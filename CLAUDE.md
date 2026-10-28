@@ -302,9 +302,10 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   0 4px, barra do rodape navy 23px dentro do quadro. Cabecalho e totais presos, so' o corpo rola, UM scrollport por tela, fundo opaco.
   O `th` alinha como o `td`; tabela de regua fixa (`table-layout: fixed`, `colgroup` em px medido) nao estica com a janela.
 - Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01;
-  P141: os selos OFX/PDF (7px) e a coluna Diferença (8px) de "Saldos por conta"). Tamanhos do A18.
-- P141 (CONC-LAYOUT-01): Conciliação = Saldos | Resumo | Status (3.05fr 1.7fr 0.7fr); Saldos com Data · OFX/PDF em lugar FIXO de 24px · Diferença
-  estreita · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
+  P141: os selos OFX/PDF (7px) de "Saldos por conta"). Tamanhos do A18.
+- P141/P166 (CONC-TELA-02): Conciliação = FAIXA do status (1 linha, altura fixa, `FaixaDoMes`: vermelho/verde/âmbar = conciliado com sem
+  subcentro/cinza) + Saldos | Resumo do mês (1fr 260px, até o fim da janela), na régua da casa e sem CAIXA ALTA; Saldos com Data · OFX/PDF em
+  lugar FIXO de 20px · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
   |valor| primeiro; saldo SÓ no fim do dia, LIDO do banco na ordem dele — nunca somado na tela).
 - Selecao se marca com navy (`Segmentado`, o unico); controle nativo nunca; seletor de entidade tem busca; todo menu aberto pelo
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.

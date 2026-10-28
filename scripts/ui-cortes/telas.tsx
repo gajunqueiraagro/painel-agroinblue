@@ -747,14 +747,15 @@ if (tela === 'mesclar') {
 } else if (tela === 'conciliacao' || tela === 'extrato-do-sistema') {
   /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status) e o "Extrato do sistema" do ↗, com as linhas do DONO no pior
      caso (`dados/conciliacao.ts`, SINTÉTICO). `&v=sem`: os mesmos números sem nenhum OFX/PDF (o deslocamento compara as duas páginas).
-     `&v=carregando`: o modal antes de o dono responder. */
+     `&v=carregando`: o modal antes de o dono responder. P166: `&v=ok|pendencia|pendente` a faixa do status nos outros casos e
+     `&v=nj` os nomes no tamanho real (`dados/conciliacao.ts`). */
   const semArquivos = v === 'sem';
   g.__bancoBancada = {
-    from: (t: string) => t === 'financeiro_contas_bancarias' ? CONC.CONTAS
+    from: (t: string) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : CONC.CONTAS)
       : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
       : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : CONC.DOCUMENTOS) : [],
     rpc: (fn: string, a: any) => fn === 'fn_conciliacao_resumo_mes'
-      ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null))
+      ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null, v))
       : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }] : null,
   };
   g.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };

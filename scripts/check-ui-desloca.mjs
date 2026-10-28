@@ -419,7 +419,10 @@ const CENARIOS = [
   { nome: 'conciliacao-saldos', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-conta="cc1"] [data-testid="slot-ofx"], [data-conta="cc1"] [data-testid="slot-pdf"], [data-conta="cc1"] [data-testid="abrir-extrato-sistema"]',
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await espera(p); },
-    estados: [['sem nenhum arquivo', { url: 'tela=conciliacao&v=sem' }], ['conta escolhida', clicar('[data-conta="cc2"]')], ['← Todas', botao(/← Todas/)]] },
+    estados: [['sem nenhum arquivo', { url: 'tela=conciliacao&v=sem' }], ['conta escolhida', clicar('[data-conta="cc2"]')], ['← Todas', botao(/← Todas/)],
+      /* P166 — a faixa do status tem altura FIXA: verde, âmbar e cinza não empurram os blocos nem a régua */
+      ['faixa conciliado', { url: 'tela=conciliacao&v=ok' }], ['faixa com pendência', { url: 'tela=conciliacao&v=pendencia' }],
+      ['faixa pendente', { url: 'tela=conciliacao&v=pendente' }]] },
   { nome: 'conciliacao-extrato-do-sistema', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DO_P92,
     antes: async (p) => { await p.locator('[data-testid="modal-extrato-sistema"]').waitFor(); await espera(p); },
     estados: [['carregado', { url: 'tela=extrato-do-sistema' }]] },

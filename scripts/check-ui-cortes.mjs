@@ -573,6 +573,17 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
   { nome: 'conciliacao-conta-escolhida', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
     antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p); } },
+  /* P166 (CONC-TELA-02) — a FAIXA do status nos outros três casos (verde, âmbar com "corrigir ›", cinza com as frases do dono) e os nomes
+     no TAMANHO REAL: de 1024px para cima o nome da conta não pode cortar (o gesto mede cada nome e recusa o que não cabe inteiro) */
+  ...['ok', 'pendencia', 'pendente'].map((v) => ({ nome: `conciliacao-faixa-${v}`, url: `tela=conciliacao&v=${v}`, tamanhos: TAMANHOS_DA_CONCILIACAO,
+    antes: async (p) => { await p.locator('[data-testid="faixa-status"]').waitFor(); await p.waitForTimeout(500); } })),
+  { nome: 'conciliacao-nomes-inteiros', url: 'tela=conciliacao&v=nj', tamanhos: TAMANHOS_DA_CONCILIACAO,
+    antes: async (p) => {
+      await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500);
+      if (p.viewportSize().width < 1024) return;
+      const cortados = await p.$$eval('[data-testid="nome-conta"]', (els) => els.filter((e) => e.scrollWidth > e.clientWidth + 0.5).map((e) => e.textContent));
+      if (cortados.length > 0) throw new Error(`nome de conta cortado a ${p.viewportSize().width}px: ${cortados.join(' | ')}`);
+    } },
   { nome: 'conciliacao-extrato-do-sistema', url: 'tela=extrato-do-sistema', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="modal-extrato-sistema"]',
     antes: async (p) => { await p.locator('[data-testid="sistema-saldo-final"]').waitFor(); await p.waitForTimeout(500); } },
   { nome: 'conciliacao-extrato-do-sistema-carregando', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DA_CONCILIACAO,

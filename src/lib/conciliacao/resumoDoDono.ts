@@ -328,7 +328,7 @@ export const STATUS_COR: Record<StatusDono, {bg:string;border:string;txt:string}
 
 export const ROTULO_STATUS: Record<StatusDono, string> = {
   conciliado: 'Conciliado',
-  nao_conciliado: 'Não Conciliado',
+  nao_conciliado: 'Não conciliado',
   pendente: 'Pendente',
 };
 
