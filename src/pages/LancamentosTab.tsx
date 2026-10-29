@@ -72,7 +72,7 @@ import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
 import { buildTransferenciaCalculation, buildTransferenciaSnapshot } from '@/lib/calculos/transferencia';
 import { buildAbateCalculation, parseNumericValue, type AbateCalculation } from '@/lib/calculos/abate';
-import { buildVendaCalculation, buildVendaSnapshot, type VendaCalculation } from '@/lib/calculos/venda';
+import { buildVendaCalculation, buildVendaSnapshot, tipoPrecoDoMotor, type VendaCalculation } from '@/lib/calculos/venda';
 import { VendaDetalhesDialog, VendaDetalhes, EMPTY_VENDA_DETALHES } from '@/components/venda/VendaDetalhesDialog';
 import { VendaResumoPanel } from '@/components/venda/VendaResumoPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
@@ -1603,10 +1603,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // Venda em Pé — unified calc (single source of truth)
   const vendaCalc = useMemo((): VendaCalculation | null => {
     if (!isVenda || !vendaDetalhes) return null;
-    const tipoPrecoEngine = vendaDetalhes.tipoPreco === 'por_total' ? 'por_cab' as const
-      : vendaDetalhes.tipoPreco === 'por_cab' ? 'por_cab' as const
-      : vendaDetalhes.tipoPreco === 'por_kg' ? 'por_kg' as const
-      : 'por_kg' as const;
+    /* P115: a regra única do motor — "por total" é o total (era mandado como 'por_cab' e o motor multiplicava pelas cabeças) */
+    const tipoPrecoEngine = tipoPrecoDoMotor(vendaDetalhes.tipoPreco);
     return buildVendaCalculation({
       quantidade: parseNumericValue(quantidade) || 0,
       pesoKg: parseNumericValue(pesoKg) || 0,
