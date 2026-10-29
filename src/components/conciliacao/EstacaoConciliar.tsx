@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
+import { ProcurarNoHistorico } from '@/components/conciliacao/ProcurarNoHistorico';
+import type { ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 import { CriarTransferenciaDialog } from '@/components/conciliacao/CriarTransferenciaDialog';
 import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
@@ -103,6 +105,8 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
   const [confirmandoGrupo, setConfirmandoGrupo] = useState<string | null>(null);
   const [vinculando, setVinculando] = useState(false);
   const [criando, setCriando] = useState(false);
+  /* P153 — o "Criar igual" do "Procurar no histórico" abre o Criar com o modelo; o Criar comum, sem */
+  const [modelo, setModelo] = useState<ModeloDoHistorico | undefined>(undefined);
   /* P139 — criar transferência direto daqui (o movimento intocado), e o "Ignorar como duplicada" da gêmea */
   const [criandoTransf, setCriandoTransf] = useState(false);
   const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
@@ -263,7 +267,8 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
 
   return (
     <Dialog open onOpenChange={o => !o && aoFechar()}>
-      <DialogContent className="flex max-h-[85vh] w-[94vw] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+      {/* P153 — 880px (antes max-w-2xl, 672): o "Procurar no histórico" tem 9 colunas. A largura é a mesma em todo estado. */}
+      <DialogContent className="flex max-h-[85vh] w-[94vw] max-w-[880px] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b bg-primary/10 px-4 py-2.5 pr-12 text-left">
           <DialogTitle className="text-[14px] font-medium text-primary leading-none">
             Conciliar movimento do extrato
@@ -511,6 +516,13 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
               )}
             </div>
           )}
+
+          {/* P153 — o movimento sem candidato não é beco: o mesmo nome em lançamentos de antes, e "Criar igual" */}
+          {estado !== 'fecha' && (
+            <ProcurarNoHistorico clienteId={clienteAtual?.id ?? null}
+              movimento={{ data: movimento.data_movimento, historico: movimento.descricao, valor: movimento.valor }}
+              onCriarIgual={(m) => { setModelo(m); setCriando(true); }} />
+          )}
         </div>
 
         {/* ⚠ O BOTÃO DIZ QUANTOS VAI GRAVAR E, QUANDO NÃO PODE, POR QUÊ — a regra
@@ -559,7 +571,7 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
                 condição de vínculo continua valendo para o caminho atômico. */}
             {estado !== 'fecha' && (vinculos.length === 0 || marcados.size > 0) && (
               <Button type="button" variant="outline" size="sm" className="gap-1.5"
-                onClick={() => setCriando(true)}
+                onClick={() => { setModelo(undefined); setCriando(true); }}
                 title="Cria o lançamento que falta, já pago e já vinculado a este movimento.">
                 <FilePlus2 className="h-3.5 w-3.5" />
                 Criar lançamento
@@ -620,7 +632,8 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
           /* Com seleção em curso, criar NÃO vincula — o vínculo de todos vem do
              grupo, somando o cheio. Sem seleção, a função atômica segue soberana. */
           semVinculo={marcados.size > 0}
-          aoFechar={() => setCriando(false)}
+          modelo={modelo}
+          aoFechar={() => { setCriando(false); setModelo(undefined); }}
           aoCriado={async (idCriado) => {
             /* ⚠ O NOVO ENTRA MARCADO. Sem isto o operador teria de caçá-lo na
                lista de candidatos que acabou de recarregar — e é o lançamento

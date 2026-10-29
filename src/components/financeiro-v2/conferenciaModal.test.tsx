@@ -158,7 +158,7 @@ async function abrirConferencia() {
   return screen.findByTestId('modal-conferencia');
 }
 const tabelaDaMesa = (modal: HTMLElement) =>
-  [...modal.querySelectorAll('table')].find((t) => t.textContent?.includes('Banco · histórico'))!;
+  [...modal.querySelectorAll('table')].find((t) => t.textContent?.includes('Nome do extrato'))!;
 /* o histórico do banco aparece LIMPO (`historicoDoBanco`): "Pix - Agendamento - 04/09 05:35 NOME" de 04/09 → "Pix Agendamento · NOME" */
 const CASADA = 'Pix Agendamento · ANTONIO PERES NETO';
 const linhaSemPar = (modal: HTMLElement) => modal.querySelector<HTMLElement>('tr[data-extrato-sem-par]')!;
@@ -219,18 +219,25 @@ describe('a mesa dentro do modal — uma régua só', () => {
     expect(fech).toEqual(['170.642,21', '36.028,37']);
   });
 
-  it('8 colunas em toda linha, linha de 19px (cabeçalho do dia e fechamento 20), 10,5px; abaixo de 9,5 só o selo', async () => {
+  /* P159e (Gabriel 29/10): a régua PADRÃO — toda linha 19px (o dia e o fechamento também; eram 20), corpo 10px (era 10,5); o EXTRATO é a
+     coluna que fica com o resto e o sistema cede (Descrição 180 · Favorecido 140 · Subcentro 140) */
+  it('8 colunas em toda linha, linha de 18px (o dia e o fechamento 22, negrito), 10px; o extrato com o resto; abaixo de 9,5 só o selo', async () => {
     const modal = await abrirConferencia();
     const tabela = tabelaDaMesa(modal);
-    expect([...tabela.querySelectorAll('col')].map((c) => c.style.width)).toEqual(['270px', '96px', '20px', '96px', '170px', '170px', '', '22px']);
+    expect([...tabela.querySelectorAll('col')].map((c) => c.style.width)).toEqual(['', '96px', '20px', '96px', '180px', '140px', '140px', '22px']);
+    expect(tabela.style.minWidth).toBe('944px');
+    expect(tabela.className).toContain('text-[10px]');
+    expect(tabela.querySelector('thead th')?.textContent).toBe('Nome do extrato');
     const linhas = [...tabela.querySelectorAll('tbody tr')];
     expect(linhas.length).toBeGreaterThanOrEqual(6); // 2 dias + fechamentos, extrato sem par, casada, candidato
     for (const tr of linhas) {
       expect([...tr.children].reduce((a, c) => a + (c instanceof HTMLTableCellElement ? c.colSpan || 1 : 1), 0)).toBe(8);
-      for (const td of [...tr.children]) expect(String(td.className)).toMatch(/h-\[(19|20)px\]/);
+      const destaque = tr.hasAttribute('data-dia') || tr.hasAttribute('data-fechamento');
+      for (const td of [...tr.children]) expect(String(td.className)).toMatch(destaque ? /h-\[22px\]/ : /h-\[18px\]/);
     }
     const comTexto = [...tabela.querySelectorAll('td, span, label')];
-    expect(comTexto.filter((el) => /text-\[(1[1-9]|[2-9]\d)(\.\d)?px\]/.test(String(el.className)))).toEqual([]);
+    /* nada acima de 10px no corpo (o 10,5 do P159a saiu) */
+    expect(comTexto.filter((el) => /text-\[(10\.[1-9]|1[1-9]|[2-9]\d)(\.\d)?px\]/.test(String(el.className)))).toEqual([]);
     /* abaixo de 9,5 SÓ o selo de status (exceção do fix2, `data-status`) */
     const abaixoDoPiso = comTexto.filter((el) => /text-\[(?:[0-8]|9)(?:\.[0-4])?px\]/.test(String(el.className)));
     expect(abaixoDoPiso.every((el) => el.closest('[data-status]'))).toBe(true);
@@ -288,6 +295,35 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
     texto: i.textContent, desabilitado: i.hasAttribute('data-disabled'),
   }));
 
+  /* P159d (Gabriel 29/10) — as cores: o dia é a faixa cinza-azulada, o fechamento cinza bem claro com filete em cima e embaixo; o filete e o
+     respiro são sombras internas (não ocupam lugar). P159e: as duas linhas na régua padrão (19px) */
+  it('P159d: as cores do dia e do fechamento; as duas a 22px em negrito (P159e, o mock)', async () => {
+    const modal = await abrirConferencia();
+    const mesa = tabelaDaMesa(modal);
+    const dia = mesa.querySelector('tr[data-dia]');
+    const fech = mesa.querySelector('tr[data-fechamento]');
+    if (!(dia instanceof HTMLElement) || !(fech instanceof HTMLElement)) throw new Error('sem o dia ou o fechamento');
+    expect(dia.className).toContain('bg-[#e4e9f0]');
+    const tdDia = dia.querySelector('td');
+    expect(tdDia?.className).toContain('h-[22px]');
+    expect(tdDia?.className).toContain('font-bold');
+    expect(tdDia?.textContent).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+    expect(tdDia?.className).toContain('text-[10px]');
+    expect(tdDia?.className).toContain('shadow-[inset_0_2px_0_hsl(var(--background))]');
+    expect(fech.className).toContain('bg-[#f3f5f8]');
+    expect(fech.className).toContain('[&>td]:shadow-[inset_0_1px_0_#cfd6df,inset_0_-1px_0_#cfd6df]');
+    expect(fech.className).toContain('border-b border-border');
+    for (const td of fech.querySelectorAll('td')) expect(td.className).toContain('h-[22px]');
+  });
+
+  /* P159e — SEM RECUO: a caixinha e a alça coladas à esquerda; sem caixinha, nenhum lugar vazio; a hora só existe quando o banco a trouxe */
+  it('P159e: o nome do extrato sem recuo — nenhum lugar vazio de 24/28px antes do texto', async () => {
+    const modal = await abrirConferencia();
+    const mesa = tabelaDaMesa(modal);
+    expect(mesa.querySelectorAll('.w-\\[24px\\], .w-\\[28px\\]')).toHaveLength(0);
+    for (const h of mesa.querySelectorAll('[data-testid="conf-hora"]')) expect(h.textContent).toMatch(/^\d{2}:\d{2}$/);
+  });
+
   it('toda linha de registro tem a célula de ações com o "⋯"; o extrato sem par tem também a alça', async () => {
     const modal = await abrirConferencia();
     const acoes = [...tabelaDaMesa(modal).querySelectorAll('[data-testid="acoes-da-linha"]')];
@@ -295,8 +331,12 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
     for (const td of acoes) expect(within(td as HTMLElement).getByRole('button', { name: 'Ações da linha' })).toBeInTheDocument();
     const semPar = linhaSemPar(modal);
     expect(within(semPar).getByLabelText('Arrastar lançamento')).toBeInTheDocument();
-    /* P159a: o sem par em destaque, com os dois botões na própria linha */
-    expect(semPar.className).toContain('bg-amber-50');
+    /* P159a: o sem par em destaque, com os dois botões na própria linha. P159d (só cor): o destaque é o traço âmbar à esquerda,
+       a linha é branca (sem o fundo amarelo) e o "sem lançamento" é âmbar */
+    expect(semPar.className).not.toContain('bg-amber-50');
+    expect(semPar.className).toContain('bg-background');
+    expect(semPar.className).toContain('[&>td:first-child]:shadow-[inset_3px_0_0_#d97706]');
+    expect(within(semPar).getByTestId('conf-sem-lancamento').className).toContain('text-[#d97706]');
     expect(within(semPar).getByTestId('conf-sem-lancamento').textContent).toBe('sem lançamento ·SugestõesCriar');
     expect(within(semPar).getByTestId('sem-par-sugestoes')).toBeDisabled();
     /* nenhum link por extenso sobrou na mesa */
@@ -360,7 +400,7 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
 });
 
 describe('fix1 — a sub-aba Sistema ganha a coluna Fornecedor', () => {
-  it('cabeçalho Data · Descrição · Fornecedor · Centro/Subcentro · Valor · Saldo · Status, e o fornecedor preenchido', async () => {
+  it('cabeçalho Data · Descrição · Fornecedor · Centro · Subcentro · Entradas · Saídas · Saldo, e o fornecedor preenchido', async () => {
     montar();
     await screen.findByTestId('resumo-espelho');
     fireEvent.click(botaoSubAba('Sistema'));
@@ -368,7 +408,8 @@ describe('fix1 — a sub-aba Sistema ganha a coluna Fornecedor', () => {
     expect([...cab.parentElement!.children].map((s) => s.textContent))
       /* P141: o rótulo do mock aprovado, "Centro / Subcentro" (a aba e o modal grande são o mesmo componente) */
       /* P159b (mock): "Centro · Subcentro" e, no lugar do Status, a coluna de 22px do sinal (✓ / ○ / ⇄) */
-      .toEqual(['Data', 'Descrição', 'Fornecedor', 'Centro · Subcentro', 'Valor', 'Saldo', '']);
+      /* P159e: o dinheiro em três colunas (Entradas · Saídas · Saldo) */
+      .toEqual(['Data', 'Descrição', 'Fornecedor', 'Centro · Subcentro', 'Entradas', 'Saídas', 'Saldo', '']);
     const fornecedores = screen.getAllByTestId('sistema-fornecedor');
     expect(fornecedores.map((s) => s.textContent)).toEqual(['Antonio Peres Neto']);
     expect(fornecedores[0].getAttribute('title')).toBe('Antonio Peres Neto');

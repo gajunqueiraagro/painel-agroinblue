@@ -66,7 +66,7 @@ describe('P159a — contagens', () => {
     expect(contagensDaMesa([DIA, DIA], ehParcial)).toEqual({ todos: 12, casados: 2, semPar: 8 });
   });
   it('rótulo do dia com o dia da semana', () => {
-    expect(rotuloDoDia('2026-10-01')).toBe('Quinta-feira · 01/10');
+    expect(rotuloDoDia('2026-10-01')).toBe('Quinta-feira · 01/10/2026');
     expect(rotuloDoDia(null)).toBe('sem data');
   });
 });

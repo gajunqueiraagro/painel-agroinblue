@@ -1,9 +1,10 @@
 /**
  * PR-CONC-SUGESTOES-CASAR-01 — o modal "Sugestões para casar" e o casar que abre o `CasarComBancoModal` preenchido.
  *
- * ⚠ jsdom NÃO FAZ LAYOUT: "nada cortado" e a largura foram medidos na tela. Aqui se prova a ESTRUTURA — as sete colunas
- *   com as larguras do briefing, os selos (azul tracejado = confere; âmbar = conferir antes), o vencido de mês anterior
- *   em âmbar, as filhas da soma com "↳" e um "casar" só por sugestão — e o valor do banco no campo com "era R$ X".
+ * ⚠ jsdom NÃO FAZ LAYOUT: "nada cortado", a data numa linha e a largura se medem no gate (`casar-sugestoes*`). Aqui se prova a
+ *   ESTRUTURA — o banco no título, o movimento como 1ª linha da MESMA tabela (P159c: data sob data, valor sob valor), as sete
+ *   colunas, os selos (azul tracejado = confere; âmbar = conferir antes), o vencido de mês anterior em âmbar, as filhas da soma
+ *   com "↳" e um "casar" só por sugestão — e o valor do banco no campo com "era R$ X".
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
@@ -44,24 +45,72 @@ function abrir(onCasar = vi.fn(), candidatos = CANDS, extrato = EXT_RABO) {
 }
 
 describe('o modal "Sugestões para casar"', () => {
-  it('cabeçalho navy, banco (valor · data · conta) e histórico no topo', () => {
+  /* P159c (1): o banco vai no TÍTULO; o bloco "banco / histórico" do topo saiu */
+  it('cabeçalho navy com "Sugestões para casar · <conta>" (com "…" e o título inteiro no title); sem o bloco do topo', () => {
     const { modal } = abrir();
-    expect(within(modal).getByText('Sugestões para casar').closest('div')!.className).toContain('bg-primary');
-    const topo = within(modal).getByText('banco').parentElement!;
-    expect(within(topo).getByText('-26.127,18')).toBeInTheDocument();
-    expect(within(topo).getByText(/15\/09 · Banco do Brasil/)).toBeInTheDocument();
-    expect(within(modal).getByText(EXT_RABO.historico)).toBeInTheDocument();
+    const titulo = within(modal).getByText('Sugestões para casar · Banco do Brasil');
+    expect(titulo.closest('div')!.className).toContain('bg-primary');
+    expect(titulo.getAttribute('title')).toBe('Sugestões para casar · Banco do Brasil');
+    expect(titulo.className).toContain('truncate');
+    expect(titulo.hasAttribute('data-reticencias-com-title')).toBe(true);
+    expect(within(modal).queryByText('banco')).toBeNull();
+    expect(within(modal).queryByText('histórico')).toBeNull();
   });
 
-  /* decisão 4 (30/09): as larguras saíram do maior texto medido no NJ, e nada corta com "…" — o que passar quebra */
-  it('a tabela tem 806px, com as sete colunas medidas no NJ', () => {
+  /* P159c (2): o movimento é a 1ª linha da MESMA tabela — cada informação na coluna dela (ALINHAMENTO SOBERANO) */
+  it('o movimento do banco é a 1ª linha: data em Venc., o nome limpo em Descrição + Fornecedor, o valor em Valor, Status "extrato"', () => {
     const { modal } = abrir();
     const t = modal.querySelector('table')!;
-    expect(t.style.width).toBe('806px');
-    expect([...t.querySelectorAll('col')].map((x) => (x as HTMLElement).style.width))
-      .toEqual(['40px', '196px', '220px', '160px', '74px', '64px', '52px']);
+    const linhas = [...t.querySelectorAll('tbody tr')];
+    const ex = linhas[0];
+    if (!(ex instanceof HTMLElement)) throw new Error('sem a linha do banco');
+    expect(ex.getAttribute('data-testid')).toBe('sugestoes-extrato');
+    expect(ex.className).toContain('bg-[#eef3fb]');
+    expect(ex.className).toContain('font-semibold');
+    /* a coluna de cada célula, contando o colSpan: o valor do banco cai na MESMA coluna do valor das sugestões */
+    const porColuna = (tr: Element) => {
+      const m = new Map<number, string>(); let col = 0;
+      for (const td of tr.querySelectorAll('td')) { m.set(col, (td.textContent ?? '').trim()); col += td.colSpan; }
+      return m;
+    };
+    const cab = [...t.querySelectorAll('th')].map((x) => x.textContent);
+    const doBanco = porColuna(ex);
+    expect(doBanco.get(cab.indexOf('Venc.'))).toBe('15/09/2026');
+    expect(doBanco.get(cab.indexOf('Descrição'))).toBe('Pagamento de Boleto · BANCO RABOBANK INTERNATIONAL BRASIL S/');
+    expect(doBanco.get(cab.indexOf('Valor'))).toBe('-26.127,18');
+    expect(doBanco.get(cab.indexOf('Status'))).toBe('extrato');
+    const nome = within(ex).getByTestId('sugestoes-extrato-nome');
+    expect(nome.getAttribute('colspan')).toBe('2');
+    expect(nome.getAttribute('title')).toBe(`Pagamento de Boleto · BANCO RABOBANK INTERNATIONAL BRASIL S/\n${EXT_RABO.historico}`);
+    expect(within(modal).queryByText('histórico')).toBeNull();
+    const igual = within(modal).getAllByTestId('sugestao')[0];
+    expect(porColuna(igual).get(cab.indexOf('Valor'))).toBe('-26.127,18');
+    /* a faixa cinza separa o banco das sugestões */
+    expect(linhas[1].textContent).toBe('Sugestões · mais provável primeiro');
+  });
+
+  it('a régua da casa: cabeçalho 22px a 9,5px, linha 19px a 10px; Venc. 70 · Motivo 160 · Valor 96 · Status 64 · casar 52', () => {
+    const { modal } = abrir();
+    const t = modal.querySelector('table')!;
+    expect([...t.querySelectorAll('col')].map((x) => (x instanceof HTMLElement ? x.style.width : '?')))
+      .toEqual(['70px', '', '', '160px', '96px', '64px', '52px']);
     expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['Venc.', 'Descrição', 'Fornecedor', 'Motivo', 'Valor', 'Status', '']);
-    expect(t.className).toContain('text-[9.5px]');
+    expect(t.className).toContain('text-[10px]');
+    expect(t.className).toContain('table-fixed');
+    expect(t.querySelector('thead tr')!.className).toContain('h-[22px]');
+    for (const tr of t.querySelectorAll('tbody tr')) expect(tr.className).toContain('h-[19px]');
+  });
+
+  /* P159c (4): DATA NUNCA QUEBRA — dd/mm/aaaa inteira, numa linha */
+  it('toda data da tabela é dd/mm/aaaa e não quebra', () => {
+    const { modal } = abrir();
+    const t = modal.querySelector('table')!;
+    const datas = [...t.querySelectorAll('tbody tr')].map((tr) => tr.querySelector('td')!).filter((td) => /\d/.test(td.textContent ?? ''));
+    expect(datas.length).toBe(6);
+    for (const td of datas) {
+      expect(td.textContent).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+      expect(td.className).toContain('whitespace-nowrap');
+    }
   });
 
   it('mesmo valor primeiro, azul tracejado; a soma depois, com filhas "↳" e UM "casar"; por último as pistas de nome', () => {
@@ -83,16 +132,21 @@ describe('o modal "Sugestões para casar"', () => {
     expect(within(linhas[1]).getByText('-26.127,18')).toBeInTheDocument();
   });
 
-  it('sem reticências: nenhum elemento com truncate/ellipsis; descrição, fornecedor e histórico quebram linha', () => {
+  /* P159c (3) — a REGRA DE CORTE (21/10): uma linha por sugestão; o texto que passa termina em "…" com ele inteiro no title */
+  it('uma linha por sugestão: descrição e fornecedor com "…" e o texto inteiro no title; nada quebra', () => {
     const { modal } = abrir();
-    const todos = [modal, ...modal.querySelectorAll('*')];
-    expect(todos.filter((el) => /\btruncate\b|text-ellipsis/.test(el.getAttribute('class') ?? ''))).toEqual([]);
-    /* a busca sabe achar: ela conta as células de texto livre que quebram */
-    const quebram = [...modal.querySelectorAll('td')].filter((td) => td.className.includes('whitespace-normal'));
-    expect(quebram.length).toBeGreaterThan(0);
-    expect(within(modal).getByText(EXT_RABO.historico).className).toContain('break-words');
-    const selo = within(modal).getAllByTestId('sugestao-motivo')[0];
-    expect(selo.className).not.toContain('whitespace-nowrap');
+    expect([...modal.querySelectorAll('td')].filter((td) => td.className.includes('whitespace-normal'))).toEqual([]);
+    const cortaveis = [...modal.querySelectorAll('.truncate')].filter((el) => el.closest('tbody'));
+    /* a busca sabe achar: o nome do banco + 1 de cada linha de sugestão (descrição e fornecedor) */
+    expect(cortaveis.length).toBeGreaterThan(8);
+    for (const el of cortaveis) {
+      const texto = (el.textContent ?? '').trim();
+      const dono = el.closest('[title]');
+      expect(dono, texto).not.toBeNull();
+      expect((dono!.getAttribute('title') ?? '').replace(/\s+/g, ' '), texto).toContain(texto);
+    }
+    const filha = within(modal).getAllByTestId('sugestao-filha')[0];
+    expect(within(filha).getByTitle('Financiamento - principal').className).toContain('truncate');
   });
 
   it('vencimento de mês anterior em âmbar negrito; status em texto de 8px com a cor da paleta', () => {
@@ -118,10 +172,24 @@ describe('o modal "Sugestões para casar"', () => {
     expect(selo.className).not.toContain('border-dashed');
   });
 
-  it('sem sugestão, diz "nenhuma sugestão para este movimento"; o rodapé explica a ordem e as cores', () => {
+  it('sem sugestão, diz "nenhuma sugestão para este movimento" abaixo da faixa; o rodapé explica as cores', () => {
     const { modal } = abrir(vi.fn(), []);
     expect(within(modal).getByText('nenhuma sugestão para este movimento')).toBeInTheDocument();
-    expect(within(modal).getByText('ordem: mais provável primeiro · âmbar = conferir antes de casar')).toBeInTheDocument();
+    expect(within(modal).getByText('âmbar = conferir antes de casar')).toBeInTheDocument();
+    expect(within(modal).getByText('Sugestões · mais provável primeiro')).toBeInTheDocument();
+  });
+
+  /* P153 — o "Procurar no histórico" fica embaixo das sugestões, no mesmo modal; sem quem receba o "Criar igual", não aparece */
+  it('com o cliente e o "Criar igual", o Procurar no histórico aparece embaixo, com o nome do banco no campo', () => {
+    const sugestoes = sugerirCasamentos(EXT_RABO, CANDS);
+    const { unmount } = render(<SugestoesCasarModal open onClose={() => {}} extrato={EXT_RABO} nomeConta="Banco do Brasil" sugestoes={sugestoes}
+      onCasar={() => {}} clienteId="cli" onCriarIgual={() => {}} />);
+    const modal = screen.getByTestId('sugestoes-casar');
+    expect(within(modal).getByTestId('procurar-historico')).toBeInTheDocument();
+    expect(within(modal).getByTestId('procurar-historico-termo')).toHaveValue('BANCO RABOBANK INTERNATIONAL BRASIL S');
+    unmount();
+    const { modal: semProcurar } = abrir();
+    expect(within(semProcurar).queryByTestId('procurar-historico')).toBeNull();
   });
 
   it('"casar" entrega a sugestão inteira (a soma com os dois lançamentos)', () => {

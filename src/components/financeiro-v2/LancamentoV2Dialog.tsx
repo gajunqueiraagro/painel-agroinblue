@@ -45,6 +45,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { FORMAS_PAGAMENTO_V2, FORMA_PAGAMENTO_V2_NENHUMA } from '@/lib/financeiro/formasPagamentoV2';
+import { camposMudados } from '@/lib/financeiro/camposMudados';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { ClassificacaoLancamento, CAMPO_BG, atividadeValida } from '@/components/shared/ClassificacaoLancamento';
 import { Input } from '@/components/ui/input';
@@ -2201,6 +2202,9 @@ export function LancamentoV2Dialog({
           depois: { valor: form.valor, vencimento: form.data_vencimento },
         }) === 'marcar_manual' ? 'marcar_manual' : undefined;
     if (pedidoValorDoMes) form.valor_do_mes = pedidoValorDoMes;
+    /* EDITAR-SO-MUDADOS-01 (Gabriel 29/10 09:1x) — o Salvar do Editar manda SÓ os campos que a pessoa mudou, contra o lançamento com que o
+       formulário abriu (o Caixa abre sem vencimento, conta destino, dados de pagamento, tipo de documento, safra e cultura: nunca os apaga) */
+    if (currentIsEdit && lancamento && lancamento.id === currentEditId) form.camposMudados = camposMudados(lancamento, form);
 
       console.log('[FinV2] SUBMIT STATE', {
         mode: currentIsEdit ? 'UPDATE' : 'INSERT',

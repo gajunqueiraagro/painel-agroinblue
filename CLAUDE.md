@@ -214,6 +214,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Conciliacao: tolerancia de MEIO centavo (R$ 0,01 e' diferenca); a data do banco manda na conferencia; o resumo da conta tem dono no
   banco; todo vinculo com extrato da' baixa e o parcial vira divisao explicita; F5 nunca e' necessario; transferencia de OFX = 1
   lancamento + 2 vinculos; arquivo de extrato se le^ pelo charset declarado.
+- P153: "Procurar no histórico" = UMA busca (`fn_conciliacao_historico_buscar`: texto do banco casado · descrição · fornecedor, só realizado, sem
+  acento) e UM componente (`ProcurarNoHistorico`: Sugestões para casar e estação); "Criar igual" só PREENCHE o Criar de hoje (`modelo` no prefill;
+  valor/data/conta do movimento); banco sem nome = campo vazio (`nomeDoHistorico`, D1); buscar é gesto.
 - P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
   seguem sem os sem caixa.
 - P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
@@ -298,6 +301,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   arquivo que metade das telas alcanca — ai' o completo e' obrigatorio antes de publicar. Um gate de tela completo por vez na maquina.
 - REGRA DE CORTE (21/10 07h25): nome/texto em tabela = uma linha com "…" e o texto inteiro no `title`; numero, valor, data, CPF/CNPJ e
   contador nunca cortam; corte SECO reprova; fora de tabela, nada de "…" (o texto rola no lugar dele ou quebra). Data sempre dd/mm/aaaa.
+- ALINHAMENTO SOBERANO (Gabriel 29/10, P159c): nunca valor, data e texto na mesma linha corrida; cada informação na sua coluna; numa comparação
+  (extrato × sugestões, nota × parcelas), a linha de referência usa AS MESMAS colunas das de baixo (valor sob valor, data sob data).
 - NADA SE DESLOCA (UI-SEM-DESLOCAR-01): texto que muda com a selecao tem largura reservada (`TextoReservado`, algarismos tabulares);
   botao/card pontual tem lugar reservado; LAYOUT FIXO em todo o sistema.
 - REGUA DE TABELA UNICA (`src/components/ui/regua-tabela.tsx`, a de Recorrencias): cabecalho navy 22px 9,5/500, linha 19px 10px, padding
@@ -314,7 +319,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   do banco limpo só na exibição (`historicoDoBanco`, o inteiro no `title`); a `ordenar` da mesa NÃO mudou (o Enriquecer lê dela). EXCEÇÃO
   DECLARADA (D7, Gabriel 28/10): a coluna Data dessa lista é dd/mm (o gate aceita só em tabela `data-dia-mes`; o auto-teste a prova).
   P159b: a aba Sistema e o ↗ "Extrato do sistema" são a mesma lista (○ âmbar = não conciliado, o status no `title`); a Evolução: Dif. do dia =
-  Mov. banco − Mov. sistema (`montarEvolucao`), some só o dia SEM NENHUMA linha, "ver o dia na Conferência" = o `irParaConferencia`.
+  Mov. banco − Mov. sistema (`montarEvolucao`), some só o dia SEM NENHUMA linha, "ver o dia na Conferência" = o Espelho abre a Conferência no dia (`onAbaChange`).
+- P159e: as 3 abas do Casar lançamentos no mock `mock-casar-abas-v1.html` (linha 18px a 10; dia/fechamento/saldos 22px negrito; data dd/mm/aaaa); Extrato e Sistema em Entradas · Saídas · Saldo, o saldo inicial/do dia/final
+  NA coluna Saldo (rodapé = tabela com o mesmo `colgroup`; gate `alinhamento`); Conferência: o EXTRATO é a coluna flexível, inteiro ≥1366 (gate `inteiroDe`).
 - Selecao se marca com navy (`Segmentado`, o unico); controle nativo nunca; seletor de entidade tem busca; todo menu aberto pelo
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
 - FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter

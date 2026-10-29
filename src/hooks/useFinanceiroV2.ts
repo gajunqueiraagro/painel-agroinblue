@@ -3,6 +3,7 @@
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { edicaoSemMudanca } from '@/lib/financeiro/edicaoSemMudanca';
+import { soOQueMudou } from '@/lib/financeiro/camposMudados';
 import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -155,6 +156,9 @@ export interface Safra {
 }
 
 export interface LancamentoV2Form {
+  /** EDITAR-SO-MUDADOS-01 — os campos que a pessoa MUDOU no Editar (`camposMudados`): o UPDATE leva só as colunas deles (`soOQueMudou`).
+   *  Ausente (outro gravador) = o UPDATE inteiro, como sempre. */
+  camposMudados?: readonly string[];
   fazenda_id: string;
   conta_bancaria_id?: string | null;
   conta_destino_id?: string | null;
@@ -1123,12 +1127,14 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
           safra_id: form.safra_id || null,
         };
         if (form.status_transacao) restrito.status_transacao = form.status_transacao;
+        /* EDITAR-SO-MUDADOS-01 — só o que a pessoa mudou (campo não tocado nunca é sobrescrito) */
+        const restritoMudado = soOQueMudou(restrito, form.camposMudados);
 
-        if (edicaoSemMudanca(restrito, linhaAtual)) {
+        if (edicaoSemMudanca(restritoMudado, linhaAtual)) {
           if (!opts?.silent) toast.success('Lançamento atualizado');
           return true;
         }
-        const { error } = await (supabase as any).from('financeiro_lancamentos_v2').update(restrito).eq('id', id);
+        const { error } = await (supabase as any).from('financeiro_lancamentos_v2').update(restritoMudado).eq('id', id);
         if (error) {
           const n = reportarErro(error, 'editarLancamento.OC', opts?.silent ? () => {} : toast.error);
           opts?.onErro?.(n.mensagem);
@@ -1161,7 +1167,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       }
     }
 
-    const updatePayload = {
+    /* EDITAR-SO-MUDADOS-01 — só as colunas dos campos que a pessoa mudou no Editar (sem a lista, outro gravador: tudo, como sempre) */
+    const updatePayload = soOQueMudou({
       fazenda_id: form.fazenda_id,
       conta_bancaria_id: form.conta_bancaria_id || null,
       conta_destino_id: form.conta_destino_id || null,
@@ -1205,7 +1212,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       ...(form.fase !== undefined ? { fase: form.fase || null } : {}),
       /* REC-VALOR-DO-MES-MODAL-01 — a marca vai NO MESMO UPDATE da edição (uma ida, atômico); sem pedido, nada entra. */
       ...marcaDoValorDoMes,
-    };
+    }, form.camposMudados);
 
     // Antes imprimia `id` e os dois `conta_destino_id` — UUIDs. O que a
     // instrumentação investigava era se o destino sobrevive do form ao payload;

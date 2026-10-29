@@ -46,7 +46,7 @@ const TAMANHOS_DO_P104 = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126
 const TAMANHOS_DA_VG = [[1000, 600], [1126, 579], [1130, 580], [1440, 800], [1440, 860]];
 /* P141 (Gabriel 28/10, decisão a) — a Conciliação (3 cards lado a lado) só de 1000px para cima: abaixo disso ela nunca coube, nem no código
    antigo — dívida declarada CONC-ESTREITA (docs/DIVIDAS-ABERTAS.md); empilhar os cards é item próprio, com mock */
-const TAMANHOS_DA_CONCILIACAO = [[1000, 600], [1024, 600], [1126, 579], [1130, 580], [1300, 704], [1440, 800], [1440, 860], [1750, 1000]];
+const TAMANHOS_DA_CONCILIACAO = [[1000, 600], [1024, 600], [1126, 579], [1130, 580], [1300, 704], [1366, 768], [1440, 800], [1440, 860], [1750, 1000]];
 const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* P121 — nos cenários dos Itens da nota o `semRolagem` deixa de fora a tabela dos itens (rola por dentro) e o RESUMO do lançamento: os
    blocos dele têm altura fixa e escondem o que passa DE PROPÓSITO (o nome em até 2 linhas com `line-clamp`, o texto longo com "…", os dois
@@ -656,12 +656,25 @@ const CENARIOS = [
     tamanhos: TAMANHOS_DA_CONCILIACAO, antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
       await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await p.waitForTimeout(500); } })),
   ...[['conferencia', null], ['conferencia-vencidos', 'chip-vencidos'], ['conferencia-sem-par', 'chip-sem_par'], ['conferencia-poucos', null]].map(([nome, chip]) => ({
-    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,
+    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : 'tela=conciliacao', tamanhos: [...TAMANHOS_DO_P92, [1366, 768]],
     regiao: '[data-testid="modal-conferencia"]',
+    /* P159e (Gabriel 29/10): o nome do extrato INTEIRO de 1366px para cima; abaixo, "…" + o title (a regra de corte de sempre) */
+    inteiroDe: { sel: '[data-testid="modal-conferencia"] [data-testid="conf-historico"]', de: 1366 },
     antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
       await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="barra-casar"]').getByRole('button', { name: 'Conferência' }).click();
       await p.locator('[data-testid="mesa-conferencia"]').waitFor(); await p.waitForTimeout(500);
       if (chip) await clicar(`[data-testid="${chip}"]`)(p); } })),
+  /* P159c — "Sugestões para casar" nos 10 tamanhos: o movimento do banco é a 1ª linha da mesma tabela (data sob data, valor sob valor);
+     a data inteira (dd/mm/aaaa) nunca corta nem quebra; texto em uma linha com "…" + title */
+  ...[['casar-sugestoes', 'tela=sugestoes-casar'], ['casar-sugestoes-vazio', 'tela=sugestoes-casar&v=vazio']].map(([nome, url]) => ({ nome, url,
+    tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]' })),
+  /* P153 — o "Procurar no histórico" depois de procurar (8 achados, o quadro de 6 rola, a faixa amarela), no modal e na estação; e a
+     estação com o banco SEM nome (D1: o campo vazio e a frase) */
+  { nome: 'casar-sugestoes-procurado', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
+  { nome: 'casar-estacao-procurado', url: 'tela=estacao', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]',
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
+  { nome: 'casar-estacao-sem-nome', url: 'tela=estacao&v=semnome', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]' },
   /* P159b (CONC-TELAS-02) — as abas Sistema e Evolução do saldo do Casar (de 1000px para cima, a página da Conciliação); a Evolução também
      com os dias sem movimento à vista. O modal "Extrato do sistema" (o ↗, D5) já tem os cenários `conciliacao-extrato-do-sistema*`. */
   ...[['casar-sistema', 'Sistema', null], ['casar-evolucao', 'Evolução do saldo', null], ['casar-evolucao-com-vazios', 'Evolução do saldo', 'evolucao-mostrar-vazios']]
@@ -701,6 +714,34 @@ const achadoDaAltura = (sel, antes, depois) => (antes === null || depois === nul
 /* P104 (print do Gabriel, 25/10: "1º vencimento · sugeric…", "Infor…") — roda NA PAGINA: dentro de `sel`, rótulo e frase NÃO rolam escondidos
    no lugar (`uma-linha-que-rola` fora de tabela, que a regra geral aceita para CAMPOS) nem passam da altura reservada. Os campos (botão,
    seletor, input) ficam de fora: neles rolar no lugar é a regra. */
+/* P159e (Gabriel 29/10) — `inteiroDe: { sel, de }`: de `de` px de largura de janela para cima, o texto de `sel` cabe INTEIRO (o "…" com
+   o title, que a regra de corte aceita, aqui reprova — o nome do extrato da Conferência de 1366 para cima) */
+function medirInteiro(sel) {
+  const achados = [];
+  for (const e of document.querySelectorAll(sel)) {
+    const r = e.getBoundingClientRect(); if (r.width < 1) continue;
+    if (e.scrollWidth > e.clientWidth + 0.5) achados.push({ regra: 'inteiro', texto: `nao cabe inteiro: ${(e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 70)} (pede ${e.scrollWidth}px, tem ${e.clientWidth})` });
+  }
+  return achados;
+}
+/* P159e — ALINHAMENTO SOBERANO: todo número marcado `data-alinha-coluna="K"` (o saldo inicial, o do fim do dia, o do rodapé) tem a
+   borda direita da célula na MESMA borda do `th[data-coluna="K"]` visível (0,5px), e o número dentro dela */
+function medirAlinhamento(regiao) {
+  const raiz = regiao ? document.querySelector(regiao) : document.body; if (!raiz) return [];
+  const achados = [];
+  for (const e of raiz.querySelectorAll('[data-alinha-coluna]')) {
+    const r = e.getBoundingClientRect(); if (r.width < 1) continue;
+    const k = e.getAttribute('data-alinha-coluna');
+    const ths = [...raiz.querySelectorAll(`th[data-coluna="${k}"]`)].filter((t) => t.getBoundingClientRect().width > 1);
+    if (!ths.length) { achados.push({ regra: 'alinhamento', texto: `coluna "${k}" sem cabecalho para ${(e.textContent ?? '').trim()}` }); continue; }
+    const th = ths.reduce((m, t) => (Math.abs(t.getBoundingClientRect().right - r.right) < Math.abs(m.getBoundingClientRect().right - r.right) ? t : m));
+    const dif = Math.abs(th.getBoundingClientRect().right - r.right);
+    const rg = document.createRange(); rg.selectNodeContents(e); const txt = rg.getBoundingClientRect();
+    if (dif > 0.5) achados.push({ regra: 'alinhamento', texto: `"${(e.textContent ?? '').trim()}" fora da coluna ${k} (borda a ${Math.round(dif * 10) / 10}px)` });
+    else if (txt.width > 0 && txt.right > r.right + 0.5) achados.push({ regra: 'alinhamento', texto: `"${(e.textContent ?? '').trim()}" passa da coluna ${k}` });
+  }
+  return achados;
+}
 function medirSemRolarNoLugar(sel) {
   const achados = [];
   const raiz = document.querySelector(sel); if (!raiz) return [{ regra: 'corte', texto: `${sel} nao achado` }];
@@ -1158,6 +1199,18 @@ try {
   const semRolar0 = daSemRolar0.some((a) => a.texto.startsWith('rola no lugar: 1º vencimento')) && daSemRolar0.some((a) => a.texto.startsWith('passa da altura reservada: Informe'))
     && !daSemRolar0.some((a) => a.texto.includes('Campo de seletor'));
   if (!semRolar0) { console.error(`check-ui-cortes: AUTO-TESTE DO SEM-ROLAR-NO-LUGAR FALHOU (${JSON.stringify(daSemRolar0)})`); process.exit(2); }
+  /* P159e — as duas regras novas se provam: o texto que corta é achado (o que cabe, não); o saldo fora da coluna é achado (o alinhado, não) */
+  await p0.setContent(`<div id="int"><span class="i" style="display:block;width:60px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">PAGAMENTO PIX-PIX_DEB 23366162</span>
+    <span class="i" style="display:block;width:300px;overflow:hidden;white-space:nowrap">curto</span></div>
+    <div id="al"><table style="table-layout:fixed;width:300px;border-collapse:collapse"><colgroup><col><col style="width:100px"></colgroup>
+    <thead><tr><th>Nome</th><th data-coluna="saldo">Saldo</th></tr></thead><tbody><tr><td>a</td><td data-alinha-coluna="saldo" style="text-align:right">1,00</td></tr></tbody></table>
+    <table style="table-layout:fixed;width:280px;border-collapse:collapse"><colgroup><col><col style="width:100px"></colgroup>
+    <tbody><tr><td>Saldo final solto</td><td data-alinha-coluna="saldo" style="text-align:right">9,99</td></tr></tbody></table></div>`);
+  const daInteiro0 = await p0.evaluate(medirInteiro, '#int .i');
+  const daAlinha0 = await p0.evaluate(medirAlinhamento, '#al');
+  if (daInteiro0.length !== 1 || !daInteiro0[0].texto.includes('PIX_DEB') || daAlinha0.length !== 1 || !daAlinha0[0].texto.includes('9,99')) {
+    console.error(`check-ui-cortes: AUTO-TESTE DO INTEIRO/ALINHAMENTO FALHOU (${JSON.stringify([daInteiro0, daAlinha0])})`); process.exit(2);
+  }
   if (aceitoErrado || !seco0 || !doc0 || clampAceitoErrado || !clampFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA REGRA DE CORTE FALHOU (aceito acusado: ${aceitoErrado}, corte seco: ${seco0}, documento: ${doc0}, clamp na célula acusado: ${clampAceitoErrado}, clamp fora achado: ${clampFora0})`); process.exit(2); }
   if (diaMesAceitoErrado || !diaMesCurto0 || !diaMesFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA DATA dd/mm FALHOU (aceito acusado: ${diaMesAceitoErrado}, dd/mm/aa na lista: ${diaMesCurto0}, dd/mm fora da lista: ${diaMesFora0})`); process.exit(2); }
   await p0.close();
@@ -1197,6 +1250,9 @@ try {
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
     if (cen.semRolarNoLugar) daRolagem.push(...(await p.evaluate(medirSemRolarNoLugar, cen.semRolarNoLugar)));
+    if (cen.inteiroDe && w >= cen.inteiroDe.de) daRolagem.push(...(await p.evaluate(medirInteiro, cen.inteiroDe.sel)));
+    /* P159e — o ALINHAMENTO SOBERANO vale em toda tela que marca os números (`data-alinha-coluna`) */
+    daRolagem.push(...(await p.evaluate(medirAlinhamento, cen.regiao ?? null)));
     const achadosTodos = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)),
       ...(await p.evaluate(medirSobreposicao, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
     /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra
