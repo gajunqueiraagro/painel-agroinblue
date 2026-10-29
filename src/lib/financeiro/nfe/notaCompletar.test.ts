@@ -37,6 +37,19 @@ describe('P128b — o pedido', () => {
     expect(p[0]).toEqual({ id: 'l1', descricao: 'Cercas sintetico 1/5', numero_documento: 'NF 000.004.875', tipo_documento: 'Nota Fiscal' });
     expect(p[1]).toEqual({ id: 'l2', descricao: 'Cercas sintetico 2/5' });
   });
+  /* URGENTE 29/10 (o caso do Azulão, texto sintético) — a Descrição desmarcada NUNCA troca o texto do usuário */
+  it('Descrição desmarcada: a de hoje fica e ganha só o "i/N"; a mantida (✎) e a que já tem o "i/N" não vão', () => {
+    const alvos: AlvoDaPrevia[] = [{ ...ALVOS[0], descricaoHoje: 'Reforma sintetica' }, { ...ALVOS[1], descricaoHoje: 'Parcela 2 - F2 - REFORMA SINTETICA' }];
+    const p = pedidoDeCompletar(alvos, TODAS, new Set<ColunaCompletar>(['documento']), new Set(), false);
+    expect(p.map((x) => x.descricao)).toEqual(['Reforma sintetica 1/2', 'Parcela 2 - F2 - REFORMA SINTETICA 2/2']);
+    expect(p.some((x) => String(x.descricao).includes('Cercas'))).toBe(false);
+    const mantida = pedidoDeCompletar(alvos, TODAS, new Set<ColunaCompletar>(), new Set([chaveDaCelula('l1', 'descricao')]), false);
+    expect(['descricao' in mantida[0], mantida[1].descricao]).toEqual([false, 'Parcela 2 - F2 - REFORMA SINTETICA 2/2']);
+    const jaNumerada = pedidoDeCompletar([{ ...ALVOS[0], descricaoHoje: 'Reforma sintetica 1/2' }, { ...ALVOS[1], descricaoHoje: 'Reforma sintetica 2/2' }],
+      TODAS, new Set<ColunaCompletar>(), new Set(), false);
+    expect(jaNumerada.every((x) => !('descricao' in x))).toBe(true);
+    expect(pedidoDeCompletar(alvos.slice(0, 1), TODAS, new Set<ColunaCompletar>(), new Set(), false)[0]).toEqual({ id: 'l1' });   // 1 parcela: nada
+  });
   it('safra escolhida vai; descrição/nº vazios não vão', () => {
     const p = pedidoDeCompletar(ALVOS.slice(0, 1), { ...TODAS, descricaoBase: ' ', numeroDocumento: '', safraId: 's1' }, TODAS_AS_COLUNAS, new Set(), false);
     expect(p[0]).toEqual({ id: 'l1', favorecido_id: 'f1', fazenda_id: 'faz1', plano_conta_id: 'p2', data_competencia: '2031-06-02', safra_id: 's1' });
