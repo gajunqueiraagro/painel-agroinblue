@@ -11,7 +11,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { ShoppingCart, Truck, TrendingDown, CreditCard, FileText, DollarSign } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
-import { buildVendaCalculation, type VendaCalculation, type TipoPrecoVenda as EngineTipoPreco } from '@/lib/calculos/venda';
+import { buildVendaCalculation, tipoPrecoDoMotor, type VendaCalculation, type TipoPrecoVenda as EngineTipoPreco } from '@/lib/calculos/venda';
 
 // Re-export legacy type for backward compat
 export type TipoPrecoVenda = 'por_kg' | 'por_cab' | 'por_total';
@@ -49,11 +49,9 @@ export const EMPTY_VENDA_DETALHES: VendaDetalhes = {
   parcelas: [],
 };
 
-/** Map legacy tipoPreco to engine tipoPreco */
+/** Map legacy tipoPreco to engine tipoPreco — P115: a regra única do motor (`tipoPrecoDoMotor`; "por total" é o total, não × cabeças) */
 function toEngineTipoPreco(tp: TipoPrecoVenda): EngineTipoPreco {
-  if (tp === 'por_total') return 'por_cab'; // por_total treated as lump-sum per-cab
-  if (tp === 'por_cab') return 'por_cab';
-  return 'por_kg';
+  return tipoPrecoDoMotor(tp);
 }
 
 interface Props {
