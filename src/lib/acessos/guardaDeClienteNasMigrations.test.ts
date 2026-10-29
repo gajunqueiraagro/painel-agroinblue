@@ -25,8 +25,9 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
     const soId = !temCliente && /\buuid\b/i.test(params) && !/^(public\.)?_/.test(nome);
     if (!temCliente && !soId) return [];
     /* FIN-FINANC-28 PASSO 4: `_fn_contrato_do_usuario(contrato)` e' a guarda pelo cliente do CONTRATO (tenant_ok + 42501, preso abaixo) */
+    /* P171: `_fn_subcentro_cliente_rodar(…)` e' a casca do escritor dos subcentros do cliente: so' o admin (42501), presa abaixo */
     const guardada = /tenant_ok\s*\(/i.test(p) || /_fn_exigir_tenant(_das_linhas)?\s*\(/i.test(p)
-      || /_fn_contrato_do_usuario\s*\(/i.test(p)
+      || /_fn_contrato_do_usuario\s*\(/i.test(p) || /_fn_subcentro_cliente_rodar\s*\(/i.test(p)
       || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p));
     return [{ nome, guardada }];
   });
@@ -80,6 +81,23 @@ describe('guarda de cliente nas migrations novas', () => {
     expect(dono).toMatch(/not coalesce\(public\.tenant_ok\(f\.cliente_id\), false\)/);
     expect(dono).toMatch(/errcode = '42501'/);
     expect(sql).toMatch(/revoke all on function public\._fn_contrato_do_usuario\(uuid\) from public, anon, authenticated;/);
+  });
+
+  it('a casca dos subcentros do cliente e\' aceita, e ela mesma so\' deixa o admin passar (P171: membro do cliente = 42501)', () => {
+    const pelaCasca = `CREATE FUNCTION public.fn_o(p_cliente_id uuid, p_nome text) RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $f$
+      select public._fn_subcentro_cliente_rodar('criar', jsonb_build_object('cliente_id', p_cliente_id), false) $f$;`;
+    const semCasca = `CREATE FUNCTION public.fn_n(p_cliente_id uuid) RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $f$ select '{}'::jsonb $f$;`;
+    expect(semGuarda([pelaCasca, semCasca].join('\n'))).toEqual(['public.fn_n']);
+    const sql = readFileSync(join(DIR, '20261028114030_p171_subcentro_cliente_escritor.sql'), 'utf8');
+    const inicio = sql.indexOf('CREATE FUNCTION public._fn_subcentro_cliente_rodar');
+    const casca = sql.slice(inicio, sql.indexOf('end $f$;', inicio));
+    expect(casca).toMatch(/if not coalesce\(public\.is_admin_agroinblue\(auth\.uid\(\)\), false\) then\s+raise exception using errcode = '42501'/);
+    // tenant_ok deixaria passar o membro do cliente (e' a guarda dos dividendos, DIVIDENDO-SO-ADMIN-01): aqui nao vale
+    expect(casca).not.toMatch(/tenant_ok/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\._fn_subcentro_cliente_rodar\(text, jsonb, boolean\) FROM PUBLIC, anon, authenticated;/);
+    expect(definicoesExpostas(sql).map((d) => d.nome)).toEqual(['public.fn_subcentro_cliente_criar', 'public.fn_subcentro_cliente_renomear',
+      'public.fn_subcentro_cliente_inativar', 'public.fn_subcentro_cliente_reativar']);
+    expect(semGuarda(sql)).toEqual([]);
   });
 
   it('nenhuma migration nova tem funcao SECURITY DEFINER com parametro de cliente sem guarda', () => {
