@@ -326,7 +326,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
 
         <div className="space-y-2 px-4 py-3">
           <AreaDeArquivo modo="lote" regra={REGRA_DOS_XML} testId="xml-area-de-soltar" inputTestId="xml-input" className="h-12"
-            convite="Clique ou arraste as notas (XML ou PDF)" detalhe="NF-e (modelo 55) · um arquivo por nota · vários de uma vez"
+            convite="Clique ou arraste as notas (XML ou PDF)" detalhe="NF-e ou NFS-e · um arquivo por nota · vários de uma vez"
             rotuloDoBotao={lendo ? 'Lendo…' : 'Escolher arquivos'}
             desabilitado={!clienteId} motivoDesabilitado="Selecione um cliente para ler as notas."
             onArquivos={(arquivos) => { void lerArquivos(arquivos); }} />
@@ -379,7 +379,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                           <td colSpan={estreito ? 6 : 7} className="h-[18px] px-[7px]" data-testid="xml-recusa-digitar">
                             <div className="flex h-full min-w-0 items-center gap-1.5">
                               <span className="w-0 min-w-0 flex-1 truncate text-[10px] leading-none text-destructive" title={frase} data-testid="xml-recusa">{frase}</span>
-                              <Input value={chaves[l.id] ?? ''} placeholder="Digitar a chave (44 dígitos)" aria-label="Digitar a chave (44 dígitos)"
+                              <Input value={chaves[l.id] ?? ''} placeholder="Digitar a chave (44 ou 50 dígitos)" aria-label="Digitar a chave (44 ou 50 dígitos)"
                                 onChange={(e) => { const v = e.target.value; setChaves((c) => ({ ...c, [l.id]: v })); }}
                                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void usarChave(l); } }}
                                 className="h-4 w-[300px] flex-none px-1 text-[10px] tabular-nums" data-testid="xml-digitar-chave" />

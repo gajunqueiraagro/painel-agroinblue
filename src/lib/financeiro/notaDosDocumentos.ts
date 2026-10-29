@@ -9,6 +9,7 @@
  * ⚠ O XML E' DADO DE IMPORTACAO: a linha abre o PDF; sem PDF, os "Itens da nota" (a leitura do XML) — nunca o XML cru.
  */
 import type { LancDocumento } from '@/hooks/useLancamentoDocumentos';
+import { ehChaveDeNota } from '@/lib/financeiro/nfe/formatos';
 
 export type FormatoDoArquivo = 'pdf' | 'xml' | 'outro';
 
@@ -31,7 +32,8 @@ export interface LinhaDeDocumento {
 }
 
 const digitos = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '');
-const chave44 = (d: LancDocumento) => { const c = digitos(d.chaveAcesso); return c.length === 44 ? c : null; };
+/* P174: a chave de 44 (NF-e) ou de 50 (NFS-e) */
+const chave44 = (d: LancDocumento) => { const c = digitos(d.chaveAcesso); return ehChaveDeNota(c) ? c : null; };
 const semZeros = (s: string | null | undefined) => digitos(s).replace(/^0+/, '');
 
 /** A identidade da nota no MESMO caminho; `null` = nao e' nota que se junta. */

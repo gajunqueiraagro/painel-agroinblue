@@ -13,7 +13,7 @@
  */
 import { decodificarPeloCharsetDeclarado } from '@/lib/financeiro/parser/decodificarExtrato';
 import { centavosDoTexto } from './centavos';
-import type { NotaLida } from './tipos';
+import type { NotaLida, ServicoDaNfse } from './tipos';
 
 export interface ImpostoDoItem { cst?: string | null; bcCent?: number; aliquota?: string | null; valorCent?: number }
 
@@ -62,6 +62,9 @@ export interface TotaisDaNota {
   notaCent: number;
   /** Lei 12.741 (`vTotTrib`): so' informacao. */
   tributosAproxCent: number | null;
+  /** P174 — so' na NFS-e: o bruto, as retencoes e o liquido (Gabriel 29/10, T2: no `totais` da `nota_fiscal`, sem coluna nova).
+   *  Aqui `notaCent` e' o bruto menos o desconto (a soma dos itens fecha); o lancamento nasce com `servico.liquidoCent`. */
+  servico?: ServicoDaNfse | null;
 }
 
 export interface ItensLidos {
@@ -212,8 +215,11 @@ export function itensDoPdf(nota: NotaLida, extras: { seguroCent?: number; outras
     totais: {
       produtosCent: nota.totais.produtosCent, descontoCent: nota.totais.descontoCent, freteCent: nota.totais.freteCent,
       seguroCent: extras.seguroCent ?? 0, outrasCent: extras.outrasCent ?? 0, ipiCent: temIpiPorItem ? ipi.reduce((s, v) => s + v, 0) : extras.ipiCent ?? 0,
-      stCent: extras.stCent ?? 0, fcpStCent: 0, icmsCent: 0, pisCent: 0, cofinsCent: 0, notaCent: nota.totais.notaCent,
+      stCent: extras.stCent ?? 0, fcpStCent: 0, icmsCent: 0, pisCent: 0, cofinsCent: 0,
+      /* P174: na NFS-e o `notaCent` da nota e' o liquido (depois das retencoes); a nota guardada fecha com os itens: bruto - desconto */
+      notaCent: nota.servico ? nota.servico.brutoCent - nota.totais.descontoCent : nota.totais.notaCent,
       tributosAproxCent: extras.tributosAproxCent ?? null,
+      ...(nota.servico ? { servico: nota.servico } : {}),
     },
   };
 }
@@ -241,6 +247,7 @@ export function payloadDaNotaFiscal(nota: Pick<NotaLida, 'chave' | 'numero' | 's
         produtos_cent: t.produtosCent, desconto_cent: t.descontoCent, frete_cent: t.freteCent, seguro_cent: t.seguroCent, outras_cent: t.outrasCent,
         ipi_cent: t.ipiCent, st_cent: t.stCent, fcp_st_cent: t.fcpStCent, icms_cent: t.icmsCent, pis_cent: t.pisCent, cofins_cent: t.cofinsCent,
         nota_cent: t.notaCent, tributos_aprox_cent: t.tributosAproxCent,
+        ...(t.servico ? { servico: servicoParaOBanco(t.servico) } : {}),
       },
     },
     itens: l.itens.map((i) => ({
@@ -265,6 +272,27 @@ function textosDoBanco(v: unknown): Record<string, string> | null {
   return o ? Object.fromEntries(Object.entries(o).map(([k, x]) => [k, String(x ?? '')])) : null;
 }
 
+/** P174 — o servico da NFS-e no `totais` (jsonb) da `nota_fiscal`, nas chaves da casa (snake_case, centavos). */
+function servicoParaOBanco(s: ServicoDaNfse) {
+  return {
+    competencia: s.competencia, codigo_tributacao: s.codigoTributacao, nbs: s.nbs, bruto_cent: s.brutoCent,
+    retencoes: { iss_retido_cent: s.retencoes.issRetidoCent, irrf_cent: s.retencoes.irrfCent, previdencia_cent: s.retencoes.previdenciaCent,
+      contribuicoes_sociais_cent: s.retencoes.contribuicoesSociaisCent },
+    total_retido_cent: s.totalRetidoCent, liquido_cent: s.liquidoCent,
+  };
+}
+function servicoDoBanco(v: unknown): ServicoDaNfse | null {
+  const o = objeto(v);
+  if (!o) return null;
+  const r = objeto(o.retencoes) ?? {};
+  return {
+    competencia: txt(o.competencia) ?? '', codigoTributacao: txt(o.codigo_tributacao), nbs: txt(o.nbs), brutoCent: num(o.bruto_cent),
+    retencoes: { issRetidoCent: num(r.iss_retido_cent), irrfCent: num(r.irrf_cent), previdenciaCent: num(r.previdencia_cent),
+      contribuicoesSociaisCent: num(r.contribuicoes_sociais_cent) },
+    totalRetidoCent: num(o.total_retido_cent), liquidoCent: num(o.liquido_cent),
+  };
+}
+
 /** O que volta do banco -> as mesmas formas da leitura (a tela desenha igual o lido agora e o guardado). */
 export function lidosDoBanco(nota: Record<string, unknown>, itens: readonly Record<string, unknown>[]): { cabecalho: CabecalhoDaNota; lidos: ItensLidos } {
   const t = objeto(nota.totais) ?? {};
@@ -281,6 +309,7 @@ export function lidosDoBanco(nota: Record<string, unknown>, itens: readonly Reco
         outrasCent: num(t.outras_cent), ipiCent: num(t.ipi_cent), stCent: num(t.st_cent), fcpStCent: num(t.fcp_st_cent), icmsCent: num(t.icms_cent),
         pisCent: num(t.pis_cent), cofinsCent: num(t.cofins_cent), notaCent: num(t.nota_cent),
         tributosAproxCent: t.tributos_aprox_cent == null ? null : num(t.tributos_aprox_cent),
+        ...((sv) => (sv ? { servico: sv } : {}))(servicoDoBanco(t.servico)),
       },
       itens: [...itens].sort((a, b) => num(a.n_item) - num(b.n_item)).map((r) => ({
         nItem: num(r.n_item), codigo: txt(r.codigo), ean: txt(r.ean), descricao: txt(r.descricao) ?? '', ncm: txt(r.ncm), cest: txt(r.cest), cfop: txt(r.cfop),

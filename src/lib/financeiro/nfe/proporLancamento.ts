@@ -228,7 +228,8 @@ export function proporLancamento(entrada: {
     proposta: {
       rotuloNota: `NF ${numeroDaNota(nota.numero)}`,
       tipoOperacao: '2-Saídas',
-      competencia: nota.emissao,
+      /* P174: a NFS-e tem competencia propria (o mes do servico); a NF-e segue na emissao */
+      competencia: nota.servico?.competencia || nota.emissao,
       favorecidoId,
       fazendaId: lado.fazenda?.id ?? peloEndereco?.id ?? null,
       valorCent,

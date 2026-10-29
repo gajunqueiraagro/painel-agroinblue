@@ -44,3 +44,8 @@ export function diaMes(iso: string | null | undefined): string {
   if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return '—';
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 }
+
+/** P174 — a chave de acesso de uma nota: 44 digitos (NF-e) ou 50 (NFS-e nacional). So' digitos. */
+export function ehChaveDeNota(c: string | null | undefined): c is string {
+  return !!c && /^(\d{44}|\d{50})$/.test(c);
+}

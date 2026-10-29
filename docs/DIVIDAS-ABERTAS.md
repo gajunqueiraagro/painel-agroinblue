@@ -455,6 +455,15 @@ docs/historico/frentes-ate-2026-09-29.md.
 
 ## DIVIDAS DE TELA
 
+- P174-TELA-NFSE (Gabriel 29/10/2026, T3: "AbaDocumentosLancamento e NotaFiscalDialog (bruto/retenções/líquido e "no DANFE") ficam com o
+  Code 1 na tela nova — deixe anotado para ele") — a NFS-e ja' e' LIDA, proposta e gravada (P174: `danfse.ts`, `NotaLida.modelo = 'nfse'`,
+  chave de 50), mas a tela ainda fala so' de NF-e. Para o Code 1, na tela nova da nota:
+  · `src/components/financeiro-v2/NotaFiscalDialog.tsx`: mostrar o BRUTO, as RETENCOES e o LIQUIDO da NFS-e (`nota.servico`: `brutoCent`,
+    `retencoes.{issRetidoCent, irrfCent, previdenciaCent, contribuicoesSociaisCent}`, `totalRetidoCent`, `liquidoCent`; o lancamento ja'
+    nasce com o liquido) e trocar "no DANFE" / "como no DANFE" pelo nome do documento lido (DANFSe quando `modelo === 'nfse'`).
+  · `src/components/financeiro-v2/AbaDocumentosLancamento.tsx:901`: o placeholder "44 dígitos" da chave → "44 ou 50 dígitos".
+  · Guardado: o servico vai em `nota_fiscal.totais.servico` (jsonb) e volta em `lidosDoBanco(...).lidos.totais.servico`.
+
 - CONC-ESTREITA (P141, Gabriel 28/10/2026, decisao a) — a aba Conciliação (os 3 cards lado a lado: Saldos | Resumo | Status) NÃO cabe
   abaixo de ~1000px de largura, e NUNCA coube. O gate de tela da Conciliação roda de 1000px para cima (`TAMANHOS_DA_CONCILIACAO` em
   `scripts/check-ui-cortes.mjs`); o estreito fica aqui. Medido na bancada (`tela=conciliacao`, dado SINTÉTICO no pior caso), cortes

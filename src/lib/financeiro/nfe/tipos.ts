@@ -39,10 +39,30 @@ export interface DuplicataNFe {
   valorCent: number;
 }
 
+/** P174 NFSE-LEITURA-01 — o que so' a NFS-e tem. Dinheiro em centavos; o "-" do DANFSe (sem valor) e' 0. */
+export interface ServicoDaNfse {
+  /** 'YYYY-MM-DD' — a competencia da NFS-e (pode diferir da emissao). */
+  competencia: string;
+  /** Codigo de tributacao nacional ("14.01.01"), como impresso. */
+  codigoTributacao: string | null;
+  nbs: string | null;
+  /** O valor da operacao / servico (o bruto). */
+  brutoCent: number;
+  /** As retencoes impressas. `issRetidoCent` so' quando "Retencao do ISSQN" diz retido. */
+  retencoes: { issRetidoCent: number; irrfCent: number; previdenciaCent: number; contribuicoesSociaisCent: number };
+  /** O "Total das Retencoes (ISSQN / Federais)" impresso. */
+  totalRetidoCent: number;
+  /** O "VALOR LIQUIDO DA NFS-e" impresso = o valor do lancamento (Gabriel 29/10, T2). */
+  liquidoCent: number;
+}
+
 export interface NotaLida {
-  /** 44 digitos, so' digitos (de `protNFe/infProt/chNFe`; sem protocolo, de `infNFe@Id` sem o "NFe"). */
+  /** 44 digitos, so' digitos (de `protNFe/infProt/chNFe`; sem protocolo, de `infNFe@Id` sem o "NFe").
+   *  P174: a NFS-e nacional tem 50 (`modelo = 'nfse'`). */
   chave: string;
-  modelo: '55';
+  modelo: '55' | 'nfse';
+  /** P174 — so' na NFS-e: competencia, codigos e as retencoes. `totais.notaCent` da NFS-e e' o LIQUIDO; o bruto mora aqui. */
+  servico?: ServicoDaNfse | null;
   /** `nNF` e `serie` crus, sem formatar. */
   numero: string;
   serie: string;
