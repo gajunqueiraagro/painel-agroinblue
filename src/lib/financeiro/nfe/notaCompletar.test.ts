@@ -22,7 +22,7 @@ describe('P128b — o pedido', () => {
   it('todas as colunas marcadas: os campos em todas; a conta SÓ na programada (nas pagas ela nunca muda); a safra fica com o banco', () => {
     const p = pedidoDeCompletar(ALVOS, TODAS, TODAS_AS_COLUNAS, new Set(), false);
     expect(p[0]).toEqual({ id: 'l1', descricao: 'Cercas sintetico 1/5', favorecido_id: 'f1', fazenda_id: 'faz1', plano_conta_id: 'p2',
-      numero_documento: 'NF 000.004.875', data_competencia: '2031-06-02' });
+      numero_documento: 'NF 000.004.875', tipo_documento: 'Nota Fiscal', data_competencia: '2031-06-02' });
     expect(p[4]).toMatchObject({ id: 'l5', descricao: 'Cercas sintetico 5/5', conta_bancaria_id: 'c1' });
     expect('valor' in p[4]).toBe(false);
   });
@@ -34,7 +34,7 @@ describe('P128b — o pedido', () => {
   });
   it('coluna desmarcada não entra; a célula mantida (✎) só naquela parcela', () => {
     const p = pedidoDeCompletar(ALVOS, TODAS, new Set<ColunaCompletar>(['descricao', 'documento']), new Set([chaveDaCelula('l2', 'documento')]), false);
-    expect(p[0]).toEqual({ id: 'l1', descricao: 'Cercas sintetico 1/5', numero_documento: 'NF 000.004.875' });
+    expect(p[0]).toEqual({ id: 'l1', descricao: 'Cercas sintetico 1/5', numero_documento: 'NF 000.004.875', tipo_documento: 'Nota Fiscal' });
     expect(p[1]).toEqual({ id: 'l2', descricao: 'Cercas sintetico 2/5' });
   });
   it('safra escolhida vai; descrição/nº vazios não vão', () => {

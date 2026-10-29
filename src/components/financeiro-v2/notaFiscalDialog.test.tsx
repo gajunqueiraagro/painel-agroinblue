@@ -46,7 +46,7 @@ const consultas = vi.hoisted(() => ({
   fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string): Promise<Consulta<{ id: string; nome: string; ativo: boolean } | null>> => ({ ok: true, valor: null })),
   usoDoFornecedor: vi.fn(async (_f: string): Promise<{ lancamentos: number; ultimo: string | null } | null> => ({ lancamentos: 3, ultimo: '2026-09-01' })),
   /* P128b — completar com a nota: a prévia é a própria função com `simular`; por padrão aceita tudo e devolve as linhas do pedido */
-  completarComANota: vi.fn(async (_c: string, pedido: readonly Record<string, unknown>[], o: { juntar: boolean; chave: string | null; simular: boolean })
+  completarComANota: vi.fn(async (_c: string, pedido: readonly Record<string, unknown>[], o: { juntar: boolean; chave: string | null; simular: boolean; valorNotaCent?: number | null })
     : Promise<Consulta<ResultadoCompletar>> => ({ ok: true, valor: { ok: true, recusas: [], efeitoDre: [], operacao: o.simular ? null : 'op-1',
       financiamentoId: o.juntar && !o.simular ? 'fin-1' : null,
       linhas: pedido.map((x) => ({ id: String(x.id), descricao: null, situacao: 'programada', parcelaN: null, campos: {} })) } })),
@@ -152,6 +152,7 @@ function gravadoresFalsos() {
     parcelarExistente: vi.fn(async (_l: string, _p: PayloadParcelamento): Promise<string | null> => 'fin-velho'),
     lancamento: vi.fn(async (_f: LancamentoV2Form): Promise<string | null> => 'lanc-unico'),
     trocarFornecedor: vi.fn(async (_c: string, _ids: readonly string[], _f: string, _m: string): Promise<string | null> => null),
+    vincular: vi.fn(async (_c: string, _doc: string, _ids: readonly string[]): Promise<string | null> => null),
   };
   const comoGravadores: Gravadores = g;
   return { g, comoGravadores };
@@ -391,7 +392,7 @@ describe('N4 — "Atualizar este": o lançamento aberto do mesmo fornecedor com 
     expect(g.gravar).not.toHaveBeenCalled();
     expect(g.parcelas).toHaveBeenCalledWith('fin-velho');
     expect(g.documentosDoParcelamento.mock.calls[0][2][0].arquivo?.type).toBe('application/pdf');
-    expect(g.numeroNoLancamento).toHaveBeenCalledWith('cli', ['lanc-1', 'lanc-2', 'lanc-3', 'lanc-4'], '937');
+    expect(g.numeroNoLancamento).toHaveBeenCalledWith('cli', ['lanc-1', 'lanc-2', 'lanc-3', 'lanc-4'], '000.000.937');   // P164: o nº "000.000.000"
   });
 });
 
@@ -424,7 +425,7 @@ describe('N6 — FIN-NOTA-PDF-01b: nota de UMA parcela e nota SEM duplicata cria
     fireEvent.click(screen.getByTestId('nota-criar'));
     await waitFor(() => expect(g.lancamento).toHaveBeenCalled());
     expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 1966.56, data_vencimento: '2026-10-20', status_transacao: 'programado', plano_conta_id: 'pl-nut',
-      favorecido_id: 'f1', fazenda_id: 'faz-1', numero_documento: '937', tipo_documento: 'Nota Fiscal' });
+      favorecido_id: 'f1', fazenda_id: 'faz-1', numero_documento: '000.000.937', tipo_documento: 'Nota Fiscal' });
     expect(g.gravar).not.toHaveBeenCalled();
     expect(g.documentosDoLancamento.mock.calls[0][1]).toBe('lanc-unico');
     expect(g.documentosDoLancamento.mock.calls[0][2][0].arquivo?.type).toBe('application/pdf');
@@ -437,7 +438,7 @@ describe('N6 — FIN-NOTA-PDF-01b: nota de UMA parcela e nota SEM duplicata cria
     await escolherSubcentro('Nutrição Engorda');
     fireEvent.click(await screen.findByTestId('nota-criar'));
     await waitFor(() => expect(g.lancamento).toHaveBeenCalled());
-    expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 9583, data_vencimento: '2026-09-29', numero_documento: '3241' });
+    expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 9583, data_vencimento: '2026-09-29', numero_documento: '000.003.241' });
   });
 });
 
@@ -454,7 +455,7 @@ describe('N7 — o caso de 21/10 16h49: NADA ESCOLHIDO NO MODAL SE PERDE no cami
     const prefill = props.onAbrirNoLancamento.mock.calls[0][0];
     expect(prefill).toMatchObject({
       conta_bancaria_id: 'sic', fazenda_id: 'faz-2', status_transacao: 'programado', plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda',
-      favorecido_id: 'f1', data_vencimento: '2026-09-29', valor: 9583, numero_documento: '3241', tipo_documento: 'Nota Fiscal', data_competencia: '2026-09-29',
+      favorecido_id: 'f1', data_vencimento: '2026-09-29', valor: 9583, numero_documento: '000.003.241', tipo_documento: 'Nota Fiscal', data_competencia: '2026-09-29',
     });
     /* P133 — a descrição é só dos produtos; o número da nota vai no documento (numero_documento acima) */
     expect(prefill.descricao).not.toContain('NF 3.241');
@@ -573,7 +574,7 @@ describe('N9 — NOTA-FORNECEDOR-DUPLICA-01: o cadastro sem CNPJ e o CNPJ ja\' c
 const LINEAGRO_SEM_CNPJ = 'forn-parecido';
 const jaLancado = (n: number, venc: string, status: string, extra: Partial<LancamentoJaLancado> = {}): LancamentoJaLancado => ({
   id: `velho-${n}`, vencimento: venc, pagamento: status === 'realizado' ? venc : null, competencia: '2026-09-15', descricao: `Insumos Sinteticos ${n}/4`,
-  valorCent: 49164, status, conciliado: status === 'realizado', financiamentoId: 'fin-antigo', numeroDocumento: null,
+  valorCent: 49164, status, conciliado: status === 'realizado', financiamentoId: 'fin-antigo', contaBancariaId: 'sic', numeroDocumento: null,
   fornecedorId: LINEAGRO_SEM_CNPJ, fornecedorNome: 'Agro Sintetica Insumos SA', fornecedorPor: 'nome',
   parcelas: [{ n, difCent: 0, difDias: 0 }], por: ['valor'], cancelado: false, ...extra,
 });
@@ -617,6 +618,8 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     /* P128b — uma gravação só: os 4, sem juntar (já são um parcelamento); depois a nota; o que nasceu registrado na operação */
     const gravado = pedidoGravado();
     expect([gravado.pedido.map((x) => x.id), gravado.opcoes.juntar]).toEqual([['velho-1', 'velho-2', 'velho-3', 'velho-4'], false]);
+    /* P167-B2 — o valor da nota vai ao banco (que recusa quando o que fica passa dele) */
+    expect(gravado.opcoes.valorNotaCent).toBe(196656);
     expect(consultas.registrarNaOperacao).toHaveBeenCalledWith('op-1', [], expect.any(Array));
     const [, parcelas, pendentes] = g.documentosDoParcelamento.mock.calls[0];
     expect(parcelas.map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
@@ -645,9 +648,63 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['velho-1', 'velho-2', 'velho-3', 'lanc-unico']);
     expect(consultas.registrarNaOperacao).toHaveBeenCalledWith('op-1', ['lanc-unico'], expect.any(Array));
     expect(g.lancamento).toHaveBeenCalledTimes(1);
-    expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 491.64, data_vencimento: '2027-01-20', favorecido_id: 'f1', plano_conta_id: 'pl-nut' });
+    /* P128b-N1 — a que falta nasce com a conta das irmãs (as 3 estão no Sicredi): a Conta da prévia começou nela */
+    expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 491.64, data_vencimento: '2027-01-20', favorecido_id: 'f1', plano_conta_id: 'pl-nut', conta_bancaria_id: 'sic' });
     expect(g.documentosDoParcelamento.mock.calls[0][1].map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'lanc-unico']);
     expect(g.gravar).not.toHaveBeenCalled();
+  });
+  /* P128b-N1 (Gabriel 28/10 16:04; o caso da Alta Paulista 4/4, nascida sem conta) — irmãs em contas DIFERENTES (ou alguma sem conta):
+     "conta" entra no "Falta:" e o "Revisar e completar" fica apagado até escolher; escolhida, libera */
+  it('N1 irmãs em contas diferentes: "Falta: conta" e nada se cria até escolher a conta', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [QUATRO[0], { ...QUATRO[1], contaBancariaId: 'outra' }, QUATRO[2]] });
+    const { comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await screen.findByTestId('nota-ja-lancada');
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: conta'));
+    expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+  });
+  it('N1 uma irmã sem conta: também "Falta: conta" (nunca nasce vazia calada)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [QUATRO[0], { ...QUATRO[1], contaBancariaId: null }, QUATRO[2]] });
+    const { comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await screen.findByTestId('nota-ja-lancada');
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: conta'));
+    expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+  });
+  /* P167 (NOTA-COMPRA-ERRADA-01) — a nota que a compra JÁ TEM (o PDF de antes, sem chave: achado pelo emitente + nº) só se LIGA às parcelas;
+     nunca nasce um segundo documento da mesma nota (o 32ffd9af do NJ) */
+  it('P167 a compra já tem esta nota: o anexar LIGA o documento que existe (nada de outro registro da mesma nota)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO.map((x, i) => (i === 0 ? { ...x, notaDocumentoId: 'doc-antigo' } : x)) });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await screen.findByTestId('nota-ja-lancada');
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(g.vincular).toHaveBeenCalledWith('cli', 'doc-antigo', ['velho-1', 'velho-2', 'velho-3', 'velho-4']);
+    expect(g.documentosDoParcelamento).not.toHaveBeenCalled();
+  });
+  /* P167 — a soma das parcelas que recebem a nota nunca passa da nota: a frase no rodapé, o "Revisar e completar" apagado, nada gravado */
+  it('P167 as parcelas somam mais que a nota: recusa com a frase, nada gravado', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [...QUATRO, { ...QUATRO[0], id: 'velho-5', parcelas: [], por: ['numero'] }] });
+    const { comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await screen.findByTestId('nota-ja-lancada');
+    expect((await screen.findByTestId('nota-recusa-compra')).textContent)
+      .toBe('⚠ As parcelas que receberiam a nota somam R$ 2.458,21, mais que a nota (R$ 1.966,56). Nada será gravado — confira se todas são desta compra.');
+    expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+  });
+  it('P167 duas compras do mesmo fornecedor: a outra compra fica de fora (o chip diz) e não recebe a nota', async () => {
+    const outra = QUATRO.map((x, i) => ({ ...x, id: `outra-${i + 1}`, financiamentoId: 'fin-outra', parcelas: [], por: ['soma' as const, 'fracao' as const] }));
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [...QUATRO.map((x) => ({ ...x, por: ['valor' as const, 'numero' as const] })), ...outra] });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    expect((await screen.findByTestId('nota-outra-compra')).textContent).toBe('4 de outra compra (fica de fora)');
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
+    expect(g.documentosDoParcelamento.mock.calls[0][1].map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
   });
   /* P128b — a caixinha "Trocar o fornecedor" saiu: o fornecedor é a COLUNA da prévia (marcada), gravado pela função única com o antes */
   it('fornecedor diferente: a coluna Fornecedor da prévia leva o da nota aos 4 (a função única), nunca a troca em lote', async () => {
@@ -852,7 +909,7 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     expect(opcoes.juntar).toBe(true);
     expect(pedido.map((x) => x.id)).toEqual(['irma-1', 'irma-2', 'irma-3', 'irma-4']);
     expect(pedido.map((x) => String(x.descricao).slice(-4))).toEqual([' 1/4', ' 2/4', ' 3/4', ' 4/4']);
-    expect(pedido.every((x) => x.data_competencia === '2026-09-15' && String(x.numero_documento).startsWith('NF '))).toBe(true);
+    expect(pedido.every((x) => x.data_competencia === '2026-09-15' && x.numero_documento === '000.000.937' && x.tipo_documento === 'Nota Fiscal')).toBe(true);   // P164: sem "NF", com o tipo
     expect(juntar).not.toHaveBeenCalled();   // a junção é a do banco, dentro da gravação única
     const [, parcelas] = g.documentosDoParcelamento.mock.calls[0];
     expect(parcelas.map((x) => x.lancamentoId)).toEqual(['irma-1', 'irma-2', 'irma-3', 'irma-4']);
@@ -955,7 +1012,7 @@ describe('P95 — o mesmo arquivo duas vezes e DIGITAR A CHAVE', () => {
     const celulas = within(screen.getByTestId('xml-linha')).getAllByRole('cell').map((c) => c.textContent);
     /* a chave nao traz a IE do destinatario: a fazenda nao vem (o operador escolhe na previa) */
     expect(celulas.slice(0, 6)).toEqual(['000.000.937', '—', 'Agro Sintetica', '11.222.333/0004-24', '—', '—']);
-    expect(consultas.notaJaLancada).toHaveBeenCalledWith('cli', expect.objectContaining({ parcelas: [], numero: '937', chave: CHAVE, emitenteDocumento: '11222333000424' }));
+    expect(consultas.notaJaLancada).toHaveBeenCalledWith('cli', expect.objectContaining({ parcelas: [], numero: '000.000.937', chave: CHAVE, emitenteDocumento: '11222333000424' }));
     fireEvent.click(screen.getByTestId('xml-abrir-lancamento'));
     const [paraLancar] = onAbrirNota.mock.calls[0];
     expect([paraLancar.lido.pelaChave, paraLancar.doXml.proposta.favorecidoId, paraLancar.arquivo.type]).toEqual([true, 'f1', 'application/pdf']);

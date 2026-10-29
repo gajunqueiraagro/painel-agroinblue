@@ -78,7 +78,7 @@ describe('proporLancamento — F1, a nota inteira', () => {
       parcelamento: { tipo: 'parcelado', parcelas: 2, primeiroVencimento: '2026-11-05' },
       duplicatas: [{ numero: '001', vencimento: '2026-11-05', valorCent: 811900 }, { numero: '002', vencimento: '2026-12-05', valorCent: 811900 }],
       formaPagamento: 'Boleto',
-      numeroDocumento: '12345',
+      numeroDocumento: '000.012.345',
       descricao: 'SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens',
       documento: {
         numero: '000.012.345', serie: '1', chaveAcesso: p.documento.chaveAcesso, dataEmissao: '2026-09-30', valorCent: 1623800,

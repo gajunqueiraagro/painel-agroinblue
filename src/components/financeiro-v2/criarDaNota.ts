@@ -117,6 +117,16 @@ export interface Gravadores {
   lancamento?: (form: LancamentoV2Form) => Promise<string | null>;
   /** NOTA-JA-LANCADA-01 — troca o fornecedor dos lancamentos pela funcao do lote (FORN-TROCAR-LOTE-01, com trilha). */
   trocarFornecedor?: (clienteId: string, ids: readonly string[], fornecedorId: string, motivo: string) => Promise<string | null>;
+  /** P167 — liga um documento que JÁ EXISTE aos lançamentos (`fin_documento_vincular`, idempotente). Devolve a frase da recusa, ou `null`. */
+  vincular?: (clienteId: string, documentoId: string, ids: readonly string[]) => Promise<string | null>;
+}
+
+/** P167 — a nota que a compra já tem se LIGA às outras parcelas dela; nunca nasce um segundo documento da mesma nota (o 32ffd9af do NJ). */
+async function vincularNoBanco(clienteId: string, documentoId: string, ids: readonly string[]): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { error } = await (supabase as any).rpc('fin_documento_vincular', { p_documento: documentoId, p_cliente: clienteId, p_lancamentos: [...ids] });
+  if (error) { console.error('fin_documento_vincular', error); return 'A nota que já existe não foi ligada às parcelas.'; }
+  return null;
 }
 
 /** NOTA-JA-LANCADA-01 — a troca do fornecedor pela funcao do lote (simular=false, com o motivo). Devolve a frase da recusa, ou `null`. */
@@ -157,6 +167,7 @@ export const GRAVADORES: Gravadores = {
   numeroNoLancamento: numeroNoLancamentoDoBanco,
   parcelarExistente: parcelarExistenteNoBanco,
   trocarFornecedor: trocarFornecedorNoBanco,
+  vincular: vincularNoBanco,
 };
 
 export type ResultadoDaNota = { ok: true; parcelas: number; erroDoDocumento: string | null } | { ok: false; erro: string };
@@ -285,7 +296,9 @@ export function prefillDoModal(d: DoXml, e: {
  */
 export async function anexarAosJaLancados(
   clienteId: string, d: DoXml, alvos: readonly { id: string; numero: number }[], favorecidoDaNota: string,
-  opcoes: { faltam?: { form: LancamentoV2Form; numero: number }[]; trocarPara?: string | null; motivoTroca?: string },
+  opcoes: { faltam?: { form: LancamentoV2Form; numero: number }[]; trocarPara?: string | null; motivoTroca?: string;
+    /** P167 — o documento desta nota que a compra JÁ TEM: liga-se este às parcelas (nunca outro registro da mesma nota) */
+    notaExistente?: string | null },
   g: Gravadores = GRAVADORES,
 ): Promise<{ ok: true; criados: number; avisos: string[]; idsCriados: string[]; documentoIds: string[] } | { ok: false; erro: string }> {
   const avisos: string[] = [];
@@ -304,11 +317,17 @@ export async function anexarAosJaLancados(
     criados += 1;
   }
   try {
-    const parcelas: ParcelaGravada[] = todos.map((x, i) => ({ numero: x.numero || i + 1, lancamentoId: x.id }));
-    const lista = await g.documentosDoParcelamento(clienteId, parcelas, [pendenteDaNota(d, favorecidoDaNota)]);
-    const falha = falhaDosDocumentos(lista);
-    if (falha) return { ok: false, erro: `A nota não foi anexada: ${falha}` };
-    documentoIds = lista.flatMap((x) => (x.documentoId ? [x.documentoId] : []));
+    if (opcoes.notaExistente && g.vincular) {
+      /* P167 — a nota já está na compra (o documento de antes, com ou sem a chave): só se liga às parcelas que faltam; nada novo nasce */
+      const e = await g.vincular(clienteId, opcoes.notaExistente, todos.map((x) => x.id));
+      if (e) return { ok: false, erro: e };
+    } else {
+      const parcelas: ParcelaGravada[] = todos.map((x, i) => ({ numero: x.numero || i + 1, lancamentoId: x.id }));
+      const lista = await g.documentosDoParcelamento(clienteId, parcelas, [pendenteDaNota(d, favorecidoDaNota)]);
+      const falha = falhaDosDocumentos(lista);
+      if (falha) return { ok: false, erro: `A nota não foi anexada: ${falha}` };
+      documentoIds = lista.flatMap((x) => (x.documentoId ? [x.documentoId] : []));
+    }
     const e = await g.numeroNoLancamento(clienteId, todos.map((x) => x.id), d.proposta.numeroDocumento);
     if (e) avisos.push(`A nota foi anexada, mas o número do documento não foi gravado: ${e}`);
   } catch (x) {

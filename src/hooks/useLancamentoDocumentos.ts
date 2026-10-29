@@ -155,6 +155,8 @@ export interface LancDocPayload {
   emitenteDocumento?: string | null;
   url?: string | null;
   tipo?: string | null;
+  /** P167 — o tipo do ARQUIVO que vai subir (só no registro): o banco recusa a mesma NF com o mesmo tipo já ativa nesta compra (o par PDF + XML segue) */
+  tipoArquivo?: string | null;
   tamanhoBytes?: number | null;
 }
 
@@ -273,6 +275,7 @@ export function paraJson(p: LancDocPayload): Record<string, Json> {
   por('url', p.url);
   por('tipo', p.tipo);
   por('tamanho_bytes', p.tamanhoBytes);
+  por('tipo_arquivo', p.tipoArquivo);
   return j;
 }
 

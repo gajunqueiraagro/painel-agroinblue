@@ -14,7 +14,7 @@
  *   de valor: a diferenca aparece em R$ e o operador decide). NADA ESCOLHIDO AQUI SE PERDE: "Abrir no Novo lancamento" leva tudo
  *   (`prefillDoModal`).
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -55,7 +55,7 @@ import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
-import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, parcelasParaCasar, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
+import { canceladosDaNota, casarJaLancados, contaUnicaDasIrmas, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, parcelasParaCasar, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
   type SituacaoNaTabela } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -70,6 +70,7 @@ import { fraseDaRemessa } from '@/lib/financeiro/nfe/remessaEntregaFutura';
 import { ORIGEM_FAZENDA_PELO_ENDERECO } from '@/lib/financeiro/nfe/proporLancamento';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
+import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import {
   camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerIeDaFazenda, fornecedorPeloDocumento, iePorFazenda, inscreverEmFazendas, lancamentosAbertosComValor,
   atualizarCamposDoCadastro, cadastroParaComparar, desfazerCamposDoCadastro, notaJaLancada, usoDoFornecedor, type CadastroComODocumento,
@@ -362,6 +363,15 @@ export function NotaFiscalDialog({
   /* D — a nota que so' tem lancamento CANCELADO nao esta' lancada: o rodape so' diz quantos */
   const canceladosSo = useMemo(() => (achados && !achados.some((l) => !l.cancelado) ? canceladosDaNota(achados) : []), [achados]);
   const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
+  /* P128b-N1 — a parcela que falta nasce com a conta das irmãs quando todas têm a mesma: a Conta da prévia COMEÇA nela (à vista, troca-se);
+     sem conta única (divergem ou alguma sem conta), "conta" entra no "Falta:" e o Criar fica apagado até escolher */
+  const contaDasIrmas = jaLancada && jaLancada.faltam.length > 0 ? contaUnicaDasIrmas(jaLancada.alvos) : null;
+  const contaDasIrmasPosta = useRef<string | null>(null);
+  useEffect(() => {
+    if (!contaDasIrmas || contaDasIrmasPosta.current === contaDasIrmas) return;
+    contaDasIrmasPosta.current = contaDasIrmas;
+    setContaId((c) => (c === '__none__' ? contaDasIrmas : c));
+  }, [contaDasIrmas]);
   /* P128a — a TABELA SISTEMA × NOTA e a frase do que foi achado (a mesma lista, as mesmas contas) */
   const linhasDaTabela = useMemo(() => (jaLancada ? linhasSistemaNota(jaLancada, n.totais.notaCent) : []), [jaLancada, n.totais.notaCent]);
   /* P128a (porta 2) — o lancamento aberto no Editar que a busca NAO achou: nada se cria daqui (a ancora pelo lancamento e' o P128c) */
@@ -478,6 +488,7 @@ export function NotaFiscalDialog({
   else if (res.inativo && favorecidoId === p.favorecidoId) faltas.push('fornecedor ativo');
   if (!fazendaId) faltas.push('fazenda');
   if (!planoId) faltas.push('subcentro');
+  if (jaLancada && caminho !== 'criar' && criarFaltam && jaLancada.faltam.length > 0 && como !== 'cartao' && (!contaId || contaId === '__none__')) faltas.push('conta');
   if (lavoura && !safraId) faltas.push('safra');
   if (lavoura && cultura === null) faltas.push('cultura');
   if (como !== 'cartao' && !cabeAqui && !vencimento) faltas.push('vencimento');
@@ -499,6 +510,15 @@ export function NotaFiscalDialog({
      (o caminho criar, ou a parcela que falta) */
   const faltasQueContam = jaLancada && !bloqueio && caminho !== 'criar' && jaLancada.faltam.length === 0 ? [] : faltas;
   const podeCriar = !bloqueio && !verificando && faltas.length === 0 && !ocupado && !naoAchouOAberto;
+  /* P167 (NOTA-COMPRA-ERRADA-01) — completar/anexar o que JÁ EXISTE: (1) duas compras com a mesma evidência = nada se grava (abrir pela parcela
+     da compra certa); (2) a soma das parcelas que recebem a nota (as achadas + as que nascem) nunca passa da nota (meio centavo de folga) —
+     "falta R$ X" não é estado final de um registro. O quadro continua à vista; a frase fica no rodapé e o "Revisar e completar" apaga. */
+  const somaDosLigadosCent = jaLancada ? jaLancada.alvos.reduce((t, l) => t + l.valorCent, 0) + jaLancada.faltam.reduce((t, f) => t + f.valorCent, 0) : 0;
+  const recusaDaCompra = !jaLancada || bloqueio || caminho === 'criar' ? null
+    : jaLancada.compraAmbigua ? 'Duas compras deste fornecedor parecem esta nota: abra a nota pela parcela da compra certa. Nada será gravado.'
+    : somaDosLigadosCent > n.totais.notaCent + 1
+      ? `As parcelas que receberiam a nota somam R$ ${reais(somaDosLigadosCent)}, mais que a nota (R$ ${reais(n.totais.notaCent)}). Nada será gravado — confira se todas são desta compra.`
+      : null;
   /* P74 — com o cartão, a conta origem das N é o cartão escolhido */
   const contaEscolhida = como === 'cartao' ? (cartaoId || null) : contaId && contaId !== '__none__' ? contaId : null;
   const escolhas = (): EscolhasDaNota | null => (favorecidoId && plano?.id ? {
@@ -592,6 +612,7 @@ export function NotaFiscalDialog({
    */
   const completarComNota = async (pedido: Record<string, unknown>[]): Promise<string | null> => {
     if (!jaLancada) return 'Nada para completar.';
+    if (recusaDaCompra) return recusaDaCompra;
     const donoDaNota = favorecidoId ?? jaLancada.alvos[0]?.fornecedorId ?? null;
     if (!donoDaNota) return 'Escolha o fornecedor da nota.';
     const e = escolhas();
@@ -610,7 +631,7 @@ export function NotaFiscalDialog({
         criados.push({ id, numero: f.n });
       }
       /* 2 */
-      const r = await completarComANota(clienteId, [...pedido, ...criados.map((x) => ({ id: x.id }))], { juntar: !!soltas, chave: n.chave || null, simular: false });
+      const r = await completarComANota(clienteId, [...pedido, ...criados.map((x) => ({ id: x.id }))], { juntar: !!soltas, chave: n.chave || null, simular: false, valorNotaCent: n.totais.notaCent });
       const recusa = r.ok === false ? r.motivo : !r.valor.ok ? (r.valor.recusas[0] ?? 'O banco recusou.') : null;
       if (recusa || r.ok === false) {
         const nao = await cancelarCriados(criados.map((x) => x.id), recusa ?? 'recusa');
@@ -619,7 +640,9 @@ export function NotaFiscalDialog({
       const operacao = r.valor.operacao;
       /* 3 */
       const numeroDe = (id: string) => jaLancada.porParcela.find((x) => x.lancamento?.id === id)?.parcela.n ?? 0;
-      const a = await anexarAosJaLancados(clienteId, doXml, [...jaLancada.alvos.map((l) => ({ id: l.id, numero: numeroDe(l.id) })), ...criados], donoDaNota, {},
+      /* P167 — a compra que JÁ TEM esta nota (o documento de antes) só recebe o vínculo: nunca um segundo documento da mesma nota */
+      const notaExistente = jaLancada.alvos.find((l) => l.notaDocumentoId)?.notaDocumentoId ?? null;
+      const a = await anexarAosJaLancados(clienteId, doXml, [...jaLancada.alvos.map((l) => ({ id: l.id, numero: numeroDe(l.id) })), ...criados], donoDaNota, { notaExistente },
         { ...g, lancamento: g.lancamento ?? onCriarLancamento });
       if (a.ok === false) {
         toast.error(`Os campos foram gravados, mas a nota não foi anexada: ${a.erro}`);
@@ -829,7 +852,9 @@ export function NotaFiscalDialog({
                  CAMINHOS lado a lado, cada um dizendo o que muda e o que não muda. Mesma altura do bloco de parcelas: nada se desloca. */
               <section className={cn(BLOCO, 'min-h-0 flex-1')} data-testid="nota-ja-lancada">
                 <TituloDoBloco nome="Esta nota já está no sistema" acao={<span className={CHIP_AVISO}>
-                  {jaLancada.outrosParecidos ? `+${jaLancada.outrosParecidos} parecido${jaLancada.outrosParecidos === 1 ? '' : 's'} (outra compra igual?)` : 'confira e escolha o caminho'}</span>} />
+                  {/* P167 — a outra compra do mesmo fornecedor fica de fora (nunca recebe a nota) e o chip diz */}
+                  {jaLancada.outraCompra.length ? <span data-testid="nota-outra-compra">{jaLancada.outraCompra.length} de outra compra (fica de fora)</span>
+                    : jaLancada.outrosParecidos ? `+${jaLancada.outrosParecidos} parecido${jaLancada.outrosParecidos === 1 ? '' : 's'} (outra compra igual?)` : 'confira e escolha o caminho'}</span>} />
                 {/* a frase: 2 linhas reservadas (nada se desloca), o texto inteiro no title */}
                 <p className="h-[26px] shrink-0 overflow-hidden whitespace-normal text-[10px] leading-[13px] text-foreground" title={fraseAchado}
                   data-testid="nota-ja-lancada-resumo">{fraseAchado}</p>
@@ -1143,6 +1168,8 @@ export function NotaFiscalDialog({
             <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-porta2-nao-achado"
               title="Aberta pelo Editar lançamento: a busca (nº, chave, soma) não achou este lançamento; criar daqui duplicaria a compra.">
               ⚠ O lançamento aberto não foi achado por esta nota. Nada será criado daqui.</span>
+          ) : recusaDaCompra ? (
+            <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-recusa-compra" title={recusaDaCompra}>⚠ {recusaDaCompra}</span>
           ) : faltasQueContam.length ? (
             <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-falta">⚠ Falta: {faltasQueContam.join(', ')}</span>
           ) : null}
@@ -1182,7 +1209,7 @@ export function NotaFiscalDialog({
           {jaLancada && !bloqueio && caminho !== 'criar' ? (
             /* P128b — "Completar" e "Completar e atualizar as não pagas": a prévia campo a campo antes de gravar (o que muda e o que não muda) */
             <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-completar-revisar"
-              disabled={!!ocupado || faltasQueContam.length > 0} onClick={() => setPreviaAberta(true)}>
+              disabled={!!ocupado || faltasQueContam.length > 0 || !!recusaDaCompra} onClick={() => setPreviaAberta(true)}>
               {ocupado === 'atualizar' ? 'Gravando…' : 'Revisar e completar'}
             </Button>
           ) : jaLancada && !bloqueio && caminho === 'criar' ? (
@@ -1236,9 +1263,9 @@ export function NotaFiscalDialog({
       {/* P128b — a prévia campo a campo do "Completar com a nota" (a do banco: `fn_nota_completar` com `p_simular`) */}
       {previaAberta && jaLancada && (
         <PreviaCompletar open onFechar={() => setPreviaAberta(false)} clienteId={clienteId}
-          alvos={alvosDaPrevia} rotulos={rotulosDaPrevia} atualizarNaoPagas={caminho === 'atualizar'} juntar={!!soltas} chave={n.chave || null}
+          alvos={alvosDaPrevia} rotulos={rotulosDaPrevia} atualizarNaoPagas={caminho === 'atualizar'} juntar={!!soltas} chave={n.chave || null} valorNotaCent={n.totais.notaCent}
           todasIniciais={{ descricaoBase: p.descricao, favorecidoId: favorecidoId ?? null, fazendaId: fazendaId || null, contaId: contaEscolhida,
-            planoContaId: planoId || null, numeroDocumento: /^nf/i.test(p.numeroDocumento) ? p.numeroDocumento : `NF ${p.numeroDocumento || numeroFalado(n.numero)}`,
+            planoContaId: planoId || null, numeroDocumento: formatNFNumber(p.numeroDocumento || n.numero),
             competencia: n.emissao || null, safraId: lavoura && safraId ? safraId : null }}
           onConfirmar={completarComNota} />
       )}

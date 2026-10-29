@@ -294,6 +294,11 @@ const CENARIOS = [
     ['mantém uma célula', clicar('[data-testid="previa-linha"] [data-testid="previa-muda"]')],
     ['troca o nº', async (p) => { await p.locator('[data-testid="previa-numero"]').fill('NF 000.004.876'); await espera(p, 700); }],
   ] },
+  /* P167 — abrir e fechar a confirmação do cancelamento no rodapé: o corpo do documento não anda (o rodapé troca no mesmo lugar) */
+  { nome: 'documento-nota-cancelar', url: 'tela=documento-nota&v=cancelar', estados: [
+    ['abre o cancelar', async (p) => { await p.locator('[data-testid="abrir-cancelar-nota"]').click(); await espera(p, 300); }],
+    ['volta', async (p) => { await p.locator('[data-testid="cancelar-nota"] button', { hasText: 'Voltar' }).click(); await espera(p, 300); }],
+  ] },
   { nome: 'documento-nota', url: 'tela=documento-nota', estados: [
     ['nota lida', async (p) => {
       const xml = await p.evaluate(() => globalThis.__xmlDaBancada);
@@ -538,7 +543,7 @@ const naRapida = RAPIDO ? filtroRapido('check-ui-desloca') : () => true;
 const TAMANHOS_DA_VEZ = TAMANHOS;
 /* P92 — o cenario pode pedir os PROPRIOS tamanhos (`tamanhos`), como no check-ui-cortes; o `--tamanhos` da linha de comando manda sobre eles */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS_DA_VEZ);
-const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || c.nome.startsWith(SO)) && naRapida(c));
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
 const base = `http://127.0.0.1:${servidor.httpServer.address().port}`;

@@ -18,6 +18,7 @@
 import type { AvisoNFe, DuplicataNFe, NotaLida } from './tipos';
 import type { ResolucaoEmitente } from './resolverEmitente';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from './formatos';
+import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 
 /** O `tPag` da nota -> a forma de pagamento do SISTEMA (`FORMAS_PAGAMENTO_V2`). Mapa FECHADO: o que nao esta' aqui fica vazio
  *  (cheque 02 e deposito 16 nao tem forma correspondente na lista do sistema). */
@@ -235,7 +236,8 @@ export function proporLancamento(entrada: {
       parcelamento,
       duplicatas: nota.duplicatas,
       formaPagamento,
-      numeroDocumento: nota.numero,
+      /* P164 (Gabriel 28/10 15:22) — o nº no lançamento é "000.009.952" (sem "NF": o tipo diz Nota Fiscal); a mesma regra do lote */
+      numeroDocumento: formatNFNumber(nota.numero) || nota.numero,
       descricao: descricaoDaNota(nota),
       documento: {
         numero: numeroDaNota(nota.numero), serie: nota.serie, chaveAcesso: nota.chave, dataEmissao: nota.emissao,

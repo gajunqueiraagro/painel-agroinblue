@@ -73,8 +73,8 @@ describe('P128b — a prévia campo a campo', () => {
     fireEvent.click(screen.getByTestId('previa-coluna-descricao'));
     fireEvent.click(screen.getByTestId('previa-coluna-conta'));
     await waitFor(() => expect(ultimoPedido().some((p) => 'conta_bancaria_id' in p)).toBe(true));
-    expect(ultimoPedido()).toEqual([{ id: 'l1', favorecido_id: 'f1', numero_documento: 'NF 1' },
-      { id: 'l2', favorecido_id: 'f1', numero_documento: 'NF 1', conta_bancaria_id: 'c1' }]);
+    expect(ultimoPedido()).toEqual([{ id: 'l1', favorecido_id: 'f1', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal' },
+      { id: 'l2', favorecido_id: 'f1', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal', conta_bancaria_id: 'c1' }]);
   });
   it('a prévia que não se confere (mesmo depois de uma boa) trava o gravar e diz; a recusa da gravação fica na prévia', async () => {
     abrir(vi.fn(async () => 'O mês 06/2031 está fechado. Nada foi gravado.'));

@@ -14,7 +14,7 @@ export const ROTULO_DA_COLUNA: Record<ColunaCompletar, string> = {
 };
 /** O campo do banco de cada coluna. */
 export type CampoCompletar = 'descricao' | 'favorecido_id' | 'fazenda_id' | 'conta_bancaria_id' | 'plano_conta_id' | 'numero_documento'
-  | 'data_competencia' | 'safra_id' | 'valor' | 'data_vencimento';
+  | 'tipo_documento' | 'data_competencia' | 'safra_id' | 'valor' | 'data_vencimento';
 export const CAMPO_DA_COLUNA: Record<ColunaCompletar, CampoCompletar> = {
   descricao: 'descricao', favorecido: 'favorecido_id', fazenda: 'fazenda_id', conta: 'conta_bancaria_id', subcentro: 'plano_conta_id',
   documento: 'numero_documento', competencia: 'data_competencia', safra: 'safra_id',
@@ -57,7 +57,8 @@ export function pedidoDeCompletar(alvos: readonly AlvoDaPrevia[], todas: Valores
     if (usa('fazenda') && todas.fazendaId) p.fazenda_id = todas.fazendaId;
     if (usa('conta') && todas.contaId && a.programada) p.conta_bancaria_id = todas.contaId;
     if (usa('subcentro') && todas.planoContaId) p.plano_conta_id = todas.planoContaId;
-    if (usa('documento') && todas.numeroDocumento.trim()) p.numero_documento = todas.numeroDocumento.trim();
+    /* P164 — o nº da nota vai com o TIPO ("000.009.952" + Nota Fiscal: o tipo diz que é nota, o nº não leva "NF") */
+    if (usa('documento') && todas.numeroDocumento.trim()) { p.numero_documento = todas.numeroDocumento.trim(); p.tipo_documento = 'Nota Fiscal'; }
     if (usa('competencia') && todas.competencia) p.data_competencia = todas.competencia;
     if (usa('safra') && todas.safraId) p.safra_id = todas.safraId;
     if (atualizarNaoPagas && a.programada) {
@@ -82,7 +83,7 @@ const lista = (x: unknown): unknown[] => (Array.isArray(x) ? x : []);
 const texto = (x: unknown): string | null => (typeof x === 'string' ? x : null);
 const SITUACOES: readonly LinhaDaPrevia['situacao'][] = ['conciliada', 'realizada', 'programada'];
 const CAMPOS: readonly CampoCompletar[] = ['descricao', 'favorecido_id', 'fazenda_id', 'conta_bancaria_id', 'plano_conta_id', 'numero_documento',
-  'data_competencia', 'safra_id', 'valor', 'data_vencimento'];
+  'tipo_documento', 'data_competencia', 'safra_id', 'valor', 'data_vencimento'];
 
 export function lerResultadoCompletar(r: unknown): ResultadoCompletar {
   const o = obj(r);

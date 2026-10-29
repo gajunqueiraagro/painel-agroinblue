@@ -85,7 +85,8 @@ async function gravarUm(
     if (!documentoId) {
       const { data, error } = await supabase.rpc('fin_documento_registrar', {
         p_lancamento_id: lancamentoId, p_cliente_id: clienteId,
-        p_payload: { ...paraJson(p.payload), especie: p.payload.especie ?? 'outro' },
+        /* P167 — o tipo do arquivo que vai subir: o banco recusa a mesma NF com o mesmo tipo já ativa nesta compra */
+        p_payload: { ...paraJson(p.payload), especie: p.payload.especie ?? 'outro', ...(p.arquivo?.type ? { tipo_arquivo: p.arquivo.type } : {}) },
       });
       if (error) throw error;
       const id = data && typeof data === 'object' && !Array.isArray(data) ? data.documento_id : null;
