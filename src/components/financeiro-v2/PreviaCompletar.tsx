@@ -33,8 +33,10 @@ const textoDo = (v: unknown, nome: string | null): string => nome && !/^[0-9a-f-
 const OBRIGATORIAS: ReadonlySet<ColunaCompletar> = new Set<ColunaCompletar>(['favorecido', 'fazenda', 'conta', 'subcentro']);
 const ROTULO_SITUACAO: Record<string, string> = { conciliada: 'conciliada', realizada: 'realizada', programada: 'programada' };
 
-export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, todasIniciais, atualizarNaoPagas, juntar, chave, onConfirmar }: {
+export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, todasIniciais, atualizarNaoPagas, juntar, chave, onConfirmar, valorNotaCent = null }: {
   open: boolean;
+  /** P167-B2 — o valor da nota: o banco recusa na prévia quando o que fica nos lançamentos passa dele */
+  valorNotaCent?: number | null;
   onFechar: () => void;
   clienteId: string;
   /** os lançamentos achados, na ordem das parcelas (1..N) */
@@ -67,7 +69,7 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
     const seq = ++pedidoSeq.current;
     setConferindo(true);
     const t = setTimeout(() => {
-      void completarComANota(clienteId, pedido, { juntar, chave, simular: true }).then((r) => {
+      void completarComANota(clienteId, pedido, { juntar, chave, simular: true, valorNotaCent }).then((r) => {
         if (seq !== pedidoSeq.current) return;
         setConferindo(false);
         if (r.ok === false) { setFalha(r.motivo); return; }
@@ -75,7 +77,7 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
       });
     }, 250);
     return () => clearTimeout(t);
-  }, [open, clienteId, pedido, juntar, chave]);
+  }, [open, clienteId, pedido, juntar, chave, valorNotaCent]);
 
   const linhaDe = (id: string) => previa?.linhas.find((l) => l.id === id) ?? null;
   const n = alvos.length;

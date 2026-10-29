@@ -46,7 +46,7 @@ const consultas = vi.hoisted(() => ({
   fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string): Promise<Consulta<{ id: string; nome: string; ativo: boolean } | null>> => ({ ok: true, valor: null })),
   usoDoFornecedor: vi.fn(async (_f: string): Promise<{ lancamentos: number; ultimo: string | null } | null> => ({ lancamentos: 3, ultimo: '2026-09-01' })),
   /* P128b — completar com a nota: a prévia é a própria função com `simular`; por padrão aceita tudo e devolve as linhas do pedido */
-  completarComANota: vi.fn(async (_c: string, pedido: readonly Record<string, unknown>[], o: { juntar: boolean; chave: string | null; simular: boolean })
+  completarComANota: vi.fn(async (_c: string, pedido: readonly Record<string, unknown>[], o: { juntar: boolean; chave: string | null; simular: boolean; valorNotaCent?: number | null })
     : Promise<Consulta<ResultadoCompletar>> => ({ ok: true, valor: { ok: true, recusas: [], efeitoDre: [], operacao: o.simular ? null : 'op-1',
       financiamentoId: o.juntar && !o.simular ? 'fin-1' : null,
       linhas: pedido.map((x) => ({ id: String(x.id), descricao: null, situacao: 'programada', parcelaN: null, campos: {} })) } })),
@@ -618,6 +618,8 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     /* P128b — uma gravação só: os 4, sem juntar (já são um parcelamento); depois a nota; o que nasceu registrado na operação */
     const gravado = pedidoGravado();
     expect([gravado.pedido.map((x) => x.id), gravado.opcoes.juntar]).toEqual([['velho-1', 'velho-2', 'velho-3', 'velho-4'], false]);
+    /* P167-B2 — o valor da nota vai ao banco (que recusa quando o que fica passa dele) */
+    expect(gravado.opcoes.valorNotaCent).toBe(196656);
     expect(consultas.registrarNaOperacao).toHaveBeenCalledWith('op-1', [], expect.any(Array));
     const [, parcelas, pendentes] = g.documentosDoParcelamento.mock.calls[0];
     expect(parcelas.map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
