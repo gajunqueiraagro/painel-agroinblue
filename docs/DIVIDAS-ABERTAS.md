@@ -443,6 +443,16 @@ docs/historico/frentes-ate-2026-09-29.md.
   ⚠ QUEM FOR TRATAR decide entre recalcular tudo (troca a identidade de ~54 mil de uma vez) e completar a lista do
     gatilho; e mede antes o que a Auditoria de duplicidade passa a mostrar.
 
+- DIVIDENDO-SO-ADMIN-01 (P171, Gabriel 29/10: "anote isso como pendencia para os dividendos tambem, sem mexer neles") — o escritor
+  dos dividendos (`_fn_dividendo_rodar`, 20261027195400) so' pede `tenant_ok`: pelo banco, um membro do cliente de qualquer perfil
+  cria, renomeia, inativa e reordena dividendos (a tela so' aparece para o admin, mas visibilidade nao e' permissao). O dos subcentros
+  do cliente (`_fn_subcentro_cliente_rodar`, P171) ja' recusa com 42501 quem nao e' `is_admin_agroinblue`. Proposta: a mesma guarda
+  nos dividendos, junto do P171b (o escritor dos dividendos passando a usar o mecanismo do P171).
+
+- PLANO-UPDATE-DIRETO-01 (P171) — a policy de UPDATE de `financeiro_plano_contas` e' `tenant_ok(cliente_id)`: um membro do cliente
+  pode, pela API, alterar direto uma conta DO CLIENTE (dividendo ou repasse), sem passar pelo escritor (nenhuma tela faz isso). Fechar
+  = trava de escritor no plano ou policy so' do admin; tabela de uso corrente (DDL curto, lock de 2 s).
+
 ## DIVIDAS DE TELA
 
 - CONC-ESTREITA (P141, Gabriel 28/10/2026, decisao a) — a aba Conciliação (os 3 cards lado a lado: Saldos | Resumo | Status) NÃO cabe
