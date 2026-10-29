@@ -7,6 +7,7 @@ import { useFinanceiroV2, notificarLancamentosMudaram, type LancamentoV2Form } f
 import { useCliente } from '@/contexts/ClienteContext';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import type { MovimentoConciliacao } from '@/hooks/useConciliacaoDoMes';
+import type { ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 
 /**
  * CriarLancamentoDaLinha — o movimento sem candidato deixa de ser beco sem saída.
@@ -105,12 +106,18 @@ interface Props {
    * gravação só, pelo grupo que soma o cheio.
    */
   semVinculo?: boolean;
+  /**
+   * P153 — o "Criar igual" do "Procurar no histórico": fornecedor, subcentro (a conta do plano), fazenda e descrição de um lançamento
+   * de antes. ⚠ SÓ ENTRA NO `prefill` — o operador vê e edita; nada é gravado sem o Salvar. Valor, data e conta continuam os do
+   * MOVIMENTO (travados). Sem modelo, o Criar de sempre.
+   */
+  modelo?: ModeloDoHistorico;
   aoFechar: () => void;
   /** Recebe o id quando a criação foi sem vínculo, para a estação marcá-lo. */
   aoCriado: (idCriado?: string) => void | Promise<void>;
 }
 
-export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugerido, semVinculo, aoFechar, aoCriado }: Props) {
+export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugerido, semVinculo, modelo, aoFechar, aoCriado }: Props) {
   const { fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const {
@@ -163,7 +170,16 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
     status_transacao: 'realizado',
     descricao: movimento.descricao ?? undefined,
     numero_documento: movimento.documento ?? undefined,
-  }), [contaQ.data, contaBancariaId, ehEntrada, dataMov, movimento, valorSugerido]);
+    /* P153 — o modelo por cima: a fazenda dele vence a da conta; a descrição dele vence o texto do banco */
+    ...(modelo ? {
+      fazenda_id: modelo.fazenda_id ?? contaQ.data?.fazenda_id ?? undefined,
+      descricao: modelo.descricao ?? movimento.descricao ?? undefined,
+      favorecido_id: modelo.favorecido_id,
+      plano_conta_id: modelo.plano_conta_id,
+      subcentro: modelo.subcentro,
+      centro_custo: modelo.centro_custo,
+    } : {}),
+  }), [contaQ.data, contaBancariaId, ehEntrada, dataMov, movimento, valorSugerido, modelo]);
 
   /**
    * ⚠ O QUE VAI AO BANCO É UM SUBCONJUNTO DELIBERADO DO FORMULÁRIO. Valor, contas,

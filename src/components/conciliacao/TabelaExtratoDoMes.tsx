@@ -35,7 +35,7 @@ import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInte
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { porDia } from '@/lib/conciliacao/linhasDoDia';
 import { historicoDoBanco } from '@/lib/conciliacao/historicoDoBanco';
-import { ListaDoMesPorDia, CelSaldoDoDia, TD_LISTA, TD_LISTA_NUM, type ColunaDaLista } from '@/components/conciliacao/ListaDoMesPorDia';
+import { ListaDoMesPorDia, CelSaldoDoDia, TD_LISTA, TD_LISTA_NUM, TD_RODAPE, COLUNA_SALDO, LARGURA_DATA, type ColunaDaLista } from '@/components/conciliacao/ListaDoMesPorDia';
 
 /* ─── formatadores (movidos de EspelhoConciliacaoTab, verbatim) ─────────────── */
 
@@ -175,25 +175,31 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, aoMarcarDuplicado, 
   }, [ofx, abertura]);
   const dias = useMemo(() => porDia(rows, (x) => (x.r.data ?? '').slice(0, 10), (x) => x.r.valor), [rows]);
   const movimentos = ofx.reduce((a, r) => a + r.valor, 0);
+  /* P159e: o rodapé soma Entradas e Saídas nas colunas delas (a soma das duas é o `movimentos` de sempre) */
+  const somaEntradas = ofx.reduce((a, r) => a + (r.valor > 0 ? r.valor : 0), 0);
+  const somaSaidas = ofx.reduce((a, r) => a + (r.valor < 0 ? r.valor : 0), 0);
   const fechamento = abertura + movimentos;
   const informado = internas.saldoInformadoConsolidado;
   const difere = informado == null ? null : fechamento - informado;
   /* ⚠ A COLUNA DA AÇÃO É ESTRUTURAL, NÃO DEPENDE DO DADO — e é isso que mantém a Lei de
      Estabilidade Visual de pé: ela existe ou não existe pela CAPACIDADE da tela (passou a
      função?), e nunca aparece no meio do uso porque uma linha é diferente da outra. */
-  /* P159a (mock 28/10): Data 44 · Histórico (o resto) · Valor 96 · Saldo 100 · ✓/○ 20 · Situação 150. A coluna Documento saiu: o
-     número vai no `title` do histórico. */
+  /* P159a (mock 28/10): a coluna Documento saiu (o número vai no `title` do histórico).
+     P159e (Gabriel 29/10, mock `mock-casar-abas-v1.html`): Data 70 (dd/mm/aaaa) · Nome do extrato (o resto; era "Histórico") · Entradas 96 · Saídas 96 · Saldo 100 · ✓/○ 20 ·
+     Situação 150 — o dinheiro em TRÊS colunas (a entrada verde em Entradas, a saída vermelha em Saídas, o saldo pela cor do sinal). */
   const colunas: ColunaDaLista[] = [
-    { titulo: 'Data', largura: 44 }, { titulo: 'Histórico' }, { titulo: 'Valor', largura: 96, alinhar: 'right' },
-    { titulo: 'Saldo', largura: 100, alinhar: 'right' }, { titulo: '', largura: 20, alinhar: 'center' }, { titulo: 'Situação', largura: 150 },
+    { titulo: 'Data', largura: LARGURA_DATA }, { titulo: 'Nome do extrato' },
+    { titulo: 'Entradas', largura: 96, alinhar: 'right' }, { titulo: 'Saídas', largura: 96, alinhar: 'right' },
+    { titulo: 'Saldo', largura: 100, alinhar: 'right', id: COLUNA_SALDO }, { titulo: '', largura: 20, alinhar: 'center' }, { titulo: 'Situação', largura: 150 },
     ...(aoMarcarDuplicado ? [{ titulo: '', largura: 24 }] : []),
   ];
+  const ICOL_SALDO = 4;
   return (
     <ListaDoMesPorDia
       testid="extrato-do-mes" testidLinha="extrato-linha"
       linhas={dias} colunas={colunas} chave={(x) => x.r.extrato_id}
       classeDaLinha={(x) => (x.item.r.status === 'sem_vinculo' ? 'bg-amber-50 dark:bg-amber-950/20' : undefined)}
-      saldoInicial={{ rotulo: 'Saldo inicial (extrato)', valor: fmtBRL(abertura), coluna: 3, className: cn('font-semibold', corValReal(abertura)),
+      saldoInicial={{ rotulo: 'Saldo inicial (extrato)', valor: fmtBRL(abertura), coluna: ICOL_SALDO, className: corValReal(abertura),
         testid: 'extrato-saldo-inicial' }}
       celulas={(x) => {
         const r = x.item.r;
@@ -212,7 +218,9 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, aoMarcarDuplicado, 
               {r.flag_investimento && <span className="shrink-0 rounded bg-violet-100 px-1 text-[9.5px] leading-[13px] text-violet-700">invest</span>}
             </span>
           </td>
-          <td className={cn(TD_LISTA_NUM, corValReal(r.valor))}>{fmtBRL(r.valor)}</td>
+          {/* P159e: a entrada na coluna Entradas (verde), a saída na coluna Saídas (vermelha); a outra fica vazia */}
+          <td className={cn(TD_LISTA_NUM, 'text-emerald-600')} data-testid="extrato-entrada">{r.valor > 0 ? fmtBRL(r.valor) : ''}</td>
+          <td className={cn(TD_LISTA_NUM, 'text-rose-600')} data-testid="extrato-saida">{r.valor < 0 ? fmtBRL(r.valor) : ''}</td>
           <CelSaldoDoDia fimDoDia={x.fimDoDia} testid="extrato-saldo"
             saldo={x.ultimaDoDiaNaOrigem ? fmtBRL(x.ultimaDoDiaNaOrigem.saldo) : null}
             className={x.ultimaDoDiaNaOrigem ? corValReal(x.ultimaDoDiaNaOrigem.saldo) : undefined} />
@@ -246,23 +254,33 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, aoMarcarDuplicado, 
           )}
         </>);
       }}
-      rodape={<>
-        <span className="shrink-0">Saldo final do extrato{' '}
-          <b className={cn('tabular-nums', corValReal(fechamento))} data-testid="extrato-saldo-final">{fmtBRL(fechamento)}</b></span>
+      /* P159e — ALINHAMENTO SOBERANO: o saldo final na coluna Saldo (as mesmas colunas da tabela); o rótulo e a legenda nas de antes,
+         o "informado no arquivo" nas de depois */
+      rodape={<tr>
+        <td className={TD_RODAPE} />
         {/* ⚠ "—" QUANDO FALTA SALDO INFORMADO, nunca "difere R$ 0,00": a sentinela do
             CLAUDE.md diz que ausência é traço, e um "confere" sobre dado que não existe é a
             pior das duas mentiras possíveis aqui.
-            ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02: um centavo aqui é divergência. */}
-        <span className="min-w-0 truncate" data-testid="extrato-informado"
-          title={informado == null ? 'sem saldo informado para o mês' : `informado no arquivo: ${fmtBRL(informado)} · calculado: ${fmtBRL(fechamento)}`}>
+            ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02: um centavo aqui é divergência.
+            P159e (mock): o rótulo e o informado no arquivo na coluna do nome; as somas de Entradas e Saídas nas colunas delas; o saldo
+            final NA coluna Saldo. */}
+        <td className={cn(TD_RODAPE, 'truncate')} data-testid="extrato-informado"
+          title={informado == null ? 'Saldo final do extrato · sem saldo informado para o mês'
+            : `Saldo final do extrato · informado no arquivo: ${fmtBRL(informado)} · calculado: ${fmtBRL(fechamento)}`}>
+          Saldo final do extrato
           {informado == null
-            ? <span className="text-muted-foreground">informado no arquivo —</span>
+            ? <span className="font-normal text-muted-foreground"> · informado no arquivo —</span>
             : saldoConfere(difere ?? 0)
-              ? <span className="text-success">informado no arquivo {fmtBRL(informado)} · confere</span>
-              : <span className="text-amber-700">informado no arquivo {fmtBRL(informado)} · difere R$ {fmtBRL(Math.abs(difere ?? 0))}</span>}
-        </span>
-        <span className="ml-auto shrink-0 text-[9.5px] text-muted-foreground">✓ casado · ○ sem par · ordem do dia: maior valor primeiro</span>
-      </>}
+              ? <span className="font-normal text-success"> · informado no arquivo {fmtBRL(informado)} · confere</span>
+              : <span className="font-normal text-amber-700"> · informado no arquivo {fmtBRL(informado)} · difere R$ {fmtBRL(Math.abs(difere ?? 0))}</span>}
+        </td>
+        <td className={cn(TD_RODAPE, 'text-right tabular-nums text-emerald-600')} data-testid="extrato-soma-entradas">{fmtBRL(somaEntradas)}</td>
+        <td className={cn(TD_RODAPE, 'text-right tabular-nums text-rose-600')} data-testid="extrato-soma-saidas">{fmtBRL(somaSaidas)}</td>
+        <td className={cn(TD_RODAPE, 'text-right tabular-nums', corValReal(fechamento))} data-testid="extrato-saldo-final"
+          data-alinha-coluna={COLUNA_SALDO}>{fmtBRL(fechamento)}</td>
+        <td colSpan={colunas.length - ICOL_SALDO - 1} className={cn(TD_RODAPE, 'truncate text-[9.5px] font-normal text-muted-foreground')}
+          title="✓ casado · ○ sem par · ordem do dia: maior valor primeiro">✓ casado · ○ sem par · ordem do dia: maior valor primeiro</td>
+      </tr>}
     />
   );
 }

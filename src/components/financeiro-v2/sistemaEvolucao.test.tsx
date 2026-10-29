@@ -27,13 +27,33 @@ const LINHA = lerLinhaResumo(comProprio({
 }));
 
 describe('P159b — a aba Sistema', () => {
-  it('a régua do mock; o maior |valor| primeiro; o saldo só no fim do dia (o do dono, 740)', () => {
+  /* P159e (Gabriel 29/10): Entradas · Saídas · Saldo; Descrição 190 e Fornecedor 160; Data 70 (dd/mm/aaaa); o rodapé nas MESMAS colunas */
+  it('a régua; o maior |valor| primeiro; o saldo só no fim do dia (o do dono, 740), na coluna Saldo como o inicial e o final', () => {
     if (!LINHA) throw new Error('linha do dono não lida');
     const { container } = render(<AbaSistemaReal linha={LINHA} />);
-    expect([...container.querySelectorAll('col')].map((c) => c.style.width)).toEqual(['44px', '220px', '200px', '', '96px', '100px', '22px']);
+    const lista = container.querySelector('[data-testid="aba-sistema"] table');
+    const rodape = container.querySelector('[data-testid="aba-sistema-rodape"] table');
+    if (!lista || !rodape) throw new Error('sem a lista ou o rodapé');
+    const larguras = (t: Element) => [...t.querySelectorAll('col')].map((c) => (c instanceof HTMLElement ? c.style.width : '?'));
+    expect(larguras(lista)).toEqual(['70px', '190px', '160px', '', '96px', '96px', '100px', '22px']);
+    expect(larguras(rodape)).toEqual(larguras(lista));
     const linhas = screen.getAllByTestId('sistema-linha');
     expect(linhas.map((tr) => tr.children[1].textContent)).toEqual(['Descrição -300', 'Descrição 50', 'Descrição -10']);
-    expect(linhas.map((tr) => tr.children[5].textContent)).toEqual(['', '', '740,00']);
+    expect(linhas.map((tr) => tr.children[6].textContent)).toEqual(['', '', '740,00']);
+    /* a entrada em Entradas (verde), a saída em Saídas (vermelha) */
+    expect(linhas.map((tr) => [tr.children[4].textContent, tr.children[5].textContent])).toEqual([['', '-300,00'], ['50,00', ''], ['', '-10,00']]);
+    expect(linhas[1].children[4].className).toContain('text-emerald-600');
+    expect(linhas[0].children[5].className).toContain('text-rose-600');
+    /* o saldo inicial, o do fim do dia e o final na coluna Saldo (a 7ª, índice 6) */
+    const coluna = (td: Element) => { let c = 0; for (const x of td.parentElement?.children ?? []) { if (x === td) return c; c += x instanceof HTMLTableCellElement ? x.colSpan : 1; } return -1; };
+    const marcados = [...container.querySelectorAll('[data-alinha-coluna="saldo"]')];
+    expect(marcados.map((td) => td.getAttribute('data-testid'))).toEqual(['sistema-saldo-inicial', 'sistema-saldo', 'sistema-saldo-final']);
+    for (const td of marcados) expect(coluna(td)).toBe(6);
+    /* o rodapé soma Entradas e Saídas nas colunas delas (4 e 5): +50 e −310 */
+    expect(coluna(screen.getByTestId('sistema-soma-entradas'))).toBe(4);
+    expect(coluna(screen.getByTestId('sistema-soma-saidas'))).toBe(5);
+    expect(screen.getByTestId('sistema-soma-entradas').textContent).toBe('50,00');
+    expect(screen.getByTestId('sistema-soma-saidas').textContent).toBe('-310,00');
     expect(screen.getByTestId('sistema-saldo-final').textContent).toBe('740,00');
   });
   it('D3: ✓ no conciliado; ○ âmbar com o status no title (parcial com a falta; realizado sem par)', () => {

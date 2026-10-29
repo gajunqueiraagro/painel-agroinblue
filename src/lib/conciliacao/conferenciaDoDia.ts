@@ -80,5 +80,6 @@ export function rotuloDoDia(iso: string | null): string {
   if (!iso) return 'sem data';
   const [a, m, d] = iso.slice(0, 10).split('-').map(Number);
   const semana = new Date(a, m - 1, d).toLocaleDateString('pt-BR', { weekday: 'long' });
-  return `${semana.charAt(0).toUpperCase()}${semana.slice(1)} · ${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+  /* P159e (mock `mock-casar-abas-v1.html`): a data inteira, dd/mm/aaaa */
+  return `${semana.charAt(0).toUpperCase()}${semana.slice(1)} · ${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 }
