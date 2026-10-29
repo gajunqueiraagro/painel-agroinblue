@@ -277,22 +277,46 @@ const CENARIOS = [
     ['nota ja registrada', { url: 'tela=nota-pdf&v=registrada' }], ['chave nao confere', { url: 'tela=nota-pdf&v=diverge' }],
     ['pior caso de texto', { url: 'tela=nota-pdf&v=longo' }],
     ['subcentro de lavoura (Safra e Cultura)', { url: 'tela=nota-pdf&v=lavoura' }], ['nota sem duplicata (Criar lancamento)', { url: 'tela=nota-pdf&v=semdup' }],
-    ['nota ja lancada (NOTA-JA-LANCADA-01)', { url: 'tela=nota-pdf&v=jalancada' }],
     ['nota avulsa, remessa de entrega futura (NOTA-AVULSA-890-01)', { url: 'tela=nota-pdf&v=avulsa' }],
-    ['nota ja lancada em parcela (NOTA-CONTAS-NA-CRIACAO-01 C)', { url: 'tela=nota-pdf&v=emparcela' }],
-    ['nota ja lancada com cancelados no fim (D)', { url: 'tela=nota-pdf&v=cancelados' }], ['so cancelados (D)', { url: 'tela=nota-pdf&v=socancelados' }],
+    ['so cancelados (D)', { url: 'tela=nota-pdf&v=socancelados' }],
     /* P95 — a previa pela chave digitada (emissao e valor em ambar no lugar dos lidos) e a nota achada em parcelas soltas */
-    ['nota pela chave digitada (P95)', { url: 'tela=nota-pdf&v=pelachave' }], ['nota em parcelas soltas, "k/4" (P95)', { url: 'tela=nota-pdf&v=irmas' }],
-    /* P128a — a tabela sistema × nota com diferença em vermelho, "só no sistema" e o "Documento hoje" */
+    ['nota pela chave digitada (P95)', { url: 'tela=nota-pdf&v=pelachave' }],
+  ] },
+  /* D-a (Gabriel 29/10 08:32) — CADA MODO CONTRA A PRÓPRIA BASE: a nota JÁ LANÇADA tem outro conjunto de abas (5, numeradas) que a NOVA (3) —
+     o desenho aprovado; trocar de modo é trocar de tela, não "deslocar". As variantes já lançadas se medem aqui, contra a já lançada recém-aberta;
+     a nova, acima, contra a nova. (O "Criar novo (duplica)" do ⋯ volta para a nova: a tela dele é medida no `check:ui-cortes`, `nota-pdf-caminho-criar`.) */
+  { nome: 'nota-pdf-ja', url: 'tela=nota-pdf&v=jalancada', estados: [
+    ['nota ja lancada em parcela (NOTA-CONTAS-NA-CRIACAO-01 C)', { url: 'tela=nota-pdf&v=emparcela' }],
+    ['nota ja lancada com cancelados no fim (D)', { url: 'tela=nota-pdf&v=cancelados' }],
+    ['nota em parcelas soltas, "k/4" (P95)', { url: 'tela=nota-pdf&v=irmas' }],
+    /* P128a — a tabela sistema × nota com diferença em vermelho e "só no sistema" */
     ['nota no sistema com diferenca (P128a)', { url: 'tela=nota-pdf&v=diferenca' }],
+    /* Gabriel 29/10 08:26 — os parcelados do LR (sem "k/N", "Parcela N - None"): o "Juntar" marcado no lugar reservado */
+    ['parcelados do LR', { url: 'tela=nota-pdf&v=lr' }], ['parcelados do LR, a 1ª escrita à mão', { url: 'tela=nota-pdf&v=lr2' }],
+  ] },
+  /* Caso 3 (Gabriel 29/10 11:33) — a nota no cartão em 10: responder a posição (pela descrição) desenha as 10 linhas DENTRO do quadro; a barra das
+     abas, o Resultado e o rodapé não andam */
+  { nome: 'nota-pdf-m2', url: 'tela=nota-pdf&v=m2', antes: async (p) => {
+    await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await espera(p, 400);
+  }, estados: [
+    ['posição pela descrição', clicar('[data-testid="nota-cartao-pergunta"] button:has-text("pela descrição")')],
+  ] },
+  /* Gabriel 29/10 08:26 — desmarcar "Juntar as 4" troca o "O que acontece" de cada linha no lugar; a aba Como vai ficar com a prévia do LR */
+  { nome: 'nota-pdf-lr', url: 'tela=nota-pdf&v=lr', antes: async (p) => { await p.locator('[data-testid="nota-juntar-caixa"]').waitFor({ timeout: 8000 }); await espera(p, 300); },
+    estados: [
+    ['desmarca Juntar', noLugar('[data-testid="nota-juntar-caixa"]')],
+    ['aba Como vai ficar', clicar('[data-testid="nota-abas-ja"] button:has-text("Como vai ficar")')],
   ] },
   /* P127 + P128c — o Novo documento: soltar a nota (a faixa do lançamento vira a da nota lida, com as divergências) e trocar um campo para o
      do lançamento não deslocam o formulário (o modal tem altura fixa) */
   /* P128b — a prévia campo a campo: desmarcar uma coluna, manter uma célula (✎), trocar o nº (a prévia reconferindo) não deslocam nada */
-  { nome: 'previa-completar', url: 'tela=previa-completar&cam=2', estados: [
-    ['desmarca Descrição', clicar('[data-testid="previa-coluna-descricao"]')], ['marca Conta', clicar('[data-testid="previa-coluna-conta"]')],
-    ['mantém uma célula', noLugar('[data-testid="previa-celula"] [data-testid="previa-muda"]')],
+  /* P163 v4 — a grade (uma linha por parcela): desmarcar uma coluna, editar uma célula, trocar o nº para todas e marcar a coluna opcional
+     (a Fazenda, que difere na 3/5): nada se desloca (os campos são da largura da coluna; o azul troca no lugar) */
+  { nome: 'previa-completar', url: 'tela=previa-completar&cam=2&v=difere', estados: [
+    ['desmarca Descrição', clicar('[data-testid="previa-coluna-descricao"]')],
+    ['edita uma célula', async (p) => { await p.locator('[data-testid="previa-linha"] [data-testid="previa-campo-descricao"]').first().fill('Mourões sinteticos'); await espera(p, 700); }],
     ['troca o nº', async (p) => { await p.locator('[data-testid="previa-numero"]').fill('NF 000.004.876'); await espera(p, 700); }],
+    ['marca Fazenda', clicar('[data-testid="previa-coluna-fazenda"]')],
   ] },
   /* P167 — abrir e fechar a confirmação do cancelamento no rodapé: o corpo do documento não anda (o rodapé troca no mesmo lugar) */
   { nome: 'documento-nota-cancelar', url: 'tela=documento-nota&v=cancelar', estados: [
@@ -312,13 +336,16 @@ const CENARIOS = [
       await p.locator('[data-trocar="valor"]').first().click(); await espera(p, 400);
     }],
   ] },
-  /* P128a — trocar o CAMINHO (Completar → Completar e atualizar → Criar novo): o texto de cada cartão e o botão do rodapé trocam no lugar */
-  { nome: 'nota-pdf-caminhos', url: 'tela=nota-pdf&v=diferenca', antes: async (p) => {
-    const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
-    if (await t.count()) { await t.first().click(); await espera(p, 300); }
-  }, estados: [
-    ['Completar e atualizar as nao pagas', clicar('[data-testid="nota-caminho-atualizar"]')],
-    ['Criar um lancamento novo', clicar('[data-testid="nota-caminho-criar"]')],
+  /* P163-2 (os 3 cartões saíram) — a nota JÁ LANÇADA em abas: trocar de aba, marcar "atualizar as não pagas" (aba 3) e escolher o "Criar novo
+     (duplica)" no ⋯ não movem a barra das abas nem o rodapé (o conteúdo troca dentro do corpo) */
+  { nome: 'nota-pdf-caminhos', url: 'tela=nota-pdf&v=diferenca', antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await espera(p, 300); },
+    estados: [
+    ['aba Parcelas × sistema', clicar('[data-testid="nota-abas-ja"] button:has-text("Parcelas × sistema")')],
+    ['aba Lançamento', clicar('[data-testid="nota-abas-ja"] button:has-text("Lançamento")')],
+    ['aba Como vai ficar', clicar('[data-testid="nota-abas-ja"] button:has-text("Como vai ficar")')],
+    ['atualizar as nao pagas', noLugar('[data-testid="nota-atualizar-nao-pagas"] button')],
+    ['aba Itens', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens (")')],
+    /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
   ] },
   /* P74 — "Como foi pago?": trocar À vista → Cartão em N× → (cartão, 4) → Parcelas livres → Duplicatas apagado não move o título do bloco, os
      outros blocos nem o rodapé (o conteúdo do bloco troca por dentro, na altura dele) */

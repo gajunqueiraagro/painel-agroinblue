@@ -35,6 +35,44 @@ export function soltasParaJuntar(j: Pick<NotaJaLancada, 'pelaNota' | 'fracoes'> 
   return null;
 }
 
+/**
+ * URGENTE 29/10 (o Azulão: "Reforma Ponte" + "Parcela 2 - F2 - REFORMA PONTE" não se juntaram, calado) + Gabriel 08:26 (os parcelados do LR,
+ * "Parcela 3 - None"…): JUNTAR É O PADRÃO. As soltas da nota são as do "k/N" (P96a) ou, sem ele, os achados vivos da nota (`alvos`) quando são
+ * EXATAMENTE as N duplicatas (N ≥ 2), na ordem do vencimento. Quando não junta, a FRASE diz por quê (nunca calado). A recusa de quem grava
+ * (fornecedores/fazendas/classificações diferentes, mês fechado…) vem da própria prévia do banco. PURO.
+ */
+export type JuncaoDaNota = { soltas: SoltasDaNota; frase: null } | { soltas: null; frase: string | null };
+/** `escolha` (o mock da nota já lançada, 29/10): `aCriar` = as parcelas da nota que nascem agora (entram na junção, o banco as junta com as
+ *  achadas); `deixadas` = as achadas que a pessoa deixou como estão (não recebem a nota: a compra não fecha, não junta). */
+export function juncaoDaNota(j: Pick<NotaJaLancada, 'pelaNota' | 'fracoes' | 'alvos'> | null, duplicatas: number,
+  escolha: { aCriar?: number; deixadas?: number } = {}): JuncaoDaNota {
+  if (!j) return { soltas: null, frase: null };
+  const aCriar = escolha.aCriar ?? 0;
+  const deixadas = escolha.deixadas ?? 0;
+  if (deixadas > 0) {
+    return { soltas: null, frase: `Não junto: ${deixadas === 1 ? '1 parcela fica' : `${deixadas} parcelas ficam`} como está (não recebe a nota).` };
+  }
+  /* o "k/N" primeiro: a nota de UMA duplicata paga no cartão em N (P95) também se junta pelas frações */
+  const pelaFracao = soltasParaJuntar(j);
+  if (pelaFracao) return { soltas: pelaFracao, frase: null };
+  if (duplicatas < 2) return { soltas: null, frase: null };
+  const vivas = j.alvos.filter((l) => !l.cancelado);
+  const jaParcela = vivas.filter((l) => l.financiamentoId);
+  if (vivas.length && jaParcela.length === vivas.length && new Set(jaParcela.map((l) => l.financiamentoId)).size === 1) {
+    return { soltas: null, frase: null };   // já são UMA compra parcelada: nada a juntar
+  }
+  if (jaParcela.length) {
+    return { soltas: null, frase: `Não junto: ${jaParcela.length === 1 ? '1 delas já é parcela' : `${jaParcela.length} delas já são parcelas`} de uma compra (junte pelo cadastro dela).` };
+  }
+  if (vivas.length + aCriar !== duplicatas) {
+    return { soltas: null, frase: `Não junto: a nota tem ${duplicatas} duplicatas e achei ${vivas.length} no sistema${aCriar ? ` (+${aCriar} a criar)` : ''} (confira as que ${vivas.length + aCriar < duplicatas ? 'faltam' : 'sobram'}).` };
+  }
+  const chave = (l: (typeof vivas)[number]) => l.vencimento ?? l.pagamento ?? l.competencia ?? '';
+  const ordem = [...vivas].sort((a, b) => chave(a).localeCompare(chave(b)) || a.id.localeCompare(b.id));
+  /* as que nascem agora entram pelo banco (a junção recebe as achadas + as criadas, na mesma gravação) */
+  return { soltas: { n: duplicatas, ids: ordem.map((l) => l.id), somaCent: ordem.reduce((s, l) => s + l.valorCent, 0) }, frase: null };
+}
+
 export interface MesDoEfeito { mes: string; valorCent: number; parcelas: number }
 export interface ParcelaDaJuncao {
   numero: number; lancamentoId: string; descricao: string | null; vencimento: string | null; valorCent: number; status: string | null;

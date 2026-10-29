@@ -288,6 +288,21 @@ export async function notaJaLancada(clienteId: string, entrada: {
   } catch (e) { console.error('fn_nota_ja_lancada', e); return falhou(e); }
 }
 
+/** Nota já lançada (Gabriel 29/10 10:38) — a aba "No sistema hoje": a FAZENDA, o SUBCENTRO e o FORNECEDOR de cada achado como estão no banco (a
+ *  `fn_nota_ja_lancada` não os traz). Só leitura, com o cliente; falha = `{ ok: false }` (a aba diz "não consegui ler", nunca "—" calado). */
+export interface ComoEstaHoje { id: string; fazendaId: string | null; subcentro: string | null; favorecidoId: string | null; planoContaId: string | null; safraId: string | null }
+export async function comoEstaoHoje(clienteId: string, ids: readonly string[]): Promise<Consulta<ComoEstaHoje[]>> {
+  if (!ids.length) return deu([]);
+  try {
+    const { data, error } = await supabase.from('financeiro_lancamentos_v2').select('id, fazenda_id, subcentro, favorecido_id, plano_conta_id, safra_id')
+      .eq('cliente_id', clienteId).in('id', [...ids]);
+    if (error) { console.error('comoEstaoHoje', error); return falhou(error); }
+    const texto = (v: unknown) => (typeof v === 'string' && v ? v : null);
+    return deu((data ?? []).flatMap((r) => (r && typeof r.id === 'string'
+      ? [{ id: r.id, fazendaId: texto(r.fazenda_id), subcentro: texto(r.subcentro), favorecidoId: texto(r.favorecido_id), planoContaId: texto(r.plano_conta_id), safraId: texto(r.safra_id) }] : [])));
+  } catch (e) { console.error('comoEstaoHoje', e); return falhou(e); }
+}
+
 /** NOTA-FORNECEDOR-COMPARAR-01 — o cadastro como esta' HOJE (as colunas que a nota ou a Receita podem mudar). Falha = `null`. */
 export async function cadastroParaComparar(clienteId: string, fornecedorId: string): Promise<CadastroParaComparar | null> {
   const { data, error } = await supabase.from('financeiro_fornecedores')

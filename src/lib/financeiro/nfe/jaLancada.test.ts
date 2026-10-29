@@ -3,7 +3,7 @@
  * cada parcela fica com o MAIS proximo, cada lancamento uma vez so'; a outra serie vira "parecidos a mais"; numero/chave entram juntos.
  */
 import { describe, it, expect } from 'vitest';
-import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fracaoDaNota, fraseDoAchado, fraseEmParcelas, lerJaLancados, linhasSistemaNota, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
+import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, maisMeses, parcelasQueFaltamNoCartao, posicaoDaDescricao, posicoesNoCartao, fracaoDaNota, fraseDoAchado, fraseEmParcelas, lerJaLancados, linhasSistemaNota, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
 
 const l = (id: string, n: number, difCent: number, difDias = 0, por: LancamentoJaLancado['por'] = ['valor']): LancamentoJaLancado => ({
   id, vencimento: null, pagamento: null, competencia: null, descricao: null, valorCent: 34134 + difCent, status: 'realizado', conciliado: false,
@@ -242,5 +242,37 @@ describe('P167 — uma compra só', () => {
   });
   it('o banco diz qual documento desta nota o achado já tem (`nota_documento_id`)', () => {
     expect(lerJaLancados([{ id: 'x', valor_cent: 1, por: ['numero'], parcelas: [], nota_documento_id: 'doc-1' }])[0].notaDocumentoId).toBe('doc-1');
+  });
+});
+
+/* Caso 3 (Gabriel 29/10 11:33) — a nota À VISTA no CARTÃO em 10× (o molde da M2 Tratores NF 14.222, SINTÉTICO): 3 achadas de 10 */
+describe('Caso 3 — a posição de cada achada no cartão', () => {
+  const doCartao = (id: string, vencimento: string, descricao: string) => ({ id, vencimento, descricao, valorCent: 147350 });
+  const TRES = [doCartao('c1', '2031-08-10', 'Manutencao sintetica 1/3'), doCartao('c2', '2031-09-10', 'Manutencao sintetica - Parc.7 2/3'),
+    doCartao('c3', '2031-10-10', 'Parcela 8 - None 3/3')];
+  it('a posição pela descrição ("Parcela 8", "Parc.7"); o "k/N" do fim não conta', () => {
+    expect(['Parcela 8 - None', 'Manutencao - Parc.7', 'Manutencao sintetica 1/3', 'Parcela 3/5 - None', null].map(posicaoDaDescricao)).toEqual([8, 7, null, null, null]);
+  });
+  it('as duas leituras: 6/7/8 pela descrição (a sem número pelo mês) × 1/2/3 pela ordem — discordam: a tela pergunta', () => {
+    const p = posicoesNoCartao(TRES, 10);
+    expect([...(p.pelaDescricao ?? [])]).toEqual([['c1', 6], ['c2', 7], ['c3', 8]]);
+    expect([...(p.pelaOrdem ?? [])]).toEqual([['c1', 1], ['c2', 2], ['c3', 3]]);
+    expect(p.concordam).toBe(false);
+  });
+  it('uma numerada só, ou numeradas fora da sequência mensal: a descrição não diz (nunca adivinha)', () => {
+    expect(posicoesNoCartao([TRES[0], TRES[2]], 10).pelaDescricao).toBeNull();
+    expect(posicoesNoCartao([doCartao('a', '2031-08-10', 'Parcela 2'), doCartao('b', '2031-09-10', 'Parcela 5')], 10).pelaDescricao).toBeNull();
+    /* as duas concordam: a 1ª achada é a parcela 1 */
+    expect(posicoesNoCartao([doCartao('a', '2031-08-10', 'Parcela 1'), doCartao('b', '2031-09-10', 'Parcela 2')], 10).concordam).toBe(true);
+  });
+  it('as que faltam nascem no vencimento da fatura (o mesmo dia, mês a mês), no valor da parcela', () => {
+    const f = parcelasQueFaltamNoCartao(TRES, new Map([['c1', 6], ['c2', 7], ['c3', 8]]), 10, 147350);
+    expect(f.map((x) => [x.n, x.vencimento])).toEqual([[1, '2031-03-10'], [2, '2031-04-10'], [3, '2031-05-10'], [4, '2031-06-10'], [5, '2031-07-10'], [9, '2031-11-10'], [10, '2031-12-10']]);
+    expect(f.every((x) => x.valorCent === 147350)).toBe(true);
+    expect([maisMeses('2031-01-31', 1), maisMeses('2031-11-10', 2)]).toEqual(['2031-02-28', '2032-01-10']);
+    /* com o valor da nota: a última que falta leva os centavos (as 10 fecham a nota exata, nunca passam) */
+    const tresDeArredondado = TRES.map((x) => ({ ...x, valorCent: 19666 }));
+    const g = parcelasQueFaltamNoCartao(tresDeArredondado, new Map([['c1', 6], ['c2', 7], ['c3', 8]]), 10, 19666, 196656);
+    expect([g.slice(0, -1).every((x) => x.valorCent === 19666), g[g.length - 1].valorCent, 3 * 19666 + g.reduce((t, x) => t + x.valorCent, 0)]).toEqual([true, 19662, 196656]);
   });
 });

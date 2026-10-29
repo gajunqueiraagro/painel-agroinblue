@@ -106,6 +106,75 @@ export function fracaoDaNota(valorCent: number, notaCent: number): number | null
   return null;
 }
 
+/* ── Caso 3 (Gabriel 29/10 11:33, a M2 Tratores NF 14.222): a nota À VISTA no CARTÃO em N ─────────────────────────────────────────────────
+   N = nota ÷ parcela (o da fração), nunca o número achado. A POSIÇÃO de cada achada no cartão tem duas leituras: (a) pela DESCRIÇÃO ("Parcela K",
+   "Parc.K"; as sem número pela sequência mensal a partir das numeradas) e (b) pela ORDEM das faturas (a 1ª achada = 1). Concordam = segue;
+   discordam (ou a descrição não diz) = a TELA PERGUNTA, nada se grava antes. As que faltam nascem no vencimento da fatura (o mesmo dia, mês a mês). PURO. */
+/** "Parcela 8 - None" -> 8; "Manutencao Maquinas - Parc.7" -> 7; o "k/N" do fim NÃO conta (é o que o sistema pôs). */
+export function posicaoDaDescricao(descricao: string | null | undefined): number | null {
+  const m = /\bparc(?:ela)?\.?\s*(\d{1,2})\b(?!\s*\/)/i.exec(descricao ?? '');
+  return m ? Number(m[1]) : null;
+}
+const mesesEntre = (de: string, ate: string) => (Number(ate.slice(0, 4)) - Number(de.slice(0, 4))) * 12 + Number(ate.slice(5, 7)) - Number(de.slice(5, 7));
+/** a data `iso` andando `m` meses, no mesmo dia (o fim do mês quando o dia não existe) */
+export function maisMeses(iso: string, m: number): string {
+  const ano = Number(iso.slice(0, 4)); const mes = Number(iso.slice(5, 7)) - 1 + m; const dia = Number(iso.slice(8, 10));
+  const a = ano + Math.floor(mes / 12); const mm = ((mes % 12) + 12) % 12;
+  const ultimo = new Date(Date.UTC(a, mm + 1, 0)).getUTCDate();
+  return `${a}-${String(mm + 1).padStart(2, '0')}-${String(Math.min(dia, ultimo)).padStart(2, '0')}`;
+}
+export interface PosicoesNoCartao {
+  n: number;
+  /** pela descrição: ≥ 2 numeradas numa sequência mensal sem buraco (as sem número pelo mês); `null` = a descrição não diz com segurança */
+  pelaDescricao: ReadonlyMap<string, number> | null;
+  /** pela ordem das faturas: a 1ª achada = 1, as outras pelo mês */
+  pelaOrdem: ReadonlyMap<string, number> | null;
+  /** as duas leituras dão o MESMO (sem pergunta) */
+  concordam: boolean;
+}
+export function posicoesNoCartao(achadas: readonly Pick<LancamentoJaLancado, 'id' | 'vencimento' | 'descricao'>[], n: number): PosicoesNoCartao {
+  const comData = [...achadas].filter((l): l is typeof l & { vencimento: string } => !!l.vencimento).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  const valida = (m: Map<string, number>) => m.size === comData.length && new Set(m.values()).size === m.size && [...m.values()].every((k) => k >= 1 && k <= n);
+  let pelaOrdem: Map<string, number> | null = null;
+  if (comData.length && comData.length === achadas.length) {
+    const m = new Map(comData.map((l) => [l.id, 1 + mesesEntre(comData[0].vencimento, l.vencimento)] as const));
+    pelaOrdem = valida(m) ? m : null;
+  }
+  let pelaDescricao: Map<string, number> | null = null;
+  /* o "k/N" do fim com o N da NOTA (o P95: "… - 3/6") também diz a posição; o de outro N (o "1/3" que um completar pôs) não */
+  const daFracao = (d: string | null) => { const f = fracaoDaDescricao(d); return f && f.n === n ? f.k : null; };
+  const numeradas = comData.flatMap((l) => { const k = posicaoDaDescricao(l.descricao) ?? daFracao(l.descricao); return k ? [{ l, k }] : []; });
+  if (numeradas.length >= 2 && comData.length === achadas.length) {
+    const [ancora] = numeradas;
+    const coerente = numeradas.every(({ l, k }) => k - ancora.k === mesesEntre(ancora.l.vencimento, l.vencimento));
+    if (coerente) {
+      const m = new Map(comData.map((l) => [l.id, ancora.k + mesesEntre(ancora.l.vencimento, l.vencimento)] as const));
+      pelaDescricao = valida(m) ? m : null;
+    }
+  }
+  const iguais = !!pelaDescricao && !!pelaOrdem && [...pelaDescricao].every(([id, k]) => pelaOrdem?.get(id) === k);
+  return { n, pelaDescricao, pelaOrdem, concordam: iguais };
+}
+/** As posições da nota que faltam no sistema, no vencimento da fatura (a achada mais próxima é a âncora) e no valor da parcela. Com o valor da
+ *  nota, a ÚLTIMA que falta leva os centavos que sobram: as N fecham a nota exata (a soma nunca passa da nota — o B2). */
+export function parcelasQueFaltamNoCartao(achadas: readonly Pick<LancamentoJaLancado, 'id' | 'vencimento' | 'valorCent'>[], posicoes: ReadonlyMap<string, number>, n: number,
+  valorCent: number, notaCent?: number): ParcelaDaNotaParaCasar[] {
+  const ancoras = achadas.flatMap((l) => { const k = posicoes.get(l.id); return l.vencimento && k ? [{ v: l.vencimento, k }] : []; });
+  if (!ancoras.length) return [];
+  const ocupadas = new Set(posicoes.values());
+  const faltam: ParcelaDaNotaParaCasar[] = [];
+  for (let k = 1; k <= n; k++) {
+    if (ocupadas.has(k)) continue;
+    const a = [...ancoras].sort((x, y) => Math.abs(x.k - k) - Math.abs(y.k - k))[0];
+    faltam.push({ n: k, vencimento: maisMeses(a.v, k - a.k), valorCent });
+  }
+  if (notaCent !== undefined && faltam.length) {
+    const resto = notaCent - achadas.reduce((t, l) => t + l.valorCent, 0) - valorCent * (faltam.length - 1);
+    if (resto > 0) faltam[faltam.length - 1] = { ...faltam[faltam.length - 1], valorCent: resto };
+  }
+  return faltam;
+}
+
 export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], todos: readonly LancamentoJaLancado[], notaCent = 0): NotaJaLancada | null {
   /* D — o cancelado nunca casa parcela, nunca e' alvo e sozinho nao faz a nota "ja' lancada" */
   const vivos = todos.filter((l) => !l.cancelado);
@@ -258,7 +327,7 @@ const situacaoDe = (l: LancamentoJaLancado): SituacaoNaTabela =>
 const dataDe = (l: LancamentoJaLancado) => l.vencimento ?? l.pagamento ?? l.competencia;
 
 /** Em quantas parcelas a nota foi lançada: o N mais comum das frações achadas; sem fração, quantos foram achados. */
-function nDasParcelas(j: Pick<NotaJaLancada, 'fracoes' | 'pelaNota'>): number {
+export function nDasParcelas(j: Pick<NotaJaLancada, 'fracoes' | 'pelaNota'>): number {
   /* achada pela soma: o parcelamento inteiro SAO as parcelas (nem toda parcela e' nota ÷ N: 33.000,00 + 6 × 12.833,33) */
   const pelaSoma = j.pelaNota.filter((l) => l.por.includes('soma')).length;
   if (pelaSoma) return pelaSoma;
