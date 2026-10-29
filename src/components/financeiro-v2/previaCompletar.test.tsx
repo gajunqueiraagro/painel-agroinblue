@@ -24,8 +24,8 @@ const banco = vi.hoisted(() => ({
 vi.mock('@/lib/financeiro/nfeConsultas', () => banco);
 import { PreviaCompletar } from './PreviaCompletar';
 
-const ALVOS: AlvoDaPrevia[] = [{ id: 'l1', programada: false, notaValorCent: 63200, notaVencimento: '2031-06-20' },
-  { id: 'l2', programada: true, notaValorCent: 63200, notaVencimento: '2031-07-20' }];
+const ALVOS: AlvoDaPrevia[] = [{ id: 'l1', programada: false, notaValorCent: 63200, notaVencimento: '2031-06-20', descricaoHoje: 'Cercas' },
+  { id: 'l2', programada: true, notaValorCent: 63200, notaVencimento: '2031-07-20', descricaoHoje: 'Cercas' }];
 const TODAS: ValoresParaTodas = { descricaoBase: 'Cercas sintetico', favorecidoId: 'f1', fazendaId: null, contaId: 'c1', planoContaId: 'p-sugerido',
   numeroDocumento: 'NF 1', competencia: null, safraId: null };
 
@@ -46,7 +46,8 @@ describe('P128b — a prévia campo a campo', () => {
     abrir();
     await waitFor(() => expect(screen.getByTestId('previa-gravar')).toBeEnabled());
     expect(screen.getByTestId('previa-gravar').textContent).toBe('Completar as 2 e anexar');
-    expect(naParcela('l1', 'previa-muda').map((x) => x.textContent)).toEqual(['Cercas → Cercas sintetico 1/2']);
+    /* URGENTE 29/10 — a Descrição DESMARCADA: a de hoje fica e ganha só o "i/N" (nunca a base da nota) */
+    expect(naParcela('l1', 'previa-muda').map((x) => x.textContent)).toEqual(['Cercas → Cercas 1/2']);
     expect(naParcela('l1', 'previa-cadeado').map((x) => x.textContent)).toEqual(['🔒 Banco sintetico']);
     expect(naParcela('l2', 'previa-cadeado')).toEqual([]);
     expect(naParcela('l2', 'previa-igual').map((x) => x.textContent)).toContain('NF 1 · igual');
@@ -58,7 +59,8 @@ describe('P128b — a prévia campo a campo', () => {
     expect(ultimoPedido().every((p) => !('plano_conta_id' in p))).toBe(true);
     /* P163-D1 — Fornecedor e Fazenda também começam desmarcados: nada do que já está no lançamento muda sem marcar */
     expect(['favorecido', 'fazenda', 'safra'].map((c) => screen.getByTestId(`previa-coluna-${c}`).getAttribute('data-state'))).toEqual(['unchecked', 'unchecked', 'unchecked']);
-    expect(['descricao', 'competencia', 'documento'].map((c) => screen.getByTestId(`previa-coluna-${c}`).getAttribute('data-state'))).toEqual(['checked', 'checked', 'checked']);
+    expect(['descricao', 'competencia', 'documento'].map((c) => screen.getByTestId(`previa-coluna-${c}`).getAttribute('data-state'))).toEqual(['unchecked', 'checked', 'checked']);
+    expect(ultimoPedido().map((p) => p.descricao)).toEqual(['Cercas 1/2', 'Cercas 2/2']);
     expect(ultimoPedido().every((p) => !('favorecido_id' in p) && !('fazenda_id' in p))).toBe(true);
     expect(banco.completarComANota.mock.calls.every((c) => c[2].simular)).toBe(true);   // nada gravado antes do clique
   });
@@ -71,16 +73,18 @@ describe('P128b — a prévia campo a campo', () => {
     fireEvent.click(screen.getByTestId('previa-gravar'));
     await waitFor(() => expect(onConfirmar).toHaveBeenCalled());
     const [pedido] = onConfirmar.mock.calls[0];
-    expect(['descricao' in pedido[0], pedido[1].descricao]).toEqual([false, 'Cercas sintetico 2/2']);
+    expect(['descricao' in pedido[0], pedido[1].descricao]).toEqual([false, 'Cercas 2/2']);
   });
   it('coluna desmarcada não vai ao pedido; marcar a Conta leva a conta SÓ à programada', async () => {
     abrir();
     await waitFor(() => expect(screen.getByTestId('previa-gravar')).toBeEnabled());
-    fireEvent.click(screen.getByTestId('previa-coluna-descricao'));
     fireEvent.click(screen.getByTestId('previa-coluna-conta'));
     await waitFor(() => expect(ultimoPedido().some((p) => 'conta_bancaria_id' in p)).toBe(true));
-    expect(ultimoPedido()).toEqual([{ id: 'l1', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal' },
-      { id: 'l2', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal', conta_bancaria_id: 'c1' }]);
+    expect(ultimoPedido()).toEqual([{ id: 'l1', descricao: 'Cercas 1/2', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal' },
+      { id: 'l2', descricao: 'Cercas 2/2', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal', conta_bancaria_id: 'c1' }]);
+    /* marcar a Descrição é o ÚNICO jeito de a base da nota ir */
+    fireEvent.click(screen.getByTestId('previa-coluna-descricao'));
+    await waitFor(() => expect(ultimoPedido()[0].descricao).toBe('Cercas sintetico 1/2'));
   });
   it('a prévia que não se confere (mesmo depois de uma boa) trava o gravar e diz; a recusa da gravação fica na prévia', async () => {
     abrir(vi.fn(async () => 'O mês 06/2031 está fechado. Nada foi gravado.'));

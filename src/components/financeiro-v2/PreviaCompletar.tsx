@@ -25,7 +25,8 @@ import {
 /** P163-D1 (Gabriel 28/10 15:22; briefing P163 B.3) — de início vêm marcadas SÓ a Descrição, a Competência (= emissão) e o Nº/nota. Conta e
  *  Subcentro desmarcados (P162: o sugerido é o último do fornecedor, nunca o deste lançamento); Fornecedor e Fazenda também — nada do que já
  *  está no lançamento muda sem a pessoa marcar. A Safra acompanha a competência: desmarcada, o banco põe a da competência nova (P138). */
-const MARCADAS_DE_INICIO: ReadonlySet<ColunaCompletar> = new Set<ColunaCompletar>(['descricao', 'competencia', 'documento']);
+/* URGENTE 29/10 — a Descrição vem DESMARCADA (o texto do usuário nunca some sem ele marcar); só Competência e Nº marcados */
+const MARCADAS_DE_INICIO: ReadonlySet<ColunaCompletar> = new Set<ColunaCompletar>(['competencia', 'documento']);
 /** a dica de cada linha (o title do rótulo) */
 const DICA: Partial<Record<ColunaCompletar, string>> = { safra: 'desmarcada, acompanha a competência (a safra da competência nova)' };
 const dataBr = (x: unknown) => (typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) ? `${x.slice(8, 10)}/${x.slice(5, 7)}/${x.slice(0, 4)}` : null);

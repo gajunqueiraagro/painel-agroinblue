@@ -382,7 +382,8 @@ export function NotaFiscalDialog({
   const alvosDaPrevia = useMemo((): AlvoDaPrevia[] => {
     const alvos = new Set((jaLancada?.alvos ?? []).map((l) => l.id));
     return linhasDaTabela.flatMap((x) => (x.sistema && alvos.has(x.sistema.id)
-      ? [{ id: x.sistema.id, programada: x.situacao === 'programada', notaValorCent: x.notaValorCent, notaVencimento: x.notaVencimento }] : []));
+      ? [{ id: x.sistema.id, programada: x.situacao === 'programada', notaValorCent: x.notaValorCent, notaVencimento: x.notaVencimento,
+        descricaoHoje: x.sistema.descricao }] : []));
   }, [jaLancada, linhasDaTabela]);
   const rotulosDaPrevia = useMemo(() => Object.fromEntries(linhasDaTabela.flatMap((x) => (x.sistema ? [[x.sistema.id, x.rotulo]] : []))), [linhasDaTabela]);
   /* P128a (decisao c) — as PROGRAMADAS que diferem da nota (valor ou vencimento): so' elas o caminho 2 atualiza */

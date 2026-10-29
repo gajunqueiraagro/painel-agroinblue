@@ -34,7 +34,9 @@ export interface ValoresParaTodas {
 }
 
 /** Um lançamento da prévia, na ordem das parcelas (1..N); `programada` = pode receber valor e vencimento da nota (caminho 2). */
-export interface AlvoDaPrevia { id: string; programada: boolean; notaValorCent: number | null; notaVencimento: string | null }
+export interface AlvoDaPrevia { id: string; programada: boolean; notaValorCent: number | null; notaVencimento: string | null;
+  /** A descrição de HOJE (com a coluna Descrição desmarcada ela fica e ganha só o "i/N"). */
+  descricaoHoje?: string | null }
 
 /** A descrição padronizada: "<base> i/N" (a base sem um "k/N" no fim). */
 export function descricaoPadronizada(base: string, i: number, n: number): string {
@@ -53,6 +55,12 @@ export function pedidoDeCompletar(alvos: readonly AlvoDaPrevia[], todas: Valores
     const p: Record<string, unknown> = { id: a.id };
     const usa = (c: ColunaCompletar) => marcadas.has(c) && !mantidas.has(chaveDaCelula(a.id, c));
     if (usa('descricao') && todas.descricaoBase.trim()) p.descricao = descricaoPadronizada(todas.descricaoBase, k + 1, n);
+    /* URGENTE 29/10 (o Azulão: "Reforma Ponte" virou o nome dos itens) — a Descrição DESMARCADA nunca troca o texto do usuário: a de hoje
+       fica e ganha só o "i/N" (com N > 1; a célula mantida pelo ✎ fica como está) */
+    else if (!marcadas.has('descricao') && !mantidas.has(chaveDaCelula(a.id, 'descricao')) && n > 1 && a.descricaoHoje?.trim()) {
+      const comNumero = descricaoPadronizada(a.descricaoHoje, k + 1, n);
+      if (comNumero !== a.descricaoHoje) p.descricao = comNumero;
+    }
     if (usa('favorecido') && todas.favorecidoId) p.favorecido_id = todas.favorecidoId;
     if (usa('fazenda') && todas.fazendaId) p.fazenda_id = todas.fazendaId;
     if (usa('conta') && todas.contaId && a.programada) p.conta_bancaria_id = todas.contaId;
