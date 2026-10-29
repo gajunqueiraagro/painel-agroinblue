@@ -347,6 +347,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   vazio fica dentro do quadro; em pagina que rola, `useAlturaAteOFim` (topo do quadro → fim da janela). O gate: filtrar para 6/1/0 linhas.
 - P121: o Resumo do lançamento é o `ResumoDoLancamento` (do Financeiro; `ui/linha-resumo` fica com os outros modais): blocos de ALTURA FIXA que
   somam ~452px (cabe em 1126×579), nada rola; linha nova num bloco = refazer a conta e medir; datas dos pares nunca cortam (larguras medidas).
+- P121b: a linha "Nota" do Resumo = o NÚMERO inteiro logo após o rótulo (`documentoDoResumo`, o rótulo da coluna Doc.; nunca corta) e a origem num selo
+  depois ("da compra" · "ligado"; é ele que cede, com o title); "Nota Fiscal ·" não entra.
 - FIN-V2-FORNECEDOR-SEM-SUFIXO-01: em TABELA o fornecedor e' so' o nome ("…" + `title` com CNPJ/"sem CNPJ", cidade/UF, inativo); o final
   de filial ("…0007-69", "sem CNPJ") so' no seletor/busca e no Mesclar.
 - FIN-V2-FILTRO-FORNECEDOR-01: filtro de fornecedor = ativos (+ inativo com lançamento no recorte ou escolhido, P94); mesclado nunca (o nome antigo acha

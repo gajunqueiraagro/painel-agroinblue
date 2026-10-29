@@ -13,13 +13,13 @@ const BASE: ResumoDoLancamentoProps = {
   favorecidoDocumento: '33.759.218/0002-64', descricao: 'Joelho c/rosca 90x1.1/2 20101946 Tigre, Registro Esfera VS Compacto', fazenda: 'Faz. Pureza',
   valor: 'R$ 804,40', sentido: 'saida', conta: [{ rotulo: 'Conta', nome: 'Banco do Brasil' }], atividade: 'Pecuária', safra: 'Safra 26/27 Pecuária',
   fase: 'Todas (rateia)', centro: 'Manutenção Fazenda', subcentro: 'Ferramentas e Equipamentos Pecuária', status: { rotulo: 'Programado', cor: 'text-x font-semibold' },
-  forma: null, vencimento: '10/11/2026', pagamento: null, modalidade: null, parcelas: null, documento: 'Nota Fiscal · 000.544.330',
+  forma: null, vencimento: '10/11/2026', pagamento: null, modalidade: null, parcelas: null, documento: { numero: 'NF 000.544.330', selo: null, titulo: 'Nota Fiscal · NF 000.544.330' },
 };
 const ALVORADA: ResumoDoLancamentoProps = {
   ...BASE, competencia: '10/08/2026', favorecido: 'Alvorada Com. de Produtos Agropecuários Ltda - CG', favorecidoDocumento: '11.222.333/0001-81 · Campo Grande/MS',
   descricao: 'Produce FR 1 L, Lontal Pour On FR 1 L · 10 itens 1/4', fazenda: 'Faz. Sta. Tereza', valor: 'R$ 821,22', conta: [{ rotulo: 'Conta', nome: 'Cartão Elo' }],
   fase: null, centro: 'Sanidade', subcentro: 'Vacinas e Vermífugos', status: { rotulo: 'Realizado', cor: 'inline-block rounded-[7px] pilula' }, forma: 'Cartão',
-  vencimento: '10/09/2026', pagamento: '10/09/2026', modalidade: 'Compra parcelada', parcelas: '1/4', documento: 'Nota Fiscal · 000.778.618',
+  vencimento: '10/09/2026', pagamento: '10/09/2026', modalidade: 'Compra parcelada', parcelas: '1/4', documento: { numero: 'NF 000.778.618', selo: 'da compra', titulo: 'NF 000.778.618 · nota da compra' },
 };
 const LONGO: ResumoDoLancamentoProps = {
   ...BASE, favorecido: 'Cooperativa Agroindustrial dos Produtores Rurais do Vale do Rio Paraná e Região Ltda',
@@ -46,7 +46,7 @@ describe('P121 — o Resumo do lançamento, os 3 casos do mock', () => {
     expect(screen.getByTestId('resumo-favorecido').className).toContain('line-clamp-2');
     expect(screen.getByTestId('resumo-favorecido-documento').textContent).toBe('33.759.218/0002-64');
     expect(screen.getByTestId('resumo-descricao').className).toContain('truncate');
-    expect(screen.getByTestId('resumo-nota').textContent).toBe('Nota Fiscal · 000.544.330');
+    expect(screen.getByTestId('resumo-nota').textContent).toBe('NF 000.544.330');
     expect(screen.getByTestId('resumo-valor').textContent).toBe('R$ 804,40');
     expect(screen.getByTestId('resumo-valor').className).toContain('text-destructive');
     expect(celulas('classificacao').map((c) => c[0])).toEqual(['Pecuária', 'Safra 26/27 Pecuária', 'Todas (rateia)', 'Manutenção Fazenda',
