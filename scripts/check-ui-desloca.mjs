@@ -288,6 +288,17 @@ const CENARIOS = [
   ] },
   /* P127 + P128c — o Novo documento: soltar a nota (a faixa do lançamento vira a da nota lida, com as divergências) e trocar um campo para o
      do lançamento não deslocam o formulário (o modal tem altura fixa) */
+  /* P128b — a prévia campo a campo: desmarcar uma coluna, manter uma célula (✎), trocar o nº (a prévia reconferindo) não deslocam nada */
+  { nome: 'previa-completar', url: 'tela=previa-completar&cam=2', estados: [
+    ['desmarca Descrição', clicar('[data-testid="previa-coluna-descricao"]')], ['marca Conta', clicar('[data-testid="previa-coluna-conta"]')],
+    ['mantém uma célula', clicar('[data-testid="previa-linha"] [data-testid="previa-muda"]')],
+    ['troca o nº', async (p) => { await p.locator('[data-testid="previa-numero"]').fill('NF 000.004.876'); await espera(p, 700); }],
+  ] },
+  /* P167 — abrir e fechar a confirmação do cancelamento no rodapé: o corpo do documento não anda (o rodapé troca no mesmo lugar) */
+  { nome: 'documento-nota-cancelar', url: 'tela=documento-nota&v=cancelar', estados: [
+    ['abre o cancelar', async (p) => { await p.locator('[data-testid="abrir-cancelar-nota"]').click(); await espera(p, 300); }],
+    ['volta', async (p) => { await p.locator('[data-testid="cancelar-nota"] button', { hasText: 'Voltar' }).click(); await espera(p, 300); }],
+  ] },
   { nome: 'documento-nota', url: 'tela=documento-nota', estados: [
     ['nota lida', async (p) => {
       const xml = await p.evaluate(() => globalThis.__xmlDaBancada);
@@ -335,6 +346,8 @@ const CENARIOS = [
   ] })),
   /* P117 — a linha fixa sob o Fornecedor: com cidade ("CNPJ · Presidente Prudente/SP") e sem (só o CNPJ) — nada anda */
   { nome: 'lancamento-fornecedor-cidade', url: 'tela=lancamento&m=editar', estados: [['cadastro sem cidade', { url: 'tela=lancamento&m=editar&cidade=sem' }]] },
+  /* P121 — o Resumo do lançamento: os nomes longos do mock no lugar dos curtos — nenhum bloco muda de altura, nada abaixo anda */
+  { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal', estados: [['nomes longos', { url: 'tela=lancamento&m=editar&v=sal&resumo=longo' }]] },
   /* P138 — "Usar" a safra da competência: a linha da sugestão sai e o campo se enche — nada abaixo anda */
   { nome: 'lancamento-safra-usar', url: 'tela=lancamento&m=editar&safra=sem', estados: [['Usar a sugestão', clicar('[data-testid="safra-usar-sugestao"]')]] },
   /* P117 (Gabriel 27/10) — a linha sob o Fornecedor VAZIA: no Novo lançamento o campo nasce sem fornecedor (o do lançamento não tem "×");
@@ -414,12 +427,25 @@ const CENARIOS = [
   { nome: 'fora-da-vigencia-cancelar', url: 'tela=fora-da-vigencia&v=cancelar',
     antes: async (p) => { await p.locator('[data-testid="modal-fora-da-vigencia"]').waitFor(); await espera(p); },
     estados: [['nada a cancelar', { url: 'tela=fora-da-vigencia&v=vazia' }]] },
+  /* P124 — o palco do mês: buscar, marcar todas as exatas, a prévia do lote e voltar — os chips, os botões e o rodapé não andam */
+  { nome: 'palco-do-mes', url: 'tela=palco-do-mes', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
+    antes: async (p) => { await p.locator('[data-testid="linha-palco"]').first().waitFor(); await espera(p); },
+    estados: [
+      ['buscou as sugestoes', async (p) => { await p.locator('[data-testid="buscar-sugestoes"]').click(); await p.locator('[data-testid="chip-sugestao-exata"]:not([disabled])').waitFor(); await espera(p); }],
+      ['filtro exata', clicar('[data-testid="chip-sugestao-exata"]')],
+      ['marcar todas as exatas', clicar('[data-testid="marcar-exatas"]')],
+      ['previa do lote', clicar('[data-testid="conciliar-selecionados"]')],
+      ['voltar', botao(/^Voltar$/)],
+    ] },
   /* P141 (CONC-LAYOUT-01) — Saldos por conta: os selos OFX/PDF e o ↗ PRESOS (lugar fixo) entre a página com arquivos e a sem nenhum,
      a conta escolhida e o "← Todas"; o modal do ↗ entre carregando e carregado. A prova: sem a largura fixa do lugar do selo, o PDF anda. */
   { nome: 'conciliacao-saldos', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-conta="cc1"] [data-testid="slot-ofx"], [data-conta="cc1"] [data-testid="slot-pdf"], [data-conta="cc1"] [data-testid="abrir-extrato-sistema"]',
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await espera(p); },
-    estados: [['sem nenhum arquivo', { url: 'tela=conciliacao&v=sem' }], ['conta escolhida', clicar('[data-conta="cc2"]')], ['← Todas', botao(/← Todas/)]] },
+    estados: [['sem nenhum arquivo', { url: 'tela=conciliacao&v=sem' }], ['conta escolhida', clicar('[data-conta="cc2"]')], ['← Todas', botao(/← Todas/)],
+      /* P166 — a faixa do status tem altura FIXA: verde, âmbar e cinza não empurram os blocos nem a régua */
+      ['faixa conciliado', { url: 'tela=conciliacao&v=ok' }], ['faixa com pendência', { url: 'tela=conciliacao&v=pendencia' }],
+      ['faixa pendente', { url: 'tela=conciliacao&v=pendente' }]] },
   { nome: 'conciliacao-extrato-do-sistema', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DO_P92,
     antes: async (p) => { await p.locator('[data-testid="modal-extrato-sistema"]').waitFor(); await espera(p); },
     estados: [['carregado', { url: 'tela=extrato-do-sistema' }]] },
@@ -546,7 +572,7 @@ const naRapida = RAPIDO ? filtroRapido('check-ui-desloca') : () => true;
 const TAMANHOS_DA_VEZ = TAMANHOS;
 /* P92 — o cenario pode pedir os PROPRIOS tamanhos (`tamanhos`), como no check-ui-cortes; o `--tamanhos` da linha de comando manda sobre eles */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS_DA_VEZ);
-const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || c.nome.startsWith(SO)) && naRapida(c));
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
 const base = `http://127.0.0.1:${servidor.httpServer.address().port}`;

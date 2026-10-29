@@ -133,7 +133,12 @@ const FATIA_FAVORECIDO = 0.55;
 const LARGURA_ACOES = 24;
 export const LARGURA_DAS_FIXAS = 554;
 
-export default function V2Recorrencias() {
+export default function V2Recorrencias({ recorrenciaIdInicial, onVoltarParaOrigem }: {
+  /** P152 — a regra que abre ao chegar (o selo R da Contas a Pagar e Receber) */
+  recorrenciaIdInicial?: string | null;
+  /** P152 — a volta: fechar a regra aberta pela ida devolve à tela de origem (que se reabre com o mesmo recorte) */
+  onVoltarParaOrigem?: () => void;
+} = {}) {
   const { recorrencias, loading, recarregar, clienteId } = useRecorrencias();
   const { contasBancarias, loadContas } = useFinanceiroV2();
 
@@ -143,6 +148,17 @@ export default function V2Recorrencias() {
     if (clienteId) void loadContas();
   }, [clienteId, loadContas]);
   const [editando, setEditando] = useState<Recorrencia | null | undefined>(undefined);
+  /* P152 — a ida do selo R: abre a regra UMA vez, quando a lista chega; fechar volta à origem */
+  const [veioDeFora, setVeioDeFora] = useState(false);
+  const idaFeita = useRef(false);
+  useEffect(() => {
+    if (!recorrenciaIdInicial || idaFeita.current || loading) return;
+    const alvo = recorrencias.find((r) => r.id === recorrenciaIdInicial);
+    if (!alvo) return;
+    idaFeita.current = true;
+    setVeioDeFora(true);
+    setEditando(alvo);
+  }, [recorrenciaIdInicial, recorrencias, loading]);
   const [gerando, setGerando] = useState<Recorrencia | null>(null);
   const [cancelando, setCancelando] = useState<Recorrencia | null>(null);
   /* P154 — a prévia do banco ao CANCELAR a regra: os previstos a partir do mês do cancelamento (D1), lidos antes de confirmar. */
@@ -591,7 +607,10 @@ export default function V2Recorrencias() {
       {editando !== undefined && (
         <RecorrenciaDialog
           recorrencia={editando} clienteId={clienteId}
-          aoFechar={() => setEditando(undefined)}
+          aoFechar={() => {
+            setEditando(undefined);
+            if (veioDeFora) { setVeioDeFora(false); onVoltarParaOrigem?.(); }
+          }}
           aoSalvar={async () => { await recarregarTudo(); }}
         />
       )}

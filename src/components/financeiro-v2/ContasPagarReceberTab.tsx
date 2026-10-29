@@ -40,7 +40,7 @@ import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, ehTransferenciaCpr, chaveDaLinhaCpr, type ContaCpr,
   ancorasDoCaixaCpr, serieDoSaldoCpr, realizadoComCartoesCpr, ordenarDoDiaCpr, totaisDeHojeCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr, somarDiasIso,
-  rodapeDoPeriodoCpr, contagemDoRodapeCpr,
+  rodapeDoPeriodoCpr, contagemDoRodapeCpr, diaDaLinhaCpr,
   type AtalhoCpr, type PeriodoCpr, type FiltroContaCpr,
 } from '@/lib/financeiro/cprRecorte';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -54,7 +54,7 @@ import {
 import { movimentoNaConta, type LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
 import { rotuloOrigem } from '@/v2/lib/origemLancamento';
 import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
-import { ChevronDown, Maximize2, Minimize2, Paperclip } from 'lucide-react';
+import { ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { montarModeloCpr, nomeDoArquivoCpr, type EntradaDoModelo } from '@/lib/pdf/cpr/modeloCpr';
 import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
@@ -66,7 +66,9 @@ import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusF
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { docDaLinha } from '@/lib/financeiro/documentoHelper';
+import { docDaLinha, type DocumentoDaLinha } from '@/lib/financeiro/documentoHelper';
+import { CelulaVinculos } from '@/components/financeiro-v2/ColunasDaListaV2';
+import { vinculosDaLinha } from '@/lib/financeiro/colunasDaListaV2';
 import { consumirRetornoCpr, guardarRetornoCpr } from '@/lib/financeiro/cprRetorno';
 
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -149,15 +151,23 @@ const CORTE_DESTAQUE = 100_000;
  * ⚠ MEDIDAS a 1.126px (ver CLAUDE.md): as três colunas de valor no pior caso "▼ −R$ 99.999.999,99" em negrito.
  */
 interface Regua {
-  comp: number; venc: number; pgto: number; fornecedor: number; subcentro: number; safra: number; faz: number;
-  status: number; anexo: number; pagar: number; receber: number; saldo: number;
+  comp: number; venc: number; pgto: number; selo: number; fornecedor: number; subcentro: number; safra: number; faz: number;
+  nf: number; status: number; pagar: number; receber: number; saldo: number;
 }
-const REGUA_NORMAL: Regua = { comp: 0, venc: 46, pgto: 0, fornecedor: 100, subcentro: 82, safra: 0, faz: 0, status: 60, anexo: 12, pagar: 111, receber: 111, saldo: 118 };
-const REGUA_AMPLIADA: Regua = { comp: 30, venc: 46, pgto: 46, fornecedor: 96, subcentro: 84, safra: 56, faz: 26, status: 60, anexo: 12, pagar: 111, receber: 111, saldo: 118 };
-/** CPR-SEM-CORTE-01 — a largura mínima da lista (a régua medida de cada modo, com a Descrição no mínimo dela): abaixo disso a lista
- *  rola na horizontal dentro do cartão. */
-const LARGURA_MINIMA_NORMAL = 884;
-const LARGURA_MINIMA_AMPLIADA = 1092;
+/* P152 (CPR-COLUNAS-01, mock v5 aprovado 28/10 07:55) — Comp. 50 · Venc. 50 · Pgto. 50 · selo 20 · Descrição 200 · Fornecedor 180 ·
+   Subcentro 170 · NF 64 · Status 74 · A receber 84 · A pagar 98 · Saldo 98: cada número abaixo é o do mock MENOS os 4px do `gap-1` da
+   linha (coluna + vão = a coluna do mock). O ampliado é a MESMA régua + Safra e Faz. (Gabriel 15:34, D2). */
+const REGUA_NORMAL: Regua = { comp: 46, venc: 46, pgto: 46, selo: 16, fornecedor: 176, subcentro: 166, safra: 0, faz: 0, nf: 60, status: 70, receber: 80, pagar: 94, saldo: 94 };
+const REGUA_AMPLIADA: Regua = { ...REGUA_NORMAL, safra: 56, faz: 26 };
+/** CPR-SEM-CORTE-01 — a largura mínima da lista (a régua de cada modo, com a Descrição no mínimo dela, 196px): abaixo disso a lista
+ *  rola na horizontal dentro do cartão. P152: 24 (px-3) + 3 (filete) + as colunas + a Descrição + 4px por vão. */
+const DESCRICAO_MINIMA = 196;
+const larguraMinima = (r: Regua): number => {
+  const colunas = [r.comp, r.venc, r.pgto, r.selo, r.fornecedor, r.subcentro, r.safra, r.faz, r.nf, r.status, r.receber, r.pagar, r.saldo].filter((x) => x > 0);
+  return 24 + 3 + DESCRICAO_MINIMA + colunas.reduce((a, b) => a + b, 0) + 4 * colunas.length;
+};
+const LARGURA_MINIMA_NORMAL = larguraMinima(REGUA_NORMAL);
+const LARGURA_MINIMA_AMPLIADA = larguraMinima(REGUA_AMPLIADA);
 const larg = (px: number): CSSProperties => ({ width: px, flexShrink: 0 });
 /** As três células de valor de uma faixa (dia, vencidos, saldo hoje, rodapé): a MESMA grade das linhas. */
 const moedaComSinal = (v: number) => `${v < 0 ? '−' : ''}${formatMoeda(Math.abs(v))}`;
@@ -310,12 +320,14 @@ interface Grupo {
   frase?: string;
 }
 
-export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento }: {
+export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento, onAbrirRecorrencia }: {
   /** CPR-SALDO-DIA-01: o MESMO mecanismo do "Ampliar" da lista de Lançamentos — o shell esconde a lateral. */
   onIntensiveToggle?: (ativo: boolean) => void;
   /** PARC-CADEIA-01 — "Abrir o contrato" do aviso de parcela de compra parcelada. Ausente = a pessoa não acessa a tela do
    *  contrato: o atalho não é oferecido. O shell volta para cá ao sair do contrato. */
   onAbrirFinanciamento?: (financiamentoId: string) => void;
+  /** P152 — o selo R abre a regra da recorrência (ida e volta: a tela volta com o mesmo recorte). Ausente = o R é só a marca. */
+  onAbrirRecorrencia?: (recorrenciaId: string) => void;
 } = {}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
@@ -345,6 +357,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const [segmento, setSegmento] = useState<Segmento>('ambos');
   const [statusLigados, setStatusLigados] = useState<string[]>(retorno?.statusLigados ?? STATUS_INICIAIS);
   const [lancEdicao, setLancEdicao] = useState<LancamentoV2 | null>(null);
+  /* P152 — o "NF nnnn" abre o lançamento direto na aba Documentos (a regra de abrir a nota mora lá) */
+  const [abaDoModal, setAbaDoModal] = useState<'documentos' | undefined>(undefined);
   const [abrindo, setAbrindo] = useState(false);
   /* Ampliar/Recolher — estado LOCAL; sair da tela desliga (o shell volta a mostrar a lateral). */
   const [ampliado, setAmpliado] = useState(retorno?.ampliado ?? false);
@@ -757,22 +771,54 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const idsVisiveis = useMemo(() => linhas.map((l) => l.id).sort(), [linhas]);
   /* PARC-LIVRES-01 passo 5 — o "i/N" da parcela de parcelamento vem do CONTRATO, numa parte que nunca corta (lista, PDF e Excel). */
   const { data: parcelasDosLancamentos } = useParcelasDosLancamentos(clienteId);
-  const { data: comAnexo } = useQuery({
+  /* P152 — a MESMA leitura traz agora os documentos de cada linha (espécie, número, cancelado): o "NF nnnn" é o do dono (`docDaLinha`,
+     o mesmo de Lançamentos), e com documento vivo o "NF" abre a aba Documentos do lançamento. */
+  const { data: documentosPorLancamento } = useQuery({
     queryKey: ['cpr-anexos', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
     enabled: !!clienteId && idsVisiveis.length > 0,
-    queryFn: async (): Promise<Set<string>> => {
-      const achados = await paginarTudo<{ lancamento_id: string | null }>(async (de, tamanho) => {
+    queryFn: async (): Promise<Map<string, DocumentoDaLinha[]>> => {
+      const achados = await paginarTudo<{ lancamento_id: string | null; especie: string | null; numero: string | null; cancelado: boolean | null; chave_acesso: string | null }>(async (de, tamanho) => {
         const fatia = idsVisiveis.slice(de, de + tamanho);
         if (fatia.length === 0) return { linhas: [], brutas: 0 };
         const { data, error } = await supabase
           .from('vw_lancamento_documentos')
-          .select('lancamento_id')
+          .select('lancamento_id, especie, numero, cancelado, chave_acesso')
           .eq('cliente_id', clienteId ?? '')
           .in('lancamento_id', fatia);
         if (error) throw error;
         return { linhas: data ?? [], brutas: fatia.length };
       });
-      return new Set(achados.map((d) => d.lancamento_id).filter((v): v is string => !!v));
+      const mapa = new Map<string, DocumentoDaLinha[]>();
+      for (const d of achados) {
+        if (!d.lancamento_id) continue;
+        const lista = mapa.get(d.lancamento_id) ?? [];
+        lista.push({ especie: d.especie, numero: d.numero, cancelado: d.cancelado, chave_acesso: d.chave_acesso });
+        mapa.set(d.lancamento_id, lista);
+      }
+      return mapa;
+    },
+  });
+  /* P152 — o selo R vem do VÍNCULO (`recorrencia_id`), nunca da descrição. A view da lista não traz a coluna: a mesma pergunta `.in()`
+     sobre os ids já visíveis, só os que têm recorrência. */
+  const { data: recorrenciaDaLinha } = useQuery({
+    queryKey: ['cpr-recorrencias', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
+    enabled: !!clienteId && idsVisiveis.length > 0,
+    queryFn: async (): Promise<Map<string, string>> => {
+      const achados = await paginarTudo<{ id: string; recorrencia_id: string | null }>(async (de, tamanho) => {
+        const fatia = idsVisiveis.slice(de, de + tamanho);
+        if (fatia.length === 0) return { linhas: [], brutas: 0 };
+        const { data, error } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('id, recorrencia_id')
+          .eq('cliente_id', clienteId ?? '')
+          .in('id', fatia)
+          .not('recorrencia_id', 'is', null);
+        if (error) throw error;
+        return { linhas: data ?? [], brutas: fatia.length };
+      });
+      const mapa = new Map<string, string>();
+      for (const r of achados) if (r.recorrencia_id) mapa.set(r.id, r.recorrencia_id);
+      return mapa;
     },
   });
 
@@ -793,7 +839,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     const doSeg = (ls: readonly LinhaCpr[]) => ls.filter((l) => doSegmentoCpr(l, segmento));
     const mapa = new Map<string, LinhaCpr[]>();
     for (const l of doPeriodoNaLista) {
-      const chave = (l.data_vencimento ?? '').slice(0, 10);
+      /* P152 — o dia da linha é o do dinheiro (`diaDaLinhaCpr`): a paga no dia do PAGAMENTO, a em aberto no vencimento */
+      const chave = diaDaLinhaCpr(l);
       /* ⚠ CONTA PAGA SEM VENCIMENTO (pílula Realizado ligada) NÃO TEM DIA: sem esta guarda ela abria um grupo de chave vazia e a
          faixa tentava formatar uma data que não existe — "Invalid time value", tela branca (CPR-SALDO-DIA-02). Ela não soma em
          lugar nenhum (é paga) e não é listada por dia. */
@@ -889,8 +936,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
    * entregaria um objeto parecido e incompleto. `buscarLancamentoPorId` é o mesmo
    * `select('*').eq('id',…)` que o Extrato Gerencial faz, já dentro do hook.
    */
-  const abrir = async (id: string) => {
+  const abrir = async (id: string, aba?: 'documentos') => {
     if (!catalogosProntos) return;
+    setAbaDoModal(aba);
     setAbrindo(true);
     try {
       const linha = await fin.buscarLancamentoPorId(id);
@@ -914,6 +962,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       queryClient.invalidateQueries({ queryKey: ['cpr-lancs'] }),
       queryClient.invalidateQueries({ queryKey: ['cpr-caixa'] }),
       queryClient.invalidateQueries({ queryKey: ['cpr-anexos'] }),
+      queryClient.invalidateQueries({ queryKey: ['cpr-recorrencias'] }),
       queryClient.invalidateQueries({ queryKey: ['cpr-estimadas'] }),
     ]);
   };
@@ -1254,9 +1303,25 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
           : null;
         const status = (l.status_transacao ?? '').toLowerCase();
         const fornecedor = (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—';
-        const anexo = comAnexo?.has(l.id) ?? false;
-        /* PARC-CONTRATO-01 item 4 — o texto do Doc é o do DONO (`docDaLinha`), o mesmo da lista de Lançamentos, do PDF e do Excel. */
-        const doc = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo;
+        /* PARC-CONTRATO-01 item 4 — o texto do Doc é o do DONO (`docDaLinha`), o mesmo da lista de Lançamentos, do PDF e do Excel.
+           P152: com os documentos da linha — o "NF nnnn" da coluna NF; com documento vivo (`clipe`), clicar abre a aba Documentos. */
+        const docDaLinhaCpr = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, documentosPorLancamento?.get(l.id));
+        const doc = docDaLinhaCpr.rotulo;
+        /* P152 — os selos do VÍNCULO (F financiamento · R recorrência · P parcelamento), o MESMO `CelulaVinculos` de Lançamentos */
+        const parcelaDoContrato = parcelasDosLancamentos?.get(l.id);
+        const recorrenciaId = recorrenciaDaLinha?.get(l.id) ?? null;
+        const vinculos = vinculosDaLinha({
+          financiamentoId: l.financiamento_id,
+          recorrenciaId,
+          parcelaDeParcelamento: parcelaDoContrato ? `${parcelaDoContrato.numero}/${parcelaDoContrato.total}` : null,
+        });
+        const abrirContratoDaLinha = onAbrirFinanciamento && l.financiamento_id ? (() => {
+          const fid = l.financiamento_id;
+          return () => { if (!fid) return; guardarRetornoCpr({ visao, atalho, datas, contaSel, segmento, statusLigados, ampliado }); onAbrirFinanciamento(fid); };
+        })() : undefined;
+        const abrirRecorrenciaDaLinha = onAbrirRecorrencia && recorrenciaId
+          ? () => { guardarRetornoCpr({ visao, atalho, datas, contaSel, segmento, statusLigados, ampliado }); onAbrirRecorrencia(recorrenciaId); }
+          : undefined;
         /* Origem, Doc e Conta saíram da grade: moram no `title` da Descrição. */
         const np = nomeEParcela(l.descricao, parcelasDosLancamentos?.get(l.id));
         const seloDaParcela = np.parcela
@@ -1272,45 +1337,58 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
               className="h-[14px] shrink-0 whitespace-nowrap rounded bg-red-100 px-1 text-[9px] leading-[14px] text-red-700">vencido</span>
           : null;
         const celValor = (
-          <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', estimada ? COR_ESTIMADO : receber ? COR_SINAL.pos : COR_SINAL.neg, (paga || foraDoCaixa) && 'opacity-50')}
+          <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', estimada ? COR_ESTIMADO : receber ? COR_SINAL.pos : COR_SINAL.neg, foraDoCaixa && 'opacity-50')}
             title={paga ? 'já paga — está no realizado do dia do pagamento, não na projeção' : foraDoCaixa ? 'ponta em conta que não entra no saldo em caixa — não soma; a outra ponta é o que mexe no saldo' : undefined}>
             {formatMoeda(valor)}
           </span>
         );
         return (
-          <button
+          /* P152 — a linha é `div role="button"` (era `<button>`): os selos de vínculo e o "NF nnnn" são botões DENTRO dela, e botão
+             dentro de botão não é HTML válido. O teclado segue: Enter/Espaço abrem; desabilitada sem catálogos. */
+          <div
             key={chaveDaLinhaCpr(l)}
             data-ponta={l.ponta}
-            type="button"
-            disabled={!catalogosProntos || abrindo}
-            onClick={() => void abrir(l.id)}
+            data-paga={paga || undefined}
+            role="button"
+            tabIndex={!catalogosProntos || abrindo ? -1 : 0}
+            aria-disabled={!catalogosProntos || abrindo}
+            onClick={() => { if (catalogosProntos && !abrindo) void abrir(l.id); }}
+            onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && catalogosProntos && !abrindo) { e.preventDefault(); void abrir(l.id); } }}
             title={catalogosProntos ? 'Abrir o lançamento' : 'Carregando os catálogos…'}
             className={cn(
-              'flex h-[18px] w-full shrink-0 items-center gap-1 border-b px-3 text-left text-[10px]',
-              'transition-colors hover:bg-muted/50 disabled:cursor-default',
+              'flex h-[18px] w-full shrink-0 cursor-pointer items-center gap-1 border-b px-3 text-left text-[10px]',
+              'transition-colors hover:bg-muted/50 aria-disabled:cursor-default',
               /* A faixa de 3px do destaque: `border-l-[3px]` em TODAS as linhas, transparente nas comuns (A27). */
               'border-l-[3px]',
               grande ? (receber ? 'border-l-success' : 'border-l-destructive') : 'border-l-transparent',
+              /* P152 — pago/recebido: a LINHA TODA mais clara (datas, selos, textos e o valor no mesmo tom do lado dele) */
+              paga && '[&>*]:opacity-50',
             )}
           >
-            {regua.comp > 0 && (
-              <span style={larg(regua.comp)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
-                {l.data_competencia ? format(parseISO(l.data_competencia), 'MM/yy') : '—'}
-              </span>
-            )}
-            <span style={larg(regua.venc)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
+            {/* P152 — as três datas em dd/mm/aa; Venc. em vermelho no vencido; Pgto. em azul quando pago, "—" sem pagamento */}
+            <span style={larg(regua.comp)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
+              {l.data_competencia ? format(parseISO(l.data_competencia), 'dd/MM/yy') : '—'}
+            </span>
+            <span style={larg(regua.venc)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums', vencida ? COR_SINAL.neg : 'text-muted-foreground')} data-celula-data>
               {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yy') : '—'}
             </span>
-            {regua.pgto > 0 && (
-              <span style={larg(regua.pgto)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
-                {paga && l.data_pagamento ? format(parseISO(l.data_pagamento), 'dd/MM/yy') : ''}
-              </span>
-            )}
-            {/* A DESCRIÇÃO, numa linha: a marca "Transf.", o nome (CPR-SEM-CORTE-01: o que não cabe ROLA na própria linha, nunca
-                "…"), o "i/N" do contrato e os selos "estimado" / "vencido" — marcas e selos nunca cortam; a linha segue com 18px. */}
+            <span style={larg(regua.pgto)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums', paga && l.data_pagamento ? 'text-blue-700 dark:text-blue-400' : 'text-muted-foreground')} data-celula-data data-celula-pgto>
+              {paga && l.data_pagamento ? format(parseISO(l.data_pagamento), 'dd/MM/yy') : '—'}
+            </span>
+            <span style={larg(regua.selo)} className="flex items-center justify-center" data-celula-selo>
+              {vinculos.length > 0 && (
+                <CelulaVinculos vinculos={vinculos} pequeno abrir={{
+                  F: abrirContratoDaLinha, P: abrirContratoDaLinha, R: abrirRecorrenciaDaLinha,
+                }} />
+              )}
+            </span>
+            {/* A DESCRIÇÃO, numa linha: a marca "Transf.", o nome (P152: o que não cabe termina em "…", com o texto inteiro no `title`;
+                era CPR-SEM-CORTE-01, rolava no lugar), o "i/N" do contrato e os selos "estimado" / "vencido" — marcas e selos nunca cortam; a linha segue com 18px. */}
             <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
               {seloTransf}
-              <span className="uma-linha-que-rola min-w-0 text-foreground" title={dicaDescricao}>{(np.parcela ? np.nome : l.descricao) || '—'}</span>
+              {/* P152 (D6, Gabriel 16:04) — Descrição, Fornecedor e Subcentro cortam com "…" e o texto inteiro no `title`: a linha não é
+                  `<table>`, então a célula se declara com a exceção do gate (`data-reticencias-com-title`, P71) */}
+              <span className="min-w-0 truncate text-foreground" title={dicaDescricao} data-reticencias-com-title="">{(np.parcela ? np.nome : l.descricao) || '—'}</span>
               {seloDaParcela}
               {estimada && (
                 <span data-testid="cpr-selo-estimado" title={tituloDoSeloDaLinha(l.id)}
@@ -1320,10 +1398,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
               )}
               {seloVencido}
             </span>
-            <span style={larg(regua.fornecedor)} className="uma-linha-que-rola text-muted-foreground" title={fornecedor}>
+            <span style={larg(regua.fornecedor)} className="truncate text-muted-foreground" title={fornecedor} data-reticencias-com-title="">
               {fornecedor}
             </span>
-            <span style={larg(regua.subcentro)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={l.subcentro ?? undefined}>
+            <span style={larg(regua.subcentro)} className={cn(FONTE_FINA, 'truncate text-muted-foreground')} title={l.subcentro || '—'} data-reticencias-com-title="">
               {l.subcentro || '—'}
             </span>
             {regua.safra > 0 && (
@@ -1336,6 +1414,18 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                 {codigoDaFazenda(l.fazenda_id)}
               </span>
             )}
+            {/* P152 — "NF nnnn" (o do dono, `docDaLinha`), cinza, sem cor; com documento vivo é botão que abre a aba Documentos do
+                lançamento (o PDF; sem PDF, os itens); sem documento é só o texto (D4). Substitui o clipe solto. */}
+            <span style={larg(regua.nf)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-nf>
+              {doc && (docDaLinhaCpr.clipe ? (
+                <button type="button" data-testid="cpr-nf-abrir" title={`${docDaLinhaCpr.titulo || doc} — clique para abrir o documento`}
+                  disabled={!catalogosProntos || abrindo}
+                  onClick={(e) => { e.stopPropagation(); void abrir(l.id, 'documentos'); }}
+                  className="whitespace-nowrap hover:underline disabled:cursor-default">{doc}</button>
+              ) : (
+                <span data-testid="cpr-nf-texto" title={docDaLinhaCpr.titulo || doc}>{doc}</span>
+              ))}
+            </span>
             {/* ⚠ PÍLULA SEM BORDA (FIN-LISTA-VISUAL-01): o mapa de COR marca o status; a palavra nunca corta. */}
             <span style={larg(regua.status)} className="text-center" data-celula-status>
               <span className={cn(
@@ -1345,17 +1435,11 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                 {STATUS_FILTRO_LABEL[status] ?? (status || '—')}
               </span>
             </span>
-            {/* ⚠ A COLUNA DO CLIPE EXISTE EM TODA LINHA (A27); o rótulo mora no `span`, não no ícone. */}
-            <span style={larg(regua.anexo)}
-              title={anexo ? 'tem documento anexado' : undefined}
-              aria-label={anexo ? 'tem documento anexado' : undefined}>
-              {anexo && <Paperclip className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />}
-            </span>
             {/* o valor da linha cai na coluna do SEU lado, na cor do sinal, sem seta; o Saldo da linha fica vazio */}
             <span style={larg(regua.receber)} className="text-right">{receber ? celValor : null}</span>
             <span style={larg(regua.pagar)} className="text-right">{receber ? null : celValor}</span>
             <span style={larg(regua.saldo)} aria-hidden />
-          </button>
+          </div>
         );
       })}
       {/* CPR-AJUSTES-20-10 — a ÚLTIMA linha do dia: "Saldo em dd/mm/aaaa", o total a receber (▲), o total a pagar (▼) e o
@@ -1377,9 +1461,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   return (
     /* ⚠ `h-full`, E NÃO `flex-1` — a mesma lição de `V2Recorrencias`: a altura vem do pai, e
        o `/v2` só a dá porque esta seção entrou em `SECOES_APP_SHELL`. Sem isso o `sticky`
-       dos grupos não gruda em nada. `max-w-5xl` para a tela não encostar na margem. */
+       dos grupos não gruda em nada. `max-w-[1240px]` para a tela não encostar na margem (P152: a régua do mock, 1.161px de lista, não
+       cabia nos 1.024px do `max-w-5xl` — rolaria na horizontal sempre). */
     /* CPR-SEM-CORTE-01: `filtros-uma-linha` — o texto de todo seletor da tela (conta, atalho) rola dentro do campo, nunca "…" */
-    <div className={cn('filtros-uma-linha w-full min-w-0 h-full min-h-0 flex flex-col bg-background', !ampliado && 'max-w-5xl mx-auto')}>
+    <div className={cn('filtros-uma-linha w-full min-w-0 h-full min-h-0 flex flex-col bg-background', !ampliado && 'max-w-[1240px] mx-auto')}>
       {/* o gráfico montado FORA DA VISTA, só enquanto o PDF é gerado: tamanho fixo, para a folha sair igual em qualquer janela */}
       {graficoParaPdf && (
         <div ref={refGraficoPdf} aria-hidden data-testid="cpr-grafico-para-pdf"
@@ -1612,16 +1697,17 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                 'text-[10px] font-medium tracking-wide bg-primary text-primary-foreground',
                 'border-l-[3px] border-l-transparent',
               )}>
-                {regua.comp > 0 && <span style={larg(regua.comp)}>Comp.</span>}
+                <span style={larg(regua.comp)}>Comp.</span>
                 <span style={larg(regua.venc)}>Venc.</span>
-                {regua.pgto > 0 && <span style={larg(regua.pgto)}>Pgto.</span>}
+                <span style={larg(regua.pgto)}>Pgto.</span>
+                <span style={larg(regua.selo)} aria-hidden />
                 <span className="min-w-0 flex-1" data-coluna-descricao>Descrição</span>
                 <span style={larg(regua.fornecedor)}>Fornecedor</span>
                 <span style={larg(regua.subcentro)}>Subcentro</span>
                 {regua.safra > 0 && <span style={larg(regua.safra)}>Safra</span>}
                 {regua.faz > 0 && <span style={larg(regua.faz)}>Faz.</span>}
+                <span style={larg(regua.nf)}>NF</span>
                 <span style={larg(regua.status)} className="text-center">Status</span>
-                <span style={larg(regua.anexo)} aria-hidden />
                 <span style={larg(regua.receber)} className="text-right">A receber</span>
                 <span style={larg(regua.pagar)} className="text-right">A pagar</span>
                 <span style={larg(regua.saldo)} className="text-right" title={segmento === 'ambos' ? undefined : MOTIVO_SALDO_DOIS_LADOS}>Saldo</span>
@@ -1660,7 +1746,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       <LancamentoV2Dialog
         open={!!lancEdicao}
         carregando={!catalogosProntos}
-        onClose={() => setLancEdicao(null)}
+        onClose={() => { setLancEdicao(null); setAbaDoModal(undefined); }}
+        abaInicial={abaDoModal}
         onSave={async (form, id) => {
           const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
           if (ok) await invalidarTela();

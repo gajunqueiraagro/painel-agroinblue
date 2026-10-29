@@ -391,8 +391,9 @@ export function DetalheCustosCentroSubcentro({
                     }}
                   >
                     <colgroup>
-                      <col style={{ width: '54%' }} />
-                      <col style={{ width: '26%' }} />
+                      {/* P137 (família 2): o cabeçalho "R$/CAB/MÊS" pedia 54px numa coluna de 52 a 1000px */}
+                      <col style={{ width: '50%' }} />
+                      <col style={{ width: '30%' }} />
                       <col style={{ width: '20%' }} />
                     </colgroup>
                     <thead>

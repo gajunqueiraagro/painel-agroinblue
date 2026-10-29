@@ -33,6 +33,8 @@ const div = vi.hoisted(() => ({
   /* P72 — voltar/desfazer pelo CADASTRO (a parcela) */
   voltarUmaContaDoCadastro: vi.fn(async (..._a: unknown[]) => ({ ok: true, valor: { frase: 'As 4 parcelas voltam inteiras para "Investimento em Instalações".', fraseNota: null, operacaoId: null, partes: [] } })),
   desfazerDivisaoDoCadastro: vi.fn(async (..._a: unknown[]) => ({ ok: true, valor: { frase: 'Desfaz a última operação (a divisão) nas 4 parcelas desta compra.', fraseNota: null, operacaoId: null, partes: [] } })),
+  /* P165 — dividir pelos itens (a prévia e a gravação) */
+  dividirPelosItens: vi.fn(async (..._a: unknown[]) => ({ ok: true, valor: { frase: 'Divide em 2 contas pelos itens da nota.', fraseNota: null, operacaoId: 'op9', partes: [] } })),
 }));
 /* P72 — as irmas da parcela (4 vivas e 1 cancelada): o aviso diz "as 4 parcelas" */
 vi.mock('@/lib/financeiro/documentosPendentes', async (orig) => ({ ...(await orig<object>()),
@@ -52,7 +54,12 @@ vi.mock('@/hooks/useItensDaNota', () => ({
 vi.mock('@/lib/financeiro/sugestaoDeContaDosItens', async (orig) => ({ ...(await orig<object>()), historicoDoEmitente: async () => [] }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'nj', nome: 'NJ' } }) }));
 vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal: () => null }));
-vi.mock('@/components/financeiro-v2/AbaDocumentosLancamento', () => ({ AbaDocumentosLancamento: () => null }));
+/* P164 — a aba Documentos falsa: um botão faz o que o "Registrar documento" da nota que confere faz depois de gravar (avisa o que ficou) */
+vi.mock('@/components/financeiro-v2/AbaDocumentosLancamento', () => ({
+  AbaDocumentosLancamento: (p: { completarPelaNota?: { onCompletado: (f: { numeroDocumento: string | null; tipoDocumento: string | null; dataCompetencia: string | null; safraId: string | null }) => void } }) => (
+    <button type="button" data-testid="fake-nota-completou" onClick={() => p.completarPelaNota?.onCompletado({ numeroDocumento: '000.003.241',
+      tipoDocumento: 'Nota Fiscal', dataCompetencia: '2026-09-15', safraId: '' })}>completou</button>),
+}));
 vi.mock('@/components/financeiro-v2/AbaAuditoriaLancamento', () => ({ AbaAuditoriaLancamento: () => null }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 
@@ -82,7 +89,7 @@ beforeEach(() => {
   Element.prototype.hasPointerCapture = () => false;
   Element.prototype.releasePointerCapture = () => {};
   div.lerDivisao.mockReset(); div.lerDivisao.mockImplementation(async () => null);
-  div.voltarUmaConta.mockClear(); div.voltarUmaContaDoCadastro.mockClear(); div.desfazerDivisaoDoCadastro.mockClear(); div.classificacaoGravada.mockReset(); div.classificacaoGravada.mockImplementation(async () => null);
+  div.voltarUmaConta.mockClear(); div.voltarUmaContaDoCadastro.mockClear(); div.dividirPelosItens.mockClear(); div.desfazerDivisaoDoCadastro.mockClear(); div.classificacaoGravada.mockReset(); div.classificacaoGravada.mockImplementation(async () => null);
 });
 
 function montar(lancamento: LancamentoV2) {
@@ -97,6 +104,13 @@ function montar(lancamento: LancamentoV2) {
 const n = (t: string | null | undefined) => (t ?? '').replace(/\s/g, ' ');
 const assentar = () => new Promise((r) => setTimeout(r, 30));
 const botaoSalvar = () => document.querySelector('button[tabindex="17"]') as HTMLButtonElement;
+/** abre o seletor de conta de dentro de `el` e escolhe a conta pelo nome */
+function escolherConta(el: HTMLElement, nome: string) {
+  fireEvent.click(within(el).getByRole('combobox'));
+  const alvo = screen.getAllByText(nome).find((x) => x.closest('[role="dialog"], [data-radix-popper-content-wrapper]'));
+  if (!alvo) throw new Error(`conta "${nome}" fora do seletor`);
+  fireEvent.click(alvo);
+}
 
 describe('Geral — a classificação dividida', () => {
   it('dividido: as partes no lugar do seletor de conta, "dividida em 2 contas" e as três ações no título', async () => {
@@ -213,5 +227,90 @@ describe('Itens da nota — a vista "Contas"', () => {
     expect(within(v).getAllByTestId('contas-resumo-conta').map((c) => c.textContent)).toEqual([
       'Investimento em Instalações PecuáriaR$ 2.540,00 · 70,7%', 'Manutenção de Instalações PecuáriaR$ 1.055,00 · 29,3%']);
     expect((within(v).getByTestId('contas-dividir') as HTMLButtonElement).textContent).toBe('Dividir o lançamento em 2 contas');
+  });
+});
+
+/* P165 — a conta por item mudada e o Salvar: nada some em silêncio. Decisão (a) do Gabriel (28/10 15:22): o Salvar com conta por item
+   mudada abre a confirmação do Dividir (motivo + prévia do banco) e grava OS DOIS — o lançamento e a divisão; "Salvar sem dividir" é explícito. */
+describe('P165 — a conta por item mudada não some no Salvar', () => {
+  const mudarItem3 = async () => {
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Itens da nota/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Contas' }));
+    const v = await screen.findByTestId('contas-dos-itens');
+    escolherConta(within(v).getByTestId('conta-do-item-3'), 'Manutenção de Instalações Pecuária');
+    expect(within(v).getAllByTestId('contas-resumo-conta')).toHaveLength(2);
+  };
+  it('o Salvar abre a confirmação do Dividir (a prévia do banco) e NADA é gravado antes do clique', async () => {
+    const { onSave } = montar(LANC);
+    await mudarItem3();
+    fireEvent.click(botaoSalvar());
+    const d = await screen.findByTestId('divisao-motivo');
+    await waitFor(() => expect(within(d).getByTestId('divisao-previa').textContent).toBe('Divide em 2 contas pelos itens da nota.'));
+    expect(within(d).getByTestId('divisao-salvar-sem-dividir')).toBeTruthy();
+    expect(div.dividirPelosItens.mock.calls.every((c) => c[4] === true)).toBe(true);
+    await assentar();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+  it('"Salvar e dividir": grava o lançamento e DEPOIS a divisão pelos itens, com o motivo e a conta de cada item', async () => {
+    const { onSave } = montar(LANC);
+    await mudarItem3();
+    fireEvent.click(botaoSalvar());
+    const d = await screen.findByTestId('divisao-motivo');
+    fireEvent.change(within(d).getByTestId('divisao-motivo-texto'), { target: { value: 'Contas dos itens da nota' } });
+    fireEvent.click(within(d).getByTestId('divisao-confirmar'));
+    await waitFor(() => expect(div.dividirPelosItens.mock.calls.some((c) => c[4] === false)).toBe(true));
+    const gravou = div.dividirPelosItens.mock.calls.find((c) => c[4] === false);
+    expect(gravou?.[1]).toBe('lanc-sel');
+    expect([...(gravou?.[2] instanceof Map ? gravou[2] : new Map())]).toEqual([[1, 'pl-inv'], [2, 'pl-inv'], [3, 'pl-man']]);
+    expect(gravou?.[3]).toBe('Contas dos itens da nota');
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.invocationCallOrder[0]).toBeLessThan(div.dividirPelosItens.mock.invocationCallOrder[div.dividirPelosItens.mock.calls.indexOf(gravou ?? [])]);
+  });
+  it('"Salvar sem dividir": grava só o lançamento — explícito, e a divisão não é chamada', async () => {
+    const { onSave } = montar(LANC);
+    await mudarItem3();
+    fireEvent.click(botaoSalvar());
+    const d = await screen.findByTestId('divisao-motivo');
+    fireEvent.click(within(d).getByTestId('divisao-salvar-sem-dividir'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(div.dividirPelosItens.mock.calls.some((c) => c[4] === false)).toBe(false);
+  });
+  it('trocar de aba não perde a conta por item: de volta à Geral, o Salvar ainda pergunta; e a vista "Contas" volta com ela', async () => {
+    const { onSave } = montar(LANC);
+    await mudarItem3();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Geral/ }));
+    await assentar();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Itens da nota/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Contas' }));
+    const v = await screen.findByTestId('contas-dos-itens');
+    expect(within(v).getAllByTestId('contas-resumo-conta')).toHaveLength(2);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Geral/ }));
+    fireEvent.click(botaoSalvar());
+    expect(await screen.findByTestId('divisao-motivo')).toBeTruthy();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+  it('sem mexer nas contas dos itens, o Salvar grava direto (nada de confirmação)', async () => {
+    const { onSave } = montar(LANC);
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Itens da nota/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Contas' }));
+    await screen.findByTestId('contas-dos-itens');
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('divisao-motivo')).toBeNull();
+  });
+});
+
+/* P164 — o "Registrar documento" da nota que confere grava nº, tipo e competência no BANCO; o modal aberto passa a mostrar isso — senão o
+   Salvar seguinte mandaria os campos de antes por cima */
+describe('P164 — o modal recebe o que a nota deixou no lançamento', () => {
+  it('depois do Registrar, o Salvar manda o nº "000.003.241", o tipo Nota Fiscal e a competência da emissão', async () => {
+    const { onSave } = montar({ ...LANC, numero_documento: '3241', tipo_documento: null, data_competencia: '2026-09-29' });
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Documentos/ }));
+    fireEvent.click(await screen.findByTestId('fake-nota-completou'));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Geral/ }));
+    await assentar();
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ numero_documento: '000.003.241', tipo_documento: 'Nota Fiscal', data_competencia: '2026-09-15' });
   });
 });

@@ -191,45 +191,50 @@ async function abrirConta(id: string) {
 describe('T1 — o Emerson (NJ Sicredi Lavoura, set/26) pela régua do dono', () => {
   it('Conciliado, saldo 155.972,29, diferença "confere", o retido 1.217,01 (15) com title', async () => {
     await abrirConta(ID_LAV);
-    await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado'));
-    expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('R$ 155.972,29');
+    await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('conciliado'));
+    expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('155.972,29');
     expect(screen.getByTestId('resumo-diferenca').textContent).toBe('confere');
     expect(n(screen.getByTestId('resumo-retido').textContent)).toBe('↳ retido no depósito R$ 1.217,01 (15)');
     expect(screen.getByTestId('resumo-retido').getAttribute('title')).toContain('15 retenções');
-    expect(within(screen.getByTestId('status-motivos')).getByText('confere em todos os dias')).toBeInTheDocument();
+    /* P166: a faixa diz o status do dono; "confere em todos os dias" segue no `title` da linha da conta */
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('✓ Set/2026 conciliado');
+    expect(screen.getByTestId('faixa-status-frase').textContent).toBe('O saldo do sistema bate com o do extrato');
+    expect(n(screen.getByTestId('faixa-classificacao').textContent)).toBe('Classificação: ✓ completa');
+    expect(linhaDaConta(ID_LAV).getAttribute('title')).toContain('confere em todos os dias');
   });
 });
 
-describe('T2 — o selo é o status do dono, e "confere em todos os dias" nunca convive com dias de diferença', () => {
-  it('a conta não conciliada: selo e card vermelhos; os motivos do dono, sem o "confere"', async () => {
+describe('T2 — a faixa é o status do dono, e "confere em todos os dias" nunca convive com dias de diferença', () => {
+  it('a conta não conciliada: faixa vermelha, sem valor de conta (P166); o selo e a 2ª prova saíram', async () => {
     await abrirConta('cartao');
-    await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('nao_conciliado'));
-    const motivos = screen.getByTestId('status-motivos');
-    expect(within(motivos).queryByText('confere em todos os dias')).toBeNull();
-    /* o status é o SALDO; o dia com diferença é 2ª prova, fora das frases do status */
-    expect(n(motivos.textContent)).toBe('saldo diverge R$ 6.470,73');
-    expect(n(screen.getByTestId('segunda-prova').textContent)).toBe('2ª prova · extrato2 dias com diferença');
-    expect(screen.getByTestId('selo-mes').getAttribute('data-status')).toBe('nao_conciliado');
-    expect(screen.getByTestId('selo-mes').textContent).toBe('❌ Não Conciliado');
+    await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('nao_conciliado'));
+    expect(screen.getByTestId('faixa-status').className).toContain('bg-destructive/10');
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('✕ Set/2026 não conciliado');
+    /* o status é o SALDO; o valor fica na tabela (a faixa não repete o 6.470,73), por extenso no `title` */
+    const frase = screen.getByTestId('faixa-status-frase');
+    expect(frase.textContent).toBe('Saldo do sistema e do extrato não batem');
+    expect(n(frase.getAttribute('title'))).toBe('saldo diverge R$ 6.470,73');
+    expect(n(linhaDaConta('cartao').getAttribute('title'))).not.toContain('confere em todos os dias');
+    expect(screen.queryByTestId('segunda-prova')).toBeNull();
+    expect(screen.queryByTestId('selo-mes')).toBeNull();
+    expect(screen.queryByTestId('card-status')).toBeNull();
   });
 });
 
-describe('T3 — os motivos e o link do dia', () => {
-  it('"2 dias com diferença" abre a Conferência da conta no PRIMEIRO dia', async () => {
+describe('T3 — os motivos (P166: o link do dia saiu com o card Status; os dias seguem no `title` da conta)', () => {
+  it('"2 dias com diferença" fica no `title` da linha; a faixa não tem link', async () => {
     await abrirConta('cartao');
-    const link = await screen.findByTestId('link-dia');
-    fireEvent.click(link);
-    await screen.findByTestId('espelho');
-    const ult = B.espelhoProps[B.espelhoProps.length - 1];
-    expect([ult.contaId, ult.aba, ult.diaFoco]).toEqual(['cartao', 'conferencia', '2026-09-08']);
+    await screen.findByTestId('faixa-status');
+    expect(n(linhaDaConta('cartao').getAttribute('title'))).toContain('2ª prova · extrato: 2 dias com diferença');
+    expect(screen.queryByTestId('link-dia')).toBeNull();
   });
 
-  it('sem extrato e sem saldo: "sem extrato"; nada de link', async () => {
+  it('sem extrato e sem saldo: faixa CINZA "pendente" com a frase do dono', async () => {
     await abrirConta('parada');
-    await waitFor(() => expect(n(screen.getByTestId('status-motivos').textContent)).toBe('saldo não informado'));
-    const prova = screen.getByTestId('segunda-prova');
-    expect(n(prova.textContent)).toBe('2ª prova · extratosem extrato');
-    expect(prova.querySelector('[data-aviso="sem_extrato"]')?.className).toContain('text-muted-foreground');   // informa: neutro
+    await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('pendente'));
+    expect(screen.getByTestId('faixa-status').className).toContain('bg-muted');
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('⏳ Set/2026 pendente');
+    expect(screen.getByTestId('faixa-status-frase').textContent).toBe('Saldo não informado');
     expect(screen.queryByTestId('link-dia')).toBeNull();
   });
 });
@@ -237,24 +242,23 @@ describe('T3 — os motivos e o link do dia', () => {
 describe('T4 — "Todas as contas": total, subtotais, contas não conciliadas, pendentes e sem conta, do dono', () => {
   it('uma conta divergente e uma que pesa sem saldo: NÃO CONCILIADO com o nome dela, e a diferença diz "falta saldo" (nunca "confere")', async () => {
     montar();
-    await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('nao_conciliado'));
+    await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('nao_conciliado'));
     expect(screen.getByTestId('resumo-diferenca').textContent).toBe('falta saldo · 1 conta');
-    const motivos = screen.getByTestId('status-motivos');
-    expect(n(motivos.textContent)).toContain('1 conta não conciliada');
-    expect(within(motivos).getByTestId('conta-nao-conciliada').textContent).toBe('Cartão BB - Visa Infinite');
-    expect(n(motivos.textContent)).toContain('1 pendente');
-    /* T-g: as contas com aviso do extrato (além de "sem extrato"), do `contas_com_aviso` do dono */
-    const prova = screen.getByTestId('segunda-prova');
-    expect(n(prova.textContent)).toBe('2ª prova · extrato1 conta com aviso do extrato');
-    expect(prova.querySelector('[data-aviso="contas_com_aviso"] [data-motivo]')?.getAttribute('title')).toBe('sem extrato: 1 · dias com diferença: 1');
+    /* P166: "não batem em N contas" é o `qtde` do motivo do dono; os nomes (com o motivo de cada uma) ficam no `title` */
+    const frase = screen.getByTestId('faixa-status-frase');
+    expect(frase.textContent).toBe('Saldo do sistema e do extrato não batem em 1 conta');
+    expect(n(frase.getAttribute('title'))).toContain('Cartão BB - Visa Infinite: saldo diverge R$ 6.470,73');
+    expect(n(frase.getAttribute('title'))).toContain('Invest Parado');
+    /* a 2ª prova ("N contas com aviso do extrato") saiu da aba com o card Status */
+    expect(screen.queryByTestId('segunda-prova')).toBeNull();
     expect(n(screen.getByTestId('resumo-sem-conta').textContent)).toBe('lançamentos sem conta +R$ 100,00 / −R$ 869,29 (3)');
-    expect(n(screen.getByTestId('total-sistema').textContent)).toBe('R$ 449.501,56');
-    expect(screen.getByText('R$ 300.000,00', { selector: 'td.sticky' })).toBeInTheDocument(); // o subtotal Investimentos do dono
+    expect(n(screen.getByTestId('total-sistema').textContent)).toBe('449.501,56');
+    expect(screen.getByText('300.000,00', { selector: 'td.sticky' })).toBeInTheDocument(); // o subtotal Investimentos do dono
   });
 
   /* ── CONC-TOTAL-SEM-SALDO-01b — "sistema tem 12 mil, extrato tem 101 mil. Como que a diferença confere?" (Gabriel, 04/10). O
         dono anulou extrato e diferença do agregado com conta que pesa sem saldo; a tela diz o que falta, com UMA frase. ── */
-  it('01b: "falta saldo · 1 conta" no Total, no subtotal Investimentos, no Resumo e no card Status — a MESMA frase, com os nomes no title', async () => {
+  it('01b: "falta saldo · 1 conta" no Total, no subtotal Investimentos e no Resumo — a MESMA frase, com os nomes no title', async () => {
     montar();
     await waitFor(() => expect(screen.getByTestId('total-falta-saldo')).toBeInTheDocument());
     const pontos = [screen.getByTestId('total-falta-saldo'), screen.getByTestId('subtotal-falta-saldo-inv'), screen.getByTestId('resumo-falta-saldo')];
@@ -267,8 +271,6 @@ describe('T4 — "Todas as contas": total, subtotais, contas não conciliadas, p
       expect(p.style.color).toBe(tons[i]);
       expect(p.closest('td,span.text-success,span.text-destructive')?.className ?? '').not.toMatch(/text-success|text-destructive/);
     }
-    expect(n(screen.getByTestId('status-motivos').textContent)).toContain('falta saldo · 1 conta');
-    expect(n(screen.getByTestId('status-motivos').textContent)).not.toContain('contas sem saldo');
     /* CONC-SALDOS-LAYOUT-02: no Total a frase ocupa Extrato + Diferença JUNTAS (uma célula); nada diz "confere" no Total nem
        no Resumo, e o Extrato do Resumo continua "—" */
     expect(screen.queryByTestId('total-extrato')).toBeNull();
@@ -295,7 +297,7 @@ describe('T4 — "Todas as contas": total, subtotais, contas não conciliadas, p
     await waitFor(() => expect(screen.getByTestId('total-falta-saldo').textContent).toBe('falta saldo · 1 conta'));
     expect(screen.getByTestId('total-falta-saldo').getAttribute('title')).toBe('Sicredi-PJ Cap. Social');
     expect(screen.getByTestId('resumo-falta-saldo').textContent).toBe('falta saldo · 1 conta');
-    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('pendente');
+    expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('pendente');
     sr.unmount();
 
     B.resumo['2026-09'] = real('nj_2026_10');
@@ -313,26 +315,24 @@ describe('T4 — "Todas as contas": total, subtotais, contas não conciliadas, p
     expect(screen.getByTestId('resumo-diferenca').textContent).toBe('confere');
   });
 
-  it('01b (M4): no Total, que não tem data de saldo, o rótulo é só "Saldo extrato" e o rodapé não afirma data; com UMA conta com data, tudo como antes', async () => {
+  it('01b (M4): no Total, que não tem data de saldo, o rótulo é só "Saldo do extrato" e o rodapé não afirma data; com UMA conta com data, tudo como antes', async () => {
     B.resumo['2026-09'] = (SEM_SALDO.nj_2026_09 as Record<string, unknown>[]).map((l) => linhaConta(l)).concat([LINHA_EMERSON]);
     montar();
     await waitFor(() => expect(screen.getByTestId('total-diferenca').textContent).toBe('confere'));
     const rotulo = () => n(screen.getByTestId('resumo-saldo-extrato').parentElement?.textContent ?? '');
-    expect(rotulo()).toBe('Saldo extrato R$ 1.281.055,45');
+    expect(rotulo()).toBe('Saldo do extrato 1.281.055,45');
     expect(rotulo()).not.toMatch(/\(\d\d\/\d\d\)/);
     expect(screen.queryByTestId('resumo-rodape')).toBeNull();
     fireEvent.click(await screen.findByText('Sicredi Lavoura'));
-    await waitFor(() => expect(rotulo()).toBe('Saldo extrato (30/09)R$ 155.972,29'));
+    await waitFor(() => expect(rotulo()).toBe('Saldo do extrato (30/09)155.972,29'));
     expect(n(screen.getByTestId('resumo-rodape').textContent)).toBe('A diferença compara o saldo do extrato de 30/09.');
   });
 
-  it('o nome da conta não conciliada leva à Conferência dela no primeiro dia', async () => {
+  it('P166: a faixa não lista as contas (a conta com diferença tem o ponto vermelho na tabela)', async () => {
     montar();
-    const nome = await screen.findByTestId('conta-nao-conciliada');
-    fireEvent.click(within(nome).getByRole('button'));
-    await screen.findByTestId('espelho');
-    const ult = B.espelhoProps[B.espelhoProps.length - 1];
-    expect([ult.contaId, ult.diaFoco]).toEqual(['cartao', '2026-09-08']);
+    await screen.findByTestId('faixa-status');
+    expect(screen.queryByTestId('conta-nao-conciliada')).toBeNull();
+    expect(linhaDaConta('cartao').getAttribute('data-status')).toBe('nao_conciliado');
   });
 });
 
@@ -381,14 +381,14 @@ describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Inves
     await screen.findAllByTestId('linha-saldo-conta');
     expect(screen.getAllByTestId('linha-saldo-conta').map((r) => r.getAttribute('data-conta'))).toEqual(['brad', 'if']);
     expect([grupoDe('brad'), grupoDe('if')]).toEqual(['Conta corrente', 'Investimentos']);
-    expect(celulas('brad')).toEqual(['-R$ 55.719,49', '-R$ 55.734,67', '-R$ 15,18']);
-    expect(celulas('if')).toEqual(['-R$ 4,02', '-R$ 4,02', 'confere']);
+    expect(celulas('brad')).toEqual(['-55.719,49', '-55.734,67', '-15,18']);
+    expect(celulas('if')).toEqual(['-4,02', '-4,02', 'confere']);
     const tabela = n(linhaDaConta('brad').closest('table')?.textContent);
     expect(tabela).not.toContain('⊕');
     /* o consolidado do par aparece SÓ no Total (a linha do dono), nunca na linha da mãe */
     expect(linhaDaConta('brad').textContent).not.toContain('55.738,69');
     expect(linhaDaConta('brad').textContent).not.toContain('55.723,51');
-    expect(n(screen.getByTestId('total-sistema').textContent)).toBe('-R$ 55.723,51');
+    expect(n(screen.getByTestId('total-sistema').textContent)).toBe('-55.723,51');
   });
 
   it('a marca do par nas duas linhas, com o title; o ponto é o status PRÓPRIO de cada uma (a interna pelo saldo dela)', async () => {
@@ -412,28 +412,27 @@ describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Inves
 
   it('Resumo com a MÃE aberta: os números próprios (com a abertura terceiros × transferências) e o card diz "conferida com"', async () => {
     await abrirConta('brad');
-    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('-R$ 55.719,49'));
-    expect(n(screen.getByTestId('resumo-saldo-inicial').textContent)).toBe('-R$ 39.997,27');
-    expect(n(screen.getByTestId('resumo-entradas').textContent)).toBe('R$ 53.405,50');
-    expect(n(screen.getByTestId('resumo-saidas').textContent)).toBe('-R$ 69.127,72');
-    expect(n(screen.getByTestId('resumo-saldo-extrato').textContent)).toBe('-R$ 55.734,67');
-    expect(n(screen.getByTestId('resumo-diferenca').textContent)).toBe('-R$ 15,18');
+    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('-55.719,49'));
+    expect(n(screen.getByTestId('resumo-saldo-inicial').textContent)).toBe('-39.997,27');
+    expect(n(screen.getByTestId('resumo-entradas').textContent)).toBe('53.405,50');
+    expect(n(screen.getByTestId('resumo-saidas').textContent)).toBe('-69.127,72');
+    expect(n(screen.getByTestId('resumo-saldo-extrato').textContent)).toBe('-55.734,67');
+    expect(n(screen.getByTestId('resumo-diferenca').textContent)).toBe('-15,18');
     const cartao = n(screen.getByTestId('resumo-saldo-sistema').closest('.rounded-lg, [class*="rounded"]')?.textContent);
-    expect(cartao).toContain('R$ 53.305,50');   // ↳ transferências: as pernas com a interna
-    const motivos = screen.getByTestId('status-motivos');
-    expect(n(motivos.textContent)).toContain('saldo diverge −⁠R$ 15,18');
-    expect(n(motivos.textContent)).toContain('conferida com Bradesco-Invest. Facil');
-    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('nao_conciliado');
+    expect(cartao).toContain('53.305,50');   // ↳ transferências: as pernas com a interna
+    /* P166: a faixa diz o status e, sem valor, o motivo; "conferida com" segue no `title` da linha */
+    expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('nao_conciliado');
+    expect(n(screen.getByTestId('faixa-status-frase').getAttribute('title'))).toContain('saldo diverge −⁠R$ 15,18');
+    expect(n(linhaDaConta('brad').getAttribute('title'))).toContain('conferida com Bradesco-Invest. Facil');
   });
 
   it('Resumo com a INTERNA aberta: os números dela e o status PRÓPRIO (o par só aponta)', async () => {
     await abrirConta('if');
-    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('-R$ 4,02'));
-    expect(n(screen.getByTestId('resumo-saldo-extrato').textContent)).toBe('-R$ 4,02');
+    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('-4,02'));
+    expect(n(screen.getByTestId('resumo-saldo-extrato').textContent)).toBe('-4,02');
     expect(screen.getByTestId('resumo-diferenca').textContent).toBe('confere');
-    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado');
-    expect(n(screen.getByTestId('status-motivos').textContent)).toBe('conferida com Bradesco');
-    expect(n(screen.getByTestId('segunda-prova').textContent)).toBe('2ª prova · extratosem extrato');
+    expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('conciliado');
+    expect(n(linhaDaConta('if').getAttribute('title'))).toContain('Conciliado: conferida com Bradesco — 2ª prova · extrato: sem extrato');
   });
 
   it('o lápis da linha abre com o extrato PRÓPRIO — o valor que o operador digitou (−55.734,67), nunca o consolidado', async () => {
@@ -495,14 +494,14 @@ describe('T7 (01b) — conta SEM par: a tela é a mesma com e sem o `proprio` es
   it('os números do Emerson, do Cartão e da conta parada são os dos campos de topo', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
-    expect(celulas(ID_LAV)).toEqual(['R$ 155.972,29', 'R$ 155.972,29', 'confere']);
-    expect(celulas('cartao')).toEqual(['-R$ 6.470,73', 'R$ 0,00', 'R$ 6.470,73']);
-    expect(celulas('parada')).toEqual(['R$ 300.000,00', '—', '—']);
+    expect(celulas(ID_LAV)).toEqual(['155.972,29', '155.972,29', 'confere']);
+    expect(celulas('cartao')).toEqual(['-6.470,73', '0,00', '6.470,73']);
+    expect(celulas('parada')).toEqual(['300.000,00', '—', '—']);
     expect(screen.queryByTestId('marca-par')).toBeNull();
     fireEvent.click(linhaDaConta(ID_LAV));
-    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('R$ 155.972,29'));
-    expect(n(screen.getByTestId('resumo-saldo-inicial').textContent)).toBe('R$ 30.150,70');
-    expect(n(screen.getByTestId('resumo-entradas').textContent)).toBe(`R$ ${Number(EMERSON.resumo.entradas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`.replace(/\s/g, ' '));
+    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('155.972,29'));
+    expect(n(screen.getByTestId('resumo-saldo-inicial').textContent)).toBe('30.150,70');
+    expect(n(screen.getByTestId('resumo-entradas').textContent)).toBe(Number(EMERSON.resumo.entradas).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
   });
 
   it('conta SEM `proprio` (dono antigo) fica neutra: "—", nunca o campo consolidado por reserva', async () => {
@@ -524,21 +523,14 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
     B.statusAno = SS.nj_status_ano_2026_total;
   });
 
-  it('NJ Sicredi Pessoal mar/26 (linha real): card VERDE; a 2ª prova diz 1 dia, o extrato que não fecha (0,02) e o sem par, em âmbar, com o link do dia', async () => {
+  it('NJ Sicredi Pessoal mar/26 (linha real): faixa VERDE; os avisos do extrato não mudam a faixa (seguem no `title` e no marcador da linha)', async () => {
     await abrirConta(PESSOAL.conta_id);
-    await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado'));
-    expect(screen.getByTestId('selo-mes').textContent).toBe('✅ Conciliado');
-    expect(n(screen.getByTestId('status-motivos').textContent)).toBe('');   // nem "confere em todos os dias": há dia com diferença
-    const prova = screen.getByTestId('segunda-prova');
-    expect(n(prova.textContent)).toBe('2ª prova · extrato1 dia com diferençao extrato não fecha com o saldo informado R$ 0,021 lançamento sem par');
-    for (const el of prova.querySelectorAll('[data-aviso]')) {
-      expect(el.className).toContain('text-amber-700');
-      expect(el.className).not.toMatch(/destructive|red/);
-    }
-    fireEvent.click(within(prova).getByTestId('link-dia'));
-    await screen.findByTestId('espelho');
-    const ult = B.espelhoProps[B.espelhoProps.length - 1];
-    expect([ult.contaId, ult.aba, ult.diaFoco]).toEqual([PESSOAL.conta_id, 'conferencia', '2026-03-31']);
+    await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('conciliado'));
+    expect(screen.getByTestId('faixa-status').className).toContain('bg-success/10');
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('✓ Set/2026 conciliado');
+    expect(screen.queryByTestId('segunda-prova')).toBeNull();
+    expect(screen.queryByTestId('link-dia')).toBeNull();
+    expect(within(linhaDaConta(PESSOAL.conta_id)).getByTestId('marca-aviso-conta')).toBeInTheDocument();
   });
 
   it('Saldos por conta: o ponto segue o status e a conta conciliada COM aviso leva o marcador âmbar; a sem aviso, não', async () => {
@@ -552,9 +544,9 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
     expect(linhaDaConta(ID_LAV).getAttribute('title')).toBe('Sicredi Lavoura — Conciliado: confere em todos os dias');
   });
 
-  it('conta SEM aviso nenhum (o Emerson): idêntica a antes — sem bloco de 2ª prova', async () => {
+  it('conta SEM aviso nenhum (o Emerson): faixa verde, sem bloco de 2ª prova', async () => {
     await abrirConta(ID_LAV);
-    await waitFor(() => expect(within(screen.getByTestId('status-motivos')).getByText('confere em todos os dias')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('conciliado'));
     expect(screen.queryByTestId('segunda-prova')).toBeNull();
   });
 
@@ -574,8 +566,8 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
     B.contas = [conta(CDI.conta_id, 'Itaú CDI', 'inv')];
     B.resumo = { '2026-09': [CDI, SS.vera_itau_cdi_2026_09.total] };
     await abrirConta(CDI.conta_id);
-    await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado'));
-    expect(n(screen.getByTestId('segunda-prova').textContent)).toBe('2ª prova · extratosem extrato1 realizado após 17/09');
+    await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('conciliado'));
+    expect(n(linhaDaConta(CDI.conta_id).getAttribute('title'))).toContain('2ª prova · extrato: sem extrato · 1 realizado após 17/09');
     expect(within(linhaDaConta(CDI.conta_id)).getByTestId('marca-aviso-conta')).toBeInTheDocument();
   });
 });
@@ -598,18 +590,18 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     await screen.findAllByTestId('linha-saldo-conta');
     const extratoDa = (id: string) => within(linhaDaConta(id)).getByTestId('conta-extrato');
     /* a busca sabe achar: os três níveis têm Extrato negativo neste fixture */
-    expect(n(extratoDa('brad').textContent)).toBe('-R$ 55.734,67');
+    expect(n(extratoDa('brad').textContent)).toBe('-55.734,67');
     expect(extratoDa('brad').className).toContain('text-destructive');
     expect(extratoDa('if').className).toContain('text-destructive');           // −4,02
     const subs = screen.getAllByTestId('subtotal-extrato');
     const sub = (txt: string) => subs.find((s) => n(s.textContent) === txt)!;
-    expect(sub('-R$ 55.734,67').className).toContain('text-destructive');      // Conta corrente
-    expect(sub('R$ 0,00').className).not.toContain('text-destructive');        // Cartão: zero não é negativo
-    expect(n(screen.getByTestId('total-extrato').textContent)).toBe('-R$ 55.738,69');
+    expect(sub('-55.734,67').className).toContain('text-destructive');      // Conta corrente
+    expect(sub('0,00').className).not.toContain('text-destructive');        // Cartão: zero não é negativo
+    expect(n(screen.getByTestId('total-extrato').textContent)).toBe('-55.738,69');
     /* CONC-SALDOS-LAYOUT-02: o Total é navy escuro — o negativo dele é o tom claro, não o vermelho do fundo branco */
     expect(screen.getByTestId('total-extrato').className).toContain('text-[#fca5a5]');
     /* positivo e zero ficam na cor do texto */
-    expect(n(extratoDa(ID_LAV).textContent)).toBe('R$ 155.972,29');
+    expect(n(extratoDa(ID_LAV).textContent)).toBe('155.972,29');
     expect(extratoDa(ID_LAV).className).not.toContain('text-destructive');
     expect(extratoDa('cartao').className).not.toContain('text-destructive');
     /* o Sistema segue a mesma regra, como antes */
@@ -659,7 +651,7 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
         filhos: cel.children.length,
         data: within(linha).getByTestId('slot-data').textContent ?? '',
         slots: ['slot-data', 'slot-ofx', 'slot-pdf', 'slot-lapis'].map((t) => within(linha).queryAllByTestId(t).length).join(''),
-        altura: Array.from(linha.querySelectorAll('td')).every((td) => td.className.includes('h-[18px]')),
+        altura: Array.from(linha.querySelectorAll('td')).every((td) => td.className.includes('h-[19px]')),
       };
     });
     /* a busca sabe achar: há conta COM data de saldo e conta SEM, e as duas têm a mesma forma */
@@ -667,7 +659,7 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     expect(formas.some((f) => f.data === '')).toBe(true);
     /* P141: a célula da Conta tem só o ponto e o nome (data e arquivos em colunas próprias); os lugares OFX/PDF têm largura FIXA */
     for (const f of formas) expect({ filhos: f.filhos, slots: f.slots, altura: f.altura }).toEqual({ filhos: 2, slots: '1111', altura: true });
-    for (const t of ['slot-ofx', 'slot-pdf']) for (const el of screen.getAllByTestId(t)) expect(el.className).toContain('w-[24px]');
+    for (const t of ['slot-ofx', 'slot-pdf']) for (const el of screen.getAllByTestId(t)) expect(el.className).toContain('w-[20px]');
   });
 
   it('(e) o Total é a faixa navy escura; "falta saldo" ocupa Extrato + Diferença juntas no Total e no grupo; a régua é fixa em px', async () => {
@@ -675,25 +667,25 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     await waitFor(() => expect(screen.getByTestId('total-falta-saldo')).toBeInTheDocument());
     const total = screen.getByTestId('linha-total');
     expect(total.className).toContain('bg-[hsl(213_52%_16%)]');
-    for (const td of Array.from(total.querySelectorAll('td'))) expect(td.className).toContain('h-[24px]');
+    for (const td of Array.from(total.querySelectorAll('td'))) expect(td.className).toContain('h-[19px]');   // P166: a régua da casa
     expect(screen.getByTestId('total-falta-saldo').closest('td')?.getAttribute('colspan')).toBe('2');
     expect(screen.getByTestId('subtotal-falta-saldo-inv').closest('td')?.getAttribute('colspan')).toBe('2');
     for (const f of screen.getAllByTestId('faixa-grupo')) {
-      expect(f.className).toContain('h-[21px]');
+      expect(f.className).toContain('h-[19px]');
       expect(f.className).toContain('bg-[color-mix(in_srgb,hsl(var(--primary))_18%,hsl(var(--card)))]');
     }
     /* a régua, lida da FONTE: tabela fixa e as seis larguras em px (a Conta fica com o resto) — P141 */
     const fonte = readFileSync(resolve(process.cwd(), 'src/pages/ConciliacaoBancariaTab.tsx'), 'utf8');
-    const temReguaFixa = (f: string) => /tableLayout:'fixed'/.test(f) && /const REGUA_SALDOS = \[40, 58, 100, 100, 82, 38\];/.test(f)
+    const temReguaFixa = (f: string) => /tableLayout:'fixed'/.test(f) && /const REGUA_SALDOS = \[38, 44, 86, 86, 86, 38\];/.test(f)
       && /REGUA_SALDOS\.map\(\(w, i\) => <col key=\{i\} style=\{\{width:`\$\{w\}px`\}\} \/>\)/.test(f);
     expect(temReguaFixa(fonte)).toBe(true);
     expect(fonte).not.toMatch(/tableLayout:'auto'/);
     /* a busca sabe achar: a tabela de antes (auto, sem a régua) é recusada */
-    expect(temReguaFixa(fonte.replace("tableLayout:'fixed'", "tableLayout:'auto'"))).toBe(false);
-    expect(temReguaFixa(fonte.replace('[40, 58, 100, 100, 82, 38]', '[95, 95, 112, 34]'))).toBe(false);
+    expect(temReguaFixa(fonte.split("tableLayout:'fixed'").join("tableLayout:'auto'"))).toBe(false);
+    expect(temReguaFixa(fonte.replace('[38, 44, 86, 86, 86, 38]', '[95, 95, 112, 34]'))).toBe(false);
     /* e o colgroup desenhado tem as quatro larguras */
     const cols = Array.from(total.closest('table')!.querySelectorAll('col')).map((c) => c.style.width);
-    expect(cols).toEqual(['', '40px', '58px', '100px', '100px', '82px', '38px']);
+    expect(cols).toEqual(['', '38px', '44px', '86px', '86px', '86px', '38px']);
   });
 });
 
@@ -735,7 +727,7 @@ describe('T8 — "Fechar contas sem movimento" grava o saldo do dono', () => {
   });
 });
 
-describe('CONC-SEM-CLASSIFICACAO-01 — o contador vermelho, o aviso âmbar e a porta do modal, lidos do dono', () => {
+describe('CONC-SEM-CLASSIFICACAO-01 — o contador vermelho, a "Classificação" da faixa e a porta do modal, lidos do dono', () => {
   const SC = { motivo: 'sem_classificacao', qtde: 39, valor_entradas: 36.9, valor_saidas: 2659.36 };
   const SF = { motivo: 'sem_fornecedor', qtde: 2 };
   const comAvisos = () => {
@@ -749,30 +741,34 @@ describe('CONC-SEM-CLASSIFICACAO-01 — o contador vermelho, o aviso âmbar e a 
     ];
   };
 
-  it('a busca sabe achar: sem o aviso do dono não há contador, bloco nem aviso âmbar', async () => {
+  it('a busca sabe achar: sem o aviso do dono não há contador, "sem subcentro" nem âmbar ("✓ completa")', async () => {
     await abrirConta(ID_LAV);
-    await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado'));
-    expect(screen.queryByTestId('bloco-sem-classificacao')).toBeNull();
-    expect(screen.queryByTestId('sem-fornecedor-qtde')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('conciliado'));
+    expect(screen.queryByTestId('sem-classificacao-qtde')).toBeNull();
+    expect(screen.queryByTestId('classificar-agora')).toBeNull();
+    expect(screen.getByTestId('faixa-status').getAttribute('data-pendencia')).toBeNull();
+    expect(n(screen.getByTestId('faixa-classificacao').textContent)).toBe('Classificação: ✓ completa');
     expect(screen.queryByTestId('contador-sem-classificacao')).toBeNull();
     expect(Object.values(B.tom.at(-1) ?? {}).some((t) => (t as { contador?: unknown }).contador)).toBe(false);
   });
 
-  it('a conta conciliada SEGUE verde ("confere em todos os dias") e ganha ao lado: N, o valor fora do DRE, o botão e o âmbar', async () => {
+  it('P166: a conta conciliada com sem classificação fica ÂMBAR na faixa ("conciliado, com pendência") — o status do dono não muda', async () => {
     comAvisos();
     await abrirConta(ID_LAV);
-    await waitFor(() => expect(screen.getByTestId('bloco-sem-classificacao')).toBeInTheDocument());
-    /* D6 — o status, a cor e as frases do saldo não mudam */
-    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado');
-    expect(within(screen.getByTestId('status-motivos')).getByText('confere em todos os dias')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('sem-classificacao-qtde')).toBeInTheDocument());
+    /* D6 — o status do dono não muda; só a cor da faixa e a frase do rótulo */
+    const faixa = screen.getByTestId('faixa-status');
+    expect(faixa.getAttribute('data-status')).toBe('conciliado');
+    expect(faixa.getAttribute('data-pendencia')).toBe('sim');
+    expect(faixa.className).toContain('bg-warning/10');
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('⚠ Set/2026 conciliado, com pendência');
     expect(screen.queryByTestId('segunda-prova')).toBeNull();   // os dois avisos NÃO são 2ª prova do extrato
     expect(screen.queryByTestId('marca-aviso-conta')).toBeNull();
-    /* os números são os do dono, em tabela, com sinal */
-    expect(screen.getByTestId('sem-classificacao-qtde').textContent).toBe('39');
-    expect(n(screen.getByTestId('fora-do-dre-entradas').textContent)).toBe('▲36,90');
-    expect(n(screen.getByTestId('fora-do-dre-saidas').textContent)).toBe('▼2.659,36');
-    expect(screen.getByTestId('sem-fornecedor-qtde').textContent).toBe('2 sem fornecedor');
-    expect(screen.getByTestId('sem-fornecedor-qtde').className).toContain('amber');
+    /* a quantidade é a do dono ("sem subcentro" = sem plano de contas); o "sem fornecedor" não muda o DRE e fica no `title` da linha */
+    expect(screen.getByTestId('sem-classificacao-qtde').textContent).toBe('39 sem subcentro');
+    expect(n(screen.getByTestId('faixa-classificacao').textContent)).toBe('Classificação: 39 sem subcentro');
+    expect(screen.queryByTestId('sem-fornecedor-qtde')).toBeNull();
+    expect(linhaDaConta(ID_LAV).getAttribute('title')).toContain('2 sem fornecedor');
     /* a linha da conta: contador vermelho com a quantidade; o ponto continua o do status */
     const linha = linhaDaConta(ID_LAV);
     expect(within(linha).getByTestId('contador-sem-classificacao').textContent).toBe('39');
@@ -789,7 +785,7 @@ describe('CONC-SEM-CLASSIFICACAO-01 — o contador vermelho, o aviso âmbar e a 
     cleanup();
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
-    expect(screen.getByTestId('sem-classificacao-qtde').textContent).toBe('41');   // o total do dono, não uma soma da tela
+    expect(screen.getByTestId('sem-classificacao-qtde').textContent).toBe('41 sem subcentro');   // o total do dono, não uma soma da tela
     fireEvent.click(screen.getByTestId('classificar-agora'));
     m = screen.getByTestId('modal-sem-classificacao');
     expect([m.getAttribute('data-conta'), m.getAttribute('data-nome')]).toEqual(['null', 'Todas as contas']);
@@ -838,21 +834,67 @@ describe('T9 — nenhum arquivo tocado importa a conta antiga', () => {
   });
 });
 
-/* ── CONC-CARDS-ORDEM-01: só a ordem dos 3 cards do topo ── */
-/* P141 (CONC-LAYOUT-01): a ordem passou a Saldos | Resumo | Status, na régua do Finanças (3.05fr 1.7fr 0.7fr) */
-describe('ORDEM — os 3 cards do topo: Saldos por conta | Resumo das movimentações | Status', () => {
-  it('a ordem na tela e a régua do grid acompanham (cada card mantém a trilha dele)', async () => {
+/* ── CONC-CARDS-ORDEM-01 → P141 → P166 (CONC-TELA-02): a faixa do status em cima, e DOIS blocos: Saldos por conta | Resumo do mês ── */
+describe('ORDEM — a faixa do status e os 2 blocos: Saldos por conta | Resumo do mês (P166)', () => {
+  it('a faixa vem antes dos blocos; o grid tem Saldos (o resto) e Resumo (260px); o card Status não existe', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
-    const saldos = screen.getByText('Saldos por conta');
-    const status = screen.getByTestId('card-status');
-    const resumo = screen.getByText('Resumo das movimentações');
+    const faixa = screen.getByTestId('faixa-status');
+    const grid = screen.getByTestId('blocos-conciliacao');
     const antes = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-    expect(antes(saldos, resumo)).toBe(true);
-    expect(antes(resumo, status)).toBe(true);
-    const grid = status.parentElement!;
-    expect(grid.style.gridTemplateColumns).toBe('3.05fr 1.7fr 0.7fr');
-    expect(grid.children[2]).toBe(status);
+    expect(antes(faixa, grid)).toBe(true);
+    expect(grid.style.gridTemplateColumns).toBe('minmax(0,1fr) 260px');
+    expect([...grid.children].map((c) => c.getAttribute('data-testid'))).toEqual(['card-saldos', 'card-resumo']);
+    expect(within(grid.children[0] as HTMLElement).getByText('Saldos por conta')).toBeInTheDocument();
+    expect(within(grid.children[1] as HTMLElement).getByText('Resumo do mês')).toBeInTheDocument();
+    expect(screen.queryByTestId('card-status')).toBeNull();
+    expect(screen.queryByText('Resumo das movimentações')).toBeNull();
+  });
+});
+
+/* ── P166 (CONC-TELA-02): nada em CAIXA ALTA na aba; as abas com 1ª maiúscula; o Resumo no desenho do Saldos ── */
+describe('P166 — a tela da Conciliação sem CAIXA ALTA, abas e o Resumo do mês', () => {
+  it('nenhum `uppercase` nem `tracking-` na aba Conciliação; "Total" e os grupos como o cadastro escreve', async () => {
+    const { container } = montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const comCaixa = [...container.querySelectorAll('[class*="uppercase"], [class*="tracking-"]')];
+    expect(comCaixa.map((e) => e.textContent)).toEqual([]);
+    expect(within(screen.getByTestId('linha-total')).getAllByRole('cell')[0].textContent).toBe('Total');
+    expect(screen.getAllByTestId('faixa-grupo').map((g) => g.textContent)).toEqual(['Conta corrente', 'Investimentos', 'Cartão']);
+    /* a busca sabe achar: o predicado acusa um elemento com `uppercase` */
+    const d = document.createElement('div'); d.className = 'text-[9px] uppercase'; container.appendChild(d);
+    expect(container.querySelectorAll('[class*="uppercase"], [class*="tracking-"]').length).toBe(1);
+  });
+
+  it('as cinco abas com só a 1ª letra maiúscula; a aberta branca com o traço navy embaixo', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const abas = [...document.querySelectorAll('button[data-aba]')];
+    expect(abas.map((a) => a.textContent)).toEqual(['Importar banco', 'Casar lançamentos', 'Enriquecer (Excel)', 'Extrato gerencial', 'Conciliação']);
+    const aberta = abas.find((a) => a.getAttribute('data-aba') === 'conciliacao')!;
+    expect(aberta.className).toContain('bg-card');
+    expect(aberta.className).toContain('inset_0_-2px_0_hsl(var(--primary))');
+    for (const a of abas.filter((x) => x !== aberta)) expect(a.className).not.toContain('inset_0_-2px_0');
+    /* o mesmo peso em todas: trocar de aba não muda a largura de nenhuma */
+    expect(new Set(abas.map((a) => (a.className.match(/font-(medium|bold|semibold|normal)/) ?? [''])[0]))).toEqual(new Set(['font-medium']));
+  });
+
+  it('Resumo do mês: Saldo inicial e Saldo no sistema na faixa navy do Total; Entradas, Saídas e Saldo do extrato como os grupos; sem "(o mês fecha?)"', async () => {
+    await abrirConta(ID_LAV);
+    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('155.972,29'));
+    const navy = 'bg-[hsl(213_52%_16%)]';
+    const grupo = 'bg-[color-mix(in_srgb,hsl(var(--primary))_18%,hsl(var(--card)))]';
+    expect(screen.getByTestId('resumo-saldo-inicial').className).toContain(navy);
+    expect(screen.getByTestId('resumo-saldo-sistema').className).toContain(navy);
+    for (const t of ['resumo-entradas', 'resumo-saidas', 'resumo-saldo-extrato']) expect(screen.getByTestId(t).className, t).toContain(grupo);
+    expect(screen.getByTestId('resumo-entradas').className).toContain('text-success');
+    expect(screen.getByTestId('resumo-saidas').className).toContain('text-destructive');
+    expect(screen.getByTestId('resumo-diferenca').className).toContain('bg-muted');
+    expect(screen.queryByText(/o mês fecha\?/)).toBeNull();
+    /* o cabeçalho das colunas do Resumo é o mesmo do Saldos (22px), e o card tem a mesma barra (26px) */
+    const thResumo = within(screen.getByTestId('card-resumo')).getByText('Movimento');
+    const thSaldos = within(screen.getByTestId('card-saldos')).getByText('Conta');
+    expect(thResumo.className).toBe(thSaldos.className.replace(' truncate', ''));
   });
 });
 
@@ -887,15 +929,15 @@ describe('P141 D6 — a cor da Diferença em "Saldos por conta"', () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
     const dif = (id: string) => linhaDaConta(id).querySelectorAll('td')[5];
-    expect(n(dif('cartao').textContent)).toBe('R$ 6.470,73');
+    expect(n(dif('cartao').textContent)).toBe('6.470,73');
     expect(corDe(dif('cartao'))).toContain('text-success');
     expect(corDe(dif('cartao'))).not.toContain('text-destructive');
     expect(corDe(dif(ID_LAV))).toContain('text-success');
-    expect(n(dif('parada').textContent)).toBe('-R$ 100,00');
+    expect(n(dif('parada').textContent)).toBe('-100,00');
     expect(corDe(dif('parada'))).toContain('text-destructive');
     const grupoCartao = screen.getAllByTestId('faixa-grupo').find((g) => n(g.textContent) === 'Cartão')!.parentElement!;
     const tdDif = grupoCartao.querySelectorAll('td')[5];
-    expect(n(tdDif.textContent)).toBe('R$ 6.470,73');
+    expect(n(tdDif.textContent)).toBe('6.470,73');
     expect(corDe(tdDif)).toContain('text-success');
   });
 });

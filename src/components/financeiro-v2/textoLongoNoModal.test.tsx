@@ -3,6 +3,7 @@
  * descrição (crescia 15 linhas e empurrava a Classificação), e o rodapé diz a ORIGEM CURTA ("Parcela 3/5 · Compra …"), nunca a
  * descrição do contrato com "…". O jsdom não mede: a altura igual com texto curto e longo é medida no `check:ui-cortes` (`alturasComo`);
  * aqui fica o contrato — o resumo montado é o MESMO HTML com as duas descrições. Dados sintéticos.
+ * ⚠ P121 (27/10): a descrição VOLTOU ao resumo, numa linha só com "…" e o title — o contrato do MESMO HTML segue, trocada só ela.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -63,7 +64,7 @@ beforeEach(() => {
 });
 
 /** o resumo lateral do modal aberto com esta descrição (o HTML inteiro) */
-async function resumoCom(descricao: string): Promise<{ html: string; texto: string; linhas: number }> {
+async function resumoCom(descricao: string): Promise<{ html: string; texto: string; descricao: { texto: string; title: string; classe: string } }> {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const tree = (p: Partial<React.ComponentProps<typeof LancamentoV2Dialog>>) => (
     <QueryClientProvider client={qc}><MemoryRouter>
@@ -77,19 +78,22 @@ async function resumoCom(descricao: string): Promise<{ html: string; texto: stri
   await screen.findByDisplayValue(descricao);
   await new Promise((ok) => setTimeout(ok, 30));
   const aside = screen.getByTestId('resumo-pagamento').closest('aside') as HTMLElement;
-  const res = { html: aside.innerHTML, texto: aside.textContent ?? '', linhas: aside.querySelectorAll('[data-linha-resumo]').length };
+  const d = screen.getByTestId('resumo-descricao');
+  const res = { html: aside.innerHTML, texto: aside.textContent ?? '',
+    descricao: { texto: d.textContent ?? '', title: d.getAttribute('title') ?? '', classe: d.className } };
   r.unmount();
   return res;
 }
 
-describe('o resumo lateral do lançamento não repete a descrição', () => {
-  it('descrição curta e de 300 caracteres: o MESMO resumo (mesmas linhas, mesmo HTML) e sem a descrição', async () => {
+/* P121 (FIN-MODAL-RESUMO-01, mock v1.1 aprovado 27/10) — a descrição VOLTA ao resumo, mas numa linha só ("…" + o texto inteiro no
+   `title`): o resto do resumo é o MESMO HTML com a descrição curta e a de 300 caracteres (nada cresce, nada empurra). */
+describe('o resumo lateral do lançamento: a descrição numa linha só', () => {
+  it('descrição curta e de 300 caracteres: o MESMO resumo (mesmo HTML, trocada só a descrição) e a descrição inteira no title', async () => {
     const curto = await resumoCom('Sal mineral');
     const longo = await resumoCom(LONGA);
-    expect(longo.texto).not.toContain(LONGA.slice(0, 30));
-    expect(curto.texto).not.toContain('Sal mineral');
-    expect(longo.linhas).toBe(curto.linhas);
-    expect(longo.html).toBe(curto.html);
+    expect(longo.descricao).toEqual({ texto: LONGA, title: LONGA, classe: expect.stringContaining('truncate') });
+    expect(curto.descricao.texto).toBe('Sal mineral');
+    expect(longo.html.split(LONGA).join('§')).toBe(curto.html.split('Sal mineral').join('§'));
     expect(longo.texto).not.toMatch(/Produto/);
   });
   it('o campo Produto / descrição é um input de uma linha (o texto rola dentro dele)', async () => {
@@ -97,9 +101,7 @@ describe('o resumo lateral do lançamento não repete a descrição', () => {
     expect(fonte).toMatch(/<Input/);
     expect(fonte).not.toMatch(/<textarea|<Textarea/);
   });
-  it('nenhum resumo lateral leva a descrição: lançamento e Editar obrigação (lido da fonte)', () => {
-    const dialogo = readFileSync(resolve(__dirname, 'LancamentoV2Dialog.tsx'), 'utf8');
-    expect(dialogo).not.toMatch(/<LinhaResumo[^>]*valor=\{descricao\}/);
+  it('o Editar obrigação segue sem a descrição no resumo (lido da fonte)', () => {
     const obrigacao = readFileSync(resolve(__dirname, '../financiamentos/ObrigacaoDialog.tsx'), 'utf8');
     expect(obrigacao).not.toMatch(/<Linha rotulo="Descrição"/);
   });

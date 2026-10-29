@@ -14,7 +14,7 @@
  *   de valor: a diferenca aparece em R$ e o operador decide). NADA ESCOLHIDO AQUI SE PERDE: "Abrir no Novo lancamento" leva tudo
  *   (`prefillDoModal`).
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -55,11 +55,13 @@ import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
-import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, parcelasParaCasar, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
+import { canceladosDaNota, casarJaLancados, contaUnicaDasIrmas, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, parcelasParaCasar, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
   type SituacaoNaTabela } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
+import { PreviaCompletar } from './PreviaCompletar';
+import type { AlvoDaPrevia } from '@/lib/financeiro/nfe/notaCompletar';
 import { GravarIeDaFazendaDialog } from './GravarIeDaFazendaDialog';
 import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import type { NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
@@ -68,11 +70,11 @@ import { fraseDaRemessa } from '@/lib/financeiro/nfe/remessaEntregaFutura';
 import { ORIGEM_FAZENDA_PELO_ENDERECO } from '@/lib/financeiro/nfe/proporLancamento';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
+import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import {
   camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerIeDaFazenda, fornecedorPeloDocumento, iePorFazenda, inscreverEmFazendas, lancamentosAbertosComValor,
   atualizarCamposDoCadastro, cadastroParaComparar, desfazerCamposDoCadastro, notaJaLancada, usoDoFornecedor, type CadastroComODocumento,
-  type LancamentoAbertoDaNota, type OcorrenciaDaNota,
-} from '@/lib/financeiro/nfeConsultas';
+  type LancamentoAbertoDaNota, type OcorrenciaDaNota, completarComANota, registrarNaOperacao, desfazerCompletar, cancelarCriados } from '@/lib/financeiro/nfeConsultas';
 import { caixaDeTitulo, consultarCnpj, type DadosDoCnpj } from '@/lib/fornecedores/consultaCnpj';
 import type { CampoDoEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
 import type { ClassificacaoItem, ContaBancariaV2, FornecedorV2, LancamentoV2Form, Safra } from '@/hooks/useFinanceiroV2';
@@ -80,8 +82,8 @@ import type { Fazenda } from '@/contexts/FazendaContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import {
-  fraseDaNfDigitada, fraseDaSafra, fraseDoEfeito, gravarJuncao, GRAVADORES_DA_JUNCAO, nfDigitadaDivergente, simularJuncao, soltasParaJuntar, usarANotaLida,
-  type DocumentoDaParcela, type GravadoresDaJuncao, type Juncao,
+  fraseDaNfDigitada, GRAVADORES_DA_JUNCAO, nfDigitadaDivergente, soltasParaJuntar, usarANotaLida,
+  type DocumentoDaParcela, type GravadoresDaJuncao,
 } from '@/lib/financeiro/juntarParcelas';
 
 export type NotaLidaOk = Extract<NotaDoArquivo, { ok: true }>;
@@ -297,7 +299,6 @@ export function NotaFiscalDialog({
   const [falhaAbertos, setFalhaAbertos] = useState<string | null>(null);
   const [abertosPendente, setAbertosPendente] = useState(false);
   const [tentativa, setTentativa] = useState(0);
-  const [trocarFornecedor, setTrocarFornecedor] = useState(false);
   /* P128a — o caminho "Completar com a nota" sempre cria as que faltam (o mock: "completa as 6 e cria as 4 que faltam") */
   const criarFaltam = true;
   /* P128a — os TRES CAMINHOS da nota que ja' esta' no sistema (o recomendado vem marcado) */
@@ -362,11 +363,28 @@ export function NotaFiscalDialog({
   /* D — a nota que so' tem lancamento CANCELADO nao esta' lancada: o rodape so' diz quantos */
   const canceladosSo = useMemo(() => (achados && !achados.some((l) => !l.cancelado) ? canceladosDaNota(achados) : []), [achados]);
   const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
+  /* P128b-N1 — a parcela que falta nasce com a conta das irmãs quando todas têm a mesma: a Conta da prévia COMEÇA nela (à vista, troca-se);
+     sem conta única (divergem ou alguma sem conta), "conta" entra no "Falta:" e o Criar fica apagado até escolher */
+  const contaDasIrmas = jaLancada && jaLancada.faltam.length > 0 ? contaUnicaDasIrmas(jaLancada.alvos) : null;
+  const contaDasIrmasPosta = useRef<string | null>(null);
+  useEffect(() => {
+    if (!contaDasIrmas || contaDasIrmasPosta.current === contaDasIrmas) return;
+    contaDasIrmasPosta.current = contaDasIrmas;
+    setContaId((c) => (c === '__none__' ? contaDasIrmas : c));
+  }, [contaDasIrmas]);
   /* P128a — a TABELA SISTEMA × NOTA e a frase do que foi achado (a mesma lista, as mesmas contas) */
   const linhasDaTabela = useMemo(() => (jaLancada ? linhasSistemaNota(jaLancada, n.totais.notaCent) : []), [jaLancada, n.totais.notaCent]);
   /* P128a (porta 2) — o lancamento aberto no Editar que a busca NAO achou: nada se cria daqui (a ancora pelo lancamento e' o P128c) */
   const naoAchouOAberto = !!partindoDe && achados !== null && !achados.some((l) => l.id === partindoDe && !l.cancelado);
   const fraseAchado = jaLancada ? `${fraseDoAchado(jaLancada, linhasDaTabela, n.totais.notaCent)}${naoAchouOAberto ? ' · o lançamento aberto não foi achado por esta nota' : ''}` : '';
+  /* P128b — os lançamentos da prévia campo a campo: os do sistema que RECEBEM a nota (o "só no sistema" fica fora), na ordem da tabela,
+     com o rótulo da parcela e o que a nota diz (o caminho 2 leva valor e vencimento da nota às programadas) */
+  const alvosDaPrevia = useMemo((): AlvoDaPrevia[] => {
+    const alvos = new Set((jaLancada?.alvos ?? []).map((l) => l.id));
+    return linhasDaTabela.flatMap((x) => (x.sistema && alvos.has(x.sistema.id)
+      ? [{ id: x.sistema.id, programada: x.situacao === 'programada', notaValorCent: x.notaValorCent, notaVencimento: x.notaVencimento }] : []));
+  }, [jaLancada, linhasDaTabela]);
+  const rotulosDaPrevia = useMemo(() => Object.fromEntries(linhasDaTabela.flatMap((x) => (x.sistema ? [[x.sistema.id, x.rotulo]] : []))), [linhasDaTabela]);
   /* P128a (decisao c) — as PROGRAMADAS que diferem da nota (valor ou vencimento): so' elas o caminho 2 atualiza */
   const programadasQueDiferem = linhasDaTabela.filter((x) => x.situacao === 'programada' && (x.difValor || x.difData)).length;
   /* P96a — as N soltas desta nota (todas as N frações, nenhuma já parcela): o gesto principal vira "Juntar as N e anexar" */
@@ -391,18 +409,6 @@ export function NotaFiscalDialog({
         naoMuda: '⚠ duplica: a compra fica em dobro.' },
     ];
   }, [jaLancada, soltas, programadasQueDiferem, p.duplicatas.length]);
-  const [confirmarJuntar, setConfirmarJuntar] = useState(false);
-  /* a OPÇÃO da competência (marcada por padrão, Gabriel 26/10): as N para a emissão da nota */
-  const [passarCompetencia, setPassarCompetencia] = useState(true);
-  /* as duas prévias do banco (a mesma função simulada): com e sem a competência */
-  const [previa, setPrevia] = useState<{ com: Juncao; sem: Juncao } | null>(null);
-  useEffect(() => {
-    if (!confirmarJuntar || !soltas) { setPrevia(null); return; }
-    let vivo = true;
-    void Promise.all([simularJuncao(clienteId, soltas.ids, n.emissao || null, gravadoresDaJuncao), simularJuncao(clienteId, soltas.ids, null, gravadoresDaJuncao)])
-      .then(([com, sem]) => { if (vivo) { setPrevia({ com, sem }); if (!com.ok) setPassarCompetencia(false); } });
-    return () => { vivo = false; };
-  }, [confirmarJuntar, soltas, clienteId, n.emissao, gravadoresDaJuncao]);
   /* P96a — a NF já anexada à mão numa das N, com valor/emissão diferentes da nota lida: NUNCA se troca sozinha */
   const [docsDasSoltas, setDocsDasSoltas] = useState<DocumentoDaParcela[]>([]);
   useEffect(() => {
@@ -419,8 +425,8 @@ export function NotaFiscalDialog({
     return f ? `${f.k}/${f.n}` : 'parcela';
   }, notaLida), [docsDasSoltas, jaLancada, notaLida]);
   const [confirmarNotaLida, setConfirmarNotaLida] = useState(false);
-  /* a prévia da opção marcada (com ou sem a competência) — a que o "Juntar" grava */
-  const escolhida = previa ? (passarCompetencia ? previa.com : previa.sem) : null;
+  /* P128b — a prévia campo a campo (a do banco) do "Completar com a nota" */
+  const [previaAberta, setPreviaAberta] = useState(false);
 
   /* o proposto que aparece depois (a lista de agora, a Receita) entra sozinho — salvo se o operador escolheu cadastrar outro */
   useEffect(() => {
@@ -482,6 +488,7 @@ export function NotaFiscalDialog({
   else if (res.inativo && favorecidoId === p.favorecidoId) faltas.push('fornecedor ativo');
   if (!fazendaId) faltas.push('fazenda');
   if (!planoId) faltas.push('subcentro');
+  if (jaLancada && caminho !== 'criar' && criarFaltam && jaLancada.faltam.length > 0 && como !== 'cartao' && (!contaId || contaId === '__none__')) faltas.push('conta');
   if (lavoura && !safraId) faltas.push('safra');
   if (lavoura && cultura === null) faltas.push('cultura');
   if (como !== 'cartao' && !cabeAqui && !vencimento) faltas.push('vencimento');
@@ -499,7 +506,19 @@ export function NotaFiscalDialog({
   const verificando = !naoVerificado && ((!registrada && achados === null) || abertosPendente);
   const bloqueio = divergencias.length ? `A chave não confere com o lido (${divergencias.map((x) => NOME_DO_CONFERIDO[x]).join(', ')}). Nada será criado.`
     : registrada ? `Nota já registrada neste cliente · ${ondeEsta(registrada)}` : naoVerificado;
+  /* P162 — completar o que JÁ EXISTE não pede o que é de lançamento novo (fazenda, subcentro…): as faltas só contam quando algo nasce
+     (o caminho criar, ou a parcela que falta) */
+  const faltasQueContam = jaLancada && !bloqueio && caminho !== 'criar' && jaLancada.faltam.length === 0 ? [] : faltas;
   const podeCriar = !bloqueio && !verificando && faltas.length === 0 && !ocupado && !naoAchouOAberto;
+  /* P167 (NOTA-COMPRA-ERRADA-01) — completar/anexar o que JÁ EXISTE: (1) duas compras com a mesma evidência = nada se grava (abrir pela parcela
+     da compra certa); (2) a soma das parcelas que recebem a nota (as achadas + as que nascem) nunca passa da nota (meio centavo de folga) —
+     "falta R$ X" não é estado final de um registro. O quadro continua à vista; a frase fica no rodapé e o "Revisar e completar" apaga. */
+  const somaDosLigadosCent = jaLancada ? jaLancada.alvos.reduce((t, l) => t + l.valorCent, 0) + jaLancada.faltam.reduce((t, f) => t + f.valorCent, 0) : 0;
+  const recusaDaCompra = !jaLancada || bloqueio || caminho === 'criar' ? null
+    : jaLancada.compraAmbigua ? 'Duas compras deste fornecedor parecem esta nota: abra a nota pela parcela da compra certa. Nada será gravado.'
+    : somaDosLigadosCent > n.totais.notaCent + 1
+      ? `As parcelas que receberiam a nota somam R$ ${reais(somaDosLigadosCent)}, mais que a nota (R$ ${reais(n.totais.notaCent)}). Nada será gravado — confira se todas são desta compra.`
+      : null;
   /* P74 — com o cartão, a conta origem das N é o cartão escolhido */
   const contaEscolhida = como === 'cartao' ? (cartaoId || null) : contaId && contaId !== '__none__' ? contaId : null;
   const escolhas = (): EscolhasDaNota | null => (favorecidoId && plano?.id ? {
@@ -583,43 +602,67 @@ export function NotaFiscalDialog({
       onCriado(); onClose();
     } finally { setOcupado(null); }
   };
-  /** NOTA-JA-LANCADA-01 — "Anexar a nota a estes N" (e criar so' as que faltam, se marcado); nada muda em valor, data, status, conta. */
-  const anexarJaLancados = async () => {
-    if (!jaLancada) return;
+  /**
+   * P128b (decisões (a)–(d) de 28/10) — COMPLETAR COM A NOTA, numa sequência só (o pedido vem da prévia campo a campo):
+   * 1. as parcelas que FALTAM nascem antes, pelo gravador de sempre (o valor e o vencimento da nota);
+   * 2. `fn_nota_completar` com TODAS (as achadas + as novas): os campos, a JUNÇÃO das soltas (P96a) e o ANTES, numa transação; recusou =
+   *    as recém-criadas são CANCELADAS (o padrão do P75: nada fica valendo pela metade) e a frase volta à prévia;
+   * 3. a nota anexada a todas (o caminho de sempre); 4. o que nasceu fica REGISTRADO na operação (o desfazer cancela); 5. os itens.
+   * Nada muda em valor, data de pagamento, status nem conciliação de conciliada/paga (o banco recusa).
+   */
+  const completarComNota = async (pedido: Record<string, unknown>[]): Promise<string | null> => {
+    if (!jaLancada) return 'Nada para completar.';
+    if (recusaDaCompra) return recusaDaCompra;
     const donoDaNota = favorecidoId ?? jaLancada.alvos[0]?.fornecedorId ?? null;
-    if (!donoDaNota) return;
+    if (!donoDaNota) return 'Escolha o fornecedor da nota.';
     const e = escolhas();
     const comFaltam = criarFaltam && jaLancada.faltam.length > 0;
-    if (comFaltam && (!e || !plano || faltas.length)) return;
+    if (comFaltam && (!e || !plano || faltas.length)) return `Para criar as que faltam, falta: ${faltas.join(', ')}.`;
     setOcupado('atualizar'); setErro(null);
     try {
+      /* 1 */
+      const criados: { id: string; numero: number }[] = [];
+      const gravarLancamento = g.lancamento ?? onCriarLancamento;
+      for (const f of comFaltam && e && plano ? jaLancada.faltam : []) {
+        if (!gravarLancamento || !e || !plano) return 'Gravador do lançamento indisponível. Nada foi gravado.';
+        const id = await gravarLancamento({ ...formDaNota(doXml, e, f.vencimento, plano), valor: f.valorCent / 100, data_vencimento: f.vencimento,
+          descricao: `${p.descricao} ${f.n}/${parcelasDaBusca.length}` });
+        if (!id) { await cancelarCriados(criados.map((x) => x.id), `a parcela ${f.n} não foi criada`); return `A parcela ${f.n} não foi criada. Nada ficou valendo.`; }
+        criados.push({ id, numero: f.n });
+      }
+      /* 2 */
+      const r = await completarComANota(clienteId, [...pedido, ...criados.map((x) => ({ id: x.id }))], { juntar: !!soltas, chave: n.chave || null, simular: false });
+      const recusa = r.ok === false ? r.motivo : !r.valor.ok ? (r.valor.recusas[0] ?? 'O banco recusou.') : null;
+      if (recusa || r.ok === false) {
+        const nao = await cancelarCriados(criados.map((x) => x.id), recusa ?? 'recusa');
+        return nao ? `${recusa} E ${nao} parcela(s) criada(s) NÃO puderam ser canceladas: cancele-as na lista.` : recusa;
+      }
+      const operacao = r.valor.operacao;
+      /* 3 */
       const numeroDe = (id: string) => jaLancada.porParcela.find((x) => x.lancamento?.id === id)?.parcela.n ?? 0;
-      const r = await anexarAosJaLancados(clienteId, doXml, jaLancada.alvos.map((l) => ({ id: l.id, numero: numeroDe(l.id) })), donoDaNota, {
-        faltam: comFaltam && e && plano ? jaLancada.faltam.map((f) => ({ numero: f.n, form: {
-          ...formDaNota(doXml, e, f.vencimento, plano), valor: f.valorCent / 100, data_vencimento: f.vencimento,
-          descricao: `${p.descricao} ${f.n}/${parcelasDaBusca.length}`,
-        } })) : [],
-        trocarPara: trocarFornecedor && favorecidoId ? favorecidoId : null,
-        motivoTroca: `fornecedor da ${p.rotuloNota}`,
-      }, { ...g, lancamento: g.lancamento ?? onCriarLancamento });
-      if (r.ok === false) { setErro(r.erro); return; }
-      for (const a of r.avisos) toast.error(a);
-      if (!r.avisos.length) toast.success(`${p.rotuloNota} anexada a ${jaLancada.alvos.length} lançamento${jaLancada.alvos.length === 1 ? '' : 's'}${r.criados ? ` · ${r.criados} criado${r.criados === 1 ? '' : 's'}` : ''}`);
+      /* P167 — a compra que JÁ TEM esta nota (o documento de antes) só recebe o vínculo: nunca um segundo documento da mesma nota */
+      const notaExistente = jaLancada.alvos.find((l) => l.notaDocumentoId)?.notaDocumentoId ?? null;
+      const a = await anexarAosJaLancados(clienteId, doXml, [...jaLancada.alvos.map((l) => ({ id: l.id, numero: numeroDe(l.id) })), ...criados], donoDaNota, { notaExistente },
+        { ...g, lancamento: g.lancamento ?? onCriarLancamento });
+      if (a.ok === false) {
+        toast.error(`Os campos foram gravados, mas a nota não foi anexada: ${a.erro}`);
+      } else for (const x of a.avisos) toast.error(x);
+      /* 4 */
+      if (operacao) {
+        const eReg = await registrarNaOperacao(operacao, criados.map((x) => x.id), a.ok === true ? a.documentoIds : []);
+        if (eReg) toast.error(`O desfazer não vai cancelar o que nasceu agora: ${eReg}`);
+      }
+      /* 5 */
       const erroItens = await gravarItens(clienteId, bytes);
       if (erroItens) toast.error(`Os itens da nota não foram guardados: ${erroItens}`);
+      const total = jaLancada.alvos.length + criados.length;
+      toast.success(`${p.rotuloNota} completou ${total} lançamento${total === 1 ? '' : 's'}${r.valor.financiamentoId ? ' · juntados numa compra parcelada' : ''}`, operacao ? {
+        action: { label: 'Desfazer', onClick: () => { void desfazerCompletar(operacao).then((x) => { if (x) toast.error(x); else { toast.success('Desfeito: tudo voltou como estava.'); onCriado(); } }); } },
+      } : undefined);
+      setPreviaAberta(false);
       onCriado(); onClose();
+      return null;
     } finally { setOcupado(null); }
-  };
-  /** P96a — "Juntar as N e anexar": as N viram UMA compra parcelada (os lançamentos ficam; com a opção, a competência vai para a emissão)
-   *  e a nota se anexa pelo MESMO caminho do "Anexar". A junção recusada não anexa nada (a frase fica no rodapé). */
-  const juntarEAnexar = async () => {
-    if (!soltas) return;
-    setOcupado('juntar'); setErro(null);
-    const r = await gravarJuncao(clienteId, soltas.ids, passarCompetencia ? n.emissao || null : null, gravadoresDaJuncao);
-    setOcupado(null); setConfirmarJuntar(false);
-    if (r.ok === false) { setErro(r.erro); return; }
-    toast.success(`${soltas.n} parcelas juntadas numa compra parcelada`);
-    await anexarJaLancados();
   };
   /** P96a — "Usar a nota lida": só com a confirmação; troca valor e emissão da NF digitada (o digitado fica na Auditoria). */
   const trocarPelaNotaLida = async () => {
@@ -809,7 +852,9 @@ export function NotaFiscalDialog({
                  CAMINHOS lado a lado, cada um dizendo o que muda e o que não muda. Mesma altura do bloco de parcelas: nada se desloca. */
               <section className={cn(BLOCO, 'min-h-0 flex-1')} data-testid="nota-ja-lancada">
                 <TituloDoBloco nome="Esta nota já está no sistema" acao={<span className={CHIP_AVISO}>
-                  {jaLancada.outrosParecidos ? `+${jaLancada.outrosParecidos} parecido${jaLancada.outrosParecidos === 1 ? '' : 's'} (outra compra igual?)` : 'confira e escolha o caminho'}</span>} />
+                  {/* P167 — a outra compra do mesmo fornecedor fica de fora (nunca recebe a nota) e o chip diz */}
+                  {jaLancada.outraCompra.length ? <span data-testid="nota-outra-compra">{jaLancada.outraCompra.length} de outra compra (fica de fora)</span>
+                    : jaLancada.outrosParecidos ? `+${jaLancada.outrosParecidos} parecido${jaLancada.outrosParecidos === 1 ? '' : 's'} (outra compra igual?)` : 'confira e escolha o caminho'}</span>} />
                 {/* a frase: 2 linhas reservadas (nada se desloca), o texto inteiro no title */}
                 <p className="h-[26px] shrink-0 overflow-hidden whitespace-normal text-[10px] leading-[13px] text-foreground" title={fraseAchado}
                   data-testid="nota-ja-lancada-resumo">{fraseAchado}</p>
@@ -885,13 +930,6 @@ export function NotaFiscalDialog({
                     </button>
                   ))}
                 </div>
-                {favorecidoId && fornecedor && jaLancada.alvos.some((l) => l.fornecedorId !== favorecidoId) && (
-                  <label className="mt-1 flex h-4 min-w-0 shrink-0 items-center gap-1.5 text-[10px]" data-testid="nota-trocar-fornecedor"
-                    title={`Troca o fornecedor dos lançamentos achados para ${fornecedor.nome} (com trilha e desfazer).`}>
-                    <Checkbox checked={trocarFornecedor} onCheckedChange={(v) => setTrocarFornecedor(v === true)} className="h-3 w-3" />
-                    <span className="min-w-0 uma-linha-que-rola">Trocar o fornecedor para {fornecedor.nome}</span>
-                  </label>
-                )}
               </section>
             ) : (
             <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5">
@@ -1130,8 +1168,10 @@ export function NotaFiscalDialog({
             <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-porta2-nao-achado"
               title="Aberta pelo Editar lançamento: a busca (nº, chave, soma) não achou este lançamento; criar daqui duplicaria a compra.">
               ⚠ O lançamento aberto não foi achado por esta nota. Nada será criado daqui.</span>
-          ) : faltas.length ? (
-            <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-falta">⚠ Falta: {faltas.join(', ')}</span>
+          ) : recusaDaCompra ? (
+            <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-recusa-compra" title={recusaDaCompra}>⚠ {recusaDaCompra}</span>
+          ) : faltasQueContam.length ? (
+            <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-falta">⚠ Falta: {faltasQueContam.join(', ')}</span>
           ) : null}
           {!bloqueio && !erro && jaLancada ? (
             <span className="min-w-0 uma-linha-que-rola font-medium text-amber-900" data-testid="nota-ja-lancada-frase">Nada é gravado antes de você clicar.</span>
@@ -1166,26 +1206,16 @@ export function NotaFiscalDialog({
           </Button>
           {/* o botao principal tem a MESMA largura nos dois estados (nada se desloca); "Criar mesmo assim" mora no bloco */}
           {/* P128a — o botão principal faz o CAMINHO escolhido no bloco (a MESMA largura em todos: nada se desloca) */}
-          {jaLancada && !bloqueio && caminho === 'atualizar' ? (
-            <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-atualizar-nao-pagas"
-              disabled title="A gravação deste caminho chega na próxima fatia (P128b).">Completar e atualizar</Button>
+          {jaLancada && !bloqueio && caminho !== 'criar' ? (
+            /* P128b — "Completar" e "Completar e atualizar as não pagas": a prévia campo a campo antes de gravar (o que muda e o que não muda) */
+            <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-completar-revisar"
+              disabled={!!ocupado || faltasQueContam.length > 0 || !!recusaDaCompra} onClick={() => setPreviaAberta(true)}>
+              {ocupado === 'atualizar' ? 'Gravando…' : 'Revisar e completar'}
+            </Button>
           ) : jaLancada && !bloqueio && caminho === 'criar' ? (
             <Button type="button" size="sm" variant="destructive" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-criar-duplicando"
               disabled={!podeCriar} onClick={() => setMesmoAssim('')} title={podeCriar ? 'É outra compra: criar mesmo assim (pede o motivo).' : `Para criar, falta: ${faltas.join(', ')}`}>
               {ocupado === 'criar' ? 'Criando…' : 'Criar novo (duplica)'}
-            </Button>
-          ) : jaLancada && !bloqueio && soltas ? (
-            /* P96a — as N soltas achadas inteiras: o gesto é JUNTAR (e anexar); "Só anexar a nota" fica na confirmação */
-            <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-juntar-soltas"
-              disabled={!!ocupado} onClick={() => setConfirmarJuntar(true)}>
-              {ocupado === 'juntar' ? 'Juntando…' : ocupado === 'atualizar' ? 'Anexando…' : `Juntar as ${soltas.n} e anexar`}
-            </Button>
-          ) : jaLancada && !bloqueio ? (
-            <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-anexar-ja-lancados"
-              disabled={!!ocupado || (criarFaltam && jaLancada.faltam.length > 0 && faltas.length > 0)} onClick={() => { void anexarJaLancados(); }}>
-              {ocupado === 'atualizar' ? 'Anexando…' : criarFaltam && jaLancada.faltam.length
-                ? `Anexar e criar ${jaLancada.faltam.length === 1 ? 'a que falta' : `as ${jaLancada.faltam.length} que faltam`}`
-                : `Anexar a nota a ${jaLancada.alvos.length === 1 ? 'este' : `estes ${jaLancada.alvos.length}`}`}
             </Button>
           ) : (
           <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" disabled={!podeCriar} onClick={() => { void criar(); }} data-testid="nota-criar"
@@ -1230,42 +1260,15 @@ export function NotaFiscalDialog({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* P96a — juntar as N soltas: o resumo, a OPÇÃO da competência (com o efeito no DRE, da prévia do banco) e "Só anexar a nota" */}
-      <AlertDialog open={confirmarJuntar} onOpenChange={(o) => { if (!o && ocupado !== 'juntar') setConfirmarJuntar(false); }}>
-        <AlertDialogContent data-testid="nota-juntar-confirmar">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Juntar as {soltas?.n ?? 0} como parcelas desta nota?</AlertDialogTitle>
-            <AlertDialogDescription data-testid="nota-juntar-texto">
-              {`As ${soltas?.n ?? 0} viram as parcelas 1 a ${soltas?.n ?? 0} de uma compra parcelada, na ordem do vencimento. Valor, vencimento, pagamento, status e conciliação não mudam. `}
-              {`Soma R$\u00a0${reais(soltas?.somaCent ?? 0)} · nota R$\u00a0${reais(n.totais.notaCent)}`}
-              {soltas && soltas.somaCent !== n.totais.notaCent ? ` · diferença R$\u00a0${reais(Math.abs(soltas.somaCent - n.totais.notaCent))}` : ''}. A {p.rotuloNota} fica anexada às {soltas?.n ?? 0}.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-1 text-[11px]">
-            <label className="flex items-start gap-1.5" data-testid="nota-juntar-competencia">
-              <Checkbox checked={passarCompetencia} disabled={!previa || !previa.com.ok || !n.emissao}
-                onCheckedChange={(v) => setPassarCompetencia(v === true)} className="mt-0.5 h-3 w-3" />
-              <span>Passar a competência das {soltas?.n ?? 0} para a emissão da nota ({dataInteira(n.emissao)})</span>
-            </label>
-            <p className="min-h-[30px] pl-[18px] text-[10.5px] leading-[15px] text-muted-foreground" data-testid="nota-juntar-efeito">
-              {!previa ? 'Calculando o efeito no DRE…'
-                : previa.com.ok === false ? previa.com.frase
-                  : passarCompetencia ? `Efeito no DRE: ${fraseDoEfeito(previa.com.efeito) || 'nenhum (já estão no mês da nota)'}${fraseDaSafra(previa.com.lista) ? `; ${fraseDaSafra(previa.com.lista)}` : ''}.`
-                    : 'A competência de cada uma fica como está: o DRE não muda.'}
-            </p>
-            {escolhida && escolhida.ok === false && <p className="text-[10.5px] text-destructive" data-testid="nota-juntar-recusa">{escolhida.frase}</p>}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={ocupado === 'juntar'}>Voltar</AlertDialogCancel>
-            <Button type="button" variant="outline" disabled={!!ocupado} data-testid="nota-juntar-so-anexar"
-              onClick={() => { setConfirmarJuntar(false); void anexarJaLancados(); }}>Só anexar a nota</Button>
-            <AlertDialogAction data-testid="nota-juntar-gravar" disabled={!!ocupado || !escolhida || !escolhida.ok}
-              onClick={(e) => { e.preventDefault(); void juntarEAnexar(); }}>
-              {ocupado === 'juntar' ? 'Juntando…' : `Juntar as ${soltas?.n ?? 0}`}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* P128b — a prévia campo a campo do "Completar com a nota" (a do banco: `fn_nota_completar` com `p_simular`) */}
+      {previaAberta && jaLancada && (
+        <PreviaCompletar open onFechar={() => setPreviaAberta(false)} clienteId={clienteId}
+          alvos={alvosDaPrevia} rotulos={rotulosDaPrevia} atualizarNaoPagas={caminho === 'atualizar'} juntar={!!soltas} chave={n.chave || null}
+          todasIniciais={{ descricaoBase: p.descricao, favorecidoId: favorecidoId ?? null, fazendaId: fazendaId || null, contaId: contaEscolhida,
+            planoContaId: planoId || null, numeroDocumento: formatNFNumber(p.numeroDocumento || n.numero),
+            competencia: n.emissao || null, safraId: lavoura && safraId ? safraId : null }}
+          onConfirmar={completarComNota} />
+      )}
 
       {/* P96a — "Usar a nota lida": a troca da NF digitada só com confirmação; o digitado fica na Auditoria */}
       <AlertDialog open={confirmarNotaLida} onOpenChange={(o) => { if (!o && ocupado !== 'nota-lida') setConfirmarNotaLida(false); }}>

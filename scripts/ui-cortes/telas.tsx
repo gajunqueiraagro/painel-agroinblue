@@ -33,6 +33,7 @@ import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTra
 import { ForaDaVigenciaDialog } from '@/components/recorrencias/ForaDaVigenciaDialog';
 import { lerForaDaVigencia } from '@/hooks/useRecorrencias';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
+import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
 import * as CONC from './dados/conciliacao';
 import * as ESP from './dados/espelho';
@@ -452,10 +453,15 @@ if (tela === 'mesclar') {
     subcentro: 'Juros de Financiamento Pecuária', macro_custo: 'Despesas Financeiras', cancelado: false, sem_movimentacao_caixa: false, ...o });
   const LINHAS_CPR = [
     lin('rec-1', 2, 435.75, 'Internet Fazenda Exemplo', { subcentro: 'Comunicação e Energia Pecuária' }),
-    lin('juros-2', 5, 35665.34, 'Juros 2/5 · 8.233.040 · Giro Rural'),
-    lin('amort-2', 5, 120004.5, 'Amortização 2/5 · 8.233.040 · Giro Rural', { subcentro: 'Amortização de Financiamento' }),
+    lin('juros-2', 5, 35665.34, 'Juros 2/5 · 8.233.040 · Giro Rural', { financiamento_id: 'fin-1' }),
+    lin('amort-2', 5, 120004.5, 'Amortização 2/5 · 8.233.040 · Giro Rural', { subcentro: 'Amortização de Financiamento', financiamento_id: 'fin-1' }),
     lin('ambas', 9, 999999999.99, 'Lançamento com as duas origens de estimativa', { subcentro: 'Juros de Financiamento Pecuária' }),
-    lin('avulsa', 12, 1500, 'Sal mineral', { subcentro: 'Nutrição Engorda' }),
+    lin('avulsa', 12, 1500, 'Sal mineral', { subcentro: 'Nutrição Engorda', tipo_documento: 'nf', numero_documento: '999999999' }),
+    /* P152 — uma PAGA antes do vencimento (fica no dia do pagamento, linha mais clara, Pgto. em azul) e uma parcela de parcelamento
+       (selo P, "i/N" do contrato) com NF anexada (o "NF" que abre a aba Documentos) */
+    lin('paga-1', 3, 2533.79, 'Manutenção do trator da sede com troca de embreagem', { status_transacao: 'realizado', data_pagamento: dia(0),
+      financiamento_id: 'parc-1', subcentro: 'Manutenção Máquinas Pecuária' }),
+    lin('parc-1', 7, 990, 'Parcela de óleo lubrificante', { financiamento_id: 'parc-2', subcentro: 'Manutenção Máquinas Pecuária' }),
     /* CPR-AJUSTES-20-10 — um VENCIDO (entra hoje, com o selo e o aviso) e uma ENTRADA no mesmo dia de uma saída (a ordem do dia) */
     lin('vencido-1', -4, 290000, 'Transferência para aplicação em CDB com o nome longo do banco', { subcentro: 'Transferência entre contas' }),
     lin('entrada-1', 12, 21000, 'Venda de bezerros desmamados', { tipo_operacao: '1-Entradas', sinal: 1, conta_bancaria_id: null, conta_destino_id: 'bb', subcentro: 'Venda de Desmama Machos' }),
@@ -470,11 +476,14 @@ if (tela === 'mesclar') {
     from: (t: string, e: any) => t === 'vw_financeiro_lancamentos_v2_doc' ? LINHAS_CPR
       : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1, tipo_conta: 'conta_corrente' }]
       : t === 'financeiro_recorrencias' ? [{ id: 'reg-1' }]
+      /* P152 — o `recorrencia_id` dos ids visíveis (o selo R) */
+      : t === 'financeiro_lancamentos_v2' && e.in.id ? [{ id: 'rec-1', recorrencia_id: 'reg-1' }, { id: 'ambas', recorrencia_id: 'reg-1' }]
+      : t === 'vw_lancamento_documentos' ? [{ lancamento_id: 'parc-1', especie: 'nf', numero: '177472', cancelado: false, chave_acesso: null }]
       : t === 'financeiro_lancamentos_v2' && e.in.recorrencia_id ? [{ id: 'rec-1', recorrencia_id: 'reg-1', valor: 435.75, data_vencimento: dia(2), status_transacao: 'programado', valor_do_mes_em: null },
           { id: 'ambas', recorrencia_id: 'reg-1', valor: 1, data_vencimento: dia(9), status_transacao: 'programado', valor_do_mes_em: null }]
       : [],
     rpc: (fn: string) => fn === 'fn_juros_estimados_do_cliente' ? [{ lancamento_id: 'juros-2' }, { lancamento_id: 'ambas' }]
-      : fn === 'fn_parcelas_dos_lancamentos' ? {} : null,
+      : fn === 'fn_parcelas_dos_lancamentos' ? { 'parc-1': [3, 10] } : null,
   };
   /* CPR-AJUSTES-20-10b — `&v=futuro`: um período que começa depois de hoje (o bloco "Vencidos em aberto · entram no saldo" antes
      do Caixa inicial, e nenhum dia de hoje). P106: o gate clica "Mês futuro" / "Mês anterior" (o retorno de sessão não restaura mais
@@ -745,17 +754,46 @@ if (tela === 'mesclar') {
     previa={v === 'carregando' ? null : lerForaDaVigencia(resposta)} carregando={v === 'carregando'}
     erro={v === 'erro' ? 'Os lançamentos mudaram durante a gravação (11 de 12). Nada foi gravado.' : null}
     aoConfirmar={async () => {}} aoFechar={() => {}} />);
+} else if (tela === 'palco-do-mes') {
+  /* P124 (CONC-LOTE-SUGESTOES-01) — a Conciliação do mês com o lote: 30 movimentos SINTÉTICOS no pior caso (descrições longas, valores
+     no teto), as sugestões do motor simulado (exata, a conferir com e sem empate, sem sugestão) e 4 já conciliados. O gate clica
+     "Buscar sugestões do mês"; `&v=recusa` faz o gravador recusar um par. */
+  const desc = (i: number) => `PIX - ENVIADO - ${String(2 + (i % 27)).padStart(2, '0')}/10 11:${String(10 + i).padStart(2, '0')} COLABORADOR SINTÉTICO COM O NOME BEM COMPRIDO ${i}`;
+  const MOVS = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, data_movimento: `2031-10-${String(1 + (i % 28)).padStart(2, '0')}`,
+    descricao: desc(i), documento: null, valor: i === 0 ? -99999999.99 : i === 7 ? 99999999.99 : -(1000 + i * 37.11) }));
+  const conciliados = new Set(['m3', 'm9', 'm15', 'm21']);
+  const cand = (i: number, o: Record<string, unknown> = {}) => ({ id: `l${i}`, descricao: `Folha de Pagamento · Lançamento Sintético com Descrição Longa ${i}`,
+    favorecido: `Fornecedor Sintético de Nome Muito Comprido ${i} Ltda`, numero_documento: null, data_referencia: '2031-10-05', vencimento: '2031-10-05',
+    valor: String(Math.abs(MOVS[i].valor)), status: i % 3 === 0 ? 'programado' : 'previsto', ja_conciliado: '0', saldo: String(Math.abs(MOVS[i].valor)),
+    delta_valor: '0', delta_dias: 3, score: 90, pre_marcado: true, ambiguo: false, indisponivel: false, ...o });
+  g.__bancoBancada = {
+    from: (t: string) => t === 'extrato_bancario_v2' ? MOVS
+      : t === 'conciliacao_bancaria_itens' ? [...conciliados].map((id) => ({ extrato_id: id, valor_aplicado: Math.abs(MOVS[Number(id.slice(1))].valor),
+          lancamento_id: `v-${id}`, financeiro_lancamentos_v2: { descricao: 'Tarifa Pacote de Serviços com Descrição Longa', financeiro_fornecedores: { nome: 'Banco Exemplo S.A.' } } }))
+      : [],
+    rpc: (fn: string, a: any) => {
+      if (fn === 'fn_candidatos_conciliacao') {
+        const i = Number(String(a.p_extrato_id).slice(1));
+        return i % 5 === 1 ? [] : i % 5 === 2 ? [cand(i, { pre_marcado: false, score: 70, delta_valor: '-99999.99', delta_dias: 61 })]
+          : i % 5 === 3 ? [cand(i, { pre_marcado: false, ambiguo: true, score: 90 })] : [cand(i)];
+      }
+      if (fn === 'fn_vincular_extrato_lancamento') return v === 'recusa' ? { __erro: 'sobre_aplicacao: valor excede o aberto do movimento' } : { ok: true };
+      return null;
+    },
+  };
+  montar(<PalcoDoMes clienteId="cli" contaId="bb" contaNome="Banco Exemplo com o Nome Comprido · Conta Movimento" ano={2031} mes={10} aoFechar={() => {}} />);
 } else if (tela === 'conciliacao' || tela === 'extrato-do-sistema') {
   /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status) e o "Extrato do sistema" do ↗, com as linhas do DONO no pior
      caso (`dados/conciliacao.ts`, SINTÉTICO). `&v=sem`: os mesmos números sem nenhum OFX/PDF (o deslocamento compara as duas páginas).
-     `&v=carregando`: o modal antes de o dono responder. */
+     `&v=carregando`: o modal antes de o dono responder. P166: `&v=ok|pendencia|pendente` a faixa do status nos outros casos e
+     `&v=nj` os nomes no tamanho real (`dados/conciliacao.ts`). */
   const semArquivos = v === 'sem';
   g.__bancoBancada = {
-    from: (t: string) => t === 'financeiro_contas_bancarias' ? CONC.CONTAS
+    from: (t: string) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : CONC.CONTAS)
       : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
       : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : CONC.DOCUMENTOS) : [],
     rpc: (fn: string, a: any) => fn === 'fn_conciliacao_resumo_mes'
-      ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null))
+      ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null, v))
       : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }]
       /* P159a — o Espelho da conta escolhida (`dados/espelho.ts`): o Casar lançamentos (Extrato, Sistema, Evolução) e a Conferência */
       : fn === 'fn_extratos_espelhados' ? ESP.espelho(v) : null,
@@ -1048,11 +1086,66 @@ if (tela === 'mesclar') {
     const api: any = { documentos: [], confronto: null, loading: false, saving: false, operacaoId: null, operacaoTipo: null,
       registrar: async () => ({ id: 'x', origem: 'lancamento', operacaoId: null }), editar: async () => true, cancelar: async () => true,
       anexar: async () => true, urlAssinada: async () => null, recarregar: async () => {} };
-    montar(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}}
-      sugestao={{ numero: '74974', dataEmissao: '2026-08-24', valor: 400, emitenteId: LEITOR[0]?.id ?? null }}
+    /* P164 — `v=confere`: o lançamento diz o valor da nota (e não tem emitente): a nota CONFERE e a faixa diz, pela prévia do banco falso (a
+       `fn_nota_completar` com `p_simular`), o que o lançamento fica — nº, tipo e competência */
+    const confere = q.get('v') === 'confere';
+    /* P167 — `v=cancelar`: editar a NF ligada a 6 parcelas e abrir "Cancelar nota" (a confirmação no RODAPÉ, à vista); `v=repetida`: a mesma NF
+       (o mesmo XML) já registrada aqui — a faixa "Esta NF já está registrada…" com "Abrir a que já existe" */
+    const DOC_BANCADA = { id: 'doc-bancada', origem: 'lancamento', operacaoId: null, especie: 'nf', especieOC: null, nome: 'nf 74974', numero: '000.074.974',
+      serie: '1', chaveAcesso: null, dataEmissao: '2026-09-30', valorDocumento: 408.77, url: 'x', tipo: 'application/xml', tamanhoBytes: 1, observacao: null,
+      emitenteId: null, emitenteNome: 'COMERCIO SINTETICO DE PARAFUSOS E FERRAMENTAS INDUSTRIAIS DO CENTRO OESTE LTDA', emitenteDocumento: null, cancelado: false,
+      canceladoMotivo: null, versao: 1, ligadoAQtd: 6 };
+    if (q.get('v') === 'repetida') api.documentos = [DOC_BANCADA];
+    if (confere) g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => (fn !== 'fn_nota_completar' ? null : { ok: true, recusas: [], efeito_dre: [],
+      linhas: (a.p_lancamentos ?? []).map((x: any) => ({ id: x.id, descricao: null, situacao: 'conciliada', parcela_n: null, campos: {
+        numero_documento: { hoje: '74974', fica: x.numero_documento, muda: true, hoje_nome: null, fica_nome: null, cadeado: null },
+        tipo_documento: { hoje: null, fica: x.tipo_documento, muda: true, hoje_nome: null, fica_nome: null, cadeado: null },
+        data_competencia: { hoje: '2026-08-24', fica: x.data_competencia, muda: true, hoje_nome: null, fica_nome: null, cadeado: null } } })) }) };
+    montar(<FormDocumento api={api} documento={q.get('v') === 'cancelar' ? DOC_BANCADA : null} clienteId="cli" onFechar={() => {}} onAbrirExistente={() => {}}
+      sugestao={confere ? { numero: '74974', dataEmissao: '2026-08-24', valor: 408.77, emitenteId: null }
+        : { numero: '74974', dataEmissao: '2026-08-24', valor: 400, emitenteId: LEITOR[0]?.id ?? null }}
+      completarPelaNota={confere ? { lancamentoId: 'lanc-bancada', onCompletado: () => {} } : undefined}
       onVerOQueANotaMuda={async () => null} />);
   };
   void montarDoc();
+} else if (tela === 'previa-completar') {
+  /* P128b — a PRÉVIA CAMPO A CAMPO do "Completar com a nota", no molde da Casa da Cerca (5 parcelas: 1 conciliada, 3 pagas, 1 programada) com
+     nomes SINTÉTICOS compridos. O banco falso faz o papel da `fn_nota_completar` com `p_simular`: o que o pedido traz muda, o resto é "igual",
+     conta/valor/vencimento das pagas têm cadeado. `cam=2`: o caminho 2 (Venc./Valor da nota na programada); `v=recusa`: o mês fechado. */
+  const montarPrevia = async () => {
+    const { PreviaCompletar } = await import('@/components/financeiro-v2/PreviaCompletar');
+    const cam2 = q.get('cam') === '2';
+    const SIT = ['conciliada', 'realizada', 'realizada', 'realizada', 'programada'];
+    const NOMES: Record<string, string> = { f0: 'Comercio Sintetico de Arames e Mourões do Centro Oeste Ltda', f1: 'Cercas Sinteticas Rurais Ltda',
+      z0: 'Fazenda Sintetica Boa Vista do Rio Comprido', z1: 'Fazenda Sintetica Boa Vista', c0: 'Banco Sintetico 0001-2 c/c 99999-9', c1: 'Caixa Sintetica',
+      p0: 'Manutenção de Cercas e Benfeitorias', p1: 'Investimento em Benfeitorias Rurais', s0: '2030/31', s1: '2031/32' };
+    const HOJE: Record<string, unknown> = { descricao: 'CERCAS SINTETICAS - parcela', favorecido_id: 'f0', fazenda_id: 'z0', conta_bancaria_id: 'c0',
+      plano_conta_id: 'p0', numero_documento: '', data_competencia: '2031-05-02', safra_id: 's0' };
+    g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => {
+      if (fn !== 'fn_nota_completar') return null;
+      if (q.get('v') === 'recusa') return { ok: false, recusas: [{ frase: 'O mês 05/2031 está fechado: reabra antes de mudar a competência de «Cercas Sinteticas Rurais Ltda - parcela 1/5».' }], linhas: [], efeito_dre: [] };
+      const linhas = (a.p_lancamentos ?? []).map((x: any, k: number) => {
+        const paga = SIT[k] !== 'programada';
+        const campos: Record<string, unknown> = {};
+        for (const [c, h] of Object.entries(HOJE)) {
+          const fica = c in x ? x[c] : h;
+          const cad = paga && c === 'conta_bancaria_id' ? `${SIT[k]}: conta, valor e vencimento não mudam` : null;
+          campos[c] = { hoje: h, fica: cad ? h : fica, muda: !cad && fica !== h, hoje_nome: NOMES[String(h)] ?? null, fica_nome: NOMES[String(fica)] ?? null, cadeado: cad };
+        }
+        const venc = `2031-${String(5 + k).padStart(2, '0')}-20`;
+        campos.data_vencimento = { hoje: venc, fica: x.data_vencimento ?? venc, muda: !paga && !!x.data_vencimento && x.data_vencimento !== venc, cadeado: paga ? 'paga' : null };
+        campos.valor = { hoje: 631.98, fica: x.valor ?? 631.98, muda: !paga && x.valor !== undefined && x.valor !== 631.98, cadeado: paga ? 'paga' : null };
+        return { id: x.id, descricao: `CERCAS SINTETICAS - parcela ${k + 1}/5`, situacao: SIT[k], parcela_n: k + 1, campos };
+      });
+      return { ok: true, recusas: [], linhas, efeito_dre: [{ mes_de: '2031-05', subcentro_de: NOMES.p0, mes_para: '2031-06', subcentro_para: NOMES.p1, valor: 3160, lancamentos: 5 }] };
+    } };
+    const alvos = [1, 2, 3, 4, 5].map((k) => ({ id: `l${k}`, programada: k === 5, notaValorCent: 63200, notaVencimento: `2031-${String(5 + k).padStart(2, '0')}-21` }));
+    montar(<PreviaCompletar open onFechar={() => {}} clienteId="cli" alvos={alvos} rotulos={Object.fromEntries(alvos.map((x, k) => [x.id, `${k + 1}/5`]))}
+      todasIniciais={{ descricaoBase: 'Cercas Sinteticas Rurais Ltda - 2/5', favorecidoId: 'f1', fazendaId: 'z1', contaId: 'c1', planoContaId: 'p1',
+        numeroDocumento: 'NF 000.004.875', competencia: '2031-06-02', safraId: null }}
+      atualizarNaoPagas={cam2} juntar={!cam2} chave="50310611222333000181550010000048751123456780" onConfirmar={async () => null} />);
+  };
+  void montarPrevia();
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   /* ACESSOS-PERFIL-01 — a aba Auditoria: eventos de dois membros e um sem autor (com e sem `via`), nomes pela fonte única. */
@@ -1162,7 +1255,18 @@ if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento =
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
 if (v === 'rateio' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura', subcentro: 'Insumos Lavoura Milho', plano_conta_id: 'pl-ins',
   macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', cultura: '', fazenda_id: 'f-pur', data_competencia: '2026-05-10', valor: 5000 };
-const NOME_LONGO = 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA FILIAL CAMPO GRANDE';
+/* P121 — `&resumo=longo`: o caso "Nomes bem longos" do mock (SINTÉTICO) sobre o `v=sal` — favorecido, fazenda, conta, centro e subcentro
+   longos e o valor de 7 dígitos. O Resumo do lançamento não rola e não muda de altura (o desloca compara com o `v=sal` curto). */
+if (m === 'editar' && q.get('resumo') === 'longo') {
+  AGRO.nome = 'Cooperativa Agroindustrial dos Produtores Rurais do Vale do Rio Paraná e Região Ltda';
+  FAZENDAS[0].nome = 'Faz. Santa Maria da Boa Esperança';
+  CONTAS[0].nome_conta = 'Itaú Personalite Investimentos';
+  CONTAS[0].nome_exibicao = 'Itaú Personalite Investimentos';
+  CLASSIF[0] = { ...CLASSIF[0], subcentro: 'Peças, Pneus e Manutenção de Tratores e Implementos Pecuária', centro_custo: 'Manutenção de Máquinas e Implementos Agrícolas' };
+  props.lancamento = { ...SAL, valor: 1234567.89, subcentro: CLASSIF[0].subcentro, centro_custo: CLASSIF[0].centro_custo,
+    descricao: 'Peças de reposição para trator e implementos, conforme pedido de compra 4521 e orçamento aprovado' };
+}
+const NOME_LONGO ='COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA FILIAL CAMPO GRANDE';
 if (v === 'xmlnome') {
   const SEM_DOC = { id: 'agro-nd', nome: NOME_LONGO, cpf_cnpj: null, fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
   const bytes = utf8(montarNFe({ nomeEmitente: NOME_LONGO, duplicatas: [['001', '2026-10-30', '3247.60'], ['002', '2026-11-29', '3247.60'], ['003', '2026-12-29', '3247.60'], ['004', '2027-01-28', '3247.60'], ['005', '2027-02-27', '3247.60']] }));

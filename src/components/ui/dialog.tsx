@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { recusarCliqueFechado } from "./menuPadrao";
+import { semFecharPeloAviso } from "./avisoSobreOModal";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -31,13 +32,16 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onClickCapture, ...props }, ref) => (
+>(({ className, children, onClickCapture, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       /* DIALOG-CLIQUE-FECHANDO-01: fechando (`data-state="closed"`, durante a animação de saída), nenhum botão daqui recebe o clique */
       onClickCapture={recusarCliqueFechado(onClickCapture)}
+      /* P158b: o clique no ✕ do aviso (fora do modal) não fecha o modal */
+      onPointerDownOutside={semFecharPeloAviso(onPointerDownOutside)}
+      onInteractOutside={semFecharPeloAviso(onInteractOutside)}
       className={cn(
         /* ⚠ `overflow-hidden` CORRIGE O "L" BRANCO NOS CANTOS — e é conserto de DEFAULT, não
            preferência. O contêiner tem `sm:rounded-lg` e `bg-background`; um filho com faixa

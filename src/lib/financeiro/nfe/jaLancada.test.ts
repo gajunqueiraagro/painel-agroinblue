@@ -178,11 +178,69 @@ describe('P128a — tabela sistema × nota e a frase do achado', () => {
 });
 
 /* P128c — a âncora da porta 2: o lançamento aberto ('lancamento') recebe a nota; o irmão dele só por 'parcelamento' não */
+/* P162 — a nota SEM duplicata (o molde do NJ: emissão 31/07, pago 10/08, nº "9952") achada pelo NÚMERO com o MESMO valor: é ela, "1 de 1";
+   nunca "só na nota → criar" + "só no sistema" (o caminho que DUPLICAVA). Valores SINTÉTICOS. */
+describe('P162 — a nota de uma parcela achada pelo número com o mesmo valor', () => {
+  const achado = (o: Partial<LancamentoJaLancado> = {}): LancamentoJaLancado => ({ id: 'j', vencimento: '2031-08-10', pagamento: '2031-08-10',
+    competencia: '2031-07-31', descricao: 'Combustivel sintetico', valorCent: 415146, status: 'realizado', conciliado: true, financiamentoId: null,
+    numeroDocumento: '9952', fornecedorId: 'f', fornecedorNome: 'F', fornecedorPor: 'cnpj', parcelas: [], por: ['numero'], cancelado: false, ...o });
+  const NOTA = [{ n: 1, vencimento: '2031-07-31', valorCent: 415146 }];
+  it('mesmo valor (até 5 centavos), data longe da emissão: casa a parcela, nada falta, "1 de 1"', () => {
+    const j = casarJaLancados(NOTA, [achado()], 415146);
+    expect([j?.porParcela.map((x) => x.lancamento?.id ?? null), j?.faltam, j?.alvos.map((x) => x.id)]).toEqual([['j'], [], ['j']]);
+    const linhas = j ? linhasSistemaNota(j, 415146) : [];
+    expect(linhas.map((x) => x.situacao)).not.toContain('so_na_nota');
+    expect(linhas.map((x) => x.situacao)).not.toContain('so_no_sistema');
+  });
+  it('valor diferente: segue como hoje (a que falta continua; quem decide é a pessoa)', () => {
+    expect(casarJaLancados(NOTA, [achado({ valorCent: 415100 })], 415146)?.faltam.map((f) => f.n)).toEqual([1]);
+  });
+  it('o irmão achado SÓ por ser do parcelamento nunca casa a nota de uma parcela', () => {
+    expect(casarJaLancados(NOTA, [achado({ por: ['parcelamento'], financiamentoId: 'p' })], 415146)?.porParcela[0].lancamento).toBeNull();
+  });
+});
+
 describe('P128c — o lançamento aberto é alvo', () => {
   it('lido do banco e alvo do Completar; o irmão "só no sistema" fora', () => {
     const [aberto, irmao] = lerJaLancados([{ id: 'aberto', valor_cent: 40877, por: ['lancamento'], parcelas: [] }, { id: 'irmao', valor_cent: 40877, por: ['parcelamento'], parcelas: [] }]);
     expect(aberto.por).toEqual(['lancamento']);
     const j = casarJaLancados([{ n: 1, vencimento: '2026-09-24', valorCent: 40877 }], [aberto, irmao], 40877);
     expect(j?.alvos.map((x) => x.id)).toEqual(['aberto']);
+  });
+});
+
+/* P167 (NOTA-COMPRA-ERRADA-01) — o molde do NJ: DUAS compras do mesmo fornecedor, mesma descrição, 3 × 225,00 cada (a mesma soma). A nota é a
+   da compra B; a compra A casa só por "soma"/"fracao" (o valor), a B pelo nº e pelas parcelas (valor e data). A nota nunca se liga às duas. */
+describe('P167 — uma compra só', () => {
+  const NOTA = [1, 2, 3].map((n) => ({ n, vencimento: `2031-1${n - 1}-10`, valorCent: 22500 }));
+  const da = (id: string, fin: string, extra: Partial<LancamentoJaLancado>): LancamentoJaLancado => ({ ...l(id, 0, 0), valorCent: 22500, financiamentoId: fin, ...extra });
+  const compraA = [1, 2, 3].map((k) => da(`a${k}`, 'fin-a', { por: ['soma', 'fracao'] }));
+  const compraB = [1, 2, 3].map((k) => da(`b${k}`, 'fin-b', { por: ['valor', 'numero'], parcelas: [{ n: k, difCent: 0, difDias: 0 }] }));
+  it('sem âncora: a compra de evidência forte (nº + parcelas) leva a nota; a outra fica de fora e é dita', () => {
+    const r = casarJaLancados(NOTA, [...compraA, ...compraB], 67500);
+    expect(r?.alvos.map((x) => x.id)).toEqual(['b1', 'b2', 'b3']);
+    expect(r?.outraCompra.map((x) => x.id)).toEqual(['a1', 'a2', 'a3']);
+    expect([r?.compraAmbigua, r?.faltam]).toEqual([false, []]);
+  });
+  it('a ÂNCORA (a parcela aberta) decide mesmo contra o placar: aberta pela compra A, a nota é da A', () => {
+    const ancoraA = [{ ...compraA[0], por: [...compraA[0].por, 'lancamento' as const] }, compraA[1], compraA[2]];
+    const r = casarJaLancados(NOTA, [...ancoraA, ...compraB], 67500);
+    expect(r?.alvos.every((x) => x.financiamentoId === 'fin-a')).toBe(true);
+    expect(r?.outraCompra.map((x) => x.id)).toEqual(['b1', 'b2', 'b3']);
+  });
+  it('as duas com a MESMA evidência: ambígua — nenhuma recebe a nota e nada se cria; as soltas seguem', () => {
+    const iguais = [1, 2, 3].map((k) => da(`c${k}`, 'fin-c', { por: ['soma', 'fracao'] }));
+    const solta = { ...l('solta', 0, 0, 0, ['numero']), valorCent: 22500 };
+    const r = casarJaLancados(NOTA, [...compraA, ...iguais, solta], 67500);
+    expect(r?.compraAmbigua).toBe(true);
+    expect(r?.alvos.map((x) => x.id)).toEqual(['solta']);
+    expect(r?.faltam).toEqual([]);
+  });
+  it('um parcelamento só (ou só soltas): nada muda — é a compra da nota', () => {
+    const r = casarJaLancados(NOTA, compraB, 67500);
+    expect([r?.alvos.length, r?.outraCompra.length, r?.compraAmbigua]).toEqual([3, 0, false]);
+  });
+  it('o banco diz qual documento desta nota o achado já tem (`nota_documento_id`)', () => {
+    expect(lerJaLancados([{ id: 'x', valor_cent: 1, por: ['numero'], parcelas: [], nota_documento_id: 'doc-1' }])[0].notaDocumentoId).toBe('doc-1');
   });
 });

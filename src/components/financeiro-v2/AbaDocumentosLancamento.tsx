@@ -16,7 +16,7 @@
  * fazem o documentado divergir do lançado sem que nada esteja errado — por isso âmbar e
  * uma frase, não vermelho e um bloqueio.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ import { ItensDaNotaDialog } from './ItensDaNotaDialog';
 import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
+import { completarComANota, desfazerCompletar, fornecedorPeloDocumento } from '@/lib/financeiro/nfeConsultas';
 import { camposDaNota, divergenciasDaNota, ehArquivoDeNota, FRASE_NOTA_NAO_LIDA, type CamposDaNota, type CampoDivergente } from '@/lib/financeiro/nfe/documentoDaNota';
 import {
   ESPECIES_LANC_DOC, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
@@ -78,8 +79,14 @@ function larguraDaColunaDocumento(ls: readonly LinhaDeDocumento[]): number {
   return Math.max(96, ...ls.map(uma));
 }
 
-export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto, onVerOQueANotaMuda }: {
+/** P164 — o que a nota que CONFERE deixou no lançamento (o modal aberto passa a mostrar isso; senão o Salvar seguinte gravaria por cima) */
+export interface FicaNoLancamento { numeroDocumento: string | null; tipoDocumento: string | null; dataCompetencia: string | null; safraId: string | null }
+/** P164 — o lançamento SALVO que a nota que confere completa (nº, tipo, competência) e quem fica sabendo do que o banco deixou */
+export interface CompletarPelaNota { lancamentoId: string; onCompletado: (fica: FicaNoLancamento) => void }
+
+export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto, onVerOQueANotaMuda, completarPelaNota }: {
   api: LancamentoDocumentosApi;
+  completarPelaNota?: CompletarPelaNota;
   /** P127 + P128c — a nota lida no "Novo documento" abre a MESMA prévia do "+ Da nota" partindo deste lançamento (o caminho do "Ler a NF"
    *  do P128a). Devolve a frase pronta do que impediu, ou `null` (a prévia abriu). Ausente = sem o gesto. */
   onVerOQueANotaMuda?: (arquivo: File) => Promise<string | null>;
@@ -355,8 +362,9 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
       )}
 
       {formAberto && (
-        <FormDocumento api={api} documento={editando} clienteId={clienteId} sugestao={sugestao} semBoleto={semBoleto}
-          onVerOQueANotaMuda={onVerOQueANotaMuda}
+        <FormDocumento key={editando?.id ?? 'novo'} api={api} documento={editando} clienteId={clienteId} sugestao={sugestao} semBoleto={semBoleto}
+          onVerOQueANotaMuda={onVerOQueANotaMuda} completarPelaNota={completarPelaNota}
+          onAbrirExistente={(d) => { setEditando(d); setFormAberto(true); }}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
 
@@ -432,8 +440,12 @@ export const CAMPOS_POR_ESPECIE: Record<EspecieLancDoc, {
   outro: { numero: 'Identificação', data: 'Data', valor: 'Valor', emitente: 'Emitente', serie: false, chave: false, dataNaSugestao: 'data' },
 };
 
-export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao, onVerOQueANotaMuda }: {
+export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao, onVerOQueANotaMuda, completarPelaNota, onAbrirExistente }: {
   api: LancamentoDocumentosApi;
+  /** P167 — a mesma NF já registrada aqui: abrir a que existe (no lugar de registrar outra) */
+  onAbrirExistente?: (d: LancDocumento) => void;
+  /** P164 — o lançamento salvo que a nota que confere completa (ausente = o documento só se registra, como sempre) */
+  completarPelaNota?: CompletarPelaNota;
   /** P127 + P128c — "Ver o que a nota muda": a nota lida com itens ou duplicatas abre a prévia do "+ Da nota" partindo do lançamento. */
   onVerOQueANotaMuda?: (arquivo: File) => Promise<string | null>;
   documento: LancDocumento | null;
@@ -527,10 +539,17 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
       if (r.ok === false) { setAvisoDaNota(FRASE_NOTA_NAO_LIDA); return; }
       const c = camposDaNota(r.nota);
       const res = resolverEmitente({ documento: c.emitenteDocumento, nome: c.emitenteNome, fantasia: r.nota.emitente.fantasia }, doLeitor.fornecedores, null);
-      setLida({ campos: c, bytes, emitenteId: res.propostoId,
+      /* P164 — o EMITENTE SAI DO CNPJ LIDO: a lista do leitor (só ativos, ainda carregando) não o achou → o cadastro pelo CNPJ no banco, antes
+         de cair em "Outro" (o documento registrado sem `emitente_id` deixava a linha com "—") */
+      let propostoId = res.propostoId;
+      if (!propostoId && clienteId && c.emitenteDocumento) {
+        const ja = await fornecedorPeloDocumento(clienteId, c.emitenteDocumento);
+        if (ja.ok && ja.valor) propostoId = ja.valor.id;
+      }
+      setLida({ campos: c, bytes, emitenteId: propostoId,
         antes: antesDaNota ?? { numero, dataEmissao, valor, emitenteId: emitenteEhOutro ? '' : emitenteId, emitenteNome: nomeDoEmitente } });
       setEspecie('nf'); setNumero(c.numero); setSerie(c.serie); setDataEmissao(c.emissao); setValor(c.valor); setChave(c.chave);
-      if (res.propostoId) setEmitenteId(res.propostoId);
+      if (propostoId) setEmitenteId(propostoId);
       else { setEmitenteId(OUTRO); setEmitenteNome(c.emitenteNome); setEmitenteDoc(c.emitenteDocumento); }
     } catch (e) {
       console.error('ler a nota do documento', e);
@@ -564,6 +583,51 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
   const DA_NOTA = ' bg-sky-50 border-sky-300';
   const daNota = { numero: !!lida && numero === lida.campos.numero, data: !!lida && dataEmissao === lida.campos.emissao,
     valor: !!lida && valor === lida.campos.valor, chave: !!lida && chave === lida.campos.chave, serie: !!lida && serie === lida.campos.serie };
+  /* P164 — A NOTA QUE CONFERE (lida com a chave; valor e emitente iguais aos do lançamento) leva ao lançamento o nº "000.000.000", o tipo
+     Nota Fiscal e a competência = emissão, pela MESMA gravação do P128b (`fn_nota_completar`; conta, valor, vencimento e status trancados no
+     pago). A prévia é a do banco (`simular`) e aparece na faixa da nota; o Registrar grava ANTES do documento (recusou = nada gravado; o
+     documento que falhar depois DESFAZ a operação — nada pela metade) */
+  const confere = !!lida && !documento && !pendente && !!completarPelaNota && !!clienteId
+    && !divergencias.some((d) => d.campo === 'valor' || d.campo === 'emitente');
+  const pedidoDaNota = confere && lida && completarPelaNota ? [{ id: completarPelaNota.lancamentoId, numero_documento: formatNFNumber(lida.campos.numero),
+    tipo_documento: 'Nota Fiscal', ...(lida.campos.emissao ? { data_competencia: lida.campos.emissao } : {}) }] : null;
+  const chaveDoPedido = pedidoDaNota ? JSON.stringify(pedidoDaNota) : '';
+  const [previaDaNota, setPreviaDaNota] = useState<{ chave: string; muda: string[]; recusa: string | null } | null>(null);
+  useEffect(() => {
+    if (!chaveDoPedido || !clienteId || !lida) return;
+    let vivo = true;
+    void completarComANota(clienteId, JSON.parse(chaveDoPedido), { juntar: false, chave: lida.campos.chave || null, simular: true }).then((r) => {
+      if (!vivo) return;
+      if (r.ok === false) { setPreviaDaNota({ chave: chaveDoPedido, muda: [], recusa: r.motivo }); return; }
+      if (!r.valor.ok) { setPreviaDaNota({ chave: chaveDoPedido, muda: [], recusa: r.valor.recusas[0] ?? 'O banco recusou.' }); return; }
+      const c = r.valor.linhas[0]?.campos ?? {};
+      const data = (x: unknown) => (typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) ? `${x.slice(8, 10)}/${x.slice(5, 7)}/${x.slice(0, 4)}` : '—');
+      const muda = [c.numero_documento?.muda ? `nº ${String(c.numero_documento.fica ?? '—')}` : null, c.tipo_documento?.muda ? `tipo ${String(c.tipo_documento.fica ?? '—')}` : null,
+        c.data_competencia?.muda ? `competência ${data(c.data_competencia.fica)}` : null].filter((x): x is string => !!x);
+      setPreviaDaNota({ chave: chaveDoPedido, muda, recusa: null });
+    });
+    return () => { vivo = false; };
+  }, [chaveDoPedido, clienteId, lida]);
+  const previaAtual = previaDaNota && previaDaNota.chave === chaveDoPedido ? previaDaNota : null;
+  /** grava no lançamento pela função; devolve a operação (para desfazer se o documento falhar) e o que ficou, ou a frase da recusa */
+  const completarOLancamento = async (): Promise<{ ok: true; operacao: string | null; fica: FicaNoLancamento | null } | { ok: false; frase: string }> => {
+    if (!pedidoDaNota || !clienteId || !lida || (previaAtual && previaAtual.muda.length === 0 && !previaAtual.recusa)) return { ok: true, operacao: null, fica: null };
+    const r = await completarComANota(clienteId, pedidoDaNota, { juntar: false, chave: lida.campos.chave || null, simular: false });
+    if (r.ok === false) return { ok: false, frase: r.motivo };
+    if (!r.valor.ok) return { ok: false, frase: r.valor.recusas[0] ?? 'O banco recusou. Nada foi gravado.' };
+    const c = r.valor.linhas[0]?.campos ?? {};
+    const t = (x: unknown) => (typeof x === 'string' ? x : null);
+    return { ok: true, operacao: r.valor.operacao, fica: { numeroDocumento: t(c.numero_documento?.fica), tipoDocumento: t(c.tipo_documento?.fica),
+      dataCompetencia: t(c.data_competencia?.fica), safraId: t(c.safra_id?.fica) } };
+  };
+
+  /* P167 — A MESMA NF JÁ ESTÁ AQUI (a chave, ou o emitente + o nº) COM O MESMO TIPO DE ARQUIVO: não se registra outra — "Abrir a que já existe".
+     O par PDF + XML da mesma nota segue (DOC-NOTA-XML-PDF-01). O banco recusa o mesmo na compra inteira (`fin_documento_registrar`). */
+  const semZeros = (x: string | null | undefined) => (x ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  const repetida = !documento && especie === 'nf' && arquivo && arquivo.type ? api.documentos.find((d) => !d.cancelado && d.especie === 'nf' && d.tipo === arquivo.type
+    && ((semZeros(chave).length >= 43 && semZeros(d.chaveAcesso) === semZeros(chave))
+      || (!!semZeros(numero) && semZeros(d.numero) === semZeros(numero) && (d.emitenteId ?? null) === (emitenteEhOutro ? null : (emitenteId || null))))) ?? null : null;
+
   /* "Ver o que a nota muda": a nota lida com itens ou duplicatas, num lançamento que existe (não no pendente) */
   const podeVerOQueMuda = !!lida?.campos.muda && !!onVerOQueANotaMuda && !documento && !pendente && !!arquivo;
   const verOQueMuda = async () => {
@@ -585,6 +649,8 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
        apagaria o que os componentes dizem. */
     valorDocumento: destinoOC ? undefined : valor,
     observacao: observacao.trim() || null,
+    /* P167 — só no registro: o tipo do arquivo que vai subir (o banco recusa a mesma NF com o mesmo tipo já ativa nesta compra) */
+    ...(!documento && arquivo?.type ? { tipoArquivo: arquivo.type } : {}),
     ...(campos.emitente ? {
       emitenteId: emitenteEhOutro ? null : (emitenteId || null),
       emitenteNome: emitenteEhOutro ? (emitenteNome.trim() || null)
@@ -626,8 +692,22 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
         await api.editar(documento.id, documento.versao, payload());
         versao = documento.versao + 1;
       } else {
-        const criado = await api.registrar(payload());
-        if (!criado) { setErroForm('Não foi possível registrar o documento.'); return; }
+        /* P164 — a nota que confere completa o lançamento ANTES; o documento que não nascer desfaz a operação */
+        const lanc = await completarOLancamento();
+        if (lanc.ok === false) { setErroForm(lanc.frase); return; }
+        const desfazer = async (motivo: string) => {
+          if (!lanc.operacao) return motivo;
+          const e = await desfazerCompletar(lanc.operacao);
+          return e ? `${motivo} E o lançamento NÃO voltou (${e}): confira o nº, o tipo e a competência dele.` : `${motivo} O lançamento voltou ao que era.`;
+        };
+        let criado: Awaited<ReturnType<typeof api.registrar>> = null;
+        try { criado = await api.registrar(payload()); } catch (e) {
+          console.error('registrar documento', e);
+          setErroForm(await desfazer(e instanceof Error ? e.message : 'Não foi possível registrar o documento.'));
+          return;
+        }
+        if (!criado) { setErroForm(await desfazer('Não foi possível registrar o documento.')); return; }
+        if (lanc.fica && completarPelaNota) completarPelaNota.onCompletado(lanc.fica);
         id = criado.id;
         destino = { origem: criado.origem, operacaoId: criado.operacaoId };
         versao = 1;
@@ -688,6 +768,9 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-sky-300 bg-sky-50 px-2 py-1 text-[10px] leading-[14px] text-sky-900"
             data-testid="nota-lida">
             <span className="font-medium">Lido da nota {lida.campos.numero} (chave conferida){divergencias.length ? ` · difere ${sug ? `do que ${sug.origem ?? 'o lançamento'} diz` : 'do documento'}:` : ` · confere com ${sug?.origem ?? 'o lançamento'}`}</span>
+            {previaAtual && (previaAtual.recusa
+              ? <span className="text-destructive" data-testid="nota-lancamento-recusa">· o lançamento não muda: {previaAtual.recusa}</span>
+              : previaAtual.muda.length > 0 && <span data-testid="nota-lancamento-fica">· ao registrar, o lançamento fica com {previaAtual.muda.join(', ')}</span>)}
             {divergencias.map((d) => (
               <span key={d.campo} className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="nota-divergencia" data-campo={d.campo}>
                 {d.rotulo}: <b className={usaANota(d.campo) ? 'text-sky-900' : 'font-normal text-muted-foreground line-through'}>nota {d.nota}</b>
@@ -702,6 +785,16 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
           <p className="truncate rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] leading-[14px] text-amber-900" data-testid="sugestao-do-lancamento"
             title={`Preenchido com o que ${sug?.origem ?? 'o lançamento'} diz — confira. Mudar aqui não muda ${sug?.origem ?? 'o lançamento'}.`}>
             Preenchido com o que {sug?.origem ?? 'o lançamento'} diz ({[sugNumero && 'número', sugData && campos.dataNaSugestao, sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda {sug?.origem ?? 'o lançamento'}.
+          </p>
+        )}
+        {repetida && (
+          <p className="flex items-center gap-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-[14px] text-destructive" role="alert"
+            data-testid="nota-repetida">
+            <span className="min-w-0 flex-1">Esta NF já está registrada neste lançamento ({identidade(repetida)}, o mesmo tipo de arquivo). Nada será registrado em dobro.</span>
+            {onAbrirExistente && (
+              <button type="button" className="shrink-0 font-medium underline underline-offset-2" onClick={() => onAbrirExistente(repetida)}
+                data-testid="nota-abrir-existente">Abrir a que já existe</button>
+            )}
           </p>
         )}
         <BlocoFormulario titulo="Documento" testId="bloco-documento">
@@ -838,23 +931,24 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
         </div>
         </BlocoFormulario>
 
-        {compartilhada && cancelandoNota && (
-          <div className="space-y-1 rounded border border-red-200 bg-red-50 px-2 py-1.5" data-testid="cancelar-nota">
-            <Label className="text-[10px] text-muted-foreground">Motivo do cancelamento da nota <span className="text-destructive">*</span></Label>
-            <Input value={motivoNota} onChange={e => setMotivoNota(e.target.value)} className="h-7 text-[11px]"
-              placeholder={`A nota sai das ${documento?.ligadoAQtd} parcelas`} />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" className="h-7 text-[11px]" onClick={() => { setCancelandoNota(false); setMotivoNota(''); setErroForm(null); }}>Voltar</Button>
-              <Button type="button" variant="destructive" className="h-7 text-[11px]" disabled={enviando} onClick={cancelarNota}
-                data-testid="confirmar-cancelar-nota">
-                Cancelar nota
-              </Button>
-            </div>
-          </div>
-        )}
-
         </div>
 
+        {/* P167 — A CONFIRMAÇÃO DO CANCELAMENTO MORA NO RODAPÉ, no lugar dos botões (no fim do corpo de altura fixa ela abria fora da vista e o
+            único botão à vista era o "Salvar documento": o Gabriel tentou duas vezes cancelar a 32ffd9af e só salvou). Enquanto ela está
+            aberta, Salvar/Registrar e "Ver o que a nota muda" somem. */}
+        {compartilhada && cancelandoNota ? (
+          <div className="flex shrink-0 items-center gap-2 border-t border-red-200 bg-red-50 px-4 py-2" data-testid="cancelar-nota">
+            <Label className="shrink-0 text-[10px] text-muted-foreground">Motivo do cancelamento da nota <span className="text-destructive">*</span></Label>
+            <Input value={motivoNota} onChange={e => setMotivoNota(e.target.value)} className="h-7 min-w-0 flex-1 text-[11px]"
+              placeholder={`A nota sai das ${documento?.ligadoAQtd} parcelas`} data-testid="motivo-cancelar-nota" />
+            {erroForm && <span className="max-w-[200px] shrink-0 truncate text-[10px] text-destructive" title={erroForm} data-testid="erro-form-documento">{erroForm}</span>}
+            <Button type="button" variant="ghost" className="h-7 shrink-0 text-[11px]" onClick={() => { setCancelandoNota(false); setMotivoNota(''); setErroForm(null); }}>Voltar</Button>
+            <Button type="button" variant="destructive" className="h-7 shrink-0 text-[11px]" disabled={enviando} onClick={cancelarNota}
+              data-testid="confirmar-cancelar-nota">
+              Cancelar nota
+            </Button>
+          </div>
+        ) : (
         <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-card px-4 py-2">
           {erroForm && (
             <span className="mr-auto text-[10px] leading-tight text-destructive" data-testid="erro-form-documento">{erroForm}</span>
@@ -866,7 +960,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             </Button>
           )}
           <Button type="button" variant="ghost" onClick={onFechar}>Cancelar</Button>
-          <Button type="button" variant={podeVerOQueMuda ? 'outline' : 'default'} onClick={salvar} disabled={enviando || api.saving || lendoANota}
+          <Button type="button" variant={podeVerOQueMuda ? 'outline' : 'default'} onClick={salvar} disabled={enviando || api.saving || lendoANota || !!repetida}
             data-testid="doc-registrar">
             {pendente ? (documento ? 'Salvar na lista' : 'Adicionar à lista') : (documento ? 'Salvar documento' : 'Registrar documento')}
           </Button>
@@ -880,6 +974,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             </Button>
           )}
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

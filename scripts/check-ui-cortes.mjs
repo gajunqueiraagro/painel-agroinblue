@@ -5,7 +5,8 @@
  *   (1) RETICENCIAS — elemento com `text-overflow: ellipsis` (ou `-webkit-line-clamp`) cujo texto nao cabe (scrollWidth > clientWidth,
  *       ou scrollHeight > clientHeight no clamp): nenhum texto com "…" em tela nenhuma; e o CORTE CALADO — texto proprio numa linha so'
  *       (`nowrap`) cortado por `overflow: hidden` sem reticencias;
- *   (2) CABECALHO PRESO COM VAO — num container que rola, rolado ate' o meio: o cabecalho preso (`position: sticky`) nao encosta no topo
+ *   (2) CABECALHO PRESO COM VAO — num container que rola, rolado ate' a TABELA DELE cruzar o topo (P137, 28/10: varias tabelas empilhadas
+ *       no mesmo quadro; antes, o quadro rolado ate' o meio): o cabecalho preso (`position: sticky`) nao encosta no topo
  *       do container (por onde as linhas aparecem ACIMA dele), tem fundo transparente (a linha aparece POR BAIXO dele), ou mora num
  *       container que nao rola dentro de um que rola (sobe com a pagina e nao fica preso);
  *   (2b) DATA OU NUMERO QUEBRADO — celula cujo texto e' so' data, hora ou numero e ocupa mais de uma linha;
@@ -47,6 +48,11 @@ const TAMANHOS_DA_VG = [[1000, 600], [1126, 579], [1130, 580], [1440, 800], [144
    antigo — dívida declarada CONC-ESTREITA (docs/DIVIDAS-ABERTAS.md); empilhar os cards é item próprio, com mock */
 const TAMANHOS_DA_CONCILIACAO = [[1000, 600], [1024, 600], [1126, 579], [1130, 580], [1300, 704], [1440, 800], [1440, 860], [1750, 1000]];
 const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+/* P121 — nos cenários dos Itens da nota o `semRolagem` deixa de fora a tabela dos itens (rola por dentro) e o RESUMO do lançamento: os
+   blocos dele têm altura fixa e escondem o que passa DE PROPÓSITO (o nome em até 2 linhas com `line-clamp`, o texto longo com "…", os dois
+   com o inteiro no `title`) — quem os julga é a regra de corte da varredura principal (que os mede aqui também), e o "nada rola" do resumo
+   é o cenário `lancamento-resumo-longo` e o teste `resumoDoLancamento.test.tsx`. */
+const EXCETO_ITENS = '[data-testid="itens-rolagem"], [data-testid="resumo-lancamento"]';
 /* P92 — os nove tamanhos do Negociar lote (os sete do consórcio + 750x483 e 900x600) e o 1024x600, a fronteira em que o resumo de 400px aparece */
 const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 600], [1000, 600], [1024, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* FIN-CONSORCIO-04 — no consórcio rolam por dentro só a lista de parcelas e a tabela das faixas (cabeçalho e Total presos nelas) */
@@ -144,9 +150,22 @@ const CENARIOS = [
   /* FIN-CLASSIF-DIVIDIDA-01b/01c — a classificação dividida: a Geral com as partes, a aba Itens na vista "Contas" (18 itens), a lista com
      a parte "de R$ total" e os selos */
   { nome: 'lancamento-dividido-Geral', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* P121 — o Resumo do lançamento com os nomes longos do mock (favorecido, fazenda, conta, centro, subcentro; valor de 7 dígitos): nada
+     corta seco, nada rola, e as alturas são as do MESMO lançamento com nomes curtos (`alturasComo`) */
+  { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal&resumo=longo', alturasComo: 'tela=lancamento&m=editar&v=sal' },
   { nome: 'lancamento-dividido-Itens', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
       await p.getByRole('button', { name: 'Contas', exact: true }).first().click(); await p.waitForTimeout(500); } },
+  /* P165 — a conta de um item mudada e o Salvar: a confirmação do Dividir com "Salvar sem dividir" (Cancelar · Salvar sem dividir · Salvar e
+     dividir no rodapé de 480px; a explicação e a prévia do banco inteiras) */
+  { nome: 'lancamento-dividido-salvar-contas', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="divisao-motivo"]',
+    antes: async (p) => {
+      await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
+      await p.getByRole('button', { name: 'Contas', exact: true }).first().click(); await p.waitForTimeout(500);
+      await p.locator('[data-testid="conta-do-item-1"] [role="combobox"]').first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="conta-barra-atividade"] button', { hasText: 'Lavoura' }).first().click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="conta-lista"] button', { hasText: 'Insumos Lavoura Milho' }).first().click(); await p.waitForTimeout(300);
+      await p.locator('button[tabindex="17"]').first().click(); await p.waitForTimeout(800); } },
   { nome: 'financeiro-dividido', url: 'tela=financeiro&div=1', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO },
   /* UI-TEXTO-LONGO-01 — a descrição de 300 caracteres: a tela é varrida (nenhum "…") e as alturas do modal, do resumo lateral e da lista
      de parcelas têm de ser as da MESMA tela com a descrição curta (`alturasComo`). O parcelado do XML traz a grade de parcelas. */
@@ -390,17 +409,32 @@ const CENARIOS = [
     } },
   /* P127 + P128c — o Novo documento que LÊ A NOTA: lida (com as três divergências lado a lado e o "Ver o que a nota muda") e a que não se
      lê (PDF sem texto: a frase "itens não gravados"). O arquivo entra pelo MESMO input da área (o XML sintético exposto pela bancada). */
-  ...[['lida', 'nota.xml'], ['nao-lida', 'escaneado.pdf']].map(([v, nome]) => ({ nome: `documento-nota-${v}`, url: 'tela=documento-nota',
+  /* P128b — a prévia campo a campo (5 parcelas, nomes compridos): juntar; o caminho 2 (Venc./Valor); a recusa do banco no rodapé */
+  ...[['juntar', ''], ['atualizar', '&cam=2'], ['recusa', '&v=recusa']].map(([v, u]) => ({ nome: `previa-completar-${v}`, url: `tela=previa-completar${u}`,
+    tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]', semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="previa-rolagem"]' },
+    antes: async (p) => { await p.locator(v === 'recusa' ? '[data-testid="previa-recusa"]' : '[data-testid="previa-dre"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400); } })),
+  /* P164 — `confere`: a faixa da nota com "ao registrar, o lançamento fica com nº …, tipo Nota Fiscal, competência …" (a prévia do banco) */
+  ...[['lida', 'nota.xml'], ['nao-lida', 'escaneado.pdf'], ['confere', 'nota.xml']].map(([v, nome]) => ({ nome: `documento-nota-${v}`,
+    url: v === 'confere' ? 'tela=documento-nota&v=confere' : 'tela=documento-nota',
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
     antes: async (p) => {
       const conteudo = nome.endsWith('.xml') ? await p.evaluate(() => globalThis.__xmlDaBancada) : '%PDF-1.4 sem texto';
       await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: nome, mimeType: nome.endsWith('.xml') ? 'application/xml' : 'application/pdf', buffer: Buffer.from(conteudo) });
       await p.locator(nome.endsWith('.xml') ? '[data-testid="nota-lida"]' : '[data-testid="nota-nao-lida"]').waitFor({ timeout: 8000 });
+      if (v === 'confere') await p.locator('[data-testid="nota-lancamento-fica"]').waitFor({ timeout: 8000 });
       await p.waitForTimeout(400);
     } })),
-  /* P96a — a confirmação do "Juntar as 4 e anexar" (o resumo, a caixinha da competência, o efeito no DRE) e a do "Usar a nota lida" */
-  { nome: 'nota-pdf-juntar-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
-    antes: async (p) => { await p.locator('[data-testid="nota-juntar-soltas"]').first().click(); await p.waitForTimeout(800); } },
+  /* P167 — o modal do documento: a confirmação do cancelamento da nota NO RODAPÉ (à vista; o Salvar some) e a faixa da NF repetida */
+  { nome: 'documento-nota-cancelar', url: 'tela=documento-nota&v=cancelar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    antes: async (p) => { await p.locator('[data-testid="abrir-cancelar-nota"]').click(); await p.locator('[data-testid="confirmar-cancelar-nota"]').waitFor({ state: 'visible', timeout: 4000 }); await p.waitForTimeout(300); } },
+  { nome: 'documento-nota-repetida', url: 'tela=documento-nota&v=repetida', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    antes: async (p) => {
+      const conteudo = await p.evaluate(() => globalThis.__xmlDaBancada);
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: 'nota.xml', mimeType: 'application/xml', buffer: Buffer.from(conteudo) });
+      await p.locator('[data-testid="nota-repetida"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400);
+    } },
+  /* P96a — a confirmação do "Usar a nota lida". (A do "Juntar as 4 e anexar" saiu com o P128b: o juntar é a prévia campo a campo,
+     medida em `previa-completar-juntar`.) */
   /* a frase da NF digitada (2 linhas reservadas) nos largos — nos estreitos ela mora na aba "Parcelas e lançamento" (nota-pdf-aba-lancamento-irmas) */
   { nome: 'nota-pdf-nf-digitada', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO.filter(([l]) => l >= 1000),
     semRolarNoLugar: '[data-testid="nota-nf-digitada"]' },
@@ -416,14 +450,14 @@ const CENARIOS = [
      descrição de 120 caracteres, razão social longa) e o backfill antes e depois do Simular: o modal fixo nao rola, so' o corpo da tabela */
   ...[['', null], ['-fiscal', 'Fiscal']].flatMap(([s, f]) => [
     { nome: `lancamento-xml-Itens${s}`, url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
-      semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-rolagem"]' },
+      semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS },
       antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); if (f) await clicarTexto(f)(p); } },
     { nome: `itens-nota-oc${s}`, url: 'tela=itens-nota', tamanhos: TAMANHOS_DO_CONSORCIO,
-      semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-rolagem"]' }, antes: f ? clicarTexto(f) : undefined }]),
+      semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS }, antes: f ? clicarTexto(f) : undefined }]),
   /* NOTA-CONTAS-NA-CRIACAO-01 A — o NOVO pela nota: a vista Contas dos itens ("Dividir em N contas ao salvar") e, depois de dividir (o item 1
      para uma conta de Lavoura, pela barra de atividade), a Geral com as partes PENDENTES ("dividida em 2 contas ao salvar") */
   { nome: 'lancamento-xml-Itens-contas', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto' },
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
     antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p); } },
   { nome: 'lancamento-xml-Geral-dividida', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => {
@@ -436,10 +470,10 @@ const CENARIOS = [
   /* ITENS-NOTA-FONTE-01 — ate' 18 itens SEM rolar a partir de 1126x579 (a tabela tambem, so' o corpo poderia); nos menores, nada corta */
   ...['xml18', 'xml14'].flatMap((x) => [
     { nome: `lancamento-${x}-Itens`, url: `tela=lancamento&m=novo&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
-      semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-rolagem"]' },
+      semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS },
       antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); } },
     { nome: `lancamento-${x}-Itens-sem-rolar`, url: `tela=lancamento&m=novo&v=${x}`, tamanhos: [[1126, 579], [1300, 704], [1440, 800]],
-      semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-rolagem"]' }, semRolarVertical: '[data-testid="itens-rolagem"]',
+      semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS }, semRolarVertical: '[data-testid="itens-rolagem"]',
       antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); } }]),
   /* FORN-TROCAR-LOTE-01 — o modal (40 origens de nome longo, os avisos) e a barra da selecao na lista com o "…" */
   { nome: 'trocar-fornecedor', url: 'tela=trocar-fornecedor', tamanhos: TAMANHOS_DO_CONSORCIO,
@@ -564,6 +598,19 @@ const CENARIOS = [
   /* P154 — a prévia dos previstos fora da vigência (encurtada e cancelar), vazia, carregando e com a recusa; valores no teto */
   ...['encurtada', 'cancelar', 'vazia', 'carregando', 'erro'].map((v) => ({ nome: `fora-da-vigencia-${v}`, url: `tela=fora-da-vigencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-fora-da-vigencia"]' })),
+  /* P124 — a Conciliação do mês com o lote (de 1000px para cima: CONC-ESTREITA); antes e depois de buscar as sugestões, com o resumo do
+     lote aberto e com a recusa do banco na linha */
+  { nome: 'palco-do-mes', url: 'tela=palco-do-mes', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',
+    antes: async (p) => { await p.locator('[data-testid="linha-palco"]').first().waitFor(); await p.waitForTimeout(400); } },
+  { nome: 'palco-do-mes-sugestoes', url: 'tela=palco-do-mes', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',
+    antes: async (p) => { await p.locator('[data-testid="buscar-sugestoes"]').click(); await p.locator('[data-testid="chip-sugestao-exata"]:not([disabled])').waitFor(); await p.waitForTimeout(400); } },
+  { nome: 'palco-do-mes-previa', url: 'tela=palco-do-mes', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',
+    antes: async (p) => { await p.locator('[data-testid="buscar-sugestoes"]').click(); await p.locator('[data-testid="chip-sugestao-exata"]:not([disabled])').waitFor();
+      await p.locator('[data-testid="conciliar-selecionados"]').click(); await p.waitForTimeout(400); } },
+  { nome: 'palco-do-mes-recusa', url: 'tela=palco-do-mes&v=recusa', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',
+    antes: async (p) => { await p.locator('[data-testid="buscar-sugestoes"]').click(); await p.locator('[data-testid="chip-sugestao-exata"]:not([disabled])').waitFor();
+      await p.locator('[data-testid="conciliar-selecionados"]').click(); await p.locator('[data-testid="confirmar-lote"]').click();
+      await p.locator('[data-testid="resultado-par"]').first().waitFor(); await p.waitForTimeout(400); } },
   /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status; a régua nova de Saldos com Data, OFX/PDF, a Diferença estreita e
      o ↗) e o "Extrato do sistema" do ↗, de 1000px para cima (CONC-ESTREITA), com o pior caso (`dados/conciliacao.ts`) */
   { nome: 'conciliacao-saldos', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
@@ -572,6 +619,17 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
   { nome: 'conciliacao-conta-escolhida', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
     antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p); } },
+  /* P166 (CONC-TELA-02) — a FAIXA do status nos outros três casos (verde, âmbar com "corrigir ›", cinza com as frases do dono) e os nomes
+     no TAMANHO REAL: de 1024px para cima o nome da conta não pode cortar (o gesto mede cada nome e recusa o que não cabe inteiro) */
+  ...['ok', 'pendencia', 'pendente'].map((v) => ({ nome: `conciliacao-faixa-${v}`, url: `tela=conciliacao&v=${v}`, tamanhos: TAMANHOS_DA_CONCILIACAO,
+    antes: async (p) => { await p.locator('[data-testid="faixa-status"]').waitFor(); await p.waitForTimeout(500); } })),
+  { nome: 'conciliacao-nomes-inteiros', url: 'tela=conciliacao&v=nj', tamanhos: TAMANHOS_DA_CONCILIACAO,
+    antes: async (p) => {
+      await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500);
+      if (p.viewportSize().width < 1024) return;
+      const cortados = await p.$$eval('[data-testid="nome-conta"]', (els) => els.filter((e) => e.scrollWidth > e.clientWidth + 0.5).map((e) => e.textContent));
+      if (cortados.length > 0) throw new Error(`nome de conta cortado a ${p.viewportSize().width}px: ${cortados.join(' | ')}`);
+    } },
   { nome: 'conciliacao-extrato-do-sistema', url: 'tela=extrato-do-sistema', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="modal-extrato-sistema"]',
     antes: async (p) => { await p.locator('[data-testid="sistema-saldo-final"]').waitFor(); await p.waitForTimeout(500); } },
   { nome: 'conciliacao-extrato-do-sistema-carregando', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DA_CONCILIACAO,
@@ -804,7 +862,10 @@ function medir(regiao) {
       if (naCelula && EH_NUMERO(inteiro)) achados.push({ regra: 'numero', texto: `numero/data/documento com "…": ${t}` });
       else if (!comTitle) achados.push({ regra: 'reticencias', texto: naCelula ? `${t} (sem o texto inteiro no title)` : t });
     }
-    else if (cs.webkitLineClamp && cs.webkitLineClamp !== 'none' && e.scrollHeight > e.clientHeight + 0.5) achados.push({ regra: 'reticencias', texto: texto(e) });
+    /* P121 (mock do Resumo aprovado 27/10; esta regra do detector: OK do Gabriel 28/10) — o corte em N linhas (`line-clamp`) DENTRO de célula de tabela com o
+       texto inteiro no `title` da célula vale como o "…" de uma linha (a mesma regra FORN-01b); fora de célula, segue proibido */
+    else if (cs.webkitLineClamp && cs.webkitLineClamp !== 'none' && e.scrollHeight > e.clientHeight + 0.5
+      && !(naCelula && (naCelula.getAttribute('title') ?? '').replace(/\s+/g, ' ').includes((e.textContent ?? '').replace(/\s+/g, ' ').trim()))) achados.push({ regra: 'reticencias', texto: texto(e) });
     /* vazamento: celula de tabela cujo conteudo passa da largura dela (invade a vizinha) */
     else if ((e.tagName === 'TD' || e.tagName === 'TH') && cs.overflowX === 'visible' && e.scrollWidth > e.clientWidth + 1) achados.push({ regra: 'corte', texto: `${texto(e)} (vaza: pede ${e.scrollWidth}px, tem ${e.clientWidth})` });
     /* corte calado: texto proprio cortado por overflow escondido numa linha so' (sem "…", mas cortado do mesmo jeito) */
@@ -959,10 +1020,21 @@ function medirCabecalho(regiao) {
       achados.push({ regra: 'cabecalho', texto: `cabeçalho não fica preso (o container dele não rola; quem rola é o de fora) "${(x.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)}"` });
     }
     if (!presos.length) continue;
-    c.scrollTop = Math.round((c.scrollHeight - c.clientHeight) / 2);
     const rc = c.getBoundingClientRect(); const topo = rc.top + c.clientTop;
     for (const h of presos) {
-      const rh = h.getBoundingClientRect(); if (rh.height === 0) continue;
+      if (h.getBoundingClientRect().height === 0) continue;
+      /* P137 (Gabriel 28/10 09:21) — cada cabeçalho preso se mede com a TABELA DELE cruzando o topo do quadro, e não com o quadro no meio:
+         com várias tabelas empilhadas no mesmo quadro (o PC-100), no meio da rolagem a de baixo ainda não chegou ao topo e o cabeçalho dela
+         está no lugar natural — isso não é vão. Rola até o meio do trecho em que a tabela cruza o topo; se o quadro não rola o bastante
+         para ela cruzar, o cabeçalho nunca precisa prender e não se mede. Numa tabela só por quadro, dá o mesmo de antes. */
+      const caixa = h.closest('table') ?? h.parentElement ?? h;
+      c.scrollTop = 0;
+      const rt0 = caixa.getBoundingClientRect(); const alto = h.getBoundingClientRect().height;
+      const inicio = rt0.top - topo; const fim = rt0.bottom - topo - alto;
+      if (fim - inicio < 2) continue;
+      c.scrollTop = Math.max(0, Math.round(inicio + (fim - inicio) / 2));
+      if (c.scrollTop < inicio + 1) continue;
+      const rh = h.getBoundingClientRect();
       const nome = (h.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
       if (rh.top - topo > 0.5) achados.push({ regra: 'cabecalho', texto: `vão de ${(rh.top - topo).toFixed(1)}px acima de "${nome}"` });
       /* fundo opaco: o cabeçalho (ou as células dele) tapa a linha que passa por baixo */
@@ -980,7 +1052,7 @@ const naRapida = RAPIDO ? filtroRapido('check-ui-cortes') : () => true;
 /* o modo rapido mede cada cenario nos MESMOS tamanhos do completo (o veredito de um cenario nao depende do modo): forcar os 7 do contrato
    reprovava o modal da OC a 750/814, largura em que ele nao tem desenho e que o completo nao mede (57 achados na prova de 21/10) */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS);
-const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || c.nome.startsWith(SO)) && naRapida(c));
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
 const base = `http://127.0.0.1:${servidor.config.server.port === 0 ? servidor.httpServer.address().port : servidor.httpServer.address().port}`;
@@ -993,7 +1065,9 @@ try {
 <div style="width:80px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">Nome muito comprido demais para caber</div>
     <table style="width:120px;table-layout:fixed"><tbody><tr><td title="Nome aceito com reticencias e title inteiro" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">Nome aceito com reticencias e title inteiro</td></tr>
     <tr><td><span style="display:block;overflow-x:auto;white-space:nowrap">Nome cortado seco rolando escondido</span></td></tr>
-    <tr><td title="12.345.678/0001-90" style="width:40px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">12.345.678/0001-90</td></tr></tbody></table>
+    <tr><td title="12.345.678/0001-90" style="width:40px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">12.345.678/0001-90</td></tr>
+    <tr><td title="Clamp aceito em duas linhas com o nome inteiro no title da celula"><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Clamp aceito em duas linhas com o nome inteiro no title da celula</div></td></tr></tbody></table>
+    <div style="width:80px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Clamp recusado fora de tabela com o texto comprido demais</div>
     <div style="width:80px;overflow:hidden;white-space:nowrap">Outro nome comprido demais para caber</div>
     <table style="width:40px;table-layout:fixed"><tbody><tr><td style="word-break:break-all">19/10/2026</td></tr></tbody></table>
     <div style="height:120px;overflow:auto;padding-top:8px"><table><thead><tr><th style="position:sticky;top:0;background:rgba(255,255,255,.5)">Data</th></tr></thead>
@@ -1001,7 +1075,9 @@ try {
     <div style="height:120px;overflow:auto"><div style="overflow-x:auto"><table><thead style="position:sticky;top:0;background:#fff"><tr><th>Nome</th></tr></thead>
     <tbody>${Array.from({ length: 30 }, () => '<tr><td>x</td></tr>').join('')}</tbody></table></div></div>
     <table data-dia-mes=""><thead><tr><th>Data</th></tr></thead><tbody><tr><td>01/10</td></tr><tr><td>01/10/26</td></tr></tbody></table>
-    <table><thead><tr><th>Data</th></tr></thead><tbody><tr><td>02/10</td></tr></tbody></table>`);
+    <table><thead><tr><th>Data</th></tr></thead><tbody><tr><td>02/10</td></tr></tbody></table>
+    <div style="height:300px;overflow:auto"><div style="height:200px">bloco de cima</div>${['Empilhada A', 'Empilhada B'].map((n) => `<table><thead style="position:sticky;top:0;background:#fff"><tr><th>${n}</th></tr></thead>
+    <tbody>${Array.from({ length: 6 }, () => '<tr><td>y</td></tr>').join('')}</tbody></table>`).join('')}</div>`);
   /* e a rolagem (FIN-CONSORCIO-02): um modal com conteudo mais alto que a caixa tem de ser acusado */
   await p0.evaluate(() => { const d = document.createElement('div'); d.setAttribute('role', 'dialog'); d.style.cssText = 'height:40px;overflow:hidden';
     d.innerHTML = '<div style="height:120px">alto</div>'; document.body.appendChild(d); });
@@ -1050,12 +1126,18 @@ try {
   const prova = [...daRolagem0, ...daTabela0, ...daPagina0, ...daSobre0, ...(comMudanca && !semMudar ? [comMudanca] : [])].map((a) => a.regra);
   /* FORN-01b — o detector se prova na regra nova: o nome com "…" e title passa; o corte seco e o documento com "…" sao achados */
   const aceitoErrado = daPagina0.some((a) => a.texto.startsWith('Nome aceito'));
+  /* P137 — tabelas empilhadas no mesmo quadro: cabeçalho de quem ainda não chegou ao topo não é vão */
+  const empilhadaAcusada = daPagina0.filter((a) => a.regra === 'cabecalho' && a.texto.includes('Empilhada'));
+  if (empilhadaAcusada.length) { console.error(`check-ui-cortes: AUTO-TESTE DO CABEÇALHO EMPILHADO FALHOU (${empilhadaAcusada.map((a) => a.texto).join(' | ')})`); process.exit(2); }
   const seco0 = daPagina0.some((a) => a.texto.startsWith('corte seco: Nome cortado seco'));
   const doc0 = daPagina0.some((a) => a.regra === 'numero' && a.texto.includes('12.345.678/0001-90'));
   /* P159a (D7) — a exceção declarada se prova: dd/mm passa SÓ na tabela `data-dia-mes`; lá, dd/mm/aa segue acusado; fora dela, dd/mm também */
   const diaMesAceitoErrado = daPagina0.some((a) => a.regra === 'data' && a.texto === 'Data: 01/10');
   const diaMesCurto0 = daPagina0.some((a) => a.regra === 'data' && a.texto === 'Data: 01/10/26');
   const diaMesFora0 = daPagina0.some((a) => a.regra === 'data' && a.texto === 'Data: 02/10');
+  /* P121 — o clamp em N linhas dentro de célula com o texto inteiro no title passa; fora de tabela segue acusado */
+  const clampAceitoErrado = daPagina0.some((a) => a.texto.includes('Clamp aceito'));
+  const clampFora0 = daPagina0.some((a) => a.regra === 'reticencias' && a.texto.includes('Clamp recusado'));
   /* P104 — o detector novo se prova: o rótulo que rola no lugar e a frase que passa da altura reservada são achados; o campo, não */
   await p0.setContent(`<div id="sem-rolar"><span class="r1" style="display:block;width:60px;overflow-x:auto;white-space:nowrap">1º vencimento · sugerido (Elo, dia 10)</span>
     <p style="height:13px;width:60px;overflow:hidden;font-size:10px;line-height:13px">Informe o nº de parcelas (2 a 24).</p>
@@ -1064,7 +1146,7 @@ try {
   const semRolar0 = daSemRolar0.some((a) => a.texto.startsWith('rola no lugar: 1º vencimento')) && daSemRolar0.some((a) => a.texto.startsWith('passa da altura reservada: Informe'))
     && !daSemRolar0.some((a) => a.texto.includes('Campo de seletor'));
   if (!semRolar0) { console.error(`check-ui-cortes: AUTO-TESTE DO SEM-ROLAR-NO-LUGAR FALHOU (${JSON.stringify(daSemRolar0)})`); process.exit(2); }
-  if (aceitoErrado || !seco0 || !doc0) { console.error(`check-ui-cortes: AUTO-TESTE DA REGRA DE CORTE FALHOU (aceito acusado: ${aceitoErrado}, corte seco: ${seco0}, documento: ${doc0})`); process.exit(2); }
+  if (aceitoErrado || !seco0 || !doc0 || clampAceitoErrado || !clampFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA REGRA DE CORTE FALHOU (aceito acusado: ${aceitoErrado}, corte seco: ${seco0}, documento: ${doc0}, clamp na célula acusado: ${clampAceitoErrado}, clamp fora achado: ${clampFora0})`); process.exit(2); }
   if (diaMesAceitoErrado || !diaMesCurto0 || !diaMesFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA DATA dd/mm FALHOU (aceito acusado: ${diaMesAceitoErrado}, dd/mm/aa na lista: ${diaMesCurto0}, dd/mm fora da lista: ${diaMesFora0})`); process.exit(2); }
   await p0.close();
   if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem', 'valor', 'tabela', 'sobreposicao', 'italico', 'numero'].every((r) => prova.includes(r))

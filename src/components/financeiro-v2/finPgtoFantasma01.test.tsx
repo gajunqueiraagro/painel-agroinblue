@@ -66,7 +66,8 @@ describe('LancamentoV2Dialog — a ligação (fonte)', () => {
     expect(modal).not.toContain('<DatePicker value={dataPagamento}');
   });
   it('M2 — o resumo lateral mostra o mesmo valor ("—" quando vazio)', () => {
-    expect(modal).toContain('<LinhaResumo rotulo="Pagamento" valor={resumoFmtData(pagamentoMostrado)} />');
+    /* P121 — o resumo é o `ResumoDoLancamento`; o valor do Pgto. sai do MESMO `pagamentoMostrado` */
+    expect(modal).toContain('pagamento={resumoFmtData(pagamentoMostrado)}');
     expect(modal).not.toContain('resumoFmtData(dataPagamento)');
   });
   it('M3 — o aviso só existe com a data que o salvar vai remover, lida do registro do banco, e só na edição', () => {
