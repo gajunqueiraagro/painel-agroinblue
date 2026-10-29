@@ -338,21 +338,33 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
     expect(semPar.className).toContain('[&>td:first-child]:shadow-[inset_3px_0_0_#d97706]');
     expect(within(semPar).getByTestId('conf-sem-lancamento').className).toContain('text-[#d97706]');
     expect(within(semPar).getByTestId('conf-sem-lancamento').textContent).toBe('sem lançamento ·SugestõesCriar');
-    expect(within(semPar).getByTestId('sem-par-sugestoes')).toBeDisabled();
+    /* P159f: abre sempre (com 0, o modal oferece o "Procurar no histórico") */
+    expect(within(semPar).getByTestId('sem-par-sugestoes')).not.toBeDisabled();
     /* nenhum link por extenso sobrou na mesa */
     expect(within(tabelaDaMesa(modal)).queryByText('criar')).toBeNull();
     expect(within(tabelaDaMesa(modal)).queryByText('desconciliar')).toBeNull();
   });
 
   /* PR-CONC-SUGESTOES-CASAR-01: o menu ganhou "Ver sugestões (N)". Aqui o banco pagou -134.613,84 e o único candidato é
-     a folha de -3.407,89 do Jonatas — nem valor, nem soma, nem nome: N = 0, desabilitado e dizendo por quê. */
-  it('extrato sem par: o menu tem Ver sugestões (0) desabilitado com o motivo, Criar, Criar transferência (P139) e Ignorar', async () => {
+     a folha de -3.407,89 do Jonatas — nem valor, nem soma, nem nome: N = 0. P159f: mesmo com 0 ele ABRE (o "Procurar no histórico"). */
+  it('extrato sem par: o menu tem Ver sugestões (0) habilitado, Criar, Criar transferência (P139) e Ignorar', async () => {
     const modal = await abrirConferencia();
     const semPar = linhaSemPar(modal);
     expect(itens(await abrirMenu(semPar))).toEqual([
-      { texto: 'Ver sugestões (0)nenhuma sugestão para este movimento', desabilitado: true },
+      { texto: 'Ver sugestões (0)', desabilitado: false },
       { texto: 'Criar', desabilitado: false }, { texto: 'Criar transferência', desabilitado: false }, { texto: 'Ignorar', desabilitado: false },
     ]);
+  });
+
+  /* P159f — o caso do Gabriel (BB out/26, 05/10, "PAGAMENTO DE BOLETO · BRADESCO SEG-RESID OUTROS"): sem candidato, "Sugestões" abre o
+     modal com "Nenhuma sugestão automática" no lugar da lista e o CURSOR no campo do "Procurar no histórico" */
+  it('P159f: movimento sem candidato → "Sugestões" abre o modal e o campo de busca está focado', async () => {
+    const modal = await abrirConferencia();
+    fireEvent.click(within(linhaSemPar(modal)).getByTestId('sem-par-sugestoes'));
+    const sug = await screen.findByTestId('sugestoes-casar');
+    expect(within(sug).getByTestId('sugestoes-nenhuma').textContent).toBe('Nenhuma sugestão automática');
+    const campo = within(sug).getByTestId('procurar-historico-termo');
+    await waitFor(() => expect(document.activeElement).toBe(campo));
   });
 
   it('P139: "Criar transferência" abre o diálogo por cima e pede a prévia à porta do banco; marcar só o sem par oferece o lote', async () => {

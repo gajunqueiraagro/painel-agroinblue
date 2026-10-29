@@ -320,6 +320,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   DECLARADA (D7, Gabriel 28/10): a coluna Data dessa lista é dd/mm (o gate aceita só em tabela `data-dia-mes`; o auto-teste a prova).
   P159b: a aba Sistema e o ↗ "Extrato do sistema" são a mesma lista (○ âmbar = não conciliado, o status no `title`); a Evolução: Dif. do dia =
   Mov. banco − Mov. sistema (`montarEvolucao`), some só o dia SEM NENHUMA linha, "ver o dia na Conferência" = o Espelho abre a Conferência no dia (`onAbaChange`).
+- P159f: "Sugestões" (o botão do sem par e o "Ver sugestões (N)" do ⋯) abre SEMPRE; com 0, "Nenhuma sugestão automática" e o cursor no campo do "Procurar no histórico"; o contorno azul só sinaliza que há candidatos.
 - P159e: as 3 abas do Casar lançamentos no mock `mock-casar-abas-v1.html` (linha 18px a 10; dia/fechamento/saldos 22px negrito; data dd/mm/aaaa); Extrato e Sistema em Entradas · Saídas · Saldo, o saldo inicial/do dia/final
   NA coluna Saldo (rodapé = tabela com o mesmo `colgroup`; gate `alinhamento`); Conferência: o EXTRATO é a coluna flexível, inteiro ≥1366 (gate `inteiroDe`).
 - Selecao se marca com navy (`Segmentado`, o unico); controle nativo nunca; seletor de entidade tem busca; todo menu aberto pelo

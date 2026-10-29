@@ -13,7 +13,7 @@
  * ⚠ O QUADRO TEM PISO (`PISO_DO_QUADRO`): abaixo dele rola na horizontal dentro da caixa (os cabeçalhos não vazam em 750px); o cabeçalho
  *   só fica PRESO quando o quadro rola de fato (mais de 6 linhas) — preso num quadro que não rola, dentro de um que rola, é vão.
  */
-import { useState } from 'react';
+import { useState, type Ref } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,8 @@ interface Props {
   clienteId: string | null;
   movimento: { data: string | null; historico: string | null; valor: number };
   onCriarIgual: (m: ModeloDoHistorico) => void;
+  /** P159f — o campo da busca, para quem monta pôr o cursor nele (o modal sem sugestão automática) */
+  campoRef?: Ref<HTMLInputElement>;
 }
 
 const ROTULO: Record<OndeProcurar, string> = { banco: 'texto do banco', descricao: 'descrição', fornecedor: 'fornecedor' };
@@ -48,7 +50,7 @@ type Estado =
   | { tipo: 'falhou'; motivo: string }
   | { tipo: 'pronto'; termo: string; r: ResultadoDoHistorico };
 
-export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual }: Props) {
+export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoRef }: Props) {
   const nomeDoBanco = nomeDoHistorico(movimento.historico, movimento.data);
   const ano = Number((movimento.data ?? '').slice(0, 4)) || new Date().getFullYear();
   const [termo, setTermo] = useState(nomeDoBanco);
@@ -87,7 +89,7 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual }: Prop
       {/* a linha do campo: altura fixa, nada quebra */}
       <div className="flex h-[24px] items-center gap-1.5 text-[10px]">
         <span className="shrink-0 font-semibold text-foreground">Procurar no histórico</span>
-        <Input value={termo} onChange={(e) => setTermo(e.target.value)} placeholder="nome do fornecedor ou do banco"
+        <Input ref={campoRef} value={termo} onChange={(e) => setTermo(e.target.value)} placeholder="nome do fornecedor ou do banco"
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void procurar(); } }}
           className="h-[22px] w-auto min-w-[80px] max-w-[200px] flex-1 px-1.5 text-[10px]" data-testid="procurar-historico-termo" aria-label="Procurar no histórico" />
         {ONDE_TODOS.map((o) => (

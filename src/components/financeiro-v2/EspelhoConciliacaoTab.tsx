@@ -724,7 +724,8 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugesto
           ⚠ "IGNORAR" INSTANCIA o `DecisaoDerivadosDialog` (o mesmo da Auditoria Bancária).
           ⚠ "VER SUGESTÕES (N)" — PR-CONC-SUGESTOES-CASAR-01. Com N = 0 aparece desabilitado e diz por quê. */}
       <CelAcoes itens={[
-        { rotulo: `Ver sugestões (${nSugestoes})`, onClick: nSugestoes > 0 ? onSugestoes : undefined, motivo: 'nenhuma sugestão para este movimento' },
+        /* P159f: abre SEMPRE (com 0, o modal oferece o "Procurar no histórico") */
+        { rotulo: `Ver sugestões (${nSugestoes})`, onClick: onSugestoes },
         { rotulo: 'Criar', onClick: onCriar },
         { rotulo: transf?.contaNome ? `Criar transferência → ${transf.contaNome}` : 'Criar transferência', onClick: onCriarTransferencia,
           motivo: 'movimento sem conta' },
