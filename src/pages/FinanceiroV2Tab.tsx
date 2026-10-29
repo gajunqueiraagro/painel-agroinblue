@@ -2071,7 +2071,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     value={produtoFiltro}
                     onChange={e => setProdutoFiltro(e.target.value)}
                     placeholder="Buscar..."
-                    className="h-6 !text-[9px] placeholder:!text-[9px] leading-tight px-1.5 bg-white border-[#C9D4E2]"
+                    className="h-6 !text-[10px] placeholder:!text-[10px] leading-tight px-1.5 bg-white border-[#C9D4E2]"
                     autoCorrect="off" autoCapitalize="none" spellCheck={false}
                   />
                 </div>
@@ -2082,7 +2082,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     onChange={(id) => setFornecedorFiltro(id || '__all__')}
                     fornecedores={fornecedoresDoFiltro}
                     situacao="todos" nomeInteiro mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
-                    linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
+                    linhaDoDocumento={false} size="compact" triggerClassName="h-6 bg-white border-[#C9D4E2] !text-[10px]"
                     valorInexistente={inexistente('fornecedorFiltro')} marcarInativo
                   />
                 </div>
@@ -2092,7 +2092,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     value={documentoFiltro}
                     onChange={e => setDocumentoFiltro(e.target.value)}
                     placeholder={PLACEHOLDER_FILTRO_DOCUMENTO}
-                    className="h-6 !text-[9px] placeholder:!text-[9px] leading-tight px-1.5 bg-white border-[#C9D4E2]"
+                    className="h-6 !text-[10px] placeholder:!text-[10px] leading-tight px-1.5 bg-white border-[#C9D4E2]"
                     autoCorrect="off" autoCapitalize="none" spellCheck={false}
                   />
                 </div>
@@ -2438,7 +2438,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       value={documentoFiltro}
                       onChange={e => setDocumentoFiltro(e.target.value)}
                       placeholder={PLACEHOLDER_FILTRO_DOCUMENTO}
-                      className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
+                      className="h-6 !text-[10px] placeholder:!text-[10px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
                       autoCorrect="off" autoCapitalize="none" spellCheck={false}
                     />
                   </div>
@@ -2495,10 +2495,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       value={produtoFiltro}
                       onChange={e => setProdutoFiltro(e.target.value)}
                       placeholder="Buscar..."
-                      className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
+                      className="h-6 !text-[10px] placeholder:!text-[10px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
                       autoCorrect="off" autoCapitalize="none" spellCheck={false}
                     />
                   </div>
+                  {/* P123: o Fornecedor na altura dos outros campos (24px; o `compact` do seletor é 20px) e o texto a 10px, como os
+                      seletores; Produto e Documento saíram de 8px (abaixo do piso) para 10px. */}
                   <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Fornecedor</label>
                     <FavorecidoSelect
@@ -2506,7 +2508,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     onChange={(id) => setFornecedorFiltro(id || '__all__')}
                     fornecedores={fornecedoresDoFiltro}
                     situacao="todos" nomeInteiro mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
-                    linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
+                    linhaDoDocumento={false} size="compact" triggerClassName="h-6 bg-white border-[#C9D4E2] !text-[10px]"
                     valorInexistente={inexistente('fornecedorFiltro')} marcarInativo
                   />
                   </div>
@@ -2556,20 +2558,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
            desciam para uma segunda linha DENTRO de 24px e transbordavam por cima do que vinha depois (a barra "Classificação ·
            Sem caixa" coberta pelo cabeçalho azul da tabela). Agora a altura é a do conteúdo (`min-h-6`, sem teto) e cada total
            tem LARGURA RESERVADA (`TextoReservado`, o maior valor possível): se a faixa quebra, quebra pela largura da janela,
-           nunca porque um número cresceu — e o que vem embaixo desce junto, sem nada por cima. */
-        <div className="flex min-h-6 shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-1 py-0.5 text-[10px] tabular-nums" data-testid="faixa-totais">
+           nunca porque um número cresceu — e o que vem embaixo desce junto, sem nada por cima.
+           P122 (Gabriel 28/10): UMA linha — os "|" saíram (o espaço entre os totais separa), espaço de 6px, "Class." e a contagem
+           reservada para 5 algarismos; cabe com ~1.090px de faixa (janela de ~1.250px para cima). Mais estreito ainda quebra, porque os
+           160px do aviso do filtro (P94) ficam: sem eles o aviso de filtro inexistente sumiria. */
+        <div className="flex min-h-6 shrink-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 py-0.5 text-[10px] tabular-nums" data-testid="faixa-totais">
           {/* FIN-V2-SEM-CAIXA-01: no padrao so' dinheiro — Entradas, Saidas, Transf. e a contagem. O total sem caixa so' existe
               com a chave ligada, e e' o mesmo numero do rodape da secao (`totalSemCaixa`). */}
           <span className="font-bold text-success" title={modoSemCaixa === 'so_dre' ? 'Só os lançamentos sem caixa que compõem o DRE.' : 'Só o que movimenta caixa.'}>Entradas: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalEntradas) : '—'} /></span>
-          <span className="text-muted-foreground/40">|</span>
           <span className="font-bold text-destructive" title={modoSemCaixa === 'so_dre' ? 'Só os lançamentos sem caixa que compõem o DRE.' : 'Só o que movimenta caixa.'}>Saídas: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalSaidas) : '—'} /></span>
-          <span className="text-muted-foreground/40">|</span>
           <span className="font-bold text-sky-700 dark:text-sky-400"
             title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
             Transf.: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalTransferencias) : '—'} />
           </span>
-          <span className="text-muted-foreground/40">|</span>
-          <span className="text-muted-foreground"><TextoReservado reserva={reservaDeNumero(6)} alinhar="direita" texto={paginaDaLista ? totalLancamentosFiltrados.toLocaleString('pt-BR') : '—'} /> lanç.</span>
+          <span className="text-muted-foreground"><TextoReservado reserva={reservaDeNumero(5)} alinhar="direita" texto={paginaDaLista ? totalLancamentosFiltrados.toLocaleString('pt-BR') : '—'} /> lanç.</span>
           {/* P94 — O LUGAR DOS AVISOS DO FILTRO, RESERVADO: sempre desenhado (vazio sem aviso), com a largura que sobra (`flex-1`), numa
               linha que rola no lugar; mínimo de 160px, para caber ao menos o começo do aviso numa janela estreita — o aviso que
               aparece ou some não move a barra, os totais nem a tabela. Os chips do que veio da OC
@@ -2608,7 +2610,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {contasAmpliado ? '✓ ' : ''}Contas origem/destino
               </button>
             )}
-            <span className="text-muted-foreground">Classificação</span>
+            <span className="text-muted-foreground" title="Classificação: o nível mostrado na coluna">Class.</span>
             <Segmentado altura={20} valor={nivelClassif} onEscolher={setNivelClassif}
               opcoes={NIVEIS_CLASSIFICACAO.map(n => ({ valor: n, rotulo: ROTULO_NIVEL[n] }))} />
             <span className="text-muted-foreground">Sem caixa</span>

@@ -174,9 +174,25 @@ describe('a ligação na tela (lida da fonte)', () => {
     expect(tela).not.toContain('encontrado{totalLancamentosFiltrados');
   });
   it('a faixa dos totais cresce com o conteúdo (nunca altura fixa com quebra) e os totais têm largura reservada', () => {
-    expect(tela).toContain('<div className="flex min-h-6 shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-1 py-0.5 text-[10px] tabular-nums" data-testid="faixa-totais">');
+    expect(tela).toContain('<div className="flex min-h-6 shrink-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 py-0.5 text-[10px] tabular-nums" data-testid="faixa-totais">');
     expect(tela).not.toContain('<div className="flex h-6 shrink-0 flex-wrap');
     expect(tela).toContain("Entradas: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalEntradas) : '—'} />");
+  });
+  it('P122 — UMA linha: sem os "|" entre os totais, "Class." e a contagem reservada para 5 algarismos', () => {
+    const faixa = tela.slice(tela.indexOf('data-testid="faixa-totais"'), tela.indexOf('data-testid="controles-da-lista"') + 1200);
+    expect(faixa).not.toContain('<span className="text-muted-foreground/40">|</span>');
+    expect(faixa).toContain('>Class.</span>');
+    expect(faixa).not.toContain('>Classificação</span>');
+    expect(faixa).toContain('reserva={reservaDeNumero(5)}');
+    /* a busca sabe achar: o recorte acha o separador quando ele está lá */
+    expect('data-testid="faixa-totais"><span className="text-muted-foreground/40">|</span>').toContain('<span className="text-muted-foreground/40">|</span>');
+  });
+  it('P123 — o Fornecedor na altura dos outros campos (24px) e nenhum campo da barra abaixo do piso (8px)', () => {
+    const chamadas = tela.match(/size="compact" triggerClassName="[^"]*"/g) ?? [];
+    expect(chamadas).toHaveLength(2);   // computador e celular
+    for (const c of chamadas) expect(c).toContain('h-6');
+    expect(tela).not.toContain('!text-[8px]');
+    expect(tela).not.toContain('placeholder:!text-[9px]');
   });
   it('FIN-V2-DESEMPENHO-01c — a pílula "Conciliado" sai da marca da página; os vínculos (o detalhe) são só os da página', () => {
     expect(tela).toContain('const temVinculo = !!paginaDaLista?.conciliados.has(l.id);');
