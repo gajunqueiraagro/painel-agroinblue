@@ -86,6 +86,8 @@ import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
 import { V2PlanejamentoVisaoGeral } from '@/v2/pages/V2PlanejamentoVisaoGeral';
 import V2FechamentoPeriodo from '@/v2/pages/V2FechamentoPeriodo';
 import * as META from './dados/metaP109';
+import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
+import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
 
 /* FIN-V2-DESEMPENHO-01b — a `fn_fin_v2_lista_pagina` da bancada: a página pedida do conjunto SINTÉTICO, com o total e os totais
    do conjunto inteiro (a regra do topo, `totaisDaListaV2`). Sem filtro: a bancada mede a tela, não o predicado. */
@@ -1025,6 +1027,16 @@ if (tela === 'mesclar') {
     raiz.render(<TrocarFornecedorDialog clienteId="cli" ids={['x']} onClose={() => {}} />);
   };
   void montarTroca();
+} else if (tela === 'plano-contas') {
+  /* P172 — Cadastros › Plano de Contas (dado SINTÉTICO, `dados/planoContas.ts`); `&perfil=cliente` = o cliente (só leitura, sem ações) */
+  if (q.get('perfil') === 'cliente') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Bancada' }, clientes: [{ id: 'cli', nome: 'Cliente Bancada' }],
+    isAdmin: false, perfil: 'financeiro', loading: false, setClienteAtual: () => {}, resumoClientes: false, setResumoClientes: () => {} };
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'financeiro_plano_contas' ? PLANO_DE_CONTAS.filter((x) => e.eq.ativo !== true || x.ativo)
+      : t === 'financeiro_dividendos' ? DIVIDENDOS_DO_PLANO : [],
+    rpc: (fn: string) => fn.startsWith('fn_subcentro_cliente_') ? { antes: { lancamentos_vivos: 12 }, depois: {}, recusa: null, lancamentos_tocados: 7 } : null,
+  };
+  montar(<FinV2PlanoContasTab onAbrirDividendos={() => {}} />);
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */

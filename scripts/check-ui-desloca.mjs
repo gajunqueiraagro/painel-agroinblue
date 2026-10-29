@@ -124,6 +124,17 @@ const CENARIOS = [
   })(),
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
+  /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor
+     nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
+  { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, estados: [
+    ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['inativos desligado', clicar('[data-testid="mostrar-inativos"]')],
+    ['busca 4 contas', digitar('[data-testid="busca-plano"]', 'Outras Saídas')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],
+    ['busca sem resultado', digitar('[data-testid="busca-plano"]', 'zzzz nada')], ['busca limpa', digitar('[data-testid="busca-plano"]', '')],
+  ] },
+  { nome: 'plano-contas-cliente', url: 'tela=plano-contas&perfil=cliente', tamanhos: TAMANHOS_DO_P92, estados: [
+    ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],
+    ['busca limpa', digitar('[data-testid="busca-plano"]', '')],
+  ] },
   /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */
   /* P109 — as 4 telas da meta (o caso real do NJ 2026): o rótulo do regime fica PRESO no lugar dele (`presos`: medido sempre, à vista)
      ao trocar a fazenda e ao passar aos valores ×400; no PC-100 o Realizado ↔ Meta (`auto`) não move nada — o rótulo tem o lugar
