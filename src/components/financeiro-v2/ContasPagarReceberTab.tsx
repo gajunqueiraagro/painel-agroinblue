@@ -1759,6 +1759,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
           onAbrirFinanciamento(finId);
         } : undefined}
         lancamento={lancEdicao}
+        /* P143 (D1) — abrir outra parcela da compra no mesmo modal: pela mesma leitura da abertura (a linha da tabela, nunca a da view) */
+        onTrocarLancamento={(id) => { void (async () => { const linha = await fin.buscarLancamentoPorId(id); if (linha) setLancEdicao(linha); })(); }}
         fazendas={fazendas}
         contas={fin.contasBancarias}
         classificacoes={fin.classificacoes}
