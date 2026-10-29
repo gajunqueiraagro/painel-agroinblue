@@ -21,6 +21,20 @@ function roundValue(value: number, decimals = 2): number {
 
 export type TipoPrecoVenda = 'por_arroba' | 'por_kg' | 'por_cab' | 'por_total';
 
+/**
+ * P115 (Gabriel 27/10) — o tipo de preço da TELA → o do motor, numa regra só (o "Detalhes da Venda em Pé" e o painel do LancamentosTab).
+ * ⚠ "POR TOTAL" É O TOTAL: o valor digitado é o total da venda (o motor faz `valorBase = preço` e o R$/cab = total ÷ cabeças). Desde
+ *   03/04/2026 (24287662 e 4800149e) as duas telas mandavam 'por_cab' no lugar, e o motor multiplicava o total pelas cabeças: 140 cabeças a
+ *   R$ 700.000,00 viravam R$ 98.000.000,00 na tela, no resumo, na confirmação e no `detalhes_snapshot` (o `valor_total` gravado e o
+ *   lançamento financeiro já saíam certos — `LancamentosTab` calcula o bruto à parte). FASE 0: 6 vendas "por total" no proto, 0 infladas.
+ * O resto continua como era: 'por_cab' → 'por_cab'; qualquer outro → 'por_kg'.
+ */
+export function tipoPrecoDoMotor(tp: string | null | undefined): TipoPrecoVenda {
+  if (tp === 'por_total') return 'por_total';
+  if (tp === 'por_cab') return 'por_cab';
+  return 'por_kg';
+}
+
 export interface VendaParcela {
   data: string;
   valor: number;

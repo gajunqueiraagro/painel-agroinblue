@@ -43,6 +43,8 @@ import {
   classificarSaida as classificarSaidaCentral,
 } from '@/lib/financeiro/classificacao';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { lancamentoDoCaixaParaOEditar } from '@/lib/financeiro/lancamentoDoCaixa';
+import { lerLancamentoDaLinha } from '@/lib/financeiro/partesDaClassificacao';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import type { FluxoDrillPayload } from '@/components/financeiro/FluxoFinanceiro';
 import { toast } from 'sonner';
@@ -165,48 +167,13 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     fluxoReloadRef.current = reload;
   }, []);
 
-  // Convert FinanceiroLancamento to LancamentoV2-like for the dialog
-  const handleEditFromAuditoria = useCallback((lanc: FinanceiroLancamento) => {
-    // Se lançamento financeiro veio de movimentação zoo → modal soberano zoo.
-    // Lançamentos sem vínculo (histórico + manuais) seguem o fluxo atual.
-    if (lanc.movimentacao_rebanho_id) {
-      setZooModalIdFin(lanc.movimentacao_rebanho_id);
-      return;
-    }
-    const v2Like = {
-      id: lanc.id,
-      cliente_id: '',
-      fazenda_id: lanc.fazenda_id,
-      conta_bancaria_id: lanc.conta_bancaria_id || null,
-      data_competencia: lanc.data_realizacao || lanc.ano_mes?.replace('-', '-') + '-01' || '',
-      data_pagamento: lanc.data_pagamento || null,
-      valor: Math.abs(lanc.valor),
-      sinal: lanc.sinal ?? (lanc.valor >= 0 ? 1 : -1),
-      tipo_operacao: lanc.tipo_operacao || '2-Saídas',
-      status_transacao: lanc.status_transacao || 'realizado',
-      descricao: lanc.descricao || lanc.produto || '',
-      macro_custo: lanc.macro_custo || null,
-      grupo_custo: lanc.grupo_custo || null,
-      centro_custo: lanc.centro_custo || null,
-      subcentro: lanc.subcentro || null,
-      escopo_negocio: lanc.escopo_negocio || null,
-      observacao: lanc.observacao || lanc.obs || null,
-      ano_mes: lanc.ano_mes || '',
-      documento: null,
-      historico: null,
-      numero_documento: lanc.numero_documento || null,
-      favorecido_id: lanc.favorecido_id || null,
-      conta_destino_id: null,
-      origem_lancamento: lanc.origem_lancamento || 'importacao',
-      lote_importacao_id: lanc.lote_importacao_id || null,
-      forma_pagamento: lanc.forma_pagamento || null,
-      dados_pagamento: null,
-      cancelado: lanc.cancelado || false,
-      editado_manual: lanc.editado_manual || false,
-      created_at: '',
-      updated_at: '',
-    };
-    setEditingLancV2(v2Like);
+  /* EDITAR-SO-MUDADOS-01 — o Editar abre com a LINHA DO BANCO (era um lançamento montado à mão, sem vencimento, safra, tipo de documento… que o
+     Salvar gravava vazios); o do rebanho segue para o modal soberano do zoo */
+  const handleEditFromAuditoria = useCallback(async (lanc: FinanceiroLancamento) => {
+    const r = await lancamentoDoCaixaParaOEditar(lanc, lerLancamentoDaLinha);
+    if ('zoo' in r) { setZooModalIdFin(r.zoo); return; }
+    if ('erro' in r) { toast.error(r.erro); return; }
+    setEditingLancV2(r.lancamento);
     setEditDialogOpen(true);
   }, []);
 

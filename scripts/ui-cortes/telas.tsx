@@ -36,6 +36,7 @@ import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
 import * as CONC from './dados/conciliacao';
+import * as ESP from './dados/espelho';
 import type { SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { volumeNJ } from './dados/volumeNJ';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
@@ -48,6 +49,9 @@ import { ValorInexistente } from '@/components/shared/ValorInexistente';
 import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, SEM_CADASTRO, USO } from './dados/fornecedores';
 import { CasarBlocoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { CasarComBancoModal } from '@/components/financeiro-v2/CasarComBancoModal';
+import { SugestoesCasarModal } from '@/components/financeiro-v2/SugestoesCasarModal';
+import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
+import type { CandidatoSugestao, Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { DialogoDesfazerCompromisso } from '@/components/compra/DialogoDesfazerCompromisso';
 import { DialogoAtualizarCompromisso } from '@/components/compra/DialogoAtualizarCompromisso';
@@ -85,6 +89,8 @@ import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
 import { V2PlanejamentoVisaoGeral } from '@/v2/pages/V2PlanejamentoVisaoGeral';
 import V2FechamentoPeriodo from '@/v2/pages/V2FechamentoPeriodo';
 import * as META from './dados/metaP109';
+import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
+import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
 
 /* Gabriel 29/10 08:26 — os parcelados do LR na nota já lançada (SINTÉTICOS): as 4 do sistema e a prévia da `fn_nota_completar` como o banco a faz */
 const DESCRICOES_DO_LR: Record<string, string[]> = {
@@ -195,6 +201,19 @@ const Casca = ({ children }: { children?: React.ReactNode }) => (
   <div style={{ display: 'flex', height: '100vh' }}><Lateral />
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}><div style={{ height: BARRA, flexShrink: 0, background: BARRA === 32 ? '#1e3a5f' : '#e9edf2' }} />
       <div data-casca="" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{children}</div></div></div>);
+/* P153 — a resposta da `fn_conciliacao_historico_buscar` na bancada, SINTÉTICA no pior caso: 8 achados (o quadro mostra 6 e rola),
+   textos maiores que as colunas, valores no teto, e o fornecedor que o banco não escreve (a faixa amarela). */
+const HISTORICO_ACHADOS = {
+  total: 8,
+  achados: Array.from({ length: 8 }, (_, i) => ({
+    lancamento_id: `h${i}`, data_pagamento: `2031-0${(i % 9) + 1}-1${i % 9}`, banco: 'PAGAMENTO DE BOLETO - FORNECEDOR SINTÉTICO COM O NOME BEM COMPRIDO',
+    descricao: 'Compra de Insumos para Suplementação do Rebanho de Engorda · Pedido 4521', fornecedor_id: 'f1',
+    fornecedor: 'Cooperativa Agropecuária Exemplo dos Produtores Rurais do Vale Ltda', plano_conta_id: 'p1', centro: 'Pecuária Engorda',
+    subcentro: 'Nutrição Engorda Suplementação Mineral e Proteinada', fazenda_id: 'fz1', fazenda: 'Fazenda Sintética do Exemplo Comprido',
+    conta_bancaria_id: 'bb', conta: 'Banco Exemplo com o Nome Comprido · Conta Movimento', valor: -99999999.99, onde: ['banco'],
+  })),
+  resumo: { fornecedor_id: 'f1', fornecedor: 'Cooperativa Agropecuária Exemplo dos Produtores Rurais do Vale Ltda', vezes: 8, desde: '2031-01-10' },
+};
 const montar = (n: React.ReactNode) => raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca>{n}</Casca></MemoryRouter></QueryClientProvider>);
 /* P79 — a tela cujo filtro mora na URL (`useFiltroUrl` lê `window.location`) monta no roteador do NAVEGADOR, como no app: no de memória
    dois cliques seguidos não se somariam */
@@ -711,6 +730,37 @@ if (tela === 'mesclar') {
     montar(<DialogoDesfazerCompromisso operacaoId={OP} compromissoId="c1" versao={19} identidade={IDENT} rol={ROL} tipoOperacao="abate"
       onFechar={() => {}} onDesfeito={() => {}} onAbrirLancamento={() => {}} rpc={rpc as any} />);
   }
+} else if (tela === 'estacao') {
+  /* P153 — a estação "Conciliar movimento do extrato" (do Palco do mês) com o "Procurar no histórico": sem candidato (o caso que abriu
+     a frente), SINTÉTICO. `&v=semnome`: o banco não trouxe o nome (Bradesco "PIX ENVIADO" — D1: o campo vazio e a frase). */
+  g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_conciliacao_historico_buscar' ? HISTORICO_ACHADOS
+    : fn === 'fn_candidatos_conciliacao' ? [] : null };
+  montar(<EstacaoConciliar contaBancariaId="bb" aoFechar={() => {}} aoMudar={() => {}}
+    movimento={{ id: 'ext-1', data_movimento: '2031-10-05', descricao: v === 'semnome' ? 'PIX ENVIADO'
+      : 'PAGAMENTO DE BOLETO - FORNECEDOR SINTÉTICO COM O NOME BEM COMPRIDO DE EXEMPLO AGROPECUÁRIA LTDA', documento: null, valor: -99999999.99,
+      valorConciliado: 0, valorAberto: -99999999.99, situacao: 'nao_conciliado', lancamentoId: null, vinculos: 0,
+      lancamentoDescricao: null, lancamentoFavorecido: null }} />);
+} else if (tela === 'sugestoes-casar') {
+  /* P159c — "Sugestões para casar" (mock `mock-sugestoes-casar-v1.html`), SINTÉTICO no pior caso: o nome da conta comprido no título, o
+     histórico do banco com a moldura ("Pagamento de Boleto - NOME"), o valor no teto, a sugestão de 1, a soma de 3 com as filhas, a de
+     valor diferente e a vencida de mês anterior, com textos maiores que as colunas. `&v=vazio`: nenhuma sugestão. */
+  const NOME_F = 'Fornecedor Sintético com o Nome Bem Comprido de Exemplo Agropecuária Ltda';
+  const cs = (id: string, venc: string, valor: number, o: Partial<CandidatoSugestao> = {}): CandidatoSugestao => ({ lancamento_id: id, valor_assinado: valor,
+    data_vencimento: venc, competencia: venc.slice(0, 8) + '01', descricao: 'Bainha para Inseminação Artificial · Bovinos e Novilhas do Lote Sintético 2/3',
+    fornecedor: NOME_F, favorecido_id: 'f1', status_transacao: 'programado', ja_conciliado: false, ...o });
+  const SUGS: Sugestao[] = v === 'vazio' ? [] : [
+    { tipo: 'mesmo_valor_nome', motivo: 'mesmo valor · nome', diasDiff: 4, vencido: false, valorDiferente: false,
+      lancamentos: [cs('u1', '2031-10-09', -99999999.99)] },
+    { tipo: 'soma', motivo: 'soma de 3 · fornecedores diferentes', diasDiff: 26, vencido: true, valorDiferente: false,
+      lancamentos: [cs('s1', '2031-09-12', -33333333.33, { status_transacao: 'previsto' }), cs('s2', '2031-10-01', -33333333.33, { fornecedor: 'Outro Fornecedor Sintético' }),
+        cs('s3', '2031-10-15', -33333333.33, { status_transacao: 'agendado' })] },
+    { tipo: 'nome_valor', motivo: 'nome · valor diferente · vencido set', diasDiff: 23, vencido: true, valorDiferente: true,
+      lancamentos: [cs('n1', '2031-09-12', -12345678.9)] },
+  ];
+  g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_conciliacao_historico_buscar' ? HISTORICO_ACHADOS : null };
+  montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} sugestoes={SUGS} clienteId="cli" onCriarIgual={() => {}}
+    nomeConta="Banco Exemplo com o Nome Comprido · Conta Movimento Agrícola 0000-0 / 00000-0 Sintética"
+    extrato={{ data: '2031-10-05', historico: `PAGAMENTO DE BOLETO - ${NOME_F.toUpperCase()}`, valor: -99999999.99 }} />);
 } else if (tela === 'casar-1x1') {
   /* UI-SEM-CORTE-02 — o Casar com o banco 1:1 (o rendimento de R$ 0,01 da Vera, sintetico): o banco simulado diz que nao fecha. */
   if (v === 'pos') {
@@ -841,10 +891,14 @@ if (tela === 'mesclar') {
       : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : CONC.DOCUMENTOS) : [],
     rpc: (fn: string, a: any) => fn === 'fn_conciliacao_resumo_mes'
       ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null, v))
-      : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }] : null,
+      : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }]
+      /* P159a — o Espelho da conta escolhida (`dados/espelho.ts`): o Casar lançamentos (Extrato, Sistema, Evolução) e a Conferência */
+      : fn === 'fn_extratos_espelhados' ? ESP.espelho(v) : null,
   };
   g.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
-  if (tela === 'conciliacao') montar(<div className="h-full"><ConciliacaoBancariaTab initialAno="2031" initialMes="09" /></div>);
+  /* P159b — montada COMO NO APP (`V2Index`, seção do app-shell: coluna flex que dá a altura até a lista). Num bloco solto quem rolava era
+     a moldura da bancada, e o cabeçalho da Evolução "não ficava preso" só aqui. */
+  if (tela === 'conciliacao') montar(<div className="flex h-full min-h-0 w-full min-w-0 flex-col"><ConciliacaoBancariaTab initialAno="2031" initialMes="09" /></div>);
   else montar(<ExtratoDoSistemaDialog aberto clienteId="cli" contaId="cc1" contaNome={CONC.CONTAS[0].nome_conta} anoMes="2031-09" onFechar={() => {}} />);
 } else if (tela === 'conciliar') {
   /* CONC-SEM-TRAVA-01 (tela) — o modal "Conciliar" no formato da resposta de `fn_conc_simular_diferenca` provada no caso real (OC
@@ -1083,6 +1137,16 @@ if (tela === 'mesclar') {
     raiz.render(<TrocarFornecedorDialog clienteId="cli" ids={['x']} onClose={() => {}} />);
   };
   void montarTroca();
+} else if (tela === 'plano-contas') {
+  /* P172 — Cadastros › Plano de Contas (dado SINTÉTICO, `dados/planoContas.ts`); `&perfil=cliente` = o cliente (só leitura, sem ações) */
+  if (q.get('perfil') === 'cliente') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Bancada' }, clientes: [{ id: 'cli', nome: 'Cliente Bancada' }],
+    isAdmin: false, perfil: 'financeiro', loading: false, setClienteAtual: () => {}, resumoClientes: false, setResumoClientes: () => {} };
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'financeiro_plano_contas' ? PLANO_DE_CONTAS.filter((x) => e.eq.ativo !== true || x.ativo)
+      : t === 'financeiro_dividendos' ? DIVIDENDOS_DO_PLANO : [],
+    rpc: (fn: string) => fn.startsWith('fn_subcentro_cliente_') ? { antes: { lancamentos_vivos: 12 }, depois: {}, recusa: null, lancamentos_tocados: 7 } : null,
+  };
+  montar(<FinV2PlanoContasTab onAbrirDividendos={() => {}} />);
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */

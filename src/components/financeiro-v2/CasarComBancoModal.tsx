@@ -27,6 +27,7 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
+import type { ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 import { ConciliarDiferencaModal } from '@/components/conciliacao/ConciliarDiferencaModal';
 import { MOTIVO_CASAR_LABEL } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
@@ -97,14 +98,23 @@ interface Props {
   /** FIN-POS-FIXADO-01b: com o cliente, o modal reconhece a parcela de contrato pós-fixado com juros estimado entre os levados e
    *  casa pelo dono (`fn_financiamento_parcela_pos_pagar`), que grava o juro real. Sem ele, o caminho de sempre. */
   clienteId?: string | null;
+  /** P153 — o "Criar igual" do "Procurar no histórico": abre o Criar de hoje JÁ com o modelo (fornecedor, subcentro, fazenda,
+   *  descrição) assim que a simulação do vazio chega — o lançamento novo entra nos levados e o Conciliar é o de sempre. */
+  modelo?: ModeloDoHistorico | null;
 }
 
-export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta, contaBancariaId, onConciliado, clienteId }: Props) {
+export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta, contaBancariaId, onConciliado, clienteId, modelo }: Props) {
   const [levados, setLevados] = useState<Levado[]>([]);
   const [sim, setSim] = useState<Simulacao | null>(null);
   const [erroRodape, setErroRodape] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
   const [criando, setCriando] = useState(false);
+  /* P153 — o modelo abre o Criar UMA vez por abertura, depois da 1ª simulação (o `aoCriado` precisa dela para o que falta) */
+  const modeloAberto = useRef<ModeloDoHistorico | null>(null);
+  useEffect(() => {
+    if (!open) { modeloAberto.current = null; return; }
+    if (modelo && sim && modeloAberto.current !== modelo) { modeloAberto.current = modelo; setCriando(true); }
+  }, [open, modelo, sim]);
   /* CONC-SEM-TRAVA-01 (tela): diferenca de valor nao trava mais o Conciliar — abre o modal "Conciliar" com as tres saidas */
   const [comDiferenca, setComDiferenca] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -477,6 +487,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
           }}
           contaBancariaId={contaBancariaId}
           valorSugerido={sim ? Math.abs(sim.diferenca) : undefined}
+          modelo={modelo ?? undefined}
           semVinculo
           aoFechar={() => setCriando(false)}
           aoCriado={async (idCriado) => {

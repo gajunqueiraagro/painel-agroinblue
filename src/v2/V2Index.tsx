@@ -1107,7 +1107,7 @@ export default function V2Index() {
       <DividendosTab />
     );
     if (section === 'plano-contas') return (
-      <FinV2PlanoContasTab />
+      <FinV2PlanoContasTab onAbrirDividendos={() => setSection('dividendos')} />
     );
     if (section === 'safras') return (
       <FinV2SafrasTab />

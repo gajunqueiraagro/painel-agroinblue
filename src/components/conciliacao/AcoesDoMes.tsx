@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeftRight, LayoutList, ListPlus } from 'lucide-react';
@@ -37,7 +38,7 @@ import { useTransferenciasSugeridas } from '@/hooks/useTransferenciasSugeridas';
  * ⚠ O QUE OS BOTÕES FAZEM NÃO MUDOU NESTE PR — nem o rótulo, nem a régua, nem o momento de
  * gravar. Separar o passo é uma frente; mudar o que o passo faz é a seguinte.
  */
-export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }: {
+export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar, curto = false }: {
   clienteId: string | null;
   contaId: string | null;
   contaNome: string;
@@ -45,6 +46,9 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
   mes: number;
   /** O que recarregar depois de gravar — a aba que monta decide. */
   aoMudar?: () => void | Promise<void>;
+  /** P159a — os rótulos curtos da barra de UMA linha do Casar lançamentos ("⇄ Transferências", "Criar em lote (N)"); o nome inteiro
+   *  vai no `title`. Os botões, as funções e os contadores são os mesmos. Sem a prop (o Importar), os rótulos de sempre. */
+  curto?: boolean;
 }) {
   const [verPalco, setVerPalco] = useState(false);
   const [verConciliarMes, setVerConciliarMes] = useState(false);
@@ -85,10 +89,10 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
       <Button type="button" variant="outline" size="sm"
         className="h-6 gap-1 px-2 text-[10px]"
         disabled={!clienteId}
-        title="Saída num banco e entrada no outro, do mesmo valor, em até 1 dia. Confirme antes de criar os lançamentos em lote."
+        title={`${curto ? 'Transferências entre contas. ' : ''}Saída num banco e entrada no outro, do mesmo valor, em até 1 dia. Confirme antes de criar os lançamentos em lote.`}
         onClick={() => setVerTransferencias(true)}>
         <ArrowLeftRight className="h-3 w-3" />
-        Transferências entre contas{nTransf > 0 ? ` (${nTransf})` : ''}
+        {curto ? 'Transferências' : 'Transferências entre contas'}{nTransf > 0 ? ` (${nTransf})` : ''}
       </Button>
       <TransferenciasEntreContasModal
         open={verTransferencias}
@@ -106,11 +110,11 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
   );
 
   if (movimentos.length === 0) {
-    return nTransf > 0 ? <div className="flex flex-wrap items-center gap-2">{botaoTransferencias}</div> : null;
+    return nTransf > 0 ? <div className={cn('flex items-center gap-2', curto ? 'flex-nowrap' : 'flex-wrap')}>{botaoTransferencias}</div> : null;
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={cn('flex items-center gap-2', curto ? 'flex-nowrap' : 'flex-wrap')}>
       {botaoTransferencias}
 
       {/* ⚠ O LAÇO MORREU — [CONCIL-MES-01] (130). "Lançar todos os sem vínculo" criava um cru
@@ -142,7 +146,7 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
             "Criar lançamentos do que sobrou". Só o rótulo de fora seguia prometendo o botão antigo
             — o que fazia o próprio Gabriel esperar que apertar conciliasse o mês.
             ⚠ O CONTADOR NÃO MUDA: ele continua sendo os movimentos sem vínculo. */}
-        Criar lançamentos em lote{semVinculo > 0 ? ` (${semVinculo})` : ''}
+        {curto ? 'Criar em lote' : 'Criar lançamentos em lote'}{semVinculo > 0 ? ` (${semVinculo})` : ''}
       </Button>
 
       {/* ⚠ ESTE SÓ MOSTRA; o outro GRAVA, e é o que merece o verbo — 130. */}

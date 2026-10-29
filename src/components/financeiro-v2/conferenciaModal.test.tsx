@@ -1,6 +1,8 @@
 /**
- * PR-CONC-CONFERENCIA-MODAL-01 — a Conferência abre num modal largo, com uma régua só (9,5px desde o fix1, 18px, uma
- * linha), uma informação por coluna, e o resumo do corpo vira tabela.
+ * PR-CONC-CONFERENCIA-MODAL-01 — a Conferência abre num modal largo, com uma régua só, uma informação por coluna.
+ * P159a (CONC-TELAS-01, mock `mock-conferencia-v1.html` aprovado 28/10): a régua passou a 8 colunas fixas (Banco · histórico ·
+ * Valor · ✓ · Sistema · Descrição · Favorecido · Subcentro · ⋯), 10,5px e linha de 19px; o "Só não conciliados" virou os chips do
+ * cabeçalho; o resumo do corpo virou UMA faixa de uma linha; o histórico do banco aparece limpo (hora na frente).
  * fix1 — a coluna de ações vira ALÇA + "⋯" (o `DropdownMenu` da casa), com as mesmas ações de antes no menu.
  *
  * ⚠ OS NÚMEROS SÃO OS DO PRINT DO GABRIEL (NJ · Banco do Brasil · set/26): o fechamento "diferença -134.613,84" saía
@@ -146,7 +148,8 @@ function montar(props: Partial<React.ComponentProps<typeof EspelhoConciliacaoTab
 }
 
 const botaoSubAba = (nome: string) => screen.getByRole('button', { name: nome });
-const ativa = (nome: string) => botaoSubAba(nome).className.includes('border-primary');
+/* P159a: a fileira é o `Segmentado` da casa — a escolhida em navy */
+const ativa = (nome: string) => botaoSubAba(nome).className.includes('bg-primary text-primary-foreground');
 
 async function abrirConferencia() {
   montar();
@@ -155,7 +158,16 @@ async function abrirConferencia() {
   return screen.findByTestId('modal-conferencia');
 }
 const tabelaDaMesa = (modal: HTMLElement) =>
-  [...modal.querySelectorAll('table')].find((t) => t.textContent?.includes('Banco (OFX)'))!;
+  [...modal.querySelectorAll('table')].find((t) => t.textContent?.includes('Nome do extrato'))!;
+/* o histórico do banco aparece LIMPO (`historicoDoBanco`): "Pix - Agendamento - 04/09 05:35 NOME" de 04/09 → "Pix Agendamento · NOME" */
+const CASADA = 'Pix Agendamento · ANTONIO PERES NETO';
+const linhaSemPar = (modal: HTMLElement) => modal.querySelector<HTMLElement>('tr[data-extrato-sem-par]')!;
+const linhaDoCandidatoOuNada = (modal: HTMLElement) => modal.querySelector('[data-status="programado"]')?.closest('tr') ?? null;
+const linhaDoCandidato = (modal: HTMLElement): HTMLElement => {
+  const tr = modal.querySelector('[data-status="programado"]')?.closest('tr');
+  if (!(tr instanceof HTMLElement)) throw new Error('linha do candidato não encontrada');
+  return tr;
+};
 
 describe('a sub-aba inicial e o modal', () => {
   it('nasce em "Extrato (banco)", sem modal; clicar "Conferência" abre o Dialog com conta e mês', async () => {
@@ -195,68 +207,81 @@ describe('a sub-aba inicial e o modal', () => {
 });
 
 describe('a mesa dentro do modal — uma régua só', () => {
-  it('o fechamento mostra "diferença -134.613,84" INTEIRA, em descrição + status + ações (colSpan 3), numa célula que não corta', async () => {
+  it('o fechamento: "diferença -134.613,84 (1 sem par)" INTEIRA, nas 4 colunas do sistema, numa célula que não corta; o saldo do banco no fim do dia', async () => {
     const modal = await abrirConferencia();
-    const dif = within(modal).getByText('diferença -134.613,84');
+    const dif = within(modal).getByText('diferença -134.613,84 (1 sem par)');
     const td = dif.closest('td')!;
-    expect(td.colSpan).toBe(3);
+    expect(td.colSpan).toBe(4);
     expect(td.className).toContain('whitespace-nowrap');
     expect(td.className).not.toContain('text-ellipsis');
+    /* 05/09: inicial 177.290,71 − 6.648,50 (04/09) − 134.613,84 = 36.028,37 — lido da Evolução do saldo, nada somado aqui */
+    const fech = [...modal.querySelectorAll<HTMLElement>('tr[data-fechamento]')].map((tr) => within(tr).getByTestId('fechamento-saldo-banco').textContent);
+    expect(fech).toEqual(['170.642,21', '36.028,37']);
   });
 
-  it('toda linha tem 18px, 11 colunas e a tabela inteira a 9,5px, sem célula de 10px ou mais', async () => {
+  /* P159e (Gabriel 29/10): a régua PADRÃO — toda linha 19px (o dia e o fechamento também; eram 20), corpo 10px (era 10,5); o EXTRATO é a
+     coluna que fica com o resto e o sistema cede (Descrição 180 · Favorecido 140 · Subcentro 140) */
+  it('8 colunas em toda linha, linha de 18px (o dia e o fechamento 22, negrito), 10px; o extrato com o resto; abaixo de 9,5 só o selo', async () => {
     const modal = await abrirConferencia();
-    const linhas = [...tabelaDaMesa(modal).querySelectorAll('tr')];
-    expect(linhas.length).toBeGreaterThanOrEqual(5); // cabeçalho, dia, extrato, candidato, fechamento
+    const tabela = tabelaDaMesa(modal);
+    expect([...tabela.querySelectorAll('col')].map((c) => c.style.width)).toEqual(['', '96px', '20px', '96px', '180px', '140px', '140px', '22px']);
+    expect(tabela.style.minWidth).toBe('944px');
+    expect(tabela.className).toContain('text-[10px]');
+    expect(tabela.querySelector('thead th')?.textContent).toBe('Nome do extrato');
+    const linhas = [...tabela.querySelectorAll('tbody tr')];
+    expect(linhas.length).toBeGreaterThanOrEqual(6); // 2 dias + fechamentos, extrato sem par, casada, candidato
     for (const tr of linhas) {
-      expect(tr.className).toContain('h-[18px]');
-      expect([...tr.children].reduce((a, c) => a + ((c as HTMLTableCellElement).colSpan || 1), 0)).toBe(11);
+      expect([...tr.children].reduce((a, c) => a + (c instanceof HTMLTableCellElement ? c.colSpan || 1 : 1), 0)).toBe(8);
+      const destaque = tr.hasAttribute('data-dia') || tr.hasAttribute('data-fechamento');
+      for (const td of [...tr.children]) expect(String(td.className)).toMatch(destaque ? /h-\[22px\]/ : /h-\[18px\]/);
     }
-    /* Toda célula, span e rótulo com texto; o gatilho do "⋯" é o `Button` da casa (que carrega `text-[12px]`) e só tem
-       ícone — por isso ele fica fora da varredura e se prova à parte que não tem texto. */
-    const comTexto = [...tabelaDaMesa(modal).querySelectorAll('th, td, span, label')];
-    expect(comTexto.filter((el) => /text-\[1[0-9]px\]/.test(String(el.className)))).toEqual([]);
-    /* abaixo de 9,5 SÓ o selo de status (exceção do fix2): nenhuma outra célula ou span leva fonte menor */
+    const comTexto = [...tabela.querySelectorAll('td, span, label')];
+    /* nada acima de 10px no corpo (o 10,5 do P159a saiu) */
+    expect(comTexto.filter((el) => /text-\[(10\.[1-9]|1[1-9]|[2-9]\d)(\.\d)?px\]/.test(String(el.className)))).toEqual([]);
+    /* abaixo de 9,5 SÓ o selo de status (exceção do fix2, `data-status`) */
     const abaixoDoPiso = comTexto.filter((el) => /text-\[(?:[0-8]|9)(?:\.[0-4])?px\]/.test(String(el.className)));
-    expect(abaixoDoPiso.every((el) => el.closest('td[data-status]'))).toBe(true);
-    expect(tabelaDaMesa(modal).className).toContain('text-[9.5px]');
-    for (const b of within(tabelaDaMesa(modal)).getAllByRole('button', { name: 'Ações da linha' })) expect(b.textContent).toBe('');
+    expect(abaixoDoPiso.every((el) => el.closest('[data-status]'))).toBe(true);
+    for (const b of within(tabela).getAllByRole('button', { name: 'Ações da linha' })) expect(b.textContent).toBe('');
   });
 
-  it('o candidato: vencimento e status em colunas próprias; o texto guarda descrição · fornecedor · subcentro', async () => {
+  it('o candidato: Descrição · Favorecido · Subcentro em colunas; o status é um selo no fim do Subcentro (só no não conciliado)', async () => {
     const modal = await abrirConferencia();
-    const status = modal.querySelector('td[data-status="programado"]')!;
-    expect(status.textContent).toBe('Programado');
-    /* programado é SÓ TEXTO na paleta: nada de fundo */
-    expect(status.innerHTML).not.toMatch(/\bbg-/);
-    const linha = status.closest('tr')!;
-    const celulas = [...linha.children];
-    const texto = celulas[8];
-    expect(texto.textContent).toContain('Folha de Pagamento');
-    expect(texto.textContent).toContain('Jonatas Barbosa Batista');
-    expect(texto.textContent).toContain('Salários e Encargos');
-    expect(texto.textContent).not.toContain('Programado');
-    expect(texto.textContent).not.toContain('05/09');
-    expect(celulas[7].textContent).toBe('05/09');
-    expect(celulas[7].getAttribute('title')).toBe('vencimento');
+    const selo = modal.querySelector('[data-status="programado"]')!;
+    expect(selo.textContent).toBe('Programado');
+    expect(selo.innerHTML).not.toMatch(/\bbg-/); // programado é SÓ TEXTO na paleta
+    const linha = linhaDoCandidato(modal);
+    /* a Descrição do candidato começa pela marcação e a alça (o lugar fixo de 24px); o texto é o `truncate` */
+    expect(within(linha).getByTestId('conf-descricao').querySelector('.truncate')!.textContent).toBe('Folha de Pagamento');
+    expect(within(linha).getByLabelText('Marcar candidato')).toBeInTheDocument();
+    expect(within(linha).getByTestId('conf-favorecido').textContent).toBe('Jonatas Barbosa Batista');
+    expect(within(linha).getByTestId('conf-subcentro').textContent).toBe('Salários e Encargos');
+    expect(selo.closest('td')).toBe(within(linha).getByTestId('conf-subcentro').closest('td'));
+    /* a casada não leva selo: o ✓ do meio diz */
+    const casada = within(modal).getByText(CASADA).closest('tr')!;
+    expect(casada.querySelector('[data-status]')).toBeNull();
+    expect(within(casada).getByTestId('sinal-do-extrato').textContent).toBe('✓');
+  });
+
+  it('o histórico do banco limpo: a hora na frente, sem o "dd/mm" do dia; o texto inteiro do banco no title', async () => {
+    const modal = await abrirConferencia();
+    const span = within(modal).getByText(CASADA);
+    const td = span.closest('td')!;
+    expect(within(td).getByTestId('conf-hora').textContent).toBe('05:35');
+    expect(td.getAttribute('title')).toBe(`${CASADA}\nPix - Agendamento - 04/09 05:35 ANTONIO PERES NETO`);
   });
 });
 
-describe('o resumo do corpo vira tabela', () => {
-  it('Banco (OFX) | Sistema | Diferença com divisores, e o "Sem par" com Qtde e Valor', async () => {
+describe('P159a — o resumo do corpo vira UMA faixa de uma linha', () => {
+  it('Banco · Sistema · Diferença (saídas · entradas) e o Sem par com quantidade e valor, os números do dono', async () => {
     montar();
-    const resumo = await screen.findByTestId('resumo-espelho');
-    const [tot, semPar] = [...resumo.querySelectorAll('table')];
-    expect([...tot.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['', 'Banco (OFX)', 'Sistema', 'Diferença']);
-    expect(tot.querySelector('thead tr')!.className).toContain('bg-primary');
-    /* PR-CONC-SALDO-UMA-REGUA-02: 7 divisores — a linha "Retido" (sempre presente) tem o seu no rótulo. */
-    expect([...tot.querySelectorAll('tbody td')].filter((td) => td.className.includes('border-r')).length).toBe(7);
-    expect(within(tot).getByText('-141.262,34')).toBeInTheDocument(); // saídas do banco, do dono
-    expect(within(tot).getByText('-134.613,84')).toBeInTheDocument(); // a diferença por lado, do dono
-    expect(within(tot).getByTestId('topo-retido').textContent).toBe('—');
-    expect([...semPar.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['Sem par', 'Qtde', 'Valor']);
-    /* O valor dos extratos sem par, que a tela nunca soube calcular ("—"), agora vem do dono. */
-    expect(within(semPar).getByText('Extratos').closest('tr')!.textContent).toBe('Extratos1-134.613,84');
+    const faixa = await screen.findByTestId('resumo-espelho');
+    expect(faixa.querySelector('table')).toBeNull();
+    expect(faixa.className).toContain('whitespace-nowrap');
+    expect(within(faixa).getByTestId('topo-saidas-banco').textContent).toBe('-141.262,34'); // saídas do banco, do dono
+    expect(within(faixa).getByTestId('topo-dif-saidas').textContent).toBe('-134.613,84'); // a diferença por lado, do dono
+    expect(within(faixa).getByTestId('topo-sem-par-extratos-qtde').textContent).toBe('1');
+    expect(within(faixa).getByTestId('topo-sem-par-extratos-valor').textContent).toBe('-134.613,84');
+    expect(within(faixa).getByTestId('topo-retido').textContent).toBe('—');
   });
 });
 
@@ -270,13 +295,50 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
     texto: i.textContent, desabilitado: i.hasAttribute('data-disabled'),
   }));
 
+  /* P159d (Gabriel 29/10) — as cores: o dia é a faixa cinza-azulada, o fechamento cinza bem claro com filete em cima e embaixo; o filete e o
+     respiro são sombras internas (não ocupam lugar). P159e: as duas linhas na régua padrão (19px) */
+  it('P159d: as cores do dia e do fechamento; as duas a 22px em negrito (P159e, o mock)', async () => {
+    const modal = await abrirConferencia();
+    const mesa = tabelaDaMesa(modal);
+    const dia = mesa.querySelector('tr[data-dia]');
+    const fech = mesa.querySelector('tr[data-fechamento]');
+    if (!(dia instanceof HTMLElement) || !(fech instanceof HTMLElement)) throw new Error('sem o dia ou o fechamento');
+    expect(dia.className).toContain('bg-[#e4e9f0]');
+    const tdDia = dia.querySelector('td');
+    expect(tdDia?.className).toContain('h-[22px]');
+    expect(tdDia?.className).toContain('font-bold');
+    expect(tdDia?.textContent).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+    expect(tdDia?.className).toContain('text-[10px]');
+    expect(tdDia?.className).toContain('shadow-[inset_0_2px_0_hsl(var(--background))]');
+    expect(fech.className).toContain('bg-[#f3f5f8]');
+    expect(fech.className).toContain('[&>td]:shadow-[inset_0_1px_0_#cfd6df,inset_0_-1px_0_#cfd6df]');
+    expect(fech.className).toContain('border-b border-border');
+    for (const td of fech.querySelectorAll('td')) expect(td.className).toContain('h-[22px]');
+  });
+
+  /* P159e — SEM RECUO: a caixinha e a alça coladas à esquerda; sem caixinha, nenhum lugar vazio; a hora só existe quando o banco a trouxe */
+  it('P159e: o nome do extrato sem recuo — nenhum lugar vazio de 24/28px antes do texto', async () => {
+    const modal = await abrirConferencia();
+    const mesa = tabelaDaMesa(modal);
+    expect(mesa.querySelectorAll('.w-\\[24px\\], .w-\\[28px\\]')).toHaveLength(0);
+    for (const h of mesa.querySelectorAll('[data-testid="conf-hora"]')) expect(h.textContent).toMatch(/^\d{2}:\d{2}$/);
+  });
+
   it('toda linha de registro tem a célula de ações com o "⋯"; o extrato sem par tem também a alça', async () => {
     const modal = await abrirConferencia();
     const acoes = [...tabelaDaMesa(modal).querySelectorAll('[data-testid="acoes-da-linha"]')];
     expect(acoes.length).toBe(3); // extrato sem par, casado, candidato
     for (const td of acoes) expect(within(td as HTMLElement).getByRole('button', { name: 'Ações da linha' })).toBeInTheDocument();
-    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    const semPar = linhaSemPar(modal);
     expect(within(semPar).getByLabelText('Arrastar lançamento')).toBeInTheDocument();
+    /* P159a: o sem par em destaque, com os dois botões na própria linha. P159d (só cor): o destaque é o traço âmbar à esquerda,
+       a linha é branca (sem o fundo amarelo) e o "sem lançamento" é âmbar */
+    expect(semPar.className).not.toContain('bg-amber-50');
+    expect(semPar.className).toContain('bg-background');
+    expect(semPar.className).toContain('[&>td:first-child]:shadow-[inset_3px_0_0_#d97706]');
+    expect(within(semPar).getByTestId('conf-sem-lancamento').className).toContain('text-[#d97706]');
+    expect(within(semPar).getByTestId('conf-sem-lancamento').textContent).toBe('sem lançamento ·SugestõesCriar');
+    expect(within(semPar).getByTestId('sem-par-sugestoes')).toBeDisabled();
     /* nenhum link por extenso sobrou na mesa */
     expect(within(tabelaDaMesa(modal)).queryByText('criar')).toBeNull();
     expect(within(tabelaDaMesa(modal)).queryByText('desconciliar')).toBeNull();
@@ -286,7 +348,7 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
      a folha de -3.407,89 do Jonatas — nem valor, nem soma, nem nome: N = 0, desabilitado e dizendo por quê. */
   it('extrato sem par: o menu tem Ver sugestões (0) desabilitado com o motivo, Criar, Criar transferência (P139) e Ignorar', async () => {
     const modal = await abrirConferencia();
-    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    const semPar = linhaSemPar(modal);
     expect(itens(await abrirMenu(semPar))).toEqual([
       { texto: 'Ver sugestões (0)nenhuma sugestão para este movimento', desabilitado: true },
       { texto: 'Criar', desabilitado: false }, { texto: 'Criar transferência', desabilitado: false }, { texto: 'Ignorar', desabilitado: false },
@@ -296,7 +358,7 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
   it('P139: "Criar transferência" abre o diálogo por cima e pede a prévia à porta do banco; marcar só o sem par oferece o lote', async () => {
     fixture.chamadas.length = 0;
     const modal = await abrirConferencia();
-    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    const semPar = linhaSemPar(modal);
     fireEvent.click(within(await abrirMenu(semPar)).getByText('Criar transferência'));
     expect(await screen.findByTestId('modal-criar-transferencia')).toBeInTheDocument();
     await waitFor(() => expect(fixture.chamadas.some((c) => c.fn === 'fn_transferencia_do_extrato')).toBe(true));
@@ -312,7 +374,7 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
       descricao: 'Compra de gado', fornecedor: 'Fazenda Boa Vista',
     }] };
     const modal = await abrirConferencia();
-    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    const semPar = linhaSemPar(modal);
     const menu = await abrirMenu(semPar);
     expect(itens(menu)[0]).toEqual({ texto: 'Ver sugestões (1)', desabilitado: false });
     fireEvent.click(within(menu).getByText('Ver sugestões (1)'));
@@ -324,7 +386,7 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
 
   it('linha casada: o menu tem Abrir e Desconciliar', async () => {
     const modal = await abrirConferencia();
-    const casada = within(modal).getByText('Pix - Agendamento - 04/09 05:35 ANTONIO PERES NETO').closest('tr')!;
+    const casada = within(modal).getByText(CASADA).closest('tr')!;
     expect(itens(await abrirMenu(casada))).toEqual([
       { texto: 'Abrir', desabilitado: false }, { texto: 'Desconciliar', desabilitado: false },
     ]);
@@ -332,20 +394,22 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
 
   it('candidato: o menu tem Abrir', async () => {
     const modal = await abrirConferencia();
-    const cand = modal.querySelector('td[data-status="programado"]')!.closest('tr')! as HTMLElement;
+    const cand = linhaDoCandidato(modal);
     expect(itens(await abrirMenu(cand))).toEqual([{ texto: 'Abrir', desabilitado: false }]);
   });
 });
 
 describe('fix1 — a sub-aba Sistema ganha a coluna Fornecedor', () => {
-  it('cabeçalho Data · Descrição · Fornecedor · Centro/Subcentro · Valor · Saldo · Status, e o fornecedor preenchido', async () => {
+  it('cabeçalho Data · Descrição · Fornecedor · Centro · Subcentro · Entradas · Saídas · Saldo, e o fornecedor preenchido', async () => {
     montar();
     await screen.findByTestId('resumo-espelho');
     fireEvent.click(botaoSubAba('Sistema'));
     const cab = await screen.findByText('Fornecedor');
     expect([...cab.parentElement!.children].map((s) => s.textContent))
       /* P141: o rótulo do mock aprovado, "Centro / Subcentro" (a aba e o modal grande são o mesmo componente) */
-      .toEqual(['Data', 'Descrição', 'Fornecedor', 'Centro / Subcentro', 'Valor', 'Saldo', 'Status']);
+      /* P159b (mock): "Centro · Subcentro" e, no lugar do Status, a coluna de 22px do sinal (✓ / ○ / ⇄) */
+      /* P159e: o dinheiro em três colunas (Entradas · Saídas · Saldo) */
+      .toEqual(['Data', 'Descrição', 'Fornecedor', 'Centro · Subcentro', 'Entradas', 'Saídas', 'Saldo', '']);
     const fornecedores = screen.getAllByTestId('sistema-fornecedor');
     expect(fornecedores.map((s) => s.textContent)).toEqual(['Antonio Peres Neto']);
     expect(fornecedores[0].getAttribute('title')).toBe('Antonio Peres Neto');
@@ -353,75 +417,90 @@ describe('fix1 — a sub-aba Sistema ganha a coluna Fornecedor', () => {
   });
 });
 
-describe('fix2 — o selo de status da Conferência é uma referência pequena, à direita', () => {
-  it('selo a 8px, 12px de altura, 4px de padding lateral, encostado à direita da coluna', async () => {
+describe('fix2 — o selo de status da Conferência é uma referência pequena', () => {
+  it('selo a 8px, só texto no programado; a casada não tem selo', async () => {
     const modal = await abrirConferencia();
-    const conc = modal.querySelector('td[data-status="conciliado"]')!;
-    expect(conc.className).toContain('text-right');
-    const selo = conc.firstElementChild!;
-    for (const c of ['text-[8px]', 'h-[12px]', 'px-[4px]', 'border']) expect(selo.className).toContain(c);
-    expect(selo.className).not.toMatch(/\bpy-/);
-    expect(selo.className).toContain('bg-[#166534]'); // a paleta única, conciliado com fundo
-    const prog = modal.querySelector('td[data-status="programado"]')!;
-    expect(prog.className).toContain('text-right');
+    const prog = modal.querySelector('[data-status="programado"]')!;
     expect(prog.firstElementChild!.className).toContain('text-[8px]');
-    expect(prog.firstElementChild!.className).not.toMatch(/\bbg-/); // programado segue só texto
+    expect(prog.firstElementChild!.className).not.toMatch(/\bbg-/);
+    expect(modal.querySelector('[data-status="conciliado"]')).toBeNull();
   });
 });
 
-describe('PR-CONC-SUGESTOES-CASAR-01 — "Só não conciliados", fundo verde nas casadas e N estável', () => {
-  const casada = (modal: HTMLElement) => within(modal).queryByText('Pix - Agendamento - 04/09 05:35 ANTONIO PERES NETO');
+describe('PR-CONC-SUGESTOES-CASAR-01 / P159a — os chips (Todos · Sem par · Casados), fundo verde nas casadas e N estável', () => {
+  const casada = (modal: HTMLElement) => within(modal).queryByText(CASADA);
+  const fechamento = (modal: HTMLElement, dia: string) =>
+    [...modal.querySelectorAll('tr[data-fechamento]')].find((tr) => tr.textContent?.startsWith(`Fechamento ${dia}`)) ?? null;
 
+  it('os chips contam a MESMA mesa: Todos 2 · Sem par 1 · Casados 1; Vencidos 0 desabilitado', async () => {
+    await abrirConferencia();
+    expect(screen.getByTestId('chip-todos').textContent).toBe('Todos 2');
+    expect(screen.getByTestId('chip-sem_par').textContent).toBe('Sem par 1');
+    expect(screen.getByTestId('chip-casados').textContent).toBe('Casados 1');
+    expect(screen.getByTestId('chip-vencidos')).toBeDisabled();
+    expect(screen.getByTestId('chip-todos').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.queryByTestId('so-nao-conciliados')).toBeNull();
+  });
+
+  it('Casados: só a casada; o dia que só tinha sem par some; o candidato (não casado) também', async () => {
+    const modal = await abrirConferencia();
+    fireEvent.click(screen.getByTestId('chip-casados'));
+    await waitFor(() => expect(modal.querySelector('tr[data-extrato-sem-par]')).toBeNull());
+    expect(casada(modal)).not.toBeNull();
+    expect(fechamento(modal, '05/09')).toBeNull();
+    expect(linhaDoCandidatoOuNada(modal)).toBeNull();
+  });
   it('em "Todos", a linha casada tem o fundo verde leve; a não casada, não', async () => {
     const modal = await abrirConferencia();
     const tr = casada(modal)!.closest('tr')!;
     expect(tr.hasAttribute('data-conciliada')).toBe(true);
     expect(tr.className).toContain('bg-success/[0.06]');
-    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
-    expect(semPar.className).not.toContain('bg-success');
+    expect(linhaSemPar(modal).className).not.toContain('bg-success');
     /* a busca sabe achar: há exatamente uma linha casada nesta mesa */
     expect(modal.querySelectorAll('tr[data-conciliada]')).toHaveLength(1);
   });
 
-  it('ligado: esconde a casada e o dia que só tinha ela; o dia que fica mantém o fechamento inteiro', async () => {
+  it('Sem par: esconde a casada e o dia que só tinha ela; o dia que fica mantém o fechamento inteiro', async () => {
     const modal = await abrirConferencia();
-    expect(within(modal).getByText('fechamento 04/09')).toBeInTheDocument();
-    const fech05 = () => within(modal).getByText('fechamento 05/09').closest('tr')!.textContent;
+    expect(fechamento(modal, '04/09')).not.toBeNull();
+    const fech05 = () => fechamento(modal, '05/09')!.textContent;
     const antes = fech05();
-    fireEvent.click(screen.getByTestId('so-nao-conciliados'));
+    fireEvent.click(screen.getByTestId('chip-sem_par'));
     await waitFor(() => expect(casada(modal)).toBeNull());
-    expect(within(modal).queryByText('fechamento 04/09')).toBeNull(); // 04/09 só tinha a casada: some inteiro
+    expect(fechamento(modal, '04/09')).toBeNull(); // 04/09 só tinha a casada: some inteiro
     expect(modal.querySelectorAll('tr[data-conciliada]')).toHaveLength(0);
-    expect(within(modal).getByText('— nenhum lançamento vinculado')).toBeInTheDocument();
+    expect(linhaSemPar(modal)).not.toBeNull();
     expect(fech05()).toBe(antes); // o fechamento não é recalculado
-    fireEvent.click(screen.getByTestId('so-nao-conciliados'));
+    fireEvent.click(screen.getByTestId('chip-todos'));
     await waitFor(() => expect(casada(modal)).not.toBeNull());
   });
 
-  it('ligado, num dia que tem casada E sem par: o dia fica, só a casada some (dos dois lados)', async () => {
+  it('Sem par, num dia que tem casada E sem par: o dia fica, só a casada some (dos dois lados)', async () => {
+    /* a casada mudou para 05/09: o "04/09" do agendamento já não é o dia, e FICA no texto limpo (`historicoDoBanco`) */
+    const casada = (modal: HTMLElement) => within(modal).queryByText('Pix Agendamento 04/09 · ANTONIO PERES NETO');
     fixture.espelho = { ...ESPELHO,
       ofx_completo: ESPELHO.ofx_completo.map((e) => (e.extrato_id === 'e2' ? { ...e, data: '2026-09-05' } : e)),
       sistema_completo: ESPELHO.sistema_completo.map((s) => ({ ...s, data: '2026-09-05' })) };
     const modal = await abrirConferencia();
     expect(casada(modal)).not.toBeNull();
     expect(within(modal).queryByText(/Antonio Peres Neto/)).not.toBeNull(); // o lado do sistema da casada
-    fireEvent.click(screen.getByTestId('so-nao-conciliados'));
+    fireEvent.click(screen.getByTestId('chip-sem_par'));
     await waitFor(() => expect(casada(modal)).toBeNull());
     expect(within(modal).queryByText(/Antonio Peres Neto/)).toBeNull();
-    expect(within(modal).getByText('fechamento 05/09')).toBeInTheDocument();
-    expect(within(modal).getByText('— nenhum lançamento vinculado')).toBeInTheDocument();
+    expect(fechamento(modal, '05/09')).not.toBeNull();
+    expect(linhaSemPar(modal)).not.toBeNull();
   });
 
   it('o estado vive só enquanto o modal está aberto: fechar e reabrir volta a mostrar tudo', async () => {
     const modal = await abrirConferencia();
-    fireEvent.click(screen.getByTestId('so-nao-conciliados'));
+    fireEvent.click(screen.getByTestId('chip-sem_par'));
     await waitFor(() => expect(casada(modal)).toBeNull());
     fireEvent.click(within(modal).getByRole('button', { name: 'Fechar' }));
     await waitFor(() => expect(screen.queryByTestId('modal-conferencia')).toBeNull());
     fireEvent.click(botaoSubAba('Conferência'));
     const modal2 = await screen.findByTestId('modal-conferencia');
     expect(casada(modal2)).not.toBeNull();
-    expect(screen.getByTestId('so-nao-conciliados').getAttribute('data-state')).toBe('unchecked');
+    expect(screen.getByTestId('chip-todos').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('N do menu = linhas do modal, e abrir duas vezes dá o mesmo N (a mesma lista, calculada uma vez)', async () => {
@@ -430,7 +509,7 @@ describe('PR-CONC-SUGESTOES-CASAR-01 — "Só não conciliados", fundo verde nas
       descricao: 'Compra de gado', fornecedor: 'Fazenda Boa Vista',
     }] };
     const modal = await abrirConferencia();
-    const semPar = () => within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    const semPar = () => linhaSemPar(modal);
     for (let vez = 0; vez < 2; vez++) {
       fireEvent.keyDown(within(semPar()).getByRole('button', { name: 'Ações da linha' }), { key: 'Enter' });
       const menu = await screen.findByRole('menu');
@@ -462,7 +541,7 @@ describe('CONC-BLOCOS-TELA-01 — desfazer bloco e o parcial', () => {
     fixture.espelho = COM_BLOCO;
     fixture.tabelas = { conciliacao_blocos: [{ id: 'b1' }] };
     const modal = await abrirConferencia();
-    const casada = within(modal).getByText('Pix - Agendamento - 04/09 05:35 ANTONIO PERES NETO').closest('tr')!;
+    const casada = within(modal).getByText(CASADA).closest('tr')!;
     const menu = await abrirMenu(casada);
     await waitFor(() => expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toContain('Desfazer bloco'));
     expect(within(menu).queryByText('Desconciliar grupo')).toBeNull();
@@ -482,7 +561,7 @@ describe('CONC-BLOCOS-TELA-01 — desfazer bloco e o parcial', () => {
   it('grupo que NÃO é bloco continua com "Desconciliar grupo"', async () => {
     fixture.espelho = COM_BLOCO;
     const modal = await abrirConferencia();
-    const casada = within(modal).getByText('Pix - Agendamento - 04/09 05:35 ANTONIO PERES NETO').closest('tr')!;
+    const casada = within(modal).getByText(CASADA).closest('tr')!;
     const menu = await abrirMenu(casada);
     expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toContain('Desconciliar grupo');
   });
@@ -491,7 +570,7 @@ describe('CONC-BLOCOS-TELA-01 — desfazer bloco e o parcial', () => {
     fixture.espelho = { ...ESPELHO, sistema_candidatos: [{ ...ESPELHO.sistema_candidatos![0], ja_conciliado: true }] };
     fixture.tabelas = { conciliacao_bancaria_itens: [{ lancamento_id: 'c1', valor_aplicado: 3060 }] };
     const modal = await abrirConferencia();
-    const cand = () => modal.querySelector('td[data-status="programado"]')!.closest('tr')! as HTMLElement;
+    const cand = () => linhaDoCandidato(modal);
     await waitFor(() => expect(within(cand()).getByTestId('chip-parcial').textContent).toBe('Parcial — falta R$ 347,89'));
     expect(within(cand()).getByLabelText('Marcar candidato')).toBeInTheDocument();
     expect(within(cand()).queryByText('já vinculado')).toBeNull();
@@ -501,7 +580,7 @@ describe('CONC-BLOCOS-TELA-01 — desfazer bloco e o parcial', () => {
     fixture.espelho = { ...ESPELHO, sistema_candidatos: [{ ...ESPELHO.sistema_candidatos![0], ja_conciliado: true }] };
     fixture.tabelas = { conciliacao_bancaria_itens: [{ lancamento_id: 'c1', valor_aplicado: 3407.89 }] };
     const modal = await abrirConferencia();
-    const cand = modal.querySelector('td[data-status="programado"]')!.closest('tr')! as HTMLElement;
+    const cand = linhaDoCandidato(modal);
     await waitFor(() => expect(within(cand).getByText('já vinculado')).toBeInTheDocument());
     expect(within(cand).queryByLabelText('Marcar candidato')).toBeNull();
     expect(within(cand).queryByTestId('chip-parcial')).toBeNull();
@@ -636,7 +715,28 @@ describe('CONC-MESA-SINAL-01 — a dedução aparece negativa no depósito', () 
     expect(filhas.some((t) => t.includes('-856,76'))).toBe(true);
     expect(filhas.some((t) => t.includes('-25.134,57'))).toBe(true);
     expect(filhas.some((t) => t.includes('428.386,40') && !t.includes('-428.386,40'))).toBe(true);
-    const fechamento = [...modal.querySelectorAll('tr')].find((r) => r.textContent?.startsWith('fechamento 07/09'));
+    const fechamento = [...modal.querySelectorAll('tr')].find((r) => r.textContent?.startsWith('Fechamento 07/09'));
     expect(fechamento?.textContent).toContain('confere');
+  });
+});
+
+/* P159b — "ver o dia na Conferência" (a Evolução do saldo): com quem monta, pede o dia a ele (o `irParaConferencia` da tela); sozinho, o
+   próprio Espelho abre a Conferência rolada no dia. No fixture o 05/09 tem o extrato sem par: a diferença muda ali. */
+describe('P159b — a Evolução abre a Conferência no dia', () => {
+  it('com quem monta: o dia vai para ele', async () => {
+    const onVerDiaNaConferencia = vi.fn();
+    montar({ aba: 'evolucao', onAbaChange: () => {}, onVerDiaNaConferencia });
+    fireEvent.click(await screen.findByTestId('evolucao-ver-dia'));
+    expect(onVerDiaNaConferencia).toHaveBeenCalledWith('2026-09-05');
+  });
+  it('sozinho: abre a própria Conferência e rola até o dia', async () => {
+    const rolados: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) { rolados.push(this.getAttribute('data-dia') ?? ''); };
+    montar();
+    await screen.findByTestId('resumo-espelho');
+    fireEvent.click(botaoSubAba('Evolução do saldo'));
+    fireEvent.click(await screen.findByTestId('evolucao-ver-dia'));
+    await screen.findByTestId('modal-conferencia');
+    await waitFor(() => expect(rolados).toContain('2026-09-05'));
   });
 });

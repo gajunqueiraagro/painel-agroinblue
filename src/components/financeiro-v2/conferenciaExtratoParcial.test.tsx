@@ -104,7 +104,7 @@ describe('faltaDoExtrato — só o que FALTA é parcial', () => {
 describe('a linha do extrato na Conferência', () => {
   it('extrato PARCIAL (dois vínculos vivos, o filho cancelado fora): "!", "Parcial" e "falta 10.219,33" escritos', async () => {
     const modal = await abrir();
-    const tr = linhaDe(modal, 'Pix - Enviado SINT');
+    const tr = linhaDe(modal, 'Pix · Enviado SINT');
     expect(within(tr).getByTestId('sinal-do-extrato').textContent).toBe('!');
     expect(tr.querySelector('[data-status]')?.getAttribute('data-status')).toBe('parcial');
     expect(tr.querySelector('[data-status]')?.textContent).toBe('Parcial');
@@ -115,19 +115,20 @@ describe('a linha do extrato na Conferência', () => {
     expect(tr.textContent).not.toContain('Conciliado');
   });
 
-  it('extrato FECHADO (os vínculos somam o banco): ✓ e "Conciliado", como sempre, sem a falta', async () => {
+  it('extrato FECHADO (os vínculos somam o banco): ✓, sem selo e sem a falta', async () => {
     const modal = await abrir();
     const tr = linhaDe(modal, 'Boleto SINT');
     expect(within(tr).getByTestId('sinal-do-extrato').textContent).toBe('✓');
-    expect(tr.querySelector('[data-status]')?.getAttribute('data-status')).toBe('conciliado');
+    /* P159a: o casado não leva selo (o ✓ do meio diz); selo só no que NÃO está conciliado */
+    expect(tr.querySelector('[data-status]')).toBeNull();
     expect(within(tr).queryByTestId('falta-do-extrato')).toBeNull();
     expect(tr.hasAttribute('data-conciliada')).toBe(true);
   });
 
-  it('"Só não conciliados" mantém o parcial e tira o fechado', async () => {
+  it('o chip "Sem par" mantém o parcial e tira o fechado', async () => {
     const modal = await abrir();
-    fireEvent.click(within(modal).getByRole('checkbox', { name: /só não conciliados/i }));
-    expect(within(modal).queryByText('Pix - Enviado SINT')).not.toBeNull();
+    fireEvent.click(screen.getByTestId('chip-sem_par'));
+    expect(within(modal).queryByText('Pix · Enviado SINT')).not.toBeNull();
     expect(within(modal).queryByText('Boleto SINT')).toBeNull();
   });
 

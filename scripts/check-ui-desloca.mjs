@@ -124,6 +124,17 @@ const CENARIOS = [
   })(),
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
+  /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor
+     nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
+  { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, estados: [
+    ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['inativos desligado', clicar('[data-testid="mostrar-inativos"]')],
+    ['busca 4 contas', digitar('[data-testid="busca-plano"]', 'Outras Saídas')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],
+    ['busca sem resultado', digitar('[data-testid="busca-plano"]', 'zzzz nada')], ['busca limpa', digitar('[data-testid="busca-plano"]', '')],
+  ] },
+  { nome: 'plano-contas-cliente', url: 'tela=plano-contas&perfil=cliente', tamanhos: TAMANHOS_DO_P92, estados: [
+    ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],
+    ['busca limpa', digitar('[data-testid="busca-plano"]', '')],
+  ] },
   /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */
   /* P109 — as 4 telas da meta (o caso real do NJ 2026): o rótulo do regime fica PRESO no lugar dele (`presos`: medido sempre, à vista)
      ao trocar a fazenda e ao passar aos valores ×400; no PC-100 o Realizado ↔ Meta (`auto`) não move nada — o rótulo tem o lugar
@@ -476,6 +487,39 @@ const CENARIOS = [
   { nome: 'conciliacao-extrato-do-sistema', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DO_P92,
     antes: async (p) => { await p.locator('[data-testid="modal-extrato-sistema"]').waitFor(); await espera(p); },
     estados: [['carregado', { url: 'tela=extrato-do-sistema' }]] },
+  /* P159a (CONC-TELAS-01) — a Conferência: trocar o chip (Sem par, Casados, Vencidos, Todos) não mexe no cabeçalho do modal, nos chips,
+     na faixa nem no cabeçalho das colunas (régua fixa); o Casar lançamentos: trocar de sub-aba não mexe na barra, e o mês curto não mexe
+     nas colunas do Extrato. */
+  /* P153 — procurar no histórico não mexe em nada fora do quadro: o botão, a contagem e a linha do banco ficam onde estão (a frase é linha do quadro) */
+  { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
+    presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',
+    estados: [['procurou', async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); }]] },
+  { nome: 'conferencia-chips', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,
+    presos: '[data-testid="chips-conferencia"] button, [data-testid="faixa-conferencia"], [data-testid="mesa-conferencia"] thead th',
+    antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
+      await botao(/^Casar lançamentos$/)(p); await p.locator('[data-testid="barra-casar"]').getByRole('button', { name: 'Conferência' }).click();
+      await p.locator('[data-testid="mesa-conferencia"]').waitFor(); await espera(p); },
+    estados: [['Sem par', clicar('[data-testid="chip-sem_par"]')], ['Casados', clicar('[data-testid="chip-casados"]')],
+      ['Vencidos', clicar('[data-testid="chip-vencidos"]')], ['Todos', clicar('[data-testid="chip-todos"]')]] },
+  { nome: 'casar-extrato', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92, minLargura: 1000,
+    presos: '[data-testid="barra-casar"], [data-testid="resumo-espelho"]',
+    antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
+      await botao(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await espera(p); },
+    estados: [['Sistema', botao(/^Sistema$/)], ['Evolução do saldo', botao(/^Evolução do saldo$/)], ['Extrato (banco)', botao(/^Extrato \(banco\)$/)]] },
+  /* P159b — a Evolução: ligar "mostrar dias sem movimento" não mexe nas colunas (régua fixa) nem no rodapé preso */
+  { nome: 'casar-evolucao-vazios', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92, minLargura: 1000,
+    presos: '[data-testid="evolucao-lista"] thead th, [data-testid="evolucao-rodape"]',
+    antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
+      await botao(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor();
+      await botao(/^Evolução do saldo$/)(p); await p.locator('[data-testid="evolucao-lista"]').waitFor(); await espera(p); },
+    estados: [['mostrar dias sem movimento', clicar('[data-testid="evolucao-mostrar-vazios"]')], ['esconder de novo', clicar('[data-testid="evolucao-mostrar-vazios"]')]] },
+  { nome: 'casar-extrato-mes-curto', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92, minLargura: 1000,
+    presos: '[data-testid="extrato-do-mes"] thead th',
+    antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
+      await botao(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await espera(p); },
+    estados: [['mês curto', async (p) => { await p.goto(p.url().replace('tela=conciliacao', 'tela=conciliacao&v=poucos'));
+      await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p); await botao(/^Casar lançamentos$/)(p);
+      await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await espera(p); }]] },
   { nome: 'casar-bloco', url: 'tela=casar-bloco', antes: async (p) => { await p.locator('[data-testid="conciliar-bloco"]').waitFor(); await espera(p); },
     estados: [
       ['regra mais antigo primeiro', botao(/Mais antigo primeiro/)],
