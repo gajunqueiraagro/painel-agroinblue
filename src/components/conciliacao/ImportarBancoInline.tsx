@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { useImportacaoExtrato } from '@/hooks/useImportacaoExtrato';
+import { tituloDaGemea } from '@/lib/financeiro/duplicidadeImportacao';
 import { detectarTipoArquivo, type TipoArquivoImport } from '@/lib/financeiro/parser/detectarTipoArquivo';
 import { V2ImportLancamentosExcel } from '@/v2/pages/V2ImportLancamentosExcel';
 import CusteioTxtImportTab from '@/v2/pages/CusteioTxtImportTab';
@@ -433,6 +434,15 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                 {preview.suspeitasForaDaImportacao} duplicado?
               </Badge>
             )}
+            {/* P140 — a GÊMEA de outro arquivo: o banco reescreveu a linha (texto E documento). Contador próprio, fora do "duplicado?"; por
+                padrão não entra (D1), e a caixa da linha decide. */}
+            {preview.gemeas > 0 && (
+              <Badge variant="secondary" className="h-5 border-amber-400/60 bg-amber-50 px-1.5 text-[9px] text-amber-800"
+                data-testid="importar-gemeas"
+                title={`${preview.gemeas === 1 ? 'Esta linha parece repetida' : 'Estas linhas parecem repetidas'} de um arquivo anterior: a mesma data e o mesmo valor de uma linha que já está no extrato e que o arquivo novo não traz — o banco mudou o texto ou o documento. Por segurança NÃO entram; marque na lista o que for movimento novo mesmo.`}>
+                {preview.gemeas} {preview.gemeas === 1 ? 'parece repetida' : 'parecem repetidas'} de um arquivo anterior (o banco mudou o texto ou o documento)
+              </Badge>
+            )}
             {preview.existentesNoBanco > 0 && (
               <Badge variant="secondary" className="h-5 px-1.5 text-[9px]"
                 title="Estas linhas já estão no extrato; não serão duplicadas.">
@@ -595,9 +605,15 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                           repetido ? 'bg-muted text-muted-foreground'
                             : suspeita === 'FORTE' ? 'bg-destructive/15 text-destructive'
                             : suspeita === 'PROVAVEL' ? 'bg-warning/15 text-warning'
+                            : suspeita === 'GEMEA' ? 'bg-amber-100 text-amber-800'
                             : suspeita ? 'bg-muted text-muted-foreground'
                             : 'bg-success/15 text-success')}
+                          data-testid={suspeita === 'GEMEA' ? 'selo-gemea' : undefined}
                           title={repetido ? 'esta linha já está no extrato; não será duplicada'
+                            : suspeita === 'GEMEA'
+                              ? tituloDaGemea({ descricao: m.dupExistenteDescricao ?? null, documento: m.dupExistenteDocumento ?? null,
+                                  arquivo: m.dupExistenteArquivo ?? null, gravadaEm: m.dupExistenteGravadoEm ?? null,
+                                  conciliada: !!m.dupExistenteConciliado, importar: m.dupImportar !== false })
                             : suspeita
                               ? `${m.dupResumo ?? ''}\nJá no extrato: ${m.dupExistenteDescricao ?? '—'}${m.dupExistenteDocumento ? ` (doc ${m.dupExistenteDocumento})` : ''}.${m.dupImportar === false ? '\nNão será importado — marque se for movimento novo mesmo.' : '\nSerá importado — desmarque se for repetição.'}`
                               : undefined}>
@@ -605,6 +621,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                             ? (m.criadoEmExistente ? `já importado ${brData(m.criadoEmExistente.slice(0, 10))}` : 'já no extrato')
                             : suspeita === 'FORTE' ? 'mesmo documento'
                             : suspeita === 'PROVAVEL' ? 'duplicado?'
+                            : suspeita === 'GEMEA' ? 'repetida?'
                             : suspeita ? 'mesmo dia e valor'
                             : 'novo'}
                         </span>

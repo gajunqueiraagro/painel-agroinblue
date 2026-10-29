@@ -221,6 +221,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   seguem sem os sem caixa.
 - P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
   PAR A PAR pelo gravador de hoje (`vincularSelecao`); buscar é GESTO; a caixa "Vincular os exatos" saiu do palco (o ConciliarMesDialog ficou: dívida).
+- P115: venda em pé "Por total" = o valor digitado é o TOTAL (R$/cab = total ÷ cabeças); tela → motor por UMA regra (`tipoPrecoDoMotor`).
 - Financiamento: o saldo devedor tem uma fonte (`fn_financiamento_saldo`); captacao segue o creditado em conta; o valor do lancamento
   vinculado a' parcela manda na parcela; consorcio e' natureza propria (gerador no banco); parcela adiada e' divida mas nao vencida.
 - Recorrencia gera a vigencia inteira e nunca omite em silencio; o valor do mes tem marca e o propagar pula as marcadas.
@@ -327,6 +328,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
 - FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter
   da conta aberta sao pegos na JANELA (captura), antes do Radix; campo de valor novo = `CampoMoeda` (nunca `Input type="number"`).
+- P140: GÊMEA na importação = a COINCIDÊNCIA cuja linha viva nada do arquivo novo reivindicou (hash, FORTE, PROVÁVEL, chave natural) no período
+  do arquivo (`gemeasDaImportacao`): selo "repetida?", NÃO entra por padrão (D1), a caixa decide; a antiga nunca é tocada (D2). Passadas: FORTE → PROVÁVEL → resto.
 - P139: transferência pela linha do extrato SÓ pela `fn_transferencia_do_extrato` (simular; lote `fn_transferencias_do_extrato_lote`, tudo ou nada);
   espelho ±3 = `_fn_espelhos_transferencia` (o mesmo do "Transferências entre contas"); gêmea = aviso com confirmação; já lançada = casar.
 - P134: TODA busca ignora acento, cedilha e maiúscula nos dois lados — tela `casaNaBusca`/`normalizarParaBusca` (`src/lib/texto/busca.ts`),
@@ -363,6 +366,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - OC-CC-BOTAO-BUSCAR-DESLOCA-01: faixa com abas + texto + botoes = tres lugares — abas `flex-none`, texto no meio `min-w-0 flex-1
   truncate` com `title` (sempre presente), botoes `flex-none` a' direita; o `check:ui-cortes` tem `botoesDentro` (botao inteiro na faixa).
 - Acesso a tela por perfil tem um dono (`NIVEL_POR_TELA`); visibilidade nao e' permissao (quem permite e' o banco).
+- P172: Plano de Contas = régua da casa; "Mostrar inativos" lê pelo carregador (`incluirInativos`, SÓ esta tela; o padrão dos seletores segue só as
+  ativas); subcentro do cliente SÓ pelas `fn_subcentro_cliente_*` (P171, simular antes, só o admin); `MOLDES_SUBCENTRO_CLIENTE` espelha `_fn_subcentro_cliente_molde`.
 - Guardas do Claude Code: o comando comeca com `cd "$CLAUDE_PROJECT_DIR" &&`; a guarda le^ o texto do comando.
 
 ## INDICE

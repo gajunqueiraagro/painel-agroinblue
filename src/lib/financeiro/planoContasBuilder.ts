@@ -131,6 +131,8 @@ export interface PlanoContasItem {
    */
   compoe_dre?: boolean | null;
   is_dividendo?: boolean;
+  /** P172 — ADITIVO: a conta é DO CLIENTE (preenchido) ou do plano padrão (nulo). As entradas de dividendo não o trazem. */
+  cliente_id?: string | null;
 }
 
 export interface Dividendo {
@@ -235,12 +237,14 @@ export function contaDoDividendo(
  * A LEITURA BASE DO PLANO, UMA SÓ: as contas ATIVAS que o cliente enxerga — as dele e as globais —, na ordem do plano. Toda
  * lista de contas e todo mapa por nome do front saem daqui (`loadPlanoContasCompleto`, os importadores, o Fluxo). O filtro de
  * cliente vai NA CONSULTA: o admin enxerga, pela RLS, as contas de todos os clientes.
+ * P172: `incluirInativos` (só a tela do Plano de Contas, "Mostrar inativos") traz também as inativas; o padrão segue o de sempre
+ * (só as ativas), que é o que todo seletor oferece.
  */
-export async function loadContasDoPlanoDoCliente(clienteId: string): Promise<ContaDoPlano[]> {
-  const { data, error } = await supabase
+export async function loadContasDoPlanoDoCliente(clienteId: string, opcoes: { incluirInativos?: boolean } = {}): Promise<ContaDoPlano[]> {
+  const base = supabase
     .from('financeiro_plano_contas')
-    .select('id, cliente_id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo, ordem_exibicao, compoe_dre')
-    .eq('ativo', true)
+    .select('id, cliente_id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo, ordem_exibicao, compoe_dre');
+  const { data, error } = await (opcoes.incluirInativos ? base : base.eq('ativo', true))
     .or(`cliente_id.is.null,cliente_id.eq.${clienteId}`)
     .order('ordem_exibicao');
   if (error) throw error;
@@ -288,10 +292,11 @@ export function buildDividendoEntries(
  * clientes específicos). As contas de Dividendos servem SÓ para dar a chave ao nome que o cadastro do cliente já tem
  * (`contaDoDividendo`) — nenhuma conta entra na lista por si.
  * A LEITURA É UMA (`loadContasDoPlanoDoCliente`, cliente ou global): a lista geral deixou de ler o plano de todos os clientes.
+ * P172: `incluirInativos` passa à leitura base (as contas do plano); os dividendos seguem só os ativos do cadastro.
  */
-export async function loadPlanoContasCompleto(clienteId: string): Promise<PlanoContasItem[]> {
+export async function loadPlanoContasCompleto(clienteId: string, opcoes: { incluirInativos?: boolean } = {}): Promise<PlanoContasItem[]> {
   const [contas, dividendos] = await Promise.all([
-    loadContasDoPlanoDoCliente(clienteId).catch((): ContaDoPlano[] => []),
+    loadContasDoPlanoDoCliente(clienteId, opcoes).catch((): ContaDoPlano[] => []),
     loadDividendos(clienteId),
   ]);
 
@@ -308,11 +313,13 @@ export async function loadPlanoContasCompleto(clienteId: string): Promise<PlanoC
       ativo: c.ativo,
       ordem_exibicao: c.ordem_exibicao,
       compoe_dre: c.compoe_dre,
+      cliente_id: c.cliente_id,
     }));
 
   if (dividendos.length > 0) {
     const maxOrdem = items.reduce((max, i) => Math.max(max, i.ordem_exibicao), 0);
-    const divEntries = buildDividendoEntries(dividendos, maxOrdem + 100, contas.filter(c => c.macro_custo === DIVIDENDO_MACRO));
+    /* P172: só as ATIVAS dão a chave ao nome (com `incluirInativos`, a inativa de mesmo nome não pode desempatar a regra do nome) */
+    const divEntries = buildDividendoEntries(dividendos, maxOrdem + 100, contas.filter(c => c.macro_custo === DIVIDENDO_MACRO && c.ativo));
     items.push(...divEntries);
   }
 

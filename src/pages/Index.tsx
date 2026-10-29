@@ -789,7 +789,7 @@ const Index = () => {
       )}
       {activeTab === 'fin_v2_contas' && <FinV2ContasTab />}
       {activeTab === 'fin_v2_fornecedores' && <FinV2FornecedoresTab />}
-      {activeTab === 'fin_v2_plano' && <FinV2PlanoContasTab />}
+      {activeTab === 'fin_v2_plano' && <FinV2PlanoContasTab onAbrirDividendos={() => setActiveTab('fin_v2_dividendos')} />}
       {activeTab === 'fin_v2_saldos' && (
         <FinV2SaldosTab
           onNavigateToConciliacao={(ano, mes, contaId) => {

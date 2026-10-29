@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
-  fraseDaNfDigitada, fraseDaSafra, fraseDoEfeito, lerJuncao, nfDigitadaDivergente, soltasParaJuntar, usarANotaLida,
+  fraseDaNfDigitada, fraseDaSafra, fraseDoEfeito, juncaoDaNota, lerJuncao, nfDigitadaDivergente, soltasParaJuntar, usarANotaLida,
   type DocumentoDaParcela, type GravadoresDaJuncao,
 } from './juntarParcelas';
 import type { LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
@@ -69,5 +69,42 @@ describe('P96a — juntar as parcelas soltas', () => {
     const d = { id: 'd1', lancamentoId: 'l6', versao: 2, especie: 'nf', numero: '46994', chave: null, valorCent: 62084, emissao: '2026-10-10', rotulo: '6/6' };
     expect(await usarANotaLida('c1', d, { totalCent: 372500, emissao: '2026-04-06' }, gj)).toBeNull();
     expect(editar).toHaveBeenCalledWith('c1', 'd1', 2, { valor_documento: '3725.00', data_emissao: '2026-04-06' });
+  });
+});
+
+/* URGENTE 29/10 + Gabriel 08:26 — JUNTAR É O PADRÃO, sem o "k/N" na descrição; quando não junta, a frase diz por quê (nunca calado) */
+describe('juncaoDaNota — as soltas da nota sem o "k/N"', () => {
+  const doLr = (k: number, venc: string, extra: Partial<LancamentoJaLancado> = {}) =>
+    lanc(k, 40876, { descricao: k === 1 ? 'Reforma sintetica' : `Parcela ${k} - None`, vencimento: venc, por: ['numero'], fracaoN: null, ...extra });
+  const nota = (ls: LancamentoJaLancado[]) => ({ pelaNota: ls, fracoes: new Map<string, number>(), alvos: ls });
+  it('as N achadas pela nota (sem "k/N", fora de ordem) = juntar, na ordem do vencimento', () => {
+    const r = juncaoDaNota(nota([doLr(2, '2031-10-20'), doLr(1, '2031-09-20')]), 2);
+    expect(r).toEqual({ soltas: { n: 2, ids: ['l1', 'l2'], somaCent: 81752 }, frase: null });
+  });
+  it('quantidade diferente da nota, ou uma já parcela: não junta e DIZ', () => {
+    expect(juncaoDaNota(nota([doLr(1, '2031-09-20')]), 2)).toEqual({ soltas: null,
+      frase: 'Não junto: a nota tem 2 duplicatas e achei 1 no sistema (confira as que faltam).' });
+    expect(juncaoDaNota(nota([doLr(1, '2031-09-20'), doLr(2, '2031-10-20'), doLr(3, '2031-11-20')]), 2).frase)
+      .toBe('Não junto: a nota tem 2 duplicatas e achei 3 no sistema (confira as que sobram).');
+    expect(juncaoDaNota(nota([doLr(1, '2031-09-20', { financiamentoId: 'fin' }), doLr(2, '2031-10-20')]), 2).frase)
+      .toBe('Não junto: 1 delas já é parcela de uma compra (junte pelo cadastro dela).');
+  });
+  it('já são UMA compra parcelada, a nota de 1 parcela ou nada achado: nada a juntar, sem frase', () => {
+    expect(juncaoDaNota(nota([doLr(1, '2031-09-20', { financiamentoId: 'fin' }), doLr(2, '2031-10-20', { financiamentoId: 'fin' })]), 2)).toEqual({ soltas: null, frase: null });
+    expect(juncaoDaNota(nota([doLr(1, '2031-09-20')]), 1)).toEqual({ soltas: null, frase: null });
+    expect(juncaoDaNota(null, 2)).toEqual({ soltas: null, frase: null });
+  });
+  it('o mock da nota já lançada: as que nascem agora completam as N (junta); uma deixada como está não junta e DIZ', () => {
+    const duas = nota([doLr(1, '2031-09-20')]);
+    expect(juncaoDaNota(duas, 2, { aCriar: 1 }).soltas?.n).toBe(2);
+    expect(juncaoDaNota(nota([doLr(1, '2031-09-20'), doLr(2, '2031-10-20')]), 2, { deixadas: 1 })).toEqual({ soltas: null,
+      frase: 'Não junto: 1 parcela fica como está (não recebe a nota).' });
+    expect(juncaoDaNota(duas, 3, { aCriar: 1 }).frase).toBe('Não junto: a nota tem 3 duplicatas e achei 1 no sistema (+1 a criar) (confira as que faltam).');
+  });
+  it('com o "k/N" (P96a) segue valendo a regra das frações', () => {
+    const ls = seis();
+    expect(juncaoDaNota({ ...comFracoes(ls), alvos: ls }, 6).soltas?.ids).toEqual(['l1', 'l2', 'l3', 'l4', 'l5', 'l6']);
+    /* P95 — a nota de UMA duplicata paga no cartão em 6: junta pelas frações */
+    expect(juncaoDaNota({ ...comFracoes(ls), alvos: ls }, 1).soltas?.n).toBe(6);
   });
 });

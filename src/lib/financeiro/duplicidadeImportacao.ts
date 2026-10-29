@@ -448,7 +448,8 @@ export function classificarLote(
 // Texto igual NUNCA vira FORTE se o documento diferir (ex.: Diocese 21/05 —
 // texto identico, FITID diferente, transacao provavelmente real).
 
-export type ClassificacaoOFXDup = 'FORTE' | 'PROVAVEL' | 'COINCIDENCIA_POSSIVEL';
+/* P140 — 'GEMEA' nunca sai de `classificarDuplicidadeOFX`: é a COINCIDÊNCIA que `gemeasDaImportacao` reconhece depois do consumo */
+export type ClassificacaoOFXDup = 'FORTE' | 'PROVAVEL' | 'COINCIDENCIA_POSSIVEL' | 'GEMEA';
 
 export interface RegistroExtratoExistente {
   id: string;
@@ -517,4 +518,89 @@ export function classificarDuplicidadeOFX(
     resumo: 'COINCIDENCIA POSSIVEL: conta+data+valor iguais, texto e documento diferentes',
     dupImportar: true,
   };
+}
+
+// ── P140 — a GÊMEA de outro arquivo (o banco reescreveu a linha) ─────────────────────────────────────────────
+// FASE 0 `valores-20261028-1851-P140-fase0.md`; OK do Gabriel (28/10): ENCAIXE, D1 (por padrão a gêmea NÃO é importada; a prévia
+// avisa e o operador decide), D2 ("trocar pela nova" fica de fora), D3 (nada a sanear).
+// O caso de origem: Santa Rita · Bradesco · 10/09 · +5.193,57 — "Resg Automatico Investim" (arquivo de agosto) e "Resg/vencto Cdb"
+// (arquivo de setembro): o banco mudou o texto E o FITID; caiu em COINCIDÊNCIA, que nasce marcada, e entrou duplicado.
+//
+// A REGRA: depois das defesas de hoje (hash, FORTE, PROVÁVEL e chave natural, com o consumo um a um), a linha VIVA X do banco é "sobra"
+// quando (1) veio de OUTRO arquivo — na prévia, toda linha viva é de outro arquivo: o arquivo novo ainda não foi gravado —, (2) o dia
+// dela está dentro do período do arquivo novo (o declarado; sem ele, o primeiro e o último movimento) e (3) nada do arquivo novo a
+// reivindicou. A linha nova que estava como COINCIDÊNCIA com uma sobra vira GÊMEA (o pareamento já é um a um: 2 novas × 1 sobra = 1
+// gêmea, a outra continua coincidência ou nova).
+// ⚠ POR QUE NÃO ACUSA A COINCIDÊNCIA VERDADEIRA: dois pagamentos iguais no mesmo dia vêm no mesmo arquivo — se o novo traz a antiga, ela
+// casa por hash/chave e é reivindicada (falha a 3); o que sobra para comparar é só o que o banco deixou de mandar como era.
+
+export interface CoincidenciaParaGemea {
+  /** quem chama identifica a linha (o índice, o hash) */
+  chave: string;
+  dupClassificacao: ClassificacaoOFXDup | null | undefined;
+  dupExistenteId: string | null | undefined;
+}
+
+/**
+ * As linhas novas que são GÊMEAS: COINCIDÊNCIA com uma linha viva que nada do arquivo novo reivindicou e cujo dia está no período.
+ * `reivindicados`: os ids das linhas vivas já casadas por hash, FORTE, PROVÁVEL ou chave natural. `diaDoExistente`: id → 'aaaa-mm-dd'.
+ */
+export function gemeasDaImportacao(
+  linhas: readonly CoincidenciaParaGemea[],
+  reivindicados: ReadonlySet<string>,
+  diaDoExistente: ReadonlyMap<string, string | null>,
+  periodo: { inicio: string | null; fim: string | null },
+): Set<string> {
+  const gemeas = new Set<string>();
+  for (const l of linhas) {
+    if (l.dupClassificacao !== 'COINCIDENCIA_POSSIVEL' || !l.dupExistenteId) continue;
+    if (reivindicados.has(l.dupExistenteId)) continue;
+    const dia = (diaDoExistente.get(l.dupExistenteId) ?? '').slice(0, 10);
+    if (!dia) continue;
+    if (periodo.inicio && dia < periodo.inicio.slice(0, 10)) continue;
+    if (periodo.fim && dia > periodo.fim.slice(0, 10)) continue;
+    gemeas.add(l.chave);
+  }
+  return gemeas;
+}
+
+/** O `title` do selo "repetida?": o que está no extrato, de que arquivo, quando entrou e se já está conciliado. */
+export function tituloDaGemea(x: {
+  descricao: string | null; documento: string | null; arquivo: string | null; gravadaEm: string | null; conciliada: boolean; importar: boolean;
+}): string {
+  const quando = x.gravadaEm && /^\d{4}-\d{2}-\d{2}/.test(x.gravadaEm) ? `${x.gravadaEm.slice(8, 10)}/${x.gravadaEm.slice(5, 7)}/${x.gravadaEm.slice(0, 4)}` : null;
+  return [
+    'Parece a MESMA linha de um arquivo anterior: o banco mudou o texto ou o documento.',
+    `No extrato: ${x.descricao ?? '—'}${x.documento ? ` (doc ${x.documento})` : ''}`
+      + `${x.arquivo ? ` · arquivo ${x.arquivo}` : ''}${quando ? ` · gravada em ${quando}` : ''}`
+      + ` · ${x.conciliada ? 'já conciliada' : 'ainda não conciliada'}.`,
+    x.importar ? 'Será importada — desmarque se for a mesma linha.' : 'Não será importada — marque se for movimento novo mesmo.',
+  ].join('\n');
+}
+
+const ehRegistro = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const textoOuNulo = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+
+/** P140 — as linhas vivas da consulta de candidatos → id → de que arquivo, quando gravada, status, ocorrência (lido sem confiar no formato). */
+export interface ExtraDaViva { importacaoId: string | null; criadoEm: string | null; status: string | null; seq: number | null }
+export function extrasDasVivas(rows: unknown): Map<string, ExtraDaViva> {
+  const m = new Map<string, ExtraDaViva>();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!ehRegistro(r)) continue;
+    const id = textoOuNulo(r.id);
+    if (id) m.set(id, { importacaoId: textoOuNulo(r.importacao_id), criadoEm: textoOuNulo(r.created_at), status: textoOuNulo(r.status),
+      seq: typeof r.seq_ocorrencia === 'number' ? r.seq_ocorrencia : null });
+  }
+  return m;
+}
+
+/** P140 — `financeiro_importacoes_v2` (id, nome_arquivo) → id → nome. */
+export function nomesDosArquivos(rows: unknown): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!ehRegistro(r)) continue;
+    const id = textoOuNulo(r.id); const nome = textoOuNulo(r.nome_arquivo);
+    if (id && nome) m.set(id, nome);
+  }
+  return m;
 }
