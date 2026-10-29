@@ -42,6 +42,9 @@ import { decodificarExtrato } from '@/lib/financeiro/parser/decodificarExtrato';
 import { dataAncoraLancamento, orFiltroDataAncora, OR_CENARIO_NAO_META } from '@/lib/financeiro/dataAncora';
 import {
   classificarDuplicidadeOFX,
+  gemeasDaImportacao,
+  extrasDasVivas,
+  nomesDosArquivos,
   type ClassificacaoOFXDup,
   type RegistroExtratoExistente,
 } from '@/lib/financeiro/duplicidadeImportacao';
@@ -158,6 +161,12 @@ export interface MovimentoPreview extends MovimentoBruto {
   dupExistenteDescricao?: string | null;
   /** 1B (display) — documento/FITID da linha existente que disparou a suspeita. */
   dupExistenteDocumento?: string | null;
+  /** P140 (display da GÊMEA) — o arquivo de onde a linha existente veio ("sem registro" quando o `importacao_id` é nulo). */
+  dupExistenteArquivo?: string | null;
+  /** P140 — quando a linha existente foi gravada (`created_at`). */
+  dupExistenteGravadoEm?: string | null;
+  /** P140 — a linha existente já está conciliada. */
+  dupExistenteConciliado?: boolean;
 }
 
 export interface LancamentoAgrupadoInfo {
@@ -227,6 +236,9 @@ export interface PreviewResult {
   ignorados: number;
   /** Suspeitas de duplicata que, pelo padrão ou pela escolha do operador, NÃO vão entrar. */
   suspeitasForaDaImportacao: number;
+  /** P140 — gêmeas de outro arquivo ainda fora da importação (o padrão, D1), e todas as gêmeas da prévia. */
+  gemeasForaDaImportacao: number;
+  gemeas: number;
   /**
    * Match counters — calculados sobre movimentos AINDA acionáveis
    * (não existe no DB ou status_persistido ∈ {nao_conciliado, parcial}).
@@ -293,7 +305,7 @@ function recomputarAgregados(
   PreviewResult,
   | 'novosParaSalvar' | 'existentesNoBanco' | 'jaExistentesPorChave' | 'pendentes' | 'parciais'
   | 'conciliados' | 'ignorados' | 'matchDireto' | 'matchAgrupados'
-  | 'semMatch' | 'ambiguos' | 'suspeitasDuplicata' | 'suspeitasForaDaImportacao'
+  | 'semMatch' | 'ambiguos' | 'suspeitasDuplicata' | 'suspeitasForaDaImportacao' | 'gemeasForaDaImportacao' | 'gemeas'
 > {
   const acionaveis = movimentos.filter(
     (m) =>
@@ -315,8 +327,13 @@ function recomputarAgregados(
     /* ⚠ SÓ A SUSPEITA — PR-CONC-OFX-LINHA-SALDO-01: com caixa em toda linha, o "novo" desmarcado pelo operador
        também tem `dupImportar === false`, e não é "duplicado?". */
     suspeitasForaDaImportacao: movimentos.filter((m) =>
-      !m.existeNoDB && !m.jaExistenteChave && !!m.dupClassificacao && m.dupImportar === false
+      !m.existeNoDB && !m.jaExistenteChave && !!m.dupClassificacao && m.dupClassificacao !== 'GEMEA' && m.dupImportar === false
     ).length,
+    /* P140 — a gêmea tem contador próprio ("repetidas de um arquivo anterior"), fora do "duplicado?" */
+    gemeasForaDaImportacao: movimentos.filter((m) =>
+      !m.existeNoDB && !m.jaExistenteChave && m.dupClassificacao === 'GEMEA' && m.dupImportar === false
+    ).length,
+    gemeas: movimentos.filter((m) => !m.existeNoDB && !m.jaExistenteChave && m.dupClassificacao === 'GEMEA').length,
     existentesNoBanco: movimentos.filter((m) =>  m.existeNoDB).length,
     jaExistentesPorChave: movimentos.filter((m) => !m.existeNoDB && m.jaExistenteChave === true).length,
     // Pendente = null (não salvo) OR nao_conciliado. Conciliado/parcial/ignorado
@@ -614,7 +631,8 @@ export function useImportacaoExtrato() {
       // do arquivo. Camada ADITIVA: não altera o dedup por hash nem o insert.
       const { data: candRows, error: errCand } = await supabase
         .from('extrato_bancario_v2' as any)
-        .select('id, data_movimento, valor, documento, descricao, seq_ocorrencia, status')
+        /* P140: `importacao_id` e `created_at` — de que arquivo a linha viva veio e quando (o `title` da gêmea) */
+        .select('id, data_movimento, valor, documento, descricao, seq_ocorrencia, status, importacao_id, created_at')
         .eq('cliente_id', clienteAtual.id)
         .eq('conta_bancaria_id', params.contaBancariaId)
         .gte('data_movimento', dataMin)
@@ -628,6 +646,16 @@ export function useImportacaoExtrato() {
         .neq('status', 'ignorado');
       if (errCand) throw errCand;
       const candidatosDup = (candRows ?? []) as unknown as RegistroExtratoExistente[];
+      /* P140 — de que arquivo veio cada linha viva (o `title` da gêmea). Só leitura; falhou = sem o nome (o aviso continua). */
+      const extrasDaViva = extrasDasVivas(candRows);
+      const idsDeArquivo = [...new Set([...extrasDaViva.values()].map((x) => x.importacaoId).filter((x): x is string => !!x))];
+      let nomeDoArquivo = new Map<string, string>();
+      if (idsDeArquivo.length) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
+        const { data: arqs } = await (supabase as any).from('financeiro_importacoes_v2')
+          .select('id, nome_arquivo').eq('cliente_id', clienteAtual.id).in('id', idsDeArquivo);
+        nomeDoArquivo = nomesDosArquivos(arqs);
+      }
 
       // PR-OFX-DEDUP-01 (1B) — conjunto das CHAVES NATURAIS VIVAS já no banco (cancelado_em
       // null pela query + status <> 'ignorado'), para o dedupe determinístico pré-insert.
@@ -636,6 +664,12 @@ export function useImportacaoExtrato() {
         { data_movimento: string; valor: number; documento: string | null; seq_ocorrencia: number; status: string }[]) {
         if (r.status === 'ignorado') continue;
         chavesVivasNoBanco.add(`${r.data_movimento}|${r.valor}|${chaveDocOFX(r.documento)}|${r.seq_ocorrencia}`);
+      }
+      /* P140 — a chave natural → a linha viva: a que casa por chave também é REIVINDICADA (não é sobra). A mesma chave do conjunto acima. */
+      const vivaDaChave = new Map<string, string>();
+      for (const c of candidatosDup) {
+        const x = extrasDaViva.get(c.id);
+        if (x && x.status !== 'ignorado') vivaDaChave.set(`${c.data_movimento}|${c.valor}|${chaveDocOFX(c.documento)}|${x.seq}`, c.id);
       }
 
       const fetchIni = addDays(dataMin, -10);
@@ -968,14 +1002,14 @@ export function useImportacaoExtrato() {
       for (const m of movimentos) {
         if (m.existeNoDB && m.extratoIdExistente) dupDisponiveis.delete(m.extratoIdExistente);
       }
-      const classificarComConsumo = (m: MovimentoPreview, soForte: boolean) => {
+      const classificarComConsumo = (m: MovimentoPreview, so: 'FORTE' | 'PROVAVEL' | null) => {
         if (m.existeNoDB || m.dupClassificacao) return;
         const dup = classificarDuplicidadeOFX(
           { contaBancariaId: params.contaBancariaId, dataMovimento: m.data, valor: m.valor, documento: m.documento, descricao: m.descricao },
           [...dupDisponiveis.values()],
         );
         if (!dup) return;
-        if (soForte && dup.classificacao !== 'FORTE') return;
+        if (so && dup.classificacao !== so) return;
         const existente = dupDisponiveis.get(dup.registroExistenteId);
         dupDisponiveis.delete(dup.registroExistenteId);
         m.dupClassificacao = dup.classificacao;
@@ -994,8 +1028,12 @@ export function useImportacaoExtrato() {
         m.dupExistenteDescricao = existente?.descricao ?? null;
         m.dupExistenteDocumento = existente?.documento ?? null;
       };
-      for (const m of movimentos) classificarComConsumo(m, true);
-      for (const m of movimentos) classificarComConsumo(m, false);
+      /* ⚠ TRÊS PASSADAS (P140): FORTE, depois PROVÁVEL, depois o resto. Com duas, em ordem de arquivo, uma COINCIDÊNCIA (texto e
+         documento diferentes) podia levar o candidato que era de uma linha PARECIDA mais adiante — e a parecida caía para "nova".
+         Agora a semelhança disputa antes da coincidência; a coincidência fica só com o que ninguém parecido quis. */
+      for (const m of movimentos) classificarComConsumo(m, 'FORTE');
+      for (const m of movimentos) classificarComConsumo(m, 'PROVAVEL');
+      for (const m of movimentos) classificarComConsumo(m, null);
 
       // PR-OFX-DEDUP-01 (1B) — seq de ocorrência em ORDEM FÍSICA do arquivo (movimentos
       // preserva a ordem de parseOFX → .map; índice do array = sequência do STMTTRN) +
@@ -1009,6 +1047,36 @@ export function useImportacaoExtrato() {
         m.seqOcorrencia = seq;
         m.jaExistenteChave = chavesVivasNoBanco.has(`${kSemSeq}|${seq}`);
       }
+
+      /* ── P140 — A GÊMEA DE OUTRO ARQUIVO ─────────────────────────────────────────────────────────────────────────
+         A COINCIDÊNCIA cuja linha viva nada do arquivo novo reivindicou (nem hash, nem FORTE/PROVÁVEL, nem chave natural) e cujo dia
+         está no período do arquivo: o banco reescreveu a linha (texto E documento). D1: por padrão NÃO entra; a prévia avisa e o
+         operador decide (a caixa da linha). D2: nada de "trocar pela nova" — a antiga não é tocada. */
+      const reivindicados = new Set<string>();
+      for (const m of movimentos) {
+        if (m.existeNoDB && m.extratoIdExistente) reivindicados.add(m.extratoIdExistente);
+        if ((m.dupClassificacao === 'FORTE' || m.dupClassificacao === 'PROVAVEL') && m.dupExistenteId) reivindicados.add(m.dupExistenteId);
+        if (m.jaExistenteChave) {
+          const viva = vivaDaChave.get(`${m.data}|${m.valor}|${chaveDocOFX(m.documento)}|${m.seqOcorrencia}`);
+          if (viva) reivindicados.add(viva);
+        }
+      }
+      const gemeas = gemeasDaImportacao(
+        movimentos.map((m, i) => ({ chave: String(i), dupClassificacao: m.jaExistenteChave ? null : m.dupClassificacao, dupExistenteId: m.dupExistenteId })),
+        reivindicados,
+        new Map(candidatosDup.map((c) => [c.id, c.data_movimento])),
+        { inicio: periodoDeclaradoInicio ?? dataMin, fim: periodoDeclaradoFim ?? dataMax },
+      );
+      movimentos.forEach((m, i) => {
+        if (!gemeas.has(String(i)) || !m.dupExistenteId) return;
+        const extra = extrasDaViva.get(m.dupExistenteId);
+        m.dupClassificacao = 'GEMEA';
+        m.dupImportar = false;
+        m.dupResumo = 'GÊMEA: a mesma conta, data e valor de uma linha de outro arquivo que o arquivo novo não traz — o banco mudou o texto ou o documento';
+        m.dupExistenteArquivo = extra?.importacaoId ? (nomeDoArquivo.get(extra.importacaoId) ?? null) : 'sem registro';
+        m.dupExistenteGravadoEm = extra?.criadoEm ?? null;
+        m.dupExistenteConciliado = extra?.status === 'conciliado';
+      });
 
       /* ⚠ A CONSULTA A MAIS QUE O PR-IMPORT-REIMPORTACAO-01 TROUXE SAIU JUNTO COM A RÉGUA DELE:
          a suspeita por semelhança usa `candidatosDup`, que a prévia já buscava antes de tudo

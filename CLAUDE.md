@@ -327,6 +327,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
 - FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter
   da conta aberta sao pegos na JANELA (captura), antes do Radix; campo de valor novo = `CampoMoeda` (nunca `Input type="number"`).
+- P140: GÊMEA na importação = a COINCIDÊNCIA cuja linha viva nada do arquivo novo reivindicou (hash, FORTE, PROVÁVEL, chave natural) no período
+  do arquivo (`gemeasDaImportacao`): selo "repetida?", NÃO entra por padrão (D1), a caixa decide; a antiga nunca é tocada (D2). Passadas: FORTE → PROVÁVEL → resto.
 - P139: transferência pela linha do extrato SÓ pela `fn_transferencia_do_extrato` (simular; lote `fn_transferencias_do_extrato_lote`, tudo ou nada);
   espelho ±3 = `_fn_espelhos_transferencia` (o mesmo do "Transferências entre contas"); gêmea = aviso com confirmação; já lançada = casar.
 - P134: TODA busca ignora acento, cedilha e maiúscula nos dois lados — tela `casaNaBusca`/`normalizarParaBusca` (`src/lib/texto/busca.ts`),
