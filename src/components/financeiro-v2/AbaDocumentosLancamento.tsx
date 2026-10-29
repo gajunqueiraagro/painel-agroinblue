@@ -596,7 +596,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
   useEffect(() => {
     if (!chaveDoPedido || !clienteId || !lida) return;
     let vivo = true;
-    void completarComANota(clienteId, JSON.parse(chaveDoPedido), { juntar: false, chave: lida.campos.chave || null, simular: true }).then((r) => {
+    void completarComANota(clienteId, JSON.parse(chaveDoPedido), { juntar: false, chave: lida.campos.chave || null, simular: true, valorNotaCent: Math.round(lida.campos.valor * 100) }).then((r) => {
       if (!vivo) return;
       if (r.ok === false) { setPreviaDaNota({ chave: chaveDoPedido, muda: [], recusa: r.motivo }); return; }
       if (!r.valor.ok) { setPreviaDaNota({ chave: chaveDoPedido, muda: [], recusa: r.valor.recusas[0] ?? 'O banco recusou.' }); return; }
@@ -612,7 +612,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
   /** grava no lançamento pela função; devolve a operação (para desfazer se o documento falhar) e o que ficou, ou a frase da recusa */
   const completarOLancamento = async (): Promise<{ ok: true; operacao: string | null; fica: FicaNoLancamento | null } | { ok: false; frase: string }> => {
     if (!pedidoDaNota || !clienteId || !lida || (previaAtual && previaAtual.muda.length === 0 && !previaAtual.recusa)) return { ok: true, operacao: null, fica: null };
-    const r = await completarComANota(clienteId, pedidoDaNota, { juntar: false, chave: lida.campos.chave || null, simular: false });
+    const r = await completarComANota(clienteId, pedidoDaNota, { juntar: false, chave: lida.campos.chave || null, simular: false, valorNotaCent: Math.round(lida.campos.valor * 100) });
     if (r.ok === false) return { ok: false, frase: r.motivo };
     if (!r.valor.ok) return { ok: false, frase: r.valor.recusas[0] ?? 'O banco recusou. Nada foi gravado.' };
     const c = r.valor.linhas[0]?.campos ?? {};

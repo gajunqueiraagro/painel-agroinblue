@@ -631,7 +631,7 @@ export function NotaFiscalDialog({
         criados.push({ id, numero: f.n });
       }
       /* 2 */
-      const r = await completarComANota(clienteId, [...pedido, ...criados.map((x) => ({ id: x.id }))], { juntar: !!soltas, chave: n.chave || null, simular: false });
+      const r = await completarComANota(clienteId, [...pedido, ...criados.map((x) => ({ id: x.id }))], { juntar: !!soltas, chave: n.chave || null, simular: false, valorNotaCent: n.totais.notaCent });
       const recusa = r.ok === false ? r.motivo : !r.valor.ok ? (r.valor.recusas[0] ?? 'O banco recusou.') : null;
       if (recusa || r.ok === false) {
         const nao = await cancelarCriados(criados.map((x) => x.id), recusa ?? 'recusa');
@@ -1263,7 +1263,7 @@ export function NotaFiscalDialog({
       {/* P128b — a prévia campo a campo do "Completar com a nota" (a do banco: `fn_nota_completar` com `p_simular`) */}
       {previaAberta && jaLancada && (
         <PreviaCompletar open onFechar={() => setPreviaAberta(false)} clienteId={clienteId}
-          alvos={alvosDaPrevia} rotulos={rotulosDaPrevia} atualizarNaoPagas={caminho === 'atualizar'} juntar={!!soltas} chave={n.chave || null}
+          alvos={alvosDaPrevia} rotulos={rotulosDaPrevia} atualizarNaoPagas={caminho === 'atualizar'} juntar={!!soltas} chave={n.chave || null} valorNotaCent={n.totais.notaCent}
           todasIniciais={{ descricaoBase: p.descricao, favorecidoId: favorecidoId ?? null, fazendaId: fazendaId || null, contaId: contaEscolhida,
             planoContaId: planoId || null, numeroDocumento: formatNFNumber(p.numeroDocumento || n.numero),
             competencia: n.emissao || null, safraId: lavoura && safraId ? safraId : null }}

@@ -61,3 +61,16 @@ describe('P128b — a resposta do banco', () => {
     expect(lerResultadoCompletar(null)).toEqual({ ok: false, recusas: [], linhas: [], efeitoDre: [], operacao: null, financiamentoId: null });
   });
 });
+
+/* P163-1 (o print 1126 do Gabriel, 29/10) — com o Subcentro desmarcado, a classificação não muda: só o MÊS. A frase não diz que o valor "sai de
+   X e vai para X"; diz que ele muda de mês no mesmo subcentro. Subcentro diferente segue a frase de sempre. */
+describe('P163-1 — o efeito no DRE quando só o mês muda', () => {
+  it('mesmo subcentro: "R$ … em «S» mudam de mês: 05/2031 → 06/2031"', () => {
+    expect(fraseDoEfeitoNoDre([{ mesDe: '2031-05', subcentroDe: 'Manutenção de Cercas', mesPara: '2031-06', subcentroPara: 'Manutenção de Cercas', valor: 3160, lancamentos: 5 }]))
+      .toBe('O DRE muda: R$ 3.160,00 em "Manutenção de Cercas" mudam de mês: 05/2031 → 06/2031.');
+  });
+  it('subcentro diferente: a frase de sempre', () => {
+    expect(fraseDoEfeitoNoDre([{ mesDe: '2031-05', subcentroDe: 'A', mesPara: '2031-05', subcentroPara: 'B', valor: 10, lancamentos: 1 }]))
+      .toBe('O DRE muda: R$ 10,00 saem de "A" (05/2031) e vão para "B" (05/2031).');
+  });
+});
