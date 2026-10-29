@@ -33,6 +33,9 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
+import { porDia } from '@/lib/conciliacao/linhasDoDia';
+import { historicoDoBanco } from '@/lib/conciliacao/historicoDoBanco';
+import { ListaDoMesPorDia, CelSaldoDoDia, TD_LISTA, TD_LISTA_NUM, type ColunaDaLista } from '@/components/conciliacao/ListaDoMesPorDia';
 
 /* ─── formatadores (movidos de EspelhoConciliacaoTab, verbatim) ─────────────── */
 
@@ -142,20 +145,8 @@ export function useExtratoDoMesEspelhado(
  * deles obrigaria a confiar: com os dois, "confere" é uma afirmação verificável, e a
  * diferença — quando existe — é o próprio número que falta explicar.
  */
-export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria', aoMarcarDuplicado }: {
+export function TabelaExtratoDoMes({ ofx, inicial, internas, aoMarcarDuplicado, semPar }: {
   ofx: EspOfx[]; inicial: number; internas: EspelhoInternas;
-  /**
-   * Quem rola esta lista.
-   *   'propria'    — ela é o scrollport (o Espelho, dentro de um modal de altura fixa).
-   *   'da-pagina'  — ela FLUI e quem rola é a tela que a montou (a aba "Importar Banco").
-   * ⚠ A PROP EXISTE POR CAUSA DA REGRA DO SCROLLPORT ÚNICO (CLAUDE.md): o corpo da aba
-   * Importar já é `overflow-y-auto`, e uma lista com rolagem própria lá dentro criaria a
-   * segunda barra — rolar a de dentro não moveria o cabeçalho fixo, e o operador veria a
-   * lista andar sem entender por que o topo fica.
-   * ⚠ E O `sticky` CONTINUA FUNCIONANDO NOS DOIS CASOS, porque ele ancora no scrollport MAIS
-   * PRÓXIMO: dentro do modal é esta div; na aba, é o corpo dela. O total não rola em nenhum.
-   */
-  rolagem?: 'propria' | 'da-pagina';
   /**
    * A ação de "marcar como duplicado" por linha — PR-EXTRATO-CANCELAR-MOVIMENTO-01.
    *
@@ -167,81 +158,75 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
    * a "arrumar" o extrato para o mês fechar, que é o avesso de conferir.
    */
   aoMarcarDuplicado?: (linha: EspOfx) => void;
+  /**
+   * P159a — os dois botões da linha SEM PAR ([Sugestões] [Criar]), os MESMOS da Conferência (o "Ver sugestões" e o "Criar" do "⋯"
+   * de lá). Só o Casar lançamentos passa; sem eles (a aba Importar) a Situação diz "sem par".
+   */
+  semPar?: { nSugestoes: (e: EspOfx) => number; aoSugestoes: (e: EspOfx) => void; aoCriar: (e: EspOfx) => void };
 }) {
   /* ⚠ O CONSOLIDADO MANDA QUANDO EXISTE; sem ele, o saldo da própria conta, que é o que a
      lista sempre usou. Nunca um zero no lugar do desconhecido: `??` não cai em 0. */
   const abertura = internas.saldoInicialConsolidado ?? inicial;
+  /* ⚠ O SALDO É O ACUMULADO DE SEMPRE, na ordem do ARQUIVO (a mesma soma de antes). P159a: a tela agora mostra só o do FIM DO DIA —
+     o acumulado depois da última linha do dia na ordem do arquivo (`porDia`), que não depende da ordem em que o dia se desenha. */
   const rows = useMemo(() => {
     let acc = abertura;
     return ofx.map((r) => { acc += r.valor; return { r, saldo: acc }; });
   }, [ofx, abertura]);
+  const dias = useMemo(() => porDia(rows, (x) => (x.r.data ?? '').slice(0, 10), (x) => x.r.valor), [rows]);
   const movimentos = ofx.reduce((a, r) => a + r.valor, 0);
   const fechamento = abertura + movimentos;
   const informado = internas.saldoInformadoConsolidado;
   const difere = informado == null ? null : fechamento - informado;
   /* ⚠ A COLUNA DA AÇÃO É ESTRUTURAL, NÃO DEPENDE DO DADO — e é isso que mantém a Lei de
      Estabilidade Visual de pé: ela existe ou não existe pela CAPACIDADE da tela (passou a
-     função?), e nunca aparece no meio do uso porque uma linha é diferente da outra. Dentro de
-     cada tela as larguras são constantes; medido nos dois lugares.
-     ⚠ AS DUAS CLASSES SÃO LITERAIS INTEIRAS de propósito: o Tailwind varre o fonte em busca de
-     nomes completos, e uma classe montada por concatenação não seria gerada. */
-  const colunas = aoMarcarDuplicado
-    ? 'grid-cols-[44px_1fr_72px_92px_92px_92px_24px]'
-    : 'grid-cols-[44px_1fr_72px_92px_92px_92px]';
-  const colunasDoTotal = aoMarcarDuplicado
-    ? 'grid-cols-[1fr_92px_92px_24px]'
-    : 'grid-cols-[1fr_92px_92px]';
+     função?), e nunca aparece no meio do uso porque uma linha é diferente da outra. */
+  /* P159a (mock 28/10): Data 44 · Histórico (o resto) · Valor 96 · Saldo 100 · ✓/○ 20 · Situação 150. A coluna Documento saiu: o
+     número vai no `title` do histórico. */
+  const colunas: ColunaDaLista[] = [
+    { titulo: 'Data', largura: 44 }, { titulo: 'Histórico' }, { titulo: 'Valor', largura: 96, alinhar: 'right' },
+    { titulo: 'Saldo', largura: 100, alinhar: 'right' }, { titulo: '', largura: 20, alinhar: 'center' }, { titulo: 'Situação', largura: 150 },
+    ...(aoMarcarDuplicado ? [{ titulo: '', largura: 24 }] : []),
+  ];
   return (
-    /* ⚠ A LISTA OCUPA A ALTURA QUE SOBRA, E TEM A MARGEM DA CONFERÊNCIA — PR-ESPELHO-06 item C.
-       Era `max-h-[55vh]` sem padding lateral: a tabela parava no meio do modal de 92vh,
-       sobrava faixa morta até o rodapé, e o texto encostava na borda enquanto a Conferência
-       respirava em `px-3.5`. `min-h-0 flex-1` é a MESMA receita da Conferência — 55vh é uma
-       altura chutada; `flex-1` é a altura que existe.
-       ⚠ `min-h-0` NÃO É ENFEITE: sem ele o filho de um flex não encolhe abaixo do conteúdo e
-       o `overflow-y-auto` nunca ganha barra — a página inteira é que rolaria. */
-    <div className={cn('border-t px-3.5 text-[10px]',
-      rolagem === 'propria' && 'min-h-0 flex-1 overflow-y-auto')}>
-      {/* ⚠ O CABEÇALHO FIXO GANHOU `z` EXPLÍCITO — PR-IMPORTAR-EXTRATO-MODAL-01, A21: em lista
-          com rolagem, cabeçalho e totais ficam parados e só o corpo anda. O rodapé já tinha
-          `z-[2]` desde o PR anterior; o topo não tinha nenhum, e dependia da regra implícita de
-          que um elemento posicionado cobre os não-posicionados. Regra implícita é a que quebra
-          quando alguém acrescenta um badge posicionado numa célula.
-          ⚠ O FUNDO É OPACO E ISSO FOI CONFERIDO NO TOKEN, não presumido: `--card: 0 0% 100%`,
-          sem alpha. É a mesma lição do rodapé, que era `bg-muted/40` e deixava as linhas
-          aparecerem por baixo do total.
-          ⚠ SEM MARGEM NEGATIVA LATERAL (A21): o container tem `px-3.5`, e resolver a faixa dos
-          lados com `-mx-3.5` comeria as bordas do cartão. O eixo vertical é o único em que a
-          compensação é segura, e aqui nem ele é necessário. */}
-      {/* ⚠ NAVY, E É O TOKEN DA CASA — PR-CONC-CABECALHO-PADRAO-01. Em `bg-card` +
-          `text-muted-foreground` o cabeçalho tinha a mesma cor do contexto das linhas e sumia
-          no branco: o olho não achava onde a grade começa. `bg-primary` é o mesmo navy que a
-          Conferência já usava, que o `CompraModalShell` usa no seu cabeçalho e que cinco
-          tabelas da casa adotam. Nenhuma cor nova.
-          ⚠ SEM MARGEM NEGATIVA LATERAL, como a nota logo acima manda: a faixa fica recuada os
-          14px do `px-3.5` do container. Esticá-la com `-mx-3.5` comeria as bordas do cartão. */}
-      <div className={cn('grid gap-1 font-medium text-primary-foreground border-b py-1 sticky top-0 z-[3] bg-primary', colunas)}>
-        <span>Data</span><span>Histórico</span><span>Documento</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
-        {aoMarcarDuplicado && <span />}
-      </div>
-      <div className={cn('grid gap-1 py-0.5 bg-muted/40 text-[11px] font-semibold border-b', colunas)}>
-        <span className="col-span-3">Saldo inicial (extrato)</span>
-        <span />
-        <span className={cn('text-right tabular-nums', corValReal(abertura))}>{fmtBRL(abertura)}</span>
-        <span />
-        {aoMarcarDuplicado && <span />}
-      </div>
-      {rows.map(({ r, saldo }) => (
-        <div key={r.extrato_id} className={cn('group grid gap-1 py-0.5 border-b last:border-b-0 items-center', colunas)}>
-          <span className="text-muted-foreground">{fmtData(r.data)}</span>
-          <span className="truncate flex items-center gap-1" title={r.historico ?? ''}>
-            <span className="truncate">{r.historico ?? '—'}</span>
-            {r.flag_dup && <span className="px-1 rounded bg-orange-100 text-orange-700 text-[10px] shrink-0">dup</span>}
-            {r.flag_investimento && <span className="px-1 rounded bg-violet-100 text-violet-700 text-[10px] shrink-0">invest</span>}
-          </span>
-          <span className="truncate text-muted-foreground" title={r.documento ?? ''}>{r.documento ?? '—'}</span>
-          <span className={`text-right tabular-nums ${corValReal(r.valor)}`}>{fmtBRL(r.valor)}</span>
-          <span className={`text-right tabular-nums ${corValReal(saldo)}`}>{fmtBRL(saldo)}</span>
-          <EspStatusCell status={r.status} />
+    <ListaDoMesPorDia
+      testid="extrato-do-mes" testidLinha="extrato-linha"
+      linhas={dias} colunas={colunas} chave={(x) => x.r.extrato_id}
+      classeDaLinha={(x) => (x.item.r.status === 'sem_vinculo' ? 'bg-amber-50 dark:bg-amber-950/20' : undefined)}
+      saldoInicial={{ rotulo: 'Saldo inicial (extrato)', valor: fmtBRL(abertura), coluna: 3, className: cn('font-semibold', corValReal(abertura)),
+        testid: 'extrato-saldo-inicial' }}
+      celulas={(x) => {
+        const r = x.item.r;
+        const h = historicoDoBanco(r.historico, r.data);
+        /* o `title` leva o texto LIMPO (o que a célula mostra, para o "…" ter o inteiro) e o inteiro do banco — a mesma regra da `CelHistorico` */
+        const original = r.historico ?? '';
+        const titulo = [h.texto && h.texto !== original ? h.texto : null, original || null, r.documento ? `documento ${r.documento}` : null]
+          .filter(Boolean).join('\n');
+        return (<>
+          <td className={TD_LISTA} title={titulo || undefined}>
+            <span className="flex min-w-0 items-center gap-1">
+              {/* a hora pequena e cinza, em lugar FIXO (vazio sem hora): o texto começa sempre no mesmo ponto */}
+              <span className="w-[28px] shrink-0 text-[9.5px] tabular-nums text-muted-foreground" data-testid="extrato-hora">{h.hora}</span>
+              <span className="min-w-0 flex-1 truncate" data-testid="extrato-historico">{h.texto || '—'}</span>
+              {r.flag_dup && <span className="shrink-0 rounded bg-orange-100 px-1 text-[9.5px] leading-[13px] text-orange-700">dup</span>}
+              {r.flag_investimento && <span className="shrink-0 rounded bg-violet-100 px-1 text-[9.5px] leading-[13px] text-violet-700">invest</span>}
+            </span>
+          </td>
+          <td className={cn(TD_LISTA_NUM, corValReal(r.valor))}>{fmtBRL(r.valor)}</td>
+          <CelSaldoDoDia fimDoDia={x.fimDoDia} testid="extrato-saldo"
+            saldo={x.ultimaDoDiaNaOrigem ? fmtBRL(x.ultimaDoDiaNaOrigem.saldo) : null}
+            className={x.ultimaDoDiaNaOrigem ? corValReal(x.ultimaDoDiaNaOrigem.saldo) : undefined} />
+          <td className={cn(TD_LISTA, 'px-0 text-center')} data-testid="extrato-sinal">
+            {r.status === 'conciliado' ? <span className="font-bold text-emerald-600" title="casado">✓</span>
+              : r.status === 'ignorado' ? <span className="text-muted-foreground" title="ignorado">⊘</span>
+              : <span className="text-muted-foreground" title="sem par">○</span>}
+          </td>
+          <td className={TD_LISTA} data-testid="extrato-situacao">
+            {r.status === 'conciliado' ? <span className="text-muted-foreground">casado</span>
+              : r.status === 'ignorado' ? <span className="text-muted-foreground">ignorado</span>
+              : semPar ? <BotoesDoSemPar e={r} semPar={semPar} />
+              : <span className="text-amber-700">sem par</span>}
+          </td>
           {/* ⚠ A AÇÃO DIZ O MOTIVO, NÃO O MECANISMO — "marcar como duplicado", nunca
               "cancelar": numa linha de tabela, "cancelar" se confunde com "cancelar a
               operação", e o operador que quer tirar a duplicata hesita justamente por medo de
@@ -249,57 +234,53 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
               ⚠ `title` E `aria-label` (regra da casa), e os dois dizem a mesma frase inteira —
               um ícone sozinho não é rótulo de nada. */}
           {aoMarcarDuplicado && (
-            <button type="button"
-              className="flex h-4 w-4 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-              title="Marcar como duplicado — o movimento sai do extrato do mês"
-              aria-label={`Marcar como duplicado o movimento de ${fmtData(r.data)}, ${fmtBRL(r.valor)}`}
-              onClick={() => aoMarcarDuplicado(r)}>
-              <Ban className="h-3 w-3" />
-            </button>
+            <td className={cn(TD_LISTA, 'px-0')}>
+              <button type="button"
+                className="flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                title="Marcar como duplicado — o movimento sai do extrato do mês"
+                aria-label={`Marcar como duplicado o movimento de ${fmtData(r.data)}, ${fmtBRL(r.valor)}`}
+                onClick={(ev) => { ev.stopPropagation(); aoMarcarDuplicado(r); }}>
+                <Ban className="h-3 w-3" />
+              </button>
+            </td>
           )}
-        </div>
-      ))}
-
-      {/* ═══ O TOTAL — FIXO NO PÉ, E FORA DA GRADE DAS LINHAS ═══════════════════════════
-          ⚠ ELE ROLAVA JUNTO COM A LISTA (PR-IMPORTAR-VER-EXTRATO-01): era o último filho do
-          scrollport, sem `sticky`, enquanto o cabeçalho já grudava no topo. Num mês de 35
-          linhas o operador perdia de vista exatamente o número que foi conferir. A regra A21
-          da casa diz que o bloco de totais não rola.
-          ⚠ E O FUNDO PRECISOU FICAR OPACO: era `bg-muted/40`, e translúcido é pior que não
-          fixar — as linhas passam por baixo do total que se está lendo.
-          ⚠ A GRADE DE 6 COLUNAS SAIU DAQUI, e este é o segundo conserto: o "informado" caía
-          na coluna de Status, de 92px, para um texto que mede 184,8px — cortava no meio
-          ("informado: 155.7…") e NÃO tinha `title`, então o número não podia ser lido nem no
-          hover. Este bloco é um TOTAL, não uma linha de dados: ele mantém as duas últimas
-          colunas alinhadas (`1fr 92px 92px` cai exatamente sobre Saldo e Status, medido) e
-          deixa o texto usar a largura que sobra à esquerda. */}
-      <div className={cn('sticky bottom-0 z-[2] grid gap-1 border-t bg-muted py-0.5 text-[11px] font-semibold', colunasDoTotal)}>
-        <span className="flex min-w-0 items-baseline gap-2">
-          <span className="shrink-0">Saldo final (extrato)</span>
-          {/* ⚠ "—" QUANDO FALTA SALDO INFORMADO, nunca "difere R$ 0,00": a sentinela do
-              CLAUDE.md diz que ausência é traço, e um "confere" sobre dado que não existe é a
-              pior das duas mentiras possíveis aqui. */}
-          <span className="min-w-0 truncate text-[10px] font-normal text-muted-foreground"
-            title={informado == null
-              ? 'sem saldo informado para o mês'
-              : `informado: ${fmtBRL(informado)} · calculado: ${fmtBRL(fechamento)}`}>
-            {informado == null
-              ? '—'
-              : <>informado: {fmtBRL(informado)}{' · '}
-                  {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02: este é o total do
-                      extrato contra o que o banco declarou, e é a mesma pergunta do portão e da
-                      tabela de saldos. Um centavo aqui é divergência, e divergência aparece. */}
-                  {saldoConfere(difere ?? 0)
-                    ? <span className="text-success">confere</span>
-                    : <span className="text-amber-600">difere R$ {fmtBRL(Math.abs(difere ?? 0))}</span>}
-                </>}
-          </span>
+        </>);
+      }}
+      rodape={<>
+        <span className="shrink-0">Saldo final do extrato{' '}
+          <b className={cn('tabular-nums', corValReal(fechamento))} data-testid="extrato-saldo-final">{fmtBRL(fechamento)}</b></span>
+        {/* ⚠ "—" QUANDO FALTA SALDO INFORMADO, nunca "difere R$ 0,00": a sentinela do
+            CLAUDE.md diz que ausência é traço, e um "confere" sobre dado que não existe é a
+            pior das duas mentiras possíveis aqui.
+            ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02: um centavo aqui é divergência. */}
+        <span className="min-w-0 truncate" data-testid="extrato-informado"
+          title={informado == null ? 'sem saldo informado para o mês' : `informado no arquivo: ${fmtBRL(informado)} · calculado: ${fmtBRL(fechamento)}`}>
+          {informado == null
+            ? <span className="text-muted-foreground">informado no arquivo —</span>
+            : saldoConfere(difere ?? 0)
+              ? <span className="text-success">informado no arquivo {fmtBRL(informado)} · confere</span>
+              : <span className="text-amber-700">informado no arquivo {fmtBRL(informado)} · difere R$ {fmtBRL(Math.abs(difere ?? 0))}</span>}
         </span>
-        <span className={cn('text-right tabular-nums', corValReal(fechamento))}>{fmtBRL(fechamento)}</span>
-        <span />
-        {aoMarcarDuplicado && <span />}
-      </div>
-    </div>
+        <span className="ml-auto shrink-0 text-[9.5px] text-muted-foreground">✓ casado · ○ sem par · ordem do dia: maior valor primeiro</span>
+      </>}
+    />
+  );
+}
+
+/** [Sugestões] [Criar] — a linha sem par do Extrato e da Conferência (P159a). Sugestões sem nenhuma = desabilitado, com o porquê. */
+export function BotoesDoSemPar({ e, semPar }: {
+  e: EspOfx; semPar: { nSugestoes: (e: EspOfx) => number; aoSugestoes: (e: EspOfx) => void; aoCriar: (e: EspOfx) => void };
+}) {
+  const n = semPar.nSugestoes(e);
+  const btn = 'h-[15px] rounded-[4px] border border-blue-600 bg-card px-1.5 text-[9.5px] leading-[13px] text-blue-700 disabled:border-border disabled:text-muted-foreground';
+  return (
+    <span className="inline-flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
+      <button type="button" className={btn} disabled={n === 0} data-testid="sem-par-sugestoes"
+        title={n === 0 ? 'nenhuma sugestão para este movimento' : `${n} sugest${n === 1 ? 'ão' : 'ões'}`}
+        onClick={() => semPar.aoSugestoes(e)}>Sugestões</button>
+      <button type="button" className={btn} data-testid="sem-par-criar" title="Criar o lançamento deste movimento"
+        onClick={() => semPar.aoCriar(e)}>Criar</button>
+    </span>
   );
 }
 
@@ -369,7 +350,7 @@ export function ExtratoDoMesModal({ clienteId, contaId, anoMes, contaNome, abert
     return (
       <>
         <TabelaExtratoDoMes ofx={data.ofx} inicial={data.inicial} internas={internas}
-          rolagem="propria" aoMarcarDuplicado={setAlvo} />
+          aoMarcarDuplicado={setAlvo} />
 
         {/* ═══ OS CANCELADOS DO MÊS ══════════════════════════════════════════════════════
             ⚠ ELES PRECISAM TER ONDE APARECER, e este é o lugar: o operador que acabou de tirar

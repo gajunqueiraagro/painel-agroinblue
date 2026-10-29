@@ -36,6 +36,7 @@ import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
 import * as CONC from './dados/conciliacao';
+import * as ESP from './dados/espelho';
 import type { SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { volumeNJ } from './dados/volumeNJ';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
@@ -793,10 +794,14 @@ if (tela === 'mesclar') {
       : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : CONC.DOCUMENTOS) : [],
     rpc: (fn: string, a: any) => fn === 'fn_conciliacao_resumo_mes'
       ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null, v))
-      : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }] : null,
+      : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }]
+      /* P159a — o Espelho da conta escolhida (`dados/espelho.ts`): o Casar lançamentos (Extrato, Sistema, Evolução) e a Conferência */
+      : fn === 'fn_extratos_espelhados' ? ESP.espelho(v) : null,
   };
   g.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
-  if (tela === 'conciliacao') montar(<div className="h-full"><ConciliacaoBancariaTab initialAno="2031" initialMes="09" /></div>);
+  /* P159b — montada COMO NO APP (`V2Index`, seção do app-shell: coluna flex que dá a altura até a lista). Num bloco solto quem rolava era
+     a moldura da bancada, e o cabeçalho da Evolução "não ficava preso" só aqui. */
+  if (tela === 'conciliacao') montar(<div className="flex h-full min-h-0 w-full min-w-0 flex-col"><ConciliacaoBancariaTab initialAno="2031" initialMes="09" /></div>);
   else montar(<ExtratoDoSistemaDialog aberto clienteId="cli" contaId="cc1" contaNome={CONC.CONTAS[0].nome_conta} anoMes="2031-09" onFechar={() => {}} />);
 } else if (tela === 'conciliar') {
   /* CONC-SEM-TRAVA-01 (tela) — o modal "Conciliar" no formato da resposta de `fn_conc_simular_diferenca` provada no caso real (OC

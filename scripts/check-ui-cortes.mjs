@@ -634,6 +634,30 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="sistema-saldo-final"]').waitFor(); await p.waitForTimeout(500); } },
   { nome: 'conciliacao-extrato-do-sistema-carregando', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DA_CONCILIACAO,
     regiao: '[data-testid="modal-extrato-sistema"]' },
+  /* P159a (CONC-TELAS-01) — o Casar lançamentos: a barra de UMA linha (sem conta: "Escolha a conta"), o Extrato (banco) por dia de 1000px
+     para cima (a página da Conciliação, CONC-ESTREITA) e a Conferência (modal quase tela cheia) nos 10 tamanhos, no pior caso
+     (`dados/espelho.ts`): com os vencidos abertos e no mês curto (a lista não enche a tela) */
+  { nome: 'casar-barra-sem-conta', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
+    antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await clicarRotulo(/^Casar lançamentos$/)(p);
+      await p.locator('[data-testid="barra-casar"]').waitFor(); } },
+  ...[['casar-extrato', 'tela=conciliacao'], ['casar-extrato-poucos', 'tela=conciliacao&v=poucos']].map(([nome, url]) => ({ nome, url,
+    tamanhos: TAMANHOS_DA_CONCILIACAO, antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
+      await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await p.waitForTimeout(500); } })),
+  ...[['conferencia', null], ['conferencia-vencidos', 'chip-vencidos'], ['conferencia-sem-par', 'chip-sem_par'], ['conferencia-poucos', null]].map(([nome, chip]) => ({
+    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,
+    regiao: '[data-testid="modal-conferencia"]',
+    antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
+      await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="barra-casar"]').getByRole('button', { name: 'Conferência' }).click();
+      await p.locator('[data-testid="mesa-conferencia"]').waitFor(); await p.waitForTimeout(500);
+      if (chip) await clicar(`[data-testid="${chip}"]`)(p); } })),
+  /* P159b (CONC-TELAS-02) — as abas Sistema e Evolução do saldo do Casar (de 1000px para cima, a página da Conciliação); a Evolução também
+     com os dias sem movimento à vista. O modal "Extrato do sistema" (o ↗, D5) já tem os cenários `conciliacao-extrato-do-sistema*`. */
+  ...[['casar-sistema', 'Sistema', null], ['casar-evolucao', 'Evolução do saldo', null], ['casar-evolucao-com-vazios', 'Evolução do saldo', 'evolucao-mostrar-vazios']]
+    .map(([nome, aba, marcar]) => ({ nome, url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
+      antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
+        await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor();
+        await p.locator('[data-testid="barra-casar"]').getByRole('button', { name: aba, exact: true }).click(); await p.waitForTimeout(600);
+        if (marcar) await clicar(`[data-testid="${marcar}"]`)(p); } })),
   /* UI-SEM-CORTE-02 — a TABELA do Financeiro V2 segue fora (FIN-V2-SEM-CORTE-01, suspensa), mas entra pelo texto inclinado e pela
      sobreposicao: a ultima letra do fornecedor ("Maderat") sumia pela linha em italico */
   { nome: 'financeiro-tabela-italico', url: 'tela=financeiro', soRegras: ['italico', 'sobreposicao'] },
@@ -875,7 +899,11 @@ function medir(regiao) {
         /* FIN-CONSORCIO-02 — a celula que DECLARA nao ter data (`data-sem-data`: a parcela adiada vence "contemplação") nao e' data incompleta */
         if (td.hasAttribute('data-sem-data')) continue;
         const t = (td.textContent ?? '').trim();
-        if (t && t !== '—' && t !== '-' && !/^\d{2}\/\d{2}\/\d{4}$/.test(t)) achados.push({ regra: 'data', texto: `${th.textContent.trim()}: ${t}` });
+        /* P159a (Gabriel 28/10, D7 — a EXCEÇÃO DECLARADA): a lista do mês por dia (`ListaDoMesPorDia`, marcada `data-dia-mes`: o Extrato
+           (banco) e o Extrato do sistema) escreve dd/mm SEM o ano — o mês está no cabeçalho da tela e a data só na 1ª linha do dia. Ali,
+           e só ali, dd/mm passa; qualquer outra forma segue acusada. */
+        const diaMes = tb.hasAttribute('data-dia-mes') && /^\d{2}\/\d{2}$/.test(t);
+        if (t && t !== '—' && t !== '-' && !diaMes && !/^\d{2}\/\d{2}\/\d{4}$/.test(t)) achados.push({ regra: 'data', texto: `${th.textContent.trim()}: ${t}` });
       }
     });
   }
@@ -1046,6 +1074,8 @@ try {
     <tbody>${Array.from({ length: 30 }, () => '<tr><td>10/09/26</td></tr>').join('')}</tbody></table></div>
     <div style="height:120px;overflow:auto"><div style="overflow-x:auto"><table><thead style="position:sticky;top:0;background:#fff"><tr><th>Nome</th></tr></thead>
     <tbody>${Array.from({ length: 30 }, () => '<tr><td>x</td></tr>').join('')}</tbody></table></div></div>
+    <table data-dia-mes=""><thead><tr><th>Data</th></tr></thead><tbody><tr><td>01/10</td></tr><tr><td>01/10/26</td></tr></tbody></table>
+    <table><thead><tr><th>Data</th></tr></thead><tbody><tr><td>02/10</td></tr></tbody></table>
     <div style="height:300px;overflow:auto"><div style="height:200px">bloco de cima</div>${['Empilhada A', 'Empilhada B'].map((n) => `<table><thead style="position:sticky;top:0;background:#fff"><tr><th>${n}</th></tr></thead>
     <tbody>${Array.from({ length: 6 }, () => '<tr><td>y</td></tr>').join('')}</tbody></table>`).join('')}</div>`);
   /* e a rolagem (FIN-CONSORCIO-02): um modal com conteudo mais alto que a caixa tem de ser acusado */
@@ -1101,6 +1131,10 @@ try {
   if (empilhadaAcusada.length) { console.error(`check-ui-cortes: AUTO-TESTE DO CABEÇALHO EMPILHADO FALHOU (${empilhadaAcusada.map((a) => a.texto).join(' | ')})`); process.exit(2); }
   const seco0 = daPagina0.some((a) => a.texto.startsWith('corte seco: Nome cortado seco'));
   const doc0 = daPagina0.some((a) => a.regra === 'numero' && a.texto.includes('12.345.678/0001-90'));
+  /* P159a (D7) — a exceção declarada se prova: dd/mm passa SÓ na tabela `data-dia-mes`; lá, dd/mm/aa segue acusado; fora dela, dd/mm também */
+  const diaMesAceitoErrado = daPagina0.some((a) => a.regra === 'data' && a.texto === 'Data: 01/10');
+  const diaMesCurto0 = daPagina0.some((a) => a.regra === 'data' && a.texto === 'Data: 01/10/26');
+  const diaMesFora0 = daPagina0.some((a) => a.regra === 'data' && a.texto === 'Data: 02/10');
   /* P121 — o clamp em N linhas dentro de célula com o texto inteiro no title passa; fora de tabela segue acusado */
   const clampAceitoErrado = daPagina0.some((a) => a.texto.includes('Clamp aceito'));
   const clampFora0 = daPagina0.some((a) => a.regra === 'reticencias' && a.texto.includes('Clamp recusado'));
@@ -1113,6 +1147,7 @@ try {
     && !daSemRolar0.some((a) => a.texto.includes('Campo de seletor'));
   if (!semRolar0) { console.error(`check-ui-cortes: AUTO-TESTE DO SEM-ROLAR-NO-LUGAR FALHOU (${JSON.stringify(daSemRolar0)})`); process.exit(2); }
   if (aceitoErrado || !seco0 || !doc0 || clampAceitoErrado || !clampFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA REGRA DE CORTE FALHOU (aceito acusado: ${aceitoErrado}, corte seco: ${seco0}, documento: ${doc0}, clamp na célula acusado: ${clampAceitoErrado}, clamp fora achado: ${clampFora0})`); process.exit(2); }
+  if (diaMesAceitoErrado || !diaMesCurto0 || !diaMesFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA DATA dd/mm FALHOU (aceito acusado: ${diaMesAceitoErrado}, dd/mm/aa na lista: ${diaMesCurto0}, dd/mm fora da lista: ${diaMesFora0})`); process.exit(2); }
   await p0.close();
   if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem', 'valor', 'tabela', 'sobreposicao', 'italico', 'numero'].every((r) => prova.includes(r))
     || prova.filter((r) => r === 'cabecalho').length < 3 || daSobre0.filter((a) => a.regra === 'sobreposicao').length < 2) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }

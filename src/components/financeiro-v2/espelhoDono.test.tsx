@@ -108,7 +108,9 @@ describe('T1 — o Emerson no Casar: o quadro do topo e a aba Sistema são do do
     expect(saldos[saldos.length - 1]).toBe('155.972,29');
     expect(saldos.length).toBe(fimDosDias(CASO.resumo.linhas_sistema, 'saldo_apos').length);
     expect(screen.getAllByTestId('sistema-linha').length).toBe(CASO.resumo.linhas_sistema.length);
-    expect(screen.getByText(/^parcial · falta R\$\s300,00$/)).toBeInTheDocument();
+    /* P159b (D3): o não conciliado é um ○ âmbar; o status (parcial e a falta) vai no title */
+    const naoConc = screen.getAllByTestId('sistema-nao-conciliado');
+    expect(naoConc.some((e) => e.textContent === '○' && /^parcial · falta R\$\s300,00: /.test(e.getAttribute('title') ?? ''))).toBe(true);
   });
 });
 
@@ -138,7 +140,7 @@ describe('T6 (PR-CONC-INTERNA-SEPARADA-01b) — a aba Sistema da conta-MÃE: sal
     expect(linhas.length).toBe(134);
     const internas = screen.getAllByTestId('sistema-transferencia-interna');
     expect(internas.length).toBe(18);
-    expect(internas[0].textContent).toBe('⇄ interna · fora do extrato');
+    expect(internas[0].textContent).toBe('⇄'); // P159b: só o sinal, na coluna de 22px; a legenda inteira no title
     expect(internas[0].getAttribute('title')).toContain('transferência interna · fora do extrato');
     /* P141 (D4): a coluna de saldo é o `saldo_apos_proprio` da ÚLTIMA linha de cada dia NA ORDEM DO DONO, só no fim do dia */
     const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -176,7 +178,7 @@ describe('o link "N dias com diferença" abre a Conferência no dia', () => {
     Element.prototype.scrollIntoView = vi.fn();
     montar({ aba: 'conferencia', onAbaChange: () => {}, onDiaFocado: focado });
     await screen.findByTestId('modal-conferencia');
-    fireEvent.click(screen.getByLabelText('Só não conciliados'));
+    fireEvent.click(screen.getByTestId('chip-sem_par'));
     expect(focado).not.toHaveBeenCalled();
   });
 });

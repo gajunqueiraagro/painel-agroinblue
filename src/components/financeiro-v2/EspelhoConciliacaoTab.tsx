@@ -15,7 +15,7 @@
  * ⚠ SEÇÃO MOVIDA, NÃO REESCRITA. `AbaOfxReal`, `AbaSistemaReal` e a Evolução do saldo vieram
  * de `AuditoriaBancariaSoberana` byte a byte — o que mudou foi a casa e a Conferência.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { fechaAoCentavo, TOLERANCIA_CONCILIACAO } from '@/lib/conciliacao/tolerancia';
 import { DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { useQuery } from '@tanstack/react-query';
@@ -36,10 +36,15 @@ import { CriarTransferenciaDialog, type MovimentoParaTransferencia } from '@/com
 import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTransferenciasLoteDialog';
 import { sugestoesDeTransferencia, porqueDaSugestao, type SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
-import { linhasDoDia } from '@/lib/conciliacao/linhasDoDia';
+import { porDia } from '@/lib/conciliacao/linhasDoDia';
+import { ListaDoMesPorDia, CelSaldoDoDia, TD_LISTA, TD_LISTA_NUM, type ColunaDaLista } from '@/components/conciliacao/ListaDoMesPorDia';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
+import { historicoDoBanco } from '@/lib/conciliacao/historicoDoBanco';
+import { itensDoDia, contagemDoDia, contagensDaMesa, rotuloDoDia, type FiltroConferencia, type ItemConferencia } from '@/lib/conciliacao/conferenciaDoDia';
+import { TH_REGUA } from '@/components/ui/regua-tabela';
+import { Segmentado } from '@/components/ui/segmentado';
 import {
-  TabelaExtratoDoMes, EspStatusCell, fmtBRL, fmtData, corValReal,
+  TabelaExtratoDoMes, BotoesDoSemPar, EspStatusCell, fmtBRL, fmtData, corValReal,
   type EspOfx, type EspStatus,
 } from '@/components/conciliacao/TabelaExtratoDoMes';
 import { toast } from 'sonner';
@@ -55,7 +60,8 @@ import { SugestoesCasarModal } from '@/components/financeiro-v2/SugestoesCasarMo
    já importava daqui (o Extrato da planilha, os testes) não mudar. */
 import {
   montarMesa, sinalDoAplicado, ordenar,
-  type EspSis, type EspCandidato, type EspelhadosReais, type FilhaConf, descricaoComParcela, fraseDaFalta,
+  type EspSis, type EspCandidato, type EspelhadosReais, type FilhaConf, type DiaConf, type Pareado, type ParedoN1,
+  descricaoComParcela, fraseDaFalta,
 } from '@/lib/conciliacao/mesaDoDia';
 import { useResumoMes, useReleDonoAoMudarLancamentos } from '@/hooks/useResumoConciliacao';
 import { fraseDoRetido, saldosDaLinha, TIPO_TRANSFERENCIA_INTERNA, type LinhaResumo, type LinhaSistemaDono } from '@/lib/conciliacao/resumoDoDono';
@@ -78,23 +84,18 @@ const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 's
  * O status de exibição da linha do sistema — o do DONO (`status_exibicao`). O parcial diz quanto falta.
  * ⚠ A FRASE INTEIRA vai no `title`; a coluna tem largura fixa medida no pior caso ("parcial · falta R$ 9.999.999,99").
  */
-function StatusLinhaSistema({ l }: { l: LinhaSistemaDono }) {
-  /* A perna da transferência mãe↔interna (PR-CONC-INTERNA-SEPARADA-01b, D6): o ⇄ da mesa; a legenda inteira no `title`
-     (a coluna tem 154px e "transferência interna · fora do extrato" pede mais). */
+/** P159b (D3) — o sinal da linha do sistema, numa coluna de 22px: ✓ conciliado; ○ âmbar com o status no `title` (realizado sem par no
+ *  extrato, parcial com a falta); ⇄ a perna da transferência mãe↔interna (PR-CONC-INTERNA-SEPARADA-01b, D6). */
+function SinalDaLinhaSistema({ l }: { l: LinhaSistemaDono }) {
   if (l.tipo === TIPO_TRANSFERENCIA_INTERNA) {
-    return (
-      <span className="text-muted-foreground text-[10px] whitespace-nowrap" data-testid="sistema-transferencia-interna"
-        title="transferência interna · fora do extrato: conta só no saldo próprio desta conta">
-        ⇄ interna · fora do extrato
-      </span>
-    );
+    return <span className="text-muted-foreground" data-testid="sistema-transferencia-interna"
+      title="transferência interna · fora do extrato: conta só no saldo próprio desta conta">⇄</span>;
   }
-  if (l.status_exibicao === 'parcial') {
-    const texto = `parcial · falta ${l.falta != null ? formatarFalta(l.falta) : '—'}`;
-    return <span className="text-amber-700 text-[10px] whitespace-nowrap" title={`programado que o extrato não quitou: ${texto}`}>{texto}</span>;
-  }
-  if (l.status_exibicao === 'conciliado') return <EspStatusCell status="conciliado" />;
-  return <span className="text-muted-foreground text-[10px] whitespace-nowrap" title="realizado sem par no extrato">realizado</span>;
+  if (l.status_exibicao === 'conciliado') return <span className="font-bold text-emerald-600" title="conciliado">✓</span>;
+  const titulo = l.status_exibicao === 'parcial'
+    ? `parcial · falta ${l.falta != null ? formatarFalta(l.falta) : '—'}: programado que o extrato não quitou`
+    : 'realizado sem par no extrato';
+  return <span className="text-amber-600" title={titulo} data-testid="sistema-nao-conciliado">○</span>;
 }
 const formatarFalta = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 /** Cor de uma diferença do dono: zero (ou ausente) neutro, negativo vermelho, positivo verde (D11). */
@@ -115,14 +116,15 @@ function corDaDiferenca(v: number | null | undefined) {
  *   os do `proprio`, e na conta-mãe aparecem as linhas 'transferencia_interna' (aplicações e resgates na interna), que só
  *   existem no sistema. Em conta sem par os três são os de antes. A Conferência dia a dia segue consolidada, sem elas.
  */
-/** P141 — dd/mm/aaaa (a regra da casa; a coluna se chama "Data"). */
-const dataInteira = (s: string | null) => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
-
 /**
- * P141 (CONC-LAYOUT-01, D3/D4) — UM componente em dois tamanhos: `aba` (a sub-aba Sistema do Casar lançamentos) e `grande` (o modal
- * "Extrato do sistema" da Conciliação). Os dois com a MESMA regra do dia (`linhasDoDia`): dentro do dia do maior |valor| para o menor;
- * o saldo SÓ na última linha do dia, em negrito, com a divisória entre os dias — e o saldo é o do BANCO (fim do dia na ordem dele).
- * Virou TABELA (era grid): o texto longo termina em "…" na célula, com o texto inteiro no `title` (a regra de corte). Status 154px nos dois.
+ * P141 (CONC-LAYOUT-01, D3/D4) + P159b (CONC-TELAS-02, mock `mock-sistema-evolucao-v1.html`, Gabriel 28/10) — UM componente: a sub-aba
+ * Sistema do Casar lançamentos e o modal "Extrato do sistema" do ↗ (D5: os dois mudam juntos; `modo` só marca onde está).
+ * A forma é a do `ListaDoMesPorDia` (D2 do P159a): data dd/mm só na 1ª linha do dia, dentro do dia o maior |valor| primeiro (`porDia`), o
+ * saldo SÓ na última linha do dia, em negrito, LIDO do dono (`saldo_apos_proprio` da última linha do dia NA ORDEM DO BANCO — nada se
+ * soma aqui), "Saldo inicial (sistema)" no topo e "Saldo final do sistema" no rodapé preso.
+ * Colunas: Data 44 · Descrição 220 · Fornecedor 200 · Centro · Subcentro (o resto; o centro em cinza na frente) · Valor 96 · Saldo 100 · ✓ 22.
+ * ⚠ D3: o "✓ conciliado" verde repetido virou só o ✓; o NÃO conciliado é um ○ âmbar com o status no `title` (realizado sem par, parcial
+ *   com a falta); a perna da transferência interna, o ⇄ (PR-CONC-INTERNA-SEPARADA-01b).
  */
 export function AbaSistemaReal({ linha, onAbrir, modo = 'aba' }: {
   linha: LinhaResumo | null; onAbrir?: (lancamentoId: string) => void; modo?: 'aba' | 'grande';
@@ -130,82 +132,49 @@ export function AbaSistemaReal({ linha, onAbrir, modo = 'aba' }: {
   if (!linha) {
     return <div className="min-h-0 flex-1 border-t px-3.5 py-6 text-center text-[10px] text-muted-foreground">Carregando o resumo do mês…</div>;
   }
-  const linhas = linhasDoDia(linha.linhas_sistema ?? []);
+  const dias = porDia(linha.linhas_sistema ?? [], (l) => (l.data ?? '').slice(0, 10), (l) => l.valor);
   const proprio = saldosDaLinha(linha);
   const inicial = proprio.saldo_inicial;
   const final = proprio.saldo_sistema;
-  const grande = modo === 'grande';
-  /* Data · Descrição · Fornecedor · Centro/Subcentro (o resto) · Valor · Saldo · Status */
-  const larguras = grande ? ['66px', '230px', '190px', undefined, '92px', '92px', '154px'] : ['66px', '22%', '24%', undefined, '80px', '80px', '154px'];
-  const td = 'h-[18px] px-1 py-0 leading-[17px]';
-  const colunas = <colgroup>{larguras.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>;
-  /* O "Saldo final (sistema)": no modo `aba`, preso no fim da lista que rola (como sempre); no `grande`, uma faixa FIXA no rodapé do
-     modal, com a mesma régua de colunas e o mesmo vão da barra de rolagem (`scrollbar-gutter: stable`) — os números alinham. */
-  const linhaFinal = (
-    <tr className="font-semibold">
-      <td colSpan={5} className={cn(td, 'h-[22px] border-t border-border')}>Saldo final (sistema)</td>
-      <td className={cn(td, 'h-[22px] border-t border-border whitespace-nowrap text-right tabular-nums', corValReal(final ?? 0))} data-testid="sistema-saldo-final">{final != null ? fmtBRL(final) : '—'}</td>
-      <td className={cn(td, 'h-[22px] border-t border-border')} />
-    </tr>
-  );
-  const lista = (
-    /* Mesma régua do Extrato acima — a lista é o scrollport, e ele é o modal inteiro. */
-    <div className={cn('min-h-0 flex-1 overflow-y-auto text-[10px]', grande ? '[scrollbar-gutter:stable]' : 'border-t px-3.5')} data-testid="aba-sistema">
-      <table className="w-full table-fixed border-separate border-spacing-0">
-        {colunas}
-        {/* ⚠ O MESMO CABEÇALHO DO EXTRATO — PR-CONC-CABECALHO-PADRAO-01: navy do token da casa (`bg-primary`), preso, `z-[3]`. */}
-        <thead className="sticky top-0 z-[3] bg-primary text-primary-foreground">
-          <tr className="h-[22px] text-[9.5px] font-medium">
-            <th className="px-1 text-left font-medium">Data</th><th className="px-1 text-left font-medium">Descrição</th>
-            <th className="px-1 text-left font-medium">Fornecedor</th><th className="px-1 text-left font-medium">Centro / Subcentro</th>
-            <th className="px-1 text-right font-medium">Valor</th><th className="px-1 text-right font-medium">Saldo</th>
-            <th className="px-1 text-left font-medium">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {/* ⚠ SALDO INICIAL E FINAL, como no Extrato: as duas pontas que tornam a coluna conferível — as do DONO. */}
-          <tr className="bg-muted/40 font-semibold">
-            <td colSpan={5} className={cn(td, 'border-b border-border')}>Saldo inicial (sistema)</td>
-            <td className={cn(td, 'border-b border-border whitespace-nowrap text-right tabular-nums', corValReal(inicial ?? 0))} data-testid="sistema-saldo-inicial">{inicial != null ? fmtBRL(inicial) : '—'}</td>
-            <td className={cn(td, 'border-b border-border')} />
-          </tr>
-          {linhas.map(({ linha: r, fimDoDia, saldoDoDia }, i) => {
-            const cs = [r.centro, r.subcentro].filter(Boolean).join(' / ') || '—';
-            /* a divisória entre os dias: a última linha do dia leva a linha forte */
-            const borda = fimDoDia ? 'border-b border-foreground/25' : 'border-b border-border/50';
-            return (
-              <tr key={`${i}-${r.extrato_id ?? ''}-${r.lancamento_id ?? ''}`}
-                  onClick={() => r.lancamento_id && onAbrir?.(r.lancamento_id)}
-                  data-testid="sistema-linha" data-tipo={r.tipo} data-fim-do-dia={fimDoDia ? 'sim' : undefined}
-                  className="cursor-pointer hover:bg-muted/50">
-                <td className={cn(td, borda, 'whitespace-nowrap tabular-nums text-muted-foreground')}>{dataInteira(r.data)}</td>
-                <td className={cn(td, borda, 'truncate')} title={r.descricao ?? ''}>{r.descricao ?? '—'}</td>
-                <td className={cn(td, borda, 'truncate')} title={r.fornecedor ?? ''} data-testid="sistema-fornecedor">{r.fornecedor || '—'}</td>
-                <td className={cn(td, borda, 'truncate text-muted-foreground')} title={cs}>{cs}</td>
-                <td className={cn(td, borda, 'whitespace-nowrap text-right tabular-nums', corValReal(r.valor))}>{fmtBRL(r.valor)}</td>
-                {/* O SALDO SÓ NO FIM DO DIA, do banco (`saldoDoDia`); nas outras linhas do dia o lugar fica vazio. */}
-                <td className={cn(td, borda, 'whitespace-nowrap text-right tabular-nums', fimDoDia && 'font-bold', fimDoDia && corValReal(saldoDoDia ?? 0))}
-                    data-testid={fimDoDia ? 'sistema-saldo' : undefined}>
-                  {fimDoDia ? (saldoDoDia != null ? fmtBRL(saldoDoDia) : '—') : ''}
-                </td>
-                <td className={cn(td, borda, 'whitespace-nowrap')}><StatusLinhaSistema l={r} /></td>
-              </tr>
-            );
-          })}
-        </tbody>
-        {/* ⚠ CONGELADO NO RODAPÉ (`sticky bottom-0`) e com FUNDO OPACO, o mesmo tratamento do Extrato: um total transparente deixa
-            as linhas passarem por baixo do número que se está conferindo — a lição já paga naquele arquivo. */}
-        {!grande && <tfoot className="sticky bottom-0 z-[2] bg-muted">{linhaFinal}</tfoot>}
-      </table>
-    </div>
-  );
-  if (!grande) return lista;
+  const colunas: ColunaDaLista[] = [
+    { titulo: 'Data', largura: 44 }, { titulo: 'Descrição', largura: 220 }, { titulo: 'Fornecedor', largura: 200 },
+    { titulo: 'Centro · Subcentro' }, { titulo: 'Valor', largura: 96, alinhar: 'right' }, { titulo: 'Saldo', largura: 100, alinhar: 'right' },
+    { titulo: '', largura: 22, alinhar: 'center' },
+  ];
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {lista}
-      <div className="shrink-0 overflow-y-hidden bg-muted text-[10px] [scrollbar-gutter:stable]" data-testid="rodape-extrato-sistema">
-        <table className="w-full table-fixed border-separate border-spacing-0">{colunas}<tbody>{linhaFinal}</tbody></table>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col" data-modo={modo}>
+      <ListaDoMesPorDia
+        testid="aba-sistema" testidLinha="sistema-linha"
+        linhas={dias} colunas={colunas} chave={(r, i) => `${i}-${r.extrato_id ?? ''}-${r.lancamento_id ?? ''}`}
+        aoClicar={onAbrir ? (r) => { if (r.lancamento_id) onAbrir(r.lancamento_id); } : undefined}
+        saldoInicial={{ rotulo: 'Saldo inicial (sistema)', valor: inicial != null ? fmtBRL(inicial) : '—', coluna: 5,
+          className: cn('font-semibold', corValReal(inicial ?? 0)), testid: 'sistema-saldo-inicial' }}
+        celulas={(x) => {
+          const r = x.item;
+          const ultima = x.ultimaDoDiaNaOrigem;
+          return (<>
+            <td className={cn(TD_LISTA, 'truncate')} title={r.descricao ?? ''}>{r.descricao ?? '—'}</td>
+            <td className={cn(TD_LISTA, 'truncate')} title={r.fornecedor ?? ''} data-testid="sistema-fornecedor">{r.fornecedor || '—'}</td>
+            <td className={TD_LISTA} title={[r.centro, r.subcentro].filter(Boolean).join(' · ') || undefined} data-testid="sistema-centro">
+              <span className="block truncate">
+                {r.centro && <span className="text-muted-foreground">{r.centro} · </span>}{r.subcentro || (r.centro ? '' : '—')}
+              </span>
+            </td>
+            <td className={cn(TD_LISTA_NUM, corValReal(r.valor))}>{fmtBRL(r.valor)}</td>
+            <CelSaldoDoDia fimDoDia={x.fimDoDia} testid="sistema-saldo"
+              saldo={ultima && ultima.saldo_apos_proprio != null ? fmtBRL(ultima.saldo_apos_proprio) : null}
+              className={ultima ? corValReal(ultima.saldo_apos_proprio ?? 0) : undefined} />
+            <td className={cn(TD_LISTA, 'px-0 text-center')} data-testid="sistema-sinal"><SinalDaLinhaSistema l={r} /></td>
+          </>);
+        }}
+        rodape={<>
+          <span className="shrink-0">Saldo final do sistema{' '}
+            <b className={cn('tabular-nums', corValReal(final ?? 0))} data-testid="sistema-saldo-final">{final != null ? fmtBRL(final) : '—'}</b></span>
+          <span className="ml-auto shrink-0 text-[9.5px] text-muted-foreground">
+            ✓ conciliado · <span className="text-amber-600">○</span> não conciliado (o status no mouse) · ordem do dia: maior valor primeiro
+          </span>
+        </>}
+      />
     </div>
   );
 }
@@ -235,73 +204,106 @@ export function montarEvolucao(data: EspelhadosReais, internos: ReadonlySet<stri
   const dia = (s: string | null) => (s ? Number(s.split('-')[2]) : 0);
   const movOfx = Array(nDias + 1).fill(0);
   const movSis = Array(nDias + 1).fill(0);
+  /* P159b (D4) — o dia com ALGUMA linha na mesa (do banco ou do sistema; o candidato não é movimento). Um dia de +100 e −100 soma 0,00
+     e tem linha: ele fica. */
+  const temLinha = Array<boolean>(nDias + 1).fill(false);
   for (const d of montarMesa(data, internos)) {
     const n = dia(d.data);
-    if (n >= 1 && n <= nDias) { movOfx[n] += d.banco; movSis[n] += d.sistema; }
+    if (n >= 1 && n <= nDias) {
+      movOfx[n] += d.banco; movSis[n] += d.sistema;
+      if (d.pareados.length || d.paredosN1.length || d.extratosSemPar.length || d.lancsSemPar.length || d.internas.length || d.restos.length) temLinha[n] = true;
+    }
   }
-  const rows: { dia: number; movOfx: number; movSis: number; saldoOfx: number; saldoSis: number; dif: number; nasce: boolean }[] = [];
+  const rows: { dia: number; movOfx: number; movSis: number; saldoOfx: number; saldoSis: number; dif: number; difDia: number; nasce: boolean; temLinha: boolean }[] = [];
   let accO = inicial, accS = inicial, nasceu = false;
   for (let d = 1; d <= nDias; d++) {
     accO += movOfx[d]; accS += movSis[d];
     const dif = accO - accS;
     const nasce = Math.abs(dif) >= 0.005 && !nasceu;
     if (nasce) nasceu = true;
-    rows.push({ dia: d, movOfx: movOfx[d], movSis: movSis[d], saldoOfx: accO, saldoSis: accS, dif, nasce });
+    /* P159b (B2) — a diferença DO DIA é a subtração das duas colunas do mesmo dia (= a variação da acumulada); nada novo é somado */
+    rows.push({ dia: d, movOfx: movOfx[d], movSis: movSis[d], saldoOfx: accO, saldoSis: accS, dif, difDia: movOfx[d] - movSis[d], nasce, temLinha: temLinha[d] });
   }
   return rows;
 }
-function AbaEvolucaoReal({ data, internos }: { data: EspelhadosReais; internos: ReadonlySet<string> }) {
-  /* ⚠ A EVOLUÇÃO LÊ A MESMA MESA, e por isso herda a regra da conta interna sem repeti-la.
-     Se lesse `sistema_completo` cru, a curva do sistema descolaria da do banco exatamente
-     nos dias em que houve transferência interna — e o gráfico acusaria uma divergência que
-     o fechamento por dia, ao lado, diz não existir. */
+/**
+ * P159b (CONC-TELAS-02, mock `mock-sistema-evolucao-v1.html`) — a Evolução do saldo: colunas de largura FIXA e juntas (Dia 52 · Mov. banco ·
+ * Mov. sistema · Saldo banco · Saldo sistema 104 cada · Dif. do dia 96 · Dif. acumulada 104 · o resto livre). O dia em que a diferença
+ * MUDA (Dif. do dia ≠ 0) fica em âmbar, com o link "ver o dia na Conferência" (abre a Conferência já naquele dia); "a diferença nasce
+ * aqui" no 1º dia com diferença acumulada. Os dias SEM NENHUMA linha somem (D4); a caixinha os traz de volta. Rodapé preso.
+ * ⚠ A EVOLUÇÃO LÊ A MESMA MESA (`montarEvolucao`): herda a regra da conta interna sem repeti-la.
+ */
+export function AbaEvolucaoReal({ data, internos, onVerDia }: {
+  data: EspelhadosReais; internos: ReadonlySet<string>;
+  /** "ver o dia na Conferência": quem monta abre a Conferência rolada no dia ('aaaa-mm-dd') */
+  onVerDia?: (dia: string) => void;
+}) {
   const rows = useMemo(() => montarEvolucao(data, internos), [data, internos]);
-  const mm = data.saldos.periodo_ini ? data.saldos.periodo_ini.split('-')[1] : '';
+  const [comVazios, setComVazios] = useState(false);
+  const ym = data.saldos.periodo_ini ? data.saldos.periodo_ini.slice(0, 7) : '';
+  const mm = ym.slice(5, 7);
+  const vazios = rows.filter((r) => !r.temLinha).length;
+  const visiveis = comVazios ? rows : rows.filter((r) => r.temLinha);
+  const larguras = [52, 104, 104, 104, 104, 96, 104, null];
+  const td = 'h-[19px] px-[5px] py-0 text-[10.5px] leading-[18px] whitespace-nowrap overflow-hidden';
+  const num = cn(td, 'text-right tabular-nums');
   return (
-    /* ⚠ UM SCROLLPORT SÓ, E O RODAPÉ DENTRO DELE. Havia um `space-y-2` externo com a lista em
-       `max-h-[50vh]` e DOIS blocos abaixo — um aviso âmbar de 10px e um "Saldo final oficial"
-       de 11px em negrito. Os dois ocupavam duas linhas grandes de altura permanente para
-       dizer o que cabe numa; e a lista, limitada a metade da tela, terminava muito antes do
-       rodapé do modal. Agora a lista é o scrollport (a mesma receita das outras três) e as
-       duas frases viram UMA linha de 10px muted no fim dela. */
-    <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]">
-      <div>
-        {/* ⚠ O MESMO CABEÇALHO DAS OUTRAS TRÊS — PR-CONC-CABECALHO-02, fechando o que o 01
-            deixou de fora. Em `bg-card` + `text-muted-foreground` ele tinha a cor do contexto
-            das linhas e sumia no branco. `bg-primary` é o token da casa, o mesmo do
-            `CompraModalShell` e da Conferência — nunca um hex, que foi a lição do PR anterior.
-            ⚠ E O `z-[3]` QUE FALTAVA: sem ele o cabeçalho dependia da regra implícita de que
-            elemento posicionado cobre não-posicionado, e ela quebra no dia em que alguém puser
-            um badge posicionado numa célula — e aqui já há um, o "nasceu aqui". */}
-        <div className="grid grid-cols-[52px_1fr_1fr_1fr_1fr_1fr] gap-1 font-medium text-primary-foreground border-b py-1 sticky top-0 z-[3] bg-primary">
-          <span>Data</span><span className="text-right">Mov. OFX</span><span className="text-right">Mov. Sist.</span><span className="text-right">Saldo OFX</span><span className="text-right">Saldo Sist.</span><span className="text-right">Dif. Acum.</span>
-        </div>
-        {rows.map((r) => {
-          const difZero = Math.abs(r.dif) < 0.005;
-          return (
-            <div key={r.dia} className={`grid grid-cols-[52px_1fr_1fr_1fr_1fr_1fr] gap-1 py-0.5 border-b last:border-b-0 items-center ${r.nasce ? 'border-l-2 border-l-rose-500 bg-rose-50/50' : ''}`}>
-              <span className="text-muted-foreground flex items-center gap-1">{String(r.dia).padStart(2, '0')}/{mm}{r.nasce && <span className="px-1 rounded bg-rose-200 text-rose-800 text-[10px] font-bold shrink-0">nasceu aqui</span>}</span>
-              <span className={`text-right tabular-nums ${r.movOfx === 0 ? 'text-muted-foreground' : corValReal(r.movOfx)}`}>{fmtBRL(r.movOfx)}</span>
-              <span className={`text-right tabular-nums ${r.movSis === 0 ? 'text-muted-foreground' : corValReal(r.movSis)}`}>{fmtBRL(r.movSis)}</span>
-              <span className={`text-right tabular-nums ${corValReal(r.saldoOfx)}`}>{fmtBRL(r.saldoOfx)}</span>
-              <span className={`text-right tabular-nums ${corValReal(r.saldoSis)}`}>{fmtBRL(r.saldoSis)}</span>
-              <span className={`text-right tabular-nums ${difZero ? 'text-muted-foreground' : 'text-rose-600 font-medium'}`}>{fmtBRL(r.dif)}</span>
-            </div>
-          );
-        })}
+    <div className="flex min-h-0 flex-1 flex-col border-t">
+      {/* a caixinha fica FORA da tabela e acima dela, num lugar fixo: ligar e desligar não mexe nas colunas */}
+      <div className="flex h-[24px] shrink-0 items-center px-[5px] text-[10px] text-muted-foreground">
+        <label className="flex cursor-pointer items-center gap-1.5">
+          <Checkbox checked={comVazios} onCheckedChange={(v) => setComVazios(v === true)} className="h-3.5 w-3.5" data-testid="evolucao-mostrar-vazios" />
+          mostrar dias sem movimento ({vazios})
+        </label>
       </div>
-      {/* ⚠ CONGELADO NO RODAPÉ, como o saldo final do Extrato e o do Sistema: é a fronteira
-          do que o banco cobre, e rolar trinta dias perdendo-a de vista é justamente perder a
-          régua contra a qual se está lendo a coluna.
-          ⚠ FUNDO OPACO (`bg-muted`) e `z-[2]`: transparente deixaria as linhas passarem por
-          baixo do número — a lição já paga no `TabelaExtratoDoMes`.
-          ⚠ "DATA DO EXTRATO", E NÃO "MOVIMENTOS ATÉ": a frase antiga se lia como um recorte
-          qualquer; o que ela diz é ATÉ ONDE o extrato do banco alcança. O valor é o mesmo
-          `extrato_fim` de sempre — mudou a palavra, não o cálculo. */}
-      <div className="sticky bottom-0 z-[2] border-t bg-muted py-1 text-[10px] leading-tight text-muted-foreground">
-        Data do extrato: {fmtData(data.saldos.extrato_fim)}
-        {' · '}Saldo final oficial (extrato):{' '}
-        <span className="tabular-nums font-semibold text-foreground">{fmtBRL(data.saldos.final_oficial)}</span>
+      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]" data-testid="evolucao-lista">
+        <table className="w-full table-fixed border-separate border-spacing-0">
+          <colgroup>{larguras.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>
+          <thead className="sticky top-0 z-[3] bg-primary">
+            <tr>
+              {['Dia', 'Mov. banco', 'Mov. sistema', 'Saldo banco', 'Saldo sistema', 'Dif. do dia', 'Dif. acumulada', ''].map((t, i) => (
+                <th key={i} className={cn(TH_REGUA, 'px-[5px]', i === 0 || i === 7 ? 'text-left' : 'text-right')}>{t}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visiveis.map((r) => {
+              const muda = Math.abs(r.difDia) >= 0.005;
+              const difZero = Math.abs(r.dif) < 0.005;
+              const iso = `${ym}-${String(r.dia).padStart(2, '0')}`;
+              const cel = cn('border-b border-border/50', muda && 'bg-amber-50 dark:bg-amber-950/20');
+              return (
+                <tr key={r.dia} data-testid="evolucao-dia" data-muda={muda ? 'sim' : undefined}>
+                  <td className={cn(td, cel, 'tabular-nums text-muted-foreground')}>{String(r.dia).padStart(2, '0')}/{mm}</td>
+                  <td className={cn(num, cel, r.movOfx === 0 ? 'text-muted-foreground' : corValReal(r.movOfx))}>{fmtBRL(r.movOfx)}</td>
+                  <td className={cn(num, cel, r.movSis === 0 ? 'text-muted-foreground' : corValReal(r.movSis))}>{fmtBRL(r.movSis)}</td>
+                  <td className={cn(num, cel, corValReal(r.saldoOfx))}>{fmtBRL(r.saldoOfx)}</td>
+                  <td className={cn(num, cel, corValReal(r.saldoSis))}>{fmtBRL(r.saldoSis)}</td>
+                  <td className={cn(num, cel, muda ? 'font-bold text-amber-700' : 'text-muted-foreground')} data-testid="evolucao-dif-dia">{muda ? fmtBRL(r.difDia) : '—'}</td>
+                  <td className={cn(num, cel, difZero ? 'text-muted-foreground' : 'font-medium text-rose-600')}>{fmtBRL(r.dif)}</td>
+                  {/* a coluna livre: na janela estreita (1000px) o link e a frase não cabem juntos — a REGRA DE CORTE da tabela: uma linha
+                      com "…" e o texto inteiro no `title` (o link vem primeiro) */}
+                  <td className={cn(td, cel)} title={[muda && onVerDia ? 'ver o dia na Conferência' : null, r.nasce ? 'a diferença nasce aqui' : null].filter(Boolean).join(' ') || undefined}>
+                    <span className="block truncate">
+                      {muda && onVerDia && (
+                        <button type="button" className="text-[10px] text-blue-700 underline underline-offset-2" data-testid="evolucao-ver-dia"
+                          onClick={() => onVerDia(iso)}>ver o dia na Conferência</button>
+                      )}
+                      {r.nasce && muda && onVerDia && ' '}
+                      {r.nasce && <span className={cn('text-[10px] font-semibold text-rose-700', muda && onVerDia && 'ml-2')} data-testid="evolucao-nasce">a diferença nasce aqui</span>}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {/* ⚠ PRESO NO RODAPÉ e com fundo opaco: é a fronteira do que o banco cobre. "DATA DO EXTRATO" é o mesmo `extrato_fim` de sempre. */}
+      <div className="flex h-[23px] shrink-0 items-center gap-3.5 overflow-hidden whitespace-nowrap border-t bg-muted px-[5px] text-[10.5px]" data-testid="evolucao-rodape">
+        <span className="shrink-0">Data do extrato {data.saldos.extrato_fim ? fmtData(data.saldos.extrato_fim) : '—'}
+          {' · '}saldo final oficial (extrato){' '}<b className="tabular-nums">{fmtBRL(data.saldos.final_oficial)}</b></span>
+        <span className="ml-auto shrink-0 text-[9.5px] text-muted-foreground"><span className="text-amber-700">âmbar</span> = dia em que a diferença muda</span>
       </div>
     </div>
   );
@@ -387,7 +389,7 @@ interface ItemAcao { rotulo: string; onClick?: () => void; motivo?: string }
  */
 function CelAcoes({ itens, alcaId }: { itens: ItemAcao[]; alcaId?: string }) {
   return (
-    <td className="px-[3px] text-right whitespace-nowrap" data-testid="acoes-da-linha">
+    <td className="h-[19px] px-[3px] py-0 text-right whitespace-nowrap" data-testid="acoes-da-linha">
       <span className="inline-flex items-center justify-end gap-0.5 align-middle">
         {alcaId && <Alca id={alcaId} />}
         <DropdownMenu>
@@ -434,19 +436,13 @@ function Alca({ id }: { id: string }) {
   );
 }
 
-/** A borda que separa os dois lados. Mesma célula em toda linha — é o que a faz contínua.
- *  ⚠ À DIREITA, 2px NO NAVY (PR-CONC-CONFERENCIA-MODAL-01, mock v2): é o divisor entre o banco e
- *  o sistema, e ele atravessa a tabela inteira porque a célula existe em toda linha. */
-const MEIO = 'border-l border-border border-r-2 border-r-primary text-center px-0';
+/* P159a: a divisória banco | sistema e a régua das linhas da Conferência estão em `SEP`/`TDC` (abaixo); estas duas servem à lista
+   dos ignorados. */
 const CEL = 'px-[5px] overflow-hidden text-ellipsis whitespace-nowrap';
 /* ⚠ A DATA NUNCA ENCOLHE. Com `text-ellipsis` numa coluna de 36px, "16/07" virava "16/…" —
    e data cortada não é data. 38px cabe o formato inteiro a 10px ("30/09" mede 29,5), e a
    célula não corta. */
 const CEL_DATA = 'px-[4px] whitespace-nowrap text-[9.5px] text-muted-foreground';
-/* ⚠ UMA ALTURA SÓ, 18px, EM TODA LINHA — PR-CONC-CONFERENCIA-MODAL-01. Eram três na mesma
-   tabela (16 no dia, 21 no movimento, 22 no fechamento e no aviso de vencidos) e 15 nas filhas,
-   com fontes de 10, 11 e 12px. Uma régua só; a hierarquia fica no peso e no fundo. */
-const H18 = 'h-[18px]';
 /* ⚠ A LINHA CASADA TEM FUNDO VERDE MUITO LEVE — PR-CONC-SUGESTOES-CASAR-01 (Gabriel, 30/09): o token de sucesso a 6%
    na mãe e 8% na filha (tipos de linha diferentes, fundos diferentes), nos dois lados, sem mudar fonte nem altura. O
    que não está casado segue com os fundos de antes. */
@@ -480,39 +476,19 @@ function paletaDoStatus(k: string) {
    CLAUDE.md; a pílula de `STATUS_PILULA_BASE` continua valendo nas outras telas. Cores: as da paleta única. */
 const SELO_CONFERENCIA = 'inline-flex h-[12px] items-center rounded-[3px] border px-[4px] text-[8px] font-semibold leading-none align-middle';
 const SELO_CONFERENCIA_TEXTO = 'text-[8px] font-semibold leading-none align-middle';
-function CelStatus({ status }: { status: string | null }) {
+/** P159a — o selo, numa `span` (mora no fim do Subcentro); só no que NÃO está conciliado (quem chama decide). */
+function SeloStatus({ status }: { status: string | null }) {
   const k = (status ?? '').trim().toLowerCase();
   const p = paletaDoStatus(k);
   const rotulo = k === 'conciliado' ? 'Conciliado' : k === 'parcial' ? 'Parcial' : (STATUS_FILTRO_LABEL[k] ?? (status || ''));
   return (
-    <td className="px-[3px] text-right whitespace-nowrap" data-status={k || undefined}>
+    <span className="shrink-0 whitespace-nowrap" data-status={k || undefined}>
       {k === 'parcial' ? <span className={cn(SELO_CONFERENCIA_TEXTO, 'text-amber-700')}>{rotulo}</span>
         : !p ? <span className={cn(SELO_CONFERENCIA_TEXTO, 'text-muted-foreground')}>{rotulo}</span>
         : p.comCaixa ? <span className={cn(SELO_CONFERENCIA, p.pilula)}>{rotulo}</span>
         : <span className={cn(SELO_CONFERENCIA_TEXTO, p.texto)}>{rotulo}</span>}
-    </td>
+    </span>
   );
-}
-
-/**
- * A DATA DO LADO DO SISTEMA, na coluna própria — PR-CONC-CONFERENCIA-MODAL-01. No candidato é o
- * VENCIMENTO (vencido em vermelho, e é aqui que o "vencido" é dito — o selo que ficava no texto
- * saiu); no realizado é a data do lançamento, porque `fn_extratos_espelhados` não devolve o
- * vencimento dele (`EspSis` não o tem).
- */
-function CelDataSistema({ data, vencido = false, rotulo }: { data: string | null | undefined; vencido?: boolean; rotulo: string }) {
-  return (
-    <td className={cn(CEL_DATA, vencido && 'font-semibold text-destructive')}
-      title={data ? `${rotulo}${vencido ? ' · vencido' : ''}` : undefined}>
-      {data ? fmtData(data) : ''}
-    </td>
-  );
-}
-
-/** Na filha, descrição e fornecedor saem no mesmo tom — ela não repete competência nem origem. */
-function textoFilha(s: EspSis | undefined) {
-  if (!s) return '—';
-  return <>{s.descricao ?? '—'}{' · '}{s.fornecedor || '—'}</>;
 }
 
 /** "resto em 04/09" · "resto em 04/09 e 09/09" · "resto em 04/09, 09/09 e 11/09" — D3. */
@@ -542,6 +518,8 @@ function tituloAvisos(a: AvisosVinculo): string[] {
  * DD/MM" / "aplic. acima"; (3) o resto vira "resto em N datas"; (4) a parte sem o resto. A frase inteira fica sempre no
  * `title` (`tituloAvisos`).
  */
+/* ⚠ P159a: a Descrição do mock tem 170px (160 úteis; ~32 caracteres a 9,5px), e este limite foi medido para 296. Ele NÃO mudou
+   (decisão pendente do Gabriel): o aviso longo agora termina em "…" na célula, com a frase inteira no `title`. */
 export const LIMITE_AVISOS = 58;
 export function textosDosAvisos(a: AvisosVinculo): { tipo: 'sobre-aplicado' | 'lancado-em' | 'parte'; texto: string }[] {
   const datas = (ds: readonly string[]) => ds.length <= 1 ? ds.map((d) => fmtData(d)).join('')
@@ -568,22 +546,114 @@ export function textosDosAvisos(a: AvisosVinculo): { tipo: 'sobre-aplicado' | 'l
   return itens;
 }
 
-/**
- * OS AVISOS DO VÍNCULO — PR-CONC-CONFERENCIA-FECHAMENTO-DIA (D3, D4, R5). Vêm ANTES da descrição, na mesma célula: ela
- * corta no FIM (a descrição, que está inteira no `title`), e o aviso nunca pode ser o pedaço cortado — por isso a escada
- * de `textosDosAvisos`. Âmbar é aviso (data do lançamento diferente, aplicado acima); a parte é contexto (cinza). Nenhum
- * deles entra na diferença do dia.
- */
-function AvisosDoVinculo(a: AvisosVinculo) {
+/* ═══ P159a (CONC-TELAS-01, mock `mock-conferencia-v1.html` aprovado pelo Gabriel 28/10 09:52) — A RÉGUA NOVA DA CONFERÊNCIA ══════
+   8 colunas de largura FIXA: Banco · histórico 270 · Valor 84 · ✓/○/⇄ 20 · Sistema (valor) 84 · Descrição 170 · Favorecido 170 ·
+   Subcentro (o resto) · ⋯ 22. Fonte 10,5px, linha 19px. Uma informação por coluna; texto longo termina em "…" com o inteiro no `title`.
+   ⚠ O QUE O MOCK NÃO DESENHA E A TELA TEM (as funções de hoje ficam, ENCAIXE item 4): a marcação e a alça de arrasto moram num lugar
+     FIXO de 24px no começo do histórico do banco (vazio quando a linha não se marca, para o texto começar sempre no mesmo ponto) e no
+     começo da Descrição do que se marca do lado do sistema; o selo de status, só no que NÃO está conciliado, no fim do Subcentro; o
+     vencimento do candidato vencido, na frente da Descrição. A data do lançamento saiu da linha (o dia está no cabeçalho; a data
+     diferente da do banco já é o aviso "lançado em"). */
+/* ⚠ VALOR E SISTEMA COM 96, NÃO OS 84 DO MOCK: número nunca corta, e o teto (-99.999.999,99) a 10,5px tabular pede 82px + 10 de
+   respiro (medido na bancada 28/10; o mock usou os valores do NJ, até -200.000,00). É a mesma largura do Valor do Extrato (banco). */
+export const LARGURAS_CONFERENCIA: readonly (number | null)[] = [270, 96, 20, 96, 170, 170, null, 22];
+const TDC = 'h-[19px] px-[5px] py-0 text-[10.5px] leading-[18px] whitespace-nowrap overflow-hidden text-ellipsis';
+const TDC_NUM = cn(TDC, 'text-right tabular-nums');
+const TDC_MEIO = 'h-[19px] px-0 py-0 text-center text-[10.5px] leading-[18px] whitespace-nowrap';
+/** a divisória banco | sistema: 2px navy à esquerda do valor do sistema, em toda linha (é o que a faz contínua) */
+const SEP = 'border-l-2 border-l-primary';
+/** o fornecedor e o subcentro não vão em cinza claro (PR-ESPELHO-CONFERENCIA-FONTE-07: é o que se lê para ter certeza do par) */
+const TEXTO_LIDO = 'text-foreground/80';
+
+/** Um pedaço de texto da Descrição. O `title` da célula é a junção de todos (o detector de corte confere o texto inteiro nele). */
+interface Pedaco { t: string; cls?: string; testid?: string; aviso?: string; title?: string }
+const textoDe = (ps: readonly Pedaco[]) => ps.map((p) => p.t).join('');
+function Pedacos({ ps }: { ps: readonly Pedaco[] }) {
+  return <>{ps.map((p, i) => <span key={i} className={p.cls} data-testid={p.testid} data-aviso={p.aviso} title={p.title}>{p.t}</span>)}</>;
+}
+/** Os avisos do vínculo ANTES da descrição (a célula corta no fim, e o aviso nunca é o pedaço cortado): a escada `textosDosAvisos`. */
+function pedacosDosAvisos(a: AvisosVinculo): Pedaco[] {
+  return textosDosAvisos(a).map((i) => ({ t: `${i.texto} · `, aviso: i.tipo,
+    cls: cn('text-[9.5px]', i.tipo === 'parte' ? 'text-muted-foreground' : 'text-amber-600') }));
+}
+/** A descrição do lançamento (com a parcela da OC), a competência quando é de outro mês, a origem quando sem par e a ponta que falta. */
+function pedacosDoLancamento(s: EspSis | undefined, mesDoRecorte: string, semPar = false): Pedaco[] {
+  if (!s) return [{ t: '—', cls: 'text-muted-foreground' }];
+  const comp = s.competencia && s.competencia.slice(0, 7) !== mesDoRecorte
+    ? `${MESES_CURTOS[Number(s.competencia.slice(5, 7)) - 1] ?? ''}/${s.competencia.slice(2, 4)}` : null;
+  return [
+    { t: descricaoComParcela(s.descricao, s.oc_parcela) ?? '—', cls: 'font-medium' },
+    ...(comp ? [{ t: ` · competência ${comp}`, cls: 'text-muted-foreground' }] : []),
+    ...(semPar && s.origem_lancamento ? [{ t: ` · ${rotuloOrigem(s.origem_lancamento)}`, cls: 'text-muted-foreground' }] : []),
+    /* CONC-TRANSF-DUAS-PONTAS-01: a transferencia com uma ponta so' diz qual falta (a frase vem do banco) */
+    ...(s.pontas && !(s.pontas.origem && s.pontas.destino) ? [{ t: ` · ${s.pontas.frase}`, cls: 'text-amber-700', testid: 'pontas-transferencia' }] : []),
+  ];
+}
+/** A origem (B, ↺, ✓ enriquecido, M…), discreta, depois da descrição — a régua é `iconeOrigemLancamento`. */
+function pedacoDaOrigem(tipo: string | null): Pedaco[] {
+  const icone = iconeDoLancamento(tipo);
+  return icone ? [{ t: ` ${icone.simbolo}`, cls: 'text-[9.5px] text-muted-foreground', title: icone.significado }] : [];
+}
+
+/** A marcação + a alça de arrasto, num lugar FIXO de 24px. */
+function Marcar({ marcado, onMarcar, rotulo, alcaId }: { marcado?: boolean; onMarcar?: () => void; rotulo?: string; alcaId?: string }) {
   return (
-    <>
-      {textosDosAvisos(a).map((i) => (
-        <span key={i.tipo} data-aviso={i.tipo} className={i.tipo === 'parte' ? 'text-muted-foreground' : 'text-amber-600'}>
-          {i.texto}{' · '}
-        </span>
-      ))}
-    </>
+    <span className="inline-flex w-[24px] shrink-0 items-center gap-[3px]">
+      {onMarcar && <input type="checkbox" className="h-3 w-3 shrink-0" checked={!!marcado} onChange={onMarcar} aria-label={rotulo} />}
+      {alcaId && <Alca id={alcaId} />}
+    </span>
   );
+}
+
+/** O histórico do banco: [marcação 24] [hora 28] texto limpo (`historicoDoBanco`)… — o `title` leva o limpo e o inteiro do banco. */
+function CelHistorico({ historico, data, marcar, nota, apagado }: {
+  historico?: string | null; data?: string | null; marcar?: ReactNode;
+  /** a linha sem extrato: a frase em itálico no lugar do histórico */
+  nota?: string; apagado?: boolean;
+}) {
+  const h = historicoDoBanco(historico, data);
+  const original = historico ?? '';
+  const semBanco = nota !== undefined;
+  const titulo = semBanco ? undefined : h.texto && h.texto !== original ? `${h.texto}\n${original}` : original || undefined;
+  return (
+    <td className={cn(TDC, apagado && 'text-muted-foreground')} title={titulo}>
+      <span className="flex min-w-0 items-center gap-[3px]">
+        {marcar ?? <span className="w-[24px] shrink-0" />}
+        <span className="w-[28px] shrink-0 text-[9.5px] tabular-nums text-muted-foreground" data-testid="conf-hora">{semBanco ? '' : h.hora}</span>
+        {/* sem lado do banco (o candidato, a filha, o N:1): a célula fica vazia, ou com a frase (`nota`) em itálico */}
+        {semBanco
+          ? <span className="min-w-0 flex-1 truncate italic text-muted-foreground">{nota}</span>
+          : <span className="min-w-0 flex-1 truncate" data-testid="conf-historico">{h.texto || '—'}</span>}
+      </span>
+    </td>
+  );
+}
+
+/** As três colunas de texto do sistema: Descrição ([marcação] pedaços… [chips]) · Favorecido · Subcentro (+ o selo do não conciliado). */
+function CelulasDoSistema({ marcar, pedacos, detalhe, fornecedor, subcentro, selo, chips, apagado }: {
+  marcar?: ReactNode; pedacos: readonly Pedaco[];
+  /** o que mais vai no `title` da Descrição (a frase inteira dos avisos, o documento…) */
+  detalhe?: string | null;
+  fornecedor: string | null | undefined; subcentro: string | null | undefined;
+  selo?: ReactNode; chips?: ReactNode; apagado?: boolean;
+}) {
+  const texto = textoDe(pedacos);
+  return (<>
+    <td className={cn(TDC, apagado && 'text-muted-foreground')} title={[texto, detalhe].filter(Boolean).join('\n') || undefined} data-testid="conf-descricao">
+      <span className="flex min-w-0 items-center gap-[3px]">
+        {marcar}
+        <span className="min-w-0 flex-1 truncate"><Pedacos ps={pedacos} /></span>
+        {chips}
+      </span>
+    </td>
+    <td className={cn(TDC, apagado ? 'text-muted-foreground' : TEXTO_LIDO)} title={fornecedor || undefined} data-testid="conf-favorecido">{fornecedor || '—'}</td>
+    <td className={TDC} title={subcentro || undefined}>
+      <span className="flex min-w-0 items-center gap-1">
+        <span className={cn('min-w-0 flex-1 truncate', apagado ? 'text-muted-foreground' : TEXTO_LIDO)} data-testid="conf-subcentro">{subcentro || '—'}</span>
+        {selo}
+      </span>
+    </td>
+  </>);
 }
 
 /**
@@ -604,35 +674,29 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugesto
      `<tr>`: o droppable envolve a linha, o draggable mora só na alça. */
   const { isOver, setNodeRef } = useDroppable({ id: `ext:${e.extrato_id}` });
   return (
-    <tr ref={setNodeRef} className={cn(H18, 'border-b border-border/50',
-      marcado && 'bg-amber-500/10',
+    /* P159a: o sem par em DESTAQUE (fundo âmbar) e os dois botões na própria linha — os mesmos "Ver sugestões" e "Criar" do "⋯" */
+    <tr ref={setNodeRef} data-extrato-sem-par="" className={cn('border-b border-border/50 bg-amber-50 dark:bg-amber-950/20',
+      marcado && 'bg-amber-500/15',
       isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
-      <td className="text-center">
-        <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado}
-          onChange={onMarcar} aria-label="Marcar movimento do banco" />
-      </td>
-      <td className={CEL_DATA}>{fmtData(e.data)}</td>
-      <td className={cn(CEL, 'font-medium')} title={e.historico ?? ''}>{e.historico ?? '—'}</td>
-      <td className={cn(CEL, 'text-right font-medium tabular-nums', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
+      <CelHistorico historico={e.historico} data={e.data}
+        marcar={<Marcar marcado={marcado} onMarcar={onMarcar} rotulo="Marcar movimento do banco" alcaId={`dragExt:${e.extrato_id}`} />} />
+      <td className={cn(TDC_NUM, 'font-medium', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
       {/* P139: o selo "transf.?" ocupa o MESMO lugar do "○" (nada se desloca); o porquê vai no `title` */}
       {transf
-        ? <td className={cn(MEIO, 'text-[9.5px] font-medium text-primary')} title={porqueDaSugestao(transf)} data-testid="selo-transf">⇄?</td>
-        : <td className={cn(MEIO, 'text-muted-foreground')} title="sem correspondência">○</td>}
-      <td />
-      <td />
-      <td />
-      <td className={cn(CEL, 'italic text-muted-foreground')}>— nenhum lançamento vinculado</td>
-      <td />
+        ? <td className={cn(TDC_MEIO, 'text-[9.5px] font-medium text-primary')} title={porqueDaSugestao(transf)} data-testid="selo-transf">⇄?</td>
+        : <td className={cn(TDC_MEIO, 'text-muted-foreground')} title="sem correspondência">○</td>}
+      <td className={cn(TDC, SEP)} />
+      <td colSpan={2} className={cn(TDC, 'text-amber-700')} data-testid="conf-sem-lancamento">
+        <span className="inline-flex items-center gap-1">sem lançamento ·
+          <BotoesDoSemPar e={e} semPar={{ nSugestoes: () => nSugestoes, aoSugestoes: () => onSugestoes(), aoCriar: () => onCriar() }} />
+        </span>
+      </td>
+      <td className={TDC} />
       {/* ⚠ "Criar" ABRE O MODAL COM A LISTA VAZIA, e não um formulário à parte: o caminho é o
-          mesmo do "criar pela diferença", só que a diferença é o valor inteiro. Um segundo
-          caminho para criar o mesmo lançamento seria a segunda forma.
-          ⚠ "IGNORAR" É A ÚLTIMA FUNÇÃO QUE SÓ EXISTIA NA AUDITORIA BANCÁRIA. O operador via
-          aqui a linha que o banco trouxe e não tinha o que fazer com ela; para desconsiderá-la
-          precisava sair do espelho, achar a mesma linha noutra tela e voltar. O fluxo inteiro
-          — listar derivados, decidir um a um, exigir motivo — já é o `DecisaoDerivadosDialog`:
-          esta tela o INSTANCIA, não o reescreve. */}
-      {/* ⚠ "VER SUGESTÕES (N)" — PR-CONC-SUGESTOES-CASAR-01. Com N = 0 aparece desabilitado e diz por quê. */}
-      <CelAcoes alcaId={`dragExt:${e.extrato_id}`} itens={[
+          mesmo do "criar pela diferença", só que a diferença é o valor inteiro.
+          ⚠ "IGNORAR" INSTANCIA o `DecisaoDerivadosDialog` (o mesmo da Auditoria Bancária).
+          ⚠ "VER SUGESTÕES (N)" — PR-CONC-SUGESTOES-CASAR-01. Com N = 0 aparece desabilitado e diz por quê. */}
+      <CelAcoes itens={[
         { rotulo: `Ver sugestões (${nSugestoes})`, onClick: nSugestoes > 0 ? onSugestoes : undefined, motivo: 'nenhuma sugestão para este movimento' },
         { rotulo: 'Criar', onClick: onCriar },
         { rotulo: transf?.contaNome ? `Criar transferência → ${transf.contaNome}` : 'Criar transferência', onClick: onCriarTransferencia,
@@ -648,25 +712,17 @@ function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `lan:${s.lancamento_id}` });
   return (
-    <tr ref={setNodeRef} className={cn(H18, 'border-b border-border/50',
+    <tr ref={setNodeRef} data-lanc-sem-par="" className={cn('border-b border-border/50',
       marcado && 'bg-amber-500/10',
       isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
-      {/* ⚠ A DATA DESTE LANÇAMENTO MORAVA NA COLUNA DE DATA DO BANCO — PR-CONC-CONFERENCIA-MODAL-01:
-          ela é do sistema, e desceu para a coluna de data do sistema. */}
-      <td />
-      <td />
-      <td className={cn(CEL, 'italic text-muted-foreground')}>— sem extrato correspondente</td>
-      <td />
-      <td className={cn(MEIO, 'font-semibold text-destructive')} title="sem par no banco">!</td>
-      <td className="text-center">
-        <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado}
-          onChange={onMarcar} aria-label="Marcar lançamento" />
-      </td>
-      <td className={cn(CEL, 'text-left font-medium tabular-nums', corVal(s.valor_assinado))}>{fmtBRL(s.valor_assinado)}</td>
-      <CelDataSistema data={s.data} rotulo="data do lançamento" />
-      <td className={CEL} title={tituloLancamento(s)}>{textoLancamento(s, mesDoRecorte, true)}</td>
-      <CelStatus status="realizado" />
-      <CelAcoes alcaId={`dragLan:${s.lancamento_id}`} itens={[
+      <CelHistorico nota="— sem extrato correspondente" />
+      <td className={TDC} />
+      <td className={cn(TDC_MEIO, 'font-semibold text-destructive')} title="sem par no banco">!</td>
+      <td className={cn(TDC_NUM, SEP, 'font-medium', corVal(s.valor_assinado))}>{fmtBRL(s.valor_assinado)}</td>
+      <CelulasDoSistema pedacos={pedacosDoLancamento(s, mesDoRecorte, true)} detalhe={tituloLancamento(s)}
+        marcar={<Marcar marcado={marcado} onMarcar={onMarcar} rotulo="Marcar lançamento" alcaId={`dragLan:${s.lancamento_id}`} />}
+        fornecedor={s.fornecedor} subcentro={s.subcentro} selo={<SeloStatus status="realizado" />} />
+      <CelAcoes itens={[
         { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(s.lancamento_id) : undefined, motivo: SEM_ABRIR },
       ]} />
     </tr>
@@ -676,95 +732,60 @@ function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
 /**
  * UM CANDIDATO NA COLUNA DO SISTEMA, EM LINHA ÚNICA — PR-ESPELHO-CANDIDATOS-COLUNA-02.
  *
- * Mesmo desenho do lançamento sem par (checkbox · valor · texto · ações), porque entra na mesma
- * mecânica de marcar e casar. O texto segue a ordem: vencimento · descrição · fornecedor ·
- * subcentro · status · vencido · sem conta · documento, truncado com o inteiro no `title`.
- * ⚠ JÁ VINCULADO não é casável (a RPC recusa `lancamento_ja_conciliado`): linha esmaecida, sem
- * checkbox, sem alça e sem receber arrasto.
- * ⚠ SEM CONTA É CASÁVEL — PR-ESPELHO-SEMCONTA-CASAVEL-03. O bloqueio de 9310fd3d existia porque
- * `fn_espelho_casar` promovia a realizado sem preencher a conta, e o lançamento sairia conciliado
- * e fora do saldo de qualquer conta. As duas RPCs passaram a preencher a conta do extrato POR
- * DIREÇÃO quando ela falta (saída → `conta_bancaria_id`; entrada → `conta_destino_id`; migrations
- * 20261027122200 e 20261027122300), nos dois sentidos (1:N e N:1). A pílula "sem conta" continua:
- * diz que o lançamento vai ganhar a conta do extrato ao casar.
+ * Mesmo desenho do lançamento sem par (marcação · valor · texto · ações), porque entra na mesma mecânica de marcar e casar.
+ * ⚠ JÁ VINCULADO não é casável (a RPC recusa `lancamento_ja_conciliado`): linha esmaecida, sem checkbox, sem alça e sem receber
+ *   arrasto. ⚠ SEM CONTA É CASÁVEL (PR-ESPELHO-SEMCONTA-CASAVEL-03): a pílula "sem conta" diz que ele ganha a conta do extrato ao casar.
+ * ⚠ O STATUS NUNCA É O PEDAÇO CORTADO (PR-ESPELHO-CANDIDATOS-POR-DATA-05): ele é um selo `shrink-0` no fim do Subcentro, e os avisos
+ *   que não são status ("sem conta", "já vinculado", o parcial) ficam `shrink-0` no fim da Descrição.
+ * P159a: no VENCIDO (de outro mês, no topo) o vencimento vai na frente da Descrição, em vermelho — o dia do cabeçalho não é o dele.
  */
-function LinhaCandidato({ c, marcado, onMarcar, onAbrir, falta = null }: {
+function LinhaCandidato({ c, marcado, onMarcar, onAbrir, falta = null, comVencimento = false }: {
   c: EspCandidato; marcado: boolean; onMarcar: () => void; onAbrir?: (id: string) => void;
   /** CONC-BLOCOS-TELA-01: o que falta para quitar um vinculado PARCIAL. Com falta, ele continua casável. */
   falta?: number | null;
+  comVencimento?: boolean;
 }) {
   const parcial = c.ja_conciliado && falta != null;
   const casavel = !c.ja_conciliado || parcial;
-  /* OC-RECEB-PARCIAL-01 — A FALTA de um vinculo parcial (o "Receb. 2/2" que sobrou): UMA linha, cinza, dizendo o que e'. Segue
-     casavel (e' o que o proximo deposito paga) e, como todo candidato, fora do subtotal do dia. */
+  /* OC-RECEB-PARCIAL-01 — A FALTA de um vinculo parcial (o "Receb. 2/2" que sobrou): UMA linha, cinza, dizendo o que e'. */
   const eFalta = !!c.saldo_de_id && !c.ja_conciliado;
   const nome = descricaoComParcela(c.descricao, c.oc_parcela);
   const { isOver, setNodeRef } = useDroppable({ id: `lan:${c.lancamento_id}`, disabled: !casavel });
   const doc = c.numero_documento ? [c.tipo_documento, c.numero_documento].filter(Boolean).join(' ') : null;
-  const fornecedorDiferente = c.fornecedor && c.fornecedor !== c.descricao ? c.fornecedor : null;
   /* O `title` continua dizendo TUDO numa frase — é o que o hover mostra quando o texto trunca. */
   const titulo = [
     eFalta ? fraseDaFalta(c) : null,
-    `${fmtData(c.data_vencimento)} venc.`, nome || c.fornecedor, fornecedorDiferente && c.descricao ? fornecedorDiferente : null,
-    c.subcentro, STATUS_FILTRO_LABEL[(c.status_transacao ?? '').toLowerCase()] ?? c.status_transacao,
+    `${fmtData(c.data_vencimento)} venc.`, nome || c.fornecedor, c.subcentro,
+    STATUS_FILTRO_LABEL[(c.status_transacao ?? '').toLowerCase()] ?? c.status_transacao,
     c.vencido ? 'vencido' : null, c.sem_conta ? 'sem conta' : null,
     c.ja_conciliado ? 'já vinculado' : null, doc,
   ].filter(Boolean).join(' · ');
+  const venc = c.data_vencimento ? `${c.data_vencimento.slice(8, 10)}/${c.data_vencimento.slice(5, 7)}/${c.data_vencimento.slice(0, 4)}` : '—';
+  const pedacos: Pedaco[] = [
+    ...(comVencimento ? [{ t: `venc. ${venc} · `, cls: cn('tabular-nums', c.vencido && 'font-semibold text-destructive'), testid: 'conf-vencimento' }] : []),
+    eFalta ? { t: fraseDaFalta(c), cls: 'font-medium', testid: 'linha-falta' } : { t: nome || c.fornecedor || '—', cls: 'font-medium' },
+    ...(!eFalta && doc ? [{ t: ` · ${doc}`, cls: 'text-muted-foreground' }] : []),
+  ];
   return (
-    <tr ref={setNodeRef} className={cn(H18, 'border-b border-border/50',
+    <tr ref={setNodeRef} data-candidato="" className={cn('border-b border-border/50',
       c.ja_conciliado && !parcial && 'opacity-60',
       eFalta && 'text-muted-foreground',
       marcado && 'bg-amber-500/10',
       isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
-      <td /><td /><td /><td />
-      <td className={MEIO} />
-      <td className="text-center">
-        {casavel && (
-          <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado}
-            onChange={onMarcar} aria-label="Marcar candidato" />
-        )}
-      </td>
-      <td className={cn(CEL, 'text-left font-medium tabular-nums', eFalta ? 'text-muted-foreground' : corVal(c.valor_assinado))}>{fmtBRL(c.valor_assinado)}</td>
-      <CelDataSistema data={c.data_vencimento} vencido={c.vencido} rotulo="vencimento" />
-      {/* ⚠ O STATUS ERA A PRIMEIRA COISA A SUMIR — PR-ESPELHO-CANDIDATOS-POR-DATA-05, e é ele que
-          o operador vem ler. A célula inteira era uma linha de texto corrido dentro de um
-          `overflow-hidden text-ellipsis`: descrição e subcentro são longos, empurravam o badge
-          para fora da largura e o corte comia justamente `agendado`/`previsto`/`programado`. Na
-          tela tudo parecia "venc.", porque o que sobrava à esquerda era a data.
-          ⚠ A CORREÇÃO É DE ESTRUTURA, NÃO DE TAMANHO: a célula vira `flex`, o que PODE encolher
-          (descrição, fornecedor, subcentro) fica num `min-w-0 truncate`, e o que NÃO pode (badge,
-          vencido, sem conta, já vinculado) é `shrink-0`. Diminuir a fonte adiaria o corte; tirar
-          do truncamento o resolve.
-          ⚠ AS CORES DO BADGE NÃO SE TOCAM: vêm de `badgeDeStatusTransacao`, o mapa da casa.
-          ⚠ E A DATA PERDE PESO, não presença: ela é o RÓTULO do vencimento, e estava competindo
-          com o dado por ser a primeira e estar em tabular.
-          ⚠ E AGORA VENCIMENTO E STATUS SAÍRAM DA CÉLULA — PR-CONC-CONFERENCIA-MODAL-01 (regra do
-          Gabriel de 28/09: uma informação por coluna). O vencimento tem coluna própria (e o
-          "vencido" é dito nela, em vermelho, em vez de um selo âmbar no texto); o status tem a
-          dele, com a paleta única. No texto sobram descrição · fornecedor · subcentro · documento,
-          que truncam com tudo no `title`, e os dois avisos que não são status nem data ("sem conta",
-          "já vinculado"), que ficam `shrink-0` no fim para nunca serem cortados. */}
-      <td className={cn(CEL, 'max-w-0')} title={titulo}>
-        <span className="flex items-center gap-1">
-          <span className="min-w-0 flex-1 truncate">
-            {eFalta
-              ? <span className="font-medium" data-testid="linha-falta">{fraseDaFalta(c)}</span>
-              : <span className="font-medium">{nome || c.fornecedor || '—'}</span>}
-            {!eFalta && (
-              <span className="text-muted-foreground">
-                {fornecedorDiferente && c.descricao && <>{' · '}{fornecedorDiferente}</>}
-                {c.subcentro && <>{' · '}{c.subcentro}</>}
-                {doc && <>{' · '}{doc}</>}
-              </span>
-            )}
-          </span>
-          {c.sem_conta && <span className="shrink-0 rounded bg-destructive/10 px-1 font-medium text-destructive">sem conta</span>}
+      <CelHistorico nota="" />
+      <td className={TDC} />
+      <td className={TDC_MEIO} />
+      <td className={cn(TDC_NUM, SEP, 'font-medium', eFalta ? 'text-muted-foreground' : corVal(c.valor_assinado))}>{fmtBRL(c.valor_assinado)}</td>
+      <CelulasDoSistema pedacos={pedacos} detalhe={titulo} apagado={eFalta}
+        marcar={<Marcar marcado={marcado} onMarcar={casavel ? onMarcar : undefined} rotulo="Marcar candidato" alcaId={casavel ? `dragLan:${c.lancamento_id}` : undefined} />}
+        fornecedor={c.fornecedor && c.fornecedor !== c.descricao ? c.fornecedor : null} subcentro={c.subcentro}
+        selo={<SeloStatus status={c.status_transacao} />}
+        chips={<>
+          {c.sem_conta && <span className="shrink-0 rounded bg-destructive/10 px-1 text-[9.5px] font-medium text-destructive">sem conta</span>}
           {parcial && falta != null && <ChipParcial falta={falta} />}
-          {c.ja_conciliado && !parcial && <span className="shrink-0 italic text-muted-foreground">já vinculado</span>}
-        </span>
-      </td>
-      <CelStatus status={c.status_transacao} />
-      <CelAcoes alcaId={casavel ? `dragLan:${c.lancamento_id}` : undefined} itens={[
+          {c.ja_conciliado && !parcial && <span className="shrink-0 text-[9.5px] italic text-muted-foreground">já vinculado</span>}
+        </>} />
+      <CelAcoes itens={[
         { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(c.lancamento_id) : undefined, motivo: SEM_ABRIR },
       ]} />
     </tr>
@@ -788,38 +809,6 @@ function ChipParcial({ falta }: { falta: number }) {
 function tituloLancamento(s: EspSis | undefined) {
   if (!s) return undefined;
   return [descricaoComParcela(s.descricao, s.oc_parcela), s.fornecedor, s.subcentro].filter(Boolean).join(' · ') || undefined;
-}
-
-/** Descrição + fornecedor (+ competência quando difere, + origem quando sem par), UMA linha. */
-function textoLancamento(s: EspSis | undefined, mesDoRecorte: string, semPar = false) {
-  if (!s) return <span className="text-muted-foreground">—</span>;
-  const comp = s.competencia && s.competencia.slice(0, 7) !== mesDoRecorte
-    ? `${MESES_CURTOS[Number(s.competencia.slice(5, 7)) - 1] ?? ''}/${s.competencia.slice(2, 4)}`
-    : null;
-  return (
-    <>
-      {/* ⚠ 10px COMO TUDO — PR-CONC-CONFERENCIA-MODAL-01: a descrição era 11px e o resto 10; agora a
-          tabela tem UMA fonte, e a hierarquia fica só no peso (descrição `font-medium`). */}
-      {/* OC-RECEB-PARCIAL-01: a parcela da OC no nome ("Venda 050 Desmama F · Receb. 1/2") */}
-      <span className="font-medium">{descricaoComParcela(s.descricao, s.oc_parcela) ?? '—'}</span>
-      {/* ⚠ SEM `text-muted-foreground` — PR-ESPELHO-CONFERENCIA-FONTE-07. O fornecedor e a
-          competência são o que o operador LÊ para ter certeza de que este lançamento é o par
-          daquele movimento do banco; em cinza claro a 10px eles viravam contexto de fundo, e
-          conciliar passava a depender de adivinhar.
-          ⚠ SÓ A COR MUDA: 10px continua, porque a hierarquia com a descrição (11px/medium) vem
-          do tamanho e do peso, não do apagado. Tirar os dois faria o fornecedor competir com a
-          descrição; tirar só a cor o traz para a leitura sem mexer em uma linha do layout. */}
-      <span>
-        {' · '}{s.fornecedor || '—'}
-        {comp && ` · competência ${comp}`}
-        {semPar && s.origem_lancamento && ` · ${rotuloOrigem(s.origem_lancamento)}`}
-      </span>
-      {/* CONC-TRANSF-DUAS-PONTAS-01: a transferencia com uma ponta so' diz qual falta (a frase vem do banco) */}
-      {s.pontas && !(s.pontas.origem && s.pontas.destino) && (
-        <span className="text-amber-700" data-testid="pontas-transferencia">{' · '}{s.pontas.frase}</span>
-      )}
-    </>
-  );
 }
 
 /** Os motivos que a RPC recusa, em português. Um lugar só — o modal do 03b reusa. */
@@ -876,18 +865,81 @@ function comPrazo<T>(promessa: PromiseLike<T>, ms: number): Promise<T> {
   ]);
 }
 
-function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos, onAbrir, onMudou, mostrarCandidatos = true, soNaoConciliados = false, diaFoco = null, onDiaFocado }: {
-  data: EspelhadosReais; anoMes: string; nomeConta?: string; clienteId: string; contaId: string | null;
-  internos: ReadonlySet<string>; onAbrir?: (id: string) => void; onMudou: () => void;
+/** P159a — os chips de filtro do cabeçalho da Conferência (o número ao lado é o de `contagensDaMesa`). */
+const CHIPS_DA_CONFERENCIA: readonly { k: FiltroConferencia; rotulo: string }[] = [
+  { k: 'todos', rotulo: 'Todos' }, { k: 'sem_par', rotulo: 'Sem par' }, { k: 'casados', rotulo: 'Casados' },
+];
+
+/**
+ * AS SUGESTÕES DE CADA MOVIMENTO SEM PAR — PR-CONC-SUGESTOES-CASAR-01. Calculadas UMA vez por mesa e guardadas por linha: o "(N)"
+ * do menu é o tamanho desta lista e o modal mostra ESTA lista (com orçamentos diferentes o menu dizia (2) e o modal mostrava 1 —
+ * medido no Camargo). P159a: saiu da Conferência para quem a monta, porque o Extrato (banco) ganhou o mesmo botão [Sugestões] — a
+ * MESMA lista nas duas telas. Sem candidatos (o modal do Espelho), toda lista é vazia.
+ */
+export function sugestoesDaMesa(dias: readonly DiaConf[], candidatos: readonly EspCandidato[]): Map<string, Sugestao[]> {
+  const m = new Map<string, Sugestao[]>();
+  for (const d of dias) for (const e of d.extratosSemPar) m.set(e.extrato_id, sugerirCasamentos(e, [...candidatos], { orcamentoMs: 30 }));
+  return m;
+}
+/** "casar" numa sugestão abre o `CasarComBancoModal` já com os levados; um lançamento de valor diferente abre com o valor do banco. */
+function levadosDaSugestao(s: Sugestao): LevadoInicial[] {
+  const umDiferente = s.lancamentos.length === 1 && s.valorDiferente;
+  return s.lancamentos.map((c) => ({
+    lancamento_id: c.lancamento_id, descricao: c.descricao, fornecedor: c.fornecedor,
+    valor_assinado: c.valor_assinado, usarValorDoBanco: umDiferente,
+    data_vencimento: c.data_vencimento, status_transacao: c.status_transacao,
+  }));
+}
+
+/**
+ * O Extrato (banco) com os dois botões do sem par — P159a (mock `mock-extrato-banco-v1.html`). [Sugestões] e [Criar] abrem os MESMOS
+ * modais da Conferência (`SugestoesCasarModal` → `CasarComBancoModal`; "Criar" = o casar com a lista vazia), com a MESMA lista de
+ * sugestões (`sugestoesDaMesa`). Gravou: relê o espelho e avisa o canal (CONC-SEM-F5-01), como a Conferência.
+ */
+function ExtratoComAcoes({ data, inicial, internas, sugestoesPorLinha, clienteId, contaId, onMudou }: {
+  data: EspelhadosReais; inicial: number; internas: EspelhoInternas; sugestoesPorLinha: ReadonlyMap<string, Sugestao[]>;
+  clienteId: string; contaId: string; onMudou: () => void;
+}) {
+  const [sugerir, setSugerir] = useState<ExtratoAlvo | null>(null);
+  const [casar, setCasar] = useState<{ extrato: ExtratoAlvo; iniciais: LevadoInicial[] } | null>(null);
+  const alvo = (e: EspOfx): ExtratoAlvo => ({ extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor });
+  const nomeConta = data.escopo.nome_conta ?? undefined;
+  return (<>
+    <TabelaExtratoDoMes ofx={data.ofx_completo} inicial={inicial} internas={internas}
+      semPar={{
+        nSugestoes: (e) => sugestoesPorLinha.get(e.extrato_id)?.length ?? 0,
+        aoSugestoes: (e) => setSugerir(alvo(e)),
+        aoCriar: (e) => setCasar({ extrato: alvo(e), iniciais: [] }),
+      }} />
+    <SugestoesCasarModal open={!!sugerir} onClose={() => setSugerir(null)} extrato={sugerir} nomeConta={nomeConta}
+      sugestoes={(sugerir && sugestoesPorLinha.get(sugerir.extrato_id)) || []}
+      onCasar={(s) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: levadosDaSugestao(s) }); setSugerir(null); }} />
+    <CasarComBancoModal open={!!casar} onClose={() => setCasar(null)} extrato={casar?.extrato ?? null} iniciais={casar?.iniciais ?? []}
+      nomeConta={nomeConta} contaBancariaId={contaId} clienteId={clienteId} onConciliado={() => onMudou()} />
+  </>);
+}
+
+function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onAbrir, onMudou, mostrarCandidatos = true, filtro = 'todos',
+  mostrarVencidos = false, saldoDoBancoNoDia, sugestoesPorLinha, diaFoco = null, onDiaFocado }: {
+  data: EspelhadosReais;
+  /** P159a — a mesa (`montarMesa`) vem de quem monta: os chips do cabeçalho do modal contam a MESMA mesa que a tabela desenha. */
+  dias: readonly DiaConf[];
+  anoMes: string; nomeConta?: string; clienteId: string; contaId: string | null;
+  onAbrir?: (id: string) => void; onMudou: () => void;
   /** Sem candidatos, a mesa é só o fecho dos realizados (o modal do Espelho). */
   mostrarCandidatos?: boolean;
-  /** Esconde as linhas casadas (✓, dos dois lados); o dia sem linha visível some; o fechamento não é recalculado. */
-  soNaoConciliados?: boolean;
+  /** P159a — o chip do cabeçalho (Todos · Sem par · Casados); esconde linhas, nunca muda o fechamento do dia. */
+  filtro?: FiltroConferencia;
+  /** P159a — o chip "Vencidos de meses anteriores": os vencidos no topo (fechados por padrão). */
+  mostrarVencidos?: boolean;
+  /** P159a — o saldo do banco no FIM de cada dia ('aaaa-mm-dd' → saldo), lido da Evolução do saldo (`montarEvolucao`). */
+  saldoDoBancoNoDia: ReadonlyMap<string, number>;
+  /** As sugestões de cada movimento sem par (`sugestoesDaMesa`), as MESMAS do Extrato (banco). */
+  sugestoesPorLinha: ReadonlyMap<string, Sugestao[]>;
   /** Rola até o cabeçalho deste dia ao abrir (o link do Status da Conciliação) e avisa quem pediu. */
   diaFoco?: string | null;
   onDiaFocado?: () => void;
 }) {
-  const dias = useMemo(() => montarMesa(data, internos), [data, internos]);
   /* PR-CONC-SALDO-UMA-REGUA-02 — o link "N dias com diferença" abre a mesa NESTE dia: o cabeçalho do dia leva
      `data-dia`, e a rolagem é a do scrollport da mesa (`scrollIntoView` acha o ancestral que rola). Uma vez por pedido. */
   const refMesa = React.useRef<HTMLDivElement | null>(null);
@@ -906,29 +958,11 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
      desconsiderar seria uma porta sem volta dentro desta tela — e uma decisão que não se
      desfaz onde foi tomada é uma decisão que o operador evita tomar. */
   const [verIgnorados, setVerIgnorados] = useState(false);
-  /* ⚠ COMEÇA OCULTO — PR-ESPELHO-VENCIDOS-NO-TOPO-08. O vencido é do passado e não pertence ao
-     fluxo do mês que se está conferindo; aberto por padrão, ele empurraria o dia 01 para baixo
-     da dobra em toda abertura da tela. A contagem no rótulo é o que garante que ele não some:
-     "Mostrar vencidos (7)" informa mesmo fechado. */
-  const [mostrarVencidos, setMostrarVencidos] = useState(false);
   /* ⚠ UM LUGAR SÓ DECIDE — PR-CONCILIACAO-5-ABAS-01. Com a lista vazia somem de uma vez a
      faixa, as linhas e os candidatos do `sisIndex` (nada de marcar ou arrastar candidato). */
   const candidatos = useMemo(
     () => (mostrarCandidatos ? (data.sistema_candidatos ?? []) : []),
     [data, mostrarCandidatos]);
-  /* ⚠ AS SUGESTÕES DE CADA MOVIMENTO SEM PAR — PR-CONC-SUGESTOES-CASAR-01. Calculadas UMA vez por mesa e guardadas
-     por linha: o "(N)" do menu é o tamanho desta lista e o modal mostra ESTA lista. Com orçamentos diferentes (2ms no
-     menu, 30 no modal) o menu dizia (2) e o modal mostrava 1 — medido no Camargo. Com a soma entre fornecedores
-     limitada a 3, a busca termina muito antes dos 30ms, e o resultado não depende mais do relógio.
-     Sem candidatos (o modal do Espelho), toda lista é vazia. */
-  const sugestoesPorLinha = useMemo(() => {
-    const m = new Map<string, Sugestao[]>();
-    for (const d of dias) for (const e of d.extratosSemPar) {
-      m.set(e.extrato_id, sugerirCasamentos(e, candidatos, { orcamentoMs: 30 }));
-    }
-    return m;
-  }, [dias, candidatos]);
-
   /* P139 — os movimentos SEM PAR do recorte (a barra só oferece "Criar transferências (N)" quando todos os marcados são deles) e a
      SUGESTÃO de transferência do banco para eles (titular de outra conta; aplicação/resgate automático → a única conta de investimento
      do mesmo banco). Uma consulta por conta e mês; a tela só mostra. */
@@ -1288,6 +1322,228 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
   };
   const marcado = (lado: 'extratos' | 'lancamentos', id: string) => sel[lado].has(id);
 
+  /* P159a — o que ESTE dia desenha, na ordem da tela (`itensDoDia`: maior |valor| primeiro; candidatos depois) e com o filtro do chip. */
+  const ehParcial = (p: Pareado) => faltaDoExtrato(p.diferenca) != null;
+
+  const renderPareado = (p: Pareado) => {
+    const agrupado = p.filhas.length > 1;
+    const unica = p.filhas.length === 1 ? p.filhas[0] : null;
+    const temDif = !fechaAoCentavo(p.diferenca);
+    const falta = faltaDoExtrato(p.diferenca);
+    const sinal = falta != null ? SINAL_PARCIAL : SINAL_CASADO;
+    const somaAssinada = Math.sign(p.extrato.valor || 1) * p.soma;
+    const avisos = { lancadoEm: unica?.lancadoEm ?? null, parte: unica?.parte ?? null, sobreAplicado: p.sobreAplicado };
+    /* a falta ANTES de tudo, escrita (não só no title): a célula corta no fim, e o número nunca é o pedaço cortado. Os avisos ANTES
+       da descrição; no agrupado a mãe só diz o "aplicado acima" (data e parte de cada lançamento vão na filha dele). */
+    const pedacos: Pedaco[] = [
+      ...(falta != null ? [{ t: `falta ${fmtBRL(falta)}`, cls: 'font-semibold text-amber-700', testid: 'falta-do-extrato' }, { t: ' · ' }] : []),
+      ...pedacosDosAvisos(avisos),
+      ...(agrupado
+        ? [{ t: `${p.filhas.length} lançamentos`, cls: 'font-medium' }, { t: ` · ${p.grupoId ? 'agrupados' : `${p.filhas.length} vínculos`}`, cls: 'text-muted-foreground' }]
+        : pedacosDoLancamento(unica?.sis, mesDoRecorte)),
+      ...(unica && unica.deN > 1 ? [{ t: ` · 1 de ${unica.deN}`, cls: 'text-muted-foreground' }] : []),
+      ...pedacoDaOrigem(p.tipoVencedor),
+    ];
+    const detalhe = [
+      falta != null ? `falta R$ ${fmtBRL(falta)}: os lançamentos somam menos que o extrato` : null,
+      ...tituloAvisos(avisos), unica ? tituloLancamento(unica.sis) : null,
+    ].filter(Boolean).join(' · ');
+    return (
+      <React.Fragment key={p.extrato.extrato_id}>
+        <tr className={cn('border-b border-border/50', falta == null && CONCILIADA)}
+            {...(falta == null ? { 'data-conciliada': '' } : { 'data-extrato-parcial': '' })}>
+          <CelHistorico historico={p.extrato.historico} data={p.extrato.data} />
+          <td className={cn(TDC_NUM, 'font-medium', corVal(p.extrato.valor))}>{fmtBRL(p.extrato.valor)}</td>
+          <td className={cn(TDC_MEIO, 'font-bold', sinal.cor)} title={sinal.titulo} data-testid="sinal-do-extrato">{sinal.simbolo}</td>
+          <td className={cn(TDC_NUM, SEP, 'font-medium', temDif ? 'text-amber-600' : corVal(somaAssinada))}
+              title={temDif ? `banco ${fmtBRL(Math.abs(p.diferenca))} ${p.diferenca > 0 ? 'a mais' : 'a menos'} que a soma` : undefined}>
+            {fmtBRL(somaAssinada)}
+          </td>
+          <CelulasDoSistema pedacos={pedacos} detalhe={detalhe}
+            fornecedor={agrupado ? null : unica?.sis?.fornecedor} subcentro={agrupado ? null : unica?.sis?.subcentro}
+            selo={falta != null ? <SeloStatus status="parcial" /> : null} />
+          <CelAcoes itens={[
+            { rotulo: 'Abrir',
+              onClick: unica && onAbrir ? () => onAbrir(unica.lancamento_id) : undefined,
+              motivo: unica ? SEM_ABRIR : 'agrupado: abra cada lançamento nas linhas abaixo' },
+            /* ⚠ BLOCO SE DESFAZ PELO GESTO CONTRÁRIO DELE (CONC-BLOCOS-TELA-01): `fn_desfazer_bloco` devolve
+               status e data de cada lançamento; o "Desconciliar grupo" só desfaria os vínculos. */
+            p.grupoId && blocosVivos.has(p.grupoId)
+              ? { rotulo: 'Desfazer bloco', onClick: () => abrirDesfazerBloco(p.grupoId!) }
+              : { rotulo: p.grupoId ? 'Desconciliar grupo' : 'Desconciliar',
+              onClick: (unica || p.grupoId) ? async () => {
+                const r = p.grupoId
+                  ? await desfazerGrupo(p.grupoId, 'desfeito_no_espelho')
+                  : await desfazerVinculo(p.extrato.extrato_id, 'desfeito_no_espelho');
+                if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
+              } : undefined,
+              motivo: falta != null ? MOTIVO_EXTRATO_PARCIAL : 'vínculos sem grupo: desconcilie cada um pelo lançamento' },
+          ]} />
+        </tr>
+        {/* ⚠ A FILHA É DETALHE DE COMPOSIÇÃO, e a tipografia diz isso: peso 400 em tudo — inclusive no valor —, texto em
+            muted e borda mais fraca que a das linhas. Ela explica a mãe; não compete com ela. */}
+        {agrupado && p.filhas.map((f) => {
+          const faltaF = faltaDe(f.lancamento_id, f.sis?.valor_assinado ?? 0);
+          const av = { lancadoEm: f.lancadoEm, parte: f.parte, sobreAplicado: false };
+          /* CONC-MESA-SINAL-01: o sinal da filha é o do lançamento — a dedução aparece negativa no depósito. */
+          const v = sinalDoAplicado(f.sis, p.extrato.valor) * f.valor_aplicado;
+          return (
+            <tr key={f.lancamento_id} className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
+              <CelHistorico nota="" />
+              <td className={TDC} />
+              <td className={cn(TDC_MEIO, 'text-muted-foreground')}>↳</td>
+              <td className={cn(TDC_NUM, SEP, corVal(v))}>{fmtBRL(v)}</td>
+              <CelulasDoSistema apagado pedacos={[...pedacosDosAvisos(av), { t: f.sis?.descricao ?? '—' }]}
+                detalhe={[...tituloAvisos(av), tituloLancamento(f.sis)].filter(Boolean).join(' · ')}
+                fornecedor={f.sis?.fornecedor} subcentro={f.sis?.subcentro}
+                chips={faltaF == null ? null : <ChipParcial falta={faltaF} />} />
+              <CelAcoes itens={[
+                { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(f.lancamento_id) : undefined, motivo: SEM_ABRIR },
+                { rotulo: 'Desconciliar', motivo: 'desconcilie pela linha do extrato, acima' },
+              ]} />
+            </tr>
+          );
+        })}
+      </React.Fragment>
+    );
+  };
+
+  /* ⚠ N:1 — a mãe do lado do SISTEMA. Ver `ParedoN1`. */
+  const renderN1 = (g: ParedoN1) => {
+    const temDif = !fechaAoCentavo(g.diferenca);
+    const somaAssinada = Math.sign(g.sis.valor_assinado || 1) * g.soma;
+    const av = { lancadoEm: g.lancadoEm, sobreAplicado: g.sobreAplicado };
+    return (
+      <React.Fragment key={g.sis.lancamento_id}>
+        <tr className={cn('border-b border-border/50', CONCILIADA)} data-conciliada="">
+          <CelHistorico nota="" />
+          <td className={cn(TDC_NUM, 'font-medium', temDif ? 'text-amber-600' : corVal(somaAssinada))}
+              title={temDif ? `os extratos somam ${fmtBRL(Math.abs(g.diferenca))} ${g.diferenca > 0 ? 'a mais' : 'a menos'} que o lançamento` : undefined}>
+            {fmtBRL(somaAssinada)}
+          </td>
+          <td className={cn(TDC_MEIO, 'font-bold', SINAL_CASADO.cor)} title={SINAL_CASADO.titulo}>{SINAL_CASADO.simbolo}</td>
+          <td className={cn(TDC_NUM, SEP, 'font-medium', corVal(g.sis.valor_assinado))}>{fmtBRL(g.sis.valor_assinado)}</td>
+          <CelulasDoSistema
+            pedacos={[...pedacosDosAvisos(av), ...pedacosDoLancamento(g.sis, mesDoRecorte),
+              { t: ` · ${g.extratos.length} extratos`, cls: 'text-muted-foreground' }, ...pedacoDaOrigem('agrupamento_manual')]}
+            detalhe={[...tituloAvisos(av), tituloLancamento(g.sis)].filter(Boolean).join(' · ')}
+            fornecedor={g.sis.fornecedor} subcentro={g.sis.subcentro} />
+          <CelAcoes itens={[
+            { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(g.sis.lancamento_id) : undefined, motivo: SEM_ABRIR },
+            g.grupoId && blocosVivos.has(g.grupoId)
+              ? { rotulo: 'Desfazer bloco', onClick: () => abrirDesfazerBloco(g.grupoId!) }
+              : { rotulo: 'Desconciliar grupo',
+              onClick: g.grupoId ? async () => {
+                const r = await desfazerGrupo(g.grupoId!, 'desfeito_no_espelho');
+                if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
+              } : undefined,
+              motivo: 'sem grupo: desconcilie cada extrato nas linhas abaixo' },
+          ]} />
+        </tr>
+        {/* ⚠ FILHAS DO LADO DO BANCO e `↰` no meio: a seta aponta para o OFX porque é ele que está sendo decomposto. */}
+        {g.extratos.map((x) => (
+          <tr key={x.extrato.extrato_id} className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
+            <CelHistorico historico={x.extrato.historico} data={x.extrato.data} apagado />
+            <td className={cn(TDC_NUM, corVal(x.extrato.valor))}>{fmtBRL(x.extrato.valor)}</td>
+            <td className={cn(TDC_MEIO, 'text-muted-foreground')}>↰</td>
+            <td className={cn(TDC, SEP)} /><td className={TDC} /><td className={TDC} /><td className={TDC} />
+            <CelAcoes itens={[
+              { rotulo: 'Abrir', motivo: 'é um movimento do banco: abra o lançamento acima' },
+              /* ⚠ CONC-N1-DESCONCILIAR-01: o vínculo SEM grupo se desfaz um a um, pela RPC unitária (que recusa
+                 membro de grupo — é segura aqui). Com grupo, continua pela linha mãe (grupo ou bloco). */
+              x.grupoId
+                ? { rotulo: 'Desconciliar', motivo: 'desconcilie pela linha do lançamento, acima' }
+                : { rotulo: 'Desconciliar', onClick: async () => {
+                    const r = await desfazerVinculo(x.extrato.extrato_id, 'desfeito_no_espelho');
+                    if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
+                  } },
+            ]} />
+          </tr>
+        ))}
+      </React.Fragment>
+    );
+  };
+
+  const renderItem = (it: ItemConferencia) => {
+    switch (it.tipo) {
+      case 'pareado': return renderPareado(it.p);
+      case 'n1': return renderN1(it.g);
+      case 'extrato_sem_par': {
+        const e = it.e;
+        return (
+          <LinhaExtratoSemPar key={e.extrato_id} e={e}
+            marcado={marcado('extratos', e.extrato_id)} onMarcar={() => alterna('extratos', e.extrato_id)}
+            onCriar={() => setCasar({
+              extrato: { extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor },
+              iniciais: [],
+            })}
+            onIgnorar={() => setIgnorarId(e.extrato_id)}
+            onCriarTransferencia={contaId ? () => setTransf(paraTransferencia(e)) : undefined}
+            transf={transfPorLinha.get(e.extrato_id)}
+            nSugestoes={sugestoesPorLinha.get(e.extrato_id)?.length ?? 0}
+            onSugestoes={() => setSugerir({ extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor })} />
+        );
+      }
+      case 'interna': {
+        const si = it.s;
+        return (
+          <tr key={si.lancamento_id} className="border-b border-border/50 bg-muted/20">
+            <CelHistorico nota="— o banco não exporta este movimento" />
+            <td className={TDC} />
+            <td className={cn(TDC_MEIO, 'text-muted-foreground')} title="transferência com conta interna">⇄</td>
+            <td className={cn(TDC_NUM, SEP, 'font-medium text-muted-foreground')}>{fmtBRL(si.valor_assinado)}</td>
+            <CelulasDoSistema apagado detalhe={tituloLancamento(si)}
+              pedacos={[{ t: si.descricao ?? '—', cls: 'font-medium' }, { t: ' · transferência interna · fora do extrato' }]}
+              fornecedor={si.fornecedor} subcentro={si.subcentro} selo={<SeloStatus status="realizado" />} />
+            <CelAcoes itens={[
+              { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(si.lancamento_id) : undefined, motivo: SEM_ABRIR },
+            ]} />
+          </tr>
+        );
+      }
+      case 'lanc_sem_par': {
+        const sl = it.s;
+        return (
+          <LinhaLancSemPar key={sl.lancamento_id} s={sl} mesDoRecorte={mesDoRecorte}
+            marcado={marcado('lancamentos', sl.lancamento_id)}
+            onMarcar={() => alterna('lancamentos', sl.lancamento_id)} onAbrir={onAbrir} />
+        );
+      }
+      case 'resto': {
+        /* ⚠ O RESTO NÃO APLICADO — PR-CONC-CONFERENCIA-FECHAMENTO-DIA (R5): o lançamento diz um valor e o banco aplicou menos; o que
+           falta aparece aqui, no dia do lançamento, somando no fechamento. Sem caixa de marcar: é o pedaço que falta de um casado. */
+        const r = it.r;
+        const v = Math.sign(r.sis.valor_assinado || 1) * r.resto;
+        return (
+          <tr key={`resto-${r.sis.lancamento_id}`} data-resto="" className="border-b border-border/50">
+            <CelHistorico nota="" />
+            <td className={TDC} />
+            <td className={cn(TDC_MEIO, 'font-semibold text-destructive')} title="parte do lançamento sem extrato">!</td>
+            <td className={cn(TDC_NUM, SEP, 'font-medium', corVal(v))}>{fmtBRL(v)}</td>
+            <CelulasDoSistema
+              pedacos={[{ t: 'aplicado abaixo do lançamento · ', cls: 'text-amber-600', aviso: 'sub-aplicado' },
+                { t: `resto de ${fmtBRL(r.sis.valor_assinado)} · `, cls: 'text-muted-foreground' }, ...pedacosDoLancamento(r.sis, mesDoRecorte)]}
+              detalhe={`aplicado abaixo do lançamento: o lançamento vale ${fmtBRL(r.sis.valor_assinado)} e os extratos desta conta aplicam ${fmtBRL(r.aplicado)}; falta ${fmtBRL(r.resto)} · ${tituloLancamento(r.sis) ?? ''}`}
+              fornecedor={r.sis.fornecedor} subcentro={r.sis.subcentro} selo={<SeloStatus status="realizado" />} />
+            <CelAcoes itens={[
+              { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(r.sis.lancamento_id) : undefined, motivo: SEM_ABRIR },
+            ]} />
+          </tr>
+        );
+      }
+      case 'candidato': {
+        /* ⚠ OS CANDIDATOS DO DIA, LOGO DEPOIS DOS MOVIMENTOS DELE e FORA da soma: o `d.banco`/`d.sistema` não os contam, então o
+           "confere" do dia é o mesmo. Estar na vizinhança não é estar na conta. */
+        const c = it.c;
+        return (
+          <LinhaCandidato key={c.lancamento_id} c={c} falta={faltaDe(c.lancamento_id, c.valor)}
+            marcado={marcado('lancamentos', c.lancamento_id)}
+            onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
+        );
+      }
+    }
+  };
+
   return (
     <DndContext sensors={sensores} onDragEnd={aoSoltar}
       onDragStart={(ev) => {
@@ -1296,399 +1552,114 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
         else if (id.startsWith('dragExt:')) setArrastandoExt(extratoIndex.get(id.slice(8)) ?? null);
       }}>
     <div ref={refMesa} className="flex min-h-0 flex-1 flex-col">
-      {/* ⚠ A MARGEM É DO CONTAINER, NÃO DA TABELA. As bordas e a divisória continuam de fora a
-          fora DA TABELA; é ela que se afasta da borda do modal, e não as linhas que encurtam. */}
-      {/* ⚠ `overflow-auto`, NOS DOIS EIXOS — PR-CONC-CONFERENCIA-MODAL-01: abaixo da largura mínima
-          da tabela ela rola DENTRO do modal, nunca a página. */}
-      <div className="min-h-0 flex-1 overflow-auto border-t px-3.5">
-        {/* ⚠ A RÉGUA É O PADRÃO DA TABELA, não de cada célula. Sem isto, as células que não
-            declaram tamanho — as dos checkboxes, a das ações, a do lançamento — herdam os
-            16px/24px do documento e esticam a linha de 21px para 26,5px, mesmo com `h-[21px]` (hoje 18px)
-            no `<tr>`: altura em tabela é mínimo, não teto. Medido em 09/09/2026. */}
-        {/* ⚠ A RÉGUA DO MODAL — PR-CONC-CONFERENCIA-MODAL-01 (mock v2 aprovado pelo Gabriel), MEDIDA
-            NA TELA. 10px e 18px em TODA célula; onze colunas, uma informação por coluna:
-            OFX [check 18][data 38][histórico][valor 80][status 18] | divisor 2px | Sistema
-            [check 18][valor 80][data 38][descrição · fornecedor · subcentro][status 72][ações 142].
-            ⚠ AS DUAS DE TEXTO NÃO TÊM LARGURA: dividem o que sobra, e é isso que as faz crescer em
-            1440 sem alargar valor, data nem status. O piso é o `minWidth` de 1046, a largura útil do
-            modal na janela do Gabriel (innerWidth 1.135): 504 fixos + 271 para cada texto.
-            ⚠ STATUS 72, NÃO OS 58 DO MOCK: medido a 10px, "Conciliado" com selo pede 65 (51,4 de
-            texto + 14 da pílula) e "Programado" em texto 59,3; 58 cortaria os dois.
-            ⚠ AÇÕES 142: "diferença -134.613,84" pede 112,2 a 10px semibold — era ela que saía "-134…"
-            nos 104 de antes, a 11px (123,4). */}
-        {/* ⚠ fix1 (Gabriel, 30/09): 9,5px (o piso da casa) em TODA célula, e a coluna de ações de 142 → 46 (alça +
-            "⋯"). Os ~100px liberados foram para o HISTÓRICO DO OFX, que agora é a única coluna sem largura: fica
-            com tudo o que sobra. A descrição do sistema ficou fixa nos 278 de antes; status foi a 78 para a
-            diferença do fechamento (status + ações = 124) caber inteira. */}
-        {/* ⚠ `[&_td]:py-0` E O ALINHAMENTO AO MEIO DO SELO E DO "⋯" (fix1): o `td` herdava 1px de padding em cima e
-            embaixo, e o selo (`inline-block` de 15px) e o gatilho (16px) alinhavam pela BASE da linha de texto —
-            as linhas saíam com 19, 21 e 22px. Medido na tela antes e depois. */}
-        <table className="w-full border-collapse text-[9.5px] leading-[13px] [&_td]:py-0" style={{ tableLayout: 'fixed', minWidth: 1046 }}>
-          <colgroup>
-            <col style={{ width: 18 }} /><col style={{ width: 38 }} /><col />
-            <col style={{ width: 80 }} /><col style={{ width: 18 }} />
-            <col style={{ width: 18 }} /><col style={{ width: 80 }} /><col style={{ width: 38 }} /><col style={{ width: 296 }} />
-            <col style={{ width: 60 }} /><col style={{ width: 46 }} />
-          </colgroup>
-          <thead className="sticky top-0 z-10">
-            <tr className={cn(H18, 'bg-primary text-primary-foreground')}>
-              <th />
-              <th colSpan={3} className="px-[5px] text-left text-[9.5px] font-medium">Banco (OFX)</th>
-              {/* A divisória atravessa o cabeçalho também — em branco, porque o fundo é azul. */}
-              <th className="border-l border-primary-foreground/40 border-r-2 border-r-primary-foreground/60 px-0" />
-              <th colSpan={5} className="px-[5px] text-left text-[9.5px] font-medium">Sistema</th>
-              <th />
+      {/* ⚠ `overflow-auto`, NOS DOIS EIXOS: abaixo da largura mínima da tabela ela rola DENTRO do modal, nunca a página. Só a tabela
+          rola; o cabeçalho dela é preso (`sticky`), e a faixa e o rodapé do modal ficam fora. */}
+      <div className="min-h-0 flex-1 overflow-auto border-t" data-testid="mesa-conferencia">
+        {/* ⚠ A RÉGUA DO MOCK (P159a): 8 colunas fixas — `LARGURAS_CONFERENCIA`; o Subcentro fica com o resto. O piso de 944px é a soma
+            das fixas (844) mais 100 para o Subcentro: abaixo dele a mesa rola na horizontal dentro do modal. */}
+        {/* ⚠ A FONTE E A ALTURA DA LINHA SÃO DA TABELA: célula que não declara (a do "⋯") herdaria os 16/24px da página e esticaria a
+            linha de 19 para 25px (medido 28/10). */}
+        <table className="w-full border-collapse text-[10.5px] leading-[18px]" style={{ tableLayout: 'fixed', minWidth: 944 }}>
+          <colgroup>{LARGURAS_CONFERENCIA.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>
+          <thead className="sticky top-0 z-10 bg-primary">
+            <tr>
+              <th className={cn(TH_REGUA, 'px-[5px] text-left')}>Banco · histórico</th>
+              <th className={cn(TH_REGUA, 'px-[5px] text-right')}>Valor</th>
+              <th className={cn(TH_REGUA, 'px-0')} />
+              {/* A divisória atravessa o cabeçalho também — em branco, porque o fundo é navy. */}
+              <th className={cn(TH_REGUA, 'border-l-2 border-l-primary-foreground/60 px-[5px] text-right')}>Sistema</th>
+              <th className={cn(TH_REGUA, 'px-[5px] text-left')}>Descrição</th>
+              <th className={cn(TH_REGUA, 'px-[5px] text-left')}>Favorecido</th>
+              <th className={cn(TH_REGUA, 'px-[5px] text-left')}>Subcentro</th>
+              <th className={cn(TH_REGUA, 'px-0')} />
             </tr>
           </thead>
           <tbody>
-            {/* ═══ VENCIDOS — NO TOPO, CRONOLÓGICOS, FECHADOS POR PADRÃO ═══════════════════
-                ⚠ ELES SUBIRAM DO FIM PARA CÁ — PR-ESPELHO-VENCIDOS-NO-TOPO-08. Atraso se lê
-                antes, não depois: quem abre a conferência precisa saber que há coisa vencida
-                ANTES de decidir o que fazer com o mês corrente, e no fim da mesa isso ficava
-                atrás de trinta dias de movimento.
-                ⚠ E FECHADO POR PADRÃO, com a contagem no rótulo: aberto, ele empurraria o dia 01
-                para baixo da dobra em toda abertura. Fechado, ele AVISA sem ocupar — que é o que
-                uma lista de pendência antiga deve fazer numa tela de conferir o mês. */}
-            {vencidos.length > 0 && (
-              <tr className={cn(H18, 'bg-amber-50 border-b border-amber-200 dark:bg-amber-950/20 dark:border-amber-900')}>
-                <td colSpan={4} />
-                <td className={MEIO} />
-                <td colSpan={6} className="px-[5px] whitespace-nowrap">
-                  <label className="flex cursor-pointer items-center gap-1.5 text-[9.5px] font-medium text-amber-900 dark:text-amber-200">
-                    <input type="checkbox" className="h-3 w-3 cursor-pointer"
-                      checked={mostrarVencidos}
-                      onChange={(e) => setMostrarVencidos(e.target.checked)} />
-                    Mostrar vencidos ({vencidos.length})
-                    <span className="font-normal opacity-70">— em aberto de meses anteriores</span>
-                  </label>
+            {/* ═══ VENCIDOS — NO TOPO, CRONOLÓGICOS, FECHADOS POR PADRÃO (PR-ESPELHO-VENCIDOS-NO-TOPO-08) ═══
+                P159a: quem os abre é o chip "Vencidos de meses anteriores (N)" do cabeçalho do modal (era a faixa amarela daqui). */}
+            {mostrarVencidos && vencidos.length > 0 && (<>
+              <tr className="bg-amber-50 dark:bg-amber-950/20" data-vencidos="">
+                <td colSpan={8} className="h-[20px] px-[5px] py-0 text-[10.5px] font-semibold text-amber-900 dark:text-amber-200">
+                  Vencidos de meses anteriores <span className="font-normal opacity-80">· {vencidos.length} em aberto</span>
                 </td>
               </tr>
-            )}
-            {mostrarVencidos && vencidos.map((c) => (
-              <LinhaCandidato key={c.lancamento_id} c={c} falta={faltaDe(c.lancamento_id, c.valor)}
-                marcado={marcado('lancamentos', c.lancamento_id)}
-                onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
-            ))}
+              {vencidos.map((c) => (
+                <LinhaCandidato key={c.lancamento_id} c={c} falta={faltaDe(c.lancamento_id, c.valor)} comVencimento
+                  marcado={marcado('lancamentos', c.lancamento_id)}
+                  onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
+              ))}
+            </>)}
 
-            {dias.map((d) => (
-              /* ⚠ "SÓ NÃO CONCILIADOS": o dia sem nenhuma linha visível some inteiro (cabeçalho e fechamento). O dia que
-                 fica mostra o fechamento com os totais do DIA INTEIRO, casados incluídos — o filtro esconde linhas, não
-                 muda a conta. */
-              soNaoConciliados && d.extratosSemPar.length === 0 && d.lancsSemPar.length === 0 && d.internas.length === 0
-                && d.restos.length === 0 && !(mostrarCandidatos && d.candidatos.length > 0)
-                && !d.pareados.some((p) => faltaDoExtrato(p.diferenca) != null) ? null :
-              <React.Fragment key={d.data ?? 'sem-data'}>
-                <tr className={cn(H18, 'bg-muted/40')} data-dia={d.data ?? undefined}>
-                  <td colSpan={4} className="px-[5px] whitespace-nowrap font-medium text-muted-foreground">{fmtData(d.data)}</td>
-                  <td className={MEIO} />
-                  <td colSpan={6} />
-                </tr>
-
-                {/* o extrato PARCIAL não é linha conciliada: aparece também em "Só não conciliados" */}
-                {d.pareados.filter((p) => !soNaoConciliados || faltaDoExtrato(p.diferenca) != null).map((p) => {
-                  const icone = iconeDoLancamento(p.tipoVencedor);
-                  const agrupado = p.filhas.length > 1;
-                  const unica = p.filhas.length === 1 ? p.filhas[0] : null;
-                  const temDif = !fechaAoCentavo(p.diferenca);
-                  const falta = faltaDoExtrato(p.diferenca);
-                  const sinal = falta != null ? SINAL_PARCIAL : SINAL_CASADO;
-                  const somaAssinada = Math.sign(p.extrato.valor || 1) * p.soma;
-                  return (
-                    <React.Fragment key={p.extrato.extrato_id}>
-                      <tr className={cn(H18, 'border-b border-border/50', falta == null && CONCILIADA)}
-                          {...(falta == null ? { 'data-conciliada': '' } : { 'data-extrato-parcial': '' })}>
-                        <td />
-                        <td className={CEL_DATA}>{fmtData(p.extrato.data)}</td>
-                        <td className={cn(CEL, 'font-medium')} title={p.extrato.historico ?? ''}>{p.extrato.historico ?? '—'}</td>
-                        <td className={cn(CEL, 'text-right font-medium tabular-nums', corVal(p.extrato.valor))}>{fmtBRL(p.extrato.valor)}</td>
-                        <td className={cn(MEIO, 'font-semibold', sinal.cor)} title={sinal.titulo} data-testid="sinal-do-extrato">{sinal.simbolo}</td>
-                        <td />
-                        <td className={cn(CEL, 'text-left font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
-                            title={temDif ? `banco ${fmtBRL(Math.abs(p.diferenca))} ${p.diferenca > 0 ? 'a mais' : 'a menos'} que a soma` : undefined}>
-                          {fmtBRL(somaAssinada)}
-                        </td>
-                        <CelDataSistema data={unica?.sis?.data} rotulo="data do lançamento" />
-                        <td className={CEL} title={[
-                          falta != null ? `falta R$ ${fmtBRL(falta)}: os lançamentos somam menos que o extrato` : null,
-                          ...tituloAvisos({ lancadoEm: unica?.lancadoEm ?? null, parte: unica?.parte, sobreAplicado: p.sobreAplicado }),
-                          unica ? tituloLancamento(unica.sis) : null,
-                        ].filter(Boolean).join(' · ') || undefined}>
-                          {/* a falta ANTES de tudo, escrita (não só no title): a célula corta no fim, e o número nunca é o pedaço cortado */}
-                          {falta != null && <span className="mr-1.5 font-semibold text-amber-700" data-testid="falta-do-extrato">falta {fmtBRL(falta)}</span>}
-                          {/* PR-CONC-CONFERENCIA-FECHAMENTO-DIA: os avisos ANTES da descrição (a célula corta no fim). No agrupado
-                              a mãe só diz o "aplicado acima"; data e parte de cada lançamento vão na filha dele. */}
-                          <AvisosDoVinculo lancadoEm={unica?.lancadoEm ?? null} parte={unica?.parte ?? null} sobreAplicado={p.sobreAplicado} />
-                          {agrupado
-                            ? <><span className="font-medium">{p.filhas.length} lançamentos</span>
-                                <span className="text-muted-foreground">{' · '}{p.grupoId ? 'agrupados' : `${p.filhas.length} vínculos`}</span></>
-                            : textoLancamento(unica?.sis, mesDoRecorte)}
-                          {unica && unica.deN > 1 && <span className="text-muted-foreground">{' · '}1 de {unica.deN}</span>}
-                          <MarcadorOrigem tipo={p.tipoVencedor} />
-                        </td>
-                        <CelStatus status={falta != null ? 'parcial' : 'conciliado'} />
-                        <CelAcoes itens={[
-                          { rotulo: 'Abrir',
-                            onClick: unica && onAbrir ? () => onAbrir(unica.lancamento_id) : undefined,
-                            motivo: unica ? SEM_ABRIR : 'agrupado: abra cada lançamento nas linhas abaixo' },
-                          /* ⚠ BLOCO SE DESFAZ PELO GESTO CONTRÁRIO DELE (CONC-BLOCOS-TELA-01): `fn_desfazer_bloco` devolve
-                             status e data de cada lançamento; o "Desconciliar grupo" só desfaria os vínculos. */
-                          p.grupoId && blocosVivos.has(p.grupoId)
-                            ? { rotulo: 'Desfazer bloco', onClick: () => abrirDesfazerBloco(p.grupoId!) }
-                            : { rotulo: p.grupoId ? 'Desconciliar grupo' : 'Desconciliar',
-                            onClick: (unica || p.grupoId) ? async () => {
-                              const r = p.grupoId
-                                ? await desfazerGrupo(p.grupoId, 'desfeito_no_espelho')
-                                : await desfazerVinculo(p.extrato.extrato_id, 'desfeito_no_espelho');
-                              if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
-                            } : undefined,
-                            motivo: falta != null ? MOTIVO_EXTRATO_PARCIAL : 'vínculos sem grupo: desconcilie cada um pelo lançamento' },
-                        ]} />
-                      </tr>
-
-                      {/* ⚠ A FILHA É DETALHE DE COMPOSIÇÃO, e a tipografia diz isso: 10px, peso
-                          400 em tudo — inclusive no valor —, descrição em muted e borda mais
-                          fraca que a das linhas. Ela explica a mãe; não compete com ela. */}
-                      {agrupado && p.filhas.map((f) => (
-                        <tr key={f.lancamento_id} className={cn(H18, CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
-                          <td /><td /><td /><td />
-                          <td className={cn(MEIO, 'font-normal text-muted-foreground')}>↳</td>
-                          <td />
-                          {/* CONC-MESA-SINAL-01: o sinal da filha é o do lançamento — a dedução aparece negativa no depósito. */}
-                          <td className={cn(CEL, 'text-left font-normal tabular-nums', corVal(sinalDoAplicado(f.sis, p.extrato.valor) * f.valor_aplicado))}>
-                            {fmtBRL(sinalDoAplicado(f.sis, p.extrato.valor) * f.valor_aplicado)}
-                          </td>
-                          <CelDataSistema data={f.sis?.data} rotulo="data do lançamento" />
-                          <td className={cn(CEL, 'font-normal text-muted-foreground')}
-                            title={[...tituloAvisos({ lancadoEm: f.lancadoEm, parte: f.parte, sobreAplicado: false }), tituloLancamento(f.sis)]
-                              .filter(Boolean).join(' · ') || undefined}>
-                            <AvisosDoVinculo lancadoEm={f.lancadoEm} parte={f.parte} sobreAplicado={false} />
-                            {textoFilha(f.sis)}
-                            {(() => {
-                              const falta = faltaDe(f.lancamento_id, f.sis?.valor_assinado ?? 0);
-                              return falta == null ? null : <ChipParcial falta={falta} />;
-                            })()}
-                          </td>
-                          <td />
-                          <CelAcoes itens={[
-                            { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(f.lancamento_id) : undefined, motivo: SEM_ABRIR },
-                            { rotulo: 'Desconciliar', motivo: 'desconcilie pela linha do extrato, acima' },
-                          ]} />
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  );
-                })}
-
-                {/* ⚠ N:1 — a mãe do lado do SISTEMA. Ver `ParedoN1`. */}
-                {!soNaoConciliados && d.paredosN1.map((g) => {
-                  const temDif = !fechaAoCentavo(g.diferenca);
-                  const somaAssinada = Math.sign(g.sis.valor_assinado || 1) * g.soma;
-                  return (
-                    <React.Fragment key={g.sis.lancamento_id}>
-                      <tr className={cn(H18, 'border-b border-border/50', CONCILIADA)} data-conciliada="">
-                        <td /><td /><td />
-                        <td className={cn(CEL, 'text-right font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
-                            title={temDif ? `os extratos somam ${fmtBRL(Math.abs(g.diferenca))} ${g.diferenca > 0 ? 'a mais' : 'a menos'} que o lançamento` : undefined}>
-                          {fmtBRL(somaAssinada)}
-                        </td>
-                        <td className={cn(MEIO, 'font-semibold', SINAL_CASADO.cor)} title={SINAL_CASADO.titulo}>{SINAL_CASADO.simbolo}</td>
-                        <td />
-                        <td className={cn(CEL, 'text-left font-medium tabular-nums', corVal(g.sis.valor_assinado))}>{fmtBRL(g.sis.valor_assinado)}</td>
-                        <CelDataSistema data={g.sis.data} rotulo="data do lançamento" />
-                        <td className={CEL} title={[...tituloAvisos({ lancadoEm: g.lancadoEm, sobreAplicado: g.sobreAplicado }), tituloLancamento(g.sis)]
-                          .filter(Boolean).join(' · ') || undefined}>
-                          <AvisosDoVinculo lancadoEm={g.lancadoEm} sobreAplicado={g.sobreAplicado} />
-                          {textoLancamento(g.sis, mesDoRecorte)}
-                          <span className="text-muted-foreground">{' · '}{g.extratos.length} extratos</span>
-                          <MarcadorOrigem tipo="agrupamento_manual" />
-                        </td>
-                        <CelStatus status="conciliado" />
-                        <CelAcoes itens={[
-                          { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(g.sis.lancamento_id) : undefined, motivo: SEM_ABRIR },
-                          g.grupoId && blocosVivos.has(g.grupoId)
-                            ? { rotulo: 'Desfazer bloco', onClick: () => abrirDesfazerBloco(g.grupoId!) }
-                            : { rotulo: 'Desconciliar grupo',
-                            onClick: g.grupoId ? async () => {
-                              const r = await desfazerGrupo(g.grupoId!, 'desfeito_no_espelho');
-                              if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
-                            } : undefined,
-                            motivo: 'sem grupo: desconcilie cada extrato nas linhas abaixo' },
-                        ]} />
-                      </tr>
-                      {/* ⚠ FILHAS DO LADO DO BANCO e `↰` no meio: a seta aponta para o OFX porque
-                          é ele que está sendo decomposto. Mesma régua das filhas do 1:N. */}
-                      {g.extratos.map((x) => (
-                        <tr key={x.extrato.extrato_id} className={cn(H18, CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
-                          <td />
-                          <td className={CEL_DATA}>{fmtData(x.extrato.data)}</td>
-                          <td className={cn(CEL, 'font-normal text-muted-foreground')} title={x.extrato.historico ?? ''}>{x.extrato.historico ?? '—'}</td>
-                          <td className={cn(CEL, 'text-right font-normal tabular-nums', corVal(x.extrato.valor))}>{fmtBRL(x.extrato.valor)}</td>
-                          <td className={cn(MEIO, 'font-normal text-muted-foreground')}>↰</td>
-                          <td /><td /><td /><td /><td />
-                          <CelAcoes itens={[
-                            { rotulo: 'Abrir', motivo: 'é um movimento do banco: abra o lançamento acima' },
-                            /* ⚠ CONC-N1-DESCONCILIAR-01: o vínculo SEM grupo se desfaz um a um, pela RPC unitária (que recusa
-                               membro de grupo — é segura aqui). Com grupo, continua pela linha mãe (grupo ou bloco). */
-                            x.grupoId
-                              ? { rotulo: 'Desconciliar', motivo: 'desconcilie pela linha do lançamento, acima' }
-                              : { rotulo: 'Desconciliar', onClick: async () => {
-                                  const r = await desfazerVinculo(x.extrato.extrato_id, 'desfeito_no_espelho');
-                                  if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
-                                } },
-                          ]} />
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  );
-                })}
-
-                {d.extratosSemPar.map((e) => (
-                  <LinhaExtratoSemPar key={e.extrato_id} e={e}
-                    marcado={marcado('extratos', e.extrato_id)} onMarcar={() => alterna('extratos', e.extrato_id)}
-                    onCriar={() => setCasar({
-                      extrato: { extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor },
-                      iniciais: [],
-                    })}
-                    onIgnorar={() => setIgnorarId(e.extrato_id)}
-                    onCriarTransferencia={contaId ? () => setTransf(paraTransferencia(e)) : undefined}
-                    transf={transfPorLinha.get(e.extrato_id)}
-                    nSugestoes={sugestoesPorLinha.get(e.extrato_id)?.length ?? 0}
-                    onSugestoes={() => setSugerir({ extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor })} />
-                ))}
-
-                {/* ⚠ NO FIM DO DIA, e depois do sem par: a ordem é a da atenção. O que falta
-                    vem antes; o que está explicado e fora do extrato vem depois. */}
-                {d.internas.map((si) => (
-                  <tr key={si.lancamento_id} className={cn(H18, 'border-b border-border/50 bg-muted/20')}>
-                    {/* A data é do lançamento do sistema: desceu da coluna do banco para a do sistema. */}
-                    <td />
-                    <td />
-                    <td className={cn(CEL, 'italic text-muted-foreground')}>— o banco não exporta este movimento</td>
-                    <td />
-                    <td className={cn(MEIO, 'text-muted-foreground')} title="transferência com conta interna">⇄</td>
-                    <td />
-                    <td className={cn(CEL, 'text-left font-medium tabular-nums text-muted-foreground')}>{fmtBRL(si.valor_assinado)}</td>
-                    <CelDataSistema data={si.data} rotulo="data do lançamento" />
-                    <td className={CEL} title={tituloLancamento(si)}>
-                      <span className="font-medium text-muted-foreground">{si.descricao ?? '—'}</span>
-                      <span className="text-muted-foreground">{' · '}transferência interna · fora do extrato</span>
+            {dias.map((d) => {
+              const itens = itensDoDia(d, filtro, { mostrarCandidatos, ehParcial });
+              /* ⚠ O FILTRO ESCONDE LINHAS, NÃO MUDA A CONTA: o dia sem nenhuma linha visível some inteiro; o que fica mostra o
+                 fechamento do DIA INTEIRO, casados incluídos. */
+              if (itens.length === 0) return null;
+              const conta = contagemDoDia(d, ehParcial);
+              /* ⚠ DIA SÓ DE CANDIDATO NÃO TEM O QUE FECHAR (PR-ESPELHO-VENCIDOS-NO-TOPO-08): um "confere" sobre um dia em que nada
+                 aconteceu parece conferência e não conferiu nada. O teste é pelas LINHAS realizadas, não pelos totais. */
+              const temMovimento = d.pareados.length > 0 || d.paredosN1.length > 0 || d.extratosSemPar.length > 0
+                || d.lancsSemPar.length > 0 || d.internas.length > 0 || d.restos.length > 0;
+              const saldoDoBanco = d.data ? saldoDoBancoNoDia.get(d.data.slice(0, 10)) : undefined;
+              const dif = d.banco - d.sistema;
+              return (
+                <React.Fragment key={d.data ?? 'sem-data'}>
+                  <tr className="bg-muted" data-dia={d.data ?? undefined}>
+                    <td colSpan={8} className="h-[20px] whitespace-nowrap px-[5px] py-0 text-[10.5px] font-semibold text-foreground/90">
+                      {rotuloDoDia(d.data)}
+                      <span className="font-normal text-muted-foreground">
+                        {' · '}{conta.movimentos} movimento{conta.movimentos === 1 ? '' : 's'}{conta.semPar > 0 ? ` · ${conta.semPar} sem par` : ''}
+                      </span>
                     </td>
-                    <CelStatus status="realizado" />
-                    <CelAcoes itens={[
-                      { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(si.lancamento_id) : undefined, motivo: SEM_ABRIR },
-                    ]} />
                   </tr>
-                ))}
-
-                {d.lancsSemPar.map((sl) => (
-                  <LinhaLancSemPar key={sl.lancamento_id} s={sl} mesDoRecorte={mesDoRecorte}
-                    marcado={marcado('lancamentos', sl.lancamento_id)}
-                    onMarcar={() => alterna('lancamentos', sl.lancamento_id)} onAbrir={onAbrir} />
-                ))}
-
-                {/* ⚠ O RESTO NÃO APLICADO — PR-CONC-CONFERENCIA-FECHAMENTO-DIA (R5). O lançamento diz um valor e o banco aplicou
-                    menos: o aplicado está no dia do extrato, e o que falta aparece aqui, no dia do lançamento, somando no
-                    fechamento — a diferença real. Sem caixa de marcar: não é um lançamento a casar, é o pedaço que falta de um
-                    lançamento já casado; o gesto "pagou diferente do programado" é PR próprio. */}
-                {d.restos.map((r) => (
-                  <tr key={`resto-${r.sis.lancamento_id}`} data-resto="" className={cn(H18, 'border-b border-border/50')}>
-                    <td /><td /><td /><td />
-                    <td className={cn(MEIO, 'font-semibold text-destructive')} title="parte do lançamento sem extrato">!</td>
-                    <td />
-                    <td className={cn(CEL, 'text-left font-medium tabular-nums', corVal(Math.sign(r.sis.valor_assinado || 1) * r.resto))}>
-                      {fmtBRL(Math.sign(r.sis.valor_assinado || 1) * r.resto)}
-                    </td>
-                    <CelDataSistema data={r.sis.data} rotulo="data do lançamento" />
-                    <td className={CEL}
-                      title={`aplicado abaixo do lançamento: o lançamento vale ${fmtBRL(r.sis.valor_assinado)} e os extratos desta conta aplicam ${fmtBRL(r.aplicado)}; falta ${fmtBRL(r.resto)} · ${tituloLancamento(r.sis) ?? ''}`}>
-                      <span className="text-amber-600" data-aviso="sub-aplicado">aplicado abaixo do lançamento{' · '}</span>
-                      <span className="text-muted-foreground">resto de {fmtBRL(r.sis.valor_assinado)}{' · '}</span>
-                      {textoLancamento(r.sis, mesDoRecorte)}
-                    </td>
-                    <CelStatus status="realizado" />
-                    <CelAcoes itens={[
-                      { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(r.sis.lancamento_id) : undefined, motivo: SEM_ABRIR },
-                    ]} />
-                  </tr>
-                ))}
-
-                {/* ⚠ OS CANDIDATOS DO DIA, LOGO ABAIXO DO EXTRATO DELE — PR-ESPELHO-CANDIDATOS-
-                    POR-DATA-05. Eles viviam num POOL no fim da mesa, depois de todos os dias: o
-                    operador via um movimento do banco em 04/09 e precisava rolar até o fim para
-                    achar o agendado do mesmo 04/09 que talvez fosse o par. Agora estão a uma
-                    linha de distância.
-                    ⚠ E FICAM DEPOIS DO FECHAMENTO? NÃO — ficam ANTES dele e FORA da soma. O
-                    `d.banco` e o `d.sistema` não os contam (ver `DiaConf.candidatos`), então o
-                    "confere" do dia é exatamente o mesmo de antes deste PR. Estar na vizinhança
-                    não é estar na conta.
-                    ⚠ `mostrarCandidatos` MANDA AQUI, como mandava no pool: o modal-fecho passa
-                    `false` e não vê candidato nenhum. `montarMesa` agrupa sempre; quem decide
-                    mostrar é o render. */}
-                {mostrarCandidatos && d.candidatos.map((c) => (
-                  <LinhaCandidato key={c.lancamento_id} c={c} falta={faltaDe(c.lancamento_id, c.valor)}
-                    marcado={marcado('lancamentos', c.lancamento_id)}
-                    onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
-                ))}
-
-                {/* ⚠ DIA SÓ DE CANDIDATO NÃO TEM O QUE FECHAR — PR-ESPELHO-VENCIDOS-NO-TOPO-08.
-                    Com os "a vencer" criando o próprio dia (o 25/09 sem OFX, por exemplo), passou
-                    a existir dia com ZERO linha realizada. Uma linha de "fechamento 25/09" ali
-                    diria `0,00 · 0,00 · confere` — e um "confere" sobre um dia em que nada
-                    aconteceu é a afirmação mais vazia que esta tela poderia fazer: ela parece
-                    conferência e não conferiu nada.
-                    ⚠ O TESTE É PELAS LINHAS REALIZADAS, não pelos totais: um dia pode fechar em
-                    zero tendo movimento (entrada e saída que se anulam), e esse fecha de verdade.
-                    Olhar `banco === 0 && sistema === 0` esconderia justamente esse caso. */}
-                {(d.pareados.length > 0 || d.paredosN1.length > 0 || d.extratosSemPar.length > 0
-                  || d.lancsSemPar.length > 0 || d.internas.length > 0 || d.restos.length > 0) && (
-                <tr className={cn(H18, 'bg-primary/10 border-t border-b border-border')}>
-                  <td colSpan={3} className={cn(CEL, 'font-semibold text-primary')}>fechamento {fmtData(d.data)}</td>
-                  <td className={cn(CEL, 'text-right font-semibold tabular-nums text-primary')}>{fmtBRL(d.banco)}</td>
-                  <td className={MEIO} />
-                  <td />
-                  {/* ⚠ NO FECHAMENTO O AZUL VENCE O VERMELHO/VERDE: a linha inteira é subtotal, e o
-                      sinal já está no número. Colorir por sinal aqui faria o subtotal competir
-                      visualmente com os movimentos que ele resume. */}
-                  <td className={cn(CEL, 'text-left font-semibold tabular-nums text-primary')}>{fmtBRL(d.sistema)}</td>
-                  <td />
-                  {/* ⚠ A DIFERENÇA OCUPA DESCRIÇÃO + STATUS + AÇÕES (colSpan 3) — fix2: com o selo de 8px a coluna de
-                      status encolheu, e status + ações já não cabem "diferença -134.613,84" (106,6px a 9,5px semibold +
-                      10 de padding). Na linha de fechamento a descrição é vazia, então o texto vai inteiro, à direita. */}
-                  <td colSpan={3} className="px-[5px] whitespace-nowrap text-right font-semibold">
-                    {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02. */}
-                    {saldoConfere(d.banco - d.sistema)
-                      ? <span className="text-emerald-600">confere</span>
-                      : <span className="text-amber-600">diferença {fmtBRL(d.banco - d.sistema)}</span>}
-                  </td>
-                </tr>
-                )}
-              </React.Fragment>
-            ))}
-
+                  {itens.map(renderItem)}
+                  {temMovimento && (
+                    <tr className="border-b border-border bg-muted/60" data-fechamento="">
+                      <td className={cn(TDC, 'h-[20px] font-semibold')} title={`Fechamento ${fmtData(d.data)} · saldo do banco no fim do dia`}>
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className="min-w-0 truncate">Fechamento {fmtData(d.data)} · saldo do banco</span>
+                          {/* o saldo do banco no FIM do dia: lido da Evolução do saldo (`montarEvolucao`), nada somado aqui */}
+                          <b className="shrink-0 tabular-nums" data-testid="fechamento-saldo-banco">{saldoDoBanco != null ? fmtBRL(saldoDoBanco) : '—'}</b>
+                        </span>
+                      </td>
+                      {/* ⚠ NO FECHAMENTO NÃO SE COLORE POR SINAL: a linha inteira é subtotal, e o sinal já está no número. */}
+                      <td className={cn(TDC_NUM, 'h-[20px] font-semibold')}>{fmtBRL(d.banco)}</td>
+                      <td className={cn(TDC_MEIO, 'h-[20px]')} />
+                      <td className={cn(TDC_NUM, SEP, 'h-[20px] font-semibold')}>{fmtBRL(d.sistema)}</td>
+                      {/* a diferença é número: nunca corta (sem "…"); as 4 colunas (340px+) a cabem inteira */}
+                      <td colSpan={4} className="h-[20px] whitespace-nowrap px-[5px] py-0 text-[10.5px] font-semibold leading-[18px]" data-testid="fechamento-diferenca">
+                        {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02. */}
+                        {saldoConfere(dif)
+                          ? <span className="text-emerald-600">confere</span>
+                          : <span className="text-amber-600">diferença {fmtBRL(dif)}{conta.semPar > 0 ? ` (${conta.semPar} sem par)` : ''}</span>}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3.5 py-1 text-[9.5px] text-muted-foreground">
-        {/* ⚠ A LEGENDA SEGUE A COLUNA: primeiro os quatro sinais do meio, que são um
-            vocabulário fechado, e depois a origem, que é outro. Misturá-los numa fila só era
-            o que fazia o operador procurar `B` na coluna do estado. */}
-        <span><span className={cn('font-semibold', SINAL_CASADO.cor)}>{SINAL_CASADO.simbolo}</span> casados</span>
-        <span><span className="text-muted-foreground">○</span> extrato sem par</span>
-        <span><span className="text-destructive font-semibold">!</span> lançamento sem par</span>
-        <span>↳ dentro de um agrupamento</span>
-        <span><span className="text-muted-foreground">⇄</span> transferência interna</span>
-        <span className="opacity-60">|</span>
-        <span>origem:</span>
-        {LEGENDA_ICONES.map((ic) => (
-          <span key={ic.simbolo}><span className="text-muted-foreground">{ic.simbolo}</span> {ic.curto}</span>
-        ))}
-        {!!ignorados?.length && (
-          <span className="ml-auto">
-            {ignorados.length} ignorado{ignorados.length === 1 ? '' : 's'} neste mês{' · '}
-            <Acao onClick={() => setVerIgnorados((v) => !v)}>{verIgnorados ? 'ocultar' : 'ver'}</Acao>
-          </span>
-        )}
+      {/* P159a — o rodapé: a legenda curta; os outros sinais e as origens (B, ↻, ✓ enriquecido, M…) no "?". */}
+      <div className="flex h-[24px] shrink-0 items-center gap-3.5 whitespace-nowrap border-t px-3 text-[10px] text-muted-foreground" data-testid="legenda-conferencia">
+        <span><span className={cn('font-bold', SINAL_CASADO.cor)}>{SINAL_CASADO.simbolo}</span> casado</span>
+        <span>○ sem par</span>
+        <span>⇄ transferência</span>
+        <span>Ordem do dia: maior valor primeiro</span>
+        <span className="ml-auto flex items-center gap-3.5">
+          {!!ignorados?.length && (
+            <span>
+              {ignorados.length} ignorado{ignorados.length === 1 ? '' : 's'} neste mês{' · '}
+              <Acao onClick={() => setVerIgnorados((v) => !v)}>{verIgnorados ? 'ocultar' : 'ver'}</Acao>
+            </span>
+          )}
+          <span className="grid h-[15px] w-[15px] cursor-help place-items-center rounded-full border text-[9.5px]" data-testid="legenda-origens"
+            title={['! sem par no outro lado (ou parte sem extrato)', '↳ parte de um agrupamento (1 extrato, N lançamentos)',
+              '↰ parte de um agrupamento (N extratos, 1 lançamento)', '⇄? sugestão de transferência',
+              ...LEGENDA_ICONES.map((ic) => `${ic.simbolo} ${ic.curto}`)].join('\n')}>?</span>
+        </span>
       </div>
 
       {/* ⚠ A LISTA FICA FORA DA MESA, e não como mais um bloco de dia: o ignorado não está no
@@ -1838,15 +1809,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
         sugestoes={(sugerir && sugestoesPorLinha.get(sugerir.extrato_id)) || []}
         onCasar={(s) => {
           if (!sugerir) return;
-          const umDiferente = s.lancamentos.length === 1 && s.valorDiferente;
-          setCasar({
-            extrato: sugerir,
-            iniciais: s.lancamentos.map((c) => ({
-              lancamento_id: c.lancamento_id, descricao: c.descricao, fornecedor: c.fornecedor,
-              valor_assinado: c.valor_assinado, usarValorDoBanco: umDiferente,
-              data_vencimento: c.data_vencimento, status_transacao: c.status_transacao,
-            })),
-          });
+          setCasar({ extrato: sugerir, iniciais: levadosDaSugestao(s) });
           setSugerir(null);
         }}
       />
@@ -1924,6 +1887,11 @@ interface Props {
    */
   diaFoco?: string | null;
   onDiaFocado?: () => void;
+  /**
+   * P159b — "ver o dia na Conferência" (a Evolução do saldo): quem monta abre a Conferência no dia, pelo MESMO caminho do link "N dias
+   * com diferença" (`irParaConferencia`). Sem a prop, este componente abre a própria Conferência no dia.
+   */
+  onVerDiaNaConferencia?: (dia: string) => void;
 }
 
 /** As quatro visões do mês, na ordem em que se lê o extrato. */
@@ -1957,7 +1925,12 @@ export const ABAS_ESPELHO: readonly { key: AbaEspelho; label: string }[] = [
   { key: 'evolucao', label: 'Evolução do saldo' },
 ] as const;
 
-export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCandidatos = true, soConferencia = false, aba: abaDeFora, onAbaChange, diaFoco = null, onDiaFocado }: Props) {
+export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCandidatos = true, soConferencia = false, aba: abaDeFora, onAbaChange,
+  diaFoco: diaFocoDeFora = null, onDiaFocado: onDiaFocadoDeFora, onVerDiaNaConferencia }: Props) {
+  /* P159b — o dia pedido pela Evolução quando ninguém de fora governa (`onVerDiaNaConferencia` ausente) */
+  const [diaFocoInterno, setDiaFocoInterno] = useState<string | null>(null);
+  const diaFoco = diaFocoDeFora ?? diaFocoInterno;
+  const onDiaFocado = () => { setDiaFocoInterno(null); onDiaFocadoDeFora?.(); };
   const anoMes = `${ano}-${mes}`;
   /* ⚠ O QUADRO DO TOPO E A ABA SISTEMA LEEM O DONO — PR-CONC-SALDO-UMA-REGUA-02 (D6/D7): a linha da conta de
      `fn_conciliacao_resumo_mes` (com UMA conta ela traz os dias e a lista do sistema). Chamado antes dos retornos
@@ -1979,10 +1952,16 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
   const conferenciaEmModal = !soConferencia;
   const [abaAnterior, setAbaAnterior] = useState<Exclude<AbaEspelho, 'conferencia'>>('ofx');
   useEffect(() => { if (aba !== 'conferencia') setAbaAnterior(aba); }, [aba]);
-  /* ⚠ "SÓ NÃO CONCILIADOS" VIVE SÓ ENQUANTO O MODAL ESTÁ ABERTO — PR-CONC-SUGESTOES-CASAR-01 (Gabriel, 30/09): fechar a
-     Conferência volta a mostrar tudo na próxima abertura. */
-  const [soNaoConciliados, setSoNaoConciliados] = useState(false);
-  useEffect(() => { if (aba !== 'conferencia') setSoNaoConciliados(false); }, [aba]);
+  /* ⚠ O FILTRO VIVE SÓ ENQUANTO O MODAL ESTÁ ABERTO — PR-CONC-SUGESTOES-CASAR-01 (Gabriel, 30/09): fechar a Conferência volta
+     a mostrar tudo na próxima abertura. P159a: o "Só não conciliados" virou o chip "Sem par" (e há "Casados").
+     ⚠ OS VENCIDOS COMEÇAM OCULTOS — PR-ESPELHO-VENCIDOS-NO-TOPO-08: o vencido é do passado; aberto por padrão ele empurraria o dia
+     01 para baixo da dobra. A contagem no chip ("Vencidos de meses anteriores 3") é o que garante que ele não some. */
+  const [filtroConf, setFiltroConf] = useState<FiltroConferencia>('todos');
+  const [mostrarVencidos, setMostrarVencidos] = useState(false);
+  useEffect(() => { if (aba !== 'conferencia') { setFiltroConf('todos'); setMostrarVencidos(false); } }, [aba]);
+  /* P159a — abrir a Conferência NUM DIA (o link do Status, a Evolução do saldo): o chip volta a Todos, senão o dia pedido pode estar
+     escondido pelo filtro. */
+  useEffect(() => { if (aba === 'conferencia' && diaFoco) setFiltroConf('todos'); }, [aba, diaFoco]);
   const abaCorpo = aba === 'conferencia' && conferenciaEmModal ? abaAnterior : aba;
   const fecharConferencia = () => { if (onAbaChange) onAbaChange(abaAnterior); else setAba(abaAnterior); };
   /**
@@ -2034,6 +2013,24 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
 
   const { data, refetch } = useEspelhadosReais(clienteId, contaId, anoMes);
 
+  /* P159a — A MESA UMA VEZ SÓ, AQUI: a tabela da Conferência a desenha e os chips do cabeçalho a contam (a mesma). O saldo do banco
+     no fim de cada dia é o da Evolução do saldo (`montarEvolucao`, que lê esta mesma mesa) — o fechamento do dia só o MOSTRA.
+     Antes dos retornos antecipados abaixo: hook nunca depois de `return`. */
+  const diasDaMesa = useMemo(() => (data ? montarMesa(data, internas.lancamentosInternos) : []), [data, internas.lancamentosInternos]);
+  const saldoDoBancoNoDia = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!data) return m;
+    const ym = data.saldos.periodo_ini ? data.saldos.periodo_ini.slice(0, 7) : anoMes;
+    for (const r of montarEvolucao(data, internas.lancamentosInternos)) m.set(`${ym}-${String(r.dia).padStart(2, '0')}`, r.saldoOfx);
+    return m;
+  }, [data, internas.lancamentosInternos, anoMes]);
+  const sugestoesPorLinha = useMemo(
+    () => sugestoesDaMesa(diasDaMesa, mostrarCandidatos ? (data?.sistema_candidatos ?? []) : []),
+    [diasDaMesa, data, mostrarCandidatos]);
+  const ehParcialDaMesa = (p: Pareado) => faltaDoExtrato(p.diferenca) != null;
+  const chips = contagensDaMesa(diasDaMesa, ehParcialDaMesa);
+  const nVencidos = mostrarCandidatos ? (data?.sistema_candidatos ?? []).filter((c) => c.vencido).length : 0;
+
   /* ⚠ A RPC É POR UMA CONTA. O cabeçalho da Conciliação permite "todas", e comparar um
      extrato de uma conta com o sistema de várias não é espelho nenhum — a tela pede a
      escolha em vez de somar o que não se soma. */
@@ -2064,6 +2061,7 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
      depósito líquido é entrada negativa, e o retido aparece na linha própria) e o parcial pelo aplicado. */
   const fmtOu = (v: number | null | undefined) => (v == null ? '—' : fmtBRL(v));
   const retidoTopo = linhaDono ? fraseDoRetido(linhaDono.retido_em_depositos) : null;
+  const tituloConferencia = ['Conferência', data.escopo.nome_conta, `${MESES_CURTOS[Number(mes) - 1] ?? mes}/${ano}`].filter(Boolean).join(' · ');
 
   /* O mesmo elemento vai inline (`soConferencia`) ou dentro do Dialog — um só, nunca dois. */
   /* CONC-SEM-F5-01 — TODO gesto da Conferência (casar 1:1 e N:1, bloco, desfazer bloco, desconciliar, ignorar, reverter) cai
@@ -2074,10 +2072,11 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
     if (clienteId) notificarLancamentosMudaram(clienteId);
   };
   const conferencia = (
-    <AbaConferencia data={data} anoMes={anoMes} nomeConta={data.escopo.nome_conta ?? undefined}
-      clienteId={clienteId} contaId={contaId} internos={internas.lancamentosInternos}
+    <AbaConferencia data={data} dias={diasDaMesa} anoMes={anoMes} nomeConta={data.escopo.nome_conta ?? undefined}
+      clienteId={clienteId} contaId={contaId}
       onAbrir={onAbrirLancamento} onMudou={aoMudarConferencia}
-      mostrarCandidatos={mostrarCandidatos} soNaoConciliados={soNaoConciliados}
+      mostrarCandidatos={mostrarCandidatos} filtro={filtroConf} mostrarVencidos={mostrarVencidos} saldoDoBancoNoDia={saldoDoBancoNoDia}
+      sugestoesPorLinha={sugestoesPorLinha}
       diaFoco={aba === 'conferencia' ? diaFoco : null} onDiaFocado={onDiaFocado} />
   );
 
@@ -2088,165 +2087,107 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* A21 — os números não rolam; só a lista de dentro da sub-aba. O título e a conta
-          moram no cabeçalho azul do modal, não aqui: repetir seria gastar altura duas vezes. */}
-      {/* ⚠ TETO DE 96px NO CABEÇALHO. Cada pixel aqui é uma linha a menos na mesa, e a mesa é a
-          tela. O que cede é espaçamento — a informação fica inteira. */}
-      <div className="shrink-0 space-y-0.5 px-3.5 py-1">
-        {/* ⚠ O TEXTO "N movimentos no extrato · N lançamentos sem par" SAIU — PR-SISTEMA-BARRA-
-            COMPACTA-01. Ele custava uma linha inteira do cabeçalho para repetir dois números que
-            a grade logo abaixo já dá, na coluna "sem par", e que a Mesa mostra linha a linha.
-            Cada pixel daqui é uma linha a menos na Mesa, e a Mesa é a tela. */}
-        {/* ⚠ UMA GRADE, NÃO QUATRO CARTÕES. O bloco que ficava ABAIXO da lista dizia isto mesmo,
-            e ninguém rolava até lá para ver — enquanto o topo repetia dois dos quatro números
-            noutro arranjo. Uma leitura só, no lugar por onde o olho entra, e a altura que
-            sobrou foi inteira para a lista. */}
-        {/* ⚠ OS SEIS NÚMEROS DESCERAM DE 15px PARA 12px — PR-IMPORTAR-VER-EXTRATO-01, a pedido
-            do Gabriel olhando a tela. 15px é tamanho de NÚMERO DE TOPO (a régua A18 reserva
-            20px/500 para aquele papel), e estes não são o número de topo: são seis valores de
-            CONFERÊNCIA, lidos em par — banco contra sistema. Em 15px ao lado de rótulos de 10px
-            eles gritavam sem hierarquizar nada, porque todos os seis gritavam junto.
-            ⚠ 12px/500 É A "IDENTIDADE" DA RÉGUA A18, que é exatamente o papel deles, e fica dois
-            pontos acima dos rótulos — a hierarquia continua legível. O piso da casa é 9,5px, bem
-            abaixo; não se está raspando limite nenhum. */}
-        {/* ⚠ TABELA, E NÃO TRÊS COLUNAS ELÁSTICAS — PR-SISTEMA-BARRA-COMPACTA-01, A16: valores
-            alinhados em coluna, à direita, em `tabular-nums`. As colunas eram `1fr` e ficavam com
-            213px cada; o número usava 75 e os outros 138 eram ar entre o rótulo e o valor, que é
-            o que fazia isto parecer texto corrido em vez de tabela.
-            ⚠ 92px NÃO É CHUTE: a 11px, "123.456.789,01" (nove dígitos) mede 89,14px e
-            "12.500.000,55" mede 82px. 92 cobre nove dígitos com folga — a lição dos 86px que
-            cortaram o valor de sete dígitos duas vezes hoje.
-            ⚠ E 11px, NÃO 10px: medi os dois. De 12px para 11px o bloco cai 3px (40 → 37); de
-            11px para 10px não cai NADA (os rótulos e os `line-height` é que passam a mandar),
-            e o número encostaria nos rótulos de 9,5px. Menor sem ganhar altura é só menos
-            legível. */}
-        {/* ⚠ AGORA É TABELA DE VERDADE — PR-CONC-CONFERENCIA-MODAL-01 (mock v2 do Gabriel): cabeçalho
-            navy, linhas de 18px a 10px, borda entre linhas e divisor vertical entre colunas. SÓ LAYOUT:
-            os números são os mesmos de `totaisDoEspelho`, e o "sem par" os mesmos contadores de antes,
-            com o total dos lançamentos sem par (`totalNaoNoBanco`) na coluna Valor. O dos extratos sem
-            par nunca foi calculado — fica "—" em vez de uma conta nova. */}
-        {/* ⚠ PR-CONC-SALDO-UMA-REGUA-02 (D6): os seis números, a diferença por lado, o retido e o "sem par" são a LINHA DO
-            DONO (`fn_conciliacao_resumo_mes` da conta). A diferença segue o sinal (vermelho negativo, verde positivo) e
-            zero fica neutro. A linha "Retido" está SEMPRE presente (vazia é "—"): a altura do quadro não muda com o dado. */}
-        <div className="flex flex-wrap items-start gap-3" data-testid="resumo-espelho">
-          <table className="border-collapse border border-border text-[10px]" style={{ tableLayout: 'fixed', width: 358 }}>
-            <colgroup>
-              <col style={{ width: 70 }} /><col style={{ width: 96 }} /><col style={{ width: 96 }} /><col style={{ width: 96 }} />
-            </colgroup>
-            <thead>
-              <tr className="h-[18px] bg-primary text-primary-foreground">
-                <th className="border-r border-primary-foreground/30 px-[5px]" />
-                <th className="border-r border-primary-foreground/30 px-[5px] text-center font-medium">Banco (OFX)</th>
-                <th className="border-r border-primary-foreground/30 px-[5px] text-center font-medium">Sistema</th>
-                <th className="px-[5px] text-center font-medium">Diferença</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="h-[18px] border-b border-border">
-                <td className="border-r border-border px-[5px] text-muted-foreground">Saídas</td>
-                <td className="border-r border-border px-[5px] text-right font-medium tabular-nums whitespace-nowrap text-destructive" data-testid="topo-saidas-banco">{fmtOu(linhaDono?.banco.saidas)}</td>
-                <td className="border-r border-border px-[5px] text-right font-medium tabular-nums whitespace-nowrap text-destructive" data-testid="topo-saidas-sistema">{fmtOu(linhaDono?.saidas)}</td>
-                <td className={cn('px-[5px] text-right font-medium tabular-nums whitespace-nowrap', corDaDiferenca(linhaDono?.diferenca_saidas))}
-                  data-testid="topo-dif-saidas">{fmtOu(linhaDono?.diferenca_saidas)}</td>
-              </tr>
-              <tr className="h-[18px] border-b border-border">
-                <td className="border-r border-border px-[5px] text-muted-foreground">Entradas</td>
-                <td className="border-r border-border px-[5px] text-right font-medium tabular-nums whitespace-nowrap text-emerald-600" data-testid="topo-entradas-banco">{fmtOu(linhaDono?.banco.entradas)}</td>
-                <td className="border-r border-border px-[5px] text-right font-medium tabular-nums whitespace-nowrap text-emerald-600" data-testid="topo-entradas-sistema">{fmtOu(linhaDono?.entradas)}</td>
-                <td className={cn('px-[5px] text-right font-medium tabular-nums whitespace-nowrap', corDaDiferenca(linhaDono?.diferenca_entradas))}
-                  data-testid="topo-dif-entradas">{fmtOu(linhaDono?.diferenca_entradas)}</td>
-              </tr>
-              <tr className="h-[18px]">
-                <td className="border-r border-border px-[5px] text-muted-foreground">Retido</td>
-                <td colSpan={3} className="overflow-hidden whitespace-nowrap px-[5px] text-muted-foreground" title={retidoTopo?.titulo}
-                  data-testid="topo-retido">{retidoTopo ? retidoTopo.texto : '—'}</td>
-              </tr>
-            </tbody>
-          </table>
-          <table className="border-collapse border border-border text-[10px]" style={{ tableLayout: 'fixed', width: 216 }}>
-            <colgroup><col style={{ width: 70 }} /><col style={{ width: 50 }} /><col style={{ width: 96 }} /></colgroup>
-            <thead>
-              <tr className="h-[18px] bg-primary text-primary-foreground">
-                <th className="border-r border-primary-foreground/30 px-[5px] text-left font-medium">Sem par</th>
-                <th className="border-r border-primary-foreground/30 px-[5px] text-center font-medium">Qtde</th>
-                <th className="px-[5px] text-center font-medium">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="h-[18px] border-b border-border">
-                <td className="border-r border-border px-[5px] text-muted-foreground">Extratos</td>
-                <td className="border-r border-border px-[5px] text-right tabular-nums" data-testid="topo-sem-par-extratos-qtde">{semParExt ? semParExt.qtde : '—'}</td>
-                <td className={cn('px-[5px] text-right font-medium tabular-nums whitespace-nowrap', corDaDiferenca(semParExt?.valor))}
-                  data-testid="topo-sem-par-extratos-valor">{fmtOu(semParExt?.valor)}</td>
-              </tr>
-              <tr className="h-[18px]">
-                <td className="border-r border-border px-[5px] text-muted-foreground">Lançamentos</td>
-                <td className="border-r border-border px-[5px] text-right tabular-nums" data-testid="topo-sem-par-lancamentos-qtde">{semParLanc ? semParLanc.qtde : '—'}</td>
-                <td className={cn('px-[5px] text-right font-medium tabular-nums whitespace-nowrap', corDaDiferenca(semParLanc?.valor))}
-                  data-testid="topo-sem-par-lancamentos-valor">{fmtOu(semParLanc?.valor)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* ⚠ A FILEIRA SÓ NASCE AQUI QUANDO NINGUÉM A MONTOU FORA — PR-SISTEMA-BARRA-COMPACTA-01.
-            É o que o modal faz. Na aba da Conciliação ela vive na barra de ações, onde não custa
-            altura, e aí `onAbaChange` chega preenchido. */}
-        {!soConferencia && !onAbaChange && (
-        <div className="flex flex-wrap gap-1">
-          {ABAS_ESPELHO.map((a) => (
-            <button key={a.key} type="button" onClick={() => setAba(a.key)}
-              className={cn('px-2 py-0.5 rounded text-[10px] border',
-                aba === a.key ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground')}>
-              {a.label}
-            </button>
-          ))}
-        </div>
-        )}
+      {/* A21 — os números não rolam; só a lista de dentro da sub-aba.
+          ⚠ P159a (mock `mock-extrato-banco-v1.html`, Gabriel 28/10): os dois quadrinhos (Banco/Sistema/Diferença e Sem par) viram UMA
+          faixa de uma linha — sobra altura para a tabela. Os números são os MESMOS, os do DONO (`fn_conciliacao_resumo_mes` da conta,
+          PR-CONC-SALDO-UMA-REGUA-02 D6): cada par é saídas · entradas; a diferença segue o sinal (zero neutro). O "Retido" fica no fim,
+          sempre presente ("—" sem retido): a faixa não muda de forma com o dado. */}
+      <div className="flex h-[22px] shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-b bg-muted/40 px-3 text-[10px] text-foreground/80"
+        data-testid="resumo-espelho">
+        <span>Banco{' '}
+          <b className="font-semibold tabular-nums text-destructive" data-testid="topo-saidas-banco">{fmtOu(linhaDono?.banco.saidas)}</b>{' · '}
+          <b className="font-semibold tabular-nums text-emerald-600" data-testid="topo-entradas-banco">{fmtOu(linhaDono?.banco.entradas)}</b></span>
+        <span>Sistema{' '}
+          <b className="font-semibold tabular-nums text-destructive" data-testid="topo-saidas-sistema">{fmtOu(linhaDono?.saidas)}</b>{' · '}
+          <b className="font-semibold tabular-nums text-emerald-600" data-testid="topo-entradas-sistema">{fmtOu(linhaDono?.entradas)}</b></span>
+        <span>Diferença{' '}
+          <b className={cn('font-semibold tabular-nums', corDaDiferenca(linhaDono?.diferenca_saidas))} data-testid="topo-dif-saidas">{fmtOu(linhaDono?.diferenca_saidas)}</b>{' · '}
+          <b className={cn('font-semibold tabular-nums', corDaDiferenca(linhaDono?.diferenca_entradas))} data-testid="topo-dif-entradas">{fmtOu(linhaDono?.diferenca_entradas)}</b></span>
+        <span>Sem par:{' '}
+          <b className="font-semibold tabular-nums" data-testid="topo-sem-par-extratos-qtde">{semParExt ? semParExt.qtde : '—'}</b> do banco (
+          <b className={cn('font-semibold tabular-nums', corDaDiferenca(semParExt?.valor))} data-testid="topo-sem-par-extratos-valor">{fmtOu(semParExt?.valor)}</b>){' · '}
+          <b className="font-semibold tabular-nums" data-testid="topo-sem-par-lancamentos-qtde">{semParLanc ? semParLanc.qtde : '—'}</b> do sistema (
+          <b className={cn('font-semibold tabular-nums', corDaDiferenca(semParLanc?.valor))} data-testid="topo-sem-par-lancamentos-valor">{fmtOu(semParLanc?.valor)}</b>)</span>
+        <span className="min-w-0 truncate text-muted-foreground" title={`Retido ${retidoTopo ? retidoTopo.texto : '—'}${retidoTopo?.titulo ? `\n${retidoTopo.titulo}` : ''}`}>
+          Retido <span data-testid="topo-retido" title={retidoTopo?.titulo}>{retidoTopo ? retidoTopo.texto : '—'}</span></span>
       </div>
 
-      {!conferenciaEmModal && aba === 'conferencia' && conferencia}
-      {abaCorpo === 'ofx' && <TabelaExtratoDoMes ofx={data.ofx_completo} inicial={inicial} internas={internas} />}
-      {abaCorpo === 'sistema' && <AbaSistemaReal linha={linhaDono} onAbrir={onAbrirLancamento} />}
-      {abaCorpo === 'evolucao' && <AbaEvolucaoReal data={data} internos={internas.lancamentosInternos} />}
+      {/* ⚠ A FILEIRA SÓ NASCE AQUI QUANDO NINGUÉM A MONTOU FORA — PR-SISTEMA-BARRA-COMPACTA-01. É o que o modal faz. Na aba da
+          Conciliação ela vive na barra de ações, onde não custa altura, e aí `onAbaChange` chega preenchido. P159a: o `Segmentado`. */}
+      {!soConferencia && !onAbaChange && (
+        <div className="shrink-0 px-3 py-1">
+          <Segmentado valor={aba} onEscolher={setAba} altura={22}
+            opcoes={ABAS_ESPELHO.map((a) => ({ valor: a.key, rotulo: a.label }))} />
+        </div>
+      )}
 
-      {/* ⚠ A CONFERÊNCIA ABRE EM MODAL LARGO — PR-CONC-CONFERENCIA-MODAL-01 (mock v2 do Gabriel). O
-          corpo é o MESMO `AbaConferencia`, só que dentro do Dialog: mesmas linhas, marcação, arrasto,
-          barra de casar, ignorados e legenda. 96vw × 90vh; cabeçalho de 32px com a conta e o mês, e
-          logo abaixo o resumo numa linha de 10px (os mesmos números da tabela do corpo). O cabeçalho
-          da mesa é `sticky` dentro do scroller e a legenda fica fora dele — só as linhas rolam. */}
+      {!conferenciaEmModal && aba === 'conferencia' && conferencia}
+      {abaCorpo === 'ofx' && (
+        <ExtratoComAcoes data={data} inicial={inicial} internas={internas} sugestoesPorLinha={sugestoesPorLinha}
+          clienteId={clienteId} contaId={contaId} onMudou={aoMudarConferencia} />
+      )}
+      {abaCorpo === 'sistema' && <AbaSistemaReal linha={linhaDono} onAbrir={onAbrirLancamento} />}
+      {abaCorpo === 'evolucao' && (
+        <AbaEvolucaoReal data={data} internos={internas.lancamentosInternos}
+          onVerDia={(dia) => {
+            if (onVerDiaNaConferencia) { onVerDiaNaConferencia(dia); return; }
+            setDiaFocoInterno(dia);
+            if (onAbaChange) onAbaChange('conferencia'); else setAba('conferencia');
+          }} />
+      )}
+
+      {/* ⚠ A CONFERÊNCIA ABRE EM MODAL — PR-CONC-CONFERENCIA-MODAL-01. O corpo é o MESMO `AbaConferencia`: mesmas linhas, marcação,
+          arrasto, barra de casar, ignorados e legenda.
+          ⚠ P159a (mock `mock-conferencia-v1.html`, Gabriel 28/10): QUASE TELA CHEIA (sobra só a moldura de 10/12px), cabeçalho navy
+          com o título e os CHIPS de filtro (no lugar do "Só não conciliados" e da faixa amarela "Mostrar vencidos"), a faixa de resumo
+          de uma linha, e só a tabela rola. */}
       {conferenciaEmModal && (
         <Dialog open={aba === 'conferencia'} onOpenChange={(v) => { if (!v) fecharConferencia(); }}>
-          <DialogContent className="w-[96vw] max-w-[96vw] h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col [&>button.absolute]:hidden"
+          <DialogContent className="w-[calc(100vw-24px)] max-w-[calc(100vw-24px)] h-[calc(100vh-20px)] max-h-[calc(100vh-20px)] p-0 gap-0 overflow-hidden flex flex-col [&>button.absolute]:hidden"
             data-testid="modal-conferencia">
-            <div className="flex h-8 shrink-0 items-center justify-between gap-2 bg-primary px-3.5 text-primary-foreground">
-              <div className="flex items-center gap-4">
-                <DialogTitle className="text-[12px] font-medium">
-                  {['Conferência', data.escopo.nome_conta, `${MESES_CURTOS[Number(mes) - 1] ?? mes}/${ano}`].filter(Boolean).join(' · ')}
-                </DialogTitle>
-                {/* ⚠ CHECKBOX CLARO, E NÃO O `Segmentado` — PR-CONC-SUGESTOES-CASAR-01. O segmentado marca a escolha em
-                    navy, e aqui o fundo JÁ é navy: o selecionado sumiria. É o `Checkbox` da casa com as cores invertidas
-                    para o cabeçalho escuro. */}
-                <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-medium">
-                  <Checkbox checked={soNaoConciliados} onCheckedChange={(v) => setSoNaoConciliados(v === true)}
-                    aria-label="Só não conciliados" data-testid="so-nao-conciliados"
-                    className="h-3.5 w-3.5 border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary [&_svg]:h-3 [&_svg]:w-3" />
-                  Só não conciliados
-                </label>
+            <div className="flex h-[30px] shrink-0 items-center gap-2.5 overflow-hidden bg-primary px-3 text-primary-foreground">
+              {/* ⚠ D9 do P159a (Gabriel 28/10) — a EXCEÇÃO DECLARADA fora de tabela: o nome da conta longo empurrava os chips para fora da
+                  faixa (o gate acusou). O título encolhe e termina em "…" com o texto inteiro no `title` (`data-reticencias-com-title`). */}
+              <DialogTitle className="min-w-0 truncate whitespace-nowrap text-[12px] font-semibold" title={tituloConferencia} data-reticencias-com-title="">
+                {tituloConferencia}
+              </DialogTitle>
+              {/* ⚠ CHIPS CLAROS, E NÃO O `Segmentado` (PR-CONC-SUGESTOES-CASAR-01): o segmentado marca a escolha em navy, e aqui o fundo
+                  JÁ é navy. O escolhido é o branco. Todos com o MESMO peso: trocar de chip não desloca os outros. Os números são da mesa
+                  que a tabela desenha (`contagensDaMesa`). */}
+              <div className="flex shrink-0 items-center gap-1" data-testid="chips-conferencia">
+                {CHIPS_DA_CONFERENCIA.map(({ k, rotulo }) => (
+                  /* o número é da mesa que a tabela desenha */
+                  <button key={k} type="button" onClick={() => setFiltroConf(k)} data-testid={`chip-${k}`} aria-pressed={filtroConf === k}
+                    className={cn('h-[17px] whitespace-nowrap rounded-full border px-2 text-[10px] font-medium leading-[15px]',
+                      filtroConf === k ? 'border-primary-foreground bg-primary-foreground text-primary' : 'border-primary-foreground/35 text-primary-foreground/85 hover:bg-primary-foreground/10')}>
+                    {rotulo} {chips[k === 'sem_par' ? 'semPar' : k]}
+                  </button>
+                ))}
+                {mostrarCandidatos && (
+                  <button type="button" onClick={() => setMostrarVencidos((v) => !v)} data-testid="chip-vencidos" aria-pressed={mostrarVencidos}
+                    disabled={nVencidos === 0} title={nVencidos === 0 ? 'nenhum lançamento vencido de meses anteriores em aberto' : 'em aberto de meses anteriores, no topo da lista'}
+                    className={cn('h-[17px] whitespace-nowrap rounded-full border px-2 text-[10px] font-medium leading-[15px] disabled:opacity-50',
+                      mostrarVencidos ? 'border-amber-200 bg-amber-100 text-amber-900' : 'border-amber-300/70 text-amber-200 hover:bg-primary-foreground/10')}>
+                    Vencidos de meses anteriores {nVencidos}
+                  </button>
+                )}
               </div>
               <button type="button" onClick={fecharConferencia} aria-label="Fechar"
-                className="rounded p-0.5 opacity-80 hover:opacity-100 hover:bg-primary-foreground/10">
+                className="ml-auto shrink-0 rounded p-0.5 opacity-80 hover:opacity-100 hover:bg-primary-foreground/10">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
-            <div className="shrink-0 whitespace-nowrap border-b px-3.5 py-[2px] text-[10px] text-muted-foreground">
-              {/* Os mesmos números do quadro do topo — os do dono. */}
-              Banco saídas <span className="font-medium tabular-nums text-destructive">{fmtOu(linhaDono?.banco.saidas)}</span>
-              {' · '}entradas <span className="font-medium tabular-nums text-emerald-600">{fmtOu(linhaDono?.banco.entradas)}</span>
-              {'  |  '}Sistema saídas <span className="font-medium tabular-nums text-destructive">{fmtOu(linhaDono?.saidas)}</span>
-              {' · '}entradas <span className="font-medium tabular-nums text-emerald-600">{fmtOu(linhaDono?.entradas)}</span>
-              {'  |  '}Sem par {semParExt?.qtde ?? '—'} extrato{semParExt?.qtde === 1 ? '' : 's'}
-              {' · '}{semParLanc?.qtde ?? '—'} lançamento{semParLanc?.qtde === 1 ? '' : 's'}
+            {/* abaixo de 1000px o vão entre os números encolhe (com 18px a faixa passava 12,6px da caixa em 750px) */}
+            <div className="flex h-[21px] shrink-0 items-center gap-3 overflow-hidden whitespace-nowrap border-b bg-muted/40 px-3 text-[10px] text-foreground/80 min-[1000px]:gap-[18px]"
+              data-testid="faixa-conferencia">
+              {/* Os mesmos números da faixa do corpo — os do dono. */}
+              <span>Saldo inicial <b className="font-semibold tabular-nums">{fmtOu(linhaDono?.saldo_inicial)}</b></span>
+              <span>Banco: saídas <b className="font-semibold tabular-nums text-destructive">{fmtOu(linhaDono?.banco.saidas)}</b>
+                {' · '}entradas <b className="font-semibold tabular-nums text-emerald-600">{fmtOu(linhaDono?.banco.entradas)}</b></span>
+              <span>Sistema: saídas <b className="font-semibold tabular-nums text-destructive">{fmtOu(linhaDono?.saidas)}</b>
+                {' · '}entradas <b className="font-semibold tabular-nums text-emerald-600">{fmtOu(linhaDono?.entradas)}</b></span>
+              <span>Sem par: <b className="font-semibold tabular-nums">{semParExt?.qtde ?? '—'}</b> do banco
+                {' · '}<b className="font-semibold tabular-nums">{semParLanc?.qtde ?? '—'}</b> do sistema</span>
             </div>
             {aba === 'conferencia' && conferencia}
           </DialogContent>

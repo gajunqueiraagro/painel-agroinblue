@@ -114,8 +114,9 @@ describe('OC-RECEB-PARCIAL-01 — a Conferencia', () => {
     const fonte = readFileSync('src/components/financeiro-v2/EspelhoConciliacaoTab.tsx', 'utf8');
     expect(fonte).toContain('descricaoComParcela(s.descricao, s.oc_parcela)');
     expect(fonte).toContain("const eFalta = !!c.saldo_de_id && !c.ja_conciliado;");
-    expect(fonte).toContain('data-testid="linha-falta">{fraseDaFalta(c)}');
+    /* P159a: a Descrição da Conferência é feita de pedaços (`Pedacos`); a falta é o pedaço com o testid */
+    expect(fonte).toContain("{ t: fraseDaFalta(c), cls: 'font-medium', testid: 'linha-falta' }");
     expect(fonte).toContain("eFalta && 'text-muted-foreground'");
-    expect(fonte).toContain('{!eFalta && (');
+    expect(fonte).toContain('...(!eFalta && doc ?');
   });
 });

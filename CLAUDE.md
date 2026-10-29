@@ -309,6 +309,12 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   subcentro/cinza) + Saldos | Resumo do mês (1fr 260px, até o fim da janela), na régua da casa e sem CAIXA ALTA; Saldos com Data · OFX/PDF em
   lugar FIXO de 20px · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
   |valor| primeiro; saldo SÓ no fim do dia, LIDO do banco na ordem dele — nunca somado na tela).
+- P159a (CONC-TELAS-01): Conferência e Extrato (banco) — a regra do dia é UMA (`porDia`: maior |valor| primeiro, saldo SÓ no fim do dia,
+  LIDO — Extrato: o acumulado de sempre; Conferência: `montarEvolucao`); a lista do mês por dia é UM componente (`ListaDoMesPorDia`); histórico
+  do banco limpo só na exibição (`historicoDoBanco`, o inteiro no `title`); a `ordenar` da mesa NÃO mudou (o Enriquecer lê dela). EXCEÇÃO
+  DECLARADA (D7, Gabriel 28/10): a coluna Data dessa lista é dd/mm (o gate aceita só em tabela `data-dia-mes`; o auto-teste a prova).
+  P159b: a aba Sistema e o ↗ "Extrato do sistema" são a mesma lista (○ âmbar = não conciliado, o status no `title`); a Evolução: Dif. do dia =
+  Mov. banco − Mov. sistema (`montarEvolucao`), some só o dia SEM NENHUMA linha, "ver o dia na Conferência" = o `irParaConferencia`.
 - Selecao se marca com navy (`Segmentado`, o unico); controle nativo nunca; seletor de entidade tem busca; todo menu aberto pelo
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
 - FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter
