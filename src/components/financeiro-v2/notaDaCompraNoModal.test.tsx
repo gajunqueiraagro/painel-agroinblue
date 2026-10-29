@@ -99,16 +99,18 @@ async function abrir(lanc: LancamentoV2, extra: Partial<React.ComponentProps<typ
   await screen.findByDisplayValue('Folha de Pagamento');
   await new Promise((ok) => setTimeout(ok, 30));
 }
-/** P121 — o bloco "Documento" do resumo é UMA linha: "Tipo · Número" (o que faltar não entra; nada = "—"). */
+/** P121b — o bloco "Documento" do resumo: o NÚMERO (nada = "—") e, depois dele, o selo da origem ("da compra" · "ligado"). */
 const linhaDocumento = () => screen.getByTestId('resumo-nota').textContent ?? '';
+const seloDocumento = () => screen.queryByTestId('resumo-nota-selo')?.textContent ?? null;
 const abaDocumentos = () => fireEvent.mouseDown(screen.getByRole('tab', { name: /Documentos/ }), { button: 0 });
 const NF = { id: 'd1', especie: 'nf', numero: '518', cancelado: false };
 
 describe('a nota da compra no resumo e no topo da aba Documentos', () => {
-  it('parcela SEM número próprio e com a NF ligada: resumo "Nota Fiscal · da compra" + "NF 000.000.518"; o campo Nº segue vazio', async () => {
+  it('parcela SEM número próprio e com a NF ligada: resumo "NF 000.000.518" + o selo "da compra"; o campo Nº segue vazio', async () => {
     docs.lista = [NF];
     await abrir(FOLHA);
-    expect(linhaDocumento()).toBe('Nota Fiscal · da compra · NF 000.000.518');
+    expect(linhaDocumento()).toBe('NF 000.000.518');
+    expect(seloDocumento()).toBe('da compra');
     abaDocumentos();
     const marca = await screen.findByTestId('doc-da-compra');
     expect(marca.textContent).toBe('nota da compra: NF 000.000.518');
@@ -125,7 +127,8 @@ describe('a nota da compra no resumo e no topo da aba Documentos', () => {
   it('o número PRÓPRIO do lançamento vence a nota ligada, e a marca não aparece', async () => {
     docs.lista = [NF];
     await abrir({ ...FOLHA, tipo_documento: 'Nota Fiscal', numero_documento: '77' });
-    expect(linhaDocumento()).toBe('Nota Fiscal · 000.000.077');
+    expect(linhaDocumento()).toBe('NF 000.000.077');
+    expect(seloDocumento()).toBeNull();
     abaDocumentos();
     await screen.findByTestId('bloco-documentos-topo');
     expect(screen.queryByTestId('doc-da-compra')).toBeNull();
@@ -135,10 +138,11 @@ describe('a nota da compra no resumo e no topo da aba Documentos', () => {
     await abrir(FOLHA);
     expect(linhaDocumento()).toBe('—');
   });
-  it('só um recibo ligado: "Documento ligado" + "Rec. 12"', async () => {
+  it('só um recibo ligado: "Rec. 12" + o selo "ligado"', async () => {
     docs.lista = [{ id: 'd2', especie: 'recibo', numero: '12', cancelado: false }];
     await abrir(FOLHA);
-    expect(linhaDocumento()).toBe('Documento ligado · Rec. 12');
+    expect(linhaDocumento()).toBe('Rec. 12');
+    expect(seloDocumento()).toBe('ligado');
     abaDocumentos();
     expect((await screen.findByTestId('doc-da-compra')).textContent).toBe('documento ligado: Rec. 12');
   });

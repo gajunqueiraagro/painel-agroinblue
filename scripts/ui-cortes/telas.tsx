@@ -1315,7 +1315,10 @@ if (tela === 'mesclar') {
   const docBase = { cliente_id: 'cli', lancamento_id: 'lanc-milho', origem: 'lancamento', operacao_id: null, tamanho_bytes: 1, uploaded_em: '2026-05-10T12:00:00Z',
     uploaded_por: 'u1', observacao: null, cancelado: false, cancelado_em: null, cancelado_motivo: null, versao: 1, ligado_a_qtd: 1, emitente_id: 'agro',
     emitente_nome: 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA', emitente_documento: '11222333000181' };
-  const DOCS_NOTA = q.get('docs') !== 'nota' && q.get('div') !== '1' ? [] : [
+  /* P121b — `&nota=11`: a parcela 2/5 SEM número próprio e a NF da compra ligada, com 11 dígitos (o pior caso do Resumo: o número inteiro + o selo) */
+  const DOCS_NOTA = q.get('nota') === '11' ? [{ ...docBase, documento_id: 'd-n11', nome: 'NF.pdf', tipo: 'application/pdf', url: 'c/l/n.pdf', especie: 'nf',
+    numero: '12.345.678.901', serie: null, chave_acesso: null, data_emissao: '2026-05-08', valor_documento: 1000 }]
+    : q.get('docs') !== 'nota' && q.get('div') !== '1' ? [] : [
     { ...docBase, documento_id: 'd-pdf', nome: 'NF 15786.pdf', tipo: 'application/pdf', url: 'c/l/a.pdf', especie: 'nf', numero: '15786', serie: null, chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
     { ...docBase, documento_id: 'd-xml', nome: 'NFe15786.xml', tipo: 'text/xml', url: 'c/l/b.xml', especie: 'nf', numero: '000.015.786', serie: '2', chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
     { ...docBase, documento_id: 'd-xml2', nome: 'NFe15790.xml', tipo: 'text/xml', url: 'c/l/c.xml', especie: 'nf', numero: '000.015.790', serie: '2', chave_acesso: CH.slice(0, 34) + '1579011234', data_emissao: '2026-05-09', valor_documento: 1250.4 },
@@ -1395,6 +1398,8 @@ if (m === 'editar') props.lancamento = (v === 'sal') ? SAL : MILHO;
 /* P74b — `salparcela`: a parcela 1/4 de uma compra parcelada (a volta para à vista); `salparcelapaga`: a mesma, com a 2/4 paga */
 if (m === 'editar' && (v === 'salparcela' || v === 'salparcelapaga')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 821.22, data_competencia: '2026-08-10',
   data_vencimento: '2026-09-10', descricao: `${DESC_LONGA} 1/4`, financiamento_id: 'fin-sint', origem_tipo: 'parcela_principal' };
+if (m === 'editar' && v === 'salparcela' && q.get('nota') === '11') props.lancamento = { ...props.lancamento, numero_documento: null, tipo_documento: null,
+  descricao: 'Ração sintética para engorda 2/5' };
 /* P104 — `salsolta`: a parcela 6/6 lançada solta (o bloco não oferece parcelar) */
 if (m === 'editar' && v === 'salsolta') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 620.83, data_competencia: '2026-10-10', data_vencimento: '2026-10-10',
   descricao: 'Tinta sintetica de nome comprido para medir - 6/6', status_transacao: 'agendado' };

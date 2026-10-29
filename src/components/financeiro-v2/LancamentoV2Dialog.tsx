@@ -20,7 +20,7 @@ import {
   STATUS_PALETA,
   STATUS_PILULA_BASE,
 } from '@/lib/financeiro/statusFinanceiro';
-import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, docDaLinha, topoDoDocumentoTravado, MOTIVO_TOPO_NO_PARCELADO, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
+import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, docDaLinha, documentoDoResumo, topoDoDocumentoTravado, MOTIVO_TOPO_NO_PARCELADO, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePodeAbrir, usePodeAlterarOperacao, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
@@ -3802,10 +3802,7 @@ export function LancamentoV2Dialog({
                 pagamento={resumoFmtData(pagamentoMostrado)}
                 modalidade={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null}
                 parcelas={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null}
-                documento={[
-                  tipoDocumento || (docDoLancamento.origem === 'nota' ? 'Nota Fiscal · da compra' : docDoLancamento.origem === 'documento' ? 'Documento ligado' : null),
-                  notaFiscalDisplay || (docVemDeDocumento ? docDoLancamento.rotulo : null),
-                ].filter(Boolean).join(' · ') || null}
+                documento={documentoDoResumo(docDoLancamento, tipoDocumento)}
               />
             </div>
           )}

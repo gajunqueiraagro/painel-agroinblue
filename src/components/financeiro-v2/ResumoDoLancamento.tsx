@@ -39,8 +39,9 @@ export interface ResumoDoLancamentoProps {
   pagamento: string | null;
   modalidade: string | null;
   parcelas: string | null;
-  /** "Nota Fiscal · 000.544.330" numa linha */
-  documento: string | null;
+  /** P121b: o NÚMERO do documento ("NF 000.521.110", inteiro, logo depois do rótulo), o selo da origem ("da compra" · "ligado") e o
+   *  `title` com tudo. Sem número: null ("—"). */
+  documento: { numero: string; selo: string | null; titulo: string } | null;
 }
 
 /** Título de bloco: pequeno, maiúsculo, navy, com a linha embaixo. */
@@ -148,7 +149,23 @@ export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
         </Bloco>
 
         <Bloco titulo="Documento" altura="h-[34px]" testid="resumo-documento">
-          <Tabela><Linha rotulo="Nota" valor={p.documento} testid="resumo-nota" /></Tabela>
+          {/* P121b: o número NUNCA corta (sem `truncate`, sem encolher); o selo vem depois e é ele que cede ("…" com o title) */}
+          <Tabela>
+            <tr className="h-[16px] text-[11px] leading-[14px]">
+              <td className={ROTULO} title="Nota">Nota</td>
+              <td className="align-middle" title={p.documento?.titulo}>
+                <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+                  <span className={cn('shrink-0 whitespace-nowrap tabular-nums', !p.documento && 'text-muted-foreground')} data-testid="resumo-nota">
+                    {p.documento?.numero || '—'}
+                  </span>
+                  {p.documento?.selo && (
+                    <span className="min-w-0 truncate rounded-[3px] bg-muted px-1 text-[9.5px] leading-[12px] text-muted-foreground" title={p.documento.titulo}
+                      data-testid="resumo-nota-selo">{p.documento.selo}</span>
+                  )}
+                </div>
+              </td>
+            </tr>
+          </Tabela>
         </Bloco>
 
         {/* fora de tabela nada termina em "…": a frase (228px a 9,5px) quebra em 2 linhas reservadas */}

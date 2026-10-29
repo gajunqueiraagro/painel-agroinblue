@@ -290,6 +290,20 @@ export function docDaLinha(
   return { rotulo: '', titulo: '', origem: null, clipe, resumo };
 }
 
+/** P121b (Gabriel 29/10) — a linha "Nota" do Resumo do lançamento: o NÚMERO primeiro e inteiro (o mesmo rótulo da coluna Doc., `docDaLinha`),
+ *  e a origem num selo depois dele ("da compra" = a NF ligada à compra; "ligado" = outro documento anexado). "Nota Fiscal ·" não entra: o
+ *  rótulo da linha já diz Nota. Sem número, o tipo escolhido (se houver) fica no lugar, como antes; nada = null ("—"). */
+export function documentoDoResumo(doc: DocDaLinha, tipoDocumento: string | null | undefined): { numero: string; selo: string | null; titulo: string } | null {
+  const tipo = (tipoDocumento ?? '').trim();
+  if (doc.rotulo) {
+    const selo = doc.origem === 'nota' ? 'da compra' : doc.origem === 'documento' ? 'ligado' : null;
+    /* o title diz tudo: o tipo por extenso do próprio lançamento ("Nota Fiscal · NF 000.544.330") ou o da coluna Doc. ("… · nota da compra") */
+    const titulo = doc.origem === 'lancamento' && tipo ? `${tipo} · ${doc.rotulo}` : doc.titulo || doc.rotulo;
+    return { numero: doc.rotulo, selo, titulo };
+  }
+  return tipo ? { numero: tipo, selo: null, titulo: tipo } : null;
+}
+
 /* ── FIN-FILTRO-DOC-01 — o FILTRO "Documento" da lista: a MESMA fonte da coluna DOC. (o campo próprio do lançamento + os documentos
    VIVOS ligados a ele — os da OC e os das parcelas da mesma nota vêm pela `vw_lancamento_documentos`) ───────────────────────────── */
 
