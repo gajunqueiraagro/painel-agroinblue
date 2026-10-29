@@ -116,6 +116,10 @@ const mesBr = (m: string) => (/^\d{4}-\d{2}$/.test(m) ? `${m.slice(5, 7)}/${m.sl
 export function fraseDoEfeitoNoDre(efeito: readonly EfeitoNoDre[]): string | null {
   if (!efeito.length) return null;
   return `O DRE muda: ${efeito.map((e) => {
+    /* P163-1 — o mesmo subcentro (a coluna Subcentro desmarcada): só o MÊS muda; nunca "sai de X e vai para X" */
+    if ((e.subcentroDe ?? null) === (e.subcentroPara ?? null)) {
+      return `R$ ${reais(Math.round(e.valor * 100))} em "${e.subcentroDe ?? 'sem subcentro'}" mudam de mês: ${mesBr(e.mesDe)} → ${mesBr(e.mesPara)}`;
+    }
     const de = `"${e.subcentroDe ?? 'sem subcentro'}" (${mesBr(e.mesDe)})`;
     const para = `"${e.subcentroPara ?? 'sem subcentro'}" (${mesBr(e.mesPara)})`;
     return `R$ ${reais(Math.round(e.valor * 100))} saem de ${de} e vão para ${para}`;

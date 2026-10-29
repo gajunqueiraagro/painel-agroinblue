@@ -1132,7 +1132,19 @@ if (tela === 'mesclar') {
         campos.valor = { hoje: 631.98, fica: x.valor ?? 631.98, muda: !paga && x.valor !== undefined && x.valor !== 631.98, cadeado: paga ? 'paga' : null };
         return { id: x.id, descricao: `CERCAS SINTETICAS - parcela ${k + 1}/5`, situacao: SIT[k], parcela_n: k + 1, campos };
       });
-      return { ok: true, recusas: [], linhas, efeito_dre: [{ mes_de: '2031-05', subcentro_de: NOMES.p0, mes_para: '2031-06', subcentro_para: NOMES.p1, valor: 3160, lancamentos: 5 }] };
+      /* o efeito no DRE como o banco o calcula: só onde o subcentro ou o mês mudam (P163-1 — era fixo, e dizia "vão para Investimento" com o
+         Subcentro desmarcado) */
+      const grupos = new Map<string, { mes_de: string; subcentro_de: string; mes_para: string; subcentro_para: string; valor: number; lancamentos: number }>();
+      for (const l of linhas) {
+        const c: any = l.campos;
+        const sub_de = NOMES[String(c.plano_conta_id.hoje)]; const sub_para = NOMES[String(c.plano_conta_id.fica)];
+        const mes_de = String(c.data_competencia.hoje).slice(0, 7); const mes_para = String(c.data_competencia.fica ?? c.data_competencia.hoje).slice(0, 7);
+        if (sub_de === sub_para && mes_de === mes_para) continue;
+        const k = [mes_de, sub_de, mes_para, sub_para].join('|');
+        const g0 = grupos.get(k) ?? { mes_de, subcentro_de: sub_de, mes_para, subcentro_para: sub_para, valor: 0, lancamentos: 0 };
+        g0.valor += Number(c.valor.fica); g0.lancamentos += 1; grupos.set(k, g0);
+      }
+      return { ok: true, recusas: [], linhas, efeito_dre: [...grupos.values()].map((x) => ({ ...x, valor: Math.round(x.valor * 100) / 100 })) };
     } };
     const alvos = [1, 2, 3, 4, 5].map((k) => ({ id: `l${k}`, programada: k === 5, notaValorCent: 63200, notaVencimento: `2031-${String(5 + k).padStart(2, '0')}-21` }));
     montar(<PreviaCompletar open onFechar={() => {}} clienteId="cli" alvos={alvos} rotulos={Object.fromEntries(alvos.map((x, k) => [x.id, `${k + 1}/5`]))}

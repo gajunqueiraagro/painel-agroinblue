@@ -35,7 +35,9 @@ function abrir(onConfirmar = vi.fn(async (_p: Record<string, unknown>[]): Promis
   return onConfirmar;
 }
 const ultimoPedido = () => banco.completarComANota.mock.calls[banco.completarComANota.mock.calls.length - 1][1];
-const linha = (i: number) => screen.getAllByTestId('previa-linha')[i];
+/* P163-D3 — a tabela é TRANSPOSTA: uma coluna por parcela; as células de uma parcela levam `data-alvo` */
+const celulas = (id: string) => screen.getAllByTestId('previa-celula').filter((c) => c.getAttribute('data-alvo') === id);
+const naParcela = (id: string, testid: string): HTMLElement[] => celulas(id).flatMap((c) => [...c.querySelectorAll<HTMLElement>(`[data-testid="${testid}"]`)]);
 
 beforeEach(() => { banco.completarComANota.mockClear(); });
 
@@ -44,23 +46,27 @@ describe('P128b — a prévia campo a campo', () => {
     abrir();
     await waitFor(() => expect(screen.getByTestId('previa-gravar')).toBeEnabled());
     expect(screen.getByTestId('previa-gravar').textContent).toBe('Completar as 2 e anexar');
-    expect(within(linha(0)).getByTestId('previa-muda').textContent).toBe('Cercas → Cercas sintetico 1/2');
-    expect(within(linha(0)).getByTestId('previa-cadeado').textContent).toBe('🔒 Banco sintetico');
-    expect(within(linha(1)).queryByTestId('previa-cadeado')).toBeNull();
-    expect(within(linha(1)).getAllByTestId('previa-igual').map((x) => x.textContent)).toContain('NF 1 · igual');
+    expect(naParcela('l1', 'previa-muda').map((x) => x.textContent)).toEqual(['Cercas → Cercas sintetico 1/2']);
+    expect(naParcela('l1', 'previa-cadeado').map((x) => x.textContent)).toEqual(['🔒 Banco sintetico']);
+    expect(naParcela('l2', 'previa-cadeado')).toEqual([]);
+    expect(naParcela('l2', 'previa-igual').map((x) => x.textContent)).toContain('NF 1 · igual');
     expect(screen.getByTestId('previa-dre').textContent).toBe('O DRE muda: R$ 1.264,00 saem de "Manutenção" (05/2031) e vão para "Investimento" (06/2031).');
     expect(screen.getByTestId('previa-coluna-conta').getAttribute('data-state')).toBe('unchecked');
     expect(ultimoPedido().every((p) => !('conta_bancaria_id' in p))).toBe(true);
     /* P162 — o Subcentro também começa desmarcado: o sugerido (o último do fornecedor) nunca vai por cima do lançamento sem a pessoa marcar */
     expect(screen.getByTestId('previa-coluna-subcentro').getAttribute('data-state')).toBe('unchecked');
     expect(ultimoPedido().every((p) => !('plano_conta_id' in p))).toBe(true);
+    /* P163-D1 — Fornecedor e Fazenda também começam desmarcados: nada do que já está no lançamento muda sem marcar */
+    expect(['favorecido', 'fazenda', 'safra'].map((c) => screen.getByTestId(`previa-coluna-${c}`).getAttribute('data-state'))).toEqual(['unchecked', 'unchecked', 'unchecked']);
+    expect(['descricao', 'competencia', 'documento'].map((c) => screen.getByTestId(`previa-coluna-${c}`).getAttribute('data-state'))).toEqual(['checked', 'checked', 'checked']);
+    expect(ultimoPedido().every((p) => !('favorecido_id' in p) && !('fazenda_id' in p))).toBe(true);
     expect(banco.completarComANota.mock.calls.every((c) => c[2].simular)).toBe(true);   // nada gravado antes do clique
   });
   it('✎ na célula: "manter o de hoje nesta parcela" — o pedido gravado sai SEM a descrição daquela parcela; a outra segue', async () => {
     const onConfirmar = abrir();
     await waitFor(() => expect(screen.getByTestId('previa-gravar')).toBeEnabled());
-    fireEvent.click(within(linha(0)).getByTestId('previa-muda'));
-    await waitFor(() => expect(within(linha(0)).queryByTestId('previa-muda')).toBeNull());
+    fireEvent.click(naParcela('l1', 'previa-muda')[0]);
+    await waitFor(() => expect(naParcela('l1', 'previa-muda')).toEqual([]));
     await waitFor(() => expect(screen.getByTestId('previa-gravar')).toBeEnabled());
     fireEvent.click(screen.getByTestId('previa-gravar'));
     await waitFor(() => expect(onConfirmar).toHaveBeenCalled());
@@ -73,8 +79,8 @@ describe('P128b — a prévia campo a campo', () => {
     fireEvent.click(screen.getByTestId('previa-coluna-descricao'));
     fireEvent.click(screen.getByTestId('previa-coluna-conta'));
     await waitFor(() => expect(ultimoPedido().some((p) => 'conta_bancaria_id' in p)).toBe(true));
-    expect(ultimoPedido()).toEqual([{ id: 'l1', favorecido_id: 'f1', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal' },
-      { id: 'l2', favorecido_id: 'f1', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal', conta_bancaria_id: 'c1' }]);
+    expect(ultimoPedido()).toEqual([{ id: 'l1', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal' },
+      { id: 'l2', numero_documento: 'NF 1', tipo_documento: 'Nota Fiscal', conta_bancaria_id: 'c1' }]);
   });
   it('a prévia que não se confere (mesmo depois de uma boa) trava o gravar e diz; a recusa da gravação fica na prévia', async () => {
     abrir(vi.fn(async () => 'O mês 06/2031 está fechado. Nada foi gravado.'));
@@ -95,12 +101,25 @@ describe('P128b — o vazio em destaque', () => {
   it('a conta vazia da l2 é "⚠ vazio" (âmbar, com a frase no title); marcando Conta vira "— → Banco da nota"', async () => {
     abrir();
     await waitFor(() => expect(screen.getByTestId('previa-gravar')).toBeEnabled());
-    const vazio = within(linha(1)).getByTestId('previa-vazio');
+    const [vazio] = naParcela('l2', 'previa-vazio');
     expect(vazio.textContent).toBe('⚠ vazio');
     expect(vazio.getAttribute('title')).toBe('Este lançamento está sem Conta: marque a coluna Conta para completar.');
-    expect(within(linha(0)).queryByTestId('previa-vazio')).toBeNull();
+    expect(naParcela('l1', 'previa-vazio')).toEqual([]);
     fireEvent.click(screen.getByTestId('previa-coluna-conta'));
-    await waitFor(() => expect(within(linha(1)).queryByTestId('previa-vazio')).toBeNull());
-    expect(within(linha(1)).getAllByTestId('previa-muda').map((x) => x.textContent)).toContain('— → Banco da nota');
+    await waitFor(() => expect(naParcela('l2', 'previa-vazio')).toEqual([]));
+    expect(naParcela('l2', 'previa-muda').map((x) => x.textContent)).toContain('— → Banco da nota');
+  });
+});
+
+/* P163 (o caso da Vera, NF 31776) — a competência saía "2026-08-18 · i…": o banco devolve o próprio valor como "nome" nos campos que não são
+   cadastro, e a tela preferia o nome. A data vem SEMPRE em dd/mm/aaaa. */
+describe('P163 — a data em dd/mm/aaaa', () => {
+  it('a competência igual aparece "18/08/2026 · igual", nunca o ISO cru', async () => {
+    banco.completarComANota.mockImplementationOnce(async (_c, pedido) => ({ ok: true, valor: { ok: true, recusas: [], operacao: null, financiamentoId: null, efeitoDre: [],
+      linhas: pedido.map((p) => ({ id: String(p.id), descricao: 'Ferramentas', situacao: 'realizada', parcelaN: null, campos: {
+        data_competencia: { hoje: '2026-08-18', fica: '2026-08-18', muda: false, hojeNome: '2026-08-18', ficaNome: '2026-08-18', cadeado: null } } })) } }));
+    abrir();
+    await waitFor(() => expect(naParcela('l1', 'previa-igual').length).toBeGreaterThan(0));
+    expect(naParcela('l1', 'previa-igual').map((x) => x.textContent)).toEqual(['18/08/2026 · igual']);
   });
 });

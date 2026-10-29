@@ -291,7 +291,7 @@ const CENARIOS = [
   /* P128b — a prévia campo a campo: desmarcar uma coluna, manter uma célula (✎), trocar o nº (a prévia reconferindo) não deslocam nada */
   { nome: 'previa-completar', url: 'tela=previa-completar&cam=2', estados: [
     ['desmarca Descrição', clicar('[data-testid="previa-coluna-descricao"]')], ['marca Conta', clicar('[data-testid="previa-coluna-conta"]')],
-    ['mantém uma célula', clicar('[data-testid="previa-linha"] [data-testid="previa-muda"]')],
+    ['mantém uma célula', noLugar('[data-testid="previa-celula"] [data-testid="previa-muda"]')],
     ['troca o nº', async (p) => { await p.locator('[data-testid="previa-numero"]').fill('NF 000.004.876'); await espera(p, 700); }],
   ] },
   /* P167 — abrir e fechar a confirmação do cancelamento no rodapé: o corpo do documento não anda (o rodapé troca no mesmo lugar) */

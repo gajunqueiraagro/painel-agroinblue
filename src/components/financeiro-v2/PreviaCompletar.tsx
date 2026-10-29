@@ -1,6 +1,6 @@
 /**
- * P128b (NOTA-JA-LANCADA; mock aprovado, casos 1b e 3) — A PRÉVIA CAMPO A CAMPO do "Completar com a nota": uma linha por parcela, uma coluna
- * por campo, com a caixa "atualizar em todas" no cabeçalho. O VALOR PARA TODAS vem do bloco "Lançamento" da prévia da nota (fornecedor,
+ * P128b (NOTA-JA-LANCADA; mock aprovado, casos 1b e 3) — A PRÉVIA CAMPO A CAMPO do "Completar com a nota". P163-D3: TRANSPOSTA — uma linha
+ * por campo (a caixa "atualizar em todas" no rótulo), uma coluna por parcela; nenhuma célula corta (o quadro rola de lado). O VALOR PARA TODAS vem do bloco "Lançamento" da prévia da nota (fornecedor,
  * fazenda, conta, subcentro, safra) e daqui (a descrição BASE, que vira "<base> i/N"; o nº do documento; a competência = emissão).
  * ⚠ A REGRA É DO BANCO: cada mudança pede a `fn_nota_completar` com `p_simular` e a tabela desenha o que ela devolve — hoje → fica, "igual",
  *   o cadeado (conciliada/paga: conta, valor e vencimento nunca mudam) e o efeito no DRE. Nada é gravado antes do clique.
@@ -22,13 +22,16 @@ import {
   type AlvoDaPrevia, type CampoDaPrevia, type ColunaCompletar, type ResultadoCompletar, type ValoresParaTodas,
 } from '@/lib/financeiro/nfe/notaCompletar';
 
-/** O mock: Conta desmarcada por padrão (nas pagas ela nunca muda; na programada só se a pessoa marcar). P162: o Subcentro também — o
- *  sugerido é o último do fornecedor, nunca o deste lançamento; ele só muda se a pessoa marcar. */
-const MARCADAS_DE_INICIO: ReadonlySet<ColunaCompletar> = new Set(COLUNAS_COMPLETAR.filter((c) => c !== 'conta' && c !== 'subcentro'));
-const LARGURA: Record<ColunaCompletar, number> = { descricao: 150, favorecido: 120, fazenda: 100, conta: 96, subcentro: 130, documento: 104, competencia: 92, safra: 74 };
+/** P163-D1 (Gabriel 28/10 15:22; briefing P163 B.3) — de início vêm marcadas SÓ a Descrição, a Competência (= emissão) e o Nº/nota. Conta e
+ *  Subcentro desmarcados (P162: o sugerido é o último do fornecedor, nunca o deste lançamento); Fornecedor e Fazenda também — nada do que já
+ *  está no lançamento muda sem a pessoa marcar. A Safra acompanha a competência: desmarcada, o banco põe a da competência nova (P138). */
+const MARCADAS_DE_INICIO: ReadonlySet<ColunaCompletar> = new Set<ColunaCompletar>(['descricao', 'competencia', 'documento']);
+/** a dica de cada linha (o title do rótulo) */
+const DICA: Partial<Record<ColunaCompletar, string>> = { safra: 'desmarcada, acompanha a competência (a safra da competência nova)' };
 const dataBr = (x: unknown) => (typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) ? `${x.slice(8, 10)}/${x.slice(5, 7)}/${x.slice(0, 4)}` : null);
-/** O texto de um valor do campo: o nome (cadastro), a data dd/mm/aaaa ou o texto. */
-const textoDo = (v: unknown, nome: string | null): string => nome && !/^[0-9a-f-]{36}$/.test(nome) ? nome : dataBr(v) ?? (v === null || v === undefined || v === '' ? '—' : String(v));
+/** O texto de um valor do campo: a data dd/mm/aaaa, o nome (cadastro) ou o texto. P163 (o caso da Vera, NF 31776): a DATA vem antes do
+ *  nome — o banco devolve o próprio valor como "nome" nos campos que não são cadastro, e a competência saía "2026-08-18 · i…". */
+const textoDo = (v: unknown, nome: string | null): string => dataBr(v) ?? (nome && !/^[0-9a-f-]{36}$/.test(nome) ? nome : (v === null || v === undefined || v === '' ? '—' : String(v)));
 /** os campos sem os quais o lançamento fica incompleto: vazio aparece em destaque (P128b, prova da Alta Paulista) */
 const OBRIGATORIAS: ReadonlySet<ColunaCompletar> = new Set<ColunaCompletar>(['favorecido', 'fazenda', 'conta', 'subcentro']);
 const ROTULO_SITUACAO: Record<string, string> = { conciliada: 'conciliada', realizada: 'realizada', programada: 'programada' };
@@ -108,7 +111,7 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
     }
     if (!campo.muda) {
       return (
-        <button type="button" className="w-full min-w-0 truncate text-left text-muted-foreground" title={`${hoje} · igual${mantida ? ' (mantido nesta parcela — clique para usar o valor para todas)' : ''}`}
+        <button type="button" className="whitespace-nowrap text-left text-muted-foreground" title={`${hoje} · igual${mantida ? ' (mantido nesta parcela — clique para usar o valor para todas)' : ''}`}
           onClick={() => trocarCelula(id, c)} disabled={!marcadas.has(c)} data-testid="previa-igual">
           {hoje} · {mantida ? 'mantido' : 'igual'}
         </button>
@@ -116,7 +119,7 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
     }
     const fica = textoDo(campo.fica, campo.ficaNome);
     return (
-      <button type="button" className="w-full min-w-0 truncate text-left" title={`${hoje} → ${fica} (clique para manter o de hoje nesta parcela)`}
+      <button type="button" className="whitespace-nowrap text-left" title={`${hoje} → ${fica} (clique para manter o de hoje nesta parcela)`}
         onClick={() => trocarCelula(id, c)} data-testid="previa-muda">
         <s className="text-muted-foreground">{hoje}</s> → <span className="font-medium text-primary">{fica}</span>
       </button>
@@ -148,49 +151,67 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-4 py-2" data-testid="previa-rolagem">
-          <table className="w-full table-fixed border-collapse">
-            <colgroup><col style={{ width: 44 }} /><col style={{ width: 80 }} />{COLUNAS_COMPLETAR.map((c) => <col key={c} style={{ width: LARGURA[c] }} />)}
-              {atualizarNaoPagas && <><col style={{ width: 76 }} /><col style={{ width: 84 }} /><col style={{ width: 92 }} /></>}</colgroup>
-            <thead className="sticky top-0 z-10 bg-primary"><tr>
-              <th className={TH_REGUA} title="Parcela">Parc.</th>
-              <th className={TH_REGUA} title="Situação">Situação</th>
-              {COLUNAS_COMPLETAR.map((c) => (
-                <th key={c} className={TH_REGUA} title={`${ROTULO_DA_COLUNA[c]} — marcar = atualizar em todas`}>
-                  <label className="flex min-w-0 cursor-pointer items-center gap-1">
-                    <Checkbox checked={marcadas.has(c)} onCheckedChange={() => trocarMarca(c)} className="h-3 w-3 border-primary-foreground" data-testid={`previa-coluna-${c}`} />
-                    <span className="min-w-0 truncate">{ROTULO_DA_COLUNA[c]}</span>
-                  </label>
-                </th>
-              ))}
-              {atualizarNaoPagas && <><th className={TH_REGUA} title="Vencimento de hoje">Venc.</th><th className={TH_REGUA} title="O vencimento que fica (🔒 = não muda)">Novo venc.</th><th className={cn(TH_REGUA, 'text-right')} title="Valor">Valor</th></>}
-            </tr></thead>
-            <tbody>
+          {/* P163-D3 (Gabriel 28/10) — TRANSPOSTA: os CAMPOS nas linhas (a caixinha "aplicar a todas" no rótulo, preso à esquerda) e as PARCELAS
+              nas colunas. Nenhuma célula corta: a coluna tem a largura do conteúdo e o quadro rola DE LADO (com 2 parcelas, nada rola). Fonte e
+              altura de linha = a régua (TH 22px 9,5; TD 19px 10). */}
+          <table className="w-max min-w-full border-collapse" data-testid="previa-tabela">
+            <thead className="sticky top-0 z-20 bg-primary"><tr>
+              <th className={cn(TH_REGUA, 'sticky left-0 z-30 w-[150px] min-w-[150px] bg-primary text-left')} title="O campo — marcar = atualizar em todas">Campo</th>
               {alvos.map((a) => {
                 const l = linhaDe(a.id);
                 return (
-                  <tr key={a.id} className="border-b border-border/50" data-testid="previa-linha" data-situacao={l?.situacao ?? ''}>
-                    <td className={cn(TD_REGUA_NUM, 'text-left')}>{rotulos[a.id] ?? '—'}</td>
-                    <td className={TD_REGUA} title={l?.descricao ?? undefined}>{l ? ROTULO_SITUACAO[l.situacao] : '…'}</td>
-                    {COLUNAS_COMPLETAR.map((c) => (
-                      <td key={c} className={cn(TD_REGUA, !marcadas.has(c) && 'opacity-60')} data-coluna={c}>{l ? celula(a.id, c, l.campos[CAMPO_DA_COLUNA[c]]) : '…'}</td>
-                    ))}
-                    {atualizarNaoPagas && <>
-                      {/* o gate de tela (regra "data"): a coluna Venc. só tem a data; o que fica e o 🔒 moram em "Novo venc." */}
-                      <td className={cn(TD_REGUA, 'whitespace-nowrap')}>{l?.campos.data_vencimento ? (l.campos.data_vencimento.muda
-                        ? <s className="text-muted-foreground">{dataBr(l.campos.data_vencimento.hoje) ?? '—'}</s>
-                        : <span className="text-muted-foreground">{dataBr(l.campos.data_vencimento.hoje) ?? '—'}</span>) : '…'}</td>
-                      <td className={cn(TD_REGUA, 'whitespace-nowrap')}>{l?.campos.data_vencimento ? (l.campos.data_vencimento.muda
-                        ? <span className="font-medium text-primary" title="hoje → fica">{dataBr(l.campos.data_vencimento.fica) ?? '—'}</span>
-                        : l.campos.data_vencimento.cadeado
-                          ? <span className="text-muted-foreground" title={`🔒 ${l.campos.data_vencimento.cadeado}`} data-testid="previa-venc-cadeado">🔒 não muda</span>
-                          : <span className="text-muted-foreground">igual</span>) : '…'}</td>
-                      <td className={cn(TD_REGUA_NUM, 'whitespace-nowrap')}>{l?.campos.valor ? (l.campos.valor.muda
-                        ? <span title="hoje → fica"><s className="text-muted-foreground">{reais(Math.round(Number(l.campos.valor.hoje) * 100))}</s> → <span className="font-medium text-primary">{reais(Math.round(Number(l.campos.valor.fica) * 100))}</span></span>
-                        : <span className="text-muted-foreground">{reais(Math.round(Number(l.campos.valor.hoje) * 100))}{l.campos.valor.cadeado ? ' 🔒' : ''}</span>) : '…'}</td>
-                    </>}
-                  </tr>
+                  <th key={a.id} className={cn(TH_REGUA, 'min-w-[180px] whitespace-nowrap text-left')} data-testid="previa-parcela" data-alvo={a.id} data-situacao={l?.situacao ?? ''}
+                    title={l?.descricao ?? undefined}>
+                    {rotulos[a.id] ?? '—'} · {l ? ROTULO_SITUACAO[l.situacao] : '…'}
+                  </th>
                 );
               })}
+            </tr></thead>
+            <tbody>
+              {COLUNAS_COMPLETAR.map((c) => (
+                <tr key={c} className={cn('border-b border-border/50', !marcadas.has(c) && 'opacity-60')} data-testid="previa-campo" data-coluna={c}>
+                  <td className={cn(TD_REGUA, 'sticky left-0 z-10 bg-background')} title={DICA[c] ?? `${ROTULO_DA_COLUNA[c]} — marcar = atualizar em todas`}>
+                    <label className="flex cursor-pointer items-center gap-1 whitespace-nowrap">
+                      <Checkbox checked={marcadas.has(c)} onCheckedChange={() => trocarMarca(c)} className="h-3 w-3" data-testid={`previa-coluna-${c}`} />
+                      <span className="font-medium">{ROTULO_DA_COLUNA[c]}</span>
+                    </label>
+                  </td>
+                  {alvos.map((a) => {
+                    const l = linhaDe(a.id);
+                    return <td key={a.id} className={TD_REGUA} data-testid="previa-celula" data-alvo={a.id} data-coluna={c}>{l ? celula(a.id, c, l.campos[CAMPO_DA_COLUNA[c]]) : '…'}</td>;
+                  })}
+                </tr>
+              ))}
+              {atualizarNaoPagas && <>
+                {/* o caminho 2: o vencimento e o valor da nota nas programadas (nas pagas, 🔒) */}
+                <tr className="border-b border-border/50" data-testid="previa-campo" data-coluna="vencimento">
+                  <td className={cn(TD_REGUA, 'sticky left-0 z-10 bg-background font-medium')}>Vencimento</td>
+                  {alvos.map((a) => {
+                    const v = linhaDe(a.id)?.campos.data_vencimento;
+                    return (
+                      <td key={a.id} className={cn(TD_REGUA, 'whitespace-nowrap tabular-nums')} data-testid="previa-celula" data-alvo={a.id} data-coluna="vencimento">
+                        {!v ? '…' : v.muda
+                          ? <span title="hoje → fica"><s className="text-muted-foreground">{dataBr(v.hoje) ?? '—'}</s> → <span className="font-medium text-primary">{dataBr(v.fica) ?? '—'}</span></span>
+                          : v.cadeado ? <span className="text-muted-foreground" title={`🔒 ${v.cadeado}`} data-testid="previa-venc-cadeado">🔒 {dataBr(v.hoje) ?? '—'}</span>
+                          : <span className="text-muted-foreground">{dataBr(v.hoje) ?? '—'} · igual</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+                <tr className="border-b border-border/50" data-testid="previa-campo" data-coluna="valor">
+                  <td className={cn(TD_REGUA, 'sticky left-0 z-10 bg-background font-medium')}>Valor</td>
+                  {alvos.map((a) => {
+                    const v = linhaDe(a.id)?.campos.valor;
+                    return (
+                      <td key={a.id} className={cn(TD_REGUA_NUM, 'text-left')} data-testid="previa-celula" data-alvo={a.id} data-coluna="valor">
+                        {!v ? '…' : v.muda
+                          ? <span title="hoje → fica"><s className="text-muted-foreground">{reais(Math.round(Number(v.hoje) * 100))}</s> → <span className="font-medium text-primary">{reais(Math.round(Number(v.fica) * 100))}</span></span>
+                          : <span className="text-muted-foreground">{reais(Math.round(Number(v.hoje) * 100))}{v.cadeado ? ' 🔒' : ' · igual'}</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </>}
             </tbody>
           </table>
         </div>

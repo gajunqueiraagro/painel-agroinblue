@@ -713,7 +713,13 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores, fornecedores: [FORN] });
     await screen.findByTestId('nota-ja-lancada');
     expect(screen.queryByTestId('nota-trocar-fornecedor')).toBeNull();
-    await completarPelaPrevia();
+    /* P163-D1 — o Fornecedor começa DESMARCADO: só vai às 4 quando a pessoa marca a linha */
+    fireEvent.click(await screen.findByTestId('nota-completar-revisar'));
+    const pv = await screen.findByTestId('previa-completar');
+    expect(within(pv).getByTestId('previa-coluna-favorecido').getAttribute('data-state')).toBe('unchecked');
+    fireEvent.click(within(pv).getByTestId('previa-coluna-favorecido'));
+    await waitFor(() => expect(within(pv).getByTestId('previa-gravar')).toBeEnabled());
+    fireEvent.click(within(pv).getByTestId('previa-gravar'));
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     expect(pedidoGravado().pedido.map((x) => x.favorecido_id)).toEqual(['f1', 'f1', 'f1', 'f1']);
     expect(g.trocarFornecedor).not.toHaveBeenCalled();
