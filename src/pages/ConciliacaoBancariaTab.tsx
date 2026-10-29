@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Segmentado } from '@/components/ui/segmentado';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ouvirContasBancarias } from '@/lib/financeiro/canalContasBancarias';
@@ -1186,23 +1187,28 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 falta, a saída é um interruptor dentro da própria Conferência, não um segundo modal.
                 ⚠ `EspelhoOfxSistemaModal` FICA SEM CONSUMIDOR e NÃO foi apagado: quem o quiser de
                 volta monta; quem for apagá-lo abre frente própria. */}
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              {/* ⚠ O SELETOR DE CONTA — PR-SISTEMA-SELETOR-CONTA-01. É o MESMO componente da aba
-                  Importar (`ContaBancariaSelect`, o seletor da casa), com as mesmas medidas e o
-                  mesmo mapeamento. A fonte da verdade continua sendo `selectedConta`: trocar aqui
-                  troca na Importar, e vice-versa. */}
-              <div className="w-[190px]">
+            {/* P159a (mock `mock-extrato-banco-v1.html`, Gabriel 28/10): UMA LINHA SÓ — conta · ⇄ Transferências · Criar em lote ·
+                Conciliar unitário e, à direita, as quatro sub-abas no `Segmentado`. Nada quebra em duas linhas (`flex-nowrap`, e o
+                segmentado é `whitespace-nowrap`); abaixo da largura, a linha rola no lugar dela, nunca empilha. */}
+            <div className="mb-2 flex flex-nowrap items-center gap-2 overflow-x-auto" data-testid="barra-casar">
+              {/* ⚠ O SELETOR DE CONTA — PR-SISTEMA-SELETOR-CONTA-01: o MESMO componente da aba Importar (`ContaBancariaSelect`, o seletor
+                  da casa, com busca). A fonte da verdade continua sendo `selectedConta`.
+                  ⚠ P159a — "__none__" NO GATILHO era defeito: o valor ia como '__none__', que não é opção nenhuma, e o seletor
+                  mostrava a string crua. Sem conta escolhida ("Todas"), o valor vai VAZIO e o gatilho diz "Escolha a conta".
+                  ⚠ P159a D10 (Gabriel 28/10): nome maior que os 200px termina em "…" com o nome inteiro no `title` — a exceção declarada do
+                  P71 (`data-reticencias-com-title`, como a Fazenda da VG e o `FavorecidoSelect`). */}
+              <div className="w-[200px] shrink-0" title={selectedConta !== '__all__' ? contaAtual : undefined} data-reticencias-com-title="">
                 <ContaBancariaSelect
-                  value={selectedConta !== '__all__' ? selectedConta : '__none__'}
-                  onValueChange={v => setSelectedConta(v === '__none__' ? '__all__' : v)}
+                  value={selectedConta !== '__all__' ? selectedConta : ''}
+                  onValueChange={v => setSelectedConta(v ? v : '__all__')}
                   contas={contas.map(c => ({
                     id: c.id, nome_conta: getContaLabel(c), nome_exibicao: null, tipo_conta: c.tipo_conta ?? null,
                   }))}
-                  placeholder="Conta"
+                  placeholder="Escolha a conta"
                   className="h-7 text-xs"
                 />
               </div>
-              <AcoesDoMes
+              <AcoesDoMes curto
                 clienteId={clienteId ?? null}
                 contaId={selectedConta === '__all__' ? null : selectedConta}
                 contaNome={contaAtual}
@@ -1210,22 +1216,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 aoMudar={() => { setRefreshExtrato(n => n + 1); }}
               />
 
-              {/* ⚠ AS QUATRO SUB-ABAS SUBIRAM PARA CÁ — PR-SISTEMA-BARRA-COMPACTA-01, e o motivo é
-                  altura: dentro do corpo a fileira custava 23px, e 23px são uma linha da Mesa, que
-                  é a tela. Aqui ela custa ZERO — esta linha já existe, e sobrava largura nela.
-                  ⚠ SEM PORTAL: o estado da sub-aba é que subiu (`aba` + `onAbaChange`), e a
-                  fileira é desenhada aqui com `ABAS_ESPELHO`. `createPortal` + host (o padrão do
-                  `PastosTab`) faria o mesmo movendo DOM entre árvores; içar o estado é o idioma
-                  React de sempre e não precisa de `callback ref`. */}
-              <div className="flex flex-wrap gap-1">
-                {ABAS_ESPELHO.map(a => (
-                  <button key={a.key} type="button" onClick={() => setAbaEspelho(a.key)}
-                    className={`rounded border px-2 py-0.5 text-[10px] ${
-                      abaEspelho === a.key ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground'}`}>
-                    {a.label}
-                  </button>
-                ))}
-              </div>
+              {/* ⚠ AS QUATRO SUB-ABAS MORAM NESTA LINHA — PR-SISTEMA-BARRA-COMPACTA-01 (dentro do corpo custavam 23px de Mesa). O estado
+                  é que subiu (`aba` + `onAbaChange`), sem portal. P159a: o `Segmentado` da casa (seleção em navy), à direita. */}
+              <Segmentado className="ml-auto" altura={22} valor={abaEspelho} onEscolher={setAbaEspelho}
+                opcoes={ABAS_ESPELHO.map(a => ({ valor: a.key, rotulo: a.label }))} />
             </div>
             {/* ⚠ AS QUATRO VISÕES VIERAM PARA A ABA — PR-SISTEMA-SUBABAS-01, e o que mudou foi
                 UMA prop: `soConferencia` saiu. Ela escondia a fileira das quatro visões, e era só
@@ -1241,7 +1235,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               contaId={selectedConta === '__all__' ? null : selectedConta}
               ano={String(ano)} mes={selectedMes} mostrarCandidatos
               aba={abaEspelho} onAbaChange={setAbaEspelho}
-              diaFoco={diaFoco} onDiaFocado={() => setDiaFoco(null)} />
+              diaFoco={diaFoco} onDiaFocado={() => setDiaFoco(null)}
+              /* P159b — a Evolução do saldo: "ver o dia na Conferência" é o mesmo caminho do "N dias com diferença" */
+              onVerDiaNaConferencia={(dia) => irParaConferencia(selectedConta, dia)} />
           </div>
         )}
 

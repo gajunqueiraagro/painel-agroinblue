@@ -74,8 +74,8 @@ async function abrir(nome: string, mes: string) {
   return screen.findByTestId('modal-conferencia');
 }
 const linhaDoFechamento = (modal: HTMLElement, ddmm: string) => {
-  const td = within(modal).getByText(`fechamento ${ddmm}`);
-  const tr = td.closest('tr');
+  /* P159a: "Fechamento 02/09 · saldo do banco …" (a linha `data-fechamento`) */
+  const tr = [...modal.querySelectorAll('tr[data-fechamento]')].find((r) => r.textContent?.startsWith(`Fechamento ${ddmm}`));
   if (!tr) throw new Error('sem linha de fechamento');
   return tr;
 };
@@ -94,9 +94,11 @@ describe('a Conferência do NJ Sicredi Lavoura set/26 (o print do Gabriel)', () 
     expect(lancado[0].className).toMatch(/text-amber-600/);
     const parte = within(modal).getAllByText((_t, el) => el?.getAttribute('data-aviso') === 'parte' && /parte de 11\.080,80 · resto em 04\/09/.test(el.textContent ?? ''));
     expect(parte.length).toBeGreaterThan(0);
-    /* o aviso é o primeiro filho da célula (a descrição vem depois, e é ela que o corte alcança) */
+    /* o aviso é o primeiro pedaço do texto da célula (a descrição vem depois, e é ela que o corte alcança). P159a: o texto é o
+       `truncate` dentro da célula (a célula começa pelo lugar da marcação). */
     const cel = parte[0].closest('td');
-    expect(cel?.querySelector('[data-aviso]')).toBe(cel?.firstElementChild);
+    const texto = parte[0].parentElement;
+    expect(texto?.querySelector('[data-aviso]')).toBe(texto?.firstElementChild);
     expect(cel?.getAttribute('title')).toMatch(/parte de 11\.080,80 · resto em 04\/09/);
   });
 });

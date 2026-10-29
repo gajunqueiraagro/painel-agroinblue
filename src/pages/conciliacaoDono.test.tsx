@@ -35,6 +35,8 @@ const B = vi.hoisted(() => ({
   lapis: [] as Array<Record<string, unknown>>,
   /** As props do modal "Sem classificação" a cada desenho (CONC-SEM-CLASSIFICACAO-01). */
   semClassificacao: [] as Array<Record<string, unknown>>,
+  /** P159a — as props do seletor de conta do Casar lançamentos a cada desenho. */
+  contaSelect: new Array<{ value: unknown; placeholder?: string; onValueChange: (v: string) => void }>(),
 }));
 
 vi.mock('@/integrations/supabase/client', () => {
@@ -72,7 +74,9 @@ vi.mock('@/components/conciliacao/SaldoRealDialog', () => ({
 vi.mock('@/components/conciliacao/ImportarBancoInline', () => ({ ImportarBancoInline: () => null }));
 vi.mock('@/components/conciliacao/EnriquecerPorPlanilha', () => ({ EnriquecerPorPlanilha: () => null }));
 vi.mock('@/components/financeiro-v2/ExtratoGerencialTab', () => ({ ExtratoGerencialTab: () => null }));
-vi.mock('@/components/shared/ContaBancariaSelect', () => ({ ContaBancariaSelect: () => null }));
+vi.mock('@/components/shared/ContaBancariaSelect', () => ({
+  ContaBancariaSelect: (p: { value: unknown; placeholder?: string; onValueChange: (v: string) => void }) => { B.contaSelect.push(p); return null; },
+}));
 vi.mock('@/components/financeiro-v2/EspelhoConciliacaoTab', () => ({
   ABAS_ESPELHO: [{ key: 'conferencia', label: 'Conferência' }, { key: 'ofx', label: 'Extrato (banco)' }],
   EspelhoOfxSistemaModal: () => null,
@@ -165,7 +169,7 @@ beforeEach(() => {
     { ano_mes: '2026-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] },
   ];
   B.segurarAno = null;
-  B.inserts = []; B.rpcs = []; B.espelhoProps = []; B.tom = []; B.lapis = []; B.semClassificacao = [];
+  B.inserts = []; B.rpcs = []; B.espelhoProps = []; B.tom = []; B.lapis = []; B.semClassificacao = []; B.contaSelect = [];
 });
 
 function montar() {
@@ -893,5 +897,25 @@ describe('P141 D6 — a cor da Diferença em "Saldos por conta"', () => {
     const tdDif = grupoCartao.querySelectorAll('td')[5];
     expect(n(tdDif.textContent)).toBe('R$ 6.470,73');
     expect(corDe(tdDif)).toContain('text-success');
+  });
+});
+
+/* P159a (CONC-TELAS-01) — a barra do Casar lançamentos: UMA linha (conta · ações · as 4 sub-abas no `Segmentado`), e o seletor de
+   conta sem a sentinela crua: com "Todas" ele recebia '__none__' (que não é opção nenhuma) e mostrava a string. */
+describe('P159a — a barra do Casar lançamentos', () => {
+  it('sem conta escolhida o seletor recebe VAZIO e diz "Escolha a conta" (nunca "__none__")', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    fireEvent.click(screen.getByRole('button', { name: 'Casar lançamentos' }));
+    const barra = await screen.findByTestId('barra-casar');
+    expect(barra.className).toContain('flex-nowrap');
+    const ult = B.contaSelect[B.contaSelect.length - 1];
+    expect(ult.value).toBe('');
+    expect(ult.placeholder).toBe('Escolha a conta');
+    expect(B.contaSelect.some((p) => p.value === '__none__')).toBe(false);
+    /* as sub-abas (o mock do Espelho tem duas) são o Segmentado da casa, na mesma linha, com a aberta em navy */
+    const abas = ['Conferência', 'Extrato (banco)'].map((r) => within(barra).getByRole('button', { name: r }));
+    expect(abas[1].className).toContain('bg-primary');
+    expect(abas[0].parentElement?.className).toContain('ml-auto');
   });
 });
