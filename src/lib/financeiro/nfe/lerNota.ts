@@ -1,10 +1,12 @@
 /**
  * A NOTA DO ARQUIVO, SEJA XML OU PDF — FIN-NOTA-PDF-01. UMA porta: o "+ Da nota" entrega o arquivo aqui e recebe a MESMA `NotaLida`.
  *   XML -> `lerNFe` (o leitor de sempre, intocado); PDF -> `itensDoPdf` + `notaDoDanfe`.
+ *   P174: o PDF que e' um DANFSe (a NFS-e nacional, pelo titulo) -> `notaDoDanfse`, na MESMA `NotaLida` (`modelo = 'nfse'`).
  * ⚠ QUEM DECIDE O QUE E' O ARQUIVO SAO OS BYTES ("%PDF" no comeco), nao a extensao nem o tipo que o navegador diz.
  * ⚠ So' o PDF traz `marcas` (o amarelo da previa) e `divergencias` (a conferencia pela chave); no XML a chave vem do protocolo.
  */
 import { lerNFe } from './lerNFe';
+import { ehDanfse, notaDoDanfse } from './danfse';
 import { notaDoDanfe, type CampoConferido, type MarcaNoPdf, type TotaisExtrasDoDanfe } from './danfe';
 import { itensDoPdf, type PaginasDoPdf, type PdfjsMinimo } from './lerNotaPdf';
 import type { AvisoNFe, NotaLida } from './tipos';
@@ -38,7 +40,7 @@ export async function lerNota(bytes: ArrayBuffer, opcoes: { pdfjs?: PdfjsMinimo 
   } catch {
     return { ok: false, origem: 'pdf', frase: FRASE_PDF_ILEGIVEL };
   }
-  const r = notaDoDanfe(lido.paginas);
+  const r = ehDanfse(lido.paginas) ? notaDoDanfse(lido.paginas) : notaDoDanfe(lido.paginas);
   if (r.ok === false) return { ok: false, origem: 'pdf', frase: r.frase };
   return { ok: true, origem: 'pdf', nota: r.nota, avisos: r.avisos, marcas: r.marcas, divergencias: r.divergencias, tamanhos: lido.tamanhos, extras: r.extras };
 }

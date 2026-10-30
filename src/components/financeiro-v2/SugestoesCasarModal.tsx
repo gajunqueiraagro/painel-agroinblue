@@ -14,6 +14,7 @@
  * contador nunca cortam — as colunas deles foram medidas no pior texto.
  * ⚠ SELOS A 8px, a exceção da Conferência (CLAUDE.md): azul tracejado = confere; âmbar cheio = conferir antes de casar.
  */
+import { useRef } from 'react';
 import { X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
@@ -95,6 +96,7 @@ const LARGURA_MODAL = FIXAS + 196 + 220 + 28;
 const ALTURA_PROCURAR = 174;
 
 export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugestoes, onCasar, clienteId, onCriarIgual }: Props) {
+  const campoProcurar = useRef<HTMLInputElement>(null);
   if (!extrato) return null;
   const mesBanco = (extrato.data ?? '').slice(0, 7);
   const titulo = ['Sugestões para casar', nomeConta].filter(Boolean).join(' · ');
@@ -104,7 +106,9 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      {/* P159f: sem sugestão automática, o cursor vai direto ao campo do "Procurar no histórico" (no lugar do foco padrão do Radix) */}
       <DialogContent className="max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden"
+        onOpenAutoFocus={(ev) => { if (sugestoes.length === 0 && campoProcurar.current) { ev.preventDefault(); campoProcurar.current.focus(); } }}
         style={{ width: LARGURA_MODAL }} aria-describedby={undefined} data-testid="sugestoes-casar">
         <div className="flex h-8 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
           {/* o nome da conta pode passar da largura: "…" e o título inteiro no `title` (a exceção declarada, como o da Conferência) */}
@@ -146,7 +150,7 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
                 <td colSpan={7} className="px-[4px] text-[9.5px] font-medium text-muted-foreground whitespace-nowrap">Sugestões · mais provável primeiro</td>
               </tr>
               {sugestoes.length === 0 && (
-                <tr className={LINHA}><td colSpan={7} className="px-[4px] italic text-muted-foreground">nenhuma sugestão para este movimento</td></tr>
+                <tr className={LINHA}><td colSpan={7} className="px-[4px] italic text-muted-foreground" data-testid="sugestoes-nenhuma">Nenhuma sugestão automática</td></tr>
               )}
               {sugestoes.map((s, i) => {
                 const um = s.lancamentos.length === 1 ? s.lancamentos[0] : null;
@@ -214,7 +218,7 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
 
         {onCriarIgual && (
           <div className="mx-3">
-            <ProcurarNoHistorico clienteId={clienteId ?? null} onCriarIgual={onCriarIgual}
+            <ProcurarNoHistorico clienteId={clienteId ?? null} onCriarIgual={onCriarIgual} campoRef={campoProcurar}
               movimento={{ data: extrato.data, historico: extrato.historico, valor: extrato.valor }} />
           </div>
         )}

@@ -122,6 +122,11 @@ const CENARIOS = [
       ] },
     ];
   })(),
+  /* P143 — a lista das parcelas tem ALTURA FIXA: com 4, 10 ou 14 parcelas o bloco, o Resumo e o rodapé do modal não se movem (só o corpo da
+     lista rola) */
+  { nome: 'lancamento-parcelas', url: 'tela=lancamento&m=editar&v=salparcela&pp=4', tamanhos: TAMANHOS_DO_P92,
+    antes: async (p) => { await p.getByText('Pagamento', { exact: true }).first().click(); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await espera(p, 600); },
+    estados: [10, 14].map((n) => [`${n} parcelas`, { url: `tela=lancamento&m=editar&v=salparcela&pp=${n}` }]) },
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor

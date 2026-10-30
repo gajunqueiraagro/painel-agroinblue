@@ -100,10 +100,17 @@ describe('P159a — o Extrato (banco) por dia', () => {
     expect(semPar.aoSugestoes).toHaveBeenCalledWith(OFX[1]);
     expect(semPar.aoCriar).toHaveBeenCalledWith(OFX[1]);
   });
-  it('sem sugestão: o botão fica apagado e diz por quê; sem os botões (o Importar), a Situação diz "sem par"', () => {
-    const { unmount } = montar({ nSugestoes: () => 0, aoSugestoes: vi.fn(), aoCriar: vi.fn() });
-    expect(screen.getByTestId('sem-par-sugestoes')).toBeDisabled();
-    expect(screen.getByTestId('sem-par-sugestoes').getAttribute('title')).toBe('nenhuma sugestão para este movimento');
+  /* P159f (Gabriel 29/10): "Sugestões" abre SEMPRE — sem candidato, o mesmo botão (sem o contorno azul), e o clique chama quem monta */
+  it('sem sugestão: o botão abre do mesmo jeito (só sem o contorno azul) e diz o que vai achar; sem os botões (o Importar), "sem par"', () => {
+    const aoSugestoes = vi.fn();
+    const { unmount } = montar({ nSugestoes: () => 0, aoSugestoes, aoCriar: vi.fn() });
+    const b = screen.getAllByTestId('sem-par-sugestoes')[0];
+    expect(b).not.toBeDisabled();
+    expect(b.className).toContain('border-border');
+    expect(b.getAttribute('data-com-sugestoes')).toBe('nao');
+    expect(b.getAttribute('title')).toBe('Nenhuma sugestão automática — abrir para procurar no histórico');
+    fireEvent.click(b);
+    expect(aoSugestoes).toHaveBeenCalledTimes(1);
     unmount();
     montar();
     expect(within(linhas()[0]).getByTestId('extrato-situacao').textContent).toBe('sem par');

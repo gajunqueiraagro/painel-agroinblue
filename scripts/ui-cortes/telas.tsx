@@ -1319,7 +1319,10 @@ if (tela === 'mesclar') {
   const docBase = { cliente_id: 'cli', lancamento_id: 'lanc-milho', origem: 'lancamento', operacao_id: null, tamanho_bytes: 1, uploaded_em: '2026-05-10T12:00:00Z',
     uploaded_por: 'u1', observacao: null, cancelado: false, cancelado_em: null, cancelado_motivo: null, versao: 1, ligado_a_qtd: 1, emitente_id: 'agro',
     emitente_nome: 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA', emitente_documento: '11222333000181' };
-  const DOCS_NOTA = q.get('docs') !== 'nota' && q.get('div') !== '1' ? [] : [
+  /* P121b — `&nota=11`: a parcela 2/5 SEM número próprio e a NF da compra ligada, com 11 dígitos (o pior caso do Resumo: o número inteiro + o selo) */
+  const DOCS_NOTA = q.get('nota') === '11' ? [{ ...docBase, documento_id: 'd-n11', nome: 'NF.pdf', tipo: 'application/pdf', url: 'c/l/n.pdf', especie: 'nf',
+    numero: '12.345.678.901', serie: null, chave_acesso: null, data_emissao: '2026-05-08', valor_documento: 1000 }]
+    : q.get('docs') !== 'nota' && q.get('div') !== '1' ? [] : [
     { ...docBase, documento_id: 'd-pdf', nome: 'NF 15786.pdf', tipo: 'application/pdf', url: 'c/l/a.pdf', especie: 'nf', numero: '15786', serie: null, chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
     { ...docBase, documento_id: 'd-xml', nome: 'NFe15786.xml', tipo: 'text/xml', url: 'c/l/b.xml', especie: 'nf', numero: '000.015.786', serie: '2', chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
     { ...docBase, documento_id: 'd-xml2', nome: 'NFe15790.xml', tipo: 'text/xml', url: 'c/l/c.xml', especie: 'nf', numero: '000.015.790', serie: '2', chave_acesso: CH.slice(0, 34) + '1579011234', data_emissao: '2026-05-09', valor_documento: 1250.4 },
@@ -1341,13 +1344,43 @@ if (tela === 'mesclar') {
   ];
   /* P104 — `salsolta`: a 6/6 de uma compra lançada em 6 parcelas SOLTAS (o caso da NF 46.994, SINTÉTICO): as 5 irmãs do mesmo fornecedor */
   const IRMAS_SOLTAS = [1, 2, 3, 4, 5, 6].map((k) => ({ id: k === 6 ? 'lanc-1' : `irma-${k}`, descricao: `Tinta sintetica de nome comprido para medir - ${k}/6`,
-    valor: k === 1 ? 620.85 : k === 2 ? 620.80 : 620.83 }));
+    valor: k === 1 ? 620.85 : k === 2 ? 620.80 : 620.83,
+    /* P143 — a tabela das irmãs: vencimento, pagamento e status (as 3 primeiras pagas, a 4ª vencida) */
+    data_vencimento: `2026-${String(4 + k).padStart(2, '0')}-10`, data_pagamento: k <= 3 ? `2026-${String(4 + k).padStart(2, '0')}-10` : null,
+    status_transacao: k <= 3 ? 'realizado' : 'programado', conta_bancaria_id: 'elo' }));
+  /* P143 (o caso "Parcela 3 - None" da NF 4964, SINTÉTICO) — `salnota`: a descrição sem "k/N"; as irmãs pela MESMA nota do mesmo fornecedor */
+  const IRMAS_DA_NOTA = [
+    { id: 'nota-1', descricao: 'Manutencao sintetica de cercas da fazenda exemplo', numero_documento: '4964 / 1', data_vencimento: '2026-08-12', data_pagamento: '2026-08-12', status_transacao: 'realizado' },
+    { id: 'nota-2', descricao: 'Manutencao sintetica de cercas', numero_documento: '4964', data_vencimento: '2026-09-11', data_pagamento: '2026-09-11', status_transacao: 'realizado' },
+    { id: 'lanc-1', descricao: 'Parcela 3 - None', numero_documento: '4964', data_vencimento: '2026-10-11', data_pagamento: null, status_transacao: 'programado' },
+  ].map((x) => ({ ...x, valor: 500, conta_bancaria_id: 'elo' }));
+  /* P143 — `salparcela`: o contrato da compra em 4 (`&pp=14`: em 14, a lista rola dentro do bloco), pela leitura de sempre (SINTÉTICO) */
+  const PP = Number(q.get('pp') ?? 4);
+  const SITUACAO_DA_COMPRA = { parcelas: Array.from({ length: PP }, (_x, i) => ({ id: `pp-${i + 1}`, numero: i + 1,
+      data_vencimento: `${2026 + Math.floor((8 + i) / 12)}-${String(((8 + i) % 12) + 1).padStart(2, '0')}-10`, valor_principal: 821.22, valor_juros: 0, valor_total: 821.22,
+      situacao: i === 0 ? 'paga' : i === 1 ? 'vencida' : 'pendente', pago_em: i === 0 ? '2026-09-10' : null, valor_pago: i === 0 ? 821.22 : 0,
+      lancamento_id: i === 0 ? 'lanc-1' : `lp-${i + 1}`, lancamento_juros_id: null, fonte: 'lancamento', diverge: false,
+      conta_nome: 'Cartão Exemplo de Nome Comprido para Medir a Coluna', documentos: [], boletos: 0 })),
+    cartoes: { valor_contrato: 821.22 * PP, pago: 821.22, a_vencer: 821.22 * (PP - 2), vencido: 821.22, adiado: 0, adiado_qtde: 0, pagas: 1, parcelas: PP,
+      juros_previstos: 0, soma_principal: 821.22 * PP, soma_total: 821.22 * PP, divergentes: 0 } };
+  const PARCELA_DA_COMPRA = v === 'salparcela' || v === 'salparcelapaga';
   g.__bancoBancada = { from: (t: string, e: any) => v === 'salsolta' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_SOLTAS
+      : v === 'salnota' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DA_NOTA
+      : PARCELA_DA_COMPRA && t === 'financiamento_parcelas' ? [{ financiamento_id: 'fin-sint', status: 'pendente' }]
+      : PARCELA_DA_COMPRA && t === 'financiamentos' ? [{ natureza: 'parcelamento', status: 'ativo' }]
       : t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
       : DIV && t === 'financeiro_lancamento_partes' ? PARTES_DIV : DIV && t === 'financeiro_lancamento_divisoes' ? [{ id: 'op-div', acao: 'dividir_nota' }]
       : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string, a: any) =>
     /* P138 — a safra da competência é do banco: aqui, pelas datas das safras SINTÉTICAS da bancada (a mesma regra) */
     fn === '_fn_safra_da_competencia' ? (SAFRAS.find((s: any) => s.escopo_negocio === a?.p_escopo && a?.p_data >= s.data_inicio && a?.p_data <= s.data_fim)?.id ?? null)
+    : PARCELA_DA_COMPRA && fn === 'fn_financiamento_situacao' ? SITUACAO_DA_COMPRA
+    /* P143 — a prévia do "Juntar num parcelamento" das 6 soltas (SINTÉTICO) */
+    : v === 'salsolta' && fn === 'fn_parcelamento_juntar_lancamentos' ? { ok: true, simulado: true, parcelas: 6, soma: 3724.97,
+        descricao: 'Tinta sintetica de nome comprido para medir', efeito_por_mes: [],
+        lista: IRMAS_SOLTAS.map((x, i) => ({ numero: i + 1, lancamento_id: x.id, descricao: x.descricao, vencimento: x.data_vencimento, valor: x.valor, status: x.status_transacao })) }
+    : v === 'salnota' && fn === 'fn_parcelamento_juntar_lancamentos' ? { ok: true, simulado: true, parcelas: 3, soma: 1500,
+        descricao: 'Manutencao sintetica de cercas da fazenda exemplo', efeito_por_mes: [],
+        lista: IRMAS_DA_NOTA.map((x, i) => ({ numero: i + 1, lancamento_id: x.id, descricao: x.descricao, vencimento: x.data_vencimento, valor: x.valor, status: x.status_transacao })) }
     : fn === 'fn_nomes_dos_autores' ? [
       { user_id: 'u-outro', nome: 'Beltrano Gestor da Silva', email: 'beltrano@exemplo.com', situacao: 'ex-membro' },
       { user_id: 'u1', nome: 'Eu Mesmo da Bancada', email: 'bancada@exemplo.com', situacao: 'membro ativo' }]
@@ -1399,9 +1432,16 @@ if (m === 'editar') props.lancamento = (v === 'sal') ? SAL : MILHO;
 /* P74b — `salparcela`: a parcela 1/4 de uma compra parcelada (a volta para à vista); `salparcelapaga`: a mesma, com a 2/4 paga */
 if (m === 'editar' && (v === 'salparcela' || v === 'salparcelapaga')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 821.22, data_competencia: '2026-08-10',
   data_vencimento: '2026-09-10', descricao: `${DESC_LONGA} 1/4`, financiamento_id: 'fin-sint', origem_tipo: 'parcela_principal' };
+if (m === 'editar' && v === 'salparcela' && q.get('nota') === '11') props.lancamento = { ...props.lancamento, numero_documento: null, tipo_documento: null,
+  descricao: 'Ração sintética para engorda 2/5' };
 /* P104 — `salsolta`: a parcela 6/6 lançada solta (o bloco não oferece parcelar) */
 if (m === 'editar' && v === 'salsolta') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 620.83, data_competencia: '2026-10-10', data_vencimento: '2026-10-10',
   descricao: 'Tinta sintetica de nome comprido para medir - 6/6', status_transacao: 'agendado' };
+/* P143 — `salnota`: "Parcela 3 - None" da NF 4964 (SINTÉTICO): sem "k/N", as irmãs saem pela nota */
+if (m === 'editar' && v === 'salnota') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 500, data_competencia: '2026-07-13', data_vencimento: '2026-10-11',
+  descricao: 'Parcela 3 - None', numero_documento: '4964', status_transacao: 'programado' };
+/* P143 — `&forma=…`: a forma GRAVADA fora da lista (o "valor atual" do Editar; o bug do 150a759d) */
+if (m === 'editar' && q.get('forma') && props.lancamento) props.lancamento = { ...props.lancamento, forma_pagamento: q.get('forma') };
 if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 3284.88, data_competencia: '2026-08-10',
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
 if (v === 'rateio' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura', subcentro: 'Insumos Lavoura Milho', plano_conta_id: 'pl-ins',

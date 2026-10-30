@@ -5,6 +5,7 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import { lerNota } from '@/lib/financeiro/nfe/lerNota';
+import { ehChaveDeNota } from '@/lib/financeiro/nfe/formatos';
 import { itensDoPdf, itensDoXml, lidosDoBanco, payloadDaNotaFiscal, type CabecalhoDaNota, type ItensLidos } from '@/lib/financeiro/nfe/itensDaNota';
 import { decodificarPeloCharsetDeclarado } from '@/lib/financeiro/parser/decodificarExtrato';
 
@@ -50,7 +51,7 @@ export async function gravarItensDoArquivo(clienteId: string, bytes: ArrayBuffer
 
 /** Os itens guardados de uma das chaves (a primeira que tiver nota guardada, a mais recente). `null` = nenhuma. */
 export async function lerItensGuardados(clienteId: string, chaves: readonly string[]): Promise<{ cabecalho: CabecalhoDaNota; lidos: ItensLidos } | null> {
-  const validas = [...new Set(chaves.filter((c) => /^\d{44}$/.test(c)))];
+  const validas = [...new Set(chaves.filter(ehChaveDeNota))];
   if (!validas.length) return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as tabelas novas ainda nao estao nos tipos gerados
   const db = supabase as any;
@@ -98,7 +99,7 @@ export async function candidatasDoBackfill(clienteId: string): Promise<Candidata
   const juntar = (linhas: { chave_acesso: string | null; numero: string | null; url: string | null }[] | null, bucket: CandidataDoBackfill['bucket'], origem: CandidataDoBackfill['origem']) => {
     for (const l of linhas ?? []) {
       const chave = (l.chave_acesso ?? '').replace(/\D/g, '');
-      if (chave.length !== 44 || guardadas.has(chave) || !l.url) continue;
+      if (!ehChaveDeNota(chave) || guardadas.has(chave) || !l.url) continue;
       const atual = porChave.get(chave);
       const ehXml = /\.xml$/i.test(l.url);
       if (!atual || (ehXml && !/\.xml$/i.test(atual.caminho))) porChave.set(chave, { chave, numero: l.numero, bucket, caminho: l.url, origem });

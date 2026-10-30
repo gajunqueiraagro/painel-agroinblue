@@ -20,7 +20,7 @@ import {
   STATUS_PALETA,
   STATUS_PILULA_BASE,
 } from '@/lib/financeiro/statusFinanceiro';
-import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, docDaLinha, topoDoDocumentoTravado, MOTIVO_TOPO_NO_PARCELADO, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
+import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, docDaLinha, documentoDoResumo, topoDoDocumentoTravado, MOTIVO_TOPO_NO_PARCELADO, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePodeAbrir, usePodeAlterarOperacao, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
@@ -46,6 +46,10 @@ import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { FORMAS_PAGAMENTO_V2, FORMA_PAGAMENTO_V2_NENHUMA } from '@/lib/financeiro/formasPagamentoV2';
 import { camposMudados } from '@/lib/financeiro/camposMudados';
+import { ParcelasNoPagamento } from './ParcelasNoPagamento';
+import { linhasDoContrato, totaisDoContrato } from '@/lib/financeiro/parcelasNoPagamento';
+import { formaForaDaLista, ROTULO_VALOR_ATUAL } from '@/lib/financeiro/formasPagamentoV2';
+import { parcelaSolta } from '@/lib/financeiro/parcelaSolta';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { ClassificacaoLancamento, CAMPO_BG, atividadeValida } from '@/components/shared/ClassificacaoLancamento';
 import { Input } from '@/components/ui/input';
@@ -199,6 +203,9 @@ interface Props {
   /** PARC-CADEIA-01 — "Abrir o contrato" do aviso de parcela de compra parcelada. Ausente = a tela não navega até o contrato
    *  (ou a pessoa não o acessa): o atalho não é oferecido. */
   onAbrirContrato?: (financiamentoId: string) => void;
+  /** P143 (PAGAMENTO-PARCELAS-01, D1) — abrir OUTRA parcela da mesma compra no MESMO modal: o hospedeiro rele^ o lancamento pelo id e o troca
+   *  na prop `lancamento`. Ausente = a tabela das parcelas so' se le^ (nenhuma linha abre). */
+  onTrocarLancamento?: (lancamentoId: string) => void;
   /** P128a (NOTA-JA-LANCADA, porta 2) — "Ler a NF" no Documentos do Editar: o arquivo abre a MESMA previa do "+ Da nota", partindo deste
    *  lancamento. Devolve a frase pronta do que impediu (nota nao lida, consulta que falhou) ou `null` (a previa abriu). Ausente = sem o gesto. */
   onLerNotaFiscal?: (arquivo: File, lancamentoId: string) => Promise<string | null>;
@@ -600,7 +607,7 @@ export function LancamentoV2Dialog({
   open, carregando, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos, origemOC,
-  referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato,
+  referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato, onTrocarLancamento,
   documentosAntesDeSalvar, onLerNotaFiscal, abaInicial,
 }: Props) {
   /* P128a (porta 2) — a frase do que impediu a NF lida de abrir a previa (na propria area, nunca toast) e o "lendo" */
@@ -706,6 +713,11 @@ export function LancamentoV2Dialog({
   void permiteEditarFavorecidoOC;
   // Store the editing ID in a ref so it can't become stale during async save
   const editingIdRef = useRef<string | null>(null);
+  /* P143 — a troca de parcela no mesmo modal: a aba em que a pessoa estava (o reset da abertura a respeita) e a pilha da volta */
+  const abaDaTrocaRef = useRef<AbaVisual | null>(null);
+  const [pilhaDeParcelas, setPilhaDeParcelas] = useState<string[]>([]);
+  const [trocaPendente, setTrocaPendente] = useState<{ id: string; volta: boolean } | null>(null);
+  useEffect(() => { if (!open) { setPilhaDeParcelas([]); setTrocaPendente(null); } }, [open]);
   useEffect(() => {
     editingIdRef.current = lancamento?.id ?? null;
   }, [lancamento]);
@@ -1394,7 +1406,9 @@ export function LancamentoV2Dialog({
       setDadosPagamento('');
     }
     setFornecedorSearch('');
-    setAbaAtiva(abaInicial ?? 'geral');
+    /* P143 — a troca de parcela no mesmo modal continua na aba em que a pessoa estava (a Pagamento) */
+    setAbaAtiva(abaDaTrocaRef.current ?? abaInicial ?? 'geral');
+    abaDaTrocaRef.current = null;
     /* FIN-NFE-XML-01d — o XML da nota ja' nasce como o documento NF pendente do lancamento novo. */
     const doXml = !lancamento ? prefill?.doXml ?? null : null;
     setPendentes(doXml ? [pendenteDaNota(doXml, doXml.proposta.favorecidoId)] : []);
@@ -1678,6 +1692,35 @@ export function LancamentoV2Dialog({
   const posicaoNaCompra = parcelasDaCompra && lancamento?.id ? parcelasDaCompra.findIndex(p => p.lancamentoId === lancamento.id) : -1;
   const parcelaDaCompra = parcelasDaCompra && posicaoNaCompra >= 0
     ? { numero: parcelasDaCompra[posicaoNaCompra].numero ?? posicaoNaCompra + 1, total: parcelasDaCompra.length } : null;
+  /* P143 — a parcela SOLTA ("k/N" na descricao, sem parcelamento) no Resumo: "Parcela solta · k de N" */
+  /* P143 — a solta PELA NOTA ("Parcela 3 - None"): quem acha é o bloco Parcelamento (`onParcelaSolta`); a do lançamento aberto, só */
+  const [soltaPelaNota, setSoltaPelaNota] = useState<{ id: string; k: number; n: number } | null>(null);
+  const soltaDoResumo = isEdit && lancamento && !parcelaDaCompra && !Reflect.get(lancamento, 'financiamento_id')
+    ? parcelaSolta(lancamento.descricao) ?? (soltaPelaNota?.id === lancamento.id ? soltaPelaNota : null) : null;
+  /* P143 — trocar de parcela: com algo mudado no formulario, pergunta antes (nada se perde calado). "Mudou" e' a mesma regra do Salvar
+     (`camposMudados`), so' nos campos que a pessoa edita a vista. */
+  const temEdicaoPendente = (): boolean => {
+    if (!lancamento) return false;
+    const aVista = {
+      data_competencia: dataCompetencia, data_vencimento: dataVencimento || null, data_pagamento: dataPagamento || null, valor: Math.abs(valorNum),
+      status_transacao: statusTransacao, descricao, observacao, numero_documento: notaFiscal || null, tipo_documento: tipoDocumento || null,
+      favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null, forma_pagamento: formaPgto || null,
+    };
+    return camposMudados(lancamento, aVista).some((c) => c in aVista);
+  };
+  const irParaParcela = (id: string, volta: boolean) => {
+    if (!onTrocarLancamento || !lancamento) return;
+    if (volta) setPilhaDeParcelas((p) => p.slice(0, -1)); else setPilhaDeParcelas((p) => [...p, lancamento.id]);
+    abaDaTrocaRef.current = 'pagamento';
+    setTrocaPendente(null);
+    onTrocarLancamento(id);
+  };
+  const trocarDeParcela = (id: string) => { if (temEdicaoPendente()) setTrocaPendente({ id, volta: false }); else irParaParcela(id, false); };
+  const voltarDeParcela = () => {
+    const anterior = pilhaDeParcelas[pilhaDeParcelas.length - 1];
+    if (!anterior) return;
+    if (temEdicaoPendente()) setTrocaPendente({ id: anterior, volta: true }); else irParaParcela(anterior, true);
+  };
   const digitadoNoTopo = !!(notaFiscal || tipoDocumento);
   const haNotaNaCompra = pendentes.some(p => p.parcela == null && p.payload.especie === 'nf');
   const levarOTopoParaACompra = () => {
@@ -3279,7 +3322,10 @@ export function LancamentoV2Dialog({
                 <div>
                   <Label className={REGUA_ROTULO}>{xmlRot('Forma de pagamento', 'forma')}</Label>
                   <Select value={formaPgto || FORMA_PAGAMENTO_V2_NENHUMA} onValueChange={handleFormaPgtoChange}>
-                    <SelectTrigger tabIndex={13} className={cn("h-7 text-[11px]", fieldBg, xmlCls('forma'))}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger tabIndex={13} className={cn("h-7 text-[11px]", fieldBg, xmlCls('forma'))}>
+                      {/* P143 — a forma fora da lista: o gatilho mostra SÓ ela (o "· valor atual" fica na lista; na coluna de 150px cortava) */}
+                      <SelectValue placeholder="Selecione">{formaForaDaLista(formaPgto) ? formaPgto : undefined}</SelectValue>
+                    </SelectTrigger>
                     {/* ⚠ A LISTA SAIU DAQUI — PAR-01c. Os oito itens eram escritos à mão neste
                         ponto; a tela de Parcelamentos passou a gravar a MESMA coluna
                         (`financeiro_lancamentos_v2.forma_pagamento`, via a parcela que nasce
@@ -3289,6 +3335,11 @@ export function LancamentoV2Dialog({
                         Cheque. Este é o do v2 — ver o cabeçalho de `formasPagamentoV2.ts`. */}
                     <SelectContent>
                       <SelectItem value={FORMA_PAGAMENTO_V2_NENHUMA}>Nenhuma</SelectItem>
+                      {/* P143 (a regra da Mesa, 30/09) — a forma GRAVADA fora da lista ("Cartão de Crédito") entra no topo como "valor atual":
+                          sem ela o Radix mostra o gatilho VAZIO sobre um dado que existe (o Resumo mostrava o texto). Nada se normaliza. */}
+                      {formaForaDaLista(formaPgto) && (
+                        <SelectItem value={formaPgto} data-testid="forma-valor-atual">{formaPgto} <span className="text-muted-foreground">· {ROTULO_VALOR_ATUAL}</span></SelectItem>
+                      )}
                       {FORMAS_PAGAMENTO_V2.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -3328,14 +3379,27 @@ export function LancamentoV2Dialog({
                   situacao={{ status: lancamento.status_transacao, dataPagamento: lancamento.data_pagamento, conciliadoEm: lancamento.conciliado_em }}
                   vencimentoAtual={lancamento.data_vencimento}
                   conta={(() => { const c = contas.find((x) => x.id === lancamento.conta_bancaria_id); return c ? { id: c.id, nome: c.nome_exibicao || c.nome_conta, cartao: c.tipo_conta === 'cartao' } : null; })()}
-                  onParcelado={() => { void qc.invalidateQueries(); onClose(); }} />
+                  onParcelado={() => { void qc.invalidateQueries(); onClose(); }}
+                  onAbrirParcela={onTrocarLancamento ? trocarDeParcela : undefined}
+                  numeroDocumento={lancamento.numero_documento ?? null}
+                  onParcelaSolta={(f) => { const id = lancamento.id; setSoltaPelaNota(f ? { id, k: f.k, n: f.n } : null); }} />
               )}
 
               {/* P74b — a parcela de uma compra parcelada: "Voltar para à vista" (a compra inteira volta a ser UM lançamento; só sem parcela
                   paga/conciliada — senão o botão fica apagado com a frase do banco). Financiamento/consórcio: o bloco não aparece. */}
               {isEdit && lancamento && clienteAtual?.id && financiamentoDoLanc && !lancamento.cancelado && (
                 <VoltarParaAVista clienteId={clienteAtual.id} financiamentoId={financiamentoDoLanc} emBloco comFrase
-                  onVoltou={() => { void qc.invalidateQueries(); onClose(); }} />
+                  onVoltou={() => { void qc.invalidateQueries(); onClose(); }}>
+                  {/* P143 — as parcelas da compra (a MESMA leitura do contrato que o modal ja' fez; totais do banco); a aberta destacada */}
+                  {contratoDaParcela && (
+                    <ParcelasNoPagamento linhas={linhasDoContrato(contratoDaParcela.situacao)} abertaId={lancamento.id}
+                      totais={totaisDoContrato(contratoDaParcela.situacao.cartoes)} onAbrir={onTrocarLancamento ? trocarDeParcela : undefined} />
+                  )}
+                  {pilhaDeParcelas.length > 0 && onTrocarLancamento && (
+                    <Button type="button" size="sm" variant="ghost" className="h-[20px] px-1.5 text-[10px]" onClick={voltarDeParcela}
+                      data-testid="parcela-voltar">← voltar à parcela de antes</Button>
+                  )}
+                </VoltarParaAVista>
               )}
 
               {/* Frequency + Installment — only for new, e nunca no modo extrato */}
@@ -3800,12 +3864,12 @@ export function LancamentoV2Dialog({
                 forma={formaPgto || null}
                 vencimento={resumoFmtData(dataVencimento)}
                 pagamento={resumoFmtData(pagamentoMostrado)}
-                modalidade={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null}
-                parcelas={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null}
-                documento={[
-                  tipoDocumento || (docDoLancamento.origem === 'nota' ? 'Nota Fiscal · da compra' : docDoLancamento.origem === 'documento' ? 'Documento ligado' : null),
-                  notaFiscalDisplay || (docVemDeDocumento ? docDoLancamento.rotulo : null),
-                ].filter(Boolean).join(' · ') || null}
+                modalidade={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista')
+                  : parcelaDaCompra ? 'Compra parcelada' : soltaDoResumo ? 'Parcela solta' : null}
+                parcelas={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}`
+                  : isEdit && parcelaDaCompra ? `${parcelaDaCompra.numero} de ${parcelaDaCompra.total}`
+                  : isEdit && soltaDoResumo ? `${soltaDoResumo.k} de ${soltaDoResumo.n}` : null}
+                documento={documentoDoResumo(docDoLancamento, tipoDocumento)}
               />
             </div>
           )}
@@ -3835,6 +3899,20 @@ export function LancamentoV2Dialog({
 
       {/* REC-VALOR-DO-MES-MODAL-01 — o gesto contrário da marca. Diz os dois valores e o que acontece; quem grava é o salvar
           de sempre (`handleSubmit`), com o previsto no lugar do valor e do vencimento e a marca limpa. */}
+      {/* P143 — trocar de parcela com algo mudado: nada se perde calado; "Trocar sem salvar" descarta, Cancelar fica aqui */}
+      <AlertDialog open={!!trocaPendente} onOpenChange={(o) => { if (!o) setTrocaPendente(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Trocar de parcela sem salvar?</AlertDialogTitle>
+            <AlertDialogDescription>Você mudou campos desta parcela. Ao trocar, o que não foi salvo se perde.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="parcela-troca-cancelar">Ficar nesta parcela</AlertDialogCancel>
+            <AlertDialogAction data-testid="parcela-troca-confirmar"
+              onClick={(e) => { e.preventDefault(); if (trocaPendente) irParaParcela(trocaPendente.id, trocaPendente.volta); }}>Trocar sem salvar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={confirmandoVoltar && !!previstoRec} onOpenChange={(o) => { if (!o) setConfirmandoVoltar(false); }}>
         <AlertDialogContent>
           <AlertDialogHeader>

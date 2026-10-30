@@ -290,11 +290,13 @@ export function BotoesDoSemPar({ e, semPar }: {
   e: EspOfx; semPar: { nSugestoes: (e: EspOfx) => number; aoSugestoes: (e: EspOfx) => void; aoCriar: (e: EspOfx) => void };
 }) {
   const n = semPar.nSugestoes(e);
-  const btn = 'h-[15px] rounded-[4px] border border-blue-600 bg-card px-1.5 text-[9.5px] leading-[13px] text-blue-700 disabled:border-border disabled:text-muted-foreground';
+  const btn = 'h-[15px] rounded-[4px] border border-blue-600 bg-card px-1.5 text-[9.5px] leading-[13px] text-blue-700';
+  /* P159f (Gabriel 29/10): "Sugestões" abre SEMPRE — sem candidato, o modal abre com "Nenhuma sugestão automática" e o "Procurar no
+     histórico" com o cursor no campo. O estilo é o mesmo; só o contorno azul diz que há candidatos (sem eles, o contorno da casa). */
   return (
     <span className="inline-flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
-      <button type="button" className={btn} disabled={n === 0} data-testid="sem-par-sugestoes"
-        title={n === 0 ? 'nenhuma sugestão para este movimento' : `${n} sugest${n === 1 ? 'ão' : 'ões'}`}
+      <button type="button" className={cn(btn, n === 0 && 'border-border')} data-testid="sem-par-sugestoes" data-com-sugestoes={n > 0 ? 'sim' : 'nao'}
+        title={n === 0 ? 'Nenhuma sugestão automática — abrir para procurar no histórico' : `${n} sugest${n === 1 ? 'ão' : 'ões'}`}
         onClick={() => semPar.aoSugestoes(e)}>Sugestões</button>
       <button type="button" className={btn} data-testid="sem-par-criar" title="Criar o lançamento deste movimento"
         onClick={() => semPar.aoCriar(e)}>Criar</button>

@@ -7,7 +7,7 @@
  * ⚠ P96a — a compra que veio da JUNÇÃO de lançamentos soltos não tem à vista: no lugar (o mesmo botão, a mesma altura) fica
  *   "Desfazer a junção" (`fn_parcelamento_desfazer_juncao`): os N voltam a ser soltos, nenhum é cancelado.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { BLOCO_FORMULARIO, TituloDoBloco } from '@/components/ui/bloco-formulario';
@@ -22,10 +22,12 @@ import { cn } from '@/lib/utils';
 
 const dataBR = (iso: string | null | undefined) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 
-export function VoltarParaAVista({ clienteId, financiamentoId, onVoltou, comFrase = false, emBloco = false, className, botaoClassName, gravadores }: {
+export function VoltarParaAVista({ clienteId, financiamentoId, onVoltou, comFrase = false, emBloco = false, className, botaoClassName, gravadores, children }: {
   clienteId: string; financiamentoId: string; onVoltou: () => void; comFrase?: boolean;
   /** a aba Pagamento: o botão num bloco "Parcelamento · compra parcelada em N" (que só aparece quando a compra é um parcelamento) */
   emBloco?: boolean; className?: string; /** a altura do botão no rodapé do hospedeiro */ botaoClassName?: string; gravadores?: GravadoresDaVolta;
+  /** P143 — no bloco, abaixo do botão: as parcelas da compra (a aba Pagamento) */
+  children?: ReactNode;
 }) {
   const [previa, setPrevia] = useState<VoltaAVista | null | 'lendo'>('lendo');
   const [confirmar, setConfirmar] = useState(false);
@@ -162,6 +164,7 @@ export function VoltarParaAVista({ clienteId, financiamentoId, onVoltou, comFras
       <TituloDoBloco nome="Parcelamento" dica={lendo ? 'compra parcelada'
         : juncao ? (desfazerPronto ? `juntada de ${desfazerPronto.lancamentos} lançamentos soltos` : 'compra juntada de lançamentos soltos') : `compra parcelada em ${n}`} />
       {conteudo}
+      {children}
     </section>
   ) : conteudo;
 }

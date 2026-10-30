@@ -41,7 +41,7 @@ export type ResultadoDoDanfe =
   | { ok: true; nota: NotaLida; avisos: AvisoNFe[]; marcas: MarcaNoPdf[]; divergencias: CampoConferido[]; extras: TotaisExtrasDoDanfe }
   | { ok: false; motivo: MotivoDoPdf; frase: string };
 
-type ItemNaPagina = ItemDoDanfe & { pagina: number };
+export type ItemNaPagina = ItemDoDanfe & { pagina: number };
 
 /** "Natureza da Operação" -> "NATUREZA DA OPERACAO" (sem acento, espacos simples). */
 export function normalizar(s: string): string {
@@ -108,7 +108,7 @@ export function conferirChave(nota: Pick<NotaLida, 'chave' | 'numero' | 'serie' 
 }
 
 /** NOTA-AVULSA-890-01 — o texto do quadro "Informações complementares" (abaixo do rotulo, na primeira pagina que o tem). */
-function textoDosDadosAdicionais(d: { itens: readonly ItemNaPagina[] }): string | null {
+export function textoDosDadosAdicionais(d: { itens: readonly ItemNaPagina[] }): string | null {
   const rot = d.itens.find((o) => /^INFORMACOES COMPLEMENTARES/.test(normalizar(o.str)));
   if (!rot) return null;
   const abaixo = d.itens.filter((o) => o.pagina === rot.pagina && o.y < rot.y - 1 && o.y > rot.y - 120 && o.x >= rot.x - 5 && o.x < rot.x + 360)
@@ -120,8 +120,8 @@ function textoDosDadosAdicionais(d: { itens: readonly ItemNaPagina[] }): string 
 const TOL_LINHA = 1.5;
 const ABAIXO_MAX = 14;
 
-/** O leitor por posicao sobre todos os itens do documento. */
-class Danfe {
+/** O leitor por posicao sobre todos os itens do documento. P174: o DANFSe (`danfse.ts`) usa o mesmo. */
+export class Danfe {
   readonly itens: ItemNaPagina[];
   readonly marcas: MarcaNoPdf[] = [];
   constructor(paginas: readonly ItemDoDanfe[][]) {

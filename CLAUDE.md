@@ -321,6 +321,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   DECLARADA (D7, Gabriel 28/10): a coluna Data dessa lista é dd/mm (o gate aceita só em tabela `data-dia-mes`; o auto-teste a prova).
   P159b: a aba Sistema e o ↗ "Extrato do sistema" são a mesma lista (○ âmbar = não conciliado, o status no `title`); a Evolução: Dif. do dia =
   Mov. banco − Mov. sistema (`montarEvolucao`), some só o dia SEM NENHUMA linha, "ver o dia na Conferência" = o Espelho abre a Conferência no dia (`onAbaChange`).
+- P159f: "Sugestões" (o botão do sem par e o "Ver sugestões (N)" do ⋯) abre SEMPRE; com 0, "Nenhuma sugestão automática" e o cursor no campo do "Procurar no histórico"; o contorno azul só sinaliza que há candidatos.
 - P159e: as 3 abas do Casar lançamentos no mock `mock-casar-abas-v1.html` (linha 18px a 10; dia/fechamento/saldos 22px negrito; data dd/mm/aaaa); Extrato e Sistema em Entradas · Saídas · Saldo, o saldo inicial/do dia/final
   NA coluna Saldo (rodapé = tabela com o mesmo `colgroup`; gate `alinhamento`); Conferência: o EXTRATO é a coluna flexível, inteiro ≥1366 (gate `inteiroDe`).
 - Selecao se marca com navy (`Segmentado`, o unico); controle nativo nunca; seletor de entidade tem busca; todo menu aberto pelo
@@ -346,6 +347,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   vazio fica dentro do quadro; em pagina que rola, `useAlturaAteOFim` (topo do quadro → fim da janela). O gate: filtrar para 6/1/0 linhas.
 - P121: o Resumo do lançamento é o `ResumoDoLancamento` (do Financeiro; `ui/linha-resumo` fica com os outros modais): blocos de ALTURA FIXA que
   somam ~452px (cabe em 1126×579), nada rola; linha nova num bloco = refazer a conta e medir; datas dos pares nunca cortam (larguras medidas).
+- P121b: a linha "Nota" do Resumo = o NÚMERO inteiro logo após o rótulo (`documentoDoResumo`, o rótulo da coluna Doc.; nunca corta) e a origem num selo
+  depois ("da compra" · "ligado"; é ele que cede, com o title); "Nota Fiscal ·" não entra.
 - FIN-V2-FORNECEDOR-SEM-SUFIXO-01: em TABELA o fornecedor e' so' o nome ("…" + `title` com CNPJ/"sem CNPJ", cidade/UF, inativo); o final
   de filial ("…0007-69", "sem CNPJ") so' no seletor/busca e no Mesclar.
 - FIN-V2-FILTRO-FORNECEDOR-01: filtro de fornecedor = ativos (+ inativo com lançamento no recorte ou escolhido, P94); mesclado nunca (o nome antigo acha

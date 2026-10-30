@@ -5,16 +5,18 @@
  * duplicatas, destinatario/IE) fica EM BRANCO: o operador preenche na previa (ambar, "Pela chave digitada · confira").
  * ⚠ So' a chave com o digito verificador certo (modulo 11) passa; modelo diferente de 55 recusa com a frase de hoje (NFC-e / NFS-e).
  * ⚠ Nota avulsa (serie 890–899): o CNPJ da chave e' do FISCO (NOTA-AVULSA-890-01) — nao vira o emitente (nao acha fornecedor por ele).
+ * ⚠ P174: a chave de 50 digitos da NFS-e nacional tambem passa (`partesDaChaveNfse`): o CPF/CNPJ do prestador, o numero e o ano/mes.
  * ⚠ Fora daqui: consultar a SEFAZ pela chave (FIN-NFE-SEFAZ-01) e OCR do escaneado.
  */
 import { digitoDaChave, ehSerieAvulsa, partesDaChave, FRASE_NOTA_SEM_CHAVE, FRASE_PDF_SEM_TEXTO } from './danfe';
+import { documentoDaChaveNfse, partesDaChaveNfse } from './danfse';
 import { soDigitos } from './formatos';
 import { FRASES_DE_RECUSA, type NotaLida } from './tipos';
 import type { NotaDoArquivo } from './lerNota';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 
 export const FRASE_CHAVE_INVALIDA = 'Chave inválida: o último dígito não confere. Confira a digitação.';
-export const FRASE_CHAVE_CURTA = 'A chave de acesso tem 44 dígitos.';
+export const FRASE_CHAVE_CURTA = 'A chave de acesso tem 44 dígitos (NF-e) ou 50 (NFS-e).';
 export const ROTULO_PELA_CHAVE = 'Pela chave digitada · confira';
 
 /** A recusa da linha deixa digitar a chave? So' a nota sem chave e o PDF sem texto (foto/escaneado). */
@@ -27,6 +29,7 @@ export type NotaDaChave = { ok: true; nota: NotaLida; avulsa: boolean; mes: stri
 /** A nota que a chave digitada da' (o resto em branco); `mes` = o ano/mes da chave ("2026-04"), para a previa sugerir a emissao. */
 export function notaDaChaveDigitada(texto: string): NotaDaChave {
   const chave = soDigitos(texto);
+  if (chave.length === 50) return notaDaChaveNfse(chave);
   if (chave.length !== 44) return { ok: false, frase: FRASE_CHAVE_CURTA };
   if (digitoDaChave(chave.slice(0, 43)) !== Number(chave[43])) return { ok: false, frase: FRASE_CHAVE_INVALIDA };
   const p = partesDaChave(chave);
@@ -42,6 +45,21 @@ export function notaDaChaveDigitada(texto: string): NotaDaChave {
     fatura: null, duplicatas: [], somaDuplicatasCent: 0, pagamentos: [], itens: [], protocolo: null, informacoesComplementares: null, cfops: [],
   };
   return { ok: true, nota, avulsa, mes: `20${p.aamm.slice(0, 2)}-${p.aamm.slice(2, 4)}` };
+}
+
+/** P174 — a NFS-e da chave de 50 (o resto em branco, como na de 44). */
+function notaDaChaveNfse(chave: string): NotaDaChave {
+  if (digitoDaChave(chave.slice(0, 49)) !== Number(chave[49])) return { ok: false, frase: FRASE_CHAVE_INVALIDA };
+  const p = partesDaChaveNfse(chave);
+  const nota: NotaLida = {
+    chave, modelo: 'nfse', numero: p.numero.replace(/^0+(?=\d)/, ''), serie: '', emissao: '', saidaEntrada: null, tipoNota: 'saida',
+    finalidade: 'normal', naturezaOperacao: '',
+    emitente: { documento: documentoDaChaveNfse(chave), nome: '', fantasia: null, ie: null, endereco: null },
+    destinatario: { documento: null, nome: null, ie: null, endereco: null },
+    totais: { produtosCent: 0, freteCent: 0, descontoCent: 0, notaCent: 0 },
+    fatura: null, duplicatas: [], somaDuplicatasCent: 0, pagamentos: [], itens: [], protocolo: null, informacoesComplementares: null, cfops: [],
+  };
+  return { ok: true, nota, avulsa: false, mes: `20${p.aamm.slice(0, 2)}-${p.aamm.slice(2, 4)}` };
 }
 
 /** A nota da chave no formato do leitor do arquivo (o PDF, mesmo escaneado, segue anexado como a NF): sem marcas, sem conferencia. */

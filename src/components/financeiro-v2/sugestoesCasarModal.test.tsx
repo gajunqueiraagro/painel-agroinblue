@@ -172,9 +172,9 @@ describe('o modal "Sugestões para casar"', () => {
     expect(selo.className).not.toContain('border-dashed');
   });
 
-  it('sem sugestão, diz "nenhuma sugestão para este movimento" abaixo da faixa; o rodapé explica as cores', () => {
+  it('sem sugestão, diz "Nenhuma sugestão automática" abaixo da faixa (P159f); o rodapé explica as cores', () => {
     const { modal } = abrir(vi.fn(), []);
-    expect(within(modal).getByText('nenhuma sugestão para este movimento')).toBeInTheDocument();
+    expect(within(modal).getByText('Nenhuma sugestão automática')).toBeInTheDocument();
     expect(within(modal).getByText('âmbar = conferir antes de casar')).toBeInTheDocument();
     expect(within(modal).getByText('Sugestões · mais provável primeiro')).toBeInTheDocument();
   });

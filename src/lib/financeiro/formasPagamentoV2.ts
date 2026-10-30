@@ -58,3 +58,15 @@ export const FORMAS_PAGAMENTO_V2 = [
  * aqui significa "não informada", e o banco guarda ausência, não a palavra.
  */
 export const FORMA_PAGAMENTO_V2_NENHUMA = '__none_fp__';
+
+/**
+ * P143 (Gabriel 29/10: "OK usar a mesma regra da Mesa (30/09) no Editar") — a forma GRAVADA que nao esta' na lista ("Cartão de Crédito",
+ * "PIX/Transferência Bancária"…). Quem monta o `<Select>` a antepoe como opcao "valor atual": o gatilho mostra o dado que existe, nunca vazio.
+ * Nada se normaliza (o legado e' frente propria). Nulo = vazia ou ja' na lista.
+ */
+export function formaForaDaLista(gravada: string | null | undefined): string | null {
+  const v = gravada ?? '';
+  if (v.trim() === '' || v === FORMA_PAGAMENTO_V2_NENHUMA) return null;
+  return FORMAS_PAGAMENTO_V2.some((f) => f === v) ? null : v;
+}
+export const ROTULO_VALOR_ATUAL = 'valor atual';

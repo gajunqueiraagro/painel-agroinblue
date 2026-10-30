@@ -154,6 +154,8 @@ const CENARIOS = [
   { nome: 'lancamento-dividido-Geral', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO },
   /* P121 — o Resumo do lançamento com os nomes longos do mock (favorecido, fazenda, conta, centro, subcentro; valor de 7 dígitos): nada
      corta seco, nada rola, e as alturas são as do MESMO lançamento com nomes curtos (`alturasComo`) */
+  /* P121b — a NF da compra de 11 dígitos na linha "Nota" do Resumo: o número inteiro, o selo "da compra" cede */
+  { nome: 'lancamento-editar-nota-11', url: 'tela=lancamento&m=editar&v=salparcela&nota=11' },
   { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal&resumo=longo', alturasComo: 'tela=lancamento&m=editar&v=sal' },
   { nome: 'lancamento-dividido-Itens', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
@@ -424,6 +426,21 @@ const CENARIOS = [
   { nome: 'lancamento-voltar-a-vista-paga', url: 'tela=lancamento&m=editar&v=salparcelapaga', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
   { nome: 'lancamento-voltar-a-vista-confirmar', url: 'tela=lancamento&m=editar&v=salparcela', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="voltar-a-vista-botao"]').click(); await p.waitForTimeout(500); } },
+  /* P143 — as parcelas da compra no bloco: 14 (a lista rola dentro do bloco, o resto fica), a prévia do "Juntar" das 6 soltas e a forma gravada
+     fora da lista no gatilho (o "valor atual"). Dados SINTÉTICOS. */
+  { nome: 'lancamento-parcelas-14', url: 'tela=lancamento&m=editar&v=salparcela&pp=14', tamanhos: TAMANHOS_DO_CONTRATO,
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await p.waitForTimeout(500); } },
+  /* P143 (Gabriel 29/10 15:03) — a solta PELA NOTA ("Parcela 3 - None" da NF 4964, sintético): as 3 da nota e o "Juntar"; e a prévia */
+  { nome: 'lancamento-parcela-nota', url: 'tela=lancamento&m=editar&v=salnota', tamanhos: TAMANHOS_DO_P104, semRolarNoLugar: '[data-testid="parcela-solta"]',
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcela-solta-juntar"]:not([disabled])').waitFor(); await p.waitForTimeout(600); } },
+  { nome: 'lancamento-parcela-nota-juntar', url: 'tela=lancamento&m=editar&v=salnota', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcela-solta-juntar"]:not([disabled])').waitFor();
+      await p.locator('[data-testid="parcela-solta-juntar"]').click(); await p.locator('[data-testid="parcela-solta-juntar-lista"]').waitFor(); await p.waitForTimeout(400); } },
+  { nome: 'lancamento-parcela-solta-juntar', url: 'tela=lancamento&m=editar&v=salsolta', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcela-solta-juntar"]:not([disabled])').waitFor();
+      await p.locator('[data-testid="parcela-solta-juntar"]').click(); await p.locator('[data-testid="parcela-solta-juntar-lista"]').waitFor(); await p.waitForTimeout(400); } },
+  { nome: 'lancamento-forma-valor-atual', url: 'tela=lancamento&m=editar&v=salparcela&forma=Cart%C3%A3o%20de%20Cr%C3%A9dito', tamanhos: TAMANHOS_DO_CONTRATO,
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await p.waitForTimeout(500); } },
   { nome: 'lancamento-parcelar-confirmar', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await parcelarEm4(p); await p.locator('[data-testid="parcelar-este-confirmar"]').click(); await p.waitForTimeout(500); } },
   /* P128a — os TRÊS CAMINHOS com o "Criar um lançamento novo" escolhido (o aviso vermelho "duplica", o botão "Criar novo (duplica)") */

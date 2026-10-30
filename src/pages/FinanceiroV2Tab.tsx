@@ -3287,6 +3287,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         /* PARC-CADEIA-01 — "Abrir o contrato" do aviso de parcela: só para quem acessa Financiamentos; os filtros ativos
            já ficam na memória da sessão (FIN-LISTA-FILTROS-01a) e voltam na remontagem. */
         onAbrirContrato={podeAbrirFinanciamento ? onAbrirFinanciamento : undefined}
+        /* P143 (D1) — abrir outra parcela da compra no mesmo modal: a linha inteira, pelo id, como na abertura */
+        onTrocarLancamento={async (id) => { const obj = await hook.buscarLancamentoPorId(id); if (obj) setEditingLanc(obj); }}
         /* P128a (porta 2) — a NF lida no Documentos do Editar abre a MESMA previa do "+ Da nota" por cima, partindo deste lancamento */
         onLerNotaFiscal={clienteAtual?.id ? async (arquivo, lancamentoId) => {
           const cli = clienteAtual.id;
