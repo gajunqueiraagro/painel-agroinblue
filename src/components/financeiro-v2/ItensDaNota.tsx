@@ -109,7 +109,7 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
         </div>
         <div className="min-w-0">
           <div className="grid grid-cols-7 gap-x-1.5 tabular-nums" data-testid="itens-totais">
-            {totais.map(([r]) => <span key={r} className="uma-linha-que-rola text-right text-[8px] uppercase tracking-normal text-muted-foreground">{r}</span>)}
+            {totais.map(([r]) => <span key={r} className="uma-linha-que-rola text-right text-[8px] tracking-normal text-muted-foreground">{r}</span>)}
             {totais.map(([r, v, nf]) => <b key={r} className={cn('whitespace-nowrap text-right', nf ? 'text-primary' : v === 0 && 'font-normal text-muted-foreground')}>{reais(v)}</b>)}
           </div>
           <div className="uma-linha-que-rola text-[8px] text-muted-foreground/70" data-testid="itens-tributos">
@@ -127,8 +127,9 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
         </span>
         {rateado && <span className={cn(CHIP, 'bg-amber-50 text-amber-800')} title="O PDF só traz desconto, frete, seguro e outras no total: repartidos pelo valor de cada item.">desconto/frete rateados</span>}
         <span className="ml-auto" />
-        <span className={cn(CHIP, 'min-w-0 bg-sky-50 text-sky-800')} title={contaDoLancamento ? `Conta do lançamento: ${contaDoLancamento}` : undefined}>
-          <span className="uma-linha-que-rola">Conta do lançamento manda no DRE e no caixa{contaDoLancamento ? ` · ${contaDoLancamento}` : ''}</span>
+        <span className={cn(CHIP, 'min-w-0 shrink bg-sky-50 text-sky-800')} title={contaDoLancamento ? `Conta do lançamento: ${contaDoLancamento}` : undefined}>
+          {/* min-w-0: o selo encolhe e o texto rola no lugar dele (a 750 a barra passava da largura: o texto segurava o selo) */}
+          <span className="min-w-0 uma-linha-que-rola">Conta do lançamento manda no DRE e no caixa{contaDoLancamento ? ` · ${contaDoLancamento}` : ''}</span>
         </span>
       </div>
 

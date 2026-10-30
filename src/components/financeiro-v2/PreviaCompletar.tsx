@@ -49,7 +49,7 @@ const MUDA = 'border-sky-300 bg-sky-50 font-medium text-sky-900';
 const GATILHO = 'h-[15px] min-w-0 rounded-sm px-1 text-[10px] leading-none [&_svg]:h-2.5 [&_svg]:w-2.5';
 const DATA = 'text-[9.5px] tabular-nums';
 /** as larguras (px) das colunas fixas; a Descrição leva o resto (o quadro rola de lado abaixo do mínimo: nada corta) */
-const LARGURA: Record<string, number> = { parc: 66, competencia: 84, vencimento: 84, pagamento: 72, documento: 112, favorecido: 170, fazenda: 150,
+const LARGURA: Record<string, number> = { parc: 90, competencia: 84, vencimento: 84, pagamento: 72, documento: 112, favorecido: 170, fazenda: 150,
   conta: 150, subcentro: 170, safra: 110, valor: 84, status: 78 };
 const DESCRICAO_MIN = 230;
 
@@ -262,7 +262,9 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
     + opcionais.reduce((t, c) => t + LARGURA[c], 0) + LARGURA.valor + LARGURA.status;
   const somaCent = alvos.reduce((t, a) => t + Math.round(Number(linhaDe(a.id)?.campos.valor?.hoje ?? 0) * 100), 0);
   const conteudo = (<>
-    <div className="min-h-0 flex-1 overflow-auto px-4 py-2" data-testid="previa-rolagem">
+    {/* o título da tabela: quantas parcelas (a linha "Aplicar a todas" não é uma delas) */}
+    <div className="flex h-[18px] shrink-0 items-center px-4 pt-1 text-[10.5px] font-semibold" data-testid="previa-titulo">{n} parcela{n === 1 ? '' : 's'}</div>
+    <div className="min-h-0 flex-1 overflow-auto px-4 py-1" data-testid="previa-rolagem">
       <table className="w-full table-fixed border-collapse" style={{ minWidth: larguraMin }} data-testid="previa-tabela">
         <colgroup>
           <col style={{ width: LARGURA.parc }} /><col style={{ width: LARGURA.competencia }} /><col style={{ width: LARGURA.vencimento }} /><col style={{ width: LARGURA.pagamento }} />
@@ -280,11 +282,11 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
           {opcionais.map((c) => <th key={c} className={cn(TH_REGUA, 'text-left')}>{cabeca(c, ROTULO_DA_COLUNA[c])}</th>)}
           <th className={cn(TH_REGUA, 'text-right')} title="Valor">Valor</th>
           <th className={cn(TH_REGUA, 'text-right')} title="Status">Status</th>
-        </tr></thead>
-        <tbody>
-          {/* a linha "Para todas" (fundo cinza): o valor que a coluna MARCADA leva às N */}
-          <tr className="border-b border-border/50 bg-muted font-medium" data-testid="previa-para-todas">
-            <td className={cn(TD_REGUA, 'whitespace-nowrap')}>Para todas</td>
+        </tr>
+          {/* Ajuste 29/10 14:02 (item 6) — "Aplicar a todas" é a 2ª linha do CABEÇALHO (azul-claro), não uma parcela: o valor que a coluna MARCADA
+              leva às N, nas mesmas colunas; as parcelas começam logo abaixo */}
+          <tr className="border-b border-blue-200 bg-blue-50 font-medium" data-testid="previa-para-todas">
+            <td className={cn(TD_REGUA, 'whitespace-nowrap text-blue-900')} title="o valor desta linha vai para a coluna inteira (marcada)">Aplicar a todas ↓</td>
             <td className={TD_REGUA}>{todasDe('competencia')}</td>
             <td className={TD_REGUA} /><td className={TD_REGUA} />
             <td className={TD_REGUA}>
@@ -296,6 +298,8 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
             <td className={TD_REGUA_NUM} title={valorNotaCent !== null ? 'o valor da nota' : 'a soma das parcelas hoje'}>{valorNotaCent !== null ? reais(valorNotaCent) : previa ? reais(somaCent) : '—'}</td>
             <td className={TD_REGUA} />
           </tr>
+        </thead>
+        <tbody>
           {alvos.map((a) => {
             const l = linhaDe(a.id);
             const campos = l?.campos;
