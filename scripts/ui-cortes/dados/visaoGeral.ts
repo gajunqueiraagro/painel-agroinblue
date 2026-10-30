@@ -123,8 +123,17 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
  * MAIS LONGOS que os reais (o pior caso de largura) e valores na casa dos milhões; a parte de cada filho fecha com o pai. Meta só no
  * Custeio (a régua e o "—" do resto). Unidade: R$/cab, R$/UA, R$/@ e R$/ha com denominadores fixos; só onde vale (pecuária, etc.). */
 const ATIV: [string | null, number][] = [['pecuaria', 0.62], ['agricultura', 0.23], ['administrativo', 0.1], [null, 0.05]];
-const CENTROS: [string, number][] = [['Nutrição e suplementação mineral do rebanho de cria e recria', 0.5], ['Sanidade animal e reprodução assistida', 0.3],
-  ['Manutenção de pastagens, cercas e aguadas', 0.2]];
+/* VG-CUSTEIO-FIXO-VARIAVEL-01 — o 3o campo: o bloco do centro (o `grupo_custo` do Plano de Contas) */
+const CENTROS_3: [string, number, 'variavel' | 'fixo'][] = [['Nutrição e suplementação mineral do rebanho de cria e recria', 0.5, 'variavel'],
+  ['Sanidade animal e reprodução assistida', 0.3, 'variavel'], ['Manutenção de pastagens, cercas e aguadas', 0.2, 'fixo']];
+/* VG-CUSTEIO-FIXO-VARIAVEL-01 — `&vg_centros=13`: o molde do caso de out/26 (7 variáveis + 6 fixos, nomes longos), o card mais alto */
+const CENTROS_13: [string, number, 'variavel' | 'fixo'][] = [
+  ['Nutrição e suplementação mineral do rebanho de cria e recria', 0.14, 'variavel'], ['Sanidade animal e reprodução assistida', 0.06, 'variavel'],
+  ['Reprodução, inseminação e protocolos de IATF', 0.05, 'variavel'], ['Combustíveis e lubrificantes das máquinas', 0.04, 'variavel'],
+  ['Fretes de animais e de insumos', 0.03, 'variavel'], ['Comissões e taxas de comercialização', 0.02, 'variavel'], ['Outros insumos da pecuária', 0.02, 'variavel'],
+  ['Mão de obra fixa, encargos e benefícios', 0.24, 'fixo'], ['Manutenção de pastagens, cercas e aguadas', 0.15, 'fixo'],
+  ['Manutenção de máquinas, veículos e benfeitorias', 0.11, 'fixo'], ['Energia elétrica e comunicação', 0.06, 'fixo'],
+  ['Arrendamentos de pastagem', 0.05, 'fixo'], ['Seguros e licenças', 0.03, 'fixo']];
 const SUBS: [string, number][] = [['Sal mineral proteinado de seca', 0.4], ['Ração de creep-feeding para bezerros', 0.3], ['Vacinas e vermífugos', 0.2], ['Outros insumos', 0.1]];
 const ROT_ATIV: Record<string, string> = { pecuaria: 'Pecuária', agricultura: 'Agricultura', administrativo: 'Administrativo' };
 const DEN: Record<string, number> = { rs_cab: 7082.5, rs_ua: 5310.2, rs_arroba: 1840.4, rs_ha_prod: 2650, rs_ha_pec: 1980, rs_ha_agri: 670, rs_ha_plant: 540 };
@@ -134,9 +143,10 @@ const validas = (ativ: string | null | undefined) => ativ === 'pecuaria' ? ['rs'
   : ativ === 'agricultura' ? ['rs', 'rs_ha_prod', 'rs_ha_agri', 'rs_ha_plant'] : ['rs', 'rs_ha_prod'];
 
 export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 'entrada' | 'saida'; p_aba?: string | null; p_foco?: (string | null)[];
-  p_grafico?: (string | null)[] | null; p_criterio?: string; p_unidade?: string; p_contas?: string[] | null; grande?: boolean }) {
+  p_grafico?: (string | null)[] | null; p_criterio?: string; p_unidade?: string; p_contas?: string[] | null; grande?: boolean; centros13?: boolean }) {
   const ms = meses(a.p_de, a.p_ate);
   const k = ms.indexOf(a.p_mes);
+  const CENTROS = a.centros13 ? CENTROS_13 : CENTROS_3;
   const crit = a.p_criterio ?? 'mes', uni = a.p_unidade ?? 'rs';
   const peso = a.p_contas ? Math.max(0.2, a.p_contas.length / 3) : 1;
   const grupos = a.p_lado === 'saida' ? GRUPOS_SAI : GRUPOS_ENT;
@@ -160,7 +170,21 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
     const razao = mt ? Math.round((v! / mt) * 10000) / 10000 : null;
     return { caminho: p, rotulo: rotulo(p), grupo: p[0] ?? null, valor: v, meta: mt, dif: mt == null || v == null ? null : r2(v - mt),
       pct: mt ? r1(((v! - mt) / mt) * 100) : null, razao, qtd: a.grande ? 99999 - p.length * 13 : 12 + p.length * 7, unidade_valida: ok(p),
-      faixa: razao == null ? null : razao < 0.9 ? 'boa' : razao < 1 ? 'ideal' : razao < 1.15 ? 'risco' : 'critica' };
+      faixa: razao == null ? null : razao < 0.9 ? 'boa' : razao < 1 ? 'ideal' : razao < 1.15 ? 'risco' : 'critica',
+      ...(p.length === 3 ? { bloco: CENTROS.find((x) => x[0] === p[2])?.[2] ?? 'sem' } : {}) };
+  };
+  /* VG-CUSTEIO-FIXO-VARIAVEL-01 (115510) — os blocos no nível de uma atividade de produção: a soma CRUA dos centros do bloco e só depois a
+     unidade e o arredondamento (a conta do banco); fora disso, nulo */
+  const blocosDe = (p: (string | null)[]) => {
+    if (p.length !== 2 || !['pecuaria', 'agricultura', 'silvicultura'].includes(p[1] ?? '')) return null;
+    return (['variavel', 'fixo'] as const).map((b) => {
+      const cs = CENTROS.filter((x) => x[2] === b).map((x) => [...p, x[0]]);
+      const v = u(cs.reduce((soma, c) => soma + janela(c), 0), p);
+      const mt = temMeta(p) && v != null ? r2(v * (a.grande ? 1 / 10.999 : fatorMeta(p))) : null;
+      return { bloco: b, rotulo: b === 'variavel' ? 'Custo variável' : 'Custo fixo', centros: cs.length, valor: v, meta: mt,
+        dif: mt == null || v == null ? null : r2(v - mt), pct: mt ? r1(((v! - mt) / mt) * 100) : null, razao: mt ? Math.round((v! / mt) * 10000) / 10000 : null,
+        qtd: 12 + 3 * 7, unidade_valida: ok(p) };
+    });
   };
   const filhos = (p: (string | null)[]): (string | null)[][] => p.length === 0 ? grupos.map((g) => [g]) : p.length === 1 ? ATIV.map((x) => [...p, x[0]])
     : p.length === 2 ? CENTROS.map((x) => [...p, x[0]]) : p.length === 3 ? SUBS.map((x) => [...p, x[0]]) : [];
@@ -180,7 +204,7 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
     resumo: { ...linha(n), valor_rs: r2(tot), pct_da_raiz: n.length ? r1((tot / janela([])) * 100) : null,
       fatias: filhos(n).map((c) => ({ caminho: c, rotulo: rotulo(c), grupo: c[0], pct: r1((janela(c) / tot) * 100) })) },
     /* P100 v4 (111952): a esquerda navega — o nível é a seleção (aba ou atividade) ou a atividade do centro escolhido */
-    tabela: { total: linha(niv), linhas: filhos(niv).map(linha), nivel: niv },
+    tabela: { total: linha(niv), linhas: filhos(niv).map(linha), nivel: niv, blocos: blocosDe(niv) },
     foco: { total: linha(f), linhas: subs },
     grafico: {
       item: linha(g), caminho: [[], ...g.map((_, i) => g.slice(0, i + 1))].map((c) => ({ caminho: c, rotulo: rotulo(c) })),

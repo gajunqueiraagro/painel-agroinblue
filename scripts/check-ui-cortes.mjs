@@ -242,6 +242,17 @@ const CENARIOS = [
     folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
     semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
     antes: async (p) => { await abrir(p); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(700); } })),
+  /* VG-CUSTEIO-FIXO-VARIAVEL-01 — o card "Centros · <atividade>" com os centros em BLOCOS (variável, fixo, com o subtotal do banco): a
+     Pecuária (3 centros), a Agricultura e o pior caso de altura (`&vg_centros=13`: 7 + 6 centros de nome longo, o molde de out/26) */
+  ...[['blocos-pecuaria', '', 0], ['blocos-agricultura', '', 1], ['blocos-13', '&vg_centros=13', 0]].map(([n, extra, ativ]) => ({
+    nome: `visao-geral-analise-${n}`, url: `tela=visao-geral&barra=0${extra}`, tamanhos: [...TAMANHOS_DA_VG, [1366, 768]], regiao: '[data-testid="modal-analise"]',
+    rotulosSvg: '[data-testid="analise-grafico-svg"] text, [data-testid="analise-donut-centro"]',
+    folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
+    semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').first().dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
+      await p.locator(`[data-testid="analise-tabela-linha-${ativ}"]`).click(); await p.locator('[data-testid="analise-tabela-bloco-variavel"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500);
+    } })),
   /* P100 item 5 — o PIOR CASO de largura das tabelas do modal ("NJ Saídas · Acumulado 12 meses"): `&vg_grande=1` (valores na casa
      de dezenas de milhões, % perto de +999,9%, 5 dígitos de lançamentos), dez/26 (12 meses), aba da raiz, Acum.: nada corta, nada cola
      (folga >= 6 px), o centro do donut cabe no furo */

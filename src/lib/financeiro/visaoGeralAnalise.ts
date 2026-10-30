@@ -22,6 +22,15 @@ export interface LinhaAnaliseVG {
   qtd: number; unidade_valida: boolean; faixa: FaixaMetaVG | null;
   /** P100: só nas linhas da tabela da direita (os subcentros) — o centro do subcentro */
   centro?: string | null;
+  /** VG-CUSTEIO-FIXO-VARIAVEL-01: só nas linhas de CENTRO — o bloco pelo `grupo_custo` do Plano de Contas */
+  bloco?: BlocoCentroVG;
+}
+export type BlocoCentroVG = 'variavel' | 'fixo' | 'sem';
+/** VG-CUSTEIO-FIXO-VARIAVEL-01 (115510): o SUBTOTAL de um bloco de centros — do banco, na mesma conta das linhas (a tela não soma) */
+export interface BlocoAnaliseVG {
+  bloco: BlocoCentroVG; rotulo: string; centros: number;
+  valor: number | null; meta: number | null; dif: number | null; pct: number | null; razao: number | null;
+  qtd: number; unidade_valida: boolean;
 }
 export interface PontoAnaliseVG { am: string; realizado: number | null; previsto: number | null; total: number | null; media: number | null; meta: number | null }
 export interface AnaliseVG {
@@ -33,7 +42,10 @@ export interface AnaliseVG {
     fatias: { caminho: CaminhoVG; rotulo: string; grupo: string | null; pct: number | null }[] }) | null;
   /** P100 v4 (111952): a tabela da ESQUERDA navega um nível por vez — `nivel` = o caminho do nível mostrado (a aba, a atividade
       escolhida, ou a atividade do centro escolhido); `total` = ele; `linhas` = os filhos dele */
-  tabela: { total: LinhaAnaliseVG | null; linhas: LinhaAnaliseVG[]; nivel?: CaminhoVG };
+  tabela: { total: LinhaAnaliseVG | null; linhas: LinhaAnaliseVG[]; nivel?: CaminhoVG;
+    /** VG-CUSTEIO-FIXO-VARIAVEL-01 (115510): no nível de uma atividade de produção, os blocos (variável, fixo, sem classificação) na
+        ordem do DRE; fora dele, nulo */
+    blocos?: BlocoAnaliseVG[] | null };
   foco: { total: LinhaAnaliseVG | null; linhas: LinhaAnaliseVG[] };
   grafico: {
     item: LinhaAnaliseVG | null; caminho: { caminho: CaminhoVG; rotulo: string }[]; irmaos: CaminhoVG[]; serie: PontoAnaliseVG[];
@@ -75,6 +87,17 @@ export const chaveCaminho = (c: CaminhoVG) => JSON.stringify(c);
 /** a aba: a raiz (null) ou um grupo — o foco e o gráfico voltam para ela */
 export const irParaAba = (e: EstadoAnaliseVG, grupo: string | null): EstadoAnaliseVG =>
   ({ ...e, aba: grupo, foco: grupo ? [grupo] : [], grafico: null });
+
+/**
+ * VG-CUSTEIO-FIXO-VARIAVEL-01 — as linhas da esquerda nos BLOCOS que o banco mandou (na ordem dele: variável, fixo, sem classificação),
+ * cada linha com o índice que tinha (a cor e o testid não mudam) e, dentro do bloco, na ordem de hoje. Sem `blocos`, `null` (a lista
+ * corrida de hoje). Só agrupa: o subtotal é o do banco.
+ */
+export function linhasEmBlocos(tabela: AnaliseVG['tabela']): { bloco: BlocoAnaliseVG; linhas: { l: LinhaAnaliseVG; i: number }[] }[] | null {
+  if (!tabela.blocos || tabela.blocos.length === 0) return null;
+  const comIndice = tabela.linhas.map((l, i) => ({ l, i }));
+  return tabela.blocos.map((bloco) => ({ bloco, linhas: comIndice.filter((x) => (x.l.bloco ?? 'sem') === bloco.bloco) }));
+}
 
 /** clique numa linha da tabela da ESQUERDA (um filho do nível mostrado, ou o total = o próprio nível): ela vira a SELEÇÃO (o foco).
     P100 v4: a esquerda navega — grupo ou atividade escolhidos DESCEM (a tabela passa a mostrar os filhos deles); o centro fica só
