@@ -46,3 +46,31 @@ export function useChavesComItens(clienteId: string | null | undefined, chaves: 
   }, [clienteId, lista]);
   return com;
 }
+
+/**
+ * Ajuste 12 (Gabriel 29/10 14:13) — a aba Itens da nota JÁ LANÇADA abre UMA vez, na versão final: os itens GUARDADOS pela chave (o XML manda sobre o
+ * PDF) e, sem eles, os do PRÓPRIO arquivo (PDF ou XML). `carregando` = ainda não respondeu (a tela mostra o esqueleto da versão final, nunca a simples).
+ */
+export function useItensDaNotaDaTela({ clienteId, chave, arquivo }: { clienteId: string | null; chave: string | null; arquivo: File | null }): {
+  nota: NotaComItens | null; carregando: boolean;
+} {
+  const [estado, setEstado] = useState<{ nota: NotaComItens | null; carregando: boolean }>({ nota: null, carregando: true });
+  const chaveValida = chave && /^\d{44}$/.test(chave) ? chave : null;
+  useEffect(() => {
+    let vivo = true;
+    setEstado({ nota: null, carregando: true });
+    (async () => {
+      try {
+        const guardada = clienteId && chaveValida ? await lerItensGuardados(clienteId, [chaveValida]) : null;
+        if (guardada) { if (vivo) setEstado({ nota: guardada, carregando: false }); return; }
+        const doArquivo = arquivo ? await notaComItensDoArquivo(await arquivo.arrayBuffer()) : null;
+        if (vivo) setEstado({ nota: doArquivo, carregando: false });
+      } catch (e) {
+        console.error('[useItensDaNotaDaTela]', e);
+        if (vivo) setEstado({ nota: null, carregando: false });
+      }
+    })();
+    return () => { vivo = false; };
+  }, [clienteId, chaveValida, arquivo]);
+  return estado;
+}

@@ -40,7 +40,7 @@ const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.s
 const FOTOS = arg('--fotos');
 const SO = arg('--so');
 /* P163-2 — as variantes da bancada `nota-pdf` em que a nota JÁ ESTÁ LANÇADA (o modal em abas) */
-const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'm2'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
+const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
 
 const TAMANHOS_DO_CONTRATO = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* P104 — os 9 tamanhos do gate e o do print do Gabriel (1750×1000) */
@@ -376,7 +376,7 @@ const CENARIOS = [
   /* FIN-NOTA-PDF-01 — "Novo lançamento · da nota fiscal" (o mock aprovado), o PDF SINTETICO lido de verdade, nos sete tamanhos: o modal
      fixo nao rola (so' as duas tabelas rolam dentro do quadro delas, no pior caso de 12 parcelas e 14 itens), nada passa da caixa. */
   /* P95 — `pelachave` (a previa da chave digitada: o chip, emissao e valor em ambar) e `irmas` (a nota em 4 parcelas soltas, "k/4") */
-  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'm2'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
   })),
   /* P101 — abaixo de 1000px a prévia tem três abas: as outras duas (Parcelas e lançamento; Arquivo) em todas as variantes, nos estreitos. P163-2: a
@@ -414,9 +414,9 @@ const CENARIOS = [
   /* P163-2 (NOTA-ABAS-PREVIA-01) — a nota JÁ LANÇADA em abas, cada aba nos sete tamanhos (a "No sistema hoje" é a que abre: `nota-pdf-<v>` acima);
      abaixo de 1000px também a aba "Arquivo" (ver a nota). Só rolam por dentro as tabelas (a do sistema, a da prévia, a dos itens). */
   /* mock da nota já lançada (29/10): Nota e Fornecedor fixos em cima; as abas Parcelas × sistema (a que abre) · Como vai ficar · Itens · Lançamento */
-  ...NOTA_JA_LANCADA.flatMap((v) => [['parcelas', 'Parcelas × sistema', TAMANHOS_DO_CONSORCIO], ['ficar', 'Como vai ficar', TAMANHOS_DO_CONSORCIO],
+  ...NOTA_JA_LANCADA.flatMap((v) => [['hoje', 'No sistema hoje', TAMANHOS_DO_CONSORCIO], ['parcelas', 'Parcelas × sistema', TAMANHOS_DO_CONSORCIO], ['ficar', 'Como vai ficar', TAMANHOS_DO_CONSORCIO],
     ['itens', 'Itens (', TAMANHOS_DO_CONSORCIO], ['lancamento', 'Lançamento', TAMANHOS_DO_CONSORCIO], ['arquivo', 'Arquivo', TAMANHOS_ESTREITOS_DA_NOTA]].map(([a, rotulo, tamanhos]) => ({
-    nome: `nota-pdf-ja-${a}-${v}`, url: `tela=nota-pdf&v=${v}`, tamanhos,
+    nome: `nota-pdf-ja-${a}-${v}`, url: `tela=nota-pdf&v=${v}`, tamanhos: a === 'arquivo' ? tamanhos : [...tamanhos, [1366, 768]], titulosDeBloco: true,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
     antes: async (p) => {
       await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
@@ -814,6 +814,9 @@ function medirRolagem({ dentro, exceto }) {
      inteiro no `title` (regra de corte de 21/10), e quem a julga e' a regra de corte da varredura principal, nao esta. */
   for (const e of raiz.querySelectorAll('*')) {
     if (livres.some((l) => e === l || l.contains(e))) continue;
+    /* a exceção DECLARADA (`data-reticencias-com-title`, P71; a razão social da nota já lançada, ajuste 2): quem a julga é a regra de reticências da
+       varredura principal (o title tem de levar o texto inteiro), não esta */
+    if (e.closest('[data-reticencias-com-title]')) continue;
     const cs = getComputedStyle(e);
     if ((cs.overflowX === 'hidden' || cs.overflowX === 'clip') && e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 2)
       achados.push({ regra: 'corte', texto: `${(e.getAttribute('data-testid') || (e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40))} pede ${e.scrollWidth}px, tem ${e.clientWidth}` });
@@ -836,6 +839,26 @@ function medirBotoesDentro(sel) {
          cima do que vem embaixo (a barra "Classificação · Sem caixa" coberta pelo cabeçalho da tabela) */
       if (r.bottom > c.bottom + 0.5 || r.top < c.top - 0.5) achados.push({ regra: 'botao', texto: `botao "${nome}" sai da faixa por ${r.bottom > c.bottom ? 'baixo' : 'cima'} (${Math.round(r.bottom > c.bottom ? r.bottom - c.bottom : c.top - r.top)}px)` });
       if (b.scrollWidth > b.clientWidth + 1) achados.push({ regra: 'botao', texto: `botao "${nome}" corta o texto` });
+    }
+  }
+  return achados;
+}
+/* Ajuste 29/10 14:02 (item 1) — `titulosDeBloco` (opcional, por cenário): o CABEÇALHO de todo bloco (`[data-titulo-do-bloco]`) cabe numa linha e
+   dentro do bloco — o nome, a dica e o selo inteiros (o "PDF com texto · leitura direta" quebrava/cortava na coluna estreita e o gate não via) */
+function medirTitulosDeBloco() {
+  const achados = [];
+  for (const t of document.querySelectorAll('[role="dialog"] [data-titulo-do-bloco]')) {
+    const r = t.getBoundingClientRect(); if (r.width < 2 || r.height < 2) continue;
+    const bloco = t.parentElement?.getBoundingClientRect();
+    const nome = (t.querySelector('h3')?.textContent ?? '').trim().slice(0, 30);
+    if (r.height > 20) achados.push({ regra: 'titulo-do-bloco', texto: `"${nome}": o cabeçalho quebra em mais de uma linha (${Math.round(r.height)}px)` });
+    if (t.scrollWidth > t.clientWidth + 1) achados.push({ regra: 'titulo-do-bloco', texto: `"${nome}": o cabeçalho passa da largura (${t.scrollWidth - t.clientWidth}px)` });
+    if (bloco && r.right > bloco.right + 0.5) achados.push({ regra: 'titulo-do-bloco', texto: `"${nome}": o cabeçalho sai do bloco (${Math.round(r.right - bloco.right)}px)` });
+    for (const el of t.querySelectorAll('h3, span, button')) {
+      const e = el.getBoundingClientRect(); if (e.width < 2) continue;
+      const txt = (el.textContent ?? '').trim().slice(0, 40);
+      if (e.right > r.right + 0.5 || e.left < r.left - 0.5) achados.push({ regra: 'titulo-do-bloco', texto: `"${nome}": "${txt}" sai do cabeçalho (${Math.round(e.right - r.right)}px)` });
+      else if (el.scrollWidth > el.clientWidth + 1 && !el.classList.contains('uma-linha-que-rola')) achados.push({ regra: 'titulo-do-bloco', texto: `"${nome}": "${txt}" corta o texto` });
     }
   }
   return achados;
@@ -1286,6 +1309,7 @@ try {
     if (cen.rotulosSvg) daRolagem.push(...(await p.evaluate(medirRotulosSvg, cen.rotulosSvg)));
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
+    if (cen.titulosDeBloco) daRolagem.push(...(await p.evaluate(medirTitulosDeBloco)));
     if (cen.semRolarNoLugar) daRolagem.push(...(await p.evaluate(medirSemRolarNoLugar, cen.semRolarNoLugar)));
     if (cen.inteiroDe && w >= cen.inteiroDe.de) daRolagem.push(...(await p.evaluate(medirInteiro, cen.inteiroDe.sel)));
     /* P159e — o ALINHAMENTO SOBERANO vale em toda tela que marca os números (`data-alinha-coluna`) */

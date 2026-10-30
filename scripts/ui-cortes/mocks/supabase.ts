@@ -38,7 +38,10 @@ export const supabase: any = {
   rpc: (fn: string, a: Record<string, unknown>) => {
     anotar('rpc', fn);
     const r: any = banco().rpc?.(fn, a ?? {}) ?? null;
-    return Promise.resolve(r && typeof r === 'object' && '__erro' in r ? { data: null, error: { code: 'CBLOC', message: r.__erro } } : { data: r, error: null });
+    const resposta = r && typeof r === 'object' && '__erro' in r ? { data: null, error: { code: 'CBLOC', message: r.__erro } } : { data: r, error: null };
+    /* Ajuste 11 — `&lento=1`: a busca "nota já lançada" demora 2 s (o print da 1ª abertura mostra o esqueleto, nunca a tela antiga) */
+    const lento = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lento') === '1' && fn === 'fn_nota_ja_lancada';
+    return lento ? new Promise((ok) => setTimeout(() => ok(resposta), 2000)) : Promise.resolve(resposta);
   },
   auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }), getSession: async () => ({ data: { session: null } }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
   /* ITENS-NOTA-01 — `download` le^ de `globalThis.__arquivosBancada[caminho]` (bytes SINTETICOS que a tela registra); sem ele, o "nao achado" */
