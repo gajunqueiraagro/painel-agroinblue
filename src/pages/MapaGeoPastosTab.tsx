@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
+import { usePastoGeometrias, type PoligonoParaGravar } from '@/hooks/usePastoGeometrias';
+import { casarNomePasto } from '@/lib/pastos/casarNomePasto';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
 import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
@@ -78,15 +79,14 @@ export function MapaGeoPastosTab() {
   const hasGeo = geometrias.length > 0;
 
   const handleKmlUpload = useCallback(async (polygons: ParsedPolygon[]) => {
-    const pastoMap = new Map(pastos.filter(p => p.ativo).map(p => [p.nome.trim().toLowerCase(), p]));
-    const items = polygons.map(poly => ({
-      pasto_id: pastoMap.get(poly.name.trim().toLowerCase())?.id || null,
-      nome_original: poly.name,
-      geojson: poly.geojson,
-    }));
+    // MAPA-IMPORT-01a: o vínculo pelo nome é o `casarNomePasto` (o mesmo da prévia); sem vínculo claro grava 'outra' com o nome do arquivo.
+    const items: PoligonoParaGravar[] = polygons.map(poly => {
+      const pastoId = casarNomePasto(poly.name, pastos, fazendaAtual?.id).pastoId;
+      return { tipo: pastoId ? 'pasto' : 'outra', pasto_id: pastoId, nome_original: poly.name, geojson: poly.geojson };
+    });
     const success = await salvarGeometrias(items);
     if (success) setUploadOpen(false);
-  }, [pastos, salvarGeometrias]);
+  }, [pastos, fazendaAtual?.id, salvarGeometrias]);
 
   if (isGlobal) {
     return (

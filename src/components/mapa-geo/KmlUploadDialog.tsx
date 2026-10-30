@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Upload, FileCheck, AlertCircle, Link2, MapPin, X, Loader2, Trash2, Save, RefreshCw } from 'lucide-react';
 import { parseKMLFile, type ParsedPolygon } from '@/lib/kmlParser';
+import { casarNomePasto } from '@/lib/pastos/casarNomePasto';
 import type { Pasto } from '@/hooks/usePastos';
 import { toast } from 'sonner';
 import L from 'leaflet';
@@ -29,7 +30,8 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, onRemove, pastos
   const previewMap = useRef<L.Map | null>(null);
   const previewLayer = useRef<L.LayerGroup | null>(null);
 
-  const pastoNames = new Set(pastos.filter(p => p.ativo).map(p => p.nome.trim().toLowerCase()));
+  // MAPA-IMPORT-01a: a prévia usa a MESMA regra da gravação (`casarNomePasto`); verde = vínculo claro.
+  const casou = (poly: ParsedPolygon) => casarNomePasto(poly.name, pastos).clara;
 
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,7 +98,7 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, onRemove, pastos
 
     const bounds: L.LatLngBounds[] = [];
     polygons.forEach(poly => {
-      const isMatched = pastoNames.has(poly.name.trim().toLowerCase());
+      const isMatched = casarNomePasto(poly.name, pastos).clara;
       const color = isMatched ? '#22c55e' : '#f59e0b';
       const layer = L.geoJSON(poly.geojson as any, {
         style: { color, weight: 2, fillColor: color, fillOpacity: 0.3 },
@@ -119,7 +121,7 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, onRemove, pastos
       const combined = bounds.reduce((acc, b) => acc.extend(b));
       previewMap.current.fitBounds(combined, { padding: [20, 20] });
     }
-  }, [polygons, pastoNames]);
+  }, [polygons, pastos]);
 
   // invalidateSize when dialog resizes
   useEffect(() => {
@@ -128,8 +130,8 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, onRemove, pastos
     return () => clearTimeout(timer);
   }, [open, polygons]);
 
-  const matched = polygons.filter(p => pastoNames.has(p.name.trim().toLowerCase()));
-  const unmatched = polygons.filter(p => !pastoNames.has(p.name.trim().toLowerCase()));
+  const matched = polygons.filter(p => casou(p));
+  const unmatched = polygons.filter(p => !casou(p));
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -228,7 +230,7 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, onRemove, pastos
                       {/* Polygon list */}
                       <div className="max-h-36 overflow-y-auto space-y-0.5 text-xs border border-border rounded-md p-2 bg-background">
                         {polygons.map((p, i) => {
-                          const isM = pastoNames.has(p.name.trim().toLowerCase());
+                          const isM = casou(p);
                           return (
                             <div key={i} className="flex items-center gap-1.5 py-0.5">
                               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isM ? 'bg-success' : 'bg-destructive'}`} />
