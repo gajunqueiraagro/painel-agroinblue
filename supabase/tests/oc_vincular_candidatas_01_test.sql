@@ -1,3 +1,7 @@
+-- ⚠ OC-VINCULO-VALOR (Gabriel 30/10, migration 20261028115090): "Vincular não pode mudar valor, não pode nada, nada, nada".
+--   Todo vinculo GRAVADO aqui leva `p_aceitar_titulo_oc = true` — o clique do operador depois de ver na previa o que acontece com
+--   o titulo programado da OC (sem ele o banco recusa `confirmar_titulo_oc`, provado em oc_vinculo_so_liga_test.sql). E o vinculo
+--   NAO troca mais a competencia do lancamento ligado: onde este teste a lia, ela agora e' a do proprio lancamento.
 -- OC-VINCULAR-CANDIDATAS-01 — nada some da lista de candidatas sem motivo.
 --
 -- Roda como `postgres`, DEPOIS da migration 20261027193400, numa transacao que TERMINA EM RAISE: nada fica no banco.
@@ -86,7 +90,7 @@ DECLARE
   c_faz constant uuid := 'c2498ace-8478-410c-a697-d3f2e2934d1f';
   c_admin constant uuid := '7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e';
   c_venda constant uuid := 'f74f95e5-ecaa-4785-932a-abd37328a1f8';
-  c_abate constant uuid := '67ea4fab-bcef-45e3-a3bc-ac73bf28e8da';
+  c_abate constant uuid := '1645ba75-2cea-45ee-8316-e0695b7cffe7';  -- molde trocado em 30/10 (o 67ea4fab nao tem mais compromisso principal vivo)
   v_faz2 uuid := gen_random_uuid();
   mesma record; outra record; d74 record; d200 record; rasc record; canc record; abt record; pago record;
   l uuid; l2 uuid; l3 uuid; l4 uuid; r jsonb; k jsonb; v jsonb; s jsonb; v_ok text := ''; v_faz_antes uuid; v_n int;
@@ -152,7 +156,7 @@ BEGIN
   -- K6: vincular na OC de outra fazenda
   SELECT fazenda_id INTO v_faz_antes FROM financeiro_lancamentos_v2 WHERE id = l;
   s := oc_vincular_lancamento(outra.op, 1, l, NULL, 'ensaio', NULL, NULL, false, true);
-  v := oc_vincular_lancamento(outra.op, 1, l, NULL, 'ensaio', NULL, NULL, false, false);
+  v := oc_vincular_lancamento(outra.op, 1, l, NULL, 'ensaio', NULL, NULL, false, false, true);
   SELECT a INTO k FROM jsonb_array_elements(v -> 'avisos') a WHERE a ->> 'codigo' = 'fazenda_diferente';
   IF (v ->> 'ok') IS DISTINCT FROM 'true' OR k IS NULL OR (k ->> 'operacao_fazenda') IS DISTINCT FROM 'Faz. Ensaio Dois' OR (k ->> 'lancamento_fazenda') IS NULL
      OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(s -> 'avisos') a WHERE a ->> 'codigo' = 'fazenda_diferente') THEN
@@ -166,9 +170,9 @@ BEGIN
   -- K7: compromisso com duas parcelas TODAS pagas
   SELECT * INTO pago FROM pg_temp.montar(c_venda, 100000);  UPDATE zoo_operacoes_comerciais SET is_teste = false WHERE id = pago.op;
   l3 := pg_temp.pago(pago.op, 60000, '2026-09-01'); l4 := pg_temp.pago(pago.op, 40000, '2026-09-02');
-  v := oc_vincular_lancamento(pago.op, 1, l3, NULL, 'p1', NULL, NULL, false, false);
+  v := oc_vincular_lancamento(pago.op, 1, l3, NULL, 'p1', NULL, NULL, false, false, true);
   IF _oc_vinculo_compromisso_liquidado(pago.comp) THEN RAISE EXCEPTION 'K7: com UMA parcela em aberto o compromisso nao e'' liquidado'; END IF;
-  v := oc_vincular_lancamento(pago.op, pg_temp.ver(pago.op), l4, NULL, 'p2', NULL, NULL, false, false);   -- escolhe a parcela em aberto sozinho
+  v := oc_vincular_lancamento(pago.op, pg_temp.ver(pago.op), l4, NULL, 'p2', NULL, NULL, false, false, true);   -- escolhe a parcela em aberto sozinho
   IF (v ->> 'ok') IS DISTINCT FROM 'true' OR (v -> 'parcela' ->> 'acao') IS DISTINCT FROM 'substituida' THEN RAISE EXCEPTION 'K7 segundo: %', v; END IF;
   IF NOT _oc_vinculo_compromisso_liquidado(pago.comp) THEN RAISE EXCEPTION 'K7: com as DUAS pagas o compromisso tem de contar como liquidado'; END IF;
   l4 := pg_temp.pago(pago.op, 5000, '2026-09-03');
@@ -208,7 +212,7 @@ BEGIN
     RAISE EXCEPTION 'K9 diferenca zero nao avisa: %', v -> 'avisos'; END IF;
   UPDATE zoo_operacao_compromissos SET valor_total = 100000.50 WHERE id = pago.comp;
   s := oc_vincular_lancamento(pago.op, pg_temp.ver(pago.op), l4, NULL, 'k9', NULL, NULL, false, true);
-  v := oc_vincular_lancamento(pago.op, pg_temp.ver(pago.op), l4, NULL, 'k9', NULL, NULL, false, false);
+  v := oc_vincular_lancamento(pago.op, pg_temp.ver(pago.op), l4, NULL, 'k9', NULL, NULL, false, false, true);
   IF (v ->> 'ok') IS DISTINCT FROM 'true' OR (v -> 'compromisso' ->> 'acao') IS DISTINCT FROM 'criado'
      OR (SELECT (a ->> 'diferenca')::numeric FROM jsonb_array_elements(v -> 'avisos') a WHERE a ->> 'codigo' = 'parcelas_pagas_com_diferenca') IS DISTINCT FROM 0.50
      OR (SELECT (a ->> 'diferenca')::numeric FROM jsonb_array_elements(s -> 'avisos') a WHERE a ->> 'codigo' = 'parcelas_pagas_com_diferenca') IS DISTINCT FROM 0.50 THEN
