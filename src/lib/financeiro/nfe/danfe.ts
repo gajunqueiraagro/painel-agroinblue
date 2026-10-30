@@ -118,7 +118,7 @@ export function textoDosDadosAdicionais(d: { itens: readonly ItemNaPagina[] }): 
 }
 
 const TOL_LINHA = 1.5;
-const ABAIXO_MAX = 14;
+const ABAIXO_MAX = 16;
 
 /** O leitor por posicao sobre todos os itens do documento. P174: o DANFSe (`danfse.ts`) usa o mesmo. */
 export class Danfe {
@@ -146,16 +146,38 @@ export class Danfe {
   }
   /** O primeiro rotulo (de cima para baixo) dentro da faixa de altura [abaixoDe, acimaDe] e o valor dele. */
   campo(rotulo: string, faixa: { acimaDe?: number; abaixoDe?: number } = {}, prefixo = false): ItemNaPagina | null {
-    const rs = this.rotulos(rotulo, prefixo)
+    for (const r of this.rotulosNaFaixa(rotulo, faixa, prefixo)) { const v = this.valorDe(r); if (v) return v; }
+    return null;
+  }
+  /**
+   * NF-LEITOR-LAYOUTS-01 — o valor de um rotulo que tem de ser de um tipo (`aceita`): o da coluna, se for; senao o que passa por baixo
+   * do MEIO do rotulo (o rotulo centrado do pdfmake: o valor comeca a' esquerda dele, e a coluna pegaria o vizinho — a chave, o CPF).
+   * Sem nenhum, `null` — quem chama cai no `campo` de sempre.
+   */
+  valorQue(rotulo: string, faixa: { acimaDe?: number; abaixoDe?: number }, prefixo: boolean, aceita: (o: ItemNaPagina) => boolean): ItemNaPagina | null {
+    for (const r of this.rotulosNaFaixa(rotulo, faixa, prefixo)) {
+      const v = this.valorDe(r);
+      if (v && aceita(v)) return v;
+      const meio = r.x + r.w / 2;
+      const sob = this.itens.filter((o) => o.pagina === r.pagina && o.y < r.y - 2 && o.y >= r.y - ABAIXO_MAX && o.x <= meio && o.x + o.w >= meio && aceita(o))
+        .sort((a, b) => b.y - a.y)[0];
+      if (sob) return sob;
+    }
+    return null;
+  }
+  /** O CNPJ/CPF de um rotulo (11 ou 14 digitos), pelo `valorQue`. */
+  documento(rotulo: string, faixa: { acimaDe?: number; abaixoDe?: number } = {}, prefixo = false): ItemNaPagina | null {
+    return this.valorQue(rotulo, faixa, prefixo, (o) => { const n = soDigitos(o.str).length; return n === 11 || n === 14; });
+  }
+  private rotulosNaFaixa(rotulo: string, faixa: { acimaDe?: number; abaixoDe?: number }, prefixo: boolean): ItemNaPagina[] {
+    return this.rotulos(rotulo, prefixo)
       .filter((r) => (faixa.acimaDe == null || r.y > faixa.acimaDe) && (faixa.abaixoDe == null || r.y < faixa.abaixoDe))
       .sort((a, b) => a.pagina - b.pagina || b.y - a.y);
-    for (const r of rs) { const v = this.valorDe(r); if (v) return v; }
-    return null;
   }
   /** DANFE-CHAVE-EM-GRUPOS-01 — o item logo a' direita, na mesma linha (o valor de um rotulo escrito em item separado: "N°." | "46.994"). */
   aoLado(r: ItemNaPagina): ItemNaPagina | null {
     const fim = r.x + r.w;
-    const dir = this.itens.filter((o) => o.pagina === r.pagina && o !== r && Math.abs(o.y - r.y) <= 2 && o.x >= fim - 1 && o.x - fim <= 40);
+    const dir = this.itens.filter((o) => o.pagina === r.pagina && o !== r && Math.abs(o.y - r.y) <= 2 && o.x >= fim - 1 && o.x - fim <= 80);
     return dir.sort((a, b) => a.x - b.x)[0] ?? null;
   }
   /** As linhas (itens da mesma altura, da esquerda para a direita) entre duas alturas, numa pagina. */
@@ -187,6 +209,13 @@ export function partirPelosEspacos<T extends ItemDoDanfe>(o: T): T[] {
 }
 
 const RE_CHAVE = /^(\d{4}\s?){10}\d{4}$/;
+/** NF-LEITOR-LAYOUTS-01 — a chave num item com o rotulo na frente ("Chave de Acesso: 3526 …") ou com mascara ("35-26/10-…-4"): 44 digitos que passam no DV. */
+export function chaveDoItem(str: string): string | null {
+  const t = normalizar(str).replace(/^CHAVE DE ACESSO(?: DA NF-?E)?\s*:?\s*/, '');
+  if (!/^[\d\s.\-/]+$/.test(t)) return null;
+  const d = soDigitos(t);
+  return d.length === 44 && digitoDaChave(d.slice(0, 43)) === Number(d[43]) ? d : null;
+}
 
 /**
  * DANFE-CHAVE-EM-GRUPOS-01 (Gabriel 23/10/2026: "Sistema não está lendo essa NF") — a chave PICADA em itens: emissores (JasperReports +
@@ -210,7 +239,14 @@ export function chaveEmGrupos<T extends ItemDoDanfe & { pagina: number }>(itens:
   }
   return null;
 }
-const RE_NUMERO = /^N[º°O.]?\.?\s*:?\s*(\d{1,3}(?:\.\d{3}){0,2}|\d{1,9})$/;
+/** O numero do protocolo de autorizacao (15 digitos), corrido ou com pontos ("135.264.453.322.786" — NF-LEITOR-LAYOUTS-01). */
+export function numeroDoProtocolo(s: string | null | undefined): string | null {
+  const corrido = /(\d{15})/.exec(s ?? '');
+  if (corrido) return corrido[1];
+  const comPontos = /(?<![\d.])(\d{3}(?:\.\d{3}){4})(?![\d.]?\d)/.exec(s ?? '');
+  return comPontos ? soDigitos(comPontos[1]) : null;
+}
+const RE_NUMERO = /^N[º°O.]?\.?\s*:?\s*(\d{1,3}(?:\.\d{3}){0,2}|\d{1,9})(?:\s+SERIE:?\s*\d{1,3})?$/;
 const RE_SERIE = /^SERIE:?\s*(\d{1,3})$/;
 const RE_DUPLICATA = /(?:NUM\.?:?\s*)?(\d{1,4}[A-Z]?)\s+(?:VENC\.?:?\s*)?(\d{2}\/\d{2}\/\d{4})\s+(?:VALOR:?\s*)?(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})/g;
 
@@ -220,23 +256,26 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   if (d.itens.length === 0) return { ok: false, motivo: 'pdf_sem_texto', frase: FRASE_PDF_SEM_TEXTO };
 
   /* A CHAVE: o item de 44 digitos (em grupos de 4 ou corrido); sem ele, a chave picada em itens na mesma linha (com o DV certo). */
-  const itemChave = d.itens.find((it) => RE_CHAVE.test(it.str.trim()));
+  const itemChave = d.itens.find((it) => RE_CHAVE.test(it.str.trim())) ?? d.itens.find((it) => chaveDoItem(it.str) != null);
   const grupos = itemChave ? null : chaveEmGrupos(d.itens);
   const ehDanfe = !!itemChave || !!grupos || d.itens.some((it) => normalizar(it.str) === 'DANFE');
   if (!ehDanfe) return { ok: false, motivo: 'pdf_nao_e_danfe', frase: FRASE_PDF_NAO_E_DANFE };
   if (!itemChave && !grupos) return { ok: false, motivo: 'incompleta', frase: FRASE_NOTA_SEM_CHAVE };
-  const chave = itemChave ? soDigitos(itemChave.str) : grupos?.chave ?? '';
+  const chave = itemChave ? (chaveDoItem(itemChave.str) ?? soDigitos(itemChave.str)) : grupos?.chave ?? '';
   for (const it of itemChave ? [itemChave] : grupos?.itens ?? []) d.marcar('chave', it);
   const pg = itemChave?.pagina ?? grupos?.itens[0]?.pagina ?? 1;
 
   /* AS FAIXAS DA PRIMEIRA FOLHA: emitente acima do "DESTINATARIO / REMETENTE"; destinatario ate' a fatura/imposto. */
-  const rotDest = d.rotulos('DESTINATARIO / REMETENTE', true).find((r) => r.pagina === pg) ?? d.rotulos('DESTINATARIO', true).find((r) => r.pagina === pg);
+  /* NF-LEITOR-LAYOUTS-01 — "Destinatário/Remetente" junto (sem ele, o "DESTINATARIO" pegaria o "Destinatário (FOB)" do frete) */
+  const rotDest = d.rotulos('DESTINATARIO / REMETENTE', true).find((r) => r.pagina === pg) ?? d.rotulos('DESTINATARIO/REMETENTE', true).find((r) => r.pagina === pg)
+    ?? d.rotulos('DESTINATARIO', true).find((r) => r.pagina === pg);
   const yDest = rotDest?.y ?? 0;
   const rotFatura = d.rotulos('FATURA', true).find((r) => r.pagina === pg && r.y < yDest);
-  const rotImposto = d.rotulos('CALCULO DO IMPOSTO', true).find((r) => r.pagina === pg);
+  const rotImposto = d.rotulos('CALCULO DO IMPOSTO', true).find((r) => r.pagina === pg) ?? d.rotulos('CALCULO DE IMPOSTO', true).find((r) => r.pagina === pg);
   const yImposto = rotImposto?.y ?? 0;
   const yFimDest = rotFatura?.y ?? yImposto;
-  const rotProdutos = d.rotulos('DADOS DO PRODUTO', true).find((r) => r.pagina === pg) ?? d.rotulos('DADOS DOS PRODUTOS', true).find((r) => r.pagina === pg);
+  const rotProdutos = d.rotulos('DADOS DO PRODUTO', true).find((r) => r.pagina === pg) ?? d.rotulos('DADOS DOS PRODUTOS', true).find((r) => r.pagina === pg)
+    ?? d.rotulos('ITENS DA NOTA FISCAL', true).find((r) => r.pagina === pg);
   const yProdutos = rotProdutos?.y ?? 0;
 
   /* NUMERO E SERIE: o "Nº" com mais digitos (o do quadro do DANFE, nao o do canhoto) e a "SERIE" ao lado dele. */
@@ -257,18 +296,34 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   d.marcar('serie', series[0]?.it);
 
   /* EMITENTE. */
-  const canhoto = d.itens.map((it) => ({ it, m: /RECEBEMOS DE (.+?) OS PRODUTOS/i.exec(it.str) })).find((x) => x.m);
+  const canhoto = d.itens.map((it) => ({ it, m: /RECEBEMOS DE\s+'?(.+?)'?,?\s+OS PRODUTOS?/i.exec(it.str) })).find((x) => x.m);
   const nomeEmit = canhoto?.m?.[1]?.trim() ?? '';
-  const itNomeEmit = d.itens.find((it) => it !== canhoto?.it && normalizar(it.str) === normalizar(nomeEmit)) ?? canhoto?.it;
+  /* NF-LEITOR-LAYOUTS-01 — o nome no quadro do emitente em 2 linhas ("AGRO EXEMPLO COMERCIO E" / "REPRESENTACOES LTDA"): a 2a linha logo
+     abaixo, alinhada a' esquerda (mesmo x) ou centrada (mesmo meio); as duas juntas tem de dar o nome do canhoto. */
+  const alvoNome = normalizar(nomeEmit);
+  const mesmaColuna = (a: ItemNaPagina, b: ItemNaPagina) => Math.abs(a.x - b.x) <= 2 || Math.abs(a.x + a.w / 2 - (b.x + b.w / 2)) <= 3;
+  let segunda: ItemNaPagina | undefined;
+  for (const it of d.itens) {
+    if (!alvoNome || it === canhoto?.it || !alvoNome.startsWith(`${normalizar(it.str)} `)) continue;
+    segunda = d.itens.find((o) => o.pagina === it.pagina && o.y < it.y && o.y > it.y - 14 && mesmaColuna(it, o)
+      && alvoNome === `${normalizar(it.str)} ${normalizar(o.str)}`);
+    if (segunda) break;
+  }
+  const itNomeEmit = d.itens.find((it) => it !== canhoto?.it && normalizar(it.str) === normalizar(nomeEmit)) ?? (segunda ?? canhoto?.it);
   d.marcar('emitente', itNomeEmit);
-  const itCnpjEmit = d.campo('CNPJ', { acimaDe: yDest }, true);
+  const itCnpjEmit = d.documento('CNPJ', { acimaDe: yDest }, true) ?? d.campo('CNPJ', { acimaDe: yDest }, true);
   d.marcar('emitente_cnpj', itCnpjEmit);
   const itIeEmit = d.campo('INSCRICAO ESTADUAL', { acimaDe: yDest });
   d.marcar('emitente_ie', itIeEmit);
-  const itNatureza = d.campo('NATUREZA DA OPERACAO', { acimaDe: yDest });
+  const itNatureza = d.campo('NATUREZA DA OPERACAO', { acimaDe: yDest }) ?? d.campo('NATUREZA DE OPERACAO', { acimaDe: yDest });
   d.marcar('natureza', itNatureza);
   /* DANFE-CHAVE-EM-GRUPOS-01 — ha' leiaute com o rotulo curto ("PROTOCOLO DE AUTORIZAÇÃO", sem o "DE USO") */
-  const itProtocolo = d.campo('PROTOCOLO DE AUTORIZACAO DE USO', { acimaDe: yDest }, true) ?? d.campo('PROTOCOLO DE AUTORIZACAO', { acimaDe: yDest }, true);
+  /* NF-LEITOR-LAYOUTS-01 — e o rotulo longo ("Número do protocolo de Autorização de uso da NF-e"); e o valor AO LADO do rotulo quando
+     o de baixo nao e' um protocolo */
+  const itProtocoloAbaixo = d.campo('PROTOCOLO DE AUTORIZACAO DE USO', { acimaDe: yDest }, true) ?? d.campo('PROTOCOLO DE AUTORIZACAO', { acimaDe: yDest }, true)
+    ?? d.campo('NUMERO DO PROTOCOLO', { acimaDe: yDest }, true);
+  const rotProt = d.rotulos('PROTOCOLO DE AUTORIZACAO', true).find((r) => r.pagina === pg && r.y > yDest);
+  const itProtocolo = numeroDoProtocolo(itProtocoloAbaixo?.str) ? itProtocoloAbaixo : (rotProt ? d.aoLado(rotProt) : null) ?? itProtocoloAbaixo;
   d.marcar('protocolo', itProtocolo);
 
   /* O ENDERECO DO EMITENTE: as linhas logo abaixo do nome, no quadro dele (a esquerda do "DANFE"). */
@@ -301,13 +356,18 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
 
   /* DESTINATARIO. */
   const faixaDest = { abaixoDe: yDest + 1, acimaDe: yFimDest };
-  const itNomeDest = d.campo('NOME / RAZAO SOCIAL', faixaDest, true);
+  /* NF-LEITOR-LAYOUTS-01 — o nome tem letra (o rotulo centrado do pdfmake pegaria o CPF da coluna ao lado) */
+  const temLetra = (o: ItemNaPagina) => /[A-Za-zÀ-ÿ]/.test(o.str);
+  const ROTULOS_NOME_DEST = ['NOME / RAZAO SOCIAL', 'NOME/RAZAO SOCIAL', 'NOME RAZAO SOCIAL'];
+  const itNomeDest = ROTULOS_NOME_DEST.reduce<ItemNaPagina | null>((achado, rot) => achado ?? d.valorQue(rot, faixaDest, true, temLetra), null)
+    ?? ROTULOS_NOME_DEST.reduce<ItemNaPagina | null>((achado, rot) => achado ?? d.campo(rot, faixaDest, true), null);
   d.marcar('destinatario', itNomeDest);
-  const itDocDest = d.campo('CNPJ / CPF', faixaDest, true) ?? d.campo('CNPJ', faixaDest, true);
+  const itDocDest = d.documento('CNPJ / CPF', faixaDest, true) ?? d.documento('CNPJ', faixaDest, true)
+    ?? d.campo('CNPJ / CPF', faixaDest, true) ?? d.campo('CNPJ', faixaDest, true);
   const itIeDest = d.campo('INSCRICAO ESTADUAL', faixaDest);
   d.marcar('destinatario_ie', itIeDest);
   const itEnderDest = d.campo('ENDERECO', faixaDest, true);
-  const itEmissao = d.campo('DATA DA EMISSAO', faixaDest, true) ?? d.campo('DATA DE EMISSAO', faixaDest, true);
+  const itEmissao = d.campo('DATA DA EMISSAO', faixaDest, true) ?? d.campo('DATA DE EMISSAO', faixaDest, true) ?? d.campo('DATA EMISSAO', faixaDest, true);
   d.marcar('emissao', itEmissao);
   const itSaida = d.campo('DATA DA ENTRADA / SAIDA', faixaDest, true) ?? d.campo('DATA DA SAIDA', faixaDest, true) ?? d.campo('DATA DE SAIDA', faixaDest, true);
 
@@ -330,15 +390,23 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
         }
         if (achou) d.marcar('duplicatas', it);
       }
+      /* NF-LEITOR-LAYOUTS-01 — numero, vencimento e valor em itens separados: a linha junta */
+      if (!linha.some((it) => normalizar(it.str).match(RE_DUPLICATA))) {
+        const t = linha.map((it) => normalizar(it.str)).join(' ');
+        for (const m of t.matchAll(RE_DUPLICATA)) {
+          const venc = dataIso(m[2]); const valor = centavosBr(m[3]);
+          if (venc && valor != null) { duplicatas.push({ numero: m[1], vencimento: venc, valorCent: valor }); for (const it of linha) d.marcar('duplicatas', it); }
+        }
+      }
     }
   }
 
   /* TOTAIS (o quadro do calculo do imposto). */
   const faixaImp = { abaixoDe: yImposto + 1, acimaDe: yProdutos };
-  const itProdutos = d.campo('VALOR TOTAL DOS PRODUTOS', faixaImp);
+  const itProdutos = d.campo('VALOR TOTAL DOS PRODUTOS', faixaImp) ?? d.campo('VALOR TOTAL PRODUTOS', faixaImp) ?? d.campo('VLR TOTAL PRODUTOS', faixaImp) ?? d.campo('VALOR PRODUTOS', faixaImp);
   const itFrete = d.campo('VALOR DO FRETE', faixaImp);
   const itDesconto = d.campo('DESCONTO', faixaImp) ?? d.campo('VALOR DO DESCONTO', faixaImp);
-  const itTotal = d.campo('VALOR TOTAL DA NOTA', faixaImp);
+  const itTotal = d.campo('VALOR TOTAL DA NOTA', faixaImp) ?? d.campo('VLR TOTAL NOTA', faixaImp) ?? d.campo('VALOR TOTAL', faixaImp);
   const extras: TotaisExtrasDoDanfe = {
     seguroCent: centavosBr(d.campo('VALOR DO SEGURO', faixaImp)?.str) ?? 0,
     outrasCent: centavosBr(d.campo('OUTRAS DESPESAS', faixaImp, true)?.str) ?? 0,
@@ -350,53 +418,88 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
 
   /* ITENS: o cabecalho da tabela da' as colunas; linha com valor total e' produto, linha sem ele completa o de cima (lote…). */
   const itens: NotaLida['itens'] = [];
-  if (rotProdutos) {
-    const rotDescr = d.itens.find((it) => it.pagina === pg && it.y < rotProdutos.y && it.y > rotProdutos.y - 15 && normalizar(it.str).startsWith('DESCRICAO'));
-    if (rotDescr) {
-      const cab = d.itens.filter((o) => o.pagina === pg && Math.abs(o.y - rotDescr.y) <= TOL_LINHA).sort((a, b) => a.x - b.x);
-      const col = (pred: (n: string) => boolean) => { const i = cab.findIndex((c) => pred(normalizar(c.str))); return i < 0 ? null : { de: cab[i].x - 4, ate: (cab[i + 1]?.x ?? 1e9) - 4 }; };
-      const cDesc = col((n) => n.startsWith('DESCRICAO'));
-      const cUn = col((n) => n === 'UN.' || n === 'UN' || n.startsWith('UNID'));
-      const cQtd = col((n) => n.startsWith('QTD') || n.startsWith('QUANT'));
-      const cUnit = col((n) => n.startsWith('V.UNIT') || n.startsWith('VALOR UNIT') || n.startsWith('VLR. UNIT') || n.startsWith('V. UNIT'));
-      const cTotal = col((n) => n.startsWith('V.TOTAL') || n.startsWith('VALOR TOTAL') || n.startsWith('VLR. TOTAL') || n.startsWith('V. TOTAL'));
-      /* ITENS-NOTA-01 — as colunas fiscais do item, quando o DANFE as tem */
-      const cCod = col((n) => n.startsWith('CODIGO') || n.startsWith('COD.'));
-      const cNcm = col((n) => n.startsWith('NCM'));
-      const cCst = col((n) => n === 'CST' || n.startsWith('CST') || n.startsWith('CSOSN') || n.startsWith('O/CST') || n.startsWith('O/CSOSN'));
-      const cCfop = col((n) => n.startsWith('CFOP'));
-      const cBcIcms = col((n) => n.startsWith('BC.ICMS') || n.startsWith('B.CALC') || n.startsWith('BC ICMS') || n.startsWith('BASE CALC'));
-      const cVIcms = col((n) => n.startsWith('V.ICMS') || n === 'VALOR ICMS' || n.startsWith('VLR.ICMS') || n.startsWith('V. ICMS'));
-      const cVIpi = col((n) => n.startsWith('V.IPI') || n === 'VALOR IPI' || n.startsWith('VLR.IPI') || n.startsWith('V. IPI'));
-      const cAIcms = col((n) => n.startsWith('%ICMS') || n.startsWith('ALIQ. ICMS') || n.startsWith('ALIQ.ICMS'));
-      const cAIpi = col((n) => n.startsWith('%IPI') || n.startsWith('ALIQ. IPI') || n.startsWith('ALIQ.IPI'));
-      const rotFim = d.itens.filter((o) => o.pagina === pg && o.y < rotDescr.y && /^(DADOS ADICIONAIS|CALCULO DO ISSQN)/.test(normalizar(o.str))).sort((a, b) => b.y - a.y)[0];
-      const naCol = (linha: ItemNaPagina[], c: { de: number; ate: number } | null) => (c ? linha.filter((o) => o.x >= c.de && o.x < c.ate) : []);
-      /* a descricao fica inteira (tem espaco de proposito); o pedaco que comeca DEPOIS dela e passa da coluna onde comeca, se parte */
-      const inicioDasColunas = cab.map((c) => c.x - 4);
-      const atravessa = (o: ItemNaPagina) => inicioDasColunas.some((x) => x > o.x + 1 && x < o.x + o.w - 1);
-      const fimDaDescricao = cDesc?.ate ?? 0;
-      for (const linhaCrua of d.linhasEntre(pg, rotDescr.y - TOL_LINHA, rotFim?.y ?? 0)) {
-        const linha = linhaCrua.flatMap((o) => (o.x >= fimDaDescricao && atravessa(o) ? partirPelosEspacos(o) : [o]));
-        const total = centavosBr(naCol(linha, cTotal).map((o) => o.str).join('').trim());
-        const descr = naCol(linha, cDesc).map((o) => o.str.trim()).join(' ').trim();
-        if (total != null && descr) {
-          const qtd = naCol(linha, cQtd).map((o) => o.str.trim()).join('');
-          const txt = (c: { de: number; ate: number } | null) => naCol(linha, c).map((o) => o.str.trim()).join('') || null;
-          itens.push({
-            descricao: descr, quantidade: qtd.replace(/\./g, '').replace(',', '.'), unidade: naCol(linha, cUn).map((o) => o.str.trim()).join(''),
-            valorCent: total, unitarioCent: centavosBr(naCol(linha, cUnit).map((o) => o.str.trim()).join('')), detalhe: null,
-            fiscal: {
-              codigo: txt(cCod), ncm: txt(cNcm), cst: txt(cCst), cfop: txt(cCfop),
-              bcIcmsCent: centavosBr(txt(cBcIcms)), vIcmsCent: centavosBr(txt(cVIcms)), vIpiCent: centavosBr(txt(cVIpi)),
-              aliqIcms: txt(cAIcms), aliqIpi: txt(cAIpi),
-            },
-          });
-          for (const o of naCol(linha, cDesc)) d.marcar('itens', o);
-        } else if (descr && itens.length) {
-          const ult = itens[itens.length - 1];
-          ult.detalhe = ult.detalhe ? `${ult.detalhe} · ${descr}` : descr;
-        }
+  /* NF-LEITOR-LAYOUTS-01 — a tabela dos itens em TODAS as folhas: a 1a pelo "DADOS DO PRODUTO"; as seguintes com o cabecalho da 1a */
+  const tabelas = [...new Set(d.itens.map((o) => o.pagina))].sort((a, b) => a - b).flatMap((p) => (
+    p === pg ? (rotProdutos ? [{ pagina: p, rot: rotProdutos }] : []) : p > pg ? [{ pagina: p, rot: null }] : []));
+  let cabSalvo: ItemNaPagina[] | null = null;
+  for (const tabela of tabelas) {
+    let itensNestaFolha = 0;
+    const folha = tabela.pagina; const rotTabela = tabela.rot;
+    const rotDescr = rotTabela ? d.itens.find((it) => it.pagina === folha && it.y < rotTabela.y && it.y > rotTabela.y - 20 && normalizar(it.str).startsWith('DESCRICAO')) ?? null : null;
+    /* NF-LEITOR-LAYOUTS-01 — o cabecalho em ate' 3 linhas ("VALOR" / "TOTAL"): os pedacos da mesma coluna (x sobreposto) viram um rotulo, de cima para baixo */
+    const pedacosCab = rotTabela && rotDescr
+      ? d.itens.filter((o) => o.pagina === folha && Math.abs(o.y - rotDescr.y) <= 7 && o.y < rotTabela.y - 2).sort((a, b) => b.y - a.y) : [];
+    const grupos: ItemNaPagina[][] = [];
+    for (const o of pedacosCab) {
+      const g = grupos.find((x) => x.some((p) => o.x < p.x + p.w - 0.5 && p.x < o.x + o.w - 0.5 && p.y !== o.y));
+      if (g && !g.some((p) => Math.abs(p.y - o.y) <= TOL_LINHA)) g.push(o); else grupos.push([o]);
+    }
+    const juntado = (g: ItemNaPagina[]): ItemNaPagina => {
+      const x = Math.min(...g.map((p) => p.x));
+      return { ...g[0], x, w: Math.max(...g.map((p) => p.x + p.w)) - x, str: g.map((p) => p.str.trim()).join(' ') };
+    };
+    /* NF-LEITOR-LAYOUTS-01 — as folhas seguintes (a continuacao do ACBr, a do savnf sem cabecalho) usam o da 1a */
+    const cab = rotDescr ? grupos.map(juntado).sort((a, b) => a.x - b.x) : cabSalvo;
+    if (!cab) continue;
+    if (rotDescr) cabSalvo = cab;
+    const yFimCab = pedacosCab.length ? Math.min(...pedacosCab.map((o) => o.y)) : Number.POSITIVE_INFINITY;
+    const col = (pred: (n: string) => boolean) => { const i = cab.findIndex((c) => pred(normalizar(c.str))); return i < 0 ? null : { i, de: cab[i].x - 4, ate: (cab[i + 1]?.x ?? 1e9) - 4 }; };
+    /* NF-LEITOR-LAYOUTS-01 — a coluna de um valor: a do cabecalho que ele SOBREPOE (o maior pedaco); sem nenhum, a do cabecalho mais perto.
+       O cabecalho centrado (a descricao comeca antes dele) e o numero alinhado a' direita (passa do fim dele) caem na coluna certa. */
+    const colunaDe = (o: ItemNaPagina) => {
+      let melhor = -1; let sobre = 0; let perto = -1; let dist = Number.POSITIVE_INFINITY;
+      cab.forEach((c, k) => {
+        const s0 = Math.min(o.x + o.w, c.x + c.w) - Math.max(o.x, c.x);
+        if (s0 > sobre) { sobre = s0; melhor = k; }
+        const g = o.x + o.w < c.x ? c.x - (o.x + o.w) : o.x > c.x + c.w ? o.x - (c.x + c.w) : 0;
+        if (g < dist) { dist = g; perto = k; }
+      });
+      return melhor >= 0 ? melhor : perto;
+    };
+    const cDesc = col((n) => n.startsWith('DESCRICAO'));
+    const cUn = col((n) => n === 'UN.' || n === 'UN' || n === 'UND' || n.startsWith('UNID'));
+    const cQtd = col((n) => n.startsWith('QTD') || n.startsWith('QUANT'));
+    const cUnit = col((n) => n.startsWith('V.UNIT') || n.startsWith('VALOR UNIT') || n.startsWith('VLR. UNIT') || n.startsWith('V. UNIT') || n === 'PRECO');
+    const cTotal = col((n) => n.startsWith('V.TOTAL') || n.startsWith('VALOR TOTAL') || n.startsWith('VLR. TOTAL') || n.startsWith('V. TOTAL') || n === 'PRECO TOTAL');
+    /* ITENS-NOTA-01 — as colunas fiscais do item, quando o DANFE as tem */
+    const cCod = col((n) => n.startsWith('CODIGO') || n.startsWith('COD.'));
+    const cNcm = col((n) => n.startsWith('NCM'));
+    const cCst = col((n) => n === 'CST' || n.startsWith('CST') || n.startsWith('CSOSN') || n.startsWith('O/CST') || n.startsWith('O/CSOSN'));
+    const cCfop = col((n) => n.startsWith('CFOP'));
+    const cBcIcms = col((n) => n.startsWith('BC.ICMS') || n.startsWith('B.CALC') || n.startsWith('BC ICMS') || n.startsWith('BASE CALC'));
+    const cVIcms = col((n) => n.startsWith('V.ICMS') || n === 'VALOR ICMS' || n.startsWith('VLR.ICMS') || n.startsWith('V. ICMS'));
+    const cVIpi = col((n) => n.startsWith('V.IPI') || n === 'VALOR IPI' || n.startsWith('VLR.IPI') || n.startsWith('V. IPI'));
+    const cAIcms = col((n) => n.startsWith('%ICMS') || n.startsWith('ALIQ. ICMS') || n.startsWith('ALIQ.ICMS'));
+    const cAIpi = col((n) => n.startsWith('%IPI') || n.startsWith('ALIQ. IPI') || n.startsWith('ALIQ.IPI'));
+    const rotFim = d.itens.filter((o) => o.pagina === folha && o.y < (rotDescr?.y ?? Number.POSITIVE_INFINITY) && /^(DADOS ADICIONAIS|CALCULO DO ISSQN|INFORMACOES COMPLEMENTARES)/.test(normalizar(o.str))).sort((a, b) => b.y - a.y)[0];
+    /* o que comeca antes da 1a coluna nao e' da tabela (o canhoto girado na margem, que a largura faria sobrepor a descricao) */
+    const inicioDaTabela = Math.min(...cab.map((c) => c.x)) - 4;
+    const naCol = (linha: ItemNaPagina[], c: { i: number; de: number; ate: number } | null) => (c ? linha.filter((o) => o.x >= inicioDaTabela && colunaDe(o) === c.i) : []);
+    /* a descricao fica inteira (tem espaco de proposito); o pedaco que comeca DEPOIS dela e passa da coluna onde comeca, se parte */
+    const inicioDasColunas = cab.map((c) => c.x - 4);
+    const atravessa = (o: ItemNaPagina) => inicioDasColunas.some((x) => x > o.x + 1 && x < o.x + o.w - 1);
+    const fimDaDescricao = cDesc?.ate ?? 0;
+    for (const linhaCrua of d.linhasEntre(folha, Math.min(rotDescr?.y ?? Number.POSITIVE_INFINITY, yFimCab) - TOL_LINHA, rotFim?.y ?? 0)) {
+      const linha = linhaCrua.flatMap((o) => (o.x >= fimDaDescricao && atravessa(o) ? partirPelosEspacos(o) : [o]));
+      const total = centavosBr(naCol(linha, cTotal).map((o) => o.str).join('').trim());
+      const descr = naCol(linha, cDesc).map((o) => o.str.trim()).join(' ').trim();
+      if (total != null && descr) {
+        const qtd = naCol(linha, cQtd).map((o) => o.str.trim()).join('');
+        const txt = (c: { i: number; de: number; ate: number } | null) => naCol(linha, c).map((o) => o.str.trim()).join('') || null;
+        itens.push({
+          descricao: descr, quantidade: qtd.replace(/\./g, '').replace(',', '.'), unidade: naCol(linha, cUn).map((o) => o.str.trim()).join(''),
+          valorCent: total, unitarioCent: centavosBr(naCol(linha, cUnit).map((o) => o.str.trim()).join('')), detalhe: null,
+          fiscal: {
+            codigo: txt(cCod), ncm: txt(cNcm), cst: txt(cCst), cfop: txt(cCfop),
+            bcIcmsCent: centavosBr(txt(cBcIcms)), vIcmsCent: centavosBr(txt(cVIcms)), vIpiCent: centavosBr(txt(cVIpi)),
+            aliqIcms: txt(cAIcms), aliqIpi: txt(cAIpi),
+          },
+        });
+        for (const o of naCol(linha, cDesc)) d.marcar('itens', o);
+        itensNestaFolha++;
+      } else if (descr && itens.length && itensNestaFolha > 0) {
+        const ult = itens[itens.length - 1];
+        ult.detalhe = ult.detalhe ? `${ult.detalhe} · ${descr}` : descr;
       }
     }
   }
@@ -416,7 +519,7 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   const naturezaOperacao = itNatureza?.str.trim() ?? '';
   const nNat = normalizar(naturezaOperacao);
   const finalidade: FinalidadeNota = nNat.includes('DEVOLU') ? 'devolucao' : nNat.includes('COMPLEMENT') ? 'complementar' : 'normal';
-  const protocoloNum = /(\d{15})/.exec(itProtocolo?.str ?? '')?.[1] ?? null;
+  const protocoloNum = numeroDoProtocolo(itProtocolo?.str);
   const somaDuplicatasCent = somarCentavos(duplicatas.map((x) => x.valorCent));
   const ie = (it: ItemNaPagina | null) => { const s = soDigitos(it?.str); return s ? s : null; };
 

@@ -147,6 +147,8 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
         operacaoId: oc.operacao_id, versao: oc.versao, lancamentoId,
         componente: compromissoSel ? null : componente, motivo: motivo.trim(),
         compromissoId: compromissoSel, parcelaId: parcelaSel, criarNovo,
+        /* OC-VINCULO-VALOR: o clique em "Vincular" é o aceite do que a prévia mostrou para o título da OC — só se ela mostrou */
+        aceitarTituloOc: ehVinculo(sim) && !!sim.confirmar_titulo_oc,
       });
       if (ehRecusa(r)) { setSim(r); toast.error('A operação mudou: escolha de novo.'); return; }
       /* FIN-V2-REFRESH-02: escrita por fora do hook avisa a lista, e so' no sucesso. */
@@ -175,7 +177,7 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
           <Link2 className="h-3.5 w-3.5 shrink-0" />
           <DialogTitle className="shrink-0 text-[13px] font-semibold leading-none">Vincular à operação comercial</DialogTitle>
           <span className="min-w-0 truncate text-[10px] text-primary-foreground/80">
-            O lançamento continua o mesmo — valor, pagamento e conciliação não mudam. Ele passa a pertencer à OC escolhida.
+            O lançamento continua o mesmo — valor, descrição, classificação, competência, datas, status e conciliação não mudam. Ele passa a pertencer à OC escolhida.
           </span>
           <button type="button" onClick={onClose} disabled={gravando} className="ml-auto shrink-0 text-white/80 hover:text-white"
             title="Fechar" aria-label="Fechar"><X className="h-3.5 w-3.5" /></button>
@@ -324,11 +326,19 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
               {!oc && !motivoDaLinha && <p className="text-muted-foreground">Escolha uma operação para ver o efeito antes de confirmar.</p>}
               {oc && simulando && <p className="flex items-center gap-1 text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Calculando…</p>}
               {oc && !simulando && recusa && (
-                <p className={recusa.motivo === 'titulo_oc_liquidado' ? 'text-red-700 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}>
-                  {recusa.motivo === 'titulo_oc_liquidado'
-                    ? `O título da OC já está ${recusa.titulo_oc?.status_transacao ?? 'realizado'} (${brl(recusa.titulo_oc?.valor)}). Os dois são dinheiro real: desfaça um deles antes.`
-                    : recusa.motivo === 'escolher_parcela' ? 'Escolha a parcela na lista à esquerda.' : 'Escolha o compromisso na lista à esquerda.'}
+                <p data-testid="vinc-recusa" data-motivo={recusa.motivo}
+                  className={recusa.motivo === 'titulo_oc_liquidado' || recusa.motivo === 'parcela_tem_lancamento' ? 'text-red-700 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}>
+                  {fraseDaRecusa(recusa)}
                 </p>
+              )}
+              {/* OC-VINCULO-VALOR (Gabriel 30/10): a parcela é de um lançamento que a OC não gerou — o vínculo nunca o muda; o
+                  caminho é um compromisso NOVO dentro da OC, com o valor deste lançamento */}
+              {oc && !simulando && recusa?.motivo === 'parcela_tem_lancamento' && recusa.pode_criar_novo && (
+                <Button type="button" variant="outline" data-testid="vinc-criar-novo-recusa"
+                  onClick={() => { setCompromissoSel(null); setParcelaSel(null); setCriarNovo(true); }}
+                  className="h-[22px] px-[9px] text-[10px]">
+                  Criar compromisso novo
+                </Button>
               )}
               {/* OC-VINCULAR-PARCELA-SEGUINTE-01 — o painel NUNCA fica vazio com a operação escolhida: se a simulação falhou,
                   a frase do banco aparece aqui também. */}
@@ -442,7 +452,9 @@ function LinhaCandidata({ c, componente, valorLanc, selecionada, onEscolher, onE
           <td />
           <td colSpan={5} className="py-1.5">
             <div className="text-[10px] text-muted-foreground mb-1">
-              {escolha.motivo === 'escolher_parcela' ? 'O compromisso tem mais de uma parcela — qual este lançamento paga?' : 'A OC tem mais de um compromisso que cabe — qual é este?'}
+              {escolha.motivo === 'escolher_parcela' ? 'O compromisso tem mais de uma parcela — qual este lançamento paga?'
+                : escolha.fornecedor_diferente ? 'O compromisso deste item é de outro fornecedor — é este mesmo, ou crie um novo?'
+                : 'A OC tem mais de um compromisso que cabe — qual é este?'}
             </div>
             <div className="flex flex-wrap gap-1.5">
               {escolha.motivo === 'escolher_compromisso' && (escolha.compromissos ?? []).map(k => (
@@ -469,4 +481,22 @@ function LinhaCandidata({ c, componente, valorLanc, selecionada, onEscolher, onE
       )}
     </>
   );
+}
+
+/** A frase do painel quando o banco recusa (ou pede uma escolha) — a do banco quando ele a manda pronta. */
+function fraseDaRecusa(r: VinculoRecusado): string {
+  switch (r.motivo) {
+    case 'titulo_oc_liquidado':
+      return `O título da OC já está ${r.titulo_oc?.status_transacao ?? 'realizado'} (${brl(r.titulo_oc?.valor)}). Os dois são dinheiro real: desfaça um deles antes.`;
+    case 'parcela_tem_lancamento':
+      return r.frase ?? 'Este compromisso já tem um lançamento. Crie um compromisso novo para este.';
+    case 'confirmar_titulo_oc':
+      return `${r.frase ?? 'O título programado da OC muda.'} Confira e clique de novo em Vincular.`;
+    case 'escolher_parcela':
+      return 'Escolha a parcela na lista à esquerda.';
+    default:
+      return r.fornecedor_diferente
+        ? 'O único compromisso livre deste item é de outro fornecedor: escolha-o na lista à esquerda ou crie um novo.'
+        : 'Escolha o compromisso na lista à esquerda.';
+  }
 }
