@@ -441,6 +441,10 @@ const CENARIOS = [
      fora da lista no gatilho (o "valor atual"). Dados SINTÉTICOS. */
   { nome: 'lancamento-parcelas-14', url: 'tela=lancamento&m=editar&v=salparcela&pp=14', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await p.waitForTimeout(500); } },
+  /* P143-DATAS-01 — duas compras iguais seguidas (12 × 69,90, SINTÉTICO): a 1/12 da nova diz "achadas 1 de 12"; a 6/12 da antiga, "7 de 12" */
+  ...[['nova', ''], ['antiga', '&qual=antiga']].map(([n, extra]) => ({ nome: `lancamento-parcela-duas-${n}`, url: `tela=lancamento&m=editar&v=salduas${extra}`,
+    tamanhos: TAMANHOS_DO_P104, semRolarNoLugar: '[data-testid="parcela-solta"]',
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelas-no-pagamento-rodape"]').waitFor(); await p.waitForTimeout(600); } })),
   /* P143 (Gabriel 29/10 15:03) — a solta PELA NOTA ("Parcela 3 - None" da NF 4964, sintético): as 3 da nota e o "Juntar"; e a prévia */
   { nome: 'lancamento-parcela-nota', url: 'tela=lancamento&m=editar&v=salnota', tamanhos: TAMANHOS_DO_P104, semRolarNoLugar: '[data-testid="parcela-solta"]',
     antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcela-solta-juntar"]:not([disabled])').waitFor(); await p.waitForTimeout(600); } },

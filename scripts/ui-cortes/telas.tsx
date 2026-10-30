@@ -1348,6 +1348,12 @@ if (tela === 'mesclar') {
     /* P143 — a tabela das irmãs: vencimento, pagamento e status (as 3 primeiras pagas, a 4ª vencida) */
     data_vencimento: `2026-${String(4 + k).padStart(2, '0')}-10`, data_pagamento: k <= 3 ? `2026-${String(4 + k).padStart(2, '0')}-10` : null,
     status_transacao: k <= 3 ? 'realizado' : 'programado', conta_bancaria_id: 'elo' }));
+  /* P143-DATAS-01 — `salduas`: DUAS compras iguais seguidas, 12 × 69,90 no cartão (SINTÉTICO): a antiga começou em set/25 (a 6/12…12/12 de
+     fev a ago/26), a nova em set/26 (só a 1/12). `&qual=antiga` abre a 6/12; sem ele, a 1/12 da nova */
+  const ANTIGA = q.get('qual') === 'antiga';
+  const IRMAS_DUAS = [...[6, 7, 8, 9, 10, 11, 12].map((k) => ({ id: ANTIGA && k === 6 ? 'lanc-1' : `antiga-${k}`, k, venc: `2026-${String(k - 4).padStart(2, '0')}-20` })),
+    { id: ANTIGA ? 'nova-1' : 'lanc-1', k: 1, venc: '2026-09-20' }].map((x) => ({ id: x.id, descricao: `Assinatura sintetica Parc ${String(x.k).padStart(2, '0')}/12`,
+    valor: 69.9, data_vencimento: x.venc, data_pagamento: x.venc, status_transacao: 'realizado', conta_bancaria_id: 'elo' }));
   /* P143 (o caso "Parcela 3 - None" da NF 4964, SINTÉTICO) — `salnota`: a descrição sem "k/N"; as irmãs pela MESMA nota do mesmo fornecedor */
   const IRMAS_DA_NOTA = [
     { id: 'nota-1', descricao: 'Manutencao sintetica de cercas da fazenda exemplo', numero_documento: '4964 / 1', data_vencimento: '2026-08-12', data_pagamento: '2026-08-12', status_transacao: 'realizado' },
@@ -1366,6 +1372,7 @@ if (tela === 'mesclar') {
   const PARCELA_DA_COMPRA = v === 'salparcela' || v === 'salparcelapaga';
   g.__bancoBancada = { from: (t: string, e: any) => v === 'salsolta' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_SOLTAS
       : v === 'salnota' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DA_NOTA
+      : v === 'salduas' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DUAS
       : PARCELA_DA_COMPRA && t === 'financiamento_parcelas' ? [{ financiamento_id: 'fin-sint', status: 'pendente' }]
       : PARCELA_DA_COMPRA && t === 'financiamentos' ? [{ natureza: 'parcelamento', status: 'ativo' }]
       : t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
@@ -1437,6 +1444,10 @@ if (m === 'editar' && v === 'salparcela' && q.get('nota') === '11') props.lancam
 /* P104 — `salsolta`: a parcela 6/6 lançada solta (o bloco não oferece parcelar) */
 if (m === 'editar' && v === 'salsolta') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 620.83, data_competencia: '2026-10-10', data_vencimento: '2026-10-10',
   descricao: 'Tinta sintetica de nome comprido para medir - 6/6', status_transacao: 'agendado' };
+/* P143-DATAS-01 — `salduas`: a 1/12 da compra nova (set/26) ou, com `&qual=antiga`, a 6/12 da antiga (fev/26) */
+if (m === 'editar' && v === 'salduas') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 69.9, data_competencia: q.get('qual') === 'antiga' ? '2026-01-26' : '2026-08-26',
+  data_vencimento: q.get('qual') === 'antiga' ? '2026-02-20' : '2026-09-20', data_pagamento: q.get('qual') === 'antiga' ? '2026-02-20' : '2026-09-20',
+  descricao: `Assinatura sintetica Parc ${q.get('qual') === 'antiga' ? '06' : '01'}/12`, status_transacao: 'realizado' };
 /* P143 — `salnota`: "Parcela 3 - None" da NF 4964 (SINTÉTICO): sem "k/N", as irmãs saem pela nota */
 if (m === 'editar' && v === 'salnota') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 500, data_competencia: '2026-07-13', data_vencimento: '2026-10-11',
   descricao: 'Parcela 3 - None', numero_documento: '4964', status_transacao: 'programado' };
