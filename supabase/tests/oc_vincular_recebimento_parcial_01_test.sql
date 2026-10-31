@@ -1,3 +1,7 @@
+-- ⚠ OC-VINCULO-VALOR (Gabriel 30/10, migration 20261028115090): "Vincular não pode mudar valor, não pode nada, nada, nada".
+--   Todo vinculo GRAVADO aqui leva `p_aceitar_titulo_oc = true` — o clique do operador depois de ver na previa o que acontece com
+--   o titulo programado da OC (sem ele o banco recusa `confirmar_titulo_oc`, provado em oc_vinculo_so_liga_test.sql). E o vinculo
+--   NAO troca mais a competencia do lancamento ligado: onde este teste a lia, ela agora e' a do proprio lancamento.
 -- OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — recebimento MENOR que a parcela nao encolhe o compromisso; o desvincular devolve ao saldo.
 --
 -- Roda como `postgres`, DEPOIS da migration 20261027193300, numa transacao que TERMINA EM RAISE: nada fica no banco.
@@ -134,7 +138,8 @@ DECLARE
   v_fora_a text; v_fora_d text; v_ids uuid[]; v_out_a text; v_out_d text;
 BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object('sub', c_admin, 'role', 'authenticated')::text, true);
-  SELECT id INTO v_compra FROM zoo_operacoes_comerciais WHERE id::text LIKE 'da9c27ee%';
+  -- molde de compra trocado em 30/10: a da9c27ee nao tem mais compromisso principal vivo (o fixture nao montava)
+  v_compra := '4c5e8c86-3af7-4634-964c-bc1966c30965';
   SELECT array_agg(l.id), md5(coalesce(string_agg(md5(l::text), '' ORDER BY l.id), '')) INTO v_ids, v_fora_a FROM financeiro_lancamentos_v2 l WHERE l.cliente_id = c_cli;
   SELECT md5(string_agg(x.s, '' ORDER BY x.id)) INTO v_out_a FROM (SELECT cl.id, concat(
       (SELECT md5(coalesce(string_agg(md5(pp::text), '' ORDER BY pp.id), '')) FROM zoo_operacao_partes pp WHERE pp.cliente_id = cl.id),
@@ -153,14 +158,17 @@ BEGIN
      OR (v_sim -> 'parcial' ->> 'de')::numeric IS DISTINCT FROM 294595 OR (v_sim -> 'parcial' ->> 'saldo')::numeric IS DISTINCT FROM 94595
      OR (v_sim -> 'parcial' ->> 'lado') IS DISTINCT FROM 'receber' OR (v_sim -> 'compromisso' ->> 'acao') IS DISTINCT FROM 'mantido'
      OR (v_sim -> 'compromisso' ->> 'valor_total')::numeric IS DISTINCT FROM 294595
-     OR (v_sim -> 'parte' ->> 'sequencia') IS DISTINCT FROM '1' OR (v_sim -> 'parte' ->> 'quantidade') IS DISTINCT FROM '2' THEN
+     OR (v_sim -> 'parte' ->> 'sequencia') IS DISTINCT FROM '1' OR (v_sim -> 'parte' ->> 'quantidade') IS DISTINCT FROM '2'
+     -- OC-VINCULO-VALOR: a previa diz o que acontece com o titulo programado da OC (so' grava com o clique)
+     OR (v_sim -> 'confirmar_titulo_oc' ->> 'acao') IS DISTINCT FROM 'reduzir'
+     OR (v_sim -> 'confirmar_titulo_oc' ->> 'valor_depois')::numeric IS DISTINCT FROM 94595 THEN
     RAISE EXCEPTION 'V1 simulacao: %', v_sim; END IF;
   IF pg_temp.foto(a.op) IS DISTINCT FROM v_f0 OR pg_temp.lanc(l1) IS DISTINCT FROM v_l0 OR pg_temp.ver(a.op) IS DISTINCT FROM 1 THEN
     RAISE EXCEPTION 'V1: a simulacao gravou'; END IF;
   v_ok := v_ok || 'V1 ok (simulacao: recebido 200000 de 294595, saldo 94595, compromisso mantido, parcela 1 de 2; nada gravado); ';
 
   -- V2 gravacao = simulacao
-  v_res := oc_vincular_lancamento(a.op, 1, l1, NULL, 'pgto 1/2', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(a.op, 1, l1, NULL, 'pgto 1/2', NULL, NULL, false, false, true);
   IF ((v_res -> 'parcial') #- '{parcela_saldo,id}'::text[]) IS DISTINCT FROM ((v_sim -> 'parcial') #- '{parcela_saldo,id}'::text[])
      OR ((v_res -> 'compromisso') - 'id'::text) IS DISTINCT FROM ((v_sim -> 'compromisso') - 'id'::text)
      OR (v_res -> 'parte') IS DISTINCT FROM (v_sim -> 'parte') OR (v_res -> 'avisos') IS DISTINCT FROM (v_sim -> 'avisos')
@@ -190,16 +198,16 @@ BEGIN
   IF pg_temp.foto(a.op) IS DISTINCT FROM v_f0 THEN RAISE EXCEPTION 'V3: o estado vivo da OC nao voltou byte a byte (partes %, view %)', pg_temp.partes(a.op), pg_temp.liq(a.op); END IF;
   -- ⚠ a COMPETENCIA nao volta: `_oc_restaurar_competencia` so' devolve a que o vinculo trocou "pela saida"; nesta OC sem saida o
   --   vinculo a levou para a data da OC e o desvincular a deixa la' (regra anterior a este PR, nao tocada).
-  IF ((pg_temp.lanc(l1)::jsonb) - 'data_competencia' - 'ano_mes') IS DISTINCT FROM ((v_l0::jsonb) - 'data_competencia' - 'ano_mes') THEN
+  IF pg_temp.lanc(l1) IS DISTINCT FROM v_l0 THEN  -- OC-VINCULO-VALOR: inteiro, competencia inclusive (o vinculo nao a troca mais)
     RAISE EXCEPTION 'V3: o lancamento nao voltou: % x %', pg_temp.lanc(l1), v_l0; END IF;
   IF pg_temp.soberano(l1) IS DISTINCT FROM v_s0 THEN RAISE EXCEPTION 'V3: o recebimento mudou'; END IF;
   IF pg_temp.lanc(a.tit) IS DISTINCT FROM v_t0 THEN RAISE EXCEPTION 'V3: o titulo nao voltou: % x %', pg_temp.lanc(a.tit), v_t0; END IF;
-  v_ok := v_ok || 'V3 ok (desvincular: OC e titulo identicos ao estado anterior; lancamento identico fora a competencia, que fica na data da OC — regra anterior; partes ' || pg_temp.partes(a.op) || '); ';
+  v_ok := v_ok || 'V3 ok (desvincular: OC e titulo identicos ao estado anterior; lancamento identico, competencia inclusive; partes ' || pg_temp.partes(a.op) || '); ';
 
   -- V4 de novo, e o segundo = saldo, sem escolher parcela
-  v_res := oc_vincular_lancamento(a.op, pg_temp.ver(a.op), l1, NULL, 'pgto 1/2', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(a.op, pg_temp.ver(a.op), l1, NULL, 'pgto 1/2', NULL, NULL, false, false, true);
   v_s0 := pg_temp.soberano(l2);
-  v_res := oc_vincular_lancamento(a.op, pg_temp.ver(a.op), l2, NULL, 'pgto 2/2', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(a.op, pg_temp.ver(a.op), l2, NULL, 'pgto 2/2', NULL, NULL, false, false, true);
   IF (v_res ->> 'ok') IS DISTINCT FROM 'true' OR (v_res -> 'parcial') IS DISTINCT FROM 'null'::jsonb OR (v_res -> 'compromisso' ->> 'acao') IS DISTINCT FROM 'mantido'
      OR (v_res -> 'parcela' ->> 'acao') IS DISTINCT FROM 'substituida' THEN RAISE EXCEPTION 'V4: %', v_res; END IF;
   SELECT * INTO r FROM vw_oc_operacao_liquidacao WHERE operacao_id = a.op;
@@ -211,8 +219,8 @@ BEGIN
   -- ═══ V5–V7: segundo MENOR que o saldo, devolucao a outro saldo, e MAIOR que o saldo ═══
   SELECT * INTO b FROM pg_temp.montar(c_venda, 294595);
   lb1 := pg_temp.pago(b.op, 200000, '2026-09-01'); lb2 := pg_temp.pago(b.op, 90000, '2026-09-05'); l5 := pg_temp.pago(b.op, 300000, '2026-09-10');
-  v_res := oc_vincular_lancamento(b.op, 1, lb1, NULL, 'p1', NULL, NULL, false, false);
-  v_res := oc_vincular_lancamento(b.op, pg_temp.ver(b.op), lb2, NULL, 'p2', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(b.op, 1, lb1, NULL, 'p1', NULL, NULL, false, false, true);
+  v_res := oc_vincular_lancamento(b.op, pg_temp.ver(b.op), lb2, NULL, 'p2', NULL, NULL, false, false, true);
   IF (v_res -> 'parcial' ->> 'saldo')::numeric IS DISTINCT FROM 4595 OR (v_res -> 'parcial' ->> 'de')::numeric IS DISTINCT FROM 94595
      OR pg_temp.partes(b.op) IS DISTINCT FROM '1/3=200000.00:realizado 2/3=90000.00:realizado 3/3=4595.00:programado'
      OR (SELECT valor_total FROM zoo_operacao_compromissos WHERE id = b.comp) IS DISTINCT FROM 294595 THEN
@@ -239,15 +247,15 @@ BEGIN
   -- ═══ V8: sem saldo em aberto, a parcela volta a 'prevista' ═══
   SELECT * INTO d FROM pg_temp.montar(c_venda, 294595);
   lk1 := pg_temp.pago(d.op, 200000, '2026-09-01'); lk2 := pg_temp.pago(d.op, 94595, '2026-09-02');
-  v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'p1', NULL, NULL, false, false);
-  v_res := oc_vincular_lancamento(d.op, pg_temp.ver(d.op), lk2, NULL, 'p2', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'p1', NULL, NULL, false, false, true);
+  v_res := oc_vincular_lancamento(d.op, pg_temp.ver(d.op), lk2, NULL, 'p2', NULL, NULL, false, false, true);
   v_res := oc_desvincular_lancamento(d.op, pg_temp.ver(d.op), lk1, 'ensaio', NULL, false);
   SELECT * INTO r FROM vw_oc_operacao_liquidacao WHERE operacao_id = d.op;
   IF (v_res -> 'devolucao_ao_saldo' ->> 'modo') IS DISTINCT FROM 'volta_a_prevista' OR (SELECT status FROM zoo_operacao_parcelas_programacao WHERE id = d.parc) IS DISTINCT FROM 'prevista'
      OR (SELECT valor_total FROM zoo_operacao_compromissos WHERE id = d.comp) IS DISTINCT FROM 294595
      OR r.base IS DISTINCT FROM 294595 OR r.total_liquidado_valido IS DISTINCT FROM 94595 OR r.saldo_operacao IS DISTINCT FROM 200000 OR r.estado_liquidacao IS DISTINCT FROM 'parcial' THEN
     RAISE EXCEPTION 'V8: % · view % · partes %', v_res -> 'devolucao_ao_saldo', pg_temp.liq(d.op), pg_temp.partes(d.op); END IF;
-  v_res := oc_vincular_lancamento(d.op, pg_temp.ver(d.op), lk1, NULL, 'p1 de novo', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(d.op, pg_temp.ver(d.op), lk1, NULL, 'p1 de novo', NULL, NULL, false, false, true);
   IF (v_res -> 'parcela' ->> 'acao') IS DISTINCT FROM 'preenchida' OR pg_temp.liq(d.op) NOT LIKE 'quitada%' THEN RAISE EXCEPTION 'V8 volta: % · %', v_res, pg_temp.liq(d.op); END IF;
   v_ok := v_ok || 'V8 ok (sem saldo em aberto: a parcela volta a prevista, compromisso 294595, view parcial com saldo 200000; vinculada de novo, quitada); ';
 
@@ -256,7 +264,7 @@ BEGIN
   lc1 := pg_temp.pago(c.op, 17400, '2026-09-09'); lc2 := pg_temp.pago(c.op, 35, '2026-09-12');
   v_s0 := pg_temp.soberano(lc1);
   v_sim := oc_vincular_lancamento(c.op, 1, lc1, NULL, 'pgto', NULL, NULL, false, true);
-  v_res := oc_vincular_lancamento(c.op, 1, lc1, NULL, 'pgto', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(c.op, 1, lc1, NULL, 'pgto', NULL, NULL, false, false, true);
   SELECT * INTO r FROM vw_oc_operacao_liquidacao WHERE operacao_id = c.op;
   IF (v_res -> 'parcial' ->> 'saldo')::numeric IS DISTINCT FROM 35 OR (v_res -> 'parcial' ->> 'lado') IS DISTINCT FROM 'pagar'
      OR ((v_res -> 'parcial') #- '{parcela_saldo,id}'::text[]) IS DISTINCT FROM ((v_sim -> 'parcial') #- '{parcela_saldo,id}'::text[])
@@ -266,7 +274,7 @@ BEGIN
      OR pg_temp.soberano(lc1) IS DISTINCT FROM v_s0 THEN
     RAISE EXCEPTION 'C1: % · view % · partes %', v_res, pg_temp.liq(c.op), pg_temp.partes(c.op); END IF;
   v_txt := pg_temp.partes(c.op) || '; view ' || pg_temp.liq(c.op);
-  v_res := oc_vincular_lancamento(c.op, pg_temp.ver(c.op), lc2, NULL, 'saldo', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(c.op, pg_temp.ver(c.op), lc2, NULL, 'saldo', NULL, NULL, false, false, true);
   IF pg_temp.liq(c.op) NOT LIKE 'quitada%saldo=0%' THEN RAISE EXCEPTION 'C1 quitacao: % · %', pg_temp.liq(c.op), v_res; END IF;
   v_ok := v_ok || 'C1 ok (compra: 17400 em 17435 deixa 35,00 a pagar — ' || v_txt || '; pago o saldo: ' || pg_temp.liq(c.op) || '); ';
 
@@ -276,7 +284,7 @@ BEGIN
     SELECT * INTO d FROM pg_temp.montar(r.molde, r.c);
     lk1 := pg_temp.pago(d.op, r.v, '2026-09-01');
     v_f0 := pg_temp.foto(d.op); v_s0 := pg_temp.soberano(lk1); v_t0 := pg_temp.lanc(d.tit);
-    v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'vinculo', NULL, NULL, false, false);
+    v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'vinculo', NULL, NULL, false, false, true);
     IF (v_res ->> 'ok') IS DISTINCT FROM 'true' OR NOT (SELECT cancelado FROM financeiro_lancamentos_v2 WHERE id = d.tit)
        OR (SELECT valor_total FROM zoo_operacao_compromissos WHERE id = d.comp) IS DISTINCT FROM r.v THEN
       RAISE EXCEPTION 'D1/D2 % %: o vinculo nao montou o caso: %', r.tipo, r.v, v_res; END IF;
@@ -300,7 +308,7 @@ BEGIN
   DELETE FROM zoo_operacao_parcelas_programacao WHERE programacao_id = d.prog; DELETE FROM zoo_operacao_programacoes WHERE id = d.prog;
   UPDATE zoo_operacao_compromissos SET status = 'aberto' WHERE id = d.comp;
   lk1 := pg_temp.pago(d.op, 200000, '2026-09-01'); v_f0 := pg_temp.foto(d.op);
-  v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'vinculo', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'vinculo', NULL, NULL, false, false, true);
   SELECT * INTO r FROM vw_oc_operacao_liquidacao WHERE operacao_id = d.op;
   IF (v_res -> 'parcial' ->> 'saldo')::numeric IS DISTINCT FROM 94595 OR (v_res -> 'compromisso' ->> 'acao') IS DISTINCT FROM 'mantido'
      OR (SELECT valor_total FROM zoo_operacao_compromissos WHERE id = d.comp) IS DISTINCT FROM 294595
@@ -317,7 +325,7 @@ BEGIN
   DELETE FROM zoo_operacao_partes WHERE operacao_id = d.op; DELETE FROM financeiro_lancamentos_v2 WHERE id = d.tit;
   UPDATE zoo_operacao_parcelas_programacao SET status = 'prevista' WHERE id = d.parc;
   lk1 := pg_temp.pago(d.op, 300000, '2026-09-01'); v_f0 := pg_temp.foto(d.op);
-  v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'vinculo', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'vinculo', NULL, NULL, false, false, true);
   IF (v_res -> 'parcela' ->> 'acao') IS DISTINCT FROM 'preenchida' OR (SELECT valor_total FROM zoo_operacao_compromissos WHERE id = d.comp) IS DISTINCT FROM 300000 THEN
     RAISE EXCEPTION 'D4 vinculo: %', v_res; END IF;
   v_res := oc_desvincular_lancamento(d.op, pg_temp.ver(d.op), lk1, 'volta', NULL, false);
@@ -328,7 +336,7 @@ BEGIN
   -- ═══ D5: titulo que nao pode ser reativado ═══
   SELECT * INTO d FROM pg_temp.montar(c_venda, 294595);
   lk1 := pg_temp.pago(d.op, 294595, '2026-09-01');
-  v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'vinculo', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(d.op, 1, lk1, NULL, 'vinculo', NULL, NULL, false, false, true);
   UPDATE financeiro_lancamentos_v2 SET cancelado = false WHERE id = d.tit;      -- alguem o reativou por fora
   v_res := oc_desvincular_lancamento(d.op, pg_temp.ver(d.op), lk1, 'volta', NULL, false);
   IF (v_res -> 'devolucao_ao_saldo' ->> 'modo') IS DISTINCT FROM 'volta_a_prevista' OR (SELECT status FROM zoo_operacao_parcelas_programacao WHERE id = d.parc) IS DISTINCT FROM 'prevista'
@@ -340,8 +348,8 @@ BEGIN
   -- ═══ R1: desvincular renumera ═══
   SELECT * INTO k FROM pg_temp.montar(c_venda, 200000);
   lr1 := pg_temp.pago(k.op, 200000, '2026-09-01'); lr2 := pg_temp.pago(k.op, 94595, '2026-09-02');
-  v_res := oc_vincular_lancamento(k.op, 1, lr1, NULL, 'p1', NULL, NULL, false, false);
-  v_res := oc_vincular_lancamento(k.op, pg_temp.ver(k.op), lr2, NULL, 'p2', NULL, NULL, true, false);
+  v_res := oc_vincular_lancamento(k.op, 1, lr1, NULL, 'p1', NULL, NULL, false, false, true);
+  v_res := oc_vincular_lancamento(k.op, pg_temp.ver(k.op), lr2, NULL, 'p2', NULL, NULL, true, false, true);
   IF pg_temp.partes(k.op) IS DISTINCT FROM '1/2=200000.00:realizado 2/2=94595.00:realizado' THEN RAISE EXCEPTION 'R1 antes: %', pg_temp.partes(k.op); END IF;
   v_res := oc_desvincular_lancamento(k.op, pg_temp.ver(k.op), lr2, 'ensaio', NULL, false);
   IF pg_temp.partes(k.op) IS DISTINCT FROM '1/1=200000.00:realizado' OR (v_res ->> 'parcelas_do_grupo') IS DISTINCT FROM '1' THEN RAISE EXCEPTION 'R1 depois: % · %', pg_temp.partes(k.op), v_res; END IF;

@@ -1908,7 +1908,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           voltar o raio, volta nos dois — meio arredondado é a única saída errada. */}
       <Card data-testid="filtros-da-lista" className="filtros-uma-linha rounded-none bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         {/* Padding interno pequeno: o afastamento da borda da tela é do container raiz. */}
-        <CardContent className="p-2 space-y-1">
+        {/* FORN-CAMPO-01 — no desktop a sobra embaixo da 3ª linha de filtros cai de 9 para 4px (`pb-[3px]` + a borda): a linha do CNPJ ·
+            Cidade/UF sob o Fornecedor (11px) custa só +6px ao card (137 → 143), como no mock v4 */}
+        <CardContent className={cn("p-2 space-y-1", !isMobile && "pb-[3px]")}>
           {isMobile ? (
             <>
               {/* MOBILE: Row 1 — Ano | Mês | Data por | Tipo | Status */}
@@ -2236,7 +2238,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     2: Atividade 2 · Safra 3 · C. Origem 3 · C. Destino 4
                     3: Macro 3 · Grupo 3 · Centro 3 · Subcentro 3
                     4: Produto 4 · Fornecedor 4 · Documento 4 */}
-              <div className="grid grid-cols-12 gap-1.5 items-end">
+              {/* FORN-CAMPO-01 — `pb-[11px]`: o lugar da linha do CNPJ sob o Fornecedor (a célula dele desconta os 11px com `-mb-[11px]`, então
+                  a 3ª linha segue alinhada pelo pé como as outras; `items-start` subia 3px a Data por, o Tipo e a Fazenda — medido) */}
+              <div className="grid grid-cols-12 gap-1.5 items-end pb-[11px]">
                   {/* ⚠ DUAS FAIXAS ERAM DEMAIS E UMA ERA DE MENOS, e a segunda tentativa é o
                       meio: o Ano mostra "2026" ou "2 anos" e o Mês mostra "12 meses" — os dois
                       são curtos, e o que quebrava era a faixa de ~55px, não o conteúdo. Com a
@@ -2501,16 +2505,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   </div>
                   {/* P123: o Fornecedor na altura dos outros campos (24px; o `compact` do seletor é 20px) e o texto a 10px, como os
                       seletores; Produto e Documento saíram de 8px (abaixo do piso) para 10px. */}
-                  <div className="col-span-2 min-w-0">
+                  {/* FORN-CAMPO-01 (Gabriel 30/10, mock v4) — o Fornecedor vai até a margem direita, EMBAIXO do "Limpar": a coluna das ações
+                      (190px + o intervalo de 6px) tem 3 linhas de botão (80px) e acaba antes da 3ª linha de filtros, então ali não mora nada
+                      em largura nenhuma (o gate de sobreposição prova). Embaixo dele, "CNPJ · Cidade/UF" em 8,5px (`linhaCompacta`), linha
+                      SEMPRE presente (vazia com "Todos"). Nome longo: "…" e o nome inteiro no `title` (saiu o `nomeInteiro`). */}
+                  <div className="col-span-2 min-w-0 -mb-[11px]">
+                    <div className="w-[calc(100%+196px)]" data-testid="filtro-fornecedor-largo">
                     <label className={lblCls}>Fornecedor</label>
                     <FavorecidoSelect
                     value={fornecedorFiltro === '__all__' ? '' : fornecedorFiltro}
                     onChange={(id) => setFornecedorFiltro(id || '__all__')}
                     fornecedores={fornecedoresDoFiltro}
-                    situacao="todos" nomeInteiro mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
-                    linhaDoDocumento={false} size="compact" triggerClassName="h-6 bg-white border-[#C9D4E2] !text-[10px]"
+                    situacao="todos" mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
+                    linhaDoDocumento linhaCompacta size="compact" triggerClassName="h-6 bg-white border-[#C9D4E2] !text-[10px]"
                     valorInexistente={inexistente('fornecedorFiltro')} marcarInativo
                   />
+                    </div>
                   </div>
                   
               </div>

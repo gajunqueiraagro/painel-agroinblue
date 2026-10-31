@@ -169,13 +169,30 @@ export interface VinculoFeito {
     parcela_saldo: { id: string; sequencia: number; quantidade: number | null; vencimento: string | null;
       titulo_id: string | null; titulo_valor_antes: number | null };
   } | null;
+  /**
+   * OC-VINCULO-VALOR (Gabriel 30/10) — o título PROGRAMADO gerado pela OC que ocupa a parcela e que o vínculo reduz ao saldo ou
+   * cancela. Só acontece com o clique do operador (`aceitarTituloOc`); a frase vem pronta do banco. Nulo/ausente: nada acontece.
+   */
+  confirmar_titulo_oc?: ConfirmarTituloOc | null;
+}
+
+export interface ConfirmarTituloOc {
+  acao: 'reduzir' | 'cancelar'; titulo_id: string; valor_antes: number; valor_depois: number; frase: string;
 }
 
 export interface VinculoRecusado {
   ok: false;
   acao: 'recusado';
-  motivo: 'escolher_compromisso' | 'escolher_parcela' | 'titulo_oc_liquidado';
+  /** OC-VINCULO-VALOR: `parcela_tem_lancamento` (a parcela é de um lançamento que a OC não gerou — crie um compromisso novo) e
+   *  `confirmar_titulo_oc` (gravar sem o clique que aceita o que acontece com o título da OC). */
+  motivo: 'escolher_compromisso' | 'escolher_parcela' | 'titulo_oc_liquidado' | 'parcela_tem_lancamento' | 'confirmar_titulo_oc';
   pode_criar_novo?: boolean;
+  /** a frase pronta do banco (`parcela_tem_lancamento`, `confirmar_titulo_oc`) */
+  frase?: string;
+  /** `escolher_compromisso` porque o único compromisso livre é de OUTRO fornecedor (o vínculo nunca escolhe sozinho) */
+  fornecedor_diferente?: boolean;
+  titulo?: { id: string; valor: number; descricao: string | null; status_transacao: string };
+  confirmar_titulo_oc?: ConfirmarTituloOc;
   compromissos?: Array<{ id: string; componente?: string; descricao: string | null; valor_total: number; status: string }>;
   parcelas?: Array<{ id: string; sequencia: number; valor: number; vencimento: string | null; status: string; titulo_id: string | null; titulo_status: string | null }>;
   titulo_oc?: { id: string; valor: number; status_transacao: string; data_pagamento: string | null; conciliado: boolean };
@@ -201,6 +218,8 @@ export interface ParametrosVinculo {
   parcelaId?: string | null;
   criarNovo?: boolean;
   simular?: boolean;
+  /** OC-VINCULO-VALOR: o operador viu na prévia o que acontece com o título programado da OC e clicou. */
+  aceitarTituloOc?: boolean;
 }
 
 /* ─── chamadas ─────────────────────────────────────────────────────────────────────────── */
@@ -224,6 +243,7 @@ export async function vincularLancamentoOC(p: ParametrosVinculo): Promise<Respos
     p_parcela_id: p.parcelaId ?? null,
     p_criar_novo: p.criarNovo ?? false,
     p_simular: p.simular ?? false,
+    p_aceitar_titulo_oc: p.aceitarTituloOc ?? false,
   });
   if (error) throw error;
   return data;
@@ -442,9 +462,13 @@ export function resumoDoVinculo(s: VinculoFeito): LinhaResumo[] {
     : `mantido · ${brl(c.valor_total)}`;
   const t = s.titulo_substituido;
   const pc = s.parcial ?? null;
+  const conf = s.confirmar_titulo_oc ?? null;
   return [
     { rotulo: 'Compromisso', valor: comp },
-    pc
+    /* OC-VINCULO-VALOR: "Título da OC" só quando o título É da OC — e então a frase do banco diz o que acontece com ele */
+    conf
+      ? { rotulo: 'Título da OC', valor: conf.frase, tom: 'ambar' as const }
+    : pc
       ? (pc.parcela_saldo.titulo_id
           ? { rotulo: 'Título da OC', valor: `fica · ${brl(pc.parcela_saldo.titulo_valor_antes)} → ${brl(pc.saldo)} · vence ${dataBr(pc.parcela_saldo.vencimento)}`, tom: 'ambar' as const }
           : { rotulo: 'Saldo', valor: `${brl(pc.saldo)} · parcela ${pc.parcela_saldo.sequencia}, sem título`, tom: 'ambar' as const })

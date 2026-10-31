@@ -49,6 +49,9 @@ export interface LevadoInicial {
   /** PR-CONC-SUGESTOES-CASAR-01: a linha de identificação mostra vencimento e status; ausentes, "—". */
   data_vencimento?: string | null;
   status_transacao?: string | null;
+  /** P153b (D3, Gabriel 29/10) — o EM ABERTO de OUTRA conta, levado do "Procurar no histórico": o item vai com `trocar_conta` e a
+   *  `fn_espelho_casar` troca a conta para a do extrato NA MESMA TRANSAÇÃO do casar (o casar falhou = nada trocado). `de`/`para` = os nomes. */
+  trocarConta?: { de: string | null; para: string | null };
 }
 
 const PALETA_DO_STATUS: Record<string, { texto: string } | undefined> = {
@@ -152,7 +155,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
   const [pergunta, setPergunta] = useState<{ lancamento_id: string; frase: string } | null>(null);
   const [aceitos, setAceitos] = useState<string[]>([]);
   const itensBase = useMemo(
-    () => levados.map((l) => ({ lancamento_id: l.lancamento_id, valor: Math.abs(valorDe(l.valorTexto)) })),
+    () => levados.map((l) => ({ lancamento_id: l.lancamento_id, valor: Math.abs(valorDe(l.valorTexto)), ...(l.trocarConta ? { trocar_conta: true } : {}) })),
     [levados],
   );
   useEffect(() => { setAceitos([]); setPergunta(null); }, [itensBase]);
@@ -256,6 +259,8 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
   const podeCriar = podeCriarPelaDiferenca(sim, semItens);
   const sentido = sim && !semItens ? sentidoDaDiferenca(sim.diferenca, sim.noExtrato) : null;
   const unico = levados.length === 1;
+  /* P153b (D3) — algum levado troca de conta ao casar: o botão diz isso (o texto é fixo enquanto o modal está aberto) */
+  const trocaConta = levados.some((l) => !!l.trocarConta);
   const valorDoBanco = paraCampo(extrato.valor);
   const poeValor = (id: string, texto: string) =>
     setLevados((v) => v.map((x) => x.lancamento_id === id ? { ...x, valorTexto: texto } : x));
@@ -316,6 +321,13 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                       </div>
                     );
                   })()}
+                {/* P153b (D3) — a confirmação curta: a conta ANTES × DEPOIS, e que valor e data viram os do extrato (o casar de hoje) */}
+                {l.trocarConta && (
+                  <div className="mt-[3px] rounded border border-amber-400 bg-amber-50 px-1.5 py-[2px] text-[10px] text-amber-800" data-testid="levado-troca-conta">
+                    Conta: <span className="font-semibold">{l.trocarConta.de ?? 'sem conta'}</span> → <span className="font-semibold">{l.trocarConta.para ?? 'a do extrato'}</span>
+                    {' · '}ao conciliar, o lançamento passa para a conta do extrato; valor e data viram os do extrato.
+                  </div>
+                )}
                 <div className="mt-[3px] flex min-w-0 items-center gap-2">
                   <input
                     /* FIN-POS-FIXADO-01b: no caso pós o campo dos juros mostra o juro real que o banco vai gravar (lido do dono) */
@@ -448,7 +460,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                 className={cn('min-w-[86px] rounded px-2.5 py-0.5 text-[11px] font-medium',
                   podeConciliar || podeComDiferenca ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
                 {/* min-w: "Conciliar…" / "Conciliar" / "Conciliando…" trocam o texto, nunca a posicao dos botoes ao lado */}
-                {gravando ? 'Conciliando…' : podeComDiferenca ? 'Conciliar…' : 'Conciliar'}
+                {gravando ? 'Conciliando…' : podeComDiferenca ? 'Conciliar…' : trocaConta ? 'Conciliar e trocar a conta' : 'Conciliar'}
               </button>
             )}
           </div>

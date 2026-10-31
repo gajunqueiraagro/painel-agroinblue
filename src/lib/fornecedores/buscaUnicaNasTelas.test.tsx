@@ -35,7 +35,8 @@ describe('a busca única nas telas (fonte)', () => {
     expect(achados.map((p) => p.slice(SRC.length + 1))).toEqual([]);
   });
   it.each([
-    ['pages/FinanceiroV2Tab.tsx', /<FavorecidoSelect[\s\S]{0,200}fornecedores=\{fornecedoresDoFiltro\}[\s\S]{0,40}situacao="todos" nomeInteiro/g, 2],
+    /* FORN-CAMPO-01: o do desktop saiu do `nomeInteiro` ("…" + title); o do celular segue */
+    ['pages/FinanceiroV2Tab.tsx', /<FavorecidoSelect[\s\S]{0,200}fornecedores=\{fornecedoresDoFiltro\}[\s\S]{0,40}situacao="todos"( nomeInteiro)? mostrarUso/g, 2],
     ['pages/FinanciamentosListaPage.tsx', /<FavorecidoSelect[\s\S]{0,200}fornecedores=\{credores\} situacao="todos" nomeInteiro/g, 1],
     ['pages/LancamentosTab.tsx', /<FavorecidoSelect \/\* FORN-BUSCA-UNICA-01/g, 3],
     ['components/compra/CompraMetaModalShell.tsx', /<CampoDeFornecedor/g, 1],
@@ -66,9 +67,10 @@ describe('o chip do filtro (FavorecidoSelect com nomeInteiro)', () => {
     /* o gatilho nao cresce: nada de altura automatica */
     expect(screen.getByRole('combobox').className).not.toMatch(/h-auto|whitespace-normal/);
   });
-  it('a regra da linha que rola mora no index.css e vale para todo gatilho do cartao de filtros do V2', () => {
+  it('a regra da linha que rola mora no index.css e vale para todo gatilho do cartao de filtros do V2 — menos o Fornecedor (FORN-CAMPO-01: "…" + title)', () => {
     const css = ler('index.css');
-    for (const sel of ['.uma-linha-que-rola', '.filtros-uma-linha button[role="combobox"] > span:first-child', '.filtros-uma-linha button > span.truncate.flex-1:first-child'])
+    for (const sel of ['.uma-linha-que-rola', '.filtros-uma-linha button[role="combobox"]:not([data-reticencias-com-title]) > span:first-child',
+      '.filtros-uma-linha button:not([data-reticencias-com-title]) > span.truncate.flex-1:first-child'])
       expect(css).toContain(sel);
     expect(css).toMatch(/white-space: nowrap !important;[\s\S]{0,80}overflow-x: auto !important;/);
     expect(ler('pages/FinanceiroV2Tab.tsx')).toMatch(/data-testid="filtros-da-lista" className="filtros-uma-linha /);

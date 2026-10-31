@@ -30,8 +30,8 @@ import {
 } from '@/lib/financeiro/visaoGeralGaveta';
 import {
   COR_FAIXA, ROTULO_FAIXA, andarEntreIrmaos, carregarAnaliseVG, chaveCaminho, escolherNaDireita, escolherNaEsquerda,
-  TITULO_NIVEL_ESQ, estadoInicialAnalise, irParaAba, irParaCaminho, mesmoCaminho, pctVar, posicaoNaRegua, subirNaEsquerda,
-  type AnaliseVG, type CaminhoVG, type ContextoAnaliseVG, type CriterioVG, type EstadoAnaliseVG, type LinhaAnaliseVG, type UnidadeVG,
+  TITULO_NIVEL_ESQ, estadoInicialAnalise, irParaAba, irParaCaminho, linhasEmBlocos, mesmoCaminho, pctVar, posicaoNaRegua, subirNaEsquerda,
+  type AnaliseVG, type BlocoAnaliseVG, type CaminhoVG, type ContextoAnaliseVG, type CriterioVG, type EstadoAnaliseVG, type LinhaAnaliseVG, type UnidadeVG,
 } from '@/lib/financeiro/visaoGeralAnalise';
 
 const COR_META = '#b45309';
@@ -119,6 +119,7 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, recorte = '', versao =
   /* a seleção é um centro: a coluna "Centro" da direita some */
   const comCentro = e.foco.length < 3;
   const lancar = (c: CaminhoVG) => { irNaGaveta(c); onLancamentos?.(c, e); };
+  const blocosEsq = d ? linhasEmBlocos(d.tabela) : null;
 
   return (
     <DialogPrimitive.Root open onOpenChange={(o) => { if (!o) onFechar(); }}>
@@ -182,7 +183,16 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, recorte = '', versao =
                         onClick={() => setE(escolherNaEsquerda(e, d.tabela.total!.caminho))} />}
                     </thead>
                     <tbody>
-                      {d?.tabela.linhas.map((l, i) => (
+                      {/* VG-CUSTEIO-FIXO-VARIAVEL-01 — no nível de uma atividade, os centros em blocos (variável, fixo) com o subtotal do banco */}
+                      {d && blocosEsq ? blocosEsq.map((g) => (
+                        <Fragment key={g.bloco.bloco}>
+                          <LinhaBloco d={d} b={g.bloco} />
+                          {g.linhas.map(({ l, i }) => (
+                            <LinhaEsquerda key={chaveCaminho(l.caminho)} d={d} l={l} i={i} recuo ativa={mesmoCaminho(e.foco, l.caminho)}
+                              onClick={() => setE(escolherNaEsquerda(e, l.caminho))} />
+                          ))}
+                        </Fragment>
+                      )) : d?.tabela.linhas.map((l, i) => (
                         <LinhaEsquerda key={chaveCaminho(l.caminho)} d={d} l={l} i={i} ativa={mesmoCaminho(e.foco, l.caminho)}
                           onClick={() => setE(escolherNaEsquerda(e, l.caminho))} />
                       ))}
@@ -284,8 +294,10 @@ function BotaoSeta({ rotulo, testid, desligado, onClick, children }: { rotulo: s
    A direita: subcentro (o resto) · centro (curto, cinza, "…" + title; some quando a seleção é um centro) · os números · lanç. */
 /* P113 — o "%" a 54px: "+999,9%" no negrito do total pede ~43px de conteúdo + 8 do padding; com 46 ele saía 4,8px da célula
    (o gate numero-vaza do P92 acusou na régua de saídas) */
-const LARG_ESQ = [92, 92, 98, 54];
-const LARG_DIR = [50, 92, 92, 98, 54, 66];
+/* VG-CUSTEIO-FIXO-VARIAVEL-01 (Gabriel 30/10) — a Dif. R$ em 7,5px: 98 → 80px ("−R$ 99.999.999,99" mede 71,2 + 8 de padding);
+   os 18px vão para o nome (Centro/Subcentro) */
+const LARG_ESQ = [92, 92, 80, 54];
+const LARG_DIR = [50, 92, 92, 80, 54, 66];
 function Colunas({ larguras }: { larguras: number[] }) {
   return <colgroup><col />{larguras.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
 }
@@ -300,14 +312,15 @@ function Cabecalho({ rotulos }: { rotulos: string[] }) {
 }
 
 /** valor, meta, Dif. R$ e % — os quatro do banco; sem meta (ou unidade que não vale), "—" */
-function Numeros({ d, l, forte }: { d: AnaliseVG; l: LinhaAnaliseVG; forte?: boolean }) {
+function Numeros({ d, l, forte }: { d: AnaliseVG; l: Pick<LinhaAnaliseVG, 'valor' | 'meta' | 'dif' | 'pct'>; forte?: boolean }) {
   const cv = corVariacao(d.lado, l.pct);
   const td = 'whitespace-nowrap px-1 text-right tabular-nums';
   return (
     <>
       <td className={cn(td, forte && 'font-bold')} style={{ color: corDoLado(d.lado) }}>{brl(l.valor)}</td>
       <td className={td} style={{ color: COR_META }}>{brl(l.meta)}</td>
-      <td className={cn(td, 'font-semibold')} style={{ color: cv }}>{brl(l.dif)}</td>
+      {/* VG-CUSTEIO-FIXO-VARIAVEL-01 (Gabriel 30/10 16:21) — a Dif. R$ em 7,5px (a do cabeçalho), nas linhas, subtotais e total */}
+      <td className={cn(td, 'text-[7.5px] font-semibold')} style={{ color: cv }} data-col="dif">{brl(l.dif)}</td>
       <td className={cn(td, 'font-semibold')} style={{ color: cv }}>{pctVar(l.pct)}</td>
     </>
   );
@@ -316,17 +329,32 @@ function Numeros({ d, l, forte }: { d: AnaliseVG; l: LinhaAnaliseVG; forte?: boo
 const linhaCls = (forte: boolean | undefined, ativa: boolean) => cn('cursor-pointer border-b border-[#eef1f5] tabular-nums',
   forte ? 'h-[21px] border-b-[#cfd6df] text-[9.5px] font-bold' : 'h-[18px] text-[8.5px]', ativa ? 'bg-[#e8eef7]' : forte ? 'bg-[#f7f8fa]' : 'bg-white hover:bg-muted/40');
 
-function LinhaEsquerda({ d, l, i, forte, ativa, onClick }: { d: AnaliseVG; l: LinhaAnaliseVG; i: number; forte?: boolean; ativa: boolean; onClick: () => void }) {
+function LinhaEsquerda({ d, l, i, forte, recuo, ativa, onClick }: {
+  d: AnaliseVG; l: LinhaAnaliseVG; i: number; forte?: boolean; recuo?: boolean; ativa: boolean; onClick: () => void;
+}) {
   const nome = `${l.rotulo}${forte ? ' · total' : ''}`;
   return (
     <tr onClick={onClick} data-testid={forte ? 'analise-tabela-total' : `analise-tabela-linha-${i}`} aria-selected={ativa} className={linhaCls(forte, ativa)}>
-      <td className="px-1.5">
+      {/* VG-CUSTEIO-FIXO-VARIAVEL-01 — o centro dentro de um bloco: 10px a mais que o subtotal */}
+      <td className={recuo ? 'pl-[18px] pr-1.5' : 'px-1.5'} data-recuo={recuo ? '' : undefined}>
         <span className="flex min-w-0 items-center gap-1.5">
           <i className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: forte ? corDoLado(d.lado) : corDaLinha(d, l, i) }} />
           <span className="truncate" title={nome}>{nome}</span>
         </span>
       </td>
       <Numeros d={d} l={l} forte={forte} />
+    </tr>
+  );
+}
+
+/** VG-CUSTEIO-FIXO-VARIAVEL-01 — o SUBTOTAL do bloco ("Custo variável · 7 centros"): 18px, negrito, fundo um tom mais escuro; os números
+    são os do banco (a mesma conta das linhas); só leitura */
+function LinhaBloco({ d, b }: { d: AnaliseVG; b: BlocoAnaliseVG }) {
+  const nome = `${b.rotulo} · ${b.centros} ${b.centros === 1 ? 'centro' : 'centros'}`;
+  return (
+    <tr data-testid={`analise-tabela-bloco-${b.bloco}`} className="h-[18px] border-b border-t border-b-[#eef1f5] border-t-[#d9dee6] bg-[#f2f5f9] text-[8.5px] font-bold tabular-nums">
+      <td className="pl-2 pr-1.5"><span className="block truncate" title={nome}>{nome}</span></td>
+      <Numeros d={d} l={b} forte />
     </tr>
   );
 }

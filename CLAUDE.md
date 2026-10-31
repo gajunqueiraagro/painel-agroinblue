@@ -210,6 +210,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Pecuaria: lancamentos iguais sao normais; vincular nao julga repeticao. "Global nao e' fazenda". O cenario vem do caminho.
 - Financeiro V2 mostra so' dinheiro por padrao (sem caixa em secao propria). Boitel: ao financeiro e ao DRE vai so' o liquido do acerto.
 - Vinculo com OC = parte viva (`zoo_operacao_partes.cancelada = false`), nunca `origem_lancamento`. OC fechada: so' o cadastral se edita.
+- OC-VINCULO-VALOR (Gabriel 30/10): VINCULAR SÓ LIGA — `oc_vincular_lancamento` nunca muda valor/descrição/classificação/competência/datas/status
+  de lançamento (guarda no banco); parcela ocupada por lançamento que a OC não gerou = recusa + "Criar compromisso novo"; fornecedor diferente = pergunta; título programado da OC só muda com `p_aceitar_titulo_oc` (o clique na prévia).
   A previa e' a propria RPC com `p_simular`. Um gesto de desfazer = um motivo + um `estorno_id`. As recusas da OC vem prontas do banco.
 - Conciliacao: tolerancia de MEIO centavo (R$ 0,01 e' diferenca); a data do banco manda na conferencia; o resumo da conta tem dono no
   banco; todo vinculo com extrato da' baixa e o parcial vira divisao explicita; F5 nunca e' necessario; transferencia de OFX = 1
@@ -217,6 +219,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P153: "Procurar no histórico" = UMA busca (`fn_conciliacao_historico_buscar`: texto do banco casado · descrição · fornecedor, só realizado, sem
   acento) e UM componente (`ProcurarNoHistorico`: Sugestões para casar e estação); "Criar igual" só PREENCHE o Criar de hoje (`modelo` no prefill;
   valor/data/conta do movimento); banco sem nome = campo vazio (`nomeDoHistorico`, D1); buscar é gesto.
+  P153b (Gabriel 29/10): a busca acha TODOS os status (até = fim do mês seguinte ao extrato); em aberto = "Casar" (de outra conta, "Casar e trocar a
+  conta" = `fn_espelho_casar` com `trocar_conta`, na mesma transação); pago = "Criar igual" (+ selo "outra conta"); sugestão "mesmo fornecedor · valor
+  difere" só em aberto a ±5 dias (`JANELA_MESMO_FORNECEDOR_DIAS`; a E3 segue); modal até 1400px e altura toda, 9px/17/8,5 (exceção declarada).
 - P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
   seguem sem os sem caixa.
 - P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
@@ -310,7 +315,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   0 4px, barra do rodape navy 23px dentro do quadro. Cabecalho e totais presos, so' o corpo rola, UM scrollport por tela, fundo opaco.
   O `th` alinha como o `td`; tabela de regua fixa (`table-layout: fixed`, `colgroup` em px medido) nao estica com a janela.
 - Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01;
-  P141: os selos OFX/PDF (7px) de "Saldos por conta"). Tamanhos do A18.
+  P141: os selos OFX/PDF (7px) de "Saldos por conta"; FORN-CAMPO-01: a linha "CNPJ · Cidade/UF" (8,5px) sob o Fornecedor da barra de Lançamentos e
+  sob o nome em cada opção da lista do `FavorecidoSelect`). Tamanhos do A18.
 - P141/P166 (CONC-TELA-02): Conciliação = FAIXA do status (1 linha, altura fixa, `FaixaDoMes`: vermelho/verde/âmbar = conciliado com sem
   subcentro/cinza) + Saldos | Resumo do mês (1fr 260px, até o fim da janela), na régua da casa e sem CAIXA ALTA; Saldos com Data · OFX/PDF em
   lugar FIXO de 20px · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
@@ -354,7 +360,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - FIN-V2-FILTRO-FORNECEDOR-01: filtro de fornecedor = ativos (+ inativo com lançamento no recorte ou escolhido, P94); mesclado nunca (o nome antigo acha
   o destino pelos apelidos); "N lanç." vem do servidor (`fornecedores` da `fn_fin_v2_lista_pagina`, recorte sem o filtro de fornecedor).
 - P94 (FIN-V2-FILTRO-FANTASMA-01): a tela nunca filtra o que não mostra — memória da lista POR CLIENTE (`chaveDoCliente`); troca de cliente
-  volta ao padrão; o restaurado se confere com as opções CARREGADAS (`useConferenciaDosFiltros`); fora das opções = "valor inexistente (limpar)".
+  volta ao padrão; o restaurado se confere com as opções CARREGADAS (`useConferenciaDosFiltros`); fora das opções = "valor inexistente (limpar)";
+  o fornecedor MESCLADO restaurado vira o destino EM SILÊNCIO nesta lista (FORN-CAMPO-01: sem a frase "foi mesclado em").
 - FIN-V2-DESEMPENHO-01c: trocar SO' a pagina pede `so_linhas` (sem recontar) e reaproveita totais/uso; gravar ou total diferente relê
   completa; vinculos e nomes so' da pagina (a pilula "Conciliado" sai da marca `conciliado` da RPC).
 - P73: salvou UM lançamento → o canal leva o id (`notificarLancamentosMudaram(cliente, menosEste, ids)`) e a lista relê SÓ a linha

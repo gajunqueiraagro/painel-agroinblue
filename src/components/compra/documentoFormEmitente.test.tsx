@@ -49,7 +49,7 @@ describe('emitente do documento da OC', () => {
   it('a lista é a do leitor (ativos, sem "[META]"); escolher grava id, nome e o documento do cadastro; esvaziar volta à contraparte', async () => {
     montar();
     fireEvent.click(seletor() as HTMLElement);
-    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.textContent?.replace(/\d.*$/, ''))).toEqual(['Alfa Agro', 'Beta Boi']);
+    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.querySelector('span')?.textContent)).toEqual(['Alfa Agro', 'Beta Boi']);
     fireEvent.click(screen.getByText('Beta Boi'));
     expect(seletor()?.textContent).toContain('Beta Boi');
     fireEvent.click(screen.getByRole('button', { name: /Registrar documento/ }));

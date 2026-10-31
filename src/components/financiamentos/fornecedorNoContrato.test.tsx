@@ -64,7 +64,7 @@ describe('fatia 2c — o fornecedor da destinação', () => {
     expect(opcoes()).toHaveLength(1);
     expect(opcoes()[0].textContent).toContain('Fornecedor 1150');
     digitar('fornecedor 1200');
-    expect(opcoes().map((o) => o.textContent)).toEqual(['Fornecedor 1200']);
+    expect(opcoes().map((o) => o.querySelector('span')?.textContent)).toEqual(['Fornecedor 1200']);
   });
 
   it('o id gravado na destinação é o do fornecedor ESCOLHIDO, e só o campo dele muda', () => {

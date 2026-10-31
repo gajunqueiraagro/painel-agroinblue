@@ -1,3 +1,7 @@
+-- ⚠ OC-VINCULO-VALOR (Gabriel 30/10, migration 20261028115090): "Vincular não pode mudar valor, não pode nada, nada, nada".
+--   Todo vinculo GRAVADO aqui leva `p_aceitar_titulo_oc = true` — o clique do operador depois de ver na previa o que acontece com
+--   o titulo programado da OC (sem ele o banco recusa `confirmar_titulo_oc`, provado em oc_vinculo_so_liga_test.sql). E o vinculo
+--   NAO troca mais a competencia do lancamento ligado: onde este teste a lia, ela agora e' a do proprio lancamento.
 -- OC-VINCULAR-PARCELA-SEGUINTE-01 — o "criar item" do Vincular entra como a PARCELA SEGUINTE do grupo.
 --
 -- Roda como `postgres`, DEPOIS da migration 20261027193200, numa transacao que TERMINA EM RAISE: nada fica no banco.
@@ -15,7 +19,7 @@
 --     igual — o ESTADO DO AGNALDO (uma parte ativa 1/1 de 200.000 numa OC de 294.595 acordados).
 -- T2  SIMULACAO do recebimento de 94.595 em "criar item": devolve parcela 2 de 2 e principal 294.595 / 294.595, e NAO grava.
 -- T3  GRAVACAO: mesmos campos da simulacao; partes ativas = (1 de 2) e (2 de 2), soma = acordado; os dois lancamentos com
---     valor, pagamento e status identicos (a competencia do que entra segue a regra de sempre — a data da OC).
+--     valor, pagamento, status e competencia identicos (desde o OC-VINCULO-VALOR o vinculo nao troca a competencia).
 -- T4  passar do acordado AVISA e nao bloqueia: um terceiro recebimento vira a parcela 3 de 3 com `principal_excede_acordado`.
 -- T5  parte CANCELADA nao ocupa sequencia: desvinculada a parcela 3, o proximo "criar item" volta a ser a 3.
 -- T6  o gesto contrario (`oc_desvincular_lancamento`) da parcela 2: sobra UMA parte ativa, que passa a dizer 1/1.
@@ -78,7 +82,7 @@ BEGIN
   RETURNING id INTO v_l2;
 
   -- ── T1: o recebimento de 200.000 no compromisso de 294.595 (o estado do Agnaldo) ──
-  v_res := oc_vincular_lancamento(v_op, 1, v_l1, NULL, 'pgto 1/2', NULL, NULL, false, false);
+  v_res := oc_vincular_lancamento(v_op, 1, v_l1, NULL, 'pgto 1/2', NULL, NULL, false, false, true);
   IF (v_res ->> 'ok') IS DISTINCT FROM 'true' OR (v_res -> 'compromisso' ->> 'acao') IS DISTINCT FROM 'mantido' OR (v_res -> 'compromisso' ->> 'valor_total')::numeric IS DISTINCT FROM 200000
      OR (v_res -> 'parte' ->> 'sequencia') IS DISTINCT FROM '1' OR (v_res -> 'parte' ->> 'quantidade') IS DISTINCT FROM '1' OR (v_res -> 'parte' ->> 'parcela_seguinte') IS DISTINCT FROM 'false' THEN
     RAISE EXCEPTION 'T1 o primeiro vinculo: %', v_res; END IF;
@@ -107,7 +111,7 @@ BEGIN
   -- ── T3: a gravacao = a simulacao ──
   SELECT md5(jsonb_build_object('v', valor, 'p', data_pagamento, 's', status_transacao, 'c', data_competencia, 'k', cancelado)::text) INTO v_ass_a
     FROM financeiro_lancamentos_v2 WHERE id = v_l1;
-  v_res := oc_vincular_lancamento(v_op, v_ver, v_l2, NULL, 'pgto 2/2', NULL, NULL, true, false);
+  v_res := oc_vincular_lancamento(v_op, v_ver, v_l2, NULL, 'pgto 2/2', NULL, NULL, true, false, true);
   IF (v_res -> 'parte') IS DISTINCT FROM (v_sim -> 'parte') OR (v_res -> 'principal') IS DISTINCT FROM (v_sim -> 'principal')
      OR (v_res -> 'compromisso' ->> 'acao') IS DISTINCT FROM (v_sim -> 'compromisso' ->> 'acao') OR (v_res -> 'avisos') IS DISTINCT FROM (v_sim -> 'avisos')
      OR (v_res -> 'lancamento' ->> 'competencia_nova') IS DISTINCT FROM (v_sim -> 'lancamento' ->> 'competencia_nova') THEN
@@ -119,11 +123,11 @@ BEGIN
     FROM financeiro_lancamentos_v2 WHERE id = v_l1;
   IF v_ass_a IS DISTINCT FROM v_ass_d THEN RAISE EXCEPTION 'T3: o primeiro recebimento mudou com o segundo vinculo'; END IF;
   IF NOT EXISTS (SELECT 1 FROM financeiro_lancamentos_v2 WHERE id = v_l2 AND valor = 94595 AND data_pagamento = '2026-09-01'
-                   AND status_transacao = 'realizado' AND cancelado IS NOT TRUE
+                   AND status_transacao = 'realizado' AND cancelado IS NOT TRUE AND data_competencia = '2026-08-31'
                    AND data_competencia = (v_res -> 'lancamento' ->> 'competencia_nova')::date) THEN
     RAISE EXCEPTION 'T3: o segundo recebimento mudou de valor, pagamento ou status'; END IF;
   v_ok := v_ok || 'T3 ok (gravou = simulou: partes ' || v_txt || ', soma = acordado; valor, pagamento e status dos dois iguais; competencia do 2o = '
-       || (v_res -> 'lancamento' ->> 'competencia_nova') || ', a regra de sempre); ';
+       || (v_res -> 'lancamento' ->> 'competencia_nova') || ', a dele mesmo — o vinculo nao a troca, OC-VINCULO-VALOR); ';
   SELECT id INTO v_parte2 FROM zoo_operacao_partes WHERE operacao_id = v_op AND financeiro_lancamento_id = v_l2 AND NOT cancelada;
   SELECT versao INTO v_ver FROM zoo_operacoes_comerciais WHERE id = v_op;
 
@@ -132,7 +136,7 @@ BEGIN
       tipo_operacao, status_transacao, descricao, subcentro, plano_conta_id, origem_lancamento, ano_mes, cenario)
   VALUES (c_cli, c_faz, c_conta, '2026-08-25', '2026-09-02', '2026-09-02', 1000, '1', '1-Entradas', 'realizado', 'ENSAIO a mais', 'Venda de Machos Adultos', c_plano, 'extrato', '2026-09', 'realizado')
   RETURNING id INTO v_l3;
-  v_res := oc_vincular_lancamento(v_op, v_ver, v_l3, NULL, 'a mais', NULL, NULL, true, false);
+  v_res := oc_vincular_lancamento(v_op, v_ver, v_l3, NULL, 'a mais', NULL, NULL, true, false, true);
   IF (v_res ->> 'ok') IS DISTINCT FROM 'true' OR (v_res -> 'parte' ->> 'sequencia') IS DISTINCT FROM '3' OR (v_res -> 'parte' ->> 'quantidade') IS DISTINCT FROM '3'
      OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_res -> 'avisos') a WHERE a ->> 'codigo' = 'principal_excede_acordado'
                       AND (a ->> 'excedente')::numeric = 1000 AND (a ->> 'acordado')::numeric = 294595 AND (a ->> 'vinculado')::numeric = 295595) THEN

@@ -172,7 +172,7 @@ describe('FIN-FINANC-28-P3-FIX3 — o filtro Credor é o seletor da casa com bus
     fireEvent.change(busca, { target: { value: 'conc' } });
     expect(within(screen.getByTestId('favorecido-lista')).getByText('Todos credores')).toBeTruthy();
     const opcoes = screen.getAllByTestId('favorecido-opcao');
-    expect(opcoes.map((o) => o.textContent)).toEqual(['Concessionaria']);
+    expect(opcoes.map((o) => o.querySelector('span')?.textContent)).toEqual(['Concessionaria']);
     fireEvent.click(opcoes[0]);
     expect(screen.getAllByTestId('cel-data').map((c) => c.textContent)).toEqual(['01/02/24']);
     expect(filtro.getAttribute('title')).toBe('Concessionaria');
@@ -188,7 +188,7 @@ describe('FIN-FINANC-28-P3-FIX4 — filtros: trocar de aba zera, "Limpar filtros
     fireEvent.click(within(filtro).getByRole('combobox'));
     const busca = await screen.findByPlaceholderText('Buscar por nome ou CNPJ/CPF...');
     fireEvent.change(busca, { target: { value: nome.slice(0, 4) } });
-    fireEvent.click(screen.getAllByTestId('favorecido-opcao').find((b) => b.textContent === nome)!);
+    fireEvent.click(screen.getAllByTestId('favorecido-opcao').find((b) => b.querySelector('span')?.textContent === nome)!);
   };
 
   it('(a) trocar de aba zera o credor e a busca (e o Limpar volta a ficar apagado)', async () => {

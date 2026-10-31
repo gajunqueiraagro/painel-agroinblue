@@ -3,7 +3,9 @@
  *   H1 carregando (pronto nulo): nada se confere — o filtro restaurado fica · H2 carregou: o id inexistente volta ao padrão com o aviso
  *   H3 confere uma vez só (re-render não repete) · H4 trocou de cliente: `pedir` + o pronto do novo cliente confere de novo
  *   H5 tudo existe: `aplicar` nem é chamado
- * Mutação: tirar a chamada de `conferirFiltrosDaLista` (aplicar nunca chamado) derruba H2 e H4.
+ *   H6 FORN-CAMPO-01: o mesclado troca para o destino SEM aviso — `aplicar` é chamado com a troca e nenhuma frase
+ * Mutação: tirar a chamada de `conferirFiltrosDaLista` (aplicar nunca chamado) derruba H2 e H4; voltar a condição a "só com aviso"
+ * derruba H6.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
@@ -46,6 +48,12 @@ describe('P94 — useConferenciaDosFiltros', () => {
     expect(aplicar).not.toHaveBeenCalled();
     rerender({ pronto: 'cli-b', filtros: { ...PADRAO, fazendaId: 'faz-a' }, opcoes: { ...OPCOES, fazendas: ['faz-b'] } });
     expect(aplicar).toHaveBeenCalledWith({ trocas: { fazendaId: TODOS }, avisos: [fraseDoRemovido('fazendaId')] });
+  });
+  it('H6 FORN-CAMPO-01 — o fornecedor mesclado vira o destino EM SILÊNCIO: troca aplicada, nenhum aviso', () => {
+    const opcoes: OpcoesDoCliente = { ...OPCOES, fornecedores: [{ id: 'f-a', nome: 'Agro Sintetica' }, { id: 'f-velho', nome: 'Agro Antiga Sintetica', fundido_em_id: 'f-a' }] };
+    const { aplicar } = montar({ pronto: 'cli-a', filtros: { ...PADRAO, fornecedorFiltro: 'f-velho' }, opcoes });
+    expect(aplicar).toHaveBeenCalledTimes(1);
+    expect(aplicar).toHaveBeenCalledWith({ trocas: { fornecedorFiltro: 'f-a' }, avisos: [] });
   });
   it('H5 tudo existe: nada a aplicar', () => {
     const { aplicar } = montar({ pronto: 'cli-a', filtros: { ...PADRAO, fazendaId: 'faz-a', fornecedorFiltro: 'f-a' }, opcoes: OPCOES });

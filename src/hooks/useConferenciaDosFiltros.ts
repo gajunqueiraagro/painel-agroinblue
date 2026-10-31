@@ -25,7 +25,8 @@ export function useConferenciaDosFiltros(p: {
     if (!p.pronto || !pendente.current) return;
     pendente.current = false;
     const r = conferirFiltrosDaLista(atual.current.filtros, atual.current.opcoes);
-    if (r.avisos.length) atual.current.aplicar(r);
+    /* FORN-CAMPO-01 — o mesclado troca SEM aviso: o que decide aplicar é haver troca (ou aviso), não só aviso */
+    if (r.avisos.length || Object.keys(r.trocas).length) atual.current.aplicar(r);
   }, [p.pronto]);
   const pedir = useCallback(() => { pendente.current = true; }, []);
   return { pedir };
