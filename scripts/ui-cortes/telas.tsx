@@ -1186,7 +1186,10 @@ if (tela === 'mesclar') {
       const arquivo = arquivoPdfDaNota(bytes, nome);
       const doXml: any = { proposta: p.proposta, emitenteNome: l.nota.emitente.nome, emitenteDocumento: l.nota.emitente.documento, emitente: l.nota.emitente, resolucao, ocorrencias: [], arquivo };
       return { id, arquivoNome: nome, arquivoTamanho: bytes.byteLength, nota: l.nota, avisos: l.avisos, fazenda: p.proposta.fazendaId ? { ...fazendas[0], aliases: null } : null,
-        recusa: null, lancada: false, doXml, jaLancados: 0, paraLancar: { arquivo, bytes, lido: l, doXml } };
+        recusa: null, lancada: false, doXml, jaLancados: 0, paraLancar: { arquivo, bytes, lido: l, doXml },
+        /* como `montarLinhaDaNota` (NOTA-NOVA-MODAL-REAL: a tela lê `l.pelaChave`): sem isto a linha da chave digitada saía como lida — o nome
+           do cadastro cortado com o title vazio (o nome da nota, que a chave não traz) e a emissão e o valor no lugar do "—" */
+        pelaChave: l.pelaChave === true };
     };
     const r: any = notaDaChaveDigitada('5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8298');
     const LONGO = 'NOTA FISCAL ESCANEADA DO FORNECEDOR SINTETICO DE NOME BEM COMPRIDO 000.000.938 - copia digitalizada em baixa resolucao.pdf';
