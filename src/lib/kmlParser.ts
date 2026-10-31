@@ -7,15 +7,31 @@ export interface ParsedPolygon {
   properties: Record<string, unknown>;
 }
 
+/** MAPA-IMPORT-01b — o que o arquivo trouxe: os polígonos e quantos PONTOS (rótulos do Google Earth) ficaram de fora. */
+export interface MapaLido {
+  poligonos: ParsedPolygon[];
+  pontosIgnorados: number;
+}
+
+function contarPontos(features: readonly GeoJSON.Feature[]): number {
+  return features.filter(f => f.geometry && (f.geometry.type === 'Point' || f.geometry.type === 'MultiPoint')).length;
+}
+
+function feicoesDoKML(kmlText: string): GeoJSON.Feature[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(kmlText, 'application/xml');
+  return kmlToGeoJSON(doc).features;
+}
+
 /**
  * Parse KML text into an array of polygons with names.
  */
 export function parseKML(kmlText: string): ParsedPolygon[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(kmlText, 'application/xml');
-  const geoJson = kmlToGeoJSON(doc);
+  return poligonosDoKML(feicoesDoKML(kmlText));
+}
 
-  return geoJson.features
+function poligonosDoKML(features: readonly GeoJSON.Feature[]): ParsedPolygon[] {
+  return features
     .filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'))
     .map(f => ({
       name: (f.properties?.name as string) || 'Sem nome',
@@ -29,16 +45,16 @@ export function parseKML(kmlText: string): ParsedPolygon[] {
  * KMZ is a zip file containing a doc.kml.
  */
 export async function parseKMZ(arrayBuffer: ArrayBuffer): Promise<ParsedPolygon[]> {
-  // Dynamic import to keep bundle small
+  return parseKML(await textoDoKMZ(arrayBuffer));
+}
+
+/* O ÚNICO import() do jszip (o censo dos import() dinâmicos conta este): o KMZ é um zip com o doc.kml dentro. */
+async function textoDoKMZ(arrayBuffer: ArrayBuffer): Promise<string> {
   const JSZip = (await importarDoApp(() => import('jszip'))).default;
   const zip = await JSZip.loadAsync(arrayBuffer);
-  
-  // Find the KML file inside the KMZ
   const kmlFile = zip.file(/\.kml$/i)[0];
   if (!kmlFile) throw new Error('Nenhum arquivo .kml encontrado dentro do KMZ');
-  
-  const kmlText = await kmlFile.async('text');
-  return parseKML(kmlText);
+  return kmlFile.async('text');
 }
 
 /**
@@ -61,6 +77,20 @@ export function parseGeoJSON(text: string): ParsedPolygon[] {
       geojson: f.geometry!,
       properties: f.properties || {},
     }));
+}
+
+/** MAPA-IMPORT-01b — o arquivo (KML, KMZ ou GeoJSON) com a contagem dos pontos ignorados. Os polígonos são os mesmos de `parseKMLFile`. */
+export async function lerArquivoDeMapa(file: File): Promise<MapaLido> {
+  const ext = file.name.toLowerCase().split('.').pop();
+  if (ext === 'geojson' || ext === 'json') {
+    const text = await file.text();
+    const bruto = JSON.parse(text);
+    const features: GeoJSON.Feature[] = bruto?.type === 'FeatureCollection' ? bruto.features ?? [] : bruto?.type === 'Feature' ? [bruto] : [];
+    return { poligonos: parseGeoJSON(text), pontosIgnorados: contarPontos(features) };
+  }
+  const kmlText = ext === 'kmz' ? await textoDoKMZ(await file.arrayBuffer()) : await file.text();
+  const features = feicoesDoKML(kmlText);
+  return { poligonos: poligonosDoKML(features), pontosIgnorados: contarPontos(features) };
 }
 
 /**

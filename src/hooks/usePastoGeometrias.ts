@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { pastosMudaramPorFora } from '@/hooks/usePastos';
 import { toast } from 'sonner';
 
 /**
@@ -25,12 +26,15 @@ export interface FazendaGeometria {
   updated_at: string;
 }
 
+/** MAPA-IMPORT-01b: `pasto_novo` cria o pasto (nome = `nome_original`, área inicial = `area_ha`) na mesma transação e grava o polígono
+ *  ligado a ele. */
 export interface PoligonoParaGravar {
-  tipo: TipoGeometria;
+  tipo: TipoGeometria | 'pasto_novo';
   pasto_id: string | null;
   nome_original: string;
   geojson: GeoJSON.Geometry;
   cor?: string | null;
+  area_ha?: number;
 }
 
 function ehGeometria(j: Json): j is Json & GeoJSON.Geometry {
@@ -38,7 +42,8 @@ function ehGeometria(j: Json): j is Json & GeoJSON.Geometry {
 }
 
 /** A frase da recusa do banco (o texto cru vai ao console). */
-function fraseDoErro(erro: { code?: string } | null | undefined, padrao: string): string {
+function fraseDoErro(erro: { code?: string; message?: string } | null | undefined, padrao: string): string {
+  if (erro?.code === '23505' && erro.message?.startsWith('Já existe um pasto')) return 'Já existe um pasto com este nome nesta fazenda.';
   if (erro?.code === '23505') return 'Este pasto já tem um polígono. Desvincule o outro antes.';
   if (erro?.code === '23514') return 'O polígono não pode ser ligado a um pasto de outra fazenda.';
   if (erro?.code === '42501') return 'Sem acesso a esta fazenda.';
@@ -51,6 +56,7 @@ export function usePastoGeometrias() {
   const [loading, setLoading] = useState(true);
 
   const fazendaId = fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id;
+  const clienteId = fazendaAtual?.cliente_id;
 
   const loadGeometrias = useCallback(async () => {
     if (!fazendaId) { setGeometrias([]); setLoading(false); return; }
@@ -78,8 +84,12 @@ export function usePastoGeometrias() {
 
   useEffect(() => { loadGeometrias(); }, [loadGeometrias]);
 
-  /** Troca o mapa da fazenda inteiro (lista vazia = remove o mapa). */
-  const substituirMapa = useCallback(async (poligonos: PoligonoParaGravar[], sucesso: string) => {
+  /** Troca o mapa da fazenda inteiro (lista vazia = remove o mapa). Com `aoRecusar` a recusa vai para quem chamou (o modal a escreve
+   *  no rodapé, sem toast por cima do Salvar); sem ela, toast. */
+  const substituirMapa = useCallback(async (
+    poligonos: PoligonoParaGravar[], sucesso: string, aoRecusar?: (frase: string) => void,
+  ) => {
+    const recusar = (frase: string) => { if (aoRecusar) aoRecusar(frase); else toast.error(frase); };
     if (!fazendaId) return false;
     try {
       const { error } = await supabase.rpc('fn_mapa_fazenda_substituir', {
@@ -91,22 +101,25 @@ export function usePastoGeometrias() {
           // a interface do GeoJSON não cabe no tipo Json do client; a cópia JSON é o próprio dado que vai no corpo (sem `as`).
           geojson: JSON.parse(JSON.stringify(p.geojson)),
           cor: p.cor ?? null,
+          area_ha: p.area_ha ?? null,
         })),
       });
-      if (error) { toast.error(fraseDoErro(error, 'Erro ao salvar o mapa. Nada foi alterado.')); console.error(error); return false; }
+      if (error) { recusar(fraseDoErro(error, 'Erro ao salvar o mapa. Nada foi alterado.')); console.error(error); return false; }
+      if (clienteId && poligonos.some(p => p.tipo === 'pasto_novo')) pastosMudaramPorFora(clienteId);
       toast.success(sucesso);
       return true;
     } catch (e) {
-      toast.error('Erro ao salvar o mapa. Nada foi alterado.');
+      recusar('Erro ao salvar o mapa. Nada foi alterado.');
       console.error(e);
       return false;
     } finally {
       await loadGeometrias();
     }
-  }, [fazendaId, loadGeometrias]);
+  }, [fazendaId, clienteId, loadGeometrias]);
 
   const salvarGeometrias = useCallback(
-    (poligonos: PoligonoParaGravar[]) => substituirMapa(poligonos, `${poligonos.length} polígonos salvos`),
+    (poligonos: PoligonoParaGravar[], opcoes?: { aoRecusar?: (frase: string) => void }) =>
+      substituirMapa(poligonos, `${poligonos.length} polígonos salvos`, opcoes?.aoRecusar),
     [substituirMapa],
   );
 
