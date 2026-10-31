@@ -182,6 +182,14 @@ const CENARIOS = [
   /* P172 — Cadastros › Plano de Contas nos dez tamanhos do P92: o admin (com as ações), os inativos ligados, o cliente (só leitura), a
      busca para 4/1/0 contas (o quadro tem a mesma altura) e os diálogos do subcentro do cliente (o nome; a prévia do renomear) */
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92 },
+  /* PROD-EVOLUCAO-01a — Produção › Evolução no Ano (nível 1), pior caso de largura (`mocks/evolucao.ts`): NENHUM número cortado a 1126 e a 1366,
+     nas três unidades, uma fazenda e sem meta (Gabriel 30/10 17:16) */
+  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-ano-arroba', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/) },
+  { nome: 'evolucao-ano-t', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
+  { nome: 'evolucao-ano-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Ano$/) },
+  { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
   { nome: 'plano-contas-inativos', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: clicar('[data-testid="mostrar-inativos"]') },
   { nome: 'plano-contas-cliente', url: 'tela=plano-contas&perfil=cliente', tamanhos: TAMANHOS_DO_P92 },
   { nome: 'plano-contas-busca-4', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: async (p) => { await p.locator('[data-testid="busca-plano"]').fill('Outras Saídas'); await p.waitForTimeout(500); } },

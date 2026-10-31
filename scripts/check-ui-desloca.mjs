@@ -145,6 +145,10 @@ const CENARIOS = [
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor
      nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
+  /* PROD-EVOLUCAO-01a — trocar unidade, período e a meta não desloca a barra, os cards nem as colunas (larguras fixas pelo maior valor) */
+  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], estados: [
+    ['@', botao(/^@$/)], ['t', botao(/^t$/)], ['cabeças', botao(/^Cabeças$/)], ['ano', botao(/^Ano$/)], ['mês', botao(/^Mês/)], ['acum', botao(/^Acum/)],
+    ['sem meta', clicar('[data-testid="evolucao-com-meta"]')], ['com meta', clicar('[data-testid="evolucao-com-meta"]')]] },
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, estados: [
     ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['inativos desligado', clicar('[data-testid="mostrar-inativos"]')],
     ['busca 4 contas', digitar('[data-testid="busca-plano"]', 'Outras Saídas')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],

@@ -1,0 +1,278 @@
+<meta charset="utf-8">
+<title>Evolução do rebanho</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#3f4652;--navy:#1d3a5d;--th:#1e2d47;--ink:#0f1729;--mut:#6b7280;--line:#e0e2e6;--page:#f6f7f9;--red:#c0262d;--blue:#1d4ed8;--grn:#15803d;--ent:#f0faf4;--sai:#fdf3f3;--sal:#e3e9f1;--ind:#f7f8fa;--sub:#e8eef6;--tot:#d5dfec;--amb:#a15c00;--ambbg:#fff4e0;color-scheme:light}
+body{background:var(--bg);color:var(--ink);font:12px/1.35 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;padding-block:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.w{max-width:1128px;margin:0 auto;display:grid;gap:10px}
+.cap{color:#fff;font-size:11px;line-height:1.5}
+.cap b{color:#ffd58a}
+h3{color:#fff;font-size:12px;margin:6px 0 0}
+.fit{overflow:hidden}
+.win{width:1126px;height:579px;display:grid;grid-template-columns:152px 974px;transform-origin:top left;background:var(--page);border-radius:6px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+/* sidebar */
+.sb{background:var(--navy);color:#fff;padding:8px 6px;display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+.sb .lg{height:40px;display:flex;align-items:center;gap:6px;padding:0 4px;font-weight:700;font-size:13px}
+.sb .lg i{width:46px;height:26px;background:#fff;border-radius:3px;display:block}
+.sb .pk{height:28px;border-radius:6px;background:rgba(255,255,255,.12);display:flex;align-items:center;padding:0 8px;font-weight:700;font-size:12px}
+.sb .it{height:30px;display:flex;align-items:center;padding:0 10px;border-radius:6px;opacity:.9}
+.sb .it.on{background:rgba(255,255,255,.15);opacity:1}
+/* main */
+.mn{display:grid;grid-template-rows:32px 547px}
+.hd{background:linear-gradient(90deg,#084c7d,#1d3a5d);color:#fff;display:flex;align-items:center;padding:0 8px;font-size:12px;gap:6px}
+.hd b{font-weight:700}.hd span{opacity:.75}.hd .u{margin-left:auto;font-size:11px;opacity:.85}
+.ct{padding:8px 16px;display:grid;grid-template-rows:34px 50px 435px;gap:6px}
+/* filtros */
+.fb{background:#fff;border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;gap:10px;padding:0 8px;font-size:10px;white-space:nowrap}
+.fb .l{color:var(--mut);font-size:8.5px;margin-right:3px}
+.dd{height:22px;border:1px solid var(--line);border-radius:5px;display:inline-flex;align-items:center;padding:0 7px;gap:8px;font-weight:600}.dd::after{content:"⌄";color:var(--mut);font-weight:400}
+.sg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;height:22px}
+.sg span{padding:0 7px;display:flex;align-items:center;color:var(--mut)}.sg .on{background:var(--th);color:#fff;font-weight:600}
+.ck{display:inline-flex;align-items:center;gap:4px}.ck i{width:11px;height:11px;border-radius:3px;border:1px solid #9aa3b0;display:inline-grid;place-items:center;font-size:8px;font-style:normal;line-height:1}.ck i.on{background:var(--th);border-color:var(--th);color:#fff}
+.rs{font-size:7.5px;background:var(--ambbg);color:var(--amb);border-radius:7px;padding:1px 5px}
+.bt{margin-left:auto;height:24px;border-radius:5px;background:var(--th);color:#fff;display:flex;align-items:center;padding:0 10px;font-weight:600}
+.bk{height:22px;border:1px solid var(--line);border-radius:5px;display:inline-flex;align-items:center;padding:0 8px;font-weight:600;color:var(--th)}
+/* kpis */
+.kp{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.kp>div{background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px 8px;display:grid;grid-template-rows:9px 16px 9px 9px;overflow:hidden;min-width:0}
+.kp .k{font-size:8px;color:var(--mut);white-space:nowrap}
+.kp .v{font-size:13.5px;line-height:16px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}.kp .v small{font-size:9px;font-weight:600;color:var(--mut)}
+.kp .m{font-size:8px;color:var(--mut);white-space:nowrap;font-variant-numeric:tabular-nums}
+.pb{display:flex;align-items:center;gap:5px;font-size:7.5px;color:var(--mut);white-space:nowrap}.pb .tr{flex:1;height:5px;background:#e8ebf0;border-radius:3px;overflow:hidden}.pb .tr b{display:block;height:100%;background:#1d4ed8}.pb em{font-style:normal;font-weight:700;color:#1d4ed8}.pb em.g{color:#15803d}.dxv{color:#d08a00;outline:1px dashed #d08a00;outline-offset:1px;font-weight:600}
+.kp .d{font-size:8px;font-weight:700;font-variant-numeric:tabular-nums}
+/* corpo */
+.bd{display:grid;grid-template-columns:626px 306px;gap:10px;min-height:0}
+.cd{background:#fff;border:1px solid var(--line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.ctit{height:24px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px;font-size:10px;font-weight:700;border-bottom:1px solid var(--line)}
+.ctit span{font-weight:400;color:var(--mut);font-size:8.5px}
+.ctit .lgd .go{position:static;margin:0}
+.ctit .lgd{margin-left:auto;display:flex;gap:6px;font-weight:400;font-size:8px;color:var(--mut)}
+table{border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
+th{background:var(--th);color:#fff;font-size:8.5px;font-weight:600;height:21px;padding:0 4px;text-align:right;white-space:nowrap;position:sticky;top:0}
+th:first-child{text-align:left;padding-left:8px}
+th.op{background:#4a5870;color:#c9d2df;font-weight:400}
+th.ac{background:#14213a}
+th.gp{height:16px;font-size:8px;font-weight:600;text-align:center;background:#2c3e5c;border-left:1px solid #46597a}
+td{height:18px;padding:0 4px;font-size:9px;text-align:right;border-bottom:1px solid #eef0f3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td:first-child{text-align:left;padding-left:8px;position:relative}
+td.mo{padding:0 2px}
+tr.ind td{font-size:8.5px}
+tr.ind td.mo{padding:0 1px;letter-spacing:-.15px}
+td.op{background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.025) 0 3px,transparent 3px 6px);color:#b8bec8}
+td.ac{font-weight:700;background-color:rgba(30,45,71,.05)}
+td.z{color:#c3c8d0}
+td.dx{outline:1px dashed #d08a00;outline-offset:-3px;color:#d08a00}
+tr.sal td{background:var(--sal);font-weight:700}
+tr.ent td{background:var(--ent)}
+tr.sai td{background:var(--sai)}
+tr.ind td{background:var(--ind);color:#374151}
+tr.ents td{background:#dcf1e4;font-weight:700}
+tr.sais td{background:#f8dede;font-weight:700}
+tr.ints td{background:#ebe8f6;font-weight:700;color:#3b2f73}
+tr.int td{background:#f6f4fc}
+tr.ent td:first-child,tr.sai td:first-child,tr.int td:first-child{padding-left:16px}
+tr.fin td{background:var(--tot);font-weight:800;border-bottom:2px solid #b9c6d8}
+tr.sub td{background:var(--sub);font-weight:700}
+tr.tt td{background:var(--tot);font-weight:800}
+.t3 td,.t3 th{padding:0 2px;font-size:8.5px}.t3 td:first-child,.t3 th:first-child{padding-left:6px}.t3 td.kg{color:#4b5563}.t3 tr.h3 th{height:15px;font-size:7.5px;font-weight:400;color:#c9d2df}
+td.fa2{background:#fff1d6!important;color:#8a4b00!important;font-weight:700}td.fr{background:#fde1e1!important;color:#a3161c!important;font-weight:700}
+.tabs{display:flex;height:24px;border-bottom:1px solid var(--line);font-size:9.5px}.tabs span{padding:0 10px;display:flex;align-items:center;color:var(--mut)}.tabs .on{color:var(--ink);font-weight:700;box-shadow:inset 0 -2px 0 var(--th)}
+.cres{display:flex;gap:6px;align-items:center;padding:5px 8px;font-size:8px;color:var(--mut)}.cres b{border-radius:6px;padding:1px 6px}.cres b.r{background:#fde1e1;color:#a3161c}.cres b.a{background:#fff1d6;color:#8a4b00}
+.tcf td{height:17px;font-size:8.5px;padding:0 3px}.tcf th{padding:0 3px}.tcf td.dt{font-size:8px;color:#6b7280}.tcf td.mu2{color:#9ca3af}.tcf td.ed{color:#1e2d47;text-align:center;cursor:pointer}
+.lk{text-decoration:underline dotted #8aa0bf;text-underline-offset:2px;cursor:pointer}
+.go{position:absolute;right:4px;top:3px;font-size:7px;font-weight:600;border-radius:6px;padding:0 4px;line-height:11px;margin-top:3px;background:#e6ecf5;color:var(--th)}
+.go.oc{background:#fde8d6;color:#9a3412}.go.fe{background:#e1f2e8;color:var(--grn)}
+.neg{color:var(--red)}.pos{color:var(--blue)}.g{color:var(--grn)}
+.al{flex:1;padding:6px 8px;display:grid;align-content:start;gap:4px;font-size:8.5px;color:#4b5563;border-top:1px solid var(--line)}
+.al div{display:flex;gap:6px;align-items:baseline}.al i{font-style:normal;font-size:7.5px;font-weight:700;border-radius:6px;padding:0 5px;background:var(--ambbg);color:var(--amb);flex:none}
+.rt{display:grid;grid-template-rows:1fr 1fr;gap:8px;min-height:0}
+.fa{display:flex;gap:3px;white-space:nowrap;padding:5px 8px 0;align-items:center;font-size:8.5px}.fc{white-space:nowrap;display:inline-flex;align-items:center;gap:3px;border:1px solid var(--line);border-radius:5px;padding:0 5px;height:20px;color:var(--mut)}.fc.on{color:var(--ink);font-weight:600;border-color:#c9d0da;background:#f7f8fa}.fc i{width:10px;height:10px;border-radius:2px;border:1px solid #b8bec8;display:inline-grid;place-items:center;font-size:7px;font-style:normal;color:#fff;line-height:1}
+.chips{display:flex;gap:4px;padding:5px 8px 0;flex-wrap:wrap}
+.chips span{font-size:8px;border:1px solid var(--line);border-radius:8px;padding:1px 6px;color:var(--mut)}.chips .on{background:#9a3412;border-color:#9a3412;color:#fff}
+svg text{font-family:Inter,system-ui,sans-serif}
+.leg{display:flex;gap:10px;padding:0 8px 5px;font-size:8px;color:var(--mut);font-variant-numeric:tabular-nums}.leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px;vertical-align:-1px}
+/* doc */
+.doc{background:#fff;border-radius:8px;padding:12px 16px;display:grid;gap:6px}
+.doc h2{font-size:13px;margin:0;color:var(--th)}.doc ul{margin:0;padding-left:18px;display:grid;gap:3px;font-size:12px;line-height:1.45}
+.q{background:var(--ambbg);border-radius:6px;padding:8px 10px;font-size:12px}
+</style>
+
+<div class="w">
+<div class="cap"><b>Mock v1 · Produção › Evolução do rebanho</b> · 2 níveis: o ano e o mês por categoria. MEDIDO no proto agora: janela 1126×579 (barra lateral 152, topo 32, área útil 974×547), régua da casa para tabela (cabeçalho 21 px / 8,5 px, linha 18 px / 9 px). Dados: <b>RRCC · Global</b>, o cliente aberto no seu Chrome, lidos da tela de hoje (2024, 2025, 2026 realizado e meta). Calculados por mim sobre esses números: GMD ponderado, @ produzidas, desfrute. Células <b>tracejadas</b> = número que nenhuma tela mostra hoje (a tela por categoria está presa em out/26): o Code põe o real.</div>
+
+<h3>Nível 1 · Evolução no Ano (abre em cabeças, acumulado até o último mês fechado)</h3>
+<div class="fit" data-fit><div class="win" id="w1"></div></div>
+
+<h3>Ponte com "@" escolhido (o mesmo card, em arrobas)</h3>
+<div class="fit" data-fit2><div id="p3" style="width:306px;transform-origin:top left"></div></div>
+
+<h3>Nível 2 · Clique em "Set": o mês por categoria, para CONFERIR · exemplo com o Agnaldo · Global · set/26 (o set/26 da RRCC só teve 1 consumo)</h3>
+<div class="fit" data-fit><div class="win" id="w2"></div></div>
+<h3>Nível 2 · a outra aba do painel da direita: Composição (donut em cima, tabela embaixo)</h3>
+<div class="fit" data-fit2><div id="p4" style="width:306px;transform-origin:top left"></div></div>
+
+<div class="doc">
+<h2>O que muda</h2>
+<ul>
+<li><b>Topo congelado</b> com os filtros: ano, fazenda (pelo código), período (mês · acumulado · ano), unidade (cabeças · @ · kg) e comparar com meta e/ou ano anterior. "Apresentar" abre a mesma tela em tela cheia para a reunião com o cliente.</li>
+<li><b>A meta do ano é a régua</b>: os 6 cards dizem quanto da meta de 2026 (cenário Meta) já foi feito até o último mês fechado — faturamento, cabeças vendidas, @ produzidas, desfrute = (abates + vendas + consumo) ÷ rebanho inicial, preço médio por @ — e o estoque que ainda dá para vender (engorda × descarte, em @ e cabeças). R$ e preço médio (tracejados) o Code tira das OCs e dos lançamentos de abate e venda; a tela de hoje não mostra R$.</li>
+<li><b>Tabela do ano</b> com fundo diferente por nível (saldo · entradas · saídas · indicadores) e colunas Acum. · Meta · Δ fixas à direita. Mês aberto fica hachurado. <b>Todo número é um caminho</b>: o selo da linha diz para onde ele leva (Lanç. = lançamentos do mês e tipo, OC = operações comerciais do tipo e período, Fech. = Fechamento Área do mês).</li>
+<li><b>Comparar anos</b> com filtros pequenos: <b>Mês | Acumulado</b> (acumulado = a curva do ano somando mês a mês, para ver em que mês cada ano chegou onde), o que ver o que ver (abates + vendas, nascimentos, compras, mortes, saldo) e quais séries ligar — 2026, 2025, 2024, Meta 2026 (coluna tracejada). Número em cima de cada coluna.</li>
+<li><b>A conferência fala</b>: embaixo da tabela, o que está estranho (GMD de 3,181 em mar/26 porque o peso do fechamento salta de 273,6 para 372,0 kg) com o caminho para corrigir.</li>
+<li><b>Nível 2 é conferência</b>: cada tipo de movimento do mês (compra, abate, venda, morte, evolução entrou/saiu…) com <b>cabeças e kg/cab</b>, por categoria. O kg lançado é comparado com o kg/cab real da categoria no Fechamento e pinta quando foge (âmbar ≥ 15%, vermelho ≥ 25%). Ao lado, a lista <b>Conferir pesos</b>: cada lançamento do mês, do maior desvio para o menor, com ✎ para abrir e corrigir. A composição do rebanho é a outra aba do mesmo painel.</li>
+</ul>
+<div class="q"><b>Para você decidir:</b> (1) "Estoque para vender": engorda = garrotes + bois; descarte = vacas de descarte. Hoje o cadastro não tem "vaca de descarte" separada da vaca de cria — conta todas as vacas como descarte, nenhuma, ou o operador marca? (2) Faturamento: só pecuária (abates + vendas de gado) ou com outras receitas da atividade?</div>
+</div>
+</div>
+
+<script>
+const nf=(v,d=0)=>v==null?'':(v<0?'−':'')+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const sg=(v,d=0)=>v==null?'':(v>0?'+':v<0?'−':'')+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const M=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const side=(cli='RRCC')=>`<div class="sb"><div class="lg"><i></i>Agroinblue</div><div class="pk">${cli}</div><div class="pk">Global</div>${['Visão Geral','Produção','Financeiro','Planejamento','Executivo','Auditoria','Cadastros','Validar','Configurações'].map(x=>`<div class="it${x==='Produção'?' on':''}">${x}</div>`).join('')}</div>`;
+
+/* ---------- NÍVEL 1 ---------- */
+const R=[ // [classe, rótulo, selo, meses(9), acum, meta, delta, casas]
+['sal','Saldo início','',[895,894,893,893,893,839,838,735,677],895,895,0,0],
+['ents','+ Entradas externas','',[0,0,1,0,0,0,0,0,0],1,0,1,0],
+['ent','Nascimentos','lanç',[0,0,1,0,0,0,0,0,0],1,0,1,0],
+['ent','Compras','oc',[0,0,0,0,0,0,0,0,0],0,0,0,0],
+['sais','− Saídas externas','',[-1,-1,-1,0,-54,-1,-103,-58,-1],-220,-59,-161,0],
+['sai','Abates','oc',[0,0,0,0,54,0,101,58,0],213,59,154,0],
+['sai','Vendas em pé','oc',[0,0,0,0,0,0,0,0,0],0,0,0,0],
+['sai','Consumo','lanç',[0,0,0,0,0,0,0,0,1],1,0,1,0],
+['sai','Mortes','lanç',[1,1,1,0,0,1,2,0,0],6,0,6,0],
+['ints','↔ Internas · não mudam o total','',null,null,null,null,0],
+['int','Transf. fazendas','lanç',[0,0,0,0,0,0,0,0,0],0,0,0,0],
+['int','Evol. categoria','lanç','dx','dx','dx','dx',0],
+['fin','Saldo final','fech',[894,893,893,893,839,838,735,677,676],676,836,-160,0],
+['ind','Peso final kg','fech',[260.1,273.6,372.0,400.0,373.1,397.0,395.7,405.1,415.5],415.5,407.8,7.7,1],
+['ind','GMD kg/cab/dia','fech',[0.143,0.480,3.181,0.934,-0.498,0.791,0.684,0.735,0.345],0.777,0.560,0.217,3],
+['ind','Lotação UA/ha ⚠','fech',[1.52,1.60,2.18,2.34,2.12,2.18,2.04,1.87,1.84],1.97,1.93,0.04,2],
+['ind','@ produzidas','fech',[132,400,2935,834,-446,663,556,536,233],5845,4412,1433,0],
+['ind','Desfrute %','',[0,0,0,0,6.0,0,11.3,6.5,0.1],23.9,6.6,17.3,1]];
+const selo={'lanç':'<span class="go">Lanç.</span>','oc':'<span class="go oc">OC</span>','fech':'<span class="go fe">Fech.</span>','':''};
+function cell(v,d,cls){ if(v===0) return `<td class="z mo">–</td>`; const neg=v<0; return `<td class="mo${neg?' neg':''}"${d===3?' style="font-size:8px"':''}><span class="lk">${nf(v,d)}</span></td>`;}
+let col=`<colgroup><col style="width:116px">${M.map(()=>'<col style="width:32px">').join('')}<col style="width:40px"><col style="width:40px"><col style="width:44px"></colgroup>`;
+let thead=`<thead><tr><th>Movimentação</th>${M.map((m,i)=>`<th class="${i>8?'op':''}">${m}</th>`).join('')}<th class="ac">Acum.</th><th class="ac" style="color:#f6c27a">Meta</th><th class="ac">Δ %</th></tr></thead>`;
+let tb=R.map(([c,l,sl,v,a,m,dl,d])=>{
+ const op=[0,0,0].map(()=>'<td class="op">·</td>').join('');
+ if(v==null) return `<tr class="${c}"><td colspan="13">${l}</td><td colspan="3" style="text-align:right;font-weight:400;font-size:8px">no Global, entrou = saiu</td>${''}</tr>`;
+ if(v==='dx') return `<tr class="${c}"><td>${l}${selo[sl]}</td>${Array(9).fill('<td class="dx mo">·</td>').join('')}${op}<td class="dx ac">·</td><td class="dx ac">·</td><td class="z ac">–</td></tr>`;
+ return `<tr class="${c}"><td>${l}${selo[sl]}</td>${v.map(x=>cell(x,d)).join('')}${op}${a===0&&d===0?'<td class="z ac">–</td>':`<td class="ac${a<0?' neg':''}">${nf(a,d)}</td>`}<td class="ac" style="color:#b45309">${m===0&&d===0?'–':nf(m,d)}</td>${(()=>{if(!m){return '<td class="ac z">–</td>'}const pc=(Math.abs(a)-Math.abs(m))/Math.abs(m)*100;return `<td class="ac ${pc<0?'neg':pc>0?'pos':'z'}">${Math.abs(pc)<0.05?'–':sg(pc,Math.abs(pc)>=100?0:1)+'%'}</td>`})()}</tr>`}).join('');
+const tabela1=`<table style="width:624px">${col}${thead}<tbody>${tb}</tbody></table>`;
+const kp=(k,v,u,m,d,p,cls)=>`<div><div class="k">${k}</div><div class="v">${v} <small>${u}</small></div><div class="m">${m}</div><div class="d ${cls}">${d}${p?' · '+p:''}</div></div>`;
+// % em linha propria: d (diferença) e p na mesma? regra: valor e % nunca na mesma linha -> separo
+const kp2=(k,v,u,m,p,cls)=>`<div><div class="k">${k}</div><div class="v">${v} <small>${u}</small></div><div class="m">${m}</div><div class="d ${cls}">${p}</div></div>`;
+const kpm=(k,v,u,meta,pc,extra)=>{const w=pc==null?0:Math.min(100,pc);const dx=pc==null;return `<div><div class="k">${k}</div><div class="v">${dx?'<span class="dxv">▒▒▒</span>':v} <small>${u}</small></div><div class="m">${meta}</div><div class="pb"><span class="tr"><b style="width:${w}%;${pc>=100?'background:#15803d':''}"></b></span><em class="${dx?'dxv':pc>=100?'g':''}">${dx?'▒ %':nf(pc,0)+'% da meta do ano'}</em></div></div>`};
+const kpis=`<div class="kp">
+${kpm('Faturamento pecuário · até set','','R$','meta 2026 R$ ▒ · vendas + abates',null)}
+${kpm('Vendidos · abate + venda','213','cab','meta 2026: 161 cab',132.3)}
+${kpm('@ produzidas · até set','5.845','@','meta 2026: 5.536 @',105.6)}
+${kpm('Desfrute · até set','23,9','%','meta 2026: 18,0%',132.8)}
+${kpm('Preço médio de venda','','R$/@','meta 2026 R$ ▒/@',null)}
+<div><div class="k">Estoque para vender · set/26</div><div class="v">9.363 <small>@ · 676 cab</small></div><div class="m">engorda 674 cab · descarte 0</div><div class="m">meta para dez: 734 cab</div></div>
+</div>`;
+const fb1=`<div class="fb"><span><span class="l">Ano</span><span class="dd">2026</span></span><span><span class="l">Fazenda</span><span class="dd">Global</span></span><span><span class="l">Período</span><span class="sg"><span>Mês</span><span class="on">Acum. até set</span><span>Ano</span></span></span><span><span class="l">Unidade</span><span class="sg"><span class="on">Cabeças</span><span>@</span><span>Kg</span></span></span><span class="ck"><span class="l">Comparar</span><i class="on">✓</i>Meta <span class="rs">rascunho</span></span><span class="ck"><i></i>Ano anterior</span><span class="bt">Apresentar</span></div>`;
+const alertas=`<div class="al"><div><i>conferir</i><span>Mar/26: GMD 3,181 — o peso médio final salta de 273,6 kg (fev) para 372,0 kg (mar) sem compra nem evolução de categoria. Fechamento Área de mar/26 ↗</span></div><div><i>conferir</i><span>Lotação ainda com a área do cadastro de hoje; com o conserto, a área de pecuária de cada mês.</span></div></div>`;
+
+// gráfico comparar anos (abates + vendas) com séries escolhidas
+const Y={2024:[0,219,90,138,0,0,250,0,93,305,0,0],2025:[0,0,0,0,0,217,74,224,0,0,0,0],2026:[0,0,0,0,54,0,101,58,0,null,null,null],meta:[0,0,0,0,59,0,0,0,0,0,102,0]};
+const CY={2025:'#d29a6c',2026:'#7c2d12',meta:'#b45309'};
+const SER=['2026','2025','meta'];
+function grafAnos(){const W=290,H=124,x0=24,y0=10,ph=H-y0-18,max=320,gw=(W-x0)/12,bw=6.6;let s=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+[0,100,200,300].forEach(t=>{const y=y0+ph-ph*t/max;s+=`<line x1="${x0}" x2="${W}" y1="${y}" y2="${y}" stroke="#eef0f3"/><text x="${x0-3}" y="${y+2.5}" font-size="6.5" fill="#9ca3af" text-anchor="end">${t}</text>`});
+M.forEach((m,i)=>{const cx=x0+gw*i+gw/2;SER.forEach((a,j)=>{const v=Y[a][i];const x=cx-bw*1.5+bw*j;if(v==null||v<=0)return;const h=ph*v/max;
+s+=a==='meta'?`<rect x="${x+0.4}" y="${y0+ph-h}" width="${bw-1.6}" height="${h}" fill="#fff4e0" stroke="${CY.meta}" stroke-width="0.9" stroke-dasharray="2 1.2" rx="0.8"/>`:`<rect x="${x}" y="${y0+ph-h}" width="${bw-0.8}" height="${h}" fill="${CY[a]}" rx="0.8"/>`;
+s+=`<text x="${x+bw/2-0.4}" y="${y0+ph-h-2}" font-size="5.6" fill="${a==='meta'?CY.meta:'#374151'}" text-anchor="middle">${v}</text>`});s+=`<text x="${cx}" y="${H-6}" font-size="7" fill="${i>8?'#b8bec8':'#6b7280'}" text-anchor="middle">${m.slice(0,1)}</text>`});
+s+=`<line x1="${x0}" x2="${W}" y1="${y0+ph}" y2="${y0+ph}" stroke="#cfd5dd"/></svg>`;return s}
+const filtrosAnos=`<div class="fa"><span class="dd" style="height:20px;font-size:8.5px;white-space:nowrap;padding:0 4px;gap:3px">Abat.+vend.</span><span class="sg" style="height:20px;font-size:8.5px"><span class="on" style="padding:0 4px">Mês</span><span style="padding:0 4px">Acum.</span></span>
+<span class="fc on"><i style="background:${CY[2026]}">✓</i>2026</span><span class="fc on"><i style="background:${CY[2025]}">✓</i>2025</span><span class="fc on"><i style="background:#fff4e0;border:1px dashed ${CY.meta};color:${CY.meta}">✓</i>Meta</span></div>`;
+// ponte (totais)
+function ponte(u){const A=u==='@';const W=290,H=106,x0=30,y0=12,ph=H-y0-24;
+const it=A?[['Início',7627,'ini'],['Compras',0,'+'],['Produção',5845,'+'],['Saídas ext.',-4109,'-'],['Final',9363,'fim']]:[['Início',895,'ini'],['Entradas ext.',1,'+'],['Saídas ext.',-220,'-'],['Final',676,'fim']];
+const lo=A?0:500,hi=A?14000:920,tk=A?[0,4000,8000,12000]:[500,600,700,800,900];const sc=v=>y0+ph-ph*(v-lo)/(hi-lo);
+const gw=(W-x0)/it.length,bw=gw*0.5;let s=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+tk.forEach(t=>{const y=sc(t);s+=`<line x1="${x0}" x2="${W}" y1="${y}" y2="${y}" stroke="#eef0f3"/><text x="${x0-3}" y="${y+2.5}" font-size="6.5" fill="#9ca3af" text-anchor="end">${nf(t)}</text>`});
+let acc=it[0][1];it.forEach(([l,v,k],i)=>{const x=x0+gw*i+(gw-bw)/2;let a,b,c,lab;
+if(k==='ini'||k==='fim'){a=lo;b=v;c='#1e2d47';lab=nf(v)}else{a=acc;b=acc+v;acc=b;c=v>0?'#15803d':v<0?'#c0262d':'#cfd5dd';lab=v===0?'0':sg(v)}
+const y1=sc(Math.max(a,b)),y2=sc(Math.min(a,b));const h=Math.max(y2-y1,1);
+s+=`<rect x="${x}" y="${y1}" width="${bw}" height="${h}" fill="${c}" rx="1"/>`;
+s+=`<text x="${x+bw/2}" y="${y1-3}" font-size="7.5" font-weight="700" fill="${v<0&&k==='-'?'#c0262d':v>0&&k==='+'?'#15803d':'#0f1729'}" text-anchor="middle">${lab}</text>`;
+s+=`<text x="${x+bw/2}" y="${H-12}" font-size="7" fill="#6b7280" text-anchor="middle">${l}</text>`});
+if(!A){const ym=sc(836),xf=x0+gw*3+(gw-bw)/2;s+=`<line x1="${xf-6}" x2="${xf+bw+6}" y1="${ym}" y2="${ym}" stroke="#b45309" stroke-dasharray="3 2"/><text x="${xf+bw/2}" y="${ym-3}" font-size="6.5" fill="#b45309" text-anchor="middle">meta 836</text>`}
+s+=`<line x1="${x0}" x2="${W}" y1="${y0+ph}" y2="${y0+ph}" stroke="#cfd5dd"/><text x="${x0}" y="${H-2}" font-size="6.2" fill="#9ca3af">${A?'@ = kg vivo ÷ 30 · saídas = início + produção − final':'eixo começa em 500 cab'}</text></svg>`;
+const tot=A?`<table style="width:290px;margin:0 8px"><colgroup><col style="width:130px"><col style="width:80px"><col style="width:80px"></colgroup><thead><tr><th>Totais jan–set</th><th>@</th><th>% do início</th></tr></thead><tbody>
+<tr class="ent"><td>Compras + produção</td><td class="g">+5.845</td><td>76,6%</td></tr>
+<tr class="sai"><td>Saídas externas</td><td class="neg">−4.109</td><td class="neg">−53,9%</td></tr>
+<tr class="fin"><td>Variação do estoque</td><td class="pos">+1.736</td><td class="pos">+22,8%</td></tr></tbody></table>`
+:`<table style="width:290px;margin:0 8px"><colgroup><col style="width:150px"><col style="width:60px"><col style="width:80px"></colgroup><thead><tr><th>Totais jan–set</th><th>Cab</th><th>% do início</th></tr></thead><tbody>
+<tr class="ent"><td>Entradas externas</td><td class="g">+1</td><td>0,1%</td></tr>
+<tr class="sai"><td>Saídas externas</td><td class="neg">−220</td><td class="neg">−24,6%</td></tr>
+<tr class="fin"><td>Variação do rebanho</td><td class="neg">−219</td><td class="neg">−24,5%</td></tr></tbody></table>`;
+return `<div style="padding:4px 6px 0">${s}</div>${tot}`}
+const ponteCard=u=>`<div class="cd"><div class="ctit">Ponte do rebanho <span>jan–set/26</span><span class="sg" style="margin-left:auto;height:18px;font-size:8.5px;font-weight:400"><span class="${u==='@'?'':'on'}">Cabeças</span><span class="${u==='@'?'on':''}">@</span></span></div>${ponte(u)}</div>`;
+document.getElementById('w1').innerHTML=side()+`<div class="mn"><div class="hd"><b>Produção</b><span>/ Evolução do rebanho</span><span class="u">Gabriel Junqueira</span></div><div class="ct">${fb1}${kpis}
+<div class="bd"><div class="cd"><div class="ctit">Movimentação do rebanho <span>cabeças · 2026 · clique no mês para ver por categoria</span><span class="lgd"><span><span class="go" style="float:none">Lanç.</span> lançamentos</span><span><span class="go oc" style="float:none">OC</span> operações</span><span><span class="go fe" style="float:none">Fech.</span> fechamento</span></span></div>${tabela1}${alertas}</div>
+<div class="rt"><div class="cd"><div class="ctit">Comparar anos <span>cabeças por mês</span></div>${filtrosAnos}<div style="padding:4px 6px 0">${grafAnos()}</div><div class="leg"><span><i style="background:${CY[2026]}"></i>2026 · 213 até set</span><span><i style="background:${CY[2025]}"></i>2025 · 515</span><span><i style="background:#fff4e0;border:1px dashed ${CY.meta}"></i>meta 2026 · 161</span></div></div>
+${ponteCard("cab")}</div></div></div></div>`;
+
+/* ---------- NÍVEL 2 · Agnaldo · Global · set/26 ---------- */
+// [nome, SI, compra[c,kg], abate, venda, morte, evEnt, evSai, SF[c,kg]]
+const C2=[
+['Mamotes M',3,null,null,null,null,null,null,[3,170.0]],
+['Desmama M',768,[221,177.4],null,null,[16,181.6],null,null,[973,211.7]],
+['Garrotes',388,[29,257.4],null,null,null,null,[67,390.2],[350,355.9]],
+['Bois',344,null,[52,547.0],[140,424.5],[1,480.0],[67,390.2],null,[218,501.1]],
+['Touros',13,null,null,null,null,null,null,[13,515.4]],
+['Mamotes F',9,null,null,null,null,null,null,[9,157.8]],
+['Desmama F',0,null,null,null,null,null,null,[0,null]],
+['Novilhas',0,null,null,null,null,null,null,[0,null]],
+['Vacas',35,null,null,null,null,null,null,[35,450.0]]];
+const flag=(kg,ref)=>{if(kg==null||ref==null)return '';const d=Math.abs(kg-ref)/ref;return d>=0.25?'fr':d>=0.15?'fa2':''};
+const mv=(x,ref,cl)=>x?`<td class="${cl||''}">${nf(x[0])}</td><td class="kg ${flag(x[1],ref)}" title="${ref?sg((x[1]-ref)/ref*100,0)+'% sobre o kg/cab final da categoria':''}">${nf(x[1],1)}</td>`:`<td class="z">–</td><td class="z kg">–</td>`;
+const row3=([n,si,co,ab,ve,mo,ee,es,sf])=>{const z=si===0&&sf[0]===0;const ref=sf[1];
+return `<tr><td>${n}</td><td>${si?nf(si):'<span class="z">–</span>'}</td>${si?'<td class="dx kg">·</td>':'<td class="z kg">–</td>'}${mv(co,ref,'ce')}${mv(ab,ref,'cs')}${mv(ve,ref,'cs')}${mv(mo,ref,'cs')}${mv(ee,ref,'ci')}${mv(es,ref,'ci')}<td><b>${sf[0]?'<span class="lk">'+nf(sf[0])+'</span>':'<span class="z">–</span>'}</b></td><td class="kg">${sf[1]==null?'<span class="z">–</span>':nf(sf[1],1)}</td>${z?'<td class="z">–</td><td class="z">–</td>':'<td class="dx">·</td><td class="dx">·</td>'}</tr>`};
+const sub3=(n,si,co,ab,ve,mo,ee,es,sf,cls)=>`<tr class="${cls}"><td>${n}</td><td>${nf(si)}</td><td class="dx kg">·</td>${[co,ab,ve,mo,ee,es].map(x=>x?`<td>${nf(x[0])}</td><td class="kg">${nf(x[1],1)}</td>`:'<td class="z">–</td><td class="z kg">–</td>').join('')}<td>${nf(sf[0])}</td><td class="kg">${nf(sf[1],1)}</td>${cls==='tt'?'<td>2.183</td><td class="neg">0,046</td>':'<td class="dx">·</td><td class="dx">·</td>'}</tr>`;
+const col3=`<colgroup><col style="width:70px">${'<col style="width:30px"><col style="width:30px">'.repeat(1)}${'<col style="width:28px"><col style="width:32px">'.repeat(6)}<col style="width:30px"><col style="width:30px"><col style="width:30px"><col style="width:30px"></colgroup>`;
+const th3=(t,top,st)=>`<th style="top:${top}px;${st||''}">${t}</th>`;
+const thead3=`<thead>
+<tr><th class="gp" style="text-align:left;padding-left:6px;border-left:0">Set/26</th><th class="gp" colspan="2">Início</th><th class="gp" colspan="2" style="background:#1f5a3a">Entrada ext.</th><th class="gp" colspan="6" style="background:#7a2328">Saídas externas</th><th class="gp" colspan="4" style="background:#3b2f73">Evolução de categoria</th><th class="gp" colspan="2">Final</th><th class="gp" colspan="2">Produção</th></tr>
+<tr>${th3('Categoria',16,'height:16px')}${th3('',16,'height:16px')}${th3('',16,'height:16px')}<th colspan="2" style="top:16px;height:16px;text-align:center">Compra</th><th colspan="2" style="top:16px;height:16px;text-align:center">Abate</th><th colspan="2" style="top:16px;height:16px;text-align:center">Venda</th><th colspan="2" style="top:16px;height:16px;text-align:center">Morte</th><th colspan="2" style="top:16px;height:16px;text-align:center">Entrou</th><th colspan="2" style="top:16px;height:16px;text-align:center">Saiu</th>${th3('',16,'height:16px')}${th3('',16,'height:16px')}${th3('',16,'height:16px')}${th3('',16,'height:16px')}</tr>
+<tr class="h3">${th3('',32)}${th3('Cab',32)}${th3('Kg',32)}${'<th style="top:32px">Cab</th><th style="top:32px">Kg</th>'.repeat(6)}${th3('Cab',32)}${th3('Kg',32)}${th3('Kg',32)}${th3('GMD',32)}</tr></thead>`;
+const body3=C2.slice(0,5).map(row3).join('')+sub3('Machos',1516,[250,186.7],[52,547.0],[140,424.5],[17,199.1],[67,390.2],[67,390.2],[1557,287.1],'sub')+C2.slice(5).map(row3).join('')+sub3('Fêmeas',44,null,null,null,null,null,null,[44,390.2],'sub')+sub3('Total',1560,[250,186.7],[52,547.0],[140,424.5],[17,199.1],[67,390.2],[67,390.2],[1601,289.9],'tt')+
+`<tr class="ints"><td colspan="19" style="font-weight:400;font-size:8px;white-space:normal;height:auto;padding:3px 8px">Confere: 1.560 + 250 − 52 − 140 − 17 + 67 − 67 = 1.601 ✓ · sem movimento em set/26 (colunas escondidas): nascimento, transf. entrada, consumo, transf. saída</td></tr>`;
+const tabela3=`<table style="width:610px" class="t3">${col3}${thead3}<tbody>${body3}</tbody></table>`;
+const nota3=`<div class="al"><div><i>pesos</i><span>Kg de cada movimento = o peso lançado. A cor compara com o kg/cab final da categoria no mês (Fechamento): <b style="background:#fff1d6;padding:0 3px;white-space:nowrap">âmbar ≥ 15%</b> · <b style="background:#fde1e1;padding:0 3px;white-space:nowrap">vermelho ≥ 25%</b>. Peso lançado fora derruba o GMD (set/26: 0,046).</span></div><div><i>mock</i><span>Tracejado = kg/cab do início, produção e GMD por categoria: precisam do fechamento de ago/26 por categoria, que nenhuma tela mostra hoje.</span></div></div>`;
+const CONF=[['04/09','Morte','Desmama M',1,125.0,211.7],['29/09','Compra','Garrotes',4,220.0,355.9],['30/09','Compra','Garrotes',20,250.0,355.9],['02/09','Compra','Desmama M',70,150.0,211.7],['01/09','Evolução','Garr. → Bois',67,390.2,501.1],['01/09','Venda','Bois',55,400.0,501.1],['23/09','Morte','Desmama M',3,170.0,211.7],['09/09','Venda','Bois',67,415.0,501.1],['02/09','Morte','Desmama M',1,180.0,211.7],['17/09','Compra','Desmama M',14,180.0,211.7],['29/09','Compra','Desmama M',6,180.0,211.7],['08/09','Compra','Garrotes',5,317.0,355.9],['09/09','Compra','Desmama M',110,190.0,211.7],['11/09','Morte','Desmama M',2,190.0,211.7],['18/09','Abate','Bois',52,547.0,501.1],['02/09','Venda','Bois',18,535.0,501.1],['30/09','Compra','Desmama M',21,200.0,211.7],['23/09','Morte','Bois',1,480.0,501.1]];
+const conf=`<div class="tabs"><span class="on">Conferir pesos · 23</span><span>Composição</span></div>
+<div class="cres"><b class="r">4 ≥ 25%</b><b class="a">7 entre 15 e 25%</b><span>do maior desvio para o menor</span></div>
+<table style="width:304px" class="tcf"><colgroup><col style="width:34px"><col style="width:46px"><col style="width:66px"><col style="width:26px"><col style="width:36px"><col style="width:36px"><col style="width:38px"><col style="width:22px"></colgroup>
+<thead><tr><th>Data</th><th style="text-align:left">Tipo</th><th style="text-align:left">Categoria</th><th>Cab</th><th>Kg</th><th>Ref.</th><th>Dif.</th><th></th></tr></thead><tbody>
+${CONF.map(([d,t,c,q,kg,ref])=>{const pc=(kg-ref)/ref*100;const f=Math.abs(pc)>=24.95?'fr':Math.abs(pc)>=14.95?'fa2':'';return `<tr><td class="dt">${d}</td><td style="text-align:left">${t}</td><td style="text-align:left">${c}</td><td>${q}</td><td class="${f}">${nf(kg,1)}</td><td class="mu2">${nf(ref,1)}</td><td class="${pc<0?'neg':'pos'}">${sg(pc,0)}%</td><td class="ed">✎</td></tr>`}).join('')}
+<tr><td colspan="8" style="text-align:left;color:#6b7280;font-size:8px">+ 5 mortes de desmama a 190,0 kg (−10%)</td></tr></tbody></table>`;
+function donut3(){const D=[['Desmama M',973,'#1e2d47'],['Garrotes',350,'#4f6d96'],['Bois',218,'#8fa6c7'],['Vacas',35,'#c2410c'],['Touros',13,'#334155'],['Mamotes F',9,'#e8907e'],['Mamotes M',3,'#cbd5e1']];const T=1601,R=50,r=32,cx=64,cy=60;let a=-Math.PI/2,s=`<svg width="128" height="120" viewBox="0 0 128 120">`;
+D.forEach(([n,v,c])=>{const b=a+2*Math.PI*v/T;const la=b-a>Math.PI?1:0;const p=(rr,t)=>[cx+rr*Math.cos(t),cy+rr*Math.sin(t)];const[x1,y1]=p(R,a),[x2,y2]=p(R,b),[x3,y3]=p(r,b),[x4,y4]=p(r,a);
+s+=`<path d="M${x1} ${y1}A${R} ${R} 0 ${la} 1 ${x2} ${y2}L${x3} ${y3}A${r} ${r} 0 ${la} 0 ${x4} ${y4}Z" fill="${c}"/>`;const m=(a+b)/2;if(v/T>0.1){const[tx,ty]=p((R+r)/2,m);s+=`<text x="${tx}" y="${ty+2.5}" font-size="7" font-weight="700" fill="#fff" text-anchor="middle">${nf(v/T*100,1)}%</text>`}a=b});
+s+=`<text x="${cx}" y="58" font-size="13" font-weight="700" fill="#0f1729" text-anchor="middle">1.601</text><text x="${cx}" y="70" font-size="7" fill="#6b7280" text-anchor="middle">cab · set/26</text></svg>`;
+const KG={'Desmama M':211.7,Garrotes:355.9,Bois:501.1,Vacas:450.0,Touros:515.4,'Mamotes F':157.8,'Mamotes M':170.0};
+return `<div class="tabs"><span>Conferir pesos · 23</span><span class="on">Composição</span></div><div style="display:flex;justify-content:center;padding:6px 0 4px">${s}</div><table style="width:290px;margin:0 7px"><colgroup><col style="width:120px"><col style="width:56px"><col style="width:56px"><col style="width:58px"></colgroup><thead><tr><th>Categoria</th><th>Cab</th><th>% reb.</th><th>Kg/cab</th></tr></thead><tbody>${['Mamotes M','Desmama M','Garrotes','Bois','Touros','Mamotes F','Vacas'].map(n=>{const [_,v,c]=D.find(x=>x[0]===n);return `<tr><td><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${c};margin-right:4px"></i>${n}</td><td>${nf(v)}</td><td>${nf(v/T*100,1)}</td><td>${nf(KG[n],1)}</td></tr>`}).join('')}<tr class="sub"><td>Machos</td><td>1.557</td><td>97,3</td><td>287,1</td></tr><tr class="sub"><td>Fêmeas</td><td>44</td><td>2,7</td><td>390,2</td></tr></tbody></table>`}
+const fb3=`<div class="fb"><span class="bk">‹ Evolução no Ano</span><span class="sg"><span>‹</span><span class="on">Set/26</span><span>›</span></span><span><span class="l">Fazenda</span><span class="dd">Global</span></span><span><span class="l">Cenário</span><span class="sg"><span class="on">Realizado</span><span>Meta</span></span></span><span class="bt" style="background:#fff;color:var(--th);border:1px solid var(--line)">Fechamento ↗</span></div>`;
+const kpis3=`<div class="kp">
+${kp2('Saldo inicial · set/26','1.560','cab','fechamento de ago/26','','')}
+${kp2('Entradas externas','+250','cab','compras · 186,7 kg/cab','','g')}
+${kp2('Saídas externas','−209','cab','abate 52 · venda 140 · morte 17','','')}
+${kp2('Evolução de categoria','67','cab','garrotes → bois · 390,2 kg','','')}
+${kp2('Saldo final · set/26','1.601','cab','289,9 kg/cab','','')}
+${kp2('GMD · set/26','0,046','kg/dia','ago/26: −0,057','11 pesos a conferir','neg')}
+</div>`;
+document.getElementById('p3').innerHTML=ponteCard('@');
+document.getElementById('p4').innerHTML=`<div class="cd" style="height:430px">${donut3()}</div>`;
+document.getElementById('w2').innerHTML=side('Agnaldo')+`<div class="mn"><div class="hd"><b>Produção</b><span>/ Evolução do rebanho / Set/26 por categoria</span><span class="u">Gabriel Junqueira</span></div><div class="ct">${fb3}${kpis3}
+<div class="bd"><div class="cd"><div class="ctit">Rebanho por categoria <span>set/26 · cabeças e kg de cada movimento · as 9 categorias</span></div>${tabela3}${nota3}</div>
+<div class="rt" style="grid-template-rows:1fr"><div class="cd">${conf}</div></div></div></div></div>`;
+
+function fit(){document.querySelectorAll('[data-fit]').forEach(f=>{const w=f.firstElementChild;const k=Math.min(1,f.clientWidth/1126);w.style.transform=`scale(${k})`;f.style.height=(579*k)+'px'})}
+document.querySelectorAll('[data-fit2]').forEach(f=>{const w=f.firstElementChild;const k=Math.min(1,f.clientWidth/306);w.style.transform=`scale(${k})`;f.style.height=(w.offsetHeight*k)+'px'});
+addEventListener('resize',fit);fit();
+</script>
