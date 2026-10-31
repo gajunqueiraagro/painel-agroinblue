@@ -20,12 +20,38 @@
 --       gravacao vai a' trilha (de → para, motivo, autor)
 --   T16 3.6: competencia 03/2024 e pagamento 05/2024 entra em 03/2024
 --   T8 tambem: lancamento INTEIRO ligado que depois e' dividido ganha o selo e segue somando a parte de investimento
+--   T17 (116090, o P176 renumerou o plano): cada id de `contas_sugeridas` das categorias globais e' UMA conta global ativa de
+--       "Investimento na Fazenda", fora de RH, com o tema da categoria no nome; pelo menos 11 categorias com sugestao
+--   T18 (116090): renumerar a `ordem_exibicao` da conta de pastagem e da de maquinas (so' dentro deste teste) nao muda a categoria
+--       sugerida em "Investimentos sem bem" (L12 segue pastagens, L11 segue maquinas e sozinho)
 -- Mutacoes (rodadas no ensaio, ver o relatorio): M1 somar quotas arredondadas derruba T1 · M2 previsto somar derruba T5 · M3 sem a
 -- checagem "ja' ligado" derruba T6 · M4 aceitar RH derruba T9 · M5 componente desde o "em uso" derruba T7 · M6 aceitar vigencia
 -- passada derruba T4 · M7 parcela prevista de contrato nao somar derruba T14 · M8 pagamento antes da competencia derruba T16.
 begin;
 set local lock_timeout = '2s';
 set local statement_timeout = '10s';
+
+do $t17$
+declare v text;
+begin
+  select string_agg(format('%s→%s (%s)', c.codigo, o, coalesce(x.nomes, 'nenhuma conta')), '; ' order by c.ordem, o) into v
+    from public.patrimonio_categorias c
+    cross join lateral unnest(c.contas_sugeridas) o
+    join (values ('maquinas', 'Máquinas e Equipamentos'), ('implementos', 'Implementos'), ('veiculos', 'Veículos'),
+                 ('equipamentos_informatica', 'Equipamentos'), ('benfeitorias', 'Instalações'), ('instalacoes', 'Instalações'),
+                 ('rede_agua', 'Rede'), ('cercas', 'Cercas'), ('estradas_aceiros', 'Estradas'), ('pastagens', 'Pasto'),
+                 ('formacao_area', 'Formação de'), ('correcao_solo', 'Correção de Solo'), ('terra', 'Terra')) t(codigo, tema) on t.codigo = c.codigo
+    left join lateral (select count(*) n,
+                              count(*) filter (where p.subcentro like '%' || t.tema || '%' and p.macro_custo = 'Investimento na Fazenda'
+                                                 and p.cliente_id is null and p.ativo and coalesce(p.centro_custo, '') <> 'RH') n_ok,
+                              string_agg(p.subcentro, ' | ') nomes
+                         from public.financeiro_plano_contas p where p.id = o) x on true
+   where c.cliente_id is null and (x.n is distinct from 1 or x.n_ok is distinct from 1);
+  if v is not null then raise exception 'T17: sugestao de categoria fora das contas de investimento do tema: %', v; end if;
+  if (select count(*) from public.patrimonio_categorias where cliente_id is null and cardinality(contas_sugeridas) > 0) < 11 then
+    raise exception 'T17: menos de 11 categorias com sugestao (o teste nao prova nada)';
+  end if;
+end $t17$;
 
 do $fx$
 declare
@@ -466,6 +492,23 @@ begin
   end if;
 end $t8b$;
 
+-- T18 (116090): renumerar a ordem_exibicao (como o P176 fez) nao muda a sugestao — duas contas, so' dentro desta transacao
+reset role;
+update public.financeiro_plano_contas set ordem_exibicao = 99961 where id = '08c28ca4-c776-4493-8ef8-0e056d7c9196';
+update public.financeiro_plano_contas set ordem_exibicao = 99962 where id = 'cb586f4f-8373-403d-95dc-dbc43d83f176';
+set local role authenticated;
+do $t18$
+declare r jsonb; ids text := current_setting('teste.ids');
+begin
+  r := public.fn_investimentos_sem_bem('43f32d07-dba8-4670-900c-bf645440c04a', 'c2498ace-8478-410c-a697-d3f2e2934d1f', 20000);
+  if not exists (select 1 from jsonb_array_elements(r->'grupos') g, jsonb_array_elements(g->'itens') i
+                  where i->>'lancamento_id' = substring(ids from 'l12=([0-9a-f-]+)') and g->'categoria'->>'codigo' = 'pastagens')
+    then raise exception 'T18: com a ordem da conta mudada, o L12 deixou de sugerir pastagens'; end if;
+  if not exists (select 1 from jsonb_array_elements(r->'individuais') i
+                  where i->>'lancamento_id' = substring(ids from 'l11=([0-9a-f-]+)') and i->'categoria'->>'codigo' = 'maquinas')
+    then raise exception 'T18: com a ordem da conta mudada, o L11 deixou de sugerir maquinas (ou de sair sozinho)'; end if;
+end $t18$;
+
 -- T13 acesso --------------------------------------------------------------------------------------------------------------------
 select set_config('request.jwt.claims', '{"sub":"a91962cd-56dd-4729-b2e1-dcd4a1d7b9c9","role":"authenticated"}', true);
 do $t13$
@@ -507,5 +550,5 @@ begin
 end $t13b$;
 reset role;
 
-do $fim$ begin raise exception 'OK patr_01 (T0–T16)'; end $fim$;
+do $fim$ begin raise exception 'OK patr_01 (T0–T18)'; end $fim$;
 rollback;

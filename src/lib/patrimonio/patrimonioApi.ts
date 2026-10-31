@@ -34,7 +34,8 @@ export function bemDaLinha(r: Linha): BemDaLista {
     bem_id: String(r.bem_id), fazenda_id: String(r.fazenda_id), fazenda_codigo: txt(r.fazenda_codigo),
     categoria_id: String(r.categoria_id), categoria_codigo: txt(r.categoria_codigo) ?? '', categoria_nome: txt(r.categoria_nome) ?? '',
     deprecia: bool(r.deprecia), tem_mercado: bool(r.tem_mercado), tem_pastos: bool(r.tem_pastos),
-    descricao: txt(r.descricao) ?? '', marca: txt(r.marca), modelo: txt(r.modelo), identificacao: txt(r.identificacao),
+    codigo: txt(r.codigo) ?? '', descricao: txt(r.descricao) ?? '', marca: txt(r.marca), modelo: txt(r.modelo), identificacao: txt(r.identificacao),
+    numero_proprio: txt(r.numero_proprio), placa: txt(r.placa), chassi: txt(r.chassi), numero_serie: txt(r.numero_serie), renavam: txt(r.renavam),
     situacao: situacao(r.situacao), em_uso_desde: txt(r.em_uso_desde), baixado_em: txt(r.baixado_em), atividade: atividade(r.atividade),
     origem_valor: origem(r.origem_valor), valor_extra: num(r.valor_extra), valor_lancamentos: num(r.valor_lancamentos),
     aquisicao: num(r.aquisicao), a_realizar: num(r.a_realizar), n_lancamentos: num(r.n_lancamentos), n_a_realizar: num(r.n_a_realizar),
@@ -48,10 +49,12 @@ export function bemDaLinha(r: Linha): BemDaLista {
 
 /* ── os tipos do modal ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-/** O cadastro do bem como o formulário edita (o `p_bem` da `fn_patrimonio_bem_salvar`). */
+/** O cadastro do bem como o formulário edita (o `p_bem` da `fn_patrimonio_bem_salvar`). B2: `codigo` é só leitura (nulo no bem
+ *  novo: o banco gera ao salvar); `identificacao` é o campo ANTIGO, só mostrado — o `payloadDoBem` NÃO o manda (o banco o mantém). */
 export interface FormBem {
-  id: string | null; versao: number | null; cliente_id: string; fazenda_id: string; categoria_id: string; descricao: string;
+  id: string | null; versao: number | null; cliente_id: string; fazenda_id: string; categoria_id: string; codigo: string | null; descricao: string;
   marca: string; modelo: string; ano_fabricacao: number | null; identificacao: string; observacao: string;
+  numero_proprio: string; placa: string; chassi: string; numero_serie: string; renavam: string;
   situacao: SituacaoBem; em_uso_desde: string; atividade: AtividadeBem; financiamento_id: string | null;
   origem_valor: OrigemValor; valor_sem_lancamento: number | null; estimativa_rs_ha: number | null; estimativa_area_ha: number | null;
   area_ha: number | null; matricula: string; nirf: string; seguradora: string; apolice: string; seguro_vence_em: string;
@@ -123,10 +126,15 @@ const tabela = (nome: string) => (supabase as any).from(nome);
 
 const vazioOuNulo = (s: string) => (s.trim() === '' ? null : s.trim());
 
+/** O pedido do salvar. ⚠ SEM `identificacao` (B2): a `fn_patrimonio_bem_salvar` só muda um campo da identificação quando a chave
+ *  vem no pedido — a tela nova manda os cinco novos + o nº próprio (vazio = limpa) e deixa o antigo como está. Placa e chassi sobem
+ *  como digitados: o banco grava em maiúscula e sem espaço. */
 export function payloadDoBem(f: FormBem): Record<string, unknown> {
   return {
     id: f.id, versao: f.versao, cliente_id: f.cliente_id, fazenda_id: f.fazenda_id, categoria_id: f.categoria_id, descricao: f.descricao,
-    marca: vazioOuNulo(f.marca), modelo: vazioOuNulo(f.modelo), ano_fabricacao: f.ano_fabricacao, identificacao: vazioOuNulo(f.identificacao),
+    marca: vazioOuNulo(f.marca), modelo: vazioOuNulo(f.modelo), ano_fabricacao: f.ano_fabricacao,
+    numero_proprio: vazioOuNulo(f.numero_proprio), placa: vazioOuNulo(f.placa), chassi: vazioOuNulo(f.chassi),
+    numero_serie: vazioOuNulo(f.numero_serie), renavam: vazioOuNulo(f.renavam),
     observacao: vazioOuNulo(f.observacao), situacao: f.situacao, em_uso_desde: f.situacao === 'em_uso' ? vazioOuNulo(f.em_uso_desde) : null,
     atividade: f.atividade, financiamento_id: f.financiamento_id, origem_valor: f.origem_valor, valor_sem_lancamento: f.valor_sem_lancamento,
     estimativa_rs_ha: f.estimativa_rs_ha, estimativa_area_ha: f.estimativa_area_ha, area_ha: f.area_ha, matricula: vazioOuNulo(f.matricula),
@@ -227,6 +235,8 @@ export const apiDoBanco: PatrimonioApi = {
     const b = data;
     return {
       id: String(b.id), versao: num(b.versao), cliente_id: String(b.cliente_id), fazenda_id: String(b.fazenda_id), categoria_id: String(b.categoria_id),
+      codigo: txt(b.codigo), numero_proprio: txt(b.numero_proprio) ?? '', placa: txt(b.placa) ?? '', chassi: txt(b.chassi) ?? '',
+      numero_serie: txt(b.numero_serie) ?? '', renavam: txt(b.renavam) ?? '',
       descricao: txt(b.descricao) ?? '', marca: txt(b.marca) ?? '', modelo: txt(b.modelo) ?? '', ano_fabricacao: numOuNulo(b.ano_fabricacao),
       identificacao: txt(b.identificacao) ?? '', observacao: txt(b.observacao) ?? '', situacao: situacao(b.situacao),
       em_uso_desde: txt(b.em_uso_desde) ?? '', atividade: atividade(b.atividade), financiamento_id: txt(b.financiamento_id),

@@ -8,6 +8,10 @@
  * ⚠ A RÉGUA É A DA CASA (Recorrências): cabeçalho navy preso, rodapé navy fora da rolagem com o MESMO `colgroup`, um scrollport,
  * `table-layout: fixed` com larguras em px; texto corta com "…" e o inteiro no `title`; número, valor e data nunca cortam.
  * Fazenda pelo CÓDIGO. Toda coluna ordena, a seta em espaço reservado (`ThOrdenavel`).
+ * ⚠ B2: a coluna CÓDIGO do bem ("MAQ-001") vem antes de "Bem" e não corta (é identificador, como número); ordena pelo prefixo e pelo
+ * número (`chaveDoCodigo`). A busca acha pelo código e pelos campos da identificação (`textosDaBusca`).
+ * ⚠ O HOVER DO CABEÇALHO clareia o navy (`hover:brightness-110`, o de `CargasDaArea`): o `hover:bg-primary-foreground/10` de antes
+ * TROCAVA o fundo navy por branco a 10% e o cabeçalho sumia sob o mouse.
  */
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Pencil, Search, Landmark, ChevronDown, Check } from 'lucide-react';
@@ -27,7 +31,7 @@ import { cn } from '@/lib/utils';
 import { useCategoriasPatrimonio, useListaPatrimonio, useSemBemResumo } from '@/hooks/usePatrimonio';
 import {
   brl, chipsDeCategoria, COLUNAS_ORDENAVEIS, dataBR, dataDoBem, filtrarBens, n2, nomeCurtoDaCategoria, ROTULO_SITUACAO, rotuloOrigem, rotuloSemDepreciacao,
-  rotuloVida, totaisDaLista, type BemDaLista, type ColunaBem,
+  rotuloVida, tituloDaLinha, totaisDaLista, type BemDaLista, type ColunaBem,
 } from '@/lib/patrimonio/patrimonio';
 import { BemDialog } from './BemDialog';
 
@@ -100,10 +104,14 @@ function ChipsDeCategoria({ chips, valor, onEscolher }: { chips: ReadonlyArray<{
  *  padding pedem 38). MEDIDO no gate de tela (31/10, a 1000 px a soma antiga de 786 deixava 28 px para "Bem"): valores 84 = o teto do
  *  rodapé "108.235.599,99" em negrito pede 83; Origem 92 = "sem lançamento" pede 90; Situação 74 = o selo "em formação" 62 + 8 + 4;
  *  Categoria 100 = o NOME CURTO (`nomeCurtoDaCategoria`; o maior, "Formação de área"/"Correção de solo", cabe sem corte — a regra do
- *  Gabriel 31/10: a coluna Categoria não corta a 1170), o nome completo no `title`. Soma das fixas 762: a 1000 px "Bem" fica com
- *  ~45 px (corta com o `title`), a 1170 com ~215. */
+ *  Gabriel 31/10: a coluna Categoria não corta a 1170), o nome completo no `title`. B2: + Código 62 (`LARGURA_CODIGO`) → soma das
+ *  fixas 824 + 20 das ações; "Bem" fica com o resto e corta com o `title` (gate --so patrimonio verde nos 4 tamanhos, 31/10). */
+/** Código: o teto "MAQ-1000" (o contador passa de 999 sem cortar, C5) a 10 px + o padding de 4+4; o cabeçalho "Código" + a seta
+ *  reservada cabem na mesma largura. MEDIDO no gate de tela (B2). */
+export const LARGURA_CODIGO = 62;
 export const COLUNAS_DA_LISTA: ReadonlyArray<{ coluna: ColunaBem; rotulo: string; largura: number | null; direita?: boolean }> = [
   { coluna: 'data', rotulo: 'Data', largura: 60 },
+  { coluna: 'codigo', rotulo: 'Código', largura: LARGURA_CODIGO },
   { coluna: 'bem', rotulo: 'Bem', largura: null },
   { coluna: 'categoria', rotulo: 'Categoria', largura: 100 },
   { coluna: 'fazenda', rotulo: 'Faz.', largura: 40 },
@@ -166,7 +174,7 @@ export function PatrimonioTela() {
     { chave: 'sem-bem', rotulo: 'Investimentos sem bem', valor: semBem ? `${semBem.n.toLocaleString('pt-BR')} · ${brl(semBem.valor)}` : '—', alerta: true },
   ];
 
-  const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary hover:bg-primary-foreground/10');
+  const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary transition-[filter] hover:brightness-110');
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col bg-background" data-testid="patrimonio-tela">
@@ -211,7 +219,7 @@ export function PatrimonioTela() {
           <div className="flex h-[22px] items-center gap-1.5" data-testid="patrimonio-filtros">
             <div className="relative w-[170px] shrink-0">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-              <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar bem, placa, série…" className="h-[22px] pl-6 text-[10px]" data-testid="patrimonio-busca" />
+              <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Bem, código, placa…" className="h-[22px] pl-6 text-[10px]" data-testid="patrimonio-busca" />
             </div>
             <ChipsDeCategoria chips={chips} valor={categoria} onEscolher={setCategoria} />
           </div>
@@ -243,13 +251,14 @@ export function PatrimonioTela() {
                   {ordenadas.map(b => {
                     const semDep = rotuloSemDepreciacao(b);
                     const origem = rotuloOrigem(b);
-                    const titulo = [b.descricao, b.marca, b.modelo, b.identificacao].filter(Boolean).join(' · ');
+                    const titulo = tituloDaLinha(b);
                     return (
                       <tr key={b.bem_id} role="link" tabIndex={0} className="h-[19px] cursor-pointer border-b border-border/40 hover:bg-muted/40"
                         onClick={() => setAberto({ bemId: b.bem_id })}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setAberto({ bemId: b.bem_id }); } }}
                         data-testid="patrimonio-linha">
                         <td className={cn(TD_REGUA_NUM, 'text-left text-[9.5px]')}>{dataBR(dataDoBem(b))}</td>
+                        <td className={cn(TD_REGUA, 'whitespace-nowrap tabular-nums')} title={b.codigo || undefined} data-testid="patrimonio-codigo">{b.codigo || '—'}</td>
                         <td className={TD_REGUA_TEXTO} title={titulo}>{b.descricao}</td>
                         <td className={TD_REGUA_TEXTO} title={b.categoria_nome}>{nomeCurtoDaCategoria(b)}</td>
                         <td className={cn(TD_REGUA, 'whitespace-nowrap')} title={b.fazenda_codigo ?? undefined}>{b.fazenda_codigo ?? codigoDa.get(b.fazenda_id) ?? '—'}</td>
@@ -293,6 +302,7 @@ export function PatrimonioTela() {
                 <Colunas />
                 <tbody>
                   <tr className="h-[22px] font-semibold">
+                    <td />
                     <td />
                     <td className="truncate px-1" title={`${totais.n} ${totais.n === 1 ? 'bem' : 'bens'}`}>{totais.n} {totais.n === 1 ? 'bem' : 'bens'}</td>
                     <td colSpan={4} />
