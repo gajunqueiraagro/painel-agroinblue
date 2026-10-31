@@ -28,6 +28,7 @@ import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Pon
 import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
 import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
+import { FUNDOS } from '@/lib/mapa/fundoDoMapa';
 
 interface Props {
   geometrias: FazendaGeometria[];
@@ -186,8 +187,8 @@ export function MapaGestorView({
   const camadasRef = useRef(new Map<string, L.GeoJSON>());
   const rotulosRef = useRef<RotuloDoPasto[]>([]);
 
-  const { mapContainerRef, mapInstanceRef, featureLayerRef, labelLayerRef, status: mapStatus, reportRenderedGeometries } =
-    useStableLeafletMap({ debugName: 'MapaGestor', labelZoomThreshold: 0 });
+  const { mapContainerRef, mapInstanceRef, featureLayerRef, labelLayerRef, status: mapStatus, reportRenderedGeometries,
+    fundo, trocarFundo } = useStableLeafletMap({ debugName: 'MapaGestor', labelZoomThreshold: 0 });
 
   const pastoPorId = useMemo(() => new Map(pastos.map(p => [p.id, p])), [pastos]);
   const hasGeo = geometrias.length > 0;
@@ -446,6 +447,15 @@ export function MapaGestorView({
             {CAMADAS.map(c => (
               <DropdownMenuItem key={c.valor} onSelect={() => setCamada(c.valor)} className={c.valor === camada ? 'font-semibold' : ''}>
                 {c.rotulo}
+              </DropdownMenuItem>
+            ))}
+            {/* MAPA-02b (D5): o fundo do mapa — a escolha fica salva por usuário (todos os mapas da casa a seguem, P2) */}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Fundo</DropdownMenuLabel>
+            {FUNDOS.map(f => (
+              <DropdownMenuItem key={f.valor} onSelect={() => trocarFundo(f.valor)} className={f.valor === fundo ? 'font-semibold' : ''}
+                data-testid={`mapa-fundo-${f.valor}`}>
+                {f.rotulo}
               </DropdownMenuItem>
             ))}
             {CAMADAS_EM_BREVE.map(gr => (

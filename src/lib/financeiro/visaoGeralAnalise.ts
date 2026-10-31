@@ -32,7 +32,13 @@ export interface BlocoAnaliseVG {
   valor: number | null; meta: number | null; dif: number | null; pct: number | null; razao: number | null;
   qtd: number; unidade_valida: boolean;
 }
-export interface PontoAnaliseVG { am: string; realizado: number | null; previsto: number | null; total: number | null; media: number | null; meta: number | null }
+export interface PontoAnaliseVG {
+  am: string; realizado: number | null; previsto: number | null; total: number | null; media: number | null; meta: number | null;
+  /** VG-META-NO-MODO-01 (114080) — fora de R$: o mês está ABERTO no fechamento (P1); o divisor é o do sistema. Em R$, nulo */
+  aberto?: boolean | null;
+}
+/** VG-META-NO-MODO-01 (Gabriel 31/10 11:13) — a gaveta só oferece R$ e R$/cab/mês (as outras unidades da função não aparecem) */
+export const UNIDADES_DA_GAVETA: readonly UnidadeVG[] = ['rs', 'rs_cab'];
 export interface AnaliseVG {
   lado: LadoVG; mes: string; criterio: CriterioVG; unidade: UnidadeVG; meses_janela: number;
   periodo: { de: string; ate_mes: string };

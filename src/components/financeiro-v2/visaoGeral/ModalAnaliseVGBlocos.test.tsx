@@ -7,10 +7,10 @@
  *   B3 o centro de um bloco continua clicável (vira o foco); o subtotal não é linha de navegação
  *   B4 "1 centro" no singular; o bloco "Sem classificação" quando o banco o manda
  *   B5 `linhasEmBlocos`: cada linha guarda o índice de antes (cor e testid) e a ordem de dentro do bloco
- * VG-CENTAVO D2a: C3 o title do total fora de R$
+ * VG-CENTAVO D2a: C3 o title do total fora de R$. VG-META-NO-MODO-01: M1 os KPIs e a legenda da Média
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc, from: () => ({}) } }));
@@ -147,5 +147,25 @@ describe('VG-CENTAVO D2a — o title do total fora de R$', () => {
     resposta = COM_BLOCOS;
     await abrir();
     expect(screen.getByTestId('analise-tabela-total').querySelectorAll('td')[1].hasAttribute('title')).toBe(false);
+  });
+});
+
+describe('VG-META-NO-MODO-01 — a meta do gráfico segue o modo', () => {
+  /* o banco (114060) manda na MÉDIA: `kpis.meta` = a meta média e `vs_meta` = média × meta média; a tela só escreve */
+  const KPIS = { mes: 101408.34, meta: 120932.1, media: 82978.54, vs_meta: -31.4, tendencia: 48.7 };
+  it('M1 Média: META/MÊS (a do banco), "VS META DA MÉDIA" e a legenda "meta média"; Mês: como antes', async () => {
+    resposta = { ...COM_BLOCOS, grafico: { ...COM_BLOCOS.grafico, kpis: KPIS } };
+    await abrir();
+    expect(screen.queryByTestId('analise-kpi-meta')).toBeNull();
+    expect(screen.getByTestId('analise-kpi-vsmeta').previousSibling!.textContent).toBe('VS META');
+    expect(screen.getByTestId('analise-legenda').textContent).toContain('meta');
+    expect(screen.getByTestId('analise-legenda').textContent).not.toContain('meta média');
+    fireEvent.click(within(screen.getByTestId('analise-tabela')).getByText('Média'));
+    await act(async () => { for (let i = 0; i < 6; i += 1) await Promise.resolve(); });
+    expect(screen.getByTestId('analise-kpi-meta').previousSibling!.textContent).toBe('META/MÊS');
+    expect(screen.getByTestId('analise-kpi-meta').textContent).toBe('R$ 120.932,10');
+    expect(screen.getByTestId('analise-kpi-vsmeta').previousSibling!.textContent).toBe('VS META DA MÉDIA');
+    expect(screen.getByTestId('analise-kpi-vsmeta').textContent).toBe('−31,4%');
+    expect(screen.getByTestId('analise-legenda').textContent).toContain('meta média');
   });
 });

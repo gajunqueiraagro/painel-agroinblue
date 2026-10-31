@@ -27,7 +27,7 @@ export const CAMADAS: { valor: CamadaDoMapa; rotulo: string; curto?: string }[] 
 /** As camadas do mock que ainda não existem (desabilitadas, com o selo "em breve"). */
 export const CAMADAS_EM_BREVE: { grupo: string; itens: string[] }[] = [
   { grupo: 'Manejo (com movimentação por dia)', itens: ['Dias desde o último pastejo', 'Dias vazios', 'Dias de pastejo restantes'] },
-  { grupo: 'Satélite', itens: ['Vigor do capim (NDVI)', 'Oferta de forragem (kg MS/ha)'] },
+  { grupo: 'Índices do satélite', itens: ['Vigor do capim (NDVI)', 'Oferta de forragem (kg MS/ha)'] },
 ];
 
 const KG_HA = ['#E8F3E2', '#C2E2B0', '#94CC7E', '#5FB05A', '#2F8A3E', '#1A5E2A'];
