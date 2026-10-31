@@ -21,3 +21,15 @@ export async function diasDoCartao(contaId: string, hoje: string = hojeLocal()):
   }
   return lista;
 }
+
+/**
+ * CARTAO-LANCAMENTO-01 — os dias DIGITADOS no cadastro do cartão (`dia_fechamento`, `dia_vencimento`; nulos = não informados). Lê a linha
+ * inteira (`*`) porque os dois campos ainda não estão no `types.ts` gerado; cada um é conferido aqui (1–31), e falha de leitura = os dois
+ * nulos (o vencimento cai no dia das faturas, nunca num dia inventado).
+ */
+export async function diasCadastradosDoCartao(contaId: string): Promise<{ fechamento: number | null; vencimento: number | null }> {
+  const { data, error } = await supabase.from('financeiro_contas_bancarias').select('*').eq('id', contaId).maybeSingle();
+  if (error || !data) return { fechamento: null, vencimento: null };
+  const dia = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 31 ? v : null);
+  return { fechamento: dia(Reflect.get(data, 'dia_fechamento')), vencimento: dia(Reflect.get(data, 'dia_vencimento')) };
+}

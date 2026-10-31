@@ -19,15 +19,26 @@ import {
 } from '@/hooks/useLancamentoDocumentos';
 import { motivoArquivoRecusado, novoPendente, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
 import { NomeDoArquivo } from '@/components/financeiro-v2/NomeDoArquivo';
+import { VisualizadorDeDocumento } from '@/components/financeiro-v2/VisualizadorDeDocumento';
 
-const TH = 'sticky top-0 z-10 h-[17px] whitespace-nowrap bg-primary px-[4px] text-center text-[9.5px] font-semibold text-white';
+/** NOTA-NOVA-MODAL-REAL D4 — o arquivo do pendente numa aba nova (o XML, ou o PDF pelo "Abrir em nova aba" do visualizador). */
+function abrirArquivoEmNovaAba(f: File) {
+  const url = URL.createObjectURL(f);
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+const ehPdf = (f: File) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+
+/* sem `sticky`: a caixa da lista não rola por dentro (cresce com os documentos); quem rola é o modal (NOTA-NOVA-MODAL-REAL, o gate) */
+const TH = 'h-[17px] whitespace-nowrap bg-primary px-[4px] text-center text-[9.5px] font-semibold text-white';
 /* `py-0 leading-none`: como a grade de parcelas — sem isto a linha mede 19 (medido no PR 2b-fix1). */
 const TD = 'h-[18px] border-b border-[#eceae4] px-[4px] py-0 text-[10px] leading-none align-middle';
 
+/* a data inteira (dd/mm/aaaa) — a regra da casa (P163); NOTA-NOVA-MODAL-REAL: o gate passou a medir o anexo pendente do Novo lançamento */
 const dataCurta = (iso: string | null | undefined) => {
   if (!iso) return '—';
   const [a, m, d] = iso.split('-');
-  return `${d}/${m}/${a.slice(2)}`;
+  return `${d}/${m}/${a}`;
 };
 
 /** Número do documento: NF no formato 000.000.000 (padrão da casa); as outras espécies como vieram. */
@@ -35,6 +46,11 @@ function numeroExibido(d: LancDocumento): string {
   if (!d.numero) return '—';
   const n = d.especie === 'nf' ? (formatNFNumber(d.numero) || d.numero) : d.numero;
   return d.serie ? `${n} · série ${d.serie}` : n;
+}
+
+function numeroSemSerie(d: LancDocumento): string {
+  if (!d.numero) return '—';
+  return d.especie === 'nf' ? (formatNFNumber(d.numero) || d.numero) : d.numero;
 }
 
 /** O pendente no formato que o `FormDocumento` lê — só para editar; nada disto vai ao banco. */
@@ -107,6 +123,12 @@ export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, tr
   const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<LancDocumento | null>(null);
   const api = useMemo(() => apiDePendentes(pendentes, onMudar), [pendentes, onMudar]);
+  /* NOTA-NOVA-MODAL-REAL D4 (Gabriel 30/10) — o anexo é clicável ANTES de salvar: o PDF abre no visualizador (tela cheia); o XML, numa aba nova */
+  const [vendo, setVendo] = useState<{ arquivo: File; bytes: ArrayBuffer } | null>(null);
+  const abrirPendente = (f: File) => {
+    if (!ehPdf(f)) { abrirArquivoEmNovaAba(f); return; }
+    void f.arrayBuffer().then((bytes) => setVendo({ arquivo: f, bytes }), (e) => { console.error('[DocumentosPendentes] abrir', e); abrirArquivoEmNovaAba(f); });
+  };
 
   return (
     <div className="space-y-1.5" data-testid="documentos-pendentes">
@@ -128,10 +150,10 @@ export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, tr
             {/* A31 — larguras fixas: nada muda de largura quando o dado muda (PR 2b). */}
             <colgroup>
               {/* PR 2b-fix1 — medidas no diálogo (748px úteis), texto renderizado + 8 de padding: "Comprovante" 76,
-                  000.000.000 76, dd/mm/aa 58, emitente "Ana Verena Milani Hernandes" 156, 1.234.567,89 78,
-                  "10 de 10 parcelas" 98, "não gravado" 72, ações 40. O Arquivo fica com a sobra e corta no meio. */}
-              <col style={{ width: 76 }} /><col style={{ width: 76 }} /><col style={{ width: 58 }} />
-              <col style={{ width: 156 }} /><col style={{ width: 78 }} /><col />
+                  000.000.000 76, dd/mm/aaaa 70 (NOTA-NOVA-MODAL-REAL: a data inteira, a regra da casa), emitente "Ana Verena Milani
+                  Hernandes" 144, 1.234.567,89 78, "10 de 10 parcelas" 98, "não gravado" 72, ações 40. O Arquivo fica com a sobra e corta no meio. */}
+              <col style={{ width: 76 }} /><col style={{ width: 76 }} /><col style={{ width: 70 }} />
+              <col style={{ width: 144 }} /><col style={{ width: 78 }} /><col />
               {ligadoA ? <col style={{ width: 98 }} /> : null}
               <col style={{ width: 72 }} /><col style={{ width: 40 }} />
             </colgroup>
@@ -148,13 +170,19 @@ export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, tr
                 return (
                   <tr key={p.chave} className="bg-white">
                     <td className={TD}>{rotuloEspecieDoc(d)}</td>
-                    <td className={TD}>{numeroExibido(d)}</td>
+                    {/* o número numa linha só (000.000.000 cabe nos 76); a série vai no `title` (NOTA-NOVA-MODAL-REAL: "· série 10" quebrava em 2 linhas) */}
+                    <td className={`${TD} whitespace-nowrap`} title={numeroExibido(d)}>{numeroSemSerie(d)}</td>
                     <td className={`${TD} text-center`}>{dataCurta(d.dataEmissao)}</td>
                     <td className={TD}>{d.emitenteNome ?? '—'}</td>
                     <td className={`${TD} text-right`}>{d.valorDocumento == null ? '—' : d.valorDocumento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     {/* PR 2b-fix1 — uma linha só: nome cortado no meio, inteiro no `title` (exceção da A31, só aqui). */}
                     <td className={`${TD} overflow-hidden whitespace-nowrap`} title={p.arquivo?.name} data-testid="arquivo-pendente">
-                      {p.arquivo ? <NomeDoArquivo nome={p.arquivo.name} /> : <span className="text-amber-700">sem arquivo</span>}
+                      {p.arquivo ? (
+                        <button type="button" className="flex w-full min-w-0 text-left text-primary underline-offset-2 hover:underline" data-testid="abrir-pendente"
+                          onClick={() => { if (p.arquivo) abrirPendente(p.arquivo); }}>
+                          <NomeDoArquivo nome={p.arquivo.name} />
+                        </button>
+                      ) : <span className="text-amber-700">sem arquivo</span>}
                     </td>
                     {ligadoA ? <td className={`${TD} text-center whitespace-nowrap`} data-testid="ligado-a">{ligadoA} de {ligadoA} parcelas</td> : null}
                     <td className={`${TD} text-center`}>
@@ -190,6 +218,10 @@ export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, tr
         <FormDocumento api={api} documento={editando} clienteId={clienteId} pendente semBoleto={!!ligadoA}
           sugestao={sugestao}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
+      )}
+      {vendo && (
+        <VisualizadorDeDocumento open onFechar={() => setVendo(null)} bytes={vendo.bytes} nome={vendo.arquivo.name}
+          onNovaAba={() => abrirArquivoEmNovaAba(vendo.arquivo)} />
       )}
     </div>
   );

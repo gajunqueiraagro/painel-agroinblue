@@ -66,7 +66,8 @@ interface Props {
   aoSalvar: () => void | Promise<void>;
 }
 
-const FORMAS = ['PIX', 'TED', 'Boleto', 'Cartão', 'Dinheiro', 'Débito', 'Outro'];
+/* CARTAO-LANCAMENTO-01 — o cartão grava "Cartão de crédito" (as 5 regras com 'Cartão' se juntam pela migration 20261028113110) */
+const FORMAS = ['PIX', 'TED', 'Boleto', 'Cartão de crédito', 'Dinheiro', 'Débito', 'Outro'];
 
 export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }: Props) {
   const { fazendas } = useFazenda();

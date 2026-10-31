@@ -58,7 +58,7 @@ import { MetaGmdTab } from '@/pages/MetaGmdTab';
 import { V2ZootWrapper } from './components/V2ZootWrapper';
 import { ValorRebanhoTab } from '@/pages/ValorRebanhoTab';
 import { EvolucaoTab } from '@/pages/EvolucaoTab';
-import { FluxoAnualTab } from '@/pages/FluxoAnualTab';
+import { EvolucaoDoAnoTab } from '@/pages/EvolucaoDoAnoTab';
 import { FinanceiroTab, type SubAba } from '@/pages/FinanceiroTab';
 import { IndicadoresTab } from '@/pages/IndicadoresTab';
 import { FinanceiroCaixaTab } from '@/pages/FinanceiroCaixaTab';
@@ -522,6 +522,8 @@ export default function V2Index() {
     cenario: 'realizado' | 'meta';
     categoria: string;
     label: string;
+    /* PROD-EVOLUCAO-01a — a tela de onde o drill saiu (a volta retorna a ela); sem ela, a Evolução por Categoria, como sempre */
+    origem?: V2Section;
   } | null>(null);
   // Quando um lançamento de financiamento é editado em Financeiro → Lançamentos,
   // setamos o id e trocamos para a section 'financiamentos' para abrir FinanciamentoDetalhe.
@@ -1221,10 +1223,15 @@ export default function V2Index() {
             filtroStatusInicial={drillFiltro?.cenario ?? 'realizado'}
             filtroCategoriaInicial={drillFiltro?.categoria}
             subAbaInicial={drillFiltro?.subAba}
+            /* PROD-EVOLUCAO-01a — o ano e o mês do drill CHEGAM à lista (antes iam no drillFiltro e ninguém os repassava: o selo dizia
+               "mm/aaaa" e a lista abria no ano inteiro). Mês vazio = o ano. */
+            filtroAnoInicial={drillFiltro?.ano}
+            filtroMesInicial={drillFiltro?.mes || undefined}
             drillDownLabel={drillFiltro?.label}
             onBack={drillFiltro ? () => {
+              const volta = drillFiltro.origem ?? 'evolucao-categoria';
               setDrillFiltro(null);
-              setSection('evolucao-categoria');
+              setSection(volta);
             } : undefined}
             onRemover={removerLancamento}
             onEditar={editarLancamento}
@@ -1250,14 +1257,36 @@ export default function V2Index() {
     );
     if (section === 'conferencia-mensal') return (
       <V2ZootWrapper>
-        {({ lancamentos, saldosIniciais }) => (
-          <FluxoAnualTab
-            lancamentos={lancamentos}
-            saldosIniciais={saldosIniciais}
-            onNavigate={(targetSection, params) => {
-              if (params?.mes !== undefined) setMes(String(params.mes));
-              if (params?.ano !== undefined) setAno(params.ano);
-              setSection(targetSection as V2Section);
+        {() => (
+          /* PROD-EVOLUCAO-01a — a Evolução no Ano do mock v4 (o v1 segue com a `FluxoAnualTab`). Todo número leva à origem. */
+          <EvolucaoDoAnoTab
+            onAbrirMes={(a, m) => { setAno(String(a)); setMes(String(m)); setSection('evolucao-categoria'); }}
+            onAbrirOrigem={(o) => {
+              const mm = (m: number) => String(m).padStart(2, '0');
+              const ini = o.mes ?? o.meses[0] ?? 1; const fim = o.mes ?? o.meses[o.meses.length - 1] ?? 12;
+              if (o.destino === 'fech') { setAno(String(o.ano)); setMes(String(o.mes ?? fim)); setSection('fechamento'); return; }
+              if (o.destino === 'oc') {
+                /* as operações comerciais do tipo e do período, pelos filtros que a Central já lê da URL */
+                const p = new URLSearchParams(window.location.search);
+                p.set('f_tipo', o.tipo === 'compra' ? 'compra' : o.tipo === 'abate' ? 'abate' : 'venda');
+                p.set('f_ini', `${o.ano}-${mm(ini)}-01`);
+                p.set('f_fim', `${o.ano}-${mm(fim)}-${String(new Date(o.ano, fim, 0).getDate()).padStart(2, '0')}`);
+                setSearchParams(p, { replace: true });
+                setSection('operacoes-comerciais');
+                return;
+              }
+              /* Lanç.: os lançamentos do tipo e do mês (o ano inteiro quando é o acumulado); a evolução de categoria vive em 'historico' */
+              const rotuloDoTipo = o.tipo ? o.tipo.replace('_', ' ') : 'evolução de categoria';
+              setDrillFiltro({
+                subAba: (o.tipo ?? 'historico') as SubAba,
+                ano: String(o.ano),
+                mes: o.mes ? mm(o.mes) : '',
+                cenario: 'realizado',
+                categoria: '',
+                label: `${rotuloDoTipo} · ${o.mes ? `${mm(o.mes)}/${o.ano}` : o.ano} · Realizado`,
+                origem: 'conferencia-mensal',
+              });
+              setSection('conferencia-lancamentos');
             }}
           />
         )}

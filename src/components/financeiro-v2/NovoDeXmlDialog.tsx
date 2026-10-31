@@ -32,7 +32,7 @@ import {
 } from '@/lib/financeiro/nfeConsultas';
 import { arquivoXmlDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { parcelasParaCasar } from '@/lib/financeiro/nfe/jaLancada';
-import { dataInteira, type NotaLidaOk, type NotaParaLancar } from './NotaFiscalDialog';
+import { dataInteira, fraseDaChaveNaoConfere, type NotaLidaOk, type NotaParaLancar } from './NotaFiscalDialog';
 import { ItensDasNotasGuardadasDialog } from './ItensDasNotasGuardadasDialog';
 
 export interface LinhaDeNota {
@@ -58,6 +58,9 @@ export interface LinhaDeNota {
    *  "Tentar de novo" responder; `null` = tudo verificado. `paraRefazer` guarda o lido para refazer as consultas. */
   naoVerificada?: string | null;
   paraRefazer?: { arquivo: File; bytes: ArrayBuffer; lido: NotaLidaOk } | null;
+  /** P95 — a nota pela CHAVE DIGITADA (sem emissão nem valor): a linha mostra "—" (NOTA-NOVA-MODAL-REAL: a linha da nota nova não tem
+   *  `paraLancar`, então a marca é da própria linha) */
+  pelaChave?: boolean;
 }
 
 /** "2 × 8.119,00 · 05/11 e 05/12" | "sem duplicatas" | "3 · parcelas livres" | "1 × 16.238,00 · 30/10". */
@@ -150,6 +153,9 @@ export async function notaParaAPrevia(cli: string, arquivo: File, fornecedores: 
 export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 'recusa'>, arquivo: File, bytes: ArrayBuffer, lido: NotaLidaOk,
   fazendasComIE: FazendaComIE[], fornecedores: readonly FornecedorParaResolver[]): Promise<LinhaDeNota> {
   const { nota, avisos } = lido;
+  /* NOTA-NOVA-MODAL-REAL — a chave que contradiz o lido (CNPJ, nº, série, mês…) recusa a linha AQUI: a nota nova vai direto ao Novo
+     lançamento, e a conferência da chave morava só na tela intermediária */
+  if (lido.divergencias.length) return { ...base, nota, avisos, recusa: fraseDaChaveNaoConfere(lido.divergencias) };
   /* O fornecedor: pelo documento; so' vai ao banco pelo nome quando o documento nao achou ninguem (e ha' nome: a chave digitada nao traz). */
   /* P146 — a consulta que FALHA entra em `falhas` (nunca vira "nao achei"): a linha fica "não verificada" e nao abre */
   const falhas: string[] = [];
@@ -190,8 +196,10 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
   return {
     ...base, nota, avisos, recusa: null,
     fazenda: fazendasComIE.find((f) => f.id === proposta.proposta.fazendaId) ?? null,
-    doXml, jaLancados, naoVerificada, paraRefazer: naoVerificada ? { arquivo, bytes, lido } : null,
-    paraLancar: naoVerificada ? null : ehPdf || jaLancados > 0 || noLancamento ? { arquivo: doXml.arquivo, bytes, lido, doXml } : null,
+    doXml, jaLancados, naoVerificada, paraRefazer: naoVerificada ? { arquivo, bytes, lido } : null, pelaChave: lido.pelaChave === true,
+    /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — só a nota JÁ no sistema abre a tela da nota (as abas); a que não está vai direto ao Novo
+       lançamento (PDF, XML ou pela chave digitada), pelo `onAbrirLancamento`: nada é gravado antes do Salvar do modal */
+    paraLancar: naoVerificada ? null : jaLancados > 0 || noLancamento ? { arquivo: doXml.arquivo, bytes, lido, doXml } : null,
   };
 }
 
@@ -251,9 +259,11 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
         novas.push(await montarLinha(clienteId, base, arquivo, bytes, lido, fazendasComIE));
       }
       setAviso(repetidos.length ? repetidos.map(fraseJaNaLista).join(' ') : null);
-      /* FIN-NOTA-PDF-01 — um PDF so', lido e aceito: abre direto a nota (o mock), sem passar pela lista. */
+      /* FIN-NOTA-PDF-01 — uma nota so', lida e aceita: abre direto, sem passar pela lista — a já lançada na tela da nota; a que não está, no
+         Novo lançamento (NOTA-NOVA-MODAL-REAL, Gabriel 30/10). Sem verificar (P146) ou registrada numa OC, não abre: a linha diz. */
       const unica = arquivos.length === 1 && novas.length === 1 ? novas[0] : null;
-      if (unica?.paraLancar && !unica.recusa && onAbrirNota) onAbrirNota(unica.paraLancar, unica.id);
+      if (unica && !unica.recusa && unica.paraLancar && onAbrirNota) onAbrirNota(unica.paraLancar, unica.id);
+      else if (unica?.doXml && (situacaoDaNota(unica) === 'nova' || situacaoDaNota(unica) === 'sem_protocolo')) onAbrirLancamento(unica.doXml, unica.id);
       /* A mesma nota solta duas vezes entra uma so' (pela chave). */
       setLinhas((antes) => {
         const chavesDaLista = new Set(antes.map((l) => l.nota?.chave).filter(Boolean));
@@ -268,7 +278,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
     } finally {
       setLendo(false);
     }
-  }, [clienteId, onAbrirNota, fazendasDoCliente, montarLinha]);
+  }, [clienteId, onAbrirNota, onAbrirLancamento, fazendasDoCliente, montarLinha]);
 
   /* P146 — "Tentar de novo" na linha não verificada: refaz as consultas com o MESMO lido (nada se relê do arquivo) e troca a linha */
   const refazer = useCallback(async (l: LinhaDeNota) => {
@@ -402,7 +412,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                   const s = TEXTO_DA_SITUACAO[sit];
                   const onde = d.ocorrencias.find((o) => o.origem === 'oc');
                   /* P95 — a nota da chave digitada: o emitente e' o do cadastro (a chave so' traz o CNPJ); emissao e valor sao do operador ("—") */
-                  const pelaChave = l.paraLancar?.lido.pelaChave === true;
+                  const pelaChave = l.pelaChave === true;
                   const emitenteNome = n.emitente.nome || fornecedores.find((f) => f.id === d.proposta.favorecidoId)?.nome || '—';
                   return (
                     <tr key={l.id} className="border-t" data-testid="xml-linha" data-situacao={sit}>

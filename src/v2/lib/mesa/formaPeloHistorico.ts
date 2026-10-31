@@ -19,7 +19,7 @@ type FormaPagamentoV2 = typeof FORMAS_PAGAMENTO_V2[number];
 const REGRAS: ReadonlyArray<{ re: RegExp; forma: FormaPagamentoV2 }> = [
   { re: /\bpix\b/, forma: 'PIX' },
   { re: /\bboleto\b/, forma: 'Boleto' },
-  { re: /\bcompra com cart.o\b/, forma: 'Cartão' },
+  { re: /\bcompra com cart.o\b/, forma: 'Cartão de crédito' },   // CARTAO-LANCAMENTO-01: o valor gravado do cartão
   { re: /\bted\b/, forma: 'Transferência' },
   { re: /\btransferencia\b/, forma: 'Transferência' },
 ];

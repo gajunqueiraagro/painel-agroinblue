@@ -25,10 +25,10 @@ export function OrigemDoXml({ campo, origem }: { campo: CampoDoXml; origem: stri
 }
 
 /** A pilula do cabecalho: "do XML · NF 000.178.766". */
-export function PilulaDoXml({ rotuloNota }: { rotuloNota: string }) {
+export function PilulaDoXml({ rotuloNota, fonte = 'XML' }: { rotuloNota: string; fonte?: 'PDF' | 'XML' }) {
   return (
     <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-px text-[10px] font-medium leading-none text-amber-900" data-testid="pilula-do-xml">
-      do XML · {rotuloNota}
+      do {fonte} · {rotuloNota}
     </span>
   );
 }

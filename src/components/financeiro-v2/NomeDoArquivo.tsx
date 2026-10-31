@@ -10,7 +10,8 @@ import { partesDoNome } from '@/lib/financeiro/documentosPendentes';
 export function NomeDoArquivo({ nome }: { nome: string }) {
   const { inicio, fim } = partesDoNome(nome);
   return (
-    <span className="flex min-w-0">
+    /* `data-nome-de-arquivo`: é NOME (texto), mesmo começando por dígitos ("000.000.937.pdf") — o gate o julga pela regra de texto (com title) */
+    <span className="flex min-w-0" data-nome-de-arquivo="">
       <span className="min-w-0 overflow-hidden text-ellipsis" data-testid="arquivo-inicio">{inicio}</span>
       <span className="shrink-0" data-testid="arquivo-fim">{fim}</span>
     </span>

@@ -75,7 +75,8 @@ function doXml(): DoXml {
   if (p.ok === false) throw new Error(p.frase);
   return { proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao, ocorrencias: [], arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') };
 }
-const prefillSalvavel = () => ({ ...prefillDaNota(doXml()), conta_bancaria_id: 'bb' });
+/* NOTA-NOVA-MODAL-REAL — a descrição nasce vazia; o operador a escreve (aqui, o mesmo texto da foto de antes) */
+const prefillSalvavel = () => ({ ...prefillDaNota(doXml()), conta_bancaria_id: 'bb', descricao: 'SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens' });
 /* CRIAR-DO-EXTRATO-01 — o vencimento é obrigatório para SALVAR: as provas que gravam levam um. */
 const prefillComVencimento = () => ({ ...prefillSalvavel(), data_vencimento: '2026-10-30' });
 const LANCAMENTO = {

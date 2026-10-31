@@ -109,4 +109,22 @@ describe('CAD-CONTAS-BANCARIAS-01 — o formulario', () => {
     expect(faltasDoFormulario({ ...vazio, nome: 'X', saldoEm: '2026-01-01', saldoInicial: 0 }, true)).toEqual([]);
     expect(faltasDoFormulario(formularioDaConta(conta({ mes_inicio: null, saldo_inicial_oficial: null }), 'f1'), false)).toEqual([]);
   });
+
+  /* CARTAO-LANCAMENTO-01 (mock aprovado 30/10 18:28): no cartão, Dia de fechamento e Dia de vencimento DIGITADOS (vazio = nulo); nas
+     outras contas os dias não existem (vão nulos); dia fora de 1–31 trava o Salvar com a frase */
+  it('K7 os dias do cartão', () => {
+    const cartao = formularioDaConta(conta({ tipo_conta: 'cartao', dia_fechamento: 3, dia_vencimento: null }), 'f1');
+    expect([cartao.diaFechamento, cartao.diaVencimento]).toEqual(['3', '']);
+    expect(mudancas(cartao, { ...cartao })).toEqual({});
+    expect(mudancas(cartao, { ...cartao, diaVencimento: '10' })).toEqual({ dia_vencimento: 10 });
+    expect(mudancas(cartao, { ...cartao, diaFechamento: '' })).toEqual({ dia_fechamento: null });
+    expect(mudancas(cartao, { ...cartao, tipo: 'cc' })).toEqual({ tipo_conta: 'cc', dia_fechamento: null });
+    const orig = formularioDaConta(conta(), 'f1');
+    expect([orig.diaFechamento, orig.diaVencimento]).toEqual(['', '']);
+    expect(mudancas(orig, { ...orig, diaVencimento: '10' })).toEqual({});
+    expect(faltasDoFormulario({ ...cartao, diaVencimento: '32' }, false)).toEqual(['o dia de vencimento (de 1 a 31)']);
+    expect(faltasDoFormulario({ ...cartao, diaFechamento: '3a' }, false)).toEqual(['o dia de fechamento (de 1 a 31)']);
+    expect(faltasDoFormulario({ ...orig, diaFechamento: '99' }, false)).toEqual([]);
+  });
 });
+

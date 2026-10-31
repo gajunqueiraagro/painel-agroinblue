@@ -42,54 +42,6 @@ export function parcelasDaNota(d: DoXml): ParcelaDoPayload[] {
   return d.proposta.duplicatas.map((x, i) => ({ numero: i + 1, data_vencimento: x.vencimento, valor: x.valorCent / 100 }));
 }
 
-/**
- * O PAGO NAO MUDA DE VALOR (o principio da conciliacao): a parcela 1 = o valor pago, e o RESTO da nota se reparte nas demais
- * (iguais, a ultima com a sobra), nas datas da nota. `null` quando nao ha' resto para repartir (o pago cobre a nota inteira ou mais).
- */
-export function parcelasRepartindo(d: DoXml, pagoCent: number): ParcelaDoPayload[] | null {
-  const dup = d.proposta.duplicatas;
-  const n = dup.length;
-  const resto = d.proposta.valorCent - pagoCent;
-  if (n < 2 || resto < n - 1) return null;
-  const base = Math.floor(resto / (n - 1));
-  return dup.map((x, i) => ({
-    numero: i + 1, data_vencimento: x.vencimento,
-    valor: (i === 0 ? pagoCent : i === n - 1 ? resto - base * (n - 2) : base) / 100,
-  }));
-}
-
-/** O que o "Atualizar e parcelar" encontra no lancamento que existe. */
-export type DecisaoDoExistente =
-  | { tipo: 'cabe' }                                                                     // aberto, ou pago com o valor da parcela 1
-  | { tipo: 'diferenca'; pagoCent: number; parcela1Cent: number; diferencaCent: number; repartindo: ParcelaDoPayload[] | null };
-export function decisaoDoExistente(alvo: { pago: boolean; valorCent: number }, d: DoXml): DecisaoDoExistente {
-  const parcela1Cent = d.proposta.duplicatas[0]?.valorCent ?? 0;
-  if (!alvo.pago || alvo.valorCent === parcela1Cent) return { tipo: 'cabe' };
-  return { tipo: 'diferenca', pagoCent: alvo.valorCent, parcela1Cent, diferencaCent: alvo.valorCent - parcela1Cent, repartindo: parcelasRepartindo(d, alvo.valorCent) };
-}
-
-/** O payload do parcelamento da nota — PURO. Mensal (as duplicatas cabem no parcelamento de hoje) ou as parcelas como na nota. */
-export function payloadDaNota(clienteId: string, d: DoXml, e: EscolhasDaNota, explicitas?: ParcelaDoPayload[]): PayloadParcelamento {
-  const p = d.proposta;
-  const livres = explicitas ?? (p.parcelamento.tipo === 'livres' ? parcelasDaNota(d) : null);
-  return montarPayloadParcelamento(clienteId, {
-    fazendaId: e.fazendaId,
-    descricao: p.descricao,
-    valorTotal: p.valorCent / 100,
-    totalParcelas: p.duplicatas.length,
-    dataPrimeiraParcela: p.duplicatas[0]?.vencimento ?? '',
-    parcelas: livres,
-    dataCompetencia: p.competencia,
-    intervaloMeses: 1,
-    favorecidoId: e.favorecidoId,
-    formaPagamento: p.formaPagamento || null,
-    contaBancariaId: e.contaBancariaId,
-    tipoFinanciamento: e.escopoNegocio || null,
-    numeroContrato: null,
-    observacao: e.observacao ?? null,
-  }, { plano_conta_id: e.planoContaId, safra_id: e.safraId || null, cultura: e.cultura || null, fase: null });
-}
-
 /** O formulario do lancamento UNICO da nota (uma parcela, ou sem duplicata) — o mesmo `LancamentoV2Form` do Novo lancamento. */
 export function formDaNota(d: DoXml, e: EscolhasDaNota, vencimento: string, textos: { subcentro: string; macro_custo: string; grupo_custo: string; centro_custo: string }): LancamentoV2Form {
   const p = d.proposta;
@@ -170,86 +122,8 @@ export const GRAVADORES: Gravadores = {
   vincular: vincularNoBanco,
 };
 
-export type ResultadoDaNota = { ok: true; parcelas: number; erroDoDocumento: string | null } | { ok: false; erro: string };
-
 const erroDe = (e: unknown, padrao: string) => (e && typeof e === 'object' && 'message' in e && typeof e.message === 'string' && e.message ? e.message : padrao);
 const falhaDosDocumentos = (lista: DocumentoPendente[]) => (todosGravados(lista) ? null : (lista.find((x) => !x.gravado)?.erro ?? 'o documento não foi gravado'));
-
-export async function criarParcelasDaNota(clienteId: string, d: DoXml, e: EscolhasDaNota, g: Gravadores = GRAVADORES): Promise<ResultadoDaNota> {
-  let financiamentoId: string | null;
-  try {
-    financiamentoId = await g.gravar(payloadDaNota(clienteId, d, e), clienteId);
-  } catch (x) {
-    return { ok: false, erro: erroDe(x, 'Falha ao criar as parcelas.') };
-  }
-  const n = d.proposta.duplicatas.length;
-  try {
-    const parcelas = financiamentoId ? await g.parcelas(financiamentoId) : [];
-    if (!parcelas.length) return { ok: true, parcelas: n, erroDoDocumento: 'As parcelas foram criadas, mas não foram achadas para anexar a nota — anexe pelo Editar.' };
-    const lista = await g.documentosDoParcelamento(clienteId, parcelas, [pendenteDaNota(d, e.favorecidoId)]);
-    const falha = falhaDosDocumentos(lista);
-    return { ok: true, parcelas: n, erroDoDocumento: falha ? `As ${n} parcelas foram criadas, mas a nota não foi anexada: ${falha}` : null };
-  } catch (x) {
-    return { ok: true, parcelas: n, erroDoDocumento: `As ${n} parcelas foram criadas, mas a nota não foi anexada: ${erroDe(x, 'falha')}` };
-  }
-}
-
-/** O lancamento que ja' existe recebe a nota: no parcelamento, a NF na parcela 1 e ligada a todas; avulso, nele. */
-export async function atualizarComANota(
-  clienteId: string, alvo: { id: string; financiamentoId: string | null }, d: DoXml, favorecidoId: string, g: Gravadores = GRAVADORES,
-): Promise<{ ok: true } | { ok: false; erro: string }> {
-  try {
-    const parcelas = alvo.financiamentoId ? await g.parcelas(alvo.financiamentoId) : [];
-    const pendente = pendenteDaNota(d, favorecidoId);
-    const lista = parcelas.length
-      ? await g.documentosDoParcelamento(clienteId, parcelas, [pendente])
-      : await g.documentosDoLancamento(clienteId, alvo.id, [pendente]);
-    const falha = falhaDosDocumentos(lista);
-    if (falha) return { ok: false, erro: `A nota não foi anexada: ${falha}` };
-    const ids = parcelas.length ? parcelas.map((x) => x.lancamentoId) : [alvo.id];
-    const erro = await g.numeroNoLancamento(clienteId, ids, d.proposta.numeroDocumento);
-    return erro ? { ok: false, erro: `A nota foi anexada, mas o número do documento não foi gravado: ${erro}` } : { ok: true };
-  } catch (x) {
-    return { ok: false, erro: erroDe(x, 'Falha ao atualizar o lançamento.') };
-  }
-}
-
-/** FIN-NOTA-PDF-01b — UM lancamento (nota de uma parcela, ou sem duplicata): o gravador da tela, e a nota anexada a ele. */
-export async function criarLancamentoDaNota(clienteId: string, d: DoXml, form: LancamentoV2Form, favorecidoId: string, g: Gravadores = GRAVADORES): Promise<ResultadoDaNota> {
-  if (!g.lancamento) return { ok: false, erro: 'Gravador do lançamento indisponível. Nada foi gravado.' };
-  let id: string | null;
-  try { id = await g.lancamento(form); } catch (x) { return { ok: false, erro: erroDe(x, 'Falha ao criar o lançamento.') }; }
-  if (!id) return { ok: false, erro: 'O lançamento não foi gravado (veja o aviso ao lado).' };
-  try {
-    const lista = await g.documentosDoLancamento(clienteId, id, [pendenteDaNota(d, favorecidoId)]);
-    const falha = falhaDosDocumentos(lista);
-    return { ok: true, parcelas: 1, erroDoDocumento: falha ? `O lançamento foi criado, mas a nota não foi anexada: ${falha}` : null };
-  } catch (x) {
-    return { ok: true, parcelas: 1, erroDoDocumento: `O lançamento foi criado, mas a nota não foi anexada: ${erroDe(x, 'falha')}` };
-  }
-}
-
-/** FIN-NOTA-PDF-01b — "Atualizar e parcelar": o a' vista existente vira a parcela 1/N (mesmo id), nascem as demais, a nota em todas. */
-export async function atualizarEParcelar(
-  clienteId: string, alvoId: string, d: DoXml, e: EscolhasDaNota, parcelas: ParcelaDoPayload[], g: Gravadores = GRAVADORES,
-): Promise<ResultadoDaNota> {
-  let financiamentoId: string | null;
-  try {
-    financiamentoId = await g.parcelarExistente(alvoId, payloadDaNota(clienteId, d, e, parcelas));
-  } catch (x) {
-    return { ok: false, erro: erroDe(x, 'Falha ao parcelar o lançamento.') };
-  }
-  const n = parcelas.length;
-  try {
-    const gravadas = financiamentoId ? await g.parcelas(financiamentoId) : [];
-    if (!gravadas.length) return { ok: true, parcelas: n, erroDoDocumento: 'O lançamento foi parcelado, mas as parcelas não foram achadas para anexar a nota — anexe pelo Editar.' };
-    const lista = await g.documentosDoParcelamento(clienteId, gravadas, [pendenteDaNota(d, e.favorecidoId)]);
-    const falha = falhaDosDocumentos(lista);
-    return { ok: true, parcelas: n, erroDoDocumento: falha ? `O lançamento foi parcelado em ${n}, mas a nota não foi anexada: ${falha}` : null };
-  } catch (x) {
-    return { ok: true, parcelas: n, erroDoDocumento: `O lançamento foi parcelado em ${n}, mas a nota não foi anexada: ${erroDe(x, 'falha')}` };
-  }
-}
 
 /**
  * FIN-NOTA-PDF-01b (caso do Gabriel, 21/10 16h49: NF sem duplicata caiu no Novo lancamento e ele teve de escolher tudo de novo) —
@@ -261,6 +135,8 @@ export function prefillDoModal(d: DoXml, e: {
   fazendaId: string; contaBancariaId: string | null; favorecidoId: string | null; favorecidoNome: string | null;
   plano: { id: string; subcentro: string; macro_custo: string; grupo_custo: string; centro_custo: string; escopo_negocio: string } | null;
   safraId: string | null; cultura: string | null; vencimento: string | null;
+  /** NOTA-NOVA-MODAL-REAL — o "duplica": o motivo de criar mesmo com a nota parecendo já lançada (vai na observação) */
+  observacao?: string | null;
 }) {
   /* o fornecedor escolhido vale tambem para a NF pendente (emitente) e para a faixa do fornecedor no Novo lancamento */
   const proposta = { ...d.proposta, favorecidoId: e.favorecidoId ?? d.proposta.favorecidoId,
@@ -284,6 +160,7 @@ export function prefillDoModal(d: DoXml, e: {
     } : {}),
     ...(e.safraId ? { safra_id: e.safraId } : {}),
     ...(e.cultura != null ? { cultura: e.cultura } : {}),
+    ...(e.observacao ? { observacao: e.observacao } : {}),
     doXml,
   };
 }

@@ -145,6 +145,10 @@ const CENARIOS = [
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor
      nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
+  /* PROD-EVOLUCAO-01a — trocar unidade, período e a meta não desloca a barra, os cards nem as colunas (larguras fixas pelo maior valor) */
+  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], estados: [
+    ['@', botao(/^@$/)], ['t', botao(/^t$/)], ['cabeças', botao(/^Cabeças$/)], ['ano', botao(/^Ano$/)], ['mês', botao(/^Mês/)], ['acum', botao(/^Acum/)],
+    ['sem meta', clicar('[data-testid="evolucao-com-meta"]')], ['com meta', clicar('[data-testid="evolucao-com-meta"]')]] },
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, estados: [
     ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['inativos desligado', clicar('[data-testid="mostrar-inativos"]')],
     ['busca 4 contas', digitar('[data-testid="busca-plano"]', 'Outras Saídas')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],
@@ -320,20 +324,23 @@ const CENARIOS = [
     ['mostrar inativas', clicar('[data-testid="mostrar-inativas"]')]] },
   { nome: 'contas-modal', url: 'tela=contas&barra=32&v=editar', auto: true },
   { nome: 'contas-nova', url: 'tela=contas&barra=32&v=nova', auto: true },
+  /* CARTAO-LANCAMENTO-01 (mock v2: "mesmo lugar, mesmo tamanho: o modal não muda de altura") — a conta corrente × o cartão (fecha/vence no lugar
+     de Agência/Conta e a explicação embaixo) */
+  { nome: 'contas-modal-cartao', url: 'tela=contas&barra=32&n=longo&v=editar', antes: async (p) => { await p.locator('[data-testid="modal-conta-bancaria"]').waitFor(); await espera(p, 700); },
+    estados: [['o cartão', { url: 'tela=contas&barra=32&n=longo&v=editar&cartao=1' }]] },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
   { nome: 'mesclar', url: 'tela=mesclar', auto: true },
   /* FIN-NOTA-PDF-01 — o modal da nota: nada anda quando o "Falta:" troca pelo aviso de baixo, quando a faixa "Atualizar este" aparece,
      quando a nota e' barrada (ja' registrada, chave que nao confere) ou no pior caso de texto. Cada um contra a nota recem-aberta. */
-  { nome: 'nota-pdf', url: 'tela=nota-pdf', estados: [
-    ['fornecedor cadastrado, subcentro sugerido, "Atualizar este"', { url: 'tela=nota-pdf&v=cadastrado' }],
-    ['nota ja registrada', { url: 'tela=nota-pdf&v=registrada' }], ['chave nao confere', { url: 'tela=nota-pdf&v=diverge' }],
-    ['pior caso de texto', { url: 'tela=nota-pdf&v=longo' }],
-    ['subcentro de lavoura (Safra e Cultura)', { url: 'tela=nota-pdf&v=lavoura' }], ['nota sem duplicata (Criar lancamento)', { url: 'tela=nota-pdf&v=semdup' }],
-    ['nota avulsa, remessa de entrega futura (NOTA-AVULSA-890-01)', { url: 'tela=nota-pdf&v=avulsa' }],
-    ['so cancelados (D)', { url: 'tela=nota-pdf&v=socancelados' }],
-    /* P95 — a previa pela chave digitada (emissao e valor em ambar no lugar dos lidos) e a nota achada em parcelas soltas */
-    ['nota pela chave digitada (P95)', { url: 'tela=nota-pdf&v=pelachave' }],
-  ] },
+  /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota NOVA abre direto o Novo lançamento: o mesmo modal com o PDF, só a chave digitada, a nota no
+     cartão (sem duplicata) e o XML não desloca nada (a tela intermediária saiu; a já lançada segue em `nota-pdf-ja`).
+     A nota SÓ PELA CHAVE não tem itens, logo não tem a aba "Itens da nota" — outro conjunto de abas, a mesma regra do D-a abaixo (cada modo
+     contra a própria base): fica fora desta comparação e é medida no `check:ui-cortes` (`nota-nova-modal-chave-*`). */
+  { nome: 'nota-nova-modal', url: 'tela=lancamento&m=novo&v=notapdf', antes: async (p) => { await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900); },
+    estados: [
+      ['nota sem duplicata, conta do cartao', { url: 'tela=lancamento&m=novo&v=notacartao' }],
+      ['o XML', { url: 'tela=lancamento&m=novo&v=xml' }],
+    ] },
   /* D-a (Gabriel 29/10 08:32) — CADA MODO CONTRA A PRÓPRIA BASE: a nota JÁ LANÇADA tem outro conjunto de abas (5, numeradas) que a NOVA (3) —
      o desenho aprovado; trocar de modo é trocar de tela, não "deslocar". As variantes já lançadas se medem aqui, contra a já lançada recém-aberta;
      a nova, acima, contra a nova. (O "Criar novo (duplica)" do ⋯ volta para a nova: a tela dele é medida no `check:ui-cortes`, `nota-pdf-caminho-criar`.) */
@@ -399,21 +406,6 @@ const CENARIOS = [
     ['aba Itens', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens (")')],
     /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
   ] },
-  /* P74 — "Como foi pago?": trocar À vista → Cartão em N× → (cartão, 4) → Parcelas livres → Duplicatas apagado não move o título do bloco, os
-     outros blocos nem o rodapé (o conteúdo do bloco troca por dentro, na altura dele) */
-  /* P101 — em todos os tamanhos: abaixo de 1000px, na aba "Parcelas e lançamento" */
-  { nome: 'nota-pdf-como-foi-pago', url: 'tela=nota-pdf&v=semdup', antes: async (p) => {
-    const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
-    if (await t.count()) { await t.first().click(); await espera(p, 300); }
-  }, estados: [
-    ['Cartao em Nx', async (p) => { await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p); }],
-    ['cartao escolhido, 4 parcelas', async (p) => {
-      await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p);
-      await p.locator('[data-testid="nota-cartao"] button', { hasText: 'Selecione o cartão' }).first().click(); await espera(p, 300);
-      await p.getByText('Cartão Elo Exemplo', { exact: true }).last().click(); await espera(p, 300);
-      await digitar('[data-testid="nota-cartao-parcelas"]', '4')(p);
-    }],
-  ] },
   /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */
   { nome: 'obrigacao-editar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', antes: async (p) => {
     await p.locator('[data-testid="botoes-do-contrato"] button', { hasText: 'Editar' }).first().click(); await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900);
@@ -426,6 +418,12 @@ const CENARIOS = [
   /* P117 — a linha fixa sob o Fornecedor: com cidade ("CNPJ · Presidente Prudente/SP") e sem (só o CNPJ) — nada anda */
   { nome: 'lancamento-fornecedor-cidade', url: 'tela=lancamento&m=editar', estados: [['cadastro sem cidade', { url: 'tela=lancamento&m=editar&cidade=sem' }]] },
   /* P121 — o Resumo do lançamento: os nomes longos do mock no lugar dos curtos — nenhum bloco muda de altura, nada abaixo anda */
+  /* CARTAO-LANCAMENTO-01 — a mesma compra numa conta comum × no cartão (o vencimento da fatura, a frase embaixo da conta, o 💳 do resumo) e
+     a forma "auto" na aba Pagamento: nada se desloca */
+  ...['Geral', 'Pagamento'].map((aba) => ({ nome: `lancamento-cartao-${aba}`, url: 'tela=lancamento&m=novo&v=cartaoavista&conta=bb',
+    antes: async (p) => { await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900); await clicar(`text=${aba}`)(p); await espera(p, 500); },
+    estados: [['conta do cartão (dias digitados)', { url: 'tela=lancamento&m=novo&v=cartaoavista' }],
+      ['conta do cartão (dia das faturas)', { url: 'tela=lancamento&m=novo&v=cartaoavista&dias=sem' }]] })),
   { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal', estados: [['nomes longos', { url: 'tela=lancamento&m=editar&v=sal&resumo=longo' }]] },
   /* P138 — "Usar" a safra da competência: a linha da sugestão sai e o campo se enche — nada abaixo anda */
   { nome: 'lancamento-safra-usar', url: 'tela=lancamento&m=editar&safra=sem', estados: [['Usar a sugestão', clicar('[data-testid="safra-usar-sugestao"]')]] },

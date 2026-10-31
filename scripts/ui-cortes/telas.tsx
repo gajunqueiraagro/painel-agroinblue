@@ -90,6 +90,7 @@ import { V2PlanejamentoVisaoGeral } from '@/v2/pages/V2PlanejamentoVisaoGeral';
 import V2FechamentoPeriodo from '@/v2/pages/V2FechamentoPeriodo';
 import * as META from './dados/metaP109';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
+import { EvolucaoDoAnoTab } from '@/pages/EvolucaoDoAnoTab';
 import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
 
 /* Gabriel 29/10 08:26 — os parcelados do LR na nota já lançada (SINTÉTICOS): as 4 do sistema e a prévia da `fn_nota_completar` como o banco a faz */
@@ -563,19 +564,24 @@ if (tela === 'mesclar') {
 } else if (tela === 'contas') {
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias: a lista (`&n=longo` = o pior caso), o modal da conta (`&v=editar&aba=dados|gerente|
      saldo|importacao`, aberto pela 1ª linha) e a nova conta (`&v=nova`). SINTÉTICO (`dados/contas.ts`). */
-  const lista = q.get('n') === 'longo' ? CONTAS_BANC.CONTAS_LONGAS : CONTAS_BANC.CONTAS;
+  const listaBase = q.get('n') === 'longo' ? CONTAS_BANC.CONTAS_LONGAS : CONTAS_BANC.CONTAS;
+  /* CARTAO-LANCAMENTO-01 — `&cartao=1`: o cartão SINTÉTICO (k9) com os dias digitados (fecha 3, vence 10) — o modal abre nele */
+  const lista = q.get('cartao') === '1' ? listaBase.map((c: any) => (c.id === 'k9' ? { ...c, dia_fechamento: 3, dia_vencimento: 10 } : c)) : listaBase;
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_contas_bancarias' ? (e.in.id ? lista.filter((c: any) => e.in.id.includes(c.id)) : lista)
       : t === 'bancos_referencia' ? CONTAS_BANC.BANCOS
       : t === 'financeiro_saldos_bancarios_v2' ? [{ saldo_final: 30943.91, saldo_data: '2026-08-31' }] : [],
     rpc: (fn: string, a: any) => fn === 'fn_conta_bancaria_painel' ? CONTAS_BANC.PAINEL
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Usuário Exemplo', email: null, situacao: 'membro ativo' }]
-      : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano)) : null,
+      : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano))
+      : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }] : null,
   };
   montar(<div className="h-full"><FinV2ContasTab /></div>);
   const abre = q.get('v');
   if (abre) setTimeout(() => {
-    const alvo = abre === 'nova' ? document.querySelector('[data-testid="nova-conta"]') : document.querySelector('[data-testid="linha-conta"]');
+    /* CARTAO-LANCAMENTO-01 — `&cartao=1` abre a linha do cartão (a tela ordena a lista: a 1ª linha não é a 1ª do banco) */
+    const doCartao = q.get('cartao') === '1' ? [...document.querySelectorAll('[data-testid="linha-conta"]')].find((tr) => (tr.textContent ?? '').includes('Cartão Corporativo Exemplo')) : null;
+    const alvo = abre === 'nova' ? document.querySelector('[data-testid="nova-conta"]') : doCartao ?? document.querySelector('[data-testid="linha-conta"]');
     (alvo as HTMLElement | null)?.click();
     const aba = q.get('aba');
     if (aba) setTimeout(() => (document.querySelector(`[data-testid="aba-conta-${aba}"]`) as HTMLElement | null)?.click(), 200);
@@ -623,6 +629,10 @@ if (tela === 'mesclar') {
     : T === 'pc100' ? <div className="h-full"><PainelConsultorTab filtroGlobal={{ ano: '2026', mes: 10 }} /></div>
     : T === 'vgplan' ? <div className="h-full"><V2PlanejamentoVisaoGeral ano={2026} mes={10} /></div>
     : <div className="h-full"><V2FechamentoPeriodo periodo={{ periodoInicio: '2026-01', periodoFim: '2026-10' }} onPeriodoChange={() => {}} /></div>);
+} else if (tela === 'evolucao-ano') {
+  /* PROD-EVOLUCAO-01a — Produção › Evolução no Ano (nível 1), meses SINTÉTICOS no pior caso de largura (`mocks/evolucao.ts`); `&faz=1` uma fazenda */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  montar(<div className="h-full"><EvolucaoDoAnoTab /></div>);
 } else if (tela === 'recorrencias') {
   /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
   g.__bancoBancada = {
@@ -1422,6 +1432,8 @@ if (tela === 'mesclar') {
       juros_previstos: 0, soma_principal: 821.22 * PP, soma_total: 821.22 * PP, divergentes: 0 } };
   const PARCELA_DA_COMPRA = v === 'salparcela' || v === 'salparcelapaga';
   g.__bancoBancada = { from: (t: string, e: any) => v === 'salsolta' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_SOLTAS
+      /* CARTAO-LANCAMENTO-01 — `cartaoavista`: o cadastro do cartão SINTÉTICO com os dias digitados (fecha 3, vence 10); `&dias=sem`, sem */
+      : v === 'cartaoavista' && t === 'financeiro_contas_bancarias' ? (q.get('dias') === 'sem' ? [{ id: 'elo', dia_fechamento: null, dia_vencimento: null }] : [{ id: 'elo', dia_fechamento: 3, dia_vencimento: 10 }])
       : v === 'salnota' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DA_NOTA
       : v === 'salduas' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DUAS
       : PARCELA_DA_COMPRA && t === 'financiamento_parcelas' ? [{ financiamento_id: 'fin-sint', status: 'pendente' }]
@@ -1506,6 +1518,10 @@ if (m === 'editar' && v === 'salnota') props.lancamento = { ...SAL, conta_bancar
 if (m === 'editar' && q.get('forma') && props.lancamento) props.lancamento = { ...props.lancamento, forma_pagamento: q.get('forma') };
 if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 3284.88, data_competencia: '2026-08-10',
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
+/* CARTAO-LANCAMENTO-01 — `cartaoavista`: a compra à vista no cartão (mock v2: R$ 312,40 em 30/10; dados SINTÉTICOS) — o vencimento da fatura,
+   a frase e a forma "Cartão de crédito" automática */
+if (v === 'cartaoavista' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', status_transacao: 'previsto', data_competencia: '2026-10-30', valor: 312.4,
+  descricao: 'Combustível posto exemplo', fazenda_id: 'f-pur', conta_bancaria_id: q.get('conta') ?? 'elo' };   // `&conta=bb`: a mesma compra numa conta comum (a base do desloca)
 if (v === 'rateio' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura', subcentro: 'Insumos Lavoura Milho', plano_conta_id: 'pl-ins',
   macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', cultura: '', fazenda_id: 'f-pur', data_competencia: '2026-05-10', valor: 5000 };
 /* P121 — `&resumo=longo`: o caso "Nomes bem longos" do mock (SINTÉTICO) sobre o `v=sal` — favorecido, fazenda, conta, centro e subcentro
@@ -1621,10 +1637,42 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
     g.__fornecedoresBancada = [...(g.__fornecedoresBancada ?? []).filter((f: any) => f.id !== 'agro'),
       { ...AGRO, municipio: semCidade ? null : 'Presidente Prudente', uf: semCidade ? null : 'SP' }];
   }
-  raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
+  const renderizar = () => raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
     <LancamentoV2Dialog open onClose={() => {}} onSave={async () => 'x'} fazendas={FAZENDAS} contas={CONTAS} classificacoes={CLASSIF}
       fornecedores={[AGRO]} safras={SAFRAS} onCriarFornecedor={async () => null}
       /* P128a (porta 2) — o "Ler a NF" do Documentos do Editar (na bancada, a prévia não abre) */
       onLerNotaFiscal={async () => null} {...props} />
   </MemoryRouter></QueryClientProvider>);
+  /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO aqui, pelo `prefillDaNota` (o caminho da lista): `notapdf`
+     o PDF sintético (4 duplicatas) · `notachave` só a chave digitada (sem valor nem data) · `notacartao` a nota sem duplicata paga no cartão
+     Elo (a conta já escolhida; o cenário escolhe Parcelada 10× no Pagamento). O PDF é desenhado pelo jspdf e LIDO pelo caminho de verdade. */
+  if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
+    void (async () => {
+      const { jsPDF } = await import('jspdf');
+      const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+      const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
+      const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
+      if (v === 'notachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
+      else for (const it of (v === 'notacartao' ? danfeSinteticoSemDuplicata() : PAGINAS_DANFE_SINTETICO)[0]) { doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 595.28 - it.y); }
+      const bytes: ArrayBuffer = doc.output('arraybuffer');
+      let lido: any;
+      if (v === 'notachave') {
+        const { notaDaChaveDigitada, lidoDaChave } = await import('@/lib/financeiro/nfe/chaveDigitada');
+        const r = notaDaChaveDigitada('5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8298');
+        if (r.ok === false) { raiz.render(<div>{r.frase}</div>); return; }
+        lido = lidoDaChave(r.nota, [{ largura: 841.89, altura: 595.28 }]);
+      } else lido = await lerNota(bytes);
+      if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+      const FORN_S = { ...AGRO, id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24' };
+      props.fornecedores = [FORN_S];
+      const resolucao = resolverEmitente(lido.nota.emitente, [FORN_S], null);
+      const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: '280000002' }], emitente: resolucao,
+        favorecidoId: resolucao.propostoId, ultima: { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' } });
+      props.prefill = { ...prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente,
+        resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, '000.000.937.pdf') } as any), ...(v === 'notacartao' ? { conta_bancaria_id: 'elo' } : {}) };
+      props.documentosAntesDeSalvar = true;
+      renderizar();
+    })();
+  } else renderizar();
 }

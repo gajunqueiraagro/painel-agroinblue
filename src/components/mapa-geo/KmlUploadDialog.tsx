@@ -6,7 +6,7 @@
  * Layout fixo: 900px de largura, 640px de altura (até 95% da janela), cabeçalho e rodapé de 40px; só o corpo da tabela rola; a barra de
  * seleção tem lugar reservado; o "Remover mapa atual" tem lugar reservado (nada se desloca).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
@@ -133,23 +133,6 @@ export function KmlUploadDialog({
       setLendo(false);
     }
   }, [ativos, fazendaId]);
-
-  /* ⚠ A LISTA DO SELETOR ROLA (MAPA-IMPORT-01b-fix1, medido): o painel do `SearchableSelect` vai num portal direto no <body>, FORA do
-     modal, e o bloqueio de rolagem do Dialog (ouvinte de `wheel` acima dele) cancelava a roda — os 26 destinos existiam, mas "+ Novo
-     pasto", as áreas e "Não importar" ficavam abaixo dos 18 pastos sem como chegar. Enquanto este modal está aberto, a roda e o toque
-     sobre o painel não sobem até o bloqueio. (O conserto de todos os modais é no componente da casa; frente própria.) */
-  useEffect(() => {
-    if (!open) return;
-    const naoSobe = (e: Event) => {
-      if (e.target instanceof Element && e.target.closest('[data-testid="searchable-select-painel"]')) e.stopPropagation();
-    };
-    document.body.addEventListener('wheel', naoSobe);
-    document.body.addEventListener('touchmove', naoSobe);
-    return () => {
-      document.body.removeEventListener('wheel', naoSobe);
-      document.body.removeEventListener('touchmove', naoSobe);
-    };
-  }, [open]);
 
   /* UI-ARRASTAR-ARQUIVO-01b: o arquivo arrastado e o escolhido no seletor passam pelo MESMO dono (`useSoltarArquivo`). */
   const soltar = useSoltarArquivo({ regra: REGRA_DO_MAPA, desabilitado: salvando, onArquivos: arquivos => { if (arquivos[0]) void lerArquivo(arquivos[0]); } });
