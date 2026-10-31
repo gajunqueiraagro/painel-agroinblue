@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
+import { usePastoGeometrias, type PoligonoParaGravar } from '@/hooks/usePastoGeometrias';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
 import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
@@ -11,7 +11,6 @@ import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
 import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
-import type { ParsedPolygon } from '@/lib/kmlParser';
 
 export interface PastoMapData {
   pasto: any;
@@ -32,7 +31,7 @@ export function MapaGeoPastosTab() {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const {
-    geometrias, loading: geoLoading, salvarGeometrias, loadGeometrias,
+    geometrias, loading: geoLoading, salvarGeometrias, removerGeometrias, loadGeometrias,
     atualizarGeometria, excluirGeometrias, vincularPasto,
   } = usePastoGeometrias();
   const { ocupacoes, reload: reloadOcupacao } = usePastoOcupacao(pastos);
@@ -77,16 +76,13 @@ export function MapaGeoPastosTab() {
 
   const hasGeo = geometrias.length > 0;
 
-  const handleKmlUpload = useCallback(async (polygons: ParsedPolygon[]) => {
-    const pastoMap = new Map(pastos.filter(p => p.ativo).map(p => [p.nome.trim().toLowerCase(), p]));
-    const items = polygons.map(poly => ({
-      pasto_id: pastoMap.get(poly.name.trim().toLowerCase())?.id || null,
-      nome_original: poly.name,
-      geojson: poly.geojson,
-    }));
-    const success = await salvarGeometrias(items);
+  // MAPA-IMPORT-01b: o destino de cada polígono vem escolhido do modal (pasto, pasto novo, área); "Não importar" já ficou de fora.
+  // A recusa do banco volta para o rodapé do modal (`aoRecusar`), sem toast por cima do Salvar.
+  const handleKmlUpload = useCallback(async (itens: PoligonoParaGravar[], aoRecusar: (frase: string) => void) => {
+    const success = await salvarGeometrias(itens, { aoRecusar });
     if (success) setUploadOpen(false);
-  }, [pastos, salvarGeometrias]);
+    return success;
+  }, [salvarGeometrias]);
 
   if (isGlobal) {
     return (
@@ -199,9 +195,12 @@ export function MapaGeoPastosTab() {
           open={uploadOpen}
           onOpenChange={setUploadOpen}
           onUpload={handleKmlUpload}
-          onRemove={async () => {}}
+          onRemove={removerGeometrias}
           pastos={pastos}
           hasExistingMap={hasGeo}
+          fazendaId={fazendaAtual?.id}
+          fazendaCodigo={fazendaAtual?.codigo}
+          fazendaNome={fazendaAtual?.nome}
         />
       </>
     );
@@ -223,9 +222,12 @@ export function MapaGeoPastosTab() {
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         onUpload={handleKmlUpload}
-        onRemove={async () => {}}
+        onRemove={removerGeometrias}
         pastos={pastos}
         hasExistingMap={hasGeo}
+        fazendaId={fazendaAtual?.id}
+        fazendaCodigo={fazendaAtual?.codigo}
+        fazendaNome={fazendaAtual?.nome}
       />
     </div>
   );

@@ -100,10 +100,10 @@ describe.each(['leitor', 'lista'] as const)('a opção, a busca e o selo — mod
     abrir(); digitar('prudente'); fireEvent.click(opcoes()[0]);
     await waitFor(() => expect(screen.getByTestId('favorecido-linha-texto').textContent).toBe('11.222.333/0038-73 · Presidente Prudente/SP'));
   });
-  it('sem documento a área fica VAZIA; tamanho inválido aparece como está', () => {
+  it('FORN-CAMPO-01 — sem documento a linha da opção diz "—"; tamanho inválido aparece como está', () => {
     render(<Campo modo={modo} />);
     abrir();
-    expect(docDe(opcoes().find((o) => o.textContent?.includes('Sicrano')) as HTMLElement)).toBe('');
+    expect(docDe(opcoes().find((o) => o.textContent?.includes('Sicrano')) as HTMLElement)).toBe('—');
     expect(docDe(opcoes().find((o) => o.textContent?.includes('Torto')) as HTMLElement)).toBe('1234567');
   });
   it('só ativos, e "[META]" fora: o inativo e o de meta não estão na lista (a busca prova que existem na base)', () => {
@@ -156,7 +156,7 @@ describe.each(['leitor', 'lista'] as const)('a opção, a busca e o selo — mod
 });
 
 describe('a linha fixa do documento sob o campo', () => {
-  it('existe SEMPRE com a mesma altura declarada: vazia sem escolha, o documento, ou "sem CNPJ/CPF"', () => {
+  it('existe SEMPRE com a mesma altura declarada: vazia sem escolha, o documento, ou "—" sem documento (FORN-CAMPO-01)', () => {
     render(<Campo modo="leitor" />);
     const linha = () => screen.getByTestId('favorecido-documento');
     expect(linha().textContent).toBe('');
@@ -165,7 +165,7 @@ describe('a linha fixa do documento sob o campo', () => {
     abrir(); fireEvent.click(opcoes()[2]);
     expect(linha().textContent).toBe('11.222.333/0001-81');
     abrir(); fireEvent.click(opcoes().find((o) => o.textContent?.includes('Sicrano')) as HTMLElement);
-    expect(linha().textContent).toBe('sem CNPJ/CPF');
+    expect(linha().textContent).toBe('—');
     expect(linha().className).toBe(classe);
   });
   it('LIGADA por padrão no modo do leitor; na lista do hospedeiro (transição) fica desligada até a fatia dele; a prop manda', () => {
@@ -433,16 +433,16 @@ describe('fatia 2b — o que o dono ganhou para a OC', () => {
   it('busca SEM controle do hospedeiro: o seletor guarda o texto e filtra', () => {
     render(<FavorecidoSelect value="" onChange={() => {}} clienteId="c" />);
     fireEvent.click(screen.getByRole('combobox'));
-    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.textContent)).toEqual(['Alfa Agro', 'Beta Boi']);   /* "[META]" e o inativo fora */
+    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.querySelector('span')?.textContent)).toEqual(['Alfa Agro', 'Beta Boi']);   /* "[META]" e o inativo fora */
     fireEvent.change(screen.getByPlaceholderText('Buscar por nome ou CNPJ/CPF...'), { target: { value: 'beta' } });
-    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.textContent)).toEqual(['Beta Boi']);
+    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.querySelector('span')?.textContent)).toEqual(['Beta Boi']);
   });
   it('fornecedor de OC antiga hoje INATIVO: o campo abre com o nome e a marca "inativo", nunca vazio, e ele não está na lista', () => {
     render(<FavorecidoSelect value="x" onChange={() => {}} clienteId="c" />);
     expect(screen.getByRole('combobox').textContent).toContain('Velho Ltda');
     expect(screen.getByTestId('favorecido-inativo').textContent).toBe('inativo');
     fireEvent.click(screen.getByRole('combobox'));
-    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.textContent)).toEqual(['Alfa Agro', 'Beta Boi']);
+    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.querySelector('span')?.textContent)).toEqual(['Alfa Agro', 'Beta Boi']);
   });
   it('`novoDesabilitado`: o "+" fica APAGADO (não some) e não chama; `novoRotulo` é o nome dele', () => {
     const criar = vi.fn();

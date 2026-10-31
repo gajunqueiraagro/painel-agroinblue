@@ -1019,7 +1019,7 @@ describe('fatia 2c — o credor do contrato', () => {
     fireEvent.click(campoCredor());
     const busca = screen.getByPlaceholderText('Buscar por nome ou CNPJ/CPF...');
     fireEvent.change(busca, { target: { value: 'cooperativa' } });
-    expect(screen.getAllByTestId('favorecido-opcao').map((o) => o.textContent)).toEqual(['Cooperativa Três']);
+    expect(screen.getAllByTestId('favorecido-opcao').map((o) => o.querySelector('span')?.textContent)).toEqual(['Cooperativa Três']);
     fireEvent.change(busca, { target: { value: '99.888.777/0001' } });
     const achadas = screen.getAllByTestId('favorecido-opcao');
     expect(achadas).toHaveLength(1);

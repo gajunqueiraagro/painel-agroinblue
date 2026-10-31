@@ -89,16 +89,18 @@ describe('o modal "Sugestões para casar"', () => {
     expect(linhas[1].textContent).toBe('Sugestões · mais provável primeiro');
   });
 
-  it('a régua da casa: cabeçalho 22px a 9,5px, linha 19px a 10px; Venc. 70 · Motivo 160 · Valor 96 · Status 64 · casar 52', () => {
+  /* P153b (Gabriel 29/10): 9px, linha de 17px, cabeçalho de 20px a 8,5px; o Motivo cabe o "mesmo fornecedor · valor difere: previsto …" */
+  it('a régua do P153b: cabeçalho 20px a 8,5px, linha 17px a 9px; Venc. 58 · Motivo 220 · Valor 88 · Status 62 · casar 52', () => {
     const { modal } = abrir();
     const t = modal.querySelector('table')!;
     expect([...t.querySelectorAll('col')].map((x) => (x instanceof HTMLElement ? x.style.width : '?')))
-      .toEqual(['70px', '', '', '160px', '96px', '64px', '52px']);
+      .toEqual(['58px', '', '', '220px', '88px', '62px', '52px']);
     expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['Venc.', 'Descrição', 'Fornecedor', 'Motivo', 'Valor', 'Status', '']);
-    expect(t.className).toContain('text-[10px]');
+    expect([...t.querySelectorAll('th')].every((x) => x.className.includes('text-[8.5px]'))).toBe(true);
+    expect(t.className).toContain('text-[9px]');
     expect(t.className).toContain('table-fixed');
-    expect(t.querySelector('thead tr')!.className).toContain('h-[22px]');
-    for (const tr of t.querySelectorAll('tbody tr')) expect(tr.className).toContain('h-[19px]');
+    expect(t.querySelector('thead tr')!.className).toContain('h-[20px]');
+    for (const tr of t.querySelectorAll('tbody tr')) expect(tr.className).toContain('h-[17px]');
   });
 
   /* P159c (4): DATA NUNCA QUEBRA — dd/mm/aaaa inteira, numa linha */
@@ -167,7 +169,8 @@ describe('o modal "Sugestões para casar"', () => {
       c({ lancamento_id: 'amanda', valor_assinado: -3085, fornecedor: 'Amanda Montes Camargo' }),
     ], { data: '2026-09-04', historico: 'Pix - Agendamento - 04/09 05:35 CAMARGO PROMOCAO DE VENDA', valor: -5665 });
     const selo = within(modal).getByTestId('sugestao-motivo');
-    expect(selo.textContent).toBe('nome · valor diferente');
+    /* P153b: em aberto a ±5 dias, a pista de nome com valor diferente é o "mesmo fornecedor · valor difere" — âmbar como antes */
+    expect(selo.textContent).toBe('mesmo fornecedor · valor difere: previsto 3.085,00');
     expect(selo.className).toContain('bg-amber-50');
     expect(selo.className).not.toContain('border-dashed');
   });

@@ -388,6 +388,12 @@ export function SearchableSelect({
           /* Clicar no próprio campo não fecha: é o gesto de "abrir", e o gatilho já reabre. */
           onInteractOutside={(e) => { if (containerRef.current?.contains(e.target as Node)) e.preventDefault(); }}
           data-testid="searchable-select-painel"
+          /* ⚠ A LISTA ROLA DENTRO DE MODAL (SEARCHABLE-SELECT-ROLAGEM, medido no MAPA-IMPORT-01b-fix1): o painel vai num portal no <body>,
+             FORA do conteúdo do Dialog, e o bloqueio de rolagem do Dialog (ouvinte de `wheel`/`touchmove` no document) cancelava a roda —
+             lista longa (mais itens que a altura) ficava presa nos primeiros. A roda e o toque sobre o painel não sobem até o bloqueio.
+             Fora de modal não muda nada: ninguém acima cancelava. */
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
           /* a paleta é `MENU_PALETA` (o dono, `menuPadrao.ts`), que chega pelo `COMBOBOX_CONTENT` do command.tsx —
              UI-DROPDOWN-PADRAO-01: opaca, a mesma do Select e do DropdownMenu */
           className={cn(COMBOBOX_CONTENT, 'max-w-[320px] rounded-md border shadow-md', contentClassName)}>

@@ -72,9 +72,19 @@ describe('sugerirCasamentos — os casos do NJ', () => {
     ]);
   });
 
-  it('Amanda: "CAMARGO PROMOCAO DE VENDA" -5.665,00 x Amanda Montes Camargo -3.085,00 → "nome · valor diferente", âmbar', () => {
+  /* P153b: em aberto a ±5 dias do vencimento, a pista de nome com valor diferente sai como "mesmo fornecedor · valor difere: previsto X";
+     mais longe que isso, segue a E3 de antes ("nome · valor diferente") — D1, a janela é só do selo novo. */
+  it('Amanda: "CAMARGO PROMOCAO DE VENDA" -5.665,00 x Amanda Montes Camargo -3.085,00 a 1 dia → "mesmo fornecedor · valor difere", âmbar', () => {
     const r = sugerirCasamentos({ data: '2026-09-04', historico: PIX('CAMARGO PROMOCAO DE VENDA'), valor: -5665 }, [
       cand({ valor_assinado: -3085, fornecedor: 'Amanda Montes Camargo', data_vencimento: '2026-09-05', competencia: '2026-08-01' }),
+    ]);
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ tipo: 'mesmo_fornecedor', motivo: 'mesmo fornecedor · valor difere: previsto 3.085,00', valorDiferente: true, vencido: false });
+  });
+
+  it('Amanda a 12 dias do vencimento: fora da janela do selo novo, a E3 de antes → "nome · valor diferente", âmbar', () => {
+    const r = sugerirCasamentos({ data: '2026-09-04', historico: PIX('CAMARGO PROMOCAO DE VENDA'), valor: -5665 }, [
+      cand({ valor_assinado: -3085, fornecedor: 'Amanda Montes Camargo', data_vencimento: '2026-09-16', competencia: '2026-08-01' }),
     ]);
     expect(r).toHaveLength(1);
     expect(r[0]).toMatchObject({ tipo: 'nome_valor', motivo: 'nome · valor diferente', valorDiferente: true, vencido: false });
@@ -167,7 +177,8 @@ describe('decisões do Gabriel de 30/09 — soma entre fornecedores e palavras g
       cand({ lancamento_id: 'x', valor_assinado: -600, fornecedor: 'Posto Trevo', favorecido_id: 'x' }),
       cand({ lancamento_id: 'y', valor_assinado: -100, fornecedor: 'Casa Agro', favorecido_id: 'y' }),
     ]);
-    expect(r.map((s) => s.tipo)).toEqual(['nome_valor', 'soma_mista']);
+    /* P153b: a pista de nome em aberto perto da data é o "mesmo fornecedor"; a soma mista continua por último */
+    expect(r.map((s) => s.tipo)).toEqual(['mesmo_fornecedor', 'soma_mista']);
     const mista = r[1];
     expect(mista).toMatchObject({ motivo: 'soma de 3 · fornecedores diferentes', valorDiferente: true });
     /* 4 fornecedores diferentes que somam o valor não viram sugestão */
