@@ -32,7 +32,8 @@ const TH = 'sticky top-0 z-[2] h-[18px] whitespace-nowrap bg-primary px-1.5 py-0
 const TD = 'h-[19px] border-b border-border px-1.5 py-0 text-[10px] leading-none align-middle';
 const CAMPO = 'h-[17px] rounded-[3px] text-[10px]';
 const AMBAR = 'border-amber-400 bg-amber-50';
-const dataBR = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
+/* a data inteira (dd/mm/aaaa) — a regra da casa (P163); NOTA-NOVA-MODAL-REAL: o gate passou a medir a grade no Novo lançamento da nota */
+const dataBR = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 
 /**
  * O VALOR DA PARCELA: texto livre enquanto digita; ao sair (ou Enter) vira centavos. Aceita a conta direto no campo
@@ -200,7 +201,7 @@ export function GradeDeParcelas({
                     {editavel
                       ? <DatePicker size="compact" value={p.vencimento} onChange={(v) => onParcelas(editarVencimento(parcelas, p.chave, v))}
                           className={`${CAMPO} pl-1 pr-5 ${m.vencimento ? AMBAR : ''}`} />
-                      : compacta && /^\d{4}-\d{2}-\d{2}$/.test(p.vencimento) ? `${p.vencimento.slice(8, 10)}/${p.vencimento.slice(5, 7)}/${p.vencimento.slice(0, 4)}` : dataBR(p.vencimento)}
+                      : dataBR(p.vencimento)}
                   </td>
                   <td className={`${TD} text-right whitespace-nowrap tabular-nums`} data-testid="cel-valor">
                     {editavel

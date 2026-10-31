@@ -71,6 +71,8 @@ import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
+import * as MAPA from './dados/mapaPastos';
+import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import * as CONTAS_BANC from './dados/contas';
 import * as VG from './dados/visaoGeral';
 import { BarraSecao } from '@/v2/components/BarraSecao';
@@ -118,8 +120,14 @@ const M2_DA_NOTA = () => [['2026-08-10', 'Manutencao Maquinas Agricultura sintet
   conta_bancaria_id: conta, numero_documento: '000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj',
   parcelas: [], por: ['numero'] }));
 /* a prévia da `fn_nota_completar` como o banco a faz, a partir dos achados da variante (as pagas: valor, vencimento e conta com o cadeado) */
+/* NOTA-PAGA-A-VISTA-01 (Gabriel 31/10) — `v=avista`: a nota de 4 duplicatas (4 × 491,64) paga À VISTA num lançamento só, com o valor da nota
+   inteira (R$ 1.966,56), realizado, descrição comprida (o pior caso). SINTÉTICO. */
+const AVISTA_DA_NOTA = () => [{ id: 'jl-av', vencimento: '2026-10-10', pagamento: '2026-10-10', competencia: '2026-10-10',
+  descricao: 'Brincos de identificação sintéticos — pago à vista no Itaú Personalite, descrição comprida para o pior caso', valor_cent: 196656,
+  status: 'realizado', conciliado: false, financiamento_id: null, conta_bancaria_id: 'sic', numero_documento: '937', fornecedor_id: 'agro-s',
+  fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
 function completarDoLr(v: string, a: any) {
-  const doLr: any[] = (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA() : v === 'm2' ? M2_DA_NOTA() : LR_DA_NOTA(v);
+  const doLr: any[] = (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA() : v === 'm2' ? M2_DA_NOTA() : v === 'avista' ? AVISTA_DA_NOTA() : LR_DA_NOTA(v);
   const linhas = (a?.p_lancamentos ?? []).map((x: any) => {
     const i = doLr.findIndex((l) => l.id === x.id); const l = doLr[i]; const paga = l?.status === 'realizado';
     const hoje: Record<string, unknown> = { descricao: l?.descricao ?? null, favorecido_id: 'agro-s', fazenda_id: 'f-pur', conta_bancaria_id: 'sic', plano_conta_id: 'pl-vet',
@@ -565,19 +573,24 @@ if (tela === 'mesclar') {
 } else if (tela === 'contas') {
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias: a lista (`&n=longo` = o pior caso), o modal da conta (`&v=editar&aba=dados|gerente|
      saldo|importacao`, aberto pela 1ª linha) e a nova conta (`&v=nova`). SINTÉTICO (`dados/contas.ts`). */
-  const lista = q.get('n') === 'longo' ? CONTAS_BANC.CONTAS_LONGAS : CONTAS_BANC.CONTAS;
+  const listaBase = q.get('n') === 'longo' ? CONTAS_BANC.CONTAS_LONGAS : CONTAS_BANC.CONTAS;
+  /* CARTAO-LANCAMENTO-01 — `&cartao=1`: o cartão SINTÉTICO (k9) com os dias digitados (fecha 3, vence 10) — o modal abre nele */
+  const lista = q.get('cartao') === '1' ? listaBase.map((c: any) => (c.id === 'k9' ? { ...c, dia_fechamento: 3, dia_vencimento: 10 } : c)) : listaBase;
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_contas_bancarias' ? (e.in.id ? lista.filter((c: any) => e.in.id.includes(c.id)) : lista)
       : t === 'bancos_referencia' ? CONTAS_BANC.BANCOS
       : t === 'financeiro_saldos_bancarios_v2' ? [{ saldo_final: 30943.91, saldo_data: '2026-08-31' }] : [],
     rpc: (fn: string, a: any) => fn === 'fn_conta_bancaria_painel' ? CONTAS_BANC.PAINEL
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Usuário Exemplo', email: null, situacao: 'membro ativo' }]
-      : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano)) : null,
+      : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano))
+      : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }] : null,
   };
   montar(<div className="h-full"><FinV2ContasTab /></div>);
   const abre = q.get('v');
   if (abre) setTimeout(() => {
-    const alvo = abre === 'nova' ? document.querySelector('[data-testid="nova-conta"]') : document.querySelector('[data-testid="linha-conta"]');
+    /* CARTAO-LANCAMENTO-01 — `&cartao=1` abre a linha do cartão (a tela ordena a lista: a 1ª linha não é a 1ª do banco) */
+    const doCartao = q.get('cartao') === '1' ? [...document.querySelectorAll('[data-testid="linha-conta"]')].find((tr) => (tr.textContent ?? '').includes('Cartão Corporativo Exemplo')) : null;
+    const alvo = abre === 'nova' ? document.querySelector('[data-testid="nova-conta"]') : doCartao ?? document.querySelector('[data-testid="linha-conta"]');
     (alvo as HTMLElement | null)?.click();
     const aba = q.get('aba');
     if (aba) setTimeout(() => (document.querySelector(`[data-testid="aba-conta-${aba}"]`) as HTMLElement | null)?.click(), 200);
@@ -644,6 +657,20 @@ if (tela === 'mesclar') {
     rpc: (fn: string) => fn === 'fn_recorrencias_a_gerar' ? REC.A_GERAR : null,
   };
   montar(<div className="h-full"><V2Recorrencias /></div>);
+} else if (tela === 'mapa-geo') {
+  /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
+     abre no último mês com fechamento de pastos (set/2026; fix1 A: o banco falso ignora `order`/`limit`, a lista vem do mais novo); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
+  g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'fazenda_geometrias' ? MAPA.GEOMETRIAS
+      : t === 'pastos' ? MAPA.PASTOS
+      : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
+      : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
+      : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
+      : [],
+    rpc: () => null,
+  };
+  montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
 } else if (tela === 'acessos') {
   /* ACESSOS-PERFIL-01 — a lista (nome e e-mail pela fonte unica), o "Novo acesso" e o "Editar acesso" (`&v=editar`). SINTETICO. */
   const MEMBROS = [
@@ -1038,7 +1065,7 @@ if (tela === 'mesclar') {
       lido.nota.totais = { ...lido.nota.totais, notaCent: 99999999 * 12, descontoCent: 99999999 };
     }
     const forn = { id: 'agro-s', nome: v === 'gulartlongo' ? 'Cooperativa Agroindustrial Sintetica dos Produtores Rurais do Centro Oeste Ltda' : 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24', fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
-    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela', 'pelachave', 'irmas', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'].includes(v) ? [forn] : [];
+    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela', 'pelachave', 'irmas', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'].includes(v) ? [forn] : [];
     const resolucao = resolverEmitente(lido.nota.emitente, fornecedores, null);
     const ultima = v === 'cadastrado' || v === 'parcelar' ? { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' }
       : v === 'lavoura' ? { plano_conta_id: 'pl-lav', subcentro: 'Insumos Lavoura — Defensivos e Fertilizantes', macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', escopo_negocio: 'agricultura', data: '2026-08-14', safra_id: 's-soja', cultura: 'soja' }
@@ -1062,8 +1089,8 @@ if (tela === 'mesclar') {
         /* Gabriel 29/10 10:38 — "No sistema hoje": a fazenda, o subcentro e o fornecedor de cada achado (SINTÉTICOS; o mesmo para todos os ids da bancada) */
         if (t === 'financeiro_lancamentos_v2' && v === 'm2') return ['jl-m20', 'jl-m21', 'jl-m22'].map((id, i) => ({ id, fazenda_id: 'f-pur',
           subcentro: 'Manutenção de Máquinas Agrícolas', favorecido_id: 'agro-s', plano_conta_id: 'pl-lav', safra_id: i === 2 ? 's-soja-25' : 's-soja' }));
-        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo'].includes(v)) return ['jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
-          'jl-irma-0', 'jl-irma-1', 'jl-irma-2', 'jl-irma-3', 'jl-p1', 'jl-lr0', 'jl-lr1', 'jl-lr2', 'jl-lr3', 'jl-g1']
+        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'avista'].includes(v)) return ['jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
+          'jl-irma-0', 'jl-irma-1', 'jl-irma-2', 'jl-irma-3', 'jl-p1', 'jl-lr0', 'jl-lr1', 'jl-lr2', 'jl-lr3', 'jl-g1', 'jl-av']
           .map((id) => ({ id, fazenda_id: 'f-pur', subcentro: 'Sanidade Animal — Vacinas e Medicamentos Veterinários', favorecido_id: 'agro-s', plano_conta_id: 'pl-vet' }));
         if (t === 'financeiro_lancamentos_v2' && (v === 'cadastrado' || v === 'parcelar')) return [{ id: 'l-ext', data_vencimento: '2026-10-20', data_competencia: '2026-10-20',
           descricao: 'PAGTO BOLETO AGRO SINTETICA INSUMOS — lançamento criado do extrato bancário com histórico comprido', valor: 491.64, financiamento_id: null, numero_documento: null }];
@@ -1109,7 +1136,8 @@ if (tela === 'mesclar') {
         /* Gabriel 29/10 10:38 — `v=gulart`: a nota de UMA parcela já lançada 1 de 1, PROGRAMADA (o molde Gulart & Cia, SINTÉTICO) */
         : fn === 'fn_nota_ja_lancada' && (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'm2' ? M2_DA_NOTA()
-        : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2') ? completarDoLr(v, a)
+        : fn === 'fn_nota_ja_lancada' && v === 'avista' ? AVISTA_DA_NOTA()
+        : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'avista') ? completarDoLr(v, a)
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
           financiamento_id: null, numero_documento: 'NF_000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
@@ -1164,7 +1192,10 @@ if (tela === 'mesclar') {
       const arquivo = arquivoPdfDaNota(bytes, nome);
       const doXml: any = { proposta: p.proposta, emitenteNome: l.nota.emitente.nome, emitenteDocumento: l.nota.emitente.documento, emitente: l.nota.emitente, resolucao, ocorrencias: [], arquivo };
       return { id, arquivoNome: nome, arquivoTamanho: bytes.byteLength, nota: l.nota, avisos: l.avisos, fazenda: p.proposta.fazendaId ? { ...fazendas[0], aliases: null } : null,
-        recusa: null, lancada: false, doXml, jaLancados: 0, paraLancar: { arquivo, bytes, lido: l, doXml } };
+        recusa: null, lancada: false, doXml, jaLancados: 0, paraLancar: { arquivo, bytes, lido: l, doXml },
+        /* como `montarLinhaDaNota` (NOTA-NOVA-MODAL-REAL: a tela lê `l.pelaChave`): sem isto a linha da chave digitada saía como lida — o nome
+           do cadastro cortado com o title vazio (o nome da nota, que a chave não traz) e a emissão e o valor no lugar do "—" */
+        pelaChave: l.pelaChave === true };
     };
     const r: any = notaDaChaveDigitada('5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8298');
     const LONGO = 'NOTA FISCAL ESCANEADA DO FORNECEDOR SINTETICO DE NOME BEM COMPRIDO 000.000.938 - copia digitalizada em baixa resolucao.pdf';
@@ -1202,6 +1233,17 @@ if (tela === 'mesclar') {
     rpc: (fn: string) => fn.startsWith('fn_subcentro_cliente_') ? { antes: { lancamentos_vivos: 12 }, depois: {}, recusa: null, lancamentos_tocados: 7 } : null,
   };
   montar(<FinV2PlanoContasTab onAbrirDividendos={() => {}} />);
+} else if (tela === 'patrimonio') {
+  /* PATR-01 PR B — Cadastros › Patrimônio: a tela real com a API em memória (`dados/patrimonio.ts`, SINTÉTICO); o modal do bem se abre
+     pelo clique na linha (os cenários do gate) */
+  const montarPatrimonio = async () => {
+    const { PatrimonioTela } = await import('@/components/patrimonio/PatrimonioTela');
+    const { PatrimonioApiProvider } = await import('@/hooks/usePatrimonio');
+    const { API_PATRIMONIO, FAZENDAS_PATRIMONIO } = await import('./dados/patrimonio');
+    g.__fazendaBancada = { fazendas: FAZENDAS_PATRIMONIO, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
+    montar(<PatrimonioApiProvider api={API_PATRIMONIO}><PatrimonioTela /></PatrimonioApiProvider>);
+  };
+  void montarPatrimonio();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */
@@ -1422,6 +1464,8 @@ if (tela === 'mesclar') {
       juros_previstos: 0, soma_principal: 821.22 * PP, soma_total: 821.22 * PP, divergentes: 0 } };
   const PARCELA_DA_COMPRA = v === 'salparcela' || v === 'salparcelapaga';
   g.__bancoBancada = { from: (t: string, e: any) => v === 'salsolta' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_SOLTAS
+      /* CARTAO-LANCAMENTO-01 — `cartaoavista`: o cadastro do cartão SINTÉTICO com os dias digitados (fecha 3, vence 10); `&dias=sem`, sem */
+      : v === 'cartaoavista' && t === 'financeiro_contas_bancarias' ? (q.get('dias') === 'sem' ? [{ id: 'elo', dia_fechamento: null, dia_vencimento: null }] : [{ id: 'elo', dia_fechamento: 3, dia_vencimento: 10 }])
       : v === 'salnota' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DA_NOTA
       : v === 'salduas' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DUAS
       : PARCELA_DA_COMPRA && t === 'financiamento_parcelas' ? [{ financiamento_id: 'fin-sint', status: 'pendente' }]
@@ -1506,6 +1550,10 @@ if (m === 'editar' && v === 'salnota') props.lancamento = { ...SAL, conta_bancar
 if (m === 'editar' && q.get('forma') && props.lancamento) props.lancamento = { ...props.lancamento, forma_pagamento: q.get('forma') };
 if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 3284.88, data_competencia: '2026-08-10',
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
+/* CARTAO-LANCAMENTO-01 — `cartaoavista`: a compra à vista no cartão (mock v2: R$ 312,40 em 30/10; dados SINTÉTICOS) — o vencimento da fatura,
+   a frase e a forma "Cartão de crédito" automática */
+if (v === 'cartaoavista' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', status_transacao: 'previsto', data_competencia: '2026-10-30', valor: 312.4,
+  descricao: 'Combustível posto exemplo', fazenda_id: 'f-pur', conta_bancaria_id: q.get('conta') ?? 'elo' };   // `&conta=bb`: a mesma compra numa conta comum (a base do desloca)
 if (v === 'rateio' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura', subcentro: 'Insumos Lavoura Milho', plano_conta_id: 'pl-ins',
   macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', cultura: '', fazenda_id: 'f-pur', data_competencia: '2026-05-10', valor: 5000 };
 /* P121 — `&resumo=longo`: o caso "Nomes bem longos" do mock (SINTÉTICO) sobre o `v=sal` — favorecido, fazenda, conta, centro e subcentro
@@ -1621,10 +1669,42 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
     g.__fornecedoresBancada = [...(g.__fornecedoresBancada ?? []).filter((f: any) => f.id !== 'agro'),
       { ...AGRO, municipio: semCidade ? null : 'Presidente Prudente', uf: semCidade ? null : 'SP' }];
   }
-  raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
+  const renderizar = () => raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
     <LancamentoV2Dialog open onClose={() => {}} onSave={async () => 'x'} fazendas={FAZENDAS} contas={CONTAS} classificacoes={CLASSIF}
       fornecedores={[AGRO]} safras={SAFRAS} onCriarFornecedor={async () => null}
       /* P128a (porta 2) — o "Ler a NF" do Documentos do Editar (na bancada, a prévia não abre) */
       onLerNotaFiscal={async () => null} {...props} />
   </MemoryRouter></QueryClientProvider>);
+  /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO aqui, pelo `prefillDaNota` (o caminho da lista): `notapdf`
+     o PDF sintético (4 duplicatas) · `notachave` só a chave digitada (sem valor nem data) · `notacartao` a nota sem duplicata paga no cartão
+     Elo (a conta já escolhida; o cenário escolhe Parcelada 10× no Pagamento). O PDF é desenhado pelo jspdf e LIDO pelo caminho de verdade. */
+  if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
+    void (async () => {
+      const { jsPDF } = await import('jspdf');
+      const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+      const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
+      const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
+      if (v === 'notachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
+      else for (const it of (v === 'notacartao' ? danfeSinteticoSemDuplicata() : PAGINAS_DANFE_SINTETICO)[0]) { doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 595.28 - it.y); }
+      const bytes: ArrayBuffer = doc.output('arraybuffer');
+      let lido: any;
+      if (v === 'notachave') {
+        const { notaDaChaveDigitada, lidoDaChave } = await import('@/lib/financeiro/nfe/chaveDigitada');
+        const r = notaDaChaveDigitada('5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8298');
+        if (r.ok === false) { raiz.render(<div>{r.frase}</div>); return; }
+        lido = lidoDaChave(r.nota, [{ largura: 841.89, altura: 595.28 }]);
+      } else lido = await lerNota(bytes);
+      if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+      const FORN_S = { ...AGRO, id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24' };
+      props.fornecedores = [FORN_S];
+      const resolucao = resolverEmitente(lido.nota.emitente, [FORN_S], null);
+      const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: '280000002' }], emitente: resolucao,
+        favorecidoId: resolucao.propostoId, ultima: { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' } });
+      props.prefill = { ...prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente,
+        resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, '000.000.937.pdf') } as any), ...(v === 'notacartao' ? { conta_bancaria_id: 'elo' } : {}) };
+      props.documentosAntesDeSalvar = true;
+      renderizar();
+    })();
+  } else renderizar();
 }

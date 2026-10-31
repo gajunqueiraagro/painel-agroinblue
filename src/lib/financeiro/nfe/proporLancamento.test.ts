@@ -175,7 +175,7 @@ describe('proporLancamento — as decisoes', () => {
   });
   it('tPag: mapa FECHADO e so com formas que existem no sistema; o que nao mapeia fica vazio', () => {
     for (const f of Object.values(FORMA_POR_TPAG)) expect(FORMAS_PAGAMENTO_V2).toContain(f);
-    expect(FORMA_POR_TPAG).toEqual({ '01': 'Dinheiro', '03': 'Cartão', '04': 'Cartão', '15': 'Boleto', '17': 'PIX', '18': 'Transferência' });
+    expect(FORMA_POR_TPAG).toEqual({ '01': 'Dinheiro', '03': 'Cartão de crédito', '04': 'Débito', '15': 'Boleto', '17': 'PIX', '18': 'Transferência' });
     const { nota, avisos } = ler();
     const r = proporLancamento({ nota: { ...nota, pagamentos: [{ tPag: '90', valorCent: 0 }] }, avisosDoLeitor: avisos, fazendas: [FAZ_DEST], emitente: ACHADO, favorecidoId: 'forn-1', ultima: null });
     if (r.ok === false) throw new Error('recusou');

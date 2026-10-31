@@ -19,6 +19,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { usePastos } from '@/hooks/usePastos';
+import { anoMesDe, areaDosPastosNoMes } from '@/lib/pastos/areaDoMes';
 import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark, ClipboardCheck, Wrench } from 'lucide-react';
 import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
@@ -92,13 +93,15 @@ function useZooKpis(ano: number, mes: number, cenario: 'realizado' | 'meta' = 'r
     const pesoMedio = mesDado?.peso_medio_final_kg ?? null;
     // Área: prioriza soma direta de pastos (instant, fonte única de verdade);
     // fallback para a view quando pastos ainda não carregou.
-    const areaFromPastos = (pastos || []).reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0);
+    // SM-ARRENDAMENTO-ENCERRAR-01 (Gabriel 30/10/2026): só os pastos ativos e vigentes no MÊS escolhido (`areaDosPastosNoMes`);
+    // antes somava todos, até inativo e arrendamento já devolvido.
+    const areaFromPastos = areaDosPastosNoMes(pastos || [], anoMesDe(ano, mes));
     const area = areaFromPastos > 0 ? areaFromPastos : (mesDado?.area_produtiva_ha ?? 0);
     const pesoTotalKg = mesDado?.peso_total_final_kg ?? 0;
     const lotacaoKgHa = pesoTotalKg > 0 && area > 0 ? pesoTotalKg / area : null;
 
     return { saldoFinal, pesoMedio, lotacaoKgHa, area };
-  }, [rows, mes, pastos]);
+  }, [rows, ano, mes, pastos]);
 }
 
 // ---------------------------------------------------------------------------

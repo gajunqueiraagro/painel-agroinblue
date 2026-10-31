@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { valorDoLancamento } from '@/lib/financeiro/valorDoLancamento';
 import { toast } from 'sonner';
 import { FRASE_META_NAO_VAI_AO_FINANCEIRO, ehCenarioMeta } from '@/lib/financeiro/metaNaoVaiAoFinanceiro';
 import { CATEGORIAS } from '@/types/cattle';
@@ -170,7 +171,8 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
     });
   }
 
-  const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
+  /* VG-CENTAVO D1a (Gabriel 31/10 07:42): todo valor vai ao banco em centavos (o Funrural, a comissão e o frete são contas) */
+  const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts.map((r) => ({ ...r, valor: valorDoLancamento(r.valor) })));
   if (error) {
     toast.error('Erro ao gerar lançamentos: ' + error.message);
     return false;

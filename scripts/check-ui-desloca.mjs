@@ -45,6 +45,22 @@ const digitar = (sel, txt) => async (p) => { await p.locator(sel).first().fill(t
 
 /* Cada estado e' um gesto aplicado em sequencia; cada um e' comparado com o estado INICIAL da tela. `url` = outra pagina inteira
    comparada com a inicial (a faixa de aviso aparecendo). */
+/* MAPA-02a — os gestos do mapa de pastos em tela cheia (`tela=mapa-geo`): camada pelo menu, mês pelo seletor, pasto pela busca */
+const mapaCamada = (nome) => async (p) => {
+  await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Camadas' }).first().click(); await p.waitForTimeout(250);
+  await p.getByRole('menuitem', { name: nome, exact: true }).first().click(); await p.waitForTimeout(500);
+};
+const mapaMes = (rotulo) => async (p) => {
+  await p.locator('[data-testid="mapa-mes"]').first().click(); await p.waitForTimeout(250);
+  await p.getByRole('option', { name: rotulo, exact: true }).first().click(); await p.waitForTimeout(700);
+};
+const mapaPasto = (nome) => async (p) => {
+  /* fix1: a busca de pasto (antes o 1º combobox da barra, que era o seletor de ANO: o painel nunca abria) */
+  await p.locator('[data-testid="mapa-busca"] button').first().click(); await p.waitForTimeout(250);
+  await p.keyboard.type(nome); await p.waitForTimeout(150); await p.keyboard.press('Enter'); await p.waitForTimeout(700);
+  await p.locator('[data-testid="mapa-painel"]').waitFor({ timeout: 4000 }); // o painel abriu de verdade (senão o cenário falha)
+};
+const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
   { nome: 'fornecedores', url: 'tela=fornecedores&barra=32&n=2356', estados: [
     ['por pagina 50', botao(/^50$/)], ['por pagina 200', botao(/^200$/)], ['por pagina 100', botao(/^100$/)],
@@ -142,6 +158,12 @@ const CENARIOS = [
     antes: async (p) => { await p.getByText('Pagamento', { exact: true }).first().click(); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await espera(p, 600); },
     estados: [10, 14].map((n) => [`${n} parcelas`, { url: `tela=lancamento&m=editar&v=salparcela&pp=${n}` }]) },
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
+  /* MAPA-02a — o mapa de pastos: trocar a camada, o mês e o pasto não move a barra, os KPIs, os filtros, o painel nem a legenda */
+  { nome: 'mapa-geo', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], estados: [
+    ['painel P_01', mapaPasto('P_01')], ['painel P_03 sem fechamento', mapaPasto('P_03')], ['painel nome longo', mapaPasto('Retiro')],
+    ['camada kg/ha', mapaCamada('Lotação (kg/ha)')], ['camada atividade', mapaCamada('Atividade')], ['camada cabeças', mapaCamada('Cabeças')],
+    ['camada tipo de área', mapaCamada('Tipo de área')], ['mês agosto', mapaMes('Ago')], ['mês setembro', mapaMes('Set')],
+  ] },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor
      nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
@@ -162,6 +184,28 @@ const CENARIOS = [
     ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],
     ['busca limpa', digitar('[data-testid="busca-plano"]', '')],
   ] },
+  /* PATR-01 PR B — Cadastros › Patrimônio: trocar a aba da tela, o chip e a busca (1/0 bens) não move os cartões, os filtros, o cabeçalho
+     nem o rodapé; no modal do bem, ir de aba em aba (as seis ficam no lugar; a apagada não se clica) não move nada — o trator, a
+     pastagem e o bem NOVO (Dados ↔ Lançamentos, a terra num passo) */
+  { nome: 'patrimonio', url: 'tela=patrimonio&barra=32', estados: [
+    ['aba Investimentos sem bem', botao(/^Investimentos sem bem/)], ['aba Depreciação', botao(/^Depreciação mês a mês$/)], ['aba Bens', botao(/^Bens$/)],
+    ['chip Máquinas', botao(/^Máquinas$/)], ['chip Todos', botao(/^Todos$/)],
+    ['categoria pelo Mais', async (p) => { const m = p.locator('[data-testid="patrimonio-chips-mais"]'); if (!(await m.count())) return;
+      await m.click(); await espera(p, 300); await p.getByRole('menuitem', { name: /Terra/ }).click(); await espera(p); }],
+    ['chip Todos de novo', botao(/^Todos$/)],
+    ['busca 1 bem', digitar('[data-testid="patrimonio-busca"]', 'Valtra')], ['busca sem resultado', digitar('[data-testid="patrimonio-busca"]', 'zzzz nada')],
+    ['busca limpa', digitar('[data-testid="patrimonio-busca"]', '')],
+  ] },
+  ...[['trator', 'Trator Valtra', ['Lançamentos', 'Depreciação', 'Valor de mercado', 'Documentos', 'Dados']],
+      ['pastagem', 'Reforma de pastagem', ['Lançamentos', 'Pastos', 'Depreciação', 'Documentos', 'Dados']],
+      ['novo', null, ['Lançamentos', 'Dados']]].map(([n, bem, abas]) => ({
+    nome: `patrimonio-bem-${n}`, url: 'tela=patrimonio&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      if (bem) await p.locator('[data-testid="patrimonio-linha"]', { hasText: bem }).first().click(); else await p.locator('[data-testid="patrimonio-novo"]').click();
+      await p.locator('[data-testid="bem-dialog"]').waitFor(); await espera(p, 700);
+    },
+    estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
+  })),
   /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */
   /* P109 — as 4 telas da meta (o caso real do NJ 2026): o rótulo do regime fica PRESO no lugar dele (`presos`: medido sempre, à vista)
      ao trocar a fazenda e ao passar aos valores ×400; no PC-100 o Realizado ↔ Meta (`auto`) não move nada — o rótulo tem o lugar
@@ -306,20 +350,23 @@ const CENARIOS = [
     ['mostrar inativas', clicar('[data-testid="mostrar-inativas"]')]] },
   { nome: 'contas-modal', url: 'tela=contas&barra=32&v=editar', auto: true },
   { nome: 'contas-nova', url: 'tela=contas&barra=32&v=nova', auto: true },
+  /* CARTAO-LANCAMENTO-01 (mock v2: "mesmo lugar, mesmo tamanho: o modal não muda de altura") — a conta corrente × o cartão (fecha/vence no lugar
+     de Agência/Conta e a explicação embaixo) */
+  { nome: 'contas-modal-cartao', url: 'tela=contas&barra=32&n=longo&v=editar', antes: async (p) => { await p.locator('[data-testid="modal-conta-bancaria"]').waitFor(); await espera(p, 700); },
+    estados: [['o cartão', { url: 'tela=contas&barra=32&n=longo&v=editar&cartao=1' }]] },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
   { nome: 'mesclar', url: 'tela=mesclar', auto: true },
   /* FIN-NOTA-PDF-01 — o modal da nota: nada anda quando o "Falta:" troca pelo aviso de baixo, quando a faixa "Atualizar este" aparece,
      quando a nota e' barrada (ja' registrada, chave que nao confere) ou no pior caso de texto. Cada um contra a nota recem-aberta. */
-  { nome: 'nota-pdf', url: 'tela=nota-pdf', estados: [
-    ['fornecedor cadastrado, subcentro sugerido, "Atualizar este"', { url: 'tela=nota-pdf&v=cadastrado' }],
-    ['nota ja registrada', { url: 'tela=nota-pdf&v=registrada' }], ['chave nao confere', { url: 'tela=nota-pdf&v=diverge' }],
-    ['pior caso de texto', { url: 'tela=nota-pdf&v=longo' }],
-    ['subcentro de lavoura (Safra e Cultura)', { url: 'tela=nota-pdf&v=lavoura' }], ['nota sem duplicata (Criar lancamento)', { url: 'tela=nota-pdf&v=semdup' }],
-    ['nota avulsa, remessa de entrega futura (NOTA-AVULSA-890-01)', { url: 'tela=nota-pdf&v=avulsa' }],
-    ['so cancelados (D)', { url: 'tela=nota-pdf&v=socancelados' }],
-    /* P95 — a previa pela chave digitada (emissao e valor em ambar no lugar dos lidos) e a nota achada em parcelas soltas */
-    ['nota pela chave digitada (P95)', { url: 'tela=nota-pdf&v=pelachave' }],
-  ] },
+  /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota NOVA abre direto o Novo lançamento: o mesmo modal com o PDF, só a chave digitada, a nota no
+     cartão (sem duplicata) e o XML não desloca nada (a tela intermediária saiu; a já lançada segue em `nota-pdf-ja`).
+     A nota SÓ PELA CHAVE não tem itens, logo não tem a aba "Itens da nota" — outro conjunto de abas, a mesma regra do D-a abaixo (cada modo
+     contra a própria base): fica fora desta comparação e é medida no `check:ui-cortes` (`nota-nova-modal-chave-*`). */
+  { nome: 'nota-nova-modal', url: 'tela=lancamento&m=novo&v=notapdf', antes: async (p) => { await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900); },
+    estados: [
+      ['nota sem duplicata, conta do cartao', { url: 'tela=lancamento&m=novo&v=notacartao' }],
+      ['o XML', { url: 'tela=lancamento&m=novo&v=xml' }],
+    ] },
   /* D-a (Gabriel 29/10 08:32) — CADA MODO CONTRA A PRÓPRIA BASE: a nota JÁ LANÇADA tem outro conjunto de abas (5, numeradas) que a NOVA (3) —
      o desenho aprovado; trocar de modo é trocar de tela, não "deslocar". As variantes já lançadas se medem aqui, contra a já lançada recém-aberta;
      a nova, acima, contra a nova. (O "Criar novo (duplica)" do ⋯ volta para a nova: a tela dele é medida no `check:ui-cortes`, `nota-pdf-caminho-criar`.) */
@@ -385,21 +432,6 @@ const CENARIOS = [
     ['aba Itens', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens (")')],
     /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
   ] },
-  /* P74 — "Como foi pago?": trocar À vista → Cartão em N× → (cartão, 4) → Parcelas livres → Duplicatas apagado não move o título do bloco, os
-     outros blocos nem o rodapé (o conteúdo do bloco troca por dentro, na altura dele) */
-  /* P101 — em todos os tamanhos: abaixo de 1000px, na aba "Parcelas e lançamento" */
-  { nome: 'nota-pdf-como-foi-pago', url: 'tela=nota-pdf&v=semdup', antes: async (p) => {
-    const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
-    if (await t.count()) { await t.first().click(); await espera(p, 300); }
-  }, estados: [
-    ['Cartao em Nx', async (p) => { await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p); }],
-    ['cartao escolhido, 4 parcelas', async (p) => {
-      await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p);
-      await p.locator('[data-testid="nota-cartao"] button', { hasText: 'Selecione o cartão' }).first().click(); await espera(p, 300);
-      await p.getByText('Cartão Elo Exemplo', { exact: true }).last().click(); await espera(p, 300);
-      await digitar('[data-testid="nota-cartao-parcelas"]', '4')(p);
-    }],
-  ] },
   /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */
   { nome: 'obrigacao-editar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', antes: async (p) => {
     await p.locator('[data-testid="botoes-do-contrato"] button', { hasText: 'Editar' }).first().click(); await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900);
@@ -412,6 +444,12 @@ const CENARIOS = [
   /* P117 — a linha fixa sob o Fornecedor: com cidade ("CNPJ · Presidente Prudente/SP") e sem (só o CNPJ) — nada anda */
   { nome: 'lancamento-fornecedor-cidade', url: 'tela=lancamento&m=editar', estados: [['cadastro sem cidade', { url: 'tela=lancamento&m=editar&cidade=sem' }]] },
   /* P121 — o Resumo do lançamento: os nomes longos do mock no lugar dos curtos — nenhum bloco muda de altura, nada abaixo anda */
+  /* CARTAO-LANCAMENTO-01 — a mesma compra numa conta comum × no cartão (o vencimento da fatura, a frase embaixo da conta, o 💳 do resumo) e
+     a forma "auto" na aba Pagamento: nada se desloca */
+  ...['Geral', 'Pagamento'].map((aba) => ({ nome: `lancamento-cartao-${aba}`, url: 'tela=lancamento&m=novo&v=cartaoavista&conta=bb',
+    antes: async (p) => { await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900); await clicar(`text=${aba}`)(p); await espera(p, 500); },
+    estados: [['conta do cartão (dias digitados)', { url: 'tela=lancamento&m=novo&v=cartaoavista' }],
+      ['conta do cartão (dia das faturas)', { url: 'tela=lancamento&m=novo&v=cartaoavista&dias=sem' }]] })),
   { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal', estados: [['nomes longos', { url: 'tela=lancamento&m=editar&v=sal&resumo=longo' }]] },
   /* P138 — "Usar" a safra da competência: a linha da sugestão sai e o campo se enche — nada abaixo anda */
   { nome: 'lancamento-safra-usar', url: 'tela=lancamento&m=editar&safra=sem', estados: [['Usar a sugestão', clicar('[data-testid="safra-usar-sugestao"]')]] },

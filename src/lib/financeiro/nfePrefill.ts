@@ -62,7 +62,8 @@ export function prefillDaNota(d: DoXml) {
     data_vencimento: p.parcelamento.tipo === 'parcelado' ? p.parcelamento.primeiroVencimento
       : p.parcelamento.tipo === 'unico' ? p.parcelamento.vencimento : '',
     valor: p.valorCent / 100,
-    descricao: p.descricao,
+    /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a descrição nasce VAZIA, para o operador escrever: nunca gerada dos itens */
+    descricao: '',
     numero_documento: p.numeroDocumento,
     tipo_documento: 'Nota Fiscal',
     favorecido_id: p.favorecidoId ?? undefined,

@@ -40,7 +40,7 @@ const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.s
 const FOTOS = arg('--fotos');
 const SO = arg('--so');
 /* P163-2 — as variantes da bancada `nota-pdf` em que a nota JÁ ESTÁ LANÇADA (o modal em abas) */
-const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
+const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
 
 const TAMANHOS_DO_CONTRATO = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* P104 — os 9 tamanhos do gate e o do print do Gabriel (1750×1000) */
@@ -70,23 +70,27 @@ const abrirEditarObrigacao = async (p) => {
 };
 /* P101 — os tamanhos em que a prévia da nota tem abas (abaixo de 1000px) */
 const TAMANHOS_ESTREITOS_DA_NOTA = [[750, 483], [750, 530], [750, 600], [814, 530], [900, 600]];
-const abaDoLancamentoSeHouver = async (p) => {
-  const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
-  if (await t.count()) { await t.first().click(); await p.waitForTimeout(300); }
-};
-const cartaoEm4 = async (p) => {
-  await abaDoLancamentoSeHouver(p);
-  await p.locator('[data-testid="nota-como-foi-pago"]').click(); await p.waitForTimeout(300);
-  await p.locator('[data-testid="nota-como-cartao"]').click(); await p.waitForTimeout(300);
-  await p.locator('[data-testid="nota-cartao"] button', { hasText: 'Selecione o cartão' }).first().click(); await p.waitForTimeout(300);
-  await p.getByText('Cartão Elo Exemplo', { exact: true }).last().click(); await p.waitForTimeout(300);
-  await p.locator('[data-testid="nota-cartao-parcelas"]').fill('4'); await p.waitForTimeout(600);
-};
 const parcelarEm4 = async (p) => {
   await clicarTexto('Pagamento')(p);
   await p.locator('[data-testid="parcelar-este-abrir"]').click(); await p.waitForTimeout(300);
   await p.locator('[data-testid="parcelar-este-n"]').fill('4'); await p.waitForTimeout(600);
 };
+/* MAPA-02a — os gestos do mapa de pastos em tela cheia (`tela=mapa-geo`): camada pelo menu, mês pelo seletor, pasto pela busca */
+const mapaCamada = (nome) => async (p) => {
+  await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Camadas' }).first().click(); await p.waitForTimeout(250);
+  await p.getByRole('menuitem', { name: nome, exact: true }).first().click(); await p.waitForTimeout(500);
+};
+const mapaMes = (rotulo) => async (p) => {
+  await p.locator('[data-testid="mapa-mes"]').first().click(); await p.waitForTimeout(250);
+  await p.getByRole('option', { name: rotulo, exact: true }).first().click(); await p.waitForTimeout(700);
+};
+const mapaPasto = (nome) => async (p) => {
+  /* fix1: a busca de pasto (antes o 1º combobox da barra, que era o seletor de ANO: o painel nunca abria) */
+  await p.locator('[data-testid="mapa-busca"] button').first().click(); await p.waitForTimeout(250);
+  await p.keyboard.type(nome); await p.waitForTimeout(150); await p.keyboard.press('Enter'); await p.waitForTimeout(700);
+  await p.locator('[data-testid="mapa-painel"]').waitFor({ timeout: 4000 }); // o painel abriu de verdade (senão o cenário falha)
+};
+const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
   { nome: 'mesclar-vazio', url: 'tela=mesclar&vazio=1' },
   { nome: 'mesclar-comparar', url: 'tela=mesclar' },
@@ -189,6 +193,22 @@ const CENARIOS = [
      `reticencias` fica fora; corte calado, vazamento, número partido, quebra, sobreposição e cabeçalho valem.
      ⚠ SÓ DE 1000px PARA CIMA: em 750 e 814 os cartões se sobrepõem e o "Gerar" sai da tabela (anterior ao REC-COLUNAS-01) — divida
      REC-COLUNAS-01b no CLAUDE.md; quando fechar, este cenário passa a TAMANHOS_DO_CONSORCIO. */
+  /* MAPA-02a — o mapa de pastos em tela cheia (só de 1126 para cima: a barra do mock não tem desenho abaixo). O mapa inteiro com filtros e
+     legenda; o painel de um pasto (categorias, histórico, observação); a camada Atividade; o pasto SEM fechamento no mês; o mês de agosto */
+  { nome: 'mapa-geo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-geo-painel', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
+  /* MAPA-02a-fix1 (5) — o "+ Adicionar" na estrutura do mock, com o submenu Infraestrutura aberto (tudo "em breve" menos Importar) */
+  { nome: 'mapa-geo-menu-adicionar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(300);
+    await p.getByRole('menuitem', { name: /Infraestrutura/ }).first().hover(); await p.waitForTimeout(500);
+    await p.getByRole('menuitem', { name: 'Galpão' }).first().waitFor({ timeout: 3000 }); } },
+  /* MAPA-02a-fix1 B — sem o rodapé do vínculo, o painel do pasto (histórico + categorias com o total + observações) não rola a 1366×768 */
+  { nome: 'mapa-geo-painel-sem-rolar', url: 'tela=mapa-geo', tamanhos: [[1366, 768], [1440, 800]], antes: mapaPasto('P_01'),
+    semRolagem: { dentro: '[data-testid="mapa-painel"]' } },
+  { nome: 'mapa-geo-painel-nome-longo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('Retiro') },
+  { nome: 'mapa-geo-sem-fechamento', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_03') },
+  { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
+  { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
   { nome: 'recorrencias', url: 'tela=recorrencias', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'rolagem', 'tabela'] },
   /* P172 — Cadastros › Plano de Contas nos dez tamanhos do P92: o admin (com as ações), os inativos ligados, o cliente (só leitura), a
@@ -218,6 +238,39 @@ const CENARIOS = [
   { nome: 'plano-contas-renomear-previa', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]', antes: async (p) => {
     await p.locator('[data-testid="renomear-subcentro"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="nome-subcentro"]').fill('Animais de terceiros'); await p.locator('[data-testid="conferir-subcentro"]').click(); await p.waitForTimeout(500); } },
+  /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
+     a lista, a busca para 1/0 bens e um chip (o quadro tem a mesma altura), a aba que chega depois, e o modal do bem em cada aba (o
+     trator, a pastagem, a terra e o bem NOVO — Dados e Lançamentos, a terra num passo) */
+  ...(() => {
+    const T = [[1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+    const URL = 'tela=patrimonio&barra=32';
+    const buscar = (txt) => async (p) => { await p.locator('[data-testid="patrimonio-busca"]').fill(txt); await p.waitForTimeout(500); };
+    const abrir = (bem, aba) => async (p) => {
+      if (bem) await p.locator('[data-testid="patrimonio-linha"]', { hasText: bem }).first().click();
+      else await p.locator('[data-testid="patrimonio-novo"]').click();
+      await p.locator('[data-testid="bem-dialog"]').waitFor(); await p.waitForTimeout(600);
+      if (aba !== 'Dados') { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${aba}`) }).first().click(); await p.waitForTimeout(600); }
+    };
+    const modal = (nome, bem, aba) => ({ nome: `patrimonio-bem-${nome}`, url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: abrir(bem, aba) });
+    return [
+      { nome: 'patrimonio', url: URL, tamanhos: T },
+      { nome: 'patrimonio-busca-1', url: URL, tamanhos: T, antes: buscar('Valtra') },
+      { nome: 'patrimonio-busca-0', url: URL, tamanhos: T, antes: buscar('zzzz nada') },
+      { nome: 'patrimonio-chip', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="patrimonio-filtros"] button', { hasText: /^Máquinas$/ }).click(); await p.waitForTimeout(500); } },
+      /* a categoria escolhida pelo "Mais N ▾" (só onde ele existe: a 1440 todos os chips cabem e o gesto é o do chip) */
+      { nome: 'patrimonio-chip-mais', url: URL, tamanhos: T, antes: async (p) => {
+        const mais = p.locator('[data-testid="patrimonio-chips-mais"]');
+        if (await mais.count()) { await mais.click(); await p.waitForTimeout(300); await p.getByRole('menuitem', { name: /Terra/ }).click(); }
+        else await p.locator('[data-testid="patrimonio-filtros"] button', { hasText: /^Terra$/ }).click();
+        await p.waitForTimeout(500); } },
+      { nome: 'patrimonio-sem-bem', url: URL, tamanhos: T, antes: async (p) => { await p.locator('button', { hasText: /^Investimentos sem bem/ }).first().click(); await p.waitForTimeout(500); } },
+      ...['Dados', 'Lançamentos', 'Depreciação', 'Valor de mercado', 'Documentos'].map((a) => modal(`trator-${a.toLowerCase().replace(/[^a-z]/g, '')}`, 'Trator Valtra', a)),
+      modal('pastagem-pastos', 'Reforma de pastagem', 'Pastos'), modal('pastagem-lancamentos', 'Reforma de pastagem', 'Lançamentos'),
+      modal('terra-dados', 'Terra nua', 'Dados'), modal('terra-mercado', 'Terra nua', 'Valor de mercado'),
+      modal('longo-dados', 'Pivô central', 'Dados'),
+      modal('novo-dados', null, 'Dados'), modal('novo-lancamentos', null, 'Lançamentos'),
+    ];
+  })(),
   /* P106 — a tela abre em "Mês atual": o período futuro é o botão "Mês futuro" */
   { nome: 'cpr-futuro', url: 'tela=cpr&v=futuro', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Mês futuro') },
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias nos sete tamanhos: a lista do mock, o pior caso (nome, banco e gerente longos,
@@ -359,6 +412,9 @@ const CENARIOS = [
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },
   ...['dados', 'gerente', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-editar-${aba}`, url: `tela=contas&barra=32&v=editar&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
+  /* CARTAO-LANCAMENTO-01 — o cadastro do cartão: Dia de fechamento e Dia de vencimento no lugar de Agência e Conta, e a explicação embaixo */
+  { nome: 'contas-editar-cartao', url: 'tela=contas&barra=32&n=longo&v=editar&aba=dados&cartao=1', tamanhos: [...TAMANHOS_DO_CONTRATO, [1366, 768]],
+    regiao: '[data-testid="modal-conta-bancaria"]' },
   ...['dados', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-nova-${aba}`, url: `tela=contas&barra=32&v=nova&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
   /* UI-SIDEBAR-ESTREITA-01 — a barra lateral de verdade (V2Sidebar, `LARGURA_DA_LATERAL`) com o grupo Financeiro aberto. Com nomes que
@@ -394,6 +450,10 @@ const CENARIOS = [
       semRolagem: { dentro: '[role="dialog"]' } },
     { nome: `criar-do-${o}-Pagamento-longo`, url: `tela=lancamento&m=novo&v=${o}&ref=longo`, tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Pagamento') }]),
   { nome: 'lancamento-novo-Geral-7', url: 'tela=lancamento&m=novo', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* CARTAO-LANCAMENTO-01 — a compra à vista no cartão (o vencimento da fatura com 💳, a frase embaixo da conta, a forma "auto" e o resumo);
+     `&dias=sem`: sem dia digitado, a frase mais longa ("sugerido pelas faturas; sem dia de fechamento") */
+  ...['', '&dias=sem'].flatMap((d) => ['Geral', 'Pagamento'].map((aba) => ({ nome: `lancamento-cartao${d ? '-sem-dias' : ''}-${aba}`,
+    url: `tela=lancamento&m=novo&v=cartaoavista${d}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1366, 768]], antes: clicarTexto(aba) }))),
   /* P138 — editar um lançamento gravado sem safra: "Sem safra" e a linha "sugestão: <safra> · Usar" (a da competência, do banco) */
   { nome: 'lancamento-safra-sugestao', url: 'tela=lancamento&m=editar&safra=sem' },
   { nome: 'lancamento-vencimento-falta', url: 'tela=lancamento&m=editar&v=semvenc', tamanhos: TAMANHOS_DO_CONSORCIO,
@@ -406,13 +466,14 @@ const CENARIOS = [
   /* FIN-NOTA-PDF-01 — "Novo lançamento · da nota fiscal" (o mock aprovado), o PDF SINTETICO lido de verdade, nos sete tamanhos: o modal
      fixo nao rola (so' as duas tabelas rolam dentro do quadro delas, no pior caso de 12 parcelas e 14 itens), nada passa da caixa. */
   /* P95 — `pelachave` (a previa da chave digitada: o chip, emissao e valor em ambar) e `irmas` (a nota em 4 parcelas soltas, "k/4") */
-  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  /* NOTA-NOVA-MODAL-REAL (30/10) — a nota NOVA não fica mais nesta tela (passa ao Novo lançamento: `nota-nova-modal-*` abaixo); aqui, a já
+     lançada e a barrada (`diverge`: a chave não confere) */
+  ...['diverge', 'jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
   })),
   /* P101 — abaixo de 1000px a prévia tem três abas: as outras duas (Parcelas e lançamento; Arquivo) em todas as variantes, nos estreitos. P163-2: a
      nota JÁ LANÇADA tem as abas dela (abaixo, `nota-pdf-ja-*`) */
-  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas', 'diferenca']
-    .filter((v) => !NOTA_JA_LANCADA.includes(v))
+  ...['diverge']
     .flatMap((v) => [['lancamento', 'Parcelas e lançamento'], ['arquivo', 'Arquivo']].map(([a, rotulo]) => ({ nome: `nota-pdf-aba-${a}${v ? `-${v}` : ''}`,
       url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_ESTREITOS_DA_NOTA,
       semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
@@ -421,13 +482,25 @@ const CENARIOS = [
   /* P95 — "Novo a partir da nota": a nota lida, a da chave digitada, as recusadas com o campo da chave (nome comprido) e o aviso do repetido */
   /* P101 — em TODOS os tamanhos: abaixo de 1000px a tabela perde a coluna CNPJ (no `title` do Emitente) e estreita (antes vazava 155px a 750) */
   { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', tamanhos: TAMANHOS_DO_CONSORCIO },
-  /* P74 — "Como foi pago?" › Cartão em N× na nota sem duplicata: o cartão, 4 parcelas, a 1ª fatura sugerida em âmbar e a grade (Igual todo
-     mês e Parcelas livres); o modal fixo não rola (só a lista da grade) */
-  /* P101 — em TODOS os tamanhos: abaixo de 1000px a prévia vira três abas e o cartão mora na "Parcelas e lançamento" */
-  ...[['', null], ['-livres', 'Parcelas livres']].map(([s, livres]) => ({ nome: `nota-pdf-cartao${s}`, url: 'tela=nota-pdf&v=semdup', tamanhos: TAMANHOS_DO_CONSORCIO,
-    semRolarNoLugar: '[data-testid="nota-cartao"] > div:first-child',
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-parcelas-rolagem"], [data-testid="lista-de-parcelas"]' },
-    antes: async (p) => { await cartaoEm4(p); if (livres) await clicarTexto(livres)(p); } })),
+  /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO o Novo lançamento: o PDF (4 duplicatas), só a chave
+     digitada (valor e data para o operador) e o cartão em 10× (D2: Parcelada 10× no Pagamento, a 1ª fatura sugerida); Geral, Pagamento e
+     Documentos (o anexo clicável) nos sete tamanhos. Substitui a tela intermediária (`nota-pdf` da nota nova, `nota-pdf-aba-*`, `nota-pdf-cartao*`). */
+  ...['pdf', 'chave', 'cartao'].flatMap((v) => {
+    const pronto = async (p) => { await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(600); };
+    const parcelada10 = async (p) => {
+      await clicarTexto('Pagamento')(p);
+      await p.getByRole('combobox').filter({ hasText: 'À vista' }).first().click(); await p.getByRole('option', { name: 'Parcelada' }).click();
+      const n = p.getByRole('spinbutton').first(); await n.fill('10'); await n.blur(); await p.waitForTimeout(600);
+    };
+    return [
+      /* a Geral rola por dentro quando a nota traz avisos (as faixas no topo): o corpo do Novo lançamento rola por desenho, como no XML (`lancamento-xml-*`) */
+      { nome: `nota-nova-modal-${v}-Geral`, url: `tela=lancamento&m=novo&v=nota${v}`, tamanhos: TAMANHOS_DO_CONSORCIO, antes: pronto },
+      { nome: `nota-nova-modal-${v}-Pagamento`, url: `tela=lancamento&m=novo&v=nota${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+        antes: async (p) => { await pronto(p); if (v === 'cartao') await parcelada10(p); else await clicarTexto('Pagamento')(p); } },
+      { nome: `nota-nova-modal-${v}-Documentos`, url: `tela=lancamento&m=novo&v=nota${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+        antes: async (p) => { await pronto(p); await clicarTexto('Documentos')(p); } },
+    ];
+  }),
   /* P74 B — "Parcelar este lançamento" (aba Pagamento do Editar): fechado, aberto com 4 no cartão (a sugestão em âmbar, a Situação) e a
      confirmação antes → depois; e o pago (o botão apagado com a frase) */
   { nome: 'lancamento-parcelar-fechado', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
@@ -516,8 +589,10 @@ const CENARIOS = [
   /* P96a — a confirmação do "Usar a nota lida". (A do "Juntar as 4 e anexar" saiu com o P128b: o juntar é a prévia campo a campo,
      medida em `previa-completar-juntar`.) */
   /* a frase da NF digitada (2 linhas reservadas) nos largos — nos estreitos ela mora na aba "Parcelas e lançamento" (nota-pdf-aba-lancamento-irmas) */
+  /* a frase mora na aba "Parcelas × sistema" (desde 29/10 a nota já lançada abre em "No sistema hoje"): o cenário abre a aba antes */
   { nome: 'nota-pdf-nf-digitada', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO.filter(([l]) => l >= 1000),
-    semRolarNoLugar: '[data-testid="nota-nf-digitada"]' },
+    semRolarNoLugar: '[data-testid="nota-nf-digitada"]',
+    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(500); } },
   { nome: 'nota-pdf-nota-lida-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
     antes: async (p) => {
       /* P163-2 — a nota já lançada abre em abas (`nota-abas-ja`, em todo tamanho): o "Usar a nota lida" mora em "No sistema hoje" */
@@ -526,9 +601,7 @@ const CENARIOS = [
       else if (p.viewportSize().width < 1000) { await p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' }).first().click(); await p.waitForTimeout(400); }
       await p.locator('[data-testid="nota-usar-nota-lida"]').first().click(); await p.waitForTimeout(600);
     } },
-  /* FIN-NOTA-PDF-01b — a confirmacao do "Atualizar e parcelar" (o texto que diz que o existente vira 1/4) */
-  { nome: 'nota-pdf-parcelar-confirmar', url: 'tela=nota-pdf&v=parcelar', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
-    antes: async (p) => { await p.locator('[data-testid="nota-atualizar-este"]').first().click(); await p.waitForTimeout(600); } },
+  /* (o "Atualizar e parcelar" saiu — D1 do NOTA-NOVA-MODAL-REAL, Gabriel 30/10: o aberto se completa pelo "Ler a NF" do Editar) */
   /* ITENS-NOTA-01 — a aba "Itens da nota (N)" do Novo lançamento pela nota (Valores e Fiscal), o diálogo da OC no pior caso (40 itens,
      descrição de 120 caracteres, razão social longa) e o backfill antes e depois do Simular: o modal fixo nao rola, so' o corpo da tabela */
   ...[['', null], ['-fiscal', 'Fiscal']].flatMap(([s, f]) => [
@@ -1015,7 +1088,8 @@ function medir(regiao) {
         /* P71 (Gabriel 23/10) — a exceção DECLARADA fora de tabela: o seletor de largura fixa marcado `data-reticencias-com-title` (hoje só o
            de Fazenda da Visão Geral) pode terminar em "…" se o title dele leva o texto inteiro */
         || !!((() => { const m = e.closest('[data-reticencias-com-title]'); return m && (m.getAttribute('title') ?? '').replace(/\s+/g, ' ').includes(inteiro); })());
-      if (naCelula && EH_NUMERO(inteiro)) achados.push({ regra: 'numero', texto: `numero/data/documento com "…": ${t}` });
+      /* NOTA-NOVA-MODAL-REAL — o NOME DE ARQUIVO (`data-nome-de-arquivo`) é texto mesmo começando por dígitos ("000.000.937.pdf"): vale a regra do texto */
+      if (naCelula && EH_NUMERO(inteiro) && !e.closest('[data-nome-de-arquivo]')) achados.push({ regra: 'numero', texto: `numero/data/documento com "…": ${t}` });
       else if (!comTitle) achados.push({ regra: 'reticencias', texto: naCelula ? `${t} (sem o texto inteiro no title)` : t });
     }
     /* P121 (mock do Resumo aprovado 27/10; esta regra do detector: OK do Gabriel 28/10) — o corte em N linhas (`line-clamp`) DENTRO de célula de tabela com o

@@ -130,5 +130,34 @@ describe('CAD-CONTAS-BANCARIAS-01 — o modal', () => {
     expect(rpc.mock.calls.filter(c => c[0] === 'fn_conta_bancaria_efeito_conciliacao')).toEqual([['fn_conta_bancaria_efeito_conciliacao', { p_conta_id: 'c1' }]]);
     expect(rpc.mock.calls.some(c => c[0] === 'fn_conciliacao_status_ano')).toBe(false);
   });
+
+  /* CARTAO-LANCAMENTO-01 (mock v2, Gabriel 30/10 18:28/18:36) — no cartão, Fechamento e Vencimento digitados no lugar de Agência e Conta;
+     o vencimento vazio mostra o dia das faturas como SUGESTÃO (nada gravado até o operador usar ou digitar); a frase da fatura embaixo */
+  it('M6 cartão: os dois dias no lugar de Agência e Conta; a sugestão das faturas só vai ao banco quando o operador usa', async () => {
+    rpc.mockImplementation(async (fn: string) => {
+      if (fn === 'fn_cartao_dias_de_vencimento') return { data: [{ dia: 10, lancamentos: 9, ultimo: '2026-10-10' }, { dia: 13, lancamentos: 1, ultimo: '2026-09-13' }], error: null };
+      if (fn === 'fn_conta_bancaria_salvar') return { data: { id: 'c1', semente: null }, error: null };
+      return { data: null, error: null };
+    });
+    montar({ ...CONTA, tipo_conta: 'cartao', dia_fechamento: 3, dia_vencimento: null }, 'dados');
+    expect(screen.queryByText('Agência')).not.toBeInTheDocument();
+    expect(screen.getByTestId('campo-dia-fechamento')).toHaveValue('3');
+    expect(screen.getByTestId('campo-dia-vencimento')).toHaveValue('');
+    await waitFor(() => expect(screen.getByTestId('campo-dia-vencimento')).toHaveAttribute('placeholder', '10'));
+    expect(screen.getByTestId('explicacao-da-fatura')).toHaveTextContent('fecha dia 3, vence dia 10');
+    expect(screen.getByTestId('salvar-conta')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('usar-dia-sugerido'));
+    expect(screen.getByTestId('campo-dia-vencimento')).toHaveValue('10');
+    fireEvent.click(screen.getByTestId('salvar-conta'));
+    await waitFor(() => expect(salvos()).toHaveLength(1));
+    expect(salvos()[0].p_dados).toEqual({ dia_vencimento: 10 });
+  });
+
+  it('M7 conta corrente não tem os dias nem a frase da fatura', async () => {
+    montar(CONTA, 'dados');
+    expect(screen.getByText('Agência')).toBeInTheDocument();
+    expect(screen.queryByTestId('campo-dia-fechamento')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('explicacao-da-fatura')).not.toBeInTheDocument();
+  });
 });
 

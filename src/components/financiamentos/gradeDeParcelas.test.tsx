@@ -143,7 +143,7 @@ describe('a grade no "Igual todo mês" e a parcela paga', () => {
     expect(screen.queryByTestId('mais-parcela')).toBeNull();
     expect(screen.queryAllByTestId('tirar-parcela')).toHaveLength(0);
     expect(screen.getAllByTestId('cel-valor').map((c) => c.textContent)[0]).toBe('33.000,00');
-    expect(screen.getAllByTestId('cel-vencimento').map((c) => c.textContent)[0]).toBe('23/05/26');
+    expect(screen.getAllByTestId('cel-vencimento').map((c) => c.textContent)[0]).toBe('23/05/2026');   // dd/mm/aaaa, a regra da casa
     expect(t('diferenca')).toBe('0,00 ✓');
   });
 
