@@ -12,8 +12,9 @@ import { normalizarParaBusca } from '@/lib/texto/busca';
 
 export type TipoArea = 'area_sem_uso' | 'reserva_legal' | 'app' | 'benfeitoria' | 'estrada' | 'area_total';
 
+/** O nome da área como aparece no seletor e na célula (MAPA-IMPORT-01c): só o nome; o grupo ("área") vai no `hint`, como o "pasto". */
 export const ROTULO_DA_AREA: Record<TipoArea, string> = {
-  area_sem_uso: 'Área sem uso (terceiros)',
+  area_sem_uso: 'Sem uso (terceiros)',
   reserva_legal: 'Reserva legal',
   app: 'APP',
   benfeitoria: 'Benfeitorias',

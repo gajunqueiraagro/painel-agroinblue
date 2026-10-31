@@ -66,7 +66,8 @@ function opcoesDosPastos(ativos: readonly Pasto[], primeiro: ReadonlySet<string>
   ];
 }
 
-const OPCOES_DE_AREA: OpcaoSearchable[] = AREAS_DA_FAZENDA.map(a => ({ value: `area:${a}`, label: `Área · ${ROTULO_DA_AREA[a]}` }));
+/* MAPA-IMPORT-01c: a área só pelo nome; o grupo vai no hint à direita ("área"), como o "pasto" dos pastos. */
+const OPCOES_DE_AREA: OpcaoSearchable[] = AREAS_DA_FAZENDA.map(a => ({ value: `area:${a}`, label: ROTULO_DA_AREA[a], hint: 'área' }));
 const OPCAO_NAO: OpcaoSearchable = { value: 'nao', label: 'Não importar' };
 
 function Card({ titulo, valor, cor, destaque }: { titulo: string; valor: string; cor: string; destaque?: boolean }) {
