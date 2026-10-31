@@ -7,6 +7,7 @@
  *   B3 o centro de um bloco continua clicável (vira o foco); o subtotal não é linha de navegação
  *   B4 "1 centro" no singular; o bloco "Sem classificação" quando o banco o manda
  *   B5 `linhasEmBlocos`: cada linha guarda o índice de antes (cor e testid) e a ordem de dentro do bloco
+ * VG-CENTAVO D2a: C3 o title do total fora de R$
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
@@ -130,5 +131,21 @@ describe('VG-CUSTEIO-FIXO-VARIAVEL-01 — os centros em blocos', () => {
     const larguras = (testid: string) => [...(screen.getByTestId(testid).closest('table')?.querySelectorAll('col') ?? [])].map((c) => c.style.width);
     expect(larguras('analise-tabela-total')).toEqual(['', '92px', '92px', '80px', '54px']);
     expect(larguras('analise-foco-total')).toEqual(['', '50px', '92px', '92px', '80px', '54px', '66px']);
+  });
+});
+
+describe('VG-CENTAVO D2a — o title do total fora de R$', () => {
+  it('C3 em R$/cab o total (e o subtotal do bloco) avisa que a soma das linhas pode diferir em centavos; em R$, nada', async () => {
+    resposta = { ...COM_BLOCOS, unidade: 'rs_cab', unidades: [{ id: 'rs', rotulo: 'R$', valida: true }, { id: 'rs_cab', rotulo: 'R$/cab', valida: true }] };
+    const { unmount } = render(<ModalAnaliseVG alvo={{ lado: 'saida', grupo: 'Custeio', am: '2026-10' }} ctx={CTX} rotuloContas="Caixa" onFechar={() => {}} />);
+    await act(async () => { for (let i = 0; i < 6; i += 1) await Promise.resolve(); });
+    const FRASE = 'Em R$/cab, cada linha é arredondada: a soma das linhas pode diferir do total em centavos';
+    expect(screen.getByTestId('analise-tabela-total').querySelectorAll('td')[1].getAttribute('title')).toBe(FRASE);
+    expect(screen.getByTestId('analise-tabela-bloco-variavel').querySelectorAll('td')[1].getAttribute('title')).toBe(FRASE);
+    expect(screen.getByTestId('analise-tabela-linha-0').querySelectorAll('td')[1].hasAttribute('title')).toBe(false);
+    unmount();
+    resposta = COM_BLOCOS;
+    await abrir();
+    expect(screen.getByTestId('analise-tabela-total').querySelectorAll('td')[1].hasAttribute('title')).toBe(false);
   });
 });

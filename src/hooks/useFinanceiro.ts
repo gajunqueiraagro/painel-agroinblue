@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { reportarErro, normalizarErro } from '@/lib/erroOperacional';
 import type { LinhaImportada, SaldoBancarioImportado, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
 import { gerarHashImportacao } from '@/lib/financeiro/duplicidadeImportacao';
+import { valorDoLancamento } from '@/lib/financeiro/valorDoLancamento';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1204,7 +1205,8 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
           data_vencimento: l.dataPagamento || l.anoMes + '-01',
           ano_mes: l.anoMes,
           descricao: l.produto,
-          valor: l.valor,
+          /* VG-CENTAVO D1a: o valor da planilha em centavos (o hash abaixo segue com o lido, para reconhecer o que já entrou) */
+          valor: valorDoLancamento(l.valor),
           status_transacao: (l.statusTransacao || '').toLowerCase().trim() || null,
           tipo_operacao: l.tipoOperacao || '2 - Saídas',
           macro_custo: l.macroCusto,

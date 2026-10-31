@@ -41,7 +41,7 @@
  */
 export const FORMAS_PAGAMENTO_V2 = [
   'PIX',
-  'Cartão',
+  'Cartão de crédito',
   'Boleto',
   'Débito Automático',
   'Débito',
@@ -49,6 +49,13 @@ export const FORMAS_PAGAMENTO_V2 = [
   'Dinheiro',
   'Outro',
 ] as const;
+
+/**
+ * CARTAO-LANCAMENTO-01 (Gabriel 30/10 18:04, decisão 1) — o cartão GRAVA "Cartão de crédito" (rótulo = valor). As 4 grafias antigas
+ * ('Cartão', 'Cartão de Crédito', 'Credito', 'Cartão de Credito') se juntam nele pela migration 20261028113110, que vai ao ar junto com o
+ * push deste código; até lá, a linha antiga aparece no seletor como "valor atual" (`formaForaDaLista`). 'Débito' fica como está.
+ */
+export const FORMA_CARTAO_CREDITO = 'Cartão de crédito';
 
 /**
  * O valor do item "Nenhuma".

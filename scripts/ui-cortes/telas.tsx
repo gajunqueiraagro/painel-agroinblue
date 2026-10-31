@@ -71,6 +71,8 @@ import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
+import * as MAPA from './dados/mapaPastos';
+import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import * as CONTAS_BANC from './dados/contas';
 import * as VG from './dados/visaoGeral';
 import { BarraSecao } from '@/v2/components/BarraSecao';
@@ -570,19 +572,24 @@ if (tela === 'mesclar') {
 } else if (tela === 'contas') {
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias: a lista (`&n=longo` = o pior caso), o modal da conta (`&v=editar&aba=dados|gerente|
      saldo|importacao`, aberto pela 1ª linha) e a nova conta (`&v=nova`). SINTÉTICO (`dados/contas.ts`). */
-  const lista = q.get('n') === 'longo' ? CONTAS_BANC.CONTAS_LONGAS : CONTAS_BANC.CONTAS;
+  const listaBase = q.get('n') === 'longo' ? CONTAS_BANC.CONTAS_LONGAS : CONTAS_BANC.CONTAS;
+  /* CARTAO-LANCAMENTO-01 — `&cartao=1`: o cartão SINTÉTICO (k9) com os dias digitados (fecha 3, vence 10) — o modal abre nele */
+  const lista = q.get('cartao') === '1' ? listaBase.map((c: any) => (c.id === 'k9' ? { ...c, dia_fechamento: 3, dia_vencimento: 10 } : c)) : listaBase;
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_contas_bancarias' ? (e.in.id ? lista.filter((c: any) => e.in.id.includes(c.id)) : lista)
       : t === 'bancos_referencia' ? CONTAS_BANC.BANCOS
       : t === 'financeiro_saldos_bancarios_v2' ? [{ saldo_final: 30943.91, saldo_data: '2026-08-31' }] : [],
     rpc: (fn: string, a: any) => fn === 'fn_conta_bancaria_painel' ? CONTAS_BANC.PAINEL
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Usuário Exemplo', email: null, situacao: 'membro ativo' }]
-      : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano)) : null,
+      : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano))
+      : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }] : null,
   };
   montar(<div className="h-full"><FinV2ContasTab /></div>);
   const abre = q.get('v');
   if (abre) setTimeout(() => {
-    const alvo = abre === 'nova' ? document.querySelector('[data-testid="nova-conta"]') : document.querySelector('[data-testid="linha-conta"]');
+    /* CARTAO-LANCAMENTO-01 — `&cartao=1` abre a linha do cartão (a tela ordena a lista: a 1ª linha não é a 1ª do banco) */
+    const doCartao = q.get('cartao') === '1' ? [...document.querySelectorAll('[data-testid="linha-conta"]')].find((tr) => (tr.textContent ?? '').includes('Cartão Corporativo Exemplo')) : null;
+    const alvo = abre === 'nova' ? document.querySelector('[data-testid="nova-conta"]') : doCartao ?? document.querySelector('[data-testid="linha-conta"]');
     (alvo as HTMLElement | null)?.click();
     const aba = q.get('aba');
     if (aba) setTimeout(() => (document.querySelector(`[data-testid="aba-conta-${aba}"]`) as HTMLElement | null)?.click(), 200);
@@ -644,6 +651,20 @@ if (tela === 'mesclar') {
     rpc: (fn: string) => fn === 'fn_recorrencias_a_gerar' ? REC.A_GERAR : null,
   };
   montar(<div className="h-full"><V2Recorrencias /></div>);
+} else if (tela === 'mapa-geo') {
+  /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
+     abre no último mês fechado (set/2026); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
+  g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'fazenda_geometrias' ? MAPA.GEOMETRIAS
+      : t === 'pastos' ? MAPA.PASTOS
+      : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
+      : t === 'fechamento_pastos' ? MAPA.FECHAMENTOS
+      : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
+      : [],
+    rpc: (fn: string, a: any) => fn === 'get_status_pilares_ano' ? MAPA.statusAno(Number(a.p_ano)) : null,
+  };
+  montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
 } else if (tela === 'acessos') {
   /* ACESSOS-PERFIL-01 — a lista (nome e e-mail pela fonte unica), o "Novo acesso" e o "Editar acesso" (`&v=editar`). SINTETICO. */
   const MEMBROS = [
@@ -1203,6 +1224,17 @@ if (tela === 'mesclar') {
     rpc: (fn: string) => fn.startsWith('fn_subcentro_cliente_') ? { antes: { lancamentos_vivos: 12 }, depois: {}, recusa: null, lancamentos_tocados: 7 } : null,
   };
   montar(<FinV2PlanoContasTab onAbrirDividendos={() => {}} />);
+} else if (tela === 'patrimonio') {
+  /* PATR-01 PR B — Cadastros › Patrimônio: a tela real com a API em memória (`dados/patrimonio.ts`, SINTÉTICO); o modal do bem se abre
+     pelo clique na linha (os cenários do gate) */
+  const montarPatrimonio = async () => {
+    const { PatrimonioTela } = await import('@/components/patrimonio/PatrimonioTela');
+    const { PatrimonioApiProvider } = await import('@/hooks/usePatrimonio');
+    const { API_PATRIMONIO, FAZENDAS_PATRIMONIO } = await import('./dados/patrimonio');
+    g.__fazendaBancada = { fazendas: FAZENDAS_PATRIMONIO, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
+    montar(<PatrimonioApiProvider api={API_PATRIMONIO}><PatrimonioTela /></PatrimonioApiProvider>);
+  };
+  void montarPatrimonio();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */
@@ -1423,6 +1455,8 @@ if (tela === 'mesclar') {
       juros_previstos: 0, soma_principal: 821.22 * PP, soma_total: 821.22 * PP, divergentes: 0 } };
   const PARCELA_DA_COMPRA = v === 'salparcela' || v === 'salparcelapaga';
   g.__bancoBancada = { from: (t: string, e: any) => v === 'salsolta' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_SOLTAS
+      /* CARTAO-LANCAMENTO-01 — `cartaoavista`: o cadastro do cartão SINTÉTICO com os dias digitados (fecha 3, vence 10); `&dias=sem`, sem */
+      : v === 'cartaoavista' && t === 'financeiro_contas_bancarias' ? (q.get('dias') === 'sem' ? [{ id: 'elo', dia_fechamento: null, dia_vencimento: null }] : [{ id: 'elo', dia_fechamento: 3, dia_vencimento: 10 }])
       : v === 'salnota' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DA_NOTA
       : v === 'salduas' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DUAS
       : PARCELA_DA_COMPRA && t === 'financiamento_parcelas' ? [{ financiamento_id: 'fin-sint', status: 'pendente' }]
@@ -1507,6 +1541,10 @@ if (m === 'editar' && v === 'salnota') props.lancamento = { ...SAL, conta_bancar
 if (m === 'editar' && q.get('forma') && props.lancamento) props.lancamento = { ...props.lancamento, forma_pagamento: q.get('forma') };
 if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 3284.88, data_competencia: '2026-08-10',
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
+/* CARTAO-LANCAMENTO-01 — `cartaoavista`: a compra à vista no cartão (mock v2: R$ 312,40 em 30/10; dados SINTÉTICOS) — o vencimento da fatura,
+   a frase e a forma "Cartão de crédito" automática */
+if (v === 'cartaoavista' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', status_transacao: 'previsto', data_competencia: '2026-10-30', valor: 312.4,
+  descricao: 'Combustível posto exemplo', fazenda_id: 'f-pur', conta_bancaria_id: q.get('conta') ?? 'elo' };   // `&conta=bb`: a mesma compra numa conta comum (a base do desloca)
 if (v === 'rateio' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura', subcentro: 'Insumos Lavoura Milho', plano_conta_id: 'pl-ins',
   macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', cultura: '', fazenda_id: 'f-pur', data_competencia: '2026-05-10', valor: 5000 };
 /* P121 — `&resumo=longo`: o caso "Nomes bem longos" do mock (SINTÉTICO) sobre o `v=sal` — favorecido, fazenda, conta, centro e subcentro

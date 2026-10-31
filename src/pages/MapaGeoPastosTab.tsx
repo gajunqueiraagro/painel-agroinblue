@@ -2,12 +2,16 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { usePastoGeometrias, type PoligonoParaGravar } from '@/hooks/usePastoGeometrias';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Segmentado } from '@/components/ui/segmentado';
 import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos } from '@/hooks/usePastos';
-import { usePastoOcupacao } from '@/hooks/usePastoOcupacao';
-import { useLancamentos } from '@/hooks/useLancamentos';
+import { useMapaDoMes } from '@/hooks/useMapaDoMes';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
+import { useStatusPilaresAno } from '@/hooks/useStatusPilaresAno';
+import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
+import { MESES_COLS } from '@/lib/calculos/labels';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
 import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
@@ -27,52 +31,74 @@ export interface PastoMapData {
 
 type ViewMode = 'gestor' | 'operacao' | 'validacao';
 
-export function MapaGeoPastosTab() {
+const VISTAS: { valor: ViewMode; rotulo: string }[] = [
+  { valor: 'gestor', rotulo: 'Gestor' },
+  { valor: 'operacao', rotulo: 'Operação' },
+  { valor: 'validacao', rotulo: 'Validação' },
+];
+
+/**
+ * MAPA-02a — o mapa de pastos lê UM mês (D1): o ano/mês do shell (FECH-MES-SELECIONADO-01, o mesmo do Fechamento e do Mapa de Pastos),
+ * que abre no ÚLTIMO MÊS FECHADO da fazenda (P1 'oficial' na `get_status_pilares_fechamento`, pelo `useStatusPilaresAno`). O rebanho
+ * oficial é o do MESMO mês (antes: o mês do relógio). Os números do mês saem do `useMapaDoMes` (fonte única).
+ */
+export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const {
     geometrias, loading: geoLoading, salvarGeometrias, removerGeometrias, loadGeometrias,
     atualizarGeometria, excluirGeometrias, vincularPasto,
   } = usePastoGeometrias();
-  const { ocupacoes, reload: reloadOcupacao } = usePastoOcupacao(pastos);
-  const { lancamentos, saldosIniciais } = useLancamentos();
 
-  // FONTE OFICIAL: useRebanhoOficial
-  const now = new Date();
-  const rebanhoOf = useRebanhoOficial({ ano: now.getFullYear(), cenario: 'realizado' });
+  const hoje = new Date();
+  const anoDoRelogio = hoje.getFullYear();
+  const mesAnterior = hoje.getMonth() === 0 ? 12 : hoje.getMonth();
+  const anoMesAnterior = hoje.getMonth() === 0 ? anoDoRelogio - 1 : anoDoRelogio;
+  const { ano, mes, setAno, setMes, controlado } =
+    usePeriodoDaTela({ periodo, onPeriodoChange }, { ano: String(anoMesAnterior), mes: mesAnterior });
+  const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
+  const irPara = useCallback((a: string, m: number) => {
+    if (controlado && onPeriodoChange) onPeriodoChange(a, m);
+    else { setAno(a); setMes(m); }
+  }, [controlado, onPeriodoChange, setAno, setMes]);
+
+  const fazendaId = fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : undefined;
+
+  /* o último mês fechado (P1 oficial) da fazenda: este ano; sem nenhum, o ano anterior */
+  const statusAno = useStatusPilaresAno(fazendaAtual?.cliente_id, anoDoRelogio, !!fazendaId);
+  const statusAnoAnterior = useStatusPilaresAno(fazendaAtual?.cliente_id, anoDoRelogio - 1, !!fazendaId);
+  const ultimoFechado = useMemo(() => {
+    const fechados = [...statusAno.data, ...statusAnoAnterior.data]
+      .filter(c => c.fazendaId === fazendaId && c.p1 === 'oficial')
+      .map(c => c.anoMes)
+      .sort();
+    return fechados.length ? fechados[fechados.length - 1] : null;
+  }, [statusAno.data, statusAnoAnterior.data, fazendaId]);
+  const abriuNaFazendaRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fazendaId || !ultimoFechado || abriuNaFazendaRef.current === fazendaId) return;
+    abriuNaFazendaRef.current = fazendaId;
+    if (ultimoFechado !== anoMes) irPara(ultimoFechado.slice(0, 4), Number(ultimoFechado.slice(5, 7)));
+  }, [fazendaId, ultimoFechado, anoMes, irPara]);
+
+  const mapaDoMes = useMapaDoMes(fazendaId, anoMes, pastos, categorias);
+
+  // FONTE OFICIAL: useRebanhoOficial, no MESMO mês do mapa
+  const rebanhoOf = useRebanhoOficial({ ano: Number(ano), cenario: 'realizado' });
   const rebanhoOficial = useMemo(() => {
-    return rebanhoOf.getSaldoFinalTotal(now.getMonth() + 1);
-  }, [rebanhoOf.getSaldoFinalTotal]);
+    const v = rebanhoOf.getSaldoFinalTotal(mes);
+    return typeof v === 'number' && v > 0 ? v : null;
+  }, [rebanhoOf.getSaldoFinalTotal, mes]);
+
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
   const [expanded, setExpanded] = useState(false);
   const renderedCountRef = useRef(0);
-  const [renderedCount, setRenderedCount] = useState(0);
-  const mapModuleRef = useRef<HTMLDivElement | null>(null);
+  const [, setRenderedCount] = useState(0);
   const onRenderedChange = useCallback((n: number) => {
     renderedCountRef.current = n;
     setRenderedCount(n);
   }, []);
-
-  useEffect(() => {
-    if (expanded) return;
-    const node = mapModuleRef.current;
-    if (!node) return;
-
-    const updateLayoutBounds = () => {
-      const topOffset = Math.max(node.getBoundingClientRect().top, 0);
-      node.style.setProperty('--map-top-offset', `${topOffset}px`);
-    };
-
-    updateLayoutBounds();
-    window.addEventListener('resize', updateLayoutBounds);
-    window.visualViewport?.addEventListener('resize', updateLayoutBounds);
-
-    return () => {
-      window.removeEventListener('resize', updateLayoutBounds);
-      window.visualViewport?.removeEventListener('resize', updateLayoutBounds);
-    };
-  }, [expanded, viewMode]);
 
   const hasGeo = geometrias.length > 0;
 
@@ -84,6 +110,12 @@ export function MapaGeoPastosTab() {
     return success;
   }, [salvarGeometrias]);
 
+  const anosDoSeletor = useMemo(() => {
+    const s = new Set<string>([ano]);
+    for (let y = anoDoRelogio; y >= anoDoRelogio - 3; y--) s.add(String(y));
+    return [...s].sort().reverse();
+  }, [ano, anoDoRelogio]);
+
   if (isGlobal) {
     return (
       <div className="p-6 text-center text-muted-foreground">
@@ -92,39 +124,39 @@ export function MapaGeoPastosTab() {
     );
   }
 
+  /* o seletor de ano/mês do Fechamento Área (os dois `Select` da casa), o mesmo mês do shell */
+  const seletorDeMes = (
+    <>
+      <Select value={ano} onValueChange={a => irPara(a, mes)}>
+        <SelectTrigger className="h-[26px] w-[66px] text-[11px] font-semibold" data-testid="mapa-ano"><SelectValue /></SelectTrigger>
+        <SelectContent className="z-[1100]">{anosDoSeletor.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+      </Select>
+      <Select value={String(mes)} onValueChange={v => irPara(ano, Number(v))}>
+        <SelectTrigger className="h-[26px] w-[62px] text-[11px] font-semibold" data-testid="mapa-mes"><SelectValue /></SelectTrigger>
+        <SelectContent className="z-[1100]">
+          {MESES_COLS.map((m, i) => <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </>
+  );
 
-  const views: { key: ViewMode; label: string }[] = [
-    { key: 'gestor', label: 'Gestor' },
-    { key: 'operacao', label: 'Operação' },
-    { key: 'validacao', label: 'Validação' },
-  ];
+  const trocaDeVista = (
+    <Segmentado valor={viewMode} onEscolher={setViewMode} opcoes={VISTAS} altura={26} />
+  );
 
-  const topBar = (
-    <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-4 py-1.5 border-b border-border bg-background gap-2">
-      <div className="flex items-center gap-2 min-w-0">
+  /* Operação e Validação seguem com a barra de sempre (sem mudança nelas nesta fatia) */
+  const barraSimples = (
+    <div className="flex h-10 flex-shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-3">
+      <div className="flex min-w-0 items-center gap-2">
         {expanded && (
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground" onClick={() => setExpanded(false)}>
             <Minimize2 className="h-3.5 w-3.5" />
           </Button>
         )}
-        <h2 className="text-[11px] font-semibold text-foreground whitespace-nowrap">
-          {expanded && fazendaAtual ? fazendaAtual.nome : 'Mapa de Pastos'}
+        <h2 className="whitespace-nowrap text-[11px] font-semibold text-foreground">
+          {expanded && fazendaAtual ? fazendaAtual.nome : 'Mapa de pastos'}
         </h2>
-        <div className="flex items-center bg-muted rounded-lg p-0.5">
-          {views.map(v => (
-            <button
-              key={v.key}
-              onClick={() => setViewMode(v.key)}
-              className={`px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all ${
-                viewMode === v.key
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
+        {viewMode === 'operacao' && <div className="flex items-center gap-1">{seletorDeMes}</div>}
       </div>
       <div className="flex items-center gap-1.5">
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground" onClick={() => loadGeometrias()} title="Atualizar mapa">
@@ -135,100 +167,98 @@ export function MapaGeoPastosTab() {
             <Maximize2 className="h-3 w-3" />
           </Button>
         )}
-        <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setUploadOpen(true)}>
-          <Upload className="h-3 w-3 mr-1" />
+        <Button variant="outline" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setUploadOpen(true)}>
+          <Upload className="mr-1 h-3 w-3" />
           {hasGeo ? 'Atualizar' : 'Importar'}
         </Button>
+        {trocaDeVista}
       </div>
     </div>
   );
 
-  const content = (
-    <div className="flex-1 min-h-0 p-1.5 sm:p-2">
-      {viewMode === 'gestor' && (
-        <MapaGestorView
-          geometrias={geometrias}
-          pastos={pastos}
-          ocupacoes={ocupacoes}
-          geoLoading={geoLoading}
-          onUpload={() => setUploadOpen(true)}
-          onRenderedChange={onRenderedChange}
-          onLink={async (geoId, pastoId) => vincularPasto(geoId, pastoId || null)}
-          rebanhoOficial={rebanhoOficial}
-        />
-      )}
-      {viewMode === 'operacao' && (
-        <MapaOperacaoView
-          geometrias={geometrias}
-          pastos={pastos}
-          categorias={categorias}
-          ocupacoes={ocupacoes}
-          geoLoading={geoLoading}
-          onUpload={() => setUploadOpen(true)}
-          onRefresh={() => { loadGeometrias(); reloadOcupacao(); }}
-          onRenderedChange={onRenderedChange}
-        />
-      )}
-      {viewMode === 'validacao' && (
-        <ValidacaoPoligonosView
-          geometrias={geometrias}
-          pastos={pastos}
-          geoLoading={geoLoading}
-          onUpdate={atualizarGeometria}
-          onDelete={excluirGeometrias}
-          onLink={vincularPasto}
-          onRefresh={loadGeometrias}
-        />
-      )}
+  const content = viewMode === 'gestor' ? (
+    <div className="min-h-0 flex-1">
+      <MapaGestorView
+        geometrias={geometrias}
+        pastos={pastos}
+        anoMes={anoMes}
+        dadosDoMes={mapaDoMes.dados}
+        carregandoMes={mapaDoMes.carregando}
+        erroDoMes={mapaDoMes.erro}
+        geoLoading={geoLoading}
+        rebanhoOficial={rebanhoOficial}
+        onImportar={() => setUploadOpen(true)}
+        onRenderedChange={onRenderedChange}
+        onLink={async (geoId, pastoId) => vincularPasto(geoId, pastoId || null)}
+        seletorDeMes={seletorDeMes}
+        trocaDeVista={trocaDeVista}
+      />
     </div>
+  ) : (
+    <>
+      {barraSimples}
+      <div className="min-h-0 flex-1 p-1.5 sm:p-2">
+        {viewMode === 'operacao' && (
+          <MapaOperacaoView
+            geometrias={geometrias}
+            pastos={pastos}
+            categorias={categorias}
+            ocupacoes={mapaDoMes.ocupacoes}
+            dadosDoMes={mapaDoMes.dados}
+            geoLoading={geoLoading}
+            onUpload={() => setUploadOpen(true)}
+            onRefresh={() => { loadGeometrias(); mapaDoMes.recarregar(); }}
+            onRenderedChange={onRenderedChange}
+          />
+        )}
+        {viewMode === 'validacao' && (
+          <ValidacaoPoligonosView
+            geometrias={geometrias}
+            pastos={pastos}
+            geoLoading={geoLoading}
+            onUpdate={atualizarGeometria}
+            onDelete={excluirGeometrias}
+            onLink={vincularPasto}
+            onRefresh={loadGeometrias}
+          />
+        )}
+      </div>
+    </>
+  );
+
+  const dialogo = (
+    <KmlUploadDialog
+      open={uploadOpen}
+      onOpenChange={setUploadOpen}
+      onUpload={handleKmlUpload}
+      onRemove={removerGeometrias}
+      pastos={pastos}
+      hasExistingMap={hasGeo}
+      fazendaId={fazendaAtual?.id}
+      fazendaCodigo={fazendaAtual?.codigo}
+      fazendaNome={fazendaAtual?.nome}
+    />
   );
 
   // Expanded mode — fixed overlay above everything except bottom nav
   if (expanded) {
     return (
       <>
-        <div className="fixed inset-x-0 top-0 z-40 bg-background flex flex-col" style={{ bottom: 'var(--bottom-nav-safe, 64px)' }}>
-          {topBar}
+        <div className="fixed inset-x-0 top-0 z-40 flex flex-col bg-background" style={{ bottom: 'var(--bottom-nav-safe, 64px)' }}>
           {content}
         </div>
-        <KmlUploadDialog
-          open={uploadOpen}
-          onOpenChange={setUploadOpen}
-          onUpload={handleKmlUpload}
-          onRemove={removerGeometrias}
-          pastos={pastos}
-          hasExistingMap={hasGeo}
-          fazendaId={fazendaAtual?.id}
-          fazendaCodigo={fazendaAtual?.codigo}
-          fazendaNome={fazendaAtual?.nome}
-        />
+        {dialogo}
       </>
     );
   }
 
-  // Normal mode
+  /* Normal mode — MAPA-02a (adendo do Gabriel): o mapa vai ATÉ A BASE DA JANELA. A altura vem do container flex do shell
+     ('mapa-geo-pastos' em SECOES_APP_SHELL do V2Index; no Index antigo, o pai `flex-1 min-h-0 overflow-hidden`), nunca de altura
+     fixa — o `calc(100dvh − topo − 64px)` de antes descontava a barra de baixo do celular também no desktop e sobrava uma faixa. */
   return (
-    <div
-      ref={mapModuleRef}
-      className="flex flex-col min-h-0 overflow-hidden"
-      style={{
-        height: 'calc(100dvh - var(--map-top-offset, 0px) - var(--bottom-nav-safe, 64px))',
-        maxHeight: 'calc(100dvh - var(--map-top-offset, 0px) - var(--bottom-nav-safe, 64px))',
-      }}
-    >
-      {topBar}
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
       {content}
-      <KmlUploadDialog
-        open={uploadOpen}
-        onOpenChange={setUploadOpen}
-        onUpload={handleKmlUpload}
-        onRemove={removerGeometrias}
-        pastos={pastos}
-        hasExistingMap={hasGeo}
-        fazendaId={fazendaAtual?.id}
-        fazendaCodigo={fazendaAtual?.codigo}
-        fazendaNome={fazendaAtual?.nome}
-      />
+      {dialogo}
     </div>
   );
 }

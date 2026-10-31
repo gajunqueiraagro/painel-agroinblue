@@ -90,12 +90,14 @@ describe('a ligação de verdade', () => {
   const v2 = readFileSync('src/v2/V2Index.tsx', 'utf8');
   const fech = readFileSync('src/pages/FechamentoTab.tsx', 'utf8');
   const mapa = readFileSync('src/pages/MapaPastosTab.tsx', 'utf8');
-  it('o V2Index entrega o MESMO ano/mês às duas seções', () => {
+  /* MAPA-02a — o mapa geográfico (Geo Pastos) lê o MESMO ano/mês do shell */
+  const geo = readFileSync('src/pages/MapaGeoPastosTab.tsx', 'utf8');
+  it('o V2Index entrega o MESMO ano/mês às três seções (Fechamento, Mapa de Pastos, Geo Pastos)', () => {
     expect(v2).toContain('const periodoDoFechamento = { ano, mes: mesVisivel };');
-    expect(v2.split('periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}').length - 1).toBe(2);
+    expect(v2.split('periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}').length - 1).toBe(3);
   });
   it('Fechamento e Mapa não guardam mês próprio quando o shell manda', () => {
-    for (const src of [fech, mapa]) {
+    for (const src of [fech, mapa, geo]) {
       expect(src).toContain('usePeriodoDaTela({ periodo, onPeriodoChange }');
       expect(src).not.toMatch(/const \[mesFiltro, setMesFiltro\] = useState/);
       expect(src).not.toMatch(/const \[anoFiltro, setAnoFiltro\] = useState/);

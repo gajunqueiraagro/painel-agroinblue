@@ -61,7 +61,9 @@ vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal
 vi.mock('@/components/financeiro-v2/AbaAuditoriaLancamento', () => ({ AbaAuditoriaLancamento: () => null }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 /* NOTA-NOVA-MODAL-REAL D2 — os dias de vencimento do cartão SINTÉTICO (o mais frequente: 10) */
-const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async () => [{ dia: 10, lancamentos: 6, ultimo: '2026-09-10' }, { dia: 15, lancamentos: 1, ultimo: '2026-08-15' }]) }));
+const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async () => [{ dia: 10, lancamentos: 6, ultimo: '2026-09-10' }, { dia: 15, lancamentos: 1, ultimo: '2026-08-15' }]),
+  /* CARTAO-LANCAMENTO-01 — nenhum dia digitado no cadastro: vale o das faturas */
+  diasCadastradosDoCartao: vi.fn(async () => ({ fechamento: null, vencimento: null })) }));
 vi.mock('@/lib/financeiro/diasDoCartao', () => cartaoNoBanco);
 
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';

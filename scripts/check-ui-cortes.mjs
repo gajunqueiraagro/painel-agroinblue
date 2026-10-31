@@ -75,6 +75,20 @@ const parcelarEm4 = async (p) => {
   await p.locator('[data-testid="parcelar-este-abrir"]').click(); await p.waitForTimeout(300);
   await p.locator('[data-testid="parcelar-este-n"]').fill('4'); await p.waitForTimeout(600);
 };
+/* MAPA-02a — os gestos do mapa de pastos em tela cheia (`tela=mapa-geo`): camada pelo menu, mês pelo seletor, pasto pela busca */
+const mapaCamada = (nome) => async (p) => {
+  await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Camadas' }).first().click(); await p.waitForTimeout(250);
+  await p.getByRole('menuitem', { name: nome, exact: true }).first().click(); await p.waitForTimeout(500);
+};
+const mapaMes = (rotulo) => async (p) => {
+  await p.locator('[data-testid="mapa-mes"]').first().click(); await p.waitForTimeout(250);
+  await p.getByRole('option', { name: rotulo, exact: true }).first().click(); await p.waitForTimeout(700);
+};
+const mapaPasto = (nome) => async (p) => {
+  await p.locator('[data-testid="mapa-barra"] button[role="combobox"]').first().click(); await p.waitForTimeout(250);
+  await p.keyboard.type(nome); await p.waitForTimeout(150); await p.keyboard.press('Enter'); await p.waitForTimeout(700);
+};
+const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
   { nome: 'mesclar-vazio', url: 'tela=mesclar&vazio=1' },
   { nome: 'mesclar-comparar', url: 'tela=mesclar' },
@@ -177,6 +191,14 @@ const CENARIOS = [
      `reticencias` fica fora; corte calado, vazamento, número partido, quebra, sobreposição e cabeçalho valem.
      ⚠ SÓ DE 1000px PARA CIMA: em 750 e 814 os cartões se sobrepõem e o "Gerar" sai da tabela (anterior ao REC-COLUNAS-01) — divida
      REC-COLUNAS-01b no CLAUDE.md; quando fechar, este cenário passa a TAMANHOS_DO_CONSORCIO. */
+  /* MAPA-02a — o mapa de pastos em tela cheia (só de 1126 para cima: a barra do mock não tem desenho abaixo). O mapa inteiro com filtros e
+     legenda; o painel de um pasto (categorias, histórico, observação); a camada Atividade; o pasto SEM fechamento no mês; o mês de agosto */
+  { nome: 'mapa-geo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-geo-painel', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
+  { nome: 'mapa-geo-painel-nome-longo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('Retiro') },
+  { nome: 'mapa-geo-sem-fechamento', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_03') },
+  { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
+  { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
   { nome: 'recorrencias', url: 'tela=recorrencias', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'rolagem', 'tabela'] },
   /* P172 — Cadastros › Plano de Contas nos dez tamanhos do P92: o admin (com as ações), os inativos ligados, o cliente (só leitura), a
@@ -199,6 +221,39 @@ const CENARIOS = [
   { nome: 'plano-contas-renomear-previa', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]', antes: async (p) => {
     await p.locator('[data-testid="renomear-subcentro"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="nome-subcentro"]').fill('Animais de terceiros'); await p.locator('[data-testid="conferir-subcentro"]').click(); await p.waitForTimeout(500); } },
+  /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
+     a lista, a busca para 1/0 bens e um chip (o quadro tem a mesma altura), a aba que chega depois, e o modal do bem em cada aba (o
+     trator, a pastagem, a terra e o bem NOVO — Dados e Lançamentos, a terra num passo) */
+  ...(() => {
+    const T = [[1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+    const URL = 'tela=patrimonio&barra=32';
+    const buscar = (txt) => async (p) => { await p.locator('[data-testid="patrimonio-busca"]').fill(txt); await p.waitForTimeout(500); };
+    const abrir = (bem, aba) => async (p) => {
+      if (bem) await p.locator('[data-testid="patrimonio-linha"]', { hasText: bem }).first().click();
+      else await p.locator('[data-testid="patrimonio-novo"]').click();
+      await p.locator('[data-testid="bem-dialog"]').waitFor(); await p.waitForTimeout(600);
+      if (aba !== 'Dados') { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${aba}`) }).first().click(); await p.waitForTimeout(600); }
+    };
+    const modal = (nome, bem, aba) => ({ nome: `patrimonio-bem-${nome}`, url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: abrir(bem, aba) });
+    return [
+      { nome: 'patrimonio', url: URL, tamanhos: T },
+      { nome: 'patrimonio-busca-1', url: URL, tamanhos: T, antes: buscar('Valtra') },
+      { nome: 'patrimonio-busca-0', url: URL, tamanhos: T, antes: buscar('zzzz nada') },
+      { nome: 'patrimonio-chip', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="patrimonio-filtros"] button', { hasText: /^Máquinas$/ }).click(); await p.waitForTimeout(500); } },
+      /* a categoria escolhida pelo "Mais N ▾" (só onde ele existe: a 1440 todos os chips cabem e o gesto é o do chip) */
+      { nome: 'patrimonio-chip-mais', url: URL, tamanhos: T, antes: async (p) => {
+        const mais = p.locator('[data-testid="patrimonio-chips-mais"]');
+        if (await mais.count()) { await mais.click(); await p.waitForTimeout(300); await p.getByRole('menuitem', { name: /Terra/ }).click(); }
+        else await p.locator('[data-testid="patrimonio-filtros"] button', { hasText: /^Terra$/ }).click();
+        await p.waitForTimeout(500); } },
+      { nome: 'patrimonio-sem-bem', url: URL, tamanhos: T, antes: async (p) => { await p.locator('button', { hasText: /^Investimentos sem bem/ }).first().click(); await p.waitForTimeout(500); } },
+      ...['Dados', 'Lançamentos', 'Depreciação', 'Valor de mercado', 'Documentos'].map((a) => modal(`trator-${a.toLowerCase().replace(/[^a-z]/g, '')}`, 'Trator Valtra', a)),
+      modal('pastagem-pastos', 'Reforma de pastagem', 'Pastos'), modal('pastagem-lancamentos', 'Reforma de pastagem', 'Lançamentos'),
+      modal('terra-dados', 'Terra nua', 'Dados'), modal('terra-mercado', 'Terra nua', 'Valor de mercado'),
+      modal('longo-dados', 'Pivô central', 'Dados'),
+      modal('novo-dados', null, 'Dados'), modal('novo-lancamentos', null, 'Lançamentos'),
+    ];
+  })(),
   /* P106 — a tela abre em "Mês atual": o período futuro é o botão "Mês futuro" */
   { nome: 'cpr-futuro', url: 'tela=cpr&v=futuro', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Mês futuro') },
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias nos sete tamanhos: a lista do mock, o pior caso (nome, banco e gerente longos,
@@ -340,6 +395,9 @@ const CENARIOS = [
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },
   ...['dados', 'gerente', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-editar-${aba}`, url: `tela=contas&barra=32&v=editar&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
+  /* CARTAO-LANCAMENTO-01 — o cadastro do cartão: Dia de fechamento e Dia de vencimento no lugar de Agência e Conta, e a explicação embaixo */
+  { nome: 'contas-editar-cartao', url: 'tela=contas&barra=32&n=longo&v=editar&aba=dados&cartao=1', tamanhos: [...TAMANHOS_DO_CONTRATO, [1366, 768]],
+    regiao: '[data-testid="modal-conta-bancaria"]' },
   ...['dados', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-nova-${aba}`, url: `tela=contas&barra=32&v=nova&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
   /* UI-SIDEBAR-ESTREITA-01 — a barra lateral de verdade (V2Sidebar, `LARGURA_DA_LATERAL`) com o grupo Financeiro aberto. Com nomes que
@@ -375,6 +433,10 @@ const CENARIOS = [
       semRolagem: { dentro: '[role="dialog"]' } },
     { nome: `criar-do-${o}-Pagamento-longo`, url: `tela=lancamento&m=novo&v=${o}&ref=longo`, tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Pagamento') }]),
   { nome: 'lancamento-novo-Geral-7', url: 'tela=lancamento&m=novo', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* CARTAO-LANCAMENTO-01 — a compra à vista no cartão (o vencimento da fatura com 💳, a frase embaixo da conta, a forma "auto" e o resumo);
+     `&dias=sem`: sem dia digitado, a frase mais longa ("sugerido pelas faturas; sem dia de fechamento") */
+  ...['', '&dias=sem'].flatMap((d) => ['Geral', 'Pagamento'].map((aba) => ({ nome: `lancamento-cartao${d ? '-sem-dias' : ''}-${aba}`,
+    url: `tela=lancamento&m=novo&v=cartaoavista${d}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1366, 768]], antes: clicarTexto(aba) }))),
   /* P138 — editar um lançamento gravado sem safra: "Sem safra" e a linha "sugestão: <safra> · Usar" (a da competência, do banco) */
   { nome: 'lancamento-safra-sugestao', url: 'tela=lancamento&m=editar&safra=sem' },
   { nome: 'lancamento-vencimento-falta', url: 'tela=lancamento&m=editar&v=semvenc', tamanhos: TAMANHOS_DO_CONSORCIO,

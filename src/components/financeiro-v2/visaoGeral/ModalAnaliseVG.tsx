@@ -315,9 +315,13 @@ function Cabecalho({ rotulos }: { rotulos: string[] }) {
 function Numeros({ d, l, forte }: { d: AnaliseVG; l: Pick<LinhaAnaliseVG, 'valor' | 'meta' | 'dif' | 'pct'>; forte?: boolean }) {
   const cv = corVariacao(d.lado, l.pct);
   const td = 'whitespace-nowrap px-1 text-right tabular-nums';
+  /* VG-CENTAVO D2a (Gabriel 31/10): fora de R$ cada linha é o R$ dela dividido e ARREDONDADO pelo banco; o total também — a soma das
+     linhas pode diferir do total em centavos (aritmética, sem conserto na origem). O total diz isso no title */
+  const rotUnidade = d.unidades.find((u) => u.id === d.unidade)?.rotulo ?? d.unidade;
+  const titleTotal = forte && d.unidade !== 'rs' ? `Em ${rotUnidade}, cada linha é arredondada: a soma das linhas pode diferir do total em centavos` : undefined;
   return (
     <>
-      <td className={cn(td, forte && 'font-bold')} style={{ color: corDoLado(d.lado) }}>{brl(l.valor)}</td>
+      <td className={cn(td, forte && 'font-bold')} style={{ color: corDoLado(d.lado) }} title={titleTotal}>{brl(l.valor)}</td>
       <td className={td} style={{ color: COR_META }}>{brl(l.meta)}</td>
       {/* VG-CUSTEIO-FIXO-VARIAVEL-01 (Gabriel 30/10 16:21) — a Dif. R$ em 7,5px (a do cabeçalho), nas linhas, subtotais e total */}
       <td className={cn(td, 'text-[7.5px] font-semibold')} style={{ color: cv }} data-col="dif">{brl(l.dif)}</td>

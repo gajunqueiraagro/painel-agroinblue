@@ -56,7 +56,7 @@ const COLUNAS: ColunaModelo[] = [
   col(COL_DESCRICAO,      false, ['Diesel S10 — 200 L', 'Troca de óleo do trator', 'Venda 32 cab.'], 30),
   col(COL_DOCUMENTO,      false, ['NF 12345', '', 'NF 998'], 14),
   col(COL_TIPO_DOCUMENTO, false, ['NF', '', 'NF'], 16),
-  col(COL_FORMA_PAGAMENTO,false, ['Cartão', 'PIX', 'TED'], 18),
+  col(COL_FORMA_PAGAMENTO,false, ['Cartão de crédito', 'PIX', 'TED'], 18),
   col(COL_OBSERVACAO,     false, ['', 'Garantia 3 meses', ''], 26),
   col(COL_STATUS,         false, ['realizado', 'realizado', 'previsto'], 12),
   col(COL_SAFRA,          false, ['2026/2027', '', ''], 12),
