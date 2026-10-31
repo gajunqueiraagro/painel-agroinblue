@@ -246,6 +246,17 @@ const CENARIOS = [
     folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
     semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
     antes: async (p) => { await abrir(p); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(700); } })),
+  /* VG-CUSTEIO-FIXO-VARIAVEL-01 — o card "Centros · <atividade>" com os centros em BLOCOS (variável, fixo, com o subtotal do banco): a
+     Pecuária (3 centros), a Agricultura e o pior caso de altura (`&vg_centros=13`: 7 + 6 centros de nome longo, o molde de out/26) */
+  ...[['blocos-pecuaria', '', 0], ['blocos-agricultura', '', 1], ['blocos-13', '&vg_centros=13', 0]].map(([n, extra, ativ]) => ({
+    nome: `visao-geral-analise-${n}`, url: `tela=visao-geral&barra=0${extra}`, tamanhos: [...TAMANHOS_DA_VG, [1366, 768]], regiao: '[data-testid="modal-analise"]',
+    rotulosSvg: '[data-testid="analise-grafico-svg"] text, [data-testid="analise-donut-centro"]',
+    folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
+    semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').first().dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
+      await p.locator(`[data-testid="analise-tabela-linha-${ativ}"]`).click(); await p.locator('[data-testid="analise-tabela-bloco-variavel"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500);
+    } })),
   /* P100 item 5 — o PIOR CASO de largura das tabelas do modal ("NJ Saídas · Acumulado 12 meses"): `&vg_grande=1` (valores na casa
      de dezenas de milhões, % perto de +999,9%, 5 dígitos de lançamentos), dez/26 (12 meses), aba da raiz, Acum.: nada corta, nada cola
      (folga >= 6 px), o centro do donut cabe no furo */
@@ -434,6 +445,10 @@ const CENARIOS = [
      fora da lista no gatilho (o "valor atual"). Dados SINTÉTICOS. */
   { nome: 'lancamento-parcelas-14', url: 'tela=lancamento&m=editar&v=salparcela&pp=14', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await p.waitForTimeout(500); } },
+  /* P143-DATAS-01 — duas compras iguais seguidas (12 × 69,90, SINTÉTICO): a 1/12 da nova diz "achadas 1 de 12"; a 6/12 da antiga, "7 de 12" */
+  ...[['nova', ''], ['antiga', '&qual=antiga']].map(([n, extra]) => ({ nome: `lancamento-parcela-duas-${n}`, url: `tela=lancamento&m=editar&v=salduas${extra}`,
+    tamanhos: TAMANHOS_DO_P104, semRolarNoLugar: '[data-testid="parcela-solta"]',
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelas-no-pagamento-rodape"]').waitFor(); await p.waitForTimeout(600); } })),
   /* P143 (Gabriel 29/10 15:03) — a solta PELA NOTA ("Parcela 3 - None" da NF 4964, sintético): as 3 da nota e o "Juntar"; e a prévia */
   { nome: 'lancamento-parcela-nota', url: 'tela=lancamento&m=editar&v=salnota', tamanhos: TAMANHOS_DO_P104, semRolarNoLugar: '[data-testid="parcela-solta"]',
     antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcela-solta-juntar"]:not([disabled])').waitFor(); await p.waitForTimeout(600); } },

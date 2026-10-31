@@ -1,10 +1,15 @@
 -- OC-DESVINCULAR-COMPETENCIA-01 — desvincular / cancelar a conta corrente devolve competencia, safra e movimentacao de antes do
 -- vinculo. Sintetico no cliente Teste, numa transacao revertida; termina em RAISE 'OK …'. Compara com `is distinct from`.
---   T1 TITULO, sem saida: o vinculo leva a competencia a' data da OC e solta a movimentacao; o desvincular devolve competencia,
---      safra, movimentacao e `ano_mes`, sem mexer em valor, pagamento, conta, plano nem hash
+-- ⚠ OC-VINCULO-VALOR (Gabriel 30/10, migration 20261028115090): "Vincular não pode mudar valor, não pode nada, nada, nada". O vinculo
+--   NAO troca mais a competencia nem a safra (nem a data da OC, nem a da saida do gado); so' solta a movimentacao antiga (D4). Este
+--   teste passou a afirmar isso; a volta continua devolvendo o que o vinculo soltou.
+--   T1 TITULO, sem saida: o vinculo MANTEM competencia e safra e solta a movimentacao; o desvincular devolve a movimentacao, e o
+--      lancamento fica igual ao de antes (competencia, safra, `ano_mes`), sem mexer em valor, pagamento, conta, plano nem hash
 --   T2 editado depois do vinculo: NAO restaura, e o motivo volta
---   T3 CONTA CORRENTE com a marca da saida: `_oc_cancelar_conta_corrente` devolve competencia, safra e movimentacao (`restauros`)
---   T4 CONTA CORRENTE SEM a marca da saida: o cancelar devolve o que o vinculo trocou
+--   T3 CONTA CORRENTE com saida: o vinculo NAO leva mais a competencia a' da saida (nem a safra); so' solta a movimentacao e nao
+--      mexe em valor, pagamento, conta, hash nem plano. A VOLTA nao se prova mais aqui: recebimento ja' recebido de conta corrente nao
+--      se cancela com a operacao nem se desvincula (regras posteriores a este teste)
+--   T4 CONTA CORRENTE sem saida: o vinculo mantem competencia e safra e solta a movimentacao
 --   T5 tenant alheio: 42501 no desvincular e no cancelar
 --   T6 evento inexistente: motivo 'sem evento de vinculo'
 --   T7 os lancamentos que ja' existiam no Teste ficam identicos
@@ -55,12 +60,12 @@ begin
   r := public.oc_vincular_lancamento(ot, v, la, 'principal', 'SINT ODC', null, null, true, false);
   select * into d from financeiro_lancamentos_v2 where id = la;
   if (r->>'ok')::boolean is not true then raise exception 'T1 vincular recusado: %', r; end if;
-  if d.data_competencia is not distinct from antes.data_competencia or d.movimentacao_rebanho_id is not null then
-    raise exception 'T1 preparo: o vinculo nao trocou o que o teste mede (competencia %, mov %)', d.data_competencia, d.movimentacao_rebanho_id; end if;
+  -- OC-VINCULO-VALOR: a competencia e a safra FICAM; so' a movimentacao antiga se solta
+  if d.data_competencia is distinct from antes.data_competencia or d.safra_id is distinct from antes.safra_id or d.movimentacao_rebanho_id is not null then
+    raise exception 'T1 o vinculo mudou a competencia/safra ou nao soltou a mov (competencia %, safra %, mov %)', d.data_competencia, d.safra_id, d.movimentacao_rebanho_id; end if;
   select versao into v from zoo_operacoes_comerciais where id = ot;
   r := public.oc_desvincular_lancamento(ot, v, la, 'SINT ODC');
   select * into d from financeiro_lancamentos_v2 where id = la;
-  if (r->'competencia_restauro'->>'restaurado') is distinct from 'true' then raise exception 'T1 nao restaurou: %', r->'competencia_restauro'; end if;
   if d.data_competencia is distinct from antes.data_competencia or d.safra_id is distinct from antes.safra_id
      or d.movimentacao_rebanho_id is distinct from antes.movimentacao_rebanho_id or d.ano_mes is distinct from antes.ano_mes then
     raise exception 'T1 volta errada: competencia % safra % mov % ano_mes %', d.data_competencia, d.safra_id, d.movimentacao_rebanho_id, d.ano_mes; end if;
@@ -96,19 +101,14 @@ begin
   r := public.oc_vincular_lancamento(ov, v, lb, null, 'SINT ODC', null, null, true, false);
   select * into d from financeiro_lancamentos_v2 where id = lb;
   if (r->>'ok')::boolean is not true then raise exception 'T3 vincular recusado: %', r; end if;
-  if d.data_competencia is distinct from date '2031-03-11' or d.safra_id is not null or d.movimentacao_rebanho_id is not null then
-    raise exception 'T3 preparo: pela saida esperava 2031-03-11, safra nula e mov nula (competencia %, safra %, mov %)', d.data_competencia, d.safra_id, d.movimentacao_rebanho_id; end if;
-  perform public.oc_estornar_movimentacao(mv, k, 'SINT ODC');
-  r := public._oc_cancelar_conta_corrente(ov, 'SINT ODC', false);
-  select * into d from financeiro_lancamentos_v2 where id = lb;
-  if jsonb_array_length(coalesce(r->'restauros', '[]')) is distinct from 1 or (r->'restauros'->0->'restauro'->>'restaurado') is distinct from 'true' then
-    raise exception 'T3 restauros: %', r->'restauros'; end if;
-  if d.data_competencia is distinct from antes.data_competencia or d.safra_id is distinct from antes.safra_id
-     or d.movimentacao_rebanho_id is distinct from antes.movimentacao_rebanho_id or d.ano_mes is distinct from antes.ano_mes then
-    raise exception 'T3 volta errada: competencia % safra % mov % ano_mes %', d.data_competencia, d.safra_id, d.movimentacao_rebanho_id, d.ano_mes; end if;
+  -- OC-VINCULO-VALOR: com saida em 11/03 a competencia FICA a do lancamento (05/05) e a safra tambem; so' a mov se solta
+  if d.data_competencia is distinct from antes.data_competencia or d.safra_id is distinct from antes.safra_id or d.movimentacao_rebanho_id is not null then
+    raise exception 'T3 o vinculo mudou a competencia/safra ou nao soltou a mov (competencia %, safra %, mov %)', d.data_competencia, d.safra_id, d.movimentacao_rebanho_id; end if;
+  -- (sem volta aqui: recebimento ja' recebido de conta corrente nao se cancela com a operacao — "o dinheiro moveu" — nem se
+  --  desvincula — "vinculo antigo, sem parcela programada"; regras posteriores a este teste)
   if d.valor is distinct from antes.valor or d.data_pagamento is distinct from antes.data_pagamento or d.conta_destino_id is distinct from antes.conta_destino_id
-     or d.hash_importacao is distinct from antes.hash_importacao or d.cancelado is distinct from false then
-    raise exception 'T3 mexeu em valor/pagamento/conta/hash ou cancelou'; end if;
+     or d.hash_importacao is distinct from antes.hash_importacao or d.plano_conta_id is distinct from antes.plano_conta_id then
+    raise exception 'T3 o vinculo mexeu em valor/pagamento/conta/hash/plano'; end if;
 
   -- ── T4 conta corrente sem a marca da saida ──
   x := public.oc_salvar_rascunho(null, k, null, fp || '{"tipo_operacao": "venda"}'); ow := (x->>'operacao_id')::uuid;
@@ -124,17 +124,9 @@ begin
   if exists (select 1 from zoo_operacao_eventos e where e.operacao_id = ow and e.acao = 'vincular_recebimento'
               and (e.detalhes->>'competencia_pela_saida') = 'true') then raise exception 'T4 preparo: marcou pela saida sem saida'; end if;
   if (select movimentacao_rebanho_id from financeiro_lancamentos_v2 where id = lc) is not null then raise exception 'T4 preparo: o vinculo nao soltou a mov'; end if;
-  r := public._oc_cancelar_conta_corrente(ow, 'SINT ODC', false);
   select * into d from financeiro_lancamentos_v2 where id = lc;
-  -- sem a saida o vinculo nao troca a competencia, e o cancelar ja' religa a movimentacao pela conta original: o restaurador
-  -- e' chamado e diz 'nada a restaurar' (ou restaura, no ramo 'fica_manual'); o que se prova e' o estado final
-  if jsonb_array_length(coalesce(r->'restauros', '[]')) is distinct from 1
-     or (r->'restauros'->0->'restauro'->>'restaurado') is distinct from 'true'
-        and (r->'restauros'->0->'restauro'->>'motivo') is distinct from 'nada a restaurar' then
-    raise exception 'T4 restauros: %', r->'restauros'; end if;
-  if d.data_competencia is distinct from antes.data_competencia or d.safra_id is distinct from antes.safra_id
-     or d.movimentacao_rebanho_id is distinct from antes.movimentacao_rebanho_id then
-    raise exception 'T4 volta errada: competencia % safra % mov %', d.data_competencia, d.safra_id, d.movimentacao_rebanho_id; end if;
+  if d.data_competencia is distinct from antes.data_competencia or d.safra_id is distinct from antes.safra_id then
+    raise exception 'T4 o vinculo mudou a competencia/safra: % %', d.data_competencia, d.safra_id; end if;
 
   -- ── T5 tenant alheio ──
   perform set_config('request.jwt.claims', json_build_object('sub', c_alheio, 'role', 'authenticated')::text, true);
@@ -158,6 +150,6 @@ begin
   select md5(coalesce(string_agg(md5(l::text), '' order by l.id), '')) into v_fora_d from financeiro_lancamentos_v2 l where l.id = any (v_ids);
   if v_fora_d is distinct from v_fora_a then raise exception 'T7 lancamentos que ja existiam mudaram'; end if;
 
-  raise exception 'OK titulo ida e volta (competencia, safra, mov, ano_mes); editado vence com o motivo; cc pela saida e sem saida restauram no cancelar; alheio 42501; sem evento; resto do Teste igual';
+  raise exception 'OK vinculo mantem competencia e safra (titulo e cc com e sem saida), so'' solta a mov; no titulo o desvincular devolve a mov e o lancamento fica igual; editado vence com o motivo; alheio 42501; sem evento; resto do Teste igual';
 end $teste$;
 ROLLBACK;

@@ -67,19 +67,19 @@ describe('Q3 — as soltas: a regra do P95/P104 e o juntar', () => {
   /* ⚠ a regra do P95 (a do "achadas X de N") nao compara a descricao-base: o MESMO fornecedor (a busca filtra), a mesma fracao N e o valor
      a ±5 centavos. Por isso a "Outra sintetica - 3/3" (lx) conta quando a da k=3 de verdade nao entra — e a previa do juntar LISTA as N. */
   it('uma por k, mesma fracao N, ±5 centavos; a propria entra; ordem do k', () => {
-    const l = linhasDasSoltas(propria, irmas, '2026-10-29', 5);
+    const l = linhasDasSoltas(propria, irmas, '2026-10-29', 5, true);
     expect(l.map((x) => [x.numero, x.total, x.lancamentoId, x.situacao])).toEqual([[1, 3, 'l1', 'paga'], [2, 3, 'l2', 'pendente'], [3, 3, 'l3', 'pendente']]);
     expect(l[0]).toMatchObject({ pagamento: '2026-10-10', conta: 'Conta Sintetica' });
-    expect(linhasDasSoltas(propria, irmas, '2026-10-29', 3).map((x) => x.lancamentoId)).toEqual(['l2', 'lx']);
-    expect(linhasDasSoltas(propria, irmas, '2026-10-29', 0).map((x) => x.numero)).toEqual([2]);
+    expect(linhasDasSoltas(propria, irmas, '2026-10-29', 3, true).map((x) => x.lancamentoId)).toEqual(['l2', 'lx']);
+    expect(linhasDasSoltas(propria, irmas, '2026-10-29', 0, true).map((x) => x.numero)).toEqual([2]);
   });
   it('juntar so\' com as N, cada k uma vez', () => {
-    expect(idsParaJuntar(linhasDasSoltas(propria, irmas, '2026-10-29', 5))).toEqual(['l1', 'l2', 'l3']);
-    expect(idsParaJuntar(linhasDasSoltas(propria, irmas.filter((x) => x.id !== 'l3' && x.id !== 'lx'), '2026-10-29', 5))).toBeNull();
+    expect(idsParaJuntar(linhasDasSoltas(propria, irmas, '2026-10-29', 5, true))).toEqual(['l1', 'l2', 'l3']);
+    expect(idsParaJuntar(linhasDasSoltas(propria, irmas.filter((x) => x.id !== 'l3' && x.id !== 'lx'), '2026-10-29', 5, true))).toBeNull();
     expect(idsParaJuntar([])).toBeNull();
   });
   it('a que nao e\' parcela (sem "k/N") nao tem linhas', () => {
-    expect(linhasDasSoltas({ ...propria, descricao: 'Peca sintetica' }, irmas, '2026-10-29', 5)).toEqual([]);
+    expect(linhasDasSoltas({ ...propria, descricao: 'Peca sintetica' }, irmas, '2026-10-29', 5, true)).toEqual([]);
   });
 });
 
@@ -233,5 +233,66 @@ describe('Q6 — a forma gravada fora da lista (a regra da Mesa, 30/09)', () => 
     expect(formaForaDaLista('PIX/Transferência Bancária')).toBe('PIX/Transferência Bancária');
     for (const f of FORMAS_PAGAMENTO_V2) expect(formaForaDaLista(f)).toBeNull();
     for (const v of ['', '   ', null, undefined, FORMA_PAGAMENTO_V2_NENHUMA]) expect(formaForaDaLista(v)).toBeNull();
+  });
+});
+
+/* P143-DATAS-01 (Gabriel 30/10) — a parcela k so' e' da MESMA compra se o vencimento bater com o da 1a + (k−1) meses: no cartao, o mes da
+   fatura; fora do cartao, tambem ate' 7 dias na virada do mes (D1). Sem isso nao junta e a tela diz "achadas X de N" (D2); o mesmo k da
+   mesma compra continua "a primeira de cada k" (D3). O caso sintetico: duas compras iguais seguidas de 12 × 69,90 no cartao. */
+describe('Q8 — P143-DATAS-01: duas compras iguais nao se juntam', () => {
+  const venc = (aaaaMm: string) => `${aaaaMm}-20`;
+  /* a compra A comecou em set/25: a 6/12 … 12/12 de fev a ago/26; a compra B comecou em set/26: so' a 1/12 */
+  const A = [6, 7, 8, 9, 10, 11, 12].map((k) => ({ id: `a${k}`, descricao: `Assinatura sintetica Parc ${String(k).padStart(2, '0')}/12`,
+    valorCent: 6990, vencimento: venc(`2026-0${k - 4}`), status: 'realizado' }));
+  const B1 = { id: 'b1', descricao: 'Assinatura sintetica Parc 01/12', valorCent: 6990, vencimento: venc('2026-09'), status: 'realizado' };
+  it('aberta a 1/12 da compra nova: so\' ela (1 de 12) — as 6/12…12/12 sao da compra de set/25', () => {
+    expect(linhasDasSoltas(B1, A, '2026-10-30', 5, true).map((x) => x.lancamentoId)).toEqual(['b1']);
+  });
+  it('aberta uma da compra antiga: as 7 dela (6/12…12/12), sem a 1/12 de set/26', () => {
+    const l = linhasDasSoltas(A[0], [B1, ...A], '2026-10-30', 5, true);
+    expect(l.map((x) => x.numero)).toEqual([6, 7, 8, 9, 10, 11, 12]);
+    expect(l.some((x) => x.lancamentoId === 'b1')).toBe(false);
+  });
+  it('D1 no cartao vale o MES da fatura (o dia varia no mesmo mes); fora do cartao, ate\' 7 dias na virada do mes', () => {
+    const p1 = { id: 'p1', descricao: 'Peca sintetica - 1/3', valorCent: 50000, vencimento: '2026-01-31' };
+    const noMes = { id: 'p2', descricao: 'Peca sintetica - 2/3', valorCent: 50000, vencimento: '2026-02-05' };
+    const virada = { id: 'p2', descricao: 'Peca sintetica - 2/3', valorCent: 50000, vencimento: '2026-03-03' };
+    const longe = { id: 'p2', descricao: 'Peca sintetica - 2/3', valorCent: 50000, vencimento: '2026-03-10' };
+    expect(linhasDasSoltas(p1, [noMes], '2026-10-30', 5, true)).toHaveLength(2);
+    expect(linhasDasSoltas(p1, [virada], '2026-10-30', 5, true)).toHaveLength(1);
+    expect(linhasDasSoltas(p1, [virada], '2026-10-30', 5, false)).toHaveLength(2);
+    expect(linhasDasSoltas(p1, [longe], '2026-10-30', 5, false)).toHaveLength(1);
+    /* D2 estrito: sem o vencimento nao ha' como conferir — nao junta */
+    expect(linhasDasSoltas(p1, [{ ...noMes, vencimento: null }], '2026-10-30', 5, false)).toHaveLength(1);
+  });
+  it('D3 o mesmo k na mesma compra: a primeira (como antes)', () => {
+    const dup = { ...A[1], id: 'a7-dup' };
+    expect(linhasDasSoltas(A[0], [A[1], dup], '2026-10-30', 5, true).map((x) => x.lancamentoId)).toEqual(['a6', 'a7']);
+  });
+  it('a tela: a 1/12 nova diz "achadas 1 de 12" e nao oferece juntar', async () => {
+    const LANC_B: LancamentoParaParcelar = {
+      id: 'b1', valorCent: 6990, descricao: B1.descricao, dataCompetencia: '2026-08-26', fazendaId: 'faz-1', planoContaId: 'pl-1',
+      safraId: null, cultura: null, fase: null, favorecidoId: 'f1', formaPagamento: 'Cartão', contaId: 'c1', escopo: 'pecuaria',
+    };
+    render(<ParcelarEsteLancamento clienteId="cli" lancamento={LANC_B} situacao={{ status: 'realizado', dataPagamento: '2026-09-20', conciliadoEm: null }}
+      vencimentoAtual="2026-09-20" conta={{ id: 'c1', nome: 'Cartão Sintetico', cartao: true }} onParcelado={vi.fn()}
+      buscarIrmas={vi.fn(async () => [B1, ...A])} />);
+    await waitFor(() => expect(screen.getByTestId('parcelas-no-pagamento-rodape').textContent).toBe('soltas, sem parcelamento · achadas 1 de 12'));
+    expect(screen.getAllByTestId('parcela-no-pagamento')).toHaveLength(1);
+    expect(screen.getByTestId('parcela-solta-juntar')).toBeDisabled();
+  });
+  it('a tela leva o cartao da conta: a 2/3 que caiu no mes seguinte (+3 dias) junta fora do cartao e nao junta no cartao', async () => {
+    const LANC_P: LancamentoParaParcelar = {
+      id: 'p1', valorCent: 50000, descricao: 'Peca sintetica - 1/3', dataCompetencia: '2026-01-10', fazendaId: 'faz-1', planoContaId: 'pl-1',
+      safraId: null, cultura: null, fase: null, favorecidoId: 'f1', formaPagamento: 'Boleto', contaId: 'c1', escopo: 'pecuaria',
+    };
+    const irma = [{ id: 'p2', descricao: 'Peca sintetica - 2/3', valorCent: 50000, vencimento: '2026-03-03', status: 'programado' }];
+    const casos: [boolean, number][] = [[false, 2], [true, 1]];
+    for (const [cartao, achadas] of casos) {
+      const { unmount } = render(<ParcelarEsteLancamento clienteId="cli" lancamento={LANC_P} situacao={{ status: 'programado', dataPagamento: null, conciliadoEm: null }}
+        vencimentoAtual="2026-01-31" conta={{ id: 'c1', nome: 'Conta Sintetica', cartao }} onParcelado={vi.fn()} buscarIrmas={vi.fn(async () => irma)} />);
+      await waitFor(() => expect(screen.getByTestId('parcelas-no-pagamento-rodape').textContent).toBe(`soltas, sem parcelamento · achadas ${achadas} de 3`));
+      unmount();
+    }
   });
 });

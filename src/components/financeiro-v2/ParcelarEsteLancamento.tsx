@@ -77,9 +77,9 @@ export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencim
   const linhasSoltas = useMemo(() => (solta && candidatas ? linhasDasSoltas(
     { id: lancamento.id, descricao: lancamento.descricao, valorCent: lancamento.valorCent, vencimento: vencimentoAtual,
       pagamento: situacao.dataPagamento ?? null, status: situacao.status ?? null, conta: conta?.nome ?? null },
-    candidatas, hojeLocal(), TOLERANCIA_DA_IRMA_CENT) : null),
+    candidatas, hojeLocal(), TOLERANCIA_DA_IRMA_CENT, !!conta?.cartao) : null),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [candidatas, lancamento.id, lancamento.descricao, lancamento.valorCent, vencimentoAtual, situacao.dataPagamento, situacao.status, conta?.nome]);
+  [candidatas, lancamento.id, lancamento.descricao, lancamento.valorCent, vencimentoAtual, situacao.dataPagamento, situacao.status, conta?.nome, conta?.cartao]);
   /* P143 (Gabriel 29/10 15:03, "Parcela 3 - None" da NF 4964) — sem "k/N", as irmãs PELA NOTA: o mesmo fornecedor e o mesmo nº de nota;
      N = quantas são, a parcela = a posição no vencimento. Nenhuma irmã = à vista de verdade (o bloco de parcelar de sempre) */
   const notaDasIrmas = solta ? null : numeroDaNota(numeroDocumento);

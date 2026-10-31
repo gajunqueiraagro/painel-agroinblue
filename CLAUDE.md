@@ -210,6 +210,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Pecuaria: lancamentos iguais sao normais; vincular nao julga repeticao. "Global nao e' fazenda". O cenario vem do caminho.
 - Financeiro V2 mostra so' dinheiro por padrao (sem caixa em secao propria). Boitel: ao financeiro e ao DRE vai so' o liquido do acerto.
 - Vinculo com OC = parte viva (`zoo_operacao_partes.cancelada = false`), nunca `origem_lancamento`. OC fechada: so' o cadastral se edita.
+- OC-VINCULO-VALOR (Gabriel 30/10): VINCULAR SÓ LIGA — `oc_vincular_lancamento` nunca muda valor/descrição/classificação/competência/datas/status
+  de lançamento (guarda no banco); parcela ocupada por lançamento que a OC não gerou = recusa + "Criar compromisso novo"; fornecedor diferente = pergunta; título programado da OC só muda com `p_aceitar_titulo_oc` (o clique na prévia).
   A previa e' a propria RPC com `p_simular`. Um gesto de desfazer = um motivo + um `estorno_id`. As recusas da OC vem prontas do banco.
 - Conciliacao: tolerancia de MEIO centavo (R$ 0,01 e' diferenca); a data do banco manda na conferencia; o resumo da conta tem dono no
   banco; todo vinculo com extrato da' baixa e o parcial vira divisao explicita; F5 nunca e' necessario; transferencia de OFX = 1

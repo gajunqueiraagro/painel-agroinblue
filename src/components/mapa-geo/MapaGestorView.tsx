@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Upload, X, MapPin, Link2, Unlink } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
-import type { PastoGeometria } from '@/hooks/usePastoGeometrias';
+import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import type { PastoOcupacao } from '@/hooks/usePastoOcupacao';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
@@ -32,7 +32,7 @@ function polyStyle(status: string, isSelected: boolean) {
 }
 
 interface Props {
-  geometrias: PastoGeometria[];
+  geometrias: FazendaGeometria[];
   pastos: Pasto[];
   ocupacoes: Map<string, PastoOcupacao>;
   geoLoading: boolean;
@@ -42,7 +42,7 @@ interface Props {
   rebanhoOficial?: number;
 }
 
-interface SelectedGeo { geo: PastoGeometria }
+interface SelectedGeo { geo: FazendaGeometria }
 
 export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange, onLink, rebanhoOficial }: Props) {
   const [selected, setSelected] = useState<SelectedGeo | null>(null);
