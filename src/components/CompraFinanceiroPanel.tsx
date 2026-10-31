@@ -17,6 +17,7 @@ import { FRASE_META_NAO_VAI_AO_FINANCEIRO, ehCenarioMeta } from '@/lib/financeir
 import type { FiltroVisual } from '@/lib/statusOperacional';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { valorDoLancamento } from '@/lib/financeiro/valorDoLancamento';
 import { mirrorMetaToPlanejamento, deleteMetaPlanejamentoByMovimentacao } from '@/lib/financeiro/metaPlanejamentoMirror';
 
 type TipoPreco = 'por_kg' | 'por_cab' | 'por_total';
@@ -465,7 +466,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         });
       }
 
-      const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
+      /* VG-CENTAVO D1a (Gabriel 31/10 07:42): todo valor vai ao banco em centavos (o Funrural, a comissão e o frete são contas) */
+      const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts.map((r) => ({ ...r, valor: valorDoLancamento(r.valor) })));
       if (error) throw error;
 
       // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
