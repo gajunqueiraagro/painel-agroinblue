@@ -37,6 +37,7 @@ import {
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
 import { useMetaGmd } from '@/hooks/useMetaGmd';
 import { usePastos } from '@/hooks/usePastos';
+import { areaDosPastosNoMes } from '@/lib/pastos/areaDoMes';
 import {
   aplicarOverlayFechamento,
   roundNumber,
@@ -499,16 +500,19 @@ export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseR
       for (const c of baseCategorias) {
         if (c.saldo_final > 0 && c.fazenda_id) fazendasComRebanho.add(c.fazenda_id);
       }
-      const areaTotal = pastos
-        .filter(p => fazendasComRebanho.has(p.fazenda_id))
-        .reduce((sum, p) => sum + (p.area_produtiva_ha ?? 0), 0);
-      return rows.map(r => ({
-        ...r,
-        area_produtiva_ha: areaTotal,
-        lotacao_ua_ha: areaTotal > 0 && r.ua_media !== null
-          ? roundNumber(r.ua_media / areaTotal, 2)
-          : null,
-      }));
+      // SM-ARRENDAMENTO-ENCERRAR-01 (Gabriel 30/10/2026): a área é a do MÊS da linha (pastos ativos e vigentes naquele mês,
+      // `areaDosPastosNoMes`). Antes era UM valor para o ano, somando até pasto inativo e arrendamento já devolvido.
+      const daFazendaComRebanho = pastos.filter(p => fazendasComRebanho.has(p.fazenda_id));
+      return rows.map(r => {
+        const areaDoMes = areaDosPastosNoMes(daFazendaComRebanho, r.ano_mes);
+        return {
+          ...r,
+          area_produtiva_ha: areaDoMes,
+          lotacao_ua_ha: areaDoMes > 0 && r.ua_media !== null
+            ? roundNumber(r.ua_media / areaDoMes, 2)
+            : null,
+        };
+      });
     }
 
     if (cenario === 'meta') {
