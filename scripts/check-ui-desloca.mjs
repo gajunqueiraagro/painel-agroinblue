@@ -163,6 +163,8 @@ const CENARIOS = [
     ['painel P_01', mapaPasto('P_01')], ['painel P_03 sem fechamento', mapaPasto('P_03')], ['painel nome longo', mapaPasto('Retiro')],
     ['camada kg/ha', mapaCamada('Lotação (kg/ha)')], ['camada atividade', mapaCamada('Atividade')], ['camada cabeças', mapaCamada('Cabeças')],
     ['camada tipo de área', mapaCamada('Tipo de área')], ['mês agosto', mapaMes('Ago')], ['mês setembro', mapaMes('Set')],
+    /* MAPA-02b — trocar o fundo não move nada (os créditos têm lugar e altura fixos) */
+    ['fundo mapa', mapaCamada('Mapa')], ['fundo satélite', mapaCamada('Satélite')],
   ] },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor

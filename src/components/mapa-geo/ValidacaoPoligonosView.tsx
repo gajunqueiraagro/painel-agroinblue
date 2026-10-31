@@ -18,6 +18,7 @@ import {
   X, Save, ChevronDown,
 } from 'lucide-react';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
+import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { Pasto } from '@/hooks/usePastos';
 
 type FilterStatus = 'all' | 'vinculado' | 'sem_vinculo';
@@ -44,9 +45,10 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[]; label: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<L.Map | null>(null);
-  const layerRef = useRef<L.LayerGroup | null>(null);
+  /* MAPA-02b (D1): o mapa nasce pelo hook da casa (o fundo, os créditos e o zoom são os mesmos do Gestor e da Operação); antes ela
+     criava o próprio `L.map` com o OpenStreetMap fixo. */
+  const { mapContainerRef: mapRef, mapInstanceRef: mapInstance, featureLayerRef: layerRef, status: statusDoMapa } =
+    useStableLeafletMap({ debugName: 'ValidacaoPoligonos' });
   const boundsMap = useRef<Map<string, L.LatLngBounds>>(new Map());
 
   // Filter & search
@@ -66,20 +68,6 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     vinculados: geometrias.filter(g => g.pasto_id).length,
     semVinculo: geometrias.filter(g => !g.pasto_id).length,
   }), [geometrias]);
-
-  // Map init
-  useEffect(() => {
-    const el = mapRef.current;
-    if (!el || mapInstance.current) return;
-    const map = L.map(el, { center: [-15.8, -47.9], zoom: 5, zoomControl: false });
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap', maxZoom: 19,
-    }).addTo(map);
-    layerRef.current = L.layerGroup().addTo(map);
-    mapInstance.current = map;
-    return () => { map.remove(); mapInstance.current = null; layerRef.current = null; };
-  }, []);
 
   // Draw polygons
   useEffect(() => {
@@ -126,7 +114,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [geometrias, focusedId, selectedIds]);
+  }, [geometrias, focusedId, selectedIds, statusDoMapa]);
 
   // Focus on selected polygon
   useEffect(() => {

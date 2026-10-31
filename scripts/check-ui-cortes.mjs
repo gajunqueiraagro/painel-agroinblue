@@ -209,6 +209,13 @@ const CENARIOS = [
   { nome: 'mapa-geo-sem-fechamento', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_03') },
   { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
   { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
+  /* MAPA-02b — o fundo (neutro na bancada: nenhum tile do Google nem do OSM) e os créditos no canto, logo abaixo do zoom: em satélite com o
+     copyright do tamanho dos reais (e com o painel aberto, junto do zoom), no Mapa, na queda sem satélite (o aviso) e na Operação, que nasce
+     pelo mesmo hook. A Validação fica de fora: já reprova na base (rótulos e "Area Total" cortados) → pendência MAPA-VALIDACAO-CORTES */
+  { nome: 'mapa-geo-fundo-mapa', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Mapa') },
+  { nome: 'mapa-geo-sem-satelite', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-geo-sem-satelite-painel', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
+  { nome: 'mapa-geo-operacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
   { nome: 'recorrencias', url: 'tela=recorrencias', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'rolagem', 'tabela'] },
   /* P172 — Cadastros › Plano de Contas nos dez tamanhos do P92: o admin (com as ações), os inativos ligados, o cliente (só leitura), a
