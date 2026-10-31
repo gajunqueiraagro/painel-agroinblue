@@ -19,6 +19,7 @@ import type { AvisoNFe, DuplicataNFe, NotaLida } from './tipos';
 import type { ResolucaoEmitente } from './resolverEmitente';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from './formatos';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
+import { fraseDaRemessa } from './remessaEntregaFutura';
 
 /** O `tPag` da nota -> a forma de pagamento do SISTEMA (`FORMAS_PAGAMENTO_V2`). Mapa FECHADO: o que nao esta' aqui fica vazio
  *  (cheque 02 e deposito 16 nao tem forma correspondente na lista do sistema). */
@@ -205,6 +206,9 @@ export function proporLancamento(entrada: {
   }
 
   if (avisosDoLeitor.includes('sem_protocolo')) avisos.push(FRASE_SEM_PROTOCOLO);
+  /* NOTA-NOVA-MODAL-REAL — a remessa de entrega futura avisa no Novo lançamento (o aviso morava só na tela intermediária; âmbar, nunca bloqueio) */
+  const remessa = fraseDaRemessa(nota);
+  if (remessa) avisos.push(remessa);
 
   /* A FAZENDA: pela IE do destinatario; sem IE gravada, pelo nome no endereco dele (NOTA-FAZENDA-PELA-IE-01, "confira") */
   const pelaIe = lado.fazenda;

@@ -194,13 +194,27 @@ export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBo
     ro.observe(el);
     return () => ro.disconnect();
   }, [preencher]);
+  /* NOTA-NOVA-MODAL-REAL (o gate mediu a aba Documentos do Novo lançamento da nota) — fora do `preencher`, o cabeçalho e o Total só prendem
+     quando a caixa de 260px ROLA de fato: com poucas parcelas ela não rola, e o "preso" dentro dela ficava solto quando quem rola é o modal */
+  const caixaRef = useRef<HTMLDivElement>(null);
+  const [caixaRola, setCaixaRola] = useState(false);
+  useLayoutEffect(() => {
+    const el = caixaRef.current;
+    if (preencher || !el) return;
+    const medir = () => setCaixaRola(el.scrollHeight > el.clientHeight + 1);
+    medir();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [preencher, n]);
   const densidade: DensidadeDasParcelas = preencher ? densidadeQueCabe(alturaDoQuadro, n) : 'normal';
   const { th: TH_DA_REGUA, td: TD, tf: TF } = REGUA[densidade];
   /* o cabeçalho só prende quando o corpo rola (no `preencher`, quando nem a compacta cabe; fora dele, sempre, como era) */
-  const rola = !preencher || alturaDoQuadro <= 0 || !cabeEm(densidade, alturaDoQuadro, n);
+  const rola = preencher ? alturaDoQuadro <= 0 || !cabeEm(densidade, alturaDoQuadro, n) : caixaRola;
   const TH = rola ? `sticky top-0 z-10 ${TH_DA_REGUA}` : TH_DA_REGUA;
   /* fora do `preencher`, o Total segue preso no fim da tabela que rola (como sempre) */
-  const TF_DA_TABELA = preencher ? TF : `sticky bottom-0 z-10 ${TF}`;
+  const TF_DA_TABELA = preencher || !caixaRola ? TF : `sticky bottom-0 z-10 ${TF}`;
   const colunas = (
     <colgroup>
       <col style={{ width: 64 }} /><col style={{ width: 82 }} /><col style={{ width: 100 }} />
@@ -284,7 +298,7 @@ export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBo
           </div>
         </div>
       ) : (
-      <div className="max-h-[260px] overflow-auto rounded border border-[#E0E2E6]">
+      <div ref={caixaRef} className="max-h-[260px] overflow-auto rounded border border-[#E0E2E6]">
         <table className={TABELA}>{colunas}{cabecalho}{corpo}{rodape}</table>
       </div>
       )}

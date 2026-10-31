@@ -1559,10 +1559,42 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
     g.__fornecedoresBancada = [...(g.__fornecedoresBancada ?? []).filter((f: any) => f.id !== 'agro'),
       { ...AGRO, municipio: semCidade ? null : 'Presidente Prudente', uf: semCidade ? null : 'SP' }];
   }
-  raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
+  const renderizar = () => raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
     <LancamentoV2Dialog open onClose={() => {}} onSave={async () => 'x'} fazendas={FAZENDAS} contas={CONTAS} classificacoes={CLASSIF}
       fornecedores={[AGRO]} safras={SAFRAS} onCriarFornecedor={async () => null}
       /* P128a (porta 2) — o "Ler a NF" do Documentos do Editar (na bancada, a prévia não abre) */
       onLerNotaFiscal={async () => null} {...props} />
   </MemoryRouter></QueryClientProvider>);
+  /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO aqui, pelo `prefillDaNota` (o caminho da lista): `notapdf`
+     o PDF sintético (4 duplicatas) · `notachave` só a chave digitada (sem valor nem data) · `notacartao` a nota sem duplicata paga no cartão
+     Elo (a conta já escolhida; o cenário escolhe Parcelada 10× no Pagamento). O PDF é desenhado pelo jspdf e LIDO pelo caminho de verdade. */
+  if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
+    void (async () => {
+      const { jsPDF } = await import('jspdf');
+      const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+      const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
+      const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
+      if (v === 'notachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
+      else for (const it of (v === 'notacartao' ? danfeSinteticoSemDuplicata() : PAGINAS_DANFE_SINTETICO)[0]) { doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 595.28 - it.y); }
+      const bytes: ArrayBuffer = doc.output('arraybuffer');
+      let lido: any;
+      if (v === 'notachave') {
+        const { notaDaChaveDigitada, lidoDaChave } = await import('@/lib/financeiro/nfe/chaveDigitada');
+        const r = notaDaChaveDigitada('5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8298');
+        if (r.ok === false) { raiz.render(<div>{r.frase}</div>); return; }
+        lido = lidoDaChave(r.nota, [{ largura: 841.89, altura: 595.28 }]);
+      } else lido = await lerNota(bytes);
+      if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+      const FORN_S = { ...AGRO, id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24' };
+      props.fornecedores = [FORN_S];
+      const resolucao = resolverEmitente(lido.nota.emitente, [FORN_S], null);
+      const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: '280000002' }], emitente: resolucao,
+        favorecidoId: resolucao.propostoId, ultima: { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' } });
+      props.prefill = { ...prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente,
+        resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, '000.000.937.pdf') } as any), ...(v === 'notacartao' ? { conta_bancaria_id: 'elo' } : {}) };
+      props.documentosAntesDeSalvar = true;
+      renderizar();
+    })();
+  } else renderizar();
 }

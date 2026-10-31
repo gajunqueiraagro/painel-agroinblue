@@ -60,6 +60,9 @@ vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual:
 vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal: () => null }));
 vi.mock('@/components/financeiro-v2/AbaAuditoriaLancamento', () => ({ AbaAuditoriaLancamento: () => null }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
+/* NOTA-NOVA-MODAL-REAL D2 — os dias de vencimento do cartão SINTÉTICO (o mais frequente: 10) */
+const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async () => [{ dia: 10, lancamentos: 6, ultimo: '2026-09-10' }, { dia: 15, lancamentos: 1, ultimo: '2026-08-15' }]) }));
+vi.mock('@/lib/financeiro/diasDoCartao', () => cartaoNoBanco);
 
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';
 import { NovoDeXmlDialog, comFornecedoresDeAgora, resumoDasDuplicatas } from './NovoDeXmlDialog';
@@ -126,8 +129,10 @@ function montarModal(props: Partial<React.ComponentProps<typeof LancamentoV2Dial
   return { ...r, onSave, onClose, onLancamentoCriado, onCriarFornecedor };
 }
 const botaoSalvar = () => document.querySelector('button[tabindex="17"]') as HTMLButtonElement;
-/** A nota NAO traz a conta de pagamento: o operador a escolhe. Nos casos de Salvar, a escolha entra como ele a faria. */
-const comConta = (d: DoXml) => ({ ...prefillDaNota(d), conta_bancaria_id: 'bb' });
+/** A nota NAO traz a conta de pagamento nem a descrição (NOTA-NOVA-MODAL-REAL: a descrição nasce vazia): o operador escolhe a conta e
+ *  ESCREVE a descrição. Nos casos de Salvar, as duas entram como ele as faria. */
+const DESCRICAO_DO_OPERADOR = 'Sal e ração da engorda';
+const comConta = (d: DoXml) => ({ ...prefillDaNota(d), conta_bancaria_id: 'bb', descricao: DESCRICAO_DO_OPERADOR });
 /* PASSO 8 do FIN-FINANC-28: conta e fazenda sao o seletor da casa COM BUSCA (gatilho = botao); os outros seguem combobox. */
 const gatilhoDeBusca = () => Array.from(document.querySelectorAll('button')).filter((b) => Array.from(b.children).some((c) => c.tagName === 'SPAN' && c.classList.contains('truncate') && c.classList.contains('text-left')));
 const combo = (texto: string) => [...screen.getAllByRole('combobox'), ...gatilhoDeBusca()].some((c) => (c.textContent ?? '').includes(texto));
@@ -273,7 +278,7 @@ describe('tela A — a lista de notas', () => {
 describe('tela B — o Novo lançamento preenchido pela nota', () => {
   it('o prefill inteiro no DOM, com a pilula e as origens', async () => {
     montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO])) });
-    await screen.findByDisplayValue('SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens');
+    await screen.findByDisplayValue('16.238,00');
     expect(screen.getByTestId('pilula-do-xml').textContent).toBe('do XML · NF 000.012.345');
     expect(screen.getByDisplayValue('30/09/2026')).toBeInTheDocument();      // competencia = emissao
     expect(screen.getByDisplayValue('05/11/2026')).toBeInTheDocument();      // 1o vencimento = 1a duplicata
@@ -284,7 +289,8 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     expect(screen.getByTestId('origem-xml-valor').textContent).toBe('do XML');
     expect(screen.getByText('Fornecedor * · pelo CNPJ')).toBeTruthy();
     expect(screen.getByText('Fazenda * · IE 289876543')).toBeTruthy();
-    expect(screen.getByText('Produto / descrição * · do XML')).toBeTruthy();
+    /* a descrição é do operador: nasce vazia e nunca é "do XML" */
+    expect(screen.getByText('Produto / descrição *')).toBeTruthy();
     expect(screen.getByTestId('origem-xml-subcentro').textContent).toBe('Classificação sugerida: Nutrição Engorda · último · 14/08/26 deste fornecedor');
     /* fornecedor achado pelo documento, unico e ativo: nenhuma faixa de fornecedor, nenhum aviso */
     expect(screen.queryByTestId('xml-faixa-fornecedor')).toBeNull();
@@ -407,7 +413,7 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     expect(m.onSave.mock.calls[0][0]).toMatchObject({
       tipo_operacao: '2-Saídas', status_transacao: 'programado', valor: 16238, data_competencia: '2026-09-30', data_vencimento: '2026-10-30',
       data_pagamento: null, favorecido_id: 'agro', fazenda_id: 'f-pur', numero_documento: '000.012.345', tipo_documento: 'Nota Fiscal',
-      forma_pagamento: 'Boleto', plano_conta_id: 'pl-nut', descricao: 'SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens',
+      forma_pagamento: 'Boleto', plano_conta_id: 'pl-nut', descricao: DESCRICAO_DO_OPERADOR,
     });
     /* o documento NF pendente vai ao banco com a chave, o numero, a serie, a emissao e o valor da NOTA… */
     await waitFor(() => expect(banco.rpc.mock.calls.some((c) => c[0] === 'fin_documento_registrar')).toBe(true));
@@ -434,7 +440,7 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     const grade = screen.getByTestId('grade-de-parcelas');
     expect(grade.getAttribute('data-modo')).toBe('mensal');
     expect(screen.getAllByTestId('linha-da-parcela').map((l) => l.textContent)).toEqual([
-      '105/11/268.119,00duplicata da nota', '205/12/268.119,00duplicata da nota',
+      '105/11/20268.119,00duplicata da nota', '205/12/20268.119,00duplicata da nota',
     ]);
     expect(screen.getByTestId('diferenca').textContent).toBe('0,00 ✓');
     expect(screen.getByTestId('recado-de-parcelas').textContent).toBe('= valor da nota');
@@ -892,5 +898,71 @@ describe('P101 — "Novo a partir da nota" numa janela estreita', () => {
     soltar([arquivo('a.xml', montarNFe())]);
     await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
     expect(titulos()).toContain('CNPJ');
+  });
+});
+
+/* ═══ NOTA-NOVA-MODAL-REAL D2 (Gabriel 30/10) ══════════════════════════════════════════════════════════════════════
+   A nota paga no CARTÃO EM N× nasce no Novo lançamento de sempre, antes de a tela intermediária sair: Parcelada + N× na aba Pagamento,
+   a conta origem é o cartão e cada parcela cai na fatura certa (o dia mais frequente do cartão, no mês seguinte à emissão). O caso M2
+   (cartão 10×), SINTÉTICO. */
+describe('NOTA-NOVA-MODAL-REAL D2 — o cartão em N× no Novo lançamento (o caso M2, sintético)', () => {
+  const ELO: ContaBancariaV2 = { id: 'elo', nome_conta: 'Cartão Elo', banco: 'BB', fazenda_id: 'f-pur', tipo_conta: 'cartao', codigo_conta: null, nome_exibicao: 'Cartão Elo', agencia: null, numero_conta: null, conta_digito: null };
+  it('nota sem duplicata no cartão Elo em 10×: a 1ª fatura sugerida (dia 10, mês seguinte à emissão); o Salvar manda as 10 ao writer de sempre, na conta do cartão', async () => {
+    Element.prototype.hasPointerCapture = () => false;
+    Element.prototype.releasePointerCapture = () => {};
+    banco.rpc.mockImplementation(async (nome: unknown) => (nome === 'fn_parcelamento_cadastrar' ? { data: 'fin-1', error: null } : { data: null, error: null }));
+    const m = montarModal({ contas: [...CONTAS, ELO], prefill: { ...prefillDaNota(doXmlDe({ duplicatas: null }, [AGRO])), conta_bancaria_id: 'elo', descricao: DESCRICAO_DO_OPERADOR } });
+    await screen.findByDisplayValue('16.238,00');
+    const aba = screen.getAllByRole('tab').find((t) => /Pagamento/.test(t.textContent ?? ''))!;
+    fireEvent.mouseDown(aba); fireEvent.click(aba);
+    const modalidade = screen.getAllByRole('combobox').find((c) => (c.textContent ?? '').includes('À vista'))!;
+    modalidade.focus(); fireEvent.keyDown(modalidade, { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Parcelada' }));
+    const n = await screen.findByRole('spinbutton');
+    fireEvent.change(n, { target: { value: '10' } }); fireEvent.blur(n);
+    await waitFor(() => expect(screen.getAllByTestId('linha-da-parcela')).toHaveLength(10));
+    expect(cartaoNoBanco.diasDoCartao).toHaveBeenCalledWith('elo');
+    expect(screen.getAllByTestId('cel-vencimento').map((c) => c.textContent)).toEqual(
+      ['10/10/2026', '10/11/2026', '10/12/2026', '10/01/2027', '10/02/2027', '10/03/2027', '10/04/2027', '10/05/2027', '10/06/2027', '10/07/2027']);
+    expect(screen.getByTestId('recado-de-parcelas').textContent).toBe('1ª fatura · sugerido (Elo, dia 10) · = valor da nota');
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(banco.rpc.mock.calls.some((c) => c[0] === 'fn_parcelamento_cadastrar')).toBe(true));
+    const payload = (banco.rpc.mock.calls.find((c) => c[0] === 'fn_parcelamento_cadastrar')?.[1] as { p_payload: Record<string, unknown> }).p_payload;
+    expect(payload).toMatchObject({ valor_total: 16238, total_parcelas: 10, data_primeira_parcela: '2026-10-10', conta_bancaria_id: 'elo', descricao: DESCRICAO_DO_OPERADOR });
+    await waitFor(() => expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1));
+  });
+  it('conta que NÃO é cartão: nada é sugerido (o 1º vencimento é do operador)', async () => {
+    Element.prototype.hasPointerCapture = () => false;
+    cartaoNoBanco.diasDoCartao.mockClear();
+    montarModal({ prefill: { ...prefillDaNota(doXmlDe({ duplicatas: null }, [AGRO])), conta_bancaria_id: 'bb', descricao: DESCRICAO_DO_OPERADOR } });
+    await screen.findByDisplayValue('16.238,00');
+    const aba = screen.getAllByRole('tab').find((t) => /Pagamento/.test(t.textContent ?? ''))!;
+    fireEvent.mouseDown(aba); fireEvent.click(aba);
+    const modalidade = screen.getAllByRole('combobox').find((c) => (c.textContent ?? '').includes('À vista'))!;
+    modalidade.focus(); fireEvent.keyDown(modalidade, { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Parcelada' }));
+    await screen.findByRole('spinbutton');
+    expect(cartaoNoBanco.diasDoCartao).not.toHaveBeenCalled();
+    expect(screen.getByTestId('recado-de-parcelas').textContent).not.toContain('fatura');
+  });
+});
+
+/* NOTA-NOVA-MODAL-REAL — o Novo lançamento pela nota do PDF (e pela chave digitada) diz de onde veio, sem inventar */
+describe('NOTA-NOVA-MODAL-REAL — a origem no Novo lançamento: "do PDF"; o que a nota não trouxe nunca é "da nota"', () => {
+  const comoPdf = (d: DoXml): DoXml => ({ ...d, arquivo: new File(['%PDF-1.4 x'], '000.012.345.pdf', { type: 'application/pdf' }) });
+  it('a nota do PDF: a pílula e as origens dizem "do PDF" (nunca "do XML")', async () => {
+    montarModal({ prefill: prefillDaNota(comoPdf(doXmlDe({}, [AGRO]))) });
+    await screen.findByDisplayValue('16.238,00');
+    expect(screen.getByTestId('pilula-do-xml').textContent).toBe('do PDF · NF 000.012.345');
+    expect(screen.getByTestId('origem-xml-tipo').textContent).toBe('Saída · do PDF');
+    expect(screen.getByTestId('origem-xml-valor').textContent).toBe('do PDF');
+  });
+  it('só a chave (sem emissão nem valor): o 0,00 e a competência vazia NÃO ficam em âmbar "da nota" — são do operador', async () => {
+    const d = comoPdf(doXmlDe({}, [AGRO]));
+    montarModal({ prefill: prefillDaNota({ ...d, proposta: { ...d.proposta, valorCent: 0, competencia: '' } }) });
+    await screen.findByTestId('pilula-do-xml');
+    expect(screen.queryByTestId('origem-xml-valor')).toBeNull();
+    expect(screen.queryByTestId('origem-xml-competencia')).toBeNull();
+    expect(screen.getByTestId('origem-xml-tipo').textContent).toBe('Saída · do PDF');
   });
 });

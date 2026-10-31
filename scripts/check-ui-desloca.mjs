@@ -288,16 +288,15 @@ const CENARIOS = [
   { nome: 'mesclar', url: 'tela=mesclar', auto: true },
   /* FIN-NOTA-PDF-01 — o modal da nota: nada anda quando o "Falta:" troca pelo aviso de baixo, quando a faixa "Atualizar este" aparece,
      quando a nota e' barrada (ja' registrada, chave que nao confere) ou no pior caso de texto. Cada um contra a nota recem-aberta. */
-  { nome: 'nota-pdf', url: 'tela=nota-pdf', estados: [
-    ['fornecedor cadastrado, subcentro sugerido, "Atualizar este"', { url: 'tela=nota-pdf&v=cadastrado' }],
-    ['nota ja registrada', { url: 'tela=nota-pdf&v=registrada' }], ['chave nao confere', { url: 'tela=nota-pdf&v=diverge' }],
-    ['pior caso de texto', { url: 'tela=nota-pdf&v=longo' }],
-    ['subcentro de lavoura (Safra e Cultura)', { url: 'tela=nota-pdf&v=lavoura' }], ['nota sem duplicata (Criar lancamento)', { url: 'tela=nota-pdf&v=semdup' }],
-    ['nota avulsa, remessa de entrega futura (NOTA-AVULSA-890-01)', { url: 'tela=nota-pdf&v=avulsa' }],
-    ['so cancelados (D)', { url: 'tela=nota-pdf&v=socancelados' }],
-    /* P95 — a previa pela chave digitada (emissao e valor em ambar no lugar dos lidos) e a nota achada em parcelas soltas */
-    ['nota pela chave digitada (P95)', { url: 'tela=nota-pdf&v=pelachave' }],
-  ] },
+  /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota NOVA abre direto o Novo lançamento: o mesmo modal com o PDF, só a chave digitada, a nota no
+     cartão (sem duplicata) e o XML não desloca nada (a tela intermediária saiu; a já lançada segue em `nota-pdf-ja`).
+     A nota SÓ PELA CHAVE não tem itens, logo não tem a aba "Itens da nota" — outro conjunto de abas, a mesma regra do D-a abaixo (cada modo
+     contra a própria base): fica fora desta comparação e é medida no `check:ui-cortes` (`nota-nova-modal-chave-*`). */
+  { nome: 'nota-nova-modal', url: 'tela=lancamento&m=novo&v=notapdf', antes: async (p) => { await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900); },
+    estados: [
+      ['nota sem duplicata, conta do cartao', { url: 'tela=lancamento&m=novo&v=notacartao' }],
+      ['o XML', { url: 'tela=lancamento&m=novo&v=xml' }],
+    ] },
   /* D-a (Gabriel 29/10 08:32) — CADA MODO CONTRA A PRÓPRIA BASE: a nota JÁ LANÇADA tem outro conjunto de abas (5, numeradas) que a NOVA (3) —
      o desenho aprovado; trocar de modo é trocar de tela, não "deslocar". As variantes já lançadas se medem aqui, contra a já lançada recém-aberta;
      a nova, acima, contra a nova. (O "Criar novo (duplica)" do ⋯ volta para a nova: a tela dele é medida no `check:ui-cortes`, `nota-pdf-caminho-criar`.) */
@@ -362,21 +361,6 @@ const CENARIOS = [
     ['atualizar as nao pagas', noLugar('[data-testid="nota-atualizar-nao-pagas"] button')],
     ['aba Itens', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens (")')],
     /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
-  ] },
-  /* P74 — "Como foi pago?": trocar À vista → Cartão em N× → (cartão, 4) → Parcelas livres → Duplicatas apagado não move o título do bloco, os
-     outros blocos nem o rodapé (o conteúdo do bloco troca por dentro, na altura dele) */
-  /* P101 — em todos os tamanhos: abaixo de 1000px, na aba "Parcelas e lançamento" */
-  { nome: 'nota-pdf-como-foi-pago', url: 'tela=nota-pdf&v=semdup', antes: async (p) => {
-    const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
-    if (await t.count()) { await t.first().click(); await espera(p, 300); }
-  }, estados: [
-    ['Cartao em Nx', async (p) => { await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p); }],
-    ['cartao escolhido, 4 parcelas', async (p) => {
-      await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p);
-      await p.locator('[data-testid="nota-cartao"] button', { hasText: 'Selecione o cartão' }).first().click(); await espera(p, 300);
-      await p.getByText('Cartão Elo Exemplo', { exact: true }).last().click(); await espera(p, 300);
-      await digitar('[data-testid="nota-cartao-parcelas"]', '4')(p);
-    }],
   ] },
   /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */
   { nome: 'obrigacao-editar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', antes: async (p) => {

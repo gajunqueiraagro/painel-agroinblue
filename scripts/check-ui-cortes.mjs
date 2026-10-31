@@ -70,18 +70,6 @@ const abrirEditarObrigacao = async (p) => {
 };
 /* P101 — os tamanhos em que a prévia da nota tem abas (abaixo de 1000px) */
 const TAMANHOS_ESTREITOS_DA_NOTA = [[750, 483], [750, 530], [750, 600], [814, 530], [900, 600]];
-const abaDoLancamentoSeHouver = async (p) => {
-  const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
-  if (await t.count()) { await t.first().click(); await p.waitForTimeout(300); }
-};
-const cartaoEm4 = async (p) => {
-  await abaDoLancamentoSeHouver(p);
-  await p.locator('[data-testid="nota-como-foi-pago"]').click(); await p.waitForTimeout(300);
-  await p.locator('[data-testid="nota-como-cartao"]').click(); await p.waitForTimeout(300);
-  await p.locator('[data-testid="nota-cartao"] button', { hasText: 'Selecione o cartão' }).first().click(); await p.waitForTimeout(300);
-  await p.getByText('Cartão Elo Exemplo', { exact: true }).last().click(); await p.waitForTimeout(300);
-  await p.locator('[data-testid="nota-cartao-parcelas"]').fill('4'); await p.waitForTimeout(600);
-};
 const parcelarEm4 = async (p) => {
   await clicarTexto('Pagamento')(p);
   await p.locator('[data-testid="parcelar-este-abrir"]').click(); await p.waitForTimeout(300);
@@ -376,13 +364,14 @@ const CENARIOS = [
   /* FIN-NOTA-PDF-01 — "Novo lançamento · da nota fiscal" (o mock aprovado), o PDF SINTETICO lido de verdade, nos sete tamanhos: o modal
      fixo nao rola (so' as duas tabelas rolam dentro do quadro delas, no pior caso de 12 parcelas e 14 itens), nada passa da caixa. */
   /* P95 — `pelachave` (a previa da chave digitada: o chip, emissao e valor em ambar) e `irmas` (a nota em 4 parcelas soltas, "k/4") */
-  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  /* NOTA-NOVA-MODAL-REAL (30/10) — a nota NOVA não fica mais nesta tela (passa ao Novo lançamento: `nota-nova-modal-*` abaixo); aqui, a já
+     lançada e a barrada (`diverge`: a chave não confere) */
+  ...['diverge', 'jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
   })),
   /* P101 — abaixo de 1000px a prévia tem três abas: as outras duas (Parcelas e lançamento; Arquivo) em todas as variantes, nos estreitos. P163-2: a
      nota JÁ LANÇADA tem as abas dela (abaixo, `nota-pdf-ja-*`) */
-  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas', 'diferenca']
-    .filter((v) => !NOTA_JA_LANCADA.includes(v))
+  ...['diverge']
     .flatMap((v) => [['lancamento', 'Parcelas e lançamento'], ['arquivo', 'Arquivo']].map(([a, rotulo]) => ({ nome: `nota-pdf-aba-${a}${v ? `-${v}` : ''}`,
       url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_ESTREITOS_DA_NOTA,
       semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
@@ -391,13 +380,25 @@ const CENARIOS = [
   /* P95 — "Novo a partir da nota": a nota lida, a da chave digitada, as recusadas com o campo da chave (nome comprido) e o aviso do repetido */
   /* P101 — em TODOS os tamanhos: abaixo de 1000px a tabela perde a coluna CNPJ (no `title` do Emitente) e estreita (antes vazava 155px a 750) */
   { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', tamanhos: TAMANHOS_DO_CONSORCIO },
-  /* P74 — "Como foi pago?" › Cartão em N× na nota sem duplicata: o cartão, 4 parcelas, a 1ª fatura sugerida em âmbar e a grade (Igual todo
-     mês e Parcelas livres); o modal fixo não rola (só a lista da grade) */
-  /* P101 — em TODOS os tamanhos: abaixo de 1000px a prévia vira três abas e o cartão mora na "Parcelas e lançamento" */
-  ...[['', null], ['-livres', 'Parcelas livres']].map(([s, livres]) => ({ nome: `nota-pdf-cartao${s}`, url: 'tela=nota-pdf&v=semdup', tamanhos: TAMANHOS_DO_CONSORCIO,
-    semRolarNoLugar: '[data-testid="nota-cartao"] > div:first-child',
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-parcelas-rolagem"], [data-testid="lista-de-parcelas"]' },
-    antes: async (p) => { await cartaoEm4(p); if (livres) await clicarTexto(livres)(p); } })),
+  /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO o Novo lançamento: o PDF (4 duplicatas), só a chave
+     digitada (valor e data para o operador) e o cartão em 10× (D2: Parcelada 10× no Pagamento, a 1ª fatura sugerida); Geral, Pagamento e
+     Documentos (o anexo clicável) nos sete tamanhos. Substitui a tela intermediária (`nota-pdf` da nota nova, `nota-pdf-aba-*`, `nota-pdf-cartao*`). */
+  ...['pdf', 'chave', 'cartao'].flatMap((v) => {
+    const pronto = async (p) => { await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(600); };
+    const parcelada10 = async (p) => {
+      await clicarTexto('Pagamento')(p);
+      await p.getByRole('combobox').filter({ hasText: 'À vista' }).first().click(); await p.getByRole('option', { name: 'Parcelada' }).click();
+      const n = p.getByRole('spinbutton').first(); await n.fill('10'); await n.blur(); await p.waitForTimeout(600);
+    };
+    return [
+      /* a Geral rola por dentro quando a nota traz avisos (as faixas no topo): o corpo do Novo lançamento rola por desenho, como no XML (`lancamento-xml-*`) */
+      { nome: `nota-nova-modal-${v}-Geral`, url: `tela=lancamento&m=novo&v=nota${v}`, tamanhos: TAMANHOS_DO_CONSORCIO, antes: pronto },
+      { nome: `nota-nova-modal-${v}-Pagamento`, url: `tela=lancamento&m=novo&v=nota${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+        antes: async (p) => { await pronto(p); if (v === 'cartao') await parcelada10(p); else await clicarTexto('Pagamento')(p); } },
+      { nome: `nota-nova-modal-${v}-Documentos`, url: `tela=lancamento&m=novo&v=nota${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+        antes: async (p) => { await pronto(p); await clicarTexto('Documentos')(p); } },
+    ];
+  }),
   /* P74 B — "Parcelar este lançamento" (aba Pagamento do Editar): fechado, aberto com 4 no cartão (a sugestão em âmbar, a Situação) e a
      confirmação antes → depois; e o pago (o botão apagado com a frase) */
   { nome: 'lancamento-parcelar-fechado', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
@@ -482,8 +483,10 @@ const CENARIOS = [
   /* P96a — a confirmação do "Usar a nota lida". (A do "Juntar as 4 e anexar" saiu com o P128b: o juntar é a prévia campo a campo,
      medida em `previa-completar-juntar`.) */
   /* a frase da NF digitada (2 linhas reservadas) nos largos — nos estreitos ela mora na aba "Parcelas e lançamento" (nota-pdf-aba-lancamento-irmas) */
+  /* a frase mora na aba "Parcelas × sistema" (desde 29/10 a nota já lançada abre em "No sistema hoje"): o cenário abre a aba antes */
   { nome: 'nota-pdf-nf-digitada', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO.filter(([l]) => l >= 1000),
-    semRolarNoLugar: '[data-testid="nota-nf-digitada"]' },
+    semRolarNoLugar: '[data-testid="nota-nf-digitada"]',
+    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(500); } },
   { nome: 'nota-pdf-nota-lida-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
     antes: async (p) => {
       /* P163-2 — a nota já lançada abre em abas (`nota-abas-ja`, em todo tamanho): o "Usar a nota lida" mora em "No sistema hoje" */
@@ -492,9 +495,7 @@ const CENARIOS = [
       else if (p.viewportSize().width < 1000) { await p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' }).first().click(); await p.waitForTimeout(400); }
       await p.locator('[data-testid="nota-usar-nota-lida"]').first().click(); await p.waitForTimeout(600);
     } },
-  /* FIN-NOTA-PDF-01b — a confirmacao do "Atualizar e parcelar" (o texto que diz que o existente vira 1/4) */
-  { nome: 'nota-pdf-parcelar-confirmar', url: 'tela=nota-pdf&v=parcelar', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
-    antes: async (p) => { await p.locator('[data-testid="nota-atualizar-este"]').first().click(); await p.waitForTimeout(600); } },
+  /* (o "Atualizar e parcelar" saiu — D1 do NOTA-NOVA-MODAL-REAL, Gabriel 30/10: o aberto se completa pelo "Ler a NF" do Editar) */
   /* ITENS-NOTA-01 — a aba "Itens da nota (N)" do Novo lançamento pela nota (Valores e Fiscal), o diálogo da OC no pior caso (40 itens,
      descrição de 120 caracteres, razão social longa) e o backfill antes e depois do Simular: o modal fixo nao rola, so' o corpo da tabela */
   ...[['', null], ['-fiscal', 'Fiscal']].flatMap(([s, f]) => [
@@ -972,7 +973,8 @@ function medir(regiao) {
         /* P71 (Gabriel 23/10) — a exceção DECLARADA fora de tabela: o seletor de largura fixa marcado `data-reticencias-com-title` (hoje só o
            de Fazenda da Visão Geral) pode terminar em "…" se o title dele leva o texto inteiro */
         || !!((() => { const m = e.closest('[data-reticencias-com-title]'); return m && (m.getAttribute('title') ?? '').replace(/\s+/g, ' ').includes(inteiro); })());
-      if (naCelula && EH_NUMERO(inteiro)) achados.push({ regra: 'numero', texto: `numero/data/documento com "…": ${t}` });
+      /* NOTA-NOVA-MODAL-REAL — o NOME DE ARQUIVO (`data-nome-de-arquivo`) é texto mesmo começando por dígitos ("000.000.937.pdf"): vale a regra do texto */
+      if (naCelula && EH_NUMERO(inteiro) && !e.closest('[data-nome-de-arquivo]')) achados.push({ regra: 'numero', texto: `numero/data/documento com "…": ${t}` });
       else if (!comTitle) achados.push({ regra: 'reticencias', texto: naCelula ? `${t} (sem o texto inteiro no title)` : t });
     }
     /* P121 (mock do Resumo aprovado 27/10; esta regra do detector: OK do Gabriel 28/10) — o corte em N linhas (`line-clamp`) DENTRO de célula de tabela com o

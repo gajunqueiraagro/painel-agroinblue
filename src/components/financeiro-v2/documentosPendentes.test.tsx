@@ -6,7 +6,7 @@
  * dezenas de hooks) — o mesmo método de `finV2HomologFix01.test.ts`. A cadeia depois do salvar está
  * em `src/lib/financeiro/documentosPendentes.test.ts`.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
@@ -14,6 +14,11 @@ import { resolve } from 'node:path';
 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), from: vi.fn(), storage: { from: vi.fn() } } }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+/* NOTA-NOVA-MODAL-REAL D4 — o visualizador (pdf.js) troca por um marcador: aqui se prova QUAL arquivo abre e ONDE */
+vi.mock('@/components/financeiro-v2/VisualizadorDeDocumento', () => ({
+  VisualizadorDeDocumento: ({ nome, onNovaAba }: { nome: string; onNovaAba: () => void }) => (
+    <div data-testid="visualizador-documento">{nome}<button type="button" onClick={onNovaAba} data-testid="visualizador-nova-aba">nova aba</button></div>),
+}));
 
 import { DocumentosPendentes, apiDePendentes } from '@/components/financeiro-v2/DocumentosPendentes';
 import { novoPendente, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
@@ -35,14 +40,17 @@ function Palco({ inicial = [], ligadoA, travado = false }: { inicial?: Documento
 }
 
 describe('pendentes antes de salvar', () => {
-  it('a lista A31 mostra o documento como "pendente", com a data dd/mm/aa e o valor à direita', () => {
+  it('a lista A31 mostra o documento como "pendente", com a data dd/mm/aaaa (a regra da casa) e o valor à direita', () => {
     const p = novoPendente({ especie: 'nf', numero: '18112', serie: '2', dataEmissao: '2026-09-24', valorDocumento: 24052, emitenteNome: 'St Repro' },
       new File(['%PDF'], 'nfe_18112.pdf', { type: 'application/pdf' }));
     render(<Palco inicial={[p]} />);
     /* PR 2b — padrão da casa: NF no formato 000.000.000 (contrato novo; antes, "18112" cru). */
-    const linha = screen.getByText('000.018.112 · série 2').closest('tr');
+    /* NOTA-NOVA-MODAL-REAL — o número numa linha só; a série no `title` (antes "· série 2" quebrava a linha) */
+    const numero = screen.getByText('000.018.112');
+    expect(numero.getAttribute('title')).toBe('000.018.112 · série 2');
+    const linha = numero.closest('tr');
     expect(linha?.textContent).toContain('NF');
-    expect(linha?.textContent).toContain('24/09/26');
+    expect(linha?.textContent).toContain('24/09/2026');
     expect(linha?.textContent).toContain('St Repro');
     expect(linha?.textContent).toContain('nfe_18112.pdf');
     expect(linha?.textContent).toContain('pendente');
@@ -145,5 +153,33 @@ describe('ligação com o salvar (lida da fonte)', () => {
     expect(tela).toContain('if (criadoId && clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);');
     /* sem a prop, a aba segue dizendo para salvar antes (os outros 13 chamadores) */
     expect(dialogo).toContain('Salve o lançamento para anexar documentos.');
+  });
+});
+
+/* NOTA-NOVA-MODAL-REAL D4 (Gabriel 30/10) — o anexo do Novo lançamento é clicável ANTES de salvar */
+describe('D4 — o anexo pendente abre antes de salvar', () => {
+  /* o jsdom não tem `URL.createObjectURL` nem `File.arrayBuffer` (o navegador tem): aqui, os dois de mentira */
+  beforeEach(() => { Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:pendente'), configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true }); });
+  const comBytes = (f: File) => { Object.defineProperty(f, 'arrayBuffer', { value: async () => new TextEncoder().encode('%PDF-1.4 x').buffer }); return f; };
+  it('o PDF abre no visualizador (tela cheia), com o "Abrir em nova aba" dele; nada vai ao banco', async () => {
+    const abrir = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const pdf = comBytes(new File(['%PDF-1.4 x'], 'nfe_937.pdf', { type: 'application/pdf' }));
+    render(<Palco inicial={[novoPendente({ especie: 'nf', numero: '937' }, pdf)]} />);
+    fireEvent.click(screen.getByTestId('abrir-pendente'));
+    expect((await screen.findByTestId('visualizador-documento')).textContent).toContain('nfe_937.pdf');
+    expect(abrir).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('visualizador-nova-aba'));
+    expect(abrir).toHaveBeenCalledWith(expect.stringMatching(/^blob:/), '_blank', 'noopener');
+    abrir.mockRestore();
+  });
+  it('o XML abre DIRETO numa aba nova (o pdf.js não o desenha): sem visualizador', () => {
+    const abrir = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const xml = new File(['<nfeProc/>'], 'NFe-937.xml', { type: 'application/xml' });
+    render(<Palco inicial={[novoPendente({ especie: 'nf', numero: '937' }, xml)]} />);
+    fireEvent.click(screen.getByTestId('abrir-pendente'));
+    expect(abrir).toHaveBeenCalledWith(expect.stringMatching(/^blob:/), '_blank', 'noopener');
+    expect(screen.queryByTestId('visualizador-documento')).toBeNull();
+    abrir.mockRestore();
   });
 });
