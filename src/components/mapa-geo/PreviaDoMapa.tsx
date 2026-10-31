@@ -79,7 +79,9 @@ export function PreviaDoMapa({ linhas, acesa, aoPassar }: Props) {
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded bg-[#DCE3D3]">
-      <div ref={mapContainerRef} className="absolute inset-0" data-testid="previa-do-mapa" />
+      {/* ⚠ h-full w-full, NUNCA `absolute inset-0`: o `index.css` força `.leaflet-container { position: relative }` (fora das camadas do
+          Tailwind, vence o `absolute`) e a caixa ficava relativa SEM altura — 0px, o mapa em branco (MAPA-IMPORT-01b-fix1, medido no navegador). */}
+      <div ref={mapContainerRef} className="h-full w-full" data-testid="previa-do-mapa" />
       <div className="absolute left-2 bottom-2 z-[500] rounded bg-white/90 px-1.5 py-1 text-[9px] leading-[13px] text-[#1d232b] pointer-events-none">
         {LEGENDA.map(item => (
           <div key={item.texto} className="flex items-center gap-1">

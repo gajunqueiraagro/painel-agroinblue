@@ -6,7 +6,7 @@
  * Layout fixo: 900px de largura, 640px de altura (até 95% da janela), cabeçalho e rodapé de 40px; só o corpo da tabela rola; a barra de
  * seleção tem lugar reservado; o "Remover mapa atual" tem lugar reservado (nada se desloca).
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
@@ -39,6 +39,9 @@ interface Props {
 }
 
 const REGRA_DO_MAPA: RegraDeAceite = { tipos: ['kml', 'kmz', 'geojson'] };
+/* ⚠ A LISTA DO SELETOR ACIMA DO MODAL (MAPA-IMPORT-01b-fix1, medido): este modal fica em z-[1000] (acima dos controles do Leaflet da
+   página do mapa) e o painel do `SearchableSelect` nasce em z-50 — abria ATRÁS do modal e parecia não abrir. */
+const LISTA_ACIMA_DO_MODAL = 'z-[1100]';
 const LARGURAS = [22, 132, 62, 176, 92];
 const LARGURA_DA_TABELA = LARGURAS.reduce((s, w) => s + w, 0);
 
@@ -130,6 +133,23 @@ export function KmlUploadDialog({
     }
   }, [ativos, fazendaId]);
 
+  /* ⚠ A LISTA DO SELETOR ROLA (MAPA-IMPORT-01b-fix1, medido): o painel do `SearchableSelect` vai num portal direto no <body>, FORA do
+     modal, e o bloqueio de rolagem do Dialog (ouvinte de `wheel` acima dele) cancelava a roda — os 26 destinos existiam, mas "+ Novo
+     pasto", as áreas e "Não importar" ficavam abaixo dos 18 pastos sem como chegar. Enquanto este modal está aberto, a roda e o toque
+     sobre o painel não sobem até o bloqueio. (O conserto de todos os modais é no componente da casa; frente própria.) */
+  useEffect(() => {
+    if (!open) return;
+    const naoSobe = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest('[data-testid="searchable-select-painel"]')) e.stopPropagation();
+    };
+    document.body.addEventListener('wheel', naoSobe);
+    document.body.addEventListener('touchmove', naoSobe);
+    return () => {
+      document.body.removeEventListener('wheel', naoSobe);
+      document.body.removeEventListener('touchmove', naoSobe);
+    };
+  }, [open]);
+
   /* UI-ARRASTAR-ARQUIVO-01b: o arquivo arrastado e o escolhido no seletor passam pelo MESMO dono (`useSoltarArquivo`). */
   const soltar = useSoltarArquivo({ regra: REGRA_DO_MAPA, desabilitado: salvando, onArquivos: arquivos => { if (arquivos[0]) void lerArquivo(arquivos[0]); } });
 
@@ -201,7 +221,8 @@ export function KmlUploadDialog({
   };
 
   const mensagem = erroDoBanco
-    || (contagem.escolher > 0 ? `Faltam ${contagem.escolher} polígonos sem destino — escolha um destino ou "Não importar"` : '')
+    || (contagem.escolher === 1 ? 'Falta 1 polígono sem destino — escolha um destino ou "Não importar"' : '')
+    || (contagem.escolher > 1 ? `Faltam ${contagem.escolher} polígonos sem destino — escolha um destino ou "Não importar"` : '')
     || (problemas.size > 0 ? `${problemas.size} polígonos com destino repetido — troque o destino de um deles` : '');
   const temArquivo = linhas.length > 0;
   const titulo = [fazendaCodigo, fazendaNome].filter(Boolean).join(' · ');
@@ -275,11 +296,12 @@ export function KmlUploadDialog({
             <div className={`flex h-7 flex-none items-center gap-2 rounded-t-md px-2 text-[10.5px] ${marcadas.size > 0 ? 'bg-[#1F5FA8] text-white' : 'bg-[#F3F5F8] text-[#6B7480]'}`}>
               {marcadas.size > 0 ? (
                 <>
-                  <b className="w-[92px] flex-none tabular-nums">{marcadas.size} selecionados</b>
+                  <b className="w-[86px] flex-none tabular-nums">{marcadas.size} selecionados</b>
                   <span className="flex-none">Destino:</span>
-                  <div className="w-[190px] flex-none text-[#1d232b]">
+                  <div className="w-[168px] flex-none text-[#1d232b]">
                     <SearchableSelect value={destinoDoLote} onValueChange={setDestinoDoLote} options={opcoesDoLote}
-                      allLabel="Escolher…" allValue="" semTodos dense triggerClassName="h-[18px] px-1.5 text-[10px]" />
+                      allLabel="Escolher…" allValue="" semTodos dense contentClassName={LISTA_ACIMA_DO_MODAL}
+                      triggerClassName="h-[18px] px-1.5 text-[10px]" />
                   </div>
                   <button type="button" onClick={aplicarLote} disabled={!destinoDoLote}
                     className="flex h-[18px] flex-none items-center rounded-[3px] bg-white px-2.5 font-semibold text-[#1F5FA8] disabled:opacity-60">
@@ -347,6 +369,7 @@ export function KmlUploadDialog({
                             allValue=""
                             semTodos
                             dense
+                            contentClassName={LISTA_ACIMA_DO_MODAL}
                             triggerClassName={`h-4 px-1.5 text-[10px] rounded-[3px] ${motivo ? 'border-[#C0392B] text-[#C0392B]' : 'border-[#CBD2DB]'}`}
                           />
                         </td>
