@@ -36,7 +36,8 @@ const FORNS = [
 type Chamada = [string | null, string | null];
 const campo = () => screen.getByRole('combobox');
 const opcoes = () => screen.getAllByTestId('favorecido-opcao');
-const nomes = () => opcoes().map((o) => o.textContent);
+/* FORN-CAMPO-01 — a opção tem 2 linhas (o nome e "CNPJ · Cidade/UF" / "—"): o nome é o 1º span */
+const nomes = () => opcoes().map((o) => o.querySelector('span')?.textContent);
 const digitar = (q: string) => fireEvent.change(screen.getByPlaceholderText('Buscar por nome ou CNPJ/CPF...'), { target: { value: q } });
 
 beforeEach(() => {
@@ -54,7 +55,7 @@ describe('fatia 2e — o campo: "[META]", texto legado e inativo', () => {
     cleanup();
     render(<CampoDeFornecedor clienteId="cli" value={null} onChange={() => {}} />);
     fireEvent.click(campo());
-    expect(nomes()).toEqual(['Agropecuária Alfa11.222.333/0001-81', 'Bezerros Beta']);
+    expect(nomes()).toEqual(['Agropecuária Alfa', 'Bezerros Beta']);
   });
 
   it('o "[META]" já gravado aparece no campo e é o marcado na lista do modal de meta', () => {

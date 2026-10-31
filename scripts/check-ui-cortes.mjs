@@ -118,6 +118,10 @@ const CENARIOS = [
   { nome: 'financeiro-filtro-fornecedor', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]', alturaFixa: '[data-testid="filtros-da-lista"]', antes: async (p) => {
     await p.locator('label:text-is("Fornecedor") + div [role="combobox"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="favorecido-opcao"]').filter({ hasText: 'Cooperativa' }).first().click(); await p.waitForTimeout(500); } },
+  /* FORN-CAMPO-01 — a lista aberta do Fornecedor do filtro: cada opção em DUAS linhas (o nome, "…" + `title`; embaixo "CNPJ · Cidade/UF"
+     ou "—", que nunca cortam), o painel com a largura do campo (315px) */
+  { nome: 'financeiro-filtro-fornecedor-lista', url: 'tela=financeiro', regiao: '[data-testid="favorecido-lista"]', antes: async (p) => {
+    await p.locator('[data-testid="filtro-fornecedor-largo"] [role="combobox"]').first().click(); await p.waitForTimeout(400); } },
   ...['Dados gerais', 'Endereço e contato', 'Pagamento', 'Padrões', 'Uso'].map((aba) => ({ nome: `fornecedor-cadastro-${aba}`, url: 'tela=fornecedor-cadastro', antes: clicarTexto(aba) })),
   /* FIN-CONTRATO-TELA-FONTE-01 — a tela do contrato nos sete tamanhos: o crédito em cada aba, o título de 120 caracteres, a compra parcelada
      com a conta longa nas parcelas e o consórcio */
@@ -1102,7 +1106,9 @@ function medirSobreposicao(regiao) {
     const t = texto(e);
     /* com "…" o texto ja' e' achado da regra das reticencias; o INCLINADO conta sempre (o span que encolhe ao texto corta a ultima letra) */
     /* FORN-01b — o texto dentro de uma CELULA com "…" (o `truncate` no `td`, o texto num `span` filho) e' a regra das reticencias que julga */
-    const reticenciasNoCorte = getComputedStyle(corta.el).textOverflow === 'ellipsis' && !!corta.el.closest('td, th');
+    /* FORN-CAMPO-01 — e fora de tabela, no "…" da exceção DECLARADA (`data-reticencias-com-title`, P71): o pedaço filho (a "· Fantasia" do nome na
+       lista de fornecedor) é cortado pelo "…" do pai, e quem julga é a regra das reticências, que confere o texto inteiro no `title` */
+    const reticenciasNoCorte = getComputedStyle(corta.el).textOverflow === 'ellipsis' && !!corta.el.closest('td, th, [data-reticencias-com-title]');
     if (!corta.rola && (inclinado || (cs.textOverflow !== 'ellipsis' && !reticenciasNoCorte)) && rt.right + folga > corta.r + 0.5)
       achados.push({ regra: inclinado ? 'italico' : 'corte', texto: `"${t}" passa ${(rt.right + folga - corta.r).toFixed(1)}px da caixa${inclinado ? ' (texto inclinado)' : ''}` });
     /* so' o numero PARTIDO (parte a' vista, parte escondida); o que rola inteiro para fora da vista e o que mora numa tabela que rola

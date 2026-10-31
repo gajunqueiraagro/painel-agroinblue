@@ -7,8 +7,8 @@
  * REGRA: A TELA NUNCA FILTRA O QUE NÃO MOSTRA. Todo filtro que volta (memória, instantâneo da OC, drill, troca de cliente) passa aqui
  * DEPOIS que as opções do cliente carregaram — nunca contra uma lista vazia ainda carregando:
  *   · o que não existe volta ao padrão, com a frase "Filtro de <campo> guardado não existe neste cliente — removido.";
- *   · o fornecedor MESCLADO vira o destino da mescla (a mesma cadeia do Mesclar, `fimDaCadeia`), com "Fornecedor X foi mesclado em Y —
- *     filtrando por Y.";
+ *   · o fornecedor MESCLADO vira o destino da mescla (a mesma cadeia do Mesclar, `fimDaCadeia`), EM SILÊNCIO (FORN-CAMPO-01, Gabriel
+ *     30/10: a frase "Fornecedor X foi mesclado em Y — filtrando por Y." saiu da tela; o campo já mostra Y e a linha do CNPJ dele);
  *   · o fornecedor INATIVO fica (ele existe; o seletor o mostra com o selo "inativo").
  */
 import { fimDaCadeia, type CadastroDaCadeia } from '@/lib/fornecedores/donoDoMesclado';
@@ -49,7 +49,6 @@ export interface Conferencia {
 }
 
 export const fraseDoRemovido = (campo: CampoDeCadastro) => `Filtro de ${ROTULO_DO_CAMPO[campo]} guardado não existe neste cliente — removido.`;
-export const fraseDoMesclado = (de: string, para: string) => `Fornecedor ${de} foi mesclado em ${para} — filtrando por ${para}.`;
 
 function conjuntos(o: OpcoesDoCliente): Record<Exclude<CampoDeCadastro, 'fornecedorFiltro'>, ReadonlySet<string>> {
   const de = (k: 'macro_custo' | 'grupo_custo' | 'centro_custo' | 'subcentro') => new Set(o.plano.map((c) => c[k] ?? '').filter(Boolean));
@@ -89,7 +88,6 @@ export function conferirFiltrosDaLista(f: FiltrosDeCadastro, o: OpcoesDoCliente)
       const dono = de?.fundido_em_id ? fimDaCadeia(conhecidos, de.id) : null;
       if (de && dono) {
         trocas.fornecedorFiltro = dono.id;
-        avisos.push(fraseDoMesclado(de.nome, dono.nome));
         continue;
       }
     }

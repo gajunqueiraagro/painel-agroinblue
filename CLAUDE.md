@@ -310,7 +310,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   0 4px, barra do rodape navy 23px dentro do quadro. Cabecalho e totais presos, so' o corpo rola, UM scrollport por tela, fundo opaco.
   O `th` alinha como o `td`; tabela de regua fixa (`table-layout: fixed`, `colgroup` em px medido) nao estica com a janela.
 - Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01;
-  P141: os selos OFX/PDF (7px) de "Saldos por conta"). Tamanhos do A18.
+  P141: os selos OFX/PDF (7px) de "Saldos por conta"; FORN-CAMPO-01: a linha "CNPJ · Cidade/UF" (8,5px) sob o Fornecedor da barra de Lançamentos e
+  sob o nome em cada opção da lista do `FavorecidoSelect`). Tamanhos do A18.
 - P141/P166 (CONC-TELA-02): Conciliação = FAIXA do status (1 linha, altura fixa, `FaixaDoMes`: vermelho/verde/âmbar = conciliado com sem
   subcentro/cinza) + Saldos | Resumo do mês (1fr 260px, até o fim da janela), na régua da casa e sem CAIXA ALTA; Saldos com Data · OFX/PDF em
   lugar FIXO de 20px · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
@@ -354,7 +355,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - FIN-V2-FILTRO-FORNECEDOR-01: filtro de fornecedor = ativos (+ inativo com lançamento no recorte ou escolhido, P94); mesclado nunca (o nome antigo acha
   o destino pelos apelidos); "N lanç." vem do servidor (`fornecedores` da `fn_fin_v2_lista_pagina`, recorte sem o filtro de fornecedor).
 - P94 (FIN-V2-FILTRO-FANTASMA-01): a tela nunca filtra o que não mostra — memória da lista POR CLIENTE (`chaveDoCliente`); troca de cliente
-  volta ao padrão; o restaurado se confere com as opções CARREGADAS (`useConferenciaDosFiltros`); fora das opções = "valor inexistente (limpar)".
+  volta ao padrão; o restaurado se confere com as opções CARREGADAS (`useConferenciaDosFiltros`); fora das opções = "valor inexistente (limpar)";
+  o fornecedor MESCLADO restaurado vira o destino EM SILÊNCIO nesta lista (FORN-CAMPO-01: sem a frase "foi mesclado em").
 - FIN-V2-DESEMPENHO-01c: trocar SO' a pagina pede `so_linhas` (sem recontar) e reaproveita totais/uso; gravar ou total diferente relê
   completa; vinculos e nomes so' da pagina (a pilula "Conciliado" sai da marca `conciliado` da RPC).
 - P73: salvou UM lançamento → o canal leva o id (`notificarLancamentosMudaram(cliente, menosEste, ids)`) e a lista relê SÓ a linha
