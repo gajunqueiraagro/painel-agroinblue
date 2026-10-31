@@ -117,8 +117,14 @@ const M2_DA_NOTA = () => [['2026-08-10', 'Manutencao Maquinas Agricultura sintet
   conta_bancaria_id: conta, numero_documento: '000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj',
   parcelas: [], por: ['numero'] }));
 /* a prévia da `fn_nota_completar` como o banco a faz, a partir dos achados da variante (as pagas: valor, vencimento e conta com o cadeado) */
+/* NOTA-PAGA-A-VISTA-01 (Gabriel 31/10) — `v=avista`: a nota de 4 duplicatas (4 × 491,64) paga À VISTA num lançamento só, com o valor da nota
+   inteira (R$ 1.966,56), realizado, descrição comprida (o pior caso). SINTÉTICO. */
+const AVISTA_DA_NOTA = () => [{ id: 'jl-av', vencimento: '2026-10-10', pagamento: '2026-10-10', competencia: '2026-10-10',
+  descricao: 'Brincos de identificação sintéticos — pago à vista no Itaú Personalite, descrição comprida para o pior caso', valor_cent: 196656,
+  status: 'realizado', conciliado: false, financiamento_id: null, conta_bancaria_id: 'sic', numero_documento: '937', fornecedor_id: 'agro-s',
+  fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
 function completarDoLr(v: string, a: any) {
-  const doLr: any[] = (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA() : v === 'm2' ? M2_DA_NOTA() : LR_DA_NOTA(v);
+  const doLr: any[] = (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA() : v === 'm2' ? M2_DA_NOTA() : v === 'avista' ? AVISTA_DA_NOTA() : LR_DA_NOTA(v);
   const linhas = (a?.p_lancamentos ?? []).map((x: any) => {
     const i = doLr.findIndex((l) => l.id === x.id); const l = doLr[i]; const paga = l?.status === 'realizado';
     const hoje: Record<string, unknown> = { descricao: l?.descricao ?? null, favorecido_id: 'agro-s', fazenda_id: 'f-pur', conta_bancaria_id: 'sic', plano_conta_id: 'pl-vet',
@@ -1032,7 +1038,7 @@ if (tela === 'mesclar') {
       lido.nota.totais = { ...lido.nota.totais, notaCent: 99999999 * 12, descontoCent: 99999999 };
     }
     const forn = { id: 'agro-s', nome: v === 'gulartlongo' ? 'Cooperativa Agroindustrial Sintetica dos Produtores Rurais do Centro Oeste Ltda' : 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24', fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
-    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela', 'pelachave', 'irmas', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'].includes(v) ? [forn] : [];
+    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela', 'pelachave', 'irmas', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'].includes(v) ? [forn] : [];
     const resolucao = resolverEmitente(lido.nota.emitente, fornecedores, null);
     const ultima = v === 'cadastrado' || v === 'parcelar' ? { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' }
       : v === 'lavoura' ? { plano_conta_id: 'pl-lav', subcentro: 'Insumos Lavoura — Defensivos e Fertilizantes', macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', escopo_negocio: 'agricultura', data: '2026-08-14', safra_id: 's-soja', cultura: 'soja' }
@@ -1056,8 +1062,8 @@ if (tela === 'mesclar') {
         /* Gabriel 29/10 10:38 — "No sistema hoje": a fazenda, o subcentro e o fornecedor de cada achado (SINTÉTICOS; o mesmo para todos os ids da bancada) */
         if (t === 'financeiro_lancamentos_v2' && v === 'm2') return ['jl-m20', 'jl-m21', 'jl-m22'].map((id, i) => ({ id, fazenda_id: 'f-pur',
           subcentro: 'Manutenção de Máquinas Agrícolas', favorecido_id: 'agro-s', plano_conta_id: 'pl-lav', safra_id: i === 2 ? 's-soja-25' : 's-soja' }));
-        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo'].includes(v)) return ['jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
-          'jl-irma-0', 'jl-irma-1', 'jl-irma-2', 'jl-irma-3', 'jl-p1', 'jl-lr0', 'jl-lr1', 'jl-lr2', 'jl-lr3', 'jl-g1']
+        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'avista'].includes(v)) return ['jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
+          'jl-irma-0', 'jl-irma-1', 'jl-irma-2', 'jl-irma-3', 'jl-p1', 'jl-lr0', 'jl-lr1', 'jl-lr2', 'jl-lr3', 'jl-g1', 'jl-av']
           .map((id) => ({ id, fazenda_id: 'f-pur', subcentro: 'Sanidade Animal — Vacinas e Medicamentos Veterinários', favorecido_id: 'agro-s', plano_conta_id: 'pl-vet' }));
         if (t === 'financeiro_lancamentos_v2' && (v === 'cadastrado' || v === 'parcelar')) return [{ id: 'l-ext', data_vencimento: '2026-10-20', data_competencia: '2026-10-20',
           descricao: 'PAGTO BOLETO AGRO SINTETICA INSUMOS — lançamento criado do extrato bancário com histórico comprido', valor: 491.64, financiamento_id: null, numero_documento: null }];
@@ -1103,7 +1109,8 @@ if (tela === 'mesclar') {
         /* Gabriel 29/10 10:38 — `v=gulart`: a nota de UMA parcela já lançada 1 de 1, PROGRAMADA (o molde Gulart & Cia, SINTÉTICO) */
         : fn === 'fn_nota_ja_lancada' && (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'm2' ? M2_DA_NOTA()
-        : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2') ? completarDoLr(v, a)
+        : fn === 'fn_nota_ja_lancada' && v === 'avista' ? AVISTA_DA_NOTA()
+        : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'avista') ? completarDoLr(v, a)
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
           financiamento_id: null, numero_documento: 'NF_000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
