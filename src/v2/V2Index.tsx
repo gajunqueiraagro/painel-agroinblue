@@ -1311,7 +1311,8 @@ export default function V2Index() {
       <AuditoriaTecnicaTab />
     );
     if (section === 'mapa-geo-pastos') return (
-      <MapaGeoPastosTab />
+      /* MAPA-02a: o mapa geográfico lê o MESMO ano/mês do shell (FECH-MES-SELECIONADO-01) */
+      <MapaGeoPastosTab periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento} />
     );
     if (section === 'mapa-pastos') return (
       <MapaPastosTab
@@ -1702,7 +1703,8 @@ export default function V2Index() {
      tem referência, a página inteira cresce, e quem rola é o `<section>` — então o cabeçalho
      "fixo" de qualquer lista interna sobe junto. Foi o caso da colheita
      (`lancamentos-agricultura`), que nasceu escrita para app-shell e estava fora da lista. */
-  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos', 'contas-a-pagar-receber', 'config-acessos',
+  /* MAPA-02a: 'mapa-geo-pastos' — o mapa vai até a base da janela (a altura vem do pai flex, nunca de altura fixa) */
+  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'mapa-geo-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos', 'contas-a-pagar-receber', 'config-acessos',
     /* FIN-VISAO-GERAL-01 PR 3 — a Visão Geral tem blocos de altura fixa e nada rola na página: a altura vem do pai */
     'fin-visao-geral',
     /* FORN-01b — a lista de Fornecedores vai até o fim da tela: a altura vem do pai, não de `calc(100dvh-120px)` */

@@ -71,6 +71,8 @@ import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
+import * as MAPA from './dados/mapaPastos';
+import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import * as CONTAS_BANC from './dados/contas';
 import * as VG from './dados/visaoGeral';
 import { BarraSecao } from '@/v2/components/BarraSecao';
@@ -643,6 +645,20 @@ if (tela === 'mesclar') {
     rpc: (fn: string) => fn === 'fn_recorrencias_a_gerar' ? REC.A_GERAR : null,
   };
   montar(<div className="h-full"><V2Recorrencias /></div>);
+} else if (tela === 'mapa-geo') {
+  /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
+     abre no último mês fechado (set/2026); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
+  g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'fazenda_geometrias' ? MAPA.GEOMETRIAS
+      : t === 'pastos' ? MAPA.PASTOS
+      : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
+      : t === 'fechamento_pastos' ? MAPA.FECHAMENTOS
+      : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
+      : [],
+    rpc: (fn: string, a: any) => fn === 'get_status_pilares_ano' ? MAPA.statusAno(Number(a.p_ano)) : null,
+  };
+  montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
 } else if (tela === 'acessos') {
   /* ACESSOS-PERFIL-01 — a lista (nome e e-mail pela fonte unica), o "Novo acesso" e o "Editar acesso" (`&v=editar`). SINTETICO. */
   const MEMBROS = [

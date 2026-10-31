@@ -45,6 +45,20 @@ const digitar = (sel, txt) => async (p) => { await p.locator(sel).first().fill(t
 
 /* Cada estado e' um gesto aplicado em sequencia; cada um e' comparado com o estado INICIAL da tela. `url` = outra pagina inteira
    comparada com a inicial (a faixa de aviso aparecendo). */
+/* MAPA-02a — os gestos do mapa de pastos em tela cheia (`tela=mapa-geo`): camada pelo menu, mês pelo seletor, pasto pela busca */
+const mapaCamada = (nome) => async (p) => {
+  await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Camadas' }).first().click(); await p.waitForTimeout(250);
+  await p.getByRole('menuitem', { name: nome, exact: true }).first().click(); await p.waitForTimeout(500);
+};
+const mapaMes = (rotulo) => async (p) => {
+  await p.locator('[data-testid="mapa-mes"]').first().click(); await p.waitForTimeout(250);
+  await p.getByRole('option', { name: rotulo, exact: true }).first().click(); await p.waitForTimeout(700);
+};
+const mapaPasto = (nome) => async (p) => {
+  await p.locator('[data-testid="mapa-barra"] button[role="combobox"]').first().click(); await p.waitForTimeout(250);
+  await p.keyboard.type(nome); await p.waitForTimeout(150); await p.keyboard.press('Enter'); await p.waitForTimeout(700);
+};
+const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
   { nome: 'fornecedores', url: 'tela=fornecedores&barra=32&n=2356', estados: [
     ['por pagina 50', botao(/^50$/)], ['por pagina 200', botao(/^200$/)], ['por pagina 100', botao(/^100$/)],
@@ -142,6 +156,12 @@ const CENARIOS = [
     antes: async (p) => { await p.getByText('Pagamento', { exact: true }).first().click(); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await espera(p, 600); },
     estados: [10, 14].map((n) => [`${n} parcelas`, { url: `tela=lancamento&m=editar&v=salparcela&pp=${n}` }]) },
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
+  /* MAPA-02a — o mapa de pastos: trocar a camada, o mês e o pasto não move a barra, os KPIs, os filtros, o painel nem a legenda */
+  { nome: 'mapa-geo', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], estados: [
+    ['painel P_01', mapaPasto('P_01')], ['painel P_03 sem fechamento', mapaPasto('P_03')], ['painel nome longo', mapaPasto('Retiro')],
+    ['camada kg/ha', mapaCamada('Lotação (kg/ha)')], ['camada atividade', mapaCamada('Atividade')], ['camada cabeças', mapaCamada('Cabeças')],
+    ['camada tipo de área', mapaCamada('Tipo de área')], ['mês agosto', mapaMes('Ago')], ['mês setembro', mapaMes('Set')],
+  ] },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor
      nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
