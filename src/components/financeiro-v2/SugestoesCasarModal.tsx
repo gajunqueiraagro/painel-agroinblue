@@ -13,6 +13,10 @@
  * ⚠ REGRA DE CORTE (21/10): em tabela, texto = UMA linha com "…" e o texto inteiro no `title`; data (dd/mm/aaaa), valor e
  * contador nunca cortam — as colunas deles foram medidas no pior texto.
  * ⚠ SELOS A 8px, a exceção da Conferência (CLAUDE.md): azul tracejado = confere; âmbar cheio = conferir antes de casar.
+ * ⚠ P153b (Gabriel 29/10): o modal vai a até 1400px de largura e a ALTURA TODA; 9px, linha de 17px, cabeçalho de 8,5px (EXCEÇÃO DECLARADA
+ *   ao piso de 9,5, pedida pelo Gabriel). As sugestões ficam num bloco de ALTURA FIXA (a linha do extrato + 9 linhas; mais rola lá dentro) e o
+ *   "Procurar no histórico" ocupa o resto da altura — nada se desloca ao procurar. O achado EM ABERTO do histórico casa por aqui também
+ *   (`onCasarDoHistorico`, o mesmo `CasarComBancoModal`); o de outra conta casa trocando a conta (D3).
  */
 import { useRef } from 'react';
 import { X } from 'lucide-react';
@@ -26,11 +30,11 @@ import { historicoDoBanco } from '@/lib/conciliacao/historicoDoBanco';
    fecharia um ciclo (Espelho → este modal → Casar → Espelho), que o `madge` acusa. */
 import type { CandidatoSugestao, ExtratoParaSugerir, Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
 import { ProcurarNoHistorico } from '@/components/conciliacao/ProcurarNoHistorico';
-import type { ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
+import type { AchadoDoHistorico, ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 
 const corVal = (v: number) => (v < 0 ? 'text-rose-600' : 'text-emerald-600');
-/* A régua da casa: linha de 19px, 10px; número e data numa linha só, na coluna medida. */
-const LINHA = 'h-[19px]';
+/* P153b: linha de 17px a 9px (pedido do Gabriel); número e data numa linha só, na coluna medida. */
+const LINHA = 'h-[17px]';
 const CEL = 'px-[4px] whitespace-nowrap';
 /* Texto livre: uma linha, "…" e o texto inteiro no `title`. */
 const TEXTO = 'px-[4px] truncate';
@@ -82,20 +86,25 @@ interface Props {
   /** P153 — o "Procurar no histórico" embaixo das sugestões; sem os dois, ele não aparece. */
   clienteId?: string | null;
   onCriarIgual?: (m: ModeloDoHistorico) => void;
+  /** P153b — casar um achado EM ABERTO do "Procurar no histórico" (`trocarConta` = o de outra conta, D3). */
+  onCasarDoHistorico?: (a: AchadoDoHistorico, trocarConta: boolean) => void;
+  /** P153b — a conta do movimento (decide "outra conta" no histórico). */
+  contaBancariaId?: string | null;
 }
 
-/* ⚠ AS LARGURAS (P159c): Venc. 70 = "00/00/0000" a 10px tabular (~52) + 8 de padding + folga — a data inteira, nunca em duas linhas ·
-     Motivo 160 ("soma de 3 · fornecedores diferentes", 139,8 a 8px + selo) · Valor 96 (o teto "-99.999.999,99", a mesma da
-     Conferência) · Status 64 ("Programado", 47,4) · casar 52. Descrição e Fornecedor dividem o resto (`null` = sem largura). */
-const COLUNAS: readonly (number | null)[] = [70, null, null, 160, 96, 64, 52];
+/* ⚠ AS LARGURAS (P159c; P153b a 9px): Venc. 58 = "00/00/0000" a 9px tabular (~47) + 8 de padding + folga — a data inteira, nunca em duas
+     linhas · Motivo 220 ("mesmo fornecedor · valor difere: previsto 99.999.999,99", ~200 a 8px + selo) · Valor 88 (o teto "-99.999.999,99")
+     · Status 62 ("Programado") · casar 52. Descrição e Fornecedor dividem o resto (`null` = sem largura). */
+const COLUNAS: readonly (number | null)[] = [58, null, null, 220, 88, 62, 52];
 const FIXAS = COLUNAS.reduce<number>((a, b) => a + (b ?? 0), 0);
-/* 196 + 220 de antes para Descrição e Fornecedor; a caixa = a mesa + 24 de margem + 2 da borda da caixa + 2 da borda do Dialog. */
-const LARGURA_MODAL = FIXAS + 196 + 220 + 28;
-/* P153 — o bloco do "Procurar no histórico" tem altura FIXA (8 + 24 + 4 + 138 = 174; a frase é a 1ª linha do quadro): a lista das sugestões rola no que
-   sobra dos 95% da janela (32 do cabeçalho, 30 do rodapé, 8 de respiro), e a caixa nunca passa da janela. */
-const ALTURA_PROCURAR = 174;
+/* P153b — até 1400px (Gabriel 29/10), nunca mais que 95% da janela; a ALTURA TODA (12px de respiro em cima e embaixo). */
+const LARGURA_MODAL = 'min(1400px, 95vw)';
+const ALTURA_MODAL = 'calc(100vh - 24px)';
+/* as sugestões: cabeçalho 20 + a linha do extrato 17 + o título 17 + 9 linhas de 17 + 2 de borda = 209, FIXO (mais rola dentro) */
+const ALTURA_SUGESTOES = 20 + 17 + 17 + 9 * 17 + 2;
 
-export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugestoes, onCasar, clienteId, onCriarIgual }: Props) {
+export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugestoes, onCasar, clienteId, onCriarIgual, onCasarDoHistorico,
+  contaBancariaId }: Props) {
   const campoProcurar = useRef<HTMLInputElement>(null);
   if (!extrato) return null;
   const mesBanco = (extrato.data ?? '').slice(0, 7);
@@ -107,9 +116,9 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       {/* P159f: sem sugestão automática, o cursor vai direto ao campo do "Procurar no histórico" (no lugar do foco padrão do Radix) */}
-      <DialogContent className="max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden"
+      <DialogContent className="flex max-h-none max-w-[95vw] flex-col p-0 gap-0 overflow-hidden [&>button.absolute]:hidden"
         onOpenAutoFocus={(ev) => { if (sugestoes.length === 0 && campoProcurar.current) { ev.preventDefault(); campoProcurar.current.focus(); } }}
-        style={{ width: LARGURA_MODAL }} aria-describedby={undefined} data-testid="sugestoes-casar">
+        style={{ width: LARGURA_MODAL, height: ALTURA_MODAL }} aria-describedby={undefined} data-testid="sugestoes-casar">
         <div className="flex h-8 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
           {/* o nome da conta pode passar da largura: "…" e o título inteiro no `title` (a exceção declarada, como o da Conferência) */}
           <DialogTitle className="min-w-0 truncate whitespace-nowrap text-[12px] font-medium" title={titulo} data-reticencias-com-title="">
@@ -120,17 +129,17 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
           </button>
         </div>
 
-        {/* ⚠ UM SCROLLPORT SÓ, e é este: o cabeçalho navy fica, só as linhas rolam. */}
-        <div className="mx-3 mt-2 overflow-y-auto border rounded-sm"
-          style={{ maxHeight: onCriarIgual ? `min(60vh, calc(95vh - ${32 + 30 + 8 + ALTURA_PROCURAR}px))` : '60vh' }}>
-          <table className="w-full table-fixed border-collapse text-[10px]" style={{ minWidth: FIXAS + 160 }}>
+        {/* ⚠ o bloco das sugestões tem ALTURA FIXA: o cabeçalho navy fica, só as linhas rolam (sem o Procurar, ele ocupa o modal todo). */}
+        <div className={cn('mx-3 mt-2 shrink-0 overflow-y-auto border rounded-sm', !onCriarIgual && 'min-h-0 flex-1')}
+          style={onCriarIgual ? { height: ALTURA_SUGESTOES } : undefined} data-testid="sugestoes-lista">
+          <table className="w-full table-fixed border-collapse text-[9px]" style={{ minWidth: FIXAS + 160 }}>
             <colgroup>
               {COLUNAS.map((w, i) => <col key={i} style={w == null ? undefined : { width: w }} />)}
             </colgroup>
             <thead className="sticky top-0 z-10 bg-primary text-primary-foreground">
-              <tr className="h-[22px]">
+              <tr className="h-[20px]">
                 {['Venc.', 'Descrição', 'Fornecedor', 'Motivo', 'Valor', 'Status', ''].map((t, i) => (
-                  <th key={i} className={cn('px-[4px] text-[9.5px] font-medium whitespace-nowrap', i === 4 ? 'text-right' : 'text-left')}>{t}</th>
+                  <th key={i} className={cn('px-[4px] text-[8.5px] font-medium whitespace-nowrap', i === 4 ? 'text-right' : 'text-left')}>{t}</th>
                 ))}
               </tr>
             </thead>
@@ -147,7 +156,7 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
                 <td />
               </tr>
               <tr className={cn(LINHA, 'bg-muted')}>
-                <td colSpan={7} className="px-[4px] text-[9.5px] font-medium text-muted-foreground whitespace-nowrap">Sugestões · mais provável primeiro</td>
+                <td colSpan={7} className="px-[4px] font-medium text-muted-foreground whitespace-nowrap">Sugestões · mais provável primeiro</td>
               </tr>
               {sugestoes.length === 0 && (
                 <tr className={LINHA}><td colSpan={7} className="px-[4px] italic text-muted-foreground" data-testid="sugestoes-nenhuma">Nenhuma sugestão automática</td></tr>
@@ -159,7 +168,7 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
                 const casar = (
                   <td className="px-[4px] text-right">
                     <button type="button" onClick={() => onCasar(s)} data-testid="sugestao-casar"
-                      className="text-[10px] font-semibold text-[#1d4ed8] underline underline-offset-2 hover:text-[#1e40af]">
+                      className="font-semibold text-[#1d4ed8] underline underline-offset-2 hover:text-[#1e40af]">
                       casar
                     </button>
                   </td>
@@ -217,13 +226,14 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
         </div>
 
         {onCriarIgual && (
-          <div className="mx-3">
-            <ProcurarNoHistorico clienteId={clienteId ?? null} onCriarIgual={onCriarIgual} campoRef={campoProcurar}
+          <div className="mx-3 flex min-h-0 flex-1 flex-col">
+            <ProcurarNoHistorico clienteId={clienteId ?? null} onCriarIgual={onCriarIgual} campoRef={campoProcurar} preencher
+              onCasar={onCasarDoHistorico} contaDoExtrato={{ id: contaBancariaId ?? null, nome: nomeConta ?? null }}
               movimento={{ data: extrato.data, historico: extrato.historico, valor: extrato.valor }} />
           </div>
         )}
 
-        <div className="flex h-[30px] items-center justify-between gap-2 px-3">
+        <div className="flex h-[30px] shrink-0 items-center justify-between gap-2 px-3">
           <span className="text-[9.5px] text-muted-foreground">âmbar = conferir antes de casar</span>
           <button type="button" onClick={onClose} className="h-[22px] rounded border px-2 text-[10px] hover:bg-muted">Fechar</button>
         </div>

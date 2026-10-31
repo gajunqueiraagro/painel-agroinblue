@@ -14,7 +14,7 @@
  *   `porArquivo` na linha de cada um.
  */
 
-export type TipoDeArquivo = 'pdf' | 'jpg' | 'png' | 'xml' | 'ofx' | 'xlsx' | 'xls' | 'csv' | 'txt';
+export type TipoDeArquivo = 'pdf' | 'jpg' | 'png' | 'xml' | 'ofx' | 'xlsx' | 'xls' | 'csv' | 'txt' | 'kml' | 'kmz' | 'geojson';
 
 /**
  * O CATÁLOGO: por tipo, as extensões, os MIME PRÓPRIOS e os MIME GENÉRICOS que o navegador costuma mandar no lugar deles.
@@ -33,8 +33,13 @@ const CATALOGO: Record<TipoDeArquivo, { extensoes: readonly string[]; mimes: rea
   xls: { extensoes: ['xls'], mimes: ['application/vnd.ms-excel'], genericos: [] },
   csv: { extensoes: ['csv'], mimes: ['text/csv', 'application/csv', 'text/comma-separated-values'], genericos: ['text/plain', 'application/vnd.ms-excel'] },
   txt: { extensoes: ['txt'], mimes: ['text/plain'], genericos: [] },
+  /* MAPA-IMPORT-01b — o mapa da fazenda (Google Earth). Os genéricos só valem com a extensão (o KML chega como XML, o KMZ como ZIP). */
+  kml: { extensoes: ['kml'], mimes: ['application/vnd.google-earth.kml+xml'], genericos: ['application/xml', 'text/xml'] },
+  kmz: { extensoes: ['kmz'], mimes: ['application/vnd.google-earth.kmz'], genericos: ['application/zip', 'application/x-zip-compressed'] },
+  geojson: { extensoes: ['geojson', 'json'], mimes: ['application/geo+json'], genericos: ['application/json'] },
 };
-const TODOS: readonly TipoDeArquivo[] = ['pdf', 'jpg', 'png', 'xml', 'ofx', 'xlsx', 'xls', 'csv', 'txt'];
+/* ⚠ Os do mapa vão no FIM: pelo MIME sozinho, `application/xml` continua sendo XML. */
+const TODOS: readonly TipoDeArquivo[] = ['pdf', 'jpg', 'png', 'xml', 'ofx', 'xlsx', 'xls', 'csv', 'txt', 'kml', 'kmz', 'geojson'];
 /** O que o navegador manda quando NÃO sabe o tipo. */
 const SEM_MIME: readonly string[] = ['', 'application/octet-stream'];
 
@@ -78,6 +83,7 @@ export function tipoDoArquivo(arquivo: Pick<File, 'name' | 'type'>): TipoDeArqui
 
 const NOMES: Record<TipoDeArquivo, string> = {
   pdf: 'PDF', jpg: 'imagem', png: 'imagem', xml: 'XML', ofx: 'OFX', xlsx: 'Excel', xls: 'Excel', csv: 'CSV', txt: 'TXT',
+  kml: 'KML', kmz: 'KMZ', geojson: 'GeoJSON',
 };
 /** "PDF, imagem ou XML" — os tipos da regra, em português, sem repetir "imagem". */
 export function tiposPorExtenso(tipos: readonly TipoDeArquivo[]): string {
@@ -87,6 +93,7 @@ export function tiposPorExtenso(tipos: readonly TipoDeArquivo[]): string {
 }
 const SIGLAS: Record<TipoDeArquivo, string> = {
   pdf: 'PDF', jpg: 'JPG', png: 'PNG', xml: 'XML', ofx: 'OFX', xlsx: 'XLSX', xls: 'XLS', csv: 'CSV', txt: 'TXT',
+  kml: 'KML', kmz: 'KMZ', geojson: 'GeoJSON',
 };
 /** "PDF, JPG, PNG ou XML" — os tipos da regra pela sigla, para a frase de recusa e a ajuda. */
 export function tiposPorSigla(tipos: readonly TipoDeArquivo[]): string {

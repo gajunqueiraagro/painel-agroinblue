@@ -191,6 +191,13 @@ function notifyPastosChanged(clienteId: string) {
   for (const cb of [...subs]) cb();
 }
 
+/** MAPA-IMPORT-01b — quem cria pasto POR FORA deste hook (o import do mapa, pela `fn_mapa_fazenda_substituir`) chama isto DEPOIS que a
+ *  gravação passou: esquece o cache do cliente e recarrega as instâncias montadas (a mesma ordem do `criarPasto`). */
+export function pastosMudaramPorFora(clienteId: string) {
+  invalidatePastosForCliente(clienteId);
+  notifyPastosChanged(clienteId);
+}
+
 /* OC-HOSPEDEIRO-LEVE-01 — `enabled: false` nao le^ nada (nem pastos, nem categorias, nem a recarga por notificacao): quem monta o hook
    sem usar o resultado agora (o rebanho oficial desligado) nao paga a leitura. Ao ligar, le^ como sempre. */
 export function usePastos({ enabled = true }: { enabled?: boolean } = {}) {

@@ -17,13 +17,13 @@ import {
   Link2, Unlink, Pencil, Trash2, CheckCheck, MapPin, Search, Filter,
   X, Save, ChevronDown,
 } from 'lucide-react';
-import type { PastoGeometria } from '@/hooks/usePastoGeometrias';
+import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 
 type FilterStatus = 'all' | 'vinculado' | 'sem_vinculo';
 
 interface Props {
-  geometrias: PastoGeometria[];
+  geometrias: FazendaGeometria[];
   pastos: Pasto[];
   geoLoading: boolean;
   onUpdate: (id: string, updates: { nome_original?: string; pasto_id?: string | null }) => Promise<boolean>;
@@ -150,7 +150,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const deselectAll = () => setSelectedIds(new Set());
   const isAllSelected = filtered.length > 0 && filtered.every(g => selectedIds.has(g.id));
 
-  const startEdit = (geo: PastoGeometria) => {
+  const startEdit = (geo: FazendaGeometria) => {
     setEditingId(geo.id);
     setEditName(geo.nome_original || '');
   };
@@ -162,7 +162,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     setSaving(false);
   };
 
-  const startLink = (geo: PastoGeometria) => {
+  const startLink = (geo: FazendaGeometria) => {
     setLinkingId(geo.id);
     setLinkPastoId(geo.pasto_id || '__none__');
   };

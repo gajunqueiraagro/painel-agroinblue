@@ -53,7 +53,7 @@ describe('fatia 2d — o campo de fornecedor da Lavoura', () => {
     expect(pedidosAoLeitor).toContain('cli');
     fireEvent.click(campo());
     digitar('fecula');
-    expect(opcoes().map((o) => o.textContent)).toEqual(['Indústria Beta de Fécula']);
+    expect(opcoes().map((o) => o.querySelector('span')?.textContent)).toEqual(['Indústria Beta de Fécula']);
     digitar('11.222.333/0001');
     expect(opcoes()).toHaveLength(1);
     expect(opcoes()[0].textContent).toBe('Cooperativa Alfa11.222.333/0001-81');
