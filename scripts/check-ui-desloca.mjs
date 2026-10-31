@@ -499,6 +499,15 @@ const CENARIOS = [
   { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',
     estados: [['procurou', async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); }]] },
+  /* P153b — ordenar o histórico não mexe em nada fora do corpo da lista: o cabeçalho (a seta tem lugar reservado), a contagem, o botão */
+  { nome: 'casar-sugestoes-guariroba-ordenar', url: 'tela=sugestoes-casar&v=guariroba', tamanhos: TAMANHOS_DO_P92,
+    /* ⚠ abaixo do piso o quadro rola de lado: o clique do robô rolaria até o "Valor" e mediria a ROLAGEM dele, não a tela — o "Valor" vem à
+       vista ANTES de medir (como o operador faz) */
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor();
+      await p.locator('[data-testid="procurar-ordenar-valor"]').scrollIntoViewIfNeeded(); await espera(p); },
+    presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"], [data-testid="procurar-ordenar-valor"]',
+    estados: [['por valor', async (p) => { await clicar('[data-testid="procurar-ordenar-valor"]')(p); await espera(p); }],
+      ['por valor, subindo', async (p) => { await clicar('[data-testid="procurar-ordenar-valor"]')(p); await espera(p); }]] },
   { nome: 'conferencia-chips', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-testid="chips-conferencia"] button, [data-testid="faixa-conferencia"], [data-testid="mesa-conferencia"] thead th',
     antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);

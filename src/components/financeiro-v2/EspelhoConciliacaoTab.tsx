@@ -55,7 +55,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { sugerirCasamentos, type Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
 import { SugestoesCasarModal } from '@/components/financeiro-v2/SugestoesCasarModal';
-import type { ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
+import type { AchadoDoHistorico, ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 /* ⚠ A MESA DO DIA MUDOU DE CASA — PR-CONC-CONFERENCIA-FECHAMENTO-DIA: tipos do Espelho, `montarMesa`, `totaisDoEspelho`,
    `sinalDoAplicado` e `ordenar` foram para a lib pura (movidos byte a byte); a tela importa de lá e REEXPORTA, para quem
    já importava daqui (o Extrato da planilha, os testes) não mudar. */
@@ -920,6 +920,20 @@ function levadosDaSugestao(s: Sugestao): LevadoInicial[] {
 }
 
 /**
+ * P153b — "Casar" num achado EM ABERTO do "Procurar no histórico": o MESMO `CasarComBancoModal`, com o achado levado. Valor diferente do
+ * banco abre com o valor do banco ("era R$ X", o caminho de hoje); o de OUTRA conta vai com `trocarConta` (a `fn_espelho_casar` troca a
+ * conta na mesma transação do casar — D3).
+ */
+function levadoDoAchado(a: AchadoDoHistorico, extrato: ExtratoAlvo, trocarConta: boolean, nomeConta: string | undefined): LevadoInicial {
+  return {
+    lancamento_id: a.lancamentoId, descricao: a.descricao, fornecedor: a.fornecedor, valor_assinado: a.valor,
+    usarValorDoBanco: Math.abs(Math.abs(a.valor) - Math.abs(extrato.valor)) > 0.005,
+    data_vencimento: a.dataVencimento, status_transacao: a.status,
+    trocarConta: trocarConta ? { de: a.conta, para: nomeConta ?? null } : undefined,
+  };
+}
+
+/**
  * O Extrato (banco) com os dois botões do sem par — P159a (mock `mock-extrato-banco-v1.html`). [Sugestões] e [Criar] abrem os MESMOS
  * modais da Conferência (`SugestoesCasarModal` → `CasarComBancoModal`; "Criar" = o casar com a lista vazia), com a MESMA lista de
  * sugestões (`sugestoesDaMesa`). Gravou: relê o espelho e avisa o canal (CONC-SEM-F5-01), como a Conferência.
@@ -943,8 +957,9 @@ function ExtratoComAcoes({ data, inicial, internas, sugestoesPorLinha, clienteId
       sugestoes={(sugerir && sugestoesPorLinha.get(sugerir.extrato_id)) || []}
       onCasar={(s) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: levadosDaSugestao(s) }); setSugerir(null); }}
       /* P153 — "Criar igual" no "Procurar no histórico": o Casar de sempre, vazio, abre o Criar com o modelo */
-      clienteId={clienteId}
-      onCriarIgual={(m) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: [], modelo: m }); setSugerir(null); }} />
+      clienteId={clienteId} contaBancariaId={contaId}
+      onCriarIgual={(m) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: [], modelo: m }); setSugerir(null); }}
+      onCasarDoHistorico={(a, trocar) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: [levadoDoAchado(a, sugerir, trocar, nomeConta)] }); setSugerir(null); }} />
     <CasarComBancoModal open={!!casar} onClose={() => setCasar(null)} extrato={casar?.extrato ?? null} iniciais={casar?.iniciais ?? []}
       modelo={casar?.modelo ?? null}
       nomeConta={nomeConta} contaBancariaId={contaId} clienteId={clienteId} onConciliado={() => onMudou()} />
@@ -1848,8 +1863,13 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
           setSugerir(null);
         }}
         /* P153 — "Criar igual" no "Procurar no histórico": o Casar de sempre, vazio, abre o Criar com o modelo */
-        clienteId={clienteId}
+        clienteId={clienteId} contaBancariaId={contaId}
         onCriarIgual={(m) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: [], modelo: m }); setSugerir(null); }}
+        onCasarDoHistorico={(a, trocar) => {
+          if (!sugerir) return;
+          setCasar({ extrato: sugerir, iniciais: [levadoDoAchado(a, sugerir, trocar, nomeConta)] });
+          setSugerir(null);
+        }}
       />
 
       <CasarComBancoModal

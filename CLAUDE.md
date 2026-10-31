@@ -219,6 +219,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P153: "Procurar no histórico" = UMA busca (`fn_conciliacao_historico_buscar`: texto do banco casado · descrição · fornecedor, só realizado, sem
   acento) e UM componente (`ProcurarNoHistorico`: Sugestões para casar e estação); "Criar igual" só PREENCHE o Criar de hoje (`modelo` no prefill;
   valor/data/conta do movimento); banco sem nome = campo vazio (`nomeDoHistorico`, D1); buscar é gesto.
+  P153b (Gabriel 29/10): a busca acha TODOS os status (até = fim do mês seguinte ao extrato); em aberto = "Casar" (de outra conta, "Casar e trocar a
+  conta" = `fn_espelho_casar` com `trocar_conta`, na mesma transação); pago = "Criar igual" (+ selo "outra conta"); sugestão "mesmo fornecedor · valor
+  difere" só em aberto a ±5 dias (`JANELA_MESMO_FORNECEDOR_DIAS`; a E3 segue); modal até 1400px e altura toda, 9px/17/8,5 (exceção declarada).
 - P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
   seguem sem os sem caixa.
 - P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava

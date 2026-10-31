@@ -638,6 +638,8 @@ const CENARIOS = [
   { nome: 'casar-1x1-pos', url: 'tela=casar-1x1&v=pos', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* CONC-VALOR-CERTO-ACEITA-01 — a pergunta do valor do extrato no rodapé, com o botão "Ligar com o valor do extrato" */
   { nome: 'casar-1x1-certo', url: 'tela=casar-1x1&v=certo', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* P153b (D3) — "Casar e trocar a conta": a confirmação curta (conta antes → depois) e o botão "Conciliar e trocar a conta" */
+  { nome: 'casar-1x1-trocar', url: 'tela=casar-1x1&v=trocar', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* P139 — criar transferencia pela linha do extrato (um espelho escolhido, empate, gemea, ja' lancada) e o lote de 6; valores no teto */
   ...['espelho', 'empate', 'gemea', 'existente'].map((v) => ({ nome: `criar-transferencia-${v}`, url: `tela=criar-transferencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-criar-transferencia"]' })),
@@ -709,6 +711,13 @@ const CENARIOS = [
      estação com o banco SEM nome (D1: o campo vazio e a frase) */
   { nome: 'casar-sugestoes-procurado', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
+  /* P153b — o caso da Guariroba (sintético): a sugestão "mesmo fornecedor · valor difere" e o histórico com Casar, Casar e trocar conta,
+     Criar igual e o selo "outra conta"; e a lista ordenada por valor (a seta no cabeçalho, nada se mexe fora dele) */
+  { nome: 'casar-sugestoes-guariroba', url: 'tela=sugestoes-casar&v=guariroba', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
+  { nome: 'casar-sugestoes-guariroba-por-valor', url: 'tela=sugestoes-casar&v=guariroba', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor();
+      await clicar('[data-testid="procurar-ordenar-valor"]')(p); } },
   { nome: 'casar-estacao-procurado', url: 'tela=estacao', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]',
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
   { nome: 'casar-estacao-sem-nome', url: 'tela=estacao&v=semnome', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]' },
