@@ -203,6 +203,39 @@ const CENARIOS = [
   { nome: 'plano-contas-renomear-previa', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]', antes: async (p) => {
     await p.locator('[data-testid="renomear-subcentro"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="nome-subcentro"]').fill('Animais de terceiros'); await p.locator('[data-testid="conferir-subcentro"]').click(); await p.waitForTimeout(500); } },
+  /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
+     a lista, a busca para 1/0 bens e um chip (o quadro tem a mesma altura), a aba que chega depois, e o modal do bem em cada aba (o
+     trator, a pastagem, a terra e o bem NOVO — Dados e Lançamentos, a terra num passo) */
+  ...(() => {
+    const T = [[1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+    const URL = 'tela=patrimonio&barra=32';
+    const buscar = (txt) => async (p) => { await p.locator('[data-testid="patrimonio-busca"]').fill(txt); await p.waitForTimeout(500); };
+    const abrir = (bem, aba) => async (p) => {
+      if (bem) await p.locator('[data-testid="patrimonio-linha"]', { hasText: bem }).first().click();
+      else await p.locator('[data-testid="patrimonio-novo"]').click();
+      await p.locator('[data-testid="bem-dialog"]').waitFor(); await p.waitForTimeout(600);
+      if (aba !== 'Dados') { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${aba}`) }).first().click(); await p.waitForTimeout(600); }
+    };
+    const modal = (nome, bem, aba) => ({ nome: `patrimonio-bem-${nome}`, url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: abrir(bem, aba) });
+    return [
+      { nome: 'patrimonio', url: URL, tamanhos: T },
+      { nome: 'patrimonio-busca-1', url: URL, tamanhos: T, antes: buscar('Valtra') },
+      { nome: 'patrimonio-busca-0', url: URL, tamanhos: T, antes: buscar('zzzz nada') },
+      { nome: 'patrimonio-chip', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="patrimonio-filtros"] button', { hasText: /^Máquinas$/ }).click(); await p.waitForTimeout(500); } },
+      /* a categoria escolhida pelo "Mais N ▾" (só onde ele existe: a 1440 todos os chips cabem e o gesto é o do chip) */
+      { nome: 'patrimonio-chip-mais', url: URL, tamanhos: T, antes: async (p) => {
+        const mais = p.locator('[data-testid="patrimonio-chips-mais"]');
+        if (await mais.count()) { await mais.click(); await p.waitForTimeout(300); await p.getByRole('menuitem', { name: /Terra/ }).click(); }
+        else await p.locator('[data-testid="patrimonio-filtros"] button', { hasText: /^Terra$/ }).click();
+        await p.waitForTimeout(500); } },
+      { nome: 'patrimonio-sem-bem', url: URL, tamanhos: T, antes: async (p) => { await p.locator('button', { hasText: /^Investimentos sem bem/ }).first().click(); await p.waitForTimeout(500); } },
+      ...['Dados', 'Lançamentos', 'Depreciação', 'Valor de mercado', 'Documentos'].map((a) => modal(`trator-${a.toLowerCase().replace(/[^a-z]/g, '')}`, 'Trator Valtra', a)),
+      modal('pastagem-pastos', 'Reforma de pastagem', 'Pastos'), modal('pastagem-lancamentos', 'Reforma de pastagem', 'Lançamentos'),
+      modal('terra-dados', 'Terra nua', 'Dados'), modal('terra-mercado', 'Terra nua', 'Valor de mercado'),
+      modal('longo-dados', 'Pivô central', 'Dados'),
+      modal('novo-dados', null, 'Dados'), modal('novo-lancamentos', null, 'Lançamentos'),
+    ];
+  })(),
   /* P106 — a tela abre em "Mês atual": o período futuro é o botão "Mês futuro" */
   { nome: 'cpr-futuro', url: 'tela=cpr&v=futuro', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Mês futuro') },
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias nos sete tamanhos: a lista do mock, o pior caso (nome, banco e gerente longos,

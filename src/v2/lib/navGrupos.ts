@@ -32,6 +32,8 @@ export type V2Section =
   // financeiro — cadastros
   | 'contas-bancarias' | 'fornecedores' | 'plano-contas' | 'dividendos'
   | 'subcentro-aliases' | 'safras' | 'rateio-admin' | 'locais-estoque'
+  // cadastros — patrimônio (PATR-01: máquinas, estruturas, pastagens e terra)
+  | 'patrimonio'
   // financeiro — análise
   | 'analise-trimestral' | 'financeiro-caixa' | 'fluxo-anual'
   // planejamento (IDs legados preservados)
@@ -344,6 +346,8 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'contas-bancarias',  label: 'Contas Bancárias',    status: 'needs-wrapper', liberadaClientes: true },
           { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper', liberadaClientes: true },
           { id: 'plano-contas',      label: 'Plano de Contas',     status: 'needs-wrapper' },
+          /* PATR-01 — o cadastro dos bens (máquinas, estruturas, pastagens e terra), ligado aos lançamentos de Investimento */
+          { id: 'patrimonio',        label: 'Patrimônio',          status: 'ready', liberadaClientes: true },
           { id: 'safras',            label: 'Safras',              status: 'ready' },
           /* ⚠ ELE FICA EM CADASTROS, NÃO EM AGRICULTURA, e a diferença é o que o item É: um local
              de estoque é identidade que o resto referencia — como Fazendas e Fornecedores —, não
@@ -446,6 +450,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'plano-contas':      'cadastros',
   'safras':            'cadastros',
   'locais-estoque':    'cadastros',
+  'patrimonio':        'cadastros',
   'rateio-admin':      'cadastros',
   'subcentro-aliases': 'cadastros',
   'dividendos':        'cadastros',

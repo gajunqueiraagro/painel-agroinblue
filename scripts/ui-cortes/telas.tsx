@@ -1191,6 +1191,17 @@ if (tela === 'mesclar') {
     rpc: (fn: string) => fn.startsWith('fn_subcentro_cliente_') ? { antes: { lancamentos_vivos: 12 }, depois: {}, recusa: null, lancamentos_tocados: 7 } : null,
   };
   montar(<FinV2PlanoContasTab onAbrirDividendos={() => {}} />);
+} else if (tela === 'patrimonio') {
+  /* PATR-01 PR B — Cadastros › Patrimônio: a tela real com a API em memória (`dados/patrimonio.ts`, SINTÉTICO); o modal do bem se abre
+     pelo clique na linha (os cenários do gate) */
+  const montarPatrimonio = async () => {
+    const { PatrimonioTela } = await import('@/components/patrimonio/PatrimonioTela');
+    const { PatrimonioApiProvider } = await import('@/hooks/usePatrimonio');
+    const { API_PATRIMONIO, FAZENDAS_PATRIMONIO } = await import('./dados/patrimonio');
+    g.__fazendaBancada = { fazendas: FAZENDAS_PATRIMONIO, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
+    montar(<PatrimonioApiProvider api={API_PATRIMONIO}><PatrimonioTela /></PatrimonioApiProvider>);
+  };
+  void montarPatrimonio();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */

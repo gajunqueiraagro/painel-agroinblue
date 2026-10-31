@@ -154,6 +154,28 @@ const CENARIOS = [
     ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],
     ['busca limpa', digitar('[data-testid="busca-plano"]', '')],
   ] },
+  /* PATR-01 PR B — Cadastros › Patrimônio: trocar a aba da tela, o chip e a busca (1/0 bens) não move os cartões, os filtros, o cabeçalho
+     nem o rodapé; no modal do bem, ir de aba em aba (as seis ficam no lugar; a apagada não se clica) não move nada — o trator, a
+     pastagem e o bem NOVO (Dados ↔ Lançamentos, a terra num passo) */
+  { nome: 'patrimonio', url: 'tela=patrimonio&barra=32', estados: [
+    ['aba Investimentos sem bem', botao(/^Investimentos sem bem/)], ['aba Depreciação', botao(/^Depreciação mês a mês$/)], ['aba Bens', botao(/^Bens$/)],
+    ['chip Máquinas', botao(/^Máquinas$/)], ['chip Todos', botao(/^Todos$/)],
+    ['categoria pelo Mais', async (p) => { const m = p.locator('[data-testid="patrimonio-chips-mais"]'); if (!(await m.count())) return;
+      await m.click(); await espera(p, 300); await p.getByRole('menuitem', { name: /Terra/ }).click(); await espera(p); }],
+    ['chip Todos de novo', botao(/^Todos$/)],
+    ['busca 1 bem', digitar('[data-testid="patrimonio-busca"]', 'Valtra')], ['busca sem resultado', digitar('[data-testid="patrimonio-busca"]', 'zzzz nada')],
+    ['busca limpa', digitar('[data-testid="patrimonio-busca"]', '')],
+  ] },
+  ...[['trator', 'Trator Valtra', ['Lançamentos', 'Depreciação', 'Valor de mercado', 'Documentos', 'Dados']],
+      ['pastagem', 'Reforma de pastagem', ['Lançamentos', 'Pastos', 'Depreciação', 'Documentos', 'Dados']],
+      ['novo', null, ['Lançamentos', 'Dados']]].map(([n, bem, abas]) => ({
+    nome: `patrimonio-bem-${n}`, url: 'tela=patrimonio&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      if (bem) await p.locator('[data-testid="patrimonio-linha"]', { hasText: bem }).first().click(); else await p.locator('[data-testid="patrimonio-novo"]').click();
+      await p.locator('[data-testid="bem-dialog"]').waitFor(); await espera(p, 700);
+    },
+    estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
+  })),
   /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */
   /* P109 — as 4 telas da meta (o caso real do NJ 2026): o rótulo do regime fica PRESO no lugar dele (`presos`: medido sempre, à vista)
      ao trocar a fazenda e ao passar aos valores ×400; no PC-100 o Realizado ↔ Meta (`auto`) não move nada — o rótulo tem o lugar

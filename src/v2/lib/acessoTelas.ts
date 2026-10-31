@@ -74,6 +74,8 @@ export const TELAS_DO_FINANCEIRO: readonly V2Section[] = [
   'lancamentos-zoot', 'conferencia-lancamentos', 'fechamento', 'estoque-graos', 'barter-contratos',
   'valor-rebanho', 'dre', 'painel-consultor',
   'fornecedores', 'contas-bancarias',
+  /* PATR-01 (Chat 30/10): Cadastros › Patrimônio, gestor e financeiro editam */
+  'patrimonio',
 ];
 
 export const NIVEL_POR_TELA: Partial<Record<V2Section, Record<PerfilCliente, NivelTela>>> = {

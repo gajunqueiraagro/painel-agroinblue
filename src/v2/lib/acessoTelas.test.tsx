@@ -34,7 +34,8 @@ const PRODUCAO_FIN: V2Section[] = ['lancamentos-zoot', 'fechamento', 'conferenci
 const FINANCEIRO_FIN: V2Section[] = ['fin-visao-geral', 'financeiro-lanc', 'conciliacao', 'visao-consolidada', 'financiamentos', 'contratos', 'recorrencias',
   'fluxo-caixa', 'contas-a-pagar-receber', 'painel-financiamentos'];
 const EXECUTIVO_FIN: V2Section[] = ['painel-consultor', 'valor-rebanho', 'dre'];
-const CADASTROS_FIN: V2Section[] = ['contas-bancarias', 'fornecedores'];
+/* PATR-01 (Chat 30/10, ajuste 4): Cadastros › Patrimônio entra para gestor e financeiro */
+const CADASTROS_FIN: V2Section[] = ['contas-bancarias', 'fornecedores', 'patrimonio'];
 const ROTULOS_PRODUCAO_FIN = ['Pecuária', 'Fechamento Área', 'Lançamentos', 'Operações Comerciais', 'Estoque de Grãos', 'Barter'];
 const ROTULOS_FINANCEIRO_FIN = ['Visão Geral', 'Lançamentos Financeiros', 'Conciliação Bancária', 'Visão Consolidada', 'Financ. e Parcelamentos', 'Contratos',
   'Recorrências', 'Fluxo Caixa', 'Contas a Pagar/Receber', 'Painel Financiamentos'];
@@ -43,7 +44,7 @@ const todosOsItens = NAV_GRUPOS.flatMap((g) => g.drawer.flatMap((s) => s.itens.m
 describe('a marca de liberacao (navGrupos)', () => {
   it('as telas liberadas: as tres do piloto, a lista de Operações Comerciais (ACESSOS-OC-01) e as 16 do ACESSOS-FIN-01; a Visão Geral NAO', () => {
     expect(todosOsItens.filter((x) => x.item.liberadaClientes).map((x) => x.item.id)).toEqual([...PRODUCAO_FIN, ...FINANCEIRO_FIN, ...EXECUTIVO_FIN, ...CADASTROS_FIN]);
-    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(4 + 1 + 16);
+    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(4 + 1 + 17);
     /* nenhuma tela de Planejamento, Auditoria ou Validar tem a marca */
     expect(todosOsItens.filter((x) => x.item.liberadaClientes && ['planejamento', 'auditoria', 'validar'].includes(x.grupo))).toEqual([]);
     /* toda tela marcada fora do piloto tem linha propria no mapa por tela (marca sem linha cairia na matriz do grupo) */
@@ -137,9 +138,11 @@ describe('ACESSOS-FIN-01 — perfil × tela', () => {
     ['Fornecedores', 'fornecedores'], ['Contas Bancárias', 'contas-bancarias'], ['Fechamento Área', 'fechamento'],
     ['Evolução Patrimonial', 'valor-rebanho'], ['DRE', 'dre'], ['PC-100', 'painel-consultor'], ['Estoque de Grãos', 'estoque-graos'],
     ['Barter', 'barter-contratos'], ['Visão Consolidada', 'visao-consolidada'], ['Fluxo Caixa', 'fluxo-caixa'],
+    /* PATR-01 (Chat 30/10, ajuste 4) — a 17ª */
+    ['Patrimônio', 'patrimonio'],
   ];
   it('a lista do dono sao as 16 do briefing, e cada id e o item de menu com aquele rotulo (um so)', () => {
-    expect(AS_16).toHaveLength(16);
+    expect(AS_16).toHaveLength(17);
     expect([...TELAS_DO_FINANCEIRO].sort()).toEqual(AS_16.map(([, t]) => t).sort());
     for (const [rotulo, tela] of AS_16) {
       const itens = todosOsItens.filter((x) => x.item.id === tela);
@@ -174,7 +177,7 @@ describe('ACESSOS-FIN-01 — perfil × tela', () => {
       for (const p of PERFIS) expect(`${t}/${p}:${nivelDaTela(p, false, t)}`).toBe(`${t}/${p}:nao`);
     }
     const cadastros = doGrupo('cadastros');
-    expect(cadastros.length).toBe(9);
+    expect(cadastros.length).toBe(10);
     for (const t of cadastros) expect(`${t}:${nivelDaTela('financeiro', false, t)}`).toBe(`${t}:${CADASTROS_FIN.includes(t) ? 'editar' : 'nao'}`);
     /* as telas de META fora do menu tambem */
     for (const t of ['fluxo-caixa-meta', 'lancamentos-meta-fin', 'lancamentos-meta-zoo', 'meta-cenario', 'meta-precos'] as const) expect(nivelDaTela('financeiro', false, t)).toBe('nao');
@@ -298,7 +301,7 @@ describe('o drawer (V2ContextDrawer)', () => {
   });
   it('financeiro, Executivo e Cadastros: so as telas dele', () => {
     expect(itensDoDrawer('executivo').itens).toEqual(['PC-100', 'Evolução Patrimonial', 'DRE']);
-    expect(itensDoDrawer('cadastros').itens).toEqual(['Contas Bancárias', 'Fornecedores']);
+    expect(itensDoDrawer('cadastros').itens).toEqual(['Contas Bancárias', 'Fornecedores', 'Patrimônio']);
   });
   it('leitura, grupo Financeiro: as tres do piloto, como antes', () => {
     como('leitura');
