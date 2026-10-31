@@ -126,13 +126,15 @@ describe('modal de análise', () => {
     expect(screen.getByTestId('analise-lanc-0').textContent).toBe('7 lanç. ›');
   });
 
-  it('A3 critério e unidade vão ao banco; a que não vale fica apagada', async () => {
+  it('A3 critério e unidade vão ao banco; a lista só tem R$ e R$/cab/mês, e só o que vale (VG-META-NO-MODO-01, 31/10)', async () => {
     await abrir();
     fireEvent.click(within(screen.getByTestId('analise-tabela')).getByText('Média'));
     await act(async () => { await Promise.resolve(); });
     expect(ultimo()).toMatchObject({ p_criterio: 'media' });
     fireEvent.click(screen.getByTestId('analise-unidade'));
-    expect((screen.getByTestId('analise-unidade-rs_ha_agri') as HTMLButtonElement).disabled).toBe(true);
+    /* Gabriel 31/10 11:13: sai a opção cinza (a que não vale) e as outras unidades da função */
+    expect([...screen.getByTestId('analise-unidade-lista').querySelectorAll('button')].map((b) => b.textContent)).toEqual(['R$', 'R$/cab/mês']);
+    expect(screen.queryByTestId('analise-unidade-rs_ha_agri')).toBeNull();
     fireEvent.click(screen.getByTestId('analise-unidade-rs_cab'));
     await act(async () => { await Promise.resolve(); });
     expect(ultimo()).toMatchObject({ p_unidade: 'rs_cab', p_criterio: 'media' });
@@ -560,6 +562,12 @@ describe('modal de análise', () => {
   it('P2/P3 o gráfico: coluna no meio ou acima; média e meta com marcador e o valor do banco; a curva passa por todo marcador', comQuadro(async () => {
     resposta = P100;
     await abrir();
+    /* VG-META-NO-MODO-01 (Gabriel 31/10 11:13): no MÊS só as colunas e a meta do mês — a média acumulada não aparece */
+    expect(screen.queryByTestId('analise-linha-media')).toBeNull();
+    expect(document.querySelectorAll('[data-testid^="analise-ponto-media-"]')).toHaveLength(0);
+    expect(screen.getByTestId('analise-linha-meta')).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId('analise-tabela')).getByText('Média'));
+    await act(async () => { for (let i = 0; i < 4; i += 1) await Promise.resolve(); });
     const col = (am: string) => screen.getByTestId(`analise-rotulo-coluna-${am}`);
     expect(col('2026-07').textContent).toBe('640,0k');
     expect(col('2026-07').getAttribute('data-lugar')).toBe('meio');
@@ -593,6 +601,27 @@ describe('modal de análise', () => {
       }
       expect(d).toContain('C');   /* curva (Bézier), não reta */
     }
+  }));
+
+  it('P5 (VG-META-NO-MODO-01, 31/10) R$/cab/mês: rótulos com 2 casas; o mês aberto no title; no Mês a legenda sem a média', comQuadro(async () => {
+    const serie = [
+      { am: '2026-08', realizado: 48.31, previsto: 0, total: 48.31, media: 47.02, meta: 55.4, aberto: false },
+      { am: '2026-09', realizado: 51.44, previsto: 0, total: 51.44, media: 47.51, meta: 57.1, aberto: false },
+      { am: '2026-10', realizado: 52.67, previsto: 0.09, total: 52.76, media: 48.03, meta: 58.9, aberto: true },
+    ];
+    resposta = { ...P100, unidade: 'rs_cab', grafico: { ...P100.grafico, serie } };
+    await abrir();
+    expect(screen.getByTestId('analise-legenda').textContent).not.toContain('média acumulada');
+    fireEvent.click(screen.getByTestId('analise-unidade'));
+    fireEvent.click(screen.getByTestId('analise-unidade-rs_cab'));
+    await act(async () => { for (let i = 0; i < 4; i += 1) await Promise.resolve(); });
+    expect(screen.getByTestId('analise-rotulo-coluna-2026-10').textContent).toBe('52,76');
+    expect(screen.getByTestId('analise-rotulo-coluna-2026-08').textContent).toBe('48,31');
+    expect(screen.getByTestId('analise-coluna-2026-10').querySelector('title')!.textContent).toContain('mês aberto (cabeças do sistema)');
+    expect(screen.getByTestId('analise-coluna-2026-09').querySelector('title')!.textContent).not.toContain('mês aberto');
+    fireEvent.click(within(screen.getByTestId('analise-tabela')).getByText('Média'));
+    await act(async () => { for (let i = 0; i < 4; i += 1) await Promise.resolve(); });
+    expect(screen.getByTestId('analise-legenda').textContent).toContain('média acumulada');
   }));
 
   it('P4a a ESQUERDA navega: Atividades → (Pecuária) Centros · Pecuária com "‹"; centro fica selecionado; "‹" volta; o caminho também', async () => {
