@@ -10809,29 +10809,66 @@ export type Database = {
         }
         Relationships: []
       }
-      pasto_geometrias: {
+      fazenda_geometrias: {
         Row: {
+          cliente_id: string
+          cor: string | null
           created_at: string
+          fazenda_id: string
           geojson: Json
           id: string
-          pasto_id: string
+          nome_original: string
+          pasto_id: string | null
+          tipo: string
           updated_at: string
         }
         Insert: {
+          cliente_id: string
+          cor?: string | null
           created_at?: string
+          fazenda_id: string
           geojson?: Json
           id?: string
-          pasto_id: string
+          nome_original: string
+          pasto_id?: string | null
+          tipo: string
           updated_at?: string
         }
         Update: {
+          cliente_id?: string
+          cor?: string | null
           created_at?: string
+          fazenda_id?: string
           geojson?: Json
           id?: string
-          pasto_id?: string
+          nome_original?: string
+          pasto_id?: string | null
+          tipo?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fazenda_geometrias_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fazenda_geometrias_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fazenda_geometrias_pasto_id_fkey"
+            columns: ["pasto_id"]
+            isOneToOne: false
+            referencedRelation: "pastos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pasto_movimentacoes: {
         Row: {
@@ -17253,6 +17290,10 @@ export type Database = {
       }
       fn_lr_sync_desfazer: {
         Args: { p_aplicacao?: string; p_cliente: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_mapa_fazenda_substituir: {
+        Args: { p_fazenda_id: string; p_poligonos: Json }
         Returns: Json
       }
       fn_materializar_conjunto_mes: {

@@ -60,7 +60,8 @@ describe('o componente ProcurarNoHistorico', () => {
     await waitFor(() => expect(M.rpc).toHaveBeenCalledTimes(1));
     expect(M.rpc).toHaveBeenCalledWith('fn_conciliacao_historico_buscar', {
       p_cliente: 'cli', p_termo: 'ZEBRALUX SINT', p_onde: ['banco', 'descricao', 'fornecedor'],
-      p_de: '2026-01-01', p_ate: '2026-10-05', p_valor: -1382,
+      /* P153b: o "até" é o fim do MÊS SEGUINTE ao extrato (05/10 → 30/11) — o em aberto que vence depois do movimento entra */
+      p_de: '2026-01-01', p_ate: '2026-11-30', p_valor: -1382,
     });
     const linha = await screen.findByTestId('procurar-historico-achado');
     expect(within(linha).getByText('02/06/2026')).toBeInTheDocument();
@@ -108,11 +109,12 @@ describe('o componente ProcurarNoHistorico', () => {
     });
   });
 
-  it('LAYOUT FIXO: o quadro tem a altura de 6 linhas e piso de 800px; a frase é a 1ª linha DO QUADRO (o "…" com o title vale em tabela)', async () => {
+  /* P153b: 9px, linha de 17px, cabeçalho de 20px (8,5px); o piso = as colunas fixas (678) + 2 × 120 */
+  it('LAYOUT FIXO: o quadro tem a altura de 6 linhas e piso de 918px; a frase é a 1ª linha DO QUADRO (o "…" com o title vale em tabela)', async () => {
     const { container } = render(<ProcurarNoHistorico clienteId="cli" movimento={MOV_BB} onCriarIgual={() => {}} />);
     const quadro = container.querySelector('table')?.parentElement;
-    expect(quadro?.style.height).toBe('138px');
-    expect(container.querySelector('table')?.style.minWidth).toBe('800px');
+    expect(quadro?.style.height).toBe('124px');
+    expect(container.querySelector('table')?.style.minWidth).toBe('918px');
     /* com 1 achado o quadro não rola: o cabeçalho não fica preso (preso num quadro que não rola é vão no gate) */
     expect(container.querySelector('thead')?.className).not.toContain('sticky');
     fireEvent.click(screen.getByTestId('procurar-historico-botao'));
@@ -121,8 +123,10 @@ describe('o componente ProcurarNoHistorico', () => {
     expect(frase.tagName).toBe('TD');
     expect(frase.className).toContain('truncate');
     expect(frase.getAttribute('title')).toBe(frase.textContent);
-    const banco = within(linha).getByText(ACHADO.banco);
-    expect(banco.className).toContain('truncate');
-    expect(banco.getAttribute('title')).toBe(ACHADO.banco);
+    /* P153b: a coluna "O que o banco disse" saiu — o texto do banco vai no `title` da descrição */
+    expect(within(linha).queryByText(ACHADO.banco)).toBeNull();
+    const desc = within(linha).getByText('Ração de engorda');
+    expect(desc.className).toContain('truncate');
+    expect(desc.getAttribute('title')).toBe(`Ração de engorda\nO banco: ${ACHADO.banco}`);
   });
 });

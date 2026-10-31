@@ -6,12 +6,12 @@
 // via `onCriarNovo`. Consumido pelo LancamentoV2Dialog e (PR-U2c-2) pela Mesa.
 //
 // FORN-SELETOR-PADRAO-01 passo 1b (Gabriel, 08/10/2026) — ESTE É O DONO do seletor de fornecedor do sistema.
-//  · Opção em UMA linha: nome à esquerda (corta, inteiro no `title`), selo "N iguais" quando o nome se repete entre os
-//    ativos, e o CNPJ/CPF à direita, em tom apagado, que NUNCA corta. Sem documento a área fica vazia.
+//  · Opção em DUAS linhas (FORN-CAMPO-01, 30/10): o nome em cima (corta, inteiro no `title`), o selo "N iguais" quando o nome se
+//    repete entre os ativos, e embaixo "CNPJ · Cidade/UF" em 8,5px, tom apagado, que NUNCA corta. Sem documento, "—".
 //  · Busca em memória por nome (sem acento, sem caixa) e por dígitos do documento (ignora ponto, barra e traço).
 //  · No máximo 100 opções desenhadas; a busca corre sobre todas; o escolhido vem sempre no topo; rodapé fixo
 //    "Mostrando 100 de N — digite para refinar".
-//  · Linha FIXA sob o campo com o documento do escolhido ("sem CNPJ/CPF"; vazia sem escolha) — prop `linhaDoDocumento`.
+//  · Linha FIXA sob o campo com o documento do escolhido ("—" sem documento; vazia sem escolha) — prop `linhaDoDocumento`.
 //  · Valor gravado inativo: aparece no campo com a marca "inativo" (não está na lista).
 //  · Cadastro "[META]": fora da lista, salvo `incluirMeta` (modal de meta).
 //  · DOIS MODOS NA TRANSIÇÃO: com `clienteId` e SEM `fornecedores`, a lista vem do LEITOR ÚNICO
@@ -99,6 +99,9 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
    * nenhum formulário muda de altura sem ter sido medido. Em célula de tabela: `false` (o documento vai no `title`).
    */
   linhaDoDocumento?: boolean;
+  /** FORN-CAMPO-01 (Gabriel 30/10, mock v4) — a linha sob o campo em 8,5px numa faixa de 10px, 1px abaixo do campo (11px no total): a
+   *  da barra de filtros de Lançamentos, EXCEÇÃO DECLARADA do piso de 9,5px. Sem ela, a linha de sempre (14px, 9,5px). */
+  linhaCompacta?: boolean;
   /** FORN-SELETOR-PADRAO-01 (D7) — cadastros "[META]" entram na lista (só modal de meta). */
   incluirMeta?: boolean;
   /**
@@ -158,6 +161,13 @@ function EditarCadastroDoEscolhido({ clienteId, fornecedorId, semelhantes, onClo
   );
 }
 
+/** FORN-CAMPO-01 — o texto da linha do campo e da linha de cada opção: "CNPJ · Cidade/UF" (P117); SEM documento, "—" (dado ausente).
+ *  Só aqui: o Resumo do lançamento segue com "sem CNPJ/CPF" (`linhaDoDocumento` do fornecedorTexto, que não muda). */
+function linhaDoCampo(f: FavorecidoOpcao | null | undefined): string {
+  if (!f) return '';
+  return formatarDocumento(f.cpf_cnpj) ? textoDaLinhaDoDocumento(f) : '—';
+}
+
 /** Rótulo de exibição do favorecido. Com showCpfCnpj + documento presente → "Nome (CPF/CNPJ)";
  *  sem documento (ou desabilitado) → apenas o nome. Não altera valor/seleção/identidade. */
 function favorecidoLabel(f: FavorecidoOpcao, showCpfCnpj: boolean): string {
@@ -169,7 +179,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   value, onChange, onSelected, fornecedores, clienteId,
   search: buscaDoHospedeiro, onSearchChange: aoBuscarNoHospedeiro, onCriarNovo, novoButtonClassName,
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
-  limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, incluirMeta = false, acaoFinal,
+  limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, linhaCompacta = false, incluirMeta = false, acaoFinal,
   novoDesabilitado = false, novoRotulo, rotuloDoVazio = '— nenhum —', situacao = 'ativos', nomeInteiro = false, mostrarUso = false,
   mostrarIguais = true, valorInexistente = false, marcarInativo = false,
 }: FavorecidoSelectProps<F>) {
@@ -359,13 +369,26 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                   onMouseEnter={() => setHighlight(idx)}
                 >
                   <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value === o.f.id ? "opacity-100" : "opacity-0")} />
-                  {/* nome à esquerda: é o ÚNICO que corta (inteiro no `title`) */}
+                  {/* FORN-CAMPO-01 (Gabriel 30/10, mock v4) — DUAS LINHAS: o nome em cima e "CNPJ · Cidade/UF" embaixo (8,5px, exceção declarada do
+                      piso); sem documento, "—". Era tudo numa linha só, o CNPJ e a cidade à direita (P117). O painel tem a largura de sempre. */}
+                  <div className="flex min-w-0 flex-1 flex-col text-left">
+                  {/* nome em cima: é o ÚNICO que corta (inteiro no `title`) */}
                   {/* FORN-CADASTRO-02: "RAZÃO SOCIAL · Fantasia" (a fantasia em tom apagado), numa linha — o item de menu é o da casa */}
-                  {/* FORN-FILIAL-01 / P117: "Razão social · CNPJ completo · Município/UF" — o documento e a cidade à direita NUNCA cortam (filiais têm
-                      a mesma razão social: é a cidade e o CNPJ que as distinguem); o `title` leva a linha inteira */}
-                  <span className="min-w-0 flex-1 truncate text-left" title={[o.f.nome, fantasiaDe(o.f), o.documento, cidadeDe(o.f)].filter(Boolean).join(' · ')}>
+                  {/* FORN-FILIAL-01 / P117: o documento e a cidade NUNCA cortam (filiais têm a mesma razão social: é a cidade e o CNPJ que as
+                      distinguem); o `title` leva a linha inteira */}
+                  {/* FORN-CAMPO-01 — o "…" do nome é a exceção DECLARADA do gate (`data-reticencias-com-title`, P71): o `title` leva o texto inteiro */}
+                  <span className="min-w-0 truncate text-left" data-reticencias-com-title="" title={[o.f.nome, fantasiaDe(o.f), o.documento, cidadeDe(o.f)].filter(Boolean).join(' · ')}>
                     {o.f.nome}{fantasiaDe(o.f) ? <span data-testid="favorecido-fantasia" className={MENU_SECUNDARIO}> · {fantasiaDe(o.f)}</span> : null}
                   </span>
+                  <span data-testid="favorecido-linha-da-opcao" className={cn("flex min-w-0 gap-1 text-[8.5px] leading-[10px]", MENU_SECUNDARIO)}>
+                    <span data-testid="favorecido-doc-da-opcao" className="shrink-0 whitespace-nowrap tabular-nums">{o.documento || '—'}</span>
+                    {/* P117 — a cidade DEPOIS do CNPJ, a mesma ordem da linha sob o campo; sem documento, nada (a cidade sozinha não identifica) */}
+                    {o.documento && cidadeDe(o.f) && <>
+                      <span aria-hidden="true">·</span>
+                      <span data-testid="favorecido-cidade-da-opcao" className="shrink-0 whitespace-nowrap">{cidadeDe(o.f)}</span>
+                    </>}
+                  </span>
+                  </div>
                   {/* FORN-BUSCA-UNICA-01 — inativo / "mesclado em <dono>": só aparece quando o filtro pede (situação ≠ 'ativos') */}
                   {situacaoDoItem(o.f, (id) => nomePorId.get(id)) && (
                     <span data-testid="favorecido-situacao" className="ml-1.5 shrink-0 rounded-sm bg-zinc-200/90 px-1 text-zinc-900">{situacaoDoItem(o.f, (id) => nomePorId.get(id))}</span>
@@ -373,12 +396,6 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                   {mostrarIguais && o.iguais > 0 && (
                     <span data-testid="favorecido-iguais" className="ml-1.5 shrink-0 rounded-sm bg-amber-400/90 px-1 text-zinc-900"
                       title={`${o.iguais} cadastros ativos com este nome — confira o CNPJ/CPF`}>{seloDeIguais(o.iguais)}</span>
-                  )}
-                  {/* documento à direita, em tom apagado: NUNCA corta. Sem documento a área fica vazia (D5). */}
-                  <span data-testid="favorecido-doc-da-opcao" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.documento}</span>
-                  {/* P117 — a cidade DEPOIS do CNPJ: "nome · CNPJ · Cidade/UF", a mesma ordem da linha sob o campo */}
-                  {cidadeDe(o.f) && (
-                    <span data-testid="favorecido-cidade-da-opcao" className={cn("ml-2 shrink-0 whitespace-nowrap", MENU_SECUNDARIO)}>{cidadeDe(o.f)}</span>
                   )}
                   {mostrarUso && <span data-testid="favorecido-uso" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.uso} lanç.</span>}
                 </button>
@@ -424,14 +441,17 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
       {comLinha && (
         /* ⚠ ALTURA FIXA E SEMPRE PRESENTE (D8): escolher, trocar ou limpar o fornecedor não muda a altura do formulário */
         /* 14px com o texto encostado EMBAIXO (fatia 2a, visto na tela): com 12px o anel de foco do campo (4px) cobria o topo do texto */
-        <div data-testid="favorecido-documento" className="flex h-[14px] items-end gap-1.5 overflow-hidden text-[9.5px] leading-3 text-muted-foreground">
+        /* FORN-CAMPO-01 — `linhaCompacta`: 1px abaixo do campo, faixa de 10px, 8,5px (a barra de filtros; exceção declarada do piso) */
+        <div data-testid="favorecido-documento" className={linhaCompacta
+          ? "mt-px flex h-[10px] items-center gap-1.5 overflow-hidden text-[8.5px] leading-[10px] text-muted-foreground"
+          : "flex h-[14px] items-end gap-1.5 overflow-hidden text-[9.5px] leading-3 text-muted-foreground"}>
           {erroDoLeitor ? (
             <>
               <span className="min-w-0 truncate text-destructive" title={erroDoLeitor}>{erroDoLeitor}</span>
               <button type="button" className="shrink-0 underline text-destructive" onClick={lidos.tentarDeNovo}>Tentar de novo</button>
             </>
           ) : (
-            <span className="whitespace-nowrap tabular-nums" data-testid="favorecido-linha-texto" title={textoDaLinhaDoDocumento(escolhido) || documentoDoEscolhido || undefined}>{textoDaLinhaDoDocumento(escolhido)}</span>
+            <span className="whitespace-nowrap tabular-nums" data-testid="favorecido-linha-texto" title={textoDaLinhaDoDocumento(escolhido) || documentoDoEscolhido || undefined}>{linhaDoCampo(escolhido)}</span>
           )}
         </div>
       )}

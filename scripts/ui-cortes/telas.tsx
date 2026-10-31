@@ -51,7 +51,7 @@ import { CasarBlocoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { CasarComBancoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { SugestoesCasarModal } from '@/components/financeiro-v2/SugestoesCasarModal';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
-import type { CandidatoSugestao, Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
+import { sugerirCasamentos, type CandidatoSugestao, type Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { DialogoDesfazerCompromisso } from '@/components/compra/DialogoDesfazerCompromisso';
 import { DialogoAtualizarCompromisso } from '@/components/compra/DialogoAtualizarCompromisso';
@@ -207,11 +207,16 @@ const Casca = ({ children }: { children?: React.ReactNode }) => (
 const HISTORICO_ACHADOS = {
   total: 8,
   achados: Array.from({ length: 8 }, (_, i) => ({
-    lancamento_id: `h${i}`, data_pagamento: `2031-0${(i % 9) + 1}-1${i % 9}`, banco: 'PAGAMENTO DE BOLETO - FORNECEDOR SINTÉTICO COM O NOME BEM COMPRIDO',
+    /* P153b: todos os status (metade em aberto, sem pagamento; um de outra conta; um conciliado), Comp. · Venc., e a fazenda pelo código */
+    lancamento_id: `h${i}`, data_pagamento: i % 2 === 0 ? null : `2031-0${(i % 9) + 1}-1${i % 9}`,
+    data_vencimento: `2031-0${(i % 9) + 1}-1${i % 9}`, data_competencia: `2031-0${(i % 9) + 1}-01`,
+    status_transacao: i % 2 === 0 ? (['previsto', 'programado', 'agendado', 'previsto'][i / 2]) : 'realizado', conciliado: i === 3,
+    fazenda_codigo: 'PUR',
+    banco: 'PAGAMENTO DE BOLETO - FORNECEDOR SINTÉTICO COM O NOME BEM COMPRIDO',
     descricao: 'Compra de Insumos para Suplementação do Rebanho de Engorda · Pedido 4521', fornecedor_id: 'f1',
     fornecedor: 'Cooperativa Agropecuária Exemplo dos Produtores Rurais do Vale Ltda', plano_conta_id: 'p1', centro: 'Pecuária Engorda',
     subcentro: 'Nutrição Engorda Suplementação Mineral e Proteinada', fazenda_id: 'fz1', fazenda: 'Fazenda Sintética do Exemplo Comprido',
-    conta_bancaria_id: 'bb', conta: 'Banco Exemplo com o Nome Comprido · Conta Movimento', valor: -99999999.99, onde: ['banco'],
+    conta_bancaria_id: i === 2 || i === 5 ? 'itau' : 'bb', conta: 'Banco Exemplo com o Nome Comprido · Conta Movimento', valor: -99999999.99, onde: ['banco'],
   })),
   resumo: { fornecedor_id: 'f1', fornecedor: 'Cooperativa Agropecuária Exemplo dos Produtores Rurais do Vale Ltda', vezes: 8, desde: '2031-01-10' },
 };
@@ -592,7 +597,7 @@ if (tela === 'mesclar') {
   const gavetaVG = (a: any) => { const r = VG.gaveta(a); return comFatura && r.lista ? { ...r, lista: { ...r.lista, faturas_cartao: 1 } } : r; };
   g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros'
       ? (duasContas && setTimeout(() => filtrosVG.mudar({ contas: ['c1', 'c2'] }), 0), g.__vgFiltrosReal ?? VG.FILTROS)
-    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela({ ...a, varia: q.get('vg_grupos') === 'varia' })) : fn === 'fn_vg_analise' ? VG.analise({ ...a, grande: q.get('vg_grande') === '1' }) : fn === 'fn_vg_gaveta' || fn === 'fn_vg_gaveta_ordenada' ? gavetaVG(a) : null };
+    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela({ ...a, varia: q.get('vg_grupos') === 'varia' })) : fn === 'fn_vg_analise' ? VG.analise({ ...a, grande: q.get('vg_grande') === '1', centros13: q.get('vg_centros') === '13' }) : fn === 'fn_vg_gaveta' || fn === 'fn_vg_gaveta_ordenada' ? gavetaVG(a) : null };
   montarNaUrl(
     <div className="flex h-full flex-col">
       <BarraSecao area="Financeiro" secao="Visão Geral" atalho={<FiltrosBarraVG />} />
@@ -762,10 +767,35 @@ if (tela === 'mesclar') {
     { tipo: 'nome_valor', motivo: 'nome · valor diferente · vencido set', diasDiff: 23, vencido: true, valorDiferente: true,
       lancamentos: [cs('n1', '2031-09-12', -12345678.9)] },
   ];
+  if (v === 'guariroba') {
+    /* P153b — O CASO que abriu a frente, SINTÉTICO: BB 07/10, "PAGAMENTO FATURA DE ÁGUA - AGUAS GUARIROBA SA", −142,72; a sugestão nova
+       ("mesmo fornecedor · valor difere: previsto 500,00", calculada pelo motor de verdade) e o histórico com os quatro casos: em aberto
+       da mesma conta (Casar), em aberto de outra conta (Casar e trocar conta), pago (Criar igual) e conciliado de outra conta (o selo). */
+    const AGUA: CandidatoSugestao = { lancamento_id: 'agua', valor_assinado: -500, data_vencimento: '2031-10-09', competencia: '2031-10-01',
+      descricao: 'Agua e Esgoto - Escritorio', fornecedor: 'Aguas Guariroba SA', favorecido_id: 'gua', status_transacao: 'previsto', ja_conciliado: false };
+    const EXT = { data: '2031-10-07', historico: 'PAGAMENTO FATURA DE ÁGUA - AGUAS GUARIROBA SA', valor: -142.72 };
+    const lin = (o: Record<string, unknown>) => ({ lancamento_id: 'x', data_pagamento: null, data_vencimento: '2031-10-09', data_competencia: '2031-10-01',
+      status_transacao: 'previsto', conciliado: false, banco: null, descricao: 'Agua e Esgoto - Escritorio', fornecedor_id: 'gua',
+      fornecedor: 'Aguas Guariroba SA', plano_conta_id: 'p1', centro: 'Administração', subcentro: 'Água e Esgoto', fazenda_id: 'fz1',
+      fazenda: 'Administrativo', fazenda_codigo: 'ADM', conta_bancaria_id: 'bb', conta: 'Banco do Brasil', valor: -500, onde: ['fornecedor'], ...o });
+    const HIST = { total: 4, resumo: null, achados: [
+      lin({ lancamento_id: 'g1' }),
+      lin({ lancamento_id: 'g2', data_vencimento: '2031-10-10', conta_bancaria_id: 'itau', conta: 'Itaú Personalité', descricao: 'Agua e Esgoto - Sede' }),
+      lin({ lancamento_id: 'g3', status_transacao: 'realizado', data_pagamento: '2031-09-08', data_vencimento: '2031-09-09', data_competencia: '2031-09-01',
+        valor: -136.53, conciliado: true, banco: 'PAGAMENTO FATURA DE ÁGUA - AGUAS GUARIROBA SA' }),
+      lin({ lancamento_id: 'g4', status_transacao: 'realizado', data_pagamento: '2031-08-08', data_vencimento: '2031-08-09', data_competencia: '2031-08-01',
+        conta_bancaria_id: 'itau', conta: 'Itaú Personalité', valor: -98.1, conciliado: true }),
+    ] };
+    g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_conciliacao_historico_buscar' ? HIST : null };
+    montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} sugestoes={sugerirCasamentos(EXT, [AGUA])} clienteId="cli"
+      onCriarIgual={() => {}} onCasarDoHistorico={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" extrato={EXT} />);
+  } else {
   g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_conciliacao_historico_buscar' ? HISTORICO_ACHADOS : null };
   montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} sugestoes={SUGS} clienteId="cli" onCriarIgual={() => {}}
+    onCasarDoHistorico={() => {}} contaBancariaId="bb"
     nomeConta="Banco Exemplo com o Nome Comprido · Conta Movimento Agrícola 0000-0 / 00000-0 Sintética"
     extrato={{ data: '2031-10-05', historico: `PAGAMENTO DE BOLETO - ${NOME_F.toUpperCase()}`, valor: -99999999.99 }} />);
+  }
 } else if (tela === 'casar-1x1') {
   /* UI-SEM-CORTE-02 — o Casar com o banco 1:1 (o rendimento de R$ 0,01 da Vera, sintetico): o banco simulado diz que nao fecha. */
   if (v === 'pos') {
@@ -780,6 +810,16 @@ if (tela === 'mesclar') {
       extrato={{ extrato_id: 'x1', data: '2027-08-15', historico: 'DEBITO PARCELA CREDITO RURAL · CONTRATO SINTETICO 0.000.000 · PARCELA 2/5', valor: -99999999.99 }}
       iniciais={[{ lancamento_id: 'yp', descricao: 'Amortização 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -88888888.88, data_vencimento: '2027-08-15', status_transacao: 'programado' },
         { lancamento_id: 'yj', descricao: 'Juros 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -9999999.99, data_vencimento: '2027-08-15', status_transacao: 'programado' }]}
+      onConciliado={() => {}} />);
+  } else if (v === 'trocar') {
+    /* P153b (D3) — "Casar e trocar a conta": o em aberto de outra conta levado do histórico, com a confirmação curta (valores no teto) */
+    g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: true, simulado: true, no_extrato: -99999999.99, soma: -99999999.99,
+      trocas_conta: [{ lancamento_id: 'yt', de_id: 'itau', de: 'Banco Exemplo Itaú Personalité · Conta Movimento Sintética', para_id: 'bb', para: 'Banco Exemplo Personalité' }] } : null };
+    montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco Exemplo Personalité"
+      extrato={{ extrato_id: 'x1', data: '2031-10-07', historico: 'PAGAMENTO FATURA DE ÁGUA - AGUAS GUARIROBA SA · CONTA SINTÉTICA DO ESCRITÓRIO', valor: -99999999.99 }}
+      iniciais={[{ lancamento_id: 'yt', descricao: 'Agua e Esgoto - Escritorio da Sede Administrativa', fornecedor: 'Aguas Guariroba SA', valor_assinado: -88888888.88,
+        usarValorDoBanco: true, data_vencimento: '2031-10-09', status_transacao: 'previsto',
+        trocarConta: { de: 'Banco Exemplo Itaú Personalité · Conta Movimento Sintética', para: 'Banco Exemplo Personalité' } }]}
       onConciliado={() => {}} />);
   } else if (v === 'certo') {
     /* CONC-VALOR-CERTO-ACEITA-01 — valor certo com extrato maior: a pergunta do banco no rodapé e o "Ligar com o valor do extrato" (valores no teto). */
@@ -1353,6 +1393,12 @@ if (tela === 'mesclar') {
     /* P143 — a tabela das irmãs: vencimento, pagamento e status (as 3 primeiras pagas, a 4ª vencida) */
     data_vencimento: `2026-${String(4 + k).padStart(2, '0')}-10`, data_pagamento: k <= 3 ? `2026-${String(4 + k).padStart(2, '0')}-10` : null,
     status_transacao: k <= 3 ? 'realizado' : 'programado', conta_bancaria_id: 'elo' }));
+  /* P143-DATAS-01 — `salduas`: DUAS compras iguais seguidas, 12 × 69,90 no cartão (SINTÉTICO): a antiga começou em set/25 (a 6/12…12/12 de
+     fev a ago/26), a nova em set/26 (só a 1/12). `&qual=antiga` abre a 6/12; sem ele, a 1/12 da nova */
+  const ANTIGA = q.get('qual') === 'antiga';
+  const IRMAS_DUAS = [...[6, 7, 8, 9, 10, 11, 12].map((k) => ({ id: ANTIGA && k === 6 ? 'lanc-1' : `antiga-${k}`, k, venc: `2026-${String(k - 4).padStart(2, '0')}-20` })),
+    { id: ANTIGA ? 'nova-1' : 'lanc-1', k: 1, venc: '2026-09-20' }].map((x) => ({ id: x.id, descricao: `Assinatura sintetica Parc ${String(x.k).padStart(2, '0')}/12`,
+    valor: 69.9, data_vencimento: x.venc, data_pagamento: x.venc, status_transacao: 'realizado', conta_bancaria_id: 'elo' }));
   /* P143 (o caso "Parcela 3 - None" da NF 4964, SINTÉTICO) — `salnota`: a descrição sem "k/N"; as irmãs pela MESMA nota do mesmo fornecedor */
   const IRMAS_DA_NOTA = [
     { id: 'nota-1', descricao: 'Manutencao sintetica de cercas da fazenda exemplo', numero_documento: '4964 / 1', data_vencimento: '2026-08-12', data_pagamento: '2026-08-12', status_transacao: 'realizado' },
@@ -1371,6 +1417,7 @@ if (tela === 'mesclar') {
   const PARCELA_DA_COMPRA = v === 'salparcela' || v === 'salparcelapaga';
   g.__bancoBancada = { from: (t: string, e: any) => v === 'salsolta' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_SOLTAS
       : v === 'salnota' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DA_NOTA
+      : v === 'salduas' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DUAS
       : PARCELA_DA_COMPRA && t === 'financiamento_parcelas' ? [{ financiamento_id: 'fin-sint', status: 'pendente' }]
       : PARCELA_DA_COMPRA && t === 'financiamentos' ? [{ natureza: 'parcelamento', status: 'ativo' }]
       : t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
@@ -1442,6 +1489,10 @@ if (m === 'editar' && v === 'salparcela' && q.get('nota') === '11') props.lancam
 /* P104 — `salsolta`: a parcela 6/6 lançada solta (o bloco não oferece parcelar) */
 if (m === 'editar' && v === 'salsolta') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 620.83, data_competencia: '2026-10-10', data_vencimento: '2026-10-10',
   descricao: 'Tinta sintetica de nome comprido para medir - 6/6', status_transacao: 'agendado' };
+/* P143-DATAS-01 — `salduas`: a 1/12 da compra nova (set/26) ou, com `&qual=antiga`, a 6/12 da antiga (fev/26) */
+if (m === 'editar' && v === 'salduas') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 69.9, data_competencia: q.get('qual') === 'antiga' ? '2026-01-26' : '2026-08-26',
+  data_vencimento: q.get('qual') === 'antiga' ? '2026-02-20' : '2026-09-20', data_pagamento: q.get('qual') === 'antiga' ? '2026-02-20' : '2026-09-20',
+  descricao: `Assinatura sintetica Parc ${q.get('qual') === 'antiga' ? '06' : '01'}/12`, status_transacao: 'realizado' };
 /* P143 — `salnota`: "Parcela 3 - None" da NF 4964 (SINTÉTICO): sem "k/N", as irmãs saem pela nota */
 if (m === 'editar' && v === 'salnota') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 500, data_competencia: '2026-07-13', data_vencimento: '2026-10-11',
   descricao: 'Parcela 3 - None', numero_documento: '4964', status_transacao: 'programado' };

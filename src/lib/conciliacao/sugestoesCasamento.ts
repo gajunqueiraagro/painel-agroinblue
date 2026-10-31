@@ -292,10 +292,11 @@ export interface CandidatoSugestao {
 export interface ExtratoParaSugerir { data: string | null; historico: string | null; valor: number; }
 
 /** Na ordem em que aparecem: o mais provável primeiro. */
-export type TipoSugestao = 'mesmo_valor_nome' | 'mesmo_valor' | 'soma' | 'nome_valor' | 'nome_soma' | 'soma_mista';
-/* ⚠ A SOMA DE FORNECEDORES DIFERENTES VEM POR ÚLTIMO — nunca acima de uma pista de nome (decisão do Gabriel, 30/09). */
+export type TipoSugestao = 'mesmo_valor_nome' | 'mesmo_valor' | 'soma' | 'mesmo_fornecedor' | 'nome_valor' | 'nome_soma' | 'soma_mista';
+/* ⚠ A SOMA DE FORNECEDORES DIFERENTES VEM POR ÚLTIMO — nunca acima de uma pista de nome (decisão do Gabriel, 30/09).
+   P153b: o "mesmo fornecedor · valor difere" (em aberto, ±5 dias) vem logo depois das somas exatas e antes da pista de nome solta. */
 const ORDEM_DO_TIPO: Record<TipoSugestao, number> = {
-  mesmo_valor_nome: 0, mesmo_valor: 1, soma: 2, nome_valor: 3, nome_soma: 4, soma_mista: 5,
+  mesmo_valor_nome: 0, mesmo_valor: 1, soma: 2, mesmo_fornecedor: 3, nome_valor: 4, nome_soma: 5, soma_mista: 6,
 };
 
 export interface Sugestao {
@@ -319,6 +320,10 @@ export interface OpcoesSugestao {
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+/** P153b (D1, Gabriel 29/10) — a janela do "mesmo fornecedor · valor difere": ±5 dias do vencimento. Só desta sugestão; a E3 segue como era. */
+export const JANELA_MESMO_FORNECEDOR_DIAS = 5;
+const EM_ABERTO = new Set(['previsto', 'programado', 'agendado']);
+const valorSemMoeda = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const TOL_VALOR = 0.01;
 const TOL_SOMA = 0.05;
 
@@ -423,6 +428,17 @@ export function sugerirCasamentos(
   for (const grupo of porFornecedor.values()) tentarSoma(grupo, 8);
   /* No geral, os 30 mais perto da data — o mesmo corte da prévia —, mas com no máximo 3: acima disso é coincidência. */
   tentarSoma([...menores].sort((a, b) => dias(a) - dias(b)).slice(0, 30), 3);
+
+  // ── P153b: o EM ABERTO do mesmo fornecedor (o nome do extrato no fornecedor OU na descrição), vencendo a ±5 dias, valor diferente ──
+  /* O caso da Guariroba (BB 07/10, −142,72): o recorrente "Agua e Esgoto" de R$ 500 previsto para 09/10. Âmbar: o casar de hoje abre
+     com o valor do banco ("era R$ 500,00") — o mesmo caminho da E3, sem regra nova de gravação. */
+  for (const c of pool) {
+    if (iguais.has(c.lancamento_id) || !EM_ABERTO.has((c.status_transacao ?? '').toLowerCase()) || !c.data_vencimento) continue;
+    if (Math.abs(diasEntre(dataBanco, c.data_vencimento)) > JANELA_MESMO_FORNECEDOR_DIAS) continue;
+    const nome = Math.max(forca.get(c.lancamento_id) ?? 0, forcaDoNome(extrato.historico, c.descricao));
+    if (nome <= 0) continue;
+    pos('mesmo_fornecedor', [c], `mesmo fornecedor · valor difere: previsto ${valorSemMoeda(Number(c.valor_assinado))}`, true);
+  }
 
   // ── E3: o nome casa, o valor não ──
   const doNome = pool.filter((c) => (forca.get(c.lancamento_id) ?? 0) > 0 && !iguais.has(c.lancamento_id));
