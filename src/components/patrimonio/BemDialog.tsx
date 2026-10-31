@@ -9,6 +9,10 @@
  * acumulada antes × depois e pede o motivo (ajuste 3.5 do Chat); a trilha é do banco. Validação e recusa ficam no RODAPÉ (nunca em
  * toast, UX-TOAST-01); o campo pendente fica vermelho. Bem novo: Dados e Lançamentos (o valor sem lançamento — a terra — entra já na
  * criação e grava no mesmo Salvar); depois do primeiro Salvar o modal segue aberto no bem.
+ * ⚠ B2 (116080): o CÓDIGO do bem ("MAQ-001") vem no título e no campo só leitura (no novo, "gerado ao salvar"); a identificação é em
+ * campos separados — Nº próprio, Chassi, Nº de série; Placa e Renavam só em Veículos (ou quando já têm valor), com o LUGAR RESERVADO
+ * nas outras categorias (o modal não muda de altura). O campo antigo aparece como "Identificação antiga", só leitura, quando o bem
+ * gravado o tem e nenhum dos novos (`mostraIdentificacaoAntiga`); o Salvar NÃO o manda (`payloadDoBem`).
  */
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -29,7 +33,9 @@ import {
   useCadastroDoBem, useCategoriasPatrimonio, useLancamentosDoBem, usePastosDoBem, useAvaliacoesDoBem, useDocumentosDoBem,
   usePatrimonioApi, useRelerPatrimonio,
 } from '@/hooks/usePatrimonio';
-import { abasDoBem, brl, jaDeprecia, mesBR, ROTULO_SITUACAO, type AbaBem, type BemDaLista, type CategoriaBem } from '@/lib/patrimonio/patrimonio';
+import {
+  abasDoBem, brl, jaDeprecia, mesBR, mostraIdentificacaoAntiga, mostraPlacaRenavam, ROTULO_SITUACAO, type AbaBem, type BemDaLista, type CategoriaBem,
+} from '@/lib/patrimonio/patrimonio';
 import type { FormBem, PastoLigado } from '@/lib/patrimonio/patrimonioApi';
 import { AbaLancamentos } from './AbaLancamentos';
 import { AbaPastos } from './AbaPastos';
@@ -38,8 +44,8 @@ import { AbaMercado } from './AbaMercado';
 import { AbaDocumentos } from './AbaDocumentos';
 
 const formNovo = (clienteId: string): FormBem => ({
-  id: null, versao: null, cliente_id: clienteId, fazenda_id: '', categoria_id: '', descricao: '', marca: '', modelo: '', ano_fabricacao: null,
-  identificacao: '', observacao: '', situacao: 'em_formacao', em_uso_desde: '', atividade: 'pecuaria', financiamento_id: null,
+  id: null, versao: null, cliente_id: clienteId, fazenda_id: '', categoria_id: '', codigo: null, descricao: '', marca: '', modelo: '', ano_fabricacao: null,
+  identificacao: '', observacao: '', numero_proprio: '', placa: '', chassi: '', numero_serie: '', renavam: '', situacao: 'em_formacao', em_uso_desde: '', atividade: 'pecuaria', financiamento_id: null,
   origem_valor: 'lancamentos', valor_sem_lancamento: null, estimativa_rs_ha: null, estimativa_area_ha: null, area_ha: null,
   matricula: '', nirf: '', seguradora: '', apolice: '', seguro_vence_em: '', vida_util_meses: null, residual_pct: null,
 });
@@ -95,6 +101,8 @@ export function BemDialog({ bemId, clienteId, posicao, linha, aoFechar, aoCriar 
   const deprecia = !!linha && jaDeprecia({ deprecia: linha.deprecia, situacao: linha.situacao, em_uso_desde: linha.em_uso_desde }, hoje);
   const tipoDaLinha: 'terra' | 'pastagem' | 'bem' = categoria?.base_mercado === 'terra' ? 'terra' : categoria?.tem_pastos ? 'pastagem' : 'bem';
   const fazendaCodigo = fazendas.find(f => f.id === form.fazenda_id)?.codigo ?? null;
+  const placaRenavam = mostraPlacaRenavam(categoria?.codigo, form.placa, form.renavam);
+  const antiga = mostraIdentificacaoAntiga(cadastro && cadastro.id === form.id ? cadastro : null);
   const pastosDirty = pastos != null && pastosGravados != null && JSON.stringify(pastos) !== JSON.stringify(pastosGravados);
 
   const set = <K extends keyof FormBem>(k: K, v: FormBem[K]) => {
@@ -135,7 +143,8 @@ export function BemDialog({ bemId, clienteId, posicao, linha, aoFechar, aoCriar 
         const p = await api.salvarPastos(id, pastos, false);
         if (!p.ok) { setRodape(p.erro); setForm(f => ({ ...f, id, versao })); await reler(); return; }
       }
-      setForm(f => ({ ...f, id, versao }));
+      const codigo = typeof r.dados.codigo === 'string' ? r.dados.codigo : form.codigo;
+      setForm(f => ({ ...f, id, versao, codigo }));
       setMotivo(''); setPedeMotivo(null); setErros({});
       toast.success(form.id ? 'Bem salvo.' : 'Bem criado. Agora dá para ligar lançamentos, pastos e documentos.');
       await reler();
@@ -143,7 +152,7 @@ export function BemDialog({ bemId, clienteId, posicao, linha, aoFechar, aoCriar 
     } finally { setSalvando(false); }
   };
 
-  const titulo = form.id ? (form.descricao || 'Bem') : 'Novo bem';
+  const titulo = form.id ? [form.codigo, form.descricao || 'Bem'].filter(Boolean).join(' · ') : 'Novo bem';
   const resumo: Array<{ rotulo: string; valor: string; cor?: string }> = [
     { rotulo: 'situação', valor: linha ? ROTULO_SITUACAO[linha.situacao] : ROTULO_SITUACAO[form.situacao] },
     { rotulo: 'valor de aquisição', valor: linha ? brl(linha.aquisicao) : '—' },
@@ -200,7 +209,16 @@ export function BemDialog({ bemId, clienteId, posicao, linha, aoFechar, aoCriar 
                     <FazendaSelect value={form.fazenda_id} onChange={v => set('fazenda_id', v)} fazendas={fazendas} forcaAdministrativo={false}
                       triggerClassName={cn(REGUA_CAMPO, erros.fazenda && 'border-destructive')} hideAviso />
                   </div>
-                  <div className="col-span-2">
+                </div>
+                {/* o CÓDIGO (só leitura; o banco gera ao criar e não muda) · o nº próprio · a descrição */}
+                <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[84px_96px_minmax(0,1fr)]')}>
+                  <div>
+                    <Rotulo texto="Código" />
+                    <Input value={form.codigo ?? ''} readOnly tabIndex={-1} placeholder="gerado ao salvar" title={form.codigo ?? 'o código é gerado ao salvar'}
+                      className={cn(REGUA_CAMPO, 'bg-muted/60 font-semibold tabular-nums placeholder:font-normal placeholder:text-[10px]')} data-testid="bem-codigo" />
+                  </div>
+                  <div><Rotulo texto="Nº próprio" /><Input value={form.numero_proprio} onChange={e => set('numero_proprio', e.target.value)} className={REGUA_CAMPO} data-testid="bem-numero-proprio" /></div>
+                  <div>
                     <Rotulo texto="Descrição" obrig />
                     <Input value={form.descricao} onChange={e => set('descricao', e.target.value)} className={cn(REGUA_CAMPO, erros.descricao && 'border-destructive')}
                       placeholder={tipoDaLinha === 'terra' ? 'Terra nua 850 ha' : tipoDaLinha === 'pastagem' ? 'Reforma de pastagem — 6 pastos' : 'Trator Valtra A950 4x4'} data-testid="bem-descricao" />
@@ -229,9 +247,27 @@ export function BemDialog({ bemId, clienteId, posicao, linha, aoFechar, aoCriar 
                     <div><Rotulo texto="Modelo" /><Input value={form.modelo} onChange={e => set('modelo', e.target.value)} className={REGUA_CAMPO} /></div>
                     <div><Rotulo texto="Ano" /><Input inputMode="numeric" maxLength={4} value={form.ano_fabricacao != null ? String(form.ano_fabricacao) : ''}
                       onChange={e => { const d = e.target.value.replace(/\D/g, ''); set('ano_fabricacao', d ? Number(d) : null); }} className={cn(REGUA_CAMPO, 'tabular-nums')} /></div>
-                    <div><Rotulo texto="Placa / chassi / nº de série" /><Input value={form.identificacao} onChange={e => set('identificacao', e.target.value)} className={REGUA_CAMPO} /></div>
+                    <div><Rotulo texto="Nº de série" /><Input value={form.numero_serie} onChange={e => set('numero_serie', e.target.value)} className={REGUA_CAMPO} data-testid="bem-numero-serie" /></div>
                   </div>
                 )}
+                {/* CHASSI · PLACA · RENAVAM — a linha existe nos três tipos (mesma altura); na terra e na pastagem fica reservada. Placa e
+                    Renavam só em Veículos (ou com valor): fora disso o lugar fica reservado, invisível */}
+                <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[minmax(0,1fr)_96px_120px]', tipoDaLinha !== 'bem' && 'invisible')} data-testid="bem-linha-identificacao"
+                  aria-hidden={tipoDaLinha !== 'bem' || undefined}>
+                  <div><Rotulo texto="Chassi" /><Input value={form.chassi} onChange={e => set('chassi', e.target.value)} className={REGUA_CAMPO} data-testid="bem-chassi" /></div>
+                  <div className={cn(!placaRenavam && 'invisible')} aria-hidden={!placaRenavam || undefined}>
+                    <Rotulo texto="Placa" /><Input value={form.placa} onChange={e => set('placa', e.target.value)} className={REGUA_CAMPO} data-testid="bem-placa" />
+                  </div>
+                  <div className={cn(!placaRenavam && 'invisible')} aria-hidden={!placaRenavam || undefined}>
+                    <Rotulo texto="Renavam" /><Input inputMode="numeric" value={form.renavam} onChange={e => set('renavam', e.target.value)} className={cn(REGUA_CAMPO, 'tabular-nums')} data-testid="bem-renavam" />
+                  </div>
+                </div>
+                {/* A IDENTIFICAÇÃO ANTIGA (só leitura) — o lugar fica reservado; aparece só quando o bem gravado tem o campo de antes do B2 e
+                    nenhum dos novos (a separação automática não casou). Para usar, copie para os campos acima. */}
+                <div className={cn('mt-1', !antiga && 'invisible')} aria-hidden={!antiga || undefined} data-testid="bem-identificacao-antiga">
+                  <Rotulo texto="Identificação antiga (só leitura) — passe para os campos acima" />
+                  <Input value={form.identificacao} readOnly tabIndex={-1} title={form.identificacao || undefined} className={cn(REGUA_CAMPO, 'bg-muted/60')} />
+                </div>
                 <div className="mt-1">
                   <Rotulo texto="Observação" />
                   <Input value={form.observacao} onChange={e => set('observacao', e.target.value)} className={REGUA_CAMPO} />

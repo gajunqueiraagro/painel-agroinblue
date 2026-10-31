@@ -230,6 +230,11 @@ const CENARIOS = [
       modal('terra-dados', 'Terra nua', 'Dados'), modal('terra-mercado', 'Terra nua', 'Valor de mercado'),
       modal('longo-dados', 'Pivô central', 'Dados'),
       modal('novo-dados', null, 'Dados'), modal('novo-lancamentos', null, 'Lançamentos'),
+      /* B2: o veículo (Placa e Renavam à vista), a máquina só com a identificação ANTIGA (só leitura) e o cabeçalho com o mouse em cima
+         (o hover clareia o navy; antes trocava o fundo por branco e o rótulo sumia) */
+      modal('veiculo-dados', 'Caminhonete Hilux', 'Dados'), modal('antiga-dados', 'Grade aradora', 'Dados'),
+      { nome: 'patrimonio-hover-cabecalho', url: URL, tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="patrimonio-tabela"] th', { hasText: /^Código/ }).first().hover(); await p.waitForTimeout(300); } },
     ];
   })(),
   /* P106 — a tela abre em "Mês atual": o período futuro é o botão "Mês futuro" */

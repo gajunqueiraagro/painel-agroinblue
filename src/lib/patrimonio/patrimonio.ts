@@ -25,10 +25,18 @@ export interface BemDaLista {
   deprecia: boolean;
   tem_mercado: boolean;
   tem_pastos: boolean;
+  /** B2 (116080): "MAQ-001" — gerado pelo banco ao criar, nunca muda (nem trocando a categoria). */
+  codigo: string;
   descricao: string;
   marca: string | null;
   modelo: string | null;
+  /** o campo ANTIGO (texto livre "placa / chassi / série" de antes do B2): a tela nova só o MOSTRA, nunca o grava */
   identificacao: string | null;
+  numero_proprio: string | null;
+  placa: string | null;
+  chassi: string | null;
+  numero_serie: string | null;
+  renavam: string | null;
   situacao: SituacaoBem;
   em_uso_desde: string | null;
   baixado_em: string | null;
@@ -130,11 +138,19 @@ export const dataDoBem = (b: Pick<BemDaLista, 'primeira_data' | 'em_uso_desde'>)
 
 /* ── A LISTA ──────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-export type ColunaBem = 'data' | 'bem' | 'categoria' | 'fazenda' | 'situacao' | 'vida' | 'aquisicao' | 'depreciado' | 'contabil' | 'mercado' | 'origem';
+export type ColunaBem = 'data' | 'codigo' | 'bem' | 'categoria' | 'fazenda' | 'situacao' | 'vida' | 'aquisicao' | 'depreciado' | 'contabil' | 'mercado' | 'origem';
+
+/** O código ordena pelo PREFIXO e depois pelo NÚMERO ("MAQ-999" antes de "MAQ-1000"; o texto puro inverteria). */
+export const chaveDoCodigo = (codigo: string | null | undefined): string | null => {
+  if (!codigo) return null;
+  const m = /^(.*?)-(\d+)$/.exec(codigo);
+  return m ? `${m[1]}-${m[2].padStart(9, '0')}` : codigo;
+};
 
 /** As colunas ordenáveis — TODA coluna ordena (regra do briefing). Ausência vai para o fim (`ordenarPorColuna`). */
 export const COLUNAS_ORDENAVEIS: ReadonlyArray<ColunaOrdenavel<BemDaLista, ColunaBem>> = [
   { coluna: 'data', tipo: 'data', valor: b => dataDoBem(b) },
+  { coluna: 'codigo', tipo: 'texto', valor: b => chaveDoCodigo(b.codigo) },
   { coluna: 'bem', tipo: 'texto', valor: b => b.descricao },
   { coluna: 'categoria', tipo: 'texto', valor: b => nomeCurtoDaCategoria(b) },
   { coluna: 'fazenda', tipo: 'texto', valor: b => b.fazenda_codigo },
@@ -147,11 +163,35 @@ export const COLUNAS_ORDENAVEIS: ReadonlyArray<ColunaOrdenavel<BemDaLista, Colun
   { coluna: 'origem', tipo: 'numero', valor: b => b.n_lancamentos },
 ];
 
-/** O filtro da lista: o chip da categoria (código; vazio = todas) e a busca (descrição, marca, modelo, placa/série). */
+/** Os textos em que a busca procura: descrição, código do bem, marca, modelo, os campos da identificação (B2: nº próprio, placa,
+ *  chassi, nº de série, Renavam) e a antiga, a categoria e a fazenda. */
+export const textosDaBusca = (b: BemDaLista): Array<string | null> => [
+  b.descricao, b.codigo, b.marca, b.modelo, b.numero_proprio, b.placa, b.chassi, b.numero_serie, b.renavam, b.identificacao,
+  b.categoria_nome, b.fazenda_codigo,
+];
+
+/** O filtro da lista: o chip da categoria (código; vazio = todas) e a busca (`textosDaBusca`, sem acento e sem maiúscula). */
 export function filtrarBens(bens: readonly BemDaLista[], categoria: string, busca: string): BemDaLista[] {
   return bens.filter(b => (!categoria || b.categoria_codigo === categoria)
-    && (!busca.trim() || [b.descricao, b.marca, b.modelo, b.identificacao, b.categoria_nome, b.fazenda_codigo].some(t => casaNaBusca(t, busca))));
+    && (!busca.trim() || textosDaBusca(b).some(t => casaNaBusca(t, busca))));
 }
+
+/** O `title` da linha: o código, a descrição, marca e modelo e o que identifica o bem (o novo; sem nenhum novo, o antigo). */
+export function tituloDaLinha(b: BemDaLista): string {
+  const novos = [b.numero_proprio && `nº ${b.numero_proprio}`, b.placa && `placa ${b.placa}`, b.chassi && `chassi ${b.chassi}`,
+    b.numero_serie && `série ${b.numero_serie}`, b.renavam && `Renavam ${b.renavam}`].filter(Boolean);
+  return [b.codigo, b.descricao, b.marca, b.modelo, ...(novos.length ? novos : [b.identificacao])].filter(Boolean).join(' · ');
+}
+
+/** Placa e Renavam são só de Veículos (o banco recusa nas outras categorias): o lugar aparece em Veículos ou quando já há valor
+ *  (para o operador ver e apagar antes de trocar a categoria). Categoria do cliente com o código `veiculos` conta como Veículos. */
+export const mostraPlacaRenavam = (categoriaCodigo: string | null | undefined, placa: string, renavam: string): boolean =>
+  categoriaCodigo === 'veiculos' || placa.trim() !== '' || renavam.trim() !== '';
+
+/** "Identificação antiga" (só leitura): o bem tem o campo de antes do B2 e NENHUM dos campos novos preenchido (a separação de
+ *  09:00 não casou todos os pedaços). Pelo cadastro GRAVADO (não pelo que se digita): o lugar não pisca. */
+export const mostraIdentificacaoAntiga = (g: { identificacao: string; numero_proprio: string; placa: string; chassi: string; numero_serie: string; renavam: string } | null | undefined): boolean =>
+  !!g && g.identificacao.trim() !== '' && [g.numero_proprio, g.placa, g.chassi, g.numero_serie, g.renavam].every(v => v.trim() === '');
 
 export interface TotaisDaLista { n: number; aquisicao: number; depreciado: number; contabil: number; mercado: number; noAno: number }
 

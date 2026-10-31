@@ -28,12 +28,23 @@ function calc(valor: number, vidaAnos: number | null, res: number, desde: string
 const B = (id: string, descricao: string, c: string, faz: 'PUR' | 'RET', sit: 'em_uso' | 'em_formacao', desde: string | null, valor: number, mk: number | null, nl: number, origem: 'lancamentos' | 'sem_lancamento' = 'lancamentos'): BemDaLista => {
   const k = cat(c); const r = calc(valor, k.vida_util_anos, k.residual_pct, desde, sit === 'em_uso');
   return { bem_id: id, fazenda_id: `f${faz}`, fazenda_codigo: faz, categoria_id: k.id, categoria_codigo: k.codigo, categoria_nome: k.nome, deprecia: k.deprecia,
-    tem_mercado: k.tem_mercado, tem_pastos: k.tem_pastos, descricao, marca: null, modelo: null, identificacao: null, situacao: sit, em_uso_desde: sit === 'em_uso' ? desde : null,
+    tem_mercado: k.tem_mercado, tem_pastos: k.tem_pastos, codigo: CODIGO[id] ?? 'BEM-001', descricao, marca: null, modelo: null, ...SEM_IDENT, ...IDENT[id], situacao: sit, em_uso_desde: sit === 'em_uso' ? desde : null,
     baixado_em: null, atividade: 'pecuaria', origem_valor: origem, valor_extra: origem === 'sem_lancamento' ? valor : 0, valor_lancamentos: origem === 'sem_lancamento' ? 0 : valor,
     aquisicao: valor, a_realizar: 0, n_lancamentos: nl, n_a_realizar: 0, n_a_conferir: 0, n_selo: 0, n_repetidas: 0, primeira_data: nl ? desde : null,
     vida_util_meses: k.vida_util_anos ? k.vida_util_anos * 12 : null, residual_pct: k.residual_pct, depreciacao_acumulada: r.da, depreciacao_no_ano: r.ano,
     valor_contabil: Math.round((valor - r.da) * 100) / 100, mercado_valor: mk, mercado_data: mk ? '2026-06-30' : null, mercado_base: mk ? (c === 'terra' ? 'terra_nua' : 'bem') : null,
     area_pastos_ha: c === 'pastagens' && id === 'past' ? 120 : null, versao: 1 };
+};
+/* B2 — os códigos (o pior caso "EQP-1000": o contador passa de 999) e a identificação separada (a Hilux com placa, chassi e Renavam; o
+   trator com chassi e série; a grade só com a identificação ANTIGA — a separação não casou) */
+const CODIGO: Record<string, string> = { mq: 'MAQ-001', gr: 'IMP-001', hi: 'VEI-001', cu: 'INS-001', ce: 'CER-001', ba: 'BEN-001', past: 'PAS-001', fp: 'PAS-002',
+  terra: 'TER-001', be: 'AGU-001', lg: 'EQP-1000' };
+type Ident = Pick<BemDaLista, 'identificacao' | 'numero_proprio' | 'placa' | 'chassi' | 'numero_serie' | 'renavam'>;
+const SEM_IDENT: Ident = { identificacao: null, numero_proprio: null, placa: null, chassi: null, numero_serie: null, renavam: null };
+const IDENT: Record<string, Partial<Ident>> = {
+  mq: { numero_proprio: 'T-07', chassi: 'A950P22118730004', numero_serie: 'A950P22-11873' },
+  hi: { numero_proprio: 'V-03', placa: 'EUM1E62', chassi: '8AJDA3CD4R1834700', renavam: '01234567890' },
+  gr: { identificacao: 'Grade Baldan 16x32 série 1610 nº 4471' },
 };
 const BENS: BemDaLista[] = [
   B('mq', 'Trator Valtra A950 4x4', 'maquinas', 'PUR', 'em_uso', '2022-03-15', 388400, 330000, 3),
@@ -64,8 +75,9 @@ const LANC: Record<string, LancamentoDoBem[]> = {
 };
 const PASTOS = [['Piquete 07', 22.5], ['Piquete 08', 18], ['Piquete 09', 21.3], ['Piquete 10', 19.7], ['Piquete 11', 20.5], ['Piquete 12', 18], ['Piquete 13', 24], ['Mangueira', 6.2]]
   .map(([n, a], i) => ({ id: `pa${i}`, nome: String(n), fazenda_id: 'fRET', area_produtiva_ha: Number(a), ativo: true }));
-const form = (b: BemDaLista): FormBem => ({ id: b.bem_id, versao: 1, cliente_id: 'cli', fazenda_id: b.fazenda_id, categoria_id: b.categoria_id, descricao: b.descricao,
-  marca: b.bem_id === 'mq' ? 'Valtra' : '', modelo: b.bem_id === 'mq' ? 'A950' : '', ano_fabricacao: b.bem_id === 'mq' ? 2022 : null, identificacao: b.bem_id === 'mq' ? 'A950P22-11873' : '',
+const form = (b: BemDaLista): FormBem => ({ id: b.bem_id, versao: 1, cliente_id: 'cli', fazenda_id: b.fazenda_id, categoria_id: b.categoria_id, codigo: b.codigo, descricao: b.descricao,
+  marca: b.bem_id === 'mq' ? 'Valtra' : '', modelo: b.bem_id === 'mq' ? 'A950' : '', ano_fabricacao: b.bem_id === 'mq' ? 2022 : null, identificacao: b.identificacao ?? '',
+  numero_proprio: b.numero_proprio ?? '', placa: b.placa ?? '', chassi: b.chassi ?? '', numero_serie: b.numero_serie ?? '', renavam: b.renavam ?? '',
   observacao: b.bem_id === 'mq' ? 'trator principal da lavoura e da manutenção de pastos' : b.bem_id === 'past' ? 'gradagem, calagem e plantio de Marandu em fev/2025' : '',
   situacao: b.situacao, em_uso_desde: b.em_uso_desde ?? '', atividade: b.bem_id === 'terra' ? 'compartilhado' : 'pecuaria', financiamento_id: null, origem_valor: b.origem_valor,
   valor_sem_lancamento: b.origem_valor === 'sem_lancamento' ? b.aquisicao : null, estimativa_rs_ha: null, estimativa_area_ha: null, area_ha: b.bem_id === 'terra' ? 850 : null,

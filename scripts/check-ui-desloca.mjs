@@ -172,7 +172,9 @@ const CENARIOS = [
   ] },
   ...[['trator', 'Trator Valtra', ['Lançamentos', 'Depreciação', 'Valor de mercado', 'Documentos', 'Dados']],
       ['pastagem', 'Reforma de pastagem', ['Lançamentos', 'Pastos', 'Depreciação', 'Documentos', 'Dados']],
-      ['novo', null, ['Lançamentos', 'Dados']]].map(([n, bem, abas]) => ({
+      ['novo', null, ['Lançamentos', 'Dados']],
+      /* B2: o veículo (Placa/Renavam à vista) e a máquina com a identificação antiga — as mesmas abas, nada se move */
+      ['veiculo', 'Caminhonete Hilux', ['Lançamentos', 'Depreciação', 'Dados']], ['antiga', 'Grade aradora', ['Lançamentos', 'Dados']]].map(([n, bem, abas]) => ({
     nome: `patrimonio-bem-${n}`, url: 'tela=patrimonio&barra=32', regiao: '[role="dialog"]',
     antes: async (p) => {
       if (bem) await p.locator('[data-testid="patrimonio-linha"]', { hasText: bem }).first().click(); else await p.locator('[data-testid="patrimonio-novo"]').click();
