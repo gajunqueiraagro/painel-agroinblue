@@ -276,3 +276,47 @@ describe('Caso 3 — a posição de cada achada no cartão', () => {
     expect([g.slice(0, -1).every((x) => x.valorCent === 19666), g[g.length - 1].valorCent, 3 * 19666 + g.reduce((t, x) => t + x.valorCent, 0)]).toEqual([true, 19662, 196656]);
   });
 });
+
+/* NOTA-PAGA-A-VISTA-01 (Gabriel 31/10 05:30, a NF da homologação; aqui SINTÉTICA) — a nota de 3 duplicatas (917,32 + 916,34 + 916,34 =
+   2.750,00) paga À VISTA num lançamento só do mesmo fornecedor, com o valor da nota inteira: ele não vira a 1/3, nada "falta" por padrão
+   (as duplicatas ficam como informação: "já paga no lançamento acima") e a soma ligada fica a da nota. */
+describe('NOTA-PAGA-A-VISTA-01 — a nota inteira paga à vista num lançamento', () => {
+  /* a 1ª duplicata a 15 dias do pagamento: hoje (a regra dos 20 dias do P128a) o pago de 2.750,00 vira a 1/3 — o caso da homologação */
+  const DUP = [{ n: 1, vencimento: '2031-11-14', valorCent: 91732 }, { n: 2, vencimento: '2031-12-14', valorCent: 91634 }, { n: 3, vencimento: '2032-01-13', valorCent: 91634 }];
+  const NOTA = 275000;
+  const pago = (id: string, valorCent: number, por: LancamentoJaLancado['por'] = ['numero']): LancamentoJaLancado => ({
+    ...l(id, 0, 0, 0, por), valorCent, vencimento: '2031-10-30', pagamento: '2031-10-30', competencia: '2031-10-30', fornecedorPor: 'cnpj' });
+  it('A1 o pago de 2.750,00 é a nota à vista: não casa a 1/3, é o único alvo, e as 3 duplicatas ficam sem lançamento', () => {
+    const r = casarJaLancados(DUP, [pago('av', 275000)], NOTA);
+    expect(r?.aVista?.id).toBe('av');
+    expect(r?.porParcela.map((x) => x.lancamento?.id ?? null)).toEqual([null, null, null]);
+    expect(r?.alvos.map((a) => a.id)).toEqual(['av']);
+    expect(r?.faltam.map((f) => f.n)).toEqual([1, 2, 3]);
+  });
+  it('A2 ± centavos vale (2.749,97); a 6 centavos não é a nota inteira', () => {
+    expect(casarJaLancados(DUP, [pago('av', 274997)], NOTA)?.aVista?.id).toBe('av');
+    expect(casarJaLancados(DUP, [pago('av', 274994)], NOTA)?.aVista ?? null).toBeNull();
+  });
+  it('A3 contraprova (Ferri & Prado): o achado de 917,32 continua casando a 1/3; nada à vista', () => {
+    const r = casarJaLancados(DUP, [{ ...pago('p1', 91732), vencimento: '2031-11-14' }], NOTA);
+    expect(r?.aVista ?? null).toBeNull();
+    expect(r?.porParcela[0].lancamento?.id).toBe('p1');
+  });
+  it('A4 o cancelado, o irmão só pelo parcelamento e a nota de UMA duplicata nunca são "à vista"; dois candidatos = nenhum (nunca adivinha)', () => {
+    expect(casarJaLancados(DUP, [{ ...pago('c', 275000), cancelado: true }, pago('p1', 91732)], NOTA)?.aVista ?? null).toBeNull();
+    expect(casarJaLancados(DUP, [pago('irmao', 275000, ['parcelamento']), pago('p1', 91732)], NOTA)?.aVista ?? null).toBeNull();
+    expect(casarJaLancados([{ n: 1, vencimento: '2031-10-30', valorCent: NOTA }], [pago('um', 275000)], NOTA)?.aVista ?? null).toBeNull();
+    expect(casarJaLancados(DUP, [pago('a', 275000), pago('b', 275000)], NOTA)?.aVista ?? null).toBeNull();
+    /* o fornecedor é o critério da busca (`fornecedorPor`): achado sem ele (só pela chave/lançamento aberto) não é "à vista" */
+    expect(casarJaLancados(DUP, [{ ...pago('sem', 275000), fornecedorPor: null }], NOTA)?.aVista ?? null).toBeNull();
+  });
+  it('A5 a tabela: a linha do lançamento à vista primeiro (a nota inteira ao lado, sem diferença), depois as 3 duplicatas; a frase', () => {
+    const r = casarJaLancados(DUP, [pago('av', 275000)], NOTA);
+    if (!r) throw new Error('sem achado');
+    const linhas = linhasSistemaNota(r, NOTA);
+    expect(linhas.map((x) => [x.rotulo, x.sistema?.id ?? null, x.situacao, x.notaValorCent, x.difValor])).toEqual([
+      ['à vista', 'av', 'realizada', 275000, false], ['1/3', null, 'so_na_nota', 91732, false], ['2/3', null, 'so_na_nota', 91634, false],
+      ['3/3', null, 'so_na_nota', 91634, false]]);
+    expect(fraseDoAchado(r, linhas, NOTA)).toMatch(/^A nota inteira já está paga à vista num lançamento \(R\$ 2\.750,00 ✓\)/);
+  });
+});

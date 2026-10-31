@@ -17,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
-import type { PastoOcupacao } from '@/hooks/usePastoOcupacao';
+import type { DadosDoPastoNoMes, PastoOcupacao } from '@/lib/mapa/mapaDoMes';
 import { toast } from 'sonner';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import { dataLocalISO, hojeLocal } from '@/lib/datas/hojeLocal';
@@ -59,13 +59,15 @@ interface Props {
   pastos: Pasto[];
   categorias: CategoriaRebanho[];
   ocupacoes: Map<string, PastoOcupacao>;
+  /** MAPA-02a: as categorias do pasto vêm do mês do mapa (`useMapaDoMes`), não de leitura própria do último fechamento. */
+  dadosDoMes: Map<string, DadosDoPastoNoMes>;
   geoLoading: boolean;
   onUpload: () => void;
   onRefresh?: () => void;
   onRenderedChange?: (count: number) => void;
 }
 
-export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, geoLoading, onUpload, onRefresh, onRenderedChange }: Props) {
+export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, dadosDoMes, geoLoading, onUpload, onRefresh, onRenderedChange }: Props) {
   const { fazendaAtual } = useFazenda();
   const { registrarMovimentacao } = usePastoMovimentacoes();
 
@@ -78,7 +80,6 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
   const [saving, setSaving] = useState(false);
   const lastFitKeyRef = useRef('');
 
-  const [selectedCategories, setSelectedCategories] = useState<{ nome: string; quantidade: number; peso_medio_kg: number | null }[]>([]);
   const [recentTransfers, setRecentTransfers] = useState<{ nome_cat: string; quantidade: number; data: string; origem: string }[]>([]);
 
   const {
@@ -98,44 +99,17 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     return oc?.cabecas || 999999;
   }, [transfer?.originPasto, ocupacoes]);
 
-  // Load categories + recent transfers
+  // MAPA-02a: as categorias do pasto são as do mês do mapa (fonte única); aqui só os recém-transferidos
+  const selectedCategories = useMemo(
+    () => (selectedGeo?.pasto_id ? dadosDoMes.get(selectedGeo.pasto_id)?.categorias ?? [] : []),
+    [selectedGeo?.pasto_id, dadosDoMes],
+  );
+
   useEffect(() => {
-    if (!selectedGeo?.pasto_id) { setSelectedCategories([]); setRecentTransfers([]); return; }
+    if (!selectedGeo?.pasto_id) { setRecentTransfers([]); return; }
     const pastoId = selectedGeo.pasto_id;
 
     (async () => {
-      const { data: fechamentos } = await supabase
-        .from('fechamento_pastos')
-        .select('id')
-        .eq('pasto_id', pastoId)
-        .order('ano_mes', { ascending: false })
-        .limit(1);
-
-      if (fechamentos?.length) {
-        const { data: itens } = await supabase
-          .from('fechamento_pasto_itens')
-          .select('quantidade, peso_medio_kg, categoria_id')
-          .eq('fechamento_id', fechamentos[0].id);
-
-        if (itens?.length) {
-          const catIds = itens.map(i => i.categoria_id);
-          const { data: cats } = await supabase
-            .from('categorias_rebanho')
-            .select('id, nome')
-            .in('id', catIds);
-          const catMap = new Map((cats || []).map(c => [c.id, c.nome]));
-          setSelectedCategories(itens.map(i => ({
-            nome: catMap.get(i.categoria_id) || 'Sem nome',
-            quantidade: i.quantidade,
-            peso_medio_kg: i.peso_medio_kg,
-          })).sort((a, b) => b.quantidade - a.quantidade));
-        } else {
-          setSelectedCategories([]);
-        }
-      } else {
-        setSelectedCategories([]);
-      }
-
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const { data: transfers } = await supabase

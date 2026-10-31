@@ -942,6 +942,7 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
       .toEqual(['Compra cantina sintetica', 'Sicredi Lavoura', 'Benefícios sinteticos', '1.966,56', 'programada']);
     expect(consultas.comoEstaoHoje.mock.calls.at(-1)?.[1]).toEqual(['gulart-1']);
     expect((await naAbaParcelas()) && screen.getAllByTestId('nota-ja-lancada-linha')).toHaveLength(1);
+    expect(screen.getByTestId('nota-ja-lancada-col-acao').style.width).toBe('74px');   // sem a linha à vista, a coluna Ação de sempre
     expect(screen.queryByTestId('nota-caminhos')).toBeNull();
     await waitFor(() => expect(screen.getByTestId('nota-completar-revisar')).toBeEnabled());
     expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 1');
@@ -1328,5 +1329,63 @@ describe('P163-2 — a nota já lançada em abas', () => {
     await waitFor(() => expect(screen.getByTestId('nota-ja-lancada-diferencas').textContent)
       .toBe('⚠ Diferente entre elas: descrição (4 jeitos), competência (15/09/2026, 16/09/2026), conta (3 em Sicredi Lavoura, 1 em outra conta), '
         + 'safra (3 em 26/27-Pec, 1 em 26/27-SOJ). Acerte marcando a coluna em "Como vai ficar".'));
+  });
+});
+
+/* NOTA-PAGA-A-VISTA-01 (Gabriel 31/10 05:30; aqui SINTÉTICO) — a nota de 4 duplicatas (4 × 491,64 = 1.966,56) paga À VISTA num lançamento só
+   do fornecedor, com o valor da nota inteira: antes, ele virava a 1/4 e as outras 3 "nasciam" (a soma passava da nota e nada se gravava) */
+describe('NOTA-PAGA-A-VISTA-01 — a nota inteira paga à vista num lançamento', () => {
+  const AVISTA = jaLancado(1, '2026-10-10', 'realizado', { id: 'avista', valorCent: 196656, financiamentoId: null, descricao: 'Insumos Sinteticos',
+    parcelas: [], por: ['numero'] });
+  it('V1 a linha do lançamento "Pago à vista", as 4 duplicatas "Já paga no lançamento acima"; sem a recusa da soma; grava só ligando (nada criado, sem "k/N")', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [AVISTA] });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await naAbaParcelas();
+    const linhas = within(screen.getByTestId('nota-ja-lancada')).getAllByTestId('nota-ja-lancada-linha');
+    expect(linhas.map((x) => [within(x).getByTestId('nota-ja-lancada-parc').textContent, x.getAttribute('data-situacao'), within(x).getByTestId('nota-acao').textContent,
+      within(x).getByTestId('nota-ja-lancada-efeito').textContent])).toEqual([
+      ['à vista', 'conciliada', 'Pago à vista▾', 'recebe a nota'],
+      ...[1, 2, 3, 4].map((k) => [`${k}/4`, 'so_na_nota', 'Já paga▾', 'não cria nada'])]);
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('A nota inteira já está paga à vista num lançamento (R$ 1.966,56 ✓)');
+    expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
+    /* a barra Resultado em cinza "não junta (1 parcela)", nunca o âmbar "faltam ou sobram" (Gabriel 31/10 09:00) */
+    expect(screen.queryByTestId('nota-juntar-frase')).toBeNull();
+    expect(screen.getByTestId('nota-nao-junta').textContent).toBe('não junta (1 parcela)');
+    /* o "Pago à vista" inteiro: a coluna Ação mais larga só quando há a linha à vista (as outras notas seguem com 74) */
+    expect(screen.getByTestId('nota-ja-lancada-col-acao').style.width).toBe('92px');
+    expect(linhas[0].querySelector('[data-testid="nota-ja-lancada-efeito"]')?.getAttribute('title')).toContain('recebe a nota e o PDF · valor, vencimento e pagamento não mudam');
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['avista']);
+    expect(pedidoGravado().pedido[0]).not.toHaveProperty('descricao');
+    expect(pedidoGravado().opcoes.juntar).toBe(false);
+    expect(g.lancamento).not.toHaveBeenCalled();
+  });
+  it('V3 pelo "+ Adicionar documento" do lançamento já pago (a porta 2): o aberto é o à vista — anexa e vincula, sem forçar as parcelas', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [{ ...AVISTA, por: ['lancamento'] }] });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores, partindoDe: 'avista' });
+    await naAbaParcelas();
+    const linhas = within(screen.getByTestId('nota-ja-lancada')).getAllByTestId('nota-ja-lancada-linha');
+    expect(within(linhas[0]).getByTestId('nota-ja-lancada-efeito').textContent).toBe('este lançamento · recebe a nota');
+    expect(linhas.slice(1).map((x) => within(x).getByTestId('nota-acao').textContent)).toEqual(['Já paga▾', 'Já paga▾', 'Já paga▾', 'Já paga▾']);
+    expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['avista']);
+    expect(g.lancamento).not.toHaveBeenCalled();
+  });
+  it('V2 escolher "Criar" numa duplicata volta ao caso de antes: a soma passa da nota e a recusa aparece (o aviso continua valendo)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [AVISTA] });
+    const { comoGravadores } = gravadoresFalsos();
+    await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await naAbaParcelas();
+    const linhas = within(screen.getByTestId('nota-ja-lancada')).getAllByTestId('nota-ja-lancada-linha');
+    fireEvent.keyDown(within(linhas[2]).getByTestId('nota-acao'), { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('nota-acao-criar'));
+    expect((await screen.findByTestId('nota-recusa-compra')).textContent).toContain('somam R$ 2.458,20, mais que a nota (R$ 1.966,56)');
+    expect(screen.queryByTestId('nota-nao-junta')).toBeNull();   // a barra volta ao âmbar: o cinza "1 parcela" é só do caso à vista
+    expect(screen.getByTestId('nota-juntar-frase').textContent).toContain('⚠ não junta');
   });
 });

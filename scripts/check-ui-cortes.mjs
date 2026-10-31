@@ -40,7 +40,7 @@ const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.s
 const FOTOS = arg('--fotos');
 const SO = arg('--so');
 /* P163-2 — as variantes da bancada `nota-pdf` em que a nota JÁ ESTÁ LANÇADA (o modal em abas) */
-const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
+const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
 
 const TAMANHOS_DO_CONTRATO = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* P104 — os 9 tamanhos do gate e o do print do Gabriel (1750×1000) */
@@ -75,6 +75,22 @@ const parcelarEm4 = async (p) => {
   await p.locator('[data-testid="parcelar-este-abrir"]').click(); await p.waitForTimeout(300);
   await p.locator('[data-testid="parcelar-este-n"]').fill('4'); await p.waitForTimeout(600);
 };
+/* MAPA-02a — os gestos do mapa de pastos em tela cheia (`tela=mapa-geo`): camada pelo menu, mês pelo seletor, pasto pela busca */
+const mapaCamada = (nome) => async (p) => {
+  await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Camadas' }).first().click(); await p.waitForTimeout(250);
+  await p.getByRole('menuitem', { name: nome, exact: true }).first().click(); await p.waitForTimeout(500);
+};
+const mapaMes = (rotulo) => async (p) => {
+  await p.locator('[data-testid="mapa-mes"]').first().click(); await p.waitForTimeout(250);
+  await p.getByRole('option', { name: rotulo, exact: true }).first().click(); await p.waitForTimeout(700);
+};
+const mapaPasto = (nome) => async (p) => {
+  /* fix1: a busca de pasto (antes o 1º combobox da barra, que era o seletor de ANO: o painel nunca abria) */
+  await p.locator('[data-testid="mapa-busca"] button').first().click(); await p.waitForTimeout(250);
+  await p.keyboard.type(nome); await p.waitForTimeout(150); await p.keyboard.press('Enter'); await p.waitForTimeout(700);
+  await p.locator('[data-testid="mapa-painel"]').waitFor({ timeout: 4000 }); // o painel abriu de verdade (senão o cenário falha)
+};
+const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
   { nome: 'mesclar-vazio', url: 'tela=mesclar&vazio=1' },
   { nome: 'mesclar-comparar', url: 'tela=mesclar' },
@@ -177,6 +193,29 @@ const CENARIOS = [
      `reticencias` fica fora; corte calado, vazamento, número partido, quebra, sobreposição e cabeçalho valem.
      ⚠ SÓ DE 1000px PARA CIMA: em 750 e 814 os cartões se sobrepõem e o "Gerar" sai da tabela (anterior ao REC-COLUNAS-01) — divida
      REC-COLUNAS-01b no CLAUDE.md; quando fechar, este cenário passa a TAMANHOS_DO_CONSORCIO. */
+  /* MAPA-02a — o mapa de pastos em tela cheia (só de 1126 para cima: a barra do mock não tem desenho abaixo). O mapa inteiro com filtros e
+     legenda; o painel de um pasto (categorias, histórico, observação); a camada Atividade; o pasto SEM fechamento no mês; o mês de agosto */
+  { nome: 'mapa-geo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-geo-painel', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
+  /* MAPA-02a-fix1 (5) — o "+ Adicionar" na estrutura do mock, com o submenu Infraestrutura aberto (tudo "em breve" menos Importar) */
+  { nome: 'mapa-geo-menu-adicionar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(300);
+    await p.getByRole('menuitem', { name: /Infraestrutura/ }).first().hover(); await p.waitForTimeout(500);
+    await p.getByRole('menuitem', { name: 'Galpão' }).first().waitFor({ timeout: 3000 }); } },
+  /* MAPA-02a-fix1 B — sem o rodapé do vínculo, o painel do pasto (histórico + categorias com o total + observações) não rola a 1366×768 */
+  { nome: 'mapa-geo-painel-sem-rolar', url: 'tela=mapa-geo', tamanhos: [[1366, 768], [1440, 800]], antes: mapaPasto('P_01'),
+    semRolagem: { dentro: '[data-testid="mapa-painel"]' } },
+  { nome: 'mapa-geo-painel-nome-longo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('Retiro') },
+  { nome: 'mapa-geo-sem-fechamento', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_03') },
+  { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
+  { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
+  /* MAPA-02b — o fundo (neutro na bancada: nenhum tile do Google nem do OSM) e os créditos no canto, logo abaixo do zoom: em satélite com o
+     copyright do tamanho dos reais (e com o painel aberto, junto do zoom), no Mapa, na queda sem satélite (o aviso) e na Operação, que nasce
+     pelo mesmo hook. A Validação fica de fora: já reprova na base (rótulos e "Area Total" cortados) → pendência MAPA-VALIDACAO-CORTES */
+  { nome: 'mapa-geo-fundo-mapa', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Mapa') },
+  { nome: 'mapa-geo-sem-satelite', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-geo-sem-satelite-painel', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
+  { nome: 'mapa-geo-operacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
   { nome: 'recorrencias', url: 'tela=recorrencias', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'rolagem', 'tabela'] },
   /* P172 — Cadastros › Plano de Contas nos dez tamanhos do P92: o admin (com as ações), os inativos ligados, o cliente (só leitura), a
@@ -184,12 +223,22 @@ const CENARIOS = [
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92 },
   /* PROD-EVOLUCAO-01a — Produção › Evolução no Ano (nível 1), pior caso de largura (`mocks/evolucao.ts`): NENHUM número cortado a 1126 e a 1366,
      nas três unidades, uma fazenda e sem meta (Gabriel 30/10 17:16) */
-  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]] },
-  { nome: 'evolucao-ano-arroba', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/) },
+  /* PROD-EVOLUCAO-01b-fix1 (Gabriel 31/10): o período é Mês | Ano (o Acum. saiu; abre no Ano) e os rótulos curtos cabem INTEIROS (`data-inteiro`) */
+  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-arroba', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'evolucao-ano-t', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
-  { nome: 'evolucao-ano-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Ano$/) },
-  { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-ano-mes', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Mês/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-fazenda-arroba', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
+  /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (o mês por categoria), pior caso (`mocks/evolucaoMes.ts`): os 8 tipos, 3 tipos, mês
+     sem Fechamento, sem linha e a aba Composição; NENHUM número cortado a 1126 e a 1366 (Gabriel 30/10 17:16) */
+  { nome: 'evolucao-mes', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-mes-3-tipos', url: 'tela=evolucao-mes&barra=32&tipos=3', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-mes-aberto', url: 'tela=evolucao-mes&barra=32&aberto=1', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-mes-vazio', url: 'tela=evolucao-mes&barra=32&vazio=1', tamanhos: [[1126, 579], [1366, 768]] },
+  /* fix1 (item 4): o painel abre em Composição; "Conferir pesos" (2ª aba) com dd/mm e nomes curtos que cabem INTEIROS */
+  { nome: 'evolucao-mes-pesos', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Conferir pesos/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'plano-contas-inativos', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: clicar('[data-testid="mostrar-inativos"]') },
   { nome: 'plano-contas-cliente', url: 'tela=plano-contas&perfil=cliente', tamanhos: TAMANHOS_DO_P92 },
   { nome: 'plano-contas-busca-4', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: async (p) => { await p.locator('[data-testid="busca-plano"]').fill('Outras Saídas'); await p.waitForTimeout(500); } },
@@ -291,6 +340,18 @@ const CENARIOS = [
       await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').first().dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
       await p.locator(`[data-testid="analise-tabela-linha-${ativ}"]`).click(); await p.locator('[data-testid="analise-tabela-bloco-variavel"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500);
     } })),
+  /* VG-META-NO-MODO-01 (regra final, Gabriel 31/10 11:13) — a análise do Custeio total nos 3 modos × R$ e R$/cab/mês: no Mês só as colunas
+     e a meta do mês; na Média a média e a meta média; no Acum. como estava; em R$/cab os rótulos com 2 casas */
+  ...['mes', 'media', 'acum'].flatMap((modo) => ['rs', 'cab'].map((un) => ({
+    nome: `visao-geral-analise-modo-${modo}-${un}`, url: 'tela=visao-geral&barra=0', tamanhos: [...TAMANHOS_DA_VG, [1366, 768]], regiao: '[data-testid="modal-analise"]',
+    rotulosSvg: '[data-testid="analise-grafico-svg"] text, [data-testid="analise-donut-centro"]',
+    folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
+    semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').first().dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
+      if (modo !== 'mes') { await p.locator('[data-testid="analise-tabela"]').getByText(modo === 'media' ? 'Média' : 'Acum.', { exact: true }).dispatchEvent('click'); await p.waitForTimeout(600); }
+      if (un === 'cab') { await p.locator('[data-testid="analise-unidade"]').click(); await p.locator('[data-testid="analise-unidade-rs_cab"]').click(); await p.waitForTimeout(700); }
+    } }))),
   /* P100 item 5 — o PIOR CASO de largura das tabelas do modal ("NJ Saídas · Acumulado 12 meses"): `&vg_grande=1` (valores na casa
      de dezenas de milhões, % perto de +999,9%, 5 dígitos de lançamentos), dez/26 (12 meses), aba da raiz, Acum.: nada corta, nada cola
      (folga >= 6 px), o centro do donut cabe no furo */
@@ -434,7 +495,7 @@ const CENARIOS = [
   /* P95 — `pelachave` (a previa da chave digitada: o chip, emissao e valor em ambar) e `irmas` (a nota em 4 parcelas soltas, "k/4") */
   /* NOTA-NOVA-MODAL-REAL (30/10) — a nota NOVA não fica mais nesta tela (passa ao Novo lançamento: `nota-nova-modal-*` abaixo); aqui, a já
      lançada e a barrada (`diverge`: a chave não confere) */
-  ...['diverge', 'jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  ...['diverge', 'jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
   })),
   /* P101 — abaixo de 1000px a prévia tem três abas: as outras duas (Parcelas e lançamento; Arquivo) em todas as variantes, nos estreitos. P163-2: a

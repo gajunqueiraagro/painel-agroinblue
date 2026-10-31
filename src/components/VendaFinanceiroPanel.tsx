@@ -21,6 +21,7 @@ import { FRASE_META_NAO_VAI_AO_FINANCEIRO, ehCenarioMeta } from '@/lib/financeir
 import { type BasePrecoVenda, CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { valorDoLancamento } from '@/lib/financeiro/valorDoLancamento';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
 import { salvarBoitelLote, salvarBoitelPlanejamento, vincularBoitelAoLancamento, gerarFinanceiroBoitel, carregarBoitelOperacao } from '@/hooks/useBoitelOperacoes';
 import type { FiltroVisual } from '@/lib/statusOperacional';
@@ -770,7 +771,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         setGerando(false);
         return false;
       }
-      const { error, data: insertedData } = await supabase.from('financeiro_lancamentos_v2').insert(inserts).select();
+      /* VG-CENTAVO D1a (Gabriel 31/10 07:42): todo valor vai ao banco em centavos (o Funrural, a comissão e o frete são contas) */
+      const { error, data: insertedData } = await supabase.from('financeiro_lancamentos_v2').insert(inserts.map((r) => ({ ...r, valor: valorDoLancamento(r.valor) }))).select();
       if (error) {
         console.error('[VendaFinanceiro] INSERT ERROR', JSON.stringify(error));
         console.error('[VendaFinanceiro] payload', JSON.stringify(inserts));

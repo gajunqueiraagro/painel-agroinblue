@@ -177,7 +177,8 @@ type AbaDaNota = 'arquivo' | 'nota' | 'lancamento';
  *  "Arquivo" (ver a nota) entra como aba só abaixo de 1000px — acima dele a nota fica à esquerda */
 type AbaDaNotaJa = 'arquivo' | 'hoje' | 'sistema' | 'ficar' | 'itens' | 'lancamento';
 /** Mock da nota já lançada (29/10) — a ação de cada linha da "Parcelas × sistema" */
-type AcaoDaLinha = 'vincular' | 'deixar' | 'criar';
+/** NOTA-PAGA-A-VISTA-01 — 'jaPaga': a duplicata da nota paga à vista no lançamento de cima (não cria nada) */
+type AcaoDaLinha = 'vincular' | 'deixar' | 'criar' | 'jaPaga';
 
 export interface NotaParaLancar { arquivo: File; bytes: ArrayBuffer; lido: NotaLidaOk; doXml: DoXml }
 
@@ -418,7 +419,8 @@ export function NotaFiscalDialog({
   const [acoes, setAcoes] = useState<ReadonlyMap<string, AcaoDaLinha>>(new Map());
   useEffect(() => { setAcoes(new Map()); }, [jaLancada]);
   const acaoDoLancamento = (id: string): AcaoDaLinha => acoes.get(id) ?? 'vincular';
-  const acaoDaFalta = (numero: number): AcaoDaLinha => acoes.get(`falta:${numero}`) ?? 'criar';
+  /* NOTA-PAGA-A-VISTA-01 — com a nota paga à vista num lançamento, a duplicata vem "Já paga no lançamento acima" (criar é escolha) */
+  const acaoDaFalta = (numero: number): AcaoDaLinha => acoes.get(`falta:${numero}`) ?? (jaLancada?.aVista ? 'jaPaga' : 'criar');
   const alvosEscolhidos = (jaLancada?.alvos ?? []).filter((l) => acaoDoLancamento(l.id) !== 'deixar');
   const faltamEscolhidas = faltamDaNota.filter((x) => acaoDaFalta(x.n) === 'criar');
   /* "No sistema hoje" — a fazenda, o subcentro e o fornecedor de cada achado como estão no banco (só leitura; falhou = a aba diz) */
@@ -536,12 +538,17 @@ export function NotaFiscalDialog({
     if (x.situacao === 'so_na_nota') {
       const nF = numeroDaFalta(x);
       if (nF !== null && acaoDaFalta(nF) === 'deixar') return { texto: 'não é criada', curto: 'não é criada', cadeado: false };
+      if (nF !== null && acaoDaFalta(nF) === 'jaPaga') return { texto: 'já paga no lançamento acima: não cria nada', curto: 'não cria nada', cadeado: false };
       const c = contaEscolhida ? contas.find((k) => k.id === contaEscolhida) : undefined;
       return { texto: `nasce programada${c ? ` · conta ${c.nome_exibicao || c.nome_conta}` : ''}${naCompra}`, curto: juntarAgora ? `nasce como ${x.rotulo}` : 'nasce programada', cadeado: false };
     }
     if (x.situacao === 'so_no_sistema' || !l) return { texto: 'fica de fora (não é desta nota)', curto: 'fica de fora', cadeado: false };
     if (acaoDoLancamento(l.id) === 'deixar') return { texto: 'fica como está (não recebe a nota)', curto: 'fica como está', cadeado: false };
     const paga = x.situacao === 'conciliada' || x.situacao === 'realizada';
+    /* NOTA-PAGA-A-VISTA-01 — vincular só liga: a nota e o PDF; valor, vencimento, pagamento e descrição ficam (sem "k/N") */
+    if (jaLancada?.aVista && l.id === jaLancada.aVista.id) {
+      return { texto: 'recebe a nota e o PDF · valor, vencimento e pagamento não mudam', curto: 'recebe a nota', cadeado: paga };
+    }
     const descricao = descricaoSemInformacao(l.descricao) ? ' · descrição da nota' : ` · "… ${x.rotulo}"`;
     const daNota = !paga && caminho === 'atualizar' && (x.difData || x.difValor)
       ? ` · ${x.difData && x.notaVencimento ? `venc. ${dataInteira(l.vencimento).slice(0, 5)} → ${dataInteira(x.notaVencimento).slice(0, 5)}` : ''}${x.difData && x.difValor ? ', ' : ''}${x.difValor && x.notaValorCent !== null ? `valor → ${reais(x.notaValorCent)}` : ''} (da nota)` : '';
@@ -555,9 +562,15 @@ export function NotaFiscalDialog({
     if (x.situacao === 'so_no_sistema' || (!l && nF === null)) return <span className="text-muted-foreground">—</span>;
     const chave = l ? l.id : `falta:${nF ?? 0}`;
     const atual = l ? acaoDoLancamento(l.id) : acaoDaFalta(nF ?? 0);
-    const opcoes: { valor: AcaoDaLinha; rotulo: string; curto: string }[] = l
+    const aVista = jaLancada?.aVista ?? null;
+    const opcoes: { valor: AcaoDaLinha; rotulo: string; curto: string }[] = l && aVista && l.id === aVista.id
+      ? [{ valor: 'vincular', rotulo: 'Pago à vista: a nota inteira neste lançamento', curto: 'Pago à vista' },
+        { valor: 'deixar', rotulo: 'Deixar como está', curto: 'Deixar' }]
+      : l
       ? [{ valor: 'vincular', rotulo: parecida ? 'É esta: vincular' : 'Vincular a nota', curto: parecida ? 'É esta' : 'Vincular' },
         { valor: 'deixar', rotulo: 'Deixar como está', curto: 'Deixar' }]
+      : aVista
+      ? [{ valor: 'jaPaga', rotulo: 'Já paga no lançamento acima', curto: 'Já paga' }, { valor: 'criar', rotulo: 'Criar', curto: 'Criar' }]
       : [{ valor: 'criar', rotulo: 'Criar', curto: 'Criar' }, { valor: 'deixar', rotulo: 'Não criar', curto: 'Não criar' }];
     const escolhida = opcoes.find((o) => o.valor === atual);
     const rotulo = escolhida?.rotulo ?? '';
@@ -566,7 +579,7 @@ export function NotaFiscalDialog({
         <DropdownMenuTrigger asChild>
           <button type="button" disabled={!!ocupado} data-testid="nota-acao" data-acao={atual}
             className={cn('inline-flex h-[15px] max-w-full items-center gap-1 rounded border px-1.5 text-[9.5px] font-semibold',
-              atual === 'deixar' ? 'border-border bg-muted text-muted-foreground' : parecida ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-blue-200 bg-blue-50 text-blue-700')}>
+              atual === 'deixar' || atual === 'jaPaga' ? 'border-border bg-muted text-muted-foreground' : parecida ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-blue-200 bg-blue-50 text-blue-700')}>
             <span className="min-w-0 truncate" title={rotulo}>{escolhida?.curto ?? ''}</span><span className="shrink-0 font-normal">▾</span>
           </button>
         </DropdownMenuTrigger>
@@ -584,7 +597,8 @@ export function NotaFiscalDialog({
     if (!jaLancada) return [];
     const nDup = p.duplicatas.length;
     const nAlvos = jaLancada.alvos.length;
-    const nFaltam = jaLancada.faltam.length;
+    /* NOTA-PAGA-A-VISTA-01 — paga à vista: as duplicatas só nascem se o operador escolher "Criar" */
+    const nFaltam = jaLancada.aVista ? nACriar : jaLancada.faltam.length;
     const completa = soltas ? `Junta os ${soltas.n} numa compra parcelada e anexa a nota a todos.`
       : `Anexa a nota ${nAlvos === 1 ? 'ao lançamento achado' : `aos ${nAlvos} achados`}${nFaltam ? ` e cria ${nFaltam === 1 ? 'a parcela que falta' : `as ${nFaltam} que faltam`}` : ''}.`;
     return [
@@ -598,7 +612,7 @@ export function NotaFiscalDialog({
         faz: `Cria ${nDup >= 2 ? `${nDup} parcelas novas` : 'um lançamento novo'} com a nota (pede o motivo). Os achados ficam como estão.`,
         naoMuda: '⚠ duplica: a compra fica em dobro.' },
     ];
-  }, [jaLancada, soltas, programadasQueDiferem, p.duplicatas.length]);
+  }, [jaLancada, soltas, programadasQueDiferem, p.duplicatas.length, nACriar]);
   /* P96a — a NF já anexada à mão numa das N, com valor/emissão diferentes da nota lida: NUNCA se troca sozinha */
   const [docsDasSoltas, setDocsDasSoltas] = useState<DocumentoDaParcela[]>([]);
   useEffect(() => {
@@ -1332,7 +1346,9 @@ export function NotaFiscalDialog({
                   {/* de 1024 para cima a tabela CABE (nada corta): Ação e Efeito curtos (o inteiro no title); estreita, rola de lado */}
                   <table className="w-full min-w-[780px] table-fixed border-collapse">
                     <colgroup><col style={{ width: 36 }} /><col style={{ width: 66 }} /><col style={{ width: 62 }} /><col style={{ width: 68 }} /><col style={{ width: 66 }} />
-                      <col /><col style={{ width: 76 }} /><col style={{ width: 62 }} /><col style={{ width: 72 }} /><col style={{ width: 74 }} /><col style={{ width: 98 }} /></colgroup>
+                      <col /><col style={{ width: 76 }} /><col style={{ width: 62 }} /><col style={{ width: 72 }} />
+                      {/* NOTA-PAGA-A-VISTA-01: com a linha à vista, a Ação cabe o "Pago à vista" inteiro (o que sobra sai da Descrição) */}
+                      <col style={{ width: jaLancada?.aVista ? 92 : 74 }} data-testid="nota-ja-lancada-col-acao" /><col style={{ width: 98 }} /></colgroup>
                     <thead className="sticky top-0 z-10 bg-primary">
                       <tr>
                         <th className={cn(TH9, 'text-center')} colSpan={3}>Na nota</th>
@@ -1701,7 +1717,7 @@ export function NotaFiscalDialog({
                     <Checkbox checked={juntarMarcado} onCheckedChange={(v) => setJuntarMarcado(v === true)} className="h-3 w-3" data-testid="nota-juntar-caixa" />
                     <span>junta as {soltas.n}</span>
                   </label>
-                ) : juncao.frase ? (
+                ) : juncao.frase && !(jaLancada?.aVista && nACriar === 0) ? (
                   <span className="shrink-0 text-amber-900" title={noCartao ? juncao.frase.replace(' duplicatas ', ' parcelas no cartão ') : juncao.frase} data-testid="nota-juntar-frase">
                     ⚠ não junta ({juncao.frase.includes('fica') ? 'uma fica como está' : juncao.frase.includes('já é parcela') || juncao.frase.includes('já são parcelas') ? 'já é parcela' : 'faltam ou sobram'})</span>
                 ) : <span className="shrink-0 text-muted-foreground" data-testid="nota-nao-junta">não junta ({alvosEscolhidos.length + nACriar === 1 ? '1 parcela' : 'já é uma compra'})</span>}

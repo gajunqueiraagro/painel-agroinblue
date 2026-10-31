@@ -45,6 +45,22 @@ const digitar = (sel, txt) => async (p) => { await p.locator(sel).first().fill(t
 
 /* Cada estado e' um gesto aplicado em sequencia; cada um e' comparado com o estado INICIAL da tela. `url` = outra pagina inteira
    comparada com a inicial (a faixa de aviso aparecendo). */
+/* MAPA-02a — os gestos do mapa de pastos em tela cheia (`tela=mapa-geo`): camada pelo menu, mês pelo seletor, pasto pela busca */
+const mapaCamada = (nome) => async (p) => {
+  await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Camadas' }).first().click(); await p.waitForTimeout(250);
+  await p.getByRole('menuitem', { name: nome, exact: true }).first().click(); await p.waitForTimeout(500);
+};
+const mapaMes = (rotulo) => async (p) => {
+  await p.locator('[data-testid="mapa-mes"]').first().click(); await p.waitForTimeout(250);
+  await p.getByRole('option', { name: rotulo, exact: true }).first().click(); await p.waitForTimeout(700);
+};
+const mapaPasto = (nome) => async (p) => {
+  /* fix1: a busca de pasto (antes o 1º combobox da barra, que era o seletor de ANO: o painel nunca abria) */
+  await p.locator('[data-testid="mapa-busca"] button').first().click(); await p.waitForTimeout(250);
+  await p.keyboard.type(nome); await p.waitForTimeout(150); await p.keyboard.press('Enter'); await p.waitForTimeout(700);
+  await p.locator('[data-testid="mapa-painel"]').waitFor({ timeout: 4000 }); // o painel abriu de verdade (senão o cenário falha)
+};
+const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
   { nome: 'fornecedores', url: 'tela=fornecedores&barra=32&n=2356', estados: [
     ['por pagina 50', botao(/^50$/)], ['por pagina 200', botao(/^200$/)], ['por pagina 100', botao(/^100$/)],
@@ -142,13 +158,25 @@ const CENARIOS = [
     antes: async (p) => { await p.getByText('Pagamento', { exact: true }).first().click(); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await espera(p, 600); },
     estados: [10, 14].map((n) => [`${n} parcelas`, { url: `tela=lancamento&m=editar&v=salparcela&pp=${n}` }]) },
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
+  /* MAPA-02a — o mapa de pastos: trocar a camada, o mês e o pasto não move a barra, os KPIs, os filtros, o painel nem a legenda */
+  { nome: 'mapa-geo', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], estados: [
+    ['painel P_01', mapaPasto('P_01')], ['painel P_03 sem fechamento', mapaPasto('P_03')], ['painel nome longo', mapaPasto('Retiro')],
+    ['camada kg/ha', mapaCamada('Lotação (kg/ha)')], ['camada atividade', mapaCamada('Atividade')], ['camada cabeças', mapaCamada('Cabeças')],
+    ['camada tipo de área', mapaCamada('Tipo de área')], ['mês agosto', mapaMes('Ago')], ['mês setembro', mapaMes('Set')],
+    /* MAPA-02b — trocar o fundo não move nada (os créditos têm lugar e altura fixos) */
+    ['fundo mapa', mapaCamada('Mapa')], ['fundo satélite', mapaCamada('Satélite')],
+  ] },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor
      nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
   /* PROD-EVOLUCAO-01a — trocar unidade, período e a meta não desloca a barra, os cards nem as colunas (larguras fixas pelo maior valor) */
   { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], estados: [
-    ['@', botao(/^@$/)], ['t', botao(/^t$/)], ['cabeças', botao(/^Cabeças$/)], ['ano', botao(/^Ano$/)], ['mês', botao(/^Mês/)], ['acum', botao(/^Acum/)],
+    ['@', botao(/^@$/)], ['t', botao(/^t$/)], ['cabeças', botao(/^Cabeças$/)], ['ano', botao(/^Ano/)], ['mês', botao(/^Mês/)], ['ano de novo', botao(/^Ano/)],
     ['sem meta', clicar('[data-testid="evolucao-com-meta"]')], ['com meta', clicar('[data-testid="evolucao-com-meta"]')]] },
+  /* PROD-EVOLUCAO-01b — as setas do mês, o cenário e as abas do painel não deslocam a barra, os cards nem a tabela */
+  { nome: 'evolucao-mes', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], estados: [
+    ['mês anterior', clicar('[aria-label="mês anterior"]')], ['mês seguinte', clicar('[aria-label="mês seguinte"]')],
+    ['meta', botao(/^Meta$/)], ['realizado', botao(/^Realizado$/)], ['pesos', botao(/^Conferir pesos/)], ['composição', botao(/^Composição$/)]] },
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, estados: [
     ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['inativos desligado', clicar('[data-testid="mostrar-inativos"]')],
     ['busca 4 contas', digitar('[data-testid="busca-plano"]', 'Outras Saídas')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],

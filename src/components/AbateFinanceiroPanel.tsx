@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { FRASE_META_NAO_VAI_AO_FINANCEIRO, ehCenarioMeta } from '@/lib/financeiro/metaNaoVaiAoFinanceiro';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { valorDoLancamento } from '@/lib/financeiro/valorDoLancamento';
 import { mirrorMetaToPlanejamento, deleteMetaPlanejamentoByMovimentacao } from '@/lib/financeiro/metaPlanejamentoMirror';
 
 interface Parcela {
@@ -439,7 +440,9 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       }
 
       console.log('[AbateFinanceiro] INSERT payload', JSON.stringify(inserts, null, 2));
-      const { error, data: insertedData } = await supabase.from('financeiro_lancamentos_v2').insert(inserts).select('id');
+      /* VG-CENTAVO D1a: todo valor do abate (parcela, líquido, dedução) vai ao banco em centavos */
+      const { error, data: insertedData } = await supabase.from('financeiro_lancamentos_v2')
+        .insert(inserts.map((r) => ({ ...r, valor: valorDoLancamento(r.valor) }))).select('id');
       if (error) {
         console.error('[AbateFinanceiro] INSERT ERROR', error, JSON.stringify(error));
         console.error('[AbateFinanceiro] INSERT payload was', JSON.stringify(inserts));

@@ -929,12 +929,13 @@ export const ORDEM_CENTROS_JUROS_AGRICULTURA = [
   'Juros de Financiamento Agricultura',
 ] as const;
 
+// P176 (20261028114050): os mesmos 4 centros de Investimento nas atividades — "Pastagem" e "Solo" viraram "Formação".
 export const ORDEM_CENTROS_INVESTIMENTO_PECUARIA = [
-  'Infraestrutura', 'Máquinas', 'Pastagem', 'RH',
+  'Infraestrutura', 'Máquinas', 'Formação', 'RH',
 ] as const;
 
 export const ORDEM_CENTROS_INVESTIMENTO_AGRICULTURA = [
-  'Infraestrutura', 'Máquinas', 'Solo', 'RH',
+  'Infraestrutura', 'Máquinas', 'Formação', 'RH',
 ] as const;
 
 export const ORDEM_CENTROS_REPOSICAO_BOVINOS = [

@@ -69,6 +69,8 @@ export interface LinhaDaEvolucao {
   comSinal?: boolean;
   /** Δ % é em pontos? (desfrute já é %) */
   deltaEmPontos?: boolean;
+  /** a explicação do rótulo curto (fix1, item 6): o nome cabe inteiro e o resto vai no `title` */
+  title?: string;
 }
 
 const TIPOS_ENTRADA: FluxoTipo[] = ['nascimento', 'compra'];
@@ -76,9 +78,13 @@ const TIPOS_SAIDA: FluxoTipo[] = ['abate', 'venda', 'consumo', 'morte'];
 /** desfrute = (abates + vendas + consumo) ÷ rebanho inicial (Gabriel 30/10; `TIPOS_DESFRUTE_OFICIAL`) */
 export const TIPOS_DESFRUTE: FluxoTipo[] = ['abate', 'venda', 'consumo'];
 
+/* fix1 (Gabriel 31/10, item 6): nomes curtos que cabem INTEIROS; a explicação no `title` (`TITLE`) */
 const ROTULO: Record<FluxoTipo, string> = {
-  nascimento: 'Nascimentos', compra: 'Compras', transferencia_entrada: 'Transf. de fazenda (entrou)',
-  abate: 'Abates', venda: 'Vendas em pé', consumo: 'Consumo', morte: 'Mortes', transferencia_saida: 'Transf. de fazenda (saiu)',
+  nascimento: 'Nascimentos', compra: 'Compras', transferencia_entrada: 'Transf. entrada',
+  abate: 'Abates', venda: 'Vendas em pé', consumo: 'Consumo', morte: 'Mortes', transferencia_saida: 'Transf. saída',
+};
+const TITLE: Partial<Record<FluxoTipo, string>> = {
+  transferencia_entrada: 'Transferência de outra fazenda (entrou nesta)', transferencia_saida: 'Transferência para outra fazenda (saiu desta)',
 };
 /** compra, abate e venda têm OC; o resto só lançamento */
 const DESTINO_DO_TIPO: Record<FluxoTipo, Destino> = {
@@ -211,12 +217,13 @@ export function montarEvolucao({ real, meta, unidade, periodo, global }: Entrada
   });
 
   linhas.push(linhaDeFluxo('entradas', 'Entradas externas', 'bloco-entrada', tiposEntrada, 1));
-  for (const t of tiposEntrada) linhas.push(linhaDeFluxo(t, ROTULO[t], 'entrada', [t], 1, { destino: DESTINO_DO_TIPO[t], tipo: t }));
+  for (const t of tiposEntrada) linhas.push(linhaDeFluxo(t, ROTULO[t], 'entrada', [t], 1, { destino: DESTINO_DO_TIPO[t], tipo: t, title: TITLE[t] }));
   linhas.push(linhaDeFluxo('saidas', 'Saídas externas', 'bloco-saida', tiposSaida, -1));
-  for (const t of tiposSaida) linhas.push(linhaDeFluxo(t, ROTULO[t], 'saida', [t], 1, { destino: DESTINO_DO_TIPO[t], tipo: t }));
+  for (const t of tiposSaida) linhas.push(linhaDeFluxo(t, ROTULO[t], 'saida', [t], 1, { destino: DESTINO_DO_TIPO[t], tipo: t, title: TITLE[t] }));
 
   /* INTERNAS — não mudam o total do Global: a transferência entre fazendas (só no Global) e a evolução de categoria (entrou = saiu) */
-  linhas.push({ id: 'internas', rotulo: 'Internas · não mudam o total', nivel: 'bloco-interna', casas: 0, meses: doze.map(() => null), acum: null, meta: null });
+  linhas.push({ id: 'internas', rotulo: 'Internas', title: 'Internas: não mudam o total do rebanho (a transferência entre fazendas e a evolução de categoria)',
+    nivel: 'bloco-interna', casas: 0, meses: doze.map(() => null), acum: null, meta: null });
   if (global) {
     linhas.push(linhaDeFluxo('transferencia', 'Transf. entre fazendas', 'interna', ['transferencia_saida'], 1, { destino: 'lanc', tipo: 'transferencia_saida' }));
   }
