@@ -223,11 +223,13 @@ const CENARIOS = [
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92 },
   /* PROD-EVOLUCAO-01a — Produção › Evolução no Ano (nível 1), pior caso de largura (`mocks/evolucao.ts`): NENHUM número cortado a 1126 e a 1366,
      nas três unidades, uma fazenda e sem meta (Gabriel 30/10 17:16) */
-  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]] },
-  { nome: 'evolucao-ano-arroba', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/) },
+  /* PROD-EVOLUCAO-01b-fix1 (Gabriel 31/10): o período é Mês | Ano (o Acum. saiu; abre no Ano) e os rótulos curtos cabem INTEIROS (`data-inteiro`) */
+  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-arroba', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'evolucao-ano-t', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
-  { nome: 'evolucao-ano-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Ano$/) },
-  { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-ano-mes', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Mês/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-fazenda-arroba', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
   /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (o mês por categoria), pior caso (`mocks/evolucaoMes.ts`): os 8 tipos, 3 tipos, mês
      sem Fechamento, sem linha e a aba Composição; NENHUM número cortado a 1126 e a 1366 (Gabriel 30/10 17:16) */
@@ -235,7 +237,8 @@ const CENARIOS = [
   { nome: 'evolucao-mes-3-tipos', url: 'tela=evolucao-mes&barra=32&tipos=3', tamanhos: [[1126, 579], [1366, 768]] },
   { nome: 'evolucao-mes-aberto', url: 'tela=evolucao-mes&barra=32&aberto=1', tamanhos: [[1126, 579], [1366, 768]] },
   { nome: 'evolucao-mes-vazio', url: 'tela=evolucao-mes&barra=32&vazio=1', tamanhos: [[1126, 579], [1366, 768]] },
-  { nome: 'evolucao-mes-composicao', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Composição$/) },
+  /* fix1 (item 4): o painel abre em Composição; "Conferir pesos" (2ª aba) com dd/mm e nomes curtos que cabem INTEIROS */
+  { nome: 'evolucao-mes-pesos', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Conferir pesos/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'plano-contas-inativos', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: clicar('[data-testid="mostrar-inativos"]') },
   { nome: 'plano-contas-cliente', url: 'tela=plano-contas&perfil=cliente', tamanhos: TAMANHOS_DO_P92 },
   { nome: 'plano-contas-busca-4', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: async (p) => { await p.locator('[data-testid="busca-plano"]').fill('Outras Saídas'); await p.waitForTimeout(500); } },
@@ -332,6 +335,18 @@ const CENARIOS = [
       await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').first().dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
       await p.locator(`[data-testid="analise-tabela-linha-${ativ}"]`).click(); await p.locator('[data-testid="analise-tabela-bloco-variavel"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500);
     } })),
+  /* VG-META-NO-MODO-01 (regra final, Gabriel 31/10 11:13) — a análise do Custeio total nos 3 modos × R$ e R$/cab/mês: no Mês só as colunas
+     e a meta do mês; na Média a média e a meta média; no Acum. como estava; em R$/cab os rótulos com 2 casas */
+  ...['mes', 'media', 'acum'].flatMap((modo) => ['rs', 'cab'].map((un) => ({
+    nome: `visao-geral-analise-modo-${modo}-${un}`, url: 'tela=visao-geral&barra=0', tamanhos: [...TAMANHOS_DA_VG, [1366, 768]], regiao: '[data-testid="modal-analise"]',
+    rotulosSvg: '[data-testid="analise-grafico-svg"] text, [data-testid="analise-donut-centro"]',
+    folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
+    semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').first().dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
+      if (modo !== 'mes') { await p.locator('[data-testid="analise-tabela"]').getByText(modo === 'media' ? 'Média' : 'Acum.', { exact: true }).dispatchEvent('click'); await p.waitForTimeout(600); }
+      if (un === 'cab') { await p.locator('[data-testid="analise-unidade"]').click(); await p.locator('[data-testid="analise-unidade-rs_cab"]').click(); await p.waitForTimeout(700); }
+    } }))),
   /* P100 item 5 — o PIOR CASO de largura das tabelas do modal ("NJ Saídas · Acumulado 12 meses"): `&vg_grande=1` (valores na casa
      de dezenas de milhões, % perto de +999,9%, 5 dígitos de lançamentos), dez/26 (12 meses), aba da raiz, Acum.: nada corta, nada cola
      (folga >= 6 px), o centro do donut cabe no furo */

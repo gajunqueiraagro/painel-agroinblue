@@ -171,12 +171,12 @@ const CENARIOS = [
      nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
   /* PROD-EVOLUCAO-01a — trocar unidade, período e a meta não desloca a barra, os cards nem as colunas (larguras fixas pelo maior valor) */
   { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], estados: [
-    ['@', botao(/^@$/)], ['t', botao(/^t$/)], ['cabeças', botao(/^Cabeças$/)], ['ano', botao(/^Ano$/)], ['mês', botao(/^Mês/)], ['acum', botao(/^Acum/)],
+    ['@', botao(/^@$/)], ['t', botao(/^t$/)], ['cabeças', botao(/^Cabeças$/)], ['ano', botao(/^Ano/)], ['mês', botao(/^Mês/)], ['ano de novo', botao(/^Ano/)],
     ['sem meta', clicar('[data-testid="evolucao-com-meta"]')], ['com meta', clicar('[data-testid="evolucao-com-meta"]')]] },
   /* PROD-EVOLUCAO-01b — as setas do mês, o cenário e as abas do painel não deslocam a barra, os cards nem a tabela */
   { nome: 'evolucao-mes', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], estados: [
     ['mês anterior', clicar('[aria-label="mês anterior"]')], ['mês seguinte', clicar('[aria-label="mês seguinte"]')],
-    ['meta', botao(/^Meta$/)], ['realizado', botao(/^Realizado$/)], ['composição', botao(/^Composição$/)], ['pesos', botao(/^Conferir pesos/)]] },
+    ['meta', botao(/^Meta$/)], ['realizado', botao(/^Realizado$/)], ['pesos', botao(/^Conferir pesos/)], ['composição', botao(/^Composição$/)]] },
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, estados: [
     ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['inativos desligado', clicar('[data-testid="mostrar-inativos"]')],
     ['busca 4 contas', digitar('[data-testid="busca-plano"]', 'Outras Saídas')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],

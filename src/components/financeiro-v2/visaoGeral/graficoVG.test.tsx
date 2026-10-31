@@ -5,6 +5,8 @@
  *   G3 a linha do saldo COMEÇA no ponto "i" (saldo inicial) e é CURVA (Bézier), não reta
  *   G4 azul ≥ 0 e vermelha < 0 trocando no zero (a mesma curva recortada acima/abaixo do zero); o PREVISTO laranja e pontilhado fino,
  *      recortado a partir do último mês realizado
+ *   G5 (Gabriel 31/10 11:13) a linha do saldo com a espessura da linha da gaveta (1,6 px, medida no navegador; era 2) e os marcadores e
+ *      a pontilhada do previsto na mesma proporção (×0,8): cores, valores e posições não mudam
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { render } from '@testing-library/react';
@@ -77,5 +79,15 @@ describe('gráfico entradas × saídas', () => {
     const xFev = num(getByTestId('coluna-2026-02'), 'x') + num(getByTestId('coluna-2026-02'), 'width') / 2;
     expect(num(real, 'width')).toBeCloseTo(xFev, 5);
     expect(num(prevC, 'x')).toBeCloseTo(xFev, 5);
+  });
+
+  it('G5 saldo a 1,6 px (a da gaveta), marcadores e previsto ×0,8', () => {
+    const { getByTestId, container } = render(<GraficoVG tela={TELA} modo="flx" sel="2026-02" onSel={() => {}} />);
+    expect(getByTestId('linha-saldo-pos').getAttribute('stroke-width')).toBe('1.6');
+    expect(getByTestId('linha-saldo-neg').getAttribute('stroke-width')).toBe('1.6');
+    expect(getByTestId('linha-saldo-previsto').getAttribute('stroke-width')).toBe('1.12');
+    const raios = [...container.querySelectorAll('circle')].filter((c) => c.querySelector('title')?.textContent?.startsWith('saldo final'))
+      .map((c) => c.getAttribute('r'));
+    expect(raios).toEqual(['1.92', '2.72', '1.92', '1.92']);
   });
 });

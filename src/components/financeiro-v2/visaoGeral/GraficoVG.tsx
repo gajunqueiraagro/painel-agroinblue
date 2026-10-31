@@ -174,6 +174,9 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
     if (yMeta !== null && metaSel != null) els.push(<text key="mtv" x={L + iw + 3} y={yMeta + 3} fontSize={7.5} fill="#a85a00">{fmtL(metaSel)}</text>);
     if (yMed !== null && vMed != null) els.push(<text key="mdv" x={L + iw + 3} y={yMed + 3} fontSize={7.5} fontWeight={700} fill={ladoUnico === 'entrada' ? COR.mediaEnt : COR.mediaSai}>{fmtL(vMed)}</text>);
     if (saldo) {
+      /* Gabriel 31/10 11:13 — a linha do saldo com a espessura da linha da gaveta (1,6 px, medida no navegador; era 2) e os marcadores e
+         a pontilhada do previsto na mesma proporção (×0,8); cores, valores e posições como antes */
+      const TRACO = 1.6, ESCALA = TRACO / 2;
       const pts = saldo.map((v, k) => ({ x: X(k), y: Y(v ?? 0), v: v ?? 0, k }));
       /* a curva começa no "i" (o saldo inicial do período) e liga em jan */
       const linha: [number, number][] = [...(saldoIni != null ? [[L + 0.5 * slot, Y(saldoIni)] as [number, number]] : []), ...pts.map((p) => [p.x, p.y] as [number, number])];
@@ -182,12 +185,12 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
       const d = curva(linha);
       els.push(
         <g key="saldo-real" clipPath={`url(#${id}-real)`}>
-          <path d={d} fill="none" stroke={COR.pos} strokeWidth={2} clipPath={`url(#${id}-acima)`} data-testid="linha-saldo-pos" />
-          <path d={d} fill="none" stroke={COR.neg} strokeWidth={2} clipPath={`url(#${id}-abaixo)`} data-testid="linha-saldo-neg" />
+          <path d={d} fill="none" stroke={COR.pos} strokeWidth={TRACO} clipPath={`url(#${id}-acima)`} data-testid="linha-saldo-pos" />
+          <path d={d} fill="none" stroke={COR.neg} strokeWidth={TRACO} clipPath={`url(#${id}-abaixo)`} data-testid="linha-saldo-neg" />
         </g>,
         ult < meses.length - 1 ? (
           <g key="saldo-prev" clipPath={`url(#${id}-prev)`}>
-            <path d={d} fill="none" stroke={COR.previsto} strokeWidth={1.4} strokeDasharray="1.2 2.6" strokeLinecap="round" data-testid="linha-saldo-previsto" />
+            <path d={d} fill="none" stroke={COR.previsto} strokeWidth={+(1.4 * ESCALA).toFixed(2)} strokeDasharray="1.2 2.6" strokeLinecap="round" data-testid="linha-saldo-previsto" />
           </g>
         ) : null);
       defsSaldo = (
@@ -201,7 +204,7 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
       if (saldoIni != null) rotulos.push({ chave: 'svi', x: L + 0.5 * slot, y: Y(saldoIni) - 5, t: fmtL(saldoIni), cor: corSinal(saldoIni), forte: false, prio: 1, testid: 'rotulo-saldo-inicial' });
       pts.forEach((p) => {
         const am = meses[p.k].am, prev = !!meses[p.k].previsto;
-        els.push(<circle key={`sc${p.k}`} cx={p.x} cy={p.y} r={am === sel ? 3.4 : 2.4} fill={prev ? COR.previsto : corSinal(p.v)} stroke="#fff" strokeWidth={1}>
+        els.push(<circle key={`sc${p.k}`} cx={p.x} cy={p.y} r={+((am === sel ? 3.4 : 2.4) * ESCALA).toFixed(2)} fill={prev ? COR.previsto : corSinal(p.v)} stroke="#fff" strokeWidth={1}>
           <title>{`saldo final de ${rotuloMes(am)}${prev ? ' (previsto)' : ''}: ${brl(p.v)}`}</title></circle>);
         rotulos.push({ chave: `sv${p.k}`, x: p.x, y: p.y - 5, t: fmtL(p.v), cor: prev ? COR.previsto : corSinal(p.v), forte: am === sel,
           prio: am === sel ? -1 : 2, testid: `rotulo-saldo-${am}` });
