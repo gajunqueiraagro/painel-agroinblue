@@ -240,3 +240,30 @@ export function resumoDosPastos(
     area: area > 0 ? area : null,
   };
 }
+
+/** MAPA-PERF-01 — a linha lida de `fechamento_pastos` com os itens embutidos (`fechamento_pasto_itens(...)`). */
+export interface FechamentoComItens extends FechamentoLido {
+  fazenda_id?: string | null;
+  fechamento_pasto_itens?: ItemLido[] | null;
+}
+
+/**
+ * MAPA-PERF-01 — separa o que veio numa consulta só (fechamentos da janela com os itens embutidos) no formato da `montarMapaDoMes`:
+ * só as fazendas pedidas, só os meses da janela e cada fechamento UMA vez (o banco já filtra; aqui é a garantia de que nada de fora
+ * nem repetido entra na conta).
+ */
+export function separarFechamentosEItens(linhas: readonly FechamentoComItens[], fazendaIds: readonly string[], janela: readonly string[]):
+  { fechamentos: FechamentoLido[]; itens: ItemLido[] } {
+  const meses = new Set(janela);
+  const fazendas = new Set(fazendaIds);
+  const fechamentos: FechamentoLido[] = [];
+  const itens: ItemLido[] = [];
+  const vistos = new Set<string>();
+  for (const l of linhas) {
+    if ((l.fazenda_id != null && !fazendas.has(l.fazenda_id)) || !meses.has(l.ano_mes) || vistos.has(l.id)) continue;
+    vistos.add(l.id);
+    fechamentos.push({ id: l.id, pasto_id: l.pasto_id, ano_mes: l.ano_mes, tipo_uso_mes: l.tipo_uso_mes, status: l.status });
+    for (const i of l.fechamento_pasto_itens ?? []) itens.push({ ...i, fechamento_id: l.id });
+  }
+  return { fechamentos, itens };
+}

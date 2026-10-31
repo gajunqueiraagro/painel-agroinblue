@@ -660,7 +660,9 @@ if (tela === 'mesclar') {
     from: (t: string, e: any) => t === 'fazenda_geometrias' ? MAPA.GEOMETRIAS
       : t === 'pastos' ? MAPA.PASTOS
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
+      // MAPA-PERF-01: os itens vêm EMBUTIDOS no fechamento (o banco falso não faz o embed; a linha já o traz)
       : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
+        .map(f => ({ ...f, fechamento_pasto_itens: MAPA.ITENS.filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       : [],
     rpc: () => null,
@@ -676,7 +678,7 @@ if (tela === 'mesclar') {
     from: (t: string, e: any) => t === 'fazenda_geometrias' ? GL.GEOMETRIAS
       : t === 'pastos' ? GL.PASTOS
       : t === 'categorias_rebanho' ? GL.CATEGORIAS
-      : t === 'fechamento_pastos' ? GL.FECHAMENTOS
+      : t === 'fechamento_pastos' ? GL.FECHAMENTOS.map(f => ({ ...f, fechamento_pasto_itens: GL.ITENS.filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? GL.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       : [],
     rpc: () => null,
