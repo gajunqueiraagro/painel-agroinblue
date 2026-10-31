@@ -3,9 +3,9 @@
  * Um mês só (D1), escolhido no seletor da barra: todo número vem do `useMapaDoMes` (o fechamento DAQUELE mês; atividade =
  * `tipo_uso_mes`, D3); as faixas de lotação vêm de `faixasLotacao.ts` (D2, 300/500); as camadas e a legenda, de `camadasDoMapa.ts`.
  * Desenho: pastos pela camada; áreas pelo `fazenda_geometrias.tipo`; `area_total` só contorno tracejado, por baixo e sem clique;
- * área que não é pasto mostra o nome ao passar o mouse e não abre o painel. Clique no pasto abre o painel de vidro (330px).
+ * área que não é pasto mostra o nome ao passar o mouse e não abre o painel. Clique no pasto abre o painel de vidro (286px, fix1 C).
  * Estabilidade visual: barra, KPIs, filtros, painel e legenda têm lugar e largura fixos — trocar camada, mês, filtro ou pasto não move
- * nada. As ações do rodapé do painel são as que já existiam no Gestor (alterar e remover o vínculo).
+ * nada. O painel é só leitura (fix1 B): o vínculo do polígono com o pasto fica só na aba Validação.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import L from 'leaflet';
@@ -14,16 +14,19 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent,
+  DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, Link2, ListFilter, MapPin, Plus, Unlink, Upload, X } from 'lucide-react';
+import { itemFunciona, MENU_ADICIONAR } from '@/lib/mapa/menuAdicionar';
+import { ChevronDown, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
-import { COR_DA_FAIXA } from '@/lib/mapa/faixasLotacao';
-import { mesAbreviado, mesCurtoNumerico, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
+import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Ponto } from '@/lib/mapa/rotulosDoMapa';
+import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
+import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
 
 interface Props {
@@ -36,10 +39,7 @@ interface Props {
   carregandoMes: boolean;
   erroDoMes: string | null;
   geoLoading: boolean;
-  /** O rebanho oficial do MESMO mês (null = sem dado). */
-  rebanhoOficial: number | null;
   onImportar: () => void;
-  onLink?: (geoId: string, pastoId: string) => Promise<boolean>;
   onRenderedChange?: (count: number) => void;
   /** O seletor de ano/mês (o mesmo do Fechamento Área, mês compartilhado). */
   seletorDeMes: ReactNode;
@@ -48,7 +48,41 @@ interface Props {
 }
 
 const VIDRO = 'rounded-[10px] border border-white/60 bg-white/[0.78] shadow-[0_8px_28px_rgba(0,0,0,0.28)] backdrop-blur-[14px] backdrop-saturate-[1.2]';
-const MIN_HA_ROTULO = 8;
+/* fix1 (2): o rótulo do pasto — nome 10px/600, kg/ha 9,5px (o piso da casa) mais claro; tamanho fixo em qualquer zoom */
+const ROTULO_NOME_PX = 10;
+const ROTULO_SUB_PX = 9.5;
+const ROTULO_ALTURA_NOME = 12;
+const ROTULO_ALTURA_SUB = 11;
+/* o ponto interno e a largura do pasto se medem uma vez, nesta escala fixa; no zoom z vale × 2^(z − ZOOM_DE_MEDIDA) */
+const ZOOM_DE_MEDIDA = 20;
+
+interface RotuloDoPasto {
+  id: string; nome: string; sub: string; ancora: L.LatLng; folga: number; largura: number; prioridade: number;
+  /** Os anéis do pasto na escala de medida (para conferir se a caixa do rótulo fica dentro). */
+  aneis: Aneis;
+}
+
+let reguaDoTexto: CanvasRenderingContext2D | null = null;
+function larguraDoTexto(texto: string, px: number, peso: number): number {
+  if (typeof document === 'undefined') return texto.length * px * 0.6;
+  reguaDoTexto ??= document.createElement('canvas').getContext('2d');
+  if (!reguaDoTexto) return texto.length * px * 0.6;
+  reguaDoTexto.font = `${peso} ${px}px ${getComputedStyle(document.body).fontFamily}`;
+  return Math.ceil(reguaDoTexto.measureText(texto).width) + 2;
+}
+
+/** Os anéis do maior polígono da geometria (Polygon ou MultiPolygon), em pixels na escala de medida. */
+function aneisEmPixels(mapa: L.Map, geo: FazendaGeometria['geojson']): Aneis | null {
+  const para = (anel: number[][]): Ponto[] => anel.map(([lng, lat]) => { const pt = mapa.project(L.latLng(lat, lng), ZOOM_DE_MEDIDA); return [pt.x, pt.y]; });
+  const areaDe = (a: Ponto[]) => Math.abs(a.reduce((s, [x, y], i) => { const [x2, y2] = a[(i + 1) % a.length]; return s + x * y2 - x2 * y; }, 0)) / 2;
+  if (geo.type === 'Polygon') return geo.coordinates.map(para);
+  if (geo.type === 'MultiPolygon') {
+    let melhor: Aneis | null = null; let maior = -1;
+    for (const pol of geo.coordinates) { const a = pol.map(para); const ar = a[0] ? areaDe(a[0]) : 0; if (ar > maior) { maior = ar; melhor = a; } }
+    return melhor;
+  }
+  return null;
+}
 const MENU_ACIMA = 'z-[1100]';
 const SEM_ATIVIDADE = '__sem__';
 
@@ -64,46 +98,89 @@ function numero(v: number | null | undefined, casas = 0, sufixo = ''): string {
   return v == null ? '—' : `${formatNum(v, casas)}${sufixo}`;
 }
 
-function Kpi({ rotulo, valor }: { rotulo: string; valor: string }) {
+function Kpi({ rotulo, valor, unidade, largura = 88 }: { rotulo: string; valor: string; unidade?: string | null; largura?: number }) {
   return (
-    <div className="w-[88px] flex-none rounded-md bg-white/70 px-2 py-[3px]">
+    <div className="flex-none rounded-md bg-white/70 px-2 py-[3px]" style={{ width: largura }}>
       <div className="text-[9.5px] leading-[12px] text-[#4A5361]">{rotulo}</div>
-      <div className="whitespace-nowrap text-[13px] font-semibold leading-[17px] tabular-nums">{valor}</div>
+      <div className="whitespace-nowrap text-[13px] font-semibold leading-[17px] tabular-nums">
+        {valor}{unidade ? <span className="ml-0.5 text-[10px] font-normal text-[#4A5361]">{unidade}</span> : null}
+      </div>
     </div>
   );
 }
 
-function Cel({ rotulo, valor, destaque }: { rotulo: string; valor: string; destaque?: boolean }) {
+function Cel({ rotulo, valor, destaque, unidade }: { rotulo: string; valor: string; destaque?: boolean; unidade?: string | null }) {
   return (
-    <div className={`rounded-md px-2 py-1 ${destaque ? 'bg-[#FFF6D6]' : 'bg-white/75'}`}>
+    <div className={`rounded-md px-1.5 py-[3px] ${destaque ? 'bg-[#FFF6D6]' : 'bg-white/75'}`}>
       <div className="text-[9.5px] leading-[12px] text-[#4A5361]">{rotulo}</div>
-      <div className="whitespace-nowrap text-[13px] font-semibold leading-[17px] tabular-nums">{valor}</div>
+      <div className="whitespace-nowrap text-[12px] font-semibold leading-[16px] tabular-nums">
+        {valor}{unidade ? <span className="ml-1 text-[9.5px] font-normal text-[#4A5361]">{unidade}</span> : null}
+      </div>
     </div>
   );
 }
 
 function LinhaFiltro({ rotulo, marcado, onChange, n }: { rotulo: string; marcado: boolean; onChange: (v: boolean) => void; n?: number }) {
   return (
-    <label className="flex h-[22px] cursor-pointer items-center gap-1.5 text-[11px]">
+    <label className="flex h-[20px] cursor-pointer items-center gap-1.5 text-[10px]">
       <Checkbox checked={marcado} onCheckedChange={v => onChange(v === true)} className="h-3 w-3 rounded-[2px] [&_svg]:h-2.5 [&_svg]:w-2.5" />
       <span className="min-w-0 flex-1 truncate" title={rotulo}>{rotulo}</span>
-      {n != null ? <span className="w-7 flex-none text-right text-[10px] tabular-nums text-[#5A6472]">{n}</span> : null}
+      {n != null ? <span className="w-6 flex-none text-right text-[9.5px] tabular-nums text-[#5A6472]">{n}</span> : null}
     </label>
   );
 }
 
+/** Põe os rótulos no zoom atual: cada pasto mostra nome + kg/ha, só o nome ou nada (fica no hover); nunca dois se sobrepõem. */
+function desenharRotulos(mapa: L.Map, camada: L.LayerGroup, lista: readonly RotuloDoPasto[]) {
+  camada.clearLayers();
+  if (lista.length === 0) return;
+  const escala = Math.pow(2, mapa.getZoom() - ZOOM_DE_MEDIDA);
+  const porId = new Map(lista.map(r => [r.id, r]));
+  const modos = arrumarRotulos(lista.map(r => {
+    const pt = mapa.project(r.ancora, mapa.getZoom());
+    return {
+      id: r.id, x: pt.x, y: pt.y, folga: r.folga * escala, larguraDoPasto: r.largura * escala,
+      larguraNome: larguraDoTexto(r.nome, ROTULO_NOME_PX, 600), alturaNome: ROTULO_ALTURA_NOME,
+      larguraSub: larguraDoTexto(r.sub, ROTULO_SUB_PX, 400), alturaSub: ROTULO_ALTURA_SUB, prioridade: r.prioridade,
+      dentro: (x: number, y: number) => distanciaABorda(x / escala, y / escala, r.aneis) >= 0,
+    };
+  }));
+  modos.forEach((modo, id) => {
+    const r = porId.get(id);
+    if (!r || modo === 'oculto') return;
+    const sub = modo === 'completo'
+      ? `<div style="font-weight:400;font-size:${ROTULO_SUB_PX}px;line-height:${ROTULO_ALTURA_SUB}px;opacity:.88">${escaparHtml(r.sub)}</div>` : '';
+    L.marker(r.ancora, {
+      interactive: false,
+      icon: L.divIcon({
+        className: '',
+        iconSize: [0, 0],
+        html: `<div data-rotulo-pasto="${modo}" style="transform:translate(-50%,-50%);white-space:nowrap;text-align:center;color:#fff;font-size:${ROTULO_NOME_PX}px;font-weight:600;line-height:${ROTULO_ALTURA_NOME}px;text-shadow:0 1px 2px #000,0 0 2px #000">${escaparHtml(r.nome)}${sub}</div>`,
+      }),
+    }).addTo(camada);
+  });
+}
+
+/** O número em cima da barra do histórico: até 999 inteiro; de 1.000 em diante "1,1k" (a barra tem ~18px; o valor inteiro fica no title). */
+function valorDaBarra(v: number): string {
+  return v >= 999.5 ? `${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : formatNum(v, 0);
+}
+
+function escaparHtml(t: string): string {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export function MapaGestorView({
-  geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, rebanhoOficial, onImportar, onLink, onRenderedChange,
+  geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onRenderedChange,
   seletorDeMes, trocaDeVista,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
   const [filtrosAbertos, setFiltrosAbertos] = useState(true);
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS);
-  const [linkPastoId, setLinkPastoId] = useState('');
-  const [linking, setLinking] = useState(false);
   const enquadrouRef = useRef('');
   const camadasRef = useRef(new Map<string, L.GeoJSON>());
+  const rotulosRef = useRef<RotuloDoPasto[]>([]);
 
   const { mapContainerRef, mapInstanceRef, featureLayerRef, labelLayerRef, status: mapStatus, reportRenderedGeometries } =
     useStableLeafletMap({ debugName: 'MapaGestor', labelZoomThreshold: 0 });
@@ -137,8 +214,12 @@ export function MapaGestorView({
       pesoMedio: algum && cab > 0 ? pesoTotal / cab : null,
       lotacao: algum && area > 0 ? pesoTotal / area : null,
       area: area > 0 ? area : null,
+      uaHa: algum ? uaPorHa(cab, cab > 0 ? pesoTotal / cab : null, area) : null,
     };
   }, [geoPastos, dadosDoMes, pastoPorId]);
+
+  /* fix1 E: o fechamento de pastos do mês ainda não está fechado (algum pasto do mapa com status ≠ 'fechado') */
+  const fechamentoAberto = useMemo(() => fechamentoDoMesAberto(dadosDoMes, geoPastos.map(g => g.pasto_id!)), [dadosDoMes, geoPastos]);
 
   /* ── Contagens dos filtros ── */
   const contagens = useMemo(() => {
@@ -189,6 +270,7 @@ export function MapaGestorView({
 
     const limites = L.latLngBounds([]);
     let desenhados = 0;
+    const candidatos: RotuloDoPasto[] = [];
     // área total por baixo de tudo; depois as áreas; os pastos por cima
     const peso = (g: FazendaGeometria) => (g.tipo === 'area_total' ? 0 : g.tipo === 'pasto' ? 2 : 1);
     for (const g of [...geometrias].sort((a, b) => peso(a) - peso(b))) {
@@ -215,17 +297,18 @@ export function MapaGestorView({
         if (ehPasto) {
           camadaGeo.on('click', () => setSelecionadoId(g.id));
           const sub = !d || !d.temFechamento ? '—' : (d.cabecas ?? 0) === 0 ? 'vazio' : `${formatNum(d.kgHa ?? 0, 0)} kg/ha`;
-          if (areaEmHectares(g.geojson) >= MIN_HA_ROTULO && filtros.nomes && b.isValid()) {
-            L.marker(b.getCenter(), {
-              interactive: false,
-              icon: L.divIcon({
-                className: '',
-                iconSize: [0, 0],
-                html: `<div style="transform:translate(-50%,-50%);white-space:nowrap;text-align:center;color:#fff;font-size:10px;font-weight:600;line-height:12px;text-shadow:0 1px 2px #000,0 0 2px #000">${nome}<div style="font-weight:400;font-size:9.5px">${sub}</div></div>`,
-              }),
-            }).addTo(rotulos);
-          } else {
-            camadaGeo.bindTooltip(`${nome} · ${sub}`, { sticky: true });
+          // o hover mostra sempre o nome e o kg/ha (é onde fica o rótulo que não coube)
+          camadaGeo.bindTooltip(`${nome} · ${sub}`, { sticky: true });
+          if (filtros.nomes && b.isValid()) {
+            const aneis = aneisEmPixels(mapa, g.geojson);
+            if (aneis && aneis[0]?.length >= 3) {
+              const polo = pontoMaisInterno(aneis, 2);
+              const xs = aneis[0].map(pt => pt[0]);
+              candidatos.push({
+                id: g.id, nome, sub, ancora: mapa.unproject(L.point(polo.x, polo.y), ZOOM_DE_MEDIDA), folga: polo.folga,
+                largura: Math.max(...xs) - Math.min(...xs), prioridade: areaEmHectares(g.geojson), aneis,
+              });
+            }
           }
         } else if (g.tipo !== 'area_total') {
           camadaGeo.bindTooltip(nome, { sticky: true });
@@ -236,6 +319,7 @@ export function MapaGestorView({
         /* polígono inválido: fica de fora */
       }
     }
+    rotulosRef.current = candidatos;
     reportRenderedGeometries(desenhados);
     onRenderedChange?.(desenhados);
     const chave = geometrias.map(x => x.id).join(',');
@@ -243,8 +327,21 @@ export function MapaGestorView({
       enquadrouRef.current = chave;
       try { mapa.fitBounds(limites, { paddingTopLeft: [240, 70], paddingBottomRight: [20, 60], animate: false, maxZoom: 16 }); } catch { /* */ }
     }
+    // depois do enquadramento: os rótulos se arrumam no zoom em que o mapa vai ficar
+    desenharRotulos(mapa, rotulos, candidatos);
   }, [mapStatus, geometrias, dadosDoMes, camada, filtros, selecionadoId, pastoPorId, mapInstanceRef, featureLayerRef, labelLayerRef,
     reportRenderedGeometries, onRenderedChange]);
+
+  /* fix1 (2): o rótulo tem tamanho fixo na tela, então a colisão se refaz a cada zoom */
+  useEffect(() => {
+    if (mapStatus !== 'ready') return;
+    const mapa = mapInstanceRef.current;
+    const rotulos = labelLayerRef.current;
+    if (!mapa || !rotulos) return;
+    const refazer = () => desenharRotulos(mapa, rotulos, rotulosRef.current);
+    mapa.on('zoomend', refazer);
+    return () => { mapa.off('zoomend', refazer); };
+  }, [mapStatus, mapInstanceRef, labelLayerRef]);
 
   const enquadrar = (limites: L.LatLngBounds, comPainel: boolean) => {
     const mapa = mapInstanceRef.current;
@@ -267,19 +364,6 @@ export function MapaGestorView({
     .map(g => ({ value: g.pasto_id!, label: pastoPorId.get(g.pasto_id!)?.nome ?? g.nome_original }))
     .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR', { numeric: true })), [geoPastos, pastoPorId]);
 
-  const pastosLivres = useMemo(() => {
-    const ligados = new Set(geometrias.filter(g => g.pasto_id && g.id !== selecionadoId).map(g => g.pasto_id!));
-    return pastos.filter(p => p.ativo && !ligados.has(p.id)).map(p => ({ value: p.id, label: p.nome }));
-  }, [pastos, geometrias, selecionadoId]);
-
-  const vincular = async (pastoId: string) => {
-    if (!onLink || !geoSelecionada) return;
-    setLinking(true);
-    const ok = await onLink(geoSelecionada.id, pastoId);
-    setLinking(false);
-    if (ok) setLinkPastoId('');
-  };
-
   const camadaAtual = CAMADAS.find(c => c.valor === camada);
   const nomeCamada = camadaAtual?.rotulo ?? '';
   const nomeCurtoCamada = camadaAtual?.curto ?? nomeCamada;
@@ -297,26 +381,50 @@ export function MapaGestorView({
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="mapa-gestor">
       {/* Barra 40px */}
-      <div className="relative z-[600] flex h-10 flex-none items-center gap-1.5 border-b border-[#D9DEE5] bg-white px-2.5" data-testid="mapa-barra">
+      <div className="relative z-[600] flex h-[34px] flex-none items-center gap-1.5 border-b border-[#D9DEE5] bg-white px-2.5" data-testid="mapa-barra">
         <Button type="button" variant="outline" size="sm" onClick={() => setFiltrosAbertos(v => !v)}
-          className={`h-[26px] w-[72px] flex-none gap-1 px-2 text-[11px] ${filtrosAbertos ? 'border-[#1B2A44] bg-[#1B2A44] text-white hover:bg-[#1B2A44] hover:text-white' : ''}`}>
+          className={`h-[24px] w-[72px] flex-none gap-1 px-2 text-[11px] ${filtrosAbertos ? 'border-[#1B2A44] bg-[#1B2A44] text-white hover:bg-[#1B2A44] hover:text-white' : ''}`}>
           <ListFilter className="h-3 w-3" /> Filtros
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" size="sm" className="h-[26px] w-[100px] flex-none gap-1 bg-[#2F7D4F] px-2 text-[11px] text-white hover:bg-[#2F7D4F]/90">
+            <Button type="button" size="sm" className="h-[24px] w-[100px] flex-none gap-1 bg-[#2F7D4F] px-2 text-[11px] text-white hover:bg-[#2F7D4F]/90">
               <Plus className="h-3 w-3" /> Adicionar <ChevronDown className="h-3 w-3" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className={`${MENU_ACIMA} w-[220px]`}>
-            <DropdownMenuLabel>Arquivo</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={onImportar}><Upload className="mr-1.5 h-3 w-3" />Importar mapa (KML/KMZ)</DropdownMenuItem>
+          <DropdownMenuContent align="start" className={`${MENU_ACIMA} w-[230px]`} data-testid="menu-adicionar">
+            {MENU_ADICIONAR.map((gr, gi) => (
+              <div key={gr.grupo ?? gi}>
+                {gr.grupo && <><DropdownMenuSeparator /><DropdownMenuLabel>{gr.grupo}</DropdownMenuLabel></>}
+                {gr.itens.map(item => item.itens ? (
+                  <DropdownMenuSub key={item.rotulo}>
+                    <DropdownMenuSubTrigger className="justify-between">
+                      <span>{item.rotulo}</span><span className="ml-auto mr-1 rounded-full bg-white/15 px-1.5 text-[9.5px]">em breve</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className={`${MENU_ACIMA} max-h-[70vh] w-[220px] overflow-y-auto`}>
+                      {item.itens.map((sub, si) => (
+                        <div key={sub.rotulo}>
+                          {sub.grupo && sub.grupo !== item.itens?.[si - 1]?.grupo && <DropdownMenuLabel>{sub.grupo}</DropdownMenuLabel>}
+                          <DropdownMenuItem disabled>{sub.rotulo}</DropdownMenuItem>
+                        </div>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                ) : itemFunciona(item) ? (
+                  <DropdownMenuItem key={item.rotulo} onSelect={onImportar}><Upload className="mr-1.5 h-3 w-3" />{item.rotulo}</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem key={item.rotulo} disabled className="justify-between">
+                    <span>{item.rotulo}</span><span className="rounded-full bg-white/15 px-1.5 text-[9.5px]">em breve</span>
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" size="sm" title={`Camadas: ${nomeCamada}`}
-              className="h-[26px] w-[184px] flex-none justify-between gap-1 bg-[#2B6CB0] px-2 text-[11px] text-white hover:bg-[#2B6CB0]/90">
+              className="h-[24px] w-[184px] flex-none justify-between gap-1 bg-[#2B6CB0] px-2 text-[11px] text-white hover:bg-[#2B6CB0]/90">
               <span className="truncate">Camadas: <b className="font-semibold">{nomeCurtoCamada}</b></span>
               <ChevronDown className="h-3 w-3 flex-none" />
             </Button>
@@ -334,7 +442,7 @@ export function MapaGestorView({
                 <DropdownMenuLabel>{gr.grupo}</DropdownMenuLabel>
                 {gr.itens.map(i => (
                   <DropdownMenuItem key={i} disabled className="justify-between">
-                    <span>{i}</span><span className="rounded-full bg-white/15 px-1.5 text-[9px]">em breve</span>
+                    <span>{i}</span><span className="rounded-full bg-white/15 px-1.5 text-[9.5px]">em breve</span>
                   </DropdownMenuItem>
                 ))}
               </div>
@@ -343,36 +451,44 @@ export function MapaGestorView({
         </DropdownMenu>
         <div className="min-w-0 flex-1" />
         <div className="flex flex-none items-center gap-1">{seletorDeMes}</div>
-        <Button type="button" variant="outline" size="sm" className="h-[26px] w-[92px] flex-none px-1.5 text-[11px]" onClick={fazendaInteira}>
+        <Button type="button" variant="outline" size="sm" className="h-[24px] w-[92px] flex-none px-1.5 text-[11px]" onClick={fazendaInteira}>
           Fazenda inteira
         </Button>
-        <div className="w-[124px] flex-none">
-          <SearchableSelect value={pastoSelecionado?.id ?? ''} onValueChange={v => { if (v) irParaPasto(v); else setSelecionadoId(null); }}
+        <div className="w-[124px] flex-none" data-testid="mapa-busca">
+          {/* a busca só leva ao pasto (mostra sempre "Buscar pasto…"): o escolhido aparece no painel, e um nome longo cortado aqui seria "…" fora de tabela */}
+          <SearchableSelect value="" onValueChange={v => { if (v) irParaPasto(v); }}
             options={opcoesBusca} allLabel="Buscar pasto…" allValue="" semTodos placeholder="Buscar pasto…"
-            contentClassName={MENU_ACIMA} triggerClassName="h-[26px] text-[11px]" />
+            contentClassName={MENU_ACIMA} triggerClassName="h-[24px] text-[11px]" />
         </div>
         <div className="flex-none">{trocaDeVista}</div>
       </div>
 
       {/* Mapa + vidros */}
-      <div className={`relative min-h-0 flex-1 bg-[#3a4436] [&_.leaflet-bottom.leaflet-right]:bottom-[60px] ${selecionadoId ? '[&_.leaflet-bottom.leaflet-right]:right-[346px]' : ''}`}>
+      {/* o zoom (e os créditos) ficam SEMPRE à esquerda da coluna do painel: abrir ou fechar o pasto não move nada (UI-SEM-DESLOCAR-01) */}
+      <div className="relative min-h-0 flex-1 bg-[#3a4436] [&_.leaflet-bottom.leaflet-right]:bottom-[50px] [&_.leaflet-bottom.leaflet-right]:right-[302px]">
         <div className="absolute inset-0">
-          <div ref={mapContainerRef} className="h-full w-full" data-testid="mapa-gestor-mapa" />
+          {/* fix1 (1): o Chrome desenhava um retângulo azul (contorno de foco) no polígono clicado (Gabriel, proto, 31/10 08:27): sem contorno
+              de foco SÓ nos polígonos do mapa; o foco de teclado do resto da tela continua */}
+          <div ref={mapContainerRef} className="h-full w-full [&_path.leaflet-interactive:focus]:outline-none" data-testid="mapa-gestor-mapa" />
         </div>
 
         {hasGeo && (
-          <div className={`absolute left-3 top-3 z-[500] flex gap-1.5 p-1.5 ${VIDRO}`} data-testid="mapa-kpis">
-            <Kpi rotulo="Alocadas" valor={numero(kpis.cabecas)} />
-            <Kpi rotulo="Oficial" valor={numero(rebanhoOficial)} />
+          <div className={`absolute left-3 top-3 z-[500] flex gap-[3px] p-[3px] ${VIDRO}`} data-testid="mapa-kpis">
+            <Kpi rotulo="Alocadas" valor={numero(kpis.cabecas)} unidade={kpis.cabecas == null ? undefined : 'cab.'} />
             <Kpi rotulo="Peso méd." valor={numero(kpis.pesoMedio, 0, ' kg')} />
-            <Kpi rotulo="Lotação" valor={numero(kpis.lotacao, 0, ' kg/ha')} />
+            <Kpi rotulo="Lotação" valor={numero(kpis.lotacao, 0, ' kg/ha')} unidade={textoUaHa(kpis.uaHa)} largura={140} />
             <Kpi rotulo="Área pastos" valor={numero(kpis.area, 1, ' ha')} />
+            {/* fix1 E: o aviso tem lugar reservado (aparecer não move nada) */}
+            <div className={`flex w-[74px] flex-none items-center text-[9.5px] leading-[12px] text-[#8A5A00] ${fechamentoAberto ? '' : 'invisible'}`}
+              data-testid="mapa-fechamento-aberto" aria-hidden={!fechamentoAberto}>
+              fechamento de {mesDoMapa} aberto
+            </div>
           </div>
         )}
 
         {hasGeo && filtrosAbertos && (
-          <div className={`absolute bottom-[64px] left-3 top-[70px] z-[500] w-[220px] overflow-y-auto px-3 py-2.5 ${VIDRO}`} data-testid="mapa-filtros">
-            <div className="mb-1 flex items-center justify-between text-[12px] font-semibold">
+          <div className={`absolute bottom-[50px] left-3 top-[59px] z-[500] w-[190px] overflow-y-auto px-2.5 py-2 ${VIDRO}`} data-testid="mapa-filtros">
+            <div className="mb-1 flex items-center justify-between text-[11px] font-semibold">
               Filtros
               <button type="button" className="text-[10.5px] font-normal text-[#2B6CB0]" onClick={() => setFiltrosAbertos(false)}>Ocultar</button>
             </div>
@@ -399,26 +515,29 @@ export function MapaGestorView({
         )}
 
         {geoSelecionada && pastoSelecionado && (
-          <div className={`absolute bottom-[64px] right-3 top-3 z-[500] flex w-[330px] flex-col overflow-hidden ${VIDRO}`} data-testid="mapa-painel">
+          <div className={`absolute bottom-3 right-3 top-3 z-[500] flex w-[286px] flex-col overflow-hidden ${VIDRO}`} data-testid="mapa-painel">
             <div className="flex-none border-b border-black/[0.08] px-3 pb-2 pt-2.5">
-              <div className="flex items-center gap-2">
-                <b className="min-w-0 truncate text-[15px]" title={pastoSelecionado.nome}>{pastoSelecionado.nome}</b>
+              <div className="flex items-start gap-2">
+                <b className="min-w-0 break-words text-[13px] leading-[16px]">{pastoSelecionado.nome}</b>
                 <span className="flex-none rounded-lg bg-[#E3F2E8] px-1.5 py-px text-[9.5px] font-semibold text-[#2F6E45]">Vinculado</span>
                 <button type="button" aria-label="Fechar" className="ml-auto flex-none text-[#4A5361] hover:text-[#1d232b]" onClick={() => setSelecionadoId(null)}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <div className="mt-0.5 h-[14px] truncate text-[10.5px] leading-[14px] text-[#4A5361]" title={subtitulo}>{subtitulo}</div>
+              {/* duas linhas reservadas: o subtítulo longo quebra (fora de tabela, nada de "…") e nada abaixo se desloca */}
+              <div className="mt-0.5 h-[26px] overflow-hidden text-[10.5px] leading-[13px] text-[#4A5361]">{subtitulo}</div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">
               <div className="grid grid-cols-2 gap-1.5">
                 <Cel rotulo="Área" valor={numero(pastoSelecionado.area_produtiva_ha, 1, ' ha')} />
                 <Cel rotulo="Cabeças" valor={numero(dadosSelecionado?.cabecas)} />
                 <Cel rotulo="Peso méd." valor={numero(dadosSelecionado?.pesoMedioKg, 0, ' kg')} />
-                <Cel rotulo="Lotação kg/ha" valor={numero(dadosSelecionado?.kgHa)} destaque />
+                <Cel rotulo="Lotação kg/ha" valor={numero(dadosSelecionado?.kgHa)} destaque
+                  unidade={textoUaHa(dadosSelecionado?.temFechamento ? uaPorHa(dadosSelecionado.cabecas, dadosSelecionado.pesoMedioKg, pastoSelecionado.area_produtiva_ha) : null)} />
               </div>
               <div className="mb-1 mt-3 text-[9.5px] font-semibold text-[#4A5361]">Categorias</div>
-              <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+              {/* tabela: uma linha por categoria, o nome longo com "…" e o inteiro no title (a regra de reticências do gate confere o title) */}
+              <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }} data-reticencias-com-title>
                 <colgroup><col /><col style={{ width: 44 }} /><col style={{ width: 60 }} /></colgroup>
                 <tbody>
                   {(dadosSelecionado?.categorias ?? []).map(c => (
@@ -428,6 +547,13 @@ export function MapaGestorView({
                       <td className="h-[18px] px-1 text-right text-[10px] tabular-nums text-[#5A6472]">{numero(c.peso_medio_kg, 0, ' kg')}</td>
                     </tr>
                   ))}
+                  {(dadosSelecionado?.categorias.length ?? 0) > 1 && (
+                    <tr className="border-t border-black/[0.12]" data-testid="mapa-painel-total">
+                      <td className="h-[18px] px-1 text-[10.5px] font-semibold">Total</td>
+                      <td className="h-[18px] px-1 text-right text-[10.5px] font-semibold tabular-nums">{numero(dadosSelecionado?.cabecas)}</td>
+                      <td className="h-[18px] px-1 text-right text-[10px] font-semibold tabular-nums">{numero(dadosSelecionado?.pesoMedioKg, 0, ' kg')}</td>
+                    </tr>
+                  )}
                   {(dadosSelecionado?.categorias.length ?? 0) === 0 && (
                     <tr><td colSpan={3} className="h-[18px] px-1 text-[10.5px] text-[#5A6472]">
                       {dadosSelecionado?.temFechamento ? 'Sem animais no fechamento do mês' : '—'}
@@ -442,7 +568,7 @@ export function MapaGestorView({
                 {hist.map(h => (
                   <div key={h.anoMes} className="flex h-full min-w-0 flex-1 flex-col justify-end"
                     title={`${mesAbreviado(h.anoMes)}/${h.anoMes.slice(2, 4)}: ${h.kgHa == null ? 'sem fechamento' : `${formatNum(h.kgHa, 0)} kg/ha`}`}>
-                    <span className="mb-px block text-center text-[8px] leading-[10px] tabular-nums">{h.kgHa == null ? '—' : formatNum(h.kgHa, 0)}</span>
+                    <span className="mb-px block text-center text-[9.5px] leading-[11px] tabular-nums">{h.kgHa == null ? '—' : valorDaBarra(h.kgHa)}</span>
                     {h.kgHa != null && (
                       <div className="w-full rounded-t-[2px]" style={{ height: Math.max(2, (h.kgHa / maxHist) * 60), background: h.faixa ? COR_DA_FAIXA[h.faixa] : COR_DA_FAIXA.vazio }} />
                     )}
@@ -450,7 +576,7 @@ export function MapaGestorView({
                 ))}
               </div>
               <div className="mt-0.5 flex gap-1">
-                {hist.map(h => <div key={h.anoMes} className="min-w-0 flex-1 text-center text-[8px] text-[#5A6472]">{mesAbreviado(h.anoMes)}</div>)}
+                {hist.map(h => <div key={h.anoMes} className="min-w-0 flex-1 text-center text-[9.5px] text-[#5A6472]">{mesAbreviado(h.anoMes)}</div>)}
               </div>
               {pastoSelecionado.observacoes && (
                 <>
@@ -461,37 +587,25 @@ export function MapaGestorView({
               <div className="mb-1 mt-3 text-[9.5px] font-semibold text-[#4A5361]">Satélite (vigor do capim)</div>
               <div className="text-[10.5px] text-[#5A6472]">Em breve.</div>
             </div>
-            {onLink && (
-              <div className="flex flex-none items-center gap-1.5 border-t border-black/[0.08] px-3 py-2" data-testid="mapa-painel-rodape">
-                <div className="min-w-0 flex-1">
-                  <SearchableSelect value={linkPastoId} onValueChange={setLinkPastoId} options={pastosLivres} placeholder="Buscar pasto…"
-                    allLabel="Alterar vínculo" allValue="" semTodos contentClassName={MENU_ACIMA} triggerClassName="h-[26px] text-[11px]" />
-                </div>
-                <Button type="button" size="sm" variant="outline" className="h-[26px] w-[70px] flex-none gap-1 bg-white/85 px-2 text-[11px]"
-                  disabled={!linkPastoId || linking} onClick={() => vincular(linkPastoId)}>
-                  <Link2 className="h-3 w-3" /> Alterar
-                </Button>
-                <Button type="button" size="sm" variant="outline"
-                  className="h-[26px] w-[80px] flex-none gap-1 bg-white/85 px-2 text-[11px] text-destructive hover:text-destructive"
-                  disabled={linking} onClick={() => vincular('')}>
-                  <Unlink className="h-3 w-3" /> Remover
-                </Button>
-              </div>
-            )}
           </div>
         )}
 
         {hasGeo && (
-          <div className={`absolute bottom-3 left-3 right-3 z-[500] flex h-10 items-center gap-3.5 overflow-hidden px-3.5 text-[10.5px] ${VIDRO}`} data-testid="mapa-legenda">
-            <b className="flex-none whitespace-nowrap text-[11px]">{nomeCamada}</b>
+          /* fix1 (4): a legenda tem o tamanho do conteúdo, à esquerda, e nunca passa por baixo do painel do pasto */
+          <div className={`absolute bottom-3 left-3 z-[500] flex h-[30px] w-fit items-center gap-2.5 overflow-hidden px-2.5 text-[9.5px] ${VIDRO}`}
+            style={{ maxWidth: selecionadoId ? 'calc(100% - 322px)' : 'calc(100% - 24px)' }} data-testid="mapa-legenda">
+            <b className="flex-none whitespace-nowrap text-[10px]">{nomeCamada}</b>
             {legenda.map(i => (
-              <span key={i.rotulo} className="flex flex-none items-center gap-1.5 whitespace-nowrap">
-                <i className="inline-block h-3.5 w-3.5 rounded-[3px]" style={{ background: i.cor }} />{i.rotulo}
+              <span key={i.rotulo} className="flex flex-none items-center gap-1 whitespace-nowrap">
+                <i className="inline-block h-2.5 w-2.5 rounded-[2px]" style={{ background: i.cor }} />{i.rotulo}
               </span>
             ))}
-            <span className="ml-auto flex-none whitespace-nowrap text-[#4A5361]">
-              {erroDoMes ? <span className="text-[#B03A2E]">{erroDoMes}</span> : carregandoMes ? 'Lendo o mês…' : `Mês ${mesDoMapa}`}
-            </span>
+            {/* o mês já está no seletor da barra: aqui só a leitura em curso ou o erro */}
+            {(erroDoMes || carregandoMes) && (
+              <span className="flex-none whitespace-nowrap text-[#4A5361]">
+                {erroDoMes ? <span className="text-[#B03A2E]">{erroDoMes}</span> : 'Lendo o mês…'}
+              </span>
+            )}
           </div>
         )}
 

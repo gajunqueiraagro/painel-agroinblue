@@ -8,8 +8,9 @@ import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos } from '@/hooks/usePastos';
 import { useMapaDoMes } from '@/hooks/useMapaDoMes';
-import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
-import { useStatusPilaresAno } from '@/hooks/useStatusPilaresAno';
+import { useUltimoMesComFechamento } from '@/hooks/useUltimoMesComFechamento';
+import { mesDeAbertura } from '@/lib/mapa/mapaDoMes';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
@@ -39,8 +40,9 @@ const VISTAS: { valor: ViewMode; rotulo: string }[] = [
 
 /**
  * MAPA-02a — o mapa de pastos lê UM mês (D1): o ano/mês do shell (FECH-MES-SELECIONADO-01, o mesmo do Fechamento e do Mapa de Pastos),
- * que abre no ÚLTIMO MÊS FECHADO da fazenda (P1 'oficial' na `get_status_pilares_fechamento`, pelo `useStatusPilaresAno`). O rebanho
- * oficial é o do MESMO mês (antes: o mês do relógio). Os números do mês saem do `useMapaDoMes` (fonte única).
+ * que abre no ÚLTIMO MÊS COM FECHAMENTO DE PASTOS da fazenda (fix1 A, `useUltimoMesComFechamento` + `mesDeAbertura`; sem nenhum, o mês de
+ * hoje). Os números do mês saem do `useMapaDoMes` (fonte única). O rebanho oficial não entra no mapa (fix1 E: conferir alocadas ×
+ * oficial é papel do Fechamento de pastos).
  */
 export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
@@ -64,31 +66,18 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
 
   const fazendaId = fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : undefined;
 
-  /* o último mês fechado (P1 oficial) da fazenda: este ano; sem nenhum, o ano anterior */
-  const statusAno = useStatusPilaresAno(fazendaAtual?.cliente_id, anoDoRelogio, !!fazendaId);
-  const statusAnoAnterior = useStatusPilaresAno(fazendaAtual?.cliente_id, anoDoRelogio - 1, !!fazendaId);
-  const ultimoFechado = useMemo(() => {
-    const fechados = [...statusAno.data, ...statusAnoAnterior.data]
-      .filter(c => c.fazendaId === fazendaId && c.p1 === 'oficial')
-      .map(c => c.anoMes)
-      .sort();
-    return fechados.length ? fechados[fechados.length - 1] : null;
-  }, [statusAno.data, statusAnoAnterior.data, fazendaId]);
+  /* MAPA-02a-fix1 (A): abre no último mês com fechamento de pastos da fazenda; sem nenhum, no mês de hoje. Uma vez por fazenda. */
+  const ultimoComFechamento = useUltimoMesComFechamento(fazendaId);
   const abriuNaFazendaRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!fazendaId || !ultimoFechado || abriuNaFazendaRef.current === fazendaId) return;
+    if (!fazendaId || !ultimoComFechamento.pronto || ultimoComFechamento.fazendaId !== fazendaId) return;
+    if (abriuNaFazendaRef.current === fazendaId) return;
     abriuNaFazendaRef.current = fazendaId;
-    if (ultimoFechado !== anoMes) irPara(ultimoFechado.slice(0, 4), Number(ultimoFechado.slice(5, 7)));
-  }, [fazendaId, ultimoFechado, anoMes, irPara]);
+    const alvo = mesDeAbertura(ultimoComFechamento.mes, hojeLocal());
+    if (alvo !== anoMes) irPara(alvo.slice(0, 4), Number(alvo.slice(5, 7)));
+  }, [fazendaId, ultimoComFechamento.pronto, ultimoComFechamento.fazendaId, ultimoComFechamento.mes, anoMes, irPara]);
 
   const mapaDoMes = useMapaDoMes(fazendaId, anoMes, pastos, categorias);
-
-  // FONTE OFICIAL: useRebanhoOficial, no MESMO mês do mapa
-  const rebanhoOf = useRebanhoOficial({ ano: Number(ano), cenario: 'realizado' });
-  const rebanhoOficial = useMemo(() => {
-    const v = rebanhoOf.getSaldoFinalTotal(mes);
-    return typeof v === 'number' && v > 0 ? v : null;
-  }, [rebanhoOf.getSaldoFinalTotal, mes]);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
@@ -128,11 +117,11 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const seletorDeMes = (
     <>
       <Select value={ano} onValueChange={a => irPara(a, mes)}>
-        <SelectTrigger className="h-[26px] w-[66px] text-[11px] font-semibold" data-testid="mapa-ano"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-[24px] w-[66px] text-[11px] font-semibold" data-testid="mapa-ano"><SelectValue /></SelectTrigger>
         <SelectContent className="z-[1100]">{anosDoSeletor.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
       </Select>
       <Select value={String(mes)} onValueChange={v => irPara(ano, Number(v))}>
-        <SelectTrigger className="h-[26px] w-[62px] text-[11px] font-semibold" data-testid="mapa-mes"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-[24px] w-[62px] text-[11px] font-semibold" data-testid="mapa-mes"><SelectValue /></SelectTrigger>
         <SelectContent className="z-[1100]">
           {MESES_COLS.map((m, i) => <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>)}
         </SelectContent>
@@ -141,7 +130,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   );
 
   const trocaDeVista = (
-    <Segmentado valor={viewMode} onEscolher={setViewMode} opcoes={VISTAS} altura={26} />
+    <Segmentado valor={viewMode} onEscolher={setViewMode} opcoes={VISTAS} altura={24} />
   );
 
   /* Operação e Validação seguem com a barra de sempre (sem mudança nelas nesta fatia) */
@@ -186,10 +175,8 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         carregandoMes={mapaDoMes.carregando}
         erroDoMes={mapaDoMes.erro}
         geoLoading={geoLoading}
-        rebanhoOficial={rebanhoOficial}
         onImportar={() => setUploadOpen(true)}
         onRenderedChange={onRenderedChange}
-        onLink={async (geoId, pastoId) => vincularPasto(geoId, pastoId || null)}
         seletorDeMes={seletorDeMes}
         trocaDeVista={trocaDeVista}
       />

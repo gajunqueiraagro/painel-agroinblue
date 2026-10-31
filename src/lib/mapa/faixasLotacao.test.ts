@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { faixaDaLotacao, statusDaFaixa } from './faixasLotacao';
+import { faixaDaLotacao, statusDaFaixa, textoUaHa, uaPorHa } from './faixasLotacao';
 
 describe('faixas de lotação (MAPA-02a, D2: 300/500)', () => {
   it('os limites', () => {
@@ -24,5 +24,23 @@ describe('faixas de lotação (MAPA-02a, D2: 300/500)', () => {
     expect(statusDaFaixa(faixaDaLotacao(501))).toBe('pressao');
     expect(statusDaFaixa(faixaDaLotacao(0))).toBe('sem_ocupacao');
     expect(statusDaFaixa(null)).toBe('sem_ocupacao');
+  });
+});
+
+describe('UA/ha (fix1 3): a regra do Fechamento, kg ÷ 450 ÷ área', () => {
+  it('P_10: 76 cab × 215 kg em 59,7 ha = 0,61 UA/ha', () => {
+    expect(uaPorHa(76, 215, 59.7)).toBeCloseTo((76 * 215) / 450 / 59.7, 6);
+    expect(textoUaHa(uaPorHa(76, 215, 59.7))).toBe('0,61 UA/ha');
+  });
+  it('3M set/26: 936 cab × 316 kg em 793,5 ha (o card Lotação) = 0,83 UA/ha', () => {
+    expect(textoUaHa(uaPorHa(936, 316, 793.5))).toBe('0,83 UA/ha');
+  });
+  it('sem área ou sem cabeças: "—" (null), nunca 0', () => {
+    expect(uaPorHa(76, 215, 0)).toBeNull();
+    expect(uaPorHa(null, 215, 50)).toBeNull();
+    expect(textoUaHa(null)).toBeNull();
+  });
+  it('vazio (0 cab) é 0,00 UA/ha (zero é valor real)', () => {
+    expect(textoUaHa(uaPorHa(0, null, 50))).toBe('0,00 UA/ha');
   });
 });

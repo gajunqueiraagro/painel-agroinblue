@@ -4,6 +4,8 @@
  *   sem animais (ou kg/ha 0) → vazio · < 300 → sublotado · 300 a 500 → ideal · > 500 → carga alta.
  *   sem fechamento no mês (kg/ha desconhecido) → null: a tela mostra "—", nunca 0 nem "vazio".
  */
+import { calcUA, calcUAHa } from '@/lib/calculos/zootecnicos';
+
 export type FaixaLotacao = 'vazio' | 'sublotado' | 'ideal' | 'carga_alta';
 
 export const LIMITE_SUBLOTADO = 300;
@@ -42,4 +44,18 @@ export function statusDaFaixa(f: FaixaLotacao | null): StatusOcupacao {
   if (f === 'ideal') return 'adequado';
   if (f === 'carga_alta') return 'pressao';
   return 'sem_ocupacao';
+}
+
+/**
+ * MAPA-02a-fix1 (3) — a lotação em UA/ha do mapa: a MESMA regra do Fechamento (`calcUA`: cabeças × peso médio ÷ 450; `calcUAHa`: ÷ área),
+ * sem fórmula nova. Sem cabeças ou sem área: null ("—").
+ */
+export function uaPorHa(cabecas: number | null | undefined, pesoMedioKg: number | null | undefined, areaHa: number | null | undefined): number | null {
+  if (cabecas == null || !(areaHa && areaHa > 0)) return null;
+  return calcUAHa(calcUA(cabecas, pesoMedioKg ?? null), areaHa);
+}
+
+/** "0,92 UA/ha" (2 casas, pt-BR); null quando não há valor. */
+export function textoUaHa(ua: number | null): string | null {
+  return ua == null ? null : `${ua.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} UA/ha`;
 }

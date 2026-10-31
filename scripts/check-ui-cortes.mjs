@@ -85,8 +85,10 @@ const mapaMes = (rotulo) => async (p) => {
   await p.getByRole('option', { name: rotulo, exact: true }).first().click(); await p.waitForTimeout(700);
 };
 const mapaPasto = (nome) => async (p) => {
-  await p.locator('[data-testid="mapa-barra"] button[role="combobox"]').first().click(); await p.waitForTimeout(250);
+  /* fix1: a busca de pasto (antes o 1º combobox da barra, que era o seletor de ANO: o painel nunca abria) */
+  await p.locator('[data-testid="mapa-busca"] button').first().click(); await p.waitForTimeout(250);
   await p.keyboard.type(nome); await p.waitForTimeout(150); await p.keyboard.press('Enter'); await p.waitForTimeout(700);
+  await p.locator('[data-testid="mapa-painel"]').waitFor({ timeout: 4000 }); // o painel abriu de verdade (senão o cenário falha)
 };
 const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
@@ -195,6 +197,14 @@ const CENARIOS = [
      legenda; o painel de um pasto (categorias, histórico, observação); a camada Atividade; o pasto SEM fechamento no mês; o mês de agosto */
   { nome: 'mapa-geo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS },
   { nome: 'mapa-geo-painel', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
+  /* MAPA-02a-fix1 (5) — o "+ Adicionar" na estrutura do mock, com o submenu Infraestrutura aberto (tudo "em breve" menos Importar) */
+  { nome: 'mapa-geo-menu-adicionar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(300);
+    await p.getByRole('menuitem', { name: /Infraestrutura/ }).first().hover(); await p.waitForTimeout(500);
+    await p.getByRole('menuitem', { name: 'Galpão' }).first().waitFor({ timeout: 3000 }); } },
+  /* MAPA-02a-fix1 B — sem o rodapé do vínculo, o painel do pasto (histórico + categorias com o total + observações) não rola a 1366×768 */
+  { nome: 'mapa-geo-painel-sem-rolar', url: 'tela=mapa-geo', tamanhos: [[1366, 768], [1440, 800]], antes: mapaPasto('P_01'),
+    semRolagem: { dentro: '[data-testid="mapa-painel"]' } },
   { nome: 'mapa-geo-painel-nome-longo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('Retiro') },
   { nome: 'mapa-geo-sem-fechamento', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_03') },
   { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },

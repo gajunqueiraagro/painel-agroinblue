@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dozeMesesAte, mesAntes, mesCurtoNumerico, montarMapaDoMes, ocupacoesDoMes, type FechamentoLido, type ItemLido } from './mapaDoMes';
+import { dozeMesesAte, fechamentoDoMesAberto, mesAntes, mesCurtoNumerico, mesDeAbertura, montarMapaDoMes, ocupacoesDoMes, type FechamentoLido, type ItemLido } from './mapaDoMes';
 
 const P10 = { id: 'p10', nome: 'P_10', area_produtiva_ha: 50 };
 const P09 = { id: 'p09', nome: 'P_09', area_produtiva_ha: 27 };
@@ -79,5 +79,32 @@ describe('montarMapaDoMes (MAPA-02a, D1/D3)', () => {
     expect([...oc.keys()].sort()).toEqual(['p07', 'p10']);
     expect(oc.get('p10')!.status).toBe('adequado');
     expect(oc.get('p07')!.status).toBe('sem_ocupacao');
+  });
+});
+
+describe('mesDeAbertura (fix1 A): o último mês com fechamento de pastos, sem nenhum o mês de hoje', () => {
+  it('3M: P1 oficial em dez/25, pastos fechados até set/26 → abre em set/26 (não no mês de hoje)', () => {
+    expect(mesDeAbertura('2026-09', '2026-10-31')).toBe('2026-09');
+  });
+  it('fazenda sem nenhum fechamento → o mês de hoje (não o anterior)', () => {
+    expect(mesDeAbertura(null, '2026-10-31')).toBe('2026-10');
+  });
+});
+
+describe('fechamentoDoMesAberto (fix1 E): algum pasto do mapa com fechamento do mês não fechado', () => {
+  const fech = (status: string | null): FechamentoLido[] => [
+    { id: 'a', pasto_id: 'p10', ano_mes: '2026-09', tipo_uso_mes: 'recria', status: 'fechado' },
+    { id: 'b', pasto_id: 'p09', ano_mes: '2026-09', tipo_uso_mes: 'cria', status },
+  ];
+  const montar = (status: string | null) => montarMapaDoMes({ anoMes: '2026-09', vigentes: [P10, P09, P07], fechamentos: fech(status), itens: [], nomeDaCategoria: nome });
+  it('todos fechados → não avisa; P07 sem fechamento não conta como aberto', () => {
+    expect(fechamentoDoMesAberto(montar('fechado'), ['p10', 'p09', 'p07'])).toBe(false);
+  });
+  it('um em rascunho (ou aberto) → avisa', () => {
+    expect(fechamentoDoMesAberto(montar('rascunho'), ['p10', 'p09', 'p07'])).toBe(true);
+    expect(fechamentoDoMesAberto(montar('aberto'), ['p10', 'p09'])).toBe(true);
+  });
+  it('o aberto é de um pasto fora do mapa (sem polígono) → não avisa', () => {
+    expect(fechamentoDoMesAberto(montar('rascunho'), ['p10', 'p07'])).toBe(false);
   });
 });

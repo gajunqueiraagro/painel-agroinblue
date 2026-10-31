@@ -21,6 +21,8 @@ export interface FechamentoLido {
   pasto_id: string;
   ano_mes: string;
   tipo_uso_mes: string | null;
+  /** 'fechado' | 'aberto' | 'rascunho' (fix1 E: o aviso "fechamento aberto"). */
+  status?: string | null;
 }
 
 export interface ItemLido {
@@ -46,6 +48,8 @@ export interface DadosDoPastoNoMes {
   pastoId: string;
   /** Há fechamento deste pasto no mês escolhido. Sem ele, cabeças/peso/kg/ha/atividade são null ("—"). */
   temFechamento: boolean;
+  /** O fechamento do mês tem status 'fechado' (null = sem fechamento no mês). */
+  fechado: boolean | null;
   cabecas: number | null;
   pesoTotalKg: number | null;
   pesoMedioKg: number | null;
@@ -132,7 +136,7 @@ export function montarMapaDoMes(entrada: {
 
     if (!doMes) {
       resultado.set(p.id, {
-        pastoId: p.id, temFechamento: false, cabecas: null, pesoTotalKg: null, pesoMedioKg: null, kgHa: null, faixa: null,
+        pastoId: p.id, temFechamento: false, fechado: null, cabecas: null, pesoTotalKg: null, pesoMedioKg: null, kgHa: null, faixa: null,
         atividade: null, categorias: [], categoriaPrincipalId: null, ultimoFechamento: lista[0]?.ano_mes ?? null, historico,
       });
       continue;
@@ -141,6 +145,7 @@ export function montarMapaDoMes(entrada: {
     resultado.set(p.id, {
       pastoId: p.id,
       temFechamento: true,
+      fechado: doMes.status === 'fechado',
       cabecas,
       pesoTotalKg: pesoTotal,
       pesoMedioKg: cabecas > 0 ? pesoTotal / cabecas : null,
@@ -175,4 +180,24 @@ export function ocupacoesDoMes(dados: ReadonlyMap<string, DadosDoPastoNoMes>): M
     });
   });
   return m;
+}
+
+/**
+ * MAPA-02a-fix1 (A) — o mês em que o mapa ABRE numa fazenda: o último mês com fechamento de pastos DAQUELA fazenda
+ * (`fechamento_pastos`); sem nenhum, o mês de hoje. Antes era o último mês com P1 oficial (na 3M dava dez/25 com pastos fechados até set/26).
+ */
+export function mesDeAbertura(ultimoComFechamento: string | null, hoje: string): string {
+  return ultimoComFechamento && /^\d{4}-\d{2}$/.test(ultimoComFechamento) ? ultimoComFechamento : hoje.slice(0, 7);
+}
+
+/**
+ * MAPA-02a-fix1 (E) — o fechamento de pastos do mês está ABERTO: algum dos pastos do mapa tem fechamento no mês com status ≠ 'fechado'
+ * ('aberto' ou 'rascunho'). Pasto sem fechamento no mês não conta (é o "sem fechamento", outra coisa). Os números aparecem do mesmo jeito.
+ */
+export function fechamentoDoMesAberto(dados: ReadonlyMap<string, DadosDoPastoNoMes>, pastoIds: Iterable<string>): boolean {
+  for (const id of pastoIds) {
+    const d = dados.get(id);
+    if (d?.temFechamento && d.fechado === false) return true;
+  }
+  return false;
 }

@@ -55,8 +55,10 @@ const mapaMes = (rotulo) => async (p) => {
   await p.getByRole('option', { name: rotulo, exact: true }).first().click(); await p.waitForTimeout(700);
 };
 const mapaPasto = (nome) => async (p) => {
-  await p.locator('[data-testid="mapa-barra"] button[role="combobox"]').first().click(); await p.waitForTimeout(250);
+  /* fix1: a busca de pasto (antes o 1º combobox da barra, que era o seletor de ANO: o painel nunca abria) */
+  await p.locator('[data-testid="mapa-busca"] button').first().click(); await p.waitForTimeout(250);
   await p.keyboard.type(nome); await p.waitForTimeout(150); await p.keyboard.press('Enter'); await p.waitForTimeout(700);
+  await p.locator('[data-testid="mapa-painel"]').waitFor({ timeout: 4000 }); // o painel abriu de verdade (senão o cenário falha)
 };
 const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [

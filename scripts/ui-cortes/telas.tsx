@@ -653,16 +653,16 @@ if (tela === 'mesclar') {
   montar(<div className="h-full"><V2Recorrencias /></div>);
 } else if (tela === 'mapa-geo') {
   /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
-     abre no último mês fechado (set/2026); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
+     abre no último mês com fechamento de pastos (set/2026; fix1 A: o banco falso ignora `order`/`limit`, a lista vem do mais novo); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
   g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'fazenda_geometrias' ? MAPA.GEOMETRIAS
       : t === 'pastos' ? MAPA.PASTOS
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
-      : t === 'fechamento_pastos' ? MAPA.FECHAMENTOS
+      : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
       : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       : [],
-    rpc: (fn: string, a: any) => fn === 'get_status_pilares_ano' ? MAPA.statusAno(Number(a.p_ano)) : null,
+    rpc: () => null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
 } else if (tela === 'acessos') {

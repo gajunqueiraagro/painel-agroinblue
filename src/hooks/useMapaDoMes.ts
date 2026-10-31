@@ -42,7 +42,7 @@ export function useMapaDoMes(fazendaId: string | undefined, anoMes: string, past
         const { data: fechamentos } = await fetchAllPaginated<FechamentoLido & { fazenda_id?: string }>({
           query: () => supabase
             .from('fechamento_pastos')
-            .select('id, pasto_id, ano_mes, tipo_uso_mes, fazenda_id')
+            .select('id, pasto_id, ano_mes, tipo_uso_mes, status, fazenda_id')
             .eq('fazenda_id', fazendaId)
             .lte('ano_mes', anoMes)
             .order('id', { ascending: true }),
