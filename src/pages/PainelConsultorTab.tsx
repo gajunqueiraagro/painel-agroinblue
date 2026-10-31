@@ -43,9 +43,7 @@ import { usePastos } from '@/hooks/usePastos';
 import { useRebanhoOficial, indexByMes, type ZootMensal, type ZootCategoriaMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useRebanhoOficial';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
-import {
-  calcAreaProdutivaPecuaria,
-} from '@/lib/calculos/zootecnicos';
+import { areaPecuariaMediaDoAno } from '@/lib/pastos/areaDoMes';
 import { calcArrobasSafe, TIPOS_DESFRUTE_GLOBAL } from '@/lib/calculos/economicos';
 import { supabase } from '@/integrations/supabase/client';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
@@ -2155,19 +2153,13 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     })();
   }, [fazendaId, anoNum, fazendas, isGlobal, clienteId]);
 
-  // RESÍDUO CONSCIENTE — PR-VIGENCIA-03A (19/08/2026).
-  // calcAreaProdutivaPecuaria ignora tipo_uso e vigência: soma reserva/APP/
-  // benfeitorias e pastos encerrados. Na Sta. Rita infla a área em 887 ha (32%);
-  // Sta. Luzia e Retiro Agricultura têm denominador 100% não-pecuário.
-  //
-  // O caminho REALIZADO já não usa isto — passou para a série soberana
-  // areaPecuariaRealPorMes. Sobrou aqui só para buildBlocosFromMetaConsolidacao
-  // (L1805), que é ESCALAR ANUAL, contrato diferente do mensal do Realizado.
-  //
-  // Trocar o divisor da META é decisão de produto (areaPecuariaMetaPorMes tem
-  // meses sem plano — reabre a pergunta do "—" em outro contexto). Fica para o
-  // PR-VIGENCIA-03B. Não "consertar" isto de passagem.
-  const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
+  // DECISÃO DE PRODUTO — SM-ARRENDAMENTO-ENCERRAR-01 (Gabriel 30/10/2026 19:33, "ok" à P1): o divisor do PC-100 META
+  // (buildBlocosFromMetaConsolidacao, ESCALAR ANUAL) é a ÁREA MÉDIA DO ANO = a média das áreas de pecuária VIGENTES nos
+  // 12 meses do ano escolhido (`areaPecuariaMediaDoAno`: ativo + uso pecuário + vigência do mês), "não a de dezembro".
+  // Substitui o "RESÍDUO CONSCIENTE — PR-VIGENCIA-03A" de 19/08/2026, que somava o cadastro de hoje sem vigência (o
+  // arrendamento devolvido da Sta. Maria, 600 ha, seguia no divisor). Não voltar ao cadastro de hoje nem a um mês só.
+  // O REALIZADO segue na série soberana areaPecuariaRealPorMes (abaixo).
+  const areaProdutiva = useMemo(() => areaPecuariaMediaDoAno(pastos, anoNum), [pastos, anoNum]);
 
   // A área do painel vem da MESMA fonte soberana do bloco de áreas (:1717):
   // areaPecuariaRealPorMes, que filtra por isOperacionalPecuaria e por mês.

@@ -21,6 +21,7 @@ import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
 import { isLancamentoDRERealizada } from '@/lib/financeiro/dreRealizada';
+import { areaPorMes } from '@/lib/pastos/areaDoMes';
 
 export type Trimestre = 1 | 2 | 3 | 4;
 
@@ -84,7 +85,7 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
         supabase.from('lancamentos').select('data, tipo, quantidade, peso_total, valor_total, cenario, cancelado')
           .eq('cliente_id', clienteId).eq('cancelado', false).eq('cenario', 'realizado')
           .gte('data', dataIni).lte('data', dataFim),
-        supabase.from('pastos').select('fazenda_id, area_produtiva_ha, ativo, entra_conciliacao')
+        supabase.from('pastos').select('fazenda_id, area_produtiva_ha, ativo, entra_conciliacao, data_inicio, data_fim')
           .eq('cliente_id', clienteId).eq('ativo', true).eq('entra_conciliacao', true),
         supabase.from('valor_rebanho_fechamento').select('ano_mes, valor_total, status')
           .eq('cliente_id', clienteId).in('ano_mes', vrfAnoMes),
@@ -99,7 +100,10 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
       const pastoRows = (pastos.data as any[]) || [];
 
       // ── ÁREA ──
-      const areaPecuariaHa = pastoRows.reduce((s, p) => s + (p.area_produtiva_ha || 0), 0);
+      // SM-ARRENDAMENTO-ENCERRAR-01 (decisão P2, Gabriel 30/10/2026 19:33): a lotação usa a área de CADA mês do trimestre (pastos
+      // vigentes no mês, `areaPorMes`); a área mostrada é a do ÚLTIMO mês. Antes era um valor só, com pasto já devolvido.
+      const areaPorMesTri = areaPorMes(pastoRows, anoMesTri);
+      const areaPecuariaHa = areaPorMesTri[2];
 
       // ── REBANHO (agregando todas categorias) ──
       const aggZoot = (rows: any[]): { si: Arr3; sf: Arr3; gmdNum: Arr3; gmdDen: Arr3; prodBio: Arr3 } => {
@@ -129,10 +133,10 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
       const gmdReal: Arr3 = [0, 1, 2].map(i => zr.gmdDen[i] > 0 ? zr.gmdNum[i] / zr.gmdDen[i] : 0) as Arr3;
       const gmdMeta: Arr3 = [0, 1, 2].map(i => zm.gmdDen[i] > 0 ? zm.gmdNum[i] / zm.gmdDen[i] : 0) as Arr3;
       const gmdYoy: Arr3 = [0, 1, 2].map(i => zp.gmdDen[i] > 0 ? zp.gmdNum[i] / zp.gmdDen[i] : 0) as Arr3;
-      const lotacaoUaHa: Arr3 = [0, 1, 2].map(i => areaPecuariaHa > 0 ? (rebanhoMedio[i] * 0.75) / areaPecuariaHa : 0) as Arr3;
+      const lotacaoUaHa: Arr3 = [0, 1, 2].map(i => areaPorMesTri[i] > 0 ? (rebanhoMedio[i] * 0.75) / areaPorMesTri[i] : 0) as Arr3;
       const lotacaoMeta: Arr3 = [0, 1, 2].map(i => {
         const rebMedMeta = (zm.si[i] + zm.sf[i]) / 2;
-        return areaPecuariaHa > 0 ? (rebMedMeta * 0.75) / areaPecuariaHa : 0;
+        return areaPorMesTri[i] > 0 ? (rebMedMeta * 0.75) / areaPorMesTri[i] : 0;
       }) as Arr3;
 
       // ── MOVIMENTAÇÕES (tipo zootécnico) ──
