@@ -209,6 +209,17 @@ const CENARIOS = [
   { nome: 'mapa-geo-sem-fechamento', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_03') },
   { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
   { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
+  /* MAPA-GLOBAL-01 — Geo Pastos em Global (dados sintéticos `dados/mapaGlobal.ts`): 2 fazendas; 5 com o nome mais longo, uma sem fechamento
+     no mês e uma sem mapa; a visão Pastos com o filtro "Carga alta"; as abas Área por situação e Atividade do gráfico */
+  { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-global-5', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-global-pastos', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('[data-testid="global-barra"] button', { hasText: 'Pastos' }).first().click(); await p.waitForTimeout(300);
+    await p.locator('[data-testid="global-chips"] button', { hasText: 'Carga alta' }).first().click(); await p.waitForTimeout(400); } },
+  { nome: 'mapa-global-grafico-area', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="global-grafico"] button', { hasText: 'Área por situação' }).first().click(); await p.waitForTimeout(300); } },
+  { nome: 'mapa-global-grafico-atividade', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="global-grafico"] button', { hasText: 'Atividade' }).first().click(); await p.waitForTimeout(300); } },
   { nome: 'recorrencias', url: 'tela=recorrencias', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'rolagem', 'tabela'] },
   /* P172 — Cadastros › Plano de Contas nos dez tamanhos do P92: o admin (com as ações), os inativos ligados, o cliente (só leitura), a

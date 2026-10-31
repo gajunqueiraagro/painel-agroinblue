@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { usePastoGeometrias, type PoligonoParaGravar } from '@/hooks/usePastoGeometrias';
-import { useFazenda } from '@/contexts/FazendaContext';
+import { GLOBAL_FAZENDA, useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Segmentado } from '@/components/ui/segmentado';
@@ -9,7 +9,10 @@ import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos } from '@/hooks/usePastos';
 import { useMapaDoMes } from '@/hooks/useMapaDoMes';
 import { useUltimoMesComFechamento } from '@/hooks/useUltimoMesComFechamento';
-import { mesDeAbertura } from '@/lib/mapa/mapaDoMes';
+import { mesDeAbertura, resumoDosPastos } from '@/lib/mapa/mapaDoMes';
+import { pastosDoGlobal, resumoGlobal, situacaoDoPasto } from '@/lib/mapa/resumoGlobal';
+import { useGeometriasDasFazendas, type GeometriaDoGlobal } from '@/hooks/useGeometriasDasFazendas';
+import { ESTADO_INICIAL_DO_GLOBAL, GeoPastosGlobal, type EstadoDoGlobal } from '@/components/mapa-geo/GeoPastosGlobal';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -43,9 +46,13 @@ const VISTAS: { valor: ViewMode; rotulo: string }[] = [
  * que abre no ÚLTIMO MÊS COM FECHAMENTO DE PASTOS da fazenda (fix1 A, `useUltimoMesComFechamento` + `mesDeAbertura`; sem nenhum, o mês de
  * hoje). Os números do mês saem do `useMapaDoMes` (fonte única). O rebanho oficial não entra no mapa (fix1 E: conferir alocadas ×
  * oficial é papel do Fechamento de pastos).
+ * MAPA-GLOBAL-01: com a barra lateral em Global, o resumo de todas as fazendas com pecuária (`GeoPastosGlobal`) no MESMO mês (D1),
+ * pela MESMA fonte (`useMapaDoMes` com a lista de fazendas) e a MESMA regra do Gestor (D2). Abrir uma fazenda pelo Global (D6) não pula
+ * para o último mês fechado (Q3) e mostra "← Global" no Gestor; a volta (pelo botão ou pela barra lateral) acha o Global como estava: o
+ * estado mora aqui enquanto a tela Geo Pastos está aberta (Q4).
  */
 export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado = {}) {
-  const { isGlobal, fazendaAtual } = useFazenda();
+  const { isGlobal, fazendaAtual, fazendasComPecuaria, setFazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const {
     geometrias, loading: geoLoading, salvarGeometrias, removerGeometrias, loadGeometrias,
@@ -77,10 +84,59 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
     if (alvo !== anoMes) irPara(alvo.slice(0, 4), Number(alvo.slice(5, 7)));
   }, [fazendaId, ultimoComFechamento.pronto, ultimoComFechamento.fazendaId, ultimoComFechamento.mes, anoMes, irPara]);
 
-  const mapaDoMes = useMapaDoMes(fazendaId, anoMes, pastos, categorias);
-
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
+
+  /* MAPA-GLOBAL-01: as fazendas do Global = as com pecuária (fora o ADM); a MESMA leitura do mês, para todas de uma vez */
+  const fazendasDoGlobal = useMemo(() => fazendasComPecuaria.filter(f => f.id !== GLOBAL_FAZENDA.id), [fazendasComPecuaria]);
+  const idsDoGlobal = useMemo(() => fazendasDoGlobal.map(f => f.id), [fazendasDoGlobal]);
+  const mapaDoMes = useMapaDoMes(isGlobal ? idsDoGlobal : fazendaId, anoMes, pastos, categorias);
+  const geosDoGlobal = useGeometriasDasFazendas(isGlobal ? idsDoGlobal : []);
+
+  const global = useMemo(() => {
+    if (!isGlobal) return null;
+    const comPoligono = new Set<string>();
+    const fazendasComMapa = new Set<string>();
+    const porFazenda = new Map<string, GeometriaDoGlobal[]>();
+    for (const g of geosDoGlobal.geometrias) {
+      fazendasComMapa.add(g.fazenda_id);
+      if (g.tipo === 'pasto' && g.pasto_id) comPoligono.add(g.pasto_id);
+      porFazenda.set(g.fazenda_id, [...(porFazenda.get(g.fazenda_id) ?? []), g]);
+    }
+    const entrada = {
+      anoMes, fazendas: fazendasDoGlobal.map(f => ({ id: f.id, codigo: f.codigo ?? '', nome: f.nome })),
+      vigentes: mapaDoMes.vigentes, comPoligono, fazendasComMapa, dados: mapaDoMes.dados,
+    };
+    return { ...resumoGlobal(entrada), pastos: pastosDoGlobal(entrada), porFazenda };
+  }, [isGlobal, geosDoGlobal.geometrias, anoMes, fazendasDoGlobal, mapaDoMes.vigentes, mapaDoMes.dados]);
+  const areaPorPasto = useMemo(() => new Map(mapaDoMes.vigentes.map(p => [p.id, p.area_produtiva_ha])), [mapaDoMes.vigentes]);
+  const resumoDoFiltro = useCallback((ids: readonly string[]) => resumoDosPastos(ids, mapaDoMes.dados, id => areaPorPasto.get(id)),
+    [mapaDoMes.dados, areaPorPasto]);
+  const situacaoDe = useCallback((id: string) => situacaoDoPasto(mapaDoMes.dados.get(id)), [mapaDoMes.dados]);
+
+  /* D6: o estado do Global (Q4: só enquanto esta tela está aberta) e a ida/volta */
+  const estadoDoGlobalRef = useRef<EstadoDoGlobal>(ESTADO_INICIAL_DO_GLOBAL);
+  const guardarEstadoDoGlobal = useCallback((e: EstadoDoGlobal) => { estadoDoGlobalRef.current = e; }, []);
+  const trocaPeloGlobalRef = useRef<string | null>(null);
+  const [veioDoGlobal, setVeioDoGlobal] = useState(false);
+  const [pastoInicial, setPastoInicial] = useState<string | null>(null);
+  useEffect(() => {
+    const doGlobal = !!fazendaId && trocaPeloGlobalRef.current === fazendaId;
+    setVeioDoGlobal(doGlobal);
+    if (!doGlobal) setPastoInicial(null);
+  }, [fazendaId]);
+  const abrirFazenda = useCallback((id: string, opcoes?: { pastoId?: string; importar?: boolean }) => {
+    const f = fazendasDoGlobal.find(x => x.id === id);
+    if (!f) return;
+    trocaPeloGlobalRef.current = id;
+    abriuNaFazendaRef.current = id; // Q3: vindo do Global, o mês é o do Global (não pula para o último fechado)
+    setPastoInicial(opcoes?.pastoId ?? null);
+    setViewMode('gestor');
+    if (opcoes?.importar) setUploadOpen(true);
+    setFazendaAtual(f);
+  }, [fazendasDoGlobal, setFazendaAtual]);
+  const voltarAoGlobal = useCallback(() => { trocaPeloGlobalRef.current = null; setFazendaAtual(GLOBAL_FAZENDA); }, [setFazendaAtual]);
+
   const [expanded, setExpanded] = useState(false);
   const renderedCountRef = useRef(0);
   const [, setRenderedCount] = useState(0);
@@ -105,14 +161,6 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
     return [...s].sort().reverse();
   }, [ano, anoDoRelogio]);
 
-  if (isGlobal) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">
-        Selecione uma fazenda para ver o mapa.
-      </div>
-    );
-  }
-
   /* o seletor de ano/mês do Fechamento Área (os dois `Select` da casa), o mesmo mês do shell */
   const seletorDeMes = (
     <>
@@ -128,6 +176,19 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
       </Select>
     </>
   );
+
+  if (isGlobal && global) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
+        <GeoPastosGlobal
+          fazendas={global.fazendas} total={global.total} pastos={global.pastos} geometriasPorFazenda={global.porFazenda}
+          situacaoDoPasto={situacaoDe} resumoDoFiltro={resumoDoFiltro}
+          carregando={mapaDoMes.carregando || geosDoGlobal.carregando} erro={mapaDoMes.erro ?? geosDoGlobal.erro}
+          seletorDeMes={seletorDeMes} estado={estadoDoGlobalRef.current} onEstado={guardarEstadoDoGlobal} onAbrirFazenda={abrirFazenda}
+        />
+      </div>
+    );
+  }
 
   const trocaDeVista = (
     <Segmentado valor={viewMode} onEscolher={setViewMode} opcoes={VISTAS} altura={24} />
@@ -179,6 +240,8 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         onRenderedChange={onRenderedChange}
         seletorDeMes={seletorDeMes}
         trocaDeVista={trocaDeVista}
+        voltarAoGlobal={veioDoGlobal ? voltarAoGlobal : undefined}
+        pastoInicialId={veioDoGlobal ? pastoInicial : null}
       />
     </div>
   ) : (

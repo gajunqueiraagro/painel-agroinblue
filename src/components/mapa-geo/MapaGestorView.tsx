@@ -18,7 +18,7 @@ import {
   DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { itemFunciona, MENU_ADICIONAR } from '@/lib/mapa/menuAdicionar';
-import { ChevronDown, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
@@ -26,7 +26,7 @@ import type { Pasto } from '@/hooks/usePastos';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
 import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Ponto } from '@/lib/mapa/rotulosDoMapa';
 import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
-import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
+import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
 
 interface Props {
@@ -40,6 +40,10 @@ interface Props {
   erroDoMes: string | null;
   geoLoading: boolean;
   onImportar: () => void;
+  /** MAPA-GLOBAL-01 (D6): a fazenda foi aberta pelo Global — o "← Global" aparece no espaço reservado do início da barra. */
+  voltarAoGlobal?: () => void;
+  /** MAPA-GLOBAL-01 (D6): o pasto clicado no Global abre selecionado, com o painel aberto. */
+  pastoInicialId?: string | null;
   onRenderedChange?: (count: number) => void;
   /** O seletor de ano/mês (o mesmo do Fechamento Área, mês compartilhado). */
   seletorDeMes: ReactNode;
@@ -172,7 +176,7 @@ function escaparHtml(t: string): string {
 
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onRenderedChange,
-  seletorDeMes, trocaDeVista,
+  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
@@ -198,24 +202,10 @@ export function MapaGestorView({
   }, [selecionadoId, geoPastos]);
 
   /* ── KPIs da fazenda no mês: os pastos com polígono, vigentes no mês ── */
+  // MAPA-GLOBAL-01: a regra mora na lib (`resumoDosPastos`), a MESMA do Global
   const kpis = useMemo(() => {
-    let cab = 0; let pesoTotal = 0; let area = 0; let algum = false;
-    for (const g of geoPastos) {
-      const d = dadosDoMes.get(g.pasto_id!);
-      if (!d) continue;
-      area += pastoPorId.get(g.pasto_id!)?.area_produtiva_ha ?? 0;
-      if (!d.temFechamento) continue;
-      algum = true;
-      cab += d.cabecas ?? 0;
-      pesoTotal += d.pesoTotalKg ?? 0;
-    }
-    return {
-      cabecas: algum ? cab : null,
-      pesoMedio: algum && cab > 0 ? pesoTotal / cab : null,
-      lotacao: algum && area > 0 ? pesoTotal / area : null,
-      area: area > 0 ? area : null,
-      uaHa: algum ? uaPorHa(cab, cab > 0 ? pesoTotal / cab : null, area) : null,
-    };
+    const r = resumoDosPastos(geoPastos.map(g => g.pasto_id!), dadosDoMes, id => pastoPorId.get(id)?.area_produtiva_ha);
+    return { ...r, uaHa: r.cabecas == null ? null : uaPorHa(r.cabecas, r.pesoMedio, r.area) };
   }, [geoPastos, dadosDoMes, pastoPorId]);
 
   /* fix1 E: o fechamento de pastos do mês ainda não está fechado (algum pasto do mapa com status ≠ 'fechado') */
@@ -343,6 +333,20 @@ export function MapaGestorView({
     return () => { mapa.off('zoomend', refazer); };
   }, [mapStatus, mapInstanceRef, labelLayerRef]);
 
+  /* MAPA-GLOBAL-01 (D6): o pasto clicado no Global abre selecionado e enquadrado (uma vez por pedido) */
+  const pastoInicialFeitoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pastoInicialId || pastoInicialFeitoRef.current === pastoInicialId || mapStatus !== 'ready') return;
+    const g = geoPastos.find(x => x.pasto_id === pastoInicialId);
+    const camadaGeo = g ? camadasRef.current.get(g.id) : undefined;
+    if (!g || !camadaGeo) return;
+    pastoInicialFeitoRef.current = pastoInicialId;
+    setSelecionadoId(g.id);
+    const mapa = mapInstanceRef.current;
+    const b = camadaGeo.getBounds();
+    if (mapa && b.isValid()) mapa.fitBounds(b, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [352, 60], maxZoom: 16 });
+  });
+
   const enquadrar = (limites: L.LatLngBounds, comPainel: boolean) => {
     const mapa = mapInstanceRef.current;
     if (!mapa || !limites.isValid()) return;
@@ -382,6 +386,14 @@ export function MapaGestorView({
     <div className="flex h-full min-h-0 flex-col" data-testid="mapa-gestor">
       {/* Barra 40px */}
       <div className="relative z-[600] flex h-[34px] flex-none items-center gap-1.5 border-b border-[#D9DEE5] bg-white px-2.5" data-testid="mapa-barra">
+        {/* MAPA-GLOBAL-01 (D6): o lugar do "← Global" existe sempre (largura fixa): aparecer não empurra os outros botões */}
+        <div className="w-[56px] flex-none" data-testid="mapa-volta-global">
+          {voltarAoGlobal && (
+            <Button type="button" variant="ghost" size="sm" className="h-[24px] w-full justify-start gap-0 px-0.5 text-[11px] font-semibold text-[#2B6CB0]" onClick={voltarAoGlobal}>
+              <ChevronLeft className="h-3 w-3" /> Global
+            </Button>
+          )}
+        </div>
         <Button type="button" variant="outline" size="sm" onClick={() => setFiltrosAbertos(v => !v)}
           className={`h-[24px] w-[72px] flex-none gap-1 px-2 text-[11px] ${filtrosAbertos ? 'border-[#1B2A44] bg-[#1B2A44] text-white hover:bg-[#1B2A44] hover:text-white' : ''}`}>
           <ListFilter className="h-3 w-3" /> Filtros
@@ -424,7 +436,7 @@ export function MapaGestorView({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" size="sm" title={`Camadas: ${nomeCamada}`}
-              className="h-[24px] w-[184px] flex-none justify-between gap-1 bg-[#2B6CB0] px-2 text-[11px] text-white hover:bg-[#2B6CB0]/90">
+              className="h-[24px] w-[152px] flex-none justify-between gap-1 bg-[#2B6CB0] px-2 text-[11px] text-white hover:bg-[#2B6CB0]/90">
               <span className="truncate">Camadas: <b className="font-semibold">{nomeCurtoCamada}</b></span>
               <ChevronDown className="h-3 w-3 flex-none" />
             </Button>

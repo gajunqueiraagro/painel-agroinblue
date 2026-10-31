@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Mock — Geo Pastos · Global v1</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:Inter,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1d232b;background:#F3F5F8;font-size:12px}
+.app{position:fixed;inset:0;display:flex}
+/* barra lateral (como a casa) */
+.side{width:152px;background:#1E2D45;color:#DCE3EE;display:flex;flex-direction:column;flex:none}
+.logo{height:52px;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid rgba(255,255,255,.08)}
+.logo i{width:30px;height:22px;background:#fff;border-radius:2px;display:inline-block}
+.logo b{font-size:13px;color:#fff;display:block}.logo small{font-size:9px;color:#9FB0C8}
+.ssel{margin:6px 6px 0;height:28px;border-radius:5px;background:#2A3B57;display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-size:11.5px;font-weight:600;color:#fff;cursor:pointer;position:relative}
+.ssel span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav{margin-top:10px}.nav div{height:30px;display:flex;align-items:center;gap:8px;padding:0 12px;font-size:12px;color:#C9D3E2}
+.nav div.on{background:#2A3B57;color:#fff;border-radius:5px;margin:0 6px;padding:0 6px}
+.nav div em{font-style:normal;margin-left:auto;color:#7F90AA}
+.fzmenu{position:absolute;left:0;top:30px;width:180px;background:#2E3D55;border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,.35);padding:4px;display:none;z-index:50}
+.fzmenu.show{display:block}.fzmenu div{height:24px;display:flex;align-items:center;padding:0 8px;font-weight:400;border-radius:4px;color:#E6ECF5}
+.fzmenu div:hover{background:#3A4A63}.fzmenu div.sel{background:#3A4A63;font-weight:600}
+/* área da tela */
+.col{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:32px;background:#22395A;color:#fff;display:flex;align-items:center;padding:0 14px;gap:6px;font-size:12px;flex:none}
+.top b{font-weight:600}.top span{color:#AEB9CC}.top .u{margin-left:auto;color:#C9D3E2;font-size:11px}
+.bar{height:40px;background:#fff;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid #D9DEE5;flex:none}
+.btn{height:26px;padding:0 10px;border:1px solid #CBD2DB;border-radius:4px;background:#fff;font-size:11px;display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;color:#1d232b;white-space:nowrap}
+.btn.on{background:#1B2A44;color:#fff;border-color:#1B2A44}
+.btn.dd:after{content:"▾";font-size:9px;color:#6B7480;margin-left:2px}
+.seg{display:flex}.seg .btn{border-radius:0;border-left-width:0}.seg .btn:first-child{border-radius:4px 0 0 4px;border-left-width:1px}.seg .btn:last-child{border-radius:0 4px 4px 0}
+.sp{flex:1}
+.busca{height:26px;width:150px;border:1px solid #CBD2DB;border-radius:4px;font-size:11px;padding:0 8px;color:#8A93A0;display:flex;align-items:center}
+.volta{width:78px;flex:none}.volta .btn{width:78px;justify-content:center;background:#EEF3FA;border-color:#B9CBE3;color:#1B4F8C;font-weight:600}
+.main{flex:1;min-height:0;display:flex;flex-direction:column;padding:10px;gap:8px}
+/* cards de resumo */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;flex:none}
+.k{background:#fff;border:1px solid #DDE2E8;border-radius:6px;padding:5px 10px;min-width:0}
+.k div{font-size:10.5px;color:#5A6472;white-space:nowrap}.k b{font-size:15px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.k b small{font-size:11px;font-weight:500;color:#5A6472;margin-left:2px}
+.k.al{border-color:#F0B8B3}.k.al b{color:#C0392B}
+/* corpo: tabela + resumo gráfico */
+.body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 272px;gap:8px}
+.lc{display:flex;flex-direction:column;gap:8px;min-height:0}
+.lc .card.fz{flex:none;max-height:58%}
+.lc .card.at{flex:1}
+.card{background:#fff;border:1px solid #DDE2E8;border-radius:6px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.ch{height:34px;display:flex;align-items:center;gap:6px;padding:0 8px;border-bottom:1px solid #E6EAF0;flex:none}
+.ch .t{font-size:12px;font-weight:600}
+.chips{display:flex;gap:4px;margin-left:8px;overflow:hidden}
+.cp{height:22px;padding:0 8px;border-radius:11px;border:1px solid #D5DBE3;font-size:10.5px;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;color:#3B4452}
+.cp i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.cp.on{background:#1B2A44;border-color:#1B2A44;color:#fff}
+.tw{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{position:sticky;top:0;z-index:2;background:#1B2A44;color:#fff;font-size:11px;font-weight:600;height:26px;padding:0 6px;text-align:left;white-space:nowrap;cursor:pointer;user-select:none}
+thead th.r{text-align:right}thead th .ar{font-size:9px;color:#9FB0C8;margin-left:3px}thead th.so .ar{color:#fff}
+tbody td{font-size:11px;height:24px;padding:0 6px;border-bottom:1px solid #EEF1F5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+tbody tr{cursor:pointer}tbody tr:hover td{background:#EEF3FA}tbody tr.hl td{background:#FFF6D6}
+td.r{text-align:right;font-variant-numeric:tabular-nums}td.m{color:#8A93A0}
+tfoot td{position:sticky;bottom:0;background:#1B2A44;color:#fff;font-size:11px;font-weight:600;height:26px;padding:0 6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sb{display:flex;height:9px;border-radius:2px;overflow:hidden;background:#EEF1F5}.sb i{display:block;height:100%}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:10.5px}.pill i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.go{color:#2B6CB0;font-size:11px}
+/* resumo gráfico */
+.rs{display:flex;flex-direction:column;gap:8px;min-height:0}
+.thumbs{display:grid;gap:6px;padding:8px;overflow:hidden}
+.th{border:1px solid #E1E6EC;border-radius:5px;padding:4px 6px 5px;cursor:pointer;min-width:0}
+.th:hover,.th.hl{border-color:#2B6CB0;background:#F5F8FD}
+.th .n{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;white-space:nowrap}
+.th .n span{overflow:hidden;text-overflow:ellipsis}.th .n em{font-style:normal;margin-left:auto;font-weight:500;font-size:10.5px;font-variant-numeric:tabular-nums}
+.th svg{display:block;width:100%;margin-top:3px}
+.gr{flex:1;min-height:0;display:flex;flex-direction:column}
+.gb{flex:1;min-height:0;padding:8px 10px;overflow:hidden}
+.hrow{display:grid;grid-template-columns:28px 1fr 46px;align-items:center;gap:6px;height:22px;font-size:11px}
+.hrow b{font-weight:600}.hrow .v{text-align:right;font-variant-numeric:tabular-nums}
+.track{position:relative;height:12px;background:#F1F3F6;border-radius:2px}
+.band{position:absolute;top:0;bottom:0;background:rgba(47,158,91,.13);border-left:1px dashed #2F9E5B;border-right:1px dashed #2F9E5B}
+.fill{position:absolute;top:2px;bottom:2px;left:0;border-radius:2px}
+.axis{display:grid;grid-template-columns:28px 1fr 46px;gap:6px;font-size:9.5px;color:#8A93A0;margin-top:2px}.axis i{display:block}
+.axis div{position:relative;height:12px}.axis div span{position:absolute;transform:translateX(-50%)}
+.leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:10px;color:#4A5361;padding:6px 10px;border-top:1px solid #EEF1F5}
+.leg span{display:flex;align-items:center;gap:4px;white-space:nowrap}.leg i{width:9px;height:9px;border-radius:2px;display:inline-block}
+/* tela da fazenda (simulada) */
+.fazv{flex:1;min-height:0;position:relative;background:#3B4A3A;display:none}
+.fazv.show{display:block}
+.fazv svg{position:absolute;inset:0;width:100%;height:100%}
+.glass{background:rgba(255,255,255,.8);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.6);box-shadow:0 6px 20px rgba(0,0,0,.25);border-radius:8px}
+.fk{position:absolute;top:10px;left:10px;display:flex;gap:6px;padding:6px}
+.fk div{background:rgba(255,255,255,.7);border-radius:5px;padding:3px 8px;min-width:76px}.fk small{display:block;font-size:9.5px;color:#4A5361}.fk b{font-size:13px}
+.fp{position:absolute;top:10px;right:10px;width:260px;padding:10px 12px;display:none}
+.fp.show{display:block}.fp b{font-size:14px}.fp .g{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.fp .g div{background:rgba(255,255,255,.75);border-radius:5px;padding:3px 8px}.fp .g small{display:block;font-size:9.5px;color:#4A5361}
+.fnote{position:absolute;left:10px;bottom:10px;padding:6px 10px;font-size:11px;color:#1d232b}
+.mocknote{position:fixed;right:150px;top:6px;background:#1d232b;color:#fff;font-size:10.5px;padding:5px 8px;border-radius:5px;opacity:.85;z-index:99;display:flex;gap:6px;align-items:center}
+.mocknote a{color:#9FD0FF;cursor:pointer}
+.tip{position:fixed;pointer-events:none;background:#1d232b;color:#fff;font-size:10.5px;padding:4px 7px;border-radius:4px;display:none;z-index:100;white-space:nowrap}
+</style></head><body>
+<div class="app">
+ <div class="side">
+  <div class="logo"><i></i><div><b>Agroinblue</b><small>Gestão Rural</small></div></div>
+  <div class="ssel"><span>Vera Ligia Milani</span>▾</div>
+  <div class="ssel" id="fzSel"><span id="fzNome">🌐 Global</span>▾<div class="fzmenu" id="fzMenu"></div></div>
+  <div class="nav">
+   <div>▦ Visão geral</div><div class="on">◎ Produção <em>›</em></div><div>$ Financeiro <em>›</em></div><div>◉ Planejamento <em>›</em></div>
+   <div>▤ Executivo <em>›</em></div><div>⛨ Auditoria <em>›</em></div><div>▢ Cadastros <em>›</em></div><div>⛨ Validar <em>›</em></div><div>⚙ Configurações</div>
+  </div>
+ </div>
+ <div class="col">
+  <div class="top"><b>Produção</b><span>/ Geo Pastos</span><span class="u">Gabriel Junqueira</span></div>
+  <div class="bar" id="bar">
+   <div class="volta" id="voltaBox"></div>
+   <span class="btn dd">2026</span><span class="btn dd" id="mesBtn">Set</span>
+   <span class="sp"></span>
+   <span class="busca">Buscar pasto…</span>
+   <div class="seg" id="segVis"><span class="btn on" data-v="faz">Fazendas</span><span class="btn" data-v="pas">Pastos</span></div>
+   <div class="seg" id="segTela"><span class="btn on">Gestor</span><span class="btn">Operação</span><span class="btn">Validação</span></div>
+  </div>
+
+  <!-- GLOBAL -->
+  <div class="main" id="global">
+   <div class="kpis" id="kpis"></div>
+   <div class="body">
+    <div class="lc">
+     <div class="card fz" id="cardTb">
+      <div class="ch"><span class="t" id="tbTit">Fazendas</span><div class="chips" id="chips"></div><span class="sp"></span><span class="btn">Exportar ▾</span></div>
+      <div class="tw" id="tw"><table id="tb"></table></div>
+     </div>
+     <div class="card at" id="cardAt">
+      <div class="ch"><span class="t">Pedem atenção no mês</span><span style="font-size:10.5px;color:#5A6472;margin-left:6px">carga alta, sem fechamento e vazios · clique abre o pasto na fazenda</span></div>
+      <div class="tw" id="twAt"><table id="tbAt"></table></div>
+     </div>
+    </div>
+    <div class="rs">
+     <div class="card" style="flex:none"><div class="ch"><span class="t">Mapa das fazendas</span><span class="sp"></span><span style="font-size:10.5px;color:#5A6472">clique para abrir</span></div><div class="thumbs" id="thumbs"></div></div>
+     <div class="card gr">
+      <div class="ch"><div class="seg" id="segGraf"><span class="btn on" data-g="lot">Lotação</span><span class="btn" data-g="sit">Área por situação</span><span class="btn" data-g="ati">Atividade</span></div></div>
+      <div class="gb" id="graf"></div>
+      <div class="leg" id="leg"></div>
+     </div>
+    </div>
+   </div>
+  </div>
+
+  <!-- FAZENDA (a tela do MAPA-02a, simulada) -->
+  <div class="fazv" id="fazv">
+   <svg id="fazSvg" preserveAspectRatio="xMidYMid meet"></svg>
+   <div class="glass fk" id="fazK"></div>
+   <div class="glass fp" id="fazP"></div>
+   <div class="glass fnote">Tela da fazenda (MAPA-02a, já no ar) — aqui só simulada para mostrar a ida e a volta.</div>
+  </div>
+ </div>
+</div>
+<div class="mocknote">Mock · dados ilustrativos · exemplo com <a id="ex2">2 fazendas</a> | <a id="ex5">5 fazendas</a></div>
+<div class="tip" id="tip"></div>
+
+<script>
+const COR={ideal:'#2F9E5B',sub:'#E2B53A',alta:'#D9443B',vazio:'#9AA3AE',sem:'#D9DEE5'};
+const NSIT={ideal:'Ideal (300–500)',sub:'Sublotado (< 300)',alta:'Carga alta (> 500)',vazio:'Vazio',sem:'Sem fechamento no mês'};const NCURTO={ideal:'Ideal',sub:'Sublotado',alta:'Carga alta',vazio:'Vazio',sem:'Sem fechamento'};
+const ATI={Recria:'#4C8BD6',Cria:'#9C6BD3',Engorda:'#D98E3B',Vedado:'#7A8796'};
+const fmt=(v,d=0)=>v==null?'—':v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+function rng(seed){let s=seed;return()=>{s=(s*16807)%2147483647;return(s-1)/2147483646}}
+function sit(p){if(p.cab==null)return'sem';if(p.cab===0)return'vazio';const l=p.kgha;return l<300?'sub':l>500?'alta':'ideal'}
+
+/* gera fazendas: grade torta de pastos dentro de um contorno irregular */
+function gerar(def,seed){
+ const r=rng(seed);const {rows,cols}=def;const V=[];
+ for(let i=0;i<=rows;i++){V.push([]);for(let j=0;j<=cols;j++){V[i].push([j*100+(i&&i<rows&&j&&j<cols?(r()-.5)*44:0)+(i*7*def.skew),i*100+(j&&j<cols&&i&&i<rows?(r()-.5)*44:0)])}}
+ const ps=[];let n=0;
+ for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){
+  if(def.cut(i,j))continue;n++;
+  const poly=[V[i][j],V[i][j+1],V[i+1][j+1],V[i+1][j]];
+  const area=+(def.haMed*(0.55+r()*0.9)).toFixed(1);
+  const semF=r()<def.pSem, vaz=!semF&&r()<0.07;
+  let cab=null,peso=null;
+  if(!semF){cab=vaz?0:Math.round(area*(def.dens*(0.6+r()*0.85)));peso=vaz?null:Math.round(def.peso*(0.75+r()*0.5))}
+  const ati=vaz?'Vedado':(r()<def.pCria?'Cria':r()<0.8?'Recria':'Engorda');
+  ps.push({faz:def.cod,nome:'P_'+String(n).padStart(2,'0'),poly,area,cab,peso,ati});
+ }
+ ps.forEach(p=>{p.kgha=p.cab?p.cab*p.peso/p.area:(p.cab===0?0:null);p.sit=sit(p)});
+ return ps;
+}
+const DEFS={
+ BG:{cod:'BG',nome:'Faz Baia Grande',rows:5,cols:6,skew:.4,cut:(i,j)=>(i===0&&j>3)||(i===4&&j<1),haMed:52,dens:1.25,peso:330,pSem:.04,pCria:.5,hist:[402,388,371,365,380,410,433,451,440,428,415,407]},
+ '3M':{cod:'3M',nome:'Faz. 3 Muchachas',rows:4,cols:5,skew:-.3,cut:(i,j)=>(i===0&&j===0)||(i===3&&j>3)||(i===0&&j===4),haMed:49.6,dens:.95,peso:316,pSem:.06,pCria:.25,hist:[587,567,590,630,641,437,913,523,279,443,342,372]},
+ PUR:{cod:'PUR',nome:'Faz. Pureza',rows:5,cols:7,skew:.2,cut:(i,j)=>(i>3&&j>4),haMed:38,dens:1.6,peso:410,pSem:.03,pCria:.1,hist:[520,540,560,575,590,602,610,598,585,570,560,548]},
+ RET:{cod:'RET',nome:'Faz. Retiro do Indaiá',rows:4,cols:4,skew:.5,cut:(i,j)=>false,haMed:61,dens:.9,peso:280,pSem:.1,pCria:.6,hist:[260,255,270,281,290,300,296,288,279,270,262,251]},
+ SE:{cod:'SE',nome:'Faz. Sto Expedito',rows:3,cols:5,skew:-.2,cut:(i,j)=>(i===2&&j===0),haMed:44,dens:1.2,peso:360,pSem:.2,pCria:.3,hist:[380,392,401,410,420,431,440,452,447,439,430,421]}
+};
+let FAZ=[],PAS=[],estado={vis:'faz',sort:{k:'cod',d:1},sortP:{k:'faz',d:1},filtro:'todos',graf:'lot',aberta:null,scroll:0};
+function carregar(lista){
+ FAZ=[];PAS=[];
+ lista.forEach((c,ix)=>{const d=DEFS[c];const ps=gerar(d,ix*977+31);
+  if(c==='3M'){ // ajusta aos números reais de set/26 (793,5 ha · 936 cab · 316 kg)
+   const fa=793.5/ps.reduce((a,p)=>a+p.area,0);ps.forEach(p=>p.area=+(p.area*fa).toFixed(1));
+   const tc=ps.reduce((a,p)=>a+(p.cab||0),0);ps.forEach(p=>{if(p.cab)p.cab=Math.round(p.cab*936/tc)});
+   ps.forEach(p=>{p.kgha=p.cab?p.cab*p.peso/p.area:(p.cab===0?0:null);p.sit=sit(p)});
+  }
+  PAS.push(...ps);
+  const comF=ps.filter(p=>p.cab!=null);const area=ps.reduce((a,p)=>a+p.area,0);
+  const cab=comF.reduce((a,p)=>a+p.cab,0);const kg=comF.reduce((a,p)=>a+p.cab*(p.peso||0),0);
+  const sitA={};Object.keys(COR).forEach(s=>sitA[s]=ps.filter(p=>p.sit===s).reduce((a,p)=>a+p.area,0));
+  const atiA={};Object.keys(ATI).forEach(s=>atiA[s]=ps.filter(p=>p.ati===s&&p.cab).reduce((a,p)=>a+p.cab,0));
+  FAZ.push({cod:d.cod,nome:d.nome,ps,np:ps.length,area,cab,peso:cab?kg/cab:null,kgha:area?kg/area:null,sem:ps.filter(p=>p.sit==='sem').length,alta:ps.filter(p=>p.sit==='alta').length,sitA,atiA,hist:d.hist,fech:c==='SE'?'08/26':'09/26'});
+ });
+ const m=document.getElementById('fzMenu');
+ m.innerHTML='<div class="sel" data-f="">🌐 Global</div>'+FAZ.map(f=>`<div data-f="${f.cod}">${f.nome}</div>`).join('')+'<div style="color:#9FB0C8">Administrativo</div>';
+ render();
+}
+const fxSit=k=>COR[k];
+function corLot(v){return v==null?COR.sem:v===0?COR.vazio:v<300?COR.sub:v>500?COR.alta:COR.ideal}
+function spark(h,w=74,ht=16){const mx=Math.max(...h,520),mn=Math.min(...h,240);const x=i=>i*(w/(h.length-1)),y=v=>ht-2-(v-mn)/(mx-mn)*(ht-4);
+ const b1=y(500),b2=y(300);
+ return `<svg width="${w}" height="${ht}" style="vertical-align:middle"><rect x="0" y="${b1}" width="${w}" height="${b2-b1}" fill="rgba(47,158,91,.13)"/><path d="${h.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' ')}" fill="none" stroke="#1B2A44" stroke-width="1.3"/><circle cx="${x(h.length-1)}" cy="${y(h[h.length-1])}" r="2.2" fill="${corLot(h[h.length-1])}"/></svg>`}
+function sbar(obj,tot,cores){return `<div class="sb">${Object.keys(cores).map(k=>obj[k]?`<i style="width:${obj[k]/tot*100}%;background:${cores[k]}" title="${k}: ${fmt(obj[k],1)}"></i>`:'').join('')}</div>`}
+
+function render(){
+ if(estado.aberta){document.getElementById('global').style.display='none';document.getElementById('fazv').classList.add('show');renderFaz();return}
+ document.getElementById('global').style.display='flex';document.getElementById('fazv').classList.remove('show');
+ document.getElementById('voltaBox').innerHTML='';document.getElementById('segVis').style.visibility='visible';
+ document.getElementById('fzNome').textContent='🌐 Global';
+ const area=FAZ.reduce((a,f)=>a+f.area,0),cab=FAZ.reduce((a,f)=>a+f.cab,0),kg=FAZ.reduce((a,f)=>a+f.cab*(f.peso||0),0);
+ const sem=FAZ.reduce((a,f)=>a+f.sem,0),alta=FAZ.reduce((a,f)=>a+f.alta,0);
+ document.getElementById('kpis').innerHTML=`
+  <div class="k"><div>Fazendas · pastos</div><b>${FAZ.length} <small>· ${PAS.length} pastos</small></b></div>
+  <div class="k"><div>Área de pastos</div><b>${fmt(area,1)} <small>ha</small></b></div>
+  <div class="k"><div>Cabeças</div><b>${fmt(cab)}</b></div>
+  <div class="k"><div>Peso médio</div><b>${fmt(kg/cab)} <small>kg</small></b></div>
+  <div class="k"><div>Lotação média</div><b style="color:${corLot(kg/area)==COR.ideal?'#1d232b':corLot(kg/area)}">${fmt(kg/area)} <small>kg/ha</small></b></div>
+  <div class="k ${sem||alta?'al':''}"><div>Pedem atenção</div><b>${alta} <small>alta</small> · ${sem} <small>sem fech.</small></b></div>`;
+ renderTabela();renderThumbs();renderGraf();
+}
+function cab(cols,s){return '<thead><tr>'+cols.map(c=>`<th class="${c.r?'r':''} ${s.k===c.k?'so':''}" data-k="${c.k}" style="width:${c.w}">${c.t}<span class="ar">${s.k===c.k?(s.d>0?'▲':'▼'):'↕'}</span></th>`).join('')+'</tr></thead>'}
+function ordenar(arr,s){return arr.slice().sort((a,b)=>{let x=a[s.k],y=b[s.k];if(x==null)return 1;if(y==null)return -1;return(typeof x==='string'?x.localeCompare(y,'pt'):x-y)*s.d})}
+const COLP=[{k:'faz',t:'Faz.',w:'44px'},{k:'nome',t:'Pasto',w:'auto'},{k:'ati',t:'Atividade',w:'80px'},{k:'area',t:'Área ha',w:'68px',r:1},{k:'cab',t:'Cab.',w:'56px',r:1},{k:'peso',t:'Peso kg',w:'62px',r:1},{k:'kgha',t:'kg/ha',w:'62px',r:1},{k:'sit',t:'Situação',w:'118px'}];
+function linhaP(p){return `<tr data-f="${p.faz}" data-p="${p.nome}"><td><b>${p.faz}</b></td><td>${p.nome}</td><td>${p.cab==null?'<span class="m">—</span>':p.ati}</td><td class="r">${fmt(p.area,1)}</td><td class="r">${p.cab==null?'<span class="m">—</span>':fmt(p.cab)}</td><td class="r">${fmt(p.peso)}</td><td class="r">${p.kgha==null?'<span class="m">—</span>':fmt(p.kgha)}</td><td><span class="pill"><i style="background:${COR[p.sit]}"></i>${NCURTO[p.sit]}</span></td></tr>`}
+estado.sortA={k:'kgha',d:-1};
+function renderAtencao(){
+ const ord={alta:0,sem:1,vazio:2};const base=PAS.filter(p=>p.sit in ord);
+ const l=ordenar(base,estado.sortA);
+ document.getElementById('tbAt').innerHTML=cab(COLP,estado.sortA)+'<tbody>'+l.map(linhaP).join('')+'</tbody>';
+}
+function renderTabela(){
+ const tb=document.getElementById('tb'),chips=document.getElementById('chips');
+ if(estado.vis==='faz'){
+  document.getElementById('tbTit').textContent='Fazendas';chips.innerHTML='';
+  const cols=[{k:'cod',t:'Faz.',w:'44px'},{k:'nome',t:'Fazenda',w:'auto'},{k:'np',t:'Pastos',w:'54px',r:1},{k:'area',t:'Área ha',w:'68px',r:1},{k:'cab',t:'Cab.',w:'52px',r:1},{k:'peso',t:'Peso kg',w:'60px',r:1},{k:'kgha',t:'kg/ha',w:'60px',r:1},{k:'sitk',t:'Situação (área)',w:'104px'},{k:'histk',t:'12 meses',w:'82px'},{k:'sem',t:'Sem fech.',w:'64px',r:1}];
+  const linhas=ordenar(FAZ,estado.sort);
+  const area=FAZ.reduce((a,f)=>a+f.area,0),cb=FAZ.reduce((a,f)=>a+f.cab,0),kg=FAZ.reduce((a,f)=>a+f.cab*(f.peso||0),0);
+  const sitT={};Object.keys(COR).forEach(k=>sitT[k]=FAZ.reduce((a,f)=>a+f.sitA[k],0));
+  tb.innerHTML=cab(cols,estado.sort)+'<tbody>'+linhas.map(f=>`<tr data-f="${f.cod}"><td><b>${f.cod}</b></td><td title="${f.nome}">${f.nome}</td><td class="r">${f.np}</td><td class="r">${fmt(f.area,1)}</td><td class="r">${fmt(f.cab)}</td><td class="r">${fmt(f.peso)}</td><td class="r"><span class="pill"><i style="background:${corLot(f.kgha)}"></i>${fmt(f.kgha)}</span></td><td>${sbar(f.sitA,f.area,COR)}</td><td>${spark(f.hist)}</td><td class="r ${f.sem?'':'m'}">${f.sem||'—'}</td></tr>`).join('')+'</tbody>'+
+   `<tfoot><tr><td></td><td>${FAZ.length} fazendas</td><td class="r" style="text-align:right">${PAS.length}</td><td style="text-align:right">${fmt(area,1)}</td><td style="text-align:right">${fmt(cb)}</td><td style="text-align:right">${fmt(kg/cb)}</td><td style="text-align:right">${fmt(kg/area)}</td><td>${sbar(sitT,area,COR)}</td><td></td><td style="text-align:right">${FAZ.reduce((a,f)=>a+f.sem,0)}</td></tr></tfoot>`;
+ } else {
+  document.getElementById('tbTit').textContent='Pastos';
+  const cont=k=>k==='todos'?PAS.length:PAS.filter(p=>p.sit===k).length;
+  chips.innerHTML=[['todos','Todos',null],['alta','Carga alta',COR.alta],['sub','Sublotado',COR.sub],['ideal','Ideal',COR.ideal],['vazio','Vazio',COR.vazio],['sem','Sem fech.',COR.sem]].map(([k,t,c])=>`<span class="cp ${estado.filtro===k?'on':''}" data-c="${k}">${c?`<i style="background:${c}"></i>`:''}${t} ${cont(k)}</span>`).join('');
+  const cols=COLP;
+  const base=estado.filtro==='todos'?PAS:PAS.filter(p=>p.sit===estado.filtro);
+  const linhas=ordenar(base,estado.sortP);
+  const area=base.reduce((a,p)=>a+p.area,0),cb=base.reduce((a,p)=>a+(p.cab||0),0),kg=base.reduce((a,p)=>a+(p.cab||0)*(p.peso||0),0);
+  tb.innerHTML=cab(cols,estado.sortP)+'<tbody>'+linhas.map(linhaP).join('')+'</tbody>'+
+   `<tfoot><tr><td></td><td>${base.length} pastos</td><td></td><td style="text-align:right">${fmt(area,1)}</td><td style="text-align:right">${fmt(cb)}</td><td style="text-align:right">${cb?fmt(kg/cb):'—'}</td><td style="text-align:right">${area&&cb?fmt(kg/area):'—'}</td><td></td></tr></tfoot>`;
+ }
+ document.getElementById('cardAt').style.display=estado.vis==='faz'?'flex':'none';
+ document.getElementById('cardTb').style.maxHeight=estado.vis==='faz'?'58%':'none';
+ document.getElementById('cardTb').style.flex=estado.vis==='faz'?'none':'1';
+ if(estado.vis==='faz')renderAtencao();
+ const tw=document.getElementById('tw');tw.scrollTop=estado.scroll;
+}
+function bbox(ps){let a=1e9,b=1e9,c=-1e9,d=-1e9;ps.forEach(p=>p.poly.forEach(([x,y])=>{a=Math.min(a,x);b=Math.min(b,y);c=Math.max(c,x);d=Math.max(d,y)}));return[a,b,c-a,d-b]}
+function svgFaz(f,h,lbl){const [x,y,w,hh]=bbox(f.ps);const pad=10;
+ return `<svg viewBox="${x-pad} ${y-pad} ${w+2*pad} ${hh+2*pad}" style="height:${h}px" preserveAspectRatio="xMidYMid meet">${f.ps.map(p=>`<polygon points="${p.poly.map(q=>q.join(',')).join(' ')}" fill="${COR[p.sit]}" fill-opacity=".85" stroke="#fff" stroke-width="${lbl?3:5}" data-p="${p.nome}"/>`).join('')}${lbl?f.ps.map(p=>{const cx=p.poly.reduce((a,q)=>a+q[0],0)/4,cy=p.poly.reduce((a,q)=>a+q[1],0)/4;return `<text x="${cx}" y="${cy}" text-anchor="middle" font-size="15" font-weight="600" fill="#fff" style="paint-order:stroke;stroke:#0008;stroke-width:3px">${p.nome.replace('_',' ')}</text><text x="${cx}" y="${cy+15}" text-anchor="middle" font-size="11" fill="#fff" style="paint-order:stroke;stroke:#0008;stroke-width:3px">${p.kgha==null?'—':p.kgha===0?'vazio':fmt(p.kgha)+' kg/ha'}</text>`}).join(''):''}</svg>`}
+function renderThumbs(){
+ const n=FAZ.length;const el=document.getElementById('thumbs');
+ el.style.gridTemplateColumns=n<=2?'1fr 1fr':'1fr 1fr 1fr';
+ const h=n<=2?92:n<=3?70:50;
+ el.innerHTML=FAZ.map(f=>`<div class="th" data-f="${f.cod}"><div class="n"><b>${f.cod}</b><em style="color:${corLot(f.kgha)===COR.ideal?'#2F7D4F':corLot(f.kgha)}">${fmt(f.kgha)}</em></div>${svgFaz(f,h,false)}</div>`).join('');
+}
+function renderGraf(){
+ const g=document.getElementById('graf'),leg=document.getElementById('leg');const max=700;
+ if(estado.graf==='lot'){
+  const pct=v=>Math.min(v,max)/max*100;
+  g.innerHTML='<div style="font-size:10.5px;color:#5A6472;margin-bottom:6px">kg/ha no mês · faixa ideal 300–500 sombreada</div>'+ordenar(FAZ,{k:'kgha',d:-1}).map(f=>`<div class="hrow" data-f="${f.cod}"><b>${f.cod}</b><div class="track"><div class="band" style="left:${pct(300)}%;width:${pct(500)-pct(300)}%"></div><div class="fill" style="width:${pct(f.kgha)}%;background:${corLot(f.kgha)}"></div></div><span class="v">${fmt(f.kgha)}</span></div>`).join('')+
+   `<div class="axis"><i></i><div>${[0,300,500,700].map(v=>`<span style="left:${pct(v)}%">${v}</span>`).join('')}</div><i></i></div>`;
+  leg.innerHTML=['ideal','sub','alta'].map(k=>`<span><i style="background:${COR[k]}"></i>${NSIT[k]}</span>`).join('');
+ } else if(estado.graf==='sit'){
+  g.innerHTML='<div style="font-size:10.5px;color:#5A6472;margin-bottom:6px">% da área de pastos de cada fazenda</div>'+FAZ.map(f=>`<div class="hrow" data-f="${f.cod}"><b>${f.cod}</b><div>${sbar(f.sitA,f.area,COR).replace('height:9px','')}</div><span class="v">${fmt(f.sitA.ideal/f.area*100)}%</span></div>`).join('')+'<div style="font-size:10px;color:#8A93A0;margin-top:4px">à direita: % da área na faixa ideal</div>';
+  leg.innerHTML=Object.keys(COR).map(k=>`<span><i style="background:${COR[k]}"></i>${NSIT[k].replace(/ \(.*\)/,'')}</span>`).join('');
+ } else {
+  g.innerHTML='<div style="font-size:10.5px;color:#5A6472;margin-bottom:6px">cabeças por atividade do fechamento do mês</div>'+FAZ.map(f=>{const t=Object.values(f.atiA).reduce((a,b)=>a+b,0)||1;return `<div class="hrow" data-f="${f.cod}"><b>${f.cod}</b><div>${sbar(f.atiA,t,ATI)}</div><span class="v">${fmt(f.cab)}</span></div>`}).join('');
+  leg.innerHTML=Object.keys(ATI).map(k=>`<span><i style="background:${ATI[k]}"></i>${k}</span>`).join('');
+ }
+ g.querySelectorAll('.sb').forEach(s=>s.style.height='12px');
+}
+function abrir(cod,pasto){estado.scroll=document.getElementById('tw').scrollTop;estado.aberta={cod,pasto};render()}
+function voltar(){estado.aberta=null;render()}
+function renderFaz(){
+ const f=FAZ.find(x=>x.cod===estado.aberta.cod);
+ document.getElementById('fzNome').textContent=f.nome;
+ document.getElementById('voltaBox').innerHTML='<span class="btn" id="bVolta" title="Voltar para a visão Global, como estava">← Global</span>';
+ document.getElementById('bVolta').onclick=voltar;document.getElementById('segVis').style.visibility='hidden';
+ const s=document.getElementById('fazSvg');const [x,y,w,h]=bbox(f.ps);const pad=60;
+ s.setAttribute('viewBox',`${x-pad-120} ${y-pad} ${w+2*pad+240} ${h+2*pad}`);
+ s.innerHTML=svgFaz(f,0,true).replace(/^<svg[^>]*>/,'').replace('</svg>','');
+ s.querySelectorAll('polygon').forEach(pg=>{pg.style.cursor='pointer';pg.onclick=()=>{estado.aberta.pasto=pg.dataset.p;renderFaz()}});
+ document.getElementById('fazK').innerHTML=`<div><small>Pastos</small><b>${f.np}</b></div><div><small>Cabeças</small><b>${fmt(f.cab)}</b></div><div><small>Peso méd.</small><b>${fmt(f.peso)} kg</b></div><div><small>Lotação</small><b>${fmt(f.kgha)} kg/ha</b></div><div><small>Área pastos</small><b>${fmt(f.area,1)} ha</b></div>`;
+ const fp=document.getElementById('fazP');const p=f.ps.find(q=>q.nome===estado.aberta.pasto);
+ s.querySelectorAll('polygon').forEach(pg=>{if(p&&pg.dataset.p===p.nome){pg.setAttribute('stroke','#FFD84D');pg.setAttribute('stroke-width','7')}});
+ if(p){fp.classList.add('show');fp.innerHTML=`<b>${p.nome}</b> <span style="font-size:10.5px;color:#4A5361">· ${f.cod} · ${p.ati}</span><div class="g"><div><small>Área</small><b>${fmt(p.area,1)} ha</b></div><div><small>Cabeças</small><b>${p.cab==null?'—':fmt(p.cab)}</b></div><div><small>Peso méd.</small><b>${p.peso?fmt(p.peso)+' kg':'—'}</b></div><div><small>Lotação</small><b>${p.kgha==null?'—':fmt(p.kgha)+' kg/ha'}</b></div></div><div style="font-size:10.5px;color:#4A5361;margin-top:8px">aberto a partir da lista de pastos do Global</div>`}else fp.classList.remove('show');
+}
+/* eventos */
+document.addEventListener('click',e=>{
+ const th=e.target.closest('thead th');if(th){const s=th.closest('#tbAt')?estado.sortA:(estado.vis==='faz'?estado.sort:estado.sortP);const k=th.dataset.k;if(k==='sitk'||k==='histk')return;s.d=s.k===k?-s.d:1;s.k=k;renderTabela();return}
+ const cp=e.target.closest('.cp');if(cp){estado.filtro=cp.dataset.c;estado.scroll=0;renderTabela();return}
+ const sv=e.target.closest('#segVis .btn');if(sv){estado.vis=sv.dataset.v;estado.scroll=0;document.querySelectorAll('#segVis .btn').forEach(b=>b.classList.toggle('on',b===sv));renderTabela();return}
+ const sg=e.target.closest('#segGraf .btn');if(sg){estado.graf=sg.dataset.g;document.querySelectorAll('#segGraf .btn').forEach(b=>b.classList.toggle('on',b===sg));renderGraf();return}
+ const fz=e.target.closest('#fzSel');const mi=e.target.closest('#fzMenu div');
+ if(mi&&mi.dataset.f!==undefined){document.getElementById('fzMenu').classList.remove('show');mi.dataset.f?abrir(mi.dataset.f):voltar();e.stopPropagation();return}
+ if(fz){document.getElementById('fzMenu').classList.toggle('show');return}
+ document.getElementById('fzMenu').classList.remove('show');
+ const tr=e.target.closest('tbody tr, .th, .hrow');if(tr&&tr.dataset.f&&!estado.aberta){abrir(tr.dataset.f,tr.dataset.p||null);return}
+ if(e.target.id==='ex2')carregar(['BG','3M']);if(e.target.id==='ex5')carregar(['BG','3M','PUR','RET','SE']);
+});
+/* destaque cruzado: passar o mouse numa fazenda acende a linha, a miniatura e a barra */
+document.addEventListener('mouseover',e=>{const el=e.target.closest('[data-f]');document.querySelectorAll('.hl').forEach(x=>x.classList.remove('hl'));if(!el||estado.aberta||estado.vis!=='faz')return;document.querySelectorAll(`tr[data-f="${el.dataset.f}"], .th[data-f="${el.dataset.f}"]`).forEach(x=>x.classList.add('hl'))});
+document.getElementById('tw').addEventListener('scroll',e=>{if(!estado.aberta)estado.scroll=e.target.scrollTop});
+carregar(['BG','3M']);
+</script>
+</body></html>

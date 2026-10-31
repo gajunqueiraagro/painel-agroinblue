@@ -66,7 +66,7 @@ describe('montarMapaDoMes (MAPA-02a, D1/D3)', () => {
     expect(h).toHaveLength(12);
     expect(h[11].anoMes).toBe('2026-09');
     expect(h[10].kgHa).toBeCloseTo((70 * 280) / 50, 6);
-    expect(h[9]).toEqual({ anoMes: '2026-07', kgHa: null, faixa: null });
+    expect(h[9]).toEqual({ anoMes: '2026-07', kgHa: null, pesoTotalKg: null, faixa: null });
     expect(h.some(x => x.anoMes === '2026-10')).toBe(false);
   });
 

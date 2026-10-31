@@ -15,10 +15,10 @@ export function rotuloDaAtividade(tipo: string | null | undefined): string {
 
 export type CamadaDoMapa = 'situacao' | 'kg_ha' | 'atividade' | 'cabecas' | 'tipo_area';
 
-/** `curto` = o nome no botão Camadas (184px), quando o inteiro não cabe; o inteiro fica no menu, no title e na legenda. */
+/** `curto` = o nome no botão Camadas (152px desde o MAPA-GLOBAL-01, para caber o "← Global"), quando o inteiro não cabe; o inteiro fica no menu, no title e na legenda. */
 export const CAMADAS: { valor: CamadaDoMapa; rotulo: string; curto?: string }[] = [
   { valor: 'situacao', rotulo: 'Situação da lotação', curto: 'Situação' },
-  { valor: 'kg_ha', rotulo: 'Lotação (kg/ha)' },
+  { valor: 'kg_ha', rotulo: 'Lotação (kg/ha)', curto: 'Lotação' },
   { valor: 'atividade', rotulo: 'Atividade' },
   { valor: 'cabecas', rotulo: 'Cabeças' },
   { valor: 'tipo_area', rotulo: 'Tipo de área' },

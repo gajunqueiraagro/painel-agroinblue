@@ -164,6 +164,19 @@ const CENARIOS = [
     ['camada kg/ha', mapaCamada('Lotação (kg/ha)')], ['camada atividade', mapaCamada('Atividade')], ['camada cabeças', mapaCamada('Cabeças')],
     ['camada tipo de área', mapaCamada('Tipo de área')], ['mês agosto', mapaMes('Ago')], ['mês setembro', mapaMes('Set')],
   ] },
+  /* MAPA-GLOBAL-01 — trocar a visão, o filtro, a aba do gráfico e a ordenação não desloca a barra, os cards nem as colunas */
+  { nome: 'mapa-global', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], estados: [
+    ['ordena por kg/ha', async (p) => { await p.locator('[data-testid="global-tabela-fazendas"] th', { hasText: 'kg/ha' }).first().click(); await espera(p, 300); }],
+    ['gráfico área', async (p) => { await p.locator('[data-testid="global-grafico"] button', { hasText: 'Área por situação' }).first().click(); await espera(p, 300); }],
+    ['gráfico atividade', async (p) => { await p.locator('[data-testid="global-grafico"] button', { hasText: 'Atividade' }).first().click(); await espera(p, 300); }],
+    ['gráfico lotação', async (p) => { await p.locator('[data-testid="global-grafico"] button', { hasText: 'Lotação' }).first().click(); await espera(p, 300); }],
+  ] },
+  { nome: 'mapa-global-pastos', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]],
+    antes: async (p) => { await p.locator('[data-testid="global-barra"] button', { hasText: 'Pastos' }).first().click(); await espera(p, 400); }, estados: [
+    ['filtro carga alta', async (p) => { await p.locator('[data-testid="global-chips"] button', { hasText: 'Carga alta' }).first().click(); await espera(p, 300); }],
+    ['filtro sem fech.', async (p) => { await p.locator('[data-testid="global-chips"] button', { hasText: 'Sem fech.' }).first().click(); await espera(p, 300); }],
+    ['filtro todos', async (p) => { await p.locator('[data-testid="global-chips"] button', { hasText: 'Todos' }).first().click(); await espera(p, 300); }],
+  ] },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor
      nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
