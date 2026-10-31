@@ -26,11 +26,17 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
     if (!temCliente && !soId) return [];
     /* FIN-FINANC-28 PASSO 4: `_fn_contrato_do_usuario(contrato)` e' a guarda pelo cliente do CONTRATO (tenant_ok + 42501, preso abaixo) */
     /* P171: `_fn_subcentro_cliente_rodar(…)` e' a casca do escritor dos subcentros do cliente: so' o admin (42501), presa abaixo */
+    /* PATR-01: `_fn_patrimonio_bem_do_usuario(bem)` e' a guarda pelo cliente do BEM (tenant_ok + 42501), o molde do contrato, presa abaixo */
     const guardada = /tenant_ok\s*\(/i.test(p) || /_fn_exigir_tenant(_das_linhas)?\s*\(/i.test(p)
-      || /_fn_contrato_do_usuario\s*\(/i.test(p) || /_fn_subcentro_cliente_rodar\s*\(/i.test(p)
+      || /_fn_contrato_do_usuario\s*\(/i.test(p) || /_fn_subcentro_cliente_rodar\s*\(/i.test(p) || /(?<!function\s+public\.)_fn_patrimonio_bem_do_usuario\s*\(/i.test(p)
       || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p));
     return [{ nome, guardada }];
   });
+}
+
+/** O nome de TODA funcao criada num texto de migration (exposta ou nao). */
+export function todasAsDefinicoes(sql: string): string[] {
+  return [...sql.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)\s*\(/gi)].map(m => m[1]);
 }
 
 /** As funcoes SECURITY DEFINER com parametro de cliente sem guarda, num texto de migration. */
@@ -45,7 +51,12 @@ export function semGuarda(sql: string): string[] {
  */
 export function ultimasSemGuarda(arquivos: readonly { arquivo: string; sql: string }[]): string[] {
   const ultima = new Map<string, { arquivo: string; guardada: boolean }>();
-  for (const a of arquivos) for (const d of definicoesExpostas(a.sql)) ultima.set(d.nome.toLowerCase(), { arquivo: a.arquivo, guardada: d.guardada });
+  for (const a of arquivos) {
+    /* PATR-01: a redefinicao que DEIXA de ser exposta (SECURITY INVOKER, ou sem parametro de cliente/id) tambem e' a ultima — ela fecha a
+       anterior. Sem isto, uma funcao que vira INVOKER numa migration seguinte continuava reprovada pela definicao velha. */
+    for (const nome of todasAsDefinicoes(a.sql)) ultima.set(nome.toLowerCase(), { arquivo: a.arquivo, guardada: true });
+    for (const d of definicoesExpostas(a.sql)) ultima.set(d.nome.toLowerCase(), { arquivo: a.arquivo, guardada: d.guardada });
+  }
   return [...ultima.entries()].filter(([, v]) => !v.guardada).map(([nome, v]) => `${v.arquivo}: ${nome}`);
 }
 
@@ -83,6 +94,22 @@ describe('guarda de cliente nas migrations novas', () => {
     expect(sql).toMatch(/revoke all on function public\._fn_contrato_do_usuario\(uuid\) from public, anon, authenticated;/);
   });
 
+  it('a guarda pelo bem do patrimonio e\' aceita, e ela mesma tem tenant_ok + 42501 e nasce fechada (PATR-01)', () => {
+    const peloBem = `CREATE FUNCTION public.fn_m(p_bem uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      declare b record; begin b := public._fn_patrimonio_bem_do_usuario(p_bem); return '{}'; end $$;`;
+    const soIdSem = `CREATE FUNCTION public.fn_l(p_bem uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$ begin return '{}'; end $$;`;
+    expect(semGuarda([peloBem, soIdSem].join('\n'))).toEqual(['public.fn_l']);
+    const sql = readFileSync(join(DIR, '20261028116060_patr_01_rpcs.sql'), 'utf8');
+    const inicio = sql.indexOf('create or replace function public._fn_patrimonio_bem_do_usuario');
+    const dono = sql.slice(inicio, sql.indexOf('end $$;', inicio));
+    expect(dono).toMatch(/not coalesce\(public\.tenant_ok\(b\.cliente_id\), false\)/);
+    expect(dono).toMatch(/errcode = '42501'/);
+    expect(sql).toMatch(/revoke all on function public\._fn_patrimonio_bem_do_usuario\(uuid\) from public, anon, authenticated;/);
+    /* as duas internas com o cliente passam a INVOKER na 116070 (a ultima definicao vale) */
+    const fix = readFileSync(join(DIR, '20261028116070_patr_01_internas_invoker.sql'), 'utf8');
+    expect(definicoesExpostas(fix)).toEqual([]);
+  });
+
   it('a casca dos subcentros do cliente e\' aceita, e ela mesma so\' deixa o admin passar (P171: membro do cliente = 42501)', () => {
     const pelaCasca = `CREATE FUNCTION public.fn_o(p_cliente_id uuid, p_nome text) RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $f$
       select public._fn_subcentro_cliente_rodar('criar', jsonb_build_object('cliente_id', p_cliente_id), false) $f$;`;
@@ -113,6 +140,10 @@ describe('guarda de cliente nas migrations novas', () => {
       begin perform public._fn_contrato_do_usuario(p_id); end $$;`;
     expect(ultimasSemGuarda([{ arquivo: 'a.sql', sql: sem }, { arquivo: 'b.sql', sql: com }])).toEqual([]);
     expect(ultimasSemGuarda([{ arquivo: 'a.sql', sql: com }, { arquivo: 'b.sql', sql: sem }])).toEqual(['b.sql: public.fn_p']);
+    /* PATR-01: redefinir como INVOKER fecha a anterior; a DEFINER de novo depois reabre */
+    const invoker = `CREATE OR REPLACE FUNCTION public.fn_p(p_id uuid) RETURNS void LANGUAGE sql SECURITY INVOKER AS $$ select 1 $$;`;
+    expect(ultimasSemGuarda([{ arquivo: 'a.sql', sql: sem }, { arquivo: 'b.sql', sql: invoker }])).toEqual([]);
+    expect(ultimasSemGuarda([{ arquivo: 'a.sql', sql: invoker }, { arquivo: 'b.sql', sql: sem }])).toEqual(['b.sql: public.fn_p']);
     const sql = readFileSync(join(DIR, '20261027200400_fin_financ_28_p4b_guarda.sql'), 'utf8');
     expect(semGuarda(sql)).toEqual([]);
     expect(definicoesExpostas(sql).map((d) => d.nome)).toEqual(['public.fn_financiamento_parcela_vincular', 'public.fn_financiamento_parcela_desvincular']);
