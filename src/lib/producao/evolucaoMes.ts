@@ -24,6 +24,18 @@ export const TIPOS_DO_MES: { tipo: FluxoTipo; rotulo: string; lado: 'entrada' | 
   { tipo: 'morte', rotulo: 'Morte', lado: 'saida' },
   { tipo: 'transferencia_saida', rotulo: 'Transf. saída', lado: 'saida' },
 ];
+/* PROD-EVOLUCAO-01b-fix1 (Gabriel 31/10, item 4) — os nomes CURTOS do "Conferir pesos": cabem inteiros na coluna (o nome inteiro vai no `title`) */
+export const CATEGORIA_CURTA: Record<string, string> = {
+  mamotes_m: 'Mam. M', desmama_m: 'Desm. M', garrotes: 'Garr.', bois: 'Bois', touros: 'Touros',
+  mamotes_f: 'Mam. F', desmama_f: 'Desm. F', novilhas: 'Novil.', vacas: 'Vacas',
+};
+export const TIPO_CURTO: Record<string, string> = {
+  nascimento: 'Nasc.', compra: 'Compra', transferencia_entrada: 'Tr. entr.', abate: 'Abate', venda: 'Venda',
+  consumo: 'Cons.', morte: 'Morte', transferencia_saida: 'Tr. saída', reclassificacao: 'Evol.',
+};
+export const categoriaCurta = (codigo: string): string => CATEGORIA_CURTA[codigo] ?? codigo;
+export const tipoCurto = (tipo: string): string => TIPO_CURTO[tipo] ?? tipo;
+
 const COL_CAB: Record<FluxoTipo, keyof ZootCategoriaMensal> = {
   nascimento: 'cab_nascimento', compra: 'cab_compra', transferencia_entrada: 'cab_transf_entrada', abate: 'cab_abate', venda: 'cab_venda',
   transferencia_saida: 'cab_transf_saida', consumo: 'cab_consumo', morte: 'cab_morte',

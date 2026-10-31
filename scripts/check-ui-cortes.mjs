@@ -216,11 +216,13 @@ const CENARIOS = [
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92 },
   /* PROD-EVOLUCAO-01a — Produção › Evolução no Ano (nível 1), pior caso de largura (`mocks/evolucao.ts`): NENHUM número cortado a 1126 e a 1366,
      nas três unidades, uma fazenda e sem meta (Gabriel 30/10 17:16) */
-  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]] },
-  { nome: 'evolucao-ano-arroba', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/) },
+  /* PROD-EVOLUCAO-01b-fix1 (Gabriel 31/10): o período é Mês | Ano (o Acum. saiu; abre no Ano) e os rótulos curtos cabem INTEIROS (`data-inteiro`) */
+  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-arroba', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'evolucao-ano-t', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
-  { nome: 'evolucao-ano-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Ano$/) },
-  { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-ano-mes', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Mês/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-fazenda-arroba', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
   /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (o mês por categoria), pior caso (`mocks/evolucaoMes.ts`): os 8 tipos, 3 tipos, mês
      sem Fechamento, sem linha e a aba Composição; NENHUM número cortado a 1126 e a 1366 (Gabriel 30/10 17:16) */
@@ -228,7 +230,8 @@ const CENARIOS = [
   { nome: 'evolucao-mes-3-tipos', url: 'tela=evolucao-mes&barra=32&tipos=3', tamanhos: [[1126, 579], [1366, 768]] },
   { nome: 'evolucao-mes-aberto', url: 'tela=evolucao-mes&barra=32&aberto=1', tamanhos: [[1126, 579], [1366, 768]] },
   { nome: 'evolucao-mes-vazio', url: 'tela=evolucao-mes&barra=32&vazio=1', tamanhos: [[1126, 579], [1366, 768]] },
-  { nome: 'evolucao-mes-composicao', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Composição$/) },
+  /* fix1 (item 4): o painel abre em Composição; "Conferir pesos" (2ª aba) com dd/mm e nomes curtos que cabem INTEIROS */
+  { nome: 'evolucao-mes-pesos', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Conferir pesos/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'plano-contas-inativos', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: clicar('[data-testid="mostrar-inativos"]') },
   { nome: 'plano-contas-cliente', url: 'tela=plano-contas&perfil=cliente', tamanhos: TAMANHOS_DO_P92 },
   { nome: 'plano-contas-busca-4', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: async (p) => { await p.locator('[data-testid="busca-plano"]').fill('Outras Saídas'); await p.waitForTimeout(500); } },

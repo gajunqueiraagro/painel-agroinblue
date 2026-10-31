@@ -28,12 +28,14 @@ const montar = () => {
 const linha = (id: string) => document.querySelector(`tr[data-linha="${id}"]`) as HTMLElement;
 
 describe('todo número leva à origem', () => {
-  it('a célula do abate de fev → OC do abate, fev; o selo da linha → o período inteiro do acumulado', () => {
+  /* fix1 (item 5): a tela abre no "Ano" = o ano até o último mês fechado (os mesmos números do Acum. de antes) — o selo leva jan..fev */
+  const DOZE = [1, 2];
+  it('a célula do abate de fev → OC do abate, fev; o selo da linha → o ano até o último fechado', () => {
     const { onAbrirOrigem } = montar();
     fireEvent.click(linha('abate').querySelector('td[data-mes="2"]')!);
-    expect(onAbrirOrigem).toHaveBeenLastCalledWith({ destino: 'oc', tipo: 'abate', ano: new Date().getFullYear(), mes: 2, meses: [1, 2] });
+    expect(onAbrirOrigem).toHaveBeenLastCalledWith({ destino: 'oc', tipo: 'abate', ano: new Date().getFullYear(), mes: 2, meses: DOZE });
     fireEvent.click(within(linha('abate')).getByRole('button', { name: 'OC' }));
-    expect(onAbrirOrigem).toHaveBeenLastCalledWith({ destino: 'oc', tipo: 'abate', ano: new Date().getFullYear(), mes: null, meses: [1, 2] });
+    expect(onAbrirOrigem).toHaveBeenLastCalledWith({ destino: 'oc', tipo: 'abate', ano: new Date().getFullYear(), mes: null, meses: DOZE });
   });
   it('nascimento → Lanç.; saldo final e GMD → Fech. do mês', () => {
     const { onAbrirOrigem } = montar();
@@ -49,10 +51,41 @@ describe('todo número leva à origem', () => {
     fireEvent.click(screen.getByRole('columnheader', { name: 'Mar' }));
     expect(onAbrirMes).toHaveBeenCalledWith(new Date().getFullYear(), 3);
   });
-  it('o mês aberto não mostra indicador; zero é "0", não "—"', () => {
+  /* fix1 (item 8): VAZIO = VAZIO — o mês sem dado e o zero ficam em branco (antes "—" e "0") */
+  it('o mês aberto não mostra indicador e o zero fica em branco; o mês sem dado também', () => {
     montar();
-    expect(linha('gmd').querySelector('td[data-mes="3"]')!.textContent).toBe('—');
-    expect(linha('nascimento').querySelector('td[data-mes="1"]')!.textContent).toBe('0');
+    expect(linha('gmd').querySelector('td[data-mes="3"]')!.textContent).toBe('');
+    expect(linha('nascimento').querySelector('td[data-mes="1"]')!.textContent).toBe('');
+    expect(linha('nascimento').querySelector('td[data-mes="4"]')!.textContent).toBe('');
+    expect(linha('nascimento').querySelector('td[data-mes="2"]')!.textContent).toBe('5');
+  });
+});
+
+describe('PROD-EVOLUCAO-01b-fix1 (Gabriel 31/10) — a Evolução no Ano', () => {
+  it('item 5: o período é só "Mês | Ano" (o Acum. saiu) e abre no Ano', () => {
+    montar();
+    const barra = screen.getByTestId('evolucao-barra');
+    expect(within(barra).queryByRole('button', { name: /Acum/ })).toBeNull();
+    /* Gabriel 31/10: o rótulo diz até onde o ano vai (o último mês fechado do fixture é fev) e o title explica */
+    const ano = within(barra).getByRole('button', { name: 'Ano · até fev' });
+    expect(ano.className).toContain('bg-primary');
+    expect(ano.getAttribute('title')).toBe('O ano até fev, o último mês fechado');
+  });
+  it('item 6: "Internas" e as transferências com nome curto inteiro; a explicação no title', () => {
+    montar();
+    const internas = linha('internas').querySelector('[data-inteiro]')!;
+    expect(internas.textContent).toContain('Internas');
+    expect(internas.textContent).not.toContain('não mudam');
+    expect(internas.getAttribute('title')).toContain('não mudam o total');
+  });
+  it('item 7: Meta e Δ % são secundários (fonte bem menor, sem negrito, cor suave)', () => {
+    montar();
+    for (const col of ['meta', 'delta']) {
+      const td = linha('abate').querySelector(`td[data-coluna="${col}"]`)!;
+      expect(td.className).toContain('text-[8.5px]');
+      expect(td.className).toContain('font-normal');
+      expect(td.className).not.toContain('font-semibold');
+    }
   });
 });
 
