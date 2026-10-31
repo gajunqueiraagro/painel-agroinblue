@@ -97,6 +97,8 @@ export const brl = (v: number | null | undefined) => (v == null ? '—' : `${sin
 export const n0 = (v: number | null | undefined) => (v == null ? '—' : `${sinal(v)}${fmt(Math.round(v), 0)}`);
 /** R$ mil com 1 decimal (a grade com mais de 14 meses e o eixo do gráfico) — é escrita do número, não conta da tela */
 export const mil1 = (v: number | null | undefined) => (v == null ? '—' : `${sinal(v)}${fmt(v / 1000, 1)}`);
+/** VG-META-NO-MODO-01 (Gabriel 31/10 11:13) — o número com 2 casas, sem "R$" (os rótulos do gráfico da gaveta em R$/cab/mês) */
+export const n2 = (v: number | null | undefined) => (v == null ? '—' : `${sinal(v)}${fmt(v, 2)}`);
 export const pct1 = (v: number | null | undefined) => (v == null ? '—' : `${sinal(v)}${fmt(v, 1)}%`);
 export const vsMedia = (v: number | null | undefined) => (v == null ? '—' : `${v > 0.05 ? '+' : v < -0.05 ? '−' : ''}${fmt(Math.round(v), 0)}%`);
 export const dataCurta = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '—');

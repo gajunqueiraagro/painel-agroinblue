@@ -328,6 +328,18 @@ const CENARIOS = [
       await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').first().dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
       await p.locator(`[data-testid="analise-tabela-linha-${ativ}"]`).click(); await p.locator('[data-testid="analise-tabela-bloco-variavel"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500);
     } })),
+  /* VG-META-NO-MODO-01 (regra final, Gabriel 31/10 11:13) — a análise do Custeio total nos 3 modos × R$ e R$/cab/mês: no Mês só as colunas
+     e a meta do mês; na Média a média e a meta média; no Acum. como estava; em R$/cab os rótulos com 2 casas */
+  ...['mes', 'media', 'acum'].flatMap((modo) => ['rs', 'cab'].map((un) => ({
+    nome: `visao-geral-analise-modo-${modo}-${un}`, url: 'tela=visao-geral&barra=0', tamanhos: [...TAMANHOS_DA_VG, [1366, 768]], regiao: '[data-testid="modal-analise"]',
+    rotulosSvg: '[data-testid="analise-grafico-svg"] text, [data-testid="analise-donut-centro"]',
+    folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
+    semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').first().dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
+      if (modo !== 'mes') { await p.locator('[data-testid="analise-tabela"]').getByText(modo === 'media' ? 'Média' : 'Acum.', { exact: true }).dispatchEvent('click'); await p.waitForTimeout(600); }
+      if (un === 'cab') { await p.locator('[data-testid="analise-unidade"]').click(); await p.locator('[data-testid="analise-unidade-rs_cab"]').click(); await p.waitForTimeout(700); }
+    } }))),
   /* P100 item 5 — o PIOR CASO de largura das tabelas do modal ("NJ Saídas · Acumulado 12 meses"): `&vg_grande=1` (valores na casa
      de dezenas de milhões, % perto de +999,9%, 5 dígitos de lançamentos), dez/26 (12 meses), aba da raiz, Acum.: nada corta, nada cola
      (folga >= 6 px), o centro do donut cabe no furo */
