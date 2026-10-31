@@ -17,6 +17,8 @@ export default defineConfig({
     { find: /^@\/hooks\/useFornecedoresDoCliente$/, replacement: m('leitor.ts') },
     /* PROD-EVOLUCAO-01a — a Evolução no Ano recebe meses sintéticos no pior caso de largura (a conta é a da `montarEvolucao`, testada) */
     { find: /^@\/hooks\/useEvolucaoDoAno$/, replacement: m('evolucao.ts') },
+    /* PROD-EVOLUCAO-01b — o mês por categoria recebe linhas sintéticas no pior caso de largura (a conta é a da `montarMesPorCategoria`) */
+    { find: /^@\/hooks\/useEvolucaoDoMes$/, replacement: m('evolucaoMes.ts') },
     { find: '@', replacement: path.resolve(RAIZ, 'src') } ] },
   css: { postcss: RAIZ },
   server: { fs: { allow: [RAIZ] } },

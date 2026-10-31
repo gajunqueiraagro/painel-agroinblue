@@ -44,7 +44,7 @@ import { LancamentoZooModal } from './components/edicao/LancamentoZooModal';
 import V2VisaoGeralRebanho from './pages/V2VisaoGeralRebanho';
 import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
 import { MetaPrecoTab } from '@/pages/MetaPrecoTab';
-import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
+import { EvolucaoMesTab } from '@/pages/EvolucaoMesTab';
 import { FechamentoTab } from '@/pages/FechamentoTab';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { PastosTab } from '@/pages/PastosTab';
@@ -524,6 +524,8 @@ export default function V2Index() {
     /* PROD-EVOLUCAO-01a — a tela de onde o drill saiu (a volta retorna a ela); sem ela, a Evolução por Categoria, como sempre */
     origem?: V2Section;
   } | null>(null);
+  /* PROD-EVOLUCAO-01b — o mês que a Evolução por Categoria abre: o clicado na Evolução no Ano (ou o da volta de um drill); null = o último fechado */
+  const [mesDaEvolucao, setMesDaEvolucao] = useState<{ ano: number; mes: number } | null>(null);
   // Quando um lançamento de financiamento é editado em Financeiro → Lançamentos,
   // setamos o id e trocamos para a section 'financiamentos' para abrir FinanciamentoDetalhe.
   // Voltar do detalhe externo limpa este state e retorna a 'financeiro-lanc'.
@@ -1257,7 +1259,7 @@ export default function V2Index() {
         {() => (
           /* PROD-EVOLUCAO-01a — a Evolução no Ano do mock v4 (o v1 segue com a `FluxoAnualTab`). Todo número leva à origem. */
           <EvolucaoDoAnoTab
-            onAbrirMes={(a, m) => { setAno(String(a)); setMes(String(m)); setSection('evolucao-categoria'); }}
+            onAbrirMes={(a, m) => { setAno(String(a)); setMes(String(m)); setMesDaEvolucao({ ano: a, mes: m }); setSection('evolucao-categoria'); }}
             onAbrirOrigem={(o) => {
               const mm = (m: number) => String(m).padStart(2, '0');
               const ini = o.mes ?? o.meses[0] ?? 1; const fim = o.mes ?? o.meses[o.meses.length - 1] ?? 12;
@@ -1469,40 +1471,34 @@ export default function V2Index() {
         } : undefined}
       />
     );
+    /* PROD-EVOLUCAO-01b — o nível 2 do mock v4: o MÊS por categoria (a `EvolucaoCategoriaTab` sai do v2; ficou presa no mês corrente desde o
+       c01a10e3). Abre no mês clicado na Evolução no Ano; sem mês dito, no último fechado. A volta de um drill reabre o MESMO mês. */
     if (section === 'evolucao-categoria') return (
-      <EvolucaoCategoriaTab
-        ocultarFiltrosPeriodo
-        onNavigateToEvolCatLista={(filtro) => {
-          // Drill da Conferência Categoria → 'conferencia-lancamentos'
-          // (FinanceiroTab) filtrado por subAba+ano+mês+cenário+categoria.
-          // Padrão idêntico ao onNavigateToMovimentacao do FluxoAnualTab.
-          //
-          // Mapeamento coluna → SubAba (default mais comum por coluna; o
-          // usuário ajusta a SubAba dentro do FinanceiroTab se precisar
-          // ver outro tipo da mesma TopTab):
-          //   ent_ext   → 'compra'    (TopTab 'entradas')
-          //   sai_ext   → 'venda'     (TopTab 'saidas')
-          //   evol_ent  → 'historico' (reclassificacoes vivem em 'historico')
-          //   evol_sai  → 'historico'
-          //   (sem coluna ou Saldo Ini/Fin) → 'venda' default
-          const subAba: SubAba =
-            filtro.coluna === 'ent_ext' ? 'compra'
-            : filtro.coluna === 'evol_ent' || filtro.coluna === 'evol_sai' ? 'historico'
-            : 'venda';
-          const colunaLabel =
-            filtro.coluna === 'ent_ext' ? 'Entradas'
-            : filtro.coluna === 'sai_ext' ? 'Saídas'
-            : filtro.coluna === 'evol_ent' ? 'Evolução Entrada'
-            : filtro.coluna === 'evol_sai' ? 'Evolução Saída'
-            : 'Movimentações';
-          const mesPadded = String(filtro.mes).padStart(2, '0');
+      <EvolucaoMesTab
+        key={mesDaEvolucao ? `${mesDaEvolucao.ano}-${mesDaEvolucao.mes}` : 'ultimo-fechado'}
+        anoInicial={mesDaEvolucao?.ano ?? Number(ano)}
+        mesInicial={mesDaEvolucao?.mes ?? null}
+        onVoltar={podeAbrirTela('conferencia-mensal') ? () => setSection('conferencia-mensal') : undefined}
+        onAbrirFechamento={(a, m) => { setAno(String(a)); setMes(String(m)); setSection('fechamento'); }}
+        onEditarLancamento={async (id) => {
+          /* com OC, a OC (a regra do "i" da lista: o elo em zoo_operacao_movimentacoes); avulso, o modal do lançamento */
+          const elo = await buscarOperacaoDoLancamento(id);
+          if (elo) abrirOperacaoOC(elo.operacaoId, 'negociacao', elo.tipoOperacao);
+          else setZooEditId(id);
+        }}
+        onAbrirLancamentos={(o) => {
+          const mm = String(o.mes).padStart(2, '0');
+          const subAba: SubAba = o.tipo === 'reclassificacao' ? 'historico' : o.tipo;
+          const rotulo = o.tipo === 'reclassificacao' ? 'evolução de categoria' : o.tipo.replace('_', ' ');
+          setMesDaEvolucao({ ano: o.ano, mes: o.mes });
           setDrillFiltro({
             subAba,
-            ano: filtro.ano,
-            mes: mesPadded,
-            cenario: filtro.cenario,
-            categoria: filtro.categoria ?? 'todas',
-            label: `${colunaLabel} · ${mesPadded}/${filtro.ano} · ${filtro.cenario === 'meta' ? 'META' : 'Realizado'}`,
+            ano: String(o.ano),
+            mes: mm,
+            cenario: o.cenario,
+            categoria: o.categoria ?? 'todas',
+            label: `${rotulo} · ${mm}/${o.ano} · ${o.cenario === 'meta' ? 'Meta' : 'Realizado'}`,
+            origem: 'evolucao-categoria',
           });
           setSection('conferencia-lancamentos');
         }}

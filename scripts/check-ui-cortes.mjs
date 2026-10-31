@@ -202,6 +202,13 @@ const CENARIOS = [
   { nome: 'evolucao-ano-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Ano$/) },
   { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]] },
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
+  /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (o mês por categoria), pior caso (`mocks/evolucaoMes.ts`): os 8 tipos, 3 tipos, mês
+     sem Fechamento, sem linha e a aba Composição; NENHUM número cortado a 1126 e a 1366 (Gabriel 30/10 17:16) */
+  { nome: 'evolucao-mes', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-mes-3-tipos', url: 'tela=evolucao-mes&barra=32&tipos=3', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-mes-aberto', url: 'tela=evolucao-mes&barra=32&aberto=1', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-mes-vazio', url: 'tela=evolucao-mes&barra=32&vazio=1', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-mes-composicao', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Composição$/) },
   { nome: 'plano-contas-inativos', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: clicar('[data-testid="mostrar-inativos"]') },
   { nome: 'plano-contas-cliente', url: 'tela=plano-contas&perfil=cliente', tamanhos: TAMANHOS_DO_P92 },
   { nome: 'plano-contas-busca-4', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: async (p) => { await p.locator('[data-testid="busca-plano"]').fill('Outras Saídas'); await p.waitForTimeout(500); } },
