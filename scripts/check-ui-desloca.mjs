@@ -302,6 +302,10 @@ const CENARIOS = [
     ['mostrar inativas', clicar('[data-testid="mostrar-inativas"]')]] },
   { nome: 'contas-modal', url: 'tela=contas&barra=32&v=editar', auto: true },
   { nome: 'contas-nova', url: 'tela=contas&barra=32&v=nova', auto: true },
+  /* CARTAO-LANCAMENTO-01 (mock v2: "mesmo lugar, mesmo tamanho: o modal não muda de altura") — a conta corrente × o cartão (fecha/vence no lugar
+     de Agência/Conta e a explicação embaixo) */
+  { nome: 'contas-modal-cartao', url: 'tela=contas&barra=32&n=longo&v=editar', antes: async (p) => { await p.locator('[data-testid="modal-conta-bancaria"]').waitFor(); await espera(p, 700); },
+    estados: [['o cartão', { url: 'tela=contas&barra=32&n=longo&v=editar&cartao=1' }]] },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
   { nome: 'mesclar', url: 'tela=mesclar', auto: true },
   /* FIN-NOTA-PDF-01 — o modal da nota: nada anda quando o "Falta:" troca pelo aviso de baixo, quando a faixa "Atualizar este" aparece,
@@ -392,6 +396,12 @@ const CENARIOS = [
   /* P117 — a linha fixa sob o Fornecedor: com cidade ("CNPJ · Presidente Prudente/SP") e sem (só o CNPJ) — nada anda */
   { nome: 'lancamento-fornecedor-cidade', url: 'tela=lancamento&m=editar', estados: [['cadastro sem cidade', { url: 'tela=lancamento&m=editar&cidade=sem' }]] },
   /* P121 — o Resumo do lançamento: os nomes longos do mock no lugar dos curtos — nenhum bloco muda de altura, nada abaixo anda */
+  /* CARTAO-LANCAMENTO-01 — a mesma compra numa conta comum × no cartão (o vencimento da fatura, a frase embaixo da conta, o 💳 do resumo) e
+     a forma "auto" na aba Pagamento: nada se desloca */
+  ...['Geral', 'Pagamento'].map((aba) => ({ nome: `lancamento-cartao-${aba}`, url: 'tela=lancamento&m=novo&v=cartaoavista&conta=bb',
+    antes: async (p) => { await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900); await clicar(`text=${aba}`)(p); await espera(p, 500); },
+    estados: [['conta do cartão (dias digitados)', { url: 'tela=lancamento&m=novo&v=cartaoavista' }],
+      ['conta do cartão (dia das faturas)', { url: 'tela=lancamento&m=novo&v=cartaoavista&dias=sem' }]] })),
   { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal', estados: [['nomes longos', { url: 'tela=lancamento&m=editar&v=sal&resumo=longo' }]] },
   /* P138 — "Usar" a safra da competência: a linha da sugestão sai e o campo se enche — nada abaixo anda */
   { nome: 'lancamento-safra-usar', url: 'tela=lancamento&m=editar&safra=sem', estados: [['Usar a sugestão', clicar('[data-testid="safra-usar-sugestao"]')]] },

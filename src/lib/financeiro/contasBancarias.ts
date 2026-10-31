@@ -51,6 +51,9 @@ export interface ContaBancariaCadastro {
   ordem_exibicao?: number | null;
   updated_at?: string | null;
   updated_by?: string | null;
+  /** CARTAO-LANCAMENTO-01 — só cartão: o dia de fechamento e o de vencimento da fatura, digitados (nulo = não informado) */
+  dia_fechamento?: number | null;
+  dia_vencimento?: number | null;
 }
 
 export interface BancoReferencia { codigo_banco: string; nome_banco: string; nome_curto: string }
@@ -216,6 +219,8 @@ export interface FormularioConta {
   nomesReconhecimento: string[]; formato: FormatoNaTela | null;
   /** cc: a de investimento que vive dentro desta; inv: a corrente onde ela vive */
   contaVinculada: string;
+  /** CARTAO-LANCAMENTO-01 — só cartão, digitados (texto do campo; vazio = nulo) */
+  diaFechamento: string; diaVencimento: string;
 }
 
 export function aliasesDaConta(v: unknown): string[] {
@@ -245,6 +250,7 @@ export function formularioDaConta(c: ContaBancariaCadastro | null, fazendaPadrao
     nomesReconhecimento: c ? aliasesDaConta(c.aliases) : [],
     formato: c ? formatoNaTela(c) : null,
     contaVinculada: tipo === 'inv' ? limpo(c?.consolida_em_conta_id) : limpo(internaDaConta),
+    diaFechamento: c?.dia_fechamento != null ? String(c.dia_fechamento) : '', diaVencimento: c?.dia_vencimento != null ? String(c.dia_vencimento) : '',
   };
 }
 
@@ -254,6 +260,14 @@ export function separarContaDigito(v: string): { numero: string; digito: string 
   const i = s.lastIndexOf('-');
   if (i <= 0 || i === s.length - 1) return { numero: s, digito: '' };
   return { numero: s.slice(0, i).trim(), digito: s.slice(i + 1).trim() };
+}
+
+/** O dia digitado (1–31) ou nulo; texto que não é dia vira nulo aqui — quem trava o Salvar é `faltasDoFormulario`. */
+export function diaDoCampo(v: string): number | null {
+  const s = v.trim();
+  if (!/^\d{1,2}$/.test(s)) return null;
+  const n = Number(s);
+  return n >= 1 && n <= 31 ? n : null;
 }
 
 /** O formulario no formato do escritor (`fn_conta_bancaria_salvar`): as chaves do banco, texto vazio = nulo. */
@@ -276,6 +290,9 @@ export function dadosDoFormulario(f: FormularioConta): Record<string, unknown> {
     aliases: f.nomesReconhecimento.length ? f.nomesReconhecimento : null,
     sem_extrato_bancario: f.formato === 'sem_extrato',
     formato_extrato: f.formato && f.formato !== 'sem_extrato' ? f.formato : null,
+    /* CARTAO-LANCAMENTO-01 — os dias só existem no cartão; nas outras contas vão nulos (trocar o tipo apaga) */
+    dia_fechamento: f.tipo === 'cartao' ? diaDoCampo(f.diaFechamento) : null,
+    dia_vencimento: f.tipo === 'cartao' ? diaDoCampo(f.diaVencimento) : null,
   };
   if (f.tipo === 'inv') d.consolida_em_conta_id = t(f.contaVinculada);
   else if (f.tipo === 'cc') d.conta_interna_id = t(f.contaVinculada);
@@ -305,6 +322,10 @@ export function faltasDoFormulario(f: FormularioConta, nova: boolean): string[] 
   if (nova || f.saldoEm || f.saldoInicial !== null) {
     if (!f.saldoEm) falta.push('a data do saldo');
     if (f.saldoInicial === null) falta.push('o saldo inicial');
+  }
+  if (f.tipo === 'cartao') {
+    if (f.diaFechamento.trim() && diaDoCampo(f.diaFechamento) == null) falta.push('o dia de fechamento (de 1 a 31)');
+    if (f.diaVencimento.trim() && diaDoCampo(f.diaVencimento) == null) falta.push('o dia de vencimento (de 1 a 31)');
   }
   return falta;
 }

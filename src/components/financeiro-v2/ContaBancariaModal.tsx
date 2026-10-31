@@ -30,8 +30,11 @@ import { REGRA_ARQUIVO_DO_DOCUMENTO } from '@/hooks/useLancamentoDocumentos';
 import { anexarSaldoDocumento, cancelarSaldoDocumento, useSaldoDocumentos } from '@/hooks/useExtratoDaConta';
 import { invalidarDono } from '@/hooks/useResumoConciliacao';
 import { avisarContaBancariaMudou } from '@/lib/financeiro/canalContasBancarias';
+import { diasDoCartao } from '@/lib/financeiro/diasDoCartao';
+import { diaDoVencimentoDoCartao, explicacaoDaFatura } from '@/lib/financeiro/pagamentoNoCartao';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 import {
-  brl, faltasDoFormulario, formularioDaConta, mudancas, mudaOSaldoInicial, nomeDaConta, subtituloDaConta,
+  brl, diaDoCampo, faltasDoFormulario, formularioDaConta, mudancas, mudaOSaldoInicial, nomeDaConta, subtituloDaConta,
   type BancoReferencia, type ContaBancariaCadastro, type FormatoNaTela, type FormularioConta, type TipoNaTela,
 } from '@/lib/financeiro/contasBancarias';
 
@@ -106,6 +109,7 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
 
   const muda = <K extends keyof FormularioConta>(k: K, v: FormularioConta[K]) => setForm(f => ({ ...f, [k]: v }));
   const caixa = form.tipo === 'caixa';
+  const cartao = form.tipo === 'cartao';
   const diff = useMemo(() => mudancas(original, form), [original, form]);
   const faltas = faltasDoFormulario(form, nova);
   const nadaMudou = !nova && Object.keys(diff).length === 0 && !arquivo;
@@ -121,6 +125,15 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
       return (data ?? null) as Painel | null;
     },
   });
+  /* CARTAO-LANCAMENTO-01 (mock v2, Gabriel 30/10 18:28/18:36) — o dia de vencimento SUGERIDO pelas faturas do cartão (o mais frequente em 12
+     meses): só aparece como sugestão no campo vazio; o operador confirma ("usar") ou digita. Conta nova não tem faturas. */
+  const diasDasFaturas = useQuery({
+    queryKey: ['dias-do-cartao', conta?.id],
+    enabled: aberto && !!conta && cartao,
+    queryFn: () => (conta ? diasDoCartao(conta.id) : Promise.resolve([])),
+  });
+  const sugeridoPelasFaturas = diaDoVencimentoDoCartao(null, diasDasFaturas.data ?? [])?.dia ?? null;
+  const explicacao = explicacaoDaFatura(diaDoCampo(form.diaFechamento), diaDoCampo(form.diaVencimento) ?? sugeridoPelasFaturas, hojeLocal());
   const autorId = painel.data?.ultima_alteracao?.por ?? null;
   const autor = useQuery({
     queryKey: ['nomes-dos-autores', clienteId, autorId],
@@ -272,7 +285,7 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
                 </div>
               </div>
             </BlocoFormulario>
-            <BlocoFormulario titulo="Dados bancários" testId="bloco-dados-bancarios">
+            <BlocoFormulario titulo={cartao ? 'Dados do cartão' : 'Dados bancários'} testId="bloco-dados-bancarios">
               <div className={cn(GRADE_FORMULARIO, 'grid-cols-4')}>
                 <div className="col-span-2 min-w-0">
                   <Rotulo texto="Banco" />
@@ -281,17 +294,51 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
                     : <SearchableSelect value={form.banco} onValueChange={v => muda('banco', v)} options={opcoesBancoComAtual}
                         semTodos allValue="" allLabel="Selecione" placeholder="Selecione" dense triggerClassName={REGUA_CAMPO} />}
                 </div>
-                {campo('agencia', 'Agência', { desabilitado: caixa })}
-                {campo('contaComDigito', 'Conta e dígito', { desabilitado: caixa, placeholder: '00000-0' })}
+                {/* CARTAO-LANCAMENTO-01 — no cartão, Agência e Conta (que ele não usa) dão lugar aos dois dias, no mesmo lugar e tamanho */}
+                {cartao ? (<>
+                  <label className="min-w-0">
+                    <Rotulo texto="Dia de fechamento" />
+                    <div className="relative">
+                      <Input className={cn(REGUA_CAMPO, 'pr-[72px] tabular-nums')} value={form.diaFechamento} inputMode="numeric" maxLength={2}
+                        onChange={e => muda('diaFechamento', e.target.value.replace(/\D/g, ''))} data-testid="campo-dia-fechamento" />
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[9.5px] text-muted-foreground">de cada mês</span>
+                    </div>
+                  </label>
+                  <label className="min-w-0">
+                    <Rotulo texto="Dia de vencimento" />
+                    <div className="relative">
+                      <Input className={cn(REGUA_CAMPO, 'pr-[96px] tabular-nums')} value={form.diaVencimento} inputMode="numeric" maxLength={2}
+                        placeholder={sugeridoPelasFaturas != null ? String(sugeridoPelasFaturas) : ''}
+                        onChange={e => muda('diaVencimento', e.target.value.replace(/\D/g, ''))} data-testid="campo-dia-vencimento" />
+                      {!form.diaVencimento && sugeridoPelasFaturas != null && (
+                        <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 whitespace-nowrap text-[9px] text-muted-foreground underline"
+                          onClick={() => muda('diaVencimento', String(sugeridoPelasFaturas))} data-testid="usar-dia-sugerido"
+                          title="O dia mais frequente das faturas deste cartão nos últimos 12 meses — clique para usar">sugerido pelas faturas</button>
+                      )}
+                    </div>
+                  </label>
+                </>) : (<>
+                  {campo('agencia', 'Agência', { desabilitado: caixa })}
+                  {campo('contaComDigito', 'Conta e dígito', { desabilitado: caixa, placeholder: '00000-0' })}
+                </>)}
                 {campo('titular', 'Titular', { span: 'col-span-2' })}
                 {campo('titularDocumento', 'CPF ou CNPJ do titular')}
-                {campo('chavePix', 'Chave Pix')}
+                {campo('chavePix', 'Chave Pix', { desabilitado: cartao })}
                 <label className="col-span-4 min-w-0">
                   <Rotulo texto="Observação" />
                   <Textarea className="h-[44px] min-h-0 resize-none px-2 py-1 text-[11px]" value={form.observacao} onChange={e => muda('observacao', e.target.value)} />
                 </label>
               </div>
             </BlocoFormulario>
+            {/* CARTAO-LANCAMENTO-01 — em qual fatura cai a compra, no espaço vazio de baixo (o modal não muda de altura); a frase sai da MESMA
+                regra do vencimento no lançamento (`faturaDaCompra`) */}
+            {cartao && (
+              <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-2.5 py-1.5 text-[9.5px] leading-[1.5] text-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                data-testid="explicacao-da-fatura">
+                <b>{explicacao.titulo}</b><br />{explicacao.linha}
+                {explicacao.nota && <><br /><span className="text-muted-foreground">{explicacao.nota}</span></>}
+              </div>
+            )}
           </>)}
 
           {aba === 'gerente' && (<>

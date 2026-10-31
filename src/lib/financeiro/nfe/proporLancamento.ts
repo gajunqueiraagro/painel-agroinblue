@@ -25,8 +25,9 @@ import { fraseDaRemessa } from './remessaEntregaFutura';
  *  (cheque 02 e deposito 16 nao tem forma correspondente na lista do sistema). */
 export const FORMA_POR_TPAG: Readonly<Record<string, string>> = {
   '01': 'Dinheiro',
-  '03': 'Cartão',
-  '04': 'Cartão',
+  /* CARTAO-LANCAMENTO-01 — 03 é cartão de crédito (o valor gravado do cartão); 04 é cartão de DÉBITO, que fica 'Débito' (decisão 1) */
+  '03': 'Cartão de crédito',
+  '04': 'Débito',
   '15': 'Boleto',
   '17': 'PIX',
   '18': 'Transferência',

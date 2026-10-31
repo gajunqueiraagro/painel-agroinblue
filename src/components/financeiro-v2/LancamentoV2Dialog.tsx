@@ -44,7 +44,7 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { DatePicker } from '@/components/ui/date-picker';
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
-import { FORMAS_PAGAMENTO_V2, FORMA_PAGAMENTO_V2_NENHUMA } from '@/lib/financeiro/formasPagamentoV2';
+import { FORMAS_PAGAMENTO_V2, FORMA_CARTAO_CREDITO, FORMA_PAGAMENTO_V2_NENHUMA } from '@/lib/financeiro/formasPagamentoV2';
 import { camposMudados } from '@/lib/financeiro/camposMudados';
 import { ParcelasNoPagamento } from './ParcelasNoPagamento';
 import { linhasDoContrato, totaisDoContrato } from '@/lib/financeiro/parcelasNoPagamento';
@@ -147,8 +147,10 @@ import {
   novoPendente, todosGravados, type DocumentoPendente, type ParcelaGravada, type ParcelaIrma,
 } from '@/lib/financeiro/documentosPendentes';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
-import { diasDoCartao } from '@/lib/financeiro/diasDoCartao';
-import { diaMaisFrequente, primeiraFatura, rotuloDaSugestao } from '@/lib/financeiro/pagamentoNoCartao';
+import { diasCadastradosDoCartao, diasDoCartao } from '@/lib/financeiro/diasDoCartao';
+import {
+  diaDoVencimentoDoCartao, faturaDaCompra, formaPelaConta, fraseDaFaturaNoLancamento, rotuloDaSugestao, vencimentoPelaFatura,
+} from '@/lib/financeiro/pagamentoNoCartao';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   type OrigemOC, type CampoTravavelDoModal, lancarPeloModal, parcelasParaRpc, classificacoesDaDespesa, fraseAcimaDoSaldo,
@@ -994,6 +996,11 @@ export function LancamentoV2Dialog({
 
   // Payment method fields
   const [formaPgto, setFormaPgto] = useState('');
+  /* CARTAO-LANCAMENTO-01 (decisão 2) — a forma foi posta PELA CONTA de cartão (o selo "auto"); a do operador ou da nota nunca é trocada */
+  const [formaAutomatica, setFormaAutomatica] = useState(false);
+  /** A conta é um cartão que pede a forma "Cartão de crédito": só no lançamento novo de saída, fora da OC e do extrato. */
+  const contaPedeFormaDoCartao = (contaId: string | null | undefined, novo: boolean, tipo: string) =>
+    novo && !origemOC && !ocultarParcelamento && tipo === '2-Saídas' && contas.find((x) => x.id === contaId)?.tipo_conta === 'cartao';
   const [dadosPagamento, setDadosPagamento] = useState('');
   /* FIN-PIX-CADASTRO-MODAL-01 — `dadosPagamento` é o texto PRÓPRIO do lançamento (a exceção). O modo (`cadastro` | `proprio`)
      é calculado do que veio gravado até o operador decidir; daí em diante vale a decisão dele (`modoPgto`). */
@@ -1289,7 +1296,7 @@ export function LancamentoV2Dialog({
       setTipoDocumento((lancamento as any).tipo_documento || '');
       setNotaFiscal(lancamento.numero_documento || '');
       setObservacao(lancamento.observacao || '');
-      setFormaPgto(lancamento.forma_pagamento || '');
+      setFormaPgto(lancamento.forma_pagamento || ''); setFormaAutomatica(false);
       setDadosPagamento(lancamento.dados_pagamento || '');
       // CRITICAL: reset parcela/recorrência when editing — prevents stale state from previous "new" dialog
       setFormaPagamentoParc('avista');
@@ -1367,7 +1374,11 @@ export function LancamentoV2Dialog({
         const daNota = parcelasDaNota(propostaDoXml.duplicatas);
         setModoParcelas('livres'); setParcelasLivres(daNota); setBaseLivres(daNota);
       } else { setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null); }
-      setFormaPgto(prefill.forma_pagamento ?? '');
+      {
+        const daConta = formaPelaConta({ forma: prefill.forma_pagamento ?? '', automatica: false },
+          contaPedeFormaDoCartao(prefill.conta_bancaria_id, true, prefill.tipo_operacao ?? '2-Saídas'));
+        setFormaPgto(daConta.forma); setFormaAutomatica(daConta.automatica);
+      }
       setDadosPagamento(prefill.dados_pagamento ?? '');
     } else {
       setClassificacaoDe(null);
@@ -1404,7 +1415,7 @@ export function LancamentoV2Dialog({
       setFormaPagamentoParc('avista');
       setNumParcelas(2); setNumParcelasTexto('2');
       setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null);
-      setFormaPgto('');
+      setFormaPgto(''); setFormaAutomatica(false);
       setDadosPagamento('');
     }
     setFornecedorSearch('');
@@ -1553,25 +1564,42 @@ export function LancamentoV2Dialog({
      boletos, o resumo) recebe a lista do modo aberto. */
   const livresAbertas = formaPagamentoParc === 'parcelada' && modoParcelas === 'livres';
   /* NOTA-NOVA-MODAL-REAL D2 (Gabriel 30/10) — NO CARTÃO EM N×, CADA PARCELA NA FATURA CERTA (o que a tela intermediária fazia, P74): no
-     lançamento NOVO pago numa conta do tipo cartão, parcelado "Igual todo mês", o 1º vencimento é a 1ª fatura — o dia mais frequente do
-     cartão (`fn_cartao_dias_de_vencimento`, 12 meses) no mês seguinte ao da competência; as N seguem todo mês no mesmo dia (a RPC de
-     sempre). Sugestão: o operador muda a data; sem histórico, nada é sugerido (o campo segue obrigatório). Nenhum gravador novo. */
+     lançamento NOVO pago numa conta do tipo cartão, parcelado "Igual todo mês", o 1º vencimento é a 1ª fatura; as N seguem todo mês no
+     mesmo dia (a RPC de sempre). Sugestão: o operador muda a data; sem dia, nada é sugerido (o campo segue obrigatório). Nenhum gravador novo.
+     CARTAO-LANCAMENTO-01 (Gabriel 30/10, decisões 2–5 e o mock v2) — vale também À VISTA; o dia do vencimento é o DIGITADO no cadastro do
+     cartão (vazio: o mais frequente das faturas, `fn_cartao_dias_de_vencimento`, 12 meses) e, com dia de FECHAMENTO, a fatura é a que a
+     compra (a competência) pega (`faturaDaCompra`). Não sugere na edição, na OC nem no lançamento vindo do extrato (`ocultarParcelamento`:
+     a data vem do banco). A data sugerida só entra no vazio ou no lugar da sugestão anterior (`vencimentoPelaFatura`). */
   const cartaoDaCompra = useMemo(() => {
-    const c = !isEdit && formaPagamentoParc === 'parcelada' && !livresAbertas ? contas.find((x) => x.id === contaOrigemId) : undefined;
+    /* só a SAÍDA paga no cartão (a transferência que paga a fatura e a entrada não são compra) */
+    const c = !isEdit && !modoOC && !ocultarParcelamento && !livresAbertas && !isTransferencia && !isEntrada ? contas.find((x) => x.id === contaOrigemId) : undefined;
     return c && c.tipo_conta === 'cartao' ? { id: c.id, nome: c.nome_exibicao || c.nome_conta } : null;
-  }, [isEdit, formaPagamentoParc, livresAbertas, contas, contaOrigemId]);
-  const [diaDoCartao, setDiaDoCartao] = useState<number | null>(null);
+  }, [isEdit, modoOC, ocultarParcelamento, livresAbertas, isTransferencia, isEntrada, contas, contaOrigemId]);
+  const [diasDaCompra, setDiasDaCompra] = useState<{ vencimento: { dia: number; origem: 'digitado' | 'faturas' } | null; fechamento: number | null }>({ vencimento: null, fechamento: null });
   useEffect(() => {
     let vivo = true;
-    if (!open || !cartaoDaCompra) { setDiaDoCartao(null); return; }
-    void diasDoCartao(cartaoDaCompra.id).then((d) => { if (vivo) setDiaDoCartao(diaMaisFrequente(d)); }, () => { if (vivo) setDiaDoCartao(null); });
+    if (!open || !cartaoDaCompra) { setDiasDaCompra({ vencimento: null, fechamento: null }); return; }
+    void Promise.all([diasCadastradosDoCartao(cartaoDaCompra.id), diasDoCartao(cartaoDaCompra.id)]).then(([cad, faturas]) => {
+      if (vivo) setDiasDaCompra({ vencimento: diaDoVencimentoDoCartao(cad.vencimento, faturas), fechamento: cad.fechamento });
+    }, () => { if (vivo) setDiasDaCompra({ vencimento: null, fechamento: null }); });
     return () => { vivo = false; };
   }, [open, cartaoDaCompra]);
-  const faturaSugerida = cartaoDaCompra && diaDoCartao ? primeiraFatura(dataCompetencia, diaDoCartao) : '';
-  /* a sugestão entra quando nasce (o cartão escolhido, o parcelado, a competência); depois, só o operador muda */
-  useEffect(() => { if (faturaSugerida) setDataVencimento(faturaSugerida); }, [faturaSugerida]);
-  const sugestaoDoCartao = cartaoDaCompra && diaDoCartao && faturaSugerida && dataVencimento === faturaSugerida
+  const diaDoCartao = diasDaCompra.vencimento?.dia ?? null;
+  const faturaSugerida = cartaoDaCompra && diaDoCartao ? faturaDaCompra(dataCompetencia, diaDoCartao, diasDaCompra.fechamento) : '';
+  /* a sugestão entra quando nasce (o cartão escolhido, a competência); a data que o operador ou a nota puseram fica */
+  const faturaAnteriorRef = useRef('');
+  useEffect(() => {
+    if (!open) { faturaAnteriorRef.current = ''; return; }
+    if (!faturaSugerida) return;
+    const antes = faturaAnteriorRef.current;
+    setDataVencimento((v) => vencimentoPelaFatura(v, antes, faturaSugerida));
+    faturaAnteriorRef.current = faturaSugerida;
+  }, [open, faturaSugerida]);
+  const naFatura = !!(cartaoDaCompra && diaDoCartao && faturaSugerida && dataVencimento === faturaSugerida);
+  const sugestaoDoCartao = naFatura && cartaoDaCompra && diaDoCartao && formaPagamentoParc === 'parcelada'
     ? rotuloDaSugestao(cartaoDaCompra.nome, diaDoCartao) : null;
+  const fraseDaFatura = naFatura && cartaoDaCompra && diasDaCompra.vencimento
+    ? fraseDaFaturaNoLancamento(cartaoDaCompra.nome, dataCompetencia, diasDaCompra.vencimento, diasDaCompra.fechamento) : '';
   const parcelaRows = useMemo(
     () => (livresAbertas ? parcelasComoPrevistas(parcelasLivres) : parcelasMensais),
     [livresAbertas, parcelasLivres, parcelasMensais],
@@ -1626,7 +1654,16 @@ export function LancamentoV2Dialog({
   const handleFormaPgtoChange = useCallback((metodo: string) => {
     setModoPgto(modoPgtoEfetivo);
     setFormaPgto(metodo === FORMA_PAGAMENTO_V2_NENHUMA ? '' : metodo);
+    setFormaAutomatica(false);   // CARTAO-LANCAMENTO-01 — a escolha do operador manda daqui em diante
   }, [modoPgtoEfetivo]);
+  /* CARTAO-LANCAMENTO-01 — trocar a conta de saída: cartão põe "Cartão de crédito" (se a forma está vazia ou era a automática); conta
+     comum tira a automática */
+  const trocarContaOrigem = (id: string) => {
+    setContaOrigemId(id);
+    const daConta = formaPelaConta({ forma: formaPgto, automatica: formaAutomatica }, contaPedeFormaDoCartao(id, !isEdit, tipoOperacao));
+    if (daConta.forma !== formaPgto) setFormaPgto(daConta.forma);
+    setFormaAutomatica(daConta.automatica);
+  };
 
   /** Relê AQUELE fornecedor depois de o cadastro salvar (as mesmas colunas de `loadFornecedores`) — releitura do dono logo após
    *  a escrita, não segunda fonte. Vale nas treze telas que montam este modal, sem prop nova. */
@@ -2983,6 +3020,7 @@ export function LancamentoV2Dialog({
                   data-testid={modoOC ? 'rotulo-vencimento-oc' : 'rotulo-vencimento'}>
                   {modoOC ? (tentouOC && faltaVencimentoOC ? `Vencimento * · ${MOTIVO_VENCIMENTO_OBRIGATORIO}` : 'Vencimento *')
                     : sugestaoDoCartao ? <span data-testid="sugestao-fatura">{sugestaoDoCartao}</span>
+                    : naFatura ? <span data-testid="vencimento-da-fatura" title={fraseDaFatura}>Data vencimento * 💳</span>
                     : xmlAmbar('vencimento') ? xmlRot('Vencimento *', 'vencimento') : 'Data vencimento *'}</Label>
                 {/* parcela paga: em leitura; o motivo está escrito no rodapé (`parcela-do-contrato`) — sem invólucro aqui, o HTML do lançamento comum não muda */}
                 <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={(isOCTitulo && !ocAjustavel) || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro) && 'border-destructive')} />
@@ -3108,7 +3146,7 @@ export function LancamentoV2Dialog({
                   <Label className={REGUA_ROTULO}>Conta origem *</Label>
                   <ContaBancariaSelect
                     value={contaOrigemId}
-                    onValueChange={setContaOrigemId}
+                    onValueChange={trocarContaOrigem}
                     contas={contas}
                     placeholder="Selecione"
                     disabled={lockedFields?.includes('conta_bancaria_id') || travaCasado.contaOrigem}
@@ -3118,6 +3156,10 @@ export function LancamentoV2Dialog({
                 </div>
               )}
             </div>
+            {/* CARTAO-LANCAMENTO-01 (mock v2) — por que o vencimento é aquele: a fatura onde a compra cai; some quando o operador troca a data */}
+            {fraseDaFatura && (
+              <p className="-mt-1 text-[10px] leading-tight text-muted-foreground" data-testid="frase-da-fatura">{fraseDaFatura}</p>
+            )}
 
             </BlocoFormulario>
             <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
@@ -3348,7 +3390,12 @@ export function LancamentoV2Dialog({
                   (PR-FIN-MODAL-02B). Campos e handlers idênticos; só mudou a aba. */}
               <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
                 <div>
-                  <Label className={REGUA_ROTULO}>{xmlRot('Forma de pagamento', 'forma')}</Label>
+                  <Label className={REGUA_ROTULO}>{xmlRot('Forma de pagamento', 'forma')}
+                    {/* CARTAO-LANCAMENTO-01 — posta pela conta de cartão (some quando o operador escolhe outra) */}
+                    {formaAutomatica && formaPgto === FORMA_CARTAO_CREDITO && (
+                      <span className="ml-1 rounded-[7px] bg-primary/10 px-1 text-[8px] font-semibold leading-[13px] text-primary" data-testid="forma-automatica"
+                        title={`automática pela conta ${resumoContaOrigem ?? ''} · trocar a forma aqui vale; a escolha do operador ou da nota nunca é sobrescrita`}>auto</span>
+                    )}</Label>
                   <Select value={formaPgto || FORMA_PAGAMENTO_V2_NENHUMA} onValueChange={handleFormaPgtoChange}>
                     <SelectTrigger tabIndex={13} className={cn("h-7 text-[11px]", fieldBg, xmlCls('forma'))}>
                       {/* P143 — a forma fora da lista: o gatilho mostra SÓ ela (o "· valor atual" fica na lista; na coluna de 150px cortava) */}
@@ -3391,6 +3438,10 @@ export function LancamentoV2Dialog({
                   />
                 </div>
               </div>
+              {formaAutomatica && formaPgto === FORMA_CARTAO_CREDITO && (
+                <p className="text-[10px] leading-tight text-muted-foreground" data-testid="forma-automatica-frase">
+                  automática pela conta {resumoContaOrigem} · trocar a forma aqui vale; a escolha do operador ou da nota nunca é sobrescrita</p>
+              )}
 
               {/* P74 B (NOTA-CARTAO-PARCELADO-01) — o lançamento À VISTA gravado vira parcelado: "Parcelar este lançamento" (o mesmo id vira a
                   1/N, nascem as demais; documentos e classificação, inclusive dividida, vão às N). Parcela de parcelamento/financiamento ou

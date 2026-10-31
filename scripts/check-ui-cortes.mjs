@@ -340,6 +340,9 @@ const CENARIOS = [
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },
   ...['dados', 'gerente', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-editar-${aba}`, url: `tela=contas&barra=32&v=editar&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
+  /* CARTAO-LANCAMENTO-01 — o cadastro do cartão: Dia de fechamento e Dia de vencimento no lugar de Agência e Conta, e a explicação embaixo */
+  { nome: 'contas-editar-cartao', url: 'tela=contas&barra=32&n=longo&v=editar&aba=dados&cartao=1', tamanhos: [...TAMANHOS_DO_CONTRATO, [1366, 768]],
+    regiao: '[data-testid="modal-conta-bancaria"]' },
   ...['dados', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-nova-${aba}`, url: `tela=contas&barra=32&v=nova&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
   /* UI-SIDEBAR-ESTREITA-01 — a barra lateral de verdade (V2Sidebar, `LARGURA_DA_LATERAL`) com o grupo Financeiro aberto. Com nomes que
@@ -375,6 +378,10 @@ const CENARIOS = [
       semRolagem: { dentro: '[role="dialog"]' } },
     { nome: `criar-do-${o}-Pagamento-longo`, url: `tela=lancamento&m=novo&v=${o}&ref=longo`, tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Pagamento') }]),
   { nome: 'lancamento-novo-Geral-7', url: 'tela=lancamento&m=novo', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* CARTAO-LANCAMENTO-01 — a compra à vista no cartão (o vencimento da fatura com 💳, a frase embaixo da conta, a forma "auto" e o resumo);
+     `&dias=sem`: sem dia digitado, a frase mais longa ("sugerido pelas faturas; sem dia de fechamento") */
+  ...['', '&dias=sem'].flatMap((d) => ['Geral', 'Pagamento'].map((aba) => ({ nome: `lancamento-cartao${d ? '-sem-dias' : ''}-${aba}`,
+    url: `tela=lancamento&m=novo&v=cartaoavista${d}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1366, 768]], antes: clicarTexto(aba) }))),
   /* P138 — editar um lançamento gravado sem safra: "Sem safra" e a linha "sugestão: <safra> · Usar" (a da competência, do banco) */
   { nome: 'lancamento-safra-sugestao', url: 'tela=lancamento&m=editar&safra=sem' },
   { nome: 'lancamento-vencimento-falta', url: 'tela=lancamento&m=editar&v=semvenc', tamanhos: TAMANHOS_DO_CONSORCIO,
