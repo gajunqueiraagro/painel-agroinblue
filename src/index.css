@@ -132,10 +132,12 @@
    (o cartao dos filtros do Financeiro V2) leva a mesma regra ao texto de TODO gatilho de seletor dentro dele: `SelectTrigger` e
    `FavorecidoSelect` (role combobox) e `SearchableSelect` (o span `truncate flex-1`). O `!important` vence o `truncate`, o
    `line-clamp-1` e o `break-all` dos componentes. FIN-CONTRATO-SALVAR-01: `.campos-uma-linha` (o corpo do cadastro de contrato) e' a
-   mesma regra para os seletores de um formulario. */
+   mesma regra para os seletores de um formulario.
+   FORN-CAMPO-01 (Gabriel 30/10) — o Fornecedor da barra (o gatilho com `data-reticencias-com-title`, a excecao do P117) fica FORA: o nome
+   longo termina em "…" e o nome inteiro vai no `title`. */
 .uma-linha-que-rola,
-.filtros-uma-linha button[role="combobox"] > span:first-child,
-.filtros-uma-linha button > span.truncate.flex-1:first-child,
+.filtros-uma-linha button[role="combobox"]:not([data-reticencias-com-title]) > span:first-child,
+.filtros-uma-linha button:not([data-reticencias-com-title]) > span.truncate.flex-1:first-child,
 .campos-uma-linha button[role="combobox"] > span:first-child,
 .campos-uma-linha button > span.truncate.flex-1:first-child {
   display: block !important;
@@ -151,8 +153,8 @@
   padding-right: 2px !important;
 }
 .uma-linha-que-rola::-webkit-scrollbar,
-.filtros-uma-linha button[role="combobox"] > span:first-child::-webkit-scrollbar,
-.filtros-uma-linha button > span.truncate.flex-1:first-child::-webkit-scrollbar,
+.filtros-uma-linha button[role="combobox"]:not([data-reticencias-com-title]) > span:first-child::-webkit-scrollbar,
+.filtros-uma-linha button:not([data-reticencias-com-title]) > span.truncate.flex-1:first-child::-webkit-scrollbar,
 .campos-uma-linha button[role="combobox"] > span:first-child::-webkit-scrollbar,
 .campos-uma-linha button > span.truncate.flex-1:first-child::-webkit-scrollbar { display: none; }
 

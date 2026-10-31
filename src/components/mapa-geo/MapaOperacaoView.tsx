@@ -15,7 +15,7 @@ import { usePastoMovimentacoes } from '@/hooks/usePastoMovimentacoes';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
-import type { PastoGeometria } from '@/hooks/usePastoGeometrias';
+import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import type { PastoOcupacao } from '@/hooks/usePastoOcupacao';
 import { toast } from 'sonner';
@@ -32,9 +32,9 @@ const STATUS_STYLES: Record<string, { fillColor: string; color: string; label: s
 type TransferMode = 'idle' | 'selecting_dest' | 'confirming';
 
 interface TransferState {
-  originGeo: PastoGeometria;
+  originGeo: FazendaGeometria;
   originPasto: Pasto;
-  destGeo?: PastoGeometria;
+  destGeo?: FazendaGeometria;
   destPasto?: Pasto;
 }
 
@@ -55,7 +55,7 @@ function getOpStyle(status: string, role: 'normal' | 'selected' | 'origin' | 'de
 }
 
 interface Props {
-  geometrias: PastoGeometria[];
+  geometrias: FazendaGeometria[];
   pastos: Pasto[];
   categorias: CategoriaRebanho[];
   ocupacoes: Map<string, PastoOcupacao>;
@@ -69,7 +69,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
   const { fazendaAtual } = useFazenda();
   const { registrarMovimentacao } = usePastoMovimentacoes();
 
-  const [selectedGeo, setSelectedGeo] = useState<PastoGeometria | null>(null);
+  const [selectedGeo, setSelectedGeo] = useState<FazendaGeometria | null>(null);
   const [transferMode, setTransferMode] = useState<TransferMode>('idle');
   const [transfer, setTransfer] = useState<TransferState | null>(null);
   const [qty, setQty] = useState('');
@@ -167,7 +167,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
   }, [selectedGeo?.pasto_id]);
 
   // Handle map click based on transfer mode
-  const handleGeoClick = (geo: PastoGeometria) => {
+  const handleGeoClick = (geo: FazendaGeometria) => {
     if (transferMode === 'selecting_dest' && transfer) {
       // Clicking on a destination
       if (geo.id === transfer.originGeo.id) return; // can't transfer to self

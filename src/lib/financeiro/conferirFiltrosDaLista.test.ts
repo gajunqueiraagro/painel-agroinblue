@@ -5,7 +5,7 @@
  *   C7 cadeia quebrada (o destino não está no cadastro) = removido
  */
 import { describe, it, expect } from 'vitest';
-import { TODOS, camposForaDasOpcoes, conferirFiltrosDaLista, fraseDoMesclado, fraseDoRemovido, type FiltrosDeCadastro, type OpcoesDoCliente } from './conferirFiltrosDaLista';
+import { TODOS, camposForaDasOpcoes, conferirFiltrosDaLista, fraseDoRemovido, type FiltrosDeCadastro, type OpcoesDoCliente } from './conferirFiltrosDaLista';
 
 const PADRAO: FiltrosDeCadastro = {
   fazendaId: TODOS, contaOrigem: TODOS, contaDestino: TODOS, macroFiltro: TODOS, grupoFiltro: TODOS, centroFiltro: TODOS,
@@ -33,11 +33,10 @@ describe('P94 — conferirFiltrosDaLista', () => {
     expect(r.avisos).toEqual([fraseDoRemovido('fazendaId'), fraseDoRemovido('fornecedorFiltro')]);
     expect(r.avisos[0]).toBe('Filtro de Fazenda guardado não existe neste cliente — removido.');
   });
-  it('C3 o mesclado vira o destino da mescla (fim da cadeia), com a frase', () => {
+  it('C3 o mesclado vira o destino da mescla (fim da cadeia), EM SILÊNCIO (FORN-CAMPO-01: a frase saiu da lista)', () => {
     const r = conferirFiltrosDaLista({ ...PADRAO, fornecedorFiltro: 'f-velho' }, OPCOES);
     expect(r.trocas).toEqual({ fornecedorFiltro: 'f-dono' });
-    expect(r.avisos).toEqual([fraseDoMesclado('Posto Antigo Sintetico', 'Posto Dono Sintetico')]);
-    expect(r.avisos[0]).toBe('Fornecedor Posto Antigo Sintetico foi mesclado em Posto Dono Sintetico — filtrando por Posto Dono Sintetico.');
+    expect(r.avisos).toEqual([]);
   });
   it('C4 o inativo existe: fica', () => {
     expect(conferirFiltrosDaLista({ ...PADRAO, fornecedorFiltro: 'f-inativo' }, OPCOES).trocas).toEqual({});

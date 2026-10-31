@@ -58,15 +58,39 @@ export interface IrmaSolta {
   vencimento?: string | null; pagamento?: string | null; status?: string | null; conta?: string | null;
 }
 
-/** As linhas das soltas: so' as da MESMA fracao N e com o valor a ate' `toleranciaCent` do da propria (a regra do P95/P104, a mesma do
- *  "achadas X de N": `achadasDaFracao`), uma por k (a primeira de cada k), na ordem do k. A propria entra sempre. */
-export function linhasDasSoltas(propria: IrmaSolta, irmas: readonly IrmaSolta[], hoje: string, toleranciaCent: number): LinhaDaParcela[] {
+/** P143-DATAS-01 (Gabriel 30/10, D1) — a tolerancia, fora do cartao, entre o inicio de uma parcela e o da outra na virada do mes. */
+export const TOLERANCIA_DIAS_DA_COMPRA = 7;
+
+const ISO = /^(\d{4})-(\d{2})-(\d{2})/;
+/** O INICIO da compra pela parcela k: o vencimento menos (k−1) meses (o dia que nao existe no mes vai ao ultimo). Sem data = nulo. PURO. */
+function inicioDaCompra(vencimento: string | null | undefined, k: number): { mes: number; dia: number } | null {
+  const m = ISO.exec(vencimento ?? '');
+  if (!m) return null;
+  const mes = Number(m[1]) * 12 + Number(m[2]) - 1 - (k - 1);
+  const ultimo = new Date(Date.UTC(Math.floor(mes / 12), (mes % 12) + 1, 0)).getUTCDate();
+  return { mes, dia: Date.UTC(Math.floor(mes / 12), mes % 12, Math.min(Number(m[3]), ultimo)) / 86400000 };
+}
+
+/** P143-DATAS-01 (Gabriel 30/10) — a parcela k so' e' da MESMA compra se o vencimento bater com o da 1a + (k−1) meses: o MES do inicio
+ *  igual (no cartao, o mes da fatura); fora do cartao, tambem ate' 7 dias na virada do mes. Sem data = nao junta (D2: estrito). PURO. */
+export function mesmaCompra(a: { k: number; vencimento: string | null | undefined }, b: { k: number; vencimento: string | null | undefined }, cartao: boolean): boolean {
+  const x = inicioDaCompra(a.vencimento, a.k);
+  const y = inicioDaCompra(b.vencimento, b.k);
+  if (!x || !y) return false;
+  if (x.mes === y.mes) return true;
+  return !cartao && Math.abs(x.dia - y.dia) <= TOLERANCIA_DIAS_DA_COMPRA;
+}
+
+/** As linhas das soltas: so' as da MESMA fracao N, com o valor a ate' `toleranciaCent` do da propria (a regra do P95/P104) e da MESMA
+ *  compra pela data (`mesmaCompra`, P143-DATAS-01), uma por k (a primeira de cada k), na ordem do k. A propria entra sempre. */
+export function linhasDasSoltas(propria: IrmaSolta, irmas: readonly IrmaSolta[], hoje: string, toleranciaCent: number, cartao: boolean): LinhaDaParcela[] {
   const f = fracaoDaDescricao(propria.descricao);
   if (!f) return [];
   const porK = new Map<number, IrmaSolta>([[f.k, propria]]);
   for (const x of irmas) {
     const g = fracaoDaDescricao(x.descricao);
     if (x.id === propria.id || !g || g.n !== f.n || porK.has(g.k) || Math.abs(x.valorCent - propria.valorCent) > toleranciaCent) continue;
+    if (!mesmaCompra({ k: f.k, vencimento: propria.vencimento }, { k: g.k, vencimento: x.vencimento }, cartao)) continue;
     porK.set(g.k, x);
   }
   return [...porK].sort((a, b) => a[0] - b[0]).map(([k, x]) => ({

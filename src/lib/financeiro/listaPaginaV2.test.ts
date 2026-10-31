@@ -107,7 +107,8 @@ describe('FIN-V2-FILTRO-FORNECEDOR-01 — a lista do filtro de fornecedor', () =
   it('na tela: a lista vem do servidor, sem o selo "N iguais", e o uso só aparece com a página lida', () => {
     const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
     expect(tela).toContain('const fornecedoresDoFiltro = useMemo(() => fornecedoresDoFiltroV2(hook.fornecedores, paginaDaLista?.usoPorFornecedor ?? null, fornecedorFiltro),');
-    expect(tela.match(/situacao="todos" nomeInteiro mostrarUso=\{!!paginaDaLista\} mostrarIguais=\{false\}/g)).toHaveLength(2);
+    /* FORN-CAMPO-01: o do desktop sem `nomeInteiro` ("…" + title) */
+    expect(tela.match(/situacao="todos"( nomeInteiro)? mostrarUso=\{!!paginaDaLista\} mostrarIguais=\{false\}/g)).toHaveLength(2);
   });
 });
 

@@ -113,7 +113,8 @@ describe('P74 B — Parcelar este lançamento', () => {
 /** P104 — a parcela lançada SOLTA ("… - 6/6", o caso da NF 46.994) não oferece "Parcelar"; o à vista de verdade, sim. */
 describe('P104 — parcela solta no bloco Parcelamento', () => {
   const IRMAS = [620.85, 620.80, 620.83, 620.83, 620.83, 620.83].map((v, i) => ({ id: i === 5 ? 'lanc-1' : `irma-${i + 1}`,
-    descricao: `Tinta sintetica - ${i + 1}/6`, valorCent: Math.round(v * 100) }));
+    /* P143-DATAS-01 — as irmãs com o vencimento de cada mês (a 6/6 em 10/10/2026): sem data, a regra da mesma compra não junta */
+    descricao: `Tinta sintetica - ${i + 1}/6`, valorCent: Math.round(v * 100), vencimento: `2026-${String(5 + i).padStart(2, '0')}-10` }));
   it('B6 a 6/6 com as 5 irmãs: sem "Parcelar", sem "à vista (1/1)", a frase com "achadas 6 de 6"', async () => {
     const buscar = vi.fn(async (_c: string, _f: string, _n: number) => IRMAS);
     render(<ParcelarEsteLancamento clienteId="cli" lancamento={{ ...LANC, descricao: 'Tinta sintetica - 6/6', valorCent: 62083 }} situacao={ABERTO}

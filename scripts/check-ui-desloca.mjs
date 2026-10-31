@@ -80,6 +80,20 @@ const CENARIOS = [
       ['tira o chip da OC', noTopo(clicar('[data-testid="chip-vindo-da-oc"]'))],
       ['sem aviso nenhum (a tela limpa)', { url: 'tela=financeiro' }],
     ] },
+  /* FORN-CAMPO-01 — a linha "CNPJ · Cidade/UF" sob o Fornecedor do filtro existe SEMPRE (vazia com "Todos"): escolher, trocar de
+     fornecedor e voltar a "Todos" não movem a barra, os totais nem a tabela (o +6px do card é o mesmo nos três) */
+  ...(() => {
+    const escolher = (texto) => async (p) => {
+      await p.locator('[data-testid="filtro-fornecedor-largo"] [role="combobox"]').first().click(); await espera(p, 300);
+      await p.locator('[data-testid="favorecido-lista"] button').filter({ hasText: texto }).first().click(); await espera(p, 600);
+    };
+    /* os tamanhos da barra de DESKTOP (Gabriel 30/10: 1024/1126/1366/1920); abaixo de 1000 a tela mostra a barra do celular, sem este campo */
+    return [{ nome: 'financeiro-filtro-fornecedor-linha', url: 'tela=financeiro', tamanhos: [[1024, 640], [1126, 579], [1366, 768], [1920, 1080]], estados: [
+      ['escolhe um fornecedor com CNPJ e cidade', escolher('Agro')],
+      ['troca por um com CPF e sem cidade', escolher('Cooperativa')],
+      ['volta a Todos', escolher(/^Todos$/)],
+    ] }];
+  })(),
   /* TABELA-ALTURA-FIXA-01 — o mesmo no Ampliado (como no app: a tela da barra de 32px) */
   { nome: 'financeiro-ampliado', url: 'tela=financeiro&v=volume&n=450&barra=32', antes: ampliar,
     estados: [6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, async (p) => {

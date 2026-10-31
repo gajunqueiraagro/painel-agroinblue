@@ -1,0 +1,62 @@
+<title>Custeio fixo e variável</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#3f4652;--navy:#1e2d47;--ink:#0f1729;--mut:#6b7280;--line:#e5e7eb;--real:#b3261e;--meta:#b45309;--blue:#1d4ed8;--tot:#e6ecf5;--sub:#f2f5f9;color-scheme:light}
+body{background:var(--bg);color:var(--ink);font:12px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif;padding-block:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.w{max-width:1000px;margin:0 auto;display:grid;gap:8px}
+.cap{color:#fff;font-size:11px;line-height:1.45}
+.fit{overflow:hidden}
+.duo{display:flex;gap:20px;width:998px;transform-origin:top left}
+.lbl{color:#fff;font-size:11px;font-weight:600;margin-bottom:4px}
+.card{width:489px;height:417px;background:#fff;border:1px solid var(--line);border-radius:6px;position:relative;overflow:hidden;box-sizing:border-box}
+.hd{height:31px;display:flex;align-items:center;gap:6px;padding:0 6px 0 4px}
+.bk{width:18px;height:18px;border:1px solid var(--line);border-radius:4px;display:grid;place-items:center;font-size:10px;color:var(--mut)}
+.tt{font-size:11px;font-weight:700}
+.seg{margin-left:auto;display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg span{font-size:9px;padding:2px 6px;color:var(--mut)}.seg .on{background:var(--navy);color:#fff}
+.dd{width:118px;height:20px;border:1px solid var(--line);border-radius:4px;font-size:9.5px;display:flex;align-items:center;padding:0 6px;box-sizing:border-box}.dd::after{content:"⌄";margin-left:auto;color:var(--mut)}
+table{border-collapse:collapse;table-layout:fixed;width:487px;font-variant-numeric:tabular-nums}
+th{background:var(--navy);color:#fff;font-size:7.5px;font-weight:600;height:18px;padding:0 6px;text-align:right}
+th:first-child{text-align:left}th.m{color:#f6c27a}
+td{height:18px;padding:0 6px;font-size:8.5px;text-align:right;border-bottom:1px solid #f1f2f4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td:first-child{text-align:left}
+.sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+tr.tot td{height:21px;background:var(--tot);font-weight:700;font-size:9px}
+tr.sub td{background:var(--sub);font-weight:700;border-top:1px solid #d9dee6}
+tr.sub td:first-child{padding-left:8px}
+tr.in td:first-child{padding-left:18px}
+.r{color:var(--real)}.mt{color:var(--meta)}.b{color:var(--blue);font-weight:600}.v{color:var(--real);font-weight:600}.mu{color:#9ca3af}
+.doc{background:#fff;border-radius:8px;padding:12px 16px;display:grid;gap:6px}
+.doc h2{font-size:13px;margin:0;color:var(--navy)}.doc ul{margin:0;padding-left:18px;display:grid;gap:3px;font-size:12px;line-height:1.45}
+.q{background:#fff4e0;border-radius:6px;padding:8px 10px;font-size:12px}
+</style>
+<div class="w">
+<div class="cap"><b>Mock v1 · Visão Geral do Financeiro › gaveta Custeio › Centros · Pecuária</b> · só o card da esquerda muda; o resto da gaveta fica igual. MEDIDO no proto agora (Vera, out/26, janela 1126×579): card 489×417; cabeçalho 18 px / 7,5 px; total 21 px; linha 18 px / 8,5 px; colunas 151 · 92 · 92 · 98 · 54. Valores: os que a tela mostra hoje. Fixo/variável: o "Grupo" de cada centro no Plano de Contas (Custo Fixo Pecuária / Custo Variável Pecuária). Os subtotais são a soma das linhas da tela (conferem com o total: 32.366,50 + 69.041,84 = 101.408,34).</div>
+<div class="fit" id="fit"><div class="duo" id="duo"></div></div>
+<div class="doc">
+<h2>Como funciona</h2>
+<ul>
+<li><b>Automático, sem clique:</b> ao abrir a atividade (Pecuária, Agricultura, Silvicultura), os centros já vêm em dois blocos — <b>Custo variável</b> e <b>Custo fixo</b> — cada um com o subtotal (real, meta, dif., %). Ordem do DRE: variável primeiro.</li>
+<li><b>Quem decide o bloco é o Plano de Contas</b> (o "Grupo" do centro: Custo Fixo / Custo Variável). Nada digitado na tela; mudou no plano, muda aqui.</li>
+<li>Dentro de cada bloco, a ordem de hoje (maior valor primeiro). Clicar num centro continua abrindo o gráfico e os subcentros, como hoje.</li>
+<li>Administrativo (só custo fixo) e o nível "Atividades · Custeio" ficam como estão.</li>
+</ul>
+<div class="q"><b>Para você decidir:</b> (1) o mesmo agrupamento também na tabela "Subcentros" da direita? (2) recolher um bloco com clique no subtotal (aberto por padrão)?</div>
+</div>
+</div>
+<script>
+const SW={Nutrição:'#7f1d1d','Mão de Obra':'#c2410c','Manutenção Fazenda':'#334155',Impostos:'#7f1d1d',Administração:'#e8907e',Máquinas:'#0f766e',Reprodução:'#1e3a5f',Identificação:'#d97706',Outros:'#991b1b',Comercial:'#9ca3af',Pastagem:'#b91c1c',Sanidade:'#e8907e',Transferências:'#334155'};
+const D=[['Nutrição',26610,35500],['Mão de Obra',25617.13,22000],['Manutenção Fazenda',15316.28,9500],['Impostos',11867.15,10000],['Administração',8567.17,5100],['Máquinas',6551.61,5400],['Reprodução',3006.5,18000],['Identificação',2750,null],['Outros',1122.5,700],['Comercial',0,null],['Pastagem',0,null],['Sanidade',0,7000],['Transferências',0,null]];
+const VAR=['Comercial','Identificação','Nutrição','Pastagem','Reprodução','Sanidade','Transferências'];
+const brl=v=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const dif=(r,m)=>{if(m==null)return['<span class="mu">—</span>','<span class="mu">—</span>'];const d=r-m,p=d/m*100;const c=d>0?'v':'b';return[`<span class="${c}">${d<0?'−':''}${brl(Math.abs(d))}</span>`,`<span class="${c}">${d>0?'+':d<0?'−':''}${Math.abs(p).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</span>`]};
+const row=(cls,nome,r,m,sw)=>{const[d,p]=dif(r,m);return `<tr class="${cls}"><td>${sw?`<span class="sw" style="background:${sw}"></span>`:''}${nome}</td><td class="r">${brl(r)}</td><td class="mt">${m==null?'<span class="mu">—</span>':brl(m)}</td><td>${d}</td><td>${p}</td></tr>`};
+const head=`<div class="hd"><span class="bk">‹</span><span class="tt">Centros · Pecuária</span><span class="seg"><span class="on">out/26</span><span>Média</span><span>Acum.</span></span><span class="dd">R$</span></div><table><colgroup><col style="width:151px"><col style="width:92px"><col style="width:92px"><col style="width:98px"><col style="width:54px"></colgroup><thead><tr><th>CENTRO</th><th>OUT/26</th><th class="m">META</th><th>DIF. R$</th><th>%</th></tr></thead><tbody>`;
+const tot=row('tot','Pecuária · total',101408.34,113200);
+const hoje=head+tot+D.map(([n,r,m])=>row('',n,r,m,SW[n])).join('')+'</tbody></table>';
+function bloco(nome,lista){const r=lista.reduce((a,x)=>a+x[1],0),m=lista.reduce((a,x)=>a+(x[2]||0),0);return row('sub',`${nome} · ${lista.length} centros`,r,m)+lista.map(([n,r,m])=>row('in',n,r,m,SW[n])).join('')}
+const prop=head+tot+bloco('Custo variável',D.filter(x=>VAR.includes(x[0])))+bloco('Custo fixo',D.filter(x=>!VAR.includes(x[0])))+'</tbody></table>';
+document.getElementById('duo').innerHTML=`<div><div class="lbl">Hoje</div><div class="card">${hoje}</div></div><div><div class="lbl">Proposta · fixo × variável automático</div><div class="card">${prop}</div></div>`;
+function fit(){const f=document.getElementById('fit'),d=document.getElementById('duo');const k=Math.min(1,f.clientWidth/998);d.style.transform=`scale(${k})`;f.style.height=(440*k)+'px'}
+addEventListener('resize',fit);fit();
+</script>
