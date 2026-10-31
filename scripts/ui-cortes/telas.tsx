@@ -90,6 +90,7 @@ import { V2PlanejamentoVisaoGeral } from '@/v2/pages/V2PlanejamentoVisaoGeral';
 import V2FechamentoPeriodo from '@/v2/pages/V2FechamentoPeriodo';
 import * as META from './dados/metaP109';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
+import { EvolucaoDoAnoTab } from '@/pages/EvolucaoDoAnoTab';
 import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
 
 /* Gabriel 29/10 08:26 — os parcelados do LR na nota já lançada (SINTÉTICOS): as 4 do sistema e a prévia da `fn_nota_completar` como o banco a faz */
@@ -618,6 +619,10 @@ if (tela === 'mesclar') {
     : T === 'pc100' ? <div className="h-full"><PainelConsultorTab filtroGlobal={{ ano: '2026', mes: 10 }} /></div>
     : T === 'vgplan' ? <div className="h-full"><V2PlanejamentoVisaoGeral ano={2026} mes={10} /></div>
     : <div className="h-full"><V2FechamentoPeriodo periodo={{ periodoInicio: '2026-01', periodoFim: '2026-10' }} onPeriodoChange={() => {}} /></div>);
+} else if (tela === 'evolucao-ano') {
+  /* PROD-EVOLUCAO-01a — Produção › Evolução no Ano (nível 1), meses SINTÉTICOS no pior caso de largura (`mocks/evolucao.ts`); `&faz=1` uma fazenda */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  montar(<div className="h-full"><EvolucaoDoAnoTab /></div>);
 } else if (tela === 'recorrencias') {
   /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
   g.__bancoBancada = {
