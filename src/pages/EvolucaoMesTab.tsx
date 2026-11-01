@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { useEvolucaoDoMes } from '@/hooks/useEvolucaoDoMes';
 import {
-  TIPOS_DO_MES, kgCabFinal, kgPorCab, desvio, tomDoDesvio, montarMesPorCategoria, pesosAConferir, type LinhaDoMes,
+  TIPOS_DO_MES, kgCabFinal, kgPorCab, desvio, tomDoDesvio, montarMesPorCategoria, pesosAConferir, categoriaCurta, tipoCurto, type LinhaDoMes,
 } from '@/lib/producao/evolucaoMes';
 import type { FluxoTipo } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -26,6 +26,12 @@ const fmt = (v: number | null | undefined, casas = 0): string => {
   const s = Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
   return v < 0 && Number(s.replace(/\./g, '').replace(',', '.')) !== 0 ? `−${s}` : s;
 };
+/* fix1 (Gabriel 31/10, item 2): VAZIO = VAZIO — célula sem movimento (zero ou sem dado) fica em branco; o "Confere" usa o `fmt` */
+const vazio = (v: number | null | undefined, casas = 0): string => (v == null || v === 0 ? '' : fmt(v, casas));
+/* fix1 (item 1): o kg/cab é secundário — fonte bem menor e mais clara que as cabeças */
+const KG_SECUNDARIO = 'text-[8.5px] text-muted-foreground/80';
+/* fix1 (item 3): zebra leve entre as categorias; os subtotais ficam com o fundo próprio */
+const ZEBRA = ['bg-card', 'bg-[#f7f8fa]'];
 const TOM = { vermelho: 'bg-[#fde1e1] text-[#a3161c] font-semibold', ambar: 'bg-[#fff1d6] text-[#8a4b00] font-semibold' } as const;
 const ROTULO_TIPO: Record<string, string> = Object.fromEntries([...TIPOS_DO_MES.map((t) => [t.tipo, t.rotulo]), ['reclassificacao', 'Evolução']]);
 
@@ -45,7 +51,8 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
   const [ano, setAno] = useState(anoInicial ?? new Date().getFullYear());
   const [mesEscolhido, setMes] = useState<number | null>(mesInicial ?? null);
   const [cenario, setCenario] = useState<'realizado' | 'meta'>('realizado');
-  const [aba, setAba] = useState<'pesos' | 'composicao'>('pesos');
+  /* fix1 (item 4): o painel abre SEMPRE em "Composição"; "Conferir pesos" é a 2ª aba */
+  const [aba, setAba] = useState<'pesos' | 'composicao'>('composicao');
   /* sem mês dito, o último fechado; sem nenhum fechado, o mês de hoje */
   const prov = useEvolucaoDoMes(ano, mesEscolhido ?? 1, cenario);
   const mes = mesEscolhido ?? prov.ultimoFechado ?? new Date().getMonth() + 1;
@@ -72,19 +79,19 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
     const ts = TIPOS_DO_MES.filter((t) => t.lado === lado);
     return kgPorCab({ cab: ts.reduce((s, t) => s + total.tipos[t.tipo].cab, 0), kg: ts.reduce((s, t) => s + total.tipos[t.tipo].kg, 0) });
   };
-  const subDoLado = (lado: 'entrada' | 'saida') => { const k = kgCabDoLado(lado); return k == null ? 'nenhuma no mês' : `${fmt(k, 1)} kg/cab`; };
+  const subDoLado = (lado: 'entrada' | 'saida') => { const k = kgCabDoLado(lado); return k == null ? '' : `${fmt(k, 1)} kg/cab`; };
   const detalhe = (lado: 'entrada' | 'saida') => TIPOS_DO_MES.filter((t) => t.lado === lado && total.tipos[t.tipo].cab > 0)
     .map((t) => `${t.rotulo.toLowerCase()} ${fmt(total.tipos[t.tipo].cab)}`).join(' · ') || 'nenhuma';
 
   /* uma célula de kg/cab: o desvio só nas linhas de categoria com Fechamento */
   const celKg = (l: LinhaDoMes, v: number | null, ref: number | null) => {
     const tom = l.nivel === 'categoria' && d.fechado ? tomDoDesvio(desvio(v, ref)) : null;
-    return <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap text-muted-foreground', tom && TOM[tom])}>{v == null ? '—' : fmt(v, 1)}</td>;
+    return <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', KG_SECUNDARIO, tom && TOM[tom])}>{vazio(v, 1)}</td>;
   };
   const celCab = (l: LinhaDoMes, v: number, abrir?: () => void) => (
-    <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', v === 0 && 'text-muted-foreground/60',
+    <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap',
       abrir && v !== 0 && 'cursor-pointer underline decoration-dotted decoration-[#8aa0bf] underline-offset-2')}
-      onClick={abrir && v !== 0 ? abrir : undefined}>{l.temDado ? fmt(v) : '—'}</td>
+      onClick={abrir && v !== 0 ? abrir : undefined}>{l.temDado ? vazio(v) : ''}</td>
   );
 
   return (
@@ -107,13 +114,13 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
         <Card titulo={`Saldo inicial · ${rotuloMes.toLowerCase()}`} valor={fmt(total.inicio.cab)} unidade="cab" sub={rotuloAnt ? `fechamento de ${rotuloAnt}` : 'saldo inicial do ano'} />
         <Card titulo="Entradas externas" valor={`+${fmt(entradasCab)}`} unidade="cab" sub={subDoLado('entrada')} dica={detalhe('entrada')} />
         <Card titulo="Saídas externas" valor={fmt(-saidasCab)} unidade="cab" sub={subDoLado('saida')} dica={detalhe('saida')} />
-        <Card titulo="Evolução de categoria" valor={fmt(total.entrou.cab)} unidade="cab" sub={total.entrou.cab ? `${fmt(kgPorCab(total.entrou), 1)} kg/cab` : 'sem evolução no mês'} />
+        <Card titulo="Evolução de categoria" valor={fmt(total.entrou.cab)} unidade="cab" sub={total.entrou.cab ? `${fmt(kgPorCab(total.entrou), 1)} kg/cab` : ''} />
         <Card titulo={`Saldo final · ${rotuloMes.toLowerCase()}`} valor={fmt(total.final.cab)} unidade="cab" sub={`${fmt(kgCabFinal(total), 1)} kg/cab`} />
         <Card titulo={`GMD · ${rotuloMes.toLowerCase()}`} valor={fmt(total.gmd, 3)} unidade="kg/dia"
           sub={rotuloAnt ? `${rotuloAnt}: ${fmt(totalAnt?.gmd, 3)}` : ''} alerta={aConferir ? `${aConferir} ${aConferir === 1 ? 'peso' : 'pesos'} a conferir` : undefined} />
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_352px] gap-2.5">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_368px] gap-2.5">
         {/* A TABELA DO MÊS POR CATEGORIA */}
         <div className={cn(QUADRO_REGUA, 'min-h-0')}>
           <div className="flex h-[24px] shrink-0 items-center gap-3 border-b border-border px-2 text-[10px]">
@@ -153,11 +160,12 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
               </thead>
               <tbody>
                 {m.linhas.map((l) => {
+                  const zebra = ZEBRA[m.linhas.filter((x) => x.nivel === 'categoria').indexOf(l) % 2] ?? 'bg-card';
                   const ref = m.referencia.get(l.id) ?? null;
                   const abrir = (tipo: FluxoTipo | 'reclassificacao') => () => onAbrirLancamentos?.({ ano, mes, tipo, categoria: l.nivel === 'categoria' ? l.id : null, cenario });
                   return (
-                    <tr key={l.id} data-linha={l.id} className={cn(l.nivel === 'subtotal' && 'bg-[#e8eef6] font-bold', l.nivel === 'total' && 'bg-[#d5dfec] font-bold')}>
-                      <td className={cn(TD_REGUA, 'sticky left-0 z-[1] pl-2', l.nivel === 'subtotal' ? 'bg-[#e8eef6]' : l.nivel === 'total' ? 'bg-[#d5dfec]' : 'bg-card')}>
+                    <tr key={l.id} data-linha={l.id} className={cn(l.nivel === 'subtotal' ? 'bg-[#e8eef6] font-bold' : l.nivel === 'total' ? 'bg-[#d5dfec] font-bold' : zebra)}>
+                      <td className={cn(TD_REGUA, 'sticky left-0 z-[1] pl-2', l.nivel === 'subtotal' ? 'bg-[#e8eef6]' : l.nivel === 'total' ? 'bg-[#d5dfec]' : zebra)}>
                         <span className="block truncate" data-reticencias-com-title="" title={l.rotulo}>{l.rotulo}</span></td>
                       {celCab(l, l.inicio.cab)}
                       {celKg(l, l.temDado ? kgPorCab(l.inicio) : null, null)}
@@ -169,10 +177,10 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
                       {celKg(l, kgPorCab(l.entrou), ref)}
                       {celCab(l, l.saiu.cab, abrir('reclassificacao'))}
                       {celKg(l, kgPorCab(l.saiu), null)}
-                      <td className={cn(TD_REGUA, 'text-right font-bold tabular-nums whitespace-nowrap')}>{l.temDado ? fmt(l.final.cab) : '—'}</td>
+                      <td className={cn(TD_REGUA, 'text-right font-bold tabular-nums whitespace-nowrap')}>{l.temDado ? vazio(l.final.cab) : ''}</td>
                       {celKg(l, d.fechado ? kgCabFinal(l) : null, null)}
-                      <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap')}>{d.fechado && l.temDado ? fmt(l.producaoKg) : '—'}</td>
-                      <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', l.gmd != null && l.gmd < 0 && 'text-[#c0262d]')}>{d.fechado && l.temDado ? fmt(l.gmd, 3) : '—'}</td>
+                      <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap')}>{d.fechado && l.temDado ? vazio(l.producaoKg) : ''}</td>
+                      <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', l.gmd != null && l.gmd < 0 && 'text-[#c0262d]')}>{d.fechado && l.temDado ? vazio(l.gmd, 3) : ''}</td>
                     </tr>
                   );
                 })}
@@ -199,7 +207,7 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
         {/* O PAINEL DA DIREITA — Conferir pesos | Composição */}
         <div className={cn(QUADRO_REGUA, 'min-h-0')}>
           <div className="flex h-[26px] shrink-0 border-b border-border text-[10px]">
-            {(['pesos', 'composicao'] as const).map((a) => (
+            {(['composicao', 'pesos'] as const).map((a) => (
               <button key={a} type="button" onClick={() => setAba(a)} className={cn('px-2.5', aba === a ? 'font-bold shadow-[inset_0_-2px_0_hsl(var(--primary))]' : 'text-muted-foreground')}>
                 {/* a largura é a do NEGRITO nas duas abas (cópia invisível embaixo): marcar uma não desloca a outra (gate desloca 31/10) */}
                 <span className="inline-grid">
@@ -212,9 +220,11 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
           {aba === 'pesos' ? (
             <div className="min-h-0 flex-1 overflow-auto" data-testid="evolucao-mes-pesos">
               {d.erroLancamentos && <p className="px-2 py-2 text-[10px] text-destructive">{d.erroLancamentos}</p>}
-              <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-                {/* larguras pelo maior valor (gate de 31/10): data dd/mm/aaaa 68 · cab "1.234" 36 · kg "5.000,0" 42 · dif "+999%" 42; a Categoria fica com o resto (≥ 50) */}
-                <colgroup><col style={{ width: 68 }} /><col style={{ width: 50 }} /><col /><col style={{ width: 36 }} /><col style={{ width: 42 }} /><col style={{ width: 36 }} /><col style={{ width: 42 }} /><col style={{ width: 18 }} /></colgroup>
+              <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }} data-dia-mes="">
+                {/* fix1 (item 4, medido no gate de 31/10): data dd/mm SEM o ano (o mês está na barra; exceção declarada `data-dia-mes`) 38 · Tipo curto 50 ·
+                    cab "1.234" 36 · kg e ref "5.000,0" a 8,5px 38 · dif "+999%" 42 · ✎ 18; a Categoria (curta, "Mam. M → Desm. M" pede 94px) fica com o
+                    resto — por isso o painel passou de 352 para 368px. Nada termina em "…" (gate `inteiroDe`). */}
+                <colgroup><col style={{ width: 38 }} /><col style={{ width: 50 }} /><col /><col style={{ width: 36 }} /><col style={{ width: 38 }} /><col style={{ width: 38 }} /><col style={{ width: 42 }} /><col style={{ width: 18 }} /></colgroup>
                 <thead className="sticky top-0 z-10 bg-primary">
                   <tr>{['Data', 'Tipo', 'Categoria', 'Cab', 'Kg', 'Ref.', 'Dif.', ''].map((h, i) => <th key={i} className={cn(TH_REGUA, i < 3 ? 'text-left' : 'text-right', i === 0 && 'pl-2')}>{h}</th>)}</tr>
                 </thead>
@@ -223,14 +233,15 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
                     const cat = d.categorias.find((c) => c.codigo === p.categoria)?.nome ?? p.categoria;
                     const dest = p.categoria_destino ? d.categorias.find((c) => c.codigo === p.categoria_destino)?.nome ?? p.categoria_destino : null;
                     const rotuloCat = dest ? `${cat} → ${dest}` : cat;
+                    const catCurta = p.categoria_destino ? `${categoriaCurta(p.categoria)} → ${categoriaCurta(p.categoria_destino)}` : categoriaCurta(p.categoria);
                     return (
                       <tr key={p.id} data-peso={p.id}>
-                        <td className={cn(TD_REGUA, 'pl-2 tabular-nums whitespace-nowrap text-muted-foreground')}>{format(parseISO(p.data), 'dd/MM/yyyy')}</td>
-                        <td className={TD_REGUA}><span className="block truncate" data-reticencias-com-title="" title={ROTULO_TIPO[p.tipo] ?? p.tipo}>{ROTULO_TIPO[p.tipo] ?? p.tipo}</span></td>
-                        <td className={TD_REGUA}><span className="block truncate" data-reticencias-com-title="" title={rotuloCat}>{rotuloCat}</span></td>
+                        <td className={cn(TD_REGUA, 'pl-2 tabular-nums whitespace-nowrap text-muted-foreground')} title={format(parseISO(p.data), 'dd/MM/yyyy')}>{format(parseISO(p.data), 'dd/MM')}</td>
+                        <td className={TD_REGUA}><span className="block truncate" data-inteiro="" title={ROTULO_TIPO[p.tipo] ?? p.tipo}>{tipoCurto(p.tipo)}</span></td>
+                        <td className={TD_REGUA}><span className="block truncate" data-inteiro="" title={rotuloCat}>{catCurta}</span></td>
                         <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap')}>{fmt(p.quantidade)}</td>
-                        <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', p.tom && TOM[p.tom])}>{fmt(p.peso_medio_kg, 1)}</td>
-                        <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap text-muted-foreground')}>{fmt(p.referencia, 1)}</td>
+                        <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', KG_SECUNDARIO, p.tom && TOM[p.tom])}>{vazio(p.peso_medio_kg, 1)}</td>
+                        <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', KG_SECUNDARIO)}>{vazio(p.referencia, 1)}</td>
                         <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', p.desvio != null && (p.desvio < 0 ? 'text-[#c0262d]' : 'text-[#1d4ed8]'))}
                           title={p.desvio == null ? undefined : `${p.desvio > 0 ? '+' : ''}${fmt(p.desvio * 100, 0)}% sobre ${fmt(p.referencia, 1)} kg/cab`}>
                           {textoDoDesvio(p.desvio)}
@@ -256,7 +267,7 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
 
 /** a diferença em %: de 1.000% para cima a célula diz ">999%" (o valor inteiro no `title`) — a coluna é medida para "+999%" */
 export const textoDoDesvio = (d: number | null): string => {
-  if (d == null) return '—';
+  if (d == null) return '';
   if (d >= 9.995) return '>999%';
   return `${d > 0 ? '+' : ''}${fmt(d * 100, 0)}%`;
 };
@@ -268,9 +279,10 @@ function Card({ titulo, valor, unidade, sub, alerta, dica }: { titulo: string; v
     <div className="grid min-w-0 grid-rows-[12px_18px_12px] overflow-hidden rounded-md border border-border bg-card px-2 py-0.5">
       <span className="truncate text-[9.5px] text-muted-foreground" title={titulo}>{titulo}</span>
       <span className="whitespace-nowrap tabular-nums"><span className="text-[14px] font-bold leading-[18px]">{valor}</span> <span className="text-[9.5px] font-semibold text-muted-foreground">{unidade}</span></span>
+      {/* fix1 (item 1): a linha do kg/cab do card é secundária (menor e mais clara); o alerta segue no tamanho dele */}
       {alerta
         ? <span className="truncate text-[9.5px] font-semibold text-[#c0262d]" title={`${sub} · ${alerta}`}>{alerta}</span>
-        : <span className="truncate text-[9.5px] text-muted-foreground" title={dica ?? sub}>{sub}</span>}
+        : <span className={cn('truncate', KG_SECUNDARIO)} title={dica ?? sub}>{sub}</span>}
     </div>
   );
 }
@@ -300,9 +312,9 @@ function Composicao({ linhas, total }: { linhas: LinhaDoMes[]; total: number }) 
             <tr key={l.id}>
               <td className={TD_REGUA}><span className="flex min-w-0 items-center gap-1"><span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: CORES[i % CORES.length] }} />
                 <span className="truncate" data-reticencias-com-title="" title={l.rotulo}>{l.rotulo}</span></span></td>
-              <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap')}>{l.temDado ? fmt(l.final.cab) : '—'}</td>
-              <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap text-muted-foreground')}>{total > 0 && l.temDado ? `${fmt((l.final.cab / total) * 100, 1)}%` : '—'}</td>
-              <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap text-muted-foreground')}>{fmt(kgCabFinal(l), 1)}</td>
+              <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap')}>{l.temDado ? vazio(l.final.cab) : ''}</td>
+              <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap text-muted-foreground')}>{total > 0 && l.temDado && l.final.cab ? `${fmt((l.final.cab / total) * 100, 1)}%` : ''}</td>
+              <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', KG_SECUNDARIO)}>{vazio(kgCabFinal(l), 1)}</td>
             </tr>
           ))}
         </tbody>

@@ -19,6 +19,8 @@ export default defineConfig({
     { find: /^@\/hooks\/useEvolucaoDoAno$/, replacement: m('evolucao.ts') },
     /* PROD-EVOLUCAO-01b — o mês por categoria recebe linhas sintéticas no pior caso de largura (a conta é a da `montarMesPorCategoria`) */
     { find: /^@\/hooks\/useEvolucaoDoMes$/, replacement: m('evolucaoMes.ts') },
+    /* MAPA-02b (D4) — o fundo do mapa é neutro e local: nenhum tile do Google nem do OSM nos gates */
+    { find: /^@\/lib\/mapa\/camadaDoFundo$/, replacement: m('fundo.ts') },
     { find: '@', replacement: path.resolve(RAIZ, 'src') } ] },
   css: { postcss: RAIZ },
   server: { fs: { allow: [RAIZ] } },

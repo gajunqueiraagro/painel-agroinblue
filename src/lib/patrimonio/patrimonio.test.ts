@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ordenarPorColuna } from '@/hooks/useOrdenacaoTabela';
 import {
-  abasDoBem, chipsDeCategoria, COLUNAS_ORDENAVEIS, custoPorPasto, dataBR, filtrarBens, fraseDoErro, mesBR, n2, NOME_CURTO_CATEGORIA, nomeCurtoDaCategoria, rotuloOrigem,
-  rotuloSemDepreciacao, rotuloVida, totaisDaLista, type BemDaLista, type CategoriaBem,
+  abasDoBem, chaveDoCodigo, chipsDeCategoria, COLUNAS_ORDENAVEIS, custoPorPasto, dataBR, filtrarBens, fraseDoErro, mesBR, mostraIdentificacaoAntiga,
+  mostraPlacaRenavam, n2, NOME_CURTO_CATEGORIA, nomeCurtoDaCategoria, rotuloOrigem, rotuloSemDepreciacao, rotuloVida, tituloDaLinha, totaisDaLista,
+  type BemDaLista, type CategoriaBem,
 } from './patrimonio';
 
 const bem = (p: Partial<BemDaLista>): BemDaLista => ({
   bem_id: 'b', fazenda_id: 'f', fazenda_codigo: 'PUR', categoria_id: 'c', categoria_codigo: 'maquinas', categoria_nome: 'Máquinas',
-  deprecia: true, tem_mercado: true, tem_pastos: false, descricao: 'Trator', marca: null, modelo: null, identificacao: null,
+  deprecia: true, tem_mercado: true, tem_pastos: false, codigo: 'MAQ-001', descricao: 'Trator', marca: null, modelo: null, identificacao: null,
+  numero_proprio: null, placa: null, chassi: null, numero_serie: null, renavam: null,
   situacao: 'em_uso', em_uso_desde: '2022-03-01', baixado_em: null, atividade: 'pecuaria', origem_valor: 'lancamentos',
   valor_extra: 0, valor_lancamentos: 388400, aquisicao: 388400, a_realizar: 0, n_lancamentos: 2, n_a_realizar: 0, n_a_conferir: 0,
   n_selo: 0, n_repetidas: 0, primeira_data: '2022-03-10', vida_util_meses: 120, residual_pct: 20, depreciacao_acumulada: 145002.67,
@@ -49,9 +51,9 @@ describe('a lista', () => {
   const cerca = bem({ bem_id: 'c', descricao: 'Cerca divisa', categoria_codigo: 'cercas', categoria_nome: 'Cercas', situacao: 'em_formacao',
     depreciacao_acumulada: 0, aquisicao: 67200, valor_contabil: 67200, primeira_data: null, em_uso_desde: null });
 
-  it('toda coluna ordena (11) e a ausência vai para o fim nos dois sentidos', () => {
+  it('toda coluna ordena (12, com o Código do B2) e a ausência vai para o fim nos dois sentidos', () => {
     expect(COLUNAS_ORDENAVEIS.map(c => c.coluna)).toEqual(
-      ['data', 'bem', 'categoria', 'fazenda', 'situacao', 'vida', 'aquisicao', 'depreciado', 'contabil', 'mercado', 'origem']);
+      ['data', 'codigo', 'bem', 'categoria', 'fazenda', 'situacao', 'vida', 'aquisicao', 'depreciado', 'contabil', 'mercado', 'origem']);
     const porData = COLUNAS_ORDENAVEIS.find(c => c.coluna === 'data');
     expect(ordenarPorColuna([cerca, trator, terra], porData, 'asc').map(b => b.bem_id)).toEqual(['r', 't', 'c']);
     expect(ordenarPorColuna([cerca, trator, terra], porData, 'desc').map(b => b.bem_id)).toEqual(['t', 'r', 'c']);
@@ -66,6 +68,40 @@ describe('a lista', () => {
     expect(filtrarBens([trator, terra, cerca], '', 'a950').map(b => b.bem_id)).toEqual(['t']);
     expect(filtrarBens([trator, terra, cerca], '', 'ret').map(b => b.bem_id)).toEqual(['r']);
     expect(filtrarBens([trator, terra, cerca], '', '').length).toBe(3);
+  });
+  it('B2: o código ordena pelo prefixo e pelo NÚMERO (MAQ-999 antes de MAQ-1000; o texto puro inverteria)', () => {
+    expect(chaveDoCodigo('MAQ-1000')).toBe('MAQ-000001000');
+    expect(chaveDoCodigo(null)).toBeNull();
+    const porCodigo = COLUNAS_ORDENAVEIS.find(c => c.coluna === 'codigo');
+    const a = bem({ bem_id: 'a', codigo: 'MAQ-1000' }), b = bem({ bem_id: 'b', codigo: 'MAQ-999' }), c = bem({ bem_id: 'c', codigo: 'IMP-002' }),
+      d = bem({ bem_id: 'd', codigo: 'MAQ-010' });
+    expect(ordenarPorColuna([a, b, c, d], porCodigo, 'asc').map(x => x.bem_id)).toEqual(['c', 'd', 'b', 'a']);
+    expect(ordenarPorColuna([a, b, c, d], porCodigo, 'desc').map(x => x.bem_id)).toEqual(['a', 'b', 'd', 'c']);
+  });
+  it('B2: a busca acha pelo código e por cada campo da identificação (e pelo antigo)', () => {
+    const hilux = bem({ bem_id: 'h', codigo: 'VEI-003', categoria_codigo: 'veiculos', descricao: 'Caminhonete', numero_proprio: 'V-03', placa: 'EUM1E62',
+      chassi: '8AJDA3CD4R1834700', renavam: '01234567890' });
+    const grade = bem({ bem_id: 'g', codigo: 'IMP-004', descricao: 'Grade', numero_serie: 'S-1610', identificacao: 'Baldan nº 4471' });
+    const todos = [hilux, grade];
+    for (const [q, id] of [['vei-003', 'h'], ['v-03', 'h'], ['eum1e62', 'h'], ['1834700', 'h'], ['01234567890', 'h'], ['s-1610', 'g'], ['4471', 'g'], ['imp-004', 'g']] as const) {
+      expect(filtrarBens(todos, '', q).map(b => b.bem_id), q).toEqual([id]);
+    }
+  });
+  it('B2: o title da linha leva o código e a identificação nova; sem nenhuma nova, a antiga', () => {
+    expect(tituloDaLinha(bem({ codigo: 'VEI-001', descricao: 'Hilux', placa: 'EUM1E62', chassi: '8AJ', identificacao: 'velho' })))
+      .toBe('VEI-001 · Hilux · placa EUM1E62 · chassi 8AJ');
+    expect(tituloDaLinha(bem({ codigo: 'IMP-004', descricao: 'Grade', marca: 'Baldan', identificacao: 'série 1610' }))).toBe('IMP-004 · Grade · Baldan · série 1610');
+  });
+  it('B2: Placa/Renavam só em Veículos ou com valor; a identificação antiga só sem nenhum campo novo', () => {
+    expect(mostraPlacaRenavam('veiculos', '', '')).toBe(true);
+    expect(mostraPlacaRenavam('maquinas', '', '')).toBe(false);
+    expect(mostraPlacaRenavam('maquinas', 'ABC1D23', '')).toBe(true);
+    expect(mostraPlacaRenavam('maquinas', '', ' 123 ')).toBe(true);
+    const g = { identificacao: 'Sem', numero_proprio: '', placa: '', chassi: '', numero_serie: '', renavam: '' };
+    expect(mostraIdentificacaoAntiga(g)).toBe(true);
+    expect(mostraIdentificacaoAntiga({ ...g, chassi: '9BW' })).toBe(false);
+    expect(mostraIdentificacaoAntiga({ ...g, identificacao: ' ' })).toBe(false);
+    expect(mostraIdentificacaoAntiga(null)).toBe(false);
   });
   it('os totais: mercado sem avaliação entra pelo contábil', () => {
     const t = totaisDaLista([trator, terra]);

@@ -32,6 +32,8 @@ import { cn } from '@/lib/utils';
 const LARGURA = { mes: 50, acum: 58, meta: 58, delta: 58 } as const;
 
 const MESES_CURTOS = MESES_COLS.map((m) => m.label);
+/* fix1 (item 7): o secundário da Evolução — Meta, Δ % e a meta do card */
+const SECUNDARIO = 'text-[8.5px] font-normal';
 const fmtNum = (v: number, casas: number) => {
   const s = Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
   return v < 0 && Number(s.replace(/\./g, '').replace(',', '.')) !== 0 ? `−${s}` : s;
@@ -74,6 +76,8 @@ const FUNDO: Record<LinhaDaEvolucao['nivel'], string> = {
 export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
   const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis();
   const [ano, setAno] = useState(String(new Date().getFullYear()));
+  /* fix1 (Gabriel 31/10, item 5): só "Mês | Ano". O "Ano" é o ano ATÉ O ÚLTIMO MÊS FECHADO (o `acum`, os MESMOS números com que a tela abria):
+     o `ano` dos 12 meses somava a projeção dos meses abertos e deixava o saldo e o peso final do ano em branco (dez sem Fechamento). */
   const [periodo, setPeriodo] = useState<Periodo>('acum');
   const [unidade, setUnidade] = useState<Unidade>('cab');
   const [comMeta, setComMeta] = useState(true);
@@ -89,12 +93,12 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
   const avisos = useMemo(() => avisosDaEvolucao(dados.mesesReal, fmtNum, (m) => `${MESES_CURTOS[m - 1]}/${ano.slice(2)}`), [dados.mesesReal, ano]);
 
   const ate = ev.ultimoFechado;
-  const rotuloAcum = ate ? `Acum. até ${MESES_CURTOS[ate - 1].toLowerCase()}` : 'Acum.';
   const valorDe = (e: typeof ev, id: string) => e.linhas.find((l) => l.id === id)?.acum ?? null;
 
   /* em "t" o peso vivo vai em toneladas com 1 casa (o rebanho passa de 2 milhões de kg: não caberia em coluna nenhuma) */
+  /* fix1 (item 8): VAZIO = VAZIO — mês sem dado ou sem movimento fica em branco (nada de "0" nem "—") */
   const exibir = (l: LinhaDaEvolucao, v: number | null): string => {
-    if (v == null) return '—';
+    if (v == null || v === 0) return '';
     const emToneladas = unidade === 'kg' && l.nivel !== 'indicador';
     const n = emToneladas ? v / 1000 : v;
     const casas = emToneladas ? 1 : l.casas;
@@ -103,7 +107,7 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
   };
   const exibirDelta = (l: LinhaDaEvolucao): string => {
     const d = deltaSobreMeta(l);
-    if (d == null) return '—';
+    if (d == null) return '';
     const casas = l.deltaEmPontos || Math.abs(d) < 100 ? 1 : 0;
     return `${d > 0 ? '+' : d < 0 ? '' : ''}${fmtNum(d, casas)}${l.deltaEmPontos ? ' pp' : '%'}`;
   };
@@ -123,11 +127,14 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
           <SelectContent>{anosDisponiveis.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
         </Select>
         <span className="text-muted-foreground">Período</span>
-        <Segmentado valor={periodo} onEscolher={setPeriodo} altura={24} opcoes={[
-          { valor: 'mes', rotulo: ate ? `Mês (${MESES_CURTOS[ate - 1].toLowerCase()})` : 'Mês' },
-          { valor: 'acum', rotulo: rotuloAcum },
-          { valor: 'ano', rotulo: 'Ano' },
-        ]} />
+        {/* o lugar é reservado (largura fixa): "Mês (set)" muda de tamanho com o mês e nada à direita anda */}
+        {/* "Ano · até set" (Gabriel 31/10: o rótulo diz até onde o ano vai) — o lugar cabe "Mês (set) | Ano · até set" com o mês mais largo */}
+        <span className="inline-flex w-[150px] shrink-0">
+          <Segmentado valor={periodo} onEscolher={setPeriodo} altura={24} opcoes={[
+            { valor: 'mes', rotulo: ate ? `Mês (${MESES_CURTOS[ate - 1].toLowerCase()})` : 'Mês' },
+            { valor: 'acum', rotulo: ate ? `Ano · até ${MESES_CURTOS[ate - 1].toLowerCase()}` : 'Ano', title: ate ? `O ano até ${MESES_CURTOS[ate - 1].toLowerCase()}, o último mês fechado` : 'O ano até o último mês fechado' },
+          ]} />
+        </span>
         <span className="text-muted-foreground">Unidade</span>
         <Segmentado valor={unidade} onEscolher={setUnidade} altura={24} opcoes={[
           { valor: 'cab', rotulo: 'Cabeças' },
@@ -179,18 +186,18 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
                       title={`${m.label}/${ano} por categoria`} onClick={() => onAbrirMes?.(Number(ano), i + 1)}>{m.label}</th>
                   );
                 })}
-                <th className={cn(TH_REGUA, 'text-right')}>Acum.</th>
-                <th className={cn(TH_REGUA, 'text-right')}>Meta</th>
-                <th className={cn(TH_REGUA, 'text-right')}>Δ %</th>
+                <th className={cn(TH_REGUA, 'text-right')}>{periodo === 'mes' ? 'Mês' : 'Ano'}</th>
+                <th className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>Meta</th>
+                <th className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>Δ %</th>
               </tr>
             </thead>
             <tbody>
               {ev.linhas.map((l) => (
                 <tr key={l.id} className={FUNDO[l.nivel]} data-linha={l.id}>
-                  <td className={cn(TD_REGUA, 'pl-2')} title={l.rotulo}>
+                  <td className={cn(TD_REGUA, 'pl-2')} title={l.title ?? l.rotulo}>
                     <span className="flex min-w-0 items-center gap-1">
                       <span className={cn('min-w-0 truncate', (l.nivel === 'entrada' || l.nivel === 'saida' || l.nivel === 'interna') && 'pl-2')}
-                        data-reticencias-com-title="" title={l.rotulo}>
+                        data-inteiro="" title={l.title ?? l.rotulo}>
                         {l.nivel === 'bloco-entrada' ? '+ ' : l.nivel === 'bloco-saida' ? '− ' : l.nivel === 'bloco-interna' ? '⇄ ' : ''}{l.rotulo}
                       </span>
                       {l.destino && (
@@ -215,11 +222,12 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
                   <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap font-bold bg-[rgba(30,45,71,.05)]')} data-coluna="acum">
                     {l.nivel === 'bloco-interna' ? '' : exibir(l, l.acum)}
                   </td>
-                  <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap font-semibold text-[#c2410c]')} data-coluna="meta">
-                    {l.nivel === 'bloco-interna' ? '' : comMeta ? exibir(l, l.meta) : '—'}
+                  {/* fix1 (item 7): Meta e Δ % são SECUNDÁRIOS — fonte bem menor, sem negrito, cor suave */}
+                  <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', SECUNDARIO, 'text-[#c2410c]/70')} data-coluna="meta">
+                    {l.nivel === 'bloco-interna' || !comMeta ? '' : exibir(l, l.meta)}
                   </td>
-                  <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap font-semibold text-[#1d4ed8]')} data-coluna="delta">
-                    {l.nivel === 'bloco-interna' ? '' : comMeta ? exibirDelta(l) : '—'}
+                  <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', SECUNDARIO, 'text-[#1d4ed8]/70')} data-coluna="delta">
+                    {l.nivel === 'bloco-interna' || !comMeta ? '' : exibirDelta(l)}
                   </td>
                 </tr>
               ))}
@@ -258,9 +266,9 @@ function Card({ titulo, valor, meta, unidade, casas, ano }: { titulo: string; va
       <span className="flex items-baseline gap-1 whitespace-nowrap tabular-nums">
         <span className="text-[14px] font-bold leading-[18px]">{valor == null ? '—' : fmtNum(valor, casas)}</span>
         <span className="text-[9.5px] font-semibold text-muted-foreground">{unidade}</span>
-        <span className="ml-auto text-[10px] font-bold text-[#1d4ed8]" title={`${pct == null ? '—' : `${fmtNum(pct, 0)}%`} da meta de ${ano}`}>{pct == null ? '—' : `${fmtNum(pct, 0)}%`}</span>
+        <span className={cn('ml-auto text-[#1d4ed8]/70', SECUNDARIO)} title={`${pct == null ? '—' : `${fmtNum(pct, 0)}%`} da meta de ${ano}`}>{pct == null ? '—' : `${fmtNum(pct, 0)}%`}</span>
       </span>
-      <span className="flex items-center gap-1 whitespace-nowrap text-[9.5px] text-muted-foreground tabular-nums">
+      <span className={cn('flex items-center gap-1 whitespace-nowrap text-muted-foreground/80 tabular-nums', SECUNDARIO)}>
         <span>meta {ano} {meta == null ? '—' : fmtNum(meta, casas)}</span>
         <span className="h-[4px] min-w-0 flex-1 overflow-hidden rounded bg-[#e8ebf0]">
           <span className="block h-full bg-[#1d4ed8]" style={{ width: `${Math.max(0, Math.min(100, pct ?? 0))}%` }} />

@@ -3,14 +3,21 @@
  * (`fechamento_pastos` + `fechamento_pasto_itens`; os nomes das categorias vêm do `usePastos`). A montagem é `montarMapaDoMes`.
  * Substitui o `usePastoOcupacao` (o último fechamento de cada pasto, de qualquer mês) e as duas leituras de categorias do Gestor e da
  * Operação. Lê só o que precisa: os fechamentos da fazenda até o mês e os itens dos 12 meses da janela.
+ * MAPA-GLOBAL-01: o MESMO hook lê uma fazenda (o Gestor) ou várias de uma vez (o Global): `.in('fazenda_id', …)`, uma ida paginada
+ * para os fechamentos e os itens em lotes de 150 — nunca uma leitura por fazenda.
+ * MAPA-PERF-01 (Gabriel 31/10): só a JANELA usada (o mês escolhido + os 11 anteriores do histórico), só as colunas necessárias e os
+ *   itens EMBUTIDOS na mesma consulta (`fechamento_pasto_itens(...)`, pela FK `fechamento_id`), uma consulta por mês, as 12 em paralelo; sem o histórico
+ *   inteiro (a Pureza lia 6.781 fechamentos desde 2020 em 7 páginas + 7 lotes de itens, tudo em série). Consequência: o "último
+ *   fechamento" do pasto sem fechamento no mês se acha dentro da janela; antes dela, o painel não o cita.
  * ⚠ Leitura que termina depois de o mês/fazenda mudar não escreve (OC-ABRIR-LENTO-01). Erro não vai a toast: fica em `erro`.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { fetchAllPaginated, fetchAllPaginatedEmLotes, MAX_ROWS } from '@/lib/supabase/fetchAllPaginated';
+import { fetchAllPaginated, MAX_ROWS } from '@/lib/supabase/fetchAllPaginated';
 import { pastosAtivosNoMes, type CategoriaRebanho, type Pasto } from '@/hooks/usePastos';
 import {
-  dozeMesesAte, montarMapaDoMes, ocupacoesDoMes, type DadosDoPastoNoMes, type FechamentoLido, type ItemLido, type PastoOcupacao,
+  dozeMesesAte, montarMapaDoMes, ocupacoesDoMes, separarFechamentosEItens, type DadosDoPastoNoMes, type FechamentoComItens, type FechamentoLido,
+  type ItemLido, type PastoOcupacao,
 } from '@/lib/mapa/mapaDoMes';
 
 export interface MapaDoMes {
@@ -25,50 +32,40 @@ export interface MapaDoMes {
   recarregar: () => void;
 }
 
-export function useMapaDoMes(fazendaId: string | undefined, anoMes: string, pastos: Pasto[], categorias: CategoriaRebanho[]): MapaDoMes {
+export function useMapaDoMes(fazenda: string | readonly string[] | undefined, anoMes: string, pastos: Pasto[], categorias: CategoriaRebanho[]): MapaDoMes {
+  const idsChave = typeof fazenda === 'string' ? fazenda : fazenda ? [...fazenda].sort().join(',') : '';
+  const fazendaIds = useMemo(() => (idsChave ? idsChave.split(',') : []), [idsChave]);
   const [lidos, setLidos] = useState<{ chave: string; fechamentos: FechamentoLido[]; itens: ItemLido[] } | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [rodada, setRodada] = useState(0);
-  const chave = `${fazendaId ?? ''}|${anoMes}`;
+  const chave = `${idsChave}|${anoMes}`;
 
   useEffect(() => {
-    if (!fazendaId || !/^\d{4}-\d{2}$/.test(anoMes)) { setLidos(null); return; }
+    if (fazendaIds.length === 0 || !/^\d{4}-\d{2}$/.test(anoMes)) { setLidos(null); return; }
     let cancelado = false;
     setCarregando(true);
     setErro(null);
     (async () => {
       try {
-        const { data: fechamentos } = await fetchAllPaginated<FechamentoLido & { fazenda_id?: string }>({
+        const janela = dozeMesesAte(anoMes);
+        // uma leitura por mês da janela, as 12 EM PARALELO: a RLS (`tenant_ok` por linha) custa ~1,5 ms por linha e, numa leitura só, a
+        // Pureza (986 fechamentos) levava 2,3 s; dividida em 12 ao mesmo tempo, 0,55 s (medido no proto, 31/10). Erro em qualquer uma
+        // derruba todas (o `erro` aparece; nunca vira lista vazia).
+        const porMes = await Promise.all(janela.map(mes => fetchAllPaginated<FechamentoComItens>({
           query: () => supabase
             .from('fechamento_pastos')
-            .select('id, pasto_id, ano_mes, tipo_uso_mes, status, fazenda_id')
-            .eq('fazenda_id', fazendaId)
-            .lte('ano_mes', anoMes)
+            .select('id, pasto_id, ano_mes, tipo_uso_mes, status, fazenda_id, fechamento_pasto_itens(id, fechamento_id, quantidade, peso_medio_kg, categoria_id)')
+            .in('fazenda_id', fazendaIds)
+            .eq('ano_mes', mes)
             .order('id', { ascending: true }),
           getKey: r => r.id,
           maxRows: MAX_ROWS,
-          context: 'useMapaDoMes/fechamentos',
+          context: `useMapaDoMes/${mes}`,
           shouldAbort: () => cancelado,
-        });
+        })));
         if (cancelado) return;
-        const janela = new Set(dozeMesesAte(anoMes));
-        const daFazenda = fechamentos.filter(f => (f.fazenda_id == null || f.fazenda_id === fazendaId) && f.ano_mes <= anoMes);
-        const idsDaJanela = daFazenda.filter(f => janela.has(f.ano_mes)).map(f => f.id);
-        const itens: ItemLido[] = idsDaJanela.length === 0 ? [] : await fetchAllPaginatedEmLotes<ItemLido>(idsDaJanela, 150, {
-          query: lote => supabase
-            .from('fechamento_pasto_itens')
-            .select('id, fechamento_id, quantidade, peso_medio_kg, categoria_id')
-            .in('fechamento_id', lote)
-            .order('id', { ascending: true }),
-          getKey: r => (r as ItemLido & { id?: string }).id ?? `${r.fechamento_id}|${r.categoria_id}`,
-          maxRows: MAX_ROWS,
-          context: 'useMapaDoMes/itens',
-          shouldAbort: () => cancelado,
-        });
-        if (cancelado) return;
-        const idsSet = new Set(idsDaJanela);
-        setLidos({ chave, fechamentos: daFazenda, itens: itens.filter(i => idsSet.has(i.fechamento_id)) });
+        setLidos({ chave, ...separarFechamentosEItens(porMes.flatMap(r => r.data), fazendaIds, janela) });
       } catch (e) {
         if (cancelado) return;
         console.error('[useMapaDoMes]', e);
@@ -79,11 +76,11 @@ export function useMapaDoMes(fazendaId: string | undefined, anoMes: string, past
       }
     })();
     return () => { cancelado = true; };
-  }, [fazendaId, anoMes, chave, rodada]);
+  }, [fazendaIds, anoMes, chave, rodada]);
 
   const vigentes = useMemo(
-    () => pastosAtivosNoMes(pastos.filter(p => !fazendaId || p.fazenda_id === fazendaId), anoMes),
-    [pastos, fazendaId, anoMes],
+    () => pastosAtivosNoMes(pastos.filter(p => fazendaIds.includes(p.fazenda_id)), anoMes),
+    [pastos, fazendaIds, anoMes],
   );
   const nomes = useMemo(() => new Map(categorias.map(c => [c.id, c.nome])), [categorias]);
 

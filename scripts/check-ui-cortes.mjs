@@ -209,6 +209,30 @@ const CENARIOS = [
   { nome: 'mapa-geo-sem-fechamento', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_03') },
   { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
   { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
+  /* MAPA-02b — o fundo (neutro na bancada: nenhum tile do Google nem do OSM) e os créditos no canto, logo abaixo do zoom: em satélite com o
+     copyright do tamanho dos reais (e com o painel aberto, junto do zoom), no Mapa, na queda sem satélite (o aviso) e na Operação, que nasce
+     pelo mesmo hook. A Validação fica de fora: já reprova na base (rótulos e "Area Total" cortados) → pendência MAPA-VALIDACAO-CORTES */
+  { nome: 'mapa-geo-fundo-mapa', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Mapa') },
+  { nome: 'mapa-geo-sem-satelite', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-geo-sem-satelite-painel', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
+  { nome: 'mapa-geo-operacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
+  /* MAPA-CONTROLES-01 — abrir o pasto e FECHAR o painel: o zoom e os créditos voltam à borda direita (o espaço do painel não fica
+     reservado); com os Filtros ocultos, o mesmo. O canto se mede sozinho em toda tela do Gestor (`medirCantoDoMapa`) */
+  { nome: 'mapa-geo-painel-fechado', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaPasto('P_01')(p); await p.locator('[data-testid="mapa-painel"] button[aria-label="Fechar"]').first().click(); await p.waitForTimeout(400); } },
+  { nome: 'mapa-geo-sem-filtros', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('[data-testid="mapa-filtros"] button', { hasText: 'Ocultar' }).first().click(); await p.waitForTimeout(400); } },
+  /* MAPA-GLOBAL-01 — Geo Pastos em Global (dados sintéticos `dados/mapaGlobal.ts`): 2 fazendas; 5 com o nome mais longo, uma sem fechamento
+     no mês e uma sem mapa; a visão Pastos com o filtro "Carga alta"; as abas Área por situação e Atividade do gráfico */
+  { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-global-5', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS },
+  { nome: 'mapa-global-pastos', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('[data-testid="global-barra"] button', { hasText: 'Pastos' }).first().click(); await p.waitForTimeout(300);
+    await p.locator('[data-testid="global-chips"] button', { hasText: 'Carga alta' }).first().click(); await p.waitForTimeout(400); } },
+  { nome: 'mapa-global-grafico-area', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="global-grafico"] button', { hasText: 'Área por situação' }).first().click(); await p.waitForTimeout(300); } },
+  { nome: 'mapa-global-grafico-atividade', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="global-grafico"] button', { hasText: 'Atividade' }).first().click(); await p.waitForTimeout(300); } },
   { nome: 'recorrencias', url: 'tela=recorrencias', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'rolagem', 'tabela'] },
   /* P172 — Cadastros › Plano de Contas nos dez tamanhos do P92: o admin (com as ações), os inativos ligados, o cliente (só leitura), a
@@ -216,11 +240,13 @@ const CENARIOS = [
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92 },
   /* PROD-EVOLUCAO-01a — Produção › Evolução no Ano (nível 1), pior caso de largura (`mocks/evolucao.ts`): NENHUM número cortado a 1126 e a 1366,
      nas três unidades, uma fazenda e sem meta (Gabriel 30/10 17:16) */
-  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]] },
-  { nome: 'evolucao-ano-arroba', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/) },
+  /* PROD-EVOLUCAO-01b-fix1 (Gabriel 31/10): o período é Mês | Ano (o Acum. saiu; abre no Ano) e os rótulos curtos cabem INTEIROS (`data-inteiro`) */
+  { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-arroba', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'evolucao-ano-t', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
-  { nome: 'evolucao-ano-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Ano$/) },
-  { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]] },
+  { nome: 'evolucao-ano-mes', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Mês/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-fazenda-arroba', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^@$/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
   /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (o mês por categoria), pior caso (`mocks/evolucaoMes.ts`): os 8 tipos, 3 tipos, mês
      sem Fechamento, sem linha e a aba Composição; NENHUM número cortado a 1126 e a 1366 (Gabriel 30/10 17:16) */
@@ -228,7 +254,8 @@ const CENARIOS = [
   { nome: 'evolucao-mes-3-tipos', url: 'tela=evolucao-mes&barra=32&tipos=3', tamanhos: [[1126, 579], [1366, 768]] },
   { nome: 'evolucao-mes-aberto', url: 'tela=evolucao-mes&barra=32&aberto=1', tamanhos: [[1126, 579], [1366, 768]] },
   { nome: 'evolucao-mes-vazio', url: 'tela=evolucao-mes&barra=32&vazio=1', tamanhos: [[1126, 579], [1366, 768]] },
-  { nome: 'evolucao-mes-composicao', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Composição$/) },
+  /* fix1 (item 4): o painel abre em Composição; "Conferir pesos" (2ª aba) com dd/mm e nomes curtos que cabem INTEIROS */
+  { nome: 'evolucao-mes-pesos', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Conferir pesos/), inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
   { nome: 'plano-contas-inativos', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: clicar('[data-testid="mostrar-inativos"]') },
   { nome: 'plano-contas-cliente', url: 'tela=plano-contas&perfil=cliente', tamanhos: TAMANHOS_DO_P92 },
   { nome: 'plano-contas-busca-4', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: async (p) => { await p.locator('[data-testid="busca-plano"]').fill('Outras Saídas'); await p.waitForTimeout(500); } },
@@ -269,6 +296,11 @@ const CENARIOS = [
       modal('terra-dados', 'Terra nua', 'Dados'), modal('terra-mercado', 'Terra nua', 'Valor de mercado'),
       modal('longo-dados', 'Pivô central', 'Dados'),
       modal('novo-dados', null, 'Dados'), modal('novo-lancamentos', null, 'Lançamentos'),
+      /* B2: o veículo (Placa e Renavam à vista), a máquina só com a identificação ANTIGA (só leitura) e o cabeçalho com o mouse em cima
+         (o hover clareia o navy; antes trocava o fundo por branco e o rótulo sumia) */
+      modal('veiculo-dados', 'Caminhonete Hilux', 'Dados'), modal('antiga-dados', 'Grade aradora', 'Dados'),
+      { nome: 'patrimonio-hover-cabecalho', url: URL, tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="patrimonio-tabela"] th', { hasText: /^Código/ }).first().hover(); await p.waitForTimeout(300); } },
     ];
   })(),
   /* P106 — a tela abre em "Mês atual": o período futuro é o botão "Mês futuro" */
@@ -951,6 +983,38 @@ function medirRolagem({ dentro, exceto }) {
   }
   return achados;
 }
+/* MAPA-CONTROLES-01 (Gabriel 31/10) — o CANTO DO MAPA do Gestor, medido sozinho em toda tela que tem o mapa do Gestor: com o painel do
+   pasto aberto, o zoom e os créditos do Google ficam à esquerda dele; fechado, encostados na borda direita (os créditos no rodapé quando
+   cabem ao lado da legenda, senão logo acima dela; o + / − acima deles e acima da faixa da legenda). Os créditos nunca por baixo de painel, legenda, Filtros ou KPIs (exigência do Google). */
+function medirCantoDoMapa() {
+  const mapa = document.querySelector('[data-testid="mapa-gestor-mapa"]'); if (!mapa) return [];
+  const caixa = (sel) => { const e = document.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(); return r.width < 2 || r.height < 2 ? null : r; };
+  const m = mapa.getBoundingClientRect(), z = caixa('.leaflet-control-zoom'), c = caixa('[data-testid="mapa-creditos"]');
+  const painel = caixa('[data-testid="mapa-painel"]'), legenda = caixa('[data-testid="mapa-legenda"]');
+  const achados = [], px = (n) => `${Math.round(n)}px`;
+  if (!z) return [{ regra: 'canto-do-mapa', texto: 'zoom nao achado' }];
+  if (!c) return [{ regra: 'canto-do-mapa', texto: 'creditos nao achados' }];
+  if (painel) {
+    if (z.right > painel.left - 2) achados.push({ regra: 'canto-do-mapa', texto: `painel aberto: o zoom invade o painel (${px(z.right - painel.left)})` });
+    if (c.right > painel.left - 2) achados.push({ regra: 'canto-do-mapa', texto: `painel aberto: os creditos invadem o painel (${px(c.right - painel.left)})` });
+  } else {
+    if (m.right - z.right > 14) achados.push({ regra: 'canto-do-mapa', texto: `painel fechado: o zoom fica a ${px(m.right - z.right)} da borda direita` });
+    if (m.right - c.right > 14) achados.push({ regra: 'canto-do-mapa', texto: `painel fechado: os creditos ficam a ${px(m.right - c.right)} da borda direita` });
+    /* no rodapé quando cabem ao lado da legenda inteira (no pior caso: créditos de 360 → reserva 390); senão logo acima da faixa dela */
+    const cabem = !legenda || m.width >= document.querySelector('[data-testid="mapa-legenda"]').scrollWidth + 390;
+    if (cabem && m.bottom - c.bottom > 14) achados.push({ regra: 'canto-do-mapa', texto: `painel fechado: os creditos cabem no rodape e ficam a ${px(m.bottom - c.bottom)} dele` });
+    if (!cabem && (c.bottom > legenda.top + 0.5 || legenda.top - c.bottom > 24)) achados.push({ regra: 'canto-do-mapa', texto: 'painel fechado: sem lugar no rodape, os creditos nao ficam logo acima da legenda' });
+  }
+  if (z.bottom > c.top + 0.5) achados.push({ regra: 'canto-do-mapa', texto: 'o zoom nao fica acima dos creditos' });
+  if (legenda && z.bottom > legenda.top + 0.5) achados.push({ regra: 'canto-do-mapa', texto: 'o zoom desce ate a faixa da legenda' });
+  const cruza = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+  for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['KPIs', '[data-testid="mapa-kpis"]']]) {
+    const b = caixa(sel); if (!b) continue;
+    if (cruza(c, b)) achados.push({ regra: 'canto-do-mapa', texto: `os creditos ficam por baixo de ${nome}` });
+    if (cruza(z, b)) achados.push({ regra: 'canto-do-mapa', texto: `o zoom fica por baixo de ${nome}` });
+  }
+  return achados;
+}
 /* FIN-CONSORCIO-04 — a tabela que rola por dentro mostra, sem rolar, o cabeçalho, N linhas e o Total inteiros (roda NA PAGINA) */
 /* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — `botoesDentro` (opcional, por cenario): todo botao da faixa cabe INTEIRO nela (nao sai pela borda
    nem corta o proprio texto). O "+ Buscar recebimento" saia da faixa por cima do resumo lateral, sem ser irmao dele: a sobreposicao nao via. */
@@ -1441,6 +1505,7 @@ try {
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
     if (cen.titulosDeBloco) daRolagem.push(...(await p.evaluate(medirTitulosDeBloco)));
+    daRolagem.push(...(await p.evaluate(medirCantoDoMapa))); // MAPA-CONTROLES-01: só age onde há o mapa do Gestor
     if (cen.semRolarNoLugar) daRolagem.push(...(await p.evaluate(medirSemRolarNoLugar, cen.semRolarNoLugar)));
     if (cen.inteiroDe && w >= cen.inteiroDe.de) daRolagem.push(...(await p.evaluate(medirInteiro, cen.inteiroDe.sel)));
     /* P159e — o ALINHAMENTO SOBERANO vale em toda tela que marca os números (`data-alinha-coluna`) */

@@ -48,6 +48,7 @@ describe('a tela do mês', () => {
     const cabAbate = Array.from(linha('bois').querySelectorAll('td')).find((td) => td.textContent === '10' && td.className.includes('cursor-pointer'))!;
     fireEvent.click(cabAbate);
     expect(onAbrirLancamentos).toHaveBeenCalledWith({ ano: 2026, mes: 9, tipo: 'abate', categoria: 'bois', cenario: 'realizado' });
+    fireEvent.click(screen.getByRole('button', { name: /Conferir pesos/ }));
     fireEvent.click(screen.getByLabelText('Abrir o lançamento'));
     expect(onEditarLancamento).toHaveBeenCalledWith('L1');
   });
@@ -55,6 +56,41 @@ describe('a tela do mês', () => {
     render(<EvolucaoMesTab anoInicial={2026} mesInicial={9} />);
     expect(linha('bois').querySelector('td')!.className).toContain('sticky left-0');
     expect(linha('total').querySelector('td')!.className).toContain('bg-[#d5dfec]');
+  });
+});
+
+describe('PROD-EVOLUCAO-01b-fix1 (Gabriel 31/10) — a Evolução por Categoria', () => {
+  it('item 1: o kg/cab é secundário (fonte bem menor e mais clara) na tabela e nos cards', () => {
+    render(<EvolucaoMesTab anoInicial={2026} mesInicial={9} />);
+    const kg = Array.from(linha('bois').querySelectorAll('td')).find((td) => td.textContent === '520,0')!;
+    expect(kg.className).toContain('text-[8.5px]');
+    expect(screen.getAllByText(/kg\/cab$/).some((e) => e.className.includes('text-[8.5px]'))).toBe(true);
+  });
+  it('item 2: célula sem movimento em branco (nada de "0" nem "—"); o Confere continua', () => {
+    render(<EvolucaoMesTab anoInicial={2026} mesInicial={9} />);
+    const tds = Array.from(linha('vacas').querySelectorAll('td')).slice(1);
+    expect(tds.every((td) => td.textContent === '')).toBe(true);
+    expect(Array.from(linha('bois').querySelectorAll('td')).some((td) => td.textContent === '0' || td.textContent === '—')).toBe(false);
+    expect(screen.getByTestId('evolucao-mes-confere').textContent).toContain('Confere: 100');
+  });
+  it('item 3: zebra leve entre as categorias; os subtotais com o fundo próprio', () => {
+    render(<EvolucaoMesTab anoInicial={2026} mesInicial={9} />);
+    expect(linha('bois').className).not.toBe(linha('vacas').className.replace('bg-card', 'x'));
+    expect([linha('bois').className, linha('vacas').className].some((c) => c.includes('bg-[#f7f8fa]'))).toBe(true);
+    expect(linha('total').className).toContain('bg-[#d5dfec]');
+  });
+  it('item 4: o painel abre em Composição; Conferir pesos com dd/mm e nomes curtos (o inteiro no title)', () => {
+    render(<EvolucaoMesTab anoInicial={2026} mesInicial={9} />);
+    expect(screen.getByTestId('evolucao-mes-composicao')).toBeInTheDocument();
+    const abas = screen.getAllByRole('button').filter((b) => /Composição|Conferir pesos/.test(b.textContent ?? ''));
+    expect(abas[0].textContent).toContain('Composição');
+    fireEvent.click(screen.getByRole('button', { name: /Conferir pesos/ }));
+    const tr = document.querySelector('tr[data-peso="L1"]')!;
+    expect(tr.querySelector('td')!.textContent).toBe('18/09');
+    const curtos = tr.querySelectorAll('[data-inteiro]');
+    expect(curtos[0].textContent).toBe('Abate');
+    expect(curtos[1].textContent).toBe('Bois');
+    expect(curtos[1].getAttribute('title')).toBe('Bois');
   });
 });
 

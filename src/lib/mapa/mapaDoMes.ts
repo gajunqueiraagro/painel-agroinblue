@@ -41,6 +41,8 @@ export interface CategoriaDoPasto {
 export interface MesDoHistorico {
   anoMes: string;
   kgHa: number | null;
+  /** O peso total (kg) do fechamento do mês (null = sem fechamento): para somar a série de uma fazenda (MAPA-GLOBAL-01). */
+  pesoTotalKg: number | null;
   faixa: FaixaLotacao | null;
 }
 
@@ -129,9 +131,9 @@ export function montarMapaDoMes(entrada: {
     const doMes = lista.find(f => f.ano_mes === anoMes) ?? null;
     const historico: MesDoHistorico[] = dozeMesesAte(anoMes).map(m => {
       const f = lista.find(x => x.ano_mes === m);
-      if (!f || !janela.has(m)) return { anoMes: m, kgHa: null, faixa: null };
-      const { kgHa } = somar(f);
-      return { anoMes: m, kgHa, faixa: faixaDaLotacao(kgHa) };
+      if (!f || !janela.has(m)) return { anoMes: m, kgHa: null, pesoTotalKg: null, faixa: null };
+      const { kgHa, pesoTotal } = somar(f);
+      return { anoMes: m, kgHa, pesoTotalKg: pesoTotal, faixa: faixaDaLotacao(kgHa) };
     });
 
     if (!doMes) {
@@ -200,4 +202,68 @@ export function fechamentoDoMesAberto(dados: ReadonlyMap<string, DadosDoPastoNoM
     if (d?.temFechamento && d.fechado === false) return true;
   }
   return false;
+}
+
+/**
+ * MAPA-GLOBAL-01 (D2) — os números de um conjunto de pastos no mês, pela regra ÚNICA do Gestor (antes no `MapaGestorView`): a área soma
+ * todo pasto vigente do conjunto (com ou sem fechamento); cabeças e peso somam só os que têm fechamento; peso médio = peso total ÷
+ * cabeças; lotação = peso total ÷ área total (nunca média das médias). Sem nenhum fechamento: "—" (null). O Gestor passa os pastos COM
+ * polígono da fazenda; o Global, os de cada fazenda e, para o total do cliente, todos.
+ */
+export interface ResumoDosPastos {
+  cabecas: number | null;
+  pesoTotalKg: number | null;
+  pesoMedio: number | null;
+  lotacao: number | null;
+  area: number | null;
+}
+export function resumoDosPastos(
+  pastoIds: Iterable<string>,
+  dados: ReadonlyMap<string, DadosDoPastoNoMes>,
+  areaDe: (pastoId: string) => number | null | undefined,
+): ResumoDosPastos {
+  let cab = 0; let pesoTotal = 0; let area = 0; let algum = false;
+  for (const id of pastoIds) {
+    const d = dados.get(id);
+    if (!d) continue;
+    area += areaDe(id) ?? 0;
+    if (!d.temFechamento) continue;
+    algum = true;
+    cab += d.cabecas ?? 0;
+    pesoTotal += d.pesoTotalKg ?? 0;
+  }
+  return {
+    cabecas: algum ? cab : null,
+    pesoTotalKg: algum ? pesoTotal : null,
+    pesoMedio: algum && cab > 0 ? pesoTotal / cab : null,
+    lotacao: algum && area > 0 ? pesoTotal / area : null,
+    area: area > 0 ? area : null,
+  };
+}
+
+/** MAPA-PERF-01 — a linha lida de `fechamento_pastos` com os itens embutidos (`fechamento_pasto_itens(...)`). */
+export interface FechamentoComItens extends FechamentoLido {
+  fazenda_id?: string | null;
+  fechamento_pasto_itens?: ItemLido[] | null;
+}
+
+/**
+ * MAPA-PERF-01 — separa o que veio numa consulta só (fechamentos da janela com os itens embutidos) no formato da `montarMapaDoMes`:
+ * só as fazendas pedidas, só os meses da janela e cada fechamento UMA vez (o banco já filtra; aqui é a garantia de que nada de fora
+ * nem repetido entra na conta).
+ */
+export function separarFechamentosEItens(linhas: readonly FechamentoComItens[], fazendaIds: readonly string[], janela: readonly string[]):
+  { fechamentos: FechamentoLido[]; itens: ItemLido[] } {
+  const meses = new Set(janela);
+  const fazendas = new Set(fazendaIds);
+  const fechamentos: FechamentoLido[] = [];
+  const itens: ItemLido[] = [];
+  const vistos = new Set<string>();
+  for (const l of linhas) {
+    if ((l.fazenda_id != null && !fazendas.has(l.fazenda_id)) || !meses.has(l.ano_mes) || vistos.has(l.id)) continue;
+    vistos.add(l.id);
+    fechamentos.push({ id: l.id, pasto_id: l.pasto_id, ano_mes: l.ano_mes, tipo_uso_mes: l.tipo_uso_mes, status: l.status });
+    for (const i of l.fechamento_pasto_itens ?? []) itens.push({ ...i, fechamento_id: l.id });
+  }
+  return { fechamentos, itens };
 }
