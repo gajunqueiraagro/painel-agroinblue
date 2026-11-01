@@ -19,6 +19,7 @@ import { MESES_COLS } from '@/lib/calculos/labels';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
 import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
+import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
 
 export interface PastoMapData {
   pasto: any;
@@ -56,7 +57,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const { pastos, categorias } = usePastos();
   const {
     geometrias, loading: geoLoading, salvarGeometrias, removerGeometrias, loadGeometrias,
-    atualizarGeometria, excluirGeometrias, vincularPasto,
+    atualizarGeometria, excluirGeometrias,
   } = usePastoGeometrias();
 
   const hoje = new Date();
@@ -86,6 +87,8 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
+  /* MAPA-AREA-TIPO-01: o tipo pedido pelo Adicionar › Área, que a Validação usa no próximo polígono escolhido */
+  const [tipoPedido, setTipoPedido] = useState<TipoDeArea | null>(null);
 
   /* MAPA-GLOBAL-01: as fazendas do Global = as com pecuária (fora o ADM); a MESMA leitura do mês, para todas de uma vez */
   const fazendasDoGlobal = useMemo(() => fazendasComPecuaria.filter(f => f.id !== GLOBAL_FAZENDA.id), [fazendasComPecuaria]);
@@ -177,9 +180,12 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
     </>
   );
 
+  /* fix1 (5): a tela do mapa é um CONTEXTO DE EMPILHAMENTO PRÓPRIO (`isolate`): os z-index internos do Leaflet (400–1000) e dos vidros
+     (500+) só competem aqui dentro, e o submenu lateral (z-50), o cabeçalho, os modais e os avisos do app ficam sempre por cima.
+     Vale para o Global, o Gestor, a Operação e a Validação (todas nascem aqui). */
   if (isGlobal && global) {
     return (
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
+      <div className="isolate flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
         <GeoPastosGlobal
           fazendas={global.fazendas} total={global.total} pastos={global.pastos} geometriasPorFazenda={global.porFazenda}
           situacaoDoPasto={situacaoDe} resumoDoFiltro={resumoDoFiltro}
@@ -237,6 +243,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         erroDoMes={mapaDoMes.erro}
         geoLoading={geoLoading}
         onImportar={() => setUploadOpen(true)}
+        onClassificarArea={tipo => { setTipoPedido(tipo); setViewMode('validacao'); }}
         onRenderedChange={onRenderedChange}
         seletorDeMes={seletorDeMes}
         trocaDeVista={trocaDeVista}
@@ -268,8 +275,9 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
             geoLoading={geoLoading}
             onUpdate={atualizarGeometria}
             onDelete={excluirGeometrias}
-            onLink={vincularPasto}
             onRefresh={loadGeometrias}
+            tipoPedido={tipoPedido}
+            onTipoPedidoUsado={() => setTipoPedido(null)}
           />
         )}
       </div>
@@ -306,7 +314,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
      ('mapa-geo-pastos' em SECOES_APP_SHELL do V2Index; no Index antigo, o pai `flex-1 min-h-0 overflow-hidden`), nunca de altura
      fixa — o `calc(100dvh − topo − 64px)` de antes descontava a barra de baixo do celular também no desktop e sobrava uma faixa. */
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
+    <div className="isolate flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
       {content}
       {dialogo}
     </div>

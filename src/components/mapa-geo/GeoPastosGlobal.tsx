@@ -9,7 +9,7 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { Button } from '@/components/ui/button';
-import { TD_REGUA, TD_REGUA_NUM, TH_REGUA } from '@/components/ui/regua-tabela';
+import { TD_REGUA, TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA } from '@/components/ui/regua-tabela';
 import { formatNum } from '@/lib/calculos/formatters';
 import { COR_DA_FAIXA, COR_SEM_FECHAMENTO, LIMITE_CARGA_ALTA, LIMITE_SUBLOTADO, textoUaHa } from '@/lib/mapa/faixasLotacao';
 import { rotuloDaAtividade } from '@/lib/mapa/camadasDoMapa';
@@ -59,7 +59,8 @@ const COR_ATIVIDADE_OUTRA = '#7A8796';
 const CHIPS: FiltroDePastos[] = ['todos', 'carga_alta', 'sublotado', 'ideal', 'vazio', 'sem_fechamento'];
 const NOME_CHIP: Record<FiltroDePastos, string> = { todos: 'Todos', ...NOME_SITUACAO, sem_fechamento: 'Sem fech.' };
 const LARGURA_DIREITA = 272;
-const TH = cn(TH_REGUA, 'sticky top-0 z-[1] bg-primary hover:bg-primary-foreground/10');
+/* fix1 (1): sem hover de FUNDO — trocava o navy por branco a 10% e o rótulo sumia; o hover do cabeçalho que ordena é o do `ThOrdenavel` */
+const TH = cn(TH_REGUA, 'sticky top-0 z-[1] bg-primary');
 const TD_TXT = cn(TD_REGUA, 'whitespace-nowrap');
 const n0 = (v: number | null | undefined) => (v == null ? '—' : formatNum(v, 0));
 const n1 = (v: number | null | undefined) => (v == null ? '—' : formatNum(v, 1));
@@ -73,8 +74,13 @@ function largura(texto: string, px = 10, peso = 400): number {
   regua.font = `${peso} ${px}px ${getComputedStyle(document.body).fontFamily}`;
   return Math.ceil(regua.measureText(texto).width);
 }
+/* fix1 (2): o cabeçalho pede o rótulo + 8 de padding + 12 do lugar da seta de ordenação (10 + 2 de vão, reservado sempre) + 4 de folga
+   = +24; eram +14 e "Área ha", "Peso kg" e "Sem fech." passavam da coluna. A célula: o texto + 8 de padding. */
+const FOLGA_DO_CABECALHO = 24;
+/** o piso da coluna do nome da fazenda (o resto da largura vai para ela; abaixo disso, a tabela rola de lado) */
+const NOME_MINIMO = 120;
 const colunaPara = (textos: string[], cabecalho: string, extra = 0) =>
-  Math.max(largura(cabecalho, 9.5, 500) + 14, ...textos.map(t => largura(t) + 8)) + extra;
+  Math.max(largura(cabecalho, 9.5, 500) + FOLGA_DO_CABECALHO, ...textos.map(t => largura(t) + 8)) + extra;
 
 function Quadradinho({ cor }: { cor: string }) {
   return <i className="inline-block h-2 w-2 flex-none rounded-[2px]" style={{ background: cor }} />;
@@ -186,11 +192,11 @@ function Card({ titulo, extra, children, className, testid }: { titulo?: ReactNo
   );
 }
 
-function Kpi({ rotulo, valor, unidade, aviso, alerta, testid }: {
-  rotulo: string; valor: ReactNode; unidade?: string | null; aviso?: string | null; alerta?: boolean; testid?: string;
+function Kpi({ rotulo, valor, unidade, aviso, alerta, testid, title }: {
+  rotulo: string; valor: ReactNode; unidade?: string | null; aviso?: string | null; alerta?: boolean; testid?: string; title?: string;
 }) {
   return (
-    <div className={cn('min-w-0 flex-1 rounded-lg border bg-card px-2.5 py-1', alerta ? 'border-[#D0453A]' : 'border-border')} data-testid={testid}>
+    <div className={cn('min-w-0 flex-1 rounded-lg border bg-card px-2.5 py-1', alerta ? 'border-[#D0453A]' : 'border-border')} data-testid={testid} title={title}>
       <div className="flex items-center justify-between gap-1 text-[9.5px] leading-[12px] text-muted-foreground">
         <span className="whitespace-nowrap">{rotulo}</span>
         <span className={cn('whitespace-nowrap text-[#8A5A00]', !aviso && 'invisible')}>{aviso ?? '·'}</span>
@@ -239,6 +245,15 @@ export function GeoPastosGlobal({
   const refFaz = useRef<HTMLDivElement>(null);
   const refAt = useRef<HTMLDivElement>(null);
   const refPas = useRef<HTMLDivElement>(null);
+  /* fix1 (2): as larguras se medem de novo quando a fonte da casa termina de carregar (antes disso o canvas mede com a fonte reserva,
+     mais estreita, e a coluna nascia curta) */
+  const [fontesProntas, setFontesProntas] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    if (typeof document === 'undefined' || !document.fonts) { setFontesProntas(true); return; }
+    document.fonts.ready.then(() => { if (vivo) setFontesProntas(true); });
+    return () => { vivo = false; };
+  }, []);
   // a rolagem volta como estava quando as linhas já estão desenhadas
   const restaurou = useRef(false);
   useLayoutEffect(() => {
@@ -297,7 +312,7 @@ export function GeoPastosGlobal({
       pKgHa: colunaPara(pastos.map(p => n0(p.kgHa)), 'kg/ha', 12),
       sit: colunaPara(SITUACOES.map(s => NOME_SITUACAO[s]), 'Situação', 12),
     };
-  }, [fazendas, total, pastos]);
+  }, [fazendas, total, pastos, fontesProntas]);
 
   const thF = (c: ColunaFazenda, rotulo: string, direita = false) => (
     <ThOrdenavel coluna={c} rotulo={rotulo} ordem={e.ordemFazendas} alinhaDireita={direita} className={TH}
@@ -387,7 +402,10 @@ export function GeoPastosGlobal({
         <div className="flex flex-none gap-1.5" data-testid="global-kpis">
           <Kpi rotulo="Fazendas · pastos" valor={<>{fazendas.length}<span className="ml-1 text-[9.5px] font-normal text-muted-foreground">· {n0(total.pastos)} pastos</span></>} />
           <Kpi rotulo="Área de pastos" valor={n1(total.area)} unidade="ha" />
-          <Kpi rotulo="Cabeças" valor={n0(total.cabecas)} aviso={total.cabecasSemMapa > 0 ? `${n0(total.cabecasSemMapa)} sem mapa` : null} testid="global-kpi-cabecas" />
+          {/* fix1 (4, Gabriel 01/11): o rótulo diz o que o número é — cabeças fechadas em pastos SEM polígono (o "Alocadas" do Gestor mostra
+              só as do mapa); o title abre por fazenda */}
+          <Kpi rotulo="Cabeças" valor={n0(total.cabecas)} aviso={avisoSemMapa(total.cabecasSemMapa)} testid="global-kpi-cabecas"
+            title={total.cabecasSemMapa > 0 ? fazendas.filter(l => l.cabecasSemMapa > 0).map(l => `${l.fazenda.codigo} ${n0(l.cabecasSemMapa)} cab em pastos sem mapa`).join(' · ') : undefined} />
           <Kpi rotulo="Peso médio" valor={n0(total.pesoMedio)} unidade="kg" />
           <Kpi rotulo="Lotação média" valor={n0(total.kgHa)} unidade={total.kgHa == null ? null : `kg/ha · ${textoUaHa(total.uaHa) ?? ''}`} />
           <Kpi rotulo="Pedem atenção" alerta={pedemCount > 0} testid="global-kpi-atencao"
@@ -402,7 +420,9 @@ export function GeoPastosGlobal({
               <>
                 <Card titulo="Fazendas" className="max-h-[45%] flex-none" testid="global-card-fazendas">
                   <QuadroDaTabela refCorpo={refFaz} onScroll={rolar('fazendas')} testid="global-tabela-fazendas"
-                    larguraMinima={larg.cod + larg.nome + larg.pastos + larg.area + larg.cab + larg.peso + larg.kgHa + 64 + 58 + larg.semFech}
+                    /* fix1 (2): o NOME é a coluna que cede ("…" + o nome inteiro no title): na largura mínima entra só o piso dele, nunca o nome
+                       mais longo — com os cabeçalhos inteiros, a soma passava do card a 1126 e a tabela rolava de lado */
+                    larguraMinima={larg.cod + Math.min(larg.nome, NOME_MINIMO) + larg.pastos + larg.area + larg.cab + larg.peso + larg.kgHa + 64 + 58 + larg.semFech}
                     colgroup={(
                       <colgroup>
                         <col style={{ width: larg.cod }} /><col /><col style={{ width: larg.pastos }} />
@@ -424,7 +444,8 @@ export function GeoPastosGlobal({
                           <tr key={l.fazenda.id} className="cursor-pointer border-b border-border/60 hover:bg-muted/60" onClick={() => onAbrirFazenda(l.fazenda.id)}
                             data-testid="global-linha-fazenda">
                             <td className={cn(TD_TXT, 'font-semibold')}>{l.fazenda.codigo}</td>
-                            <td className={TD_TXT}>{l.fazenda.nome}{!l.temMapa && <span className="ml-1 text-[9.5px] text-muted-foreground">sem mapa</span>}</td>
+                            <td className={TD_REGUA_TEXTO} title={l.temMapa ? l.fazenda.nome : `${l.fazenda.nome} · sem mapa`}>
+                              {l.fazenda.nome}{!l.temMapa && <span className="ml-1 text-[9.5px] text-muted-foreground">sem mapa</span>}</td>
                             <td className={TD_REGUA_NUM}>{n0(l.pastos)}</td>
                             <td className={TD_REGUA_NUM}>{n1(l.area)}</td>
                             {celCabecas(l.cabecas, l.cabecasSemMapa)}
@@ -487,9 +508,10 @@ export function GeoPastosGlobal({
 
           {/* coluna direita (largura fixa): miniaturas + gráfico */}
           <div className="flex min-h-0 flex-col gap-1.5">
-            <Card titulo="Mapa das fazendas" className="flex-none" testid="global-miniaturas"
+            {/* fix1 (2c): as miniaturas cedem altura (rolam por dentro) para o gráfico nunca ficar abaixo do mínimo dele */}
+            <Card titulo="Mapa das fazendas" className="min-h-[96px] flex-initial" testid="global-miniaturas"
               extra={<span className="ml-auto whitespace-nowrap text-[9.5px] text-muted-foreground">clique para abrir</span>}>
-              <div className="grid max-h-[260px] grid-cols-2 gap-1.5 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable]">
+              <div className="grid max-h-[260px] min-h-0 grid-cols-2 gap-1.5 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable]">
                 {fazendas.map(l => (
                   <div key={l.fazenda.id} role="button" tabIndex={0} onClick={() => onAbrirFazenda(l.fazenda.id)}
                     onKeyDown={ev => { if (ev.key === 'Enter') onAbrirFazenda(l.fazenda.id); }}
@@ -514,7 +536,8 @@ export function GeoPastosGlobal({
                 ))}
               </div>
             </Card>
-            <Card className="flex-1" testid="global-grafico">
+            {/* o mínimo: abas 30 + subtítulo 16 + 3 barras (54) + a legenda de 2 linhas (34) + folgas */}
+            <Card className="min-h-[164px] flex-1" testid="global-grafico">
               <div className="flex-none px-2 pt-2">
                 <Segmentado valor={e.aba} onEscolher={v => atualizar({ aba: v })} altura={22}
                   opcoes={[{ valor: 'lotacao', rotulo: 'Lotação' }, { valor: 'area', rotulo: 'Área por situação' }, { valor: 'atividade', rotulo: 'Atividade' }]} />
@@ -536,8 +559,8 @@ function Grafico({ aba, fazendas, onAbrir }: { aba: AbaDoGrafico; fazendas: Linh
     const max = Math.max(LIMITE_CARGA_ALTA + 200, ...fazendas.map(l => l.kgHa ?? 0));
     const px = (v: number) => (v / max) * W;
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 py-2" data-testid="grafico-lotacao">
-        <div className="mb-1.5 text-[9.5px] text-muted-foreground">kg/ha no mês · faixa ideal {LIMITE_SUBLOTADO}–{LIMITE_CARGA_ALTA} sombreada</div>
+      <QuadroDoGrafico testid="grafico-lotacao" subtitulo={`kg/ha no mês · faixa ideal ${LIMITE_SUBLOTADO}–${LIMITE_CARGA_ALTA} sombreada`}
+        legenda={<Legenda itens={ORDEM_LEGENDA.slice(0, 3).map(s => ({ cor: COR_SITUACAO[s], rotulo: LEGENDA_SITUACAO[s] }))} />}>
         {fazendas.map(l => (
           <button key={l.fazenda.id} type="button" onClick={() => onAbrir(l.fazenda.id)} className="flex h-[18px] w-full items-center gap-1.5 hover:bg-muted/60">
             <b className="w-[34px] flex-none text-left text-[10px]">{l.fazenda.codigo}</b>
@@ -551,14 +574,13 @@ function Grafico({ aba, fazendas, onAbrir }: { aba: AbaDoGrafico; fazendas: Linh
         <div className="mt-0.5 flex text-[9.5px] tabular-nums text-muted-foreground" style={{ marginLeft: 40, width: W }}>
           <span className="flex-1">0</span><span className="flex-1 text-center">{LIMITE_SUBLOTADO}</span><span className="flex-1 text-center">{LIMITE_CARGA_ALTA}</span><span className="flex-1 text-right">{formatNum(max, 0)}</span>
         </div>
-        <Legenda itens={ORDEM_LEGENDA.slice(0, 3).map(s => ({ cor: COR_SITUACAO[s], rotulo: LEGENDA_SITUACAO[s] }))} />
-      </div>
+      </QuadroDoGrafico>
     );
   }
   if (aba === 'area') {
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 py-2" data-testid="grafico-area">
-        <div className="mb-1.5 text-[9.5px] text-muted-foreground">área de pastos por situação no mês</div>
+      <QuadroDoGrafico testid="grafico-area" subtitulo="área de pastos por situação no mês"
+        legenda={<Legenda itens={ORDEM_LEGENDA.map(s => ({ cor: COR_SITUACAO[s], rotulo: LEGENDA_SITUACAO[s] }))} />}>
         {fazendas.map(l => (
           <button key={l.fazenda.id} type="button" onClick={() => onAbrir(l.fazenda.id)} className="flex h-[18px] w-full items-center gap-1.5 hover:bg-muted/60">
             <b className="w-[34px] flex-none text-left text-[10px]">{l.fazenda.codigo}</b>
@@ -566,16 +588,15 @@ function Grafico({ aba, fazendas, onAbrir }: { aba: AbaDoGrafico; fazendas: Linh
             <span className="ml-auto text-right text-[10px] tabular-nums">{n1(l.area)}</span>
           </button>
         ))}
-        <Legenda itens={ORDEM_LEGENDA.map(s => ({ cor: COR_SITUACAO[s], rotulo: LEGENDA_SITUACAO[s] }))} />
-      </div>
+      </QuadroDoGrafico>
     );
   }
   const atividades = [...new Set(fazendas.flatMap(l => [...l.cabecasPorAtividade.keys()]))]
     .sort((a, b) => ['cria', 'recria', 'engorda'].indexOf(a) - ['cria', 'recria', 'engorda'].indexOf(b) || a.localeCompare(b));
   const cor = (a: string) => COR_ATIVIDADE[a] ?? COR_ATIVIDADE_OUTRA;
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 py-2" data-testid="grafico-atividade">
-      <div className="mb-1.5 text-[9.5px] text-muted-foreground">cabeças por atividade do fechamento no mês</div>
+    <QuadroDoGrafico testid="grafico-atividade" subtitulo="cabeças por atividade do fechamento no mês"
+      legenda={<Legenda itens={atividades.map(a => ({ cor: cor(a), rotulo: rotuloDaAtividade(a) }))} />}>
       {fazendas.map(l => {
         const tot = [...l.cabecasPorAtividade.values()].reduce((s, v) => s + v, 0);
         return (
@@ -591,14 +612,25 @@ function Grafico({ aba, fazendas, onAbrir }: { aba: AbaDoGrafico; fazendas: Linh
           </button>
         );
       })}
-      <Legenda itens={atividades.map(a => ({ cor: cor(a), rotulo: rotuloDaAtividade(a) }))} />
+    </QuadroDoGrafico>
+  );
+}
+
+/* fix1 (2c): o subtítulo fica preso logo abaixo das abas e a legenda presa no pé do card; SÓ as barras rolam. Antes os três rolavam
+   juntos e, com o card baixo (1126) ou muitas fazendas, a legenda ia para baixo da dobra e o subtítulo passava por trás das abas. */
+function QuadroDoGrafico({ testid, subtitulo, legenda, children }: { testid: string; subtitulo: string; legenda: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2 pt-1.5" data-testid={testid}>
+      <div className="mb-1 flex-none text-[9.5px] text-muted-foreground">{subtitulo}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto" data-testid={`${testid}-barras`}>{children}</div>
+      {legenda}
     </div>
   );
 }
 
 function Legenda({ itens }: { itens: { cor: string; rotulo: string }[] }) {
   return (
-    <div className="mt-auto flex flex-wrap gap-x-2.5 gap-y-1 pt-2 text-[9.5px]">
+    <div className="flex flex-none flex-wrap gap-x-2.5 gap-y-1 pt-1.5 text-[9.5px]">
       {itens.map(i => <span key={i.rotulo} className="inline-flex items-center gap-1 whitespace-nowrap"><Quadradinho cor={i.cor} />{i.rotulo}</span>)}
     </div>
   );

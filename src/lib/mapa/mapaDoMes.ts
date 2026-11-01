@@ -8,7 +8,7 @@
  * Antes eram três leituras: `usePastoOcupacao` (o último fechamento DE CADA PASTO, de qualquer mês) e as categorias do Gestor e da
  * Operação (cada uma o último fechamento do pasto).
  */
-import { faixaDaLotacao, statusDaFaixa, type FaixaLotacao, type StatusOcupacao } from '@/lib/mapa/faixasLotacao';
+import { faixaDaLotacao, statusDaFaixa, uaPorHa, type FaixaLotacao, type StatusOcupacao } from '@/lib/mapa/faixasLotacao';
 
 export interface PastoDoMapa {
   id: string;
@@ -30,12 +30,16 @@ export interface ItemLido {
   quantidade: number;
   peso_medio_kg: number | null;
   categoria_id: string;
+  /** MAPA-PAINEL-COMPACTO-01: o lote da linha do fechamento (texto livre do operador; null = sem lote). */
+  lote?: string | null;
 }
 
 export interface CategoriaDoPasto {
   nome: string;
   quantidade: number;
   peso_medio_kg: number | null;
+  /** MAPA-PAINEL-COMPACTO-01: o lote da linha (uma linha do painel por registro do fechamento). */
+  lote: string | null;
 }
 
 export interface MesDoHistorico {
@@ -44,6 +48,10 @@ export interface MesDoHistorico {
   /** O peso total (kg) do fechamento do mês (null = sem fechamento): para somar a série de uma fazenda (MAPA-GLOBAL-01). */
   pesoTotalKg: number | null;
   faixa: FaixaLotacao | null;
+  /** MAPA-PAINEL-COMPACTO-01: UA/ha do mês (calcUA/calcUAHa, pela `uaPorHa` da casa; null = sem fechamento ou sem área). */
+  uaHa: number | null;
+  /** MAPA-PAINEL-COMPACTO-01: o fechamento do mês marcou o pasto como VEDADO (`tipo_uso_mes = 'vedado'`). */
+  vedado: boolean;
 }
 
 export interface DadosDoPastoNoMes {
@@ -131,9 +139,10 @@ export function montarMapaDoMes(entrada: {
     const doMes = lista.find(f => f.ano_mes === anoMes) ?? null;
     const historico: MesDoHistorico[] = dozeMesesAte(anoMes).map(m => {
       const f = lista.find(x => x.ano_mes === m);
-      if (!f || !janela.has(m)) return { anoMes: m, kgHa: null, pesoTotalKg: null, faixa: null };
-      const { kgHa, pesoTotal } = somar(f);
-      return { anoMes: m, kgHa, pesoTotalKg: pesoTotal, faixa: faixaDaLotacao(kgHa) };
+      if (!f || !janela.has(m)) return { anoMes: m, kgHa: null, pesoTotalKg: null, faixa: null, uaHa: null, vedado: false };
+      const { kgHa, pesoTotal, cabecas } = somar(f);
+      return { anoMes: m, kgHa, pesoTotalKg: pesoTotal, faixa: faixaDaLotacao(kgHa),
+        uaHa: uaPorHa(cabecas, cabecas > 0 ? pesoTotal / cabecas : null, area), vedado: f.tipo_uso_mes === 'vedado' };
     });
 
     if (!doMes) {
@@ -156,7 +165,7 @@ export function montarMapaDoMes(entrada: {
       atividade: doMes.tipo_uso_mes,
       categorias: its
         .filter(i => (i.quantidade || 0) > 0)
-        .map(i => ({ nome: nomeDaCategoria(i.categoria_id), quantidade: i.quantidade, peso_medio_kg: i.peso_medio_kg }))
+        .map(i => ({ nome: nomeDaCategoria(i.categoria_id), quantidade: i.quantidade, peso_medio_kg: i.peso_medio_kg, lote: i.lote?.trim() || null }))
         .sort((a, b) => b.quantidade - a.quantidade),
       categoriaPrincipalId: its.reduce<ItemLido | null>((m, i) => ((i.quantidade || 0) > (m?.quantidade ?? 0) ? i : m), null)?.categoria_id ?? null,
       ultimoFechamento: null,

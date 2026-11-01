@@ -11,15 +11,23 @@
  * cabeçalho — sticky, fundo, tamanho — e este componente não impõe nenhum: ele recebe
  * `className` e acrescenta só o que é da ORDENAÇÃO (cursor e seleção de texto). Impor um fundo
  * aqui quebraria o cabeçalho fixo da colheita no primeiro uso.
- * ⚠ O HOVER TAMBÉM VEM DE FORA, e a razão é concreta: um `hover:bg-black/…` desaparece sobre
- * cabeçalho escuro, e um `hover:bg-white/…` some sobre o claro. Quem sabe a cor do fundo é a
- * tabela — a Central usa `hover:bg-primary-foreground/10` sobre o azul, e é o que a colheita
- * passa também.
+ * ⚠ O HOVER É DESTE COMPONENTE (MAPA-GLOBAL-01 fix1, Gabriel 31/10): `hover:brightness-110`, um FILTRO
+ * que clareia o fundo que a tabela escolheu, qualquer que seja. Antes o hover vinha de fora e o
+ * `hover:bg-primary-foreground/10` passado pelas tabelas SUBSTITUÍA o `bg-primary` opaco por branco
+ * a 10%: o cabeçalho ficava branco e o rótulo branco sumia ("Pedem atenção" do Geo Pastos Global; o
+ * Patrimônio e a colheita já tinham trocado, cada um no seu arquivo). Por isso toda classe
+ * `hover:bg-…` que chegue em `className` é DESCARTADA aqui (`semHoverDeFundo`): o defeito não volta
+ * por nenhuma tabela.
  */
 import type { ReactNode } from 'react';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DirecaoOrdem } from '@/hooks/useOrdenacaoTabela';
+
+/** Tira de `className` toda classe que troca o FUNDO no hover (`hover:bg-…`, com ou sem `!`): o hover é o filtro deste componente. */
+export function semHoverDeFundo(className: string | undefined): string {
+  return (className ?? '').split(/\s+/).filter(c => c && !/^hover:!?bg-/.test(c)).join(' ');
+}
 
 export function ThOrdenavel<C extends string>({
   coluna, rotulo, ordem, onOrdenar, className, alinhaDireita, extra,
@@ -40,7 +48,7 @@ export function ThOrdenavel<C extends string>({
   const ativa = ordem.coluna === coluna;
   return (
     <th
-      className={cn(className, 'cursor-pointer select-none',
+      className={cn(semHoverDeFundo(className), 'cursor-pointer select-none transition-[filter] hover:brightness-110',
         alinhaDireita ? 'text-right' : 'text-left')}
       onClick={() => onOrdenar(coluna)}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOrdenar(coluna); } }}
