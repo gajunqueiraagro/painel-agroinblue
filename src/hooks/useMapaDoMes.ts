@@ -55,7 +55,7 @@ export function useMapaDoMes(fazenda: string | readonly string[] | undefined, an
         const porMes = await Promise.all(janela.map(mes => fetchAllPaginated<FechamentoComItens>({
           query: () => supabase
             .from('fechamento_pastos')
-            .select('id, pasto_id, ano_mes, tipo_uso_mes, status, fazenda_id, fechamento_pasto_itens(id, fechamento_id, quantidade, peso_medio_kg, categoria_id)')
+            .select('id, pasto_id, ano_mes, tipo_uso_mes, status, fazenda_id, fechamento_pasto_itens(id, fechamento_id, quantidade, peso_medio_kg, categoria_id, lote)')
             .in('fazenda_id', fazendaIds)
             .eq('ano_mes', mes)
             .order('id', { ascending: true }),

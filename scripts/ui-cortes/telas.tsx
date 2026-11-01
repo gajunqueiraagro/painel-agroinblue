@@ -74,6 +74,7 @@ import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
 import { mapaGlobal } from './dados/mapaGlobal';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
+import { rotuloDoTipo } from '@/lib/mapa/tiposDeArea';
 import * as CONTAS_BANC from './dados/contas';
 import * as VG from './dados/visaoGeral';
 import { BarraSecao } from '@/v2/components/BarraSecao';
@@ -671,7 +672,10 @@ if (tela === 'mesclar') {
         .map(f => ({ ...f, fechamento_pasto_itens: MAPA.ITENS.filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       : [],
-    rpc: () => null,
+    // MAPA-AREA-TIPO-01: a prévia do escritor da classificação (sintética: de "Sem classificação" para o tipo pedido)
+    rpc: (fn: string, a: any) => fn === 'fn_mapa_geometria_classificar'
+      ? { ok: true, simulado: true, de: { rotulo: 'Sem classificação' }, para: { rotulo: a?.p_tipo === 'pasto' ? 'Pasto' : rotuloDoTipo(a?.p_tipo ?? '') } }
+      : null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
 } else if (tela === 'mapa-global') {
