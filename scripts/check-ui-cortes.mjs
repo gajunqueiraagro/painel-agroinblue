@@ -244,6 +244,29 @@ const CENARIOS = [
     antes: async (p) => {
       await p.locator('button', { hasText: 'Validação' }).first().click(); await p.waitForTimeout(600);
       await p.locator('button[title="Classificar (pasto ou área)"]').first().click(); await p.waitForTimeout(500); } },
+  /* MAPA-PIQUETES-02 — `&piquetes=1` (dois polígonos sem classificação, o 1º com o nome mais longo): o painel do polígono com "É piquete de…"
+     em espera, a espera no rodapé da lista com "Concluir piquetes de" e o diálogo com a prévia (área na casa dos milhares). Mede só as
+     regiões novas (o resto da Validação reprova na base: pendência MAPA-VALIDACAO-CORTES do Code 3). */
+  ...(() => {
+    const URL_PQ = 'tela=mapa-geo&piquetes=1';
+    const T = [[1126, 579], [1366, 768]];
+    const LONGO = 'P_04 Retiro do Córrego Comprido – Divisão A';
+    const validacao = async (p) => { await p.locator('button', { hasText: 'Validação' }).first().click(); await p.waitForTimeout(600); };
+    const marcar = (nome) => async (p) => {
+      await p.getByText(nome, { exact: true }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="marcar-piquete"] button').first().click(); await p.waitForTimeout(300);
+      // "P_01" também é rótulo do mapa e linha da lista: escolhe pela busca do seletor (Enter pega o 1º da busca)
+      await p.getByPlaceholder('escolha o pasto…').fill('P_01'); await p.waitForTimeout(200); await p.keyboard.press('Enter'); await p.waitForTimeout(300); };
+    const osDois = async (p) => { await validacao(p); await marcar(LONGO)(p); await marcar('P_04B')(p); };
+    return [
+      { nome: 'mapa-geo-validacao-piquete', url: URL_PQ, tamanhos: T, regiao: '[data-testid="validacao-painel-poligono"]',
+        antes: async (p) => { await validacao(p); await marcar(LONGO)(p); } },
+      { nome: 'mapa-geo-validacao-piquetes-espera', url: URL_PQ, tamanhos: T, regiao: '[data-testid="piquetes-em-espera"]', antes: osDois },
+      { nome: 'mapa-geo-validacao-piquetes-previa', url: URL_PQ, tamanhos: T, regiao: '[data-testid="concluir-piquetes"]',
+        antes: async (p) => { await osDois(p); await p.getByRole('button', { name: 'Concluir piquetes de P_01' }).first().click();
+          await p.locator('tr[data-linha="soma"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(300); } },
+    ];
+  })(),
   { nome: 'mapa-geo-adicionar-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-painel-poligono"]',
     antes: async (p) => {
       await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);

@@ -103,3 +103,21 @@ export const BENS = [
   { id: 'b1', codigo: 'INS-1001', descricao: 'Cochos cobertos 2024', situacao: 'em_uso', categoria: { codigo: 'instalacoes' } },
   { id: 'b2', codigo: 'AGU-1002', descricao: 'Rede de bebedouros', situacao: 'em_uso', categoria: { codigo: 'rede_agua' } },
 ];
+
+/* MAPA-PIQUETES-02 — só com `&piquetes=1`: dois polígonos SEM CLASSIFICAÇÃO (as divisões que viram piquetes), o 1º com o nome mais longo
+   (o pior caso do corte), e a prévia sintética da `fn_piquetes_concluir` com área na casa dos milhares (o pior caso da largura). */
+export const PIQUETES_SOLTOS = [
+  { id: 'gq1', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'outra', nome_original: 'P_04 Retiro do Córrego Comprido – Divisão A', cor: null,
+    geojson: ret(4, 1, PASSO / 2), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  { id: 'gq2', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'outra', nome_original: 'P_04B', cor: null,
+    geojson: ret(4.5, 1, PASSO / 2), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+];
+export function previaDosPiquetes(a: { p_pasto_pai?: string; p_geometrias?: string[]; p_mes?: string }) {
+  const pai = PASTOS.find((p) => p.id === a.p_pasto_pai) ?? PASTOS[0];
+  const piquetes = PIQUETES_SOLTOS.filter((g) => (a.p_geometrias ?? []).includes(g.id))
+    .map((g, i) => ({ geometria_id: g.id, nome: g.nome_original, area_ha: i === 0 ? 9876.54 : 1234.56 }));
+  const soma = piquetes.reduce((s, p) => s + p.area_ha, 0);
+  return { ok: true, simulado: true, mes: a.p_mes ?? '2026-11-01', pai: { id: pai.id, nome: pai.nome, area_oficial_ha: 9999.99, encerra_em: '2026-10-31' },
+    piquetes, soma_ha: soma, dif_ha: Math.round((soma - 9999.99) * 100) / 100, dif_pct: Math.round((soma - 9999.99) / 9999.99 * 1000) / 10,
+    grupo: { nome: pai.nome, area_ha: soma }, frase: '' };
+}

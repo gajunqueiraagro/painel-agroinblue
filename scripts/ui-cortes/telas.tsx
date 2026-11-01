@@ -673,9 +673,10 @@ if (tela === 'mesclar') {
   g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendasComPecuaria: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
   g.__bancoBancada = {
     // MAPA-EDITAR-POLIGONO-02: a edição lê o polígono na hora (`.eq('id', …).maybeSingle()`), com a versão
+    // MAPA-PIQUETES-02: `&piquetes=1` traz dois polígonos sem classificação (as divisões que viram piquetes)
     from: (t: string, e: any) => t === 'fazenda_geometrias'
-        ? (e.eq.id ? MAPA.GEOMETRIAS.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: q.get('laco') === '1' ? gravataDe(g.geojson) : g.geojson }))
-          : MAPA.GEOMETRIAS)
+        ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: q.get('laco') === '1' ? gravataDe(g.geojson) : g.geojson }))
+          : geos))(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS)
       : t === 'pastos' ? MAPA.PASTOS
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
       // MAPA-PERF-01: os itens vêm EMBUTIDOS no fechamento (o banco falso não faz o embed; a linha já o traz)
@@ -694,6 +695,7 @@ if (tela === 'mesclar') {
         ? { ok: true, simulado: !!a?.p_simular, rotulo: 'Cocho', forma: 'Point', pasto: a?.p_infra?.pasto_id ? { id: a.p_infra.pasto_id, nome: 'P_01' } : null, bem: null, avisos: [] }
       : fn === 'fn_infra_desativar' ? { ok: true, simulado: !!a?.p_simular }
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gabriel Junqueira', email: null, situacao: 'membro ativo' }]
+      : fn === 'fn_piquetes_concluir' ? MAPA.previaDosPiquetes(a ?? {})   // MAPA-PIQUETES-02: a prévia sintética
       : null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
