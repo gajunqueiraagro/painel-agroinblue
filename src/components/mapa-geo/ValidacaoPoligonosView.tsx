@@ -26,6 +26,11 @@ import { ehTipoDeArea, rotuloDoTipo, type TipoDeArea } from '@/lib/mapa/tiposDeA
 import { useEdicaoDoPoligono, type ModoDaEdicao } from '@/hooks/useEdicaoDoPoligono';
 import { BarraDeEdicaoDoPoligono, DesfazerUltimaEdicao } from '@/components/mapa-geo/BarraDeEdicaoDoPoligono';
 import { useFazenda } from '@/contexts/FazendaContext';
+/* MAPA-PIQUETES-02 — os piquetes são um módulo próprio (espera + prévia + gravar); aqui só o encaixe */
+import { ConcluirPiquetesDialog, MarcarPiquete, PiquetesEmEspera } from '@/components/mapa-geo/PiquetesDoPoligono';
+import { usePiquetesEmEspera } from '@/hooks/usePiquetes';
+import { pastosMudaramPorFora } from '@/hooks/usePastos';
+import type { PiqueteEmEspera } from '@/lib/mapa/piquetesEmEspera';
 
 const CHAVE_LISTA_RECOLHIDA = 'mapa-validacao-lista-recolhida';
 
@@ -106,6 +111,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     return () => clearTimeout(t);
   }, [listaRecolhida, reenquadrar]);
   const [motivoDoLote, setMotivoDoLote] = useState('');
+  /* MAPA-PIQUETES-02 — a espera (nada grava) e o diálogo do "Concluir piquetes de <pasto>" */
+  const piquetes = usePiquetesEmEspera();
+  const [concluindo, setConcluindo] = useState<{ paiId: string; lista: PiqueteEmEspera[] } | null>(null);
   const [recusasDoLote, setRecusasDoLote] = useState<string | null>(null);
 
   // Filter & search
@@ -453,6 +461,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
               })
             )}
           </div>
+          {/* MAPA-PIQUETES-02 — os piquetes em espera, por pasto-pai, com o "Concluir piquetes de <pasto>" */}
+          <PiquetesEmEspera espera={piquetes.espera} pastos={pastos} onTirar={piquetes.tirar}
+            onConcluir={(paiId, lista) => setConcluindo({ paiId, lista })} />
         </Card>
         )}
 
@@ -523,17 +534,32 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     onGravou={() => { setClassificandoId(null); onTipoPedidoUsado?.(); onRefresh(); }}
                     onFechar={() => { setClassificandoId(null); onTipoPedidoUsado?.(); }} />
                 ) : (
-                  <div className="mt-1.5 flex gap-1" data-testid="validacao-gestos">
-                    <Button variant="outline" size="sm" className="h-6 px-2 text-[10.5px]" onClick={() => setClassificandoId(geo.id)}>
-                      <Link2 className="h-3 w-3 mr-1" />Classificar
-                    </Button>
-                  </div>
+                  <>
+                    <div className="mt-1.5 flex gap-1" data-testid="validacao-gestos">
+                      <Button variant="outline" size="sm" className="h-6 px-2 text-[10.5px]" onClick={() => setClassificandoId(geo.id)}>
+                        <Link2 className="h-3 w-3 mr-1" />Classificar
+                      </Button>
+                    </div>
+                    {/* MAPA-PIQUETES-02 — "É piquete de…": o polígono fica EM ESPERA; o "Concluir" mora no rodapé da lista */}
+                    <MarcarPiquete poligono={geo} pastos={pastos} espera={piquetes.espera} onMarcar={piquetes.marcar} onTirar={piquetes.tirar} />
+                  </>
                 )}
               </div>
             );
           })()}
         </Card>
       </div>
+
+      {concluindo && (
+        <ConcluirPiquetesDialog aberto paiId={concluindo.paiId} piquetes={concluindo.lista}
+          nomeDoPai={pastos.find(p => p.id === concluindo.paiId)?.nome ?? 'o pasto'}
+          onFechar={() => setConcluindo(null)}
+          onGravado={(paiId) => {
+            piquetes.concluido(paiId);
+            onRefresh();
+            if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id);
+          }} />
+      )}
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
