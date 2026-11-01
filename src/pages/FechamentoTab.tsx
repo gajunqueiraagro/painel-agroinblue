@@ -28,6 +28,10 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
 import { safrasQueCobremOMes, labelDaCultura } from '@/lib/agri/areaPlantada';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
+import { useGruposDePastejo } from '@/components/pastos/GruposDePastejo';
+import type { ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
+import { API_LOTE_NO_GRUPO, alocacaoDoCard, propostosComoVedado, quemRecebe, resumoDoGrupo, type AlocacaoDoMes, type LotacaoDoPasto, type PastoDoLote } from '@/lib/fechamento/loteNoGrupo';
+import { areaNoMesOuHoje, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
 import { useReclassificacaoState, ReclassificacaoFormFields } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { MapaRebanhoImportDialog, type MapaItem } from '@/components/MapaRebanhoImportDialog';
@@ -339,6 +343,81 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     [fechamentos]
   );
 
+  /* ── FECH-ROTACAO-01 fatia 3 — o grupo de pastejo no Fechamento ──────────────────────────────────────────────────────────
+     Os grupos ativos da fazenda, a lotação do mês pela `fn_lotacao_do_mes` (rateio por área; sem alocação = a conta de hoje) e
+     onde cada lote esteve (`fechamento_alocacoes`). Relidos quando os cards do mês mudam (o modal fecha → loadFechamentos). */
+  const fazendaDoMes = fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
+  const { grupos: gruposDePastejo } = useGruposDePastejo(fazendaDoMes);
+  /* a área de cada pasto NO MÊS (PASTO-AREA-OFICIAL-02a): enquanto não lê, a de hoje (`areaNoMesOuHoje`) */
+  const fazendasDaArea = useMemo(() => (fazendaDoMes ? [fazendaDoMes] : []), [fazendaDoMes]);
+  const { areaDe } = useAreaDosPastosNoMes(fazendasDaArea, anoMes, anoMes);
+  const paraLote = useCallback((p: Pasto): PastoDoLote => ({ id: p.id, nome: p.nome, grupo_id: p.grupo_id ?? null, area: areaNoMesOuHoje(p, anoMes, areaDe) }), [anoMes, areaDe]);
+  const [lotacaoDoMes, setLotacaoDoMes] = useState<Map<string, LotacaoDoPasto>>(new Map());
+  const [alocacoesDoMes, setAlocacoesDoMes] = useState<AlocacaoDoMes[]>([]);
+  useEffect(() => {
+    if (!fazendaDoMes) { setLotacaoDoMes(new Map()); setAlocacoesDoMes([]); return; }
+    let vivo = true;
+    void Promise.all([API_LOTE_NO_GRUPO.lotacaoDoMes(fazendaDoMes, anoMes), API_LOTE_NO_GRUPO.alocacoesDoMes(fazendaDoMes, anoMes)]).then(([l, a]) => {
+      if (!vivo) return;
+      setLotacaoDoMes(l.ok ? l.dados : new Map());
+      setAlocacoesDoMes(a.ok ? a.dados : []);
+    });
+    return () => { vivo = false; };
+  }, [fazendaDoMes, anoMes, fechamentos]);
+  /** os membros VIGENTES no mês de cada grupo ativo com 2 ou mais pastos (um grupo de 1 no mês não vira moldura) */
+  const membrosPorGrupo = useMemo(() => {
+    const ativos = new Map(gruposDePastejo.filter(g => g.ativo).map(g => [g.id, g.nome]));
+    const mapa = new Map<string, { nome: string; membros: Pasto[] }>();
+    for (const p of pastosAtivos) {
+      const nome = p.grupo_id ? ativos.get(p.grupo_id) : undefined;
+      if (!p.grupo_id || !nome) continue;
+      const atual = mapa.get(p.grupo_id) ?? { nome, membros: [] };
+      atual.membros.push(p);
+      mapa.set(p.grupo_id, atual);
+    }
+    for (const [id, g] of mapa) if (g.membros.length < 2) mapa.delete(id);
+    return mapa;
+  }, [gruposDePastejo, pastosAtivos]);
+  /** quem não recebe lote no mês: card vedado ou fechado */
+  const impedidosDoMes = useMemo(() => {
+    const mapa = new Map<string, 'vedado' | 'fechado'>();
+    for (const f of fechamentos) {
+      if (f.tipo_uso_mes === 'vedado') mapa.set(f.pasto_id, 'vedado');
+      else if (f.status === 'fechado') mapa.set(f.pasto_id, 'fechado');
+    }
+    return mapa;
+  }, [fechamentos]);
+  /** pasto que RECEBE o lote de outro card no mês → os pastos de origem */
+  const recebeDe = useMemo(() => quemRecebe(alocacoesDoMes, fechamentos), [alocacoesDoMes, fechamentos]);
+  /** a grade em segmentos: pasto solto, ou o grupo inteiro numa moldura (no lugar do 1º membro) */
+  const segmentosDaGrade = useMemo(() => {
+    const feitos = new Set<string>();
+    const segs: ({ tipo: 'pasto'; pasto: Pasto } | { tipo: 'grupo'; id: string; nome: string; membros: Pasto[] })[] = [];
+    for (const p of pastosAtivos) {
+      const g = p.grupo_id ? membrosPorGrupo.get(p.grupo_id) : undefined;
+      if (!g || !p.grupo_id) { segs.push({ tipo: 'pasto', pasto: p }); continue; }
+      if (feitos.has(p.grupo_id)) continue;
+      feitos.add(p.grupo_id);
+      segs.push({ tipo: 'grupo', id: p.grupo_id, nome: g.nome, membros: g.membros });
+    }
+    return segs;
+  }, [pastosAtivos, membrosPorGrupo]);
+  /** o contexto do lote para o modal do pasto (F3-1: por card) */
+  const contextoDoLote = useCallback((p: Pasto, fechamentoId: string): ContextoDoLote => {
+    const g = p.grupo_id ? membrosPorGrupo.get(p.grupo_id) : undefined;
+    const membros = g?.membros ?? [];
+    const idsDoGrupo = new Set(membros.map(m => m.id));
+    const impedidos = new Map([...impedidosDoMes].filter(([id]) => id !== p.id));
+    return {
+      proprio: paraLote(p),
+      nomeDoGrupo: g?.nome ?? null,
+      membros: membros.map(paraLote),
+      outrosPastos: pastosAtivos.filter(x => x.id !== p.id && !idsDoGrupo.has(x.id) && !isPastoDivergencia(x.tipo_uso)).map(paraLote),
+      impedidos,
+      gravada: alocacaoDoCard(alocacoesDoMes, fechamentoId),
+    };
+  }, [membrosPorGrupo, impedidosDoMes, pastosAtivos, alocacoesDoMes, paraLote]);
+
   const getResumo = useCallback((fech: FechamentoPasto | null, pasto: Pasto): PastoResumo => {
     if (!fech) return { totalCabecas: 0, pesoMedio: null, uaHa: null, uaTotal: 0, catBreakdown: [], lotacaoKgHa: null };
     const items = itensMap.get(fech.id) || [];
@@ -617,7 +696,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         return;
       }
       const comItens = new Set((itens || []).map(i => i.fechamento_id));
-      const vazios = candidatos.filter(id => !comItens.has(id));
+      /* FECH-ROTACAO-01 fatia 3 (F3-4b): quem RECEBE o lote de outro card no mês não está vazio — não é proposto como vedado */
+      const vazios = propostosComoVedado(candidatos, comItens, fechamentos, recebeDe);
       if (vazios.length === 0) {
         setConfirmBulkOpen(true);
         return;
@@ -982,6 +1062,182 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   // só o gate impedia de chegar aqui. Fazenda sem boi abre com as colunas zootécnicas
   // zeradas, que é o estado honesto: o talhão existe, o mês existe, e não há rebanho.
   // useRedirecionarPecuaria segue em uso nas outras 7 telas, onde o gate é correto.
+  /* FECH-ROTACAO-01 fatia 3 — o card do pasto (o mesmo de antes, só saiu do map para servir à grade solta e à moldura do grupo) */
+  const renderCardDoPasto = (p: Pasto) => {
+    const fech = getFechamento(p.id);
+    const pastoStatus = getPastoStatus(p);
+    const resumo = getResumo(fech, p);
+    const tipoUsoEfetivo = fech?.tipo_uso_mes || p.tipo_uso;
+    const tipoNorm = normalizeTipoUso(tipoUsoEfetivo);
+
+    const isDivergencia = isPastoDivergencia(tipoUsoEfetivo);
+    /**
+     * O PASTO DE LAVOURA SE DISTINGUE NA GRADE — AGRI-AREA-PLANTADA-01.
+     *
+     * ⚠ A BORDA, NÃO O FUNDO, e essa é a parte que não pode ser trocada por
+     * engano: neste card o FUNDO carrega o STATUS (verde = fechado, azul = em
+     * edição, âmbar = conciliado, laranja = inconsistente). Pintar o fundo por
+     * atividade apagaria o status — um pasto agrícola fechado deixaria de parecer
+     * fechado. A borda estava livre e passa a dizer a atividade.
+     * ⚠ VIOLETA PORQUE AS OUTRAS ESTÃO OCUPADAS, e isto foi conferido antes de
+     * escolher: verde é `fechado`, azul é `em_edicao`, âmbar é `conciliado` E a
+     * divergência, laranja é `inconsistente`, vermelho é erro. Violeta é a única
+     * família livre nas duas paletas.
+     * ⚠ E A PALETA CANÔNICA DIZ OUTRA COISA — `corDoTipoUso('agricultura')` em
+     * `lib/pastos/tiposUso.ts` é AZUL. Não foi ignorada por descuido: azul, neste
+     * card, já significa "em edição", e obedecê-la aqui produziria azul sobre azul.
+     * Este card já mantém uma paleta própria (nele recria é esmeralda e engorda é
+     * azul, contra laranja e índigo da canônica) — a reconciliação é a frente
+     * PR-UI-PASTO-CORES-03, e ela decide as três telas de uma vez.
+     */
+    const ehLavoura = grupoDoTipoUso(tipoUsoEfetivo) === 'agricultura';
+    const lavoura = ehLavoura ? areaLavouraPorPasto.get(p.id) : undefined;
+    /* FECH-ROTACAO-01 fatia 3 — a lotação do mês pela função (com o rateio) e de quem este pasto recebe lote */
+    const lotacaoDoPasto = lotacaoDoMes.get(p.id);
+    const origens = (recebeDe.get(p.id) ?? []).map(id => pastos.find(x => x.id === id)?.nome).filter((n): n is string => !!n);
+    const uaHaDoMes = lotacaoDoPasto?.uaHa != null && lotacaoDoPasto.ua > 0 ? lotacaoDoPasto.uaHa : resumo.uaHa;
+
+    return (
+      <Tooltip key={p.id}>
+        <TooltipTrigger asChild>
+          <button
+            onClick={() => handleOpenPasto(p)}
+            className={`w-full rounded-lg border px-2 py-1.5 text-left hover:ring-1 hover:ring-primary/40 transition-all ${
+              isDivergencia
+                ? 'bg-amber-100 dark:bg-amber-950/40 border-amber-500 dark:border-amber-600 border-2'
+                : ehLavoura
+                ? `${STATUS_CARD_CLASSES[pastoStatus]} !border-violet-500 dark:!border-violet-400 border-2`
+                : STATUS_CARD_CLASSES[pastoStatus]
+            }`}
+          >
+            {/* Nome + status icon */}
+            <div className="flex items-center justify-between gap-0.5">
+              <span className="font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
+              <span className={`text-sm font-bold leading-none ${STATUS_ICON_COLOR[pastoStatus]}`}>
+                {STATUS_ICON[pastoStatus]}
+              </span>
+            </div>
+            {/* Cabeças — ou hectares plantados, quando o pasto é de lavoura. */}
+            <div className="font-extrabold text-[13px] tabular-nums text-foreground leading-tight mt-0.5">
+              {ehLavoura
+                ? (lavoura ? `${formatNum(lavoura.totalHa, 1)} ha` : '—')
+                : resumo.totalCabecas > 0 ? `${formatNum(resumo.totalCabecas, 0)} cab` : '—'}
+            </div>
+            {origens.length > 0 && (
+              <div className="uma-linha-que-rola text-[8px] font-semibold leading-none text-primary mt-0.5" data-testid="card-recebe-lote">↘ lote do {origens.join(', ')}</div>
+            )}
+            {/* Peso médio — na lavoura, a(s) cultura(s) da safra ocupam a linha:
+                "kg" num talhão de amendoim seria a resposta de outra pergunta. */}
+            {ehLavoura ? (
+              lavoura && lavoura.culturas.length > 0 && (
+                <div className="text-[8px] text-muted-foreground leading-none mt-0.5 truncate"
+                  title={lavoura.culturas.map(labelDaCultura).join(' · ')}>
+                  {lavoura.culturas.map(labelDaCultura).join(' · ')}
+                </div>
+              )
+            ) : resumo.pesoMedio ? (
+              <div className="text-[8px] text-muted-foreground leading-none mt-0.5 tabular-nums">
+                {formatNum(resumo.pesoMedio, 1)} kg
+              </div>
+            ) : null}
+            {/* Área + Tipo uso (área omitida em pastos de divergência) */}
+            <div className="flex items-center justify-between mt-0.5">
+              {isDivergencia ? (
+                <span className="text-[7px] font-bold uppercase tracking-wider leading-none text-amber-800 dark:text-amber-300">⚠️ Divergência</span>
+              ) : p.area_produtiva_ha ? (
+                <span className="text-[8px] text-muted-foreground leading-none">{formatNum(p.area_produtiva_ha, 1)} ha</span>
+              ) : <span />}
+              {!isDivergencia && tipoUsoEfetivo && (
+                <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
+                  ehLavoura ? 'text-violet-700 dark:text-violet-300'
+                  : tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
+                  : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
+                  : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
+                  : 'text-muted-foreground'
+                }`}>
+                  {tipoUsoEfetivo!.toUpperCase()}
+                </span>
+              )}
+            </div>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[260px] p-2 text-[10px] space-y-1">
+          <div className="font-bold text-xs">{p.nome}</div>
+          {/* PR-UI-TOOLTIP-PASTO-01 — Lote SEMPRE visivel, inclusive em pasto sem
+              gado: e o dado que identifica o lote do mes, e ausencia dele e
+              informacao. Travessao, nunca vazio — sentinela do CLAUDE.md. */}
+          <div className="text-muted-foreground">
+            Lote: <span className="font-semibold text-foreground">{(fech?.lote_mes ?? '').trim() || '—'}</span>
+          </div>
+          {resumo.totalCabecas > 0 && (
+            <>
+              {/* Total na MESMA coluna de valor das categorias: celula da esquerda
+                  vazia, valor a direita. Antes era texto corrido e nao alinhava
+                  com o breakdown logo abaixo. */}
+              <div className="flex justify-between text-muted-foreground">
+                <span />
+                <span className="tabular-nums">
+                  <span className="font-semibold text-foreground">{resumo.totalCabecas}</span> cab
+                  {resumo.pesoMedio && <> · <span className="font-semibold text-foreground">{formatNum(resumo.pesoMedio, 1)}</span> kg</>}
+                </span>
+              </div>
+              {resumo.catBreakdown.length > 0 && (
+                <div className="space-y-0.5 pt-1 border-t border-border/30">
+                  {resumo.catBreakdown.map(cb => (
+                    <div key={cb.sigla} className="flex justify-between">
+                      <span className="text-muted-foreground">{cb.sigla}</span>
+                      <span className="tabular-nums">{cb.qty} cab{cb.pesoMedio ? ` · ${formatNum(cb.pesoMedio, 0)} kg` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Porteiro trocado de lotacaoKgHa para uaHa: com o kg/ha fora da
+                  exibicao, quem porteia o bloco tem que ser o dado que ele mostra.
+                  uaHa != null e SUPERCONJUNTO de lotacaoKgHa != null (calcUA
+                  devolve a quantidade quando nao ha peso), entao a troca nunca
+                  esconde rodape que aparecia antes. O calculo de lotacaoKgHa
+                  continua intacto — o grafico de kg/ha do painel consome ele. */}
+              {uaHaDoMes != null && (
+                <div className="pt-1 border-t border-border/30 text-muted-foreground">
+                  Lotação: <span className="text-sm font-bold text-foreground">{formatNum(uaHaDoMes, 2)} UA/ha</span>
+                </div>
+              )}
+            </>
+          )}
+          {/* FECH-ROTACAO-01 fatia 3 — quem só RECEBE o lote (sem cabeça própria) também mostra a lotação do mês, com a origem */}
+          {resumo.totalCabecas === 0 && origens.length > 0 && uaHaDoMes != null && (
+            <div className="pt-1 border-t border-border/30 text-muted-foreground">
+              Recebe o lote do {origens.join(', ')} · <span className="text-sm font-bold text-foreground">{formatNum(uaHaDoMes, 2)} UA/ha</span>
+            </div>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
+  /* FECH-ROTACAO-01 fatia 3 — a moldura do grupo: a faixa com Σ cab, Σ área (sem os vedados do mês) e a lotação pela fn_lotacao_do_mes,
+     e por dentro os cards dos piquetes como sempre (decisões 2 e 4) */
+  const renderGrupoDoFechamento = (seg: { id: string; nome: string; membros: Pasto[] }) => {
+    const vedados = new Set(seg.membros.filter(m => impedidosDoMes.get(m.id) === 'vedado').map(m => m.id));
+    const r = resumoDoGrupo(seg.membros.map(paraLote), lotacaoDoMes, vedados);
+    return (
+      <div key={`grupo-${seg.id}`} className="col-span-full rounded-lg border border-dashed border-primary/50 bg-primary/5 p-1" data-testid="grupo-no-fechamento">
+        <div className="mb-1 flex min-w-0 items-baseline gap-2 px-1 text-[10px]" data-testid="grupo-faixa">
+          <span className="shrink-0 font-bold text-foreground">Grupo {seg.nome}</span>
+          <span className="uma-linha-que-rola min-w-0 text-muted-foreground">
+            {r.piquetes} piquetes · {r.areaHa != null ? `${formatNum(r.areaHa, 1)} ha` : '— ha'}
+            {r.cabecas > 0 && <> · {formatNum(r.cabecas, 0)} cab</>}
+            {r.uaHa != null && <> · <span className="font-semibold text-foreground">{formatNum(r.uaHa, 2)} UA/ha</span></>}
+            {r.vedados.length > 0 && <> · vedado: {r.vedados.join(', ')}</>}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
+          {seg.membros.map(m => renderCardDoPasto(m))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="pb-24">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
@@ -1296,144 +1552,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         ) : (
           <TooltipProvider delayDuration={200}>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
-              {pastosAtivos.map(p => {
-                const fech = getFechamento(p.id);
-                const pastoStatus = getPastoStatus(p);
-                const resumo = getResumo(fech, p);
-                const tipoUsoEfetivo = fech?.tipo_uso_mes || p.tipo_uso;
-                const tipoNorm = normalizeTipoUso(tipoUsoEfetivo);
-
-                const isDivergencia = isPastoDivergencia(tipoUsoEfetivo);
-                /**
-                 * O PASTO DE LAVOURA SE DISTINGUE NA GRADE — AGRI-AREA-PLANTADA-01.
-                 *
-                 * ⚠ A BORDA, NÃO O FUNDO, e essa é a parte que não pode ser trocada por
-                 * engano: neste card o FUNDO carrega o STATUS (verde = fechado, azul = em
-                 * edição, âmbar = conciliado, laranja = inconsistente). Pintar o fundo por
-                 * atividade apagaria o status — um pasto agrícola fechado deixaria de parecer
-                 * fechado. A borda estava livre e passa a dizer a atividade.
-                 * ⚠ VIOLETA PORQUE AS OUTRAS ESTÃO OCUPADAS, e isto foi conferido antes de
-                 * escolher: verde é `fechado`, azul é `em_edicao`, âmbar é `conciliado` E a
-                 * divergência, laranja é `inconsistente`, vermelho é erro. Violeta é a única
-                 * família livre nas duas paletas.
-                 * ⚠ E A PALETA CANÔNICA DIZ OUTRA COISA — `corDoTipoUso('agricultura')` em
-                 * `lib/pastos/tiposUso.ts` é AZUL. Não foi ignorada por descuido: azul, neste
-                 * card, já significa "em edição", e obedecê-la aqui produziria azul sobre azul.
-                 * Este card já mantém uma paleta própria (nele recria é esmeralda e engorda é
-                 * azul, contra laranja e índigo da canônica) — a reconciliação é a frente
-                 * PR-UI-PASTO-CORES-03, e ela decide as três telas de uma vez.
-                 */
-                const ehLavoura = grupoDoTipoUso(tipoUsoEfetivo) === 'agricultura';
-                const lavoura = ehLavoura ? areaLavouraPorPasto.get(p.id) : undefined;
-
-                return (
-                  <Tooltip key={p.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => handleOpenPasto(p)}
-                        className={`w-full rounded-lg border px-2 py-1.5 text-left hover:ring-1 hover:ring-primary/40 transition-all ${
-                          isDivergencia
-                            ? 'bg-amber-100 dark:bg-amber-950/40 border-amber-500 dark:border-amber-600 border-2'
-                            : ehLavoura
-                            ? `${STATUS_CARD_CLASSES[pastoStatus]} !border-violet-500 dark:!border-violet-400 border-2`
-                            : STATUS_CARD_CLASSES[pastoStatus]
-                        }`}
-                      >
-                        {/* Nome + status icon */}
-                        <div className="flex items-center justify-between gap-0.5">
-                          <span className="font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
-                          <span className={`text-sm font-bold leading-none ${STATUS_ICON_COLOR[pastoStatus]}`}>
-                            {STATUS_ICON[pastoStatus]}
-                          </span>
-                        </div>
-                        {/* Cabeças — ou hectares plantados, quando o pasto é de lavoura. */}
-                        <div className="font-extrabold text-[13px] tabular-nums text-foreground leading-tight mt-0.5">
-                          {ehLavoura
-                            ? (lavoura ? `${formatNum(lavoura.totalHa, 1)} ha` : '—')
-                            : resumo.totalCabecas > 0 ? `${formatNum(resumo.totalCabecas, 0)} cab` : '—'}
-                        </div>
-                        {/* Peso médio — na lavoura, a(s) cultura(s) da safra ocupam a linha:
-                            "kg" num talhão de amendoim seria a resposta de outra pergunta. */}
-                        {ehLavoura ? (
-                          lavoura && lavoura.culturas.length > 0 && (
-                            <div className="text-[8px] text-muted-foreground leading-none mt-0.5 truncate"
-                              title={lavoura.culturas.map(labelDaCultura).join(' · ')}>
-                              {lavoura.culturas.map(labelDaCultura).join(' · ')}
-                            </div>
-                          )
-                        ) : resumo.pesoMedio ? (
-                          <div className="text-[8px] text-muted-foreground leading-none mt-0.5 tabular-nums">
-                            {formatNum(resumo.pesoMedio, 1)} kg
-                          </div>
-                        ) : null}
-                        {/* Área + Tipo uso (área omitida em pastos de divergência) */}
-                        <div className="flex items-center justify-between mt-0.5">
-                          {isDivergencia ? (
-                            <span className="text-[7px] font-bold uppercase tracking-wider leading-none text-amber-800 dark:text-amber-300">⚠️ Divergência</span>
-                          ) : p.area_produtiva_ha ? (
-                            <span className="text-[8px] text-muted-foreground leading-none">{formatNum(p.area_produtiva_ha, 1)} ha</span>
-                          ) : <span />}
-                          {!isDivergencia && tipoUsoEfetivo && (
-                            <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
-                              ehLavoura ? 'text-violet-700 dark:text-violet-300'
-                              : tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
-                              : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
-                              : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
-                              : 'text-muted-foreground'
-                            }`}>
-                              {tipoUsoEfetivo!.toUpperCase()}
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[260px] p-2 text-[10px] space-y-1">
-                      <div className="font-bold text-xs">{p.nome}</div>
-                      {/* PR-UI-TOOLTIP-PASTO-01 — Lote SEMPRE visivel, inclusive em pasto sem
-                          gado: e o dado que identifica o lote do mes, e ausencia dele e
-                          informacao. Travessao, nunca vazio — sentinela do CLAUDE.md. */}
-                      <div className="text-muted-foreground">
-                        Lote: <span className="font-semibold text-foreground">{(fech?.lote_mes ?? '').trim() || '—'}</span>
-                      </div>
-                      {resumo.totalCabecas > 0 && (
-                        <>
-                          {/* Total na MESMA coluna de valor das categorias: celula da esquerda
-                              vazia, valor a direita. Antes era texto corrido e nao alinhava
-                              com o breakdown logo abaixo. */}
-                          <div className="flex justify-between text-muted-foreground">
-                            <span />
-                            <span className="tabular-nums">
-                              <span className="font-semibold text-foreground">{resumo.totalCabecas}</span> cab
-                              {resumo.pesoMedio && <> · <span className="font-semibold text-foreground">{formatNum(resumo.pesoMedio, 1)}</span> kg</>}
-                            </span>
-                          </div>
-                          {resumo.catBreakdown.length > 0 && (
-                            <div className="space-y-0.5 pt-1 border-t border-border/30">
-                              {resumo.catBreakdown.map(cb => (
-                                <div key={cb.sigla} className="flex justify-between">
-                                  <span className="text-muted-foreground">{cb.sigla}</span>
-                                  <span className="tabular-nums">{cb.qty} cab{cb.pesoMedio ? ` · ${formatNum(cb.pesoMedio, 0)} kg` : ''}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {/* Porteiro trocado de lotacaoKgHa para uaHa: com o kg/ha fora da
-                              exibicao, quem porteia o bloco tem que ser o dado que ele mostra.
-                              uaHa != null e SUPERCONJUNTO de lotacaoKgHa != null (calcUA
-                              devolve a quantidade quando nao ha peso), entao a troca nunca
-                              esconde rodape que aparecia antes. O calculo de lotacaoKgHa
-                              continua intacto — o grafico de kg/ha do painel consome ele. */}
-                          {resumo.uaHa != null && (
-                            <div className="pt-1 border-t border-border/30 text-muted-foreground">
-                              Lotação: <span className="text-sm font-bold text-foreground">{formatNum(resumo.uaHa, 2)} UA/ha</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
+              {segmentosDaGrade.map(seg => seg.tipo === 'pasto' ? renderCardDoPasto(seg.pasto) : renderGrupoDoFechamento(seg))}
             </div>
           </TooltipProvider>
         )}
@@ -1449,6 +1568,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             pastosDaFazenda={pastos}
             onRenomear={async (nome, aoRecusar) => editarPasto(selectedPasto.id, { nome }, { aoRecusar })}
             onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}
+            lote={contextoDoLote(selectedPasto, activeFechamento.id)}
             onReabrirValorRebanho={onReabrirValorRebanho ? () => {
               const pastoId = selectedPasto.id;
               setDialogOpen(false); setSelectedPasto(null); setActiveFechamento(null);

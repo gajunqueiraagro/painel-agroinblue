@@ -74,6 +74,7 @@ import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
 import { mapaGlobal } from './dados/mapaGlobal';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
+import { rotuloDoTipo } from '@/lib/mapa/tiposDeArea';
 import * as CONTAS_BANC from './dados/contas';
 import * as VG from './dados/visaoGeral';
 import * as DRE from './dados/dre';
@@ -671,19 +672,58 @@ if (tela === 'mesclar') {
   };
   montar(<div className="h-full"><V2Recorrencias /></div>);
 } else if (tela === 'mapa-geo') {
+  const UNIDADE = q.get('unidade') === '1';   // MAPA-PIQUETES-03
+  /* MAPA-EDITAR-POLIGONO-03: `&laco=1` — o polígono aberto na edição chega com a linha cruzando ela mesma (uma "gravata" na caixa dele),
+     como o "APP triângulo" do KMZ; a barra mostra a frase, o destaque e o "Corrigir automaticamente" */
+  const gravataDe = (g: { type: string; coordinates: unknown }) => {
+    const anel = g.type === 'Polygon' && Array.isArray(g.coordinates) && Array.isArray(g.coordinates[0]) ? g.coordinates[0] : [];
+    const xs = anel.map((p: number[]) => p[0]), ys = anel.map((p: number[]) => p[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    return { type: 'Polygon', coordinates: [[[x0, y0], [x1, y1], [x1, y0], [x0, y1], [x0, y0]]] };
+  };
+  /* MAPA-EDITAR-POLIGONO-09: `&amontoado=1` — o polígono chega com um ponto a ~0,2 m do 1º (no mesmo lado, sem cruzar): a barra mostra o
+     aviso de pontos amontoados e o "Corrigir automaticamente" com todas as opções (o caso da Pureza › 6B→P6 que empurrava o "Prévia e gravar") */
+  const amontoadoDe = (g: { type: string; coordinates: unknown }) => {
+    const anel: number[][] = g.type === 'Polygon' && Array.isArray(g.coordinates) && Array.isArray(g.coordinates[0]) ? g.coordinates[0] : [];
+    if (anel.length < 4) return g;
+    const [a, b] = [anel[0], anel[1]];
+    const t = 0.2 / (Math.hypot((b[0] - a[0]) * 107000, (b[1] - a[1]) * 111000) || 1);
+    return { type: 'Polygon', coordinates: [[a, [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], ...anel.slice(1)]] };
+  };
+  const formaNaEdicao = (g: { type: string; coordinates: unknown }) => q.get('laco') === '1' ? gravataDe(g) : q.get('amontoado') === '1' ? amontoadoDe(g) : g;
   /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
      abre no último mês com fechamento de pastos (set/2026; fix1 A: o banco falso ignora `order`/`limit`, a lista vem do mais novo); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
   g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendasComPecuaria: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
   g.__bancoBancada = {
-    from: (t: string, e: any) => t === 'fazenda_geometrias' ? MAPA.GEOMETRIAS
-      : t === 'pastos' ? MAPA.PASTOS
+    // MAPA-EDITAR-POLIGONO-02: a edição lê o polígono na hora (`.eq('id', …).maybeSingle()`), com a versão
+    // MAPA-PIQUETES-02: `&piquetes=1` traz dois polígonos sem classificação (as divisões que viram piquetes)
+    from: (t: string, e: any) => t === 'fazenda_geometrias'
+        ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : [])])
+      : t === 'pastos' ? [...MAPA.PASTOS, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : [])]
+      // MAPA-PIQUETES-03: `&unidade=1` — o grupo que nasceu de um pasto (o elo)
+      : t === 'pasto_grupos' ? (UNIDADE ? MAPA.UNIDADE_GRUPOS : [])
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
       // MAPA-PERF-01: os itens vêm EMBUTIDOS no fechamento (o banco falso não faz o embed; a linha já o traz)
-      : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
-        .map(f => ({ ...f, fechamento_pasto_itens: MAPA.ITENS.filter(i => i.fechamento_id === f.id) }))
+      : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS, ...(UNIDADE ? MAPA.UNIDADE_FECHAMENTOS : [])].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
+        .map(f => ({ ...f, fechamento_pasto_itens: [...MAPA.ITENS, ...(UNIDADE ? MAPA.UNIDADE_ITENS : [])].filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
+      // MAPA-02f-b: a infraestrutura e os bens do Patrimônio (sintéticos)
+      : t === 'fazenda_infraestruturas' ? MAPA.INFRA
+      : t === 'patrimonio_bens' ? MAPA.BENS
+      // MAPA-ATIVIDADE-LAVOURA-01: a lavoura do P5A (a safra vem embutida na linha)
+      : t === 'agri_safra_area' ? MAPA.LAVOURA
       : [],
-    rpc: () => null,
+    // MAPA-AREA-TIPO-01: a prévia do escritor da classificação (sintética: de "Sem classificação" para o tipo pedido)
+    rpc: (fn: string, a: any) => fn === 'fn_mapa_geometria_classificar'
+      ? { ok: true, simulado: true, de: { rotulo: 'Sem classificação' }, para: { rotulo: a?.p_tipo === 'pasto' ? 'Pasto' : rotuloDoTipo(a?.p_tipo ?? '') } }
+      // MAPA-02f-b: a prévia sintética das funções da infraestrutura e o nome de quem criou
+      : fn === 'fn_infra_salvar'
+        ? { ok: true, simulado: !!a?.p_simular, rotulo: 'Cocho', forma: 'Point', pasto: a?.p_infra?.pasto_id ? { id: a.p_infra.pasto_id, nome: 'P_01' } : null, bem: null, avisos: [] }
+      : fn === 'fn_infra_desativar' ? { ok: true, simulado: !!a?.p_simular }
+      : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gabriel Junqueira', email: null, situacao: 'membro ativo' }]
+      : fn === 'fn_piquetes_concluir' ? MAPA.previaDosPiquetes(a ?? {})   // MAPA-PIQUETES-02: a prévia sintética
+      : null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
 } else if (tela === 'mapa-global') {
@@ -1275,6 +1315,141 @@ if (tela === 'mesclar') {
     montar(<PatrimonioApiProvider api={API_PATRIMONIO}><PatrimonioTela /></PatrimonioApiProvider>);
   };
   void montarPatrimonio();
+} else if (tela === 'pastos') {
+  /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (a tela REAL) com o modo "Grupos": dado SINTÉTICO, nomes de exemplo; um grupo de 3
+     piquetes (P10A/B/C), um de nome longo com 4 pastos, um inativo e pastos soltos. O banco responde a prévia do `fn_pasto_grupo_salvar`
+     a partir do pedido (a frase do banco, a área somada), sem gravar nada. */
+  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  /* o `canEdit('pastos')` lê o perfil de `clienteAtual` (o padrão da bancada não traz): sem ele a tela abre só para leitura */
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  const pasto = (id: string, nome: string, area: number | null, tipo: string, grupo: string | null, ativo = true, ordem = 0) => ({
+    id, fazenda_id: 'f1', cliente_id: 'cli', nome, lote_padrao: null, area_produtiva_ha: area, tipo_uso: tipo, qualidade: null, entra_conciliacao: true,
+    ativo, observacoes: null, ordem_exibicao: ordem, data_inicio: null, data_fim: null, grupo_id: grupo, created_at: '2026-01-01', updated_at: '2026-01-01' });
+  const PASTOS = [
+    pasto('p10a', 'P10A', 21.4, 'recria', 'g1', true, 1), pasto('p10b', 'P10B', 22.9, 'recria', 'g1', true, 2), pasto('p10c', 'P10C', 20, 'recria', 'g1', true, 3),
+    pasto('ta1', 'T-A1 Piquete da terminação', 10.25, 'engorda', 'g2', true, 4), pasto('ta2', 'T-A2 Piquete da terminação', 11.5, 'engorda', 'g2', true, 5),
+    pasto('ta3', 'T-A3 Piquete da terminação', 12, 'engorda', 'g2', true, 6), pasto('ta4', 'T-A4 Piquete da terminação', 9.75, 'engorda', 'g2', true, 7),
+    pasto('p11', 'P11', 35.5, 'cria', null, true, 8), pasto('p13', 'P13 Retiro do córrego de baixo', 1234.56, 'cria', null, true, 9),
+    pasto('p14', 'P14', 18, 'vedado', null, true, 10), pasto('p15', 'P15 velho', 9, 'recria', null, false, 11),
+  ];
+  const GRUPOS = [
+    { id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true },
+    { id: 'g2', fazenda_id: 'f1', nome: 'Terminação intensiva do retiro de cima', ativo: true },
+    { id: 'g3', fazenda_id: 'f1', nome: 'Antigo rotacionado', ativo: false },
+  ];
+  const br = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  g.__bancoBancada = {
+    from: (t: string) => (t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? GRUPOS : []),
+    rpc: (fn: string, a: any) => {
+      /* PASTO-AREA-OFICIAL-01 — o modo "Áreas" (SINTÉTICO): a área do mapa de cada pasto (a medição), um travado, um sem polígono, um já
+         igual com a última mudança "do mapa" (desfazer) e o P11 que a PRÉVIA recusa (área da fazenda oficializada) */
+      const AM = new Date().toISOString().slice(0, 7);
+      const MAPA_AREA: Record<string, number | null> = { p10a: 19.87, p10b: 22.9, p10c: 23.41, ta1: 11.02, ta2: 11.5, ta3: 12.3, ta4: 8.9, p11: 50.12, p13: 1198.02, p14: null };
+      const TRAVA: Record<string, string> = { ta1: `o pasto está fechado em ${AM.slice(5)}/${AM.slice(0, 4)}` };
+      if (fn === 'fn_pastos_area_comparar') {
+        return PASTOS.filter((x) => x.ativo).map((x) => {
+          const mapa = MAPA_AREA[x.id] ?? null; const of = x.area_produtiva_ha;
+          return { pasto_id: x.id, nome: x.nome, ativo: true, area_oficial_ha: of, area_mapa_ha: mapa, n_poligonos: mapa == null ? 0 : 1,
+            dif_ha: mapa != null && of != null ? Math.round((mapa - of) * 100) / 100 : null,
+            dif_pct: mapa != null && of ? Math.round((mapa - of) / of * 1000) / 10 : null,
+            ultima_vigencia_id: x.id === 'ta2' ? 'vig-ta2' : null, ultima_origem: x.id === 'ta2' ? 'mapa' : null,
+            ultima_desde: x.id === 'ta2' ? `${AM}-01` : null, ultima_anterior_ha: x.id === 'ta2' ? 12.75 : null, trava: TRAVA[x.id] ?? null };
+        });
+      }
+      if (fn === 'fn_pasto_area_usar_mapa') {
+        const itens = PASTOS.filter((x) => (a.p_pastos ?? []).includes(x.id)).map((x) => {
+          const mapa = MAPA_AREA[x.id] ?? null; const of = x.area_produtiva_ha ?? 0; const recusa = x.id === 'p11';
+          return { pasto_id: x.id, nome: x.nome, situacao: recusa ? 'recusa' : 'muda',
+            motivo: recusa ? `A área não muda: a área de ${AM.slice(5)}/${AM.slice(0, 4)} da fazenda já foi oficializada.` : null,
+            area_antes: of, area_mapa: mapa, dif_ha: mapa != null ? Math.round((mapa - of) * 100) / 100 : null,
+            dif_pct: mapa != null && of ? Math.round((mapa - of) / of * 1000) / 10 : null, lotacao_mes: AM,
+            ua_ha_antes: of ? Math.round(52 / of * 100) / 100 : null, ua_ha_depois: !recusa && mapa ? Math.round(52 / mapa * 100) / 100 : null };
+        });
+        const nr = itens.filter((i) => i.situacao === 'recusa').length;
+        return { ok: nr === 0, simulado: a.p_simular, n_muda: itens.length - nr, n_igual: 0, n_recusa: nr, itens };
+      }
+      if (fn === 'fn_pasto_area_desfazer') {
+        return { ok: true, simulado: a.p_simular, itens: [{ vigencia_id: 'vig-ta2', nome: 'T-A2 Piquete da terminação', area_ha: 11.5, volta_para: 12.75, recusa: null }] };
+      }
+      if (fn === 'fn_pasto_grupo_desativar') {
+        const n = PASTOS.filter((x) => x.grupo_id === a.p_grupo_id).length;
+        const nome = GRUPOS.find((x) => x.id === a.p_grupo_id)?.nome;
+        return { ok: true, simulado: true, frase: `Desativa o grupo ${nome}: ${n} pastos voltam a ficar sem grupo, com o mesmo nome e a mesma área.`, saem: [] };
+      }
+      if (fn !== 'fn_pasto_grupo_salvar') return null;
+      const ids: string[] = a.p_pasto_ids ?? [];
+      const escolhidos = PASTOS.filter((x) => ids.includes(x.id));
+      const antes = PASTOS.filter((x) => a.p_grupo_id && x.grupo_id === a.p_grupo_id);
+      const area = escolhidos.reduce((s, x) => s + (x.area_produtiva_ha ?? 0), 0);
+      const vira = (l: typeof PASTOS) => l.map((x) => ({ id: x.id, nome: x.nome, area_ha: x.area_produtiva_ha }));
+      const entram = escolhidos.filter((x) => !antes.includes(x)); const saem = antes.filter((x) => !ids.includes(x.id));
+      if (a.p_grupo_id && entram.length === 0 && saem.length === 0) return { ok: true, simulado: true, sem_mudanca: true, frase: `O grupo ${a.p_nome.trim()} já está assim.` };
+      return { ok: true, simulado: true, frase: `${a.p_grupo_id ? 'O grupo' : 'Cria o grupo'} ${a.p_nome.trim()}: ${ids.length} pastos, ${br(area)} ha.`,
+        entram: vira(entram), saem: vira(saem), area_ha: area };
+    },
+  };
+  const montarPastos = async () => {
+    const { PastosTab } = await import('@/pages/PastosTab');
+    montar(<PastosTab />);
+  };
+  void montarPastos();
+} else if (tela === 'fechamento-grupo') {
+  /* FECH-ROTACAO-01 fatia 3 — Fechamento de pastos (a tela REAL) com um grupo de pastejo, dado SINTÉTICO de out/2026: o grupo P10
+     (P10A com o lote no grupo inteiro, P10B só recebe, P10C vedado), a rotação avulsa P11 → P12 Retiro, e um pasto solto. A lotação
+     responde pela mesma regra da `fn_lotacao_do_mes` (rateio por área), calculada aqui a partir dos cards e das alocações. */
+  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  const pasto = (id: string, nome: string, area: number, tipo: string, grupo: string | null, ordem: number) => ({
+    id, fazenda_id: 'f1', cliente_id: 'cli', nome, lote_padrao: null, area_produtiva_ha: area, tipo_uso: tipo, qualidade: null, entra_conciliacao: true,
+    ativo: true, observacoes: null, ordem_exibicao: ordem, data_inicio: null, data_fim: null, grupo_id: grupo, created_at: '2026-01-01', updated_at: '2026-01-01' });
+  const PASTOS = [pasto('p10a', 'P10A', 21.4, 'recria', 'g1', 1), pasto('p10b', 'P10B', 22.9, 'recria', 'g1', 2), pasto('p10c', 'P10C', 20, 'recria', 'g1', 3),
+    pasto('p11', 'P11', 35.5, 'cria', null, 4), pasto('p12', 'P12 Retiro do córrego de baixo', 18, 'cria', null, 5), pasto('t1', 'T-1', 12, 'engorda', null, 6)];
+  const card = (id: string, pastoId: string, extra: Record<string, unknown> = {}) => ({ id, pasto_id: pastoId, fazenda_id: 'f1', cliente_id: 'cli', ano_mes: '2026-10',
+    status: 'rascunho', responsavel_nome: null, lote_mes: null, tipo_uso_mes: null, qualidade_mes: null, observacao_mes: null, created_at: '2026-10-01', updated_at: '2026-10-01', ...extra });
+  const CARDS = [card('fa', 'p10a', { lote_mes: 'L1', tipo_uso_mes: 'recria' }), card('fb', 'p10b'), card('fc', 'p10c', { tipo_uso_mes: 'vedado' }),
+    card('f11', 'p11', { tipo_uso_mes: 'cria' }), card('f12', 'p12'), card('ft', 't1', { tipo_uso_mes: 'engorda', status: 'fechado' })];
+  const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
+  const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
+    lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
+  const ITENS = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  const ALOC = [{ fechamento_id: 'fa', lote: '', pasto_id: 'p10a' }, { fechamento_id: 'fa', lote: '', pasto_id: 'p10b' },
+    { fechamento_id: 'f11', lote: '', pasto_id: 'p11' }, { fechamento_id: 'f11', lote: '', pasto_id: 'p12' }];
+  const lotacao = () => {
+    const area = (id: string) => PASTOS.find((x) => x.id === id)?.area_produtiva_ha ?? 0;
+    const porPasto = new Map<string, { cab: number; kg: number; ua: number; recebe: boolean }>();
+    for (const c of CARDS) porPasto.set(c.pasto_id, { cab: 0, kg: 0, ua: 0, recebe: false });
+    for (const c of CARDS) {
+      const its = ITENS.filter((i) => i.fechamento_id === c.id);
+      if (!its.length) continue;
+      const cab = its.reduce((s, i) => s + i.quantidade, 0); const kg = its.reduce((s, i) => s + i.quantidade * i.peso_medio_kg, 0);
+      const ua = its.reduce((s, i) => s + (i.peso_medio_kg > 0 ? i.quantidade * i.peso_medio_kg / 450 : i.quantidade), 0);
+      const S = ALOC.filter((a) => a.fechamento_id === c.id).map((a) => a.pasto_id); const dest = S.length ? S : [c.pasto_id];
+      const A = dest.reduce((s, id) => s + area(id), 0);
+      for (const id of dest) {
+        const f = dest.length === 1 ? 1 : area(id) / A; const atual = porPasto.get(id) ?? { cab: 0, kg: 0, ua: 0, recebe: false };
+        porPasto.set(id, { cab: atual.cab + cab * f, kg: atual.kg + kg * f, ua: atual.ua + ua * f, recebe: atual.recebe || id !== c.pasto_id });
+      }
+    }
+    return [...porPasto].map(([id, v]) => ({ pasto_id: id, grupo_id: PASTOS.find((x) => x.id === id)?.grupo_id ?? null, area_ha: area(id), cabecas: v.cab, kg: v.kg, ua: v.ua,
+      kg_ha: v.kg / area(id), ua_ha: v.ua / area(id), recebe_de_outro_card: v.recebe }));
+  };
+  g.__bancoBancada = {
+    from: (t: string, e: { eq: Record<string, unknown> }) => (
+      t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? [{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true }]
+      : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
+      : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
+      : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC : []),
+    rpc: (fn: string) => (fn === 'fn_lotacao_do_mes' ? lotacao() : null),
+  };
+  const montarFechamento = async () => {
+    const { FechamentoTab } = await import('@/pages/FechamentoTab');
+    montar(<FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} />);
+  };
+  void montarFechamento();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */

@@ -28,6 +28,12 @@ docs/historico/frentes-ate-2026-09-29.md.
   nao tem item (o cache fica com 0 cab e -1.800 kg — o caso da CACHE-ZOOT-ZERADA-01). A view ainda mostra 384 cab em ago-dez/23, depois
   do encerramento. Corrigir na fonte (o Fechamento), com o cliente; nada de UPDATE sem OK.
 
+- AREA-MAPA-FORMULA-UNICA-01 (aberta 01/11/2026, MAPA-PIQUETES-02 D1; donos: Code 5 + Code 6) — DUAS fórmulas de área do polígono no
+  sistema: a tela (`src/lib/mapa/areaDoPoligono.ts`) usa o raio médio da Terra (6.371.008,8 m, o do turf); o banco
+  (`_fn_area_geodesica_ha`, a do "Usar área do mapa" e dos piquetes) usa o raio equatorial (6.378.137 m). O banco dá +0,22% (o quadrado da
+  razão). Medido na Faz. Sto. Expedito, R_01 com 1A–1D: 92,90 ha pelo banco × 92,69 pela tela. Decisão do Gabriel (01/11): a área OFICIAL é
+  a do banco; a tela mostra o número que vem da RPC (prévia), nunca o seu. Unificar a fórmula (qual raio fica) é este item, à parte.
+
 - SALDO-INICIAL-MES-01 — `saldos_iniciais` tem coluna `mes`, e NINGUEM a le'.
   `fn_zoot_categoria_mensal` (md5 a3e6eb6b) busca o saldo em
   `WHERE si.fazenda_id = ? AND si.ano = ?` (prosrc :7-8, sem `si.mes`) e a recursao da
@@ -492,6 +498,17 @@ docs/historico/frentes-ate-2026-09-29.md.
   `fn_dre_pecuaria` so' usa a palavra num rotulo; o AGRI-05 depende do PATR-02, que nao existe — docs/specs/AGRI-FECHAMENTO-v1.md:256),
   por isso nao ha' trava. ⚠ O BRIEFING DO PATR-02 / AGRI-05 decide a trava: quando um mes de depreciacao passar a ser CONSUMIDO
   (DRE, fechamento, Lucro Rural), a correcao desse mes fica proibida ou vira ajuste no mes corrente.
+
+- PASTO-AREA-OFICIAL-02 (PASTO-AREA-OFICIAL-01, Gabriel 01/11/2026, decisão 4) — o FRONT lê a área do pasto de HOJE (`usePastos` →
+  `pastos.area_produtiva_ha`) também quando mostra um mês passado. Com a vigência da área (116120: `pasto_area_vigencias`,
+  `fn_pasto_area_no_mes`), o banco já dá a área de cada mês, e a lotação, a DRE e os pastos do P1 a usam (116130); o front ainda não.
+  Até isto, só os pastos que tiveram a área mudada, e só nos meses antes da mudança, mostram a área nova onde deveria ser a antiga.
+  Leitores (mapa do agente de 01/11): FechamentoTab (UA/ha do card), FechamentoPastoDialog, fechamentoGlobal, resumoPorAtividade,
+  resumoPecuaria, ResumoPastosTab, MapaPastosTab (+ exports), MapaGestorView (KPI e `HistoricoLotacao`), MapaOperacaoView,
+  PastoDetailSheet, usePastoOcupacao, zootecnicos.calcAreaProdutivaPecuaria, useIndicadoresZootecnicos, ZootecnicoTab, VisaoZooHubTab,
+  GraficosAnaliseTab, PainelConsultorTab (Meta), ResumoTab, useRebanhoOficial (Global), useAnaliseTrimestral, useFechamentoArea
+  (destinos por mês). ⚠ QUEM FOR TRATAR: uma leitura por fazenda × mês (RPC sobre `fn_pasto_area_no_mes`), nunca a conta da vigência
+  copiada no front; leitor do mês corrente pode seguir no cadastro (é a mesma área).
 
 ## DIVIDAS DE TELA
 

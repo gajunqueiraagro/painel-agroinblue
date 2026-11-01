@@ -21,6 +21,33 @@ const I: ItemLido[] = [
   { fechamento_id: 'f09-08', quantidade: 30, peso_medio_kg: 250, categoria_id: 'c2' },
 ];
 
+describe('MAPA-PAINEL-COMPACTO-01: lote por registro, mês vedado e UA/ha no histórico', () => {
+  const comLote: ItemLido[] = [
+    { fechamento_id: 'f10-09', quantidade: 60, peso_medio_kg: 300, categoria_id: 'c1', lote: ' L-12 ' },
+    { fechamento_id: 'f10-09', quantidade: 9, peso_medio_kg: 310, categoria_id: 'c1', lote: 'Lote 7' },
+    { fechamento_id: 'f10-09', quantidade: 16, peso_medio_kg: 200, categoria_id: 'c2', lote: '' },
+    { fechamento_id: 'f10-08', quantidade: 70, peso_medio_kg: 280, categoria_id: 'c1' },
+  ];
+  const fech: FechamentoLido[] = [
+    { id: 'f10-09', pasto_id: 'p10', ano_mes: '2026-09', tipo_uso_mes: 'recria' },
+    { id: 'f10-08', pasto_id: 'p10', ano_mes: '2026-08', tipo_uso_mes: 'cria' },
+    { id: 'f10-07', pasto_id: 'p10', ano_mes: '2026-07', tipo_uso_mes: 'vedado' },
+  ];
+  const d = montarMapaDoMes({ anoMes: '2026-09', vigentes: [P10], fechamentos: fech, itens: comLote, nomeDaCategoria: nome }).get('p10')!;
+
+  it('uma linha por registro do fechamento, com o lote (sem espaço nas pontas; vazio = null)', () => {
+    expect(d.categorias.map(c => [c.nome, c.lote, c.quantidade])).toEqual([['Bois 2-3', 'L-12', 60], ['Garrotes', null, 16], ['Bois 2-3', 'Lote 7', 9]]);
+  });
+  it('o mês vedado é marcado; os outros não', () => {
+    expect(d.historico.find(h => h.anoMes === '2026-07')?.vedado).toBe(true);
+    expect(d.historico.find(h => h.anoMes === '2026-08')?.vedado).toBe(false);
+  });
+  it('a UA/ha do mês sai da mesma conta da casa (uaPorHa = calcUA ÷ área): 70 cab × 280 kg em 50 ha = 0,87 UA/ha', () => {
+    expect(d.historico.find(h => h.anoMes === '2026-08')?.uaHa).toBeCloseTo((70 * 280) / 450 / 50, 6);
+    expect(d.historico.find(h => h.anoMes === '2026-06')?.uaHa).toBeNull();
+  });
+});
+
 describe('meses (MAPA-02a)', () => {
   it('mês anterior e os 12 meses corridos', () => {
     expect(mesAntes('2026-01', 1)).toBe('2025-12');
@@ -66,7 +93,7 @@ describe('montarMapaDoMes (MAPA-02a, D1/D3)', () => {
     expect(h).toHaveLength(12);
     expect(h[11].anoMes).toBe('2026-09');
     expect(h[10].kgHa).toBeCloseTo((70 * 280) / 50, 6);
-    expect(h[9]).toEqual({ anoMes: '2026-07', kgHa: null, pesoTotalKg: null, faixa: null });
+    expect(h[9]).toEqual({ anoMes: '2026-07', kgHa: null, pesoTotalKg: null, faixa: null, uaHa: null, vedado: false });
     expect(h.some(x => x.anoMes === '2026-10')).toBe(false);
   });
 

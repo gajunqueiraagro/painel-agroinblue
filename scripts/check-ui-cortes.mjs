@@ -207,6 +207,9 @@ const CENARIOS = [
     semRolagem: { dentro: '[data-testid="mapa-painel"]' } },
   { nome: 'mapa-geo-painel-nome-longo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('Retiro') },
   { nome: 'mapa-geo-sem-fechamento', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_03') },
+  /* MAPA-ATIVIDADE-LAVOURA-01: o pasto de LAVOURA (cultura/safra/área plantada, sem cabeças nem lotação) e a RESERVA pelo cadastro (D1) */
+  { nome: 'mapa-geo-painel-lavoura', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P5A') },
+  { nome: 'mapa-geo-painel-reserva', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P5B') },
   { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
   { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
   /* MAPA-02b — o fundo (neutro na bancada: nenhum tile do Google nem do OSM) e os créditos no canto, logo abaixo do zoom: em satélite com o
@@ -216,17 +219,160 @@ const CENARIOS = [
   { nome: 'mapa-geo-sem-satelite', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS },
   { nome: 'mapa-geo-sem-satelite-painel', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
   { nome: 'mapa-geo-operacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
+  /* MAPA-02f-b — a infraestrutura como PONTOS (dados sintéticos: cocho, 2 bebedouros, sede com nome longo, energia): o ícone clicado abre o
+     painel de leitura; Editar; o Adicionar › Infraestrutura › Cocho entra no modo de colocar (o aviso) e o clique no mapa abre o formulário;
+     o filtro "Infraestruturas" aparece no card Filtros em todas as telas do mapa */
+  { nome: 'mapa-geo-infra-ver', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('.mapa-infra-icone').first().click(); await p.waitForTimeout(500);
+    await p.locator('[data-testid="mapa-painel-infra"]').waitFor({ timeout: 3000 }); } },
+  { nome: 'mapa-geo-infra-editar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('.mapa-infra-icone').first().click(); await p.waitForTimeout(400);
+    await p.locator('[data-testid="mapa-painel-infra"] button', { hasText: 'Editar' }).first().click(); await p.waitForTimeout(400); } },
+  { nome: 'mapa-geo-infra-colocar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+    await p.getByRole('menuitem', { name: 'Infraestrutura' }).first().hover(); await p.waitForTimeout(300);
+    await p.locator('[data-testid="infra-colocar-cocho"]').first().click(); await p.waitForTimeout(400);
+    await p.locator('[data-testid="infra-modo-colocar"]').waitFor({ timeout: 3000 }); } },
+  { nome: 'mapa-geo-infra-formulario', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+    await p.getByRole('menuitem', { name: 'Infraestrutura' }).first().hover(); await p.waitForTimeout(300);
+    await p.locator('[data-testid="infra-colocar-cocho"]').first().click(); await p.waitForTimeout(400);
+    const caixa = await p.locator('[data-testid="mapa-gestor-mapa"]').boundingBox();
+    await p.mouse.click(caixa.x + caixa.width * 0.55, caixa.y + caixa.height * 0.5); await p.waitForTimeout(500);
+    await p.locator('[data-testid="infra-formulario"]').waitFor({ timeout: 3000 }); } },
+  /* MAPA-AREA-TIPO-01 — o painel do polígono da Validação com "Classificar" aberto, e o Adicionar › Área › Curral levando à Validação
+     (o aviso "Escolha o polígono…" e o painel já em "É área: Curral" com a prévia). Mede SÓ o painel (o resto da Validação reprova na base:
+     pendência MAPA-VALIDACAO-CORTES do Code 3) */
+  { nome: 'mapa-geo-validacao-classificar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-painel-poligono"]',
+    antes: async (p) => {
+      await p.locator('button', { hasText: 'Validação' }).first().click(); await p.waitForTimeout(600);
+      await p.locator('button[title="Classificar (pasto ou área)"]').first().click(); await p.waitForTimeout(500); } },
+  /* MAPA-PIQUETES-02 — `&piquetes=1` (dois polígonos sem classificação, o 1º com o nome mais longo): o painel do polígono com "É piquete de…"
+     em espera, a espera no rodapé da lista com "Concluir piquetes de" e o diálogo com a prévia (área na casa dos milhares). Mede só as
+     regiões novas (o resto da Validação reprova na base: pendência MAPA-VALIDACAO-CORTES do Code 3). */
+  ...(() => {
+    const URL_PQ = 'tela=mapa-geo&piquetes=1';
+    const T = [[1126, 579], [1366, 768]];
+    const LONGO = 'P_04 Retiro do Córrego Comprido – Divisão A';
+    const validacao = async (p) => { await p.locator('button', { hasText: 'Validação' }).first().click(); await p.waitForTimeout(600); };
+    const marcar = (nome) => async (p) => {
+      await p.getByText(nome, { exact: true }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="marcar-piquete"] button').first().click(); await p.waitForTimeout(300);
+      // "P_01" também é rótulo do mapa e linha da lista: escolhe pela busca do seletor (Enter pega o 1º da busca)
+      await p.getByPlaceholder('escolha o pasto…').fill('P_01'); await p.waitForTimeout(200); await p.keyboard.press('Enter'); await p.waitForTimeout(300); };
+    const osDois = async (p) => { await validacao(p); await marcar(LONGO)(p); await marcar('P_04B')(p); };
+    return [
+      { nome: 'mapa-geo-validacao-piquete', url: URL_PQ, tamanhos: T, regiao: '[data-testid="validacao-painel-poligono"]',
+        antes: async (p) => { await validacao(p); await marcar(LONGO)(p); } },
+      { nome: 'mapa-geo-validacao-piquetes-espera', url: URL_PQ, tamanhos: T, regiao: '[data-testid="piquetes-em-espera"]', antes: osDois },
+      { nome: 'mapa-geo-validacao-piquetes-previa', url: URL_PQ, tamanhos: T, regiao: '[data-testid="concluir-piquetes"]',
+        antes: async (p) => { await osDois(p); await p.getByRole('button', { name: 'Concluir piquetes de P_01' }).first().click();
+          await p.locator('tr[data-linha="soma"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(300); } },
+    ];
+  })(),
+  /* MAPA-PIQUETES-03 — `&unidade=1`: o pasto-pai que virou grupo aparece como UMA unidade (o contorno do pai, a lotação Σ dos piquetes) com as
+     divisões em linha fina; o painel com "2 divisões: P_09A 21,4 · P_09B 19,2 = 40,6 ha". */
+  { nome: 'mapa-geo-unidade-painel', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaPasto('P_09 Retiro')(p); await p.locator('[data-testid="mapa-painel-divisoes"]').waitFor({ timeout: 3000 }); } },
+  /* -03: o mês do PAI (ago/26): a unidade é o pasto inteiro, sem linhas nem a linha das divisões (se ela aparecer, o cenário falha) */
+  { nome: 'mapa-geo-unidade-mes-do-pai', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaMes('Ago')(p); await mapaPasto('P_09 Retiro')(p);
+    if (await p.locator('[data-testid="mapa-painel-divisoes"]').count()) throw new Error('mês do pai com a linha das divisões'); } },
+  /* -03 caso P6: o contorno furado (a manga) e as divisões SEM polígono — "2 divisões sem desenho: P_10A, P_10B" */
+  { nome: 'mapa-geo-unidade-sem-desenho', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaPasto('P_10 Manga')(p); await p.locator('[data-testid="mapa-painel-divisoes"]', { hasText: '2 divisões sem desenho: P_10A, P_10B' }).waitFor({ timeout: 3000 }); } },
+  /* -03: a Operação com as unidades (rótulo = nome do pasto; as divisões em linha fina) */
+  { nome: 'mapa-geo-unidade-operacao', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
+  { nome: 'mapa-geo-adicionar-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-painel-poligono"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+      await p.getByRole('menuitem', { name: 'Área' }).first().hover(); await p.waitForTimeout(300);
+      await p.getByRole('menuitem', { name: 'Curral', exact: true }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="validacao-tipo-pedido"]').waitFor({ timeout: 3000 });
+      await p.getByText('P_01', { exact: true }).first().click(); await p.waitForTimeout(500); } },
+  /* MAPA-EDITAR-POLIGONO-02 (a lacuna do -01: a Validação não tinha cenário) — a lista estreita (280 px, nome inteiro) e a barra de
+     edição compacta (2 linhas, 9,5 px) em Vértices e em Desenhar. Mede SÓ a lista e a barra (o resto da Validação: MAPA-VALIDACAO-CORTES) */
+  ...(() => {
+    const T = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
+    const validacao = async (p) => { await p.locator('button', { hasText: 'Validação' }).first().click(); await p.locator('[data-testid="validacao-lista"]').waitFor(); await p.waitForTimeout(500); };
+    return [
+      { nome: 'mapa-validacao-lista', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="validacao-lista"]', antes: validacao },
+      /* -02b: a lista recolhida FORA da edição (faixa de 24 px; o mapa ganha a largura) */
+      { nome: 'mapa-validacao-lista-recolhida', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="validacao-lista-recolhida"]', antes: async (p) => {
+        await validacao(p); await p.locator('[data-testid="validacao-recolher-lista"]').click();
+        await p.locator('[data-testid="validacao-lista-recolhida"]').waitFor(); await p.waitForTimeout(500); } },
+      /* MAPA-EDITAR-POLIGONO-09 (UI-ESPACO-RESERVADO, Gabriel 01/11 17:52: "está empurrando para a direita e sumindo o salvar") — a barra de
+         edição em TODOS os modos, com a lista recolhida (o padrão na edição) e aberta: "Prévia e gravar" e "Cancelar" INTEIROS na tela e na
+         barra, sem nada por cima (`visivelNaTela`), nenhum botão cortado na zona que se acomoda nem na barra (`botoesDentro`) e a barra
+         sempre com a mesma altura (2 linhas) */
+      ...(() => {
+        const abrir = (modo, url = '') => async (p) => {
+          await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
+          await p.locator('[data-testid="editar-poligono"] button', { hasText: modo }).click();
+          await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); };
+        const noMapa = async (p, pontos, duplo = false) => {
+          const c = await p.locator('.leaflet-container').first().boundingBox();
+          for (let k = 0; k < pontos.length; k++) {
+            const [fx, fy] = pontos[k]; const x = c.x + c.width * fx, y = c.y + c.height * fy;
+            if (duplo && k === pontos.length - 1) await p.mouse.dblclick(x, y); else await p.mouse.click(x, y);
+            await p.waitForTimeout(250);
+          } };
+        /* o botão pode estar na linha ou no "Mais ▾" (é o que a barra decide) */
+        const acao = async (p, testid) => {
+          const b = p.locator(`[data-testid="barra-edicao-poligono"] [data-testid="${testid}"]`);
+          if (await b.count()) await b.first().click();
+          else { await p.locator('[data-testid="edicao-mais"]').click(); await p.waitForTimeout(200); await p.locator(`[role="menuitem"][data-testid="${testid}"]`).click(); }
+          await p.waitForTimeout(500); };
+        const modos = [
+          ['vertices-amontoado', 'tela=mapa-geo&amontoado=1', async (p) => { await abrir('Vértices')(p); await p.locator('[data-testid="edicao-corrigir"]').waitFor(); }],
+          ['corrigir', 'tela=mapa-geo&laco=1', async (p) => { await abrir('Vértices')(p); await p.locator('[data-testid="edicao-corrigir"]').waitFor(); }],
+          ['redesenhar', 'tela=mapa-geo', abrir('Redesenhar')],
+          /* risca de lado a lado pelo MEIO do P_01: a caixa dele sai dos rótulos dos lados (no meio de cada lado) */
+          ['dividir', 'tela=mapa-geo', async (p) => {
+            await abrir('Dividir')(p);
+            const r = await p.evaluate(() => { const bs = [...document.querySelectorAll('.lado-do-poligono span')].map(e => e.getBoundingClientRect());
+              return { x0: Math.min(...bs.map(b => b.left)), x1: Math.max(...bs.map(b => b.right)), y: (Math.min(...bs.map(b => b.top)) + Math.max(...bs.map(b => b.bottom))) / 2 }; });
+            await p.mouse.click(r.x0 - 25, r.y + 3); await p.waitForTimeout(250); await p.mouse.dblclick(r.x1 + 25, r.y - 3); await p.waitForTimeout(800);
+            await p.locator('[data-testid="edicao-nome-novo"]').waitFor({ timeout: 3000 }); }],
+          ['unir', 'tela=mapa-geo', async (p) => {
+            await validacao(p); const caixas = p.locator('[data-testid="validacao-lista"] button[role="checkbox"]');
+            await caixas.nth(1).click(); await caixas.nth(2).click(); await p.locator('[data-testid="unir-selecionados"]').click();
+            await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); }],
+          ['desenhar', 'tela=mapa-geo', async (p) => {
+            await validacao(p); await p.locator('[data-testid="edicao-desenhar-novo"]').click();
+            await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); await noMapa(p, [[0.3, 0.5], [0.5, 0.45]]); }],
+          ['rascunho', 'tela=mapa-geo', async (p) => {
+            await validacao(p); await p.locator('[data-testid="edicao-desenhar-novo"]').click();
+            await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700);
+            await noMapa(p, [[0.3, 0.5], [0.5, 0.42], [0.55, 0.7]]); await acao(p, 'edicao-fechar-ajustar'); }],
+        ];
+        const medicao = { visivelNaTela: { sels: ['[data-testid="edicao-previa"]', '[data-testid="edicao-cancelar"]'], dentro: '[data-testid="barra-edicao-poligono"]', altura: 50,
+          inteirosEm: ['[data-testid="edicao-zona"]', '[data-testid="edicao-linha-2"]', '[data-testid="barra-edicao-poligono"]'] },
+          botoesDentro: '[data-testid="edicao-zona"], [data-testid="edicao-fixos"], [data-testid="barra-edicao-poligono"]' };
+        return modos.flatMap(([nome, url, antes]) => [
+          { nome: `mapa-validacao-${nome}`, url, tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes, ...medicao },
+          { nome: `mapa-validacao-${nome}-lista`, url, tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', ...medicao, antes: async (p) => {
+            await antes(p); await p.locator('[data-testid="validacao-reabrir-lista"]').click(); await p.waitForTimeout(700); } },
+        ]);
+      })(),
+    ];
+  })(),
   /* MAPA-CONTROLES-01 — abrir o pasto e FECHAR o painel: o zoom e os créditos voltam à borda direita (o espaço do painel não fica
      reservado); com os Filtros ocultos, o mesmo. O canto se mede sozinho em toda tela do Gestor (`medirCantoDoMapa`) */
   { nome: 'mapa-geo-painel-fechado', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
     await mapaPasto('P_01')(p); await p.locator('[data-testid="mapa-painel"] button[aria-label="Fechar"]').first().click(); await p.waitForTimeout(400); } },
+  /* fix1 (5): a Validação só pelo menu por cima (o resto dela reprova na base: pendência MAPA-VALIDACAO-CORTES) */
+  { nome: 'mapa-geo-validacao-menu', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('button:has-text("Validação")'), soRegras: ['menu-por-cima'] },
   { nome: 'mapa-geo-sem-filtros', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
     await p.locator('[data-testid="mapa-filtros"] button', { hasText: 'Ocultar' }).first().click(); await p.waitForTimeout(400); } },
   /* MAPA-GLOBAL-01 — Geo Pastos em Global (dados sintéticos `dados/mapaGlobal.ts`): 2 fazendas; 5 com o nome mais longo, uma sem fechamento
      no mês e uma sem mapa; a visão Pastos com o filtro "Carga alta"; as abas Área por situação e Atividade do gráfico */
-  { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS },
-  { nome: 'mapa-global-5', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS },
-  { nome: 'mapa-global-pastos', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+  { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
+  { nome: 'mapa-global-5', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
+  /* fix1 (1): o hover do cabeçalho que ordena, nas duas tabelas da visão Fazendas */
+  { nome: 'mapa-global-hover-fazendas', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], hoverCabecalho: '[data-testid="global-card-fazendas"]' },
+  { nome: 'mapa-global-hover-atencao', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], hoverCabecalho: '[data-testid="global-card-atencao"]' },
+  { nome: 'mapa-global-pastos', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true, hoverCabecalho: '[data-testid="global-card-pastos"]', antes: async (p) => {
     await p.locator('[data-testid="global-barra"] button', { hasText: 'Pastos' }).first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="global-chips"] button', { hasText: 'Carga alta' }).first().click(); await p.waitForTimeout(400); } },
   { nome: 'mapa-global-grafico-area', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
@@ -296,6 +442,70 @@ const CENARIOS = [
   { nome: 'plano-contas-renomear-previa', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]', antes: async (p) => {
     await p.locator('[data-testid="renomear-subcentro"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="nome-subcentro"]').fill('Animais de terceiros'); await p.locator('[data-testid="conferir-subcentro"]').click(); await p.waitForTimeout(500); } },
+  /* FECH-ROTACAO-01 fatia 3 — Fechamento de pastos com o grupo (dado SINTÉTICO, `tela=fechamento-grupo`): a grade com a moldura do
+     grupo P10 (um vedado) e o card que só recebe; o modal do P10A com o quadro "Onde o lote esteve" (grupo inteiro) e o do P11 com a
+     rotação avulsa ("também esteve em" o P12 de nome longo) */
+  ...(() => {
+    const T = [[750, 483], [1000, 600], [1126, 579], [1300, 704], [1366, 768], [1440, 800], [1750, 1000]];
+    const URL = 'tela=fechamento-grupo&barra=32';
+    const grade = async (p) => { await p.locator('[data-testid="grupo-no-fechamento"]').waitFor(); await p.waitForTimeout(600); };
+    const modal = (nome) => async (p) => { await grade(p); await p.locator('button', { hasText: new RegExp(`^${nome}`) }).first().click();
+      await p.locator('[data-testid="modal-do-pasto"]').waitFor(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="lote-onde"]').click(); await p.locator('[data-testid="lote-quadro"]').waitFor(); await p.waitForTimeout(400); };
+    /* SÓ O QUE ESTE ITEM TOCA (`regiao`): a moldura do grupo, o quadro do lote e o modal com o botão novo no rodapé. A tela do
+       Fechamento nunca teve gate e tem achados antigos fora disto (a fita dos meses a 750px, nome longo do card cortado sem title):
+       listados no relatório da fatia 3; tirar a `regiao` mede a tela inteira. */
+    const soModal = (nome) => async (p) => { await grade(p); await p.locator('button', { hasText: new RegExp(`^${nome}`) }).first().click();
+      await p.locator('[data-testid="modal-do-pasto"]').waitFor(); await p.waitForTimeout(700); };
+    return [
+      { nome: 'fechamento-grupo', url: URL, tamanhos: T, regiao: '[data-testid="grupo-no-fechamento"]', antes: grade },
+      { nome: 'fechamento-grupo-modal', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
+      { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
+    ];
+  })(),
+  /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos, modo "Grupos" (dado SINTÉTICO no `tela=pastos`): a lista dos grupos, com os
+     inativos, o modal de editar (3 piquetes, a prévia "já está assim"), o novo grupo com o pasto de nome longo e área no milhar, a
+     prévia da desativação, e a etiqueta do grupo no cartão do modo "Ordem manual" */
+  ...(() => {
+    const T = [[750, 483], [1000, 600], [1126, 579], [1300, 704], [1366, 768], [1440, 800], [1750, 1000]];
+    const URL = 'tela=pastos&barra=32';
+    const grupos = async (p) => { await p.locator('[data-testid="pastos-modo-grupos"]').click(); await p.locator('[data-testid="grupos-tabela"]').waitFor(); await p.waitForTimeout(300); };
+    const abrir = (nome) => async (p) => { await grupos(p); await p.locator('[data-testid="grupo-linha"]', { hasText: nome }).first().click();
+      await p.locator('[data-testid="grupo-dialog"]').waitFor(); await p.waitForTimeout(700); };
+    return [
+      { nome: 'pastos-grupos', url: URL, tamanhos: T, antes: grupos },
+      { nome: 'pastos-grupos-inativos', url: URL, tamanhos: T, antes: async (p) => { await grupos(p); await p.getByText('Inativos', { exact: true }).click(); await p.waitForTimeout(400); } },
+      { nome: 'pastos-grupo-editar', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: abrir('P10') },
+      { nome: 'pastos-grupo-novo', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+        await grupos(p); await p.locator('[data-testid="grupo-novo"]').click(); await p.locator('[data-testid="grupo-dialog"]').waitFor();
+        await p.locator('[data-testid="grupo-nome"]').fill('Retiro do córrego');
+        for (const nome of ['P13 Retiro do córrego de baixo', 'P11']) {
+          await p.locator('[data-testid="grupo-bloco-pastos"] button', { hasText: /^Adicionar pasto/ }).click(); await p.waitForTimeout(200);
+          await p.getByPlaceholder('Buscar pasto').fill(nome); await p.waitForTimeout(200); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+        }
+        await p.waitForTimeout(700); } },
+      { nome: 'pastos-grupo-desativar', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => { await abrir('Terminação')(p);
+        await p.locator('[data-testid="grupo-desativar"]').click(); await p.waitForTimeout(500); } },
+      { nome: 'pastos-manual-etiqueta', url: URL, tamanhos: T, antes: async (p) => { await p.locator('button', { hasText: /^Ordem manual$/ }).click(); await p.waitForTimeout(400); } },
+      /* PASTO-AREA-OFICIAL-01 — o modo "Áreas": a lista (oficial × mapa, a diferença, o travado, o sem polígono, a última mudança), os
+         marcados, a prévia do "Usar área do mapa" (P13 com área no milhar e o nome longo), a prévia com recusa e o desfazer */
+      ...(() => {
+        const areas = async (p) => { await p.locator('[data-testid="pastos-modo-areas"]').click(); await p.locator('[data-testid="areas-linha"]').first().waitFor(); await p.waitForTimeout(300); };
+        const marcar = async (p, nome) => { await p.locator('[data-testid="areas-linha"]', { hasText: nome }).first().locator('[data-testid="areas-marcar"]').click(); };
+        const previa = (nomes) => async (p) => { await areas(p); for (const n of nomes) await marcar(p, n);
+          await p.locator('[data-testid="areas-usar-mapa"]').click(); await p.locator('[data-testid="areas-previa-linha"]').first().waitFor(); await p.waitForTimeout(400); };
+        return [
+          { nome: 'pastos-areas', url: URL, tamanhos: T, antes: areas },
+          { nome: 'pastos-areas-marcados', url: URL, tamanhos: T, antes: async (p) => { await areas(p); await p.locator('[data-testid="areas-marcar-todos"]').click(); await p.waitForTimeout(300); } },
+          { nome: 'pastos-areas-previa', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: previa(['P13 Retiro', 'P10A', 'T-A3']) },
+          { nome: 'pastos-areas-recusa', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: previa(['P11']) },
+          { nome: 'pastos-areas-desfazer', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => { await areas(p);
+            await p.locator('[data-testid="areas-desfazer"]').first().click(); await p.locator('[data-testid="areas-desfazer-dialog"]').waitFor(); await p.waitForTimeout(400); } },
+        ];
+      })(),
+    ];
+  })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
      a lista, a busca para 1/0 bens e um chip (o quadro tem a mesma altura), a aba que chega depois, e o modal do bem em cada aba (o
      trator, a pastagem, a terra e o bem NOVO — Dados e Lançamentos, a terra num passo) */
@@ -342,6 +552,8 @@ const CENARIOS = [
           await p.locator('[data-testid="bem-dep-motivo"]').fill('Cadastro errado desde o início: a vida útil certa é outra');
           await p.locator('[data-testid="bem-dep-ver"]').click(); await p.waitForTimeout(600);
         } })),
+      /* MAPA-GLOBAL-01 fix1 (1): o hover MEDIDO (fundo opaco, rótulo legível) — o cenário de cima só fotografa */
+      { nome: 'patrimonio-hover-medido', url: URL, tamanhos: T, hoverCabecalho: '[data-testid="patrimonio-tabela"]' },
       { nome: 'patrimonio-hover-cabecalho', url: URL, tamanhos: T, antes: async (p) => {
         await p.locator('[data-testid="patrimonio-tabela"] th', { hasText: /^Código/ }).first().hover(); await p.waitForTimeout(300); } },
     ];
@@ -1026,6 +1238,79 @@ function medirRolagem({ dentro, exceto }) {
   }
   return achados;
 }
+/* MAPA-GLOBAL-01 fix1 (2, Gabriel 31/10) — `cabecalhoInteiro` (opcional, por cenário): todo cabeçalho de tabela (`thead th`) cabe INTEIRO
+   na coluna: nem o `th` passa da largura, nem um pedaço dele corta ("…" incluso — cabeçalho nunca tem reticências). "Área ha", "Peso kg"
+   e "Sem fech." passavam da coluna por baixo do vizinho opaco e o gate dizia 0: a regra de corte só via quem tem `overflow: hidden`. */
+function medirCabecalhoInteiro(regiao) {
+  const raiz = regiao ? document.querySelector(regiao) : document; if (!raiz) return [];
+  const achados = [];
+  for (const th of raiz.querySelectorAll('thead th')) {
+    const r = th.getBoundingClientRect(); if (r.width < 2 || r.height < 2) continue;
+    const nome = (th.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 30);
+    if (th.scrollWidth > th.clientWidth + 1) { achados.push({ regra: 'cabecalho-inteiro', texto: `"${nome}" pede ${th.scrollWidth}px, a coluna tem ${th.clientWidth}` }); continue; }
+    for (const e of th.querySelectorAll('*')) {
+      const cs = getComputedStyle(e);
+      if (e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 2 && (cs.overflowX === 'hidden' || cs.overflowX === 'clip' || cs.textOverflow === 'ellipsis')) {
+        achados.push({ regra: 'cabecalho-inteiro', texto: `"${nome}" corta (pede ${e.scrollWidth}px, tem ${e.clientWidth})` }); break;
+      }
+      const re = e.getBoundingClientRect();
+      if (re.width > 1 && (re.right > r.right + 0.5 || re.left < r.left - 0.5)) { achados.push({ regra: 'cabecalho-inteiro', texto: `"${nome}" sai da coluna (${Math.round(Math.max(re.right - r.right, r.left - re.left))}px)` }); break; }
+    }
+  }
+  return achados;
+}
+/* MAPA-GLOBAL-01 fix1 (1) — `hoverCabecalho: '<seletor da tabela>'` (opcional): com o mouse num cabeçalho que ordena, o fundo segue OPACO e o
+   rótulo legível (contraste ≥ 3). O `hover:bg-primary-foreground/10` trocava o navy por branco a 10% e o rótulo branco sumia. */
+function medirHoverCabecalho() {
+  const th = [...document.querySelectorAll('th:hover')].pop(); if (!th) return [{ regra: 'cabecalho-hover', texto: 'nenhum cabecalho com o mouse em cima' }];
+  const rgba = (s) => { const m = s.match(/[\d.]+/g) ?? []; return { r: +m[0] || 0, g: +m[1] || 0, b: +m[2] || 0, a: m[3] == null ? 1 : +m[3] }; };
+  const lum = ({ r, g, b }) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const cs = getComputedStyle(th), fundo = rgba(cs.backgroundColor), letra = rgba(cs.color);
+  const nome = (th.textContent ?? '').trim().slice(0, 30);
+  if (fundo.a < 0.99) return [{ regra: 'cabecalho-hover', texto: `"${nome}": com o mouse em cima o fundo fica translucido (${cs.backgroundColor})` }];
+  const [cl, ce] = [lum(fundo), lum(letra)].sort((x, y) => y - x);
+  const contraste = (cl + 0.05) / (ce + 0.05);
+  return contraste < 3 ? [{ regra: 'cabecalho-hover', texto: `"${nome}": com o mouse em cima o rotulo some (contraste ${contraste.toFixed(1)})` }] : [];
+}
+/* MAPA-GLOBAL-01 fix1 (2c) — o GRÁFICO do Global, medido sozinho onde ele existe: o subtítulo fica abaixo das abas (nunca por trás), a
+   legenda inteira dentro do card e pelo menos 2 barras à vista. Antes tudo rolava junto e a legenda sumia atrás das abas/abaixo do card. */
+function medirGraficoDoGlobal() {
+  const card = document.querySelector('[data-testid="global-grafico"]'); if (!card) return [];
+  const c = card.getBoundingClientRect(), achados = [];
+  const abas = card.querySelector('[role="radiogroup"], [role="tablist"]') ?? card.firstElementChild;
+  const quadro = card.querySelector('[data-testid^="grafico-"]:not([data-testid$="-barras"])');
+  if (!quadro) return [{ regra: 'grafico', texto: 'grafico nao achado' }];
+  const sub = quadro.firstElementChild, barras = quadro.querySelector('[data-testid$="-barras"]'), leg = quadro.lastElementChild;
+  const a = abas.getBoundingClientRect(), su = sub.getBoundingClientRect(), le = leg.getBoundingClientRect();
+  if (su.top < a.bottom - 0.5) achados.push({ regra: 'grafico', texto: `o subtitulo passa por tras das abas (${Math.round(a.bottom - su.top)}px)` });
+  if (le.bottom > c.bottom + 0.5 || le.top < c.top) achados.push({ regra: 'grafico', texto: `a legenda sai do card (${Math.round(le.bottom - c.bottom)}px)` });
+  if (barras && barras.getBoundingClientRect().height < 2 * 18 - 0.5) achados.push({ regra: 'grafico', texto: `menos de 2 barras a vista (${Math.round(barras.getBoundingClientRect().height)}px)` });
+  return achados;
+}
+/* MAPA-GLOBAL-01 fix1 (5) — o MENU POR CIMA DO MAPA, medido sozinho em toda tela do mapa (`mapa-geo-tela`): uma gaveta igual à do menu
+   lateral (V2ContextDrawer: 240px, z-50) é posta ao lado da barra; em cada vidro, no mapa e nos cards que ela cobre, o ponto do meio da
+   parte coberta tem de ser a gaveta. Sem o `isolate` da tela, os vidros (z-500) e o Leaflet (z-400…1000) ficavam por cima do menu. */
+function medirMenuPorCima(foto) {
+  const tela = document.querySelector('[data-testid="mapa-geo-tela"]'); if (!tela) return [];
+  const t = tela.getBoundingClientRect();
+  const gaveta = document.createElement('div');
+  gaveta.dataset.gavetaDeTeste = '1';
+  /* pointer-events: auto — com um menu do Radix aberto o body fica com pointer-events: none, a gaveta herdaria e o elementFromPoint a pularia */
+  Object.assign(gaveta.style, { position: 'fixed', left: `${t.left}px`, top: '0', bottom: '0', width: '240px', zIndex: '50', background: 'rgba(27,42,68,0.9)', pointerEvents: 'auto' });
+  document.body.appendChild(gaveta);
+  const g = gaveta.getBoundingClientRect(), achados = [];
+  const alvos = ['[data-testid="mapa-kpis"]', '[data-testid="mapa-filtros"]', '[data-testid="mapa-legenda"]', '.leaflet-container', '.leaflet-control-container .leaflet-control',
+    '[data-testid="global-kpis"]', '[data-testid="global-tabela-fazendas"]', '[data-testid="global-barra"]'];
+  for (const sel of alvos) for (const e of document.querySelectorAll(sel)) {
+    const r = e.getBoundingClientRect(); if (r.width < 2 || r.height < 2) continue;
+    const x0 = Math.max(r.left, g.left), x1 = Math.min(r.right, g.right), y0 = Math.max(r.top, g.top), y1 = Math.min(r.bottom, g.bottom);
+    if (x1 - x0 < 2 || y1 - y0 < 2) continue;
+    const no = document.elementFromPoint((x0 + x1) / 2, (y0 + y1) / 2);
+    if (!no || !gaveta.contains(no)) achados.push({ regra: 'menu-por-cima', texto: `${sel} fica por cima do menu lateral` });
+  }
+  if (!foto) gaveta.remove();
+  return achados;
+}
 /* MAPA-CONTROLES-01 (Gabriel 31/10) — o CANTO DO MAPA do Gestor, medido sozinho em toda tela que tem o mapa do Gestor: com o painel do
    pasto aberto, o zoom e os créditos do Google ficam à esquerda dele; fechado, encostados na borda direita (os créditos no rodapé quando
    cabem ao lado da legenda, senão logo acima dela; o + / − acima deles e acima da faixa da legenda). Os créditos nunca por baixo de painel, legenda, Filtros ou KPIs (exigência do Google). */
@@ -1033,7 +1318,8 @@ function medirCantoDoMapa() {
   const mapa = document.querySelector('[data-testid="mapa-gestor-mapa"]'); if (!mapa) return [];
   const caixa = (sel) => { const e = document.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(); return r.width < 2 || r.height < 2 ? null : r; };
   const m = mapa.getBoundingClientRect(), z = caixa('.leaflet-control-zoom'), c = caixa('[data-testid="mapa-creditos"]');
-  const painel = caixa('[data-testid="mapa-painel"]'), legenda = caixa('[data-testid="mapa-legenda"]');
+  /* MAPA-02f-b: o painel da infraestrutura ocupa o mesmo lugar do painel do pasto (o canto segue qualquer um dos dois) */
+  const painel = caixa('[data-testid="mapa-painel"]') ?? caixa('[data-testid="mapa-painel-infra"]'), legenda = caixa('[data-testid="mapa-legenda"]');
   const achados = [], px = (n) => `${Math.round(n)}px`;
   if (!z) return [{ regra: 'canto-do-mapa', texto: 'zoom nao achado' }];
   if (!c) return [{ regra: 'canto-do-mapa', texto: 'creditos nao achados' }];
@@ -1058,7 +1344,7 @@ function medirCantoDoMapa() {
   if (logo) {
     if (logo.height < 15.5 || logo.height > 19.5) achados.push({ regra: 'canto-do-mapa', texto: `o logo do Google tem ${px(logo.height)} de altura (16 a 19)` });
     const livre = { left: logo.left - 10, right: logo.right + 10, top: logo.top - 10, bottom: logo.bottom + 5 };
-    for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['zoom', '.leaflet-control-zoom']]) {
+    for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['painel da infraestrutura', '[data-testid="mapa-painel-infra"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['zoom', '.leaflet-control-zoom']]) {
       const b = caixa(sel); if (b && cruza(livre, b)) achados.push({ regra: 'canto-do-mapa', texto: `${nome} entra no espaço livre do logo do Google` });
     }
   }
@@ -1067,7 +1353,7 @@ function medirCantoDoMapa() {
     if (f.height > 16.5) achados.push({ regra: 'canto-do-mapa', texto: `o texto dos créditos tem ${px(f.height)} (uma linha)` });
     if (faixaEl.scrollWidth > faixaEl.clientWidth + 1) achados.push({ regra: 'canto-do-mapa', texto: 'o texto dos créditos é cortado' });
   }
-  for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['KPIs', '[data-testid="mapa-kpis"]']]) {
+  for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['painel da infraestrutura', '[data-testid="mapa-painel-infra"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['KPIs', '[data-testid="mapa-kpis"]']]) {
     const b = caixa(sel); if (!b) continue;
     if (cruza(c, b)) achados.push({ regra: 'canto-do-mapa', texto: `os creditos ficam por baixo de ${nome}` });
     if (cruza(z, b)) achados.push({ regra: 'canto-do-mapa', texto: `o zoom fica por baixo de ${nome}` });
@@ -1091,6 +1377,48 @@ function medirBotoesDentro(sel) {
       if (r.bottom > c.bottom + 0.5 || r.top < c.top - 0.5) achados.push({ regra: 'botao', texto: `botao "${nome}" sai da faixa por ${r.bottom > c.bottom ? 'baixo' : 'cima'} (${Math.round(r.bottom > c.bottom ? r.bottom - c.bottom : c.top - r.top)}px)` });
       if (b.scrollWidth > b.clientWidth + 1) achados.push({ regra: 'botao', texto: `botao "${nome}" corta o texto` });
     }
+  }
+  return achados;
+}
+/* MAPA-EDITAR-POLIGONO-09 (UI-ESPACO-RESERVADO) — `visivelNaTela` (opcional, por cenário): cada seletor existe, está INTEIRO dentro da janela,
+   dentro do `dentro` e de todo ancestral que corta (overflow ≠ visible), e é ele (ou um filho) que está no centro (nada por cima). Com
+   `altura`, o `dentro` tem exatamente essa altura (a barra não cresce nem encolhe com o que mostra). */
+function medirVisivelNaTela({ sels, dentro, altura, inteirosEm = [] }) {
+  const achados = [];
+  /* `inteirosEm`: TODO elemento visível dentro de cada caixa cabe inteiro nela (campo, seletor, texto — não só botão: a zona que se
+     acomoda corta por dentro, e o campo do nome cortado passava) */
+  for (const sel of inteirosEm) {
+    for (const cx of document.querySelectorAll(sel)) {
+      const c = cx.getBoundingClientRect();
+      for (const el of cx.querySelectorAll('*')) {
+        const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2 || getComputedStyle(el).visibility === 'hidden') continue;
+        if (r.right > c.right + 0.5 || r.left < c.left - 0.5) {
+          achados.push({ regra: 'visivel', texto: `${sel}: "${(el.getAttribute('data-testid') ?? el.getAttribute('placeholder') ?? el.textContent ?? el.tagName).trim().slice(0, 30)}" cortado (${Math.round(r.right - c.right)}px)` });
+          break;
+        }
+      }
+    }
+  }
+  const caixa = dentro ? document.querySelector(dentro) : null;
+  if (dentro && !caixa) return [{ regra: 'visivel', texto: `${dentro} nao achado` }];
+  if (caixa && altura && Math.abs(caixa.getBoundingClientRect().height - altura) > 0.5)
+    achados.push({ regra: 'visivel', texto: `${dentro} com ${Math.round(caixa.getBoundingClientRect().height)}px de altura (esperado ${altura})` });
+  for (const sel of sels) {
+    const el = document.querySelector(sel); if (!el) { achados.push({ regra: 'visivel', texto: `${sel} nao achado` }); continue; }
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) { achados.push({ regra: 'visivel', texto: `${sel} sem tamanho` }); continue; }
+    if (r.left < -0.5 || r.top < -0.5 || r.right > innerWidth + 0.5 || r.bottom > innerHeight + 0.5)
+      achados.push({ regra: 'visivel', texto: `${sel} sai da janela (direita ${Math.round(r.right)} de ${innerWidth})` });
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const st = getComputedStyle(a); if (st.overflowX === 'visible' && st.overflowY === 'visible' && a !== caixa) continue;
+      const c = a.getBoundingClientRect();
+      if (r.left < c.left - 0.5 || r.right > c.right + 0.5 || r.top < c.top - 0.5 || r.bottom > c.bottom + 0.5) {
+        achados.push({ regra: 'visivel', texto: `${sel} cortado por ${a.getAttribute('data-testid') ?? a.tagName.toLowerCase()} (${Math.round(r.right - c.right)}px)` }); break;
+      }
+    }
+    const topo = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    // o botão desabilitado não recebe o mouse (pointer-events: none): o ponto cai num ANCESTRAL dele — isso não é "coberto"
+    if (!topo || !(topo === el || el.contains(topo) || topo.contains(el))) achados.push({ regra: 'visivel', texto: `${sel} coberto por ${topo?.getAttribute('data-testid') ?? topo?.tagName?.toLowerCase()}` });
   }
   return achados;
 }
@@ -1563,6 +1891,7 @@ try {
     if (cen.rotulosSvg) daRolagem.push(...(await p.evaluate(medirRotulosSvg, cen.rotulosSvg)));
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
+    if (cen.visivelNaTela) daRolagem.push(...(await p.evaluate(medirVisivelNaTela, cen.visivelNaTela)));
     if (cen.titulosDeBloco) daRolagem.push(...(await p.evaluate(medirTitulosDeBloco)));
     daRolagem.push(...(await p.evaluate(medirCantoDoMapa))); // MAPA-CONTROLES-01: só age onde há o mapa do Gestor
     if (cen.semRolarNoLugar) daRolagem.push(...(await p.evaluate(medirSemRolarNoLugar, cen.semRolarNoLugar)));
@@ -1571,6 +1900,18 @@ try {
     daRolagem.push(...(await p.evaluate(medirAlinhamento, cen.regiao ?? null)));
     const achadosTodos = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)),
       ...(await p.evaluate(medirSobreposicao, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
+    /* MAPA-GLOBAL-01 fix1: cabeçalho inteiro, hover do cabeçalho e o menu lateral por cima do mapa (este, sozinho em toda tela do mapa) */
+    if (cen.cabecalhoInteiro) achadosTodos.push(...(await p.evaluate(medirCabecalhoInteiro, cen.regiao ?? null)));
+    achadosTodos.push(...(await p.evaluate(medirGraficoDoGlobal))); // só age onde há o gráfico do Global
+    if (cen.hoverCabecalho) {
+      try { await p.locator(`${cen.hoverCabecalho} th[aria-sort]`).first().hover(); await p.waitForTimeout(300); achadosTodos.push(...(await p.evaluate(medirHoverCabecalho))); }
+      catch (e) { achadosTodos.push({ regra: 'erro', texto: `hover do cabecalho: ${String(e).slice(0, 100)}` }); }
+      if (FOTOS) await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}_hover.png`) });
+    }
+    if (await p.$('[data-testid="mapa-geo-tela"]')) {
+      achadosTodos.push(...(await p.evaluate(medirMenuPorCima, Boolean(FOTOS))));
+      if (FOTOS) { await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}_menu.png`) }); await p.evaluate(() => document.querySelectorAll('[data-gaveta-de-teste]').forEach((e) => e.remove())); }
+    }
     /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra
        so' pelo texto inclinado e pela sobreposicao. Erro de pagina conta sempre. */
     const achados = cen.soRegras ? achadosTodos.filter((a) => a.regra === 'erro' || cen.soRegras.includes(a.regra)) : achadosTodos;

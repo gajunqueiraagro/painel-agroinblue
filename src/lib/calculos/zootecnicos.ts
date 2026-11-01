@@ -446,6 +446,7 @@ export function calcUAHa(uaTotal: number, areaHa: number | null): number | null 
 // ---------------------------------------------------------------------------
 
 interface PastoParaArea {
+  id?: string;
   ativo: boolean;
   area_produtiva_ha: number | null;
   tipo_uso?: string | null;
@@ -477,6 +478,9 @@ interface PastoParaArea {
 export function calcAreaProdutivaPecuaria(
   pastos: PastoParaArea[],
   anoMes?: string,
+  /** PASTO-AREA-OFICIAL-02a — QUANTO cada pasto mede no mês (a área do mês do banco, `useAreaDosPastosNoMes`). Sem ele, ou quando
+   *  ele devolve `undefined` (não sabe), vale a área de hoje do cadastro, como antes. Só vale com `anoMes`. */
+  areaDe?: (pastoId: string, anoMes: string) => number | null | undefined,
 ): number {
   return pastos
     .filter(p =>
@@ -484,7 +488,10 @@ export function calcAreaProdutivaPecuaria(
       isOperacionalPecuaria(p.tipo_uso) &&
       (anoMes ? isPastoAtivoNoMes(p, anoMes) : true),
     )
-    .reduce((s, p) => s + (p.area_produtiva_ha || 0), 0);
+    .reduce((s, p) => {
+      const doMes = areaDe && anoMes && p.id ? areaDe(p.id, anoMes) : undefined;
+      return s + (doMes !== undefined ? doMes || 0 : p.area_produtiva_ha || 0);
+    }, 0);
 }
 
 // ---------------------------------------------------------------------------

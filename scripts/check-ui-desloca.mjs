@@ -241,6 +241,61 @@ const CENARIOS = [
     },
     estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
   })),
+  /* FECH-ROTACAO-01 fatia 3 — no quadro "Onde o lote esteve" do P10A: parte do grupo, marcar um piquete, voltar ao grupo inteiro e pôr um
+     pasto em "também esteve em" não movem o botão, os títulos dos blocos nem o rodapé do modal */
+  { nome: 'fechamento-grupo-lote', url: 'tela=fechamento-grupo&barra=32', regiao: '[data-testid="lote-quadro"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="grupo-no-fechamento"]').waitFor(); await espera(p, 600);
+      await p.locator('button', { hasText: /^P10A/ }).first().click(); await p.locator('[data-testid="modal-do-pasto"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="lote-onde"]').click(); await p.locator('[data-testid="lote-quadro"]').waitFor(); await espera(p, 400);
+    },
+    estados: [
+      ['parte do grupo', clicar('[data-testid="lote-grupo-parte"]')],
+      ['marcar o P10B', async (p) => { await p.locator('[data-testid="lote-membro"]').nth(1).click(); await espera(p); }],
+      ['grupo inteiro', clicar('[data-testid="lote-grupo-inteiro"]')],
+      ['também esteve em', async (p) => { await p.locator('[data-testid="lote-quadro"] button', { hasText: /^Adicionar pasto/ }).click(); await espera(p, 200);
+        await p.getByPlaceholder('Buscar pasto').fill('P11'); await espera(p, 200); await p.keyboard.press('Enter'); await espera(p); }],
+    ] },
+  /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (`tela=pastos`, SINTÉTICO): trocar o modo (Grupos, Ordem manual, Por destino) e
+     ligar os inativos não move a barra; no modal do grupo, tirar e pôr pasto, a prévia que troca e a desativação (com a frase que
+     quebra a linha) não movem o nome, o seletor, os títulos nem o rodapé */
+  { nome: 'pastos', url: 'tela=pastos&barra=32', antes: async (p) => { await p.locator('[data-testid="pastos-modo-grupos"]').waitFor(); await espera(p, 600); }, estados: [
+    ['modo Grupos', clicar('[data-testid="pastos-modo-grupos"]')], ['modo Áreas', clicar('[data-testid="pastos-modo-areas"]')],
+    ['inativos', async (p) => { await p.getByText('Inativos', { exact: true }).click(); await espera(p); }],
+    ['modo Ordem manual', botao(/^Ordem manual$/)], ['modo Por destino', botao(/^Por destino$/)],
+  ] },
+  /* PASTO-AREA-OFICIAL-01 — no modo "Áreas", marcar um, marcar todos e trocar o mês não movem a faixa (mês · frase · botão de largura
+     fixa), o cabeçalho nem o rodapé dos totais; no modal da prévia, digitar o motivo e gravar sem motivo (o aviso) não movem nada */
+  { nome: 'pastos-areas', url: 'tela=pastos&barra=32',
+    antes: async (p) => { await p.locator('[data-testid="pastos-modo-areas"]').click(); await p.locator('[data-testid="areas-linha"]').first().waitFor(); await espera(p, 600); },
+    estados: [
+      ['marcar um', async (p) => { await p.locator('[data-testid="areas-linha"]', { hasText: 'P10A' }).first().locator('[data-testid="areas-marcar"]').click(); await espera(p); }],
+      ['marcar todos', clicar('[data-testid="areas-marcar-todos"]')],
+      ['desmarcar todos', clicar('[data-testid="areas-marcar-todos"]')],
+      ['mês anterior', async (p) => { await p.locator('[data-testid="areas-dos-pastos"] button').first().click(); await espera(p, 600); }],
+    ] },
+  { nome: 'pastos-areas-previa', url: 'tela=pastos&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="pastos-modo-areas"]').click(); await p.locator('[data-testid="areas-linha"]').first().waitFor();
+      /* só o P10A: o "marcar todos" leva o P11, que a prévia recusa — o gravar fica apagado e não há o que clicar */
+      await p.locator('[data-testid="areas-linha"]', { hasText: 'P10A' }).first().locator('[data-testid="areas-marcar"]').click(); await p.locator('[data-testid="areas-usar-mapa"]').click();
+      await p.locator('[data-testid="areas-previa-linha"]').first().waitFor(); await espera(p, 600);
+    },
+    estados: [
+      ['gravar sem motivo', clicar('[data-testid="areas-gravar"]')],
+      ['motivo', async (p) => { await p.locator('[data-testid="areas-motivo"]').fill('o mapa foi medido com GPS'); await espera(p); }],
+    ] },
+  { nome: 'pastos-grupo', url: 'tela=pastos&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="pastos-modo-grupos"]').click(); await p.locator('[data-testid="grupo-linha"]', { hasText: 'Terminação' }).first().click();
+      await p.locator('[data-testid="grupo-dialog"]').waitFor(); await espera(p, 800);
+    },
+    estados: [
+      ['tirar um pasto', async (p) => { await p.locator('[data-testid="grupo-tirar"]').first().click(); await espera(p, 800); }],
+      ['pôr um pasto', async (p) => { await p.locator('[data-testid="grupo-bloco-pastos"] button', { hasText: /^Adicionar pasto/ }).click(); await espera(p, 200);
+        await p.getByPlaceholder('Buscar pasto').fill('P13'); await espera(p, 200); await p.keyboard.press('Enter'); await espera(p, 800); }],
+      ['desativar', async (p) => { await p.locator('[data-testid="grupo-desativar"]').click(); await espera(p, 600); }],
+    ] },
   /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */
   /* P109 — as 4 telas da meta (o caso real do NJ 2026): o rótulo do regime fica PRESO no lugar dele (`presos`: medido sempre, à vista)
      ao trocar a fazenda e ao passar aos valores ×400; no PC-100 o Realizado ↔ Meta (`auto`) não move nada — o rótulo tem o lugar

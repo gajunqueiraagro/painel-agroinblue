@@ -11,25 +11,36 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Button } from '@/components/ui/button';
+import { Segmentado } from '@/components/ui/segmentado';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent,
   DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { itemFunciona, MENU_ADICIONAR } from '@/lib/mapa/menuAdicionar';
+import { itemFunciona, MENU_ADICIONAR, subitemFunciona } from '@/lib/mapa/menuAdicionar';
+import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
 import { ChevronDown, ChevronLeft, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
+import { divisoesNoPainel, type Divisao } from '@/lib/mapa/unidadesDoMapa';
+import { areaCercadaDoPasto } from '@/lib/mapa/areaCercada';
 import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Ponto } from '@/lib/mapa/rotulosDoMapa';
 import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
 import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
 import { FUNDOS } from '@/lib/mapa/fundoDoMapa';
 import { EVENTO_LIMITE_DOS_CREDITOS } from '@/lib/mapa/creditosDoMapa';
+import { InfraPainel } from '@/components/mapa-geo/InfraPainel';
+import { useInfraestruturas } from '@/hooks/useInfraestruturas';
+import { useLavouraDaFazenda } from '@/hooks/useLavouraDaFazenda';
+import { lavouraDoPastoNoMes, rotuloDaLavoura, type LavouraDoMes } from '@/lib/mapa/lavouraDoMes';
+import { familiaForaDaPecuaria, type FamiliaForaDaPecuaria } from '@/lib/mapa/usoDoPasto';
+import { dataBR } from '@/lib/datas/dataBR';
+import { contagemPorTipo, definicaoDoTipo, iconeDaInfra, pastoNoPonto, pontoDaInfra, tipoDePontoPeloRotulo, type TipoInfra } from '@/lib/mapa/infraestrutura';
 /* MAPA-CONTROLES-01 / MAPA-COMPACTO-01: o que a legenda deixa livre à direita para os créditos no rodapé = 12 (a margem da legenda) +
    8 de folga + 10 (a margem do controle do Leaflet) + a largura MEDIDA dos créditos (o texto muda com a área à vista) */
 const FOLGA_DA_LEGENDA_PX = 12 + 8 + 10;
@@ -37,6 +48,8 @@ const FOLGA_DA_LEGENDA_PX = 12 + 8 + 10;
 interface Props {
   geometrias: FazendaGeometria[];
   pastos: Pasto[];
+  /** MAPA-PIQUETES-03: as divisões de cada unidade (pai + grupo) no mês — linhas finas por dentro do contorno, sem rótulo nem cor. */
+  divisoes?: ReadonlyMap<string, readonly Divisao<FazendaGeometria>[]>;
   /** O mês do mapa ('AAAA-MM'). */
   anoMes: string;
   /** Por pasto vigente no mês (`useMapaDoMes`). */
@@ -45,6 +58,11 @@ interface Props {
   erroDoMes: string | null;
   geoLoading: boolean;
   onImportar: () => void;
+  /** MAPA-AREA-TIPO-01: Adicionar › Área › [tipo] — vai à Validação para marcar um polígono existente com o tipo */
+  onClassificarArea?: (tipo: TipoDeArea) => void;
+  /** MAPA-02f-b: a fazenda e o cliente da infraestrutura (sem fazenda, o menu Infraestrutura fica "em breve") */
+  fazendaId?: string;
+  clienteId?: string | null;
   /** MAPA-GLOBAL-01 (D6): a fazenda foi aberta pelo Global — o "← Global" aparece no espaço reservado do início da barra. */
   voltarAoGlobal?: () => void;
   /** MAPA-GLOBAL-01 (D6): o pasto clicado no Global abre selecionado, com o painel aberto. */
@@ -98,9 +116,12 @@ const SEM_ATIVIDADE = '__sem__';
 type Filtros = {
   pastos: boolean; areas: boolean; semUso: boolean; nomes: boolean;
   atividadesOcultas: Set<string>; comAnimais: boolean; vazio: boolean; semFechamento: boolean;
+  /** MAPA-02f-b: a infraestrutura (liga/desliga tudo) e os tipos escondidos */
+  infra: boolean; infraOcultos: Set<string>;
 };
 const FILTROS_INICIAIS: Filtros = {
   pastos: true, areas: true, semUso: true, nomes: true, atividadesOcultas: new Set(), comAnimais: true, vazio: true, semFechamento: true,
+  infra: true, infraOcultos: new Set(),
 };
 
 function numero(v: number | null | undefined, casas = 0, sufixo = ''): string {
@@ -119,13 +140,70 @@ function Kpi({ rotulo, valor, unidade, largura = 80 }: { rotulo: string; valor: 
   );
 }
 
-function Cel({ rotulo, valor, destaque, unidade }: { rotulo: string; valor: string; destaque?: boolean; unidade?: string | null }) {
+/* MAPA-PAINEL-COMPACTO-01: a célula mais baixa (rótulo 11 + valor 14), menos padding; `nota` = uma linha secundária (a área do mapa) */
+function Cel({ rotulo, valor, destaque, unidade, nota, tituloNota }: {
+  rotulo: string; valor: string; destaque?: boolean; unidade?: string | null; nota?: string | null; tituloNota?: string;
+}) {
   return (
-    <div className={`rounded-md px-1.5 py-[3px] ${destaque ? 'bg-[#FFF6D6]' : 'bg-white/75'}`}>
-      <div className="text-[9.5px] leading-[12px] text-[#4A5361]">{rotulo}</div>
-      <div className="whitespace-nowrap text-[12px] font-semibold leading-[16px] tabular-nums">
+    <div className={`rounded-md px-1 py-px ${destaque ? 'bg-[#FFF6D6]' : 'bg-white/75'}`}>
+      <div className="text-[9.5px] leading-[11px] text-[#4A5361]">{rotulo}</div>
+      <div className="whitespace-nowrap text-[11px] font-semibold leading-[14px] tabular-nums">
         {valor}{unidade ? <span className="ml-1 text-[9.5px] font-normal text-[#4A5361]">{unidade}</span> : null}
       </div>
+      {nota && <div className="whitespace-nowrap text-[9.5px] leading-[11px] text-[#5A6472]" title={tituloNota} data-testid="mapa-painel-area-mapa">{nota}</div>}
+    </div>
+  );
+}
+
+/** MAPA-PAINEL-COMPACTO-01: campo sem valor fica em BRANCO no painel (Gabriel 01/11), não "—". */
+function branco(v: number | null | undefined, casas = 0, unidade = ''): string {
+  return v == null ? '' : `${formatNum(v, casas)}${unidade}`;
+}
+
+/** MAPA-ATIVIDADE-LAVOURA-01: uma linha rótulo · valor do bloco da lavoura (o valor quebra; fora de tabela nada de "…"). */
+function LinhaDoUso({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <div className="grid grid-cols-[86px_1fr] gap-1 text-[10px] leading-[13px]">
+      <span className="text-[#4A5361]">{rotulo}</span>
+      <span className="break-words font-semibold tabular-nums text-[#1d232b]">{valor}</span>
+    </div>
+  );
+}
+
+/**
+ * MAPA-ATIVIDADE-LAVOURA-01 — o painel do pasto FORA da pecuária no mês: sem cabeças, lotação, categorias nem histórico de lotação.
+ * Lavoura: cultura, safra, área plantada (e variedade, situação, plantio, colheita) da safra que contém o mês (D4). Os outros usos dizem o
+ * uso e que o rebanho não se aplica.
+ */
+function BlocoForaDaPecuaria({ familia, uso, lavoura, lida, erro, mes }: {
+  familia: FamiliaForaDaPecuaria; uso: string; lavoura: LavouraDoMes | null; lida: boolean; erro: string | null; mes: string;
+}) {
+  if (familia !== 'lavoura') {
+    return (
+      <div className="mt-2 text-[10px] leading-[13px] text-[#4A5361]" data-testid="mapa-painel-uso">
+        <b className="font-semibold text-[#1d232b]">{uso}</b> no mês: sem rebanho — cabeças e lotação não se aplicam.
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2" data-testid="mapa-painel-lavoura">
+      <div className="mb-0.5 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Lavoura</div>
+      {erro ? <div className="text-[10px] leading-[13px] text-[#B03A2E]">{erro}</div>
+        : !lida ? <div className="text-[10px] leading-[13px] text-[#5A6472]">Lendo a lavoura…</div>
+          : !lavoura ? <div className="text-[10px] leading-[13px] text-[#5A6472]">Nenhuma safra de lavoura cadastrada que contenha {mes}.</div>
+            : (
+              <div className="flex flex-col gap-px">
+                <LinhaDoUso rotulo="Cultura" valor={lavoura.culturas.join(' + ') || '—'} />
+                <LinhaDoUso rotulo="Safra" valor={lavoura.safra} />
+                <LinhaDoUso rotulo="Área plantada" valor={lavoura.areaPlantadaHa == null ? '—' : `${formatNum(lavoura.areaPlantadaHa, 1)} ha`} />
+                <LinhaDoUso rotulo="Variedade" valor={lavoura.variedades.join(' + ') || '—'} />
+                <LinhaDoUso rotulo="Situação" valor={lavoura.status ?? '—'} />
+                <LinhaDoUso rotulo="Plantio" valor={dataBR(lavoura.plantio)} />
+                {lavoura.colheitaReal
+                  ? <LinhaDoUso rotulo="Colheita" valor={dataBR(lavoura.colheitaReal)} />
+                  : <LinhaDoUso rotulo="Colheita prevista" valor={dataBR(lavoura.colheitaPrevista)} />}
+              </div>
+            )}
     </div>
   );
 }
@@ -176,16 +254,27 @@ function valorDaBarra(v: number): string {
   return v >= 999.5 ? `${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : formatNum(v, 0);
 }
 
+/** MAPA-ATIVIDADE-LAVOURA-01: a família do pasto FORA da pecuária no mês (null = pecuária ou fora da vigência). */
+function familiaDoPasto(d: DadosDoPastoNoMes | null | undefined): FamiliaForaDaPecuaria | null {
+  return d && !d.pecuaria ? familiaForaDaPecuaria(d.usoDoMes) : null;
+}
+
+/** MAPA-ATIVIDADE-LAVOURA-01: o rótulo do pasto fora da pecuária (nunca "vazio"): lavoura com a cultura da safra do mês; o resto, o uso. */
+function rotuloForaDaPecuaria(d: DadosDoPastoNoMes, lavoura: LavouraDoMes | null): string {
+  return familiaDoPasto(d) === 'lavoura' ? rotuloDaLavoura(lavoura) : rotuloDaAtividade(d.usoDoMes);
+}
+
 function escaparHtml(t: string): string {
   return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 export function MapaGestorView({
-  geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onRenderedChange,
-  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId,
+  geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
+  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
+  const [serieDoHistorico, setSerieDoHistorico] = useState<'kg' | 'ua'>('kg'); // MAPA-PAINEL-COMPACTO-01: abre em kg/ha
   const [filtrosAbertos, setFiltrosAbertos] = useState(true);
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS);
   const [creditosNoRodape, setCreditosNoRodape] = useState(true); // MAPA-CONTROLES-01
@@ -204,8 +293,26 @@ export function MapaGestorView({
   const geoPastos = useMemo(() => geometrias.filter(g => g.tipo === 'pasto' && !!g.pasto_id), [geometrias]);
   const geoSelecionada = selecionadoId ? geoPastos.find(g => g.id === selecionadoId) ?? null : null;
   const pastoSelecionado = geoSelecionada?.pasto_id ? pastoPorId.get(geoSelecionada.pasto_id) ?? null : null;
-  const painelAberto = Boolean(geoSelecionada && pastoSelecionado);
+  /* MAPA-02f-b: a infraestrutura — colocar (um clique no mapa), ver, editar (arrastar o ponto) e desativar */
+  const { infras, bens, salvar: salvarInfra, desativar: desativarInfra, recarregar: recarregarInfra } = useInfraestruturas(fazendaId);
+  const [colocandoTipo, setColocandoTipo] = useState<TipoInfra | null>(null);
+  const [pontoNovo, setPontoNovo] = useState<{ lon: number; lat: number } | null>(null);
+  const [infraSelId, setInfraSelId] = useState<string | null>(null);
+  const [editandoInfra, setEditandoInfra] = useState(false);
+  const [pontoEditado, setPontoEditado] = useState<{ lon: number; lat: number } | null>(null);
+  const colocandoRef = useRef<TipoInfra | null>(null);
+  colocandoRef.current = colocandoTipo;
+  const infraLayerRef = useRef<L.LayerGroup | null>(null);
+  const infraSel = infraSelId ? infras.find(i => i.id === infraSelId) ?? null : null;
+  const infraPainelAberto = (!!colocandoTipo && !!pontoNovo) || !!infraSel;
+  const fecharInfra = () => { setColocandoTipo(null); setPontoNovo(null); setInfraSelId(null); setEditandoInfra(false); setPontoEditado(null); };
+  const painelAberto = Boolean(geoSelecionada && pastoSelecionado) || infraPainelAberto;
   const dadosSelecionado = pastoSelecionado ? dadosDoMes.get(pastoSelecionado.id) ?? null : null;
+  /* MAPA-ATIVIDADE-LAVOURA-01: a lavoura dos pastos da fazenda (a safra do mês se escolhe na lib, D4) */
+  const { registros: registrosDeLavoura, lido: lavouraLida, erro: erroDaLavoura } = useLavouraDaFazenda(fazendaId, clienteId);
+  const familiaSelecionada = familiaDoPasto(dadosSelecionado);
+  const lavouraSelecionada = pastoSelecionado && familiaSelecionada === 'lavoura'
+    ? lavouraDoPastoNoMes(registrosDeLavoura, pastoSelecionado.id, anoMes) : null;
 
   // o polígono deixou de ser pasto (vínculo removido) ou sumiu: o painel fecha
   useEffect(() => {
@@ -226,24 +333,33 @@ export function MapaGestorView({
   const contagens = useMemo(() => {
     const atividades = new Map<string, number>();
     let comAnimais = 0; let vazio = 0; let semFechamento = 0;
+    const atividadesDaPecuaria = new Set<string>(); const familias = new Set<FamiliaForaDaPecuaria>();
     for (const g of geoPastos) {
       const d = dadosDoMes.get(g.pasto_id!);
+      /* MAPA-ATIVIDADE-LAVOURA-01: fora da pecuária conta só no filtro de atividade (pelo uso do mês), nunca em "Vazio"/"Sem fechamento" */
+      const familia = familiaDoPasto(d);
+      if (d && familia) {
+        const u = d.usoDoMes ?? SEM_ATIVIDADE;
+        atividades.set(u, (atividades.get(u) ?? 0) + 1);
+        familias.add(familia);
+        continue;
+      }
       if (!d || !d.temFechamento) { semFechamento++; continue; }
       if ((d.cabecas ?? 0) > 0) comAnimais++; else vazio++;
       const a = d.atividade ?? SEM_ATIVIDADE;
       atividades.set(a, (atividades.get(a) ?? 0) + 1);
+      if (a !== SEM_ATIVIDADE) atividadesDaPecuaria.add(a);
     }
     return {
       pastos: geoPastos.length,
       areas: geometrias.filter(g => g.tipo !== 'pasto' && g.tipo !== 'area_sem_uso' && g.tipo !== 'area_total').length,
       semUso: geometrias.filter(g => g.tipo === 'area_sem_uso').length,
       atividades: [...atividades.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
-      comAnimais, vazio, semFechamento,
+      comAnimais, vazio, semFechamento, atividadesDaPecuaria: [...atividadesDaPecuaria], familias: [...familias],
     };
   }, [geoPastos, geometrias, dadosDoMes]);
 
-  const atividadesDoMes = useMemo(() => contagens.atividades.map(([a]) => a).filter(a => a !== SEM_ATIVIDADE), [contagens]);
-  const legenda = useMemo(() => legendaDaCamada(camada, atividadesDoMes), [camada, atividadesDoMes]);
+  const legenda = useMemo(() => legendaDaCamada(camada, contagens.atividadesDaPecuaria, contagens.familias), [camada, contagens]);
 
   /* ── Desenho ── */
   useEffect(() => {
@@ -263,6 +379,7 @@ export function MapaGestorView({
       if (g.tipo !== 'pasto' || !g.pasto_id) return filtros.areas;
       if (!filtros.pastos) return false;
       const d = dadoDe(g);
+      if (d && familiaDoPasto(d)) return !filtros.atividadesOcultas.has(d.usoDoMes ?? SEM_ATIVIDADE);
       if (!d || !d.temFechamento) return filtros.semFechamento;
       if ((d.cabecas ?? 0) > 0 ? !filtros.comAnimais : !filtros.vazio) return false;
       return !filtros.atividadesOcultas.has(d.atividade ?? SEM_ATIVIDADE);
@@ -286,6 +403,7 @@ export function MapaGestorView({
             ? {
               color: sel ? '#ffffff' : 'rgba(255,255,255,0.85)', weight: sel ? 3 : 1, fillOpacity: sel ? 0.65 : 0.45,
               fillColor: corDoPasto(camada, {
+                foraDaPecuaria: familiaDoPasto(d),
                 temFechamento: !!d?.temFechamento, kgHa: d?.kgHa ?? null, cabecas: d?.cabecas ?? null, faixa: d?.faixa ?? null,
                 atividade: d?.atividade ?? null,
               }),
@@ -296,8 +414,9 @@ export function MapaGestorView({
         if (b.isValid()) { limites.extend(b); desenhados++; }
         const nome = nomeDe(g);
         if (ehPasto) {
-          camadaGeo.on('click', () => setSelecionadoId(g.id));
-          const sub = !d || !d.temFechamento ? '—' : (d.cabecas ?? 0) === 0 ? 'vazio' : `${formatNum(d.kgHa ?? 0, 0)} kg/ha`;
+          camadaGeo.on('click', () => { if (colocandoRef.current) return; setInfraSelId(null); setSelecionadoId(g.id); });
+          const sub = d && familiaDoPasto(d) ? rotuloForaDaPecuaria(d, lavouraDoPastoNoMes(registrosDeLavoura, g.pasto_id!, anoMes))
+            : !d || !d.temFechamento ? '—' : (d.cabecas ?? 0) === 0 ? 'vazio' : `${formatNum(d.kgHa ?? 0, 0)} kg/ha`;
           // o hover mostra sempre o nome e o kg/ha (é onde fica o rótulo que não coube)
           camadaGeo.bindTooltip(`${nome} · ${sub}`, { sticky: true });
           if (filtros.nomes && b.isValid()) {
@@ -316,6 +435,11 @@ export function MapaGestorView({
         }
         camadaGeo.addTo(grupo);
         camadasRef.current.set(g.id, camadaGeo);
+        /* MAPA-PIQUETES-03: as divisões da unidade (os piquetes do mês) — só linhas finas por dentro, sem preenchimento, rótulo nem clique */
+        for (const dv of (ehPasto && g.pasto_id ? divisoes?.get(g.pasto_id) ?? [] : [])) {
+          if (!dv.poligono) continue;
+          L.geoJSON(dv.poligono.geojson, { style: { color: 'rgba(255,255,255,0.7)', weight: 0.75, fill: false }, interactive: false }).addTo(grupo);
+        }
       } catch {
         /* polígono inválido: fica de fora */
       }
@@ -323,7 +447,9 @@ export function MapaGestorView({
     rotulosRef.current = candidatos;
     reportRenderedGeometries(desenhados);
     onRenderedChange?.(desenhados);
-    const chave = geometrias.map(x => x.id).join(',');
+    /* MAPA-EDITAR-POLIGONO-07 (Gabriel 15:09): o enquadramento automático só na troca de FAZENDA (e no 1º carregamento). A chave era a
+       lista de ids dos polígonos: toda gravação que cria/remove um (desenhar, dividir, unir, apagar) reenquadrava a fazenda inteira. */
+    const chave = geometrias[0]?.fazenda_id ?? '';
     if (limites.isValid() && enquadrouRef.current !== chave) {
       enquadrouRef.current = chave;
       try { mapa.fitBounds(limites, { paddingTopLeft: [240, 70], paddingBottomRight: [20, 60], animate: false, maxZoom: 16 }); } catch { /* */ }
@@ -331,7 +457,44 @@ export function MapaGestorView({
     // depois do enquadramento: os rótulos se arrumam no zoom em que o mapa vai ficar
     desenharRotulos(mapa, rotulos, candidatos);
   }, [mapStatus, geometrias, dadosDoMes, camada, filtros, selecionadoId, pastoPorId, mapInstanceRef, featureLayerRef, labelLayerRef,
-    reportRenderedGeometries, onRenderedChange]);
+    reportRenderedGeometries, onRenderedChange, registrosDeLavoura, anoMes, divisoes]);
+
+  /* MAPA-02f-b: a camada dos ÍCONES da infraestrutura (acima dos pastos; tamanho fixo em qualquer zoom; o rótulo no hover). Clique abre o
+     painel (só leitura); na edição o ponto escolhido se arrasta; o ponto novo (ainda sem gravar) também. */
+  useEffect(() => {
+    const mapa = mapInstanceRef.current;
+    if (mapStatus !== 'ready' || !mapa) return;
+    if (!infraLayerRef.current) infraLayerRef.current = L.layerGroup().addTo(mapa);
+    const grupo = infraLayerRef.current;
+    grupo.clearLayers();
+    const icone = (tipo: string, sel: boolean) => L.divIcon({ html: iconeDaInfra(tipo, sel), className: 'mapa-infra-icone', iconSize: [18, 18], iconAnchor: [9, 9] });
+    if (filtros.infra) {
+      for (const i of infras) {
+        if (filtros.infraOcultos.has(i.tipo)) continue;
+        const sel = i.id === infraSelId;
+        const pt = sel && pontoEditado ? pontoEditado : pontoDaInfra(i.geometria);
+        if (!pt) continue;
+        const m = L.marker([pt.lat, pt.lon], { icon: icone(i.tipo, sel), draggable: sel && editandoInfra, keyboard: false, zIndexOffset: sel ? 1000 : 0 });
+        m.bindTooltip(`${definicaoDoTipo(i.tipo)?.rotulo ?? i.tipo}${i.nome ? ` · ${i.nome}` : ''}`, { direction: 'top', offset: [0, -8] });
+        m.on('click', ev => { L.DomEvent.stopPropagation(ev); if (colocandoRef.current) return; setSelecionadoId(null); setPontoEditado(null); setInfraSelId(i.id); });
+        m.on('dragend', () => { const ll = m.getLatLng(); setPontoEditado({ lon: ll.lng, lat: ll.lat }); });
+        m.addTo(grupo);
+      }
+    }
+    if (colocandoTipo && pontoNovo) {
+      const m = L.marker([pontoNovo.lat, pontoNovo.lon], { icon: icone(colocandoTipo, true), draggable: true, keyboard: false, zIndexOffset: 1000 });
+      m.on('dragend', () => { const ll = m.getLatLng(); setPontoNovo({ lon: ll.lng, lat: ll.lat }); });
+      m.addTo(grupo);
+    }
+  }, [mapStatus, mapInstanceRef, infras, filtros.infra, filtros.infraOcultos, infraSelId, editandoInfra, pontoEditado, colocandoTipo, pontoNovo]);
+  /* o clique no mapa, no modo de colocar, marca (ou move) o ponto novo */
+  useEffect(() => {
+    const mapa = mapInstanceRef.current;
+    if (mapStatus !== 'ready' || !mapa || !colocandoTipo) return;
+    const aoClicar = (ev: L.LeafletMouseEvent) => setPontoNovo({ lon: ev.latlng.lng, lat: ev.latlng.lat });
+    mapa.on('click', aoClicar);
+    return () => { mapa.off('click', aoClicar); };
+  }, [mapStatus, mapInstanceRef, colocandoTipo]);
 
   /* fix1 (2): o rótulo tem tamanho fixo na tela, então a colisão se refaz a cada zoom */
   useEffect(() => {
@@ -355,13 +518,13 @@ export function MapaGestorView({
     setSelecionadoId(g.id);
     const mapa = mapInstanceRef.current;
     const b = camadaGeo.getBounds();
-    if (mapa && b.isValid()) mapa.fitBounds(b, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [352, 60], maxZoom: 16 });
+    if (mapa && b.isValid()) mapa.fitBounds(b, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [314, 60], maxZoom: 16 });
   });
 
   const enquadrar = (limites: L.LatLngBounds, comPainel: boolean) => {
     const mapa = mapInstanceRef.current;
     if (!mapa || !limites.isValid()) return;
-    mapa.fitBounds(limites, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [comPainel ? 352 : 20, 60], maxZoom: 16 });
+    mapa.fitBounds(limites, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [comPainel ? 314 : 20, 60], maxZoom: 16 });
   };
   const fazendaInteira = () => {
     const l = L.latLngBounds([]);
@@ -372,7 +535,10 @@ export function MapaGestorView({
     const g = geoPastos.find(x => x.pasto_id === pastoId);
     if (!g) return;
     setSelecionadoId(g.id);
-    enquadrar((camadasRef.current.get(g.id) ?? L.geoJSON(g.geojson)).getBounds(), true);
+    /* -07: escolher o pasto NÃO muda o zoom; fora da tela, o mapa só desliza até ele ("Fazenda inteira" enquadra quando se quer) */
+    const mapa = mapInstanceRef.current;
+    const b = (camadasRef.current.get(g.id) ?? L.geoJSON(g.geojson)).getBounds();
+    if (mapa && b.isValid() && !mapa.getBounds().intersects(b)) mapa.panTo(b.getCenter()); // só quando está TODO fora da tela
   };
 
   const opcoesBusca = useMemo(() => geoPastos
@@ -386,12 +552,30 @@ export function MapaGestorView({
   let subtitulo = '';
   if (pastoSelecionado) {
     if (!dadosSelecionado) subtitulo = `Fora da vigência em ${mesDoMapa}`;
-    else if (!dadosSelecionado.temFechamento) {
+    else if (familiaSelecionada) {
+      /* MAPA-ATIVIDADE-LAVOURA-01: o uso do mês; sem fechamento, o do cadastro (D1) */
+      subtitulo = `${rotuloForaDaPecuaria(dadosSelecionado, lavouraSelecionada)} · ${dadosSelecionado.temFechamento ? `fechamento ${mesDoMapa}` : `pelo cadastro (sem fechamento em ${mesDoMapa})`}`;
+    } else if (!dadosSelecionado.temFechamento) {
       subtitulo = `Sem fechamento em ${mesDoMapa}${dadosSelecionado.ultimoFechamento ? ` · último fechamento ${mesCurtoNumerico(dadosSelecionado.ultimoFechamento)}` : ''}`;
     } else subtitulo = `${rotuloDaAtividade(dadosSelecionado.atividade)} · fechamento ${mesDoMapa}`;
   }
   const hist = dadosSelecionado?.historico ?? [];
-  const maxHist = Math.max(1, ...hist.map(h => h.kgHa ?? 0));
+  /* MAPA-PAINEL-COMPACTO-01: a escala das barras segue a série escolhida (kg/ha ou UA/ha) */
+  const maxDoHistorico = Math.max(serieDoHistorico === 'kg' ? 1 : 0.1, ...hist.map(h => (serieDoHistorico === 'kg' ? h.kgHa : h.uaHa) ?? 0));
+  /* a área MEDIDA no mapa (o polígono do pasto) ao lado da oficial do cadastro; a diferença com sinal, só se passa de 0,05 ha */
+  const areaDoMapa = geoSelecionada ? areaEmHectares(geoSelecionada.geojson) : null;
+  /* MAPA-PAINEL-CERCADA-01: útil + áreas internas (os polígonos de área dentro do contorno do pasto) */
+  const cercada = useMemo(() => (geoSelecionada ? areaCercadaDoPasto(geoSelecionada, geometrias) : null), [geoSelecionada, geometrias]);
+  const divisoesSelecionadas = useMemo(() => {
+    const lista = pastoSelecionado ? divisoes?.get(pastoSelecionado.id) ?? [] : [];
+    return lista.length ? divisoesNoPainel(lista) : null;
+  }, [pastoSelecionado, divisoes]);
+  const diferencaDaArea = (() => {
+    const oficial = pastoSelecionado?.area_produtiva_ha;
+    if (areaDoMapa == null || oficial == null) return null;
+    const d = areaDoMapa - oficial;
+    return Math.abs(d) < 0.05 ? null : `${d > 0 ? '+' : '−'}${formatNum(Math.abs(d), 1)}`;
+  })();
 
   /* MAPA-CONTROLES-01: com o painel fechado, os créditos vão para o rodapé à direita SÓ se cabem ao lado da legenda inteira; senão sobem
      para logo acima da faixa da legenda, ainda encostados à direita — nunca por baixo dela (D4).
@@ -408,23 +592,26 @@ export function MapaGestorView({
       setLarguraDosCreditos(larguraDeles);
       setCreditosNoRodape(noRodape);
       /* fora do rodapé os créditos sobem à altura dos Filtros: o espaço deles vai da borda dos Filtros (12 + 190 + 8) até o painel
-         (302 + 10) ou a borda do mapa (10); sem lugar para o texto inteiro, viram o botão "Fontes dos dados" (nunca cortado) */
+         (264 + 10; o painel tem 248 desde o MAPA-PAINEL-COMPACTO-01) ou a borda do mapa (10); sem lugar para o texto inteiro, viram o botão "Fontes dos dados" (nunca cortado) */
       const limite = noRodape ? Number.MAX_SAFE_INTEGER
-        : quadro.clientWidth - (painelAberto ? 312 : 10) - (filtrosAbertos && hasGeo ? 210 : 12);
+        : quadro.clientWidth - (painelAberto ? 274 : 10) - (filtrosAbertos && hasGeo ? 210 : 12);
       creditos?.dispatchEvent(new CustomEvent(EVENTO_LIMITE_DOS_CREDITOS, { detail: limite }));
     };
     medir();
-    if (typeof ResizeObserver === 'undefined') return;
+    /* MAPA-PAINEL-COMPACTO-01: mede de novo no quadro seguinte — logo depois de trocar a camada a legenda ainda não se acomodou e o canto
+       ficava no rodapé colado nela (visto no gate: Atividade a 1126, às vezes) */
+    const quadroSeguinte = requestAnimationFrame(medir);
+    if (typeof ResizeObserver === 'undefined') return () => cancelAnimationFrame(quadroSeguinte);
     const ro = new ResizeObserver(medir);
     ro.observe(quadro);
     if (legendaRef.current) ro.observe(legendaRef.current);
     if (creditos) ro.observe(creditos);
-    return () => ro.disconnect();
+    return () => { cancelAnimationFrame(quadroSeguinte); ro.disconnect(); };
   }, [hasGeo, nomeCamada, legenda, erroDoMes, carregandoMes, mapStatus, painelAberto, filtrosAbertos]);
   /* MAPA-COMPACTO-01: sem lugar no rodapé (ou com o painel aberto), o canto sobe só até logo acima da legenda (22 px a 12 do pé = topo a
      34; a caixa dos créditos começa a 30 + 7 de margem = 37) */
   const canto = painelAberto
-    ? '[&_.leaflet-bottom.leaflet-right]:bottom-[30px] [&_.leaflet-bottom.leaflet-right]:right-[302px]'
+    ? '[&_.leaflet-bottom.leaflet-right]:bottom-[30px] [&_.leaflet-bottom.leaflet-right]:right-[264px]'
     : creditosNoRodape
       ? '[&_.leaflet-bottom.leaflet-right]:bottom-0 [&_.leaflet-bottom.leaflet-right]:right-0'
       : '[&_.leaflet-bottom.leaflet-right]:bottom-[30px] [&_.leaflet-bottom.leaflet-right]:right-0';
@@ -458,13 +645,28 @@ export function MapaGestorView({
                 {gr.itens.map(item => item.itens ? (
                   <DropdownMenuSub key={item.rotulo}>
                     <DropdownMenuSubTrigger className="justify-between">
-                      <span>{item.rotulo}</span><span className="ml-auto mr-1 rounded-full bg-white/15 px-1.5 text-[9.5px]">em breve</span>
+                      <span>{item.rotulo}</span>
+                      {/* MAPA-AREA-TIPO-01: o selo "em breve" só quando nada do submenu funciona */}
+                      <span className={`ml-auto mr-1 rounded-full bg-white/15 px-1.5 text-[9.5px] ${(onClassificarArea && item.itens.some(subitemFunciona))
+                        || (fazendaId && item.itens.some(sub => tipoDePontoPeloRotulo(sub.rotulo) && item.rotulo === 'Infraestrutura')) ? 'invisible' : ''}`}>em breve</span>
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className={`${MENU_ACIMA} max-h-[70vh] w-[220px] overflow-y-auto`}>
                       {item.itens.map((sub, si) => (
                         <div key={sub.rotulo}>
                           {sub.grupo && sub.grupo !== item.itens?.[si - 1]?.grupo && <DropdownMenuLabel>{sub.grupo}</DropdownMenuLabel>}
-                          <DropdownMenuItem disabled>{sub.rotulo}</DropdownMenuItem>
+                          {subitemFunciona(sub) && onClassificarArea ? (
+                            <DropdownMenuItem onSelect={() => onClassificarArea(sub.tipo)} title="Marca um polígono do mapa com este tipo, na Validação">
+                              {sub.rotulo}
+                            </DropdownMenuItem>
+                          ) : item.rotulo === 'Infraestrutura' && fazendaId && tipoDePontoPeloRotulo(sub.rotulo) ? (
+                            /* MAPA-02f-b: entra no modo de colocar (um clique no mapa); a cerca (só linha) fica para a 02f-c */
+                            <DropdownMenuItem onSelect={() => { fecharInfra(); setSelecionadoId(null); setColocandoTipo(tipoDePontoPeloRotulo(sub.rotulo)); }}
+                              data-testid={`infra-colocar-${tipoDePontoPeloRotulo(sub.rotulo)}`}>
+                              <span className="mr-1.5 inline-flex" dangerouslySetInnerHTML={{ __html: iconeDaInfra(tipoDePontoPeloRotulo(sub.rotulo) ?? '') }} />{sub.rotulo}
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem disabled>{sub.rotulo}</DropdownMenuItem>
+                          )}
                         </div>
                       ))}
                     </DropdownMenuSubContent>
@@ -533,11 +735,11 @@ export function MapaGestorView({
 
       {/* Mapa + vidros */}
       {/* MAPA-CONTROLES-01 (Gabriel 31/10, D1/D2): o canto do zoom e dos créditos do Google só abre espaço para o painel do pasto quando ele
-          está na tela — aberto, os dois ficam encostados à esquerda dele, acima da legenda (302 = 286 do painel + 12 da margem + 4); fechado,
+          está na tela — aberto, os dois ficam encostados à esquerda dele, acima da legenda (264 = 248 do painel + 12 da margem + 4; era 302 com o painel de 286); fechado,
           voltam para a borda direita: os créditos no rodapé (ou logo acima da legenda, se não cabem ao lado dela) e o + / − acima deles.
           EXCEÇÃO DECLARADA ao UI-SEM-DESLOCAR-01, só para o zoom e os créditos: abrir/fechar o pasto os move; barra, KPIs, Filtros,
           legenda e painel seguem fixos. */}
-      <div ref={quadroRef} className={`relative min-h-0 flex-1 bg-[#3a4436] ${canto}`}>
+      <div ref={quadroRef} className={`relative min-h-0 flex-1 bg-[#3a4436] ${canto} ${colocandoTipo ? '[&_.leaflet-container]:cursor-crosshair' : ''}`}>
         <div className="absolute inset-0">
           {/* fix1 (1): o Chrome desenhava um retângulo azul (contorno de foco) no polígono clicado (Gabriel, proto, 31/10 08:27): sem contorno
               de foco SÓ nos polígonos do mapa; o foco de teclado do resto da tela continua */}
@@ -587,81 +789,162 @@ export function MapaGestorView({
             <LinhaFiltro rotulo="Vazio" marcado={filtros.vazio} n={contagens.vazio} onChange={v => setFiltros(f => ({ ...f, vazio: v }))} />
             <LinhaFiltro rotulo="Sem fechamento no mês" marcado={filtros.semFechamento} n={contagens.semFechamento}
               onChange={v => setFiltros(f => ({ ...f, semFechamento: v }))} />
+            {/* MAPA-02f-b: liga/desliga toda a infraestrutura e um por tipo presente, com a contagem */}
+            <div className="mb-1 mt-2.5 text-[9.5px] font-semibold text-[#4A5361]">Infraestruturas</div>
+            <LinhaFiltro rotulo="Mostrar infraestrutura" marcado={filtros.infra} n={infras.length} onChange={v => setFiltros(f => ({ ...f, infra: v }))} />
+            {contagemPorTipo(infras).map(t => (
+              <LinhaFiltro key={t.tipo} rotulo={t.rotulo} marcado={filtros.infra && !filtros.infraOcultos.has(t.tipo)} n={t.n}
+                onChange={v => setFiltros(f => {
+                  const s = new Set(f.infraOcultos);
+                  if (v) s.delete(t.tipo); else s.add(t.tipo);
+                  return { ...f, infraOcultos: s, infra: v ? true : f.infra };
+                })} />
+            ))}
           </div>
         )}
 
-        {geoSelecionada && pastoSelecionado && (
-          <div className={`absolute bottom-3 right-3 top-3 z-[500] flex w-[286px] flex-col overflow-hidden ${VIDRO}`} data-testid="mapa-painel">
-            <div className="flex-none border-b border-black/[0.08] px-3 pb-2 pt-2.5">
-              <div className="flex items-start gap-2">
-                <b className="min-w-0 break-words text-[13px] leading-[16px]">{pastoSelecionado.nome}</b>
-                <span className="flex-none rounded-lg bg-[#E3F2E8] px-1.5 py-px text-[9.5px] font-semibold text-[#2F6E45]">Vinculado</span>
+        {/* MAPA-02f-b: o modo de colocar — um clique no mapa marca o ponto */}
+        {colocandoTipo && !pontoNovo && (
+          <div className={`absolute left-1/2 top-1.5 z-[600] flex -translate-x-1/2 items-center gap-2 px-2.5 py-1 text-[10.5px] ${VIDRO}`} data-testid="infra-modo-colocar">
+            <span dangerouslySetInnerHTML={{ __html: iconeDaInfra(colocandoTipo) }} />
+            Clique no mapa onde fica o <b className="font-semibold">{definicaoDoTipo(colocandoTipo)?.rotulo}</b>
+            <button type="button" className="text-[#2B6CB0]" onClick={fecharInfra}>Cancelar</button>
+          </div>
+        )}
+        {infraPainelAberto && fazendaId && (colocandoTipo || infraSel) && (
+          <InfraPainel key={infraSel?.id ?? `novo-${colocandoTipo}`}
+            className={`absolute bottom-3 right-3 top-3 z-[500] flex w-[248px] flex-col overflow-hidden ${VIDRO}`}
+            fazendaId={fazendaId} clienteId={clienteId ?? null}
+            tipo={infraSel ? (definicaoDoTipo(infraSel.tipo)?.tipo ?? 'cocho') : (colocandoTipo ?? 'cocho')}
+            infra={infraSel}
+            ponto={infraSel ? (pontoEditado ?? pontoDaInfra(infraSel.geometria) ?? { lon: 0, lat: 0 }) : (pontoNovo ?? { lon: 0, lat: 0 })}
+            pastoSugerido={pontoNovo ? pastoNoPonto(pontoNovo.lon, pontoNovo.lat, geoPastos) : null}
+            pastos={pastos} bens={bens} salvar={salvarInfra} desativar={desativarInfra}
+            onEditando={setEditandoInfra}
+            onGravou={() => { fecharInfra(); recarregarInfra(); }}
+            onFechar={fecharInfra} />
+        )}
+
+        {geoSelecionada && pastoSelecionado && !infraPainelAberto && (
+          /* MAPA-PAINEL-COMPACTO-01 (Gabriel 01/11): o painel do pasto mais estreito (248 px, era 286), menos padding, fontes menores (piso
+             9,5 px), nada quebra; categorias com o LOTE de cada registro (uma linha por registro); histórico em kg/ha | UA/ha; mês vedado
+             marcado; campo sem valor em BRANCO; a área do MAPA ao lado da oficial, com a diferença (só leitura — quem adota é o cadastro). */
+          <div className={`absolute bottom-3 right-3 top-3 z-[500] flex w-[248px] flex-col overflow-hidden ${VIDRO}`} data-testid="mapa-painel">
+            <div className="flex-none border-b border-black/[0.08] px-2 pb-1.5 pt-2">
+              <div className="flex items-start gap-1.5">
+                <b className="min-w-0 break-words text-[12px] leading-[15px]">{pastoSelecionado.nome}</b>
+                <span className="flex-none rounded-lg bg-[#E3F2E8] px-1.5 py-px text-[9.5px] font-semibold leading-[13px] text-[#2F6E45]">Vinculado</span>
                 <button type="button" aria-label="Fechar" className="ml-auto flex-none text-[#4A5361] hover:text-[#1d232b]" onClick={() => setSelecionadoId(null)}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
               {/* duas linhas reservadas: o subtítulo longo quebra (fora de tabela, nada de "…") e nada abaixo se desloca */}
-              <div className="mt-0.5 h-[26px] overflow-hidden text-[10.5px] leading-[13px] text-[#4A5361]">{subtitulo}</div>
+              <div className="mt-0.5 h-[24px] overflow-hidden text-[9.5px] leading-[12px] text-[#4A5361]">{subtitulo}</div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">
-              <div className="grid grid-cols-2 gap-1.5">
-                <Cel rotulo="Área" valor={numero(pastoSelecionado.area_produtiva_ha, 1, ' ha')} />
-                <Cel rotulo="Cabeças" valor={numero(dadosSelecionado?.cabecas)} />
-                <Cel rotulo="Peso méd." valor={numero(dadosSelecionado?.pesoMedioKg, 0, ' kg')} />
-                <Cel rotulo="Lotação kg/ha" valor={numero(dadosSelecionado?.kgHa)} destaque
-                  unidade={textoUaHa(dadosSelecionado?.temFechamento ? uaPorHa(dadosSelecionado.cabecas, dadosSelecionado.pesoMedioKg, pastoSelecionado.area_produtiva_ha) : null)} />
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
+              <div className="grid grid-cols-2 gap-1">
+                <Cel rotulo="Área" valor={branco(pastoSelecionado.area_produtiva_ha, 1, ' ha')}
+                  nota={areaDoMapa == null ? null : `mapa ${formatNum(areaDoMapa, 1)} ha${diferencaDaArea ? ` · ${diferencaDaArea}` : ''}`}
+                  tituloNota="A área do mapa é medição (só leitura); a oficial é a do cadastro do pasto." />
+                {!familiaSelecionada && (
+                  <>
+                    <Cel rotulo="Cabeças" valor={branco(dadosSelecionado?.cabecas)} />
+                    <Cel rotulo="Peso méd." valor={branco(dadosSelecionado?.pesoMedioKg, 0, ' kg')} />
+                    <Cel rotulo="Lotação kg/ha" valor={branco(dadosSelecionado?.kgHa)} destaque
+                      unidade={textoUaHa(dadosSelecionado?.temFechamento ? uaPorHa(dadosSelecionado.cabecas, dadosSelecionado.pesoMedioKg, pastoSelecionado.area_produtiva_ha) : null)} />
+                  </>
+                )}
               </div>
-              <div className="mb-1 mt-3 text-[9.5px] font-semibold text-[#4A5361]">Categorias</div>
-              {/* tabela: uma linha por categoria, o nome longo com "…" e o inteiro no title (a regra de reticências do gate confere o title) */}
-              <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }} data-reticencias-com-title>
-                <colgroup><col /><col style={{ width: 44 }} /><col style={{ width: 60 }} /></colgroup>
+              {/* MAPA-PAINEL-CERCADA-01: a área cercada = a útil (o polígono do pasto) + as áreas internas (os polígonos de área dentro dele);
+                  só leitura, medição do mapa (a oficial é a do cadastro) */}
+              {cercada && (
+                <div className="mt-1 h-[24px] overflow-hidden text-[9.5px] leading-[12px] text-[#4A5361]" data-testid="mapa-painel-cercada"
+                  title={cercada.internas.length ? `Áreas internas: ${cercada.internas.map(i => `${i.nome} ${formatNum(i.ha, 1)} ha`).join(' · ')}` : 'Nenhuma área interna no pasto'}>
+                  {/* duas linhas reservadas: fora de tabela o texto quebra (nunca "…"), e nada abaixo se desloca */}
+                  Área cercada: <b className="font-semibold text-[#1d232b]">{formatNum(cercada.cercadaHa, 1)} ha</b>
+                  {' '}<span className="whitespace-nowrap">(útil {formatNum(cercada.utilHa, 1)} + áreas internas {formatNum(cercada.internasHa, 1)})</span>
+                </div>
+              )}
+              {/* MAPA-PIQUETES-03: "4 divisões: 7A 24,8 · … = 97,5 ha" — duas linhas reservadas (quebra, nunca "…"; longa vira a forma curta + title) */}
+              {divisoesSelecionadas && (
+                <div className="mt-0.5 h-[24px] overflow-hidden text-[9.5px] leading-[12px] text-[#4A5361]" data-testid="mapa-painel-divisoes"
+                  title={divisoesSelecionadas.title}>
+                  {divisoesSelecionadas.texto}
+                </div>
+              )}
+              {familiaSelecionada && dadosSelecionado && (
+                <BlocoForaDaPecuaria familia={familiaSelecionada} uso={rotuloDaAtividade(dadosSelecionado.usoDoMes)} lavoura={lavouraSelecionada}
+                  lida={lavouraLida} erro={erroDaLavoura} mes={mesDoMapa} />
+              )}
+              {!familiaSelecionada && (<>
+              <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Categorias</div>
+              {/* tabela: uma linha por REGISTRO do fechamento (categoria · lote · cab · peso); texto longo com "…" e o inteiro no title */}
+              <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }} data-reticencias-com-title data-testid="mapa-painel-categorias">
+                <colgroup><col /><col style={{ width: 54 }} /><col style={{ width: 30 }} /><col style={{ width: 44 }} /></colgroup>
+                <thead>
+                  <tr className="text-[9.5px] text-[#5A6472]">
+                    <th className="h-[14px] px-0.5 text-left font-normal">Categoria</th><th className="h-[14px] px-0.5 text-left font-normal">Lote</th>
+                    <th className="h-[14px] px-0.5 text-right font-normal">Cab.</th><th className="h-[14px] px-0.5 text-right font-normal">Peso</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {(dadosSelecionado?.categorias ?? []).map(c => (
-                    <tr key={c.nome}>
-                      <td className="h-[18px] truncate px-1 text-[10.5px]" title={c.nome}>{c.nome}</td>
-                      <td className="h-[18px] px-1 text-right text-[10.5px] font-semibold tabular-nums">{formatNum(c.quantidade, 0)}</td>
-                      <td className="h-[18px] px-1 text-right text-[10px] tabular-nums text-[#5A6472]">{numero(c.peso_medio_kg, 0, ' kg')}</td>
+                  {(dadosSelecionado?.categorias ?? []).map((c, i) => (
+                    <tr key={`${c.nome}-${c.lote ?? ''}-${i}`}>
+                      <td className="h-[16px] truncate px-0.5 text-[10px]" title={c.nome}>{c.nome}</td>
+                      <td className="h-[16px] truncate px-0.5 text-[9.5px] text-[#5A6472]" title={c.lote ?? undefined}>{c.lote ?? ''}</td>
+                      <td className="h-[16px] px-0.5 text-right text-[10px] font-semibold tabular-nums">{formatNum(c.quantidade, 0)}</td>
+                      <td className="h-[16px] whitespace-nowrap px-0.5 text-right text-[9.5px] tabular-nums text-[#5A6472]">{branco(c.peso_medio_kg, 0, ' kg')}</td>
                     </tr>
                   ))}
                   {(dadosSelecionado?.categorias.length ?? 0) > 1 && (
                     <tr className="border-t border-black/[0.12]" data-testid="mapa-painel-total">
-                      <td className="h-[18px] px-1 text-[10.5px] font-semibold">Total</td>
-                      <td className="h-[18px] px-1 text-right text-[10.5px] font-semibold tabular-nums">{numero(dadosSelecionado?.cabecas)}</td>
-                      <td className="h-[18px] px-1 text-right text-[10px] font-semibold tabular-nums">{numero(dadosSelecionado?.pesoMedioKg, 0, ' kg')}</td>
+                      <td className="h-[16px] px-0.5 text-[10px] font-semibold">Total</td><td />
+                      <td className="h-[16px] px-0.5 text-right text-[10px] font-semibold tabular-nums">{branco(dadosSelecionado?.cabecas)}</td>
+                      <td className="h-[16px] whitespace-nowrap px-0.5 text-right text-[9.5px] font-semibold tabular-nums">{branco(dadosSelecionado?.pesoMedioKg, 0, ' kg')}</td>
                     </tr>
                   )}
-                  {(dadosSelecionado?.categorias.length ?? 0) === 0 && (
-                    <tr><td colSpan={3} className="h-[18px] px-1 text-[10.5px] text-[#5A6472]">
-                      {dadosSelecionado?.temFechamento ? 'Sem animais no fechamento do mês' : '—'}
-                    </td></tr>
+                  {(dadosSelecionado?.categorias.length ?? 0) === 0 && dadosSelecionado?.temFechamento && (
+                    <tr><td colSpan={4} className="h-[16px] px-0.5 text-[10px] text-[#5A6472]">Sem animais no fechamento do mês</td></tr>
                   )}
                 </tbody>
               </table>
-              <div className="mb-1 mt-3 flex justify-between text-[9.5px] font-semibold text-[#4A5361]">
-                <span>Histórico de lotação</span><span className="font-normal">kg/ha</span>
+              <div className="mb-0.5 mt-2 flex items-center justify-between text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">
+                <span>Histórico de lotação</span>
+                <Segmentado valor={serieDoHistorico} onEscolher={setSerieDoHistorico} altura={20} fonte={9.5}
+                  opcoes={[{ valor: 'kg', rotulo: 'kg/ha' }, { valor: 'ua', rotulo: 'UA/ha' }]} />
               </div>
-              <div className="flex h-[84px] items-end gap-1 pt-1" data-testid="mapa-historico">
-                {hist.map(h => (
-                  <div key={h.anoMes} className="flex h-full min-w-0 flex-1 flex-col justify-end"
-                    title={`${mesAbreviado(h.anoMes)}/${h.anoMes.slice(2, 4)}: ${h.kgHa == null ? 'sem fechamento' : `${formatNum(h.kgHa, 0)} kg/ha`}`}>
-                    <span className="mb-px block text-center text-[9.5px] leading-[11px] tabular-nums">{h.kgHa == null ? '—' : valorDaBarra(h.kgHa)}</span>
-                    {h.kgHa != null && (
-                      <div className="w-full rounded-t-[2px]" style={{ height: Math.max(2, (h.kgHa / maxHist) * 60), background: h.faixa ? COR_DA_FAIXA[h.faixa] : COR_DA_FAIXA.vazio }} />
-                    )}
-                  </div>
-                ))}
+              <div className="flex h-[72px] items-end gap-[3px] pt-1" data-testid="mapa-historico">
+                {hist.map(h => {
+                  const v = serieDoHistorico === 'kg' ? h.kgHa : h.uaHa;
+                  const titulo = `${mesAbreviado(h.anoMes)}/${h.anoMes.slice(2, 4)}: ${h.vedado ? 'vedado' : v == null ? 'sem fechamento'
+                    : serieDoHistorico === 'kg' ? `${formatNum(v, 0)} kg/ha` : `${formatNum(v, 2)} UA/ha`}`;
+                  return (
+                    <div key={h.anoMes} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={titulo} data-vedado={h.vedado || undefined}>
+                      <span className="mb-px block text-center text-[9.5px] leading-[11px] tabular-nums">
+                        {h.vedado ? 'V' : v == null ? '' : serieDoHistorico === 'kg' ? valorDaBarra(v) : formatNum(v, 1)}
+                      </span>
+                      {h.vedado ? (
+                        <div className="h-[6px] w-full rounded-t-[2px] bg-[repeating-linear-gradient(45deg,#9AA3AE_0,#9AA3AE_2px,transparent_2px,transparent_4px)]" />
+                      ) : v != null && (
+                        <div className="w-full rounded-t-[2px]" style={{ height: Math.max(2, (v / maxDoHistorico) * 50), background: h.faixa ? COR_DA_FAIXA[h.faixa] : COR_DA_FAIXA.vazio }} />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="mt-0.5 flex gap-1">
-                {hist.map(h => <div key={h.anoMes} className="min-w-0 flex-1 text-center text-[9.5px] text-[#5A6472]">{mesAbreviado(h.anoMes)}</div>)}
+              <div className="mt-0.5 flex gap-[3px]">
+                {hist.map(h => <div key={h.anoMes} className="min-w-0 flex-1 text-center text-[9.5px] leading-[11px] text-[#5A6472]">{mesAbreviado(h.anoMes)}</div>)}
               </div>
+              {hist.some(h => h.vedado) && <div className="mt-0.5 text-[9.5px] leading-[12px] text-[#5A6472]">V = vedado no mês</div>}
+              </>)}
               {pastoSelecionado.observacoes && (
                 <>
-                  <div className="mb-1 mt-3 text-[9.5px] font-semibold text-[#4A5361]">Observações</div>
-                  <p className="text-[10.5px] leading-[14px] text-[#1d232b]">{pastoSelecionado.observacoes}</p>
+                  <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Observações</div>
+                  <p className="text-[10px] leading-[13px] text-[#1d232b]">{pastoSelecionado.observacoes}</p>
                 </>
               )}
-              <div className="mb-1 mt-3 text-[9.5px] font-semibold text-[#4A5361]">Satélite (vigor do capim)</div>
-              <div className="text-[10.5px] text-[#5A6472]">Em breve.</div>
+              <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Satélite (vigor do capim)</div>
+              <div className="text-[10px] text-[#5A6472]">Em breve.</div>
             </div>
           </div>
         )}
@@ -673,7 +956,7 @@ export function MapaGestorView({
              MAPA-COMPACTO-01: uma linha de 22 px, 9,5 px, quadradinhos de 8 px, padding mínimo, vidro discreto; o título é o nome curto
              da camada (o inteiro no title) */
           <div ref={legendaRef} className={`absolute bottom-3 left-3 z-[500] flex h-[22px] w-fit items-center gap-1.5 overflow-hidden rounded-md border border-white/60 bg-white/[0.8] px-1.5 text-[9.5px] leading-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.18)] backdrop-blur-[6px]`}
-            style={{ maxWidth: painelAberto ? 'calc(100% - 322px)' : creditosNoRodape ? `calc(100% - ${FOLGA_DA_LEGENDA_PX + larguraDosCreditos}px)` : 'calc(100% - 24px)' }}
+            style={{ maxWidth: painelAberto ? 'calc(100% - 284px)' : creditosNoRodape ? `calc(100% - ${FOLGA_DA_LEGENDA_PX + larguraDosCreditos}px)` : 'calc(100% - 24px)' }}
             data-testid="mapa-legenda" title={nomeCamada}>
             <b className="flex-none whitespace-nowrap font-semibold">{nomeCurtoCamada}</b>
             {legenda.map(i => (

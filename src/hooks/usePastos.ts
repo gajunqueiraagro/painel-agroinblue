@@ -23,6 +23,9 @@ export interface Pasto {
    * types.ts após a regeneração — que não pertence a este PR.
    */
   data_fim?: string | null;
+  /** FECH-ROTACAO-01 fatia 2 — o grupo de pastejo (nulo = sem grupo). Muda SÓ pelo `fn_pasto_grupo_salvar` (gatilho de guarda no
+   *  banco); o cadastro do pasto nunca o manda. Opcional pelo mesmo motivo do `data_fim`: fora do types.ts até a regeneração. */
+  grupo_id?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -8,12 +8,15 @@
  * Antes eram três leituras: `usePastoOcupacao` (o último fechamento DE CADA PASTO, de qualquer mês) e as categorias do Gestor e da
  * Operação (cada uma o último fechamento do pasto).
  */
-import { faixaDaLotacao, statusDaFaixa, type FaixaLotacao, type StatusOcupacao } from '@/lib/mapa/faixasLotacao';
+import { faixaDaLotacao, statusDaFaixa, uaPorHa, type FaixaLotacao, type StatusOcupacao } from '@/lib/mapa/faixasLotacao';
+import { ehUsoPecuaria, usoDoMes } from '@/lib/mapa/usoDoPasto';
 
 export interface PastoDoMapa {
   id: string;
   nome: string;
   area_produtiva_ha: number | null;
+  /** MAPA-ATIVIDADE-LAVOURA-01: o uso do CADASTRO (vale para o mês sem fechamento, D1). */
+  tipo_uso?: string | null;
 }
 
 export interface FechamentoLido {
@@ -30,12 +33,16 @@ export interface ItemLido {
   quantidade: number;
   peso_medio_kg: number | null;
   categoria_id: string;
+  /** MAPA-PAINEL-COMPACTO-01: o lote da linha do fechamento (texto livre do operador; null = sem lote). */
+  lote?: string | null;
 }
 
 export interface CategoriaDoPasto {
   nome: string;
   quantidade: number;
   peso_medio_kg: number | null;
+  /** MAPA-PAINEL-COMPACTO-01: o lote da linha (uma linha do painel por registro do fechamento). */
+  lote: string | null;
 }
 
 export interface MesDoHistorico {
@@ -44,6 +51,10 @@ export interface MesDoHistorico {
   /** O peso total (kg) do fechamento do mês (null = sem fechamento): para somar a série de uma fazenda (MAPA-GLOBAL-01). */
   pesoTotalKg: number | null;
   faixa: FaixaLotacao | null;
+  /** MAPA-PAINEL-COMPACTO-01: UA/ha do mês (calcUA/calcUAHa, pela `uaPorHa` da casa; null = sem fechamento ou sem área). */
+  uaHa: number | null;
+  /** MAPA-PAINEL-COMPACTO-01: o fechamento do mês marcou o pasto como VEDADO (`tipo_uso_mes = 'vedado'`). */
+  vedado: boolean;
 }
 
 export interface DadosDoPastoNoMes {
@@ -58,6 +69,10 @@ export interface DadosDoPastoNoMes {
   kgHa: number | null;
   faixa: FaixaLotacao | null;
   atividade: string | null;
+  /** MAPA-ATIVIDADE-LAVOURA-01: o uso do mês — o `tipo_uso_mes` do fechamento; sem ele, o `tipo_uso` do cadastro (D1). */
+  usoDoMes: string | null;
+  /** MAPA-ATIVIDADE-LAVOURA-01: o uso do mês é pecuária (`_fn_tipos_uso_pecuaria`, espelho em `usoDoPasto.ts`). */
+  pecuaria: boolean;
   categorias: CategoriaDoPasto[];
   /** A categoria com mais cabeças no mês (o `categoria_principal` que a Operação lia). */
   categoriaPrincipalId: string | null;
@@ -131,15 +146,17 @@ export function montarMapaDoMes(entrada: {
     const doMes = lista.find(f => f.ano_mes === anoMes) ?? null;
     const historico: MesDoHistorico[] = dozeMesesAte(anoMes).map(m => {
       const f = lista.find(x => x.ano_mes === m);
-      if (!f || !janela.has(m)) return { anoMes: m, kgHa: null, pesoTotalKg: null, faixa: null };
-      const { kgHa, pesoTotal } = somar(f);
-      return { anoMes: m, kgHa, pesoTotalKg: pesoTotal, faixa: faixaDaLotacao(kgHa) };
+      if (!f || !janela.has(m)) return { anoMes: m, kgHa: null, pesoTotalKg: null, faixa: null, uaHa: null, vedado: false };
+      const { kgHa, pesoTotal, cabecas } = somar(f);
+      return { anoMes: m, kgHa, pesoTotalKg: pesoTotal, faixa: faixaDaLotacao(kgHa),
+        uaHa: uaPorHa(cabecas, cabecas > 0 ? pesoTotal / cabecas : null, area), vedado: f.tipo_uso_mes === 'vedado' };
     });
 
+    const uso = usoDoMes(doMes?.tipo_uso_mes, p.tipo_uso);
     if (!doMes) {
       resultado.set(p.id, {
         pastoId: p.id, temFechamento: false, fechado: null, cabecas: null, pesoTotalKg: null, pesoMedioKg: null, kgHa: null, faixa: null,
-        atividade: null, categorias: [], categoriaPrincipalId: null, ultimoFechamento: lista[0]?.ano_mes ?? null, historico,
+        atividade: null, usoDoMes: uso, pecuaria: ehUsoPecuaria(uso), categorias: [], categoriaPrincipalId: null, ultimoFechamento: lista[0]?.ano_mes ?? null, historico,
       });
       continue;
     }
@@ -154,9 +171,11 @@ export function montarMapaDoMes(entrada: {
       kgHa,
       faixa: faixaDaLotacao(kgHa),
       atividade: doMes.tipo_uso_mes,
+      usoDoMes: uso,
+      pecuaria: ehUsoPecuaria(uso),
       categorias: its
         .filter(i => (i.quantidade || 0) > 0)
-        .map(i => ({ nome: nomeDaCategoria(i.categoria_id), quantidade: i.quantidade, peso_medio_kg: i.peso_medio_kg }))
+        .map(i => ({ nome: nomeDaCategoria(i.categoria_id), quantidade: i.quantidade, peso_medio_kg: i.peso_medio_kg, lote: i.lote?.trim() || null }))
         .sort((a, b) => b.quantidade - a.quantidade),
       categoriaPrincipalId: its.reduce<ItemLido | null>((m, i) => ((i.quantidade || 0) > (m?.quantidade ?? 0) ? i : m), null)?.categoria_id ?? null,
       ultimoFechamento: null,
@@ -209,6 +228,8 @@ export function fechamentoDoMesAberto(dados: ReadonlyMap<string, DadosDoPastoNoM
  * todo pasto vigente do conjunto (com ou sem fechamento); cabeças e peso somam só os que têm fechamento; peso médio = peso total ÷
  * cabeças; lotação = peso total ÷ área total (nunca média das médias). Sem nenhum fechamento: "—" (null). O Gestor passa os pastos COM
  * polígono da fazenda; o Global, os de cada fazenda e, para o total do cliente, todos.
+ * MAPA-ATIVIDADE-LAVOURA-01 (OK do Gabriel 01/11): só os pastos de PECUÁRIA no mês (`pecuaria`) entram — lavoura, reserva, APP,
+ * benfeitorias e eucalipto saem da área, das cabeças e do peso (Pureza set/26: 2.612,57 ha · 413,7 kg/ha → 1.521,58 ha · 710,4 kg/ha).
  */
 export interface ResumoDosPastos {
   cabecas: number | null;
@@ -225,7 +246,7 @@ export function resumoDosPastos(
   let cab = 0; let pesoTotal = 0; let area = 0; let algum = false;
   for (const id of pastoIds) {
     const d = dados.get(id);
-    if (!d) continue;
+    if (!d || !d.pecuaria) continue;
     area += areaDe(id) ?? 0;
     if (!d.temFechamento) continue;
     algum = true;
