@@ -234,6 +234,21 @@ const CENARIOS = [
     },
     estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
   })),
+  /* FECH-ROTACAO-01 fatia 3 — no quadro "Onde o lote esteve" do P10A: parte do grupo, marcar um piquete, voltar ao grupo inteiro e pôr um
+     pasto em "também esteve em" não movem o botão, os títulos dos blocos nem o rodapé do modal */
+  { nome: 'fechamento-grupo-lote', url: 'tela=fechamento-grupo&barra=32', regiao: '[data-testid="lote-quadro"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="grupo-no-fechamento"]').waitFor(); await espera(p, 600);
+      await p.locator('button', { hasText: /^P10A/ }).first().click(); await p.locator('[data-testid="modal-do-pasto"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="lote-onde"]').click(); await p.locator('[data-testid="lote-quadro"]').waitFor(); await espera(p, 400);
+    },
+    estados: [
+      ['parte do grupo', clicar('[data-testid="lote-grupo-parte"]')],
+      ['marcar o P10B', async (p) => { await p.locator('[data-testid="lote-membro"]').nth(1).click(); await espera(p); }],
+      ['grupo inteiro', clicar('[data-testid="lote-grupo-inteiro"]')],
+      ['também esteve em', async (p) => { await p.locator('[data-testid="lote-quadro"] button', { hasText: /^Adicionar pasto/ }).click(); await espera(p, 200);
+        await p.getByPlaceholder('Buscar pasto').fill('P11'); await espera(p, 200); await p.keyboard.press('Enter'); await espera(p); }],
+    ] },
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (`tela=pastos`, SINTÉTICO): trocar o modo (Grupos, Ordem manual, Por destino) e
      ligar os inativos não move a barra; no modal do grupo, tirar e pôr pasto, a prévia que troca e a desativação (com a frase que
      quebra a linha) não movem o nome, o seletor, os títulos nem o rodapé */
