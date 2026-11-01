@@ -220,6 +220,15 @@ const CENARIOS = [
     ['busca 1 bem', digitar('[data-testid="patrimonio-busca"]', 'Valtra')], ['busca sem resultado', digitar('[data-testid="patrimonio-busca"]', 'zzzz nada')],
     ['busca limpa', digitar('[data-testid="patrimonio-busca"]', '')],
   ] },
+  /* PATR-01c: na aba Depreciação do trator, trocar Mudança de estimativa ↔ Corrigir cadastro não move nada fora do miolo */
+  { nome: 'patrimonio-bem-trator-depreciacao', url: 'tela=patrimonio&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="patrimonio-linha"]', { hasText: 'Trator Valtra' }).first().click();
+      await p.locator('[data-testid="bem-dialog"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="bem-dialog"] button', { hasText: /^Depreciação/ }).first().click(); await espera(p, 600);
+    },
+    estados: [['Corrigir cadastro', async (p) => { await p.locator('[data-testid="bem-dep-mudar"] button', { hasText: /^Corrigir cadastro$/ }).first().click(); await espera(p, 300); }],
+      ['Mudança de estimativa', async (p) => { await p.locator('[data-testid="bem-dep-mudar"] button', { hasText: /^Mudança de estimativa$/ }).first().click(); await espera(p, 300); }]] },
   ...[['trator', 'Trator Valtra', ['Lançamentos', 'Depreciação', 'Valor de mercado', 'Documentos', 'Dados']],
       ['pastagem', 'Reforma de pastagem', ['Lançamentos', 'Pastos', 'Depreciação', 'Documentos', 'Dados']],
       ['novo', null, ['Lançamentos', 'Dados']],

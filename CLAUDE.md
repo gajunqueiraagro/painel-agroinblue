@@ -179,6 +179,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   de gatilho/indice novo roda como `authenticated` (`set local role authenticated` + claims de um usuario real), nunca so' como postgres.
 - RPC chamada pela tela roda sob pg_safeupdate (todo UPDATE/DELETE com WHERE, inclusive em tabela temporaria). Funcao chamada a cada
   carga com parametro de conta leva `SET plan_cache_mode = force_custom_plan`. REPLACE de VIEW leva `security_invoker = true`.
+- SALVAR-TRAVA (PATR-01c, 01/11): RPC chamada pela tela NUNCA recusa com 40001/40P01 — o PostgREST repete a transacao sem fim (sem
+  resposta, CPU presa); versao velha = P0001 com a frase. As 44 que ainda o usam (01/11): FIX-40001-SISTEMICO (DIVIDAS-ABERTAS).
 - Migration de corpo grande: patch guardado por md5. Ancora que casa 1x pode ser a errada. Deslocar chave de indice unico em lote exige
   ordem segura.
 - REGRA DO NASCIMENTO (OC-CC-PADRAO-NOVAS-01a): frente que converte dado existente para um padrao novo mede o que nasce errado HOJE e
@@ -204,6 +206,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Status: so' realizado (e conciliado) tem data de pagamento. Lancamento casado com extrato nao sai do estado que o banco pos.
 - Pasto no mes = vigencia + ativo (`fn_pasto_vigente_no_mes`). Saldo inicial se cadastra uma vez. O cache do rebanho se reconstroi na
   gravacao. Fechamento P1: a autoridade e' `get_status_pilares_fechamento`.
+- FECH-P2-TRAVA-01: o Valor do Rebanho reabre SO' pela `fn_valor_rebanho_reabrir` (abre o fechamento E invalida o validado + cadeia, trilha);
+  os pastos travam com QUALQUER das duas marcas (`_fn_fechamento_p2_travado`); a tela avisa pela `lerEstadoDoP2`, nunca reabre P2 sozinha.
 - Rateio administrativo e' por mes (`fn_rateio_admin_mes`); modal de linha do DRE soma as mesmas chaves da grade (`somaComposta`);
   `lucro_liquido` da RPC NAO e' a linha "Lucro liquido" da grade.
 - "Pec.3M-" no nome do fornecedor = pagamento por rateio (nota em nome do Higino): nunca juntar os dois lados.

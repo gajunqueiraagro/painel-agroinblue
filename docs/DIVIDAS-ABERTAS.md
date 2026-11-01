@@ -7,6 +7,27 @@ docs/historico/frentes-ate-2026-09-29.md.
 
 ## DIVIDAS DE DADO E DE MOTOR (abertas, nao tratadas)
 
+- CACHE-ZOOT-ZERADA-01 (aberta 01/11/2026, REBANHO-LEITURA-01; dono: banco) — a categoria que ZEROU num mes FECHADO e nao tem item no
+  Fechamento sai do `_fn_zoot_categoria_mensal` (e do `zoot_mensal_cache`) sem a regra do Fechamento: peso final NEGATIVO com 0 cab,
+  producao biologica 0 e `fonte_oficial_mes` nula. O overlay da tela (`aplicarOverlayFechamento`) e' quem corrige (peso 0, producao e
+  GMD refeitos, fonte "fechamento").
+  - Prova (01/11, canal de leitura, a regra do overlay em SQL sobre as 4.699 linhas de realizado): 193 linhas de categoria-mes neste
+    caso em todos os 6 clientes; peso final difere em 178, producao em 256, GMD em 185.
+  - Conferido na mao: Faz. Ursa Maior (RRCC), mar/23, desmama_m — cache 0 cab, -83.500 kg, producao 0; a conta do estoque da fazenda
+    (fechamento de mar 280.900,3 - fev 250.303,29 + saidas 260) = 30.857 kg, e so' a soma com o overlay bate (30.857,01; o cache puro da'
+    -52.643). Outros: Sta. Rita nov/23 desmama_f -36.764,82 kg; 3 Muchachas nov/25 desmama_f -20.644 kg.
+  - No Global: 136 meses saem "parcial" por isso (Agnaldo 15, NJ 42, Raul 18, RRCC 16, Santa Rita 29, Vera 16); em 116 deles o numero
+    do cache puro difere do corrigido (ex.: RRCC mar/23 peso 197.400 x 280.900 kg, GMD -2,047 x 1,200).
+  - BLOQUEIA (decisao do Gabriel 01/11): a D2 (o overlay sair do `useRebanhoOficial` — e dos outros 2 hooks juntos: `useHistoricoZootCache`,
+    `useSeriePorFazenda`) e a D3 (o selo do mes ignorar a categoria sem fonte) da REBANHO-LEITURA-01. Depois do conserto + reconstrucao do
+    cache, a mesma prova (`overlay-replica.sql`, relatorio `layout-20261101-0625-REBANHO-LEITURA-01-provas.md`) tem de dar 0 diferencas.
+
+- BOM-RETIRO-FECHAMENTO-DUPLICADO-01 (anotada 01/11/2026; DADO DO CLIENTE, Santa Rita Agro) — Faz. Bom Retiro, fev a jun/2023: DOIS
+  pastos com o Fechamento fechado, cada um com o rebanho inteiro (fev 439 + 439 = 878 cab, 287.838 kg; mar 882; abr 884; mai 824; jun
+  748). O cache esta' certo (439/441/442/412/374); a view `vw_zoot_fazenda_mensal` e o overlay da tela dobram. Em jul/23 os 2 fechamentos
+  nao tem item (o cache fica com 0 cab e -1.800 kg — o caso da CACHE-ZOOT-ZERADA-01). A view ainda mostra 384 cab em ago-dez/23, depois
+  do encerramento. Corrigir na fonte (o Fechamento), com o cliente; nada de UPDATE sem OK.
+
 - SALDO-INICIAL-MES-01 — `saldos_iniciais` tem coluna `mes`, e NINGUEM a le'.
   `fn_zoot_categoria_mensal` (md5 a3e6eb6b) busca o saldo em
   `WHERE si.fazenda_id = ? AND si.ano = ?` (prosrc :7-8, sem `si.mes`) e a recursao da
@@ -452,6 +473,25 @@ docs/historico/frentes-ate-2026-09-29.md.
 - PLANO-UPDATE-DIRETO-01 (P171) — a policy de UPDATE de `financeiro_plano_contas` e' `tenant_ok(cliente_id)`: um membro do cliente
   pode, pela API, alterar direto uma conta DO CLIENTE (dividendo ou repasse), sem passar pelo escritor (nenhuma tela faz isso). Fechar
   = trava de escritor no plano ou policy so' do admin; tabela de uso corrente (DDL curto, lock de 2 s).
+
+- FIX-40001-SISTEMICO (PATR-01c / SALVAR-TRAVA, Gabriel 01/11/2026: "NAO mexa; registre como frente propria") — o PostgREST REPETE
+  sem fim toda transacao que falha com 40001 (serialization_failure) — e com 40P01 (deadlock), que ele trata igual: o pedido nunca
+  responde, a conexao fica em laco (BEGIN → chamada → erro → ABORT, ~1.500 rollbacks/s no proto) mesmo depois que o navegador
+  desiste, ate' alguem derrubar a conexao (`pg_terminate_backend`). Reproduzido num container (postgres 17 + postgrest v14.16):
+  P0001 → 400 em 26 ms; 40001 → sem resposta, ~46% de CPU no banco por pedido. Medido no proto em 01/11: 6,39 bilhoes de rollbacks
+  desde 29/09 contra 14,9 milhoes de commits; 8 conexoes em laco na `fn_patrimonio_bem_salvar` e 2 na `oc_explicar_saldo` (uma desde
+  12/10), derrubadas com OK do Gabriel. O front da OC trata `error.code === '40001'`, mas por esse caminho o codigo NUNCA chega.
+  A Patrimonio saiu (116100). Seguem com 40001/40P01 no corpo (45 em 01/11, a busca `prosrc ~ '40001|40P01|serialization_failure|
+  deadlock_detected'`, menos a do Patrimonio): `_oc_vincular_recebimento`, `fin_documento_editar`, `fn_infra_desativar`,
+  `fn_infra_salvar`, `fn_obter_ou_criar_fechamento_pasto`, `fn_obter_ou_criar_fechamentos_lote` e 38 `oc_*`. ⚠ QUEM FOR TRATAR
+  separa, uma a uma, quem LEVANTA 40001 (trocar por P0001 com a frase; o front que olha '40001' passa a olhar a frase/P0001) de quem
+  so' o CAPTURA (pode ficar); e mede antes o laco de hoje (`pg_stat_activity`, o `xact_start` muda a cada amostra).
+
+- PATR-02-TRAVA-CONSUMIDA (PATR-01c, Gabriel 01/11/2026) — "Corrigir cadastro" (`fn_patrimonio_parametros_corrigir`) refaz a serie
+  de depreciacao do bem desde o "em uso", inclusive meses passados. Hoje NINGUEM fora da Patrimonio le' a depreciacao (a
+  `fn_dre_pecuaria` so' usa a palavra num rotulo; o AGRI-05 depende do PATR-02, que nao existe — docs/specs/AGRI-FECHAMENTO-v1.md:256),
+  por isso nao ha' trava. ⚠ O BRIEFING DO PATR-02 / AGRI-05 decide a trava: quando um mes de depreciacao passar a ser CONSUMIDO
+  (DRE, fechamento, Lucro Rural), a correcao desse mes fica proibida ou vira ajuste no mes corrente.
 
 ## DIVIDAS DE TELA
 
