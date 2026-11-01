@@ -20,8 +20,10 @@ import {
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { Pasto } from '@/hooks/usePastos';
+import { ClassificarPoligono } from '@/components/mapa-geo/ClassificarPoligono';
+import { ehTipoDeArea, rotuloDoTipo, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
 
-type FilterStatus = 'all' | 'vinculado' | 'sem_vinculo';
+type FilterStatus = 'all' | 'vinculado' | 'area' | 'sem_vinculo';
 
 interface Props {
   geometrias: FazendaGeometria[];
@@ -29,19 +31,22 @@ interface Props {
   geoLoading: boolean;
   onUpdate: (id: string, updates: { nome_original?: string; pasto_id?: string | null }) => Promise<boolean>;
   onDelete: (ids: string[]) => Promise<boolean>;
-  onLink: (geoId: string, pastoId: string | null) => Promise<boolean>;
   onRefresh: () => void;
+  /** MAPA-AREA-TIPO-01: o tipo pedido pelo Adicionar › Área — o próximo polígono escolhido abre "É área" com ele */
+  tipoPedido?: TipoDeArea | null;
+  onTipoPedidoUsado?: () => void;
 }
 
-export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdate, onDelete, onLink, onRefresh }: Props) {
+/* MAPA-AREA-TIPO-01 (Gabriel 01/11): o vínculo e o tipo de área saem do UPDATE direto e vão pelo escritor do banco
+   (`fn_mapa_geometria_classificar`: prévia, trilha e a memória que o "Atualizar mapa" respeita), no painel do polígono. */
+export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdate, onDelete, onRefresh, tipoPedido, onTipoPedidoUsado }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-  const [linkingId, setLinkingId] = useState<string | null>(null);
-  const [linkPastoId, setLinkPastoId] = useState('');
+  const [classificandoId, setClassificandoId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[]; label: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -55,7 +60,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const filtered = useMemo(() => {
     let list = [...geometrias];
     if (filterStatus === 'vinculado') list = list.filter(g => g.pasto_id);
-    if (filterStatus === 'sem_vinculo') list = list.filter(g => !g.pasto_id);
+    if (filterStatus === 'area') list = list.filter(g => ehTipoDeArea(g.tipo) || g.tipo === 'area_total');
+    if (filterStatus === 'sem_vinculo') list = list.filter(g => g.tipo === 'outra');
     if (searchTerm.trim()) {
       /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
       list = list.filter(g => casaNaBusca(g.nome_original, searchTerm));
@@ -66,7 +72,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const stats = useMemo(() => ({
     total: geometrias.length,
     vinculados: geometrias.filter(g => g.pasto_id).length,
-    semVinculo: geometrias.filter(g => !g.pasto_id).length,
+    areas: geometrias.filter(g => ehTipoDeArea(g.tipo) || g.tipo === 'area_total').length,
+    semVinculo: geometrias.filter(g => g.tipo === 'outra').length,
   }), [geometrias]);
 
   // Draw polygons
@@ -151,15 +158,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   };
 
   const startLink = (geo: FazendaGeometria) => {
-    setLinkingId(geo.id);
-    setLinkPastoId(geo.pasto_id || '__none__');
-  };
-  const saveLink = async () => {
-    if (!linkingId) return;
-    setSaving(true);
-    await onLink(linkingId, linkPastoId === '__none__' ? null : linkPastoId);
-    setLinkingId(null);
-    setSaving(false);
+    setFocusedId(geo.id);
+    setClassificandoId(geo.id);
   };
 
   const confirmDelete = (ids: string[], label: string) => setDeleteConfirm({ ids, label });
@@ -186,8 +186,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       {/* Stats bar */}
       <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
         <Badge variant="secondary" className="text-[10px] h-5">{stats.total} polígonos</Badge>
-        <Badge variant="outline" className="text-[10px] h-5 text-green-700 border-green-300">{stats.vinculados} vinculados</Badge>
-        <Badge variant="outline" className="text-[10px] h-5 text-orange-700 border-orange-300">{stats.semVinculo} sem vínculo</Badge>
+        <Badge variant="outline" className="text-[10px] h-5 text-green-700 border-green-300">{stats.vinculados} pastos</Badge>
+        <Badge variant="outline" className="text-[10px] h-5">{stats.areas} áreas</Badge>
+        <Badge variant="outline" className="text-[10px] h-5 text-orange-700 border-orange-300">{stats.semVinculo} sem classificação</Badge>
         {selectedIds.size > 0 && (
           <Badge variant="default" className="text-[10px] h-5">{selectedIds.size} selecionados</Badge>
         )}
@@ -215,8 +216,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="vinculado">Vinculados</SelectItem>
-                  <SelectItem value="sem_vinculo">Sem vínculo</SelectItem>
+                  <SelectItem value="vinculado">Pastos</SelectItem>
+                  <SelectItem value="area">Áreas</SelectItem>
+                  <SelectItem value="sem_vinculo">Sem classificação</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -241,11 +243,12 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     size="sm"
                     className="h-6 text-[10px] px-2 text-destructive hover:text-destructive"
                     onClick={() => {
-                      const semVinculo = geometrias.filter(g => !g.pasto_id).map(g => g.id);
-                      if (semVinculo.length > 0) confirmDelete(semVinculo, `${semVinculo.length} polígono(s) sem vínculo`);
+                      /* MAPA-AREA-TIPO-01: só os SEM CLASSIFICAÇÃO — área classificada (reserva, APP, curral…) não tem pasto e não é lixo */
+                      const semVinculo = geometrias.filter(g => g.tipo === 'outra').map(g => g.id);
+                      if (semVinculo.length > 0) confirmDelete(semVinculo, `${semVinculo.length} polígono(s) sem classificação`);
                     }}
                   >
-                    <Unlink className="h-3 w-3 mr-1" />Excluir sem vínculo
+                    <Unlink className="h-3 w-3 mr-1" />Excluir sem classificação
                   </Button>
                 </>
               )}
@@ -261,7 +264,6 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                 const isFocused = focusedId === geo.id;
                 const pastoName = getPastoName(geo.pasto_id);
                 const isEditing = editingId === geo.id;
-                const isLinking = linkingId === geo.id;
 
                 return (
                   <div
@@ -301,48 +303,30 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                             {geo.nome_original || 'Sem nome'}
                           </p>
                         )}
-                        {isLinking ? (
-                          <div className="flex gap-1 mt-1" onClick={e => e.stopPropagation()}>
-                            <Select value={linkPastoId} onValueChange={setLinkPastoId}>
-                              <SelectTrigger className="h-6 text-[10px] flex-1">
-                                <SelectValue placeholder="Selecionar pasto" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">— Sem vínculo —</SelectItem>
-                                {pastos.filter(p => p.ativo).map(p => (
-                                  <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Button size="sm" className="h-6 w-6 p-0" onClick={saveLink} disabled={saving}>
-                              <Save className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setLinkingId(null)}>
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ) : (
+                        {(
                           <div className="flex items-center gap-1 mt-0.5">
                             {pastoName ? (
                               <Badge variant="secondary" className="text-[9px] h-4 max-w-[140px] truncate">
                                 <Link2 className="h-2.5 w-2.5 mr-0.5 flex-shrink-0" />
                                 {pastoName}
                               </Badge>
-                            ) : (
+                            ) : geo.tipo === 'outra' ? (
                               <Badge variant="outline" className="text-[9px] h-4 text-orange-600 border-orange-300">
-                                Sem vínculo
+                                Sem classificação
                               </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[9px] h-4">{rotuloDoTipo(geo.tipo)}</Badge>
                             )}
                           </div>
                         )}
                       </div>
                       {/* Actions */}
-                      {!isEditing && !isLinking && (
+                      {!isEditing && (
                         <div className="flex items-center gap-0.5 flex-shrink-0">
                           <Button
                             variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                             onClick={e => { e.stopPropagation(); startLink(geo); }}
-                            title="Vincular"
+                            title="Classificar (pasto ou área)"
                           >
                             <Link2 className="h-3 w-3" />
                           </Button>
@@ -378,24 +362,44 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
               <p className="text-sm text-muted-foreground">Nenhum polígono para exibir</p>
             </div>
           )}
+          {/* MAPA-AREA-TIPO-01: veio do Adicionar › Área — diz o que fazer (o próximo polígono escolhido abre "É área" com o tipo) */}
+          {tipoPedido && !focusedId && (
+            <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1 text-[10.5px] shadow-sm"
+              data-testid="validacao-tipo-pedido">
+              Escolha o polígono para marcar como <b className="font-semibold">{rotuloDoTipo(tipoPedido)}</b>
+              <button type="button" className="ml-2 text-[#2B6CB0]" onClick={() => onTipoPedidoUsado?.()}>Cancelar</button>
+            </div>
+          )}
           {/* Focused polygon info overlay */}
           {focusedId && (() => {
             const geo = geometrias.find(g => g.id === focusedId);
             if (!geo) return null;
             const pName = getPastoName(geo.pasto_id);
             return (
-              <div className="absolute top-3 left-3 bg-card/95 backdrop-blur-sm border border-border rounded-lg px-3 py-2 z-10 max-w-xs">
+              <div className="absolute top-3 left-3 bg-card/95 backdrop-blur-sm border border-border rounded-lg px-3 py-2 z-10 w-[300px]" data-testid="validacao-painel-poligono">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-foreground">{geo.nome_original || 'Sem nome'}</p>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground break-words">{geo.nome_original || 'Sem nome'}</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {pName ? `Vinculado → ${pName}` : 'Sem vínculo'}
+                      {pName ? `Pasto → ${pName}` : rotuloDoTipo(geo.tipo)}
                     </p>
                   </div>
-                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setFocusedId(null)}>
+                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 flex-none" onClick={() => { setFocusedId(null); setClassificandoId(null); }}>
                     <X className="h-3 w-3" />
                   </Button>
                 </div>
+                {/* os gestos do polígono, cada um no seu botão (MAPA-AREA-TIPO-01 aqui; piquetes e editar polígono entram ao lado) */}
+                {classificandoId === geo.id || (tipoPedido && classificandoId === null) ? (
+                  <ClassificarPoligono key={`${geo.id}-${tipoPedido ?? ''}`} geo={geo} pastos={pastos} geometrias={geometrias} tipoInicial={tipoPedido}
+                    onGravou={() => { setClassificandoId(null); onTipoPedidoUsado?.(); onRefresh(); }}
+                    onFechar={() => { setClassificandoId(null); onTipoPedidoUsado?.(); }} />
+                ) : (
+                  <div className="mt-1.5 flex gap-1" data-testid="validacao-gestos">
+                    <Button variant="outline" size="sm" className="h-6 px-2 text-[10.5px]" onClick={() => setClassificandoId(geo.id)}>
+                      <Link2 className="h-3 w-3 mr-1" />Classificar
+                    </Button>
+                  </div>
+                )}
               </div>
             );
           })()}

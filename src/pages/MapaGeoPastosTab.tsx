@@ -19,6 +19,7 @@ import { MESES_COLS } from '@/lib/calculos/labels';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
 import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
+import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
 
 export interface PastoMapData {
   pasto: any;
@@ -56,7 +57,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const { pastos, categorias } = usePastos();
   const {
     geometrias, loading: geoLoading, salvarGeometrias, removerGeometrias, loadGeometrias,
-    atualizarGeometria, excluirGeometrias, vincularPasto,
+    atualizarGeometria, excluirGeometrias,
   } = usePastoGeometrias();
 
   const hoje = new Date();
@@ -86,6 +87,8 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
+  /* MAPA-AREA-TIPO-01: o tipo pedido pelo Adicionar › Área, que a Validação usa no próximo polígono escolhido */
+  const [tipoPedido, setTipoPedido] = useState<TipoDeArea | null>(null);
 
   /* MAPA-GLOBAL-01: as fazendas do Global = as com pecuária (fora o ADM); a MESMA leitura do mês, para todas de uma vez */
   const fazendasDoGlobal = useMemo(() => fazendasComPecuaria.filter(f => f.id !== GLOBAL_FAZENDA.id), [fazendasComPecuaria]);
@@ -237,6 +240,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         erroDoMes={mapaDoMes.erro}
         geoLoading={geoLoading}
         onImportar={() => setUploadOpen(true)}
+        onClassificarArea={tipo => { setTipoPedido(tipo); setViewMode('validacao'); }}
         onRenderedChange={onRenderedChange}
         seletorDeMes={seletorDeMes}
         trocaDeVista={trocaDeVista}
@@ -268,8 +272,9 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
             geoLoading={geoLoading}
             onUpdate={atualizarGeometria}
             onDelete={excluirGeometrias}
-            onLink={vincularPasto}
             onRefresh={loadGeometrias}
+            tipoPedido={tipoPedido}
+            onTipoPedidoUsado={() => setTipoPedido(null)}
           />
         )}
       </div>
