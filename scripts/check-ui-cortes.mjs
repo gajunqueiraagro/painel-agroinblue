@@ -1085,7 +1085,8 @@ function medirMenuPorCima(foto) {
   const t = tela.getBoundingClientRect();
   const gaveta = document.createElement('div');
   gaveta.dataset.gavetaDeTeste = '1';
-  Object.assign(gaveta.style, { position: 'fixed', left: `${t.left}px`, top: '0', bottom: '0', width: '240px', zIndex: '50', background: 'rgba(27,42,68,0.9)' });
+  /* pointer-events: auto — com um menu do Radix aberto o body fica com pointer-events: none, a gaveta herdaria e o elementFromPoint a pularia */
+  Object.assign(gaveta.style, { position: 'fixed', left: `${t.left}px`, top: '0', bottom: '0', width: '240px', zIndex: '50', background: 'rgba(27,42,68,0.9)', pointerEvents: 'auto' });
   document.body.appendChild(gaveta);
   const g = gaveta.getBoundingClientRect(), achados = [];
   const alvos = ['[data-testid="mapa-kpis"]', '[data-testid="mapa-filtros"]', '[data-testid="mapa-legenda"]', '.leaflet-container', '.leaflet-control-container .leaflet-control',
