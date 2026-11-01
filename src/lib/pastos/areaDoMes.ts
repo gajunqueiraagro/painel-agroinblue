@@ -7,8 +7,17 @@
  */
 import { pastosAtivosNoMes } from '@/hooks/usePastos';
 import { calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
+import type { AreaDoPastoNoMes } from '@/lib/pastos/areaDoPastoNoMes';
+
+/* PASTO-AREA-OFICIAL-02a — o `areaDe` (opcional, o último parâmetro) dá QUANTO cada pasto mede no mês (a área do mês do banco,
+   `useAreaDosPastosNoMes`); sem ele, ou quando ele não sabe (`undefined`), vale a área de hoje do cadastro, como antes. */
+const areaNoMes = (p: PastoComArea, anoMes: string, areaDe?: AreaDoPastoNoMes): number => {
+  const a = areaDe && p.id ? areaDe(p.id, anoMes) : undefined;
+  return a !== undefined ? a ?? 0 : p.area_produtiva_ha ?? 0;
+};
 
 interface PastoComArea {
+  id?: string;
   ativo: boolean;
   area_produtiva_ha?: number | null;
   data_inicio?: string | null;
@@ -21,13 +30,13 @@ export function anoMesDe(ano: number, mes: number): string {
 }
 
 /** Σ da área dos pastos ativos e vigentes no mês (sem olhar o uso — quem pede o uso usa `calcAreaProdutivaPecuaria`). */
-export function areaDosPastosNoMes(pastos: PastoComArea[], anoMes: string): number {
-  return pastosAtivosNoMes(pastos, anoMes).reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0);
+export function areaDosPastosNoMes(pastos: PastoComArea[], anoMes: string, areaDe?: AreaDoPastoNoMes): number {
+  return pastosAtivosNoMes(pastos, anoMes).reduce((s, p) => s + areaNoMes(p, anoMes, areaDe), 0);
 }
 
 /** A área de cada mês de uma lista de meses ("AAAA-MM"), na mesma ordem. */
-export function areaPorMes(pastos: PastoComArea[], anosMeses: string[]): number[] {
-  return anosMeses.map((am) => areaDosPastosNoMes(pastos, am));
+export function areaPorMes(pastos: PastoComArea[], anosMeses: string[], areaDe?: AreaDoPastoNoMes): number[] {
+  return anosMeses.map((am) => areaDosPastosNoMes(pastos, am, areaDe));
 }
 
 /**
@@ -35,8 +44,8 @@ export function areaPorMes(pastos: PastoComArea[], anosMeses: string[]): number[
  * pecuária vigentes nos 12 meses (`calcAreaProdutivaPecuaria` com o mês), nunca a de um mês só nem a do cadastro de hoje.
  * Mês sem pasto vigente entra como 0 na média (o pasto que começa em julho conta metade do ano).
  */
-export function areaPecuariaMediaDoAno(pastos: Parameters<typeof calcAreaProdutivaPecuaria>[0], ano: number): number {
+export function areaPecuariaMediaDoAno(pastos: Parameters<typeof calcAreaProdutivaPecuaria>[0], ano: number, areaDe?: AreaDoPastoNoMes): number {
   let soma = 0;
-  for (let mes = 1; mes <= 12; mes++) soma += calcAreaProdutivaPecuaria(pastos, anoMesDe(ano, mes));
+  for (let mes = 1; mes <= 12; mes++) soma += calcAreaProdutivaPecuaria(pastos, anoMesDe(ano, mes), areaDe);
   return soma / 12;
 }
