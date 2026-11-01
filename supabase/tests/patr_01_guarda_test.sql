@@ -2,9 +2,10 @@
 -- `guardaDeClienteNasMigrations.test.ts` sobre a 20261028116060). Fixture SINTETICA no cliente Teste (43f32d07), criada pelo admin
 -- (7bd0b6ad); as chamadas sao feitas como `authenticated` com as claims de um usuario de FORA do Teste (a91962cd). TERMINA EM RAISE.
 --   G0  o usuario de fora e' de fora: nao e' admin e `tenant_ok(Teste)` = false (sem isso o teste nao prova nada)
---   G1  as 13 RPCs expostas, cada uma com ids/cliente REAIS do Teste e argumentos validos: todas recusam com 42501 (nunca vazio,
+--   G1  as 14 RPCs expostas (01c/116110: + `fn_patrimonio_parametros_corrigir`), cada uma com ids/cliente REAIS do Teste e argumentos validos: todas recusam com 42501 (nunca vazio,
 --       nunca outro erro — outro erro = a guarda nao foi a primeira coisa a agir, e o teste reprova)
---   G2  as 9 internas `_fn_patrimonio_*` (B2/116080: + `_fn_patrimonio_prefixo` e `_fn_patrimonio_proximo_codigo`): `authenticated`
+--   G2  as 11 internas `_fn_patrimonio_*` (B2/116080: + `_fn_patrimonio_prefixo` e `_fn_patrimonio_proximo_codigo`; 01c/116110: +
+--       `_fn_patrimonio_resumo_serie` e `_fn_patrimonio_parametros_copia`): `authenticated`
 --       nao executa (42501 "permission denied")
 --   G3  completude: o conjunto chamado em G1+G2 = TODAS as funcoes `fn_patrimonio_*`/`_fn_patrimonio_*`/`fn_investimentos_sem_bem`
 --       do catalogo (funcao nova sem entrar aqui reprova)
@@ -55,6 +56,7 @@ insert into fx_chamadas values
   ('fn_patrimonio_bem_salvar#editar', true, $q$select public.fn_patrimonio_bem_salvar(jsonb_build_object('id', current_setting('teste.maq'), 'versao', current_setting('teste.versao')::int, 'descricao', 'Intruso sintetico'), true)::text$q$),
   ('fn_patrimonio_bem_lancamentos', true, $q$select count(*) from public.fn_patrimonio_bem_lancamentos(current_setting('teste.maq')::uuid)$q$),
   ('fn_patrimonio_parametros_mudar', true, $q$select public.fn_patrimonio_parametros_mudar(current_setting('teste.maq')::uuid, (date_trunc('month', now()) + interval '1 month')::date, 60, 10, 'motivo sintetico', true)::text$q$),
+  ('fn_patrimonio_parametros_corrigir', true, $q$select public.fn_patrimonio_parametros_corrigir(current_setting('teste.maq')::uuid, current_setting('teste.versao')::int, 60, 10, 'motivo sintetico', true)::text$q$),
   ('fn_patrimonio_bem_ligar', true, $q$select public.fn_patrimonio_bem_ligar(current_setting('teste.maq')::uuid, '[]'::jsonb, false, true)::text$q$),
   ('fn_patrimonio_bem_desligar', true, $q$select public.fn_patrimonio_bem_desligar(current_setting('teste.maq')::uuid, '[{"lancamento_id":"00000000-0000-0000-0000-000000000000"}]'::jsonb, 'motivo sintetico', true)::text$q$),
   ('fn_patrimonio_bem_pastos_salvar', true, $q$select public.fn_patrimonio_bem_pastos_salvar(current_setting('teste.maq')::uuid, '[]'::jsonb, true)::text$q$),
@@ -70,6 +72,8 @@ insert into fx_chamadas values
   ('_fn_patrimonio_conta_investimento', false, $q$select public._fn_patrimonio_conta_investimento(null)::text$q$),
   ('_fn_patrimonio_meses', false, $q$select count(*) from public._fn_patrimonio_meses(current_date, current_date)$q$),
   ('_fn_patrimonio_prefixo', false, $q$select public._fn_patrimonio_prefixo((select id from public.patrimonio_categorias where cliente_id is null and codigo = 'maquinas'))$q$),
+  ('_fn_patrimonio_resumo_serie', false, $q$select public._fn_patrimonio_resumo_serie('43f32d07-dba8-4670-900c-bf645440c04a', current_setting('teste.maq')::uuid)::text$q$),
+  ('_fn_patrimonio_parametros_copia', false, $q$select public._fn_patrimonio_parametros_copia(current_setting('teste.maq')::uuid)::text$q$),
   ('_fn_patrimonio_proximo_codigo', false, $q$select public._fn_patrimonio_proximo_codigo('43f32d07-dba8-4670-900c-bf645440c04a', (select id from public.patrimonio_categorias where cliente_id is null and codigo = 'maquinas'))$q$);
 grant select on fx_chamadas to authenticated;
 
@@ -107,7 +111,7 @@ begin
     end;
   end loop;
   if falhas <> '' then raise exception 'G1/G2 (% de % recusaram com 42501):%', n_ok, (select count(*) from fx_chamadas), falhas; end if;
-  if n_ok <> 23 then raise exception 'G1/G2: % recusas, esperadas 23', n_ok; end if;
+  if n_ok <> 26 then raise exception 'G1/G2: % recusas, esperadas 26', n_ok; end if;
 end $g1$;
 reset role;
 
@@ -127,7 +131,7 @@ begin
   if exists (select 1 from public.patrimonio_bem_documentos where nome = 'intruso') then raise exception 'G4: o de fora registrou documento'; end if;
 end $g4$;
 
--- G5 controle: o admin, as mesmas 14 chamadas expostas, nenhuma com 42501 ---------------------------------------------------------
+-- G5 controle: o admin, as mesmas 15 chamadas expostas, nenhuma com 42501 ---------------------------------------------------------
 select set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
 set local role authenticated;
 do $g5$
@@ -142,9 +146,9 @@ begin
     end;
   end loop;
   if falhas <> '' then raise exception 'G5 controle:%', falhas; end if;
-  if n <> 14 then raise exception 'G5: % chamadas do admin, esperadas 14', n; end if;
+  if n <> 15 then raise exception 'G5: % chamadas do admin, esperadas 15', n; end if;
 end $g5$;
 reset role;
 
-do $fim$ begin raise exception 'OK patr_01_guarda (G0–G5: 14 chamadas expostas + 9 internas recusam o usuario de fora)'; end $fim$;
+do $fim$ begin raise exception 'OK patr_01_guarda (G0–G5: 15 chamadas expostas + 11 internas recusam o usuario de fora)'; end $fim$;
 rollback;

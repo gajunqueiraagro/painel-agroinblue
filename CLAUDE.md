@@ -179,6 +179,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   de gatilho/indice novo roda como `authenticated` (`set local role authenticated` + claims de um usuario real), nunca so' como postgres.
 - RPC chamada pela tela roda sob pg_safeupdate (todo UPDATE/DELETE com WHERE, inclusive em tabela temporaria). Funcao chamada a cada
   carga com parametro de conta leva `SET plan_cache_mode = force_custom_plan`. REPLACE de VIEW leva `security_invoker = true`.
+- SALVAR-TRAVA (PATR-01c, 01/11): RPC chamada pela tela NUNCA recusa com 40001/40P01 — o PostgREST repete a transacao sem fim (sem
+  resposta, CPU presa); versao velha = P0001 com a frase. As 44 que ainda o usam (01/11): FIX-40001-SISTEMICO (DIVIDAS-ABERTAS).
 - Migration de corpo grande: patch guardado por md5. Ancora que casa 1x pode ser a errada. Deslocar chave de indice unico em lote exige
   ordem segura.
 - REGRA DO NASCIMENTO (OC-CC-PADRAO-NOVAS-01a): frente que converte dado existente para um padrao novo mede o que nasce errado HOJE e

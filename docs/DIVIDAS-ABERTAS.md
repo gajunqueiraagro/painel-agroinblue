@@ -453,6 +453,25 @@ docs/historico/frentes-ate-2026-09-29.md.
   pode, pela API, alterar direto uma conta DO CLIENTE (dividendo ou repasse), sem passar pelo escritor (nenhuma tela faz isso). Fechar
   = trava de escritor no plano ou policy so' do admin; tabela de uso corrente (DDL curto, lock de 2 s).
 
+- FIX-40001-SISTEMICO (PATR-01c / SALVAR-TRAVA, Gabriel 01/11/2026: "NAO mexa; registre como frente propria") — o PostgREST REPETE
+  sem fim toda transacao que falha com 40001 (serialization_failure) — e com 40P01 (deadlock), que ele trata igual: o pedido nunca
+  responde, a conexao fica em laco (BEGIN → chamada → erro → ABORT, ~1.500 rollbacks/s no proto) mesmo depois que o navegador
+  desiste, ate' alguem derrubar a conexao (`pg_terminate_backend`). Reproduzido num container (postgres 17 + postgrest v14.16):
+  P0001 → 400 em 26 ms; 40001 → sem resposta, ~46% de CPU no banco por pedido. Medido no proto em 01/11: 6,39 bilhoes de rollbacks
+  desde 29/09 contra 14,9 milhoes de commits; 8 conexoes em laco na `fn_patrimonio_bem_salvar` e 2 na `oc_explicar_saldo` (uma desde
+  12/10), derrubadas com OK do Gabriel. O front da OC trata `error.code === '40001'`, mas por esse caminho o codigo NUNCA chega.
+  A Patrimonio saiu (116100). Seguem com 40001/40P01 no corpo (45 em 01/11, a busca `prosrc ~ '40001|40P01|serialization_failure|
+  deadlock_detected'`, menos a do Patrimonio): `_oc_vincular_recebimento`, `fin_documento_editar`, `fn_infra_desativar`,
+  `fn_infra_salvar`, `fn_obter_ou_criar_fechamento_pasto`, `fn_obter_ou_criar_fechamentos_lote` e 38 `oc_*`. ⚠ QUEM FOR TRATAR
+  separa, uma a uma, quem LEVANTA 40001 (trocar por P0001 com a frase; o front que olha '40001' passa a olhar a frase/P0001) de quem
+  so' o CAPTURA (pode ficar); e mede antes o laco de hoje (`pg_stat_activity`, o `xact_start` muda a cada amostra).
+
+- PATR-02-TRAVA-CONSUMIDA (PATR-01c, Gabriel 01/11/2026) — "Corrigir cadastro" (`fn_patrimonio_parametros_corrigir`) refaz a serie
+  de depreciacao do bem desde o "em uso", inclusive meses passados. Hoje NINGUEM fora da Patrimonio le' a depreciacao (a
+  `fn_dre_pecuaria` so' usa a palavra num rotulo; o AGRI-05 depende do PATR-02, que nao existe — docs/specs/AGRI-FECHAMENTO-v1.md:256),
+  por isso nao ha' trava. ⚠ O BRIEFING DO PATR-02 / AGRI-05 decide a trava: quando um mes de depreciacao passar a ser CONSUMIDO
+  (DRE, fechamento, Lucro Rural), a correcao desse mes fica proibida ou vira ajuste no mes corrente.
+
 ## DIVIDAS DE TELA
 
 - P174-TELA-NFSE (Gabriel 29/10/2026, T3: "AbaDocumentosLancamento e NotaFiscalDialog (bruto/retenções/líquido e "no DANFE") ficam com o
