@@ -22,20 +22,20 @@ import type { ModoDaEdicao, PoligonoDaFazenda, useEdicaoDoPoligono } from '@/hoo
 /* a instrução curta de cada gesto (o Alt/Option solto do encaixe vale enquanto arrasta: o Geoman testa o `altKey`) */
 const INSTRUCAO: Record<ModoDaEdicao, string> = {
   vertices: 'Arraste · clique na linha cria ponto · Alt: sem encaixe',
-  redesenhar: 'Clique ponto a ponto · Alt: sem encaixe',
-  dividir: 'Risque de lado a lado; duplo clique termina',
+  redesenhar: 'Clique ponto a ponto · ⌫ desfaz · Esc cancela',
+  dividir: 'Risque de lado a lado · ⌫ desfaz · duplo clique termina',
   unir: 'Unir · clique no mapa para pôr ou tirar',
   apagar: 'Apagar',
-  desenhar: 'Clique ponto a ponto · Alt: sem encaixe',
+  desenhar: 'Clique ponto a ponto · ⌫ desfaz · Esc cancela',
 };
 /* o texto inteiro de cada instrução, no `title` (a barra tem 2 linhas: a instrução fica curta) */
 const INSTRUCAO_INTEIRA: Record<ModoDaEdicao, string> = {
   vertices: 'Arraste os pontos. Um clique em QUALQUER lugar da linha cria um ponto ali (num lado longo com o meio fora da tela, aparece um ponto do meio no trecho visível). Botão direito num ponto o tira. Segurar Alt/Option solta o encaixe enquanto arrasta. Ctrl/Cmd+Z desfaz um passo.',
-  redesenhar: 'Clique ponto a ponto; clique no primeiro para fechar. Segurar Alt/Option solta o encaixe.',
+  redesenhar: 'Clique ponto a ponto; clique no primeiro para fechar. Backspace (ou Ctrl/Cmd+Z, ou "Desfazer ponto") tira o último ponto; para mover um ponto já posto, "Fechar e ajustar" e arraste no rascunho. Esc pergunta se cancela. Segurar Alt/Option solta o encaixe.',
   dividir: 'Risque a linha de um lado ao outro do polígono; o duplo clique termina.',
   unir: 'Escolha o vizinho que encosta.',
   apagar: 'Diga o motivo; o polígono fica na trilha e dá para desfazer.',
-  desenhar: 'Clique ponto a ponto; clique no primeiro para fechar. Segurar Alt/Option solta o encaixe.',
+  desenhar: 'Clique ponto a ponto; clique no primeiro para fechar. Backspace (ou Ctrl/Cmd+Z, ou "Desfazer ponto") tira o último ponto; para mover um ponto já posto, "Fechar e ajustar" e arraste no rascunho. Esc pergunta se cancela. Segurar Alt/Option solta o encaixe.',
 };
 
 const NOME_DO_GESTO: Record<ModoDaEdicao, string> = {
@@ -80,7 +80,9 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
   const areaGravada = e.alvo ? areaDe(e.alvo.geojson) : null;
   /* com o polígono cruzando ele mesmo, primeiro se corrige: "Divisa junto" e "Recortar" saem da linha e entra "Corrigir automaticamente" */
   const corrigirPrimeiro = e.podeCorrigir && !!e.fraseDoCruzamento;
-  const podeRecortar = (e.modo === 'vertices' || e.modo === 'redesenhar' || e.modo === 'desenhar') && !corrigirPrimeiro;
+  /* -08: com a pergunta "Continuar o desenho de HH:MM?" na linha, as opções saem (senão o Cancelar ia para fora da faixa) */
+  const perguntaContinuar = e.modo === 'desenhar' && e.desenhandoAgora && e.pontosNoDesenho === 0 && !!e.guardado && !e.confirmarCancelar;
+  const podeRecortar = (e.modo === 'vertices' || e.modo === 'redesenhar' || e.modo === 'desenhar') && !corrigirPrimeiro && !perguntaContinuar;
 
   return (
     <>
@@ -88,9 +90,10 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
         data-testid="barra-edicao-poligono">
         {/* 1ª linha: instrução · escolhas · opções · botões */}
         <div className="flex h-[22px] items-center gap-2">
-          <p className={`flex-none whitespace-nowrap font-semibold text-foreground ${TXT}`} data-testid="edicao-instrucao" title={INSTRUCAO_INTEIRA[e.modo]}>
+          <p className={`flex-none whitespace-nowrap font-semibold text-foreground ${TXT}`} data-testid="edicao-instrucao"
+            title={e.temRascunho && e.modo !== 'dividir' ? 'Rascunho: arraste os pontos; um clique na linha cria ponto; clique num ponto e "Tirar ponto" o tira (ou botão direito); Ctrl/Cmd+Z desfaz o último gesto; "Corrigir automaticamente" tira o cruzamento; Esc ou Cancelar perguntam antes de descartar. O rascunho fica guardado no navegador.' : INSTRUCAO_INTEIRA[e.modo]}>
             {temEscolhas ? `${NOME_DO_GESTO[e.modo][0].toUpperCase()}${NOME_DO_GESTO[e.modo].slice(1)}`
-              : e.temRascunho ? (e.modo === 'dividir' ? 'Ajuste a linha do corte · arraste os pontos' : 'Ajuste · clique na linha cria ponto · Alt: sem encaixe')
+              : e.temRascunho ? (e.modo === 'dividir' ? 'Ajuste a linha do corte · arraste os pontos' : 'Ajuste os pontos · Esc cancela')
               : INSTRUCAO[e.modo]}
             {e.alvo && <span className="ml-1 font-normal text-muted-foreground">{e.alvo.nome}{pastoDoAlvo ? ` → ${pastoDoAlvo}` : ''}</span>}
           </p>
@@ -147,7 +150,7 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
           )}
 
           <div className="min-w-0 flex-1" />
-          {e.modo !== 'apagar' && e.modo !== 'unir' && (
+          {e.modo !== 'apagar' && e.modo !== 'unir' && !perguntaContinuar && (
             <Opcao ligado={e.encaixe} aoMudar={e.setEncaixe} rotulo="Encaixe" testid="edicao-encaixe"
               title="Encaixe nos pontos e lados vizinhos (7 px; nunca no contorno da fazenda). Segurar Alt/Option solta o encaixe enquanto arrasta." />
           )}
@@ -166,16 +169,56 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
             </Button>
           )}
           {(e.modo === 'vertices' || (e.temRascunho && e.modo !== 'dividir')) && (
-            <Button variant="ghost" size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`} disabled={!e.podeDesfazerPasso} onClick={e.desfazerPasso}
-              title="Volta um movimento (Ctrl/Cmd+Z)" data-testid="edicao-desfazer-passo">
-              <Undo2 className="h-3 w-3" />Desfazer passo
-            </Button>
+            <>
+              {/* -08: clicar num ponto o escolhe (anel azul); "Tirar ponto" o tira — o botão direito também tira */}
+              <Button variant="ghost" size="sm" className={`h-5 flex-none px-1.5 ${TXT}`} disabled={!e.verticeEscolhido} onClick={e.tirarPonto}
+                title={e.verticeEscolhido ? 'Tira o ponto escolhido (dá para desfazer)' : 'Clique num ponto para escolher; o botão direito tira direto'} data-testid="edicao-tirar-ponto">
+                Tirar ponto
+              </Button>
+              <Button variant="ghost" size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`} disabled={!e.podeDesfazerPasso} onClick={e.desfazerPasso}
+                title="Desfaz o último gesto: mover, criar ou tirar ponto (Ctrl/Cmd+Z)" data-testid="edicao-desfazer-passo">
+                <Undo2 className="h-3 w-3" />Desfazer
+              </Button>
+            </>
           )}
-          <Button variant="outline" size="sm" className={`h-5 flex-none px-2 ${TXT}`} onClick={e.cancelar} data-testid="edicao-cancelar">Cancelar</Button>
-          <Button size="sm" className={`h-5 flex-none px-2 ${TXT}`} disabled={!podePrever} onClick={() => void e.prever()} data-testid="edicao-previa"
-            title={podePrever ? undefined : motivoDoBloqueio ?? undefined}>
-            {e.gravando ? 'Conferindo…' : 'Prévia e gravar'}
-          </Button>
+          {/* -08: durante o desenho — desfazer o último ponto e "Fechar e ajustar" (o Geoman não arrasta ponto no meio do desenho) */}
+          {/* -08: o desenho guardado no navegador — ao abrir o desenho novo, oferece continuar */}
+          {perguntaContinuar && e.guardado && (
+            <span className={`flex flex-none items-center gap-1.5 ${TXT}`} data-testid="edicao-continuar-guardado">
+              <span className="font-semibold text-foreground">Continuar o desenho de {e.guardado.em}?</span>
+              <Button size="sm" className={`h-5 px-2 ${TXT}`} onClick={e.retomarRascunho} data-testid="edicao-continuar-sim">Continuar</Button>
+              <Button variant="outline" size="sm" className={`h-5 px-2 ${TXT}`} onClick={e.esquecerGuardado} data-testid="edicao-continuar-nao">Começar de novo</Button>
+            </span>
+          )}
+          {e.desenhandoAgora && !e.confirmarCancelar && !(e.modo === 'desenhar' && e.pontosNoDesenho === 0 && e.guardado) && (
+            <>
+              <Button variant="ghost" size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`} disabled={e.pontosNoDesenho === 0} onClick={e.desfazerPonto}
+                title="Tira o último ponto (Backspace ou Ctrl/Cmd+Z)" data-testid="edicao-desfazer-ponto">
+                <Undo2 className="h-3 w-3" />Desfazer ponto
+              </Button>
+              <Button variant="outline" size="sm" className={`h-5 flex-none px-2 ${TXT}`} disabled={e.pontosNoDesenho < (e.modo === 'dividir' ? 2 : 3)}
+                onClick={e.fecharEAjustar} title="Fecha o desenho agora e abre o rascunho, onde os pontos se arrastam" data-testid="edicao-fechar-ajustar">
+                Fechar e ajustar
+              </Button>
+            </>
+          )}
+          {e.confirmarCancelar ? (
+            <span className={`flex flex-none items-center gap-1.5 ${TXT}`} data-testid="edicao-confirmar-cancelar">
+              <span className="font-semibold text-red-700">Descartar o que foi feito?</span>
+              <Button variant="outline" size="sm" className={`h-5 px-2 ${TXT}`} onClick={e.descartar} data-testid="edicao-cancelar-sim">Sim, descartar</Button>
+              <Button size="sm" className={`h-5 px-2 ${TXT}`} onClick={() => e.setConfirmarCancelar(false)} data-testid="edicao-cancelar-nao">Não, continuar</Button>
+            </span>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" className={`h-5 flex-none px-2 ${TXT}`} onClick={e.pedirCancelar} data-testid="edicao-cancelar">Cancelar</Button>
+              {!e.desenhandoAgora && (
+                <Button size="sm" className={`h-5 flex-none px-2 ${TXT}`} disabled={!podePrever} onClick={() => void e.prever()} data-testid="edicao-previa"
+                  title={podePrever ? undefined : motivoDoBloqueio ?? undefined}>
+                  {e.gravando ? 'Conferindo…' : 'Prévia e gravar'}
+                </Button>
+              )}
+            </>
+          )}
         </div>
 
         {/* 2ª linha: medidas · sobreposição · ver lados · aviso */}
