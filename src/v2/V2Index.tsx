@@ -498,6 +498,10 @@ export default function V2Index() {
      dezenas de setSection do arquivo seria invasivo, e consumir basta para nao vazar
      entre navegacoes. */
   const origemPendenciaRef = useRef<V2Section | null>(null);
+  /* FECH-P2-TRAVA-AVISO-01 — a ida do pasto travado ao Valor do Rebanho: o mês com que ele abre e o pasto que a volta reabre.
+     O pasto é estado (não ref): consumido, o Fechamento rerenderiza sem ele e não o reabre de novo. */
+  const mesDoValorRebanhoRef = useRef<number | null>(null);
+  const [voltaAoPasto, setVoltaAoPasto] = useState<string | null>(null);
   // Estado para edição completa de Abate/Venda vinda da Conferência.
   // Quando setado, navega para `lancamentos-zoot` e abre LancamentosTab em edit mode.
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
@@ -537,6 +541,11 @@ export default function V2Index() {
   const [recorrenciaIdAlvo, setRecorrenciaIdAlvo] = useState<string | null>(null);
   /* saiu de Recorrências por outro caminho (a barra lateral): a ida acabou — a próxima visita abre a lista, sem regra e sem volta */
   useEffect(() => { if (section !== 'recorrencias') setRecorrenciaIdAlvo(null); }, [section]);
+  /* FECH-P2-TRAVA-AVISO-01 — fora do caminho Valor do Rebanho ⇄ Fechamento, a ida esquecida não vale mais */
+  useEffect(() => {
+    if (section !== 'valor-rebanho') mesDoValorRebanhoRef.current = null;
+    if (section !== 'valor-rebanho' && section !== 'fechamento') setVoltaAoPasto(null);
+  }, [section]);
   // Quando o lápis do modal "Lançamentos do mês" da Conciliação Bancária é clicado,
   // navegamos para 'financeiro-lanc' com ano/mês do contexto e habilitamos onBack
   // para retornar a 'conciliacao'. Resetar ao redirecionar para outras sections.
@@ -1191,7 +1200,7 @@ export default function V2Index() {
                `AnaliseEconomica`. Ela só é lida na MONTAGEM, e basta — a section remonta. */
             filtroAnoInicial={String(ano)}
             /* RESUMO-CLIENTES-01 passo b — vindo da esteira, também o mês dela */
-            filtroMesInicial={voltaAoResumoRef.current ? mesVisivel : undefined}
+            filtroMesInicial={voltaAoResumoRef.current ? mesVisivel : mesDoValorRebanhoRef.current ?? undefined}
             /* ⚠ A SETA SÓ EXISTE QUANDO HÁ ORIGEM PARA VOLTAR — VALOR-REBANHO-COMPACTO-01. O
                `onBack` era passado SEMPRE, então quem chegava pelo menu via um "voltar" que caía na
                Home: um caminho que ele não percorreu. É o mesmo idioma que a faixa de pendências já
@@ -1460,6 +1469,17 @@ export default function V2Index() {
           setMes(String(filtro.mes));
           setSection('valor-rebanho');
         }}
+        /* FECH-P2-TRAVA-AVISO-01 — ida e volta: a seta do Valor do Rebanho volta ao Fechamento, que reabre o pasto */
+        onReabrirValorRebanho={(alvo) => {
+          setAno(alvo.ano);
+          setMes(String(alvo.mes));
+          mesDoValorRebanhoRef.current = alvo.mes;
+          setVoltaAoPasto(alvo.pastoId);
+          origemPendenciaRef.current = 'fechamento';
+          setSection('valor-rebanho');
+        }}
+        pastoParaAbrir={voltaAoPasto}
+        onPastoParaAbrirConsumido={() => setVoltaAoPasto(null)}
         /* ACESSOS-FIN-01 — "Conferência do GMD" e "Mapa de Pastos" so' se desenham com o callback (FechamentoTab): sem a tela de
            destino, sem botao. */
         onNavigateToConferenciaGmd={podeAbrirTela('conferencia-mensal') ? (filtro) => {

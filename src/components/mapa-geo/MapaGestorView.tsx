@@ -29,11 +29,10 @@ import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
 import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
 import { FUNDOS } from '@/lib/mapa/fundoDoMapa';
-import { LARGURA_MAXIMA_DOS_CREDITOS_PX } from '@/lib/mapa/creditosDoMapa';
-
-/* MAPA-CONTROLES-01: o que a legenda deixa livre à direita para os créditos no rodapé = 12 (a margem da legenda) + a largura máxima dos
-   créditos + 10 (a margem do controle do Leaflet) + 8 de folga */
-const RESERVA_DOS_CREDITOS_PX = 12 + LARGURA_MAXIMA_DOS_CREDITOS_PX + 10 + 8;
+import { EVENTO_LIMITE_DOS_CREDITOS } from '@/lib/mapa/creditosDoMapa';
+/* MAPA-CONTROLES-01 / MAPA-COMPACTO-01: o que a legenda deixa livre à direita para os créditos no rodapé = 12 (a margem da legenda) +
+   8 de folga + 10 (a margem do controle do Leaflet) + a largura MEDIDA dos créditos (o texto muda com a área à vista) */
+const FOLGA_DA_LEGENDA_PX = 12 + 8 + 10;
 
 interface Props {
   geometrias: FazendaGeometria[];
@@ -108,11 +107,12 @@ function numero(v: number | null | undefined, casas = 0, sufixo = ''): string {
   return v == null ? '—' : `${formatNum(v, casas)}${sufixo}`;
 }
 
-function Kpi({ rotulo, valor, unidade, largura = 88 }: { rotulo: string; valor: string; unidade?: string | null; largura?: number }) {
+/* MAPA-COMPACTO-01: o card mais baixo (28 px: rótulo 11 + valor 15 + 2) e com menos padding; "cab." e "UA/ha" seguem menores */
+function Kpi({ rotulo, valor, unidade, largura = 80 }: { rotulo: string; valor: string; unidade?: string | null; largura?: number }) {
   return (
-    <div className="flex-none rounded-md bg-white/70 px-2 py-[3px]" style={{ width: largura }}>
-      <div className="text-[9.5px] leading-[12px] text-[#4A5361]">{rotulo}</div>
-      <div className="whitespace-nowrap text-[13px] font-semibold leading-[17px] tabular-nums">
+    <div className="flex-none rounded-md bg-white/70 px-1.5 py-px" style={{ width: largura }}>
+      <div className="text-[9.5px] leading-[11px] text-[#4A5361]">{rotulo}</div>
+      <div className="whitespace-nowrap text-[12px] font-semibold leading-[15px] tabular-nums">
         {valor}{unidade ? <span className="ml-0.5 text-[10px] font-normal text-[#4A5361]">{unidade}</span> : null}
       </div>
     </div>
@@ -189,6 +189,7 @@ export function MapaGestorView({
   const [filtrosAbertos, setFiltrosAbertos] = useState(true);
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS);
   const [creditosNoRodape, setCreditosNoRodape] = useState(true); // MAPA-CONTROLES-01
+  const [larguraDosCreditos, setLarguraDosCreditos] = useState(0); // MAPA-COMPACTO-01: medida, não o pior caso
   const quadroRef = useRef<HTMLDivElement>(null);
   const legendaRef = useRef<HTMLDivElement>(null);
   const enquadrouRef = useRef('');
@@ -392,27 +393,41 @@ export function MapaGestorView({
   const hist = dadosSelecionado?.historico ?? [];
   const maxHist = Math.max(1, ...hist.map(h => h.kgHa ?? 0));
 
-  /* MAPA-CONTROLES-01: com o painel fechado, os créditos vão para o rodapé à direita SÓ se cabem ao lado da legenda inteira (no pior caso,
-     os créditos na largura máxima); senão sobem para logo acima da faixa da legenda, ainda encostados à direita — nunca por baixo dela.
-     A 1126 com satélite: mapa 974 < legenda 613 + reserva 390. Mede de novo quando o quadro, a legenda ou o conteúdo dela mudam. */
+  /* MAPA-CONTROLES-01: com o painel fechado, os créditos vão para o rodapé à direita SÓ se cabem ao lado da legenda inteira; senão sobem
+     para logo acima da faixa da legenda, ainda encostados à direita — nunca por baixo dela (D4).
+     MAPA-COMPACTO-01: a conta usa a largura MEDIDA dos créditos (antes, o pior caso de 360 px), e mede de novo quando o quadro, a legenda,
+     o conteúdo dela ou o texto dos créditos mudam. */
   useEffect(() => {
     const quadro = quadroRef.current; if (!quadro) return;
+    const creditos = quadro.querySelector<HTMLElement>('[data-testid="mapa-creditos"]');
     const medir = () => {
       const larguraDaLegenda = legendaRef.current?.scrollWidth ?? 0;
-      setCreditosNoRodape(quadro.clientWidth >= larguraDaLegenda + RESERVA_DOS_CREDITOS_PX);
+      /* a largura com o texto INTEIRO (gravada pelos créditos): decidir pela largura limitada faria o canto ir e voltar */
+      const larguraDeles = Number(creditos?.dataset.larguraInteira ?? creditos?.offsetWidth ?? 0) || 0;
+      const noRodape = !painelAberto && quadro.clientWidth >= larguraDaLegenda + FOLGA_DA_LEGENDA_PX + larguraDeles;
+      setLarguraDosCreditos(larguraDeles);
+      setCreditosNoRodape(noRodape);
+      /* fora do rodapé os créditos sobem à altura dos Filtros: o espaço deles vai da borda dos Filtros (12 + 190 + 8) até o painel
+         (302 + 10) ou a borda do mapa (10); sem lugar para o texto inteiro, viram o botão "Fontes dos dados" (nunca cortado) */
+      const limite = noRodape ? Number.MAX_SAFE_INTEGER
+        : quadro.clientWidth - (painelAberto ? 312 : 10) - (filtrosAbertos && hasGeo ? 210 : 12);
+      creditos?.dispatchEvent(new CustomEvent(EVENTO_LIMITE_DOS_CREDITOS, { detail: limite }));
     };
     medir();
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(medir);
     ro.observe(quadro);
     if (legendaRef.current) ro.observe(legendaRef.current);
+    if (creditos) ro.observe(creditos);
     return () => ro.disconnect();
-  }, [hasGeo, nomeCamada, legenda, erroDoMes, carregandoMes]);
+  }, [hasGeo, nomeCamada, legenda, erroDoMes, carregandoMes, mapStatus, painelAberto, filtrosAbertos]);
+  /* MAPA-COMPACTO-01: sem lugar no rodapé (ou com o painel aberto), o canto sobe só até logo acima da legenda (22 px a 12 do pé = topo a
+     34; a caixa dos créditos começa a 30 + 7 de margem = 37) */
   const canto = painelAberto
-    ? '[&_.leaflet-bottom.leaflet-right]:bottom-[50px] [&_.leaflet-bottom.leaflet-right]:right-[302px]'
+    ? '[&_.leaflet-bottom.leaflet-right]:bottom-[30px] [&_.leaflet-bottom.leaflet-right]:right-[302px]'
     : creditosNoRodape
       ? '[&_.leaflet-bottom.leaflet-right]:bottom-0 [&_.leaflet-bottom.leaflet-right]:right-0'
-      : '[&_.leaflet-bottom.leaflet-right]:bottom-[50px] [&_.leaflet-bottom.leaflet-right]:right-0';
+      : '[&_.leaflet-bottom.leaflet-right]:bottom-[30px] [&_.leaflet-bottom.leaflet-right]:right-0';
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="mapa-gestor">
@@ -530,13 +545,17 @@ export function MapaGestorView({
         </div>
 
         {hasGeo && (
-          <div className={`absolute left-3 top-3 z-[500] flex gap-[3px] p-[3px] ${VIDRO}`} data-testid="mapa-kpis">
-            <Kpi rotulo="Alocadas" valor={numero(kpis.cabecas)} unidade={kpis.cabecas == null ? undefined : 'cab.'} />
-            <Kpi rotulo="Peso méd." valor={numero(kpis.pesoMedio, 0, ' kg')} />
-            <Kpi rotulo="Lotação" valor={numero(kpis.lotacao, 0, ' kg/ha')} unidade={textoUaHa(kpis.uaHa)} largura={140} />
-            <Kpi rotulo="Área pastos" valor={numero(kpis.area, 1, ' ha')} />
-            {/* fix1 E: o aviso tem lugar reservado (aparecer não move nada) */}
-            <div className={`flex w-[74px] flex-none items-center text-[9.5px] leading-[12px] text-[#8A5A00] ${fechamentoAberto ? '' : 'invisible'}`}
+          /* MAPA-COMPACTO-01: os cards a 6 px do topo, mais baixos, e o vidro na largura do CONTEÚDO (os 4 cards). O aviso do fechamento
+             aberto saiu de dentro do vidro (o lugar reservado dele era o vazio à direita): é um selo à parte, ao lado, que aparece sem
+             mover nada (é sobreposição, não ocupa lugar no vidro). */
+          <div className="absolute left-3 top-1.5 z-[500] flex items-start gap-1.5">
+            <div className={`flex gap-[2px] p-[2px] ${VIDRO}`} data-testid="mapa-kpis">
+              <Kpi rotulo="Alocadas" valor={numero(kpis.cabecas)} unidade={kpis.cabecas == null ? undefined : 'cab.'} />
+              <Kpi rotulo="Peso méd." valor={numero(kpis.pesoMedio, 0, ' kg')} />
+              <Kpi rotulo="Lotação" valor={numero(kpis.lotacao, 0, ' kg/ha')} unidade={textoUaHa(kpis.uaHa)} largura={128} />
+              <Kpi rotulo="Área pastos" valor={numero(kpis.area, 1, ' ha')} />
+            </div>
+            <div className={`mt-[2px] whitespace-nowrap rounded-md bg-[#FFF6D6]/95 px-1.5 py-px text-[9.5px] leading-[14px] text-[#8A5A00] shadow-sm ${fechamentoAberto ? '' : 'invisible'}`}
               data-testid="mapa-fechamento-aberto" aria-hidden={!fechamentoAberto}>
               fechamento de {mesDoMapa} aberto
             </div>
@@ -544,7 +563,7 @@ export function MapaGestorView({
         )}
 
         {hasGeo && filtrosAbertos && (
-          <div className={`absolute bottom-[50px] left-3 top-[59px] z-[500] w-[190px] overflow-y-auto px-2.5 py-2 ${VIDRO}`} data-testid="mapa-filtros">
+          <div className={`absolute bottom-[42px] left-3 top-[44px] z-[500] w-[190px] overflow-y-auto px-2.5 py-2 ${VIDRO}`} data-testid="mapa-filtros">
             <div className="mb-1 flex items-center justify-between text-[11px] font-semibold">
               Filtros
               <button type="button" className="text-[10.5px] font-normal text-[#2B6CB0]" onClick={() => setFiltrosAbertos(false)}>Ocultar</button>
@@ -649,15 +668,17 @@ export function MapaGestorView({
 
         {hasGeo && (
           /* fix1 (4): a legenda tem o tamanho do conteúdo, à esquerda, e nunca passa por baixo do painel do pasto.
-             MAPA-CONTROLES-01: com os créditos no rodapé (painel fechado), a legenda reserva o lugar deles (RESERVA_DOS_CREDITOS_PX) e
-             nunca os cobre; com eles acima da faixa, ela tem a largura toda */
-          <div ref={legendaRef} className={`absolute bottom-3 left-3 z-[500] flex h-[30px] w-fit items-center gap-2.5 overflow-hidden px-2.5 text-[9.5px] ${VIDRO}`}
-            style={{ maxWidth: painelAberto ? 'calc(100% - 322px)' : creditosNoRodape ? `calc(100% - ${RESERVA_DOS_CREDITOS_PX}px)` : 'calc(100% - 24px)' }}
-            data-testid="mapa-legenda">
-            <b className="flex-none whitespace-nowrap text-[10px]">{nomeCamada}</b>
+             MAPA-CONTROLES-01: com os créditos no rodapé (painel fechado), a legenda reserva o lugar MEDIDO deles e nunca os cobre; com
+             eles acima da faixa, ela tem a largura toda.
+             MAPA-COMPACTO-01: uma linha de 22 px, 9,5 px, quadradinhos de 8 px, padding mínimo, vidro discreto; o título é o nome curto
+             da camada (o inteiro no title) */
+          <div ref={legendaRef} className={`absolute bottom-3 left-3 z-[500] flex h-[22px] w-fit items-center gap-1.5 overflow-hidden rounded-md border border-white/60 bg-white/[0.8] px-1.5 text-[9.5px] leading-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.18)] backdrop-blur-[6px]`}
+            style={{ maxWidth: painelAberto ? 'calc(100% - 322px)' : creditosNoRodape ? `calc(100% - ${FOLGA_DA_LEGENDA_PX + larguraDosCreditos}px)` : 'calc(100% - 24px)' }}
+            data-testid="mapa-legenda" title={nomeCamada}>
+            <b className="flex-none whitespace-nowrap font-semibold">{nomeCurtoCamada}</b>
             {legenda.map(i => (
-              <span key={i.rotulo} className="flex flex-none items-center gap-1 whitespace-nowrap">
-                <i className="inline-block h-2.5 w-2.5 rounded-[2px]" style={{ background: i.cor }} />{i.rotulo}
+              <span key={i.rotulo} className="flex flex-none items-center gap-[3px] whitespace-nowrap">
+                <i className="inline-block h-2 w-2 rounded-[2px]" style={{ background: i.cor }} />{i.rotulo}
               </span>
             ))}
             {/* o mês já está no seletor da barra: aqui só a leitura em curso ou o erro */}

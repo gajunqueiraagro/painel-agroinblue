@@ -20,7 +20,11 @@ import { QUADRO_MODAL, TD_MODAL, TD_MODAL_NUM, TD_MODAL_TEXTO, TH_MODAL, TH_MODA
 
 const chave = (i: ItemDoVinculo) => `${i.lancamento_id}#${i.parte_ordem}`;
 
-export function LigarLancamentosDialog({ bemId, clienteId, aoFechar }: { bemId: string; clienteId: string; aoFechar: () => void }) {
+export function LigarLancamentosDialog({ bemId, clienteId, aoFechar, aoLigar }: {
+  bemId: string; clienteId: string; aoFechar: () => void;
+  /** SALVAR-TRAVA: ligou (a versão do bem subiu) — o modal do bem adota a versão nova */
+  aoLigar?: () => Promise<void> | void;
+}) {
   const api = usePatrimonioApi();
   const reler = useRelerPatrimonio();
   const { data: itens = [], isLoading } = useItensSemBem(clienteId, true);
@@ -56,6 +60,7 @@ export function LigarLancamentosDialog({ bemId, clienteId, aoFechar }: { bemId: 
     const r = await api.ligar(bemId, [...marcados.values()], confirmaRepetidas, false);
     setIndo(false);
     if (!r.ok) { setErro(r.erro); return; }
+    await aoLigar?.();
     toast.success(`${r.dados.n_ligar} ${r.dados.n_ligar === 1 ? 'lançamento ligado' : 'lançamentos ligados'} ao bem.`);
     await reler();
     aoFechar();

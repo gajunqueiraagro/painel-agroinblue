@@ -22,6 +22,12 @@ export const CREDITOS_VAZIOS: CreditosDoFundo = { tipo: 'nenhum', texto: '', avi
 export const ESPERA_DA_VISTA_MS = 400;
 /** Tiles que falham antes do primeiro que carrega = o satélite não serve (chave recusada, site fora da trava): cai no OSM. */
 export const ERROS_ATE_DESISTIR = 3;
+/* MAPA-SAT-FRESTA-01 (Gabriel 01/11): no zoom fracionado (ZOOM_SNAP 0,25) o Leaflet escala os ladrilhos e sobra uma fresta de
+   fração de pixel entre as fileiras, por onde aparece o fundo do `.leaflet-container` — o #ddd padrão, uma linha clara sobre a foto
+   (provado pintando o fundo de magenta: a linha ficou magenta; no zoom inteiro, nenhuma). Atrás do SATÉLITE o fundo passa a ser o
+   escuro do quadro e a fresta quase some; no OSM (claro) volta o padrão, onde o #ddd não aparece. Esticar o ladrilho (257/256,5 px)
+   foi testado e cria linhas claras nas duas direções. */
+export const FUNDO_ATRAS_DO_SATELITE = '#3a4436';
 
 export interface DependenciasDoFundo {
   chave: string | null;
@@ -62,6 +68,7 @@ export function montarFundo(
     if (!vivo) return;
     tirarCamada();
     camada = L.tileLayer(URL_OSM, { maxZoom: ZOOM_MAXIMO_OSM }).addTo(map);
+    map.getContainer().style.backgroundColor = '';
     map.setMaxZoom(ZOOM_MAXIMO_OSM);
     aoMudar({ tipo: 'osm', texto: CREDITO_OSM, aviso }, 'mapa');
   };
@@ -86,6 +93,7 @@ export function montarFundo(
         if (erros >= ERROS_ATE_DESISTIR) montarOsm(FRASE_SEM_SATELITE);
       });
       camada = google.addTo(map);
+      map.getContainer().style.backgroundColor = FUNDO_ATRAS_DO_SATELITE;
       map.setMaxZoom(ZOOM_MAXIMO_SATELITE_INICIAL);
       aoMudar({ tipo: 'google', texto: CREDITO_GOOGLE_RESERVA, aviso: null }, 'satelite');
 

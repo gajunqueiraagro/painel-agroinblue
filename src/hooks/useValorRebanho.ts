@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { lerEstadoDoP2 } from '@/lib/fechamento/travaDoP2';
 
 export interface PrecoCategoria {
   categoria: string;
@@ -21,6 +22,8 @@ export interface FechamentoStatus {
   status: 'aberto' | 'fechado';
   fechado_por?: string | null;
   fechado_em?: string | null;
+  /** FECH-P2-TRAVA-01 (3): o mês segue VALIDADO com o fechamento aberto — os pastos travam e o Reabrir tem de aparecer */
+  validadoComP2Aberto?: boolean;
 }
 
 export function useValorRebanho(anoMes: string) {
@@ -40,22 +43,29 @@ export function useValorRebanho(anoMes: string) {
   const loadFechamentoStatus = useCallback(async () => {
     if (!fazendaId || fazendaId === '__global__') return;
     try {
-      const { data, error } = await supabase
-        .from('valor_rebanho_fechamento')
-        .select('status, fechado_por, fechado_em')
-        .eq('fazenda_id', fazendaId)
-        .eq('ano_mes', anoMes)
-        .maybeSingle();
+      const [{ data, error }, p2] = await Promise.all([
+        supabase
+          .from('valor_rebanho_fechamento')
+          .select('status, fechado_por, fechado_em')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', anoMes)
+          .maybeSingle(),
+        lerEstadoDoP2(fazendaId, anoMes),
+      ]);
 
       if (error) throw error;
+      const fechado = data?.status === 'fechado';
+      /* travado sem o fechamento fechado = só o validado travando (o estado que o Reabrir antigo deixava) */
+      const validadoComP2Aberto = !fechado && p2.ok && p2.valor.travado;
       if (data) {
         setFechamento({
-          status: data.status === 'fechado' ? 'fechado' : 'aberto',
+          status: fechado ? 'fechado' : 'aberto',
           fechado_por: data.fechado_por,
           fechado_em: data.fechado_em,
+          validadoComP2Aberto,
         });
       } else {
-        setFechamento({ status: 'aberto' });
+        setFechamento({ status: 'aberto', validadoComP2Aberto });
       }
     } catch {
       setFechamento({ status: 'aberto' });
@@ -264,15 +274,13 @@ export function useValorRebanho(anoMes: string) {
   const reabrirFechamento = useCallback(async () => {
     if (!fazendaId || fazendaId === '__global__' || !isAdmin) return;
     try {
-      const { error } = await supabase
-        .from('valor_rebanho_fechamento')
-        .update({
-          status: 'aberto',
-          reaberto_por: user?.id || null,
-          reaberto_em: new Date().toISOString(),
-        })
-        .eq('fazenda_id', fazendaId)
-        .eq('ano_mes', anoMes);
+      /* FECH-P2-TRAVA-01 D2 — UMA transação no banco: abre o fechamento E invalida o validado (cadeia_quebrada nos meses
+         seguintes), com trilha. O UPDATE direto só abria o fechamento: o validado seguia travando o salvar dos pastos. */
+      const { error } = await (supabase as any).rpc('fn_valor_rebanho_reabrir', {
+        p_fazenda_id: fazendaId,
+        p_ano_mes: anoMes,
+        p_motivo: 'Reabertura pela tela do Valor do Rebanho',
+      });
 
       if (error) throw error;
       toast.success('Fechamento reaberto para edição');
@@ -291,6 +299,7 @@ export function useValorRebanho(anoMes: string) {
     loadPrecosBaseAnual,
     isFechado,
     fechamento,
+    validadoComP2Aberto: fechamento.validadoComP2Aberto === true,
     isAdmin,
     reabrirFechamento,
   };
