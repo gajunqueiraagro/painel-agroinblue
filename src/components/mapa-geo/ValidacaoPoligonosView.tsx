@@ -40,6 +40,8 @@ interface Props {
   onUpdate: (id: string, updates: { nome_original?: string; pasto_id?: string | null }) => Promise<boolean>;
   onDelete: (ids: string[]) => Promise<boolean>;
   onRefresh: () => void;
+  /** @deprecated MAPA-AREA-TIPO-01: o vínculo vai pelo escritor do banco (ClassificarPoligono); a prop fica opcional só para quem ainda a passa */
+  onLink?: (geoId: string, pastoId: string | null) => Promise<boolean>;
   /** MAPA-AREA-TIPO-01: o tipo pedido pelo Adicionar › Área — o próximo polígono escolhido abre "É área" com ele */
   tipoPedido?: TipoDeArea | null;
   onTipoPedidoUsado?: () => void;
