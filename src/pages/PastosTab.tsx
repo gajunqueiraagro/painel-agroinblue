@@ -1,6 +1,6 @@
-import { useState, useMemo, type ReactNode, type CSSProperties } from 'react';
+import { useState, useMemo, createContext, useContext, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { usePastos, isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes, pastosMudaramPorFora, type Pasto } from '@/hooks/usePastos';
 import { formatarAreaBR, parseAreaBR } from '@/lib/areaBR';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -28,6 +28,7 @@ import {
   corTextoDoTipoUso,
 } from '@/lib/pastos/tiposUso';
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
+import { GruposDePastejo, useGruposDePastejo } from '@/components/pastos/GruposDePastejo';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -285,6 +286,20 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
   );
 }
 
+/* FECH-ROTACAO-01 fatia 2 — o nome do grupo de pastejo de cada pasto (id do grupo → nome), lido uma vez pela tela: a etiqueta mora
+   na linha e no cartão sem atravessar os 3 GrupoTipo por prop. O nome do PASTO não muda (decisão 6). */
+const NomeDoGrupoContext = createContext<ReadonlyMap<string, string>>(new Map());
+
+function EtiquetaDoGrupo({ pasto }: { pasto: Pasto }) {
+  const nome = useContext(NomeDoGrupoContext).get(pasto.grupo_id ?? '');
+  if (!nome) return null;
+  return (
+    <Badge variant="outline" className="text-[9px] px-1 py-0 leading-tight max-w-[96px] shrink-0" title={nome} aria-label={`Grupo de pastejo ${nome}`} data-testid="pasto-etiqueta-grupo">
+      <span className="uma-linha-que-rola min-w-0">{nome}</span>
+    </Badge>
+  );
+}
+
 function SortablePastoCard({
   pasto,
   onEdit,
@@ -315,7 +330,8 @@ function SortablePastoCard({
           <button {...attributes} {...listeners} className="cursor-grab touch-none text-muted-foreground hover:text-foreground shrink-0">
             <GripVertical className="h-3.5 w-3.5" />
           </button>
-          <span className="font-bold text-sm truncate flex-1 min-w-0">{pasto.nome}</span>
+          {/* fora de tabela, sem "…" (UI-SEM-CORTE-01): o nome longo rola no lugar */}
+          <span className="font-bold text-sm uma-linha-que-rola flex-1 min-w-0" title={pasto.nome}>{pasto.nome}</span>
         </div>
         <Switch checked={pasto.ativo} onCheckedChange={onToggle} className="scale-75 shrink-0" />
       </div>
@@ -335,6 +351,7 @@ function SortablePastoCard({
         <Badge variant="outline" className={`text-[9px] px-1 py-0 leading-tight ${corDoTipoUso(pasto.tipo_uso)}`}>
           {labelDoTipoUso(pasto.tipo_uso)}
         </Badge>
+        <EtiquetaDoGrupo pasto={pasto} />
         {pasto.observacoes && (
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 leading-tight">Obs</Badge>
         )}
@@ -455,7 +472,8 @@ function LinhaPasto({
       {COLUNAS_EM_BREVE.map(c => (
         <span key={c} className="text-[10px] text-muted-foreground/40 truncate" title={`${c} — em breve`}>—</span>
       ))}
-      <div className="flex items-center justify-end gap-0.5">
+      <div className="flex items-center justify-end gap-0.5 min-w-0">
+        <EtiquetaDoGrupo pasto={pasto} />
         {pasto.observacoes && (
           <Badge variant="secondary" className="text-[9px] px-1 py-0 leading-tight" title={pasto.observacoes}>Obs</Badge>
         )}
@@ -640,7 +658,11 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   // às vezes não tem efeito (o grupo manda sobre ordem_exibicao). O modo manual
   // preserva o comportamento atual intacto — e, com ele, o significado de
   // ordem_exibicao, que é a ordenação de usePastos e alimenta outras 12 telas.
-  const [modo, setModo] = useState<'destino' | 'manual'>('destino');
+  const [modo, setModo] = useState<'destino' | 'manual' | 'grupos'>('destino');
+  /* FECH-ROTACAO-01 fatia 2 — os grupos de pastejo da fazenda (a lista do modo "Grupos" e a etiqueta do pasto nos outros dois) */
+  const fazendaDosGrupos = fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
+  const gruposDePastejo = useGruposDePastejo(fazendaDosGrupos);
+  const nomeDoGrupo = useMemo(() => new Map(gruposDePastejo.grupos.map(g => [g.id, g.nome])), [gruposDePastejo.grupos]);
   /** Área total do cadastro da fazenda, para o comparativo do rodapé. */
   const [areaTotalFazenda, setAreaTotalFazenda] = useState<number | null>(null);
   const [matriculaConferida, setMatriculaConferida] = useState(false);
@@ -856,7 +878,9 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
       <div className="flex items-center gap-2">
         <h2 className="text-xs font-bold">Pastos</h2>
         <Badge variant="secondary" className="text-[10px]">{pastos.filter(p => p.ativo).length} ativos</Badge>
-        {showInativos && <Badge variant="outline" className="text-[10px]">{pastos.length} total</Badge>}
+        {/* FECH-ROTACAO-01 fatia 2 — o "N total" reserva o lugar sempre (invisível com os inativos desligados): com o 3º modo na barra,
+            ligar os inativos espremia os botões da direita a 1000px (gate de deslocamento) */}
+        <Badge variant="outline" className={`text-[10px] ${showInativos ? '' : 'invisible'}`} aria-hidden={!showInativos}>{pastos.length} total</Badge>
       </div>
       <div className="flex items-center gap-2">
         <div className="flex rounded border overflow-hidden">
@@ -874,6 +898,15 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
             title="Lista plana, arrastável — define ordem_exibicao"
           >
             Ordem manual
+          </button>
+          <button
+            type="button"
+            onClick={() => setModo('grupos')}
+            className={`px-2 py-0.5 text-[10px] font-semibold ${modo === 'grupos' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+            title="Grupos de pastejo: pastos que já existem, juntos (a área do grupo é a soma)"
+            data-testid="pastos-modo-grupos"
+          >
+            Grupos
           </button>
         </div>
         <label className="text-[10px] text-muted-foreground flex items-center gap-1">
@@ -935,7 +968,22 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
       {hostBarra ? createPortal(barra, hostBarra) : barra}
 
       {/* Grid */}
-      {loading ? (
+      <NomeDoGrupoContext.Provider value={nomeDoGrupo}>
+      {/* o miolo troca INTEIRO com o modo (destino, manual, grupos): é conteúdo, não controle (UI-SEM-DESLOCAR-01) */}
+      <div data-desloca-livre="">
+      {modo === 'grupos' && fazendaAtual ? (
+        <GruposDePastejo
+          fazendaId={fazendaAtual.id}
+          fazendaCodigo={fazendaAtual.codigo ?? null}
+          pastos={pastos}
+          grupos={gruposDePastejo.grupos}
+          carregando={gruposDePastejo.carregando}
+          erro={gruposDePastejo.erro}
+          mostrarInativos={showInativos}
+          podeEditar={canEdit('pastos')}
+          aoGravar={() => { void gruposDePastejo.recarregar(); if (fazendaAtual.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id); }}
+        />
+      ) : loading ? (
         <div className="text-center text-muted-foreground py-8 text-xs">Carregando...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center text-muted-foreground py-12">
@@ -1203,6 +1251,8 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
           </div>
         </div>
       )}
+      </div>
+      </NomeDoGrupoContext.Provider>
 
       {/* Regenerar histórico — confirmação com o TAMANHO */}
       <AlertDialog open={confirmLoteOpen} onOpenChange={(o) => { if (!loteRodando) setConfirmLoteOpen(o); }}>
