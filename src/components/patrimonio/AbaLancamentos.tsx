@@ -23,9 +23,11 @@ import { LigarLancamentosDialog } from './LigarLancamentosDialog';
 
 const ROTULO_STATUS: Record<string, string> = { realizado: 'realizado', previsto: 'previsto', programado: 'programado', agendado: 'agendado' };
 
-export function AbaLancamentos({ bemId, clienteId, form, set, lancamentos, linha, ehPastagem, areaDosPastos, erroValor }: {
+export function AbaLancamentos({ bemId, clienteId, form, set, lancamentos, linha, ehPastagem, areaDosPastos, erroValor, aoEscrever }: {
   bemId: string | null; clienteId: string; form: FormBem; set: <K extends keyof FormBem>(k: K, v: FormBem[K]) => void;
   lancamentos: LancamentoDoBem[]; linha: BemDaLista | null; ehPastagem: boolean; areaDosPastos: number; erroValor?: boolean;
+  /** SALVAR-TRAVA: ligar/desligar sobem a versão do bem — o modal a adota (`antes` = a versão com que a escrita foi feita) */
+  aoEscrever?: (antes: number | null) => Promise<void> | void;
 }) {
   const api = usePatrimonioApi();
   const reler = useRelerPatrimonio();
@@ -143,13 +145,16 @@ export function AbaLancamentos({ bemId, clienteId, form, set, lancamentos, linha
         <span className="text-muted-foreground">grava no Salvar</span>
       </div>
 
-      {ligando && bemId && <LigarLancamentosDialog bemId={bemId} clienteId={clienteId} aoFechar={() => setLigando(false)} />}
+      {ligando && bemId && <LigarLancamentosDialog bemId={bemId} clienteId={clienteId} aoFechar={() => setLigando(false)}
+        aoLigar={() => aoEscrever?.(form.versao)} />}
       <PedirMotivo aberto={desligando != null} aoFechar={() => setDesligando(null)} titulo="Desligar lançamento"
         frase="O lançamento volta para “Investimentos sem bem” e não muda em nada. Por que desligar?" rotuloDoBotao="Desligar"
         aoConfirmar={async motivo => {
           if (!desligando) return null;
+          const antes = form.versao;
           const r = await api.desligar(bemId, [{ lancamento_id: desligando.lancamento_id, parte_ordem: desligando.parte_ordem }], motivo);
           if (!r.ok) return r.erro;
+          await aoEscrever?.(antes);
           toast.success('Lançamento desligado do bem.');
           await reler();
           return null;

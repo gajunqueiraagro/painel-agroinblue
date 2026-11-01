@@ -13,6 +13,10 @@
  * campos separados — Nº próprio, Chassi, Nº de série; Placa e Renavam só em Veículos (ou quando já têm valor), com o LUGAR RESERVADO
  * nas outras categorias (o modal não muda de altura). O campo antigo aparece como "Identificação antiga", só leitura, quando o bem
  * gravado o tem e nenhum dos novos (`mostraIdentificacaoAntiga`); o Salvar NÃO o manda (`payloadDoBem`).
+ * ⚠ SALVAR-TRAVA (PATR-01c): ligar/desligar lançamentos, gravar os pastos e mudar/corrigir a vida útil SOBEM a versão do bem. O modal
+ * ADOTA a versão nova depois de cada escrita DELE (`adotarVersao`: relê a versão e adota só se subiu exatamente uma — `versaoAdotada`;
+ * mudar/corrigir já devolvem a versão). Sem isso o Salvar seguinte mandava a versão velha e o banco recusava. O botão solta assim que
+ * a gravação volta: a releitura das listas (`reler`) corre por fora, sem segurar o "Salvando…".
  */
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -34,7 +38,7 @@ import {
   usePatrimonioApi, useRelerPatrimonio,
 } from '@/hooks/usePatrimonio';
 import {
-  abasDoBem, brl, jaDeprecia, mesBR, mostraIdentificacaoAntiga, mostraPlacaRenavam, ROTULO_SITUACAO, type AbaBem, type BemDaLista, type CategoriaBem,
+  abasDoBem, brl, jaDeprecia, mesBR, mostraIdentificacaoAntiga, mostraPlacaRenavam, ROTULO_SITUACAO, versaoAdotada, type AbaBem, type BemDaLista, type CategoriaBem,
 } from '@/lib/patrimonio/patrimonio';
 import type { FormBem, PastoLigado } from '@/lib/patrimonio/patrimonioApi';
 import { AbaLancamentos } from './AbaLancamentos';
@@ -120,6 +124,14 @@ export function BemDialog({ bemId, clienteId, posicao, linha, aoFechar, aoCriar 
     setErros(e => ({ ...e, categoria: undefined })); setRodape(null);
   };
 
+  /** depois de uma escrita do próprio modal que sobe a versão sem devolvê-la: `antes` = a versão com que ela foi feita */
+  const adotarVersao = async (antes: number | null) => {
+    const id = form.id;
+    if (!id) return;
+    const nova = versaoAdotada(antes, await api.versaoDoBem(id));
+    if (nova != null) setForm(f => (f.id === id && f.versao === antes ? { ...f, versao: nova } : f));
+  };
+
   const salvar = async () => {
     const pend = pendenciasDoBem(form, categoria);
     if (pastos?.some(p => !(p.area_ha > 0))) pend.area_ha = 'Informe a área de cada pasto marcado (aba Pastos).';
@@ -138,16 +150,17 @@ export function BemDialog({ bemId, clienteId, posicao, linha, aoFechar, aoCriar 
       const r = await api.salvarBem(form, false, m);
       if (!r.ok) { setRodape(r.erro); return; }
       const id = typeof r.dados.id === 'string' ? r.dados.id : form.id;
-      const versao = typeof r.dados.versao === 'number' ? r.dados.versao : form.versao;
+      let versao = typeof r.dados.versao === 'number' ? r.dados.versao : form.versao;
       if (id && pastosDirty && categoria?.tem_pastos && pastos) {
         const p = await api.salvarPastos(id, pastos, false);
-        if (!p.ok) { setRodape(p.erro); setForm(f => ({ ...f, id, versao })); await reler(); return; }
+        if (!p.ok) { setRodape(p.erro); setForm(f => ({ ...f, id, versao })); void reler(); return; }
+        versao = versaoAdotada(versao, await api.versaoDoBem(id)) ?? versao;
       }
       const codigo = typeof r.dados.codigo === 'string' ? r.dados.codigo : form.codigo;
       setForm(f => ({ ...f, id, versao, codigo }));
       setMotivo(''); setPedeMotivo(null); setErros({});
       toast.success(form.id ? 'Bem salvo.' : 'Bem criado. Agora dá para ligar lançamentos, pastos e documentos.');
-      await reler();
+      void reler();
       if (!form.id && id) aoCriar(id);
     } finally { setSalvando(false); }
   };
@@ -318,7 +331,7 @@ export function BemDialog({ bemId, clienteId, posicao, linha, aoFechar, aoCriar 
           )}
           {aba === 'lancamentos' && (
             <AbaLancamentos bemId={form.id} clienteId={clienteId} form={form} set={set} lancamentos={lancamentos} linha={linha} erroValor={!!erros.valor}
-              ehPastagem={!!categoria?.tem_pastos} areaDosPastos={(pastos ?? []).reduce((t, p) => t + p.area_ha, 0)} />
+              ehPastagem={!!categoria?.tem_pastos} areaDosPastos={(pastos ?? []).reduce((t, p) => t + p.area_ha, 0)} aoEscrever={adotarVersao} />
           )}
           {aba === 'pastos' && form.id && (
             <AbaPastos fazendaId={form.fazenda_id} fazendaCodigo={fazendaCodigo} pastos={pastos ?? []} setPastos={p => { setPastos(p); setRodape(null); }}
