@@ -36,6 +36,7 @@ import { formatNum } from '@/lib/calculos/formatters';
 import { ERROS_REGENERAR, somarFamilias } from '@/lib/pastos/regenerarArea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { fraseDaTravaAoReabrirMes, lerEstadoDoP2, rotuloReabrirValorRebanho } from '@/lib/fechamento/travaDoP2';
 import { gerarSugestoes, type Sugestao } from '@/lib/calculos/sugestoesConciliacao';
 import { useZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
@@ -110,6 +111,11 @@ interface Props {
   /* FECH-MES-SELECIONADO-01 — o ano/mês do shell (V2Index): com eles a tela não guarda mês próprio (usePeriodoDaTela). */
   periodo?: PeriodoControlado['periodo'];
   onPeriodoChange?: PeriodoControlado['onPeriodoChange'];
+  /* FECH-P2-TRAVA-AVISO-01 — ida ao Valor do Rebanho do mês para reabri-lo; `pastoId` = o pasto que estava aberto (a volta o reabre) */
+  onReabrirValorRebanho?: (alvo: { ano: string; mes: number; pastoId: string | null }) => void;
+  /** a volta do Valor do Rebanho: o pasto a reabrir quando os cards do mês chegarem */
+  pastoParaAbrir?: string | null;
+  onPastoParaAbrirConsumido?: () => void;
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
@@ -179,7 +185,7 @@ function gmdColor(gmd: number | null): string {
   return 'text-emerald-600 dark:text-emerald-400';
 }
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack, periodo, onPeriodoChange }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack, periodo, onPeriodoChange, onReabrirValorRebanho, pastoParaAbrir, onPastoParaAbrirConsumido }: Props = {}) {
   const { isGlobal, fazendaAtual, fazendas, setFazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
@@ -566,6 +572,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     setDialogOpen(true);
   };
 
+  /* FECH-P2-TRAVA-AVISO-01 — a volta do Valor do Rebanho reabre o pasto de onde se saiu, quando os cards DESTE mês chegaram */
+  useEffect(() => {
+    if (!pastoParaAbrir || loading || !fechamentos.some(f => f.ano_mes === anoMes)) return;
+    const pasto = pastos.find(p => p.id === pastoParaAbrir);
+    onPastoParaAbrirConsumido?.();
+    if (pasto && getFechamento(pasto.id)) void handleOpenPasto(pasto);
+  }, [pastoParaAbrir, loading, fechamentos, anoMes, pastos]);
+
   // Pré-checagem antes de abrir o dialog de fechamento:
   // identifica pastos sem tipo_uso_mes e sem itens (quantidade > 0).
   const handleCloseClick = async () => {
@@ -840,6 +854,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       } else {
         const cascata = (data && typeof data === 'object' && !Array.isArray(data) && 'cascata' in data) ? (data as any).cascata : [];
         toast.success(`Mês ${anoMes} reaberto com sucesso.${cascata.length > 0 ? ` Pilares invalidados: ${cascata.join(', ')}` : ''}`);
+        /* o reabrir do mês não mexe no Valor do Rebanho: se ele segue validado, os pastos continuam travados — avisar, com a saída */
+        const p2 = await lerEstadoDoP2(fazendaAtual.id, anoMes);
+        if (p2.ok && p2.valor.travado) {
+          toast.warning(fraseDaTravaAoReabrirMes(anoMes), onReabrirValorRebanho
+            ? { action: { label: rotuloReabrirValorRebanho(anoMes), onClick: () => onReabrirValorRebanho({ ano: anoFiltro, mes: mesFiltro, pastoId: null }) } }
+            : undefined);
+        }
       }
       await loadFechamentos(anoMes);
     } catch (e: any) {
@@ -1428,6 +1449,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             pastosDaFazenda={pastos}
             onRenomear={async (nome, aoRecusar) => editarPasto(selectedPasto.id, { nome }, { aoRecusar })}
             onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}
+            onReabrirValorRebanho={onReabrirValorRebanho ? () => {
+              const pastoId = selectedPasto.id;
+              setDialogOpen(false); setSelectedPasto(null); setActiveFechamento(null);
+              onReabrirValorRebanho({ ano: anoFiltro, mes: mesFiltro, pastoId });
+            } : undefined}
           />
         )}
 

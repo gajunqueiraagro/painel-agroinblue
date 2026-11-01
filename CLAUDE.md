@@ -206,6 +206,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Status: so' realizado (e conciliado) tem data de pagamento. Lancamento casado com extrato nao sai do estado que o banco pos.
 - Pasto no mes = vigencia + ativo (`fn_pasto_vigente_no_mes`). Saldo inicial se cadastra uma vez. O cache do rebanho se reconstroi na
   gravacao. Fechamento P1: a autoridade e' `get_status_pilares_fechamento`.
+- FECH-P2-TRAVA-01: o Valor do Rebanho reabre SO' pela `fn_valor_rebanho_reabrir` (abre o fechamento E invalida o validado + cadeia, trilha);
+  os pastos travam com QUALQUER das duas marcas (`_fn_fechamento_p2_travado`); a tela avisa pela `lerEstadoDoP2`, nunca reabre P2 sozinha.
 - Rateio administrativo e' por mes (`fn_rateio_admin_mes`); modal de linha do DRE soma as mesmas chaves da grade (`somaComposta`);
   `lucro_liquido` da RPC NAO e' a linha "Lucro liquido" da grade.
 - "Pec.3M-" no nome do fornecedor = pagamento por rateio (nota em nome do Higino): nunca juntar os dois lados.

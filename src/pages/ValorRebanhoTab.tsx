@@ -835,6 +835,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     salvarPrecos,
     loadPrecosMesAnterior,
     isFechado,
+    validadoComP2Aberto,
     isAdmin,
     reabrirFechamento,
   } = useValorRebanho(anoMes);
@@ -1786,7 +1787,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         )}
 
         <div className="ml-auto flex gap-1.5">
-          {!verInicio && !isGlobal && !isMesFuturo && mesSelecionadoFechado && isAdmin && (
+          {/* FECH-P2-TRAVA-01 (3): também com o mês validado e o P2 aberto — a fn_valor_rebanho_reabrir invalida o validado */}
+          {!verInicio && !isGlobal && !isMesFuturo && (mesSelecionadoFechado || validadoComP2Aberto) && isAdmin && (
             <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1 h-[18px] !text-[9px] px-1.5">
               <Unlock className="h-3 w-3" /> Reabrir
             </Button>
