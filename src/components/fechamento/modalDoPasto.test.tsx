@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { motivoDoNomeDoPasto, FRASE_NOME_VAZIO, FRASE_NOME_REPETIDO } from '@/lib/pastos/nomeDoPasto';
+import { toast } from 'sonner';
 
 /* ── bancos de mentira ── */
 const salvarCard = vi.fn(async (_id: string, _campos: unknown, _itens: unknown) => ({ ok: true, erro: null as string | null }));
@@ -36,25 +37,35 @@ vi.mock('@/components/agri/AreaPlantadaPanel', () => ({ AreaPlantadaPanel: () =>
 vi.mock('@/lib/supabase/fetchAllPaginated', () => ({ fetchAllPaginated: async () => ({ data: [] }), MAX_ROWS: 1000 }));
 vi.mock('@/lib/exportMapaPastos', () => ({ exportMapaPastosXlsx: vi.fn() }));
 vi.mock('@/lib/exportMapaPastosPdf', () => ({ exportMapaPastosPdf: vi.fn() }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+/* FECH-P2-TRAVA-AVISO-01 — só a leitura das duas marcas é de mentira; as frases e a regra são as de verdade */
+const { estadoP2, lerEstadoDoP2 } = vi.hoisted(() => {
+  const estadoP2 = { travado: false, revalidar: false };
+  return { estadoP2, lerEstadoDoP2: vi.fn(async (_faz: string, _mes: string) => ({ ok: true as const, valor: { ...estadoP2 } })) };
+});
+vi.mock('@/lib/fechamento/travaDoP2', async (original) => ({ ...(await original<typeof import('@/lib/fechamento/travaDoP2')>()), lerEstadoDoP2 }));
 
 import { MapaPastosTab } from '@/pages/MapaPastosTab';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 
 const comQc = (ui: React.ReactElement) => render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
-const FECH_P2 = { id: 'fp2', pasto_id: 'p2', ano_mes: '2026-09', status: 'rascunho', tipo_uso_mes: 'recria', lote_mes: null, qualidade_mes: null, observacao_mes: null };
+const FECH_P2 = { id: 'fp2', pasto_id: 'p2', fazenda_id: 'f', ano_mes: '2026-09', status: 'rascunho', tipo_uso_mes: 'recria', lote_mes: null, qualidade_mes: null, observacao_mes: null };
 
-function abrirDialogo(fechamento: Record<string, unknown> = FECH_P2, onOpenChange = vi.fn()) {
+function abrirDialogo(fechamento: Record<string, unknown> = FECH_P2, onOpenChange = vi.fn(), onReabrirValorRebanho?: () => void) {
   comQc(<FechamentoPastoDialog open onOpenChange={onOpenChange} pasto={PASTOS[1] as never} fechamento={fechamento as never}
-    categorias={CATS as never} onFechar={vi.fn()} onCopiar={vi.fn()} pastosDaFazenda={PASTOS as never} onRenomear={editarPasto} />);
+    categorias={CATS as never} onFechar={vi.fn()} onCopiar={vi.fn()} pastosDaFazenda={PASTOS as never} onRenomear={editarPasto}
+    onReabrirValorRebanho={onReabrirValorRebanho} />);
   return onOpenChange;
 }
+const FRASE_DO_BANCO = 'Mês 2026-09 possui Valor do Rebanho validado ou P2 fechado. Reabra o pilar P2 antes de alterar pastos.';
+const FRASE_DA_TELA = 'O Valor do Rebanho de set/26 está validado. Reabra-o para editar os pastos deste mês.';
 
 beforeEach(() => {
   vi.clearAllMocks();
   fech.fechamentos = [];
   salvarCard.mockImplementation(async () => ({ ok: true, erro: null }));
   reabrirCard.mockImplementation(async () => ({ ok: true, erro: null }));
+  estadoP2.travado = false; estadoP2.revalidar = false;
 });
 
 describe('Mapa de Pastos → modal do pasto', () => {
@@ -100,12 +111,58 @@ describe('modal do pasto', () => {
     await waitFor(() => expect(fechar).toHaveBeenCalledWith(false));
   });
 
-  it('recusa da RPC (P2 validado) fica escrita no rodape e o modal nao fecha', async () => {
-    salvarCard.mockImplementation(async () => ({ ok: false, erro: 'Mês 2026-09 possui Valor do Rebanho validado ou P2 fechado. Reabra o pilar P2 antes de alterar pastos.' }));
+  it('recusa da RPC (P2 validado) vira a linha da trava, com a frase inteira; o rodape fica limpo e o modal nao fecha', async () => {
+    salvarCard.mockImplementation(async () => ({ ok: false, erro: FRASE_DO_BANCO }));
     const fechar = abrirDialogo();
     fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
-    await waitFor(() => expect(screen.getByTestId('erro-do-pasto').textContent).toContain('P2 fechado'));
+    await waitFor(() => expect(screen.getByTestId('frase-da-trava-do-p2').textContent).toBe(FRASE_DA_TELA));
+    expect(screen.getByTestId('erro-do-pasto').textContent).toBe('');
     expect(fechar).not.toHaveBeenCalledWith(false);
+  });
+
+  it('erro que NAO e a trava do P2 segue no rodape (sem a linha da trava)', async () => {
+    salvarCard.mockImplementation(async () => ({ ok: false, erro: 'Card fechado não se salva.' }));
+    abrirDialogo();
+    fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
+    await waitFor(() => expect(screen.getByTestId('erro-do-pasto').textContent).toBe('Card fechado não se salva.'));
+    expect(screen.queryByTestId('trava-do-p2')).toBeNull();
+  });
+
+  it('mes travado: a linha aparece ao ABRIR (antes de digitar), Salvar desabilitado com o porque, e o botao leva ao Valor do Rebanho', async () => {
+    estadoP2.travado = true;
+    const ir = vi.fn();
+    abrirDialogo(FECH_P2, vi.fn(), ir);
+    expect((await screen.findByTestId('frase-da-trava-do-p2')).textContent).toBe(FRASE_DA_TELA);
+    expect(lerEstadoDoP2).toHaveBeenCalledWith('f', '2026-09');
+    const salvar = screen.getByRole('button', { name: /Salvar/ });
+    expect(salvar).toHaveProperty('disabled', true);
+    expect(salvar.getAttribute('title')).toBe(FRASE_DA_TELA);
+    fireEvent.click(screen.getByRole('button', { name: 'Reabrir Valor do Rebanho de set/26' }));
+    expect(ir).toHaveBeenCalledTimes(1);
+  });
+
+  it('sem a ida (host sem callback) a trava se explica, sem botao', async () => {
+    estadoP2.travado = true;
+    abrirDialogo();
+    await screen.findByTestId('trava-do-p2');
+    expect(screen.queryByTestId('reabrir-valor-rebanho')).toBeNull();
+  });
+
+  it('mes livre: nada da trava; salvar com o Valor do Rebanho reaberto lembra de revalidar (aviso, nada reabre sozinho)', async () => {
+    estadoP2.revalidar = true;
+    abrirDialogo();
+    await waitFor(() => expect(lerEstadoDoP2).toHaveBeenCalled());
+    expect(screen.queryByTestId('trava-do-p2')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('Revalide o Valor do Rebanho de set/26 (o peso mudou).'));
+  });
+
+  it('mes nunca validado: salvar nao lembra de nada', async () => {
+    abrirDialogo();
+    fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Fechamento salvo'));
+    await waitFor(() => expect(lerEstadoDoP2).toHaveBeenCalledTimes(2));
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 
   it('"Reabrir pasto" chama a RPC do card com o motivo', async () => {
@@ -119,7 +176,8 @@ describe('modal do pasto', () => {
     reabrirCard.mockImplementation(async () => ({ ok: false, erro: 'Mês 2026-09 possui Valor do Rebanho validado ou P2 fechado.' }));
     abrirDialogo({ ...FECH_P2, status: 'fechado' });
     fireEvent.click(screen.getByRole('button', { name: /Reabrir pasto/ }));
-    await waitFor(() => expect(screen.getByTestId('erro-do-pasto').textContent).toContain('P2 fechado'));
+    await waitFor(() => expect(screen.getByTestId('frase-da-trava-do-p2').textContent).toBe(FRASE_DA_TELA));
+    expect(screen.getByRole('button', { name: /Reabrir pasto/ })).toHaveProperty('disabled', true);
     expect(screen.queryByRole('button', { name: /Salvar/ })).toBeNull();
   });
 
