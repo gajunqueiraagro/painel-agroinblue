@@ -80,6 +80,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     mapa: statusDoMapa === 'ready' ? mapInstance.current : null,
     fazendaId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null,
     geometrias, aoMudar: onRefresh,
+    clienteId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.cliente_id : null,
   });
   /* o polígono em edição sai do desenho da lista (a barra o desenha na camada dela); no apagar ele fica à vista */
   const emEdicaoId = edicao.alvo && edicao.modo !== 'apagar' ? edicao.alvo.id : null;

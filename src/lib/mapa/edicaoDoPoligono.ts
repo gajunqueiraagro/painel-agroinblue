@@ -313,7 +313,7 @@ export function dividirPorLinha(g: GeoJSON.Geometry, linha: readonly Ponto[]): R
 }
 
 // --- a linha que cruza ela mesma (item 7 do -02) ----------------------------------------------------------------------------
-export const FRASE_DO_CRUZAMENTO = 'A linha cruza ela mesma perto do ponto destacado — tire ou mova esse ponto.';
+export const FRASE_DO_CRUZAMENTO = 'A linha cruza ela mesma (anel vermelho): mova ou tire o ponto laranja — ou "Corrigir automaticamente".';
 
 /** Onde o anel cruza ele mesmo: o ponto de cada cruzamento entre dois lados que não são vizinhos (lados vizinhos só se tocam no vértice). */
 export function cruzamentos(anel: readonly (readonly number[])[]): Ponto[] {
