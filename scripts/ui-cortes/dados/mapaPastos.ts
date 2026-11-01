@@ -49,6 +49,11 @@ export const GEOMETRIAS = [
     geojson: ret(3, 1), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
   { id: 'ge', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'estrada', nome_original: 'Estrada interna', cor: null,
     geojson: ret(3, 2, 0.003), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  /* MAPA-PAINEL-CERCADA-01: duas áreas DENTRO do P_01 (a sede e o curral) — o painel mostra "útil + áreas internas" */
+  { id: 'gi1', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'benfeitoria', nome_original: 'Sede do P_01', cor: null,
+    geojson: ret(0.6, 0.6, 0.0015), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  { id: 'gi2', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'curral', nome_original: 'Curral do P_01', cor: null,
+    geojson: ret(0.1, 0.6, 0.0012), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
 ];
 
 export const CATEGORIAS = [
@@ -84,3 +89,17 @@ PASTOS.forEach((p, i) => MESES.forEach((m, k) => {
   if (i === 0) ['c4', 'c5', 'c6', 'c7'].forEach((c, n) => ITENS.push({ id: `${id}-${4 + n}`, fechamento_id: id, quantidade: 5 + n * 3, peso_medio_kg: 180 + n * 40, categoria_id: c }));
 }));
 
+
+// MAPA-02f-b — a infraestrutura sintética (um de cada grupo + um com nome longo) e os bens do Patrimônio da fazenda
+const PT = (dx: number, dy: number) => ({ type: 'Point', coordinates: [LON0 + dx * PASSO, LAT0 - dy * PASSO] });
+export const INFRA = [
+  { id: 'i1', fazenda_id: 'f1', tipo: 'cocho', geometria: PT(0.5, 0.5), nome: 'Cocho do P_01', pasto_id: 'p1', bem_id: 'b1', observacao: 'Coberto', versao: 1, criado_em: '2026-10-20T10:00:00Z', criado_por: 'u1', ativo: true },
+  { id: 'i2', fazenda_id: 'f1', tipo: 'bebedouro', geometria: PT(1.5, 0.5), nome: null, pasto_id: 'p2', bem_id: null, observacao: null, versao: 1, criado_em: '2026-10-21T10:00:00Z', criado_por: 'u1', ativo: true },
+  { id: 'i3', fazenda_id: 'f1', tipo: 'sede_casa', geometria: PT(3.5, 2.5), nome: 'Sede principal da fazenda com o nome bem longo', pasto_id: null, bem_id: null, observacao: null, versao: 1, criado_em: '2026-10-22T10:00:00Z', criado_por: 'u1', ativo: true },
+  { id: 'i4', fazenda_id: 'f1', tipo: 'energia', geometria: PT(2.5, 1.5), nome: 'Transformador', pasto_id: null, bem_id: null, observacao: null, versao: 1, criado_em: '2026-10-23T10:00:00Z', criado_por: 'u1', ativo: true },
+  { id: 'i5', fazenda_id: 'f1', tipo: 'bebedouro', geometria: PT(0.5, 1.5), nome: 'Bebedouro 2', pasto_id: null, bem_id: null, observacao: null, versao: 1, criado_em: '2026-10-24T10:00:00Z', criado_por: 'u1', ativo: true },
+];
+export const BENS = [
+  { id: 'b1', codigo: 'INS-1001', descricao: 'Cochos cobertos 2024', situacao: 'em_uso', categoria: { codigo: 'instalacoes' } },
+  { id: 'b2', codigo: 'AGU-1002', descricao: 'Rede de bebedouros', situacao: 'em_uso', categoria: { codigo: 'rede_agua' } },
+];

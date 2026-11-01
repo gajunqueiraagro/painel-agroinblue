@@ -682,10 +682,18 @@ if (tela === 'mesclar') {
       : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
         .map(f => ({ ...f, fechamento_pasto_itens: MAPA.ITENS.filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
+      // MAPA-02f-b: a infraestrutura e os bens do Patrimônio (sintéticos)
+      : t === 'fazenda_infraestruturas' ? MAPA.INFRA
+      : t === 'patrimonio_bens' ? MAPA.BENS
       : [],
     // MAPA-AREA-TIPO-01: a prévia do escritor da classificação (sintética: de "Sem classificação" para o tipo pedido)
     rpc: (fn: string, a: any) => fn === 'fn_mapa_geometria_classificar'
       ? { ok: true, simulado: true, de: { rotulo: 'Sem classificação' }, para: { rotulo: a?.p_tipo === 'pasto' ? 'Pasto' : rotuloDoTipo(a?.p_tipo ?? '') } }
+      // MAPA-02f-b: a prévia sintética das funções da infraestrutura e o nome de quem criou
+      : fn === 'fn_infra_salvar'
+        ? { ok: true, simulado: !!a?.p_simular, rotulo: 'Cocho', forma: 'Point', pasto: a?.p_infra?.pasto_id ? { id: a.p_infra.pasto_id, nome: 'P_01' } : null, bem: null, avisos: [] }
+      : fn === 'fn_infra_desativar' ? { ok: true, simulado: !!a?.p_simular }
+      : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gabriel Junqueira', email: null, situacao: 'membro ativo' }]
       : null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);

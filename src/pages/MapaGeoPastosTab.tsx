@@ -244,6 +244,8 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         geoLoading={geoLoading}
         onImportar={() => setUploadOpen(true)}
         onClassificarArea={tipo => { setTipoPedido(tipo); setViewMode('validacao'); }}
+        fazendaId={fazendaId}
+        clienteId={fazendaAtual?.cliente_id ?? null}
         onRenderedChange={onRenderedChange}
         seletorDeMes={seletorDeMes}
         trocaDeVista={trocaDeVista}

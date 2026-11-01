@@ -216,6 +216,27 @@ const CENARIOS = [
   { nome: 'mapa-geo-sem-satelite', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS },
   { nome: 'mapa-geo-sem-satelite-painel', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
   { nome: 'mapa-geo-operacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
+  /* MAPA-02f-b — a infraestrutura como PONTOS (dados sintéticos: cocho, 2 bebedouros, sede com nome longo, energia): o ícone clicado abre o
+     painel de leitura; Editar; o Adicionar › Infraestrutura › Cocho entra no modo de colocar (o aviso) e o clique no mapa abre o formulário;
+     o filtro "Infraestruturas" aparece no card Filtros em todas as telas do mapa */
+  { nome: 'mapa-geo-infra-ver', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('.mapa-infra-icone').first().click(); await p.waitForTimeout(500);
+    await p.locator('[data-testid="mapa-painel-infra"]').waitFor({ timeout: 3000 }); } },
+  { nome: 'mapa-geo-infra-editar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('.mapa-infra-icone').first().click(); await p.waitForTimeout(400);
+    await p.locator('[data-testid="mapa-painel-infra"] button', { hasText: 'Editar' }).first().click(); await p.waitForTimeout(400); } },
+  { nome: 'mapa-geo-infra-colocar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+    await p.getByRole('menuitem', { name: 'Infraestrutura' }).first().hover(); await p.waitForTimeout(300);
+    await p.locator('[data-testid="infra-colocar-cocho"]').first().click(); await p.waitForTimeout(400);
+    await p.locator('[data-testid="infra-modo-colocar"]').waitFor({ timeout: 3000 }); } },
+  { nome: 'mapa-geo-infra-formulario', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+    await p.getByRole('menuitem', { name: 'Infraestrutura' }).first().hover(); await p.waitForTimeout(300);
+    await p.locator('[data-testid="infra-colocar-cocho"]').first().click(); await p.waitForTimeout(400);
+    const caixa = await p.locator('[data-testid="mapa-gestor-mapa"]').boundingBox();
+    await p.mouse.click(caixa.x + caixa.width * 0.55, caixa.y + caixa.height * 0.5); await p.waitForTimeout(500);
+    await p.locator('[data-testid="infra-formulario"]').waitFor({ timeout: 3000 }); } },
   /* MAPA-AREA-TIPO-01 — o painel do polígono da Validação com "Classificar" aberto, e o Adicionar › Área › Curral levando à Validação
      (o aviso "Escolha o polígono…" e o painel já em "É área: Curral" com a prévia). Mede SÓ o painel (o resto da Validação reprova na base:
      pendência MAPA-VALIDACAO-CORTES do Code 3) */
@@ -1191,7 +1212,8 @@ function medirCantoDoMapa() {
   const mapa = document.querySelector('[data-testid="mapa-gestor-mapa"]'); if (!mapa) return [];
   const caixa = (sel) => { const e = document.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(); return r.width < 2 || r.height < 2 ? null : r; };
   const m = mapa.getBoundingClientRect(), z = caixa('.leaflet-control-zoom'), c = caixa('[data-testid="mapa-creditos"]');
-  const painel = caixa('[data-testid="mapa-painel"]'), legenda = caixa('[data-testid="mapa-legenda"]');
+  /* MAPA-02f-b: o painel da infraestrutura ocupa o mesmo lugar do painel do pasto (o canto segue qualquer um dos dois) */
+  const painel = caixa('[data-testid="mapa-painel"]') ?? caixa('[data-testid="mapa-painel-infra"]'), legenda = caixa('[data-testid="mapa-legenda"]');
   const achados = [], px = (n) => `${Math.round(n)}px`;
   if (!z) return [{ regra: 'canto-do-mapa', texto: 'zoom nao achado' }];
   if (!c) return [{ regra: 'canto-do-mapa', texto: 'creditos nao achados' }];
@@ -1216,7 +1238,7 @@ function medirCantoDoMapa() {
   if (logo) {
     if (logo.height < 15.5 || logo.height > 19.5) achados.push({ regra: 'canto-do-mapa', texto: `o logo do Google tem ${px(logo.height)} de altura (16 a 19)` });
     const livre = { left: logo.left - 10, right: logo.right + 10, top: logo.top - 10, bottom: logo.bottom + 5 };
-    for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['zoom', '.leaflet-control-zoom']]) {
+    for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['painel da infraestrutura', '[data-testid="mapa-painel-infra"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['zoom', '.leaflet-control-zoom']]) {
       const b = caixa(sel); if (b && cruza(livre, b)) achados.push({ regra: 'canto-do-mapa', texto: `${nome} entra no espaço livre do logo do Google` });
     }
   }
@@ -1225,7 +1247,7 @@ function medirCantoDoMapa() {
     if (f.height > 16.5) achados.push({ regra: 'canto-do-mapa', texto: `o texto dos créditos tem ${px(f.height)} (uma linha)` });
     if (faixaEl.scrollWidth > faixaEl.clientWidth + 1) achados.push({ regra: 'canto-do-mapa', texto: 'o texto dos créditos é cortado' });
   }
-  for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['KPIs', '[data-testid="mapa-kpis"]']]) {
+  for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['painel da infraestrutura', '[data-testid="mapa-painel-infra"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['KPIs', '[data-testid="mapa-kpis"]']]) {
     const b = caixa(sel); if (!b) continue;
     if (cruza(c, b)) achados.push({ regra: 'canto-do-mapa', texto: `os creditos ficam por baixo de ${nome}` });
     if (cruza(z, b)) achados.push({ regra: 'canto-do-mapa', texto: `o zoom fica por baixo de ${nome}` });
