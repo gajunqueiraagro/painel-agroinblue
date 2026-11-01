@@ -177,9 +177,12 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
     </>
   );
 
+  /* fix1 (5): a tela do mapa é um CONTEXTO DE EMPILHAMENTO PRÓPRIO (`isolate`): os z-index internos do Leaflet (400–1000) e dos vidros
+     (500+) só competem aqui dentro, e o submenu lateral (z-50), o cabeçalho, os modais e os avisos do app ficam sempre por cima.
+     Vale para o Global, o Gestor, a Operação e a Validação (todas nascem aqui). */
   if (isGlobal && global) {
     return (
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
+      <div className="isolate flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
         <GeoPastosGlobal
           fazendas={global.fazendas} total={global.total} pastos={global.pastos} geometriasPorFazenda={global.porFazenda}
           situacaoDoPasto={situacaoDe} resumoDoFiltro={resumoDoFiltro}
@@ -306,7 +309,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
      ('mapa-geo-pastos' em SECOES_APP_SHELL do V2Index; no Index antigo, o pai `flex-1 min-h-0 overflow-hidden`), nunca de altura
      fixa — o `calc(100dvh − topo − 64px)` de antes descontava a barra de baixo do celular também no desktop e sobrava uma faixa. */
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
+    <div className="isolate flex h-full min-h-0 flex-1 flex-col overflow-hidden" data-testid="mapa-geo-tela">
       {content}
       {dialogo}
     </div>

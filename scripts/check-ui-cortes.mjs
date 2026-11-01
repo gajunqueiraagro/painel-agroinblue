@@ -220,13 +220,18 @@ const CENARIOS = [
      reservado); com os Filtros ocultos, o mesmo. O canto se mede sozinho em toda tela do Gestor (`medirCantoDoMapa`) */
   { nome: 'mapa-geo-painel-fechado', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
     await mapaPasto('P_01')(p); await p.locator('[data-testid="mapa-painel"] button[aria-label="Fechar"]').first().click(); await p.waitForTimeout(400); } },
+  /* fix1 (5): a Validação só pelo menu por cima (o resto dela reprova na base: pendência MAPA-VALIDACAO-CORTES) */
+  { nome: 'mapa-geo-validacao-menu', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('button:has-text("Validação")'), soRegras: ['menu-por-cima'] },
   { nome: 'mapa-geo-sem-filtros', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
     await p.locator('[data-testid="mapa-filtros"] button', { hasText: 'Ocultar' }).first().click(); await p.waitForTimeout(400); } },
   /* MAPA-GLOBAL-01 — Geo Pastos em Global (dados sintéticos `dados/mapaGlobal.ts`): 2 fazendas; 5 com o nome mais longo, uma sem fechamento
      no mês e uma sem mapa; a visão Pastos com o filtro "Carga alta"; as abas Área por situação e Atividade do gráfico */
-  { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS },
-  { nome: 'mapa-global-5', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS },
-  { nome: 'mapa-global-pastos', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+  { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
+  { nome: 'mapa-global-5', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
+  /* fix1 (1): o hover do cabeçalho que ordena, nas duas tabelas da visão Fazendas */
+  { nome: 'mapa-global-hover-fazendas', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], hoverCabecalho: '[data-testid="global-card-fazendas"]' },
+  { nome: 'mapa-global-hover-atencao', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], hoverCabecalho: '[data-testid="global-card-atencao"]' },
+  { nome: 'mapa-global-pastos', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true, hoverCabecalho: '[data-testid="global-card-pastos"]', antes: async (p) => {
     await p.locator('[data-testid="global-barra"] button', { hasText: 'Pastos' }).first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="global-chips"] button', { hasText: 'Carga alta' }).first().click(); await p.waitForTimeout(400); } },
   { nome: 'mapa-global-grafico-area', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
@@ -299,6 +304,8 @@ const CENARIOS = [
       /* B2: o veículo (Placa e Renavam à vista), a máquina só com a identificação ANTIGA (só leitura) e o cabeçalho com o mouse em cima
          (o hover clareia o navy; antes trocava o fundo por branco e o rótulo sumia) */
       modal('veiculo-dados', 'Caminhonete Hilux', 'Dados'), modal('antiga-dados', 'Grade aradora', 'Dados'),
+      /* MAPA-GLOBAL-01 fix1 (1): o hover MEDIDO (fundo opaco, rótulo legível) — o cenário de cima só fotografa */
+      { nome: 'patrimonio-hover-medido', url: URL, tamanhos: T, hoverCabecalho: '[data-testid="patrimonio-tabela"]' },
       { nome: 'patrimonio-hover-cabecalho', url: URL, tamanhos: T, antes: async (p) => {
         await p.locator('[data-testid="patrimonio-tabela"] th', { hasText: /^Código/ }).first().hover(); await p.waitForTimeout(300); } },
     ];
@@ -983,6 +990,78 @@ function medirRolagem({ dentro, exceto }) {
   }
   return achados;
 }
+/* MAPA-GLOBAL-01 fix1 (2, Gabriel 31/10) — `cabecalhoInteiro` (opcional, por cenário): todo cabeçalho de tabela (`thead th`) cabe INTEIRO
+   na coluna: nem o `th` passa da largura, nem um pedaço dele corta ("…" incluso — cabeçalho nunca tem reticências). "Área ha", "Peso kg"
+   e "Sem fech." passavam da coluna por baixo do vizinho opaco e o gate dizia 0: a regra de corte só via quem tem `overflow: hidden`. */
+function medirCabecalhoInteiro(regiao) {
+  const raiz = regiao ? document.querySelector(regiao) : document; if (!raiz) return [];
+  const achados = [];
+  for (const th of raiz.querySelectorAll('thead th')) {
+    const r = th.getBoundingClientRect(); if (r.width < 2 || r.height < 2) continue;
+    const nome = (th.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 30);
+    if (th.scrollWidth > th.clientWidth + 1) { achados.push({ regra: 'cabecalho-inteiro', texto: `"${nome}" pede ${th.scrollWidth}px, a coluna tem ${th.clientWidth}` }); continue; }
+    for (const e of th.querySelectorAll('*')) {
+      const cs = getComputedStyle(e);
+      if (e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 2 && (cs.overflowX === 'hidden' || cs.overflowX === 'clip' || cs.textOverflow === 'ellipsis')) {
+        achados.push({ regra: 'cabecalho-inteiro', texto: `"${nome}" corta (pede ${e.scrollWidth}px, tem ${e.clientWidth})` }); break;
+      }
+      const re = e.getBoundingClientRect();
+      if (re.width > 1 && (re.right > r.right + 0.5 || re.left < r.left - 0.5)) { achados.push({ regra: 'cabecalho-inteiro', texto: `"${nome}" sai da coluna (${Math.round(Math.max(re.right - r.right, r.left - re.left))}px)` }); break; }
+    }
+  }
+  return achados;
+}
+/* MAPA-GLOBAL-01 fix1 (1) — `hoverCabecalho: '<seletor da tabela>'` (opcional): com o mouse num cabeçalho que ordena, o fundo segue OPACO e o
+   rótulo legível (contraste ≥ 3). O `hover:bg-primary-foreground/10` trocava o navy por branco a 10% e o rótulo branco sumia. */
+function medirHoverCabecalho() {
+  const th = [...document.querySelectorAll('th:hover')].pop(); if (!th) return [{ regra: 'cabecalho-hover', texto: 'nenhum cabecalho com o mouse em cima' }];
+  const rgba = (s) => { const m = s.match(/[\d.]+/g) ?? []; return { r: +m[0] || 0, g: +m[1] || 0, b: +m[2] || 0, a: m[3] == null ? 1 : +m[3] }; };
+  const lum = ({ r, g, b }) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const cs = getComputedStyle(th), fundo = rgba(cs.backgroundColor), letra = rgba(cs.color);
+  const nome = (th.textContent ?? '').trim().slice(0, 30);
+  if (fundo.a < 0.99) return [{ regra: 'cabecalho-hover', texto: `"${nome}": com o mouse em cima o fundo fica translucido (${cs.backgroundColor})` }];
+  const [cl, ce] = [lum(fundo), lum(letra)].sort((x, y) => y - x);
+  const contraste = (cl + 0.05) / (ce + 0.05);
+  return contraste < 3 ? [{ regra: 'cabecalho-hover', texto: `"${nome}": com o mouse em cima o rotulo some (contraste ${contraste.toFixed(1)})` }] : [];
+}
+/* MAPA-GLOBAL-01 fix1 (2c) — o GRÁFICO do Global, medido sozinho onde ele existe: o subtítulo fica abaixo das abas (nunca por trás), a
+   legenda inteira dentro do card e pelo menos 2 barras à vista. Antes tudo rolava junto e a legenda sumia atrás das abas/abaixo do card. */
+function medirGraficoDoGlobal() {
+  const card = document.querySelector('[data-testid="global-grafico"]'); if (!card) return [];
+  const c = card.getBoundingClientRect(), achados = [];
+  const abas = card.querySelector('[role="radiogroup"], [role="tablist"]') ?? card.firstElementChild;
+  const quadro = card.querySelector('[data-testid^="grafico-"]:not([data-testid$="-barras"])');
+  if (!quadro) return [{ regra: 'grafico', texto: 'grafico nao achado' }];
+  const sub = quadro.firstElementChild, barras = quadro.querySelector('[data-testid$="-barras"]'), leg = quadro.lastElementChild;
+  const a = abas.getBoundingClientRect(), su = sub.getBoundingClientRect(), le = leg.getBoundingClientRect();
+  if (su.top < a.bottom - 0.5) achados.push({ regra: 'grafico', texto: `o subtitulo passa por tras das abas (${Math.round(a.bottom - su.top)}px)` });
+  if (le.bottom > c.bottom + 0.5 || le.top < c.top) achados.push({ regra: 'grafico', texto: `a legenda sai do card (${Math.round(le.bottom - c.bottom)}px)` });
+  if (barras && barras.getBoundingClientRect().height < 2 * 18 - 0.5) achados.push({ regra: 'grafico', texto: `menos de 2 barras a vista (${Math.round(barras.getBoundingClientRect().height)}px)` });
+  return achados;
+}
+/* MAPA-GLOBAL-01 fix1 (5) — o MENU POR CIMA DO MAPA, medido sozinho em toda tela do mapa (`mapa-geo-tela`): uma gaveta igual à do menu
+   lateral (V2ContextDrawer: 240px, z-50) é posta ao lado da barra; em cada vidro, no mapa e nos cards que ela cobre, o ponto do meio da
+   parte coberta tem de ser a gaveta. Sem o `isolate` da tela, os vidros (z-500) e o Leaflet (z-400…1000) ficavam por cima do menu. */
+function medirMenuPorCima(foto) {
+  const tela = document.querySelector('[data-testid="mapa-geo-tela"]'); if (!tela) return [];
+  const t = tela.getBoundingClientRect();
+  const gaveta = document.createElement('div');
+  gaveta.dataset.gavetaDeTeste = '1';
+  Object.assign(gaveta.style, { position: 'fixed', left: `${t.left}px`, top: '0', bottom: '0', width: '240px', zIndex: '50', background: 'rgba(27,42,68,0.9)' });
+  document.body.appendChild(gaveta);
+  const g = gaveta.getBoundingClientRect(), achados = [];
+  const alvos = ['[data-testid="mapa-kpis"]', '[data-testid="mapa-filtros"]', '[data-testid="mapa-legenda"]', '.leaflet-container', '.leaflet-control-container .leaflet-control',
+    '[data-testid="global-kpis"]', '[data-testid="global-tabela-fazendas"]', '[data-testid="global-barra"]'];
+  for (const sel of alvos) for (const e of document.querySelectorAll(sel)) {
+    const r = e.getBoundingClientRect(); if (r.width < 2 || r.height < 2) continue;
+    const x0 = Math.max(r.left, g.left), x1 = Math.min(r.right, g.right), y0 = Math.max(r.top, g.top), y1 = Math.min(r.bottom, g.bottom);
+    if (x1 - x0 < 2 || y1 - y0 < 2) continue;
+    const no = document.elementFromPoint((x0 + x1) / 2, (y0 + y1) / 2);
+    if (!no || !gaveta.contains(no)) achados.push({ regra: 'menu-por-cima', texto: `${sel} fica por cima do menu lateral` });
+  }
+  if (!foto) gaveta.remove();
+  return achados;
+}
 /* MAPA-CONTROLES-01 (Gabriel 31/10) — o CANTO DO MAPA do Gestor, medido sozinho em toda tela que tem o mapa do Gestor: com o painel do
    pasto aberto, o zoom e os créditos do Google ficam à esquerda dele; fechado, encostados na borda direita (os créditos no rodapé quando
    cabem ao lado da legenda, senão logo acima dela; o + / − acima deles e acima da faixa da legenda). Os créditos nunca por baixo de painel, legenda, Filtros ou KPIs (exigência do Google). */
@@ -1528,6 +1607,18 @@ try {
     daRolagem.push(...(await p.evaluate(medirAlinhamento, cen.regiao ?? null)));
     const achadosTodos = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)),
       ...(await p.evaluate(medirSobreposicao, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
+    /* MAPA-GLOBAL-01 fix1: cabeçalho inteiro, hover do cabeçalho e o menu lateral por cima do mapa (este, sozinho em toda tela do mapa) */
+    if (cen.cabecalhoInteiro) achadosTodos.push(...(await p.evaluate(medirCabecalhoInteiro, cen.regiao ?? null)));
+    achadosTodos.push(...(await p.evaluate(medirGraficoDoGlobal))); // só age onde há o gráfico do Global
+    if (cen.hoverCabecalho) {
+      try { await p.locator(`${cen.hoverCabecalho} th[aria-sort]`).first().hover(); await p.waitForTimeout(300); achadosTodos.push(...(await p.evaluate(medirHoverCabecalho))); }
+      catch (e) { achadosTodos.push({ regra: 'erro', texto: `hover do cabecalho: ${String(e).slice(0, 100)}` }); }
+      if (FOTOS) await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}_hover.png`) });
+    }
+    if (await p.$('[data-testid="mapa-geo-tela"]')) {
+      achadosTodos.push(...(await p.evaluate(medirMenuPorCima, Boolean(FOTOS))));
+      if (FOTOS) { await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}_menu.png`) }); await p.evaluate(() => document.querySelectorAll('[data-gaveta-de-teste]').forEach((e) => e.remove())); }
+    }
     /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra
        so' pelo texto inclinado e pela sobreposicao. Erro de pagina conta sempre. */
     const achados = cen.soRegras ? achadosTodos.filter((a) => a.regra === 'erro' || cen.soRegras.includes(a.regra)) : achadosTodos;
