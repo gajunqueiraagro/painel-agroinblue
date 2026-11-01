@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Button } from '@/components/ui/button';
+import { Segmentado } from '@/components/ui/segmentado';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
@@ -119,15 +120,24 @@ function Kpi({ rotulo, valor, unidade, largura = 80 }: { rotulo: string; valor: 
   );
 }
 
-function Cel({ rotulo, valor, destaque, unidade }: { rotulo: string; valor: string; destaque?: boolean; unidade?: string | null }) {
+/* MAPA-PAINEL-COMPACTO-01: a célula mais baixa (rótulo 11 + valor 14), menos padding; `nota` = uma linha secundária (a área do mapa) */
+function Cel({ rotulo, valor, destaque, unidade, nota, tituloNota }: {
+  rotulo: string; valor: string; destaque?: boolean; unidade?: string | null; nota?: string | null; tituloNota?: string;
+}) {
   return (
-    <div className={`rounded-md px-1.5 py-[3px] ${destaque ? 'bg-[#FFF6D6]' : 'bg-white/75'}`}>
-      <div className="text-[9.5px] leading-[12px] text-[#4A5361]">{rotulo}</div>
-      <div className="whitespace-nowrap text-[12px] font-semibold leading-[16px] tabular-nums">
+    <div className={`rounded-md px-1 py-px ${destaque ? 'bg-[#FFF6D6]' : 'bg-white/75'}`}>
+      <div className="text-[9.5px] leading-[11px] text-[#4A5361]">{rotulo}</div>
+      <div className="whitespace-nowrap text-[11px] font-semibold leading-[14px] tabular-nums">
         {valor}{unidade ? <span className="ml-1 text-[9.5px] font-normal text-[#4A5361]">{unidade}</span> : null}
       </div>
+      {nota && <div className="whitespace-nowrap text-[9.5px] leading-[11px] text-[#5A6472]" title={tituloNota} data-testid="mapa-painel-area-mapa">{nota}</div>}
     </div>
   );
+}
+
+/** MAPA-PAINEL-COMPACTO-01: campo sem valor fica em BRANCO no painel (Gabriel 01/11), não "—". */
+function branco(v: number | null | undefined, casas = 0, unidade = ''): string {
+  return v == null ? '' : `${formatNum(v, casas)}${unidade}`;
 }
 
 function LinhaFiltro({ rotulo, marcado, onChange, n }: { rotulo: string; marcado: boolean; onChange: (v: boolean) => void; n?: number }) {
@@ -186,6 +196,7 @@ export function MapaGestorView({
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
+  const [serieDoHistorico, setSerieDoHistorico] = useState<'kg' | 'ua'>('kg'); // MAPA-PAINEL-COMPACTO-01: abre em kg/ha
   const [filtrosAbertos, setFiltrosAbertos] = useState(true);
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS);
   const [creditosNoRodape, setCreditosNoRodape] = useState(true); // MAPA-CONTROLES-01
@@ -355,13 +366,13 @@ export function MapaGestorView({
     setSelecionadoId(g.id);
     const mapa = mapInstanceRef.current;
     const b = camadaGeo.getBounds();
-    if (mapa && b.isValid()) mapa.fitBounds(b, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [352, 60], maxZoom: 16 });
+    if (mapa && b.isValid()) mapa.fitBounds(b, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [314, 60], maxZoom: 16 });
   });
 
   const enquadrar = (limites: L.LatLngBounds, comPainel: boolean) => {
     const mapa = mapInstanceRef.current;
     if (!mapa || !limites.isValid()) return;
-    mapa.fitBounds(limites, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [comPainel ? 352 : 20, 60], maxZoom: 16 });
+    mapa.fitBounds(limites, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [comPainel ? 314 : 20, 60], maxZoom: 16 });
   };
   const fazendaInteira = () => {
     const l = L.latLngBounds([]);
@@ -391,7 +402,16 @@ export function MapaGestorView({
     } else subtitulo = `${rotuloDaAtividade(dadosSelecionado.atividade)} · fechamento ${mesDoMapa}`;
   }
   const hist = dadosSelecionado?.historico ?? [];
-  const maxHist = Math.max(1, ...hist.map(h => h.kgHa ?? 0));
+  /* MAPA-PAINEL-COMPACTO-01: a escala das barras segue a série escolhida (kg/ha ou UA/ha) */
+  const maxDoHistorico = Math.max(serieDoHistorico === 'kg' ? 1 : 0.1, ...hist.map(h => (serieDoHistorico === 'kg' ? h.kgHa : h.uaHa) ?? 0));
+  /* a área MEDIDA no mapa (o polígono do pasto) ao lado da oficial do cadastro; a diferença com sinal, só se passa de 0,05 ha */
+  const areaDoMapa = geoSelecionada ? areaEmHectares(geoSelecionada.geojson) : null;
+  const diferencaDaArea = (() => {
+    const oficial = pastoSelecionado?.area_produtiva_ha;
+    if (areaDoMapa == null || oficial == null) return null;
+    const d = areaDoMapa - oficial;
+    return Math.abs(d) < 0.05 ? null : `${d > 0 ? '+' : '−'}${formatNum(Math.abs(d), 1)}`;
+  })();
 
   /* MAPA-CONTROLES-01: com o painel fechado, os créditos vão para o rodapé à direita SÓ se cabem ao lado da legenda inteira; senão sobem
      para logo acima da faixa da legenda, ainda encostados à direita — nunca por baixo dela (D4).
@@ -408,23 +428,26 @@ export function MapaGestorView({
       setLarguraDosCreditos(larguraDeles);
       setCreditosNoRodape(noRodape);
       /* fora do rodapé os créditos sobem à altura dos Filtros: o espaço deles vai da borda dos Filtros (12 + 190 + 8) até o painel
-         (302 + 10) ou a borda do mapa (10); sem lugar para o texto inteiro, viram o botão "Fontes dos dados" (nunca cortado) */
+         (264 + 10; o painel tem 248 desde o MAPA-PAINEL-COMPACTO-01) ou a borda do mapa (10); sem lugar para o texto inteiro, viram o botão "Fontes dos dados" (nunca cortado) */
       const limite = noRodape ? Number.MAX_SAFE_INTEGER
-        : quadro.clientWidth - (painelAberto ? 312 : 10) - (filtrosAbertos && hasGeo ? 210 : 12);
+        : quadro.clientWidth - (painelAberto ? 274 : 10) - (filtrosAbertos && hasGeo ? 210 : 12);
       creditos?.dispatchEvent(new CustomEvent(EVENTO_LIMITE_DOS_CREDITOS, { detail: limite }));
     };
     medir();
-    if (typeof ResizeObserver === 'undefined') return;
+    /* MAPA-PAINEL-COMPACTO-01: mede de novo no quadro seguinte — logo depois de trocar a camada a legenda ainda não se acomodou e o canto
+       ficava no rodapé colado nela (visto no gate: Atividade a 1126, às vezes) */
+    const quadroSeguinte = requestAnimationFrame(medir);
+    if (typeof ResizeObserver === 'undefined') return () => cancelAnimationFrame(quadroSeguinte);
     const ro = new ResizeObserver(medir);
     ro.observe(quadro);
     if (legendaRef.current) ro.observe(legendaRef.current);
     if (creditos) ro.observe(creditos);
-    return () => ro.disconnect();
+    return () => { cancelAnimationFrame(quadroSeguinte); ro.disconnect(); };
   }, [hasGeo, nomeCamada, legenda, erroDoMes, carregandoMes, mapStatus, painelAberto, filtrosAbertos]);
   /* MAPA-COMPACTO-01: sem lugar no rodapé (ou com o painel aberto), o canto sobe só até logo acima da legenda (22 px a 12 do pé = topo a
      34; a caixa dos créditos começa a 30 + 7 de margem = 37) */
   const canto = painelAberto
-    ? '[&_.leaflet-bottom.leaflet-right]:bottom-[30px] [&_.leaflet-bottom.leaflet-right]:right-[302px]'
+    ? '[&_.leaflet-bottom.leaflet-right]:bottom-[30px] [&_.leaflet-bottom.leaflet-right]:right-[264px]'
     : creditosNoRodape
       ? '[&_.leaflet-bottom.leaflet-right]:bottom-0 [&_.leaflet-bottom.leaflet-right]:right-0'
       : '[&_.leaflet-bottom.leaflet-right]:bottom-[30px] [&_.leaflet-bottom.leaflet-right]:right-0';
@@ -533,7 +556,7 @@ export function MapaGestorView({
 
       {/* Mapa + vidros */}
       {/* MAPA-CONTROLES-01 (Gabriel 31/10, D1/D2): o canto do zoom e dos créditos do Google só abre espaço para o painel do pasto quando ele
-          está na tela — aberto, os dois ficam encostados à esquerda dele, acima da legenda (302 = 286 do painel + 12 da margem + 4); fechado,
+          está na tela — aberto, os dois ficam encostados à esquerda dele, acima da legenda (264 = 248 do painel + 12 da margem + 4; era 302 com o painel de 286); fechado,
           voltam para a borda direita: os créditos no rodapé (ou logo acima da legenda, se não cabem ao lado dela) e o + / − acima deles.
           EXCEÇÃO DECLARADA ao UI-SEM-DESLOCAR-01, só para o zoom e os créditos: abrir/fechar o pasto os move; barra, KPIs, Filtros,
           legenda e painel seguem fixos. */}
@@ -591,77 +614,98 @@ export function MapaGestorView({
         )}
 
         {geoSelecionada && pastoSelecionado && (
-          <div className={`absolute bottom-3 right-3 top-3 z-[500] flex w-[286px] flex-col overflow-hidden ${VIDRO}`} data-testid="mapa-painel">
-            <div className="flex-none border-b border-black/[0.08] px-3 pb-2 pt-2.5">
-              <div className="flex items-start gap-2">
-                <b className="min-w-0 break-words text-[13px] leading-[16px]">{pastoSelecionado.nome}</b>
-                <span className="flex-none rounded-lg bg-[#E3F2E8] px-1.5 py-px text-[9.5px] font-semibold text-[#2F6E45]">Vinculado</span>
+          /* MAPA-PAINEL-COMPACTO-01 (Gabriel 01/11): o painel do pasto mais estreito (248 px, era 286), menos padding, fontes menores (piso
+             9,5 px), nada quebra; categorias com o LOTE de cada registro (uma linha por registro); histórico em kg/ha | UA/ha; mês vedado
+             marcado; campo sem valor em BRANCO; a área do MAPA ao lado da oficial, com a diferença (só leitura — quem adota é o cadastro). */
+          <div className={`absolute bottom-3 right-3 top-3 z-[500] flex w-[248px] flex-col overflow-hidden ${VIDRO}`} data-testid="mapa-painel">
+            <div className="flex-none border-b border-black/[0.08] px-2 pb-1.5 pt-2">
+              <div className="flex items-start gap-1.5">
+                <b className="min-w-0 break-words text-[12px] leading-[15px]">{pastoSelecionado.nome}</b>
+                <span className="flex-none rounded-lg bg-[#E3F2E8] px-1.5 py-px text-[9.5px] font-semibold leading-[13px] text-[#2F6E45]">Vinculado</span>
                 <button type="button" aria-label="Fechar" className="ml-auto flex-none text-[#4A5361] hover:text-[#1d232b]" onClick={() => setSelecionadoId(null)}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
               {/* duas linhas reservadas: o subtítulo longo quebra (fora de tabela, nada de "…") e nada abaixo se desloca */}
-              <div className="mt-0.5 h-[26px] overflow-hidden text-[10.5px] leading-[13px] text-[#4A5361]">{subtitulo}</div>
+              <div className="mt-0.5 h-[24px] overflow-hidden text-[9.5px] leading-[12px] text-[#4A5361]">{subtitulo}</div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">
-              <div className="grid grid-cols-2 gap-1.5">
-                <Cel rotulo="Área" valor={numero(pastoSelecionado.area_produtiva_ha, 1, ' ha')} />
-                <Cel rotulo="Cabeças" valor={numero(dadosSelecionado?.cabecas)} />
-                <Cel rotulo="Peso méd." valor={numero(dadosSelecionado?.pesoMedioKg, 0, ' kg')} />
-                <Cel rotulo="Lotação kg/ha" valor={numero(dadosSelecionado?.kgHa)} destaque
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
+              <div className="grid grid-cols-2 gap-1">
+                <Cel rotulo="Área" valor={branco(pastoSelecionado.area_produtiva_ha, 1, ' ha')}
+                  nota={areaDoMapa == null ? null : `mapa ${formatNum(areaDoMapa, 1)} ha${diferencaDaArea ? ` · ${diferencaDaArea}` : ''}`}
+                  tituloNota="A área do mapa é medição (só leitura); a oficial é a do cadastro do pasto." />
+                <Cel rotulo="Cabeças" valor={branco(dadosSelecionado?.cabecas)} />
+                <Cel rotulo="Peso méd." valor={branco(dadosSelecionado?.pesoMedioKg, 0, ' kg')} />
+                <Cel rotulo="Lotação kg/ha" valor={branco(dadosSelecionado?.kgHa)} destaque
                   unidade={textoUaHa(dadosSelecionado?.temFechamento ? uaPorHa(dadosSelecionado.cabecas, dadosSelecionado.pesoMedioKg, pastoSelecionado.area_produtiva_ha) : null)} />
               </div>
-              <div className="mb-1 mt-3 text-[9.5px] font-semibold text-[#4A5361]">Categorias</div>
-              {/* tabela: uma linha por categoria, o nome longo com "…" e o inteiro no title (a regra de reticências do gate confere o title) */}
-              <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }} data-reticencias-com-title>
-                <colgroup><col /><col style={{ width: 44 }} /><col style={{ width: 60 }} /></colgroup>
+              <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Categorias</div>
+              {/* tabela: uma linha por REGISTRO do fechamento (categoria · lote · cab · peso); texto longo com "…" e o inteiro no title */}
+              <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }} data-reticencias-com-title data-testid="mapa-painel-categorias">
+                <colgroup><col /><col style={{ width: 54 }} /><col style={{ width: 30 }} /><col style={{ width: 44 }} /></colgroup>
+                <thead>
+                  <tr className="text-[9.5px] text-[#5A6472]">
+                    <th className="h-[14px] px-0.5 text-left font-normal">Categoria</th><th className="h-[14px] px-0.5 text-left font-normal">Lote</th>
+                    <th className="h-[14px] px-0.5 text-right font-normal">Cab.</th><th className="h-[14px] px-0.5 text-right font-normal">Peso</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {(dadosSelecionado?.categorias ?? []).map(c => (
-                    <tr key={c.nome}>
-                      <td className="h-[18px] truncate px-1 text-[10.5px]" title={c.nome}>{c.nome}</td>
-                      <td className="h-[18px] px-1 text-right text-[10.5px] font-semibold tabular-nums">{formatNum(c.quantidade, 0)}</td>
-                      <td className="h-[18px] px-1 text-right text-[10px] tabular-nums text-[#5A6472]">{numero(c.peso_medio_kg, 0, ' kg')}</td>
+                  {(dadosSelecionado?.categorias ?? []).map((c, i) => (
+                    <tr key={`${c.nome}-${c.lote ?? ''}-${i}`}>
+                      <td className="h-[16px] truncate px-0.5 text-[10px]" title={c.nome}>{c.nome}</td>
+                      <td className="h-[16px] truncate px-0.5 text-[9.5px] text-[#5A6472]" title={c.lote ?? undefined}>{c.lote ?? ''}</td>
+                      <td className="h-[16px] px-0.5 text-right text-[10px] font-semibold tabular-nums">{formatNum(c.quantidade, 0)}</td>
+                      <td className="h-[16px] whitespace-nowrap px-0.5 text-right text-[9.5px] tabular-nums text-[#5A6472]">{branco(c.peso_medio_kg, 0, ' kg')}</td>
                     </tr>
                   ))}
                   {(dadosSelecionado?.categorias.length ?? 0) > 1 && (
                     <tr className="border-t border-black/[0.12]" data-testid="mapa-painel-total">
-                      <td className="h-[18px] px-1 text-[10.5px] font-semibold">Total</td>
-                      <td className="h-[18px] px-1 text-right text-[10.5px] font-semibold tabular-nums">{numero(dadosSelecionado?.cabecas)}</td>
-                      <td className="h-[18px] px-1 text-right text-[10px] font-semibold tabular-nums">{numero(dadosSelecionado?.pesoMedioKg, 0, ' kg')}</td>
+                      <td className="h-[16px] px-0.5 text-[10px] font-semibold">Total</td><td />
+                      <td className="h-[16px] px-0.5 text-right text-[10px] font-semibold tabular-nums">{branco(dadosSelecionado?.cabecas)}</td>
+                      <td className="h-[16px] whitespace-nowrap px-0.5 text-right text-[9.5px] font-semibold tabular-nums">{branco(dadosSelecionado?.pesoMedioKg, 0, ' kg')}</td>
                     </tr>
                   )}
-                  {(dadosSelecionado?.categorias.length ?? 0) === 0 && (
-                    <tr><td colSpan={3} className="h-[18px] px-1 text-[10.5px] text-[#5A6472]">
-                      {dadosSelecionado?.temFechamento ? 'Sem animais no fechamento do mês' : '—'}
-                    </td></tr>
+                  {(dadosSelecionado?.categorias.length ?? 0) === 0 && dadosSelecionado?.temFechamento && (
+                    <tr><td colSpan={4} className="h-[16px] px-0.5 text-[10px] text-[#5A6472]">Sem animais no fechamento do mês</td></tr>
                   )}
                 </tbody>
               </table>
-              <div className="mb-1 mt-3 flex justify-between text-[9.5px] font-semibold text-[#4A5361]">
-                <span>Histórico de lotação</span><span className="font-normal">kg/ha</span>
+              <div className="mb-0.5 mt-2 flex items-center justify-between text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">
+                <span>Histórico de lotação</span>
+                <Segmentado valor={serieDoHistorico} onEscolher={setSerieDoHistorico} altura={20} fonte={9.5}
+                  opcoes={[{ valor: 'kg', rotulo: 'kg/ha' }, { valor: 'ua', rotulo: 'UA/ha' }]} />
               </div>
-              <div className="flex h-[84px] items-end gap-1 pt-1" data-testid="mapa-historico">
-                {hist.map(h => (
-                  <div key={h.anoMes} className="flex h-full min-w-0 flex-1 flex-col justify-end"
-                    title={`${mesAbreviado(h.anoMes)}/${h.anoMes.slice(2, 4)}: ${h.kgHa == null ? 'sem fechamento' : `${formatNum(h.kgHa, 0)} kg/ha`}`}>
-                    <span className="mb-px block text-center text-[9.5px] leading-[11px] tabular-nums">{h.kgHa == null ? '—' : valorDaBarra(h.kgHa)}</span>
-                    {h.kgHa != null && (
-                      <div className="w-full rounded-t-[2px]" style={{ height: Math.max(2, (h.kgHa / maxHist) * 60), background: h.faixa ? COR_DA_FAIXA[h.faixa] : COR_DA_FAIXA.vazio }} />
-                    )}
-                  </div>
-                ))}
+              <div className="flex h-[72px] items-end gap-[3px] pt-1" data-testid="mapa-historico">
+                {hist.map(h => {
+                  const v = serieDoHistorico === 'kg' ? h.kgHa : h.uaHa;
+                  const titulo = `${mesAbreviado(h.anoMes)}/${h.anoMes.slice(2, 4)}: ${h.vedado ? 'vedado' : v == null ? 'sem fechamento'
+                    : serieDoHistorico === 'kg' ? `${formatNum(v, 0)} kg/ha` : `${formatNum(v, 2)} UA/ha`}`;
+                  return (
+                    <div key={h.anoMes} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={titulo} data-vedado={h.vedado || undefined}>
+                      <span className="mb-px block text-center text-[9.5px] leading-[11px] tabular-nums">
+                        {h.vedado ? 'V' : v == null ? '' : serieDoHistorico === 'kg' ? valorDaBarra(v) : formatNum(v, 1)}
+                      </span>
+                      {h.vedado ? (
+                        <div className="h-[6px] w-full rounded-t-[2px] bg-[repeating-linear-gradient(45deg,#9AA3AE_0,#9AA3AE_2px,transparent_2px,transparent_4px)]" />
+                      ) : v != null && (
+                        <div className="w-full rounded-t-[2px]" style={{ height: Math.max(2, (v / maxDoHistorico) * 50), background: h.faixa ? COR_DA_FAIXA[h.faixa] : COR_DA_FAIXA.vazio }} />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="mt-0.5 flex gap-1">
-                {hist.map(h => <div key={h.anoMes} className="min-w-0 flex-1 text-center text-[9.5px] text-[#5A6472]">{mesAbreviado(h.anoMes)}</div>)}
+              <div className="mt-0.5 flex gap-[3px]">
+                {hist.map(h => <div key={h.anoMes} className="min-w-0 flex-1 text-center text-[9.5px] leading-[11px] text-[#5A6472]">{mesAbreviado(h.anoMes)}</div>)}
               </div>
+              {hist.some(h => h.vedado) && <div className="mt-0.5 text-[9.5px] leading-[12px] text-[#5A6472]">V = vedado no mês</div>}
               {pastoSelecionado.observacoes && (
                 <>
-                  <div className="mb-1 mt-3 text-[9.5px] font-semibold text-[#4A5361]">Observações</div>
-                  <p className="text-[10.5px] leading-[14px] text-[#1d232b]">{pastoSelecionado.observacoes}</p>
+                  <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Observações</div>
+                  <p className="text-[10px] leading-[13px] text-[#1d232b]">{pastoSelecionado.observacoes}</p>
                 </>
               )}
-              <div className="mb-1 mt-3 text-[9.5px] font-semibold text-[#4A5361]">Satélite (vigor do capim)</div>
-              <div className="text-[10.5px] text-[#5A6472]">Em breve.</div>
+              <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Satélite (vigor do capim)</div>
+              <div className="text-[10px] text-[#5A6472]">Em breve.</div>
             </div>
           </div>
         )}
@@ -673,7 +717,7 @@ export function MapaGestorView({
              MAPA-COMPACTO-01: uma linha de 22 px, 9,5 px, quadradinhos de 8 px, padding mínimo, vidro discreto; o título é o nome curto
              da camada (o inteiro no title) */
           <div ref={legendaRef} className={`absolute bottom-3 left-3 z-[500] flex h-[22px] w-fit items-center gap-1.5 overflow-hidden rounded-md border border-white/60 bg-white/[0.8] px-1.5 text-[9.5px] leading-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.18)] backdrop-blur-[6px]`}
-            style={{ maxWidth: painelAberto ? 'calc(100% - 322px)' : creditosNoRodape ? `calc(100% - ${FOLGA_DA_LEGENDA_PX + larguraDosCreditos}px)` : 'calc(100% - 24px)' }}
+            style={{ maxWidth: painelAberto ? 'calc(100% - 284px)' : creditosNoRodape ? `calc(100% - ${FOLGA_DA_LEGENDA_PX + larguraDosCreditos}px)` : 'calc(100% - 24px)' }}
             data-testid="mapa-legenda" title={nomeCamada}>
             <b className="flex-none whitespace-nowrap font-semibold">{nomeCurtoCamada}</b>
             {legenda.map(i => (

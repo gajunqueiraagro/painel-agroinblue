@@ -64,17 +64,21 @@ export const CATEGORIAS = [
 const MESES = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'];
 const ATIVIDADE = ['cria', 'recria', 'recria', 'engorda', 'recria', 'vedado', 'cria', 'recria', 'recria', 'recria', 'engorda', 'engorda'];
 export const FECHAMENTOS: { id: string; fazenda_id: string; pasto_id: string; ano_mes: string; tipo_uso_mes: string; status: string }[] = [];
-export const ITENS: { id: string; fechamento_id: string; quantidade: number; peso_medio_kg: number; categoria_id: string }[] = [];
+export const ITENS: { id: string; fechamento_id: string; quantidade: number; peso_medio_kg: number; categoria_id: string; lote?: string }[] = [];
 PASTOS.forEach((p, i) => MESES.forEach((m, k) => {
   if (i === 2 && m === '2026-09') return; // P_03 sem fechamento em set/26: "—" e "último fechamento 08/26"
   if (i === 7 && k % 4 === 1) return;      // P_08 com meses sem fechamento no histórico
   const id = `f-${p.id}-${m}`;
   // fix1 E: o P_02 em ago/26 ainda em rascunho → o cenário de agosto mostra "fechamento de 08/26 aberto"
-  FECHAMENTOS.push({ id, fazenda_id: 'f1', pasto_id: p.id, ano_mes: m, tipo_uso_mes: ATIVIDADE[i], status: i === 1 && m === '2026-08' ? 'rascunho' : 'fechado' });
-  if (i === 5) return;                     // P_06 vedado: fechamento SEM animais (vazio)
+  // MAPA-PAINEL-COMPACTO-01: o P_01 vedado em mar/26 (o histórico marca o mês como vedado)
+  const vedadoNoMes = i === 0 && m === '2026-03';
+  FECHAMENTOS.push({ id, fazenda_id: 'f1', pasto_id: p.id, ano_mes: m, tipo_uso_mes: vedadoNoMes ? 'vedado' : ATIVIDADE[i], status: i === 1 && m === '2026-08' ? 'rascunho' : 'fechado' });
+  if (i === 5 || vedadoNoMes) return;      // P_06 vedado: fechamento SEM animais (vazio)
   const base = 30 + ((i * 13 + k * 7) % 60);
-  ITENS.push({ id: `${id}-1`, fechamento_id: id, quantidade: base, peso_medio_kg: 260 + ((i * 17 + k * 11) % 160), categoria_id: 'c1' });
-  if (i % 2 === 0) ITENS.push({ id: `${id}-2`, fechamento_id: id, quantidade: 12 + (k % 9), peso_medio_kg: 210 + k * 3, categoria_id: 'c2' });
+  // MAPA-PAINEL-COMPACTO-01: o lote de cada registro (um longo, para o "…" com o title; os Bois em 2 lotes = 2 linhas)
+  ITENS.push({ id: `${id}-1`, fechamento_id: id, quantidade: base, peso_medio_kg: 260 + ((i * 17 + k * 11) % 160), categoria_id: 'c1', lote: 'L-12' });
+  if (i === 0) ITENS.push({ id: `${id}-1b`, fechamento_id: id, quantidade: 9, peso_medio_kg: 300, categoria_id: 'c1', lote: 'Lote da recria de inverno 2026' });
+  if (i % 2 === 0) ITENS.push({ id: `${id}-2`, fechamento_id: id, quantidade: 12 + (k % 9), peso_medio_kg: 210 + k * 3, categoria_id: 'c2', lote: 'L-07' });
   if (i === 0) ITENS.push({ id: `${id}-3`, fechamento_id: id, quantidade: 8, peso_medio_kg: 420, categoria_id: 'c3' });
   // fix1: o P_01 com 7 categorias (o painel com 6+ não rola a 1366×768)
   if (i === 0) ['c4', 'c5', 'c6', 'c7'].forEach((c, n) => ITENS.push({ id: `${id}-${4 + n}`, fechamento_id: id, quantidade: 5 + n * 3, peso_medio_kg: 180 + n * 40, categoria_id: c }));
