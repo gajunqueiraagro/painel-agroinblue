@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Link2, Unlink, Pencil, Trash2, CheckCheck, MapPin, Search, Filter,
-  X, Save, ChevronDown,
+  X, Save, ChevronDown, ChevronRight, ChevronLeft,
 } from 'lucide-react';
+import { TIPOS_DE_CONTORNO } from '@/lib/mapa/edicaoDoPoligono';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { Pasto } from '@/hooks/usePastos';
@@ -75,6 +76,16 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const emEdicaoId = edicao.alvo && edicao.modo !== 'apagar' ? edicao.alvo.id : null;
   /* durante a edição os polígonos da lista não respondem a clique: o clique é do desenho (senão focava o vizinho e dava zoom nele) */
   const editando = !!edicao.modo;
+  /* MAPA-EDITAR-POLIGONO-02 (item 1): na edição o MAPA ganha a tela — a lista recolhe numa faixa de 24 px (dá para reabrir); ao sair da
+     edição volta como estava. Mudou a largura do mapa = o Leaflet relê o tamanho e o polígono volta ao meio. */
+  const [listaReaberta, setListaReaberta] = useState(false);
+  const listaRecolhida = editando && !listaReaberta;
+  useEffect(() => { if (!editando) setListaReaberta(false); }, [editando]);
+  const { reenquadrar } = edicao;
+  useEffect(() => {
+    const t = setTimeout(() => reenquadrar(), 60);
+    return () => clearTimeout(t);
+  }, [listaRecolhida, reenquadrar]);
   const [motivoDoLote, setMotivoDoLote] = useState('');
   const [recusasDoLote, setRecusasDoLote] = useState<string | null>(null);
 
@@ -116,6 +127,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
           const isChecked = selectedIds.has(geo.id);
           const layer = L.geoJSON(geo.geojson as any, {
             interactive: !editando,
+            /* -02 (item 4a): o contorno da fazenda nunca é ponto de encaixe na edição */
+            snapIgnore: TIPOS_DE_CONTORNO.includes(geo.tipo),
             style: {
               color: isFocused ? 'hsl(213, 80%, 40%)' : isChecked ? 'hsl(45, 70%, 45%)' : geo.pasto_id ? 'hsl(213, 48%, 32%)' : 'hsl(220, 8%, 50%)',
               weight: isFocused ? 3 : isChecked ? 2.5 : 1.2,
@@ -227,7 +240,21 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
 
       <div className="flex-1 min-h-0 flex gap-3">
         {/* Left: list panel */}
-        <Card className="flex flex-col w-full sm:w-96 flex-shrink-0 overflow-hidden">
+        {listaRecolhida ? (
+          <Card className="hidden w-6 flex-shrink-0 items-start justify-center overflow-hidden pt-2 sm:flex" data-testid="validacao-lista-recolhida">
+            <Button variant="ghost" size="sm" className="h-6 w-5 p-0" onClick={() => setListaReaberta(true)} title="Mostrar a lista de polígonos"
+              data-testid="validacao-reabrir-lista">
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </Card>
+        ) : (
+        <Card className="flex flex-col w-full sm:w-[280px] flex-shrink-0 overflow-hidden" data-testid="validacao-lista">
+          {editando && (
+            <Button variant="ghost" size="sm" className="h-5 justify-start gap-1 rounded-none border-b border-border px-2 text-[9.5px]"
+              onClick={() => setListaReaberta(false)} title="Recolher a lista (o mapa ganha a tela)" data-testid="validacao-recolher-lista">
+              <ChevronLeft className="h-3 w-3" />Recolher a lista
+            </Button>
+          )}
           {/* Search + filter bar */}
           <div className="p-2 border-b border-border space-y-1.5">
             <div className="flex gap-1.5">
@@ -304,12 +331,13 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     }`}
                     onClick={() => setFocusedId(geo.id)}
                   >
-                    <div className="flex items-center gap-2">
+                    {/* -02 (item 1): a lista mais estreita — o nome INTEIRO na 1ª linha (sem quebrar); o selo e as ações (ícones) na 2ª */}
+                    <div className="flex items-start gap-2">
                       <Checkbox
                         checked={selectedIds.has(geo.id)}
                         onCheckedChange={() => toggleSelect(geo.id)}
                         onClick={e => e.stopPropagation()}
-                        className="h-3.5 w-3.5"
+                        className="mt-0.5 h-3.5 w-3.5"
                       />
                       <div className="flex-1 min-w-0">
                         {isEditing ? (
@@ -330,53 +358,53 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                             </Button>
                           </div>
                         ) : (
-                          <p className="text-xs font-medium text-foreground truncate">
+                          <p className="whitespace-nowrap text-[11px] font-medium text-foreground" title={geo.nome_original || 'Sem nome'}
+                            data-testid="validacao-nome">
                             {geo.nome_original || 'Sem nome'}
                           </p>
                         )}
-                        {(
-                          <div className="flex items-center gap-1 mt-0.5">
-                            {pastoName ? (
-                              <Badge variant="secondary" className="text-[9px] h-4 max-w-[140px] truncate">
-                                <Link2 className="h-2.5 w-2.5 mr-0.5 flex-shrink-0" />
-                                {pastoName}
-                              </Badge>
-                            ) : geo.tipo === 'outra' ? (
-                              <Badge variant="outline" className="text-[9px] h-4 text-orange-600 border-orange-300">
-                                Sem classificação
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[9px] h-4">{rotuloDoTipo(geo.tipo)}</Badge>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {/* Actions */}
-                      {!isEditing && (
-                        <div className="flex items-center gap-0.5 flex-shrink-0">
-                          <Button
-                            variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                            onClick={e => { e.stopPropagation(); startLink(geo); }}
-                            title="Classificar (pasto ou área)"
-                          >
-                            <Link2 className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                            onClick={e => { e.stopPropagation(); startEdit(geo); }}
-                            title="Editar nome"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                            onClick={e => { e.stopPropagation(); setFocusedId(geo.id); void edicao.iniciar('apagar', geo.id); }}
-                            title="Apagar (com motivo; dá para desfazer)"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {pastoName ? (
+                            <Badge variant="secondary" className="text-[9.5px] h-4 whitespace-nowrap" title={pastoName}>
+                              <Link2 className="h-2.5 w-2.5 mr-0.5 flex-shrink-0" />
+                              {pastoName}
+                            </Badge>
+                          ) : geo.tipo === 'outra' ? (
+                            <Badge variant="outline" className="text-[9.5px] h-4 text-orange-600 border-orange-300">
+                              Sem classificação
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[9.5px] h-4">{rotuloDoTipo(geo.tipo)}</Badge>
+                          )}
+                          <span className="flex-1" />
+                          {/* Actions */}
+                          {!isEditing && (
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                              <Button
+                                variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={e => { e.stopPropagation(); startLink(geo); }}
+                                title="Classificar (pasto ou área)"
+                              >
+                                <Link2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={e => { e.stopPropagation(); startEdit(geo); }}
+                                title="Editar nome"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={e => { e.stopPropagation(); setFocusedId(geo.id); void edicao.iniciar('apagar', geo.id); }}
+                                title="Apagar (com motivo; dá para desfazer)"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -384,6 +412,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             )}
           </div>
         </Card>
+        )}
 
         {/* Right: map preview */}
         <Card className="hidden sm:flex flex-1 min-h-0 relative overflow-hidden">

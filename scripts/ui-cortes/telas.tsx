@@ -664,7 +664,9 @@ if (tela === 'mesclar') {
      abre no último mês com fechamento de pastos (set/2026; fix1 A: o banco falso ignora `order`/`limit`, a lista vem do mais novo); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
   g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendasComPecuaria: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
   g.__bancoBancada = {
-    from: (t: string, e: any) => t === 'fazenda_geometrias' ? MAPA.GEOMETRIAS
+    // MAPA-EDITAR-POLIGONO-02: a edição lê o polígono na hora (`.eq('id', …).maybeSingle()`), com a versão
+    from: (t: string, e: any) => t === 'fazenda_geometrias'
+        ? (e.eq.id ? MAPA.GEOMETRIAS.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1 })) : MAPA.GEOMETRIAS)
       : t === 'pastos' ? MAPA.PASTOS
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
       // MAPA-PERF-01: os itens vêm EMBUTIDOS no fechamento (o banco falso não faz o embed; a linha já o traz)

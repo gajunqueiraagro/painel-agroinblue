@@ -206,6 +206,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Status: so' realizado (e conciliado) tem data de pagamento. Lancamento casado com extrato nao sai do estado que o banco pos.
 - MAPA-EDITAR-POLIGONO-01: polígono da fazenda só se edita pela `fn_geometria_gravar` (prévia = simular; versão; trilha `fazenda_geometria_edicoes`;
   desfazer `fn_geometria_desfazer`); o "Atualizar mapa" nunca apaga editado/desenhado/apagado; a geometria (área, dividir, unir) é a lib `edicaoDoPoligono`.
+- MAPA-EDITAR-POLIGONO-02: divisa junto (vértice comum ≤ 0,5 m) e recorte dos vizinhos gravam NUM gesto da `fn_geometria_gravar` (até 50; vizinho só muda
+  de forma; o contorno 'area_total'/'area_fazenda' nunca é vizinho nem alvo de encaixe); sobreposição ≥ 0,1 ha; ao sair do zoom 22 da edição NUNCA `redraw()` (zoom fracionado).
 - Pasto no mes = vigencia + ativo (`fn_pasto_vigente_no_mes`). Saldo inicial se cadastra uma vez. O cache do rebanho se reconstroi na
   gravacao. Fechamento P1: a autoridade e' `get_status_pilares_fechamento`.
 - FECH-P2-TRAVA-01: o Valor do Rebanho reabre SO' pela `fn_valor_rebanho_reabrir` (abre o fechamento E invalida o validado + cadeia, trilha);
