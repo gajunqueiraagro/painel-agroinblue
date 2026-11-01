@@ -314,7 +314,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - REGUA DE TABELA UNICA (`src/components/ui/regua-tabela.tsx`, a de Recorrencias): cabecalho navy 22px 9,5/500, linha 19px 10px, padding
   0 4px, barra do rodape navy 23px dentro do quadro. Cabecalho e totais presos, so' o corpo rola, UM scrollport por tela, fundo opaco.
   O `th` alinha como o `td`; tabela de regua fixa (`table-layout: fixed`, `colgroup` em px medido) nao estica com a janela.
-- Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01;
+- Piso de 9,5px (excecoes declaradas: grade do DRE, o secundario da Evolucao do rebanho a 8,5px — so' kg/cab, Meta e Δ (PROD-EVOLUCAO-01b-fix1), selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01;
   P141: os selos OFX/PDF (7px) de "Saldos por conta"; FORN-CAMPO-01: a linha "CNPJ · Cidade/UF" (8,5px) sob o Fornecedor da barra de Lançamentos e
   sob o nome em cada opção da lista do `FavorecidoSelect`). Tamanhos do A18.
 - P141/P166 (CONC-TELA-02): Conciliação = FAIXA do status (1 linha, altura fixa, `FaixaDoMes`: vermelho/verde/âmbar = conciliado com sem

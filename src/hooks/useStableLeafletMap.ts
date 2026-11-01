@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import { useAuth } from '@/contexts/AuthContext';
+import { lerFundoSalvo, salvarFundo, type FundoDoMapa } from '@/lib/mapa/fundoDoMapa';
+import { CREDITOS_VAZIOS, montarFundo, type CreditosDoFundo } from '@/lib/mapa/camadaDoFundo';
+import { criarControleDeCreditos, type ControleDeCreditos } from '@/lib/mapa/creditosDoMapa';
+
+/* ── MAPA-02b adendo (Gabriel 31/10/2026): ZOOM MENOS AGRESSIVO em todos os mapas da casa ──
+   O +/− e o teclado andam MEIO nível; a rodinha e o trackpad precisam do DOBRO de giro (o padrão do Leaflet é 60 px por nível);
+   o enquadrar encaixa em passos de 0,25. Os tiles continuam pedidos só em níveis inteiros (o Leaflet pede `Math.round(zoom)` e
+   escala entre um nível e outro): o zoom fracionado não multiplica pedidos. */
+export const ZOOM_SNAP = 0.25;
+export const ZOOM_DELTA = 0.5;
+export const RODA_PX_POR_NIVEL = 120;
 
 /* ── Global patch: prevent _leaflet_pos crashes ── */
 const domUtilAny = L.DomUtil as any;
@@ -35,6 +47,8 @@ interface Options {
   center?: L.LatLngExpression;
   zoom?: number;
   labelZoomThreshold?: number;
+  /** MAPA-02b (D1): o fundo inicial. Sem ele, a escolha salva do usuário (padrão: satélite). */
+  fundo?: FundoDoMapa;
 }
 
 export function useStableLeafletMap({
@@ -42,7 +56,19 @@ export function useStableLeafletMap({
   center = [-15.8, -47.9],
   zoom = 5,
   labelZoomThreshold = 14,
+  fundo,
 }: Options) {
+  const { user } = useAuth();
+  const usuarioId = user?.id ?? null;
+  /* MAPA-02b: o fundo pedido (D1/D5), o que de fato está na tela (satélite que caiu no OSM = 'mapa') e os créditos (D3) */
+  const [fundoPedido, setFundoPedido] = useState<FundoDoMapa>(() => fundo ?? lerFundoSalvo(usuarioId));
+  const [fundoAtivo, setFundoAtivo] = useState<FundoDoMapa | null>(null);
+  const [creditos, setCreditos] = useState<CreditosDoFundo>(CREDITOS_VAZIOS);
+  const fundoMontadoRef = useRef<{ pedido: FundoDoMapa; desmontar: () => void } | null>(null);
+  const creditosRef = useRef<ControleDeCreditos | null>(null);
+  /* cada mapa novo (o contêiner trocou) remonta o fundo */
+  const [versaoDoMapa, setVersaoDoMapa] = useState(0);
+
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const featureLayerRef = useRef<L.LayerGroup | null>(null);
@@ -116,7 +142,8 @@ export function useStableLeafletMap({
           return;
         }
         // Container changed — destroy old
-        
+        fundoMontadoRef.current?.desmontar();
+        fundoMontadoRef.current = null;
         existing.remove();
         mapInstanceRef.current = null;
         featureLayerRef.current = null;
@@ -129,6 +156,10 @@ export function useStableLeafletMap({
           zoom: initZoom,
           zoomControl: false,
           preferCanvas: false,
+          attributionControl: false,
+          zoomSnap: ZOOM_SNAP,
+          zoomDelta: ZOOM_DELTA,
+          wheelPxPerZoomLevel: RODA_PX_POR_NIVEL,
         });
 
         fixPanePos(map);
@@ -136,11 +167,12 @@ export function useStableLeafletMap({
 
 
 
+        /* MAPA-02b: os créditos entram ANTES do zoom — no canto de baixo o Leaflet empilha o último por cima, então o zoom fica acima
+           e os créditos logo abaixo dele (P1). O fundo é montado pelo efeito do fundo, quando o mapa fica pronto. */
+        const creditosDoMapa = criarControleDeCreditos();
+        creditosDoMapa.controle.addTo(map);
+        creditosRef.current = creditosDoMapa;
         L.control.zoom({ position: 'bottomright' }).addTo(map);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap',
-          maxZoom: 19,
-        }).addTo(map);
 
         const featureLayer = L.layerGroup().addTo(map);
         const labelLayer = L.layerGroup().addTo(map);
@@ -158,6 +190,7 @@ export function useStableLeafletMap({
         map.on('zoomend', syncLabelVisibility);
 
         mapInstanceRef.current = map;
+        setVersaoDoMapa((v) => v + 1);
         featureLayerRef.current = featureLayer;
         labelLayerRef.current = labelLayer;
 
@@ -211,8 +244,9 @@ export function useStableLeafletMap({
       window.removeEventListener('resize', onWindowResize);
 
       if (mapInstanceRef.current) {
-
-
+        fundoMontadoRef.current?.desmontar();
+        fundoMontadoRef.current = null;
+        creditosRef.current = null;
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
         featureLayerRef.current = null;
@@ -223,6 +257,26 @@ export function useStableLeafletMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ← empty deps: run ONCE per mount
 
+  /* MAPA-02b — o fundo: montado quando o mapa fica pronto e trocado no MESMO mapa quando o pedido muda (nada se recria; a sessão do
+     Google é reaproveitada pela `fundoDoMapa`). */
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || status !== 'ready') return;
+    if (fundoMontadoRef.current?.pedido === fundoPedido) return;
+    fundoMontadoRef.current?.desmontar();
+    const desmontar = montarFundo(map, fundoPedido, (c, ativo) => {
+      creditosRef.current?.atualizar(c);
+      setCreditos(c);
+      setFundoAtivo(ativo);
+    });
+    fundoMontadoRef.current = { pedido: fundoPedido, desmontar };
+  }, [fundoPedido, status, versaoDoMapa]);
+
+  const trocarFundo = useCallback((f: FundoDoMapa) => {
+    setFundoPedido(f);
+    salvarFundo(usuarioId, f);
+  }, [usuarioId]);
+
   return {
     mapContainerRef,
     mapInstanceRef,
@@ -231,5 +285,9 @@ export function useStableLeafletMap({
     status,
     debugInfo,
     reportRenderedGeometries,
+    fundo: fundoPedido,
+    fundoAtivo,
+    creditos,
+    trocarFundo,
   };
 }

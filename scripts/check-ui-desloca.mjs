@@ -159,17 +159,34 @@ const CENARIOS = [
     estados: [10, 14].map((n) => [`${n} parcelas`, { url: `tela=lancamento&m=editar&v=salparcela&pp=${n}` }]) },
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   /* MAPA-02a — o mapa de pastos: trocar a camada, o mês e o pasto não move a barra, os KPIs, os filtros, o painel nem a legenda */
-  { nome: 'mapa-geo', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], estados: [
+  /* MAPA-CONTROLES-01 (Gabriel 31/10, D2): o zoom e os creditos do Google (o canto do Leaflet) se MOVEM ao abrir/fechar o pasto — excecao
+     declarada no MapaGestorView; o lugar deles e' medido pelo `medirCantoDoMapa` do check-ui-cortes */
+  { nome: 'mapa-geo', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], naoMede: '.leaflet-control-container', estados: [
     ['painel P_01', mapaPasto('P_01')], ['painel P_03 sem fechamento', mapaPasto('P_03')], ['painel nome longo', mapaPasto('Retiro')],
     ['camada kg/ha', mapaCamada('Lotação (kg/ha)')], ['camada atividade', mapaCamada('Atividade')], ['camada cabeças', mapaCamada('Cabeças')],
     ['camada tipo de área', mapaCamada('Tipo de área')], ['mês agosto', mapaMes('Ago')], ['mês setembro', mapaMes('Set')],
+    /* MAPA-02b — trocar o fundo não move nada (os créditos têm lugar e altura fixos) */
+    ['fundo mapa', mapaCamada('Mapa')], ['fundo satélite', mapaCamada('Satélite')],
+  ] },
+  /* MAPA-GLOBAL-01 — trocar a visão, o filtro, a aba do gráfico e a ordenação não desloca a barra, os cards nem as colunas */
+  { nome: 'mapa-global', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], estados: [
+    ['ordena por kg/ha', async (p) => { await p.locator('[data-testid="global-tabela-fazendas"] th', { hasText: 'kg/ha' }).first().click(); await espera(p, 300); }],
+    ['gráfico área', async (p) => { await p.locator('[data-testid="global-grafico"] button', { hasText: 'Área por situação' }).first().click(); await espera(p, 300); }],
+    ['gráfico atividade', async (p) => { await p.locator('[data-testid="global-grafico"] button', { hasText: 'Atividade' }).first().click(); await espera(p, 300); }],
+    ['gráfico lotação', async (p) => { await p.locator('[data-testid="global-grafico"] button', { hasText: 'Lotação' }).first().click(); await espera(p, 300); }],
+  ] },
+  { nome: 'mapa-global-pastos', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]],
+    antes: async (p) => { await p.locator('[data-testid="global-barra"] button', { hasText: 'Pastos' }).first().click(); await espera(p, 400); }, estados: [
+    ['filtro carga alta', async (p) => { await p.locator('[data-testid="global-chips"] button', { hasText: 'Carga alta' }).first().click(); await espera(p, 300); }],
+    ['filtro sem fech.', async (p) => { await p.locator('[data-testid="global-chips"] button', { hasText: 'Sem fech.' }).first().click(); await espera(p, 300); }],
+    ['filtro todos', async (p) => { await p.locator('[data-testid="global-chips"] button', { hasText: 'Todos' }).first().click(); await espera(p, 300); }],
   ] },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* P172 — Cadastros › Plano de Contas: ligar/desligar os inativos e buscar para 4/1/0 contas não move o cabeçalho, a busca, o interruptor
      nem a barra do pé (a contagem tem lugar reservado); o mesmo no perfil do cliente (sem a coluna das ações) */
   /* PROD-EVOLUCAO-01a — trocar unidade, período e a meta não desloca a barra, os cards nem as colunas (larguras fixas pelo maior valor) */
   { nome: 'evolucao-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], estados: [
-    ['@', botao(/^@$/)], ['t', botao(/^t$/)], ['cabeças', botao(/^Cabeças$/)], ['ano', botao(/^Ano$/)], ['mês', botao(/^Mês/)], ['acum', botao(/^Acum/)],
+    ['@', botao(/^@$/)], ['t', botao(/^t$/)], ['cabeças', botao(/^Cabeças$/)], ['ano', botao(/^Ano/)], ['mês', botao(/^Mês/)], ['ano de novo', botao(/^Ano/)],
     ['sem meta', clicar('[data-testid="evolucao-com-meta"]')], ['com meta', clicar('[data-testid="evolucao-com-meta"]')]] },
   /* DRE-LEVE-01 — as duas faixas de filtro do DRE não andam ao trocar o modo, a comparação, o Δ, o "por fazenda", o rateio, as unidades e
      a atividade (os lugares são reservados); a grade é o conteúdo que muda (`data-desloca-livre` no cartão). */
@@ -178,6 +195,10 @@ const CENARIOS = [
     ['1 ano', botao(/^1 ano$/)], ['Δ R$', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: 'Δ R$' }).click(); await p.keyboard.press('Escape'); await espera(p); }],
     ['por fazenda', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: /^Ver por fazenda/ }).click(); await p.keyboard.press('Escape'); await espera(p); }],
     ['R$/ha fora', botao(/^R\$\/ha$/)], ['resumido', botao(/^Resumido$/)], ['lavoura', botao(/^Lavoura$/)], ['pecuária', botao(/^Pecuária$/)]] },
+  /* PROD-EVOLUCAO-01b — as setas do mês, o cenário e as abas do painel não deslocam a barra, os cards nem a tabela */
+  { nome: 'evolucao-mes', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], estados: [
+    ['mês anterior', clicar('[aria-label="mês anterior"]')], ['mês seguinte', clicar('[aria-label="mês seguinte"]')],
+    ['meta', botao(/^Meta$/)], ['realizado', botao(/^Realizado$/)], ['pesos', botao(/^Conferir pesos/)], ['composição', botao(/^Composição$/)]] },
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, estados: [
     ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['inativos desligado', clicar('[data-testid="mostrar-inativos"]')],
     ['busca 4 contas', digitar('[data-testid="busca-plano"]', 'Outras Saídas')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],
@@ -201,7 +222,9 @@ const CENARIOS = [
   ] },
   ...[['trator', 'Trator Valtra', ['Lançamentos', 'Depreciação', 'Valor de mercado', 'Documentos', 'Dados']],
       ['pastagem', 'Reforma de pastagem', ['Lançamentos', 'Pastos', 'Depreciação', 'Documentos', 'Dados']],
-      ['novo', null, ['Lançamentos', 'Dados']]].map(([n, bem, abas]) => ({
+      ['novo', null, ['Lançamentos', 'Dados']],
+      /* B2: o veículo (Placa/Renavam à vista) e a máquina com a identificação antiga — as mesmas abas, nada se move */
+      ['veiculo', 'Caminhonete Hilux', ['Lançamentos', 'Depreciação', 'Dados']], ['antiga', 'Grade aradora', ['Lançamentos', 'Dados']]].map(([n, bem, abas]) => ({
     nome: `patrimonio-bem-${n}`, url: 'tela=patrimonio&barra=32', regiao: '[role="dialog"]',
     antes: async (p) => {
       if (bem) await p.locator('[data-testid="patrimonio-linha"]', { hasText: bem }).first().click(); else await p.locator('[data-testid="patrimonio-novo"]').click();
@@ -630,8 +653,9 @@ const CENARIOS = [
 
 /* roda NA PAGINA: o retangulo de cada elemento medido, pela identidade */
 function medirPosicoes(cfg) {
-  /* P109 — `regiao` (opcional, seletor): so' o que esta' dentro dela conta (os `presos` sempre); o argumento e' `[presos, regiao]` */
-  const [presos, regiao] = Array.isArray(cfg) ? cfg : [cfg, null];
+  /* P109 — `regiao` (opcional, seletor): so' o que esta' dentro dela conta (os `presos` sempre); o argumento e' `[presos, regiao, naoMede]`
+     MAPA-CONTROLES-01 — `naoMede` (opcional, seletor): o que esta' dentro dele NAO conta (excecao declarada no codigo da tela, medida por outro gate) */
+  const [presos, regiao, naoMede] = Array.isArray(cfg) ? cfg : [cfg, null, null];
   const SEL = 'button, [role="tab"], [role="button"], [role="combobox"], input, select, textarea, h1, h2, h3, h4, th, [data-desloca]';
   const raiz = document.getElementById('root') ?? document.body;
   const caminho = (e) => { const p = []; for (let x = e; x && x !== raiz; x = x.parentElement) { const pai = x.parentElement; p.unshift(`${x.tagName.toLowerCase()}${pai ? `:${[...pai.children].indexOf(x)}` : ''}`); } return p.join('>'); };
@@ -646,7 +670,7 @@ function medirPosicoes(cfg) {
   };
   const vistos = new Map(); const out = {};
   for (const e of document.querySelectorAll(SEL)) {
-    if (e.closest('tbody') || e.closest('[data-desloca-livre]') || (regiao && !e.closest(regiao))) continue;
+    if (e.closest('tbody') || e.closest('[data-desloca-livre]') || (regiao && !e.closest(regiao)) || (naoMede && e.closest(naoMede))) continue;
     /* dentro da area que ROLA (a lista) mora o conteudo: so' o cabecalho e o que esta' preso (sticky) contam */
     if (e.tagName !== 'TH' && rolaPorDentro(e)) continue;
     const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') continue;
@@ -730,7 +754,7 @@ try {
     const abrir = async (pg, url) => { await pg.goto(`${base}/index.html?${url}`); await pg.evaluate(() => document.fonts.ready); await espera(pg, 1300); };
     await abrir(p, cen.url);
     if (cen.antes) await cen.antes(p);
-    const inicial = await p.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null]);
+    const inicial = await p.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null, cen.naoMede ?? null]);
     /* `auto`: as escolhas da tela, por indice (a lista e' relida na tela recem-aberta a cada troca) */
     /* o `Segmentado` da casa: `div.inline-flex.shrink-0.overflow-hidden.rounded-md.border` com os botoes filhos (src/components/ui/segmentado) */
     const ESCOLHAS = 'div.inline-flex.shrink-0.overflow-hidden.rounded-md.border > button:not([disabled]), [role="tab"]:not([disabled])';
@@ -748,10 +772,10 @@ try {
       medicoes++;
       if (typeof gesto === 'function') {
         try { await gesto(p); } catch (e) { erros.push(`${nome}: ${String(e).slice(0, 100)}`); continue; }
-        todos.push(...comparar(inicial, await p.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
+        todos.push(...comparar(inicial, await p.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null, cen.naoMede ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
       } else {
         const pu = await navegador.newPage({ viewport: { width: w, height: h } }); await abrir(pu, gesto.url);
-        todos.push(...comparar(inicial, await pu.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
+        todos.push(...comparar(inicial, await pu.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null, cen.naoMede ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
         await pu.close();
       }
     }

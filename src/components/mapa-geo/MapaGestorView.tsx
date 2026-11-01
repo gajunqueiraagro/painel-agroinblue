@@ -18,7 +18,7 @@ import {
   DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { itemFunciona, MENU_ADICIONAR } from '@/lib/mapa/menuAdicionar';
-import { ChevronDown, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
@@ -26,8 +26,14 @@ import type { Pasto } from '@/hooks/usePastos';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
 import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Ponto } from '@/lib/mapa/rotulosDoMapa';
 import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
-import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
+import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
+import { FUNDOS } from '@/lib/mapa/fundoDoMapa';
+import { LARGURA_MAXIMA_DOS_CREDITOS_PX } from '@/lib/mapa/creditosDoMapa';
+
+/* MAPA-CONTROLES-01: o que a legenda deixa livre à direita para os créditos no rodapé = 12 (a margem da legenda) + a largura máxima dos
+   créditos + 10 (a margem do controle do Leaflet) + 8 de folga */
+const RESERVA_DOS_CREDITOS_PX = 12 + LARGURA_MAXIMA_DOS_CREDITOS_PX + 10 + 8;
 
 interface Props {
   geometrias: FazendaGeometria[];
@@ -40,6 +46,10 @@ interface Props {
   erroDoMes: string | null;
   geoLoading: boolean;
   onImportar: () => void;
+  /** MAPA-GLOBAL-01 (D6): a fazenda foi aberta pelo Global — o "← Global" aparece no espaço reservado do início da barra. */
+  voltarAoGlobal?: () => void;
+  /** MAPA-GLOBAL-01 (D6): o pasto clicado no Global abre selecionado, com o painel aberto. */
+  pastoInicialId?: string | null;
   onRenderedChange?: (count: number) => void;
   /** O seletor de ano/mês (o mesmo do Fechamento Área, mês compartilhado). */
   seletorDeMes: ReactNode;
@@ -172,24 +182,28 @@ function escaparHtml(t: string): string {
 
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onRenderedChange,
-  seletorDeMes, trocaDeVista,
+  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
   const [filtrosAbertos, setFiltrosAbertos] = useState(true);
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS);
+  const [creditosNoRodape, setCreditosNoRodape] = useState(true); // MAPA-CONTROLES-01
+  const quadroRef = useRef<HTMLDivElement>(null);
+  const legendaRef = useRef<HTMLDivElement>(null);
   const enquadrouRef = useRef('');
   const camadasRef = useRef(new Map<string, L.GeoJSON>());
   const rotulosRef = useRef<RotuloDoPasto[]>([]);
 
-  const { mapContainerRef, mapInstanceRef, featureLayerRef, labelLayerRef, status: mapStatus, reportRenderedGeometries } =
-    useStableLeafletMap({ debugName: 'MapaGestor', labelZoomThreshold: 0 });
+  const { mapContainerRef, mapInstanceRef, featureLayerRef, labelLayerRef, status: mapStatus, reportRenderedGeometries,
+    fundo, trocarFundo } = useStableLeafletMap({ debugName: 'MapaGestor', labelZoomThreshold: 0 });
 
   const pastoPorId = useMemo(() => new Map(pastos.map(p => [p.id, p])), [pastos]);
   const hasGeo = geometrias.length > 0;
   const geoPastos = useMemo(() => geometrias.filter(g => g.tipo === 'pasto' && !!g.pasto_id), [geometrias]);
   const geoSelecionada = selecionadoId ? geoPastos.find(g => g.id === selecionadoId) ?? null : null;
   const pastoSelecionado = geoSelecionada?.pasto_id ? pastoPorId.get(geoSelecionada.pasto_id) ?? null : null;
+  const painelAberto = Boolean(geoSelecionada && pastoSelecionado);
   const dadosSelecionado = pastoSelecionado ? dadosDoMes.get(pastoSelecionado.id) ?? null : null;
 
   // o polígono deixou de ser pasto (vínculo removido) ou sumiu: o painel fecha
@@ -198,24 +212,10 @@ export function MapaGestorView({
   }, [selecionadoId, geoPastos]);
 
   /* ── KPIs da fazenda no mês: os pastos com polígono, vigentes no mês ── */
+  // MAPA-GLOBAL-01: a regra mora na lib (`resumoDosPastos`), a MESMA do Global
   const kpis = useMemo(() => {
-    let cab = 0; let pesoTotal = 0; let area = 0; let algum = false;
-    for (const g of geoPastos) {
-      const d = dadosDoMes.get(g.pasto_id!);
-      if (!d) continue;
-      area += pastoPorId.get(g.pasto_id!)?.area_produtiva_ha ?? 0;
-      if (!d.temFechamento) continue;
-      algum = true;
-      cab += d.cabecas ?? 0;
-      pesoTotal += d.pesoTotalKg ?? 0;
-    }
-    return {
-      cabecas: algum ? cab : null,
-      pesoMedio: algum && cab > 0 ? pesoTotal / cab : null,
-      lotacao: algum && area > 0 ? pesoTotal / area : null,
-      area: area > 0 ? area : null,
-      uaHa: algum ? uaPorHa(cab, cab > 0 ? pesoTotal / cab : null, area) : null,
-    };
+    const r = resumoDosPastos(geoPastos.map(g => g.pasto_id!), dadosDoMes, id => pastoPorId.get(id)?.area_produtiva_ha);
+    return { ...r, uaHa: r.cabecas == null ? null : uaPorHa(r.cabecas, r.pesoMedio, r.area) };
   }, [geoPastos, dadosDoMes, pastoPorId]);
 
   /* fix1 E: o fechamento de pastos do mês ainda não está fechado (algum pasto do mapa com status ≠ 'fechado') */
@@ -343,6 +343,20 @@ export function MapaGestorView({
     return () => { mapa.off('zoomend', refazer); };
   }, [mapStatus, mapInstanceRef, labelLayerRef]);
 
+  /* MAPA-GLOBAL-01 (D6): o pasto clicado no Global abre selecionado e enquadrado (uma vez por pedido) */
+  const pastoInicialFeitoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pastoInicialId || pastoInicialFeitoRef.current === pastoInicialId || mapStatus !== 'ready') return;
+    const g = geoPastos.find(x => x.pasto_id === pastoInicialId);
+    const camadaGeo = g ? camadasRef.current.get(g.id) : undefined;
+    if (!g || !camadaGeo) return;
+    pastoInicialFeitoRef.current = pastoInicialId;
+    setSelecionadoId(g.id);
+    const mapa = mapInstanceRef.current;
+    const b = camadaGeo.getBounds();
+    if (mapa && b.isValid()) mapa.fitBounds(b, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [352, 60], maxZoom: 16 });
+  });
+
   const enquadrar = (limites: L.LatLngBounds, comPainel: boolean) => {
     const mapa = mapInstanceRef.current;
     if (!mapa || !limites.isValid()) return;
@@ -378,10 +392,40 @@ export function MapaGestorView({
   const hist = dadosSelecionado?.historico ?? [];
   const maxHist = Math.max(1, ...hist.map(h => h.kgHa ?? 0));
 
+  /* MAPA-CONTROLES-01: com o painel fechado, os créditos vão para o rodapé à direita SÓ se cabem ao lado da legenda inteira (no pior caso,
+     os créditos na largura máxima); senão sobem para logo acima da faixa da legenda, ainda encostados à direita — nunca por baixo dela.
+     A 1126 com satélite: mapa 974 < legenda 613 + reserva 390. Mede de novo quando o quadro, a legenda ou o conteúdo dela mudam. */
+  useEffect(() => {
+    const quadro = quadroRef.current; if (!quadro) return;
+    const medir = () => {
+      const larguraDaLegenda = legendaRef.current?.scrollWidth ?? 0;
+      setCreditosNoRodape(quadro.clientWidth >= larguraDaLegenda + RESERVA_DOS_CREDITOS_PX);
+    };
+    medir();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(medir);
+    ro.observe(quadro);
+    if (legendaRef.current) ro.observe(legendaRef.current);
+    return () => ro.disconnect();
+  }, [hasGeo, nomeCamada, legenda, erroDoMes, carregandoMes]);
+  const canto = painelAberto
+    ? '[&_.leaflet-bottom.leaflet-right]:bottom-[50px] [&_.leaflet-bottom.leaflet-right]:right-[302px]'
+    : creditosNoRodape
+      ? '[&_.leaflet-bottom.leaflet-right]:bottom-0 [&_.leaflet-bottom.leaflet-right]:right-0'
+      : '[&_.leaflet-bottom.leaflet-right]:bottom-[50px] [&_.leaflet-bottom.leaflet-right]:right-0';
+
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="mapa-gestor">
       {/* Barra 40px */}
       <div className="relative z-[600] flex h-[34px] flex-none items-center gap-1.5 border-b border-[#D9DEE5] bg-white px-2.5" data-testid="mapa-barra">
+        {/* MAPA-GLOBAL-01 (D6): o lugar do "← Global" existe sempre (largura fixa): aparecer não empurra os outros botões */}
+        <div className="w-[56px] flex-none" data-testid="mapa-volta-global">
+          {voltarAoGlobal && (
+            <Button type="button" variant="ghost" size="sm" className="h-[24px] w-full justify-start gap-0 px-0.5 text-[11px] font-semibold text-[#2B6CB0]" onClick={voltarAoGlobal}>
+              <ChevronLeft className="h-3 w-3" /> Global
+            </Button>
+          )}
+        </div>
         <Button type="button" variant="outline" size="sm" onClick={() => setFiltrosAbertos(v => !v)}
           className={`h-[24px] w-[72px] flex-none gap-1 px-2 text-[11px] ${filtrosAbertos ? 'border-[#1B2A44] bg-[#1B2A44] text-white hover:bg-[#1B2A44] hover:text-white' : ''}`}>
           <ListFilter className="h-3 w-3" /> Filtros
@@ -424,7 +468,7 @@ export function MapaGestorView({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" size="sm" title={`Camadas: ${nomeCamada}`}
-              className="h-[24px] w-[184px] flex-none justify-between gap-1 bg-[#2B6CB0] px-2 text-[11px] text-white hover:bg-[#2B6CB0]/90">
+              className="h-[24px] w-[152px] flex-none justify-between gap-1 bg-[#2B6CB0] px-2 text-[11px] text-white hover:bg-[#2B6CB0]/90">
               <span className="truncate">Camadas: <b className="font-semibold">{nomeCurtoCamada}</b></span>
               <ChevronDown className="h-3 w-3 flex-none" />
             </Button>
@@ -434,6 +478,15 @@ export function MapaGestorView({
             {CAMADAS.map(c => (
               <DropdownMenuItem key={c.valor} onSelect={() => setCamada(c.valor)} className={c.valor === camada ? 'font-semibold' : ''}>
                 {c.rotulo}
+              </DropdownMenuItem>
+            ))}
+            {/* MAPA-02b (D5): o fundo do mapa — a escolha fica salva por usuário (todos os mapas da casa a seguem, P2) */}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Fundo</DropdownMenuLabel>
+            {FUNDOS.map(f => (
+              <DropdownMenuItem key={f.valor} onSelect={() => trocarFundo(f.valor)} className={f.valor === fundo ? 'font-semibold' : ''}
+                data-testid={`mapa-fundo-${f.valor}`}>
+                {f.rotulo}
               </DropdownMenuItem>
             ))}
             {CAMADAS_EM_BREVE.map(gr => (
@@ -464,8 +517,12 @@ export function MapaGestorView({
       </div>
 
       {/* Mapa + vidros */}
-      {/* o zoom (e os créditos) ficam SEMPRE à esquerda da coluna do painel: abrir ou fechar o pasto não move nada (UI-SEM-DESLOCAR-01) */}
-      <div className="relative min-h-0 flex-1 bg-[#3a4436] [&_.leaflet-bottom.leaflet-right]:bottom-[50px] [&_.leaflet-bottom.leaflet-right]:right-[302px]">
+      {/* MAPA-CONTROLES-01 (Gabriel 31/10, D1/D2): o canto do zoom e dos créditos do Google só abre espaço para o painel do pasto quando ele
+          está na tela — aberto, os dois ficam encostados à esquerda dele, acima da legenda (302 = 286 do painel + 12 da margem + 4); fechado,
+          voltam para a borda direita: os créditos no rodapé (ou logo acima da legenda, se não cabem ao lado dela) e o + / − acima deles.
+          EXCEÇÃO DECLARADA ao UI-SEM-DESLOCAR-01, só para o zoom e os créditos: abrir/fechar o pasto os move; barra, KPIs, Filtros,
+          legenda e painel seguem fixos. */}
+      <div ref={quadroRef} className={`relative min-h-0 flex-1 bg-[#3a4436] ${canto}`}>
         <div className="absolute inset-0">
           {/* fix1 (1): o Chrome desenhava um retângulo azul (contorno de foco) no polígono clicado (Gabriel, proto, 31/10 08:27): sem contorno
               de foco SÓ nos polígonos do mapa; o foco de teclado do resto da tela continua */}
@@ -591,9 +648,12 @@ export function MapaGestorView({
         )}
 
         {hasGeo && (
-          /* fix1 (4): a legenda tem o tamanho do conteúdo, à esquerda, e nunca passa por baixo do painel do pasto */
-          <div className={`absolute bottom-3 left-3 z-[500] flex h-[30px] w-fit items-center gap-2.5 overflow-hidden px-2.5 text-[9.5px] ${VIDRO}`}
-            style={{ maxWidth: selecionadoId ? 'calc(100% - 322px)' : 'calc(100% - 24px)' }} data-testid="mapa-legenda">
+          /* fix1 (4): a legenda tem o tamanho do conteúdo, à esquerda, e nunca passa por baixo do painel do pasto.
+             MAPA-CONTROLES-01: com os créditos no rodapé (painel fechado), a legenda reserva o lugar deles (RESERVA_DOS_CREDITOS_PX) e
+             nunca os cobre; com eles acima da faixa, ela tem a largura toda */
+          <div ref={legendaRef} className={`absolute bottom-3 left-3 z-[500] flex h-[30px] w-fit items-center gap-2.5 overflow-hidden px-2.5 text-[9.5px] ${VIDRO}`}
+            style={{ maxWidth: painelAberto ? 'calc(100% - 322px)' : creditosNoRodape ? `calc(100% - ${RESERVA_DOS_CREDITOS_PX}px)` : 'calc(100% - 24px)' }}
+            data-testid="mapa-legenda">
             <b className="flex-none whitespace-nowrap text-[10px]">{nomeCamada}</b>
             {legenda.map(i => (
               <span key={i.rotulo} className="flex flex-none items-center gap-1 whitespace-nowrap">

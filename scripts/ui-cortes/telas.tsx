@@ -72,6 +72,7 @@ import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarRec
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
+import { mapaGlobal } from './dados/mapaGlobal';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import * as CONTAS_BANC from './dados/contas';
 import * as VG from './dados/visaoGeral';
@@ -95,6 +96,7 @@ import V2FechamentoPeriodo from '@/v2/pages/V2FechamentoPeriodo';
 import * as META from './dados/metaP109';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { EvolucaoDoAnoTab } from '@/pages/EvolucaoDoAnoTab';
+import { EvolucaoMesTab } from '@/pages/EvolucaoMesTab';
 import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
 
 /* Gabriel 29/10 08:26 — os parcelados do LR na nota já lançada (SINTÉTICOS): as 4 do sistema e a prévia da `fn_nota_completar` como o banco a faz */
@@ -653,6 +655,11 @@ if (tela === 'mesclar') {
       : fn === 'fn_dre_lavoura' ? DRE.dreLavoura(ESCALA_DRE) : null,
   };
   montarNaUrl(<div className="h-full"><AgriDreLavouraTab /></div>);
+} else if (tela === 'evolucao-mes') {
+  /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (nível 2, o mês), linhas SINTÉTICAS no pior caso (`mocks/evolucaoMes.ts`):
+     `&tipos=3` só compra/abate/venda · `&aberto=1` sem Fechamento · `&vazio=1` sem linha */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  montar(<div className="h-full"><EvolucaoMesTab anoInicial={2026} mesInicial={9} onVoltar={() => {}} /></div>);
 } else if (tela === 'recorrencias') {
   /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
   g.__bancoBancada = {
@@ -666,13 +673,31 @@ if (tela === 'mesclar') {
 } else if (tela === 'mapa-geo') {
   /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
      abre no último mês com fechamento de pastos (set/2026; fix1 A: o banco falso ignora `order`/`limit`, a lista vem do mais novo); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
-  g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
+  g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendasComPecuaria: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'fazenda_geometrias' ? MAPA.GEOMETRIAS
       : t === 'pastos' ? MAPA.PASTOS
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
+      // MAPA-PERF-01: os itens vêm EMBUTIDOS no fechamento (o banco falso não faz o embed; a linha já o traz)
       : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
+        .map(f => ({ ...f, fechamento_pasto_itens: MAPA.ITENS.filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
+      : [],
+    rpc: () => null,
+  };
+  montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
+} else if (tela === 'mapa-global') {
+  /* MAPA-GLOBAL-01 — Produção › Geo Pastos com a barra lateral em Global (mock aprovado mock-geo-global-v1). SINTÉTICO (`dados/mapaGlobal.ts`):
+     `n=2` ou `n=5` (o nome mais longo, uma fazenda sem fechamento no mês e uma sem mapa). Abre em set/2026 (o mês anterior ao de hoje). */
+  const GL = mapaGlobal(Number(q.get('n') ?? '2'));
+  g.__fazendaBancada = { fazendas: GL.FAZENDAS, fazendasComPecuaria: GL.FAZENDAS, fazendaAtual: { id: '__global__', nome: 'Global', owner_id: '', cliente_id: '' },
+    isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {}, loading: false };
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'fazenda_geometrias' ? GL.GEOMETRIAS
+      : t === 'pastos' ? GL.PASTOS
+      : t === 'categorias_rebanho' ? GL.CATEGORIAS
+      : t === 'fechamento_pastos' ? GL.FECHAMENTOS.map(f => ({ ...f, fechamento_pasto_itens: GL.ITENS.filter(i => i.fechamento_id === f.id) }))
+      : t === 'fechamento_pasto_itens' ? GL.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       : [],
     rpc: () => null,
   };

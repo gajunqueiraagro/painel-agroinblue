@@ -4,7 +4,8 @@
 --   G0  o usuario de fora e' de fora: nao e' admin e `tenant_ok(Teste)` = false (sem isso o teste nao prova nada)
 --   G1  as 13 RPCs expostas, cada uma com ids/cliente REAIS do Teste e argumentos validos: todas recusam com 42501 (nunca vazio,
 --       nunca outro erro — outro erro = a guarda nao foi a primeira coisa a agir, e o teste reprova)
---   G2  as 7 internas `_fn_patrimonio_*`: `authenticated` nao executa (42501 "permission denied")
+--   G2  as 9 internas `_fn_patrimonio_*` (B2/116080: + `_fn_patrimonio_prefixo` e `_fn_patrimonio_proximo_codigo`): `authenticated`
+--       nao executa (42501 "permission denied")
 --   G3  completude: o conjunto chamado em G1+G2 = TODAS as funcoes `fn_patrimonio_*`/`_fn_patrimonio_*`/`fn_investimentos_sem_bem`
 --       do catalogo (funcao nova sem entrar aqui reprova)
 --   G4  nada mudou no Teste depois das tentativas (bens, avaliacao, documento)
@@ -67,7 +68,9 @@ insert into fx_chamadas values
   ('_fn_patrimonio_data_do_contrato', false, $q$select public._fn_patrimonio_data_do_contrato(null)::text$q$),
   ('_fn_patrimonio_hoje', false, $q$select public._fn_patrimonio_hoje()::text$q$),
   ('_fn_patrimonio_conta_investimento', false, $q$select public._fn_patrimonio_conta_investimento(null)::text$q$),
-  ('_fn_patrimonio_meses', false, $q$select count(*) from public._fn_patrimonio_meses(current_date, current_date)$q$);
+  ('_fn_patrimonio_meses', false, $q$select count(*) from public._fn_patrimonio_meses(current_date, current_date)$q$),
+  ('_fn_patrimonio_prefixo', false, $q$select public._fn_patrimonio_prefixo((select id from public.patrimonio_categorias where cliente_id is null and codigo = 'maquinas'))$q$),
+  ('_fn_patrimonio_proximo_codigo', false, $q$select public._fn_patrimonio_proximo_codigo('43f32d07-dba8-4670-900c-bf645440c04a', (select id from public.patrimonio_categorias where cliente_id is null and codigo = 'maquinas'))$q$);
 grant select on fx_chamadas to authenticated;
 
 -- G3 completude (catalogo x lista) --------------------------------------------------------------------------------------------
@@ -104,7 +107,7 @@ begin
     end;
   end loop;
   if falhas <> '' then raise exception 'G1/G2 (% de % recusaram com 42501):%', n_ok, (select count(*) from fx_chamadas), falhas; end if;
-  if n_ok <> 21 then raise exception 'G1/G2: % recusas, esperadas 21', n_ok; end if;
+  if n_ok <> 23 then raise exception 'G1/G2: % recusas, esperadas 23', n_ok; end if;
 end $g1$;
 reset role;
 
@@ -143,5 +146,5 @@ begin
 end $g5$;
 reset role;
 
-do $fim$ begin raise exception 'OK patr_01_guarda (G0–G5: 14 chamadas expostas + 7 internas recusam o usuario de fora)'; end $fim$;
+do $fim$ begin raise exception 'OK patr_01_guarda (G0–G5: 14 chamadas expostas + 9 internas recusam o usuario de fora)'; end $fim$;
 rollback;

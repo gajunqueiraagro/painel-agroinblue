@@ -139,8 +139,10 @@ const ROT_ATIV: Record<string, string> = { pecuaria: 'Pecuária', agricultura: '
 const DEN: Record<string, number> = { rs_cab: 7082.5, rs_ua: 5310.2, rs_arroba: 1840.4, rs_ha_prod: 2650, rs_ha_pec: 1980, rs_ha_agri: 670, rs_ha_plant: 540 };
 const UNID: [string, string][] = [['rs', 'R$'], ['rs_cab', 'R$/cab/mês'], ['rs_ua', 'R$/UA/mês'], ['rs_arroba', 'R$/@'], ['rs_ha_prod', 'R$/ha produtiva'],
   ['rs_ha_pec', 'R$/ha pecuária'], ['rs_ha_agri', 'R$/ha agricultura'], ['rs_ha_plant', 'R$/ha plantado']];
-const validas = (ativ: string | null | undefined) => ativ === 'pecuaria' ? ['rs', 'rs_cab', 'rs_ua', 'rs_arroba', 'rs_ha_prod', 'rs_ha_pec']
-  : ativ === 'agricultura' ? ['rs', 'rs_ha_prod', 'rs_ha_agri', 'rs_ha_plant'] : ['rs', 'rs_ha_prod'];
+/* VG-META-NO-MODO-01 (114080) — R$/cab na raiz, nos grupos, no Administrativo e na Pecuária (a regra da função) */
+const validas = (p: readonly (string | null)[]) => p.length <= 1 ? ['rs', 'rs_cab', 'rs_ha_prod']
+  : p[1] === 'pecuaria' ? ['rs', 'rs_cab', 'rs_ua', 'rs_arroba', 'rs_ha_prod', 'rs_ha_pec']
+  : p[1] === 'agricultura' ? ['rs', 'rs_ha_prod', 'rs_ha_agri', 'rs_ha_plant'] : p[1] === 'administrativo' ? ['rs', 'rs_cab', 'rs_ha_prod'] : ['rs', 'rs_ha_prod'];
 
 export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 'entrada' | 'saida'; p_aba?: string | null; p_foco?: (string | null)[];
   p_grafico?: (string | null)[] | null; p_criterio?: string; p_unidade?: string; p_contas?: string[] | null; grande?: boolean; centros13?: boolean }) {
@@ -156,7 +158,7 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
   const mesV = (p: (string | null)[], i: number) => r2(base(p) * 3 * peso * (1 + 0.15 * Math.sin(i * 1.1 + p.length)));
   const janela = (p: (string | null)[]) => { const vs = ms.slice(0, k + 1).map((_, i) => mesV(p, i)); const s = vs.reduce((x, y) => x + y, 0);
     return crit === 'mes' ? mesV(p, k) : crit === 'media' ? s / (k + 1) : s; };
-  const ok = (p: (string | null)[]) => validas(p[1] ?? null).includes(uni);
+  const ok = (p: (string | null)[]) => validas(p).includes(uni);
   const u = (v: number, p: (string | null)[]) => (!ok(p) ? null : r2(uni === 'rs' ? v : v / DEN[uni]));
   /* P103 — meta também nas Receitas operacionais (a 125% do valor: razão 0,8 → faixa "crítico" da ENTRADA — a régua de entradas com a
      marca na faixa mais estreita do fim) */
@@ -200,7 +202,7 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
   return {
     lado: a.p_lado, mes: a.p_mes, criterio: crit, unidade: uni, meses_janela: crit === 'mes' ? 1 : k + 1, periodo: { de: ms[0], ate_mes: a.p_mes },
     abas: grupos.map((x) => ({ grupo: x, rotulo: x })),
-    unidades: UNID.map(([id, rot]) => ({ id, rotulo: rot, valida: validas(f[1] ?? null).includes(id) })),
+    unidades: UNID.map(([id, rot]) => ({ id, rotulo: rot, valida: validas(f).includes(id) })),
     resumo: { ...linha(n), valor_rs: r2(tot), pct_da_raiz: n.length ? r1((tot / janela([])) * 100) : null,
       fatias: filhos(n).map((c) => ({ caminho: c, rotulo: rotulo(c), grupo: c[0], pct: r1((janela(c) / tot) * 100) })) },
     /* P100 v4 (111952): a esquerda navega — o nível é a seleção (aba ou atividade) ou a atividade do centro escolhido */
@@ -216,12 +218,14 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
           const re = ms.slice(0, i + 1).reduce((s, y, j) => s + (y <= HOJE ? mesV(g, j) : 0), 0);
           return { am: x, realizado: u(re, g), previsto: u(ac - re, g), total: u(ac, g), media: null, meta: temMeta(g) ? u(ac * fatorMeta(g), g) : null };
         }
+        /* 114060: na MÉDIA a meta do ponto é a meta média acumulada; 114080: fora de R$, o mês de hoje em diante está ABERTO */
         return { am: x, realizado: x <= HOJE ? u(v, g) : 0, previsto: x > HOJE ? u(v, g) : 0, total: u(v, g), media: x <= HOJE ? u(ac / (i + 1), g) : null,
-          meta: temMeta(g) ? u(v * fatorMeta(g), g) : null }; }),
+          meta: temMeta(g) ? u((crit === 'media' ? ac / (i + 1) : v) * fatorMeta(g), g) : null, aberto: uni === 'rs' ? null : x >= HOJE.slice(0, 7) }; }),
       kpis: !ok(g) ? null : crit === 'acumulado'
         ? { mes: linha(g).valor, meta: linha(g).meta, media: null, vs_meta: linha(g).pct, tendencia: null }
-        : { mes: u(mesV(g, k), g), meta: temMeta(g) ? u(mesV(g, k) * fatorMeta(g), g) : null, media: u(ms.slice(0, k + 1).reduce((s, _, j) => s + mesV(g, j), 0) / (k + 1), g),
-          vs_meta: temMeta(g) ? 8.7 : null, tendencia: r1(((mesV(g, k) - mesV(g, 0)) / mesV(g, 0)) * 100) },
+        : { mes: u(mesV(g, k), g), meta: temMeta(g) ? (crit === 'media' ? linha(g).meta : u(mesV(g, k) * fatorMeta(g), g)) : null,
+          media: u(ms.slice(0, k + 1).reduce((s, _, j) => s + mesV(g, j), 0) / (k + 1), g),
+          vs_meta: temMeta(g) ? (crit === 'media' ? linha(g).pct : 8.7) : null, tendencia: r1(((mesV(g, k) - mesV(g, 0)) / mesV(g, 0)) * 100) },
     },
   };
 }

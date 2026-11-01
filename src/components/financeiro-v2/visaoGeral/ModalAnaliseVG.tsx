@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Segmentado } from '@/components/ui/segmentado';
 import { cn } from '@/lib/utils';
 import {
-  COR, MESES_ABR, brl, corDoGrupo, corVariacao, mes0De, mil1, n0, pct1, rotuloMes, type AlvoAnaliseVG, type LadoVG,
+  COR, MESES_ABR, brl, corDoGrupo, corVariacao, mes0De, mil1, n0, n2, pct1, rotuloMes, type AlvoAnaliseVG, type LadoVG,
 } from '@/lib/financeiro/visaoGeral';
 import { GavetaVG } from '@/components/financeiro-v2/visaoGeral/GavetaVG';
 import { alturaTexto, curvaMonotona, larguraTexto, posicionar, trechos, type Caixa, type Ponto } from '@/lib/financeiro/graficoAnaliseVG';
@@ -30,7 +30,7 @@ import {
 } from '@/lib/financeiro/visaoGeralGaveta';
 import {
   COR_FAIXA, ROTULO_FAIXA, andarEntreIrmaos, carregarAnaliseVG, chaveCaminho, escolherNaDireita, escolherNaEsquerda,
-  TITULO_NIVEL_ESQ, estadoInicialAnalise, irParaAba, irParaCaminho, linhasEmBlocos, mesmoCaminho, pctVar, posicaoNaRegua, subirNaEsquerda,
+  TITULO_NIVEL_ESQ, UNIDADES_DA_GAVETA, estadoInicialAnalise, irParaAba, irParaCaminho, linhasEmBlocos, mesmoCaminho, pctVar, posicaoNaRegua, subirNaEsquerda,
   type AnaliseVG, type BlocoAnaliseVG, type CaminhoVG, type ContextoAnaliseVG, type CriterioVG, type EstadoAnaliseVG, type LinhaAnaliseVG, type UnidadeVG,
 } from '@/lib/financeiro/visaoGeralAnalise';
 
@@ -392,7 +392,8 @@ function SeletorUnidade({ d, valor, onEscolher }: { d: AnaliseVG | null; valor: 
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[150px] p-1" data-testid="analise-unidade-lista">
-        {(d?.unidades ?? []).map((u) => (
+        {/* VG-META-NO-MODO-01 (Gabriel 31/10 11:13): só R$ e R$/cab/mês, e só o que vale no nível (nada de opção cinza) */}
+        {(d?.unidades ?? []).filter((u) => UNIDADES_DA_GAVETA.includes(u.id) && u.valida).map((u) => (
           <button key={u.id} type="button" disabled={!u.valida} onClick={() => { onEscolher(u.id); setAberto(false); }} data-testid={`analise-unidade-${u.id}`}
             title={u.valida ? undefined : 'Sem denominador para este nível'}
             className={cn('flex h-[22px] w-full items-center rounded px-2 text-left text-[10px] disabled:cursor-default disabled:text-muted-foreground/60',
@@ -478,6 +479,9 @@ function Kpis({ d, e }: { d: AnaliseVG | null; e: EstadoAnaliseVG }) {
   /* P103 — no ACUMULADO (111954) as colunas e a meta são acumuladas mês a mês e não há linha da média: os KPIs são o acumulado até o
      mês, a meta acumulada e o vs meta (do banco) */
   const acum = e.criterio === 'acumulado';
+  /* VG-META-NO-MODO-01 (114060) — na MÉDIA a meta segue o modo: a pontilhada é a meta média acumulada, o `kpis.meta` é a meta média do
+     mês e o vs meta é média × meta média (os três do banco, iguais à tabela) */
+  const media = e.criterio === 'media';
   return (
     <div className="flex h-[30px] shrink-0 items-center justify-between gap-3">
       {acum ? (
@@ -490,15 +494,16 @@ function Kpis({ d, e }: { d: AnaliseVG | null; e: EstadoAnaliseVG }) {
         <div className="flex gap-3">
           <Kpi rotulo={rotuloMes(e.am).toUpperCase()} testid="analise-kpi-mes"><span style={{ color: corDoLado(lado) }}>{brl(k?.mes)}</span></Kpi>
           <Kpi rotulo="MÉDIA/MÊS" testid="analise-kpi-media"><span>{brl(k?.media)}</span></Kpi>
-          <Kpi rotulo="VS META" testid="analise-kpi-vsmeta"><span style={{ color: corVariacao(lado, k?.vs_meta) }}>{pctVar(k?.vs_meta)}</span></Kpi>
+          {media && <Kpi rotulo="META/MÊS" testid="analise-kpi-meta"><span style={{ color: COR_META }}>{brl(k?.meta)}</span></Kpi>}
+          <Kpi rotulo={media ? 'VS META DA MÉDIA' : 'VS META'} testid="analise-kpi-vsmeta"><span style={{ color: corVariacao(lado, k?.vs_meta) }}>{pctVar(k?.vs_meta)}</span></Kpi>
           <Kpi rotulo="TENDÊNCIA" testid="analise-kpi-tendencia"><span style={{ color: corVariacao(lado, k?.tendencia) }}>{pctVar(k?.tendencia)}</span></Kpi>
         </div>
       )}
       <div className="hidden items-center gap-2 text-[8.5px] text-muted-foreground xl:flex" data-testid="analise-legenda">
         <span className="flex items-center gap-1"><i className="h-2 w-2" style={{ background: lado === 'saida' ? COR.barraSai : COR.barraEnt }} />{acum ? 'realizado acum.' : 'realizado'}</span>
         <span className="flex items-center gap-1"><i className="h-2 w-2" style={{ background: lado === 'saida' ? COR.barraSaiP : COR.barraEntP }} />{acum ? 'previsto acum.' : 'previsto'}</span>
-        {!acum && <span className="flex items-center gap-1"><i className="w-3.5 border-t-2" style={{ borderColor: lado === 'saida' ? COR.mediaSai : COR.mediaEnt }} />média acumulada</span>}
-        <span className="flex items-center gap-1"><i className="w-3.5 border-t-2 border-dotted" style={{ borderColor: COR.meta }} />{acum ? 'meta acumulada' : 'meta'}</span>
+        {media && <span className="flex items-center gap-1"><i className="w-3.5 border-t-2" style={{ borderColor: lado === 'saida' ? COR.mediaSai : COR.mediaEnt }} />média acumulada</span>}
+        <span className="flex items-center gap-1"><i className="w-3.5 border-t-2 border-dotted" style={{ borderColor: COR.meta }} />{acum ? 'meta acumulada' : media ? 'meta média' : 'meta'}</span>
       </div>
     </div>
   );
@@ -529,13 +534,16 @@ function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG;
   const serie = d?.grafico.serie ?? [];
   const saida = e.lado === 'saida';
   let svg: JSX.Element | null = null;
+  /* VG-META-NO-MODO-01 (Gabriel 31/10 11:13) — no MÊS só as colunas e a pontilhada da meta do mês: a média acumulada do realizado não
+     entra (nem na escala, nem como linha, rótulo ou title); na MÉDIA, colunas + média + meta média; no ACUM., como estava */
+  const comMedia = e.criterio !== 'mes';
   if (W > 0 && H > 0 && serie.length) {
-    const vals = serie.flatMap((p) => [p.realizado, p.previsto, p.total, p.media, p.meta]).filter((x): x is number => x != null);
+    const vals = serie.flatMap((p) => [p.realizado, p.previsto, p.total, comMedia ? p.media : null, p.meta]).filter((x): x is number => x != null);
     const mx = Math.max(1, ...vals), mn = Math.min(0, ...vals);
     const passo = passoBonito((mx - mn) / 4 || 1);
     const topo = Math.ceil(mx / passo) * passo, base = Math.floor(mn / passo) * passo;
     /* escrita curta do eixo, da coluna e dos pontos: R$ mil ("k") quando a escala passa de 10 mil; senão o inteiro */
-    const curto = (v: number) => (Math.max(Math.abs(topo), Math.abs(base)) >= 10000 ? `${mil1(v)}k` : n0(v));
+    const curto = (v: number) => (e.unidade !== 'rs' ? n2(v) : Math.max(Math.abs(topo), Math.abs(base)) >= 10000 ? `${mil1(v)}k` : n0(v));
     /* P103 — a margem do eixo cabe o MAIOR rótulo dele (no acumulado o eixo chega a "100.000,0k"): nunca menos de 44px */
     const L = Math.max(44, Math.ceil(Math.max(larguraTexto(curto(topo), 8), larguraTexto(curto(base), 8))) + 6);
     const Rm = 6, T = 8, B = 14, iw = W - L - Rm, ih = H - T - B, n = serie.length, slot = iw / n;
@@ -562,7 +570,7 @@ function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG;
     /* as linhas: curva monotônica por trecho (mês sem ponto quebra a linha) e o marcador em cada mês */
     const pontos = (chave: 'media' | 'meta') => serie.map((p, k) => (p[chave] == null ? null : [X(k), Y(p[chave]!)] as Ponto));
     const corMedia = saida ? COR.mediaSai : COR.mediaEnt;
-    const md = pontos('media'), mt = pontos('meta');
+    const md = comMedia ? pontos('media') : serie.map(() => null), mt = pontos('meta');
     const tm = trechos(md), tt = trechos(mt);
     if (tm.some((t) => t.length > 1)) els.push(<path key="md" d={tm.map(curvaMonotona).join(' ')} fill="none" stroke={corMedia} strokeWidth={1.6} data-testid="analise-linha-media" />);
     if (tt.some((t) => t.length > 1)) els.push(<path key="mt" d={tt.map(curvaMonotona).join(' ')} fill="none" stroke={COR.meta} strokeWidth={1.6} strokeDasharray="2 3" data-testid="analise-linha-meta" />);
@@ -610,7 +618,7 @@ function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG;
     });
     serie.forEach((p, k) => els.push(
       <rect key={`c${k}`} x={L + k * slot} y={T} width={slot} height={ih + B} fill="transparent" style={{ cursor: 'pointer' }} onClick={() => onSel(p.am)} data-testid={`analise-coluna-${p.am}`}>
-        <title>{`${rotuloMes(p.am)}: ${brl(p.total)}${p.media != null ? ` · média ${brl(p.media)}` : ''}${p.meta != null ? ` · meta ${brl(p.meta)}` : ''}`}</title>
+        <title>{`${rotuloMes(p.am)}: ${brl(p.total)}${comMedia && p.media != null ? ` · média ${brl(p.media)}` : ''}${p.meta != null ? ` · ${e.criterio === 'media' ? 'meta média' : 'meta'} ${brl(p.meta)}` : ''}${p.aberto ? ' · mês aberto (cabeças do sistema)' : ''}`}</title>
       </rect>));
     svg = <svg width={W} height={H} className="block" data-testid="analise-grafico-svg">{els}<g style={{ pointerEvents: 'none' }}>{rotulos}</g></svg>;
   }

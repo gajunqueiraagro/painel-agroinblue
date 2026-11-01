@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dozeMesesAte, fechamentoDoMesAberto, mesAntes, mesCurtoNumerico, mesDeAbertura, montarMapaDoMes, ocupacoesDoMes, type FechamentoLido, type ItemLido } from './mapaDoMes';
+import { dozeMesesAte, fechamentoDoMesAberto, mesAntes, mesCurtoNumerico, mesDeAbertura, montarMapaDoMes, separarFechamentosEItens, ocupacoesDoMes, type FechamentoLido, type ItemLido } from './mapaDoMes';
 
 const P10 = { id: 'p10', nome: 'P_10', area_produtiva_ha: 50 };
 const P09 = { id: 'p09', nome: 'P_09', area_produtiva_ha: 27 };
@@ -66,7 +66,7 @@ describe('montarMapaDoMes (MAPA-02a, D1/D3)', () => {
     expect(h).toHaveLength(12);
     expect(h[11].anoMes).toBe('2026-09');
     expect(h[10].kgHa).toBeCloseTo((70 * 280) / 50, 6);
-    expect(h[9]).toEqual({ anoMes: '2026-07', kgHa: null, faixa: null });
+    expect(h[9]).toEqual({ anoMes: '2026-07', kgHa: null, pesoTotalKg: null, faixa: null });
     expect(h.some(x => x.anoMes === '2026-10')).toBe(false);
   });
 
@@ -106,5 +106,55 @@ describe('fechamentoDoMesAberto (fix1 E): algum pasto do mapa com fechamento do 
   });
   it('o aberto é de um pasto fora do mapa (sem polígono) → não avisa', () => {
     expect(fechamentoDoMesAberto(montar('rascunho'), ['p10', 'p07'])).toBe(false);
+  });
+});
+
+describe('MAPA-PERF-01: ler só a janela dá os MESMOS números que ler o histórico inteiro', () => {
+  // 3 pastos, 3 anos de fechamentos (2023-10 a 2026-09); o p3 parou em 2024 (sem fechamento nos 12 meses da janela)
+  const pastos = [{ id: 'p1', nome: 'P_01', area_produtiva_ha: 40 }, { id: 'p2', nome: 'P_02', area_produtiva_ha: 25 }, { id: 'p3', nome: 'P_03', area_produtiva_ha: 30 }];
+  const todos: FechamentoLido[] = []; const itensTodos: ItemLido[] = [];
+  for (let a = 2023; a <= 2026; a++) for (let m = 1; m <= 12; m++) {
+    const am = `${a}-${String(m).padStart(2, '0')}`;
+    if (am < '2023-10' || am > '2026-09') continue;
+    pastos.forEach((p, k) => {
+      if (p.id === 'p3' && am > '2024-06') return;
+      if (p.id === 'p2' && am === '2026-09') return; // sem fechamento NO mês: "último fechamento 08/26"
+      const id = `${p.id}-${am}`;
+      todos.push({ id, pasto_id: p.id, ano_mes: am, tipo_uso_mes: k === 0 ? 'recria' : 'cria', status: 'fechado' });
+      itensTodos.push({ fechamento_id: id, quantidade: 20 + ((m * 7 + k * 3) % 40), peso_medio_kg: 250 + ((m * 11 + a) % 120), categoria_id: k ? 'c2' : 'c1' });
+    });
+  }
+  const janela = dozeMesesAte('2026-09');
+  const naJanela = new Set(janela);
+  // ANTES: todos os fechamentos até o mês + os itens só da janela (o hook do MAPA-02a)
+  const antes = montarMapaDoMes({ anoMes: '2026-09', vigentes: pastos, fechamentos: todos,
+    itens: itensTodos.filter(i => naJanela.has(i.fechamento_id.slice(3))), nomeDaCategoria: nome });
+  // DEPOIS: uma consulta só, a janela com os itens embutidos
+  const linhas = todos.filter(f => naJanela.has(f.ano_mes)).map(f => ({ ...f, fazenda_id: 'fz', fechamento_pasto_itens: itensTodos.filter(i => i.fechamento_id === f.id) }));
+  const { fechamentos, itens } = separarFechamentosEItens(linhas, ['fz'], janela);
+  const depois = montarMapaDoMes({ anoMes: '2026-09', vigentes: pastos, fechamentos, itens, nomeDaCategoria: nome });
+
+  it('cabeças, peso, kg/ha, faixa, atividade, categorias e os 12 meses: idênticos em todos os pastos', () => {
+    for (const p of pastos) {
+      const { ultimoFechamento: ua, ...a } = antes.get(p.id)!;
+      const { ultimoFechamento: ud, ...d } = depois.get(p.id)!;
+      expect(d).toEqual(a);
+      if (p.id !== 'p3') expect(ud).toBe(ua);
+    }
+    expect(depois.get('p2')!.ultimoFechamento).toBe('2026-08');
+  });
+  it('a única diferença declarada: o pasto sem fechamento há mais de 12 meses não cita o último (antes: 2024-06)', () => {
+    expect(antes.get('p3')!.ultimoFechamento).toBe('2024-06');
+    expect(depois.get('p3')!.ultimoFechamento).toBeNull();
+  });
+  it('nada de fora da janela nem de outra fazenda entra na conta', () => {
+    const r = separarFechamentosEItens([...linhas, { ...linhas[0], id: 'x1', fazenda_id: 'outra' }, { ...linhas[0], id: 'x2', ano_mes: '2025-09' }], ['fz'], janela);
+    expect(r.fechamentos.some(f => f.id === 'x1' || f.id === 'x2')).toBe(false);
+    expect(r.fechamentos).toHaveLength(linhas.length);
+  });
+  it('o mesmo fechamento lido duas vezes conta uma vez só (as 12 leituras em paralelo)', () => {
+    const r = separarFechamentosEItens([...linhas, ...linhas], ['fz'], janela);
+    expect(r.fechamentos).toHaveLength(linhas.length);
+    expect(r.itens).toHaveLength(itens.length);
   });
 });
