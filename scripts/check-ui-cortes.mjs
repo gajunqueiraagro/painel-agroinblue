@@ -251,6 +251,22 @@ const CENARIOS = [
       await p.getByRole('menuitem', { name: 'Curral', exact: true }).first().click(); await p.waitForTimeout(700);
       await p.locator('[data-testid="validacao-tipo-pedido"]').waitFor({ timeout: 3000 });
       await p.getByText('P_01', { exact: true }).first().click(); await p.waitForTimeout(500); } },
+  /* MAPA-EDITAR-POLIGONO-02 (a lacuna do -01: a Validação não tinha cenário) — a lista estreita (280 px, nome inteiro) e a barra de
+     edição compacta (2 linhas, 9,5 px) em Vértices e em Desenhar. Mede SÓ a lista e a barra (o resto da Validação: MAPA-VALIDACAO-CORTES) */
+  ...(() => {
+    const T = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
+    const validacao = async (p) => { await p.locator('button', { hasText: 'Validação' }).first().click(); await p.locator('[data-testid="validacao-lista"]').waitFor(); await p.waitForTimeout(500); };
+    return [
+      { nome: 'mapa-validacao-lista', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="validacao-lista"]', antes: validacao },
+      { nome: 'mapa-validacao-vertices', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
+        await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
+        await p.locator('[data-testid="editar-poligono"] button', { hasText: 'Vértices' }).click();
+        await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); } },
+      { nome: 'mapa-validacao-desenhar', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
+        await validacao(p); await p.locator('[data-testid="edicao-desenhar-novo"]').click();
+        await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); } },
+    ];
+  })(),
   /* MAPA-CONTROLES-01 — abrir o pasto e FECHAR o painel: o zoom e os créditos voltam à borda direita (o espaço do painel não fica
      reservado); com os Filtros ocultos, o mesmo. O canto se mede sozinho em toda tela do Gestor (`medirCantoDoMapa`) */
   { nome: 'mapa-geo-painel-fechado', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {

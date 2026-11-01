@@ -62,6 +62,16 @@ export function fraseDasAreas(areaDoMapaHa: number, areaCadastroHa: number | nul
   return `área do mapa ${textoHa(areaDoMapaHa)} · cadastro ${areaCadastroHa != null && areaCadastroHa > 0 ? textoHa(areaCadastroHa) : '—'}`;
 }
 
+const numHa = (ha: number | null | undefined) =>
+  ha != null && ha > 0 ? ha.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—';
+
+/** MAPA-EDITAR-POLIGONO-02 (Gabriel 01/11) — a linha compacta da barra: "58,7 ha · 3.200 m · mapa 58,7 · cadastro 58,7".
+ *  1º = a área AO VIVO (o que está no mapa agora), "mapa" = a área GRAVADA do polígono antes da edição, "cadastro" = a oficial do pasto;
+ *  sem polígono gravado (desenhar) ou sem pasto: "—". */
+export function fraseCompactaDasMedidas(m: Medidas, areaGravadaHa: number | null | undefined, areaCadastroHa: number | null | undefined): string {
+  return `${textoHa(m.areaHa)} · ${textoM(m.perimetroM)} · mapa ${numHa(areaGravadaHa)} · cadastro ${numHa(areaCadastroHa)}`;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------
 function paraPoli(g: GeoJSON.Polygon | GeoJSON.MultiPolygon): Poli | Poli[] {
   if (g.type === 'Polygon') return g.coordinates.map(a => a.map(pt));
@@ -88,19 +98,141 @@ export function unirVizinhos(a: GeoJSON.Geometry, b: GeoJSON.Geometry): Resultad
 
 export interface Sobreposicao { id: string; nome: string; areaHa: number }
 
-/** Polígonos vizinhos que o editado invade, com a área invadida (aviso; abaixo de 10 m² é encaixe, não conta). */
-export function sobreposicoes(g: GeoJSON.Geometry, vizinhos: readonly { id: string; nome: string; geojson: GeoJSON.Geometry }[],
-  minimoHa = 0.001): Sobreposicao[] {
+/** MAPA-EDITAR-POLIGONO-02 (Gabriel 01/11): abaixo de 0,1 ha (1.000 m²) a "sobreposição" é encaixe/arredondamento da divisa — o
+ *  aviso mostrava "P18 (0,0 ha)". Uma faixa de 5 m ao longo de 200 m já passa disso. */
+export const MINIMO_SOBREPOSICAO_HA = 0.1;
+
+export type Vizinho = { id: string; nome: string; tipo?: string | null; geojson: GeoJSON.Geometry };
+
+export const TIPOS_DE_CONTORNO: readonly string[] = ['area_total', 'area_fazenda'];
+/** O contorno da fazenda ("Area Total"): o tipo 'area_total' (o do KMZ: "Area Total" da 3M) ou 'area_fazenda', ou o polígono que contém TODOS os outros (cada um ≥ 99% dentro dele;
+ *  só com 3 polígonos ou mais). Ele cobre os pastos por definição: não é sobreposição. */
+export function contornosDaFazenda(todos: readonly Vizinho[]): Set<string> {
+  const ids = new Set(todos.filter(v => TIPOS_DE_CONTORNO.includes(v.tipo ?? '')).map(v => v.id));
+  const outros = todos.filter(v => !ids.has(v.id) && ehPoligono(v.geojson));
+  if (outros.length < 3) return ids;
+  for (const c of outros) {
+    const gc = c.geojson;
+    if (!ehPoligono(gc)) continue;
+    const pc = paraPoli(gc);
+    const contemTodos = outros.every(o => {
+      const go = o.geojson;
+      if (o.id === c.id) return true;
+      if (!ehPoligono(go)) return true;
+      const area = areaEmHectares(go);
+      const i = deMultiPoli(intersection(pc, paraPoli(go)));
+      return area > 0 && !!i && areaEmHectares(i) >= area * 0.99;
+    });
+    if (contemTodos) ids.add(c.id);
+  }
+  return ids;
+}
+
+/** Polígonos vizinhos que o editado invade, com a área invadida (aviso; abaixo de `MINIMO_SOBREPOSICAO_HA` não conta). O contorno
+ *  da fazenda fica de fora: quem chama passa os ids de `contornosDaFazenda` em `ignorar`. */
+export function sobreposicoes(g: GeoJSON.Geometry, vizinhos: readonly Vizinho[],
+  minimoHa = MINIMO_SOBREPOSICAO_HA, ignorar: ReadonlySet<string> = new Set()): Sobreposicao[] {
   if (!ehPoligono(g)) return [];
   const eu = paraPoli(g);
   const achadas: Sobreposicao[] = [];
   for (const v of vizinhos) {
-    if (!ehPoligono(v.geojson)) continue;
+    if (ignorar.has(v.id) || !ehPoligono(v.geojson)) continue;
     const i = deMultiPoli(intersection(eu, paraPoli(v.geojson)));
     const ha = i ? areaEmHectares(i) : 0;
     if (ha >= minimoHa) achadas.push({ id: v.id, nome: v.nome, areaHa: ha });
   }
   return achadas.sort((x, y) => y.areaHa - x.areaHa);
+}
+
+/** "Sobrepõe P20 (0,3 ha), Reserva (0,2 ha) +2" — em UMA linha: os `max` maiores e o resto num "+N" (item 3 do -02). */
+export function fraseDasSobreposicoes(s: readonly Sobreposicao[], max = 2): string {
+  if (s.length === 0) return '';
+  const vistos = s.slice(0, max).map(x => `${x.nome} (${textoHa(x.areaHa)})`).join(', ');
+  return `Sobrepõe ${vistos}${s.length > max ? ` +${s.length - max}` : ''}`;
+}
+
+// --- divisa compartilhada ("Mover a divisa junto", item 5 do -02) -------------------------------------------------------------
+/** Dois vértices são o MESMO ponto da divisa quando estão a até 0,5 m (o KMZ e o encaixe deixam as divisas iguais ou quase). */
+export const TOLERANCIA_VERTICE_COMUM_M = 0.5;
+
+/** O que se fez num vértice do polígono editado, na ordem em que se fez (o hook anota pelos eventos do Geoman). */
+export type OperacaoNoVertice =
+  | { tipo: 'mover'; de: Ponto; para: Ponto }
+  | { tipo: 'tirar'; de: Ponto }
+  | { tipo: 'acrescentar'; entre: [Ponto, Ponto]; ponto: Ponto };
+
+const perto = (a: readonly number[], b: readonly number[], tol = TOLERANCIA_VERTICE_COMUM_M) => distanciaM(a, b) <= tol;
+
+/** Aplica as operações num anel do vizinho: mover/tirar o vértice que coincide com o do editado; acrescentar só quando o vizinho tem
+ *  o MESMO lado (os dois pontos, seguidos). Devolve null quando nada coincidiu. Tirar que deixaria menos de 3 pontos não tira. */
+function aplicarNoAnel(anel: readonly (readonly number[])[], ops: readonly OperacaoNoVertice[]): Anel | null {
+  const fechado = anel.length > 1 && anel[0][0] === anel[anel.length - 1][0] && anel[0][1] === anel[anel.length - 1][1];
+  let pts: Anel = (fechado ? anel.slice(0, -1) : anel).map(pt);
+  let mudou = false;
+  for (const op of ops) {
+    if (op.tipo === 'mover') {
+      pts = pts.map(p => { if (perto(p, op.de)) { mudou = true; return op.para; } return p; });
+    } else if (op.tipo === 'tirar') {
+      const resto = pts.filter(p => !perto(p, op.de));
+      if (resto.length !== pts.length && resto.length >= 3) { pts = resto; mudou = true; }
+    } else {
+      const [a, b] = op.entre;
+      const n = pts.length;
+      for (let i = 0; i < n; i++) {
+        const p = pts[i], q = pts[(i + 1) % n];
+        if ((perto(p, a) && perto(q, b)) || (perto(p, b) && perto(q, a))) {
+          pts = [...pts.slice(0, i + 1), op.ponto, ...pts.slice(i + 1)];
+          mudou = true;
+          break;
+        }
+      }
+    }
+  }
+  return mudou ? [...pts, pts[0]] : null;
+}
+
+/** A forma nova de cada vizinho que divide vértice com o editado (só os que mudaram). Nunca o contorno da fazenda. */
+export function vizinhosDaDivisa(vizinhos: readonly Vizinho[], ops: readonly OperacaoNoVertice[],
+  ignorar: ReadonlySet<string> = new Set()): { id: string; nome: string; geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon }[] {
+  if (ops.length === 0) return [];
+  const saida: { id: string; nome: string; geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon }[] = [];
+  for (const v of vizinhos) {
+    const g = v.geojson;
+    if (ignorar.has(v.id) || TIPOS_DE_CONTORNO.includes(v.tipo ?? '')) continue;
+    if (g.type === 'Polygon') {
+      const aneis = g.coordinates.map(a => aplicarNoAnel(a, ops));
+      if (aneis.every(a => a === null)) continue;
+      saida.push({ id: v.id, nome: v.nome, geojson: { type: 'Polygon', coordinates: aneis.map((a, i) => a ?? g.coordinates[i].map(pt)) } });
+    } else if (g.type === 'MultiPolygon') {
+      const partes = g.coordinates.map(p => p.map(a => aplicarNoAnel(a, ops)));
+      if (partes.every(p => p.every(a => a === null))) continue;
+      saida.push({ id: v.id, nome: v.nome, geojson: { type: 'MultiPolygon',
+        coordinates: partes.map((p, j) => p.map((a, i) => a ?? g.coordinates[j][i].map(pt))) } });
+    }
+  }
+  return saida;
+}
+
+// --- recortar dos vizinhos (item 6 do -02) ----------------------------------------------------------------------------------
+/** A forma nova sai de cada vizinho que ela cobre (acima de `MINIMO_SOBREPOSICAO_HA`): vizinho − forma. Nunca o contorno da fazenda.
+ *  Vizinho que sumiria inteiro = recusa com frase (apagar é outro gesto, com motivo). */
+export function recortarDosVizinhos(forma: GeoJSON.Geometry, vizinhos: readonly Vizinho[], ignorar: ReadonlySet<string> = new Set()):
+  Resultado<{ id: string; nome: string; geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon }[]> {
+  if (!ehPoligono(forma)) return { ok: true, valor: [] };
+  const corte = paraPoli(forma);
+  const saida: { id: string; nome: string; geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon }[] = [];
+  for (const v of vizinhos) {
+    const g = v.geojson;
+    if (ignorar.has(v.id) || TIPOS_DE_CONTORNO.includes(v.tipo ?? '') || !ehPoligono(g)) continue;
+    const i = deMultiPoli(intersection(corte, paraPoli(g)));
+    if (!i || areaEmHectares(i) < MINIMO_SOBREPOSICAO_HA) continue;
+    const resto = deMultiPoli(difference(paraPoli(g), corte));
+    if (!resto || areaEmHectares(resto) < MINIMO_SOBREPOSICAO_HA) {
+      return { ok: false, motivo: `${v.nome} ficaria inteiro dentro do polígono novo: apague-o antes (com motivo) ou desenhe sem recortar.` };
+    }
+    saida.push({ id: v.id, nome: v.nome, geojson: resto });
+  }
+  return { ok: true, valor: saida };
 }
 
 // --- dividir ----------------------------------------------------------------------------------------------------------------
@@ -178,3 +310,40 @@ export function dividirPorLinha(g: GeoJSON.Geometry, linha: readonly Ponto[]): R
   }
   return { ok: true, valor: { a, b } };
 }
+
+// --- a linha que cruza ela mesma (item 7 do -02) ----------------------------------------------------------------------------
+export const FRASE_DO_CRUZAMENTO = 'A linha cruza ela mesma perto do ponto destacado — tire ou mova esse ponto.';
+
+/** Onde o anel cruza ele mesmo: o ponto de cada cruzamento entre dois lados que não são vizinhos (lados vizinhos só se tocam no vértice). */
+export function cruzamentos(anel: readonly (readonly number[])[]): Ponto[] {
+  const n0 = anel.length;
+  const fechado = n0 > 1 && anel[0][0] === anel[n0 - 1][0] && anel[0][1] === anel[n0 - 1][1];
+  const pts = (fechado ? anel.slice(0, -1) : anel).map(pt);
+  const n = pts.length;
+  if (n < 4) return [];
+  const achados: Ponto[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue; // o primeiro e o último lado são vizinhos
+      const c = pts[j], d = pts[(j + 1) % n];
+      const den = (b[0] - a[0]) * (d[1] - c[1]) - (b[1] - a[1]) * (d[0] - c[0]);
+      if (den === 0) continue;
+      const t = ((c[0] - a[0]) * (d[1] - c[1]) - (c[1] - a[1]) * (d[0] - c[0])) / den;
+      const u = ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / den;
+      if (t > 0 && t < 1 && u > 0 && u < 1) achados.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+    }
+  }
+  return achados;
+}
+
+/** O vértice do anel que fica a menos de `TOLERANCIA_VERTICE_COMUM_M` de outro (o ponto solto em cima de outro): o índice do repetido. */
+export function verticeEmCimaDeOutro(anel: readonly (readonly number[])[], i: number): number | null {
+  const n0 = anel.length;
+  const fechado = n0 > 1 && anel[0][0] === anel[n0 - 1][0] && anel[0][1] === anel[n0 - 1][1];
+  const n = fechado ? n0 - 1 : n0;
+  if (i < 0 || i >= n || n <= 3) return null;
+  for (let j = 0; j < n; j++) if (j !== i && distanciaM(anel[i], anel[j]) <= TOLERANCIA_VERTICE_COMUM_M) return j;
+  return null;
+}
+
