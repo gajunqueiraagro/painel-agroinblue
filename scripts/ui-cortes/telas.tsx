@@ -1313,6 +1313,61 @@ if (tela === 'mesclar') {
     montar(<PastosTab />);
   };
   void montarPastos();
+} else if (tela === 'fechamento-grupo') {
+  /* FECH-ROTACAO-01 fatia 3 — Fechamento de pastos (a tela REAL) com um grupo de pastejo, dado SINTÉTICO de out/2026: o grupo P10
+     (P10A com o lote no grupo inteiro, P10B só recebe, P10C vedado), a rotação avulsa P11 → P12 Retiro, e um pasto solto. A lotação
+     responde pela mesma regra da `fn_lotacao_do_mes` (rateio por área), calculada aqui a partir dos cards e das alocações. */
+  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  const pasto = (id: string, nome: string, area: number, tipo: string, grupo: string | null, ordem: number) => ({
+    id, fazenda_id: 'f1', cliente_id: 'cli', nome, lote_padrao: null, area_produtiva_ha: area, tipo_uso: tipo, qualidade: null, entra_conciliacao: true,
+    ativo: true, observacoes: null, ordem_exibicao: ordem, data_inicio: null, data_fim: null, grupo_id: grupo, created_at: '2026-01-01', updated_at: '2026-01-01' });
+  const PASTOS = [pasto('p10a', 'P10A', 21.4, 'recria', 'g1', 1), pasto('p10b', 'P10B', 22.9, 'recria', 'g1', 2), pasto('p10c', 'P10C', 20, 'recria', 'g1', 3),
+    pasto('p11', 'P11', 35.5, 'cria', null, 4), pasto('p12', 'P12 Retiro do córrego de baixo', 18, 'cria', null, 5), pasto('t1', 'T-1', 12, 'engorda', null, 6)];
+  const card = (id: string, pastoId: string, extra: Record<string, unknown> = {}) => ({ id, pasto_id: pastoId, fazenda_id: 'f1', cliente_id: 'cli', ano_mes: '2026-10',
+    status: 'rascunho', responsavel_nome: null, lote_mes: null, tipo_uso_mes: null, qualidade_mes: null, observacao_mes: null, created_at: '2026-10-01', updated_at: '2026-10-01', ...extra });
+  const CARDS = [card('fa', 'p10a', { lote_mes: 'L1', tipo_uso_mes: 'recria' }), card('fb', 'p10b'), card('fc', 'p10c', { tipo_uso_mes: 'vedado' }),
+    card('f11', 'p11', { tipo_uso_mes: 'cria' }), card('f12', 'p12'), card('ft', 't1', { tipo_uso_mes: 'engorda', status: 'fechado' })];
+  const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
+  const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
+    lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
+  const ITENS = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  const ALOC = [{ fechamento_id: 'fa', lote: '', pasto_id: 'p10a' }, { fechamento_id: 'fa', lote: '', pasto_id: 'p10b' },
+    { fechamento_id: 'f11', lote: '', pasto_id: 'p11' }, { fechamento_id: 'f11', lote: '', pasto_id: 'p12' }];
+  const lotacao = () => {
+    const area = (id: string) => PASTOS.find((x) => x.id === id)?.area_produtiva_ha ?? 0;
+    const porPasto = new Map<string, { cab: number; kg: number; ua: number; recebe: boolean }>();
+    for (const c of CARDS) porPasto.set(c.pasto_id, { cab: 0, kg: 0, ua: 0, recebe: false });
+    for (const c of CARDS) {
+      const its = ITENS.filter((i) => i.fechamento_id === c.id);
+      if (!its.length) continue;
+      const cab = its.reduce((s, i) => s + i.quantidade, 0); const kg = its.reduce((s, i) => s + i.quantidade * i.peso_medio_kg, 0);
+      const ua = its.reduce((s, i) => s + (i.peso_medio_kg > 0 ? i.quantidade * i.peso_medio_kg / 450 : i.quantidade), 0);
+      const S = ALOC.filter((a) => a.fechamento_id === c.id).map((a) => a.pasto_id); const dest = S.length ? S : [c.pasto_id];
+      const A = dest.reduce((s, id) => s + area(id), 0);
+      for (const id of dest) {
+        const f = dest.length === 1 ? 1 : area(id) / A; const atual = porPasto.get(id) ?? { cab: 0, kg: 0, ua: 0, recebe: false };
+        porPasto.set(id, { cab: atual.cab + cab * f, kg: atual.kg + kg * f, ua: atual.ua + ua * f, recebe: atual.recebe || id !== c.pasto_id });
+      }
+    }
+    return [...porPasto].map(([id, v]) => ({ pasto_id: id, grupo_id: PASTOS.find((x) => x.id === id)?.grupo_id ?? null, area_ha: area(id), cabecas: v.cab, kg: v.kg, ua: v.ua,
+      kg_ha: v.kg / area(id), ua_ha: v.ua / area(id), recebe_de_outro_card: v.recebe }));
+  };
+  g.__bancoBancada = {
+    from: (t: string, e: { eq: Record<string, unknown> }) => (
+      t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? [{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true }]
+      : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
+      : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
+      : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC : []),
+    rpc: (fn: string) => (fn === 'fn_lotacao_do_mes' ? lotacao() : null),
+  };
+  const montarFechamento = async () => {
+    const { FechamentoTab } = await import('@/pages/FechamentoTab');
+    montar(<FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} />);
+  };
+  void montarFechamento();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */

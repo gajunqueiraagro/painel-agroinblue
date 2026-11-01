@@ -265,6 +265,28 @@ const CENARIOS = [
   { nome: 'plano-contas-renomear-previa', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]', antes: async (p) => {
     await p.locator('[data-testid="renomear-subcentro"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="nome-subcentro"]').fill('Animais de terceiros'); await p.locator('[data-testid="conferir-subcentro"]').click(); await p.waitForTimeout(500); } },
+  /* FECH-ROTACAO-01 fatia 3 — Fechamento de pastos com o grupo (dado SINTÉTICO, `tela=fechamento-grupo`): a grade com a moldura do
+     grupo P10 (um vedado) e o card que só recebe; o modal do P10A com o quadro "Onde o lote esteve" (grupo inteiro) e o do P11 com a
+     rotação avulsa ("também esteve em" o P12 de nome longo) */
+  ...(() => {
+    const T = [[750, 483], [1000, 600], [1126, 579], [1300, 704], [1366, 768], [1440, 800], [1750, 1000]];
+    const URL = 'tela=fechamento-grupo&barra=32';
+    const grade = async (p) => { await p.locator('[data-testid="grupo-no-fechamento"]').waitFor(); await p.waitForTimeout(600); };
+    const modal = (nome) => async (p) => { await grade(p); await p.locator('button', { hasText: new RegExp(`^${nome}`) }).first().click();
+      await p.locator('[data-testid="modal-do-pasto"]').waitFor(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="lote-onde"]').click(); await p.locator('[data-testid="lote-quadro"]').waitFor(); await p.waitForTimeout(400); };
+    /* SÓ O QUE ESTE ITEM TOCA (`regiao`): a moldura do grupo, o quadro do lote e o modal com o botão novo no rodapé. A tela do
+       Fechamento nunca teve gate e tem achados antigos fora disto (a fita dos meses a 750px, nome longo do card cortado sem title):
+       listados no relatório da fatia 3; tirar a `regiao` mede a tela inteira. */
+    const soModal = (nome) => async (p) => { await grade(p); await p.locator('button', { hasText: new RegExp(`^${nome}`) }).first().click();
+      await p.locator('[data-testid="modal-do-pasto"]').waitFor(); await p.waitForTimeout(700); };
+    return [
+      { nome: 'fechamento-grupo', url: URL, tamanhos: T, regiao: '[data-testid="grupo-no-fechamento"]', antes: grade },
+      { nome: 'fechamento-grupo-modal', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
+      { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
+    ];
+  })(),
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos, modo "Grupos" (dado SINTÉTICO no `tela=pastos`): a lista dos grupos, com os
      inativos, o modal de editar (3 piquetes, a prévia "já está assim"), o novo grupo com o pasto de nome longo e área no milhar, a
      prévia da desativação, e a etiqueta do grupo no cartão do modo "Ordem manual" */

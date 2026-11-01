@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
 import type { CategoriaRebanho } from './usePastos';
+import { salvarCardComAlocacaoNoBanco } from '@/lib/fechamento/loteNoGrupo';
 
 export interface FechamentoPasto {
   id: string;
@@ -141,6 +142,20 @@ export function useFechamento() {
     return { ok: true, erro: null };
   }, [qc]);
 
+  /* FECH-ROTACAO-01 fatia 3 (F3-3) — o card E onde o lote dele esteve, numa transação só (`fn_fechamento_pasto_salvar_com_alocacao`):
+     se a alocação recusa (destino vedado/fechado, outra fazenda…), nada é gravado. `pastoIds` null = não mexe na alocação; [] = apaga. */
+  const salvarCardComAlocacao = useCallback(async (
+    fechamentoId: string,
+    campos: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null },
+    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[],
+    pastoIds: string[] | null,
+  ): Promise<{ ok: boolean; erro: string | null }> => {
+    const r = await salvarCardComAlocacaoNoBanco(fechamentoId, campos, itens, pastoIds);
+    if (!r.ok) return { ok: false, erro: r.erro };
+    await qc.invalidateQueries({ queryKey: ['snapshot-area-anual'] });
+    return { ok: true, erro: null };
+  }, [qc]);
+
   const reabrirCardDoPasto = useCallback(async (fechamentoId: string, motivo: string): Promise<{ ok: boolean; erro: string | null }> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `(supabase as any).rpc` do repo
     const { error } = await (supabase as any).rpc('fn_fechamento_pasto_reabrir', { p_fechamento_id: fechamentoId, p_motivo: motivo });
@@ -203,5 +218,5 @@ export function useFechamento() {
     };
   }, [loadItens]);
 
-  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, salvarCardDoPasto, reabrirCardDoPasto, copiarMesAnterior, setPesoAtualizadoPasto };
+  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, salvarCardDoPasto, salvarCardComAlocacao, reabrirCardDoPasto, copiarMesAnterior, setPesoAtualizadoPasto };
 }
