@@ -17,7 +17,8 @@ const NOMES = ['P_01', 'P_02', 'P_03', 'P_04 Retiro do Córrego Comprido', 'P_05
 const AREA_EXTRA = [0, 0, 0, 0, 0, 0, 0, 0, 4.7, 18.3, 3.1, 2.9];
 export const PASTOS = NOMES.map((nome, i) => ({
   id: `p${i + 1}`, fazenda_id: 'f1', cliente_id: 'cli', nome, lote_padrao: null, area_produtiva_ha: i >= 8 ? AREA_EXTRA[i] : 41.6 + i,
-  tipo_uso: 'recria', qualidade: null, entra_conciliacao: true, ativo: true, observacoes: i === 0 ? 'Bebedouro novo instalado em ago/26.' : null,
+  /* MAPA-ATIVIDADE-LAVOURA-01: o P5B é RESERVA no cadastro e não tem fechamento em set/26 (D1: vale o cadastro) */
+  tipo_uso: i === 11 ? 'reserva' : 'recria', qualidade: null, entra_conciliacao: true, ativo: true, observacoes: i === 0 ? 'Bebedouro novo instalado em ago/26.' : null,
   ordem_exibicao: i + 1, data_inicio: null, data_fim: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 }));
 
@@ -73,12 +74,15 @@ export const ITENS: { id: string; fechamento_id: string; quantidade: number; pes
 PASTOS.forEach((p, i) => MESES.forEach((m, k) => {
   if (i === 2 && m === '2026-09') return; // P_03 sem fechamento em set/26: "—" e "último fechamento 08/26"
   if (i === 7 && k % 4 === 1) return;      // P_08 com meses sem fechamento no histórico
+  if (i === 11 && m === '2026-09') return; // MAPA-ATIVIDADE-LAVOURA-01: o P5B sem fechamento em set/26 (reserva pelo cadastro)
   const id = `f-${p.id}-${m}`;
   // fix1 E: o P_02 em ago/26 ainda em rascunho → o cenário de agosto mostra "fechamento de 08/26 aberto"
   // MAPA-PAINEL-COMPACTO-01: o P_01 vedado em mar/26 (o histórico marca o mês como vedado)
   const vedadoNoMes = i === 0 && m === '2026-03';
-  FECHAMENTOS.push({ id, fazenda_id: 'f1', pasto_id: p.id, ano_mes: m, tipo_uso_mes: vedadoNoMes ? 'vedado' : ATIVIDADE[i], status: i === 1 && m === '2026-08' ? 'rascunho' : 'fechado' });
-  if (i === 5 || vedadoNoMes) return;      // P_06 vedado: fechamento SEM animais (vazio)
+  // MAPA-ATIVIDADE-LAVOURA-01: o P5A vira LAVOURA em set/26 (fechamento sem animais, uso do mês 'agricultura')
+  const lavouraNoMes = i === 10 && m === '2026-09';
+  FECHAMENTOS.push({ id, fazenda_id: 'f1', pasto_id: p.id, ano_mes: m, tipo_uso_mes: lavouraNoMes ? 'agricultura' : vedadoNoMes ? 'vedado' : ATIVIDADE[i], status: i === 1 && m === '2026-08' ? 'rascunho' : 'fechado' });
+  if (i === 5 || vedadoNoMes || lavouraNoMes) return; // P_06 vedado: fechamento SEM animais (vazio)
   const base = 30 + ((i * 13 + k * 7) % 60);
   // MAPA-PAINEL-COMPACTO-01: o lote de cada registro (um longo, para o "…" com o title; os Bois em 2 lotes = 2 linhas)
   ITENS.push({ id: `${id}-1`, fechamento_id: id, quantidade: base, peso_medio_kg: 260 + ((i * 17 + k * 11) % 160), categoria_id: 'c1', lote: 'L-12' });
@@ -121,3 +125,14 @@ export function previaDosPiquetes(a: { p_pasto_pai?: string; p_geometrias?: stri
     piquetes, soma_ha: soma, dif_ha: Math.round((soma - 9999.99) * 100) / 100, dif_pct: Math.round((soma - 9999.99) / 9999.99 * 1000) / 10,
     grupo: { nome: pai.nome, area_ha: soma }, frase: '' };
 }
+// MAPA-ATIVIDADE-LAVOURA-01 — a lavoura sintética do P5A: duas variedades na safra que contém set/26 (e uma safra antiga, que não vale)
+const SAFRA_2627 = { nome: 'Safra 26/27 Lavoura', data_inicio: '2026-07-01', data_fim: '2027-06-30' };
+export const LAVOURA = [
+  { pasto_id: 'p11', safra_id: 's2627', cultura: 'amendoim', variedade: 'IAC 503 de ciclo longo', area_plantada_ha: 2.1, data_plantio: '2026-09-12',
+    data_colheita_prevista: '2027-01-25', data_colheita_real: null, status: 'plantada', ativo: true, safra: SAFRA_2627, pasto: { fazenda_id: 'f1' } },
+  { pasto_id: 'p11', safra_id: 's2627', cultura: 'amendoim', variedade: 'OL3', area_plantada_ha: 0.9, data_plantio: '2026-09-20',
+    data_colheita_prevista: '2027-02-10', data_colheita_real: null, status: 'plantada', ativo: true, safra: SAFRA_2627, pasto: { fazenda_id: 'f1' } },
+  { pasto_id: 'p11', safra_id: 's2425', cultura: 'soja', variedade: null, area_plantada_ha: 3, data_plantio: '2024-10-01',
+    data_colheita_prevista: '2025-02-01', data_colheita_real: '2025-02-10', status: 'colhida', ativo: true,
+    safra: { nome: 'Safra 24/25 Lavoura', data_inicio: '2024-07-01', data_fim: '2025-06-30' }, pasto: { fazenda_id: 'f1' } },
+];

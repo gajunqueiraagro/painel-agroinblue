@@ -2,8 +2,11 @@
  * MAPA-02a — as CAMADAS do mapa de pastos (mock aprovado `docs/mocks/mock-mapa-pastos-v2.html`): a cor de cada pasto por camada e a
  * legenda de cada uma; as áreas que não são pasto pintam pelo `fazenda_geometrias.tipo` em qualquer camada.
  * As faixas de lotação vêm de `faixasLotacao.ts` (a régua é uma só).
+ * MAPA-ATIVIDADE-LAVOURA-01 (Gabriel 01/11): o pasto FORA da pecuária no mês (lavoura, eucalipto, reserva/APP, benfeitorias) pinta pela
+ * cor da FAMÍLIA em TODA camada — nunca "vazio" nem "sem fechamento" — e a legenda ganha as famílias presentes (D2/D3).
  */
 import { COR_DA_FAIXA, COR_SEM_FECHAMENTO, ROTULO_DA_FAIXA, type FaixaLotacao } from '@/lib/mapa/faixasLotacao';
+import { ORDEM_DAS_FAMILIAS, ROTULO_DA_FAMILIA, type FamiliaForaDaPecuaria } from '@/lib/mapa/usoDoPasto';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
 
 /** O rótulo da atividade do mês: o da casa (`tipoUsoLabel`); o que ele não conhece (ex.: 'vedado'), com a 1ª letra maiúscula. */
@@ -42,7 +45,22 @@ export const COR_TIPO_AREA = {
   estrutura: '#9AA3AE',
 } as const;
 
+/**
+ * MAPA-ATIVIDADE-LAVOURA-01 — as cores das famílias fora da pecuária, as mesmas em toda camada.
+ * D2: a LAVOURA é bege-terra/palha escuro, longe do amarelo do "sublotado" (#E2B53E), do verde do "ideal" (#3E9E5F) e do bege claro da
+ * "área sem uso" (#C9A27A). Reserva/APP é a cor ambiental de sempre; benfeitorias um cinza-violeta (o cinza puro é o "vazio").
+ */
+export const COR_FORA_DA_PECUARIA: Record<FamiliaForaDaPecuaria, string> = {
+  lavoura: '#8A6A3B',
+  silvicultura: '#2E6E62',
+  ambiental: COR_TIPO_AREA.ambiental,
+  benfeitorias: '#7B6F8E',
+  outro: '#A88BC4',
+};
+
 export interface PastoNaCamada {
+  /** MAPA-ATIVIDADE-LAVOURA-01: a família do uso do mês quando NÃO é pecuária (null/ausente = pecuária) */
+  foraDaPecuaria?: FamiliaForaDaPecuaria | null;
   temFechamento: boolean;
   kgHa: number | null;
   cabecas: number | null;
@@ -52,6 +70,7 @@ export interface PastoNaCamada {
 
 /** A cor do pasto na camada. Sem fechamento no mês: a cor do "sem dado" em toda camada de rebanho. */
 export function corDoPasto(camada: CamadaDoMapa, p: PastoNaCamada): string {
+  if (p.foraDaPecuaria) return COR_FORA_DA_PECUARIA[p.foraDaPecuaria];
   if (camada === 'tipo_area') return COR_TIPO_AREA.pasto;
   if (!p.temFechamento) return COR_SEM_FECHAMENTO;
   if (camada === 'situacao') return p.faixa ? COR_DA_FAIXA[p.faixa] : COR_SEM_FECHAMENTO;
@@ -70,8 +89,19 @@ export function corDaArea(tipo: string): string {
 
 export interface ItemDaLegenda { cor: string; rotulo: string }
 
-/** A legenda da camada. `atividades` = as atividades do mês presentes nos pastos do mapa. */
-export function legendaDaCamada(camada: CamadaDoMapa, atividades: readonly string[]): ItemDaLegenda[] {
+/** A legenda da camada. `atividades` = as atividades do mês presentes nos pastos de PECUÁRIA do mapa; `familias` = as famílias fora da
+ *  pecuária presentes (MAPA-ATIVIDADE-LAVOURA-01), no fim, sem repetir um rótulo que a camada já tem. */
+export function legendaDaCamada(camada: CamadaDoMapa, atividades: readonly string[], familias: readonly FamiliaForaDaPecuaria[] = []): ItemDaLegenda[] {
+  const base = legendaDaPecuaria(camada, atividades);
+  const presentes = ORDEM_DAS_FAMILIAS.filter(f => familias.includes(f))
+    .map(f => ({ cor: COR_FORA_DA_PECUARIA[f], rotulo: ROTULO_DA_FAMILIA[f] }))
+    .filter(i => !base.some(b => b.rotulo === i.rotulo && b.cor === i.cor));
+  /* o "sem fechamento" fica por último em toda camada de rebanho */
+  const fim = base.length && base[base.length - 1].cor === COR_SEM_FECHAMENTO ? base.length - 1 : base.length;
+  return [...base.slice(0, fim), ...presentes, ...base.slice(fim)];
+}
+
+function legendaDaPecuaria(camada: CamadaDoMapa, atividades: readonly string[]): ItemDaLegenda[] {
   const semFechamento = { cor: COR_SEM_FECHAMENTO, rotulo: 'Sem fechamento no mês' };
   if (camada === 'situacao') {
     return [

@@ -696,6 +696,8 @@ if (tela === 'mesclar') {
       // MAPA-02f-b: a infraestrutura e os bens do Patrimônio (sintéticos)
       : t === 'fazenda_infraestruturas' ? MAPA.INFRA
       : t === 'patrimonio_bens' ? MAPA.BENS
+      // MAPA-ATIVIDADE-LAVOURA-01: a lavoura do P5A (a safra vem embutida na linha)
+      : t === 'agri_safra_area' ? MAPA.LAVOURA
       : [],
     // MAPA-AREA-TIPO-01: a prévia do escritor da classificação (sintética: de "Sem classificação" para o tipo pedido)
     rpc: (fn: string, a: any) => fn === 'fn_mapa_geometria_classificar'
