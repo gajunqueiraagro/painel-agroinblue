@@ -660,6 +660,7 @@ if (tela === 'mesclar') {
   };
   montar(<div className="h-full"><V2Recorrencias /></div>);
 } else if (tela === 'mapa-geo') {
+  const UNIDADE = q.get('unidade') === '1';   // MAPA-PIQUETES-03
   /* MAPA-EDITAR-POLIGONO-03: `&laco=1` — o polígono aberto na edição chega com a linha cruzando ela mesma (uma "gravata" na caixa dele),
      como o "APP triângulo" do KMZ; a barra mostra a frase, o destaque e o "Corrigir automaticamente" */
   const gravataDe = (g: { type: string; coordinates: unknown }) => {
@@ -686,12 +687,14 @@ if (tela === 'mesclar') {
     // MAPA-PIQUETES-02: `&piquetes=1` traz dois polígonos sem classificação (as divisões que viram piquetes)
     from: (t: string, e: any) => t === 'fazenda_geometrias'
         ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
-          : geos))(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS)
-      : t === 'pastos' ? MAPA.PASTOS
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : [])])
+      : t === 'pastos' ? [...MAPA.PASTOS, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : [])]
+      // MAPA-PIQUETES-03: `&unidade=1` — o grupo que nasceu de um pasto (o elo)
+      : t === 'pasto_grupos' ? (UNIDADE ? MAPA.UNIDADE_GRUPOS : [])
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
       // MAPA-PERF-01: os itens vêm EMBUTIDOS no fechamento (o banco falso não faz o embed; a linha já o traz)
-      : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
-        .map(f => ({ ...f, fechamento_pasto_itens: MAPA.ITENS.filter(i => i.fechamento_id === f.id) }))
+      : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS, ...(UNIDADE ? MAPA.UNIDADE_FECHAMENTOS : [])].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
+        .map(f => ({ ...f, fechamento_pasto_itens: [...MAPA.ITENS, ...(UNIDADE ? MAPA.UNIDADE_ITENS : [])].filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       // MAPA-02f-b: a infraestrutura e os bens do Patrimônio (sintéticos)
       : t === 'fazenda_infraestruturas' ? MAPA.INFRA

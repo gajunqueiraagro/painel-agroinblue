@@ -26,6 +26,7 @@ import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
+import { divisoesNoPainel, type Divisao } from '@/lib/mapa/unidadesDoMapa';
 import { areaCercadaDoPasto } from '@/lib/mapa/areaCercada';
 import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Ponto } from '@/lib/mapa/rotulosDoMapa';
 import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
@@ -47,6 +48,8 @@ const FOLGA_DA_LEGENDA_PX = 12 + 8 + 10;
 interface Props {
   geometrias: FazendaGeometria[];
   pastos: Pasto[];
+  /** MAPA-PIQUETES-03: as divisões de cada unidade (pai + grupo) no mês — linhas finas por dentro do contorno, sem rótulo nem cor. */
+  divisoes?: ReadonlyMap<string, readonly Divisao<FazendaGeometria>[]>;
   /** O mês do mapa ('AAAA-MM'). */
   anoMes: string;
   /** Por pasto vigente no mês (`useMapaDoMes`). */
@@ -267,7 +270,7 @@ function escaparHtml(t: string): string {
 
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
-  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId,
+  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
@@ -432,6 +435,11 @@ export function MapaGestorView({
         }
         camadaGeo.addTo(grupo);
         camadasRef.current.set(g.id, camadaGeo);
+        /* MAPA-PIQUETES-03: as divisões da unidade (os piquetes do mês) — só linhas finas por dentro, sem preenchimento, rótulo nem clique */
+        for (const dv of (ehPasto && g.pasto_id ? divisoes?.get(g.pasto_id) ?? [] : [])) {
+          if (!dv.poligono) continue;
+          L.geoJSON(dv.poligono.geojson, { style: { color: 'rgba(255,255,255,0.7)', weight: 0.75, fill: false }, interactive: false }).addTo(grupo);
+        }
       } catch {
         /* polígono inválido: fica de fora */
       }
@@ -449,7 +457,7 @@ export function MapaGestorView({
     // depois do enquadramento: os rótulos se arrumam no zoom em que o mapa vai ficar
     desenharRotulos(mapa, rotulos, candidatos);
   }, [mapStatus, geometrias, dadosDoMes, camada, filtros, selecionadoId, pastoPorId, mapInstanceRef, featureLayerRef, labelLayerRef,
-    reportRenderedGeometries, onRenderedChange, registrosDeLavoura, anoMes]);
+    reportRenderedGeometries, onRenderedChange, registrosDeLavoura, anoMes, divisoes]);
 
   /* MAPA-02f-b: a camada dos ÍCONES da infraestrutura (acima dos pastos; tamanho fixo em qualquer zoom; o rótulo no hover). Clique abre o
      painel (só leitura); na edição o ponto escolhido se arrasta; o ponto novo (ainda sem gravar) também. */
@@ -558,6 +566,10 @@ export function MapaGestorView({
   const areaDoMapa = geoSelecionada ? areaEmHectares(geoSelecionada.geojson) : null;
   /* MAPA-PAINEL-CERCADA-01: útil + áreas internas (os polígonos de área dentro do contorno do pasto) */
   const cercada = useMemo(() => (geoSelecionada ? areaCercadaDoPasto(geoSelecionada, geometrias) : null), [geoSelecionada, geometrias]);
+  const divisoesSelecionadas = useMemo(() => {
+    const lista = pastoSelecionado ? divisoes?.get(pastoSelecionado.id) ?? [] : [];
+    return lista.length ? divisoesNoPainel(lista) : null;
+  }, [pastoSelecionado, divisoes]);
   const diferencaDaArea = (() => {
     const oficial = pastoSelecionado?.area_produtiva_ha;
     if (areaDoMapa == null || oficial == null) return null;
@@ -851,6 +863,13 @@ export function MapaGestorView({
                   {/* duas linhas reservadas: fora de tabela o texto quebra (nunca "…"), e nada abaixo se desloca */}
                   Área cercada: <b className="font-semibold text-[#1d232b]">{formatNum(cercada.cercadaHa, 1)} ha</b>
                   {' '}<span className="whitespace-nowrap">(útil {formatNum(cercada.utilHa, 1)} + áreas internas {formatNum(cercada.internasHa, 1)})</span>
+                </div>
+              )}
+              {/* MAPA-PIQUETES-03: "4 divisões: 7A 24,8 · … = 97,5 ha" — duas linhas reservadas (quebra, nunca "…"; longa vira a forma curta + title) */}
+              {divisoesSelecionadas && (
+                <div className="mt-0.5 h-[24px] overflow-hidden text-[9.5px] leading-[12px] text-[#4A5361]" data-testid="mapa-painel-divisoes"
+                  title={divisoesSelecionadas.title}>
+                  {divisoesSelecionadas.texto}
                 </div>
               )}
               {familiaSelecionada && dadosSelecionado && (
