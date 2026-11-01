@@ -519,6 +519,10 @@ const passoBonito = (x: number) => { const p = Math.pow(10, Math.floor(Math.log1
     gráfico (`posicionar`): sem lugar, não se escreve — o valor segue no title da coluna. */
 const FONTE_COLUNA = 6;
 const FONTE_PONTO = 6.5;
+/** VG-META-ROTULOS-01 — a distância mínima do rótulo da meta até um rótulo do realizado: o contorno branco (2 px) + meio de folga */
+const FOLGA_META = 2.5;
+/** o marcador dos pontos (raio 1,9 + o traço de 1,2): o tamanho que ele ocupa no desenho */
+const RAIO_MARCADOR = 2.5;
 function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG; onSel: (am: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [[W, H], setTam] = useState<[number, number]>([0, 0]);
@@ -583,21 +587,20 @@ function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG;
     });
     /* os rótulos: primeiro os dos pontos (média acima; meta acima, ou abaixo se colidir), depois o da coluna (no meio dela; sem
        lugar no meio — coluna baixa ou um ponto em cima —, logo acima da coluna) */
-    const rotuloPonto = (qual: 'media' | 'meta', k: number, q: Ponto, cor: string, v: number) => {
+    const rotuloPonto = (qual: 'media' | 'meta', k: number, q: Ponto, cor: string, v: number, folga?: number) => {
       const t = curto(v), w = larguraTexto(t, FONTE_PONTO), h = alturaTexto(FONTE_PONTO);
       const x = Math.min(Math.max(q[0] - w / 2, L), L + iw - w);
       const acima: Caixa = { x, y: q[1] - 2.5 - h, w, h }, abaixo: Caixa = { x, y: q[1] + 2.5, w, h };
-      const i = posicionar([acima, abaixo], postos, area);
+      const i = posicionar([acima, abaixo], postos, area, folga);
       if (i < 0) return;
       const c = i === 0 ? acima : abaixo;
       rotulos.push(<text key={`l${qual}${k}`} x={c.x + w / 2} y={c.y + h / 2} fontSize={FONTE_PONTO} textAnchor="middle" dominantBaseline="central" fill={cor} fontWeight={600}
         stroke="#fff" strokeWidth={2} strokeLinejoin="round" paintOrder="stroke"
         data-rotulo={qual} data-lugar={i === 0 ? 'acima' : 'abaixo'} data-testid={`analise-rotulo-${qual}-${serie[k].am}`}>{t}</text>);
     };
-    serie.forEach((p, k) => {
-      if (md[k] && p.media != null) rotuloPonto('media', k, md[k]!, corMedia, p.media);
-      if (mt[k] && p.meta != null) rotuloPonto('meta', k, mt[k]!, COR.meta, p.meta);
-    });
+    /* VG-META-ROTULOS-01 (Gabriel 31/10 12:26) — o REALIZADO escreve primeiro (a média e o valor da coluna); a meta vem por último e só
+       onde não encosta em nada, com a folga do contorno branco do texto (2,5 px): colidiu = sem rótulo, a meta segue no title da coluna */
+    serie.forEach((p, k) => { if (md[k] && p.media != null) rotuloPonto('media', k, md[k]!, corMedia, p.media); });
     serie.forEach((p, k) => {
       if (!p.total) return;
       const t = curto(p.total), comp = larguraTexto(t, FONTE_COLUNA), w = alturaTexto(FONTE_COLUNA);
@@ -616,6 +619,9 @@ function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG;
         transform={`rotate(-90 ${cx} ${cy})`} data-rotulo="coluna" data-lugar={dentroDaColuna ? 'meio' : 'acima'}
         data-testid={`analise-rotulo-coluna-${p.am}`}>{t}</text>);
     });
+    /* o MARCADOR da média também é do realizado: a meta não escreve em cima dele (medido no navegador em 31/10: era aí a colisão) */
+    md.forEach((q) => { if (q) postos.push({ x: q[0] - RAIO_MARCADOR, y: q[1] - RAIO_MARCADOR, w: 2 * RAIO_MARCADOR, h: 2 * RAIO_MARCADOR }); });
+    serie.forEach((p, k) => { if (mt[k] && p.meta != null) rotuloPonto('meta', k, mt[k]!, COR.meta, p.meta, FOLGA_META); });
     serie.forEach((p, k) => els.push(
       <rect key={`c${k}`} x={L + k * slot} y={T} width={slot} height={ih + B} fill="transparent" style={{ cursor: 'pointer' }} onClick={() => onSel(p.am)} data-testid={`analise-coluna-${p.am}`}>
         <title>{`${rotuloMes(p.am)}: ${brl(p.total)}${comMedia && p.media != null ? ` · média ${brl(p.media)}` : ''}${p.meta != null ? ` · ${e.criterio === 'media' ? 'meta média' : 'meta'} ${brl(p.meta)}` : ''}${p.aberto ? ' · mês aberto (cabeças do sistema)' : ''}`}</title>

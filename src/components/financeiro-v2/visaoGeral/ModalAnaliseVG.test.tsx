@@ -32,6 +32,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc, from: () => 
 
 import { ModalAnaliseVG } from './ModalAnaliseVG';
 import type { AnaliseVG, LinhaAnaliseVG } from '@/lib/financeiro/visaoGeralAnalise';
+import { alturaTexto, encostam, larguraTexto, type Caixa } from '@/lib/financeiro/graficoAnaliseVG';
 import type { GavetaVG, LancamentoGavetaVG } from '@/lib/financeiro/visaoGeralGaveta';
 
 const linha = (caminho: (string | null)[], rotulo: string, valor: number | null, meta: number | null, extra: Partial<LinhaAnaliseVG> = {}): LinhaAnaliseVG => ({
@@ -586,10 +587,12 @@ describe('modal de análise', () => {
     }
     /* todo valor de ponto foi escrito (há lugar para todos neste quadro) */
     expect(document.querySelectorAll('[data-rotulo="media"]')).toHaveLength(3);
-    expect(document.querySelectorAll('[data-rotulo="meta"]')).toHaveLength(4);
-    /* ago: média = meta (620 mil) → a da média acima, a da meta abaixo do marcador */
+    /* VG-META-ROTULOS-01 (Gabriel 31/10): ago, média = meta (620 mil, o mesmo ponto) → a da média acima; a da meta encostaria no
+       marcador da média: só o realizado é escrito e a meta fica no title do mês */
+    expect(document.querySelectorAll('[data-rotulo="meta"]')).toHaveLength(3);
     expect(screen.getByTestId('analise-rotulo-media-2026-08').getAttribute('data-lugar')).toBe('acima');
-    expect(screen.getByTestId('analise-rotulo-meta-2026-08').getAttribute('data-lugar')).toBe('abaixo');
+    expect(screen.queryByTestId('analise-rotulo-meta-2026-08')).toBeNull();
+    expect(screen.getByTestId('analise-coluna-2026-08').querySelector('title')!.textContent).toContain('meta média R$ 620.000,00');
     /* a curva passa por todo marcador (cada um é ponta de um trecho do caminho) */
     for (const q of ['media', 'meta'] as const) {
       const d = screen.getByTestId(`analise-linha-${q}`).getAttribute('d')!;
@@ -622,6 +625,48 @@ describe('modal de análise', () => {
     fireEvent.click(within(screen.getByTestId('analise-tabela')).getByText('Média'));
     await act(async () => { for (let i = 0; i < 4; i += 1) await Promise.resolve(); });
     expect(screen.getByTestId('analise-legenda').textContent).toContain('média acumulada');
+  }));
+
+  /* o quadro do gráfico a 1126×579, medido no navegador em 31/10 (579 × 210): a densidade real, onde a colisão aparecia */
+  const comQuadroReal = (f: () => Promise<void>) => async () => {
+    const guardado: Record<string, PropertyDescriptor | undefined> = {};
+    for (const [k, v] of [['clientWidth', 579], ['clientHeight', 210]] as const) {
+      guardado[k] = Object.getOwnPropertyDescriptor(HTMLElement.prototype, k);
+      Object.defineProperty(HTMLElement.prototype, k, { configurable: true, get: () => v });
+    }
+    try { await f(); } finally { for (const k of ['clientWidth', 'clientHeight']) if (guardado[k]) Object.defineProperty(HTMLElement.prototype, k, guardado[k]!); }
+  };
+  it('P6 (VG-META-ROTULOS-01, 31/10) a meta nunca encosta num rótulo nem num marcador do realizado (a folga do contorno); a que não cabe fica no title', comQuadroReal(async () => {
+    /* os números do print de 31/10 (Média, R$/cab/mês): jan 517,96 × 477,52; fev 518,71 × 477,21; jul 471,19 × 433,40 */
+    const M = [['2026-01', 517.96, 517.96, 477.52], ['2026-02', 519.46, 518.71, 477.21], ['2026-03', 455.88, 497.77, 457.94], ['2026-04', 396.71, 472.5, 434.7],
+      ['2026-05', 408.6, 459.32, 422.57], ['2026-06', 474.75, 461.89, 424.04], ['2026-07', 528.68, 471.19, 433.4], ['2026-08', 505.64, 475.46, 437.42],
+      ['2026-09', 434.63, 470.92, 433.25], ['2026-10', 391.24, 462.95, 425.91]] as const;
+    const serie = M.map(([am, total, media, meta]) => ({ am, realizado: total, previsto: 0, total, media, meta }));
+    resposta = { ...P100, unidade: 'rs_cab', grafico: { ...P100.grafico, serie } };
+    await abrir();
+    fireEvent.click(within(screen.getByTestId('analise-tabela')).getByText('Média'));
+    fireEvent.click(screen.getByTestId('analise-unidade'));
+    fireEvent.click(screen.getByTestId('analise-unidade-rs_cab'));
+    await act(async () => { for (let i = 0; i < 4; i += 1) await Promise.resolve(); });
+    /* a caixa de cada rótulo, da posição desenhada (o texto da coluna é girado: largura e altura trocam) */
+    const caixa = (el: Element): Caixa => {
+      const x = Number(el.getAttribute('x')), y = Number(el.getAttribute('y')), f = Number(el.getAttribute('font-size')), t = el.textContent ?? '';
+      const w = larguraTexto(t, f), h = alturaTexto(f);
+      return el.getAttribute('data-rotulo') === 'coluna' ? { x: x - h / 2, y: y - w / 2, w: h, h: w } : { x: x - w / 2, y: y - h / 2, w, h };
+    };
+    /* o realizado: os rótulos da média e da coluna E os marcadores da média (era neles a colisão medida no navegador) */
+    const marcadores = [...document.querySelectorAll('[data-testid^="analise-ponto-media-"]')].map((c): Caixa => {
+      const cx = Number(c.getAttribute('cx')), cy = Number(c.getAttribute('cy')), r = Number(c.getAttribute('r')) + 0.6;
+      return { x: cx - r, y: cy - r, w: 2 * r, h: 2 * r };
+    });
+    const realizado = [...[...document.querySelectorAll('[data-rotulo="media"], [data-rotulo="coluna"]')].map(caixa), ...marcadores];
+    const metas = [...document.querySelectorAll('[data-rotulo="meta"]')];
+    expect(marcadores).toHaveLength(M.length);
+    expect(metas.length).toBeGreaterThan(0);
+    for (const m of metas) expect(realizado.some((r) => encostam(caixa(m), r, 2)), m.getAttribute('data-testid')!).toBe(false);
+    /* todo valor da média e da coluna foi escrito (o realizado tem a vez); a meta segue no title de cada mês */
+    expect(document.querySelectorAll('[data-rotulo="media"]')).toHaveLength(M.length);
+    for (const [am, , , meta] of M) expect(screen.getByTestId(`analise-coluna-${am}`).querySelector('title')!.textContent).toContain(`meta média R$ ${meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
   }));
 
   it('P4a a ESQUERDA navega: Atividades → (Pecuária) Centros · Pecuária com "‹"; centro fica selecionado; "‹" volta; o caminho também', async () => {
