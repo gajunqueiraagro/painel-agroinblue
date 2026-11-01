@@ -64,6 +64,7 @@ const LEEM_HOJE: readonly string[] = [
   'src/components/mapa-geo/MapaGestorView.tsx',
   'src/components/mapa-geo/MapaOperacaoView.tsx',
   'src/components/mapa-geo/PastoDetailSheet.tsx',
+  'src/components/mapa-geo/ValidacaoPoligonosView.tsx', // MAPA-EDITAR-POLIGONO-01: a área de HOJE ao lado do polígono que se edita (estado atual, não mês passado)
   'src/components/pastos/GruposDePastejo.tsx',
   'src/components/patrimonio/AbaPastos.tsx',
   'src/hooks/useAnaliseTrimestral.ts',

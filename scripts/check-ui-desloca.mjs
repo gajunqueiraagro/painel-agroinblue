@@ -253,9 +253,31 @@ const CENARIOS = [
      ligar os inativos não move a barra; no modal do grupo, tirar e pôr pasto, a prévia que troca e a desativação (com a frase que
      quebra a linha) não movem o nome, o seletor, os títulos nem o rodapé */
   { nome: 'pastos', url: 'tela=pastos&barra=32', antes: async (p) => { await p.locator('[data-testid="pastos-modo-grupos"]').waitFor(); await espera(p, 600); }, estados: [
-    ['modo Grupos', clicar('[data-testid="pastos-modo-grupos"]')], ['inativos', async (p) => { await p.getByText('Inativos', { exact: true }).click(); await espera(p); }],
+    ['modo Grupos', clicar('[data-testid="pastos-modo-grupos"]')], ['modo Áreas', clicar('[data-testid="pastos-modo-areas"]')],
+    ['inativos', async (p) => { await p.getByText('Inativos', { exact: true }).click(); await espera(p); }],
     ['modo Ordem manual', botao(/^Ordem manual$/)], ['modo Por destino', botao(/^Por destino$/)],
   ] },
+  /* PASTO-AREA-OFICIAL-01 — no modo "Áreas", marcar um, marcar todos e trocar o mês não movem a faixa (mês · frase · botão de largura
+     fixa), o cabeçalho nem o rodapé dos totais; no modal da prévia, digitar o motivo e gravar sem motivo (o aviso) não movem nada */
+  { nome: 'pastos-areas', url: 'tela=pastos&barra=32',
+    antes: async (p) => { await p.locator('[data-testid="pastos-modo-areas"]').click(); await p.locator('[data-testid="areas-linha"]').first().waitFor(); await espera(p, 600); },
+    estados: [
+      ['marcar um', async (p) => { await p.locator('[data-testid="areas-linha"]', { hasText: 'P10A' }).first().locator('[data-testid="areas-marcar"]').click(); await espera(p); }],
+      ['marcar todos', clicar('[data-testid="areas-marcar-todos"]')],
+      ['desmarcar todos', clicar('[data-testid="areas-marcar-todos"]')],
+      ['mês anterior', async (p) => { await p.locator('[data-testid="areas-dos-pastos"] button').first().click(); await espera(p, 600); }],
+    ] },
+  { nome: 'pastos-areas-previa', url: 'tela=pastos&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="pastos-modo-areas"]').click(); await p.locator('[data-testid="areas-linha"]').first().waitFor();
+      /* só o P10A: o "marcar todos" leva o P11, que a prévia recusa — o gravar fica apagado e não há o que clicar */
+      await p.locator('[data-testid="areas-linha"]', { hasText: 'P10A' }).first().locator('[data-testid="areas-marcar"]').click(); await p.locator('[data-testid="areas-usar-mapa"]').click();
+      await p.locator('[data-testid="areas-previa-linha"]').first().waitFor(); await espera(p, 600);
+    },
+    estados: [
+      ['gravar sem motivo', clicar('[data-testid="areas-gravar"]')],
+      ['motivo', async (p) => { await p.locator('[data-testid="areas-motivo"]').fill('o mapa foi medido com GPS'); await espera(p); }],
+    ] },
   { nome: 'pastos-grupo', url: 'tela=pastos&barra=32', regiao: '[role="dialog"]',
     antes: async (p) => {
       await p.locator('[data-testid="pastos-modo-grupos"]').click(); await p.locator('[data-testid="grupo-linha"]', { hasText: 'Terminação' }).first().click();

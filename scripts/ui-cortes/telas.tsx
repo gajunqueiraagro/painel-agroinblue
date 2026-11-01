@@ -1295,6 +1295,36 @@ if (tela === 'mesclar') {
   g.__bancoBancada = {
     from: (t: string) => (t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? GRUPOS : []),
     rpc: (fn: string, a: any) => {
+      /* PASTO-AREA-OFICIAL-01 — o modo "Áreas" (SINTÉTICO): a área do mapa de cada pasto (a medição), um travado, um sem polígono, um já
+         igual com a última mudança "do mapa" (desfazer) e o P11 que a PRÉVIA recusa (área da fazenda oficializada) */
+      const AM = new Date().toISOString().slice(0, 7);
+      const MAPA_AREA: Record<string, number | null> = { p10a: 19.87, p10b: 22.9, p10c: 23.41, ta1: 11.02, ta2: 11.5, ta3: 12.3, ta4: 8.9, p11: 50.12, p13: 1198.02, p14: null };
+      const TRAVA: Record<string, string> = { ta1: `o pasto está fechado em ${AM.slice(5)}/${AM.slice(0, 4)}` };
+      if (fn === 'fn_pastos_area_comparar') {
+        return PASTOS.filter((x) => x.ativo).map((x) => {
+          const mapa = MAPA_AREA[x.id] ?? null; const of = x.area_produtiva_ha;
+          return { pasto_id: x.id, nome: x.nome, ativo: true, area_oficial_ha: of, area_mapa_ha: mapa, n_poligonos: mapa == null ? 0 : 1,
+            dif_ha: mapa != null && of != null ? Math.round((mapa - of) * 100) / 100 : null,
+            dif_pct: mapa != null && of ? Math.round((mapa - of) / of * 1000) / 10 : null,
+            ultima_vigencia_id: x.id === 'ta2' ? 'vig-ta2' : null, ultima_origem: x.id === 'ta2' ? 'mapa' : null,
+            ultima_desde: x.id === 'ta2' ? `${AM}-01` : null, ultima_anterior_ha: x.id === 'ta2' ? 12.75 : null, trava: TRAVA[x.id] ?? null };
+        });
+      }
+      if (fn === 'fn_pasto_area_usar_mapa') {
+        const itens = PASTOS.filter((x) => (a.p_pastos ?? []).includes(x.id)).map((x) => {
+          const mapa = MAPA_AREA[x.id] ?? null; const of = x.area_produtiva_ha ?? 0; const recusa = x.id === 'p11';
+          return { pasto_id: x.id, nome: x.nome, situacao: recusa ? 'recusa' : 'muda',
+            motivo: recusa ? `A área não muda: a área de ${AM.slice(5)}/${AM.slice(0, 4)} da fazenda já foi oficializada.` : null,
+            area_antes: of, area_mapa: mapa, dif_ha: mapa != null ? Math.round((mapa - of) * 100) / 100 : null,
+            dif_pct: mapa != null && of ? Math.round((mapa - of) / of * 1000) / 10 : null, lotacao_mes: AM,
+            ua_ha_antes: of ? Math.round(52 / of * 100) / 100 : null, ua_ha_depois: !recusa && mapa ? Math.round(52 / mapa * 100) / 100 : null };
+        });
+        const nr = itens.filter((i) => i.situacao === 'recusa').length;
+        return { ok: nr === 0, simulado: a.p_simular, n_muda: itens.length - nr, n_igual: 0, n_recusa: nr, itens };
+      }
+      if (fn === 'fn_pasto_area_desfazer') {
+        return { ok: true, simulado: a.p_simular, itens: [{ vigencia_id: 'vig-ta2', nome: 'T-A2 Piquete da terminação', area_ha: 11.5, volta_para: 12.75, recusa: null }] };
+      }
       if (fn === 'fn_pasto_grupo_desativar') {
         const n = PASTOS.filter((x) => x.grupo_id === a.p_grupo_id).length;
         const nome = GRUPOS.find((x) => x.id === a.p_grupo_id)?.nome;

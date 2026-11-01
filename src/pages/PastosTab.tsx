@@ -29,6 +29,7 @@ import {
 } from '@/lib/pastos/tiposUso';
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import { GruposDePastejo, useGruposDePastejo } from '@/components/pastos/GruposDePastejo';
+import { AreasDosPastos } from '@/components/pastos/AreasDosPastos';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -658,7 +659,8 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   // às vezes não tem efeito (o grupo manda sobre ordem_exibicao). O modo manual
   // preserva o comportamento atual intacto — e, com ele, o significado de
   // ordem_exibicao, que é a ordenação de usePastos e alimenta outras 12 telas.
-  const [modo, setModo] = useState<'destino' | 'manual' | 'grupos'>('destino');
+  /* PASTO-AREA-OFICIAL-01 — o 4º modo, "Áreas": a área oficial × a do mapa e o "Usar área do mapa" (`AreasDosPastos`) */
+  const [modo, setModo] = useState<'destino' | 'manual' | 'grupos' | 'areas'>('destino');
   /* FECH-ROTACAO-01 fatia 2 — os grupos de pastejo da fazenda (a lista do modo "Grupos" e a etiqueta do pasto nos outros dois) */
   const fazendaDosGrupos = fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
   const gruposDePastejo = useGruposDePastejo(fazendaDosGrupos);
@@ -908,6 +910,15 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
           >
             Grupos
           </button>
+          <button
+            type="button"
+            onClick={() => setModo('areas')}
+            className={`px-2 py-0.5 text-[10px] font-semibold ${modo === 'areas' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+            title="Área oficial × área do mapa: a diferença e o “Usar área do mapa” (de um mês em diante, com prévia)"
+            data-testid="pastos-modo-areas"
+          >
+            Áreas
+          </button>
         </div>
         <label className="text-[10px] text-muted-foreground flex items-center gap-1">
           <Switch checked={showInativos} onCheckedChange={setShowInativos} className="scale-75" />
@@ -969,9 +980,22 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
 
       {/* Grid */}
       <NomeDoGrupoContext.Provider value={nomeDoGrupo}>
-      {/* o miolo troca INTEIRO com o modo (destino, manual, grupos): é conteúdo, não controle (UI-SEM-DESLOCAR-01) */}
+      {/* o miolo troca INTEIRO com o modo (destino, manual, grupos, áreas): é conteúdo, não controle (UI-SEM-DESLOCAR-01) */}
       <div data-desloca-livre="">
-      {modo === 'grupos' && fazendaAtual ? (
+      {modo === 'areas' ? (
+        fazendaDosGrupos && fazendaAtual ? (
+          <AreasDosPastos
+            fazendaId={fazendaDosGrupos}
+            fazendaCodigo={fazendaAtual.codigo ?? null}
+            podeEditar={canEdit('pastos')}
+            aoGravar={() => { if (fazendaAtual.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id); }}
+          />
+        ) : (
+          <p className="rounded border bg-card px-3 py-6 text-center text-[11px] text-muted-foreground" data-testid="areas-sem-fazenda">
+            Escolha uma fazenda para comparar a área oficial com a do mapa.
+          </p>
+        )
+      ) : modo === 'grupos' && fazendaAtual ? (
         <GruposDePastejo
           fazendaId={fazendaAtual.id}
           fazendaCodigo={fazendaAtual.codigo ?? null}

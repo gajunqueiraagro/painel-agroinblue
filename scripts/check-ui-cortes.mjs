@@ -330,6 +330,22 @@ const CENARIOS = [
       { nome: 'pastos-grupo-desativar', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => { await abrir('Terminação')(p);
         await p.locator('[data-testid="grupo-desativar"]').click(); await p.waitForTimeout(500); } },
       { nome: 'pastos-manual-etiqueta', url: URL, tamanhos: T, antes: async (p) => { await p.locator('button', { hasText: /^Ordem manual$/ }).click(); await p.waitForTimeout(400); } },
+      /* PASTO-AREA-OFICIAL-01 — o modo "Áreas": a lista (oficial × mapa, a diferença, o travado, o sem polígono, a última mudança), os
+         marcados, a prévia do "Usar área do mapa" (P13 com área no milhar e o nome longo), a prévia com recusa e o desfazer */
+      ...(() => {
+        const areas = async (p) => { await p.locator('[data-testid="pastos-modo-areas"]').click(); await p.locator('[data-testid="areas-linha"]').first().waitFor(); await p.waitForTimeout(300); };
+        const marcar = async (p, nome) => { await p.locator('[data-testid="areas-linha"]', { hasText: nome }).first().locator('[data-testid="areas-marcar"]').click(); };
+        const previa = (nomes) => async (p) => { await areas(p); for (const n of nomes) await marcar(p, n);
+          await p.locator('[data-testid="areas-usar-mapa"]').click(); await p.locator('[data-testid="areas-previa-linha"]').first().waitFor(); await p.waitForTimeout(400); };
+        return [
+          { nome: 'pastos-areas', url: URL, tamanhos: T, antes: areas },
+          { nome: 'pastos-areas-marcados', url: URL, tamanhos: T, antes: async (p) => { await areas(p); await p.locator('[data-testid="areas-marcar-todos"]').click(); await p.waitForTimeout(300); } },
+          { nome: 'pastos-areas-previa', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: previa(['P13 Retiro', 'P10A', 'T-A3']) },
+          { nome: 'pastos-areas-recusa', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: previa(['P11']) },
+          { nome: 'pastos-areas-desfazer', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => { await areas(p);
+            await p.locator('[data-testid="areas-desfazer"]').first().click(); await p.locator('[data-testid="areas-desfazer-dialog"]').waitFor(); await p.waitForTimeout(400); } },
+        ];
+      })(),
     ];
   })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
