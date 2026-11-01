@@ -237,9 +237,24 @@ const CENARIOS = [
     const validacao = async (p) => { await p.locator('button', { hasText: 'Validação' }).first().click(); await p.locator('[data-testid="validacao-lista"]').waitFor(); await p.waitForTimeout(500); };
     return [
       { nome: 'mapa-validacao-lista', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="validacao-lista"]', antes: validacao },
+      /* -02b: a lista recolhida FORA da edição (faixa de 24 px; o mapa ganha a largura) */
+      { nome: 'mapa-validacao-lista-recolhida', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="validacao-lista-recolhida"]', antes: async (p) => {
+        await validacao(p); await p.locator('[data-testid="validacao-recolher-lista"]').click();
+        await p.locator('[data-testid="validacao-lista-recolhida"]').waitFor(); await p.waitForTimeout(500); } },
       { nome: 'mapa-validacao-vertices', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
         await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
         await p.locator('[data-testid="editar-poligono"] button', { hasText: 'Vértices' }).click();
+        await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); } },
+      /* MAPA-EDITAR-POLIGONO-03 — o polígono que veio inválido: a frase, o destaque e o "Corrigir automaticamente" na 1ª linha (cabe) */
+      { nome: 'mapa-validacao-corrigir', url: 'tela=mapa-geo&laco=1', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
+        await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
+        await p.locator('[data-testid="editar-poligono"] button', { hasText: 'Vértices' }).click();
+        await p.locator('[data-testid="edicao-corrigir"]').waitFor(); await p.waitForTimeout(700); } },
+      /* MAPA-EDITAR-POLIGONO-04 — unir vários: marcar 2 na lista (o 1º é o contorno; marca P_01 e o seguinte) e "Unir (2)" — a barra com
+         o "+ vizinho", o "fica" e a soma das partes */
+      { nome: 'mapa-validacao-unir', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
+        await validacao(p); const caixas = p.locator('[data-testid="validacao-lista"] button[role="checkbox"]');
+        await caixas.nth(1).click(); await caixas.nth(2).click(); await p.locator('[data-testid="unir-selecionados"]').click();
         await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); } },
       { nome: 'mapa-validacao-desenhar', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
         await validacao(p); await p.locator('[data-testid="edicao-desenhar-novo"]').click();

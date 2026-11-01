@@ -660,13 +660,22 @@ if (tela === 'mesclar') {
   };
   montar(<div className="h-full"><V2Recorrencias /></div>);
 } else if (tela === 'mapa-geo') {
+  /* MAPA-EDITAR-POLIGONO-03: `&laco=1` — o polígono aberto na edição chega com a linha cruzando ela mesma (uma "gravata" na caixa dele),
+     como o "APP triângulo" do KMZ; a barra mostra a frase, o destaque e o "Corrigir automaticamente" */
+  const gravataDe = (g: { type: string; coordinates: unknown }) => {
+    const anel = g.type === 'Polygon' && Array.isArray(g.coordinates) && Array.isArray(g.coordinates[0]) ? g.coordinates[0] : [];
+    const xs = anel.map((p: number[]) => p[0]), ys = anel.map((p: number[]) => p[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    return { type: 'Polygon', coordinates: [[[x0, y0], [x1, y1], [x1, y0], [x0, y1], [x0, y0]]] };
+  };
   /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
      abre no último mês com fechamento de pastos (set/2026; fix1 A: o banco falso ignora `order`/`limit`, a lista vem do mais novo); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
   g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendasComPecuaria: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
   g.__bancoBancada = {
     // MAPA-EDITAR-POLIGONO-02: a edição lê o polígono na hora (`.eq('id', …).maybeSingle()`), com a versão
     from: (t: string, e: any) => t === 'fazenda_geometrias'
-        ? (e.eq.id ? MAPA.GEOMETRIAS.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1 })) : MAPA.GEOMETRIAS)
+        ? (e.eq.id ? MAPA.GEOMETRIAS.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: q.get('laco') === '1' ? gravataDe(g.geojson) : g.geojson }))
+          : MAPA.GEOMETRIAS)
       : t === 'pastos' ? MAPA.PASTOS
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
       // MAPA-PERF-01: os itens vêm EMBUTIDOS no fechamento (o banco falso não faz o embed; a linha já o traz)

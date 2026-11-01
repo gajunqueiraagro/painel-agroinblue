@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { areaEmHectares } from './areaDoPoligono';
 import {
-  contornosDaFazenda, distanciaM, dividirPorLinha, fraseCompactaDasMedidas, fraseDasAreas, fraseDasSobreposicoes, ladosM, medidasDe,
-  cruzamentos, FRASE_DO_CRUZAMENTO, MINIMO_SOBREPOSICAO_HA, recortarDosVizinhos, sobreposicoes, textoHa, textoM, unirVizinhos,
+  casaNoNomeDoPoligono, contornosDaFazenda, distanciaEntrePoligonosM, distanciaM, dividirPorLinha, TOLERANCIA_FRESTA_M, unirVarios, fraseCompactaDasMedidas, fraseDasAreas, fraseDasSobreposicoes, ladosM, medidasDe,
+  corrigirPoligono, cruzamentos, FRASE_DO_CRUZAMENTO, MINIMO_SOBREPOSICAO_HA, temPontosAmontoados, recortarDosVizinhos, sobreposicoes, textoHa, textoM, unirVizinhos,
   verticeEmCimaDeOutro, vizinhosDaDivisa, type Ponto,
 } from './edicaoDoPoligono';
 
@@ -205,3 +205,57 @@ describe('a linha que cruza ela mesma', () => {
   });
 });
 
+describe('corrigir automaticamente (o polígono que veio inválido do KMZ)', () => {
+  const s = 0.001; // ~110 m por unidade perto de -15°
+  const P = (x: number, y: number) => [-48 + x * s, -15 + y * s];
+  // quadrado 10×10 com um LAÇO no lado de cima (dois lados que se cruzam) e um ponto AMONTOADO no lado de baixo
+  const comLaco: GeoJSON.Polygon = { type: 'Polygon', coordinates: [[P(0, 0), P(5, 0), P(5.000001, 0), P(10, 0), P(10, 10), P(6, 10), P(4, 11), P(5, 11), P(3, 10), P(0, 10), P(0, 0)]] };
+  it('junta o amontoado, tira o laço e fica válido; a área diz antes × depois', () => {
+    expect(cruzamentos(comLaco.coordinates[0]).length).toBeGreaterThan(0);
+    expect(temPontosAmontoados(comLaco)).toBe(true);
+    const r = corrigirPoligono(comLaco);
+    if ('motivo' in r) throw new Error(r.motivo);
+    expect(r.valor.pontosJuntados).toBe(1);
+    expect(r.valor.partesDescartadas).toBeGreaterThanOrEqual(1);
+    expect(cruzamentos(r.valor.geojson.coordinates[0])).toEqual([]);
+    expect(temPontosAmontoados(r.valor.geojson)).toBe(false);
+    expect(r.valor.areaDepoisHa).toBeGreaterThan(areaEmHectares(quad(-48, -15, -48 + 10 * s, -15 + 10 * s)) * 0.95);
+  });
+  it('polígono sem defeito: recusa com frase (nada a corrigir)', () => {
+    const r = corrigirPoligono(A);
+    expect(r.ok).toBe(false);
+  });
+});
+
+/* MAPA-EDITAR-POLIGONO-04 (Gabriel 01/11 14:45, Pureza 6A–6D): unir VÁRIOS que encostam com fresta de KMZ; a busca tolerante ao nome */
+describe('unir vários', () => {
+  const g = 0.0000045; // ~0,5 m em graus perto de -15°
+  // 2×2 quadrados de ~1,1 km, cada um separado do vizinho por uma fresta de ~0,5 m (o caso 6A × 6B)
+  const Q1 = quad(-48, -15, -47.99, -15.01);
+  const Q2 = quad(-47.99 + g, -15, -47.98, -15.01);
+  const Q3 = quad(-48, -15.01 - g, -47.99, -15.02);
+  const Q4 = quad(-47.99 + g, -15.01 - g, -47.98, -15.02);
+  const quatro = [{ id: '1', nome: '6A', geojson: Q1 }, { id: '2', nome: '6B', geojson: Q2 }, { id: '3', nome: '6C', geojson: Q3 }, { id: '4', nome: '6D', geojson: Q4 }];
+  it('a fresta de ~0,5 m: a união exata dava 2 pedaços (o "Nenhum resultado"); unirVarios fecha e dá UM polígono com a soma', () => {
+    expect(unirVizinhos(Q1, Q2).ok).toBe(false); // a causa do achado
+    expect(distanciaEntrePoligonosM(Q1, Q2)).toBeLessThan(TOLERANCIA_FRESTA_M);
+    const r = unirVarios(quatro);
+    if ('motivo' in r) throw new Error(r.motivo);
+    expect(r.valor.geojson.type).toBe('Polygon');
+    expect(r.valor.geojson.coordinates.length).toBe(1); // sem furo: os furinhos da fresta fecham
+    const soma = [Q1, Q2, Q3, Q4].reduce((s, q) => s + areaEmHectares(q), 0);
+    expect(areaEmHectares(r.valor.geojson)).toBeCloseTo(soma, 0);
+    expect(r.valor.pontosEncaixados).toBeGreaterThan(0);
+  });
+  it('quem não encosta nos outros: recusa com o nome', () => {
+    const r = unirVarios([...quatro.slice(0, 2), { id: 'l', nome: 'Longe', geojson: LONGE }]);
+    expect('motivo' in r && r.motivo).toContain('Longe não encosta');
+    expect(unirVarios(quatro.slice(0, 1)).ok).toBe(false); // um só não une
+  });
+  it('a busca pelo nome: 6b = 6B = P6B = "P 6B" = P_6B; e a de sempre continua (sem acento)', () => {
+    for (const termo of ['6b', '6B', 'P6B', 'p 6b', 'P_6B']) expect(casaNoNomeDoPoligono('6B', termo)).toBe(true);
+    expect(casaNoNomeDoPoligono('P6B', '6b')).toBe(true);
+    expect(casaNoNomeDoPoligono('6B', '6C')).toBe(false);
+    expect(casaNoNomeDoPoligono('Retiro do Córrego', 'corrego')).toBe(true);
+  });
+});

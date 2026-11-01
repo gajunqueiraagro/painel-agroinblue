@@ -1,4 +1,3 @@
-import { casaNaBusca } from '@/lib/texto/busca';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -17,7 +16,7 @@ import {
   Link2, Unlink, Pencil, Trash2, CheckCheck, MapPin, Search, Filter,
   X, Save, ChevronDown, ChevronRight, ChevronLeft,
 } from 'lucide-react';
-import { TIPOS_DE_CONTORNO } from '@/lib/mapa/edicaoDoPoligono';
+import { casaNoNomeDoPoligono, TIPOS_DE_CONTORNO } from '@/lib/mapa/edicaoDoPoligono';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { Pasto } from '@/hooks/usePastos';
@@ -27,6 +26,8 @@ import { ehTipoDeArea, rotuloDoTipo, type TipoDeArea } from '@/lib/mapa/tiposDeA
 import { useEdicaoDoPoligono, type ModoDaEdicao } from '@/hooks/useEdicaoDoPoligono';
 import { BarraDeEdicaoDoPoligono, DesfazerUltimaEdicao } from '@/components/mapa-geo/BarraDeEdicaoDoPoligono';
 import { useFazenda } from '@/contexts/FazendaContext';
+
+const CHAVE_LISTA_RECOLHIDA = 'mapa-validacao-lista-recolhida';
 
 type FilterStatus = 'all' | 'vinculado' | 'area' | 'sem_vinculo';
 
@@ -66,6 +67,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const { mapContainerRef: mapRef, mapInstanceRef: mapInstance, featureLayerRef: layerRef, status: statusDoMapa } =
     useStableLeafletMap({ debugName: 'ValidacaoPoligonos' });
   const boundsMap = useRef<Map<string, L.LatLngBounds>>(new Map());
+  /* MAPA-EDITAR-POLIGONO-07 (Gabriel 15:09: "a tela pula para a fazenda toda"): o mapa só se enquadra SOZINHO na troca de fazenda (e no
+     1º carregamento). Antes, o desenho refazia o fitBounds a cada seleção/gravação e o foco num polígono dava zoom nele. */
+  const enquadradoRef = useRef<string | null>(null);
   const { fazendaAtual } = useFazenda();
   const edicao = useEdicaoDoPoligono({
     mapa: statusDoMapa === 'ready' ? mapInstance.current : null,
@@ -76,10 +80,24 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const emEdicaoId = edicao.alvo && edicao.modo !== 'apagar' ? edicao.alvo.id : null;
   /* durante a edição os polígonos da lista não respondem a clique: o clique é do desenho (senão focava o vizinho e dava zoom nele) */
   const editando = !!edicao.modo;
+  /* -04: no unir, o clique no mapa põe/tira o polígono da união (os outros gestos seguem com o mapa inerte: o clique é do desenho) */
+  const unindo = edicao.modo === 'unir';
+  const { unidos, alternarNaUniao } = edicao;
   /* MAPA-EDITAR-POLIGONO-02 (item 1): na edição o MAPA ganha a tela — a lista recolhe numa faixa de 24 px (dá para reabrir); ao sair da
      edição volta como estava. Mudou a largura do mapa = o Leaflet relê o tamanho e o polígono volta ao meio. */
   const [listaReaberta, setListaReaberta] = useState(false);
-  const listaRecolhida = editando && !listaReaberta;
+  /* MAPA-EDITAR-POLIGONO-02b (Gabriel 14:19, Pureza: "aba tão grande e o mapa tão pequeno"): fora da edição a lista também recolhe, e a
+     escolha fica lembrada na sessão; na edição ela recolhe sempre (dá para reabrir) e volta ao que estava ao sair */
+  const [recolhidaFora, setRecolhidaForaEstado] = useState<boolean>(() => {
+    try { return sessionStorage.getItem(CHAVE_LISTA_RECOLHIDA) === '1'; } catch { return false; }
+  });
+  const setRecolhidaFora = (v: boolean) => {
+    setRecolhidaForaEstado(v);
+    try { sessionStorage.setItem(CHAVE_LISTA_RECOLHIDA, v ? '1' : '0'); } catch { /* sem armazenamento: vale só nesta tela */ }
+  };
+  const listaRecolhida = editando ? !listaReaberta : recolhidaFora;
+  const recolherLista = () => (editando ? setListaReaberta(false) : setRecolhidaFora(true));
+  const abrirLista = () => (editando ? setListaReaberta(true) : setRecolhidaFora(false));
   useEffect(() => { if (!editando) setListaReaberta(false); }, [editando]);
   const { reenquadrar } = edicao;
   useEffect(() => {
@@ -97,10 +115,19 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     if (filterStatus === 'sem_vinculo') list = list.filter(g => g.tipo === 'outra');
     if (searchTerm.trim()) {
       /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
-      list = list.filter(g => casaNaBusca(g.nome_original, searchTerm));
+      list = list.filter(g => casaNoNomeDoPoligono(g.nome_original, searchTerm)); // -04: tolerante (6b = 6B = P6B), sobre o P134
     }
     return list;
   }, [geometrias, filterStatus, searchTerm]);
+
+  /* -04: depois de unir/apagar, os marcados que sumiram saem da seleção (senão "4 selecionados" e "Unir (4)" seguiam com ids mortos) */
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const vivos = new Set(geometrias.map(g => g.id));
+      const ficam = [...prev].filter(id => vivos.has(id));
+      return ficam.length === prev.size ? prev : new Set(ficam);
+    });
+  }, [geometrias]);
 
   const stats = useMemo(() => ({
     total: geometrias.length,
@@ -124,9 +151,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
         if (geo.id === emEdicaoId) return;
         try {
           const isFocused = focusedId === geo.id;
-          const isChecked = selectedIds.has(geo.id);
+          const isChecked = selectedIds.has(geo.id) || unidos.includes(geo.id);
           const layer = L.geoJSON(geo.geojson as any, {
-            interactive: !editando,
+            interactive: !editando || unindo,
             /* -02 (item 4a): o contorno da fazenda nunca é ponto de encaixe na edição */
             snapIgnore: TIPOS_DE_CONTORNO.includes(geo.tipo),
             style: {
@@ -148,28 +175,37 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             L.marker(center, { icon: label, interactive: false }).addTo(lg);
           }
           if (!editando) layer.on('click', () => setFocusedId(geo.id));
+          else if (unindo) layer.on('click', () => alternarNaUniao(geo.id));
           layer.addTo(lg);
           allBounds.push(b);
         } catch {}
       });
-      /* durante a edição o enquadramento é da edição (o polígono abaixo da barra), não o da fazenda inteira */
-      if (allBounds.length > 0 && !emEdicaoId) {
+      const fazendaDaVista = geometrias[0]?.fazenda_id ?? '';
+      if (allBounds.length > 0 && !emEdicaoId && enquadradoRef.current !== fazendaDaVista) {
+        enquadradoRef.current = fazendaDaVista;
         const combined = allBounds.reduce((acc, b) => acc.extend(b));
         map.fitBounds(combined, { padding: [30, 30], maxZoom: 17 });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [geometrias, focusedId, selectedIds, statusDoMapa, emEdicaoId, editando]);
+  }, [geometrias, focusedId, selectedIds, statusDoMapa, emEdicaoId, editando, unindo, unidos, alternarNaUniao]);
 
   // Focus on selected polygon
   useEffect(() => {
     if (!focusedId || editando) return;
     const map = mapInstance.current;
     const b = boundsMap.current.get(focusedId);
-    if (map && b) {
-      map.fitBounds(b, { padding: [60, 60], maxZoom: 17 });
-    }
+    /* -07: selecionar NÃO muda o zoom; fora da tela, o mapa só desliza até ele */
+    if (map && b && !map.getBounds().intersects(b)) map.panTo(b.getCenter()); // só quando está TODO fora da tela
   }, [focusedId]);
+
+  /* -07: o enquadramento da fazenda inteira só quando o operador pede */
+  const verFazendaInteira = () => {
+    const map = mapInstance.current;
+    const todos = [...boundsMap.current.values()];
+    if (!map || todos.length === 0) return;
+    map.fitBounds(todos.reduce((acc, b) => L.latLngBounds(acc.getSouthWest(), acc.getNorthEast()).extend(b)), { padding: [30, 30], maxZoom: 17 });
+  };
 
   // Helpers
   const toggleSelect = (id: string) => {
@@ -242,19 +278,17 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
         {/* Left: list panel */}
         {listaRecolhida ? (
           <Card className="hidden w-6 flex-shrink-0 items-start justify-center overflow-hidden pt-2 sm:flex" data-testid="validacao-lista-recolhida">
-            <Button variant="ghost" size="sm" className="h-6 w-5 p-0" onClick={() => setListaReaberta(true)} title="Mostrar a lista de polígonos"
+            <Button variant="ghost" size="sm" className="h-6 w-5 p-0" onClick={abrirLista} title="Mostrar a lista de polígonos"
               data-testid="validacao-reabrir-lista">
               <ChevronRight className="h-3.5 w-3.5" />
             </Button>
           </Card>
         ) : (
-        <Card className="flex flex-col w-full sm:w-[280px] flex-shrink-0 overflow-hidden" data-testid="validacao-lista">
-          {editando && (
-            <Button variant="ghost" size="sm" className="h-5 justify-start gap-1 rounded-none border-b border-border px-2 text-[9.5px]"
-              onClick={() => setListaReaberta(false)} title="Recolher a lista (o mapa ganha a tela)" data-testid="validacao-recolher-lista">
-              <ChevronLeft className="h-3 w-3" />Recolher a lista
-            </Button>
-          )}
+        <Card className="flex flex-col w-full sm:w-[240px] flex-shrink-0 overflow-hidden" data-testid="validacao-lista">
+          <Button variant="ghost" size="sm" className="hidden h-5 justify-start gap-1 rounded-none border-b border-border px-2 text-[9.5px] sm:flex"
+            onClick={recolherLista} title="Recolher a lista (o mapa ganha a tela)" data-testid="validacao-recolher-lista">
+            <ChevronLeft className="h-3 w-3" />Recolher a lista
+          </Button>
           {/* Search + filter bar */}
           <div className="p-2 border-b border-border space-y-1.5">
             <div className="flex gap-1.5">
@@ -263,12 +297,12 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                 <Input
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  placeholder="Buscar polígono..."
+                  placeholder="Buscar"
                   className="h-7 pl-7 text-xs"
                 />
               </div>
               <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
-                <SelectTrigger className="h-7 w-32 text-xs">
+                <SelectTrigger className="h-7 w-[104px] text-xs">
                   <Filter className="h-3 w-3 mr-1" />
                   <SelectValue />
                 </SelectTrigger>
@@ -281,7 +315,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
               </Select>
             </div>
             {/* Batch actions */}
-            <div className="flex items-center gap-1.5">
+            {/* -02b/-04: na lista de 240 px as ações em lote quebram linha em vez de sumir pela direita */}
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
               <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={isAllSelected ? deselectAll : selectAll}>
                 <CheckCheck className="h-3 w-3 mr-1" />
                 {isAllSelected ? 'Desmarcar' : 'Selecionar'} todos
@@ -296,6 +331,12 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                   >
                     <Trash2 className="h-3 w-3 mr-1" />Apagar ({selectedIds.size})
                   </Button>
+                  {selectedIds.size >= 2 && (
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" data-testid="unir-selecionados"
+                      onClick={() => void edicao.iniciarUniao(Array.from(selectedIds))} title="Unir selecionados: os marcados viram um polígono só (o primeiro fica; prévia antes de gravar)">
+                      Unir ({selectedIds.size})
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -364,11 +405,11 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                           </p>
                         )}
                         <div className="flex items-center gap-1 mt-0.5">
+                          {/* -02b: o pasto vira ÍCONE (o nome dele quase sempre repete o do polígono; vai no title) — a lista de 240 px não quebra */}
                           {pastoName ? (
-                            <Badge variant="secondary" className="text-[9.5px] h-4 whitespace-nowrap" title={pastoName}>
-                              <Link2 className="h-2.5 w-2.5 mr-0.5 flex-shrink-0" />
-                              {pastoName}
-                            </Badge>
+                            <span className="flex h-4 items-center gap-0.5 text-[9.5px] text-green-700" title={`Pasto → ${pastoName}`} data-testid="validacao-selo-pasto">
+                              <Link2 className="h-3 w-3 flex-shrink-0" />pasto
+                            </span>
                           ) : geo.tipo === 'outra' ? (
                             <Badge variant="outline" className="text-[9.5px] h-4 text-orange-600 border-orange-300">
                               Sem classificação
@@ -423,10 +464,15 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             areaCadastroHa={pastos.find(p => p.id === edicao.alvo?.pasto_id)?.area_produtiva_ha ?? null} />
           <DesfazerUltimaEdicao edicao={edicao} />
           {!edicao.modo && (
-            <Button variant="outline" size="sm" className="absolute right-3 top-3 z-20 h-6 bg-card px-2 text-[11px]"
-              onClick={() => void edicao.iniciar('desenhar', null)} data-testid="edicao-desenhar-novo">
-              Desenhar polígono novo
-            </Button>
+            <div className="absolute right-3 top-3 z-20 flex gap-1.5">
+              <Button variant="outline" size="sm" className="h-6 bg-card px-2 text-[11px]" onClick={verFazendaInteira} data-testid="validacao-ver-fazenda">
+                Ver fazenda inteira
+              </Button>
+              <Button variant="outline" size="sm" className="h-6 bg-card px-2 text-[11px]"
+                onClick={() => void edicao.iniciar('desenhar', null)} data-testid="edicao-desenhar-novo">
+                Desenhar polígono novo
+              </Button>
+            </div>
           )}
           {geometrias.length === 0 && !edicao.modo && (
             <div className="absolute inset-0 flex items-center justify-center bg-card z-10 rounded-lg">

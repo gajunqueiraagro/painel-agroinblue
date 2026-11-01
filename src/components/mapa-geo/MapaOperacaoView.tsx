@@ -226,8 +226,11 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
       reportRenderedGeometries(renderedCount);
       onRenderedChange?.(renderedCount);
 
-      if (allBounds.length > 0 && geoIdKey !== lastFitKeyRef.current) {
-        lastFitKeyRef.current = geoIdKey;
+      /* MAPA-EDITAR-POLIGONO-07: enquadra sozinho só na troca de FAZENDA (e no 1º carregamento) — a chave era a lista de ids, que muda a
+         cada gravação que cria/remove polígono e jogava o operador de volta à fazenda inteira */
+      const fazendaDaVista = geometrias[0]?.fazenda_id ?? '';
+      if (allBounds.length > 0 && fazendaDaVista !== lastFitKeyRef.current) {
+        lastFitKeyRef.current = fazendaDaVista;
         const combinedBounds = allBounds.reduce((acc, b) => acc.extend(b));
         try { map.fitBounds(combinedBounds, { padding: [20, 20], animate: false, maxZoom: 16 }); } catch { /* */ }
       }

@@ -10,7 +10,7 @@ import '@geoman-io/leaflet-geoman-free';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  contornosDaFazenda, cruzamentos as cruzamentosDoAnel, distanciaM, dividirPorLinha, FRASE_DO_CRUZAMENTO, verticeEmCimaDeOutro, medidasDe, MINIMO_SOBREPOSICAO_HA, recortarDosVizinhos, sobreposicoes, unirVizinhos,
+  contornosDaFazenda, corrigirPoligono, ladosM, temPontosAmontoados, type Correcao, cruzamentos as cruzamentosDoAnel, distanciaM, dividirPorLinha, FRASE_DO_CRUZAMENTO, verticeEmCimaDeOutro, medidasDe, MINIMO_SOBREPOSICAO_HA, recortarDosVizinhos, sobreposicoes, distanciaEntrePoligonosM, TIPOS_DE_CONTORNO, TOLERANCIA_FRESTA_M, unirVarios,
   vizinhosDaDivisa, type Divisao, type Medidas, type OperacaoNoVertice, type Ponto, type Sobreposicao,
 } from '@/lib/mapa/edicaoDoPoligono';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
@@ -68,6 +68,7 @@ const opcoesDoGeoman = (encaixe: boolean) => ({ snappable: encaixe, snapDistance
 const latLngsDe = (g: GeoJSON.Polygon): L.LatLng[][] => g.coordinates.map(a => a.map(p => L.latLng(p[1], p[0])));
 
 const pontoDe = (ll: L.LatLng): Ponto => [ll.lng, ll.lat];
+const pt2 = (q: readonly number[]): Ponto => [q[0], q[1]];
 /** O ponto do marcador do vértice (o Geoman entrega o evento do marcador sem tipo). */
 function pontoDoMarcador(ev: unknown): Ponto | null {
   const alvo = ev && typeof ev === 'object' && 'target' in ev ? ev.target : null;
@@ -107,8 +108,10 @@ export function useEdicaoDoPoligono(args: {
   const [divisao, setDivisao] = useState<Divisao | null>(null);
   const [originalFicaCom, setOriginalFicaCom] = useState<'a' | 'b'>('a');
   const [pastoVaiParaNova, setPastoVaiParaNova] = useState(false);
-  const [vizinhoId, setVizinhoId] = useState<string | null>(null);
-  const [pastoDoVizinho, setPastoDoVizinho] = useState(false);
+  /* MAPA-EDITAR-POLIGONO-04: o unir junta VÁRIOS — o alvo fica (com a forma da união) e os `unidos` somem nele; `ficaComDe` = o polígono
+     cujo pasto o resultado herda ('' = sem classificação; o padrão é o próprio alvo) */
+  const [unidos, setUnidos] = useState<string[]>([]);
+  const [ficaComDe, setFicaComDe] = useState<string>('');
   const [motivo, setMotivo] = useState('');
   const [destinoDoPasto, setDestinoDoPasto] = useState<string | null>(null);
   const [nomeNovo, setNomeNovo] = useState('');
@@ -129,6 +132,17 @@ export function useEdicaoDoPoligono(args: {
   const editadoRef = useRef<L.Polygon | null>(null);
   /* a forma depois do último passo (o "antes" do próximo); o "Desfazer passo" também a acerta */
   const depoisDoUltimoRef = useRef<GeoJSON.Polygon | null>(null);
+  /* -05: cria um vértice num ponto da linha do polígono em edição (o clique na linha e os pontos do meio dos trechos visíveis) */
+  const acrescentarRef = useRef<((p: Ponto) => void) | null>(null);
+  /* o clique na linha é ouvido no MAPA (a 1 px fora do traço o clique não cai na camada do polígono); sai ao encerrar */
+  const cliqueNaLinhaRef = useRef<((ev: L.LeafletMouseEvent) => void) | null>(null);
+  /* -06: o desenho AO VIVO (pontos postos + cursor) e o rascunho editável depois de fechar */
+  const [pontosDoDesenho, setPontosDoDesenho] = useState<Ponto[]>([]);
+  const [cursorDoDesenho, setCursorDoDesenho] = useState<Ponto | null>(null);
+  const [temRascunho, setTemRascunho] = useState(false);
+  const moverRef = useRef<((ev: L.LeafletMouseEvent) => void) | null>(null);
+  /* item 8: o "Corrigir automaticamente" do polígono que veio inválido (o que mudou, para a barra dizer) */
+  const [correcao, setCorrecao] = useState<Correcao | null>(null);
   const encaixeRef = useRef(encaixe);
   encaixeRef.current = encaixe;
   const setEncaixe = useCallback((v: boolean) => {
@@ -140,6 +154,9 @@ export function useEdicaoDoPoligono(args: {
     if (mapa) {
       mapa.pm.disableDraw();
       mapa.off('pm:create');
+      if (cliqueNaLinhaRef.current) { mapa.off('click', cliqueNaLinhaRef.current); cliqueNaLinhaRef.current = null; }
+      mapa.off('pm:drawstart');
+      if (moverRef.current) { mapa.off('mousemove', moverRef.current); moverRef.current = null; }
       mapa.doubleClickZoom.enable();
     }
     camadaRef.current?.eachLayer(l => { if (l instanceof L.Polyline) l.pm.disable(); });
@@ -148,10 +165,11 @@ export function useEdicaoDoPoligono(args: {
 
   const encerrar = useCallback(() => {
     limparCamada();
-    setModo(null); setAlvo(null); setGeometriaNova(null); setDivisao(null); setVizinhoId(null); setPastoDoVizinho(false);
+    setModo(null); setAlvo(null); setGeometriaNova(null); setDivisao(null); setUnidos([]); setFicaComDe('');
     setOriginalFicaCom('a'); setPastoVaiParaNova(false); setMotivo(''); setDestinoDoPasto(null); setNomeNovo(''); setPrevia(null);
     setErro(null); setOperacoes([]); setRecortar(false);
-    passosRef.current = []; setNPassos(0); editadoRef.current = null; depoisDoUltimoRef.current = null;
+    passosRef.current = []; setNPassos(0); editadoRef.current = null; depoisDoUltimoRef.current = null; acrescentarRef.current = null;
+    setPontosDoDesenho([]); setCursorDoDesenho(null); setTemRascunho(false); setCorrecao(null);
   }, [limparCamada, setOperacoes]);
 
   // a camada própria nasce com o mapa e sai com ele
@@ -173,19 +191,20 @@ export function useEdicaoDoPoligono(args: {
 
   /** O polígono no meio do mapa, abaixo da barra de edição (2 linhas no topo: 64 px). Sem animação: animado, ele colidia com o
    *  redesenho da Validação e o mapa ficava preso no meio do zoom (clique caindo no lugar errado). */
+  /* -07: abrir a edição NÃO muda o zoom (o operador escolheu o zoom para pôr o ponto na cerca); o polígono fora da tela só faz o mapa
+     deslizar até ele */
   const enquadrar = useCallback((g: GeoJSON.Geometry) => {
     if (!mapa) return;
     const limites = L.geoJSON(g).getBounds();
-    if (limites.isValid()) mapa.fitBounds(limites, { paddingTopLeft: [24, 64], paddingBottomRight: [24, 24], maxZoom: 19, animate: false });
+    if (limites.isValid() && !mapa.getBounds().intersects(limites)) mapa.panTo(limites.getCenter(), { animate: false });
   }, [mapa]);
   const alvoRef = useRef<Alvo | null>(null);
   alvoRef.current = alvo;
   /** Depois que o mapa muda de largura (a lista recolhe ou volta): o Leaflet relê o tamanho e o polígono volta ao meio. */
   const reenquadrar = useCallback(() => {
     if (!mapa) return;
-    mapa.invalidateSize({ pan: false });
-    if (alvoRef.current) enquadrar(alvoRef.current.geojson);
-  }, [mapa, enquadrar]);
+    mapa.invalidateSize({ pan: true, animate: false }); // -07: mantém o CENTRO e o zoom quando a lista recolhe/volta
+  }, [mapa]);
 
   /* MAPA-EDITAR-POLIGONO-02 (item 4d): na edição o zoom vai até 22 — a imagem do último nível que o provedor tem é ampliada
      (`maxNativeZoom`); o fundo que volta a baixar o zoom máximo (a vista do satélite) é seguido e o zoom sobe de novo; ao sair, volta. */
@@ -226,80 +245,174 @@ export function useEdicaoDoPoligono(args: {
     if (id) { a = await lerAlvo(id); if (!a) return; }
     setModo(m); setAlvo(a);
     if (a) setNomeNovo(`${a.nome} (2)`); else setNomeNovo('Novo polígono');
+    if (a && m === 'unir') setFicaComDe(a.id);
     /* o polígono vai para o meio do mapa, abaixo da barra de edição (que cobre o topo) */
     if (a) enquadrar(a.geojson);
     mapa.pm.setGlobalOptions(opcoesDoGeoman(encaixeRef.current));
 
+    /* a edição de vértices de um polígono na camada própria (o existente ou o RASCUNHO recém-desenhado, -06): medidas, passos, juntar
+       pontos, divisa junto, clique na linha cria ponto (-05) */
+    const ligarVertices = (l: L.Polygon) => {
+      const atualizar = () => setGeometriaNova(l.toGeoJSON().geometry);
+      editadoRef.current = l;
+      const formaAgora = (): GeoJSON.Polygon | null => { const g = l.toGeoJSON().geometry; return g.type === 'Polygon' ? g : null; };
+      depoisDoUltimoRef.current = formaAgora();
+      /** Fecha um passo: guarda a forma de antes (para o "Desfazer passo") e anota a operação (para a divisa andar junto, item 5). */
+      const fecharPasso = (op: OperacaoNoVertice | null) => {
+        const antes = depoisDoUltimoRef.current;
+        if (antes) { passosRef.current.push({ geo: antes, nOps: opsRef.current.length }); setNPassos(passosRef.current.length); }
+        if (op) setOperacoes([...opsRef.current, op]);
+        depoisDoUltimoRef.current = formaAgora();
+        atualizar();
+      };
+      let deOnde: Ponto | null = null;
+      l.on('pm:markerdragstart', (e) => { deOnde = pontoDoMarcador(e.markerEvent); });
+      l.on('pm:markerdragend', (e) => {
+        const para = pontoDoMarcador(e.markerEvent);
+        const de = deOnde;
+        deOnde = null;
+        if (!de || !para || distanciaM(de, para) <= 0.001) { atualizar(); return; }
+        /* item 7: soltou a menos de 0,5 m de outro ponto do MESMO polígono = junta os dois (nada de pontos amontoados) */
+        const g = formaAgora();
+        const anel = g?.coordinates[0] ?? [];
+        const i = anel.findIndex(q => distanciaM(q, para) < 0.001);
+        const outro = g && i >= 0 ? verticeEmCimaDeOutro(anel, i) : null;
+        if (g && i >= 0 && outro !== null) {
+          const n = anel.length - 1;
+          const aberto = anel.slice(0, n).filter((_q, k) => k !== i);
+          l.pm.disable();
+          l.setLatLngs(latLngsDe({ type: 'Polygon', coordinates: [[...aberto, aberto[0]], ...g.coordinates.slice(1)] }));
+          l.pm.enable(opcoesDoGeoman(encaixeRef.current));
+          fecharPasso({ tipo: 'tirar', de });
+          return;
+        }
+        fecharPasso({ tipo: 'mover', de, para });
+      });
+      l.on('pm:vertexadded', (e) => {
+        const p = pontoDe(e.latlng);
+        const lado = ladoDoVertice(l, p);
+        fecharPasso(lado ? { tipo: 'acrescentar', entre: lado, ponto: p } : null);
+      });
+      l.on('pm:vertexremoved', (e) => {
+        fecharPasso({ tipo: 'tirar', de: pontoDe(e.marker.getLatLng()) });
+      });
+      l.on('pm:markerdrag', atualizar);
+      /* MAPA-EDITAR-POLIGONO-05 (Gabriel 14:54, Pureza › Massay 01: "como crio um vértice aqui?"): o ponto do meio do Geoman fica no meio
+         do LADO, fora da tela num lado longo com zoom alto. Agora o CLIQUE simples em qualquer lugar da linha (até 8 px dela) cria o vértice
+         ali — o ponto projetado na linha, sem encaixe —, é um passo (o "Desfazer passo" o volta) e anda junto na divisa compartilhada. */
+      const acrescentarAqui = (p: Ponto) => {
+        const g = formaAgora();
+        if (!g) return;
+        const anel = g.coordinates[0];
+        const px = (q: readonly number[]) => mapa.latLngToContainerPoint([q[1], q[0]]);
+        const c = px(p);
+        let melhor = -1, menor = Infinity;
+        for (let i = 0; i + 1 < anel.length; i++) {
+          const a = px(anel[i]), b = px(anel[i + 1]);
+          const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+          const k = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / len2));
+          const d = Math.hypot(a.x + k * dx - c.x, a.y + k * dy - c.y);
+          if (d < menor) { menor = d; melhor = i; }
+        }
+        if (melhor < 0) return;
+        const a = px(anel[melhor]), b = px(anel[melhor + 1]);
+        const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+        const k = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / len2));
+        const naLinha = mapa.containerPointToLatLng([a.x + k * dx, a.y + k * dy]);
+        const ponto: Ponto = [naLinha.lng, naLinha.lat];
+        const novo = [...anel.slice(0, melhor + 1), ponto, ...anel.slice(melhor + 1)];
+        l.pm.disable();
+        l.setLatLngs(latLngsDe({ type: 'Polygon', coordinates: [novo, ...g.coordinates.slice(1)] }));
+        l.pm.enable(opcoesDoGeoman(encaixeRef.current));
+        fecharPasso({ tipo: 'acrescentar', entre: [pt2(anel[melhor]), pt2(anel[melhor + 1])], ponto });
+      };
+      acrescentarRef.current = acrescentarAqui;
+      const aoClicarNaLinha = (ev: L.LeafletMouseEvent) => {
+        const c = mapa.latLngToContainerPoint(ev.latlng);
+        const g = formaAgora();
+        if (!g) return;
+        const anel = g.coordinates[0];
+        const perto = anel.some((q, i) => {
+          if (i + 1 >= anel.length) return false;
+          const a = mapa.latLngToContainerPoint([q[1], q[0]]), b = mapa.latLngToContainerPoint([anel[i + 1][1], anel[i + 1][0]]);
+          const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+          const k = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / len2));
+          return Math.hypot(a.x + k * dx - c.x, a.y + k * dy - c.y) <= 8;
+        });
+        if (perto) acrescentarAqui([ev.latlng.lng, ev.latlng.lat]);
+      };
+      cliqueNaLinhaRef.current = aoClicarNaLinha;
+      mapa.on('click', aoClicarNaLinha);
+      l.pm.enable(opcoesDoGeoman(encaixeRef.current));
+    };
     if (m === 'vertices' && a) {
-      const grupo = L.geoJSON(a.geojson, { style: { color: '#1d4ed8', weight: 2, fillOpacity: 0.15 } });
-      grupo.eachLayer(l => {
+      L.geoJSON(a.geojson, { style: { color: '#1d4ed8', weight: 2, fillOpacity: 0.15 } }).eachLayer(l => {
         if (!(l instanceof L.Polygon)) return;
         camada.addLayer(l);
-        const atualizar = () => setGeometriaNova(l.toGeoJSON().geometry);
-        editadoRef.current = l;
-        const formaAgora = (): GeoJSON.Polygon | null => { const g = l.toGeoJSON().geometry; return g.type === 'Polygon' ? g : null; };
-        depoisDoUltimoRef.current = formaAgora();
-        /** Fecha um passo: guarda a forma de antes (para o "Desfazer passo") e anota a operação (para a divisa andar junto, item 5). */
-        const fecharPasso = (op: OperacaoNoVertice | null) => {
-          const antes = depoisDoUltimoRef.current;
-          if (antes) { passosRef.current.push({ geo: antes, nOps: opsRef.current.length }); setNPassos(passosRef.current.length); }
-          if (op) setOperacoes([...opsRef.current, op]);
-          depoisDoUltimoRef.current = formaAgora();
-          atualizar();
-        };
-        let deOnde: Ponto | null = null;
-        l.on('pm:markerdragstart', (e) => { deOnde = pontoDoMarcador(e.markerEvent); });
-        l.on('pm:markerdragend', (e) => {
-          const para = pontoDoMarcador(e.markerEvent);
-          const de = deOnde;
-          deOnde = null;
-          if (!de || !para || distanciaM(de, para) <= 0.001) { atualizar(); return; }
-          /* item 7: soltou a menos de 0,5 m de outro ponto do MESMO polígono = junta os dois (nada de pontos amontoados) */
-          const g = formaAgora();
-          const anel = g?.coordinates[0] ?? [];
-          const i = anel.findIndex(q => distanciaM(q, para) < 0.001);
-          const outro = g && i >= 0 ? verticeEmCimaDeOutro(anel, i) : null;
-          if (g && i >= 0 && outro !== null) {
-            const n = anel.length - 1;
-            const aberto = anel.slice(0, n).filter((_q, k) => k !== i);
-            l.pm.disable();
-            l.setLatLngs(latLngsDe({ type: 'Polygon', coordinates: [[...aberto, aberto[0]], ...g.coordinates.slice(1)] }));
-            l.pm.enable(opcoesDoGeoman(encaixeRef.current));
-            fecharPasso({ tipo: 'tirar', de });
-            return;
-          }
-          fecharPasso({ tipo: 'mover', de, para });
-        });
-        l.on('pm:vertexadded', (e) => {
-          const p = pontoDe(e.latlng);
-          const lado = ladoDoVertice(l, p);
-          fecharPasso(lado ? { tipo: 'acrescentar', entre: lado, ponto: p } : null);
-        });
-        l.on('pm:vertexremoved', (e) => {
-          fecharPasso({ tipo: 'tirar', de: pontoDe(e.marker.getLatLng()) });
-        });
-        l.on('pm:markerdrag', atualizar);
-        l.pm.enable(opcoesDoGeoman(encaixeRef.current));
+        ligarVertices(l);
       });
       return;
     }
     if (a) L.geoJSON(a.geojson, { style: { color: '#1d4ed8', weight: 2, dashArray: '4 3', fillOpacity: 0.08 }, pmIgnore: true }).addTo(camada);
     if (m === 'redesenhar' || m === 'desenhar' || m === 'dividir') {
+      /* -06: AO VIVO enquanto desenha — os pontos postos (o vértice que o Geoman acrescenta) e o cursor (o lado elástico) */
+      mapa.on('pm:drawstart', (e) => {
+        const wl = e.workingLayer;
+        if (!(wl instanceof L.Polyline)) return;
+        wl.on('pm:vertexadded', () => {
+          const ll = wl.getLatLngs();
+          setPontosDoDesenho(ll.filter((x): x is L.LatLng => x instanceof L.LatLng).map(pontoDe));
+        });
+      });
+      /* um quadro por vez, mas sempre com o ÚLTIMO movimento (descartar o que chega no meio perdia o cursor parado num ponto só) */
+      let quadro = 0;
+      let ultimo: L.LatLng | null = null;
+      const aoMover = (ev: L.LeafletMouseEvent) => {
+        ultimo = ev.latlng;
+        if (quadro) return;
+        quadro = requestAnimationFrame(() => { quadro = 0; if (ultimo) setCursorDoDesenho(pontoDe(ultimo)); });
+      };
+      moverRef.current = aoMover;
+      mapa.on('mousemove', aoMover);
+      const pararAoVivo = () => {
+        mapa.off('mousemove', aoMover); moverRef.current = null;
+        setPontosDoDesenho([]); setCursorDoDesenho(null);
+      };
       mapa.on('pm:create', (e) => {
         const g = geometriaDaCamada(e.layer);
         mapa.removeLayer(e.layer);
+        pararAoVivo();
         if (!g) return;
         if (m === 'dividir') {
-          const r = dividirPorLinha(a?.geojson ?? g, pontosDaLinha(g));
-          if ('motivo' in r) { setErro(r.motivo); return; }
-          setErro(null); setDivisao(r.valor);
-          camada.addLayer(L.geoJSON(r.valor.a, { style: { color: '#15803d', weight: 2, fillOpacity: 0.25 }, pmIgnore: true }));
-          camada.addLayer(L.geoJSON(r.valor.b, { style: { color: '#b45309', weight: 2, fillOpacity: 0.25 }, pmIgnore: true }));
+          /* -06: a linha do corte fica EDITÁVEL (arrastar/acrescentar ponto) e a divisão se refaz a cada ajuste, antes da prévia */
+          const metades = L.featureGroup().addTo(camada);
+          const linha = L.polyline(pontosDaLinha(g).map(p => L.latLng(p[1], p[0])), { color: '#7c3aed', weight: 2, dashArray: '6 4' });
+          camada.addLayer(linha);
+          const refazer = () => {
+            metades.clearLayers();
+            const gl = linha.toGeoJSON().geometry;
+            const r = dividirPorLinha(a?.geojson ?? gl, pontosDaLinha(gl));
+            if ('motivo' in r) { setErro(r.motivo); setDivisao(null); return; }
+            setErro(null); setDivisao(r.valor);
+            metades.addLayer(L.geoJSON(r.valor.a, { style: { color: '#15803d', weight: 2, fillOpacity: 0.25 }, pmIgnore: true, interactive: false }));
+            metades.addLayer(L.geoJSON(r.valor.b, { style: { color: '#b45309', weight: 2, fillOpacity: 0.25 }, pmIgnore: true, interactive: false }));
+          };
+          refazer();
+          linha.on('pm:markerdragend', refazer);
+          linha.on('pm:vertexadded', refazer);
+          linha.on('pm:vertexremoved', refazer);
+          linha.pm.enable(opcoesDoGeoman(encaixeRef.current));
+          setTemRascunho(true);
           return;
         }
         if (g.type !== 'Polygon') return;
+        /* -06: o polígono fechado NÃO vai direto para a prévia: vira RASCUNHO em edição de vértices (medidas, encaixe, recortar, desfazer
+           passo, clique na linha) e só o "Prévia e gravar" leva ao banco; Cancelar descarta */
+        const rascunho = L.polygon(latLngsDe(g), { color: '#15803d', weight: 2, fillOpacity: 0.2 });
+        camada.addLayer(rascunho);
         setGeometriaNova(g);
-        camada.addLayer(L.geoJSON(g, { style: { color: '#15803d', weight: 2, fillOpacity: 0.25 }, pmIgnore: true }));
+        setTemRascunho(true);
+        ligarVertices(rascunho);
       });
       /* o duplo clique termina o desenho (e não dá zoom: o zoom do duplo clique volta ao encerrar) */
       mapa.doubleClickZoom.disable();
@@ -307,19 +420,38 @@ export function useEdicaoDoPoligono(args: {
     }
   }, [mapa, encerrar, lerAlvo, enquadrar]);
 
-  // unir: o vizinho escolhido entra na conta
+  /** -04: começa o unir já com vários (os marcados na lista): o 1º fica, os outros somem nele. */
+  const iniciarUniao = useCallback(async (ids: readonly string[]) => {
+    if (ids.length < 2) return;
+    await iniciar('unir', ids[0]);
+    setUnidos(ids.slice(1));
+  }, [iniciar]);
+  /** -04: no unir, o clique no mapa (ou o "acrescentar") põe ou tira o polígono da união. */
+  const alternarNaUniao = useCallback((id: string) => {
+    if (modo !== 'unir' || !alvo || id === alvo.id) return;
+    setUnidos(u => (u.includes(id) ? u.filter(x => x !== id) : [...u, id]));
+    setFicaComDe(f => (f === id ? alvo.id : f));
+  }, [modo, alvo]);
+  // os candidatos: quem encosta (até 2 m: a fresta do KMZ) no alvo ou em algum já escolhido — nunca o contorno da fazenda
   const candidatosAUnir = useMemo(() => {
     if (modo !== 'unir' || !alvo) return [];
-    return geometrias.filter(g => g.id !== alvo.id && unirVizinhos(alvo.geojson, g.geojson).ok);
-  }, [modo, alvo, geometrias]);
+    const membros = [alvo.geojson, ...geometrias.filter(g => unidos.includes(g.id)).map(g => g.geojson)];
+    return geometrias.filter(g => g.id !== alvo.id && !unidos.includes(g.id) && !TIPOS_DE_CONTORNO.includes(g.tipo ?? '')
+      && membros.some(m => distanciaEntrePoligonosM(m, g.geojson) <= TOLERANCIA_FRESTA_M));
+  }, [modo, alvo, unidos, geometrias]);
+  const membrosDaUniao = useMemo(() => (modo === 'unir' && alvo
+    ? [{ id: alvo.id, nome: alvo.nome, geojson: alvo.geojson, pasto_id: alvo.pasto_id },
+       ...unidos.map(id => geometrias.find(g => g.id === id)).filter((g): g is PoligonoDaFazenda => !!g)
+         .map(g => ({ id: g.id, nome: g.nome_original, geojson: g.geojson, pasto_id: g.pasto_id }))]
+    : []), [modo, alvo, unidos, geometrias]);
   useEffect(() => {
-    if (modo !== 'unir' || !alvo || !vizinhoId) return;
-    const v = geometrias.find(g => g.id === vizinhoId);
-    if (!v) return;
-    const r = unirVizinhos(alvo.geojson, v.geojson);
+    if (modo !== 'unir' || !alvo) return;
+    if (membrosDaUniao.length < 2) { setGeometriaNova(null); setErro(null); return; }
+    const r = unirVarios(membrosDaUniao);
     if ('motivo' in r) { setErro(r.motivo); setGeometriaNova(null); return; }
-    setErro(null); setGeometriaNova(r.valor);
-  }, [modo, alvo, vizinhoId, geometrias]);
+    setErro(null); setGeometriaNova(r.valor.geojson);
+  }, [modo, alvo, membrosDaUniao]);
+  const somaDaUniaoHa = useMemo(() => membrosDaUniao.reduce((t, m) => t + areaEmHectares(m.geojson), 0), [membrosDaUniao]);
 
   /** A geometria que vale agora para medir (a nova; no dividir, a metade que fica com o original). */
   const geometriaMedida = useMemo<GeoJSON.Geometry | null>(() => {
@@ -327,7 +459,20 @@ export function useEdicaoDoPoligono(args: {
     return geometriaNova ?? alvo?.geojson ?? null;
   }, [modo, divisao, originalFicaCom, geometriaNova, alvo]);
 
-  const medidas = useMemo<Medidas | null>(() => (geometriaMedida ? medidasDe(geometriaMedida) : null), [geometriaMedida]);
+  /* -06: enquanto desenha (antes de fechar), o trajeto aberto + o cursor: lados (o elástico incluso), perímetro e, a partir do 3º ponto, a
+     área com o polígono fechado no 1º ponto — a MESMA conta da edição (`ladosM`/`areaEmHectares`) */
+  const desenhando = (modo === 'desenhar' || modo === 'redesenhar' || modo === 'dividir') && !temRascunho && pontosDoDesenho.length > 0;
+  const trajetoDoDesenho = useMemo<Ponto[]>(() => (desenhando ? (cursorDoDesenho ? [...pontosDoDesenho, cursorDoDesenho] : pontosDoDesenho) : []),
+    [desenhando, pontosDoDesenho, cursorDoDesenho]);
+  const fechaODesenho = modo !== 'dividir' && trajetoDoDesenho.length >= 3;
+  const medidasAoVivo = useMemo<Medidas | null>(() => {
+    if (!desenhando || trajetoDoDesenho.length < 2) return null;
+    const lados = ladosM(fechaODesenho ? [...trajetoDoDesenho, trajetoDoDesenho[0]] : trajetoDoDesenho);
+    const ladosAbertos = fechaODesenho ? lados : lados.slice(0, trajetoDoDesenho.length - 1);
+    const areaHa = fechaODesenho ? areaEmHectares({ type: 'Polygon', coordinates: [[...trajetoDoDesenho, trajetoDoDesenho[0]]] }) : 0;
+    return { areaHa, perimetroM: ladosAbertos.reduce((t, l) => t + l, 0), ladosM: ladosAbertos };
+  }, [desenhando, trajetoDoDesenho, fechaODesenho]);
+  const medidas = useMemo<Medidas | null>(() => medidasAoVivo ?? (geometriaMedida ? medidasDe(geometriaMedida) : null), [medidasAoVivo, geometriaMedida]);
 
   /** item 7: volta UM movimento (a forma de antes do último passo e as operações daquela hora). Sem passos, nada. */
   const desfazerPasso = useCallback(() => {
@@ -339,9 +484,11 @@ export function useEdicaoDoPoligono(args: {
     l.setLatLngs(latLngsDe(p.geo));
     l.pm.enable(opcoesDoGeoman(encaixeRef.current));
     depoisDoUltimoRef.current = p.geo;
+    setCorrecao(null);
     setOperacoes(opsRef.current.slice(0, p.nOps));
-    setGeometriaNova(passosRef.current.length === 0 ? null : p.geo);
-  }, [setOperacoes]);
+    // no editar vértices, sem passos = o polígono como estava (nada a gravar); no rascunho (-06) a forma desenhada continua valendo
+    setGeometriaNova(passosRef.current.length === 0 && modo === 'vertices' ? null : p.geo);
+  }, [setOperacoes, modo]);
   // Ctrl/Cmd+Z na edição de vértices = desfazer passo (fora de campo de texto)
   useEffect(() => {
     if (modo !== 'vertices') return;
@@ -353,6 +500,23 @@ export function useEdicaoDoPoligono(args: {
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
   }, [modo, desfazerPasso]);
+
+  /** item 8: corrige o polígono em edição (junta os amontoados, tira o laço) — é um PASSO (o "Desfazer passo" o volta); a prévia mostra
+   *  a área antes × depois e grava como "editar" (trilha e desfazer). */
+  const corrigir = useCallback(() => {
+    const l = editadoRef.current;
+    const g = l ? l.toGeoJSON().geometry : null;
+    if (!l || !g) return;
+    const r = corrigirPoligono(g);
+    if ('motivo' in r) { setErro(r.motivo); return; }
+    const antes = depoisDoUltimoRef.current;
+    if (antes) { passosRef.current.push({ geo: antes, nOps: opsRef.current.length }); setNPassos(passosRef.current.length); }
+    l.pm.disable();
+    l.setLatLngs(latLngsDe(r.valor.geojson));
+    l.pm.enable(opcoesDoGeoman(encaixeRef.current));
+    depoisDoUltimoRef.current = r.valor.geojson;
+    setErro(null); setCorrecao(r.valor); setGeometriaNova(r.valor.geojson);
+  }, []);
 
   /** item 7: onde a linha cruza ela mesma (só o anel externo do polígono que vale agora). */
   const cruzamentos = useMemo<Ponto[]>(() => {
@@ -373,13 +537,20 @@ export function useEdicaoDoPoligono(args: {
     const g = rotulosRef.current;
     if (!g) return;
     g.clearLayers();
-    if (!modo || modo === 'apagar' || !geometriaMedida || geometriaMedida.type !== 'Polygon') return;
-    const anel = geometriaMedida.coordinates[0] ?? [];
-    const n = anel.length;
-    if (n < 4 || n > 41) return;
-    const fechado = anel[0][0] === anel[n - 1][0] && anel[0][1] === anel[n - 1][1];
-    const pontos = fechado ? anel.slice(0, -1) : anel;
-    pontos.forEach((p, i) => {
+    if (!modo || modo === 'apagar') return;
+    /* -06: desenhando, os lados do TRAJETO (o elástico até o cursor e, com 3+ pontos, o de fechar); senão, os do polígono */
+    let pontos: number[][] = [];
+    let fechar = true;
+    if (desenhando) { pontos = trajetoDoDesenho; fechar = fechaODesenho; }
+    else if (geometriaMedida && geometriaMedida.type === 'Polygon') {
+      const anel = geometriaMedida.coordinates[0] ?? [];
+      const n = anel.length;
+      if (n < 4 || n > 41) return;
+      pontos = anel[0][0] === anel[n - 1][0] && anel[0][1] === anel[n - 1][1] ? anel.slice(0, -1) : anel;
+    }
+    if (pontos.length < 2) return;
+    const total = fechar ? pontos.length : pontos.length - 1;
+    pontos.slice(0, total).forEach((p, i) => {
       const q = pontos[(i + 1) % pontos.length];
       const m = Math.round(distanciaM(p, q));
       const icone = L.divIcon({ className: 'lado-do-poligono', iconSize: [0, 0],
@@ -392,10 +563,10 @@ export function useEdicaoDoPoligono(args: {
         html: '<span style="position:absolute;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;border:2.5px solid #dc2626;background:rgba(254,202,202,.55)"></span>' });
       L.marker([c[1], c[0]], { icon: anelVermelho, interactive: false, pmIgnore: true, zIndexOffset: 1000 }).addTo(g);
     }
-  }, [mapa, modo, geometriaMedida, cruzamentos]);
+  }, [mapa, modo, geometriaMedida, cruzamentos, desenhando, trajetoDoDesenho, fechaODesenho]);
 
-  const vizinhosAntes = useMemo(() => geometrias.filter(g => g.id !== alvo?.id && g.id !== vizinhoId)
-    .map(g => ({ id: g.id, nome: g.nome_original, tipo: g.tipo, geojson: g.geojson })), [geometrias, alvo, vizinhoId]);
+  const vizinhosAntes = useMemo(() => geometrias.filter(g => g.id !== alvo?.id && !unidos.includes(g.id))
+    .map(g => ({ id: g.id, nome: g.nome_original, tipo: g.tipo, geojson: g.geojson })), [geometrias, alvo, unidos]);
 
   // MAPA-EDITAR-POLIGONO-02: o contorno da fazenda ("Area Total") cobre os pastos por definição — não é sobreposição
   const contornos = useMemo(() => contornosDaFazenda(geometrias.map(g => ({ id: g.id, nome: g.nome_original, tipo: g.tipo, geojson: g.geojson }))),
@@ -433,6 +604,52 @@ export function useEdicaoDoPoligono(args: {
     return proprias.flatMap(g => sobreposicoes(g, vizinhos, MINIMO_SOBREPOSICAO_HA, contornos));
   }, [modo, geometriaMedida, divisao, vizinhos, contornos]);
 
+  /* -05: num lado longo com o meio FORA da tela, um "ponto do meio" no meio do TRECHO VISÍVEL (o do Geoman fica no meio do lado);
+     clicar nele cria o vértice ali. Refeito a cada movimento do mapa. */
+  const meiosRef = useRef<L.LayerGroup | null>(null);
+  useEffect(() => {
+    if (!mapa) return;
+    const g = L.layerGroup().addTo(mapa);
+    meiosRef.current = g;
+    return () => { g.remove(); meiosRef.current = null; };
+  }, [mapa]);
+  useEffect(() => {
+    const g = meiosRef.current;
+    if (!mapa || !g) return;
+    const desenhar = () => {
+      g.clearLayers();
+      if (modo !== 'vertices' || !geometriaMedida || geometriaMedida.type !== 'Polygon') return;
+      const t = mapa.getSize();
+      const anel = geometriaMedida.coordinates[0];
+      for (let i = 0; i + 1 < anel.length; i++) {
+        const a = mapa.latLngToContainerPoint([anel[i][1], anel[i][0]]), b = mapa.latLngToContainerPoint([anel[i + 1][1], anel[i + 1][0]]);
+        const meio = a.add(b).divideBy(2);
+        if (meio.x >= 0 && meio.y >= 0 && meio.x <= t.x && meio.y <= t.y) continue; // o do Geoman está à vista
+        // recorte do lado na janela (Liang–Barsky)
+        let t0 = 0, t1 = 1;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const lados: [number, number][] = [[-dx, a.x], [dx, t.x - a.x], [-dy, a.y], [dy, t.y - a.y]];
+        let fora = false;
+        for (const [pp, qq] of lados) {
+          if (pp === 0) { if (qq < 0) { fora = true; break; } continue; }
+          const r = qq / pp;
+          if (pp < 0) t0 = Math.max(t0, r); else t1 = Math.min(t1, r);
+        }
+        if (fora || t1 - t0 <= 0 || Math.hypot(dx, dy) * (t1 - t0) < 60) continue;
+        const k = (t0 + t1) / 2;
+        const ll = mapa.containerPointToLatLng([a.x + k * dx, a.y + k * dy]);
+        const icone = L.divIcon({ className: 'meio-do-trecho', iconSize: [0, 0],
+          html: '<span style="position:absolute;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid #3388ff;opacity:.85;cursor:pointer"></span>' });
+        const mk = L.marker(ll, { icon: icone, pmIgnore: true, zIndexOffset: 500, title: 'Clique para criar um vértice aqui' });
+        mk.on('click', () => acrescentarRef.current?.([ll.lng, ll.lat]));
+        mk.addTo(g);
+      }
+    };
+    desenhar();
+    mapa.on('moveend zoomend', desenhar);
+    return () => { mapa.off('moveend zoomend', desenhar); g.clearLayers(); };
+  }, [mapa, modo, geometriaMedida]);
+
   /* os vizinhos que mudam aparecem tracejados em laranja (o que vai ser gravado junto) */
   const vizinhosRef = useRef<L.LayerGroup | null>(null);
   useEffect(() => {
@@ -468,13 +685,14 @@ export function useEdicaoDoPoligono(args: {
       if (pastoVaiParaNova && alvo.pasto_id) { alterar.pasto_id = null; criar.pasto_id = alvo.pasto_id; }
       return { g: { acao: 'dividir', alterar: [alterar], criar: [criar] }, antes, depois: areaEmHectares(fica) + areaEmHectares(nova) };
     }
-    if (modo === 'unir' && alvo && geometriaNova && vizinhoId) {
-      const v = geometrias.find(x => x.id === vizinhoId);
-      if (!v) return null;
+    if (modo === 'unir' && alvo && geometriaNova && membrosDaUniao.length >= 2) {
       const alterar: Record<string, unknown> = { id: alvo.id, versao: alvo.versao, geojson: geometriaNova };
-      if (pastoDoVizinho && v.pasto_id) alterar.pasto_id = v.pasto_id;
-      return { g: { acao: 'unir', alterar: [alterar], remover: [{ id: v.id, versao: -1 }] },
-        antes: antes + areaEmHectares(v.geojson), depois: areaEmHectares(geometriaNova) };
+      // o pasto do resultado: o do polígono escolhido; '' = sem classificação (desliga o pasto do alvo, se houver)
+      const fica = membrosDaUniao.find(m => m.id === ficaComDe);
+      if (!fica) { if (alvo.pasto_id) alterar.pasto_id = null; }
+      else if (fica.id !== alvo.id) alterar.pasto_id = fica.pasto_id;
+      return { g: { acao: 'unir', alterar: [alterar], remover: membrosDaUniao.slice(1).map(m => ({ id: m.id, versao: -1 })) },
+        antes: somaDaUniaoHa, depois: areaEmHectares(geometriaNova) };
     }
     if (modo === 'apagar' && alvo) {
       const g: Gesto = { acao: 'apagar', motivo: motivo.trim(), remover: [{ id: alvo.id, versao: alvo.versao }] };
@@ -488,7 +706,7 @@ export function useEdicaoDoPoligono(args: {
       return { g, antes: 0, depois: areaEmHectares(geometriaNova) };
     }
     return null;
-  }, [modo, alvo, geometriaNova, divisao, originalFicaCom, pastoVaiParaNova, nomeNovo, vizinhoId, pastoDoVizinho, geometrias, motivo, destinoDoPasto, afetados, cruzamentos]);
+  }, [modo, alvo, geometriaNova, divisao, originalFicaCom, pastoVaiParaNova, nomeNovo, membrosDaUniao, ficaComDe, somaDaUniaoHa, geometrias, motivo, destinoDoPasto, afetados, cruzamentos]);
 
   /** A versão de cada polígono que entra no gesto sem ser o alvo (vizinho do unir, destino do apagar) é lida na hora. */
   const comVersoesFrescas = useCallback(async (g: Gesto): Promise<Gesto | null> => {
@@ -529,6 +747,7 @@ export function useEdicaoDoPoligono(args: {
       const areas = new Map<string, [number | null, number | null]>();
       if (alvo) areas.set(alvo.id, [areaEmHectares(alvo.geojson), geometriaMedida && modo !== 'apagar' ? areaEmHectares(geometriaMedida) : null]);
       for (const a of afetados.lista) areas.set(a.id, [areaEmHectares(a.antes), areaEmHectares(a.depois)]);
+      for (const m of membrosDaUniao.slice(1)) areas.set(m.id, [areaEmHectares(m.geojson), null]); // -04: os que somem na união
       const lista: ItemDaPrevia[] = (Array.isArray(r.poligonos) ? r.poligonos : []).map((p: ItemDaPrevia) => {
         const ar = areas.get(p.id);
         if (ar) return { ...p, areaAntesHa: ar[0], areaDepoisHa: p.mudanca === 'removido' ? null : ar[1] };
@@ -541,7 +760,7 @@ export function useEdicaoDoPoligono(args: {
         areaAntesHa: gesto.antes, areaDepoisHa: gesto.depois, sobreposicoes: avisos,
       });
     } finally { setGravando(false); }
-  }, [gesto, chamar, avisos, alvo, geometriaMedida, modo, afetados, geometriaNova]);
+  }, [gesto, chamar, avisos, alvo, geometriaMedida, modo, afetados, geometriaNova, membrosDaUniao]);
 
   const gravar = useCallback(async () => {
     setGravando(true); setErro(null);
@@ -592,10 +811,11 @@ export function useEdicaoDoPoligono(args: {
   return {
     modo, alvo, iniciar, cancelar: encerrar, medidas, avisos, gesto, previa, setPrevia, prever, gravar, gravando, erro, setErro,
     divisao, originalFicaCom, setOriginalFicaCom, pastoVaiParaNova, setPastoVaiParaNova,
-    candidatosAUnir, vizinhoId, setVizinhoId, pastoDoVizinho, setPastoDoVizinho,
+    candidatosAUnir, unidos, alternarNaUniao, iniciarUniao, membrosDaUniao, ficaComDe, setFicaComDe, somaDaUniaoHa,
     motivo, setMotivo, destinoDoPasto, setDestinoDoPasto, nomeNovo, setNomeNovo,
     ultimoGesto, desfazer, apagarVarios,
     encaixe, setEncaixe, divisaJunto, setDivisaJunto, recortar, setRecortar, afetados: afetados.lista, erroDoRecorte: afetados.erro,
-    reenquadrar, desfazerPasso, podeDesfazerPasso: nPassos > 0, cruzamentos, fraseDoCruzamento: cruzamentos.length ? FRASE_DO_CRUZAMENTO : null,
+    reenquadrar, desfazerPasso, podeDesfazerPasso: nPassos > 0, desenhando, temRascunho, cruzamentos, corrigir, correcao,
+    podeCorrigir: modo === 'vertices' && !!geometriaMedida && (cruzamentos.length > 0 || temPontosAmontoados(geometriaMedida)), fraseDoCruzamento: cruzamentos.length ? FRASE_DO_CRUZAMENTO : null,
   };
 }

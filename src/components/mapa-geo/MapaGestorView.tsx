@@ -337,7 +337,9 @@ export function MapaGestorView({
     rotulosRef.current = candidatos;
     reportRenderedGeometries(desenhados);
     onRenderedChange?.(desenhados);
-    const chave = geometrias.map(x => x.id).join(',');
+    /* MAPA-EDITAR-POLIGONO-07 (Gabriel 15:09): o enquadramento automático só na troca de FAZENDA (e no 1º carregamento). A chave era a
+       lista de ids dos polígonos: toda gravação que cria/remove um (desenhar, dividir, unir, apagar) reenquadrava a fazenda inteira. */
+    const chave = geometrias[0]?.fazenda_id ?? '';
     if (limites.isValid() && enquadrouRef.current !== chave) {
       enquadrouRef.current = chave;
       try { mapa.fitBounds(limites, { paddingTopLeft: [240, 70], paddingBottomRight: [20, 60], animate: false, maxZoom: 16 }); } catch { /* */ }
@@ -386,7 +388,10 @@ export function MapaGestorView({
     const g = geoPastos.find(x => x.pasto_id === pastoId);
     if (!g) return;
     setSelecionadoId(g.id);
-    enquadrar((camadasRef.current.get(g.id) ?? L.geoJSON(g.geojson)).getBounds(), true);
+    /* -07: escolher o pasto NÃO muda o zoom; fora da tela, o mapa só desliza até ele ("Fazenda inteira" enquadra quando se quer) */
+    const mapa = mapInstanceRef.current;
+    const b = (camadasRef.current.get(g.id) ?? L.geoJSON(g.geojson)).getBounds();
+    if (mapa && b.isValid() && !mapa.getBounds().intersects(b)) mapa.panTo(b.getCenter()); // só quando está TODO fora da tela
   };
 
   const opcoesBusca = useMemo(() => geoPastos

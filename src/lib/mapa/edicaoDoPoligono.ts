@@ -10,6 +10,7 @@
  */
 import { difference, intersection, union } from 'polyclip-ts';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
+import { casaNaBusca, normalizarParaBusca } from '@/lib/texto/busca';
 
 const RAIO_DA_TERRA_M = 6371008.8;
 
@@ -347,3 +348,154 @@ export function verticeEmCimaDeOutro(anel: readonly (readonly number[])[], i: nu
   return null;
 }
 
+// --- corrigir automaticamente o polígono que já veio inválido (item 8 do -02) -------------------------------------------------
+export interface Correcao {
+  geojson: GeoJSON.Polygon;
+  pontosJuntados: number;      // pontos amontoados (≤ 0,5 m do vizinho no anel) que viraram um só
+  partesDescartadas: number;   // os laços soltos que saíram (fica a parte maior)
+  areaAntesHa: number;
+  areaDepoisHa: number;
+}
+
+/** Junta os pontos seguidos a até `TOLERANCIA_VERTICE_COMUM_M` (o amontoado do KMZ) e, se o anel ainda cruza ele mesmo, desfaz o
+ *  cruzamento pela polyclip (a união do polígono com ele mesmo devolve as partes sem cruzamento) e fica com a parte MAIOR — o laço
+ *  pequeno sai. Nada a corrigir = recusa com frase. Furos não entram (o anel externo é o que o KMZ errou). */
+export function corrigirPoligono(g: GeoJSON.Geometry): Resultado<Correcao> {
+  if (g.type !== 'Polygon' || !g.coordinates[0]) return { ok: false, motivo: 'Só se corrige um polígono simples.' };
+  const anel0 = g.coordinates[0];
+  const n0 = anel0.length;
+  const fechado = n0 > 1 && anel0[0][0] === anel0[n0 - 1][0] && anel0[0][1] === anel0[n0 - 1][1];
+  const aberto = (fechado ? anel0.slice(0, -1) : anel0).map(pt);
+  const limpo: Anel = [];
+  for (const p of aberto) if (limpo.length === 0 || distanciaM(limpo[limpo.length - 1], p) > TOLERANCIA_VERTICE_COMUM_M) limpo.push(p);
+  while (limpo.length > 1 && distanciaM(limpo[0], limpo[limpo.length - 1]) <= TOLERANCIA_VERTICE_COMUM_M) limpo.pop();
+  const pontosJuntados = aberto.length - limpo.length;
+  if (limpo.length < 3) return { ok: false, motivo: 'Sobraram menos de 3 pontos: redesenhe o polígono.' };
+  let anel: Anel = [...limpo, limpo[0]];
+  let partesDescartadas = 0;
+  if (cruzamentos(anel).length > 0) {
+    const partes = union([anel]).filter(p => p.length && p[0].length >= 4);
+    if (partes.length === 0) return { ok: false, motivo: 'Não consegui desfazer o cruzamento: redesenhe o polígono.' };
+    const maior = partes.reduce((a, b) => (areaEmHectares({ type: 'Polygon', coordinates: [b[0]] }) > areaEmHectares({ type: 'Polygon', coordinates: [a[0]] }) ? b : a));
+    anel = maior[0];
+    partesDescartadas = partes.length - 1;
+    if (cruzamentos(anel).length > 0) return { ok: false, motivo: 'Não consegui desfazer o cruzamento: redesenhe o polígono.' };
+  }
+  if (pontosJuntados === 0 && partesDescartadas === 0 && cruzamentos(anel0).length === 0) return { ok: false, motivo: 'Este polígono não tem cruzamento nem pontos amontoados.' };
+  const geojson: GeoJSON.Polygon = { type: 'Polygon', coordinates: [anel] };
+  return { ok: true, valor: { geojson, pontosJuntados, partesDescartadas, areaAntesHa: areaEmHectares(g), areaDepoisHa: areaEmHectares(geojson) } };
+}
+
+/** O polígono tem pontos amontoados (dois seguidos a até 0,5 m)? */
+export function temPontosAmontoados(g: GeoJSON.Geometry): boolean {
+  if (g.type !== 'Polygon' || !g.coordinates[0]) return false;
+  const a = g.coordinates[0];
+  for (let i = 0; i + 1 < a.length; i++) if (distanciaM(a[i], a[i + 1]) <= TOLERANCIA_VERTICE_COMUM_M) return true;
+  return false;
+}
+
+// --- unir vários (MAPA-EDITAR-POLIGONO-04) ----------------------------------------------------------------------------------
+/** Dois polígonos ENCOSTAM quando as divisas ficam a até 2 m: o KMZ deixa frestas de centímetros a ~1 m entre vizinhos (6A × 6B da Pureza:
+ *  ~0,6 m) e a união exata devolvia 2 pedaços — o Unir dizia "Nenhum resultado". Uma estrada entre dois pastos tem bem mais que isso. */
+export const TOLERANCIA_FRESTA_M = 2;
+
+/** A busca pelo nome do polígono, tolerante: a de sempre (P134) ou a "chave" — sem espaço/pontuação e sem o "P" da frente antes do
+ *  número: 6b = 6B = P6B = "P 6B" = P_6B. */
+export function chaveDoNomeDoPoligono(s: string | null | undefined): string {
+  return normalizarParaBusca(s).replace(/[^a-z0-9]/g, '').replace(/^p(?=\d)/, '');
+}
+export function casaNoNomeDoPoligono(nome: string | null | undefined, termo: string | null | undefined): boolean {
+  return casaNaBusca(nome, termo) || chaveDoNomeDoPoligono(nome).includes(chaveDoNomeDoPoligono(termo));
+}
+
+/* metros locais (plano tangente perto do ponto): bom para distâncias de poucos metros */
+function paraMetros(ref: readonly number[]) {
+  const kx = 111320 * Math.cos(rad(ref[1])), ky = 110540;
+  return {
+    ida: (p: readonly number[]): [number, number] => [(p[0] - ref[0]) * kx, (p[1] - ref[1]) * ky],
+    volta: (m: readonly number[]): Ponto => [ref[0] + m[0] / kx, ref[1] + m[1] / ky],
+  };
+}
+/** O ponto do segmento a–b mais perto de p, e a distância em metros. */
+function maisPertoNoSegmento(p: readonly number[], a: readonly number[], b: readonly number[]): { ponto: Ponto; m: number } {
+  const t = paraMetros(p);
+  const [ax, ay] = t.ida(a), [bx, by] = t.ida(b);
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const k = len2 === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+  const q: [number, number] = [ax + k * dx, ay + k * dy];
+  return { ponto: t.volta(q), m: Math.hypot(q[0], q[1]) };
+}
+function segmentos(g: GeoJSON.Polygon | GeoJSON.MultiPolygon): [Ponto, Ponto][] {
+  const aneis = g.type === 'Polygon' ? g.coordinates : g.coordinates.flat();
+  return aneis.flatMap(a => a.slice(0, -1).map((p, i): [Ponto, Ponto] => [pt(p), pt(a[i + 1])]));
+}
+function vertices(g: GeoJSON.Polygon | GeoJSON.MultiPolygon): Ponto[] {
+  const aneis = g.type === 'Polygon' ? g.coordinates : g.coordinates.flat();
+  return aneis.flatMap(a => a.map(pt));
+}
+
+/** A menor distância entre as divisas de dois polígonos, em metros (0 = se tocam ou se sobrepõem). */
+export function distanciaEntrePoligonosM(a: GeoJSON.Geometry, b: GeoJSON.Geometry): number {
+  if (!ehPoligono(a) || !ehPoligono(b)) return Infinity;
+  if (deMultiPoli(intersection(paraPoli(a), paraPoli(b)))) return 0;
+  let menor = Infinity;
+  const pares: [GeoJSON.Polygon | GeoJSON.MultiPolygon, GeoJSON.Polygon | GeoJSON.MultiPolygon][] = [[a, b], [b, a]];
+  for (const [x, y] of pares) {
+    const segs = segmentos(y);
+    for (const v of vertices(x)) for (const [p, q] of segs) menor = Math.min(menor, maisPertoNoSegmento(v, p, q).m);
+  }
+  return menor;
+}
+
+/** Encaixa cada ponto de `g` que fica a até `tolM` da divisa de algum dos `outros` no ponto mais perto dessa divisa (fecha a fresta). */
+function encaixarNaDivisa(g: GeoJSON.Polygon, outros: readonly (GeoJSON.Polygon | GeoJSON.MultiPolygon)[], tolM: number): { g: GeoJSON.Polygon; n: number } {
+  const segs = outros.flatMap(segmentos);
+  let n = 0;
+  const aneis = g.coordinates.map(anel => anel.map(p => {
+    let melhor: { ponto: Ponto; m: number } | null = null;
+    for (const [a, b] of segs) { const r = maisPertoNoSegmento(p, a, b); if (r.m <= tolM && (!melhor || r.m < melhor.m)) melhor = r; }
+    if (melhor && melhor.m > 0.001) { n++; return melhor.ponto; }
+    return pt(p);
+  }));
+  return { g: { type: 'Polygon', coordinates: aneis }, n };
+}
+
+export interface Uniao { geojson: GeoJSON.Polygon; pontosEncaixados: number; furosFechados: number }
+
+/** Une VÁRIOS polígonos que encostam (até `TOLERANCIA_FRESTA_M`) num só: fecha as frestas encaixando os pontos na divisa vizinha, une pela
+ *  polyclip e fecha os furinhos que a fresta deixou (abaixo de `MINIMO_SOBREPOSICAO_HA`). Quem não encosta em nenhum = recusa com o nome. */
+export function unirVarios(polis: readonly { id: string; nome: string; geojson: GeoJSON.Geometry }[], tolM = TOLERANCIA_FRESTA_M): Resultado<Uniao> {
+  if (polis.length < 2) return { ok: false, motivo: 'Escolha pelo menos dois polígonos para unir.' };
+  const simples: { id: string; nome: string; g: GeoJSON.Polygon }[] = [];
+  for (const p of polis) {
+    if (p.geojson.type !== 'Polygon') return { ok: false, motivo: `${p.nome} tem mais de uma parte: una só polígonos simples.` };
+    simples.push({ id: p.id, nome: p.nome, g: { type: 'Polygon', coordinates: p.geojson.coordinates.map(a => a.map(pt)) } });
+  }
+  // quem encosta em quem (grafo): todos precisam estar ligados ao primeiro
+  const ligados = new Set<number>([0]);
+  for (let mudou = true; mudou;) {
+    mudou = false;
+    for (let i = 0; i < simples.length; i++) {
+      if (ligados.has(i)) continue;
+      if ([...ligados].some(j => distanciaEntrePoligonosM(simples[i].g, simples[j].g) <= tolM)) { ligados.add(i); mudou = true; }
+    }
+  }
+  const soltos = simples.filter((_p, i) => !ligados.has(i)).map(p => p.nome);
+  if (soltos.length) {
+    return { ok: false, motivo: `${soltos.join(', ')} não ${soltos.length === 1 ? 'encosta' : 'encostam'} nos outros (fresta acima de ${tolM} m): aproxime as divisas ou tire da seleção.` };
+  }
+  let pontosEncaixados = 0;
+  const encaixados = simples.map((p, i) => {
+    const r = encaixarNaDivisa(p.g, simples.filter((_q, j) => j !== i).map(q => q.g), tolM);
+    pontosEncaixados += r.n;
+    return r.g;
+  });
+  const [primeiro, ...resto] = encaixados.map(g => paraPoli(g));
+  const u = deMultiPoli(union(primeiro, ...resto));
+  if (!u) return { ok: false, motivo: 'A união ficou vazia.' };
+  if (u.type !== 'Polygon') return { ok: false, motivo: 'Os polígonos não ficaram numa peça só: aproxime as divisas (encaixe nos vértices) e tente de novo.' };
+  const furos = u.coordinates.slice(1);
+  const ficam = furos.filter(f => areaEmHectares({ type: 'Polygon', coordinates: [f] }) >= MINIMO_SOBREPOSICAO_HA);
+  return { ok: true, valor: { geojson: { type: 'Polygon', coordinates: [u.coordinates[0], ...ficam] }, pontosEncaixados, furosFechados: furos.length - ficam.length } };
+}
