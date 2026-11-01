@@ -472,6 +472,17 @@ docs/historico/frentes-ate-2026-09-29.md.
   por isso nao ha' trava. ⚠ O BRIEFING DO PATR-02 / AGRI-05 decide a trava: quando um mes de depreciacao passar a ser CONSUMIDO
   (DRE, fechamento, Lucro Rural), a correcao desse mes fica proibida ou vira ajuste no mes corrente.
 
+- PASTO-AREA-OFICIAL-02 (PASTO-AREA-OFICIAL-01, Gabriel 01/11/2026, decisão 4) — o FRONT lê a área do pasto de HOJE (`usePastos` →
+  `pastos.area_produtiva_ha`) também quando mostra um mês passado. Com a vigência da área (116120: `pasto_area_vigencias`,
+  `fn_pasto_area_no_mes`), o banco já dá a área de cada mês, e a lotação, a DRE e os pastos do P1 a usam (116130); o front ainda não.
+  Até isto, só os pastos que tiveram a área mudada, e só nos meses antes da mudança, mostram a área nova onde deveria ser a antiga.
+  Leitores (mapa do agente de 01/11): FechamentoTab (UA/ha do card), FechamentoPastoDialog, fechamentoGlobal, resumoPorAtividade,
+  resumoPecuaria, ResumoPastosTab, MapaPastosTab (+ exports), MapaGestorView (KPI e `HistoricoLotacao`), MapaOperacaoView,
+  PastoDetailSheet, usePastoOcupacao, zootecnicos.calcAreaProdutivaPecuaria, useIndicadoresZootecnicos, ZootecnicoTab, VisaoZooHubTab,
+  GraficosAnaliseTab, PainelConsultorTab (Meta), ResumoTab, useRebanhoOficial (Global), useAnaliseTrimestral, useFechamentoArea
+  (destinos por mês). ⚠ QUEM FOR TRATAR: uma leitura por fazenda × mês (RPC sobre `fn_pasto_area_no_mes`), nunca a conta da vigência
+  copiada no front; leitor do mês corrente pode seguir no cadastro (é a mesma área).
+
 ## DIVIDAS DE TELA
 
 - P174-TELA-NFSE (Gabriel 29/10/2026, T3: "AbaDocumentosLancamento e NotaFiscalDialog (bruto/retenções/líquido e "no DANFE") ficam com o
