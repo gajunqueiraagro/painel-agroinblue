@@ -216,6 +216,20 @@ const CENARIOS = [
   { nome: 'mapa-geo-sem-satelite', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS },
   { nome: 'mapa-geo-sem-satelite-painel', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
   { nome: 'mapa-geo-operacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
+  /* MAPA-AREA-TIPO-01 — o painel do polígono da Validação com "Classificar" aberto, e o Adicionar › Área › Curral levando à Validação
+     (o aviso "Escolha o polígono…" e o painel já em "É área: Curral" com a prévia). Mede SÓ o painel (o resto da Validação reprova na base:
+     pendência MAPA-VALIDACAO-CORTES do Code 3) */
+  { nome: 'mapa-geo-validacao-classificar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-painel-poligono"]',
+    antes: async (p) => {
+      await p.locator('button', { hasText: 'Validação' }).first().click(); await p.waitForTimeout(600);
+      await p.locator('button[title="Classificar (pasto ou área)"]').first().click(); await p.waitForTimeout(500); } },
+  { nome: 'mapa-geo-adicionar-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-painel-poligono"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+      await p.getByRole('menuitem', { name: 'Área' }).first().hover(); await p.waitForTimeout(300);
+      await p.getByRole('menuitem', { name: 'Curral', exact: true }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="validacao-tipo-pedido"]').waitFor({ timeout: 3000 });
+      await p.getByText('P_01', { exact: true }).first().click(); await p.waitForTimeout(500); } },
   /* MAPA-CONTROLES-01 — abrir o pasto e FECHAR o painel: o zoom e os créditos voltam à borda direita (o espaço do painel não fica
      reservado); com os Filtros ocultos, o mesmo. O canto se mede sozinho em toda tela do Gestor (`medirCantoDoMapa`) */
   { nome: 'mapa-geo-painel-fechado', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
