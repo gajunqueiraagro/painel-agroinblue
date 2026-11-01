@@ -58,9 +58,10 @@ export const encostam = (a: Caixa, b: Caixa, folga = 0.5) =>
 export const dentro = (a: Caixa, area: Caixa) =>
   a.x >= area.x - 0.01 && a.y >= area.y - 0.01 && a.x + a.w <= area.x + area.w + 0.01 && a.y + a.h <= area.y + area.h + 0.01;
 
-/** o 1º candidato que cabe na área e não encosta em nenhum posto; põe ele na lista dos postos */
-export function posicionar(candidatos: Caixa[], postos: Caixa[], area: Caixa): number {
-  const i = candidatos.findIndex((c) => dentro(c, area) && !postos.some((p) => encostam(c, p)));
+/** o 1º candidato que cabe na área e não encosta em nenhum posto; põe ele na lista dos postos. `folga`: a distância mínima até o
+    vizinho (a meta da gaveta usa a do contorno branco do texto, VG-META-ROTULOS-01) */
+export function posicionar(candidatos: Caixa[], postos: Caixa[], area: Caixa, folga = 0.5): number {
+  const i = candidatos.findIndex((c) => dentro(c, area) && !postos.some((p) => encostam(c, p, folga)));
   if (i >= 0) postos.push(candidatos[i]);
   return i;
 }
