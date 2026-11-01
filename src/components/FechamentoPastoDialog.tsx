@@ -18,6 +18,8 @@ import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { toast } from 'sonner';
 import { motivoDoNomeDoPasto, NOTA_NOME_DO_CADASTRO } from '@/lib/pastos/nomeDoPasto';
+import { OndeOLoteEsteve, escolhaInicial, type ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
+import { pastosParaGravar, uaDosItens } from '@/lib/fechamento/loteNoGrupo';
 import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseRevalidarValorRebanho, lerEstadoDoP2, rotuloReabrirValorRebanho } from '@/lib/fechamento/travaDoP2';
 
 /* FECH-MAPA-PASTO-MODAL-01 — ALTURA FIXA (o corpo nao rola): topo + grade das 9 categorias + rodape. So' o painel da
@@ -155,11 +157,13 @@ interface Props {
   onCopiar: () => Promise<{ itens: FechamentoItem[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }>;
   /** FECH-P2-TRAVA-AVISO-01: leva ao Valor do Rebanho do mês e volta a este pasto. Sem ele, a trava só se explica (sem botão). */
   onReabrirValorRebanho?: () => void;
+  /** FECH-ROTACAO-01 fatia 3 — onde o lote do card esteve (grupo, parte do grupo, também esteve em). Sem ele, o modal salva como sempre. */
+  lote?: ContextoDoLote;
 }
 
 export function FechamentoPastoDialog({
   open, onOpenChange, pasto, fechamento,
-  categorias, onCopiar, pastosDaFazenda, onRenomear, onReabrirValorRebanho,
+  categorias, onCopiar, pastosDaFazenda, onRenomear, onReabrirValorRebanho, lote,
 }: Props) {
   const { clienteAtual } = useCliente();
   const [itens, setItens] = useState<FechamentoItem[]>([]);
@@ -176,10 +180,13 @@ export function FechamentoPastoDialog({
   /* FECH-P2-TRAVA-AVISO-01: o mês trava pelo Valor do Rebanho validado (ou P2 fechado). Lido ao abrir, para avisar ANTES de
      digitar; a recusa do banco com a mesma regra também liga. */
   const [travadoPeloP2, setTravadoPeloP2] = useState(false);
+  /* FECH-ROTACAO-01 fatia 3 — os pastos onde o lote do card fica (o próprio sempre); começa no gravado ou no grupo inteiro (F3-2) */
+  const [escolhidos, setEscolhidos] = useState<string[]>(() => (lote ? escolhaInicial(pasto.id, lote) : [pasto.id]));
+  const [escolhidosIniciais, setEscolhidosIniciais] = useState('');
 
   const isFechado = status === 'fechado';
   /* FECH-PASTO-SALVAR-TRANSACAO-01: o modal grava e reabre so' pelas duas RPCs do card (uma transacao cada) */
-  const { loadItens, salvarCardDoPasto, reabrirCardDoPasto } = useFechamento();
+  const { loadItens, salvarCardDoPasto, salvarCardComAlocacao, reabrirCardDoPasto } = useFechamento();
   const { isReadOnly: isMesReadOnly, isMaster, isMesLocked } = useMasterLock(fechamento.ano_mes);
   const masterReadOnly = isMesReadOnly(fechamento.ano_mes);
   /* o MasterLockBanner só se desenha para quem não é master com o mês travado (a mesma condição do componente) */
@@ -195,6 +202,8 @@ export function FechamentoPastoDialog({
   useEffect(() => {
     if (!open || !fechamento) return;
     setNomePasto(pasto.nome); setErroNome(null); setErroSalvar(null); setTravadoPeloP2(false);
+    const inicio = lote ? escolhaInicial(pasto.id, lote) : [pasto.id];
+    setEscolhidos(inicio); setEscolhidosIniciais(inicio.join(','));
     let vivo = true;
     lerEstadoDoP2(fechamento.fazenda_id, fechamento.ano_mes).then(r => { if (vivo && r.ok) setTravadoPeloP2(r.valor.travado); });
     const blank = categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' }));
@@ -264,7 +273,8 @@ export function FechamentoPastoDialog({
 
   const isDirty = () => {
     return JSON.stringify(itens) !== initialItens ||
-      JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes, nomePasto }) !== initialMeta;
+      JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes, nomePasto }) !== initialMeta ||
+      escolhidos.join(',') !== escolhidosIniciais;
   };
 
   /* O nome so' e' julgado quando mudou; a frase fica ao lado do campo. */
@@ -280,12 +290,18 @@ export function FechamentoPastoDialog({
     try {
       setSaving(true);
       if (nomeMudou && !(await onRenomear(nomePasto.trim(), setErroNome))) return;
-      const r = await salvarCardDoPasto(fechamento.id, {
+      const campos = {
         lote_mes: loteMes || null,
         tipo_uso_mes: tipoUsoMes || null,
         qualidade_mes: qualidadeMes,
         observacao_mes: observacaoMes || null,
-      }, itens);
+      };
+      /* FECH-ROTACAO-01 fatia 3 (F3-3): com o contexto do lote, o card e onde o lote esteve vão numa transação só */
+      const r = lote
+        ? await salvarCardComAlocacao(fechamento.id, campos, itens, pastosParaGravar({
+            pastoId: pasto.id, escolhidos, temCabeca: itens.some(i => i.quantidade > 0), temGrupo: lote.membros.length > 1, gravada: lote.gravada,
+          }))
+        : await salvarCardDoPasto(fechamento.id, campos, itens);
       if (!r.ok) {
         if (ehRecusaDaTravaDoP2(r.erro)) { setTravadoPeloP2(true); return; }
         setErroSalvar(r.erro); return;
@@ -585,6 +601,10 @@ export function FechamentoPastoDialog({
               </>
             )}
           </div>
+          {lote && !ehLavoura && total > 0 && (
+            <OndeOLoteEsteve pasto={lote.proprio} contexto={lote} escolhidos={escolhidos} onChange={setEscolhidos}
+              uaDoCard={uaDosItens(itens)} disabled={inputsDisabled} />
+          )}
           <div className="flex-1" />
           {/* a recusa do banco (ex.: P2 validado) fica escrita aqui, nunca so' em toast */}
           <span className="min-w-0 max-w-[360px] truncate text-[11px] font-medium text-red-600" title={erroSalvar ?? undefined} data-testid="erro-do-pasto">
