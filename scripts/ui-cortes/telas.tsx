@@ -75,6 +75,8 @@ import * as MAPA from './dados/mapaPastos';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import * as CONTAS_BANC from './dados/contas';
 import * as VG from './dados/visaoGeral';
+import * as DRE from './dados/dre';
+import { AgriDreLavouraTab } from '@/pages/AgriDreLavouraTab';
 import { BarraSecao } from '@/v2/components/BarraSecao';
 import { VisaoGeralFinanceiro } from '@/v2/pages/VisaoGeralFinanceiro';
 import { FiltrosBarraVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
@@ -641,6 +643,16 @@ if (tela === 'mesclar') {
   /* PROD-EVOLUCAO-01a — Produção › Evolução no Ano (nível 1), meses SINTÉTICOS no pior caso de largura (`mocks/evolucao.ts`); `&faz=1` uma fazenda */
   g.__bancoBancada = { from: () => [], rpc: () => null };
   montar(<div className="h-full"><EvolucaoDoAnoTab /></div>);
+} else if (tela === 'dre') {
+  /* DRE-LEVE-01 — Executivo › DRE (a página inteira: as faixas de filtro e a grade), dado SINTÉTICO (`dados/dre.ts`): a Pecuária com os
+     números do mock e a Lavoura do teste da grade; `&v=grande` = todo valor ×10 (o pior caso de largura). O período vem da URL (`f_de`). */
+  const ESCALA_DRE = v === 'grande' ? 10 : 1;
+  g.__bancoBancada = {
+    from: (t: string) => (t === 'financeiro_safras' ? DRE.SAFRAS : []),
+    rpc: (fn: string, a: any) => fn === 'fn_dre_pecuaria' ? DRE.drePecuaria(a, ESCALA_DRE)
+      : fn === 'fn_dre_lavoura' ? DRE.dreLavoura(ESCALA_DRE) : null,
+  };
+  montarNaUrl(<div className="h-full"><AgriDreLavouraTab /></div>);
 } else if (tela === 'recorrencias') {
   /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
   g.__bancoBancada = {

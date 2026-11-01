@@ -52,13 +52,29 @@ export type TipoLinha = 'subtotal' | 'grupo' | 'simples' | 'filha';
  * descuido: antes só a filha (9px) era exceção. Fora do DRE, 10px continua sendo o piso — e
  * 9,5px, o da casa desde 17/09. Está registrado no CLAUDE.md com esta data.
  */
+/* ⚠ DRE-LEVE-01 (Gabriel 31/10/2026, mock `mock-dre-v2.html` opção B): UMA letra só, 9px, como o card "Entradas e saídas" da Visão
+   Geral. O resultado se marca pelo NEGRITO e por uma régua escura de 1,5px embaixo (`REGUA_RESULTADO`), não por letra maior nem faixa;
+   o subitem (de dentro de um grupo aberto) desce a 8,5px em 13px — exceção do piso registrada no histórico (DRE-LEVE-01). */
 export const REGUA_LINHA: Record<TipoLinha,
   { fonte: number; peso: string; altura: number; recuo: number }> = {
-  subtotal: { fonte: 11, peso: 'font-medium', altura: 20, recuo: 0 },
-  grupo: { fonte: 9, peso: 'font-medium', altura: 16, recuo: 8 },
+  subtotal: { fonte: 9, peso: 'font-bold', altura: 16, recuo: 0 },
+  grupo: { fonte: 9, peso: 'font-normal', altura: 16, recuo: 8 },
   simples: { fonte: 9, peso: 'font-normal', altura: 16, recuo: 8 },
-  filha: { fonte: 9, peso: 'font-normal', altura: 14, recuo: 16 },
+  filha: { fonte: 8.5, peso: 'font-normal', altura: 13, recuo: 16 },
 };
+
+/** DRE-LEVE-01 — a régua escura de 1,5px embaixo de um resultado. Fundo desenhado (não `border`): não muda a altura da linha e
+    convive com a coluna congelada e com o contorno da Meta (`box-shadow`). */
+export const REGUA_RESULTADO = '[&>td]:[background-image:linear-gradient(#1f2937,#1f2937)] [&>td]:[background-size:100%_1.5px] '
+  + '[&>td]:[background-position:bottom] [&>td]:bg-no-repeat';
+/** DRE-LEVE-01 — os resultados-chave (Margem de contribuição, Lucro operacional, Resultado econômico): fundo azul-claro, valor a 10px. */
+export const LINHAS_CHAVE: ReadonlySet<string> = new Set(['margem', 'margem_contribuicao', 'resultado_operacional', 'resultado_com_mercado']);
+export const FUNDO_CHAVE = 'bg-[#f1f5fa]';
+export const FONTE_CHAVE = 10;
+/** DRE-LEVE-01 (D6) — a cor do número NA GRADE: negativo vermelho, positivo em tinta escura; o resultado-chave em navy. A cor das
+    outras telas do DRE (modais, cascata) segue a de sempre (`corDoSinal`, `corDoTom`). */
+export const corNaGrade = (v: number | null | undefined, opts: { custo?: boolean; chave?: boolean; apoio?: boolean } = {}) =>
+  (opts.custo ? VERMELHO : v != null && v < 0 ? VERMELHO : opts.chave ? 'text-primary' : opts.apoio ? 'text-muted-foreground' : 'text-foreground');
 
 /**
  * O FUNDO DE UMA LINHA — e ele faz parte da RÉGUA DO SUBTOTAL, não é decoração à parte.
@@ -73,7 +89,8 @@ export const REGUA_LINHA: Record<TipoLinha,
  * VISUAL entre os dois; a distinção semântica fica, para o dia em que ela voltar a significar
  * algo na tela.
  */
-export const fundoDaLinha = (d?: DestaqueLinha) => (d ? 'bg-muted' : 'bg-card');
+/* ⚠ DRE-LEVE-01 (D6): sem cinza nas linhas de resultado — o mock marca o resultado pelo negrito e pela régua, não pelo fundo. */
+export const fundoDaLinha = (_d?: DestaqueLinha) => 'bg-card';
 
 /** O papel de uma linha: o destaque manda, depois o grupo, senão é simples. */
 export const tipoDaLinha = (destaque?: DestaqueLinha, temBloco?: boolean): TipoLinha =>
@@ -109,10 +126,12 @@ export function PontoRateio({ title = 'tem rateio dentro' }: { title?: string })
    passa de 1080 para 1313 e rola na horizontal a 1440 (container de 1200). Quatro anos dão 1131 e
    todas as outras visões cabem. A conta antiga registrada aqui — 240 + 6 × (96+64) = 1200 — já
    estava desatualizada: o rótulo é 200 desde o 01a e a coluna de comparação é `W_REFERENCIA`. */
-export const W_RS = 114;      // R$ por cultura
-export const W_HA = 90;       // R$/ha
+/* ⚠ DRE-LEVE-01: −10px no R$ e no R$/ha — o slot do ▲/▼ (`L_MARCADOR`, 10px) saiu com o marcador; o pior número segue cabendo (o gate
+   `dre-*-grande`, com todo valor ×10, prova que nada vaza). Sem eles, a Lavoura com a coluna "% RL" rolava para o lado a 1126. */
+export const W_RS = 104;      // R$ por cultura
+export const W_HA = 80;       // R$/ha
 export const W_UN = 74;       // R$/unidade
-export const W_RS_TOTAL = 114;
+export const W_RS_TOTAL = 104;
 
 /**
  * A LARGURA MÍNIMA DE UM GRUPO DE COLUNA — DRE-UNIDADES-01b.
@@ -166,9 +185,11 @@ export function larguraDoGrupo(cols: readonly number[]): number[] {
  */
 export const FAIXA_TOTAL: Record<'t1' | 't2' | 't3' | 't4',
   { fundo: string; texto?: string; positivo?: string; negativo?: string }> = {
-  t1: { fundo: 'bg-[#e9eff6]' },
-  t2: { fundo: 'bg-[#d3e0ed]' },
-  t3: { fundo: 'bg-[#b6cade]' },
+  /* ⚠ DRE-LEVE-01: AS FAIXAS SAÍRAM DA GRADE (sem fundo e sem o branco do navy) — quem marca o resultado é o negrito com a régua.
+     O mapa fica porque as linhas o declaram (`faixa`) e é por ele que a grade sabe quem é resultado. */
+  t1: { fundo: 'bg-card' },
+  t2: { fundo: 'bg-card' },
+  t3: { fundo: 'bg-card' },
   /**
    * ⚠ NO AZUL CHEIO O NÚMERO É BRANCO, SEMPRE — item 13, e ele substitui duas tentativas anteriores.
    * A primeira deixou o número preto (a faixa "já destaca"): um prejuízo de 6,2 milhões saía da
@@ -177,7 +198,7 @@ export const FAIXA_TOTAL: Record<'t1' | 't2' | 't3' | 't4',
    * contraste máximo que esta faixa permite, e o sinal passou a ser um MARCADOR ao lado do número
    * (ver `marcadorDoTotal`) — um glifo colorido não precisa ser lido, só visto.
    */
-  t4: { fundo: 'bg-primary', texto: 'text-primary-foreground' },
+  t4: { fundo: 'bg-card' },
 };
 
 /** ⚠ O POSITIVO DE UM TOTAL É AZUL ESCURO, não verde (item 12): o verde é a cor da NATUREZA
@@ -209,9 +230,10 @@ export function corDoTotal(faixa: keyof typeof FAIXA_TOTAL, v: number | null): s
  * número é azul ou vermelho, e um glifo a mais seria o mesmo recado duas vezes.
  * ⚠ ZERO E AUSÊNCIA NÃO TÊM MARCADOR: "não deu nem perdeu" e "não sei" não são sinal.
  */
-export function marcadorDoTotal(faixa: keyof typeof FAIXA_TOTAL, v: number | null | undefined) {
-  if (faixa !== 't4' || v == null || v === 0) return undefined;
-  return v < 0 ? { glifo: '▼', cor: MARCADOR_NEGATIVO } : { glifo: '▲', cor: MARCADOR_POSITIVO };
+/* ⚠ DRE-LEVE-01 (D6): SEM O AZUL CHEIO NÃO HÁ ▲/▼ — o número volta a ter a cor do sinal. A assinatura fica (os chamadores a usam). */
+export function marcadorDoTotal(_faixa: keyof typeof FAIXA_TOTAL, _v: number | null | undefined):
+  { glifo: string; cor: string } | undefined {
+  return undefined;
 }
 
 /**
@@ -222,7 +244,8 @@ export function marcadorDoTotal(faixa: keyof typeof FAIXA_TOTAL, v: number | nul
  * mais comprida da grade. Com o slot fixo, o número tem a MESMA caixa em toda linha da coluna —
  * com marcador, sem marcador ou em traço — e a largura da coluna pode ser calculada uma vez.
  */
-export const L_MARCADOR = 10;
+/* ⚠ DRE-LEVE-01 (D6): o slot saiu junto com o ▲/▼ — `Marcador` não desenha mais nada; a largura fica para quem a lê. */
+export const L_MARCADOR = 0;
 
 /**
  * O marcador desenhado — 9px, à frente do número, sem participar do alinhamento do tabular-nums.
@@ -236,7 +259,8 @@ export function Marcador({ marcador, semSlot }: {
   marcador?: { glifo: string; cor: string };
   semSlot?: boolean;
 }) {
-  if (!marcador && semSlot) return null;
+  if (!marcador) return null;
+  void semSlot;
   return (
     <span aria-hidden className="inline-block text-center align-[1px]"
       style={{ fontSize: 9, width: L_MARCADOR, color: marcador?.cor }}>
@@ -309,7 +333,9 @@ export const NAVY_TOTAL = '#2b3750';
 export const BORDA_TOTAL = '1px solid hsl(var(--border) / .6)';
 /** A mesma divisória, do lado de dentro do cabeçalho navy — ali o que se lê é branco a 22%. */
 export const BORDA_TOTAL_CAB = '1px solid rgba(255,255,255,.22)';
-export const FUNDO_TOTAL = '#f1f5f9';
+/* ⚠ DRE-LEVE-01 (D6): a coluna Total deixou de ser cinza (o mock só a marca no cabeçalho navy); com o azul-claro das linhas-chave os dois
+   tons quase se igualavam. Fica OPACO (é `sticky`) — a cor do cartão. */
+export const FUNDO_TOTAL = 'hsl(var(--card))';
 
 /**
  * Etiqueta pequena ao lado do rótulo — "estimado", "rateio".
@@ -319,15 +345,29 @@ export const FUNDO_TOTAL = '#f1f5f9';
  * Cultura e a etiqueta quebrava para uma segunda linha, estourando a altura de 18px da linha.
  * O texto encolheu para "rateio" e a frase inteira foi para o `title`.
  */
+/* ⚠ DRE-LEVE-01: o selo virou uma MARCA cinza pequena ao lado do nome ("· início", "· estimado"), sem borda; a frase segue no `title`. */
 export function Etiqueta({ texto, cor, title }: { texto: string; cor?: string; title?: string }) {
   return (
     <span title={title}
-      className="ml-1 whitespace-nowrap rounded-[3px] border text-[8px] leading-[11px]"
-      style={{ borderColor: cor ?? 'currentColor', color: cor, padding: '0 4px' }}>
-      {texto}
+      className="whitespace-nowrap font-normal text-muted-foreground"
+      style={{ fontSize: 7.5, ...(cor ? { color: cor } : {}) }}>
+      {/* o espaço antes do ponto mora AQUI: o texto da célula fica "rótulo · marca", igual ao `title` (o gate compara os dois) */}
+      {` · ${texto}`}
     </span>
   );
 }
+
+/** DRE-LEVE-01 (D2/D3/D4) — a célula de % (do VBP na pecuária, da receita líquida na lavoura), uma por período, em coluna. Vazia acima da
+    base e nos subitens. `data-pct` é por onde a prova de número igual a acha. */
+export function CelulaPct({ texto, fundo, estilo }: { texto: string; fundo?: string; estilo?: CSSProperties }) {
+  return (
+    <td data-pct="" className={cn('whitespace-nowrap px-[5px] text-right font-normal tabular-nums text-muted-foreground', fundo)}
+      style={{ fontSize: 9, ...estilo }}>
+      {texto}
+    </td>
+  );
+}
+export const W_PCT = 56;
 
 export const AMBAR = '#b45309';
 
@@ -377,8 +417,7 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
     <td onClick={clicavel ? onAbrir : undefined}
       title={title ?? (clicavel ? 'ver os lançamentos' : undefined)}
       className={cn('whitespace-nowrap px-[7px] py-px text-right tabular-nums',
-      filha ? 'border-t border-dashed border-border/60' : '',
-      total && 'font-medium',
+      total && !filha && 'font-medium',
       clicavel && 'cursor-pointer hover:underline hover:decoration-dotted', faixa ?? fundo, cor)}
       style={{
         ...(fonte ? { fontSize: fonte } : {}),
@@ -432,11 +471,10 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
   return (
     <td onClick={clicavel ? onAbrir : undefined}
       title={clicavel ? 'ver os lançamentos' : title}
-      className={cn('whitespace-nowrap px-[7px] py-px text-right text-[10px] tabular-nums',
-      total && 'font-medium',
+      className={cn('whitespace-nowrap px-[7px] py-px text-right tabular-nums',
+      total && !filha && 'font-medium',
       faixa ?? (total ? '' : sub ? 'bg-muted' : 'bg-muted/40'),
       bordaEsquerda && !total && 'border-l border-border/60',
-      filha ? 'border-t border-dashed border-border/60' : '',
       clicavel && 'cursor-pointer hover:underline hover:decoration-dotted',
       /* ⚠ 70% NAS LINHAS COMUNS, 100% NOS SUBTOTAIS: o unitário é leitura de apoio, e ao lado do
          valor cheio ele tem de ceder. No subtotal ele É o número que se lê. */
@@ -445,7 +483,8 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
       /* ⚠ A SUB-COLUNA VAI A 9,5px — DRE-PADRAO-01a: com a régua nova, `fonte - 1` levaria a
          linha comum (9px) para 8, abaixo de qualquer piso. O piso passa a ser 9,5, e o subtotal
          (11px) segue um ponto abaixo do valor, em 10. */
-      style={{ ...(fonte ? { fontSize: Math.max(9.5, fonte - 1) } : {}),
+      /* ⚠ DRE-LEVE-01: a sub-coluna segue a letra da linha (9px; 8,5 no subitem) — "uma régua só". */
+      style={{ fontSize: fonte ?? 9,
         ...(total && !faixa ? { backgroundColor: FUNDO_TOTAL } : {}), ...estilo }}>
       {/* ⚠ TRAÇO NÃO TEM SETA — fix6, e foi AQUI que o defeito aparecia: a x Anos mostrava
           "▼—" porque o marcador se decide pelo valor em R$ e a sub-coluna cai em traço quando

@@ -221,6 +221,37 @@ const CENARIOS = [
   { nome: 'evolucao-ano-t', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
   { nome: 'evolucao-ano-ano', url: 'tela=evolucao-ano&barra=32', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^Ano$/) },
   { nome: 'evolucao-ano-fazenda', url: 'tela=evolucao-ano&barra=32&faz=1', tamanhos: [[1126, 579], [1366, 768]] },
+  /* DRE-LEVE-01 — Executivo › DRE (`dados/dre.ts`): nenhum número cortado no Resumido e no Detalhado (Custo variável aberto / tudo aberto),
+     com 1, 2 e 3 anos, a Meta com o Δ, Por fazenda, só R$/ha e o rateio nos grupos (a grade oferece R$ e R$/ha), e na Lavoura; `v=grande` = todo valor ×10. */
+  ...[['', ''], ['-grande', '&v=grande']].flatMap(([suf, par]) => {
+    const URL_DRE = `tela=dre&barra=32&f_de=2026-01&f_ate=2026-09${par}`;
+    const T = [[1126, 579], [1366, 768]];
+    const det = async (p) => { await clicarRotulo(/^Detalhado$/)(p); };
+    const tudo = async (p) => { await clicarRotulo(/^abrir tudo$/)(p); };
+    const mais = (item) => async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: item }).first().click();
+      await p.keyboard.press('Escape'); await p.waitForTimeout(400); };
+    const chip = (rot) => async (p) => { await p.getByRole('button', { name: rot, exact: true }).first().click(); await p.waitForTimeout(400); };
+    return [
+      { nome: `dre-pec-resumido${suf}`, url: URL_DRE, tamanhos: T },
+      { nome: `dre-pec-resumido-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: tudo },
+      { nome: `dre-pec-detalhado-cv${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await clicarTexto('(−) Custo variável')(p); } },
+      { nome: `dre-pec-detalhado-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); } },
+      { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^2$/)(p); } },
+      { nome: `dre-pec-3anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^3$/)(p); } },
+      { nome: `dre-pec-meta-delta${suf}`, url: URL_DRE, tamanhos: T,
+        antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^Meta$/)(p); await mais('Δ R$')(p); await mais('Δ %')(p); } },
+      { nome: `dre-pec-ano-delta${suf}`, url: URL_DRE, tamanhos: T,
+        antes: async (p) => { await det(p); await tudo(p); await mais('Δ R$')(p); await mais('Δ %')(p); } },
+      { nome: `dre-pec-fazenda${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await mais(/^Ver por fazenda/)(p); } },
+      { nome: `dre-pec-so-ha${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await chip('R$')(p); } },
+      { nome: `dre-pec-rateio-grupos${suf}`, url: URL_DRE, tamanhos: T,
+        antes: async (p) => { await det(p); await tudo(p); await clicar('[data-testid="dre-mais"]')(p); await clicarRotulo(/^Rateio nos grupos$/)(p);
+          await p.keyboard.press('Escape'); await p.waitForTimeout(400); } },
+      { nome: `dre-lavoura${suf}`, url: `${URL_DRE}&safra=s1`, tamanhos: T, antes: async (p) => { await clicarRotulo(/^Lavoura$/)(p); await tudo(p); } },
+      { nome: `dre-lavoura-unidades${suf}`, url: `${URL_DRE}&safra=s1`, tamanhos: T,
+        antes: async (p) => { await clicarRotulo(/^Lavoura$/)(p); await tudo(p); await chip('R$/sc ou t')(p); } },
+    ];
+  }),
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
   { nome: 'plano-contas-inativos', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, antes: clicar('[data-testid="mostrar-inativos"]') },
   { nome: 'plano-contas-cliente', url: 'tela=plano-contas&perfil=cliente', tamanhos: TAMANHOS_DO_P92 },

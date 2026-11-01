@@ -33,6 +33,7 @@ import {
   W_RS, W_HA, W_UN, W_RS_TOTAL, W_GRUPO_MIN, larguraDoGrupo, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
   NAVY_TOTAL, BORDA_TOTAL, BORDA_TOTAL_CAB, FUNDO_TOTAL, FAIXA_TOTAL, traco, corDoSinal, corDoTotal, marcadorDoTotal, Marcador, numeroDaCelula, porUnidade,
   Etiqueta, Celula, CelulaUnit, Caixas, ChipsUnidade, PontoRateio, REGUA_LINHA, tipoDaLinha, fundoDaLinha,
+  CelulaPct, W_PCT, REGUA_RESULTADO, LINHAS_CHAVE, FUNDO_CHAVE, FONTE_CHAVE, corNaGrade,
   type CaixaFaixa, type DestaqueLinha, type TomFaixa,
 } from '@/components/agri/dreGrade';
 import { supabase } from '@/integrations/supabase/client';
@@ -64,7 +65,7 @@ import {
   PecHistoricoLinhaModal, type RecorteHistoricoPec,
 } from '@/components/agri/PecHistoricoLinhaModal';
 import {
-  PecDrePanel, FaixaVisoesPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
+  PecDrePanel, ComparacaoPec, MaisPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
   type InsumosDidaticos,
   escreverNAnosPec, N_ANOS_PADRAO, ehVisaoMetaLegada, visaoDaUrl,
   type VisaoPec, type VisaoUrlPec, type ReferenciaPec,
@@ -632,53 +633,32 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
    */
   /* ⚠ O Δ PRECISA DE UMA REFERÊNCIA SÓ — ver `escolherReferencia`. */
   const deltaIndisponivel = referenciaPec !== 'meta' && referenciaPec > 1;
+  /* ⚠ DRE-LEVE-01 (item 1, D5a): A 2ª FAIXA DA PECUÁRIA — 22px, uma linha. O rateio nos grupos, o Δ e o "Por fazenda" foram para o "Mais ▾"
+     (`MaisPec`); o aviso "sem plano de contas" mora no meio dela (na Lavoura, segue na linha própria). Os lugares são fixos: o aviso
+     ocupa o vão flexível e só ele encolhe. */
   const controlesPec = (
-    <>
+    <div className="flex h-[22px] items-center gap-2" data-testid="dre-faixa-2">
       <ChipsUnidade valor={unidadesPec} onEscolher={setUnidadesPec}
         opcoes={UNIDADES_PEC_GRADE.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
-      <span className="flex w-[247px] shrink-0 items-center gap-1.5">
-        {/* ⚠ O BOTÃO DO RATEIO NOS GRUPOS — DRE-MODAL-VALOR-01b. O mock o põe acima do bloco Custo
-            fixo; ele mora na linha de controles da grade (a da lavoura mora na dela), e DENTRO do slot
-            fixo de 247px, à esquerda: o Δ usa 81px dele e fica ancorado à direita (`ml-auto`). Fora
-            do slot a linha estourava 84px por cima do card "Por fazenda" — medido em 27/09. Botão
-            (154) + folga (6) + Δ (81) = 241. Nada anda entre as visões: o botão é sempre o primeiro. */}
-        <Segmentado altura={22} valor={rateioNosGruposPec ? 'grupos' : 'diretos'}
-          onEscolher={v => setRateioNosGruposPec(v === 'grupos')}
-          opcoes={[
-            /* ⚠ RÓTULOS CURTOS, O INTEIRO NO `title`: com "Custos diretos | Com rateio adm. nos grupos" o
-               botão pedia ~320px e a linha de controles (as quatro colunas livres da faixa de cards)
-               estourava por cima do card "Por fazenda" — medido no preview em 27/09. */
-            { valor: 'diretos', rotulo: 'Diretos', title: 'Custos diretos: o rateio administrativo em linha própria' },
-            { valor: 'grupos', rotulo: 'Rateio nos grupos',
-              title: 'Com rateio adm. nos grupos: cada grupo do custo fixo soma o seu rateio; o resultado não muda' },
-          ]} />
-        <span className="ml-auto flex items-center gap-1.5">
-        {visaoPec === 'comparacao' && <>
-          {/* ⚠ A BARRA VERTICAL MORA DENTRO DO SLOT, não antes dele: o conteúdo é ancorado à
-              direita, então ela acompanha o grupo e nada se move quando o slot fica vazio. */}
-          <span className="h-[14px] w-px shrink-0 bg-border" aria-hidden />
-          {/* ⚠ DESABILITADOS, NÃO ESCONDIDOS, com dois anos ou mais: sumir ensinaria que o Δ não
-              existe nesta tela; apagado com o porquê no `title` ensina que ele depende da
-              referência — e o caminho de volta é um clique no card. */}
-          <ChipsUnidade valor={deltasPec} onEscolher={setDeltasPec} permiteVazio
-            desabilitado={deltaIndisponivel}
-            titleDesabilitado="Disponível ao comparar com a meta ou com 1 ano"
-            opcoes={[{ valor: 'rs', rotulo: 'Δ R$' }, { valor: 'pct', rotulo: 'Δ %' }]} />
-        </>}
-        </span>
-      </span>
+      <MaisPec rateioNosGrupos={rateioNosGruposPec} onRateioNosGrupos={setRateioNosGruposPec}
+        deltas={deltasPec} onDeltas={setDeltasPec} deltaIndisponivel={deltaIndisponivel}
+        visao={visaoPec} onVisao={escolherVisao} nFazendas={drePec?.fazendas.length ?? 0} />
       {/* ⚠ UM BOTÃO SÓ, QUE DIZ O QUE VAI FAZER — o mesmo da linha de antes, palavra por palavra. */}
       <button type="button" onClick={alternarTudo}
-        className="shrink-0 whitespace-nowrap rounded border px-2 text-[10px] text-muted-foreground
+        className="w-[68px] shrink-0 whitespace-nowrap rounded border px-2 text-[10px] text-muted-foreground
           hover:bg-muted hover:text-foreground"
         style={{ height: 22 }}>
         {tudoAberto ? 'fechar tudo' : 'abrir tudo'}
       </button>
-      {/* ⚠ AO LADO DO "abrir tudo", NO MESMO SLOT DA DIREITA: a régua de 22px é a dos chips, e o
-          segmentado navy é o marcador único de seleção da casa (PR-DRE-LAVOURA-04). */}
+      <div className="flex min-w-0 flex-1 items-center">
+        {!ampliado && (
+          <AvisoDreSemClassificacao clienteId={clienteId} recorte={{ de: pecDe, ate: pecAte }}
+            onIrParaConciliacao={onIrParaConciliacao} />
+        )}
+      </div>
       <Segmentado altura={22} valor={vistaPec} onEscolher={setVistaPec}
         opcoes={[{ valor: 'tabela', rotulo: 'Tabela' }, { valor: 'grafico', rotulo: 'Gráfico' }]} />
-    </>
+    </div>
   );
 
 
@@ -1014,7 +994,8 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
         /* ⚠ 16px DE PADDING LATERAL, e a faixa respeita por ser filha normal: a última caixa
            termina onde o conteúdo termina, sem margem negativa nem overflow. */
         ampliado ? 'fixed inset-0 z-50 flex flex-col gap-1 overflow-hidden bg-background p-1'
-          : 'space-y-2 px-4 py-3')}>
+          /* ⚠ DRE-LEVE-01 (item 1): 8px no topo e 6 entre as faixas (o mock: a tabela a ~62px do topo da área). */
+          : 'space-y-1.5 px-4 py-2')}>
 
       {ampliado ? (
         /* ⚠ BARRA DE VERDADE, NÃO BOTÃO FLUTUANTE. Flutuando, ele pousava por cima da primeira
@@ -1041,20 +1022,20 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
               baixo só no drill — que é exatamente o que o A23 proíbe.
               ⚠ O `PageHeader` SAIU DESTA TELA: ele põe o contexto ABAIXO do título, em duas
               linhas, e aqui as duas alturas têm de fechar em 30px com a faixa no mesmo y. */}
-          <div className="flex h-[30px] items-center gap-2">
+          {/* ⚠ DRE-LEVE-01 (item 1): a 1ª faixa desceu a 22px (o mock), e a Pecuária ganhou o "Comparar" nela — os cards "Comparação" e
+              "Por fazenda" saíram; a tabela sobe. */}
+          <div className="flex h-[22px] items-center gap-2">
             {ehLavoura && culturaAberta && (
               <button type="button" onClick={voltarParaRaiz} title="Voltar para todas as culturas"
                 className="inline-flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-md border hover:bg-muted">
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
             )}
-            <h2 className="shrink-0 text-[15px] font-medium leading-none">DRE</h2>
-            {/* ⚠ O TEXTO INTEIRO NO `title`: truncar pela direita esconde o fim da frase, e no
-                drill o fim é justamente o percentual de custo direto. */}
-            <p className="min-w-0 flex-1 truncate text-[11px] leading-none text-muted-foreground"
-              title={contextoDaTela}>
-              {contextoDaTela}
-            </p>
+            {/* ⚠ DRE-LEVE-01: O CONTEXTO ("cliente · período · por fazenda") MORA NO `title` DO "DRE". Com a 1ª faixa de 22px e o lugar do
+                "Comparar", a 1126 não sobra largura para ele em nenhuma aba, e cortar com "…" fora de tabela é proibido (o gate acusou). Cliente e
+                período já estão na barra lateral e no seletor; no Ampliar, a barra continua dizendo. */}
+            <h2 className="shrink-0 cursor-default text-[13px] font-medium leading-none" title={contextoDaTela}>DRE</h2>
+            <span className="min-w-0 flex-1" aria-hidden />
             <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               {/* ⚠ PECUÁRIA E CONSOLIDADO NASCEM DESLIGADOS E VISÍVEIS: eles dizem para onde a
                   tela vai, e escondê-los faria a Lavoura parecer a única resposta possível. */}
@@ -1108,6 +1089,16 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
                   </Select>
                 )}
               </div>
+              {/* ⚠ O LUGAR DO "Comparar" É RESERVADO NAS DUAS ABAS (vazio na Lavoura): sem ele, trocar de aba andaria o seletor de
+                  atividade, o modo e o período — a lei de estabilidade. */}
+              <span className="flex w-[226px] shrink-0 items-center justify-end">
+                {ehPec && drePec && (
+                  <ComparacaoPec visao={visaoPec} referencia={referenciaPec} onReferencia={escolherReferencia}
+                    meta={drePecMeta} carregandoMeta={carregandoPecMeta}
+                    anoAnterior={anosPec[0]?.dre ?? null} carregandoAnoAnterior={anosPec[0]?.carregando ?? true}
+                    motivoSemMeta={veMeta ? null : MOTIVO_SEM_META} />
+                )}
+              </span>
               <button type="button" onClick={() => setAmpliado(true)}
                 title="Ampliar a grade (só a tabela)"
                 className="inline-flex h-[22px] items-center gap-1 rounded-md border px-2 text-[10px] hover:bg-muted">
@@ -1116,14 +1107,9 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
             </div>
           </div>
 
-          {ehPec ? (drePec ? (
-            <FaixaVisoesPec visao={visaoPec} onVisao={escolherVisao} real={drePec}
-              meta={drePecMeta} carregandoMeta={carregandoPecMeta}
-              anoAnterior={anosPec[0]?.dre ?? null} carregandoAnoAnterior={anosPec[0]?.carregando ?? true}
-              referencia={referenciaPec} onReferencia={escolherReferencia}
-              motivoSemMeta={veMeta ? null : MOTIVO_SEM_META}
-              controles={controlesPec} />
-          ) : null)
+          {/* ⚠ DRE-LEVE-01 (item 1): na Pecuária, a 2ª faixa de 22px (unidades · Mais ▾ · abrir tudo · o aviso · Tabela | Gráfico) no lugar
+              dos cards. A Lavoura mantém os 6 cards (D1a). */}
+          {ehPec ? (drePec ? controlesPec : <div className="h-[22px]" />)
             : culturaAberta ? <FaixaCultura c={culturaAberta} />
               : <Faixa dre={dre} />}
 
@@ -1136,7 +1122,8 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
               cartão do drill descia 34px em vez de 26 — "nada muda de lugar" viraria "quase
               nada". Juntos, o gap da pilha é pago uma vez pelos dois, e a diferença entre raiz e
               drill passa a ser a altura da barra de abas e nada mais. */}
-          <div>
+          {/* ⚠ DRE-LEVE-01: o bloco só existe na Lavoura — vazio na Pecuária, ele custava um gap da pilha. */}
+          {!ehPec && <div>
           {ehLavoura && culturaAberta && (
             /* ⚠ A ALTURA É DO CONTÊINER, NÃO DOS BOTÕES, e o 1px da divisória mora DENTRO dela.
                Com `h-[26px]` nos botões e a borda no pai, a barra media 27 — e o cartão do drill
@@ -1256,13 +1243,13 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
               </button>
             </span>          </div>
           )}
-          </div>
+          </div>}
         </>
       )}
 
       {/* ⚠ O AVISO "SEM PLANO DE CONTAS" — CONC-SEM-CLASSIFICACAO-01: slot FIXO de 18px, sempre presente fora do Ampliado (a grade
           mede o próprio topo). Pecuária: a competência do período aberto; lavoura: a safra aberta. */}
-      {!ampliado && (
+      {!ampliado && !ehPec && (
         <AvisoDreSemClassificacao clienteId={clienteId}
           recorte={ehPec ? { de: pecDe, ate: pecAte } : { safraId: safraId || null }}
           onIrParaConciliacao={onIrParaConciliacao} />
@@ -1407,7 +1394,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
             minHeight: alturaCartao ?? undefined,
           }
           : undefined}>
-      <div ref={cartao} className="overflow-auto rounded-lg border border-border/60 bg-card"
+      <div ref={cartao} data-desloca-livre="" data-testid="dre-grade-lav" className="overflow-auto rounded-lg border border-border/60 bg-card"
         style={alturaCartao
           ? (ampliado ? { height: alturaCartao }
             /* ⚠ COM OS CARTÕES AO LADO, `height: 100%` faz o `stretch` valer: sem altura própria
@@ -1719,22 +1706,25 @@ export function Grade({
   const larguras = useMemo(() => {
     const daCultura: number[] = [];
     if (unidades.includes('rs')) daCultura.push(W_RS);
+    /* ⚠ DRE-LEVE-01 (D2): a coluna "% RL" de cada cultura, logo depois do R$ (sem R$, ela abre o grupo). */
+    daCultura.push(W_PCT);
     if (unidades.includes('ha')) daCultura.push(W_HA);
     if (unidades.includes('un')) daCultura.push(W_UN);
     /* ⚠ E O TOTAL SEM NENHUMA UNIDADE SOMÁVEL TEM UMA COLUNA, não zero: é a do traço. */
     const doTotal: number[] = [];
     if (unidades.includes('rs')) doTotal.push(W_RS_TOTAL);
+    doTotal.push(W_PCT);
     if (unidades.includes('ha')) doTotal.push(W_HA);
 
     const cols: number[] = [W_CULTURA];
     culturas.forEach(() => cols.push(...larguraDoGrupo(daCultura)));
-    if (!semTotal) cols.push(...larguraDoGrupo(doTotal.length ? doTotal : [W_GRUPO_MIN]));
+    if (!semTotal) cols.push(...larguraDoGrupo(totalEmTraco(unidades) ? [...doTotal, W_UN] : doTotal));
     return cols;
   }, [culturas, unidades, semTotal]);
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
   /* ⚠ A COLUNA TOTAL NÃO TEM /sc (ver `unidadesDoTotal`): ela leva o R$ e o R$/ha que estiverem
      marcados, e NUNCA menos de uma coluna — `colSpan={0}` é "todas as restantes" em HTML. */
-  const colsTotal = Math.max(1, unidadesDoTotal(unidades).length);
+  const colsTotal = Math.max(1, unidadesDoTotal(unidades).length) + 1;
 
   const alterna = (k: string) => setAbertos(a => ({ ...a, [k]: !a[k] }));
 
@@ -1773,7 +1763,7 @@ export function Grade({
             /* ⚠ DUAS LINHAS CENTRADAS, não nome e área lado a lado à direita: empilhados, os
                dois cabem nos 26px e o nome fica sobre as colunas que ele governa. Alinhados à
                direita, "Amendoim 185,0 ha" competia com o número da primeira coluna. */
-            <th key={c.cultura} colSpan={colsPorCultura}
+            <th key={c.cultura} colSpan={colsPorCultura + 1}
               onClick={onAbrirCultura ? () => onAbrirCultura(c.cultura) : undefined}
               title={onAbrirCultura ? `abrir o painel de ${labelDaCultura(c.cultura)}` : undefined}
               className={cn(CINZA_CABECALHO, 'sticky top-0 z-20 px-[7px] text-center',
@@ -1818,17 +1808,18 @@ export function Grade({
               <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
                 style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL_CAB }}>R$</th>
             )}
+            <th className="sticky z-20 px-[5px] text-right text-[10px] font-normal text-white" title={TITULO_PCT_RL}
+              style={{ top: 26, backgroundColor: NAVY_TOTAL, ...(unidades.includes('rs') ? {} : { borderLeft: BORDA_TOTAL_CAB }) }}>% RL</th>
             {unidades.includes('ha') && (
               <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
-                style={{ top: 26, backgroundColor: NAVY_TOTAL,
-                  ...(unidades.includes('rs') ? {} : { borderLeft: BORDA_TOTAL_CAB }) }}>R$/ha</th>
+                style={{ top: 26, backgroundColor: NAVY_TOTAL }}>R$/ha</th>
             )}
             {/* ⚠ A CÉLULA DA UNIDADE FICA VAZIA, não escrita: a coluna não tem unidade nenhuma —
                 é só o lugar onde o traço mora. Quem explica é o `title` do traço, na linha. */}
             {totalEmTraco(unidades) && (
               <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
                 title={TOTAL_SEM_SOMA}
-                style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL_CAB }} />
+                style={{ top: 26, backgroundColor: NAVY_TOTAL }} />
             )}
           </>}
         </tr>
@@ -1850,14 +1841,9 @@ export function Grade({
               <LinhaDre def={def} dre={dre} culturas={culturas} rateioDentro={rateioDentro}
                 unidades={unidades} aberto={!!(chaveExp && abertos[chaveExp])}
                 onAlternar={chaveExp ? () => alterna(chaveExp as string) : undefined}
-                valorDaLinha={valorDaLinha} abrir={abrir} semTotal={semTotal} onDrill={onDrill} />
-              {/* ⚠ O % VEM SOB OS TRÊS RESULTADOS, na régua da linha de % da pecuária. A base é a
-                  RECEITA LÍQUIDA: a lavoura não tem VBP, e a receita líquida é o que as três
-                  linhas consomem. Ver `LinhaPercentualLav`. */}
-              {COM_PERCENTUAL_LAV.has(def.chave) && (
-                <LinhaPercentualLav chave={def.chave} dre={dre} culturas={culturas}
-                  unidades={unidades} semTotal={semTotal} />
-              )}
+                valorDaLinha={valorDaLinha} abrir={abrir} semTotal={semTotal} onDrill={onDrill}
+                comPct={pctNaLinhaLav(def)} />
+              {/* ⚠ DRE-LEVE-01 (D2/D3): a linha extra "% da receita líquida" saiu — o % é a coluna "% RL" da própria linha. */}
               {/* ⚠ O LUCRO POR HECTARE É LEITURA DE APOIO, na régua da linha de % da pecuária: 9px,
                   muted, altura 14, sem cor de sinal e sem clique. Ele some quando o chip R$/ha está
                   marcado — ali a sub-coluna já responde. */}
@@ -1912,8 +1898,11 @@ function ThUnidade({ cultura, unidades }: { cultura: string; unidades: readonly 
       {unidades.includes('rs') && (
         <th className={cls} style={{ top: 26, borderLeft: DIVISOR }}>R$</th>
       )}
+      {/* ⚠ DRE-LEVE-01 (D2): "% RL" logo depois do R$; sem R$, é ela que abre o grupo (e leva a divisa). */}
+      <th className={cn(cls, 'px-[5px]')} title={TITULO_PCT_RL}
+        style={{ top: 26, ...(primeira === 'rs' ? {} : { borderLeft: DIVISOR }) }}>% RL</th>
       {unidades.includes('ha') && (
-        <th className={cls} style={{ top: 26, ...(primeira === 'ha' ? { borderLeft: DIVISOR } : {}) }}>R$/ha</th>
+        <th className={cls} style={{ top: 26 }}>R$/ha</th>
       )}
       {unidades.includes('un') && <>
         {/* ⚠ A UNIDADE É DA CULTURA, não da tela: mandioca fecha em tonelada e amendoim em saca,
@@ -1921,7 +1910,7 @@ function ThUnidade({ cultura, unidades }: { cultura: string; unidades: readonly 
             ⚠ E É O SÍMBOLO CURTO: a coluna tem 60px e "R$/sc 25kg" quebrava em duas linhas,
             empurrando a segunda linha do cabeçalho para além dos 14px. O peso foi para o
             `title`, onde não custa largura. */}
-        <th className={cls} style={{ top: 26, ...(primeira === 'un' ? { borderLeft: DIVISOR } : {}) }}
+        <th className={cls} style={{ top: 26 }}
           title={descricaoDaUnidade(cultura)}>
           <span className="whitespace-nowrap">R$/{simboloDaUnidade(cultura)}</span>
         </th>
@@ -1956,47 +1945,19 @@ function ThUnidade({ cultura, unidades }: { cultura: string; unidades: readonly 
  * ⚠ RECEITA ≤ 0 DÁ TRAÇO, NUNCA 0% — a mesma regra do `percentual` da pecuária: sem base não há
  * percentual, e 0% afirmaria que a linha não consumiu nada.
  */
-const COM_PERCENTUAL_LAV: ReadonlySet<ChaveLinha> = new Set<ChaveLinha>([
-  'margem_contribuicao', 'resultado_operacional', 'resultado_caixa',
-]);
-
-function LinhaPercentualLav({ chave, dre, culturas, unidades, semTotal }: {
-  chave: ChaveLinha; dre: DreLavoura; culturas: DreCultura[];
-  unidades: readonly UnidadeLav[]; semTotal?: boolean;
-}) {
-  const pct = (l: DreLinhas) => {
-    const base = l.receita_liquida.valor;
-    const v = l[chave].valor;
-    if (base == null || v == null || base <= 0) return traco;
-    return `${formatNum((v / base) * 100, 1)} %`;
-  };
-  const vazias = (n: number) => Array.from({ length: n }).map((_, i) => <td key={i} className="bg-card" />);
-  return (
-    <tr className="bg-card font-normal" style={{ height: 14 }}>
-      <td className="sticky left-0 z-10 truncate border-r border-border/60 bg-card py-px text-muted-foreground"
-        style={{ fontSize: 9, paddingLeft: 15, paddingRight: 7 }}
-        title="Percentual da receita líquida da cultura">
-        % da receita líquida
-      </td>
-      {culturas.map(c => (
-        <Fragment key={c.cultura}>
-          <td className="truncate bg-card px-[7px] text-right tabular-nums text-muted-foreground"
-            style={{ fontSize: 9, borderLeft: '1px solid hsl(var(--border))' }}>
-            {pct(c.linhas)}
-          </td>
-          {vazias(unidades.length - 1)}
-        </Fragment>
-      ))}
-      {!semTotal && <>
-        <td className="truncate bg-card px-[7px] text-right tabular-nums text-muted-foreground"
-          style={{ fontSize: 9, borderLeft: BORDA_TOTAL }}>
-          {pct(dre.total.linhas)}
-        </td>
-        {vazias(unidades.filter(u => u !== 'un').length - 1)}
-      </>}
-    </tr>
-  );
-}
+/* ⚠ DRE-LEVE-01 (D2/D3): o % virou a COLUNA "% RL" (base: a receita líquida da coluna) — da Receita líquida para baixo, só nos grupos e
+   resultados (nunca num subitem: filha de grupo, memo, centro, rateio do grupo, "por hectare"). A `LinhaPercentualLav` saiu. */
+const TITULO_PCT_RL = 'O R$ da linha em % da receita líquida da coluna (da Receita líquida para baixo; nos subitens, vazio)';
+const I_RECEITA_LIQUIDA = LINHAS.findIndex(d => d.chave === 'receita_liquida');
+const pctNaLinhaLav = (d: DefLinha) => !d.filhoDe && !d.memo && LINHAS.indexOf(d) >= I_RECEITA_LIQUIDA;
+const textoPctRL = (l: DreLinhas, v: number | null) => {
+  const base = l.receita_liquida.valor;
+  if (base == null || v == null || base <= 0) return traco;
+  return `${formatNum((v / base) * 100, 1)} %`;
+};
+/** DRE-LEVE-01 — os resultados da Lavoura: as linhas de faixa e a Receita bruta (negrito + régua escura). */
+const ehResultadoLav = (d: DefLinha) => !!d.faixa || d.chave === 'receita_bruta';
+const DIVISA_CORPO = '1px solid hsl(var(--border) / .6)';
 
 /* ⚠ A CHAVE VEM DE FORA — DRE-DESTAQUE-LAVOURA-01. Ela estava fixa em `lucro_liquido`, em dois
    pontos do corpo, e com o lucro líquido fora da grade a linha precisava servir DUAS outras:
@@ -2006,44 +1967,36 @@ function LinhaPorHectareLav({ chave, dre, culturas, unidades, semTotal }: {
   dre: DreLavoura; culturas: DreCultura[]; unidades: readonly UnidadeLav[]; semTotal?: boolean;
 }) {
   const celula = (v: number | null | undefined) => (v == null ? traco : `R$ ${formatNum(v, 2)}/ha`);
-  /* ⚠ ELA MORA NA FAIXA DO LUCRO LÍQUIDO — item 12: é a mesma linha noutra unidade, e a tira branca
-     que ela era logo abaixo do azul se lia como uma linha nova da cascata. O fundo, a cor do texto
-     e o marcador ▲/▼ são os do t4, os mesmos da linha de cima. */
-  const t4 = FAIXA_TOTAL.t4;
-  const vazias = (n: number) => Array.from({ length: n }).map((_, i) => (
-    <td key={i} className={t4.fundo} />
-  ));
-  const valor = (v: number | null | undefined) => (
-    <>
-      {/* ⚠ O SLOT FICA RESERVADO MESMO SEM VALOR — fix6: esta linha divide a coluna com o Lucro
-          líquido logo acima, e o número tem de começar no mesmo x nas duas. Sem marcador quando o
-          valor não existe, que é a mesma regra do traço nas células. */}
-      <Marcador marcador={v == null ? undefined : marcadorDoTotal('t4', v)} />
+  /* ⚠ DRE-LEVE-01 (D6): "por hectare" é SUBITEM da linha de cima — a régua da filha (13px, 8,5), cinza (negativo em vermelho), a coluna
+     "% RL" vazia. Sem a faixa navy de antes, não há ▲/▼. */
+  const regua = REGUA_LINHA.filha;
+  const comRs = unidades.includes('rs');
+  const vazias = (n: number) => Array.from({ length: Math.max(0, n) }).map((_, i) => <td key={i} className="bg-card" />);
+  const valor = (v: number | null | undefined, borda: string) => (
+    <td className={cn('truncate bg-card px-[7px] text-right tabular-nums', corNaGrade(v ?? null, { apoio: true }))}
+      style={{ fontSize: regua.fonte, ...(comRs ? { borderLeft: borda } : {}) }}>
       {celula(v)}
-    </>
+    </td>
   );
+  const pct = (borda: string) => <CelulaPct texto="" fundo="bg-card" estilo={comRs ? undefined : { borderLeft: borda }} />;
   return (
-    <tr className={cn(t4.fundo, 'font-normal')} style={{ height: 14 }}>
-      <td className={cn('sticky left-0 z-10 truncate border-r border-border/60 py-px text-primary-foreground/80', t4.fundo)}
-        style={{ fontSize: 9, paddingLeft: 7, paddingRight: 7 }}
+    <tr className="bg-card font-normal" style={{ height: regua.altura }}>
+      <td className="sticky left-0 z-10 truncate border-r border-border/60 bg-card py-px text-muted-foreground"
+        style={{ fontSize: regua.fonte, paddingLeft: 7 + regua.recuo, paddingRight: 7 }}
         title="O total desta linha dividido pela área plantada da cultura">
         por hectare
       </td>
       {culturas.map(c => (
         <Fragment key={c.cultura}>
-          <td className={cn('truncate px-[7px] text-right tabular-nums', t4.fundo, t4.texto)}
-            style={{ fontSize: 9, borderLeft: '1px solid hsl(var(--border))' }}>
-            {valor(c.linhas[chave].por_ha)}
-          </td>
+          {comRs ? <>{valor(c.linhas[chave].por_ha, DIVISA_CORPO)}{pct(DIVISA_CORPO)}</>
+            : <>{pct(DIVISA_CORPO)}{valor(c.linhas[chave].por_ha, DIVISA_CORPO)}</>}
           {vazias(unidades.length - 1)}
         </Fragment>
       ))}
       {!semTotal && <>
-        <td className={cn('truncate px-[7px] text-right tabular-nums', t4.fundo, t4.texto)}
-          style={{ fontSize: 9, borderLeft: BORDA_TOTAL }}>
-          {valor(dre.total.linhas[chave].por_ha)}
-        </td>
-        {vazias(unidades.filter(u => u !== 'un').length - 1)}
+        {comRs ? <>{valor(dre.total.linhas[chave].por_ha, BORDA_TOTAL)}{pct(BORDA_TOTAL)}</>
+          : <>{pct(BORDA_TOTAL)}{valor(dre.total.linhas[chave].por_ha, BORDA_TOTAL)}</>}
+        {vazias(Math.max(1, unidades.filter(u => u !== 'un').length) - 1)}
       </>}
     </tr>
   );
@@ -2051,9 +2004,11 @@ function LinhaPorHectareLav({ chave, dre, culturas, unidades, semTotal }: {
 
 function LinhaDre({
   def, dre, culturas, rateioDentro, unidades, aberto, onAlternar, valorDaLinha, abrir,
-  semTotal, onDrill,
+  semTotal, onDrill, comPct = false,
 }: {
   def: DefLinha; dre: DreLavoura; culturas: DreCultura[];
+  /** DRE-LEVE-01 (D2/D3) — a coluna "% RL" tem número nesta linha. */
+  comPct?: boolean;
   rateioDentro: boolean; unidades: readonly UnidadeLav[];
   aberto: boolean; onAlternar?: () => void;
   valorDaLinha: (l: DreValor, def: DefLinha) => number | null;
@@ -2066,7 +2021,11 @@ function LinhaDre({
      −1,4 milhão com a mesma cara de um positivo: a faixa marca a IMPORTÂNCIA da linha, que é igual
      nos dois casos, e não o resultado dela. `corDoTotal` escolhe o tom certo para cada faixa. */
   const daFaixa = def.faixa ? FAIXA_TOTAL[def.faixa] : null;
-  const fundo = daFaixa ? daFaixa.fundo : fundoDaLinha(def.destaque);
+  /* ⚠ DRE-LEVE-01 (D6): as linhas-chave (Margem, Lucro operacional) com o azul-claro, que substitui o fundo da célula (como a faixa). */
+  const chave = LINHAS_CHAVE.has(def.chave);
+  const fundoForte = chave ? FUNDO_CHAVE : daFaixa?.fundo;
+  const fundo = fundoForte ?? fundoDaLinha(def.destaque);
+  const resultado = ehResultadoLav(def);
   /* ⚠ TRÊS PESOS, E A REGRA É A HIERARQUIA DO DRE: subtotal e grupo em 500, filha em 400. O 600
      de antes fazia os cinco subtotais competirem entre si e com o cabeçalho — com 500 eles
      continuam destacados das linhas comuns sem virar cinco títulos empilhados. */
@@ -2076,13 +2035,17 @@ function LinhaDre({
      GRUPO (10px/500, recuo 8) e as filhas como FILHA (9px/400, recuo 16), que é a régua
      DRE-GRADE-TIPOGRAFIA que a pecuária já usa. `temBloco` sozinho não bastava: Custeio tem
      `bloco` e agora é FILHA de "Custo variável". */
-  const papel = def.paiGrupo ? 'grupo' : def.filhoDe ? 'filha' : tipoDaLinha(def.destaque, !!def.bloco);
+  const papel = resultado ? 'subtotal' : def.paiGrupo ? 'grupo' : def.filhoDe ? 'filha' : tipoDaLinha(def.destaque, !!def.bloco);
   const regua = REGUA_LINHA[papel];
   const peso = regua.peso;
   /* ⚠ O MEMO NÃO TEM COR DE CUSTO: ele não é uma parcela a subtrair, é um recorte do que o pai já
      contém. Vermelho ali faria o olho somá-lo de novo. */
-  const corLinha = def.memo ? 'text-muted-foreground'
-    : daFaixa ? (daFaixa.texto ?? '') : corDoTom(def.tom);
+  /* ⚠ DRE-LEVE-01 (D6): o rótulo na tinta da casa; o subitem (filha de grupo) e o memo em cinza. */
+  const corLinha = def.memo || def.filhoDe ? 'text-muted-foreground' : 'text-foreground';
+  /* ⚠ DRE-LEVE-01 (D6): o número na cor do mock — custo e negativo em vermelho, o resto na tinta, o resultado-chave em navy; o memo e o
+     subitem em cinza. */
+  const corDoNumero = (v: number | null) => corNaGrade(v, { custo: def.tom === 'custo', chave, apoio: !!(def.memo || def.filhoDe) });
+  const fonteValor = chave ? FONTE_CHAVE : regua.fonte;
   const tot = dre.total.linhas[def.chave];
   /* ⚠ A COLUNA TOTAL SEGUE A MESMA REGRA das culturas, com o valor DELA: o sinal do total da safra
      não é o de nenhuma cultura em particular. */
@@ -2095,8 +2058,7 @@ function LinhaDre({
     for (const k of def.somaDe) { const v = l[k].valor; if (v == null) return null; t += v; }
     return t;
   };
-  const corDoTotalDaSafra = def.faixa ? corDoTotal(def.faixa, valorDe(dre.total.linhas))
-    : def.corPorSinal ? corDoSinal(valorDe(dre.total.linhas)) : corLinha;
+  const corDoTotalDaSafra = corDoNumero(valorDe(dre.total.linhas));
   /* ⚠ O MARCADOR SÓ EXISTE NO AZUL CHEIO (item 13): nas outras faixas o próprio número é azul ou
      vermelho, e o glifo seria o mesmo recado duas vezes. */
   const marcador = (v: number | null) => (def.faixa ? marcadorDoTotal(def.faixa, v) : undefined);
@@ -2111,12 +2073,13 @@ function LinhaDre({
     ? () => onDrill(grupoDoRotulo, def.rotulo, culturas[0].cultura) : undefined;
 
   return (
-    <tr className={cn(fundo, peso)} style={{ height: regua.altura }}>
+    <tr className={cn(fundo, peso, resultado && REGUA_RESULTADO)} style={{ height: regua.altura }}>
       {/* ⚠ NO DRILL O RÓTULO TAMBÉM ABRE (§5): com uma cultura só, a linha inteira é aquele
           número, e obrigar a mirar na célula da direita é atrito sem razão. Na raiz o rótulo
           continua inerte — ali ele governa N culturas e não há qual abrir. */}
       <td onClick={rotuloAbre ? aoAbrirRotulo : undefined}
-        title={def.rotulo}
+        /* ⚠ DRE-LEVE-01: o `title` leva a marca junto ("· estimado") — a célula pode cortar com "…", e o texto inteiro tem de estar nele. */
+        title={def.etiqueta ? `${def.rotulo} · ${def.etiqueta}` : def.rotulo}
         className={cn('sticky left-0 z-10 truncate py-px', fundo,
           'border-r border-border/60', corLinha,
           rotuloAbre && 'cursor-pointer hover:underline hover:decoration-dotted')}
@@ -2147,8 +2110,7 @@ function LinhaDre({
         const l = c.linhas[def.chave];
         const v = valorDe(c.linhas);
         const rat = def.bloco && rateioDentro ? (l.rateado ?? 0) : 0;
-        const cor = def.faixa ? corDoTotal(def.faixa, v)
-          : def.corPorSinal ? corDoSinal(v) : corLinha;
+        const cor = corDoNumero(v);
         /* ⚠ A LINHA DO RATEIO COMPARTILHADO ABRE O POOL INTEIRO (§2), com `p_chave` nulo. Ela só
            existe no modo "Custos diretos" — no outro o rateio está dentro dos centros e a linha
            some, junto com a pergunta que ela responde. */
@@ -2170,20 +2132,20 @@ function LinhaDre({
             {/* ⚠ CADA CHIP MARCADO É UMA CÉLULA — DRE-UNIDADES-01. A divisa do grupo de colunas
                 vai na PRIMEIRA que existir: com o R$ desmarcado, ela passa para o R$/ha. */}
             {unidades.includes('rs') && (
-              <Celula valor={v} cor={cor} destaque={def.destaque} fonte={regua.fonte}
-                faixa={daFaixa?.fundo} marcador={marcador(v)}
+              <Celula valor={v} cor={cor} destaque={def.destaque} fonte={fonteValor}
+                faixa={fundoForte} marcador={marcador(v)}
                 bordaEsquerda onAbrir={aoAbrir} />
             )}
+            <CelulaPct texto={comPct ? textoPctRL(c.linhas, v) : ''} fundo={fundo}
+              estilo={unidades.includes('rs') ? undefined : { borderLeft: DIVISA_CORPO }} />
             {unidades.includes('ha') && (
               <CelulaUnit texto={porUnidade(v, c.area_ha)} cor={cor} destaque={def.destaque}
-                bordaEsquerda={unidades[0] === 'ha'}
-                faixa={daFaixa?.fundo} marcador={marcador(v)}
+                faixa={fundoForte} marcador={marcador(v)}
                 fonte={regua.fonte} onAbrir={aoAbrir} />
             )}
             {unidades.includes('un') && (
               <CelulaUnit texto={porUnidade(v, c.producao)} cor={cor} destaque={def.destaque}
-                bordaEsquerda={unidades[0] === 'un'}
-                faixa={daFaixa?.fundo} marcador={marcador(v)}
+                faixa={fundoForte} marcador={marcador(v)}
                 fonte={regua.fonte} onAbrir={aoAbrir} />
             )}
           </Fragment>
@@ -2199,19 +2161,21 @@ function LinhaDre({
       {!semTotal && <>
         {unidades.includes('rs') && (
           <Celula valor={valorDe(dre.total.linhas)} cor={corDoTotalDaSafra}
-            faixa={daFaixa?.fundo} marcador={marcador(valorDe(dre.total.linhas))}
-            destaque={def.destaque} fonte={regua.fonte} total />
+            faixa={fundoForte} marcador={marcador(valorDe(dre.total.linhas))}
+            destaque={def.destaque} fonte={fonteValor} total />
         )}
+        <CelulaPct texto={comPct ? textoPctRL(dre.total.linhas, valorDe(dre.total.linhas)) : ''} fundo={fundo}
+          estilo={unidades.includes('rs') ? undefined : { borderLeft: BORDA_TOTAL }} />
         {unidades.includes('ha') && (
           <CelulaUnit texto={porUnidade(valorDe(dre.total.linhas), dre.total.area_ha)}
             cor={corDoTotalDaSafra}
-            faixa={daFaixa?.fundo} marcador={marcador(valorDe(dre.total.linhas))}
+            faixa={fundoForte} marcador={marcador(valorDe(dre.total.linhas))}
             destaque={def.destaque} fonte={regua.fonte}
             total />
         )}
         {totalEmTraco(unidades) && (
           <CelulaUnit texto={traco} cor="" destaque={def.destaque} fonte={regua.fonte}
-            faixa={daFaixa?.fundo}
+            faixa={fundoForte}
             total title={TOTAL_SEM_SOMA} />
         )}
       </>}
@@ -2252,7 +2216,7 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, unidades, semTotal, abrir }:
   return (
     <tr className="bg-card" style={{ height: REGUA_LINHA.filha.altura }}>
       <td className={cn('sticky left-0 z-10 truncate border-r border-t border-dashed border-border/60',
-        'bg-card py-px', VERMELHO)}
+        'bg-card py-px text-muted-foreground')}
         style={{ fontSize: REGUA_LINHA.filha.fonte,
           paddingLeft: 7 + REGUA_LINHA.filha.recuo, paddingRight: 7 }}
         title="(−) Rateio compartilhado — estimado, rateado por área">
@@ -2269,15 +2233,14 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, unidades, semTotal, abrir }:
                 bordaEsquerda fundo="bg-card"
                 onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
             )}
+            <CelulaPct texto="" fundo="bg-card" estilo={unidades.includes('rs') ? undefined : { borderLeft: DIVISA_CORPO }} />
             {unidades.includes('ha') && (
               <CelulaUnit filha texto={porUnidade(r, c.area_ha)} cor={VERMELHO}
-                bordaEsquerda={unidades[0] === 'ha'}
                 fonte={REGUA_LINHA.filha.fonte} fundo="bg-card"
                 onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
             )}
             {unidades.includes('un') && (
               <CelulaUnit filha texto={porUnidade(r, c.producao)} cor={VERMELHO}
-                bordaEsquerda={unidades[0] === 'un'}
                 fonte={REGUA_LINHA.filha.fonte} fundo="bg-card"
                 onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
             )}
@@ -2290,6 +2253,7 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, unidades, semTotal, abrir }:
           <Celula filha valor={totalRateado} cor={VERMELHO} fonte={REGUA_LINHA.filha.fonte}
             total fundo="bg-card" />
         )}
+        <CelulaPct texto="" fundo="bg-card" estilo={unidades.includes('rs') ? undefined : { borderLeft: BORDA_TOTAL }} />
         {unidades.includes('ha') && (
           <CelulaUnit filha texto={porUnidade(totalRateado, dre.total.area_ha)} cor={VERMELHO}
             fonte={REGUA_LINHA.filha.fonte} total fundo="bg-card" />
@@ -2325,7 +2289,7 @@ function LinhaCentro({ centro, culturas, rateioDentro, unidades, areaTotal, abri
   return (
     <tr className={fundo} style={{ height: regua.altura, ...estilo }}>
       <td className={cn('sticky left-0 z-10 truncate border-r border-t border-dashed border-border/60',
-        'py-px', fundo)}
+        'py-px text-muted-foreground', fundo)}
         style={{
           fontSize: regua.fonte, paddingLeft: 7 + regua.recuo, paddingRight: 7,
           ...estilo, ...(solo ? { color: '#8a5a1e', fontWeight: 600 } : undefined),
@@ -2349,13 +2313,14 @@ function LinhaCentro({ centro, culturas, rateioDentro, unidades, areaTotal, abri
                 bordaEsquerda fundo={fundo} estilo={estilo}
                 onAbrir={() => abrir(tipo, centro.centro, centro.centro, c.cultura)} />
             )}
+            <CelulaPct texto="" fundo={fundo} estilo={{ ...estilo, ...(unidades.includes('rs') ? {} : { borderLeft: DIVISA_CORPO }) }} />
             {unidades.includes('ha') && (
               <CelulaUnit filha texto={porUnidade(v, c.area_ha)} cor={VERMELHO} fonte={regua.fonte}
-                bordaEsquerda={unidades[0] === 'ha'} fundo={fundo} estilo={estilo} />
+                fundo={fundo} estilo={estilo} />
             )}
             {unidades.includes('un') && (
               <CelulaUnit filha texto={porUnidade(v, c.producao)} cor={VERMELHO} fonte={regua.fonte}
-                bordaEsquerda={unidades[0] === 'un'} fundo={fundo} estilo={estilo} />
+                fundo={fundo} estilo={estilo} />
             )}
           </Fragment>
         );
@@ -2366,6 +2331,7 @@ function LinhaCentro({ centro, culturas, rateioDentro, unidades, areaTotal, abri
           <Celula filha valor={totalCentro} cor={VERMELHO} fonte={regua.fonte}
             total fundo={fundo} estilo={estilo} />
         )}
+        <CelulaPct texto="" fundo={fundo} estilo={{ ...estilo, ...(unidades.includes('rs') ? {} : { borderLeft: BORDA_TOTAL }) }} />
         {unidades.includes('ha') && (
           <CelulaUnit filha texto={porUnidade(totalCentro, areaTotal)} cor={VERMELHO}
             fonte={regua.fonte} total fundo={fundo} estilo={estilo} />
