@@ -29,6 +29,11 @@ import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
 import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
 import { FUNDOS } from '@/lib/mapa/fundoDoMapa';
+import { LARGURA_MAXIMA_DOS_CREDITOS_PX } from '@/lib/mapa/creditosDoMapa';
+
+/* MAPA-CONTROLES-01: o que a legenda deixa livre à direita para os créditos no rodapé = 12 (a margem da legenda) + a largura máxima dos
+   créditos + 10 (a margem do controle do Leaflet) + 8 de folga */
+const RESERVA_DOS_CREDITOS_PX = 12 + LARGURA_MAXIMA_DOS_CREDITOS_PX + 10 + 8;
 
 interface Props {
   geometrias: FazendaGeometria[];
@@ -183,6 +188,9 @@ export function MapaGestorView({
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
   const [filtrosAbertos, setFiltrosAbertos] = useState(true);
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS);
+  const [creditosNoRodape, setCreditosNoRodape] = useState(true); // MAPA-CONTROLES-01
+  const quadroRef = useRef<HTMLDivElement>(null);
+  const legendaRef = useRef<HTMLDivElement>(null);
   const enquadrouRef = useRef('');
   const camadasRef = useRef(new Map<string, L.GeoJSON>());
   const rotulosRef = useRef<RotuloDoPasto[]>([]);
@@ -195,6 +203,7 @@ export function MapaGestorView({
   const geoPastos = useMemo(() => geometrias.filter(g => g.tipo === 'pasto' && !!g.pasto_id), [geometrias]);
   const geoSelecionada = selecionadoId ? geoPastos.find(g => g.id === selecionadoId) ?? null : null;
   const pastoSelecionado = geoSelecionada?.pasto_id ? pastoPorId.get(geoSelecionada.pasto_id) ?? null : null;
+  const painelAberto = Boolean(geoSelecionada && pastoSelecionado);
   const dadosSelecionado = pastoSelecionado ? dadosDoMes.get(pastoSelecionado.id) ?? null : null;
 
   // o polígono deixou de ser pasto (vínculo removido) ou sumiu: o painel fecha
@@ -383,6 +392,28 @@ export function MapaGestorView({
   const hist = dadosSelecionado?.historico ?? [];
   const maxHist = Math.max(1, ...hist.map(h => h.kgHa ?? 0));
 
+  /* MAPA-CONTROLES-01: com o painel fechado, os créditos vão para o rodapé à direita SÓ se cabem ao lado da legenda inteira (no pior caso,
+     os créditos na largura máxima); senão sobem para logo acima da faixa da legenda, ainda encostados à direita — nunca por baixo dela.
+     A 1126 com satélite: mapa 974 < legenda 613 + reserva 390. Mede de novo quando o quadro, a legenda ou o conteúdo dela mudam. */
+  useEffect(() => {
+    const quadro = quadroRef.current; if (!quadro) return;
+    const medir = () => {
+      const larguraDaLegenda = legendaRef.current?.scrollWidth ?? 0;
+      setCreditosNoRodape(quadro.clientWidth >= larguraDaLegenda + RESERVA_DOS_CREDITOS_PX);
+    };
+    medir();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(medir);
+    ro.observe(quadro);
+    if (legendaRef.current) ro.observe(legendaRef.current);
+    return () => ro.disconnect();
+  }, [hasGeo, nomeCamada, legenda, erroDoMes, carregandoMes]);
+  const canto = painelAberto
+    ? '[&_.leaflet-bottom.leaflet-right]:bottom-[50px] [&_.leaflet-bottom.leaflet-right]:right-[302px]'
+    : creditosNoRodape
+      ? '[&_.leaflet-bottom.leaflet-right]:bottom-0 [&_.leaflet-bottom.leaflet-right]:right-0'
+      : '[&_.leaflet-bottom.leaflet-right]:bottom-[50px] [&_.leaflet-bottom.leaflet-right]:right-0';
+
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="mapa-gestor">
       {/* Barra 40px */}
@@ -486,8 +517,12 @@ export function MapaGestorView({
       </div>
 
       {/* Mapa + vidros */}
-      {/* o zoom (e os créditos) ficam SEMPRE à esquerda da coluna do painel: abrir ou fechar o pasto não move nada (UI-SEM-DESLOCAR-01) */}
-      <div className="relative min-h-0 flex-1 bg-[#3a4436] [&_.leaflet-bottom.leaflet-right]:bottom-[50px] [&_.leaflet-bottom.leaflet-right]:right-[302px]">
+      {/* MAPA-CONTROLES-01 (Gabriel 31/10, D1/D2): o canto do zoom e dos créditos do Google só abre espaço para o painel do pasto quando ele
+          está na tela — aberto, os dois ficam encostados à esquerda dele, acima da legenda (302 = 286 do painel + 12 da margem + 4); fechado,
+          voltam para a borda direita: os créditos no rodapé (ou logo acima da legenda, se não cabem ao lado dela) e o + / − acima deles.
+          EXCEÇÃO DECLARADA ao UI-SEM-DESLOCAR-01, só para o zoom e os créditos: abrir/fechar o pasto os move; barra, KPIs, Filtros,
+          legenda e painel seguem fixos. */}
+      <div ref={quadroRef} className={`relative min-h-0 flex-1 bg-[#3a4436] ${canto}`}>
         <div className="absolute inset-0">
           {/* fix1 (1): o Chrome desenhava um retângulo azul (contorno de foco) no polígono clicado (Gabriel, proto, 31/10 08:27): sem contorno
               de foco SÓ nos polígonos do mapa; o foco de teclado do resto da tela continua */}
@@ -613,9 +648,12 @@ export function MapaGestorView({
         )}
 
         {hasGeo && (
-          /* fix1 (4): a legenda tem o tamanho do conteúdo, à esquerda, e nunca passa por baixo do painel do pasto */
-          <div className={`absolute bottom-3 left-3 z-[500] flex h-[30px] w-fit items-center gap-2.5 overflow-hidden px-2.5 text-[9.5px] ${VIDRO}`}
-            style={{ maxWidth: selecionadoId ? 'calc(100% - 322px)' : 'calc(100% - 24px)' }} data-testid="mapa-legenda">
+          /* fix1 (4): a legenda tem o tamanho do conteúdo, à esquerda, e nunca passa por baixo do painel do pasto.
+             MAPA-CONTROLES-01: com os créditos no rodapé (painel fechado), a legenda reserva o lugar deles (RESERVA_DOS_CREDITOS_PX) e
+             nunca os cobre; com eles acima da faixa, ela tem a largura toda */
+          <div ref={legendaRef} className={`absolute bottom-3 left-3 z-[500] flex h-[30px] w-fit items-center gap-2.5 overflow-hidden px-2.5 text-[9.5px] ${VIDRO}`}
+            style={{ maxWidth: painelAberto ? 'calc(100% - 322px)' : creditosNoRodape ? `calc(100% - ${RESERVA_DOS_CREDITOS_PX}px)` : 'calc(100% - 24px)' }}
+            data-testid="mapa-legenda">
             <b className="flex-none whitespace-nowrap text-[10px]">{nomeCamada}</b>
             {legenda.map(i => (
               <span key={i.rotulo} className="flex flex-none items-center gap-1 whitespace-nowrap">
