@@ -1000,14 +1000,30 @@ function medirCantoDoMapa() {
   } else {
     if (m.right - z.right > 14) achados.push({ regra: 'canto-do-mapa', texto: `painel fechado: o zoom fica a ${px(m.right - z.right)} da borda direita` });
     if (m.right - c.right > 14) achados.push({ regra: 'canto-do-mapa', texto: `painel fechado: os creditos ficam a ${px(m.right - c.right)} da borda direita` });
-    /* no rodapé quando cabem ao lado da legenda inteira (no pior caso: créditos de 360 → reserva 390); senão logo acima da faixa dela */
-    const cabem = !legenda || m.width >= document.querySelector('[data-testid="mapa-legenda"]').scrollWidth + 390;
+    /* no rodapé quando cabem ao lado da legenda inteira (MAPA-COMPACTO-01: a largura MEDIDA dos créditos + 30 de margens); senão logo
+       acima da faixa dela */
+    const cabem = !legenda || m.width >= document.querySelector('[data-testid="mapa-legenda"]').scrollWidth + 30 + c.width;
     if (cabem && m.bottom - c.bottom > 14) achados.push({ regra: 'canto-do-mapa', texto: `painel fechado: os creditos cabem no rodape e ficam a ${px(m.bottom - c.bottom)} dele` });
     if (!cabem && (c.bottom > legenda.top + 0.5 || legenda.top - c.bottom > 24)) achados.push({ regra: 'canto-do-mapa', texto: 'painel fechado: sem lugar no rodape, os creditos nao ficam logo acima da legenda' });
   }
   if (z.bottom > c.top + 0.5) achados.push({ regra: 'canto-do-mapa', texto: 'o zoom nao fica acima dos creditos' });
   if (legenda && z.bottom > legenda.top + 0.5) achados.push({ regra: 'canto-do-mapa', texto: 'o zoom desce ate a faixa da legenda' });
   const cruza = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+  /* MAPA-COMPACTO-01 — as regras da Google (Map Tiles API › Policies): logo de 16 a 19 px, sem deformar; espaço livre de 10 px nos lados
+     e em cima e 5 px embaixo, sem nada da casa dentro; o texto da atribuição INTEIRO numa linha (ou o botão "Fontes dos dados") */
+  const logo = caixa('[data-testid="mapa-creditos-logo"]'), faixaEl = document.querySelector('[data-testid="mapa-creditos-faixa"]');
+  if (logo) {
+    if (logo.height < 15.5 || logo.height > 19.5) achados.push({ regra: 'canto-do-mapa', texto: `o logo do Google tem ${px(logo.height)} de altura (16 a 19)` });
+    const livre = { left: logo.left - 10, right: logo.right + 10, top: logo.top - 10, bottom: logo.bottom + 5 };
+    for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['zoom', '.leaflet-control-zoom']]) {
+      const b = caixa(sel); if (b && cruza(livre, b)) achados.push({ regra: 'canto-do-mapa', texto: `${nome} entra no espaço livre do logo do Google` });
+    }
+  }
+  if (faixaEl && faixaEl.getBoundingClientRect().width > 1) {
+    const f = faixaEl.getBoundingClientRect();
+    if (f.height > 16.5) achados.push({ regra: 'canto-do-mapa', texto: `o texto dos créditos tem ${px(f.height)} (uma linha)` });
+    if (faixaEl.scrollWidth > faixaEl.clientWidth + 1) achados.push({ regra: 'canto-do-mapa', texto: 'o texto dos créditos é cortado' });
+  }
   for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['KPIs', '[data-testid="mapa-kpis"]']]) {
     const b = caixa(sel); if (!b) continue;
     if (cruza(c, b)) achados.push({ regra: 'canto-do-mapa', texto: `os creditos ficam por baixo de ${nome}` });
