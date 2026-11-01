@@ -23,8 +23,9 @@ export interface LotacaoDoPasto {
 
 export interface AlocacaoDoMes { fechamentoId: string; lote: string; pastoId: string }
 
-/** O pasto como o lote o vê (o `Pasto` do cadastro tem tudo isso). */
-export interface PastoDoLote { id: string; nome: string; area_produtiva_ha: number | null; grupo_id?: string | null }
+/** O pasto como o lote o vê. ⚠ A `area` é a do MÊS (PASTO-AREA-OFICIAL-02a: quem monta usa `areaNoMesOuHoje` com o `areaDe` de
+ *  `useAreaDosPastosNoMes`), nunca o cadastro de hoje lido aqui. */
+export interface PastoDoLote { id: string; nome: string; area: number | null; grupo_id?: string | null }
 
 export type Resultado<T> = { ok: true; dados: T; erro?: undefined } | { ok: false; erro: string; dados?: undefined };
 
@@ -92,8 +93,8 @@ export function grupoInteiro(pastoId: string, membros: readonly PastoDoLote[], i
 }
 
 /** Σ das áreas (só as que existem); nenhuma = null (sem número, nunca "0,00"). */
-export function somaDasAreas(pastos: ReadonlyArray<Pick<PastoDoLote, 'area_produtiva_ha'>>): number | null {
-  const areas = pastos.map((p) => p.area_produtiva_ha).filter((a): a is number => a != null && Number.isFinite(a) && a > 0);
+export function somaDasAreas(pastos: ReadonlyArray<Pick<PastoDoLote, 'area'>>): number | null {
+  const areas = pastos.map((p) => p.area).filter((a): a is number => a != null && Number.isFinite(a) && a > 0);
   return areas.length ? Math.round(areas.reduce((s, a) => s + a, 0) * 100) / 100 : null;
 }
 

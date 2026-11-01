@@ -21,6 +21,8 @@ import { formatNum } from '@/lib/calculos/formatters';
 import { grupoInteiro, somaDasAreas, type PastoDoLote } from '@/lib/fechamento/loteNoGrupo';
 
 export interface ContextoDoLote {
+  /** o pasto do card, com a área do mês */
+  proprio: PastoDoLote;
   nomeDoGrupo: string | null;
   /** os membros do grupo vigentes no mês, com o próprio pasto (vazio = pasto sem grupo) */
   membros: PastoDoLote[];
@@ -71,7 +73,7 @@ export function OndeOLoteEsteve({ pasto, contexto, escolhidos, onChange, uaDoCar
   const marcar = (id: string, sim: boolean) => onChange(sim ? [...escolhidos, id] : escolhidos.filter((x) => x !== id));
   const opcoesExtras = contexto.outrosPastos
     .filter((p) => !contexto.impedidos.has(p.id) && !escolhidos.includes(p.id))
-    .map((p) => ({ value: p.id, label: p.nome, hint: formatarAreaBR(p.area_produtiva_ha) ? `${formatarAreaBR(p.area_produtiva_ha)} ha` : undefined }));
+    .map((p) => ({ value: p.id, label: p.nome, hint: formatarAreaBR(p.area) ? `${formatarAreaBR(p.area)} ha` : undefined }));
   const nomes = (ids: readonly string[]) => ids.map((id) => porId.get(id)?.nome ?? '').filter(Boolean).join(', ');
 
   return (

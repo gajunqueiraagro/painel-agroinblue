@@ -34,10 +34,10 @@ import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import type { FechamentoPasto } from '@/hooks/useFechamento';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
-const A = { id: 'a', nome: 'P10A', area_produtiva_ha: 10, grupo_id: 'g' };
-const B = { id: 'b', nome: 'P10B', area_produtiva_ha: 30, grupo_id: 'g' };
-const C = { id: 'c', nome: 'P10C', area_produtiva_ha: 20, grupo_id: 'g' };
-const X = { id: 'x', nome: 'P11 Retiro', area_produtiva_ha: 40, grupo_id: null };
+const A = { id: 'a', nome: 'P10A', area: 10, grupo_id: 'g' };
+const B = { id: 'b', nome: 'P10B', area: 30, grupo_id: 'g' };
+const C = { id: 'c', nome: 'P10C', area: 20, grupo_id: 'g' };
+const X = { id: 'x', nome: 'P11 Retiro', area: 40, grupo_id: null };
 const lot = (id: string, ua: number, cab: number): LotacaoDoPasto => ({ pastoId: id, grupoId: 'g', areaHa: 0, cabecas: cab, ua, uaHa: null, recebeDeOutroCard: false });
 
 beforeEach(() => { vi.clearAllMocks(); Element.prototype.scrollIntoView = () => {}; });
@@ -80,7 +80,7 @@ describe('L — as contas puras', () => {
   });
 });
 
-const CTX: ContextoDoLote = { nomeDoGrupo: 'P10', membros: [A, B, C], outrosPastos: [X], impedidos: new Map([['c', 'vedado']]), gravada: null };
+const CTX: ContextoDoLote = { proprio: A, nomeDoGrupo: 'P10', membros: [A, B, C], outrosPastos: [X], impedidos: new Map([['c', 'vedado']]), gravada: null };
 
 function montarBotao(escolhidos: string[], uaDoCard = 100) {
   const onChange = vi.fn();
@@ -119,7 +119,7 @@ describe('C — o botão e o quadro "Onde o lote esteve"', () => {
 describe('D — o modal do pasto', () => {
   const FECH: FechamentoPasto = { id: 'fa', pasto_id: 'a', fazenda_id: 'f', ano_mes: '2026-10', status: 'rascunho', responsavel_nome: null,
     tipo_uso_mes: 'recria', lote_mes: null, qualidade_mes: null, observacao_mes: null, created_at: '2026-10-01', updated_at: '2026-10-01' };
-  const PASTO_A: Pasto = { ...A, fazenda_id: 'f', tipo_uso: 'recria', ativo: true, entra_conciliacao: true, ordem_exibicao: 1, lote_padrao: null,
+  const PASTO_A: Pasto = { id: 'a', nome: 'P10A', area_produtiva_ha: 10, grupo_id: 'g', fazenda_id: 'f', tipo_uso: 'recria', ativo: true, entra_conciliacao: true, ordem_exibicao: 1, lote_padrao: null,
     qualidade: null, observacoes: null, data_inicio: null, created_at: '2026-01-01', updated_at: '2026-01-01' };
   const CATS: CategoriaRebanho[] = [{ id: 'c1', nome: 'Bois', codigo: 'bois', ordem_exibicao: 1 }];
   const abrir = (lote?: ContextoDoLote) => render(

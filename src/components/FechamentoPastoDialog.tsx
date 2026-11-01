@@ -602,7 +602,7 @@ export function FechamentoPastoDialog({
             )}
           </div>
           {lote && !ehLavoura && total > 0 && (
-            <OndeOLoteEsteve pasto={pasto} contexto={lote} escolhidos={escolhidos} onChange={setEscolhidos}
+            <OndeOLoteEsteve pasto={lote.proprio} contexto={lote} escolhidos={escolhidos} onChange={setEscolhidos}
               uaDoCard={uaDosItens(itens)} disabled={inputsDisabled} />
           )}
           <div className="flex-1" />
