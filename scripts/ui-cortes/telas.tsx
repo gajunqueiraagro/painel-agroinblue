@@ -74,6 +74,7 @@ import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
 import { mapaGlobal } from './dados/mapaGlobal';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
+import { rotuloDoTipo } from '@/lib/mapa/tiposDeArea';
 import * as CONTAS_BANC from './dados/contas';
 import * as VG from './dados/visaoGeral';
 import { BarraSecao } from '@/v2/components/BarraSecao';
@@ -671,7 +672,10 @@ if (tela === 'mesclar') {
         .map(f => ({ ...f, fechamento_pasto_itens: MAPA.ITENS.filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       : [],
-    rpc: () => null,
+    // MAPA-AREA-TIPO-01: a prévia do escritor da classificação (sintética: de "Sem classificação" para o tipo pedido)
+    rpc: (fn: string, a: any) => fn === 'fn_mapa_geometria_classificar'
+      ? { ok: true, simulado: true, de: { rotulo: 'Sem classificação' }, para: { rotulo: a?.p_tipo === 'pasto' ? 'Pasto' : rotuloDoTipo(a?.p_tipo ?? '') } }
+      : null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
 } else if (tela === 'mapa-global') {
@@ -1263,6 +1267,56 @@ if (tela === 'mesclar') {
     montar(<PatrimonioApiProvider api={API_PATRIMONIO}><PatrimonioTela /></PatrimonioApiProvider>);
   };
   void montarPatrimonio();
+} else if (tela === 'pastos') {
+  /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (a tela REAL) com o modo "Grupos": dado SINTÉTICO, nomes de exemplo; um grupo de 3
+     piquetes (P10A/B/C), um de nome longo com 4 pastos, um inativo e pastos soltos. O banco responde a prévia do `fn_pasto_grupo_salvar`
+     a partir do pedido (a frase do banco, a área somada), sem gravar nada. */
+  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  /* o `canEdit('pastos')` lê o perfil de `clienteAtual` (o padrão da bancada não traz): sem ele a tela abre só para leitura */
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  const pasto = (id: string, nome: string, area: number | null, tipo: string, grupo: string | null, ativo = true, ordem = 0) => ({
+    id, fazenda_id: 'f1', cliente_id: 'cli', nome, lote_padrao: null, area_produtiva_ha: area, tipo_uso: tipo, qualidade: null, entra_conciliacao: true,
+    ativo, observacoes: null, ordem_exibicao: ordem, data_inicio: null, data_fim: null, grupo_id: grupo, created_at: '2026-01-01', updated_at: '2026-01-01' });
+  const PASTOS = [
+    pasto('p10a', 'P10A', 21.4, 'recria', 'g1', true, 1), pasto('p10b', 'P10B', 22.9, 'recria', 'g1', true, 2), pasto('p10c', 'P10C', 20, 'recria', 'g1', true, 3),
+    pasto('ta1', 'T-A1 Piquete da terminação', 10.25, 'engorda', 'g2', true, 4), pasto('ta2', 'T-A2 Piquete da terminação', 11.5, 'engorda', 'g2', true, 5),
+    pasto('ta3', 'T-A3 Piquete da terminação', 12, 'engorda', 'g2', true, 6), pasto('ta4', 'T-A4 Piquete da terminação', 9.75, 'engorda', 'g2', true, 7),
+    pasto('p11', 'P11', 35.5, 'cria', null, true, 8), pasto('p13', 'P13 Retiro do córrego de baixo', 1234.56, 'cria', null, true, 9),
+    pasto('p14', 'P14', 18, 'vedado', null, true, 10), pasto('p15', 'P15 velho', 9, 'recria', null, false, 11),
+  ];
+  const GRUPOS = [
+    { id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true },
+    { id: 'g2', fazenda_id: 'f1', nome: 'Terminação intensiva do retiro de cima', ativo: true },
+    { id: 'g3', fazenda_id: 'f1', nome: 'Antigo rotacionado', ativo: false },
+  ];
+  const br = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  g.__bancoBancada = {
+    from: (t: string) => (t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? GRUPOS : []),
+    rpc: (fn: string, a: any) => {
+      if (fn === 'fn_pasto_grupo_desativar') {
+        const n = PASTOS.filter((x) => x.grupo_id === a.p_grupo_id).length;
+        const nome = GRUPOS.find((x) => x.id === a.p_grupo_id)?.nome;
+        return { ok: true, simulado: true, frase: `Desativa o grupo ${nome}: ${n} pastos voltam a ficar sem grupo, com o mesmo nome e a mesma área.`, saem: [] };
+      }
+      if (fn !== 'fn_pasto_grupo_salvar') return null;
+      const ids: string[] = a.p_pasto_ids ?? [];
+      const escolhidos = PASTOS.filter((x) => ids.includes(x.id));
+      const antes = PASTOS.filter((x) => a.p_grupo_id && x.grupo_id === a.p_grupo_id);
+      const area = escolhidos.reduce((s, x) => s + (x.area_produtiva_ha ?? 0), 0);
+      const vira = (l: typeof PASTOS) => l.map((x) => ({ id: x.id, nome: x.nome, area_ha: x.area_produtiva_ha }));
+      const entram = escolhidos.filter((x) => !antes.includes(x)); const saem = antes.filter((x) => !ids.includes(x.id));
+      if (a.p_grupo_id && entram.length === 0 && saem.length === 0) return { ok: true, simulado: true, sem_mudanca: true, frase: `O grupo ${a.p_nome.trim()} já está assim.` };
+      return { ok: true, simulado: true, frase: `${a.p_grupo_id ? 'O grupo' : 'Cria o grupo'} ${a.p_nome.trim()}: ${ids.length} pastos, ${br(area)} ha.`,
+        entram: vira(entram), saem: vira(saem), area_ha: area };
+    },
+  };
+  const montarPastos = async () => {
+    const { PastosTab } = await import('@/pages/PastosTab');
+    montar(<PastosTab />);
+  };
+  void montarPastos();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */

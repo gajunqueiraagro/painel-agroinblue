@@ -18,7 +18,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent,
   DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { itemFunciona, MENU_ADICIONAR } from '@/lib/mapa/menuAdicionar';
+import { itemFunciona, MENU_ADICIONAR, subitemFunciona } from '@/lib/mapa/menuAdicionar';
+import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
 import { ChevronDown, ChevronLeft, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
@@ -46,6 +47,8 @@ interface Props {
   erroDoMes: string | null;
   geoLoading: boolean;
   onImportar: () => void;
+  /** MAPA-AREA-TIPO-01: Adicionar › Área › [tipo] — vai à Validação para marcar um polígono existente com o tipo */
+  onClassificarArea?: (tipo: TipoDeArea) => void;
   /** MAPA-GLOBAL-01 (D6): a fazenda foi aberta pelo Global — o "← Global" aparece no espaço reservado do início da barra. */
   voltarAoGlobal?: () => void;
   /** MAPA-GLOBAL-01 (D6): o pasto clicado no Global abre selecionado, com o painel aberto. */
@@ -191,7 +194,7 @@ function escaparHtml(t: string): string {
 }
 
 export function MapaGestorView({
-  geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onRenderedChange,
+  geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
   seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
@@ -481,13 +484,21 @@ export function MapaGestorView({
                 {gr.itens.map(item => item.itens ? (
                   <DropdownMenuSub key={item.rotulo}>
                     <DropdownMenuSubTrigger className="justify-between">
-                      <span>{item.rotulo}</span><span className="ml-auto mr-1 rounded-full bg-white/15 px-1.5 text-[9.5px]">em breve</span>
+                      <span>{item.rotulo}</span>
+                      {/* MAPA-AREA-TIPO-01: o selo "em breve" só quando nada do submenu funciona */}
+                      <span className={`ml-auto mr-1 rounded-full bg-white/15 px-1.5 text-[9.5px] ${onClassificarArea && item.itens.some(subitemFunciona) ? 'invisible' : ''}`}>em breve</span>
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className={`${MENU_ACIMA} max-h-[70vh] w-[220px] overflow-y-auto`}>
                       {item.itens.map((sub, si) => (
                         <div key={sub.rotulo}>
                           {sub.grupo && sub.grupo !== item.itens?.[si - 1]?.grupo && <DropdownMenuLabel>{sub.grupo}</DropdownMenuLabel>}
-                          <DropdownMenuItem disabled>{sub.rotulo}</DropdownMenuItem>
+                          {subitemFunciona(sub) && onClassificarArea ? (
+                            <DropdownMenuItem onSelect={() => onClassificarArea(sub.tipo)} title="Marca um polígono do mapa com este tipo, na Validação">
+                              {sub.rotulo}
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem disabled>{sub.rotulo}</DropdownMenuItem>
+                          )}
                         </div>
                       ))}
                     </DropdownMenuSubContent>
