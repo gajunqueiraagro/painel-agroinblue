@@ -32,6 +32,9 @@ import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos,
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
 import { FUNDOS } from '@/lib/mapa/fundoDoMapa';
 import { EVENTO_LIMITE_DOS_CREDITOS } from '@/lib/mapa/creditosDoMapa';
+import { InfraPainel } from '@/components/mapa-geo/InfraPainel';
+import { useInfraestruturas } from '@/hooks/useInfraestruturas';
+import { contagemPorTipo, definicaoDoTipo, iconeDaInfra, pastoNoPonto, pontoDaInfra, tipoDePontoPeloRotulo, type TipoInfra } from '@/lib/mapa/infraestrutura';
 /* MAPA-CONTROLES-01 / MAPA-COMPACTO-01: o que a legenda deixa livre à direita para os créditos no rodapé = 12 (a margem da legenda) +
    8 de folga + 10 (a margem do controle do Leaflet) + a largura MEDIDA dos créditos (o texto muda com a área à vista) */
 const FOLGA_DA_LEGENDA_PX = 12 + 8 + 10;
@@ -49,6 +52,9 @@ interface Props {
   onImportar: () => void;
   /** MAPA-AREA-TIPO-01: Adicionar › Área › [tipo] — vai à Validação para marcar um polígono existente com o tipo */
   onClassificarArea?: (tipo: TipoDeArea) => void;
+  /** MAPA-02f-b: a fazenda e o cliente da infraestrutura (sem fazenda, o menu Infraestrutura fica "em breve") */
+  fazendaId?: string;
+  clienteId?: string | null;
   /** MAPA-GLOBAL-01 (D6): a fazenda foi aberta pelo Global — o "← Global" aparece no espaço reservado do início da barra. */
   voltarAoGlobal?: () => void;
   /** MAPA-GLOBAL-01 (D6): o pasto clicado no Global abre selecionado, com o painel aberto. */
@@ -102,9 +108,12 @@ const SEM_ATIVIDADE = '__sem__';
 type Filtros = {
   pastos: boolean; areas: boolean; semUso: boolean; nomes: boolean;
   atividadesOcultas: Set<string>; comAnimais: boolean; vazio: boolean; semFechamento: boolean;
+  /** MAPA-02f-b: a infraestrutura (liga/desliga tudo) e os tipos escondidos */
+  infra: boolean; infraOcultos: Set<string>;
 };
 const FILTROS_INICIAIS: Filtros = {
   pastos: true, areas: true, semUso: true, nomes: true, atividadesOcultas: new Set(), comAnimais: true, vazio: true, semFechamento: true,
+  infra: true, infraOcultos: new Set(),
 };
 
 function numero(v: number | null | undefined, casas = 0, sufixo = ''): string {
@@ -195,7 +204,7 @@ function escaparHtml(t: string): string {
 
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
-  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId,
+  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
@@ -218,7 +227,20 @@ export function MapaGestorView({
   const geoPastos = useMemo(() => geometrias.filter(g => g.tipo === 'pasto' && !!g.pasto_id), [geometrias]);
   const geoSelecionada = selecionadoId ? geoPastos.find(g => g.id === selecionadoId) ?? null : null;
   const pastoSelecionado = geoSelecionada?.pasto_id ? pastoPorId.get(geoSelecionada.pasto_id) ?? null : null;
-  const painelAberto = Boolean(geoSelecionada && pastoSelecionado);
+  /* MAPA-02f-b: a infraestrutura — colocar (um clique no mapa), ver, editar (arrastar o ponto) e desativar */
+  const { infras, bens, salvar: salvarInfra, desativar: desativarInfra, recarregar: recarregarInfra } = useInfraestruturas(fazendaId);
+  const [colocandoTipo, setColocandoTipo] = useState<TipoInfra | null>(null);
+  const [pontoNovo, setPontoNovo] = useState<{ lon: number; lat: number } | null>(null);
+  const [infraSelId, setInfraSelId] = useState<string | null>(null);
+  const [editandoInfra, setEditandoInfra] = useState(false);
+  const [pontoEditado, setPontoEditado] = useState<{ lon: number; lat: number } | null>(null);
+  const colocandoRef = useRef<TipoInfra | null>(null);
+  colocandoRef.current = colocandoTipo;
+  const infraLayerRef = useRef<L.LayerGroup | null>(null);
+  const infraSel = infraSelId ? infras.find(i => i.id === infraSelId) ?? null : null;
+  const infraPainelAberto = (!!colocandoTipo && !!pontoNovo) || !!infraSel;
+  const fecharInfra = () => { setColocandoTipo(null); setPontoNovo(null); setInfraSelId(null); setEditandoInfra(false); setPontoEditado(null); };
+  const painelAberto = Boolean(geoSelecionada && pastoSelecionado) || infraPainelAberto;
   const dadosSelecionado = pastoSelecionado ? dadosDoMes.get(pastoSelecionado.id) ?? null : null;
 
   // o polígono deixou de ser pasto (vínculo removido) ou sumiu: o painel fecha
@@ -310,7 +332,7 @@ export function MapaGestorView({
         if (b.isValid()) { limites.extend(b); desenhados++; }
         const nome = nomeDe(g);
         if (ehPasto) {
-          camadaGeo.on('click', () => setSelecionadoId(g.id));
+          camadaGeo.on('click', () => { if (colocandoRef.current) return; setInfraSelId(null); setSelecionadoId(g.id); });
           const sub = !d || !d.temFechamento ? '—' : (d.cabecas ?? 0) === 0 ? 'vazio' : `${formatNum(d.kgHa ?? 0, 0)} kg/ha`;
           // o hover mostra sempre o nome e o kg/ha (é onde fica o rótulo que não coube)
           camadaGeo.bindTooltip(`${nome} · ${sub}`, { sticky: true });
@@ -346,6 +368,43 @@ export function MapaGestorView({
     desenharRotulos(mapa, rotulos, candidatos);
   }, [mapStatus, geometrias, dadosDoMes, camada, filtros, selecionadoId, pastoPorId, mapInstanceRef, featureLayerRef, labelLayerRef,
     reportRenderedGeometries, onRenderedChange]);
+
+  /* MAPA-02f-b: a camada dos ÍCONES da infraestrutura (acima dos pastos; tamanho fixo em qualquer zoom; o rótulo no hover). Clique abre o
+     painel (só leitura); na edição o ponto escolhido se arrasta; o ponto novo (ainda sem gravar) também. */
+  useEffect(() => {
+    const mapa = mapInstanceRef.current;
+    if (mapStatus !== 'ready' || !mapa) return;
+    if (!infraLayerRef.current) infraLayerRef.current = L.layerGroup().addTo(mapa);
+    const grupo = infraLayerRef.current;
+    grupo.clearLayers();
+    const icone = (tipo: string, sel: boolean) => L.divIcon({ html: iconeDaInfra(tipo, sel), className: 'mapa-infra-icone', iconSize: [18, 18], iconAnchor: [9, 9] });
+    if (filtros.infra) {
+      for (const i of infras) {
+        if (filtros.infraOcultos.has(i.tipo)) continue;
+        const sel = i.id === infraSelId;
+        const pt = sel && pontoEditado ? pontoEditado : pontoDaInfra(i.geometria);
+        if (!pt) continue;
+        const m = L.marker([pt.lat, pt.lon], { icon: icone(i.tipo, sel), draggable: sel && editandoInfra, keyboard: false, zIndexOffset: sel ? 1000 : 0 });
+        m.bindTooltip(`${definicaoDoTipo(i.tipo)?.rotulo ?? i.tipo}${i.nome ? ` · ${i.nome}` : ''}`, { direction: 'top', offset: [0, -8] });
+        m.on('click', ev => { L.DomEvent.stopPropagation(ev); if (colocandoRef.current) return; setSelecionadoId(null); setPontoEditado(null); setInfraSelId(i.id); });
+        m.on('dragend', () => { const ll = m.getLatLng(); setPontoEditado({ lon: ll.lng, lat: ll.lat }); });
+        m.addTo(grupo);
+      }
+    }
+    if (colocandoTipo && pontoNovo) {
+      const m = L.marker([pontoNovo.lat, pontoNovo.lon], { icon: icone(colocandoTipo, true), draggable: true, keyboard: false, zIndexOffset: 1000 });
+      m.on('dragend', () => { const ll = m.getLatLng(); setPontoNovo({ lon: ll.lng, lat: ll.lat }); });
+      m.addTo(grupo);
+    }
+  }, [mapStatus, mapInstanceRef, infras, filtros.infra, filtros.infraOcultos, infraSelId, editandoInfra, pontoEditado, colocandoTipo, pontoNovo]);
+  /* o clique no mapa, no modo de colocar, marca (ou move) o ponto novo */
+  useEffect(() => {
+    const mapa = mapInstanceRef.current;
+    if (mapStatus !== 'ready' || !mapa || !colocandoTipo) return;
+    const aoClicar = (ev: L.LeafletMouseEvent) => setPontoNovo({ lon: ev.latlng.lng, lat: ev.latlng.lat });
+    mapa.on('click', aoClicar);
+    return () => { mapa.off('click', aoClicar); };
+  }, [mapStatus, mapInstanceRef, colocandoTipo]);
 
   /* fix1 (2): o rótulo tem tamanho fixo na tela, então a colisão se refaz a cada zoom */
   useEffect(() => {
@@ -486,7 +545,8 @@ export function MapaGestorView({
                     <DropdownMenuSubTrigger className="justify-between">
                       <span>{item.rotulo}</span>
                       {/* MAPA-AREA-TIPO-01: o selo "em breve" só quando nada do submenu funciona */}
-                      <span className={`ml-auto mr-1 rounded-full bg-white/15 px-1.5 text-[9.5px] ${onClassificarArea && item.itens.some(subitemFunciona) ? 'invisible' : ''}`}>em breve</span>
+                      <span className={`ml-auto mr-1 rounded-full bg-white/15 px-1.5 text-[9.5px] ${(onClassificarArea && item.itens.some(subitemFunciona))
+                        || (fazendaId && item.itens.some(sub => tipoDePontoPeloRotulo(sub.rotulo) && item.rotulo === 'Infraestrutura')) ? 'invisible' : ''}`}>em breve</span>
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className={`${MENU_ACIMA} max-h-[70vh] w-[220px] overflow-y-auto`}>
                       {item.itens.map((sub, si) => (
@@ -495,6 +555,12 @@ export function MapaGestorView({
                           {subitemFunciona(sub) && onClassificarArea ? (
                             <DropdownMenuItem onSelect={() => onClassificarArea(sub.tipo)} title="Marca um polígono do mapa com este tipo, na Validação">
                               {sub.rotulo}
+                            </DropdownMenuItem>
+                          ) : item.rotulo === 'Infraestrutura' && fazendaId && tipoDePontoPeloRotulo(sub.rotulo) ? (
+                            /* MAPA-02f-b: entra no modo de colocar (um clique no mapa); a cerca (só linha) fica para a 02f-c */
+                            <DropdownMenuItem onSelect={() => { fecharInfra(); setSelecionadoId(null); setColocandoTipo(tipoDePontoPeloRotulo(sub.rotulo)); }}
+                              data-testid={`infra-colocar-${tipoDePontoPeloRotulo(sub.rotulo)}`}>
+                              <span className="mr-1.5 inline-flex" dangerouslySetInnerHTML={{ __html: iconeDaInfra(tipoDePontoPeloRotulo(sub.rotulo) ?? '') }} />{sub.rotulo}
                             </DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem disabled>{sub.rotulo}</DropdownMenuItem>
@@ -571,7 +637,7 @@ export function MapaGestorView({
           voltam para a borda direita: os créditos no rodapé (ou logo acima da legenda, se não cabem ao lado dela) e o + / − acima deles.
           EXCEÇÃO DECLARADA ao UI-SEM-DESLOCAR-01, só para o zoom e os créditos: abrir/fechar o pasto os move; barra, KPIs, Filtros,
           legenda e painel seguem fixos. */}
-      <div ref={quadroRef} className={`relative min-h-0 flex-1 bg-[#3a4436] ${canto}`}>
+      <div ref={quadroRef} className={`relative min-h-0 flex-1 bg-[#3a4436] ${canto} ${colocandoTipo ? '[&_.leaflet-container]:cursor-crosshair' : ''}`}>
         <div className="absolute inset-0">
           {/* fix1 (1): o Chrome desenhava um retângulo azul (contorno de foco) no polígono clicado (Gabriel, proto, 31/10 08:27): sem contorno
               de foco SÓ nos polígonos do mapa; o foco de teclado do resto da tela continua */}
@@ -621,10 +687,43 @@ export function MapaGestorView({
             <LinhaFiltro rotulo="Vazio" marcado={filtros.vazio} n={contagens.vazio} onChange={v => setFiltros(f => ({ ...f, vazio: v }))} />
             <LinhaFiltro rotulo="Sem fechamento no mês" marcado={filtros.semFechamento} n={contagens.semFechamento}
               onChange={v => setFiltros(f => ({ ...f, semFechamento: v }))} />
+            {/* MAPA-02f-b: liga/desliga toda a infraestrutura e um por tipo presente, com a contagem */}
+            <div className="mb-1 mt-2.5 text-[9.5px] font-semibold text-[#4A5361]">Infraestruturas</div>
+            <LinhaFiltro rotulo="Mostrar infraestrutura" marcado={filtros.infra} n={infras.length} onChange={v => setFiltros(f => ({ ...f, infra: v }))} />
+            {contagemPorTipo(infras).map(t => (
+              <LinhaFiltro key={t.tipo} rotulo={t.rotulo} marcado={filtros.infra && !filtros.infraOcultos.has(t.tipo)} n={t.n}
+                onChange={v => setFiltros(f => {
+                  const s = new Set(f.infraOcultos);
+                  if (v) s.delete(t.tipo); else s.add(t.tipo);
+                  return { ...f, infraOcultos: s, infra: v ? true : f.infra };
+                })} />
+            ))}
           </div>
         )}
 
-        {geoSelecionada && pastoSelecionado && (
+        {/* MAPA-02f-b: o modo de colocar — um clique no mapa marca o ponto */}
+        {colocandoTipo && !pontoNovo && (
+          <div className={`absolute left-1/2 top-1.5 z-[600] flex -translate-x-1/2 items-center gap-2 px-2.5 py-1 text-[10.5px] ${VIDRO}`} data-testid="infra-modo-colocar">
+            <span dangerouslySetInnerHTML={{ __html: iconeDaInfra(colocandoTipo) }} />
+            Clique no mapa onde fica o <b className="font-semibold">{definicaoDoTipo(colocandoTipo)?.rotulo}</b>
+            <button type="button" className="text-[#2B6CB0]" onClick={fecharInfra}>Cancelar</button>
+          </div>
+        )}
+        {infraPainelAberto && fazendaId && (colocandoTipo || infraSel) && (
+          <InfraPainel key={infraSel?.id ?? `novo-${colocandoTipo}`}
+            className={`absolute bottom-3 right-3 top-3 z-[500] flex w-[248px] flex-col overflow-hidden ${VIDRO}`}
+            fazendaId={fazendaId} clienteId={clienteId ?? null}
+            tipo={infraSel ? (definicaoDoTipo(infraSel.tipo)?.tipo ?? 'cocho') : (colocandoTipo ?? 'cocho')}
+            infra={infraSel}
+            ponto={infraSel ? (pontoEditado ?? pontoDaInfra(infraSel.geometria) ?? { lon: 0, lat: 0 }) : (pontoNovo ?? { lon: 0, lat: 0 })}
+            pastoSugerido={pontoNovo ? pastoNoPonto(pontoNovo.lon, pontoNovo.lat, geoPastos) : null}
+            pastos={pastos} bens={bens} salvar={salvarInfra} desativar={desativarInfra}
+            onEditando={setEditandoInfra}
+            onGravou={() => { fecharInfra(); recarregarInfra(); }}
+            onFechar={fecharInfra} />
+        )}
+
+        {geoSelecionada && pastoSelecionado && !infraPainelAberto && (
           /* MAPA-PAINEL-COMPACTO-01 (Gabriel 01/11): o painel do pasto mais estreito (248 px, era 286), menos padding, fontes menores (piso
              9,5 px), nada quebra; categorias com o LOTE de cada registro (uma linha por registro); histórico em kg/ha | UA/ha; mês vedado
              marcado; campo sem valor em BRANCO; a área do MAPA ao lado da oficial, com a diferença (só leitura — quem adota é o cadastro). */
