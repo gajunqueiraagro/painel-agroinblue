@@ -20,8 +20,16 @@ import {
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { Pasto } from '@/hooks/usePastos';
+/* MAPA-EDITAR-POLIGONO-01 — a edição de polígono é um módulo próprio (hook + barra); aqui só o encaixe */
+import { useEdicaoDoPoligono, type ModoDaEdicao } from '@/hooks/useEdicaoDoPoligono';
+import { BarraDeEdicaoDoPoligono, DesfazerUltimaEdicao } from '@/components/mapa-geo/BarraDeEdicaoDoPoligono';
+import { useFazenda } from '@/contexts/FazendaContext';
 
 type FilterStatus = 'all' | 'vinculado' | 'sem_vinculo';
+
+const GESTOS: ReadonlyArray<[ModoDaEdicao, string]> = [
+  ['vertices', 'Vértices'], ['redesenhar', 'Redesenhar'], ['dividir', 'Dividir'], ['unir', 'Unir'], ['apagar', 'Apagar'],
+];
 
 interface Props {
   geometrias: FazendaGeometria[];
@@ -33,7 +41,7 @@ interface Props {
   onRefresh: () => void;
 }
 
-export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdate, onDelete, onLink, onRefresh }: Props) {
+export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdate, onLink, onRefresh }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,6 +58,18 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const { mapContainerRef: mapRef, mapInstanceRef: mapInstance, featureLayerRef: layerRef, status: statusDoMapa } =
     useStableLeafletMap({ debugName: 'ValidacaoPoligonos' });
   const boundsMap = useRef<Map<string, L.LatLngBounds>>(new Map());
+  const { fazendaAtual } = useFazenda();
+  const edicao = useEdicaoDoPoligono({
+    mapa: statusDoMapa === 'ready' ? mapInstance.current : null,
+    fazendaId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null,
+    geometrias, aoMudar: onRefresh,
+  });
+  /* o polígono em edição sai do desenho da lista (a barra o desenha na camada dela); no apagar ele fica à vista */
+  const emEdicaoId = edicao.alvo && edicao.modo !== 'apagar' ? edicao.alvo.id : null;
+  /* durante a edição os polígonos da lista não respondem a clique: o clique é do desenho (senão focava o vizinho e dava zoom nele) */
+  const editando = !!edicao.modo;
+  const [motivoDoLote, setMotivoDoLote] = useState('');
+  const [recusasDoLote, setRecusasDoLote] = useState<string | null>(null);
 
   // Filter & search
   const filtered = useMemo(() => {
@@ -81,10 +101,12 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       if (geometrias.length === 0) return;
       const allBounds: L.LatLngBounds[] = [];
       geometrias.forEach((geo) => {
+        if (geo.id === emEdicaoId) return;
         try {
           const isFocused = focusedId === geo.id;
           const isChecked = selectedIds.has(geo.id);
           const layer = L.geoJSON(geo.geojson as any, {
+            interactive: !editando,
             style: {
               color: isFocused ? 'hsl(213, 80%, 40%)' : isChecked ? 'hsl(45, 70%, 45%)' : geo.pasto_id ? 'hsl(213, 48%, 32%)' : 'hsl(220, 8%, 50%)',
               weight: isFocused ? 3 : isChecked ? 2.5 : 1.2,
@@ -103,22 +125,23 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             });
             L.marker(center, { icon: label, interactive: false }).addTo(lg);
           }
-          layer.on('click', () => setFocusedId(geo.id));
+          if (!editando) layer.on('click', () => setFocusedId(geo.id));
           layer.addTo(lg);
           allBounds.push(b);
         } catch {}
       });
-      if (allBounds.length > 0) {
+      /* durante a edição o enquadramento é da edição (o polígono abaixo da barra), não o da fazenda inteira */
+      if (allBounds.length > 0 && !emEdicaoId) {
         const combined = allBounds.reduce((acc, b) => acc.extend(b));
         map.fitBounds(combined, { padding: [30, 30], maxZoom: 17 });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [geometrias, focusedId, selectedIds, statusDoMapa]);
+  }, [geometrias, focusedId, selectedIds, statusDoMapa, emEdicaoId, editando]);
 
   // Focus on selected polygon
   useEffect(() => {
-    if (!focusedId) return;
+    if (!focusedId || editando) return;
     const map = mapInstance.current;
     const b = boundsMap.current.get(focusedId);
     if (map && b) {
@@ -162,11 +185,17 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     setSaving(false);
   };
 
-  const confirmDelete = (ids: string[], label: string) => setDeleteConfirm({ ids, label });
+  /* D4 (Gabriel 01/11): o "Excluir" virou o APAGAR da edição — motivo, trilha e desfazer, pela fn_geometria_gravar (nunca DELETE direto) */
+  const confirmDelete = (ids: string[], label: string) => { setMotivoDoLote(''); setRecusasDoLote(null); setDeleteConfirm({ ids, label }); };
   const executeDelete = async () => {
-    if (!deleteConfirm) return;
+    if (!deleteConfirm || !motivoDoLote.trim()) return;
     setSaving(true);
-    await onDelete(deleteConfirm.ids);
+    const recusas = await edicao.apagarVarios(deleteConfirm.ids, motivoDoLote);
+    if (recusas.length > 0) {
+      setRecusasDoLote(recusas.map(r => `${r.nome}: ${r.frase}`).join(' · '));
+      setSaving(false);
+      return;
+    }
     setSelectedIds(prev => {
       const next = new Set(prev);
       deleteConfirm.ids.forEach(id => next.delete(id));
@@ -234,7 +263,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     className="h-6 text-[10px] px-2 text-destructive hover:text-destructive"
                     onClick={() => confirmDelete(Array.from(selectedIds), `${selectedIds.size} polígono(s) selecionado(s)`)}
                   >
-                    <Trash2 className="h-3 w-3 mr-1" />Excluir ({selectedIds.size})
+                    <Trash2 className="h-3 w-3 mr-1" />Apagar ({selectedIds.size})
                   </Button>
                   <Button
                     variant="ghost"
@@ -245,7 +274,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                       if (semVinculo.length > 0) confirmDelete(semVinculo, `${semVinculo.length} polígono(s) sem vínculo`);
                     }}
                   >
-                    <Unlink className="h-3 w-3 mr-1" />Excluir sem vínculo
+                    <Unlink className="h-3 w-3 mr-1" />Apagar sem vínculo
                   </Button>
                 </>
               )}
@@ -355,8 +384,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                           </Button>
                           <Button
                             variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                            onClick={e => { e.stopPropagation(); confirmDelete([geo.id], geo.nome_original || 'Polígono'); }}
-                            title="Excluir"
+                            onClick={e => { e.stopPropagation(); setFocusedId(geo.id); void edicao.iniciar('apagar', geo.id); }}
+                            title="Apagar (com motivo; dá para desfazer)"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
@@ -372,14 +401,25 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
 
         {/* Right: map preview */}
         <Card className="hidden sm:flex flex-1 min-h-0 relative overflow-hidden">
-          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0 }} />
-          {geometrias.length === 0 && (
+          {/* o `.leaflet-container { position: relative }` do index.css vencia a classe `absolute` e o mapa ficava com largura 0 (achado no
+              MAPA-EDITAR-POLIGONO-01): a posição vai no estilo da própria div, sem mexer na regra global */}
+          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0, position: 'absolute' }} />
+          <BarraDeEdicaoDoPoligono edicao={edicao} geometrias={geometrias} nomeDoPasto={getPastoName}
+            areaCadastroHa={pastos.find(p => p.id === edicao.alvo?.pasto_id)?.area_produtiva_ha ?? null} />
+          <DesfazerUltimaEdicao edicao={edicao} />
+          {!edicao.modo && (
+            <Button variant="outline" size="sm" className="absolute right-3 top-3 z-20 h-6 bg-card px-2 text-[11px]"
+              onClick={() => void edicao.iniciar('desenhar', null)} data-testid="edicao-desenhar-novo">
+              Desenhar polígono novo
+            </Button>
+          )}
+          {geometrias.length === 0 && !edicao.modo && (
             <div className="absolute inset-0 flex items-center justify-center bg-card z-10 rounded-lg">
               <p className="text-sm text-muted-foreground">Nenhum polígono para exibir</p>
             </div>
           )}
           {/* Focused polygon info overlay */}
-          {focusedId && (() => {
+          {focusedId && !edicao.modo && (() => {
             const geo = geometrias.find(g => g.id === focusedId);
             if (!geo) return null;
             const pName = getPastoName(geo.pasto_id);
@@ -391,6 +431,17 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     <p className="text-[10px] text-muted-foreground mt-0.5">
                       {pName ? `Vinculado → ${pName}` : 'Sem vínculo'}
                     </p>
+                    {/* MAPA-EDITAR-POLIGONO-01 — "Editar polígono" (Code 3): os gestos da edição; o "É pasto / É área" é do Code 6 */}
+                    {!edicao.modo && (
+                      <div className="mt-1 flex flex-wrap items-center gap-1" data-testid="editar-poligono">
+                        <span className="text-[10px] font-semibold text-foreground">Editar polígono:</span>
+                        {GESTOS.map(([m, rotulo]) => (
+                          <Button key={m} variant="outline" size="sm" className="h-5 px-1.5 text-[10px]" onClick={() => void edicao.iniciar(m, geo.id)}>
+                            {rotulo}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setFocusedId(null)}>
                     <X className="h-3 w-3" />
@@ -406,15 +457,20 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogTitle>Apagar polígonos</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja excluir {deleteConfirm?.label}? Esta ação não pode ser desfeita.
+              Apagar {deleteConfirm?.label}? Fica na trilha e dá para desfazer. Polígono ligado a pasto não se apaga em lote: desligue o
+              vínculo antes ou apague-o pela edição, escolhendo quem fica com o pasto.
             </AlertDialogDescription>
+            <Input value={motivoDoLote} onChange={e => setMotivoDoLote(e.target.value)} placeholder="Motivo (obrigatório)" className="h-7 text-xs"
+              data-testid="apagar-lote-motivo" />
+            {recusasDoLote && <p className="text-[11px] font-medium text-red-600" data-testid="apagar-lote-recusas">Não apagados: {recusasDoLote}</p>}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={executeDelete} disabled={saving} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {saving ? 'Excluindo...' : 'Excluir'}
+            <AlertDialogAction onClick={(ev) => { ev.preventDefault(); void executeDelete(); }} disabled={saving || !motivoDoLote.trim()}
+              title={motivoDoLote.trim() ? undefined : 'Diga o motivo'} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {saving ? 'Apagando...' : 'Apagar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
