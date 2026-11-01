@@ -299,6 +299,18 @@ const CENARIOS = [
       /* B2: o veículo (Placa e Renavam à vista), a máquina só com a identificação ANTIGA (só leitura) e o cabeçalho com o mouse em cima
          (o hover clareia o navy; antes trocava o fundo por branco e o rótulo sumia) */
       modal('veiculo-dados', 'Caminhonete Hilux', 'Dados'), modal('antiga-dados', 'Grade aradora', 'Dados'),
+      /* PATR-01c (SALVAR-TRAVA item 2): a aba Depreciação do bem que já deprecia com a PRÉVIA — "Corrigir cadastro" (a tabela vira hoje ×
+         depois, a frase com a acumulada/contábil) e a "Mudança de estimativa" SEM EFEITO (o aviso âmbar e o atalho "Corrigir cadastro →";
+         na bancada, vida de 30 anos ou mais = sem efeito) */
+      ...[['depreciacao-corrigir', true, 20], ['depreciacao-sem-efeito', false, 30]].map(([nome, corrigir, anos]) => ({
+        nome: `patrimonio-bem-trator-${nome}`, url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+          await abrir('Trator Valtra', 'Depreciação')(p);
+          if (corrigir) await p.locator('[data-testid="bem-dep-mudar"] button', { hasText: /^Corrigir cadastro$/ }).first().click();
+          const vida = p.locator('[data-testid="bem-dialog"] [data-testid="campo-numero"] input').first();
+          await vida.fill(String(anos)); await vida.blur();
+          await p.locator('[data-testid="bem-dep-motivo"]').fill('Cadastro errado desde o início: a vida útil certa é outra');
+          await p.locator('[data-testid="bem-dep-ver"]').click(); await p.waitForTimeout(600);
+        } })),
       { nome: 'patrimonio-hover-cabecalho', url: URL, tamanhos: T, antes: async (p) => {
         await p.locator('[data-testid="patrimonio-tabela"] th', { hasText: /^Código/ }).first().hover(); await p.waitForTimeout(300); } },
     ];
