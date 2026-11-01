@@ -7,14 +7,15 @@
  *              também vão no próprio mapa) e o aviso que trava a prévia (cruzamento, recorte impossível, falta de motivo).
  * A PRÉVIA é a própria função do banco com simular, com cada polígono afetado e a área antes × depois. Cancelar não grava nada.
  */
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, Undo2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Info, Undo2 } from 'lucide-react';
+import { arranjarZona, type ArranjoDaZona } from '@/lib/mapa/barraQueCabe';
 import { chaveDoNomeDoPoligono, fraseCompactaDasMedidas, fraseDasSobreposicoes, textoHa, textoM } from '@/lib/mapa/edicaoDoPoligono';
 import { areaEmHectares as areaDe } from '@/lib/mapa/areaDoPoligono';
 import type { ModoDaEdicao, PoligonoDaFazenda, useEdicaoDoPoligono } from '@/hooks/useEdicaoDoPoligono';
@@ -46,14 +47,13 @@ const TXT = 'text-[9.5px]';
 
 type Edicao = ReturnType<typeof useEdicaoDoPoligono>;
 
-function Opcao({ ligado, aoMudar, rotulo, testid, title }: { ligado: boolean; aoMudar: (v: boolean) => void; rotulo: string; testid: string; title: string }) {
-  return (
-    <label className={`flex flex-none cursor-pointer items-center gap-1 ${TXT}`} title={title}>
-      <Checkbox checked={ligado} onCheckedChange={(v) => aoMudar(v === true)} className="h-3 w-3" data-testid={testid} />
-      {rotulo}
-    </label>
-  );
+/* UI-ESPACO-RESERVADO (-09): um botão de ação da 1ª linha — inline quando cabe, item do "Mais ▾" quando não */
+interface AcaoDaBarra {
+  id: string; rotulo: string; testid: string; title: string; disabled: boolean; onClick: () => void;
+  desfazer?: boolean; contorno?: boolean;
 }
+
+const GAP = 8; // gap-2 da zona
 
 export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaCadastroHa }: {
   edicao: Edicao;
@@ -63,7 +63,85 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
 }) {
   const [verLados, setVerLados] = useState(false);
   const e = edicao;
+
+  /* os botões de ação (os que não couberem vão para o "Mais ▾") */
+  const acoes: AcaoDaBarra[] = [];
+  if (e.modo === 'vertices' || (e.temRascunho && e.modo !== 'dividir')) {
+    // -08: clicar num ponto o escolhe (anel azul); "Tirar ponto" o tira — o botão direito também tira
+    acoes.push({ id: 'tirar', rotulo: 'Tirar ponto', testid: 'edicao-tirar-ponto', disabled: !e.verticeEscolhido, onClick: e.tirarPonto,
+      title: e.verticeEscolhido ? 'Tira o ponto escolhido (dá para desfazer)' : 'Clique num ponto para escolher; o botão direito tira direto' });
+    acoes.push({ id: 'desfazer-passo', rotulo: 'Desfazer', testid: 'edicao-desfazer-passo', disabled: !e.podeDesfazerPasso, onClick: e.desfazerPasso,
+      title: 'Desfaz o último gesto: mover, criar ou tirar ponto (Ctrl/Cmd+Z)', desfazer: true });
+  }
+  // -08: durante o desenho — desfazer o último ponto e "Fechar e ajustar" (o Geoman não arrasta ponto no meio do desenho)
+  if (e.desenhandoAgora && !e.confirmarCancelar && !(e.modo === 'desenhar' && e.pontosNoDesenho === 0 && e.guardado)) {
+    acoes.push({ id: 'desfazer-ponto', rotulo: 'Desfazer ponto', testid: 'edicao-desfazer-ponto', disabled: e.pontosNoDesenho === 0, onClick: e.desfazerPonto,
+      title: 'Tira o último ponto (Backspace ou Ctrl/Cmd+Z)', desfazer: true });
+    acoes.push({ id: 'fechar', rotulo: 'Fechar e ajustar', testid: 'edicao-fechar-ajustar', disabled: e.pontosNoDesenho < (e.modo === 'dividir' ? 2 : 3),
+      onClick: e.fecharEAjustar, title: 'Fecha o desenho agora e abre o rascunho, onde os pontos se arrastam', contorno: true });
+  }
+  const temEscolhas = (e.modo === 'dividir' && !!e.divisao) || e.modo === 'apagar' || e.modo === 'unir';
+
+  /* UI-ESPACO-RESERVADO: mede a zona que se acomoda e decide (arranjarZona) — a instrução inteira ou ⓘ, e quantos botões ficam na linha.
+     Enquanto mede (itens novos), tudo vai inteiro; a medição roda antes da pintura (useLayoutEffect), então nada pisca. */
+  const zonaRef = useRef<HTMLDivElement>(null);
+  const escolhasRef = useRef<HTMLDivElement>(null);
+  const larguras = useRef(new Map<string, number>());
+  const chave = `${e.modo ?? ''}|${acoes.map(a => a.id).join(',')}|${temEscolhas}|${e.alvo?.id ?? ''}|${e.temRascunho}|${e.desenhandoAgora}`;
+  const [arranjo, setArranjo] = useState<(ArranjoDaZona & { chave: string }) | null>(null);
+  const medindo = !arranjo || arranjo.chave !== chave;
+  const calcular = useRef<() => void>(() => {});
+  calcular.current = () => {
+    const z = zonaRef.current; if (!z) return;
+    const W = larguras.current;
+    z.querySelectorAll<HTMLElement>('[data-medir]').forEach(el => { const id = el.dataset.medir; if (id) W.set(id, el.offsetWidth); });
+    const nome = W.get('nome') ?? 0;
+    const comNome = nome ? nome + 4 : 0;
+    const escolhas = escolhasRef.current ? escolhasRef.current.offsetWidth + GAP : 0;
+    const r = arranjarZona({ disponivel: z.clientWidth - escolhas, instrucaoInteira: (W.get('texto') ?? 0) + comNome, instrucaoCurta: 14 + comNome,
+      acoes: acoes.map(a => W.get(a.id) ?? 0), mais: W.get('mais') ?? 48, gap: GAP });
+    setArranjo(a => (a && a.chave === chave && a.instrucaoInteira === r.instrucaoInteira && a.acoesVisiveis === r.acoesVisiveis ? a : { ...r, chave }));
+  };
+  useLayoutEffect(() => { if (medindo) calcular.current(); }, [medindo, chave]);
+  useLayoutEffect(() => {
+    const z = zonaRef.current; if (!z || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => calcular.current());
+    ro.observe(z); if (escolhasRef.current) ro.observe(escolhasRef.current);
+    return () => ro.disconnect();
+  }, [chave]);
+
+  /* 2ª linha: a direita (aviso + botão, ou a pergunta da vez) nunca cede; à esquerda, se faltar lugar, nível 1 = sobreposição e correção
+     viram ícone (o texto no `title`), nível 2 = sai o "ver lados" (os metros estão no próprio mapa). Volta ao nível de baixo quando a folga
+     cobre o que ele ocupa. */
+  const linha2Ref = useRef<HTMLDivElement>(null);
+  const folgaRef = useRef<HTMLSpanElement>(null);
+  const ganhos = useRef<number[]>([0, 0]);
+  const [nivel2, setNivel2] = useState(0);
+  const [, setTique] = useState(0);
+  useLayoutEffect(() => {
+    const l = linha2Ref.current, f = folgaRef.current; if (!l || !f) return;
+    const excesso = l.scrollWidth - l.clientWidth;
+    if (excesso > 0.5 && nivel2 < 2) {
+      const sob = l.querySelector<HTMLElement>('[data-testid="edicao-sobreposicao"]')?.offsetWidth ?? 0;
+      const cor = l.querySelector<HTMLElement>('[data-testid="edicao-correcao"]')?.offsetWidth ?? 0;
+      const lados = l.querySelector<HTMLElement>('[data-testid="edicao-ver-lados"]')?.offsetWidth ?? 0;
+      if (nivel2 === 0) ganhos.current[0] = Math.max(0, sob - 32) + Math.max(0, cor - 70);
+      else ganhos.current[1] = lados ? lados + 12 : 0;
+      setNivel2(nivel2 + 1);
+    } else if (excesso <= 0.5 && nivel2 > 0 && f.offsetWidth > ganhos.current[nivel2 - 1] + 4) {
+      setNivel2(nivel2 - 1);
+    }
+  });
+  useLayoutEffect(() => {
+    const l = linha2Ref.current; if (!l || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setTique(t => t + 1));
+    ro.observe(l);
+    return () => ro.disconnect();
+  }, [e.modo]);
+
   if (!e.modo) return null;
+  const instrucaoInteira = medindo || arranjo.instrucaoInteira;
+  const nVisiveis = medindo ? acoes.length : arranjo.acoesVisiveis;
   const m = e.medidas;
   const pastoDoAlvo = nomeDoPasto(e.alvo?.pasto_id ?? null);
   const podePrever = !!e.gesto && !e.gravando
@@ -75,154 +153,162 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
       : e.modo === 'unir' && e.membrosDaUniao.length < 2 ? 'Escolha os vizinhos: clique no mapa ou "+ vizinho".'
       : !e.gesto ? 'Faça a mudança no mapa primeiro.' : null);
   const aviso = e.erro ?? (podePrever ? (e.podeCorrigir ? 'Há pontos amontoados no polígono (até 0,5 m): "Corrigir automaticamente" junta.' : null) : motivoDoBloqueio);
+  /* com o "Corrigir automaticamente" ao lado (2ª linha), a frase fica curta e termina nele */
+  const avisoNaTela = !e.erro && e.podeCorrigir && !!e.fraseDoCruzamento && aviso === e.fraseDoCruzamento
+    ? 'A linha cruza ela mesma: mova ou tire o ponto laranja, ou'
+    : !e.erro && e.podeCorrigir && !e.fraseDoCruzamento && !e.erroDoRecorte ? 'Pontos amontoados (até 0,5 m):' : aviso;
   const avisoVermelho = !!e.erro || !!e.fraseDoCruzamento || !!e.erroDoRecorte;
-  const temEscolhas = (e.modo === 'dividir' && !!e.divisao) || e.modo === 'apagar';
   const areaGravada = e.alvo ? areaDe(e.alvo.geojson) : null;
-  /* com o polígono cruzando ele mesmo, primeiro se corrige: "Divisa junto" e "Recortar" saem da linha e entra "Corrigir automaticamente" */
+  /* com o polígono cruzando ele mesmo, primeiro se corrige: "Divisa junto" e "Recortar" saem das opções */
   const corrigirPrimeiro = e.podeCorrigir && !!e.fraseDoCruzamento;
-  /* -08: com a pergunta "Continuar o desenho de HH:MM?" na linha, as opções saem (senão o Cancelar ia para fora da faixa) */
+  /* -08: o desenho guardado no navegador — ao abrir o desenho novo, oferece continuar (na 2ª linha, -09) */
   const perguntaContinuar = e.modo === 'desenhar' && e.desenhandoAgora && e.pontosNoDesenho === 0 && !!e.guardado && !e.confirmarCancelar;
-  const podeRecortar = (e.modo === 'vertices' || e.modo === 'redesenhar' || e.modo === 'desenhar') && !corrigirPrimeiro && !perguntaContinuar;
+  const temOpcoes = e.modo !== 'apagar' && e.modo !== 'unir';
+  const podeRecortar = (e.modo === 'vertices' || e.modo === 'redesenhar' || e.modo === 'desenhar') && !corrigirPrimeiro;
+  const opcoesLigadas = [e.encaixe && 'Encaixe', e.modo === 'vertices' && !corrigirPrimeiro && e.divisaJunto && 'Divisa junto', podeRecortar && e.recortar && 'Recortar vizinhos']
+    .filter(Boolean).join(' · ');
+  const tituloDaInstrucao = e.temRascunho && e.modo !== 'dividir' ? 'Rascunho: arraste os pontos; um clique na linha cria ponto; clique num ponto e "Tirar ponto" o tira (ou botão direito); Ctrl/Cmd+Z desfaz o último gesto; "Corrigir automaticamente" tira o cruzamento; Esc ou Cancelar perguntam antes de descartar. O rascunho fica guardado no navegador.' : INSTRUCAO_INTEIRA[e.modo];
+  const textoDaInstrucao = (e.modo === 'dividir' && !!e.divisao) || e.modo === 'apagar' ? `${NOME_DO_GESTO[e.modo][0].toUpperCase()}${NOME_DO_GESTO[e.modo].slice(1)}`
+    : e.temRascunho ? (e.modo === 'dividir' ? 'Ajuste a linha do corte · arraste os pontos' : 'Ajuste os pontos · Esc cancela')
+    : INSTRUCAO[e.modo];
+  const naLinha = acoes.slice(0, nVisiveis);
+  const noMais = acoes.slice(nVisiveis);
+  const tituloDaPrevia = e.desenhandoAgora ? 'Feche o desenho primeiro (clique no 1º ponto ou "Fechar e ajustar")'
+    : e.confirmarCancelar ? 'Responda primeiro: descartar ou continuar' : podePrever ? undefined : motivoDoBloqueio ?? undefined;
 
   return (
     <>
       <div className="absolute left-3 right-3 top-2 z-20 rounded-md border border-border bg-card/95 px-2 py-1 shadow-md backdrop-blur-sm"
         data-testid="barra-edicao-poligono">
-        {/* 1ª linha: instrução · escolhas · opções · botões */}
+        {/* 1ª linha (UI-ESPACO-RESERVADO): [zona que se acomoda: instrução · escolhas · botões · Mais ▾] [Opções ▾] [FIXO: Cancelar · Prévia e gravar] */}
         <div className="flex h-[22px] items-center gap-2">
-          <p className={`flex-none whitespace-nowrap font-semibold text-foreground ${TXT}`} data-testid="edicao-instrucao"
-            title={e.temRascunho && e.modo !== 'dividir' ? 'Rascunho: arraste os pontos; um clique na linha cria ponto; clique num ponto e "Tirar ponto" o tira (ou botão direito); Ctrl/Cmd+Z desfaz o último gesto; "Corrigir automaticamente" tira o cruzamento; Esc ou Cancelar perguntam antes de descartar. O rascunho fica guardado no navegador.' : INSTRUCAO_INTEIRA[e.modo]}>
-            {temEscolhas ? `${NOME_DO_GESTO[e.modo][0].toUpperCase()}${NOME_DO_GESTO[e.modo].slice(1)}`
-              : e.temRascunho ? (e.modo === 'dividir' ? 'Ajuste a linha do corte · arraste os pontos' : 'Ajuste os pontos · Esc cancela')
-              : INSTRUCAO[e.modo]}
-            {e.alvo && <span className="ml-1 font-normal text-muted-foreground">{e.alvo.nome}{pastoDoAlvo ? ` → ${pastoDoAlvo}` : ''}</span>}
-          </p>
+          <div ref={zonaRef} className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" data-testid="edicao-zona">
+            <p className={`flex flex-none items-center gap-1 whitespace-nowrap font-semibold text-foreground ${TXT}`} data-testid="edicao-instrucao"
+              title={tituloDaInstrucao}>
+              {instrucaoInteira
+                ? <span data-medir="texto">{textoDaInstrucao}</span>
+                : <Info className="h-3.5 w-3.5 flex-none text-[#2B6CB0]" aria-label={textoDaInstrucao} data-testid="edicao-instrucao-icone" />}
+              {e.alvo && <span data-medir="nome" className="font-normal text-muted-foreground">{e.alvo.nome}{pastoDoAlvo ? ` → ${pastoDoAlvo}` : ''}</span>}
+            </p>
 
-          {e.modo === 'dividir' && e.divisao && (
-            <>
-              <Segmentado altura={20} fonte={9.5} valor={e.originalFicaCom} onEscolher={e.setOriginalFicaCom}
-                opcoes={[{ valor: 'a', rotulo: `verde ${textoHa(areaDe(e.divisao.a))}` }, { valor: 'b', rotulo: `laranja ${textoHa(areaDe(e.divisao.b))}` }]} />
-              {e.alvo?.pasto_id && (
-                <Segmentado altura={20} fonte={9.5} valor={e.pastoVaiParaNova ? 'nova' : 'original'} onEscolher={(v) => e.setPastoVaiParaNova(v === 'nova')}
-                  opcoes={[{ valor: 'original', rotulo: 'pasto fica no original' }, { valor: 'nova', rotulo: 'pasto vai para a nova' }]} />
-              )}
-            </>
-          )}
-          {(e.modo === 'dividir' || e.modo === 'desenhar') && (
-            <Input value={e.nomeNovo} onChange={ev => e.setNomeNovo(ev.target.value)} className={`h-5 w-[150px] flex-none px-1.5 ${TXT}`}
-              placeholder="Nome do polígono novo" title="Nome do polígono novo" data-testid="edicao-nome-novo" />
-          )}
-          {e.modo === 'unir' && (
-            <>
-              {/* -04: vários de uma vez — o resumo dos escolhidos (os nomes no title), acrescentar pela busca (tolerante: 6b = 6B = P6B) ou
-                  clicando no mapa, e de quem o resultado herda o pasto */}
-              <span className={`flex-none whitespace-nowrap text-foreground ${TXT}`} title={e.membrosDaUniao.map(m => m.nome).join(' + ')} data-testid="unir-membros">
-                {e.membrosDaUniao.length} {e.membrosDaUniao.length === 1 ? 'polígono' : 'polígonos'}
-              </span>
-              <div className="w-[150px] flex-none" data-testid="unir-acrescentar">
-                <SearchableSelect dense semTodos triggerClassName="h-5 text-[9.5px]" value="__acrescentar__" allValue="__acrescentar__" onValueChange={(v) => { if (v && v !== '__acrescentar__') e.alternarNaUniao(v); }}
-                  allLabel={e.candidatosAUnir.length ? '+ vizinho' : 'sem mais vizinhos'} placeholder="Buscar (6b = 6B = P6B)"
-                  options={e.candidatosAUnir.map(g => {
-                    const k = chaveDoNomeDoPoligono(g.nome_original);
-                    return { value: g.id, label: g.nome_original, sub: nomeDoPasto(g.pasto_id) ?? 'sem vínculo', busca: `${k} p${k} p ${k} p_${k}` };
-                  })} />
+            {temEscolhas && (
+              <div ref={escolhasRef} className="flex flex-none items-center gap-2" data-testid="edicao-escolhas">
+                {e.modo === 'dividir' && e.divisao && (
+                  <>
+                    <Segmentado altura={20} fonte={9.5} valor={e.originalFicaCom} onEscolher={e.setOriginalFicaCom}
+                      opcoes={[{ valor: 'a', rotulo: `verde ${textoHa(areaDe(e.divisao.a))}` }, { valor: 'b', rotulo: `laranja ${textoHa(areaDe(e.divisao.b))}` }]} />
+                    {e.alvo?.pasto_id && (
+                      <Segmentado altura={20} fonte={9.5} valor={e.pastoVaiParaNova ? 'nova' : 'original'} onEscolher={(v) => e.setPastoVaiParaNova(v === 'nova')}
+                        opcoes={[{ valor: 'original', rotulo: 'pasto: original' }, { valor: 'nova', rotulo: 'pasto: nova' }]} />
+                    )}
+                  </>
+                )}
+                {e.modo === 'unir' && (
+                  <>
+                    {/* -04: vários de uma vez — o resumo dos escolhidos (os nomes no title), acrescentar pela busca (tolerante: 6b = 6B = P6B) ou
+                        clicando no mapa, e de quem o resultado herda o pasto */}
+                    <span className={`flex-none whitespace-nowrap text-foreground ${TXT}`} title={e.membrosDaUniao.map(mm => mm.nome).join(' + ')} data-testid="unir-membros">
+                      {e.membrosDaUniao.length} {e.membrosDaUniao.length === 1 ? 'polígono' : 'polígonos'}
+                    </span>
+                    <div className="w-[130px] flex-none" data-testid="unir-acrescentar">
+                      <SearchableSelect dense semTodos triggerClassName="h-5 text-[9.5px]" value="__acrescentar__" allValue="__acrescentar__" onValueChange={(v) => { if (v && v !== '__acrescentar__') e.alternarNaUniao(v); }}
+                        allLabel={e.candidatosAUnir.length ? '+ vizinho' : 'sem mais vizinhos'} placeholder="Buscar (6b = 6B = P6B)"
+                        options={e.candidatosAUnir.map(g => {
+                          const k = chaveDoNomeDoPoligono(g.nome_original);
+                          return { value: g.id, label: g.nome_original, sub: nomeDoPasto(g.pasto_id) ?? 'sem vínculo', busca: `${k} p${k} p ${k} p_${k}` };
+                        })} />
+                    </div>
+                    <span className={`flex-none text-muted-foreground ${TXT}`}>fica</span>
+                    <div className="w-[130px] flex-none" title="De quem o polígono unido herda o pasto" data-testid="unir-fica-com">
+                      <SearchableSelect dense semTodos nomeInteiro triggerClassName="h-5 text-[9.5px]" value={e.ficaComDe || '__sem__'} onValueChange={(v) => e.setFicaComDe(v === '__sem__' ? '' : v)}
+                        options={[...e.membrosDaUniao.map(mm => ({ value: mm.id, label: mm.nome, sub: nomeDoPasto(mm.pasto_id) ? `pasto ${nomeDoPasto(mm.pasto_id)}` : 'sem pasto' })),
+                          { value: '__sem__', label: 'sem classificação' }]} />
+                    </div>
+                  </>
+                )}
+                {e.modo === 'apagar' && (
+                  <>
+                    <Input value={e.motivo} onChange={ev => e.setMotivo(ev.target.value)} placeholder="Motivo (ex.: divisa errada no KMZ)"
+                      className={`h-5 w-[200px] flex-none px-1.5 ${TXT}`} data-testid="edicao-motivo" />
+                    {e.alvo?.pasto_id && (
+                      <div className="w-[170px] flex-none" title={`O pasto ${pastoDoAlvo} fica com`}>
+                        <SearchableSelect dense semTodos value={e.destinoDoPasto ?? ''} onValueChange={(v) => e.setDestinoDoPasto(v || null)}
+                          placeholder={`${pastoDoAlvo} fica com…`}
+                          options={geometrias.filter(g => g.id !== e.alvo?.id && !g.pasto_id).map(g => ({ value: g.id, label: g.nome_original }))} />
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-              <span className={`flex-none text-muted-foreground ${TXT}`}>fica</span>
-              <div className="w-[150px] flex-none" title="De quem o polígono unido herda o pasto" data-testid="unir-fica-com">
-                <SearchableSelect dense semTodos nomeInteiro triggerClassName="h-5 text-[9.5px]" value={e.ficaComDe || '__sem__'} onValueChange={(v) => e.setFicaComDe(v === '__sem__' ? '' : v)}
-                  options={[...e.membrosDaUniao.map(m => ({ value: m.id, label: m.nome, sub: nomeDoPasto(m.pasto_id) ? `pasto ${nomeDoPasto(m.pasto_id)}` : 'sem pasto' })),
-                    { value: '__sem__', label: 'sem classificação' }]} />
-              </div>
-            </>
-          )}
-          {e.modo === 'apagar' && (
-            <>
-              <Input value={e.motivo} onChange={ev => e.setMotivo(ev.target.value)} placeholder="Motivo (ex.: divisa errada no KMZ)"
-                className={`h-5 w-[200px] flex-none px-1.5 ${TXT}`} data-testid="edicao-motivo" />
-              {e.alvo?.pasto_id && (
-                <div className="w-[170px] flex-none" title={`O pasto ${pastoDoAlvo} fica com`}>
-                  <SearchableSelect dense semTodos value={e.destinoDoPasto ?? ''} onValueChange={(v) => e.setDestinoDoPasto(v || null)}
-                    placeholder={`${pastoDoAlvo} fica com…`}
-                    options={geometrias.filter(g => g.id !== e.alvo?.id && !g.pasto_id).map(g => ({ value: g.id, label: g.nome_original }))} />
-                </div>
-              )}
-            </>
-          )}
+            )}
 
-          <div className="min-w-0 flex-1" />
-          {e.modo !== 'apagar' && e.modo !== 'unir' && !perguntaContinuar && (
-            <Opcao ligado={e.encaixe} aoMudar={e.setEncaixe} rotulo="Encaixe" testid="edicao-encaixe"
-              title="Encaixe nos pontos e lados vizinhos (7 px; nunca no contorno da fazenda). Segurar Alt/Option solta o encaixe enquanto arrasta." />
-          )}
-          {e.modo === 'vertices' && !corrigirPrimeiro && (
-            <Opcao ligado={e.divisaJunto} aoMudar={e.setDivisaJunto} rotulo="Divisa junto" testid="edicao-divisa-junto"
-              title="Mover a divisa junto: o ponto comum a outro polígono (até 0,5 m) muda nos dois, na mesma gravação" />
-          )}
-          {podeRecortar && (
-            <Opcao ligado={e.recortar} aoMudar={e.setRecortar} rotulo="Recortar vizinhos" testid="edicao-recortar"
-              title="A forma nova sai dos polígonos que ela cobre (nunca do contorno da fazenda), na mesma gravação" />
-          )}
-          {e.podeCorrigir && (
-            <Button variant="outline" size="sm" className={`h-5 flex-none border-red-300 px-1.5 text-red-700 ${TXT}`} onClick={e.corrigir}
-              title="Junta os pontos amontoados (até 0,5 m) e tira o laço da linha que cruza ela mesma; dá para desfazer o passo" data-testid="edicao-corrigir">
-              Corrigir automaticamente
-            </Button>
-          )}
-          {(e.modo === 'vertices' || (e.temRascunho && e.modo !== 'dividir')) && (
-            <>
-              {/* -08: clicar num ponto o escolhe (anel azul); "Tirar ponto" o tira — o botão direito também tira */}
-              <Button variant="ghost" size="sm" className={`h-5 flex-none px-1.5 ${TXT}`} disabled={!e.verticeEscolhido} onClick={e.tirarPonto}
-                title={e.verticeEscolhido ? 'Tira o ponto escolhido (dá para desfazer)' : 'Clique num ponto para escolher; o botão direito tira direto'} data-testid="edicao-tirar-ponto">
-                Tirar ponto
+            <div className="min-w-0 flex-1" />
+            {naLinha.map(a => (
+              <Button key={a.id} data-medir={a.id} variant={a.contorno ? 'outline' : 'ghost'} size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`}
+                disabled={a.disabled} onClick={a.onClick} title={a.title} data-testid={a.testid}>
+                {a.desfazer && <Undo2 className="h-3 w-3" />}{a.rotulo}
               </Button>
-              <Button variant="ghost" size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`} disabled={!e.podeDesfazerPasso} onClick={e.desfazerPasso}
-                title="Desfaz o último gesto: mover, criar ou tirar ponto (Ctrl/Cmd+Z)" data-testid="edicao-desfazer-passo">
-                <Undo2 className="h-3 w-3" />Desfazer
-              </Button>
-            </>
-          )}
-          {/* -08: durante o desenho — desfazer o último ponto e "Fechar e ajustar" (o Geoman não arrasta ponto no meio do desenho) */}
-          {/* -08: o desenho guardado no navegador — ao abrir o desenho novo, oferece continuar */}
-          {perguntaContinuar && e.guardado && (
-            <span className={`flex flex-none items-center gap-1.5 ${TXT}`} data-testid="edicao-continuar-guardado">
-              <span className="font-semibold text-foreground">Continuar o desenho de {e.guardado.em}?</span>
-              <Button size="sm" className={`h-5 px-2 ${TXT}`} onClick={e.retomarRascunho} data-testid="edicao-continuar-sim">Continuar</Button>
-              <Button variant="outline" size="sm" className={`h-5 px-2 ${TXT}`} onClick={e.esquecerGuardado} data-testid="edicao-continuar-nao">Começar de novo</Button>
-            </span>
-          )}
-          {e.desenhandoAgora && !e.confirmarCancelar && !(e.modo === 'desenhar' && e.pontosNoDesenho === 0 && e.guardado) && (
-            <>
-              <Button variant="ghost" size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`} disabled={e.pontosNoDesenho === 0} onClick={e.desfazerPonto}
-                title="Tira o último ponto (Backspace ou Ctrl/Cmd+Z)" data-testid="edicao-desfazer-ponto">
-                <Undo2 className="h-3 w-3" />Desfazer ponto
-              </Button>
-              <Button variant="outline" size="sm" className={`h-5 flex-none px-2 ${TXT}`} disabled={e.pontosNoDesenho < (e.modo === 'dividir' ? 2 : 3)}
-                onClick={e.fecharEAjustar} title="Fecha o desenho agora e abre o rascunho, onde os pontos se arrastam" data-testid="edicao-fechar-ajustar">
-                Fechar e ajustar
-              </Button>
-            </>
-          )}
-          {e.confirmarCancelar ? (
-            <span className={`flex flex-none items-center gap-1.5 ${TXT}`} data-testid="edicao-confirmar-cancelar">
-              <span className="font-semibold text-red-700">Descartar o que foi feito?</span>
-              <Button variant="outline" size="sm" className={`h-5 px-2 ${TXT}`} onClick={e.descartar} data-testid="edicao-cancelar-sim">Sim, descartar</Button>
-              <Button size="sm" className={`h-5 px-2 ${TXT}`} onClick={() => e.setConfirmarCancelar(false)} data-testid="edicao-cancelar-nao">Não, continuar</Button>
-            </span>
-          ) : (
-            <>
-              <Button variant="outline" size="sm" className={`h-5 flex-none px-2 ${TXT}`} onClick={e.pedirCancelar} data-testid="edicao-cancelar">Cancelar</Button>
-              {!e.desenhandoAgora && (
-                <Button size="sm" className={`h-5 flex-none px-2 ${TXT}`} disabled={!podePrever} onClick={() => void e.prever()} data-testid="edicao-previa"
-                  title={podePrever ? undefined : motivoDoBloqueio ?? undefined}>
-                  {e.gravando ? 'Conferindo…' : 'Prévia e gravar'}
+            ))}
+            {noMais.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button data-medir="mais" variant="ghost" size="sm" className={`h-5 flex-none gap-0.5 px-1.5 ${TXT}`} data-testid="edicao-mais"
+                    title={noMais.map(a => a.rotulo).join(' · ')}>
+                    Mais<ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {noMais.map(a => (
+                    <DropdownMenuItem key={a.id} disabled={a.disabled} onSelect={a.onClick} title={a.title} data-testid={a.testid}>
+                      {a.desfazer && <Undo2 className="mr-1 h-3 w-3" />}{a.rotulo}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+
+          {temOpcoes && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className={`h-5 flex-none gap-0.5 px-1.5 ${TXT}`} data-testid="edicao-opcoes"
+                  title={opcoesLigadas ? `Ligado: ${opcoesLigadas}` : 'Encaixe e recorte desligados'}>
+                  Opções<ChevronDown className="h-3 w-3" />
                 </Button>
-              )}
-            </>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuCheckboxItem checked={e.encaixe} onCheckedChange={(v) => e.setEncaixe(v === true)} onSelect={(ev) => ev.preventDefault()}
+                  title="Encaixe nos pontos e lados vizinhos (7 px; nunca no contorno da fazenda). Segurar Alt/Option solta o encaixe enquanto arrasta." data-testid="edicao-encaixe">
+                  Encaixe
+                </DropdownMenuCheckboxItem>
+                {e.modo === 'vertices' && !corrigirPrimeiro && (
+                  <DropdownMenuCheckboxItem checked={e.divisaJunto} onCheckedChange={(v) => e.setDivisaJunto(v === true)} onSelect={(ev) => ev.preventDefault()}
+                    title="Mover a divisa junto: o ponto comum a outro polígono (até 0,5 m) muda nos dois, na mesma gravação" data-testid="edicao-divisa-junto">
+                    Divisa junto
+                  </DropdownMenuCheckboxItem>
+                )}
+                {podeRecortar && (
+                  <DropdownMenuCheckboxItem checked={e.recortar} onCheckedChange={(v) => e.setRecortar(v === true)} onSelect={(ev) => ev.preventDefault()}
+                    title="A forma nova sai dos polígonos que ela cobre (nunca do contorno da fazenda), na mesma gravação" data-testid="edicao-recortar">
+                    Recortar vizinhos
+                  </DropdownMenuCheckboxItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
+
+          {/* FIXO (UI-ESPACO-RESERVADO): sempre na tela, largura reservada — nada o empurra */}
+          <div className="flex flex-none items-center gap-1.5" data-testid="edicao-fixos">
+            <Button variant="outline" size="sm" className={`h-5 flex-none px-2 ${TXT}`} onClick={e.pedirCancelar} data-testid="edicao-cancelar">Cancelar</Button>
+            <Button size="sm" className={`h-5 w-[86px] flex-none px-0 ${TXT}`} disabled={!podePrever || e.desenhandoAgora || e.confirmarCancelar}
+              onClick={() => void e.prever()} data-testid="edicao-previa" title={tituloDaPrevia}>
+              {e.gravando ? 'Conferindo…' : 'Prévia e gravar'}
+            </Button>
+          </div>
         </div>
 
-        {/* 2ª linha: medidas · sobreposição · ver lados · aviso */}
-        <div className={`flex h-[18px] items-center gap-3 tabular-nums ${TXT}`}>
+        {/* 2ª linha: medidas · sobreposição · ver lados · aviso (+ o botão contextual) — ou a pergunta da vez (descartar? continuar?) */}
+        <div ref={linha2Ref} className={`flex h-[18px] items-center gap-3 tabular-nums ${TXT}`} data-testid="edicao-linha-2">
           {m && e.modo !== 'apagar' && (
             <span className="flex-none whitespace-nowrap font-semibold text-foreground" data-testid="edicao-medidas">
               {/* -06: desenhando, "X ha · Y m" ao vivo desde o 1º lado (a área só a partir do 3º ponto: antes, "— ha") */}
@@ -232,15 +318,16 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
           {/* com um aviso vermelho (cruzamento, recorte impossível, recusa) a linha fica só com as medidas e ele: nada corta */}
           {e.avisos.length > 0 && !avisoVermelho && (
             <span className="flex flex-none items-center gap-1 whitespace-nowrap font-medium text-amber-700" data-testid="edicao-sobreposicao"
-              title={e.avisos.map(s => `${s.nome} (${textoHa(s.areaHa)})`).join(', ')}>
-              <AlertTriangle className="h-3 w-3 flex-none" />{fraseDasSobreposicoes(e.avisos)}
+              title={`${fraseDasSobreposicoes(e.avisos)}: ${e.avisos.map(s => `${s.nome} (${textoHa(s.areaHa)})`).join(', ')}`}>
+              <AlertTriangle className="h-3 w-3 flex-none" />{nivel2 >= 1 ? e.avisos.length : fraseDasSobreposicoes(e.avisos)}
             </span>
           )}
           {e.correcao && !avisoVermelho && (
-            <span className="flex-none whitespace-nowrap text-emerald-700" data-testid="edicao-correcao">
-              corrigido: {e.correcao.pontosJuntados} {e.correcao.pontosJuntados === 1 ? 'ponto juntado' : 'pontos juntados'}
+            <span className="flex-none whitespace-nowrap text-emerald-700" data-testid="edicao-correcao"
+              title={`corrigido: ${e.correcao.pontosJuntados} juntado(s) · ${e.correcao.partesDescartadas} laço(s) fora · ${textoHa(e.correcao.areaAntesHa)} → ${textoHa(e.correcao.areaDepoisHa)}`}>
+              {nivel2 >= 1 ? 'corrigido ✓' : <>corrigido: {e.correcao.pontosJuntados} {e.correcao.pontosJuntados === 1 ? 'ponto juntado' : 'pontos juntados'}
               {e.correcao.partesDescartadas > 0 ? ` · ${e.correcao.partesDescartadas} ${e.correcao.partesDescartadas === 1 ? 'laço fora' : 'laços fora'}` : ''}
-              {` · ${textoHa(e.correcao.areaAntesHa)} → ${textoHa(e.correcao.areaDepoisHa)}`}
+              {` · ${textoHa(e.correcao.areaAntesHa)} → ${textoHa(e.correcao.areaDepoisHa)}`}</>}
             </span>
           )}
           {e.modo === 'unir' && e.membrosDaUniao.length >= 2 && (
@@ -254,16 +341,43 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
               muda junto: {e.afetados.length} {e.afetados.length === 1 ? 'polígono' : 'polígonos'}
             </span>
           )}
-          {m && m.ladosM.length > 0 && e.modo !== 'apagar' && !avisoVermelho && (
+          {m && m.ladosM.length > 0 && e.modo !== 'apagar' && !avisoVermelho && nivel2 < 2 && (
             <button type="button" className="flex-none text-[#2B6CB0]" onClick={() => setVerLados(v => !v)} data-testid="edicao-ver-lados">
               {verLados ? 'esconder lados' : 'ver lados'}
             </button>
           )}
-          <span className="min-w-0 flex-1" />
-          {aviso && (
-            <span className={`flex-none whitespace-nowrap font-medium ${avisoVermelho ? 'text-red-600' : 'text-muted-foreground'}`} data-testid="edicao-erro">
-              {aviso}
+          <span ref={folgaRef} className="min-w-0 flex-1" />
+          {e.confirmarCancelar ? (
+            <span className="flex flex-none items-center gap-1.5" data-testid="edicao-confirmar-cancelar">
+              <span className="font-semibold text-red-700">Descartar o que foi feito?</span>
+              <Button variant="outline" size="sm" className={`h-4 px-2 ${TXT}`} onClick={e.descartar} data-testid="edicao-cancelar-sim">Sim, descartar</Button>
+              <Button size="sm" className={`h-4 px-2 ${TXT}`} onClick={() => e.setConfirmarCancelar(false)} data-testid="edicao-cancelar-nao">Não, continuar</Button>
             </span>
+          ) : perguntaContinuar && e.guardado ? (
+            <span className="flex flex-none items-center gap-1.5" data-testid="edicao-continuar-guardado">
+              <span className="font-semibold text-foreground">Continuar o desenho de {e.guardado.em}?</span>
+              <Button size="sm" className={`h-4 px-2 ${TXT}`} onClick={e.retomarRascunho} data-testid="edicao-continuar-sim">Continuar</Button>
+              <Button variant="outline" size="sm" className={`h-4 px-2 ${TXT}`} onClick={e.esquecerGuardado} data-testid="edicao-continuar-nao">Começar de novo</Button>
+            </span>
+          ) : (
+            <>
+              {/* -09: o nome do polígono novo fica na 2ª linha, ao lado do aviso (na 1ª, com a lista aberta, as escolhas do Dividir não cabiam) */}
+              {(e.modo === 'dividir' || e.modo === 'desenhar') && (
+                <Input value={e.nomeNovo} onChange={ev => e.setNomeNovo(ev.target.value)} className={`h-4 w-[140px] flex-none px-1.5 ${TXT}`}
+                  placeholder="Nome do polígono novo" title="Nome do polígono novo" data-testid="edicao-nome-novo" />
+              )}
+              {avisoNaTela && (
+                <span className={`flex-none whitespace-nowrap font-medium ${avisoVermelho ? 'text-red-600' : 'text-muted-foreground'}`} data-testid="edicao-erro">
+                  {avisoNaTela}
+                </span>
+              )}
+              {e.podeCorrigir && (
+                <Button variant="outline" size="sm" className={`h-4 flex-none border-red-300 px-1.5 text-red-700 ${TXT}`} onClick={e.corrigir}
+                  title="Junta os pontos amontoados (até 0,5 m) e tira o laço da linha que cruza ela mesma; dá para desfazer o passo" data-testid="edicao-corrigir">
+                  Corrigir automaticamente
+                </Button>
+              )}
+            </>
           )}
         </div>
 

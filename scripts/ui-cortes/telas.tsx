@@ -668,6 +668,16 @@ if (tela === 'mesclar') {
     const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
     return { type: 'Polygon', coordinates: [[[x0, y0], [x1, y1], [x1, y0], [x0, y1], [x0, y0]]] };
   };
+  /* MAPA-EDITAR-POLIGONO-09: `&amontoado=1` — o polígono chega com um ponto a ~0,2 m do 1º (no mesmo lado, sem cruzar): a barra mostra o
+     aviso de pontos amontoados e o "Corrigir automaticamente" com todas as opções (o caso da Pureza › 6B→P6 que empurrava o "Prévia e gravar") */
+  const amontoadoDe = (g: { type: string; coordinates: unknown }) => {
+    const anel: number[][] = g.type === 'Polygon' && Array.isArray(g.coordinates) && Array.isArray(g.coordinates[0]) ? g.coordinates[0] : [];
+    if (anel.length < 4) return g;
+    const [a, b] = [anel[0], anel[1]];
+    const t = 0.2 / (Math.hypot((b[0] - a[0]) * 107000, (b[1] - a[1]) * 111000) || 1);
+    return { type: 'Polygon', coordinates: [[a, [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], ...anel.slice(1)]] };
+  };
+  const formaNaEdicao = (g: { type: string; coordinates: unknown }) => q.get('laco') === '1' ? gravataDe(g) : q.get('amontoado') === '1' ? amontoadoDe(g) : g;
   /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
      abre no último mês com fechamento de pastos (set/2026; fix1 A: o banco falso ignora `order`/`limit`, a lista vem do mais novo); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
   g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendasComPecuaria: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
@@ -675,7 +685,7 @@ if (tela === 'mesclar') {
     // MAPA-EDITAR-POLIGONO-02: a edição lê o polígono na hora (`.eq('id', …).maybeSingle()`), com a versão
     // MAPA-PIQUETES-02: `&piquetes=1` traz dois polígonos sem classificação (as divisões que viram piquetes)
     from: (t: string, e: any) => t === 'fazenda_geometrias'
-        ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: q.get('laco') === '1' ? gravataDe(g.geojson) : g.geojson }))
+        ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
           : geos))(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS)
       : t === 'pastos' ? MAPA.PASTOS
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS

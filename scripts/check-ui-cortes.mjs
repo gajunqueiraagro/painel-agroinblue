@@ -285,24 +285,60 @@ const CENARIOS = [
       { nome: 'mapa-validacao-lista-recolhida', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="validacao-lista-recolhida"]', antes: async (p) => {
         await validacao(p); await p.locator('[data-testid="validacao-recolher-lista"]').click();
         await p.locator('[data-testid="validacao-lista-recolhida"]').waitFor(); await p.waitForTimeout(500); } },
-      { nome: 'mapa-validacao-vertices', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
-        await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
-        await p.locator('[data-testid="editar-poligono"] button', { hasText: 'Vértices' }).click();
-        await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); } },
-      /* MAPA-EDITAR-POLIGONO-03 — o polígono que veio inválido: a frase, o destaque e o "Corrigir automaticamente" na 1ª linha (cabe) */
-      { nome: 'mapa-validacao-corrigir', url: 'tela=mapa-geo&laco=1', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
-        await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
-        await p.locator('[data-testid="editar-poligono"] button', { hasText: 'Vértices' }).click();
-        await p.locator('[data-testid="edicao-corrigir"]').waitFor(); await p.waitForTimeout(700); } },
-      /* MAPA-EDITAR-POLIGONO-04 — unir vários: marcar 2 na lista (o 1º é o contorno; marca P_01 e o seguinte) e "Unir (2)" — a barra com
-         o "+ vizinho", o "fica" e a soma das partes */
-      { nome: 'mapa-validacao-unir', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
-        await validacao(p); const caixas = p.locator('[data-testid="validacao-lista"] button[role="checkbox"]');
-        await caixas.nth(1).click(); await caixas.nth(2).click(); await p.locator('[data-testid="unir-selecionados"]').click();
-        await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); } },
-      { nome: 'mapa-validacao-desenhar', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
-        await validacao(p); await p.locator('[data-testid="edicao-desenhar-novo"]').click();
-        await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); } },
+      /* MAPA-EDITAR-POLIGONO-09 (UI-ESPACO-RESERVADO, Gabriel 01/11 17:52: "está empurrando para a direita e sumindo o salvar") — a barra de
+         edição em TODOS os modos, com a lista recolhida (o padrão na edição) e aberta: "Prévia e gravar" e "Cancelar" INTEIROS na tela e na
+         barra, sem nada por cima (`visivelNaTela`), nenhum botão cortado na zona que se acomoda nem na barra (`botoesDentro`) e a barra
+         sempre com a mesma altura (2 linhas) */
+      ...(() => {
+        const abrir = (modo, url = '') => async (p) => {
+          await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
+          await p.locator('[data-testid="editar-poligono"] button', { hasText: modo }).click();
+          await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); };
+        const noMapa = async (p, pontos, duplo = false) => {
+          const c = await p.locator('.leaflet-container').first().boundingBox();
+          for (let k = 0; k < pontos.length; k++) {
+            const [fx, fy] = pontos[k]; const x = c.x + c.width * fx, y = c.y + c.height * fy;
+            if (duplo && k === pontos.length - 1) await p.mouse.dblclick(x, y); else await p.mouse.click(x, y);
+            await p.waitForTimeout(250);
+          } };
+        /* o botão pode estar na linha ou no "Mais ▾" (é o que a barra decide) */
+        const acao = async (p, testid) => {
+          const b = p.locator(`[data-testid="barra-edicao-poligono"] [data-testid="${testid}"]`);
+          if (await b.count()) await b.first().click();
+          else { await p.locator('[data-testid="edicao-mais"]').click(); await p.waitForTimeout(200); await p.locator(`[role="menuitem"][data-testid="${testid}"]`).click(); }
+          await p.waitForTimeout(500); };
+        const modos = [
+          ['vertices-amontoado', 'tela=mapa-geo&amontoado=1', async (p) => { await abrir('Vértices')(p); await p.locator('[data-testid="edicao-corrigir"]').waitFor(); }],
+          ['corrigir', 'tela=mapa-geo&laco=1', async (p) => { await abrir('Vértices')(p); await p.locator('[data-testid="edicao-corrigir"]').waitFor(); }],
+          ['redesenhar', 'tela=mapa-geo', abrir('Redesenhar')],
+          /* risca de lado a lado pelo MEIO do P_01: a caixa dele sai dos rótulos dos lados (no meio de cada lado) */
+          ['dividir', 'tela=mapa-geo', async (p) => {
+            await abrir('Dividir')(p);
+            const r = await p.evaluate(() => { const bs = [...document.querySelectorAll('.lado-do-poligono span')].map(e => e.getBoundingClientRect());
+              return { x0: Math.min(...bs.map(b => b.left)), x1: Math.max(...bs.map(b => b.right)), y: (Math.min(...bs.map(b => b.top)) + Math.max(...bs.map(b => b.bottom))) / 2 }; });
+            await p.mouse.click(r.x0 - 25, r.y + 3); await p.waitForTimeout(250); await p.mouse.dblclick(r.x1 + 25, r.y - 3); await p.waitForTimeout(800);
+            await p.locator('[data-testid="edicao-nome-novo"]').waitFor({ timeout: 3000 }); }],
+          ['unir', 'tela=mapa-geo', async (p) => {
+            await validacao(p); const caixas = p.locator('[data-testid="validacao-lista"] button[role="checkbox"]');
+            await caixas.nth(1).click(); await caixas.nth(2).click(); await p.locator('[data-testid="unir-selecionados"]').click();
+            await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); }],
+          ['desenhar', 'tela=mapa-geo', async (p) => {
+            await validacao(p); await p.locator('[data-testid="edicao-desenhar-novo"]').click();
+            await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); await noMapa(p, [[0.3, 0.5], [0.5, 0.45]]); }],
+          ['rascunho', 'tela=mapa-geo', async (p) => {
+            await validacao(p); await p.locator('[data-testid="edicao-desenhar-novo"]').click();
+            await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700);
+            await noMapa(p, [[0.3, 0.5], [0.5, 0.42], [0.55, 0.7]]); await acao(p, 'edicao-fechar-ajustar'); }],
+        ];
+        const medicao = { visivelNaTela: { sels: ['[data-testid="edicao-previa"]', '[data-testid="edicao-cancelar"]'], dentro: '[data-testid="barra-edicao-poligono"]', altura: 50,
+          inteirosEm: ['[data-testid="edicao-zona"]', '[data-testid="edicao-linha-2"]', '[data-testid="barra-edicao-poligono"]'] },
+          botoesDentro: '[data-testid="edicao-zona"], [data-testid="edicao-fixos"], [data-testid="barra-edicao-poligono"]' };
+        return modos.flatMap(([nome, url, antes]) => [
+          { nome: `mapa-validacao-${nome}`, url, tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', antes, ...medicao },
+          { nome: `mapa-validacao-${nome}-lista`, url, tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', ...medicao, antes: async (p) => {
+            await antes(p); await p.locator('[data-testid="validacao-reabrir-lista"]').click(); await p.waitForTimeout(700); } },
+        ]);
+      })(),
     ];
   })(),
   /* MAPA-CONTROLES-01 — abrir o pasto e FECHAR o painel: o zoom e os créditos voltam à borda direita (o espaço do painel não fica
@@ -1297,6 +1333,48 @@ function medirBotoesDentro(sel) {
   }
   return achados;
 }
+/* MAPA-EDITAR-POLIGONO-09 (UI-ESPACO-RESERVADO) — `visivelNaTela` (opcional, por cenário): cada seletor existe, está INTEIRO dentro da janela,
+   dentro do `dentro` e de todo ancestral que corta (overflow ≠ visible), e é ele (ou um filho) que está no centro (nada por cima). Com
+   `altura`, o `dentro` tem exatamente essa altura (a barra não cresce nem encolhe com o que mostra). */
+function medirVisivelNaTela({ sels, dentro, altura, inteirosEm = [] }) {
+  const achados = [];
+  /* `inteirosEm`: TODO elemento visível dentro de cada caixa cabe inteiro nela (campo, seletor, texto — não só botão: a zona que se
+     acomoda corta por dentro, e o campo do nome cortado passava) */
+  for (const sel of inteirosEm) {
+    for (const cx of document.querySelectorAll(sel)) {
+      const c = cx.getBoundingClientRect();
+      for (const el of cx.querySelectorAll('*')) {
+        const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2 || getComputedStyle(el).visibility === 'hidden') continue;
+        if (r.right > c.right + 0.5 || r.left < c.left - 0.5) {
+          achados.push({ regra: 'visivel', texto: `${sel}: "${(el.getAttribute('data-testid') ?? el.getAttribute('placeholder') ?? el.textContent ?? el.tagName).trim().slice(0, 30)}" cortado (${Math.round(r.right - c.right)}px)` });
+          break;
+        }
+      }
+    }
+  }
+  const caixa = dentro ? document.querySelector(dentro) : null;
+  if (dentro && !caixa) return [{ regra: 'visivel', texto: `${dentro} nao achado` }];
+  if (caixa && altura && Math.abs(caixa.getBoundingClientRect().height - altura) > 0.5)
+    achados.push({ regra: 'visivel', texto: `${dentro} com ${Math.round(caixa.getBoundingClientRect().height)}px de altura (esperado ${altura})` });
+  for (const sel of sels) {
+    const el = document.querySelector(sel); if (!el) { achados.push({ regra: 'visivel', texto: `${sel} nao achado` }); continue; }
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) { achados.push({ regra: 'visivel', texto: `${sel} sem tamanho` }); continue; }
+    if (r.left < -0.5 || r.top < -0.5 || r.right > innerWidth + 0.5 || r.bottom > innerHeight + 0.5)
+      achados.push({ regra: 'visivel', texto: `${sel} sai da janela (direita ${Math.round(r.right)} de ${innerWidth})` });
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const st = getComputedStyle(a); if (st.overflowX === 'visible' && st.overflowY === 'visible' && a !== caixa) continue;
+      const c = a.getBoundingClientRect();
+      if (r.left < c.left - 0.5 || r.right > c.right + 0.5 || r.top < c.top - 0.5 || r.bottom > c.bottom + 0.5) {
+        achados.push({ regra: 'visivel', texto: `${sel} cortado por ${a.getAttribute('data-testid') ?? a.tagName.toLowerCase()} (${Math.round(r.right - c.right)}px)` }); break;
+      }
+    }
+    const topo = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    // o botão desabilitado não recebe o mouse (pointer-events: none): o ponto cai num ANCESTRAL dele — isso não é "coberto"
+    if (!topo || !(topo === el || el.contains(topo) || topo.contains(el))) achados.push({ regra: 'visivel', texto: `${sel} coberto por ${topo?.getAttribute('data-testid') ?? topo?.tagName?.toLowerCase()}` });
+  }
+  return achados;
+}
 /* Ajuste 29/10 14:02 (item 1) — `titulosDeBloco` (opcional, por cenário): o CABEÇALHO de todo bloco (`[data-titulo-do-bloco]`) cabe numa linha e
    dentro do bloco — o nome, a dica e o selo inteiros (o "PDF com texto · leitura direta" quebrava/cortava na coluna estreita e o gate não via) */
 function medirTitulosDeBloco() {
@@ -1766,6 +1844,7 @@ try {
     if (cen.rotulosSvg) daRolagem.push(...(await p.evaluate(medirRotulosSvg, cen.rotulosSvg)));
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
+    if (cen.visivelNaTela) daRolagem.push(...(await p.evaluate(medirVisivelNaTela, cen.visivelNaTela)));
     if (cen.titulosDeBloco) daRolagem.push(...(await p.evaluate(medirTitulosDeBloco)));
     daRolagem.push(...(await p.evaluate(medirCantoDoMapa))); // MAPA-CONTROLES-01: só age onde há o mapa do Gestor
     if (cen.semRolarNoLugar) daRolagem.push(...(await p.evaluate(medirSemRolarNoLugar, cen.semRolarNoLugar)));

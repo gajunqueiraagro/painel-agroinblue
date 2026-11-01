@@ -14,6 +14,7 @@ import {
   vizinhosDaDivisa, type Divisao, type Medidas, type OperacaoNoVertice, type Ponto, type Sobreposicao,
 } from '@/lib/mapa/edicaoDoPoligono';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
+import { desenharRotulosDosLados } from '@/lib/mapa/rotulosDosLados';
 
 export type ModoDaEdicao = 'vertices' | 'redesenhar' | 'dividir' | 'unir' | 'apagar' | 'desenhar';
 
@@ -127,8 +128,10 @@ export function useEdicaoDoPoligono(args: {
   aoMudar: () => void;
   /** -08: para guardar o rascunho do desenho no navegador por cliente + fazenda */
   clienteId?: string | null;
+  /** -09: o polígono selecionado na Validação (fora da edição) também mostra os metros dos lados */
+  selecionado?: GeoJSON.Geometry | null;
 }) {
-  const { mapa, fazendaId, geometrias, aoMudar, clienteId } = args;
+  const { mapa, fazendaId, geometrias, aoMudar, clienteId, selecionado } = args;
   const camadaRef = useRef<L.FeatureGroup | null>(null);
   const [modo, setModo] = useState<ModoDaEdicao | null>(null);
   const [alvo, setAlvo] = useState<Alvo | null>(null);
@@ -663,30 +666,41 @@ export function useEdicaoDoPoligono(args: {
     rotulosRef.current = g;
     return () => { g.remove(); rotulosRef.current = null; };
   }, [mapa]);
+  /* -09: os METROS DOS LADOS numa camada própria, por UM componente (`desenharRotulosDosLados`), em todo modo e no polígono selecionado;
+     refeitos a cada zoom/movimento (o que cabe na tela muda) */
+  const ladosRef = useRef<L.LayerGroup | null>(null);
+  useEffect(() => {
+    if (!mapa) return;
+    const g = L.layerGroup().addTo(mapa);
+    ladosRef.current = g;
+    return () => { g.remove(); ladosRef.current = null; };
+  }, [mapa]);
+  useEffect(() => {
+    const g = ladosRef.current;
+    if (!mapa || !g) return;
+    let pontos: number[][] = [];
+    let fechar = true;
+    const anelDe = (geo: GeoJSON.Geometry | null | undefined): number[][] => {
+      if (!geo || geo.type !== 'Polygon') return [];
+      const anel = geo.coordinates[0] ?? [];
+      const n = anel.length;
+      return n > 1 && anel[0][0] === anel[n - 1][0] && anel[0][1] === anel[n - 1][1] ? anel.slice(0, -1) : anel;
+    };
+    if (modo && modo !== 'apagar') {
+      /* -06: desenhando, os lados do TRAJETO (o elástico até o cursor e, com 3+ pontos, o de fechar); senão, os do polígono */
+      if (desenhando) { pontos = trajetoDoDesenho; fechar = fechaODesenho; }
+      else pontos = anelDe(geometriaMedida);
+    } else if (!modo) pontos = anelDe(selecionado);
+    const redesenhar = () => desenharRotulosDosLados(mapa, g, pontos, fechar);
+    redesenhar();
+    mapa.on('zoomend moveend', redesenhar);
+    return () => { mapa.off('zoomend moveend', redesenhar); g.clearLayers(); };
+  }, [mapa, modo, geometriaMedida, desenhando, trajetoDoDesenho, fechaODesenho, selecionado]);
   useEffect(() => {
     const g = rotulosRef.current;
     if (!g) return;
     g.clearLayers();
     if (!modo || modo === 'apagar') return;
-    /* -06: desenhando, os lados do TRAJETO (o elástico até o cursor e, com 3+ pontos, o de fechar); senão, os do polígono */
-    let pontos: number[][] = [];
-    let fechar = true;
-    if (desenhando) { pontos = trajetoDoDesenho; fechar = fechaODesenho; }
-    else if (geometriaMedida && geometriaMedida.type === 'Polygon') {
-      const anel = geometriaMedida.coordinates[0] ?? [];
-      const n = anel.length;
-      if (n < 4 || n > 41) return;
-      pontos = anel[0][0] === anel[n - 1][0] && anel[0][1] === anel[n - 1][1] ? anel.slice(0, -1) : anel;
-    }
-    if (pontos.length < 2) return;
-    const total = fechar ? pontos.length : pontos.length - 1;
-    pontos.slice(0, total).forEach((p, i) => {
-      const q = pontos[(i + 1) % pontos.length];
-      const m = Math.round(distanciaM(p, q));
-      const icone = L.divIcon({ className: 'lado-do-poligono', iconSize: [0, 0],
-        html: `<span style="position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font-size:9.5px;font-weight:600;color:#1e3a8a;background:rgba(255,255,255,.85);padding:0 2px;border-radius:2px;font-variant-numeric:tabular-nums">${m.toLocaleString('pt-BR')} m</span>` });
-      L.marker([(p[1] + q[1]) / 2, (p[0] + q[0]) / 2], { icon: icone, interactive: false, pmIgnore: true }).addTo(g);
-    });
     if (verticeEscolhido) {
       const anelAzul = L.divIcon({ className: 'ponto-escolhido', iconSize: [0, 0],
         html: '<span style="position:absolute;transform:translate(-50%,-50%);width:18px;height:18px;border-radius:50%;border:2.5px solid #1d4ed8;background:rgba(191,219,254,.5)"></span>' });

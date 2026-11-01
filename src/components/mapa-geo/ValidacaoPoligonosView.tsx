@@ -81,6 +81,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     fazendaId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null,
     geometrias, aoMudar: onRefresh,
     clienteId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.cliente_id : null,
+    /* -09: o polígono selecionado também mostra os metros dos lados */
+    selecionado: focusedId ? geometrias.find(g => g.id === focusedId)?.geojson ?? null : null,
   });
   /* o polígono em edição sai do desenho da lista (a barra o desenha na camada dela); no apagar ele fica à vista */
   const emEdicaoId = edicao.alvo && edicao.modo !== 'apagar' ? edicao.alvo.id : null;
@@ -299,7 +301,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             <ChevronLeft className="h-3 w-3" />Recolher a lista
           </Button>
           {/* Search + filter bar */}
-          <div className="p-2 border-b border-border space-y-1.5">
+          <div className="px-2 py-1 border-b border-border space-y-1">
             <div className="flex gap-1.5">
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -307,11 +309,11 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                   placeholder="Buscar"
-                  className="h-7 pl-7 text-xs"
+                  className="h-6 pl-7 text-[11px]"
                 />
               </div>
               <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
-                <SelectTrigger className="h-7 w-[104px] text-xs">
+                <SelectTrigger className="h-6 w-[104px] text-[11px]">
                   <Filter className="h-3 w-3 mr-1" />
                   <SelectValue />
                 </SelectTrigger>
@@ -326,7 +328,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             {/* Batch actions */}
             {/* -02b/-04: na lista de 240 px as ações em lote quebram linha em vez de sumir pela direita */}
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={isAllSelected ? deselectAll : selectAll}>
+              <Button variant="ghost" size="sm" className="h-5 text-[10px] px-2" onClick={isAllSelected ? deselectAll : selectAll}>
                 <CheckCheck className="h-3 w-3 mr-1" />
                 {isAllSelected ? 'Desmarcar' : 'Selecionar'} todos
               </Button>
@@ -363,104 +365,78 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             </div>
           </div>
 
-          {/* List */}
-          <div className="flex-1 overflow-y-auto">
+          {/* -09 (Gabriel 17:42, Pureza com 141 polígonos: "compactar mais para aparecer mais linhas") — UMA linha por polígono, numa
+              TABELA de largura fixa (a regra de corte da casa: nome longo em tabela corta com "…" e o inteiro no title, nunca empilha):
+              [caixa] nome · selo do vínculo (o nome do pasto, "sem vínculo" em laranja ou o tipo da área) · ações em ícones */}
+          <div className="flex-1 overflow-y-auto" data-testid="validacao-lista-linhas">
             {filtered.length === 0 ? (
               <div className="p-4 text-center text-xs text-muted-foreground">Nenhum polígono encontrado.</div>
             ) : (
-              filtered.map(geo => {
-                const isFocused = focusedId === geo.id;
-                const pastoName = getPastoName(geo.pasto_id);
-                const isEditing = editingId === geo.id;
-
-                return (
-                  <div
-                    key={geo.id}
-                    className={`border-b border-border px-2 py-1.5 transition-colors cursor-pointer ${
-                      isFocused ? 'bg-primary/5' : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => setFocusedId(geo.id)}
-                  >
-                    {/* -02 (item 1): a lista mais estreita — o nome INTEIRO na 1ª linha (sem quebrar); o selo e as ações (ícones) na 2ª */}
-                    <div className="flex items-start gap-2">
-                      <Checkbox
-                        checked={selectedIds.has(geo.id)}
-                        onCheckedChange={() => toggleSelect(geo.id)}
-                        onClick={e => e.stopPropagation()}
-                        className="mt-0.5 h-3.5 w-3.5"
-                      />
-                      <div className="flex-1 min-w-0">
+              <table className="w-full table-fixed border-collapse text-[11px]">
+                <colgroup><col style={{ width: 22 }} /><col /><col style={{ width: 72 }} /><col style={{ width: 58 }} /></colgroup>
+                <tbody>
+                  {filtered.map(geo => {
+                    const isFocused = focusedId === geo.id;
+                    const pastoName = getPastoName(geo.pasto_id);
+                    const isEditing = editingId === geo.id;
+                    const selo = pastoName ?? (geo.tipo === 'outra' ? 'sem vínculo' : rotuloDoTipo(geo.tipo));
+                    return (
+                      <tr key={geo.id} className={`h-8 cursor-pointer border-b border-border ${isFocused ? 'bg-primary/5' : 'hover:bg-muted/50'}`}
+                        onClick={() => setFocusedId(geo.id)} data-testid="validacao-linha">
+                        <td className="pl-2 align-middle">
+                          <Checkbox checked={selectedIds.has(geo.id)} onCheckedChange={() => toggleSelect(geo.id)} onClick={e => e.stopPropagation()}
+                            className="h-3.5 w-3.5" />
+                        </td>
                         {isEditing ? (
-                          <div className="flex gap-1">
-                            <Input
-                              value={editName}
-                              onChange={e => setEditName(e.target.value)}
-                              className="h-6 text-xs flex-1"
-                              autoFocus
-                              onClick={e => e.stopPropagation()}
-                              onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingId(null); }}
-                            />
-                            <Button size="sm" className="h-6 w-6 p-0" onClick={e => { e.stopPropagation(); saveEdit(); }} disabled={saving}>
-                              <Save className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={e => { e.stopPropagation(); setEditingId(null); }}>
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <p className="whitespace-nowrap text-[11px] font-medium text-foreground" title={geo.nome_original || 'Sem nome'}
-                            data-testid="validacao-nome">
-                            {geo.nome_original || 'Sem nome'}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {/* -02b: o pasto vira ÍCONE (o nome dele quase sempre repete o do polígono; vai no title) — a lista de 240 px não quebra */}
-                          {pastoName ? (
-                            <span className="flex h-4 items-center gap-0.5 text-[9.5px] text-green-700" title={`Pasto → ${pastoName}`} data-testid="validacao-selo-pasto">
-                              <Link2 className="h-3 w-3 flex-shrink-0" />pasto
-                            </span>
-                          ) : geo.tipo === 'outra' ? (
-                            <Badge variant="outline" className="text-[9.5px] h-4 text-orange-600 border-orange-300">
-                              Sem classificação
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[9.5px] h-4">{rotuloDoTipo(geo.tipo)}</Badge>
-                          )}
-                          <span className="flex-1" />
-                          {/* Actions */}
-                          {!isEditing && (
-                            <div className="flex items-center gap-0.5 flex-shrink-0">
-                              <Button
-                                variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
-                                onClick={e => { e.stopPropagation(); startLink(geo); }}
-                                title="Classificar (pasto ou área)"
-                              >
-                                <Link2 className="h-3 w-3" />
+                          <td colSpan={3} className="pr-1 align-middle">
+                            <div className="flex gap-1">
+                              <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-6 flex-1 text-[11px]" autoFocus
+                                onClick={e => e.stopPropagation()}
+                                onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingId(null); }} />
+                              <Button size="sm" className="h-6 w-6 p-0" onClick={e => { e.stopPropagation(); saveEdit(); }} disabled={saving}>
+                                <Save className="h-3 w-3" />
                               </Button>
-                              <Button
-                                variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
-                                onClick={e => { e.stopPropagation(); startEdit(geo); }}
-                                title="Editar nome"
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={e => { e.stopPropagation(); setFocusedId(geo.id); void edicao.iniciar('apagar', geo.id); }}
-                                title="Apagar (com motivo; dá para desfazer)"
-                              >
-                                <Trash2 className="h-3 w-3" />
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={e => { e.stopPropagation(); setEditingId(null); }}>
+                                <X className="h-3 w-3" />
                               </Button>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+                          </td>
+                        ) : (
+                          <>
+                            <td className="truncate pr-1 align-middle font-medium text-foreground" title={geo.nome_original || 'Sem nome'} data-testid="validacao-nome">
+                              {geo.nome_original || 'Sem nome'}
+                            </td>
+                            <td className={`truncate pr-1 align-middle text-[9.5px] ${pastoName ? 'text-green-700' : geo.tipo === 'outra' ? 'text-orange-600' : 'text-muted-foreground'}`}
+                              title={pastoName ? `Pasto → ${pastoName}` : selo} data-testid={pastoName ? 'validacao-selo-pasto' : undefined}>
+                              {selo}
+                            </td>
+                            <td className="pr-1 align-middle">
+                              <div className="flex items-center justify-end gap-0">
+                                <Button variant="ghost" size="sm" className="h-[18px] w-[18px] p-0 text-muted-foreground hover:text-foreground"
+                                  onClick={e => { e.stopPropagation(); startLink(geo); }} title="Classificar (pasto ou área)">
+                                  <Link2 className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-[18px] w-[18px] p-0 text-muted-foreground hover:text-foreground"
+                                  onClick={e => { e.stopPropagation(); startEdit(geo); }} title="Editar nome">
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-[18px] w-[18px] p-0 text-muted-foreground hover:text-destructive"
+                                  onClick={e => { e.stopPropagation(); setFocusedId(geo.id); void edicao.iniciar('apagar', geo.id); }}
+                                  title="Apagar (com motivo; dá para desfazer)">
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
+
           {/* MAPA-PIQUETES-02 — os piquetes em espera, por pasto-pai, com o "Concluir piquetes de <pasto>" */}
           <PiquetesEmEspera espera={piquetes.espera} pastos={pastos} onTirar={piquetes.tirar}
             onConcluir={(paiId, lista) => setConcluindo({ paiId, lista })} />
