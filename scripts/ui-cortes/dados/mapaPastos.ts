@@ -49,6 +49,11 @@ export const GEOMETRIAS = [
     geojson: ret(3, 1), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
   { id: 'ge', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'estrada', nome_original: 'Estrada interna', cor: null,
     geojson: ret(3, 2, 0.003), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  /* MAPA-PAINEL-CERCADA-01: duas áreas DENTRO do P_01 (a sede e o curral) — o painel mostra "útil + áreas internas" */
+  { id: 'gi1', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'benfeitoria', nome_original: 'Sede do P_01', cor: null,
+    geojson: ret(0.6, 0.6, 0.0015), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  { id: 'gi2', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'curral', nome_original: 'Curral do P_01', cor: null,
+    geojson: ret(0.1, 0.6, 0.0012), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
 ];
 
 export const CATEGORIAS = [

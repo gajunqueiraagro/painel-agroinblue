@@ -26,6 +26,7 @@ import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
+import { areaCercadaDoPasto } from '@/lib/mapa/areaCercada';
 import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Ponto } from '@/lib/mapa/rotulosDoMapa';
 import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
 import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
@@ -468,6 +469,8 @@ export function MapaGestorView({
   const maxDoHistorico = Math.max(serieDoHistorico === 'kg' ? 1 : 0.1, ...hist.map(h => (serieDoHistorico === 'kg' ? h.kgHa : h.uaHa) ?? 0));
   /* a área MEDIDA no mapa (o polígono do pasto) ao lado da oficial do cadastro; a diferença com sinal, só se passa de 0,05 ha */
   const areaDoMapa = geoSelecionada ? areaEmHectares(geoSelecionada.geojson) : null;
+  /* MAPA-PAINEL-CERCADA-01: útil + áreas internas (os polígonos de área dentro do contorno do pasto) */
+  const cercada = useMemo(() => (geoSelecionada ? areaCercadaDoPasto(geoSelecionada, geometrias) : null), [geoSelecionada, geometrias]);
   const diferencaDaArea = (() => {
     const oficial = pastoSelecionado?.area_produtiva_ha;
     if (areaDoMapa == null || oficial == null) return null;
@@ -749,6 +752,16 @@ export function MapaGestorView({
                 <Cel rotulo="Lotação kg/ha" valor={branco(dadosSelecionado?.kgHa)} destaque
                   unidade={textoUaHa(dadosSelecionado?.temFechamento ? uaPorHa(dadosSelecionado.cabecas, dadosSelecionado.pesoMedioKg, pastoSelecionado.area_produtiva_ha) : null)} />
               </div>
+              {/* MAPA-PAINEL-CERCADA-01: a área cercada = a útil (o polígono do pasto) + as áreas internas (os polígonos de área dentro dele);
+                  só leitura, medição do mapa (a oficial é a do cadastro) */}
+              {cercada && (
+                <div className="mt-1 h-[24px] overflow-hidden text-[9.5px] leading-[12px] text-[#4A5361]" data-testid="mapa-painel-cercada"
+                  title={cercada.internas.length ? `Áreas internas: ${cercada.internas.map(i => `${i.nome} ${formatNum(i.ha, 1)} ha`).join(' · ')}` : 'Nenhuma área interna no pasto'}>
+                  {/* duas linhas reservadas: fora de tabela o texto quebra (nunca "…"), e nada abaixo se desloca */}
+                  Área cercada: <b className="font-semibold text-[#1d232b]">{formatNum(cercada.cercadaHa, 1)} ha</b>
+                  {' '}<span className="whitespace-nowrap">(útil {formatNum(cercada.utilHa, 1)} + áreas internas {formatNum(cercada.internasHa, 1)})</span>
+                </div>
+              )}
               <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Categorias</div>
               {/* tabela: uma linha por REGISTRO do fechamento (categoria · lote · cab · peso); texto longo com "…" e o inteiro no title */}
               <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }} data-reticencias-com-title data-testid="mapa-painel-categorias">
