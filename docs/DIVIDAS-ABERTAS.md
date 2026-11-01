@@ -7,6 +7,27 @@ docs/historico/frentes-ate-2026-09-29.md.
 
 ## DIVIDAS DE DADO E DE MOTOR (abertas, nao tratadas)
 
+- CACHE-ZOOT-ZERADA-01 (aberta 01/11/2026, REBANHO-LEITURA-01; dono: banco) — a categoria que ZEROU num mes FECHADO e nao tem item no
+  Fechamento sai do `_fn_zoot_categoria_mensal` (e do `zoot_mensal_cache`) sem a regra do Fechamento: peso final NEGATIVO com 0 cab,
+  producao biologica 0 e `fonte_oficial_mes` nula. O overlay da tela (`aplicarOverlayFechamento`) e' quem corrige (peso 0, producao e
+  GMD refeitos, fonte "fechamento").
+  - Prova (01/11, canal de leitura, a regra do overlay em SQL sobre as 4.699 linhas de realizado): 193 linhas de categoria-mes neste
+    caso em todos os 6 clientes; peso final difere em 178, producao em 256, GMD em 185.
+  - Conferido na mao: Faz. Ursa Maior (RRCC), mar/23, desmama_m — cache 0 cab, -83.500 kg, producao 0; a conta do estoque da fazenda
+    (fechamento de mar 280.900,3 - fev 250.303,29 + saidas 260) = 30.857 kg, e so' a soma com o overlay bate (30.857,01; o cache puro da'
+    -52.643). Outros: Sta. Rita nov/23 desmama_f -36.764,82 kg; 3 Muchachas nov/25 desmama_f -20.644 kg.
+  - No Global: 136 meses saem "parcial" por isso (Agnaldo 15, NJ 42, Raul 18, RRCC 16, Santa Rita 29, Vera 16); em 116 deles o numero
+    do cache puro difere do corrigido (ex.: RRCC mar/23 peso 197.400 x 280.900 kg, GMD -2,047 x 1,200).
+  - BLOQUEIA (decisao do Gabriel 01/11): a D2 (o overlay sair do `useRebanhoOficial` — e dos outros 2 hooks juntos: `useHistoricoZootCache`,
+    `useSeriePorFazenda`) e a D3 (o selo do mes ignorar a categoria sem fonte) da REBANHO-LEITURA-01. Depois do conserto + reconstrucao do
+    cache, a mesma prova (`overlay-replica.sql`, relatorio `layout-20261101-0625-REBANHO-LEITURA-01-provas.md`) tem de dar 0 diferencas.
+
+- BOM-RETIRO-FECHAMENTO-DUPLICADO-01 (anotada 01/11/2026; DADO DO CLIENTE, Santa Rita Agro) — Faz. Bom Retiro, fev a jun/2023: DOIS
+  pastos com o Fechamento fechado, cada um com o rebanho inteiro (fev 439 + 439 = 878 cab, 287.838 kg; mar 882; abr 884; mai 824; jun
+  748). O cache esta' certo (439/441/442/412/374); a view `vw_zoot_fazenda_mensal` e o overlay da tela dobram. Em jul/23 os 2 fechamentos
+  nao tem item (o cache fica com 0 cab e -1.800 kg — o caso da CACHE-ZOOT-ZERADA-01). A view ainda mostra 384 cab em ago-dez/23, depois
+  do encerramento. Corrigir na fonte (o Fechamento), com o cliente; nada de UPDATE sem OK.
+
 - SALDO-INICIAL-MES-01 — `saldos_iniciais` tem coluna `mes`, e NINGUEM a le'.
   `fn_zoot_categoria_mensal` (md5 a3e6eb6b) busca o saldo em
   `WHERE si.fazenda_id = ? AND si.ano = ?` (prosrc :7-8, sem `si.mes`) e a recursao da

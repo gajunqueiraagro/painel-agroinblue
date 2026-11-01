@@ -1,18 +1,11 @@
 /**
- * Hook: useZootMensal
+ * ZootMensal — a LINHA DO MÊS do rebanho (totais de uma fazenda ou do Global).
  *
- * ⚠️ USO INTERNO — NÃO IMPORTAR DIRETAMENTE EM TELAS/COMPONENTES.
- * Consumir EXCLUSIVAMENTE via useRebanhoOficial.
- *
- * Este hook é a camada de acesso direto à view `vw_zoot_fazenda_mensal`.
- * Qualquer import direto em componente é uma VIOLAÇÃO arquitetural.
- *
- * Regra de produto: todo indicador mensal do rebanho deve vir de useRebanhoOficial.
+ * REBANHO-LEITURA-01 D1 (Gabriel 01/11/2026): o hook que lia a view `vw_zoot_fazenda_mensal` SAIU. Numa fazenda a view estourava o
+ * tempo do papel `authenticated` (8,1 s, 57014) para todo cliente e todo número da linha do mês saía "—". A linha agora é MONTADA das
+ * categorias do `zoot_mensal_cache` em `useRebanhoOficial` (`buildFazendaRowsFromCategories`), a mesma regra do Global. Aqui ficam o
+ * tipo e o `indexByMes`, que os consumidores importam por `useRebanhoOficial`.
  */
-
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useFazenda } from '@/contexts/FazendaContext';
 
 export interface ZootMensal {
   fazenda_id: string;
@@ -38,59 +31,6 @@ export interface ZootMensal {
   area_produtiva_ha: number;
   lotacao_ua_ha: number | null;
   fonte_oficial_mes: 'fechamento' | 'fallback_movimentacao' | 'projecao' | 'parcial';
-}
-
-interface UseZootMensalParams {
-  ano: number;
-  cenario: 'realizado' | 'meta';
-  /** Gate do caller (default true). Composto com o guard interno — nunca substitui. */
-  enabled?: boolean;
-}
-
-export function useZootMensal({ ano, cenario, enabled = true }: UseZootMensalParams) {
-  const { fazendaAtual } = useFazenda();
-  const fazendaId = fazendaAtual?.id;
-
-  return useQuery({
-    queryKey: ['zoot-mensal', fazendaId, ano, cenario],
-    queryFn: async (): Promise<ZootMensal[]> => {
-      if (!fazendaId) return [];
-
-      const { data, error } = await supabase
-        .from('vw_zoot_fazenda_mensal' as any)
-        .select('*')
-        .eq('fazenda_id', fazendaId)
-        .eq('ano', ano)
-        .eq('cenario', cenario)
-        .order('mes');
-
-      if (error) {
-        console.error('[useZootMensal] vw_zoot_fazenda_mensal indisponível', {
-          message: error.message,
-          code: (error as any).code,
-          details: (error as any).details,
-          hint: (error as any).hint,
-          fazendaId, ano, cenario,
-        });
-        // Circuit breaker: falha da view é falha DE VERDADE — propaga o erro (isError=true)
-        // em vez de mascarar com []. A UI de erro fica para o PR-ZOOT-ERROR-UI.
-        throw error;
-      }
-
-      return (data as unknown as ZootMensal[]) || [];
-    },
-    enabled: enabled && Boolean(fazendaId) && fazendaId !== '__global__',
-    staleTime: 30_000,
-    // Circuit breaker: 1 retry com backoff exponencial e SEM re-marteladas automáticas
-    // (remount/foco não refazem; só invalidação explícita ou refetch() manual).
-    retry: 1,
-    retryDelay: (attempt) => Math.min(2000 * 2 ** attempt, 10000),
-    retryOnMount: false,
-    refetchOnWindowFocus: false,
-    // Mantém dados anteriores durante troca de fazenda/ano para evitar flash vazio
-    // (react-query v5).
-    placeholderData: (previousData) => previousData,
-  });
 }
 
 /**

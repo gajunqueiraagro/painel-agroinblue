@@ -48,7 +48,9 @@ describe('trava: os 4 leitores usam a área do mês', () => {
   const src = (p: string) => readFileSync(resolve(__dirname, '../../', p), 'utf8');
   it('lotação global (useRebanhoOficial) soma por mês', () => {
     const s = src('hooks/useRebanhoOficial.ts');
-    expect(s).toContain("areaDosPastosNoMes(daFazendaComRebanho, r.ano_mes)");
+    expect(s).toContain("areaDosPastosNoMes(pastosDaArea, r.ano_mes)");
+    /* REBANHO-LEITURA-01 D1: numa fazenda a área é a dos pastos DELA (a mesma soma que a view fazia), pela mesma função */
+    expect(s).toContain("pastosDaArea = pastos.filter(p => p.fazenda_id === fazendaId)");
     expect(s).not.toMatch(/const areaTotal = pastos/);
   });
   it('PC-100 Meta usa a área média do ano e não o cadastro de hoje', () => {
