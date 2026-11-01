@@ -18,6 +18,7 @@ import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { toast } from 'sonner';
 import { motivoDoNomeDoPasto, NOTA_NOME_DO_CADASTRO } from '@/lib/pastos/nomeDoPasto';
+import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseRevalidarValorRebanho, lerEstadoDoP2, rotuloReabrirValorRebanho } from '@/lib/fechamento/travaDoP2';
 
 /* FECH-MAPA-PASTO-MODAL-01 — ALTURA FIXA (o corpo nao rola): topo + grade das 9 categorias + rodape. So' o painel da
    lavoura rola dentro do proprio quadro. */
@@ -152,11 +153,13 @@ interface Props {
   onRenomear: (nome: string, aoRecusar: (frase: string) => void) => Promise<boolean>;
   onFechar: () => Promise<boolean>;
   onCopiar: () => Promise<{ itens: FechamentoItem[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }>;
+  /** FECH-P2-TRAVA-AVISO-01: leva ao Valor do Rebanho do mês e volta a este pasto. Sem ele, a trava só se explica (sem botão). */
+  onReabrirValorRebanho?: () => void;
 }
 
 export function FechamentoPastoDialog({
   open, onOpenChange, pasto, fechamento,
-  categorias, onCopiar, pastosDaFazenda, onRenomear,
+  categorias, onCopiar, pastosDaFazenda, onRenomear, onReabrirValorRebanho,
 }: Props) {
   const { clienteAtual } = useCliente();
   const [itens, setItens] = useState<FechamentoItem[]>([]);
@@ -170,12 +173,17 @@ export function FechamentoPastoDialog({
   const [nomePasto, setNomePasto] = useState(pasto.nome);
   const [erroNome, setErroNome] = useState<string | null>(null);
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+  /* FECH-P2-TRAVA-AVISO-01: o mês trava pelo Valor do Rebanho validado (ou P2 fechado). Lido ao abrir, para avisar ANTES de
+     digitar; a recusa do banco com a mesma regra também liga. */
+  const [travadoPeloP2, setTravadoPeloP2] = useState(false);
 
   const isFechado = status === 'fechado';
   /* FECH-PASTO-SALVAR-TRANSACAO-01: o modal grava e reabre so' pelas duas RPCs do card (uma transacao cada) */
   const { loadItens, salvarCardDoPasto, reabrirCardDoPasto } = useFechamento();
-  const { isReadOnly: isMesReadOnly } = useMasterLock(fechamento.ano_mes);
+  const { isReadOnly: isMesReadOnly, isMaster, isMesLocked } = useMasterLock(fechamento.ano_mes);
   const masterReadOnly = isMesReadOnly(fechamento.ano_mes);
+  /* o MasterLockBanner só se desenha para quem não é master com o mês travado (a mesma condição do componente) */
+  const bannerMasterVisivel = !isMaster && isMesLocked(fechamento.ano_mes);
   // Inputs ficam disabled se já fechado OU se mês está bloqueado pelo master lock
   const inputsDisabled = isFechado || masterReadOnly;
 
@@ -186,7 +194,9 @@ export function FechamentoPastoDialog({
   // Load items + meta when modal opens
   useEffect(() => {
     if (!open || !fechamento) return;
-    setNomePasto(pasto.nome); setErroNome(null); setErroSalvar(null);
+    setNomePasto(pasto.nome); setErroNome(null); setErroSalvar(null); setTravadoPeloP2(false);
+    let vivo = true;
+    lerEstadoDoP2(fechamento.fazenda_id, fechamento.ano_mes).then(r => { if (vivo && r.ok) setTravadoPeloP2(r.valor.travado); });
     const blank = categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' }));
     setItens(blank);
 
@@ -211,6 +221,7 @@ export function FechamentoPastoDialog({
         setObservacaoMes('');
       }
     });
+    return () => { vivo = false; };
   }, [open, fechamento, categorias, loadItens]);
 
   const updateItem = useCallback((catId: string, field: string, value: any) => {
@@ -275,8 +286,14 @@ export function FechamentoPastoDialog({
         qualidade_mes: qualidadeMes,
         observacao_mes: observacaoMes || null,
       }, itens);
-      if (!r.ok) { setErroSalvar(r.erro); return; }
+      if (!r.ok) {
+        if (ehRecusaDaTravaDoP2(r.erro)) { setTravadoPeloP2(true); return; }
+        setErroSalvar(r.erro); return;
+      }
       toast.success('Fechamento salvo');
+      /* o mês já foi validado e está reaberto: o peso mudou, o Valor do Rebanho tem de ser revalidado (nada se reabre/fecha sozinho) */
+      const p2 = await lerEstadoDoP2(fechamento.fazenda_id, fechamento.ano_mes);
+      if (p2.ok && p2.valor.revalidar) toast.warning(fraseRevalidarValorRebanho(fechamento.ano_mes));
       // Não fechar o pasto aqui. O fechamento oficial ocorre via "Fechar Mês".
       onOpenChange(false);
     } finally {
@@ -296,7 +313,10 @@ export function FechamentoPastoDialog({
   const handleReabrir = async () => {
     setErroSalvar(null);
     const r = await reabrirCardDoPasto(fechamento.id, MOTIVO_REABRIR_PASTO);
-    if (!r.ok) { setErroSalvar(r.erro); return; }
+    if (!r.ok) {
+      if (ehRecusaDaTravaDoP2(r.erro)) { setTravadoPeloP2(true); return; }
+      setErroSalvar(r.erro); return;
+    }
     toast.success('Pasto reaberto');
     setStatus('rascunho');
   };
@@ -507,7 +527,9 @@ export function FechamentoPastoDialog({
         {/* ── GRADE PRINCIPAL ── */}
         <div className="flex-1 min-h-0 overflow-hidden px-5 py-3 space-y-4 bg-background" data-testid="corpo-do-pasto">
           {/* lugar FIXO de 22px para o aviso da trava master (vazio quando nao ha'): nada muda de altura */}
-          <div className="h-[22px]" data-testid="lugar-trava-master"><MasterLockBanner anoMes={fechamento.ano_mes} compacto /></div>
+          {/* FECH-P2-TRAVA-AVISO-01: com a linha da trava do P2 acima do rodapé, este lugar VAZIO sai (o atributo `hidden` tira também
+              o espaço do space-y): a grade não perde altura e nada corta (corpo 307px medido a 1126) */}
+          <div className="h-[22px]" data-testid="lugar-trava-master" hidden={travadoPeloP2 && !bannerMasterVisivel}><MasterLockBanner anoMes={fechamento.ano_mes} compacto /></div>
           {ehLavoura ? (
             /* ⚠ O PAINEL SUBSTITUI A GRADE, não convive com ela: as categorias de gado não são
                "opcionais" num talhão de amendoim — são a pergunta errada. Deixá-las abaixo
@@ -534,6 +556,21 @@ export function FechamentoPastoDialog({
           )}
         </div>
 
+        {/* FECH-P2-TRAVA-AVISO-01 — a trava do Valor do Rebanho numa linha PRÓPRIA, a frase inteira (nunca cortada no rodapé) */}
+        {travadoPeloP2 && (
+          <div className="shrink-0 border-t border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-0.5 flex items-center gap-2" data-testid="trava-do-p2">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+            <span className="min-w-0 flex-1 text-[10.5px] leading-tight font-medium text-amber-900 dark:text-amber-200" data-testid="frase-da-trava-do-p2">
+              {fraseDaTravaDoPasto(fechamento.ano_mes)}
+            </span>
+            {onReabrirValorRebanho && (
+              <Button variant="outline" size="sm" className="h-6 shrink-0 text-[10.5px] px-2" onClick={onReabrirValorRebanho} data-testid="reabrir-valor-rebanho">
+                <LockOpen className="h-3 w-3 mr-1" />{rotuloReabrirValorRebanho(fechamento.ano_mes)}
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* ── FOOTER ── */}
         <div className="shrink-0 border-t bg-muted/30 px-4 py-1.5 flex items-center gap-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -558,12 +595,14 @@ export function FechamentoPastoDialog({
               <Button variant="outline" size="sm" className="h-7 text-[11px] px-4" onClick={handleCancel}>
                 Cancelar
               </Button>
-              <Button onClick={handleSave} disabled={saving || masterReadOnly || !!motivoDoNome} size="sm" className="h-7 text-[11px] px-4">
+              <Button onClick={handleSave} disabled={saving || masterReadOnly || !!motivoDoNome || travadoPeloP2} size="sm" className="h-7 text-[11px] px-4"
+                title={travadoPeloP2 ? fraseDaTravaDoPasto(fechamento.ano_mes) : undefined}>
                 <Save className="h-3 w-3 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
               </Button>
             </div>
           ) : (
-            <Button variant="outline" onClick={handleReabrir} disabled={masterReadOnly} size="sm" className="h-7 text-[11px] px-4">
+            <Button variant="outline" onClick={handleReabrir} disabled={masterReadOnly || travadoPeloP2} size="sm" className="h-7 text-[11px] px-4"
+              title={travadoPeloP2 ? fraseDaTravaDoPasto(fechamento.ano_mes) : undefined}>
               <LockOpen className="h-3 w-3 mr-1" />Reabrir pasto
             </Button>
           )}

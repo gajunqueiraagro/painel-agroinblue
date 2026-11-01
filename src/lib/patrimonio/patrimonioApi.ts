@@ -99,7 +99,13 @@ export interface PatrimonioApi {
   documentos(bemId: string): Promise<DocumentoBem[]>;
   cadastroDoBem(bemId: string): Promise<FormBem | null>;
   salvarBem(form: FormBem, simular: boolean, motivo: string | null): Promise<Resultado<Linha>>;
-  mudarParametros(bemId: string, vigenteDesde: string, vidaMeses: number, residual: number, motivo: string, simular: boolean): Promise<Resultado<Linha>>;
+  /** "Mudança de estimativa" (deste mês em diante). PATR-01c: confere a versão; a resposta traz `versao` (a nova, ao gravar), `sem_efeito`,
+   *  `aviso` e `antes`/`depois` (a série ano a ano). */
+  mudarParametros(bemId: string, versao: number | null, vigenteDesde: string, vidaMeses: number, residual: number, motivo: string, simular: boolean): Promise<Resultado<Linha>>;
+  /** "Corrigir cadastro" (desde o "em uso"; as linhas posteriores saem, a trilha guarda a cópia). Mesma resposta, com `linhas_removidas`. */
+  corrigirParametros(bemId: string, versao: number | null, vidaMeses: number, residual: number, motivo: string, simular: boolean): Promise<Resultado<Linha>>;
+  /** A versão gravada do bem agora (SALVAR-TRAVA: o modal a adota depois das próprias escritas — `versaoAdotada`). */
+  versaoDoBem(bemId: string): Promise<number | null>;
   ligar(bemId: string, itens: ItemDoVinculo[], confirmarRepetidas: boolean, simular: boolean): Promise<Resultado<PreviaLigar>>;
   desligar(bemId: string, itens: ItemDoVinculo[], motivo: string): Promise<Resultado<Linha>>;
   salvarPastos(bemId: string, pastos: PastoLigado[], simular: boolean): Promise<Resultado<Linha>>;
@@ -249,9 +255,18 @@ export const apiDoBanco: PatrimonioApi = {
   async salvarBem(form, simular, motivo) {
     return comoLinha(await rpc('fn_patrimonio_bem_salvar', { p_bem: payloadDoBem(form), p_simular: simular, p_motivo: motivo }));
   },
-  async mudarParametros(bemId, vigenteDesde, vidaMeses, residual, motivo, simular) {
+  async mudarParametros(bemId, versao, vigenteDesde, vidaMeses, residual, motivo, simular) {
     return comoLinha(await rpc('fn_patrimonio_parametros_mudar', { p_bem: bemId, p_vigente_desde: vigenteDesde, p_vida_util_meses: vidaMeses,
+      p_residual_pct: residual, p_motivo: motivo, p_simular: simular, p_versao: versao }));
+  },
+  async corrigirParametros(bemId, versao, vidaMeses, residual, motivo, simular) {
+    return comoLinha(await rpc('fn_patrimonio_parametros_corrigir', { p_bem: bemId, p_versao: versao, p_vida_util_meses: vidaMeses,
       p_residual_pct: residual, p_motivo: motivo, p_simular: simular }));
+  },
+  async versaoDoBem(bemId) {
+    const { data, error } = await tabela('patrimonio_bens').select('versao').eq('id', bemId).maybeSingle();
+    if (error || !ehLinha(data)) { if (error) console.error('[patrimonio]', error); return null; }
+    return typeof data.versao === 'number' ? data.versao : null;
   },
   async ligar(bemId, itens, confirmarRepetidas, simular) {
     const r = await rpc('fn_patrimonio_bem_ligar', { p_bem: bemId, p_itens: itens, p_confirmar_repetidas: confirmarRepetidas, p_simular: simular });

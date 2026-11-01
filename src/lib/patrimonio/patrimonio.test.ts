@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ordenarPorColuna } from '@/hooks/useOrdenacaoTabela';
 import {
   abasDoBem, chaveDoCodigo, chipsDeCategoria, COLUNAS_ORDENAVEIS, custoPorPasto, dataBR, filtrarBens, fraseDoErro, mesBR, mostraIdentificacaoAntiga,
-  mostraPlacaRenavam, n2, NOME_CURTO_CATEGORIA, nomeCurtoDaCategoria, rotuloOrigem, rotuloSemDepreciacao, rotuloVida, tituloDaLinha, totaisDaLista,
+  comparacaoAnoAAno, ladoDaPrevia, versaoAdotada, mostraPlacaRenavam, n2, NOME_CURTO_CATEGORIA, nomeCurtoDaCategoria, rotuloOrigem, rotuloSemDepreciacao, rotuloVida, tituloDaLinha, totaisDaLista,
   type BemDaLista, type CategoriaBem,
 } from './patrimonio';
 
@@ -191,4 +191,31 @@ describe('o nome curto da categoria na tabela (Gabriel 31/10: Categoria não cor
     expect(v.map(b => b.bem_id)).toEqual(['es', 'eq']);   /* Estradas < Informática (pelo nome completo seria Equipamentos < Estradas) */
   });
 });
+});
+
+describe('SALVAR-TRAVA (PATR-01c) — a versão adotada e a prévia da vida útil', () => {
+  it('adota só quando a versão subiu exatamente uma (a escrita foi a do próprio modal)', () => {
+    expect(versaoAdotada(4, 5)).toBe(5);
+    expect(versaoAdotada(4, 6)).toBeNull();   // outra pessoa mexeu no meio: o Salvar tem de recusar
+    expect(versaoAdotada(4, 4)).toBeNull();   // nada subiu (a escrita não gravou)
+    expect(versaoAdotada(null, 1)).toBeNull();
+    expect(versaoAdotada(4, null)).toBeNull();
+  });
+  it('lê um lado da prévia como o banco devolve (números em texto inclusive); lixo vira vazio', () => {
+    expect(ladoDaPrevia({ anos: [{ ano: 2020, quota: '8750.00', acumulada: 8750 }], hoje: { acumulada: 60520.83, contabil: '189479.17', base: 250000 }, fim_da_vida: '2039-12-01' }))
+      .toEqual({ anos: [{ ano: '2020', quota: 8750, acumulada: 8750 }], hoje: { acumulada: 60520.83, contabil: 189479.17, base: 250000 }, fim_da_vida: '2039-12-01' });
+    expect(ladoDaPrevia(null)).toEqual({ anos: [], hoje: null, fim_da_vida: null });
+    expect(ladoDaPrevia({ anos: 'x', hoje: [] })).toEqual({ anos: [], hoje: null, fim_da_vida: null });
+  });
+  it('o VEI-001: hoje 35 mil/ano até 2024, depois 8.750/ano até 2039; o ano zerado depois do fim sai; contábil = base − acumulada', () => {
+    const hoje = ['2020', '2021', '2022', '2023', '2024', '2025', '2026'].map((ano, i) => ({ ano, depreciacao: i < 5 ? 35000 : 0,
+      acumulada: Math.min(5, i + 1) * 35000, contabil: 250000 - Math.min(5, i + 1) * 35000 }));
+    const depois = ladoDaPrevia({ anos: [...Array.from({ length: 20 }, (_, i) => ({ ano: 2020 + i, quota: 8750, acumulada: 8750 * (i + 1) })), { ano: 2040, quota: 0, acumulada: 175000 }],
+      hoje: { acumulada: 60520.83, contabil: 189479.17, base: 250000 }, fim_da_vida: '2039-12-01' });
+    const c = comparacaoAnoAAno(hoje, depois);
+    expect(c.length).toBe(20);
+    expect(c[0]).toEqual({ ano: '2020', hoje: 35000, depois: 8750, acumulada: 8750, contabil: 241250 });
+    expect(c[6]).toEqual({ ano: '2026', hoje: 0, depois: 8750, acumulada: 61250, contabil: 188750 });
+    expect(c[19]).toEqual({ ano: '2039', hoje: null, depois: 8750, acumulada: 175000, contabil: 75000 });
+  });
 });

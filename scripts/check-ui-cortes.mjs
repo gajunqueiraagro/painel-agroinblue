@@ -325,6 +325,18 @@ const CENARIOS = [
       /* B2: o veículo (Placa e Renavam à vista), a máquina só com a identificação ANTIGA (só leitura) e o cabeçalho com o mouse em cima
          (o hover clareia o navy; antes trocava o fundo por branco e o rótulo sumia) */
       modal('veiculo-dados', 'Caminhonete Hilux', 'Dados'), modal('antiga-dados', 'Grade aradora', 'Dados'),
+      /* PATR-01c (SALVAR-TRAVA item 2): a aba Depreciação do bem que já deprecia com a PRÉVIA — "Corrigir cadastro" (a tabela vira hoje ×
+         depois, a frase com a acumulada/contábil) e a "Mudança de estimativa" SEM EFEITO (o aviso âmbar e o atalho "Corrigir cadastro →";
+         na bancada, vida de 30 anos ou mais = sem efeito) */
+      ...[['depreciacao-corrigir', true, 20], ['depreciacao-sem-efeito', false, 30]].map(([nome, corrigir, anos]) => ({
+        nome: `patrimonio-bem-trator-${nome}`, url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+          await abrir('Trator Valtra', 'Depreciação')(p);
+          if (corrigir) await p.locator('[data-testid="bem-dep-mudar"] button', { hasText: /^Corrigir cadastro$/ }).first().click();
+          const vida = p.locator('[data-testid="bem-dialog"] [data-testid="campo-numero"] input').first();
+          await vida.fill(String(anos)); await vida.blur();
+          await p.locator('[data-testid="bem-dep-motivo"]').fill('Cadastro errado desde o início: a vida útil certa é outra');
+          await p.locator('[data-testid="bem-dep-ver"]').click(); await p.waitForTimeout(600);
+        } })),
       { nome: 'patrimonio-hover-cabecalho', url: URL, tamanhos: T, antes: async (p) => {
         await p.locator('[data-testid="patrimonio-tabela"] th', { hasText: /^Código/ }).first().hover(); await p.waitForTimeout(300); } },
     ];
@@ -1026,14 +1038,30 @@ function medirCantoDoMapa() {
   } else {
     if (m.right - z.right > 14) achados.push({ regra: 'canto-do-mapa', texto: `painel fechado: o zoom fica a ${px(m.right - z.right)} da borda direita` });
     if (m.right - c.right > 14) achados.push({ regra: 'canto-do-mapa', texto: `painel fechado: os creditos ficam a ${px(m.right - c.right)} da borda direita` });
-    /* no rodapé quando cabem ao lado da legenda inteira (no pior caso: créditos de 360 → reserva 390); senão logo acima da faixa dela */
-    const cabem = !legenda || m.width >= document.querySelector('[data-testid="mapa-legenda"]').scrollWidth + 390;
+    /* no rodapé quando cabem ao lado da legenda inteira (MAPA-COMPACTO-01: a largura MEDIDA dos créditos + 30 de margens); senão logo
+       acima da faixa dela */
+    const cabem = !legenda || m.width >= document.querySelector('[data-testid="mapa-legenda"]').scrollWidth + 30 + c.width;
     if (cabem && m.bottom - c.bottom > 14) achados.push({ regra: 'canto-do-mapa', texto: `painel fechado: os creditos cabem no rodape e ficam a ${px(m.bottom - c.bottom)} dele` });
     if (!cabem && (c.bottom > legenda.top + 0.5 || legenda.top - c.bottom > 24)) achados.push({ regra: 'canto-do-mapa', texto: 'painel fechado: sem lugar no rodape, os creditos nao ficam logo acima da legenda' });
   }
   if (z.bottom > c.top + 0.5) achados.push({ regra: 'canto-do-mapa', texto: 'o zoom nao fica acima dos creditos' });
   if (legenda && z.bottom > legenda.top + 0.5) achados.push({ regra: 'canto-do-mapa', texto: 'o zoom desce ate a faixa da legenda' });
   const cruza = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+  /* MAPA-COMPACTO-01 — as regras da Google (Map Tiles API › Policies): logo de 16 a 19 px, sem deformar; espaço livre de 10 px nos lados
+     e em cima e 5 px embaixo, sem nada da casa dentro; o texto da atribuição INTEIRO numa linha (ou o botão "Fontes dos dados") */
+  const logo = caixa('[data-testid="mapa-creditos-logo"]'), faixaEl = document.querySelector('[data-testid="mapa-creditos-faixa"]');
+  if (logo) {
+    if (logo.height < 15.5 || logo.height > 19.5) achados.push({ regra: 'canto-do-mapa', texto: `o logo do Google tem ${px(logo.height)} de altura (16 a 19)` });
+    const livre = { left: logo.left - 10, right: logo.right + 10, top: logo.top - 10, bottom: logo.bottom + 5 };
+    for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['zoom', '.leaflet-control-zoom']]) {
+      const b = caixa(sel); if (b && cruza(livre, b)) achados.push({ regra: 'canto-do-mapa', texto: `${nome} entra no espaço livre do logo do Google` });
+    }
+  }
+  if (faixaEl && faixaEl.getBoundingClientRect().width > 1) {
+    const f = faixaEl.getBoundingClientRect();
+    if (f.height > 16.5) achados.push({ regra: 'canto-do-mapa', texto: `o texto dos créditos tem ${px(f.height)} (uma linha)` });
+    if (faixaEl.scrollWidth > faixaEl.clientWidth + 1) achados.push({ regra: 'canto-do-mapa', texto: 'o texto dos créditos é cortado' });
+  }
   for (const [nome, sel] of [['painel', '[data-testid="mapa-painel"]'], ['legenda', '[data-testid="mapa-legenda"]'], ['Filtros', '[data-testid="mapa-filtros"]'], ['KPIs', '[data-testid="mapa-kpis"]']]) {
     const b = caixa(sel); if (!b) continue;
     if (cruza(c, b)) achados.push({ regra: 'canto-do-mapa', texto: `os creditos ficam por baixo de ${nome}` });
