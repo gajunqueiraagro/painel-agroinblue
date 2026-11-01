@@ -207,6 +207,9 @@ const CENARIOS = [
     semRolagem: { dentro: '[data-testid="mapa-painel"]' } },
   { nome: 'mapa-geo-painel-nome-longo', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('Retiro') },
   { nome: 'mapa-geo-sem-fechamento', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_03') },
+  /* MAPA-ATIVIDADE-LAVOURA-01: o pasto de LAVOURA (cultura/safra/área plantada, sem cabeças nem lotação) e a RESERVA pelo cadastro (D1) */
+  { nome: 'mapa-geo-painel-lavoura', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P5A') },
+  { nome: 'mapa-geo-painel-reserva', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P5B') },
   { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
   { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
   /* MAPA-02b — o fundo (neutro na bancada: nenhum tile do Google nem do OSM) e os créditos no canto, logo abaixo do zoom: em satélite com o
