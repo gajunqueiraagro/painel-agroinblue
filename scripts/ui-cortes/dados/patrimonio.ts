@@ -92,6 +92,18 @@ function serie(b: BemDaLista, ate: string) {
   return out;
 }
 const ok = <T,>(dados: T): Resultado<T> => ({ ok: true, dados });
+/* PATR-01c — a prévia da vida útil (o que `_fn_patrimonio_resumo_serie` devolve: ano a ano, o mês atual, o fim da vida), da série acima */
+function resumo(b: BemDaLista, vidaMeses: number | null, residual: number | null) {
+  const x = { ...b, vida_util_meses: vidaMeses, residual_pct: residual };
+  const s = serie(x, '2060-12-31');
+  const porAno = new Map<string, { ano: string; quota: number; acumulada: number }>();
+  for (const m of s) { const a = porAno.get(m.periodo.slice(0, 4)) ?? { ano: m.periodo.slice(0, 4), quota: 0, acumulada: 0 }; a.quota = Math.round((a.quota + m.quota) * 100) / 100; a.acumulada = m.acumulada; porAno.set(a.ano, a); }
+  const hoje = s.find(m => m.periodo === POS.slice(0, 7));
+  const comQuota = s.filter(m => m.quota > 0);
+  return { anos: [...porAno.values()], hoje: hoje ? { acumulada: hoje.acumulada, contabil: hoje.contabil, base: hoje.base } : null,
+    fim_da_vida: comQuota.length ? `${comQuota[comQuota.length - 1].periodo}-01` : null };
+}
+const bemDe = (id: string) => BENS.find(b => b.bem_id === id)!;
 export const API_PATRIMONIO: PatrimonioApi = {
   categorias: async () => CAT,
   lista: async (_c, faz) => ok(BENS.filter(b => !faz || b.fazenda_id === faz)),
@@ -108,7 +120,19 @@ export const API_PATRIMONIO: PatrimonioApi = {
   documentos: async id => id === 'mq' || id === 'past' ? [{ id: 'd1', especie: 'nota_fiscal', nome: 'NF trator Valtra A950.pdf', storage_path: 'x', tamanho_bytes: 184320, criado_em: '2022-03-15T10:00:00' },
     { id: 'd2', especie: 'seguro', nome: 'Apólice Porto Seguro 7712004.pdf', storage_path: 'x', tamanho_bytes: 412000, criado_em: '2026-03-14T10:00:00' }] : [],
   cadastroDoBem: async id => form(BENS.find(b => b.bem_id === id)!),
-  salvarBem: async () => ok({ ok: true }), mudarParametros: async () => ok({ quota_antes: 2589.33, quota_depois: 3540.12 }),
+  salvarBem: async () => ok({ ok: true }),
+  /* a mudança de estimativa com vida de 30 anos ou mais: a bancada a dá como SEM EFEITO (o caso do caminhão já todo depreciado) */
+  mudarParametros: async (id, versao, _desde, vida, res, _motivo, simular) => {
+    const b = bemDe(id); const semEfeito = vida >= 360;
+    return ok({ quota_antes: 2589.33, quota_depois: semEfeito ? 2589.33 : 3540.12, versao: simular ? versao : (versao ?? 0) + 1, sem_efeito: semEfeito,
+      aviso: semEfeito ? 'Já está todo depreciado; esta mudança não altera nada. Quer corrigir o cadastro desde o início?' : null,
+      antes: resumo(b, b.vida_util_meses, b.residual_pct), depois: semEfeito ? resumo(b, b.vida_util_meses, b.residual_pct) : resumo(b, vida, res) });
+  },
+  corrigirParametros: async (id, versao, vida, res, _motivo, simular) => {
+    const b = bemDe(id);
+    return ok({ versao: simular ? versao : (versao ?? 0) + 1, linhas_removidas: 1, antes: resumo(b, b.vida_util_meses, b.residual_pct), depois: resumo(b, vida, res) });
+  },
+  versaoDoBem: async () => 1,
   ligar: async () => ok({ ok: true, soma: 0, n_ligar: 0, n_recusas: 0, n_repetidas: 0, itens: [], contratos: [] }),
   desligar: async () => ok({}), salvarPastos: async () => ok({}), salvarAvaliacao: async () => ok({}), cancelarAvaliacao: async () => ok({}),
   enviarDocumento: async () => null, removerDocumento: async () => ok({}), urlDoDocumento: async () => null,

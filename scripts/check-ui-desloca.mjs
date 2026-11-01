@@ -213,6 +213,15 @@ const CENARIOS = [
     ['busca 1 bem', digitar('[data-testid="patrimonio-busca"]', 'Valtra')], ['busca sem resultado', digitar('[data-testid="patrimonio-busca"]', 'zzzz nada')],
     ['busca limpa', digitar('[data-testid="patrimonio-busca"]', '')],
   ] },
+  /* PATR-01c: na aba Depreciação do trator, trocar Mudança de estimativa ↔ Corrigir cadastro não move nada fora do miolo */
+  { nome: 'patrimonio-bem-trator-depreciacao', url: 'tela=patrimonio&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="patrimonio-linha"]', { hasText: 'Trator Valtra' }).first().click();
+      await p.locator('[data-testid="bem-dialog"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="bem-dialog"] button', { hasText: /^Depreciação/ }).first().click(); await espera(p, 600);
+    },
+    estados: [['Corrigir cadastro', async (p) => { await p.locator('[data-testid="bem-dep-mudar"] button', { hasText: /^Corrigir cadastro$/ }).first().click(); await espera(p, 300); }],
+      ['Mudança de estimativa', async (p) => { await p.locator('[data-testid="bem-dep-mudar"] button', { hasText: /^Mudança de estimativa$/ }).first().click(); await espera(p, 300); }]] },
   ...[['trator', 'Trator Valtra', ['Lançamentos', 'Depreciação', 'Valor de mercado', 'Documentos', 'Dados']],
       ['pastagem', 'Reforma de pastagem', ['Lançamentos', 'Pastos', 'Depreciação', 'Documentos', 'Dados']],
       ['novo', null, ['Lançamentos', 'Dados']],
@@ -225,6 +234,24 @@ const CENARIOS = [
     },
     estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
   })),
+  /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (`tela=pastos`, SINTÉTICO): trocar o modo (Grupos, Ordem manual, Por destino) e
+     ligar os inativos não move a barra; no modal do grupo, tirar e pôr pasto, a prévia que troca e a desativação (com a frase que
+     quebra a linha) não movem o nome, o seletor, os títulos nem o rodapé */
+  { nome: 'pastos', url: 'tela=pastos&barra=32', antes: async (p) => { await p.locator('[data-testid="pastos-modo-grupos"]').waitFor(); await espera(p, 600); }, estados: [
+    ['modo Grupos', clicar('[data-testid="pastos-modo-grupos"]')], ['inativos', async (p) => { await p.getByText('Inativos', { exact: true }).click(); await espera(p); }],
+    ['modo Ordem manual', botao(/^Ordem manual$/)], ['modo Por destino', botao(/^Por destino$/)],
+  ] },
+  { nome: 'pastos-grupo', url: 'tela=pastos&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="pastos-modo-grupos"]').click(); await p.locator('[data-testid="grupo-linha"]', { hasText: 'Terminação' }).first().click();
+      await p.locator('[data-testid="grupo-dialog"]').waitFor(); await espera(p, 800);
+    },
+    estados: [
+      ['tirar um pasto', async (p) => { await p.locator('[data-testid="grupo-tirar"]').first().click(); await espera(p, 800); }],
+      ['pôr um pasto', async (p) => { await p.locator('[data-testid="grupo-bloco-pastos"] button', { hasText: /^Adicionar pasto/ }).click(); await espera(p, 200);
+        await p.getByPlaceholder('Buscar pasto').fill('P13'); await espera(p, 200); await p.keyboard.press('Enter'); await espera(p, 800); }],
+      ['desativar', async (p) => { await p.locator('[data-testid="grupo-desativar"]').click(); await espera(p, 600); }],
+    ] },
   /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */
   /* P109 — as 4 telas da meta (o caso real do NJ 2026): o rótulo do regime fica PRESO no lugar dele (`presos`: medido sempre, à vista)
      ao trocar a fazenda e ao passar aos valores ×400; no PC-100 o Realizado ↔ Meta (`auto`) não move nada — o rótulo tem o lugar

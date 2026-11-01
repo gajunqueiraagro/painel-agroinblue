@@ -12,7 +12,7 @@ import L from 'leaflet';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RODA_PX_POR_NIVEL, ZOOM_DELTA, ZOOM_SNAP, useStableLeafletMap } from './useStableLeafletMap';
 import { FRASE_SEM_SATELITE, esquecerSessaoParaTeste, lerFundoSalvo, type FundoDoMapa } from '@/lib/mapa/fundoDoMapa';
-import { ESPERA_DA_VISTA_MS } from '@/lib/mapa/camadaDoFundo';
+import { ESPERA_DA_VISTA_MS, FUNDO_ATRAS_DO_SATELITE } from '@/lib/mapa/camadaDoFundo';
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-teste' } }) }));
 
@@ -229,5 +229,31 @@ describe('o fundo (MAPA-02b)', () => {
     render(<Mapa indice={1} />);
     await esperar();
     expect(montados[1].fundo).toBe('mapa');
+  });
+
+  /* MAPA-SAT-FRESTA-01: no zoom fracionado sobra uma fresta entre as fileiras de ladrilhos; atrás do satélite ela mostra o escuro do
+     quadro, não o #ddd do Leaflet (linha clara). No OSM o fundo volta ao padrão. */
+  it('atrás do satélite o fundo do mapa é o escuro do quadro; no Mapa (OSM) volta ao padrão', async () => {
+    vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', CHAVE);
+    render(<Mapa indice={0} />);
+    await esperar(ESPERA_DA_VISTA_MS + 10);
+    const map = montados[0].mapInstanceRef.current;
+    if (!map) throw new Error('o mapa não nasceu');
+    const escuro = document.createElement('div');
+    escuro.style.backgroundColor = FUNDO_ATRAS_DO_SATELITE;
+    expect(FUNDO_ATRAS_DO_SATELITE).toBe('#3a4436');
+    expect(map.getContainer().style.backgroundColor).toBe(escuro.style.backgroundColor);
+    await act(async () => { montados[0].trocarFundo('mapa'); });
+    expect(map.getContainer().style.backgroundColor).toBe('');
+    await act(async () => { montados[0].trocarFundo('satelite'); });
+    await esperar(ESPERA_DA_VISTA_MS + 10);
+    expect(map.getContainer().style.backgroundColor).toBe(escuro.style.backgroundColor);
+  });
+
+  it('satélite que cai no OSM (sem chave) fica com o fundo padrão', async () => {
+    vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', '');
+    render(<Mapa indice={0} />);
+    await esperar(ESPERA_DA_VISTA_MS + 10);
+    expect(montados[0].mapInstanceRef.current?.getContainer().style.backgroundColor).toBe('');
   });
 });

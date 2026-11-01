@@ -11,6 +11,13 @@
  *      em Veículos com o lugar reservado (invisível) nas outras; a "Identificação antiga" só leitura quando só há o campo antigo; o
  *      pedido do salvar manda os campos novos e NÃO manda o `identificacao`
  *   P8 o cabeçalho da lista clareia o navy no hover (`hover:brightness-110`), nunca troca o fundo por branco
+ *   SALVAR-TRAVA (PATR-01c):
+ *   P9  desligar um lançamento sobe a versão do bem: o modal adota a nova (subiu UMA) e o Salvar seguinte manda ela; se subiu mais de
+ *       uma (outra pessoa mexeu no meio), o modal NÃO adota e o Salvar manda a de antes (o banco recusa, que é o certo)
+ *   P10 o Salvar solta o botão assim que a gravação volta, sem esperar a releitura das listas
+ *   P11 "Corrigir cadastro": a prévia troca a tabela por hoje × depois e diz a acumulada/contábil; gravar manda a versão do modal e
+ *       ADOTA a devolvida (o Salvar seguinte manda a nova)
+ *   P12 "Mudança de estimativa" sem efeito: a prévia avisa (âmbar), o gravar fica apagado e o atalho leva a "Corrigir cadastro"
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, within, cleanup } from '@testing-library/react';
@@ -25,7 +32,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: (...a: unknown[]) =
 
 import { PatrimonioTela } from './PatrimonioTela';
 import { PatrimonioApiProvider } from '@/hooks/usePatrimonio';
-import { payloadDoBem, type PatrimonioApi, type FormBem } from '@/lib/patrimonio/patrimonioApi';
+import { payloadDoBem, type PatrimonioApi, type FormBem, type LancamentoDoBem } from '@/lib/patrimonio/patrimonioApi';
 import type { BemDaLista, CategoriaBem } from '@/lib/patrimonio/patrimonio';
 
 const g = globalThis as unknown as { __fazendaBancada?: unknown };
@@ -60,13 +67,23 @@ const form = (b: BemDaLista): FormBem => ({ id: b.bem_id, versao: 1, cliente_id:
   matricula: '', nirf: '', seguradora: '', apolice: '', seguro_vence_em: '', vida_util_meses: b.vida_util_meses, residual_pct: b.residual_pct });
 
 let salvarBem: ReturnType<typeof vi.fn>;
+let desligar: ReturnType<typeof vi.fn>;
+let versaoDoBem: ReturnType<typeof vi.fn>;
+let mudarParametros: ReturnType<typeof vi.fn>;
+let corrigirParametros: ReturnType<typeof vi.fn>;
+let lancamentos: LancamentoDoBem[] = [];
+let listaPendura = false;
 function api(): PatrimonioApi {
   return {
-    categorias: async () => CATS, lista: async () => ({ ok: true, dados: BENS }), semBemResumo: async () => ({ n: 7, valor: 1000 }), itensSemBem: async () => [],
-    lancamentosDoBem: async () => [], pastosDaFazenda: async () => [], pastosDoBem: async () => [], serie: async () => [], avaliacoes: async () => [], documentos: async () => [],
+    categorias: async () => CATS,
+    /* P10: depois da 1a leitura, a lista pode "pendurar" (a releitura nunca volta) — o botão do Salvar não pode ficar esperando ela */
+    lista: () => (listaPendura ? new Promise(() => {}) : Promise.resolve({ ok: true, dados: BENS })),
+    semBemResumo: async () => ({ n: 7, valor: 1000 }), itensSemBem: async () => [],
+    lancamentosDoBem: async () => lancamentos, pastosDaFazenda: async () => [], pastosDoBem: async () => [], serie: async () => [], avaliacoes: async () => [], documentos: async () => [],
     cadastroDoBem: async id => form(BENS.find(b => b.bem_id === id) ?? BENS[0]),
-    salvarBem: (...a) => salvarBem(...a), mudarParametros: async () => ({ ok: true, dados: {} }), ligar: async () => ({ ok: false, erro: 'x' }),
-    desligar: async () => ({ ok: true, dados: {} }), salvarPastos: async () => ({ ok: true, dados: {} }), salvarAvaliacao: async () => ({ ok: true, dados: {} }),
+    salvarBem: (...a) => salvarBem(...a), mudarParametros: (...a) => mudarParametros(...a), corrigirParametros: (...a) => corrigirParametros(...a),
+    versaoDoBem: (...a) => versaoDoBem(...a), ligar: async () => ({ ok: false, erro: 'x' }),
+    desligar: (...a) => desligar(...a), salvarPastos: async () => ({ ok: true, dados: {} }), salvarAvaliacao: async () => ({ ok: true, dados: {} }),
     cancelarAvaliacao: async () => ({ ok: true, dados: {} }), enviarDocumento: async () => null, removerDocumento: async () => ({ ok: true, dados: {} }), urlDoDocumento: async () => null,
   };
 }
@@ -76,7 +93,32 @@ function montar() {
 }
 const abaDoModal = (rotulo: string) => within(screen.getByTestId('bem-dialog')).getAllByRole('button').find(b => (b.textContent ?? '').startsWith(rotulo));
 
-beforeEach(() => { cleanup(); toastErro.mockReset(); salvarBem = vi.fn(async () => ({ ok: true, dados: { ok: true } })); });
+const RESUMO_ANTES = { anos: [{ ano: 2022, quota: 25893.30, acumulada: 25893.30 }, { ano: 2023, quota: 31072, acumulada: 56965.30 }], hoje: { acumulada: 145002.67, contabil: 243397.33, base: 388400 }, fim_da_vida: '2032-02-01' };
+const RESUMO_DEPOIS = { anos: [{ ano: 2022, quota: 12946.65, acumulada: 12946.65 }, { ano: 2023, quota: 15536, acumulada: 28482.65 }], hoje: { acumulada: 72501.33, contabil: 315898.67, base: 388400 }, fim_da_vida: '2042-02-01' };
+beforeEach(() => {
+  cleanup(); toastErro.mockReset(); salvarBem = vi.fn(async () => ({ ok: true, dados: { ok: true } }));
+  desligar = vi.fn(async () => ({ ok: true, dados: {} })); versaoDoBem = vi.fn(async () => 2); lancamentos = []; listaPendura = false;
+  mudarParametros = vi.fn(async () => ({ ok: true, dados: {} }));
+  corrigirParametros = vi.fn(async (_b: string, versao: number | null, _v: number, _r: number, _m: string, simular: boolean) => ({ ok: true,
+    dados: simular ? { versao, linhas_removidas: 1, antes: RESUMO_ANTES, depois: RESUMO_DEPOIS } : { versao: (versao ?? 0) + 1, linhas_removidas: 1 } }));
+});
+const lancamento = (p: Partial<LancamentoDoBem>): LancamentoDoBem => ({ vinculo_id: 'v1', lancamento_id: 'l1', parte_ordem: 1, partes_total: null, estado: 'soma',
+  motivo: null, selo: null, valor: 300000, data: '2022-03-10', data_pagamento: '2022-03-10', numero_documento: '123', status_transacao: 'realizado',
+  descricao: 'Trator sintético NF 123', fornecedor: 'Revenda sintética', subcentro: 'Máquinas', fazenda_id: 'fPUR', repetida: false, de_contrato: false, ...p });
+const abrirTrator = async () => {
+  fireEvent.click((await screen.findAllByTestId('patrimonio-linha')).find(tr => tr.textContent?.includes('Trator sintético'))!);
+  await screen.findByTestId('bem-dialog');
+  await waitFor(() => expect((screen.getByTestId('bem-salvar') as HTMLButtonElement).disabled).toBe(false));
+};
+const desligarOPrimeiro = async () => {
+  fireEvent.click(abaDoModal('Lançamentos')!);
+  fireEvent.click(await screen.findByTitle('Desligar deste bem (o lançamento não muda)'));
+  const caixa = await screen.findByTestId('pedir-motivo');
+  fireEvent.change(within(caixa).getByPlaceholderText('motivo'), { target: { value: 'não é deste trator' } });
+  fireEvent.click(within(caixa).getByRole('button', { name: 'Desligar' }));
+  await waitFor(() => expect(desligar).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.queryByTestId('pedir-motivo')).toBeNull());
+};
 
 describe('PATR-01 · PR B — a tela de Patrimônio', () => {
   it('P1 a lista: 12 colunas ordenam, fazenda pelo código, terra "não deprecia", rodapé soma', async () => {
@@ -219,4 +261,80 @@ describe('PATR-01 · PR B — a tela de Patrimônio', () => {
       expect(th.className).not.toMatch(/hover:bg-/);
     }
   });
+  it('P9 desligar sobe a versão: o modal adota a nova (subiu uma) e o Salvar manda ela; subiu mais = não adota', async () => {
+    lancamentos = [lancamento({})];
+    montar();
+    await abrirTrator();
+    await desligarOPrimeiro();
+    expect(versaoDoBem).toHaveBeenCalledWith('mq');
+    fireEvent.click(screen.getByTestId('bem-salvar'));
+    await waitFor(() => expect(salvarBem).toHaveBeenCalledTimes(2));
+    expect(salvarBem.mock.calls[0][0].versao).toBe(2);
+    expect(salvarBem.mock.calls[1][0].versao).toBe(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    /* outra pessoa mexeu no meio: a versão gravada pulou de 1 para 3 — o modal fica com a 1 */
+    salvarBem.mockClear(); desligar.mockClear(); versaoDoBem = vi.fn(async () => 3);
+    await abrirTrator();
+    await desligarOPrimeiro();
+    fireEvent.click(screen.getByTestId('bem-salvar'));
+    await waitFor(() => expect(salvarBem).toHaveBeenCalled());
+    expect(salvarBem.mock.calls[0][0].versao).toBe(1);
+  }, 20000);
+
+  it('P10 o Salvar solta o botão assim que a gravação volta, sem esperar a releitura', async () => {
+    montar();
+    await abrirTrator();
+    listaPendura = true;
+    fireEvent.click(screen.getByTestId('bem-salvar'));
+    await waitFor(() => expect(salvarBem).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId('bem-salvar').textContent).toBe('Salvar'));
+    expect((screen.getByTestId('bem-salvar') as HTMLButtonElement).disabled).toBe(false);
+  }, 15000);
+
+  it('P11 "Corrigir cadastro": prévia hoje × depois, gravar manda a versão do modal e adota a devolvida', async () => {
+    montar();
+    await abrirTrator();
+    fireEvent.click(abaDoModal('Depreciação')!);
+    const mudar = await screen.findByTestId('bem-dep-mudar');
+    fireEvent.click(within(mudar).getByRole('button', { name: 'Corrigir cadastro' }));
+    expect((screen.getByTestId('bem-dep-gravar') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByTestId('bem-dep-motivo'), { target: { value: 'cadastro errado desde o início' } });
+    fireEvent.click(screen.getByTestId('bem-dep-ver'));
+    const tabela = await screen.findByTestId('bem-dep-comparacao');
+    expect(corrigirParametros.mock.calls[0]).toEqual(['mq', 1, 120, 20, 'cadastro errado desde o início', true]);
+    expect(within(tabela).getAllByRole('columnheader').map(th => th.textContent)).toEqual(['Ano', 'Depreciação hoje R$', 'Depreciação depois R$', 'Acumulada depois R$', 'Contábil depois R$']);
+    expect(screen.getByTestId('bem-dep-frase').textContent).toBe('Desde 03/2022: acumulada hoje R$ 145.002,67 → R$ 72.501,33; contábil R$ 243.397,33 → R$ 315.898,67. A mudança posterior sai (fica na trilha).');
+    fireEvent.click(screen.getByTestId('bem-dep-gravar'));
+    await waitFor(() => expect(corrigirParametros).toHaveBeenCalledTimes(2));
+    expect(corrigirParametros.mock.calls[1][1]).toBe(1);
+    expect(corrigirParametros.mock.calls[1][5]).toBe(false);
+    await waitFor(() => expect(screen.queryByTestId('bem-dep-comparacao')).toBeNull());
+    fireEvent.click(screen.getByTestId('bem-salvar'));
+    await waitFor(() => expect(salvarBem).toHaveBeenCalledTimes(2));
+    expect(salvarBem.mock.calls[1][0].versao).toBe(2);
+  }, 15000);
+
+  it('P12 "Mudança de estimativa" sem efeito: aviso âmbar, gravar apagado, atalho para "Corrigir cadastro"', async () => {
+    const aviso = 'Já está todo depreciado; esta mudança não altera nada. Quer corrigir o cadastro desde o início?';
+    mudarParametros = vi.fn(async () => ({ ok: true, dados: { sem_efeito: true, aviso, versao: 1, antes: RESUMO_ANTES, depois: RESUMO_ANTES } }));
+    montar();
+    await abrirTrator();
+    fireEvent.click(abaDoModal('Depreciação')!);
+    await screen.findByTestId('bem-dep-mudar');
+    const vida = within(screen.getByTestId('bem-dialog')).getAllByTestId('campo-numero')[0].querySelector('input')!;
+    fireEvent.change(vida, { target: { value: '20' } }); fireEvent.blur(vida);
+    fireEvent.change(screen.getByTestId('bem-dep-motivo'), { target: { value: 'vida real maior' } });
+    fireEvent.click(screen.getByTestId('bem-dep-ver'));
+    await waitFor(() => expect(screen.getByTestId('bem-dep-frase').textContent).toBe(aviso));
+    expect(mudarParametros.mock.calls[0][1]).toBe(1);
+    expect(mudarParametros.mock.calls[0][3]).toBe(240);
+    expect(screen.getByTestId('bem-dep-frase').className).toContain('text-amber-700');
+    expect((screen.getByTestId('bem-dep-gravar') as HTMLButtonElement).disabled).toBe(true);
+    const atalho = screen.getByTestId('bem-dep-ir-corrigir');
+    expect(atalho.className).not.toContain('invisible');
+    fireEvent.click(atalho);
+    expect(screen.getByTestId('bem-dep-gravar').textContent).toBe('Corrigir cadastro');
+    expect(screen.getByTestId('bem-dep-frase').textContent).toBe('');
+    expect(screen.getByTestId('bem-dep-ir-corrigir').className).toContain('invisible');
+  }, 15000);
 });

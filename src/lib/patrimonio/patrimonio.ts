@@ -307,3 +307,47 @@ export function tamanhoDoArquivo(bytes: number | null): string {
 export function jaDeprecia(b: { deprecia: boolean; situacao: SituacaoBem; em_uso_desde: string | null }, hoje: string): boolean {
   return b.deprecia && b.situacao !== 'em_formacao' && !!b.em_uso_desde && b.em_uso_desde.slice(0, 7) < hoje.slice(0, 7);
 }
+
+/** SALVAR-TRAVA (PATR-01c): a versão que o modal ADOTA depois de uma escrita DELE MESMO que sobe a versão do bem sem devolvê-la
+ *  (ligar, desligar, pastos). Só quando subiu EXATAMENTE uma: mais que isso, outra pessoa mexeu no meio — o modal fica com a versão
+ *  velha e o Salvar recusa ("Este bem foi alterado por outra pessoa"), que é o certo. Nulo = não adota. */
+export function versaoAdotada(antes: number | null, atual: number | null): number | null {
+  return antes != null && atual != null && atual === antes + 1 ? atual : null;
+}
+
+/** Um lado da prévia da vida útil (`antes` / `depois` de `fn_patrimonio_parametros_corrigir` e `_mudar`, de `_fn_patrimonio_resumo_serie`). */
+export interface LadoDaPrevia {
+  anos: Array<{ ano: string; quota: number; acumulada: number }>;
+  hoje: { acumulada: number; contabil: number; base: number } | null;
+  fim_da_vida: string | null;
+}
+const numero = (v: unknown): number => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v)) ? Number(v) : 0);
+const objeto = (v: unknown): Record<string, unknown> | null => (typeof v === 'object' && v !== null && !Array.isArray(v) ? Object.fromEntries(Object.entries(v)) : null);
+
+export function ladoDaPrevia(v: unknown): LadoDaPrevia {
+  const o = objeto(v);
+  const anos = Array.isArray(o?.anos) ? o.anos.map(objeto).filter((a): a is Record<string, unknown> => a != null)
+    .map(a => ({ ano: String(a.ano ?? ''), quota: numero(a.quota), acumulada: numero(a.acumulada) })) : [];
+  const h = objeto(o?.hoje);
+  return {
+    anos,
+    hoje: h ? { acumulada: numero(h.acumulada), contabil: numero(h.contabil), base: numero(h.base) } : null,
+    fim_da_vida: typeof o?.fim_da_vida === 'string' ? o.fim_da_vida : null,
+  };
+}
+
+/** A tabela ano a ano da prévia: a depreciação de HOJE × a de DEPOIS, e a acumulada e o contábil de depois. O ano que só existe
+ *  depois do fim da vida com quota zero (nos dois lados) não entra (o horizonte do banco vai até o mês "em uso + vida"). O contábil é a base do ano
+ *  (a de hoje: contábil + acumulada da série do bem; sem o ano, a base atual) menos a acumulada de depois. */
+export function comparacaoAnoAAno(
+  hoje: ReadonlyArray<{ ano: string; depreciacao: number; acumulada: number; contabil: number }>, depois: LadoDaPrevia,
+): Array<{ ano: string; hoje: number | null; depois: number; acumulada: number; contabil: number }> {
+  const porAno = new Map(hoje.map(a => [a.ano, a]));
+  const baseAtual = depois.hoje?.base ?? null;
+  const ultimoComQuota = depois.anos.reduce((u, a) => (a.quota > 0 ? a.ano : u), '');
+  return depois.anos.filter(a => a.ano <= ultimoComQuota || (porAno.get(a.ano)?.depreciacao ?? 0) > 0).map(a => {
+    const h = porAno.get(a.ano);
+    const base = h ? Math.round((h.contabil + h.acumulada) * 100) / 100 : baseAtual ?? 0;
+    return { ano: a.ano, hoje: h ? h.depreciacao : null, depois: a.quota, acumulada: a.acumulada, contabil: Math.round((base - a.acumulada) * 100) / 100 };
+  });
+}

@@ -270,6 +270,32 @@ const CENARIOS = [
   { nome: 'plano-contas-renomear-previa', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]', antes: async (p) => {
     await p.locator('[data-testid="renomear-subcentro"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="nome-subcentro"]').fill('Animais de terceiros'); await p.locator('[data-testid="conferir-subcentro"]').click(); await p.waitForTimeout(500); } },
+  /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos, modo "Grupos" (dado SINTÉTICO no `tela=pastos`): a lista dos grupos, com os
+     inativos, o modal de editar (3 piquetes, a prévia "já está assim"), o novo grupo com o pasto de nome longo e área no milhar, a
+     prévia da desativação, e a etiqueta do grupo no cartão do modo "Ordem manual" */
+  ...(() => {
+    const T = [[750, 483], [1000, 600], [1126, 579], [1300, 704], [1366, 768], [1440, 800], [1750, 1000]];
+    const URL = 'tela=pastos&barra=32';
+    const grupos = async (p) => { await p.locator('[data-testid="pastos-modo-grupos"]').click(); await p.locator('[data-testid="grupos-tabela"]').waitFor(); await p.waitForTimeout(300); };
+    const abrir = (nome) => async (p) => { await grupos(p); await p.locator('[data-testid="grupo-linha"]', { hasText: nome }).first().click();
+      await p.locator('[data-testid="grupo-dialog"]').waitFor(); await p.waitForTimeout(700); };
+    return [
+      { nome: 'pastos-grupos', url: URL, tamanhos: T, antes: grupos },
+      { nome: 'pastos-grupos-inativos', url: URL, tamanhos: T, antes: async (p) => { await grupos(p); await p.getByText('Inativos', { exact: true }).click(); await p.waitForTimeout(400); } },
+      { nome: 'pastos-grupo-editar', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: abrir('P10') },
+      { nome: 'pastos-grupo-novo', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+        await grupos(p); await p.locator('[data-testid="grupo-novo"]').click(); await p.locator('[data-testid="grupo-dialog"]').waitFor();
+        await p.locator('[data-testid="grupo-nome"]').fill('Retiro do córrego');
+        for (const nome of ['P13 Retiro do córrego de baixo', 'P11']) {
+          await p.locator('[data-testid="grupo-bloco-pastos"] button', { hasText: /^Adicionar pasto/ }).click(); await p.waitForTimeout(200);
+          await p.getByPlaceholder('Buscar pasto').fill(nome); await p.waitForTimeout(200); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+        }
+        await p.waitForTimeout(700); } },
+      { nome: 'pastos-grupo-desativar', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => { await abrir('Terminação')(p);
+        await p.locator('[data-testid="grupo-desativar"]').click(); await p.waitForTimeout(500); } },
+      { nome: 'pastos-manual-etiqueta', url: URL, tamanhos: T, antes: async (p) => { await p.locator('button', { hasText: /^Ordem manual$/ }).click(); await p.waitForTimeout(400); } },
+    ];
+  })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
      a lista, a busca para 1/0 bens e um chip (o quadro tem a mesma altura), a aba que chega depois, e o modal do bem em cada aba (o
      trator, a pastagem, a terra e o bem NOVO — Dados e Lançamentos, a terra num passo) */
@@ -304,6 +330,18 @@ const CENARIOS = [
       /* B2: o veículo (Placa e Renavam à vista), a máquina só com a identificação ANTIGA (só leitura) e o cabeçalho com o mouse em cima
          (o hover clareia o navy; antes trocava o fundo por branco e o rótulo sumia) */
       modal('veiculo-dados', 'Caminhonete Hilux', 'Dados'), modal('antiga-dados', 'Grade aradora', 'Dados'),
+      /* PATR-01c (SALVAR-TRAVA item 2): a aba Depreciação do bem que já deprecia com a PRÉVIA — "Corrigir cadastro" (a tabela vira hoje ×
+         depois, a frase com a acumulada/contábil) e a "Mudança de estimativa" SEM EFEITO (o aviso âmbar e o atalho "Corrigir cadastro →";
+         na bancada, vida de 30 anos ou mais = sem efeito) */
+      ...[['depreciacao-corrigir', true, 20], ['depreciacao-sem-efeito', false, 30]].map(([nome, corrigir, anos]) => ({
+        nome: `patrimonio-bem-trator-${nome}`, url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+          await abrir('Trator Valtra', 'Depreciação')(p);
+          if (corrigir) await p.locator('[data-testid="bem-dep-mudar"] button', { hasText: /^Corrigir cadastro$/ }).first().click();
+          const vida = p.locator('[data-testid="bem-dialog"] [data-testid="campo-numero"] input').first();
+          await vida.fill(String(anos)); await vida.blur();
+          await p.locator('[data-testid="bem-dep-motivo"]').fill('Cadastro errado desde o início: a vida útil certa é outra');
+          await p.locator('[data-testid="bem-dep-ver"]').click(); await p.waitForTimeout(600);
+        } })),
       /* MAPA-GLOBAL-01 fix1 (1): o hover MEDIDO (fundo opaco, rótulo legível) — o cenário de cima só fotografa */
       { nome: 'patrimonio-hover-medido', url: URL, tamanhos: T, hoverCabecalho: '[data-testid="patrimonio-tabela"]' },
       { nome: 'patrimonio-hover-cabecalho', url: URL, tamanhos: T, antes: async (p) => {
