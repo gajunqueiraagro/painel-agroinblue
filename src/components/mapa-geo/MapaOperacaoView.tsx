@@ -16,6 +16,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
+import type { Divisao } from '@/lib/mapa/unidadesDoMapa';
 import type { Pasto } from '@/hooks/usePastos';
 import type { DadosDoPastoNoMes, PastoOcupacao } from '@/lib/mapa/mapaDoMes';
 import { toast } from 'sonner';
@@ -54,6 +55,8 @@ function getOpStyle(status: string, role: 'normal' | 'selected' | 'origin' | 'de
   }
 }
 
+const MOTIVO_SEM_TRANSFERENCIA = 'Pasto com divisões: a transferência vai no Fechamento, na divisão.';
+
 interface Props {
   geometrias: FazendaGeometria[];
   pastos: Pasto[];
@@ -65,9 +68,11 @@ interface Props {
   onUpload: () => void;
   onRefresh?: () => void;
   onRenderedChange?: (count: number) => void;
+  /** MAPA-PIQUETES-03: as divisões de cada unidade (pai + grupo) no mês — linhas finas por dentro, sem rótulo nem clique. */
+  divisoes?: ReadonlyMap<string, readonly Divisao<FazendaGeometria>[]>;
 }
 
-export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, dadosDoMes, geoLoading, onUpload, onRefresh, onRenderedChange }: Props) {
+export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, dadosDoMes, geoLoading, onUpload, onRefresh, onRenderedChange, divisoes }: Props) {
   const { fazendaAtual } = useFazenda();
   const { registrarMovimentacao } = usePastoMovimentacoes();
 
@@ -146,6 +151,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
       // Clicking on a destination
       if (geo.id === transfer.originGeo.id) return; // can't transfer to self
       if (!geo.pasto_id) { toast.error('Pasto sem vínculo'); return; }
+      if (temDivisoes(geo.pasto_id)) { toast.error(MOTIVO_SEM_TRANSFERENCIA); return; }
       const destPasto = pastos.find(p => p.id === geo.pasto_id);
       if (!destPasto) return;
       setTransfer({ ...transfer, destGeo: geo, destPasto });
@@ -200,7 +206,8 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
           const bounds = layer.getBounds();
           if (!bounds.isValid()) return;
 
-          const shortName = geo.nome_original || '';
+          /* MAPA-PIQUETES-03: o nome é o do PASTO (a unidade), como no Gestor; o do polígono só quando ele não tem pasto */
+          const shortName = (geo.pasto_id ? pastos.find(p => p.id === geo.pasto_id)?.nome : null) || geo.nome_original || '';
           if (shortName) {
             const kgLabel = oc?.kg_ha != null ? `<br/><span class="kg-value">${formatNum(oc.kg_ha, 0)}</span>` : '';
             const labelClass = role === 'origin' ? 'pasto-label-origin' :
@@ -216,6 +223,9 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
 
           layer.on('click', () => handleGeoClick(geo));
           layer.addTo(featureLayer);
+          for (const dv of (geo.pasto_id ? divisoes?.get(geo.pasto_id) ?? [] : [])) {
+            if (dv.poligono) L.geoJSON(dv.poligono.geojson, { style: { color: 'rgba(255,255,255,0.7)', weight: 0.75, fill: false }, interactive: false }).addTo(featureLayer);
+          }
           allBounds.push(bounds);
           renderedCount += 1;
         } catch {
@@ -237,10 +247,14 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
     }, 220);
 
     return () => window.clearTimeout(timer);
-  }, [geometrias, geoIdKey, mapStatus, ocupacoes, reportRenderedGeometries, selectedGeo, transferMode, transfer]);
+  }, [geometrias, geoIdKey, mapStatus, ocupacoes, reportRenderedGeometries, selectedGeo, transferMode, transfer, divisoes, pastos]);
 
+  /* MAPA-PIQUETES-03: a unidade com divisões no mês é o contorno do pai (que já encerrou): a transferência entre pastos vai no Fechamento,
+     na divisão — aqui ela não começa nem termina nessa unidade */
+  const temDivisoes = (pastoId: string | null | undefined) => !!pastoId && (divisoes?.get(pastoId)?.length ?? 0) > 0;
+  const transferenciaBloqueada = temDivisoes(selectedPasto?.id);
   const startTransfer = () => {
-    if (!selectedGeo || !selectedPasto) return;
+    if (!selectedGeo || !selectedPasto || transferenciaBloqueada) return;
     setTransfer({ originGeo: selectedGeo, originPasto: selectedPasto });
     setTransferMode('selecting_dest');
     setQty('');
@@ -447,12 +461,16 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
                       <Separator />
                       <button
                         onClick={startTransfer}
-                        className="flex items-center gap-1.5 w-full px-2 py-2 rounded-md border text-[10px] font-semibold transition-colors text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100"
+                        disabled={transferenciaBloqueada}
+                        title={transferenciaBloqueada ? MOTIVO_SEM_TRANSFERENCIA : undefined}
+                        className="flex items-center gap-1.5 w-full px-2 py-2 rounded-md border text-[10px] font-semibold transition-colors text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <ArrowRightLeft className="h-3.5 w-3.5" />
                         Transferir animais
                       </button>
-                      <p className="text-[7px] text-muted-foreground text-center">Clique e depois selecione o destino no mapa</p>
+                      <p className="text-[7px] text-muted-foreground text-center">
+                        {transferenciaBloqueada ? MOTIVO_SEM_TRANSFERENCIA : 'Clique e depois selecione o destino no mapa'}
+                      </p>
                     </>
                   )}
 
@@ -596,7 +614,9 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
           </div>
           <button
             onClick={startTransfer}
-            className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md border text-[10px] font-medium text-blue-700 bg-blue-50 border-blue-200"
+            disabled={transferenciaBloqueada}
+            title={transferenciaBloqueada ? MOTIVO_SEM_TRANSFERENCIA : undefined}
+            className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md border text-[10px] font-medium text-blue-700 bg-blue-50 border-blue-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ArrowRightLeft className="h-3 w-3" />
             Transferir animais

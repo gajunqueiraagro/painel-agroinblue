@@ -283,6 +283,19 @@ const CENARIOS = [
           await p.locator('tr[data-linha="soma"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(300); } },
     ];
   })(),
+  /* MAPA-PIQUETES-03 — `&unidade=1`: o pasto-pai que virou grupo aparece como UMA unidade (o contorno do pai, a lotação Σ dos piquetes) com as
+     divisões em linha fina; o painel com "2 divisões: P_09A 21,4 · P_09B 19,2 = 40,6 ha". */
+  { nome: 'mapa-geo-unidade-painel', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaPasto('P_09 Retiro')(p); await p.locator('[data-testid="mapa-painel-divisoes"]').waitFor({ timeout: 3000 }); } },
+  /* -03: o mês do PAI (ago/26): a unidade é o pasto inteiro, sem linhas nem a linha das divisões (se ela aparecer, o cenário falha) */
+  { nome: 'mapa-geo-unidade-mes-do-pai', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaMes('Ago')(p); await mapaPasto('P_09 Retiro')(p);
+    if (await p.locator('[data-testid="mapa-painel-divisoes"]').count()) throw new Error('mês do pai com a linha das divisões'); } },
+  /* -03 caso P6: o contorno furado (a manga) e as divisões SEM polígono — "2 divisões sem desenho: P_10A, P_10B" */
+  { nome: 'mapa-geo-unidade-sem-desenho', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaPasto('P_10 Manga')(p); await p.locator('[data-testid="mapa-painel-divisoes"]', { hasText: '2 divisões sem desenho: P_10A, P_10B' }).waitFor({ timeout: 3000 }); } },
+  /* -03: a Operação com as unidades (rótulo = nome do pasto; as divisões em linha fina) */
+  { nome: 'mapa-geo-unidade-operacao', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
   { nome: 'mapa-geo-adicionar-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-painel-poligono"]',
     antes: async (p) => {
       await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);

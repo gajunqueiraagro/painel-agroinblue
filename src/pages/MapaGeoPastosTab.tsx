@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { usePastoGeometrias, type PoligonoParaGravar } from '@/hooks/usePastoGeometrias';
+import { usePastoGeometrias, type FazendaGeometria, type PoligonoParaGravar } from '@/hooks/usePastoGeometrias';
 import { GLOBAL_FAZENDA, useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Segmentado } from '@/components/ui/segmentado';
 import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
-import { usePastos } from '@/hooks/usePastos';
+import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useMapaDoMes } from '@/hooks/useMapaDoMes';
 import { useUltimoMesComFechamento } from '@/hooks/useUltimoMesComFechamento';
 import { mesDeAbertura, resumoDosPastos } from '@/lib/mapa/mapaDoMes';
@@ -20,6 +20,10 @@ import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
 import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
 import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
+/* MAPA-PIQUETES-03 — a unidade do mapa (pai + grupo que nasceu dele): os piquetes viram divisões em linha fina */
+import { useGruposComOrigem } from '@/hooks/useGruposComOrigem';
+import { unidadesDoMapa } from '@/lib/mapa/unidadesDoMapa';
+import { areaNoMesOuHoje } from '@/lib/pastos/areaDoPastoNoMes';
 
 export interface PastoMapData {
   pasto: any;
@@ -93,15 +97,31 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   /* MAPA-GLOBAL-01: as fazendas do Global = as com pecuária (fora o ADM); a MESMA leitura do mês, para todas de uma vez */
   const fazendasDoGlobal = useMemo(() => fazendasComPecuaria.filter(f => f.id !== GLOBAL_FAZENDA.id), [fazendasComPecuaria]);
   const idsDoGlobal = useMemo(() => fazendasDoGlobal.map(f => f.id), [fazendasDoGlobal]);
-  const mapaDoMes = useMapaDoMes(isGlobal ? idsDoGlobal : fazendaId, anoMes, pastos, categorias);
   const geosDoGlobal = useGeometriasDasFazendas(isGlobal ? idsDoGlobal : []);
+  /* MAPA-PIQUETES-03 (Gabriel 01/11): a UNIDADE é o pasto-pai e o grupo que nasceu dele — nome, lote, lotação e cor dela, em todos os meses;
+     os polígonos dos piquetes viram divisões (linhas finas, sem rótulo nem cor). A área da unidade = a do pai ou Σ dos piquetes do mês.
+     A Validação segue com os polígonos e pastos crus (é onde se edita). */
+  const fazendasDaLeitura = useMemo(() => (isGlobal ? idsDoGlobal : fazendaId ? [fazendaId] : []), [isGlobal, idsDoGlobal, fazendaId]);
+  const { grupos: gruposComOrigem } = useGruposComOrigem(fazendasDaLeitura);
+  const areaDoPastoNoMes = useCallback((p: { id: string; area_produtiva_ha?: number | null }) => areaNoMesOuHoje(p, anoMes), [anoMes]);
+  const unidades = useMemo(() => unidadesDoMapa<Pasto, FazendaGeometria>({ pastos, grupos: gruposComOrigem, poligonos: geometrias, anoMes, areaDe: areaDoPastoNoMes }),
+    [pastos, gruposComOrigem, geometrias, anoMes, areaDoPastoNoMes]);
+  const unidadesDoGlobal = useMemo(() => unidadesDoMapa<Pasto, GeometriaDoGlobal>({ pastos, grupos: gruposComOrigem, poligonos: geosDoGlobal.geometrias, anoMes,
+    areaDe: areaDoPastoNoMes }), [pastos, gruposComOrigem, geosDoGlobal.geometrias, anoMes, areaDoPastoNoMes]);
+  /* o pasto da unidade leva a área da unidade (a do pai, ou Σ dos piquetes vigentes no mês) */
+  const pastosDoMapa = useMemo(() => unidades.pastos.map(p => {
+    const u = unidades.unidades.get(p.id);
+    return u ? { ...p, area_produtiva_ha: u.areaHa } : p;
+  }), [unidades]);
+  const divisoesDoMapa = useMemo(() => new Map([...unidades.unidades].map(([id, u]) => [id, u.divisoes])), [unidades]);
+  const mapaDoMes = useMapaDoMes(isGlobal ? idsDoGlobal : fazendaId, anoMes, pastosDoMapa, categorias, unidades.unidadeDe);
 
   const global = useMemo(() => {
     if (!isGlobal) return null;
     const comPoligono = new Set<string>();
     const fazendasComMapa = new Set<string>();
     const porFazenda = new Map<string, GeometriaDoGlobal[]>();
-    for (const g of geosDoGlobal.geometrias) {
+    for (const g of unidadesDoGlobal.poligonos) {
       fazendasComMapa.add(g.fazenda_id);
       if (g.tipo === 'pasto' && g.pasto_id) comPoligono.add(g.pasto_id);
       porFazenda.set(g.fazenda_id, [...(porFazenda.get(g.fazenda_id) ?? []), g]);
@@ -111,7 +131,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
       vigentes: mapaDoMes.vigentes, comPoligono, fazendasComMapa, dados: mapaDoMes.dados,
     };
     return { ...resumoGlobal(entrada), pastos: pastosDoGlobal(entrada), porFazenda };
-  }, [isGlobal, geosDoGlobal.geometrias, anoMes, fazendasDoGlobal, mapaDoMes.vigentes, mapaDoMes.dados]);
+  }, [isGlobal, unidadesDoGlobal.poligonos, anoMes, fazendasDoGlobal, mapaDoMes.vigentes, mapaDoMes.dados]);
   const areaPorPasto = useMemo(() => new Map(mapaDoMes.vigentes.map(p => [p.id, p.area_produtiva_ha])), [mapaDoMes.vigentes]);
   const resumoDoFiltro = useCallback((ids: readonly string[]) => resumoDosPastos(ids, mapaDoMes.dados, id => areaPorPasto.get(id)),
     [mapaDoMes.dados, areaPorPasto]);
@@ -235,8 +255,9 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const content = viewMode === 'gestor' ? (
     <div className="min-h-0 flex-1">
       <MapaGestorView
-        geometrias={geometrias}
-        pastos={pastos}
+        geometrias={unidades.poligonos}
+        pastos={pastosDoMapa}
+        divisoes={divisoesDoMapa}
         anoMes={anoMes}
         dadosDoMes={mapaDoMes.dados}
         carregandoMes={mapaDoMes.carregando}
@@ -259,8 +280,9 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
       <div className="min-h-0 flex-1 p-1.5 sm:p-2">
         {viewMode === 'operacao' && (
           <MapaOperacaoView
-            geometrias={geometrias}
-            pastos={pastos}
+            geometrias={unidades.poligonos}
+            pastos={pastosDoMapa}
+            divisoes={divisoesDoMapa}
             categorias={categorias}
             ocupacoes={mapaDoMes.ocupacoes}
             dadosDoMes={mapaDoMes.dados}

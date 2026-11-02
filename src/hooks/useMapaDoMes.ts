@@ -19,6 +19,7 @@ import {
   dozeMesesAte, montarMapaDoMes, ocupacoesDoMes, separarFechamentosEItens, type DadosDoPastoNoMes, type FechamentoComItens, type FechamentoLido,
   type ItemLido, type PastoOcupacao,
 } from '@/lib/mapa/mapaDoMes';
+import { fechamentosDaUnidade } from '@/lib/mapa/unidadesDoMapa';
 
 export interface MapaDoMes {
   /** Por pasto VIGENTE no mês. */
@@ -32,7 +33,9 @@ export interface MapaDoMes {
   recarregar: () => void;
 }
 
-export function useMapaDoMes(fazenda: string | readonly string[] | undefined, anoMes: string, pastos: Pasto[], categorias: CategoriaRebanho[]): MapaDoMes {
+/** `unidadeDe` (MAPA-PIQUETES-03): pasto (pai ou membro de um grupo que nasceu dele) → a unidade; os fechamentos deles contam na unidade. */
+export function useMapaDoMes(fazenda: string | readonly string[] | undefined, anoMes: string, pastos: Pasto[], categorias: CategoriaRebanho[],
+  unidadeDe?: ReadonlyMap<string, string>): MapaDoMes {
   const idsChave = typeof fazenda === 'string' ? fazenda : fazenda ? [...fazenda].sort().join(',') : '';
   const fazendaIds = useMemo(() => (idsChave ? idsChave.split(',') : []), [idsChave]);
   const [lidos, setLidos] = useState<{ chave: string; fechamentos: FechamentoLido[]; itens: ItemLido[] } | null>(null);
@@ -86,10 +89,11 @@ export function useMapaDoMes(fazenda: string | readonly string[] | undefined, an
 
   const dados = useMemo(() => {
     if (!lidos || lidos.chave !== chave) return new Map<string, DadosDoPastoNoMes>();
+    const pelaUnidade = fechamentosDaUnidade(lidos.fechamentos, lidos.itens, unidadeDe ?? new Map());
     return montarMapaDoMes({
-      anoMes, vigentes, fechamentos: lidos.fechamentos, itens: lidos.itens, nomeDaCategoria: id => nomes.get(id) ?? 'Sem nome',
+      anoMes, vigentes, fechamentos: pelaUnidade.fechamentos, itens: pelaUnidade.itens, nomeDaCategoria: id => nomes.get(id) ?? 'Sem nome',
     });
-  }, [lidos, chave, anoMes, vigentes, nomes]);
+  }, [lidos, chave, anoMes, vigentes, nomes, unidadeDe]);
 
   const ocupacoes = useMemo(() => ocupacoesDoMes(dados), [dados]);
 
