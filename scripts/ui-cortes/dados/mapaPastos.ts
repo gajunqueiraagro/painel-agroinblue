@@ -136,3 +136,51 @@ export const LAVOURA = [
     data_colheita_prevista: '2025-02-01', data_colheita_real: '2025-02-10', status: 'colhida', ativo: true,
     safra: { nome: 'Safra 24/25 Lavoura', data_inicio: '2024-07-01', data_fim: '2025-06-30' }, pasto: { fazenda_id: 'f1' } },
 ];
+
+/* MAPA-PIQUETES-03 — só com `&unidade=1`: um pasto-pai (P_09 Retiro de Cima, encerrado em 31/08/2026) que virou o grupo P_09 (elo
+   `pasto_origem_id`) com 2 piquetes desde 09/2026 (P_09A, P_09B — com fechamento em set/26); o contorno é o polígono do pai, as divisões os
+   dos piquetes. O mapa mostra UMA unidade "P_09 Retiro de Cima" com a lotação Σ e o painel "2 divisões: … = … ha". */
+const PAI_U = { id: 'pu', fazenda_id: 'f1', cliente_id: 'cli', nome: 'P_09 Retiro de Cima', lote_padrao: null, area_produtiva_ha: 40,
+  tipo_uso: 'recria', qualidade: null, entra_conciliacao: true, ativo: true, observacoes: 'virou o grupo P_09 Retiro de Cima em 09/2026',
+  ordem_exibicao: 20, data_inicio: null, data_fim: '2026-08-31', grupo_id: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
+const piqU = (id: string, nome: string, area: number) => ({ ...PAI_U, id, nome, area_produtiva_ha: area, observacoes: 'piquete de P_09 Retiro de Cima',
+  data_inicio: '2026-09-01', data_fim: null, grupo_id: 'gu' });
+/* caso P6 (Gabriel 01/11 18:28): o pai "P_10 Manga" com o contorno FURADO (a manga) e as 2 divisões SEM polígono — o painel diz "2 divisões sem desenho" */
+const PAI_M = { ...PAI_U, id: 'pm', nome: 'P_10 Manga', area_produtiva_ha: 36, observacoes: 'virou o grupo P_10 Manga em 09/2026', ordem_exibicao: 21 };
+const piqM = (id: string, nome: string, area: number) => ({ ...PAI_M, id, nome, area_produtiva_ha: area, observacoes: 'piquete de P_10 Manga',
+  data_inicio: '2026-09-01', data_fim: null, grupo_id: 'gm' });
+export const UNIDADE_PASTOS = [PAI_U, piqU('pua', 'P_09A', 21.4), piqU('pub', 'P_09B', 19.2), PAI_M, piqM('pma', 'P_10A', 28.1), piqM('pmb', 'P_10B', 7.6)];
+export const UNIDADE_GRUPOS = [{ id: 'gu', nome: 'P_09 Retiro de Cima', pasto_origem_id: 'pu', ativo: true, fazenda_id: 'f1' },
+  { id: 'gm', nome: 'P_10 Manga', pasto_origem_id: 'pm', ativo: true, fazenda_id: 'f1' }];
+const furado = () => {
+  const x = LON0 + 5 * PASSO; const y = LAT0 - 2 * PASSO; const f = PASSO / 4;
+  return { type: 'Polygon', coordinates: [[[x, y], [x + PASSO, y], [x + PASSO, y - PASSO], [x, y - PASSO], [x, y]],
+    [[x + f, y - f], [x + f, y - 2 * f], [x + 2 * f, y - 2 * f], [x + 2 * f, y - f], [x + f, y - f]]] };
+};
+const metade = (dx: number) => {
+  const x = LON0 + 4 * PASSO + dx; const y = LAT0 - 2 * PASSO;
+  return { type: 'Polygon', coordinates: [[[x, y], [x + PASSO / 2, y], [x + PASSO / 2, y - PASSO], [x, y - PASSO], [x, y]]] };
+};
+export const UNIDADE_POLIGONOS = [
+  { id: 'gu-c', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: 'pu', tipo: 'pasto', nome_original: 'P_09 Retiro de Cima', cor: null,
+    geojson: ret(4, 2), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  { id: 'gu-a', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: 'pua', tipo: 'pasto', nome_original: 'P_09A', cor: null,
+    geojson: metade(0), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  { id: 'gu-b', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: 'pub', tipo: 'pasto', nome_original: 'P_09B', cor: null,
+    geojson: metade(PASSO / 2), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  { id: 'gm-c', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: 'pm', tipo: 'pasto', nome_original: 'P_10B', cor: null,
+    geojson: furado(), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+];
+export const UNIDADE_FECHAMENTOS = [
+  { id: 'f-pu-2026-08', fazenda_id: 'f1', pasto_id: 'pu', ano_mes: '2026-08', tipo_uso_mes: 'recria', status: 'fechado' },
+  { id: 'f-pua-2026-09', fazenda_id: 'f1', pasto_id: 'pua', ano_mes: '2026-09', tipo_uso_mes: 'recria', status: 'fechado' },
+  { id: 'f-pub-2026-09', fazenda_id: 'f1', pasto_id: 'pub', ano_mes: '2026-09', tipo_uso_mes: 'vedado', status: 'fechado' },
+  { id: 'f-pm-2026-08', fazenda_id: 'f1', pasto_id: 'pm', ano_mes: '2026-08', tipo_uso_mes: 'recria', status: 'fechado' },
+  { id: 'f-pma-2026-09', fazenda_id: 'f1', pasto_id: 'pma', ano_mes: '2026-09', tipo_uso_mes: 'recria', status: 'fechado' },
+];
+export const UNIDADE_ITENS = [
+  { id: 'i-pu-1', fechamento_id: 'f-pu-2026-08', quantidade: 90, peso_medio_kg: 360, categoria_id: 'c1' },
+  { id: 'i-pua-1', fechamento_id: 'f-pua-2026-09', quantidade: 95, peso_medio_kg: 372, categoria_id: 'c1', lote: 'Lote P_09' },
+  { id: 'i-pm-1', fechamento_id: 'f-pm-2026-08', quantidade: 70, peso_medio_kg: 350, categoria_id: 'c1' },
+  { id: 'i-pma-1', fechamento_id: 'f-pma-2026-09', quantidade: 72, peso_medio_kg: 361, categoria_id: 'c1', lote: 'Lote P_10' },
+];

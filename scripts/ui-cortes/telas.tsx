@@ -660,6 +660,7 @@ if (tela === 'mesclar') {
   };
   montar(<div className="h-full"><V2Recorrencias /></div>);
 } else if (tela === 'mapa-geo') {
+  const UNIDADE = q.get('unidade') === '1';   // MAPA-PIQUETES-03
   /* MAPA-EDITAR-POLIGONO-03: `&laco=1` — o polígono aberto na edição chega com a linha cruzando ela mesma (uma "gravata" na caixa dele),
      como o "APP triângulo" do KMZ; a barra mostra a frase, o destaque e o "Corrigir automaticamente" */
   const gravataDe = (g: { type: string; coordinates: unknown }) => {
@@ -686,15 +687,16 @@ if (tela === 'mesclar') {
     // MAPA-PIQUETES-02: `&piquetes=1` traz dois polígonos sem classificação (as divisões que viram piquetes)
     from: (t: string, e: any) => t === 'fazenda_geometrias'
         ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
-          : geos))(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS)
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : [])])
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
-      : t === 'pastos' ? (q.get('grupo') === '1' ? [...MAPA.PASTOS, ...['P_01A', 'P_01B'].map((nome, i) => ({ ...MAPA.PASTOS[0], id: `p1${'ab'[i]}`, nome,
-          grupo_id: 'gx', data_inicio: '2026-11-01', observacoes: null }))] : MAPA.PASTOS)
-      : t === 'pasto_grupos' ? (q.get('grupo') === '1' ? [{ id: 'gx', nome: 'P_01', pasto_origem_id: 'p1', cliente_id: 'cli' }] : [])
+      : t === 'pastos' ? [...MAPA.PASTOS, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
+          ...(q.get('grupo') === '1' ? ['P_01A', 'P_01B'].map((nome, i) => ({ ...MAPA.PASTOS[0], id: `p1${'ab'[i]}`, nome, grupo_id: 'gx', data_inicio: '2026-11-01', observacoes: null })) : [])]
+      // MAPA-PIQUETES-03: `&unidade=1` — o grupo que nasceu de um pasto (o elo); MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o do P_01
+      : t === 'pasto_grupos' ? [...(UNIDADE ? MAPA.UNIDADE_GRUPOS : []), ...(q.get('grupo') === '1' ? [{ id: 'gx', nome: 'P_01', pasto_origem_id: 'p1', cliente_id: 'cli' }] : [])]
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
       // MAPA-PERF-01: os itens vêm EMBUTIDOS no fechamento (o banco falso não faz o embed; a linha já o traz)
-      : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
-        .map(f => ({ ...f, fechamento_pasto_itens: MAPA.ITENS.filter(i => i.fechamento_id === f.id) }))
+      : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS, ...(UNIDADE ? MAPA.UNIDADE_FECHAMENTOS : [])].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
+        .map(f => ({ ...f, fechamento_pasto_itens: [...MAPA.ITENS, ...(UNIDADE ? MAPA.UNIDADE_ITENS : [])].filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       // MAPA-02f-b: a infraestrutura e os bens do Patrimônio (sintéticos)
       : t === 'fazenda_infraestruturas' ? MAPA.INFRA
