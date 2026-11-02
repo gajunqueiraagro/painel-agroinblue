@@ -723,6 +723,9 @@ if (tela === 'mesclar') {
       : fn === 'fn_infra_salvar'
         ? { ok: true, simulado: !!a?.p_simular, rotulo: 'Cocho', forma: 'Point', pasto: a?.p_infra?.pasto_id ? { id: a.p_infra.pasto_id, nome: 'P_01' } : null, bem: null, avisos: [] }
       : fn === 'fn_infra_desativar' ? { ok: true, simulado: !!a?.p_simular }
+      // INFRA-FICHAS-PATR-01: a prévia sintética do criar bem (a resposta do escritor do Patrimônio, com um aviso longo)
+      : fn === 'fn_infra_criar_bem' ? { ok: true, simulado: !!a?.p_simular, bem: { ok: true, simulado: true, categoria: { codigo: a?.p_bem?.categoria_codigo, nome: 'Rede de água e bebedouros' },
+          vida_util_meses: a?.p_bem?.vida_util_meses ?? 180, residual_pct: 0, avisos: ['O bem nasce sem valor: ligue as notas fiscais no Patrimônio para ele depreciar.'] } }
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gabriel Junqueira', email: null, situacao: 'membro ativo' }]
       : fn === 'fn_piquetes_concluir' ? MAPA.previaDosPiquetes(a ?? {})   // MAPA-PIQUETES-02: a prévia sintética
       // MAPA-CRIAR-PIQUETES-01: a prévia sintética do "Criar piquetes" (caso novo, ou o grupo que já existe com `&grupo=1`)

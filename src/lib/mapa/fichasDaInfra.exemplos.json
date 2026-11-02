@@ -1,0 +1,16 @@
+{
+  "cocho": { "material": "Concreto", "comprimento_m": 12, "lados": 2, "coberto": true, "uso": "Sal mineral" },
+  "bebedouro": { "modelo": "Australiano", "material": "Concreto", "capacidade_l": 15000, "abastecimento": "Poço" },
+  "saleiro": { "material": "Madeira", "coberto": true, "comprimento_m": 3.5 },
+  "caixa_dagua": { "material": "Fibra", "capacidade_l": 20000, "elevada": true },
+  "poco": { "modelo": "Semiartesiano", "profundidade_m": 80, "vazao_m3h": 6.5, "bomba": "Submersa 3 cv" },
+  "represa_acude": { "finalidade": "Dessedentação do gado" },
+  "curral": { "area_m2": 1800, "material": "Madeira", "divisoes": 6 },
+  "tronco_brete": { "modelo": "Tronco de contenção", "material": "Metal" },
+  "balanca": { "capacidade_kg": 2000, "marca_modelo": "Coimma BR 2000", "eletronica": true },
+  "porteira": { "material": "Metal", "largura_m": 4 },
+  "cerca": { "modelo": "Arame liso", "fios": 5, "mourao": "Eucalipto tratado" },
+  "sede_casa": { "area_construida_m2": 220, "material": "Alvenaria" },
+  "galpao": { "area_construida_m2": 600, "material": "Metálico" },
+  "energia": { "modelo": "Transformador", "potencia_kva": 75 }
+}

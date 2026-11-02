@@ -97,8 +97,12 @@ PASTOS.forEach((p, i) => MESES.forEach((m, k) => {
 // MAPA-02f-b — a infraestrutura sintética (um de cada grupo + um com nome longo) e os bens do Patrimônio da fazenda
 const PT = (dx: number, dy: number) => ({ type: 'Point', coordinates: [LON0 + dx * PASSO, LAT0 - dy * PASSO] });
 export const INFRA = [
-  { id: 'i1', fazenda_id: 'f1', tipo: 'cocho', geometria: PT(0.5, 0.5), nome: 'Cocho do P_01', pasto_id: 'p1', bem_id: 'b1', observacao: 'Coberto', versao: 1, criado_em: '2026-10-20T10:00:00Z', criado_por: 'u1', ativo: true },
-  { id: 'i2', fazenda_id: 'f1', tipo: 'bebedouro', geometria: PT(1.5, 0.5), nome: null, pasto_id: 'p2', bem_id: null, observacao: null, versao: 1, criado_em: '2026-10-21T10:00:00Z', criado_por: 'u1', ativo: true },
+  { id: 'i1', fazenda_id: 'f1', tipo: 'cocho', geometria: PT(0.5, 0.5), nome: 'Cocho do P_01', pasto_id: 'p1', bem_id: 'b1', observacao: 'Coberto',
+    /* INFRA-FICHAS-PATR-01: a ficha completa do cocho */
+    ficha: { material: 'Concreto', comprimento_m: 12, lados: 2, coberto: true, uso: 'Volumoso / confinamento' }, versao: 1, criado_em: '2026-10-20T10:00:00Z', criado_por: 'u1', ativo: true },
+  { id: 'i2', fazenda_id: 'f1', tipo: 'bebedouro', geometria: PT(1.5, 0.5), nome: null, pasto_id: 'p2', bem_id: null, observacao: null,
+    /* INFRA-FICHAS-PATR-01: sem bem — o "Criar bem no Patrimônio"; material fora da lista ("Outro…") */
+    ficha: { modelo: 'Australiano', material: 'Fibra de vidro reforçada', capacidade_l: 15000, abastecimento: 'Poço' }, versao: 1, criado_em: '2026-10-21T10:00:00Z', criado_por: 'u1', ativo: true },
   { id: 'i3', fazenda_id: 'f1', tipo: 'sede_casa', geometria: PT(3.5, 2.5), nome: 'Sede principal da fazenda com o nome bem longo', pasto_id: null, bem_id: null, observacao: null, versao: 1, criado_em: '2026-10-22T10:00:00Z', criado_por: 'u1', ativo: true },
   { id: 'i4', fazenda_id: 'f1', tipo: 'energia', geometria: PT(2.5, 1.5), nome: 'Transformador', pasto_id: null, bem_id: null, observacao: null, versao: 1, criado_em: '2026-10-23T10:00:00Z', criado_por: 'u1', ativo: true },
   { id: 'i5', fazenda_id: 'f1', tipo: 'bebedouro', geometria: PT(0.5, 1.5), nome: 'Bebedouro 2', pasto_id: null, bem_id: null, observacao: null, versao: 1, criado_em: '2026-10-24T10:00:00Z', criado_por: 'u1', ativo: true },

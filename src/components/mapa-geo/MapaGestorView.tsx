@@ -294,7 +294,7 @@ export function MapaGestorView({
   const geoSelecionada = selecionadoId ? geoPastos.find(g => g.id === selecionadoId) ?? null : null;
   const pastoSelecionado = geoSelecionada?.pasto_id ? pastoPorId.get(geoSelecionada.pasto_id) ?? null : null;
   /* MAPA-02f-b: a infraestrutura — colocar (um clique no mapa), ver, editar (arrastar o ponto) e desativar */
-  const { infras, bens, salvar: salvarInfra, desativar: desativarInfra, recarregar: recarregarInfra } = useInfraestruturas(fazendaId);
+  const { infras, bens, salvar: salvarInfra, desativar: desativarInfra, criarBem: criarBemDaInfra, recarregar: recarregarInfra } = useInfraestruturas(fazendaId);
   const [colocandoTipo, setColocandoTipo] = useState<TipoInfra | null>(null);
   const [pontoNovo, setPontoNovo] = useState<{ lon: number; lat: number } | null>(null);
   const [infraSelId, setInfraSelId] = useState<string | null>(null);
@@ -819,7 +819,7 @@ export function MapaGestorView({
             infra={infraSel}
             ponto={infraSel ? (pontoEditado ?? pontoDaInfra(infraSel.geometria) ?? { lon: 0, lat: 0 }) : (pontoNovo ?? { lon: 0, lat: 0 })}
             pastoSugerido={pontoNovo ? pastoNoPonto(pontoNovo.lon, pontoNovo.lat, geoPastos) : null}
-            pastos={pastos} bens={bens} salvar={salvarInfra} desativar={desativarInfra}
+            pastos={pastos} bens={bens} salvar={salvarInfra} desativar={desativarInfra} criarBem={criarBemDaInfra}
             onEditando={setEditandoInfra}
             onGravou={() => { fecharInfra(); recarregarInfra(); }}
             onFechar={fecharInfra} />

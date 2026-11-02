@@ -38,11 +38,11 @@ describe('infraestrutura (lib)', () => {
   });
 });
 
-function renderiza(infra: Parameters<typeof InfraPainel>[0]['infra'], salvar = vi.fn(), desativar = vi.fn()) {
+function renderiza(infra: Parameters<typeof InfraPainel>[0]['infra'], salvar = vi.fn(), desativar = vi.fn(), criarBem = vi.fn()) {
   const onGravou = vi.fn();
   render(<QueryClientProvider client={new QueryClient()}>
     <InfraPainel className="" fazendaId="f" clienteId="c" tipo="cocho" infra={infra} ponto={{ lon: -47, lat: -20 }} pastoSugerido="p1"
-      pastos={[{ id: 'p1', nome: 'P_01', ativo: true }]} bens={[]} salvar={salvar} desativar={desativar}
+      pastos={[{ id: 'p1', nome: 'P_01', ativo: true }]} bens={[]} salvar={salvar} desativar={desativar} criarBem={criarBem}
       onEditando={() => undefined} onGravou={onGravou} onFechar={() => undefined} />
   </QueryClientProvider>);
   return onGravou;
@@ -79,6 +79,54 @@ describe('InfraPainel', () => {
     renderiza(null, salvar);
     fireEvent.click(screen.getByRole('button', { name: 'Ver prévia' }));
     expect(await screen.findByText('O pasto escolhido não é desta fazenda.')).toBeTruthy();
+    expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+describe('InfraPainel — a FICHA e o bem do Patrimônio (INFRA-FICHAS-PATR-01)', () => {
+  const comFicha = { id: 'i1', fazenda_id: 'f', tipo: 'cocho', geometria: { type: 'Point', coordinates: [-47, -20] }, nome: 'Cocho A', pasto_id: 'p1',
+    bem_id: null, observacao: null, versao: 2, criado_em: '2026-10-20T10:00:00Z', criado_por: null,
+    ficha: { material: 'Concreto', comprimento_m: 12, lados: 2, coberto: true, uso: 'Sal mineral' } };
+
+  it('NOVO: lados e coberto pelo Segmentado; os metros úteis aparecem; a ficha vai LIMPA ao banco', async () => {
+    const salvar = vi.fn((_c: unknown, simular: boolean) => Promise.resolve({ ok: true, dado: simular ? { rotulo: 'Cocho', avisos: [] } : { ok: true }, motivo: null }));
+    renderiza(null, salvar);
+    expect(screen.getByTestId('infra-metros-uteis').textContent).toContain('—');
+    fireEvent.click(screen.getByRole('button', { name: '2 lados' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sim' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ver prévia' }));
+    await waitFor(() => expect(salvar).toHaveBeenCalled());
+    expect(salvar).toHaveBeenLastCalledWith(expect.objectContaining({ ficha: { lados: 2, coberto: true } }), true);
+  });
+
+  it('VER: a ficha lida (com os metros úteis) e, sem bem, "Criar bem no Patrimônio"', () => {
+    renderiza(comFicha);
+    const ler = screen.getByTestId('infra-ficha-ler').textContent ?? '';
+    expect(ler).toContain('Concreto');
+    expect(ler).toContain('24,0 m lineares');
+    expect(screen.getByTestId('infra-sem-bem')).toBeTruthy();
+  });
+
+  it('CRIAR BEM: sem "em uso desde" não chama o banco e diz por quê; com a data, a prévia leva categoria, descrição e vida útil em meses', async () => {
+    const criarBem = vi.fn((_i: string, _v: number, _b: Record<string, unknown>, simular: boolean) => Promise.resolve({ ok: true, motivo: null,
+      dado: simular ? { bem: { categoria: { nome: 'Instalações' }, vida_util_meses: 240, residual_pct: 0, avisos: [] } } : { ok: true } }));
+    const onGravou = renderiza(comFicha, vi.fn(), vi.fn(), criarBem);
+    fireEvent.click(screen.getByRole('button', { name: 'Criar bem no Patrimônio' }));
+    expect(screen.getByTestId('infra-vida-sugerida').textContent).toContain('20 anos');
+    fireEvent.click(screen.getByRole('button', { name: 'Ver prévia' }));
+    expect(screen.getAllByText('Informe desde quando está em uso.').length).toBeGreaterThan(0);
+    expect(criarBem).not.toHaveBeenCalled();
+    const data = screen.getByPlaceholderText('dd/mm/aaaa');
+    fireEvent.change(data, { target: { value: '15/03/2024' } });
+    fireEvent.blur(data);
+    fireEvent.click(screen.getByRole('button', { name: 'Ver prévia' }));
+    await screen.findByText(/Nasce em Instalações/);
+    expect(criarBem).toHaveBeenLastCalledWith('i1', 2, expect.objectContaining({ categoria_codigo: 'instalacoes', em_uso_desde: '2024-03-15',
+      atividade: 'pecuaria', origem_valor: 'lancamentos', vida_util_meses: 240,
+      descricao: 'Cocho de concreto coberto · 12 m · 2 lados (24 m úteis) · sal mineral · P_01' }), true);
+    fireEvent.click(screen.getByRole('button', { name: 'Criar bem e ligar' }));
+    await waitFor(() => expect(onGravou).toHaveBeenCalled());
+    expect(criarBem).toHaveBeenLastCalledWith('i1', 2, expect.anything(), false);
     expect(toast).not.toHaveBeenCalled();
   });
 });
