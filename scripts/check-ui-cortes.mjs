@@ -243,10 +243,12 @@ const CENARIOS = [
   /* MAPA-AREA-TIPO-01 — o painel do polígono da Validação com "Classificar" aberto, e o Adicionar › Área › Curral levando à Validação
      (o aviso "Escolha o polígono…" e o painel já em "É área: Curral" com a prévia). Mede SÓ o painel (o resto da Validação reprova na base:
      pendência MAPA-VALIDACAO-CORTES do Code 3) */
-  { nome: 'mapa-geo-validacao-classificar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-painel-poligono"]',
+  /* MAPA-ZOOM-E-PAINEL-01: o "Classificar" é um POPOVER no ícone da barra do polígono (a barra tem 1 linha); a região medida é o popover */
+  { nome: 'mapa-geo-validacao-classificar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-popover"]',
     antes: async (p) => {
       await p.locator('button', { hasText: 'Validação' }).first().click(); await p.waitForTimeout(600);
-      await p.locator('button[title="Classificar (pasto ou área)"]').first().click(); await p.waitForTimeout(500); } },
+      await p.locator('button[title="Classificar (pasto ou área)"]').first().click();
+      await p.locator('[data-testid="validacao-popover"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(500); } },
   /* MAPA-PIQUETES-02 — `&piquetes=1` (dois polígonos sem classificação, o 1º com o nome mais longo): o painel do polígono com "É piquete de…"
      em espera, a espera no rodapé da lista com "Concluir piquetes de" e o diálogo com a prévia (área na casa dos milhares). Mede só as
      regiões novas (o resto da Validação reprova na base: pendência MAPA-VALIDACAO-CORTES do Code 3). */
@@ -257,12 +259,13 @@ const CENARIOS = [
     const validacao = async (p) => { await p.locator('button', { hasText: 'Validação' }).first().click(); await p.waitForTimeout(600); };
     const marcar = (nome) => async (p) => {
       await p.getByText(nome, { exact: true }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="validacao-piquete-de"]').click(); await p.waitForTimeout(300); // MAPA-ZOOM-E-PAINEL-01: o "É piquete de…" é um popover da barra
       await p.locator('[data-testid="marcar-piquete"] button').first().click(); await p.waitForTimeout(300);
       // "P_01" também é rótulo do mapa e linha da lista: escolhe pela busca do seletor (Enter pega o 1º da busca)
       await p.getByPlaceholder('escolha o pasto…').fill('P_01'); await p.waitForTimeout(200); await p.keyboard.press('Enter'); await p.waitForTimeout(300); };
     const osDois = async (p) => { await validacao(p); await marcar(LONGO)(p); await marcar('P_04B')(p); };
     return [
-      { nome: 'mapa-geo-validacao-piquete', url: URL_PQ, tamanhos: T, regiao: '[data-testid="validacao-painel-poligono"]',
+      { nome: 'mapa-geo-validacao-piquete', url: URL_PQ, tamanhos: T, regiao: '[data-testid="validacao-popover"]',
         antes: async (p) => { await validacao(p); await marcar(LONGO)(p); } },
       { nome: 'mapa-geo-validacao-piquetes-espera', url: URL_PQ, tamanhos: T, regiao: '[data-testid="piquetes-em-espera"]', antes: osDois },
       { nome: 'mapa-geo-validacao-piquetes-previa', url: URL_PQ, tamanhos: T, regiao: '[data-testid="concluir-piquetes"]',
@@ -283,13 +286,25 @@ const CENARIOS = [
     await mapaPasto('P_10 Manga')(p); await p.locator('[data-testid="mapa-painel-divisoes"]', { hasText: '2 divisões sem desenho: P_10A, P_10B' }).waitFor({ timeout: 3000 }); } },
   /* -03: a Operação com as unidades (rótulo = nome do pasto; as divisões em linha fina) */
   { nome: 'mapa-geo-unidade-operacao', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
-  { nome: 'mapa-geo-adicionar-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-painel-poligono"]',
+  { nome: 'mapa-geo-adicionar-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-popover"]',
     antes: async (p) => {
       await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
       await p.getByRole('menuitem', { name: 'Área' }).first().hover(); await p.waitForTimeout(300);
       await p.getByRole('menuitem', { name: 'Curral', exact: true }).first().click(); await p.waitForTimeout(700);
       await p.locator('[data-testid="validacao-tipo-pedido"]').waitFor({ timeout: 3000 });
-      await p.getByText('P_01', { exact: true }).first().click(); await p.waitForTimeout(500); } },
+      await p.getByText('P_01', { exact: true }).first().click();
+      await p.locator('[data-testid="validacao-popover"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(500); } },
+  /* MAPA-CROMO-01 (Gabriel 02/11 07:46) — Adicionar › Área › Sede / benfeitorias: o aviso é UMA BARRA na zona de cima (2 linhas, Cancelar fixo à
+     direita), os botões do topo saem, nada cortado nem por baixo de outro (`cromoDoMapa`, medido em todo cenário `mapa-geo-*`/`mapa-validacao-*`);
+     com a lista aberta e recolhida, em 1126/1366/1440 */
+  ...[['', false], ['-recolhida', true]].map(([sufixo, recolher]) => ({ nome: `mapa-geo-adicionar-sede${sufixo}`, url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768], [1440, 800]],
+    regiao: '[data-testid="validacao-tipo-pedido"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+      await p.getByRole('menuitem', { name: 'Área' }).first().hover(); await p.waitForTimeout(300);
+      await p.getByRole('menuitem', { name: 'Sede / benfeitorias', exact: true }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="validacao-tipo-pedido"]').waitFor({ timeout: 3000 });
+      if (recolher) { await p.locator('[data-testid="validacao-recolher-lista"]').click(); await p.waitForTimeout(500); } } })),
   /* MAPA-EDITAR-POLIGONO-02 (a lacuna do -01: a Validação não tinha cenário) — a lista estreita (280 px, nome inteiro) e a barra de
      edição compacta (2 linhas, 9,5 px) em Vértices e em Desenhar. Mede SÓ a lista e a barra (o resto da Validação: MAPA-VALIDACAO-CORTES) */
   ...(() => {
@@ -308,7 +323,7 @@ const CENARIOS = [
       ...(() => {
         const abrir = (modo, url = '') => async (p) => {
           await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
-          await p.locator('[data-testid="editar-poligono"] button', { hasText: modo }).click();
+          await p.locator(`[data-testid="editar-poligono"] button[title="${modo}"]`).click();
           await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); };
         const noMapa = async (p, pontos, duplo = false) => {
           const c = await p.locator('.leaflet-container').first().boundingBox();
@@ -355,6 +370,27 @@ const CENARIOS = [
             await antes(p); await p.locator('[data-testid="validacao-reabrir-lista"]').click(); await p.waitForTimeout(700); } },
         ]);
       })(),
+      /* MAPA-ZOOM-E-PAINEL-01 (Gabriel 02/11 07:40: "este modal está muito grande, tirando a visão do mapa"; "clique no polígono = pasto inteiro"):
+         (1) a BARRA do polígono (1 linha, ícones) tem ≤ 44 px e fica INTEIRA dentro do mapa, sem rolar nem pisar nos botões do topo (`barraCompacta`);
+         (2) selecionar enquadra o polígono INTEIRO na área visível — descontando a barra e a lista — e ele ocupa ≥ 50% do lado limitante,
+         senão qualquer zoom amplo "cabia" (`pastoInteiro`); (3) em Vértices o clique no mapa, o clique de novo no MESMO polígono na lista e o ✕ não
+         mexem no `data-enquadramento` (`semReenquadrar`). A barra antiga (painel de ~600×250) reprova em (1) pela altura. */
+      ...(() => {
+        const T3 = [[1126, 579], [1366, 768], [1440, 800]];
+        const selecionarP01 = async (p) => { await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click();
+          await p.locator('[data-testid="validacao-painel-poligono"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(1200); };
+        return [
+          { nome: 'mapa-validacao-barra-poligono', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]', antes: selecionarP01,
+            barraCompacta: { sel: '[data-testid="validacao-painel-poligono"]', alturaMax: 44, mapa: '.leaflet-container', vizinho: '[data-testid="validacao-botoes-topo"]' } },
+          { nome: 'mapa-validacao-barra-poligono-recolhida', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]',
+            antes: async (p) => { await selecionarP01(p); await p.locator('[data-testid="validacao-recolher-lista"]').click(); await p.waitForTimeout(500);
+              await p.locator('[data-testid="validacao-reabrir-lista"]').waitFor(); await p.waitForTimeout(500); },
+            barraCompacta: { sel: '[data-testid="validacao-painel-poligono"]', alturaMax: 44, mapa: '.leaflet-container', vizinho: '[data-testid="validacao-botoes-topo"]' } },
+          { nome: 'mapa-validacao-pasto-inteiro', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-topo"]', antes: selecionarP01,
+            pastoInteiro: { poligono: 'path.poligono-selecionado', mapa: '.leaflet-container', lista: '[data-testid="validacao-lista"]', minimo: 0.5 } },
+          { nome: 'mapa-validacao-vertices-sem-reenquadrar', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-topo"]', antes: selecionarP01, semReenquadrar: true },
+        ];
+      })(),
       /* MAPA-CRIAR-PIQUETES-01 (fatia 1) — o "Criar piquetes" do P_01: a barra (2 linhas fixas, "Prévia e gravar" e "Cancelar" inteiros na
          tela), a lista das divisões (grade 2 × 4 = 8; o grupo que já existe com `&grupo=1`: "é a divisão do cadastro"), com a lista lateral
          recolhida e aberta, e a prévia (o diálogo) */
@@ -384,6 +420,11 @@ const CENARIOS = [
      reservado); com os Filtros ocultos, o mesmo. O canto se mede sozinho em toda tela do Gestor (`medirCantoDoMapa`) */
   { nome: 'mapa-geo-painel-fechado', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
     await mapaPasto('P_01')(p); await p.locator('[data-testid="mapa-painel"] button[aria-label="Fechar"]').first().click(); await p.waitForTimeout(400); } },
+  /* MAPA-ZOOM-ENTRE-VISOES-01 — com zoom dado, trocar de visão, de mês e de camada NÃO muda o enquadramento (`mesmoEnquadramento`) */
+  { nome: 'mapa-geo-enquadramento', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], mesmoEnquadramento: true },
+  /* MAPA-ZOOM-E-PAINEL-01 (Gabriel 02/11 08:27: "o zoom ficou muito devagar") — 1 clique no "+" = 1 nível inteiro; 1 giro padrão da roda
+     (100 px) sobe ≥ 0,5 nível — o DOBRO do de antes (medido: +0,25 com 120 px/nível) — e ≤ 2 */
+  { nome: 'mapa-geo-zoom-sensibilidade', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], zoomSensibilidade: true },
   /* fix1 (5): a Validação só pelo menu por cima (o resto dela reprova na base: pendência MAPA-VALIDACAO-CORTES) */
   { nome: 'mapa-geo-validacao-menu', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('button:has-text("Validação")'), soRegras: ['menu-por-cima'] },
   { nome: 'mapa-geo-sem-filtros', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
@@ -1353,6 +1394,164 @@ function medirCantoDoMapa() {
   return achados;
 }
 /* FIN-CONSORCIO-04 — a tabela que rola por dentro mostra, sem rolar, o cabeçalho, N linhas e o Total inteiros (roda NA PAGINA) */
+/* MAPA-ZOOM-ENTRE-VISOES-01 (Gabriel, homologação 02/11) — `mesmoEnquadramento` (opcional, por cenário; roda DEPOIS do `antes`): o enquadramento
+   (centro + zoom) do mapa é UM só por fazenda. Abre o Gestor, dá zoom (2 cliques no "+" do Leaflet), lê o `data-enquadramento` do contêiner
+   ("lat,lng,zoom", gravado pelo hook em todo `moveend`) e confere que continua IGUAL depois de trocar para Operação, para Validação, de
+   voltar ao Gestor, de trocar o mês e de trocar a camada. Zoom igual e lat/lng a ≤ 1e-5. O código antigo (cada visão enquadrava a fazenda
+   inteira ao nascer, e o contêiner não tinha o atributo) reprova nos dois: "zoom 16 → 15" e "sem data-enquadramento". */
+async function medirZoomSensibilidade(p) {
+  const zoom = async () => {
+    await p.waitForTimeout(900);
+    const b = await p.locator('.leaflet-container').first().getAttribute('data-enquadramento');
+    return b ? Number(b.split(',')[2]) : NaN;
+  };
+  const achados = [];
+  try {
+    const z0 = await zoom();
+    await p.locator('.leaflet-control-zoom-in').first().click();
+    const z1 = await zoom();
+    if (!(Math.abs(z1 - z0 - 1) < 0.01)) achados.push({ regra: 'zoom', texto: `1 clique no "+": ${z0} → ${z1} (esperado +1 nível)` });
+    const c = await p.locator('.leaflet-container').first().boundingBox();
+    await p.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+    await p.mouse.wheel(0, -100);
+    const z2 = await zoom();
+    if (!(z2 - z1 >= 0.5 - 0.01 && z2 - z1 <= 2 + 0.01)) achados.push({ regra: 'zoom', texto: `1 giro da roda (100 px): ${z1} → ${z2} (esperado de +0,5 a +2 níveis; antes era +0,25)` });
+  } catch (e) { achados.push({ regra: 'erro', texto: `zoomSensibilidade: ${String(e).slice(0, 100)}` }); }
+  return achados;
+}
+async function medirMesmoEnquadramento(p) {
+  const achados = [];
+  const botao = (nome) => p.getByRole('button', { name: nome, exact: true }).first();
+  const ler = async () => {
+    await p.waitForTimeout(1500);
+    const bruto = await p.locator('.leaflet-container').first().getAttribute('data-enquadramento');
+    if (!bruto) return null;
+    const [lat, lng, zoom] = bruto.split(',').map(Number);
+    return [lat, lng, zoom].every(Number.isFinite) ? { lat, lng, zoom, bruto } : null;
+  };
+  try {
+    await botao('Gestor').click(); await p.waitForTimeout(800);
+    const antesDoZoom = await ler();
+    for (let i = 0; i < 2; i++) { await p.locator('.leaflet-control-zoom-in').first().click(); await p.waitForTimeout(500); }
+    const base = await ler();
+    if (!base) return [{ regra: 'enquadramento', texto: 'Gestor: o contêiner do mapa não tem data-enquadramento' }];
+    if (antesDoZoom && Math.abs(base.zoom - antesDoZoom.zoom) < 0.01)
+      achados.push({ regra: 'enquadramento', texto: `Gestor: o zoom não mudou com os cliques no "+" (${antesDoZoom.zoom}) — a medição não prova nada` });
+    const passos = [
+      ['Operação', async () => { await botao('Operação').click(); }],
+      ['Validação', async () => { await botao('Validação').click(); }],
+      ['Gestor de volta', async () => { await botao('Gestor').click(); }],
+      ['mês', async () => { await mapaMes('Ago')(p); }],
+      ['camada', async () => { await mapaCamada('Lotação (kg/ha)')(p); }],
+    ];
+    for (const [nome, agir] of passos) {
+      await agir();
+      const lido = await ler();
+      if (!lido) { achados.push({ regra: 'enquadramento', texto: `${nome}: sem data-enquadramento no contêiner do mapa` }); continue; }
+      if (Math.abs(lido.zoom - base.zoom) > 1e-9)
+        achados.push({ regra: 'enquadramento', texto: `${nome}: zoom ${base.zoom} → ${lido.zoom} (${base.bruto} → ${lido.bruto})` });
+      else if (Math.abs(lido.lat - base.lat) > 1e-5 || Math.abs(lido.lng - base.lng) > 1e-5)
+        achados.push({ regra: 'enquadramento', texto: `${nome}: centro andou (${base.bruto} → ${lido.bruto})` });
+    }
+  } catch (e) { achados.push({ regra: 'erro', texto: `mesmoEnquadramento: ${String(e).slice(0, 100)}` }); }
+  return achados;
+}
+/* MAPA-ZOOM-E-PAINEL-01 — `barraCompacta` (opcional, por cenário): a barra do polígono existe, tem no máximo `alturaMax` px, fica INTEIRA dentro do
+   mapa (`mapa`), não rola (scrollWidth ≤ clientWidth) e não pisa no `vizinho` (os botões do topo). A barra antiga (~600×250) reprova pela altura. */
+function medirBarraCompacta({ sel, alturaMax, mapa, vizinho }) {
+  const b = document.querySelector(sel); const m = document.querySelector(mapa);
+  if (!b || !m) return [{ regra: 'barra', texto: `${!b ? sel : mapa} nao achado` }];
+  const r = b.getBoundingClientRect(), c = m.getBoundingClientRect(); const achados = [];
+  if (r.height > alturaMax + 0.5) achados.push({ regra: 'barra', texto: `a barra do poligono tem ${Math.round(r.height)}px de altura (max ${alturaMax})` });
+  if (r.left < c.left - 0.5 || r.top < c.top - 0.5 || r.right > c.right + 0.5 || r.bottom > c.bottom + 0.5)
+    achados.push({ regra: 'barra', texto: `a barra sai do mapa (${Math.round(r.left - c.left)},${Math.round(r.top - c.top)} ate ${Math.round(c.right - r.right)},${Math.round(c.bottom - r.bottom)})` });
+  if (b.scrollWidth > b.clientWidth + 1 || b.scrollHeight > b.clientHeight + 1) achados.push({ regra: 'barra', texto: 'a barra rola por dentro' });
+  for (const el of b.querySelectorAll('button')) {
+    const e = el.getBoundingClientRect(); if (e.width < 2) continue;
+    if (e.right > r.right + 0.5 || e.left < r.left - 0.5 || e.bottom > r.bottom + 0.5 || e.top < r.top - 0.5)
+      achados.push({ regra: 'barra', texto: `botao "${el.getAttribute('title') ?? '?'}" sai da barra` });
+    if (!el.getAttribute('title')) achados.push({ regra: 'barra', texto: 'botao de icone sem title' });
+  }
+  const v = vizinho ? document.querySelector(vizinho) : null;
+  if (v) { const q = v.getBoundingClientRect();
+    if (r.right > q.left - 0.5 && r.left < q.right && r.bottom > q.top && r.top < q.bottom) achados.push({ regra: 'barra', texto: 'a barra pisa nos botoes do topo' }); }
+  return achados;
+}
+/* MAPA-ZOOM-E-PAINEL-01 — `pastoInteiro` (opcional, por cenário): o `path` do polígono selecionado (classe `poligono-selecionado`) cabe INTEIRO na
+   área visível do mapa (o mapa menos o que está marcado `data-sobre-o-mapa` e encostado no topo, menos a lista, se ela entrar no mapa) e ocupa
+   pelo menos `minimo` do lado limitante — sem isto, o zoom antigo (fazenda inteira) "cabia" também. */
+function medirPastoInteiro({ poligono, mapa, lista, minimo }) {
+  const m = document.querySelector(mapa); const ps = [...document.querySelectorAll(poligono)];
+  if (!m) return [{ regra: 'pasto-inteiro', texto: `${mapa} nao achado` }];
+  if (!ps.length) return [{ regra: 'pasto-inteiro', texto: `${poligono} nao achado (nada selecionado no mapa)` }];
+  const c = m.getBoundingClientRect(); const v = { left: c.left, top: c.top, right: c.right, bottom: c.bottom };
+  for (const el of document.querySelectorAll('[data-sobre-o-mapa]')) { const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.top - c.top <= 16) v.top = Math.max(v.top, r.bottom); }
+  const l = lista ? document.querySelector(lista) : null;
+  if (l) { const r = l.getBoundingClientRect(); if (r.right > v.left && r.left < v.right) v.left = Math.max(v.left, r.right); }
+  const u = ps.map((e) => e.getBoundingClientRect()).reduce((a, r) => ({ left: Math.min(a.left, r.left), top: Math.min(a.top, r.top), right: Math.max(a.right, r.right), bottom: Math.max(a.bottom, r.bottom) }));
+  const achados = []; const T = 1.5;
+  if (u.left < v.left - T || u.top < v.top - T || u.right > v.right + T || u.bottom > v.bottom + T)
+    achados.push({ regra: 'pasto-inteiro', texto: `o poligono nao cabe na area visivel (esq ${Math.round(u.left - v.left)}, topo ${Math.round(u.top - v.top)}, dir ${Math.round(v.right - u.right)}, base ${Math.round(v.bottom - u.bottom)})` });
+  const fr = Math.max((u.right - u.left) / (v.right - v.left), (u.bottom - u.top) / (v.bottom - v.top));
+  if (fr < minimo) achados.push({ regra: 'pasto-inteiro', texto: `o poligono ocupa so' ${Math.round(fr * 100)}% da area visivel (minimo ${Math.round(minimo * 100)}%): nao enquadrou o pasto` });
+  return achados;
+}
+/* MAPA-ZOOM-E-PAINEL-01 — `semReenquadrar` (opcional, por cenário; roda DEPOIS do `antes`, com P_01 selecionado): o `data-enquadramento` não muda
+   (1) ao clicar de novo no MESMO polígono na lista, (2) ao fechar a barra (✕), (3) em Vértices, ao clicar no polígono no mapa. */
+async function medirSemReenquadrar(p) {
+  const achados = [];
+  const ler = async () => { await p.waitForTimeout(1200); return p.locator('.leaflet-container').first().getAttribute('data-enquadramento'); };
+  try {
+    const caixa = await p.locator('path.poligono-selecionado').first().boundingBox();
+    if (!caixa) return [{ regra: 'reenquadra', texto: 'P_01 nao esta selecionado no mapa' }];
+    const centro = [caixa.x + caixa.width / 2, caixa.y + caixa.height / 2];
+    const linha = p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first();
+    const a0 = await ler(); if (!a0) return [{ regra: 'reenquadra', texto: 'sem data-enquadramento' }];
+    await linha.click(); const a1 = await ler();
+    if (a1 !== a0) achados.push({ regra: 'reenquadra', texto: `clicar de novo no mesmo poligono reenquadrou (${a0} -> ${a1})` });
+    await p.locator('[data-testid="validacao-painel-poligono"] button[title="Fechar"]').click(); const a2 = await ler();
+    if (a2 !== a0) achados.push({ regra: 'reenquadra', texto: `fechar a barra reenquadrou (${a0} -> ${a2})` });
+    await linha.click(); await p.locator('[data-testid="validacao-painel-poligono"]').waitFor({ timeout: 3000 });
+    await p.locator('[data-testid="editar-poligono"] button[title="Vértices"]').click();
+    await p.locator('[data-testid="barra-edicao-poligono"]').waitFor({ timeout: 3000 });
+    const b0 = await ler();
+    await p.mouse.click(centro[0], centro[1]); const b1 = await ler();
+    if (b1 !== b0) achados.push({ regra: 'reenquadra', texto: `clicar no poligono em Vertices reenquadrou (${b0} -> ${b1})` });
+  } catch (e) { achados.push({ regra: 'erro', texto: `semReenquadrar: ${String(e).slice(0, 100)}` }); }
+  return achados;
+}
+/* MAPA-CROMO-01 — `cromoDoMapa` (roda em TODO cenário `mapa-geo-*` e `mapa-validacao-*`): tudo o que flutua sobre o mapa (`data-cromo` =
+   cima|botoes|painel|aviso|base, a barra e a lista dos piquetes, os botões do topo e o aviso pelos testids, os controles do Leaflet) (1) NÃO
+   se cruza — nenhum retângulo corta outro (aninhado não conta; Leaflet × Leaflet fica com o MAPA-CONTROLES-01) e (2) não tem texto cortado:
+   elemento com scrollWidth > clientWidth + 1 só passa se ele (ou um ancestral) leva `title` com o texto inteiro. O aviso antigo (pílula
+   centrada, z-10, sem title) caía por cima do "Ver fazenda inteira" e cortava "Sede / b…": reprova nas duas. */
+function medirCromoDoMapa() {
+  const SEL = '[data-cromo], [data-testid="barra-piquetes"], [data-testid="piquetes-lista"], [data-testid="validacao-tipo-pedido"], [data-testid="validacao-ver-fazenda"], [data-testid="edicao-desenhar-novo"], [data-testid="validacao-pasto-inteiro"], [data-testid="validacao-painel-poligono"], .leaflet-control-zoom, .leaflet-control-attribution';
+  const visiveis = [...document.querySelectorAll(SEL)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1 && getComputedStyle(e).visibility !== 'hidden'; });
+  if (!visiveis.length) return [];
+  const ehLeaflet = (e) => e.matches('.leaflet-control-zoom, .leaflet-control-attribution');
+  const nome = (e) => e.getAttribute('data-cromo') ?? e.getAttribute('data-testid') ?? e.className.toString().slice(0, 30);
+  const achados = [];
+  for (let i = 0; i < visiveis.length; i++) for (let j = i + 1; j < visiveis.length; j++) {
+    const a = visiveis[i], b = visiveis[j];
+    if (a.contains(b) || b.contains(a) || (ehLeaflet(a) && ehLeaflet(b))) continue;
+    const x = a.getBoundingClientRect(), y = b.getBoundingClientRect();
+    const w = Math.min(x.right, y.right) - Math.max(x.left, y.left), h = Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top);
+    if (w > 1 && h > 1) achados.push({ regra: 'cromo', texto: `"${nome(a)}" e "${nome(b)}" se cruzam (${Math.round(w)}x${Math.round(h)}px)` });
+  }
+  const raizes = visiveis.filter((e) => !ehLeaflet(e));
+  const vistos = new Set();
+  for (const raiz of raizes) for (const el of [raiz, ...raiz.querySelectorAll('*')]) {
+    if (vistos.has(el)) continue; vistos.add(el);
+    if (!(el.scrollWidth > el.clientWidth + 1) || el.clientWidth < 2) continue;
+    const texto = (el.textContent ?? '').replace(/\s+/g, ' ').trim(); if (!texto) continue;
+    let ok = false;
+    for (let a = el; a && a !== document.body; a = a.parentElement) { const t = a.getAttribute('title'); if (t && t.replace(/\s+/g, ' ').includes(texto)) { ok = true; break; } }
+    if (!ok) achados.push({ regra: 'cromo', texto: `texto cortado sem title inteiro em "${nome(raiz)}": "${texto.slice(0, 40)}"` });
+  }
+  return achados;
+}
 /* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — `botoesDentro` (opcional, por cenario): todo botao da faixa cabe INTEIRO nela (nao sai pela borda
    nem corta o proprio texto). O "+ Buscar recebimento" saia da faixa por cima do resumo lateral, sem ser irmao dele: a sobreposicao nao via. */
 function medirBotoesDentro(sel) {
@@ -1884,6 +2083,12 @@ try {
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
     if (cen.visivelNaTela) daRolagem.push(...(await p.evaluate(medirVisivelNaTela, cen.visivelNaTela)));
+    if (cen.mesmoEnquadramento) daRolagem.push(...(await medirMesmoEnquadramento(p))); // MAPA-ZOOM-ENTRE-VISOES-01
+    if (cen.zoomSensibilidade) daRolagem.push(...(await medirZoomSensibilidade(p))); // MAPA-ZOOM-E-PAINEL-01
+    if (/^mapa-(geo|validacao)-/.test(cen.nome)) daRolagem.push(...(await p.evaluate(medirCromoDoMapa))); // MAPA-CROMO-01
+    if (cen.barraCompacta) daRolagem.push(...(await p.evaluate(medirBarraCompacta, cen.barraCompacta))); // MAPA-ZOOM-E-PAINEL-01
+    if (cen.pastoInteiro) daRolagem.push(...(await p.evaluate(medirPastoInteiro, cen.pastoInteiro))); // MAPA-ZOOM-E-PAINEL-01
+    if (cen.semReenquadrar) daRolagem.push(...(await medirSemReenquadrar(p))); // MAPA-ZOOM-E-PAINEL-01
     if (cen.titulosDeBloco) daRolagem.push(...(await p.evaluate(medirTitulosDeBloco)));
     daRolagem.push(...(await p.evaluate(medirCantoDoMapa))); // MAPA-CONTROLES-01: só age onde há o mapa do Gestor
     if (cen.semRolarNoLugar) daRolagem.push(...(await p.evaluate(medirSemRolarNoLugar, cen.semRolarNoLugar)));

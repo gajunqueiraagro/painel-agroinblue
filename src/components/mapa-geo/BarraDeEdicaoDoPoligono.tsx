@@ -179,7 +179,7 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
   return (
     <>
       <div className="absolute left-3 right-3 top-2 z-20 rounded-md border border-border bg-card/95 px-2 py-1 shadow-md backdrop-blur-sm"
-        data-testid="barra-edicao-poligono">
+        data-testid="barra-edicao-poligono" data-cromo="cima">
         {/* 1ª linha (UI-ESPACO-RESERVADO): [zona que se acomoda: instrução · escolhas · botões · Mais ▾] [Opções ▾] [FIXO: Cancelar · Prévia e gravar] */}
         <div className="flex h-[22px] items-center gap-2">
           <div ref={zonaRef} className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" data-testid="edicao-zona">
@@ -446,7 +446,7 @@ export function DesfazerUltimaEdicao({ edicao }: { edicao: Edicao }) {
   const id = edicao.ultimoGesto;
   return (
     <Button variant="outline" size="sm" className="absolute bottom-3 left-3 z-20 h-6 gap-1 bg-card px-2 text-[11px]"
-      disabled={edicao.gravando} onClick={() => void edicao.desfazer(id)} data-testid="edicao-desfazer">
+      disabled={edicao.gravando} onClick={() => void edicao.desfazer(id)} data-testid="edicao-desfazer" data-cromo="base">
       <Undo2 className="h-3 w-3" />Desfazer a última edição
     </Button>
   );

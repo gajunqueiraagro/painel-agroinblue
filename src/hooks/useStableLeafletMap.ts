@@ -9,9 +9,12 @@ import { criarControleDeCreditos, type ControleDeCreditos } from '@/lib/mapa/cre
    O +/− e o teclado andam MEIO nível; a rodinha e o trackpad precisam do DOBRO de giro (o padrão do Leaflet é 60 px por nível);
    o enquadrar encaixa em passos de 0,25. Os tiles continuam pedidos só em níveis inteiros (o Leaflet pede `Math.round(zoom)` e
    escala entre um nível e outro): o zoom fracionado não multiplica pedidos. */
-export const ZOOM_SNAP = 0.25;
-export const ZOOM_DELTA = 0.5;
-export const RODA_PX_POR_NIVEL = 120;
+/* MAPA-ZOOM-E-PAINEL-01 (Gabriel 02/11 08:27: "a sensibilidade do zoom com o mouse e com + − ficou muito devagar"): era 0,25 / 0,5 / 120 px
+   (MAPA-02b). Agora: + − = 1 nível inteiro por clique; a roda ~2× mais rápida (60 px por nível, o padrão do Leaflet); o passo fracionado
+   fica em 0,5 para o "pasto inteiro" caber bem. UM lugar: todas as visões nascem por este hook. */
+export const ZOOM_SNAP = 0.5;
+export const ZOOM_DELTA = 1;
+export const RODA_PX_POR_NIVEL = 60;
 
 /* ── Global patch: prevent _leaflet_pos crashes ── */
 const domUtilAny = L.DomUtil as any;

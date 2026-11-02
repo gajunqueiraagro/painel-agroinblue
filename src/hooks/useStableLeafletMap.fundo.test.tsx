@@ -1,6 +1,6 @@
 /**
  * MAPA-02b — o hook dos mapas da casa com o Leaflet DE VERDADE (jsdom, caixa de 800×600 de mentira):
- *  - o zoom menos agressivo (adendo do Gabriel, 31/10): `zoomSnap` 0,25, `zoomDelta` 0,5, 120 px de roda por nível;
+ *  - o zoom (adendo do Gabriel, 31/10; MAPA-ZOOM-E-PAINEL-01, 02/11): `zoomSnap` 0,5, `zoomDelta` 1, 60 px de roda por nível;
  *  - o zoom fracionado NÃO multiplica tiles: o Leaflet pede só níveis inteiros (`Math.round(zoom)`);
  *  - com chave: UMA sessão para dois mapas e uma troca de fundo; tiles na 2dtiles; os créditos com o logo e o copyright do viewport;
  *  - sem chave ou com a sessão recusada: OpenStreetMap + "satélite indisponível · usando mapa" (D4), a tela não quebra;
@@ -85,31 +85,31 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('zoom menos agressivo (adendo 31/10)', () => {
-  it('o mapa nasce com zoomSnap 0,25, zoomDelta 0,5 e 120 px de roda por nível; o +/− anda meio nível', async () => {
+describe('zoom (adendo 31/10; MAPA-ZOOM-E-PAINEL-01 em 02/11: + − de 1 nível, roda 60 px, passo 0,5)', () => {
+  it('o mapa nasce com zoomSnap 0,5, zoomDelta 1 e 60 px de roda por nível; o +/− anda 1 nível inteiro', async () => {
     vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', '');
     render(<Mapa indice={0} />);
     await esperar();
     const map = montados[0].mapInstanceRef.current;
     if (!map) throw new Error('o mapa não nasceu');
-    expect([ZOOM_SNAP, ZOOM_DELTA, RODA_PX_POR_NIVEL]).toEqual([0.25, 0.5, 120]);
-    expect([map.options.zoomSnap, map.options.zoomDelta, map.options.wheelPxPerZoomLevel]).toEqual([0.25, 0.5, 120]);
+    expect([ZOOM_SNAP, ZOOM_DELTA, RODA_PX_POR_NIVEL]).toEqual([0.5, 1, 60]); // MAPA-ZOOM-E-PAINEL-01 (era 0,25 / 0,5 / 120)
+    expect([map.options.zoomSnap, map.options.zoomDelta, map.options.wheelPxPerZoomLevel]).toEqual([0.5, 1, 60]);
     map.setView([-15.5, -47.5], 15, { animate: false });
     const mais = montados[0].mapContainerRef.current?.querySelector('.leaflet-control-zoom-in');
     if (!(mais instanceof HTMLElement)) throw new Error('sem o botão +');
     mais.click();
     await esperar(300);
-    expect(map.getZoom()).toBe(15.5);
+    expect(map.getZoom()).toBe(16);
     const menos = montados[0].mapContainerRef.current?.querySelector('.leaflet-control-zoom-out');
     if (!(menos instanceof HTMLElement)) throw new Error('sem o botão −');
     menos.click();
     await esperar(300);
     menos.click();
     await esperar(300);
-    expect(map.getZoom()).toBe(14.5);
+    expect(map.getZoom()).toBe(14);
   });
 
-  it('o zoom fracionado NÃO multiplica tiles: 15 → 15,25 → 15,5 → 15,75 → 16 pede só os níveis 15 e 16, cada tile uma vez', async () => {
+  it('o zoom fracionado NÃO multiplica tiles: 15 → 15,5 → 16 pede só os níveis 15 e 16, cada tile uma vez', async () => {
     vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', '');
     render(<Mapa indice={0} />);
     await esperar();
@@ -125,16 +125,15 @@ describe('zoom menos agressivo (adendo 31/10)', () => {
     /* o gesto do usuário (roda, trackpad, +/−) é ANIMADO; o zoom sem animação (`animate: false`) descarta e repede os tiles em
        QUALQUER nível, inteiro ou não — é do Leaflet, não do zoom fracionado (o cache do navegador atende) */
     const porPasso: number[] = [];
-    for (const z of [15.25, 15.5, 15.75, 16]) {
+    for (const z of [15.5, 16]) {
       map.setZoom(z);
       await esperar(300);
       expect(map.getZoom()).toBe(z);
       porPasso.push(tiles.length);
     }
-    // 15,25: nada novo (os do 15 ampliados) · 15,5: nascem os do 16 · 15,75 e 16: nada novo
-    expect(porPasso[0]).toBe(doNivel15);
-    expect(porPasso[1]).toBeGreaterThan(doNivel15);
-    expect(porPasso[3]).toBe(porPasso[1]);
+    // 15,5: nascem os do 16 · 16: nada novo
+    expect(porPasso[0]).toBeGreaterThan(doNivel15);
+    expect(porPasso[1]).toBe(porPasso[0]);
     expect(map.getZoom()).toBe(16);
     expect(new Set(tiles.map((t) => t.split('/')[0]))).toEqual(new Set(['15', '16']));
     expect(new Set(tiles).size).toBe(tiles.length);

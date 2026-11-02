@@ -23,6 +23,7 @@ import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
 import { ChevronDown, ChevronLeft, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
+import { trocarLimites, useEnquadramentoDoMapa, type LimitesDaFazenda } from '@/lib/mapa/enquadramentoDoMapa';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
@@ -281,12 +282,17 @@ export function MapaGestorView({
   const [larguraDosCreditos, setLarguraDosCreditos] = useState(0); // MAPA-COMPACTO-01: medida, não o pior caso
   const quadroRef = useRef<HTMLDivElement>(null);
   const legendaRef = useRef<HTMLDivElement>(null);
-  const enquadrouRef = useRef('');
+  /* MAPA-ZOOM-ENTRE-VISOES-01: os limites da fazenda (o hook decide se enquadra ou volta ao guardado) */
+  const [limitesDaFazenda, setLimitesDaFazenda] = useState<LimitesDaFazenda | null>(null);
   const camadasRef = useRef(new Map<string, L.GeoJSON>());
   const rotulosRef = useRef<RotuloDoPasto[]>([]);
 
   const { mapContainerRef, mapInstanceRef, featureLayerRef, labelLayerRef, status: mapStatus, reportRenderedGeometries,
     fundo, trocarFundo } = useStableLeafletMap({ debugName: 'MapaGestor', labelZoomThreshold: 0 });
+  const { enquadrarEm } = useEnquadramentoDoMapa({
+    mapa: mapStatus === 'ready' ? mapInstanceRef.current : null, clienteId, fazendaId, limitesDaFazenda,
+    opcoesDoAjuste: { paddingTopLeft: [240, 70], paddingBottomRight: [20, 60], maxZoom: 16 },
+  });
 
   const pastoPorId = useMemo(() => new Map(pastos.map(p => [p.id, p])), [pastos]);
   const hasGeo = geometrias.length > 0;
@@ -447,14 +453,11 @@ export function MapaGestorView({
     rotulosRef.current = candidatos;
     reportRenderedGeometries(desenhados);
     onRenderedChange?.(desenhados);
-    /* MAPA-EDITAR-POLIGONO-07 (Gabriel 15:09): o enquadramento automático só na troca de FAZENDA (e no 1º carregamento). A chave era a
-       lista de ids dos polígonos: toda gravação que cria/remove um (desenhar, dividir, unir, apagar) reenquadrava a fazenda inteira. */
-    const chave = geometrias[0]?.fazenda_id ?? '';
-    if (limites.isValid() && enquadrouRef.current !== chave) {
-      enquadrouRef.current = chave;
-      try { mapa.fitBounds(limites, { paddingTopLeft: [240, 70], paddingBottomRight: [20, 60], animate: false, maxZoom: 16 }); } catch { /* */ }
-    }
-    // depois do enquadramento: os rótulos se arrumam no zoom em que o mapa vai ficar
+    /* MAPA-ZOOM-ENTRE-VISOES-01 (era o -07): o desenho NÃO enquadra mais — só entrega os limites da fazenda ao hook, que enquadra na
+       troca de fazenda/1ª abertura e volta ao enquadramento guardado nas demais (visão, mês, camada, painel, tela cheia). */
+    const fazendaDosLimites = geometrias[0]?.fazenda_id;
+    if (fazendaDosLimites && limites.isValid()) setLimitesDaFazenda(ant => trocarLimites(ant, fazendaDosLimites, limites));
+    // os rótulos se arrumam no zoom em que o mapa está (o hook, ao enquadrar, dispara o zoomend que os refaz)
     desenharRotulos(mapa, rotulos, candidatos);
   }, [mapStatus, geometrias, dadosDoMes, camada, filtros, selecionadoId, pastoPorId, mapInstanceRef, featureLayerRef, labelLayerRef,
     reportRenderedGeometries, onRenderedChange, registrosDeLavoura, anoMes, divisoes]);
@@ -518,13 +521,13 @@ export function MapaGestorView({
     setSelecionadoId(g.id);
     const mapa = mapInstanceRef.current;
     const b = camadaGeo.getBounds();
-    if (mapa && b.isValid()) mapa.fitBounds(b, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [314, 60], maxZoom: 16 });
+    if (mapa && b.isValid()) enquadrarEm(b, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [314, 60], maxZoom: 16 });
   });
 
   const enquadrar = (limites: L.LatLngBounds, comPainel: boolean) => {
     const mapa = mapInstanceRef.current;
     if (!mapa || !limites.isValid()) return;
-    mapa.fitBounds(limites, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [comPainel ? 314 : 20, 60], maxZoom: 16 });
+    enquadrarEm(limites, { paddingTopLeft: [filtrosAbertos ? 240 : 20, 70], paddingBottomRight: [comPainel ? 314 : 20, 60], maxZoom: 16 });
   };
   const fazendaInteira = () => {
     const l = L.latLngBounds([]);

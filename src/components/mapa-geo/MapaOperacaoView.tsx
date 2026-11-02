@@ -21,6 +21,7 @@ import type { Pasto } from '@/hooks/usePastos';
 import type { DadosDoPastoNoMes, PastoOcupacao } from '@/lib/mapa/mapaDoMes';
 import { toast } from 'sonner';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
+import { trocarLimites, useEnquadramentoDoMapa, type LimitesDaFazenda } from '@/lib/mapa/enquadramentoDoMapa';
 import { dataLocalISO, hojeLocal } from '@/lib/datas/hojeLocal';
 
 const STATUS_STYLES: Record<string, { fillColor: string; color: string; label: string }> = {
@@ -83,7 +84,8 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
   const [cat, setCat] = useState('');
   const [refField, setRefField] = useState('');
   const [saving, setSaving] = useState(false);
-  const lastFitKeyRef = useRef('');
+  /* MAPA-ZOOM-ENTRE-VISOES-01: os limites da fazenda (o hook decide se enquadra ou volta ao guardado) */
+  const [limitesDaFazenda, setLimitesDaFazenda] = useState<LimitesDaFazenda | null>(null);
 
   const [recentTransfers, setRecentTransfers] = useState<{ nome_cat: string; quantidade: number; data: string; origem: string }[]>([]);
 
@@ -91,6 +93,11 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
     mapContainerRef, mapInstanceRef, featureLayerRef, labelLayerRef,
     status: mapStatus, reportRenderedGeometries,
   } = useStableLeafletMap({ debugName: 'MapaOperacao' });
+  useEnquadramentoDoMapa({
+    mapa: mapStatus === 'ready' ? mapInstanceRef.current : null,
+    clienteId: fazendaAtual?.cliente_id, fazendaId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null,
+    limitesDaFazenda, opcoesDoAjuste: { padding: [20, 20], maxZoom: 16 },
+  });
 
   const hasGeo = geometrias.length > 0;
   const selectedPasto = selectedGeo?.pasto_id ? pastos.find((p) => p.id === selectedGeo.pasto_id) : null;
@@ -236,13 +243,13 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, da
       reportRenderedGeometries(renderedCount);
       onRenderedChange?.(renderedCount);
 
-      /* MAPA-EDITAR-POLIGONO-07: enquadra sozinho só na troca de FAZENDA (e no 1º carregamento) — a chave era a lista de ids, que muda a
-         cada gravação que cria/remove polígono e jogava o operador de volta à fazenda inteira */
-      const fazendaDaVista = geometrias[0]?.fazenda_id ?? '';
-      if (allBounds.length > 0 && fazendaDaVista !== lastFitKeyRef.current) {
-        lastFitKeyRef.current = fazendaDaVista;
-        const combinedBounds = allBounds.reduce((acc, b) => acc.extend(b));
-        try { map.fitBounds(combinedBounds, { padding: [20, 20], animate: false, maxZoom: 16 }); } catch { /* */ }
+      /* MAPA-ZOOM-ENTRE-VISOES-01 (era o -07): o desenho NÃO enquadra — só entrega os limites ao hook (fazenda inteira na troca de fazenda
+         e na 1ª abertura; nas demais, o enquadramento guardado) */
+      const fazendaDaVista = geometrias[0]?.fazenda_id;
+      if (allBounds.length > 0 && fazendaDaVista) {
+        const combinedBounds = L.latLngBounds(allBounds[0].getSouthWest(), allBounds[0].getNorthEast());
+        for (const b of allBounds) combinedBounds.extend(b);
+        setLimitesDaFazenda(ant => trocarLimites(ant, fazendaDaVista, combinedBounds));
       }
     }, 220);
 

@@ -49,6 +49,7 @@ beforeEach(() => { estado.rpc = []; estado.mudou = []; });
 
 async function marcar(nome: string) {
   fireEvent.click(screen.getAllByText(nome)[0]);                     // a linha da lista põe o polígono em foco
+  fireEvent.click(await screen.findByTestId('validacao-piquete-de'));   // MAPA-ZOOM-E-PAINEL-01: o "É piquete de…" é um popover da barra
   const painel = await screen.findByTestId('marcar-piquete');
   fireEvent.click(within(painel).getByRole('button'));               // abre o "É piquete de…"
   fireEvent.click(await screen.findByRole('button', { name: /^R_01/ }));   // a opção (botão) com o nome e a área
