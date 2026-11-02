@@ -228,6 +228,19 @@ const CENARIOS = [
   { nome: 'mapa-geo-infra-editar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
     await p.locator('.mapa-infra-icone').first().click(); await p.waitForTimeout(400);
     await p.locator('[data-testid="mapa-painel-infra"] button', { hasText: 'Editar' }).first().click(); await p.waitForTimeout(400); } },
+  /* INFRA-FICHAS-PATR-01: o bebedouro sem bem (a ficha com material "Outro…") e o Criar bem no Patrimônio com a prévia na tela */
+  { nome: 'mapa-geo-infra-ficha-sem-bem', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('.mapa-infra-icone').nth(1).click(); await p.waitForTimeout(400);
+    await p.locator('[data-testid="infra-sem-bem"]').waitFor({ timeout: 3000 }); } },
+  { nome: 'mapa-geo-infra-criar-bem', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('.mapa-infra-icone').nth(1).click(); await p.waitForTimeout(400);
+    await p.locator('[data-testid="infra-sem-bem"] button', { hasText: 'Criar bem no Patrimônio' }).click(); await p.waitForTimeout(300);
+    const data = p.locator('[data-testid="infra-criar-bem"] input[placeholder="dd/mm/aaaa"]');
+    await data.fill('15/03/2024'); await data.press('Tab'); await p.waitForTimeout(200);
+    await p.locator('[data-testid="mapa-painel-infra"] button', { hasText: 'Ver prévia' }).click(); await p.waitForTimeout(400); } },
+  { nome: 'mapa-geo-infra-editar-ficha-outro', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('.mapa-infra-icone').nth(1).click(); await p.waitForTimeout(400);
+    await p.locator('[data-testid="mapa-painel-infra"] button', { hasText: 'Editar' }).first().click(); await p.waitForTimeout(400); } },
   { nome: 'mapa-geo-infra-colocar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
     await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
     await p.getByRole('menuitem', { name: 'Infraestrutura' }).first().hover(); await p.waitForTimeout(300);

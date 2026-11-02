@@ -40,8 +40,9 @@ export const TIPOS_INFRA: readonly DefinicaoInfra[] = [
   { tipo: 'bebedouro', rotulo: 'Bebedouro', grupo: 'agua', ponto: true, categorias: ['rede_agua', 'instalacoes'], desenho: GOTA },
   { tipo: 'saleiro', rotulo: 'Saleiro', grupo: 'manejo', ponto: true, categorias: ['instalacoes'], desenho: QUADRADO },
   { tipo: 'curral', rotulo: 'Curral', grupo: 'manejo', ponto: true, categorias: ['instalacoes', 'benfeitorias'], desenho: PORTEIRA },
-  { tipo: 'tronco_brete', rotulo: 'Tronco / brete', grupo: 'manejo', ponto: true, categorias: ['instalacoes'], desenho: QUADRADO },
-  { tipo: 'balanca', rotulo: 'Balança', grupo: 'manejo', ponto: true, categorias: ['instalacoes'], desenho: QUADRADO },
+  /* INFRA-FICHAS-PATR-01: o tronco hidráulico e a balança nascem em Máquinas (D2) — o seletor do bem também as mostra */
+  { tipo: 'tronco_brete', rotulo: 'Tronco / brete', grupo: 'manejo', ponto: true, categorias: ['instalacoes', 'maquinas'], desenho: QUADRADO },
+  { tipo: 'balanca', rotulo: 'Balança', grupo: 'manejo', ponto: true, categorias: ['instalacoes', 'maquinas'], desenho: QUADRADO },
   { tipo: 'porteira', rotulo: 'Porteira', grupo: 'manejo', ponto: true, categorias: ['cercas'], desenho: PORTEIRA },
   { tipo: 'cerca', rotulo: 'Cerca', grupo: 'manejo', ponto: false, categorias: ['cercas'], desenho: PORTEIRA },
   { tipo: 'poco', rotulo: 'Poço', grupo: 'agua', ponto: true, categorias: ['rede_agua'], desenho: CIRCULO },
@@ -114,6 +115,8 @@ export interface CamposDaInfra {
   pastoId: string | null;
   bemId: string | null;
   observacao: string;
+  /** INFRA-FICHAS-PATR-01: a ficha do tipo (já limpa); ausente = não mexe na ficha gravada */
+  ficha?: Record<string, string | number | boolean>;
 }
 
 /** O `p_infra` da `fn_infra_salvar`: ao criar leva a fazenda; ao editar, id + versão (a fazenda não muda). */
@@ -125,6 +128,7 @@ export function argumentoDaInfra(c: CamposDaInfra): Record<string, unknown> {
     pasto_id: c.pastoId || null,
     bem_id: c.bemId || null,
     observacao: c.observacao.trim() || null,
+    ...(c.ficha ? { ficha: c.ficha } : {}),
   };
   return c.id ? { id: c.id, versao: c.versao, ...base } : { fazenda_id: c.fazendaId, ...base };
 }
@@ -139,6 +143,8 @@ export interface InfraLida {
   pasto_id: string | null;
   bem_id: string | null;
   observacao: string | null;
+  /** INFRA-FICHAS-PATR-01: a ficha gravada ({} = sem ficha) */
+  ficha?: Record<string, string | number | boolean>;
   versao: number;
   criado_em: string;
   criado_por: string | null;
