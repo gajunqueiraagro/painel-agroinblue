@@ -41,6 +41,9 @@ const ESTILO = 'position:absolute;transform:translate(-50%,-50%);white-space:now
 /** Desenha os metros dos lados de `pontos` (fechado ou não) no `grupo`, com a regra acima. Os lados sem rótulo ganham o tooltip. */
 export function desenharRotulosDosLados(mapa: L.Map, grupo: L.LayerGroup, pontos: readonly (readonly number[])[], fechar: boolean) {
   grupo.clearLayers();
+  /* mapa já desmontado (`map.remove()` esvazia os panes): converter coordenada quebraria a tela inteira (achado na prova do
+     MAPA-CRIAR-PIQUETES-01: a recarga desmontou o mapa com o redesenho agendado — "Cannot read properties of undefined (_leaflet_pos)") */
+  if (!mapa.getPane('mapPane')) return;
   if (pontos.length < 2) return;
   const total = fechar ? pontos.length : pontos.length - 1;
   const lados = Array.from({ length: total }, (_x, i) => {

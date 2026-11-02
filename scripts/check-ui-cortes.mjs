@@ -342,6 +342,29 @@ const CENARIOS = [
             await antes(p); await p.locator('[data-testid="validacao-reabrir-lista"]').click(); await p.waitForTimeout(700); } },
         ]);
       })(),
+      /* MAPA-CRIAR-PIQUETES-01 (fatia 1) — o "Criar piquetes" do P_01: a barra (2 linhas fixas, "Prévia e gravar" e "Cancelar" inteiros na
+         tela), a lista das divisões (grade 2 × 4 = 8; o grupo que já existe com `&grupo=1`: "é a divisão do cadastro"), com a lista lateral
+         recolhida e aberta, e a prévia (o diálogo) */
+      ...(() => {
+        const abrirPiquetes = (url) => async (p) => {
+          await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
+          await p.locator('[data-testid="editar-piquetes"]').click();
+          await p.locator('[data-testid="barra-piquetes"]').waitFor(); await p.waitForTimeout(900); };
+        const medir = { visivelNaTela: { sels: ['[data-testid="piquetes-previa"]', '[data-testid="piquetes-cancelar"]'], dentro: '[data-testid="barra-piquetes"]', altura: 50,
+            inteirosEm: ['[data-testid="piquetes-zona"]', '[data-testid="piquetes-linha-2"]', '[data-testid="barra-piquetes"]', '[data-testid="piquetes-lista"]'] },
+          botoesDentro: '[data-testid="piquetes-zona"], [data-testid="piquetes-fixos"], [data-testid="barra-piquetes"]' };
+        const casos = [['piquetes', 'tela=mapa-geo'], ['piquetes-grupo', 'tela=mapa-geo&grupo=1']];
+        return [
+          ...casos.flatMap(([nome, url]) => [
+            { nome: `mapa-validacao-${nome}`, url, tamanhos: T, regiao: '[data-testid="piquetes-tela"]', antes: abrirPiquetes(url), ...medir },
+            { nome: `mapa-validacao-${nome}-lista`, url, tamanhos: T, regiao: '[data-testid="piquetes-tela"]', ...medir, antes: async (p) => {
+              await abrirPiquetes(url)(p); await p.locator('[data-testid="validacao-reabrir-lista"]').click(); await p.waitForTimeout(800); } },
+          ]),
+          ...casos.map(([nome, url]) => ({ nome: `mapa-validacao-${nome}-previa`, url, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+            await abrirPiquetes(url)(p); await p.locator('[data-testid="piquetes-previa"]').click();
+            await p.locator('[data-testid="piquetes-dialogo-previa"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(400); } })),
+        ];
+      })(),
     ];
   })(),
   /* MAPA-CONTROLES-01 — abrir o pasto e FECHAR o painel: o zoom e os créditos voltam à borda direita (o espaço do painel não fica

@@ -298,7 +298,7 @@ export interface Divisao { a: GeoJSON.Polygon; b: GeoJSON.Polygon }
 /** Divide um polígono por uma linha riscada (2+ pontos). Precisa dar exatamente 2 pedaços. */
 export function dividirPorLinha(g: GeoJSON.Geometry, linha: readonly Ponto[]): Resultado<Divisao> {
   if (g.type !== 'Polygon') return { ok: false, motivo: 'Só se divide um polígono simples (sem partes separadas).' };
-  if (g.coordinates.length > 1) return { ok: false, motivo: 'Este polígono tem furo: redesenhe-o antes de dividir.' };
+  // MAPA-CRIAR-PIQUETES-01 (3): o furo não trava — o corte é a interseção com o polígono INTEIRO (anéis internos incluídos)
   if (linha.length < 2) return { ok: false, motivo: 'Risque a linha de divisão com pelo menos 2 pontos.' };
   const c = caixaGrande(g, linha);
   const lado = ladoDaLinha(linha, c);
