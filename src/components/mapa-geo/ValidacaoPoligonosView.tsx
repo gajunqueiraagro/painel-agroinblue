@@ -25,6 +25,9 @@ import { ehTipoDeArea, rotuloDoTipo, type TipoDeArea } from '@/lib/mapa/tiposDeA
 /* MAPA-EDITAR-POLIGONO-01 — a edição de polígono é um módulo próprio (hook + barra); aqui só o encaixe */
 import { useEdicaoDoPoligono, type ModoDaEdicao } from '@/hooks/useEdicaoDoPoligono';
 import { BarraDeEdicaoDoPoligono, DesfazerUltimaEdicao } from '@/components/mapa-geo/BarraDeEdicaoDoPoligono';
+import { CriarPiquetesNoMapa } from '@/components/mapa-geo/CriarPiquetes';
+import { useCriarPiquetes } from '@/hooks/useCriarPiquetes';
+import { toast } from 'sonner';
 import { useFazenda } from '@/contexts/FazendaContext';
 /* MAPA-PIQUETES-02 — os piquetes são um módulo próprio (espera + prévia + gravar); aqui só o encaixe */
 import { ConcluirPiquetesDialog, MarcarPiquete, PiquetesEmEspera } from '@/components/mapa-geo/PiquetesDoPoligono';
@@ -84,10 +87,21 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     /* -09: o polígono selecionado também mostra os metros dos lados */
     selecionado: focusedId ? geometrias.find(g => g.id === focusedId)?.geojson ?? null : null,
   });
+  /* MAPA-CRIAR-PIQUETES-01 (fatia 1): o "Criar piquetes" do polígono ligado a um pasto — camadas próprias no mesmo mapa; grava pela
+     `fn_piquetes_criar` (pastos novos, ou liga às divisões que o pasto já tem no cadastro); o contorno do pai fica */
+  const piq = useCriarPiquetes({
+    mapa: statusDoMapa === 'ready' ? mapInstance.current : null, pastos, geometrias,
+    clienteId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.cliente_id : null,
+    aoGravar: () => {
+      onRefresh();
+      if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id);
+      toast.success('Piquetes gravados.');
+    },
+  });
   /* o polígono em edição sai do desenho da lista (a barra o desenha na camada dela); no apagar ele fica à vista */
   const emEdicaoId = edicao.alvo && edicao.modo !== 'apagar' ? edicao.alvo.id : null;
   /* durante a edição os polígonos da lista não respondem a clique: o clique é do desenho (senão focava o vizinho e dava zoom nele) */
-  const editando = !!edicao.modo;
+  const editando = !!edicao.modo || piq.aberto;
   /* -04: no unir, o clique no mapa põe/tira o polígono da união (os outros gestos seguem com o mapa inerte: o clique é do desenho) */
   const unindo = edicao.modo === 'unir';
   const { unidos, alternarNaUniao } = edicao;
@@ -450,8 +464,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
           <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0, position: 'absolute' }} />
           <BarraDeEdicaoDoPoligono edicao={edicao} geometrias={geometrias} nomeDoPasto={getPastoName}
             areaCadastroHa={pastos.find(p => p.id === edicao.alvo?.pasto_id)?.area_produtiva_ha ?? null} />
-          <DesfazerUltimaEdicao edicao={edicao} />
-          {!edicao.modo && (
+          {!piq.aberto && <DesfazerUltimaEdicao edicao={edicao} />}
+          <CriarPiquetesNoMapa piq={piq} />
+          {!edicao.modo && !piq.aberto && (
             <div className="absolute right-3 top-3 z-20 flex gap-1.5">
               <Button variant="outline" size="sm" className="h-6 bg-card px-2 text-[11px]" onClick={verFazendaInteira} data-testid="validacao-ver-fazenda">
                 Ver fazenda inteira
@@ -476,7 +491,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             </div>
           )}
           {/* Focused polygon info overlay */}
-          {focusedId && !edicao.modo && (() => {
+          {focusedId && !edicao.modo && !piq.aberto && (() => {
             const geo = geometrias.find(g => g.id === focusedId);
             if (!geo) return null;
             const pName = getPastoName(geo.pasto_id);
@@ -497,6 +512,14 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                             {rotulo}
                           </Button>
                         ))}
+                        {/* MAPA-CRIAR-PIQUETES-01: só no polígono ligado a um pasto (o pasto vira o pai das divisões) */}
+                        {geo.pasto_id && (
+                          <Button variant="outline" size="sm" className="h-5 px-1.5 text-[10px]" data-testid="editar-piquetes"
+                            title="Cortar este pasto em piquetes (N iguais ou grade); o contorno fica"
+                            onClick={() => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }); }}>
+                            Piquetes
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>

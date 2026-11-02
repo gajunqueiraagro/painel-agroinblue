@@ -630,6 +630,10 @@ export function useEdicaoDoPoligono(args: {
       if (ev.key !== 'Escape') return;
       const alvoDaTecla = ev.target;
       if (alvoDaTecla instanceof HTMLInputElement || alvoDaTecla instanceof HTMLTextAreaElement) return;
+      /* -09 (achado na prova do MAPA-CRIAR-PIQUETES-01): o Esc que fecha o "Opções ▾"/"Mais ▾" (ou uma lista, ou um diálogo) é DELES —
+         antes ele também pedia para descartar a edição */
+      if (alvoDaTecla instanceof Element && alvoDaTecla.closest('[role="menu"], [role="listbox"], [role="dialog"]')) return;
+      if (document.querySelector('[role="menu"][data-state="open"]')) return;
       ev.preventDefault(); ev.stopPropagation(); pedirCancelar();
     };
     window.addEventListener('keydown', aoTeclar, true);

@@ -270,6 +270,19 @@ const CENARIOS = [
           await p.locator('tr[data-linha="soma"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(300); } },
     ];
   })(),
+  /* MAPA-PIQUETES-03 — `&unidade=1`: o pasto-pai que virou grupo aparece como UMA unidade (o contorno do pai, a lotação Σ dos piquetes) com as
+     divisões em linha fina; o painel com "2 divisões: P_09A 21,4 · P_09B 19,2 = 40,6 ha". */
+  { nome: 'mapa-geo-unidade-painel', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaPasto('P_09 Retiro')(p); await p.locator('[data-testid="mapa-painel-divisoes"]').waitFor({ timeout: 3000 }); } },
+  /* -03: o mês do PAI (ago/26): a unidade é o pasto inteiro, sem linhas nem a linha das divisões (se ela aparecer, o cenário falha) */
+  { nome: 'mapa-geo-unidade-mes-do-pai', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaMes('Ago')(p); await mapaPasto('P_09 Retiro')(p);
+    if (await p.locator('[data-testid="mapa-painel-divisoes"]').count()) throw new Error('mês do pai com a linha das divisões'); } },
+  /* -03 caso P6: o contorno furado (a manga) e as divisões SEM polígono — "2 divisões sem desenho: P_10A, P_10B" */
+  { nome: 'mapa-geo-unidade-sem-desenho', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaPasto('P_10 Manga')(p); await p.locator('[data-testid="mapa-painel-divisoes"]', { hasText: '2 divisões sem desenho: P_10A, P_10B' }).waitFor({ timeout: 3000 }); } },
+  /* -03: a Operação com as unidades (rótulo = nome do pasto; as divisões em linha fina) */
+  { nome: 'mapa-geo-unidade-operacao', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
   { nome: 'mapa-geo-adicionar-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-painel-poligono"]',
     antes: async (p) => {
       await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
@@ -341,6 +354,29 @@ const CENARIOS = [
           { nome: `mapa-validacao-${nome}-lista`, url, tamanhos: T, regiao: '[data-testid="barra-edicao-poligono"]', ...medicao, antes: async (p) => {
             await antes(p); await p.locator('[data-testid="validacao-reabrir-lista"]').click(); await p.waitForTimeout(700); } },
         ]);
+      })(),
+      /* MAPA-CRIAR-PIQUETES-01 (fatia 1) — o "Criar piquetes" do P_01: a barra (2 linhas fixas, "Prévia e gravar" e "Cancelar" inteiros na
+         tela), a lista das divisões (grade 2 × 4 = 8; o grupo que já existe com `&grupo=1`: "é a divisão do cadastro"), com a lista lateral
+         recolhida e aberta, e a prévia (o diálogo) */
+      ...(() => {
+        const abrirPiquetes = (url) => async (p) => {
+          await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
+          await p.locator('[data-testid="editar-piquetes"]').click();
+          await p.locator('[data-testid="barra-piquetes"]').waitFor(); await p.waitForTimeout(900); };
+        const medir = { visivelNaTela: { sels: ['[data-testid="piquetes-previa"]', '[data-testid="piquetes-cancelar"]'], dentro: '[data-testid="barra-piquetes"]', altura: 50,
+            inteirosEm: ['[data-testid="piquetes-zona"]', '[data-testid="piquetes-linha-2"]', '[data-testid="barra-piquetes"]', '[data-testid="piquetes-lista"]'] },
+          botoesDentro: '[data-testid="piquetes-zona"], [data-testid="piquetes-fixos"], [data-testid="barra-piquetes"]' };
+        const casos = [['piquetes', 'tela=mapa-geo'], ['piquetes-grupo', 'tela=mapa-geo&grupo=1']];
+        return [
+          ...casos.flatMap(([nome, url]) => [
+            { nome: `mapa-validacao-${nome}`, url, tamanhos: T, regiao: '[data-testid="piquetes-tela"]', antes: abrirPiquetes(url), ...medir },
+            { nome: `mapa-validacao-${nome}-lista`, url, tamanhos: T, regiao: '[data-testid="piquetes-tela"]', ...medir, antes: async (p) => {
+              await abrirPiquetes(url)(p); await p.locator('[data-testid="validacao-reabrir-lista"]').click(); await p.waitForTimeout(800); } },
+          ]),
+          ...casos.map(([nome, url]) => ({ nome: `mapa-validacao-${nome}-previa`, url, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+            await abrirPiquetes(url)(p); await p.locator('[data-testid="piquetes-previa"]').click();
+            await p.locator('[data-testid="piquetes-dialogo-previa"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(400); } })),
+        ];
       })(),
     ];
   })(),
