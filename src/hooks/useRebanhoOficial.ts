@@ -5,8 +5,8 @@
  * DEVE ser consumida exclusivamente por este hook.
  *
  * Fontes oficiais:
- *   - vw_zoot_categoria_mensal  (detalhamento por categoria)
- *   - vw_zoot_fazenda_mensal    (totais fazenda)
+ *   - zoot_mensal_cache (detalhamento por categoria — Global e uma fazenda, REBANHO-LEITURA-01 D1)
+ *   - a linha do mês (totais da fazenda / do Global) é MONTADA das categorias (`buildFazendaRowsFromCategories`)
  *
  * PROIBIDO:
  *   - Recalcular saldo por movimentações (calcSaldoPorCategoriaLegado)
@@ -32,9 +32,10 @@ import {
   groupByCategoria,
   totalizarPorMes,
   categoriasUnicas,
+  ERRO_LEITURA_REBANHO,
   type ZootCategoriaMensal,
 } from '@/hooks/useZootCategoriaMensal';
-import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
+import { indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
 import { useMetaGmd } from '@/hooks/useMetaGmd';
 import { usePastos } from '@/hooks/usePastos';
 import { areaDosPastosNoMes } from '@/lib/pastos/areaDoMes';
@@ -53,7 +54,7 @@ import {
 // ---------------------------------------------------------------------------
 // Re-exports — consumers DEVEM importar daqui, nunca dos hooks internos
 // ---------------------------------------------------------------------------
-export { type ZootCategoriaMensal, groupByMes, groupByCategoria, totalizarPorMes, categoriasUnicas };
+export { type ZootCategoriaMensal, groupByMes, groupByCategoria, totalizarPorMes, categoriasUnicas, ERRO_LEITURA_REBANHO };
 export { type ZootMensal, indexByMes };
 
 // ---------------------------------------------------------------------------
@@ -192,81 +193,9 @@ function normalizeMetaCategorias(
   });
 }
 
-function buildMetaFazendaRows(rows: ZootCategoriaMensal[], baseRows: ZootMensal[]): ZootMensal[] {
-  if (rows.length === 0) return baseRows;
-
-  const groupedByMes = groupByMes(rows);
-  const baseByMes = indexByMes(baseRows);
-  const meses = Array.from(new Set([
-    ...baseRows.map(row => row.mes),
-    ...rows.map(row => row.mes),
-  ])).sort((a, b) => a - b);
-
-  return meses.map((mes) => {
-    const mesKey = String(mes).padStart(2, '0');
-    const baseRow = baseByMes[mesKey];
-    const cats = groupedByMes[mes] || [];
-
-    if (cats.length === 0 && baseRow) return baseRow;
-    if (cats.length === 0) {
-      throw new Error(`Meta sem categorias para o mês ${mesKey}`);
-    }
-
-    const first = cats[0];
-    const cabecasInicio = cats.reduce((sum, row) => sum + row.saldo_inicial, 0);
-    const cabecasFinal = cats.reduce((sum, row) => sum + row.saldo_final, 0);
-    const pesoInicioKg = roundNumber(cats.reduce((sum, row) => sum + row.peso_total_inicial, 0), 2);
-    const pesoTotalFinalKg = roundNumber(cats.reduce((sum, row) => sum + row.peso_total_final, 0), 2);
-    const pesoEntradasKg = roundNumber(cats.reduce((sum, row) => sum + row.peso_entradas_externas, 0), 2);
-    const pesoSaidasKg = roundNumber(cats.reduce((sum, row) => sum + row.peso_saidas_externas, 0), 2);
-    const entradas = cats.reduce((sum, row) => sum + row.entradas_externas, 0);
-    const saidas = cats.reduce((sum, row) => sum + row.saidas_externas, 0);
-    const gmdNumeradorKg = roundNumber(cats.reduce((sum, row) => sum + row.producao_biologica, 0), 2);
-    const diasMes = baseRow?.dias_mes ?? first.dias_mes;
-    const cabecasMedias = (cabecasInicio + cabecasFinal) / 2;
-    const pesoMedioFinalKg = cabecasFinal !== 0 ? roundNumber(pesoTotalFinalKg / cabecasFinal, 2) : null;
-    const gmdKgCabDia = cabecasMedias !== 0 && diasMes > 0
-      ? roundNumber(gmdNumeradorKg / cabecasMedias / diasMes, 4)
-      : null;
-    const uaMedia = pesoMedioFinalKg !== null
-      ? roundNumber((cabecasMedias * pesoMedioFinalKg) / 450, 2)
-      : null;
-    const areaProdutivaHa = baseRow?.area_produtiva_ha ?? 0;
-    const lotacaoUaHa = uaMedia !== null && areaProdutivaHa > 0
-      ? roundNumber(uaMedia / areaProdutivaHa, 2)
-      : null;
-
-    return {
-      fazenda_id: first.fazenda_id,
-      cliente_id: first.cliente_id,
-      ano: first.ano,
-      mes,
-      cenario: 'meta',
-      mes_key: mesKey,
-      ano_mes: `${first.ano}-${mesKey}`,
-      cabecas_inicio: cabecasInicio,
-      cabecas_final: cabecasFinal,
-      peso_inicio_kg: pesoInicioKg,
-      peso_total_final_kg: pesoTotalFinalKg,
-      peso_medio_final_kg: pesoMedioFinalKg,
-      peso_entradas_kg: pesoEntradasKg,
-      peso_saidas_kg: pesoSaidasKg,
-      entradas,
-      saidas,
-      dias_mes: diasMes,
-      gmd_kg_cab_dia: gmdKgCabDia,
-      gmd_numerador_kg: cabecasMedias !== 0 ? gmdNumeradorKg : null,
-      ua_media: uaMedia,
-      area_produtiva_ha: areaProdutivaHa,
-      lotacao_ua_ha: lotacaoUaHa,
-      fonte_oficial_mes: baseRow?.fonte_oficial_mes ?? 'projecao',
-    };
-  });
-}
-
 /**
  * Synthesize ZootMensal rows from category-level data.
- * Used in Global mode where useZootMensal cannot work (no single fazenda_id).
+ * Global e uma fazenda (REBANHO-LEITURA-01 D1: a view `vw_zoot_fazenda_mensal` saiu do hook).
  */
 function buildFazendaRowsFromCategories(rows: ZootCategoriaMensal[]): ZootMensal[] {
   const byMesMap = groupByMes(rows);
@@ -356,6 +285,7 @@ export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseR
     data: categoriasData,
     isLoading: loadingCategorias,
     error: errorCategorias,
+    refetch: refetchCategorias,
   } = useZootCategoriaMensal({ ano, cenario, global: resolvedGlobal, enabled });
 
   // ── Fechamento oficial: dados consolidados por categoria para meses fechados ──
@@ -439,15 +369,11 @@ export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseR
     placeholderData: keepPreviousData,
   });
 
-  // useZootMensal only works for single-fazenda (NOT global).
-  const {
-    data: fazendaData,
-    isLoading: loadingFazenda,
-    error: errorFazenda,
-  } = useZootMensal({ ano, cenario, enabled });
-
-  const loading = loadingCategorias || loadingFechamento || (resolvedGlobal ? false : loadingFazenda);
-  const error = errorCategorias || (resolvedGlobal ? null : errorFazenda);
+  /* REBANHO-LEITURA-01 D1 (Gabriel 01/11/2026) — a view `vw_zoot_fazenda_mensal` (o `useZootMensal`) SAIU: numa fazenda ela estourava
+     o tempo do papel `authenticated` (8,1 s, 57014) para todo cliente, e todo número da linha do mês saía "—". A linha do mês agora é
+     montada das categorias, a mesma regra do Global (abaixo, `rawFazenda`). */
+  const loading = loadingCategorias || loadingFechamento;
+  const error = errorCategorias;
 
   // ── Raw data with fechamento overlay ──
   const baseCategorias = categoriasData ?? [];
@@ -487,83 +413,36 @@ export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseR
     return aplicarOverlayFechamento(rows, overlayMap, mesesFechados, ano, cenario);
   }, [baseCategorias, cenario, resolvedGlobal, metaGmdRows, overlayMap, mesesFechados, ano]);
 
-  const baseFazenda = fazendaData ?? [];
-
-  // ── rawFazenda: SEMPRE recalculado a partir de rawCategorias para meses fechados ──
+  // ── rawFazenda: a linha do mês, SEMPRE montada de rawCategorias (Global e uma fazenda, realizado e meta) ──
   const rawFazenda = useMemo(() => {
+    const rows = buildFazendaRowsFromCategories(rawCategorias);
+    /* A área do mês (SM-ARRENDAMENTO-ENCERRAR-01, Gabriel 30/10/2026): os pastos ativos e vigentes naquele mês (`areaDosPastosNoMes`).
+       - Global: só das fazendas presentes nas categorias (saldo_final > 0 em algum mês do período) — fazenda com pasto e sem rebanho
+         não entra no denominador da lotação.
+       - Uma fazenda (REBANHO-LEITURA-01 D1): os pastos DELA, a mesma soma que a view fazia (`entra_conciliacao` + vigência; nenhum
+         pasto do proto está fora da conciliação). Prova de 01/11 em todos os meses de todas as fazendas, realizado e meta: área 0
+         diferença; lotação 0 diferença fora da Bom Retiro (onde a view dobrava o rebanho, fev–jun/23). */
+    let pastosDaArea = pastos;
     if (resolvedGlobal) {
-      const rows = buildFazendaRowsFromCategories(rawCategorias);
-      // Area produtiva Global: soma apenas das fazendas presentes em categoriasData
-      // (saldo_final > 0 em pelo menos um mês do período). Fazendas com pastos
-      // cadastrados mas sem rebanho no período NÃO entram no denominador da lotação.
       const fazendasComRebanho = new Set<string>();
       for (const c of baseCategorias) {
         if (c.saldo_final > 0 && c.fazenda_id) fazendasComRebanho.add(c.fazenda_id);
       }
-      // SM-ARRENDAMENTO-ENCERRAR-01 (Gabriel 30/10/2026): a área é a do MÊS da linha (pastos ativos e vigentes naquele mês,
-      // `areaDosPastosNoMes`). Antes era UM valor para o ano, somando até pasto inativo e arrendamento já devolvido.
-      const daFazendaComRebanho = pastos.filter(p => fazendasComRebanho.has(p.fazenda_id));
-      return rows.map(r => {
-        const areaDoMes = areaDosPastosNoMes(daFazendaComRebanho, r.ano_mes);
-        return {
-          ...r,
-          area_produtiva_ha: areaDoMes,
-          lotacao_ua_ha: areaDoMes > 0 && r.ua_media !== null
-            ? roundNumber(r.ua_media / areaDoMes, 2)
-            : null,
-        };
-      });
+      pastosDaArea = pastos.filter(p => fazendasComRebanho.has(p.fazenda_id));
+    } else if (fazendaId) {
+      pastosDaArea = pastos.filter(p => p.fazenda_id === fazendaId);
     }
-
-    if (cenario === 'meta') {
-      return buildMetaFazendaRows(rawCategorias, baseFazenda);
-    }
-
-    // Realizado: se há meses fechados, reconstruir rawFazenda inteiramente
-    // a partir de rawCategorias (já corrigido com dados oficiais)
-    if (mesesFechados.size > 0) {
-      // Build from rawCategorias for closed months, keep baseFazenda for open months
-      const fromCats = buildFazendaRowsFromCategories(rawCategorias);
-      const catByMes = new Map<string, ZootMensal>();
-      for (const r of fromCats) catByMes.set(r.mes_key, r);
-
-      const baseByMesMap = indexByMes(baseFazenda);
-
-      // Merge: closed months from categories, open months from base
-      const allMeses = new Set<string>();
-      for (const r of baseFazenda) allMeses.add(r.mes_key);
-      for (const r of fromCats) allMeses.add(r.mes_key);
-
-      const result: ZootMensal[] = [];
-      for (const mesKey of Array.from(allMeses).sort()) {
-        const anoMes = `${ano}-${mesKey}`;
-        const fazendaIdLocal = resolvedGlobal ? undefined : fazendaId;
-        const mesesFechadoKey = fazendaIdLocal ? `${anoMes}|${fazendaIdLocal}` : anoMes;
-        if (mesesFechados.has(mesesFechadoKey) || (resolvedGlobal && Array.from(mesesFechados).some(k => k.startsWith(anoMes + '|')))) {
-          // Mês fechado: usar dados recalculados a partir de rawCategorias
-          const catRow = catByMes.get(mesKey);
-          if (catRow) {
-            // Preserve area_produtiva from base
-            const baseRow = baseByMesMap[mesKey];
-            result.push({
-              ...catRow,
-              area_produtiva_ha: baseRow?.area_produtiva_ha ?? catRow.area_produtiva_ha,
-              lotacao_ua_ha: baseRow?.area_produtiva_ha && catRow.ua_media
-                ? roundNumber(catRow.ua_media / baseRow.area_produtiva_ha, 2)
-                : catRow.lotacao_ua_ha,
-            });
-          }
-        } else {
-          // Mês aberto: usar view diretamente
-          const baseRow = baseByMesMap[mesKey];
-          if (baseRow) result.push(baseRow);
-        }
-      }
-      return result;
-    }
-
-    return baseFazenda;
-  }, [baseFazenda, cenario, resolvedGlobal, rawCategorias, baseCategorias, mesesFechados, ano, pastos]);
+    return rows.map(r => {
+      const areaDoMes = areaDosPastosNoMes(pastosDaArea, r.ano_mes);
+      return {
+        ...r,
+        area_produtiva_ha: areaDoMes,
+        lotacao_ua_ha: areaDoMes > 0 && r.ua_media !== null
+          ? roundNumber(r.ua_media / areaDoMes, 2)
+          : null,
+      };
+    });
+  }, [resolvedGlobal, fazendaId, rawCategorias, baseCategorias, pastos]);
 
   // ── Grouped data ──
   const byMes = useMemo(() => groupByMes(rawCategorias), [rawCategorias]);
@@ -776,6 +655,8 @@ export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseR
     // Status
     loading,
     error,
+    /** D4 (REBANHO-LEITURA-01) — o "Tentar de novo" da tela: relê as categorias (o erro nunca vira lista vazia). */
+    tentarDeNovo: refetchCategorias,
 
     // Raw data (for advanced consumers)
     rawCategorias,

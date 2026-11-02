@@ -30,7 +30,8 @@ import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
 import { divisoesNoPainel, type Divisao } from '@/lib/mapa/unidadesDoMapa';
 import { areaCercadaDoPasto } from '@/lib/mapa/areaCercada';
 import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Ponto } from '@/lib/mapa/rotulosDoMapa';
-import { COR_DA_FAIXA, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
+import { COR_DA_FAIXA, faixaDaLotacaoUa, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
+import { tituloDosLotes } from '@/lib/mapa/lotesDoPasto';
 import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
 import { FUNDOS } from '@/lib/mapa/fundoDoMapa';
@@ -275,7 +276,8 @@ export function MapaGestorView({
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
-  const [serieDoHistorico, setSerieDoHistorico] = useState<'kg' | 'ua'>('kg'); // MAPA-PAINEL-COMPACTO-01: abre em kg/ha
+  /* MAPA-PAINEL-LOTE-UA-01 (Gabriel 02/11): o histórico abre SEMPRE em UA/ha; o kg/ha troca, e a escolha não é lembrada (volta ao trocar de pasto) */
+  const [serieDoHistorico, setSerieDoHistorico] = useState<'kg' | 'ua'>('ua');
   const [filtrosAbertos, setFiltrosAbertos] = useState(true);
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS);
   const [creditosNoRodape, setCreditosNoRodape] = useState(true); // MAPA-CONTROLES-01
@@ -300,7 +302,7 @@ export function MapaGestorView({
   const geoSelecionada = selecionadoId ? geoPastos.find(g => g.id === selecionadoId) ?? null : null;
   const pastoSelecionado = geoSelecionada?.pasto_id ? pastoPorId.get(geoSelecionada.pasto_id) ?? null : null;
   /* MAPA-02f-b: a infraestrutura — colocar (um clique no mapa), ver, editar (arrastar o ponto) e desativar */
-  const { infras, bens, salvar: salvarInfra, desativar: desativarInfra, recarregar: recarregarInfra } = useInfraestruturas(fazendaId);
+  const { infras, bens, salvar: salvarInfra, desativar: desativarInfra, criarBem: criarBemDaInfra, recarregar: recarregarInfra } = useInfraestruturas(fazendaId);
   const [colocandoTipo, setColocandoTipo] = useState<TipoInfra | null>(null);
   const [pontoNovo, setPontoNovo] = useState<{ lon: number; lat: number } | null>(null);
   const [infraSelId, setInfraSelId] = useState<string | null>(null);
@@ -319,6 +321,8 @@ export function MapaGestorView({
   const familiaSelecionada = familiaDoPasto(dadosSelecionado);
   const lavouraSelecionada = pastoSelecionado && familiaSelecionada === 'lavoura'
     ? lavouraDoPastoNoMes(registrosDeLavoura, pastoSelecionado.id, anoMes) : null;
+
+  useEffect(() => { setSerieDoHistorico('ua'); }, [selecionadoId]);
 
   // o polígono deixou de ser pasto (vínculo removido) ou sumiu: o painel fecha
   useEffect(() => {
@@ -563,6 +567,7 @@ export function MapaGestorView({
     } else subtitulo = `${rotuloDaAtividade(dadosSelecionado.atividade)} · fechamento ${mesDoMapa}`;
   }
   const hist = dadosSelecionado?.historico ?? [];
+  const lotes = tituloDosLotes(dadosSelecionado?.categorias ?? [], !!dadosSelecionado?.temFechamento);
   /* MAPA-PAINEL-COMPACTO-01: a escala das barras segue a série escolhida (kg/ha ou UA/ha) */
   const maxDoHistorico = Math.max(serieDoHistorico === 'kg' ? 1 : 0.1, ...hist.map(h => (serieDoHistorico === 'kg' ? h.kgHa : h.uaHa) ?? 0));
   /* a área MEDIDA no mapa (o polígono do pasto) ao lado da oficial do cadastro; a diferença com sinal, só se passa de 0,05 ha */
@@ -822,7 +827,7 @@ export function MapaGestorView({
             infra={infraSel}
             ponto={infraSel ? (pontoEditado ?? pontoDaInfra(infraSel.geometria) ?? { lon: 0, lat: 0 }) : (pontoNovo ?? { lon: 0, lat: 0 })}
             pastoSugerido={pontoNovo ? pastoNoPonto(pontoNovo.lon, pontoNovo.lat, geoPastos) : null}
-            pastos={pastos} bens={bens} salvar={salvarInfra} desativar={desativarInfra}
+            pastos={pastos} bens={bens} salvar={salvarInfra} desativar={desativarInfra} criarBem={criarBemDaInfra}
             onEditando={setEditandoInfra}
             onGravou={() => { fecharInfra(); recarregarInfra(); }}
             onFechar={fecharInfra} />
@@ -880,13 +885,16 @@ export function MapaGestorView({
                   lida={lavouraLida} erro={erroDaLavoura} mes={mesDoMapa} />
               )}
               {!familiaSelecionada && (<>
-              <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Categorias</div>
-              {/* tabela: uma linha por REGISTRO do fechamento (categoria · lote · cab · peso); texto longo com "…" e o inteiro no title */}
+              {/* MAPA-PAINEL-LOTE-UA-01: o título é o LOTE do mês ("Lote X" · "Lotes: A · B" · "Sem lote"); duas linhas reservadas (fora de
+                  tabela o texto quebra, nunca "…"; o inteiro também no title) */}
+              <div className="mb-0.5 mt-2 h-[24px] overflow-hidden break-words text-[9.5px] font-semibold leading-[12px] text-[#4A5361]"
+                title={lotes.titulo} data-testid="mapa-painel-lotes">{lotes.titulo}</div>
+              {/* tabela: uma linha por REGISTRO do fechamento (categoria · cab · peso; o lote por linha só com mais de um); "…" com o inteiro no title */}
               <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }} data-reticencias-com-title data-testid="mapa-painel-categorias">
-                <colgroup><col /><col style={{ width: 54 }} /><col style={{ width: 30 }} /><col style={{ width: 44 }} /></colgroup>
+                <colgroup><col />{lotes.varios && <col style={{ width: 54 }} />}<col style={{ width: 30 }} /><col style={{ width: 44 }} /></colgroup>
                 <thead>
                   <tr className="text-[9.5px] text-[#5A6472]">
-                    <th className="h-[14px] px-0.5 text-left font-normal">Categoria</th><th className="h-[14px] px-0.5 text-left font-normal">Lote</th>
+                    <th className="h-[14px] px-0.5 text-left font-normal">Categoria</th>{lotes.varios && <th className="h-[14px] px-0.5 text-left font-normal">Lote</th>}
                     <th className="h-[14px] px-0.5 text-right font-normal">Cab.</th><th className="h-[14px] px-0.5 text-right font-normal">Peso</th>
                   </tr>
                 </thead>
@@ -894,31 +902,33 @@ export function MapaGestorView({
                   {(dadosSelecionado?.categorias ?? []).map((c, i) => (
                     <tr key={`${c.nome}-${c.lote ?? ''}-${i}`}>
                       <td className="h-[16px] truncate px-0.5 text-[10px]" title={c.nome}>{c.nome}</td>
-                      <td className="h-[16px] truncate px-0.5 text-[9.5px] text-[#5A6472]" title={c.lote ?? undefined}>{c.lote ?? ''}</td>
+                      {lotes.varios && <td className="h-[16px] truncate px-0.5 text-[9.5px] text-[#5A6472]" title={c.lote ?? undefined}>{c.lote ?? ''}</td>}
                       <td className="h-[16px] px-0.5 text-right text-[10px] font-semibold tabular-nums">{formatNum(c.quantidade, 0)}</td>
                       <td className="h-[16px] whitespace-nowrap px-0.5 text-right text-[9.5px] tabular-nums text-[#5A6472]">{branco(c.peso_medio_kg, 0, ' kg')}</td>
                     </tr>
                   ))}
                   {(dadosSelecionado?.categorias.length ?? 0) > 1 && (
                     <tr className="border-t border-black/[0.12]" data-testid="mapa-painel-total">
-                      <td className="h-[16px] px-0.5 text-[10px] font-semibold">Total</td><td />
+                      <td className="h-[16px] px-0.5 text-[10px] font-semibold">Total</td>{lotes.varios && <td />}
                       <td className="h-[16px] px-0.5 text-right text-[10px] font-semibold tabular-nums">{branco(dadosSelecionado?.cabecas)}</td>
                       <td className="h-[16px] whitespace-nowrap px-0.5 text-right text-[9.5px] font-semibold tabular-nums">{branco(dadosSelecionado?.pesoMedioKg, 0, ' kg')}</td>
                     </tr>
                   )}
                   {(dadosSelecionado?.categorias.length ?? 0) === 0 && dadosSelecionado?.temFechamento && (
-                    <tr><td colSpan={4} className="h-[16px] px-0.5 text-[10px] text-[#5A6472]">Sem animais no fechamento do mês</td></tr>
+                    <tr><td colSpan={lotes.varios ? 4 : 3} className="h-[16px] px-0.5 text-[10px] text-[#5A6472]">Sem animais no fechamento do mês</td></tr>
                   )}
                 </tbody>
               </table>
               <div className="mb-0.5 mt-2 flex items-center justify-between text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">
                 <span>Histórico de lotação</span>
                 <Segmentado valor={serieDoHistorico} onEscolher={setSerieDoHistorico} altura={20} fonte={9.5}
-                  opcoes={[{ valor: 'kg', rotulo: 'kg/ha' }, { valor: 'ua', rotulo: 'UA/ha' }]} />
+                  opcoes={[{ valor: 'ua', rotulo: 'UA/ha' }, { valor: 'kg', rotulo: 'kg/ha' }]} />
               </div>
               <div className="flex h-[72px] items-end gap-[3px] pt-1" data-testid="mapa-historico">
                 {hist.map(h => {
                   const v = serieDoHistorico === 'kg' ? h.kgHa : h.uaHa;
+                  /* a cor segue a régua NA UNIDADE MOSTRADA (kg/ha 300/500 · UA/ha 0,67/1,11, LOTACAO-REF D2) */
+                  const faixa = serieDoHistorico === 'kg' ? h.faixa : faixaDaLotacaoUa(h.uaHa);
                   const titulo = `${mesAbreviado(h.anoMes)}/${h.anoMes.slice(2, 4)}: ${h.vedado ? 'vedado' : v == null ? 'sem fechamento'
                     : serieDoHistorico === 'kg' ? `${formatNum(v, 0)} kg/ha` : `${formatNum(v, 2)} UA/ha`}`;
                   return (
@@ -929,7 +939,7 @@ export function MapaGestorView({
                       {h.vedado ? (
                         <div className="h-[6px] w-full rounded-t-[2px] bg-[repeating-linear-gradient(45deg,#9AA3AE_0,#9AA3AE_2px,transparent_2px,transparent_4px)]" />
                       ) : v != null && (
-                        <div className="w-full rounded-t-[2px]" style={{ height: Math.max(2, (v / maxDoHistorico) * 50), background: h.faixa ? COR_DA_FAIXA[h.faixa] : COR_DA_FAIXA.vazio }} />
+                        <div className="w-full rounded-t-[2px]" style={{ height: Math.max(2, (v / maxDoHistorico) * 50), background: faixa ? COR_DA_FAIXA[faixa] : COR_DA_FAIXA.vazio }} />
                       )}
                     </div>
                   );

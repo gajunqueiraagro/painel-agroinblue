@@ -4,10 +4,13 @@
  * A recusa do banco vem pronta (P0001); sem acesso (42501) e edição simultânea (40001) viram frases da casa; nunca toast.
  * ⚠ `(supabase as any)`: as tabelas e funções da 02f-a ainda não estão no types.ts (a exceção da regra, até regenerar).
  * ⚠ Leitura que chega depois de a fazenda mudar não escreve (OC-ABRIR-LENTO-01).
+ * INFRA-FICHAS-PATR-01: lê a `ficha` e cria o bem do Patrimônio pela `fn_infra_criar_bem` (cria e liga numa transação; prévia por padrão).
+ * ⚠ ORDEM: a coluna `ficha` e a função nascem na migration 20261028117100 — esta tela só vai ao ar DEPOIS dela aplicada.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { argumentoDaInfra, type CamposDaInfra, type InfraLida } from '@/lib/mapa/infraestrutura';
+import { lerFicha } from '@/lib/mapa/fichasDaInfra';
 
 export interface BemDaFazenda { id: string; codigo: string | null; descricao: string; situacao: string; categoria: string | null }
 export interface Resposta { ok: boolean; dado: unknown; motivo: string | null }
@@ -41,7 +44,7 @@ function lerInfras(dado: unknown): InfraLida[] {
     const s = (k: string) => { const v = Reflect.get(l, k); return typeof v === 'string' ? v : null; };
     const versao = Reflect.get(l, 'versao');
     return [{ id, tipo, fazenda_id: fazenda, geometria: Reflect.get(l, 'geometria'), nome: s('nome'), pasto_id: s('pasto_id'), bem_id: s('bem_id'),
-      observacao: s('observacao'), versao: typeof versao === 'number' ? versao : 1, criado_em: s('criado_em') ?? '', criado_por: s('criado_por') }];
+      observacao: s('observacao'), ficha: lerFicha(Reflect.get(l, 'ficha')), versao: typeof versao === 'number' ? versao : 1, criado_em: s('criado_em') ?? '', criado_por: s('criado_por') }];
   });
 }
 
@@ -57,7 +60,7 @@ export function useInfraestruturas(fazendaId: string | undefined) {
     (async () => {
       const [i, b] = await Promise.all([
         (supabase as any).from('fazenda_infraestruturas')
-          .select('id, fazenda_id, tipo, geometria, nome, pasto_id, bem_id, observacao, versao, criado_em, criado_por')
+          .select('id, fazenda_id, tipo, geometria, nome, pasto_id, bem_id, observacao, ficha, versao, criado_em, criado_por')
           .eq('fazenda_id', fazendaId).eq('ativo', true).order('criado_em', { ascending: true }),
         (supabase as any).from('patrimonio_bens')
           .select('id, codigo, descricao, situacao, categoria:patrimonio_categorias(codigo)')
@@ -88,6 +91,13 @@ export function useInfraestruturas(fazendaId: string | undefined) {
     return { ok: true, dado: data, motivo: null };
   }, []);
 
+  /** INFRA-FICHAS-PATR-01: cria o bem do Patrimônio a partir da infraestrutura e liga (o `p_bem` leva `categoria_codigo`) */
+  const criarBem = useCallback(async (infraId: string, versao: number, bem: Record<string, unknown>, simular: boolean): Promise<Resposta> => {
+    const { data, error } = await (supabase as any).rpc('fn_infra_criar_bem', { p_infra_id: infraId, p_versao: versao, p_bem: bem, p_simular: simular });
+    if (error) { if (error.code !== 'P0001') console.error('[useInfraestruturas] criar bem', error); return { ok: false, dado: null, motivo: frase(error) }; }
+    return { ok: true, dado: data, motivo: null };
+  }, []);
+
   const atual = lidas && lidas.fazendaId === fazendaId ? lidas : null;
-  return { infras: atual?.infras ?? [], bens: atual?.bens ?? [], erro, recarregar, salvar, desativar };
+  return { infras: atual?.infras ?? [], bens: atual?.bens ?? [], erro, recarregar, salvar, desativar, criarBem };
 }

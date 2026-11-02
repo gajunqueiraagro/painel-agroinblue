@@ -45,6 +45,15 @@ export function areaNoMesOuHoje(p: { id?: string; area_produtiva_ha?: number | n
   return p.area_produtiva_ha ?? 0;
 }
 
+/** PASTO-AREA-OFICIAL-02b — os pastos com a área DO MÊS no lugar da de hoje (o que o `areaDe` não sabe fica como está). Para telas de um
+ *  mês que passam o pasto adiante (o card e o modal do Fechamento): uma troca na entrada, nenhuma conta mudada lá dentro. */
+export function comAreaDoMes<P extends { id: string; area_produtiva_ha: number | null }>(pastos: readonly P[], anoMes: string, areaDe: AreaDoPastoNoMes): P[] {
+  return pastos.map((p) => {
+    const a = areaDe(p.id, anoMes);
+    return a === undefined ? p : { ...p, area_produtiva_ha: a };
+  });
+}
+
 export async function lerAreaDosPastosNoMes(fazendaIds: readonly string[], de: string, ate: string): Promise<AreaDoMesLida[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC nova fora do `types.ts` (a exceção do zero-cast)
   const { data, error } = await (supabase as any).rpc('fn_pastos_area_do_mes', { p_fazendas: fazendaIds, p_de: de, p_ate: ate });

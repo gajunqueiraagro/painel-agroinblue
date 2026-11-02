@@ -84,6 +84,8 @@ describe('OC-HOSPEDEIRO-LEVE-01 — a OC aberta sobre Lançamentos não carrega 
     montar('/v2', false);
     await waitFor(() => expect(doRebanho().length).toBeGreaterThan(0), { timeout: 15_000 });
     const modulos = new Set(doRebanho().map((p) => p.split(' <= ')[1].split(':')[0]));
-    for (const m of ['hooks/useLancamentos.ts', 'hooks/useZootMensal.ts', 'hooks/useAnosDisponiveis.ts']) expect(modulos).toContain(m);
+    /* REBANHO-LEITURA-01 D1: a view saiu (o `useZootMensal` não lê mais nada); numa fazenda quem pede o rebanho é o cache, pelo
+       `useZootCategoriaMensal` */
+    for (const m of ['hooks/useLancamentos.ts', 'hooks/useZootCategoriaMensal.ts', 'hooks/useAnosDisponiveis.ts']) expect(modulos).toContain(m);
   }, 30_000);
 });

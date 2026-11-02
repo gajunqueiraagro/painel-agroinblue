@@ -5,6 +5,8 @@
  * - VER: só leitura (tipo, nome, pasto, bem, quem criou e quando) + "Editar" (arrastar o ponto no mapa e mudar os campos) e
  *   "Desativar" (motivo). Nada se apaga: desativar tira do mapa e fica na trilha.
  * A recusa do banco aparece aqui (nunca toast); o botão desabilitado diz por quê.
+ * INFRA-FICHAS-PATR-01: a FICHA do tipo (editar no NOVO/EDITAR, ler no VER) e o bloco Patrimônio do VER: o bem ligado, ou "Criar bem no
+ * Patrimônio" (`CriarBemDaInfra`, cria e liga numa transação) e "Ligar a um bem existente" (o seletor do EDITAR).
  */
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
@@ -14,8 +16,11 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useNomesDosAutores } from '@/hooks/useNomesDosAutores';
 import type { BemDaFazenda, Resposta } from '@/hooks/useInfraestruturas';
 import { COR_DO_GRUPO, definicaoDoTipo, iconeDaInfra, type CamposDaInfra, type InfraLida, type TipoInfra } from '@/lib/mapa/infraestrutura';
+import { limparFicha, type Ficha } from '@/lib/mapa/fichasDaInfra';
+import { FichaEditar, FichaLer } from '@/components/mapa-geo/FichaDaInfra';
+import { CriarBemDaInfra } from '@/components/mapa-geo/CriarBemDaInfra';
 
-type Modo = 'novo' | 'ver' | 'editar' | 'desativar';
+type Modo = 'novo' | 'ver' | 'editar' | 'desativar' | 'criarBem';
 const SEM = '__sem__';
 
 interface Props {
@@ -31,6 +36,8 @@ interface Props {
   bens: readonly BemDaFazenda[];
   salvar: (c: CamposDaInfra, simular: boolean, motivo?: string) => Promise<Resposta>;
   desativar: (id: string, motivo: string, simular: boolean) => Promise<Resposta>;
+  /** INFRA-FICHAS-PATR-01: cria o bem do Patrimônio e liga (`fn_infra_criar_bem`) */
+  criarBem: (infraId: string, versao: number, bem: Record<string, unknown>, simular: boolean) => Promise<Resposta>;
   /** o painel avisa quando entra/sai da edição (o mapa deixa arrastar o ponto) */
   onEditando: (editando: boolean) => void;
   onGravou: () => void;
@@ -54,6 +61,7 @@ export function InfraPainel(p: Props) {
   const [pastoId, setPastoId] = useState(p.infra ? (p.infra.pasto_id ?? SEM) : (p.pastoSugerido ?? SEM));
   const [bemId, setBemId] = useState(p.infra?.bem_id ?? SEM);
   const [observacao, setObservacao] = useState(p.infra?.observacao ?? '');
+  const [ficha, setFicha] = useState<Ficha>(p.infra?.ficha ?? {});
   const [motivo, setMotivo] = useState('');
   const [previa, setPrevia] = useState<string | null>(null);
   const [recusa, setRecusa] = useState<string | null>(null);
@@ -64,7 +72,8 @@ export function InfraPainel(p: Props) {
 
   useEffect(() => { onEditando(modo === 'editar'); }, [modo, onEditando]);
   /* qualquer mudança derruba a prévia: o Gravar só vale para o que foi conferido */
-  useEffect(() => { setPrevia(null); setRecusa(null); }, [nome, pastoId, bemId, observacao, p.ponto.lon, p.ponto.lat, modo]);
+  const fichaChave = JSON.stringify(ficha);
+  useEffect(() => { setPrevia(null); setRecusa(null); }, [nome, pastoId, bemId, observacao, fichaChave, p.ponto.lon, p.ponto.lat, modo]);
 
   const opcoesDePasto = useMemo(() => [{ value: SEM, label: 'Fora de pasto' },
     ...p.pastos.filter(x => x.ativo).map(x => ({ value: x.id, label: x.nome, sub: x.id === p.pastoSugerido ? 'onde o ponto caiu' : undefined }))],
@@ -76,7 +85,7 @@ export function InfraPainel(p: Props) {
 
   const campos = (): CamposDaInfra => ({
     id: p.infra?.id ?? null, versao: p.infra?.versao ?? null, fazendaId: p.fazendaId, tipo: p.tipo, lon: p.ponto.lon, lat: p.ponto.lat,
-    nome, pastoId: pastoId === SEM ? null : pastoId, bemId: bemId === SEM ? null : bemId, observacao,
+    nome, pastoId: pastoId === SEM ? null : pastoId, bemId: bemId === SEM ? null : bemId, observacao, ficha: limparFicha(p.tipo, ficha),
   });
 
   const verPrevia = async () => {
@@ -99,6 +108,12 @@ export function InfraPainel(p: Props) {
   const quando = p.infra?.criado_em ? new Date(p.infra.criado_em).toLocaleDateString('pt-BR') : '';
   const pastoNome = (id: string | null) => (id ? p.pastos.find(x => x.id === id)?.nome ?? '' : '');
   const bem = p.infra?.bem_id ? p.bens.find(b => b.id === p.infra?.bem_id) : null;
+  if (modo === 'criarBem' && p.infra) {
+    return (
+      <CriarBemDaInfra className={p.className} tipo={p.tipo} ficha={p.infra.ficha ?? {}} pasto={pastoNome(p.infra.pasto_id) || null}
+        infraId={p.infra.id} versao={p.infra.versao} criarBem={p.criarBem} onGravou={p.onGravou} onVoltar={() => setModo('ver')} />
+    );
+  }
   const porQue = modo === 'desativar' && !motivo.trim() ? 'Diga o motivo.' : !previa ? 'Veja a prévia antes.' : previa === 'Nada muda.' ? 'Nada muda.' : null;
 
   return (
@@ -124,6 +139,22 @@ export function InfraPainel(p: Props) {
             <dt className="text-[#5A6472]">Criada</dt><dd>{[nomeDoAutor, quando].filter(Boolean).join(' · ')}</dd>
           </dl>
         )}
+        {modo === 'ver' && p.infra && (
+          <>
+            <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Ficha</div>
+            <FichaLer tipo={p.tipo} ficha={p.infra.ficha ?? {}} />
+            <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Patrimônio</div>
+            {bem ? (
+              <div className="break-words leading-[13px]" data-testid="infra-bem-ligado">{bem.codigo ? `${bem.codigo} · ` : ''}{bem.descricao}</div>
+            ) : (
+              <div className="flex flex-col gap-1" data-testid="infra-sem-bem">
+                <span className="text-[9.5px] leading-[12px] text-[#5A6472]">Ainda não é um bem do Patrimônio.</span>
+                <Button type="button" variant="outline" size="sm" className="h-6 w-full px-2 text-[10.5px]" onClick={() => setModo('criarBem')}>Criar bem no Patrimônio</Button>
+                <button type="button" className="self-start text-[10px] text-[#2B6CB0]" onClick={() => setModo('editar')}>Ligar a um bem existente</button>
+              </div>
+            )}
+          </>
+        )}
         {(modo === 'novo' || modo === 'editar') && (
           <div className="flex flex-col gap-1.5" data-testid="infra-formulario">
             <label className="flex flex-col gap-0.5"><span className="text-[9.5px] text-[#5A6472]">Nome</span>
@@ -134,6 +165,8 @@ export function InfraPainel(p: Props) {
               <SearchableSelect value={bemId} onValueChange={setBemId} options={opcoesDeBem} semTodos dense triggerClassName="h-[24px] min-h-0 py-0 text-[10.5px]" /></div>
             <label className="flex flex-col gap-0.5"><span className="text-[9.5px] text-[#5A6472]">Observação</span>
               <Input value={observacao} onChange={e => setObservacao(e.target.value)} className="h-[24px] px-1.5 text-[10.5px]" /></label>
+            <div className="mt-1 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Ficha</div>
+            <FichaEditar tipo={p.tipo} ficha={ficha} onChange={setFicha} />
           </div>
         )}
         {modo === 'desativar' && (

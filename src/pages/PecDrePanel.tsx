@@ -26,11 +26,14 @@ import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import { formatNum } from '@/lib/calculos/formatters';
 import {
   W_RS, W_HA, W_RS_TOTAL, larguraDoGrupo, FAIXA_TOTAL, VERDE, VERDE_70, VERMELHO, VERMELHO_70, NAVY_TOTAL, BORDA_TOTAL, BORDA_TOTAL_CAB, FUNDO_TOTAL, traco,
-  corDoSinal, corDoTotal, corDoApoio, marcadorDoTotal, Marcador, numeroDaCelula, Celula, CelulaUnit, Etiqueta, Caixas, REGUA_LINHA, tipoDaLinha,
-  fundoDaLinha,
-  type CaixaFaixa,
+  corDoSinal, corDoTotal, corDoApoio, marcadorDoTotal, Marcador, numeroDaCelula, Celula, CelulaUnit, Etiqueta, REGUA_LINHA, tipoDaLinha,
+  fundoDaLinha, CelulaPct, W_PCT, REGUA_RESULTADO, LINHAS_CHAVE, FUNDO_CHAVE, FONTE_CHAVE, corNaGrade,
 } from '@/components/agri/dreGrade';
 import { Segmentado } from '@/components/ui/segmentado';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem,
+} from '@/components/ui/dropdown-menu';
+import { MENU_SEGMENTADO, MENU_ROTULO } from '@/components/ui/menuPadrao';
 /* ⚠ A RÉGUA DA PECUÁRIA SAIU DAQUI — DRE-HISTORICO-LINHA-01a. A cascata, a conta das unidades e o
    tipo da coluna moram em `drePecRegua`, porque o modal do histórico precisa das MESMAS, e ele é
    montado por esta tela: importar de volta fecharia um ciclo. Nada mudou de corpo. */
@@ -62,6 +65,7 @@ const W_SUB = W_HA;
 const TITULO_ARROBA = 'Divisor por linha: receita e deduções pela @ vendida, reposição pela @ comprada, '
   + 'demais pela @ produzida. Esta coluna não soma.';
 const TITULO_CAB = 'R$ por cabeça média do período, por mês';
+const TITULO_PCT_VBP = 'O R$ da linha em % do VBP desta coluna (do VBP para baixo; nos subitens, vazio)';
 
 /** O que o cabeçalho da sub-coluna explica: a unidade, o período e a ÁREA que dividiu. */
 const tituloHa = (c: ColunaPec) => {
@@ -86,7 +90,6 @@ const tituloHa = (c: ColunaPec) => {
  * por período (comparação) ou por fazenda.
  */
 export type VisaoPec = 'comparacao' | 'fazenda';
-const VISOES: readonly VisaoPec[] = ['comparacao', 'fazenda'];
 
 /**
  * CONTRA O QUE O PERÍODO DA TELA SE LÊ — 'meta' ou quantos anos anteriores entram.
@@ -387,9 +390,15 @@ const larguraUn = (c: ColunaPec) => (c.total ? W_HA : W_SUB);
  * outros: desmarcá-lo deixa a coluna só com as unidades. O delta não entra nessa conta — ele é
  * "Δ R$ + Δ %" e sempre foi.
  */
-type SlotPec = UnidadePec | 'pct';
+/* ⚠ DRE-LEVE-01 (D2–D4): 'vbp' é a COLUNA "% VBP" de cada período — ela substitui a linha extra "% do VBP". Uma por coluna de valor, logo
+   depois do R$ (o % é sempre do R$, qualquer unidade marcada); o Δ não tem. */
+type SlotPec = UnidadePec | 'pct' | 'vbp';
+const comPctVbp = (s: readonly UnidadePec[]): readonly SlotPec[] => {
+  const i = s.indexOf('rs');
+  return i < 0 ? ['vbp', ...s] : [...s.slice(0, i + 1), 'vbp', ...s.slice(i + 1)];
+};
 const slotsDaColuna = (c: ColunaPec, unidades: readonly UnidadePec[]): readonly SlotPec[] =>
-  (c.tipo === 'delta' ? (c.deltaSlots ?? ['rs', 'pct']) : c.unidade === null ? ['rs'] : unidades);
+  (c.tipo === 'delta' ? (c.deltaSlots ?? ['rs', 'pct']) : comPctVbp(c.unidade === null ? ['rs'] : unidades));
 /* ⚠ A COLUNA DE Δ TEM LARGURA PRÓPRIA: ela carrega "▲ 12,3 %" ou um valor abreviado, nunca os
    milhões de uma coluna de R$ — mas a premissa de que ela é sempre menor ESTAVA ERRADA. Medido no
    fix6: o Δ do Lucro líquido é "-13.899.298,16", 71,4px numa caixa de 64, e o Δ é a diferença de
@@ -401,11 +410,20 @@ const W_DELTA_PCT = 70;
 const W_REFERENCIA = 98;
 const larguraSlot = (s: SlotPec, c: ColunaPec) => {
   if (c.tipo === 'delta') return s === 'pct' ? W_DELTA_PCT : W_DELTA_RS;
+  if (s === 'vbp') return W_PCT;
   if (c.comparacao) return s === 'rs' ? W_REFERENCIA : larguraUn(c);
   return s === 'rs' ? larguraRs(c) : larguraUn(c);
 };
 const rotuloSlot = (s: SlotPec, c: ColunaPec) =>
-  (s === 'pct' ? 'Δ %' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
+  (s === 'pct' ? 'Δ %' : s === 'vbp' ? '% VBP' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
+/** DRE-LEVE-01 (D3) — a linha mostra o % do VBP só do VBP para baixo, e nunca num subitem (filha, filha de grupo, "por hectare"). */
+const pctNaLinha = (def: DefPec, defs: readonly DefPec[]) => {
+  const iVbp = defs.findIndex(d => d.chave === BASE_DO_PERCENTUAL && !d.agrupa);
+  return !def.grupo && iVbp >= 0 && defs.indexOf(def) >= iVbp;
+};
+/** O texto da célula "% VBP" de uma linha numa coluna de valor: o R$ da linha (composta inclusive) ÷ o VBP da coluna. */
+const textoPctVbp = (col: ColunaPec, v: number | null) =>
+  (!col.linhas || col.tipo === 'delta' ? '' : percentual(v, valorNaColuna(col, BASE_DO_PERCENTUAL) ?? 0));
 
 /**
  * A COLUNA META SE MARCA POR UM CONTORNO FINO E CONTÍNUO — fix8, decisão do Gabriel de 23/09.
@@ -437,8 +455,9 @@ const ehMeta = (c: ColunaPec) => c.chave === '__meta__';
  * ⚠ OPACOS DE PROPOSITO: a coluna de rotulos e a do Total sao `sticky`, e fundo transparente ali deixa
  *   o numero da coluna de baixo passar por tras (regra permanente do CLAUDE.md).
  */
-const FUNDO_GRUPO = 'bg-[#D6D4CC]';
-const ZEBRA_FILHA: readonly string[] = ['bg-[#F5F4F0]', 'bg-card'];
+/* ⚠ DRE-LEVE-01 (D6): o grupo e as filhas sem fundo próprio (o mock é branco); o grupo se lê pela seta e o subitem pela linha mais baixa. */
+const FUNDO_GRUPO = 'bg-card';
+const ZEBRA_FILHA: readonly string[] = ['bg-card', 'bg-card'];
 /** O recuo a mais de quem mora DENTRO de um grupo — um degrau da régua (8px). */
 const RECUO_NO_GRUPO = 8;
 
@@ -589,7 +608,10 @@ function BotaoHistorico({ onAbrir }: { onAbrir?: () => void }) {
          procurando o próximo histórico. Agora o recuo é do CONTEÚDO (ver `RECUO`), e o ícone tem x
          fixo; 12 + os 2 do `mr-0.5` de antes dão os mesmos 14, então o nome do subtotal não se
          moveu um pixel. */
+      /* ⚠ DRE-LEVE-01 (item 5): o ícone só aparece ao passar o mouse na linha (ou no foco do teclado); o lugar segue reservado, o
+         nome não anda. */
       className={cn('inline-block w-[14px] text-center align-[-2px] text-muted-foreground hover:text-primary',
+        'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
         !onAbrir && 'invisible')}>
       <BarChart3 className="inline h-2.5 w-2.5" />
     </button>
@@ -689,7 +711,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
        página inteira ganha barra lateral e, ao rolar, o cabeçalho da tela e a faixa de caixas
        saem de vista. `overflow-auto` sozinho não basta — ele só age depois que o pai aceita
        encolher. */
-    <div ref={cartaoRef}
+    <div ref={cartaoRef} data-desloca-livre="" data-testid="dre-grade-pec"
       className="min-w-0 max-w-full overflow-auto rounded-lg border border-border/60 bg-card"
       style={alturaCartao ? { maxHeight: alturaCartao } : undefined}>
       {/* ⚠ A MESMA RÉGUA DA LAVOURA: `leading-none`, px fixos e largura igual à soma das colunas.
@@ -744,7 +766,8 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                   <th key={sl}
                     className={cn(!c.total && CINZA_CABECALHO, 'sticky px-[7px] text-right text-[10px] font-normal text-white',
                       c.total ? 'z-40' : 'z-20')}
-                    title={sl === 'ha' ? tituloHa(c) : sl === 'arroba' ? TITULO_ARROBA : sl === 'cab' ? TITULO_CAB : undefined}
+                    title={sl === 'ha' ? tituloHa(c) : sl === 'arroba' ? TITULO_ARROBA : sl === 'cab' ? TITULO_CAB
+                      : sl === 'vbp' ? TITULO_PCT_VBP : undefined}
                     style={c.total
                       ? { top: ALTURA_NOME, backgroundColor: NAVY_TOTAL,
                           ...(i === 0 ? { borderLeft: BORDA_TOTAL_CAB } : {}),
@@ -816,7 +839,8 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                `lucro_liquido`, que hoje encerra os dois modos, a base pula para o "Lucro por hectare"
                quando o chip R$/ha está desmarcado, porque é ele que aparece embaixo. */
             const ultima = iDef === defs.length - 1;
-            const comPercentual = COM_PERCENTUAL.has(def.chave);
+            /* ⚠ DRE-LEVE-01 (D3): a linha extra "% do VBP" saiu — o % é a coluna "% VBP" da própria linha (`pctNaLinha`). */
+            const comPercentual = false;
             const comPorHectare = (COM_POR_HECTARE.has(def.chave) || !!def.porHectare) && !unidades.includes('ha');
             const comFilhas = aberto && centros.length > 0;
             const base = {
@@ -829,16 +853,13 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
               <Fragment key={idLinha}>
                 <LinhaPec def={def} colunas={colunas} centros={centros} unidades={unidades}
                   aberto={aberto} onAlternar={() => alternar(idLinha)} base={base.linha} zebra={zebra}
+                  comPct={pctNaLinha(def, defs)}
                   onAbrirLista={onAbrirLista} onAbrirDidatico={onAbrirDidatico}
                   onAbrirHistorico={onAbrirHistorico} />
 
                 {/* ⚠ A LINHA DE % VEM LOGO ABAIXO e é leitura de apoio: 9px, muted, sem recuo,
                     altura 14. Ela não é uma linha do DRE — é a mesma linha vista noutra unidade,
                     e por isso não ganha nem cor de sinal nem clique. */}
-                {comPercentual && (
-                  <LinhaPercentual def={def} colunas={colunas} unidades={unidades} base={base.percentual} />
-                )}
-
                 {/* ⚠ O LUCRO POR HECTARE É LEITURA DE APOIO, como o % do VBP: mesma régua (9px,
                     muted, altura 14), sem cor de sinal e sem clique. Ele some quando o chip R$/ha
                     está marcado — ali a sub-coluna já responde, e repetir a mesma conta duas vezes
@@ -864,8 +885,10 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   );
 }
 
-function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirHistorico }: {
+function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, comPct = false, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirHistorico }: {
   def: DefPec;
+  /** DRE-LEVE-01 (D3) — a coluna "% VBP" tem número nesta linha (do VBP para baixo, fora dos subitens). */
+  comPct?: boolean;
   /** O fundo da filha de um grupo (zebra) — DRE-RESUMIDO-CUSTEIO-01. */
   zebra?: string;
   colunas: readonly ColunaPec[];
@@ -892,9 +915,13 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
   const daFaixa = def.faixa ? FAIXA_TOTAL[def.faixa] : null;
   /* ⚠ O GRUPO PINTA A LINHA INTEIRA, inclusive a coluna Total — como a faixa: por isso ele entra no
      mesmo lugar dela (`faixa` da celula substitui o cinza inline do Total). */
-  const fundoForte = daFaixa ? daFaixa.fundo : def.agrupa ? FUNDO_GRUPO : undefined;
+  /* ⚠ DRE-LEVE-01 (D6): as três linhas-chave (Margem, Lucro operacional, Resultado econômico) têm o fundo azul-claro, que substitui o
+     fundo da célula como a faixa fazia (inclusive na coluna Total, que é `sticky`). */
+  const chave = LINHAS_CHAVE.has(def.chave);
+  const fundoForte = chave ? FUNDO_CHAVE : daFaixa ? daFaixa.fundo : def.agrupa ? FUNDO_GRUPO : undefined;
   const fundo = fundoForte ?? zebra ?? fundoDaLinha(def.destaque);
-  const corLinha = daFaixa ? (daFaixa.texto ?? '') : corDoTom(def.tom);
+  /* ⚠ DRE-LEVE-01 (D6): o rótulo na tinta da casa (o mock não pinta o nome); o subitem, em cinza. */
+  const corLinha = def.grupo ? 'text-muted-foreground' : 'text-foreground';
   const bloco = def.agrupa ? undefined : BLOCO_DA_LINHA[def.chave];
   const temFilhas = !!def.agrupa || (def.expande && centros.length > 0);
   /* ⚠ A LINHA DO RATEIO ADMINISTRATIVO ABRE O MODAL DE VALOR NA ABA RATEIO — DRE-MODAL-VALOR-01b.
@@ -914,12 +941,14 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
   /* ⚠ A MESMA RÉGUA DA LAVOURA (PR-10): o papel de grupo entra quando a linha expande, e é ela
      que traz o peso 500 sem mudar o tamanho. O mapa é um só de propósito: o dia em que o subtotal
      mudar de tamanho, ele muda nas duas telas. */
-  const regua = REGUA_LINHA[tipoDaLinha(def.destaque, temFilhas)];
+  /* ⚠ DRE-LEVE-01: resultado (toda linha com faixa) = negrito com a régua escura; subitem (filha de grupo) = a régua da filha (13px, 8,5). */
+  const resultado = !!def.faixa;
+  const regua = resultado ? REGUA_LINHA.subtotal : def.grupo ? REGUA_LINHA.filha : REGUA_LINHA[tipoDaLinha(def.destaque, temFilhas)];
   /* ⚠ O CABECALHO DO GRUPO NAO TEM RECUO: a seta ocupa o lugar dele — DRE-RESUMIDO-CUSTEIO-01, por
      MEDICAO. Com o recuo de 8, "(−) Custeio de produção" + seta + selo "c/ rateio" mediam 172,43px nos
      172 uteis da coluna de 200 e o selo saia "c/ ratei…" (reticencia e' proibida). Sem ele sobram 7,6px,
      e o texto fica ~6px a direita das linhas soltas, como no mock. As filhas descem um degrau. */
-  const recuo = def.agrupa ? 0 : regua.recuo + (def.grupo ? RECUO_NO_GRUPO : 0);
+  const recuo = def.agrupa ? 0 : def.grupo ? REGUA_LINHA.simples.recuo + RECUO_NO_GRUPO : regua.recuo;
   /* ⚠ O RÓTULO DO RATEIO ABRE O MODAL (DRE-PEC-TELA-02b): a frase que explicava o rateio acima da
      grade saiu, e o selo "estimado" é a porta para a explicação — pool, critério e a fatia da
      pecuária. Só quando a primeira coluna é o realizado do período da tela, o único que o modal lê. */
@@ -1006,7 +1035,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
   };
 
   return (
-    <tr className={cn(fundo, regua.peso)} style={{ height: regua.altura }}>
+    <tr className={cn('group', fundo, regua.peso, resultado && REGUA_RESULTADO)} style={{ height: regua.altura }}>
       <td className={cn('sticky left-0 z-30 truncate py-px', fundo,
         'border-r border-border/60', corLinha, (temFilhas || abrirRateioDoRotulo) && 'cursor-pointer')}
         title={def.title ?? (abrirRateioDoRotulo ? 'ver como o rateio foi feito' : def.rotulo)}
@@ -1082,8 +1111,11 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
         const v = valorDaLinha(col, def);
         /* ⚠ O Δ FICA FORA DISSO, dentro ou fora de faixa: a cor dele já é orientada pelo que a
            linha quer (cair um custo é verde), e `corDoTotal` leria o sinal cru da diferença. */
-        const cor = col.tipo === 'delta' ? (daFaixa ? corLinha : corDoDelta(def, v))
-          : corDoValor(def, v);
+        /* ⚠ DRE-LEVE-01 (D6): o número na cor do mock — custo e negativo em vermelho, o resto na tinta, o resultado-chave em navy. O Δ
+           segue a cor dele (a direção boa depende da linha). */
+        const cor = col.tipo === 'delta' ? corDoDelta(def, v)
+          : corNaGrade(v, { custo: def.tom === 'custo', chave });
+        const fonteValor = chave ? FONTE_CHAVE : regua.fonte;
         /* ⚠ JUROS DE FAZENDA: "—" no R$ (é ausência, não zero) e nada nas unidades. */
         const jurosDeFazenda = def.chave === 'juros' && col.fazendaId !== null;
         /* ⚠ A CÉLULA DIZ DE ONDE VEIO A PONTA — VPB-REGRA-UNICA-01. O `title` deixou de explicar um
@@ -1097,7 +1129,10 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
         const abrir = abrirDaColuna(col);
         return (
           <Fragment key={col.chave}>
-            {slots.map((sl, i) => (sl === 'rs' ? (
+            {slots.map((sl, i) => (sl === 'vbp' ? (
+              <CelulaPct key={sl} texto={comPct ? textoPctVbp(col, v) : ''} fundo={fundoForte ?? fundo}
+                estilo={{ ...estiloDoSlot(i), ...(col.total ? { backgroundColor: fundoForte ? undefined : FUNDO_TOTAL } : {}) }} />
+            ) : sl === 'rs' ? (
               /* ⚠ A COR É DA LINHA, EM TODA COLUNA — fix8 item B. A coluna de comparação (a meta ou
                  o ano anterior) saía em `text-muted-foreground`: receita, custo e resultado ficavam
                  todos cinzas, e o operador perdia justamente na coluna que existe para comparar o
@@ -1107,7 +1142,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
                  abaixo), que a comparação já lê menor. Apagar a cor era um segundo sinal para a
                  mesma pergunta — e custava a informação. */
               <Celula key={sl} valor={v} cor={cor}
-                destaque={def.destaque} fonte={col.comparacao ? REGUA_LINHA.simples.fonte : regua.fonte}
+                destaque={def.destaque} fonte={fonteValor}
                 /* ⚠ A DIVISÓRIA DE 1px SAI ONDE O TRACEJADO ENTRA: na `Celula` o bloco de borda é
                    aplicado DEPOIS do `estilo`, então os dois disputariam o mesmo `borderLeft` e o
                    1px venceria. Aqui a coluna Meta abre mão dela e recebe a sua por `estiloDoSlot`. */
@@ -1162,61 +1197,7 @@ function faixaDoApoio(def: DefPec) {
   };
 }
 
-/**
- * A LINHA DE PERCENTUAL — §3.
- *
- * ⚠ ELA NÃO É UMA LINHA DO DRE. Não entra em soma nenhuma e não abre lista: é a linha de cima dita
- * em outra unidade. De cor ela só tem o vermelho do negativo (ver `corDoApoio`). Por isso a régua dela é a de `filha` (9px, altura 14),
- * mas SEM recuo — recuar sugeriria que ela é um item dentro do subtotal, e ela não é.
- * ⚠ NO DELTA ELA FICA VAZIA: "% do VBP" de uma diferença não é leitura de nada.
- */
-function LinhaPercentual({ def, colunas, unidades, base }: {
-  def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[]; base?: boolean;
-}) {
-  const apoio = faixaDoApoio(def);
-  return (
-    <tr className={cn(apoio.fundo, 'font-normal')} style={{ height: 14 }}>
-      <td className={cn('sticky left-0 z-30 truncate border-r border-border/60 py-px', apoio.corRotulo, apoio.fundo)}
-        style={{ fontSize: 9, paddingLeft: RECUO_ICONE + L_ICONE, paddingRight: 7 }}
-        title={`${def.rotulo} em ${ROTULO_DA_BASE}`}>
-        {ROTULO_DA_BASE}
-      </td>
-      {colunas.map(col => {
-        const bruto = col.linhas && col.tipo !== 'delta' ? valorNaColuna(col, def.chave) : null;
-        const texto = !col.linhas || col.tipo === 'delta' ? ''
-          : percentual(bruto, valorNaColuna(col, BASE_DO_PERCENTUAL) ?? 0);
-        return (
-          <Fragment key={col.chave}>
-            <td className={cn('truncate px-[7px] text-right tabular-nums', apoio.corValor(bruto), apoio.fundo)}
-              style={{
-                fontSize: 9,
-                ...(col.total ? { ...apoio.semFundo({ backgroundColor: FUNDO_TOTAL }), borderLeft: BORDA_TOTAL } : {}),
-                ...(congelada(col, colunas) ? apoio.semFundo(estiloTotalRs) : {}),
-                ...bordaDaMeta(col, 0, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
-              }}>
-              {/* ⚠ MESMO SLOT DA LINHA DE CIMA — o "% do VBP" divide a coluna com o total que ele
-                  descreve, e o percentual desalinhado do número faria a coluna parecer torta. */}
-              {texto !== '' && <Marcador semSlot={col.tipo === 'delta'} />}
-              {texto}
-            </td>
-            {/* ⚠ AS CÉLULAS DE UNIDADE FICAM VAZIAS: um percentual não se divide por hectare, por
-                cabeça nem por arroba — ele já é a linha de cima noutra unidade. Vazias, não
-                ausentes: a coluna não pode encolher só nesta linha. */}
-            {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
-              <td key={sl} className={cn(apoio.fundo)}
-                style={{
-                  ...(col.total && i === 0
-                    ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
-                    : {}),
-                  ...bordaDaMeta(col, i + 1, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
-                }} />
-            ))}
-          </Fragment>
-        );
-      })}
-    </tr>
-  );
-}
+/* ⚠ DRE-LEVE-01 (D3): a `LinhaPercentual` ("% do VBP" numa linha própria) saiu — o % virou a coluna "% VBP" de cada período. */
 
 /**
  * O LUCRO POR HECTARE — DRE-CASCATA-03a.
@@ -1233,10 +1214,13 @@ function LinhaPorHectare({ def, colunas, unidades, base }: {
   def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[]; base?: boolean;
 }) {
   const apoio = faixaDoApoio(def);
+  /* ⚠ DRE-LEVE-01 (D6): "por hectare" é SUBITEM da linha de cima — a régua da filha (13px, 8,5), rótulo e número em cinza (negativo em
+     vermelho); a coluna "% VBP" fica vazia. */
+  const regua = REGUA_LINHA.filha;
   return (
-    <tr className={cn(apoio.fundo, 'font-normal')} style={{ height: 14 }}>
-      <td className={cn('sticky left-0 z-30 truncate border-r border-border/60 py-px', apoio.corRotulo, apoio.fundo)}
-        style={{ fontSize: 9, paddingLeft: RECUO_ICONE + L_ICONE, paddingRight: 7 }}
+    <tr className={cn(apoio.fundo, 'font-normal')} style={{ height: regua.altura }}>
+      <td className={cn('sticky left-0 z-30 truncate border-r border-border/60 py-px text-muted-foreground', apoio.fundo)}
+        style={{ fontSize: regua.fonte, paddingLeft: RECUO_ICONE + L_ICONE + regua.recuo, paddingRight: 7 }}
         title={`${def.rotulo} dividido pela área produtiva média do período`}>
         {ROTULO_POR_HECTARE}
       </td>
@@ -1247,34 +1231,30 @@ function LinhaPorHectare({ def, colunas, unidades, base }: {
         const ha = col.linhas?.producao.ha_medio ?? null;
         const texto = !col.linhas || col.tipo === 'delta' ? ''
           : v == null || ha == null || !(ha > 0) ? traco : `R$ ${formatNum(v / ha, 2)}/ha`;
+        const slots = slotsDaColuna(col, unidades);
         return (
           <Fragment key={col.chave}>
-            {/* ⚠ A SUBLINHA DO VBP E DO CUSTEIO SE PINTA COMO A LINHA DE CIMA (`porHectare`): VBP pelo
-                sinal, custeio em vermelho. A dos resultados segue no apoio de sempre. */}
             <td className={cn('truncate px-[7px] text-right tabular-nums',
-              def.porHectare ? corDoValor(def, v) : apoio.corValor(v), apoio.fundo)}
+              corNaGrade(v, { custo: def.tom === 'custo', apoio: true }), apoio.fundo)}
               style={{
-                fontSize: 9,
+                fontSize: regua.fonte,
                 ...(col.total ? { ...apoio.semFundo({ backgroundColor: FUNDO_TOTAL }), borderLeft: BORDA_TOTAL } : {}),
                 ...(congelada(col, colunas) ? apoio.semFundo(estiloTotalRs) : {}),
-                ...bordaDaMeta(col, 0, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
+                ...bordaDaMeta(col, 0, slots.length, base ? { base: true } : undefined),
               }}>
-              {/* ⚠ A LINHA DE APOIO RESERVA O SLOT COMO AS OUTRAS: ela mora na MESMA coluna do
-                  Lucro líquido, e sem a reserva o "Lucro por hectare" ficaria 10px à direita do
-                  número que ele explica. No traço o slot fica vazio, como em toda parte. */}
-              {texto !== '' && <Marcador marcador={texto === traco ? undefined : apoio.marcador(v)}
-                semSlot={col.tipo === 'delta'} />}
               {texto}
             </td>
-            {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
-              <td key={sl} className={cn(apoio.fundo)}
-                style={{
-                  ...(col.total && i === 0
-                    ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
-                    : {}),
-                  ...bordaDaMeta(col, i + 1, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
-                }} />
-            ))}
+            {slots.slice(1).map((sl, i) => {
+              const estilo: CSSProperties = {
+                ...(col.total && i === 0
+                  ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
+                  : {}),
+                ...bordaDaMeta(col, i + 1, slots.length, base ? { base: true } : undefined),
+              };
+              return sl === 'vbp'
+                ? <CelulaPct key={sl} texto="" fundo={apoio.fundo} estilo={estilo} />
+                : <td key={sl} className={cn(apoio.fundo)} style={estilo} />;
+            })}
           </Fragment>
         );
       })}
@@ -1304,7 +1284,8 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
   recuoExtra?: number;
 }) {
   const regua = REGUA_LINHA.filha;
-  const corLinha = corDoTom(def.tom);
+  /* ⚠ DRE-LEVE-01 (D6): o subitem em cinza; o custo e o negativo seguem vermelhos (o mock). */
+  const corDaFilha = (v: number | null) => corNaGrade(v, { custo: def.tom === 'custo', apoio: true });
   /* ⚠ A FILHA DO RATEIO NÃO VEM DE `centros`: ela é a linha `rateio_adm` da própria coluna, posta
      como filha do Custo fixo no modo Resumido. Procurá-la entre os centros devolveria nulo. */
   /* ⚠ COM O BOTÃO LIGADO, O GRUPO SOMA O SEU RATEIO — DRE-MODAL-VALOR-01b; a regra mora em
@@ -1314,7 +1295,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
   const soRateio = centro.bloco === 'rateio_adm' || centro.bloco === BLOCO_SO_RATEIO;
   return (
     <tr className={cn('bg-card', regua.peso)} style={{ height: regua.altura }}>
-      <td className="sticky left-0 z-30 truncate border-r border-border/60 bg-card py-px"
+      <td className="sticky left-0 z-30 truncate border-r border-border/60 bg-card py-px text-muted-foreground"
         style={{ fontSize: regua.fonte, paddingLeft: RECUO_ICONE + L_ICONE + regua.recuo + recuoExtra, paddingRight: 7 }}
         title={centro.centro}>
         {/* ⚠ A FILHA NÃO TEM ÍCONE — DRE-CASCATA-03b. Numa grade aberta eram dezenas de ícones
@@ -1351,7 +1332,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
           m = achar(col.ref);
           v = r == null || m == null ? null : r - m;
         } else v = achar(col.linhas);
-        const cor = col.tipo === 'delta' ? corDoDelta(def, v) : corLinha;
+        const cor = col.tipo === 'delta' ? corDoDelta(def, v) : corDaFilha(v);
         /* ⚠ A FILHA MANDA OS NÚMEROS DELA — DRE-MODAL-VALOR-01b: o direto do centro e o rateio do grupo
            de mesmo nome (só no custo fixo). A filha do rateio total e a do grupo sem centro não têm
            lista direta (`soRateio`). */
@@ -1377,7 +1358,9 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
            subtotal acima dele. */
         return (
           <Fragment key={col.chave}>
-            {slots.map((sl, i) => (sl === 'rs' ? (
+            {slots.map((sl, i) => (sl === 'vbp' ? (
+              <CelulaPct key={sl} texto="" fundo="bg-card" estilo={estiloDoSlot(i)} />
+            ) : sl === 'rs' ? (
               <Celula key={sl} valor={v} cor={cor} fonte={regua.fonte} filha
                 bordaEsquerda={!col.total && i === 0 && !ehMeta(col)} total={col.total} fundo="bg-card" onAbrir={abrir}
                 semSlotMarcador={col.tipo === 'delta'}
@@ -1397,77 +1380,111 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
   );
 }
 
+/* ⚠ DRE-LEVE-01 (D5a): o `FaixaVisoesPec` (os cards "Comparação" e "Por fazenda") saiu — a referência é o `ComparacaoPec` (1ª faixa) e
+   o "Por fazenda", o rateio e o Δ moram no `MaisPec` (2ª faixa). */
+
+/* ══════════════ AS DUAS FAIXAS DE FILTRO — DRE-LEVE-01 (D5a, Gabriel 31/10/2026) ══════════════ */
+
 /**
- * OS QUATRO CARDS DE VISÃO — DRE-PEC-TELA-02. Substituem a faixa de seis caixas: Cabeças, Receita
- * líquida, VBP, Efeito de mercado e Patrimônio saíram do topo porque já estão na grade.
- *
- * ⚠ CADA CARD MOSTRA UM NÚMERO SÓ, e o de "x Meta" e "x Anos" é o DELTA do resultado do período —
- * a resposta curta à pergunta do card. Enquanto o número não chegou, spinner: "—" diria que o dado
- * não existe (decisão 2).
- * ⚠ O SELETOR DE ANOS OCUPA O LUGAR SEMPRE, invisível fora da visão x Anos: aparecendo e sumindo,
- * ele encolheria os quatro cards a cada troca — a lei de estabilidade.
+ * AS OPÇÕES DE "Comparar" — a mesma pergunta do card "Comparação" (que saiu), com os mesmos `title`: Meta (apagada para quem não vê meta,
+ * com o motivo), o ano anterior e 2..5 anos.
  */
-export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, anoAnterior,
-  carregandoAnoAnterior, referencia, onReferencia, controles, motivoSemMeta = null }: {
-  visao: VisaoPec;
-  onVisao: (v: VisaoPec) => void;
-  real: DrePecuaria;
-  meta: DrePecuaria | null;
-  carregandoMeta: boolean;
-  anoAnterior: DrePecuaria | null;
-  carregandoAnoAnterior: boolean;
-  /** A referência escolhida — 'meta' ou 1..5 anos. Ela mora DENTRO do card, no lugar do número. */
-  referencia: ReferenciaPec;
-  onReferencia: (r: ReferenciaPec) => void;
-  /** Os controles da grade — ver `Caixas.extra`. Eles entram nas colunas vazias. */
-  controles?: ReactNode;
-  /** ACESSOS-FIN-02 — o motivo que APAGA a referencia "Meta" (quem nao ve^ meta); nulo = a opcao de sempre. Quem decide e' o
-      dono (`podeVerMeta`), pela pagina: aqui so' se desenha. */
-  motivoSemMeta?: string | null;
+export function opcoesDaReferenciaPec({ meta, carregandoMeta, anoAnterior, carregandoAnoAnterior, motivoSemMeta }: {
+  meta: DrePecuaria | null; carregandoMeta: boolean; anoAnterior: DrePecuaria | null; carregandoAnoAnterior: boolean;
+  motivoSemMeta: string | null;
 }) {
-  const nFaz = real.fazendas.length;
   const semMeta = !carregandoMeta && (!meta || semMovimento(meta));
   const semAno = !carregandoAnoAnterior && (!anoAnterior || anoAnterior.fazendas.length === 0);
-  /* ⚠ O CARD DE COMPARAÇÃO NÃO TEM NÚMERO, e é o que ele tem de melhor: os três cards que ele
-     substituiu mostravam três números — o resultado, o Δ meta e o Δ ano —, e nenhum deles era a
-     resposta da tela; a resposta está na GRADE, que fica dez pixels abaixo. Aqui mora a pergunta
-     ("comparado com o quê?"), e a grade responde.
-     ⚠ E O `title` DE CADA OPÇÃO DIZ QUANDO ELA NÃO TEM DADO: 'Meta' sem meta no período e o ano
-     anterior sem fechamento continuam clicáveis — a coluna aparece em traço, que é o sentinela
-     certo para "não sei", e some-la esconderia a pergunta junto com a resposta. */
-  const opcoesRef = [
+  return [
     { valor: 'meta', rotulo: 'Meta', ...(motivoSemMeta ? { desabilitada: true } : {}),
       title: motivoSemMeta ?? (semMeta ? 'sem meta no período' : 'Comparar com a meta do período') },
     ...['1', '2', '3', '4', '5'].map(n => ({
-      valor: n,
-      rotulo: n,
-      title: n === '1' && semAno ? 'sem ano anterior'
-        : `Comparar com ${n === '1' ? 'o ano anterior' : `os ${n} anos anteriores`}`,
+      valor: n, rotulo: n === '1' ? '1 ano' : n,
+      title: n === '1' && semAno ? 'sem ano anterior' : `Comparar com ${n === '1' ? 'o ano anterior' : `os ${n} anos anteriores`}`,
     })),
   ];
-  const caixas: CaixaFaixa[] = [
-    {
-      chave: 'comparacao', rotulo: 'Comparação', valor: '',
-      title: 'Contra o que este período se lê.',
-      conteudo: (
-        <Segmentado altura={20} fonte={9}
-          valor={referencia === 'meta' ? 'meta' : String(referencia)}
-          /* ⚠ UM GESTO, UM ESCRITOR: escolher a referência JÁ seleciona a comparação — quem o faz é
-             `escolherReferencia`, na página. Chamar `onVisao` aqui também punha dois `setParams` no
-             mesmo tique do React, e a segunda escrita se perdia: clicar em "Meta" não fazia nada.
-             Medido na tela em 23/09. */
-          onEscolher={v => onReferencia(v === 'meta' ? 'meta' : Number(v))}
-          opcoes={opcoesRef} />
-      ),
-    },
-    { chave: 'fazenda', rotulo: 'Por fazenda', valor: String(nFaz), unidade: nFaz === 1 ? 'fazenda' : 'fazendas',
-      title: 'Qual fazenda carrega o resultado?' },
-  ];
-  /* ⚠ SEIS COLUNAS E A RÉGUA DA LAVOURA — DRE-PADRAO-01a: a grade é de 6 e as colunas que sobram
-     ficam com os controles (ver `Caixas.extra`). Com dois cards em vez de três, sobram quatro. */
+}
+
+/**
+ * "Comparar Meta | 1 ano | 2 | 3 | 4 | 5" — na 1ª faixa. ⚠ NA VISÃO POR FAZENDA NENHUMA FICA MARCADA: a grade não compara períodos ali;
+ * escolher uma referência volta para a comparação (`escolherReferencia`, um gesto, um escritor).
+ */
+export function ComparacaoPec({ visao, referencia, onReferencia, ...dados }: {
+  visao: VisaoPec; referencia: ReferenciaPec; onReferencia: (r: ReferenciaPec) => void;
+  meta: DrePecuaria | null; carregandoMeta: boolean; anoAnterior: DrePecuaria | null; carregandoAnoAnterior: boolean;
+  motivoSemMeta: string | null;
+}) {
+  const valor: string = visao === 'fazenda' ? '' : referencia === 'meta' ? 'meta' : String(referencia);
+  /* D5a: com "Por fazenda" ligado, APAGADO com o porquê (cor, nunca largura) — e o clique numa referência volta à comparação. */
+  const porFazenda = visao === 'fazenda';
   return (
-    <Caixas caixas={caixas} colunas={6} selecionada={visao} extra={controles}
-      onEscolher={ch => { const v = VISOES.find(x => x === ch); if (v) onVisao(v); }} />
+    <span className={cn('flex shrink-0 items-center gap-1', porFazenda && 'opacity-50')} data-testid="dre-comparar"
+      title={porFazenda ? 'Por fazenda ligado: a grade não compara períodos. Escolher uma referência volta à comparação.' : undefined}>
+      <span className="text-[10px] text-muted-foreground">Comparar</span>
+      <Segmentado altura={22} fonte={10} valor={valor}
+        onEscolher={v => onReferencia(v === 'meta' ? 'meta' : Number(v))}
+        opcoes={opcoesDaReferenciaPec(dados)} />
+    </span>
   );
 }
 
+/**
+ * "Mais ▾" — na 2ª faixa: o rateio nos grupos (Diretos | Rateio nos grupos), o Δ R$ / Δ % e "Ver por fazenda". ⚠ A MARCA AO LADO DO BOTÃO
+ * SEMPRE ESCRITA ("rateio · Δ · por fazenda"): o que está ligado fica em navy, o resto cinza — muda a cor, nunca a largura (nada se
+ * desloca). ⚠ O MENU NÃO FECHA AO MARCAR (`preventDefault`): são três chaves independentes.
+ */
+const DELTAS_PEC: readonly ('rs' | 'pct')[] = ['rs', 'pct'];
+export function MaisPec({ rateioNosGrupos, onRateioNosGrupos, deltas, onDeltas, deltaIndisponivel, visao, onVisao, nFazendas }: {
+  rateioNosGrupos: boolean; onRateioNosGrupos: (v: boolean) => void;
+  deltas: readonly ('rs' | 'pct')[]; onDeltas: (d: readonly ('rs' | 'pct')[]) => void;
+  /** Δ só com UMA referência (a meta ou 1 ano) e na comparação — o porquê vai no `title`. */
+  deltaIndisponivel: boolean;
+  visao: VisaoPec; onVisao: (v: VisaoPec) => void; nFazendas: number;
+}) {
+  const semDelta = deltaIndisponivel || visao === 'fazenda';
+  const alternarDelta = (d: 'rs' | 'pct', ligar: boolean) =>
+    onDeltas(DELTAS_PEC.filter(x => (x === d ? ligar : deltas.includes(x))));
+  const marca = (ligada: boolean) => (ligada ? 'text-primary' : 'text-muted-foreground');
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" data-testid="dre-mais"
+          className="inline-flex h-[22px] shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-border/60 bg-card px-2
+            text-[10px] hover:bg-muted">
+          Mais ▾
+          <span className="ml-1 text-muted-foreground">
+            <span className={marca(rateioNosGrupos)}>rateio</span> · <span className={marca(!semDelta && deltas.length > 0)}>Δ</span>
+            {' · '}<span className={marca(visao === 'fazenda')}>por fazenda</span>
+          </span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-[230px]">
+        <DropdownMenuLabel className={MENU_ROTULO}>Rateio administrativo</DropdownMenuLabel>
+        <div className="px-2 pb-1.5">
+          <Segmentado altura={22} className={MENU_SEGMENTADO} valor={rateioNosGrupos ? 'grupos' : 'diretos'}
+            onEscolher={v => onRateioNosGrupos(v === 'grupos')}
+            opcoes={[
+              { valor: 'diretos', rotulo: 'Diretos', title: 'Custos diretos: o rateio administrativo em linha própria' },
+              { valor: 'grupos', rotulo: 'Rateio nos grupos',
+                title: 'Com rateio adm. nos grupos: cada grupo do custo fixo soma o seu rateio; o resultado não muda' },
+            ]} />
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className={MENU_ROTULO}>Diferença</DropdownMenuLabel>
+        {DELTAS_PEC.map(d => (
+          <DropdownMenuCheckboxItem key={d} checked={!semDelta && deltas.includes(d)} disabled={semDelta}
+            title={semDelta ? (visao === 'fazenda' ? 'Disponível na comparação de períodos' : 'Disponível ao comparar com a meta ou com 1 ano') : undefined}
+            onSelect={e => e.preventDefault()} onCheckedChange={v => alternarDelta(d, v === true)}>
+            {d === 'rs' ? 'Δ R$' : 'Δ %'}
+          </DropdownMenuCheckboxItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem checked={visao === 'fazenda'} onSelect={e => e.preventDefault()}
+          title="Qual fazenda carrega o resultado?"
+          onCheckedChange={v => onVisao(v === true ? 'fazenda' : 'comparacao')}>
+          Ver por fazenda · {nFazendas} {nFazendas === 1 ? 'fazenda' : 'fazendas'}
+        </DropdownMenuCheckboxItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

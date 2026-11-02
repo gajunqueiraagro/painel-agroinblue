@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
+import { useRebanhoOficial, ERRO_LEITURA_REBANHO } from '@/hooks/useRebanhoOficial';
 import { useMovimentacoesMensais } from '@/hooks/useMovimentacoesMensais';
 import { useSnapshotAreaAnual } from '@/hooks/useFechamentoArea';
 import { useAreaPlanejamento } from '@/hooks/useAreaPlanejamento';
@@ -128,5 +128,9 @@ export function useEvolucaoDoAno(ano: number) {
   });
   const metaRascunho = versao.data !== 'aprovada';
 
-  return { mesesReal, mesesMeta, isGlobal, metaRascunho, carregando: real.loading || movReal.isLoading };
+  /* D4 (REBANHO-LEITURA-01) — a leitura do rebanho que falha nunca vira mês vazio: a tela diz a frase e oferece "Tentar de novo" */
+  const erroRebanho = real.error || meta.error ? ERRO_LEITURA_REBANHO : null;
+  const tentarDeNovo = () => { void real.tentarDeNovo(); void meta.tentarDeNovo(); };
+
+  return { mesesReal, mesesMeta, isGlobal, metaRascunho, carregando: real.loading || movReal.isLoading, erroRebanho, tentarDeNovo };
 }

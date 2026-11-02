@@ -65,7 +65,9 @@ begin
   select string_agg(p.proname, ', ') into v from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname ~ '^_?fn_infra_' and p.proname not in ('fn_infra_salvar', 'fn_infra_desativar',
      '_fn_infra_rotulo', '_fn_infra_formas', '_fn_infra_posicao_ok', '_fn_infra_geometria_erro', '_fn_infra_comprimento_m',
-     '_fn_infra_area_ha', '_fn_infra_coerencia');
+     '_fn_infra_area_ha', '_fn_infra_coerencia',
+     -- INFRA-FICHAS-PATR-01 (20261028117100): testadas em supabase/tests/infra_fichas_patr_01_test.sql
+     'fn_infra_criar_bem', '_fn_infra_ficha_campos', '_fn_infra_ficha_erro');
   if v is not null then raise exception 'T0: função da infraestrutura fora do teste: %', v; end if;
 end $t0$;
 

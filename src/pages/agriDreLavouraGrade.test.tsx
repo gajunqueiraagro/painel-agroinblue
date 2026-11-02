@@ -15,6 +15,13 @@ import { Grade, painelDoDrill } from '@/pages/AgriDreLavouraTab';
 import { REGUA_LINHA } from '@/components/agri/dreGrade';
 import type { DreLavoura, DreCultura, DreCentro, DreValor, DreLinhas } from '@/hooks/useDreLavoura';
 
+/* DRE-LEVE-01 — a coluna de % (`data-pct`: "% VBP" na pecuária, "% RL" na lavoura) tem prova própria em `dreLeveNumeros.test.tsx`; aqui as
+   células de uma linha se leem SEM ela (`semPct`), nas posições de antes, e o que estes testes provam não muda. */
+declare global { interface HTMLTableRowElement { readonly semPct: HTMLTableCellElement[] } }
+Object.defineProperty(HTMLTableRowElement.prototype, 'semPct', { configurable: true,
+  get(this: HTMLTableRowElement) { return [...this.cells].filter(c => !c.hasAttribute('data-pct')); } });
+
+
 const v = (valor: number, direto = valor, rateado = 0): DreValor => ({ valor, direto, rateado });
 
 const CHAVES: (keyof DreLinhas)[] = [
@@ -138,7 +145,7 @@ const clicar = (el: Element) =>
 const linhasDaTabela = () => [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')];
 
 /** O texto de todas as células de R$ da coluna do amendoim, linha a linha. */
-const valoresDoAmendoim = () => linhasDaTabela().map(tr => tr.cells[1]?.textContent ?? '');
+const valoresDoAmendoim = () => linhasDaTabela().map(tr => tr.semPct[1]?.textContent ?? '');
 
 describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
   /* ⚠ É O DEFEITO QUE ESTE TESTE TRAVA: com o grupo mostrando `direto`, o Custo fixo do NJ
@@ -149,7 +156,8 @@ describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
     /* ⚠ OS DOIS RESULTADOS VÊM COM O MARCADOR ▲ — DRE-DESTAQUE-LAVOURA-01: `resultado_operacional`
        e `resultado_caixa` ganharam a faixa t4, que traz o ▲/▼ por sinal. Os dois são positivos no
        fixture do NJ. Custo fixo e investimento seguem sem marcador, fora da faixa. */
-    for (const alvo of ['76.544,30', '6.360.202,63', '▲379.499,54', '▲235.792,40']) {
+    /* DRE-LEVE-01 (D6): sem o azul cheio, sem ▲/▼ — o número é só o número. */
+    for (const alvo of ['76.544,30', '6.360.202,63', '379.499,54', '235.792,40']) {
       cleanup(); montar({ rateioDentro: false });
       expect(valoresDoAmendoim(), `${alvo} em Custos diretos`).toContain(alvo);
       cleanup(); montar({ rateioDentro: true });
@@ -162,8 +170,8 @@ describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
   it('em "Custos diretos" há três linhas de rateio, com os valores do NJ', () => {
     montar({ rateioDentro: false });
     const rateios = linhasDaTabela()
-      .filter(tr => (tr.cells[0]?.textContent ?? '').match(/rateio compartilhado/i))
-      .map(tr => tr.cells[1]?.textContent ?? '');
+      .filter(tr => (tr.semPct[0]?.textContent ?? '').match(/rateio compartilhado/i))
+      .map(tr => tr.semPct[1]?.textContent ?? '');
     expect(rateios).toEqual(['532.913,78', '76.544,30', '155.295,94']);
   });
 
@@ -176,20 +184,20 @@ describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
        filha de rateio mostram o MESMO 76.544,30 — e um `getByText` acha os dois. As três linhas
        de rateio vêm na ordem da cascata: custeio, custo fixo, investimento. */
     const rateios = linhasDaTabela()
-      .filter(tr => (tr.cells[0]?.textContent ?? '').match(/rateio compartilhado/i));
+      .filter(tr => (tr.semPct[0]?.textContent ?? '').match(/rateio compartilhado/i));
     expect(rateios).toHaveLength(3);
 
-    clicar(rateios[1].cells[1]);
+    clicar(rateios[1].semPct[1]);
     expect(abrir).toHaveBeenCalledWith(
       'pool_fixo', null, '(−) Rateio compartilhado · Custo fixo', 'amendoim');
 
-    clicar(rateios[2].cells[1]);
+    clicar(rateios[2].semPct[1]);
     expect(abrir).toHaveBeenCalledWith(
       'pool_investimento', null, '(−) Rateio compartilhado · Investimento', 'amendoim');
 
     /* ⚠ A DA CASCATA CONTINUA PEDINDO 'natureza' com chave nula — o pool de custeio +
        pós-colheita, que é outro bloco e outro número. */
-    clicar(rateios[0].cells[1]);
+    clicar(rateios[0].semPct[1]);
     expect(abrir).toHaveBeenCalledWith(
       /* ⚠ CONTRATO NOVO — fix8 item A: a linha deixou de ser a terceira PARCELA do custo variável
          e virou MEMO do que o grupo já contém, com o rótulo em minúscula e sem o "(−)". Medido:
@@ -202,7 +210,7 @@ describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
   it('com rateio nos centros não sobra nenhuma linha de rateio', () => {
     montar({ rateioDentro: true });
     const rateios = linhasDaTabela()
-      .filter(tr => (tr.cells[0]?.textContent ?? '').match(/rateio compartilhado/i));
+      .filter(tr => (tr.semPct[0]?.textContent ?? '').match(/rateio compartilhado/i));
     expect(rateios).toHaveLength(0);
   });
 });
@@ -292,31 +300,36 @@ describe('a régua tipográfica da grade', () => {
      grupo e simples 10→9, filha inalterada. As ALTURAS não mudaram, e é por isso que os três casos
      seguintes continuam valendo palavra por palavra: a fonte menor sobra dentro da mesma altura, e
      a grade não cresce nem encolhe. */
+  /* ⚠ DRE-LEVE-01 (Gabriel 31/10, mock opção B): UMA letra só, 9px; o resultado em NEGRITO (com a régua escura embaixo), linha de 16px; o
+     subitem desce a 8,5px em 13px (exceção do piso declarada). */
   it('os quatro papéis têm fonte, peso, altura e recuo declarados', () => {
-    expect(REGUA_LINHA.subtotal).toEqual({ fonte: 11, peso: 'font-medium', altura: 20, recuo: 0 });
-    expect(REGUA_LINHA.grupo).toEqual({ fonte: 9, peso: 'font-medium', altura: 16, recuo: 8 });
+    expect(REGUA_LINHA.subtotal).toEqual({ fonte: 9, peso: 'font-bold', altura: 16, recuo: 0 });
+    expect(REGUA_LINHA.grupo).toEqual({ fonte: 9, peso: 'font-normal', altura: 16, recuo: 8 });
     expect(REGUA_LINHA.simples).toEqual({ fonte: 9, peso: 'font-normal', altura: 16, recuo: 8 });
-    expect(REGUA_LINHA.filha).toEqual({ fonte: 9, peso: 'font-normal', altura: 14, recuo: 16 });
+    expect(REGUA_LINHA.filha).toEqual({ fonte: 8.5, peso: 'font-normal', altura: 13, recuo: 16 });
   });
 
   /* ⚠ E A HIERARQUIA CONTINUA EXISTINDO, que é o que a régua existe para dar: três degraus de
      fonte (11 no subtotal, 9 nas linhas, 9,5 na sub-coluna) e dois de peso. Descer o subtotal ao
      nível das linhas comuns apagaria onde a conta fecha — foi esse o defeito que o mock B corrigiu
      em 16/09, e ele não pode voltar por um ajuste de densidade. */
-  it('o subtotal continua acima das linhas comuns', () => {
-    expect(REGUA_LINHA.subtotal.fonte).toBeGreaterThan(REGUA_LINHA.simples.fonte);
-    expect(REGUA_LINHA.subtotal.peso).toBe('font-medium');
+  /* DRE-LEVE-01: a hierarquia continua, por outro meio — o subtotal se destaca pelo NEGRITO (e pela régua), não pela letra maior. */
+  it('o subtotal se destaca pelo negrito, na mesma letra das linhas comuns', () => {
+    expect(REGUA_LINHA.subtotal.fonte).toBe(REGUA_LINHA.simples.fonte);
+    expect(REGUA_LINHA.subtotal.peso).toBe('font-bold');
     expect(REGUA_LINHA.simples.peso).toBe('font-normal');
   });
 
   /* ⚠ SÓ O SUBTOTAL PODE PASSAR DOS 18px de antes, e ele passa de propósito: é o único que a
      hierarquia manda destacar. Os outros três têm de caber no mesmo espaço ou menos — foi por
      não respeitar isso que a primeira versão fez a grade crescer. */
-  it('só o subtotal excede os 18px da grade uniforme', () => {
-    expect(REGUA_LINHA.subtotal.altura).toBeGreaterThan(18);
-    for (const papel of ['grupo', 'simples', 'filha'] as const) {
-      expect(REGUA_LINHA[papel].altura, `${papel} devia caber em 18`).toBeLessThanOrEqual(18);
+  /* DRE-LEVE-01: nenhuma linha passa de 16px, e o subitem é a mais baixa (13). */
+  it('nenhuma linha passa de 16px; o subitem é a mais baixa', () => {
+    const papeis: (keyof typeof REGUA_LINHA)[] = ['subtotal', 'grupo', 'simples', 'filha'];
+    for (const papel of papeis) {
+      expect(REGUA_LINHA[papel].altura, `${papel} devia caber em 16`).toBeLessThanOrEqual(16);
     }
+    expect(REGUA_LINHA.filha.altura).toBeLessThan(REGUA_LINHA.simples.altura);
   });
 
   /* ⚠ E A ALTURA TEM DE CABER O TEXTO: fonte + 2px de padding, mais 1px de borda tracejada na
@@ -339,6 +352,33 @@ describe('a régua tipográfica da grade', () => {
   });
 });
 
+/* ══════════════ A COLUNA "% RL" — DRE-LEVE-01 (D2/D3) ══════════════ */
+describe('a coluna "% RL" da lavoura', () => {
+  const pctDe = (inicio: string) => {
+    const tr = linhasDaTabela().find(t => (t.cells[0]?.textContent ?? '').replace(/[▾▸]/g, '').trim().startsWith(inicio));
+    return [...(tr?.cells ?? [])].filter(c => c.hasAttribute('data-pct')).map(c => c.textContent ?? '');
+  };
+  it('da Receita líquida para baixo, nos grupos e resultados; vazia acima dela e nos subitens', () => {
+    const comRL = (l: DreLinhas): DreLinhas => ({ ...l, receita_liquida: v(2891257.12), margem_contribuicao: v(1634146.19),
+      custo_variavel: v(1257110.93) });
+    const dre: DreLavoura = { ...DRE, culturas: DRE.culturas.map(c => ({ ...c, linhas: comRL(c.linhas) })),
+      total: { ...DRE.total, linhas: comRL(DRE.total.linhas) } };
+    render(<Grade dre={dre} culturas={dre.culturas}
+      abertos={{ custeio: true, investimento: true, fixo: true, 'g:custo_variavel': true, 'g:g_custo_fixo': true }}
+      setAbertos={vi.fn()} rateioDentro={false} unidades={['rs']} colsPorCultura={1}
+      centrosDoBloco={b => dre.centros.filter(c => c.bloco === b)} valorDaLinha={valorDaLinhaComoNaTela(false)}
+      abrir={vi.fn()} onDrill={vi.fn()} onAbrirCultura={vi.fn()} />);
+    /* as colunas de %: a cultura e o Total; a base é a receita líquida da coluna */
+    expect(pctDe('= Receita líquida')).toEqual(['100,0 %', '100,0 %']);
+    expect(pctDe('= Margem de contribuição')).toEqual(['56,5 %', '56,5 %']);
+    expect(pctDe('= Margem de contribuição')[0]).toMatch(/^\d+,\d %$/);
+    expect(pctDe('(−) Custo variável')[0]).toMatch(/^\d+,\d %$/);
+    for (const rot of ['Receita bruta', '(−) Deduções', '(−) Custeio da lavoura', 'Insumos', 'dos quais rateio compartilhado']) {
+      expect(pctDe(rot), rot).toEqual(['', '']);
+    }
+  });
+});
+
 /* ══════════════ A LARGURA MÍNIMA DO GRUPO — DRE-UNIDADES-01b ══════════════ */
 
 /**
@@ -351,10 +391,11 @@ describe('a largura mínima do grupo de coluna na lavoura', () => {
   const largurasDoColgroup = () =>
     [...document.querySelectorAll<HTMLTableColElement>('colgroup col')].map(c => c.style.width);
 
-  it('com um chip só, a cultura e o Total vão ao piso de 104px', () => {
+  /* ⚠ DRE-LEVE-01 (D2): todo grupo tem a coluna "% RL" (56px), e o R$ e o R$/ha desceram 10px (o slot do ▲/▼ saiu). Com um chip só, o grupo
+     já passa do piso de 104 (56 + 80) e ninguém é esticado. */
+  it('com um chip só, o "% RL" faz a cultura e o Total passarem do piso de 104px', () => {
     montar({ unidades: ['ha'] });
-    /* Cultura + amendoim (104) + Total (104). */
-    expect(largurasDoColgroup()).toEqual(['200px', '104px', '104px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '56px', '80px', '56px', '80px']);
   });
 
   /* ⚠ O TOTAL SEM NENHUMA UNIDADE SOMÁVEL — DRE-UNIDADES-01c, e é o achado do 01b. Com só o
@@ -363,13 +404,14 @@ describe('a largura mínima do grupo de coluna na lavoura', () => {
      quê — a tela declara o limite em vez de esconder o dado (Art. 19). */
   it('só R$/sc: o Total fica com uma coluna em traço, e explica por quê', () => {
     montar({ unidades: ['un'] });
-    expect(largurasDoColgroup()).toEqual(['200px', '104px', '104px']);
+    /* a cultura: % RL + R$/sc; o Total: % RL + a coluna do traço */
+    expect(largurasDoColgroup()).toEqual(['200px', '56px', '74px', '56px', '74px']);
     /* ⚠ O `th` DO TOTAL CARREGA DUAS LINHAS ("Total" e a área), então a busca é por prefixo — por
        igualdade ela não acha nada e o `?.` faz o caso passar verde sem olhar. */
     const cabecalho = [...document.querySelectorAll('thead th')]
       .find(th => th.textContent?.trim().startsWith('Total'));
     expect(cabecalho).toBeDefined();
-    expect(cabecalho?.getAttribute('colspan')).toBe('1');
+    expect(cabecalho?.getAttribute('colspan')).toBe('2');
     /* ⚠ E A EXPLICAÇÃO ESTÁ EM TODA LINHA, não só no cabeçalho: são as 15 da cascata mais as
        filhas dos grupos abertos, todas em traço. Uma célula vazia e muda seria o mesmo buraco de
        antes, com outra largura. */
@@ -380,7 +422,7 @@ describe('a largura mínima do grupo de coluna na lavoura', () => {
 
   it('o padrão de abertura não se mexe', () => {
     montar({ unidades: ['rs', 'ha'] });
-    expect(largurasDoColgroup()).toEqual(['200px', '114px', '90px', '114px', '90px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '104px', '56px', '80px', '104px', '56px', '80px']);
   });
 
   /* ⚠ O TOTAL NÃO TEM /sc (a safra mistura culturas), então com as três unidades marcadas os dois
@@ -388,7 +430,7 @@ describe('a largura mínima do grupo de coluna na lavoura', () => {
      grupo, daria a soma certa e a divisão errada. */
   it('com as três unidades, a cultura passa do piso e o Total é medido sozinho', () => {
     montar({ unidades: ['rs', 'ha', 'un'] });
-    expect(largurasDoColgroup()).toEqual(['200px', '114px', '90px', '74px', '114px', '90px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '104px', '56px', '80px', '74px', '104px', '56px', '80px']);
   });
 });
 

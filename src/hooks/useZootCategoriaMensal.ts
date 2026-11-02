@@ -79,6 +79,9 @@ export interface ZootCategoriaMensal {
   fonte_oficial_mes: 'fechamento' | 'fallback_movimentacao' | 'projecao' | 'parcial';
 }
 
+/** D4 (REBANHO-LEITURA-01) — a frase da falha da leitura do rebanho: a tela a mostra com "Tentar de novo"; nunca uma lista vazia. */
+export const ERRO_LEITURA_REBANHO = 'Não consegui ler o rebanho.';
+
 interface UseZootCategoriaMensalParams {
   ano: number;
   cenario: 'realizado' | 'meta';
@@ -113,25 +116,15 @@ export function useZootCategoriaMensal({ ano, cenario, global = false, enabled =
       if (effectiveGlobal && !clienteId) return [];
       if (effectiveGlobal && fazendaIdsReais.length === 0) return [];
 
-      if (!effectiveGlobal) {
-        const { data, error } = await supabase.rpc('fn_zoot_categoria_mensal' as any, {
-          p_fazenda_id: fazendaId,
-          p_ano: ano,
-        });
-
-        if (error) {
-          console.error('useZootCategoriaMensal RPC error:', error);
-          return [];
-        }
-
-        const rows = (data as unknown as ZootCategoriaMensal[]) || [];
-        return rows.filter(r => r.cenario === cenario);
-      }
+      /* REBANHO-LEITURA-01 D1 (Gabriel 01/11/2026) — UMA fazenda lê o MESMO cache do Global, pelo mesmo caminho (paginado, com o ensure).
+         Antes ela chamava `fn_zoot_categoria_mensal` (a CTE recursiva); a prova de 31/10 (60 pares fazenda-ano, 9.144 linhas, 448.056
+         campos, pela sessão de um usuário) deu 0 diferença entre a função e o cache — o cache É o que a tela já lia. */
+      const alvosDaLeitura = effectiveGlobal ? fazendaIdsReais : [fazendaId ?? ''];
 
       // ───────────────────────────────────────────────────────────────────────
-      // Global: pagina o cache oficial (PostgREST default = 1000) e filtra
-      // explicitamente por fazenda_id IN (lista de fazendas do cliente) —
-      // não confia em cliente_id da cache.
+      // Pagina o cache oficial (PostgREST default = 1000) e filtra
+      // explicitamente por fazenda_id IN (a fazenda escolhida, ou a lista de
+      // fazendas do cliente no Global) — não confia em cliente_id da cache.
       //
       // Ensure-on-partial: cache pode estar vazio OU parcialmente populado
       // (ex: tem fazenda A mas não fazenda B após import/migration). Em ambos
@@ -149,13 +142,14 @@ export function useZootCategoriaMensal({ ano, cenario, global = false, enabled =
       // O rebuild direto leva ~2-3s para clientes típicos (1-3 fazendas).
       // ───────────────────────────────────────────────────────────────────────
 
-      const { data: siRows, error: siError } = await supabase
+      let consultaSaldos = supabase
         .from('saldos_iniciais')
         .select('fazenda_id, quantidade')
-        .eq('cliente_id', clienteId)
         .eq('ano', ano)
         .eq('mes', 1)
-        .in('fazenda_id', fazendaIdsReais);
+        .in('fazenda_id', alvosDaLeitura);
+      if (clienteId) consultaSaldos = consultaSaldos.eq('cliente_id', clienteId);
+      const { data: siRows, error: siError } = await consultaSaldos;
 
       if (siError) {
         console.warn('[zoot-cache] saldos_iniciais lookup failed, falling back to legacy guard:', siError);
@@ -186,14 +180,16 @@ export function useZootCategoriaMensal({ ano, cenario, global = false, enabled =
             .select('*')
             .eq('ano', ano)
             .eq('cenario', cenario)
-            .in('fazenda_id', fazendaIdsReais)
+            .in('fazenda_id', alvosDaLeitura)
             .order('mes')
             .order('ordem_exibicao')
             .range(from, from + PAGE_SIZE - 1);
 
+          /* D4 (P146) — falha NUNCA vira lista vazia: lista vazia é "rebanho zerado" e a tela mostrava zero/"—" como se fosse dado.
+             O erro sobe para o react-query e a tela diz "Não consegui ler o rebanho" com "Tentar de novo". */
           if (error) {
             console.error('useZootCategoriaMensal error:', error);
-            return [];
+            throw new Error(ERRO_LEITURA_REBANHO);
           }
           const page = data || [];
           all.push(...page);
@@ -247,7 +243,7 @@ export function useZootCategoriaMensal({ ano, cenario, global = false, enabled =
          * segura: `refresh_zoot_cache` é a mesma função que a RPC do banco
          * chamaria no laço, com o mesmo par de argumentos.
          */
-        const alvos = ausentes.length > 0 ? ausentes : fazendaIdsReais;
+        const alvos = ausentes.length > 0 ? ausentes : alvosDaLeitura;
         for (const fid of alvos) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
           const { error: e1 } = await (supabase as any).rpc('refresh_zoot_cache', {
@@ -258,7 +254,7 @@ export function useZootCategoriaMensal({ ano, cenario, global = false, enabled =
                sobre um trabalho que parou. */
             toast.error('Não foi possível recalcular os indicadores.', { id: 'zoot-cache-ensure' });
             console.warn('[zoot-cache] refresh_zoot_cache falhou para', fid, e1);
-            return [];
+            throw new Error(ERRO_LEITURA_REBANHO);
           }
         }
         toast.success('Indicadores atualizados.', { id: 'zoot-cache-ensure' });
@@ -270,10 +266,12 @@ export function useZootCategoriaMensal({ ano, cenario, global = false, enabled =
     },
     // Guard: se NÃO é global e fazendaId é o sentinel, desliga a query.
     enabled: enabled && (effectiveGlobal ? (!!clienteId && fazendaIdsReais.length > 0) : (!!fazendaId && fazendaId !== '__global__')),
-    // staleTime alinhado ao padrão do useZootMensal (30s): a RPC recursiva
-    // fn_zoot_categoria_mensal não deve refazer a cada remontagem. Invalidações
+    // staleTime de 30s: o cache não se relê a cada remontagem. Invalidações
     // explícitas (fn_zoot_cache_rebuild / troca de fazenda·ano·cenario na key) seguem valendo.
     staleTime: 30_000,
+    /* D4 — com o erro subindo, o react-query tentaria 3 vezes antes de a tela poder dizer que falhou; uma nova tentativa basta
+       (a leitura é do cache, rápida). Depois o "Tentar de novo" da tela (`refetch`). */
+    retry: 1,
   });
 }
 

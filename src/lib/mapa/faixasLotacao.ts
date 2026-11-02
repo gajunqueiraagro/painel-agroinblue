@@ -19,6 +19,22 @@ export function faixaDaLotacao(kgHa: number | null | undefined): FaixaLotacao | 
   return 'carga_alta';
 }
 
+/**
+ * MAPA-PAINEL-LOTE-UA-01 — a MESMA régua em UA/ha (LOTACAO-REF-01, D2 do Gabriel 01/11: o padrão do sistema semeado em 0,67 / 1,11
+ * UA/ha, o equivalente de 300 / 500 kg/ha ÷ 450). Enquanto a régua por pasto/fazenda/cliente (`fn_lotacao_regua`) não existe, estes são
+ * os limites do sistema; quando ela vier, a função passa a recebê-la.
+ */
+export const LIMITE_SUBLOTADO_UA = 0.67;
+export const LIMITE_CARGA_ALTA_UA = 1.11;
+
+export function faixaDaLotacaoUa(uaHa: number | null | undefined): FaixaLotacao | null {
+  if (uaHa == null || Number.isNaN(uaHa)) return null;
+  if (uaHa <= 0) return 'vazio';
+  if (uaHa < LIMITE_SUBLOTADO_UA) return 'sublotado';
+  if (uaHa <= LIMITE_CARGA_ALTA_UA) return 'ideal';
+  return 'carga_alta';
+}
+
 export const ROTULO_DA_FAIXA: Record<FaixaLotacao, string> = {
   ideal: `Ideal (${LIMITE_SUBLOTADO}–${LIMITE_CARGA_ALTA})`,
   sublotado: `Sublotado (< ${LIMITE_SUBLOTADO})`,

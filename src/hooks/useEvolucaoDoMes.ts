@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
+import { useRebanhoOficial, ERRO_LEITURA_REBANHO } from '@/hooks/useRebanhoOficial';
 import { usePastos } from '@/hooks/usePastos';
 import type { LancamentoDoMes } from '@/lib/producao/evolucaoMes';
 
@@ -58,5 +58,8 @@ export function useEvolucaoDoMes(ano: number, mes: number, cenario: 'realizado' 
     rowsDoMes, rowsDoMesAnterior, categorias, fechado, ultimoFechado, isGlobal,
     lancamentos: lancs.data ?? [], erroLancamentos: lancs.error ? 'Não consegui ler os lançamentos do mês.' : null,
     carregando: rebanho.loading || lancs.isLoading,
+    /* D4 (REBANHO-LEITURA-01) — a falha do rebanho nunca vira tabela vazia: a frase + "Tentar de novo" */
+    erroRebanho: rebanho.error ? ERRO_LEITURA_REBANHO : null,
+    tentarDeNovo: () => { void rebanho.tentarDeNovo(); },
   };
 }
