@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { QUADRO_REGUA, TD_REGUA, TH_REGUA } from '@/components/ui/regua-tabela';
 import { cn } from '@/lib/utils';
+import { AvisoErroRebanho } from '@/components/rebanho/AvisoErroRebanho';
 
 /* As larguras (px) pelo MAIOR valor possível, a 10px negrito com algarismos tabulares (~6px por caractere + 8px de respiro):
    mês "9.999,9" / "−9.999" (7) → 50; Acum. e Meta "−99.999" / "99.999,9" (8) → 58; Δ "+9.999%" / "+99,9 pp" (8) → 58.
@@ -165,9 +166,14 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
       <div className={cn(QUADRO_REGUA, 'min-h-0 flex-1')}>
         <div className="flex h-[24px] shrink-0 items-center gap-3 border-b border-border px-2 text-[10px]">
           <span className="font-semibold">Movimentação do rebanho</span>
-          <span className="truncate text-muted-foreground">
-            {unidade === 'cab' ? 'cabeças' : unidade === 'arroba' ? 'arrobas' : 'peso vivo em toneladas'} · {ano} · clique no mês para ver por categoria
-          </span>
+          {/* D4 (REBANHO-LEITURA-01): a leitura que falhou fala no lugar do subtítulo (a mesma faixa de 24px — nada se desloca) */}
+          {dados.erroRebanho ? (
+            <AvisoErroRebanho texto={dados.erroRebanho} onTentar={dados.tentarDeNovo} />
+          ) : (
+            <span className="truncate text-muted-foreground">
+              {unidade === 'cab' ? 'cabeças' : unidade === 'arroba' ? 'arrobas' : 'peso vivo em toneladas'} · {ano} · clique no mês para ver por categoria
+            </span>
+          )}
         </div>
         <div className="min-h-0 flex-1 overflow-auto" data-testid="evolucao-tabela">
           <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>

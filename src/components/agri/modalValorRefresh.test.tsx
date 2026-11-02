@@ -23,6 +23,13 @@ import type {
   DrePecuaria, DrePecLinhas, LancamentoPec, RateioAdmPec, RecortePec,
 } from '@/hooks/useDrePecuaria';
 
+/* DRE-LEVE-01 — a coluna de % (`data-pct`: "% VBP" na pecuária, "% RL" na lavoura) tem prova própria em `dreLeveNumeros.test.tsx`; aqui as
+   células de uma linha se leem SEM ela (`semPct`), nas posições de antes, e o que estes testes provam não muda. */
+declare global { interface HTMLTableRowElement { readonly semPct: HTMLTableCellElement[] } }
+Object.defineProperty(HTMLTableRowElement.prototype, 'semPct', { configurable: true,
+  get(this: HTMLTableRowElement) { return [...this.cells].filter(c => !c.hasAttribute('data-pct')); } });
+
+
 const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
   vendas: 0, outras_receitas: 0, receita_bruta: 0, deducoes: 0, receita_liquida: 0,
   vpb_operacional: 0, reposicao: 0, vbp: 0, custo_variavel: 0, margem: 0,
@@ -191,20 +198,20 @@ describe('o modal de valor depois de salvar um lançamento aberto por ele', () =
         colunas={colunasDaVisao({ visao: 'fazenda', de: '2026-01', ate: '2026-12', real: dre, meta: null, carregandoMeta: false, anos: [] })}
         alturaCartao={null} cartaoRef={{ current: null }} />);
       const linha = (rot: string) => [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')]
-        .find(tr => (tr.cells[0]?.textContent ?? '').trim().startsWith(rot));
-      const abrirGrupo = (rot: string) => { const td = linha(rot)?.cells[0]; if (td) fireEvent.click(td); };
+        .find(tr => (tr.semPct[0]?.textContent ?? '').trim().startsWith(rot));
+      const abrirGrupo = (rot: string) => { const td = linha(rot)?.semPct[0]; if (td) fireEvent.click(td); };
       abrirGrupo('(−) Custo fixo');
       abrirGrupo('(−) Custo variável');
       /* Total e a fazenda, em cada tipo: linha do bloco, filha, rateio administrativo. */
       for (const rot of ['(−) Custo fixo', '(−) Custo variável', 'Administração', 'Mão de Obra', 'Nutrição']) {
         const tr = linha(rot);
-        if (tr?.cells[1]) fireEvent.click(tr.cells[1]);
-        if (tr?.cells[3]) fireEvent.click(tr.cells[3]);
+        if (tr?.semPct[1]) fireEvent.click(tr.semPct[1]);
+        if (tr?.semPct[3]) fireEvent.click(tr.semPct[3]);
       }
       if (!rateioNosGrupos) {
         const tr = linha('(−) Rateio administrativo');
-        if (tr?.cells[1]) fireEvent.click(tr.cells[1]);
-        if (tr?.cells[3]) fireEvent.click(tr.cells[3]);
+        if (tr?.semPct[1]) fireEvent.click(tr.semPct[1]);
+        if (tr?.semPct[3]) fireEvent.click(tr.semPct[3]);
       }
       const recortes: RecortePec[] = onAbrirLista.mock.calls.map(c => c[0]);
       expect(recortes.length).toBeGreaterThanOrEqual(10);

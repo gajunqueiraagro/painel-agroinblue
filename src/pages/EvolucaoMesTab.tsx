@@ -19,6 +19,7 @@ import { MESES_COLS } from '@/lib/calculos/labels';
 import { Segmentado } from '@/components/ui/segmentado';
 import { QUADRO_REGUA, TD_REGUA, TH_REGUA } from '@/components/ui/regua-tabela';
 import { cn } from '@/lib/utils';
+import { AvisoErroRebanho } from '@/components/rebanho/AvisoErroRebanho';
 
 const MESES = MESES_COLS.map((m) => m.label);
 const fmt = (v: number | null | undefined, casas = 0): string => {
@@ -125,7 +126,9 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
         <div className={cn(QUADRO_REGUA, 'min-h-0')}>
           <div className="flex h-[24px] shrink-0 items-center gap-3 border-b border-border px-2 text-[10px]">
             <span className="font-semibold">Rebanho por categoria</span>
-            <span className="truncate text-muted-foreground">{rotuloMes.toLowerCase()} · cabeças e kg/cab de cada movimento · as 9 categorias</span>
+            {/* D4 (REBANHO-LEITURA-01): a leitura que falhou fala no lugar do subtítulo (a mesma faixa — nada se desloca) */}
+            {d.erroRebanho ? <AvisoErroRebanho texto={d.erroRebanho} onTentar={d.tentarDeNovo} />
+              : <span className="truncate text-muted-foreground">{rotuloMes.toLowerCase()} · cabeças e kg/cab de cada movimento · as 9 categorias</span>}
           </div>
           <div className="min-h-0 flex-1 overflow-auto" data-testid="evolucao-mes-tabela">
             <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>

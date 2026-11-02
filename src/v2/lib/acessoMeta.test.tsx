@@ -6,7 +6,7 @@
  *     gravacao apagados e o motivo.
  *
  * ⚠ PC-100, Fluxo Caixa, o DRE e Pecuária › Lançamentos NAO se montam em teste (telas de milhares de linhas, com dezenas de
- *   hooks de dado): os pontos de uso sao LIDOS DA FONTE, um caso por ponto, e o card do DRE (`FaixaVisoesPec`) e' montado em
+ *   hooks de dado): os pontos de uso sao LIDOS DA FONTE, um caso por ponto, e o "Comparar" do DRE (`ComparacaoPec`, DRE-LEVE-01) e' montado em
  *   `src/pages/pecDrePanel.test.tsx`. O perfil nao admin nao se prova no navegador com o login do admin.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -106,7 +106,7 @@ describe('DRE (AgriDreLavouraTab, lido da FONTE): a referência "Meta"', () => {
     expect(f).toContain("const referenciaPec: ReferenciaPec = visaoUrl === 'meta' ? 'meta' : nAnosPec;");
     expect(f.match(/visaoUrlLida/g)).toHaveLength(3);
   });
-  it('o card recebe o motivo só para quem não vê meta', () => {
+  it('o "Comparar" recebe o motivo só para quem não vê meta', () => {
     expect(f).toContain('motivoSemMeta={veMeta ? null : MOTIVO_SEM_META}');
   });
 });
