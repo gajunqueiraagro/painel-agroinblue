@@ -127,10 +127,27 @@ describe('dividir por uma linha', () => {
     if ('motivo' in r) expect(r.motivo).toContain('mais de 2 partes');
   });
 
-  it('polígono com furo: recusa', () => {
-    const furado: GeoJSON.Polygon = { type: 'Polygon', coordinates: [A.coordinates[0],
-      [[-47.996, -15.004], [-47.994, -15.004], [-47.994, -15.006], [-47.996, -15.006], [-47.996, -15.004]]] };
-    expect(dividirPorLinha(furado, [[-47.995, -14.99], [-47.995, -15.02]]).ok).toBe(false);
+  /* MAPA-CRIAR-PIQUETES-01 (3) (Gabriel 18:28, Pureza › P6 com a manga/redondel): o polígono com FURO divide; o furo continua furo em
+     quem o tocar e a área de cada parte é sem ele */
+  const furo = [[-47.996, -15.004], [-47.994, -15.004], [-47.994, -15.006], [-47.996, -15.006], [-47.996, -15.004]];
+  const furado: GeoJSON.Polygon = { type: 'Polygon', coordinates: [A.coordinates[0], furo] };
+  const areaDoFuro = areaEmHectares({ type: 'Polygon', coordinates: [furo] });
+
+  it('polígono com furo e a linha longe dele: a parte que o contém leva o furo (anel interno) e a área sem ele', () => {
+    const r = dividirPorLinha(furado, [[-47.998, -14.99], [-47.998, -15.02]]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const { a, b } = r.valor;
+    expect(a.type === 'Polygon' && b.type === 'Polygon').toBe(true);
+    const comFuro = [a, b].filter(p => p.type === 'Polygon' && p.coordinates.length === 2);
+    expect(comFuro).toHaveLength(1);
+    expect(areaEmHectares(a) + areaEmHectares(b)).toBeCloseTo(areaEmHectares(A) - areaDoFuro, 6);
+  });
+
+  it('polígono com furo e a linha atravessando o furo: 2 partes, o furo fica fora das duas', () => {
+    const r = dividirPorLinha(furado, [[-47.995, -14.99], [-47.995, -15.02]]);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(areaEmHectares(r.valor.a) + areaEmHectares(r.valor.b)).toBeCloseTo(areaEmHectares(A) - areaDoFuro, 6);
   });
 });
 

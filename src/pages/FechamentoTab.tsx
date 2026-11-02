@@ -31,7 +31,7 @@ import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import { useGruposDePastejo } from '@/components/pastos/GruposDePastejo';
 import type { ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
 import { API_LOTE_NO_GRUPO, alocacaoDoCard, propostosComoVedado, quemRecebe, resumoDoGrupo, type AlocacaoDoMes, type LotacaoDoPasto, type PastoDoLote } from '@/lib/fechamento/loteNoGrupo';
-import { areaNoMesOuHoje, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
+import { areaNoMesOuHoje, comAreaDoMes, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
 import { useReclassificacaoState, ReclassificacaoFormFields } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { MapaRebanhoImportDialog, type MapaItem } from '@/components/MapaRebanhoImportDialog';
@@ -194,7 +194,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
 
-  const { pastos, categorias, editarPasto } = usePastos();
+  const { pastos: pastosDeHoje, categorias, editarPasto } = usePastos();
   const { lancamentos, saldosIniciais, adicionarLancamento } = useLancamentos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, copiarMesAnterior } = useFechamento();
   const { user } = useAuth();
@@ -214,6 +214,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     usePeriodoDaTela({ periodo, onPeriodoChange }, { ano: anoInicial, mes: mesDefault });
   const anoNum2 = Number(anoFiltro);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+  /* PASTO-AREA-OFICIAL-02b — a área de cada pasto é a DO MÊS escolhido (`fn_pastos_area_do_mes`: mês fechado = a congelada; senão a
+     vigência), não a de hoje do cadastro: o card (UA/ha, kg/ha, "X ha"), o modal do pasto, o resumo Global e o Resumo por Atividade
+     leem estes `pastos`. Lê dez do ano anterior + o ano de uma vez (as colunas "mês a mês" do Resumo usam `areaDoAno`); enquanto não lê, vale a de hoje.
+     (Os nomes `fazendasDaArea`/`areaDe` mais abaixo são da fatia 3 do Code 1 — a leitura do mês para o lote no grupo.) */
+  const fazendasDoAno = useMemo(() => (isGlobal ? fazendas.map(f => f.id) : fazendaAtual ? [fazendaAtual.id] : []), [isGlobal, fazendas, fazendaAtual]);
+  const { areaDe: areaDoAno } = useAreaDosPastosNoMes(fazendasDoAno, `${Number(anoFiltro) - 1}-12`, `${anoFiltro}-12`);
+  const pastos = useMemo(() => comAreaDoMes(pastosDeHoje, anoMes, areaDoAno), [pastosDeHoje, areaDoAno, anoMes]);
 
   /* FECH-GLOBAL-RESUMO-01 — em Global a tela mostra o resumo por fazenda (só lê quando está em Global). Clicar numa fazenda
      troca a fazenda do contexto e esta MESMA tela abre nela, no mesmo ano e mês (o estado é deste componente); "← Resumo"
@@ -1031,6 +1038,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         itensMap={itensMap}
         culturasPorPasto={areaLavouraPorPasto}
         anoMes={anoMes}
+        areaDe={areaDoAno}
         anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp}
         mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} statusPorMes={statusPorMes}
         onBack={() => setShowResumoAtividades(false)}
