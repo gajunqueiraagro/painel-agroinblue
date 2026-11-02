@@ -51,6 +51,8 @@ export interface ResumoPorAtividadeProps {
   itensMap: ReadonlyMap<string, readonly FechamentoItem[]>;
   culturasPorPasto: ReadonlyMap<string, { culturas: string[] }>;
   anoMes: string;
+  /** PASTO-AREA-OFICIAL-02b — a área de cada pasto em cada mês (as colunas "mês a mês"); sem ela, a do cadastro */
+  areaDe?: (pastoId: string, anoMes: string) => number | null | undefined;
   anoFiltro: string;
   setAnoFiltro: (ano: string) => void;
   anosDisp: string[];
@@ -79,10 +81,10 @@ export function ResumoPorAtividade(props: ResumoPorAtividadeProps) {
   const total = useMemo(() => totalDaPecuariaDoCache(dados.cacheDoAno.filter(l => l.mes === props.mesFiltro), dados.areaPecuariaHa),
     [dados.cacheDoAno, dados.areaPecuariaHa, props.mesFiltro]);
   const divergencia = divergenciaDasFases(total, resumo);
-  const colFazenda = useMemo(() => colunasDaArea({ meses: dados.meses, modo: 'fazenda', pastos: props.pastos, cards: dados.cardsDoAno }),
-    [dados.meses, props.pastos, dados.cardsDoAno]);
-  const colPecuaria = useMemo(() => colunasDaArea({ meses: dados.meses, modo: 'pecuaria', pastos: props.pastos, cards: dados.cardsDoAno }),
-    [dados.meses, props.pastos, dados.cardsDoAno]);
+  const colFazenda = useMemo(() => colunasDaArea({ meses: dados.meses, modo: 'fazenda', pastos: props.pastos, cards: dados.cardsDoAno, areaDe: props.areaDe }),
+    [dados.meses, props.pastos, dados.cardsDoAno, props.areaDe]);
+  const colPecuaria = useMemo(() => colunasDaArea({ meses: dados.meses, modo: 'pecuaria', pastos: props.pastos, cards: dados.cardsDoAno, areaDe: props.areaDe }),
+    [dados.meses, props.pastos, dados.cardsDoAno, props.areaDe]);
 
   /* 01b — aba Pecuaria: tudo pronto da lib */
   const porFase = useMemo(() => montarPorFase({ anoMes, pastos: props.pastos, cards: cardsDoMes, resumo, total, areaPecuariaHa: dados.areaPecuariaHa }),
