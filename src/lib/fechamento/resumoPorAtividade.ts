@@ -4,7 +4,8 @@
  * FONTE UNICA (decisao D4 do Gabriel, 15/10/2026) — nenhuma conta paralela:
  *   · atividade do pasto no mes = `fechamento_pastos.tipo_uso_mes`; card sem tipo -> o cadastro (`pastos.tipo_uso`);
  *     pasto SEM card no mes -> balde "sem fechamento", fora de toda atividade (a regra que a tela antiga ja' tinha);
- *   · area por pasto = `pastos.area_produtiva_ha` (limitacao conhecida: e' a area do cadastro ATUAL);
+ *   · area por pasto = a area DO MES (PASTO-AREA-OFICIAL-02b: `areaDe`, da `fn_pastos_area_do_mes`); sem `areaDe`, ou quando ele nao
+ *     sabe, a do cadastro (`pastos.area_produtiva_ha`) — a limitacao antiga ("a area do cadastro ATUAL") vale so' nesse caso;
  *   · cabecas / peso por fase = `fechamento_pasto_itens` agrupados pela atividade do pasto;
  *   · total da pecuaria (cab, peso medio, @ em estoque, @ produzidas, GMD) = `zoot_mensal_cache` do mes, SEM o overlay
  *     de fechamento, pelas funcoes canonicas do painel (`pesoMedioPonderadoFromRows`, `cabecasMediaPeriodoFromRows`,
@@ -107,6 +108,8 @@ export function montarResumoDoMes(entrada: {
   cards: readonly CardDoResumo[];
   itens: readonly ItemDoResumo[];
   culturasPorPasto?: ReadonlyMap<string, readonly string[]>;
+  /** PASTO-AREA-OFICIAL-02b — a área do pasto NESTE mês (`useAreaDosPastosNoMes`); `undefined` = não sabe (vale a do cadastro) */
+  areaDe?: (pastoId: string, anoMes: string) => number | null | undefined;
 }): ResumoDoMes {
   const { anoMes } = entrada;
   const cardDoPasto = new Map(entrada.cards.filter(c => c.ano_mes === anoMes).map(c => [c.pasto_id, c]));
@@ -127,7 +130,8 @@ export function montarResumoDoMes(entrada: {
   const destino = new Map<string, { g: GrupoDoResumo; f: ParteDoResumo }>();
 
   for (const p of pastosDoMes(entrada.pastos, anoMes)) {
-    const area = Number(p.area_produtiva_ha) || 0;
+    const doMes = entrada.areaDe ? entrada.areaDe(p.id, anoMes) : undefined;
+    const area = doMes !== undefined ? Number(doMes) || 0 : Number(p.area_produtiva_ha) || 0;
     const atv = atividadeNoMes(p, cardDoPasto.get(p.id));
     const grupo = atv === SEM_FECHAMENTO ? null : grupoDaAtividade(atv);
     if (!grupo) { semFechamento.areas += 1; semFechamento.areaHa += area; continue; }
@@ -222,11 +226,13 @@ export function colunasDaArea(entrada: {
   modo: 'fazenda' | 'pecuaria';
   pastos: readonly PastoDoResumo[];
   cards: readonly CardDoResumo[];
+  /** PASTO-AREA-OFICIAL-02b — a área de cada pasto em CADA mês da coluna */
+  areaDe?: (pastoId: string, anoMes: string) => number | null | undefined;
 }): ColunaDoMes[] {
   return entrada.meses.map(anoMes => {
     const doMes = entrada.cards.filter(c => c.ano_mes === anoMes);
     if (doMes.length === 0) return { anoMes, semFechamento: true, totalHa: 0, partes: [] };
-    const r = montarResumoDoMes({ anoMes, pastos: entrada.pastos, cards: doMes, itens: [] });
+    const r = montarResumoDoMes({ anoMes, pastos: entrada.pastos, cards: doMes, itens: [], areaDe: entrada.areaDe });
     const partes = entrada.modo === 'fazenda'
       ? GRUPOS_ATIVIDADE.map(g => ({ chave: g, rotulo: ROTULO_GRUPO[g], areaHa: r.grupos[g].areaHa }))
       : FASES_PECUARIA.map(f => ({ chave: f, rotulo: ROTULO_FASE[f], areaHa: r.grupos.pecuaria.filhas.find(x => x.chave === f)?.areaHa ?? 0 }));
