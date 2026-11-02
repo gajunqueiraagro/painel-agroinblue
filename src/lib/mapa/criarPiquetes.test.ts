@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  alcasDosCortes, areaDoBancoHa, comAreaDesejada, cortesIguais, divisoesDosCortes, haDoBanco, membrosPorParecenca, montar, moverAlca, nomeSugerido,
+  alcasDosCortes, areaDoBancoHa, comAreaDesejada, cortarPorLinhas, cortesIguais, divisoesDosCortes, haDoBanco, membrosPorParecenca, montar, moverAlca, nomeSugerido,
 } from './criarPiquetes';
 
 const R = 6378137;
@@ -102,5 +102,69 @@ describe('os nomes', () => {
     const membros = [{ nome: '6A' }, { nome: '6B' }, { nome: 'Outro' }];
     expect(membrosPorParecenca('6B', membros).map(x => x.nome)).toEqual(['6B', '6A', 'Outro']);
     expect(membrosPorParecenca('P6-B', membros).map(x => x.nome)[0]).toBe('6B');
+  });
+});
+
+describe('cortar pelas linhas que o usuário traça', () => {
+  const g = retangulo(80);
+  const [[x0, y0], [x1], [, y1]] = g.coordinates[0];
+  const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2;
+  const vertical: [number, number][] = [[xm, y0 - 0.001], [xm, y1 + 0.001]];
+  const horizontal: [number, number][] = [[x0 - 0.001, ym], [x1 + 0.001, ym]];
+
+  it('1 linha de lado a lado: 2 peças que somam a área', () => {
+    const r = cortarPorLinhas(g, [vertical]);
+    expect(r.recusa).toBeNull();
+    expect(r.pecas).toHaveLength(2);
+    expect(r.pecas.reduce((s, d) => s + d.areaHa, 0)).toBeCloseTo(areaDoBancoHa(g), 4);
+  });
+
+  it('2 linhas cruzadas: 4 peças, a soma é o pasto', () => {
+    const r = cortarPorLinhas(g, [vertical, horizontal]);
+    expect(r.recusa).toBeNull();
+    expect(r.pecas).toHaveLength(4);
+    expect(r.pecas.reduce((s, d) => s + d.areaHa, 0)).toBeCloseTo(areaDoBancoHa(g), 4);
+  });
+
+  it('linha que não atravessa: recusa com a frase e as peças intactas (a boa continua valendo)', () => {
+    const fora: [number, number][] = [[x0 - 0.01, y0 - 0.01], [x0 - 0.005, y0 - 0.01]];
+    const r = cortarPorLinhas(g, [vertical, fora]);
+    expect(r.recusa).toBe('A linha 2 não atravessa o pasto de lado a lado: risque de uma borda à outra.');
+    expect(r.pecas).toHaveLength(2);
+    const so = cortarPorLinhas(g, [fora]);
+    expect(so.pecas).toHaveLength(1);
+    expect(so.pecas[0].areaHa).toBeCloseTo(areaDoBancoHa(g), 6);
+  });
+
+  it('sem linha: 1 peça, o pasto inteiro', () => {
+    const r = cortarPorLinhas(g, []);
+    expect(r.pecas).toHaveLength(1);
+    expect(r.recusa).toBeNull();
+  });
+
+  it('com FURO: o furo segue anel interno na peça que o contém e a soma é a área sem ele', () => {
+    const furado: GeoJSON.Polygon = { type: 'Polygon', coordinates: [
+      g.coordinates[0],
+      [[x0 + 0.001, ym + 0.0005], [x0 + 0.001, ym + 0.002], [x0 + 0.003, ym + 0.002], [x0 + 0.003, ym + 0.0005], [x0 + 0.001, ym + 0.0005]]] };
+    const r = cortarPorLinhas(furado, [vertical]);
+    expect(r.recusa).toBeNull();
+    expect(r.pecas).toHaveLength(2);
+    const comFuro = r.pecas.filter(d => d.geojson.type === 'Polygon' && d.geojson.coordinates.length === 2);
+    expect(comFuro).toHaveLength(1);
+    expect(r.pecas.reduce((s, d) => s + d.areaHa, 0)).toBeCloseTo(areaDoBancoHa(furado), 4);
+    expect(areaDoBancoHa(furado)).toBeLessThan(areaDoBancoHa(g));
+  });
+
+  it('ordem de leitura: oeste → leste, e no mesmo meridiano norte → sul (A é a do noroeste)', () => {
+    const r = cortarPorLinhas(g, [vertical, horizontal]);
+    const centros = r.pecas.map(d => {
+      const anel = d.geojson.coordinates[0];
+      return { x: (Math.min(...anel.map(p => p[0])) + Math.max(...anel.map(p => p[0]))) / 2, y: (Math.min(...anel.map(p => p[1])) + Math.max(...anel.map(p => p[1]))) / 2 };
+    });
+    expect(centros[0].x).toBeLessThan(xm); expect(centros[0].y).toBeGreaterThan(ym); // A: noroeste
+    expect(centros[1].x).toBeLessThan(xm); expect(centros[1].y).toBeLessThan(ym);    // B: sudoeste
+    expect(centros[2].x).toBeGreaterThan(xm); expect(centros[2].y).toBeGreaterThan(ym); // C: nordeste
+    expect(centros[3].x).toBeGreaterThan(xm); expect(centros[3].y).toBeLessThan(ym);    // D: sudeste
+    expect(r.pecas.map(d => d.coluna)).toEqual([0, 1, 2, 3]);
   });
 });

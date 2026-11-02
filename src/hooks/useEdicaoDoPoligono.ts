@@ -125,7 +125,8 @@ export function useEdicaoDoPoligono(args: {
   mapa: L.Map | null;
   fazendaId: string | null;
   geometrias: readonly PoligonoDaFazenda[];
-  aoMudar: () => void;
+  /** MAPA-DICAS-01 (área): depois de gravar, devolve o id do polígono CRIADO (se houve) para a tela selecioná-lo */
+  aoMudar: (criadoId?: string) => void;
   /** -08: para guardar o rascunho do desenho no navegador por cliente + fazenda */
   clienteId?: string | null;
   /** -09: o polígono selecionado na Validação (fora da edição) também mostra os metros dos lados */
@@ -934,7 +935,8 @@ export function useEdicaoDoPoligono(args: {
       setUltimoGesto(typeof r.gesto_id === 'string' ? r.gesto_id : null);
       if (modo === 'desenhar') { guardarRascunho(clienteId, fazendaId, null); setGuardado(null); }
       encerrar();
-      aoMudar();
+      const criado = (Array.isArray(r.poligonos) ? r.poligonos : []).find((p: ItemDaPrevia) => p.mudanca === 'criado');
+      aoMudar(criado && typeof criado.id === 'string' ? criado.id : undefined);
       return true;
     } finally { setGravando(false); }
   }, [chamar, encerrar, aoMudar, modo, clienteId, fazendaId]);

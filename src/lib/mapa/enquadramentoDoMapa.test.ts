@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import L from 'leaflet';
 import {
   chaveDoEnquadramento, decidirEnquadramento, guardarEnquadramento, lerEnquadramento, limitesDaFazendaAtual, textoDoEnquadramento,
-  trocarLimites, paddingDaAreaVisivel, retangulosSobrepostos, OPCOES_PASTO_INTEIRO,
+  trocarLimites, paddingDaAreaVisivel, retangulosSobrepostos, OPCOES_PASTO_INTEIRO, mapaVivo,
 } from './enquadramentoDoMapa';
 
 function armazenamentoFalso() {
@@ -143,5 +143,13 @@ describe('retangulosSobrepostos', () => {
     marcado.getBoundingClientRect = () => caixa(0, 0, 0, 0);
     expect(retangulosSobrepostos(raiz)).toEqual([]);
     expect(retangulosSobrepostos(null)).toEqual([]);
+  });
+});
+
+describe('mapaVivo (02/11: enquadrar em mapa desmontado derrubava a tela)', () => {
+  it('sem mapa ou sem o mapPane (depois do map.remove()) = não está vivo; com o pane, está', () => {
+    expect(mapaVivo(null)).toBe(false);
+    expect(mapaVivo({ getPane: () => undefined })).toBe(false);
+    expect(mapaVivo({ getPane: () => document.createElement('div') })).toBe(true);
   });
 });
