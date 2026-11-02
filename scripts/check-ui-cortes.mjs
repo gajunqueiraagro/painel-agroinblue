@@ -361,7 +361,7 @@ const CENARIOS = [
       ...(() => {
         const abrir = (modo, url = '') => async (p) => {
           await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
-          await p.locator(`[data-testid="editar-poligono"] button[title="${modo}"]`).click();
+          await p.locator(`[data-testid="editar-poligono"] button[aria-label="${modo}"]`).click();
           await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); };
         const noMapa = async (p, pontos, duplo = false) => {
           const c = await p.locator('.leaflet-container').first().boundingBox();
@@ -419,14 +419,24 @@ const CENARIOS = [
           await p.locator('[data-testid="validacao-painel-poligono"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(1200); };
         return [
           { nome: 'mapa-validacao-barra-poligono', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]', antes: selecionarP01,
-            barraCompacta: { sel: '[data-testid="validacao-painel-poligono"]', alturaMax: 44, mapa: '.leaflet-container', vizinho: '[data-testid="validacao-botoes-topo"]' } },
+            barraCompacta: { sel: '[data-testid="validacao-painel-poligono"]', alturaMax: 44, mapa: '.leaflet-container', vizinho: '[data-testid="validacao-botoes-topo"]', area: { cadastro: true } } },
           { nome: 'mapa-validacao-barra-poligono-recolhida', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]',
             antes: async (p) => { await selecionarP01(p); await p.locator('[data-testid="validacao-recolher-lista"]').click(); await p.waitForTimeout(500);
               await p.locator('[data-testid="validacao-reabrir-lista"]').waitFor(); await p.waitForTimeout(500); },
-            barraCompacta: { sel: '[data-testid="validacao-painel-poligono"]', alturaMax: 44, mapa: '.leaflet-container', vizinho: '[data-testid="validacao-botoes-topo"]' } },
+            barraCompacta: { sel: '[data-testid="validacao-painel-poligono"]', alturaMax: 44, mapa: '.leaflet-container', vizinho: '[data-testid="validacao-botoes-topo"]', area: { cadastro: true } } },
+          /* MAPA-DICAS-01 (área; Gabriel 02/11 12:26, "quando eu crio um pasto, preciso ver a área dele em hectares"): (1) a coluna "ha" da lista, com a
+             lista aberta, em todas as linhas: "N,NN", à direita, inteira (`colunaHa`); (2) o rótulo do P_01 no mapa mostra a área com o zoom aproximado
+             ("+" 2×) e a linha SOME com o zoom afastado ("−" 3×) (`rotuloDeArea`) */
+          { nome: 'mapa-validacao-lista-area', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-lista"]', antes: validacao, colunaHa: true },
+          { nome: 'mapa-validacao-rotulo-area', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-topo"]', antes: validacao, rotuloDeArea: { nome: 'P_01' } },
           { nome: 'mapa-validacao-pasto-inteiro', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-topo"]', antes: selecionarP01,
             pastoInteiro: { poligono: 'path.poligono-selecionado', mapa: '.leaflet-container', lista: '[data-testid="validacao-lista"]', minimo: 0.5 } },
           { nome: 'mapa-validacao-vertices-sem-reenquadrar', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-topo"]', antes: selecionarP01, semReenquadrar: true },
+          /* MAPA-DICAS-01 (Gabriel 02/11 11:18: "ficou bom, mas o cliente não entende; tem que explicar bem ao passar o mouse"): para CADA ícone da
+             barra do polígono e dos botões do canto, o hover mostra a dica em até 600 ms, inteira (nunca cortada), dentro da janela, com ≤ 260 px e
+             sem cobrir a barra de onde saiu (`dicasDoMapa`); com `--fotos`, um print por dica (`<cenario>_<tamanho>_dica-<nome>.png`) */
+          { nome: 'mapa-validacao-dicas', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], regiao: '[data-testid="validacao-painel-poligono"]', antes: selecionarP01,
+            dicasDoMapa: { barras: ['[data-testid="validacao-painel-poligono"]', '[data-testid="validacao-botoes-topo"]'] } },
         ];
       })(),
       /* MAPA-CRIAR-PIQUETES-01 (fatia 1) — o "Criar piquetes" do P_01: a barra (2 linhas fixas, "Prévia e gravar" e "Cancelar" inteiros na
@@ -1527,7 +1537,7 @@ async function medirMesmoEnquadramento(p) {
 }
 /* MAPA-ZOOM-E-PAINEL-01 — `barraCompacta` (opcional, por cenário): a barra do polígono existe, tem no máximo `alturaMax` px, fica INTEIRA dentro do
    mapa (`mapa`), não rola (scrollWidth ≤ clientWidth) e não pisa no `vizinho` (os botões do topo). A barra antiga (~600×250) reprova pela altura. */
-function medirBarraCompacta({ sel, alturaMax, mapa, vizinho }) {
+function medirBarraCompacta({ sel, alturaMax, mapa, vizinho, area }) {
   const b = document.querySelector(sel); const m = document.querySelector(mapa);
   if (!b || !m) return [{ regra: 'barra', texto: `${!b ? sel : mapa} nao achado` }];
   const r = b.getBoundingClientRect(), c = m.getBoundingClientRect(); const achados = [];
@@ -1538,12 +1548,62 @@ function medirBarraCompacta({ sel, alturaMax, mapa, vizinho }) {
   for (const el of b.querySelectorAll('button')) {
     const e = el.getBoundingClientRect(); if (e.width < 2) continue;
     if (e.right > r.right + 0.5 || e.left < r.left - 0.5 || e.bottom > r.bottom + 0.5 || e.top < r.top - 0.5)
-      achados.push({ regra: 'barra', texto: `botao "${el.getAttribute('title') ?? '?'}" sai da barra` });
-    if (!el.getAttribute('title')) achados.push({ regra: 'barra', texto: 'botao de icone sem title' });
+      achados.push({ regra: 'barra', texto: `botao "${el.getAttribute('aria-label') ?? '?'}" sai da barra` });
+    /* MAPA-DICAS-01: o nome do ícone é o `aria-label` (a dica rica mostra o nome e a frase; o `title` nativo saiu para não aparecer junto) */
+    if (!el.getAttribute('aria-label')) achados.push({ regra: 'barra', texto: 'botao de icone sem aria-label (sem nome para a dica e o leitor de tela)' });
   }
   const v = vizinho ? document.querySelector(vizinho) : null;
   if (v) { const q = v.getBoundingClientRect();
     if (r.right > q.left - 0.5 && r.left < q.right && r.bottom > q.top && r.top < q.bottom) achados.push({ regra: 'barra', texto: 'a barra pisa nos botoes do topo' }); }
+  /* MAPA-DICAS-01 (área): a barra mostra "12,84 ha" (e "cadastro 12,50 (+0,34)" quando o pasto tem área oficial diferente) — números INTEIROS,
+     sem corte (o nome é quem cede) */
+  if (area) {
+    const a = b.querySelector('[data-testid="validacao-painel-area"]');
+    if (!a) achados.push({ regra: 'barra-area', texto: 'a barra nao tem a area (validacao-painel-area)' });
+    else {
+      const t = (a.textContent ?? '').trim(); const ar = a.getBoundingClientRect();
+      if (!/\d[\d.]*,\d{2} ha/.test(t)) achados.push({ regra: 'barra-area', texto: `a area da barra nao e "N,NN ha": "${t}"` });
+      if (area.cadastro && !/cadastro \d[\d.]*,\d{2} \([+-]\d[\d.]*,\d{2}\)/.test(t)) achados.push({ regra: 'barra-area', texto: `falta "cadastro N,NN (+N,NN)" na barra: "${t}"` });
+      if (a.scrollWidth > a.clientWidth + 1 || ar.right > r.right + 0.5 || ar.left < r.left - 0.5) achados.push({ regra: 'barra-area', texto: `a area da barra esta cortada ("${t}")` });
+      for (const f of a.querySelectorAll('*')) { const fr = f.getBoundingClientRect();
+        if (fr.right > ar.right + 0.5 || f.scrollWidth > f.clientWidth + 1) achados.push({ regra: 'barra-area', texto: 'o cadastro da barra esta cortado' }); }
+    }
+  }
+  return achados;
+}
+/* MAPA-DICAS-01 (área) — `colunaHa` (opcional, por cenário): em TODA linha da lista a célula "ha" (`validacao-area`) tem "N,NN" (ou "—"), alinha à
+   direita, cabe inteira na célula (scrollWidth ≤ clientWidth, sem "…") e a lista não ganha rolagem lateral. */
+function medirColunaHa() {
+  const achados = []; const cs = [...document.querySelectorAll('[data-testid="validacao-area"]')];
+  if (!cs.length) return [{ regra: 'coluna-ha', texto: 'nenhuma celula validacao-area (a lista nao tem a coluna ha)' }];
+  const lista = document.querySelector('[data-testid="validacao-lista-linhas"]');
+  if (lista && lista.scrollWidth > lista.clientWidth + 1) achados.push({ regra: 'coluna-ha', texto: 'a lista rola para o lado' });
+  for (const c of cs) {
+    const t = (c.textContent ?? '').trim(); const st = getComputedStyle(c);
+    if (!/^(\d[\d.]*,\d{2}|—)$/.test(t)) achados.push({ regra: 'coluna-ha', texto: `celula ha fora do formato: "${t}"` });
+    if (st.textAlign !== 'right' && st.textAlign !== 'end') achados.push({ regra: 'coluna-ha', texto: `"${t}" nao alinha a direita` });
+    if (st.textOverflow === 'ellipsis' || c.scrollWidth > c.clientWidth + 1) achados.push({ regra: 'coluna-ha', texto: `a area "${t}" esta cortada` });
+  }
+  return achados;
+}
+/* MAPA-DICAS-01 (área) — `rotuloDeArea` (opcional, por cenário): com o zoom aproximado ("+" 2×, até 4 mais se preciso) o rótulo do `nome` mostra a
+   linha da área (`rotulo-area`, "N,N ha"); com o afastado ("−" 3×, até 6 mais) a linha SOME e o nome fica. O zoom em que a bancada abre não é
+   conhecido de antemão: os cliques extras só andam na direção pedida, e o número de cliques gasto vai no achado. */
+async function medirRotuloDeArea(p, { nome }) {
+  const achados = [];
+  const rotulo = () => p.evaluate((n) => { const el = [...document.querySelectorAll('.pasto-label')].find((e) => (e.textContent ?? '').includes(n));
+    return el ? { achou: true, area: el.querySelector('[data-testid="rotulo-area"]')?.textContent?.trim() ?? null } : { achou: false, area: null }; }, nome);
+  const clicar = async (cls, n) => { for (let i = 0; i < n; i++) { await p.locator(`.leaflet-control-zoom-${cls}`).first().click(); await p.waitForTimeout(450); } };
+  await clicar('in', 2);
+  let r = await rotulo(); let extra = 0;
+  while (!r.area && r.achou && extra < 4) { await clicar('in', 1); extra++; r = await rotulo(); }
+  if (!r.achou) return [{ regra: 'rotulo-area', texto: `o rotulo de ${nome} nao esta no mapa` }];
+  if (!r.area || !/^\d[\d.]*,\d ha$/.test(r.area)) achados.push({ regra: 'rotulo-area', texto: `com zoom aproximado o rotulo de ${nome} nao mostra "N,N ha" (${r.area ?? 'sem a linha'}; +${2 + extra} cliques)` });
+  await clicar('out', 3 + extra);
+  r = await rotulo(); let mais = 0;
+  while (r.area && mais < 6) { await clicar('out', 1); mais++; r = await rotulo(); }
+  if (r.area) achados.push({ regra: 'rotulo-area', texto: `com zoom afastado o rotulo de ${nome} ainda mostra a area (${r.area}; −${3 + extra + mais} cliques)` });
+  if (!r.achou) achados.push({ regra: 'rotulo-area', texto: `o nome ${nome} sumiu junto com a area` });
   return achados;
 }
 /* MAPA-ZOOM-E-PAINEL-01 — `pastoInteiro` (opcional, por cenário): o `path` do polígono selecionado (classe `poligono-selecionado`) cabe INTEIRO na
@@ -1566,6 +1626,69 @@ function medirPastoInteiro({ poligono, mapa, lista, minimo }) {
   if (fr < minimo) achados.push({ regra: 'pasto-inteiro', texto: `o poligono ocupa so' ${Math.round(fr * 100)}% da area visivel (minimo ${Math.round(minimo * 100)}%): nao enquadrou o pasto` });
   return achados;
 }
+/* MAPA-DICAS-01 — `dicasDoMapa` (opcional, por cenário; roda DEPOIS do `antes`, com P_01 selecionado). `medirDicaAberta` roda NA PÁGINA, com a dica
+   aberta, e devolve os achados de UMA dica:
+     - SAI DA JANELA: o retângulo da dica passa de 0..innerWidth / 0..innerHeight;
+     - CORTADA: `scrollWidth > clientWidth + 1` ou `scrollHeight > clientHeight + 1` na dica OU em qualquer filho dela. COMO REPROVA UMA DICA CORTADA:
+       a dica cortada é a que tem `overflow:hidden`/`truncate`/altura fixa — o conteúdo é MAIOR que a caixa, logo `scrollWidth`/`scrollHeight` passam do
+       `clientWidth`/`clientHeight` em pelo menos 2 px e o achado sai (o auto-teste do gate, abaixo, monta uma dica assim e exige o achado);
+       a dica certa (`w-max`, `overflow-visible`, quebra de linha) cresce com o texto e dá scroll == client;
+     - CRUZA A BARRA: o retângulo da dica pisa (mais de 1 px nos dois eixos) na barra de onde o botão saiu (`barraDeOrigem`) — ela é a de baixo, e a
+       dica fica EMBAIXO do botão; se o Radix a virar para cima por falta de lugar, ela cobre a barra e reprova;
+     - LARGA: mais de 260 px (+1 de folga de arredondamento). Que ela NÃO APARECE em 600 ms o `medirDicasDoMapa` acha (waitFor com 600 ms). */
+function medirDicaAberta({ barraDeOrigem, nome }) {
+  const achados = [];
+  /* a dica ABERTA deste botão (a anterior pode estar fechando: `data-state="closed"`) */
+  const abertas = [...document.querySelectorAll('[data-testid="dica-do-mapa"]')]
+    .filter((d) => d.getBoundingClientRect().width > 0 && d.getAttribute('data-state') !== 'closed');
+  const comNome = abertas.filter((d) => (d.textContent ?? '').includes(nome));
+  const d = (comNome.length ? comNome : abertas)[(comNome.length ? comNome : abertas).length - 1];
+  if (!d) return [{ regra: 'dica', texto: `"${nome}": a dica nao esta na tela` }];
+  const r = d.getBoundingClientRect();
+  if (r.left < -0.5 || r.top < -0.5 || r.right > window.innerWidth + 0.5 || r.bottom > window.innerHeight + 0.5)
+    achados.push({ regra: 'dica', texto: `"${nome}": a dica sai da janela (${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)})` });
+  for (const e of [d, ...d.querySelectorAll('*')]) {
+    if (e.closest('[role="tooltip"]')) continue; // a cópia invisível do Radix para leitor de tela (1×1 px de propósito)
+    if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1)
+      achados.push({ regra: 'dica', texto: `"${nome}": texto cortado (scroll ${e.scrollWidth}x${e.scrollHeight} > caixa ${e.clientWidth}x${e.clientHeight})` });
+  }
+  const barra = barraDeOrigem ? document.querySelector(barraDeOrigem) : null;
+  if (barra) {
+    const b = barra.getBoundingClientRect();
+    const w = Math.min(r.right, b.right) - Math.max(r.left, b.left), h = Math.min(r.bottom, b.bottom) - Math.max(r.top, b.top);
+    if (w > 1 && h > 1) achados.push({ regra: 'dica', texto: `"${nome}": a dica cruza a barra de onde saiu (${Math.round(w)}x${Math.round(h)}px)` });
+  }
+  if (r.width > 261) achados.push({ regra: 'dica', texto: `"${nome}": a dica tem ${Math.round(r.width)} px de largura (maximo 260)` });
+  return achados;
+}
+async function medirDicasDoMapa(p, cfg, prefixoDaFoto) {
+  const achados = [];
+  try {
+    for (const barra of cfg.barras) {
+      const botoes = p.locator(`${barra} button`);
+      const n = await botoes.count();
+      if (n === 0) { achados.push({ regra: 'dica', texto: `a barra ${barra} nao tem botoes` }); continue; }
+      for (let i = 0; i < n; i++) {
+        const b = botoes.nth(i);
+        const nome = (await b.getAttribute('aria-label')) ?? (await b.innerText()) ?? `botao ${i}`;
+        if (!(await b.isVisible())) continue;
+        if (await b.getAttribute('title')) achados.push({ regra: 'dica', texto: `"${nome}": ainda tem o title nativo (aparece junto da dica)` });
+        /* a dica do botão anterior FECHA antes do próximo (senão mede a dica errada — o print do "Unir" mostrava a do "Dividir") */
+        await p.mouse.move(5, 5);
+        await p.waitForFunction(() => ![...document.querySelectorAll('[data-testid="dica-do-mapa"]')].some((d) => d.getAttribute('data-state') !== 'closed'), null, { timeout: 2000 }).catch(() => {});
+        await p.waitForTimeout(100);
+        await b.hover();
+        try { await p.locator('[data-testid="dica-do-mapa"]:not([data-state="closed"])', { hasText: nome }).last().waitFor({ state: 'visible', timeout: 1500 }); }
+        catch { achados.push({ regra: 'dica', texto: `"${nome}": a dica nao aparece em 1,5 s (o atraso configurado e 300 ms; a bancada soma a animacao e o Playwright)` }); continue; }
+        await p.waitForTimeout(250); // a animação de entrada termina antes de medir
+        achados.push(...(await p.evaluate(medirDicaAberta, { barraDeOrigem: barra, nome })));
+        if (prefixoDaFoto) await p.screenshot({ path: `${prefixoDaFoto}_dica-${nome.normalize('NFD').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}.png` });
+        await p.mouse.move(5, 5); await p.waitForTimeout(200);
+      }
+    }
+  } catch (e) { achados.push({ regra: 'erro', texto: `dicasDoMapa: ${String(e).slice(0, 100)}` }); }
+  return achados;
+}
 /* MAPA-ZOOM-E-PAINEL-01 — `semReenquadrar` (opcional, por cenário; roda DEPOIS do `antes`, com P_01 selecionado): o `data-enquadramento` não muda
    (1) ao clicar de novo no MESMO polígono na lista, (2) ao fechar a barra (✕), (3) em Vértices, ao clicar no polígono no mapa. */
 async function medirSemReenquadrar(p) {
@@ -1579,10 +1702,10 @@ async function medirSemReenquadrar(p) {
     const a0 = await ler(); if (!a0) return [{ regra: 'reenquadra', texto: 'sem data-enquadramento' }];
     await linha.click(); const a1 = await ler();
     if (a1 !== a0) achados.push({ regra: 'reenquadra', texto: `clicar de novo no mesmo poligono reenquadrou (${a0} -> ${a1})` });
-    await p.locator('[data-testid="validacao-painel-poligono"] button[title="Fechar"]').click(); const a2 = await ler();
+    await p.locator('[data-testid="validacao-painel-poligono"] button[aria-label="Fechar"]').click(); const a2 = await ler();
     if (a2 !== a0) achados.push({ regra: 'reenquadra', texto: `fechar a barra reenquadrou (${a0} -> ${a2})` });
     await linha.click(); await p.locator('[data-testid="validacao-painel-poligono"]').waitFor({ timeout: 3000 });
-    await p.locator('[data-testid="editar-poligono"] button[title="Vértices"]').click();
+    await p.locator('[data-testid="editar-poligono"] button[aria-label="Vértices"]').click();
     await p.locator('[data-testid="barra-edicao-poligono"]').waitFor({ timeout: 3000 });
     const b0 = await ler();
     await p.mouse.click(centro[0], centro[1]); const b1 = await ler();
@@ -1616,7 +1739,8 @@ function medirCromoDoMapa() {
     if (!(el.scrollWidth > el.clientWidth + 1) || el.clientWidth < 2) continue;
     const texto = (el.textContent ?? '').replace(/\s+/g, ' ').trim(); if (!texto) continue;
     let ok = false;
-    for (let a = el; a && a !== document.body; a = a.parentElement) { const t = a.getAttribute('title'); if (t && t.replace(/\s+/g, ' ').includes(texto)) { ok = true; break; } }
+    /* MAPA-DICAS-01 (área): o nome que cede na barra do polígono abre a DicaDoMapa (o `title` nativo saiu); o texto inteiro fica no `aria-label` */
+    for (let a = el; a && a !== document.body; a = a.parentElement) { const t = a.getAttribute('title') ?? a.getAttribute('aria-label'); if (t && t.replace(/\s+/g, ' ').includes(texto)) { ok = true; break; } }
     if (!ok) achados.push({ regra: 'cromo', texto: `texto cortado sem title inteiro em "${nome(raiz)}": "${texto.slice(0, 40)}"` });
   }
   return achados;
@@ -2113,6 +2237,20 @@ try {
   if (daInteiro0.length !== 1 || !daInteiro0[0].texto.includes('PIX_DEB') || daAlinha0.length !== 1 || !daAlinha0[0].texto.includes('9,99')) {
     console.error(`check-ui-cortes: AUTO-TESTE DO INTEIRO/ALINHAMENTO FALHOU (${JSON.stringify([daInteiro0, daAlinha0])})`); process.exit(2);
   }
+  /* MAPA-DICAS-01 — auto-teste da `medirDicaAberta`: uma dica CORTADA (overflow hidden, 100 px, texto longo sem quebra) e uma que sai da janela e
+     cruza a barra TÊM de gerar achado; uma dica inteira, embaixo da barra, não */
+  await p0.setContent(`<body style="margin:0"><div id="bar" style="position:absolute;left:10px;top:10px;width:200px;height:30px"></div>
+    <div data-testid="dica-do-mapa" style="position:absolute;left:10px;top:60px;width:100px;overflow:hidden;white-space:nowrap;font:10px sans-serif">Um texto longo demais para caber nesta dica cortada</div></body>`);
+  const dicaCortada0 = await p0.evaluate(medirDicaAberta, { barraDeOrigem: '#bar', nome: 'cortada' });
+  await p0.setContent(`<body style="margin:0"><div id="bar" style="position:absolute;left:10px;top:10px;width:200px;height:30px"></div>
+    <div data-testid="dica-do-mapa" style="position:absolute;left:10px;top:20px;width:max-content;max-width:260px;font:10px sans-serif">Dica inteira</div></body>`);
+  const dicaCruza0 = await p0.evaluate(medirDicaAberta, { barraDeOrigem: '#bar', nome: 'cruza' });
+  await p0.setContent(`<body style="margin:0"><div id="bar" style="position:absolute;left:10px;top:10px;width:200px;height:30px"></div>
+    <div data-testid="dica-do-mapa" style="position:absolute;left:10px;top:60px;width:max-content;max-width:260px;font:10px sans-serif">Dica inteira, embaixo</div></body>`);
+  const dicaOk0 = await p0.evaluate(medirDicaAberta, { barraDeOrigem: '#bar', nome: 'ok' });
+  if (!dicaCortada0.some((a) => a.texto.includes('cortado')) || !dicaCruza0.some((a) => a.texto.includes('cruza a barra')) || dicaOk0.length) {
+    console.error(`check-ui-cortes: AUTO-TESTE DAS DICAS DO MAPA FALHOU (cortada: ${JSON.stringify(dicaCortada0)}, cruza: ${JSON.stringify(dicaCruza0)}, ok: ${JSON.stringify(dicaOk0)})`); process.exit(2);
+  }
   if (aceitoErrado || !seco0 || !doc0 || clampAceitoErrado || !clampFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA REGRA DE CORTE FALHOU (aceito acusado: ${aceitoErrado}, corte seco: ${seco0}, documento: ${doc0}, clamp na célula acusado: ${clampAceitoErrado}, clamp fora achado: ${clampFora0})`); process.exit(2); }
   if (diaMesAceitoErrado || !diaMesCurto0 || !diaMesFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA DATA dd/mm FALHOU (aceito acusado: ${diaMesAceitoErrado}, dd/mm/aa na lista: ${diaMesCurto0}, dd/mm fora da lista: ${diaMesFora0})`); process.exit(2); }
   await p0.close();
@@ -2157,7 +2295,13 @@ try {
     if (/^mapa-(geo|validacao)-/.test(cen.nome)) daRolagem.push(...(await p.evaluate(medirCromoDoMapa))); // MAPA-CROMO-01
     if (cen.barraCompacta) daRolagem.push(...(await p.evaluate(medirBarraCompacta, cen.barraCompacta))); // MAPA-ZOOM-E-PAINEL-01
     if (cen.pastoInteiro) daRolagem.push(...(await p.evaluate(medirPastoInteiro, cen.pastoInteiro))); // MAPA-ZOOM-E-PAINEL-01
+    if (cen.colunaHa) daRolagem.push(...(await p.evaluate(medirColunaHa))); // MAPA-DICAS-01 (área)
+    if (cen.rotuloDeArea) daRolagem.push(...(await medirRotuloDeArea(p, cen.rotuloDeArea))); // MAPA-DICAS-01 (área; muda o zoom: por último entre as de mapa)
     if (cen.semReenquadrar) daRolagem.push(...(await medirSemReenquadrar(p))); // MAPA-ZOOM-E-PAINEL-01
+    if (cen.dicasDoMapa) { // MAPA-DICAS-01: depois das outras medições (o hover muda o estado do mapa)
+      if (FOTOS) fs.mkdirSync(FOTOS, { recursive: true });
+      daRolagem.push(...(await medirDicasDoMapa(p, cen.dicasDoMapa, FOTOS ? path.join(FOTOS, `${cen.nome}_${w}x${h}`) : null)));
+    }
     if (cen.titulosDeBloco) daRolagem.push(...(await p.evaluate(medirTitulosDeBloco)));
     daRolagem.push(...(await p.evaluate(medirCantoDoMapa))); // MAPA-CONTROLES-01: só age onde há o mapa do Gestor
     if (cen.semRolarNoLugar) daRolagem.push(...(await p.evaluate(medirSemRolarNoLugar, cen.semRolarNoLugar)));

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Card } from '@/components/ui/card';
@@ -23,7 +23,10 @@ import { trocarLimites, useEnquadramentoDoMapa, type LimitesDaFazenda } from '@/
 import type { Pasto } from '@/hooks/usePastos';
 import { CromoDoMapa } from '@/components/mapa-geo/CromoDoMapa';
 import { ClassificarPoligono } from '@/components/mapa-geo/ClassificarPoligono';
+import { DicaDoMapa } from '@/components/mapa-geo/DicaDoMapa';
 import { ehTipoDeArea, rotuloDoTipo, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
+/* MAPA-DICAS-01 (área): a área do mapa é a do banco, nos quatro lugares (barra, lista, rótulo no mapa, dica) */
+import { areaDoMapaHa, dicaDasMedidas, fraseDoCadastro, numHa2, perimetroDoMapaM, rotuloDeAreaVisivel, textoHa1, textoHa2 } from '@/lib/mapa/areaNaValidacao';
 /* MAPA-EDITAR-POLIGONO-01 — a edição de polígono é um módulo próprio (hook + barra); aqui só o encaixe */
 import { useEdicaoDoPoligono, type ModoDaEdicao } from '@/hooks/useEdicaoDoPoligono';
 import { BarraDeEdicaoDoPoligono, DesfazerUltimaEdicao } from '@/components/mapa-geo/BarraDeEdicaoDoPoligono';
@@ -50,6 +53,15 @@ type FilterStatus = 'all' | 'vinculado' | 'area' | 'sem_vinculo';
 const GESTOS: ReadonlyArray<[ModoDaEdicao, string, LucideIcon]> = [
   ['vertices', 'Vértices', Spline], ['redesenhar', 'Redesenhar', PenTool], ['dividir', 'Dividir', Scissors], ['unir', 'Unir', Merge],
 ];
+
+/* MAPA-DICAS-01: a frase de cada ícone da barra (o que o botão faz de fato: `edicao.iniciar(modo)`; o Unir abre a união com os vizinhos
+   que se marcam no mapa; o Dividir é o corte avulso — o piquete é o botão "Piquetes") */
+const FRASE_DO_GESTO: Partial<Record<ModoDaEdicao, string>> = {
+  vertices: 'Ajustar o contorno: arraste os pontos, clique na linha para criar ponto.',
+  redesenhar: 'Desenhar este contorno de novo do zero; o pasto continua o mesmo.',
+  dividir: 'Cortar este polígono em dois com uma linha (corte avulso, não piquete).',
+  unir: 'Juntar este polígono com vizinhos selecionados num só.',
+};
 
 interface Props {
   geometrias: FazendaGeometria[];
@@ -83,19 +95,52 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const { mapContainerRef: mapRef, mapInstanceRef: mapInstance, featureLayerRef: layerRef, status: statusDoMapa } =
     useStableLeafletMap({ debugName: 'ValidacaoPoligonos' });
   const boundsMap = useRef<Map<string, L.LatLngBounds>>(new Map());
+  /* MAPA-DICAS-01 (área): os rótulos do mapa (nome + a linha da área, que só aparece com zoom e tamanho que comportem) */
+  const rotulosRef = useRef<Map<string, { marker: L.Marker; nome: string; area: string | null; comArea: boolean; bounds: L.LatLngBounds }>>(new Map());
+  const iconeDoRotulo = (nome: string, area: string | null, comArea: boolean) => L.divIcon({
+    className: 'pasto-label', iconSize: [0, 0],
+    html: `<div style="position:absolute;transform:translate(-50%,-50%);white-space:nowrap;text-align:center;line-height:1.1">`
+      + `<span style="display:block;font-size:9px;font-weight:600;color:hsl(222,47%,11%);text-shadow:0 0 3px white,0 0 3px white;">${nome}</span>`
+      + (comArea && area ? `<span data-testid="rotulo-area" style="display:block;font-size:8px;font-weight:500;font-variant-numeric:tabular-nums;color:hsl(222,30%,25%);text-shadow:0 0 3px white,0 0 3px white;">${area}</span>` : '')
+      + `</div>`,
+  });
+  const atualizarRotulosDeArea = useCallback(() => {
+    const map = mapInstance.current;
+    if (!map || !map.getPane('mapPane')) return;
+    const zoom = map.getZoom();
+    rotulosRef.current.forEach((r) => {
+      let visivel = false;
+      if (r.area) {
+        const sw = map.latLngToContainerPoint(r.bounds.getSouthWest()), ne = map.latLngToContainerPoint(r.bounds.getNorthEast());
+        visivel = rotuloDeAreaVisivel(Math.abs(ne.x - sw.x), Math.abs(sw.y - ne.y), zoom, r.area);
+      }
+      if (visivel !== r.comArea) { r.comArea = visivel; r.marker.setIcon(iconeDoRotulo(r.nome, r.area, visivel)); }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapInstance]);
   /* MAPA-ZOOM-ENTRE-VISOES-01 (era o -07: "a tela pula para a fazenda toda"): o mapa só se enquadra SOZINHO na troca de fazenda e na 1ª
      abertura dela; nas demais volta ao enquadramento guardado (`useEnquadramentoDoMapa`, o mesmo do Gestor e da Operação). */
   const [limitesDaFazenda, setLimitesDaFazenda] = useState<LimitesDaFazenda | null>(null);
   const { fazendaAtual } = useFazenda();
-  const { verFazendaInteira: enquadrarFazenda, enquadrarPoligono } = useEnquadramentoDoMapa({
+  const { verFazendaInteira: enquadrarFazenda, enquadrarPoligono, enquadrarEm } = useEnquadramentoDoMapa({
     mapa: statusDoMapa === 'ready' ? mapInstance.current : null,
     clienteId: fazendaAtual?.cliente_id, fazendaId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null,
     limitesDaFazenda, opcoesDoAjuste: { padding: [30, 30], maxZoom: 17 },
   });
+  /* MAPA-DICAS-01 (área): o polígono recém-CRIADO (desenhar, dividir, unir…) abre selecionado: o id vem da gravação e a seleção espera o
+     recarregamento trazê-lo */
+  const [aSelecionar, setASelecionar] = useState<string | null>(null);
+  const aoMudarGeometrias = useCallback((criadoId?: string) => {
+    if (criadoId) setASelecionar(criadoId);
+    onRefresh();
+  }, [onRefresh]);
+  useEffect(() => {
+    if (aSelecionar && geometrias.some(g => g.id === aSelecionar)) { setFocusedId(aSelecionar); setASelecionar(null); }
+  }, [aSelecionar, geometrias]);
   const edicao = useEdicaoDoPoligono({
     mapa: statusDoMapa === 'ready' ? mapInstance.current : null,
     fazendaId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null,
-    geometrias, aoMudar: onRefresh,
+    geometrias, aoMudar: aoMudarGeometrias,
     clienteId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.cliente_id : null,
     /* -09: o polígono selecionado também mostra os metros dos lados */
     selecionado: focusedId ? geometrias.find(g => g.id === focusedId)?.geojson ?? null : null,
@@ -105,6 +150,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const piq = useCriarPiquetes({
     mapa: statusDoMapa === 'ready' ? mapInstance.current : null, pastos, geometrias,
     clienteId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.cliente_id : null,
+    enquadrar: enquadrarEm, // MAPA-ZOOM-E-PAINEL-01: o enquadramento ao abrir os piquetes passa pelo módulo único
     aoGravar: () => {
       onRefresh();
       if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id);
@@ -202,6 +248,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       map.invalidateSize();
       lg.clearLayers();
       boundsMap.current.clear();
+      rotulosRef.current.clear();
       if (geometrias.length === 0) return;
       const allBounds: L.LatLngBounds[] = [];
       // MAPA-PIQUETES-04: os contornos de pai por último (por cima), só a linha
@@ -232,11 +279,10 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
           boundsMap.current.set(geo.id, b);
           if (geo.nome_original) {
             const center = b.getCenter();
-            const label = L.divIcon({
-              className: 'pasto-label',
-              html: `<span style="font-size:9px;font-weight:600;color:hsl(222,47%,11%);text-shadow:0 0 3px white,0 0 3px white;">${geo.nome_original}</span>`,
-            });
-            L.marker(center, { icon: label, interactive: false }).addTo(lg);
+            const ha = areaDoMapaHa(geo.geojson);
+            const area = ha != null ? textoHa1(ha) : null;
+            const marker = L.marker(center, { icon: iconeDoRotulo(geo.nome_original, area, false), interactive: false }).addTo(lg);
+            rotulosRef.current.set(geo.id, { marker, nome: geo.nome_original, area, comArea: false, bounds: b });
           }
           if (!editando) layer.on('click', () => setFocusedId(geo.id));
           else if (unindo) layer.on('click', () => alternarNaUniao(geo.id));
@@ -246,6 +292,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
           allBounds.push(b);
         } catch {}
       });
+      atualizarRotulosDeArea();
       /* MAPA-ZOOM-ENTRE-VISOES-01: o desenho só entrega os limites ao hook (nunca enquadra) */
       const fazendaDaVista = geometrias[0]?.fazenda_id;
       if (allBounds.length > 0 && !emEdicaoId && fazendaDaVista) {
@@ -255,7 +302,15 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [geometrias, focusedId, selectedIds, statusDoMapa, emEdicaoId, editando, unindo, unidos, alternarNaUniao, contornos]);
+  }, [geometrias, focusedId, selectedIds, statusDoMapa, emEdicaoId, editando, unindo, unidos, alternarNaUniao, contornos, atualizarRotulosDeArea]);
+
+  /* MAPA-DICAS-01 (área): a linha da área do rótulo some no zoom afastado e reaparece no aproximado (a mesma ideia dos metros dos lados) */
+  useEffect(() => {
+    const map = statusDoMapa === 'ready' ? mapInstance.current : null;
+    if (!map) return;
+    map.on('zoomend moveend', atualizarRotulosDeArea);
+    return () => { map.off('zoomend moveend', atualizarRotulosDeArea); };
+  }, [statusDoMapa, mapInstance, atualizarRotulosDeArea]);
 
   /* MAPA-ZOOM-E-PAINEL-01 ("clique no polígono = pasto inteiro"): SELECIONAR um polígono (no mapa ou na lista) enquadra ele inteiro na área
      visível — descontando a barra do polígono e os botões do topo, com folga e 0,3 s (`enquadrarPoligono`, o mesmo caminho do "Ver fazenda
@@ -448,7 +503,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
               <div className="p-4 text-center text-xs text-muted-foreground">Nenhum polígono encontrado.</div>
             ) : (
               <table className="w-full table-fixed border-collapse text-[11px]">
-                <colgroup><col style={{ width: 22 }} /><col /><col style={{ width: 72 }} /><col style={{ width: 58 }} /></colgroup>
+                <colgroup><col style={{ width: 22 }} /><col /><col style={{ width: 46 }} /><col style={{ width: 72 }} /><col style={{ width: 58 }} /></colgroup>
                 <tbody>
                   {filtered.map(geo => {
                     const isFocused = focusedId === geo.id;
@@ -463,7 +518,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                             className="h-3.5 w-3.5" />
                         </td>
                         {isEditing ? (
-                          <td colSpan={3} className="pr-1 align-middle">
+                          <td colSpan={4} className="pr-1 align-middle">
                             <div className="flex gap-1">
                               <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-6 flex-1 text-[11px]" autoFocus
                                 onClick={e => e.stopPropagation()}
@@ -480,6 +535,10 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                           <>
                             <td className="truncate pr-1 align-middle font-medium text-foreground" title={geo.nome_original || 'Sem nome'} data-testid="validacao-nome">
                               {geo.nome_original || 'Sem nome'}
+                            </td>
+                            {/* MAPA-DICAS-01 (área): "ha" à direita do nome — 46 px = "9.999,99" a 10 px tabular (≈ 44), nunca corta */}
+                            <td className="whitespace-nowrap pr-1 text-right align-middle text-[10px] tabular-nums text-foreground" data-testid="validacao-area">
+                              {(() => { const ha = areaDoMapaHa(geo.geojson); return ha != null ? numHa2(ha) : '—'; })()}
                             </td>
                             <td className={`truncate pr-1 align-middle text-[9.5px] ${pastoName ? 'text-green-700' : geo.tipo === 'outra' ? 'text-orange-600' : 'text-muted-foreground'}`}
                               title={pastoName ? `Pasto → ${pastoName}` : selo} data-testid={pastoName ? 'validacao-selo-pasto' : undefined}>
@@ -542,50 +601,68 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
               const fecharClassificar = () => { setClassificandoId(null); onTipoPedidoUsado?.(); };
               const naEspera = piquetes.espera.some(x => x.geometriaId === geo.id);
               const icone = 'h-6 w-6 flex-none p-0 text-muted-foreground hover:text-foreground';
+              const haDoMapa = areaDoMapaHa(geo.geojson);
+              const cadastroHa = pastos.find(p => p.id === geo.pasto_id)?.area_produtiva_ha ?? null;
+              const fraseCadastro = fraseDoCadastro(haDoMapa, cadastroHa);
               return (
                 <div className="pointer-events-auto flex h-8 min-w-0 items-center gap-0.5 rounded-md border border-border bg-card/95 px-1.5 text-[10px] shadow-sm backdrop-blur-sm"
                   data-testid="validacao-painel-poligono" data-sobre-o-mapa>
-                  <span className="min-w-0 max-w-[260px] flex-initial truncate pr-1 font-semibold text-foreground" title={`${nome} · ${sub}`} data-testid="validacao-painel-nome">
-                    {nome}<span className="font-normal text-muted-foreground"> · {sub}</span>
+                  {/* MAPA-DICAS-01 (área): o nome cede ("…" e o inteiro na dica); a área e o cadastro são números e nunca cortam; o perímetro vai na dica */}
+                  <DicaDoMapa nome={nome} frase={`${sub}. ${dicaDasMedidas(perimetroDoMapaM(geo.geojson), haDoMapa, cadastroHa)}`}>
+                    <span tabIndex={0} aria-label={`${nome} · ${sub}`} className="min-w-0 max-w-[260px] flex-initial truncate pr-1 font-semibold text-foreground" data-testid="validacao-painel-nome">
+                      {nome}<span className="font-normal text-muted-foreground"> · {sub}</span>
+                    </span>
+                  </DicaDoMapa>
+                  <span className="flex-none whitespace-nowrap pr-1 font-semibold tabular-nums text-foreground" data-testid="validacao-painel-area">
+                    {haDoMapa != null ? textoHa2(haDoMapa) : '— ha'}
+                    {fraseCadastro && <span className="font-normal text-muted-foreground" data-testid="validacao-painel-cadastro"> · {fraseCadastro}</span>}
                   </span>
                   {/* MAPA-EDITAR-POLIGONO-01 — os gestos da edição; o "É pasto / É área" é do Code 6 */}
                   <div className="flex flex-none items-center gap-0.5" data-testid="editar-poligono">
                     {GESTOS.map(([m, rotulo, Icone]) => (
-                      <Button key={m} variant="ghost" size="sm" className={icone} title={rotulo} aria-label={rotulo} onClick={() => void edicao.iniciar(m, geo.id)}>
-                        <Icone className="h-3.5 w-3.5" />
-                      </Button>
+                      <DicaDoMapa key={m} nome={rotulo} frase={FRASE_DO_GESTO[m] ?? rotulo}>
+                        <Button variant="ghost" size="sm" className={icone} aria-label={rotulo} onClick={() => void edicao.iniciar(m, geo.id)}>
+                          <Icone className="h-3.5 w-3.5" />
+                        </Button>
+                      </DicaDoMapa>
                     ))}
                     {/* MAPA-CRIAR-PIQUETES-01: só no polígono ligado a um pasto (o pasto vira o pai das divisões) */}
                     {geo.pasto_id && (
-                      <Button variant="ghost" size="sm" className={icone} data-testid="editar-piquetes" aria-label="Piquetes"
-                        title="Piquetes: cortar este pasto em piquetes (N iguais ou grade); o contorno fica"
-                        onClick={() => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }); }}>
-                        <LayoutGrid className="h-3.5 w-3.5" />
-                      </Button>
+                      <DicaDoMapa nome="Piquetes" frase="Criar as divisões (piquetes) dentro deste pasto.">
+                        <Button variant="ghost" size="sm" className={icone} data-testid="editar-piquetes" aria-label="Piquetes"
+                          onClick={() => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }); }}>
+                          <LayoutGrid className="h-3.5 w-3.5" />
+                        </Button>
+                      </DicaDoMapa>
                     )}
                   </div>
                   <div className="flex flex-none items-center gap-0.5 border-l border-border pl-0.5" data-testid="validacao-gestos">
                     {/* Classificar e "É piquete de…" abrem um popover pequeno no ícone: a barra não cresce */}
                     <Popover open={classificando} onOpenChange={(v) => { if (v) setClassificandoId(geo.id); else fecharClassificar(); }}>
-                      <PopoverTrigger asChild>
-                        <Button variant="ghost" size="sm" className={icone} title="Classificar (pasto ou área)" aria-label="Classificar" data-testid="validacao-classificar">
-                          <Tag className="h-3.5 w-3.5" />
-                        </Button>
-                      </PopoverTrigger>
+                      <DicaDoMapa nome="Classificar" frase="Dizer o que é: pasto, piquete de outro pasto ou área (mata, curral, sede…).">
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" size="sm" className={icone} aria-label="Classificar" data-testid="validacao-classificar">
+                            <Tag className="h-3.5 w-3.5" />
+                          </Button>
+                        </PopoverTrigger>
+                      </DicaDoMapa>
                       <PopoverContent align="start" className="w-[300px] p-2" data-testid="validacao-popover">
                         <ClassificarPoligono key={`${geo.id}-${tipoPedido ?? ''}`} geo={geo} pastos={pastos} geometrias={geometrias} tipoInicial={tipoPedido}
-                          onGravou={() => { fecharClassificar(); onRefresh(); }} onFechar={fecharClassificar} />
+                          onGravou={() => { fecharClassificar(); setFocusedId(geo.id); onRefresh(); }} onFechar={fecharClassificar} />
                       </PopoverContent>
                     </Popover>
                     {/* MAPA-PIQUETES-02 — "É piquete de…": o polígono fica EM ESPERA; o "Concluir" mora no rodapé da lista */}
                     {!geo.pasto_id && (
                       <Popover key={geo.id}>
-                        <PopoverTrigger asChild>
-                          <Button variant="ghost" size="sm" className={`${icone} ${naEspera ? 'text-[#a15c00]' : ''}`} title={naEspera ? 'É piquete de… (em espera)' : 'É piquete de…'}
-                            aria-label="É piquete de…" data-testid="validacao-piquete-de">
-                            <Layers className="h-3.5 w-3.5" />
-                          </Button>
-                        </PopoverTrigger>
+                        <DicaDoMapa nome={naEspera ? 'É piquete de… (em espera)' : 'É piquete de…'}
+                          frase={naEspera ? 'Este desenho já espera como piquete de um pasto; aqui você troca o pasto ou tira da espera.' : 'Dizer que este desenho é um piquete de um pasto; ele espera até você concluir os piquetes desse pasto.'}>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className={`${icone} ${naEspera ? 'text-[#a15c00]' : ''}`}
+                              aria-label="É piquete de…" data-testid="validacao-piquete-de">
+                              <Layers className="h-3.5 w-3.5" />
+                            </Button>
+                          </PopoverTrigger>
+                        </DicaDoMapa>
                         <PopoverContent align="start" className="w-[300px] p-2" data-testid="validacao-popover">
                           <MarcarPiquete poligono={geo} pastos={pastos} espera={piquetes.espera} onMarcar={piquetes.marcar} onTirar={piquetes.tirar} />
                         </PopoverContent>
@@ -593,13 +670,17 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     )}
                   </div>
                   <div className="flex flex-none items-center gap-0.5 border-l border-border pl-0.5">
-                    <Button variant="ghost" size="sm" className="h-6 w-6 flex-none p-0 text-destructive hover:text-destructive" title="Apagar (com motivo; dá para desfazer)"
-                      aria-label="Apagar" data-testid="editar-apagar" onClick={() => void edicao.iniciar('apagar', geo.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className={icone} title="Fechar" aria-label="Fechar" onClick={() => { setFocusedId(null); setClassificandoId(null); }}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
+                    <DicaDoMapa nome="Apagar" frase="Tirar este desenho do mapa. Fica na trilha e dá para desfazer.">
+                      <Button variant="ghost" size="sm" className="h-6 w-6 flex-none p-0 text-destructive hover:text-destructive"
+                        aria-label="Apagar" data-testid="editar-apagar" onClick={() => void edicao.iniciar('apagar', geo.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </DicaDoMapa>
+                    <DicaDoMapa nome="Fechar" frase="Fechar o painel sem mudar nada.">
+                      <Button variant="ghost" size="sm" className={icone} aria-label="Fechar" data-testid="validacao-painel-fechar" onClick={() => { setFocusedId(null); setClassificandoId(null); }}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </DicaDoMapa>
                   </div>
                 </div>
               );
@@ -608,20 +689,26 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
               <div className="pointer-events-auto flex flex-none gap-1.5" data-sobre-o-mapa data-testid="validacao-botoes-topo">
                 {/* MAPA-CROMO-01: com um polígono selecionado a barra dele divide a linha — os botões viram ÍCONES (title/aria-label com o
                     texto) para o nome do polígono caber inteiro (a 1126 ele saía com "…") */}
-                <Button variant="outline" size="sm" className={`h-6 bg-card text-[11px] ${focusedId ? 'w-6 p-0' : 'px-2'}`} onClick={verFazendaInteira}
-                  data-testid="validacao-ver-fazenda" title="Ver fazenda inteira" aria-label="Ver fazenda inteira">
-                  {focusedId ? <Maximize2 className="h-3.5 w-3.5" /> : 'Ver fazenda inteira'}
-                </Button>
-                {focusedId && (
-                  <Button variant="outline" size="sm" className="h-6 w-6 bg-card p-0 text-[11px]" onClick={pastoInteiro} data-testid="validacao-pasto-inteiro"
-                    title="Pasto inteiro: enquadrar o polígono selecionado na área visível" aria-label="Pasto inteiro">
-                    <Scan className="h-3.5 w-3.5" />
+                <DicaDoMapa nome="Ver fazenda inteira" frase="Afastar o mapa para mostrar todos os desenhos da fazenda.">
+                  <Button variant="outline" size="sm" className={`h-6 bg-card text-[11px] ${focusedId ? 'w-6 p-0' : 'px-2'}`} onClick={verFazendaInteira}
+                    data-testid="validacao-ver-fazenda" aria-label="Ver fazenda inteira">
+                    {focusedId ? <Maximize2 className="h-3.5 w-3.5" /> : 'Ver fazenda inteira'}
                   </Button>
+                </DicaDoMapa>
+                {focusedId && (
+                  <DicaDoMapa nome="Pasto inteiro" frase="Enquadrar o polígono selecionado na área visível do mapa.">
+                    <Button variant="outline" size="sm" className="h-6 w-6 bg-card p-0 text-[11px]" onClick={pastoInteiro} data-testid="validacao-pasto-inteiro"
+                      aria-label="Pasto inteiro">
+                      <Scan className="h-3.5 w-3.5" />
+                    </Button>
+                  </DicaDoMapa>
                 )}
-                <Button variant="outline" size="sm" className={`h-6 bg-card text-[11px] ${focusedId ? 'w-6 p-0' : 'px-2'}`}
-                  onClick={() => void edicao.iniciar('desenhar', null)} data-testid="edicao-desenhar-novo" title="Desenhar polígono novo" aria-label="Desenhar polígono novo">
-                  {focusedId ? <PenLine className="h-3.5 w-3.5" /> : 'Desenhar polígono novo'}
-                </Button>
+                <DicaDoMapa nome="Desenhar polígono novo" frase="Riscar no mapa, ponto a ponto, um desenho novo; ele só entra depois da prévia e do gravar.">
+                  <Button variant="outline" size="sm" className={`h-6 bg-card text-[11px] ${focusedId ? 'w-6 p-0' : 'px-2'}`}
+                    onClick={() => void edicao.iniciar('desenhar', null)} data-testid="edicao-desenhar-novo" aria-label="Desenhar polígono novo">
+                    {focusedId ? <PenLine className="h-3.5 w-3.5" /> : 'Desenhar polígono novo'}
+                  </Button>
+                </DicaDoMapa>
               </div>
             } />
           {geometrias.length === 0 && !edicao.modo && (

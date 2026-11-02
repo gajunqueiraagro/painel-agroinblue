@@ -10,6 +10,7 @@
  * Puro: nada de mapa nem de banco aqui.
  */
 import { intersection } from 'polyclip-ts';
+import { dividirPorLinha, type Ponto } from '@/lib/mapa/edicaoDoPoligono';
 
 type P = [number, number];
 type Anel = P[];
@@ -33,7 +34,7 @@ function areaDoAnelBancoM2(anel: readonly (readonly number[])[]): number {
   return Math.abs((t * RAIO_DO_BANCO_M * RAIO_DO_BANCO_M) / 2);
 }
 
-const fechado = (anel: readonly (readonly number[])[]): number[][] => {
+export const fechado = (anel: readonly (readonly number[])[]): number[][] => {
   const a = anel.map(p => [p[0], p[1]]);
   if (a.length && (a[0][0] !== a[a.length - 1][0] || a[0][1] !== a[a.length - 1][1])) a.push([a[0][0], a[0][1]]);
   return a;
@@ -51,9 +52,9 @@ export function areaDoBancoHa(g: GeoJSON.Polygon | GeoJSON.MultiPolygon): number
 export const haDoBanco = (ha: number) => Math.round(ha * 100) / 100;
 
 // --- o plano local (metros) --------------------------------------------------------------------------------------------------------
-interface Plano { lon0: number; lat0: number; kx: number; ky: number }
-const paraPlano = (pl: Plano, p: readonly number[]): P => [(p[0] - pl.lon0) * pl.kx, (p[1] - pl.lat0) * pl.ky];
-const doPlano = (pl: Plano, q: readonly number[]): P => [q[0] / pl.kx + pl.lon0, q[1] / pl.ky + pl.lat0];
+export interface Plano { lon0: number; lat0: number; kx: number; ky: number }
+export const paraPlano = (pl: Plano, p: readonly number[]): P => [(p[0] - pl.lon0) * pl.kx, (p[1] - pl.lat0) * pl.ky];
+export const doPlano = (pl: Plano, q: readonly number[]): P => [q[0] / pl.kx + pl.lon0, q[1] / pl.ky + pl.lat0];
 const dot = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1];
 
 function areaPlanaM2(partes: Poli[]): number {
@@ -174,6 +175,48 @@ export function divisoesDosCortes(m: Montagem, c: Cortes): Divisao[] {
     }
   }
   return saida;
+}
+
+// --- as linhas que o usuário traça -------------------------------------------------------------------------------------------------
+/** As peças ordenadas em ordem de leitura: oeste → leste e, no mesmo meridiano (folga de 1% da largura), norte → sul. */
+export function emOrdemDeLeitura(pecas: GeoJSON.Polygon[]): GeoJSON.Polygon[] {
+  const centro = (g: GeoJSON.Polygon) => {
+    const xs = g.coordinates[0].map(p => p[0]), ys = g.coordinates[0].map(p => p[1]);
+    return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  };
+  const cs = new Map(pecas.map(g => [g, centro(g)]));
+  const todos = pecas.flatMap(g => g.coordinates[0].map(p => p[0]));
+  const folga = (Math.max(...todos) - Math.min(...todos)) * 0.01;
+  return [...pecas].sort((a, b) => {
+    const ca = cs.get(a), cb = cs.get(b);
+    return Math.abs(ca.x - cb.x) > folga ? ca.x - cb.x : cb.y - ca.y;
+  });
+}
+
+/** Corta o pasto pelas linhas, na ordem: cada linha divide TODA peça que ela atravessa de lado a lado; a que não atravessa nenhuma é
+ *  ignorada e a primeira dessas vira a `recusa`. As peças saem em ordem de leitura como divisões (linha 0, coluna = índice). */
+export function cortarPorLinhas(g: GeoJSON.Polygon, linhas: readonly Ponto[][]): { pecas: Divisao[]; recusa: string | null } {
+  let atuais: GeoJSON.Polygon[] = [g];
+  let recusa: string | null = null;
+  linhas.forEach((linha, k) => {
+    const proximas: GeoJSON.Polygon[] = [];
+    let cortou = false;
+    let motivoDaPeca: string | null = null;
+    for (const peca of atuais) {
+      const r = dividirPorLinha(peca, linha);
+      if ('motivo' in r) { proximas.push(peca); motivoDaPeca = motivoDaPeca ?? r.motivo; continue; }
+      cortou = true;
+      proximas.push(r.valor.a, r.valor.b);
+    }
+    if (cortou) { atuais = proximas; return; }
+    if (!recusa) {
+      recusa = motivoDaPeca && motivoDaPeca.includes('mais de 2 partes')
+        ? `A linha ${k + 1} corta o pasto em mais de 2 partes: risque uma linha que entre e saia uma vez só.`
+        : `A linha ${k + 1} não atravessa o pasto de lado a lado: risque de uma borda à outra.`;
+    }
+  });
+  const pecas: Divisao[] = emOrdemDeLeitura(atuais).map((geojson, coluna) => ({ linha: 0, coluna, geojson, areaHa: areaDoBancoHa(geojson), partes: 1 }));
+  return { pecas, recusa };
 }
 
 // --- área desejada e alças ---------------------------------------------------------------------------------------------------------

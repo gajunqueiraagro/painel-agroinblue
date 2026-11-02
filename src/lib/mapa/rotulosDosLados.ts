@@ -38,18 +38,14 @@ export const textoDoLado = (metros: number) => `${Math.round(metros).toLocaleStr
 const ESTILO = 'position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font-size:9.5px;font-weight:600;color:#1e3a8a;'
   + 'background:rgba(255,255,255,.88);padding:0 2px;border-radius:2px;font-variant-numeric:tabular-nums';
 
-/** Desenha os metros dos lados de `pontos` (fechado ou não) no `grupo`, com a regra acima. Os lados sem rótulo ganham o tooltip. */
-export function desenharRotulosDosLados(mapa: L.Map, grupo: L.LayerGroup, pontos: readonly (readonly number[])[], fechar: boolean) {
-  grupo.clearLayers();
-  /* mapa já desmontado (`map.remove()` esvazia os panes): converter coordenada quebraria a tela inteira (achado na prova do
-     MAPA-CRIAR-PIQUETES-01: a recarga desmontou o mapa com o redesenho agendado — "Cannot read properties of undefined (_leaflet_pos)") */
-  if (!mapa.getPane('mapPane')) return;
-  if (pontos.length < 2) return;
-  const total = fechar ? pontos.length : pontos.length - 1;
-  const lados = Array.from({ length: total }, (_x, i) => {
-    const p = pontos[i], q = pontos[(i + 1) % pontos.length];
-    return { p, q, texto: textoDoLado(distanciaM(p, q)) };
-  });
+export interface LadoComTexto { p: readonly number[]; q: readonly number[]; texto: string }
+
+/** Os lados de uma lista de segmentos (já SEM repetir o lado comum) com o texto dos metros. (fatia 2a do MAPA-CRIAR-PIQUETES-01) */
+export const ladosDeSegmentos = (segs: readonly { p: readonly number[]; q: readonly number[] }[]): LadoComTexto[] =>
+  segs.map(s => ({ p: s.p, q: s.q, texto: textoDoLado(distanciaM(s.p, s.q)) }));
+
+/** A regra de tela (UMA só, a de cima) aplicada a uma lista de lados: o rótulo no meio do lado, ou a faixa invisível com os metros ao passar o mouse. */
+function pintarLados(mapa: L.Map, grupo: L.LayerGroup, lados: readonly LadoComTexto[]) {
   const naTela: LadoNaTela[] = lados.map(l => ({
     a: mapa.latLngToContainerPoint([l.p[1], l.p[0]]), b: mapa.latLngToContainerPoint([l.q[1], l.q[0]]), texto: l.texto,
   }));
@@ -65,4 +61,28 @@ export function desenharRotulosDosLados(mapa: L.Map, grupo: L.LayerGroup, pontos
         .addTo(grupo);
     }
   });
+}
+
+/** Desenha os metros dos lados de `pontos` (fechado ou não) no `grupo`, com a regra acima. Os lados sem rótulo ganham o tooltip. */
+export function desenharRotulosDosLados(mapa: L.Map, grupo: L.LayerGroup, pontos: readonly (readonly number[])[], fechar: boolean) {
+  grupo.clearLayers();
+  /* mapa já desmontado (`map.remove()` esvazia os panes): converter coordenada quebraria a tela inteira (achado na prova do
+     MAPA-CRIAR-PIQUETES-01: a recarga desmontou o mapa com o redesenho agendado — "Cannot read properties of undefined (_leaflet_pos)") */
+  if (!mapa.getPane('mapPane')) return;
+  if (pontos.length < 2) return;
+  const total = fechar ? pontos.length : pontos.length - 1;
+  const lados = Array.from({ length: total }, (_x, i) => {
+    const p = pontos[i], q = pontos[(i + 1) % pontos.length];
+    return { p, q, texto: textoDoLado(distanciaM(p, q)) };
+  });
+  pintarLados(mapa, grupo, lados);
+}
+
+/** Os metros de CADA lado de cada divisão, sem repetir o lado comum: recebe os segmentos já deduplicados e usa a MESMA regra de visibilidade
+ *  (o componente continua UM). (MAPA-CRIAR-PIQUETES-01 fatia 2a) */
+export function desenharRotulosDeSegmentos(mapa: L.Map, grupo: L.LayerGroup, segs: readonly { p: readonly number[]; q: readonly number[] }[]) {
+  grupo.clearLayers();
+  if (!mapa.getPane('mapPane')) return;
+  if (!segs.length) return;
+  pintarLados(mapa, grupo, ladosDeSegmentos(segs));
 }

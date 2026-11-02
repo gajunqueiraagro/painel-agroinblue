@@ -11,6 +11,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { DicaDoMapa } from '@/components/mapa-geo/DicaDoMapa';
 import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -52,6 +53,9 @@ interface AcaoDaBarra {
   id: string; rotulo: string; testid: string; title: string; disabled: boolean; onClick: () => void;
   desfazer?: boolean; contorno?: boolean;
 }
+
+/* MAPA-DICAS-01: o atalho de cada botão de ação (o que o Geoman/teclado já faz) */
+const ATALHO_DA_ACAO: Record<string, string> = { 'desfazer-passo': 'Ctrl/Cmd+Z', 'desfazer-ponto': 'Backspace ou Ctrl/Cmd+Z', fechar: 'duplo clique' };
 
 const GAP = 8; // gap-2 da zona
 
@@ -98,7 +102,8 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
     const nome = W.get('nome') ?? 0;
     const comNome = nome ? nome + 4 : 0;
     const escolhas = escolhasRef.current ? escolhasRef.current.offsetWidth + GAP : 0;
-    const r = arranjarZona({ disponivel: z.clientWidth - escolhas, instrucaoInteira: (W.get('texto') ?? 0) + comNome, instrucaoCurta: 14 + comNome,
+    /* o espaçador flexível entre as escolhas e os botões é mais um item da zona: mais um GAP (faltavam 8 px — o "Mais" saía 5 px a 1126) */
+    const r = arranjarZona({ disponivel: z.clientWidth - escolhas - GAP, instrucaoInteira: (W.get('texto') ?? 0) + comNome, instrucaoCurta: 14 + comNome,
       acoes: acoes.map(a => W.get(a.id) ?? 0), mais: W.get('mais') ?? 48, gap: GAP });
     setArranjo(a => (a && a.chave === chave && a.instrucaoInteira === r.instrucaoInteira && a.acoesVisiveis === r.acoesVisiveis ? a : { ...r, chave }));
   };
@@ -244,19 +249,22 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
 
             <div className="min-w-0 flex-1" />
             {naLinha.map(a => (
-              <Button key={a.id} data-medir={a.id} variant={a.contorno ? 'outline' : 'ghost'} size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`}
-                disabled={a.disabled} onClick={a.onClick} title={a.title} data-testid={a.testid}>
-                {a.desfazer && <Undo2 className="h-3 w-3" />}{a.rotulo}
-              </Button>
+              <DicaDoMapa key={a.id} nome={a.rotulo} frase={a.title} atalho={ATALHO_DA_ACAO[a.id]} desabilitado={a.disabled}>
+                <Button data-medir={a.id} variant={a.contorno ? 'outline' : 'ghost'} size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`}
+                  disabled={a.disabled} onClick={a.onClick} data-testid={a.testid}>
+                  {a.desfazer && <Undo2 className="h-3 w-3" />}{a.rotulo}
+                </Button>
+              </DicaDoMapa>
             ))}
             {noMais.length > 0 && (
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button data-medir="mais" variant="ghost" size="sm" className={`h-5 flex-none gap-0.5 px-1.5 ${TXT}`} data-testid="edicao-mais"
-                    title={noMais.map(a => a.rotulo).join(' · ')}>
-                    Mais<ChevronDown className="h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
+                <DicaDoMapa nome="Mais" frase={`Mais ações que não couberam na barra: ${noMais.map(a => a.rotulo).join(' · ')}.`}>
+                  <DropdownMenuTrigger asChild>
+                    <Button data-medir="mais" variant="ghost" size="sm" className={`h-5 flex-none gap-0.5 px-1.5 ${TXT}`} data-testid="edicao-mais">
+                      Mais<ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </DicaDoMapa>
                 <DropdownMenuContent align="end">
                   {noMais.map(a => (
                     <DropdownMenuItem key={a.id} disabled={a.disabled} onSelect={a.onClick} title={a.title} data-testid={a.testid}>
@@ -270,12 +278,13 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
 
           {temOpcoes && (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className={`h-5 flex-none gap-0.5 px-1.5 ${TXT}`} data-testid="edicao-opcoes"
-                  title={opcoesLigadas ? `Ligado: ${opcoesLigadas}` : 'Encaixe e recorte desligados'}>
-                  Opções<ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
+              <DicaDoMapa nome="Opções" frase={opcoesLigadas ? `Encaixe e recorte da edição. Ligado agora: ${opcoesLigadas}.` : 'Encaixe e recorte da edição. Está tudo desligado agora.'}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className={`h-5 flex-none gap-0.5 px-1.5 ${TXT}`} data-testid="edicao-opcoes">
+                    Opções<ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </DicaDoMapa>
               <DropdownMenuContent align="end">
                 <DropdownMenuCheckboxItem checked={e.encaixe} onCheckedChange={(v) => e.setEncaixe(v === true)} onSelect={(ev) => ev.preventDefault()}
                   title="Encaixe nos pontos e lados vizinhos (7 px; nunca no contorno da fazenda). Segurar Alt/Option solta o encaixe enquanto arrasta." data-testid="edicao-encaixe">
@@ -299,11 +308,16 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
 
           {/* FIXO (UI-ESPACO-RESERVADO): sempre na tela, largura reservada — nada o empurra */}
           <div className="flex flex-none items-center gap-1.5" data-testid="edicao-fixos">
-            <Button variant="outline" size="sm" className={`h-5 flex-none px-2 ${TXT}`} onClick={e.pedirCancelar} data-testid="edicao-cancelar">Cancelar</Button>
-            <Button size="sm" className={`h-5 w-[86px] flex-none px-0 ${TXT}`} disabled={!podePrever || e.desenhandoAgora || e.confirmarCancelar}
-              onClick={() => void e.prever()} data-testid="edicao-previa" title={tituloDaPrevia}>
-              {e.gravando ? 'Conferindo…' : 'Prévia e gravar'}
-            </Button>
+            <DicaDoMapa nome="Cancelar" frase="Sair da edição sem gravar nada; se houver rascunho, pergunta antes de descartar." atalho="Esc">
+              <Button variant="outline" size="sm" className={`h-5 flex-none px-2 ${TXT}`} onClick={e.pedirCancelar} data-testid="edicao-cancelar">Cancelar</Button>
+            </DicaDoMapa>
+            <DicaDoMapa nome="Prévia e gravar" frase={tituloDaPrevia ?? 'Ver o que muda (cada polígono, área antes × depois) antes de gravar; nada é gravado até você confirmar.'}
+              desabilitado={!podePrever || e.desenhandoAgora || e.confirmarCancelar}>
+              <Button size="sm" className={`h-5 w-[86px] flex-none px-0 ${TXT}`} disabled={!podePrever || e.desenhandoAgora || e.confirmarCancelar}
+                onClick={() => void e.prever()} data-testid="edicao-previa">
+                {e.gravando ? 'Conferindo…' : 'Prévia e gravar'}
+              </Button>
+            </DicaDoMapa>
           </div>
         </div>
 

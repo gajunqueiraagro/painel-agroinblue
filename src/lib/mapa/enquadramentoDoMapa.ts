@@ -142,6 +142,10 @@ export function retangulosSobrepostos(raiz: Element | null): Retangulo[] {
   return out;
 }
 
+/** O mapa ainda está montado? Depois do `map.remove()` os panes somem e qualquer conversão de coordenada quebra a tela inteira
+ *  ("Cannot read properties of undefined (_leaflet_pos)" — achado na prova da fatia 2a dos piquetes, 02/11). */
+export const mapaVivo = (mapa: { getPane: (nome: string) => HTMLElement | undefined } | null | undefined): boolean => !!mapa && !!mapa.getPane('mapPane');
+
 /** O `fitBounds` do "pasto inteiro": animação curta (0,3 s), nunca mais perto que `maxZoom`. */
 export const OPCOES_PASTO_INTEIRO: FitBoundsOptions = { maxZoom: 18, animate: true, duration: 0.3 };
 
@@ -180,7 +184,7 @@ export function useEnquadramentoDoMapa({ mapa, clienteId, fazendaId, limitesDaFa
 
   /* a regra: guardado → setView; senão a fazenda inteira (uma vez por chave, quando os limites chegam) */
   useEffect(() => {
-    if (!mapa || !chave) return;
+    if (!mapa || !chave || !mapaVivo(mapa)) return;
     if (feitoRef.current && feitoRef.current.mapa === mapa && feitoRef.current.chave === chave) return;
     const guardado = lerEnquadramento(chave);
     const decisao = decidirEnquadramento(guardado, !!limites);
@@ -194,7 +198,7 @@ export function useEnquadramentoDoMapa({ mapa, clienteId, fazendaId, limitesDaFa
 
   /** Gesto explícito (o botão "Ver fazenda inteira"): enquadra e o `moveend` guarda. Sem argumento, usa os limites da fazenda. */
   const enquadrarEm = useCallback((alvo?: LatLngBounds | null, opcoes?: FitBoundsOptions) => {
-    if (!mapa) return;
+    if (!mapa || !mapaVivo(mapa)) return;
     const l = alvo ?? limites;
     if (!l || !l.isValid()) return;
     if (chaveRef.current) feitoRef.current = { chave: chaveRef.current, mapa };
@@ -204,7 +208,7 @@ export function useEnquadramentoDoMapa({ mapa, clienteId, fazendaId, limitesDaFa
   /** MAPA-ZOOM-E-PAINEL-01: enquadra o polígono inteiro na área visível (o padding vem da sobreposição real em `raiz`); passa pelo mesmo
    *  caminho do "Ver fazenda inteira", então o `moveend` guarda. */
   const enquadrarPoligono = useCallback((alvo: LatLngBounds | null | undefined, raiz: Element | null) => {
-    if (!mapa || !alvo || !alvo.isValid()) return;
+    if (!mapa || !mapaVivo(mapa) || !alvo || !alvo.isValid()) return;
     const c = mapa.getContainer().getBoundingClientRect();
     const pad = paddingDaAreaVisivel({ left: c.left, top: c.top, right: c.right, bottom: c.bottom }, retangulosSobrepostos(raiz));
     enquadrarEm(alvo, { ...pad, ...OPCOES_PASTO_INTEIRO });
