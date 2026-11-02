@@ -80,6 +80,8 @@ export interface PreviaDosPiquetes {
   difPct: number | null;
   grupo: { nome: string };
   frase: string;
+  /** MAPA-PIQUETES-04: o contorno do pai — `criado` = nasce agora (a união das divisões); null = a RPC não disse */
+  contorno: { criado: boolean; areaHa: number | null } | null;
 }
 
 const campo = (o: unknown, k: string): unknown => (o && typeof o === 'object' ? Reflect.get(o, k) : undefined);
@@ -109,6 +111,7 @@ export function lerPrevia(dado: unknown): PreviaDosPiquetes | null {
     pai: { id: paiId, nome: paiNome, areaOficialHa: numero(pai, 'area_oficial_ha'), encerraEm: encerra },
     grupo: { nome: texto(campo(dado, 'grupo'), 'nome') ?? paiNome },
     frase: texto(dado, 'frase') ?? '',
+    contorno: ((c) => (c && typeof c === 'object' ? { criado: campo(c, 'criado') === true, areaHa: numero(c, 'area_ha') } : null))(campo(dado, 'contorno')),
   };
 }
 

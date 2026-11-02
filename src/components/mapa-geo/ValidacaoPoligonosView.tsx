@@ -36,6 +36,11 @@ import { ConcluirPiquetesDialog, MarcarPiquete, PiquetesEmEspera } from '@/compo
 import { usePiquetesEmEspera } from '@/hooks/usePiquetes';
 import { pastosMudaramPorFora } from '@/hooks/usePastos';
 import type { PiqueteEmEspera } from '@/lib/mapa/piquetesEmEspera';
+/* MAPA-PIQUETES-04 — o contorno do pai só pega o clique na borda (as divisões, no miolo) */
+import { contornosDePai } from '@/lib/mapa/unidadesDoMapa';
+import { useGruposComOrigem } from '@/hooks/useGruposComOrigem';
+import { contornoDasDivisoes } from '@/lib/mapa/contornoDasDivisoes';
+import { avisoSemDesenho, pastosSemDesenho } from '@/lib/mapa/unidadesDoMapa';
 
 const CHAVE_LISTA_RECOLHIDA = 'mapa-validacao-lista-recolhida';
 
@@ -169,6 +174,25 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     semVinculo: geometrias.filter(g => g.tipo === 'outra').length,
   }), [geometrias]);
 
+  /* MAPA-PIQUETES-04 (Gabriel 02/11 10:40, Sta. Rita: "não dá para clicar em 20A-1-A pois o 20A-1 fica por cima"): o contorno de um pai
+     com divisão desenhada vai POR CIMA e só com a linha (sem preenchimento, o clique pega só na borda); as divisões vão por baixo,
+     preenchidas, e o clique no miolo abre a divisão. Pai sem divisão desenhada segue como pasto comum. */
+  /* MAPA-PIQUETES-04: o pai sem polígono leva o contorno (a união das divisões marcadas) no mesmo gesto */
+  const contornoDoConcluir = useMemo(() => {
+    if (!concluindo || geometrias.some(g => g.pasto_id === concluindo.paiId)) return null;
+    const ids = new Set(concluindo.lista.map(x => x.geometriaId));
+    return contornoDasDivisoes(geometrias.filter(g => ids.has(g.id)).map(g => ({ id: g.id, nome: g.nome_original, geojson: g.geojson })));
+  }, [concluindo, geometrias]);
+  /* MAPA-PIQUETES-04: os pastos vigentes HOJE sem polígono (a Validação é onde se desenha): "Pasto sem desenho: P25" no topo da lista */
+  const semDesenho = useMemo(() => {
+    const h = new Date();
+    const mes = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
+    return avisoSemDesenho(pastosSemDesenho(pastos.filter(p => geometrias.some(g => g.fazenda_id === p.fazenda_id)), geometrias, mes), 44);
+  }, [pastos, geometrias]);
+  const fazendasDaVista = useMemo(() => [...new Set(geometrias.map(g => g.fazenda_id))], [geometrias]);
+  const { grupos: gruposComOrigem } = useGruposComOrigem(fazendasDaVista);
+  const contornos = useMemo(() => contornosDePai(geometrias, pastos, gruposComOrigem), [geometrias, pastos, gruposComOrigem]);
+
   // Draw polygons
   useEffect(() => {
     const map = mapInstance.current;
@@ -180,22 +204,27 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       boundsMap.current.clear();
       if (geometrias.length === 0) return;
       const allBounds: L.LatLngBounds[] = [];
-      geometrias.forEach((geo) => {
+      // MAPA-PIQUETES-04: os contornos de pai por último (por cima), só a linha
+      const naOrdem = [...geometrias.filter(g => !contornos.has(g.id)), ...geometrias.filter(g => contornos.has(g.id))];
+      naOrdem.forEach((geo) => {
         if (geo.id === emEdicaoId) return;
         try {
           const isFocused = focusedId === geo.id;
           const isChecked = selectedIds.has(geo.id) || unidos.includes(geo.id);
+          const ehContorno = contornos.has(geo.id);
           const layer = L.geoJSON(geo.geojson as any, {
             interactive: !editando || unindo,
             /* -02 (item 4a): o contorno da fazenda nunca é ponto de encaixe na edição */
             snapIgnore: TIPOS_DE_CONTORNO.includes(geo.tipo),
             style: {
-              /* MAPA-ZOOM-E-PAINEL-01: o gate acha o polígono selecionado por esta classe do `path` */
-              className: isFocused ? 'poligono-selecionado' : undefined,
               color: isFocused ? 'hsl(213, 80%, 40%)' : isChecked ? 'hsl(45, 70%, 45%)' : geo.pasto_id ? 'hsl(213, 48%, 32%)' : 'hsl(220, 8%, 50%)',
               weight: isFocused ? 3 : isChecked ? 2.5 : 1.2,
               fillColor: isFocused ? 'hsl(213, 70%, 50%)' : isChecked ? 'hsl(45, 80%, 60%)' : geo.pasto_id ? 'hsl(213, 50%, 58%)' : 'hsl(220, 8%, 72%)',
               fillOpacity: isFocused ? 0.5 : isChecked ? 0.4 : 0.22,
+              // MAPA-PIQUETES-04: o contorno do pai sem preenchimento (o miolo não pega o clique) e com a borda mais grossa para clicar
+              ...(ehContorno ? { fill: false, weight: isFocused ? 4 : 3 } : {}),
+              /* MAPA-ZOOM-E-PAINEL-01: o gate acha o polígono selecionado por `poligono-selecionado`; MAPA-PIQUETES-04: `validacao-contorno-pai` */
+              className: ['validacao-poligono', ehContorno ? 'validacao-contorno-pai' : '', isFocused ? 'poligono-selecionado' : ''].filter(Boolean).join(' '),
             },
           });
           const b = layer.getBounds();
@@ -212,6 +241,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
           if (!editando) layer.on('click', () => setFocusedId(geo.id));
           else if (unindo) layer.on('click', () => alternarNaUniao(geo.id));
           layer.addTo(lg);
+          // MAPA-PIQUETES-04: o id no elemento (o gate clica no miolo de cada divisão e na borda do pai)
+          layer.eachLayer(l => { const el = l instanceof L.Path ? l.getElement() : null; el?.setAttribute('data-geo-id', geo.id); });
           allBounds.push(b);
         } catch {}
       });
@@ -224,7 +255,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [geometrias, focusedId, selectedIds, statusDoMapa, emEdicaoId, editando, unindo, unidos, alternarNaUniao]);
+  }, [geometrias, focusedId, selectedIds, statusDoMapa, emEdicaoId, editando, unindo, unidos, alternarNaUniao, contornos]);
 
   /* MAPA-ZOOM-E-PAINEL-01 ("clique no polígono = pasto inteiro"): SELECIONAR um polígono (no mapa ou na lista) enquadra ele inteiro na área
      visível — descontando a barra do polígono e os botões do topo, com folga e 0,3 s (`enquadrarPoligono`, o mesmo caminho do "Ver fazenda
@@ -339,6 +370,11 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             onClick={recolherLista} title="Recolher a lista (o mapa ganha a tela)" data-testid="validacao-recolher-lista">
             <ChevronLeft className="h-3 w-3" />Recolher a lista
           </Button>
+          {/* MAPA-PIQUETES-04: nenhum pasto some em silêncio — lugar reservado (14 px), a lista inteira no title */}
+          <div className={`h-[14px] flex-none truncate border-b border-border px-2 text-[9.5px] leading-[14px] text-[#8A5A00] ${semDesenho ? '' : 'invisible'}`}
+            data-testid="validacao-sem-desenho" title={semDesenho?.title} aria-hidden={!semDesenho}>
+            {semDesenho?.texto ?? '·'}
+          </div>
           {/* Search + filter bar */}
           <div className="px-2 py-1 border-b border-border space-y-1">
             <div className="flex gap-1.5">
@@ -597,7 +633,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       </div>
 
       {concluindo && (
-        <ConcluirPiquetesDialog aberto paiId={concluindo.paiId} piquetes={concluindo.lista}
+        <ConcluirPiquetesDialog aberto paiId={concluindo.paiId} piquetes={concluindo.lista} contorno={contornoDoConcluir}
           nomeDoPai={pastos.find(p => p.id === concluindo.paiId)?.nome ?? 'o pasto'}
           onFechar={() => setConcluindo(null)}
           onGravado={(paiId) => {

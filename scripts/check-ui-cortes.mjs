@@ -299,6 +299,31 @@ const CENARIOS = [
     await mapaPasto('P_10 Manga')(p); await p.locator('[data-testid="mapa-painel-divisoes"]', { hasText: '2 divisões sem desenho: P_10A, P_10B' }).waitFor({ timeout: 3000 }); } },
   /* -03: a Operação com as unidades (rótulo = nome do pasto; as divisões em linha fina) */
   { nome: 'mapa-geo-unidade-operacao', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
+  /* MAPA-PIQUETES-04: o selo "Pasto sem desenho: P_11 Sem Mapa" no Gestor (o cenário falha se ele não disser o pasto) */
+  { nome: 'mapa-geo-unidade-sem-desenho-selo', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('[data-testid="mapa-sem-desenho"]', { hasText: 'P_11 Sem Mapa' }).waitFor({ timeout: 4000 }); } },
+  /* MAPA-PIQUETES-04 (Gabriel 02/11 10:40, Sta. Rita 20A-1): na Validação o contorno do pai só pega o clique na BORDA; o miolo de cada divisão
+     abre a DIVISÃO. Prova no próprio cenário (falha se não abrir o certo): centro de P_09A e de P_09B → o painel diz a divisão; a borda de
+     fora do pai (1 px para dentro da caixa dele, sobre a linha) → o painel diz o pai. */
+  { nome: 'mapa-geo-unidade-validacao-clique', url: 'tela=mapa-geo&unidade=1', tamanhos: [[1126, 579], [1366, 768]],
+    regiao: '[data-testid="validacao-painel-poligono"]', antes: async (p) => {
+      await p.locator('button', { hasText: 'Validação' }).first().click();
+      await p.locator('path[data-geo-id="gu-c"]').waitFor({ timeout: 4000 }); await p.waitForTimeout(500);
+      const nomeNoPainel = async () => (await p.locator('[data-testid="validacao-painel-nome"]').first().innerText()).split(' · ')[0].trim();
+      const clicarEm = async (x, y, espera) => {
+        await p.mouse.click(x, y); await p.locator('[data-testid="validacao-painel-poligono"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(250);
+        const nome = await nomeNoPainel();
+        if (nome !== espera) throw new Error(`clique em (${Math.round(x)}, ${Math.round(y)}) abriu "${nome}", esperava "${espera}"`);
+      };
+      for (const [id, nome] of [['gu-a', 'P_09A'], ['gu-b', 'P_09B']]) {
+        const c = await p.locator(`path[data-geo-id="${id}"]`).boundingBox();
+        if (!c) throw new Error(`a divisão ${nome} não foi desenhada`);
+        await clicarEm(c.x + c.width / 2, c.y + c.height * 0.75, nome);   // o miolo (abaixo do rótulo do pai)
+      }
+      const pai = await p.locator('path[data-geo-id="gu-c"]').boundingBox();
+      if (!pai) throw new Error('o contorno do pai não foi desenhado');
+      await clicarEm(pai.x + 1, pai.y + pai.height / 2, 'P_09 Retiro de Cima');
+    } },
   { nome: 'mapa-geo-adicionar-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-popover"]',
     antes: async (p) => {
       await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);

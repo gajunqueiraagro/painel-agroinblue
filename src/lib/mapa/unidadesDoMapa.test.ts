@@ -1,6 +1,6 @@
 /** MAPA-PIQUETES-03 — a unidade do mapa (pai + grupo), no formato do caso real da Faz. Pureza (P7 → 7A–7D desde 11/2026; P6 → 6A, 6B). */
 import { describe, expect, it } from 'vitest';
-import { divisoesNoPainel, fechamentosDaUnidade, fraseDasDivisoes, unidadesDoMapa } from './unidadesDoMapa';
+import { avisoSemDesenho, contornosDePai, divisoesNoPainel, pastosSemDesenho, fechamentosDaUnidade, fraseDasDivisoes, unidadesDoMapa } from './unidadesDoMapa';
 
 const pasto = (id: string, nome: string, o: { inicio?: string | null; fim?: string | null; grupo?: string | null; ativo?: boolean } = {}) =>
   ({ id, nome, fazenda_id: 'pur', ativo: o.ativo ?? true, data_inicio: o.inicio ?? null, data_fim: o.fim ?? null, grupo_id: o.grupo ?? null });
@@ -116,5 +116,37 @@ describe('a linha do painel', () => {
     const doze = Array.from({ length: 12 }, (_, i) => ({ nome: `P${i + 1}A`, areaHa: 37.525, poligono: i < 3 ? null : { id: `g${i}` } }));
     expect(divisoesNoPainel(doze).texto).toBe('12 divisões = 450,3 ha · 3 sem desenho');
     expect(divisoesNoPainel(doze.map((d) => ({ ...d, poligono: null }))).texto).toBe('12 divisões sem desenho');
+  });
+});
+
+describe('o contorno do pai na Validação (MAPA-PIQUETES-04, Sta. Rita 20A-1)', () => {
+  it('o contorno do P7 (divisões desenhadas) é contorno de pai; o do P6 (divisões sem desenho) não; pasto solto e grupo do cadastro não', () => {
+    const c = contornosDePai(POLIGONOS, PASTOS, GRUPOS);
+    expect([...c].sort()).toEqual(['gP7']);
+  });
+  it('o P6 passa a ser contorno de pai quando a 1ª divisão ganha desenho', () => {
+    const c = contornosDePai([...POLIGONOS, geo('gX', 'x')], PASTOS, GRUPOS);
+    expect([...c].sort()).toEqual(['gP6', 'gP7']);
+  });
+});
+
+describe('nada some em silêncio (MAPA-PIQUETES-04)', () => {
+  it('pai SEM contorno (P18 da Pureza antes do backfill): não vira unidade; as divisões seguem como pastos, com o desenho delas', () => {
+    const r = unidadesDoMapa({ pastos: PASTOS, grupos: GRUPOS, poligonos: POLIGONOS.filter((g) => g.id !== 'gP7'), anoMes: '2026-11', areaDe: () => 1 });
+    expect(r.unidades.has('p7')).toBe(false);
+    expect(r.poligonos.map((g) => g.id)).toEqual(expect.arrayContaining(['gA', 'gB', 'gC', 'gD']));
+    expect(r.pastos.map((p) => p.id)).toEqual(expect.arrayContaining(['a', 'b', 'c', 'd']));
+  });
+  it('os pastos do mês sem polígono, em ordem natural; o aviso curto quando a lista é longa', () => {
+    const r = rodar('2026-11');
+    expect(pastosSemDesenho(r.pastos, r.poligonos, '2026-11')).toEqual([]);
+    const semP1 = POLIGONOS.filter((g) => g.id !== 'gP1');
+    expect(pastosSemDesenho(PASTOS, semP1, '2026-09')).toEqual(['P1']);
+    expect(avisoSemDesenho(['P25'])?.texto).toBe('Pasto sem desenho: P25');
+    expect(avisoSemDesenho(['P21A', 'P21B'])?.texto).toBe('2 pastos sem desenho: P21A, P21B');
+    const muitos = Array.from({ length: 51 }, (_v, i) => `Pasto ${i + 1}`);
+    expect(avisoSemDesenho(muitos)).toEqual({ texto: '51 pastos sem desenho', title: `51 pastos sem desenho: ${muitos.join(', ')}` });
+    expect(avisoSemDesenho(['P25'], 0)).toEqual({ texto: '1 pasto sem desenho', title: 'Pasto sem desenho: P25' });
+    expect(avisoSemDesenho([])).toBeNull();
   });
 });

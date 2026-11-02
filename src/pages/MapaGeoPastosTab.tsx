@@ -22,7 +22,7 @@ import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonos
 import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
 /* MAPA-PIQUETES-03 — a unidade do mapa (pai + grupo que nasceu dele): os piquetes viram divisões em linha fina */
 import { useGruposComOrigem } from '@/hooks/useGruposComOrigem';
-import { unidadesDoMapa } from '@/lib/mapa/unidadesDoMapa';
+import { avisoSemDesenho, pastosSemDesenho, unidadesDoMapa } from '@/lib/mapa/unidadesDoMapa';
 import { areaNoMesOuHoje } from '@/lib/pastos/areaDoPastoNoMes';
 
 export interface PastoMapData {
@@ -114,6 +114,9 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
     return u ? { ...p, area_produtiva_ha: u.areaHa } : p;
   }), [unidades]);
   const divisoesDoMapa = useMemo(() => new Map([...unidades.unidades].map(([id, u]) => [id, u.divisoes])), [unidades]);
+  /* MAPA-PIQUETES-04: nenhum pasto vigente some em silêncio — o Gestor diz quais estão sem desenho no mês */
+  const semDesenhoDaFazenda = useMemo(() => (unidades.poligonos.length === 0 ? null
+    : avisoSemDesenho(pastosSemDesenho(unidades.pastos, unidades.poligonos, anoMes), 60)), [unidades, anoMes]);
   const mapaDoMes = useMapaDoMes(isGlobal ? idsDoGlobal : fazendaId, anoMes, pastosDoMapa, categorias, unidades.unidadeDe);
 
   const global = useMemo(() => {
@@ -132,6 +135,14 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
     };
     return { ...resumoGlobal(entrada), pastos: pastosDoGlobal(entrada), porFazenda };
   }, [isGlobal, unidadesDoGlobal.poligonos, anoMes, fazendasDoGlobal, mapaDoMes.vigentes, mapaDoMes.dados]);
+  /* MAPA-PIQUETES-04: no Global, os pastos sem desenho das fazendas que TÊM mapa (com o código da fazenda; a lista no title) */
+  const semDesenhoDoGlobal = useMemo(() => {
+    if (!isGlobal) return null;
+    const comMapa = new Set(unidadesDoGlobal.poligonos.map(g => g.fazenda_id));
+    const codigo = new Map(fazendasDoGlobal.map(f => [f.id, f.codigo || f.nome]));
+    const pastosComMapa = unidadesDoGlobal.pastos.filter(p => comMapa.has(p.fazenda_id)).map(p => ({ ...p, nome: `${codigo.get(p.fazenda_id) ?? ''} ${p.nome}`.trim() }));
+    return avisoSemDesenho(pastosSemDesenho(pastosComMapa, unidadesDoGlobal.poligonos, anoMes), 0);
+  }, [isGlobal, unidadesDoGlobal, fazendasDoGlobal, anoMes]);
   const areaPorPasto = useMemo(() => new Map(mapaDoMes.vigentes.map(p => [p.id, p.area_produtiva_ha])), [mapaDoMes.vigentes]);
   const resumoDoFiltro = useCallback((ids: readonly string[]) => resumoDosPastos(ids, mapaDoMes.dados, id => areaPorPasto.get(id)),
     [mapaDoMes.dados, areaPorPasto]);
@@ -210,7 +221,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
           fazendas={global.fazendas} total={global.total} pastos={global.pastos} geometriasPorFazenda={global.porFazenda}
           situacaoDoPasto={situacaoDe} resumoDoFiltro={resumoDoFiltro}
           carregando={mapaDoMes.carregando || geosDoGlobal.carregando} erro={mapaDoMes.erro ?? geosDoGlobal.erro}
-          seletorDeMes={seletorDeMes} estado={estadoDoGlobalRef.current} onEstado={guardarEstadoDoGlobal} onAbrirFazenda={abrirFazenda}
+          seletorDeMes={seletorDeMes} estado={estadoDoGlobalRef.current} onEstado={guardarEstadoDoGlobal} semDesenho={semDesenhoDoGlobal} onAbrirFazenda={abrirFazenda}
         />
       </div>
     );
@@ -257,6 +268,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
       <MapaGestorView
         geometrias={unidades.poligonos}
         pastos={pastosDoMapa}
+        semDesenho={semDesenhoDaFazenda}
         divisoes={divisoesDoMapa}
         anoMes={anoMes}
         dadosDoMes={mapaDoMes.dados}

@@ -153,7 +153,10 @@ const piqU = (id: string, nome: string, area: number) => ({ ...PAI_U, id, nome, 
 const PAI_M = { ...PAI_U, id: 'pm', nome: 'P_10 Manga', area_produtiva_ha: 36, observacoes: 'virou o grupo P_10 Manga em 09/2026', ordem_exibicao: 21 };
 const piqM = (id: string, nome: string, area: number) => ({ ...PAI_M, id, nome, area_produtiva_ha: area, observacoes: 'piquete de P_10 Manga',
   data_inicio: '2026-09-01', data_fim: null, grupo_id: 'gm' });
-export const UNIDADE_PASTOS = [PAI_U, piqU('pua', 'P_09A', 21.4), piqU('pub', 'P_09B', 19.2), PAI_M, piqM('pma', 'P_10A', 28.1), piqM('pmb', 'P_10B', 7.6)];
+/* MAPA-PIQUETES-04: um pasto vigente SEM polígono — o Gestor e a Validação dizem "Pasto sem desenho: P_11 Sem Mapa" (nada some em silêncio) */
+const SEM_MAPA = { ...PAI_U, id: 'psm', nome: 'P_11 Sem Mapa', area_produtiva_ha: 12, observacoes: null, ordem_exibicao: 22, data_fim: null };
+export const UNIDADE_PASTOS = [PAI_U, piqU('pua', 'P_09A', 21.4), piqU('pub', 'P_09B', 19.2), PAI_M, piqM('pma', 'P_10A', 28.1), piqM('pmb', 'P_10B', 7.6),
+  SEM_MAPA];
 export const UNIDADE_GRUPOS = [{ id: 'gu', nome: 'P_09 Retiro de Cima', pasto_origem_id: 'pu', ativo: true, fazenda_id: 'f1' },
   { id: 'gm', nome: 'P_10 Manga', pasto_origem_id: 'pm', ativo: true, fazenda_id: 'f1' }];
 const furado = () => {

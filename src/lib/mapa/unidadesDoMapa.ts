@@ -71,6 +71,8 @@ export function unidadesDoMapa<P extends PastoDaUnidade, G extends PoligonoDaUni
   for (const gr of e.grupos) {
     const pai = gr.pasto_origem_id ? porId.get(gr.pasto_origem_id) : undefined;
     if (!pai) continue;
+    // MAPA-PIQUETES-04: o pai SEM contorno não vira unidade (ela seria desenhada pelo contorno e sumiria): o grupo segue pasto a pasto
+    if (!poligonoDe.has(pai.id)) continue;
     const membros = e.pastos.filter((p) => p.grupo_id === gr.id && p.id !== pai.id);
     for (const m of membros) { membrosDeUnidade.add(m.id); unidadeDe.set(m.id, pai.id); }
     unidadeDe.set(pai.id, pai.id);
@@ -162,4 +164,38 @@ export function divisoesNoPainel(divisoes: readonly DivisaoNaFrase[], maxCaracte
   if (faltam === divisoes.length) return { texto: `${divisoes.length} divisões sem desenho`, title: inteira };
   const soma = n1(divisoes.reduce((s, d) => s + d.areaHa, 0));
   return { texto: `${divisoes.length} divisões = ${soma} ha${faltam > 0 ? ` · ${faltam} sem desenho` : ''}`, title: inteira };
+}
+
+/**
+ * MAPA-PIQUETES-04 (Gabriel 02/11 10:40, Sta. Rita: "não dá para clicar em 20A-1-A pois o 20A-1 fica por cima") — os polígonos que são o
+ * CONTORNO de um pai cujo grupo já tem divisão desenhada. Na Validação eles vão POR CIMA, só a linha (sem preenchimento: o clique pega só
+ * na borda), e as divisões por baixo, preenchidas (o clique no miolo abre a divisão). Pai sem nenhuma divisão desenhada (o P6) fica como
+ * pasto comum — senão o miolo não abriria nada.
+ */
+export function contornosDePai(poligonos: readonly PoligonoDaUnidade[], pastos: readonly PastoDaUnidade[], grupos: readonly GrupoComOrigem[]):
+  Set<string> {
+  const comDesenho = new Set(poligonos.flatMap((g) => (g.pasto_id ? [g.pasto_id] : [])));
+  const paisComDivisao = new Set<string>();
+  for (const gr of grupos) {
+    if (!gr.pasto_origem_id) continue;
+    if (pastos.some((m) => m.grupo_id === gr.id && m.id !== gr.pasto_origem_id && comDesenho.has(m.id))) paisComDivisao.add(gr.pasto_origem_id);
+  }
+  return new Set(poligonos.filter((g) => g.pasto_id && paisComDivisao.has(g.pasto_id)).map((g) => g.id));
+}
+
+/**
+ * MAPA-PIQUETES-04 — nenhum pasto vigente some do mapa em silêncio: os pastos do mês (os que o mapa usa, já pela unidade) que não têm
+ * polígono. A tela diz "pasto sem desenho: …" (Gestor/Global e Validação). Ordem natural de nome.
+ */
+export function pastosSemDesenho(pastos: readonly PastoDaUnidade[], poligonos: readonly PoligonoDaUnidade[], anoMes: string): string[] {
+  const comDesenho = new Set(poligonos.flatMap((g) => (g.pasto_id ? [g.pasto_id] : [])));
+  return pastos.filter((p) => vigente(p, anoMes) && !comDesenho.has(p.id)).map((p) => p.nome).sort(ordemNatural);
+}
+
+/** A linha do aviso: "pasto sem desenho: P25" / "3 pastos sem desenho: P21A, P21B, Piq. Adap"; longa → "51 pastos sem desenho" + title. */
+export function avisoSemDesenho(nomes: readonly string[], maxCaracteres = 90): { texto: string; title: string } | null {
+  if (nomes.length === 0) return null;
+  const inteira = nomes.length === 1 ? `Pasto sem desenho: ${nomes[0]}` : `${nomes.length} pastos sem desenho: ${nomes.join(', ')}`;
+  const curta = nomes.length === 1 ? '1 pasto sem desenho' : `${nomes.length} pastos sem desenho`;
+  return { texto: inteira.length <= maxCaracteres ? inteira : curta, title: inteira };
 }
