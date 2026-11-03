@@ -701,7 +701,16 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
           <BarraDeEdicaoDoPoligono edicao={edicao} geometrias={geometrias} nomeDoPasto={getPastoName}
             areaCadastroHa={pastos.find(p => p.id === edicao.alvo?.pasto_id)?.area_produtiva_ha ?? null} />
           {!piq.aberto && <DesfazerUltimaEdicao edicao={edicao} />}
-          <CriarPiquetesNoMapa piq={piq} />
+          {/* PIQUETES-PRACA-CONCAVO-01 (item 3): os soltos dentro do pasto vão para a espera do "É piquete de" (nada grava; o Concluir é o de sempre) */}
+          <CriarPiquetesNoMapa piq={piq} aoUsarPiqueteDe={soltos => {
+            const pai = piq.pai;
+            if (!pai) return;
+            const recusas = soltos.flatMap(p => { const r = piquetes.marcar(p, pai.pastoId); return r ? [`${p.nome_original || 'sem nome'}: ${r}`] : []; });
+            piq.fechar();
+            const marcados = soltos.length - recusas.length;
+            if (marcados) toast.success(`${marcados} ${marcados === 1 ? 'polígono espera' : 'polígonos esperam'} como piquete de ${pai.nome}: confira e conclua na lista.`);
+            if (recusas.length) toast.warning(`Ficaram de fora: ${recusas.join(' · ')}`);
+          }} />
           {/* MAPA-ZOOM-E-PAINEL-01 (Gabriel 02/11 07:40: "este modal está muito grande, tirando a visão do mapa"): no alto UMA linha — a BARRA
               do polígono (1 linha, ícones, a largura do conteúdo) à esquerda e os botões do mapa à direita; o nome cede ("…" + `title`), os
               botões nunca. O que está marcado `data-sobre-o-mapa` é descontado do enquadramento do "pasto inteiro". */}

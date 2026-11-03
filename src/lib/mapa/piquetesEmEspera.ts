@@ -7,6 +7,8 @@
  * oferecidos e a leitura da resposta do banco. As recusas de verdade (mês travado, nome repetido, polígono já ligado…) são do banco.
  */
 
+import { pontoDentro, pontoInterior } from '@/lib/mapa/linhasDosPiquetes';
+
 export interface PiqueteEmEspera {
   geometriaId: string;
   nome: string;
@@ -124,4 +126,19 @@ export function dataBr(iso: string): string {
 /** Área em ha com 2 casas e vírgula ("1.234,50"). */
 export function haBr(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** PIQUETES-PRACA-CONCAVO-01 (item 3): os polígonos SEM classificação que já estão dentro do pasto (os piquetes que vieram no KMZ): antes de
+ *  desenhar, a ferramenta oferece "É piquete de" para eles. Dentro = o ponto interior do polígono cai no contorno do pasto. */
+export function soltosDentroDoPasto(
+  contorno: GeoJSON.Polygon,
+  geometrias: readonly { id?: string; pasto_id: string | null; tipo?: string | null; nome_original?: string | null; geojson?: GeoJSON.Geometry }[],
+  contornoId: string | null,
+): PoligonoParaPiquete[] {
+  return geometrias.flatMap(x => {
+    if (!x.id || x.id === contornoId || x.pasto_id || (x.tipo && x.tipo !== 'outra') || !x.geojson) return [];
+    if (x.geojson.type !== 'Polygon' && x.geojson.type !== 'MultiPolygon') return [];
+    if (!pontoDentro(contorno, pontoInterior(x.geojson))) return [];
+    return [{ id: x.id, nome_original: x.nome_original ?? null, tipo: x.tipo ?? null, pasto_id: null }];
+  });
 }

@@ -18,23 +18,23 @@ import L from 'leaflet';
 import { supabase } from '@/integrations/supabase/client';
 import { haDoBanco, paraPlano, type Divisao } from '@/lib/mapa/criarPiquetes';
 import {
-  acrescentarLinha, alternarFixa, apagarLinha, cercaDoDesenho, comCorredor, comLarguraDoCorredor, desenhoDaGrade, desenhoVazio, deslizarLinha, divisoesDoDesenho,
+  acrescentarLinha, alternarFixa, alternarSeguir, apagarLinha, cercaDoDesenho, comCorredor, comLarguraDoCorredor, desenhoDaGrade, desenhoVazio, deslizarLinha, divisoesDoDesenho,
   ehCerca, extrasParaGravar, internasDoDesenho, linhaDoDesenho, linhasDoDesenho, moverPontoDaLinha, pontoNaLinha, rotuloDaLinha, tirarPontoDaLinha,
   type ConfigDosPiquetes, type Desenho, type ModoDosPiquetes,
 } from '@/lib/mapa/desenhoDosPiquetes';
 import type { Ponto } from '@/lib/mapa/edicaoDoPoligono';
 import { fraseDaPrevia, pedidoDosPiquetes, secaoDaPrevia, type LinhaDaSecao } from '@/lib/mapa/gravacaoDosPiquetes';
 import {
-  alvosDeEncaixe, comAreaDesejadaPelaLinha, encaixar, fraseDaLinha, planoDoPasto, pontoDentro, reguaLivre, segmentosDaRegua, toleranciaDeEncaixeM, trechosDaLinha,
-  type AlvosDeEncaixe,
+  alvosDeEncaixe, comAreaDesejadaPelaLinha, encaixar, fraseDaLinha, fraseDaSaida, linhasQueSaemEVoltam, planoDoPasto, pontoDentro, reguaLivre, segmentosDaRegua,
+  toleranciaDeEncaixeM, trechosDaLinha, type AlvosDeEncaixe,
 } from '@/lib/mapa/linhasDosPiquetes';
 import {
   letraDoIndice, nomearClicando, ordemDaLista, presosDasDivisoes, proximoNomeLivre, semNomes, type GeradorDeNome, type NomePreso,
 } from '@/lib/mapa/nomesDosPiquetes';
-import { mesesDeInicio } from '@/lib/mapa/piquetesEmEspera';
+import { mesesDeInicio, soltosDentroDoPasto, type PoligonoParaPiquete } from '@/lib/mapa/piquetesEmEspera';
 import {
   alinharPraca, anguloDoLado, areaDaPraca, areaDesejadaNaPraca, centroideDoPasto, comMedida, comOrientacao, DIAGONAL_PADRAO_M, igualarAreas, ladoMaisLongo,
-  ladoMaisPerto, ladosDoPasto, medidasDaPraca, motivoDaPraca, moverCentro, moverVertice, novaPracaCentral, pracaDesenhada,
+  ladoMaisPerto, ladosDoPasto, medidasDaPraca, motivoDaPraca, moverCentro, moverVertice, novaPracaCentral, pontasForaDaPraca, pracaDesenhada,
   type FormatoDaPraca, type MedidaDaPraca, type PracaCentral,
 } from '@/lib/mapa/pracaCentral';
 import {
@@ -151,7 +151,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
   /** MAPA-ZOOM-E-PAINEL-01: o enquadramento passa pelo módulo único (`enquadramentoDoMapa`, o `enquadrarEm` da visão) — nada de `fitBounds` aqui */
   enquadrar: (alvo: L.LatLngBounds, opcoes?: L.FitBoundsOptions) => void;
   pastos: readonly { id: string; nome: string; grupo_id?: string | null; ativo?: boolean | null }[];
-  geometrias: readonly { id?: string; pasto_id: string | null; geojson?: GeoJSON.Geometry }[];
+  geometrias: readonly { id?: string; pasto_id: string | null; tipo?: string | null; nome_original?: string | null; geojson?: GeoJSON.Geometry }[];
   clienteId: string | null;
   aoGravar: () => void;
 }) {
@@ -179,6 +179,8 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [zoomTique, setZoomTique] = useState(0);
+  /* PIQUETES-PRACA-CONCAVO-01 (item 3): o aviso dos polígonos soltos dentro do pasto, dispensado com "Desenhar mesmo assim" */
+  const [soltosDispensados, setSoltosDispensados] = useState(false);
 
   /* espelhos para os handlers do mapa (que vivem mais que um render) */
   const desenhoRef = useRef(desenho); desenhoRef.current = desenho;
@@ -194,6 +196,12 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
   const poligonoRef = useRef(poligono); poligonoRef.current = poligono;
   const divisoes: Divisao[] = useMemo(() => (poligono ? divisoesDoDesenho(poligono, desenho) : []), [poligono, desenho]);
   const n = divisoes.length;
+  /* PIQUETES-PRACA-CONCAVO-01: a linha que sai do pasto e volta (cortada no 1º encontro) e as pontas da praça fora do pasto */
+  const saidas = useMemo(() => (poligono ? linhasQueSaemEVoltam(poligono, linhasDoDesenho(desenho)) : []), [poligono, desenho]);
+  const pontasFora = useMemo(() => (poligono && desenho.praca ? pontasForaDaPraca(poligono, desenho.praca).indices : []), [poligono, desenho.praca]);
+  const soltosDoPasto: PoligonoParaPiquete[] = useMemo(
+    () => (poligono && pai ? soltosDentroDoPasto(poligono, geometrias, pai.geometriaId) : []), [poligono, pai, geometrias]);
+  const soltos = soltosDispensados ? [] : soltosDoPasto;
 
   // --- o grupo que o pai já originou ------------------------------------------------------------------------------------------------
   const lerGrupo = useCallback(async (paiId: string) => {
@@ -276,7 +284,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     const d = g ? desenhoInicial(g, cfg) : desenhoVazio();
     setPai(p); setPrevia(null); setErro(null); setEscolhida(null); setAvisoDaArea(null); setAviso(null); setMes(meses[meses.length - 1].valor);
     setConfigEstado(cfg); desenhoRef.current = d; setDesenho(d); setBase([]); trocarPilha([]); setTrabalhou(false);
-    setSelecionada(null); setPontoSel(null); setConfirmarCancelar(false); setNomeados(0); setFerramenta(null);
+    setSelecionada(null); setPontoSel(null); setConfirmarCancelar(false); setNomeados(0); setFerramenta(null); setSoltosDispensados(false);
     setGuardado(lerRascunhoDosPiquetes(clienteId, p.geometriaId));
     void lerGrupo(p.pastoId);
   }, [lerGrupo, clienteId, setFerramenta, trocarPilha]);
@@ -345,6 +353,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     mudar(x => ({ ...x, praca: x.praca ? alinharPraca(g, x.praca) : null }));
   }, [mudar]);
   const alternarCadeado = useCallback(() => { if (selecionadaRef.current) mudar(d => alternarFixa(d, selecionadaRef.current ?? '')); }, [mudar]);
+  const alternarSeguirSelecionada = useCallback(() => { if (selecionadaRef.current) mudar(d => alternarSeguir(d, selecionadaRef.current ?? '')); }, [mudar]);
   const apagarSelecionada = useCallback(() => {
     const id = selecionadaRef.current;
     if (!id) return;
@@ -639,6 +648,10 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     if (desenho.praca) {
       const a = areaDaPraca(desenho.praca);
       L.geoJSON(a.geojson, { style: { color: '#f59e0b', weight: 2.5, fillColor: '#f59e0b', fillOpacity: 0.35 }, pmIgnore: true, interactive: false }).addTo(g);
+      /* PIQUETES-PRACA-CONCAVO-01: a ponta que cai fora do pasto (no furo ou além da borda) fica marcada em vermelho */
+      const vs = desenho.praca.vertices;
+      pontasFora.forEach(i => vs[i] && L.circleMarker(latlng(vs[i]), { radius: 4, color: '#dc2626', weight: 2, fillColor: '#fecaca', fillOpacity: 1,
+        interactive: false, pmIgnore: true }).addTo(g));
       if (config.cocho) {
         L.marker(latlng(desenho.praca.centro), { interactive: false, pmIgnore: true, icon: L.divIcon({ className: 'piquete-cocho', iconSize: [14, 14],
           html: '<span style="display:block;width:14px;height:14px;border-radius:2px;background:#78350f;border:1.5px solid #fff;box-sizing:border-box"></span>' }) }).addTo(g);
@@ -651,7 +664,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
         .bindTooltip('lado de referência (clique em outro lado para trocar)', { permanent: false }).addTo(g);
     }
     return () => { g.remove(); };
-  }, [mapa, pai, poligono, desenho.praca, desenho.corredor, config.cocho, config.modo, config.refLado]);
+  }, [mapa, pai, poligono, desenho.praca, desenho.corredor, config.cocho, config.modo, config.refLado, pontasFora]);
 
   /* 3) as linhas: a selecionada magenta e grossa; clique seleciona (e, na selecionada, cria ponto) */
   const aoClicarLinha = useCallback((id: string, ll: L.LatLng) => {
@@ -671,8 +684,15 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
         alvo.on('click', (ev: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(ev); aoClicarLinha(l.id, ev.latlng); });
       }
     });
+    /* PIQUETES-PRACA-CONCAVO-01: NA LINHA, onde ela foi cortada ("Linha 4 cruza a borda 2×: cortada no 1º encontro") */
+    saidas.forEach(s => {
+      const r = rotuloDaLinha(desenho, s.id);
+      L.circleMarker(latlng(s.corte), { radius: 4, color: '#b45309', weight: 2, fillColor: '#fde68a', fillOpacity: 1, interactive: false, pmIgnore: true }).addTo(g);
+      L.marker(latlng(s.corte), { interactive: false, pmIgnore: true, icon: L.divIcon({ className: 'piquete-saida', iconSize: [0, 0],
+        html: `<span data-testid="piquetes-saida" style="position:absolute;left:6px;top:-7px;white-space:nowrap;font-size:9.5px;font-weight:600;color:#92400e;background:rgba(255,251,235,.95);padding:0 3px;border-radius:2px">${escapar(`${r ? `${r.rotulo} ${r.numero} ` : ''}${fraseDaSaida(s.cruzamentos, s.seguida)}`)}</span>` }) }).addTo(g);
+    });
     return () => { g.remove(); };
-  }, [mapa, pai, desenho, selecionada, ferramenta, aoClicarLinha]);
+  }, [mapa, pai, desenho, selecionada, ferramenta, aoClicarLinha, saidas]);
 
   /* 4) o que está sendo traçado e a régua livre */
   useEffect(() => {
@@ -796,8 +816,10 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     if (!poligono || !selecionada) return null;
     const r = rotuloDaLinha(desenho, selecionada);
     const t = trechosDaLinha(poligono, linhasDoDesenho(desenho), internasDoDesenho(desenho), selecionada);
-    return r && t ? fraseDaLinha(r.numero, t.totalM, t.trechosM, r.rotulo) : null;
-  }, [poligono, desenho, selecionada]);
+    if (!r || !t) return null;
+    const saida = saidas.find(x => x.id === selecionada);
+    return saida ? `${fraseDaLinha(r.numero, t.totalM, t.trechosM, r.rotulo)} · ${fraseDaSaida(saida.cruzamentos, saida.seguida)}` : fraseDaLinha(r.numero, t.totalM, t.trechosM, r.rotulo);
+  }, [poligono, desenho, selecionada, saidas]);
   const reguaLivreFrase = useMemo(() => {
     if (ferramenta !== 'regua') return null;
     if (reguaPontos.length < 2) return 'Régua: clique ponto a ponto (gruda em cantos e linhas); Esc sai';
@@ -826,6 +848,8 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     guardado, continuarRascunho, comecarDoZero,
     /* medidas e o que trava */
     totalHa, medidasPraca, aviso, motivo, erro,
+    /* PIQUETES-PRACA-CONCAVO-01 */
+    saidas, pontasFora, soltos, dispensarSoltos: () => setSoltosDispensados(true), alternarSeguirSelecionada,
     previa, setPrevia, prever, gravar, conferindo, gravando, mes, setMes,
   };
 }
