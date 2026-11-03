@@ -882,7 +882,9 @@ export function NotaFiscalDialog({
         if (eReg) toast.error(`O desfazer não vai cancelar o que nasceu agora: ${eReg}`);
       }
       /* 5 */
-      const erroItens = await gravarItens(clienteId, bytes);
+      /* NFSE-MUNICIPAL-01 — a NFS-e da prefeitura sem chave nacional nao tem onde guardar os itens (`nota_fiscal` e' por cliente + chave
+         de 44/50): o arquivo vai anexado ao lancamento como sempre; so' os itens nao se guardam (o detalhe ja' esta' na descricao) */
+      const erroItens = /^(\d{44}|\d{50})$/.test(soDigitos(n.chave)) ? await gravarItens(clienteId, bytes) : null;
       if (erroItens) toast.error(`Os itens da nota não foram guardados: ${erroItens}`);
       /* 6 — "Itens (N)": a conta por item, pela divisão de hoje (a mesma do Editar): a compra juntada — a mesma proporção nas N; um lançamento só —
          pelos itens da nota anexada. Recusou: o resto já está gravado e a frase diz que a divisão não foi (como o "Salvar e dividir", P165) */

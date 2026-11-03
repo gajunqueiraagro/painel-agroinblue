@@ -72,7 +72,7 @@ export function resumoDasDuplicatas(p: PropostaDeLancamento): string {
   return `${d.length} × ${reais(d[0].valorCent)} · ${datas}`;
 }
 
-export type SituacaoDaNota = 'recusada' | 'lancada' | 'nao_verificada' | 'ja_registrada' | 'ja_lancada' | 'sem_protocolo' | 'nova';
+export type SituacaoDaNota = 'recusada' | 'lancada' | 'nao_verificada' | 'ja_registrada' | 'ja_lancada' | 'sem_protocolo' | 'sem_chave' | 'nova';
 export function situacaoDaNota(l: LinhaDeNota): SituacaoDaNota {
   if (l.recusa) return 'recusada';
   if (l.lancada) return 'lancada';
@@ -81,6 +81,8 @@ export function situacaoDaNota(l: LinhaDeNota): SituacaoDaNota {
   if (l.doXml?.ocorrencias.some((o) => o.origem === 'oc')) return 'ja_registrada';
   if ((l.jaLancados ?? 0) > 0 || l.doXml?.ocorrencias.some((o) => o.origem === 'lancamento')) return 'ja_lancada';
   if (l.avisos.includes('sem_protocolo')) return 'sem_protocolo';
+  /* NFSE-MUNICIPAL-01 — a NFS-e da prefeitura sem o Identificador Nacional: aceita, mas nada confere o lido */
+  if (l.avisos.includes('sem_chave')) return 'sem_chave';
   return 'nova';
 }
 const TEXTO_DA_SITUACAO: Record<Exclude<SituacaoDaNota, 'recusada'>, { texto: string; cor: string }> = {
@@ -89,6 +91,7 @@ const TEXTO_DA_SITUACAO: Record<Exclude<SituacaoDaNota, 'recusada'>, { texto: st
   ja_lancada: { texto: 'parece já lançada', cor: 'text-amber-700' },
   nao_verificada: { texto: 'não verificada', cor: 'text-destructive' },
   sem_protocolo: { texto: 'sem protocolo', cor: 'text-amber-700' },
+  sem_chave: { texto: 'sem chave', cor: 'text-amber-700' },
   lancada: { texto: 'lançada', cor: 'text-primary' },
 };
 
@@ -263,7 +266,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
          Novo lançamento (NOTA-NOVA-MODAL-REAL, Gabriel 30/10). Sem verificar (P146) ou registrada numa OC, não abre: a linha diz. */
       const unica = arquivos.length === 1 && novas.length === 1 ? novas[0] : null;
       if (unica && !unica.recusa && unica.paraLancar && onAbrirNota) onAbrirNota(unica.paraLancar, unica.id);
-      else if (unica?.doXml && (situacaoDaNota(unica) === 'nova' || situacaoDaNota(unica) === 'sem_protocolo')) onAbrirLancamento(unica.doXml, unica.id);
+      else if (unica?.doXml && (situacaoDaNota(unica) === 'nova' || situacaoDaNota(unica) === 'sem_protocolo' || situacaoDaNota(unica) === 'sem_chave')) onAbrirLancamento(unica.doXml, unica.id);
       /* A mesma nota solta duas vezes entra uma so' (pela chave). */
       setLinhas((antes) => {
         const chavesDaLista = new Set(antes.map((l) => l.nota?.chave).filter(Boolean));
@@ -425,7 +428,8 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                       <td className={TD} title={resumoDasDuplicatas(d.proposta)}>{resumoDasDuplicatas(d.proposta)}</td>
                       <td className={`${TD} ${DIVISOR} ${s.cor}`} data-testid="xml-situacao"
                         title={sit === 'nao_verificada' ? l.naoVerificada ?? s.texto
-                          : sit === 'ja_registrada' && onde ? `Nota já registrada · ${onde.descricao ?? ''} · ${dataCurta(onde.data)}` : s.texto}>
+                          : sit === 'ja_registrada' && onde ? `Nota já registrada · ${onde.descricao ?? ''} · ${dataCurta(onde.data)}`
+                          : sit === 'sem_chave' ? 'sem chave para conferir · confira os campos lidos' : s.texto}>
                         {sit === 'ja_registrada' && onde
                           ? <button type="button" className="underline underline-offset-2" onClick={() => abrirRegistrada(onde)}>{s.texto}</button>
                           : s.texto}
