@@ -15,6 +15,7 @@ import {
 import {
   Link2, Unlink, Pencil, Trash2, CheckCheck, MapPin, Search, Filter,
   X, Save, ChevronDown, ChevronRight, ChevronLeft, Spline, PenTool, Scissors, Merge, LayoutGrid, Tag, Layers, Maximize2, Scan, PenLine, type LucideIcon,
+  Landmark,
 } from 'lucide-react';
 import { casaNoNomeDoPoligono, TIPOS_DE_CONTORNO } from '@/lib/mapa/edicaoDoPoligono';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
@@ -24,7 +25,10 @@ import type { Pasto } from '@/hooks/usePastos';
 import { CromoDoMapa } from '@/components/mapa-geo/CromoDoMapa';
 import { ClassificarPoligono } from '@/components/mapa-geo/ClassificarPoligono';
 import { DicaDoMapa } from '@/components/mapa-geo/DicaDoMapa';
-import { ehTipoDeArea, rotuloDoTipo, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
+import { EstruturaDaArea } from '@/components/mapa-geo/EstruturaDaArea';
+import { useInfraestruturas } from '@/hooks/useInfraestruturas';
+import { useClassificarPoligono } from '@/hooks/useClassificarPoligono';
+import { definicaoDoTipoDeArea, ehTipoDeArea, rotuloDoTipo, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
 /* MAPA-DICAS-01 (área): a área do mapa é a do banco, nos quatro lugares (barra, lista, rótulo no mapa, dica) */
 import { areaDoMapaHa, dicaDasMedidas, fraseDoCadastro, numHa2, perimetroDoMapaM, rotuloDeAreaVisivel, textoHa1, textoHa2 } from '@/lib/mapa/areaNaValidacao';
 /* MAPA-EDITAR-POLIGONO-01 — a edição de polígono é um módulo próprio (hook + barra); aqui só o encaixe */
@@ -70,11 +74,15 @@ interface Props {
   /** MAPA-AREA-TIPO-01: o tipo pedido pelo Adicionar › Área — o próximo polígono escolhido abre "É área" com ele */
   tipoPedido?: TipoDeArea | null;
   onTipoPedidoUsado?: () => void;
+  /** MAPA-AREA-TIPOS-02: abre o Gestor com o painel da infraestrutura (a ficha e o Patrimônio da estrutura com valor) */
+  onAbrirInfraNoGestor?: (infraId: string) => void;
+  /** MAPA-AREA-TIPOS-02: como o pedido abre — "desenhar" (padrão, Adicionar › Área) ou "escolher" (a infraestrutura de área existente) */
+  modoInicialDoPedido?: 'desenhar' | 'escolher';
 }
 
 /* MAPA-AREA-TIPO-01 (Gabriel 01/11): o vínculo e o tipo de área saem do UPDATE direto e vão pelo escritor do banco
    (`fn_mapa_geometria_classificar`: prévia, trilha e a memória que o "Atualizar mapa" respeita), no painel do polígono. */
-export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdate, onDelete, onRefresh, tipoPedido, onTipoPedidoUsado }: Props) {
+export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdate, onDelete, onRefresh, tipoPedido, onTipoPedidoUsado, onAbrirInfraNoGestor, modoInicialDoPedido }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -125,13 +133,32 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   /* MAPA-DICAS-01 (área): o polígono recém-CRIADO (desenhar, dividir, unir…) abre selecionado: o id vem da gravação e a seleção espera o
      recarregamento trazê-lo */
   const [aSelecionar, setASelecionar] = useState<string | null>(null);
+  /* MAPA-AREA-TIPOS-02 (Gabriel 02/11 15:54): o pedido do Adicionar › Área oferece "Desenhar nova" (padrão) e "Escolher existente". O tipo do
+     desenho em curso fica num ref: o polígono que a gravação do desenho criar é classificado com ele pelo escritor de sempre
+     (`fn_mapa_geometria_classificar`) — se a classificação recusar, o polígono novo fica selecionado com o Classificar aberto no tipo pedido. */
+  const [modoDoPedido, setModoDoPedido] = useState<'desenhar' | 'escolher'>(modoInicialDoPedido ?? 'desenhar');
+  useEffect(() => { setModoDoPedido(modoInicialDoPedido ?? 'desenhar'); }, [tipoPedido, modoInicialDoPedido]);
+  const desenhoDoPedidoRef = useRef<TipoDeArea | null>(null);
+  const { gravar: classificarCriado } = useClassificarPoligono();
   const aoMudarGeometrias = useCallback((criadoId?: string) => {
     if (criadoId) setASelecionar(criadoId);
+    const tipo = desenhoDoPedidoRef.current;
+    desenhoDoPedidoRef.current = null;
+    if (criadoId && tipo) {
+      void classificarCriado(criadoId, { tipo }, 'desenhado pelo Adicionar › Área').then(r => {
+        if (r.ok) onTipoPedidoUsado?.();
+        else { console.error('[validacao] classificar o desenhado', r.motivo); setModoDoPedido('escolher'); }
+        onRefresh();
+      });
+      return;
+    }
     onRefresh();
-  }, [onRefresh]);
+  }, [onRefresh, classificarCriado, onTipoPedidoUsado]);
   useEffect(() => {
     if (aSelecionar && geometrias.some(g => g.id === aSelecionar)) { setFocusedId(aSelecionar); setASelecionar(null); }
   }, [aSelecionar, geometrias]);
+  /* MAPA-AREA-TIPOS-02 (D3): as infraestruturas da fazenda, para saber qual estrutura com valor já virou infraestrutura */
+  const { infras, estruturaDaArea, recarregar: recarregarInfras } = useInfraestruturas(fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : undefined);
   const edicao = useEdicaoDoPoligono({
     mapa: statusDoMapa === 'ready' ? mapInstance.current : null,
     fazendaId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null,
@@ -554,7 +581,15 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
               do polígono (1 linha, ícones, a largura do conteúdo) à esquerda e os botões do mapa à direita; o nome cede ("…" + `title`), os
               botões nunca. O que está marcado `data-sobre-o-mapa` é descontado do enquadramento do "pasto inteiro". */}
           <CromoDoMapa estado={{ editando: !!edicao.modo, piquetesAberto: piq.aberto, pedindoPoligono: !!tipoPedido, selecionado: !!focusedId }}
-            rotuloDoPedido={tipoPedido ? rotuloDoTipo(tipoPedido) : null} onCancelarPedido={() => onTipoPedidoUsado?.()}
+            rotuloDoPedido={tipoPedido ? rotuloDoTipo(tipoPedido) : null} onCancelarPedido={() => { desenhoDoPedidoRef.current = null; onTipoPedidoUsado?.(); }}
+            modoDoPedido={modoDoPedido}
+            onDesenharNova={() => {
+              if (!tipoPedido) return;
+              setModoDoPedido('desenhar');
+              desenhoDoPedidoRef.current = tipoPedido;
+              void edicao.iniciar('desenhar', null).then(() => edicao.setNomeNovo(rotuloDoTipo(tipoPedido)));
+            }}
+            onEscolherExistente={() => { desenhoDoPedidoRef.current = null; setModoDoPedido('escolher'); }}
             painel={focusedId ? (() => {
               const geo = geometrias.find(g => g.id === focusedId);
               if (!geo) return <span />;
@@ -615,6 +650,23 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                           onGravou={() => { fecharClassificar(); setFocusedId(geo.id); onRefresh(); }} onFechar={fecharClassificar} />
                       </PopoverContent>
                     </Popover>
+                    {/* MAPA-AREA-TIPOS-02 (D3): a estrutura com valor (armazém, curral, sede…) vira infraestrutura; a ficha e o bem são os do
+                        painel da infraestrutura — um ícone a mais na barra, só nesses tipos */}
+                    {definicaoDoTipoDeArea(geo.tipo)?.infra && (
+                      <Popover key={`patr-${geo.id}`}>
+                        <DicaDoMapa nome="Patrimônio" frase="Esta estrutura tem valor: vira infraestrutura (com ficha) e o bem nasce pelo mesmo caminho das fichas.">
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className={icone} aria-label="Patrimônio" data-testid="validacao-patrimonio">
+                              <Landmark className="h-3.5 w-3.5" />
+                            </Button>
+                          </PopoverTrigger>
+                        </DicaDoMapa>
+                        <PopoverContent align="start" className="w-[300px] p-2" data-testid="validacao-popover">
+                          <EstruturaDaArea geometriaId={geo.id} tipoDaArea={geo.tipo} infras={infras} estruturaDaArea={estruturaDaArea}
+                            onCriou={recarregarInfras} onAbrirNoGestor={onAbrirInfraNoGestor} />
+                        </PopoverContent>
+                      </Popover>
+                    )}
                     {/* MAPA-PIQUETES-02 — "É piquete de…": o polígono fica EM ESPERA; o "Concluir" mora no rodapé da lista */}
                     {!geo.pasto_id && (
                       <Popover key={geo.id}>

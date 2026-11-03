@@ -3,7 +3,7 @@
  * (KML/KMZ)" funciona; o resto aparece desabilitado com o selo "em breve" (como nas Camadas). Nada aqui cria tabela nem grava: a
  * Infraestrutura é a fatia 02f.
  */
-import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
+import { ROTULO_DA_FAMILIA_DE_AREA, TIPOS_DE_AREA, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
 
 export type AcaoDoMenu = 'importar_mapa';
 
@@ -28,9 +28,8 @@ export const MENU_ADICIONAR: GrupoDoMenu[] = [
       {
         rotulo: 'Área',
         itens: [
-          ...([['Área da fazenda', 'area_fazenda'], ['Área sem uso (terceiros)', 'area_sem_uso'], ['Reserva legal / mata nativa', 'reserva_legal'],
-            ['APP', 'app'], ['Várzea / brejo', 'varzea_brejo'], ['Sede / benfeitorias', 'benfeitoria'], ['Estrada', 'estrada'], ['Curral', 'curral'],
-            ['Confinamento', 'confinamento']] satisfies [string, TipoDeArea][]).map(([rotulo, tipo]) => ({ grupo: 'Áreas da fazenda', rotulo, tipo })),
+          /* MAPA-AREA-TIPOS-02 (D6): a lista vem do catálogo (antes repetida à mão), agrupada pela família */
+          ...TIPOS_DE_AREA.map(t => ({ grupo: ROTULO_DA_FAMILIA_DE_AREA[t.familia], rotulo: t.rotulo, tipo: t.tipo })),
           ...['Área degradada', 'Área em reforma', 'Área em recuperação', 'Zona de erosão'].map(rotulo => ({ grupo: 'Condição', rotulo })),
         ],
       },

@@ -32,3 +32,12 @@ describe('frasesDoAviso', () => {
     expect(f.inteira.length).toBeGreaterThan(f.curta.length);
   });
 });
+
+describe('frasesDoAviso — MAPA-AREA-TIPOS-02 (desenhar nova | escolher existente)', () => {
+  it('desenhar diz que vai desenhar e que ao gravar já fica com o tipo; escolher é a de sempre', () => {
+    const d = frasesDoAviso('Manga', 'desenhar');
+    expect(d.curta).toBe('Marcar como Manga: desenhe a área nova');
+    expect(d.inteira).toContain('ao gravar ela já fica como Manga');
+    expect(frasesDoAviso('Manga').curta).toBe('Marcar como Manga: escolha o polígono');
+  });
+});

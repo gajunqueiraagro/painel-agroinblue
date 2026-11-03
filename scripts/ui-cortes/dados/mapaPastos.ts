@@ -188,3 +188,18 @@ export const UNIDADE_ITENS = [
   { id: 'i-pm-1', fechamento_id: 'f-pm-2026-08', quantidade: 70, peso_medio_kg: 350, categoria_id: 'c1' },
   { id: 'i-pma-1', fechamento_id: 'f-pma-2026-09', quantidade: 72, peso_medio_kg: 361, categoria_id: 'c1', lote: 'Lote P_10' },
 ];
+
+/* MAPA-CARTOES-LARGURA-01 — os cartões de cima com números de verdade grandes (`&cartoes=ursa` | `&cartoes=pior`): em set/26 só o P_01
+   tem área e animais (os outros pastos ficam com área 0 e fechamento sem animais), para o resumo da fazenda dar exatamente:
+   - ursa (o caso do Gabriel, Ursa Maior 02/11): 1.000 cab. · 402 kg · 2,33 UA/ha · 1.047 kg/ha · 383,8 ha;
+   - pior (o pior caso fictício): 99.999 cab. · 9.999 kg · 22,22 UA/ha (mesma largura de "99,99" em algarismos tabulares) · 9.999 kg/ha ·
+     99.999,9 ha. */
+export function dadosDosCartoes(caso: string | null) {
+  const numeros = caso === 'pior' ? { area: 99999.9, cab: 99999, peso: 9999 } : caso === 'ursa' ? { area: 383.8, cab: 1000, peso: 401.84 } : null;
+  if (!numeros) return { pastos: PASTOS, itens: ITENS };
+  const pastos = PASTOS.map(p => ({ ...p, area_produtiva_ha: p.id === 'p1' ? numeros.area : 0 }));
+  const doMes = new Set(FECHAMENTOS.filter(f => f.ano_mes === '2026-09').map(f => f.id));
+  const itens = [...ITENS.filter(i => !doMes.has(i.fechamento_id)),
+    { id: 'f-p1-2026-09-cartoes', fechamento_id: 'f-p1-2026-09', quantidade: numeros.cab, peso_medio_kg: numeros.peso, categoria_id: 'c1', lote: 'L-12' }];
+  return { pastos, itens };
+}

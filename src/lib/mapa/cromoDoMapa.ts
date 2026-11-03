@@ -29,9 +29,18 @@ export function zonasVisiveis(e: EstadoDoCromo): ZonasVisiveis {
 }
 
 /** As frases do aviso: a curta cabe na linha em qualquer largura do mapa; a inteira vai no `title`. */
-export function frasesDoAviso(rotuloDoTipo: string): { curta: string; inteira: string } {
+export function frasesDoAviso(rotuloDoTipo: string, modo: 'escolher' | 'desenhar' = 'escolher'): { curta: string; inteira: string; dica: string } {
+  /* MAPA-AREA-TIPOS-02 (Gabriel 02/11 15:54): o aviso oferece DESENHAR a área nova (padrão) ou ESCOLHER uma que já existe */
+  if (modo === 'desenhar') {
+    return {
+      curta: `Marcar como ${rotuloDoTipo}: desenhe a área nova`,
+      inteira: `Desenhe a área nova no mapa (ao gravar ela já fica como ${rotuloDoTipo}) ou escolha um polígono que já existe. Cancelar volta ao que estava.`,
+      dica: 'Desenhar nova: clique os cantos no mapa · desfaz ponto, ajusta no rascunho, a prévia antes de gravar',
+    };
+  }
   return {
     curta: `Marcar como ${rotuloDoTipo}: escolha o polígono`,
     inteira: `Escolha o polígono (no mapa ou na lista) para marcar como ${rotuloDoTipo}. Cancelar volta ao que estava.`,
+    dica: 'Clique num polígono no mapa ou na lista · o gesto só grava com a prévia',
   };
 }

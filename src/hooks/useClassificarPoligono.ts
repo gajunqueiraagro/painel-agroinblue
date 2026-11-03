@@ -4,7 +4,7 @@
  * A recusa do banco vem pronta (P0001); sem acesso (42501) vira a frase da casa; outro erro vai ao console e volta uma frase genérica.
  * Nunca toast: quem chama mostra a frase no próprio painel.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { argumentosDoEscritor, type DestinoDoPoligono } from '@/lib/mapa/tiposDeArea';
 
@@ -64,4 +64,29 @@ export function useClassificarPoligono() {
   }, [chamar]);
 
   return { prever, gravar, gravando };
+}
+
+/**
+ * MAPA-AREA-TIPOS-02 — o NOME do grupo de pastejo do pasto (`pasto_grupos`, o "piquete de 20A-1" da prévia sem mudança). Leitura que chega
+ * depois de o grupo mudar não escreve; falha = sem nome (a frase sai sem o grupo, nunca errada).
+ */
+export function useNomeDoGrupo(grupoId: string | null | undefined): string | null {
+  const [lido, setLido] = useState<{ id: string; nome: string | null } | null>(null);
+  useEffect(() => {
+    if (!grupoId) return;
+    let vivo = true;
+    (async () => {
+      try {
+        const { data, error } = await (supabase as any).from('pasto_grupos').select('nome').eq('id', grupoId).maybeSingle();
+        if (!vivo) return;
+        if (error) { console.error('[useNomeDoGrupo]', error); setLido({ id: grupoId, nome: null }); return; }
+        const nome = data && typeof data === 'object' && 'nome' in data && typeof data.nome === 'string' ? data.nome : null;
+        setLido({ id: grupoId, nome });
+      } catch (e) {
+        if (vivo) { console.error('[useNomeDoGrupo]', e); setLido({ id: grupoId, nome: null }); }
+      }
+    })();
+    return () => { vivo = false; };
+  }, [grupoId]);
+  return grupoId && lido?.id === grupoId ? lido.nome : null;
 }

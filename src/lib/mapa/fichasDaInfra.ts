@@ -131,6 +131,25 @@ export const FICHAS: Record<TipoInfra, DefinicaoDaFicha> = {
     categoria: 'instalacoes',
     vidaUtil: fixa(20),
   },
+  /* MAPA-AREA-TIPOS-02 — as estruturas que nascem de uma área do mapa. A vida útil fora da tabela do pedido segue a da categoria
+     (edificação 25; instalação 20) como sugestão. */
+  armazem_graos: {
+    campos: [AREA_CONSTRUIDA, MATERIAL_CONSTRUCAO, { chave: 'capacidade_t', rotulo: 'Capacidade', forma: 'numero', unidade: 't', casas: 0 }],
+    categoria: 'benfeitorias', vidaUtil: fixa(25),
+  },
+  silo_secador: {
+    campos: [{ chave: 'modelo', rotulo: 'Tipo', forma: 'texto', opcoes: ['Silo', 'Secador', 'Silo secador'] },
+      { chave: 'capacidade_t', rotulo: 'Capacidade', forma: 'numero', unidade: 't', casas: 0 }],
+    categoria: 'instalacoes', vidaUtil: fixa(20),
+  },
+  oficina: { campos: [AREA_CONSTRUIDA, MATERIAL_CONSTRUCAO], categoria: 'benfeitorias', vidaUtil: fixa(25) },
+  casa_funcionario: { campos: [AREA_CONSTRUIDA, MATERIAL_CONSTRUCAO], categoria: 'benfeitorias', vidaUtil: fixa(25) },
+  escritorio: { campos: [AREA_CONSTRUIDA, MATERIAL_CONSTRUCAO], categoria: 'benfeitorias', vidaUtil: fixa(25) },
+  confinamento: {
+    campos: [{ chave: 'area_m2', rotulo: 'Área', forma: 'numero', unidade: 'm²', casas: 0 },
+      { chave: 'capacidade_cab', rotulo: 'Capacidade (cab.)', forma: 'inteiro' }, COBERTO],
+    categoria: 'instalacoes', vidaUtil: fixa(20),
+  },
 };
 
 export function camposDaFicha(tipo: TipoInfra): readonly CampoDaFicha[] {

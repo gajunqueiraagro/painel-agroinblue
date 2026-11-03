@@ -1,5 +1,4 @@
-{
-  "cocho": { "material": "Concreto", "comprimento_m": 12, "lados": 2, "coberto": true, "uso": "Sal mineral" },
+{ "cocho": { "material": "Concreto", "comprimento_m": 12, "lados": 2, "coberto": true, "uso": "Sal mineral" },
   "bebedouro": { "modelo": "Australiano", "material": "Concreto", "capacidade_l": 15000, "abastecimento": "Poço" },
   "saleiro": { "material": "Madeira", "coberto": true, "comprimento_m": 3.5 },
   "caixa_dagua": { "material": "Fibra", "capacidade_l": 20000, "elevada": true },
@@ -12,5 +11,11 @@
   "cerca": { "modelo": "Arame liso", "fios": 5, "mourao": "Eucalipto tratado" },
   "sede_casa": { "area_construida_m2": 220, "material": "Alvenaria" },
   "galpao": { "area_construida_m2": 600, "material": "Metálico" },
-  "energia": { "modelo": "Transformador", "potencia_kva": 75 }
+  "energia": { "modelo": "Transformador", "potencia_kva": 75 },
+  "armazem_graos": { "area_construida_m2": 1200, "material": "Metálico", "capacidade_t": 3000 },
+  "silo_secador": { "modelo": "Silo secador", "capacidade_t": 500 },
+  "oficina": { "area_construida_m2": 300, "material": "Alvenaria" },
+  "casa_funcionario": { "area_construida_m2": 80, "material": "Alvenaria" },
+  "escritorio": { "area_construida_m2": 60, "material": "Alvenaria" },
+  "confinamento": { "area_m2": 20000, "capacidade_cab": 1500, "coberto": false }
 }

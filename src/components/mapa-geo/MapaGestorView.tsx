@@ -19,7 +19,7 @@ import {
   DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { itemFunciona, MENU_ADICIONAR, subitemFunciona } from '@/lib/mapa/menuAdicionar';
-import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
+import { TIPOS_DE_AREA, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
 import { ChevronDown, ChevronLeft, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
@@ -37,6 +37,7 @@ import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotu
 import { FUNDOS } from '@/lib/mapa/fundoDoMapa';
 import { EVENTO_LIMITE_DOS_CREDITOS } from '@/lib/mapa/creditosDoMapa';
 import { InfraPainel } from '@/components/mapa-geo/InfraPainel';
+import { CartaoDoMapa, LARGURA_DO_CARTAO } from '@/components/mapa-geo/CartaoDoMapa';
 import { useInfraestruturas } from '@/hooks/useInfraestruturas';
 import { useLavouraDaFazenda } from '@/hooks/useLavouraDaFazenda';
 import { lavouraDoPastoNoMes, rotuloDaLavoura, type LavouraDoMes } from '@/lib/mapa/lavouraDoMes';
@@ -61,7 +62,7 @@ interface Props {
   geoLoading: boolean;
   onImportar: () => void;
   /** MAPA-AREA-TIPO-01: Adicionar › Área › [tipo] — vai à Validação para marcar um polígono existente com o tipo */
-  onClassificarArea?: (tipo: TipoDeArea) => void;
+  onClassificarArea?: (tipo: TipoDeArea, modo?: 'desenhar' | 'escolher') => void;
   /** MAPA-02f-b: a fazenda e o cliente da infraestrutura (sem fazenda, o menu Infraestrutura fica "em breve") */
   fazendaId?: string;
   clienteId?: string | null;
@@ -69,6 +70,9 @@ interface Props {
   voltarAoGlobal?: () => void;
   /** MAPA-GLOBAL-01 (D6): o pasto clicado no Global abre selecionado, com o painel aberto. */
   pastoInicialId?: string | null;
+  /** MAPA-AREA-TIPOS-02: a infraestrutura que abre com o painel (vinda do "Ficha e Patrimônio no Gestor" da Validação); usada, avisa */
+  infraInicialId?: string | null;
+  onInfraInicialUsada?: () => void;
   onRenderedChange?: (count: number) => void;
   /** O seletor de ano/mês (o mesmo do Fechamento Área, mês compartilhado). */
   seletorDeMes: ReactNode;
@@ -128,18 +132,6 @@ const FILTROS_INICIAIS: Filtros = {
 
 function numero(v: number | null | undefined, casas = 0, sufixo = ''): string {
   return v == null ? '—' : `${formatNum(v, casas)}${sufixo}`;
-}
-
-/* MAPA-COMPACTO-01: o card mais baixo (28 px: rótulo 11 + valor 15 + 2) e com menos padding; "cab." e "UA/ha" seguem menores */
-function Kpi({ rotulo, valor, unidade, largura = 80 }: { rotulo: string; valor: string; unidade?: string | null; largura?: number }) {
-  return (
-    <div className="flex-none rounded-md bg-white/70 px-1.5 py-px" style={{ width: largura }}>
-      <div className="text-[9.5px] leading-[11px] text-[#4A5361]">{rotulo}</div>
-      <div className="whitespace-nowrap text-[12px] font-semibold leading-[15px] tabular-nums">
-        {valor}{unidade ? <span className="ml-0.5 text-[10px] font-normal text-[#4A5361]">{unidade}</span> : null}
-      </div>
-    </div>
-  );
 }
 
 /* MAPA-PAINEL-COMPACTO-01: a célula mais baixa (rótulo 11 + valor 14), menos padding; `nota` = uma linha secundária (a área do mapa) */
@@ -272,7 +264,7 @@ function escaparHtml(t: string): string {
 
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
-  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes,
+  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, infraInicialId, onInfraInicialUsada,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
@@ -442,6 +434,9 @@ export function MapaGestorView({
           }
         } else if (g.tipo !== 'area_total') {
           camadaGeo.bindTooltip(nome, { sticky: true });
+          /* MAPA-AREA-TIPOS-02: a área que já é estrutura (infraestrutura com o elo) abre o painel dela — a ficha e o Patrimônio */
+          const estrutura = infras.find(i => i.geometria_id === g.id);
+          if (estrutura) camadaGeo.on('click', () => { if (colocandoRef.current) return; setSelecionadoId(null); setPontoEditado(null); setInfraSelId(estrutura.id); });
         }
         camadaGeo.addTo(grupo);
         camadasRef.current.set(g.id, camadaGeo);
@@ -464,7 +459,15 @@ export function MapaGestorView({
     // os rótulos se arrumam no zoom em que o mapa está (o hook, ao enquadrar, dispara o zoomend que os refaz)
     desenharRotulos(mapa, rotulos, candidatos);
   }, [mapStatus, geometrias, dadosDoMes, camada, filtros, selecionadoId, pastoPorId, mapInstanceRef, featureLayerRef, labelLayerRef,
-    reportRenderedGeometries, onRenderedChange, registrosDeLavoura, anoMes, divisoes]);
+    reportRenderedGeometries, onRenderedChange, registrosDeLavoura, anoMes, divisoes, infras]);
+
+  /* MAPA-AREA-TIPOS-02: vindo da Validação, abre o painel da infraestrutura pedida assim que a lista dela chega */
+  useEffect(() => {
+    if (!infraInicialId || !infras.some(i => i.id === infraInicialId)) return;
+    setSelecionadoId(null);
+    setInfraSelId(infraInicialId);
+    onInfraInicialUsada?.();
+  }, [infraInicialId, infras, onInfraInicialUsada]);
 
   /* MAPA-02f-b: a camada dos ÍCONES da infraestrutura (acima dos pastos; tamanho fixo em qualquer zoom; o rótulo no hover). Clique abre o
      painel (só leitura); na edição o ponto escolhido se arrasta; o ponto novo (ainda sem gravar) também. */
@@ -663,7 +666,7 @@ export function MapaGestorView({
                         <div key={sub.rotulo}>
                           {sub.grupo && sub.grupo !== item.itens?.[si - 1]?.grupo && <DropdownMenuLabel>{sub.grupo}</DropdownMenuLabel>}
                           {subitemFunciona(sub) && onClassificarArea ? (
-                            <DropdownMenuItem onSelect={() => onClassificarArea(sub.tipo)} title="Marca um polígono do mapa com este tipo, na Validação">
+                            <DropdownMenuItem onSelect={() => onClassificarArea(sub.tipo, 'desenhar')} title="Na Validação: desenhar a área nova (já com este tipo) ou escolher um polígono que já existe">
                               {sub.rotulo}
                             </DropdownMenuItem>
                           ) : item.rotulo === 'Infraestrutura' && fazendaId && tipoDePontoPeloRotulo(sub.rotulo) ? (
@@ -760,10 +763,14 @@ export function MapaGestorView({
              mover nada (é sobreposição, não ocupa lugar no vidro). */
           <div className="absolute left-3 top-1.5 z-[500] flex items-start gap-1.5">
             <div className={`flex gap-[2px] p-[2px] ${VIDRO}`} data-testid="mapa-kpis">
-              <Kpi rotulo="Alocadas" valor={numero(kpis.cabecas)} unidade={kpis.cabecas == null ? undefined : 'cab.'} />
-              <Kpi rotulo="Peso méd." valor={numero(kpis.pesoMedio, 0, ' kg')} />
-              <Kpi rotulo="Lotação" valor={numero(kpis.lotacao, 0, ' kg/ha')} unidade={textoUaHa(kpis.uaHa)} largura={128} />
-              <Kpi rotulo="Área pastos" valor={numero(kpis.area, 1, ' ha')} />
+              {/* MAPA-CARTOES-LARGURA-01: largura reservada pelo pior caso e 2 linhas fixas; na pecuária a lotação principal é UA/ha (o
+                  histórico do painel também abre em UA/ha) e o kg/ha vai na 2ª linha */}
+              <CartaoDoMapa rotulo="Alocadas" valor={numero(kpis.cabecas)} unidade={kpis.cabecas == null ? undefined : 'cab.'}
+                largura={LARGURA_DO_CARTAO.cabecas} testid="cartao-cabecas" />
+              <CartaoDoMapa rotulo="Peso méd." valor={numero(kpis.pesoMedio, 0, ' kg')} largura={LARGURA_DO_CARTAO.peso} testid="cartao-peso" />
+              <CartaoDoMapa rotulo="Lotação" valor={numero(kpis.uaHa, 2)} unidade={kpis.uaHa == null ? undefined : 'UA/ha'}
+                secundario={kpis.lotacao == null ? null : `${formatNum(kpis.lotacao, 0)} kg/ha`} largura={LARGURA_DO_CARTAO.lotacao} testid="cartao-lotacao" />
+              <CartaoDoMapa rotulo="Área pastos" valor={numero(kpis.area, 1, ' ha')} largura={LARGURA_DO_CARTAO.area} testid="cartao-area" />
             </div>
             <div className={`mt-[2px] whitespace-nowrap rounded-md bg-[#FFF6D6]/95 px-1.5 py-px text-[9.5px] leading-[14px] text-[#8A5A00] shadow-sm ${fechamentoAberto ? '' : 'invisible'}`}
               data-testid="mapa-fechamento-aberto" aria-hidden={!fechamentoAberto}>
@@ -773,7 +780,8 @@ export function MapaGestorView({
         )}
 
         {hasGeo && filtrosAbertos && (
-          <div className={`absolute bottom-[42px] left-3 top-[44px] z-[500] w-[190px] overflow-y-auto px-2.5 py-2 ${VIDRO}`} data-testid="mapa-filtros">
+          /* MAPA-CARTOES-LARGURA-01: os cartões ganharam a 2ª linha (terminam a ~48 px do topo): os Filtros começam a 52 */
+          <div className={`absolute bottom-[42px] left-3 top-[52px] z-[500] w-[190px] overflow-y-auto px-2.5 py-2 ${VIDRO}`} data-testid="mapa-filtros">
             <div className="mb-1 flex items-center justify-between text-[11px] font-semibold">
               Filtros
               <button type="button" className="text-[10.5px] font-normal text-[#2B6CB0]" onClick={() => setFiltrosAbertos(false)}>Ocultar</button>
@@ -815,7 +823,16 @@ export function MapaGestorView({
         {colocandoTipo && !pontoNovo && (
           <div className={`absolute left-1/2 top-1.5 z-[600] flex -translate-x-1/2 items-center gap-2 px-2.5 py-1 text-[10.5px] ${VIDRO}`} data-testid="infra-modo-colocar">
             <span dangerouslySetInnerHTML={{ __html: iconeDaInfra(colocandoTipo) }} />
-            Clique no mapa onde fica o <b className="font-semibold">{definicaoDoTipo(colocandoTipo)?.rotulo}</b>
+            Nova: clique no mapa onde fica o <b className="font-semibold">{definicaoDoTipo(colocandoTipo)?.rotulo}</b>
+            {/* MAPA-AREA-TIPOS-02 (Gabriel 02/11 15:54): o tipo que também existe como ÁREA (curral, sede, represa, armazém…) oferece escolher o
+                polígono que já está no mapa — vai à Validação com o tipo de área correspondente (o catálogo único) */}
+            {(() => {
+              const area = TIPOS_DE_AREA.find(t => t.infra === colocandoTipo);
+              return area && onClassificarArea ? (
+                <button type="button" className="text-[#2B6CB0]" data-testid="infra-escolher-area-existente"
+                  onClick={() => { fecharInfra(); onClassificarArea(area.tipo, 'escolher'); }}>Escolher área existente</button>
+              ) : null;
+            })()}
             <button type="button" className="text-[#2B6CB0]" onClick={fecharInfra}>Cancelar</button>
           </div>
         )}

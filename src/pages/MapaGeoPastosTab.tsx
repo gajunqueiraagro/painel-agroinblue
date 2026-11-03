@@ -91,6 +91,10 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
+  /* MAPA-AREA-TIPOS-02: a infraestrutura que o Gestor abre ao vir da Validação ("Ficha e Patrimônio no Gestor") */
+  const [infraInicial, setInfraInicial] = useState<string | null>(null);
+  /* MAPA-AREA-TIPOS-02: como o pedido abre na Validação (Adicionar › Área = desenhar; a infraestrutura de área existente = escolher) */
+  const [modoDoPedido, setModoDoPedido] = useState<'desenhar' | 'escolher'>('desenhar');
   /* MAPA-AREA-TIPO-01: o tipo pedido pelo Adicionar › Área, que a Validação usa no próximo polígono escolhido */
   const [tipoPedido, setTipoPedido] = useState<TipoDeArea | null>(null);
 
@@ -264,7 +268,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         erroDoMes={mapaDoMes.erro}
         geoLoading={geoLoading}
         onImportar={() => setUploadOpen(true)}
-        onClassificarArea={tipo => { setTipoPedido(tipo); setViewMode('validacao'); }}
+        onClassificarArea={(tipo, modo) => { setTipoPedido(tipo); setModoDoPedido(modo ?? 'desenhar'); setViewMode('validacao'); }}
         fazendaId={fazendaId}
         clienteId={fazendaAtual?.cliente_id ?? null}
         onRenderedChange={onRenderedChange}
@@ -272,6 +276,8 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         trocaDeVista={trocaDeVista}
         voltarAoGlobal={veioDoGlobal ? voltarAoGlobal : undefined}
         pastoInicialId={veioDoGlobal ? pastoInicial : null}
+        infraInicialId={infraInicial}
+        onInfraInicialUsada={() => setInfraInicial(null)}
       />
     </div>
   ) : (
@@ -302,6 +308,8 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
             onRefresh={loadGeometrias}
             tipoPedido={tipoPedido}
             onTipoPedidoUsado={() => setTipoPedido(null)}
+            onAbrirInfraNoGestor={id => { setInfraInicial(id); setViewMode('gestor'); }}
+            modoInicialDoPedido={modoDoPedido}
           />
         )}
       </div>

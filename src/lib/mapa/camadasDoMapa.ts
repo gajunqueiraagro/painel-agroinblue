@@ -7,6 +7,7 @@
  */
 import { COR_DA_FAIXA, COR_SEM_FECHAMENTO, ROTULO_DA_FAIXA, type FaixaLotacao } from '@/lib/mapa/faixasLotacao';
 import { ORDEM_DAS_FAMILIAS, ROTULO_DA_FAMILIA, type FamiliaForaDaPecuaria } from '@/lib/mapa/usoDoPasto';
+import { definicaoDoTipoDeArea, ROTULO_DA_FAMILIA_DE_AREA, type FamiliaDeArea } from '@/lib/mapa/tiposDeArea';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
 
 /** O rótulo da atividade do mês: o da casa (`tipoUsoLabel`); o que ele não conhece (ex.: 'vedado'), com a 1ª letra maiúscula. */
@@ -80,11 +81,25 @@ export function corDoPasto(camada: CamadaDoMapa, p: PastoNaCamada): string {
   return p.atividade ? ATIVIDADE[p.atividade] ?? ATIVIDADE_OUTRA : ATIVIDADE_OUTRA;
 }
 
+/**
+ * MAPA-AREA-TIPOS-02 (D4, Gabriel 02/11) — a cor da área pela FAMÍLIA do tipo (o catálogo `tiposDeArea.ts`): Estruturas no cinza-violeta
+ * das benfeitorias (o cinza puro é o "Vazio" das camadas de rebanho), Água azul-claro (longe do azul da recria), Ambiental o verde-escuro
+ * de sempre, Outros o bege da área sem uso. Sem classificação continua no cinza.
+ */
+export const COR_DA_FAMILIA_DE_AREA: Record<FamiliaDeArea, string> = {
+  estruturas: '#7B6F8E',
+  /* Gabriel 02/11 11:11: estruturas de pecuária (curral, confinamento, manga, embarcadouro, praça) em rosa-amadeirado, longe do laranja da
+     cria, do vermelho da carga alta e do bege da lavoura */
+  estruturas_pecuaria: '#A35D6A',
+  agua: '#5FA3C4',
+  ambiental: COR_TIPO_AREA.ambiental,
+  outros: COR_TIPO_AREA.area_sem_uso,
+};
+
 /** A cor de uma área que não é pasto (qualquer camada). `area_total` não pinta: só o contorno. */
 export function corDaArea(tipo: string): string {
-  if (tipo === 'area_sem_uso') return COR_TIPO_AREA.area_sem_uso;
-  if (tipo === 'reserva_legal' || tipo === 'app') return COR_TIPO_AREA.ambiental;
-  return COR_TIPO_AREA.estrutura;
+  const def = definicaoDoTipoDeArea(tipo);
+  return def ? COR_DA_FAMILIA_DE_AREA[def.familia] : COR_TIPO_AREA.estrutura;
 }
 
 export interface ItemDaLegenda { cor: string; rotulo: string }
@@ -136,8 +151,11 @@ function legendaDaPecuaria(camada: CamadaDoMapa, atividades: readonly string[]):
   }
   return [
     { cor: COR_TIPO_AREA.pasto, rotulo: 'Pasto' },
-    { cor: COR_TIPO_AREA.area_sem_uso, rotulo: 'Área sem uso (terceiros)' },
-    { cor: COR_TIPO_AREA.ambiental, rotulo: 'Reserva legal / APP' },
-    { cor: COR_TIPO_AREA.estrutura, rotulo: 'Benfeitorias / estradas' },
+    { cor: COR_DA_FAMILIA_DE_AREA.estruturas, rotulo: ROTULO_DA_FAMILIA_DE_AREA.estruturas },
+    { cor: COR_DA_FAMILIA_DE_AREA.estruturas_pecuaria, rotulo: ROTULO_DA_FAMILIA_DE_AREA.estruturas_pecuaria },
+    { cor: COR_DA_FAMILIA_DE_AREA.agua, rotulo: ROTULO_DA_FAMILIA_DE_AREA.agua },
+    { cor: COR_DA_FAMILIA_DE_AREA.ambiental, rotulo: 'Reserva legal / APP' },
+    { cor: COR_DA_FAMILIA_DE_AREA.outros, rotulo: 'Outros (estrada, sem uso)' },
+    { cor: COR_TIPO_AREA.estrutura, rotulo: 'Sem classificação' },
   ];
 }

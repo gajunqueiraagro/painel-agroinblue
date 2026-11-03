@@ -10,14 +10,17 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
-import { useClassificarPoligono, type PreviaDaClassificacao } from '@/hooks/useClassificarPoligono';
-import { ehTipoDeArea, TIPOS_DE_AREA, type DestinoDoPoligono, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
+import { useClassificarPoligono, useNomeDoGrupo, type PreviaDaClassificacao } from '@/hooks/useClassificarPoligono';
+import {
+  definicaoDoTipoDeArea, ehTipoDeArea, fraseJaEstaAssim, opcoesDeTipoDeArea, ROTULO_DA_ATIVIDADE_DA_AREA, ROTULO_DA_FAMILIA_DE_AREA, TIPOS_DE_AREA,
+  type DestinoDoPoligono, type TipoDeArea,
+} from '@/lib/mapa/tiposDeArea';
 
 type Escolha = 'pasto' | 'area' | 'outra';
 
 interface Props {
   geo: Pick<FazendaGeometria, 'id' | 'tipo' | 'pasto_id'>;
-  pastos: readonly Pick<Pasto, 'id' | 'nome' | 'ativo'>[];
+  pastos: readonly (Pick<Pasto, 'id' | 'nome' | 'ativo'> & Partial<Pick<Pasto, 'data_inicio' | 'grupo_id'>>)[];
   geometrias: readonly Pick<FazendaGeometria, 'id' | 'pasto_id' | 'nome_original'>[];
   /** o tipo pedido pelo Adicionar › Área (já chega escolhido) */
   tipoInicial?: TipoDeArea | null;
@@ -61,10 +64,18 @@ export function ClassificarPoligono({ geo, pastos, geometrias, tipoInicial, onGr
   const opcoesDePasto = useMemo(() => pastos.filter(p => p.ativo).map(p => ({
     value: p.id, label: p.nome, sub: ligadoA.has(p.id) ? `já ligado a "${ligadoA.get(p.id)}"` : undefined, subAlerta: ligadoA.has(p.id),
   })), [pastos, ligadoA]);
-  const opcoesDeArea = TIPOS_DE_AREA.map(t => ({ value: t.tipo, label: t.rotulo }));
+  /* MAPA-AREA-TIPOS-02: agrupado por família (o grupo do seletor da casa), com a atividade à direita */
+  const opcoesDeArea = useMemo(() => opcoesDeTipoDeArea(), []);
+  /* a prévia SEM mudança diz o estado atual (o pasto, o grupo e o mês de início; o tipo de área; sem classificação) */
+  const pastoEscolhido = escolha === 'pasto' ? pastos.find(p => p.id === pastoId) ?? null : null;
+  const nomeDoGrupo = useNomeDoGrupo(pastoEscolhido?.grupo_id);
+  const fraseSemMudanca = !destino ? '' : destino.tipo === 'outra' ? fraseJaEstaAssim({ tipo: 'outra' })
+    : destino.tipo === 'pasto' ? fraseJaEstaAssim({ tipo: 'pasto', pasto: pastoEscolhido?.nome ?? '', grupo: nomeDoGrupo, desde: pastoEscolhido?.data_inicio })
+      : fraseJaEstaAssim({ tipo: 'area', rotulo: definicaoDoTipoDeArea(destino.tipo)?.rotulo ?? destino.tipo });
+  const defArea = escolha === 'area' ? definicaoDoTipoDeArea(tipoArea) : null;
 
   const porQue = !destino ? (escolha === 'pasto' ? 'Escolha o pasto.' : 'Escolha o tipo de área.')
-    : recusa ? null : !previa ? 'Conferindo…' : previa.semMudanca ? 'Nada muda.' : null;
+    : recusa ? null : !previa ? 'Conferindo…' : previa.semMudanca ? 'Nada para gravar.' : null;
 
   const aoGravar = async () => {
     if (!destino) return;
@@ -77,16 +88,22 @@ export function ClassificarPoligono({ geo, pastos, geometrias, tipoInicial, onGr
       <Segmentado valor={escolha} onEscolher={setEscolha} altura={22} fonte={10}
         opcoes={[{ valor: 'pasto', rotulo: 'É pasto' }, { valor: 'area', rotulo: 'É área' }, { valor: 'outra', rotulo: 'Sem classificação' }]} />
       {/* o lugar do seletor existe sempre (trocar a escolha não move os botões) */}
-      <div className="mt-1.5 h-[26px]">
+      <div className="mt-1.5 h-[26px]" data-testid="classificar-poligono-seletor">
         {escolha === 'pasto' && (
-          <SearchableSelect value={pastoId} onValueChange={setPastoId} options={opcoesDePasto} placeholder="Escolha o pasto" semTodos dense triggerClassName="h-[26px] min-h-0 py-0 text-[10.5px]" />
+          <SearchableSelect value={pastoId} onValueChange={setPastoId} options={opcoesDePasto} placeholder="Escolha o pasto" allValue="" allLabel="Escolha o pasto" semTodos dense triggerClassName="h-[26px] min-h-0 py-0 text-[10.5px]" />
         )}
         {escolha === 'area' && (
-          <SearchableSelect value={tipoArea} onValueChange={setTipoArea} options={opcoesDeArea} placeholder="Escolha o tipo de área" semTodos dense triggerClassName="h-[26px] min-h-0 py-0 text-[10.5px]" />
+          <SearchableSelect value={tipoArea} onValueChange={setTipoArea} options={opcoesDeArea} placeholder="Escolha o tipo de área" allValue="" allLabel="Escolha o tipo de área" semTodos dense triggerClassName="h-[26px] min-h-0 py-0 text-[10.5px]" />
         )}
       </div>
-      <div className="mt-1 h-[28px] text-[10px] leading-[13px]" data-testid="classificar-poligono-previa">
+      {/* MAPA-AREA-TIPOS-02: família · atividade · não conta como área produtiva (lugar reservado: escolher não move nada) */}
+      <div className="mt-1 h-[24px] overflow-hidden text-[9.5px] leading-[12px] text-[#5A6472]" data-testid="classificar-poligono-familia">
+        {defArea ? `${ROTULO_DA_FAMILIA_DE_AREA[defArea.familia]} · ${defArea.atividade ? ROTULO_DA_ATIVIDADE_DA_AREA[defArea.atividade] : 'sem atividade'} · não conta como área produtiva` : ''}
+      </div>
+      {/* 3 linhas reservadas: a frase do estado atual com o grupo é a mais longa */}
+      <div className="mt-1 h-[39px] overflow-hidden text-[10px] leading-[13px]" data-testid="classificar-poligono-previa">
         {recusa ? <span className="text-[#B03A2E]">{recusa}</span>
+          : previa?.semMudanca ? <span className="text-[#1d232b]">{fraseSemMudanca}</span>
           : previa && !previa.semMudanca ? <span className="text-[#1d232b]">{previa.de} → <b className="font-semibold">{previa.para}</b></span>
           : null}
       </div>

@@ -8,7 +8,9 @@
  */
 export type TipoInfra =
   | 'cocho' | 'bebedouro' | 'saleiro' | 'curral' | 'tronco_brete' | 'balanca' | 'porteira' | 'cerca' | 'poco' | 'represa_acude'
-  | 'caixa_dagua' | 'sede_casa' | 'galpao' | 'energia';
+  | 'caixa_dagua' | 'sede_casa' | 'galpao' | 'energia'
+  /* MAPA-AREA-TIPOS-02: as estruturas que nascem de uma ÁREA do mapa (não se colocam como ponto pelo menu) */
+  | 'armazem_graos' | 'silo_secador' | 'oficina' | 'casa_funcionario' | 'escritorio' | 'confinamento';
 
 export type GrupoInfra = 'agua' | 'manejo' | 'construcao' | 'energia';
 
@@ -51,6 +53,13 @@ export const TIPOS_INFRA: readonly DefinicaoInfra[] = [
   { tipo: 'sede_casa', rotulo: 'Sede / casa', grupo: 'construcao', ponto: true, categorias: ['benfeitorias'], desenho: CASA },
   { tipo: 'galpao', rotulo: 'Galpão', grupo: 'construcao', ponto: true, categorias: ['benfeitorias'], desenho: CASA },
   { tipo: 'energia', rotulo: 'Energia', grupo: 'energia', ponto: true, categorias: ['instalacoes'], desenho: RAIO },
+  /* MAPA-AREA-TIPOS-02 (rótulos do banco, `_fn_infra_rotulo` da 117120) */
+  { tipo: 'armazem_graos', rotulo: 'Armazém de grãos', grupo: 'construcao', ponto: false, categorias: ['benfeitorias', 'instalacoes'], desenho: CASA },
+  { tipo: 'silo_secador', rotulo: 'Silo / secador', grupo: 'construcao', ponto: false, categorias: ['instalacoes', 'benfeitorias'], desenho: CIRCULO },
+  { tipo: 'oficina', rotulo: 'Oficina / galpão de máquinas', grupo: 'construcao', ponto: false, categorias: ['benfeitorias'], desenho: CASA },
+  { tipo: 'casa_funcionario', rotulo: 'Casa de funcionário', grupo: 'construcao', ponto: false, categorias: ['benfeitorias'], desenho: CASA },
+  { tipo: 'escritorio', rotulo: 'Escritório', grupo: 'construcao', ponto: false, categorias: ['benfeitorias'], desenho: CASA },
+  { tipo: 'confinamento', rotulo: 'Confinamento', grupo: 'manejo', ponto: false, categorias: ['instalacoes'], desenho: PORTEIRA },
 ];
 
 export function definicaoDoTipo(tipo: string): DefinicaoInfra | null {
@@ -117,13 +126,15 @@ export interface CamposDaInfra {
   observacao: string;
   /** INFRA-FICHAS-PATR-01: a ficha do tipo (já limpa); ausente = não mexe na ficha gravada */
   ficha?: Record<string, string | number | boolean>;
+  /** MAPA-AREA-TIPOS-02: a geometria gravada quando NÃO é ponto (a estrutura que veio de uma área do mapa): vai como está, nunca vira ponto */
+  geometriaOriginal?: unknown;
 }
 
 /** O `p_infra` da `fn_infra_salvar`: ao criar leva a fazenda; ao editar, id + versão (a fazenda não muda). */
 export function argumentoDaInfra(c: CamposDaInfra): Record<string, unknown> {
   const base = {
     tipo: c.tipo,
-    geometria: { type: 'Point', coordinates: [c.lon, c.lat] },
+    geometria: c.geometriaOriginal ?? { type: 'Point', coordinates: [c.lon, c.lat] },
     nome: c.nome.trim() || null,
     pasto_id: c.pastoId || null,
     bem_id: c.bemId || null,
@@ -143,6 +154,8 @@ export interface InfraLida {
   pasto_id: string | null;
   bem_id: string | null;
   observacao: string | null;
+  /** MAPA-AREA-TIPOS-02: o polígono do mapa de onde a estrutura nasceu (null = ponto colocado no mapa) */
+  geometria_id?: string | null;
   /** INFRA-FICHAS-PATR-01: a ficha gravada ({} = sem ficha) */
   ficha?: Record<string, string | number | boolean>;
   versao: number;
