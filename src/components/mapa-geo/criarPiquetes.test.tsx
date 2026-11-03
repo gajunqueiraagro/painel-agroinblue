@@ -134,14 +134,16 @@ describe('a barra e a lista', () => {
     expect(screen.queryByTestId('piquetes-tela')).toBeNull();
   });
 
-  it('o rascunho guardado aparece como "Continuar o rascunho de HH:MM?" e Continuar restaura', async () => {
+  it('o rascunho guardado aparece como "Rascunho de HH:MM: <o que ele traz>. Continuar?" (o padrão segue Losango) e Continuar restaura', async () => {
     await abrir();
     fireEvent.click(screen.getByTestId('piquetes-praca-botao'));
     fireEvent.click(within(await screen.findByTestId('piquetes-praca')).getByText('8'));
     await waitFor(() => expect(localStorage.getItem('piquetes-rascunho:cli:geo-1')).not.toBeNull());
     act(() => piqAtual.fechar());
     act(() => piqAtual.abrir(PAI));
-    await waitFor(() => expect(screen.getByTestId('piquetes-rascunho').textContent).toMatch(/Continuar o rascunho de \d\d:\d\d\?/));
+    await waitFor(() => expect(screen.getByTestId('piquetes-rascunho-frase').textContent).toMatch(/^\s*Rascunho de \d\d:\d\d: Octógono 60 m · 8 · cocho\. Continuar\?\s*$/));
+    /* MAPA-PRACA-ESTAVEL-01: abrir de novo é LOSANGO (4) até o operador escolher Continuar */
+    expect(screen.getByTestId('piquetes-praca-botao').textContent).toMatch(/^Losango 60 m · 4/);
     expect(screen.getAllByTestId('piquetes-linha')).toHaveLength(4);
     fireEvent.click(screen.getByTestId('piquetes-continuar-rascunho'));
     expect(screen.getAllByTestId('piquetes-linha')).toHaveLength(8);

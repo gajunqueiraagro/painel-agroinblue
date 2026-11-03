@@ -20,10 +20,27 @@ interface Props {
   atalho?: string;
   /** o botão está desabilitado: embrulha num span focável para a dica ainda aparecer */
   desabilitado?: boolean;
+  /** MAPA-PRACA-ESTAVEL-01: seletor de algo que a dica NUNCA cobre (a lista das divisões do Criar piquetes): se embaixo do botão ela cairia em
+   *  cima dele, a dica abre à ESQUERDA do botão (sobre a própria barra) */
+  evitar?: string;
   children: ReactNode;
 }
 
-export function DicaDoMapa({ nome, frase, atalho, desabilitado = false, children }: Props) {
+/** Embaixo (o padrão) ou à esquerda: à esquerda quando a faixa embaixo do botão (até 260 px de dica) encosta no que deve ser evitado. */
+export function ladoDaDica(botao: Pick<DOMRect, 'left' | 'right' | 'bottom'>, evitar: Pick<DOMRect, 'left' | 'right' | 'top'> | null): 'bottom' | 'left' {
+  if (!evitar) return 'bottom';
+  const meio = (botao.left + botao.right) / 2;
+  const [l, r] = [meio - 130, meio + 130];
+  return r > evitar.left && l < evitar.right && evitar.top >= botao.bottom - 1 && evitar.top < botao.bottom + 80 ? 'left' : 'bottom';
+}
+
+export function DicaDoMapa({ nome, frase, atalho, desabilitado = false, evitar, children }: Props) {
+  const [lado, setLado] = useState<'bottom' | 'left'>('bottom');
+  const medirLado = (el: Element) => {
+    if (!evitar) return;
+    const alvo = document.querySelector(evitar);
+    setLado(ladoDaDica(el.getBoundingClientRect(), alvo ? alvo.getBoundingClientRect() : null));
+  };
   const [aberta, setAberta] = useState(false);
   const [porToque, setPorToque] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,11 +73,12 @@ export function DicaDoMapa({ nome, frase, atalho, desabilitado = false, children
   return (
     <TooltipProvider delayDuration={ATRASO_DA_DICA_MS}>
       <Tooltip open={aberta} onOpenChange={(v) => { if (!v && porToque) return; setAberta(v); }} delayDuration={ATRASO_DA_DICA_MS}>
-        <TooltipTrigger asChild onTouchStart={aoTocar} onTouchEnd={aoSoltar} onTouchMove={aoMover} onTouchCancel={aoMover}>
+        <TooltipTrigger asChild onTouchStart={aoTocar} onTouchEnd={aoSoltar} onTouchMove={aoMover} onTouchCancel={aoMover}
+          onPointerEnter={ev => medirLado(ev.currentTarget)} onFocus={ev => medirLado(ev.currentTarget)}>
           {gatilho}
         </TooltipTrigger>
         <TooltipPrimitive.Portal>
-          <TooltipContent side="bottom" align="center" sideOffset={6} avoidCollisions collisionPadding={8} data-testid="dica-do-mapa" data-cromo="dica"
+          <TooltipContent side={lado} align="center" sideOffset={6} avoidCollisions collisionPadding={8} data-testid="dica-do-mapa" data-cromo="dica"
             className="z-[1200] block h-auto w-max max-w-[260px] overflow-visible whitespace-normal break-words px-2 py-1 text-[10px] font-normal leading-snug">
             <span className="block text-[10.5px] font-bold text-foreground" data-testid="dica-do-mapa-nome">{nome}</span>
             <span className="block text-muted-foreground" data-testid="dica-do-mapa-frase">{frase}</span>

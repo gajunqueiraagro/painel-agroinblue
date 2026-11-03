@@ -20,16 +20,20 @@ function lerGrupos(dado: unknown): GrupoComOrigem[] {
   return saida;
 }
 
-export function useGruposComOrigem(fazendaIds: readonly string[]): { grupos: GrupoComOrigem[]; erro: string | null } {
+/** `recarregar` (MAPA-CRIAR-PIQUETES-01 2b): quando muda, a leitura se refaz SEM esvaziar a lista (depois de juntar/desfazer os grupos mudam). */
+export function useGruposComOrigem(fazendaIds: readonly string[], recarregar = 0): { grupos: GrupoComOrigem[]; erro: string | null } {
   const chave = [...fazendaIds].sort().join(',');
   const [estado, setEstado] = useState<{ chave: string; grupos: GrupoComOrigem[]; erro: string | null }>({ chave: '', grupos: [], erro: null });
   useEffect(() => {
     if (!chave) { setEstado({ chave: '', grupos: [], erro: null }); return; }
     let vivo = true;
     void (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: a coluna nova ainda não está no types.ts
-      const { data, error } = await (supabase as any).from('pasto_grupos').select('id, nome, pasto_origem_id, ativo')
-        .in('fazenda_id', chave.split(',')).not('pasto_origem_id', 'is', null);
+      let data: unknown = null; let error: unknown = null;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: a coluna nova ainda não está no types.ts
+        ({ data, error } = await (supabase as any).from('pasto_grupos').select('id, nome, pasto_origem_id, ativo')
+          .in('fazenda_id', chave.split(',')).not('pasto_origem_id', 'is', null));
+      } catch (e) { error = e; }
       if (!vivo) return;
       if (error) {
         console.error('[useGruposComOrigem]', error);
@@ -39,6 +43,6 @@ export function useGruposComOrigem(fazendaIds: readonly string[]): { grupos: Gru
       setEstado({ chave, grupos: lerGrupos(data), erro: null });
     })();
     return () => { vivo = false; };
-  }, [chave]);
+  }, [chave, recarregar]);
   return estado.chave === chave ? { grupos: estado.grupos, erro: estado.erro } : { grupos: [], erro: null };
 }

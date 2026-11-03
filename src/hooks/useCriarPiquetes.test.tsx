@@ -22,7 +22,7 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-import { useCriarPiquetes } from './useCriarPiquetes';
+import { RAIO_MINIMO_DOS_CANTOS_PX, useCriarPiquetes } from './useCriarPiquetes';
 
 const R = 6378137;
 function retangulo(ha: number): GeoJSON.Polygon {
@@ -273,7 +273,17 @@ describe('com um mapa de verdade (jsdom)', () => {
     const h = montar(mapa);
     await abrir(h);
     const alcas = () => { const l: L.Marker[] = []; mapa.eachLayer(x => { if (x instanceof L.Marker && x.options.draggable) l.push(x); }); return l; };
+    /* MAPA-PRACA-ESTAVEL-01: longe (a praça com raio < 16 px na tela) os cantos NÃO ganham alça — só o centro e os 4 giros; o centro fica por
+       cima de tudo. Aproximado, os 4 cantos aparecem. */
+    await waitFor(() => expect(alcas().length).toBeGreaterThan(0));
+    const raio = () => { const p = h.result.current.desenho.praca!; const c = mapa.latLngToContainerPoint(L.latLng(p.centro[1], p.centro[0]));
+      return Math.max(...p.vertices.map(v => c.distanceTo(mapa.latLngToContainerPoint(L.latLng(v[1], v[0]))))); };
+    if (raio() >= RAIO_MINIMO_DOS_CANTOS_PX) act(() => { mapa.setZoom(mapa.getZoom() - Math.ceil(Math.log2(raio() / 8)), { animate: false }); });
+    await waitFor(() => expect(alcas()).toHaveLength(5));
+    expect(alcas().find(m => m.options.title?.includes('praça inteira'))?.options.zIndexOffset).toBe(2000);
+    act(() => { mapa.setZoom(mapa.getZoom() + 6, { animate: false }); });
     await waitFor(() => expect(alcas()).toHaveLength(9));
+    expect(Math.max(...alcas().map(m => m.options.zIndexOffset ?? 0))).toBe(2000);
     const antes = h.result.current.desenho.praca!.centro;
     const centro = alcas().find(m => m.options.title?.includes('praça inteira'))!;
     const novo = L.latLng(antes[1] + 0.0004, antes[0] + 0.0006);
@@ -299,6 +309,24 @@ describe('com um mapa de verdade (jsdom)', () => {
     await waitFor(() => expect(alcas().length).toBeGreaterThan(9));
     act(() => h.result.current.fechar());
     await waitFor(() => expect(alcas()).toHaveLength(0));
+    mapa.remove();
+  });
+  /* MAPA-PRACA-ESTAVEL-01 (homologação 02/11 21:54, Modulo 03): "mudando tudo conforme eu clico" — o clique perto de um lado do pasto trocava o
+     lado de referência, girava a praça e refazia cercas e nomes. Agora o clique sem ferramenta só escolhe a divisão; a troca é a ferramenta
+     "Lado de referência" (um clique e ela desliga). */
+  it('clique na borda sem ferramenta não refaz nada; com "Lado de referência" troca o lado e a ferramenta desliga', async () => {
+    const mapa = mapaDeTeste();
+    const h = montar(mapa);
+    await abrir(h);
+    const antes = JSON.stringify({ d: h.result.current.desenho, n: h.result.current.nomes, r: h.result.current.config.refLado });
+    const [a, b] = [GEO.coordinates[0][1], GEO.coordinates[0][2]]; // o lado leste (curto): clique no meio dele
+    const naBorda = L.latLng((a[1] + b[1]) / 2, a[0]);
+    for (let k = 0; k < 10; k++) act(() => { mapa.fire('click', { latlng: naBorda, originalEvent: new MouseEvent('click') }); });
+    expect(JSON.stringify({ d: h.result.current.desenho, n: h.result.current.nomes, r: h.result.current.config.refLado })).toBe(antes);
+    act(() => h.result.current.setFerramenta('referencia'));
+    act(() => { mapa.fire('click', { latlng: naBorda, originalEvent: new MouseEvent('click') }); });
+    expect(h.result.current.config.refLado).toBe(1);
+    expect(h.result.current.ferramenta).toBeNull();
     mapa.remove();
   });
 });
