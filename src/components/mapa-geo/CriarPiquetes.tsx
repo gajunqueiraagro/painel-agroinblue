@@ -24,11 +24,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { arranjarZona, type ArranjoDaZona } from '@/lib/mapa/barraQueCabe';
 import { haDoBanco, membrosPorParecenca } from '@/lib/mapa/criarPiquetes';
 import { mesesDeInicio } from '@/lib/mapa/piquetesEmEspera';
-import { letraDaDivisao, type CriarPiquetes } from '@/hooks/useCriarPiquetes';
+import { rotuloCurtoDaDivisao, type CriarPiquetes } from '@/hooks/useCriarPiquetes';
 import type { FormatoDaPraca } from '@/lib/mapa/pracaCentral';
 import { cn } from '@/lib/utils';
 
 const TXT = 'text-[9.5px]';
+/* MAPA-PRACA-ESTAVEL-01: a dica de um botão da barra nunca abre por cima da lista das divisões */
+const LISTA = '[data-testid="piquetes-lista"]';
 /* MAPA-DICAS-01: o atalho de cada botão de ação */
 const ATALHO_DA_ACAO: Record<string, string> = { desfazer: 'Ctrl/Cmd+Z', terminar: 'duplo clique' };
 
@@ -71,6 +73,9 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
     title: 'Gira as cercas NÃO fixas até as divisões ficarem iguais (a cerca ajustada à mão fica fixa)' });
   if (praca && praca.formato !== 'livre') acoes.push({ id: 'alinhar', rotulo: 'Alinhar praça', testid: 'piquetes-alinhar', onClick: piq.alinhar,
     title: 'Reorienta o polígono regular da praça pelas cercas' });
+  /* MAPA-PRACA-ESTAVEL-01: trocar o lado de referência é um gesto ANUNCIADO (antes, todo clique perto da borda girava a praça) */
+  if (praca && praca.formato !== 'livre' && modoPraca) acoes.push({ id: 'referencia', rotulo: 'Lado de referência', testid: 'piquetes-referencia', ativo: piq.ferramenta === 'referencia',
+    onClick: () => piq.setFerramenta(piq.ferramenta === 'referencia' ? null : 'referencia'), title: 'Ligue e clique num lado do pasto: a cruz fica paralela a ele (um clique e desliga)' });
   acoes.push({ id: 'tracar', rotulo: 'Traçar linha nova', testid: 'piquetes-tracar', ativo: piq.ferramenta === 'tracar',
     onClick: () => piq.setFerramenta(piq.ferramenta === 'tracar' ? null : 'tracar'), title: 'Clique ponto a ponto no satélite; duplo clique termina (Alt solta o encaixe)' });
   acoes.push({ id: 'corredor', rotulo: 'Corredor', testid: 'piquetes-corredor', ativo: piq.ferramenta === 'corredor',
@@ -132,7 +137,8 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
     : piq.ferramenta === 'tracar' ? 'clique no mapa para riscar · duplo clique termina a linha · Alt solta o encaixe'
     : piq.ferramenta === 'corredor' ? 'risque o eixo do corredor · duplo clique termina'
     : piq.ferramenta === 'desenharPraca' ? 'clique os cantos da praça (3 ou mais) · duplo clique fecha'
-    : modoPraca ? 'arraste o centro ou os cantos ⭘ · gire pela ponta na borda · clique na cerca para editar · clique num lado do pasto troca a referência'
+    : piq.ferramenta === 'referencia' ? 'clique num lado do pasto: a cruz fica paralela a ele · Esc sai'
+    : modoPraca ? 'arraste o centro (a praça anda) · aproxime para os cantos · gire a cerca pela ponta na borda · clique na cerca para editar'
     : 'clique numa linha para editar · arraste as pontas, o ◇ do meio ou crie ponto clicando nela';
 
   return (
@@ -151,7 +157,7 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
             {temEscolhas && (
               <div ref={escolhasRef} className="flex flex-none items-center gap-2" data-testid="piquetes-escolhas">
                 <DropdownMenu>
-                  <DicaDoMapa nome="Modo" frase="Como começar as divisões: linhas que eu traço, grade ou N partes iguais.">
+                  <DicaDoMapa evitar={LISTA} nome="Modo" frase="Como começar as divisões: linhas que eu traço, grade ou N partes iguais.">
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm" className={`h-5 flex-none gap-0.5 px-1.5 ${TXT}`} data-testid="piquetes-modo">
                         {ROTULO_DO_MODO[piq.modo] ?? piq.modo}<ChevronDown className="h-3 w-3" />
@@ -166,7 +172,7 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
                 </DropdownMenu>
                 {modoPraca && (
                   <Popover>
-                    <DicaDoMapa nome="Praça" frase="A praça de alimentação no centro: formato, tamanho, divisões e o cocho.">
+                    <DicaDoMapa evitar={LISTA} nome="Praça" frase="A praça de alimentação no centro: formato, tamanho, divisões e o cocho.">
                       <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className={`h-5 flex-none gap-0.5 px-1.5 ${TXT}`} data-testid="piquetes-praca-botao">
                           {cfg.formato === 'regular' ? (NOME_DO_REGULAR[cfg.n] ?? 'Regular') : cfg.formato === 'circulo' ? 'Círculo' : 'Desenhada'}
@@ -223,7 +229,7 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
                   </span>
                 )}
                 {(piq.modo === 'grade' || piq.modo === 'iguais') && (
-                  <DicaDoMapa nome="Girar" frase="Girar as linhas 90° (paralelas ao outro lado).">
+                  <DicaDoMapa evitar={LISTA} nome="Girar" frase="Girar as linhas 90° (paralelas ao outro lado).">
                     <Button variant="ghost" size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`} onClick={() => piq.mudarConfig({ girado: !cfg.girado })}
                       data-testid="piquetes-girar">
                       <RotateCw className="h-3 w-3" />Girar
@@ -250,7 +256,7 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
 
             <div className="min-w-0 flex-1" />
             {naLinha.map(a => (
-              <DicaDoMapa key={a.id} nome={a.rotulo} frase={a.title} atalho={ATALHO_DA_ACAO[a.id]} desabilitado={!!a.disabled}>
+              <DicaDoMapa evitar={LISTA} key={a.id} nome={a.rotulo} frase={a.title} atalho={ATALHO_DA_ACAO[a.id]} desabilitado={!!a.disabled}>
                 <Button data-medir={a.id} variant={a.ativo ? 'default' : 'ghost'} size="sm" className={`h-5 flex-none gap-1 px-1.5 ${TXT}`}
                   disabled={a.disabled} onClick={a.onClick} data-testid={a.testid}>
                   {a.icone === 'desfazer' && <Undo2 className="h-3 w-3" />}{a.icone === 'trancada' && <Lock className="h-3 w-3" />}{a.icone === 'solta' && <Unlock className="h-3 w-3" />}{a.rotulo}
@@ -259,7 +265,7 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
             ))}
             {noMais.length > 0 && (
               <DropdownMenu>
-                <DicaDoMapa nome="Mais" frase={`Mais ações que não couberam na barra: ${noMais.map(a => a.rotulo).join(' · ')}.`}>
+                <DicaDoMapa evitar={LISTA} nome="Mais" frase={`Mais ações que não couberam na barra: ${noMais.map(a => a.rotulo).join(' · ')}.`}>
                   <DropdownMenuTrigger asChild>
                     <Button data-medir="mais" variant="ghost" size="sm" className={`h-5 flex-none gap-0.5 px-1.5 ${TXT}`} data-testid="piquetes-mais">
                       Mais<ChevronDown className="h-3 w-3" />
@@ -277,10 +283,10 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
             )}
           </div>
           <div className="flex flex-none items-center gap-1.5" data-testid="piquetes-fixos">
-            <DicaDoMapa nome="Cancelar" frase="Sair de Criar piquetes sem gravar nada; se houver divisões feitas, pergunta antes de descartar." atalho="Esc">
+            <DicaDoMapa evitar={LISTA} nome="Cancelar" frase="Sair de Criar piquetes sem gravar nada; se houver divisões feitas, pergunta antes de descartar." atalho="Esc">
               <Button variant="outline" size="sm" className={`h-5 flex-none px-2 ${TXT}`} onClick={piq.pedirCancelar} data-testid="piquetes-cancelar">Cancelar</Button>
             </DicaDoMapa>
-            <DicaDoMapa nome="Prévia e gravar" frase={piq.motivo ?? 'Ver as divisões e as áreas antes de gravar; nada é gravado até você confirmar.'}
+            <DicaDoMapa evitar={LISTA} nome="Prévia e gravar" frase={piq.motivo ?? 'Ver as divisões e as áreas antes de gravar; nada é gravado até você confirmar.'}
               desabilitado={!!piq.motivo || piq.conferindo || piq.confirmarCancelar}>
               <Button size="sm" className={`h-5 w-[86px] flex-none px-0 ${TXT}`} disabled={!!piq.motivo || piq.conferindo || piq.confirmarCancelar}
                 onClick={() => void piq.prever()} data-testid="piquetes-previa">
@@ -310,7 +316,9 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
             </span>
           ) : piq.guardado ? (
             <span className="flex flex-none items-center gap-1.5 whitespace-nowrap" data-testid="piquetes-rascunho">
-              <span className="font-semibold text-foreground">Continuar o rascunho de {piq.guardado.em || 'antes'}?</span>
+              <span className="font-semibold text-foreground" data-testid="piquetes-rascunho-frase">
+                Rascunho de {piq.guardado.em || 'antes'}: {resumoDoRascunho(piq.guardado.estado.config)}. Continuar?
+              </span>
               <Button variant="outline" size="sm" className={`h-4 flex-none px-1.5 ${TXT}`} onClick={piq.continuarRascunho} data-testid="piquetes-continuar-rascunho">Continuar</Button>
               <Button variant="outline" size="sm" className={`h-4 flex-none px-1.5 ${TXT}`} onClick={piq.comecarDoZero} data-testid="piquetes-descartar-rascunho">Começar do zero</Button>
             </span>
@@ -346,7 +354,7 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
                 if (!d) return null;
                 return (
                   <tr key={`${piq.presos[i]?.ponto.join(',') ?? i}`} className={cn('border-b border-border', piq.escolhida === i && 'bg-violet-50')} data-testid="piquetes-linha">
-                    <td className={cn(TD_REGUA, 'font-semibold text-violet-700')}>{letraDaDivisao(i)}</td>
+                    <td className={cn(TD_REGUA, 'font-semibold text-violet-700')} title={piq.nomes[i] ?? ''}>{rotuloCurtoDaDivisao(piq.nomes[i] ?? '', piq.pai?.nome ?? '', i)}</td>
                     <td className={cn(TD_REGUA_TEXTO, 'py-[1px]')}>
                       {piq.existente ? (
                         <SearchableSelect dense semTodos triggerClassName="h-[17px] text-[10px]" value={piq.ligas[i] ?? ''} placeholder="escolha a divisão…"
@@ -389,7 +397,7 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
         <div className={`flex h-[26px] items-center gap-1.5 border-t border-border px-1.5 ${TXT}`} data-testid="piquetes-area-desejada">
           {escolhida && piq.escolhida != null ? (
             <>
-              <span className="flex-none whitespace-nowrap font-semibold">Área de {letraDaDivisao(piq.escolhida)}:</span>
+              <span className="flex-none whitespace-nowrap font-semibold">Área de {rotuloCurtoDaDivisao(piq.nomes[piq.escolhida] ?? '', piq.pai.nome, piq.escolhida)}:</span>
               <CampoNumeroComConta key={`${piq.escolhida}-${haBr(escolhida.areaHa)}`} valor={haDoBanco(escolhida.areaHa)} soAoSair sufixoDentro="ha"
                 className="h-5 w-[84px] text-[10px]" onChange={v => piq.pedirArea(piq.escolhida ?? 0, v)} invalido={!!piq.avisoDaArea}
                 title="A área que esta divisão deve ter; a cerca (ou a linha) livre que a limita se ajusta" />
@@ -404,6 +412,13 @@ export function CriarPiquetesNoMapa({ piq }: { piq: CriarPiquetes }) {
       <PreviaDoCriarPiquetes piq={piq} />
     </div>
   );
+}
+
+/** O que o rascunho guardado traz, na pergunta de continuar ("Círculo 25 m · 8 · cocho"): continuar é escolha do operador NA SESSÃO. */
+export function resumoDoRascunho(c: CriarPiquetes['config']): string {
+  if (c.modo !== 'praca') return ROTULO_DO_MODO[c.modo] ?? c.modo;
+  const forma = c.formato === 'regular' ? (NOME_DO_REGULAR[c.n] ?? 'Regular') : c.formato === 'circulo' ? 'Círculo' : 'Desenhada';
+  return `${forma}${c.formato !== 'livre' ? ` ${String(Math.round(c.medida.metros * 10) / 10).replace('.', ',')} m · ${c.n}` : ''}${c.cocho ? ' · cocho' : ''}`;
 }
 
 function PreviaDoCriarPiquetes({ piq }: { piq: CriarPiquetes }) {

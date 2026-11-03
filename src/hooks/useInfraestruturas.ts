@@ -1,7 +1,7 @@
 /**
  * MAPA-02f-b — a infraestrutura da fazenda (os ATIVOS de `fazenda_infraestruturas`) e os bens do Patrimônio da fazenda (para ligar).
  * Leitura direta (RLS tenant_ok); escrita SÓ pelas funções do banco: `fn_infra_salvar` (prévia por padrão) e `fn_infra_desativar`.
- * A recusa do banco vem pronta (P0001); sem acesso (42501) e edição simultânea (40001) viram frases da casa; nunca toast.
+ * A recusa do banco vem pronta (P0001); 42501 pela `fraseDo42501` (a causa real, nunca escondida) e edição simultânea (40001) vira frase da casa; nunca toast.
  * ⚠ `(supabase as any)`: as tabelas e funções da 02f-a ainda não estão no types.ts (a exceção da regra, até regenerar).
  * ⚠ Leitura que chega depois de a fazenda mudar não escreve (OC-ABRIR-LENTO-01).
  * INFRA-FICHAS-PATR-01: lê a `ficha` e cria o bem do Patrimônio pela `fn_infra_criar_bem` (cria e liga numa transação; prévia por padrão).
@@ -11,13 +11,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { argumentoDaInfra, type CamposDaInfra, type InfraLida } from '@/lib/mapa/infraestrutura';
 import { lerFicha } from '@/lib/mapa/fichasDaInfra';
+import { fraseDo42501 } from '@/lib/mapa/fraseDaPermissao';
 
 export interface BemDaFazenda { id: string; codigo: string | null; descricao: string; situacao: string; categoria: string | null }
 export interface Resposta { ok: boolean; dado: unknown; motivo: string | null }
 
 function frase(error: { code?: string; message?: string }): string {
   if (error.code === 'P0001' && error.message) return error.message;
-  if (error.code === '42501') return 'Sem acesso a esta fazenda.';
+  if (error.code === '42501') return fraseDo42501(error.message);
   if (error.code === '40001') return 'Esta infraestrutura foi alterada por outra pessoa. Feche e abra de novo.';
   return 'Não consegui gravar agora. Tente de novo.';
 }

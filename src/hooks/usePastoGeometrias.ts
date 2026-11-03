@@ -4,6 +4,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { pastosMudaramPorFora } from '@/hooks/usePastos';
 import { toast } from 'sonner';
+import { fraseDo42501 } from '@/lib/mapa/fraseDaPermissao';
 
 /**
  * MAPA-IMPORT-01a — os polígonos do mapa da fazenda (`fazenda_geometrias`): um por pasto (tipo 'pasto') e as áreas da fazenda
@@ -46,7 +47,7 @@ function fraseDoErro(erro: { code?: string; message?: string } | null | undefine
   if (erro?.code === '23505' && erro.message?.startsWith('Já existe um pasto')) return 'Já existe um pasto com este nome nesta fazenda.';
   if (erro?.code === '23505') return 'Este pasto já tem um polígono. Desvincule o outro antes.';
   if (erro?.code === '23514') return 'O polígono não pode ser ligado a um pasto de outra fazenda.';
-  if (erro?.code === '42501') return 'Sem acesso a esta fazenda.';
+  if (erro?.code === '42501') return fraseDo42501(erro.message);
   return padrao;
 }
 

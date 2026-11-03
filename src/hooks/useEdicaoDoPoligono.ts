@@ -15,6 +15,8 @@ import {
 } from '@/lib/mapa/edicaoDoPoligono';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
 import { desenharRotulosDosLados } from '@/lib/mapa/rotulosDosLados';
+import { fraseDo42501 } from '@/lib/mapa/fraseDaPermissao';
+import { idsDoAlterar, recortarPorPadrao, travaDaLinha, vaiPelaLinha } from '@/lib/mapa/piquetesVolta';
 
 export type ModoDaEdicao = 'vertices' | 'redesenhar' | 'dividir' | 'unir' | 'apagar' | 'desenhar';
 
@@ -46,7 +48,7 @@ type Gesto = Record<string, unknown>;
 /** O que a função do banco devolve como frase pronta (22023/40001/P0002 já vêm em português); o resto vira frase genérica. */
 function fraseDoErro(e: { code?: string; message?: string } | null): string {
   if (!e) return 'Não consegui gravar o polígono.';
-  if (e.code === '42501') return 'Sem acesso a esta fazenda.';
+  if (e.code === '42501') return fraseDo42501(e.message);
   if (e.code && ['22023', '40001', 'P0002', 'P0001'].includes(e.code) && e.message) return e.message;
   return 'Não consegui gravar o polígono. Tente de novo.';
 }
@@ -64,8 +66,10 @@ function gravarEncaixe(v: boolean) {
   try { sessionStorage.setItem(CHAVE_DO_ENCAIXE, v ? '1' : '0'); } catch { /* sem armazenamento: vale só nesta tela */ }
 }
 /* allowSelfIntersection: true — com false o Geoman pintava de vermelho e DESFAZIA o ponto sem dizer por quê (item 7); o cruzamento agora é
-   achado aqui (`cruzamentos`), com a frase e o ponto destacado, e trava a prévia */
-const opcoesDoGeoman = (encaixe: boolean) => ({ snappable: encaixe, snapDistance: DISTANCIA_DO_ENCAIXE_PX, allowSelfIntersection: true });
+   achado aqui (`cruzamentos`), com a frase e o ponto destacado, e trava a prévia.
+   tooltips: false — MAPA-DICA-GEOMAN-01 (Gabriel 02/11 21:43, Sta. Tereza): a dica do Geoman que segue o cursor ("Clique no primeiro marcador
+   para finalizar") tapava justo o ponto do clique; a instrução fica só na barra de cima. Vale em TODO modo (estas são as opções únicas). */
+export const opcoesDoGeoman = (encaixe: boolean) => ({ snappable: encaixe, snapDistance: DISTANCIA_DO_ENCAIXE_PX, allowSelfIntersection: true, tooltips: false });
 const latLngsDe = (g: GeoJSON.Polygon): L.LatLng[][] => g.coordinates.map(a => a.map(p => L.latLng(p[1], p[0])));
 
 /* -08 (Gabriel 16:00, Sta. Tereza: "o único caminho é Cancelar e perder tudo"): o desenho novo é guardado no NAVEGADOR (localStorage, por
@@ -131,8 +135,12 @@ export function useEdicaoDoPoligono(args: {
   clienteId?: string | null;
   /** -09: o polígono selecionado na Validação (fora da edição) também mostra os metros dos lados */
   selecionado?: GeoJSON.Geometry | null;
+  /** MAPA-CRIAR-PIQUETES-01 (2b, "Mover linha"): os ids dos polígonos das divisões do MESMO grupo — o gesto só vale entre duas delas */
+  divisoesDaLinha?: ReadonlySet<string> | null;
+  /** MAPA-PIQUETES-MANUAL-01 (4): os polígonos que são divisões de um grupo ativo (o desenho que cai sobre eles nasce com o recortar ligado) */
+  piquetes?: ReadonlySet<string> | null;
 }) {
-  const { mapa, fazendaId, geometrias, aoMudar, clienteId, selecionado } = args;
+  const { mapa, fazendaId, geometrias, aoMudar, clienteId, selecionado, divisoesDaLinha = null, piquetes = null } = args;
   const camadaRef = useRef<L.FeatureGroup | null>(null);
   const [modo, setModo] = useState<ModoDaEdicao | null>(null);
   const [alvo, setAlvo] = useState<Alvo | null>(null);
@@ -154,7 +162,14 @@ export function useEdicaoDoPoligono(args: {
   /* MAPA-EDITAR-POLIGONO-02 */
   const [encaixe, setEncaixeEstado] = useState<boolean>(lerEncaixe);
   const [divisaJunto, setDivisaJunto] = useState(true);
-  const [recortar, setRecortar] = useState(false);
+  const [recortar, setRecortarEstado] = useState(false);
+  /* MAPA-PIQUETES-MANUAL-01 (4): a escolha do operador (ou o padrão já aplicado) vale até o fim do gesto */
+  const recortarDecidido = useRef(false);
+  const setRecortar = useCallback((v: boolean) => { recortarDecidido.current = true; setRecortarEstado(v); }, []);
+  /* MAPA-CRIAR-PIQUETES-01 (2b): "Mover linha" = o modo vértices com a divisa junto OBRIGATÓRIA; o Gravar vai pela `fn_piquetes_mover_linha`
+     (diálogo próprio, com mês e motivo) em vez da `fn_geometria_gravar`; `linhaAberta` = o diálogo da prévia está aberto */
+  const [moverLinha, setMoverLinha] = useState(false);
+  const [linhaAberta, setLinhaAberta] = useState(false);
   const [operacoes, setOperacoesEstado] = useState<OperacaoNoVertice[]>([]);
   const opsRef = useRef<OperacaoNoVertice[]>([]);
   const setOperacoes = useCallback((o: OperacaoNoVertice[]) => { opsRef.current = o; setOperacoesEstado(o); }, []);
@@ -207,7 +222,7 @@ export function useEdicaoDoPoligono(args: {
     limparCamada();
     setModo(null); setAlvo(null); setGeometriaNova(null); setDivisao(null); setUnidos([]); setFicaComDe('');
     setOriginalFicaCom('a'); setPastoVaiParaNova(false); setMotivo(''); setDestinoDoPasto(null); setNomeNovo(''); setPrevia(null);
-    setErro(null); setOperacoes([]); setRecortar(false);
+    setErro(null); setOperacoes([]); setRecortarEstado(false); recortarDecidido.current = false; setMoverLinha(false); setLinhaAberta(false);
     passosRef.current = []; setNPassos(0); editadoRef.current = null; depoisDoUltimoRef.current = null; acrescentarRef.current = null;
     setPontosDoDesenho([]); setCursorDoDesenho(null); setTemRascunho(false); setConfirmarCancelar(false); desenhoRef.current = null;
     setVerticeEscolhido(null); tirarRef.current = null; setCorrecao(null);
@@ -278,13 +293,13 @@ export function useEdicaoDoPoligono(args: {
     };
   }, [mapa, modo]);
 
-  const iniciar = useCallback(async (m: ModoDaEdicao, id: string | null, opcoes?: { retomar?: RascunhoGuardado }) => {
+  const iniciar = useCallback(async (m: ModoDaEdicao, id: string | null, opcoes?: { retomar?: RascunhoGuardado; moverLinha?: boolean }) => {
     if (!mapa || !camadaRef.current) return;
     encerrar();
     const camada = camadaRef.current;
     let a: Alvo | null = null;
     if (id) { a = await lerAlvo(id); if (!a) return; }
-    setModo(m); setAlvo(a);
+    setModo(m); setAlvo(a); setMoverLinha(m === 'vertices' && !!opcoes?.moverLinha);
     if (a) setNomeNovo(`${a.nome} (2)`); else setNomeNovo('Novo polígono');
     if (a && m === 'unir') setFicaComDe(a.id);
     /* o polígono vai para o meio do mapa, abaixo da barra de edição (que cobre o topo) */
@@ -733,6 +748,11 @@ export function useEdicaoDoPoligono(args: {
   const vizinhosAntes = useMemo(() => geometrias.filter(g => g.id !== alvo?.id && !unidos.includes(g.id))
     .map(g => ({ id: g.id, nome: g.nome_original, tipo: g.tipo, geojson: g.geojson })), [geometrias, alvo, unidos]);
 
+  useEffect(() => {
+    if (modo !== 'desenhar' || recortarDecidido.current || !recortarPorPadrao(geometriaNova, vizinhosAntes, piquetes)) return;
+    recortarDecidido.current = true; setRecortarEstado(true);
+  }, [modo, geometriaNova, vizinhosAntes, piquetes]);
+
   // MAPA-EDITAR-POLIGONO-02: o contorno da fazenda ("Area Total") cobre os pastos por definição — não é sobreposição
   const contornos = useMemo(() => contornosDaFazenda(geometrias.map(g => ({ id: g.id, nome: g.nome_original, tipo: g.tipo, geojson: g.geojson }))),
     [geometrias]);
@@ -743,10 +763,10 @@ export function useEdicaoDoPoligono(args: {
     const vazio = { lista: [], erro: null };
     if (!modo) return vazio;
     const novas = new Map<string, GeoJSON.Geometry>();
-    if (modo === 'vertices' && divisaJunto) {
+    if (modo === 'vertices' && (divisaJunto || moverLinha)) {
       for (const v of vizinhosDaDivisa(vizinhosAntes, operacoes, contornos)) novas.set(v.id, v.geojson);
     }
-    if (recortar && geometriaNova && (modo === 'vertices' || modo === 'redesenhar' || modo === 'desenhar')) {
+    if (recortar && !moverLinha && geometriaNova && (modo === 'vertices' || modo === 'redesenhar' || modo === 'desenhar')) {
       const atuais = vizinhosAntes.map(v => ({ ...v, geojson: novas.get(v.id) ?? v.geojson }));
       const r = recortarDosVizinhos(geometriaNova, atuais, contornos);
       if ('motivo' in r) return { lista: [], erro: r.motivo };
@@ -756,7 +776,7 @@ export function useEdicaoDoPoligono(args: {
       lista: vizinhosAntes.filter(v => novas.has(v.id)).map(v => ({ id: v.id, nome: v.nome, antes: v.geojson, depois: novas.get(v.id) ?? v.geojson })),
       erro: null,
     };
-  }, [modo, divisaJunto, recortar, geometriaNova, vizinhosAntes, operacoes, contornos]);
+  }, [modo, divisaJunto, moverLinha, recortar, geometriaNova, vizinhosAntes, operacoes, contornos]);
 
   const vizinhos = useMemo(() => {
     const novas = new Map(afetados.lista.map(a => [a.id, a.depois]));
@@ -904,6 +924,13 @@ export function useEdicaoDoPoligono(args: {
 
   const prever = useCallback(async () => {
     if (!gesto) return;
+    /* MAPA-CRIAR-PIQUETES-01 (2b): na "Mover linha" a prévia é a da `fn_piquetes_mover_linha` (diálogo próprio, com o mapinha); o gesto que
+       tocou mais (ou menos) que as duas divisões do grupo nem chega lá — a barra já mostra a frase */
+    /* MAPA-PIQUETES-MANUAL-01 (2): os vértices de um piquete com a divisa junto entre duas IRMÃS também vão pela `fn_piquetes_mover_linha` */
+    if (vaiPelaLinha({ modo, moverLinha, divisaJunto, recortar, ids: idsDoAlterar(gesto.g), divisoesDoGrupo: divisoesDaLinha })) {
+      if (!travaDaLinha(idsDoAlterar(gesto.g), divisoesDaLinha)) { setErro(null); setLinhaAberta(true); }
+      return;
+    }
     setGravando(true); setErro(null);
     try {
       const r = await chamar(true);
@@ -925,7 +952,7 @@ export function useEdicaoDoPoligono(args: {
         areaAntesHa: gesto.antes, areaDepoisHa: gesto.depois, sobreposicoes: avisos,
       });
     } finally { setGravando(false); }
-  }, [gesto, chamar, avisos, alvo, geometriaMedida, modo, afetados, geometriaNova, membrosDaUniao]);
+  }, [gesto, chamar, avisos, alvo, geometriaMedida, modo, afetados, geometriaNova, membrosDaUniao, moverLinha, divisoesDaLinha, divisaJunto, recortar]);
 
   const gravar = useCallback(async () => {
     setGravando(true); setErro(null);
@@ -976,6 +1003,7 @@ export function useEdicaoDoPoligono(args: {
   useEffect(() => () => { limparCamada(); }, [limparCamada]);
 
   return {
+    moverLinha, linhaAberta, fecharLinha: () => setLinhaAberta(false), divisoesDaLinha, formaNova: geometriaNova,
     modo, alvo, iniciar, cancelar: encerrar, medidas, avisos, gesto, previa, setPrevia, prever, gravar, gravando, erro, setErro,
     divisao, originalFicaCom, setOriginalFicaCom, pastoVaiParaNova, setPastoVaiParaNova,
     candidatosAUnir, unidos, alternarNaUniao, iniciarUniao, membrosDaUniao, ficaComDe, setFicaComDe, somaDaUniaoHa,

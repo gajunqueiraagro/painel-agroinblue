@@ -72,6 +72,7 @@ import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarRec
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
+import MODULO03 from '@/lib/mapa/__fixtures__/modulo03StaTereza.json';
 import { mapaGlobal } from './dados/mapaGlobal';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import { rotuloDoTipo } from '@/lib/mapa/tiposDeArea';
@@ -691,6 +692,14 @@ if (tela === 'mesclar') {
     return { type: 'Polygon', coordinates: [[a, [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], ...anel.slice(1)]] };
   };
   const formaNaEdicao = (g: { type: string; coordinates: unknown }) => q.get('laco') === '1' ? gravataDe(g) : q.get('amontoado') === '1' ? amontoadoDe(g) : g;
+  /* MAPA-PRACA-ESTAVEL-01 (homologação 02/11 21:54, Agnaldo › Sta. Tereza › Modulo 03): `&modulo03=1` — o P_01 ganha a FORMA do Modulo 03
+     (18 pontos com lados curtos e o furo no meio, lida do proto só leitura), levada para o canto do P_01; nenhum outro dado do cliente */
+  const comModulo03 = <T extends { id: string; geojson: unknown }>(g: T): T => {
+    if (q.get('modulo03') !== '1' || g.id !== 'g1') return g;
+    const aneis = MODULO03.coordinates;
+    const [dx, dy] = [-54.03 - Math.min(...aneis[0].map(p => p[0])), -19.63 - Math.max(...aneis[0].map(p => p[1]))];
+    return { ...g, geojson: { type: 'Polygon', coordinates: aneis.map(a => a.map(p => [p[0] + dx, p[1] + dy])) } };
+  };
   /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
      abre no último mês com fechamento de pastos (set/2026; fix1 A: o banco falso ignora `order`/`limit`, a lista vem do mais novo); um pasto sem fechamento no mês, um vazio, um pequeno (rótulo no hover) e o nome mais longo. */
   g.__fazendaBancada = { fazendas: [MAPA.FAZENDA], fazendasComPecuaria: [MAPA.FAZENDA], fazendaAtual: MAPA.FAZENDA, isGlobal: false, fazendaId: 'f1', setFazendaAtual: () => {} };
@@ -699,7 +708,9 @@ if (tela === 'mesclar') {
     // MAPA-PIQUETES-02: `&piquetes=1` traz dois polígonos sem classificação (as divisões que viram piquetes)
     from: (t: string, e: any) => t === 'fazenda_geometrias'
         ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
-          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : [])])
+          // MAPA-CRIAR-PIQUETES-01 2b: `versoesDosPoligonos` lê `.select('id, versao').in('id', …)` (a versão fresca do Mover linha / Juntar)
+          : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : [])].map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
       : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
           ...(q.get('grupo') === '1' ? ['P_01A', 'P_01B'].map((nome, i) => ({ ...MAPA.PASTOS[0], id: `p1${'ab'[i]}`, nome, grupo_id: 'gx', data_inicio: '2026-11-01', observacoes: null })) : [])]
@@ -738,6 +749,32 @@ if (tela === 'mesclar') {
           concluir: q.get('grupo') === '1' ? null : { frase: `P_01 vira o grupo P_01 com ${pq.length} piquetes (41,60 ha) a partir de 11/2026; P_01 fica encerrado em 31/10/2026.` },
           ligar: q.get('grupo') === '1' ? { frase: 'As 2 divisões P_01A, P_01B de P_01 ganham o desenho; nenhum pasto é criado e a área oficial não muda.', sem_desenho: null } : null,
         }))(a?.p_piquetes ?? [])
+      /* MAPA-CRIAR-PIQUETES-01 fatia 2b — o caminho de volta (as respostas seguem os `v_res` das migrations 20261028115230/240/250): só com `&unidade=1`
+         (P_09 Retiro de Cima → P_09A + P_09B, grupo `gu`); áreas na casa dos milhares para esticar as colunas */
+      : fn === 'fn_piquetes_mover_linha' ? {
+          ok: true, simulado: !!a?.p_simular, mes: a?.p_mes ?? '2026-11-01', gesto_id: 'gs1', lote: null,
+          itens: [
+            { pasto_id: 'pua', nome: 'P_09A', situacao: 'mudou', motivo: null, area_antes: 1234.56, area_mapa: 1331.07, dif_ha: 96.51, dif_pct: 7.8 },
+            { pasto_id: 'pub', nome: 'P_09B', situacao: 'mudou', motivo: null, area_antes: 987.65, area_mapa: 891.14, dif_ha: -96.51, dif_pct: -9.8 },
+          ],
+          soma_antes_ha: 2222.21, soma_depois_ha: 2222.21, dif_soma_ha: 0, area_muda: true,
+          frase: 'A linha entre P_09A e P_09B se move; a área oficial das duas passa a valer a do mapa a partir de 11/2026 (P_09A 1.331,07 ha, P_09B 891,14 ha; a soma não muda).',
+        }
+      : fn === 'fn_piquetes_juntar' ? {
+          ok: true, simulado: !!a?.p_simular, mes: a?.p_mes ?? '2026-11-01',
+          fica: { id: 'pua', nome: 'P_09A', area_antes_ha: 1234.56, area_depois_ha: 2222.21 },
+          sai: { id: 'pub', nome: 'P_09B', area_antes_ha: 987.65, encerra_em: '2026-10-31' },
+          grupo: { nome: 'P_09 Retiro de Cima', divisoes: 2 },
+          frase: 'P_09A absorve P_09B: passa de 1.234,56 ha para 2.222,21 ha a partir de 11/2026; P_09B encerra em 31/10/2026 e o histórico dele fica.',
+        }
+      : fn === 'fn_piquetes_desfazer' ? {
+          ok: true, simulado: !!a?.p_simular, modo: 'criados',
+          pai: { id: 'pu', nome: 'P_09 Retiro de Cima', volta_a_valer: true },
+          divisoes: [{ id: 'pua', nome: 'P_09A', fica_inativo: true }, { id: 'pub', nome: 'P_09B', fica_inativo: true }],
+          poligonos: [{ id: 'gu-a', nome: 'P_09A', destino: 'apagar' }, { id: 'gu-b', nome: 'P_09B', destino: 'soltar' }],
+          areas: [],
+          frase: 'P_09 Retiro de Cima volta a valer inteiro (2.222,21 ha); P_09A e P_09B ficam inativos e o desenho de P_09A sai do mapa.',
+        }
       : null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);

@@ -20,7 +20,8 @@ function lerGrupos(dado: unknown): GrupoComOrigem[] {
   return saida;
 }
 
-export function useGruposComOrigem(fazendaIds: readonly string[]): { grupos: GrupoComOrigem[]; erro: string | null } {
+/** `recarregar` (MAPA-CRIAR-PIQUETES-01 2b): quando muda, a leitura se refaz SEM esvaziar a lista (depois de juntar/desfazer os grupos mudam). */
+export function useGruposComOrigem(fazendaIds: readonly string[], recarregar = 0): { grupos: GrupoComOrigem[]; erro: string | null } {
   const chave = [...fazendaIds].sort().join(',');
   const [estado, setEstado] = useState<{ chave: string; grupos: GrupoComOrigem[]; erro: string | null }>({ chave: '', grupos: [], erro: null });
   useEffect(() => {
@@ -43,6 +44,6 @@ export function useGruposComOrigem(fazendaIds: readonly string[]): { grupos: Gru
       setEstado({ chave, grupos: lerGrupos(data), erro: null });
     })();
     return () => { vivo = false; };
-  }, [chave]);
+  }, [chave, recarregar]);
   return estado.chave === chave ? { grupos: estado.grupos, erro: estado.erro } : { grupos: [], erro: null };
 }

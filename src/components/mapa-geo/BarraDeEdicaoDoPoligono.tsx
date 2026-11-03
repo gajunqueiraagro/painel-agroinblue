@@ -19,6 +19,7 @@ import { AlertTriangle, ChevronDown, Info, Undo2 } from 'lucide-react';
 import { arranjarZona, type ArranjoDaZona } from '@/lib/mapa/barraQueCabe';
 import { chaveDoNomeDoPoligono, fraseCompactaDasMedidas, fraseDasSobreposicoes, textoHa, textoM } from '@/lib/mapa/edicaoDoPoligono';
 import { areaEmHectares as areaDe } from '@/lib/mapa/areaDoPoligono';
+import { idsDoAlterar, travaDaLinha } from '@/lib/mapa/piquetesVolta';
 import type { ModoDaEdicao, PoligonoDaFazenda, useEdicaoDoPoligono } from '@/hooks/useEdicaoDoPoligono';
 
 /* a instrução curta de cada gesto (o Alt/Option solto do encaixe vale enquanto arrasta: o Geoman testa o `altKey`) */
@@ -148,32 +149,38 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
   const instrucaoInteira = medindo || arranjo.instrucaoInteira;
   const nVisiveis = medindo ? acoes.length : arranjo.acoesVisiveis;
   const m = e.medidas;
+  /* MAPA-CRIAR-PIQUETES-01 (2b): na "Mover linha" o gesto só vale com EXATAMENTE as duas divisões do grupo (a frase trava a prévia) */
+  const travaLinha = e.moverLinha && e.gesto ? travaDaLinha(idsDoAlterar(e.gesto.g), e.divisoesDaLinha) : null;
   const pastoDoAlvo = nomeDoPasto(e.alvo?.pasto_id ?? null);
-  const podePrever = !!e.gesto && !e.gravando
+  const podePrever = !!e.gesto && !e.gravando && !travaLinha
     && !(e.modo === 'apagar' && (!e.motivo.trim() || (!!e.alvo?.pasto_id && !e.destinoDoPasto)))
     && !((e.modo === 'dividir' || e.modo === 'desenhar') && !e.nomeNovo.trim());
-  const motivoDoBloqueio = e.fraseDoCruzamento ?? e.erroDoRecorte
+  const motivoDoBloqueio = e.fraseDoCruzamento ?? e.erroDoRecorte ?? travaLinha
     ?? (e.modo === 'apagar' && !e.motivo.trim() ? 'Diga o motivo para apagar.'
       : e.modo === 'apagar' && e.alvo?.pasto_id && !e.destinoDoPasto ? 'Escolha o polígono que fica com o pasto (ou desligue o vínculo antes).'
       : e.modo === 'unir' && e.membrosDaUniao.length < 2 ? 'Escolha os vizinhos: clique no mapa ou "+ vizinho".'
+      /* MAPA-DICA-GEOMAN-01: a dica do Geoman que seguia o cursor saiu (tapava o clique); como FECHAR o desenho fica aqui, na 2ª linha da
+         barra (o lugar que nunca cede: a 1ª linha vira ⓘ quando falta largura) */
+      : !e.gesto && e.desenhandoAgora && (e.modo === 'desenhar' || e.modo === 'redesenhar') ? 'Para fechar: clique no 1º ponto ou em "Fechar e ajustar".'
       : !e.gesto ? 'Faça a mudança no mapa primeiro.' : null);
   const aviso = e.erro ?? (podePrever ? (e.podeCorrigir ? 'Há pontos amontoados no polígono (até 0,5 m): "Corrigir automaticamente" junta.' : null) : motivoDoBloqueio);
   /* com o "Corrigir automaticamente" ao lado (2ª linha), a frase fica curta e termina nele */
   const avisoNaTela = !e.erro && e.podeCorrigir && !!e.fraseDoCruzamento && aviso === e.fraseDoCruzamento
     ? 'A linha cruza ela mesma: mova ou tire o ponto laranja, ou'
     : !e.erro && e.podeCorrigir && !e.fraseDoCruzamento && !e.erroDoRecorte ? 'Pontos amontoados (até 0,5 m):' : aviso;
-  const avisoVermelho = !!e.erro || !!e.fraseDoCruzamento || !!e.erroDoRecorte;
+  const avisoVermelho = !!e.erro || !!e.fraseDoCruzamento || !!e.erroDoRecorte || !!travaLinha;
   const areaGravada = e.alvo ? areaDe(e.alvo.geojson) : null;
   /* com o polígono cruzando ele mesmo, primeiro se corrige: "Divisa junto" e "Recortar" saem das opções */
   const corrigirPrimeiro = e.podeCorrigir && !!e.fraseDoCruzamento;
   /* -08: o desenho guardado no navegador — ao abrir o desenho novo, oferece continuar (na 2ª linha, -09) */
   const perguntaContinuar = e.modo === 'desenhar' && e.desenhandoAgora && e.pontosNoDesenho === 0 && !!e.guardado && !e.confirmarCancelar;
   const temOpcoes = e.modo !== 'apagar' && e.modo !== 'unir';
-  const podeRecortar = (e.modo === 'vertices' || e.modo === 'redesenhar' || e.modo === 'desenhar') && !corrigirPrimeiro;
-  const opcoesLigadas = [e.encaixe && 'Encaixe', e.modo === 'vertices' && !corrigirPrimeiro && e.divisaJunto && 'Divisa junto', podeRecortar && e.recortar && 'Recortar vizinhos']
+  const podeRecortar = (e.modo === 'vertices' || e.modo === 'redesenhar' || e.modo === 'desenhar') && !corrigirPrimeiro && !e.moverLinha;
+  const opcoesLigadas = [e.encaixe && 'Encaixe', e.modo === 'vertices' && !corrigirPrimeiro && (e.divisaJunto || e.moverLinha) && 'Divisa junto', podeRecortar && e.recortar && 'Recortar vizinhos']
     .filter(Boolean).join(' · ');
-  const tituloDaInstrucao = e.temRascunho && e.modo !== 'dividir' ? 'Rascunho: arraste os pontos; um clique na linha cria ponto; clique num ponto e "Tirar ponto" o tira (ou botão direito); Ctrl/Cmd+Z desfaz o último gesto; "Corrigir automaticamente" tira o cruzamento; Esc ou Cancelar perguntam antes de descartar. O rascunho fica guardado no navegador.' : INSTRUCAO_INTEIRA[e.modo];
-  const textoDaInstrucao = (e.modo === 'dividir' && !!e.divisao) || e.modo === 'apagar' ? `${NOME_DO_GESTO[e.modo][0].toUpperCase()}${NOME_DO_GESTO[e.modo].slice(1)}`
+  const tituloDaInstrucao = e.moverLinha ? 'Arraste um ponto da divisa entre as duas divisões (ou clique na linha para criar ponto): a divisa anda nas duas, na mesma gravação. A prévia mostra a área das duas antes de gravar; a área oficial vale a do mapa a partir do mês que você escolher.' : e.temRascunho && e.modo !== 'dividir' ? 'Rascunho: arraste os pontos; um clique na linha cria ponto; clique num ponto e "Tirar ponto" o tira (ou botão direito); Ctrl/Cmd+Z desfaz o último gesto; "Corrigir automaticamente" tira o cruzamento; Esc ou Cancelar perguntam antes de descartar. O rascunho fica guardado no navegador.' : INSTRUCAO_INTEIRA[e.modo];
+  const textoDaInstrucao = e.moverLinha ? 'Mover a linha · arraste a divisa entre as duas divisões'
+    : (e.modo === 'dividir' && !!e.divisao) || e.modo === 'apagar' ? `${NOME_DO_GESTO[e.modo][0].toUpperCase()}${NOME_DO_GESTO[e.modo].slice(1)}`
     : e.temRascunho ? (e.modo === 'dividir' ? 'Ajuste a linha do corte · arraste os pontos' : 'Ajuste os pontos · Esc cancela')
     : INSTRUCAO[e.modo];
   const naLinha = acoes.slice(0, nVisiveis);
@@ -290,7 +297,7 @@ export function BarraDeEdicaoDoPoligono({ edicao, geometrias, nomeDoPasto, areaC
                   title="Encaixe nos pontos e lados vizinhos (7 px; nunca no contorno da fazenda). Segurar Alt/Option solta o encaixe enquanto arrasta." data-testid="edicao-encaixe">
                   Encaixe
                 </DropdownMenuCheckboxItem>
-                {e.modo === 'vertices' && !corrigirPrimeiro && (
+                {e.modo === 'vertices' && !corrigirPrimeiro && !e.moverLinha && (
                   <DropdownMenuCheckboxItem checked={e.divisaJunto} onCheckedChange={(v) => e.setDivisaJunto(v === true)} onSelect={(ev) => ev.preventDefault()}
                     title="Mover a divisa junto: o ponto comum a outro polígono (até 0,5 m) muda nos dois, na mesma gravação" data-testid="edicao-divisa-junto">
                     Divisa junto

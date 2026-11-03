@@ -44,7 +44,9 @@ import { desenharRotulosDeSegmentos } from '@/lib/mapa/rotulosDosLados';
 import { mapaVivo } from '@/lib/mapa/enquadramentoDoMapa';
 
 export type { ModoDosPiquetes };
-export type FerramentaDosPiquetes = 'tracar' | 'regua' | 'nomear' | 'corredor' | 'desenharPraca';
+/* MAPA-PRACA-ESTAVEL-01: 'referencia' = o clique que troca o lado de referência da cruz é uma FERRAMENTA anunciada na barra (antes todo clique
+   perto de um lado do pasto girava a praça e refazia cercas e nomes — homologação 02/11 21:54, Modulo 03) */
+export type FerramentaDosPiquetes = 'tracar' | 'regua' | 'nomear' | 'corredor' | 'desenharPraca' | 'referencia';
 export interface MembroSemDesenho { id: string; nome: string }
 /** O grupo que o pai já originou (o P6): a leitura que DECIDE o caminho — falhou = não decide (P146). */
 export type GrupoDoPai = { estado: 'lendo' } | { estado: 'erro' } | { estado: 'ok'; grupo: { id: string; nome: string; membros: MembroSemDesenho[] } | null };
@@ -130,7 +132,19 @@ const ICONES: Record<Alca['classe'], string> = {
   sel: 'width:12px;height:12px;border-radius:9999px;background:#fff;border:3px solid #2563eb',
 };
 const iconeDaAlca = (classe: Alca['classe']) => L.divIcon({ className: 'piquete-alca', iconSize: [15, 15],
-  html: `<span style="display:block;box-sizing:border-box;cursor:grab;margin:auto;${ICONES[classe]}"></span>` });
+  html: `<span data-alca="${classe}" style="display:block;box-sizing:border-box;cursor:grab;margin:auto;${ICONES[classe]}"></span>` });
+/* MAPA-PRACA-ESTAVEL-01: a alça do centro fica SEMPRE por cima (com a praça pequena na tela, os cantos caíam em cima dela e o arrasto do centro
+   pegava um canto e deformava a praça) */
+const Z_DA_ALCA: Record<Alca['classe'], number> = { centro: 2000, sel: 1500, deslizar: 1200, ponta: 1100, meio: 1100, giro: 1000, vertice: 900 };
+/** Os cantos da praça só ganham alça quando o raio dela na tela passa disto (abaixo, o canto ficaria em cima do centro). */
+export const RAIO_MINIMO_DOS_CANTOS_PX = 16;
+
+/** O rótulo curto de uma divisão — a parte DEPOIS do nome do pasto ("A"), a mesma no mapa e na coluna "Div." da lista. */
+export function rotuloCurtoDaDivisao(nome: string, paiNome: string, i: number): string {
+  const n = nome.trim();
+  const curto = n.startsWith(paiNome) ? n.slice(paiNome.length).replace(/^[\s\-·]+/, '') : n;
+  return curto || n || letraDoIndice(i);
+}
 
 export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar, enquadrar }: {
   mapa: L.Map | null;
@@ -554,29 +568,27 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
       if (f === 'regua') { adicionarPontoDaRegua(encaixarEm(bruto, alvosDe('nada'))); return; }
       const dentro = divisoes.findIndex(d => pontoDentro(d.geojson, bruto));
       if (f === 'nomear') { if (dentro >= 0) nomearNaOrdem(dentro); return; }
-      /* clicar num lado do pasto troca o lado de referência da cruz (praça) */
-      if (desenhoRef.current.praca && configRef.current.modo === 'praca') {
-        const lados = ladosDoPasto(g);
-        const alvos: AlvosDeEncaixe = { pontos: [], segmentos: lados.map(l => ({ a: l.a, b: l.b, de: null })) };
-        if (encaixar(bruto, alvos, toleranciaDeEncaixeM(mapa.getZoom(), bruto[1]))) {
-          const i = ladoMaisPerto(g, bruto);
-          if (i !== configRef.current.refLado) mudarConfig({ refLado: i });
-          return;
-        }
+      /* MAPA-PRACA-ESTAVEL-01: só com a ferramenta "Lado de referência" ligada (anunciada na barra) o clique troca o lado; um clique e ela sai */
+      if (f === 'referencia') {
+        const i = ladoMaisPerto(g, bruto);
+        if (i !== configRef.current.refLado) mudarConfig({ refLado: i });
+        setFerramenta(null);
+        return;
       }
+      /* sem ferramenta, o clique no mapa só ESCOLHE a divisão (o realce e a "Área desejada"): nada se refaz */
       setSelecionada(null); setPontoSel(null);
       setEscolhida(dentro >= 0 ? dentro : null);
     };
     const aoDuplo = () => { if (ferramentaRef.current && ferramentaRef.current !== 'regua' && ferramentaRef.current !== 'nomear') terminarTraco(); };
     mapa.on('click', aoClicar); mapa.on('dblclick', aoDuplo);
     mapa.doubleClickZoom.disable();
-    if (ferramenta) contentor.style.cursor = ferramenta === 'nomear' ? 'pointer' : 'crosshair';
+    if (ferramenta) contentor.style.cursor = ferramenta === 'nomear' || ferramenta === 'referencia' ? 'pointer' : 'crosshair';
     return () => {
       mapa.off('click', aoClicar); mapa.off('dblclick', aoDuplo);
       if (dava) mapa.doubleClickZoom.enable();
       contentor.style.cursor = cursor;
     };
-  }, [mapa, pai, ferramenta, divisoes, adicionarPontoDoTraco, adicionarPontoDaRegua, encaixarEm, alvosDe, nomearNaOrdem, mudarConfig, terminarTraco]);
+  }, [mapa, pai, ferramenta, divisoes, adicionarPontoDoTraco, adicionarPontoDaRegua, encaixarEm, alvosDe, nomearNaOrdem, mudarConfig, terminarTraco, setFerramenta]);
 
   // --- as camadas do mapa ---------------------------------------------------------------------------------------------------------------
   /* enquadra o pasto ao abrir (folga para a barra no alto e a lista à direita) */
@@ -614,9 +626,8 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
       const nome = (presos[i]?.nome ?? '').trim();
       /* no mapa vai a parte DEPOIS do nome do pasto ("A · 24,95 ha"): o nome inteiro era mais largo que o quadrante e cobria os metros
          dos lados (homologação 02/11); o nome inteiro fica na lista */
-      const curto = nome.startsWith(pai.nome) ? nome.slice(pai.nome.length).replace(/^[\s\-·]+/, '') : nome;
       L.marker(latlng(ponto), { interactive: false, pmIgnore: true, icon: L.divIcon({ className: 'piquete-rotulo', iconSize: [0, 0],
-        html: rotuloDoMapa(`${escapar(curto || nome || letraDoIndice(i))} · ${haBr(d.areaHa)} ha`) }) }).addTo(g);
+        html: rotuloDoMapa(`${escapar(rotuloCurtoDaDivisao(nome, pai.nome, i))} · ${haBr(d.areaHa)} ha`) }) }).addTo(g);
     });
     return () => { g.remove(); };
   }, [mapa, pai, divisoes, presos, escolhida]);
@@ -699,11 +710,16 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     const d = desenho;
     const plano = planoDoPasto(poligono);
     const ativo = !ferramenta;
+    /* o raio da praça NA TELA (zoomTique relê a cada zoom): pequeno demais, os cantos não ganham alça (o centro anda inteiro) */
+    const raioNaTela = d.praca && mapa && mapaVivo(mapa) ? (() => {
+      const c = mapa.latLngToContainerPoint(latlng(d.praca.centro));
+      return Math.max(...d.praca.vertices.map(v => c.distanceTo(mapa.latLngToContainerPoint(latlng(v)))));
+    })() : 0;
     if (d.praca && ativo) {
       lista.push({ chave: 'centro', ponto: d.praca.centro, classe: 'centro', titulo: 'Arraste: a praça inteira anda',
         inicio: () => { empilhar(); alvosDoGestoRef.current = alvosDe('praca'); },
         mover: p => mudar(x => (x.praca ? { ...x, praca: moverCentro(poligono, x.praca, encaixarEm(p, alvosDoGestoRef.current)) } : x), false), fim: () => { alvosDoGestoRef.current = null; } });
-      d.praca.vertices.forEach((v, i) => {
+      if (raioNaTela >= RAIO_MINIMO_DOS_CANTOS_PX) d.praca.vertices.forEach((v, i) => {
         lista.push({ chave: `v${i}`, ponto: v, classe: 'vertice', titulo: 'Arraste: o canto da praça (a cerca acompanha)',
           inicio: () => { empilhar(); alvosDoGestoRef.current = alvosDe('praca'); },
           mover: p => mudar(x => (x.praca ? { ...x, praca: moverVertice(poligono, x.praca, i, encaixarEm(p, alvosDoGestoRef.current)) } : x), false), fim: () => { alvosDoGestoRef.current = null; } });
@@ -738,7 +754,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
       }
     }
     return lista;
-  }, [poligono, pai, desenho, selecionada, pontoSel, ferramenta, alvosDe, encaixarEm, empilhar, mudar, tirarPonto]);
+  }, [poligono, pai, desenho, selecionada, pontoSel, ferramenta, alvosDe, encaixarEm, empilhar, mudar, tirarPonto, mapa, zoomTique]);
 
   useEffect(() => {
     const mapaAlcas = alcasRef.current;
@@ -752,11 +768,11 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
       const existente0 = mapaAlcas.get(a.chave);
       if (existente0) {
         existente0.spec = a;
-        if (existente0.classe !== a.classe) { existente0.marker.setIcon(iconeDaAlca(a.classe)); existente0.classe = a.classe; }
+        if (existente0.classe !== a.classe) { existente0.marker.setIcon(iconeDaAlca(a.classe)); existente0.marker.setZIndexOffset(Z_DA_ALCA[a.classe]); existente0.classe = a.classe; }
         if (arrastando.current !== a.chave) existente0.marker.setLatLng(latlng(a.ponto));
         return;
       }
-      const marker = L.marker(latlng(a.ponto), { icon: iconeDaAlca(a.classe), draggable: true, pmIgnore: true, title: a.titulo, keyboard: false });
+      const marker = L.marker(latlng(a.ponto), { icon: iconeDaAlca(a.classe), draggable: true, pmIgnore: true, title: a.titulo, keyboard: false, zIndexOffset: Z_DA_ALCA[a.classe] });
       const entrada = { marker, spec: a, classe: a.classe };
       marker.on('dragstart', () => { arrastando.current = a.chave; entrada.spec.inicio?.(); });
       marker.on('drag', () => { const ll = marker.getLatLng(); entrada.spec.mover?.([ll.lng, ll.lat]); });

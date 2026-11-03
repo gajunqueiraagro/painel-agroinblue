@@ -499,11 +499,71 @@ const CENARIOS = [
           { nome: 'mapa-validacao-pasto-inteiro', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-topo"]', antes: selecionarP01,
             pastoInteiro: { poligono: 'path.poligono-selecionado', mapa: '.leaflet-container', lista: '[data-testid="validacao-lista"]', minimo: 0.5 } },
           { nome: 'mapa-validacao-vertices-sem-reenquadrar', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-topo"]', antes: selecionarP01, semReenquadrar: true },
+          /* MAPA-LISTA-SEM-PULO-01 (Gabriel 02/11, RRCC › Ursa Maior, busca "5"): marcar a caixa de um polígono NÃO desloca a lista — a faixa de ações
+             (Selecionar todos · Unir · Apagar · Apagar sem classificação) e o selo "N selecionados" têm lugar e altura fixos, sempre presentes
+             (`listaSemPulo`: `top` da 1ª linha e da faixa iguais com 0, 1, N e 0 marcados; o mapa não reenquadra; nenhum botão some) */
+          { nome: 'mapa-validacao-lista-sem-pulo', url: 'tela=mapa-geo', tamanhos: T3, regiao: '[data-testid="validacao-lista"]', antes: validacao, listaSemPulo: true },
           /* MAPA-DICAS-01 (Gabriel 02/11 11:18: "ficou bom, mas o cliente não entende; tem que explicar bem ao passar o mouse"): para CADA ícone da
              barra do polígono e dos botões do canto, o hover mostra a dica em até 600 ms, inteira (nunca cortada), dentro da janela, com ≤ 260 px e
              sem cobrir a barra de onde saiu (`dicasDoMapa`); com `--fotos`, um print por dica (`<cenario>_<tamanho>_dica-<nome>.png`) */
           { nome: 'mapa-validacao-dicas', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], regiao: '[data-testid="validacao-painel-poligono"]', antes: selecionarP01,
             dicasDoMapa: { barras: ['[data-testid="validacao-painel-poligono"]', '[data-testid="validacao-botoes-topo"]'] } },
+        ];
+      })(),
+      /* MAPA-CRIAR-PIQUETES-01 (fatia 2b, o caminho de volta) — `&unidade=1` (o pai P_09 Retiro de Cima com as divisões P_09A e P_09B, grupo `gu`;
+         as duas são metades vizinhas): (1) a barra do polígono da DIVISÃO (Mover linha · Juntar com…) e do PAI (Desfazer piquetes) segue de
+         1 linha (`barraCompacta`: os 2 ícones novos cabem); (2) o popover do "Juntar com…"; (3) os três diálogos de prévia com o mini-mapa
+         (a frase `volta-frase` lida do banco); (4) o "Mover linha" na barra de edição: o gesto de arrastar a divisa abre o diálogo, e o
+         gesto fora da divisa trava a prévia com a frase em vermelho. A prévia é a RPC sintética (`telas.tsx`, `fn_piquetes_*`). */
+      ...(() => {
+        const T3 = [[1126, 579], [1366, 768], [1440, 800]];
+        const URL_U = 'tela=mapa-geo&unidade=1';
+        const barra = { barraCompacta: { sel: '[data-testid="validacao-painel-poligono"]', alturaMax: 44, mapa: '.leaflet-container', vizinho: '[data-testid="validacao-botoes-topo"]', area: { cadastro: true } } };
+        const escolher = (texto) => async (p) => { await validacao(p);
+          await p.locator('[data-testid="validacao-nome"]', { hasText: texto }).first().click();
+          await p.locator('[data-testid="validacao-painel-poligono"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(1200); };
+        const divisao = escolher('P_09A'), pai = escolher('P_09 Retiro');
+        const comFrase = async (p) => { await p.waitForFunction(() => !!document.querySelector('[data-testid="volta-frase"]')?.textContent?.trim(), null, { timeout: 5000 }); await p.waitForTimeout(500); };
+        const juntar = async (p) => { await divisao(p); await p.locator('[data-testid="editar-juntar"]').click();
+          await p.locator('[data-testid="juntar-escolher"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(300); };
+        /* arrasta UM vértice do polígono editado (o marcador do Geoman, sem os do meio da linha): `canto` = 'divisa' (o de cima na divisa com a
+           P_09B: à direita, em cima) ou 'fora' (o de cima à esquerda, na borda do pasto); 30 px para dentro do polígono */
+        const arrastarVertice = (canto) => async (p) => {
+          const alvo = await p.evaluate((canto) => {
+            const ms = [...document.querySelectorAll('.leaflet-marker-icon.marker-icon:not(.marker-icon-middle)')].map(e => e.getBoundingClientRect())
+              .map(r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 }));
+            if (!ms.length) return null;
+            const xs = ms.map(m => m.x), ys = ms.map(m => m.y);
+            const x = canto === 'divisa' ? Math.max(...xs) : Math.min(...xs);
+            return { ...ms.filter(m => Math.abs(m.x - x) < 3).sort((a, b) => a.y - b.y)[0], dir: canto === 'divisa' ? -1 : 1, n: ms.length, ys };
+          }, canto);
+          if (!alvo) throw new Error('nenhum vértice do Geoman na tela (.marker-icon)');
+          await p.mouse.move(alvo.x, alvo.y); await p.mouse.down();
+          await p.mouse.move(alvo.x + alvo.dir * 15, alvo.y + 15, { steps: 6 }); await p.mouse.move(alvo.x + alvo.dir * 30, alvo.y + 30, { steps: 6 });
+          await p.mouse.up(); await p.waitForTimeout(700); };
+        const moverLinha = (canto) => async (p) => { await divisao(p); await p.locator('[data-testid="editar-mover-linha"]').click();
+          await p.locator('[data-testid="barra-edicao-poligono"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(900); await arrastarVertice(canto)(p); };
+        const medirBarra = { visivelNaTela: { sels: ['[data-testid="edicao-previa"]', '[data-testid="edicao-cancelar"]'], dentro: '[data-testid="barra-edicao-poligono"]', altura: 50,
+            inteirosEm: ['[data-testid="barra-edicao-poligono"]'] }, botoesDentro: '[data-testid="barra-edicao-poligono"]' };
+        return [
+          { nome: 'mapa-validacao-volta-painel-divisao', url: URL_U, tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]', antes: async (p) => { await divisao(p);
+              for (const t of ['editar-mover-linha', 'editar-juntar']) if (!(await p.locator(`[data-testid="${t}"]`).count())) throw new Error(`falta o ícone ${t} na divisão`); }, ...barra },
+          { nome: 'mapa-validacao-volta-painel-pai', url: URL_U, tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]', antes: async (p) => { await pai(p);
+              if (!(await p.locator('[data-testid="editar-desfazer-piquetes"]').count())) throw new Error('falta o ícone editar-desfazer-piquetes no pai'); }, ...barra },
+          { nome: 'mapa-validacao-volta-juntar-popover', url: URL_U, tamanhos: T3, regiao: '[data-testid="validacao-popover"]', antes: juntar },
+          { nome: 'mapa-validacao-volta-mover-linha-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="mover-linha-dialogo"]', antes: async (p) => {
+              await moverLinha('divisa')(p); await p.locator('[data-testid="edicao-previa"]').click();
+              await p.locator('[data-testid="mover-linha-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
+          { nome: 'mapa-validacao-volta-juntar-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="juntar-dialogo"]', antes: async (p) => {
+              await juntar(p); await p.locator('[data-testid="juntar-escolher"] [data-juntar-com="P_09B"]').click();
+              await p.locator('[data-testid="juntar-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
+          { nome: 'mapa-validacao-volta-desfazer-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="desfazer-dialogo"]', antes: async (p) => {
+              await pai(p); await p.locator('[data-testid="editar-desfazer-piquetes"]').click();
+              await p.locator('[data-testid="desfazer-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
+          /* o gesto fora da divisa (o vértice do canto de cima à esquerda, que não é comum às duas): a prévia trava e a frase vermelha fica na barra */
+          { nome: 'mapa-validacao-volta-barra-mover-linha-travada', url: URL_U, tamanhos: T3, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
+              await moverLinha('fora')(p);
+              await p.waitForFunction(() => /divisa|divisões/.test(document.querySelector('[data-testid="barra-edicao-poligono"]')?.textContent ?? ''), null, { timeout: 4000 }); await p.waitForTimeout(300); }, ...medirBarra },
         ];
       })(),
       /* MAPA-CRIAR-PIQUETES-01 (fatia 1) — o "Criar piquetes" do P_01: a barra (2 linhas fixas, "Prévia e gravar" e "Cancelar" inteiros na
@@ -1816,6 +1876,52 @@ async function medirSemReenquadrar(p) {
   } catch (e) { achados.push({ regra: 'erro', texto: `semReenquadrar: ${String(e).slice(0, 100)}` }); }
   return achados;
 }
+/* MAPA-LISTA-SEM-PULO-01 (UI-ESPACO-RESERVADO) — `listaSemPulo` (opcional, por cenário; página já na Validação): MARCAR a caixa de um polígono não
+   desloca NADA. Lê o `top` da 1ª linha da lista e da faixa de ações (e a altura da faixa, o lugar do selo "N selecionados" e o
+   `data-enquadramento` do mapa) com 0, 1, N (até 5; o que houver, mínimo 2) e 0 de novo marcados: diferença > 0,5 px = achado `pulo`;
+   o mapa reenquadrou = achado `pulo`; botão da faixa que NÃO existe em algum dos estados = achado `pulo` (os que dependem da seleção
+   ficam à vista e inativos). `sel` troca os seletores (o auto-teste monta uma lista falsa). */
+const SEL_LISTA_SEM_PULO = {
+  linha: '[data-testid="validacao-linha"]', faixa: '[data-testid="validacao-lista-acoes"]', caixa: '[data-testid="validacao-linha"] [role="checkbox"]',
+  contador: '[data-testid="validacao-contador"]', mapa: '.leaflet-container',
+  botoes: ['validacao-selecionar-todos', 'unir-selecionados', 'apagar-selecionados', 'apagar-sem-classificacao'],
+};
+async function medirListaSemPulo(p, sel = SEL_LISTA_SEM_PULO) {
+  const achados = [];
+  const ler = async () => { await p.waitForTimeout(700); return p.evaluate((s) => {
+    const top = (q) => { const e = document.querySelector(q); return e ? e.getBoundingClientRect().top : null; };
+    const faixa = document.querySelector(s.faixa), cont = document.querySelector(s.contador), mapa = document.querySelector(s.mapa);
+    const rc = cont ? cont.getBoundingClientRect() : null, rm = mapa ? mapa.getBoundingClientRect() : null;
+    return { linha: top(s.linha), faixa: top(s.faixa), altura: faixa ? faixa.getBoundingClientRect().height : null,
+      contador: rc ? [rc.top, rc.left, rc.width] : null, mapa: rm ? [rm.top, rm.left, rm.width, rm.height] : null,
+      enquadramento: mapa ? mapa.getAttribute('data-enquadramento') : null,
+      faltam: s.botoes.filter((b) => !document.querySelector(`[data-testid="${b}"]`)) };
+  }, sel); };
+  const compara = (nome, a, b) => {
+    const rotulo = { linha: 'a 1a linha da lista', faixa: 'a faixa de acoes', altura: 'a altura da faixa' };
+    for (const k of ['linha', 'faixa', 'altura']) {
+      if (a[k] === null || b[k] === null) { if (k !== 'altura') achados.push({ regra: 'pulo', texto: `${nome}: ${rotulo[k]} nao existe` }); continue; }
+      if (Math.abs(a[k] - b[k]) > 0.5) achados.push({ regra: 'pulo', texto: `${nome}: ${rotulo[k]} foi de ${a[k].toFixed(1)} para ${b[k].toFixed(1)} px` });
+    }
+    if (a.contador && b.contador && a.contador.some((v, i) => Math.abs(v - b.contador[i]) > 0.5)) achados.push({ regra: 'pulo', texto: `${nome}: o selo da selecao mudou de lugar/largura (${a.contador.map((v) => v.toFixed(1))} -> ${b.contador.map((v) => v.toFixed(1))})` });
+    if (!a.contador || !b.contador) achados.push({ regra: 'pulo', texto: `${nome}: o selo da selecao ${!b.contador ? 'some' : 'so aparece com a selecao'}` });
+    if (a.mapa && b.mapa && a.mapa.some((v, i) => Math.abs(v - b.mapa[i]) > 0.5)) achados.push({ regra: 'pulo', texto: `${nome}: o mapa mudou de lugar/tamanho` });
+    if (a.enquadramento !== b.enquadramento) achados.push({ regra: 'pulo', texto: `${nome}: o mapa reenquadrou (${a.enquadramento} -> ${b.enquadramento})` });
+    for (const x of b.faltam) achados.push({ regra: 'pulo', texto: `${nome}: o botao ${x} nao existe` });
+  };
+  try {
+    const caixas = p.locator(sel.caixa), n = Math.min(5, await caixas.count());
+    if (n < 2) return [{ regra: 'pulo', texto: `a lista tem ${n} poligono(s) (preciso de 2+)` }];
+    const e0 = await ler();
+    if (e0.faltam.length) for (const x of e0.faltam) achados.push({ regra: 'pulo', texto: `0 marcados: o botao ${x} nao existe` });
+    await caixas.nth(0).click(); const e1 = await ler(); compara('1 marcado', e0, e1);
+    for (let i = 1; i < n; i++) await caixas.nth(i).click();
+    const eN = await ler(); compara(`${n} marcados`, e0, eN);
+    for (let i = 0; i < n; i++) await caixas.nth(i).click();
+    const eF = await ler(); compara('desmarcou tudo', e0, eF);
+  } catch (e) { achados.push({ regra: 'erro', texto: `listaSemPulo: ${String(e).slice(0, 100)}` }); }
+  return achados;
+}
 /* MAPA-CROMO-01 — `cromoDoMapa` (roda em TODO cenário `mapa-geo-*` e `mapa-validacao-*`): tudo o que flutua sobre o mapa (`data-cromo` =
    cima|botoes|painel|aviso|base, a barra e a lista dos piquetes, os botões do topo e o aviso pelos testids, os controles do Leaflet) (1) NÃO
    se cruza — nenhum retângulo corta outro (aninhado não conta; Leaflet × Leaflet fica com o MAPA-CONTROLES-01) e (2) não tem texto cortado:
@@ -2354,6 +2460,26 @@ try {
   if (!dicaCortada0.some((a) => a.texto.includes('cortado')) || !dicaCruza0.some((a) => a.texto.includes('cruza a barra')) || dicaOk0.length) {
     console.error(`check-ui-cortes: AUTO-TESTE DAS DICAS DO MAPA FALHOU (cortada: ${JSON.stringify(dicaCortada0)}, cruza: ${JSON.stringify(dicaCruza0)}, ok: ${JSON.stringify(dicaOk0)})`); process.exit(2);
   }
+  /* MAPA-LISTA-SEM-PULO-01 — auto-teste da `medirListaSemPulo`: uma lista falsa cuja faixa de ações SÓ APARECE com seleção (e empurra a lista) TEM de
+     gerar achado `pulo`; a que reserva a faixa (sempre presente, altura fixa) não */
+  const listaFalsa = (sempre) => `<body style="margin:0;font:10px sans-serif"><div data-testid="validacao-lista"><div id="slot"></div>
+    <div id="lin" data-testid="validacao-linha"><span role="checkbox" id="cx" style="display:inline-block;width:14px;height:14px;border:1px solid #000"></span></div>
+    <div data-testid="validacao-linha"><span role="checkbox" style="display:inline-block;width:14px;height:14px;border:1px solid #000"></span></div></div>
+    <span data-testid="validacao-contador" style="display:inline-block;width:90px">0 selecionados</span>
+    <script>(() => {
+      const marcados = new Set(); const slot = document.getElementById('slot');
+      const nomes = ['validacao-selecionar-todos', 'unir-selecionados', 'apagar-selecionados', 'apagar-sem-classificacao'];
+      const desenha = () => { slot.innerHTML = (${sempre} || marcados.size) ? '<div data-testid="validacao-lista-acoes" style="height:24px">' + nomes.map((n) => '<button data-testid="' + n + '">x</button>').join('') + '</div>' : ''; };
+      document.querySelectorAll('[role=checkbox]').forEach((c) => c.addEventListener('click', () => { marcados.has(c) ? marcados.delete(c) : marcados.add(c); desenha(); }));
+      desenha();
+    })();</script></body>`;
+  await p0.setContent(listaFalsa(false));
+  const semPuloMau0 = await medirListaSemPulo(p0, { ...SEL_LISTA_SEM_PULO, mapa: '#nenhum' });
+  await p0.setContent(listaFalsa(true));
+  const semPuloBom0 = await medirListaSemPulo(p0, { ...SEL_LISTA_SEM_PULO, mapa: '#nenhum' });
+  if (!semPuloMau0.some((a) => a.regra === 'pulo') || semPuloBom0.length) {
+    console.error(`check-ui-cortes: AUTO-TESTE DA LISTA SEM PULO FALHOU (faixa que aparece: ${JSON.stringify(semPuloMau0)}, faixa reservada: ${JSON.stringify(semPuloBom0)})`); process.exit(2);
+  }
   if (aceitoErrado || !seco0 || !doc0 || clampAceitoErrado || !clampFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA REGRA DE CORTE FALHOU (aceito acusado: ${aceitoErrado}, corte seco: ${seco0}, documento: ${doc0}, clamp na célula acusado: ${clampAceitoErrado}, clamp fora achado: ${clampFora0})`); process.exit(2); }
   if (diaMesAceitoErrado || !diaMesCurto0 || !diaMesFora0) { console.error(`check-ui-cortes: AUTO-TESTE DA DATA dd/mm FALHOU (aceito acusado: ${diaMesAceitoErrado}, dd/mm/aa na lista: ${diaMesCurto0}, dd/mm fora da lista: ${diaMesFora0})`); process.exit(2); }
   await p0.close();
@@ -2401,6 +2527,7 @@ try {
     if (cen.colunaHa) daRolagem.push(...(await p.evaluate(medirColunaHa))); // MAPA-DICAS-01 (área)
     if (cen.rotuloDeArea) daRolagem.push(...(await medirRotuloDeArea(p, cen.rotuloDeArea))); // MAPA-DICAS-01 (área; muda o zoom: por último entre as de mapa)
     if (cen.semReenquadrar) daRolagem.push(...(await medirSemReenquadrar(p))); // MAPA-ZOOM-E-PAINEL-01
+    if (cen.listaSemPulo) daRolagem.push(...(await medirListaSemPulo(p))); // MAPA-LISTA-SEM-PULO-01 (marca caixas: depois das outras de mapa)
     if (cen.dicasDoMapa) { // MAPA-DICAS-01: depois das outras medições (o hover muda o estado do mapa)
       if (FOTOS) fs.mkdirSync(FOTOS, { recursive: true });
       daRolagem.push(...(await medirDicasDoMapa(p, cen.dicasDoMapa, FOTOS ? path.join(FOTOS, `${cen.nome}_${w}x${h}`) : null)));

@@ -381,6 +381,9 @@ function ReguaMeses({ celulas, mesSelecionado, ano, loading, erro, onMesChange, 
    a altura de carregamento e exatamente a altura final. */
 const PILL_STATUS = 'rounded-full border px-2 py-0.5 text-[10px] leading-tight';
 
+/* VG-LEGADO-OCULTO-01 — os blocos legados da Visão Geral ficam fora da tela até a VISAO-GERAL-02 (ver o JSX). */
+const MOSTRAR_BLOCOS_LEGADOS = false;
+
 function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }: {
   status: StatusFazenda[];
   isGlobal: boolean;
@@ -395,7 +398,6 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
     return (
       <div className="mt-1 flex flex-wrap gap-1">
         <span className={`${PILL_STATUS} border-border/40 bg-muted text-transparent animate-pulse`}>Rebanho 0/0</span>
-        <span className={`${PILL_STATUS} border-border/40 bg-muted text-transparent animate-pulse`}>Financeiro (em construção)</span>
       </div>
     );
   }
@@ -456,12 +458,8 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
         >
           {rotuloRebanho}
         </button>
-        {/* Financeiro e o P3, declarado 'nao_implementado' em PR-PILARES-CALCULO-01: a
-            regra existe, os campos de conferencia bancaria nao. CINZA INERTE e SEM
-            clique — o badge mostra a forma final da faixa, nunca finge medicao. */}
-        <span className={`${PILL_STATUS} border-border/40 bg-muted text-muted-foreground`}>
-          Financeiro (em construção)
-        </span>
+        {/* VG-LEGADO-OCULTO-01 — o chip "Financeiro (em construção)" (o P3, 'nao_implementado') saiu: item em construção
+            não aparece na tela (decisão de 03/11). Volta quando o P3 existir. */}
       </div>
 
       {/* O modal e o lugar do quadro COMPLETO: aqui a fazenda fechada tambem aparece,
@@ -3059,6 +3057,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         </SectionBlock>
         </div>
 
+        {/* VG-LEGADO-OCULTO-01 (Gabriel 03/11 07:50, URGENTE: cliente novo entra esta semana) — os blocos abaixo de Área e
+            Caixa (Fechamento Pecuária, Pecuária no mês por fazenda, Produção, Eficiência, Financeiro Produtivo, Estrutura
+            Financeira e Disponível em conta) saem da tela: mostram números legados/errados (variação relativa de %, meta
+            minúscula, caixa ÷ rebanho — "Compras 255%", "Desfrute ↑637,9%", "Custo cab. ↑5544%"). Conserto pequeno, sem
+            refazer a tela: a VISAO-GERAL-02 substitui tudo isto. Nada foi apagado; nenhum número novo entrou. */}
+        {MOSTRAR_BLOCOS_LEGADOS && (<>
         {/* Container proprio, nao SectionBlock: o miolo do SectionBlock e
             um grid-cols-2 e os tres blocos precisam de largura inteira.
             Fundo em accent/40 e NAO em bg-card: cada BlocoAtividade ja e um
@@ -3559,6 +3563,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           </SectionBlock>
         )}
         </div>
+        </>)}
 
       </div>
       </div>

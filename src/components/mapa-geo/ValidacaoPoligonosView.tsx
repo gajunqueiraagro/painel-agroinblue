@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { TextoReservado } from '@/components/ui/regua-tabela';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,8 +14,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Link2, Unlink, Pencil, Trash2, CheckCheck, MapPin, Search, Filter,
-  X, Save, ChevronDown, ChevronRight, ChevronLeft, Spline, PenTool, Scissors, Merge, LayoutGrid, Tag, Layers, Maximize2, Scan, PenLine, type LucideIcon,
+  Link2, Pencil, Trash2, CheckCheck, MapPin, Search, Filter,
+  X, Save, ChevronDown, ChevronRight, ChevronLeft, Spline, PenTool, Scissors, Merge, LayoutGrid, Tag, Layers, Maximize2, Scan, PenLine, Move, Combine, Undo2, type LucideIcon,
   Landmark,
 } from 'lucide-react';
 import { casaNoNomeDoPoligono, TIPOS_DE_CONTORNO } from '@/lib/mapa/edicaoDoPoligono';
@@ -43,6 +44,9 @@ import { ConcluirPiquetesDialog, MarcarPiquete, PiquetesEmEspera } from '@/compo
 import { usePiquetesEmEspera } from '@/hooks/usePiquetes';
 import { pastosMudaramPorFora } from '@/hooks/usePastos';
 import type { PiqueteEmEspera } from '@/lib/mapa/piquetesEmEspera';
+/* MAPA-CRIAR-PIQUETES-01 (2b, o caminho de volta): Mover linha · Juntar com… · Desfazer piquetes — diálogos de prévia com mini-mapa */
+import { DesfazerPiquetesDialog, EscolherVizinhaParaJuntar, JuntarDialog, MoverLinhaDialog } from '@/components/mapa-geo/PiquetesVolta';
+import { grupoDaDivisao, grupoDoPai, irmasQueEncostam, uniaoDasDuas } from '@/lib/mapa/piquetesVolta';
 /* MAPA-PIQUETES-04 — o contorno do pai só pega o clique na borda (as divisões, no miolo) */
 import { contornosDePai } from '@/lib/mapa/unidadesDoMapa';
 import { useGruposComOrigem } from '@/hooks/useGruposComOrigem';
@@ -50,6 +54,11 @@ import { contornoDasDivisoes } from '@/lib/mapa/contornoDasDivisoes';
 import { avisoSemDesenho, pastosSemDesenho } from '@/lib/mapa/unidadesDoMapa';
 
 const CHAVE_LISTA_RECOLHIDA = 'mapa-validacao-lista-recolhida';
+
+/* MAPA-LISTA-SEM-PULO-01: o motivo de cada botão da faixa de ações estar inativo (vai no `title`) */
+const MOTIVO_UNIR = 'Marque pelo menos 2 polígonos para unir';
+const MOTIVO_APAGAR = 'Marque polígonos para apagar';
+const MOTIVO_SEM_CLASSIFICACAO = 'Nenhum polígono sem classificação para apagar';
 
 type FilterStatus = 'all' | 'vinculado' | 'area' | 'sem_vinculo';
 
@@ -162,9 +171,38 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   useEffect(() => {
     if (aSelecionar && geometrias.some(g => g.id === aSelecionar)) { setFocusedId(aSelecionar); setASelecionar(null); }
   }, [aSelecionar, geometrias]);
+  /* MAPA-CRIAR-PIQUETES-01 (2b): quem é divisão de um grupo (o pasto está num grupo que nasceu de outro) e quem é o PAI (`pasto_origem_id`) —
+     é por isso que "Mover linha"/"Juntar com…" e "Desfazer piquetes" só aparecem onde se aplicam. A leitura se refaz depois de gravar. */
+  const [tiqueDosGrupos, setTiqueDosGrupos] = useState(0);
+  const idsDaFazenda = useMemo(() => (fazendaAtual && fazendaAtual.id !== '__global__' ? [fazendaAtual.id] : []), [fazendaAtual]);
+  const { grupos } = useGruposComOrigem(idsDaFazenda, tiqueDosGrupos);
+  const grupoDoFoco = useMemo(() => {
+    const g = focusedId ? geometrias.find(x => x.id === focusedId) : null;
+    return g ? grupoDaDivisao(g.pasto_id, pastos, grupos) : null;
+  }, [focusedId, geometrias, pastos, grupos]);
+  /* as irmãs do mesmo grupo que encostam no polígono selecionado: candidatas do "Juntar com…" (e o único lugar da linha que se move) */
+  const irmasDoFoco = useMemo(() => {
+    const g = focusedId ? geometrias.find(x => x.id === focusedId) : null;
+    return g && grupoDoFoco ? irmasQueEncostam(g, grupoDoFoco, pastos, geometrias) : [];
+  }, [focusedId, geometrias, grupoDoFoco, pastos]);
+  const divisoesDaLinha = useMemo(() => {
+    if (!grupoDoFoco) return null;
+    const doGrupo = new Set(pastos.filter(p => p.grupo_id === grupoDoFoco.id).map(p => p.id));
+    return new Set(geometrias.filter(x => x.pasto_id && doGrupo.has(x.pasto_id)).map(x => x.id));
+  }, [grupoDoFoco, pastos, geometrias]);
+  const [juntandoDe, setJuntandoDe] = useState<string | null>(null);
+  const [juntarRecusa, setJuntarRecusa] = useState<string | null>(null);
+  const [juntando, setJuntando] = useState<{ fica: FazendaGeometria; sai: FazendaGeometria; uniao: GeoJSON.Polygon } | null>(null);
+  const [desfazendo, setDesfazendo] = useState<{ grupoId: string; paiPastoId: string } | null>(null);
+  /* MAPA-PIQUETES-MANUAL-01 (4): os polígonos que são divisões de um grupo ativo com origem (o desenho sobre eles nasce recortando) */
+  const poligonosDePiquetes = useMemo(() => {
+    const pastosEmGrupo = new Set(pastos.filter(p => p.grupo_id && grupos.some(g => g.id === p.grupo_id && g.ativo)).map(p => p.id));
+    return new Set(geometrias.filter(x => x.pasto_id && pastosEmGrupo.has(x.pasto_id)).map(x => x.id));
+  }, [pastos, grupos, geometrias]);
   /* MAPA-AREA-TIPOS-02 (D3): as infraestruturas da fazenda, para saber qual estrutura com valor já virou infraestrutura */
   const { infras, estruturaDaArea, recarregar: recarregarInfras } = useInfraestruturas(fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : undefined);
   const edicao = useEdicaoDoPoligono({
+    divisoesDaLinha, piquetes: poligonosDePiquetes,
     mapa: statusDoMapa === 'ready' ? mapInstance.current : null,
     fazendaId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null,
     geometrias, aoMudar: aoMudarGeometrias,
@@ -247,6 +285,28 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     semVinculo: geometrias.filter(g => g.tipo === 'outra').length,
   }), [geometrias]);
 
+  /* MAPA-CRIAR-PIQUETES-01 (2b) — "Juntar com…": a escolhida (no mapa ou na lista) é quem SAI; a selecionada FICA (D6 a: A absorve B). A união sai
+     da MESMA `unirVarios` do Concluir piquetes e tem de dar UM polígono; senão a frase fica no popover (nunca toast). */
+  const escolherParaJuntar = (saiGeoId: string) => {
+    const fica = geometrias.find(g => g.id === focusedId);
+    const sai = geometrias.find(g => g.id === saiGeoId);
+    if (!fica || !sai) return;
+    const r = uniaoDasDuas({ id: fica.id, nome: fica.nome_original, geojson: fica.geojson }, { id: sai.id, nome: sai.nome_original, geojson: sai.geojson });
+    if ('motivo' in r) { setJuntarRecusa(r.motivo); return; }
+    setJuntarRecusa(null); setJuntandoDe(null);
+    setJuntando({ fica, sai, uniao: r.valor });
+  };
+  const escolherParaJuntarRef = useRef(escolherParaJuntar);
+  escolherParaJuntarRef.current = escolherParaJuntar;
+  /* trocou o polígono selecionado: a escolha da vizinha e a frase dela não valem mais */
+  useEffect(() => { setJuntandoDe(null); setJuntarRecusa(null); }, [focusedId]);
+  const desenhosPorId = useMemo(() => new Map(geometrias.map(g => [g.id, g.geojson])), [geometrias]);
+  const candidatasAJuntar = useMemo(() => (juntandoDe ? new Set(irmasDoFoco.map(i => i.id)) : new Set<string>()), [juntandoDe, irmasDoFoco]);
+  const depoisDeMexerNosPastos = () => {
+    onRefresh();
+    setTiqueDosGrupos(t => t + 1);
+    if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id);
+  };
   /* MAPA-PIQUETES-04 (Gabriel 02/11 10:40, Sta. Rita: "não dá para clicar em 20A-1-A pois o 20A-1 fica por cima"): o contorno de um pai
      com divisão desenhada vai POR CIMA e só com a linha (sem preenchimento, o clique pega só na borda); as divisões vão por baixo,
      preenchidas, e o clique no miolo abre a divisão. Pai sem divisão desenhada segue como pasto comum. */
@@ -263,7 +323,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     return avisoSemDesenho(pastosSemDesenho(pastos.filter(p => geometrias.some(g => g.fazenda_id === p.fazenda_id)), geometrias, mes), 44);
   }, [pastos, geometrias]);
   const fazendasDaVista = useMemo(() => [...new Set(geometrias.map(g => g.fazenda_id))], [geometrias]);
-  const { grupos: gruposComOrigem } = useGruposComOrigem(fazendasDaVista);
+  const { grupos: gruposComOrigem } = useGruposComOrigem(fazendasDaVista, tiqueDosGrupos); // merge 03/11: relê depois de juntar/desfazer (2b)
   const contornos = useMemo(() => contornosDePai(geometrias, pastos, gruposComOrigem), [geometrias, pastos, gruposComOrigem]);
 
   // Draw polygons
@@ -284,10 +344,11 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
         if (geo.id === emEdicaoId) return;
         try {
           const isFocused = focusedId === geo.id;
-          const isChecked = selectedIds.has(geo.id) || unidos.includes(geo.id);
+          const candidataAJuntar = candidatasAJuntar.has(geo.id);
+          const isChecked = selectedIds.has(geo.id) || unidos.includes(geo.id) || candidataAJuntar;
           const ehContorno = contornos.has(geo.id);
           const layer = L.geoJSON(geo.geojson as any, {
-            interactive: !editando || unindo,
+            interactive: !editando || unindo || candidataAJuntar,
             /* -02 (item 4a): o contorno da fazenda nunca é ponto de encaixe na edição */
             snapIgnore: TIPOS_DE_CONTORNO.includes(geo.tipo),
             style: {
@@ -311,7 +372,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             const marker = L.marker(center, { icon: iconeDoRotulo(geo.nome_original, area, false), interactive: false }).addTo(lg);
             rotulosRef.current.set(geo.id, { marker, nome: geo.nome_original, area, comArea: false, bounds: b });
           }
-          if (!editando) layer.on('click', () => setFocusedId(geo.id));
+          if (candidataAJuntar) layer.on('click', () => escolherParaJuntarRef.current(geo.id));
+          else if (!editando) layer.on('click', () => setFocusedId(geo.id));
           else if (unindo) layer.on('click', () => alternarNaUniao(geo.id));
           layer.addTo(lg);
           // MAPA-PIQUETES-04: o id no elemento (o gate clica no miolo de cada divisão e na borda do pai)
@@ -329,7 +391,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [geometrias, focusedId, selectedIds, statusDoMapa, emEdicaoId, editando, unindo, unidos, alternarNaUniao, contornos, atualizarRotulosDeArea]);
+  }, [geometrias, focusedId, selectedIds, statusDoMapa, emEdicaoId, editando, unindo, unidos, alternarNaUniao, contornos, atualizarRotulosDeArea, candidatasAJuntar]);
 
   /* MAPA-DICAS-01 (área): a linha da área do rótulo some no zoom afastado e reaparece no aproximado (a mesma ideia dos metros dos lados) */
   useEffect(() => {
@@ -424,6 +486,17 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     return pastos.find(p => p.id === pastoId)?.nome || null;
   };
 
+  /* MAPA-CRIAR-PIQUETES-01 (2b): o diálogo do "Mover linha" nasce do gesto de vértices — as DUAS divisões (a editada e a que andou junto na divisa) */
+  const dadosDaLinha = (() => {
+    const alvo = edicao.alvo, outra = edicao.afetados[0];
+    const outraGeo = outra ? geometrias.find(g => g.id === outra.id) : null;
+    if (!edicao.linhaAberta || !alvo?.pasto_id || !edicao.formaNova || edicao.afetados.length !== 1 || !outra || !outraGeo?.pasto_id || !fazendaAtual) return null;
+    return {
+      a: { pastoId: alvo.pasto_id, geoId: alvo.id, nome: alvo.nome, antes: alvo.geojson, depois: edicao.formaNova },
+      b: { pastoId: outraGeo.pasto_id, geoId: outra.id, nome: outra.nome, antes: outra.antes, depois: outra.depois },
+    };
+  })();
+
   return (
     <div className="flex flex-col h-full gap-3">
       {/* Stats bar */}
@@ -432,9 +505,10 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
         <Badge variant="outline" className="text-[10px] h-5 text-green-700 border-green-300">{stats.vinculados} pastos</Badge>
         <Badge variant="outline" className="text-[10px] h-5">{stats.areas} áreas</Badge>
         <Badge variant="outline" className="text-[10px] h-5 text-orange-700 border-orange-300">{stats.semVinculo} sem classificação</Badge>
-        {selectedIds.size > 0 && (
-          <Badge variant="default" className="text-[10px] h-5">{selectedIds.size} selecionados</Badge>
-        )}
+        {/* MAPA-LISTA-SEM-PULO-01: o selo da seleção tem lugar e largura reservados (sempre presente; só a cor muda com a seleção) */}
+        <Badge variant={selectedIds.size > 0 ? 'default' : 'outline'} className="text-[10px] h-5" data-testid="validacao-contador">
+          <TextoReservado texto={`${selectedIds.size} selecionados`} reserva="99.999 selecionados" />
+        </Badge>
       </div>
 
       <div className="flex-1 min-h-0 flex gap-3">
@@ -482,43 +556,58 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                 </SelectContent>
               </Select>
             </div>
-            {/* Batch actions */}
-            {/* -02b/-04: na lista de 240 px as ações em lote quebram linha em vez de sumir pela direita */}
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <Button variant="ghost" size="sm" className="h-5 text-[10px] px-2" onClick={isAllSelected ? deselectAll : selectAll}>
-                <CheckCheck className="h-3 w-3 mr-1" />
-                {isAllSelected ? 'Desmarcar' : 'Selecionar'} todos
-              </Button>
-              {selectedIds.size > 0 && (
-                <>
+            {/* MAPA-LISTA-SEM-PULO-01 (Gabriel 02/11, UI-ESPACO-RESERVADO): a faixa de ações tem ALTURA FIXA (2 linhas de 24 px) e está SEMPRE
+                presente — os botões que dependem da seleção ficam à vista e inativos (o motivo no `title`), nunca somem nem aparecem; marcar
+                a caixa de um polígono não desloca a lista. O `title` do botão inativo vai também no invólucro (o inativo não recebe o mouse). */}
+            <div className="flex h-[50px] flex-col gap-0.5" data-testid="validacao-lista-acoes">
+              <div className="flex h-6 items-center gap-x-1.5">
+                <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={isAllSelected ? deselectAll : selectAll}
+                  disabled={filtered.length === 0} title={filtered.length === 0 ? 'Nenhum polígono na lista para selecionar' : isAllSelected ? 'Tirar a marca de todos os polígonos da lista' : 'Marcar todos os polígonos da lista'}
+                  data-testid="validacao-selecionar-todos">
+                  <CheckCheck className="h-3 w-3 mr-1" />
+                  <TextoReservado texto={`${isAllSelected ? 'Desmarcar' : 'Selecionar'} todos`} reserva="Selecionar todos" />
+                </Button>
+                <span title={selectedIds.size > 0 ? undefined : MOTIVO_APAGAR} className="inline-flex">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 text-[10px] px-2 text-destructive hover:text-destructive"
+                    className="h-6 text-[10px] px-2 text-destructive hover:text-destructive disabled:text-muted-foreground"
+                    data-testid="apagar-selecionados"
+                    disabled={selectedIds.size === 0}
+                    title={selectedIds.size > 0 ? `Apagar os ${selectedIds.size} polígonos marcados` : MOTIVO_APAGAR}
                     onClick={() => confirmDelete(Array.from(selectedIds), `${selectedIds.size} polígono(s) selecionado(s)`)}
                   >
-                    <Trash2 className="h-3 w-3 mr-1" />Apagar ({selectedIds.size})
+                    <Trash2 className="h-3 w-3 mr-1" /><TextoReservado texto={`Apagar (${selectedIds.size})`} reserva="Apagar (999)" />
                   </Button>
-                  {selectedIds.size >= 2 && (
-                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" data-testid="unir-selecionados"
-                      onClick={() => void edicao.iniciarUniao(Array.from(selectedIds))} title="Unir selecionados: os marcados viram um polígono só (o primeiro fica; prévia antes de gravar)">
-                      Unir ({selectedIds.size})
-                    </Button>
-                  )}
+                </span>
+              </div>
+              <div className="flex h-6 items-center gap-x-1.5">
+                <span title={selectedIds.size >= 2 ? undefined : MOTIVO_UNIR} className="inline-flex">
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 disabled:text-muted-foreground" data-testid="unir-selecionados"
+                    disabled={selectedIds.size < 2}
+                    onClick={() => void edicao.iniciarUniao(Array.from(selectedIds))}
+                    title={selectedIds.size >= 2 ? 'Unir selecionados: os marcados viram um polígono só (o primeiro fica; prévia antes de gravar)' : MOTIVO_UNIR}>
+                    <TextoReservado texto={`Unir (${selectedIds.size})`} reserva="Unir (999)" />
+                  </Button>
+                </span>
+                <span title={stats.semVinculo > 0 ? undefined : MOTIVO_SEM_CLASSIFICACAO} className="inline-flex">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 text-[10px] px-2 text-destructive hover:text-destructive"
+                    className="h-6 text-[10px] px-2 text-destructive hover:text-destructive disabled:text-muted-foreground"
+                    data-testid="apagar-sem-classificacao"
+                    disabled={stats.semVinculo === 0}
+                    title={stats.semVinculo > 0 ? `Apagar os ${stats.semVinculo} polígonos sem classificação (área classificada não entra)` : MOTIVO_SEM_CLASSIFICACAO}
                     onClick={() => {
                       /* MAPA-AREA-TIPO-01: só os SEM CLASSIFICAÇÃO — área classificada (reserva, APP, curral…) não tem pasto e não é lixo */
                       const semVinculo = geometrias.filter(g => g.tipo === 'outra').map(g => g.id);
                       if (semVinculo.length > 0) confirmDelete(semVinculo, `${semVinculo.length} polígono(s) sem classificação`);
                     }}
                   >
-                    <Unlink className="h-3 w-3 mr-1" />Apagar sem classificação
+                    {/* gate 03/11: sem o ícone e com o "Unir" (curto) ao lado ele cabe inteiro na lista de 240 px */}Apagar sem classificação
                   </Button>
-                </>
-              )}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -631,7 +720,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
               if (!geo) return <span />;
               const pName = getPastoName(geo.pasto_id);
               const nome = geo.nome_original || 'Sem nome';
-              const sub = pName ? `Pasto → ${pName}` : rotuloDoTipo(geo.tipo);
+              /* MAPA-PIQUETES-MANUAL-01 (gate 03/11): o pasto com o MESMO nome do polígono não se repete ("P_09 Retiro de Cima · Pasto"): a barra
+                 do pai ganhou o "Desfazer piquetes" e o nome repetido passava da caixa a 1126 px */
+              const sub = pName ? (pName.trim() === (geo.nome_original ?? '').trim() ? 'Pasto' : `Pasto → ${pName}`) : rotuloDoTipo(geo.tipo);
               const classificando = classificandoId === geo.id || (!!tipoPedido && classificandoId === null);
               const fecharClassificar = () => { setClassificandoId(null); onTipoPedidoUsado?.(); };
               const naEspera = piquetes.espera.some(x => x.geometriaId === geo.id);
@@ -667,6 +758,45 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                         <Button variant="ghost" size="sm" className={icone} data-testid="editar-piquetes" aria-label="Piquetes"
                           onClick={() => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }); }}>
                           <LayoutGrid className="h-3.5 w-3.5" />
+                        </Button>
+                      </DicaDoMapa>
+                    )}
+                    {/* MAPA-CRIAR-PIQUETES-01 (2b, D8) — o caminho de volta: só onde se aplica (divisão de um grupo que nasceu de um pasto; o pai do grupo) */}
+                    {geo.pasto_id && grupoDaDivisao(geo.pasto_id, pastos, grupos) && (() => {
+                      const semVizinha = irmasDoFoco.length === 0;
+                      const porque = 'Nenhuma divisão do mesmo grupo encosta nesta.';
+                      return (
+                        <>
+                          <DicaDoMapa nome="Mover linha" desabilitado={semVizinha}
+                            frase={semVizinha ? porque : 'Arrastar a divisa entre esta divisão e a vizinha do mesmo grupo; a área oficial das duas vale a do mapa a partir de um mês.'}>
+                            <Button variant="ghost" size="sm" className={icone} data-testid="editar-mover-linha" aria-label="Mover linha" disabled={semVizinha}
+                              onClick={() => void edicao.iniciar('vertices', geo.id, { moverLinha: true })}>
+                              <Move className="h-3.5 w-3.5" />
+                            </Button>
+                          </DicaDoMapa>
+                          <Popover open={juntandoDe === geo.id} onOpenChange={(v) => { setJuntandoDe(v ? geo.id : null); setJuntarRecusa(null); }}>
+                            <DicaDoMapa nome="Juntar com…" desabilitado={semVizinha}
+                              frase={semVizinha ? porque : 'Juntar esta divisão com uma vizinha do mesmo grupo: esta fica e absorve a outra, que encerra no mês anterior.'}>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" className={icone} data-testid="editar-juntar" aria-label="Juntar com…" disabled={semVizinha}>
+                                  <Combine className="h-3.5 w-3.5" />
+                                </Button>
+                              </PopoverTrigger>
+                            </DicaDoMapa>
+                            {/* o clique no mapa (numa divisão destacada) também escolhe: o popover não fecha por clique fora */}
+                            <PopoverContent align="start" className="w-[300px] p-2" data-testid="validacao-popover" onInteractOutside={(ev) => ev.preventDefault()}>
+                              <EscolherVizinhaParaJuntar nome={nome} recusa={juntarRecusa} aoEscolher={escolherParaJuntar}
+                                irmas={irmasDoFoco.map(i => { const ha = areaDoMapaHa(i.geojson); return { id: i.id, nome: i.nome_original, ha: ha != null ? textoHa2(ha) : '— ha' }; })} />
+                            </PopoverContent>
+                          </Popover>
+                        </>
+                      );
+                    })()}
+                    {geo.pasto_id && grupoDoPai(geo.pasto_id, grupos) && (
+                      <DicaDoMapa nome="Desfazer piquetes" frase="Desfazer a divisão deste pasto em piquetes: ele volta a valer inteiro e as divisões ficam inativas. Só vale sem nada lançado nelas.">
+                        <Button variant="ghost" size="sm" className={icone} data-testid="editar-desfazer-piquetes" aria-label="Desfazer piquetes"
+                          onClick={() => { const g = grupoDoPai(geo.pasto_id, grupos); if (g && geo.pasto_id) setDesfazendo({ grupoId: g.id, paiPastoId: geo.pasto_id }); }}>
+                          <Undo2 className="h-3.5 w-3.5" />
                         </Button>
                       </DicaDoMapa>
                     )}
@@ -780,6 +910,21 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             onRefresh();
             if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id);
           }} />
+      )}
+
+      {dadosDaLinha && fazendaAtual && (
+        <MoverLinhaDialog fazendaId={fazendaAtual.id} a={dadosDaLinha.a} b={dadosDaLinha.b} aoFechar={edicao.fecharLinha}
+          aoGravar={() => { edicao.cancelar(); depoisDeMexerNosPastos(); }} />
+      )}
+      {juntando && juntando.fica.pasto_id && juntando.sai.pasto_id && (
+        <JuntarDialog uniao={juntando.uniao} aoFechar={() => setJuntando(null)} aoGravar={depoisDeMexerNosPastos}
+          fica={{ pastoId: juntando.fica.pasto_id, geoId: juntando.fica.id, nome: juntando.fica.nome_original, geojson: juntando.fica.geojson }}
+          sai={{ pastoId: juntando.sai.pasto_id, geoId: juntando.sai.id, nome: juntando.sai.nome_original, geojson: juntando.sai.geojson }} />
+      )}
+      {desfazendo && (
+        <DesfazerPiquetesDialog grupoId={desfazendo.grupoId} aoFechar={() => setDesfazendo(null)} aoGravar={depoisDeMexerNosPastos}
+          nomeDoPai={pastos.find(p => p.id === desfazendo.paiPastoId)?.nome ?? geometrias.find(g => g.pasto_id === desfazendo.paiPastoId)?.nome_original ?? 'o pasto'}
+          geoDoPai={geometrias.find(g => g.pasto_id === desfazendo.paiPastoId)?.geojson ?? null} desenhos={desenhosPorId} />
       )}
 
       {/* Delete confirmation dialog */}
