@@ -130,14 +130,57 @@ export class Danfe {
   marcar(campo: CampoDaMarca, it: ItemNaPagina | null | undefined) {
     if (it) this.marcas.push({ campo, pagina: it.pagina, x: it.x, y: it.y, w: it.w, h: it.h });
   }
-  /** Os itens que sao este rotulo (igual, sem acento; ou comecando por ele quando `prefixo`). */
+  /** Os itens que sao este rotulo (igual, sem acento; ou comecando por ele quando `prefixo`) — e o rotulo PARTIDO em itens (`partidos`). */
   rotulos(rotulo: string, prefixo = false): ItemNaPagina[] {
     const alvo = normalizar(rotulo);
-    return this.itens.filter((it) => { const n = normalizar(it.str); return n === alvo || (prefixo && n.startsWith(alvo)); });
+    const inteiros = this.itens.filter((it) => { const n = normalizar(it.str); return n === alvo || (prefixo && n.startsWith(alvo)); });
+    return [...inteiros, ...this.partidos(alvo, prefixo)];
   }
+  /**
+   * NF-LEITOR-PALAVRAS-01 (Ricci, NF 39423) — ha' emissor que escreve CADA PALAVRA do rotulo num item ("DATA" | "DA" | "EMISSÃO"): o
+   * rotulo inteiro nao existe como item e nenhum campo era achado. Aqui ele e' remontado: palavras vizinhas na MESMA linha (o vao ate'
+   * 1,5x a altura da letra) e, quando a linha acaba antes do rotulo, a continuacao na linha LOGO ABAIXO, comecando no mesmo x (o rotulo
+   * em 2 linhas numa coluna estreita). O item remontado cobre as partes; o valor e' lido abaixo da ULTIMA linha dele, como o de sempre.
+   * A barra conta sem espaco ("ENTRADA/SAÍDA" = "ENTRADA / SAIDA"). Nada e' adivinhado: so' casa o rotulo inteiro, palavra por palavra.
+   */
+  private partidos(alvo: string, prefixo: boolean): ItemNaPagina[] {
+    const sem = (s: string) => s.replace(/\s*\/\s*/g, '/');
+    const meta = sem(alvo);
+    const casa = (t: string) => t === meta || (prefixo && t.startsWith(meta));
+    const continua = (t: string) => meta.startsWith(`${t} `) || meta.startsWith(`${t}/`) || (meta.startsWith(t) && t.endsWith('/'));
+    const juntar = (t: string, p: string) => (t.endsWith('/') || p.startsWith('/') ? `${t}${p}` : `${t} ${p}`);
+    const achados: ItemNaPagina[] = [];
+    for (const ini of this.itens) {
+      const n0 = sem(normalizar(ini.str));
+      if (casa(n0) || !continua(n0)) continue;
+      const partes = [ini]; let texto = n0; let ult = ini;
+      for (;;) {
+        const vao = Math.max(ult.h, 4) * 1.5;
+        const naLinha = this.itens.filter((o) => o.pagina === ult.pagina && !partes.includes(o) && Math.abs(o.y - ult.y) <= TOL_LINHA
+          && o.x >= ult.x + ult.w - 1 && o.x - (ult.x + ult.w) <= vao).sort((a, b) => a.x - b.x)[0];
+        const abaixo = naLinha ? undefined : this.itens.filter((o) => o.pagina === ult.pagina && !partes.includes(o)
+          && o.y < ult.y - TOL_LINHA && ult.y - o.y <= Math.max(ult.h, 4) * 2 && Math.abs(o.x - ini.x) <= 3).sort((a, b) => b.y - a.y)[0];
+        const prox = naLinha ?? abaixo;
+        if (!prox) break;
+        const t = juntar(texto, sem(normalizar(prox.str)));
+        if (!casa(t) && !continua(t)) break;
+        partes.push(prox); texto = t; ult = prox;
+        if (casa(t)) break;
+      }
+      if (partes.length < 2 || !casa(texto)) continue;
+      const x = Math.min(...partes.map((o) => o.x));
+      const item: ItemNaPagina = { pagina: ini.pagina, x, y: ult.y, h: Math.max(...partes.map((o) => o.h)),
+        w: Math.max(...partes.map((o) => o.x + o.w)) - x, str: partes.map((o) => o.str.trim()).join(' ') };
+      this.partesDe.set(item, partes);
+      achados.push(item);
+    }
+    return achados;
+  }
+  private readonly partesDe = new WeakMap<ItemNaPagina, ItemNaPagina[]>();
   /** O valor abaixo do rotulo, na coluna dele. */
   valorDe(r: ItemNaPagina): ItemNaPagina | null {
-    const vizinhos = this.itens.filter((o) => o.pagina === r.pagina && o !== r && Math.abs(o.y - r.y) <= TOL_LINHA && o.x > r.x + 1);
+    const partes = this.partesDe.get(r) ?? [];
+    const vizinhos = this.itens.filter((o) => o.pagina === r.pagina && o !== r && !partes.includes(o) && Math.abs(o.y - r.y) <= TOL_LINHA && o.x > r.x + 1);
     const fim = vizinhos.length ? Math.min(...vizinhos.map((o) => o.x)) : Number.POSITIVE_INFINITY;
     const naColuna = this.itens.filter((o) => o.pagina === r.pagina && o.y < r.y - 2 && o.y >= r.y - ABAIXO_MAX && o.x >= r.x - 3 && o.x < fim - 1);
     if (!naColuna.length) return null;
@@ -296,7 +339,22 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   d.marcar('serie', series[0]?.it);
 
   /* EMITENTE. */
-  const canhoto = d.itens.map((it) => ({ it, m: /RECEBEMOS DE\s+'?(.+?)'?,?\s+OS PRODUTOS?/i.exec(it.str) })).find((x) => x.m);
+  const RE_CANHOTO = /RECEBEMOS DE\s+'?(.+?)'?,?\s+OS PRODUTOS?/i;
+  /* NF-LEITOR-PALAVRAS-01 — o canhoto partido em itens ("RECEBEMOS" | "DE" | "<nome> OS PRODUTOS…"): os pedacos CONTIGUOS a partir do
+     "RECEBEMOS" (o vao de `partidos`; outro texto na mesma altura, como o "DATA DE RECEBIMENTO" ao lado, nao entra), lidos juntos pela
+     mesma regra */
+  const canhotoPartido = () => d.itens.filter((it) => normalizar(it.str) === 'RECEBEMOS').map((it) => {
+    const partes = [it]; let ult = it;
+    for (;;) {
+      const fim = ult.x + ult.w; const vao = Math.max(ult.h, 4) * 1.5;
+      const prox = d.itens.filter((o) => o.pagina === it.pagina && !partes.includes(o) && Math.abs(o.y - it.y) <= TOL_LINHA
+        && o.x >= fim - 1 && o.x - fim <= vao).sort((a, b) => a.x - b.x)[0];
+      if (!prox) break;
+      partes.push(prox); ult = prox;
+    }
+    return { it, m: RE_CANHOTO.exec(partes.map((o) => o.str.trim()).join(' ')) };
+  }).find((x) => x.m);
+  const canhoto = d.itens.map((it) => ({ it, m: RE_CANHOTO.exec(it.str) })).find((x) => x.m) ?? canhotoPartido();
   const nomeEmit = canhoto?.m?.[1]?.trim() ?? '';
   /* NF-LEITOR-LAYOUTS-01 — o nome no quadro do emitente em 2 linhas ("AGRO EXEMPLO COMERCIO E" / "REPRESENTACOES LTDA"): a 2a linha logo
      abaixo, alinhada a' esquerda (mesmo x) ou centrada (mesmo meio); as duas juntas tem de dar o nome do canhoto. */
@@ -367,7 +425,12 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   const itIeDest = d.campo('INSCRICAO ESTADUAL', faixaDest);
   d.marcar('destinatario_ie', itIeDest);
   const itEnderDest = d.campo('ENDERECO', faixaDest, true);
-  const itEmissao = d.campo('DATA DA EMISSAO', faixaDest, true) ?? d.campo('DATA DE EMISSAO', faixaDest, true) ?? d.campo('DATA EMISSAO', faixaDest, true);
+  /* NF-LEITOR-PALAVRAS-01 — ha' leiaute com o quadro da data ACIMA do titulo "DESTINATÁRIO" (a nota de entrada do produtor, com o
+     remetente em cima): fora da faixa do destinatario, o mesmo rotulo na pagina toda; so' vale se o valor for uma data */
+  const ROTULOS_EMISSAO = ['DATA DA EMISSAO', 'DATA DE EMISSAO', 'DATA EMISSAO'];
+  const ehData = (o: ItemNaPagina) => dataIso(o.str) != null;
+  const itEmissao = ROTULOS_EMISSAO.reduce<ItemNaPagina | null>((achado, rot) => achado ?? d.campo(rot, faixaDest, true), null)
+    ?? ROTULOS_EMISSAO.reduce<ItemNaPagina | null>((achado, rot) => achado ?? d.valorQue(rot, {}, true, ehData), null);
   d.marcar('emissao', itEmissao);
   const itSaida = d.campo('DATA DA ENTRADA / SAIDA', faixaDest, true) ?? d.campo('DATA DA SAIDA', faixaDest, true) ?? d.campo('DATA DE SAIDA', faixaDest, true);
 
@@ -508,7 +571,13 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   const rotSaida = d.itens.find((it) => it.pagina === pg && /^1\s*-\s*SAIDA$/.test(normalizar(it.str)));
   const digitoTipo = rotSaida ? d.itens.find((it) => it.pagina === pg && /^[01]$/.test(it.str.trim()) && it.x > rotSaida.x && it.x < rotSaida.x + 90 && Math.abs(it.y - rotSaida.y) < 14) : null;
 
-  const emissao = dataIso(itEmissao?.str) ?? '';
+  /* NF-LEITOR-PALAVRAS-01 — sem a data no quadro do destinatario, a do PROTOCOLO DE AUTORIZACAO ("135… 13/07/2026 10:22:33"): a SEFAZ
+     autoriza no dia da emissao ou logo depois. Nunca inventada: sem as duas, "Nota sem data de emissão."; e a chave confere o ano/mes
+     (`conferirChave`: divergiu = nada criado). */
+  const itDataProt = itEmissao || !itProtocolo ? null : (dataIso(itProtocolo.str) ? itProtocolo : d.aoLado(itProtocolo));
+  const emissaoDoProtocolo = dataIso(itDataProt?.str);
+  if (emissaoDoProtocolo) d.marcar('emissao', itDataProt);
+  const emissao = dataIso(itEmissao?.str) ?? emissaoDoProtocolo ?? '';
   const docEmit = soDigitos(itCnpjEmit?.str) || chave.slice(6, 20);
   const notaCent = centavosBr(itTotal?.str);
   if (!numero) return { ok: false, motivo: 'incompleta', frase: 'Nota sem número.' };
