@@ -120,6 +120,13 @@ export const PIQUETES_SOLTOS = [
   { id: 'gq2', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'outra', nome_original: 'P_04B', cor: null,
     geojson: ret(4.5, 1, PASSO / 2), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
 ];
+/* MAPA-LISTA-COMPACTA-01: `&praca=1` — uma praça (sem pasto) no MEIO do P_02: o rótulo dela cai em cima do rótulo do pasto (o pasto vence) */
+export const PRACA_SOBRE_PASTO = [
+  { id: 'gp1', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'praca_alimentacao', nome_original: 'Praça P_02', cor: null,
+    geojson: ret(1.47, 0.47, PASSO * 0.06), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  { id: 'gp2', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'praca_alimentacao', nome_original: 'Praça P_08', cor: null,
+    geojson: ret(1.15, 2.15, PASSO * 0.06), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+];
 export function previaDosPiquetes(a: { p_pasto_pai?: string; p_geometrias?: string[]; p_mes?: string }) {
   const pai = PASTOS.find((p) => p.id === a.p_pasto_pai) ?? PASTOS[0];
   const piquetes = PIQUETES_SOLTOS.filter((g) => (a.p_geometrias ?? []).includes(g.id))
