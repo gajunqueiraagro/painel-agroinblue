@@ -16,7 +16,9 @@ import { InfraPainel } from './InfraPainel';
 describe('infraestrutura (lib)', () => {
   it('os 14 tipos com os rótulos do banco (_fn_infra_rotulo); a cerca não se coloca como ponto (02f-c)', () => {
     expect(TIPOS_INFRA.map(t => t.rotulo)).toEqual(['Cocho', 'Bebedouro', 'Saleiro', 'Curral', 'Tronco / brete', 'Balança', 'Porteira', 'Cerca',
-      'Poço', 'Represa / açude', "Caixa d'água", 'Sede / casa', 'Galpão', 'Energia']);
+      'Poço', 'Represa / açude', "Caixa d'água", 'Sede / casa', 'Galpão', 'Energia',
+      /* MAPA-AREA-TIPOS-02: as estruturas que nascem de uma área do mapa (não se colocam como ponto) */
+      'Armazém de grãos', 'Silo / secador', 'Oficina / galpão de máquinas', 'Casa de funcionário', 'Escritório', 'Confinamento']);
     expect(tipoDePontoPeloRotulo('Cerca')).toBeNull();
     expect(tipoDePontoPeloRotulo('Tronco / brete')).toBe('tronco_brete');
     expect(TIPOS_INFRA.filter(t => t.ponto)).toHaveLength(13);

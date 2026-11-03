@@ -8,7 +8,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { argumentosDoEscritor, rotuloDoTipo, TIPOS_DE_AREA } from '@/lib/mapa/tiposDeArea';
 
 const rpc = vi.fn();
-vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a) } }));
+vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a),
+  /* MAPA-AREA-TIPOS-02: o nome do grupo de pastejo (`pasto_grupos`) da prévia sem mudança */
+  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { nome: '20A-1' }, error: null }) }) }) }) } }));
 const toast = vi.fn();
 vi.mock('sonner', () => ({ toast: Object.assign((...a: unknown[]) => toast(...a), { error: toast, success: toast }) }));
 
@@ -24,9 +26,10 @@ function renderiza(tipoInicial: 'curral' | null = null) {
 }
 
 describe('tipos de área (lib)', () => {
-  it('os 9 tipos com os rótulos do banco (_fn_mapa_tipo_rotulo); degradada/erosão não são tipo', () => {
-    expect(TIPOS_DE_AREA.map(t => t.rotulo)).toEqual(['Área da fazenda', 'Área sem uso (terceiros)', 'Reserva legal / mata nativa', 'APP',
-      'Várzea / brejo', 'Sede / benfeitorias', 'Estrada', 'Curral', 'Confinamento']);
+  it('os tipos do catálogo (MAPA-AREA-TIPOS-02: 20, os 9 de antes continuam); degradada/erosão não são tipo', () => {
+    expect(TIPOS_DE_AREA).toHaveLength(23);
+    for (const r of ['Área da fazenda', 'Área sem uso (terceiros)', 'Reserva legal / mata nativa', 'APP', 'Várzea / brejo', 'Sede / benfeitorias',
+      'Estrada', 'Curral', 'Confinamento']) expect(TIPOS_DE_AREA.map(t => t.rotulo)).toContain(r);
     expect(rotuloDoTipo('outra')).toBe('Sem classificação');
     expect(TIPOS_DE_AREA.some(t => /degrad|eros|reforma|recupera/i.test(t.rotulo))).toBe(false);
   });
@@ -66,5 +69,25 @@ describe('ClassificarPoligono (painel da Validação)', () => {
     expect(screen.getByText('Escolha o tipo de área.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Gravar' })).toHaveProperty('disabled', true);
     expect(rpc.mock.calls.every(c => c[1].p_tipo === 'outra')).toBe(true);
+  });
+});
+
+describe('ClassificarPoligono — a prévia SEM mudança diz o estado atual (Gabriel 02/11 15:47, Sta. Rita "20A-1-A")', () => {
+  beforeEach(() => { rpc.mockReset(); });
+  const semMudanca = () => rpc.mockResolvedValue({ data: { ok: true, simulado: true, sem_mudanca: true }, error: null });
+
+  it('o polígono já ligado ao piquete: diz o pasto, o grupo e o mês; o Gravar apagado diz "Nada para gravar."', async () => {
+    semMudanca();
+    const g = { id: 'g2', pasto_id: 'p2', tipo: 'pasto', nome_original: '20A-1-A' };
+    render(<ClassificarPoligono geo={g} geometrias={[g]} onGravou={() => undefined} onFechar={() => undefined}
+      pastos={[{ id: 'p2', nome: '20A-1-A', ativo: true, grupo_id: 'gr', data_inicio: '2026-11-01' }]} />);
+    expect(await screen.findByText('Já está ligado ao pasto 20A-1-A, piquete de 20A-1, vale a partir de 11/2026 — nada para gravar.')).toBeTruthy();
+    expect(screen.getByText('Nada para gravar.')).toBeTruthy();
+    expect(screen.queryByText('Nada muda.')).toBeNull();
+  });
+  it('a área que já é desse tipo: "Já está marcado como Curral"', async () => {
+    semMudanca();
+    renderiza('curral');
+    expect(await screen.findByText('Já está marcado como Curral — nada para gravar.')).toBeTruthy();
   });
 });

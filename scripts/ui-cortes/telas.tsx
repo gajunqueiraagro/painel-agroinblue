@@ -712,15 +712,15 @@ if (tela === 'mesclar') {
           : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
           : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : [])].map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
-      : t === 'pastos' ? [...MAPA.PASTOS, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
+      : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
           ...(q.get('grupo') === '1' ? ['P_01A', 'P_01B'].map((nome, i) => ({ ...MAPA.PASTOS[0], id: `p1${'ab'[i]}`, nome, grupo_id: 'gx', data_inicio: '2026-11-01', observacoes: null })) : [])]
       // MAPA-PIQUETES-03: `&unidade=1` — o grupo que nasceu de um pasto (o elo); MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o do P_01
       : t === 'pasto_grupos' ? [...(UNIDADE ? MAPA.UNIDADE_GRUPOS : []), ...(q.get('grupo') === '1' ? [{ id: 'gx', nome: 'P_01', pasto_origem_id: 'p1', cliente_id: 'cli' }] : [])]
       : t === 'categorias_rebanho' ? MAPA.CATEGORIAS
       // MAPA-PERF-01: os itens vêm EMBUTIDOS no fechamento (o banco falso não faz o embed; a linha já o traz)
       : t === 'fechamento_pastos' ? [...MAPA.FECHAMENTOS, ...(UNIDADE ? MAPA.UNIDADE_FECHAMENTOS : [])].sort((a, b) => b.ano_mes.localeCompare(a.ano_mes))
-        .map(f => ({ ...f, fechamento_pasto_itens: [...MAPA.ITENS, ...(UNIDADE ? MAPA.UNIDADE_ITENS : [])].filter(i => i.fechamento_id === f.id) }))
-      : t === 'fechamento_pasto_itens' ? MAPA.ITENS.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
+        .map(f => ({ ...f, fechamento_pasto_itens: [...MAPA.dadosDosCartoes(q.get('cartoes')).itens, ...(UNIDADE ? MAPA.UNIDADE_ITENS : [])].filter(i => i.fechamento_id === f.id) }))
+      : t === 'fechamento_pasto_itens' ? MAPA.dadosDosCartoes(q.get('cartoes')).itens.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       // MAPA-02f-b: a infraestrutura e os bens do Patrimônio (sintéticos)
       : t === 'fazenda_infraestruturas' ? MAPA.INFRA
       : t === 'patrimonio_bens' ? MAPA.BENS
@@ -734,6 +734,8 @@ if (tela === 'mesclar') {
       : fn === 'fn_infra_salvar'
         ? { ok: true, simulado: !!a?.p_simular, rotulo: 'Cocho', forma: 'Point', pasto: a?.p_infra?.pasto_id ? { id: a.p_infra.pasto_id, nome: 'P_01' } : null, bem: null, avisos: [] }
       : fn === 'fn_infra_desativar' ? { ok: true, simulado: !!a?.p_simular }
+      // MAPA-AREA-TIPOS-02: a prévia sintética da estrutura com valor da área (o polígono em várias partes, o pior caso da frase)
+      : fn === 'fn_mapa_estrutura_da_area' ? { ok: true, simulado: true, ja_existe: false, tipo: 'sede_casa', rotulo: 'Sede / casa', area_ha: 0.05, partes: 3 }
       // INFRA-FICHAS-PATR-01: a prévia sintética do criar bem (a resposta do escritor do Patrimônio, com um aviso longo)
       : fn === 'fn_infra_criar_bem' ? { ok: true, simulado: !!a?.p_simular, bem: { ok: true, simulado: true, categoria: { codigo: a?.p_bem?.categoria_codigo, nome: 'Rede de água e bebedouros' },
           vida_util_meses: a?.p_bem?.vida_util_meses ?? 180, residual_pct: 0, avisos: ['O bem nasce sem valor: ligue as notas fiscais no Patrimônio para ele depreciar.'] } }

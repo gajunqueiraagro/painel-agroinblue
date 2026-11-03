@@ -45,7 +45,7 @@ function lerInfras(dado: unknown): InfraLida[] {
     const s = (k: string) => { const v = Reflect.get(l, k); return typeof v === 'string' ? v : null; };
     const versao = Reflect.get(l, 'versao');
     return [{ id, tipo, fazenda_id: fazenda, geometria: Reflect.get(l, 'geometria'), nome: s('nome'), pasto_id: s('pasto_id'), bem_id: s('bem_id'),
-      observacao: s('observacao'), ficha: lerFicha(Reflect.get(l, 'ficha')), versao: typeof versao === 'number' ? versao : 1, criado_em: s('criado_em') ?? '', criado_por: s('criado_por') }];
+      observacao: s('observacao'), ficha: lerFicha(Reflect.get(l, 'ficha')), geometria_id: s('geometria_id'), versao: typeof versao === 'number' ? versao : 1, criado_em: s('criado_em') ?? '', criado_por: s('criado_por') }];
   });
 }
 
@@ -59,9 +59,11 @@ export function useInfraestruturas(fazendaId: string | undefined) {
     let vivo = true;
     setErro(null);
     (async () => {
+      /* MAPA-AREA-TIPOS-02: a leitura que lança (rede, cliente sem a tabela) vira `erro`, nunca rejeição solta */
+      try {
       const [i, b] = await Promise.all([
         (supabase as any).from('fazenda_infraestruturas')
-          .select('id, fazenda_id, tipo, geometria, nome, pasto_id, bem_id, observacao, ficha, versao, criado_em, criado_por')
+          .select('id, fazenda_id, tipo, geometria, nome, pasto_id, bem_id, observacao, ficha, geometria_id, versao, criado_em, criado_por')
           .eq('fazenda_id', fazendaId).eq('ativo', true).order('criado_em', { ascending: true }),
         (supabase as any).from('patrimonio_bens')
           .select('id, codigo, descricao, situacao, categoria:patrimonio_categorias(codigo)')
@@ -74,6 +76,11 @@ export function useInfraestruturas(fazendaId: string | undefined) {
         return;
       }
       setLidas({ fazendaId, infras: lerInfras(i.data), bens: lerBens(b.data) });
+      } catch (e) {
+        if (!vivo) return;
+        console.error('[useInfraestruturas]', e);
+        setErro('Não foi possível ler a infraestrutura da fazenda.');
+      }
     })();
     return () => { vivo = false; };
   }, [fazendaId, rodada]);
@@ -99,6 +106,13 @@ export function useInfraestruturas(fazendaId: string | undefined) {
     return { ok: true, dado: data, motivo: null };
   }, []);
 
+  /** MAPA-AREA-TIPOS-02: a estrutura com valor de uma ÁREA do mapa vira infraestrutura (`fn_mapa_estrutura_da_area`; prévia por padrão) */
+  const estruturaDaArea = useCallback(async (geometriaId: string, simular: boolean): Promise<Resposta> => {
+    const { data, error } = await (supabase as any).rpc('fn_mapa_estrutura_da_area', { p_geometria: geometriaId, p_simular: simular });
+    if (error) { if (error.code !== 'P0001') console.error('[useInfraestruturas] estrutura da área', error); return { ok: false, dado: null, motivo: frase(error) }; }
+    return { ok: true, dado: data, motivo: null };
+  }, []);
+
   const atual = lidas && lidas.fazendaId === fazendaId ? lidas : null;
-  return { infras: atual?.infras ?? [], bens: atual?.bens ?? [], erro, recarregar, salvar, desativar, criarBem };
+  return { infras: atual?.infras ?? [], bens: atual?.bens ?? [], erro, recarregar, salvar, desativar, criarBem, estruturaDaArea };
 }

@@ -13,13 +13,18 @@ interface Props {
   /** o rótulo do tipo pedido (ex.: "Sede / benfeitorias"); só importa com `estado.pedindoPoligono` */
   rotuloDoPedido: string | null;
   onCancelarPedido: () => void;
+  /** MAPA-AREA-TIPOS-02: as duas opções do pedido — "Desenhar nova" (padrão) e "Escolher existente"; ausentes = só escolher (como antes) */
+  modoDoPedido?: 'desenhar' | 'escolher';
+  onDesenharNova?: () => void;
+  onEscolherExistente?: () => void;
   painel: ReactNode;
   botoes: ReactNode;
 }
 
-export function CromoDoMapa({ estado, rotuloDoPedido, onCancelarPedido, painel, botoes }: Props) {
+export function CromoDoMapa({ estado, rotuloDoPedido, onCancelarPedido, modoDoPedido, onDesenharNova, onEscolherExistente, painel, botoes }: Props) {
   const z = zonasVisiveis(estado);
-  const frases = frasesDoAviso(rotuloDoPedido ?? 'área');
+  const comDuasOpcoes = !!onDesenharNova && !!onEscolherExistente;
+  const frases = frasesDoAviso(rotuloDoPedido ?? 'área', comDuasOpcoes ? modoDoPedido ?? 'desenhar' : 'escolher');
   return (
     <>
       {z.aviso && (
@@ -27,11 +32,20 @@ export function CromoDoMapa({ estado, rotuloDoPedido, onCancelarPedido, painel, 
           data-cromo="aviso" data-testid="validacao-tipo-pedido">
           <div className="flex h-[22px] items-center gap-2">
             <p className="min-w-0 flex-1 truncate text-[9.5px] font-semibold text-foreground" title={frases.inteira}>{frases.curta}</p>
+            {comDuasOpcoes && (
+              /* MAPA-AREA-TIPOS-02: lado a lado — "Desenhar nova" (padrão, começa o desenho) e "Escolher existente" (clique num polígono) */
+              <div className="flex flex-none gap-1" data-testid="validacao-tipo-pedido-opcoes">
+                <Button size="sm" variant={modoDoPedido === 'escolher' ? 'outline' : 'default'} className="h-5 px-2 text-[9.5px]"
+                  onClick={onDesenharNova} data-testid="validacao-tipo-pedido-desenhar">Desenhar nova</Button>
+                <Button size="sm" variant={modoDoPedido === 'escolher' ? 'default' : 'outline'} className="h-5 px-2 text-[9.5px]"
+                  onClick={onEscolherExistente} data-testid="validacao-tipo-pedido-escolher">Escolher existente</Button>
+              </div>
+            )}
             <Button variant="outline" size="sm" className="h-5 flex-none px-2 text-[9.5px]" onClick={onCancelarPedido} data-testid="validacao-tipo-pedido-cancelar">
               Cancelar
             </Button>
           </div>
-          <p className="h-[18px] truncate text-[9.5px] leading-[18px] text-muted-foreground">Clique num polígono no mapa ou na lista · o gesto só grava com a prévia</p>
+          <p className="h-[18px] truncate text-[9.5px] leading-[18px] text-muted-foreground" title={frases.dica}>{frases.dica}</p>
         </div>
       )}
       <div className="pointer-events-none absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2" data-testid="validacao-topo">

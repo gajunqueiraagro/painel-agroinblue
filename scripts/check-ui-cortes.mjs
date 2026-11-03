@@ -211,6 +211,14 @@ const CENARIOS = [
   { nome: 'mapa-geo-painel-lavoura', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P5A') },
   { nome: 'mapa-geo-painel-reserva', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P5B') },
   { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
+  /* MAPA-ROTULO-POR-CAMADA-01: o rótulo de cada camada (Situação já é o `mapa-geo`), a camada nova "Área (ha)" e "Mostrar área no rótulo";
+     a regra `medirRotulosDoMapa` mede rótulo sobreposto a outro e rótulo saindo do mapa em toda tela do mapa */
+  { nome: 'mapa-geo-camada-lotacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Lotação (kg/ha)') },
+  { nome: 'mapa-geo-camada-cabecas', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Cabeças') },
+  { nome: 'mapa-geo-camada-tipo-area', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Tipo de área') },
+  { nome: 'mapa-geo-camada-area', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Área (ha)') },
+  { nome: 'mapa-geo-rotulo-com-area', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('[data-testid="mapa-filtros"] label', { hasText: 'Mostrar área no rótulo' }).first().click(); await p.waitForTimeout(500); } },
   { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
   /* MAPA-02b — o fundo (neutro na bancada: nenhum tile do Google nem do OSM) e os créditos no canto, logo abaixo do zoom: em satélite com o
      copyright do tamanho dos reais (e com o painel aberto, junto do zoom), no Mapa, na queda sem satélite (o aviso) e na Operação, que nasce
@@ -299,6 +307,90 @@ const CENARIOS = [
     await mapaPasto('P_10 Manga')(p); await p.locator('[data-testid="mapa-painel-divisoes"]', { hasText: '2 divisões sem desenho: P_10A, P_10B' }).waitFor({ timeout: 3000 }); } },
   /* -03: a Operação com as unidades (rótulo = nome do pasto; as divisões em linha fina) */
   { nome: 'mapa-geo-unidade-operacao', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
+  /* MAPA-AREA-TIPOS-02: o seletor de tipos ABERTO (agrupado por família, com busca), o bloco Patrimônio da estrutura com valor (a prévia
+     do banco) e o submenu Adicionar › Área com os 20 tipos do catálogo (a menor tela, para ver se cabe) */
+  { nome: 'mapa-geo-validacao-tipos-abertos', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('button', { hasText: 'Validação' }).first().click(); await p.waitForTimeout(600);
+    await p.locator('button[title="Classificar (pasto ou área)"]').first().click(); await p.waitForTimeout(400);
+    await p.locator('[data-testid="classificar-poligono"] button', { hasText: 'É área' }).first().click(); await p.waitForTimeout(250);
+    await p.locator('[data-testid="classificar-poligono-seletor"] button').first().click(); await p.waitForTimeout(400); },
+    /* lista aberta por cima do painel: mede só o menu (como os outros cenários de menu aberto) */
+    soRegras: ['menu-por-cima'] },
+  { nome: 'mapa-geo-validacao-estrutura', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-popover"]',
+    antes: async (p) => {
+      await p.locator('button', { hasText: 'Validação' }).first().click(); await p.waitForTimeout(600);
+      await p.locator('[data-testid="validacao-lista"]').getByText('Sede do P_01', { exact: true }).first().click(); await p.waitForTimeout(400);
+      /* MAPA-ZOOM-E-PAINEL-01 (Code 3): os gestos do polígono são ícones com popover — o "Patrimônio" é um deles */
+      await p.locator('[data-testid="validacao-patrimonio"]').click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="estrutura-da-area"] button', { hasText: 'Criar a estrutura' }).click(); await p.waitForTimeout(400); } },
+  { nome: 'mapa-geo-adicionar-area-submenu', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+    await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+    await p.getByRole('menuitem', { name: 'Área' }).first().hover(); await p.waitForTimeout(400); } },
+  /* MAPA-CARTOES-LARGURA-01: os cartões com o caso Ursa Maior e com o pior caso fictício (nas 3 larguras pedidas) */
+  { nome: 'mapa-geo-cartoes-ursa', url: 'tela=mapa-geo&cartoes=ursa', tamanhos: [[1126, 579], [1366, 768], [1440, 800]] },
+  { nome: 'mapa-geo-cartoes-pior', url: 'tela=mapa-geo&cartoes=pior', tamanhos: [[1126, 579], [1366, 768], [1440, 800]] },
+  /* MAPA-AREA-TIPOS-02 (Gabriel 02/11 15:54): Adicionar › Área › Manga abre o pedido com "Desenhar nova" (padrão) | "Escolher existente";
+     Desenhar nova entra no desenho do Code 3 já com o nome "Manga" (dois cliques no mapa = desenho em curso); Escolher existente + clique
+     num polígono abre o Classificar já em Manga. A gravação do desenho classificando é provada no `validacaoPedidoDesenhar.test.tsx` (a
+     bancada não guarda o polígono novo). E Adicionar › Infraestrutura › Curral oferece "Escolher área existente". */
+  ...(() => {
+    const pedirManga = async (p) => {
+      await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+      await p.getByRole('menuitem', { name: 'Área' }).first().hover(); await p.waitForTimeout(300);
+      await p.getByRole('menuitem', { name: 'Manga', exact: true }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="validacao-tipo-pedido"]').waitFor({ timeout: 3000 });
+    };
+    const noMapaEm = async (p, pontos) => {
+      const b = await p.locator('.leaflet-container').last().boundingBox();
+      for (const [x, y] of pontos) { await p.mouse.click(b.x + b.width * x, b.y + b.height * y); await p.waitForTimeout(150); }
+    };
+    return [
+      { nome: 'mapa-geo-adicionar-manga', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], regiao: '[data-testid="validacao-tipo-pedido"]',
+        botoesDentro: '[data-testid="validacao-tipo-pedido"]', antes: pedirManga },
+      { nome: 'mapa-geo-adicionar-manga-desenhar', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="barra-edicao-poligono"]',
+        antes: async (p) => {
+          await pedirManga(p);
+          await p.locator('[data-testid="validacao-tipo-pedido-desenhar"]').click();
+          await p.locator('[data-testid="barra-edicao-poligono"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(600);
+          await noMapaEm(p, [[0.3, 0.5], [0.5, 0.45]]); } },
+      { nome: 'mapa-geo-adicionar-manga-escolher', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-popover"]',
+        antes: async (p) => {
+          await pedirManga(p);
+          await p.locator('[data-testid="validacao-tipo-pedido-escolher"]').click(); await p.waitForTimeout(250);
+          await p.getByText('P_02', { exact: true }).first().click();
+          await p.locator('[data-testid="validacao-popover"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(500); } },
+      { nome: 'mapa-geo-infra-escolher-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], antes: async (p) => {
+        await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
+        await p.getByRole('menuitem', { name: 'Infraestrutura' }).first().hover(); await p.waitForTimeout(300);
+        await p.locator('[data-testid="infra-colocar-curral"]').first().click(); await p.waitForTimeout(400);
+        await p.locator('[data-testid="infra-escolher-area-existente"]').waitFor({ timeout: 3000 }); } },
+    ];
+  })(),
+  /* MAPA-PIQUETES-04: o selo "Pasto sem desenho: P_11 Sem Mapa" no Gestor (o cenário falha se ele não disser o pasto) */
+  { nome: 'mapa-geo-unidade-sem-desenho-selo', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('[data-testid="mapa-sem-desenho"]', { hasText: 'P_11 Sem Mapa' }).waitFor({ timeout: 4000 }); } },
+  /* MAPA-PIQUETES-04 (Gabriel 02/11 10:40, Sta. Rita 20A-1): na Validação o contorno do pai só pega o clique na BORDA; o miolo de cada divisão
+     abre a DIVISÃO. Prova no próprio cenário (falha se não abrir o certo): centro de P_09A e de P_09B → o painel diz a divisão; a borda de
+     fora do pai (1 px para dentro da caixa dele, sobre a linha) → o painel diz o pai. */
+  { nome: 'mapa-geo-unidade-validacao-clique', url: 'tela=mapa-geo&unidade=1', tamanhos: [[1126, 579], [1366, 768]],
+    regiao: '[data-testid="validacao-painel-poligono"]', antes: async (p) => {
+      await p.locator('button', { hasText: 'Validação' }).first().click();
+      await p.locator('path[data-geo-id="gu-c"]').waitFor({ timeout: 4000 }); await p.waitForTimeout(500);
+      const nomeNoPainel = async () => (await p.locator('[data-testid="validacao-painel-nome"]').first().innerText()).split(' · ')[0].trim();
+      const clicarEm = async (x, y, espera) => {
+        await p.mouse.click(x, y); await p.locator('[data-testid="validacao-painel-poligono"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(250);
+        const nome = await nomeNoPainel();
+        if (nome !== espera) throw new Error(`clique em (${Math.round(x)}, ${Math.round(y)}) abriu "${nome}", esperava "${espera}"`);
+      };
+      for (const [id, nome] of [['gu-a', 'P_09A'], ['gu-b', 'P_09B']]) {
+        const c = await p.locator(`path[data-geo-id="${id}"]`).boundingBox();
+        if (!c) throw new Error(`a divisão ${nome} não foi desenhada`);
+        await clicarEm(c.x + c.width / 2, c.y + c.height * 0.75, nome);   // o miolo (abaixo do rótulo do pai)
+      }
+      const pai = await p.locator('path[data-geo-id="gu-c"]').boundingBox();
+      if (!pai) throw new Error('o contorno do pai não foi desenhado');
+      await clicarEm(pai.x + 1, pai.y + pai.height / 2, 'P_09 Retiro de Cima');
+    } },
   { nome: 'mapa-geo-adicionar-area', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="validacao-popover"]',
     antes: async (p) => {
       await p.locator('[data-testid="mapa-barra"] button', { hasText: 'Adicionar' }).first().click(); await p.waitForTimeout(250);
@@ -1434,6 +1526,42 @@ function medirGraficoDoGlobal() {
   if (barras && barras.getBoundingClientRect().height < 2 * 18 - 0.5) achados.push({ regra: 'grafico', texto: `menos de 2 barras a vista (${Math.round(barras.getBoundingClientRect().height)}px)` });
   return achados;
 }
+/* MAPA-ROTULO-POR-CAMADA-01 — os RÓTULOS dos pastos (`[data-rotulo-pasto]`) em toda tela do mapa: nenhum rótulo se sobrepõe a outro e
+   nenhum sai do mapa (o texto inteiro à vista). Rótulos que não cabem somem (ficam no hover), como sempre. */
+function medirRotulosDoMapa() {
+  const achados = [];
+  const mapa = document.querySelector('[data-testid="mapa-gestor-mapa"]'); if (!mapa) return achados;
+  const m = mapa.getBoundingClientRect();
+  const rs = [...mapa.querySelectorAll('[data-rotulo-pasto]')].map((e) => ({ t: (e.textContent ?? '').trim(), r: e.getBoundingClientRect() })).filter((x) => x.r.width > 0);
+  for (let i = 0; i < rs.length; i++) {
+    const a = rs[i].r;
+    if (a.left < m.left - 0.5 || a.right > m.right + 0.5) achados.push({ regra: 'rotulo', texto: `rótulo sai do mapa: ${rs[i].t.slice(0, 40)}` });
+    for (let j = i + 1; j < rs.length; j++) {
+      const b = rs[j].r;
+      const sobre = Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+      if (sobre) achados.push({ regra: 'rotulo', texto: `rótulos sobrepostos: "${rs[i].t.slice(0, 30)}" × "${rs[j].t.slice(0, 30)}"` });
+    }
+  }
+  return achados;
+}
+/* MAPA-CARTOES-LARGURA-01 — os CARTÕES de cima do mapa (`[data-cartao-mapa]`, o componente `CartaoDoMapa`), medidos em toda tela que os
+   tem: nenhuma linha pede mais largura que a reservada (texto cortado), um cartão não invade o vizinho e todos têm a MESMA altura (2 linhas
+   fixas). O detector se prova no cenário `mapa-geo-cartoes-pior` com a largura da lotação encolhida (ver o relatório). */
+function medirCartoesDoMapa() {
+  const achados = [];
+  const cartoes = [...document.querySelectorAll('[data-cartao-mapa]')].filter((c) => c.getBoundingClientRect().width >= 1);
+  for (const c of cartoes) {
+    for (const l of c.querySelectorAll('[data-linha-cartao]')) {
+      if (l.scrollWidth > l.clientWidth + 0.5) achados.push({ regra: 'cartao', texto: `${c.dataset.cartaoMapa}: "${(l.textContent ?? '').trim()}" pede ${l.scrollWidth}px, tem ${l.clientWidth}` });
+    }
+  }
+  for (let i = 1; i < cartoes.length; i++) {
+    const a = cartoes[i - 1].getBoundingClientRect(), b = cartoes[i].getBoundingClientRect();
+    if (Math.abs(a.top - b.top) < 1 && a.right > b.left + 0.5) achados.push({ regra: 'cartao', texto: `${cartoes[i - 1].dataset.cartaoMapa} invade ${cartoes[i].dataset.cartaoMapa} (${Math.round(a.right - b.left)}px)` });
+  }
+  if (new Set(cartoes.map((c) => Math.round(c.getBoundingClientRect().height))).size > 1) achados.push({ regra: 'cartao', texto: 'os cartões não têm a mesma altura' });
+  return achados;
+}
 /* MAPA-GLOBAL-01 fix1 (5) — o MENU POR CIMA DO MAPA, medido sozinho em toda tela do mapa (`mapa-geo-tela`): uma gaveta igual à do menu
    lateral (V2ContextDrawer: 240px, z-50) é posta ao lado da barra; em cada vidro, no mapa e nos cards que ela cobre, o ponto do meio da
    parte coberta tem de ser a gaveta. Sem o `isolate` da tela, os vidros (z-500) e o Leaflet (z-400…1000) ficavam por cima do menu. */
@@ -2415,6 +2543,8 @@ try {
     /* MAPA-GLOBAL-01 fix1: cabeçalho inteiro, hover do cabeçalho e o menu lateral por cima do mapa (este, sozinho em toda tela do mapa) */
     if (cen.cabecalhoInteiro) achadosTodos.push(...(await p.evaluate(medirCabecalhoInteiro, cen.regiao ?? null)));
     achadosTodos.push(...(await p.evaluate(medirGraficoDoGlobal))); // só age onde há o gráfico do Global
+    achadosTodos.push(...(await p.evaluate(medirCartoesDoMapa))); // MAPA-CARTOES-LARGURA-01: só age onde há os cartões do mapa
+    achadosTodos.push(...(await p.evaluate(medirRotulosDoMapa))); // MAPA-ROTULO-POR-CAMADA-01: só age no mapa do Gestor
     if (cen.hoverCabecalho) {
       try { await p.locator(`${cen.hoverCabecalho} th[aria-sort]`).first().hover(); await p.waitForTimeout(300); achadosTodos.push(...(await p.evaluate(medirHoverCabecalho))); }
       catch (e) { achadosTodos.push({ regra: 'erro', texto: `hover do cabecalho: ${String(e).slice(0, 100)}` }); }

@@ -62,7 +62,7 @@ describe('o diálogo', () => {
   it('pede a prévia (p_simular = true, o mês atual) e mostra os números do banco; datas dd/mm/aaaa', async () => {
     abrir();
     await waitFor(() => expect(document.querySelector('tr[data-piquete="1A"]')).toBeTruthy());
-    expect(estado.chamadas[0]).toEqual({ fn: 'fn_piquetes_concluir', p_pasto_pai: 'r01', p_geometrias: ['g1', 'g2'], p_mes: '2026-11-01', p_simular: true });
+    expect(estado.chamadas[0]).toEqual({ fn: 'fn_piquetes_concluir', p_pasto_pai: 'r01', p_geometrias: ['g1', 'g2'], p_mes: '2026-11-01', p_simular: true, p_contorno: null });
     expect(document.querySelector('tr[data-piquete="1A"]')?.textContent).toContain('23,63');
     expect(document.querySelector('tr[data-linha="soma"]')?.textContent).toContain('92,90');
     expect(document.querySelector('tr[data-linha="oficial"]')?.textContent).toContain('92,60');
@@ -93,6 +93,24 @@ describe('o diálogo', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Gravar' })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: 'Gravar' }));
     await waitFor(() => expect(onGravado).toHaveBeenCalledWith('r01'));
-    expect(estado.chamadas.at(-1)).toEqual({ fn: 'fn_piquetes_concluir', p_pasto_pai: 'r01', p_geometrias: ['g1', 'g2'], p_mes: '2026-11-01', p_simular: false });
+    expect(estado.chamadas.at(-1)).toEqual({ fn: 'fn_piquetes_concluir', p_pasto_pai: 'r01', p_geometrias: ['g1', 'g2'], p_mes: '2026-11-01', p_simular: false, p_contorno: null });
+  });
+  /* MAPA-PIQUETES-04: o pai sem polígono leva o contorno (a união) nas DUAS chamadas; a união que não fecha recusa antes do banco */
+  const CONTORNO: GeoJSON.Polygon = { type: 'Polygon', coordinates: [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]] };
+  it('com o contorno: a prévia e o Gravar mandam o p_contorno', async () => {
+    render(<ConcluirPiquetesDialog aberto paiId="r01" nomeDoPai="R_01" piquetes={PIQ} hoje={new Date(2026, 10, 1)} onFechar={() => {}}
+      onGravado={vi.fn()} contorno={{ ok: true, valor: CONTORNO }} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Gravar' })).not.toBeDisabled());
+    expect(estado.chamadas[0].p_contorno).toEqual(CONTORNO);
+    fireEvent.click(screen.getByRole('button', { name: 'Gravar' }));
+    await waitFor(() => expect(estado.chamadas.at(-1)?.p_simular).toBe(false));
+    expect(estado.chamadas.at(-1)?.p_contorno).toEqual(CONTORNO);
+  });
+  it('a união que não fecha: a frase dela no diálogo, nenhuma chamada ao banco, Gravar apagado', async () => {
+    render(<ConcluirPiquetesDialog aberto paiId="r01" nomeDoPai="R_01" piquetes={PIQ} hoje={new Date(2026, 10, 1)} onFechar={() => {}}
+      onGravado={vi.fn()} contorno={{ ok: false, motivo: 'O contorno não fecha: 1B não encosta nos outros.' }} />);
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('O contorno não fecha: 1B não encosta nos outros. Nada foi gravado.'));
+    expect(estado.chamadas).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Gravar' })).toBeDisabled();
   });
 });

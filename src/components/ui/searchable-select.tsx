@@ -35,6 +35,12 @@ export interface OpcaoSearchable {
    * escrito "11.222.333/0001-44"). ⚠ ADITIVA: sem ela a busca é a de sempre.
    */
   busca?: string;
+  /**
+   * MAPA-AREA-TIPOS-02 — a FAMÍLIA da opção: as opções vizinhas do mesmo grupo ganham um cabeçalho (não escolhível) antes da 1ª; o nome
+   * do grupo ENTRA NA BUSCA ("água" acha a represa e a lagoa). ⚠ ADITIVA: sem ela a lista é a de sempre (as outras montagens não mudam).
+   * Quem passa grupos passa as opções JÁ ORDENADAS por grupo.
+   */
+  grupo?: string;
 }
 
 const PREFIXO = 'ss-busca:';
@@ -183,7 +189,7 @@ export function SearchableSelect({
   /* P134: a busca ignora acento, cedilha e maiúscula nos dois lados (`normalizarParaBusca`, a regra única). O texto de cada opção é
      normalizado UMA vez por lista, não por tecla. */
   const indiceDaBusca = useMemo(
-    () => options.map((o) => [normalizarParaBusca(o.label), normalizarParaBusca(o.sub), normalizarParaBusca(o.busca)]),
+    () => options.map((o) => [normalizarParaBusca(o.label), normalizarParaBusca(o.sub), normalizarParaBusca(o.busca), normalizarParaBusca(o.grupo)]),
     [options]);
   const filtered = useMemo(() => {
     if (!search.trim()) return options;
@@ -423,8 +429,12 @@ export function SearchableSelect({
           {/* A23 — 224px no modo denso: com 300px a lista passava da dobra em tela baixa. */}
           <div ref={listRef} className={cn('overflow-y-auto', dense ? 'max-h-56 px-1 pb-1' : 'max-h-[120px] px-0.5 pb-0.5')}>
             {selectableItems.map((o, idx) => (
+              <React.Fragment key={o.value}>
+              {'grupo' in o && o.grupo && (idx === 0 || !('grupo' in selectableItems[idx - 1]) || selectableItems[idx - 1].grupo !== o.grupo) ? (
+                /* MAPA-AREA-TIPOS-02: o cabeçalho do grupo (não é item: o teclado e o realce pulam por ele) */
+                <div className={cn('px-2 pb-0.5 pt-1.5 text-[9.5px] font-semibold', MENU_SECUNDARIO)} role="presentation" data-grupo={o.grupo}>{o.grupo}</div>
+              ) : null}
               <button
-                key={o.value}
                 type="button"
                 ref={el => { itemRefs.current[idx] = el; }}
                 onClick={() => handleSelect(o.value)}
@@ -461,6 +471,7 @@ export function SearchableSelect({
                   </span>
                 ) : null}
               </button>
+              </React.Fragment>
             ))}
             {filtered.length === 0 && (
               <div className={cn('px-2 py-3 text-center', MENU_VAZIO)}>Nenhum resultado</div>

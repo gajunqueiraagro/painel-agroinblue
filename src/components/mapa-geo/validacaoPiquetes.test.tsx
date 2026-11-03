@@ -35,9 +35,11 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: v
 
 import { ValidacaoPoligonosView } from './ValidacaoPoligonosView';
 
-const geo = (id: string, nome: string): FazendaGeometria => ({
-  id, fazenda_id: 'faz', cliente_id: 'cli', pasto_id: null, tipo: 'outra', nome_original: nome,
-  geojson: { type: 'Polygon', coordinates: [] }, cor: null, created_at: '', updated_at: '',
+/* MAPA-PIQUETES-04: 1A e 1B são dois quadrados vizinhos (a união deles é o contorno do R_01, que não tem polígono) */
+const quadrado = (x: number): GeoJSON.Polygon => ({ type: 'Polygon', coordinates: [[[x, 0], [x + 0.01, 0], [x + 0.01, 0.01], [x, 0.01], [x, 0]]] });
+const geo = (id: string, nome: string, x = 0, pasto_id: string | null = null): FazendaGeometria => ({
+  id, fazenda_id: 'faz', cliente_id: 'cli', pasto_id, tipo: pasto_id ? 'pasto' : 'outra', nome_original: nome,
+  geojson: quadrado(x), cor: null, created_at: '', updated_at: '',
 });
 const R01: Pasto = {
   id: 'r01', fazenda_id: 'faz', nome: 'R_01', lote_padrao: null, area_produtiva_ha: 92.6, tipo_uso: 'cria', qualidade: null,
@@ -58,7 +60,7 @@ async function marcar(nome: string) {
 describe('Validação — piquetes', () => {
   it('marca 1A e 1B como piquetes de R_01 (nada grava), conclui pela prévia e grava numa chamada; relê polígonos e pastos', async () => {
     const onRefresh = vi.fn();
-    render(<ValidacaoPoligonosView geometrias={[geo('g1', '1A'), geo('g2', '1B')]} pastos={[R01]} geoLoading={false}
+    render(<ValidacaoPoligonosView geometrias={[geo('g1', '1A', 0), geo('g2', '1B', 0.01)]} pastos={[R01]} geoLoading={false}
       onUpdate={vi.fn()} onDelete={vi.fn()} onLink={vi.fn()} onRefresh={onRefresh} />);
 
     await marcar('1A');
@@ -76,11 +78,25 @@ describe('Validação — piquetes', () => {
     expect(previa.a.p_simular).toBe(true);
     expect(previa.a.p_pasto_pai).toBe('r01');
     expect([...(Array.isArray(previa.a.p_geometrias) ? previa.a.p_geometrias : [])].sort()).toEqual(['g1', 'g2']);
+    // MAPA-PIQUETES-04: o R_01 não tem polígono → o contorno (a união de 1A e 1B: um retângulo, 4 cantos + o fecho) vai junto
+    const contorno = previa.a.p_contorno;
+    expect(contorno && typeof contorno === 'object' && Reflect.get(contorno, 'type')).toBe('Polygon');
+    expect((Reflect.get(Object(contorno), 'coordinates') ?? [])[0]).toHaveLength(5);
 
     fireEvent.click(screen.getByRole('button', { name: 'Gravar' }));
     await waitFor(() => expect(onRefresh).toHaveBeenCalled());
     expect(estado.rpc.at(-1)?.a.p_simular).toBe(false);
+    expect(estado.rpc.at(-1)?.a.p_contorno).toEqual(contorno);
     expect(estado.mudou).toEqual(['cli']);
     expect(screen.queryByTestId('piquetes-em-espera')).toBeNull();     // os concluídos saem da espera
+  });
+  it('o R_01 que JÁ tem polígono: o contorno dele fica (p_contorno nulo)', async () => {
+    render(<ValidacaoPoligonosView geometrias={[geo('g0', 'R_01', 0.05, 'r01'), geo('g1', '1A', 0), geo('g2', '1B', 0.01)]} pastos={[R01]}
+      geoLoading={false} onUpdate={vi.fn()} onDelete={vi.fn()} onLink={vi.fn()} onRefresh={vi.fn()} />);
+    await marcar('1A');
+    await marcar('1B');
+    fireEvent.click(within(screen.getByTestId('piquetes-em-espera')).getByRole('button', { name: 'Concluir piquetes de R_01' }));
+    await waitFor(() => expect(estado.rpc.length).toBeGreaterThan(0));
+    expect(estado.rpc[0].a.p_contorno).toBeNull();
   });
 });

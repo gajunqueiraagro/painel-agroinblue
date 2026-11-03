@@ -20,8 +20,10 @@ set local statement_timeout = '20s';
 do $t0$
 declare f text := 'public.fn_mapa_geometria_classificar(uuid, text, uuid, text, boolean)'; s text := 'public.fn_mapa_fazenda_substituir(uuid, jsonb)';
 begin
-  if not ((select pg_get_constraintdef(oid) from pg_constraint where conname = 'fazenda_geometrias_tipo_check') like all
-     (array['%area_fazenda%', '%varzea_brejo%', '%curral%', '%confinamento%', '%area_sem_uso%', '%outra%'])) then
+  -- MAPA-AREA-TIPOS-02 (20261028117120): a trava lê do catálogo único; os 12 de antes continuam valendo
+  if (select pg_get_constraintdef(oid) from pg_constraint where conname = 'fazenda_geometrias_tipo_check') not like '%_fn_mapa_tipo_rotulo%'
+     or exists (select 1 from unnest(array['pasto', 'outra', 'area_total', 'area_fazenda', 'area_sem_uso', 'reserva_legal', 'app', 'varzea_brejo',
+                'benfeitoria', 'estrada', 'curral', 'confinamento']) t where public._fn_mapa_tipo_rotulo(t) is null) then
     raise exception 'T0: o CHECK de tipo não tem os 12';
   end if;
   if not (select prosecdef from pg_proc where oid = f::regprocedure)

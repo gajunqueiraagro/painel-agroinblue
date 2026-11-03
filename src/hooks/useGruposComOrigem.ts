@@ -31,9 +31,10 @@ export function useGruposComOrigem(fazendaIds: readonly string[], recarregar = 0
       let data: unknown = null; let error: unknown = null;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: a coluna nova ainda não está no types.ts
-        ({ data, error } = await (supabase as any).from('pasto_grupos').select('id, nome, pasto_origem_id, ativo')
-          .in('fazenda_id', chave.split(',')).not('pasto_origem_id', 'is', null));
-      } catch (e) { error = e; }
+        const r = await (supabase as any).from('pasto_grupos').select('id, nome, pasto_origem_id, ativo')
+          .in('fazenda_id', chave.split(',')).not('pasto_origem_id', 'is', null);
+        data = r.data; error = r.error;
+      } catch (e) { error = e; }   // MAPA-PIQUETES-04: falha que lança também vira o "segue pasto a pasto" (nunca derruba a tela)
       if (!vivo) return;
       if (error) {
         console.error('[useGruposComOrigem]', error);

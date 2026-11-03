@@ -153,7 +153,10 @@ const piqU = (id: string, nome: string, area: number) => ({ ...PAI_U, id, nome, 
 const PAI_M = { ...PAI_U, id: 'pm', nome: 'P_10 Manga', area_produtiva_ha: 36, observacoes: 'virou o grupo P_10 Manga em 09/2026', ordem_exibicao: 21 };
 const piqM = (id: string, nome: string, area: number) => ({ ...PAI_M, id, nome, area_produtiva_ha: area, observacoes: 'piquete de P_10 Manga',
   data_inicio: '2026-09-01', data_fim: null, grupo_id: 'gm' });
-export const UNIDADE_PASTOS = [PAI_U, piqU('pua', 'P_09A', 21.4), piqU('pub', 'P_09B', 19.2), PAI_M, piqM('pma', 'P_10A', 28.1), piqM('pmb', 'P_10B', 7.6)];
+/* MAPA-PIQUETES-04: um pasto vigente SEM polígono — o Gestor e a Validação dizem "Pasto sem desenho: P_11 Sem Mapa" (nada some em silêncio) */
+const SEM_MAPA = { ...PAI_U, id: 'psm', nome: 'P_11 Sem Mapa', area_produtiva_ha: 12, observacoes: null, ordem_exibicao: 22, data_fim: null };
+export const UNIDADE_PASTOS = [PAI_U, piqU('pua', 'P_09A', 21.4), piqU('pub', 'P_09B', 19.2), PAI_M, piqM('pma', 'P_10A', 28.1), piqM('pmb', 'P_10B', 7.6),
+  SEM_MAPA];
 export const UNIDADE_GRUPOS = [{ id: 'gu', nome: 'P_09 Retiro de Cima', pasto_origem_id: 'pu', ativo: true, fazenda_id: 'f1' },
   { id: 'gm', nome: 'P_10 Manga', pasto_origem_id: 'pm', ativo: true, fazenda_id: 'f1' }];
 const furado = () => {
@@ -188,3 +191,18 @@ export const UNIDADE_ITENS = [
   { id: 'i-pm-1', fechamento_id: 'f-pm-2026-08', quantidade: 70, peso_medio_kg: 350, categoria_id: 'c1' },
   { id: 'i-pma-1', fechamento_id: 'f-pma-2026-09', quantidade: 72, peso_medio_kg: 361, categoria_id: 'c1', lote: 'Lote P_10' },
 ];
+
+/* MAPA-CARTOES-LARGURA-01 — os cartões de cima com números de verdade grandes (`&cartoes=ursa` | `&cartoes=pior`): em set/26 só o P_01
+   tem área e animais (os outros pastos ficam com área 0 e fechamento sem animais), para o resumo da fazenda dar exatamente:
+   - ursa (o caso do Gabriel, Ursa Maior 02/11): 1.000 cab. · 402 kg · 2,33 UA/ha · 1.047 kg/ha · 383,8 ha;
+   - pior (o pior caso fictício): 99.999 cab. · 9.999 kg · 22,22 UA/ha (mesma largura de "99,99" em algarismos tabulares) · 9.999 kg/ha ·
+     99.999,9 ha. */
+export function dadosDosCartoes(caso: string | null) {
+  const numeros = caso === 'pior' ? { area: 99999.9, cab: 99999, peso: 9999 } : caso === 'ursa' ? { area: 383.8, cab: 1000, peso: 401.84 } : null;
+  if (!numeros) return { pastos: PASTOS, itens: ITENS };
+  const pastos = PASTOS.map(p => ({ ...p, area_produtiva_ha: p.id === 'p1' ? numeros.area : 0 }));
+  const doMes = new Set(FECHAMENTOS.filter(f => f.ano_mes === '2026-09').map(f => f.id));
+  const itens = [...ITENS.filter(i => !doMes.has(i.fechamento_id)),
+    { id: 'f-p1-2026-09-cartoes', fechamento_id: 'f-p1-2026-09', quantidade: numeros.cab, peso_medio_kg: numeros.peso, categoria_id: 'c1', lote: 'L-12' }];
+  return { pastos, itens };
+}

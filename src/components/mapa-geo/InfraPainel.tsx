@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useNomesDosAutores } from '@/hooks/useNomesDosAutores';
 import type { BemDaFazenda, Resposta } from '@/hooks/useInfraestruturas';
-import { COR_DO_GRUPO, definicaoDoTipo, iconeDaInfra, type CamposDaInfra, type InfraLida, type TipoInfra } from '@/lib/mapa/infraestrutura';
+import { COR_DO_GRUPO, definicaoDoTipo, iconeDaInfra, pontoDaInfra, type CamposDaInfra, type InfraLida, type TipoInfra } from '@/lib/mapa/infraestrutura';
 import { limparFicha, type Ficha } from '@/lib/mapa/fichasDaInfra';
 import { FichaEditar, FichaLer } from '@/components/mapa-geo/FichaDaInfra';
 import { CriarBemDaInfra } from '@/components/mapa-geo/CriarBemDaInfra';
@@ -42,6 +42,12 @@ interface Props {
   onEditando: (editando: boolean) => void;
   onGravou: () => void;
   onFechar: () => void;
+}
+
+const FIM_SEM_MUDANCA = '— nada para gravar.';
+/** A prévia sem mudança da infraestrutura: o que ela é hoje ("Cocho "Cocho A" já está com estes dados — nada para gravar."). */
+export function fraseInfraSemMudanca(rotulo: string, nome: string | null): string {
+  return `${rotulo}${nome ? ` "${nome}"` : ''} já está com estes dados ${FIM_SEM_MUDANCA}`;
 }
 
 function linhaDaPrevia(d: unknown): string {
@@ -86,6 +92,8 @@ export function InfraPainel(p: Props) {
   const campos = (): CamposDaInfra => ({
     id: p.infra?.id ?? null, versao: p.infra?.versao ?? null, fazendaId: p.fazendaId, tipo: p.tipo, lon: p.ponto.lon, lat: p.ponto.lat,
     nome, pastoId: pastoId === SEM ? null : pastoId, bemId: bemId === SEM ? null : bemId, observacao, ficha: limparFicha(p.tipo, ficha),
+    /* MAPA-AREA-TIPOS-02: a estrutura de ÁREA (veio do polígono do mapa) guarda a geometria dela; só o ponto se arrasta */
+    ...(p.infra && !pontoDaInfra(p.infra.geometria) ? { geometriaOriginal: p.infra.geometria } : {}),
   });
 
   const verPrevia = async () => {
@@ -94,7 +102,8 @@ export function InfraPainel(p: Props) {
     if (!r.ok) { setRecusa(r.motivo); return; }
     const semMudanca = typeof r.dado === 'object' && r.dado !== null && Reflect.get(r.dado, 'sem_mudanca') === true;
     setPrevia(modo === 'desativar' ? `Desativar ${def?.rotulo ?? ''}${p.infra?.nome ? ` "${p.infra.nome}"` : ''}: sai do mapa, fica na trilha.`
-      : semMudanca ? 'Nada muda.' : linhaDaPrevia(r.dado));
+      /* MAPA-AREA-TIPOS-02: sem mudança, a prévia diz o estado atual (nunca só "nada muda") */
+      : semMudanca ? fraseInfraSemMudanca(def?.rotulo ?? '', p.infra?.nome ?? null) : linhaDaPrevia(r.dado));
   };
   const gravar = async () => {
     setGravando(true);
@@ -114,7 +123,7 @@ export function InfraPainel(p: Props) {
         infraId={p.infra.id} versao={p.infra.versao} criarBem={p.criarBem} onGravou={p.onGravou} onVoltar={() => setModo('ver')} />
     );
   }
-  const porQue = modo === 'desativar' && !motivo.trim() ? 'Diga o motivo.' : !previa ? 'Veja a prévia antes.' : previa === 'Nada muda.' ? 'Nada muda.' : null;
+  const porQue = modo === 'desativar' && !motivo.trim() ? 'Diga o motivo.' : !previa ? 'Veja a prévia antes.' : previa?.endsWith(FIM_SEM_MUDANCA) ? 'Nada para gravar.' : null;
 
   return (
     <div className={p.className} data-testid="mapa-painel-infra">

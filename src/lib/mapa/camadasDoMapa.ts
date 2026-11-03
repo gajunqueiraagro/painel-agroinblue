@@ -7,6 +7,7 @@
  */
 import { COR_DA_FAIXA, COR_SEM_FECHAMENTO, ROTULO_DA_FAIXA, type FaixaLotacao } from '@/lib/mapa/faixasLotacao';
 import { ORDEM_DAS_FAMILIAS, ROTULO_DA_FAMILIA, type FamiliaForaDaPecuaria } from '@/lib/mapa/usoDoPasto';
+import { definicaoDoTipoDeArea, ROTULO_DA_FAMILIA_DE_AREA, type FamiliaDeArea } from '@/lib/mapa/tiposDeArea';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
 
 /** O rótulo da atividade do mês: o da casa (`tipoUsoLabel`); o que ele não conhece (ex.: 'vedado'), com a 1ª letra maiúscula. */
@@ -16,7 +17,7 @@ export function rotuloDaAtividade(tipo: string | null | undefined): string {
   return r === tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1).replace(/_/g, ' ') : r;
 }
 
-export type CamadaDoMapa = 'situacao' | 'kg_ha' | 'atividade' | 'cabecas' | 'tipo_area';
+export type CamadaDoMapa = 'situacao' | 'kg_ha' | 'atividade' | 'cabecas' | 'tipo_area' | 'area';
 
 /** `curto` = o nome no botão Camadas (152px desde o MAPA-GLOBAL-01, para caber o "← Global"), quando o inteiro não cabe; o inteiro fica no menu, no title e na legenda. */
 export const CAMADAS: { valor: CamadaDoMapa; rotulo: string; curto?: string }[] = [
@@ -24,8 +25,26 @@ export const CAMADAS: { valor: CamadaDoMapa; rotulo: string; curto?: string }[] 
   { valor: 'kg_ha', rotulo: 'Lotação (kg/ha)', curto: 'Lotação' },
   { valor: 'atividade', rotulo: 'Atividade' },
   { valor: 'cabecas', rotulo: 'Cabeças' },
-  { valor: 'tipo_area', rotulo: 'Tipo de área' },
+  /* o nome inteiro não cabe no botão de 152 px ("Camadas: Tipo de área" cortava 4 px): o curto vai no botão, o inteiro no menu e no title */
+  { valor: 'tipo_area', rotulo: 'Tipo de área', curto: 'Tipo área' },
+  /* MAPA-ROTULO-POR-CAMADA-01: a área de cada pasto (a oficial do cadastro), cor neutra por faixa de tamanho */
+  { valor: 'area', rotulo: 'Área (ha)' },
 ];
+
+/** MAPA-ROTULO-POR-CAMADA-01 — as faixas de tamanho da camada "Área (ha)" (limite inferior em ha) e a rampa neutra (azul-acinzentado). */
+export const FAIXAS_DE_AREA: readonly { de: number; rotulo: string; cor: string }[] = [
+  { de: 0, rotulo: '< 10 ha', cor: '#E3E8EF' },
+  { de: 10, rotulo: '10–25', cor: '#C3CDDA' },
+  { de: 25, rotulo: '25–50', cor: '#9DACC0' },
+  { de: 50, rotulo: '50–100', cor: '#7488A3' },
+  { de: 100, rotulo: '100+ ha', cor: '#4E6584' },
+];
+export function corDaFaixaDeArea(ha: number | null | undefined): string {
+  if (ha == null || !(ha > 0)) return COR_SEM_FECHAMENTO;
+  let cor = FAIXAS_DE_AREA[0].cor;
+  for (const f of FAIXAS_DE_AREA) if (ha >= f.de) cor = f.cor;
+  return cor;
+}
 
 /** As camadas do mock que ainda não existem (desabilitadas, com o selo "em breve"). */
 export const CAMADAS_EM_BREVE: { grupo: string; itens: string[] }[] = [
@@ -61,6 +80,8 @@ export const COR_FORA_DA_PECUARIA: Record<FamiliaForaDaPecuaria, string> = {
 export interface PastoNaCamada {
   /** MAPA-ATIVIDADE-LAVOURA-01: a família do uso do mês quando NÃO é pecuária (null/ausente = pecuária) */
   foraDaPecuaria?: FamiliaForaDaPecuaria | null;
+  /** MAPA-ROTULO-POR-CAMADA-01: a área oficial do pasto (a camada "Área (ha)" pinta por faixa de tamanho, qualquer que seja o uso) */
+  areaHa?: number | null;
   temFechamento: boolean;
   kgHa: number | null;
   cabecas: number | null;
@@ -70,6 +91,7 @@ export interface PastoNaCamada {
 
 /** A cor do pasto na camada. Sem fechamento no mês: a cor do "sem dado" em toda camada de rebanho. */
 export function corDoPasto(camada: CamadaDoMapa, p: PastoNaCamada): string {
+  if (camada === 'area') return corDaFaixaDeArea(p.areaHa);
   if (p.foraDaPecuaria) return COR_FORA_DA_PECUARIA[p.foraDaPecuaria];
   if (camada === 'tipo_area') return COR_TIPO_AREA.pasto;
   if (!p.temFechamento) return COR_SEM_FECHAMENTO;
@@ -80,11 +102,25 @@ export function corDoPasto(camada: CamadaDoMapa, p: PastoNaCamada): string {
   return p.atividade ? ATIVIDADE[p.atividade] ?? ATIVIDADE_OUTRA : ATIVIDADE_OUTRA;
 }
 
+/**
+ * MAPA-AREA-TIPOS-02 (D4, Gabriel 02/11) — a cor da área pela FAMÍLIA do tipo (o catálogo `tiposDeArea.ts`): Estruturas no cinza-violeta
+ * das benfeitorias (o cinza puro é o "Vazio" das camadas de rebanho), Água azul-claro (longe do azul da recria), Ambiental o verde-escuro
+ * de sempre, Outros o bege da área sem uso. Sem classificação continua no cinza.
+ */
+export const COR_DA_FAMILIA_DE_AREA: Record<FamiliaDeArea, string> = {
+  estruturas: '#7B6F8E',
+  /* Gabriel 02/11 11:11: estruturas de pecuária (curral, confinamento, manga, embarcadouro, praça) em rosa-amadeirado, longe do laranja da
+     cria, do vermelho da carga alta e do bege da lavoura */
+  estruturas_pecuaria: '#A35D6A',
+  agua: '#5FA3C4',
+  ambiental: COR_TIPO_AREA.ambiental,
+  outros: COR_TIPO_AREA.area_sem_uso,
+};
+
 /** A cor de uma área que não é pasto (qualquer camada). `area_total` não pinta: só o contorno. */
 export function corDaArea(tipo: string): string {
-  if (tipo === 'area_sem_uso') return COR_TIPO_AREA.area_sem_uso;
-  if (tipo === 'reserva_legal' || tipo === 'app') return COR_TIPO_AREA.ambiental;
-  return COR_TIPO_AREA.estrutura;
+  const def = definicaoDoTipoDeArea(tipo);
+  return def ? COR_DA_FAMILIA_DE_AREA[def.familia] : COR_TIPO_AREA.estrutura;
 }
 
 export interface ItemDaLegenda { cor: string; rotulo: string }
@@ -93,6 +129,7 @@ export interface ItemDaLegenda { cor: string; rotulo: string }
  *  pecuária presentes (MAPA-ATIVIDADE-LAVOURA-01), no fim, sem repetir um rótulo que a camada já tem. */
 export function legendaDaCamada(camada: CamadaDoMapa, atividades: readonly string[], familias: readonly FamiliaForaDaPecuaria[] = []): ItemDaLegenda[] {
   const base = legendaDaPecuaria(camada, atividades);
+  if (camada === 'area') return base; // a área pinta por tamanho, qualquer que seja o uso
   const presentes = ORDEM_DAS_FAMILIAS.filter(f => familias.includes(f))
     .map(f => ({ cor: COR_FORA_DA_PECUARIA[f], rotulo: ROTULO_DA_FAMILIA[f] }))
     .filter(i => !base.some(b => b.rotulo === i.rotulo && b.cor === i.cor));
@@ -102,6 +139,7 @@ export function legendaDaCamada(camada: CamadaDoMapa, atividades: readonly strin
 }
 
 function legendaDaPecuaria(camada: CamadaDoMapa, atividades: readonly string[]): ItemDaLegenda[] {
+  if (camada === 'area') return [...FAIXAS_DE_AREA.map(f => ({ cor: f.cor, rotulo: f.rotulo })), { cor: COR_SEM_FECHAMENTO, rotulo: 'Sem área no cadastro' }];
   const semFechamento = { cor: COR_SEM_FECHAMENTO, rotulo: 'Sem fechamento no mês' };
   if (camada === 'situacao') {
     return [
@@ -136,8 +174,11 @@ function legendaDaPecuaria(camada: CamadaDoMapa, atividades: readonly string[]):
   }
   return [
     { cor: COR_TIPO_AREA.pasto, rotulo: 'Pasto' },
-    { cor: COR_TIPO_AREA.area_sem_uso, rotulo: 'Área sem uso (terceiros)' },
-    { cor: COR_TIPO_AREA.ambiental, rotulo: 'Reserva legal / APP' },
-    { cor: COR_TIPO_AREA.estrutura, rotulo: 'Benfeitorias / estradas' },
+    { cor: COR_DA_FAMILIA_DE_AREA.estruturas, rotulo: ROTULO_DA_FAMILIA_DE_AREA.estruturas },
+    { cor: COR_DA_FAMILIA_DE_AREA.estruturas_pecuaria, rotulo: ROTULO_DA_FAMILIA_DE_AREA.estruturas_pecuaria },
+    { cor: COR_DA_FAMILIA_DE_AREA.agua, rotulo: ROTULO_DA_FAMILIA_DE_AREA.agua },
+    { cor: COR_DA_FAMILIA_DE_AREA.ambiental, rotulo: 'Reserva legal / APP' },
+    { cor: COR_DA_FAMILIA_DE_AREA.outros, rotulo: 'Outros (estrada, sem uso)' },
+    { cor: COR_TIPO_AREA.estrutura, rotulo: 'Sem classificação' },
   ];
 }

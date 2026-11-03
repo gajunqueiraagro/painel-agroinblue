@@ -1,3 +1,4 @@
+import { TIPOS_DE_AREA } from './tiposDeArea';
 import { describe, expect, it } from 'vitest';
 import { itemFunciona, MENU_ADICIONAR, subitemFunciona } from './menuAdicionar';
 
@@ -16,12 +17,13 @@ describe('menu "+ Adicionar" (fix1 5): a estrutura do mock, só Importar funcion
     const infra = todos.find(i => i.rotulo === 'Infraestrutura')!.itens!.map(i => i.rotulo);
     expect(infra).toEqual(['Cocho', 'Bebedouro', 'Saleiro', 'Curral', 'Tronco / brete', 'Balança', 'Porteira', 'Cerca', 'Poço', 'Represa / açude',
       "Caixa d'água", 'Sede / casa', 'Galpão', 'Energia']);
-    expect(todos.find(i => i.rotulo === 'Área')!.itens).toHaveLength(13);
+    /* MAPA-AREA-TIPOS-02 (D6): os 23 do catálogo + as 4 de Condição */
+    expect(todos.find(i => i.rotulo === 'Área')!.itens).toHaveLength(27);
   });
-  it('MAPA-AREA-TIPO-01: em Área ▸ funcionam os 9 tipos (vão à Validação); a Condição segue "em breve"', () => {
+  it('MAPA-AREA-TIPO-01/TIPOS-02: em Área ▸ funcionam TODOS os tipos do catálogo, agrupados por família; a Condição segue "em breve"', () => {
     const area = todos.find(i => i.rotulo === 'Área')!.itens!;
-    expect(area.filter(subitemFunciona).map(s => s.tipo)).toEqual(['area_fazenda', 'area_sem_uso', 'reserva_legal', 'app', 'varzea_brejo',
-      'benfeitoria', 'estrada', 'curral', 'confinamento']);
+    expect(area.filter(subitemFunciona).map(s => s.tipo)).toEqual(TIPOS_DE_AREA.map(t => t.tipo));
+    expect(area.find(s => s.tipo === 'armazem_graos')?.grupo).toBe('Estruturas');
     expect(area.filter(s => !subitemFunciona(s)).map(s => s.rotulo)).toEqual(['Área degradada', 'Área em reforma', 'Área em recuperação', 'Zona de erosão']);
     expect(todos.find(i => i.rotulo === 'Infraestrutura')!.itens!.some(subitemFunciona)).toBe(false);
   });
