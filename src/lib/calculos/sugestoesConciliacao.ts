@@ -25,12 +25,23 @@ function getCadeiaVizinhos(codigo: string): string[] {
   return [];
 }
 
+/**
+ * Uma linha da conferência. O lado sem dado vem `null` (a categoria só existe no pasto ou só no sistema).
+ * ⚠ FECH-AJUSTE-INVENTARIO-01 (Gabriel 03/11): a diferença nula virava o texto "-null" na sugestão. A regra agora é a MESMA do
+ * botão Fechar (`hasDivergencia` do FechamentoTab): o lado vazio conta como 0 — ver `diferencaDaLinha`.
+ */
 export interface RowData {
   codigo: string;
   nome: string;
-  qtdSistema: number;
-  qtdPasto: number;
-  diferenca: number;
+  qtdSistema: number | null;
+  qtdPasto: number | null;
+  diferenca: number | null;
+}
+
+/** Pasto − sistema, com o lado vazio contando como 0 (a regra do bloqueio do Fechar). */
+export function diferencaDaLinha(r: RowData): number {
+  if (r.diferenca != null) return r.diferenca;
+  return (r.qtdPasto ?? 0) - (r.qtdSistema ?? 0);
 }
 
 export interface Sugestao {
@@ -39,8 +50,9 @@ export interface Sugestao {
   acao?: { origemCodigo: string; destinoCodigo: string; qtd: number };
 }
 
-export function gerarSugestoes(rows: RowData[], catMap: Map<string, string>): Sugestao[] {
+export function gerarSugestoes(linhas: RowData[], catMap: Map<string, string>): Sugestao[] {
   const sugestoes: Sugestao[] = [];
+  const rows = linhas.map(r => ({ ...r, diferenca: diferencaDaLinha(r) }));
   const divergentes = rows.filter(r => r.diferenca !== 0);
   if (divergentes.length === 0) return sugestoes;
 
