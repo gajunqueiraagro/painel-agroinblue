@@ -6,7 +6,7 @@
  * ⚠ So' o PDF traz `marcas` (o amarelo da previa) e `divergencias` (a conferencia pela chave); no XML a chave vem do protocolo.
  */
 import { lerNFe } from './lerNFe';
-import { ehDanfse, notaDoDanfse } from './danfse';
+import { ehDanfse, ehNfseMunicipal, notaDaNfseMunicipal, notaDoDanfse } from './danfse';
 import { notaDoDanfe, type CampoConferido, type MarcaNoPdf, type TotaisExtrasDoDanfe } from './danfe';
 import { itensDoPdf, type PaginasDoPdf, type PdfjsMinimo } from './lerNotaPdf';
 import type { AvisoNFe, NotaLida } from './tipos';
@@ -40,7 +40,9 @@ export async function lerNota(bytes: ArrayBuffer, opcoes: { pdfjs?: PdfjsMinimo 
   } catch {
     return { ok: false, origem: 'pdf', frase: FRASE_PDF_ILEGIVEL };
   }
-  const r = ehDanfse(lido.paginas) ? notaDoDanfse(lido.paginas) : notaDoDanfe(lido.paginas);
+  /* NFSE-MUNICIPAL-01 — a NFS-e da prefeitura (SP com o Identificador Nacional; PP sem chave) pelo titulo e pelos quadros */
+  const r = ehDanfse(lido.paginas) ? notaDoDanfse(lido.paginas)
+    : ehNfseMunicipal(lido.paginas) ? notaDaNfseMunicipal(lido.paginas) : notaDoDanfe(lido.paginas);
   if (r.ok === false) return { ok: false, origem: 'pdf', frase: r.frase };
   return { ok: true, origem: 'pdf', nota: r.nota, avisos: r.avisos, marcas: r.marcas, divergencias: r.divergencias, tamanhos: lido.tamanhos, extras: r.extras };
 }

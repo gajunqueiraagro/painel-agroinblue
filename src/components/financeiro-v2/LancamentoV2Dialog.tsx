@@ -2344,7 +2344,7 @@ export function LancamentoV2Dialog({
       }
     }
     if (currentIsEdit && contratoDaParcela && edicaoParcela && edicaoParcela.mudou) {
-      const recusa = await gravarParcelaDoModal(contratoDaParcela.financiamentoId, edicaoParcela.lista, edicaoParcela.totalDepoisCent);
+      const recusa = await gravarParcelaDoModal(contratoDaParcela.financiamentoId, edicaoParcela.lista, edicaoParcela.totalDepoisCent, clienteAtual?.id);
       if (recusa) { setErroAntesDeSalvar(recusa); setSaving(false); return; }
     }
 
