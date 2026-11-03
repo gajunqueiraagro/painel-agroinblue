@@ -211,6 +211,14 @@ const CENARIOS = [
   { nome: 'mapa-geo-painel-lavoura', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P5A') },
   { nome: 'mapa-geo-painel-reserva', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P5B') },
   { nome: 'mapa-geo-atividade', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Atividade') },
+  /* MAPA-ROTULO-POR-CAMADA-01: o rótulo de cada camada (Situação já é o `mapa-geo`), a camada nova "Área (ha)" e "Mostrar área no rótulo";
+     a regra `medirRotulosDoMapa` mede rótulo sobreposto a outro e rótulo saindo do mapa em toda tela do mapa */
+  { nome: 'mapa-geo-camada-lotacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Lotação (kg/ha)') },
+  { nome: 'mapa-geo-camada-cabecas', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Cabeças') },
+  { nome: 'mapa-geo-camada-tipo-area', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Tipo de área') },
+  { nome: 'mapa-geo-camada-area', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Área (ha)') },
+  { nome: 'mapa-geo-rotulo-com-area', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await p.locator('[data-testid="mapa-filtros"] label', { hasText: 'Mostrar área no rótulo' }).first().click(); await p.waitForTimeout(500); } },
   { nome: 'mapa-geo-agosto', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: async (p) => { await mapaMes('Ago')(p); await mapaPasto('P_01')(p); } },
   /* MAPA-02b — o fundo (neutro na bancada: nenhum tile do Google nem do OSM) e os créditos no canto, logo abaixo do zoom: em satélite com o
      copyright do tamanho dos reais (e com o painel aberto, junto do zoom), no Mapa, na queda sem satélite (o aviso) e na Operação, que nasce
@@ -1433,6 +1441,24 @@ function medirGraficoDoGlobal() {
   if (barras && barras.getBoundingClientRect().height < 2 * 18 - 0.5) achados.push({ regra: 'grafico', texto: `menos de 2 barras a vista (${Math.round(barras.getBoundingClientRect().height)}px)` });
   return achados;
 }
+/* MAPA-ROTULO-POR-CAMADA-01 — os RÓTULOS dos pastos (`[data-rotulo-pasto]`) em toda tela do mapa: nenhum rótulo se sobrepõe a outro e
+   nenhum sai do mapa (o texto inteiro à vista). Rótulos que não cabem somem (ficam no hover), como sempre. */
+function medirRotulosDoMapa() {
+  const achados = [];
+  const mapa = document.querySelector('[data-testid="mapa-gestor-mapa"]'); if (!mapa) return achados;
+  const m = mapa.getBoundingClientRect();
+  const rs = [...mapa.querySelectorAll('[data-rotulo-pasto]')].map((e) => ({ t: (e.textContent ?? '').trim(), r: e.getBoundingClientRect() })).filter((x) => x.r.width > 0);
+  for (let i = 0; i < rs.length; i++) {
+    const a = rs[i].r;
+    if (a.left < m.left - 0.5 || a.right > m.right + 0.5) achados.push({ regra: 'rotulo', texto: `rótulo sai do mapa: ${rs[i].t.slice(0, 40)}` });
+    for (let j = i + 1; j < rs.length; j++) {
+      const b = rs[j].r;
+      const sobre = Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+      if (sobre) achados.push({ regra: 'rotulo', texto: `rótulos sobrepostos: "${rs[i].t.slice(0, 30)}" × "${rs[j].t.slice(0, 30)}"` });
+    }
+  }
+  return achados;
+}
 /* MAPA-CARTOES-LARGURA-01 — os CARTÕES de cima do mapa (`[data-cartao-mapa]`, o componente `CartaoDoMapa`), medidos em toda tela que os
    tem: nenhuma linha pede mais largura que a reservada (texto cortado), um cartão não invade o vizinho e todos têm a MESMA altura (2 linhas
    fixas). O detector se prova no cenário `mapa-geo-cartoes-pior` com a largura da lotação encolhida (ver o relatório). */
@@ -2366,6 +2392,7 @@ try {
     if (cen.cabecalhoInteiro) achadosTodos.push(...(await p.evaluate(medirCabecalhoInteiro, cen.regiao ?? null)));
     achadosTodos.push(...(await p.evaluate(medirGraficoDoGlobal))); // só age onde há o gráfico do Global
     achadosTodos.push(...(await p.evaluate(medirCartoesDoMapa))); // MAPA-CARTOES-LARGURA-01: só age onde há os cartões do mapa
+    achadosTodos.push(...(await p.evaluate(medirRotulosDoMapa))); // MAPA-ROTULO-POR-CAMADA-01: só age no mapa do Gestor
     if (cen.hoverCabecalho) {
       try { await p.locator(`${cen.hoverCabecalho} th[aria-sort]`).first().hover(); await p.waitForTimeout(300); achadosTodos.push(...(await p.evaluate(medirHoverCabecalho))); }
       catch (e) { achadosTodos.push({ regra: 'erro', texto: `hover do cabecalho: ${String(e).slice(0, 100)}` }); }

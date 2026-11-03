@@ -17,7 +17,7 @@ export function rotuloDaAtividade(tipo: string | null | undefined): string {
   return r === tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1).replace(/_/g, ' ') : r;
 }
 
-export type CamadaDoMapa = 'situacao' | 'kg_ha' | 'atividade' | 'cabecas' | 'tipo_area';
+export type CamadaDoMapa = 'situacao' | 'kg_ha' | 'atividade' | 'cabecas' | 'tipo_area' | 'area';
 
 /** `curto` = o nome no botão Camadas (152px desde o MAPA-GLOBAL-01, para caber o "← Global"), quando o inteiro não cabe; o inteiro fica no menu, no title e na legenda. */
 export const CAMADAS: { valor: CamadaDoMapa; rotulo: string; curto?: string }[] = [
@@ -25,8 +25,26 @@ export const CAMADAS: { valor: CamadaDoMapa; rotulo: string; curto?: string }[] 
   { valor: 'kg_ha', rotulo: 'Lotação (kg/ha)', curto: 'Lotação' },
   { valor: 'atividade', rotulo: 'Atividade' },
   { valor: 'cabecas', rotulo: 'Cabeças' },
-  { valor: 'tipo_area', rotulo: 'Tipo de área' },
+  /* o nome inteiro não cabe no botão de 152 px ("Camadas: Tipo de área" cortava 4 px): o curto vai no botão, o inteiro no menu e no title */
+  { valor: 'tipo_area', rotulo: 'Tipo de área', curto: 'Tipo área' },
+  /* MAPA-ROTULO-POR-CAMADA-01: a área de cada pasto (a oficial do cadastro), cor neutra por faixa de tamanho */
+  { valor: 'area', rotulo: 'Área (ha)' },
 ];
+
+/** MAPA-ROTULO-POR-CAMADA-01 — as faixas de tamanho da camada "Área (ha)" (limite inferior em ha) e a rampa neutra (azul-acinzentado). */
+export const FAIXAS_DE_AREA: readonly { de: number; rotulo: string; cor: string }[] = [
+  { de: 0, rotulo: '< 10 ha', cor: '#E3E8EF' },
+  { de: 10, rotulo: '10–25', cor: '#C3CDDA' },
+  { de: 25, rotulo: '25–50', cor: '#9DACC0' },
+  { de: 50, rotulo: '50–100', cor: '#7488A3' },
+  { de: 100, rotulo: '100+ ha', cor: '#4E6584' },
+];
+export function corDaFaixaDeArea(ha: number | null | undefined): string {
+  if (ha == null || !(ha > 0)) return COR_SEM_FECHAMENTO;
+  let cor = FAIXAS_DE_AREA[0].cor;
+  for (const f of FAIXAS_DE_AREA) if (ha >= f.de) cor = f.cor;
+  return cor;
+}
 
 /** As camadas do mock que ainda não existem (desabilitadas, com o selo "em breve"). */
 export const CAMADAS_EM_BREVE: { grupo: string; itens: string[] }[] = [
@@ -62,6 +80,8 @@ export const COR_FORA_DA_PECUARIA: Record<FamiliaForaDaPecuaria, string> = {
 export interface PastoNaCamada {
   /** MAPA-ATIVIDADE-LAVOURA-01: a família do uso do mês quando NÃO é pecuária (null/ausente = pecuária) */
   foraDaPecuaria?: FamiliaForaDaPecuaria | null;
+  /** MAPA-ROTULO-POR-CAMADA-01: a área oficial do pasto (a camada "Área (ha)" pinta por faixa de tamanho, qualquer que seja o uso) */
+  areaHa?: number | null;
   temFechamento: boolean;
   kgHa: number | null;
   cabecas: number | null;
@@ -71,6 +91,7 @@ export interface PastoNaCamada {
 
 /** A cor do pasto na camada. Sem fechamento no mês: a cor do "sem dado" em toda camada de rebanho. */
 export function corDoPasto(camada: CamadaDoMapa, p: PastoNaCamada): string {
+  if (camada === 'area') return corDaFaixaDeArea(p.areaHa);
   if (p.foraDaPecuaria) return COR_FORA_DA_PECUARIA[p.foraDaPecuaria];
   if (camada === 'tipo_area') return COR_TIPO_AREA.pasto;
   if (!p.temFechamento) return COR_SEM_FECHAMENTO;
@@ -108,6 +129,7 @@ export interface ItemDaLegenda { cor: string; rotulo: string }
  *  pecuária presentes (MAPA-ATIVIDADE-LAVOURA-01), no fim, sem repetir um rótulo que a camada já tem. */
 export function legendaDaCamada(camada: CamadaDoMapa, atividades: readonly string[], familias: readonly FamiliaForaDaPecuaria[] = []): ItemDaLegenda[] {
   const base = legendaDaPecuaria(camada, atividades);
+  if (camada === 'area') return base; // a área pinta por tamanho, qualquer que seja o uso
   const presentes = ORDEM_DAS_FAMILIAS.filter(f => familias.includes(f))
     .map(f => ({ cor: COR_FORA_DA_PECUARIA[f], rotulo: ROTULO_DA_FAMILIA[f] }))
     .filter(i => !base.some(b => b.rotulo === i.rotulo && b.cor === i.cor));
@@ -117,6 +139,7 @@ export function legendaDaCamada(camada: CamadaDoMapa, atividades: readonly strin
 }
 
 function legendaDaPecuaria(camada: CamadaDoMapa, atividades: readonly string[]): ItemDaLegenda[] {
+  if (camada === 'area') return [...FAIXAS_DE_AREA.map(f => ({ cor: f.cor, rotulo: f.rotulo })), { cor: COR_SEM_FECHAMENTO, rotulo: 'Sem área no cadastro' }];
   const semFechamento = { cor: COR_SEM_FECHAMENTO, rotulo: 'Sem fechamento no mês' };
   if (camada === 'situacao') {
     return [

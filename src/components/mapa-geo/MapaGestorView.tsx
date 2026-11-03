@@ -19,7 +19,7 @@ import {
   DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { itemFunciona, MENU_ADICIONAR, subitemFunciona } from '@/lib/mapa/menuAdicionar';
-import { TIPOS_DE_AREA, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
+import { rotuloDoTipo, TIPOS_DE_AREA, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
 import { ChevronDown, ChevronLeft, ListFilter, MapPin, Plus, Upload, X } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
@@ -34,6 +34,8 @@ import { COR_DA_FAIXA, faixaDaLotacaoUa, textoUaHa, uaPorHa } from '@/lib/mapa/f
 import { tituloDosLotes } from '@/lib/mapa/lotesDoPasto';
 import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
 import { CAMADAS, CAMADAS_EM_BREVE, corDaArea, corDoPasto, legendaDaCamada, rotuloDaAtividade, type CamadaDoMapa } from '@/lib/mapa/camadasDoMapa';
+import { rotuloDoPastoNaCamada } from '@/lib/mapa/rotuloDoPasto';
+import { useAuth } from '@/contexts/AuthContext';
 import { FUNDOS } from '@/lib/mapa/fundoDoMapa';
 import { EVENTO_LIMITE_DOS_CREDITOS } from '@/lib/mapa/creditosDoMapa';
 import { InfraPainel } from '@/components/mapa-geo/InfraPainel';
@@ -121,12 +123,23 @@ const SEM_ATIVIDADE = '__sem__';
 
 type Filtros = {
   pastos: boolean; areas: boolean; semUso: boolean; nomes: boolean;
+  /** MAPA-ROTULO-POR-CAMADA-01: a área no rótulo em qualquer camada (lembrado no navegador) */
+  rotuloComArea: boolean;
   atividadesOcultas: Set<string>; comAnimais: boolean; vazio: boolean; semFechamento: boolean;
   /** MAPA-02f-b: a infraestrutura (liga/desliga tudo) e os tipos escondidos */
   infra: boolean; infraOcultos: Set<string>;
 };
+/* MAPA-ROTULO-POR-CAMADA-01: "Mostrar área no rótulo" lembrado POR USUÁRIO (a chave leva o id de quem está logado; neste navegador). Sem
+   armazenamento a tela funciona, só não lembra. */
+const chaveRotuloComArea = (usuario: string | null | undefined) => `mapa-rotulo-com-area:${usuario ?? 'anonimo'}`;
+function rotuloComAreaLembrado(usuario: string | null | undefined): boolean {
+  try { return typeof localStorage !== 'undefined' && localStorage.getItem(chaveRotuloComArea(usuario)) === '1'; } catch { return false; }
+}
+function lembrarRotuloComArea(usuario: string | null | undefined, v: boolean): void {
+  try { localStorage.setItem(chaveRotuloComArea(usuario), v ? '1' : '0'); } catch { /* sem armazenamento */ }
+}
 const FILTROS_INICIAIS: Filtros = {
-  pastos: true, areas: true, semUso: true, nomes: true, atividadesOcultas: new Set(), comAnimais: true, vazio: true, semFechamento: true,
+  pastos: true, areas: true, semUso: true, nomes: true, rotuloComArea: false, atividadesOcultas: new Set(), comAnimais: true, vazio: true, semFechamento: true,
   infra: true, infraOcultos: new Set(),
 };
 
@@ -271,7 +284,8 @@ export function MapaGestorView({
   /* MAPA-PAINEL-LOTE-UA-01 (Gabriel 02/11): o histórico abre SEMPRE em UA/ha; o kg/ha troca, e a escolha não é lembrada (volta ao trocar de pasto) */
   const [serieDoHistorico, setSerieDoHistorico] = useState<'kg' | 'ua'>('ua');
   const [filtrosAbertos, setFiltrosAbertos] = useState(true);
-  const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS);
+  const { user } = useAuth();
+  const [filtros, setFiltros] = useState<Filtros>(() => ({ ...FILTROS_INICIAIS, rotuloComArea: rotuloComAreaLembrado(user?.id) }));
   const [creditosNoRodape, setCreditosNoRodape] = useState(true); // MAPA-CONTROLES-01
   const [larguraDosCreditos, setLarguraDosCreditos] = useState(0); // MAPA-COMPACTO-01: medida, não o pior caso
   const quadroRef = useRef<HTMLDivElement>(null);
@@ -406,6 +420,7 @@ export function MapaGestorView({
               color: sel ? '#ffffff' : 'rgba(255,255,255,0.85)', weight: sel ? 3 : 1, fillOpacity: sel ? 0.65 : 0.45,
               fillColor: corDoPasto(camada, {
                 foraDaPecuaria: familiaDoPasto(d),
+                areaHa: g.pasto_id ? pastoPorId.get(g.pasto_id)?.area_produtiva_ha ?? null : null,
                 temFechamento: !!d?.temFechamento, kgHa: d?.kgHa ?? null, cabecas: d?.cabecas ?? null, faixa: d?.faixa ?? null,
                 atividade: d?.atividade ?? null,
               }),
@@ -417,10 +432,15 @@ export function MapaGestorView({
         const nome = nomeDe(g);
         if (ehPasto) {
           camadaGeo.on('click', () => { if (colocandoRef.current) return; setInfraSelId(null); setSelecionadoId(g.id); });
-          const sub = d && familiaDoPasto(d) ? rotuloForaDaPecuaria(d, lavouraDoPastoNoMes(registrosDeLavoura, g.pasto_id!, anoMes))
-            : !d || !d.temFechamento ? '—' : (d.cabecas ?? 0) === 0 ? 'vazio' : `${formatNum(d.kgHa ?? 0, 0)} kg/ha`;
-          // o hover mostra sempre o nome e o kg/ha (é onde fica o rótulo que não coube)
-          camadaGeo.bindTooltip(`${nome} · ${sub}`, { sticky: true });
+          /* MAPA-ROTULO-POR-CAMADA-01: a 2ª linha segue a camada (a mesma escolha que pinta e faz a legenda); "Mostrar área no rótulo" soma a área */
+          const { sub, titulo } = rotuloDoPastoNaCamada(camada, {
+            temFechamento: !!d?.temFechamento, cabecas: d?.cabecas ?? null, pesoMedioKg: d?.pesoMedioKg ?? null, kgHa: d?.kgHa ?? null,
+            atividade: d?.atividade ?? null,
+            foraDaPecuaria: d && familiaDoPasto(d) ? rotuloForaDaPecuaria(d, lavouraDoPastoNoMes(registrosDeLavoura, g.pasto_id!, anoMes)) : null,
+            areaCadastroHa: pastoPorId.get(g.pasto_id!)?.area_produtiva_ha ?? null, areaMapaHa: areaEmHectares(g.geojson),
+          }, filtros.rotuloComArea);
+          // o hover mostra sempre o nome e a 2ª linha inteira (é onde fica o rótulo que não coube)
+          camadaGeo.bindTooltip(`${nome} · ${titulo}`, { sticky: true });
           if (filtros.nomes && b.isValid()) {
             const aneis = aneisEmPixels(mapa, g.geojson);
             if (aneis && aneis[0]?.length >= 3) {
@@ -434,6 +454,18 @@ export function MapaGestorView({
           }
         } else if (g.tipo !== 'area_total') {
           camadaGeo.bindTooltip(nome, { sticky: true });
+          /* MAPA-ROTULO-POR-CAMADA-01: na camada "Tipo de área" as áreas também ganham rótulo (o nome e o tipo: "Manga", "Reserva legal") */
+          if (camada === 'tipo_area' && filtros.nomes && b.isValid()) {
+            const aneis = aneisEmPixels(mapa, g.geojson);
+            if (aneis && aneis[0]?.length >= 3) {
+              const polo = pontoMaisInterno(aneis, 2);
+              const xs = aneis[0].map(pt => pt[0]);
+              candidatos.push({
+                id: g.id, nome, sub: rotuloDoTipo(g.tipo), ancora: mapa.unproject(L.point(polo.x, polo.y), ZOOM_DE_MEDIDA), folga: polo.folga,
+                largura: Math.max(...xs) - Math.min(...xs), prioridade: areaEmHectares(g.geojson), aneis,
+              });
+            }
+          }
           /* MAPA-AREA-TIPOS-02: a área que já é estrutura (infraestrutura com o elo) abre o painel dela — a ficha e o Patrimônio */
           const estrutura = infras.find(i => i.geometria_id === g.id);
           if (estrutura) camadaGeo.on('click', () => { if (colocandoRef.current) return; setSelecionadoId(null); setPontoEditado(null); setInfraSelId(estrutura.id); });
@@ -791,6 +823,9 @@ export function MapaGestorView({
             <LinhaFiltro rotulo="Áreas da fazenda" marcado={filtros.areas} n={contagens.areas} onChange={v => setFiltros(f => ({ ...f, areas: v }))} />
             <LinhaFiltro rotulo="Área sem uso (terceiros)" marcado={filtros.semUso} n={contagens.semUso} onChange={v => setFiltros(f => ({ ...f, semUso: v }))} />
             <LinhaFiltro rotulo="Nomes dos pastos" marcado={filtros.nomes} onChange={v => setFiltros(f => ({ ...f, nomes: v }))} />
+            {/* MAPA-ROTULO-POR-CAMADA-01: soma "· 25,3 ha" ao rótulo em qualquer camada; lembrado neste navegador */}
+            <LinhaFiltro rotulo="Mostrar área no rótulo" marcado={filtros.rotuloComArea}
+              onChange={v => { lembrarRotuloComArea(user?.id, v); setFiltros(f => ({ ...f, rotuloComArea: v })); }} />
             <div className="mb-1 mt-2.5 text-[9.5px] font-semibold text-[#4A5361]">Atividade ({mesDoMapa})</div>
             {contagens.atividades.length === 0 ? <div className="text-[10.5px] text-[#5A6472]">—</div> : contagens.atividades.map(([a, n]) => (
               <LinhaFiltro key={a} rotulo={a === SEM_ATIVIDADE ? 'Sem atividade' : rotuloDaAtividade(a)} marcado={!filtros.atividadesOcultas.has(a)} n={n}
