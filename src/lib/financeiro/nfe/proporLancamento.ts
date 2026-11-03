@@ -39,6 +39,10 @@ export const FRASE_FAZENDA_NAO_IDENTIFICADA = 'Fazenda não identificada pela in
 export const ORIGEM_FAZENDA_PELO_ENDERECO = 'pelo endereço, confira';
 export const FRASE_SEM_DUPLICATAS = 'Nota sem duplicatas. Preencha o vencimento.';
 export const FRASE_SEM_PROTOCOLO = 'Nota sem protocolo de autorização.';
+/** NFSE-MUNICIPAL-01 — a NFS-e da prefeitura sem o Identificador Nacional: nada confere o lido. */
+export const FRASE_SEM_CHAVE = 'NFS-e sem chave para conferir: confira os campos lidos.';
+/** NFSE-MUNICIPAL-01 — as parcelas calculadas pela condição escrita na nota (não impressas como duplicatas). */
+export const fraseDasCondicoes = (dias: readonly number[]) => `Vencimentos pela condição de pagamento da nota (${dias.join('/')} dias da emissão): confira.`;
 /** PARC-LIVRES-01 — duplicatas com valor ou data próprios entram como PARCELAS LIVRES, como estão na nota (o recado da grade). */
 export const fraseParcelasComoNaNota = (n: number) => `A nota trouxe ${n} parcelas com valores ou datas próprias: entram como estão na nota.`;
 
@@ -207,6 +211,8 @@ export function proporLancamento(entrada: {
   }
 
   if (avisosDoLeitor.includes('sem_protocolo')) avisos.push(FRASE_SEM_PROTOCOLO);
+  if (avisosDoLeitor.includes('sem_chave')) avisos.push(FRASE_SEM_CHAVE);
+  if (avisosDoLeitor.includes('vencimentos_pelas_condicoes') && nota.servico?.condicoesPagamento?.length) avisos.push(fraseDasCondicoes(nota.servico.condicoesPagamento));
   /* NOTA-NOVA-MODAL-REAL — a remessa de entrega futura avisa no Novo lançamento (o aviso morava só na tela intermediária; âmbar, nunca bloqueio) */
   const remessa = fraseDaRemessa(nota);
   if (remessa) avisos.push(remessa);

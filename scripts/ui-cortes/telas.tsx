@@ -710,7 +710,7 @@ if (tela === 'mesclar') {
         ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
           // MAPA-CRIAR-PIQUETES-01 2b: `versoesDosPoligonos` lê `.select('id, versao').in('id', …)` (a versão fresca do Mover linha / Juntar)
           : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
-          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : [])].map(comModulo03))
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : [])].map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
       : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
           ...(q.get('grupo') === '1' ? ['P_01A', 'P_01B'].map((nome, i) => ({ ...MAPA.PASTOS[0], id: `p1${'ab'[i]}`, nome, grupo_id: 'gx', data_inicio: '2026-11-01', observacoes: null })) : [])]
@@ -1302,6 +1302,9 @@ if (tela === 'mesclar') {
     const { notaDaChaveDigitada, lidoDaChave } = await import('@/lib/financeiro/nfe/chaveDigitada');
     const { FRASE_NOTA_SEM_CHAVE, FRASE_PDF_SEM_TEXTO } = await import('@/lib/financeiro/nfe/danfe');
     const { NovoDeXmlDialog, arquivoPdfDaNota, fraseJaNaLista } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+    const { notaDaNfseMunicipal } = await import('@/lib/financeiro/nfe/danfse');
+    const { nfsePresidentePrudente } = await import('@/lib/financeiro/nfe/__fixtures__/nfseMunicipalSintetica');
+    const nfseMunicipal: any = notaDaNfseMunicipal(nfsePresidentePrudente());
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
     for (const it of PAGINAS_DANFE_SINTETICO[0]) { doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 595.28 - it.y); }
     const bytes: ArrayBuffer = doc.output('arraybuffer');
@@ -1327,6 +1330,8 @@ if (tela === 'mesclar') {
     const linhas: any[] = [
       linha('l-lida', '000.000.937.pdf', lido),
       linha('l-chave', '000.000.939.pdf', lidoDaChave(r.nota, [{ largura: 841.89, altura: 595.28 }])),
+      /* NFSE-MUNICIPAL-01 — a NFS-e da prefeitura sem chave nacional (sintetica, o layout de Presidente Prudente): o chip "sem chave · confira" */
+      linha('l-nfse', 'NFSe-6001-servico.pdf', nfseMunicipal),
       recusada('l-escaneado', LONGO, FRASE_PDF_SEM_TEXTO),
       recusada('l-semchave', '46.995.pdf', FRASE_NOTA_SEM_CHAVE),
     ];

@@ -191,3 +191,208 @@ export function notaDoDanfse(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanf
     extras: { seguroCent: 0, outrasCent: 0, ipiCent: 0, stCent: 0, tributosAproxCent: null },
   };
 }
+
+/* ───────────────────────── NFSE-MUNICIPAL-01 — a NFS-e DA PREFEITURA (o layout municipal) ─────────────────────────
+ * Gabriel 03/11: a NFS-e de SP (que traz o "Identificador Nacional", a chave de 50 — conferida pela `conferirChaveNfse`, caminho a) e a
+ * municipal SEM chave nacional (Presidente Prudente: aceita, com o aviso `sem_chave` — "confira"). Os dois layouts sao da mesma familia:
+ * titulo "NOTA FISCAL … SERVIÇOS … NFS-e", os quadros PRESTADOR / TOMADOR DE SERVIÇOS com "Rótulo:" e o valor AO LADO, o numero, a
+ * emissao e o codigo de verificacao com o valor ABAIXO (como no DANFE), os valores numa linha so' ("VALOR LÍQUIDO DA NOTA FISCAL: R$ …",
+ * "VALOR TOTAL DO SERVIÇO = R$ …"). O lancamento e' o LIQUIDO: o impresso; sem ele, o total so' quando nenhuma retencao foi impressa
+ * (com retencao e sem liquido impresso: recusa — nunca calculado por adivinhacao).
+ * A condicao de pagamento escrita na discriminacao ("COND.PAGTO.:28/56/84/112 DIAS") vira as parcelas a partir da emissao, com o aviso
+ * `vencimentos_pelas_condicoes`; o que nao se le com seguranca nao vira parcela (1 parcela, o operador ajusta).
+ */
+export const FRASE_NFSE_SEM_PRESTADOR = 'NFS-e sem o CPF/CNPJ do prestador: nada foi lido.';
+export const FRASE_NFSE_RETENCAO_SEM_LIQUIDO = 'NFS-e com retenções e sem o valor líquido impresso: nada foi lido. Lance pelo valor do boleto.';
+
+/** E' a NFS-e de uma prefeitura? O titulo ("NOTA FISCAL" + "SERVIÇOS" + "NFS-e") E os quadros do prestador e do tomador. */
+export function ehNfseMunicipal(paginas: readonly ItemDoDanfe[][]): boolean {
+  const ns = paginas.flat().map((it) => normalizar(it.str));
+  const titulo = ns.some((n) => n.includes('NOTA FISCAL') && n.includes('SERVICOS') && n.includes('NFS-E'));
+  return titulo && ns.some((n) => n === 'PRESTADOR DE SERVICOS') && ns.some((n) => n.startsWith('TOMADOR DE SERVICOS'));
+}
+
+/** O primeiro valor em reais de um texto ("R$ 11.360,00", "9,99 (*)") -> centavos; `null` se nao tem. */
+function centDoTexto(s: string | null | undefined): number | null {
+  const m = /(?:R\$\s*)?(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+,\d{2})(?![\d,])/.exec(s ?? '');
+  return m ? centavosBr(m[1]) : null;
+}
+
+/** Os dias da condicao de pagamento ("COND.PAGTO.:28/56/84/112 DIAS"): crescentes, ate' 12, ate' 400 dias. Senao `null`. */
+export function diasDaCondicao(texto: string | null | undefined): number[] | null {
+  const m = /COND\.?\s*(?:DE\s+)?PAG(?:TO|AMENTO)?\.?\s*:?\s*(\d{1,3}(?:\s*\/\s*\d{1,3})*)\s*DIAS?\b/.exec(normalizar(texto ?? ''));
+  if (!m) return null;
+  const dias = m[1].split('/').map((x) => Number(x.trim()));
+  const ok = dias.length >= 1 && dias.length <= 12 && dias.every((d, i) => d > 0 && d <= 400 && (i === 0 || d > dias[i - 1]));
+  return ok ? dias : null;
+}
+
+/** "AAAA-MM-DD" + dias (em UTC, sem fuso). */
+function somarDias(iso: string, dias: number): string {
+  const t = Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) + dias * 86400000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/** Le^ a NFS-e municipal. */
+export function notaDaNfseMunicipal(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe {
+  const d = new Danfe(paginas);
+  if (d.itens.length === 0) return { ok: false, motivo: 'pdf_sem_texto', frase: FRASE_PDF_SEM_TEXTO };
+  const pg = d.itens.find((it) => normalizar(it.str) === 'PRESTADOR DE SERVICOS')?.pagina ?? 1;
+  const naPg = d.itens.filter((it) => it.pagina === pg);
+  if (naPg.some((it) => /\bNFS-E CANCELADA\b|^CANCELADA$|\bNOTA CANCELADA\b|\bSUBSTITUIDA\b/.test(normalizar(it.str)))) {
+    return { ok: false, motivo: 'incompleta', frase: FRASE_NFSE_CANCELADA };
+  }
+
+  const yDe = (pred: (n: string) => boolean) => naPg.find((it) => pred(normalizar(it.str)))?.y ?? null;
+  const yPrest = yDe((n) => n === 'PRESTADOR DE SERVICOS');
+  const yTom = yDe((n) => n.startsWith('TOMADOR DE SERVICOS'));
+  const yInter = yDe((n) => n.startsWith('INTERMEDIARIO DE SERVICOS'));
+  /* o TITULO da discriminacao (o de cima: em PP o cabecalho da tabela de servicos, mais abaixo, tem o mesmo texto) */
+  const yDisc = naPg.filter((it) => /^DISCRIMINACAO D[EO]S? SERVICOS$/.test(normalizar(it.str))).map((it) => it.y).sort((a, b) => b - a)[0] ?? null;
+  const faixa = (de: number | null, ate: number | null) => ({ abaixoDe: de ?? undefined, acimaDe: ate ?? undefined });
+  const noPrest = faixa(yPrest, yTom);
+  const noTom = faixa(yTom, yInter ?? yDisc);
+
+  /** "Rótulo: valor" — o valor no proprio item (depois do ":") ou no item AO LADO, o primeiro rotulo de cima na faixa. */
+  const aoLadoDe = (rotulo: string, f: { abaixoDe?: number; acimaDe?: number }): { str: string; it: ItemNaPagina } | null => {
+    const alvo = normalizar(rotulo);
+    const rots = d.rotulos(rotulo, true).filter((r) => r.pagina === pg && (f.abaixoDe == null || r.y < f.abaixoDe) && (f.acimaDe == null || r.y > f.acimaDe))
+      .sort((a, b) => b.y - a.y);
+    for (const r of rots) {
+      const resto = normalizar(r.str).slice(alvo.length).replace(/^\s*[:=]\s*/, '').trim();
+      if (resto) { const bruto = r.str.slice(r.str.indexOf(':') + 1).trim(); return { str: bruto || resto, it: r }; }
+      const v = d.aoLado(r);
+      if (v && v.str.trim() && v.str.trim() !== '----') return { str: v.str.trim(), it: v };
+    }
+    return null;
+  };
+  const abaixo = (rotulo: string) => d.campo(rotulo, { abaixoDe: undefined }, true);
+
+  const itNumero = abaixo('NUMERO DA NOTA');
+  const itEmissao = abaixo('DATA E HORA DE EMISSAO');
+  const itCodigo = abaixo('CODIGO DE VERIFICACAO');
+  d.marcar('numero', itNumero);
+  d.marcar('emissao', itEmissao);
+
+  /* a chave nacional (SP): "Identificador Nacional: <50 digitos>" no proprio item ou ao lado */
+  const idNac = aoLadoDe('IDENTIFICADOR NACIONAL', {});
+  const chave = soDigitos(idNac?.str).length === 50 ? soDigitos(idNac?.str) : '';
+  if (chave) d.marcar('chave', idNac?.it);
+
+  const docPrest = aoLadoDe('CPF/CNPJ', noPrest);
+  const nomePrest = aoLadoDe('NOME/RAZAO SOCIAL', noPrest);
+  const imPrest = aoLadoDe('INSCRICAO MUNICIPAL', noPrest);
+  const enderPrest = aoLadoDe('ENDERECO', noPrest) ?? aoLadoDe('LOGRADOURO', noPrest);
+  const bairroPrest = aoLadoDe('BAIRRO', noPrest);
+  const cepPrest = aoLadoDe('CEP', noPrest);
+  const munPrest = aoLadoDe('MUNICIPIO', noPrest);
+  const ufPrest = aoLadoDe('UF', noPrest);
+  d.marcar('emitente_cnpj', docPrest?.it);
+  d.marcar('emitente', nomePrest?.it);
+  d.marcar('emitente_endereco', enderPrest?.it);
+  d.marcar('emitente_cidade', munPrest?.it);
+
+  const docTom = aoLadoDe('CPF/CNPJ', noTom);
+  const nomeTom = aoLadoDe('NOME/RAZAO SOCIAL', noTom);
+  const enderTom = aoLadoDe('ENDERECO', noTom) ?? aoLadoDe('LOGRADOURO', noTom);
+  d.marcar('destinatario', nomeTom?.it);
+
+  /* A DISCRIMINACAO: as linhas do titulo dela ate' a 1a linha de valor ("VALOR LIQUIDO…" / "VALOR TOTAL…") abaixo */
+  const yValor = naPg.filter((it) => /^VALOR (LIQUIDO|TOTAL) D/.test(normalizar(it.str)) && (yDisc == null || it.y < yDisc)).map((it) => it.y)
+    .sort((a, b) => b - a)[0] ?? null;
+  const linhasDisc = yDisc != null ? d.linhasEntre(pg, yDisc - 1, (yValor ?? yDisc - 120) + 1) : [];
+  const discriminacao = linhasDisc.map((l) => l.map((o) => o.str.trim()).join(' ')).join(' ').replace(/\s+/g, ' ').trim();
+  for (const l of linhasDisc) for (const o of l) d.marcar('itens', o);
+
+  /* OS VALORES: o liquido e o total impressos numa linha so' */
+  const linhaDe = (re: RegExp) => naPg.find((it) => re.test(normalizar(it.str))) ?? null;
+  const itLiquido = linhaDe(/^VALOR LIQUIDO DA (NOTA FISCAL|NFS-E)\b/);
+  const itTotal = linhaDe(/^VALOR TOTAL D[AO] (NOTA FISCAL|SERVICO|NFS-E)\b/);
+  d.marcar('valor_nota', itLiquido ?? itTotal);
+  const totalCent = centDoTexto(itTotal?.str) ?? centDoTexto(itLiquido?.str);
+
+  /* AS RETENCOES (os quadros com o valor abaixo; "-" ou vazio = 0) */
+  const cent = (rotulo: string) => centDoTexto(abaixo(rotulo)?.str) ?? 0;
+  const issRetido = /^RETIDO/.test(normalizar(abaixo('ISS RETIDO')?.str ?? ''));
+  const issCent = cent('VALOR DO ISS');
+  const retencoes = {
+    issRetidoCent: issRetido ? (cent('VALOR ISS RETIDO') || issCent) : 0,
+    irrfCent: cent('IRRF'),
+    previdenciaCent: cent('INSS') || cent('CONTRIBUICAO PREVIDENCIARIA - RETIDA'),
+    /* SP tem o quadro das RETIDAS (o PIS/COFINS ao lado sao destacados, nao retidos): com ele, so' ele; sem ele (PP), PIS + COFINS + CSLL */
+    contribuicoesSociaisCent: d.rotulos('CONTRIBUICOES SOCIAIS - RETIDAS', true).some((r) => r.pagina === pg)
+      ? cent('CONTRIBUICOES SOCIAIS - RETIDAS') : cent('PIS') + cent('COFINS') + cent('CSLL'),
+  };
+  const totalRetidoCent = retencoes.issRetidoCent + retencoes.irrfCent + retencoes.previdenciaCent + retencoes.contribuicoesSociaisCent;
+
+  const numero = soDigitos(itNumero?.str);
+  const emissao = dataIso(itEmissao?.str) ?? '';
+  const documento = soDigitos(docPrest?.str);
+  const nomeEmit = nomePrest?.str.trim() ?? '';
+  if (!numero) return { ok: false, motivo: 'incompleta', frase: 'Nota sem número.' };
+  if (!emissao) return { ok: false, motivo: 'incompleta', frase: 'Nota sem data de emissão.' };
+  if (documento.length !== 11 && documento.length !== 14) return { ok: false, motivo: 'incompleta', frase: FRASE_NFSE_SEM_PRESTADOR };
+  if (!nomeEmit) return { ok: false, motivo: 'incompleta', frase: 'Nota sem emitente.' };
+  if (totalCent == null) return { ok: false, motivo: 'incompleta', frase: 'Nota sem valor total.' };
+  const liquidoImpresso = centDoTexto(itLiquido?.str);
+  if (liquidoImpresso == null && totalRetidoCent > 0) return { ok: false, motivo: 'incompleta', frase: FRASE_NFSE_RETENCAO_SEM_LIQUIDO };
+  const liquidoCent = liquidoImpresso ?? totalCent;
+
+  /* AS PARCELAS PELA CONDICAO (a partir da emissao; o centavo que sobra fica na 1a, como no boleto) */
+  const dias = diasDaCondicao(discriminacao);
+  const duplicatas = dias ? dias.map((dd, i) => {
+    const base = Math.floor(liquidoCent / dias.length);
+    return { numero: String(i + 1).padStart(3, '0'), vencimento: somarDias(emissao, dd), valorCent: i === 0 ? liquidoCent - base * (dias.length - 1) : base };
+  }) : [];
+
+  /* o item: a linha da tabela de servicos (PP: "SERVICO MECANICA") ou o codigo do servico (SP: "99999 - …"); o detalhe e' a discriminacao */
+  const yTabela = naPg.find((it) => /^DISCRIMINACAO D[EO]S? SERVICOS$/.test(normalizar(it.str)) && yDisc != null && it.y < yDisc - 1)?.y ?? null;
+  const linhaTabela = yTabela != null ? d.linhasEntre(pg, yTabela - 1, yTabela - 30)[0] ?? null : null;
+  const doCodigo = abaixo('CODIGO DO SERVICO')?.str.replace(/^\s*\d+\s*-\s*/, '').trim() || null;
+  const descricaoItem = linhaTabela?.filter((o) => /[A-Za-zÀ-ÿ]/.test(o.str) && !/R\$/.test(o.str)).map((o) => o.str.trim()).join(' ').trim()
+    || doCodigo || discriminacao.slice(0, 120) || 'Serviço';
+
+  const [logradouro = null, bairroDoEndereco = null] = (enderPrest?.str ?? '').split(/\s+-\s+/).map((s) => s.trim() || null);
+  const cep = soDigitos(cepPrest?.str ?? /CEP:?\s*([\d.-]{8,10})/.exec(enderPrest?.str ?? '')?.[1]) || null;
+
+  const nota: NotaLida = {
+    chave,
+    modelo: 'nfse',
+    numero,
+    serie: '',
+    emissao,
+    saidaEntrada: null,
+    tipoNota: 'saida',
+    finalidade: 'normal',
+    naturezaOperacao: 'Prestação de serviço',
+    emitente: {
+      documento, nome: nomeEmit, fantasia: null, ie: null,
+      endereco: { logradouro: logradouro?.replace(/\s*-?\s*CEP:.*$/i, '') || null, numero: null, complemento: null,
+        bairro: bairroPrest?.str.trim() || (bairroDoEndereco && !/^CEP/i.test(bairroDoEndereco) ? bairroDoEndereco : null),
+        municipio: munPrest?.str.trim() || null, uf: ufPrest?.str.trim() || null, cep, telefone: null },
+    },
+    destinatario: { documento: soDigitos(docTom?.str) || null, nome: nomeTom?.str.trim() || null, ie: null, endereco: enderTom?.str.trim() || null },
+    totais: { produtosCent: totalCent, freteCent: 0, descontoCent: 0, notaCent: liquidoCent },
+    fatura: null,
+    duplicatas,
+    somaDuplicatasCent: duplicatas.reduce((s, x) => s + x.valorCent, 0),
+    pagamentos: [],
+    itens: [{ descricao: descricaoItem, quantidade: '1', unidade: '', valorCent: totalCent, unitarioCent: totalCent, detalhe: discriminacao || null, fiscal: { codigo: null } }],
+    protocolo: null,
+    informacoesComplementares: imPrest ? `Inscrição municipal do prestador: ${imPrest.str.trim()}` : null,
+    cfops: [],
+    servico: {
+      competencia: emissao, codigoTributacao: null, nbs: null, brutoCent: totalCent, retencoes, totalRetidoCent, liquidoCent,
+      codigoVerificacao: itCodigo?.str.trim() || null, issCent, condicoesPagamento: dias,
+    },
+  };
+
+  const avisos: AvisoNFe[] = [];
+  if (!duplicatas.length) avisos.push('sem_duplicatas');
+  else avisos.push('vencimentos_pelas_condicoes');
+  if (!chave) avisos.push('sem_chave');
+  return {
+    ok: true, nota, avisos, marcas: d.marcas, divergencias: chave ? conferirChaveNfse(nota) : [],
+    extras: { seguroCent: 0, outrasCent: 0, ipiCent: 0, stCent: 0, tributosAproxCent: null },
+  };
+}

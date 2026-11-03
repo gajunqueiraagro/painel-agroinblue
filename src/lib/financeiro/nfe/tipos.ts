@@ -54,6 +54,12 @@ export interface ServicoDaNfse {
   totalRetidoCent: number;
   /** O "VALOR LIQUIDO DA NFS-e" impresso = o valor do lancamento (Gabriel 29/10, T2). */
   liquidoCent: number;
+  /** NFSE-MUNICIPAL-01 — o "Código de verificação" da NFS-e da prefeitura (lido e guardado; so' a prefeitura o confere). */
+  codigoVerificacao?: string | null;
+  /** NFSE-MUNICIPAL-01 — o "Valor do ISS" impresso (mostrado; o lancamento e' o liquido). */
+  issCent?: number;
+  /** NFSE-MUNICIPAL-01 — os dias da condicao de pagamento escrita na discriminacao ("COND.PAGTO.: 28/56/84/112 DIAS"), quando lidos. */
+  condicoesPagamento?: number[] | null;
 }
 
 export interface NotaLida {
@@ -101,7 +107,10 @@ export interface ColunasFiscaisDoDanfe {
 }
 
 /** Nao recusam: a tela mostra. */
-export type AvisoNFe = 'sem_protocolo' | 'sem_duplicatas' | 'duplicatas_diferem_da_nota' | 'complementar' | 'devolucao';
+/** NFSE-MUNICIPAL-01: `sem_chave` = a NFS-e da prefeitura sem o Identificador Nacional (nada confere o lido: "confira");
+ *  `vencimentos_pelas_condicoes` = as parcelas calculadas pela condicao de pagamento escrita na nota (nao impressas como duplicatas). */
+export type AvisoNFe = 'sem_protocolo' | 'sem_duplicatas' | 'duplicatas_diferem_da_nota' | 'complementar' | 'devolucao'
+  | 'sem_chave' | 'vencimentos_pelas_condicoes';
 
 export type MotivoRecusa =
   | 'nao_e_xml' | 'grande_demais' | 'cte' | 'evento' | 'lote' | 'nfce' | 'nfse_ou_desconhecido' | 'cancelada_ou_denegada'
