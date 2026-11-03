@@ -225,11 +225,13 @@ export interface PropsDoGlobal {
   estado: EstadoDoGlobal;
   onEstado: (e: EstadoDoGlobal) => void;
   onAbrirFazenda: (fazendaId: string, opcoes?: { pastoId?: string; importar?: boolean }) => void;
+  /** MAPA-PIQUETES-04: os pastos vigentes sem polígono (nada some em silêncio); a lista inteira no title */
+  semDesenho?: { texto: string; title: string } | null;
 }
 
 export function GeoPastosGlobal({
   fazendas, total, pastos, geometriasPorFazenda, situacaoDoPasto, resumoDoFiltro, carregando, erro, seletorDeMes, estado, onEstado,
-  onAbrirFazenda,
+  onAbrirFazenda, semDesenho = null,
 }: PropsDoGlobal) {
   const [e, setE] = useState<EstadoDoGlobal>(estado);
   const atualizar = (m: Partial<EstadoDoGlobal>) => setE(prev => ({ ...prev, ...m }));
@@ -400,7 +402,8 @@ export function GeoPastosGlobal({
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-2">
         {/* cards */}
         <div className="flex flex-none gap-1.5" data-testid="global-kpis">
-          <Kpi rotulo="Fazendas · pastos" valor={<>{fazendas.length}<span className="ml-1 text-[9.5px] font-normal text-muted-foreground">· {n0(total.pastos)} pastos</span></>} />
+          <Kpi rotulo="Fazendas · pastos" valor={<>{fazendas.length}<span className="ml-1 text-[9.5px] font-normal text-muted-foreground">· {n0(total.pastos)} pastos</span></>}
+            aviso={semDesenho?.texto ?? null} title={semDesenho?.title} testid="global-kpi-fazendas-pastos" />
           <Kpi rotulo="Área de pastos" valor={n1(total.area)} unidade="ha" />
           {/* fix1 (4, Gabriel 01/11): o rótulo diz o que o número é — cabeças fechadas em pastos SEM polígono (o "Alocadas" do Gestor mostra
               só as do mapa); o title abre por fazenda */}

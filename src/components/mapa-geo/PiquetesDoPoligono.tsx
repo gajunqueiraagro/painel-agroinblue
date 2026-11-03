@@ -97,11 +97,13 @@ export function PiquetesEmEspera({ espera, pastos, onTirar, onConcluir }: {
 
 type Estado = { fase: 'lendo' } | { fase: 'previa'; previa: PreviaDosPiquetes } | { fase: 'recusa'; frase: string } | { fase: 'gravando'; previa: PreviaDosPiquetes };
 
-export function ConcluirPiquetesDialog({ aberto, paiId, nomeDoPai, piquetes, hoje, onFechar, onGravado }: {
+export function ConcluirPiquetesDialog({ aberto, paiId, nomeDoPai, piquetes, hoje, onFechar, onGravado, contorno = null }: {
   aberto: boolean;
   paiId: string;
   nomeDoPai: string;
   piquetes: readonly PiqueteEmEspera[];
+  /** MAPA-PIQUETES-04: o pai sem polígono → a união das divisões (ou a recusa dela); null = o pai já tem contorno */
+  contorno?: { ok: true; valor: GeoJSON.Polygon } | { ok: false; motivo: string } | null;
   hoje?: Date;
   onFechar: () => void;
   onGravado: (paiId: string) => void;
@@ -114,17 +116,18 @@ export function ConcluirPiquetesDialog({ aberto, paiId, nomeDoPai, piquetes, hoj
   useEffect(() => {
     if (!aberto) return;
     let vivo = true;
+    if (contorno && 'motivo' in contorno) { setEstado({ fase: 'recusa', frase: `${contorno.motivo} Nada foi gravado.` }); return; }
     setEstado({ fase: 'lendo' });
-    void previaDosPiquetes({ paiId, geometriaIds: ids, mes }).then((r) => {
+    void previaDosPiquetes({ paiId, geometriaIds: ids, mes, contorno: contorno?.ok ? contorno.valor : null }).then((r) => {
       if (!vivo) return;
       if ('motivo' in r) setEstado({ fase: 'recusa', frase: r.motivo }); else setEstado({ fase: 'previa', previa: r.valor });
     });
     return () => { vivo = false; };
-  }, [aberto, paiId, ids, mes]);
+  }, [aberto, paiId, ids, mes, contorno]);
 
   const gravar = async (previa: PreviaDosPiquetes) => {
     setEstado({ fase: 'gravando', previa });
-    const r = await gravarPiquetes({ paiId, geometriaIds: ids, mes });
+    const r = await gravarPiquetes({ paiId, geometriaIds: ids, mes, contorno: contorno?.ok ? contorno.valor : null });
     if ('motivo' in r) { setEstado({ fase: 'recusa', frase: r.motivo }); return; }
     toast.success(`${nomeDoPai} virou o grupo ${previa.grupo.nome} com ${previa.piquetes.length} piquetes.`);
     onGravado(paiId);
@@ -180,6 +183,8 @@ export function ConcluirPiquetesDialog({ aberto, paiId, nomeDoPai, piquetes, hoj
           {previa && (
             <p className="mt-1.5 text-[10px] text-muted-foreground" data-testid="previa-pai">
               {previa.pai.nome} fica encerrado em {dataBr(previa.pai.encerraEm)}; o histórico dele não muda.
+              {/* MAPA-PIQUETES-04: o contorno nasce no mesmo gesto (a união das divisões) */}
+              {previa.contorno?.criado && ` O contorno de ${previa.pai.nome}${previa.contorno.areaHa == null ? '' : ` (${haBr(previa.contorno.areaHa)} ha)`} é a união das divisões e é gravado junto.`}
             </p>
           )}
         </div>

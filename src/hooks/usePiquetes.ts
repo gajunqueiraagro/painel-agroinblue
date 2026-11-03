@@ -11,7 +11,8 @@ import {
   type PiqueteEmEspera, type PoligonoParaPiquete, type PreviaDosPiquetes,
 } from '@/lib/mapa/piquetesEmEspera';
 
-export interface PedidoDosPiquetes { paiId: string; geometriaIds: string[]; mes: string }
+/** MAPA-PIQUETES-04: `contorno` = a união das divisões quando o pai não tem polígono (o banco a grava no mesmo gesto); null = o pai já tem. */
+export interface PedidoDosPiquetes { paiId: string; geometriaIds: string[]; mes: string; contorno?: GeoJSON.Polygon | null }
 
 function fraseDaRecusa(erro: unknown): string {
   const c = erro && typeof erro === 'object' ? Reflect.get(erro, 'code') : null;
@@ -24,7 +25,7 @@ function fraseDaRecusa(erro: unknown): string {
 async function chamar(p: PedidoDosPiquetes, simular: boolean): Promise<{ dado: unknown; erro: unknown }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
   const { data, error } = await (supabase as any).rpc('fn_piquetes_concluir', {
-    p_pasto_pai: p.paiId, p_geometrias: p.geometriaIds, p_mes: p.mes, p_simular: simular,
+    p_pasto_pai: p.paiId, p_geometrias: p.geometriaIds, p_mes: p.mes, p_simular: simular, p_contorno: p.contorno ?? null,
   });
   return { dado: data, erro: error };
 }

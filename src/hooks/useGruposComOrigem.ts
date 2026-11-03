@@ -27,9 +27,13 @@ export function useGruposComOrigem(fazendaIds: readonly string[]): { grupos: Gru
     if (!chave) { setEstado({ chave: '', grupos: [], erro: null }); return; }
     let vivo = true;
     void (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: a coluna nova ainda não está no types.ts
-      const { data, error } = await (supabase as any).from('pasto_grupos').select('id, nome, pasto_origem_id, ativo')
-        .in('fazenda_id', chave.split(',')).not('pasto_origem_id', 'is', null);
+      let data: unknown = null; let error: unknown = null;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: a coluna nova ainda não está no types.ts
+        const r = await (supabase as any).from('pasto_grupos').select('id, nome, pasto_origem_id, ativo')
+          .in('fazenda_id', chave.split(',')).not('pasto_origem_id', 'is', null);
+        data = r.data; error = r.error;
+      } catch (e) { error = e; }   // MAPA-PIQUETES-04: falha que lança também vira o "segue pasto a pasto" (nunca derruba a tela)
       if (!vivo) return;
       if (error) {
         console.error('[useGruposComOrigem]', error);

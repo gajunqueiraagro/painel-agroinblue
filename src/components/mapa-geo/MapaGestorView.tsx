@@ -54,6 +54,8 @@ interface Props {
   geometrias: FazendaGeometria[];
   pastos: Pasto[];
   /** MAPA-PIQUETES-03: as divisões de cada unidade (pai + grupo) no mês — linhas finas por dentro do contorno, sem rótulo nem cor. */
+  /** MAPA-PIQUETES-04: "Pasto sem desenho: P25" — nenhum pasto vigente some em silêncio */
+  semDesenho?: { texto: string; title: string } | null;
   divisoes?: ReadonlyMap<string, readonly Divisao<FazendaGeometria>[]>;
   /** O mês do mapa ('AAAA-MM'). */
   anoMes: string;
@@ -277,7 +279,8 @@ function escaparHtml(t: string): string {
 
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
-  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, infraInicialId, onInfraInicialUsada,
+  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, semDesenho = null,
+  infraInicialId, onInfraInicialUsada,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
@@ -804,9 +807,16 @@ export function MapaGestorView({
                 secundario={kpis.lotacao == null ? null : `${formatNum(kpis.lotacao, 0)} kg/ha`} largura={LARGURA_DO_CARTAO.lotacao} testid="cartao-lotacao" />
               <CartaoDoMapa rotulo="Área pastos" valor={numero(kpis.area, 1, ' ha')} largura={LARGURA_DO_CARTAO.area} testid="cartao-area" />
             </div>
-            <div className={`mt-[2px] whitespace-nowrap rounded-md bg-[#FFF6D6]/95 px-1.5 py-px text-[9.5px] leading-[14px] text-[#8A5A00] shadow-sm ${fechamentoAberto ? '' : 'invisible'}`}
-              data-testid="mapa-fechamento-aberto" aria-hidden={!fechamentoAberto}>
-              fechamento de {mesDoMapa} aberto
+            <div className="flex flex-col items-start gap-[2px]">
+              <div className={`mt-[2px] whitespace-nowrap rounded-md bg-[#FFF6D6]/95 px-1.5 py-px text-[9.5px] leading-[14px] text-[#8A5A00] shadow-sm ${fechamentoAberto ? '' : 'invisible'}`}
+                data-testid="mapa-fechamento-aberto" aria-hidden={!fechamentoAberto}>
+                fechamento de {mesDoMapa} aberto
+              </div>
+              {/* MAPA-PIQUETES-04: o pasto vigente sem polígono não some em silêncio (o selo de baixo; a lista inteira no title) */}
+              <div className={`whitespace-nowrap rounded-md bg-[#FFF6D6]/95 px-1.5 py-px text-[9.5px] leading-[14px] text-[#8A5A00] shadow-sm ${semDesenho ? '' : 'invisible'}`}
+                data-testid="mapa-sem-desenho" aria-hidden={!semDesenho} title={semDesenho?.title}>
+                {semDesenho?.texto ?? '·'}
+              </div>
             </div>
           </div>
         )}
