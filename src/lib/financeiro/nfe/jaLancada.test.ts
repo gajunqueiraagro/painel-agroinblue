@@ -3,7 +3,7 @@
  * cada parcela fica com o MAIS proximo, cada lancamento uma vez so'; a outra serie vira "parecidos a mais"; numero/chave entram juntos.
  */
 import { describe, it, expect } from 'vitest';
-import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, maisMeses, parcelasQueFaltamNoCartao, posicaoDaDescricao, posicoesNoCartao, fracaoDaNota, fraseDoAchado, fraseEmParcelas, lerJaLancados, linhasSistemaNota, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
+import { ficaDeForaPorPadrao, rotuloDoAplicar, canceladosDaNota, casarJaLancados, fracaoDaDescricao, maisMeses, parcelasQueFaltamNoCartao, posicaoDaDescricao, posicoesNoCartao, fracaoDaNota, fraseDoAchado, fraseEmParcelas, lerJaLancados, linhasSistemaNota, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
 
 const l = (id: string, n: number, difCent: number, difDias = 0, por: LancamentoJaLancado['por'] = ['valor']): LancamentoJaLancado => ({
   id, vencimento: null, pagamento: null, competencia: null, descricao: null, valorCent: 34134 + difCent, status: 'realizado', conciliado: false,
@@ -318,5 +318,21 @@ describe('NOTA-PAGA-A-VISTA-01 — a nota inteira paga à vista num lançamento'
       ['à vista', 'av', 'realizada', 275000, false], ['1/3', null, 'so_na_nota', 91732, false], ['2/3', null, 'so_na_nota', 91634, false],
       ['3/3', null, 'so_na_nota', 91634, false]]);
     expect(fraseDoAchado(r, linhas, NOTA)).toMatch(/^A nota inteira já está paga à vista num lançamento \(R\$ 2\.750,00 ✓\)/);
+  });
+});
+
+/* NOTA-BOLETO-COMPOSTO-01 (PR 1) — a regra do "fica de fora" (a mesma da tabela) e o que o botão único diz */
+describe('NOTA-BOLETO-COMPOSTO-01 — fica de fora e o rótulo do Aplicar', () => {
+  it('a achada só pelo número (fora das parcelas) nasce fica de fora; a da parcela e a busca em parcelas não', () => {
+    const j = casarJaLancados(PARC, [l('a1', 1, 0), l('a2', 2, 0), l('n1', 0, 0, 0, ['numero'])]);
+    if (!j) throw new Error('nada casou');
+    expect([ficaDeForaPorPadrao(j, 'n1'), ficaDeForaPorPadrao(j, 'a1'), ficaDeForaPorPadrao(j, 'zz'), ficaDeForaPorPadrao(null, 'n1')]).toEqual([true, false, false, false]);
+    expect(ficaDeForaPorPadrao({ ...j, emParcelas: true }, 'n1')).toBe(false);
+    expect(linhasSistemaNota(j, 136536).find((x) => x.sistema?.id === 'n1')?.situacao).toBe('so_no_sistema');
+  });
+  it('o rótulo: só o escolhido, na ordem vincular · substituir · excluir · criar; nada = "Nada a aplicar"', () => {
+    expect(rotuloDoAplicar({ vincular: 4, substituir: 0, excluir: 0, criar: 0 })).toBe('Aplicar: vincular 4');
+    expect(rotuloDoAplicar({ vincular: 2, substituir: 1, excluir: 3, criar: 1 })).toBe('Aplicar: vincular 2, substituir 1, excluir 3 e criar 1');
+    expect(rotuloDoAplicar({ vincular: 0, substituir: 0, excluir: 0, criar: 0 })).toBe('Nada a aplicar');
   });
 });

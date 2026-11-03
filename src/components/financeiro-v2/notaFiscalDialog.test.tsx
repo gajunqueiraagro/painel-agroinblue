@@ -56,6 +56,7 @@ const consultas = vi.hoisted(() => ({
   registrarNaOperacao: vi.fn(async (_op: string, _c: readonly string[], _d: readonly string[]): Promise<string | null> => null),
   desfazerCompletar: vi.fn(async (_op: string): Promise<string | null> => null),
   cancelarCriados: vi.fn(async (_ids: readonly string[], _p: string): Promise<number> => 0),
+  cancelarComMotivo: vi.fn(async (_ids: readonly string[], _m: string): Promise<number> => 0),
   /* NOTA-JA-LANCADA-01 — nada ja' lancado, por padrao */
   notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<Consulta<LancamentoJaLancado[]>> => ({ ok: true, valor: [] })),
   /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro de hoje e a gravacao com trilha */
@@ -650,6 +651,13 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const { comoGravadores } = gravadoresFalsos();
     await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await naAbaParcelas();
+    /* NOTA-BOLETO-COMPOSTO-01 (PR 1) — a 5ª (só pelo número, "só no sistema") nasce FICA DE FORA: sem recusa; a recusa vem quando o operador a
+       vincula (a soma passa da nota) */
+    expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
+    const daQuinta = screen.getAllByTestId('nota-acao').find((b) => b.getAttribute('data-acao') === 'deixar');
+    if (!daQuinta) throw new Error('a 5ª não nasceu fica de fora');
+    fireEvent.keyDown(daQuinta, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('nota-acao-vincular'));
     expect((await screen.findByTestId('nota-recusa-compra')).textContent)
       .toBe('⚠ As parcelas que receberiam a nota somam R$ 2.458,21, mais que a nota (R$ 1.966,56). Nada será gravado — confira se todas são desta compra.');
     expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
@@ -665,6 +673,66 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
     expect(g.documentosDoParcelamento.mock.calls[0][1].map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
+  });
+  /* NOTA-BOLETO-COMPOSTO-01 (PR 1) — o boleto que paga DUAS notas (o caso real, SINTETICO): as 4 parcelas da compra + os 3 pagamentos achados
+     só pelo número ("só no sistema"). Ações por linha: Vincular · Substituir · Excluir · Fica de fora; o botão aplica só o escolhido e diz o que faz */
+  const PROG = QUATRO.map((x) => ({ ...x, status: 'programado', pagamento: null, conciliado: false }));
+  const PAGOS = [1, 2, 3].map((k) => jaLancado(10 + k, '2026-08-10', 'realizado', { id: `pago-${k}`, parcelas: [], por: ['numero' as const], valorCent: 89748, financiamentoId: null }));
+  it('B1 os "só no sistema" nascem Fica de fora: o efeito diz, o botão conta só os 4 e o pedido não os leva', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [...PROG, ...PAGOS] });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await naAbaParcelas();
+    const acoes = screen.getAllByTestId('nota-acao');
+    expect(acoes.filter((b) => b.getAttribute('data-acao') === 'deixar').map((b) => b.textContent)).toEqual(['Fica de fora▾', 'Fica de fora▾', 'Fica de fora▾']);
+    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 4');
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
+    expect(JSON.stringify(g.documentosDoParcelamento.mock.calls).includes('pago-')).toBe(false);
+    expect(consultas.cancelarComMotivo).not.toHaveBeenCalled();
+  });
+  it('B2 Excluir numa programada (a duplicata): o botão diz "excluir 1"; depois do Aplicar ela é CANCELADA com o motivo (nunca DELETE)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [...PROG, ...PAGOS] });
+    consultas.cancelarComMotivo.mockClear();
+    const { comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await naAbaParcelas();
+    fireEvent.keyDown(screen.getAllByTestId('nota-acao')[1], { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('nota-acao-excluir'));
+    expect(screen.getAllByTestId('nota-ja-lancada-efeito')[1].getAttribute('title')?.split(' · documento hoje:')[0]).toBe('é cancelado (duplicata), com o motivo na trilha');
+    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 3 e excluir 1');
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['velho-1', 'velho-3', 'velho-4']);
+    expect(consultas.cancelarComMotivo).toHaveBeenCalledTimes(1);
+    expect(consultas.cancelarComMotivo.mock.calls[0][0]).toEqual(['velho-2']);
+    expect(consultas.cancelarComMotivo.mock.calls[0][1]).toMatch(/^Duplicata da NF .+: excluído na prévia da nota$/);
+  });
+  it('B3 Substituir na programada que difere da nota: o pedido leva o valor e o vencimento da NOTA só nela; o botão diz "substituir 1"', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: PROG });
+    const { comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await naAbaParcelas();
+    /* a 3ª difere 1 centavo da nota (49165 × 49164): só ela oferece Substituir */
+    fireEvent.keyDown(screen.getAllByTestId('nota-acao')[2], { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('nota-acao-substituir'));
+    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 3 e substituir 1');
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    const pedido = pedidoGravado().pedido;
+    expect(pedido.find((x) => x.id === 'velho-3')?.valor).toBe(491.64);
+    expect(pedido.filter((x) => x.id !== 'velho-3').some((x) => 'valor' in x)).toBe(false);
+  });
+  it('B4 a paga só vincula ou fica: sem Excluir nem Substituir no menu (valor, data e conta não mudam; nunca se cancela daqui)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
+    const { comoGravadores } = gravadoresFalsos();
+    await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await naAbaParcelas();
+    fireEvent.keyDown(screen.getAllByTestId('nota-acao')[2], { key: 'Enter' });
+    await screen.findByTestId('nota-acao-vincular');
+    expect(screen.queryByTestId('nota-acao-excluir')).toBeNull();
+    expect(screen.queryByTestId('nota-acao-substituir')).toBeNull();
   });
   /* P128b — a caixinha "Trocar o fornecedor" saiu: o fornecedor é a COLUNA da prévia (marcada), gravado pela função única com o antes */
   it('fornecedor diferente: a coluna Fornecedor da prévia leva o da nota aos 4 (a função única), nunca a troca em lote', async () => {
