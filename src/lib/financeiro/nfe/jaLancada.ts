@@ -318,6 +318,15 @@ export function lerJaLancados(r: unknown): LancamentoJaLancado[] {
  * os N do sistema, com a parte da nota (nota/N) ao lado. Os cancelados não entram (a frase os conta).
  */
 export type SituacaoNaTabela = 'conciliada' | 'realizada' | 'programada' | 'so_na_nota' | 'so_no_sistema';
+
+/** NOTA-BOLETO-COMPOSTO-01 (PR 1) — a linha "só no sistema" da tabela (a achada pelo número/chave que NÃO casa com uma parcela da nota) NASCE
+ *  "fica de fora", como a tabela escreve; recebe a nota só se o operador escolher "Vincular" (o caso real: os pagamentos do boleto que
+ *  paga DUAS notas tinham o nº da NF-e e entravam no "vincular 7"). E' a mesma regra da `linhasSistemaNota`: fora da busca em parcelas. */
+export function ficaDeForaPorPadrao(j: NotaJaLancada | null | undefined, lancamentoId: string): boolean {
+  if (!j || j.emParcelas) return false;
+  if (j.aVista?.id === lancamentoId || j.porParcela.some((x) => x.lancamento?.id === lancamentoId)) return false;
+  return j.pelaNota.some((l) => l.id === lancamentoId);
+}
 export interface LinhaSistemaNota {
   chave: string;
   rotulo: string;
@@ -440,4 +449,13 @@ export function fraseDoAchado(j: NotaJaLancada, linhas: readonly LinhaSistemaNot
   if (conta('so_no_sistema')) partes.push(`${conta('so_no_sistema')} só no sistema`);
   if (j.cancelados.length) partes.push(plural(j.cancelados.length, 'cancelado (não conta)', 'cancelados (não contam)'));
   return partes.join(' · ');
+}
+
+/** NOTA-BOLETO-COMPOSTO-01 (PR 1) — o que o botão único da prévia faz, nas palavras dele ("Aplicar: vincular 2, substituir 1, excluir 3 e
+ *  criar 1"); nada escolhido = "Nada a aplicar". Só o que foi escolhido entra (o "fica de fora" não conta). */
+export function rotuloDoAplicar(n: { vincular: number; substituir: number; excluir: number; criar: number }): string {
+  const partes = [n.vincular ? `vincular ${n.vincular}` : '', n.substituir ? `substituir ${n.substituir}` : '', n.excluir ? `excluir ${n.excluir}` : '',
+    n.criar ? `criar ${n.criar}` : ''].filter(Boolean);
+  if (!partes.length) return 'Nada a aplicar';
+  return `Aplicar: ${partes.length > 1 ? `${partes.slice(0, -1).join(', ')} e ${partes[partes.length - 1]}` : partes[0]}`;
 }
