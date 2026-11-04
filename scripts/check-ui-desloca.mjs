@@ -168,6 +168,14 @@ const CENARIOS = [
     /* MAPA-02b — trocar o fundo não move nada (os créditos têm lugar e altura fixos) */
     ['fundo mapa', mapaCamada('Mapa')], ['fundo satélite', mapaCamada('Satélite')],
   ] },
+  /* MAPA-IMPRESSAO-01 — no diálogo "Imprimir mapa", trocar o tamanho e a imagem não move nada (as áreas de mensagem têm altura fixa) */
+  { nome: 'mapa-imprimir', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
+    antes: async (p) => { await p.locator('[data-testid="mapa-imprimir"]').click(); await p.locator('[data-testid="imprimir-baixar"]').waitFor(); await espera(p, 400); },
+    estados: [
+      ['tamanho A1', async (p) => { await p.locator('[data-testid="imprimir-tamanho"] button', { hasText: 'A1' }).click(); await espera(p, 300); }],
+      ['tamanho A0', async (p) => { await p.locator('[data-testid="imprimir-tamanho"] button', { hasText: 'A0' }).click(); await espera(p, 300); }],
+      ['sem satélite', async (p) => { await p.locator('[data-testid="imprimir-imagem"] button', { hasText: 'Sem satélite' }).click(); await espera(p, 300); }],
+    ] },
   /* MAPA-GLOBAL-01 — trocar a visão, o filtro, a aba do gráfico e a ordenação não desloca a barra, os cards nem as colunas */
   { nome: 'mapa-global', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], estados: [
     ['ordena por kg/ha', async (p) => { await p.locator('[data-testid="global-tabela-fazendas"] th', { hasText: 'kg/ha' }).first().click(); await espera(p, 300); }],

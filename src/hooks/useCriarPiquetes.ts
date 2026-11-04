@@ -19,15 +19,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { areaDoBancoHa, haDoBanco, paraPlano, type Divisao } from '@/lib/mapa/criarPiquetes';
 import { usePontoAPonto } from '@/hooks/usePontoAPonto';
 import {
-  acrescentarLinha, alternarFixa, alternarSeguir, apagarLinha, cercaDoDesenho, comCorredor, comPiqueteDesenhado, comLarguraDoCorredor, desenhoDaGrade, desenhoVazio, deslizarLinha, divisoesDoDesenho,
-  ehCerca, extrasParaGravar, internasDoDesenho, linhaDoDesenho, linhasDoDesenho, moverPontoDaLinha, pontoNaLinha, rotuloDaLinha, tirarPontoDaLinha,
+  acrescentarLinha, alternarFixa, alternarSeguir, apagarLinha, cercaDoDesenho, comAreaInterna, comCorredor, comPiqueteCru, comPiqueteDesenhado, comPiqueteEditado, comLarguraDoCorredor,
+  comRestante, contaDoPasto, desenhoDaGrade, desenhoVazio, deslizarLinha, divisoesDoDesenho, ehCerca, extrasParaGravar, internasDoDesenho, linhaDoDesenho, linhasDoDesenho,
+  moverPontoDaLinha, pontoNaLinha, rotuloDaLinha, semAreaInterna, semPiqueteNoDesenho, tirarPontoDaLinha, TOLERANCIA_SEM_PIQUETE_HA,
   type ConfigDosPiquetes, type Desenho, type ModoDosPiquetes,
 } from '@/lib/mapa/desenhoDosPiquetes';
+import { areasInternasDoPasto } from '@/lib/mapa/areaCercada';
 import type { Ponto } from '@/lib/mapa/edicaoDoPoligono';
 import { fraseDaPrevia, pedidoDosPiquetes, secaoDaPrevia, type LinhaDaSecao } from '@/lib/mapa/gravacaoDosPiquetes';
 import {
-  alvosDeEncaixe, comAreaDesejadaPelaLinha, encaixar, fraseDaLinha, fraseDaSaida, linhasQueSaemEVoltam, planoDoPasto, pontoDentro, reguaLivre, segmentosDaRegua,
-  toleranciaDeEncaixeM, trechosDaLinha, type AlvosDeEncaixe,
+  alvosDeEncaixe, cantosDoPiquete, piqueteDesenhado, comAreaDesejadaPelaLinha, comCantoMovido, comCantoNaBorda, encaixar, fraseDaLinha, fraseDaSaida, linhasQueSaemEVoltam, planoDoPasto,
+  pontoDentro, reguaLivre, segmentosDaRegua, semCanto, toleranciaDeEncaixeM, tracadoPelasBordas, trechosDaLinha, type AlvosDeEncaixe, type AreaInterna,
 } from '@/lib/mapa/linhasDosPiquetes';
 import {
   letraDoIndice, nomearClicando, ordemDaLista, presosDasDivisoes, proximoNomeLivre, semNomes, type GeradorDeNome, type NomePreso,
@@ -48,7 +50,11 @@ export type { ModoDosPiquetes };
 /* MAPA-PRACA-ESTAVEL-01: 'referencia' = o clique que troca o lado de referência da cruz é uma FERRAMENTA anunciada na barra (antes todo clique
    perto de um lado do pasto girava a praça e refazia cercas e nomes — homologação 02/11 21:54, Modulo 03) */
 /* PIQUETE-POLIGONO-01: 'piquete' = o "+ Piquete" (o polígono clicado ponto a ponto pela ferramenta única, `usePontoAPonto`) */
-export type FerramentaDosPiquetes = 'tracar' | 'regua' | 'nomear' | 'corredor' | 'desenharPraca' | 'referencia' | 'piquete';
+/* PIQUETE-PRO-01: 'areaInterna' = o "+ Área interna" (praça, corredor ou benfeitoria desenhada ponto a ponto; recorta os piquetes) */
+export type FerramentaDosPiquetes = 'tracar' | 'regua' | 'nomear' | 'corredor' | 'desenharPraca' | 'referencia' | 'piquete' | 'areaInterna';
+type Geo = GeoJSON.Polygon | GeoJSON.MultiPolygon;
+/** A área interna que já existe no pasto (a praça do mapa): nome, área e forma. */
+export interface AreaFixaDoPasto { id: string; nome: string; tipo: string; geojson: Geo }
 export interface MembroSemDesenho { id: string; nome: string }
 /** O grupo que o pai já originou (o P6): a leitura que DECIDE o caminho — falhou = não decide (P146). */
 export type GrupoDoPai = { estado: 'lendo' } | { estado: 'erro' } | { estado: 'ok'; grupo: { id: string; nome: string; membros: MembroSemDesenho[] } | null };
@@ -183,6 +189,10 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
   const [zoomTique, setZoomTique] = useState(0);
   /* PIQUETES-PRACA-CONCAVO-01 (item 3): o aviso dos polígonos soltos dentro do pasto, dispensado com "Desenhar mesmo assim" */
   const [soltosDispensados, setSoltosDispensados] = useState(false);
+  /* PIQUETE-PRO-01: o piquete com os cantos em edição e o tipo da próxima área interna */
+  const [editando, setEditandoEstado] = useState<number | null>(null);
+  const [tipoArea, setTipoArea] = useState<AreaInterna['tipo']>('praca');
+  const tipoAreaRef = useRef(tipoArea); tipoAreaRef.current = tipoArea;
 
   /* espelhos para os handlers do mapa (que vivem mais que um render) */
   const desenhoRef = useRef(desenho); desenhoRef.current = desenho;
@@ -205,6 +215,19 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
   /* PIQUETES-PRACA-CONCAVO-01: a linha que sai do pasto e volta (cortada no 1º encontro) e as pontas da praça fora do pasto */
   const saidas = useMemo(() => (poligono ? linhasQueSaemEVoltam(poligono, linhasDoDesenho(desenho)) : []), [poligono, desenho]);
   const pontasFora = useMemo(() => (poligono && desenho.praca ? pontasForaDaPraca(poligono, desenho.praca).indices : []), [poligono, desenho.praca]);
+  /* PIQUETE-PRO-01 (item 4): as áreas internas que já existem no pasto (a praça P_06) ficam fora dos piquetes sozinhas — a regra da área cercada */
+  const fixasDoPasto: AreaFixaDoPasto[] = useMemo(() => {
+    if (!pai || !poligono || config.modo !== 'poligonos') return [];
+    const formas = geometrias.flatMap(x => {
+      const geo = x.geojson;
+      return x.id && x.tipo && (geo?.type === 'Polygon' || geo?.type === 'MultiPolygon') ? [{ id: x.id, tipo: x.tipo, nome: x.nome_original ?? '', geojson: geo }] : [];
+    });
+    return areasInternasDoPasto({ id: pai.geometriaId, geojson: poligono }, formas);
+  }, [pai, poligono, geometrias, config.modo]);
+  const fixas = useMemo(() => fixasDoPasto.map(f => f.geojson), [fixasDoPasto]);
+  const fixasRef = useRef(fixas); fixasRef.current = fixas;
+  /* item 3: Pasto · piquetes · praça/corredores · SEM PIQUETE */
+  const conta = useMemo(() => (poligono && config.modo === 'poligonos' ? contaDoPasto(poligono, desenho, fixas) : null), [poligono, desenho, fixas, config.modo]);
   const soltosDoPasto: PoligonoParaPiquete[] = useMemo(
     () => (poligono && pai ? soltosDentroDoPasto(poligono, geometrias, pai.geometriaId) : []), [poligono, pai, geometrias]);
   const soltos = soltosDispensados ? [] : soltosDoPasto;
@@ -275,19 +298,62 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     setDesenho(ultimo.desenho); setBase(ultimo.presos); setPrevia(null); setSelecionada(null); setPontoSel(null);
   }, [trocarPilha]);
 
+  const editandoRef = useRef<number | null>(null);
+  const setEditando = useCallback((i: number | null) => { editandoRef.current = i; setEditandoEstado(i); }, []);
   const setFerramenta = useCallback((f: FerramentaDosPiquetes | null) => {
     ferramentaRef.current = f; setFerramentaEstado(f);
     emTracoRef.current = []; setEmTraco([]);
     reguaRef.current = []; setReguaPontos([]);
-    if (f) { setSelecionada(null); setPontoSel(null); }
-  }, []);
+    if (f) { setSelecionada(null); setPontoSel(null); setEditando(null); }
+  }, [setEditando]);
 
   /* PIQUETE-POLIGONO-01: o "+ Piquete" é a ferramenta única de clicar ponto a ponto (a do Medir no mapa), em polígono: fecha no 1º ponto e o
      piquete entra no desenho (recortado pelo pasto, sem cobrir os outros); um piquete por clique no botão. Esc desiste dele. */
+  /* PIQUETE-PRO-01 (item 2): o ímã do piquete — a borda/canto do pasto, dos outros piquetes e das áreas internas a até 7 px (Alt solta);
+     `exceto` = o piquete em edição (o canto não gruda nele mesmo) */
+  const alvosDoPiquete = useCallback((exceto = -1): AlvosDeEncaixe | null => {
+    const g = poligonoRef.current, d = desenhoRef.current;
+    if (!g) return null;
+    const formas = [...(d.piquetes ?? []).filter((_p, i) => i !== exceto), ...internasDoDesenho(d).map(a => a.geojson), ...fixasRef.current].map(geojson => ({ geojson }));
+    return alvosDeEncaixe(g, [], formas, []);
+  }, []);
+  const noImaDoPiquete = useCallback((p: Ponto, alvos: AlvosDeEncaixe | null): Ponto => {
+    if (!mapa || !mapaVivo(mapa) || altRef.current || !alvos) return p;
+    const r = encaixar(p, alvos, toleranciaDeEncaixeM(mapa.getZoom(), p[1]));
+    return r ? r.ponto : p;
+  }, [mapa]);
+  /** a borda comum IGUAL: o trecho entre dois pontos grudados na mesma borda segue a borda (o que o olho não vê como desvio, 14 px) */
+  const pelasBordas = useCallback((pts: Ponto[]): Ponto[] => {
+    const g = poligonoRef.current, d = desenhoRef.current;
+    if (!g || !mapa || !mapaVivo(mapa) || !pts.length) return pts;
+    const aneis = [g, ...(d.piquetes ?? []), ...internasDoDesenho(d).map(a => a.geojson), ...fixasRef.current]
+      .flatMap(x => (x.type === 'Polygon' ? x.coordinates : x.coordinates.flat())).map(a => a.map((q): Ponto => [q[0], q[1]]));
+    return tracadoPelasBordas(pts, aneis, 2 * toleranciaDeEncaixeM(mapa.getZoom(), pts[0][1]));
+  }, [mapa]);
   const pontoAPonto = usePontoAPonto({
     mapa: pai && mapa && mapaVivo(mapa) ? mapa : null,
-    forma: ferramenta === 'piquete' ? 'poligono' : null,
-    aoTerminar: pts => { const g = poligonoRef.current; if (g) mudar(d => comPiqueteDesenhado(g, d, pts)); setFerramenta(null); },
+    forma: ferramenta === 'piquete' || ferramenta === 'areaInterna' ? 'poligono' : null,
+    unidade: 'ha',
+    ajustar: p => noImaDoPiquete(p, alvosDoPiquete()),
+    /* item 5: ao vivo, a área que o piquete VAI TER (recortado pelo pasto e pelos vizinhos), em ha */
+    areaM2: pts => {
+      const g = poligonoRef.current, d = desenhoRef.current;
+      if (!g) return 0;
+      /* a área interna corta os piquetes: ela só não cobre as outras áreas internas */
+      const obst = [...(ferramentaRef.current === 'areaInterna' ? [] : d.piquetes ?? []), ...internasDoDesenho(d).map(a => a.geojson), ...fixasRef.current];
+      const r = piqueteDesenhado(g, obst, pts);
+      return r ? areaDoBancoHa(r) * 10000 : 0;
+    },
+    aoTerminar: pts => {
+      const g = poligonoRef.current;
+      const f = ferramentaRef.current;
+      if (g) {
+        const caminho = pelasBordas(pts);
+        if (f === 'areaInterna') mudar(d => comAreaInterna(g, d, tipoAreaRef.current, caminho, fixasRef.current));
+        else mudar(d => comPiqueteDesenhado(g, d, caminho, fixasRef.current));
+      }
+      setFerramenta(null);
+    },
     aoCancelar: () => setFerramenta(null),
   });
   const pontosDoPiquete = pontoAPonto.pontos;
@@ -304,10 +370,10 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     const d = g ? desenhoInicial(g, cfg) : desenhoVazio();
     setPai(p); setPrevia(null); setErro(null); setEscolhida(null); setAvisoDaArea(null); setAviso(null); setMes(meses[meses.length - 1].valor);
     setConfigEstado(cfg); desenhoRef.current = d; setDesenho(d); setBase([]); trocarPilha([]); setTrabalhou(false);
-    setSelecionada(null); setPontoSel(null); setConfirmarCancelar(false); setNomeados(0); setFerramenta(g && inicio === 'poligonos' ? 'piquete' : null); setSoltosDispensados(false);
+    setSelecionada(null); setPontoSel(null); setConfirmarCancelar(false); setNomeados(0); setFerramenta(g && inicio === 'poligonos' ? 'piquete' : null); setSoltosDispensados(false); setEditando(null); setTipoArea('praca');
     setGuardado(lerRascunhoDosPiquetes(clienteId, p.geometriaId));
     void lerGrupo(p.pastoId);
-  }, [lerGrupo, clienteId, setFerramenta, trocarPilha]);
+  }, [lerGrupo, clienteId, setFerramenta, trocarPilha, setEditando]);
 
   const fechar = useCallback(() => {
     setPai(null); setPrevia(null); setErro(null); setDesenho(desenhoVazio()); desenhoRef.current = desenhoVazio(); trocarPilha([]); setBase([]);
@@ -389,6 +455,17 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     mudar(d => tirarPontoDaLinha(d, id, k)); setPontoSel(null);
   }, [mudar, pontoSel]);
   const tirarCorredor = useCallback(() => mudar(d => ({ ...d, corredor: null })), [mudar]);
+  /* PIQUETE-PRO-01 (item 1): corrigir o que foi desenhado — cada gesto entra na pilha do Desfazer */
+  const editarPiquete = useCallback((i: number) => { setFerramenta(null); setEditando(editandoRef.current === i ? null : i); setEscolhida(i); }, [setFerramenta, setEditando]);
+  const apagarPiquete = useCallback((i: number) => { setEditando(null); setEscolhida(null); mudar(d => semPiqueteNoDesenho(d, i)); }, [mudar, setEditando]);
+  const restanteViraPiquete = useCallback(() => {
+    const g = poligonoRef.current;
+    if (!g) return;
+    setFerramenta(null);
+    mudar(d => comRestante(g, d, fixasRef.current));
+  }, [mudar, setFerramenta]);
+  const apagarAreaInterna = useCallback((id: string) => mudar(d => semAreaInterna(d, id)), [mudar]);
+  const desenharAreaInterna = useCallback((t: AreaInterna['tipo']) => { tipoAreaRef.current = t; setTipoArea(t); setFerramenta('areaInterna'); }, [setFerramenta]);
   const larguraDoCorredor = useCallback((m: number | null) => {
     if (m == null || !(m > 0)) return;
     mudarConfig({ larguraCorredor: m });
@@ -446,7 +523,10 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     if (desenho.praca) { const m = motivoDaPraca(poligono, desenho.praca); if (m) return m; }
     if (config.modo === 'poligonos') {
       if (ferramenta === 'piquete' && pontosDoPiquete.length) return 'Feche o piquete no 1º ponto (ou Esc para desistir dele).';
+      if (ferramenta === 'areaInterna' && pontosDoPiquete.length) return 'Feche a área interna no 1º ponto (ou Esc para desistir dela).';
       if (n < 2) return 'Desenhe pelo menos 2 piquetes ("+ Piquete").';
+      /* PIQUETE-PRO-01 (regra do Gabriel): os piquetes preenchem 100% do pasto — tolerância de 0,01 ha */
+      if (conta && conta.semPiqueteHa > TOLERANCIA_SEM_PIQUETE_HA) return `Faltam ${haBr(conta.semPiqueteHa)} ha sem piquete: desenhe ou use "Restante vira piquete".`;
     } else {
       if (!linhasDoDesenho(desenho).length) return 'Risque pelo menos uma linha de lado a lado (ou escolha a praça).';
       if (n < 2) return 'As linhas ainda não dividem o pasto: elas precisam ir de uma borda à outra (ou à praça).';
@@ -467,7 +547,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
       if (new Set(chaves).size !== chaves.length) return 'Duas divisões têm o mesmo nome.';
     }
     return null;
-  }, [pai, poligono, grupo, emTraco, ferramenta, desenho, divisoes, n, existente, membrosSemDesenho.length, ligas, nomes, config.modo, pontosDoPiquete.length]);
+  }, [pai, poligono, grupo, emTraco, ferramenta, desenho, divisoes, n, existente, membrosSemDesenho.length, ligas, nomes, config.modo, pontosDoPiquete.length, conta]);
 
   // --- o banco ----------------------------------------------------------------------------------------------------------------------------
   const pedido = useCallback((simular: boolean, mesEscolhido?: string | null) => pedidoDosPiquetes({
@@ -547,12 +627,13 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
           setFerramenta(null); return;
         }
         if (selecionadaRef.current) { setSelecionada(null); setPontoSel(null); return; }
+        if (editandoRef.current != null) { setEditando(null); return; }
         pedirCancelar();
         return;
       }
       if (emCampo) return;
       /* "+ Piquete": o Backspace é da ferramenta (tira o último ponto); o Ctrl+Z, no meio do piquete, também tira o ponto (não o piquete de antes) */
-      if (ferramentaRef.current === 'piquete') {
+      if (ferramentaRef.current === 'piquete' || ferramentaRef.current === 'areaInterna') {
         if (ev.key === 'Backspace') return;
         if ((ev.metaKey || ev.ctrlKey) && !ev.shiftKey && ev.key.toLowerCase() === 'z' && pontosDoPiqueteRef.current.length) { ev.preventDefault(); tirarUltimoRef.current(); return; }
       }
@@ -561,7 +642,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     };
     window.addEventListener('keydown', aoTeclar, true);
     return () => window.removeEventListener('keydown', aoTeclar, true);
-  }, [pai, confirmarCancelar, pedirCancelar, desfazer, setFerramenta]);
+  }, [pai, confirmarCancelar, pedirCancelar, desfazer, setFerramenta, setEditando]);
 
   // --- terminar o que está sendo traçado -----------------------------------------------------------------------------------------------
   const terminarTraco = useCallback(() => {
@@ -604,7 +685,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
       const g = poligonoRef.current;
       if (!g) return;
       const f = ferramentaRef.current;
-      if (f === 'piquete') return; // o clique é da ferramenta ponto a ponto
+      if (f === 'piquete' || f === 'areaInterna') return; // o clique é da ferramenta ponto a ponto
       const bruto: Ponto = [ev.latlng.lng, ev.latlng.lat];
       if (f === 'tracar' || f === 'corredor' || f === 'desenharPraca') { adicionarPontoDoTraco(encaixarEm(bruto, alvosDe('nada'))); return; }
       if (f === 'regua') { adicionarPontoDaRegua(encaixarEm(bruto, alvosDe('nada'))); return; }
@@ -699,6 +780,31 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     return () => { g.remove(); };
   }, [mapa, pai, poligono, desenho.praca, desenho.corredor, config.cocho, config.modo, config.refLado, pontasFora]);
 
+  /* PIQUETE-PRO-01: o SEM PIQUETE pintado de vermelho, as áreas internas (as que existem e as desenhadas) e a borda do piquete em edição (clique cria canto) */
+  useEffect(() => {
+    if (!mapa || !pai || !poligono || !mapaVivo(mapa) || config.modo !== 'poligonos') return undefined;
+    const g = L.layerGroup().addTo(mapa);
+    if (conta?.semPiquete) L.geoJSON(conta.semPiquete, { style: { color: '#dc2626', weight: 1, fillColor: '#ef4444', fillOpacity: 0.35 }, pmIgnore: true, interactive: false }).addTo(g);
+    fixasDoPasto.forEach(f => L.geoJSON(f.geojson, { style: { color: '#b45309', weight: 1.5, dashArray: '3 3', fillColor: '#f59e0b', fillOpacity: 0.25 }, pmIgnore: true, interactive: false }).addTo(g));
+    (desenho.internas ?? []).forEach(a => {
+      L.geoJSON(a.geojson, { style: { color: '#92400e', weight: 1.5, fillColor: '#d6a756', fillOpacity: 0.5 }, pmIgnore: true, interactive: false }).addTo(g);
+    });
+    const emEdicao = editando != null ? desenho.piquetes?.[editando] : null;
+    if (emEdicao && editando != null && !ferramenta) {
+      const i = editando;
+      L.geoJSON(emEdicao, { style: { color: '#2563eb', weight: 2.5, fill: false }, pmIgnore: true, interactive: false }).addTo(g);
+      const aneis = emEdicao.type === 'Polygon' ? emEdicao.coordinates : emEdicao.coordinates.flat();
+      aneis.forEach(anel => {
+        const alvo = L.polyline(anel.map(latlng), { weight: 14, opacity: 0, interactive: true, pmIgnore: true, bubblingMouseEvents: false }).addTo(g);
+        alvo.on('click', (ev: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(ev);
+          mudar(x => { const atual = x.piquetes?.[i]; return atual ? comPiqueteCru(x, i, comCantoNaBorda(atual, [ev.latlng.lng, ev.latlng.lat])) : x; });
+        });
+      });
+    }
+    return () => { g.remove(); };
+  }, [mapa, pai, poligono, config.modo, conta, fixasDoPasto, desenho.internas, desenho.piquetes, editando, ferramenta, mudar]);
+
   /* 3) as linhas: a selecionada magenta e grossa; clique seleciona (e, na selecionada, cria ponto) */
   const aoClicarLinha = useCallback((id: string, ll: L.LatLng) => {
     if (selecionadaRef.current === id) { mudar(d => pontoNaLinha(d, id, [ll.lng, ll.lat])); return; }
@@ -784,6 +890,23 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
           mover: p => mudar(x => moverPontoDaLinha(poligono, x, c.id, (cercaDoDesenho(x, c.id)?.pontos.length ?? 2) - 1, p), false) });
       });
     }
+    /* PIQUETE-PRO-01: os cantos do piquete em edição — arrastar (gruda nos vizinhos; recorta ao soltar), botão direito tira */
+    const emEdicao = editando != null && ativo && config.modo === 'poligonos' ? d.piquetes?.[editando] ?? null : null;
+    if (emEdicao && editando != null) {
+      const i = editando;
+      let antes: Geo | null = null;
+      cantosDoPiquete(emEdicao).forEach(c => {
+        lista.push({ chave: `e${i}-${c.parte}-${c.anel}-${c.i}`, ponto: c.p, classe: 'ponta', titulo: 'Arraste o canto · clique na borda cria ponto · botão direito tira',
+          inicio: () => { empilhar(); antes = desenhoRef.current.piquetes?.[i] ?? null; alvosDoGestoRef.current = alvosDoPiquete(i); },
+          mover: q => mudar(x => { const atual = x.piquetes?.[i]; return atual ? comPiqueteCru(x, i, comCantoMovido(atual, c, noImaDoPiquete(q, alvosDoGestoRef.current))) : x; }, false),
+          fim: () => { const a0 = antes; alvosDoGestoRef.current = null; if (a0) mudar(x => comPiqueteEditado(poligono, x, i, a0, fixasRef.current), false); },
+          direito: () => mudar(x => {
+            const atual = x.piquetes?.[i];
+            const sem = atual ? semCanto(atual, c) : null;
+            return atual && sem ? comPiqueteEditado(poligono, comPiqueteCru(x, i, sem), i, atual, fixasRef.current) : x;
+          }) });
+      });
+    }
     const sel = selecionada && ativo ? linhaDoDesenho(d, selecionada) : null;
     if (sel && selecionada) {
       const id = selecionada;
@@ -808,7 +931,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
       }
     }
     return lista;
-  }, [poligono, pai, desenho, selecionada, pontoSel, ferramenta, alvosDe, encaixarEm, empilhar, mudar, tirarPonto, mapa, zoomTique]);
+  }, [poligono, pai, desenho, selecionada, pontoSel, ferramenta, alvosDe, encaixarEm, empilhar, mudar, tirarPonto, mapa, zoomTique, editando, config.modo, alvosDoPiquete, noImaDoPiquete]);
 
   useEffect(() => {
     const mapaAlcas = alcasRef.current;
@@ -884,6 +1007,8 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     totalHa, medidasPraca, aviso, motivo, erro,
     /* PIQUETES-PRACA-CONCAVO-01 */
     saidas, pontasFora, soltos, dispensarSoltos: () => setSoltosDispensados(true), alternarSeguirSelecionada,
+    /* PIQUETE-PRO-01 */
+    conta, fixasDoPasto, editando, editarPiquete, apagarPiquete, restanteViraPiquete, tipoArea, desenharAreaInterna, apagarAreaInterna,
     previa, setPrevia, prever, gravar, conferindo, gravando, mes, setMes,
   };
 }

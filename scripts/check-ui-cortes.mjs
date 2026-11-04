@@ -235,6 +235,9 @@ const CENARIOS = [
   { nome: 'mapa-geo-fundo-mapa', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Mapa') },
   { nome: 'mapa-geo-sem-satelite', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS },
   { nome: 'mapa-geo-sem-satelite-painel', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
+  /* MAPA-IMPRESSAO-01 — o diálogo "Imprimir mapa" aberto pelo botão da barra do Gestor (sem a chave Esri na bancada: o satélite desabilitado com o motivo) */
+  { nome: 'mapa-imprimir', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]', antes: async (p) => {
+    await p.locator('[data-testid="mapa-imprimir"]').click(); await p.locator('[data-testid="imprimir-baixar"]').waitFor(); await p.waitForTimeout(400); } },
   { nome: 'mapa-geo-operacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
   /* MAPA-02f-b — a infraestrutura como PONTOS (dados sintéticos: cocho, 2 bebedouros, sede com nome longo, energia): o ícone clicado abre o
      painel de leitura; Editar; o Adicionar › Infraestrutura › Cocho entra no modo de colocar (o aviso) e o clique no mapa abre o formulário;
@@ -595,16 +598,28 @@ const CENARIOS = [
           ]),
           ...casos.map(([nome, url]) => ({ nome: `mapa-validacao-${nome}-previa`, url, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
             await abrirPiquetes(url)(p);
-            /* PIQUETE-POLIGONO-01: o "+ Piquete" abre desenhando; a prévia pede 2 piquetes — a metade oeste e a leste do P_01, fechando no 1º ponto */
+            /* PIQUETE-POLIGONO-01: o "+ Piquete" abre desenhando; a prévia pede 2 piquetes — a metade oeste do P_01, fechando no 1º ponto */
             const c = await p.locator('path[data-geo-id="g1"]').first().boundingBox();
             const em = (fx, fy) => [c.x + fx * c.width, c.y + fy * c.height];
             const piquete = async (cantos) => { for (const [fx, fy] of [...cantos, cantos[0]]) { const [x, y] = em(fx, fy); await p.mouse.click(x, y); await p.waitForTimeout(120); } };
             await piquete([[0.02, 0.02], [0.5, 0.02], [0.5, 0.95], [0.02, 0.95]]);
-            await p.locator('[data-testid="piquetes-mais-piquete"]').click();
-            await piquete([[0.5, 0.02], [0.98, 0.02], [0.98, 0.95], [0.5, 0.95]]);
+            /* PIQUETE-PRO-01: a prévia só com o pasto 100% em piquetes — o resto (a leste e a faixa da borda que os cliques deixam) vira o
+               2º piquete pelo "Restante" (com a divisão do cadastro, `&grupo=1`, o P_01 aceita no máximo 2 partes: desenhar as duas metades
+               e ainda o Restante daria 3) */
+            await p.locator('[data-testid="piquetes-restante"]').click();
             await p.waitForTimeout(300);
             await p.locator('[data-testid="piquetes-previa"]').click();
             await p.locator('[data-testid="piquetes-dialogo-previa"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(400); } })),
+          /* PIQUETE-PRO-01: o "+ Área interna" ligado (o seletor Praça | Corredor | Benfeitoria na barra) e a lista com piquetes desenhados
+             (Editar pontos · Renomear · Apagar e o rodapé dos 100%, com o SEM PIQUETE vermelho) */
+          { nome: 'mapa-validacao-piquetes-area-interna', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="piquetes-tela"]', ...medir, antes: async (p) => {
+            await abrirPiquetes('tela=mapa-geo')(p);
+            await p.locator('[data-testid="piquetes-mais-area"]').click(); await p.waitForTimeout(400); } },
+          { nome: 'mapa-validacao-piquetes-lista-pro', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="piquetes-lista"]', antes: async (p) => {
+            await abrirPiquetes('tela=mapa-geo')(p);
+            const c = await p.locator('path[data-geo-id="g1"]').first().boundingBox();
+            for (const [fx, fy] of [[0.02, 0.02], [0.5, 0.02], [0.5, 0.95], [0.02, 0.95], [0.02, 0.02]]) { await p.mouse.click(c.x + fx * c.width, c.y + fy * c.height); await p.waitForTimeout(120); }
+            await p.locator('[data-testid="piquetes-editar"]').first().click(); await p.waitForTimeout(400); } },
         ];
       })(),
     ];
@@ -727,6 +742,9 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-modal', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
       { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
       { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
+      /* CADERNO-CAMPO-01 peça 1 — o diálogo "Exportar mês" (as folhas para marcar, a linha do motivo reservada, Cancelar/Gerar PDF) */
+      { nome: 'fechamento-grupo-exportar-mes', url: URL, tamanhos: T, regiao: '[data-testid="exportar-mes"]', antes: async (p) => { await grade(p);
+        await p.locator('button', { hasText: 'Exportar mês (PDF)' }).click(); await p.locator('[data-testid="exportar-mes"]').waitFor(); await p.waitForTimeout(800); } },
     ];
   })(),
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos, modo "Grupos" (dado SINTÉTICO no `tela=pastos`): a lista dos grupos, com os

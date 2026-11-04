@@ -77,6 +77,7 @@ import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
 import MODULO03 from '@/lib/mapa/__fixtures__/modulo03StaTereza.json';
 import P6_PUREZA from '@/lib/mapa/__fixtures__/p6Pureza.json';
+import PRACA_P06 from '@/lib/mapa/__fixtures__/pracaP06Pureza.json';
 import { areaDoBancoHa } from '@/lib/mapa/criarPiquetes';
 import { mapaGlobal } from './dados/mapaGlobal';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
@@ -724,12 +725,23 @@ if (tela === 'mesclar') {
   const formaNaEdicao = (g: { type: string; coordinates: unknown }) => q.get('laco') === '1' ? gravataDe(g) : q.get('amontoado') === '1' ? amontoadoDe(g) : g;
   /* MAPA-PRACA-ESTAVEL-01 (homologação 02/11 21:54, Agnaldo › Sta. Tereza › Modulo 03): `&modulo03=1` — o P_01 ganha a FORMA do Modulo 03
      (18 pontos com lados curtos e o furo no meio, lida do proto só leitura), levada para o canto do P_01; nenhum outro dado do cliente */
+  /* PIQUETE-PRO-01: com `&p6=1` a sede e o curral sintéticos do P_01 saem (caíam dentro do P6, que no proto não os tem); o P6 (e a Praça P_06 no furo dele) levados para o canto do P_01 SEM mudar a área: a longitude é corrigida pelo cosseno da
+     latitude nova (sem isso o P6 da bancada media 96,7 ha no lugar dos 95,59 do proto) */
+  const moverP6 = (p: number[]): number[] => {
+    const a0 = P6_PUREZA.coordinates[0];
+    const lon0 = Math.min(...a0.map(x => x[0])), lat0 = Math.max(...a0.map(x => x[1]));
+    const lat = p[1] + (-19.63 - lat0);
+    return [-54.03 + (p[0] - lon0) * Math.cos((p[1] * Math.PI) / 180) / Math.cos((lat * Math.PI) / 180), lat];
+  };
+  const PRACA_DO_P6 = { id: 'gp6', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'praca_alimentacao', nome_original: 'Praça P_06', cor: null,
+    geojson: { type: 'Polygon', coordinates: PRACA_P06.coordinates.map(a => a.map(moverP6)) }, created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' };
   const comModulo03 = <T extends { id: string; geojson: unknown }>(g: T): T => {
     /* PIQUETE-POLIGONO-01: `&p6=1` — a FORMA do P6 da Pureza (com o furo da praça antiga; lida do proto só leitura), no lugar do P_01 */
     const forma = q.get('p6') === '1' ? P6_PUREZA : q.get('modulo03') === '1' ? MODULO03 : null;
     if (!forma || g.id !== 'g1') return g;
     const aneis = forma.coordinates;
     const [dx, dy] = [-54.03 - Math.min(...aneis[0].map(p => p[0])), -19.63 - Math.max(...aneis[0].map(p => p[1]))];
+    if (forma === P6_PUREZA) return { ...g, geojson: { type: 'Polygon', coordinates: aneis.map(a => a.map(moverP6)) } };
     return { ...g, geojson: { type: 'Polygon', coordinates: aneis.map(a => a.map(p => [p[0] + dx, p[1] + dy])) } };
   };
   /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
@@ -742,7 +754,7 @@ if (tela === 'mesclar') {
         ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
           // MAPA-CRIAR-PIQUETES-01 2b: `versoesDosPoligonos` lê `.select('id, versao').in('id', …)` (a versão fresca do Mover linha / Juntar)
           : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
-          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : [])].map(comModulo03))
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : []), ...(q.get('p6') === '1' ? [PRACA_DO_P6] : [])].filter(x => q.get('p6') !== '1' || (x.id !== 'gi1' && x.id !== 'gi2')).map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
       // PIQUETE-POLIGONO-01: `&p6=1` — o P_01 se chama P6 (o nome sugerido dos piquetes é P6-A, P6-B)
       : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos.map(x => (q.get('p6') === '1' && x.id === 'p1' ? { ...x, nome: 'P6' } : x)), ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
