@@ -27,6 +27,8 @@ export interface FiltrosListaV2 {
   lista_produto?: string;
   /** Igualdade sobre favorecido_id. */
   lista_fornecedor_id?: string;
+  /** FIN-FILTRO-FILIAIS-01: o escolhido + as filiais (`filiaisDoFornecedor`); quando vem, manda sobre o `lista_fornecedor_id`. */
+  lista_fornecedor_ids?: readonly string[];
   /** Igualdade sobre grupo_custo. */
   lista_grupo_custo?: string;
   /** Atividade normalizada: 'pecuaria' | 'agricultura' | 'silvicultura' | 'administrativo' | 'outros'. */
@@ -190,7 +192,10 @@ export function filtrarListaV2NoCliente<L extends LinhaFiltravel>(
     itens = itens.filter((l) => casaNaBusca(l.descricao, produto));
   }
 
-  if (filtros.lista_fornecedor_id) {
+  const conjunto = filtros.lista_fornecedor_ids;
+  if (conjunto && conjunto.length > 0) {
+    itens = itens.filter((l) => !!l.favorecido_id && conjunto.includes(l.favorecido_id));
+  } else if (filtros.lista_fornecedor_id) {
     itens = itens.filter((l) => l.favorecido_id === filtros.lista_fornecedor_id);
   }
 

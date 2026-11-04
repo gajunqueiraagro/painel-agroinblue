@@ -165,6 +165,8 @@ export interface PlanoBaseV2 {
   readonly orDirecao?: string;
   readonly orDescricao?: string;
   readonly favorecidoId?: string;
+  /** FIN-FILTRO-FILIAIS-01: o conjunto (o escolhido + as filiais); manda sobre o `favorecidoId` */
+  readonly favorecidoIds?: readonly string[];
   readonly listaGrupoCusto?: string;
   readonly escopoNegocio?: string;
   readonly orAtividadeOutros?: string;
@@ -356,7 +358,8 @@ export function montarPlanoBaseV2(
   const ramoDescricao = ramoImatch('busca_descricao', normalizarParaBusca(filtros.lista_produto));
   if (ramoDescricao) plano.orDescricao = ramoDescricao;
 
-  if (filtros.lista_fornecedor_id) plano.favorecidoId = filtros.lista_fornecedor_id;
+  if (filtros.lista_fornecedor_ids && filtros.lista_fornecedor_ids.length > 0) plano.favorecidoIds = filtros.lista_fornecedor_ids;
+  else if (filtros.lista_fornecedor_id) plano.favorecidoId = filtros.lista_fornecedor_id;
   if (filtros.lista_grupo_custo) plano.listaGrupoCusto = filtros.lista_grupo_custo;
 
   if (filtros.safra_id) plano.safraId = filtros.safra_id;
