@@ -206,7 +206,8 @@ if (LATERAL) {
   const atual = FAZ === 'Global' ? { id: '__global__', nome: 'Global', owner_id: '' } : fazendas[0];
   g.__fazendaBancada = { fazendas, fazendaAtual: atual, isGlobal: atual.id === '__global__', fazendaId: atual.id, setFazendaAtual: () => {} };
 }
-const Lateral = () => LATERAL ? (
+/* CPR-LARGURA-01 — `&semlateral=1`: sem a barra lateral, como o app no Ampliar (o shell a esconde: `intensivo`) */
+const Lateral = () => q.get('semlateral') ? null : LATERAL ? (
   <TooltipProvider><V2Sidebar activeSection="financeiro-lanc" onNavigate={() => {}} drawerAtivo={q.get('submenu')} onDrawerToggle={() => {}}
     clienteSelector={<ClienteSelector />} fazendaSelector={q.get('umafaz') ? undefined : <FazendaSelector />} /></TooltipProvider>
 ) : <div style={{ width: LARGURA_DA_LATERAL, flexShrink: 0, background: '#1e3a5f' }} />;
@@ -728,7 +729,7 @@ if (tela === 'mesclar') {
         ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
           // MAPA-CRIAR-PIQUETES-01 2b: `versoesDosPoligonos` lê `.select('id, versao').in('id', …)` (a versão fresca do Mover linha / Juntar)
           : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
-          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : [])].map(comModulo03))
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : [])].map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
       : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
           ...(q.get('grupo') === '1' ? ['P_01A', 'P_01B'].map((nome, i) => ({ ...MAPA.PASTOS[0], id: `p1${'ab'[i]}`, nome, grupo_id: 'gx', data_inicio: '2026-11-01', observacoes: null })) : [])]
@@ -740,7 +741,8 @@ if (tela === 'mesclar') {
         .map(f => ({ ...f, fechamento_pasto_itens: [...MAPA.dadosDosCartoes(q.get('cartoes')).itens, ...(UNIDADE ? MAPA.UNIDADE_ITENS : [])].filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.dadosDosCartoes(q.get('cartoes')).itens.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       // MAPA-02f-b: a infraestrutura e os bens do Patrimônio (sintéticos)
-      : t === 'fazenda_infraestruturas' ? MAPA.INFRA
+      // MEDIR-NO-MAPA-01: `&galpao=1` — o Galpao Agricultura (a forma do Retiro Agricultura) e um cocho ao lado
+      : t === 'fazenda_infraestruturas' ? [...MAPA.INFRA, ...(q.get('galpao') === '1' ? MAPA.GALPAO_INFRA : [])]
       : t === 'patrimonio_bens' ? MAPA.BENS
       // MAPA-ATIVIDADE-LAVOURA-01: a lavoura do P5A (a safra vem embutida na linha)
       : t === 'agri_safra_area' ? MAPA.LAVOURA

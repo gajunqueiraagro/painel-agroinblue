@@ -98,6 +98,13 @@ export function acrescentarLinha(d: Desenho, pontos: readonly Ponto[]): { desenh
 }
 
 /** O cadeado da cerca (só a cerca da praça tem). */
+/** PIQUETES-PRACA-CONCAVO-01: a linha riscada que sai do pasto e volta — cortar no 1º encontro (padrão) ou seguir além da borda. A cerca da
+ *  praça não tem a escolha (ela nasce da praça e vai até a 1ª borda). */
+export function alternarSeguir(d: Desenho, id: string): Desenho {
+  if (ehCerca(d, id)) return d;
+  return { ...d, linhas: d.linhas.map(l => (l.id !== id ? l : l.seguir ? { id: l.id, pontos: l.pontos } : { ...l, seguir: true })) };
+}
+
 export function alternarFixa(d: Desenho, id: string): Desenho {
   const cerca = cercaDoDesenho(d, id);
   return cerca && d.praca ? { ...d, praca: comFixa(d.praca, id, !cerca.fixa) } : d;

@@ -69,8 +69,8 @@ export const CATEGORIAS = [
 
 const MESES = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'];
 const ATIVIDADE = ['cria', 'recria', 'recria', 'engorda', 'recria', 'vedado', 'cria', 'recria', 'recria', 'recria', 'engorda', 'engorda'];
-export const FECHAMENTOS: { id: string; fazenda_id: string; pasto_id: string; ano_mes: string; tipo_uso_mes: string; status: string }[] = [];
-export const ITENS: { id: string; fechamento_id: string; quantidade: number; peso_medio_kg: number; categoria_id: string; lote?: string }[] = [];
+export const FECHAMENTOS: { id: string; fazenda_id: string; pasto_id: string; ano_mes: string; tipo_uso_mes: string; status: string; lote_mes: string | null }[] = [];
+export const ITENS: { id: string; fechamento_id: string; quantidade: number; peso_medio_kg: number; categoria_id: string }[] = [];
 PASTOS.forEach((p, i) => MESES.forEach((m, k) => {
   if (i === 2 && m === '2026-09') return; // P_03 sem fechamento em set/26: "—" e "último fechamento 08/26"
   if (i === 7 && k % 4 === 1) return;      // P_08 com meses sem fechamento no histórico
@@ -81,13 +81,15 @@ PASTOS.forEach((p, i) => MESES.forEach((m, k) => {
   const vedadoNoMes = i === 0 && m === '2026-03';
   // MAPA-ATIVIDADE-LAVOURA-01: o P5A vira LAVOURA em set/26 (fechamento sem animais, uso do mês 'agricultura')
   const lavouraNoMes = i === 10 && m === '2026-09';
-  FECHAMENTOS.push({ id, fazenda_id: 'f1', pasto_id: p.id, ano_mes: m, tipo_uso_mes: lavouraNoMes ? 'agricultura' : vedadoNoMes ? 'vedado' : ATIVIDADE[i], status: i === 1 && m === '2026-08' ? 'rascunho' : 'fechado' });
+  FECHAMENTOS.push({ id, fazenda_id: 'f1', pasto_id: p.id, ano_mes: m, tipo_uso_mes: lavouraNoMes ? 'agricultura' : vedadoNoMes ? 'vedado' : ATIVIDADE[i], status: i === 1 && m === '2026-08' ? 'rascunho' : 'fechado',
+    // MAPA-CARD-LOTE-01: o lote é do CARD (`lote_mes`, como no Fechamento); o P_01 com um nome longo (o "…" com o title no título do painel)
+    lote_mes: i === 5 || vedadoNoMes || lavouraNoMes ? null : i === 0 ? 'Lote da recria de inverno 2026' : 'L-12' });
   if (i === 5 || vedadoNoMes || lavouraNoMes) return; // P_06 vedado: fechamento SEM animais (vazio)
   const base = 30 + ((i * 13 + k * 7) % 60);
-  // MAPA-PAINEL-COMPACTO-01: o lote de cada registro (um longo, para o "…" com o title; os Bois em 2 lotes = 2 linhas)
-  ITENS.push({ id: `${id}-1`, fechamento_id: id, quantidade: base, peso_medio_kg: 260 + ((i * 17 + k * 11) % 160), categoria_id: 'c1', lote: 'L-12' });
-  if (i === 0) ITENS.push({ id: `${id}-1b`, fechamento_id: id, quantidade: 9, peso_medio_kg: 300, categoria_id: 'c1', lote: 'Lote da recria de inverno 2026' });
-  if (i % 2 === 0) ITENS.push({ id: `${id}-2`, fechamento_id: id, quantidade: 12 + (k % 9), peso_medio_kg: 210 + k * 3, categoria_id: 'c2', lote: 'L-07' });
+  // MAPA-PAINEL-COMPACTO-01: uma linha por registro (os Bois em 2 registros = 2 linhas); o lote é o do card (MAPA-CARD-LOTE-01)
+  ITENS.push({ id: `${id}-1`, fechamento_id: id, quantidade: base, peso_medio_kg: 260 + ((i * 17 + k * 11) % 160), categoria_id: 'c1' });
+  if (i === 0) ITENS.push({ id: `${id}-1b`, fechamento_id: id, quantidade: 9, peso_medio_kg: 300, categoria_id: 'c1' });
+  if (i % 2 === 0) ITENS.push({ id: `${id}-2`, fechamento_id: id, quantidade: 12 + (k % 9), peso_medio_kg: 210 + k * 3, categoria_id: 'c2' });
   if (i === 0) ITENS.push({ id: `${id}-3`, fechamento_id: id, quantidade: 8, peso_medio_kg: 420, categoria_id: 'c3' });
   // fix1: o P_01 com 7 categorias (o painel com 6+ não rola a 1366×768)
   if (i === 0) ['c4', 'c5', 'c6', 'c7'].forEach((c, n) => ITENS.push({ id: `${id}-${4 + n}`, fechamento_id: id, quantidade: 5 + n * 3, peso_medio_kg: 180 + n * 40, categoria_id: c }));
@@ -119,6 +121,13 @@ export const PIQUETES_SOLTOS = [
     geojson: ret(4, 1, PASSO / 2), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
   { id: 'gq2', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'outra', nome_original: 'P_04B', cor: null,
     geojson: ret(4.5, 1, PASSO / 2), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+];
+/* MAPA-LISTA-COMPACTA-01: `&praca=1` — uma praça (sem pasto) no MEIO do P_02: o rótulo dela cai em cima do rótulo do pasto (o pasto vence) */
+export const PRACA_SOBRE_PASTO = [
+  { id: 'gp1', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'praca_alimentacao', nome_original: 'Praça P_02', cor: null,
+    geojson: ret(1.47, 0.47, PASSO * 0.06), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
+  { id: 'gp2', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'praca_alimentacao', nome_original: 'Praça P_08', cor: null,
+    geojson: ret(1.15, 2.15, PASSO * 0.06), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
 ];
 export function previaDosPiquetes(a: { p_pasto_pai?: string; p_geometrias?: string[]; p_mes?: string }) {
   const pai = PASTOS.find((p) => p.id === a.p_pasto_pai) ?? PASTOS[0];
@@ -179,17 +188,21 @@ export const UNIDADE_POLIGONOS = [
     geojson: furado(), created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' },
 ];
 export const UNIDADE_FECHAMENTOS = [
-  { id: 'f-pu-2026-08', fazenda_id: 'f1', pasto_id: 'pu', ano_mes: '2026-08', tipo_uso_mes: 'recria', status: 'fechado' },
-  { id: 'f-pua-2026-09', fazenda_id: 'f1', pasto_id: 'pua', ano_mes: '2026-09', tipo_uso_mes: 'recria', status: 'fechado' },
-  { id: 'f-pub-2026-09', fazenda_id: 'f1', pasto_id: 'pub', ano_mes: '2026-09', tipo_uso_mes: 'vedado', status: 'fechado' },
-  { id: 'f-pm-2026-08', fazenda_id: 'f1', pasto_id: 'pm', ano_mes: '2026-08', tipo_uso_mes: 'recria', status: 'fechado' },
-  { id: 'f-pma-2026-09', fazenda_id: 'f1', pasto_id: 'pma', ano_mes: '2026-09', tipo_uso_mes: 'recria', status: 'fechado' },
+  { id: 'f-pu-2026-08', fazenda_id: 'f1', pasto_id: 'pu', ano_mes: '2026-08', tipo_uso_mes: 'recria', status: 'fechado', lote_mes: null },
+  { id: 'f-pua-2026-09', fazenda_id: 'f1', pasto_id: 'pua', ano_mes: '2026-09', tipo_uso_mes: 'recria', status: 'fechado', lote_mes: 'Lote P_09' },
+  { id: 'f-pub-2026-09', fazenda_id: 'f1', pasto_id: 'pub', ano_mes: '2026-09', tipo_uso_mes: 'vedado', status: 'fechado', lote_mes: null },
+  { id: 'f-pm-2026-08', fazenda_id: 'f1', pasto_id: 'pm', ano_mes: '2026-08', tipo_uso_mes: 'recria', status: 'fechado', lote_mes: null },
+  { id: 'f-pma-2026-09', fazenda_id: 'f1', pasto_id: 'pma', ano_mes: '2026-09', tipo_uso_mes: 'recria', status: 'fechado', lote_mes: 'Lote P_10' },
+  /* MAPA-CARD-LOTE-01: a outra divisão do P_10 Manga com OUTRO lote (longo) — a unidade lista os lotes das divisões ("Lotes: A · B" e a
+     coluna Lote na tabela, com o "…" e o title) */
+  { id: 'f-pmb-2026-09', fazenda_id: 'f1', pasto_id: 'pmb', ano_mes: '2026-09', tipo_uso_mes: 'recria', status: 'fechado', lote_mes: 'Lote da recria de inverno 2026' },
 ];
 export const UNIDADE_ITENS = [
   { id: 'i-pu-1', fechamento_id: 'f-pu-2026-08', quantidade: 90, peso_medio_kg: 360, categoria_id: 'c1' },
-  { id: 'i-pua-1', fechamento_id: 'f-pua-2026-09', quantidade: 95, peso_medio_kg: 372, categoria_id: 'c1', lote: 'Lote P_09' },
+  { id: 'i-pua-1', fechamento_id: 'f-pua-2026-09', quantidade: 95, peso_medio_kg: 372, categoria_id: 'c1' },
   { id: 'i-pm-1', fechamento_id: 'f-pm-2026-08', quantidade: 70, peso_medio_kg: 350, categoria_id: 'c1' },
-  { id: 'i-pma-1', fechamento_id: 'f-pma-2026-09', quantidade: 72, peso_medio_kg: 361, categoria_id: 'c1', lote: 'Lote P_10' },
+  { id: 'i-pma-1', fechamento_id: 'f-pma-2026-09', quantidade: 72, peso_medio_kg: 361, categoria_id: 'c1' },
+  { id: 'i-pmb-1', fechamento_id: 'f-pmb-2026-09', quantidade: 9, peso_medio_kg: 300, categoria_id: 'c2' },
 ];
 
 /* MAPA-CARTOES-LARGURA-01 — os cartões de cima com números de verdade grandes (`&cartoes=ursa` | `&cartoes=pior`): em set/26 só o P_01
@@ -203,6 +216,23 @@ export function dadosDosCartoes(caso: string | null) {
   const pastos = PASTOS.map(p => ({ ...p, area_produtiva_ha: p.id === 'p1' ? numeros.area : 0 }));
   const doMes = new Set(FECHAMENTOS.filter(f => f.ano_mes === '2026-09').map(f => f.id));
   const itens = [...ITENS.filter(i => !doMes.has(i.fechamento_id)),
-    { id: 'f-p1-2026-09-cartoes', fechamento_id: 'f-p1-2026-09', quantidade: numeros.cab, peso_medio_kg: numeros.peso, categoria_id: 'c1', lote: 'L-12' }];
+    { id: 'f-p1-2026-09-cartoes', fechamento_id: 'f-p1-2026-09', quantidade: numeros.cab, peso_medio_kg: numeros.peso, categoria_id: 'c1' }];
   return { pastos, itens };
 }
+
+/* MEDIR-NO-MAPA-01 (Gabriel 03/11 20:54): `&galpao=1` — a FORMA do polígono "Galpão" do Retiro Agricultura (lida do proto só leitura; só o
+   contorno, levado para um canto vazio da fazenda de exemplo), o ponto "Galpao Agricultura" (galpão, Metálico, sem área) no meio dele e um
+   cocho sintético ao lado: o gif do "Medir no mapa" e da "Régua" */
+const GALPAO_REAL = [[-52.7902, -21.472905], [-52.790094, -21.473021], [-52.789971, -21.473129], [-52.78944, -21.473385], [-52.789355, -21.473379],
+  [-52.789294, -21.47332], [-52.789259, -21.473233], [-52.789147, -21.472956], [-52.79006, -21.472547], [-52.7902, -21.472905]];
+const GALPAO_CENTRO = [LON0 + 3.3 * PASSO, LAT0 - 0.6 * PASSO];
+const GALPAO_MEIO = [(-52.7902 + -52.789147) / 2, (-21.473385 + -21.472547) / 2];
+export const GALPAO_ANEL = GALPAO_REAL.map(([x, y]) => [x - GALPAO_MEIO[0] + GALPAO_CENTRO[0], y - GALPAO_MEIO[1] + GALPAO_CENTRO[1]]);
+export const GALPAO_GEOMETRIA = { id: 'gg1', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'oficina', nome_original: 'Galpão', cor: null,
+  geojson: { type: 'Polygon', coordinates: [GALPAO_ANEL] }, created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' };
+export const GALPAO_INFRA = [
+  { id: 'ig1', fazenda_id: 'f1', tipo: 'galpao', geometria: { type: 'Point', coordinates: GALPAO_CENTRO }, nome: 'Galpao Agricultura', pasto_id: null, bem_id: null,
+    observacao: null, ficha: { material: 'Metálico' }, versao: 1, criado_em: '2026-10-25T10:00:00Z', criado_por: 'u1', ativo: true },
+  { id: 'ig2', fazenda_id: 'f1', tipo: 'cocho', geometria: { type: 'Point', coordinates: [GALPAO_CENTRO[0] - 0.0011, GALPAO_CENTRO[1] - 0.0009] }, nome: 'Cocho do galpão',
+    pasto_id: null, bem_id: null, observacao: null, ficha: { material: 'Concreto', lados: 2 }, versao: 1, criado_em: '2026-10-25T10:00:00Z', criado_por: 'u1', ativo: true },
+];

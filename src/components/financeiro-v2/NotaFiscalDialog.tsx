@@ -57,7 +57,7 @@ import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
 import { canceladosDaNota, casarJaLancados, contaUnicaDasIrmas, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, nDasParcelas, parcelasParaCasar,
   parcelasQueFaltamNoCartao, posicoesNoCartao, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
-  type LinhaSistemaNota, type SituacaoNaTabela } from '@/lib/financeiro/nfe/jaLancada';
+  type LinhaSistemaNota, type SituacaoNaTabela, ficaDeForaPorPadrao, rotuloDoAplicar } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Lock } from 'lucide-react';
@@ -83,7 +83,7 @@ import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import {
   camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerIeDaFazenda, fornecedorPeloDocumento, iePorFazenda, inscreverEmFazendas,
   atualizarCamposDoCadastro, cadastroParaComparar, desfazerCamposDoCadastro, notaJaLancada, usoDoFornecedor, type CadastroComODocumento,
-  type OcorrenciaDaNota, completarComANota, registrarNaOperacao, desfazerCompletar, cancelarCriados, comoEstaoHoje, type ComoEstaHoje, type Consulta } from '@/lib/financeiro/nfeConsultas';
+  type OcorrenciaDaNota, completarComANota, registrarNaOperacao, desfazerCompletar, cancelarCriados, cancelarComMotivo, comoEstaoHoje, type ComoEstaHoje, type Consulta } from '@/lib/financeiro/nfeConsultas';
 import { caixaDeTitulo, consultarCnpj, type DadosDoCnpj } from '@/lib/fornecedores/consultaCnpj';
 import type { CampoDoEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
 import type { ClassificacaoItem, ContaBancariaV2, FornecedorV2, LancamentoV2Form, Safra } from '@/hooks/useFinanceiroV2';
@@ -178,7 +178,8 @@ type AbaDaNota = 'arquivo' | 'nota' | 'lancamento';
 type AbaDaNotaJa = 'arquivo' | 'hoje' | 'sistema' | 'ficar' | 'itens' | 'lancamento';
 /** Mock da nota já lançada (29/10) — a ação de cada linha da "Parcelas × sistema" */
 /** NOTA-PAGA-A-VISTA-01 — 'jaPaga': a duplicata da nota paga à vista no lançamento de cima (não cria nada) */
-type AcaoDaLinha = 'vincular' | 'deixar' | 'criar' | 'jaPaga';
+/* NOTA-BOLETO-COMPOSTO-01 (PR 1): `substituir` (a programada vira a parcela da nota) e `excluir` (cancela a duplicata com motivo e trilha) */
+type AcaoDaLinha = 'vincular' | 'substituir' | 'excluir' | 'deixar' | 'criar' | 'jaPaga';
 
 export interface NotaParaLancar { arquivo: File; bytes: ArrayBuffer; lido: NotaLidaOk; doXml: DoXml }
 
@@ -418,10 +419,15 @@ export function NotaFiscalDialog({
      gravação e o anexar. (Substituir e "Não é esta: criar nova" são item próprio.) */
   const [acoes, setAcoes] = useState<ReadonlyMap<string, AcaoDaLinha>>(new Map());
   useEffect(() => { setAcoes(new Map()); }, [jaLancada]);
-  const acaoDoLancamento = (id: string): AcaoDaLinha => acoes.get(id) ?? 'vincular';
+  /* NOTA-BOLETO-COMPOSTO-01 (PR 1) — a "só no sistema" nasce "fica de fora" (como a tabela escreve); as outras achadas, vincular */
+  const acaoDoLancamento = (id: string): AcaoDaLinha => acoes.get(id) ?? (ficaDeForaPorPadrao(jaLancada, id) ? 'deixar' : 'vincular');
+  const recebeANota = (id: string) => { const a = acaoDoLancamento(id); return a === 'vincular' || a === 'substituir'; };
   /* NOTA-PAGA-A-VISTA-01 — com a nota paga à vista num lançamento, a duplicata vem "Já paga no lançamento acima" (criar é escolha) */
   const acaoDaFalta = (numero: number): AcaoDaLinha => acoes.get(`falta:${numero}`) ?? (jaLancada?.aVista ? 'jaPaga' : 'criar');
-  const alvosEscolhidos = (jaLancada?.alvos ?? []).filter((l) => acaoDoLancamento(l.id) !== 'deixar');
+  const alvosEscolhidos = (jaLancada?.alvos ?? []).filter((l) => recebeANota(l.id));
+  /* as achadas a EXCLUIR (duplicatas não pagas): canceladas com motivo e trilha depois do Aplicar (D1) */
+  const excluidosEscolhidos = (jaLancada?.alvos ?? []).filter((l) => acaoDoLancamento(l.id) === 'excluir');
+  const substituidosEscolhidos = alvosEscolhidos.filter((l) => acaoDoLancamento(l.id) === 'substituir');
   const faltamEscolhidas = faltamDaNota.filter((x) => acaoDaFalta(x.n) === 'criar');
   /* "No sistema hoje" — a fazenda, o subcentro e o fornecedor de cada achado como estão no banco (só leitura; falhou = a aba diz) */
   const [comoHoje, setComoHoje] = useState<Consulta<ComoEstaHoje[]> | null>(null);
@@ -510,9 +516,10 @@ export function NotaFiscalDialog({
       + (noCartao.leituras.concordam || posicoesDoCartao ? '.' : ': diga a posição delas no cartão para seguir.');
   })() : null;
   const alvosDaPrevia = useMemo((): AlvoDaPrevia[] => {
-    const alvos = new Set((jaLancada?.alvos ?? []).filter((l) => (acoes.get(l.id) ?? 'vincular') !== 'deixar').map((l) => l.id));
+    const alvos = new Set((jaLancada?.alvos ?? []).filter((l) => recebeANota(l.id)).map((l) => l.id));
     return linhasDaTabela.flatMap((x) => (x.sistema && alvos.has(x.sistema.id)
       ? [{ id: x.sistema.id, programada: x.situacao === 'programada', notaValorCent: x.notaValorCent, notaVencimento: x.notaVencimento, pagamento: x.sistema.pagamento,
+        ...(acaoDoLancamento(x.sistema.id) === 'substituir' ? { substituir: true } : {}),
         descricaoHoje: x.sistema.descricao, ...(posicaoDaLinha(x) ? { posicao: posicaoDaLinha(x) ?? undefined } : {}) }] : []));
   }, [jaLancada, linhasDaTabela, acoes]);
   const rotulosDaPrevia = useMemo(() => Object.fromEntries(linhasDaTabela.flatMap((x) => (x.sistema ? [[x.sistema.id, x.rotulo]] : []))), [linhasDaTabela]);
@@ -542,15 +549,20 @@ export function NotaFiscalDialog({
       const c = contaEscolhida ? contas.find((k) => k.id === contaEscolhida) : undefined;
       return { texto: `nasce programada${c ? ` · conta ${c.nome_exibicao || c.nome_conta}` : ''}${naCompra}`, curto: juntarAgora ? `nasce como ${x.rotulo}` : 'nasce programada', cadeado: false };
     }
-    if (x.situacao === 'so_no_sistema' || !l) return { texto: 'fica de fora (não é desta nota)', curto: 'fica de fora', cadeado: false };
-    if (acaoDoLancamento(l.id) === 'deixar') return { texto: 'fica como está (não recebe a nota)', curto: 'fica como está', cadeado: false };
+    if (!l) return { texto: 'fica de fora (não é desta nota)', curto: 'fica de fora', cadeado: false };
+    const acao = acaoDoLancamento(l.id);
+    /* NOTA-BOLETO-COMPOSTO-01 (PR 1) — o efeito diz a ACAO escolhida (a tabela e o botão leem a mesma regra) */
+    if (acao === 'deixar') return x.situacao === 'so_no_sistema'
+      ? { texto: 'fica de fora (não recebe a nota)', curto: 'fica de fora', cadeado: false }
+      : { texto: 'fica como está (não recebe a nota)', curto: 'fica como está', cadeado: false };
+    if (acao === 'excluir') return { texto: 'é cancelado (duplicata), com o motivo na trilha', curto: 'cancelado', cadeado: false };
     const paga = x.situacao === 'conciliada' || x.situacao === 'realizada';
     /* NOTA-PAGA-A-VISTA-01 — vincular só liga: a nota e o PDF; valor, vencimento, pagamento e descrição ficam (sem "k/N") */
     if (jaLancada?.aVista && l.id === jaLancada.aVista.id) {
       return { texto: 'recebe a nota e o PDF · valor, vencimento e pagamento não mudam', curto: 'recebe a nota', cadeado: paga };
     }
     const descricao = descricaoSemInformacao(l.descricao) ? ' · descrição da nota' : ` · "… ${x.rotulo}"`;
-    const daNota = !paga && caminho === 'atualizar' && (x.difData || x.difValor)
+    const daNota = !paga && (caminho === 'atualizar' || acao === 'substituir') && (x.difData || x.difValor)
       ? ` · ${x.difData && x.notaVencimento ? `venc. ${dataInteira(l.vencimento).slice(0, 5)} → ${dataInteira(x.notaVencimento).slice(0, 5)}` : ''}${x.difData && x.difValor ? ', ' : ''}${x.difValor && x.notaValorCent !== null ? `valor → ${reais(x.notaValorCent)}` : ''} (da nota)` : '';
     return { texto: `ganha nº e nota${descricao}${naCompra}${daNota}`, curto: juntarAgora ? `entra como ${x.rotulo}` : 'recebe a nota', cadeado: paga };
   };
@@ -559,7 +571,7 @@ export function NotaFiscalDialog({
   const acaoDaLinhaUI = (x: LinhaSistemaNota, parecida: boolean): ReactNode => {
     const l = x.sistema;
     const nF = x.situacao === 'so_na_nota' ? numeroDaFalta(x) : null;
-    if (x.situacao === 'so_no_sistema' || (!l && nF === null)) return <span className="text-muted-foreground">—</span>;
+    if (!l && nF === null) return <span className="text-muted-foreground">—</span>;
     const chave = l ? l.id : `falta:${nF ?? 0}`;
     const atual = l ? acaoDoLancamento(l.id) : acaoDaFalta(nF ?? 0);
     const aVista = jaLancada?.aVista ?? null;
@@ -567,8 +579,18 @@ export function NotaFiscalDialog({
       ? [{ valor: 'vincular', rotulo: 'Pago à vista: a nota inteira neste lançamento', curto: 'Pago à vista' },
         { valor: 'deixar', rotulo: 'Deixar como está', curto: 'Deixar' }]
       : l
-      ? [{ valor: 'vincular', rotulo: parecida ? 'É esta: vincular' : 'Vincular a nota', curto: parecida ? 'É esta' : 'Vincular' },
-        { valor: 'deixar', rotulo: 'Deixar como está', curto: 'Deixar' }]
+      /* NOTA-BOLETO-COMPOSTO-01 (PR 1) — Vincular · Substituir (a programada vira a parcela da nota) · Excluir (a duplicata NÃO paga: cancela com
+         motivo e trilha) · Fica de fora. A paga (realizada/conciliada) só vincula ou fica: valor, data e conta não mudam; nunca se cancela daqui. */
+      ? (() => {
+        const paga = l.conciliado || l.status === 'realizado' || l.status === 'conciliado' || !!l.pagamento;
+        const fora = x.situacao === 'so_no_sistema';
+        return [
+          { valor: 'vincular' as const, rotulo: parecida ? 'É esta: vincular' : 'Vincular a nota', curto: parecida ? 'É esta' : 'Vincular' },
+          ...(!paga && !fora && (x.difValor || x.difData) ? [{ valor: 'substituir' as const, rotulo: 'Substituir pela parcela da nota (valor e vencimento)', curto: 'Substituir' }] : []),
+          ...(!paga ? [{ valor: 'excluir' as const, rotulo: 'Excluir (duplicata): cancelar com motivo', curto: 'Excluir' }] : []),
+          { valor: 'deixar' as const, rotulo: fora ? 'Fica de fora (não é desta nota)' : 'Deixar como está', curto: fora ? 'Fica de fora' : 'Deixar' },
+        ];
+      })()
       : aVista
       ? [{ valor: 'jaPaga', rotulo: 'Já paga no lançamento acima', curto: 'Já paga' }, { valor: 'criar', rotulo: 'Criar', curto: 'Criar' }]
       : [{ valor: 'criar', rotulo: 'Criar', curto: 'Criar' }, { valor: 'deixar', rotulo: 'Não criar', curto: 'Não criar' }];
@@ -579,7 +601,8 @@ export function NotaFiscalDialog({
         <DropdownMenuTrigger asChild>
           <button type="button" disabled={!!ocupado} data-testid="nota-acao" data-acao={atual}
             className={cn('inline-flex h-[15px] max-w-full items-center gap-1 rounded border px-1.5 text-[9.5px] font-semibold',
-              atual === 'deixar' || atual === 'jaPaga' ? 'border-border bg-muted text-muted-foreground' : parecida ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-blue-200 bg-blue-50 text-blue-700')}>
+              atual === 'deixar' || atual === 'jaPaga' ? 'border-border bg-muted text-muted-foreground' : atual === 'excluir' ? 'border-red-200 bg-red-50 text-red-700'
+                : parecida ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-blue-200 bg-blue-50 text-blue-700')}>
             <span className="min-w-0 truncate" title={rotulo}>{escolhida?.curto ?? ''}</span><span className="shrink-0 font-normal">▾</span>
           </button>
         </DropdownMenuTrigger>
@@ -896,6 +919,12 @@ export function NotaFiscalDialog({
           ? await dividir(clienteId, { lancamentoId: alvoDaDivisao, financiamentoId: fin }, percentuaisDosItens(porContaDosItens(itensFiscais.lidos.itens, contasDosItens)), motivo, false)
           : await dividirPelosItens(clienteId, alvoDaDivisao, contasDosItens, motivo, false);
         if (d.ok === false) toast.error(`A nota foi aplicada; a divisão pelos itens não: ${d.frase}`);
+      }
+      /* 7 — NOTA-BOLETO-COMPOSTO-01 (PR 1, D1) — "Excluir": as duplicatas NÃO pagas escolhidas são CANCELADAS (motivo + trilha; nunca DELETE),
+         depois do resto gravado; a que não cancelar fica dita (o resto já valeu) */
+      if (excluidosEscolhidos.length) {
+        const nao = await cancelarComMotivo(excluidosEscolhidos.map((l) => l.id), `Duplicata da NF ${numeroDaNota(n.numero)}: excluído na prévia da nota`);
+        if (nao) toast.error(`A nota foi aplicada; ${nao} das ${excluidosEscolhidos.length} duplicata(s) NÃO foram canceladas: cancele na lista.`);
       }
       const total = alvosEscolhidos.length + criados.length;
       toast.success(`${p.rotuloNota} completou ${total} lançamento${total === 1 ? '' : 's'}${r.valor.financiamentoId ? ' · juntados numa compra parcelada' : ''}`, operacao ? {
@@ -1802,17 +1831,18 @@ export function NotaFiscalDialog({
             </DropdownMenu>
           )}
           {mostraEsqueleto ? (
-            <Button type="button" size="sm" className="h-[24px] w-[210px] shrink-0 px-2.5 text-[10.5px]" disabled data-testid="nota-completar-revisar">Procurando no sistema…</Button>
+            <Button type="button" size="sm" className="h-[24px] w-[260px] shrink-0 px-2.5 text-[10.5px]" disabled data-testid="nota-completar-revisar">Procurando no sistema…</Button>
           ) : modoJa ? (<>
             {/* P128b/P163-2 — o principal leva à aba 3 (a prévia campo a campo, que grava); nela o lugar fica reservado (nada se desloca) */}
             {/* mock da nota já lançada (29/10): o principal diz o que vai acontecer ("Aplicar: vincular 1 e criar 1") e leva à conferência campo a
                 campo ("Como vai ficar"), onde se grava */}
             {/* Gabriel 29/10 10:38 — UM botão, que diz o que faz, e grava de qualquer aba (pela prévia "Como vai ficar", montada sempre) */}
-            <Button type="button" size="sm" className="h-[24px] w-[210px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-completar-revisar"
+            <Button type="button" size="sm" className="h-[24px] w-[260px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-completar-revisar"
               disabled={!!ocupado || !!recusaDaCompra || !estadoDaPrevia?.pode || alvosEscolhidos.length + nACriar === 0 || faltasQueContam.length > 0 || posicaoPendente}
+              title={rotuloDoAplicar({ vincular: alvosEscolhidos.length - substituidosEscolhidos.length, substituir: substituidosEscolhidos.length, excluir: excluidosEscolhidos.length, criar: nACriar })}
               onClick={() => estadoDaPrevia?.gravar()}>
               {ocupado === 'atualizar' || estadoDaPrevia?.gravando ? 'Gravando…' : alvosEscolhidos.length + nACriar === 0 ? 'Nada a aplicar'
-                : `Aplicar: ${[alvosEscolhidos.length ? `vincular ${alvosEscolhidos.length}` : '', nACriar ? `criar ${nACriar}` : ''].filter(Boolean).join(' e ')}`}
+                : rotuloDoAplicar({ vincular: alvosEscolhidos.length - substituidosEscolhidos.length, substituir: substituidosEscolhidos.length, excluir: excluidosEscolhidos.length, criar: nACriar })}
             </Button>
           </>
           ) : jaLancada && !bloqueio && caminho === 'criar' ? (
