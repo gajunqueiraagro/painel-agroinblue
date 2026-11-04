@@ -722,6 +722,9 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-modal', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
       { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
       { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
+      /* CADERNO-CAMPO-01 peça 1 — o diálogo "Exportar mês" (as folhas para marcar, a linha do motivo reservada, Cancelar/Gerar PDF) */
+      { nome: 'fechamento-grupo-exportar-mes', url: URL, tamanhos: T, regiao: '[data-testid="exportar-mes"]', antes: async (p) => { await grade(p);
+        await p.locator('button', { hasText: 'Exportar mês (PDF)' }).click(); await p.locator('[data-testid="exportar-mes"]').waitFor(); await p.waitForTimeout(800); } },
     ];
   })(),
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos, modo "Grupos" (dado SINTÉTICO no `tela=pastos`): a lista dos grupos, com os

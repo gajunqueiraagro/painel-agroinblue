@@ -82,6 +82,8 @@ export interface Lancamento {
   precoMedioCabeca?: number;
   observacao?: string;
   motivo?: string;
+  /** CADERNO-CAMPO-01: a identificação do animal (brinco) da coluna `numero_id` — só leitura (a folha de mortes do caderno a imprime). */
+  numeroId?: string;
   rendimento?: number;
   rendimentoCarcaca?: number;
   // legado — remover apenas após Z5/Z6 estabilizados.
