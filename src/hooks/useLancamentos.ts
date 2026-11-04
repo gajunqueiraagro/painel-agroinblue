@@ -137,6 +137,7 @@ function mapRowToLancamento(l: any, profileMap: Record<string, string>): Lancame
     precoMedioCabeca: l.preco_medio_cabeca ?? undefined,
     observacao: l.observacao ?? undefined,
     motivo: (l as any).motivo ?? undefined,
+    numeroId: typeof l.numero_id === 'string' && l.numero_id.trim() ? l.numero_id : undefined,
     abateFrigorifico: (l as any).abate_frigorifico ?? undefined,
     rendimento: l.rendimento ?? undefined,
     rendimentoCarcaca: l.rendimento_carcaca ?? undefined,

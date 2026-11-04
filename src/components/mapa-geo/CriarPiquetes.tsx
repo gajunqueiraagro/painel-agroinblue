@@ -18,14 +18,15 @@ import { Input } from '@/components/ui/input';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Segmentado } from '@/components/ui/segmentado';
 import { TD_REGUA, TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA } from '@/components/ui/regua-tabela';
-import { ChevronDown, Info, Lock, RotateCw, Undo2, Unlock } from 'lucide-react';
+import { ChevronDown, Info, Lock, Pencil, RotateCw, Trash2, Type, Undo2, Unlock } from 'lucide-react';
 import { DicaDoMapa } from '@/components/mapa-geo/DicaDoMapa';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { arranjarZona, type ArranjoDaZona } from '@/lib/mapa/barraQueCabe';
-import { haDoBanco, membrosPorParecenca } from '@/lib/mapa/criarPiquetes';
+import { areaDoBancoHa, haDoBanco, membrosPorParecenca } from '@/lib/mapa/criarPiquetes';
 import { ehDivisaoPequena } from '@/lib/mapa/linhasDosPiquetes';
 import { mesesDeInicio } from '@/lib/mapa/piquetesEmEspera';
 import { rotuloCurtoDaDivisao, type CriarPiquetes } from '@/hooks/useCriarPiquetes';
+import { TOLERANCIA_SEM_PIQUETE_HA } from '@/lib/mapa/desenhoDosPiquetes';
 import type { FormatoDaPraca } from '@/lib/mapa/pracaCentral';
 import { cn } from '@/lib/utils';
 
@@ -107,14 +108,21 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
   }
   acoes.push({ id: 'desfazer', rotulo: 'Desfazer', testid: 'piquetes-desfazer', icone: 'desfazer', disabled: !piq.podeDesfazer, onClick: piq.desfazer, title: 'Desfaz o último passo (Ctrl/Cmd+Z)' });
   /* PIQUETE-POLIGONO-01 (Gabriel 03/11 21:37, "só isto"): no "+ Piquete" a barra tem só o "+ Piquete" (um piquete por clique) e o Desfazer */
+  /* PIQUETE-PRO-01 (Gabriel 04/11 10:34): + "+ Área interna" (recorta os piquetes) e "Restante vira piquete" (fecha os 100% do pasto) */
+  const semPiquete = piq.conta?.semPiqueteHa ?? 0;
   if (poligonos) acoes.splice(0, acoes.length,
     { id: 'piquete', rotulo: '+ Piquete', testid: 'piquetes-mais-piquete', ativo: piq.ferramenta === 'piquete',
       onClick: () => piq.setFerramenta(piq.ferramenta === 'piquete' ? null : 'piquete'),
-      title: 'Desenhe o piquete dentro do pasto: clique os pontos e feche no 1º ponto. Um piquete por clique no botão' },
-    { id: 'desfazer', rotulo: 'Desfazer', testid: 'piquetes-desfazer', icone: 'desfazer', disabled: !piq.podeDesfazer, onClick: piq.desfazer, title: 'Desfaz o último piquete (Ctrl/Cmd+Z)' });
+      title: 'Desenhe o piquete dentro do pasto: clique os pontos e feche no 1º ponto (gruda na borda e no vizinho a 7 px; Alt solta). Um piquete por clique no botão' },
+    { id: 'area-interna', rotulo: '+ Área interna', testid: 'piquetes-mais-area', ativo: piq.ferramenta === 'areaInterna',
+      onClick: () => (piq.ferramenta === 'areaInterna' ? piq.setFerramenta(null) : piq.desenharAreaInterna(piq.tipoArea)),
+      title: 'Desenhe a praça, o corredor ou a benfeitoria dentro do pasto: ela sai dos piquetes e grava como área da fazenda' },
+    { id: 'restante', rotulo: 'Restante vira piquete', testid: 'piquetes-restante', disabled: semPiquete <= TOLERANCIA_SEM_PIQUETE_HA, onClick: piq.restanteViraPiquete,
+      title: semPiquete <= TOLERANCIA_SEM_PIQUETE_HA ? 'O pasto já está todo em piquetes' : `Os ${haBr(semPiquete)} ha sem piquete viram o próximo piquete (já encaixado)` },
+    { id: 'desfazer', rotulo: 'Desfazer', testid: 'piquetes-desfazer', icone: 'desfazer', disabled: !piq.podeDesfazer, onClick: piq.desfazer, title: 'Desfaz o último gesto: ponto, piquete, edição (Ctrl/Cmd+Z, mais de uma vez)' });
 
   const temEscolhas = true;
-  const chave = `${piq.modo}|${acoes.map(a => a.id).join(',')}|${piq.config.formato}|${piq.config.n}|${!!piq.desenho.corredor}|${piq.ferramenta ?? ''}`;
+  const chave = `${piq.modo}|${acoes.map(a => a.id).join(',')}|${piq.config.formato}|${piq.config.n}|${!!piq.desenho.corredor}|${piq.ferramenta ?? ''}|${piq.tipoArea}`;
   const medindo = !arranjo || arranjo.chave !== chave;
   const calcular = useRef<() => void>(() => {});
   calcular.current = () => {
@@ -151,6 +159,8 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
   const cfg = piq.config;
   const dica = piq.ferramenta === 'nomear' ? <>clique nas divisões na ordem desejada: a próxima é <b>{piq.proximaLetra}</b></>
     : piq.ferramenta === 'piquete' ? 'clique os pontos do piquete · fecha no 1º ponto · Backspace tira o último ponto · Esc desiste'
+    : piq.ferramenta === 'areaInterna' ? 'clique os pontos da área · fecha no 1º ponto · ela sai dos piquetes · Esc desiste'
+    : poligonos && piq.editando != null ? 'arraste os cantos (grudam no vizinho) · clique na borda cria canto · botão direito tira · Esc termina'
     : poligonos ? 'cada "+ Piquete" desenha um piquete dentro do pasto · o pasto continua'
     : piq.ferramenta === 'tracar' ? 'clique no mapa para riscar · duplo clique termina a linha · Alt solta o encaixe'
     : piq.ferramenta === 'corredor' ? 'risque o eixo do corredor · duplo clique termina'
@@ -272,6 +282,12 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
               </div>
             )}
 
+            {poligonos && piq.ferramenta === 'areaInterna' && (
+              <div ref={escolhasRef} className="flex flex-none items-center gap-2" data-testid="piquetes-escolhas">
+                <Segmentado altura={20} fonte={9.5} valor={piq.tipoArea} onEscolher={t => piq.desenharAreaInterna(t)}
+                  opcoes={[{ valor: 'praca', rotulo: 'Praça' }, { valor: 'corredor', rotulo: 'Corredor' }, { valor: 'benfeitoria', rotulo: 'Benfeitoria' }]} />
+              </div>
+            )}
             <div className="min-w-0 flex-1" />
             {naLinha.map(a => (
               <DicaDoMapa evitar={LISTA} key={a.id} nome={a.rotulo} frase={a.title} atalho={ATALHO_DA_ACAO[a.id]} desabilitado={!!a.disabled}>
@@ -364,6 +380,7 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
       </div>
 
       {/* a lista das divisões (à direita, abaixo da barra), ordenada pelo nome */}
+      {poligonos ? <ListaDosPiquetes piq={piq} /> : (
       <div className="absolute right-3 top-[64px] z-20 w-[250px] overflow-hidden rounded-md border border-border bg-card shadow-md" data-testid="piquetes-lista" data-sobre-o-mapa>
         <table className="w-full table-fixed border-collapse">
           <colgroup><col className="w-[26px]" /><col /><col className="w-[64px]" /></colgroup>
@@ -442,8 +459,110 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
         </div>
         {piq.avisoDaArea && <p className={`px-1.5 pb-1 text-red-600 ${TXT}`} data-testid="piquetes-aviso-area">{piq.avisoDaArea}</p>}
       </div>
+      )}
 
       <PreviaDoCriarPiquetes piq={piq} />
+    </div>
+  );
+}
+
+/** PIQUETE-PRO-01 (Gabriel 04/11 10:34) — a lista do "+ Piquete": cada piquete com Editar pontos · Renomear · Apagar; as áreas internas (as que já
+ *  existem no pasto e as desenhadas); no rodapé a conta dos 100%: Pasto · Piquetes · Praça/corredores · SEM PIQUETE (vermelho acima de 0,01 ha). */
+function ListaDosPiquetes({ piq }: { piq: CriarPiquetes }) {
+  const conta = piq.conta;
+  const z = conta?.semPiqueteHa ?? 0;
+  const falta = z > TOLERANCIA_SEM_PIQUETE_HA;
+  const internas = piq.desenho.internas ?? [];
+  const COLS = <colgroup><col className="w-[26px]" /><col /><col className="w-[48px]" /><col className="w-[52px]" /></colgroup>;
+  const icone = 'flex h-[16px] w-[16px] flex-none items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground';
+  return (
+    <div className="absolute right-3 top-[64px] z-20 w-[250px] overflow-hidden rounded-md border border-border bg-card shadow-md" data-testid="piquetes-lista" data-sobre-o-mapa>
+      <table className="w-full table-fixed border-collapse">
+        {COLS}
+        <thead className="bg-primary">
+          <tr>
+            <th className={cn(TH_REGUA, 'text-left')}>Div.</th>
+            <th className={cn(TH_REGUA, 'text-left')}>{piq.existente ? 'É a divisão do cadastro' : 'Nome'}</th>
+            <th className={cn(TH_REGUA, 'text-right')}>Área (ha)</th>
+            <th className={TH_REGUA} />
+          </tr>
+        </thead>
+      </table>
+      <div className="h-[160px] overflow-y-auto" data-testid="piquetes-lista-corpo">
+        <table className="w-full table-fixed border-collapse">
+          {COLS}
+          <tbody>
+            {piq.ordemDaLista.map(i => {
+              const d = piq.divisoes[i];
+              if (!d) return null;
+              const nome = piq.nomes[i] ?? '';
+              const editando = piq.editando === i;
+              return (
+                <tr key={`${piq.presos[i]?.ponto.join(',') ?? i}`} className={cn('border-b border-border', editando ? 'bg-blue-50' : piq.escolhida === i && 'bg-violet-50')}
+                  data-testid="piquetes-linha">
+                  <td className={cn(TD_REGUA, 'font-semibold text-violet-700')} title={nome}>{rotuloCurtoDaDivisao(nome, piq.pai?.nome ?? '', i)}</td>
+                  <td className={cn(TD_REGUA_TEXTO, 'py-[1px]')}>
+                    {piq.existente ? (
+                      <SearchableSelect dense semTodos triggerClassName="h-[17px] text-[10px]" value={piq.ligas[i] ?? ''} placeholder="escolha a divisão…"
+                        onValueChange={v => piq.setLiga(i, v || null)}
+                        options={membrosPorParecenca(nome, piq.membrosSemDesenho).map(m => ({ value: m.id, label: m.nome }))} />
+                    ) : (
+                      <Input id={`piquete-nome-${i}`} value={nome} onChange={ev => piq.setNome(i, ev.target.value)} className="h-[17px] px-1 text-[10px]"
+                        title="Nome do pasto novo (o piquete)" data-testid="piquetes-nome" />
+                    )}
+                  </td>
+                  <td className={cn(TD_REGUA_NUM, 'tabular-nums')} data-testid="piquetes-area">{d.geojson ? haBr(d.areaHa) : '—'}</td>
+                  <td className={cn(TD_REGUA, 'px-0.5')}>
+                    <span className="flex items-center justify-end gap-0.5">
+                      <button type="button" className={cn(icone, editando && 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white')} onClick={() => piq.editarPiquete(i)}
+                        title={editando ? 'Terminar a edição dos pontos (Esc)' : 'Editar pontos: arraste os cantos, clique na borda cria ponto, botão direito tira'}
+                        aria-label={`Editar pontos de ${nome}`} data-testid="piquetes-editar"><Pencil className="h-3 w-3" /></button>
+                      <button type="button" className={icone} disabled={piq.existente} onClick={() => document.getElementById(`piquete-nome-${i}`)?.focus()}
+                        title={piq.existente ? 'O nome é o da divisão do cadastro' : 'Renomear'} aria-label={`Renomear ${nome}`} data-testid="piquetes-renomear"><Type className="h-3 w-3" /></button>
+                      <button type="button" className={cn(icone, 'hover:text-red-600')} onClick={() => piq.apagarPiquete(i)} title="Apagar o piquete (Ctrl+Z desfaz)"
+                        aria-label={`Apagar ${nome}`} data-testid="piquetes-apagar"><Trash2 className="h-3 w-3" /></button>
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+            {piq.fixasDoPasto.map(f => (
+              <tr key={f.id} className="border-b border-border bg-amber-50" data-testid="piquetes-linha-fixa">
+                <td className={cn(TD_REGUA, 'text-amber-600')}>●</td>
+                <td className={TD_REGUA_TEXTO} title={`${f.nome || 'Área interna'}: já está no mapa e fica fora dos piquetes`}>{f.nome || 'Área interna'}</td>
+                <td className={cn(TD_REGUA_NUM, 'tabular-nums')}>{haBr(areaDoBancoHa(f.geojson))}</td>
+                <td className={TD_REGUA} />
+              </tr>
+            ))}
+            {internas.map(a => (
+              <tr key={a.id} className="border-b border-border bg-amber-50" data-testid="piquetes-linha-interna">
+                <td className={cn(TD_REGUA, 'text-amber-700')}>■</td>
+                <td className={TD_REGUA_TEXTO} title={`${a.nome}: grava como área da fazenda (${a.tipo === 'corredor' ? 'estrada' : 'benfeitoria'}) e sai dos piquetes`}>{a.nome}</td>
+                <td className={cn(TD_REGUA_NUM, 'tabular-nums')}>{haBr(areaDoBancoHa(a.geojson))}</td>
+                <td className={cn(TD_REGUA, 'px-0.5')}>
+                  <span className="flex items-center justify-end">
+                    <button type="button" className={cn(icone, 'hover:text-red-600')} onClick={() => piq.apagarAreaInterna(a.id)} title="Apagar a área interna (Ctrl+Z desfaz)"
+                      aria-label={`Apagar ${a.nome}`} data-testid="piquetes-apagar-area"><Trash2 className="h-3 w-3" /></button>
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <table className="w-full table-fixed border-collapse">
+        <colgroup><col /><col className="w-[64px]" /></colgroup>
+        <tfoot className="bg-primary text-primary-foreground text-[10px]" data-testid="piquetes-conta">
+          <tr className="h-[18px]"><td className="px-1.5">Pasto</td><td className="px-1.5 text-right font-semibold tabular-nums" data-testid="piquetes-conta-pasto">{conta ? haBr(conta.pastoHa) : '—'}</td></tr>
+          <tr className="h-[18px]"><td className="px-1.5">Piquetes</td><td className="px-1.5 text-right tabular-nums" data-testid="piquetes-soma">{conta ? haBr(conta.piquetesHa) : '—'}</td></tr>
+          <tr className="h-[18px]"><td className="px-1.5" title="As áreas internas dentro do contorno: as que já estão no mapa (a praça no furo do contorno já fica fora do Pasto) e as desenhadas">Praça/corredores</td>
+            <td className="px-1.5 text-right tabular-nums" data-testid="piquetes-conta-internas">{conta ? haBr(conta.internasHa) : '—'}</td></tr>
+          <tr className={cn('h-[20px] font-bold', falta && 'bg-red-600')}>
+            <td className="px-1.5">SEM PIQUETE</td>
+            <td className="px-1.5 text-right tabular-nums" data-testid="piquetes-sem-piquete" data-falta={falta ? '1' : undefined}>{conta ? haBr(z) : '—'}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }

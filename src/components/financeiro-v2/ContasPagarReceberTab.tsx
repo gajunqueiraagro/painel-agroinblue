@@ -35,7 +35,8 @@ import { CprFluxoPrevisto } from '@/components/financeiro-v2/CprFluxoPrevisto';
 import { esperarGraficoNoDom, AVISO_PDF_SEM_GRAFICO, TAMANHO_DO_GRAFICO_NO_PDF } from '@/lib/pdf/cpr/graficoDoDom';
 import { lerEstimadosDaCpr } from '@/lib/financeiro/estimadosDaCprBanco';
 import { origensPresentes, SEM_ESTIMADOS, tituloDoEstimado } from '@/lib/financeiro/estimadosDaCpr';
-import { DatePicker } from '@/components/ui/date-picker';
+import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
+import { dataCurta } from '@/lib/periodo/intervaloDeDatas';
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, ehTransferenciaCpr, chaveDaLinhaCpr, type ContaCpr,
@@ -380,12 +381,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   const periodo = useMemo<PeriodoCpr>(
     () => (atalho === 'datas' && datas ? datas : periodoDoAtalho(atalho === 'datas' ? 'atual' : atalho, hojeIso)),
     [atalho, datas, hojeIso]);
-  /* editar "de" ou "até" parte das datas que estão na tela e passa a "Escolher datas"; campo esvaziado não muda nada */
-  const editarData = (campo: 'de' | 'ate', v: string) => {
-    if (!v) return;
-    setDatas({ ...periodo, [campo]: v });
-    setAtalho('datas');
-  };
+  /* UI-PERIODO-01 — "Escolher datas" é o componente único de período (atalhos + dois calendários): aplicar passa a "Escolher datas" */
+  const escolherDatas = (i: { de: string; ate: string }) => { setDatas({ de: i.de, ate: i.ate }); setAtalho('datas'); };
   const escolherAtalho = (a: AtalhoCpr) => { if (a === 'datas') setDatas(periodo); setAtalho(a); };
 
   // ── Leitura ────────────────────────────────────────────────────────────────
@@ -1036,15 +1033,20 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
       valor={atalho}
       onEscolher={escolherAtalho}
       altura={22}
-      opcoes={ATALHOS_CPR.map((a) => ({ valor: a.valor, rotulo: a.rotulo }))}
+      /* UI-PERIODO-01 (regra de 26/10): os 3 botões de mês ficam; o "Escolher datas" é o gatilho do componente (ctlDatas, logo ao lado) */
+      opcoes={ATALHOS_CPR.filter((a) => a.valor !== 'datas').map((a) => ({ valor: a.valor, rotulo: a.rotulo }))}
     />
   );
+  /* UI-PERIODO-01 — o gatilho do componente único: diz "Escolher datas" nos 3 atalhos de mês e o intervalo quando as datas foram
+     escolhidas; o intervalo em vigor fica sempre à vista, pequeno, ao lado (as datas que o período cobre) */
   const ctlDatas = (
     <>
-      <span className="text-[10px] text-muted-foreground">de</span>
-      <span data-testid="cpr-de"><DatePicker size="compact" className="w-[108px]" value={periodo.de} onChange={(v) => editarData('de', v)} /></span>
-      <span className="text-[10px] text-muted-foreground">até</span>
-      <span data-testid="cpr-ate"><DatePicker size="compact" className="w-[108px]" value={periodo.ate} onChange={(v) => editarData('ate', v)} /></span>
+      <span data-testid="cpr-datas">
+        <SeletorDePeriodo testid="cpr-periodo" valor={atalho === 'datas' ? periodo : null} onChange={escolherDatas} rotuloVazio="Escolher datas"
+          padrao={periodoDoAtalho('atual', hojeIso)}
+          className={atalho === 'datas' ? 'border-primary bg-primary text-primary-foreground hover:border-primary [&_svg]:text-primary-foreground' : undefined} />
+      </span>
+      <span className="text-[10px] tabular-nums text-muted-foreground" data-testid="cpr-intervalo">{dataCurta(periodo.de)} – {dataCurta(periodo.ate)}</span>
     </>
   );
   /* o seletor de conta: cada opção diz o total A PAGAR e a contagem daquela conta no recorte atual */

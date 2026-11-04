@@ -168,6 +168,14 @@ const CENARIOS = [
     /* MAPA-02b — trocar o fundo não move nada (os créditos têm lugar e altura fixos) */
     ['fundo mapa', mapaCamada('Mapa')], ['fundo satélite', mapaCamada('Satélite')],
   ] },
+  /* MAPA-IMPRESSAO-01 — no diálogo "Imprimir mapa", trocar o tamanho e a imagem não move nada (as áreas de mensagem têm altura fixa) */
+  { nome: 'mapa-imprimir', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
+    antes: async (p) => { await p.locator('[data-testid="mapa-imprimir"]').click(); await p.locator('[data-testid="imprimir-baixar"]').waitFor(); await espera(p, 400); },
+    estados: [
+      ['tamanho A1', async (p) => { await p.locator('[data-testid="imprimir-tamanho"] button', { hasText: 'A1' }).click(); await espera(p, 300); }],
+      ['tamanho A0', async (p) => { await p.locator('[data-testid="imprimir-tamanho"] button', { hasText: 'A0' }).click(); await espera(p, 300); }],
+      ['sem satélite', async (p) => { await p.locator('[data-testid="imprimir-imagem"] button', { hasText: 'Sem satélite' }).click(); await espera(p, 300); }],
+    ] },
   /* MAPA-GLOBAL-01 — trocar a visão, o filtro, a aba do gráfico e a ordenação não desloca a barra, os cards nem as colunas */
   { nome: 'mapa-global', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], estados: [
     ['ordena por kg/ha', async (p) => { await p.locator('[data-testid="global-tabela-fazendas"] th', { hasText: 'kg/ha' }).first().click(); await espera(p, 300); }],
@@ -436,6 +444,14 @@ const CENARIOS = [
       ['outra atividade', noLugar('[data-testid="analise-tabela-linha-1"]')]] },
   { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
   /* VISAO-GERAL-02 — escolher uma atividade nas pílulas (e voltar a "Todas") e abrir a distribuição por fazenda não move nada acima */
+  /* UI-PERIODO-01 — com o popup aberto, nada do popup se desloca ao escolher atalho, dia, mês do calendário ou a grade de anos (a grade
+     abre POR CIMA dos calendários, na mesma altura) */
+  { nome: 'periodo', url: 'tela=periodo&abrir=1&modo=datas&ativ=duas', antes: async (p) => { await p.locator('[data-testid="seletor-de-periodo-popup"]').waitFor(); await espera(p, 300); }, estados: [
+    ['clique num dia (início)', clicar('[data-testid="seletor-de-periodo-cal-inicio"] [data-dia="2026-10-10"]')],
+    ['mês seguinte no calendário', clicar('[data-testid="seletor-de-periodo-cal-fim"] [aria-label="próximo mês"]')],
+    ['atalho Esta safra · Lavoura', clicar('[data-atalho="esta-safra-agricultura"]')],
+    ['atalho Últimos 12 meses', clicar('[data-atalho="ultimos-12"]')],
+    ['Selecionar o ano', clicar('[data-atalho="selecionar-ano"]')]] },
   { nome: 'visao-geral-02', url: 'tela=visao-geral-02', antes: (p) => espera(p, 2500), estados: [
     /* `noTopo`: as pílulas e o link ficam abaixo da dobra e o clique rola a página até eles; a medida volta ao topo para comparar
        o LUGAR das coisas, não a rolagem (a área dos blocos guarda a altura de "Todas": filtrar não encolhe a página) */
