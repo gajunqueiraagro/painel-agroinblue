@@ -12,7 +12,8 @@ import {
 } from '@/lib/conciliacao/procurarNoHistorico';
 
 const M = vi.hoisted(() => ({ rpc: vi.fn() }));
-vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: M.rpc } }));
+vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: M.rpc,
+  from: () => { const q = { select: () => q, eq: () => q, in: () => Promise.resolve({ data: [], error: null }) }; return q; } } }));
 
 import { ProcurarNoHistorico } from './ProcurarNoHistorico';
 
@@ -79,8 +80,9 @@ describe('o componente', () => {
   it('as colunas da casa, na ordem; o "até" vai como o fim do mês seguinte', async () => {
     montar();
     await screen.findAllByTestId('procurar-historico-achado');
+    /* CONC-SUGESTOES-TABELA-01 (Gabriel 04/11 06:36): as colunas da lista do Financeiro, as mesmas das sugestões */
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent?.replace(/[↑↓]/g, ''))).toEqual(
-      ['Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Subcentro', 'Faz.', 'Conta', 'Valor', 'Status', '']);
+      ['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Faz.', 'NF', 'Valor', 'Status', 'Motivo', '']);
     expect(M.rpc.mock.calls[0][1]).toMatchObject({ p_ate: '2031-11-30', p_de: '2031-01-01' });
     /* a ordem padrão diz ↓ em lugar nenhum (é a data de referência), e a coluna clicada mostra a seta */
     fireEvent.click(screen.getByTestId('procurar-ordenar-valor'));
@@ -109,6 +111,28 @@ describe('o componente', () => {
     expect(onCasar).toHaveBeenLastCalledWith(expect.objectContaining({ lancamentoId: 'aberto-bb' }), false);
     fireEvent.click(within(linhas[0]).getByTestId('procurar-casar-trocando'));
     expect(onCasar).toHaveBeenLastCalledWith(expect.objectContaining({ lancamentoId: 'aberto-itau' }), true);
+  });
+
+  /* CONC-SUGESTOES-TABELA-01 — as caixinhas (com `selecao`): só o EM ABERTO se marca (o pago é modelo, nunca casa de novo); marcar entrega o
+     achado e se troca a conta; o marcado fica com o fundo da linha marcada da lista do Financeiro */
+  it('a caixinha só no em aberto; marcar entrega o achado e a troca de conta; sem `selecao` (a estação), nenhuma caixinha', async () => {
+    const marcados = new Set<string>();
+    const alternar = vi.fn((a: AchadoDoHistorico) => { if (marcados.has(a.lancamentoId)) marcados.delete(a.lancamentoId); else marcados.add(a.lancamentoId); });
+    const { unmount } = render(<ProcurarNoHistorico clienteId="cli" movimento={MOV} onCriarIgual={vi.fn()} onCasar={vi.fn()}
+      contaDoExtrato={{ id: BB, nome: 'Banco do Brasil' }} selecao={{ marcado: (id) => marcados.has(id), alternar }} />);
+    fireEvent.click(screen.getByTestId('procurar-historico-botao'));
+    const linhas = await screen.findAllByTestId('procurar-historico-achado');
+    expect(linhas.map((l) => within(l).queryAllByRole('checkbox').length)).toEqual([1, 1, 0, 0]);
+    expect(within(linhas[2]).getByTestId('caixinha-fora').getAttribute('title')).toBe('Pago: não se casa de novo — use "Criar igual".');
+    fireEvent.click(within(linhas[0]).getByRole('checkbox'));
+    expect(alternar).toHaveBeenLastCalledWith(expect.objectContaining({ lancamentoId: 'aberto-itau' }), true);
+    fireEvent.click(within(linhas[1]).getByRole('checkbox'));
+    expect(alternar).toHaveBeenLastCalledWith(expect.objectContaining({ lancamentoId: 'aberto-bb' }), false);
+    unmount();
+    render(<ProcurarNoHistorico clienteId="cli" movimento={MOV} onCriarIgual={vi.fn()} onCasar={vi.fn()} contaDoExtrato={{ id: BB, nome: 'Banco do Brasil' }} />);
+    fireEvent.click(screen.getByTestId('procurar-historico-botao'));
+    const semSelecao = await screen.findAllByTestId('procurar-historico-achado');
+    expect(semSelecao.every((l) => within(l).queryAllByRole('checkbox').length === 0)).toBe(true);
   });
 
   it('sem quem case (a estação): tudo é "Criar igual", como antes', async () => {

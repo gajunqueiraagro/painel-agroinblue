@@ -87,6 +87,14 @@ const COR_TRANSFERENCIA = 'text-foreground';
 const COR_SAIDA = 'text-destructive';
 const COR_ENTRADA = 'text-success';
 
+/**
+ * CONC-SUGESTOES-TABELA-01 — o valor de uma linha que JÁ VEM ASSINADO (as Sugestões para casar e o Procurar no histórico: o sinal é o
+ * do lançamento na conta do extrato). A MESMA regra de cor da lista do Financeiro: negativo vermelho, o resto verde; o texto pelo `formatMoeda`.
+ */
+export function valorAssinadoDaLinha(valorAssinado: number): { texto: string; classe: string } {
+  return { texto: formatMoeda(valorAssinado), classe: valorAssinado < 0 ? COR_SAIDA : COR_ENTRADA };
+}
+
 /** O valor de uma linha de lista: o texto e a cor, decididos juntos. */
 export interface ValorDaLinha {
   texto: string;

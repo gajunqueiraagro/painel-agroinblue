@@ -943,7 +943,51 @@ if (tela === 'mesclar') {
     { tipo: 'nome_valor', motivo: 'nome · valor diferente · vencido set', diasDiff: 23, vencido: true, valorDiferente: true,
       lancamentos: [cs('n1', '2031-09-12', -12345678.9)] },
   ];
-  if (v === 'guariroba') {
+  if (v === 'rural' || v === 'ruralmuitas') {
+    /* CONC-SUGESTOES-TABELA-01 — o caso do Gabriel (04/11 06:36), SINTÉTICO: BB 16/10/2026, "PAGAMENTO DE BOLETO - FORNECEDOR RURAL", −1.265,22.
+       As sugestões (o mesmo fornecedor com valor diferente; a soma de 2) e o histórico (em aberto e pago), com o pagamento, a fazenda e a NF
+       de cada um lidos pelos ids (`lerComplementoDasLinhas`). Nomes e números inventados. */
+    const FR = 'Fornecedor Rural Sintético Ltda';
+    const c = (id: string, venc: string, valor: number, o: Partial<CandidatoSugestao> = {}): CandidatoSugestao => ({ lancamento_id: id, valor_assinado: valor,
+      data_vencimento: venc, competencia: '2026-10-01', descricao: 'Sal mineral proteinado para recria e engorda — lote de outubro', fornecedor: FR,
+      favorecido_id: 'fr', status_transacao: 'programado', ja_conciliado: false, ...o });
+    const SUGS_R: Sugestao[] = [
+      { tipo: 'mesmo_fornecedor', motivo: 'mesmo fornecedor · valor difere: programado 1.300,00', diasDiff: 1, vencido: false, valorDiferente: true,
+        lancamentos: [c('r1', '2026-10-15', -1300)] },
+      { tipo: 'soma', motivo: 'soma de 2 · 4 dias', diasDiff: 4, vencido: false, valorDiferente: false,
+        lancamentos: [c('r2', '2026-10-12', -632.61, { descricao: 'Sal mineral 1/2' }), c('r3', '2026-10-20', -632.61, { descricao: 'Sal mineral 2/2', status_transacao: 'previsto' })] },
+      /* `ruralmuitas` (AJUSTE 07:55): 14 sugestões a mais, com textos maiores que as colunas — a lista rola só DENTRO dela */
+      ...(v === 'ruralmuitas' ? Array.from({ length: 14 }, (_, i): Sugestao => ({ tipo: 'nome_valor', motivo: `nome · valor diferente · candidato sintético ${i + 1}`,
+        diasDiff: i, vencido: false, valorDiferente: true,
+        lancamentos: [c(`m${i}`, `2026-10-${String(1 + i).padStart(2, '0')}`, -(1000 + i * 37.5), {
+          descricao: `Lançamento sintético de nome bem comprido para medir o corte da coluna de descrição ${i + 1}`,
+          fornecedor: `Fornecedor Sintético de Nome Bem Comprido Agropecuária e Comércio ${i + 1} Ltda` })] })) : []),
+    ];
+    const COMPL = [
+      { id: 'r1', data_pagamento: null, fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.123.456' },
+      { id: 'r2', data_pagamento: null, fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.123.457' },
+      { id: 'r3', data_pagamento: null, fazenda_id: 'fz1', tipo_documento: null, numero_documento: null },
+      { id: 'h1', data_pagamento: null, fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.123.458' },
+      { id: 'h2', data_pagamento: '2026-09-16', fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.120.001' },
+    ];
+    const lin = (o: Record<string, unknown>) => ({ lancamento_id: 'x', data_pagamento: null, data_vencimento: '2026-10-18', data_competencia: '2026-10-01',
+      status_transacao: 'programado', conciliado: false, banco: null, descricao: 'Sal mineral proteinado', fornecedor_id: 'fr', fornecedor: FR,
+      plano_conta_id: 'p1', centro: 'Nutrição', subcentro: 'Suplementação', fazenda_id: 'fz1', fazenda: 'Fazenda Exemplo Retiro', fazenda_codigo: 'RET',
+      conta_bancaria_id: 'bb', conta: 'Banco do Brasil', valor: -1265.22, onde: ['fornecedor'], ...o });
+    const HIST_R = { total: v === 'ruralmuitas' ? 16 : 2, resumo: null, achados: [
+      ...(v === 'ruralmuitas' ? Array.from({ length: 14 }, (_, i) => lin({ lancamento_id: `hm${i}`, data_vencimento: `2026-09-${String(1 + i).padStart(2, '0')}`,
+        descricao: `Histórico sintético de nome comprido para medir o corte ${i + 1}`, valor: -(900 + i * 41.3),
+        ...(i % 3 === 0 ? { status_transacao: 'realizado', data_pagamento: `2026-09-${String(2 + i).padStart(2, '0')}`, conciliado: true } : {}) })) : []),
+      lin({ lancamento_id: 'h1' }),
+      lin({ lancamento_id: 'h2', status_transacao: 'realizado', data_pagamento: '2026-09-16', data_vencimento: '2026-09-15', data_competencia: '2026-09-01',
+        valor: -1240.5, conciliado: true, banco: 'PAGAMENTO DE BOLETO - FORNECEDOR RURAL' }),
+    ] };
+    const EXT_R = { data: '2026-10-16', historico: 'PAGAMENTO DE BOLETO - FORNECEDOR RURAL', valor: -1265.22 };
+    g.__bancoBancada = { from: (t: string) => (t === 'financeiro_lancamentos_v2' ? COMPL : t === 'fazendas' ? [{ id: 'fz1', nome: 'Fazenda Exemplo Retiro', codigo: 'RET' }] : []),
+      rpc: (fn: string) => fn === 'fn_conciliacao_historico_buscar' ? HIST_R : null };
+    montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} onCasarSelecionados={() => {}} sugestoes={SUGS_R} clienteId="cli"
+      onCriarIgual={() => {}} onCasarDoHistorico={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" extrato={EXT_R} />);
+  } else if (v === 'guariroba') {
     /* P153b — O CASO que abriu a frente, SINTÉTICO: BB 07/10, "PAGAMENTO FATURA DE ÁGUA - AGUAS GUARIROBA SA", −142,72; a sugestão nova
        ("mesmo fornecedor · valor difere: previsto 500,00", calculada pelo motor de verdade) e o histórico com os quatro casos: em aberto
        da mesma conta (Casar), em aberto de outra conta (Casar e trocar conta), pago (Criar igual) e conciliado de outra conta (o selo). */

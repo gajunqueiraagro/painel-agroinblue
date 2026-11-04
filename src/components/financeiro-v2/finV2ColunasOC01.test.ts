@@ -9,15 +9,21 @@ import { resolve } from 'node:path';
 
 const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
 const css = readFileSync(resolve(__dirname, '../../index.css'), 'utf8');
+/* CONC-SUGESTOES-TABELA-01 — as peças da tabela (casca, linha, células) moram em `TabelaDaLista.tsx`; a tela as usa */
+const peca = readFileSync(resolve(__dirname, 'TabelaDaLista.tsx'), 'utf8');
 
-const colgroup = tela.slice(tela.indexOf('<colgroup>'), tela.indexOf('</colgroup>'));
+/* CONC-SUGESTOES-TABELA-01 — as larguras são o array `larguras={[…]}` da tela (o `colgroup` é da casca) */
+const colgroup = tela.slice(tela.indexOf('<TabelaDaLista larguras={['), tela.indexOf(']} cabecalho={<>'));
 /** FIN-V2-COLUNAS-02 — as larguras do colgroup num modo: 'normal', 'amp' (Ampliado com as contas) e 'ampSem' (Ampliado com o chip
-    das contas desligado). `modoIntensivo ? (contasAmpliado ? A : B) : C`, `modoIntensivo ? A : C` e `{modoIntensivo && contasAmpliado && <col …/>}`. */
+    das contas desligado). `modoIntensivo ? (contasAmpliado ? A : B) : C,`, `modoIntensivo ? A : C,` e `...(modoIntensivo && contasAmpliado ? [92] : []),`. */
 type Modo = 'normal' | 'amp' | 'ampSem';
 function larguras(modo: Modo): number[] {
   const out: number[] = [];
-  const re = /(\{modoIntensivo && contasAmpliado && )?<col style=\{\{ width: (?:modoIntensivo \? \(contasAmpliado \? (\d+) : (\d+)\) : (\d+)|modoIntensivo \? (\d+) : (\d+)|(\d+)) \}\} \/>/g;
-  for (const m of colgroup.matchAll(re)) {
+  const semComentarios = colgroup.replace(/\/\*[\s\S]*?\*\//g, '');
+  const re = /^\s*(?:(\.\.\.\(modoIntensivo && contasAmpliado \? \[)(\d+)\] : \[\]\)|modoIntensivo \? \(contasAmpliado \? (\d+) : (\d+)\) : (\d+)|modoIntensivo \? (\d+) : (\d+)|(\d+)),\s*$/gm;
+  for (const x of semComentarios.matchAll(re)) {
+    /* o mesmo formato de antes: m[1] = a coluna só do Ampliado com as contas; m[2..4] o a três; m[5..6] o a dois; m[7] fixa */
+    const m = x[1] ? [x[0], x[1], undefined, undefined, undefined, undefined, undefined, x[2]] : [x[0], undefined, x[3], x[4], x[5], x[6], x[7], x[8]];
     if (m[1] && modo !== 'amp') continue;
     if (m[2]) out.push(Number(modo === 'normal' ? m[4] : modo === 'amp' ? m[2] : m[3]));
     else if (m[5]) out.push(Number(modo === 'normal' ? m[6] : m[5]));
@@ -28,7 +34,7 @@ function larguras(modo: Modo): number[] {
 const soma = (v: number[]) => v.reduce((a, b) => a + b, 0);
 
 describe('a coluna Vínc. (FIN-V2-COLUNAS-02; era "OC")', () => {
-  const linha = tela.slice(tela.indexOf('<tr key={l.id}'), tela.indexOf('<MenuDaLinhaSobDemanda', tela.indexOf('<tr key={l.id}')));
+  const linha = tela.slice(tela.indexOf('<LinhaDaLista key={l.id}'), tela.indexOf('<MenuDaLinhaSobDemanda', tela.indexOf('<LinhaDaLista key={l.id}')));
   const celulaProduto = linha.slice(linha.indexOf('title={isParcelaFinanciamento ? `Parcela de financiamento'), linha.indexOf('title={fornNome || \'\'}'));
   const celulaVinc = linha.slice(linha.indexOf('data-testid="celula-oc"'), linha.indexOf('title={isParcelaFinanciamento ? `Parcela de financiamento'));
   it('a busca sabe achar: a célula do Produto e a dos vínculos foram recortadas da linha', () => {
@@ -46,14 +52,18 @@ describe('a coluna Vínc. (FIN-V2-COLUNAS-02; era "OC")', () => {
   });
   /* ⚠ CONTRATO MUDOU NO FIN-V2-DESEMPENHO-01b: as datas em dd/mm/aaaa (40→46 cada); a cadeia congelada passou a 0/28/74/120 */
   it('vem depois das congeladas e NÃO é sticky; a cadeia é 0/28/74/120', () => {
-    expect(linha.indexOf('data-testid="celula-oc"')).toBeGreaterThan(linha.indexOf('sticky left-[120px]'));  /* FIN-V2-DESEMPENHO-01b: datas dd/mm/aaaa, 40→46 */
+    expect(linha.indexOf('data-testid="celula-oc"')).toBeGreaterThan(linha.indexOf('<CelulaData iso={l.data_pagamento} coluna="pgto" />'));  /* FIN-V2-DESEMPENHO-01b: datas dd/mm/aaaa, 40→46 */
     expect(/<td className="[^"]*sticky[^"]*" data-testid="celula-oc"/.test(linha)).toBe(false);
-    for (const left of ['left-0', 'left-[28px]', 'left-[74px]', 'left-[120px]']) expect(linha, left).toContain(`sticky ${left}`);
-    for (const velho of ['left-[42px]', 'left-[82px]', 'left-[122px]']) expect(tela, velho).not.toContain(`sticky ${velho}`);
-    expect(tela.match(/sticky left-\[(28|74|120)px\]/g)?.length).toBe(6);
-    expect(tela.match(/sticky left-\[(68|108)px\]/g)).toBeNull();
+    /* CONC-SUGESTOES-TABELA-01 — a caixinha e as datas congeladas são as peças (`CelulaCaixinha`, `CelulaData` com a cadeia em `ESQUERDA_DA_DATA`) */
+    expect(linha).toContain('<CelulaCaixinha ');
+    for (const c of ['comp', 'venc', 'pgto']) expect(linha, c).toContain(`coluna="${c}"`);
+    expect(peca).toContain('sticky left-0 z-10 bg-background');
+    expect(peca).toContain("{ comp: 'left-[28px]', venc: 'left-[74px]', pgto: 'left-[120px]' }");
+    for (const velho of ['left-[42px]', 'left-[82px]', 'left-[122px]']) expect(tela + peca, velho).not.toContain(velho);
+    expect(tela.match(/sticky left-\[(28|74|120)px\]/g)?.length).toBe(3);   // os três `th` congelados
+    expect((tela + peca).match(/left-\[(68|108)px\]/g)).toBeNull();
     expect(larguras('normal').slice(0, 4)).toEqual([28, 46, 46, 46]);
-    expect(tela).toContain('>Vínc.</th>');
+    expect(tela).toContain('>Vínc.</ThDaLista>');
   });
 });
 
@@ -74,7 +84,7 @@ describe('as larguras (FIN-V2-COLUNAS-02)', () => {
     expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 17 : 15}');
   });
   it('as contas do Ampliado obedecem ao chip, no colgroup, no cabeçalho e na linha', () => {
-    expect(colgroup.match(/\{modoIntensivo && contasAmpliado && <col style=\{\{ width: 92 \}\} \/>\}/g)?.length).toBe(2);
+    expect(colgroup.match(/\.\.\.\(modoIntensivo && contasAmpliado \? \[92\] : \[\]\),/g)?.length).toBe(2);
     expect(tela.match(/\{modoIntensivo && contasAmpliado && \(/g)?.length).toBe(4);
     expect(tela).not.toMatch(/\{modoIntensivo && \(\s*<t[hd]/);
   });
@@ -85,12 +95,13 @@ describe('as fontes — exceção ao piso só nesta lista, por classe da tabela 
     expect(css).toMatch(/\.table-financeiro td\.celula-status,\s*\.table-financeiro td\.celula-status \* \{\s*font-size: 8px !important;/);
     expect(css).toMatch(/\.table-financeiro td\.celula-classe,\s*\.table-financeiro td\.celula-classe \* \{\s*font-size: 8\.5px !important;/);
     expect(tela.match(/<td className="celula-classe truncate /g)?.length).toBe(1);   // FIN-V2-COLUNAS-02: uma coluna, a Classificação
-    expect(tela).toContain('<td className="celula-status px-0.5 py-1 text-center align-middle leading-tight"');
+    expect(peca).toContain('<td className="celula-status px-0.5 py-1 text-center align-middle leading-tight"');
+    expect(tela).toContain('<CelulaStatus ');
     /* forma e cor continuam do dono */
-    expect(tela).toContain('<span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>');
+    expect(peca).toContain('<span className={cn(STATUS_PILULA_BASE, st.stPilula)} data-status={st.stKey}>{st.stLabel}</span>');
   });
   it('o status legado que não cabe corta numa linha, com o rótulo no `title`', () => {
-    expect(tela).toContain("<span className={cn('block truncate pr-0.5', stColor, stEstagio && 'font-semibold')} data-status={stKey}>{stLabel}</span>");
+    expect(peca).toContain("<span className={cn('block truncate pr-0.5', st.stColor, st.stEstagio && 'font-semibold')} data-status={st.stKey}>{st.stLabel}</span>");
     /* PARC-LIVRES-01 passo 3 — o `title` do Status passou a levar também a ORIGEM (que saiu da coluna): o rótulo do legado continua nele */
     expect(tela).toContain("title={[stTitle ?? (stPilula || stEstagio ? null : stLabel), icone ? `origem: ${icone.significado}` : null].filter(Boolean).join(' · ') || undefined}");
   });
@@ -99,14 +110,15 @@ describe('as fontes — exceção ao piso só nesta lista, por classe da tabela 
 /* ── PARC-LIVRES-01 passo 3 — o clipe no lugar do marcador de origem, e a coluna Doc. pela função única ───────────────────── */
 describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
   it('a coluna de 14px é a do CLIPE, ENTRE VALOR E DOC. (item 6), no cabeçalho, na linha e no colgroup — também no Ampliado', () => {
-    const linha = tela.slice(tela.indexOf('<tr key={l.id}'), tela.indexOf('<DropdownMenuTrigger asChild>', tela.indexOf('<tr key={l.id}')));
+    const linha = tela.slice(tela.indexOf('<LinhaDaLista key={l.id}'), tela.indexOf('<MenuDaLinhaSobDemanda', tela.indexOf('<LinhaDaLista key={l.id}')));
     const ordem = (trecho: string, ...marcas: string[]) => marcas.map(m => trecho.indexOf(m));
-    const [valor, clipe, docu] = ordem(linha, 'celula-valor', 'data-testid="celula-clipe"', 'data-testid="celula-doc"');
+    /* CONC-SUGESTOES-TABELA-01 — Valor e Doc. são as peças `CelulaValor` / `CelulaDoc` */
+    const [valor, clipe, docu] = ordem(linha, '<CelulaValor ', 'data-testid="celula-clipe"', '<CelulaDoc ');
     expect(valor).toBeGreaterThan(-1);
     expect(clipe).toBeGreaterThan(valor);
     expect(docu).toBeGreaterThan(clipe);
-    expect(linha.slice(clipe, docu).match(/<td/g)?.length).toBe(1);   // só o `<td` do próprio Doc.: nada entre os dois
-    expect(linha.slice(valor, clipe).match(/<td/g)?.length).toBe(1);  // e só o do clipe depois do Valor
+    expect(linha.slice(clipe, docu).match(/<td|<Celula/g)).toBeNull();          // nada entre o clipe e o Doc.
+    expect(linha.slice(valor, clipe).match(/<td|<Celula/g)?.length).toBe(2);    // o próprio Valor e o `<td` do clipe
     expect(/<td className="[^"]*sticky[^"]*" data-testid="celula-clipe"/.test(linha)).toBe(false);
     const [thValor, thClipe, thDoc] = ordem(tela, "toggleSort('valor')}", 'aria-label="Documentos" title="Documentos"', "toggleSort('doc')}");
     expect(thClipe).toBeGreaterThan(thValor);
@@ -125,12 +137,14 @@ describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
   });
   it('a coluna Doc. escreve o texto do DONO (`docDaLinha`), nunca o número cru; a legenda dos ícones saiu', () => {
     expect(tela).toContain('const doc = docDaLinha(lancamentoParaDoc(l), documentosPorLancamento?.get(l.id));');
-    expect(tela).toContain("{doc.rotulo || '-'}</td>");
+    expect(tela).toContain('<CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />');
+    expect(peca).toContain("{rotulo || '-'}</td>");
     expect(tela).not.toContain('{formatNF(l)}</td>');
     expect(tela).not.toContain('LEGENDA_ICONES');
   });
   it('PARC-CONTRATO-01 item 4 — o `title` da célula Doc. é o do DONO (`doc.titulo`: no genérico, "Documento N"), nunca montado na tela', () => {
-    expect(tela).toContain('title={doc.titulo || undefined}>{doc.rotulo ||');
+    expect(tela).toContain('<CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />');
+    expect(peca).toContain('title={titulo || undefined}>{rotulo ||');
     expect(tela).not.toContain('· nota da compra`');
   });
   it('item 4 — a CPR (e por ela o PDF e o Excel) escreve o Doc pelo MESMO dono, não pelo `documento_formatado` da view', () => {
