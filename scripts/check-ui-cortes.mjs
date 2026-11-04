@@ -235,6 +235,9 @@ const CENARIOS = [
   { nome: 'mapa-geo-fundo-mapa', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: mapaCamada('Mapa') },
   { nome: 'mapa-geo-sem-satelite', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS },
   { nome: 'mapa-geo-sem-satelite-painel', url: 'tela=mapa-geo&fundo=sem-satelite', tamanhos: MAPA_TAMANHOS, antes: mapaPasto('P_01') },
+  /* MAPA-IMPRESSAO-01 — o diálogo "Imprimir mapa" aberto pelo botão da barra do Gestor (sem a chave Esri na bancada: o satélite desabilitado com o motivo) */
+  { nome: 'mapa-imprimir', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]', antes: async (p) => {
+    await p.locator('[data-testid="mapa-imprimir"]').click(); await p.locator('[data-testid="imprimir-baixar"]').waitFor(); await p.waitForTimeout(400); } },
   { nome: 'mapa-geo-operacao', url: 'tela=mapa-geo', tamanhos: MAPA_TAMANHOS, antes: clicar('button:has-text("Operação")') },
   /* MAPA-02f-b — a infraestrutura como PONTOS (dados sintéticos: cocho, 2 bebedouros, sede com nome longo, energia): o ícone clicado abre o
      painel de leitura; Editar; o Adicionar › Infraestrutura › Cocho entra no modo de colocar (o aviso) e o clique no mapa abre o formulário;
