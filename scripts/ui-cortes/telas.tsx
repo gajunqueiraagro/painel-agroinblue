@@ -609,7 +609,12 @@ if (tela === 'mesclar') {
   const fz = q.get('fz');
   const GLOBAL = { id: '__global__', nome: 'Global', owner_id: '' };
   const uma = FAZENDAS_VG02.find((f) => f.id === fz);
-  g.__fazendaBancada = { fazendas: FAZENDAS_VG02, fazendasComPecuaria: FAZENDAS_VG02.filter((f) => f.tem_pecuaria), fazendaAtual: uma ?? GLOBAL,
+  /* VISAO-GERAL-04 — `&muitas=1`: mais 4 fazendas com pecuária e sem dado (miniaturas "sem mapa"), para provar que a coluna da direita não
+     cresce além da esquerda (as miniaturas rolam no card) */
+  const extras = q.get('muitas') === '1' ? ['fD', 'fE', 'fF', 'fG'].map((id, i) => ({ id, nome: `Faz. Exemplo ${i + 4}`, codigo: `EX${i + 4}`, cliente_id: 'cli',
+    tem_pecuaria: true, status_operacional: 'ativa' })) : [];
+  const comPec = [...FAZENDAS_VG02.filter((f) => f.tem_pecuaria), ...extras];
+  g.__fazendaBancada = { fazendas: [...FAZENDAS_VG02, ...extras], fazendasComPecuaria: comPec, fazendaAtual: uma ?? GLOBAL,
     isGlobal: !uma, fazendaId: uma ? uma.id : '__global__', setFazendaAtual: () => {}, loading: false };
   g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }],
     isAdmin: true, perfil: 'admin_agroinblue', loading: false };

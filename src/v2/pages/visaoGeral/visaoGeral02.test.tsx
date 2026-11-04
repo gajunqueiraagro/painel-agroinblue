@@ -17,7 +17,8 @@ const { safraDoMes } = await import('./agriculturaDaVisao');
 
 /* VISAO-GERAL-02 (mock aprovado, Gabriel 03/11/2026) — as peças novas da Visão Geral. */
 const linha = (o: Partial<LinhaFazendaVG> & { id: string }): LinhaFazendaVG => ({
-  rotulo: o.id, atividades: [], areaTotal: null, areaProdutiva: null, areaPecuaria: null, cabecas: null, ua: null, uaHa: null,
+  rotulo: o.id, atividades: [], areaTotal: null, areaProdutiva: null, areaPecuaria: null, areaAgricultura: null, areaSilvicultura: null,
+  areaReservaAppBenf: null, cabecas: null, ua: null, uaHa: null,
   chuvaMm: null, fechamento: 'sem_dado', ...o,
 });
 
@@ -47,7 +48,8 @@ describe('a linha de total da tabela Fazendas (regra 17)', () => {
     render(<TabelaFazendasVG mesCurto="set" onEscolher={escolher} linhas={[
       { ...linhas[0], rotulo: rotuloDaFazenda({ id: 'A', nome: 'Faz. Pureza', codigo: 'PUR' }) }, linhas[1], linhas[2]]} />);
     const total = screen.getByTestId('vg-fazendas-total');
-    expect(total.textContent).toContain('1.700 ha');
+    expect(total.textContent).toContain('1.700');
+    expect(screen.getByText('Total ha')).toBeTruthy();
     expect(total.textContent).toContain('1 de 2 fechadas');
     expect(total.textContent).toContain('1,22');
     fireEvent.click(screen.getByRole('button', { name: 'PUR · Faz. Pureza' }));
@@ -88,18 +90,18 @@ describe('os blocos vêm das atividades LIGADAS do cliente (Code 6), nunca de li
     expect(blocosDaVisao(null, ['agricultura']).map((a) => a.grupo)).toEqual(['agricultura']);
     expect(blocosDaVisao(lerAtividades(resposta), ['silvicultura']).map((a) => a.grupo)).toEqual(['pecuaria', 'agricultura']);
   });
-  it('as pílulas são as atividades do cliente; filtrar mostra só a escolhida; silvicultura diz "em breve" e sem dado é "—"', () => {
+  it('as pílulas são as atividades do cliente; filtrar mostra só a escolhida; indicador sem dado não aparece (VISAO-GERAL-05: nunca "em breve")', () => {
     const silvicultura: AtividadeDoCliente = { id: 's', nome: 'Eucalipto', grupo: 'silvicultura', ordem: 9 };
     const atividades: AtividadeDoCliente[] = [...lerAtividades(resposta).atividades, silvicultura];
-    const nulo = { valor: null };
     render(<BlocosPorAtividade atividades={atividades} clienteId="c1" anoMes="2026-09" silviculturaHa={823} onAbrir={vi.fn()}
-      pecuaria={{ cabecas: { valor: '7.259' }, lotacao: nulo, gmd: nulo, arrobas: nulo, custoMargemArroba: nulo }} />);
+      pecuaria={[{ id: 'arrobas', rotulo: '@ produzidas no ano', valor: '7.259', unidade: '@', meta: null, anoAnt: null, fonte: 'f' },
+        { id: 'gmd', rotulo: 'GMD', valor: null, meta: null, anoAnt: null, fonte: 'f' }]} />);
     const pilulas = within(screen.getByTestId('vg-atividades')).getAllByRole('button', { pressed: false }).map((b) => b.textContent);
     expect(pilulas).toEqual(['Pecuária de corte', 'Lavoura', 'Eucalipto']);
     expect(screen.getByTestId('vg-bloco-pecuaria').textContent).toContain('7.259');
-    expect(screen.getByTestId('vg-bloco-pecuaria').textContent).toContain('—');
-    expect(screen.getByTestId('vg-bloco-silvicultura').textContent).toContain('823 ha');
-    expect(screen.getByTestId('vg-bloco-silvicultura').textContent).toContain('em breve');
+    expect(screen.queryByTestId('vg-ind-gmd')).toBeNull();
+    expect(screen.getByTestId('vg-bloco-silvicultura').textContent).toContain('823ha');
+    expect(screen.getByTestId('vg-atividades').textContent).not.toContain('em breve');
     expect(screen.getByTestId('vg-bloco-agricultura')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Eucalipto' }));
     expect(screen.queryByTestId('vg-bloco-pecuaria')).toBeNull();
@@ -109,9 +111,8 @@ describe('os blocos vêm das atividades LIGADAS do cliente (Code 6), nunca de li
     const alto = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
     Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 640 });
     try {
-      const nulo = { valor: null };
-      render(<BlocosPorAtividade atividades={lerAtividades(resposta).atividades} clienteId="c1" anoMes="2026-09" silviculturaHa={null} onAbrir={vi.fn()}
-        pecuaria={{ cabecas: nulo, lotacao: nulo, gmd: nulo, arrobas: nulo, custoMargemArroba: nulo }} />);
+        render(<BlocosPorAtividade atividades={lerAtividades(resposta).atividades} clienteId="c1" anoMes="2026-09" silviculturaHa={null} onAbrir={vi.fn()}
+        pecuaria={[]} />);
       const areaDosBlocos = screen.getByTestId('vg-atividades');
       expect(areaDosBlocos.style.minHeight).toBe('');
       fireEvent.click(screen.getByRole('button', { name: 'Lavoura' }));
@@ -121,9 +122,8 @@ describe('os blocos vêm das atividades LIGADAS do cliente (Code 6), nunca de li
     }
   });
   it('sem atividade nenhuma, a seção não aparece', () => {
-    const nulo = { valor: null };
     const { container } = render(<BlocosPorAtividade atividades={[]} clienteId="c1" anoMes="2026-09" silviculturaHa={null} onAbrir={vi.fn()}
-      pecuaria={{ cabecas: nulo, lotacao: nulo, gmd: nulo, arrobas: nulo, custoMargemArroba: nulo }} />);
+      pecuaria={[]} />);
     expect(container.innerHTML).toBe('');
   });
   it('a safra do mês: a que contém o mês; sem nenhuma, a de início mais recente', () => {
@@ -149,7 +149,7 @@ describe('conciliação sem casar: só a linha TOTAL do resumo do dono', () => {
 describe('cartões do topo e "Precisa de atenção"', () => {
   it('cada cartão abre a tela dona; sem valor é "—", nunca zero', () => {
     const abrir = vi.fn();
-    render(<CartoesDoTopo cartoes={[{ id: 'chuva', titulo: 'Chuva no mês', valor: null, detalhe: 'média: em breve', abrir: 'Abrir chuvas', onAbrir: abrir }]} />);
+    render(<CartoesDoTopo cartoes={[{ id: 'chuva', titulo: 'Chuva no mês', valor: null, detalhe: 'na tabela', abrir: 'Abrir chuvas', onAbrir: abrir }]} />);
     const c = screen.getByTestId('vg-cartao-chuva');
     expect(c.textContent).toContain('—');
     expect(c.textContent).not.toMatch(/\b0\b/);

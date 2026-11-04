@@ -15,8 +15,8 @@ describe('Visão Geral sem os blocos legados, na ordem do mock (VISAO-GERAL-02)'
     }
   });
 
-  it('a ordem do mock: cartões → Área → Caixa → Fazendas → atenção → atalhos → blocos por atividade', () => {
-    const marcos = ['<CartoesDoTopo', "'Área no mês'", "'Caixa no mês'", '<TabelaFazendasVG', '<PrecisaDeAtencao', '<AtalhosVG', '<BlocosPorAtividade'];
+  it('a ordem (VISAO-GERAL-04): cartões → Área → Caixa → Fazendas → [coluna da direita: mapas → atenção] → blocos por atividade', () => {
+    const marcos = ['<CartoesDoTopo', "'Área no mês'", "'Caixa no mês'", '<TabelaFazendasVG', '<MiniaturaDaFazenda', '<PrecisaDeAtencao', '<BlocosPorAtividade'];
     const posicoes = marcos.map((m) => fonte.indexOf(m));
     for (const [i, p] of posicoes.entries()) expect(p, marcos[i]).toBeGreaterThan(0);
     expect([...posicoes].sort((a, b) => a - b)).toEqual(posicoes);
@@ -26,8 +26,8 @@ describe('Visão Geral sem os blocos legados, na ordem do mock (VISAO-GERAL-02)'
     expect(fonte).not.toMatch(/>\s*Financeiro \(em construção\)\s*</);
   });
 
-  it('título de bloco em sentence case (era 11px em caixa alta espaçada)', () => {
+  it('título de bloco em sentence case (era 11px em caixa alta espaçada), no Card da Geo pastos (VISAO-GERAL-03)', () => {
     expect(fonte).not.toMatch(/<h3 className="text-\[11px\] font-black uppercase tracking-widest/);
-    expect(fonte).toContain('<h3 className="text-sm font-semibold text-foreground">{title}</h3>');
+    expect(fonte).toContain('<Card titulo={title}');
   });
 });

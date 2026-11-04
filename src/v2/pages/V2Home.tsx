@@ -21,17 +21,20 @@ import { anoInteiro } from '@/v2/lib/periodo';
 /* VISAO-GERAL-02 — as peças da Visão Geral nova (mock aprovado, 03/11/2026) */
 import { CartoesDoTopo, type CartaoVG } from '@/v2/pages/visaoGeral/CartoesDoTopo';
 import { TabelaFazendasVG } from '@/v2/pages/visaoGeral/TabelaFazendasVG';
-import { PrecisaDeAtencao, AtalhosVG, type ItemAtencao } from '@/v2/pages/visaoGeral/AtencaoEAtalhos';
-import { ATALHOS_VG } from '@/v2/pages/visaoGeral/atalhosDaVisao';
-import { BlocosPorAtividade, type DadosPecuaria, type Numero } from '@/v2/pages/visaoGeral/BlocosPorAtividade';
+import { PrecisaDeAtencao, type ItemAtencao } from '@/v2/pages/visaoGeral/AtencaoEAtalhos';
+import { BlocosPorAtividade } from '@/v2/pages/visaoGeral/BlocosPorAtividade';
+import { indicadoresPecuaria, variacao } from '@/v2/pages/visaoGeral/indicadoresDaAtividade';
 import { useAtividadesDoCliente, blocosDaVisao, type GrupoAtividade } from '@/v2/pages/visaoGeral/atividadesDaVisao';
 import { useConciliacaoSemCasar } from '@/v2/pages/visaoGeral/conciliacaoSemCasar';
 import { atividadesDaArea, rotuloDaFazenda, situacaoDoFechamento, type LinhaFazendaVG } from '@/v2/pages/visaoGeral/fazendasDaVisao';
 import { useRebanhoOficial, buildFazendaRowsFromCategories } from '@/hooks/useRebanhoOficial';
 import { useChuvas } from '@/hooks/useChuvas';
 import { useDrePecuaria } from '@/hooks/useDrePecuaria';
-import { porArroba } from '@/components/agri/drePecRegua';
 import { usePodeVerMeta } from '@/v2/hooks/usePodeAbrir';
+/* VISAO-GERAL-03 — a régua da Geo pastos › Global: o card, a miniatura das fazendas e o seletor de duas opções de lá */
+import { Card, LegendaDasSituacoes, MiniaturaDaFazenda } from '@/components/mapa-geo/GeoPastosGlobal';
+import { Segmentado } from '@/components/ui/segmentado';
+import { useMapaDasFazendas } from '@/v2/pages/visaoGeral/mapaDasFazendas';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -54,8 +57,11 @@ const fmtRAbreviado = (v: number | null | undefined): string | null => {
 
 
 
-function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado, acao }: {
+function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado, acao, className, testid }: {
   title: string; subtitle?: string; children: React.ReactNode;
+  /* VISAO-GERAL-04 — "h-full": Área e Caixa na mesma altura */
+  className?: string;
+  testid?: string;
   /* VISAO-GERAL-02 — o link à direita do título ("Ver por fazenda ›") */
   acao?: React.ReactNode;
   /* PR-HOME-BLOCOS-PARCIAIS-01 — bloco que DEPENDE de fechamento fica esmaecido com
@@ -67,18 +73,18 @@ function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado, 
   avisoNaoFechado?: string;
 }) {
   return (
-    <div className="bg-card rounded-xl border border-border/40 p-5">
-      {/* Titulo e subtitulo NAO esmaecem: o operador precisa saber que bloco e aquele. */}
-      {/* VISAO-GERAL-02 — título em sentence case, 14px (era 11px em caixa alta espaçada) */}
-      <div className="flex items-baseline gap-2 mb-3">
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        {subtitle && <span className="text-[11px] text-muted-foreground">({subtitle})</span>}
-        {acao && <span className="ml-auto text-[12px]">{acao}</span>}
-      </div>
-      <div className="relative">
+    /* Titulo e subtitulo NAO esmaecem: o operador precisa saber que bloco e aquele.
+       VISAO-GERAL-03 — o quadro é o `Card` da Geo pastos › Global (título 11 px em sentence case, subtítulo e ação a 9,5/10 px). */
+    <Card titulo={title} className={className} testid={testid}
+      extra={<>
+        {/* o subtítulo só onde cabe inteiro (de 1280 px para cima); nunca com "…" */}
+        {subtitle && <span className="hidden whitespace-nowrap text-[9.5px] text-muted-foreground xl:inline">({subtitle})</span>}
+        {acao && <span className="ml-auto flex-none text-[10px]">{acao}</span>}
+      </>}>
+      <div className="relative px-2.5 pb-2.5">
         {/* pointer-events-none impede clicar num card e abrir o historico de um numero
             parcial. O overlay e ABSOLUTO: nao empurra layout nem muda a altura do bloco. */}
-        <div className={`grid grid-cols-2 gap-x-6 gap-y-5${naoFechado ? ' opacity-40 pointer-events-none select-none' : ''}`}>
+        <div className={`grid grid-cols-2 gap-x-6 gap-y-2${naoFechado ? ' opacity-40 pointer-events-none select-none' : ''}`}>
           {children}
         </div>
         {naoFechado && (
@@ -90,7 +96,7 @@ function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado, 
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -112,7 +118,7 @@ function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
      Prop nova em vez de embrulhar em <div> com classe: a hierarquia mora no
      componente, e quem chamar de fora herda a mesma escala. */
   const base = tipo === 'total'
-    ? 'text-xs font-medium text-foreground'
+    ? 'text-[11px] font-medium text-foreground'
     : tipo === 'subtotal'
     ? 'text-[10px] font-medium text-muted-foreground'
     : 'text-[9px] leading-tight text-muted-foreground pl-2';
@@ -201,7 +207,9 @@ function somaLinhas(valores: (number | null)[]): number {
 
    Verde exige TODAS as fazendas, por decisao explicita: "se tem 1 ou 12 fazendas, tem
    que fechar todas todo mes". Verde raro e informacao, nao defeito de UX. */
-const CELULA_MES = 'rounded border px-1 py-0.5 text-[10px] leading-tight font-semibold';
+/* VISAO-GERAL-03 — a régua compacta: cada mês na medida de um chip pequeno da Geo pastos (20 px de alto, 10 px), largura fixa (não estica
+   na tela inteira) */
+const CELULA_MES = 'inline-flex h-[20px] w-[34px] flex-none items-center justify-center rounded border text-[10px] font-semibold';
 
 type CorMes = 'verde' | 'ambar' | 'vermelho' | 'cinza';
 
@@ -240,7 +248,7 @@ function ReguaMeses({ celulas, mesSelecionado, ano, loading, erro, onMesChange, 
      altura final por construcao, e nao uma estimativa mantida a mao. */
   if (loading) {
     return (
-      <div className="mt-1 grid grid-cols-12 gap-0.5">
+      <div className="flex flex-none gap-0.5" data-testid="vg-regua-meses">
         {meses.map(m => (
           <span key={m} className={`${CELULA_MES} ${COR_CELULA.cinza} text-transparent animate-pulse text-center`}>{m}</span>
         ))}
@@ -254,7 +262,7 @@ function ReguaMeses({ celulas, mesSelecionado, ano, loading, erro, onMesChange, 
   const mesCorrente = (hoje.getFullYear() === ano) ? hoje.getMonth() + 1 : 0;
 
   return (
-    <div className="mt-1 grid grid-cols-12 gap-0.5">
+    <div className="flex flex-none gap-0.5" data-testid="vg-regua-meses">
       {meses.map((rotulo, i) => {
         const mm = i + 1;
         const doMes = celulas.filter(c => c.mes === mm);
@@ -306,7 +314,7 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
 
   if (loading) {
     return (
-      <div className="mt-1 flex flex-wrap gap-1">
+      <div className="flex flex-none gap-1">
         <span className={`${PILL_STATUS} border-border/40 bg-muted text-transparent animate-pulse`}>Rebanho 0/0</span>
       </div>
     );
@@ -360,7 +368,7 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
 
   return (
     <>
-      <div className="mt-1 flex flex-wrap gap-1">
+      <div className="flex flex-none gap-1">
         <button
           type="button"
           onClick={() => setModalAberto(true)}
@@ -377,7 +385,7 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
       <Dialog open={modalAberto} onOpenChange={setModalAberto}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-sm">
+            <DialogTitle className="text-[11px] font-semibold">
               Fechamento do rebanho — {escopo} · {mesLabel}
             </DialogTitle>
           </DialogHeader>
@@ -641,8 +649,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const { dre: drePecAnoMeta } = useDrePecuaria(podeVerMeta ? clienteAtual?.id : null, deAnoVG, anoMesVG || null, 'meta');
   const linhasDreVG = (d: typeof drePecAno) =>
     !d ? null : isGlobal ? d.total : (d.fazendas.find(f => f.fazenda_id === fazendaAtual?.id)?.linhas ?? null);
+  /* VISAO-GERAL-05 — o ano anterior: os MESMOS meses (jan → mês) do ano anterior, pela mesma função */
+  const deAnoAntVG = anoNum ? `${anoNum - 1}-01` : null;
+  const ateAnoAntVG = anoNum && mesNum ? `${anoNum - 1}-${String(mesNum).padStart(2, '0')}` : null;
+  const { dre: drePecAnoAnt } = useDrePecuaria(clienteAtual?.id, deAnoAntVG, ateAnoAntVG, 'realizado');
   const drePecReal = linhasDreVG(drePecAno);
   const drePecMeta = linhasDreVG(drePecAnoMeta);
+  const drePecAnt = linhasDreVG(drePecAnoAnt);
 
   const MES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const mesCurtoVG = MES_CURTO[mesNum - 1] ?? '';
@@ -681,6 +694,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           areaTotal: a ? a.area_total_ha : null,
           areaProdutiva: a ? a.area_produtiva_ha : null,
           areaPecuaria: areaPec,
+          areaAgricultura: a ? a.area_agricultura_ha : null,
+          areaSilvicultura: a ? a.area_silvicultura_ha : null,
+          areaReservaAppBenf: a ? a.area_reserva_ha + a.area_app_ha + a.area_benfeitorias_ha + a.area_outras_ha : null,
           cabecas: linhaMes ? linhaMes.cabecas_final : null,
           ua,
           uaHa: ua !== null && areaPec !== null && areaPec > 0 ? ua / areaPec : null,
@@ -692,31 +708,36 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       .filter(l => l.areaTotal !== null || l.cabecas !== null);
   }, [areaPorFazendaMes, gradeAno, mesNum, isGlobal, fazendas, fazendaAtual, categoriasVG, chuvaPorFazenda]);
 
-  const chuvaDoEscopo = !isGlobal && fazendaAtual ? (chuvaPorFazenda.get(fazendaAtual.id) ?? null) : null;
   const variacaoCaixa = saldoFinal !== null && saldoInicial !== null ? saldoFinal - saldoInicial : null;
   const resultadoAno = drePecReal?.lucro_liquido ?? null;
   const resultadoMeta = drePecMeta?.lucro_liquido ?? null;
   const irPara = (s: V2Section) => onIrPara?.(s, '');
+  /* VISAO-GERAL-03/04 — o "Mapa das fazendas" da coluna da direita (a leitura da Geo pastos › Global, no mês da Visão Geral) */
+  const mapaDasFazendas = useMapaDasFazendas(anoMesStatus ?? '');
 
+  /* VISAO-GERAL-05 (07:31) — o número e a unidade separados (a unidade menor ao lado) e, embaixo do rótulo, a variação contra a meta (só
+     para quem a vê) e contra o ano anterior, quando a fonte as tem: rebanho e lotação pelo PC-100 (deltaMeta/deltaAno), caixa pelo
+     indicador de caixa do PC-100, resultado pela DRE pecuária (meta e os mesmos meses do ano anterior). Área: sem comparação. */
+  const soMeta = (v: number | null | undefined) => (podeVerMeta ? v ?? null : null);
   const cartoesVG: CartaoVG[] = [
-    { id: 'area', titulo: isPeriodo ? 'Área produtiva média' : 'Área produtiva', valor: fmtHa(areaProdutiva),
+    { id: 'area', titulo: isPeriodo ? 'Área produtiva média' : 'Área produtiva', valor: areaProdutiva == null ? null : fmtN(areaProdutiva, 0), unidade: 'ha',
       detalhe: areaProdutiva != null && areaTotal != null && areaTotal > 0
         ? `${fmtN((areaProdutiva / areaTotal) * 100, 1)}% de ${fmtN(areaTotal, 0)} ha` : null,
       abrir: 'Abrir mapa', onAbrir: () => irPara('mapa-geo-pastos') },
-    { id: 'rebanho', titulo: 'Rebanho', valor: cabecasIndicador?.valor != null ? `${fmtN(cabecasIndicador.valor, 0)} cab.` : null,
-      detalhe: [uaHaIndicador?.valor != null ? `${fmtN(uaHaIndicador.valor, 2)} UA/ha` : null,
-        gmdIndicador?.valor != null ? `GMD ${fmtN(gmdIndicador.valor, 3)}` : null].filter(Boolean).join(' · ') || null,
+    { id: 'rebanho', titulo: 'Rebanho', valor: cabecasIndicador?.valor != null ? fmtN(cabecasIndicador.valor, 0) : null, unidade: 'cab',
+      meta: soMeta(cabecasIndicador?.deltaMeta), anoAnt: cabecasIndicador?.deltaAno ?? null,
+      abrir: 'Abrir fechamento', onAbrir: () => irPara('fechamento') },
+    /* VISAO-GERAL-04 (Gabriel 04/11 07:04) — a lotação ganha cartão próprio na faixa (era o detalhe do Rebanho) */
+    { id: 'uaha', titulo: 'Lotação', valor: uaHaIndicador?.valor != null ? fmtN(uaHaIndicador.valor, 2) : null, unidade: 'UA/ha',
+      meta: soMeta(uaHaIndicador?.deltaMeta), anoAnt: uaHaIndicador?.deltaAno ?? null,
       abrir: 'Abrir fechamento', onAbrir: () => irPara('fechamento') },
     { id: 'caixa', titulo: 'Caixa no fim do mês', valor: fmtRAbreviado(saldoFinal),
       detalhe: variacaoCaixa === null ? null : `${variacaoCaixa >= 0 ? '+' : '−'}${fmtRAbreviado(Math.abs(variacaoCaixa))} no ${isPeriodo ? 'ano' : 'mês'}`,
-      tomDetalhe: variacaoCaixa === null ? 'neutro' : variacaoCaixa < 0 ? 'negativo' : 'positivo',
+      meta: soMeta(caixaIndicador?.deltaMeta), anoAnt: caixaIndicador?.deltaAno ?? null,
       abrir: 'Abrir fluxo', onAbrir: () => irPara('fluxo-caixa') },
-    { id: 'chuva', titulo: isPeriodo ? 'Chuva no ano' : 'Chuva no mês',
-      valor: isGlobal ? 'por fazenda' : (chuvaDoEscopo === null ? null : `${fmtN(chuvaDoEscopo, 0)} mm`),
-      detalhe: isGlobal ? 'na tabela abaixo · média: em breve' : 'média: em breve',
-      abrir: 'Abrir chuvas', onAbrir: () => irPara('chuvas') },
+    /* VISAO-GERAL-04 — a chuva saiu da faixa: fica só na tabela Fazendas (coluna "Chuva") */
     { id: 'resultado', titulo: 'Resultado do ano · pecuária', valor: fmtRAbreviado(resultadoAno),
-      detalhe: podeVerMeta ? (resultadoMeta === null ? 'meta: sem base validada' : `meta ${fmtRAbreviado(resultadoMeta)}`) : null,
+      meta: soMeta(variacao(resultadoAno, resultadoMeta)), anoAnt: variacao(resultadoAno, drePecAnt?.lucro_liquido),
       abrir: 'Abrir DRE', onAbrir: () => irPara('dre') },
   ];
 
@@ -728,11 +749,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       .map((c): ItemAtencao => {
         const f = fazendas.find(x => x.id === c.fazendaId);
         const destino: V2Section = c.p1 === 'pendente' ? 'fechamento' : 'valor-rebanho';
-        return { id: `fech-${c.fazendaId}`, texto: `Fechamento de ${mesCurtoVG} faltando — ${f ? rotuloDaFazenda({ id: f.id, nome: f.nome, codigo: f.codigo ?? null }) : c.fazendaNome}`,
+        /* VISAO-GERAL-05 — o item cabe numa linha: a fazenda pelo CÓDIGO; o nome inteiro no title */
+        return { id: `fech-${c.fazendaId}`, texto: `Fechamento de ${mesCurtoVG} faltando · ${f?.codigo || f?.nome || c.fazendaNome}`,
+          title: `Fechamento de ${mesCurtoVG} faltando — ${f ? rotuloDaFazenda({ id: f.id, nome: f.nome, codigo: f.codigo ?? null }) : c.fazendaNome}`,
           acao: 'Fechar', onIr: () => onIrPara?.(destino, c.fazendaId) };
       }),
     ...(semCasar !== null && semCasar > 0
-      ? [{ id: 'conc', texto: `Conciliação de ${mesCurtoVG}: ${fmtN(semCasar, 0)} ${semCasar === 1 ? 'item' : 'itens'} sem casar`, acao: 'Conciliar', onIr: () => irPara('conciliacao') }]
+      ? [{ id: 'conc', texto: `Conciliação de ${mesCurtoVG}: ${fmtN(semCasar, 0)} sem casar`, acao: 'Conciliar', onIr: () => irPara('conciliacao') }]
       : []),
   ];
 
@@ -743,23 +766,16 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   if ((areaSilvi ?? 0) > 0) gruposComArea.push('silvicultura');
   /* numa fazenda só, o bloco da atividade que ela não tem (0 ha) não aparece; no Global, todas as ligadas do cliente */
   const atividadesVG = blocosDaVisao(atividadesLidas, gruposComArea).filter(a => isGlobal || gruposComArea.includes(a.grupo));
-  /* "vs meta": a variação que o PRÓPRIO indicador do rebanho já traz (cabeças, lotação, GMD — estoques e taxas na mesma unidade, nunca
-     variação de %); sem meta, nada. A @ produzida e o custo/margem por @ vêm da DRE pecuária do ano (a mesma base da tela DRE). */
-  const vsMeta = (d: number | null | undefined): Pick<Numero, 'detalhe' | 'tom'> | null => {
-    if (!podeVerMeta || d == null) return null;
-    return { detalhe: `${d >= 0 ? '+' : '−'}${fmtN(Math.abs(d), 1)}% vs meta`, tom: d < 0 ? 'negativo' : 'positivo' };
-  };
   const codigosCom = (atividade: string) => linhasFazendasVG.filter(l => l.atividades.includes(atividade)).map(l => l.rotulo.split(' · ')[0]).join(', ');
   const subVG = (ha: number | null, atividade: string) => [fmtHa(ha), isGlobal ? codigosCom(atividade) : null].filter(Boolean).join(' · ') || undefined;
-  const dadosPecuariaVG: DadosPecuaria = {
-    cabecas: { valor: cabecasIndicador?.valor != null ? fmtN(cabecasIndicador.valor, 0) : null, ...vsMeta(cabecasIndicador?.deltaMeta) },
-    lotacao: { valor: uaHaIndicador?.valor != null ? `${fmtN(uaHaIndicador.valor, 2)} UA/ha` : null, ...vsMeta(uaHaIndicador?.deltaMeta) },
-    gmd: { valor: gmdIndicador?.valor != null ? `${fmtN(gmdIndicador.valor, 3)} kg` : null, ...vsMeta(gmdIndicador?.deltaMeta) },
-    arrobas: { valor: drePecReal?.producao.at_produzida != null ? `${fmtN(drePecReal.producao.at_produzida, 0)} @` : null, detalhe: 'jan → mês · meta: em breve' },
-    custoMargemArroba: { valor: drePecReal
-      ? `R$ ${porArroba(drePecReal.custo_variavel, drePecReal, 'custo_variavel')} · R$ ${porArroba(drePecReal.margem, drePecReal, 'margem')}` : null,
-      detalhe: 'da DRE pecuária' },
-  };
+  /* VISAO-GERAL-05 — os indicadores da Pecuária numa linha (@ no ano · @/ha · GMD · UA/ha · custo/@ · margem/@), cada um com a variação
+     contra a meta (só para quem a vê) e contra o ano anterior. A DRE pelos MESMOS meses; o rebanho pelos indicadores do PC-100. */
+  const pecuariaVG = indicadoresPecuaria({
+    real: drePecReal, meta: drePecMeta, anoAnt: drePecAnt,
+    gmd: gmdIndicador ? { valor: gmdIndicador.valor, deltaMeta: gmdIndicador.deltaMeta, deltaAno: gmdIndicador.deltaAno } : null,
+    uaHa: uaHaIndicador ? { valor: uaHaIndicador.valor, deltaMeta: uaHaIndicador.deltaMeta, deltaAno: uaHaIndicador.deltaAno } : null,
+    podeVerMeta,
+  });
   const [verPorFazenda, setVerPorFazenda] = useState(false);
 
   /* Area e lotacao SEMPRE do snapshot oficial. A view tem area propria e
@@ -1148,22 +1164,32 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         </div>
       )}
 
-    <div className="px-4 pb-5 max-w-7xl">
-      {/* VISAO-GERAL-02 — fundo SÓLIDO (o gate recusa cabeçalho preso transparente: o conteúdo aparecia por trás ao rolar) */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 py-3 bg-background border-b border-border/40 shadow-sm mb-2">
-        <h2 className="text-sm font-semibold text-foreground">
-          {g}{clienteAtual ? ', ' + clienteAtual.nome : ''}
-        </h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {isGlobal ? 'Todas as fazendas' : fazendaAtual?.nome} · {ml}
-        </p>
-        <StatusFechamentoBanda
-          status={statusFechamento}
-          isGlobal={isGlobal}
-          loading={loadingStatusFechamento}
-          mesLabel={ml}
-          onIrPara={onIrPara}
-        />
+    <div className="px-2 pb-3">
+      {/* VISAO-GERAL-03 (Gabriel 04/11 06:28) — o cabeçalho é uma faixa pequena, na escala da barra da Geo pastos: o cumprimento numa linha
+          de 11 px, o status e "No mês | No ano" (o `Segmentado` de lá, 22 px) ao lado, e a régua compacta dos meses embaixo.
+          Fundo SÓLIDO (o gate recusa cabeçalho preso transparente: o conteúdo aparecia por trás ao rolar). */}
+      <div className="sticky top-0 z-30 -mx-2 mb-1.5 flex flex-col gap-1 border-b border-border bg-background px-2.5 py-1.5" data-testid="vg-cabecalho">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="whitespace-nowrap text-[11px] font-semibold text-foreground">
+            {g}{clienteAtual ? ', ' + clienteAtual.nome : ''}
+          </h2>
+          <span className="min-w-0 truncate text-[9.5px] text-muted-foreground">
+            {isGlobal ? 'Todas as fazendas' : fazendaAtual?.nome} · {ml}
+          </span>
+          <StatusFechamentoBanda
+            status={statusFechamento}
+            isGlobal={isGlobal}
+            loading={loadingStatusFechamento}
+            mesLabel={ml}
+            onIrPara={onIrPara}
+          />
+          {onViewModeChange && (
+            <div className="ml-auto flex-none">
+              <Segmentado valor={viewMode} onEscolher={onViewModeChange} altura={22}
+                opcoes={[{ valor: 'mes', rotulo: 'No mês' }, { valor: 'periodo', rotulo: 'No ano' }]} />
+            </div>
+          )}
+        </div>
         <ReguaMeses
           celulas={gradeEscopo}
           mesSelecionado={mesNum}
@@ -1173,34 +1199,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           onMesChange={onMesChange}
           meses={MES_ABREV}
         />
-        {onViewModeChange && (
-          <div className="flex gap-1 mt-2">
-            <button
-              onClick={() => onViewModeChange('mes')}
-              className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
-                !isPeriodo
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
-              }`}
-            >
-              No mês
-            </button>
-            <button
-              onClick={() => onViewModeChange('periodo')}
-              className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
-                isPeriodo
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
-              }`}
-            >
-              No ano
-            </button>
-          </div>
-        )}
       </div>
-      <div className="space-y-4">
+      <div className="flex flex-col gap-1.5" data-testid="vg-pilha">
 
+      {/* VISAO-GERAL-03/04 — os números numa faixa só (o `Kpi` da Geo pastos), todos com número: Área produtiva · Rebanho · Lotação ·
+          Caixa no fim do mês · Resultado do ano */}
       <CartoesDoTopo cartoes={cartoesVG} carregando={loadingPainel} />
+
+      {/* VISAO-GERAL-03 — as duas colunas da Geo pastos › Global (de 1280 px para cima): o conteúdo à esquerda e, à direita, 272 px com o
+          mapa das fazendas. Abaixo disso a coluna dos mapas sobe para o topo, na largura toda (a 1000 px os 272 apertavam a tabela). */}
+      <div className="grid min-w-0 grid-cols-1 gap-1.5 xl:grid-cols-[minmax(0,1fr)_272px]">
+      <div className="flex min-w-0 flex-col gap-1.5" data-testid="vg-coluna-esq">
 
       {/* PRIMEIRA LINHA: Area e Caixa sao filhos DIRETOS do grid, entao a linha
           alinha a altura dos dois. Decisao explicita (Gabriel, 21/08), ciente de
@@ -1208,15 +1217,16 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           motivou e948a653. Com as duas tabelas dentro do card de Area, ele tende
           a ser o mais alto e o branco cai no Caixa.
           Os DEMAIS blocos seguem em duas colunas empilhadas, logo abaixo. */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+      {/* VISAO-GERAL-04 — Área num card ESTREITO (a largura da rosca + legenda) e, ao lado, o Caixa com a sobra, os dois na MESMA altura */}
+      <div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[auto_minmax(0,1fr)]">
 
-        <div className="lg:col-span-3">
+        <div className="min-w-0">
         {/* col-span-2 porque o miolo do SectionBlock e uma grade de DUAS colunas,
             feita para MetricTile. Sem isso a barra ocupava meia largura e o rodape
             subia para a coluna da direita, ao lado dos numeros em vez de abaixo. */}
         <SectionBlock
           title={isPeriodo ? 'Área média no período' : 'Área no mês'}
-          subtitle="como a terra está dividida e onde a operação está"
+          className="h-full" testid="vg-area"
           acao={isGlobal && areaPorFazendaMes.length > 0 ? (
             <button type="button" className="text-primary hover:underline" onClick={() => setVerPorFazenda(true)} data-testid="vg-ver-por-fazenda">
               Ver por fazenda ›
@@ -1257,11 +1267,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               });
 
               return (
-                <div className="flex items-start gap-4">
+                <div className="flex items-start gap-3">
                   {/* Donut maior: coluna propria a esquerda. O viewBox e a
                       espessura sao os mesmos — so a caixa renderizada cresce,
                       entao a proporcao do anel nao muda. */}
-                  <svg viewBox="0 0 80 80" className="h-28 w-28 shrink-0 -rotate-90">
+                  <svg viewBox="0 0 80 80" className="h-24 w-24 shrink-0 -rotate-90">
                     {fatias.map(f => (
                       <circle key={f.label} cx="40" cy="40" r={R} fill="none"
                         strokeWidth="12" className={`${f.stroke} cursor-default`}
@@ -1392,7 +1402,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               <Dialog open={verPorFazenda} onOpenChange={setVerPorFazenda}>
               <DialogContent className="max-w-3xl">
                 <DialogHeader>
-                  <DialogTitle className="text-sm">Distribuição de áreas por fazenda · {ml}</DialogTitle>
+                  <DialogTitle className="text-[11px] font-semibold">Distribuição de áreas por fazenda · {ml}</DialogTitle>
                 </DialogHeader>
               <div data-testid="vg-area-por-fazenda">
                 {/* col-span-2 pelo mesmo motivo do bloco acima: a tabela precisa da
@@ -1510,36 +1520,23 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         </SectionBlock>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="min-w-0">
         {/* NAO recebe naoFechado: caixa nao depende de fechamento de rebanho.
             O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
             DUAS colunas, feita para MetricTile — e aqui e uma LISTA de linhas. */}
         <SectionBlock
           title={isPeriodo ? 'Caixa no período' : 'Caixa no mês'}
-          subtitle="entradas e saídas"
+          subtitle="regime de caixa · sem transferências"
+          className="h-full" testid="vg-caixa"
+          /* VISAO-GERAL-04 — Resumido | Macro no cabeçalho do card (o `Segmentado` da Geo pastos): a linha a menos deixa o Caixa na altura
+             da Área. Estado NAO persiste — trocar de mes ou de viewMode remonta o card em 'resumido'. */
+          acao={<Segmentado valor={modoCaixa} onEscolher={setModoCaixa} altura={22}
+            opcoes={[{ valor: 'resumido', rotulo: 'Resumido' }, { valor: 'macro', rotulo: 'Macro' }]} />}
         >
           {/* -mt-1 puxa a primeira linha para cima, encostando no titulo. Aplicado
              SO aqui: o respiro vem do SectionBlock, que e usado por todos os blocos
              e nao pode ser alterado por causa de um. */}
           <div className="col-span-2 -mt-1 space-y-0.5">
-            {/* Alternancia Resumido/Macro. Estado NAO persiste — trocar de mes ou de
-                viewMode remonta o card em 'resumido'. */}
-            <div className="flex justify-end gap-1 pb-1">
-              {(['resumido', 'macro'] as const).map(m => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setModoCaixa(m)}
-                  className={`rounded px-1.5 py-0.5 text-[9px] capitalize transition-colors ${
-                    modoCaixa === m
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted/50'
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
 
             <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="subtotal" />
 
@@ -1627,9 +1624,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               </p>
             )}
 
-            <p className="text-[9px] text-muted-foreground pt-1">
-              Regime de caixa, ano civil. Transferências entre contas não entram.
-            </p>
           </div>
         </SectionBlock>
         </div>
@@ -1641,13 +1635,38 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         <TabelaFazendasVG linhas={linhasFazendasVG} mesCurto={mesCurtoVG}
           onEscolher={isGlobal ? (id) => { const f = fazendas.find(x => x.id === id); if (f) setFazendaAtual(f); } : undefined} />
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PrecisaDeAtencao itens={atencaoVG} carregando={loadingGradeAno || carregandoConc} />
-        <AtalhosVG atalhos={ATALHOS_VG} onIr={irPara} />
+      {/* VISAO-GERAL-04 — os Atalhos saíram (o menu lateral já faz isso); "Precisa de atenção" foi para a coluna da direita */}
       </div>
+
+      {/* VISAO-GERAL-03/04 — a coluna da direita, preenchida de cima a baixo: o "Mapa das fazendas" (a MESMA peça da Geo pastos: sigla,
+          kg/ha na cor da situação, "cab sem mapa"; o clique abre a fazenda na Geo pastos, com "‹ Voltar à Visão Geral") e, embaixo,
+          "Precisa de atenção", que estica até o fim da coluna da esquerda (nada de branco embaixo). */}
+      {/* `contain: size` (de 1280 px para cima): a coluna da direita NÃO dita a altura da linha — ela tem a altura da esquerda. Com muitas
+          fazendas, as miniaturas rolam dentro do card (como na Geo pastos) e "Precisa de atenção" fica inteiro embaixo; com poucas, ela
+          estica até o fim. Nos dois casos nenhuma coluna fica com branco no pé. */}
+      <div className="order-first flex min-w-0 flex-col gap-1.5 xl:order-none xl:[contain:size]" data-testid="vg-coluna-dir">
+        <Card titulo="Mapa das fazendas" className="min-h-[96px] flex-[0_1_auto]" testid="vg-mapa-fazendas"
+          extra={<span className="ml-auto whitespace-nowrap text-[9.5px] text-muted-foreground">clique para abrir</span>}>
+          <div className="grid max-h-[260px] min-h-0 grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-1.5 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable] xl:grid-cols-2">
+            {mapaDasFazendas.fazendas.map(l => (
+              <MiniaturaDaFazenda key={l.fazenda.id} linha={l} geometrias={mapaDasFazendas.geometriasPorFazenda.get(l.fazenda.id) ?? []}
+                situacaoDoPasto={mapaDasFazendas.situacaoDoPasto} onAbrir={() => onIrPara?.('mapa-geo-pastos', l.fazenda.id)} />
+            ))}
+            {mapaDasFazendas.fazendas.length === 0 && (
+              <span className="col-span-2 text-[9.5px] text-muted-foreground">{mapaDasFazendas.carregando ? 'Lendo o mês…' : 'Nenhuma fazenda com pecuária.'}</span>
+            )}
+          </div>
+          <div className="flex-none px-2.5 pb-2"><LegendaDasSituacoes /></div>
+        </Card>
+        <PrecisaDeAtencao itens={atencaoVG} carregando={loadingGradeAno || carregandoConc} className="xl:flex-[1_0_auto]" />
+      </div>
+      </div>
+
+      {/* VISAO-GERAL-04 — os blocos por atividade na largura toda, abaixo das duas colunas: a grade fecha nas duas (o bloco é largo; na
+          coluna da esquerda ele deixava a da direita com um buraco embaixo) */}
       <BlocosPorAtividade
         atividades={atividadesVG}
-        pecuaria={dadosPecuariaVG}
+        pecuaria={pecuariaVG}
         silviculturaHa={areaSilvi ?? null}
         clienteId={clienteAtual?.id ?? null}
         anoMes={anoMesVG}
@@ -1730,9 +1749,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           <Dialog open onOpenChange={(v) => { if (!v) setLinhaCaixaModal(null); }}>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle className="flex items-baseline justify-between gap-4 text-sm">
+                <DialogTitle className="flex items-baseline justify-between gap-4 text-[11px] font-semibold">
                   <span>{linhaCaixaModal}</span>
-                  <span className="tabular-nums text-base">{fmtR(total)}</span>
+                  <span className="tabular-nums text-[14px]">{fmtR(total)}</span>
                 </DialogTitle>
                 <p className="text-[10px] text-muted-foreground">{recorte}</p>
               </DialogHeader>

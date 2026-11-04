@@ -58,12 +58,37 @@ const pastosCadastro = (): Reg[] => PASTOS.map((p, i) => ({
   grupo_id: null, created_at: '2020-01-01T00:00:00Z', updated_at: '2020-01-01T00:00:00Z',
 }));
 
+/* VISAO-GERAL-03 — as cabeças e o peso de cada pasto com gado no mês (o "Mapa das fazendas" do card Área produtiva lê a lotação por
+   pasto: um ideal, um sublotado e um com carga alta em cada fazenda). O EXN não fecha out (o status do fechamento já diz isso). */
+const GADO_NO_PASTO: Record<string, { cab: number; peso: number }> = {
+  pA1: { cab: 1000, peso: 330 }, pA2: { cab: 400, peso: 300 }, pA3: { cab: 1100, peso: 450 },
+  pB1: { cab: 420, peso: 380 }, pB2: { cab: 150, peso: 290 }, pB3: { cab: 520, peso: 420 },
+};
 const fechamentoPastos = (): Reg[] => {
   const out: Reg[] = [];
   /* mais recente primeiro: a abertura da tela lê "o último mês fechado" com order desc + limit 1, e a bancada ignora order */
   for (const m of mesesAte(MES_ATUAL).reverse()) for (const p of PASTOS) {
-    out.push({ fazenda_id: p.fazenda_id, cliente_id: CLI, ano_mes: `${ANO}-${pad(m)}`, status: 'fechado', tipo_uso_mes: null,
-      pasto: { area_produtiva_ha: p.area, tipo_uso: p.tipo_uso } });
+    const id = `fp-${p.id}-${m}`;
+    const gado = GADO_NO_PASTO[p.id];
+    out.push({ id, pasto_id: p.id, fazenda_id: p.fazenda_id, cliente_id: CLI, ano_mes: `${ANO}-${pad(m)}`, status: 'fechado', tipo_uso_mes: null, lote_mes: null,
+      pasto: { area_produtiva_ha: p.area, tipo_uso: p.tipo_uso },
+      fechamento_pasto_itens: gado ? [{ id: `${id}-1`, fechamento_id: id, quantidade: gado.cab, peso_medio_kg: gado.peso, categoria_id: 'c1' }] : [] });
+  }
+  return out;
+};
+
+/* VISAO-GERAL-03 — o desenho das fazendas com pecuária: cada pasto um quadrado de lado proporcional à área, em fila (sintético) */
+const fazendaGeometrias = (): Reg[] => {
+  const out: Reg[] = [];
+  for (const [fi, fid] of ['fA', 'fB'].entries()) {
+    let x = -54.03 + fi * 0.2;
+    PASTOS.filter((p) => p.fazenda_id === fid).forEach((p, i) => {
+      const lado = Math.sqrt(p.area) * 0.0009;
+      const y = -19.63 - (i % 2) * 0.03;
+      out.push({ id: `g-${p.id}`, fazenda_id: fid, cliente_id: CLI, pasto_id: p.id, tipo: 'pasto',
+        geojson: { type: 'Polygon', coordinates: [[[x, y], [x + lado, y], [x + lado, y - lado], [x, y - lado], [x, y]]] } });
+      if (i % 2 === 1) x += lado;
+    });
   }
   return out;
 };
@@ -372,6 +397,7 @@ const TABELAS: Record<string, Reg[]> = {
   categorias_rebanho: CATEGORIAS_SINT.map((c) => ({ id: c.id, codigo: c.codigo, nome: c.nome, ordem_exibicao: c.ordem_exibicao })),
   pastos: pastosCadastro(),
   fechamento_pastos: fechamentoPastos(),
+  fazenda_geometrias: fazendaGeometrias(),
   fechamento_area_snapshot: snapshotsArea(),
   zoot_mensal_cache: CACHE_ZOOT,
   vw_zoot_fazenda_mensal: zootFazendaMensal(CACHE_ZOOT),
