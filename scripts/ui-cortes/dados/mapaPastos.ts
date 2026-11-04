@@ -219,3 +219,20 @@ export function dadosDosCartoes(caso: string | null) {
     { id: 'f-p1-2026-09-cartoes', fechamento_id: 'f-p1-2026-09', quantidade: numeros.cab, peso_medio_kg: numeros.peso, categoria_id: 'c1' }];
   return { pastos, itens };
 }
+
+/* MEDIR-NO-MAPA-01 (Gabriel 03/11 20:54): `&galpao=1` — a FORMA do polígono "Galpão" do Retiro Agricultura (lida do proto só leitura; só o
+   contorno, levado para um canto vazio da fazenda de exemplo), o ponto "Galpao Agricultura" (galpão, Metálico, sem área) no meio dele e um
+   cocho sintético ao lado: o gif do "Medir no mapa" e da "Régua" */
+const GALPAO_REAL = [[-52.7902, -21.472905], [-52.790094, -21.473021], [-52.789971, -21.473129], [-52.78944, -21.473385], [-52.789355, -21.473379],
+  [-52.789294, -21.47332], [-52.789259, -21.473233], [-52.789147, -21.472956], [-52.79006, -21.472547], [-52.7902, -21.472905]];
+const GALPAO_CENTRO = [LON0 + 3.3 * PASSO, LAT0 - 0.6 * PASSO];
+const GALPAO_MEIO = [(-52.7902 + -52.789147) / 2, (-21.473385 + -21.472547) / 2];
+export const GALPAO_ANEL = GALPAO_REAL.map(([x, y]) => [x - GALPAO_MEIO[0] + GALPAO_CENTRO[0], y - GALPAO_MEIO[1] + GALPAO_CENTRO[1]]);
+export const GALPAO_GEOMETRIA = { id: 'gg1', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'oficina', nome_original: 'Galpão', cor: null,
+  geojson: { type: 'Polygon', coordinates: [GALPAO_ANEL] }, created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' };
+export const GALPAO_INFRA = [
+  { id: 'ig1', fazenda_id: 'f1', tipo: 'galpao', geometria: { type: 'Point', coordinates: GALPAO_CENTRO }, nome: 'Galpao Agricultura', pasto_id: null, bem_id: null,
+    observacao: null, ficha: { material: 'Metálico' }, versao: 1, criado_em: '2026-10-25T10:00:00Z', criado_por: 'u1', ativo: true },
+  { id: 'ig2', fazenda_id: 'f1', tipo: 'cocho', geometria: { type: 'Point', coordinates: [GALPAO_CENTRO[0] - 0.0011, GALPAO_CENTRO[1] - 0.0009] }, nome: 'Cocho do galpão',
+    pasto_id: null, bem_id: null, observacao: null, ficha: { material: 'Concreto', lados: 2 }, versao: 1, criado_em: '2026-10-25T10:00:00Z', criado_por: 'u1', ativo: true },
+];
