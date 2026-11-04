@@ -539,7 +539,7 @@ describe('CPR-SALDO-DIA-01 (G/H) — saldo do gráfico sem segmento; Ampliado co
       expect(Array.from(tela.matchAll(new RegExp(`const ${ctl} = \\(`, 'g'))).length, ctl).toBe(1);
       expect(Array.from(tela.matchAll(new RegExp(`\\{${ctl}\\}`, 'g'))).length, ctl).toBe(2);   // normal + ampliado
     }
-    for (const unico of ['onEscolher={setVisao}', 'onEscolher={escolherAtalho}', 'onEscolher={setSegmento}', 'data-testid="cpr-conta"', 'data-testid="cpr-de"', 'data-testid="cpr-ate"']) {
+    for (const unico of ['onEscolher={setVisao}', 'onEscolher={escolherAtalho}', 'onEscolher={setSegmento}', 'data-testid="cpr-conta"', 'data-testid="cpr-datas"', 'data-testid="cpr-intervalo"']) {
       expect(Array.from(tela.matchAll(new RegExp(unico.replace(/[{}()]/g, '\\$&'), 'g'))).length, unico).toBe(1);
     }
     /* os obrigatórios estão na barra do Ampliado, numa linha de 26px, com o Recolher */

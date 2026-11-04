@@ -4,6 +4,7 @@
  * Cada tela registra o banco simulado em `globalThis.__bancoBancada` (mocks/supabase.ts) antes de montar.
  */
 import React from 'react';
+import { PainelPeriodoTab } from '@/components/financeiro-v2/PainelPeriodoTab';
 import { createRoot } from 'react-dom/client';
 import '@/index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -103,6 +104,9 @@ import * as META from './dados/metaP109';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { EvolucaoDoAnoTab } from '@/pages/EvolucaoDoAnoTab';
 import { EvolucaoMesTab } from '@/pages/EvolucaoMesTab';
+import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
+import { Segmentado } from '@/components/ui/segmentado';
+import type { Intervalo } from '@/lib/periodo/intervaloDeDatas';
 import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
 
 /* Gabriel 29/10 08:26 — os parcelados do LR na nota já lançada (SINTÉTICOS): as 4 do sistema e a prévia da `fn_nota_completar` como o banco a faz */
@@ -837,6 +841,47 @@ if (tela === 'mesclar') {
     rpc: () => null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
+} else if (tela === 'periodo') {
+  /* UI-PERIODO-01 — o componente único de período (mock ui-validar/periodo.html, aprovado 04/11 09:33) numa barra de tela, com o
+     "hoje" fixo (04/11/2026) e as safras SINTÉTICAS do cadastro (pecuária jul–jun, lavoura set–ago: a data vem do cadastro).
+     `&modo=datas|mes|ano`, `&ativ=pec|duas`, `&abrir=1` abre o popup; `&cpr=1` = os 3 botões da CPR + "Escolher datas". */
+  const modo = q.get('modo') === 'mes' ? 'mes' : q.get('modo') === 'ano' ? 'ano' : 'datas';
+  const atividades: ('pecuaria' | 'agricultura')[] = q.get('ativ') === 'duas' ? ['pecuaria', 'agricultura'] : q.get('ativ') === 'nenhuma' ? [] : ['pecuaria'];
+  g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, loading: false };
+  const SAFRAS_SINT = [
+    { id: 'p27', codigo: '26/27-Pec', escopo_negocio: 'pecuaria', data_inicio: '2026-07-01', data_fim: '2027-06-30', cliente_id: 'cli', ativa: true },
+    { id: 'p26', codigo: '25/26-Pec', escopo_negocio: 'pecuaria', data_inicio: '2025-07-01', data_fim: '2026-06-30', cliente_id: 'cli', ativa: true },
+    { id: 'l27', codigo: '26/27-Lav', escopo_negocio: 'agricultura', data_inicio: '2026-09-01', data_fim: '2027-08-31', cliente_id: 'cli', ativa: true },
+    { id: 'l26', codigo: '25/26-Lav', escopo_negocio: 'agricultura', data_inicio: '2025-09-01', data_fim: '2026-08-31', cliente_id: 'cli', ativa: true },
+  ];
+  g.__bancoBancada = { from: (t: string) => (t === 'financeiro_safras' ? SAFRAS_SINT : []), rpc: () => null };
+  function BarraComPeriodo() {
+    const [valor, setValor] = React.useState<Intervalo | null>(q.get('cpr') === '1' ? null : { de: '2026-10-01', ate: '2026-10-31' });
+    return (
+      <div className="p-3">
+        <div className="flex h-[34px] items-center gap-1.5 rounded-md border border-[#D9DEE5] bg-white px-2.5" data-testid="barra-periodo">
+          <span className="text-[11px] text-muted-foreground">Período</span>
+          {q.get('cpr') === '1' && <Segmentado valor="atual" onEscolher={() => {}} altura={24}
+            opcoes={[{ valor: 'anterior', rotulo: 'Mês anterior' }, { valor: 'atual', rotulo: 'Mês atual' }, { valor: 'futuro', rotulo: 'Mês futuro' }]} />}
+          <SeletorDePeriodo hoje="2026-11-04" valor={valor} onChange={setValor} modo={modo} atividades={atividades} anoMaisAntigo={2020}
+            padrao={{ de: '2026-10-01', ate: '2026-10-31' }} rotuloVazio="Escolher datas" />
+        </div>
+      </div>
+    );
+  }
+  montar(<BarraComPeriodo />);
+  if (q.get('abrir') === '1') setTimeout(() => document.querySelector<HTMLElement>('[data-testid="seletor-de-periodo"]')?.click(), 300);
+} else if (tela === 'painel-periodo') {
+  /* UI-PERIODO-01 — Financeiro › Painel por período (a faixa de filtros), banco SINTÉTICO: duas contas e as safras do cadastro; sem lançamento */
+  g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, loading: false };
+  g.__fazendaBancada = { fazendas: [], fazendaAtual: { id: '__global__', nome: 'Global', owner_id: '' }, isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {}, loading: false };
+  const CONTAS_PP = [{ id: 'c1', nome_conta: 'Conta Corrente Principal', nome_exibicao: 'Conta Corrente Principal', ativa: true, cliente_id: 'cli' },
+    { id: 'c2', nome_conta: 'Aplicação Automática', nome_exibicao: 'Aplicação Automática', ativa: true, cliente_id: 'cli' }];
+  const SAFRAS_PP = [{ id: 'p27', nome: '26/27-Pec', codigo: '26/27-Pec', escopo_negocio: 'pecuaria', data_inicio: '2026-07-01', data_fim: '2027-06-30', ativa: true, cliente_id: 'cli' },
+    { id: 'l27', nome: '26/27-Lav', codigo: '26/27-Lav', escopo_negocio: 'agricultura', data_inicio: '2026-07-01', data_fim: '2027-06-30', ativa: true, cliente_id: 'cli' }];
+  g.__bancoBancada = { from: (t: string) => (t === 'financeiro_contas_bancarias' ? CONTAS_PP : t === 'financeiro_safras' ? SAFRAS_PP : []), rpc: () => null };
+  montar(<div className="h-full overflow-auto p-3"><PainelPeriodoTab /></div>);
+  if (q.get('abrir') === '1') setTimeout(() => document.querySelector<HTMLElement>('[data-testid="painel-periodo"]')?.click(), 600);
 } else if (tela === 'acessos') {
   /* ACESSOS-PERFIL-01 — a lista (nome e e-mail pela fonte unica), o "Novo acesso" e o "Editar acesso" (`&v=editar`). SINTETICO. */
   const MEMBROS = [

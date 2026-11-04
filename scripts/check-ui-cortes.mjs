@@ -616,6 +616,14 @@ const CENARIOS = [
   /* MAPA-GLOBAL-01 — Geo Pastos em Global (dados sintéticos `dados/mapaGlobal.ts`): 2 fazendas; 5 com o nome mais longo, uma sem fechamento
      no mês e uma sem mapa; a visão Pastos com o filtro "Carga alta"; as abas Área por situação e Atividade do gráfico */
   { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
+  /* UI-PERIODO-01 — o componente único de período aberto (popup com os atalhos e os dois calendários; os modos mês e ano; a CPR) */
+  ...[['periodo-datas', 'modo=datas&ativ=pec'], ['periodo-duas-atividades', 'modo=datas&ativ=duas'], ['periodo-mes', 'modo=mes'],
+    ['periodo-ano', 'modo=ano'], ['periodo-cpr', 'modo=datas&cpr=1']].map(([nome, q]) => ({ nome, url: `tela=periodo&abrir=1&${q}`,
+    antes: async (p) => { await p.locator('[data-testid="seletor-de-periodo-popup"]').waitFor(); await p.waitForTimeout(300); } })),
+  { nome: 'painel-periodo', url: 'tela=painel-periodo' },
+  { nome: 'painel-periodo-aberto', url: 'tela=painel-periodo&abrir=1', antes: async (p) => { await p.locator('[data-testid="painel-periodo-popup"]').waitFor(); await p.waitForTimeout(300); } },
+  { nome: 'periodo-selecionar-ano', url: 'tela=periodo&abrir=1&modo=datas&ativ=duas', antes: async (p) => {
+    await p.locator('[data-testid="seletor-de-periodo-popup"]').waitFor(); await p.locator('[data-atalho="selecionar-ano"]').click(); await p.waitForTimeout(300); } },
   { nome: 'mapa-global-5', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
   /* fix1 (1): o hover do cabeçalho que ordena, nas duas tabelas da visão Fazendas */
   { nome: 'mapa-global-hover-fazendas', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], hoverCabecalho: '[data-testid="global-card-fazendas"]' },
