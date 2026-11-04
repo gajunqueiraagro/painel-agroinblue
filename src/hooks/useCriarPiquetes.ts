@@ -16,9 +16,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import { supabase } from '@/integrations/supabase/client';
-import { haDoBanco, paraPlano, type Divisao } from '@/lib/mapa/criarPiquetes';
+import { areaDoBancoHa, haDoBanco, paraPlano, type Divisao } from '@/lib/mapa/criarPiquetes';
+import { usePontoAPonto } from '@/hooks/usePontoAPonto';
 import {
-  acrescentarLinha, alternarFixa, alternarSeguir, apagarLinha, cercaDoDesenho, comCorredor, comLarguraDoCorredor, desenhoDaGrade, desenhoVazio, deslizarLinha, divisoesDoDesenho,
+  acrescentarLinha, alternarFixa, alternarSeguir, apagarLinha, cercaDoDesenho, comCorredor, comPiqueteDesenhado, comLarguraDoCorredor, desenhoDaGrade, desenhoVazio, deslizarLinha, divisoesDoDesenho,
   ehCerca, extrasParaGravar, internasDoDesenho, linhaDoDesenho, linhasDoDesenho, moverPontoDaLinha, pontoNaLinha, rotuloDaLinha, tirarPontoDaLinha,
   type ConfigDosPiquetes, type Desenho, type ModoDosPiquetes,
 } from '@/lib/mapa/desenhoDosPiquetes';
@@ -46,7 +47,8 @@ import { mapaVivo } from '@/lib/mapa/enquadramentoDoMapa';
 export type { ModoDosPiquetes };
 /* MAPA-PRACA-ESTAVEL-01: 'referencia' = o clique que troca o lado de referência da cruz é uma FERRAMENTA anunciada na barra (antes todo clique
    perto de um lado do pasto girava a praça e refazia cercas e nomes — homologação 02/11 21:54, Modulo 03) */
-export type FerramentaDosPiquetes = 'tracar' | 'regua' | 'nomear' | 'corredor' | 'desenharPraca' | 'referencia';
+/* PIQUETE-POLIGONO-01: 'piquete' = o "+ Piquete" (o polígono clicado ponto a ponto pela ferramenta única, `usePontoAPonto`) */
+export type FerramentaDosPiquetes = 'tracar' | 'regua' | 'nomear' | 'corredor' | 'desenharPraca' | 'referencia' | 'piquete';
 export interface MembroSemDesenho { id: string; nome: string }
 /** O grupo que o pai já originou (o P6): a leitura que DECIDE o caminho — falhou = não decide (P146). */
 export type GrupoDoPai = { estado: 'lendo' } | { estado: 'erro' } | { estado: 'ok'; grupo: { id: string; nome: string; membros: MembroSemDesenho[] } | null };
@@ -194,7 +196,11 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
 
   const poligono = pai && pai.geojson.type === 'Polygon' ? pai.geojson : null;
   const poligonoRef = useRef(poligono); poligonoRef.current = poligono;
-  const divisoes: Divisao[] = useMemo(() => (poligono ? divisoesDoDesenho(poligono, desenho) : []), [poligono, desenho]);
+  /* PIQUETE-POLIGONO-01: no "+ Piquete" cada divisão é um polígono desenhado (na ordem em que nasceu); nos outros modos, o corte de sempre */
+  const divisoes: Divisao[] = useMemo(() => (!poligono ? []
+    : config.modo === 'poligonos' ? (desenho.piquetes ?? []).map((geojson, coluna) => ({ linha: 0, coluna, geojson, areaHa: areaDoBancoHa(geojson),
+      partes: geojson.type === 'MultiPolygon' ? geojson.coordinates.length : 1 }))
+    : divisoesDoDesenho(poligono, desenho)), [poligono, desenho, config.modo]);
   const n = divisoes.length;
   /* PIQUETES-PRACA-CONCAVO-01: a linha que sai do pasto e volta (cortada no 1º encontro) e as pontas da praça fora do pasto */
   const saidas = useMemo(() => (poligono ? linhasQueSaemEVoltam(poligono, linhasDoDesenho(desenho)) : []), [poligono, desenho]);
@@ -276,15 +282,29 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     if (f) { setSelecionada(null); setPontoSel(null); }
   }, []);
 
+  /* PIQUETE-POLIGONO-01: o "+ Piquete" é a ferramenta única de clicar ponto a ponto (a do Medir no mapa), em polígono: fecha no 1º ponto e o
+     piquete entra no desenho (recortado pelo pasto, sem cobrir os outros); um piquete por clique no botão. Esc desiste dele. */
+  const pontoAPonto = usePontoAPonto({
+    mapa: pai && mapa && mapaVivo(mapa) ? mapa : null,
+    forma: ferramenta === 'piquete' ? 'poligono' : null,
+    aoTerminar: pts => { const g = poligonoRef.current; if (g) mudar(d => comPiqueteDesenhado(g, d, pts)); setFerramenta(null); },
+    aoCancelar: () => setFerramenta(null),
+  });
+  const pontosDoPiquete = pontoAPonto.pontos;
+  const pontosDoPiqueteRef = useRef(pontosDoPiquete); pontosDoPiqueteRef.current = pontosDoPiquete;
+  const tirarUltimoRef = useRef(pontoAPonto.tirarUltimo); tirarUltimoRef.current = pontoAPonto.tirarUltimo;
+
   // --- abrir e fechar -----------------------------------------------------------------------------------------------------------------
-  const abrir = useCallback((p: PaiDosPiquetes) => {
+  /** `inicio` = 'poligonos' (PIQUETE-POLIGONO-01): o "+ Piquete" abre já desenhando o 1º piquete. */
+  const abrir = useCallback((p: PaiDosPiquetes, inicio?: ModoDosPiquetes) => {
     const meses = mesesDeInicio(new Date());
     const g = p.geojson.type === 'Polygon' ? p.geojson : null;
-    const cfg = configPadrao(p.nome, g ? ladoMaisLongo(g) : 0);
+    const cfg0 = configPadrao(p.nome, g ? ladoMaisLongo(g) : 0);
+    const cfg = inicio ? { ...cfg0, modo: inicio } : cfg0;
     const d = g ? desenhoInicial(g, cfg) : desenhoVazio();
     setPai(p); setPrevia(null); setErro(null); setEscolhida(null); setAvisoDaArea(null); setAviso(null); setMes(meses[meses.length - 1].valor);
     setConfigEstado(cfg); desenhoRef.current = d; setDesenho(d); setBase([]); trocarPilha([]); setTrabalhou(false);
-    setSelecionada(null); setPontoSel(null); setConfirmarCancelar(false); setNomeados(0); setFerramenta(null); setSoltosDispensados(false);
+    setSelecionada(null); setPontoSel(null); setConfirmarCancelar(false); setNomeados(0); setFerramenta(g && inicio === 'poligonos' ? 'piquete' : null); setSoltosDispensados(false);
     setGuardado(lerRascunhoDosPiquetes(clienteId, p.geometriaId));
     void lerGrupo(p.pastoId);
   }, [lerGrupo, clienteId, setFerramenta, trocarPilha]);
@@ -331,6 +351,8 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
   /* quando o grupo existe, começa com tantas partes quantas divisões sem desenho (N iguais) — uma vez por pasto */
   const grupoAplicado = useRef<string | null>(null);
   useEffect(() => {
+    /* no "+ Piquete" nada se troca sozinho (o Gabriel desenha cada um) */
+    if (configRef.current.modo === 'poligonos') return;
     if (!geometriaId || !existente || membrosSemDesenho.length < 2 || grupoAplicado.current === geometriaId) return;
     grupoAplicado.current = geometriaId;
     mudarConfig({ modo: 'iguais', colunas: membrosSemDesenho.length });
@@ -422,8 +444,13 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
     if (grupo.estado === 'erro') return 'Não consegui verificar se o pasto já tem divisões. Tente de novo.';
     if (emTraco.length && ferramenta !== 'regua') return 'Termine a linha em traçado (duplo clique) ou desfaça os pontos.';
     if (desenho.praca) { const m = motivoDaPraca(poligono, desenho.praca); if (m) return m; }
-    if (!linhasDoDesenho(desenho).length) return 'Risque pelo menos uma linha de lado a lado (ou escolha a praça).';
-    if (n < 2) return 'As linhas ainda não dividem o pasto: elas precisam ir de uma borda à outra (ou à praça).';
+    if (config.modo === 'poligonos') {
+      if (ferramenta === 'piquete' && pontosDoPiquete.length) return 'Feche o piquete no 1º ponto (ou Esc para desistir dele).';
+      if (n < 2) return 'Desenhe pelo menos 2 piquetes ("+ Piquete").';
+    } else {
+      if (!linhasDoDesenho(desenho).length) return 'Risque pelo menos uma linha de lado a lado (ou escolha a praça).';
+      if (n < 2) return 'As linhas ainda não dividem o pasto: elas precisam ir de uma borda à outra (ou à praça).';
+    }
     const vazia = divisoes.findIndex(d => !d.geojson || d.areaHa <= 0);
     if (vazia >= 0) return `A divisão ${letraDoIndice(vazia)} ficou sem área: deslize a linha.`;
     const partida = divisoes.findIndex(d => d.partes > 1);
@@ -440,7 +467,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
       if (new Set(chaves).size !== chaves.length) return 'Duas divisões têm o mesmo nome.';
     }
     return null;
-  }, [pai, poligono, grupo, emTraco, ferramenta, desenho, divisoes, n, existente, membrosSemDesenho.length, ligas, nomes]);
+  }, [pai, poligono, grupo, emTraco, ferramenta, desenho, divisoes, n, existente, membrosSemDesenho.length, ligas, nomes, config.modo, pontosDoPiquete.length]);
 
   // --- o banco ----------------------------------------------------------------------------------------------------------------------------
   const pedido = useCallback((simular: boolean, mesEscolhido?: string | null) => pedidoDosPiquetes({
@@ -524,6 +551,11 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
         return;
       }
       if (emCampo) return;
+      /* "+ Piquete": o Backspace é da ferramenta (tira o último ponto); o Ctrl+Z, no meio do piquete, também tira o ponto (não o piquete de antes) */
+      if (ferramentaRef.current === 'piquete') {
+        if (ev.key === 'Backspace') return;
+        if ((ev.metaKey || ev.ctrlKey) && !ev.shiftKey && ev.key.toLowerCase() === 'z' && pontosDoPiqueteRef.current.length) { ev.preventDefault(); tirarUltimoRef.current(); return; }
+      }
       if ((ev.metaKey || ev.ctrlKey) && !ev.shiftKey && ev.key.toLowerCase() === 'z') { ev.preventDefault(); desfazer(); return; }
       if (ev.key === 'Backspace' && ferramentaRef.current) { ev.preventDefault(); desfazer(); }
     };
@@ -572,6 +604,7 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
       const g = poligonoRef.current;
       if (!g) return;
       const f = ferramentaRef.current;
+      if (f === 'piquete') return; // o clique é da ferramenta ponto a ponto
       const bruto: Ponto = [ev.latlng.lng, ev.latlng.lat];
       if (f === 'tracar' || f === 'corredor' || f === 'desenharPraca') { adicionarPontoDoTraco(encaixarEm(bruto, alvosDe('nada'))); return; }
       if (f === 'regua') { adicionarPontoDaRegua(encaixarEm(bruto, alvosDe('nada'))); return; }
@@ -716,9 +749,10 @@ export function useCriarPiquetes({ mapa, pastos, geometrias, clienteId, aoGravar
   useEffect(() => {
     if (!mapa || !pai || !mapaVivo(mapa)) return undefined;
     const g = L.layerGroup().addTo(mapa);
-    desenharRotulosDeSegmentos(mapa, g, segmentos);
+    /* no "+ Piquete" na tela só a área de cada piquete (os metros dos lados ficam nos outros modos) */
+    if (config.modo !== 'poligonos') desenharRotulosDeSegmentos(mapa, g, segmentos);
     return () => { g.remove(); };
-  }, [mapa, pai, segmentos, zoomTique]);
+  }, [mapa, pai, segmentos, zoomTique, config.modo]);
 
   // --- as alças (reaproveitadas: o marcador arrastado nunca é recriado no meio do arrasto) -----------------------------------------------------
   const alcasRef = useRef(new Map<string, { marker: L.Marker; spec: Alca; classe: Alca['classe'] }>());

@@ -9,6 +9,8 @@
  * Aqui só se MONTA a linha e se SOMA/PONDERA o total a partir das linhas exibidas: soma nas aditivas; UA/ha = ΣUA ÷ Σárea pecuária
  * (a mesma área da linha, nunca média de UA/ha); fechamento "x de y fechadas"; chuva acumulada não se soma entre fazendas (mm de lugares
  * diferentes não é chuva), então o total da chuva fica vazio.
+ * VISAO-GERAL-05 (Gabriel 04/11 07:29): a tabela volta às colunas de ÁREA POR USO (as do "Ver por fazenda"): pecuária, agricultura,
+ * silvicultura e reserva/APP/benf. (reserva + APP + benfeitorias + outras, o mesmo grupo da rosca do bloco Área) — as quatro somam o total.
  */
 import type { SnapshotAreaFazendaMes } from '@/hooks/useFechamentoArea';
 
@@ -27,6 +29,10 @@ export interface LinhaFazendaVG {
   areaTotal: number | null;
   areaProdutiva: number | null;
   areaPecuaria: number | null;
+  areaAgricultura: number | null;
+  areaSilvicultura: number | null;
+  /** reserva + APP + benfeitorias + outras (a fatia "Reserva, APP, benf." do bloco Área) */
+  areaReservaAppBenf: number | null;
   cabecas: number | null;
   ua: number | null;
   uaHa: number | null;
@@ -36,6 +42,10 @@ export interface LinhaFazendaVG {
 
 export interface TotalFazendasVG {
   areaTotal: number | null;
+  areaPecuaria: number | null;
+  areaAgricultura: number | null;
+  areaSilvicultura: number | null;
+  areaReservaAppBenf: number | null;
   areaProdutiva: number | null;
   cabecas: number | null;
   uaHa: number | null;
@@ -69,6 +79,10 @@ export function totalDasFazendas(linhas: readonly LinhaFazendaVG[]): TotalFazend
   const comGado = linhas.filter((l) => l.fechamento === 'fechado' || l.fechamento === 'falta');
   return {
     areaTotal: soma(linhas.map((l) => l.areaTotal)),
+    areaPecuaria: soma(linhas.map((l) => l.areaPecuaria)),
+    areaAgricultura: soma(linhas.map((l) => l.areaAgricultura)),
+    areaSilvicultura: soma(linhas.map((l) => l.areaSilvicultura)),
+    areaReservaAppBenf: soma(linhas.map((l) => l.areaReservaAppBenf)),
     areaProdutiva: soma(linhas.map((l) => l.areaProdutiva)),
     cabecas: soma(linhas.map((l) => l.cabecas)),
     uaHa: uaTotal !== null && areaDaUa !== null && areaDaUa > 0 ? uaTotal / areaDaUa : null,

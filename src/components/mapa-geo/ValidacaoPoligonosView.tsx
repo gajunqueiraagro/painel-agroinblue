@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Link2, Pencil, Trash2, CheckCheck, MapPin, Search, Filter,
-  X, Save, ChevronDown, ChevronRight, ChevronLeft, Spline, PenTool, Scissors, Merge, LayoutGrid, Tag, Layers, Maximize2, Scan, PenLine, Move, Combine, Undo2, type LucideIcon,
+  X, Save, ChevronDown, ChevronRight, ChevronLeft, Spline, PenTool, Scissors, Merge, Tag, Layers, Maximize2, Scan, PenLine, Move, Combine, Undo2, type LucideIcon,
   Landmark,
 } from 'lucide-react';
 import { casaNoNomeDoPoligono, TIPOS_DE_CONTORNO } from '@/lib/mapa/edicaoDoPoligono';
@@ -789,10 +789,11 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     ))}
                     {/* MAPA-CRIAR-PIQUETES-01: só no polígono ligado a um pasto (o pasto vira o pai das divisões) */}
                     {geo.pasto_id && (
-                      <DicaDoMapa nome="Piquetes" frase="Criar as divisões (piquetes) dentro deste pasto.">
-                        <Button variant="ghost" size="sm" className={icone} data-testid="editar-piquetes" aria-label="Piquetes"
-                          onClick={() => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }); }}>
-                          <LayoutGrid className="h-3.5 w-3.5" />
+                      <DicaDoMapa nome="+ Piquete" frase="Desenhe um piquete dentro deste pasto: clique os pontos e feche no 1º ponto. O pasto continua; cada piquete vira pasto do cadastro na gravação.">
+                        {/* PIQUETE-POLIGONO-01 (Gabriel 03/11 21:37): o botão "+ Piquete" abre já desenhando o 1º piquete */}
+                        <Button variant="outline" size="sm" className="h-6 flex-none px-1 text-[9.5px]" data-testid="editar-piquetes" aria-label="+ Piquete"
+                          onClick={() => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }, 'poligonos'); }}>
+                          + Piquete
                         </Button>
                       </DicaDoMapa>
                     )}

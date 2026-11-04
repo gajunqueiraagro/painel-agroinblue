@@ -10,7 +10,7 @@
  *   - Praça e corredor são áreas internas: saem do pasto ANTES do corte (como o furo da manga) e não são piquete.
  * Puro: nada de mapa nem de banco aqui.
  */
-import { difference, union } from 'polyclip-ts';
+import { difference, intersection, union } from 'polyclip-ts';
 import {
   areaDoBancoHa, doPlano, emOrdemDeLeitura, fechado, paraPlano, type Cortes, type Divisao, type Montagem, type Plano,
 } from '@/lib/mapa/criarPiquetes';
@@ -652,6 +652,21 @@ const fechaAnel = (anel: readonly Ponto[]): Ponto[] => {
 export function novaPraca(id: string, nome: string, anel: readonly Ponto[]): AreaInterna | null {
   if (anel.length < 3) return null;
   return { id, tipo: 'praca', nome, geojson: { type: 'Polygon', coordinates: [fechaAnel(anel)] } };
+}
+
+/** PIQUETE-POLIGONO-01 ("+ Piquete", Gabriel 03/11 21:37): o polígono clicado ponto a ponto vira piquete DENTRO do pasto — recortado pela borda
+ *  (o clique além dela não leva área de fora) e sem cobrir os piquetes já desenhados (o vizinho fica com a divisa dele). Menos de 3 pontos,
+ *  fora do pasto ou só por cima dos outros (menos de 0,5 m²) = nada. */
+export function piqueteDesenhado(g: GeoJSON.Polygon, existentes: readonly (GeoJSON.Polygon | GeoJSON.MultiPolygon)[], pontos: readonly Ponto[]): GeoJSON.Polygon | GeoJSON.MultiPolygon | null {
+  if (pontos.length < 3) return null;
+  const plano = planoDe(g);
+  const anel = fechaAnel(pontos).map(q => paraPlano(plano, q));
+  const dentro = intersection(polisDe(g, plano)[0], [anel]);
+  const outros = existentes.flatMap(e => polisDe(e, plano));
+  const sobra = (outros.length ? difference(dentro, ...outros) : dentro).filter(p => p.length && p[0].length >= 4 && areaPlanaM2(p) >= AREA_MINIMA_M2);
+  if (!sobra.length) return null;
+  const partes = sobra.map(p => p.map(a => a.map(q => doPlano(plano, q))));
+  return partes.length === 1 ? { type: 'Polygon', coordinates: partes[0] } : { type: 'MultiPolygon', coordinates: partes };
 }
 
 /** O círculo da praça: o centro e o raio em metros, aproximado por `lados` lados (48). */

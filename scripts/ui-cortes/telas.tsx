@@ -75,6 +75,8 @@ import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
 import MODULO03 from '@/lib/mapa/__fixtures__/modulo03StaTereza.json';
+import P6_PUREZA from '@/lib/mapa/__fixtures__/p6Pureza.json';
+import { areaDoBancoHa } from '@/lib/mapa/criarPiquetes';
 import { mapaGlobal } from './dados/mapaGlobal';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import { rotuloDoTipo } from '@/lib/mapa/tiposDeArea';
@@ -609,7 +611,12 @@ if (tela === 'mesclar') {
   const fz = q.get('fz');
   const GLOBAL = { id: '__global__', nome: 'Global', owner_id: '' };
   const uma = FAZENDAS_VG02.find((f) => f.id === fz);
-  g.__fazendaBancada = { fazendas: FAZENDAS_VG02, fazendasComPecuaria: FAZENDAS_VG02.filter((f) => f.tem_pecuaria), fazendaAtual: uma ?? GLOBAL,
+  /* VISAO-GERAL-04 — `&muitas=1`: mais 4 fazendas com pecuária e sem dado (miniaturas "sem mapa"), para provar que a coluna da direita não
+     cresce além da esquerda (as miniaturas rolam no card) */
+  const extras = q.get('muitas') === '1' ? ['fD', 'fE', 'fF', 'fG'].map((id, i) => ({ id, nome: `Faz. Exemplo ${i + 4}`, codigo: `EX${i + 4}`, cliente_id: 'cli',
+    tem_pecuaria: true, status_operacional: 'ativa' })) : [];
+  const comPec = [...FAZENDAS_VG02.filter((f) => f.tem_pecuaria), ...extras];
+  g.__fazendaBancada = { fazendas: [...FAZENDAS_VG02, ...extras], fazendasComPecuaria: comPec, fazendaAtual: uma ?? GLOBAL,
     isGlobal: !uma, fazendaId: uma ? uma.id : '__global__', setFazendaAtual: () => {}, loading: false };
   g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }],
     isAdmin: true, perfil: 'admin_agroinblue', loading: false };
@@ -714,8 +721,10 @@ if (tela === 'mesclar') {
   /* MAPA-PRACA-ESTAVEL-01 (homologação 02/11 21:54, Agnaldo › Sta. Tereza › Modulo 03): `&modulo03=1` — o P_01 ganha a FORMA do Modulo 03
      (18 pontos com lados curtos e o furo no meio, lida do proto só leitura), levada para o canto do P_01; nenhum outro dado do cliente */
   const comModulo03 = <T extends { id: string; geojson: unknown }>(g: T): T => {
-    if (q.get('modulo03') !== '1' || g.id !== 'g1') return g;
-    const aneis = MODULO03.coordinates;
+    /* PIQUETE-POLIGONO-01: `&p6=1` — a FORMA do P6 da Pureza (com o furo da praça antiga; lida do proto só leitura), no lugar do P_01 */
+    const forma = q.get('p6') === '1' ? P6_PUREZA : q.get('modulo03') === '1' ? MODULO03 : null;
+    if (!forma || g.id !== 'g1') return g;
+    const aneis = forma.coordinates;
     const [dx, dy] = [-54.03 - Math.min(...aneis[0].map(p => p[0])), -19.63 - Math.max(...aneis[0].map(p => p[1]))];
     return { ...g, geojson: { type: 'Polygon', coordinates: aneis.map(a => a.map(p => [p[0] + dx, p[1] + dy])) } };
   };
@@ -731,7 +740,8 @@ if (tela === 'mesclar') {
           : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
           : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : [])].map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
-      : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
+      // PIQUETE-POLIGONO-01: `&p6=1` — o P_01 se chama P6 (o nome sugerido dos piquetes é P6-A, P6-B)
+      : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos.map(x => (q.get('p6') === '1' && x.id === 'p1' ? { ...x, nome: 'P6' } : x)), ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
           ...(q.get('grupo') === '1' ? ['P_01A', 'P_01B'].map((nome, i) => ({ ...MAPA.PASTOS[0], id: `p1${'ab'[i]}`, nome, grupo_id: 'gx', data_inicio: '2026-11-01', observacoes: null })) : [])]
       // MAPA-PIQUETES-03: `&unidade=1` — o grupo que nasceu de um pasto (o elo); MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o do P_01
       : t === 'pasto_grupos' ? [...(UNIDADE ? MAPA.UNIDADE_GRUPOS : []), ...(q.get('grupo') === '1' ? [{ id: 'gx', nome: 'P_01', pasto_origem_id: 'p1', cliente_id: 'cli' }] : [])]
@@ -762,6 +772,19 @@ if (tela === 'mesclar') {
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gabriel Junqueira', email: null, situacao: 'membro ativo' }]
       : fn === 'fn_piquetes_concluir' ? MAPA.previaDosPiquetes(a ?? {})   // MAPA-PIQUETES-02: a prévia sintética
       // MAPA-CRIAR-PIQUETES-01: a prévia sintética do "Criar piquetes" (caso novo, ou o grupo que já existe com `&grupo=1`)
+      /* PIQUETE-POLIGONO-01: com `&p6=1` a prévia sintética usa a área de cada polígono desenhado (a conta do banco) e o nome P6; o mês é o escolhido */
+      : fn === 'fn_piquetes_criar' && q.get('p6') === '1' ? ((pq: { nome: string; pasto_id: string | null; geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon | null }[]) => {
+          const areas = pq.map(x => (x.geojson ? Math.round(areaDoBancoHa(x.geojson) * 100) / 100 : 0));
+          const soma = Math.round(areas.reduce((t, v) => t + v, 0) * 100) / 100;
+          const mes = String(a?.p_mes ?? '2026-11-01');
+          const mm = `${mes.slice(5, 7)}/${mes.slice(0, 4)}`;
+          const fim = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 0);
+          const br = (v: number) => v.toFixed(2).replace('.', ',');
+          return { ok: true, simulado: !!a?.p_simular, caso: 'novo', contorno: { id: 'g1', criado: false, area_ha: soma },
+            piquetes: pq.map((x, i) => ({ nome: x.nome, area_ha: areas[i], liga: 'novo', pasto_id: null })), soma_ha: soma, dif_contorno_ha: 0,
+            concluir: { frase: `P6 vira o grupo P6 com ${pq.length} piquetes (${br(soma)} ha) a partir de ${mm}; P6 fica encerrado em ${String(fim.getDate()).padStart(2, '0')}/${String(fim.getMonth() + 1).padStart(2, '0')}/${fim.getFullYear()}.` },
+            ligar: null };
+        })(a?.p_piquetes ?? [])
       : fn === 'fn_piquetes_criar' ? ((pq: { nome: string; pasto_id: string | null }[]) => ({
           ok: true, simulado: !!a?.p_simular, caso: q.get('grupo') === '1' ? 'grupo_existente' : 'novo', contorno: { id: 'g1', criado: false, area_ha: 41.6 },
           piquetes: pq.map(x => ({ nome: x.nome, area_ha: Math.round(4160 / pq.length) / 100, liga: x.pasto_id ? 'existente' : 'novo', pasto_id: x.pasto_id })),
@@ -916,6 +939,38 @@ if (tela === 'mesclar') {
     montar(<DialogoDesfazerCompromisso operacaoId={OP} compromissoId="c1" versao={19} identidade={IDENT} rol={ROL} tipoOperacao="abate"
       onFechar={() => {}} onDesfeito={() => {}} onAbrirLancamento={() => {}} rpc={rpc as any} />);
   }
+} else if (tela === 'estacao' && (v === 'nota' || v === 'notadif' || v === 'notaja')) {
+  /* CONC-CRIAR-COM-NOTA-01 — o "Criar lançamento" da estação com a NF (o XML SINTÉTICO de sempre: nº 12.345, R$ 16.238,00, emitida em
+     30/09/2026), que o roteiro solta no "Ler a NF" do Documentos (`globalThis.__nfBancada`). `nota`: o extrato do mesmo valor (preenche e cria
+     pela RPC); `notadif`: o extrato de R$ 16.000,00 (cria com o da nota e abre o Casar com a diferença); `notaja`: a nota já lançada, realizada
+     e sem vínculo (o Casar com ela levada, o nº da NF na linha). Tudo SINTÉTICO. */
+  const valor = v === 'notadif' ? -16000 : -16238;
+  g.__nfBancada = montarNFe({ duplicatas: null });
+  const FORN = { id: 'agro', nome: 'Agropecuaria Exemplo Ltda', nome_fantasia: 'Casa do Campo', cpf_cnpj: '11.222.333/0001-81', fazenda_id: null, ativo: true };
+  g.__fornecedoresBancada = [FORN];
+  /* a última classificação do fornecedor (a sugestão da nota) e o plano dela */
+  const ULTIMA = { id: 'lanc-criado', plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação',
+    escopo_negocio: 'pecuaria', data_competencia: '2026-08-14', favorecido_id: 'agro', tipo_operacao: '2-Saídas', cancelado: false };
+  const JA = { id: 'lanc-ja', vencimento: '2026-11-10', pagamento: '2026-11-10', competencia: '2026-09-30', descricao: 'Compra de insumos sintéticos da nota',
+    valor_cent: 1623800, status: 'realizado', conciliado: false, numero_documento: '000012345', fornecedor_id: 'agro', fornecedor_nome: FORN.nome,
+    fornecedor_por: 'cnpj', parcelas: [{ n: 1, dif_cent: 0, dif_dias: 0 }], por: ['numero'], conta_bancaria_id: 'bb', cancelado: false };
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Exemplo', fazenda_id: 'f1', tipo_conta: 'conta_corrente', ativa: true }]
+      : t === 'financeiro_fornecedores' ? [FORN] : t === 'financeiro_lancamentos_v2' ? [ULTIMA]
+      : t === 'financeiro_plano_contas' ? [{ id: 'pl-nut', cliente_id: 'cli', tipo_operacao: '2-Saídas', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição',
+        centro_custo: 'Suplementação', subcentro: 'Nutrição Engorda', escopo_negocio: 'pecuaria', ativo: true, ordem_exibicao: 1 }] : [],
+    rpc: (fn: string) => fn === 'fn_nota_ja_lancada' ? (v === 'notaja' ? [JA] : [])
+      : fn === 'fn_criar_lancamento_de_extrato' ? { ok: true, lancamento_id: 'novo', cbi_id: 'cbi' }
+      : fn === 'fn_espelho_casar' ? (v === 'notadif' ? { ok: false, motivo: 'soma_nao_bate', no_extrato: valor, soma: -16238, diferenca: -16238 - valor }
+        : { ok: true, no_extrato: valor, soma: valor })
+      : fn === 'fin_documento_registrar' ? { documento_id: 'doc-1' }
+      : fn === 'fin_documento_editar' ? { documento_id: 'doc-1' }
+      : fn === 'fn_candidatos_conciliacao' || fn === 'fn_conciliacao_historico_buscar' ? [] : null,
+  };
+  montar(<EstacaoConciliar contaBancariaId="bb" aoFechar={() => {}} aoMudar={() => {}}
+    movimento={{ id: 'ext-1', data_movimento: '2026-10-05', descricao: 'COMPRA DEBITO AGROPECUARIA EXEMPLO', documento: null, valor,
+      valorConciliado: 0, valorAberto: valor, situacao: 'nao_conciliado', lancamentoId: null, vinculos: 0,
+      lancamentoDescricao: null, lancamentoFavorecido: null }} />);
 } else if (tela === 'estacao') {
   /* P153 — a estação "Conciliar movimento do extrato" (do Palco do mês) com o "Procurar no histórico": sem candidato (o caso que abriu
      a frente), SINTÉTICO. `&v=semnome`: o banco não trouxe o nome (Bradesco "PIX ENVIADO" — D1: o campo vazio e a frase). */

@@ -7,7 +7,7 @@
 import { cortesIguais, montar, type Divisao } from '@/lib/mapa/criarPiquetes';
 import type { Ponto } from '@/lib/mapa/edicaoDoPoligono';
 import {
-  areasParaGravar, comPontoMovido, comPontoNaLinha, deslizarParalela, divisoesDasLinhas, infraParaGravar, linhasDaGrade, novoCorredor, semPontoDaLinha,
+  areasParaGravar, comPontoMovido, piqueteDesenhado, comPontoNaLinha, deslizarParalela, divisoesDasLinhas, infraParaGravar, linhasDaGrade, novoCorredor, semPontoDaLinha,
   type AreaInterna, type AreaParaGravar, type InfraParaGravar, type LinhaDeCorte,
 } from '@/lib/mapa/linhasDosPiquetes';
 import {
@@ -15,14 +15,16 @@ import {
   type FormatoDaPraca, type MedidaDaPraca, type PracaCentral,
 } from '@/lib/mapa/pracaCentral';
 
-export type ModoDosPiquetes = 'praca' | 'linhas' | 'grade' | 'iguais';
+/** 'poligonos' (PIQUETE-POLIGONO-01, Gabriel 03/11 21:37): cada piquete é um polígono desenhado dentro do pasto ("+ Piquete") */
+export type ModoDosPiquetes = 'praca' | 'linhas' | 'grade' | 'iguais' | 'poligonos';
 /** As escolhas da barra que o rascunho também guarda. */
 export interface ConfigDosPiquetes {
   modo: ModoDosPiquetes; n: number; formato: FormatoDaPraca; medida: MedidaDaPraca; refLado: number; cocho: boolean;
   linhasGrade: number; colunas: number; girado: boolean; larguraCorredor: number; prefixo: string;
 }
 
-export interface Desenho { praca: PracaCentral | null; linhas: LinhaDeCorte[]; corredor: AreaInterna | null }
+/** `piquetes` (PIQUETE-POLIGONO-01): os polígonos desenhados no "+ Piquete", na ordem em que nasceram; opcional, o rascunho de antes não tem. */
+export interface Desenho { praca: PracaCentral | null; linhas: LinhaDeCorte[]; corredor: AreaInterna | null; piquetes?: (GeoJSON.Polygon | GeoJSON.MultiPolygon)[] }
 export const desenhoVazio = (): Desenho => ({ praca: null, linhas: [], corredor: null });
 
 export const linhasDoDesenho = (d: Desenho): LinhaDeCorte[] => [...(d.praca ? cercasComoLinhas(d.praca) : []), ...d.linhas];
@@ -125,7 +127,13 @@ export function comLarguraDoCorredor(d: Desenho, larguraM: number): Desenho {
 }
 
 /** Há alguma coisa feita (é o que o Cancelar pergunta antes de descartar)? */
-export const temDesenho = (d: Desenho) => !!d.praca || d.linhas.length > 0 || !!d.corredor;
+export const temDesenho = (d: Desenho) => !!d.praca || d.linhas.length > 0 || !!d.corredor || !!d.piquetes?.length;
+
+/** "+ Piquete": acrescenta o polígono clicado, recortado pelo pasto e sem cobrir os piquetes já desenhados; nada sobrou = o desenho não muda. */
+export function comPiqueteDesenhado(g: GeoJSON.Polygon, d: Desenho, pontos: readonly Ponto[]): Desenho {
+  const p = piqueteDesenhado(g, d.piquetes ?? [], pontos);
+  return p ? { ...d, piquetes: [...(d.piquetes ?? []), p] } : d;
+}
 
 /** O que vai ao banco além dos piquetes: `p_areas` (praça = benfeitoria, corredor = estrada) e `p_infra` (o cocho no centro da praça). */
 export function extrasParaGravar(d: Desenho, cocho: boolean): { areas: AreaParaGravar[]; infra: InfraParaGravar[] } {
