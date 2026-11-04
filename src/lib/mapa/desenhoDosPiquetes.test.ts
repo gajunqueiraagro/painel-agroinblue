@@ -133,7 +133,7 @@ describe('o pedido à fn_piquetes_criar (P3)', () => {
     const { areas, infra } = extrasParaGravar(d, true);
     const frase = fraseDaPrevia({ paiNome: 'Modulo 03', caso: 'novo', areas, infra,
       piquetes: ['A', 'B', 'C', 'D'].map(l => ({ nome: `Modulo 03-${l}`, areaHa: 24.4 })) });
-    expect(frase).toBe('4 pastos novos (Modulo 03-A…D, 24,40 ha cada) · Praça de alimentação 0,18 ha (área da fazenda, dentro de Modulo 03) · Cocho no centro da praça (infraestrutura) · o contorno de Modulo 03 fica.');
+    expect(frase).toBe('cria 4 pastos novos no cadastro (Modulo 03-A…D, 24,40 ha cada) · Praça de alimentação 0,18 ha (área da fazenda, dentro de Modulo 03) · Cocho no centro da praça (infraestrutura) · o contorno de Modulo 03 fica.');
     const secao = secaoDaPrevia(areas, infra);
     expect(secao).toEqual([
       { nome: 'Praça de alimentação', tipo: 'benfeitoria (área da fazenda)', areaHa: expect.closeTo(0.18, 2) },

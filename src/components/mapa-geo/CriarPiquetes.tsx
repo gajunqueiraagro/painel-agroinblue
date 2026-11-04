@@ -71,6 +71,7 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
 
   // --- os botões de ação (os que dependem de seleção só aparecem com seleção) ---------------------------------------------------
   const acoes: AcaoDaBarra[] = [];
+  const poligonos = piq.modo === 'poligonos';
   if (praca) acoes.push({ id: 'igualar', rotulo: 'Igualar áreas', testid: 'piquetes-igualar', onClick: piq.igualar,
     title: 'Gira as cercas NÃO fixas até as divisões ficarem iguais (a cerca ajustada à mão fica fixa)' });
   if (praca && praca.formato !== 'livre') acoes.push({ id: 'alinhar', rotulo: 'Alinhar praça', testid: 'piquetes-alinhar', onClick: piq.alinhar,
@@ -105,6 +106,12 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
       disabled: piq.emTraco.length < (piq.ferramenta === 'desenharPraca' ? 3 : 2), title: 'Fecha o que você está riscando (o duplo clique no mapa faz o mesmo)' });
   }
   acoes.push({ id: 'desfazer', rotulo: 'Desfazer', testid: 'piquetes-desfazer', icone: 'desfazer', disabled: !piq.podeDesfazer, onClick: piq.desfazer, title: 'Desfaz o último passo (Ctrl/Cmd+Z)' });
+  /* PIQUETE-POLIGONO-01 (Gabriel 03/11 21:37, "só isto"): no "+ Piquete" a barra tem só o "+ Piquete" (um piquete por clique) e o Desfazer */
+  if (poligonos) acoes.splice(0, acoes.length,
+    { id: 'piquete', rotulo: '+ Piquete', testid: 'piquetes-mais-piquete', ativo: piq.ferramenta === 'piquete',
+      onClick: () => piq.setFerramenta(piq.ferramenta === 'piquete' ? null : 'piquete'),
+      title: 'Desenhe o piquete dentro do pasto: clique os pontos e feche no 1º ponto. Um piquete por clique no botão' },
+    { id: 'desfazer', rotulo: 'Desfazer', testid: 'piquetes-desfazer', icone: 'desfazer', disabled: !piq.podeDesfazer, onClick: piq.desfazer, title: 'Desfaz o último piquete (Ctrl/Cmd+Z)' });
 
   const temEscolhas = true;
   const chave = `${piq.modo}|${acoes.map(a => a.id).join(',')}|${piq.config.formato}|${piq.config.n}|${!!piq.desenho.corredor}|${piq.ferramenta ?? ''}`;
@@ -136,11 +143,15 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
   const naLinha = acoes.slice(0, nVisiveis);
   const noMais = acoes.slice(nVisiveis);
   const escolhida = piq.escolhida != null ? piq.divisoes[piq.escolhida] : null;
-  const aviso = piq.erro ?? piq.aviso ?? piq.motivo;
-  const avisoVermelho = !!piq.erro || !!piq.aviso || (!!piq.motivo && piq.grupo.estado !== 'lendo');
+  /* "+ Piquete": desenhando, a 2ª linha diz como (a dica); fora disso o que falta para gravar vem em cinza ("Desenhe pelo menos 2 piquetes") */
+  const motivoNaLinha = poligonos && piq.ferramenta ? null : piq.motivo;
+  const aviso = piq.erro ?? piq.aviso ?? motivoNaLinha;
+  const avisoVermelho = !!piq.erro || !!piq.aviso || (!!motivoNaLinha && !poligonos && piq.grupo.estado !== 'lendo');
   const mp = piq.medidasPraca;
   const cfg = piq.config;
   const dica = piq.ferramenta === 'nomear' ? <>clique nas divisões na ordem desejada: a próxima é <b>{piq.proximaLetra}</b></>
+    : piq.ferramenta === 'piquete' ? 'clique os pontos do piquete · fecha no 1º ponto · Backspace tira o último ponto · Esc desiste'
+    : poligonos ? 'cada "+ Piquete" desenha um piquete dentro do pasto · o pasto continua'
     : piq.ferramenta === 'tracar' ? 'clique no mapa para riscar · duplo clique termina a linha · Alt solta o encaixe'
     : piq.ferramenta === 'corredor' ? 'risque o eixo do corredor · duplo clique termina'
     : piq.ferramenta === 'desenharPraca' ? 'clique os cantos da praça (3 ou mais) · duplo clique fecha'
@@ -161,7 +172,7 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
                 : <Info className="h-3.5 w-3.5 flex-none text-[#2B6CB0]" aria-label="Criar piquetes" />}
               <span data-medir="nome" className="font-normal text-muted-foreground">{piq.pai.nome}</span>
             </p>
-            {temEscolhas && (
+            {temEscolhas && !poligonos && (
               <div ref={escolhasRef} className="flex flex-none items-center gap-2" data-testid="piquetes-escolhas">
                 <DropdownMenu>
                   <DicaDoMapa evitar={LISTA} nome="Modo" frase="Como começar as divisões: linhas que eu traço, grade ou N partes iguais.">
@@ -305,7 +316,7 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
         {/* 2ª linha: a área, quantas divisões, a cerca selecionada · a pergunta da vez, o rascunho ou o aviso (ou a dica) */}
         <div ref={linha2Ref} className={`flex h-[18px] items-center gap-3 overflow-clip tabular-nums ${TXT}`} data-testid="piquetes-linha-2">
           <span className="flex-none whitespace-nowrap font-semibold text-foreground" data-testid="piquetes-medidas">
-            {piq.totalHa != null ? `${haBr(piq.totalHa)} ha` : '— ha'} · {n} {n === 1 ? 'divisão' : 'divisões'}{n ? ` de ${haBr(media)} ha em média` : ''}
+            {piq.totalHa != null ? `${haBr(piq.totalHa)} ha` : '— ha'} · {n} {poligonos ? (n === 1 ? 'piquete' : 'piquetes') : n === 1 ? 'divisão' : 'divisões'}{n ? ` de ${haBr(media)} ha em média` : ''}
             {mp ? ` · praça ${haBr(mp.areaHa)} ha` : ''}
           </span>
           {piq.fraseDaSelecionada && !piq.confirmarCancelar && (
@@ -321,7 +332,7 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
               <Button variant="outline" size="sm" className={`h-4 flex-none px-1.5 ${TXT}`} onClick={piq.descartar} data-testid="piquetes-descartar">Descartar</Button>
               <Button variant="outline" size="sm" className={`h-4 flex-none px-1.5 ${TXT}`} onClick={piq.continuarSemDescartar} data-testid="piquetes-continuar-editando">Continuar</Button>
             </span>
-          ) : piq.soltos.length > 0 && !piq.temTrabalho ? (
+          ) : piq.soltos.length > 0 && !piq.temTrabalho && !poligonos ? (
             <span className="flex flex-none items-center gap-1.5 whitespace-nowrap" data-testid="piquetes-soltos">
               <span className="font-semibold text-[#a15c00]" data-testid="piquetes-soltos-frase">
                 Há {piq.soltos.length} {piq.soltos.length === 1 ? 'polígono' : 'polígonos'} sem classificação dentro deste pasto: usar "É piquete de"?
@@ -416,7 +427,8 @@ export function CriarPiquetesNoMapa({ piq, aoUsarPiqueteDe }: { piq: CriarPiquet
           </tfoot>
         </table>
         {/* a área desejada da divisão escolhida (a cerca livre que a limita gira; nas linhas, a linha desliza) */}
-        <div className={`flex h-[26px] items-center gap-1.5 border-t border-border px-1.5 ${TXT}`} data-testid="piquetes-area-desejada">
+        {/* PIQUETE-POLIGONO-01: no "+ Piquete" a área é a que ele desenhou (sem "Área desejada"); o lugar fica reservado (nada se desloca) */}
+        <div className={cn(`flex h-[26px] items-center gap-1.5 border-t border-border px-1.5 ${TXT}`, poligonos && 'invisible')} data-testid="piquetes-area-desejada">
           {escolhida && piq.escolhida != null ? (
             <>
               <span className="flex-none whitespace-nowrap font-semibold">Área de {rotuloCurtoDaDivisao(piq.nomes[piq.escolhida] ?? '', piq.pai.nome, piq.escolhida)}:</span>
