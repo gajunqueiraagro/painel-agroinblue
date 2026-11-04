@@ -159,9 +159,10 @@ export function nivelDaTela(perfil: string | null | undefined, isAdmin: boolean,
   return NIVEL_POR_TELA[tela]?.[perfil] ?? MATRIZ_ACESSO[info.grupo][perfil];
 }
 
-/** A pessoa ve^ este item do menu? (o item anunciado e ainda nao construido segue a mesma regra: so' aparece se a tela for dela) */
+/** A pessoa ve^ este item do menu? UI-VARREDURA-01 L5 (Gabriel 03/11/2026): item "em construção" NAO aparece para ninguem, nem
+ *  para o admin — volta ao menu quando a tela existir (basta tirar o `emConstrucao` do item). A secao que fica sem item some. */
 export const itemVisivel = (perfil: string | null | undefined, isAdmin: boolean, item: NavItem): boolean =>
-  nivelDaTela(perfil, isAdmin, item.id) !== 'nao';
+  !item.emConstrucao && nivelDaTela(perfil, isAdmin, item.id) !== 'nao';
 
 /** As secoes do drawer de um grupo, so' com os itens visiveis; a secao sem item some. */
 export function secoesVisiveis(perfil: string | null | undefined, isAdmin: boolean, grupo: NavGrupo): NavGrupo['drawer'] {

@@ -498,6 +498,9 @@ export default function V2Index() {
      dezenas de setSection do arquivo seria invasivo, e consumir basta para nao vazar
      entre navegacoes. */
   const origemPendenciaRef = useRef<V2Section | null>(null);
+  /* VISAO-GERAL-02 (Gabriel 03/11/2026) — a tela aberta por um atalho da Visão Geral (cartão, tabela, atenção, atalho, bloco por
+     atividade) mostra "‹ Voltar à Visão Geral" na barra do topo. Some ao voltar ou ao navegar pelo menu. */
+  const [voltarAVisaoGeral, setVoltarAVisaoGeral] = useState(false);
   /* FECH-P2-TRAVA-AVISO-01 — a ida do pasto travado ao Valor do Rebanho: o mês com que ele abre e o pasto que a volta reabre.
      O pasto é estado (não ref): consumido, o Fechamento rerenderiza sem ele e não o reabre de novo. */
   const mesDoValorRebanhoRef = useRef<number | null>(null);
@@ -966,7 +969,10 @@ export default function V2Index() {
     if (f) setFazendaAtual(f);
     // A section CORRENTE, e nao o literal 'home': hoje a faixa so existe la, mas se ela
     // for reusada em outra tela a volta continua correta sem tocar neste handler.
-    origemPendenciaRef.current = section;
+    /* VISAO-GERAL-02 — da Visão Geral, a volta é UMA só: a da barra do topo (vale para toda tela de destino). A seta própria do
+       Fechamento/Valor do rebanho (que lê `origemPendenciaRef`) não aparece junto, para não haver duas voltas na mesma tela. */
+    if (section === 'home') setVoltarAVisaoGeral(true);
+    else origemPendenciaRef.current = section;
     setSection(destino);
   };
 
@@ -1688,12 +1694,14 @@ export default function V2Index() {
      isso: nada mais do `handleSelect` (drawer, intensivo, origem do mapa) muda para eles. */
   function navegarPeloMenu(s: V2Section) {
     voltaAoResumoRef.current = null;
+    setVoltarAVisaoGeral(false);
     limparOCAoSairDoLancar(s);
     setSection(s);
   }
 
   function handleSelect(s: V2Section) {
     voltaAoResumoRef.current = null;
+    setVoltarAVisaoGeral(false);
     limparOCAoSairDoLancar(s);
     setSection(s);
     setDrawerAtivo(null);
@@ -1780,6 +1788,8 @@ export default function V2Index() {
             duas linhas. */}
         <BarraSecao area={modoResumo ? 'Resumo dos clientes' : rotulo.area} secao={modoResumo ? (abaResumo === 'esteira' ? 'Esteira do mês' : 'Pendências') : rotulo.secao}
           aviso={avisoDoConsultor}
+          voltar={voltarAVisaoGeral && section !== 'home' && !modoResumo
+            ? { rotulo: 'Voltar à Visão Geral', onVoltar: () => { setVoltarAVisaoGeral(false); setSection('home'); } } : undefined}
           atalho={(() => {
             if (modoResumo) return undefined;
             /* ACESSOS-02a — sem acesso a' tela, nenhum atalho para as vizinhas. */

@@ -62,6 +62,15 @@ const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
 const clicarRotulo = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await p.waitForTimeout(500); };
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
+/* CONC-CRIAR-COM-NOTA-01 — o "Criar lançamento" da estação, a aba Documentos e (com `ler`) a NF SINTÉTICA da bancada solta no "Ler a NF" */
+const criarComNota = (ler) => async (p) => {
+  await clicarRotulo(/^Criar lançamento$/)(p);
+  await p.getByRole('tab', { name: 'Documentos' }).click(); await p.waitForTimeout(400);
+  if (!ler) return;
+  const xml = await p.evaluate(() => globalThis.__nfBancada);
+  await p.locator('[data-testid="doc-ler-nf-input"]').setInputFiles({ name: 'NFe-000012345.xml', mimeType: 'application/xml', buffer: Buffer.from(xml) });
+  await p.waitForTimeout(1500);
+};
 /* P74 — a nota no cartão em 4 (a prévia) e o "Parcelar este lançamento" em 4 (o Editar) */
 /* P102 — o Editar obrigação: o "Editar" do detalhe do contrato */
 const abrirEditarObrigacao = async (p) => {
@@ -585,7 +594,16 @@ const CENARIOS = [
               await abrirPiquetes(url)(p); await p.locator('[data-testid="validacao-reabrir-lista"]').click(); await p.waitForTimeout(800); } },
           ]),
           ...casos.map(([nome, url]) => ({ nome: `mapa-validacao-${nome}-previa`, url, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
-            await abrirPiquetes(url)(p); await p.locator('[data-testid="piquetes-previa"]').click();
+            await abrirPiquetes(url)(p);
+            /* PIQUETE-POLIGONO-01: o "+ Piquete" abre desenhando; a prévia pede 2 piquetes — a metade oeste e a leste do P_01, fechando no 1º ponto */
+            const c = await p.locator('path[data-geo-id="g1"]').first().boundingBox();
+            const em = (fx, fy) => [c.x + fx * c.width, c.y + fy * c.height];
+            const piquete = async (cantos) => { for (const [fx, fy] of [...cantos, cantos[0]]) { const [x, y] = em(fx, fy); await p.mouse.click(x, y); await p.waitForTimeout(120); } };
+            await piquete([[0.02, 0.02], [0.5, 0.02], [0.5, 0.95], [0.02, 0.95]]);
+            await p.locator('[data-testid="piquetes-mais-piquete"]').click();
+            await piquete([[0.5, 0.02], [0.98, 0.02], [0.98, 0.95], [0.5, 0.95]]);
+            await p.waitForTimeout(300);
+            await p.locator('[data-testid="piquetes-previa"]').click();
             await p.locator('[data-testid="piquetes-dialogo-previa"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(400); } })),
         ];
       })(),
@@ -806,6 +824,12 @@ const CENARIOS = [
   ...[['flx', ''], ['sai', ''], ['ent', ''], ['flx', '&faixa=per&de=2025-01&ate=2026-12'], ['sai', '&faixa=66']].map(([m, extra]) => ({
     nome: `visao-geral-${m}${extra ? extra.replace(/[&=]/g, '-') : ''}`, url: `tela=visao-geral&barra=0&modo=${m}${extra}`, tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } })),
+  /* VISAO-GERAL-02 — a Visão Geral nova (dado SINTÉTICO `dados/visaoGeral02.ts`): Global e uma fazenda, a distribuição por fazenda
+     (diálogo) e o filtro de uma atividade; nada corta nem sai do lugar nos tamanhos da VG */
+  { nome: 'visao-geral-02', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
+  { nome: 'visao-geral-02-fazenda', url: 'tela=visao-geral-02&fz=fA', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
+  { nome: 'visao-geral-02-por-fazenda', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, regiao: '[role="dialog"]',
+    antes: async (p) => { await p.waitForTimeout(2500); await clicar('[data-testid="vg-ver-por-fazenda"]')(p); await p.waitForTimeout(400); } },
   { nome: 'visao-geral-agricultura', url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' },
     /* abaixo de 768px os filtros da barra somem (`hidden md:flex`): ali o gesto não existe e é pulado */
@@ -969,6 +993,11 @@ const CENARIOS = [
     antes: async (p) => { await clicarTexto('Mês anterior')(p);
       await p.locator('[data-testid="cpr-grupo-saem_hoje"]').first().scrollIntoViewIfNeeded(); await p.waitForTimeout(400); } },
   { nome: 'cpr-ampliado', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicar('[data-testid="cpr-ampliar"]') },
+  /* CPR-LARGURA-01 (Gabriel 03/11 19:50) — a lista cabe a 1.280, 1.440 e 1.920 sem barra horizontal, cada número inteiro na sua célula; o
+     Ampliado sem a barra lateral (`&semlateral=1`), como no app (o Ampliar a esconde) */
+  ...[['cpr-largura', 'tela=cpr', undefined], ['cpr-largura-ampliado', 'tela=cpr&semlateral=1', clicar('[data-testid="cpr-ampliar"]')]].map(([nome, url, antes]) => ({
+    nome, url, antes, tamanhos: [[1280, 720], [1440, 800], [1920, 1000]],
+    semRolarNoX: { lista: '[data-tabela-que-rola]', celulas: '[data-celula-valor], [data-celula-nf], [data-celula-data], [data-celula-status], :has(> [data-valor-da-linha])' } })),
   { nome: 'cpr-selo-estimado', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-selo-estimado"]' },
   { nome: 'cpr-ampliado-totais', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-confirmado-estimado"]', antes: clicar('[data-testid="cpr-ampliar"]') },
   /* ACESSOS-PERFIL-01 — Acessos (lista + Novo, com as mensagens dos campos, + Editar) nos sete tamanhos, e a aba Auditoria do lançamento */
@@ -1348,12 +1377,20 @@ const CENARIOS = [
       await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="barra-casar"]').getByRole('button', { name: 'Conferência' }).click();
       await p.locator('[data-testid="mesa-conferencia"]').waitFor(); await p.waitForTimeout(500);
       if (chip) await clicar(`[data-testid="${chip}"]`)(p); } })),
-  /* P159c — "Sugestões para casar" nos 10 tamanhos: o movimento do banco é a 1ª linha da mesma tabela (data sob data, valor sob valor);
-     a data inteira (dd/mm/aaaa) nunca corta nem quebra; texto em uma linha com "…" + title */
+  /* P159c — "Sugestões para casar" nos 10 tamanhos: a data inteira (dd/mm/aaaa) nunca corta nem quebra; texto em uma linha com "…" + title.
+     CONC-SUGESTOES-TABELA-01 (Gabriel 04/11): o extrato numa faixa própria e as duas listas na tabela da lista do Financeiro; `rural` = o caso
+     do BB 16/10 (−1.265,22, sintético) com o histórico procurado e dois lançamentos marcados (o rodapé em colunas) */
   ...[['casar-sugestoes', 'tela=sugestoes-casar'], ['casar-sugestoes-vazio', 'tela=sugestoes-casar&v=vazio']].map(([nome, url]) => ({ nome, url,
     tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]' })),
   /* P153 — o "Procurar no histórico" depois de procurar (8 achados, o quadro de 6 rola, a faixa amarela), no modal e na estação; e a
      estação com o banco SEM nome (D1: o campo vazio e a frase) */
+  { nome: 'casar-sugestoes-rural', url: 'tela=sugestoes-casar&v=rural', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor();
+      const cx = p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]'); await cx.nth(1).click(); await cx.nth(2).click(); await p.waitForTimeout(300); } },
+  /* o ajuste 07:55: MUITAS sugestões e achados — cada lista rola só dentro dela, o modal não rola nem muda de altura */
+  { nome: 'casar-sugestoes-rural-muitas', url: 'tela=sugestoes-casar&v=ruralmuitas', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
+    semRolagem: { dentro: '[data-testid="sugestoes-casar"]', exceto: '[data-testid="sugestoes-lista"], [data-testid="procurar-historico-quadro"]' },
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
   { nome: 'casar-sugestoes-procurado', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
   /* P153b — o caso da Guariroba (sintético): a sugestão "mesmo fornecedor · valor difere" e o histórico com Casar, Casar e trocar conta,
@@ -1366,6 +1403,15 @@ const CENARIOS = [
   { nome: 'casar-estacao-procurado', url: 'tela=estacao', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]',
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
   { nome: 'casar-estacao-sem-nome', url: 'tela=estacao&v=semnome', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]' },
+  /* CONC-CRIAR-COM-NOTA-01 — o Novo pelo extrato: a aba Documentos (o "Ler a NF" + os pendentes), o Geral PREENCHIDO pela nota (as faixas do
+     XML; rola no corpo como o "+ Da nota") e o "Casar com o banco" de hoje com a nota já lançada (a coluna NF, a linha a 9,5px sem quebrar) */
+  { nome: 'conc-criar-com-nota-documentos', url: 'tela=estacao&v=nota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    regiao: '[role="dialog"]:has([data-testid="doc-ler-nf"])', antes: criarComNota(false) },
+  /* ⚠ a Geral com as faixas da nota ROLA no corpo, como no Novo do "+ Da nota" de hoje (`lancamento-xml-Geral-*` não exige sem rolagem) */
+  { nome: 'conc-criar-com-nota-preenchido', url: 'tela=estacao&v=nota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    regiao: '[role="dialog"]:has([data-testid="xml-faixas"])', antes: criarComNota(true) },
+  { nome: 'conc-criar-com-nota-casar', url: 'tela=estacao&v=notaja', tamanhos: TAMANHOS_DO_P92,
+    regiao: '[role="dialog"]:has([data-testid="levado-nf"])', antes: async (p) => { await criarComNota(true)(p); await p.locator('[data-testid="levado-nf"]').waitFor(); } },
   /* P159b (CONC-TELAS-02) — as abas Sistema e Evolução do saldo do Casar (de 1000px para cima, a página da Conciliação); a Evolução também
      com os dias sem movimento à vista. O modal "Extrato do sistema" (o ↗, D5) já tem os cenários `conciliacao-extrato-do-sistema*`. */
   ...[['casar-sistema', 'Sistema', null], ['casar-evolucao', 'Evolução do saldo', null], ['casar-evolucao-com-vazios', 'Evolução do saldo', 'evolucao-mostrar-vazios']]
@@ -1448,6 +1494,23 @@ function medirSemRolarNoLugar(sel) {
   return achados;
 }
 
+/* CPR-LARGURA-01 (Gabriel 03/11) — roda NA PAGINA: a lista `lista` cabe na tela SEM BARRA HORIZONTAL (o rolador dela não rola no X) e
+   todo número/data/NF/status dela (`celulas`) cabe na PRÓPRIA célula (o texto da faixa "▼ −R$ 113.386,53" passava 9px da coluna de 94 e
+   "NF 000.000.000" entrava no Status: nada rola nem corta, e por isso as outras regras não viam) */
+function medirSemRolarNoX({ lista, celulas }) {
+  const achados = [];
+  const l = document.querySelector(lista); if (!l) return [{ regra: 'rolagem', texto: `${lista} nao achada` }];
+  const rolador = l.parentElement;
+  if (rolador.scrollWidth > rolador.clientWidth + 1) achados.push({ regra: 'rolagem', texto: `barra horizontal na lista: pede ${rolador.scrollWidth}px, tem ${rolador.clientWidth}` });
+  const rr = l.getBoundingClientRect();
+  for (const e of l.querySelectorAll(celulas)) {
+    const r = e.getBoundingClientRect(); if (r.width < 1) continue;
+    const rg = document.createRange(); rg.selectNodeContents(e); const t = rg.getBoundingClientRect();
+    if (t.width > 0 && (t.right > r.right + 0.5 || t.left < r.left - 0.5)) achados.push({ regra: 'numero-vaza', texto: `"${(e.textContent ?? '').trim()}" passa da celula (${Math.round(t.width)}px em ${Math.round(r.width)})` });
+    else if (r.right > Math.min(rr.right, innerWidth) + 0.5) achados.push({ regra: 'rolagem', texto: `"${(e.textContent ?? '').trim()}" fora da tela` });
+  }
+  return achados;
+}
 /* FIN-CONSORCIO-02 — roda NA PAGINA: dentro de `dentro`, nenhum elemento com conteúdo maior que a caixa na vertical (rolando ou
    cortado), fora `exceto` e o que mora nele; e o próprio `dentro` cabe na janela */
 function medirRolagem({ dentro, exceto }) {
@@ -1563,7 +1626,7 @@ function medirCartoesDoMapa() {
   return achados;
 }
 /* MAPA-GLOBAL-01 fix1 (5) — o MENU POR CIMA DO MAPA, medido sozinho em toda tela do mapa (`mapa-geo-tela`): uma gaveta igual à do menu
-   lateral (V2ContextDrawer: 240px, z-50) é posta ao lado da barra; em cada vidro, no mapa e nos cards que ela cobre, o ponto do meio da
+   lateral (V2ContextDrawer: 200px desde o UI-VARREDURA-01 L5 v2, z-50) é posta ao lado da barra; em cada vidro, no mapa e nos cards que ela cobre, o ponto do meio da
    parte coberta tem de ser a gaveta. Sem o `isolate` da tela, os vidros (z-500) e o Leaflet (z-400…1000) ficavam por cima do menu. */
 function medirMenuPorCima(foto) {
   const tela = document.querySelector('[data-testid="mapa-geo-tela"]'); if (!tela) return [];
@@ -1571,7 +1634,7 @@ function medirMenuPorCima(foto) {
   const gaveta = document.createElement('div');
   gaveta.dataset.gavetaDeTeste = '1';
   /* pointer-events: auto — com um menu do Radix aberto o body fica com pointer-events: none, a gaveta herdaria e o elementFromPoint a pularia */
-  Object.assign(gaveta.style, { position: 'fixed', left: `${t.left}px`, top: '0', bottom: '0', width: '240px', zIndex: '50', background: 'rgba(27,42,68,0.9)', pointerEvents: 'auto' });
+  Object.assign(gaveta.style, { position: 'fixed', left: `${t.left}px`, top: '0', bottom: '0', width: '200px', zIndex: '50', background: 'rgb(30,58,95)', pointerEvents: 'auto' });
   document.body.appendChild(gaveta);
   const g = gaveta.getBoundingClientRect(), achados = [];
   const alvos = ['[data-testid="mapa-kpis"]', '[data-testid="mapa-filtros"]', '[data-testid="mapa-legenda"]', '.leaflet-container', '.leaflet-control-container .leaflet-control',
@@ -2514,6 +2577,7 @@ try {
     if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
     const daRolagem = cen.semRolagem ? await p.evaluate(medirRolagem, cen.semRolagem) : [];
     if (cen.tabelaMinima) daRolagem.push(...(await p.evaluate(medirTabelaMinima, cen.tabelaMinima)));
+    if (cen.semRolarNoX) daRolagem.push(...(await p.evaluate(medirSemRolarNoX, cen.semRolarNoX))); // CPR-LARGURA-01
     if (cen.semRolarVertical) daRolagem.push(...(await p.evaluate(medirSemRolarVertical, cen.semRolarVertical)));
     if (cen.rotulosSvg) daRolagem.push(...(await p.evaluate(medirRotulosSvg, cen.rotulosSvg)));
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));

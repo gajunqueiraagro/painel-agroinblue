@@ -9,7 +9,9 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { lerResultado, fraseDaFaixa, modeloDoAchado, contagemDosAchados } from '@/lib/conciliacao/procurarNoHistorico';
 
 const M = vi.hoisted(() => ({ rpc: vi.fn() }));
-vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: M.rpc } }));
+/* CONC-SUGESTOES-TABELA-01 — o nº da NF é lido pelos ids depois de procurar (`from(...)`): aqui, nenhum */
+vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: M.rpc,
+  from: () => { const q = { select: () => q, eq: () => q, in: () => Promise.resolve({ data: [], error: null }) }; return q; } } }));
 
 import { ProcurarNoHistorico } from './ProcurarNoHistorico';
 
@@ -65,8 +67,9 @@ describe('o componente ProcurarNoHistorico', () => {
     });
     const linha = await screen.findByTestId('procurar-historico-achado');
     expect(within(linha).getByText('02/06/2026')).toBeInTheDocument();
-    expect(within(linha).getByText('-1.382,00')).toBeInTheDocument();
-    expect(within(linha).getByTitle('Pecuária · Nutrição')).toHaveTextContent('Nutrição');
+    /* CONC-SUGESTOES-TABELA-01 — a linha da lista do Financeiro: o valor pelo `formatMoeda`; o subcentro no `title` da descrição */
+    expect((linha.querySelector('td.celula-valor')?.textContent ?? '').replace(/\s/g, ' ')).toBe('-R$ 1.382,00');
+    expect(within(linha).getByText('Ração de engorda').getAttribute('title')).toContain('Pecuária · Nutrição');
     expect(screen.getByTestId('procurar-historico-contagem')).toHaveTextContent('1 achado');
     expect(screen.getByTestId('procurar-historico-frase').className).toContain('bg-amber-50');
   });
@@ -109,12 +112,12 @@ describe('o componente ProcurarNoHistorico', () => {
     });
   });
 
-  /* P153b: 9px, linha de 17px, cabeçalho de 20px (8,5px); o piso = as colunas fixas (678) + 2 × 120 */
-  it('LAYOUT FIXO: o quadro tem a altura de 6 linhas e piso de 918px; a frase é a 1ª linha DO QUADRO (o "…" com o title vale em tabela)', async () => {
+  /* CONC-SUGESTOES-TABELA-01 (ajustes 07:55 e 08:1x): a tabela no tamanho grande — linha de 26px, cabeçalho de 26px; o piso = as fixas (858) + 2 × 120 */
+  it('LAYOUT FIXO: o quadro tem a altura de 6 linhas e piso de 1.098px; a frase é a 1ª linha DO QUADRO (o "…" com o title vale em tabela)', async () => {
     const { container } = render(<ProcurarNoHistorico clienteId="cli" movimento={MOV_BB} onCriarIgual={() => {}} />);
-    const quadro = container.querySelector('table')?.parentElement;
-    expect(quadro?.style.height).toBe('124px');
-    expect(container.querySelector('table')?.style.minWidth).toBe('918px');
+    const quadro = screen.getByTestId('procurar-historico-quadro');
+    expect(quadro.style.height).toBe('184px');
+    expect(screen.getByTestId('procurar-historico-piso').style.minWidth).toBe('1098px');
     /* com 1 achado o quadro não rola: o cabeçalho não fica preso (preso num quadro que não rola é vão no gate) */
     expect(container.querySelector('thead')?.className).not.toContain('sticky');
     fireEvent.click(screen.getByTestId('procurar-historico-botao'));
@@ -127,6 +130,6 @@ describe('o componente ProcurarNoHistorico', () => {
     expect(within(linha).queryByText(ACHADO.banco)).toBeNull();
     const desc = within(linha).getByText('Ração de engorda');
     expect(desc.className).toContain('truncate');
-    expect(desc.getAttribute('title')).toBe(`Ração de engorda\nO banco: ${ACHADO.banco}`);
+    expect(desc.getAttribute('title')).toBe(`Ração de engorda\nPecuária · Nutrição\nO banco: ${ACHADO.banco}`);
   });
 });

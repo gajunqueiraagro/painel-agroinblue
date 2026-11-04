@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import { render } from '@testing-library/react';
 import { diaDaLinhaCpr, recortarCpr, serieDoSaldoCpr, ramoDaConsultaCpr, type ContaCpr } from '@/lib/financeiro/cprRecorte';
 import { CelulaVinculos } from '@/components/financeiro-v2/ColunasDaListaV2';
+import { reguaDaCpr } from '@/lib/financeiro/cprLargura';
 
 const HOJE = '2026-10-28';
 const OUT = { de: '2026-10-01', ate: '2026-10-31' };
@@ -64,9 +65,9 @@ describe('P152 — a tela (lida da fonte)', () => {
     expect(grupos).not.toMatch(/const chave = \(l\.data_vencimento/);
   });
 
-  it('a régua do mock (menos os 4px do vão) e o ampliado = a mesma + Safra e Faz.', () => {
-    expect(tela).toContain('const REGUA_NORMAL: Regua = { comp: 46, venc: 46, pgto: 46, selo: 16, fornecedor: 176, subcentro: 166, safra: 0, faz: 0, nf: 60, status: 70, receber: 80, pagar: 94, saldo: 94 };');
-    expect(tela).toContain('const REGUA_AMPLIADA: Regua = { ...REGUA_NORMAL, safra: 56, faz: 26 };');
+  it('a régua (CPR-LARGURA-01: datas, NF e Status justos, os valores pelo maior do período) e o ampliado = a mesma + Safra e Faz.', () => {
+    expect(reguaDaCpr(false, 0)).toEqual({ comp: 46, venc: 46, pgto: 46, selo: 16, safra: 0, faz: 0, nf: 76, status: 58, receber: 96, pagar: 96, saldo: 104 });
+    expect(reguaDaCpr(true, 0)).toEqual({ ...reguaDaCpr(false, 0), safra: 56, faz: 26 });
     const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('{/* CAIXA INICIAL'));
     const ordem = ['Comp.', 'Venc.', 'Pgto.', 'regua.selo', 'Descrição', 'Fornecedor', 'Subcentro', 'Safra', 'Faz.', '>NF<', 'Status', 'A receber', 'A pagar', 'Saldo'];
     const pos = ordem.map((t) => cab.indexOf(t));
@@ -78,7 +79,8 @@ describe('P152 — a tela (lida da fonte)', () => {
     const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('{/* CAIXA INICIAL'));
     const linha = tela.slice(tela.indexOf('            key={chaveDaLinhaCpr(l)}'), tela.indexOf('{/* CPR-AJUSTES-20-10 — a ÚLTIMA linha do dia'));
     const colunas = (t: string) => Array.from(t.matchAll(/style=\{larg\(regua\.(\w+)\)\}/g), (m) => m[1]);
-    const ORDEM = ['comp', 'venc', 'pgto', 'selo', 'fornecedor', 'subcentro', 'safra', 'faz', 'nf', 'status', 'receber', 'pagar', 'saldo'];
+    /* CPR-LARGURA-01: Fornecedor e Subcentro saíram da régua — esticam com a Descrição (`ESTICA`, em `cprLargura.test.ts`) */
+    const ORDEM = ['comp', 'venc', 'pgto', 'selo', 'safra', 'faz', 'nf', 'status', 'receber', 'pagar', 'saldo'];
     expect(colunas(cab)).toEqual(ORDEM);
     expect(colunas(linha)).toEqual(ORDEM);
     /* e a Descrição é a única que estica, nos dois */

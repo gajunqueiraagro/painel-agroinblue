@@ -1,22 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
-import type { StatusValidacaoArea } from '@/hooks/usePainelConsultorData';
-import type { SeriesPorModo } from '@/hooks/usePainelConsultorData';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
-import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
-import { useEndividamentoAtual } from '@/hooks/useEndividamentoAtual';
-import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal';
-import { useHistoricoZootCache } from '@/hooks/useHistoricoZootCache';
-import { useSeriePorFazenda } from '@/hooks/useSeriePorFazenda';
-import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
-import { useSaldosPorConta } from '@/hooks/useSaldosPorConta';
-import { ehContaDeCaixa } from '@/lib/financeiro/tipoConta';
-import { ROTULO_GRUPO_CONTA, grupoDaConta } from '@/lib/financeiro/gruposDeConta';
-import { useProdutivoPorFazenda } from '@/hooks/useProdutivoPorFazenda';
 import {
   makeRealizadoSource, makeRealizadoSourceEntrada, agregaPorSubcentroGenerico,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
@@ -28,13 +16,25 @@ import type { StatusPilar } from '@/hooks/useStatusPilares';
 import { useStatusPilaresAno, type StatusCelulaAno } from '@/hooks/useStatusPilaresAno';
 import type { V2Section } from '@/v2/lib/navGrupos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { BlocoAtividade } from '@/v2/components/BlocoAtividade';
-import { useMovimentacoesAgregadas, type Lente, type TipoMov } from '@/v2/hooks/useMovimentacoesAgregadas';
-import { ModalAtividade, type IndicadorAtividade, type Assunto } from '@/v2/components/ModalAtividade';
-import { calcularRazaoEstoqueAcumulada, mediaIgnorandoZero } from '@/lib/calculos/eficienciaArea';
-import { BarChart3, ArrowLeftRight, Wallet } from 'lucide-react';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { anoInteiro } from '@/v2/lib/periodo';
+/* VISAO-GERAL-02 — as peças da Visão Geral nova (mock aprovado, 03/11/2026) */
+import { CartoesDoTopo, type CartaoVG } from '@/v2/pages/visaoGeral/CartoesDoTopo';
+import { TabelaFazendasVG } from '@/v2/pages/visaoGeral/TabelaFazendasVG';
+import { PrecisaDeAtencao, type ItemAtencao } from '@/v2/pages/visaoGeral/AtencaoEAtalhos';
+import { BlocosPorAtividade } from '@/v2/pages/visaoGeral/BlocosPorAtividade';
+import { indicadoresPecuaria, variacao } from '@/v2/pages/visaoGeral/indicadoresDaAtividade';
+import { useAtividadesDoCliente, blocosDaVisao, type GrupoAtividade } from '@/v2/pages/visaoGeral/atividadesDaVisao';
+import { useConciliacaoSemCasar } from '@/v2/pages/visaoGeral/conciliacaoSemCasar';
+import { atividadesDaArea, rotuloDaFazenda, situacaoDoFechamento, type LinhaFazendaVG } from '@/v2/pages/visaoGeral/fazendasDaVisao';
+import { useRebanhoOficial, buildFazendaRowsFromCategories } from '@/hooks/useRebanhoOficial';
+import { useChuvas } from '@/hooks/useChuvas';
+import { useDrePecuaria } from '@/hooks/useDrePecuaria';
+import { usePodeVerMeta } from '@/v2/hooks/usePodeAbrir';
+/* VISAO-GERAL-03 — a régua da Geo pastos › Global: o card, a miniatura das fazendas e o seletor de duas opções de lá */
+import { Card, LegendaDasSituacoes, MiniaturaDaFazenda } from '@/components/mapa-geo/GeoPastosGlobal';
+import { Segmentado } from '@/components/ui/segmentado';
+import { useMapaDasFazendas } from '@/v2/pages/visaoGeral/mapaDasFazendas';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -55,80 +55,15 @@ const fmtRAbreviado = (v: number | null | undefined): string | null => {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 };
 
-interface MetricTileProps {
-  label: string;
-  value: string | null;
-  unit?: string;
-  loading?: boolean;
-  pending?: boolean;
-  tone?: 'default' | 'positive' | 'negative' | 'blue';
-  status?: string | null;
-  deltaMes?: number | null;
-  deltaAno?: number | null;
-  deltaMeta?: number | null;
-  /** Inverte apenas a cor (verde/vermelho) dos deltas, mantendo seta e número.
-   * Use em indicadores onde "menos é melhor" (ex.: dívida, alavancagem). */
-  inverseDelta?: boolean;
-  /** Quando true, oculta inteiramente o bloco de deltas (vs mês/ano/META). */
-  hideDelta?: boolean;
-  onClick?: () => void;
-}
 
-function MetricTile({ label, value, unit, loading, pending, tone = 'default', status, deltaMes, deltaAno, deltaMeta, inverseDelta, hideDelta, onClick }: MetricTileProps) {
-  const deltaColor = (d: number) => {
-    const positivo = d >= 0;
-    const verde = inverseDelta ? !positivo : positivo;
-    return verde ? 'text-emerald-600' : 'text-red-500';
-  };
-  const valColor =
-    tone === 'positive' ? 'text-emerald-700' :
-    tone === 'negative' ? 'text-red-700' :
-    tone === 'blue'     ? 'text-primary' :
-    'text-foreground';
-  return (
-    <div
-      onClick={onClick}
-      className={`min-w-0${onClick ? ' cursor-pointer' : ''}`}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-        {label}
-      </p>
-      <p className={`text-[1.4rem] font-black leading-none tabular-nums ${pending ? 'text-muted-foreground/30' : valColor}`}>
-        {loading
-          ? <span className="inline-block w-20 h-6 bg-muted/50 rounded animate-pulse align-middle" />
-          : status
-            ? <span className="text-[0.75rem] font-semibold text-amber-600">{status}</span>
-            : <>{value ?? '—'}{unit && value ? <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span> : null}</>
-        }
-      </p>
-      {!hideDelta && (
-        <div className="mt-1 space-y-px">
-          {deltaMes != null
-            ? <p className={`text-[10px] font-medium ${deltaColor(deltaMes)}`}>
-                {deltaMes >= 0 ? '↑' : '↓'} {Math.abs(deltaMes).toFixed(1)}% vs mês
-              </p>
-            : <p className="text-[10px] text-muted-foreground/40">— vs mês</p>
-          }
-          {deltaAno != null
-            ? <p className={`text-[10px] font-medium ${deltaColor(deltaAno)}`}>
-                {deltaAno >= 0 ? '↑' : '↓'} {Math.abs(deltaAno).toFixed(1)}% vs ano ant.
-              </p>
-            : <p className="text-[10px] text-muted-foreground/40">— vs ano ant.</p>
-          }
-          {deltaMeta != null
-            ? <p className={`text-[10px] font-medium ${deltaColor(deltaMeta)}`}>
-                {deltaMeta >= 0 ? '↑' : '↓'} {Math.abs(deltaMeta).toFixed(1)}% vs META
-              </p>
-            : <p className="text-[10px] text-muted-foreground/40">— vs META</p>
-          }
-        </div>
-      )}
-    </div>
-  );
-}
 
-function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado }: {
+function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado, acao, className, testid }: {
   title: string; subtitle?: string; children: React.ReactNode;
+  /* VISAO-GERAL-04 — "h-full": Área e Caixa na mesma altura */
+  className?: string;
+  testid?: string;
+  /* VISAO-GERAL-02 — o link à direita do título ("Ver por fazenda ›") */
+  acao?: React.ReactNode;
   /* PR-HOME-BLOCOS-PARCIAIS-01 — bloco que DEPENDE de fechamento fica esmaecido com
      aviso por cima quando o mes nao fechou. Sem isto, a regua dizia "vermelho, ninguem
      fechou" e o bloco logo abaixo mostrava "0,0 @ · ↓ 100,0% vs mes" como se a producao
@@ -138,16 +73,18 @@ function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado }
   avisoNaoFechado?: string;
 }) {
   return (
-    <div className="bg-card rounded-xl border border-border/40 p-5">
-      {/* Titulo e subtitulo NAO esmaecem: o operador precisa saber que bloco e aquele. */}
-      <div className="flex items-baseline gap-2 mb-4">
-        <h3 className="text-[11px] font-black uppercase tracking-widest text-foreground">{title}</h3>
-        {subtitle && <span className="text-[10px] text-muted-foreground">({subtitle})</span>}
-      </div>
-      <div className="relative">
+    /* Titulo e subtitulo NAO esmaecem: o operador precisa saber que bloco e aquele.
+       VISAO-GERAL-03 — o quadro é o `Card` da Geo pastos › Global (título 11 px em sentence case, subtítulo e ação a 9,5/10 px). */
+    <Card titulo={title} className={className} testid={testid}
+      extra={<>
+        {/* o subtítulo só onde cabe inteiro (de 1280 px para cima); nunca com "…" */}
+        {subtitle && <span className="hidden whitespace-nowrap text-[9.5px] text-muted-foreground xl:inline">({subtitle})</span>}
+        {acao && <span className="ml-auto flex-none text-[10px]">{acao}</span>}
+      </>}>
+      <div className="relative px-2.5 pb-2.5">
         {/* pointer-events-none impede clicar num card e abrir o historico de um numero
             parcial. O overlay e ABSOLUTO: nao empurra layout nem muda a altura do bloco. */}
-        <div className={`grid grid-cols-2 gap-x-6 gap-y-5${naoFechado ? ' opacity-40 pointer-events-none select-none' : ''}`}>
+        <div className={`grid grid-cols-2 gap-x-6 gap-y-2${naoFechado ? ' opacity-40 pointer-events-none select-none' : ''}`}>
           {children}
         </div>
         {naoFechado && (
@@ -159,7 +96,7 @@ function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado }
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -181,7 +118,7 @@ function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
      Prop nova em vez de embrulhar em <div> com classe: a hierarquia mora no
      componente, e quem chamar de fora herda a mesma escala. */
   const base = tipo === 'total'
-    ? 'text-xs font-medium text-foreground'
+    ? 'text-[11px] font-medium text-foreground'
     : tipo === 'subtotal'
     ? 'text-[10px] font-medium text-muted-foreground'
     : 'text-[9px] leading-tight text-muted-foreground pl-2';
@@ -196,11 +133,6 @@ function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
 }
 
 /* Formatador unico de area. Duas casas, sempre com sufixo. */
-function fmtHa(v: number | null): string {
-  return v == null
-    ? '—'
-    : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha`;
-}
 
 /* Area em hectares INTEIROS para tabela e barra: o mockup usa densidade
    alta e centavo de hectare nao muda decisao nenhuma. `fmtHa` (2 casas)
@@ -231,21 +163,6 @@ function pctDe(parte: number | null, base: number | null): string {
 
 /* Irmao de LinhaCaixa: mesma anatomia, unidade diferente. Area em ha nao
    pode usar fmtR — o bloco inteiro perderia o sentido com cifrao. */
-function LinhaArea({ label, valor, tipo = 'detalhe' }: {
-  label: string;
-  valor: number | null;
-  tipo?: 'detalhe' | 'total';
-}) {
-  const base = tipo === 'total'
-    ? 'font-medium text-foreground'
-    : 'text-muted-foreground pl-2.5';
-  return (
-    <div className={`flex items-baseline justify-between gap-3 text-[11px] ${base}`}>
-      <span className="truncate">{label}</span>
-      <span className="tabular-nums shrink-0">{fmtHa(valor)}</span>
-    </div>
-  );
-}
 
 /* Irmao de LinhaCaixa para o modo Resumido: mesma anatomia, com afordancia de
    clique. No modo Macro as linhas NAO sao clicaveis — elas ja sao o detalhe. */
@@ -290,7 +207,9 @@ function somaLinhas(valores: (number | null)[]): number {
 
    Verde exige TODAS as fazendas, por decisao explicita: "se tem 1 ou 12 fazendas, tem
    que fechar todas todo mes". Verde raro e informacao, nao defeito de UX. */
-const CELULA_MES = 'rounded border px-1 py-0.5 text-[10px] leading-tight font-semibold';
+/* VISAO-GERAL-03 — a régua compacta: cada mês na medida de um chip pequeno da Geo pastos (20 px de alto, 10 px), largura fixa (não estica
+   na tela inteira) */
+const CELULA_MES = 'inline-flex h-[20px] w-[34px] flex-none items-center justify-center rounded border text-[10px] font-semibold';
 
 type CorMes = 'verde' | 'ambar' | 'vermelho' | 'cinza';
 
@@ -329,7 +248,7 @@ function ReguaMeses({ celulas, mesSelecionado, ano, loading, erro, onMesChange, 
      altura final por construcao, e nao uma estimativa mantida a mao. */
   if (loading) {
     return (
-      <div className="mt-1 grid grid-cols-12 gap-0.5">
+      <div className="flex flex-none gap-0.5" data-testid="vg-regua-meses">
         {meses.map(m => (
           <span key={m} className={`${CELULA_MES} ${COR_CELULA.cinza} text-transparent animate-pulse text-center`}>{m}</span>
         ))}
@@ -343,7 +262,7 @@ function ReguaMeses({ celulas, mesSelecionado, ano, loading, erro, onMesChange, 
   const mesCorrente = (hoje.getFullYear() === ano) ? hoje.getMonth() + 1 : 0;
 
   return (
-    <div className="mt-1 grid grid-cols-12 gap-0.5">
+    <div className="flex flex-none gap-0.5" data-testid="vg-regua-meses">
       {meses.map((rotulo, i) => {
         const mm = i + 1;
         const doMes = celulas.filter(c => c.mes === mm);
@@ -381,8 +300,7 @@ function ReguaMeses({ celulas, mesSelecionado, ano, loading, erro, onMesChange, 
    a altura de carregamento e exatamente a altura final. */
 const PILL_STATUS = 'rounded-full border px-2 py-0.5 text-[10px] leading-tight';
 
-/* VG-LEGADO-OCULTO-01 — os blocos legados da Visão Geral ficam fora da tela até a VISAO-GERAL-02 (ver o JSX). */
-const MOSTRAR_BLOCOS_LEGADOS = false;
+
 
 function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }: {
   status: StatusFazenda[];
@@ -396,7 +314,7 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
 
   if (loading) {
     return (
-      <div className="mt-1 flex flex-wrap gap-1">
+      <div className="flex flex-none gap-1">
         <span className={`${PILL_STATUS} border-border/40 bg-muted text-transparent animate-pulse`}>Rebanho 0/0</span>
       </div>
     );
@@ -450,7 +368,7 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
 
   return (
     <>
-      <div className="mt-1 flex flex-wrap gap-1">
+      <div className="flex flex-none gap-1">
         <button
           type="button"
           onClick={() => setModalAberto(true)}
@@ -467,7 +385,7 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
       <Dialog open={modalAberto} onOpenChange={setModalAberto}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-sm">
+            <DialogTitle className="text-[11px] font-semibold">
               Fechamento do rebanho — {escopo} · {mesLabel}
             </DialogTitle>
           </DialogHeader>
@@ -527,11 +445,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   onAnoChange?: (ano: string) => void;
 }) {
   const { clienteAtual } = useCliente();
-  const { fazendaAtual, isGlobal, fazendasComPecuaria, fazendas } = useFazenda();
-  const fazendaIdsPecuaria = useMemo(
-    () => fazendasComPecuaria.map(f => f.id),
-    [fazendasComPecuaria],
-  );
+  const { fazendaAtual, isGlobal, fazendasComPecuaria, fazendas, setFazendaAtual } = useFazenda();
   const h = new Date().getHours();
   const g = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
 
@@ -577,29 +491,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
      Enquanto carrega ou se o hook falhou, tambem nao: gradeEscopo vazio daria 'cinza' e
      a tela acusaria "mes nao iniciado" sem ter perguntado ao banco. */
-  const corMesSelecionado = useMemo(
-    () => corDoMes(gradeEscopo.filter(c => c.mes === mesNum)),
-    [gradeEscopo, mesNum],
-  );
-  const mesSemFechamento =
-    !isPeriodo && !loadingGradeAno && erroGradeAno === null
-    && (corMesSelecionado === 'vermelho' || corMesSelecionado === 'cinza');
-  const avisoMes = corMesSelecionado === 'cinza' ? 'Mês não iniciado' : 'Mês não fechado';
 
   const MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const ml = isPeriodo
     ? `Jan–${MES_ABREV[mesNum - 1]} ${ano}`
     : new Date(anoNum, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-  const [modalIndicador, setModalIndicador] = useState<string | null>(null);
-  /* PR-ATIVIDADE-01 — o modal por ASSUNTO. Estado proprio: ele nao e um
-     `modalIndicador` com outro valor, e sim outra pergunta. */
-  const [modalAtividade, setModalAtividade] = useState<Assunto | null>(null);
-  /* O assunto ATIVO dentro do modal, informado por ele. `modalAtividade` diz
-     por qual bloco o modal foi aberto e NAO acompanha a troca de assunto no
-     cabecalho — usar um pelo outro foi o defeito de 24/08: as series do
-     Zootecnico nunca carregavam quando se chegava nele por dentro do modal. */
-  const [assuntoAtivo, setAssuntoAtivo] = useState<Assunto | null>(null);
 
   /* Fatia do donut sob o mouse. Guarda o LABEL, nao o indice: `fatias` muda de
      tamanho conforme familias zeram, e indice apontaria para outra fatia. */
@@ -625,7 +522,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
   // Lançamentos compartilhados — carregados uma única vez, reutilizados pelas 3 chamadas de usePainelConsultorData abaixo.
   const { lancamentos: lancPecShared } = useLancamentos({ ano: anoNum });
-  const { lancamentos: lancFinShared, rateioADM } = useFinanceiro({ ano: anoNum });
+  const { lancamentos: lancFinShared } = useFinanceiro({ ano: anoNum });
   /* PR-FIN-COMP-02 — a SEGUNDA carga, por competência, só para as linhas de
      receita e dedução do DRE.
      ⚠ O `lancFinShared` ACIMA NÃO MUDA, e essa é a razão de existir uma segunda
@@ -650,18 +547,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   };
 
   const {
-    cabecas, pesoMedio, gmd, arrobas, desfrute,
-    receita, desembolso, resultado, valorRebanhoMes: valorReb,
-    areaProdutivaMes, areaPecuariaRealMes, areaPecuariaRealPorMes, areaPecuariaMetaPorMes,
+    areaPecuariaRealPorMes, 
     // PR-HOME-AREA-COMPOSICAO-01 — composicao da area no mes, do snapshot oficial.
     areaProdutivaRealPorMes, areaAgriculturaRealPorMes,
     areaTotalRealPorMes, areaSilviculturaRealPorMes, areaReservaRealPorMes,
     areaAppRealPorMes, areaBenfeitoriasRealPorMes, areaOutrasRealPorMes,
     areaPorFazendaMes,
-    snapshotsFazenda,
-    lotUaHa, kgHa, statusArea, faltandoCount,
-    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, desfrutePctArrIndicador, valorRebanhoIndicador,
-    receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
+    cabecasIndicador, gmdIndicador, uaHaIndicador, 
+    custeioPecIndicador, 
     // PR-HOME-CAIXA-CONSOLIDADO-01 — as 15 linhas de fluxo e o saldo.
     receitaPecCaixaIndicador, receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador, entradasNaoClassificadasIndicador,
     captacaoPecIndicador, captacaoAgriIndicador, captacaoSilviIndicador, captacaoSemEscopoIndicador,
@@ -672,41 +565,20 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     investPecIndicador, investBovinosIndicador, amortizacaoPecIndicador,
     /* Existia no PC-100 (usePainelConsultorData:4564) e nunca fora consumido
        aqui — o card montava o desembolso somando parcelas dos tres escopos. */
-    desembolsoPecIndicador,
     /* PR-PC100-POR-HECTARE-01 — financeiro de escopo pecuaria dividido pela area
        produtiva pecuaria. Nasceram sem leitor; a aba Operacional e' o primeiro. */
-    faturamentoHaIndicador, custoHaIndicador, investimentoHaIndicador, desembolsoHaIndicador,
     /* PR-PC100-DRE-01 e -PARCELAS-01 — o modelo oficial inteiro, sempre em
        COMPETENCIA por construcao. Nasceram sem leitor; esta aba e' o primeiro. */
-    dreFaturamentoIndicador, dreReceitaPecIndicador, dreOutrasReceitasIndicador,
-    dreDeducoesIndicador, dreReceitaLiquidaIndicador,
-    dreVbpIndicador, dreMargemIndicador, dreResOperIndicador,
-    dreVbpMerIndicador, dreMargemMerIndicador, dreResOperMerIndicador,
-    dreLucroOperacionalSMIndicador, dreAntesTributosSMIndicador,
-    dreLucroLiquidoSMIndicador, dreLucroLiquidoHaIndicador, dreLucroLiquidoHaSMIndicador,
-    dreCusteioIndicador, dreCustoFixoIndicador, dreCustoVariavelIndicador, dreResultadoBrutoIndicador,
-    dreInvestimentoIndicador, dreResultadoComInvestimentoIndicador,
-    dreReposicaoBovinosIndicador, dreVariacaoEstoqueIndicador,
-    dreVariacaoEstoquePorProducaoIndicador, dreVariacaoEstoquePorPrecoIndicador,
-    dreResultadoOperacionalIndicador, dreJurosIndicador,
-    dreResultadoAntesTributosIndicador, dreTributoPatrimonialIndicador,
-    dreImpostoSobreLucroIndicador, dreLucroLiquidoIndicador,
-    amortizacoesIndicador,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
     dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
     caixaIndicador,
     /* PR-ATIVIDADE-08 — quatro que o PC-100 ja produzia e nenhuma tela lia.
        Saem da MESMA desestruturacao: nenhuma chamada nova ao hook.
        `kgHaIndicador` ja vinha, na linha de cima. */
-    arrobasEstoqueIndicador, arrobasHaIndicador, precoArrEstoqueIndicador,
-    valorRebanhoSemEfeitoIndicador, areaProdutivaPecIndicador,
     /* PR-FINANCEIRO-01 — o DRE de caixa. Quase todos ja existiam no PC-100
        com a MESMA forma dos zootecnicos; so os dois `custoVariavel` de
        agricultura e silvicultura nasceram neste PR, porque o par existia
        apenas na pecuaria e a hierarquia nao fechava. */
-    custoFixoPecIndicador, custoVariavelPecIndicador,
-    custoFixoAgriIndicador, custoVariavelAgriIndicador,
-    custoFixoSilviIndicador, custoVariavelSilviIndicador,
     jurosPecIndicador, jurosAgriIndicador, jurosSilviIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
@@ -732,55 +604,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     : null;
   const saldoFinal = serieCaixa ? (serieCaixa[mesNum] ?? null) : null;
 
-  /* ── PR-HOME-DISPONIVEL-CONTA-01 — onde o saldo do mes esta ──
-     Escopo CLIENTE, nunca fazenda (regra de useSaldoCaixaMensal): identico em
-     Global e em fazenda especifica. anoMesStatus ja e o 'YYYY-MM' do mes
-     SELECIONADO — o mesmo do bloco Caixa, nao o mes corrente. */
-  const { data: saldosPorConta } = useSaldosPorConta(clienteAtual?.id, anoMesStatus ?? '');
-
-  /* ── PR-HOME-PRODUTIVO-FAZENDA-01 — produtivo por fazenda no mes selecionado ── */
-  const { data: produtivoPorFazenda } = useProdutivoPorFazenda(clienteAtual?.id, anoNum, mesNum, isPeriodo);
 
 
   /* Conta zerada nao aparece; grupo inteiro zerado nao aparece nem como rotulo
      ('cartao' cai nesse caso em todos os clientes hoje). O hook devolve tudo —
      esconder e decisao da tela. */
-  const gruposConta = useMemo(() => {
-    /**
-     * ⚠ A PERMUTA FICA FORA DOS DOIS LADOS — PR-AGRI-BARTER-PERMUTA-SEPARADA. O bloco "em
-     * conta" soma as contas e COMPARA com o saldo do Caixa, acusando diferença acima de R$ 1.
-     * Tirar a permuta só do Caixa faria este alarme disparar por desenho, todo mês, numa tela
-     * que existe para avisar de erro real. As duas pontas usam a mesma régua: `ehContaDeCaixa`.
-     * ⚠ ELA NÃO SOME DO SISTEMA — some DESTE bloco, que é sobre dinheiro em banco. O extrato
-     * da permuta é a tela dela, na camada 3 do barter.
-     */
-    const comSaldo = (saldosPorConta ?? [])
-      .filter(c => c.saldo !== 0 && ehContaDeCaixa(c.tipo_conta));
-    const out: { tipo: string; rotulo: string; subtotal: number; contas: typeof comSaldo }[] = [];
-    for (const c of comSaldo) {
-      const tipo = c.tipo_conta ?? '—';
-      let g = out.find(x => x.tipo === tipo);
-      if (!g) {
-        /* Tipo fora da lista oficial entra com o valor CRU: inventar rotulo
-           esconderia um tipo novo do plano de contas. */
-        /* ⚠ O RÓTULO VEM DE `gruposDeConta`, a régua que o resto do sistema usa. Este bloco
-           tinha um mapa próprio com três tipos, e ele já não conhecia `caixa` nem `outro`. */
-        g = { tipo, rotulo: ROTULO_GRUPO_CONTA[grupoDaConta(tipo)] ?? tipo, subtotal: 0, contas: [] };
-        out.push(g);
-      }
-      g.contas.push(c);
-      g.subtotal += c.saldo;
-    }
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saldosPorConta]);
 
-  const totalEmConta = gruposConta.reduce((acc, g) => acc + g.subtotal, 0);
 
   /* MOSTRAR, NAO FORCAR — mesmo principio da diferenca de fechamento do Caixa.
      Tolerancia de R$ 1,00 para nao exibir centavo de arredondamento. */
-  const difEmConta = saldoFinal != null ? totalEmConta - saldoFinal : null;
-  const mostrarDifEmConta = difEmConta != null && Math.abs(difEmConta) > 1;
 
   /* ── Composicao da area do mes ──
      Area e ESTOQUE: NUNCA soma ao longo do periodo.
@@ -801,54 +633,154 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const areaBenf      = areaNoModo(areaBenfeitoriasRealPorMes);
   const areaOutras    = areaNoModo(areaOutrasRealPorMes);
 
+  /* ══ VISAO-GERAL-02 (mock aprovado, Gabriel 03/11/2026) — os números da Visão Geral nova. NENHUM nasce aqui: cada um vem da fonte da
+     tela dona e já lida nesta tela (rebanho oficial pelos indicadores do PC-100, área pela foto do bloco "Área no mês", caixa pelo bloco
+     "Caixa no mês"), ou de UMA leitura nova da fonte oficial (DRE pecuária, chuvas, conciliação, atividades do Code 6). ══ */
+  const anoMesVG = anoMesStatus ?? '';
+  const podeVerMeta = usePodeVerMeta();
+  const { lidas: atividadesLidas } = useAtividadesDoCliente(clienteAtual?.id);
+  const { semCasar, carregando: carregandoConc } = useConciliacaoSemCasar(clienteAtual?.id, anoMesVG);
+  const { chuvas } = useChuvas();
+  /* o rebanho oficial por fazenda (a mesma consulta do PC-100: o cache é o mesmo) */
+  const { rawCategorias: categoriasVG } = useRebanhoOficial({ ano: anoNum, cenario: 'realizado', global: isGlobal });
+  /* DRE pecuária do ANO (jan → mês), realizado e meta, pela função da tela DRE. A meta só para quem a vê. */
+  const deAnoVG = anoNum ? `${anoNum}-01` : null;
+  const { dre: drePecAno } = useDrePecuaria(clienteAtual?.id, deAnoVG, anoMesVG || null, 'realizado');
+  const { dre: drePecAnoMeta } = useDrePecuaria(podeVerMeta ? clienteAtual?.id : null, deAnoVG, anoMesVG || null, 'meta');
+  const linhasDreVG = (d: typeof drePecAno) =>
+    !d ? null : isGlobal ? d.total : (d.fazendas.find(f => f.fazenda_id === fazendaAtual?.id)?.linhas ?? null);
+  /* VISAO-GERAL-05 — o ano anterior: os MESMOS meses (jan → mês) do ano anterior, pela mesma função */
+  const deAnoAntVG = anoNum ? `${anoNum - 1}-01` : null;
+  const ateAnoAntVG = anoNum && mesNum ? `${anoNum - 1}-${String(mesNum).padStart(2, '0')}` : null;
+  const { dre: drePecAnoAnt } = useDrePecuaria(clienteAtual?.id, deAnoAntVG, ateAnoAntVG, 'realizado');
+  const drePecReal = linhasDreVG(drePecAno);
+  const drePecMeta = linhasDreVG(drePecAnoMeta);
+  const drePecAnt = linhasDreVG(drePecAnoAnt);
+
+  const MES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const mesCurtoVG = MES_CURTO[mesNum - 1] ?? '';
+  const fmtHa = (v: number | null) => (v == null ? null : `${fmtN(v, 0)} ha`);
+
+  /* a chuva do mês (ou de jan → mês, no ano) por fazenda: a soma da tela Chuvas */
+  const chuvaPorFazenda = useMemo(() => {
+    const m = new Map<string, number>();
+    const de = `${anoNum}-${isPeriodo ? '01' : String(mesNum).padStart(2, '0')}`;
+    for (const c of chuvas) {
+      const am = c.data.slice(0, 7);
+      if (am < de || am > anoMesVG) continue;
+      m.set(c.fazendaId, (m.get(c.fazendaId) ?? 0) + c.milimetros);
+    }
+    return m;
+  }, [chuvas, anoNum, mesNum, isPeriodo, anoMesVG]);
+
+  /* a tabela Fazendas: área pela foto do bloco Área; cabeças e UA pelo rebanho oficial da fazenda; chuva; fechamento pela grade do ano */
+  const linhasFazendasVG = useMemo((): LinhaFazendaVG[] => {
+    const daArea = new Map(areaPorFazendaMes.map(a => [a.fazenda_id, a]));
+    const statusDoMes = new Map(gradeAno.filter(c => c.mes === mesNum).map(c => [c.fazendaId, c]));
+    const escopo = isGlobal ? fazendas : fazendaAtual ? [fazendaAtual] : [];
+    return escopo
+      .filter(f => f.id !== '__global__' && f.status_operacional !== 'inativa')
+      .map((f): LinhaFazendaVG => {
+        const a = daArea.get(f.id);
+        const cats = categoriasVG.filter(c => c.fazenda_id === f.id);
+        const linhaMes = cats.length ? buildFazendaRowsFromCategories(cats).find(r => r.mes === mesNum) : undefined;
+        const st = statusDoMes.get(f.id);
+        const areaPec = a ? a.area_pecuaria_ha : null;
+        const ua = linhaMes?.ua_media ?? null;
+        return {
+          id: f.id,
+          rotulo: rotuloDaFazenda({ id: f.id, nome: f.nome, codigo: f.codigo ?? null }),
+          atividades: atividadesDaArea(a),
+          areaTotal: a ? a.area_total_ha : null,
+          areaProdutiva: a ? a.area_produtiva_ha : null,
+          areaPecuaria: areaPec,
+          areaAgricultura: a ? a.area_agricultura_ha : null,
+          areaSilvicultura: a ? a.area_silvicultura_ha : null,
+          areaReservaAppBenf: a ? a.area_reserva_ha + a.area_app_ha + a.area_benfeitorias_ha + a.area_outras_ha : null,
+          cabecas: linhaMes ? linhaMes.cabecas_final : null,
+          ua,
+          uaHa: ua !== null && areaPec !== null && areaPec > 0 ? ua / areaPec : null,
+          chuvaMm: chuvaPorFazenda.get(f.id) ?? null,
+          fechamento: situacaoDoFechamento(st?.p1, st?.p2),
+        };
+      })
+      /* a fazenda sem área nem rebanho no mês (o ADM, uma fazenda nova) não ocupa linha */
+      .filter(l => l.areaTotal !== null || l.cabecas !== null);
+  }, [areaPorFazendaMes, gradeAno, mesNum, isGlobal, fazendas, fazendaAtual, categoriasVG, chuvaPorFazenda]);
+
+  const variacaoCaixa = saldoFinal !== null && saldoInicial !== null ? saldoFinal - saldoInicial : null;
+  const resultadoAno = drePecReal?.lucro_liquido ?? null;
+  const resultadoMeta = drePecMeta?.lucro_liquido ?? null;
+  const irPara = (s: V2Section) => onIrPara?.(s, '');
+  /* VISAO-GERAL-03/04 — o "Mapa das fazendas" da coluna da direita (a leitura da Geo pastos › Global, no mês da Visão Geral) */
+  const mapaDasFazendas = useMapaDasFazendas(anoMesStatus ?? '');
+
+  /* VISAO-GERAL-05 (07:31) — o número e a unidade separados (a unidade menor ao lado) e, embaixo do rótulo, a variação contra a meta (só
+     para quem a vê) e contra o ano anterior, quando a fonte as tem: rebanho e lotação pelo PC-100 (deltaMeta/deltaAno), caixa pelo
+     indicador de caixa do PC-100, resultado pela DRE pecuária (meta e os mesmos meses do ano anterior). Área: sem comparação. */
+  const soMeta = (v: number | null | undefined) => (podeVerMeta ? v ?? null : null);
+  const cartoesVG: CartaoVG[] = [
+    { id: 'area', titulo: isPeriodo ? 'Área produtiva média' : 'Área produtiva', valor: areaProdutiva == null ? null : fmtN(areaProdutiva, 0), unidade: 'ha',
+      detalhe: areaProdutiva != null && areaTotal != null && areaTotal > 0
+        ? `${fmtN((areaProdutiva / areaTotal) * 100, 1)}% de ${fmtN(areaTotal, 0)} ha` : null,
+      abrir: 'Abrir mapa', onAbrir: () => irPara('mapa-geo-pastos') },
+    { id: 'rebanho', titulo: 'Rebanho', valor: cabecasIndicador?.valor != null ? fmtN(cabecasIndicador.valor, 0) : null, unidade: 'cab',
+      meta: soMeta(cabecasIndicador?.deltaMeta), anoAnt: cabecasIndicador?.deltaAno ?? null,
+      abrir: 'Abrir fechamento', onAbrir: () => irPara('fechamento') },
+    /* VISAO-GERAL-04 (Gabriel 04/11 07:04) — a lotação ganha cartão próprio na faixa (era o detalhe do Rebanho) */
+    { id: 'uaha', titulo: 'Lotação', valor: uaHaIndicador?.valor != null ? fmtN(uaHaIndicador.valor, 2) : null, unidade: 'UA/ha',
+      meta: soMeta(uaHaIndicador?.deltaMeta), anoAnt: uaHaIndicador?.deltaAno ?? null,
+      abrir: 'Abrir fechamento', onAbrir: () => irPara('fechamento') },
+    { id: 'caixa', titulo: 'Caixa no fim do mês', valor: fmtRAbreviado(saldoFinal),
+      detalhe: variacaoCaixa === null ? null : `${variacaoCaixa >= 0 ? '+' : '−'}${fmtRAbreviado(Math.abs(variacaoCaixa))} no ${isPeriodo ? 'ano' : 'mês'}`,
+      meta: soMeta(caixaIndicador?.deltaMeta), anoAnt: caixaIndicador?.deltaAno ?? null,
+      abrir: 'Abrir fluxo', onAbrir: () => irPara('fluxo-caixa') },
+    /* VISAO-GERAL-04 — a chuva saiu da faixa: fica só na tabela Fazendas (coluna "Chuva") */
+    { id: 'resultado', titulo: 'Resultado do ano · pecuária', valor: fmtRAbreviado(resultadoAno),
+      meta: soMeta(variacao(resultadoAno, resultadoMeta)), anoAnt: variacao(resultadoAno, drePecAnt?.lucro_liquido),
+      abrir: 'Abrir DRE', onAbrir: () => irPara('dre') },
+  ];
+
+  /* Precisa de atenção: só o que tem fonte (fechamento faltando, conciliação sem casar). Pastos sem desenho e contas da semana ficam
+     fora até a tela dona expor a conta (o Geo Pastos e a CPR a fazem dentro do componente). */
+  const atencaoVG: ItemAtencao[] = [
+    ...gradeAno
+      .filter(c => c.mes === mesNum && (isGlobal || c.fazendaId === fazendaAtual?.id) && (c.p1 === 'pendente' || c.p2 === 'pendente'))
+      .map((c): ItemAtencao => {
+        const f = fazendas.find(x => x.id === c.fazendaId);
+        const destino: V2Section = c.p1 === 'pendente' ? 'fechamento' : 'valor-rebanho';
+        /* VISAO-GERAL-05 — o item cabe numa linha: a fazenda pelo CÓDIGO; o nome inteiro no title */
+        return { id: `fech-${c.fazendaId}`, texto: `Fechamento de ${mesCurtoVG} faltando · ${f?.codigo || f?.nome || c.fazendaNome}`,
+          title: `Fechamento de ${mesCurtoVG} faltando — ${f ? rotuloDaFazenda({ id: f.id, nome: f.nome, codigo: f.codigo ?? null }) : c.fazendaNome}`,
+          acao: 'Fechar', onIr: () => onIrPara?.(destino, c.fazendaId) };
+      }),
+    ...(semCasar !== null && semCasar > 0
+      ? [{ id: 'conc', texto: `Conciliação de ${mesCurtoVG}: ${fmtN(semCasar, 0)} sem casar`, acao: 'Conciliar', onIr: () => irPara('conciliacao') }]
+      : []),
+  ];
+
+  /* os blocos por atividade: as ligadas do cliente (Code 6); sem cadastro ou com falha, as famílias com área */
+  const gruposComArea: GrupoAtividade[] = [];
+  if ((areaPec ?? 0) > 0) gruposComArea.push('pecuaria');
+  if ((areaAgri ?? 0) > 0) gruposComArea.push('agricultura');
+  if ((areaSilvi ?? 0) > 0) gruposComArea.push('silvicultura');
+  /* numa fazenda só, o bloco da atividade que ela não tem (0 ha) não aparece; no Global, todas as ligadas do cliente */
+  const atividadesVG = blocosDaVisao(atividadesLidas, gruposComArea).filter(a => isGlobal || gruposComArea.includes(a.grupo));
+  const codigosCom = (atividade: string) => linhasFazendasVG.filter(l => l.atividades.includes(atividade)).map(l => l.rotulo.split(' · ')[0]).join(', ');
+  const subVG = (ha: number | null, atividade: string) => [fmtHa(ha), isGlobal ? codigosCom(atividade) : null].filter(Boolean).join(' · ') || undefined;
+  /* VISAO-GERAL-05 — os indicadores da Pecuária numa linha (@ no ano · @/ha · GMD · UA/ha · custo/@ · margem/@), cada um com a variação
+     contra a meta (só para quem a vê) e contra o ano anterior. A DRE pelos MESMOS meses; o rebanho pelos indicadores do PC-100. */
+  const pecuariaVG = indicadoresPecuaria({
+    real: drePecReal, meta: drePecMeta, anoAnt: drePecAnt,
+    gmd: gmdIndicador ? { valor: gmdIndicador.valor, deltaMeta: gmdIndicador.deltaMeta, deltaAno: gmdIndicador.deltaAno } : null,
+    uaHa: uaHaIndicador ? { valor: uaHaIndicador.valor, deltaMeta: uaHaIndicador.deltaMeta, deltaAno: uaHaIndicador.deltaAno } : null,
+    podeVerMeta,
+  });
+  const [verPorFazenda, setVerPorFazenda] = useState(false);
+
   /* Area e lotacao SEMPRE do snapshot oficial. A view tem area propria e
      lotacao derivada dela — divergentes (Pureza jul/2026: 4.726 ha e 0,73
      contra 3.595 ha e 0,96). Cruzar por fazenda_id e recalcular. */
-  const linhasProdutivas = useMemo(
-    () => (produtivoPorFazenda ?? [])
-      .map(p => {
-        const area = areaPorFazendaMes.find(a => a.fazenda_id === p.fazenda_id);
-        const areaPec = area?.area_pecuaria_ha ?? 0;
-
-        /* RAZAO DE AGREGADOS — media do UA ÷ media da area, pela funcao unica
-           da `eficienciaArea`. Ate 24/08 este bloco fazia media das RAZOES
-           mensais, deliberadamente, para espelhar o `rollingAvg(lotUaHa)` que o
-           PC-100 usava. O PR-RAZAO-ESTOQUE-01 trocou a regra do PC-100 e este
-           bloco ficaria para tras — com o tile UA/ha do bloco Eficiencia e esta
-           coluna na MESMA tela, discordando.
-
-           O divisor proprio que motivava o codigo a mao continua garantido: a
-           funcao so conta o mes que TEM area, entao fazenda com 3 de 7 meses
-           fechados divide por 3, nunca por 7. Era esse o cuidado, e ele nao se
-           perde — muda so o que se promedia.
-
-           Area do MES, do snapshot oficial — nunca a `area_produtiva_ha` da
-           view, que e lixo conhecido (Pureza jul/2026: 4.726 contra 3.595). */
-        const lotacaoPeriodo = (() => {
-          const area12 = Array.from({ length: 12 }, (_, i) =>
-            snapshotsFazenda.find(x => x.fazenda_id === p.fazenda_id && x.mes === i + 1)
-              ?.area_pecuaria_ha ?? null);
-          /* A serie acumula ate cada mes; ler em `mesNum - 1` ja recorta o
-             periodo, e mes futuro nao influencia a posicao lida. */
-          const v = calcularRazaoEstoqueAcumulada(p.uaPorMes, area12)[mesNum - 1];
-          return Number.isFinite(v) ? v : null;
-        })();
-
-        return {
-          ...p,
-          areaPec,
-          /* No MES nada muda: `ua_media[m] / area[m]` e exatamente o que o
-             PC-100 faz (eficienciaArea.ts:35-36). Area zero exibe "—", nunca
-             divisao por zero. */
-          lotacao: isPeriodo
-            ? lotacaoPeriodo
-            : (areaPec > 0 ? p.ua_media / areaPec : null),
-        };
-      })
-      .filter(l => l.cabecas > 0 || l.areaPec > 0)
-      .sort((a, b) => b.cabecas - a.cabecas),
-    [produtivoPorFazenda, areaPorFazendaMes, snapshotsFazenda, isPeriodo, mesNum],
-  );
 
   /* Total consome os indicadores do PC-100, os MESMOS objetos dos tiles do bloco
      Eficiencia. Bate por construcao, nao por coincidencia. NAO recalcular: o GMD,
@@ -856,14 +788,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      contra 0,378 na Pureza — o denominador nao e cabecas finais).
      Area e a excecao: e area, nao indicador, entao soma as linhas.
      Desfrute divide SOMAS, nunca promedia percentuais. */
-  const totProdutivo = useMemo(() => {
-    const arrIni = linhasProdutivas.reduce((s, l) => s + l.arrIniciais, 0);
-    const arrVend = linhasProdutivas.reduce((s, l) => s + l.arrVendidas, 0);
-    return {
-      areaPec: linhasProdutivas.reduce((s, l) => s + l.areaPec, 0),
-      desfrute: arrIni > 0 ? (arrVend / arrIni) * 100 : null,
-    };
-  }, [linhasProdutivas]);
 
   /* Nome da fazenda: `fazendas` do FazendaContext — a lista COMPLETA, a mesma que
      alimenta o seletor. Nao `fazendasComPecuaria`, que filtra tem_pecuaria !== false
@@ -1187,427 +1111,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     : null;
   const mostrarDifCaixa = difCaixa != null && Math.abs(difCaixa) > 1;
 
-  // ── Histórico OFICIAL PC-100 (Opção B) ──
-  // Lista de indicadores cujo histórico inferior consome fonte oficial PC-100
-  // em vez de useHistoricoIndicador (cache raw). Adicionar novos aqui conforme migração.
-  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa', 'kgHa', 'areaProdutivaPec', 'custeioPec', 'custoArr', 'custoCab', 'margemArr', 'precoArr', 'receitaPec'] as const;
-  const modalUsaHistoricoOficial =
-    !!modalIndicador &&
-    (MIGRATED_HISTORICO_KEYS as readonly string[]).includes(modalIndicador);
 
-  // ── Histórico multi-ano (auxiliar legado, só dispara com modal aberto p/ indicador permitido) ──
-  // Desfrute usa fonte oficial separada (lancamentos), via useHistoricoIndicador branch específico.
-  // uaHa/kgHa: branch específico que cruza fechamento_area_snapshot + zoot_mensal_cache.
-  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute', 'valorRebanho', 'uaHa', 'kgHa', 'receitaPec', 'precoArr', 'custeioPec', 'custoArr', 'custoCab', 'margemArr'];
-  const histAtivo = modalIndicador != null
-    && (HIST_KEYS_PERMITIDAS as string[]).includes(modalIndicador);
-  // Valor oficial do anoAtual e da meta — vêm do hook principal e são repassados
-  // ao histórico p/ que a barra do anoAtual bata 100% com o topo do modal.
-  /* O ponto do ano para UMA leitura. `valor` do indicador ja vem
-     colapsado por viewMode; `series[modo].ano[mesNum]` e a MESMA
-     expressao sem o colapso — em todos os indicadores
-     `valor = safe(serie[mesIdx])` com `serie = isPeriodo ? periodo13 :
-     mes13`. Nao e calculo paralelo: e a mesma leitura, sem escolher. */
-  type IndicadorComSeries = {
-    series?: {
-      mes:     { ano: number[]; anoAnt?: number[]; meta?: number[] };
-      periodo: { ano: number[]; anoAnt?: number[]; meta?: number[] };
-    };
-  };
-  const pontoHist = (ind: IndicadorComSeries | null | undefined, modo: 'mes' | 'periodo'): number | null => {
-    const v = ind?.series?.[modo]?.ano?.[mesNum];
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
-  };
-  /* O ponto do ano anterior para UMA leitura. Mesma relacao que
-     `pontoHist` tem com `?.valor`: e `safeSerieAnoAnt(serieAnoAnt,
-     mesNum)` sem o colapso por viewMode. Nao e calculo novo.
-     So os SEIS financeiros usam — os cinco zootecnicos leem o ano-1 de
-     `dadosAnoAnt`, que ja e uma instancia propria do hook. */
-  const antHist = (ind: IndicadorComSeries | null | undefined, modo: 'mes' | 'periodo'): number | null => {
-    const v = ind?.series?.[modo]?.anoAnt?.[mesNum];
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
-  };
-  /* A meta do ano corrente, mesma regra — sem o colapso do `serieMeta`. */
-  const metaHist = (ind: IndicadorComSeries | null | undefined, modo: 'mes' | 'periodo'): number | null => {
-    const v = ind?.series?.[modo]?.meta?.[mesNum];
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
-  };
-  /* A barra de meta do historico e uma so: "Meta {anoAtual}". O
-     `montaBarras` do modal a procura por `find(h => h.ano === anoAtual)`,
-     entao um item por leitura basta. Valor nulo = sem barra, que e o
-     correto quando o indicador nao tem meta. */
-  const metaPar = (ind: IndicadorComSeries | null | undefined): HistoricoPorModo => ({
-    mes:     [{ ano: anoNum, valor: metaHist(ind, 'mes') }],
-    periodo: [{ ano: anoNum, valor: metaHist(ind, 'periodo') }],
-  });
 
-  type HistoricoPorModo = {
-    mes:     Array<{ ano: number; valor: number | null }>;
-    periodo: Array<{ ano: number; valor: number | null }>;
-  };
 
-  /* As duas leituras do ano corrente, para o hook legado. A cadeia e a
-     MESMA de antes — so troca `?.valor` por `pontoHist(..., modo)` e
-     `serieMeta?.[mesNum]` por `metaHist(..., modo)`, que sao as mesmas
-     expressoes sem o colapso por viewMode. */
-  const valorOficialPorModo = (modo: 'mes' | 'periodo'): number | null => histAtivo
-    ? (modalIndicador === 'cabecas'      ? pontoHist(cabecasIndicador, modo)
-     : modalIndicador === 'pesoMedio'    ? pontoHist(pesoMedioIndicador, modo)
-     : modalIndicador === 'gmd'          ? pontoHist(gmdIndicador, modo)
-     : modalIndicador === 'arrobas'      ? pontoHist(arrobasIndicador, modo)
-     : modalIndicador === 'desfrute'     ? pontoHist(desfruteIndicador, modo)
-     : modalIndicador === 'valorRebanho' ? pontoHist(valorRebanhoIndicador, modo)
-     : modalIndicador === 'uaHa'         ? pontoHist(uaHaIndicador, modo)
-     : modalIndicador === 'kgHa'         ? pontoHist(kgHaIndicador, modo)
-     : modalIndicador === 'receitaPec'   ? pontoHist(receitaPecIndicador, modo)
-     : modalIndicador === 'precoArr'     ? pontoHist(precoArrIndicador, modo)
-     : modalIndicador === 'custeioPec'   ? pontoHist(custeioPecIndicador, modo)
-     : modalIndicador === 'custoArr'     ? pontoHist(custoArrIndicador, modo)
-     : modalIndicador === 'custoCab'     ? pontoHist(custoCabIndicador, modo)
-     : modalIndicador === 'margemArr'    ? pontoHist(margemArrIndicador, modo)
-     : null)
-    : null;
-  const valorOficialMetaPorModo = (modo: 'mes' | 'periodo'): number | null => histAtivo
-    ? (modalIndicador === 'cabecas'    ? metaHist(cabecasIndicador, modo)
-     : modalIndicador === 'pesoMedio'  ? metaHist(pesoMedioIndicador, modo)
-     : modalIndicador === 'gmd'        ? metaHist(gmdIndicador, modo)
-     : modalIndicador === 'arrobas'    ? metaHist(arrobasIndicador, modo)
-     : modalIndicador === 'receitaPec' ? metaHist(receitaPecIndicador, modo)
-     : modalIndicador === 'precoArr'   ? metaHist(precoArrIndicador, modo)
-     : modalIndicador === 'custeioPec' ? metaHist(custeioPecIndicador, modo)
-     : modalIndicador === 'custoArr'   ? metaHist(custoArrIndicador, modo)
-     : modalIndicador === 'custoCab'   ? metaHist(custoCabIndicador, modo)
-     : modalIndicador === 'margemArr'  ? metaHist(margemArrIndicador, modo)
-     : null)
-    : null;
 
-  /* Duas instancias do hook legado, uma por modo. Ele recebe `viewMode` e
-     devolve UMA leitura; serve `cabecas`, `desfrute` e `valorRebanho`.
-     `enabled: histAtivo` continua — so disparam com o modal aberto nessas
-     tres chaves. Custo aceito: uma rodada de query a mais nesses casos. */
-  const histLegadoParams = {
-    enabled: histAtivo,
-    clienteId: clienteAtual?.id,
-    fazendaId: isGlobal ? null : fazendaAtual?.id,
-    fazendaIds: fazendaIdsPecuaria,
-    indicadorKey: (histAtivo ? modalIndicador : 'cabecas') as HistoricoIndicadorKey,
-    mesAtual: mesNum,
-    anoAtual: anoNum,
-    anoInicio: anoNum - 5,
-  };
-  const histLegadoMes = useHistoricoIndicador({
-    ...histLegadoParams,
-    viewMode: 'mes',
-    valorOficialAnoAtual:     valorOficialPorModo('mes'),
-    valorOficialMetaAnoAtual: valorOficialMetaPorModo('mes'),
-  });
-  const histLegadoPeriodo = useHistoricoIndicador({
-    ...histLegadoParams,
-    viewMode: 'periodo',
-    valorOficialAnoAtual:     valorOficialPorModo('periodo'),
-    valorOficialMetaAnoAtual: valorOficialMetaPorModo('periodo'),
-  });
-  const historicoAno: HistoricoPorModo = { mes: histLegadoMes.historico, periodo: histLegadoPeriodo.historico };
-  const historicoAnoMeta: HistoricoPorModo = { mes: histLegadoMes.historicoMeta, periodo: histLegadoPeriodo.historicoMeta };
-  const loadingHistorico = histLegadoMes.loading || histLegadoPeriodo.loading;
 
-  // Comparativos — sempre modo 'mes', nunca 'periodo'
-  const mesAntNum = mesNum > 1 ? mesNum - 1 : null;
-  const dadosMesAnt = usePainelConsultorData({
-    ano: anoNum,
-    mes: mesAntNum ?? mesNum,
-    viewMode,
-    ...sharedLanc,
-  });
-  const dadosAnoAnt = usePainelConsultorData({
-    ano: anoNum - 1,
-    mes: mesNum,
-    viewMode,
-    ...sharedLanc,
-  });
 
-  // 5 chamadas históricas lazy — só carregam quando modal de arrobas abre.
-  // anoAtual-1 já vem de dadosAnoAnt (acima). anoAtual vem da chamada principal (L188).
-  // Não passar sharedLanc — cada ano histórico carrega seus próprios lançamentos via PC-100 interno.
-  // carregarMeta=false e incluirComparativos=false (lean) para minimizar queries.
-  const histArr2 = usePainelConsultorData({ ano: anoNum - 2, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
-  const histArr3 = usePainelConsultorData({ ano: anoNum - 3, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
-  const histArr4 = usePainelConsultorData({ ano: anoNum - 4, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
-  const histArr5 = usePainelConsultorData({ ano: anoNum - 5, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
 
-  /* Historico zootecnico direto do zoot_mensal_cache: UMA consulta paginada
-     cobrindo a faixa inteira, em vez de quatro copias do painel. As quatro
-     instancias histArr2..histArr5 continuam vivas para os sete financeiros e
-     para uaHa/kgHa, que cruzam com fechamento_area_snapshot. */
-  const histZoot = useHistoricoZootCache({
-    enabled: modalUsaHistoricoOficial,
-    clienteId: clienteAtual?.id,
-    fazendaIds: fazendaIdsPecuaria,
-    anoInicio: anoNum - 5,
-    anoFim: anoNum,
-    mesAtual: mesNum,
-  });
 
-  /* Series por fazenda — base da aba "Por Fazenda" do modal. Uma query, do
-     mesmo cache. So os QUATRO indicadores que o hook cobre recebem a prop;
-     nos catorze restantes a aba nao e renderizada. */
-  const seriePorFaz = useSeriePorFazenda({
-    enabled: !!modalIndicador,
-    clienteId: clienteAtual?.id,
-    fazendaIds: fazendaIdsPecuaria,
-    ano: anoNum,
-    mesAtual: mesNum,
-  });
 
-  /* ── PR-ATIVIDADE-01 · as fontes do modal por assunto ───────────────
-     Instancias PROPRIAS em vez de reaproveitar as de cima: as existentes
-     sao governadas por `modalIndicador`, e mudar o `enabled` delas seria
-     REMOVER linha do V2Home — o PR e aditivo por contrato. Ligam so quando
-     o modal de atividade abre, entao nao ha custo com ele fechado.
-     `useHistoricoZootCache` e a consulta barata do PR-23 (uma paginada), e
-     `useSeriePorFazenda` ja aplica o overlay de fechamento (dcaa1f11). */
-  const histZootAtiv = useHistoricoZootCache({
-    enabled: assuntoAtivo === 'zootecnico',
-    clienteId: clienteAtual?.id,
-    fazendaIds: fazendaIdsPecuaria,
-    anoInicio: anoNum - 5,
-    anoFim: anoNum,
-    mesAtual: mesNum,
-  });
-  const seriePorFazAtiv = useSeriePorFazenda({
-    /* `snapshotsFazenda` ja esta desestruturado acima e ja e consumido em
-       outro bloco desta pagina: passa por prop, sem requisicao nova. */
-    areaPorFazendaMes: snapshotsFazenda,
-    enabled: assuntoAtivo === 'zootecnico',
-    clienteId: clienteAtual?.id,
-    fazendaIds: fazendaIdsPecuaria,
-    ano: anoNum,
-    mesAtual: mesNum,
-  });
 
-  /* Os DOZE indicadores do assunto Zootecnico, prontos para o modal, TODOS
-     com dado desde o PR-ATIVIDADE-09: `areaProdutivaPecIndicador` nasceu no
-     hook e o card em construcao saiu. O nome resolveu a ambiguidade que
-     parou o PR-08 — ha tres series de area e duas se chamam "produtiva";
-     esta declara no rotulo que e' a pecuaria, a mesma que divide o @/ha.
-     `porFazenda` e `historico` ficam UNDEFINED quando nao ha fonte, e o card
-     mostra "em construção" naquela aba: mostrar o Global disfarcado de
-     por-fazenda seria dado errado com rotulo certo, e esconder o card faria o
-     buraco na grade sumir sem explicar.
-     Dos cinco que entraram no PR-ATIVIDADE-08, NENHUM tem serie por fazenda
-     nem historico multi-ano (`useHistoricoZootCache` cobre tres). Serie por
-     fazenda: NOVE dos doze cards tem, desde o PR-RAZAO-ESTOQUE-01; faltam os
-     tres de VALOR. */
-  /* UM memo, DOIS arrays. `monta` e' o helper que da forma a todos os cards de
-     indicador; escrever uma montagem propria para o Operacional faria os cards
-     dele divergirem dos outros sem ninguem decidir isso — e a divergencia so
-     apareceria numa tela, meses depois.
-     ⚠ Arrays SEPARADOS, nao um array com filtro: a grade do Zootecnico mapeia
-     `indicadores` INTEIRO e apenas ordena por `ORDEM_CARDS`
-     (ModalAtividade:1287-1292), entao pendurar os cruzados naquele array criaria
-     quatro cards na aba do Zootecnico. */
-  const { atividade: indicadoresAtividade, operacional: indicadoresOperacional, dre: indicadoresDre } =
-      useMemo<{ atividade: IndicadorAtividade[]; operacional: IndicadorAtividade[]; dre: IndicadorAtividade[] }>(() => {
-    const serie = (ind: { series?: SeriesPorModo; serieAno?: number[] } | null | undefined,
-                   modo: 'mes' | 'periodo', campo: 'ano' | 'anoAnt' | 'meta') => {
-      const s = ind?.series?.[modo]?.[campo];
-      if (s) return s;
-      return campo === 'ano' ? (ind?.serieAno ?? []) : undefined;
-    };
-    const ponto = (s: number[] | undefined) => {
-      if (!s || s.length === 0) return null;
-      const v = s.length >= 13 ? s[mesNum] : s[mesNum - 1];
-      return v != null && !isNaN(v) ? v : null;
-    };
-    /* Forma MINIMA comum aos indicadores do PC-100 — evita `any` num
-       PR novo (regra zero-cast). Nao e o tipo deles: e o subconjunto que
-       este bloco le. */
-    type IndicadorPC = {
-      titulo?: string;
-      subtitulo?: string;
-      titulos?: { mes?: { titulo?: string }; periodo?: { titulo?: string } };
-      deltaMes?: number | null;
-      deltaAno?: number | null;
-      deltaMeta?: number | null;
-      serieAno?: number[];
-      series?: SeriesPorModo;
-    } | null | undefined;
-    const monta = (
-      chave: string,
-      ind: IndicadorPC,
-      formatoValor: IndicadorAtividade['formatoValor'],
-      unidade: string | undefined,
-      porFazenda?: Array<{ fazendaId: string; nome: string; codigo: string; mes: Array<number | null>; periodo: Array<number | null> }>,
-      historico?: { mes: Array<{ ano: number; valor: number | null }>; periodo: Array<{ ano: number; valor: number | null }> },
-    ): IndicadorAtividade => {
-      const sMes = serie(ind, 'mes', 'ano') as number[];
-      const sPer = serie(ind, 'periodo', 'ano') as number[];
-      const temHist = !!historico && (historico.mes.some(p => p.valor != null));
-      return {
-        chave,
-        titulo: ind?.titulo ?? '',
-        subtitulo: ind?.subtitulo ?? '',
-        tituloMes: ind?.titulos?.mes?.titulo,
-        tituloPeriodo: ind?.titulos?.periodo?.titulo,
-        unidade,
-        formatoValor,
-        serieMes: sMes,
-        seriePeriodo: sPer,
-        serieAnoAntMes: serie(ind, 'mes', 'anoAnt'),
-        serieAnoAntPeriodo: serie(ind, 'periodo', 'anoAnt'),
-        serieMetaMes: serie(ind, 'mes', 'meta'),
-        serieMetaPeriodo: serie(ind, 'periodo', 'meta'),
-        valorMes: ponto(sMes),
-        valorPeriodo: ponto(sPer),
-        deltaMes: ind?.deltaMes ?? null,
-        deltaAno: ind?.deltaAno ?? null,
-        deltaMeta: ind?.deltaMeta ?? null,
-        porFazenda: porFazenda && porFazenda.length > 0 ? porFazenda : undefined,
-        historico: temHist ? historico : undefined,
-      };
-    };
-    const atividade = [
-      monta('cabecas',      cabecasIndicador,      'inteiro',  'cab',  seriePorFazAtiv.cabecas),
-      monta('arrobas',      arrobasIndicador,      'decimal1', '@',    seriePorFazAtiv.arrobas,   histZootAtiv.arrobas),
-      monta('uaHa',         uaHaIndicador,         'decimal2', 'UA/ha', seriePorFazAtiv.uaHa),
-      monta('gmd',          gmdIndicador,          'decimal3', 'kg',   seriePorFazAtiv.gmd,       histZootAtiv.gmd),
-      monta('pesoMedio',    pesoMedioIndicador,    'decimal1', 'kg',   seriePorFazAtiv.pesoMedio, histZootAtiv.pesoMedio),
-      monta('valorRebanho', valorRebanhoIndicador, 'moedaAbreviada', undefined, seriePorFazAtiv.valorRebanho),
-      /* ── PR-ATIVIDADE-08 · os cinco ligados ──
-         Sem `porFazenda` e sem `historico` em nenhum dos cinco: as fontes nao
-         cobrem estas chaves, e o card declara a falta em vez de mostrar o
-         Global com rotulo de fazenda. */
-      monta('arrobasEstoque', arrobasEstoqueIndicador, 'decimal1', '@', seriePorFazAtiv.arrobasEstoque),
-      monta('kgHa', kgHaIndicador, 'decimal1', 'kg/ha', seriePorFazAtiv.kgHa),
-      monta('arrobasHa', arrobasHaIndicador, 'decimal2', '@/ha', seriePorFazAtiv.arrobasHa),
-      monta('precoArrEstoque', precoArrEstoqueIndicador, 'moeda', 'R$/@', seriePorFazAtiv.precoArrEstoque),
-      monta('valorRebanhoSemEfeito', valorRebanhoSemEfeitoIndicador, 'moedaAbreviada', undefined, seriePorFazAtiv.valorRebanhoSemEfeito),
-      /* O decimo segundo, agora com dado. O rotulo diz QUAL das tres series
-         de area do hook e' esta — a mesma que divide o @/ha. */
-      monta('areaProdutiva', areaProdutivaPecIndicador, 'decimal1', 'ha', seriePorFazAtiv.areaProdutivaPec),
-    ];
-    /* Os CRUZADOS. Nenhum e' zootecnico nem financeiro puro: custo da arroba e'
-       custeio pecuario dividido por @ produzidas, preco vem da movimentacao, e a
-       margem e' a diferenca dos dois. Sem `porFazenda` nem `historico` — as
-       fontes nao cobrem estas chaves, e o card declara a falta em vez de mostrar
-       o Global com rotulo de fazenda. */
-    const operacional = [
-      monta('precoArr',  precoArrIndicador,  'moeda', 'R$/@'),
-      monta('custoArr',  custoArrIndicador,  'moeda', 'R$/@'),
-      monta('margemArr', margemArrIndicador, 'moeda', 'R$/@'),
-      monta('custoCab',  custoCabIndicador,  'moeda', 'R$/cab'),
-      /* POR HECTARE. Mesmo `monta` dos quatro acima — o helper so da forma, nao
-         calcula; a razao ja veio pronta do PC-100.
-         ⚠ O CHIP "ano ant." NASCE EM TRAVESSAO NOS QUATRO, e esta CERTO:
-         `_finSoberano` nao produz serie de ano anterior para nenhum dos
-         numeradores (recPecCx, cusPecComJ, invFazPec, desembPec), entao
-         `serieAnoAnt` vem undefined e `deltaAno` null. E' ausencia real.
-         ⚠ O chip "meta" cai em travessao nos meses em que
-         `areaPecuariaMetaPorMes` for zero ou nula — mesma regra do denominador
-         do realizado: sem hectare nao ha valor por hectare.
-         ⚠ Nenhum dos dois recebe fallback e nenhum chip e' escondido. Quem
-         "consertar" isso vai inventar numero que ninguem mediu. */
-      monta('faturamentoHa',   faturamentoHaIndicador,   'moeda', 'R$/ha'),
-      monta('custoHa',         custoHaIndicador,         'moeda', 'R$/ha'),
-      monta('investimentoHa',  investimentoHaIndicador,  'moeda', 'R$/ha'),
-      monta('desembolsoHa',    desembolsoHaIndicador,    'moeda', 'R$/ha'),
-    ];
-    /* DRE — vinte chaves, todas em moeda. Mesmo `monta` de todos os outros
-       cards: o helper so da forma, e a razao/subtracao ja veio pronta do
-       PC-100. Nenhuma conta acontece aqui. */
-    const dre = [
-      monta('dre_faturamento',             dreFaturamentoIndicador,               'moedaAbreviada', undefined),
-      monta('dre_rec_pec',                 dreReceitaPecIndicador,                'moedaAbreviada', undefined),
-      monta('dre_rec_outras',              dreOutrasReceitasIndicador,            'moedaAbreviada', undefined),
-      monta('dre_deducoes',                dreDeducoesIndicador,                  'moedaAbreviada', undefined),
-      monta('dre_receita_liquida',         dreReceitaLiquidaIndicador,            'moedaAbreviada', undefined),
-      /* Os TRES do DRE gerencial (ecf50533). `dre_res_oper` NAO e
-         `dre_resultado_operacional`: ver o comentario de LINHAS_DRE. */
-      monta('dre_vbp',                     dreVbpIndicador,                       'moedaAbreviada', undefined),
-      monta('dre_margem',                  dreMargemIndicador,                    'moedaAbreviada', undefined),
-      monta('dre_res_oper',                dreResOperIndicador,                   'moedaAbreviada', undefined),
-      /* Os tres SEM MERCADO e o lucro/ha (15cca72f). Os `_SM` sao ADICIONAIS
-         aos originais: a aba 'DRE var. mercado' le os originais, a 'sem var.
-         mercado' le estes. O lucro/ha e MOEDA, nao abreviada — R$ 444,66 diz
-         mais que R$ 0,4K num numero dessa ordem. */
-      /* Os tres COM MERCADO (158120ef): os subtotais ACIMA da variacao por
-         preco, com ela somada. Simetricos aos `_SM`. */
-      monta('dre_vbp_mer',                 dreVbpMerIndicador,                    'moedaAbreviada', undefined),
-      monta('dre_margem_mer',              dreMargemMerIndicador,                 'moedaAbreviada', undefined),
-      monta('dre_res_oper_mer',            dreResOperMerIndicador,                'moedaAbreviada', undefined),
-      monta('dre_lucro_oper_sm',           dreLucroOperacionalSMIndicador,        'moedaAbreviada', undefined),
-      monta('dre_antes_tributos_sm',       dreAntesTributosSMIndicador,           'moedaAbreviada', undefined),
-      monta('dre_lucro_liquido_sm',        dreLucroLiquidoSMIndicador,            'moedaAbreviada', undefined),
-      monta('dre_lucro_ha',                dreLucroLiquidoHaIndicador,            'moeda', 'R$/ha'),
-      /* O irmão sem variação de mercado — B-35. O rodapé do DRE escolhe um dos
-         dois pelo filtro ativo; nenhuma conta acontece lá. */
-      monta('dre_lucro_ha_sm',             dreLucroLiquidoHaSMIndicador,          'moeda', 'R$/ha'),
-      monta('dre_custeio',                 dreCusteioIndicador,                   'moedaAbreviada', undefined),
-      monta('dre_custo_fixo',              dreCustoFixoIndicador,                 'moedaAbreviada', undefined),
-      monta('dre_custo_var',               dreCustoVariavelIndicador,             'moedaAbreviada', undefined),
-      monta('dre_resultado_bruto',         dreResultadoBrutoIndicador,            'moedaAbreviada', undefined),
-      monta('dre_investimento',            dreInvestimentoIndicador,              'moedaAbreviada', undefined),
-      monta('dre_resultado_investimento',  dreResultadoComInvestimentoIndicador,  'moedaAbreviada', undefined),
-      monta('dre_reposicao',               dreReposicaoBovinosIndicador,          'moedaAbreviada', undefined),
-      monta('dre_variacao',                dreVariacaoEstoqueIndicador,           'moedaAbreviada', undefined),
-      monta('dre_variacao_producao',       dreVariacaoEstoquePorProducaoIndicador,'moedaAbreviada', undefined),
-      monta('dre_variacao_preco',          dreVariacaoEstoquePorPrecoIndicador,   'moedaAbreviada', undefined),
-      monta('dre_resultado_operacional',   dreResultadoOperacionalIndicador,      'moedaAbreviada', undefined),
-      monta('dre_financeiro',              dreJurosIndicador,                     'moedaAbreviada', undefined),
-      monta('dre_antes_tributos',          dreResultadoAntesTributosIndicador,    'moedaAbreviada', undefined),
-      monta('dre_tributo_patrimonial',     dreTributoPatrimonialIndicador,        'moedaAbreviada', undefined),
-      monta('dre_imposto_lucro',           dreImpostoSobreLucroIndicador,         'moedaAbreviada', undefined),
-      monta('dre_lucro_liquido',           dreLucroLiquidoIndicador,              'moedaAbreviada', undefined),
-    ];
-    return { atividade, operacional, dre };
-  }, [
-    custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
-    faturamentoHaIndicador, custoHaIndicador, investimentoHaIndicador, desembolsoHaIndicador,cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
-      valorRebanhoIndicador, arrobasEstoqueIndicador, kgHaIndicador, arrobasHaIndicador,
-      precoArrEstoqueIndicador, valorRebanhoSemEfeitoIndicador, areaProdutivaPecIndicador,
-      seriePorFazAtiv, histZootAtiv, mesNum]);
 
-  /* ── PR-MOVIMENTACOES-01 · os 28 cards do assunto Movimentacoes ──────────
-     FONTE UNICA: `useMovimentacoesAgregadas`, que ja entrega os treze tipos e
-     as lentes com serie mensal, acumulada, ano anterior e meta — e cujas
-     arrobas saem de `calcArrobasSafe` (carcaca/15 no abate, peso/30 no resto).
-     NENHUMA divisao de arroba e escrita aqui.
-
-     ⚠ NAO usar `rebanho.movimentacoes` do PC-100: ele nao tem arrobas, e soma
-     `l.pesoTotal`, que esta nulo em 77% das compras. Derivar R$/@ dali
-     significaria reimplementar a regra da arroba sobre um peso furado.
-
-     Sete tipos x quatro lentes. A unidade segue a decisao de Gabriel: @ para
-     abate e desfrute, QUILO para o resto. Card sem dado nao some da grade —
-     mostra travessao, e a ausencia fica legivel. */
-  const movAgg = useMovimentacoesAgregadas({
-    ano: anoNum, mes: mesNum, viewMode, isGlobal,
-    /* PR-VG-MOV-ENABLED-01 — a guarda por `assuntoAtivo` SAIU daqui.
-       HISTORICO, para nao se perder: ela existia porque as tres
-       `useLancamentos` rodavam SEMPRE, inclusive com o modal fechado, no
-       caminho de carga da Home; e o GERAL tinha de ligar junto, porque tres
-       das suas oito linhas sao de movimentacao e sem isso o resumo executivo
-       nasceria com travessao justo na metade que responde "o que entrou e
-       saiu".
-       POR QUE FOI REVERTIDA: o card Movimentacoes EXIBE quatro deltas "vs
-       meta" que dependem deste dado. Com a guarda, `assuntoAtivo` nasce null
-       (:596) e os quatro mostravam travessao no estado NORMAL da tela,
-       acertando so por efeito colateral de quem tivesse aberto um modal antes
-       e aquecido o cache. Mentir por omissao no estado normal e pior que o
-       custo das consultas. Os aceleradores do PR seguinte leem o mesmo dado.
-       O CUSTO E MENOR DO QUE PARECE, e foi medido antes de reverter:
-       - os outros TRES chamadores do hook (V2VisaoGeralRebanho:149,
-         BlocoMovimentacoesRebanhoFechamento:327 e
-         BlocoConferenciaMensalRebanhoFechamento:215) NUNCA passaram `enabled`
-         e sempre rodaram no default true. O V2Home era a UNICA excecao do
-         repo — isto alinha, nao inaugura;
-       - `enabled` NAO entra na queryKey (useLancamentos:181-183, deliberado),
-         entao o cache e compartilhado app-wide: quem ja visitou aquelas telas
-         no mesmo cliente e ano nao paga nada aqui, e a Home passa a aquecer
-         as outras. As tres requisicoes so aparecem em sessao fria de quem
-         entra direto na Home. */
-    enabled: true,
-  });
 
   /* Delta contra a META do MESMO recorte, como o bloco Zootecnico. O hook
      agrega `mesAtual` e `meta` sobre os MESMOS meses (`mesesPeriodo`), entao
@@ -1617,14 +1131,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      ⚠ Meta ZERO devolve `null`, nunca `+∞` nem `0%`: sem meta no recorte nao
      ha o que comparar, e o travessao ali passa a ser VERDADEIRO em vez de
      acidental — que era o defeito, quatro `delta: null` escritos a mao. */
-  const deltaMetaMov = (tipo: TipoMov): number | null => {
-    const cd = movAgg.porTipo[tipo];
-    const real = cd?.mesAtual?.cab;
-    const meta = cd?.meta?.cab;
-    if (real == null || meta == null) return null;
-    if (!Number.isFinite(real) || !Number.isFinite(meta) || meta === 0) return null;
-    return ((real - meta) / meta) * 100;
-  };
 
   /* Acelerador POR METRICA do card Movimentacoes: quanto das cabecas do ANO ja
      passaram, contra a meta anual, com marca onde o plano previa estar no mes.
@@ -1642,915 +1148,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      ⚠ metaAno ausente ou zero: AQUELE arco nao renderiza e o par vira so a
      metrica, como era antes. Os outros tres seguem. Sem fallback e sem
      mesNum/12 — inventar plano que ninguem escreveu e' pior que nao mostrar. */
-  const acelMov = (tipo: TipoMov, estouroGrave?: boolean) => {
-    const at = (sr: number[] | undefined, i: number) =>
-      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
-    const vivo = (v: number | null | undefined) =>
-      v != null && Number.isFinite(v) ? v : null;
-    const serie = movAgg.porTipo[tipo]?.seriesAcumulada?.cab;
-    const realAcum = vivo(at(serie?.real, mesNum));
-    const metaAcum = vivo(at(serie?.meta, mesNum));
-    const metaAno  = vivo(at(serie?.meta, 12));
-    if (metaAno == null || metaAno === 0) return null;
-    if (realAcum == null || metaAcum == null) return null;
-    const pctRitmo = (metaAcum / metaAno) * 100;
-    return {
-      pctAno: (realAcum / metaAno) * 100,
-      pctRitmo,
-      rotuloMeta: `meta ${MES_ABREV[mesNum - 1].toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
-      legenda: `${fmtN(realAcum) ?? '—'} de ${fmtN(metaAno) ?? '—'}`,
-      /* Emitido so quando pedido: ausente = comportamento normal. Espalhar o
-         retorno no ponto de chamada nao serviria — `acelMov` devolve null
-         quando falta meta, e `{...null}` viraria um objeto sem os demais
-         campos, mudando a cor de um arco que nem deveria existir. */
-      ...(estouroGrave ? { estouroGrave: true } : {}),
-    };
-  };
-
-  const indicadoresMovimentacoes = useMemo<IndicadorAtividade[]>(() => {
-    const ponto = (s: number[] | undefined) => {
-      if (!s || s.length === 0) return null;
-      const v = s.length >= 13 ? s[mesNum] : s[mesNum - 1];
-      return v != null && !isNaN(v) ? v : null;
-    };
-    const card = (
-      chave: string, tipo: TipoMov, lente: Lente,
-      titulo: string, subtitulo: string,
-      formatoValor: IndicadorAtividade['formatoValor'], unidade?: string,
-    ): IndicadorAtividade => {
-      const cd = movAgg.porTipo[tipo];
-      const mes = cd?.seriesJanDez?.[lente];
-      const per = cd?.seriesAcumulada?.[lente];
-      return {
-        chave, titulo, subtitulo,
-        tituloMes: titulo, tituloPeriodo: titulo,
-        unidade, formatoValor,
-        serieMes:     mes?.real   ?? [],
-        seriePeriodo: per?.real   ?? [],
-        serieAnoAntMes:     mes?.anoAnt,
-        serieAnoAntPeriodo: per?.anoAnt,
-        serieMetaMes:       mes?.meta,
-        serieMetaPeriodo:   per?.meta,
-        valorMes:     ponto(mes?.real),
-        valorPeriodo: ponto(per?.real),
-        /* INERTES, como no Zootecnico: o modal calcula o delta por leitura a
-           partir das series. Ficam no contrato porque a prop os exige. */
-        deltaMes: null, deltaAno: null, deltaMeta: null,
-      };
-    };
-    /* Uma LINHA por tipo. `pesoLente`/`precoLente` mudam com a unidade do tipo:
-       abate e desfrute em @, os demais em quilo. */
-    const linha = (
-      pref: string, tipo: TipoMov, rotulo: string, emArroba: boolean,
-    ): IndicadorAtividade[] => [
-      card(`${pref}_cab`, tipo, 'cab', `${rotulo} — cabeças`, 'Quantidade no recorte', 'inteiro', 'cab'),
-      emArroba
-        ? card(`${pref}_peso`, tipo, 'arroba_media', `${rotulo} — peso médio`, 'Arrobas por cabeça', 'decimal2', '@')
-        : card(`${pref}_peso`, tipo, 'peso_medio_kg', `${rotulo} — peso médio`, 'Quilos por cabeça', 'decimal1', 'kg'),
-      emArroba
-        ? card(`${pref}_preco`, tipo, 'preco_arroba', `${rotulo} — preço`, 'Valor ÷ arrobas', 'moeda', 'R$/@')
-        : card(`${pref}_preco`, tipo, 'preco_kg', `${rotulo} — preço`, 'Valor ÷ quilos', 'moeda', 'R$/kg'),
-      card(`${pref}_valor`, tipo, 'valor_total', `${rotulo} — valor total`, 'Soma no recorte', 'moedaAbreviada'),
-    ];
-    return [
-      /* E3 — NASCIMENTOS fica so com cabecas. Peso, preco e valor saem, e
-         nao viram travessao: valor de nascimento nao e preco de mercado, e
-         CUSTO DE PRODUCAO, e provavelmente nunca vai acender. Diferente de
-         consumo e morte, que acendem quando o campo voltar ao formulario —
-         mostrar travessao ali seria prometer dado que nao vem.
-         As tres chaves seguem em `ORDEM_CARDS_MOV` e, sem indicador, viram
-         celula VAZIA: e o que impede o grid de puxar Compras para esta
-         linha e quebrar a leitura horizontal. */
-      card('nasc_cab', 'nascimentos', 'cab', 'Nascimentos — cabeças', 'Quantidade no recorte', 'inteiro', 'cab'),
-      ...linha('compra',   'compras',     'Compras',            false),
-      ...linha('venda',    'vendas',      'Vendas em pé',       false),
-      /* SO PARA A TABELA do resumo, fora de `ORDEM_CARDS_MOV` — a grade
-         percorre a ordem e ignora chave que nao esta la, entao este card nao
-         aparece entre os 25.
-         O CARD de Vendas em Pe continua em R$/kg: venda em pe se negocia por
-         quilo. No resumo executivo o mercado fala em ARROBA, e sao publicos
-         diferentes lendo o mesmo fato. */
-      card('venda_preco_arroba', 'vendas', 'preco_arroba', 'Preço médio venda', 'Valor ÷ arrobas', 'moeda', 'R$/@'),
-      ...linha('abate',    'abates',      'Abates',             true),
-      ...linha('consumo',  'consumos',    'Consumo / Doações',  false),
-      /* E3 — a linha de Mortes deixa de ser cabecas/peso/preco/valor. Valor de
-         morte nao existe hoje (o campo saiu do formulario), e mortalidade e o
-         indicador que importa.
-         DENOMINADOR: `saldoInicialAnual` do proprio hook — o rebanho de
-         JANEIRO, nao o do mes nem a media. E' o MESMO denominador do
-         `desfrute_pct`, pela mesma funcao (`calcDesfrute`), entao as duas
-         taxas da tela sao comparaveis entre si. Sendo fixo no ano, o
-         acumulado cresce e o numero se compara mes a mes. */
-      card('morte_cab',   'mortes',          'cab', 'Mortes Global — cabeças',      'Quantidade no recorte', 'inteiro', 'cab'),
-      card('morte_pct',   'mortalidade_pct', 'cab', 'Mortes Global — mortalidade',  'Mortes ÷ rebanho inicial do ano', 'decimal2', '%'),
-      /* MAMOTES — `useMovimentacoesAgregadas` agrega por (mes, tipo), sem
-         dimensao de CATEGORIA. Abrir por categoria e frente do PC-100, ja
-         registrada. Os dois cards ocupam o lugar deles na grade em vez de
-         deixar a quarta linha com dois vaos mudos. */
-      { chave: 'morte_mamote_cab', titulo: 'Mortes Mamotes — cabeças', subtitulo: 'Quantidade no recorte',
-        unidade: 'cab', formatoValor: 'inteiro' as const,
-        serieMes: [], seriePeriodo: [], valorMes: null, valorPeriodo: null,
-        deltaMes: null, deltaAno: null, deltaMeta: null,
-        emConstrucao: 'o hook agrega por tipo, sem categoria' },
-      { chave: 'morte_mamote_pct', titulo: 'Mortes Mamotes — mortalidade', subtitulo: 'Mortes ÷ rebanho inicial do ano',
-        unidade: '%', formatoValor: 'decimal2' as const,
-        serieMes: [], seriePeriodo: [], valorMes: null, valorPeriodo: null,
-        deltaMes: null, deltaAno: null, deltaMeta: null,
-        emConstrucao: 'o hook agrega por tipo, sem categoria' },
-      ...linha('desfrute', 'desfrute',    'Desfrute',           true),
-    ];
-  }, [movAgg, mesNum]);
-
-  /* Le do MESMO array que o modal consome, entao bloco e tabela nunca
-     divergem: um numero, uma fonte. Segue o `viewMode` como os outros dois. */
-  const valorFin = (chave: string): string => {
-    const i = indicadoresFinanceiro.find(x => x.chave === chave);
-    const v = isPeriodo ? i?.valorPeriodo : i?.valorMes;
-    return fmtRAbreviado(v ?? null) ?? '—';
-  };
-
-  /* Espelha valorFin: MESMO array, MESMO recorte por isPeriodo. Duas leituras
-     do mesmo indicador nunca podem discordar.
-     ⚠ O ponto do mes NAO e' `serie[mesNum - 1]`. Estas series chegam em DUAS
-     convencoes: `usePainelConsultorData:1035` converte a de 12 posicoes
-     (0-indexada) numa de 13 com NaN no indice 0 (1-indexada), e `somaSeries`
-     (1972) devolve o MAIOR comprimento entre as parcelas — entao a serie
-     somada pode sair com 12 OU com 13. A regra abaixo e' a MESMA que `ponto`
-     aplica ao valor do mesmo card (1963-1967); usar outra faria as duas
-     metades de um so delta lerem meses diferentes.
-     A regra esta triplicada neste arquivo (1277, 1396, 1963) e mais duas vezes
-     em ModalAtividade (382, 656). Unificar e' PR proprio. */
-  const deltaFin = (chave: string): number | null => {
-    const i = indicadoresFinanceiro.find(x => x.chave === chave);
-    const real = isPeriodo ? i?.valorPeriodo : i?.valorMes;
-    const serieMeta = isPeriodo ? i?.serieMetaPeriodo : i?.serieMetaMes;
-    const meta = !serieMeta || serieMeta.length === 0 ? null
-      : (serieMeta.length >= 13 ? serieMeta[mesNum] : serieMeta[mesNum - 1]);
-    if (real == null || meta == null) return null;
-    if (!Number.isFinite(real) || !Number.isFinite(meta) || meta === 0) return null;
-    return ((real - meta) / meta) * 100;
-  };
-
-  /* Leitor do DRE: SEMPRE `series.periodo`, nunca `series.mes`, qualquer que
-     seja o `viewMode`. Ver o comentario do card — demonstrativo e' acumulado por
-     natureza. O indice segue a regra das duas convencoes, decima copia; o
-     PR-SERIE-INDICE-01 unifica. */
-  const valorDre = (ind: { series?: SeriesPorModo } | null | undefined): string => {
-    const sr = ind?.series?.periodo?.ano;
-    const v = !sr || sr.length === 0 ? null
-      : (sr.length >= 13 ? sr[mesNum] : sr[mesNum - 1]);
-    return fmtRAbreviado(v != null && Number.isFinite(v) ? v : null) ?? '—';
-  };
-
-  /* Arco do card DRE. Irmao do `acelFin`, com uma diferenca que importa: aqui
-     nao ha escolha de recorte a fazer. O DRE JA e' acumulado por natureza —
-     `valorDre` le `series.periodo` literal — entao card e arco falam a mesma
-     lingua, e o "no ano" dentro do arco descreve o card inteiro, nao so ele.
-     ⚠ Mesmas duas guardas dos outros arcos: sem meta anual nao renderiza, e sem
-     meta ACUMULADA tambem nao (a de 0d3dcec0, que impede o arco de mostrar
-     numero enquanto o delta ao lado mostra travessao).
-     ⚠ Os quatro sao RESULTADO: maior e' melhor, nenhum inverte, nenhum usa
-     destructive. `estouroGrave` continua exclusivo de Mortes. */
-  const acelDre = (ind: { series?: SeriesPorModo } | null | undefined) => {
-    const at = (sr: number[] | undefined, i: number) =>
-      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
-    const vivo = (v: number | null | undefined) =>
-      v != null && Number.isFinite(v) ? v : null;
-    const realAcum = vivo(at(ind?.series?.periodo?.ano, mesNum));
-    const metaAcum = vivo(at(ind?.series?.periodo?.meta, mesNum));
-    const metaAno  = vivo(at(ind?.series?.periodo?.meta, 12));
-    if (metaAno == null || metaAno === 0) return null;
-    if (realAcum == null || metaAcum == null) return null;
-    if (metaAcum === 0) return null;
-    const pctRitmo = (metaAcum / metaAno) * 100;
-    return {
-      pctAno: (realAcum / metaAno) * 100,
-      pctRitmo,
-      rotuloMeta: `meta ${MES_ABREV[mesNum - 1].toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
-      legenda: `${fmtRAbreviado(realAcum) ?? '—'} de ${fmtRAbreviado(metaAno) ?? '—'}`,
-    };
-  };
-
-  /* Arco do card Financeiro: quanto do ANO ja passou, contra a meta anual.
-     ⚠ Le do MESMO `indicadoresFinanceiro` que `valorFin` e `deltaFin` — nao dos
-     indicadores crus do PC-100. Tres leituras do mesmo card discordarem seria o
-     pior defeito possivel num bloco que existe para fechar conta.
-     As quatro metricas ACUMULAM ao longo do ano; nenhuma e' estoque nem taxa,
-     entao as quatro sao arco e nenhuma e' barra.
-     ⚠ `seriePeriodo` e `serieMetaPeriodo` ja vem ACUMULADAS Jan→mes do proprio
-     `card()` (:2169-2171), que por sua vez soma as series `periodo` do PC-100,
-     produzidas por `cumSumTo13` em `buildInd`. Nada e' reagregado aqui.
-     ⚠ 13 posicoes com NaN no indice 0 — indexar sempre, nunca varrer. `at` e' a
-     mesma regra das duas convencoes; oitava copia, e PR-SERIE-INDICE-01 unifica.
-     ⚠ Sem meta anual (ausente, NaN ou zero) o arco NAO renderiza e o par vira so
-     a metrica. Amortizacoes cai nesse caso hoje, por meta ausente de verdade. */
-  const acelFin = (chave: string) => {
-    const at = (sr: number[] | undefined, i: number) =>
-      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
-    const vivo = (v: number | null | undefined) =>
-      v != null && Number.isFinite(v) ? v : null;
-    const i = indicadoresFinanceiro.find(x => x.chave === chave);
-    const realAcum = vivo(at(i?.seriePeriodo, mesNum));
-    const metaAcum = vivo(at(i?.serieMetaPeriodo, mesNum));
-    const metaAno  = vivo(at(i?.serieMetaPeriodo, 12));
-    if (metaAno == null || metaAno === 0) return null;
-    if (realAcum == null || metaAcum == null) return null;
-    /* ⚠ ESTA GUARDA EXISTE PARA O ARCO E O DELTA CONCORDAREM. `deltaFin` desiste
-       quando a meta DO MES e' zero (:1577); sem a linha abaixo o arco seguia,
-       porque a guarda dele olha dezembro. A mesma metrica exibia travessao no
-       delta e "54,9×" no arco, lado a lado — medido em Amortizacoes na NJ, com
-       meta de amortizacao pecuaria zerada de janeiro a julho.
-       ⚠ NAO da' para saber se este zero e' "plano de zero" ou "mes sem plano":
-       `agregaPorPredicadoGenerico` parte de `emptyMeses()` e so soma, e
-       `cumSumTo13` acumula tratando ausencia como zero — a informacao ja se
-       perdeu duas vezes antes de chegar aqui. Divida a montante, PR-SENTINELA-01.
-       Como nao distingue, o arco cala: com meta anual > 0 e acumulada 0, o plano
-       existe no ano mas nao cobre o recorte, e nao ha ritmo a declarar. Desenhar
-       "0,0%" com a marca encostada na borda afirmaria que o plano previa NADA
-       ate aqui, que e' diferente de nao haver plano.
-       ⚠ Quem "melhorar" isto para o arco reaparecer traz a contradicao de volta. */
-    if (metaAcum === 0) return null;
-    const pctRitmo = (metaAcum / metaAno) * 100;
-    return {
-      pctAno: (realAcum / metaAno) * 100,
-      pctRitmo,
-      rotuloMeta: `meta ${MES_ABREV[mesNum - 1].toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
-      legenda: `${fmtRAbreviado(realAcum) ?? '—'} de ${fmtRAbreviado(metaAno) ?? '—'}`,
-    };
-  };
-
-  /* Acelerador do bloco Zootecnico: quanto das @ do ANO ja foram produzidas, e
-     onde o PLANO dizia que estariamos neste mes.
-     ⚠ E' SEMPRE do ano, mesmo com o filtro da tela em "No mes". As quatro
-     metricas ao lado seguem o recorte; esta nao. Sao leituras diferentes de
-     proposito, e quem declara isso e' o "no ano" DENTRO do arco.
-     ⚠ A marca de ritmo sai da META ACUMULADA, jamais de mesNum/12: medido no
-     banco, a meta ate julho vai de 36,6% (RRCC) a 88,2% (Raul Juliato) da meta
-     anual — marca fixa erraria em 5 dos 6 clientes.
-     ⚠ Sem meta anual (nula ou zero) o acelerador NAO aparece. Nada de fallback
-     para 7/12, que inventaria um plano que ninguem escreveu.
-     `at` repete a regra das duas convencoes de serie (12 zero-indexada, 13
-     1-indexada), a mesma do deltaFin acima. Local de proposito: unificar as
-     copias e' o PR-SERIE-INDICE-01.
-     Devolve o proprio prop-bag, com a forma EXATA que o BlocoAtividade declara.
-     Ja devolveu o par {acel, subtitulo}, quando o subtitulo do card repetia a
-     conta por extenso; a conta saiu de la porque o arco ao lado ja a mostra
-     duas vezes, no rotuloMeta e na legenda. */
-  const aceleradorArrobas = ((ind: { series?: SeriesPorModo } | null | undefined) => {
-    const at = (sr: number[] | undefined, i: number) =>
-      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
-    const vivo = (v: number | null | undefined) =>
-      v != null && Number.isFinite(v) ? v : null;
-    const realizadoAcum = vivo(at(ind?.series?.periodo?.ano, mesNum));
-    const metaAcum      = vivo(at(ind?.series?.periodo?.meta, mesNum));
-    const metaAno       = vivo(at(ind?.series?.periodo?.meta, 12));
-    if (metaAno == null || metaAno === 0) return null;
-    if (realizadoAcum == null || metaAcum == null) return null;
-    const pctRitmo = (metaAcum / metaAno) * 100;
-    const mesAbrev = MES_ABREV[mesNum - 1];
-    return {
-      pctAno: (realizadoAcum / metaAno) * 100,
-      pctRitmo,
-      rotuloMeta: `meta ${mesAbrev.toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
-      legenda: `${fmtN(realizadoAcum, 1) ?? '—'} de ${fmtN(metaAno, 1) ?? '—'}`,
-    };
-  })(arrobasIndicador);
-
-  /* As TRES barras do Zootecnico: posicao contra a meta DO RECORTE.
-     ⚠ O CARD FALA DUAS LINGUAS, e e' deliberado (decisao de Gabriel): ao
-     alternar No mes / No periodo as tres barras MUDAM e o arco de @ produzidas
-     NAO — ele e' sempre anual. Os rotulos declaram qual e' qual: "no ano" dentro
-     do arco, "no mes"/"no periodo" sob cada barra. Sem eles, a proxima pessoa le
-     como defeito.
-     ⚠ NADA e' reagregado aqui. As series de periodo do PC-100 ja sao o agregado
-     certo por natureza — rebanho e' media acumulada (:1954), GMD e'
-     computePeriodGmd recalculado (:2182), lotacao e'
-     calcularRazaoEstoqueAcumulada (:2236). A regra "razao de agregados, nunca
-     media de razoes" ja esta honrada la; refazer a conta aqui a quebraria.
-     ⚠ Ler `series.*.meta`, que e' uniforme nos tres. O campo raso do rebanho
-     chama-se `serieMetaIndicador` (usePainelConsultorData:4165), fora do padrao
-     dos outros dois — quem procurar `.serieMeta` nele recebe undefined calado.
-     ⚠ Indice 0 destas series e' NaN (nao zero literal como nas de
-     Movimentacoes): indexar sempre, nunca varrer a serie inteira.
-     ⚠ As seis series sao null quando `monthlyDataMeta` e' null, o que depende de
-     `carregarMetaEffective` (usePainelConsultorData:1045). Nesta tela esta
-     satisfeito — :669 passa `incluirComparativos: true`. Se um dia a barra ler
-     de instancia lean (as historicas de :1202-1205 sao), a meta vem null POR
-     CONSTRUCAO, nao por ausencia de plano: barra sumida ali nao significa que
-     ninguem planejou. */
-  const barraZoot = (
-    ind: { series?: SeriesPorModo; valor?: number | null } | null | undefined,
-    dec: number,
-  ) => {
-    const at = (sr: number[] | undefined, i: number) =>
-      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
-    const vivo = (v: number | null | undefined) =>
-      v != null && Number.isFinite(v) ? v : null;
-    const serieMeta = isPeriodo ? ind?.series?.periodo?.meta : ind?.series?.mes?.meta;
-    const meta = vivo(at(serieMeta, mesNum));
-    const real = vivo(ind?.valor);
-    if (meta == null || real == null) return null;
-    /* Folga de 25% sobre o MAIOR dos dois: com a meta como base, realizado acima
-       dela estouraria o trilho e o excedente — o caso que mais interessa ver —
-       ficaria invisivel. */
-    const base = Math.max(real, meta) * 1.25;
-    if (!(base > 0)) return null;
-    return {
-      pctReal: (real / base) * 100,
-      pctMeta: (meta / base) * 100,
-      rotuloMeta: `meta ${fmtN(meta, dec) ?? '—'}`,
-      rotuloRecorte: isPeriodo ? 'no período' : 'no mês',
-      abaixo: real < meta,
-    };
-  };
-
-  const arrobasHistoricoOficial: HistoricoPorModo =
-    modalIndicador === 'arrobas' ? histZoot.arrobas : { mes: [], periodo: [] };
-
-  const loadingArrobasHistorico = modalIndicador === 'arrobas' && histZoot.loading;
-
-  // ── pesoMedio histórico oficial PC-100 (Opção B) ──
-  const pesoMedioHistoricoOficial: HistoricoPorModo =
-    modalIndicador === 'pesoMedio' ? histZoot.pesoMedio : { mes: [], periodo: [] };
-
-  const loadingPesoMedioHistorico = modalIndicador === 'pesoMedio' && histZoot.loading;
-
-  // ── gmd histórico oficial PC-100 (Opção B 3º indicador) ──
-  const gmdHistoricoOficial: HistoricoPorModo =
-    modalIndicador === 'gmd' ? histZoot.gmd : { mes: [], periodo: [] };
-
-  const loadingGmdHistorico = modalIndicador === 'gmd' && histZoot.loading;
-
-  // ── uaHa histórico oficial PC-100 (Opção B 4º indicador) ──
-  const uaHaHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'uaHa') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.uaHaIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.uaHaIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.uaHaIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.uaHaIndicador, modo) },
-        { ano: anoNum - 1, valor: pontoHist(dadosAnoAnt.uaHaIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(uaHaIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum,
-    histArr5.uaHaIndicador, histArr4.uaHaIndicador, histArr3.uaHaIndicador,
-    histArr2.uaHaIndicador, dadosAnoAnt.uaHaIndicador,
-    uaHaIndicador,
-  ]);
-
-  const loadingUaHaHistorico = modalIndicador === 'uaHa' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
-
-  // ── kgHa histórico oficial PC-100 (Opção B 5º indicador) ──
-  const kgHaHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'kgHa') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.kgHaIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.kgHaIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.kgHaIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.kgHaIndicador, modo) },
-        { ano: anoNum - 1, valor: pontoHist(dadosAnoAnt.kgHaIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(kgHaIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum,
-    histArr5.kgHaIndicador, histArr4.kgHaIndicador, histArr3.kgHaIndicador,
-    histArr2.kgHaIndicador, dadosAnoAnt.kgHaIndicador,
-    kgHaIndicador,
-  ]);
-
-  const loadingKgHaHistorico = modalIndicador === 'kgHa' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
-
-  // Helper: lê o ano-1 financeiro pela série oficial da chamada principal,
-  // a mesma fonte usada pela linha cinza do gráfico superior.
-  // Evita usar dadosAnoAnt para financeiros, pois essa chamada recebe sharedLanc
-  // do ano atual e pode zerar indicadores financeiros do ano anterior.
-  const safeSerieAnoAnt = (serie: number[] | undefined, idx: number): number | null => {
-    const v = serie?.[idx];
-    return v != null && !isNaN(v) ? v : null;
-  };
-
-  // ── custeioPec histórico oficial PC-100 (Opção B 7º indicador) ──
-  const custeioPecHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'custeioPec') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.custeioPecIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.custeioPecIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.custeioPecIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.custeioPecIndicador, modo) },
-        { ano: anoNum - 1, valor: antHist(custeioPecIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(custeioPecIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum, mesNum,
-    histArr5.custeioPecIndicador, histArr4.custeioPecIndicador, histArr3.custeioPecIndicador,
-    histArr2.custeioPecIndicador,
-    custeioPecIndicador,
-  ]);
-
-  const loadingCusteioPecHistorico = modalIndicador === 'custeioPec' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
-
-  // ── custoArr histórico oficial PC-100 (Opção B 8º indicador) ──
-  const custoArrHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'custoArr') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.custoArrIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.custoArrIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.custoArrIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.custoArrIndicador, modo) },
-        { ano: anoNum - 1, valor: antHist(custoArrIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(custoArrIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum, mesNum,
-    histArr5.custoArrIndicador, histArr4.custoArrIndicador, histArr3.custoArrIndicador,
-    histArr2.custoArrIndicador,
-    custoArrIndicador,
-  ]);
-
-  const loadingCustoArrHistorico = modalIndicador === 'custoArr' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
-
-  // ── custoCab histórico oficial PC-100 (Opção B 9º indicador) ──
-  const custoCabHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'custoCab') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.custoCabIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.custoCabIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.custoCabIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.custoCabIndicador, modo) },
-        { ano: anoNum - 1, valor: antHist(custoCabIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(custoCabIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum, mesNum,
-    histArr5.custoCabIndicador, histArr4.custoCabIndicador, histArr3.custoCabIndicador,
-    histArr2.custoCabIndicador,
-    custoCabIndicador,
-  ]);
-
-  const loadingCustoCabHistorico = modalIndicador === 'custoCab' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
-
-  // ── margemArr histórico oficial PC-100 (Opção B 10º indicador) ──
-  const margemArrHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'margemArr') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.margemArrIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.margemArrIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.margemArrIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.margemArrIndicador, modo) },
-        { ano: anoNum - 1, valor: antHist(margemArrIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(margemArrIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum, mesNum,
-    histArr5.margemArrIndicador, histArr4.margemArrIndicador, histArr3.margemArrIndicador,
-    histArr2.margemArrIndicador,
-    margemArrIndicador,
-  ]);
-
-  const loadingMargemArrHistorico = modalIndicador === 'margemArr' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
-
-  // precoArr migrado do hook legado useHistoricoIndicador para o histórico oficial PC-100.
-  // Motivo: divergência matemática no histórico multi-ano causada por fórmula paralela
-  // baseada em peso_vivo/30 para abates.
-
-  // ── precoArr histórico oficial PC-100 (Opção B — 11º indicador) ──
-  const precoArrHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'precoArr') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.precoArrIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.precoArrIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.precoArrIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.precoArrIndicador, modo) },
-        { ano: anoNum - 1, valor: antHist(precoArrIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(precoArrIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum, mesNum,
-    histArr5.precoArrIndicador, histArr4.precoArrIndicador, histArr3.precoArrIndicador,
-    histArr2.precoArrIndicador,
-    precoArrIndicador,
-  ]);
-
-  const loadingPrecoArrHistorico = modalIndicador === 'precoArr' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
-
-  // receitaPec migrado do hook legado useHistoricoIndicador para o historico oficial PC-100.
-  // Motivo: divergencia matematica no historico multi-ano causada por formula paralela
-  // que soma SUM(valor_total) direto de lancamentos (inclui consumo) em vez de
-  // recPecComp classificado via financeiro_lancamentos_v2.
-
-  // --- receitaPec historico oficial PC-100 (Opcao B - 12 indicador) ---
-  const receitaPecHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'receitaPec') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.receitaPecIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.receitaPecIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.receitaPecIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.receitaPecIndicador, modo) },
-        { ano: anoNum - 1, valor: antHist(receitaPecIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(receitaPecIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum, mesNum,
-    histArr5.receitaPecIndicador, histArr4.receitaPecIndicador, histArr3.receitaPecIndicador,
-    histArr2.receitaPecIndicador,
-    receitaPecIndicador,
-  ]);
-
-  const loadingReceitaPecHistorico = modalIndicador === 'receitaPec' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
-
-  /* Media acumulada Jan->mes (1-based) da area, pela funcao unica da
-     `eficienciaArea`. Ate 24/08 este corpo era escrito a mao e ignorava null e
-     NaN mas NAO ZERO — o mesmo defeito corrigido no `mediaIgnorandoNulos` do
-     Executivo no PR-FIX-MEDIA-ZERO. Area zero e' mes sem fechamento, nao area
-     pequena: contando-a, o card da Home daria 4.253,74 ha em agosto contra
-     4.861,42 do card do modal, dois numeros para a mesma area na mesma sessao.
-     Os oito chamadores abaixo passam a ler a MESMA regra do modal e do PC-100. */
-  const mediaAcumuladaArea = (porMes: ReadonlyArray<number | null> | null | undefined, ateMes: number): number | null => {
-    if (!porMes || ateMes < 1 || ateMes > 12) return null;
-    const v = mediaIgnorandoZero(porMes as (number | null)[], ateMes)[ateMes - 1];
-    return Number.isFinite(v) ? v : null;
-  };
-
-  // ── Área Produtiva Pecuária — semântica estoque com média acumulada no período ──
-  // Mesmo padrão de Cabeças/UA-ha/KG-ha: no mês usa valor pontual; no período usa
-  // média Jan→mesAtual. Card e modal mostram labels/subtítulos dinâmicos.
-  const isPeriodoArea = viewMode === 'periodo';
-
-  // Valor do card e do topo do modal
-  const areaProdutivaPecValor = useMemo<number | null>(() => {
-    if (isPeriodoArea) return mediaAcumuladaArea(areaPecuariaRealPorMes, mesNum);
-    return areaPecuariaRealMes ?? null;
-  }, [isPeriodoArea, areaPecuariaRealPorMes, areaPecuariaRealMes, mesNum]);
-
-  // Valor do mês anterior (para deltaMes) — média Jan→mes-1 no período, ou valor mes-1 no mês
-  const areaProdutivaPecValorMesAnt = useMemo<number | null>(() => {
-    if (mesNum <= 1) return null;
-    if (isPeriodoArea) return mediaAcumuladaArea(areaPecuariaRealPorMes, mesNum - 1);
-    return dadosMesAnt.areaPecuariaRealMes ?? null;
-  }, [isPeriodoArea, areaPecuariaRealPorMes, dadosMesAnt.areaPecuariaRealMes, mesNum]);
-
-  // Valor do ano anterior no mesmo mês/período
-  const areaProdutivaPecValorAnoAnt = useMemo<number | null>(() => {
-    if (isPeriodoArea) return mediaAcumuladaArea(dadosAnoAnt.areaPecuariaRealPorMes, mesNum);
-    return dadosAnoAnt.areaPecuariaRealMes ?? null;
-  }, [isPeriodoArea, dadosAnoAnt.areaPecuariaRealPorMes, dadosAnoAnt.areaPecuariaRealMes, mesNum]);
-
-  // Valor da META no mesmo mês/período
-  const areaProdutivaPecValorMeta = useMemo<number | null>(() => {
-    if (isPeriodoArea) return mediaAcumuladaArea(areaPecuariaMetaPorMes, mesNum);
-    return areaPecuariaMetaPorMes?.[mesNum - 1] ?? null;
-  }, [isPeriodoArea, areaPecuariaMetaPorMes, mesNum]);
-
-  // Séries para o gráfico superior do modal — 13 elementos, idx 0 = NaN, idx 1..12 = Jan..Dez
-  // No período: cada idx m contém média Jan→m (curva monotônica suavizada).
-  // No mês: cada idx m contém o valor pontual do mês m (mesmo que o histórico atual).
-  const areaProdutivaPecSerieAno = useMemo<number[]>(() => {
-    return Array.from({ length: 13 }, (_, i) => {
-      if (i === 0) return NaN;
-      const v = isPeriodoArea
-        ? mediaAcumuladaArea(areaPecuariaRealPorMes, i)
-        : (areaPecuariaRealPorMes?.[i - 1] ?? null);
-      return v == null ? NaN : v;
-    });
-  }, [isPeriodoArea, areaPecuariaRealPorMes]);
-
-  const areaProdutivaPecSerieAnoAnt = useMemo<number[] | undefined>(() => {
-    const arr = dadosAnoAnt.areaPecuariaRealPorMes;
-    if (!arr) return undefined;
-    return Array.from({ length: 13 }, (_, i) => {
-      if (i === 0) return NaN;
-      const v = isPeriodoArea
-        ? mediaAcumuladaArea(arr, i)
-        : (arr[i - 1] ?? null);
-      return v == null ? NaN : v;
-    });
-  }, [isPeriodoArea, dadosAnoAnt.areaPecuariaRealPorMes]);
-
-  const areaProdutivaPecSerieMeta = useMemo<number[] | undefined>(() => {
-    if (!areaPecuariaMetaPorMes) return undefined;
-    return Array.from({ length: 13 }, (_, i) => {
-      if (i === 0) return NaN;
-      const v = isPeriodoArea
-        ? mediaAcumuladaArea(areaPecuariaMetaPorMes, i)
-        : (areaPecuariaMetaPorMes[i - 1] ?? null);
-      return v == null ? NaN : v;
-    });
-  }, [isPeriodoArea, areaPecuariaMetaPorMes]);
-
-  // Deltas — recomputados sobre o novo areaProdutivaPecValor (não mais lendo serieAno[mesNum] direto)
-  const areaProdutivaPecDeltaMes = useMemo<number | null>(() => {
-    const curr = areaProdutivaPecValor;
-    const prev = areaProdutivaPecValorMesAnt;
-    if (curr == null || prev == null || prev === 0) return null;
-    return ((curr - prev) / prev) * 100;
-  }, [areaProdutivaPecValor, areaProdutivaPecValorMesAnt]);
-
-  const areaProdutivaPecDeltaAno = useMemo<number | null>(() => {
-    const curr = areaProdutivaPecValor;
-    const ant = areaProdutivaPecValorAnoAnt;
-    if (curr == null || ant == null || ant === 0) return null;
-    return ((curr - ant) / ant) * 100;
-  }, [areaProdutivaPecValor, areaProdutivaPecValorAnoAnt]);
-
-  const areaProdutivaPecDeltaMeta = useMemo<number | null>(() => {
-    const curr = areaProdutivaPecValor;
-    const meta = areaProdutivaPecValorMeta;
-    if (curr == null || meta == null || meta === 0) return null;
-    return ((curr - meta) / meta) * 100;
-  }, [areaProdutivaPecValor, areaProdutivaPecValorMeta]);
-
-  // Histórico inferior — barras por ano: no período = média Jan→mes; no mês = valor do mes em cada ano
-  const areaProdutivaPecHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'areaProdutivaPec') return { mes: [], periodo: [] };
-    /* A excecao: este memo nao le indicador, e sim `areaPecuariaRealPorMes`
-       cru. `computar` passa a receber o MODO em vez de ler `isPeriodoArea`
-       — mesma formula, sem o colapso. O ano corrente tambem: usava
-       `areaProdutivaPecValor`, um useMemo ja colapsado, o que deixaria a
-       ultima barra numa leitura e as anteriores na outra. */
-    const computar = (porMes: ReadonlyArray<number | null> | null | undefined, valorMes: number | null | undefined, modo: 'mes' | 'periodo'): number | null => {
-      if (modo === 'periodo') return mediaAcumuladaArea(porMes, mesNum);
-      return valorMes ?? null;
-    };
-    const linha = (modo: 'mes' | 'periodo') => [
-      { ano: anoNum - 5, valor: computar(histArr5.areaPecuariaRealPorMes, histArr5.areaPecuariaRealMes, modo) },
-      { ano: anoNum - 4, valor: computar(histArr4.areaPecuariaRealPorMes, histArr4.areaPecuariaRealMes, modo) },
-      { ano: anoNum - 3, valor: computar(histArr3.areaPecuariaRealPorMes, histArr3.areaPecuariaRealMes, modo) },
-      { ano: anoNum - 2, valor: computar(histArr2.areaPecuariaRealPorMes, histArr2.areaPecuariaRealMes, modo) },
-      { ano: anoNum - 1, valor: computar(dadosAnoAnt.areaPecuariaRealPorMes, dadosAnoAnt.areaPecuariaRealMes, modo) },
-      { ano: anoNum,     valor: computar(areaPecuariaRealPorMes, areaPecuariaRealMes, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum, mesNum,
-    histArr5.areaPecuariaRealPorMes, histArr5.areaPecuariaRealMes,
-    histArr4.areaPecuariaRealPorMes, histArr4.areaPecuariaRealMes,
-    histArr3.areaPecuariaRealPorMes, histArr3.areaPecuariaRealMes,
-    histArr2.areaPecuariaRealPorMes, histArr2.areaPecuariaRealMes,
-    dadosAnoAnt.areaPecuariaRealPorMes, dadosAnoAnt.areaPecuariaRealMes,
-    areaPecuariaRealPorMes, areaPecuariaRealMes,
-  ]);
-
-  const loadingAreaProdutivaPecHistorico = modalIndicador === 'areaProdutivaPec' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
-
-  const calcVar = (atual: number | null, base: number | null): number | null => {
-    if (atual == null || base == null || base === 0) return null;
-    return ((atual - base) / base) * 100;
-  };
-
-  const calcDeltaV = (atual: number | null | undefined, base: number | null | undefined): number | null => {
-    if (atual == null || base == null || isNaN(atual) || isNaN(base) || base === 0) return null;
-    return ((atual - base) / base) * 100;
-  };
-
-  // Só usar comparativo de mês anterior se existir mês anterior real
-  // E só exibir comparativos zootécnicos se dados atuais estiverem completos
-  const dadosZootCompletos = !loadingPainel && cabecas != null && cabecas > 0;
-
-  const vsMes = (campo: number | null, baseCampo: number | null) =>
-    dadosZootCompletos && mesAntNum != null ? calcVar(campo, baseCampo) : null;
-
-  const vsAno = (campo: number | null, baseCampo: number | null) =>
-    dadosZootCompletos ? calcVar(campo, baseCampo) : null;
-
-  /* PR-HOME-AVISOS-LINGUAGEM-01 — o operador nao sabe o que e um "P1" nem um
-     "snapshot": e vocabulario interno de governanca vazando para a tela, o mesmo
-     defeito que PR-AREA-ERROS-MAPA-01 corrigiu do lado do banco.
-     Os SETE estados de StatusValidacaoArea continuam distintos no tipo e na logica —
-     so o TEXTO muda.
-     'p1_fechado_sem_snap' e 'sem_snapshot' passam a dizer a MESMA coisa de proposito:
-     a diferenca entre eles e de causa interna (o mes fechou mas a area nao foi
-     materializada x nunca houve materializacao). Para quem le a tela o fato e um so —
-     a area daquele mes nao existe — e a acao e a mesma. Os ramos ficam separados. */
-  const msgArea = (s: StatusValidacaoArea): string | null => {
-    if (s === 'ok' || s === 'carregando') return null;
-    if (s === 'incompleto')          return `⚠ ${faltandoCount} fazenda${faltandoCount !== 1 ? 's' : ''} sem área do mês`;
-    if (s === 'p1_aberto')           return '⚠ Mapa de pastos não fechado';
-    if (s === 'p1_fechado_sem_snap') return '⚠ Área do mês não gerada';
-    if (s === 'sem_snapshot')        return '⚠ Área do mês não gerada';
-    if (s === 'sem_area')            return '⚠ Área não cadastrada';
-    return null;
-  };
-
-  const mesAte = isPeriodo ? 12 : mesNum;
-  const { meses: mesesFluxo, loading: loadingFluxo } = useFluxoCaixa(lancFinShared, rateioADM, anoNum, mesAte);
-  const caixaValor = useMemo(() => {
-    if (loadingFluxo || !mesesFluxo.length) return null;
-    const sorted = [...mesesFluxo].sort((a, b) => a.mes - b.mes);
-    return isPeriodo
-      ? sorted[sorted.length - 1]?.saldoFinal ?? null
-      : sorted.find(m => m.mes === mesNum)?.saldoFinal ?? null;
-  }, [mesesFluxo, mesNum, isPeriodo, loadingFluxo]);
-
-  // Comparativos do Caixa: vs mês anterior + vs mesmo mês ano anterior.
-  // Em modo "período" não aplica delta (compara saldo acumulado Jan→mes; vs mês não é coerente).
-  const { lancamentos: lancFinAnoAnt, rateioADM: rateioADMAnoAnt } = useFinanceiro({ ano: anoNum - 1 });
-  const { meses: mesesFluxoAnoAnt, loading: loadingFluxoAnoAnt } = useFluxoCaixa(lancFinAnoAnt, rateioADMAnoAnt, anoNum - 1, 12);
-  const caixaMesAnt = useMemo(() => {
-    if (isPeriodo) return null;
-    if (mesNum === 1) {
-      if (loadingFluxoAnoAnt || !mesesFluxoAnoAnt.length) return null;
-      return mesesFluxoAnoAnt.find(m => m.mes === 12)?.saldoFinal ?? null;
-    }
-    if (loadingFluxo || !mesesFluxo.length) return null;
-    return mesesFluxo.find(m => m.mes === mesNum - 1)?.saldoFinal ?? null;
-  }, [isPeriodo, mesNum, mesesFluxo, mesesFluxoAnoAnt, loadingFluxo, loadingFluxoAnoAnt]);
-  const caixaAnoAnt = useMemo(() => {
-    if (isPeriodo) return null;
-    if (loadingFluxoAnoAnt || !mesesFluxoAnoAnt.length) return null;
-    return mesesFluxoAnoAnt.find(m => m.mes === mesNum)?.saldoFinal ?? null;
-  }, [isPeriodo, mesNum, mesesFluxoAnoAnt, loadingFluxoAnoAnt]);
-  const deltaMesCaixa = useMemo(() => {
-    if (caixaValor == null || caixaMesAnt == null || caixaMesAnt === 0) return null;
-    return ((caixaValor - caixaMesAnt) / Math.abs(caixaMesAnt)) * 100;
-  }, [caixaValor, caixaMesAnt]);
-  const deltaAnoCaixa = useMemo(() => {
-    if (caixaValor == null || caixaAnoAnt == null || caixaAnoAnt === 0) return null;
-    return ((caixaValor - caixaAnoAnt) / Math.abs(caixaAnoAnt)) * 100;
-  }, [caixaValor, caixaAnoAnt]);
-
-  const {
-    total: endividamentoTotal,
-    alavancagem: finAlavancagem,
-    pizzaVencimentos: finPizza,
-    deltaMes: finEndDeltaMes,
-    deltaAno: finEndDeltaAno,
-    serieAno: finSerieAno,
-    serieAnoAnt: finSerieAnoAnt,
-    serieAlavancagemAno: finSerieAlavAno,
-    serieAlavancagemAnoAnt: finSerieAlavAnoAnt,
-    loading: loadingDivida,
-  } = useEndividamentoAtual(anoNum);
 
 
-  /* ── PR-FINANCEIRO-01 · o DRE de caixa ─────────────────────────────────
-     FIACAO, nao construcao: os indicadores financeiros do PC-100 tem a MESMA
-     forma dos zootecnicos, entao o mesmo `monta()` serve.
-     `soma` existe porque a estrutura de Gabriel pede totais que o PC-100 nao
-     expoe agregados — Receitas e a soma dos quatro escopos, Custeio a dos
-     tres. Ela soma SERIE a serie e nao inventa meta: onde uma parcela nao
-     tem meta, o total tambem nao tem. */
-  const indicadoresFinanceiro = useMemo<IndicadorAtividade[]>(() => {
-    type IndFin = { valor?: number | null; series?: SeriesPorModo; serieAno?: number[];
-                    titulo?: string; subtitulo?: string } | null | undefined;
-    const serie = (i: IndFin, modo: 'mes' | 'periodo', campo: 'ano' | 'meta') =>
-      i?.series?.[modo]?.[campo] ?? (campo === 'ano' ? i?.serieAno : undefined);
-    const ponto = (s: number[] | undefined) => {
-      if (!s || s.length === 0) return null;
-      const v = s.length >= 13 ? s[mesNum] : s[mesNum - 1];
-      return v != null && !isNaN(v) ? v : null;
-    };
-    const somaSeries = (ss: Array<number[] | undefined>): number[] | undefined => {
-      const vivas = ss.filter((x): x is number[] => !!x && x.length > 0);
-      if (vivas.length === 0) return undefined;
-      const n = Math.max(...vivas.map(v => v.length));
-      return Array.from({ length: n }, (_, i) =>
-        vivas.reduce((acc, v) => acc + (Number.isFinite(v[i]) ? v[i] : 0), 0));
-    };
-    const card = (chave: string, rotulo: string, partes: IndFin[]): IndicadorAtividade => {
-      const sMes = somaSeries(partes.map(i => serie(i, 'mes', 'ano'))) ?? [];
-      const sPer = somaSeries(partes.map(i => serie(i, 'periodo', 'ano'))) ?? [];
-      /* ⚠ Meta so quando TODAS as parcelas tem, e "ter" e' TER VALOR — nao
-         basta o array existir. A primeira versao checava `m.length > 0`, e
-         uma parcela com meta de doze zeros passava: `Receitas` mostrava
-         R$ 1,8 mi contra meta de R$ 14,0 mil (so a de "Outras") e a
-         diferenca dava +12.937,2%.
-         Um total com meta parcial compara o realizado INTEIRO contra a meta
-         de um pedaco — e o numero grande parece precisao, nao ausencia. */
-      // temValor nao distingue meta-zero-declarada de meta-ausente:
-      // testa v !== 0 porque metasMes chega denso, com 0 no lugar de
-      // mes sem meta. A distincao NULL vs zero teria de ser preservada
-      // no builder da serie — o conserto real e la, nao aqui.
-      const temValor = (m: number[] | undefined) =>
-        !!m && m.some(v => Number.isFinite(v) && v !== 0);
-      const metasMes = partes.map(i => serie(i, 'mes', 'meta'));
-      const metasPer = partes.map(i => serie(i, 'periodo', 'meta'));
-      /* `every([])` e' true: sem a guarda, um total sem filhos visiveis
-         somaria meta 0 e a linha 737 dividiria por zero. Inalcancavel hoje;
-         alcancavel assim que linhas zeradas passarem a ser escondidas. */
-      const temTodas = metasMes.length > 0 && metasMes.every(temValor);
-      return {
-        chave, titulo: rotulo, subtitulo: '',
-        formatoValor: 'moedaAbreviada',
-        serieMes: sMes, seriePeriodo: sPer,
-        serieMetaMes:     temTodas ? somaSeries(metasMes) : undefined,
-        serieMetaPeriodo: temTodas ? somaSeries(metasPer) : undefined,
-        valorMes: ponto(sMes), valorPeriodo: ponto(sPer),
-        deltaMes: null, deltaAno: null, deltaMeta: null,
-      };
-    };
-    const recPec = receitaPecCaixaIndicador, recAgri = receitaAgriIndicador;
-    const recSilvi = receitaSilvicolaIndicador, recOutras = receitaOutrasIndicador;
-    const cFixo = [custoFixoPecIndicador, custoFixoAgriIndicador, custoFixoSilviIndicador];
-    const cVar  = [custoVariavelPecIndicador, custoVariavelAgriIndicador, custoVariavelSilviIndicador];
-    const juros = [jurosPecIndicador, jurosAgriIndicador, jurosSilviIndicador];
-    const invFaz = [investPecIndicador, investAgriIndicador, investSilviIndicador];
-    return [
-      card('fin_receitas',   'Receitas',      [recPec, recAgri, recSilvi, recOutras]),
-      card('fin_rec_pec',    'Pecuária',      [recPec]),
-      card('fin_rec_agri',   'Agrícola',      [recAgri]),
-      card('fin_rec_silvi',  'Silvícola',     [recSilvi]),
-      card('fin_rec_outras', 'Outras',        [recOutras]),
-      card('fin_captacao',   'Captação',      [captacaoIndicador]),
-      card('fin_desembolso', 'Desembolso operacional', [...cFixo, ...cVar, ...juros, ...invFaz, investBovinosIndicador]),
-      card('fin_custeio',    'Custeio',       [...cFixo, ...cVar, ...juros]),
-      card('fin_custo_fixo', 'Custo fixo',    cFixo),
-      card('fin_custo_var',  'Custo variável', cVar),
-      card('fin_juros',      'Juros de financiamento', juros),
-      card('fin_investimento', 'Investimento', [...invFaz, investBovinosIndicador]),
-      card('fin_inv_fazenda', 'Na fazenda',   invFaz),
-      card('fin_inv_bovinos', 'Em bovinos',   [investBovinosIndicador]),
-      card('fin_amortizacoes', 'Amortizações', [amortizacoesIndicador]),
-      /* ── PR-VG-FIN-ESCOPO-PEC-01 · quatro chaves NOVAS, nao reaproveitadas ──
-         O card do bloco "Fechamento Pecuaria" precisa de escopo pecuaria, mas as
-         quatro chaves acima sao lidas TAMBEM pela aba Financeiro do
-         ModalAtividade, que as resolve por nome (`LINHAS_FINANCEIRO`, e o
-         `find(i => i.chave === l.chave)` de ModalAtividade:653). Repontar
-         `fin_receitas` mudaria a DRE do modal junto — que responde outra
-         pergunta e fica como esta.
-         Chave nova e' invisivel para o modal: ele so procura o que a lista dele
-         nomeia, nunca varre o array. */
-      card('fin_receitas_pec',     'Receitas pecuária',     [recPec]),
-      card('fin_desembolso_pec',   'Desembolso pecuária',   [desembolsoPecIndicador]),
-      card('fin_captacao_pec',     'Captação pecuária',     [captacaoPecIndicador]),
-      card('fin_amortizacoes_pec', 'Amortizações pecuária', [amortizacaoPecIndicador]),
-      /* O INDICE VEM DO `useEndividamentoAtual`, ja montado nesta pagina — a
-         formula (divida pecuaria / valor do rebanho) NAO e reescrita aqui.
-         Serie propria em vez de soma: e uma razao, nao um agregado. */
-      {
-        chave: 'fin_indice', titulo: 'Índice de endividamento', subtitulo: '',
-        unidade: '%', formatoValor: 'decimal1',
-        serieMes: [], seriePeriodo: [],
-        valorMes: finAlavancagem?.percentual ?? null,
-        valorPeriodo: finAlavancagem?.percentual ?? null,
-        deltaMes: null, deltaAno: null, deltaMeta: null,
-      },
-    ];
-  }, [receitaPecCaixaIndicador, receitaAgriIndicador, receitaSilvicolaIndicador,
-      receitaOutrasIndicador, captacaoIndicador,
-      custoFixoPecIndicador, custoFixoAgriIndicador, custoFixoSilviIndicador,
-      custoVariavelPecIndicador, custoVariavelAgriIndicador, custoVariavelSilviIndicador,
-      jurosPecIndicador, jurosAgriIndicador, jurosSilviIndicador,
-      investPecIndicador, investAgriIndicador, investSilviIndicador,
-      investBovinosIndicador, amortizacoesIndicador, finAlavancagem, mesNum]);
-  const endividamentoValor = loadingDivida ? null : endividamentoTotal;
 
-  // Séries mensais para o modal histórico do Caixa (saldoFinal Jan→Dez).
-  const caixaSerieAno = useMemo(() => {
-    const arr = new Array(12).fill(null) as (number | null)[];
-    if (!loadingFluxo && mesesFluxo.length) {
-      for (const m of mesesFluxo) {
-        if (m.mes >= 1 && m.mes <= 12) arr[m.mes - 1] = m.saldoFinal;
-      }
-    }
-    return arr;
-  }, [mesesFluxo, loadingFluxo]);
-  const caixaSerieAnoAnt = useMemo(() => {
-    const arr = new Array(12).fill(null) as (number | null)[];
-    if (!loadingFluxoAnoAnt && mesesFluxoAnoAnt.length) {
-      for (const m of mesesFluxoAnoAnt) {
-        if (m.mes >= 1 && m.mes <= 12) arr[m.mes - 1] = m.saldoFinal;
-      }
-    }
-    return arr;
-  }, [mesesFluxoAnoAnt, loadingFluxoAnoAnt]);
-
-  const resultadoTone = resultado == null ? 'default' : resultado >= 0 ? 'positive' : 'negative';
 
   return (
     <>
@@ -2564,21 +1164,32 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         </div>
       )}
 
-    <div className="px-4 pb-5 max-w-7xl">
-      <div className="sticky top-0 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 shadow-sm mb-2">
-        <h2 className="text-sm font-semibold text-foreground">
-          {g}{clienteAtual ? ', ' + clienteAtual.nome : ''}
-        </h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {isGlobal ? 'Todas as fazendas' : fazendaAtual?.nome} · {ml}
-        </p>
-        <StatusFechamentoBanda
-          status={statusFechamento}
-          isGlobal={isGlobal}
-          loading={loadingStatusFechamento}
-          mesLabel={ml}
-          onIrPara={onIrPara}
-        />
+    <div className="px-2 pb-3">
+      {/* VISAO-GERAL-03 (Gabriel 04/11 06:28) — o cabeçalho é uma faixa pequena, na escala da barra da Geo pastos: o cumprimento numa linha
+          de 11 px, o status e "No mês | No ano" (o `Segmentado` de lá, 22 px) ao lado, e a régua compacta dos meses embaixo.
+          Fundo SÓLIDO (o gate recusa cabeçalho preso transparente: o conteúdo aparecia por trás ao rolar). */}
+      <div className="sticky top-0 z-30 -mx-2 mb-1.5 flex flex-col gap-1 border-b border-border bg-background px-2.5 py-1.5" data-testid="vg-cabecalho">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="whitespace-nowrap text-[11px] font-semibold text-foreground">
+            {g}{clienteAtual ? ', ' + clienteAtual.nome : ''}
+          </h2>
+          <span className="min-w-0 truncate text-[9.5px] text-muted-foreground">
+            {isGlobal ? 'Todas as fazendas' : fazendaAtual?.nome} · {ml}
+          </span>
+          <StatusFechamentoBanda
+            status={statusFechamento}
+            isGlobal={isGlobal}
+            loading={loadingStatusFechamento}
+            mesLabel={ml}
+            onIrPara={onIrPara}
+          />
+          {onViewModeChange && (
+            <div className="ml-auto flex-none">
+              <Segmentado valor={viewMode} onEscolher={onViewModeChange} altura={22}
+                opcoes={[{ valor: 'mes', rotulo: 'No mês' }, { valor: 'periodo', rotulo: 'No ano' }]} />
+            </div>
+          )}
+        </div>
         <ReguaMeses
           celulas={gradeEscopo}
           mesSelecionado={mesNum}
@@ -2588,33 +1199,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           onMesChange={onMesChange}
           meses={MES_ABREV}
         />
-        {onViewModeChange && (
-          <div className="flex gap-1 mt-2">
-            <button
-              onClick={() => onViewModeChange('mes')}
-              className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
-                !isPeriodo
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
-              }`}
-            >
-              No mês
-            </button>
-            <button
-              onClick={() => onViewModeChange('periodo')}
-              className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
-                isPeriodo
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
-              }`}
-            >
-              No período
-            </button>
-          </div>
-        )}
       </div>
-      <div className="space-y-4">
+      <div className="flex flex-col gap-1.5" data-testid="vg-pilha">
 
+      {/* VISAO-GERAL-03/04 — os números numa faixa só (o `Kpi` da Geo pastos), todos com número: Área produtiva · Rebanho · Lotação ·
+          Caixa no fim do mês · Resultado do ano */}
+      <CartoesDoTopo cartoes={cartoesVG} carregando={loadingPainel} />
+
+      {/* VISAO-GERAL-03 — as duas colunas da Geo pastos › Global (de 1280 px para cima): o conteúdo à esquerda e, à direita, 272 px com o
+          mapa das fazendas. Abaixo disso a coluna dos mapas sobe para o topo, na largura toda (a 1000 px os 272 apertavam a tabela). */}
+      <div className="grid min-w-0 grid-cols-1 gap-1.5 xl:grid-cols-[minmax(0,1fr)_272px]">
+      <div className="flex min-w-0 flex-col gap-1.5" data-testid="vg-coluna-esq">
 
       {/* PRIMEIRA LINHA: Area e Caixa sao filhos DIRETOS do grid, entao a linha
           alinha a altura dos dois. Decisao explicita (Gabriel, 21/08), ciente de
@@ -2622,15 +1217,21 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           motivou e948a653. Com as duas tabelas dentro do card de Area, ele tende
           a ser o mais alto e o branco cai no Caixa.
           Os DEMAIS blocos seguem em duas colunas empilhadas, logo abaixo. */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+      {/* VISAO-GERAL-04 — Área num card ESTREITO (a largura da rosca + legenda) e, ao lado, o Caixa com a sobra, os dois na MESMA altura */}
+      <div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[auto_minmax(0,1fr)]">
 
-        <div className="lg:col-span-3">
+        <div className="min-w-0">
         {/* col-span-2 porque o miolo do SectionBlock e uma grade de DUAS colunas,
             feita para MetricTile. Sem isso a barra ocupava meia largura e o rodape
             subia para a coluna da direita, ao lado dos numeros em vez de abaixo. */}
         <SectionBlock
           title={isPeriodo ? 'Área média no período' : 'Área no mês'}
-          subtitle="como a terra está dividida e onde a operação está"
+          className="h-full" testid="vg-area"
+          acao={isGlobal && areaPorFazendaMes.length > 0 ? (
+            <button type="button" className="text-primary hover:underline" onClick={() => setVerPorFazenda(true)} data-testid="vg-ver-por-fazenda">
+              Ver por fazenda ›
+            </button>
+          ) : undefined}
         >
           <div className="col-span-2 space-y-3">
             {(() => {
@@ -2666,11 +1267,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               });
 
               return (
-                <div className="flex items-start gap-4">
+                <div className="flex items-start gap-3">
                   {/* Donut maior: coluna propria a esquerda. O viewBox e a
                       espessura sao os mesmos — so a caixa renderizada cresce,
                       entao a proporcao do anel nao muda. */}
-                  <svg viewBox="0 0 80 80" className="h-28 w-28 shrink-0 -rotate-90">
+                  <svg viewBox="0 0 80 80" className="h-24 w-24 shrink-0 -rotate-90">
                     {fatias.map(f => (
                       <circle key={f.label} cx="40" cy="40" r={R} fill="none"
                         strokeWidth="12" className={`${f.stroke} cursor-default`}
@@ -2785,28 +1386,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                       </p>
                     )}
                   </div>
-                  {/* AJUSTE 3 — o espaco a direita da legenda estava vazio: o grid
-                      e' `justify-start` e a coluna nao usava a largura toda. O
-                      destaque ocupa esse vao e da a Area Produtiva a leitura de um
-                      olhar, que era o que a linha da legenda nao entregava.
-                      ⚠ A expressao do percentual e' COPIA LITERAL da linha de Area
-                      Produtiva acima — mesma base (`areaTotal`, a matricula, nao
-                      `soma`) e mesmo arredondamento. Nao extrair para variavel: o
-                      valor de manter as duas identicas esta em serem visivelmente a
-                      mesma conta, e um helper esconderia uma divergencia futura. */}
-                  <div className="flex-1 self-center flex flex-col items-center gap-0.5">
-                    <span className="text-2xl font-semibold tabular-nums text-foreground leading-none">
-                      {areaProdutiva == null || areaProdutiva === 0
-                        ? '—'
-                        : <>{fmtHaInt(areaProdutiva)} <span className="text-sm font-normal text-muted-foreground">ha</span></>}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground/70">Área Produtiva</span>
-                    <span className="text-base font-semibold tabular-nums text-foreground leading-none">
-                      {(areaProdutiva == null || areaTotal == null || areaTotal <= 0)
-                        ? '—'
-                        : `${((areaProdutiva / areaTotal) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`}
-                    </span>
-                  </div>
+                  {/* VISAO-GERAL-02 — o destaque grande da Área Produtiva (24px) saiu: "nada de texto grande" (regra do Gabriel), e o número
+                      agora é o do cartão "Área produtiva" no topo — a mesma conta, um lugar só. A linha "Área Produtiva" da legenda fica. */}
                 </div>
               );
             })()}
@@ -2815,11 +1396,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 fazenda. Era card proprio; a divisao entre os dois nao correspondia a
                 nada. So no Global: em fazenda especifica seria uma linha repetindo a
                 legenda acima. */}
+            {/* VISAO-GERAL-02 — a distribuição por fazenda abre num DIÁLOGO pelo "Ver por fazenda ›": aberta no bloco, ela empurrava
+                a página inteira para baixo (regra "nada pula"). A tabela e a conta são as mesmas. */}
             {isGlobal && areaPorFazendaMes.length > 0 && (
-              <div className="pt-1 border-t border-border">
-                <p className="text-[10px] font-medium text-muted-foreground pb-1">
-                  Distribuição de áreas por fazenda
-                </p>
+              <Dialog open={verPorFazenda} onOpenChange={setVerPorFazenda}>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle className="text-[11px] font-semibold">Distribuição de áreas por fazenda · {ml}</DialogTitle>
+                </DialogHeader>
+              <div data-testid="vg-area-por-fazenda">
                 {/* col-span-2 pelo mesmo motivo do bloco acima: a tabela precisa da
                     largura inteira do miolo, que e uma grade de duas colunas. */}
                 <div className="col-span-2">
@@ -2928,41 +1513,30 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                   </table>
                 </div>
               </div>
+              </DialogContent>
+              </Dialog>
             )}
           </div>
         </SectionBlock>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="min-w-0">
         {/* NAO recebe naoFechado: caixa nao depende de fechamento de rebanho.
             O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
             DUAS colunas, feita para MetricTile — e aqui e uma LISTA de linhas. */}
         <SectionBlock
           title={isPeriodo ? 'Caixa no período' : 'Caixa no mês'}
-          subtitle="entradas e saídas"
+          subtitle="regime de caixa · sem transferências"
+          className="h-full" testid="vg-caixa"
+          /* VISAO-GERAL-04 — Resumido | Macro no cabeçalho do card (o `Segmentado` da Geo pastos): a linha a menos deixa o Caixa na altura
+             da Área. Estado NAO persiste — trocar de mes ou de viewMode remonta o card em 'resumido'. */
+          acao={<Segmentado valor={modoCaixa} onEscolher={setModoCaixa} altura={22}
+            opcoes={[{ valor: 'resumido', rotulo: 'Resumido' }, { valor: 'macro', rotulo: 'Macro' }]} />}
         >
           {/* -mt-1 puxa a primeira linha para cima, encostando no titulo. Aplicado
              SO aqui: o respiro vem do SectionBlock, que e usado por todos os blocos
              e nao pode ser alterado por causa de um. */}
           <div className="col-span-2 -mt-1 space-y-0.5">
-            {/* Alternancia Resumido/Macro. Estado NAO persiste — trocar de mes ou de
-                viewMode remonta o card em 'resumido'. */}
-            <div className="flex justify-end gap-1 pb-1">
-              {(['resumido', 'macro'] as const).map(m => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setModoCaixa(m)}
-                  className={`rounded px-1.5 py-0.5 text-[9px] capitalize transition-colors ${
-                    modoCaixa === m
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted/50'
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
 
             <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="subtotal" />
 
@@ -3050,522 +1624,55 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               </p>
             )}
 
-            <p className="text-[9px] text-muted-foreground pt-1">
-              Regime de caixa, ano civil. Transferências entre contas não entram.
-            </p>
           </div>
         </SectionBlock>
         </div>
 
-        {/* VG-LEGADO-OCULTO-01 (Gabriel 03/11 07:50, URGENTE: cliente novo entra esta semana) — os blocos abaixo de Área e
-            Caixa (Fechamento Pecuária, Pecuária no mês por fazenda, Produção, Eficiência, Financeiro Produtivo, Estrutura
-            Financeira e Disponível em conta) saem da tela: mostram números legados/errados (variação relativa de %, meta
-            minúscula, caixa ÷ rebanho — "Compras 255%", "Desfrute ↑637,9%", "Custo cab. ↑5544%"). Conserto pequeno, sem
-            refazer a tela: a VISAO-GERAL-02 substitui tudo isto. Nada foi apagado; nenhum número novo entrou. */}
-        {MOSTRAR_BLOCOS_LEGADOS && (<>
-        {/* Container proprio, nao SectionBlock: o miolo do SectionBlock e
-            um grid-cols-2 e os tres blocos precisam de largura inteira.
-            Fundo em accent/40 e NAO em bg-card: cada BlocoAtividade ja e um
-            Card com bg-card, e mesma cor nos dois niveis apagaria os internos.
-            Tambem NAO em muted: --muted e --background sao ambos 220 17% 97%
-            (index.css:9 e :19), entao muted sobre o fundo da pagina nao pinta
-            nada. --accent (220 14% 94%) e o unico neutro do tema que difere do
-            fundo — 3 pontos de luminosidade abaixo, o container recua e os
-            cards em branco puro seguem saltando. */}
-        <div className="lg:col-span-5 bg-accent/40 rounded-xl border border-border/40 p-4">
-          <h3 className="text-base font-bold text-foreground mb-3">
-            {isPeriodo ? 'Fechamento Pecuária — no período' : 'Fechamento Pecuária — no mês'}
-          </h3>
-          <div className="space-y-1.5">
-      {/* ── PR-ATIVIDADE-01 ─────────────────────────────────────────────
-          O bloco NASCEU abaixo de tudo que existe, empilhado. Desde
-          PR-VG-FECHAMENTO-PEC-01 os tres vivem DENTRO do grid, agrupados
-          sob o titulo "Fechamento Pecuaria" logo depois de Area e Caixa:
-          respondem pela mesma pecuaria que aquelas duas acabaram de
-          descrever, e alcanca-los exigia rolar a Home inteira.
-          NADA foi removido da Home: Gabriel decidiu comparar os dois
-          desenhos lado a lado e so depois apagar os dezoito tiles. A
-          divida de ter dois caminhos para a mesma informacao e deliberada
-          e TEMPORARIA — o PR que remove os tiles e parte do plano, nao
-          esquecimento.
-          Os valores seguem o `viewMode` da tela, como os tiles ao lado: um
-          segundo controle para a mesma pergunta faria a Visao Geral falar
-          com duas vozes. */}
-      <div>
-        <BlocoAtividade
-          titulo="Zootécnico"
-          subtitulo="o que a fazenda tem e produz"
-          icone={BarChart3}
-          loading={loadingPainel}
-          onClick={() => setModalAtividade('zootecnico')}
-          /* ORDEM DELIBERADA: a meta do ANO vem primeiro (@ produzidas, em
-             arco), e o monitoramento que leva ate ela vem depois (rebanho, GMD
-             e lotacao, em barra). Nao reordenar — a sequencia e' o raciocinio.
-             Os rotulos DERIVAM dos titulos oficiais do PC-100
-             (usePainelConsultorData 4157/4158 e 4273/4274), encurtados: o
-             rotulo do card e text-[9px] uppercase truncate em coluna de 1/4
-             da largura, e "REBANHO MEDIO NO PERIODO" truncaria. A12 do
-             PADROES-UI manda encurtar o texto, nunca reduzir a fonte.
-             ⚠ Se o titulo no PC-100 mudar, revisar estes dois aqui.
-             GMD e Lotacao ficam iguais nos dois modos DE PROPOSITO: la o
-             PC-100 so troca "no mes"/"no periodo", sem mudar o sentido da
-             leitura. Rebanho (final x media) e @ (do mes x acumulada) mudam
-             de sentido, e e' isso que o rotulo precisa dizer. */
-          metricas={[
-            /* '@ produzidas' nos DOIS modos: o 'acum.' truncava na coluna, e e'
-               redundante — o arco ao lado diz "no ano" e o delta diz o recorte.
-               A12: encurtar o rotulo, nunca reduzir a fonte. */
-            { rotulo: '@ produzidas',
-              valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
-              delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
-              acel: aceleradorArrobas },
-            { rotulo: isPeriodo ? 'Rebanho médio' : 'Rebanho final',
-              valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
-              delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
-              barra: barraZoot(cabecasIndicador, 0) },
-            { rotulo: 'GMD',          valor: (fmtN(gmdIndicador?.valor ?? null, 3) ?? '—') + ' kg',
-              delta: gmdIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
-              barra: barraZoot(gmdIndicador, 3) },
-            { rotulo: 'Lotação',      valor: (fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—') + ' UA/ha',
-              delta: uaHaIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
-              barra: barraZoot(uaHaIndicador, 2) },
-          ]}
-        />
       </div>
 
-      {/* E6 — Movimentacoes. Mesma casca do Zootecnico: `BlocoAtividade` nao
-          calcula nada, recebe metrica pronta. As quatro sao em CABECAS, a
-          unidade que responde "o que entrou e saiu" sem exigir conversao. */}
-      <div>
-        <BlocoAtividade
-          titulo="Movimentações"
-          subtitulo="o que entrou e saiu do rebanho"
-          icone={ArrowLeftRight}
-          loading={movAgg.loading}
-          onClick={() => setModalAtividade('movimentacoes')}
-          metricas={[
-            { rotulo: 'Nascimentos', valor: (fmtN(movAgg.porTipo.nascimentos?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('nascimentos'), deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês', acel: acelMov('nascimentos') },
-            { rotulo: 'Compras',     valor: (fmtN(movAgg.porTipo.compras?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('compras'), deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês', acel: acelMov('compras') },
-            { rotulo: 'Desfrute',    valor: (fmtN(movAgg.porTipo.desfrute?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('desfrute'), deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês', acel: acelMov('desfrute') },
-            /* Morte e o unico onde subir e RUIM. */
-            { rotulo: 'Mortes',      valor: (fmtN(movAgg.porTipo.mortes?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('mortes'), deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês', inverseDelta: true,
-              /* UNICA das oito metricas com `estouroGrave`. Nao decorre de
-                 `inverseDelta`: Desembolso e Amortizacoes tambem invertem e
-                 seguem em ambar. Excecao DECLARADA, nao deduzida do rotulo. */
-              acel: acelMov('mortes', true) },
-          ]}
-        />
+      {/* VISAO-GERAL-02 — abaixo de Área e Caixa, na ordem do mock aprovado: Fazendas → atenção e atalhos → um bloco por atividade */}
+      {linhasFazendasVG.length > 0 && (
+        <TabelaFazendasVG linhas={linhasFazendasVG} mesCurto={mesCurtoVG}
+          onEscolher={isGlobal ? (id) => { const f = fazendas.find(x => x.id === id); if (f) setFazendaAtual(f); } : undefined} />
+      )}
+      {/* VISAO-GERAL-04 — os Atalhos saíram (o menu lateral já faz isso); "Precisa de atenção" foi para a coluna da direita */}
       </div>
 
-      {/* ⚠ ESTE CARD NAO FECHA COM O BLOCO CAIXA, E ESTA CERTO. Aqui e' escopo
-          PECUARIA; o bloco Caixa la em cima soma os TRES escopos, porque
-          responde "quanto dinheiro entrou e saiu da empresa". Sao perguntas
-          diferentes e os numeros divergem pela agricultura e pela silvicultura.
-          Quem tentar "fazer bater" vai reintroduzir receita agricola dentro de
-          um bloco chamado Fechamento Pecuaria — foi o defeito que este PR
-          corrigiu, medido na NJ: R$ 3,4 mi de R$ 14,4 mi nao eram pecuaria.
-          E6 — Financeiro. Terceiro bloco, mesma casca dos dois anteriores.
-          ⚠ NAO confundir com o chip "Financeiro (em construção)" da faixa de
-          status: aquele e o P3 dos pilares de fechamento, declarado
-          nao_implementado, e continua onde esta. */}
-      <div>
-        <BlocoAtividade
-          titulo="Financeiro"
-          subtitulo="o dinheiro da pecuária que entrou e saiu"
-          icone={Wallet}
-          loading={loadingPainel}
-          onClick={() => setModalAtividade('financeiro')}
-          metricas={[
-            { rotulo: 'Receitas',     valor: valorFin('fin_receitas_pec'),
-              delta: deltaFin('fin_receitas_pec'), deltaRotulo: 'vs meta',
-              acel: acelFin('fin_receitas_pec') },
-            /* ⚠ O arco de Desembolso NAO inverte a cor nesta rodada: gastar
-               acima do plano e' ruim, mas quem ja diz isso e' o `inverseDelta`
-               do delta ao lado. Trocar tambem o arco estenderia o pedido. */
-            { rotulo: 'Desembolso',   valor: valorFin('fin_desembolso_pec'),
-              delta: deltaFin('fin_desembolso_pec'), deltaRotulo: 'vs meta', inverseDelta: true,
-              acel: acelFin('fin_desembolso_pec') },
-            { rotulo: 'Captação',     valor: valorFin('fin_captacao_pec'),
-              delta: deltaFin('fin_captacao_pec'), deltaRotulo: 'vs meta',
-              acel: acelFin('fin_captacao_pec') },
-            { rotulo: 'Amortizações', valor: valorFin('fin_amortizacoes_pec'),
-              delta: deltaFin('fin_amortizacoes_pec'), deltaRotulo: 'vs meta', inverseDelta: true,
-              acel: acelFin('fin_amortizacoes_pec') },
-          ]}
-        />
-      </div>
-
-      {/* ── DRE ──────────────────────────────────────────────────────────────
-          ⚠ REALIZADOS, PELA DATA DO FATO. O subtitulo diz "realizados" de
-          proposito: "por competencia" sozinho sugeriria que previsto e
-          programado entram, e eles NAO entram — o filtro de status vive na
-          query (useFinanceiro:454) e segue em caixa. Ver o comentario extenso
-          no `_finSoberano`, que corrige uma afirmacao falsa do commit f110c45d.
-
-          ⚠ ACUMULADO POR NATUREZA. `valorDre` le SEMPRE `series.periodo`,
-          qualquer que seja o `viewMode` — alternar No mes / No periodo nao muda
-          nenhum numero deste card. Responde, sim, ao MES selecionado: Jan→Jul em
-          julho, Jan→Mar em marco. Demonstrativo e' acumulado por natureza; um
-          DRE de julho isolado nao e' uma peca contabil. Mesmo raciocinio do arco
-          de @ produzidas (a87f4184), que tambem e' anual e ignora o filtro.
-          Quem fizer este card seguir o filtro achando que corrige uma
-          inconsistencia vai transforma-lo em outra coisa.
-
-          ⚠ NAO FECHA COM O CARD FINANCEIRO ACIMA, E ESTA CERTO. Aquele mostra
-          Receitas em CAIXA e escopo pecuaria; este mostra Faturamento em
-          COMPETENCIA (Receita Pecuaria + Outras). Sao vizinhos, com nomes
-          parecidos e numeros diferentes: aquele responde quanto DINHEIRO
-          entrou, este quanto a OPERACAO gerou. Tentar fazer bater desfaz um dos
-          dois. O subtitulo do card declara as duas coisas — acumulado e
-          competencia — para que a divergencia nao pareca defeito. */}
-      <div>
-        <BlocoAtividade
-          titulo="DRE"
-          subtitulo="o resultado da operação — realizados, acumulado no ano, pela data do fato"
-          icone={Wallet}
-          loading={loadingPainel}
-          onClick={() => setModalAtividade('dre')}
-          metricas={[
-            { rotulo: 'Receita líquida',  valor: valorDre(dreReceitaLiquidaIndicador),      delta: null,
-              acel: acelDre(dreReceitaLiquidaIndicador) },
-            { rotulo: 'Resultado bruto',  valor: valorDre(dreResultadoBrutoIndicador),      delta: null,
-              acel: acelDre(dreResultadoBrutoIndicador) },
-            { rotulo: 'Result. operac.',  valor: valorDre(dreResultadoOperacionalIndicador), delta: null,
-              acel: acelDre(dreResultadoOperacionalIndicador) },
-            { rotulo: 'Lucro líquido',    valor: valorDre(dreLucroLiquidoIndicador),        delta: null,
-              acel: acelDre(dreLucroLiquidoIndicador) },
-          ]}
-        />
-      </div>
+      {/* VISAO-GERAL-03/04 — a coluna da direita, preenchida de cima a baixo: o "Mapa das fazendas" (a MESMA peça da Geo pastos: sigla,
+          kg/ha na cor da situação, "cab sem mapa"; o clique abre a fazenda na Geo pastos, com "‹ Voltar à Visão Geral") e, embaixo,
+          "Precisa de atenção", que estica até o fim da coluna da esquerda (nada de branco embaixo). */}
+      {/* `contain: size` (de 1280 px para cima): a coluna da direita NÃO dita a altura da linha — ela tem a altura da esquerda. Com muitas
+          fazendas, as miniaturas rolam dentro do card (como na Geo pastos) e "Precisa de atenção" fica inteiro embaixo; com poucas, ela
+          estica até o fim. Nos dois casos nenhuma coluna fica com branco no pé. */}
+      <div className="order-first flex min-w-0 flex-col gap-1.5 xl:order-none xl:[contain:size]" data-testid="vg-coluna-dir">
+        <Card titulo="Mapa das fazendas" className="min-h-[96px] flex-[0_1_auto]" testid="vg-mapa-fazendas"
+          extra={<span className="ml-auto whitespace-nowrap text-[9.5px] text-muted-foreground">clique para abrir</span>}>
+          <div className="grid max-h-[260px] min-h-0 grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-1.5 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable] xl:grid-cols-2">
+            {mapaDasFazendas.fazendas.map(l => (
+              <MiniaturaDaFazenda key={l.fazenda.id} linha={l} geometrias={mapaDasFazendas.geometriasPorFazenda.get(l.fazenda.id) ?? []}
+                situacaoDoPasto={mapaDasFazendas.situacaoDoPasto} onAbrir={() => onIrPara?.('mapa-geo-pastos', l.fazenda.id)} />
+            ))}
+            {mapaDasFazendas.fazendas.length === 0 && (
+              <span className="col-span-2 text-[9.5px] text-muted-foreground">{mapaDasFazendas.carregando ? 'Lendo o mês…' : 'Nenhuma fazenda com pecuária.'}</span>
+            )}
           </div>
-        </div>
-
-        <div className="lg:col-span-3 space-y-4">
-        {/* Bloco proprio, PRIMEIRO item do wrapper da esquerda — nao filho direto
-            do grid: Area e Caixa sao os unicos diretos NA PRIMEIRA LINHA, para
-            alinharem a altura. O Fechamento Pecuaria, abaixo, tambem e filho
-            direto — em col-span-5, ocupando a largura inteira sem quebrar
-            aquele alinhamento.
-            Saiu do card de Area porque responde outra pergunta: la e como a terra
-            se divide, aqui e o que o rebanho produziu nela.
-            O TITULO diz o MODO: as colunas mudam de significado entre um e outro
-            (rebanho no periodo e media de medias mensais; no mes, saldo final),
-            e "Pecuária" sozinho nao dizia qual leitura estava na tela. */}
-        {isGlobal && linhasProdutivas.length > 0 && (
-          <SectionBlock title={isPeriodo ? 'Pecuária no período' : 'Pecuária no mês'} subtitle="produção por fazenda">
-            <div className="col-span-2">
-            <table className="w-full text-[10px] tabular-nums">
-              <thead>
-                {/* Mesmo PADRAO da tabela de area: bg-primary + primary-foreground. */}
-                <tr className="bg-primary text-primary-foreground">
-                  <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
-                  <th className="text-right px-1.5 py-1 font-medium">Área pec. (ha)</th>
-                  <th className="text-right px-1.5 py-1 font-medium">Rebanho (cab)</th>
-                  <th className="text-right font-normal px-1.5 py-1 w-[64px]">Lot. (UA/ha)</th>
-                  <th className="text-right font-normal px-1.5 py-1">GMD</th>
-                  <th className="text-right font-normal px-1.5 py-1">@ prod.</th>
-                  {/* "(@)" no cabecalho: havia DOIS desfrutes com o mesmo nome na
-                      tela — esta coluna em arrobas e o tile em cabecas. */}
-                  <th className="text-right font-normal px-1.5 py-1">Desfrute (@)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {linhasProdutivas.map(l => (
-                  <tr key={l.fazenda_id} className="odd:bg-muted/30 even:bg-card">
-                    <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[l.fazenda_id] ?? 'Fazenda'}</td>
-                    {/* Sufixo no idioma da legenda de area (:1763): unidade em
-                        text-muted-foreground font-normal, ao lado do numero. O
-                        travessao NAO leva sufixo — "— ha" afirmaria unidade sobre
-                        dado ausente. Dai o ternario em vez de sufixo solto. */}
-                    <td className="text-right px-1.5 py-0.5 font-medium text-foreground">
-                      {fmtHaInt(l.areaPec) === '—'
-                        ? '—'
-                        : <>{fmtHaInt(l.areaPec)} <span className="text-muted-foreground font-normal">ha</span></>}
-                    </td>
-                    <td className="text-right px-1.5 py-0.5 font-medium text-foreground">
-                      {fmtN(l.cabecas) == null
-                        ? '—'
-                        : <>{fmtN(l.cabecas)} <span className="text-muted-foreground font-normal">cab</span></>}
-                    </td>
-                    <td className="text-right px-1.5 py-0.5 text-muted-foreground w-[64px]">{fmtN(l.lotacao, 2) ?? '—'}</td>
-                    <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.gmd, 3) ?? '—'}</td>
-                    <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.arrobas, 1) ?? '—'}</td>
-                    {/* Razao de SOMAS, a MESMA regra do desfrutePctArrIndicador:
-                        Σ @ vendidas / Σ @ iniciais. Antes dividia a SOMA das
-                        vendidas pela MEDIA das iniciais — no mes dava o mesmo, no
-                        periodo dava um numero que nao era nem um nem outro.
-                        Denominador zero exibe "—", nunca divisao por zero. */}
-                    <td className="text-right px-1.5 py-0.5 text-muted-foreground">
-                      {l.arrIniciaisSoma > 0 ? `${fmtN((l.arrVendidas / l.arrIniciaisSoma) * 100, 1)}%` : '—'}
-                    </td>
-                  </tr>
-                ))}
-                {/* Total: os MESMOS objetos que alimentam os tiles do bloco
-                    Eficiencia — bate por construcao. Area soma as linhas
-                    (e area, nao indicador); Desfrute divide SOMAS. */}
-                <tr className="bg-primary text-primary-foreground font-medium">
-                  <td className="text-left px-1.5 py-0.5">Total</td>
-                  {/* A10: sobre azul o sufixo NAO leva text-muted-foreground —
-                      herda primary-foreground como o resto da linha. Fica so o
-                      font-normal, que e o degrau de peso contra o numero. */}
-                  <td className="text-right px-1.5 py-0.5">
-                    {fmtHaInt(totProdutivo.areaPec) === '—'
-                      ? '—'
-                      : <>{fmtHaInt(totProdutivo.areaPec)} <span className="font-normal">ha</span></>}
-                  </td>
-                  <td className="text-right px-1.5 py-0.5">
-                    {fmtN(cabecasIndicador?.valor ?? null) == null
-                      ? '—'
-                      : <>{fmtN(cabecasIndicador?.valor ?? null)} <span className="font-normal">cab</span></>}
-                  </td>
-                  <td className="text-right px-1.5 py-0.5 w-[64px]">{fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—'}</td>
-                  <td className="text-right px-1.5 py-0.5">{fmtN(gmdIndicador?.valor ?? null, 3) ?? '—'}</td>
-                  <td className="text-right px-1.5 py-0.5">{fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—'}</td>
-                  {/* Total consome o INDICADOR, como as outras quatro colunas —
-                      nao um total recalculado na tela. Bate por construcao. */}
-                  <td className="text-right px-1.5 py-0.5">
-                    {desfrutePctArrIndicador?.valor != null ? `${fmtN(desfrutePctArrIndicador.valor, 1)}%` : '—'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            </div>
-          </SectionBlock>
-        )}
-
-        <SectionBlock title="Produção" subtitle="o que a fazenda entregou" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
-          <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
-            deltaMes={cabecasIndicador?.deltaMes ?? null}
-            deltaAno={cabecasIndicador?.deltaAno ?? null}
-            deltaMeta={cabecasIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('cabecas')} />
-          <MetricTile label={pesoMedioIndicador?.label ?? 'PESO MÉDIO FINAL'} value={fmtN(pesoMedioIndicador?.valor ?? null, 1)} unit="kg" loading={loadingPainel}
-            deltaMes={pesoMedioIndicador?.deltaMes ?? null}
-            deltaAno={pesoMedioIndicador?.deltaAno ?? null}
-            deltaMeta={pesoMedioIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('pesoMedio')} />
-          <MetricTile label={arrobasIndicador?.label ?? '@ PRODUZIDAS NO MÊS'} value={fmtN(arrobasIndicador?.valor ?? null, 1)} unit="@" loading={loadingPainel}
-            deltaMes={arrobasIndicador?.deltaMes ?? null}
-            deltaAno={arrobasIndicador?.deltaAno ?? null}
-            deltaMeta={arrobasIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('arrobas')} />
-          <MetricTile label={desfruteIndicador?.label ?? 'DESFRUTE (CAB.) NO MÊS'} value={fmtN(desfruteIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
-            deltaMes={desfruteIndicador?.deltaMes ?? null}
-            deltaAno={desfruteIndicador?.deltaAno ?? null}
-            deltaMeta={desfruteIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('desfrute')} />
-          {/* Desfrute (@) LOGO ABAIXO do de cabecas — os dois lado a lado e com
-              rotulos distintos e o que impede a confusao que existia. Sem
-              onClick: o modal de historico so conhece os indicadores do mapa de
-              `modalIndicador`, e acrescentar um id novo la e outro escopo. */}
-          <MetricTile label={desfrutePctArrIndicador?.label ?? 'DESFRUTE (@) NO MÊS'} value={fmtN(desfrutePctArrIndicador?.valor ?? null, 1)} unit="%" loading={loadingPainel}
-            deltaMes={desfrutePctArrIndicador?.deltaMes ?? null}
-            deltaAno={desfrutePctArrIndicador?.deltaAno ?? null}
-            deltaMeta={desfrutePctArrIndicador?.deltaMeta ?? null} />
-          <MetricTile label={gmdIndicador?.label ?? 'GMD'} value={fmtN(gmdIndicador?.valor ?? null, 3)} unit="kg/dia" loading={loadingPainel}
-            deltaMes={gmdIndicador?.deltaMes ?? null}
-            deltaAno={gmdIndicador?.deltaAno ?? null}
-            deltaMeta={gmdIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('gmd')} />
-          <MetricTile label={valorRebanhoIndicador?.label ?? 'VALOR DO REBANHO NO MÊS'} value={fmtRAbreviado(valorRebanhoIndicador?.valor ?? null)} loading={loadingPainel}
-            deltaMes={valorRebanhoIndicador?.deltaMes ?? null}
-            deltaAno={valorRebanhoIndicador?.deltaAno ?? null}
-            deltaMeta={valorRebanhoIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('valorRebanho')} />
-        </SectionBlock>
-
-        {/* Os quatro tiles sao os MESMOS indicadores ja consumidos no bloco Producao
-            (cabecas, GMD, @) e no proprio Eficiencia (UA/ha) — copiados verbatim, sem
-            reescrever formatacao. A repeticao entre os dois blocos e deliberada.
-            Os rotulos mudam sozinhos no viewMode 'periodo' porque vem do indicador;
-            a semantica difere por natureza: cabecas, UA/ha e GMD sao MEDIA no periodo,
-            @ produzidas e SOMA — arroba acumula, lotacao e ganho de peso nao. */}
-        <SectionBlock title="Eficiência" subtitle="rebanho e uso da área" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
-          <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
-            deltaMes={cabecasIndicador?.deltaMes ?? null}
-            deltaAno={cabecasIndicador?.deltaAno ?? null}
-            deltaMeta={cabecasIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('cabecas')} />
-          <MetricTile label={uaHaIndicador?.label ?? 'UA/HA NO MÊS'} value={fmtN(uaHaIndicador?.valor ?? null, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
-            deltaMes={uaHaIndicador?.deltaMes ?? null}
-            deltaAno={uaHaIndicador?.deltaAno ?? null}
-            deltaMeta={uaHaIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('uaHa')} />
-          <MetricTile label={gmdIndicador?.label ?? 'GMD'} value={fmtN(gmdIndicador?.valor ?? null, 3)} unit="kg/dia" loading={loadingPainel}
-            deltaMes={gmdIndicador?.deltaMes ?? null}
-            deltaAno={gmdIndicador?.deltaAno ?? null}
-            deltaMeta={gmdIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('gmd')} />
-          <MetricTile label={arrobasIndicador?.label ?? '@ PRODUZIDAS NO MÊS'} value={fmtN(arrobasIndicador?.valor ?? null, 1)} unit="@" loading={loadingPainel}
-            deltaMes={arrobasIndicador?.deltaMes ?? null}
-            deltaAno={arrobasIndicador?.deltaAno ?? null}
-            deltaMeta={arrobasIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('arrobas')} />
-          <MetricTile label={kgHaIndicador?.label ?? 'KG VIVO/HA NO MÊS'} value={fmtN(kgHaIndicador?.valor ?? null, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
-            deltaMes={kgHaIndicador?.deltaMes ?? null}
-            deltaAno={kgHaIndicador?.deltaAno ?? null}
-            deltaMeta={kgHaIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('kgHa')} />
-        </SectionBlock>
-        </div>
-
-        <div className="lg:col-span-2 space-y-4">
-        <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
-          <MetricTile
-            label={receitaPecIndicador?.label ?? 'RECEITAS PECUÁRIAS COMPETÊNCIA NO MÊS'}
-            value={fmtR(receitaPecIndicador?.valor ?? null)}
-            loading={loadingPainel}
-            tone="blue"
-            deltaMes={receitaPecIndicador?.deltaMes ?? null}
-            deltaAno={receitaPecIndicador?.deltaAno ?? null}
-            deltaMeta={receitaPecIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('receitaPec')} />
-          <MetricTile
-            label={custeioPecIndicador?.label ?? 'CUSTEIO PRODUÇÃO PECUÁRIA NO MÊS'}
-            value={fmtR(custeioPecIndicador?.valor ?? null)}
-            loading={loadingPainel}
-            tone="negative"
-            deltaMes={custeioPecIndicador?.deltaMes ?? null}
-            deltaAno={custeioPecIndicador?.deltaAno ?? null}
-            deltaMeta={custeioPecIndicador?.deltaMeta ?? null}
-            inverseDelta
-            onClick={() => setModalIndicador('custeioPec')} />
-          <MetricTile
-            label={custoArrIndicador?.label ?? 'CUSTO PRODUTIVO R$/@'}
-            value={fmtR(custoArrIndicador?.valor ?? null)}
-            unit="R$/@"
-            loading={loadingPainel}
-            tone="negative"
-            deltaMes={custoArrIndicador?.deltaMes ?? null}
-            deltaAno={custoArrIndicador?.deltaAno ?? null}
-            deltaMeta={custoArrIndicador?.deltaMeta ?? null}
-            inverseDelta
-            onClick={() => setModalIndicador('custoArr')} />
-          <MetricTile
-            label={precoArrIndicador?.label ?? 'PREÇO DE VENDA R$/@'}
-            value={fmtR(precoArrIndicador?.valor ?? null)}
-            unit="R$/@"
-            loading={loadingPainel}
-            tone="blue"
-            deltaMes={precoArrIndicador?.deltaMes ?? null}
-            deltaAno={precoArrIndicador?.deltaAno ?? null}
-            deltaMeta={precoArrIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('precoArr')} />
-          <MetricTile
-            label={custoCabIndicador?.label ?? 'CUSTO CAB. MÊS R$/CAB.'}
-            value={fmtR(custoCabIndicador?.valor ?? null)}
-            unit="R$/cab."
-            loading={loadingPainel}
-            tone="negative"
-            deltaMes={custoCabIndicador?.deltaMes ?? null}
-            deltaAno={custoCabIndicador?.deltaAno ?? null}
-            deltaMeta={custoCabIndicador?.deltaMeta ?? null}
-            inverseDelta
-            onClick={() => setModalIndicador('custoCab')} />
-          <MetricTile
-            label={margemArrIndicador?.label ?? 'MARGEM POR @'}
-            value={fmtR(margemArrIndicador?.valor ?? null)}
-            unit="R$/@"
-            loading={loadingPainel}
-            tone={margemArrIndicador?.valor == null ? 'default' : margemArrIndicador.valor >= 0 ? 'blue' : 'negative'}
-            deltaMes={margemArrIndicador?.deltaMes ?? null}
-            deltaAno={margemArrIndicador?.deltaAno ?? null}
-            deltaMeta={margemArrIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('margemArr')} />
-        </SectionBlock>
-
-        <SectionBlock title="Estrutura Financeira" subtitle="posição patrimonial">
-          <MetricTile
-            label="Caixa disponível"
-            value={fmtR(caixaValor)}
-            loading={loadingFluxo}
-            tone="blue"
-            deltaMes={deltaMesCaixa}
-            deltaAno={deltaAnoCaixa}
-            deltaMeta={null}
-            onClick={() => setModalIndicador('caixaDisponivel')}
-          />
-          <MetricTile
-            label="Endividamento"
-            value={fmtR(endividamentoValor)}
-            loading={loadingDivida}
-            tone={endividamentoValor != null && endividamentoValor > 0 ? 'negative' : 'default'}
-            deltaMes={finEndDeltaMes}
-            deltaAno={finEndDeltaAno}
-            deltaMeta={null}
-            inverseDelta
-            onClick={() => setModalIndicador('endividamento')}
-          />
-          <MetricTile
-            label="Dívida / rebanho"
-            value={loadingDivida ? null : fmtN(finAlavancagem?.percentual ?? null, 1)}
-            unit="%"
-            loading={loadingDivida}
-            tone={
-              finAlavancagem?.status === 'critico' ? 'negative'
-              : finAlavancagem?.status === 'atencao' ? 'negative'
-              : 'default'
-            }
-            deltaMes={finAlavancagem?.deltaMes ?? null}
-            deltaAno={finAlavancagem?.deltaAno ?? null}
-            deltaMeta={null}
-            inverseDelta
-            onClick={() => setModalIndicador('alavancagem')}
-          />
-          {(() => {
-            const pizza = finPizza ?? [];
-            const curto = pizza.find(p => p.nome?.toLowerCase().includes('curto'));
-            const longo = pizza.find(p => p.nome?.toLowerCase().includes('longo'));
-            const total = (curto?.valor ?? 0) + (longo?.valor ?? 0);
-            const pctCurto = total > 0 ? (curto?.valor ?? 0) / total * 100 : null;
-            return (
-              <MetricTile
-                label="Curto vs longo prazo"
-                value={pctCurto != null
-                  ? `${fmtN(pctCurto, 0)}% Curto Prazo / ${fmtN(100 - pctCurto, 0)}% Longo Prazo`
-                  : null}
-                loading={loadingDivida}
-                hideDelta
-              />
-            );
-          })()}
-        </SectionBlock>
-
-        {/* Ultimo bloco da COLUNA DA DIREITA — dentro da coluna, nunca como irmao
-            do grid (regra do PR das duas colunas). Sem conta com saldo, o bloco
-            nao renderiza nem o titulo: mes sem saldo lancado nao vira card vazio. */}
-        {gruposConta.length > 0 && (
-          <SectionBlock title="Disponível em conta" subtitle="onde o saldo está">
-            <div className="col-span-2 space-y-0.5">
-              {gruposConta.map(g => (
-                <div key={g.tipo} className="space-y-0.5">
-                  <LinhaCaixa label={g.rotulo} valor={g.subtotal} tipo="total" />
-                  {g.contas.map(c => (
-                    <LinhaCaixa key={c.conta_id} label={c.nome} valor={c.saldo} />
-                  ))}
-                </div>
-              ))}
-
-              <div className="pt-1 mt-1 border-t border-border">
-                <LinhaCaixa label="Total em conta" valor={totalEmConta} tipo="total" />
-              </div>
-
-              {mostrarDifEmConta && (
-                <div className="text-[10px] text-warning pt-1">
-                  Diferença de {fmtR(difEmConta)} contra o saldo do Caixa
-                </div>
-              )}
-            </div>
-          </SectionBlock>
-        )}
-        </div>
-        </>)}
-
+          <div className="flex-none px-2.5 pb-2"><LegendaDasSituacoes /></div>
+        </Card>
+        <PrecisaDeAtencao itens={atencaoVG} carregando={loadingGradeAno || carregandoConc} className="xl:flex-[1_0_auto]" />
       </div>
+      </div>
+
+      {/* VISAO-GERAL-04 — os blocos por atividade na largura toda, abaixo das duas colunas: a grade fecha nas duas (o bloco é largo; na
+          coluna da esquerda ele deixava a da direita com um buraco embaixo) */}
+      <BlocosPorAtividade
+        atividades={atividadesVG}
+        pecuaria={pecuariaVG}
+        silviculturaHa={areaSilvi ?? null}
+        clienteId={clienteAtual?.id ?? null}
+        anoMes={anoMesVG}
+        subPorGrupo={{ pecuaria: subVG(areaPec ?? null, 'Pecuária'), agricultura: subVG(areaAgri ?? null, 'Agricultura'), silvicultura: subVG(areaSilvi ?? null, 'Silvicultura') }}
+        onAbrir={(g) => irPara(g === 'pecuaria' ? 'fechamento' : g === 'agricultura' ? 'dre' : 'mapa-geo-pastos')}
+      />
       </div>
 
       {/* Modal da linha do Resumido. A quebra sai das MESMAS parcelas que compoem
@@ -3642,9 +1749,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           <Dialog open onOpenChange={(v) => { if (!v) setLinhaCaixaModal(null); }}>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle className="flex items-baseline justify-between gap-4 text-sm">
+                <DialogTitle className="flex items-baseline justify-between gap-4 text-[11px] font-semibold">
                   <span>{linhaCaixaModal}</span>
-                  <span className="tabular-nums text-base">{fmtR(total)}</span>
+                  <span className="tabular-nums text-[14px]">{fmtR(total)}</span>
                 </DialogTitle>
                 <p className="text-[10px] text-muted-foreground">{recorte}</p>
               </DialogHeader>
@@ -3719,531 +1826,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         );
       })()}
 
-      {modalIndicador === 'cabecas' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={cabecasIndicador?.titulo ?? ''}
-          unidade="cab" formatoValor="inteiro"
-          subtitulo={cabecasIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={cabecasIndicador?.serieAno ?? []}
-          serieAnoAnt={cabecasIndicador?.serieAnoAnt}
-          serieMeta={cabecasIndicador?.serieMetaIndicador}
-          series={cabecasIndicador?.series}
-          titulos={cabecasIndicador?.titulos}
-          tipoAcumulado="posicao"
-          indicadorKey="cabecas"
-          seriesPorFazenda={seriePorFaz.cabecas}
-          globalPorFazenda="soma"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={cabecasIndicador?.deltaMes ?? null}
-          deltaAno={cabecasIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
-        />
-      )}
-      {modalIndicador === 'pesoMedio' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={pesoMedioIndicador?.titulo ?? ''}
-          unidade="kg" formatoValor="decimal1"
-          subtitulo={pesoMedioIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={pesoMedioIndicador?.serieAno ?? []}
-          serieAnoAnt={pesoMedioIndicador?.serieAnoAnt}
-          serieMeta={pesoMedioIndicador?.serieMeta}
-          series={pesoMedioIndicador?.series}
-          titulos={pesoMedioIndicador?.titulos}
-          tipoAcumulado="posicao"
-          indicadorKey="pesoMedio"
-          seriesPorFazenda={seriePorFaz.pesoMedio}
-          globalPorFazenda="ponderada"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={pesoMedioIndicador?.deltaMes ?? null}
-          deltaAno={pesoMedioIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={pesoMedioHistoricoOficial}
-          historicoMeta={metaPar(pesoMedioIndicador)}
-          loadingHistorico={loadingPesoMedioHistorico}
-        />
-      )}
-      {modalIndicador === 'arrobas' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={arrobasIndicador?.titulo ?? ''}
-          unidade="@" formatoValor="decimal1"
-          subtitulo={arrobasIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={arrobasIndicador?.serieAno ?? []}
-          serieAnoAnt={arrobasIndicador?.serieAnoAnt}
-          serieMeta={arrobasIndicador?.serieMeta}
-          series={arrobasIndicador?.series}
-          titulos={arrobasIndicador?.titulos}
-          tipoAcumulado="soma"
-          indicadorKey="arrobas"
-          seriesPorFazenda={seriePorFaz.arrobas}
-          globalPorFazenda="soma"
-          tipoGraficoMes="coluna"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={arrobasIndicador?.deltaMes ?? null}
-          deltaAno={arrobasIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={arrobasHistoricoOficial}
-          historicoMeta={metaPar(arrobasIndicador)}
-          loadingHistorico={loadingArrobasHistorico}
-        />
-      )}
-      {modalIndicador === 'gmd' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={gmdIndicador?.titulo ?? ''}
-          unidade="kg/dia" formatoValor="decimal3"
-          subtitulo={gmdIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={gmdIndicador?.serieAno ?? []}
-          serieAnoAnt={gmdIndicador?.serieAnoAnt}
-          serieMeta={gmdIndicador?.serieMeta}
-          series={gmdIndicador?.series}
-          titulos={gmdIndicador?.titulos}
-          tipoAcumulado="media"
-          indicadorKey="gmd"
-          seriesPorFazenda={seriePorFaz.gmd}
-          globalPorFazenda="ponderada"
-          tipoGraficoMes="coluna"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={gmdIndicador?.deltaMes ?? null}
-          deltaAno={gmdIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={gmdHistoricoOficial}
-          historicoMeta={metaPar(gmdIndicador)}
-          loadingHistorico={loadingGmdHistorico}
-        />
-      )}
-      {modalIndicador === 'uaHa' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={uaHaIndicador?.titulo ?? ''}
-          unidade="UA/ha" formatoValor="decimal2"
-          subtitulo={uaHaIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={uaHaIndicador?.serieAno ?? []}
-          serieAnoAnt={uaHaIndicador?.serieAnoAnt}
-          serieMeta={uaHaIndicador?.serieMeta}
-          series={uaHaIndicador?.series}
-          titulos={uaHaIndicador?.titulos}
-          tipoAcumulado="media"
-          indicadorKey="uaHa"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={uaHaIndicador?.deltaMes ?? null}
-          deltaAno={uaHaIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={uaHaHistoricoOficial}
-          historicoMeta={metaPar(uaHaIndicador)}
-          loadingHistorico={loadingUaHaHistorico}
-        />
-      )}
-      {modalIndicador === 'kgHa' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={kgHaIndicador?.titulo ?? ''}
-          unidade="kg/ha" formatoValor="decimal1"
-          subtitulo={kgHaIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={kgHaIndicador?.serieAno ?? []}
-          serieAnoAnt={kgHaIndicador?.serieAnoAnt}
-          serieMeta={kgHaIndicador?.serieMeta}
-          series={kgHaIndicador?.series}
-          titulos={kgHaIndicador?.titulos}
-          tipoAcumulado="media"
-          indicadorKey="kgHa"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={kgHaIndicador?.deltaMes ?? null}
-          deltaAno={kgHaIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={kgHaHistoricoOficial}
-          historicoMeta={metaPar(kgHaIndicador)}
-          loadingHistorico={loadingKgHaHistorico}
-        />
-      )}
-      {modalIndicador === 'areaProdutivaPec' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo="Área Produtiva Pecuária"
-          unidade="ha" formatoValor="inteiro"
-          subtitulo={isPeriodoArea ? 'Área pecuária produtiva média no período' : 'Área pecuária produtiva no mês'}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={areaProdutivaPecSerieAno}
-          serieAnoAnt={areaProdutivaPecSerieAnoAnt}
-          serieMeta={areaProdutivaPecSerieMeta}
-          tipoAcumulado="posicao"
-          indicadorKey="areaProdutivaPec"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={areaProdutivaPecDeltaMes}
-          deltaAno={areaProdutivaPecDeltaAno}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={areaProdutivaPecHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
-          loadingHistorico={loadingAreaProdutivaPecHistorico}
-        />
-      )}
-      {modalIndicador === 'desfrute' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={desfruteIndicador?.titulo ?? ''}
-          unidade="cab" formatoValor="inteiro"
-          subtitulo={desfruteIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={desfruteIndicador?.serieAno ?? []}
-          serieAnoAnt={desfruteIndicador?.serieAnoAnt}
-          serieMeta={desfruteIndicador?.serieMeta}
-          series={desfruteIndicador?.series}
-          titulos={desfruteIndicador?.titulos}
-          tipoAcumulado="soma"
-          indicadorKey="desfrute"
-          tipoGraficoMes="coluna"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={desfruteIndicador?.deltaMes ?? null}
-          deltaAno={desfruteIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
-        />
-      )}
-      {modalIndicador === 'valorRebanho' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={valorRebanhoIndicador?.titulo ?? ''}
-          formatoValor="moedaAbreviada"
-          subtitulo={valorRebanhoIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={valorRebanhoIndicador?.serieAno ?? []}
-          serieAnoAnt={valorRebanhoIndicador?.serieAnoAnt}
-          serieMeta={valorRebanhoIndicador?.serieMeta}
-          series={valorRebanhoIndicador?.series}
-          titulos={valorRebanhoIndicador?.titulos}
-          tipoAcumulado="posicao"
-          indicadorKey="valorRebanho"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={valorRebanhoIndicador?.deltaMes ?? null}
-          deltaAno={valorRebanhoIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
-        />
-      )}
-      {modalIndicador === 'receitaPec' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={receitaPecIndicador?.titulo ?? ''}
-          formatoValor="moedaAbreviada"
-          subtitulo={receitaPecIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={receitaPecIndicador?.serieAno ?? []}
-          serieAnoAnt={receitaPecIndicador?.serieAnoAnt}
-          serieMeta={receitaPecIndicador?.serieMeta}
-          series={receitaPecIndicador?.series}
-          titulos={receitaPecIndicador?.titulos}
-          tipoAcumulado={isPeriodo ? 'soma' : 'posicao'}
-          indicadorKey="receitaPec"
-          tipoGraficoMes="coluna"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={receitaPecIndicador?.deltaMes ?? null}
-          deltaAno={receitaPecIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={receitaPecHistoricoOficial}
-          historicoMeta={metaPar(receitaPecIndicador)}
-          loadingHistorico={loadingReceitaPecHistorico}
-          corPrincipal="azul"
-        />
-      )}
-      {modalIndicador === 'custeioPec' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={custeioPecIndicador?.titulo ?? ''}
-          formatoValor="moedaAbreviada"
-          subtitulo={custeioPecIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={custeioPecIndicador?.serieAno ?? []}
-          serieAnoAnt={custeioPecIndicador?.serieAnoAnt}
-          serieMeta={custeioPecIndicador?.serieMeta}
-          series={custeioPecIndicador?.series}
-          titulos={custeioPecIndicador?.titulos}
-          tipoAcumulado={isPeriodo ? 'soma' : 'posicao'}
-          indicadorKey="custeioPec"
-          tipoGraficoMes="coluna"
-          polaridade="positivoRuim"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={custeioPecIndicador?.deltaMes ?? null}
-          deltaAno={custeioPecIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={custeioPecHistoricoOficial}
-          historicoMeta={metaPar(custeioPecIndicador)}
-          loadingHistorico={loadingCusteioPecHistorico}
-          corPrincipal="vermelho"
-        />
-      )}
-      {modalIndicador === 'custoArr' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={custoArrIndicador?.titulo ?? ''}
-          unidade="R$/@" formatoValor="decimal2"
-          subtitulo={custoArrIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={custoArrIndicador?.serieAno ?? []}
-          serieAnoAnt={custoArrIndicador?.serieAnoAnt}
-          serieMeta={custoArrIndicador?.serieMeta}
-          series={custoArrIndicador?.series}
-          titulos={custoArrIndicador?.titulos}
-          tipoAcumulado="media"
-          indicadorKey="custoArr"
-          tipoGraficoMes="coluna"
-          polaridade="positivoRuim"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={custoArrIndicador?.deltaMes ?? null}
-          deltaAno={custoArrIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={custoArrHistoricoOficial}
-          historicoMeta={metaPar(custoArrIndicador)}
-          loadingHistorico={loadingCustoArrHistorico}
-          corPrincipal="vermelho"
-        />
-      )}
-      {modalIndicador === 'precoArr' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={precoArrIndicador?.titulo ?? ''}
-          unidade="R$/@" formatoValor="decimal2"
-          subtitulo={precoArrIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={precoArrIndicador?.serieAno ?? []}
-          serieAnoAnt={precoArrIndicador?.serieAnoAnt}
-          serieMeta={precoArrIndicador?.serieMeta}
-          series={precoArrIndicador?.series}
-          titulos={precoArrIndicador?.titulos}
-          tipoAcumulado="media"
-          indicadorKey="precoArr"
-          tipoGraficoMes="coluna"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={precoArrIndicador?.deltaMes ?? null}
-          deltaAno={precoArrIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={precoArrHistoricoOficial}
-          historicoMeta={metaPar(precoArrIndicador)}
-          loadingHistorico={loadingPrecoArrHistorico}
-          corPrincipal="azul"
-        />
-      )}
-      {modalIndicador === 'custoCab' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={custoCabIndicador?.titulo ?? ''}
-          unidade="R$/cab" formatoValor="decimal2"
-          subtitulo={custoCabIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={custoCabIndicador?.serieAno ?? []}
-          serieAnoAnt={custoCabIndicador?.serieAnoAnt}
-          serieMeta={custoCabIndicador?.serieMeta}
-          series={custoCabIndicador?.series}
-          titulos={custoCabIndicador?.titulos}
-          tipoAcumulado="media"
-          indicadorKey="custoCab"
-          polaridade="positivoRuim"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={custoCabIndicador?.deltaMes ?? null}
-          deltaAno={custoCabIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={custoCabHistoricoOficial}
-          historicoMeta={metaPar(custoCabIndicador)}
-          loadingHistorico={loadingCustoCabHistorico}
-          corPrincipal="vermelho"
-        />
-      )}
-      {modalIndicador === 'margemArr' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={margemArrIndicador?.titulo ?? ''}
-          unidade="R$/@" formatoValor="decimal2"
-          subtitulo={margemArrIndicador?.subtitulo ?? ''}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={margemArrIndicador?.serieAno ?? []}
-          serieAnoAnt={margemArrIndicador?.serieAnoAnt}
-          serieMeta={margemArrIndicador?.serieMeta}
-          tipoAcumulado="media"
-          indicadorKey="margemArr"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={margemArrIndicador?.deltaMes ?? null}
-          deltaAno={margemArrIndicador?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          historicoAno={margemArrHistoricoOficial}
-          historicoMeta={metaPar(margemArrIndicador)}
-          loadingHistorico={loadingMargemArrHistorico}
-          corPrincipal={(margemArrIndicador?.valor ?? 0) >= 0 ? 'azul' : 'vermelho'}
-        />
-      )}
-      {modalIndicador === 'caixaDisponivel' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo="Caixa disponível"
-          unidade="" formatoValor="moedaAbreviada"
-          subtitulo="Saldo final de caixa por mês"
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={caixaSerieAno as number[]}
-          serieAnoAnt={caixaSerieAnoAnt as number[]}
-          tipoAcumulado="posicao"
-          indicadorKey="caixaDisponivel"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={deltaMesCaixa}
-          deltaAno={deltaAnoCaixa}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-        />
-      )}
-      {modalIndicador === 'endividamento' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo="Endividamento"
-          unidade="" formatoValor="moedaAbreviada"
-          subtitulo="Saldo devedor em aberto por mês"
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={finSerieAno}
-          serieAnoAnt={finSerieAnoAnt}
-          tipoAcumulado="posicao"
-          indicadorKey="endividamento"
-          polaridade="positivoRuim"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={finEndDeltaMes}
-          deltaAno={finEndDeltaAno}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          corPrincipal="vermelho"
-        />
-      )}
-      {/* SEM `series`: alavancagem, endividamento, caixaDisponivel e
-          areaProdutivaPec NAO existem em usePainelConsultorData — sao os
-          mesmos quatro que aparecem na baseline TSC por nao estarem no tipo
-          de `modalIndicador`. Sem as duas leituras, o modal cai em
-          `serieAno` e os dois graficos ficam iguais. Dar `series` a eles
-          exige antes cria-los no hook: frente propria. */}
-      {modalIndicador === 'alavancagem' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo="Dívida / rebanho"
-          unidade="%" formatoValor="decimal1"
-          subtitulo="Alavancagem pecuária = dívida pecuária / valor do rebanho"
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={finSerieAlavAno as number[]}
-          serieAnoAnt={finSerieAlavAnoAnt as number[]}
-          tipoAcumulado="posicao"
-          indicadorKey="alavancagem"
-          polaridade="positivoRuim"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 5}
-          deltaMes={finAlavancagem?.deltaMes ?? null}
-          deltaAno={finAlavancagem?.deltaAno ?? null}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          corPrincipal="vermelho"
-        />
-      )}
-
-      {/* UM ponto de montagem. Eram dois, um por assunto, e so o de
-          Movimentacoes recebia `indicadoresMovimentacoes` — entao trocar de
-          assunto dentro do modal aberto pelo Zootecnico dava `?? []`, grade
-          com zero filhos, TELA EM BRANCO. Sem nem "em construção", porque o
-          `EmConstrucao` vive DENTRO do card e nao havia card nenhum.
-          Com um ponto so, os dois prop-bags chegam sempre e nenhum assunto
-          pode cair em array vazio — o defeito morre por construcao, nao por
-          guarda. */}
-      {modalAtividade && (
-        <ModalAtividade
-          open
-          onClose={() => { setModalAtividade(null); setAssuntoAtivo(null); }}
-          mesAtual={mesNum}
-          anoAtual={anoNum}
-          clienteNome={clienteAtual?.nome ?? ''}
-          assuntoInicial={modalAtividade}
-          onAssuntoChange={setAssuntoAtivo}
-          indicadores={indicadoresAtividade}
-          indicadoresMovimentacoes={indicadoresMovimentacoes}
-          indicadoresFinanceiro={indicadoresFinanceiro}
-          indicadoresOperacional={indicadoresOperacional}
-          indicadoresDre={indicadoresDre}
-          codigosFazendas={seriePorFazAtiv.cabecas.map(f => f.codigo)}
-          loadingHistorico={histZootAtiv.loading}
-        />
-      )}
+      {/* VISAO-GERAL-02 — os modais de historico por indicador e o modal por assunto sairam junto com os blocos legados que os abriam. */}
     </div>
     </>
   );

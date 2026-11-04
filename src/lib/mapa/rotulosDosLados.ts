@@ -38,6 +38,9 @@ export const textoDoLado = (metros: number) => `${Math.round(metros).toLocaleStr
 const ESTILO = 'position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font-size:9.5px;font-weight:600;color:#1e3a8a;'
   + 'background:rgba(255,255,255,.88);padding:0 2px;border-radius:2px;font-variant-numeric:tabular-nums';
 
+/** A MESMA etiqueta dos metros ("631 m") para toda medida do mapa (MAPA-DIVIDIR-02: a linha riscada, o corte, o corredor). */
+export const htmlDaMedida = (texto: string) => `<span style="${ESTILO}">${texto}</span>`;
+
 export interface LadoComTexto { p: readonly number[]; q: readonly number[]; texto: string }
 
 /** Os lados de uma lista de segmentos (já SEM repetir o lado comum) com o texto dos metros. (fatia 2a do MAPA-CRIAR-PIQUETES-01) */
@@ -52,7 +55,7 @@ function pintarLados(mapa: L.Map, grupo: L.LayerGroup, lados: readonly LadoComTe
   const visivel = rotulosVisiveis(naTela);
   lados.forEach((l, i) => {
     if (visivel[i]) {
-      const icone = L.divIcon({ className: 'lado-do-poligono', iconSize: [0, 0], html: `<span style="${ESTILO}">${l.texto}</span>` });
+      const icone = L.divIcon({ className: 'lado-do-poligono', iconSize: [0, 0], html: htmlDaMedida(l.texto) });
       L.marker([(l.p[1] + l.q[1]) / 2, (l.p[0] + l.q[0]) / 2], { icon: icone, interactive: false, pmIgnore: true }).addTo(grupo);
     } else {
       // lado curto (ou rótulo que encavalaria): os metros aparecem ao passar o mouse no lado

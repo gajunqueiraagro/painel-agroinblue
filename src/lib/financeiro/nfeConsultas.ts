@@ -383,6 +383,20 @@ export async function desfazerCompletar(operacao: string): Promise<string | null
 }
 /** Cancela os lançamentos que nasceram para a operação quando ela foi recusada (o padrão do P75: nada fica valendo pela metade). Devolve
  *  quantos NÃO puderam ser cancelados. */
+/** NOTA-BOLETO-COMPOSTO-01 (PR 1, D1 do Gabriel) — "Excluir" na prévia da nota = CANCELAR com o motivo e a trilha (a mesma
+ *  `fn_cancelar_lancamento_auditoria`; nunca DELETE). Devolve quantos NÃO puderam ser cancelados. */
+export async function cancelarComMotivo(ids: readonly string[], motivo: string): Promise<number> {
+  let falhas = 0;
+  for (const id of ids) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { error } = await (supabase as any).rpc('fn_cancelar_lancamento_auditoria', { p_lancamento_id: id, p_motivo: motivo });
+      if (error) { console.error('cancelarComMotivo', error); falhas += 1; }
+    } catch (e) { console.error('cancelarComMotivo', e); falhas += 1; }
+  }
+  return falhas;
+}
+
 export async function cancelarCriados(ids: readonly string[], porque: string): Promise<number> {
   let falhas = 0;
   for (const id of ids) {

@@ -85,12 +85,14 @@ describe('FIN-V2-LISTA-VIRTUAL-01 — só as linhas à vista', () => {
 
   it('a tela desenha a fatia, rola no scrollport da lista, e a linha tem 19px fixos', () => {
     const fonte = readFileSync('src/pages/FinanceiroV2Tab.tsx', 'utf8');
-    const corpo = fonte.slice(fonte.indexOf('<CorpoDaListaMemo'), fonte.indexOf('</tbody>', fonte.indexOf('<CorpoDaListaMemo')));
+    /* CONC-SUGESTOES-TABELA-01 — o `<tbody>` e a linha são das peças (`TabelaDaLista`, `LinhaDaLista`) */
+    const corpo = fonte.slice(fonte.indexOf('<CorpoDaListaMemo'), fonte.indexOf('</TabelaDaLista>', fonte.indexOf('<CorpoDaListaMemo')));
     expect(corpo).toMatch(/rolagem=\{scrollContainerRef\}/);
     expect(corpo).toMatch(/desenhar=\{\(inicio, fim\) =>/);
     expect(corpo).toContain('linhasDaGrade.slice(inicio, fim).map(');
     expect(corpo).not.toMatch(/linhasDaGrade\.map\(/);
-    expect(corpo).toContain('linha-da-lista');
+    expect(corpo).toContain('<LinhaDaLista key={l.id}');
+    expect(readFileSync('src/components/financeiro-v2/TabelaDaLista.tsx', 'utf8')).toContain('linha-da-lista');
     /* o "⋯" cabe na linha de 19px */
     expect(readFileSync('src/components/financeiro-v2/corpoDaLista.tsx', 'utf8')).toMatch(/className="h-4 w-4 rounded-sm" title="Ações"/);
     expect(ALTURA_DA_LINHA).toBe(19);
