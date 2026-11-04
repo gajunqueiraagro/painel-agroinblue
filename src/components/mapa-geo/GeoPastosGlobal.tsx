@@ -178,7 +178,8 @@ function QuadroDaTabela({ colgroup, larguraMinima, cabecalho, corpo, rodape, ref
   );
 }
 
-function Card({ titulo, extra, children, className, testid }: { titulo?: ReactNode; extra?: ReactNode; children: ReactNode; className?: string; testid?: string }) {
+/** VISAO-GERAL-03: o card da Geo pastos Global é a régua de card da Visão Geral (título 11 px, faixa de 30 px) */
+export function Card({ titulo, extra, children, className, testid }: { titulo?: ReactNode; extra?: ReactNode; children: ReactNode; className?: string; testid?: string }) {
   return (
     <div className={cn('flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]', className)} data-testid={testid}>
       {(titulo || extra) && (
@@ -192,17 +193,66 @@ function Card({ titulo, extra, children, className, testid }: { titulo?: ReactNo
   );
 }
 
-function Kpi({ rotulo, valor, unidade, aviso, alerta, testid, title }: {
+/** VISAO-GERAL-03: o card de número da Visão Geral é este — a MESMA peça nas duas telas.
+ *  VISAO-GERAL-05 (Gabriel 04/11 07:31, referência AgriWebb) — a hierarquia do número: o VALOR grande e em negrito (24 px, 700) é a primeira
+ *  coisa que o olho vê, com a unidade menor ao lado (12 px); o RÓTULO pequeno e cinza embaixo (11 px, com o aviso à direita); a
+ *  `variacao` (▲ meta · ▼ ano ant., 11 px) embaixo do rótulo, só quando a tela a passa; o `aviso` (âmbar, "1 pasto sem desenho") também
+ *  vai para essa linha — no rótulo, a 11 px, ele passava da largura do card. O card segue compacto: quem cresce é só o número.
+ *  `className` ajusta a largura (na linha de uma atividade, pelo conteúdo). */
+export function Kpi({ rotulo, valor, unidade, aviso, alerta, testid, title, variacao, className }: {
   rotulo: string; valor: ReactNode; unidade?: string | null; aviso?: string | null; alerta?: boolean; testid?: string; title?: string;
+  variacao?: ReactNode; className?: string;
 }) {
   return (
-    <div className={cn('min-w-0 flex-1 rounded-lg border bg-card px-2.5 py-1', alerta ? 'border-[#D0453A]' : 'border-border')} data-testid={testid} title={title}>
-      <div className="flex items-center justify-between gap-1 text-[9.5px] leading-[12px] text-muted-foreground">
-        <span className="whitespace-nowrap">{rotulo}</span>
-        <span className={cn('whitespace-nowrap text-[#8A5A00]', !aviso && 'invisible')}>{aviso ?? '·'}</span>
+    <div className={cn('min-w-0 flex-1 rounded-lg border bg-card px-2.5 py-1', alerta ? 'border-[#D0453A]' : 'border-border', className)} data-testid={testid} title={title}>
+      <div className="whitespace-nowrap text-[24px] font-bold leading-[28px] tabular-nums">
+        {valor}{unidade ? <span className="ml-1 text-[12px] font-normal text-muted-foreground">{unidade}</span> : null}
       </div>
-      <div className="whitespace-nowrap text-[14px] font-semibold leading-[18px] tabular-nums">
-        {valor}{unidade ? <span className="ml-1 text-[9.5px] font-normal text-muted-foreground">{unidade}</span> : null}
+      <div className="whitespace-nowrap text-[11px] leading-[14px] text-muted-foreground">{rotulo}</div>
+      {(variacao !== undefined || aviso) && (
+        <div className="h-[14px] whitespace-nowrap text-[11px] leading-[14px] tabular-nums">
+          {aviso && <span className="text-[#8A5A00]">{aviso}</span>}{aviso && variacao ? ' · ' : null}{variacao}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A situação da fazenda pelo kg/ha do mês (a cor do número da miniatura e do kg/ha da tabela). */
+const situacaoDaFazenda = (l: LinhaDaFazenda): Situacao | null => {
+  if (l.kgHa == null) return l.cabecas === 0 ? 'vazio' : null;
+  if (l.kgHa <= 0) return 'vazio';
+  return l.kgHa < LIMITE_SUBLOTADO ? 'sublotado' : l.kgHa <= LIMITE_CARGA_ALTA ? 'ideal' : 'carga_alta';
+};
+
+/** A miniatura de UMA fazenda do "Mapa das fazendas" (sigla, kg/ha na cor da situação, os pastos pintados, "cab sem mapa"); clique abre.
+ *  VISAO-GERAL-03: exportada para o card "Área produtiva" da Visão Geral usar a MESMA peça. Sem `onImportar`, a fazenda sem mapa só diz
+ *  "sem mapa". */
+export function MiniaturaDaFazenda({ linha: l, geometrias, situacaoDoPasto, onAbrir, onImportar }: {
+  linha: LinhaDaFazenda; geometrias: GeometriaDoGlobal[]; situacaoDoPasto: (pastoId: string) => Situacao; onAbrir: () => void; onImportar?: () => void;
+}) {
+  const sit = situacaoDaFazenda(l);
+  return (
+    <div role="button" tabIndex={0} onClick={onAbrir}
+      onKeyDown={ev => { if (ev.key === 'Enter') onAbrir(); }}
+      className="cursor-pointer rounded-md border border-border p-1 hover:border-[#2B6CB0]" data-testid="global-miniatura">
+      <div className="flex items-center justify-between text-[10px]">
+        <b>{l.fazenda.codigo}</b>
+        <span className="tabular-nums" style={{ color: sit ? COR_SITUACAO[sit] : undefined }}>{n0(l.kgHa)}</span>
+      </div>
+      {l.temMapa ? (
+        <MiniMapa geometrias={geometrias} situacaoDe={situacaoDoPasto} w={118} h={72} />
+      ) : (
+        <div className="flex h-[72px] flex-col items-center justify-center gap-1 text-[9.5px] text-muted-foreground" data-testid="global-sem-mapa">
+          sem mapa
+          {onImportar && (
+            <Button type="button" size="sm" variant="outline" className="h-[20px] px-2 text-[10px]"
+              onClick={ev => { ev.stopPropagation(); onImportar(); }}>Importar</Button>
+          )}
+        </div>
+      )}
+      <div className={cn('h-[12px] text-[9.5px] leading-[12px] text-[#8A5A00]', l.cabecasSemMapa === 0 && 'invisible')}>
+        {l.cabecasSemMapa > 0 ? `${n0(l.cabecasSemMapa)} cab sem mapa` : '·'}
       </div>
     </div>
   );
@@ -340,11 +390,6 @@ export function GeoPastosGlobal({
       </span>
     </td>
   );
-  const situacaoDaFazenda = (l: LinhaDaFazenda): Situacao | null => {
-    if (l.kgHa == null) return l.cabecas === 0 ? 'vazio' : null;
-    if (l.kgHa <= 0) return 'vazio';
-    return l.kgHa < LIMITE_SUBLOTADO ? 'sublotado' : l.kgHa <= LIMITE_CARGA_ALTA ? 'ideal' : 'carga_alta';
-  };
 
   const tabelaDePastos = (linhas: LinhaDoPasto[], qual: 'ordemPastos' | 'ordemAtencao', rodape: ReactNode | null, ref: React.RefObject<HTMLDivElement>,
     onScroll: (ev: React.UIEvent<HTMLDivElement>) => void, testid: string) => (
@@ -402,7 +447,7 @@ export function GeoPastosGlobal({
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-2">
         {/* cards */}
         <div className="flex flex-none gap-1.5" data-testid="global-kpis">
-          <Kpi rotulo="Fazendas · pastos" valor={<>{fazendas.length}<span className="ml-1 text-[9.5px] font-normal text-muted-foreground">· {n0(total.pastos)} pastos</span></>}
+          <Kpi rotulo="Fazendas · pastos" valor={<>{fazendas.length}<span className="ml-1 text-[12px] font-normal text-muted-foreground">· {n0(total.pastos)} pastos</span></>}
             aviso={semDesenho?.texto ?? null} title={semDesenho?.title} testid="global-kpi-fazendas-pastos" />
           <Kpi rotulo="Área de pastos" valor={n1(total.area)} unidade="ha" />
           {/* fix1 (4, Gabriel 01/11): o rótulo diz o que o número é — cabeças fechadas em pastos SEM polígono (o "Alocadas" do Gestor mostra
@@ -412,8 +457,8 @@ export function GeoPastosGlobal({
           <Kpi rotulo="Peso médio" valor={n0(total.pesoMedio)} unidade="kg" />
           <Kpi rotulo="Lotação média" valor={n0(total.kgHa)} unidade={total.kgHa == null ? null : `kg/ha · ${textoUaHa(total.uaHa) ?? ''}`} />
           <Kpi rotulo="Pedem atenção" alerta={pedemCount > 0} testid="global-kpi-atencao"
-            valor={<><span className={pedemCount > 0 ? 'text-[#D0453A]' : ''}>{total.contagem.carga_alta}</span><span className="mx-0.5 text-[9.5px] font-normal text-muted-foreground">alta ·</span>
-              <span className={pedemCount > 0 ? 'text-[#D0453A]' : ''}>{total.contagem.sem_fechamento}</span><span className="ml-0.5 text-[9.5px] font-normal text-muted-foreground">sem fech.</span></>} />
+            valor={<><span className={pedemCount > 0 ? 'text-[#D0453A]' : ''}>{total.contagem.carga_alta}</span><span className="mx-0.5 text-[12px] font-normal text-muted-foreground">alta ·</span>
+              <span className={pedemCount > 0 ? 'text-[#D0453A]' : ''}>{total.contagem.sem_fechamento}</span><span className="ml-0.5 text-[12px] font-normal text-muted-foreground">sem fech.</span></>} />
         </div>
 
         <div className="grid min-h-0 flex-1 gap-1.5" style={{ gridTemplateColumns: `minmax(0,1fr) ${LARGURA_DIREITA}px` }}>
@@ -516,26 +561,8 @@ export function GeoPastosGlobal({
               extra={<span className="ml-auto whitespace-nowrap text-[9.5px] text-muted-foreground">clique para abrir</span>}>
               <div className="grid max-h-[260px] min-h-0 grid-cols-2 gap-1.5 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable]">
                 {fazendas.map(l => (
-                  <div key={l.fazenda.id} role="button" tabIndex={0} onClick={() => onAbrirFazenda(l.fazenda.id)}
-                    onKeyDown={ev => { if (ev.key === 'Enter') onAbrirFazenda(l.fazenda.id); }}
-                    className="cursor-pointer rounded-md border border-border p-1 hover:border-[#2B6CB0]" data-testid="global-miniatura">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <b>{l.fazenda.codigo}</b>
-                      <span className="tabular-nums" style={{ color: situacaoDaFazenda(l) ? COR_SITUACAO[situacaoDaFazenda(l)!] : undefined }}>{n0(l.kgHa)}</span>
-                    </div>
-                    {l.temMapa ? (
-                      <MiniMapa geometrias={geometriasPorFazenda.get(l.fazenda.id) ?? []} situacaoDe={situacaoDoPasto} w={118} h={72} />
-                    ) : (
-                      <div className="flex h-[72px] flex-col items-center justify-center gap-1 text-[9.5px] text-muted-foreground" data-testid="global-sem-mapa">
-                        sem mapa
-                        <Button type="button" size="sm" variant="outline" className="h-[20px] px-2 text-[10px]"
-                          onClick={ev => { ev.stopPropagation(); onAbrirFazenda(l.fazenda.id, { importar: true }); }}>Importar</Button>
-                      </div>
-                    )}
-                    <div className={cn('h-[12px] text-[9.5px] leading-[12px] text-[#8A5A00]', l.cabecasSemMapa === 0 && 'invisible')}>
-                      {l.cabecasSemMapa > 0 ? `${n0(l.cabecasSemMapa)} cab sem mapa` : '·'}
-                    </div>
-                  </div>
+                  <MiniaturaDaFazenda key={l.fazenda.id} linha={l} geometrias={geometriasPorFazenda.get(l.fazenda.id) ?? []} situacaoDoPasto={situacaoDoPasto}
+                    onAbrir={() => onAbrirFazenda(l.fazenda.id)} onImportar={() => onAbrirFazenda(l.fazenda.id, { importar: true })} />
                 ))}
               </div>
             </Card>
@@ -629,6 +656,12 @@ function QuadroDoGrafico({ testid, subtitulo, legenda, children }: { testid: str
       {legenda}
     </div>
   );
+}
+
+/** VISAO-GERAL-05 — a legenda das cores da miniatura (as situações do pasto no mês), a MESMA do gráfico de Lotação daqui, para o "Mapa das
+ *  fazendas" da Visão Geral (lá as miniaturas aparecem sem o gráfico ao lado). */
+export function LegendaDasSituacoes() {
+  return <Legenda itens={ORDEM_LEGENDA.map(s => ({ cor: COR_SITUACAO[s], rotulo: LEGENDA_SITUACAO[s] }))} />;
 }
 
 function Legenda({ itens }: { itens: { cor: string; rotulo: string }[] }) {

@@ -213,6 +213,9 @@ interface Props {
   /** P128a (NOTA-JA-LANCADA, porta 2) — "Ler a NF" no Documentos do Editar: o arquivo abre a MESMA previa do "+ Da nota", partindo deste
    *  lancamento. Devolve a frase pronta do que impediu (nota nao lida, consulta que falhou) ou `null` (a previa abriu). Ausente = sem o gesto. */
   onLerNotaFiscal?: (arquivo: File, lancamentoId: string) => Promise<string | null>;
+  /** CONC-CRIAR-COM-NOTA-01 — o MESMO "Ler a NF" no lancamento NOVO (o Criar pela linha do extrato): o hospedeiro le^ a nota e devolve o
+   *  `prefill` com ela (o modal se rehidrata pelo caminho do "+ Da nota"), ou a frase pronta do que impediu. Ausente = sem o gesto. */
+  onLerNotaNoNovo?: (arquivo: File) => Promise<string | null>;
   /** P152 — a aba em que o modal abre (o "NF nnnn" da Contas a Pagar e Receber abre direto em Documentos, onde mora a regra de abrir a
    *  nota: o PDF; sem PDF, os itens). Ausente = 'geral', como sempre. */
   abaInicial?: 'documentos';
@@ -612,7 +615,7 @@ export function LancamentoV2Dialog({
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos, origemOC,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato, onTrocarLancamento,
-  documentosAntesDeSalvar, onLerNotaFiscal, abaInicial,
+  documentosAntesDeSalvar, onLerNotaFiscal, onLerNotaNoNovo, abaInicial,
 }: Props) {
   /* P128a (porta 2) — a frase do que impediu a NF lida de abrir a previa (na propria area, nunca toast) e o "lendo" */
   const [recusaDaNotaLida, setRecusaDaNotaLida] = useState<string | null>(null);
@@ -3629,6 +3632,18 @@ export function LancamentoV2Dialog({
                     if (!alvo || !arquivo) return;
                     setRecusaDaNotaLida(null); setLendoANota(true);
                     void onLerNotaFiscal(arquivo, alvo).then((frase) => setRecusaDaNotaLida(frase)).finally(() => setLendoANota(false));
+                  }} />
+              )}
+              {/* CONC-CRIAR-COM-NOTA-01 — o mesmo gesto no Novo pelo extrato: a nota lida preenche ESTE formulário (e vira a NF pendente) */}
+              {!lancamento?.id && onLerNotaNoNovo && !posSalvar && (
+                <AreaDeArquivo regra={REGRA_DA_NF_LIDA} testId="doc-ler-nf" inputTestId="doc-ler-nf-input" className="mt-1.5 h-7"
+                  convite="Ler a NF (XML ou PDF)" detalhe="preenche fornecedor, nº, competência e classificação pela nota"
+                  desabilitado={lendoANota} motivoDesabilitado="Lendo a nota…" motivoExterno={recusaDaNotaLida}
+                  onArquivos={(arquivos) => {
+                    const arquivo = arquivos[0];
+                    if (!arquivo) return;
+                    setRecusaDaNotaLida(null); setLendoANota(true);
+                    void onLerNotaNoNovo(arquivo).then((frase) => setRecusaDaNotaLida(frase)).finally(() => setLendoANota(false));
                   }} />
               )}
             </section>

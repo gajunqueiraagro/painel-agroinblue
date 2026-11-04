@@ -28,14 +28,15 @@ describe('Classificação por nível', () => {
     expect(caminhoDaClassificacao({ macro_custo: 'A', centro_custo: '', subcentro: 'C' })).toBe('A › C');
   });
   it('a tela: o cabeçalho e a célula leem o MESMO nível; o title é o caminho; o padrão é Centro', () => {
-    expect(tela).toContain('data-testid="th-classificacao" onClick={() => toggleSort(\'centro\')}>{ROTULO_NIVEL[nivelClassif]}');
+    /* CONC-SUGESTOES-TABELA-01 — o cabeçalho é a peça `ThDaLista` (a ordem pelo `ordenar`) */
+    expect(tela).toContain('ordenar={() => toggleSort(\'centro\')} data-testid="th-classificacao">{ROTULO_NIVEL[nivelClassif]}');
     /* FIN-CLASSIF-DIVIDIDA-01c — o lancamento dividido leva o selo; o texto e' o MESMO nivel */
     expect(tela).toContain('title={caminhoDaClassificacao(l)}>{dividida');
     expect(tela).toContain('? <ClassificacaoComSelo texto={textoDaClassificacao(l, nivelClassif)} dividida={dividida} />');
     expect(tela).toContain(': textoDaClassificacao(l, nivelClassif)}</td>');
     expect(tela).toContain("lerPreferencia(CHAVE_PREF.nivel, null, NIVEIS_CLASSIFICACAO, 'centro')");
     expect(tela).toContain('<Segmentado altura={20} valor={nivelClassif} onEscolher={setNivelClassif}');
-    expect(tela).not.toContain('>Macro</th>');
+    expect(tela).not.toContain('>Macro</ThDaLista>');
   });
 });
 
@@ -133,7 +134,8 @@ describe('o Ampliado com e sem as contas, e as preferências', () => {
   it('o chip liga e desliga as duas contas; desligado, o espaço vai para Produto, Fornecedor e Classificação', () => {
     expect(tela).toContain('data-testid="chip-contas" aria-pressed={contasAmpliado} onClick={alternarContasAmpliado}');
     /* FIN-V2-DESEMPENHO-01b: o Ampliado devolveu às datas dd/mm/aaaa e ao Valor os 24px (140→128, 202→190) */
-    expect(tela).toContain('<col style={{ width: modoIntensivo ? (contasAmpliado ? 128 : 190) : 123 }} />');
+    /* CONC-SUGESTOES-TABELA-01 — as larguras são o array `larguras={[…]}` da tela (o `colgroup` é da peça `TabelaDaLista`) */
+    expect(tela).toContain('modoIntensivo ? (contasAmpliado ? 128 : 190) : 123,');
   });
   it('a escolha é lembrada; valor desconhecido = o padrão', () => {
     instalarStorage();

@@ -22,7 +22,7 @@ describe('item 3 — lista sem a coluna OC de 58px, "..." sempre visivel, "Abrir
      codigo da OC — `CelulaOC` — continua fora da lista: era ela que empurrava a tabela para a rolagem). A soma segue 874. */
   /* ⚠ CONTRATO MUDOU DE NOVO NO FIN-V2-COLUNAS-02 (Gabriel, 16/10): a coluna e' a "Vinc.", com todos os selos de vinculo. */
   it('a celula de 58px da OC segue fora das linhas; a coluna dos vinculos e a linha vazia ocupa todas as colunas', () => {
-    expect(tela).toContain('>Vínc.</th>');
+    expect(tela).toContain('>Vínc.</ThDaLista>');
     expect(tela).not.toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
     expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 17 : 15}');
     expect(tela).not.toContain('<td colSpan={16}');
@@ -34,7 +34,7 @@ describe('item 3 — lista sem a coluna OC de 58px, "..." sempre visivel, "Abrir
   /* ⚠ CONTRATO MUDOU NO PR-FIN-V2-STATUS-PGTO-01-fix1 (decisao do Gabriel, 30/09): o "..." NAO e' mais fixo — fixo, ele cobria
      o status sempre que a lista rolava. Ele continua visivel porque a lista passou a caber sem rolar (medido na tela). */
   it('o cabecalho e a celula do "..." sao a ultima coluna normal, sem sticky', () => {
-    expect(tela).toContain('text-primary-foreground" aria-label="Ações"></th>');
+    expect(tela).toContain('<ThDaLista recuo="px-1" aria-label="Ações"></ThDaLista>');   /* CONC-SUGESTOES-TABELA-01: a peça do cabeçalho */
     expect(tela).toContain('<td className="!py-0 px-0 align-middle" onClick={(e) => e.stopPropagation()}>');
     expect(tela).not.toContain('sticky right-0');
   });

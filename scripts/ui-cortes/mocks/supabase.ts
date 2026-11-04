@@ -45,7 +45,8 @@ export const supabase: any = {
   },
   auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }), getSession: async () => ({ data: { session: null } }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
   /* ITENS-NOTA-01 — `download` le^ de `globalThis.__arquivosBancada[caminho]` (bytes SINTETICOS que a tela registra); sem ele, o "nao achado" */
-  storage: { from: () => ({ createSignedUrl: async () => ({ data: null, error: null }), download: async (c: string) => {
+  /* CONC-CRIAR-COM-NOTA-01 — `upload` aceita (nada sai da máquina): o documento pendente do Criar pelo extrato sobe depois de criar */
+  storage: { from: () => ({ createSignedUrl: async () => ({ data: null, error: null }), upload: async (c: string) => ({ data: { path: c }, error: null }), download: async (c: string) => {
     const a = (globalThis as unknown as { __arquivosBancada?: Record<string, ArrayBuffer> }).__arquivosBancada?.[c];
     return a ? { data: new Blob([a]), error: null } : { data: null, error: { message: 'Object not found' } };
   } }) },

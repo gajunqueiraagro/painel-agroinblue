@@ -2,17 +2,22 @@
  * PR-CONC-SUGESTOES-CASAR-01 — o modal "Sugestões para casar" e o casar que abre o `CasarComBancoModal` preenchido.
  *
  * ⚠ jsdom NÃO FAZ LAYOUT: "nada cortado", a data numa linha e a largura se medem no gate (`casar-sugestoes*`). Aqui se prova a
- *   ESTRUTURA — o banco no título, o movimento como 1ª linha da MESMA tabela (P159c: data sob data, valor sob valor), as sete
- *   colunas, os selos (azul tracejado = confere; âmbar = conferir antes), o vencido de mês anterior em âmbar, as filhas da soma
- *   com "↳" e um "casar" só por sugestão — e o valor do banco no campo com "era R$ X".
+ *   ESTRUTURA — CONC-SUGESTOES-TABELA-01 (Gabriel 04/11 06:36): o extrato numa faixa própria (o título), a TABELA DA LISTA DO
+ *   FINANCEIRO com as colunas dele, uma linha por lançamento, o motivo curto (o inteiro no title), os selos (azul tracejado = confere;
+ *   âmbar = conferir antes), as caixinhas que somam no rodapé e o "Casar selecionados" — e o valor do banco no campo com "era R$ X".
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { sugerirCasamentos, type CandidatoSugestao, type Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
 
-const RPC = vi.hoisted(() => ({ chamadas: [] as { fn: string; args: Record<string, unknown> }[] }));
+const RPC = vi.hoisted(() => {
+  const r: { chamadas: { fn: string; args: Record<string, unknown> }[]; tabelas: Record<string, unknown[]> } = { chamadas: [], tabelas: {} };
+  return r;
+});
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
+    /* CONC-SUGESTOES-TABELA-01 — o complemento (pagamento, fazenda, NF) é lido pelos ids: `from(t).select().eq().in()` */
+    from: (t: string) => { const q = { select: () => q, eq: () => q, in: () => Promise.resolve({ data: RPC.tabelas[t] ?? [], error: null }) }; return q; },
     rpc: (fn: string, args: Record<string, unknown>) => {
       RPC.chamadas.push({ fn, args });
       return Promise.resolve({ data: { ok: true, no_extrato: 5665, soma: 5665, diferenca: 0 }, error: null });
@@ -24,7 +29,7 @@ vi.mock('@/components/conciliacao/CriarLancamentoDaLinha', () => ({ CriarLancame
 import { SugestoesCasarModal } from './SugestoesCasarModal';
 import { CasarComBancoModal } from './CasarComBancoModal';
 
-beforeEach(() => { RPC.chamadas = []; });
+beforeEach(() => { RPC.chamadas = []; RPC.tabelas = {}; });
 
 const c = (p: Partial<CandidatoSugestao> & { lancamento_id: string; valor_assinado: number }): CandidatoSugestao => ({
   data_vencimento: '2026-09-05', competencia: '2026-09-01', descricao: 'Folha de Pagamento', fornecedor: null,
@@ -57,129 +62,132 @@ describe('o modal "Sugestões para casar"', () => {
     expect(within(modal).queryByText('histórico')).toBeNull();
   });
 
-  /* P159c (2): o movimento é a 1ª linha da MESMA tabela — cada informação na coluna dela (ALINHAMENTO SOBERANO) */
-  it('o movimento do banco é a 1ª linha: data em Venc., o nome limpo em Descrição + Fornecedor, o valor em Valor, Status "extrato"', () => {
+  /* CONC-SUGESTOES-TABELA-01 (Gabriel 04/11 06:36) — o extrato é o TÍTULO, numa faixa própria, fora da tabela */
+  it('o lançamento do extrato é uma faixa própria acima das sugestões: rótulo · data · texto do banco · valor (em negrito, maior)', () => {
     const { modal } = abrir();
-    const t = modal.querySelector('table')!;
-    const linhas = [...t.querySelectorAll('tbody tr')];
-    const ex = linhas[0];
-    if (!(ex instanceof HTMLElement)) throw new Error('sem a linha do banco');
-    expect(ex.getAttribute('data-testid')).toBe('sugestoes-extrato');
-    expect(ex.className).toContain('bg-[#eef3fb]');
-    expect(ex.className).toContain('font-semibold');
-    /* a coluna de cada célula, contando o colSpan: o valor do banco cai na MESMA coluna do valor das sugestões */
-    const porColuna = (tr: Element) => {
-      const m = new Map<number, string>(); let col = 0;
-      for (const td of tr.querySelectorAll('td')) { m.set(col, (td.textContent ?? '').trim()); col += td.colSpan; }
-      return m;
-    };
-    const cab = [...t.querySelectorAll('th')].map((x) => x.textContent);
-    const doBanco = porColuna(ex);
-    expect(doBanco.get(cab.indexOf('Venc.'))).toBe('15/09/2026');
-    expect(doBanco.get(cab.indexOf('Descrição'))).toBe('Pagamento de Boleto · BANCO RABOBANK INTERNATIONAL BRASIL S/');
-    expect(doBanco.get(cab.indexOf('Valor'))).toBe('-26.127,18');
-    expect(doBanco.get(cab.indexOf('Status'))).toBe('extrato');
-    const nome = within(ex).getByTestId('sugestoes-extrato-nome');
-    expect(nome.getAttribute('colspan')).toBe('2');
+    const faixa = within(modal).getByTestId('sugestoes-extrato');
+    expect(faixa.tagName).toBe('DIV');
+    expect(faixa.closest('table')).toBeNull();
+    expect(faixa.textContent).toContain('Lançamento do extrato');
+    expect(within(faixa).getByTestId('sugestoes-extrato-data').textContent).toBe('15/09/2026');
+    const nome = within(faixa).getByTestId('sugestoes-extrato-nome');
+    expect(nome.textContent).toBe('Pagamento de Boleto · BANCO RABOBANK INTERNATIONAL BRASIL S/');
+    expect(nome.className).toContain('truncate');
     expect(nome.getAttribute('title')).toBe(`Pagamento de Boleto · BANCO RABOBANK INTERNATIONAL BRASIL S/\n${EXT_RABO.historico}`);
-    expect(within(modal).queryByText('histórico')).toBeNull();
-    const igual = within(modal).getAllByTestId('sugestao')[0];
-    expect(porColuna(igual).get(cab.indexOf('Valor'))).toBe('-26.127,18');
-    /* a faixa cinza separa o banco das sugestões */
-    expect(linhas[1].textContent).toBe('Sugestões · mais provável primeiro');
+    expect(within(faixa).getByTestId('sugestoes-extrato-valor').textContent).toBe('-26.127,18');
+    expect(within(faixa).getByTestId('sugestoes-extrato-valor').className).toMatch(/text-\[15px\] font-bold/);
+    /* a tabela só tem os lançamentos */
+    expect(modal.querySelector('table tbody')!.textContent).not.toContain('RABOBANK INTERNATIONAL BRASIL S/');
   });
 
-  /* P153b (Gabriel 29/10): 9px, linha de 17px, cabeçalho de 20px a 8,5px; o Motivo cabe o "mesmo fornecedor · valor difere: previsto …" */
-  it('a régua do P153b: cabeçalho 20px a 8,5px, linha 17px a 9px; Venc. 58 · Motivo 220 · Valor 88 · Status 62 · casar 52', () => {
+  /* CONC-SUGESTOES-TABELA-01 — a TABELA DA LISTA DO FINANCEIRO (`TabelaDaLista`): as mesmas peças, as larguras e a classe das fontes */
+  it('a tabela é a da lista do Financeiro: ☐ · Comp. · Venc. · Pgto. · Descrição · Fornecedor · Faz. · NF · Valor · Status · Motivo · casar', () => {
     const { modal } = abrir();
     const t = modal.querySelector('table')!;
+    expect(t.className).toContain('table-financeiro');
+    /* AJUSTES 07:55 e 08:1x — o tamanho GRANDE da tabela (12px, linha de 26px, cabeçalho sem caixa alta; `TabelaDaLista.css`) e as larguras dele */
+    expect(t.className).toContain('tabela-da-lista-grande');
+    expect(t.style.tableLayout).toBe('fixed');
     expect([...t.querySelectorAll('col')].map((x) => (x instanceof HTMLElement ? x.style.width : '?')))
-      .toEqual(['58px', '', '', '220px', '88px', '62px', '52px']);
-    expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['Venc.', 'Descrição', 'Fornecedor', 'Motivo', 'Valor', 'Status', '']);
-    expect([...t.querySelectorAll('th')].every((x) => x.className.includes('text-[8.5px]'))).toBe(true);
-    expect(t.className).toContain('text-[9px]');
-    expect(t.className).toContain('table-fixed');
-    expect(t.querySelector('thead tr')!.className).toContain('h-[20px]');
-    for (const tr of t.querySelectorAll('tbody tr')) expect(tr.className).toContain('h-[17px]');
-  });
-
-  /* P159c (4): DATA NUNCA QUEBRA — dd/mm/aaaa inteira, numa linha */
-  it('toda data da tabela é dd/mm/aaaa e não quebra', () => {
-    const { modal } = abrir();
-    const t = modal.querySelector('table')!;
-    const datas = [...t.querySelectorAll('tbody tr')].map((tr) => tr.querySelector('td')!).filter((td) => /\d/.test(td.textContent ?? ''));
-    expect(datas.length).toBe(6);
-    for (const td of datas) {
-      expect(td.textContent).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
-      expect(td.className).toContain('whitespace-nowrap');
+      .toEqual(['28px', '74px', '74px', '74px', '', '', '40px', '102px', '126px', '86px', '170px', '84px']);
+    expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Faz.', 'NF', 'Valor', 'Status', 'Motivo', '']);
+    const linhas = within(modal).getAllByTestId('sugestao');
+    expect(linhas.length).toBeGreaterThan(0);
+    for (const tr of linhas) {
+      expect(tr.className).toContain('linha-da-lista');
+      expect(tr.querySelectorAll('td.celula-data')).toHaveLength(3);
+      expect(tr.querySelector('td.celula-valor')).not.toBeNull();
+      expect(tr.querySelector('td.celula-doc')).not.toBeNull();
+      expect(tr.querySelector('td.celula-status')).not.toBeNull();
     }
   });
 
-  it('mesmo valor primeiro, azul tracejado; a soma depois, com filhas "↳" e UM "casar"; por último as pistas de nome', () => {
+  /* uma linha por lançamento (a soma: k/N em cada uma); o motivo curto, o inteiro no title */
+  it('uma linha por LANÇAMENTO; o motivo curto (o inteiro no title): mesmo valor primeiro, a soma depois, por último as pistas de nome', () => {
     const { modal } = abrir();
     const linhas = within(modal).getAllByTestId('sugestao');
-    /* o Rabobank casa pelo NOME: as duas parcelas também aparecem sozinhas, âmbar, depois da soma exata */
-    expect(linhas.map((l) => within(l).getByTestId('sugestao-motivo').textContent)).toEqual([
-      'mesmo valor', 'soma de 2 · 26 dias · vencido ago', 'nome · valor diferente', 'nome · valor diferente · vencido ago',
+    const selos = linhas.map((l) => within(l).getByTestId('sugestao-motivo'));
+    expect(selos.map((x) => x.textContent)).toEqual(['mesmo valor', '1/2 · soma de 2', '2/2 · soma de 2', 'nome · valor ≠', 'nome · valor ≠']);
+    expect(selos.map((x) => x.getAttribute('title'))).toEqual([
+      'mesmo valor', 'soma de 2 · 26 dias · vencido ago', 'soma de 2 · 26 dias · vencido ago', 'nome · valor diferente', 'nome · valor diferente · vencido ago',
     ]);
-    const selo0 = within(linhas[0]).getByTestId('sugestao-motivo');
-    expect(selo0.textContent).toBe('mesmo valor');
-    expect(selo0.className).toContain('border-dashed');
-    expect(selo0.className).toContain('text-[8px]');
-    expect(within(linhas[1]).getByTestId('sugestao-motivo').textContent).toBe('soma de 2 · 26 dias · vencido ago');
-    expect(within(modal).getAllByTestId('sugestao-filha')).toHaveLength(2);
-    expect(within(modal).getAllByText('↳')).toHaveLength(2);
-    expect(within(modal).getAllByTestId('sugestao-casar')).toHaveLength(4);
-    /* a linha-mãe da soma mostra a soma */
-    expect(within(linhas[1]).getByText('-26.127,18')).toBeInTheDocument();
+    expect(selos[0].className).toContain('border-dashed');
+    expect(selos[3].className).toContain('bg-amber-50');
+    /* cada lançamento com o SEU valor, na coluna Valor */
+    expect(linhas.map((l) => (l.querySelector('td.celula-valor')!.textContent ?? '').replace(/\s/g, ' '))).toEqual(['-R$ 26.127,18', '-R$ 22.719,29', '-R$ 3.407,89', '-R$ 22.719,29', '-R$ 3.407,89']);
+    expect(within(modal).getAllByTestId('sugestao-casar')).toHaveLength(5);
   });
 
-  /* P159c (3) — a REGRA DE CORTE (21/10): uma linha por sugestão; o texto que passa termina em "…" com ele inteiro no title */
-  it('uma linha por sugestão: descrição e fornecedor com "…" e o texto inteiro no title; nada quebra', () => {
+  /* A REGRA DE CORTE (21/10): uma linha; texto com "…" e o inteiro no title; data dd/mm/aaaa nas três colunas */
+  it('nada quebra: descrição e fornecedor cortam com o texto inteiro no title; as datas são dd/mm/aaaa', () => {
     const { modal } = abrir();
-    expect([...modal.querySelectorAll('td')].filter((td) => td.className.includes('whitespace-normal'))).toEqual([]);
-    const cortaveis = [...modal.querySelectorAll('.truncate')].filter((el) => el.closest('tbody'));
-    /* a busca sabe achar: o nome do banco + 1 de cada linha de sugestão (descrição e fornecedor) */
-    expect(cortaveis.length).toBeGreaterThan(8);
-    for (const el of cortaveis) {
-      const texto = (el.textContent ?? '').trim();
-      const dono = el.closest('[title]');
-      expect(dono, texto).not.toBeNull();
-      expect((dono!.getAttribute('title') ?? '').replace(/\s+/g, ' '), texto).toContain(texto);
+    for (const tr of within(modal).getAllByTestId('sugestao')) {
+      const [desc, forn] = [...tr.querySelectorAll('td.truncate')];
+      expect(desc.getAttribute('title')).toBe(desc.textContent);
+      expect(forn.getAttribute('title') ?? '').toBe(forn.textContent === '-' ? '' : forn.textContent);
+      for (const d of tr.querySelectorAll('td.celula-data')) expect(d.textContent).toMatch(/^(\d{2}\/\d{2}\/\d{4}|-)$/);
     }
-    const filha = within(modal).getAllByTestId('sugestao-filha')[0];
-    expect(within(filha).getByTitle('Financiamento - principal').className).toContain('truncate');
+    expect([...modal.querySelectorAll('td')].filter((td) => td.className.includes('whitespace-normal'))).toEqual([]);
   });
 
-  it('vencimento de mês anterior em âmbar negrito; status em texto de 8px com a cor da paleta', () => {
-    const { modal } = abrir();
-    const filhas = within(modal).getAllByTestId('sugestao-filha');
-    const juros = filhas.find((f) => f.textContent?.includes('juros'))!;
-    expect(juros.querySelector('td')!.className).toContain('text-amber-600');
-    expect(juros.querySelector('td')!.className).toContain('font-semibold');
-    const princ = filhas.find((f) => f.textContent?.includes('principal'))!;
-    expect(princ.querySelector('td')!.className).not.toContain('text-amber-600');
-    const status = within(princ).getByText('Programado');
-    expect(status.className).toContain('text-[8px]');
-    expect(status.className).toContain('text-[#1d4ed8]');
-  });
-
-  it('valor diferente: selo âmbar cheio', () => {
+  it('valor diferente: selo âmbar cheio ("mesmo forn. · valor ≠", o motivo inteiro no title)', () => {
     const { modal } = abrir(vi.fn(), [
       c({ lancamento_id: 'amanda', valor_assinado: -3085, fornecedor: 'Amanda Montes Camargo' }),
     ], { data: '2026-09-04', historico: 'Pix - Agendamento - 04/09 05:35 CAMARGO PROMOCAO DE VENDA', valor: -5665 });
     const selo = within(modal).getByTestId('sugestao-motivo');
-    /* P153b: em aberto a ±5 dias, a pista de nome com valor diferente é o "mesmo fornecedor · valor difere" — âmbar como antes */
-    expect(selo.textContent).toBe('mesmo fornecedor · valor difere: previsto 3.085,00');
+    expect(selo.textContent).toBe('mesmo forn. · valor ≠');
+    expect(selo.getAttribute('title')).toBe('mesmo fornecedor · valor difere: previsto 3.085,00');
     expect(selo.className).toContain('bg-amber-50');
     expect(selo.className).not.toContain('border-dashed');
   });
 
-  it('sem sugestão, diz "Nenhuma sugestão automática" abaixo da faixa (P159f); o rodapé explica as cores', () => {
+  /* CONC-SUGESTOES-TABELA-01 — a seleção múltipla: as caixinhas somam no rodapé, e "Casar selecionados" entrega os marcados */
+  it('as caixinhas somam no rodapé (N · soma · extrato · diferença) e "Casar selecionados" entrega os marcados ao hospedeiro', () => {
+    const onCasarSelecionados = vi.fn();
+    render(<SugestoesCasarModal open onClose={() => {}} extrato={EXT_RABO} nomeConta="Banco do Brasil" sugestoes={sugerirCasamentos(EXT_RABO, CANDS)}
+      onCasar={() => {}} onCasarSelecionados={onCasarSelecionados} />);
+    const modal = screen.getByTestId('sugestoes-casar');
+    expect(within(modal).getByTestId('casar-selecionados')).toBeDisabled();
+    expect(within(modal).getByTestId('selecionados-n').textContent).toBe('Selecionados 0');
+    const linhas = within(modal).getAllByTestId('sugestao');
+    fireEvent.click(within(linhas[1]).getByRole('checkbox'));
+    fireEvent.click(within(linhas[2]).getByRole('checkbox'));
+    expect(within(modal).getByTestId('selecionados-n').textContent).toBe('Selecionados 2');
+    expect(within(modal).getByTestId('selecionados-soma').textContent).toBe('-26.127,18');
+    expect(within(modal).getByTestId('selecionados-diferenca').textContent).toBe('0,00');
+    /* desmarcar tira da soma */
+    fireEvent.click(within(linhas[2]).getByRole('checkbox'));
+    expect(within(modal).getByTestId('selecionados-soma').textContent).toBe('-22.719,29');
+    expect(within(modal).getByTestId('selecionados-diferenca').textContent).toBe('3.407,89');
+    fireEvent.click(within(linhas[2]).getByRole('checkbox'));
+    fireEvent.click(within(modal).getByTestId('casar-selecionados'));
+    expect(onCasarSelecionados).toHaveBeenCalledTimes(1);
+    const marcados = onCasarSelecionados.mock.calls[0][0];
+    expect(marcados.map((m: { de: string; c: { lancamento_id: string } }) => `${m.de}:${m.c.lancamento_id}`)).toEqual(['sugestao:princ', 'sugestao:juros']);
+  });
+
+  /* CONC-SUGESTOES-TABELA-01 — o que a lista do Financeiro mostra e a sugestão não trazia: Pgto., Faz. (o código) e a NF, lidos pelos ids */
+  it('Pgto., Faz. e NF vêm da leitura pelos ids das linhas (o rótulo do Doc. é o do dono, "NF 000.123.456")', async () => {
+    RPC.tabelas = {
+      financeiro_lancamentos_v2: [{ id: 'igual', data_pagamento: '2026-09-14', fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.123.456' }],
+      fazendas: [{ id: 'fz1', nome: 'Fazenda Exemplo Retiro', codigo: 'RET' }],
+    };
+    render(<SugestoesCasarModal open onClose={() => {}} extrato={EXT_RABO} nomeConta="Banco do Brasil" sugestoes={sugerirCasamentos(EXT_RABO, CANDS)}
+      onCasar={() => {}} clienteId="cli" />);
+    const igual = within(screen.getByTestId('sugestoes-casar')).getAllByTestId('sugestao')[0];
+    await waitFor(() => expect(igual.querySelector('td.celula-doc')!.textContent).toBe('NF 000.123.456'));
+    expect(within(igual).getByTitle('Fazenda Exemplo Retiro').textContent).toBe('RET');
+    expect(igual.querySelectorAll('td.celula-data')[2].textContent).toBe('14/09/2026');
+    /* a busca sabe achar: a linha sem complemento fica com "-" (a ausência da lista do Financeiro) */
+    const outra = within(screen.getByTestId('sugestoes-casar')).getAllByTestId('sugestao')[1];
+    expect(outra.querySelector('td.celula-doc')!.textContent).toBe('-');
+  });
+
+  it('sem sugestão, diz "Nenhuma sugestão automática" (P159f); o rodapé explica as cores', () => {
     const { modal } = abrir(vi.fn(), []);
     expect(within(modal).getByText('Nenhuma sugestão automática')).toBeInTheDocument();
     expect(within(modal).getByText('âmbar = conferir antes de casar')).toBeInTheDocument();
-    expect(within(modal).getByText('Sugestões · mais provável primeiro')).toBeInTheDocument();
+    expect(within(modal).getByText('· mais provável primeiro')).toBeInTheDocument();
   });
 
   /* P153 — o "Procurar no histórico" fica embaixo das sugestões, no mesmo modal; sem quem receba o "Criar igual", não aparece */

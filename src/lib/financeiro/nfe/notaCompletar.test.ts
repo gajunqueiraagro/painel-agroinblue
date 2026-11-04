@@ -125,3 +125,17 @@ describe('P163-1 — o efeito no DRE quando só o mês muda', () => {
       .toBe('DRE: R$ 10,00 saem de "A" (05/2031) e vão para "B" (05/2031)');
   });
 });
+
+/* NOTA-BOLETO-COMPOSTO-01 (PR 1) — "Substituir" numa linha = a programada leva o valor e o vencimento da NOTA só nela (o "atualizar" por linha) */
+describe('NOTA-BOLETO-COMPOSTO-01 — o Substituir por linha', () => {
+  it('só a linha marcada (e programada) leva valor e vencimento da nota; a paga nunca muda', () => {
+    const alvos: AlvoDaPrevia[] = [
+      { id: 's1', programada: true, notaValorCent: 613486, notaVencimento: '2026-11-02', substituir: true },
+      { id: 's2', programada: true, notaValorCent: 613486, notaVencimento: '2026-10-05' },
+      { id: 's3', programada: false, notaValorCent: 613488, notaVencimento: '2026-08-10', substituir: true },
+    ];
+    const pedido = pedidoDaGrade(alvos, TODAS, new Set(), new Map(), false);
+    expect([pedido[0].valor, pedido[0].data_vencimento]).toEqual([6134.86, '2026-11-02']);
+    expect(['valor' in pedido[1], 'data_vencimento' in pedido[1], 'valor' in pedido[2], 'data_vencimento' in pedido[2]]).toEqual([false, false, false, false]);
+  });
+});

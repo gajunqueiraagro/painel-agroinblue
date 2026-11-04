@@ -150,9 +150,17 @@ describe('pasto em U', () => {
   // U: base embaixo e dois braços para cima, em graus (~1 km de largura)
   const u: GeoJSON.Polygon = { type: 'Polygon', coordinates: [[[0, 0], [0.03, 0], [0.03, 0.02], [0.02, 0.02], [0.02, 0.006], [0.01, 0.006], [0.01, 0.02], [0, 0.02], [0, 0]]
     .map(([x, y]) => [-47.9 + x, -15.5 + y])] };
-  it('uma linha atravessando os dois braços: 3 divisões (a base com os pés e as duas pontas)', () => {
+  /* PIQUETES-PRACA-CONCAVO-01 (Gabriel 03/11): a linha que sai do pasto e volta corta só até o 1º encontro com a borda POR PADRÃO; os dois
+     braços juntos só com "Seguir além da borda" (`seguir`) */
+  it('uma linha atravessando os dois braços: por padrão corta só o 1º braço (2 divisões)', () => {
     const y = -15.5 + 0.013;
     const ds = divisoesDasLinhas(u, [{ id: 'h', pontos: [[-47.9 - 0.001, y], [-47.9 + 0.031, y]] }]);
+    expect(ds).toHaveLength(2);
+    expect(Math.abs(soma(ds) - areaDoBancoHa(u))).toBeLessThan(0.001);
+  });
+  it('com "seguir": 3 divisões (a base com os pés e as duas pontas)', () => {
+    const y = -15.5 + 0.013;
+    const ds = divisoesDasLinhas(u, [{ id: 'h', pontos: [[-47.9 - 0.001, y], [-47.9 + 0.031, y]], seguir: true }]);
     expect(ds).toHaveLength(3);
     expect(Math.abs(soma(ds) - areaDoBancoHa(u))).toBeLessThan(0.001);
   });
