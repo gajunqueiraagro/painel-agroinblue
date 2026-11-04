@@ -36,9 +36,10 @@ const FINANCEIRO_FIN: V2Section[] = ['fin-visao-geral', 'financeiro-lanc', 'conc
 const EXECUTIVO_FIN: V2Section[] = ['painel-consultor', 'valor-rebanho', 'dre'];
 /* PATR-01 (Chat 30/10, ajuste 4): Cadastros › Patrimônio entra para gestor e financeiro */
 const CADASTROS_FIN: V2Section[] = ['contas-bancarias', 'fornecedores', 'patrimonio'];
-const ROTULOS_PRODUCAO_FIN = ['Pecuária', 'Fechamento Área', 'Lançamentos', 'Operações Comerciais', 'Estoque de Grãos', 'Barter'];
-const ROTULOS_FINANCEIRO_FIN = ['Visão Geral', 'Lançamentos Financeiros', 'Conciliação Bancária', 'Visão Consolidada', 'Financ. e Parcelamentos', 'Contratos',
-  'Recorrências', 'Fluxo Caixa', 'Contas a Pagar/Receber', 'Painel Financiamentos'];
+/* UI-VARREDURA-01 L5 — os rótulos do menu em sentence case (Gabriel 03/11/2026, M2) */
+const ROTULOS_PRODUCAO_FIN = ['Pecuária', 'Fechamento área', 'Lançamentos', 'Operações comerciais', 'Estoque de grãos', 'Barter'];
+const ROTULOS_FINANCEIRO_FIN = ['Visão geral', 'Lançamentos financeiros', 'Conciliação bancária', 'Visão consolidada', 'Financ. e parcelamentos', 'Contratos',
+  'Recorrências', 'Fluxo de caixa', 'Contas a pagar/receber', 'Painel financiamentos'];
 const todosOsItens = NAV_GRUPOS.flatMap((g) => g.drawer.flatMap((s) => s.itens.map((i) => ({ grupo: g.id, item: i }))));
 
 describe('a marca de liberacao (navGrupos)', () => {
@@ -133,11 +134,11 @@ describe('a excecao por tela (NIVEL_POR_TELA) — ACESSOS-OC-01', () => {
 /* ═══ ACESSOS-FIN-01 — as telas do trabalho do financeiro (Gabriel, 06/10/2026) ═══════════════════════════════════════════ */
 describe('ACESSOS-FIN-01 — perfil × tela', () => {
   const AS_16: Array<[rotulo: string, tela: V2Section]> = [
-    ['Financ. e Parcelamentos', 'financiamentos'], ['Contratos', 'contratos'], ['Recorrências', 'recorrencias'],
-    ['Painel Financiamentos', 'painel-financiamentos'], ['Pecuária', 'lancamentos-zoot'], ['Lançamentos', 'conferencia-lancamentos'],
-    ['Fornecedores', 'fornecedores'], ['Contas Bancárias', 'contas-bancarias'], ['Fechamento Área', 'fechamento'],
-    ['Evolução Patrimonial', 'valor-rebanho'], ['DRE', 'dre'], ['PC-100', 'painel-consultor'], ['Estoque de Grãos', 'estoque-graos'],
-    ['Barter', 'barter-contratos'], ['Visão Consolidada', 'visao-consolidada'], ['Fluxo Caixa', 'fluxo-caixa'],
+    ['Financ. e parcelamentos', 'financiamentos'], ['Contratos', 'contratos'], ['Recorrências', 'recorrencias'],
+    ['Painel financiamentos', 'painel-financiamentos'], ['Pecuária', 'lancamentos-zoot'], ['Lançamentos', 'conferencia-lancamentos'],
+    ['Fornecedores', 'fornecedores'], ['Contas bancárias', 'contas-bancarias'], ['Fechamento área', 'fechamento'],
+    ['Evolução patrimonial', 'valor-rebanho'], ['DRE', 'dre'], ['PC-100', 'painel-consultor'], ['Estoque de grãos', 'estoque-graos'],
+    ['Barter', 'barter-contratos'], ['Visão consolidada', 'visao-consolidada'], ['Fluxo de caixa', 'fluxo-caixa'],
     /* PATR-01 (Chat 30/10, ajuste 4) — a 17ª */
     ['Patrimônio', 'patrimonio'],
   ];
@@ -224,10 +225,23 @@ describe('o que o menu oferece (gruposVisiveis / secoesVisiveis)', () => {
     expect(gruposVisiveis('campo', false)).toEqual([]);
     expect(gruposVisiveis(null, false)).toEqual([]);
   });
-  it('admin: todos os grupos e todos os itens, na ordem do NAV_GRUPOS', () => {
+  it('admin: todos os grupos e todos os itens, na ordem do NAV_GRUPOS — MENOS os "em construção" (UI-VARREDURA-01 L5)', () => {
     const grupos = gruposVisiveis('admin_agroinblue', true);
     expect(grupos).toEqual(NAV_GRUPOS);
-    for (const g of NAV_GRUPOS) expect(secoesVisiveis('admin_agroinblue', true, g)).toEqual(g.drawer);
+    for (const g of NAV_GRUPOS) {
+      const semObra = g.drawer.map((sec) => ({ ...sec, itens: sec.itens.filter((i) => !i.emConstrucao) })).filter((sec) => sec.itens.length > 0);
+      expect(secoesVisiveis('admin_agroinblue', true, g)).toEqual(semObra);
+    }
+  });
+  it('L5: nenhum item "em construção" no menu, nem para o admin; os 7 estão marcados e a seção que fica vazia some', () => {
+    const marcados = NAV_GRUPOS.flatMap((g) => g.drawer.flatMap((s) => s.itens)).filter((i) => i.emConstrucao).map((i) => i.id);
+    expect(marcados.sort()).toEqual(['agricultura-home', 'divergencias', 'dre-executivo', 'lancamentos-silvicultura', 'logs', 'silvicultura-home', 'validacoes']);
+    for (const g of NAV_GRUPOS) {
+      for (const sec of secoesVisiveis('admin_agroinblue', true, g)) for (const i of sec.itens) expect(i.emConstrucao, i.id).toBeFalsy();
+    }
+    const producao = NAV_GRUPOS.find((g) => g.id === 'rebanho');
+    expect(producao && secoesVisiveis('admin_agroinblue', true, producao).map((s) => s.titulo)).toEqual(['Lançar', '', 'Pecuária', 'Agricultura']);
+    expect(NAV_GRUPOS.flatMap((g) => g.drawer.flatMap((s) => s.itens)).some((i) => /em constru/i.test(i.label))).toBe(false);
   });
   it('a tela inicial NAO MUDOU com o ACESSOS-FIN-01: financeiro, leitura e o GESTOR caem em Lançamentos Financeiros (a preferida), nao na primeira do menu ("Lançar › Pecuária"); campo nao tem nenhuma; admin, a Visão Geral', () => {
     /* a busca sabe achar: a primeira do menu deles e' outra, e so' a preferida os mantem onde estavam */
@@ -289,7 +303,7 @@ describe('a lateral (V2Sidebar)', () => {
   it('admin: tudo como antes — Visão Geral, todos os grupos na ordem, Configurações', () => {
     como('admin_agroinblue', true);
     lateral();
-    expect(botoesDaLateral()).toEqual(['Visão Geral', ...NAV_GRUPOS.map((g) => g.label), 'Configurações']);
+    expect(botoesDaLateral()).toEqual(['Visão geral', ...NAV_GRUPOS.map((g) => g.label), 'Configurações']);
   });
 });
 
@@ -300,33 +314,46 @@ describe('o drawer (V2ContextDrawer)', () => {
     expect(d.secoes).toEqual(['Operação', 'Gestão']);
   });
   it('financeiro, Executivo e Cadastros: so as telas dele', () => {
-    expect(itensDoDrawer('executivo').itens).toEqual(['PC-100', 'Evolução Patrimonial', 'DRE']);
-    expect(itensDoDrawer('cadastros').itens).toEqual(['Contas Bancárias', 'Fornecedores', 'Patrimônio']);
+    expect(itensDoDrawer('executivo').itens).toEqual(['PC-100', 'Evolução patrimonial', 'DRE']);
+    expect(itensDoDrawer('cadastros').itens).toEqual(['Contas bancárias', 'Fornecedores', 'Patrimônio']);
   });
   it('leitura, grupo Financeiro: as tres do piloto, como antes', () => {
     como('leitura');
-    expect(itensDoDrawer('financeiro').itens).toEqual(['Visão Geral', 'Lançamentos Financeiros', 'Conciliação Bancária', 'Contas a Pagar/Receber']);
+    expect(itensDoDrawer('financeiro').itens).toEqual(['Visão geral', 'Lançamentos financeiros', 'Conciliação bancária', 'Contas a pagar/receber']);
   });
   it('financeiro, grupo sem tela liberada (aberto por fora do menu): nenhuma secao, nenhum item', () => {
     for (const g of ['validar', 'planejamento', 'auditoria']) expect(itensDoDrawer(g)).toEqual({ itens: [], secoes: [] });
   });
-  it('admin: todo grupo com todos os itens, como no NAV_GRUPOS', () => {
+  it('admin: todo grupo com todos os itens, como no NAV_GRUPOS, menos os "em construção" (L5)', () => {
     como('admin_agroinblue', true);
     for (const g of NAV_GRUPOS) {
-      expect(itensDoDrawer(g.id).itens).toEqual(g.drawer.flatMap((s) => s.itens.map((i) => i.label)));
+      expect(itensDoDrawer(g.id).itens).toEqual(g.drawer.flatMap((s) => s.itens.filter((i) => !i.emConstrucao).map((i) => i.label)));
     }
   });
 });
 
 describe('a barra do celular (V2MobileNav)', () => {
-  it('nao admin: nenhuma aba dela e de tela liberada — a barra some', () => {
+  /* UI-VARREDURA-01 L5 (M3) — os três do meio iam para ids SEM tela; agora vão para telas que existem, e o dono do acesso filtra.
+     Por isso o financeiro, que antes não tinha aba nenhuma (a barra sumia), passa a ver as duas liberadas para ele. */
+  it('financeiro: só as abas de tela liberada para ele — Lançamentos (Lançar › Pecuária) e PC-100', () => {
+    const ir = vi.fn();
+    render(<V2MobileNav activeSection="financeiro-lanc" onNavigate={ir} />);
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Lançamentos', 'PC-100']);
+    fireEvent.click(screen.getByRole('button', { name: 'Lançamentos' }));
+    expect(ir).toHaveBeenCalledWith('lancamentos-zoot');
+  });
+  it('campo: nenhuma aba — a barra some', () => {
+    como('campo');
     const { container } = render(<V2MobileNav activeSection="financeiro-lanc" onNavigate={vi.fn()} />);
     expect(container.querySelector('nav')).toBeNull();
   });
-  it('admin: as cinco abas de sempre', () => {
+  it('admin: as cinco abas, cada uma para uma tela que existe', () => {
     como('admin_agroinblue', true);
-    render(<V2MobileNav activeSection="home" onNavigate={vi.fn()} />);
-    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Home', 'Operação', 'Plan.', 'PC-100', 'Mais']);
+    const ir = vi.fn();
+    render(<V2MobileNav activeSection="home" onNavigate={ir} />);
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Home', 'Lançamentos', 'Planejamento', 'PC-100', 'Mais']);
+    for (const b of screen.getAllByRole('button')) fireEvent.click(b);
+    expect(ir.mock.calls.map((c) => c[0])).toEqual(['home', 'lancamentos-zoot', 'planejamento-home', 'painel-consultor', 'configuracoes']);
   });
 });
 

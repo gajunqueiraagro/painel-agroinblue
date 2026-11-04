@@ -81,14 +81,18 @@ export type V2Section =
 
 export type ItemStatus = 'ready' | 'needs-wrapper';
 
+/** UI-VARREDURA-01 L5 — o grupo de ATIVIDADE de uma seção ou item do menu, com o MESMO código de `atividade_familias.grupo_menu`
+ *  (MAPA-ATIVIDADES-01, Code 6; fonte única `fn_cliente_atividades_liberadas`). Sem a marca = sempre aparece. Ainda SEM efeito: o
+ *  filtro (L5b) lê a função do Code 6. Grupos comuns (Financeiro, Planejamento, Executivo, Auditoria, Cadastros) não levam marca. */
+export type GrupoDaAtividade = 'pecuaria' | 'agricultura' | 'silvicultura';
+
 export interface NavItem {
   id: V2Section;
   label: string;
   status: ItemStatus;
   primary?: boolean;
-  /* Area anunciada e ainda nao construida: aparece SEMPRE, cinza, com a marca "em
-     construção" e sem clique. Decisao do Gabriel — o menu anuncia o rumo. Nao e'
-     `status`, que fala de wrapper de rota; e' outro eixo. */
+  /* Area anunciada e ainda nao construida. UI-VARREDURA-01 L5 (Gabriel 03/11/2026): NAO aparece no menu (`itemVisivel`),
+     para ninguem; o item fica aqui marcado e volta quando a tela existir. Nao e' `status`, que fala de wrapper de rota. */
   emConstrucao?: boolean;
   /**
    * A tela esta' LIBERADA PARA CLIENTES — ACESSOS-02a. Sem a marca, so' o admin do AGROinBLUE a ve^ e a abre, qualquer que seja
@@ -98,6 +102,8 @@ export interface NavItem {
    *   esta tela?" e' UM dono, `nivelDaTela` (`src/v2/lib/acessoTelas.ts`); menu e rota so' consultam.
    */
   liberadaClientes?: boolean;
+  /** o grupo de atividade do item (só nos itens do "Lançar"; os demais herdam o da seção) */
+  grupoDaAtividade?: GrupoDaAtividade;
 }
 
 /** A Visao Geral ('home') nao e' item do `NAV_GRUPOS` (e' o botao do topo da lateral), entao a marca dela mora aqui, ao lado da
@@ -117,6 +123,8 @@ export interface NavSecao {
      exclusivo da pecuaria e por isso nao mora sob nenhum dos escopos. */
   titulo: string;
   itens: NavItem[];
+  /** o grupo de atividade da seção inteira (ver `GrupoDaAtividade`) */
+  grupoDaAtividade?: GrupoDaAtividade;
 }
 
 export interface NavGrupo {
@@ -149,9 +157,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Lançar',
         itens: [
-          { id: 'lancamentos-zoot',          label: 'Pecuária',     status: 'ready', primary: true, liberadaClientes: true },
-          { id: 'lancamentos-agricultura',   label: 'Agricultura',  status: 'ready' },
-          { id: 'lancamentos-silvicultura',  label: 'Silvicultura', status: 'ready', emConstrucao: true },
+          { id: 'lancamentos-zoot',          label: 'Pecuária',     status: 'ready', primary: true, liberadaClientes: true, grupoDaAtividade: 'pecuaria' },
+          { id: 'lancamentos-agricultura',   label: 'Agricultura',  status: 'ready', grupoDaAtividade: 'agricultura' },
+          { id: 'lancamentos-silvicultura',  label: 'Silvicultura', status: 'ready', emConstrucao: true, grupoDaAtividade: 'silvicultura' },
         ],
       },
       {
@@ -159,18 +167,19 @@ export const NAV_GRUPOS: NavGrupo[] = [
            pecuaria, entao pendura-lo sob "Pecuária" diria o contrario. */
         titulo: '',
         itens: [
-          { id: 'fechamento', label: 'Fechamento Área', status: 'ready', primary: true, liberadaClientes: true },
+          { id: 'fechamento', label: 'Fechamento área', status: 'ready', primary: true, liberadaClientes: true },
         ],
       },
       {
         titulo: 'Pecuária',
+        grupoDaAtividade: 'pecuaria',
         itens: [
-          { id: 'rebanho-home',            label: 'Visão Geral',          status: 'ready' },
+          { id: 'rebanho-home',            label: 'Visão geral',          status: 'ready' },
           { id: 'conferencia-lancamentos', label: 'Lançamentos',          status: 'ready', liberadaClientes: true },
-          { id: 'operacoes-comerciais',    label: 'Operações Comerciais', status: 'ready', primary: true, liberadaClientes: true },
-          { id: 'conferencia-mensal',      label: 'Evolução no Ano',      status: 'ready' },
-          { id: 'mapa-pastos',             label: 'Mapa de Pastos',       status: 'ready' },
-          { id: 'mapa-geo-pastos',         label: 'Geo Pastos',           status: 'ready' },
+          { id: 'operacoes-comerciais',    label: 'Operações comerciais', status: 'ready', primary: true, liberadaClientes: true },
+          { id: 'conferencia-mensal',      label: 'Evolução no ano',      status: 'ready' },
+          { id: 'mapa-pastos',             label: 'Mapa de pastos',       status: 'ready' },
+          { id: 'mapa-geo-pastos',         label: 'Geo pastos',           status: 'ready' },
           { id: 'chuvas',                  label: 'Chuvas',               status: 'ready' },
         ],
       },
@@ -180,20 +189,22 @@ export const NAV_GRUPOS: NavGrupo[] = [
            termina no Financeiro, quando se materializa — pendurá-lo lá poria a origem no lugar
            errado. */
         titulo: 'Agricultura',
+        grupoDaAtividade: 'agricultura',
         itens: [
-          { id: 'agricultura-home', label: 'Visão Geral', status: 'ready', emConstrucao: true },
+          { id: 'agricultura-home', label: 'Visão geral', status: 'ready', emConstrucao: true },
           /* ⚠ O ESTOQUE VEM ANTES DO BARTER (decisão do Gabriel). A primeira ordem seguia o
              caminho do grão — colheita, barter, sobra —, mas o menu não é uma linha do tempo: é
              onde se procura. O estoque é a pergunta de todo dia ("quanto tenho para vender?") e
              o barter é o contrato que se abre de vez em quando. */
-          { id: 'estoque-graos', label: 'Estoque de Grãos', status: 'ready', liberadaClientes: true },
+          { id: 'estoque-graos', label: 'Estoque de grãos', status: 'ready', liberadaClientes: true },
           { id: 'barter-contratos', label: 'Barter', status: 'ready', liberadaClientes: true },
         ],
       },
       {
         titulo: 'Silvicultura',
+        grupoDaAtividade: 'silvicultura',
         itens: [
-          { id: 'silvicultura-home', label: 'Visão Geral', status: 'ready', emConstrucao: true },
+          { id: 'silvicultura-home', label: 'Visão geral', status: 'ready', emConstrucao: true },
         ],
       },
     ],
@@ -209,15 +220,15 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           /* FIN-VISAO-GERAL-01 PR 3 — no TOPO do Financeiro, com o mesmo acesso de Lançamentos Financeiros. O "Dashboard Financeiro"
              (Gestão) fica onde está até a homologação desta. */
-          { id: 'fin-visao-geral',     label: 'Visão Geral',             status: 'ready', liberadaClientes: true },
-          { id: 'financeiro-lanc',     label: 'Lançamentos Financeiros', status: 'ready', liberadaClientes: true },
-          { id: 'conciliacao',         label: 'Conciliação Bancária',    status: 'ready', liberadaClientes: true },
+          { id: 'fin-visao-geral',     label: 'Visão geral',             status: 'ready', liberadaClientes: true },
+          { id: 'financeiro-lanc',     label: 'Lançamentos financeiros', status: 'ready', liberadaClientes: true },
+          { id: 'conciliacao',         label: 'Conciliação bancária',    status: 'ready', liberadaClientes: true },
           /* ⚠ A TELA NOVA ENTRA AO LADO DAS VELHAS, e nao no lugar delas —
              FIN-CONCIL-PORTAR-01, rodada 1. Ela leva "(novo)" no rotulo porque
              conviver sem dizer qual e' qual faria o operador escolher no escuro.
              As velhas e este "Extrato Gerencial" saem na rodada 2, depois da
              homologacao. */
-          { id: 'visao-consolidada',   label: 'Visão Consolidada',       status: 'ready', liberadaClientes: true },
+          { id: 'visao-consolidada',   label: 'Visão consolidada',       status: 'ready', liberadaClientes: true },
           // PR-CLEANUP-MESA-CLASSIFICACAO-01 — 'mesa-classificacao' saiu do menu. O fluxo
           // vigente e' Conciliação Bancária → Importar Banco / Enriquecer / Conciliação.
           // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — 'mesa-operacional' saiu do menu junto com
@@ -233,7 +244,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
              ("Lançamentos Financeiros"), que dispoe de 200px por nao ter o ponto: 30% mais
              texto em 7% menos espaco. O `truncate` do span cortaria justamente
              "Financiamentos", a palavra pela qual o operador conhece a tela. */
-          { id: 'financiamentos',      label: 'Financ. e Parcelamentos', status: 'needs-wrapper', liberadaClientes: true },
+          { id: 'financiamentos',      label: 'Financ. e parcelamentos', status: 'needs-wrapper', liberadaClientes: true },
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper', liberadaClientes: true },
           { id: 'recorrencias',        label: 'Recorrências',            status: 'ready', liberadaClientes: true },
           // PR-IMPORT-EXCEL-LANC-01 — planilha no vocabulário DO CLIENTE (de-para de plano
@@ -243,19 +254,19 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Gestão',
         itens: [
-          { id: 'financeiro-dashboard',  label: 'Dashboard Financeiro',  status: 'needs-wrapper' },
-          { id: 'fluxo-caixa',           label: 'Fluxo Caixa',           status: 'needs-wrapper', liberadaClientes: true },
+          { id: 'financeiro-dashboard',  label: 'Dashboard financeiro',  status: 'needs-wrapper' },
+          { id: 'fluxo-caixa',           label: 'Fluxo de caixa',           status: 'needs-wrapper', liberadaClientes: true },
           { id: 'rateio-adm',            label: 'Rateio ADM',            status: 'needs-wrapper' },
           /* A mesma leitura do Extrato Gerencial, com o recorte do fechamento — FIN-PAINEL-SAFRA-01.
              Fica em Gestão, e não em Conciliação, porque Conciliação é operação de UMA conta num
              mês; aqui a pergunta é por safra, ano ou datas, com todas as contas. */
-          { id: 'painel-periodo',        label: 'Painel por Período',    status: 'ready' },
+          { id: 'painel-periodo',        label: 'Painel por período',    status: 'ready' },
           /* ⚠ FICA EM GESTÃO, AO LADO DO PAINEL POR PERÍODO, e não em Operação — PR-CPR-2A.
              Operação é o que se faz numa conta e num mês; aqui a pergunta é "o que vence,
              quando, somando todas as contas", que é a mesma família do Painel por Período:
              leitura de compromisso, não lançamento. */
-          { id: 'contas-a-pagar-receber', label: 'Contas a Pagar/Receber', status: 'ready', liberadaClientes: true },
-          { id: 'painel-financiamentos', label: 'Painel Financiamentos', status: 'needs-wrapper', liberadaClientes: true },
+          { id: 'contas-a-pagar-receber', label: 'Contas a pagar/receber', status: 'ready', liberadaClientes: true },
+          { id: 'painel-financiamentos', label: 'Painel financiamentos', status: 'needs-wrapper', liberadaClientes: true },
         ],
       },
     ],
@@ -269,8 +280,8 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Planejamento',
         itens: [
-          { id: 'lancamentos-meta-zoo', label: 'Lançamentos META Zoo',       status: 'ready' },
-          { id: 'lancamentos-meta-fin', label: 'Lançamentos META Financeiro', status: 'ready' },
+          { id: 'lancamentos-meta-zoo', label: 'Lançamentos META zoo',       status: 'ready' },
+          { id: 'lancamentos-meta-fin', label: 'Lançamentos META financeiro', status: 'ready' },
           { id: 'meta-gmd',             label: 'GMD META',                    status: 'ready' },
           { id: 'meta-precos',          label: 'Preços META',                 status: 'ready' },
           { id: 'areas-meta',           label: 'Áreas META',                  status: 'ready' },
@@ -279,7 +290,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Gestão',
         itens: [
-          { id: 'planejamento-home', label: 'Visão Geral Planejamento', status: 'ready' },
+          { id: 'planejamento-home', label: 'Visão geral do planejamento', status: 'ready' },
         ],
       },
     ],
@@ -291,12 +302,12 @@ export const NAV_GRUPOS: NavGrupo[] = [
     label: 'Executivo',
     drawer: [
       {
-        titulo: 'Visão Executiva',
+        titulo: 'Visão executiva',
         itens: [
           { id: 'painel-consultor',    label: 'PC-100',                       status: 'ready', liberadaClientes: true },
-          { id: 'fechamento-periodo',  label: 'Fechamento do Período',        status: 'ready' },
+          { id: 'fechamento-periodo',  label: 'Fechamento do período',        status: 'ready' },
           { id: 'indicadores-zoot',    label: 'Indicadores',                  status: 'needs-wrapper' },
-          { id: 'valor-rebanho',       label: 'Evolução Patrimonial',         status: 'needs-wrapper', liberadaClientes: true },
+          { id: 'valor-rebanho',       label: 'Evolução patrimonial',         status: 'needs-wrapper', liberadaClientes: true },
           /* ⚠ A GRADE UNICA DA LAVOURA — compara as culturas da safra, abre os centros e, no
              clique do cabecalho de uma cultura, vira o painel dela (Resultado, Producao,
              Historico). E' a unica porta do DRE agricola desde o PR-DRE-LAVOURA-02. */
@@ -308,7 +319,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
              e' como nasce divergencia de numero entre relatorios.
              ⚠ AS CHAVES CONTINUAM NO TIPO E VIRAM REDIRECT para 'dre' no V2Index: link antigo,
              favorito e `sessionStorage` residual caem na tela nova em vez de em rota morta. */
-          { id: 'dre-executivo',       label: 'DRE Executivo (em construção)', status: 'needs-wrapper' },
+          { id: 'dre-executivo',       label: 'DRE executivo', status: 'needs-wrapper', emConstrucao: true },
         ],
       },
     ],
@@ -322,11 +333,11 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Auditoria',
         itens: [
-          { id: 'auditoria-tecnica', label: 'Auditoria Técnica',          status: 'ready' },
-          { id: 'auditoria-zoot',    label: 'Auditoria Zootécnica',       status: 'ready' },
-          { id: 'divergencias',      label: 'Divergências (em construção)', status: 'needs-wrapper' },
-          { id: 'logs',              label: 'Logs (em construção)',       status: 'needs-wrapper' },
-          { id: 'validacoes',        label: 'Validações (em construção)', status: 'needs-wrapper' },
+          { id: 'auditoria-tecnica', label: 'Auditoria técnica',          status: 'ready' },
+          { id: 'auditoria-zoot',    label: 'Auditoria zootécnica',       status: 'ready' },
+          { id: 'divergencias',      label: 'Divergências', status: 'needs-wrapper', emConstrucao: true },
+          { id: 'logs',              label: 'Logs',       status: 'needs-wrapper', emConstrucao: true },
+          { id: 'validacoes',        label: 'Validações', status: 'needs-wrapper', emConstrucao: true },
         ],
       },
     ],
@@ -342,10 +353,10 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           /* O item abre a tela com as abas Cadastro e Pastos — "Fazendas" sozinho
              escondia metade do que ha ali. */
-          { id: 'config-fazendas',   label: 'Fazendas e Pastos',   status: 'ready' },
-          { id: 'contas-bancarias',  label: 'Contas Bancárias',    status: 'needs-wrapper', liberadaClientes: true },
+          { id: 'config-fazendas',   label: 'Fazendas e pastos',   status: 'ready' },
+          { id: 'contas-bancarias',  label: 'Contas bancárias',    status: 'needs-wrapper', liberadaClientes: true },
           { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper', liberadaClientes: true },
-          { id: 'plano-contas',      label: 'Plano de Contas',     status: 'needs-wrapper' },
+          { id: 'plano-contas',      label: 'Plano de contas',     status: 'needs-wrapper' },
           /* PATR-01 — o cadastro dos bens (máquinas, estruturas, pastagens e terra), ligado aos lançamentos de Investimento */
           { id: 'patrimonio',        label: 'Patrimônio',          status: 'ready', liberadaClientes: true },
           { id: 'safras',            label: 'Safras',              status: 'ready' },
@@ -358,7 +369,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
              (derivado, tela de conferência); este declara quanto do administrativo é de cada
              ATIVIDADE, por ano — cadastro, decisão do produtor. */
           { id: 'rateio-admin',      label: 'Rateio administrativo', status: 'ready' },
-          { id: 'subcentro-aliases', label: 'Aliases de Subcentro', status: 'needs-wrapper' },
+          { id: 'subcentro-aliases', label: 'Aliases de subcentro', status: 'needs-wrapper' },
           { id: 'dividendos',        label: 'Dividendos',          status: 'needs-wrapper' },
         ],
       },
@@ -379,9 +390,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Validar',
         itens: [
-          { id: 'validar-trimestral', label: 'Análise Trimestral',    status: 'ready' },
-          { id: 'validar-operacao',   label: 'Operação / Indicadores', status: 'ready' },
-          { id: 'validar-precos',     label: 'Preços de Mercado',      status: 'ready' },
+          { id: 'validar-trimestral', label: 'Análise trimestral',    status: 'ready' },
+          { id: 'validar-operacao',   label: 'Operação / indicadores', status: 'ready' },
+          { id: 'validar-precos',     label: 'Preços de mercado',      status: 'ready' },
         ],
       },
     ],

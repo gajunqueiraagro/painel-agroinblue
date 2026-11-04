@@ -815,6 +815,12 @@ const CENARIOS = [
   ...[['flx', ''], ['sai', ''], ['ent', ''], ['flx', '&faixa=per&de=2025-01&ate=2026-12'], ['sai', '&faixa=66']].map(([m, extra]) => ({
     nome: `visao-geral-${m}${extra ? extra.replace(/[&=]/g, '-') : ''}`, url: `tela=visao-geral&barra=0&modo=${m}${extra}`, tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } })),
+  /* VISAO-GERAL-02 — a Visão Geral nova (dado SINTÉTICO `dados/visaoGeral02.ts`): Global e uma fazenda, a distribuição por fazenda
+     (diálogo) e o filtro de uma atividade; nada corta nem sai do lugar nos tamanhos da VG */
+  { nome: 'visao-geral-02', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
+  { nome: 'visao-geral-02-fazenda', url: 'tela=visao-geral-02&fz=fA', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
+  { nome: 'visao-geral-02-por-fazenda', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, regiao: '[role="dialog"]',
+    antes: async (p) => { await p.waitForTimeout(2500); await clicar('[data-testid="vg-ver-por-fazenda"]')(p); await p.waitForTimeout(400); } },
   { nome: 'visao-geral-agricultura', url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' },
     /* abaixo de 768px os filtros da barra somem (`hidden md:flex`): ali o gesto não existe e é pulado */
@@ -1594,7 +1600,7 @@ function medirCartoesDoMapa() {
   return achados;
 }
 /* MAPA-GLOBAL-01 fix1 (5) — o MENU POR CIMA DO MAPA, medido sozinho em toda tela do mapa (`mapa-geo-tela`): uma gaveta igual à do menu
-   lateral (V2ContextDrawer: 240px, z-50) é posta ao lado da barra; em cada vidro, no mapa e nos cards que ela cobre, o ponto do meio da
+   lateral (V2ContextDrawer: 200px desde o UI-VARREDURA-01 L5 v2, z-50) é posta ao lado da barra; em cada vidro, no mapa e nos cards que ela cobre, o ponto do meio da
    parte coberta tem de ser a gaveta. Sem o `isolate` da tela, os vidros (z-500) e o Leaflet (z-400…1000) ficavam por cima do menu. */
 function medirMenuPorCima(foto) {
   const tela = document.querySelector('[data-testid="mapa-geo-tela"]'); if (!tela) return [];
@@ -1602,7 +1608,7 @@ function medirMenuPorCima(foto) {
   const gaveta = document.createElement('div');
   gaveta.dataset.gavetaDeTeste = '1';
   /* pointer-events: auto — com um menu do Radix aberto o body fica com pointer-events: none, a gaveta herdaria e o elementFromPoint a pularia */
-  Object.assign(gaveta.style, { position: 'fixed', left: `${t.left}px`, top: '0', bottom: '0', width: '240px', zIndex: '50', background: 'rgba(27,42,68,0.9)', pointerEvents: 'auto' });
+  Object.assign(gaveta.style, { position: 'fixed', left: `${t.left}px`, top: '0', bottom: '0', width: '200px', zIndex: '50', background: 'rgb(30,58,95)', pointerEvents: 'auto' });
   document.body.appendChild(gaveta);
   const g = gaveta.getBoundingClientRect(), achados = [];
   const alvos = ['[data-testid="mapa-kpis"]', '[data-testid="mapa-filtros"]', '[data-testid="mapa-legenda"]', '.leaflet-container', '.leaflet-control-container .leaflet-control',

@@ -197,7 +197,8 @@ function normalizeMetaCategorias(
  * Synthesize ZootMensal rows from category-level data.
  * Global e uma fazenda (REBANHO-LEITURA-01 D1: a view `vw_zoot_fazenda_mensal` saiu do hook).
  */
-function buildFazendaRowsFromCategories(rows: ZootCategoriaMensal[]): ZootMensal[] {
+/** Exportada para a Visão Geral (VISAO-GERAL-02): a linha do mês de UMA fazenda, pela mesma conta do hook (nenhuma segunda dona). */
+export function buildFazendaRowsFromCategories(rows: ZootCategoriaMensal[]): ZootMensal[] {
   const byMesMap = groupByMes(rows);
   const result: ZootMensal[] = [];
 
