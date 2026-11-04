@@ -11,7 +11,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
+import { CriarLancamentoDaLinha, type LevadoDaNota } from '@/components/conciliacao/CriarLancamentoDaLinha';
+import { CasarComBancoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { ProcurarNoHistorico } from '@/components/conciliacao/ProcurarNoHistorico';
 import type { ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 import { CriarTransferenciaDialog } from '@/components/conciliacao/CriarTransferenciaDialog';
@@ -111,6 +112,10 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
   const [criandoTransf, setCriandoTransf] = useState(false);
   const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
   const [comDiferenca, setComDiferenca] = useState(false);
+  /* CONC-CRIAR-COM-NOTA-01 — a NF lida no Criar que JÁ ESTÁ lançada (ou o criado com o valor da nota): o "Casar com o banco" de hoje, com eles */
+  const [casarCom, setCasarCom] = useState<LevadoDaNota[] | null>(null);
+  const extratoDoCasar = useMemo(() => ({ extrato_id: movimento.id, data: movimento.data_movimento, historico: movimento.descricao, valor: movimento.valor }),
+    [movimento.id, movimento.data_movimento, movimento.descricao, movimento.valor]);
   /* ⚠ MARCADO É UM MAPA id → VALOR A APLICAR, não um conjunto de ids: dois
      candidatos podem entrar no mesmo movimento com valores diferentes, e é o
      valor que vai ao banco. O default de cada um é o SALDO do lançamento —
@@ -634,6 +639,7 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
           semVinculo={marcados.size > 0}
           modelo={modelo}
           aoFechar={() => { setCriando(false); setModelo(undefined); }}
+          aoCasarComBanco={setCasarCom}
           aoCriado={async (idCriado) => {
             /* ⚠ O NOVO ENTRA MARCADO. Sem isto o operador teria de caçá-lo na
                lista de candidatos que acabou de recarregar — e é o lançamento
@@ -654,6 +660,15 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
             await aoMudar();
           }}
         />
+      )}
+
+      {casarCom && (
+        <CasarComBancoModal open onClose={() => setCasarCom(null)} extrato={extratoDoCasar} iniciais={casarCom}
+          contaBancariaId={contaBancariaId ?? null} clienteId={clienteAtual?.id ?? null}
+          onConciliado={() => {
+            setCasarCom(null); void recarregar(); void recarregarCand(); void aoMudar();
+            if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+          }} />
       )}
 
       {/* ⚠ A CONFIRMAÇÃO DIZ O QUE NÃO ACONTECE. "Desfazer" sobre dinheiro

@@ -664,6 +664,15 @@ const CENARIOS = [
   { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',
     estados: [['procurou', async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); }]] },
+  /* CONC-SUGESTOES-TABELA-01 — marcar e desmarcar as caixinhas (das sugestões e do histórico) não mexe em nada: o rodapé tem as colunas
+     reservadas (N · soma · extrato · diferença) e o "Casar selecionados" fica no lugar; o cabeçalho das listas e a faixa do extrato também */
+  { nome: 'casar-sugestoes-marcar', url: 'tela=sugestoes-casar&v=rural', tamanhos: TAMANHOS_DO_P92,
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); },
+    presos: '[data-testid="sugestoes-extrato"], [data-testid="sugestoes-rodape"] > *, [data-testid="sugestoes-lista"] thead th, [data-testid="procurar-historico-quadro"] thead th',
+    estados: [['uma sugestão', async (p) => { await p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]').nth(0).click(); await espera(p); }],
+      ['e uma do histórico', async (p) => { await p.locator('[data-testid="procurar-historico-quadro"] tbody button[role="checkbox"]').first().click(); await espera(p); }],
+      ['desmarcadas', async (p) => { await p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]').nth(0).click();
+        await p.locator('[data-testid="procurar-historico-quadro"] tbody button[role="checkbox"]').first().click(); await espera(p); }]] },
   /* P153b — ordenar o histórico não mexe em nada fora do corpo da lista: o cabeçalho (a seta tem lugar reservado), a contagem, o botão */
   { nome: 'casar-sugestoes-guariroba-ordenar', url: 'tela=sugestoes-casar&v=guariroba', tamanhos: TAMANHOS_DO_P92,
     /* ⚠ abaixo do piso o quadro rola de lado: o clique do robô rolaria até o "Valor" e mediria a ROLAGEM dele, não a tela — o "Valor" vem à

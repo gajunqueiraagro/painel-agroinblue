@@ -25,6 +25,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
 import type { ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
@@ -52,6 +53,9 @@ export interface LevadoInicial {
   /** P153b (D3, Gabriel 29/10) — o EM ABERTO de OUTRA conta, levado do "Procurar no histórico": o item vai com `trocar_conta` e a
    *  `fn_espelho_casar` troca a conta para a do extrato NA MESMA TRANSAÇÃO do casar (o casar falhou = nada trocado). `de`/`para` = os nomes. */
   trocarConta?: { de: string | null; para: string | null };
+  /** CONC-CRIAR-COM-NOTA-01 (Gabriel 04/11 06:28) — a NF lida no Criar pelo extrato que JÁ ESTÁ lançada: o nº dela na linha do levado.
+   *  Com algum levado com o nº, a linha de identificação ganha a coluna NF. */
+  numero_documento?: string | null;
 }
 
 const PALETA_DO_STATUS: Record<string, { texto: string } | undefined> = {
@@ -259,6 +263,8 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
   const podeCriar = podeCriarPelaDiferenca(sim, semItens);
   const sentido = sim && !semItens ? sentidoDaDiferenca(sim.diferenca, sim.noExtrato) : null;
   const unico = levados.length === 1;
+  /* CONC-CRIAR-COM-NOTA-01 — a coluna NF so' quando algum levado traz o nº (os outros chamadores seguem como sempre) */
+  const comNF = levados.some((l) => !!l.numero_documento);
   /* P153b (D3) — algum levado troca de conta ao casar: o botão diz isso (o texto é fixo enquanto o modal está aberto) */
   const trocaConta = levados.some((l) => !!l.trocarConta);
   const valorDoBanco = paraCampo(extrato.valor);
@@ -310,6 +316,19 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                 <div key={l.lancamento_id} className="py-[4px] border-b last:border-b-0" data-testid="levado">
                   {(() => {
                     const st = (l.status_transacao ?? '').trim().toLowerCase();
+                    /* CONC-CRIAR-COM-NOTA-01 (Gabriel 04/11 06:28) — com a NF: a coluna do nº (000.000.000 a 9,5px mede 52) e a linha a 9,5px,
+                       UMA linha só (nada quebra): descrição e fornecedor com "…" e o inteiro no `title`; o nº nunca corta */
+                    if (comNF) return (
+                      <div className="grid grid-cols-[34px_58px_minmax(0,1fr)_minmax(0,1fr)_62px] gap-x-2 items-baseline whitespace-nowrap text-[9.5px]" data-testid="levado-identificacao">
+                        <span className="text-muted-foreground tabular-nums" title="vencimento">{vencCurto(l.data_vencimento)}</span>
+                        <span className="tabular-nums" title="nº da nota fiscal" data-testid="levado-nf">{l.numero_documento ? (formatNFNumber(l.numero_documento) || l.numero_documento) : '—'}</span>
+                        <span className="truncate" title={l.descricao ?? undefined}>{l.descricao ?? '—'}</span>
+                        <span className="truncate text-muted-foreground" title={l.fornecedor ?? undefined}>{l.fornecedor || '—'}</span>
+                        <span className={cn('text-right font-medium', PALETA_DO_STATUS[st]?.texto ?? 'text-muted-foreground')}>
+                          {st ? (STATUS_FILTRO_LABEL[st] ?? l.status_transacao) : '—'}
+                        </span>
+                      </div>
+                    );
                     return (
                       <div className="grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_62px] gap-x-2 items-baseline" data-testid="levado-identificacao">
                         <span className="text-[10px] text-muted-foreground tabular-nums" title="vencimento">{vencCurto(l.data_vencimento)}</span>

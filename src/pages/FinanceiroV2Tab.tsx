@@ -7,9 +7,6 @@ import { ClassificacaoComSelo, ValorDaParte } from '@/components/financeiro-v2/C
 import {
   STATUS_FINANCEIRO_OPCOES_FILTRO,
   STATUS_FILTRO_LABEL,
-  STATUS_FILTRO_COR,
-  STATUS_FILTRO_PILULA,
-  STATUS_PILULA_BASE,
   isStatusFiltroFinanceiro,
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
@@ -50,6 +47,10 @@ import { useConferenciaDosFiltros } from '@/hooks/useConferenciaDosFiltros';
 import { ValorInexistente, CLASSE_DO_INEXISTENTE } from '@/components/shared/ValorInexistente';
 import { Button } from '@/components/ui/button';
 import { CorpoDaListaMemo, MenuDaLinhaSobDemanda } from '@/components/financeiro-v2/corpoDaLista';
+import {
+  TabelaDaLista, ThDaLista, LinhaDaLista, CelulaCaixinha, CelulaData, CelulaProduto, CelulaFornecedor, NomeNaCelula, CelulaFaz, CelulaValor,
+  CelulaDoc, CelulaStatus, RotuloDoStatus, statusDaLinha,
+} from '@/components/financeiro-v2/TabelaDaLista';
 import { Textarea } from '@/components/ui/textarea';
 import { MOTIVO_BLOQUEIO_TITULO_OC } from '@/lib/financeiro/cancelamentoLancamento';
 import { Input } from '@/components/ui/input';
@@ -2700,21 +2701,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
            <div ref={quadroAteOFim.ref} className={cn("flex min-h-0 flex-col overflow-hidden border border-[hsl(var(--border))] bg-card", modoIntensivo && "flex-1")}
              style={modoIntensivo ? undefined : { height: quadroAteOFim.altura ?? 'calc(100vh - 264px)' }} data-testid="quadro-lancamentos">
            <div ref={scrollContainerRef} className="min-h-0 flex-1 bg-card overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista">
-            <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
                 - Modo normal: Produto (col 4) usa flex (sem width); Doc 100; demais mantidas.
                 - Modo intensivo: Produto fixo em 280 (deixa de dominar com truncate);
                   Doc sobe para 110 para caber NF/série completa.
               */}
-              <colgroup>
-                <col style={{ width: 28 }} />
-                {/* PR-CONC-B-1 — ícone de origem. 22px fixos; as demais larguras ficam
-                    intactas e a tabela apenas cresce 22px dentro do container que rola. */}
-                {/* ⚠ PARC-FECHA-02 item 6 (Gabriel, 07/10): a coluna de 14px do CLIPE SAIU DAQUI e foi para entre VALOR e DOC. — o
+            <TabelaDaLista larguras={[
+                28,
+                /* PR-CONC-B-1 — ícone de origem. 22px fixos; as demais larguras ficam
+                    intactas e a tabela apenas cresce 22px dentro do container que rola. */
+                /* ⚠ PARC-FECHA-02 item 6 (Gabriel, 07/10): a coluna de 14px do CLIPE SAIU DAQUI e foi para entre VALOR e DOC. — o
                     clipe fala do documento e fica ao lado dele. Nada ficou no lugar (nenhuma coluna vazia): as três datas andaram
-                    14px para a esquerda e a cadeia congelada passou a 0/28/68/108. A soma do colgroup segue 874. */}
-                {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data).
+                    14px para a esquerda e a cadeia congelada passou a 0/28/68/108. A soma do colgroup segue 874. */
+                /* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data).
                     45→40 cada em FIN-LISTA-VISUAL-06. Foram a 34 no FIN-TABELA-GEOMETRIA-01
                     e VOLTARAM: a fonte de 7px que justificava os 34 foi revertida, e — o que
                     importa mais — os 34 quebraram a CADEIA das colunas congeladas, que
@@ -2723,13 +2723,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     ("iuste Manual"). Com 40, a cadeia fecha exata.
                     A data renderiza com
                     `letter-spacing: -0.4px` (regra `.celula-data` do index.css), e "31/12/26"
-                    pede ~32px — 40 ainda sobra para o padding de 1px de cada lado. */}
-                {/* FIN-V2-DESEMPENHO-01b: 40→46 cada, para dd/mm/aaaa ("31/12/2026" ~41px a 9px com o -0,4 da `.celula-data`);
-                    a cadeia congelada passou a 0/28/74/120 (as três datas) */}
-                <col style={{ width: 46 }} />
-                <col style={{ width: 46 }} />
-                <col style={{ width: 46 }} />
-                {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
+                    pede ~32px — 40 ainda sobra para o padding de 1px de cada lado. */
+                /* FIN-V2-DESEMPENHO-01b: 40→46 cada, para dd/mm/aaaa ("31/12/2026" ~41px a 9px com o -0,4 da `.celula-data`);
+                    a cadeia congelada passou a 0/28/74/120 (as três datas) */
+                46,
+                46,
+                46,
+                /* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
                     larga e a que mais tolera truncar: o texto inteiro está no `title`.
                     ⚠ NO AMPLIADO, 170→140: a célula renderiza a 9px (`.table-financeiro td`
                     vence o `text-[12px]` do JSX), e os nomes típicos — "Encerramento Conta -
@@ -2738,8 +2738,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     ⚠ E ELA NÃO É CONGELADA: Produto é a 6ª coluna, depois das cinco `sticky`
                     (check, origem, Comp., Venc., Pgto.). Mexer nela NÃO desloca nenhum offset —
                     conferido antes de aplicar, porque foi exatamente o oposto disso que
-                    quebrou a lista hoje. */}
-                {/* ⚠ A GRADE FOI MEDIDA NA TELA — PR-FIN-V2-STATUS-PGTO-01-fix1. A conta do PR anterior
+                    quebrou a lista hoje. */
+                /* ⚠ A GRADE FOI MEDIDA NA TELA — PR-FIN-V2-STATUS-PGTO-01-fix1. A conta do PR anterior
                     (968px contra ~1.011 úteis) saiu do código e supunha janela de 1280; a do Gabriel
                     tem 1.135px de CSS (`innerWidth`), e o scroller úteis 909 − 20 do `respiro-lista` =
                     889. A tabela rolava 79px e o "…" fixo cobria o status.
@@ -2747,45 +2747,45 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     as colunas que truncam com o texto inteiro no `title`. Valor, datas e status não
                     cederam. Soma normal 874 (cabe em 889, e em 874 com barra clássica de 15).
                     ⚠ FIN-V2-COLUNAS-OC-01 (as larguras de HOJE): 28·14·40·40·40·OC 16·Produto 136·Fornecedor 100·Macro 56·
-                    Centro 56·Faz. 30·Safra 66·Valor 90·Doc. 70·Status 64·ações 28 = 874. */}
-                {/* FIN-V2-COLUNAS-OC-01 — coluna OC: 16px (o ícone de 12 + os 4 da margem dele). Não congelada. */}
-                {/* FIN-V2-COLUNAS-02: a coluna "Vínc." (era "OC") leva TODOS os selos de vínculo lado a lado, 36px (até dois selos de 13). */}
-                <col style={{ width: 36 }} />
-                {/* ⚠ FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): Produto 111→136 (Ampliado 125→150) — recebe o que Status, Faz., Macro e
-                    Centro devolveram, menos os 16 da coluna OC. A soma normal segue 874. */}
-                {/* PARC-LIVRES-01 passo 3: Produto 136→130 (Ampliado 150→144) e Macro/Centro 56→49 devolvem 20px à coluna Doc. */}
-                {/* FIN-V2-COLUNAS-02 — larguras novas (normal 906; Ampliado 1.088 com e sem as contas: desligadas, os 184px delas vão para
-                    Produto, Fornecedor e Classificação). Produto, Fornecedor e Classificação são as únicas que cortam (inteiro no `title`). */}
-                {/* FIN-V2-DESEMPENHO-01b: no Ampliado 140→128 e 202→190 (com Fornecedor 116→104 e 177→165): as datas em dd/mm/aaaa
+                    Centro 56·Faz. 30·Safra 66·Valor 90·Doc. 70·Status 64·ações 28 = 874. */
+                /* FIN-V2-COLUNAS-OC-01 — coluna OC: 16px (o ícone de 12 + os 4 da margem dele). Não congelada. */
+                /* FIN-V2-COLUNAS-02: a coluna "Vínc." (era "OC") leva TODOS os selos de vínculo lado a lado, 36px (até dois selos de 13). */
+                36,
+                /* ⚠ FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): Produto 111→136 (Ampliado 125→150) — recebe o que Status, Faz., Macro e
+                    Centro devolveram, menos os 16 da coluna OC. A soma normal segue 874. */
+                /* PARC-LIVRES-01 passo 3: Produto 136→130 (Ampliado 150→144) e Macro/Centro 56→49 devolvem 20px à coluna Doc. */
+                /* FIN-V2-COLUNAS-02 — larguras novas (normal 906; Ampliado 1.088 com e sem as contas: desligadas, os 184px delas vão para
+                    Produto, Fornecedor e Classificação). Produto, Fornecedor e Classificação são as únicas que cortam (inteiro no `title`). */
+                /* FIN-V2-DESEMPENHO-01b: no Ampliado 140→128 e 202→190 (com Fornecedor 116→104 e 177→165): as datas em dd/mm/aaaa
                     tomaram 18px e o Valor 6; a soma do Ampliado volta à de antes. Na normal, Produto 128→123, Fornecedor 122→117 e
-                    Classificação 124→120: a soma vai a 916, dentro dos 919 medidos na janela do Gabriel (nomes cortam com o `title`) */}
-                <col style={{ width: modoIntensivo ? (contasAmpliado ? 128 : 190) : 123 }} />
-                {/* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */}
-                {/* ⚠ 100 → 124 — PARC-LIVRES-01 fechamento C (pedido do Gabriel: Fornecedor mais largo). Os 24px saem de Macro (49→33,
-                    que já cortava em 5.250 de 5.251 linhas do NJ) e de Centro (49→41). Medido no NJ a 1.126. */}
-                <col style={{ width: modoIntensivo ? (contasAmpliado ? 104 : 165) : 117 }} />
-                {/* Macro e Centro 66→56, a 8,5px (`.celula-classe`, exceção ao piso só nesta lista): cortam com o texto inteiro no
-                    `title`, como já cortavam — medido no NJ: 3 das 11 macros cabiam em 66 a 9px, e as mesmas 3 cabem em 56 a 8,5. */}
-                {/* FIN-V2-COLUNAS-02: Macro e Centro viram UMA coluna, a Classificação no nível escolhido. */}
-                <col style={{ width: modoIntensivo ? (contasAmpliado ? 116 : 177) : 120 }} />
-                {/* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
+                    Classificação 124→120: a soma vai a 916, dentro dos 919 medidos na janela do Gabriel (nomes cortam com o `title`) */
+                modoIntensivo ? (contasAmpliado ? 128 : 190) : 123,
+                /* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */
+                /* ⚠ 100 → 124 — PARC-LIVRES-01 fechamento C (pedido do Gabriel: Fornecedor mais largo). Os 24px saem de Macro (49→33,
+                    que já cortava em 5.250 de 5.251 linhas do NJ) e de Centro (49→41). Medido no NJ a 1.126. */
+                modoIntensivo ? (contasAmpliado ? 104 : 165) : 117,
+                /* Macro e Centro 66→56, a 8,5px (`.celula-classe`, exceção ao piso só nesta lista): cortam com o texto inteiro no
+                    `title`, como já cortavam — medido no NJ: 3 das 11 macros cabiam em 66 a 9px, e as mesmas 3 cabem em 56 a 8,5. */
+                /* FIN-V2-COLUNAS-02: Macro e Centro viram UMA coluna, a Classificação no nível escolhido. */
+                modoIntensivo ? (contasAmpliado ? 116 : 177) : 120,
+                /* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
                     horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
-                    icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */}
-                {/* Fazenda 50→44→38: a célula mostra o CÓDIGO (PUR, RET, ADM), nunca o nome —
+                    icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */
+                /* Fazenda 50→44→38: a célula mostra o CÓDIGO (PUR, RET, ADM), nunca o nome —
                     o nome inteiro está no `title`. Chegou a 30 no FIN-TABELA-GEOMETRIA-01 e
-                    voltou junto com as datas, no mesmo revert de geometria. */}
-                {/* ⚠ 38→30 — FIN-V2-COLUNAS-OC-01, MEDIDO: o pior código dos 13 do cadastro é "ADM", 21,1px a 9px/500; com o
-                    padding de 2px de cada lado (`px-0.5`) sobram 4,9px. O código nunca corta. */}
-                <col style={{ width: 30 }} />
-                {/* Safra 56→66 — FIN-LISTA-VISUAL-06, a ÚNICA coluna que CRESCE neste corte.
+                    voltou junto com as datas, no mesmo revert de geometria. */
+                /* ⚠ 38→30 — FIN-V2-COLUNAS-OC-01, MEDIDO: o pior código dos 13 do cadastro é "ADM", 21,1px a 9px/500; com o
+                    padding de 2px de cada lado (`px-0.5`) sobram 4,9px. O código nunca corta. */
+                30,
+                /* Safra 56→66 — FIN-LISTA-VISUAL-06, a ÚNICA coluna que CRESCE neste corte.
                     ⚠ NO AMPLIADO NÃO HÁ ESTICAMENTO: a tabela transborda o container, então
                     cada faixa vale exatamente o que está escrito aqui — e "25/26-MAND", o
                     código mais longo do cadastro (medido: 10 caracteres, os demais têm 9),
                     não cabia nos 56 e saía "25/26-M…". Na lista normal a diferença é nenhuma,
-                    porque lá as faixas esticam. */}
-                {/* FIN-V2-COLUNAS-02: Safra 66→50, em duas linhas (o período + a atividade embaixo). */}
-                <col style={{ width: 50 }} />
-                {/* As duas contas só no Ampliado: 130→105 (VISUAL-06), 78 e de volta a 105 no
+                    porque lá as faixas esticam. */
+                /* FIN-V2-COLUNAS-02: Safra 66→50, em duas linhas (o período + a atividade embaixo). */
+                50,
+                /* As duas contas só no Ampliado: 130→105 (VISUAL-06), 78 e de volta a 105 no
                     revert da geometria, agora 92 — e o 92 sai dos NOMES REAIS, medidos no
                     proto, não de estimativa: a célula renderiza a 9px, e dos nomes do NJ os
                     típicos têm 15 a 19 caracteres ("Banco do Brasil", "Sicredi PJ Pecuária"),
@@ -2800,48 +2800,46 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     ⚠ O COMENTÁRIO ANTIGO DIZIA 150 E A LARGURA ERA 130 — o texto ficou para
                     trás de um corte anterior. Agora são 105, e o nome longo ("Cartão Banco do
                     Brasil - Pecuária") passa a truncar mais cedo; o nome inteiro está no
-                    `title`, e o que a coluna precisa responder é QUAL conta, não o nome todo. */}
-                {modoIntensivo && contasAmpliado && <col style={{ width: 92 }} />}
-                {modoIntensivo && contasAmpliado && <col style={{ width: 92 }} />}
-                {/* FIN-V2-COLUNAS-02: Valor 90→88. */}
-                {/* FIN-V2-DESEMPENHO-01b: 88→94 — o maior valor da casa, "-R$ 99.999.999,99", pede 93px (medido pelo gate) */}
-                <col style={{ width: 94 }} />
-                {/* PARC-FECHA-02 item 6 — o CLIPE, 14px, entre Valor e Doc. (vale também no Ampliado). Não é congelada. */}
-                <col style={{ width: 14 }} />
-                {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
+                    `title`, e o que a coluna precisa responder é QUAL conta, não o nome todo. */
+                ...(modoIntensivo && contasAmpliado ? [92] : []),
+                ...(modoIntensivo && contasAmpliado ? [92] : []),
+                /* FIN-V2-COLUNAS-02: Valor 90→88. */
+                /* FIN-V2-DESEMPENHO-01b: 88→94 — o maior valor da casa, "-R$ 99.999.999,99", pede 93px (medido pelo gate) */
+                94,
+                /* PARC-FECHA-02 item 6 — o CLIPE, 14px, entre Valor e Doc. (vale também no Ampliado). Não é congelada. */
+                14,
+                /* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
                     ⚠ A FONTE NÃO MUDA, e o briefing pedia 10px: a célula JÁ renderiza a 9px,
                     porque `.celula-doc` no index.css tem `font-size: 9px !important` e vence
                     o `text-[10px]` do JSX. Subir para 10 seria AUMENTAR a fonte dentro de uma
-                    coluna que está encolhendo 30px — o contrário do pedido. */}
-                {/* ⚠ 55/60 → 70 — PR-FIN-V2-STATUS-PGTO-01: o documento cabe INTEIRO no formato
+                    coluna que está encolhendo 30px — o contrário do pedido. */
+                /* ⚠ 55/60 → 70 — PR-FIN-V2-STATUS-PGTO-01: o documento cabe INTEIRO no formato
                     "000.000.000". Medido com a fonte real (mono 8px, a `.celula-doc`): 53px de
-                    texto + 8 de padding + 8 de folga = 69. */}
-                {/* ⚠ 70 → 90 — PARC-LIVRES-01 passo 3: a coluna passou a escrever o TIPO antes do número ("NF 000.000.518",
+                    texto + 8 de padding + 8 de folga = 69. */
+                /* ⚠ 70 → 90 — PARC-LIVRES-01 passo 3: a coluna passou a escrever o TIPO antes do número ("NF 000.000.518",
                     "Doc. 21474298649"). Medido no NJ com um Range (mono 8px): NF 67,4px; "Doc." + 11 dígitos 77,1; + 12 dígitos
                     81,9 — os mesmos números que cabiam sem o prefixo em 70 cabem com ele em 90 (82 úteis). 13 dígitos ou mais
-                    já cortavam e seguem cortando (dívida FIN-V2-DOC-CORTA-01). */}
-                {/* FIN-V2-COLUNAS-02: Doc. 90→78. */}
-                <col style={{ width: 78 }} />
-                {/* ⚠ 64 → 84 → 77. Com 64 o status saía cortado colado nos pontinhos ("Ag"); o
+                    já cortavam e seguem cortando (dívida FIN-V2-DOC-CORTA-01). */
+                /* FIN-V2-COLUNAS-02: Doc. 90→78. */
+                78,
+                /* ⚠ 64 → 84 → 77. Com 64 o status saía cortado colado nos pontinhos ("Ag"); o
                     PR-FIN-V2-STATUS-PGTO-01 foi a 84 pela pílula em "Programado", e o fix1 a 77: previsto, programado e agendado viraram
                     TEXTO (sem o padding da pílula), e a caixa ficou só para realizado e conciliado.
                     Medido na tela: o maior com caixa é "Conciliado", 46,2px + 14 da pílula + 8 do `td`
-                    = 68,2; o maior sem caixa, "Programado", 53,3 + 8 = 61,3. Com 8 de folga, 77. */}
-                {/* ⚠ 77→64 — FIN-V2-COLUNAS-OC-01, a 8px (`.celula-status`), MEDIDO na tela: o maior é "Conciliado" com o selo,
+                    = 68,2; o maior sem caixa, "Programado", 53,3 + 8 = 61,3. Com 8 de folga, 77. */
+                /* ⚠ 77→64 — FIN-V2-COLUNAS-OC-01, a 8px (`.celula-status`), MEDIDO na tela: o maior é "Conciliado" com o selo,
                     55,1px; "Realizado" com a caixa 51,7; "Programado" (texto) 47,4. Com `px-0.5` a célula tem 60 úteis: folga de
                     4,9px. O status NUNCA corta. Os dois LEGADOS: "Meta (legado)" 54,3 cabe; "Conciliado (legado)" pede 75,7 e CORTA
-                    com o rótulo inteiro no `title` (uma linha por registro — antes quebrava em duas). */}
-                {/* FIN-V2-COLUNAS-02: Status 64→60 (o maior, "Conciliado" com o selo, 55,1px em 56 úteis). */}
-                <col style={{ width: 60 }} />
-                {/* Ações 36→28: um botão "…" em vez de dois ícones. */}
-                <col style={{ width: 28 }} />
-              </colgroup>
-              <thead className="[&_tr]:border-b sticky top-0 z-20 bg-primary">
-                <tr className="border-b !h-auto">
-                  <th className="px-1 py-[3px] text-center align-middle bg-primary sticky left-0 z-30">
+                    com o rótulo inteiro no `title` (uma linha por registro — antes quebrava em duas). */
+                /* FIN-V2-COLUNAS-02: Status 64→60 (o maior, "Conciliado" com o selo, 55,1px em 56 úteis). */
+                60,
+                /* Ações 36→28: um botão "…" em vez de dois ícones. */
+                28,
+              ]} cabecalho={<>
+                  <ThDaLista recuo="px-1" semTexto fixa="bg-primary sticky left-0 z-30">
                     <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} className="h-3 w-3 border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary" />
-                  </th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[28px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
+                  </ThDaLista>
+                  <ThDaLista recuo="px-0.5" ordenar={() => toggleSort('data')} fixa="sticky left-[28px] z-30 bg-primary">Comp.<SortIndicator field="data" /></ThDaLista>
                   {/* ⚠ A CADEIA DE `sticky left` É A SOMA DAS COLUNAS ANTERIORES, e agora bate —
                       PARC-FECHA-02 item 6: 0 (check 28) → 28 (comp. 40) → 68 (venc. 40) → 108 (pgto. 40). Era
                       0/28/42/82/122 enquanto a coluna de 14px do clipe morava depois do checkbox. Estava 0/28/50/95/140 contra colunas de 28+14+45+45:
@@ -2853,33 +2851,31 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       isso o defeito viveu escondido.
                       ⚠ QUEM MEXER NA LARGURA DE UMA DESTAS CINCO refaz a conta aqui. São quatro
                       números em oito lugares (th + td). */}
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[74px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[120px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
-                  <th className="px-0 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Vínculos: O operação comercial · F financiamento · R recorrência · P parcelamento">Vínc.</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" data-testid="th-classificacao" onClick={() => toggleSort('centro')}>{ROTULO_NIVEL[nivelClassif]}<SortIndicator field="centro" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Fazenda">Faz.</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('safra')}>Safra<SortIndicator field="safra" /></th>
+                  <ThDaLista recuo="px-0.5" ordenar={() => toggleSort('venc')} fixa="sticky left-[74px] z-30 bg-primary">Venc.<SortIndicator field="venc" /></ThDaLista>
+                  <ThDaLista recuo="px-0.5" ordenar={() => toggleSort('pgto')} fixa="sticky left-[120px] z-30 bg-primary">Pgto.<SortIndicator field="pgto" /></ThDaLista>
+                  <ThDaLista recuo="px-0" title="Vínculos: O operação comercial · F financiamento · R recorrência · P parcelamento">Vínc.</ThDaLista>
+                  <ThDaLista recuo="px-1" ordenar={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></ThDaLista>
+                  <ThDaLista recuo="px-1" ordenar={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></ThDaLista>
+                  <ThDaLista recuo="px-1" ordenar={() => toggleSort('centro')} data-testid="th-classificacao">{ROTULO_NIVEL[nivelClassif]}<SortIndicator field="centro" /></ThDaLista>
+                  <ThDaLista recuo="px-1" title="Fazenda">Faz.</ThDaLista>
+                  <ThDaLista recuo="px-1" ordenar={() => toggleSort('safra')}>Safra<SortIndicator field="safra" /></ThDaLista>
                   {modoIntensivo && contasAmpliado && (
-                    <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Origem</th>
+                    <ThDaLista recuo="px-1">C. Origem</ThDaLista>
                   )}
                   {modoIntensivo && contasAmpliado && (
-                    <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Destino</th>
+                    <ThDaLista recuo="px-1">C. Destino</ThDaLista>
                   )}
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
+                  <ThDaLista recuo="px-1" ordenar={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></ThDaLista>
                   {/* PARC-FECHA-02 item 6 — o clipe, sem rótulo (14px), entre Valor e Doc. */}
-                  <th className="px-0 py-[3px] text-center align-middle" aria-label="Documentos" title="Documentos" />
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
+                  <ThDaLista recuo="px-0" semTexto aria-label="Documentos" title="Documentos" />
+                  <ThDaLista recuo="px-1" ordenar={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></ThDaLista>
+                  <ThDaLista recuo="px-1" ordenar={() => toggleSort('status')}>Status<SortIndicator field="status" /></ThDaLista>
                   {/* ⚠ O "…" NÃO É FIXO — decisão soberana do Gabriel, 30/09 (PR-FIN-V2-STATUS-PGTO-01-fix1),
                       e revoga a do FIN-V2-HOMOLOG-FIX-01 ("fixo à direita, nunca some na rolagem"). Fixo, ele
                       ficava POR CIMA do status sempre que a lista rolava. É a última coluna, no fim da linha;
                       se a tabela rolar, ele rola junto. */}
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" aria-label="Ações"></th>
-                </tr>
-              </thead>
-              <tbody className="[&_tr:last-child]:border-0">
+                  <ThDaLista recuo="px-1" aria-label="Ações"></ThDaLista>
+              </>}>
                 {/* FIN-MODAL-FAZENDA-TRAVA-01 — as linhas só se redesenham quando a CHAVE muda (dado, filtro, seleção); abrir o
                     modal ou mexer nele não as toca. As ações entram por referência estável (`acoesDaLista`). */}
                 <CorpoDaListaMemo chave={chaveDaLista} total={linhasDaGrade.length} colunas={modoIntensivo && contasAmpliado ? 17 : 15}
@@ -2906,28 +2902,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     /* PARC-LIVRES-01 passo 5 — parcela de parcelamento: o "i/N" vem do CONTRATO e fica numa parte que nunca corta;
                        o nome corta antes dele. Sem parcela de contrato a célula é a de sempre. */
                     const np = nomeEParcela(descExibida, parcelasDosLancamentos?.get(l.id));
-                    /* ⚠ CONCILIADO É DERIVADO, e é por isso que a chave se
-                       calcula aqui em vez de vir do banco: existe vínculo ativo →
-                       conciliado; não existe → o status persistido, intocado. A
-                       coluna `status_transacao` continua guardando o que sempre
-                       guardou, e nenhum writer muda por causa disto.
-                       ⚠ SÓ REALIZADO VIRA CONCILIADO. Previsto com vínculo seria
-                       contradição — dinheiro que ainda não andou não se concilia
-                       —, e mascarar o previsto esconderia o defeito em vez de
-                       mostrá-lo. */
-                    const stCru = (l.status_transacao || '').toLowerCase();
                     const vinculo = conciliados.get(l.id);
-                    /* ⚠ A PÍLULA AZUL VEM DO VÍNCULO, e o `stCru === 'conciliado'`
-                       NÃO a herda: 574 linhas têm esse status gravado sem vínculo
-                       nenhum — legado de 10/04/2026. Elas caem no rótulo
-                       "Conciliado (legado)", muted, distinguível do fato. */
+                    /* CONC-SUGESTOES-TABELA-01 — o status da linha (conciliado DERIVADO do vínculo, a pílula) mora em `statusDaLinha` */
                     const temVinculo = !!paginaDaLista?.conciliados.has(l.id);
-                    const stKey = temVinculo && stCru === 'realizado' ? 'conciliado_real' : stCru;
-                    const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
-                    const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
-                    const stPilula = STATUS_FILTRO_PILULA[stKey];
-                    /* Os estágios sem caixa levam o mesmo peso da pílula; o legado fica no muted normal. */
-                    const stEstagio = stKey === 'previsto' || stKey === 'programado' || stKey === 'agendado';
+                    const st = statusDaLinha(l.status_transacao, temVinculo);
+                    const { stLabel, stPilula, stEstagio } = st;
                     /* Vencido é fato de duas colunas: venceu no passado E não foi pago. */
                     const vencido = !!l.data_vencimento && !l.data_pagamento && l.data_vencimento < hojeISO;
                     /* A EVIDÊNCIA, sem UUID: o operador confere pelo que
@@ -2957,31 +2936,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                        financiamento e histórico antigo ficam sem cursor e sem `onClick` —
                        um clique que não faz nada ensina a desconfiar do resto da tela. */
                     return (
-                      <tr key={l.id}
-                        className={`linha-da-lista border-b hover:bg-muted/50 transition-colors${canEditRow ? ' cursor-pointer' : ''} ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}
-                        onClick={canEditRow ? () => openEdit(l) : undefined}>
+                      <LinhaDaLista key={l.id} marcada={selectedIds.has(l.id)} abrir={canEditRow ? () => openEdit(l) : undefined}>
                         {/* ⚠ A FAIXA CINZA COMEÇA NA BORDA — FIN-LISTA-DENSIDADE-01, e isto
                             DESFAZ o `bg-card` que estas duas células ganharam no c9cefcf3.
                             Lá o objetivo era não ter cinza avulso sobre o card branco; aqui o
                             cinza passa a ser uma FAIXA CONTÍNUA, da borda esquerda até o fim
                             das datas — checkbox, ícone de origem e as três datas no mesmo tom.
                             Faixa inteira se lê como bloco; retalho se lê como defeito. */}
-                        <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background"
-                          onClick={(e) => e.stopPropagation()}>
-                          <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={isParcelaFinanciamento} className="h-3 w-3" />
-                        </td>
+                        <CelulaCaixinha marcada={selectedIds.has(l.id)} alternar={() => toggleSelect(l.id)} desabilitada={isParcelaFinanciamento} />
                         {/* ⚠ DATA CINZA POR PADRÃO, VENCIDA EM VERMELHO — e só a data, não a
                             linha: pintar a linha inteira faria o atraso competir com o valor e
                             o status, que são o que se lê primeiro. Vencido = tem vencimento no
                             passado E não tem pagamento; um lançamento pago ontem com
                             vencimento anteontem não está atrasado, está resolvido. */}
-                        <td className="celula-data tabular-nums px-[1px] py-1 align-middle leading-tight sticky left-[28px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
+                        <CelulaData iso={l.data_competencia} coluna="comp" />
                         {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. em colunas separadas, cada uma a sua coluna real
                             (nunca fundidas, nunca a data financeira derivada). fmtDate(null) já rende o sentinela '-'.
                             VENC. permanece visível mesmo quando há PGTO. */}
-                        <td className={`celula-data tabular-nums px-[1px] py-1 align-middle leading-tight sticky left-[74px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
-                          title={vencido ? 'Vencido e não pago' : undefined}>{fmtDate(l.data_vencimento)}</td>
-                        <td className="celula-data tabular-nums px-[1px] py-1 align-middle leading-tight sticky left-[120px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
+                        <CelulaData iso={l.data_vencimento} coluna="venc" vencido={vencido} />
+                        <CelulaData iso={l.data_pagamento} coluna="pgto" />
                         {/* FIN-V2-COLUNAS-OC-01 — A MARCA DA OC TEM COLUNA PRÓPRIA, antes do Produto (Gabriel, 05/10: "o ícone vem depois do
                             texto e some quando o texto é longo"). O bloco abaixo é o que estava no fim da célula do Produto, MOVIDO
                             VERBATIM: com acesso, o botão que abre a operação (e para a propagação — a linha não abre); sem acesso, só a
@@ -3015,7 +2988,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             );
                           })()}
                         </td>
-                        <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${np.inteiro || ''}` : (np.inteiro || '')}>
+                        <CelulaProduto title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${np.inteiro || ''}` : (np.inteiro || '')}>
                           {np.parcela ? (
                             <span className="flex min-w-0 items-baseline gap-1" data-testid="nome-com-parcela">
                               <span className="min-w-0 truncate pr-0.5">{np.nome || '-'}</span>
@@ -3030,14 +3003,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                               <TooltipContent>Gerado a partir de lançamento zootécnico</TooltipContent>
                             </Tooltip>
                           )}
-                        </td>
-                        <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground"
-                          title={rotuloForn?.title ?? fornNome ?? ''} data-testid="celula-fornecedor">
+                        </CelulaProduto>
+                        <CelulaFornecedor title={rotuloForn?.title ?? fornNome ?? ''}>
                           {/* FIN-V2-FORNECEDOR-SEM-SUFIXO-01 (Gabriel, 22/10: "não ficou legal! esconde o nome") — na TABELA, SÓ o nome
                               (uma linha, "…"); o CNPJ inteiro ou "sem CNPJ", a cidade/UF e o "inativo" vão no `title`. O final da filial
                               ("…0007-69", "sem CNPJ") fica no seletor/busca, onde ele separa as filiais (FORN-FILIAL-01). */}
-                          {fornNome ? <span className="flex min-w-0"><span className="truncate pr-0.5">{fornNome}</span></span> : (!l.favorecido_id ? '-' : hook.fornecedores.length === 0 ? <span className="text-muted-foreground">…</span> : <span className="text-warning">n/c</span>)}
-                        </td>
+                          {fornNome ? <NomeNaCelula nome={fornNome} /> : (!l.favorecido_id ? '-' : hook.fornecedores.length === 0 ? <span className="text-muted-foreground">…</span> : <span className="text-warning">n/c</span>)}
+                        </CelulaFornecedor>
                         {/* FIN-V2-COLUNAS-02 — a Classificação no nível escolhido; o caminho inteiro no `title`. */}
                         {/* FIN-CLASSIF-DIVIDIDA-01c — o lancamento dividido: o selo "1 de 2 contas" (o filtro pega parte) ou "dividido" (sem filtro
                             de conta), sempre a' vista; quem corta e' o texto da classificacao */}
@@ -3045,7 +3017,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           title={caminhoDaClassificacao(l)}>{dividida
                             ? <ClassificacaoComSelo texto={textoDaClassificacao(l, nivelClassif)} dividida={dividida} />
                             : textoDaClassificacao(l, nivelClassif)}</td>
-                        <td className="whitespace-nowrap px-0.5 py-1 align-middle text-center text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
+                        <CelulaFaz codigo={fazendaCodigoMap.get(l.fazenda_id)} nome={fazendaNameMap.get(l.fazenda_id)} />
                         {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
                             investimento e administrativo NÃO têm safra por regra. Um traço
                             nessas linhas é o esperado; um código é o que se veio caçar. */}
@@ -3090,14 +3062,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             ganha o MESMO fundo das colunas de data — `bg-background`, medido no
                             `LancamentosTabela.tsx` da referência, que é o cinza
                             `--background: 220 17% 97%` sobre o branco do card. */}
-                        <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight bg-background ${valorDaLinha(l).classe}`}
-                          data-testid="celula-valor">
+                        <CelulaValor classe={valorDaLinha(l).classe}>
                           {/* FIN-CLASSIF-DIVIDIDA-01c — o filtro pega PARTE do lancamento dividido: a parte (o que entra no total do filtro) e, embaixo,
                               "de R$ <o lancamento>" — sem coluna nova, a linha segue com 19px */}
                           {dividida && dividida.parte != null
                             ? <ValorDaParte textoDaParte={valorDaLinha({ ...l, valor: (Math.sign(Number(l.valor)) || 1) * dividida.parte }).texto} total={dividida.total} />
                             : valorDaLinha(l).texto}
-                        </td>
+                        </CelulaValor>
                         {/* O CLIPE (PARC-LIVRES-01 passo 3), entre Valor e Doc. desde o PARC-FECHA-02 item 6: aceso quando há documento —
                             arquivo anexado OU a nota da compra ligada —, com o que tem no `title`. Coluna de 14px, não congelada. */}
                         <td className="px-0 py-1 align-middle text-center" data-testid="celula-clipe">
@@ -3108,8 +3079,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           )}
                         </td>
                         {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}
-                        <td className="celula-doc tabular-nums text-muted-foreground text-right px-1 py-1 align-middle text-[10px] leading-tight truncate" data-testid="celula-doc"
-                            title={doc.titulo || undefined}>{doc.rotulo || '-'}</td>
+                        <CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />
                         {/* `truncate` também aqui: a tabela é `tableLayout: fixed`, então a
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em
                             vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do
@@ -3125,13 +3095,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         {/* PARC-LIVRES-01 passo 3 — A ORIGEM (cru do banco, substituído, enriquecido, manual, sem par) saiu da coluna e veio
                             para CÁ: o `title` do Status a diz por extenso, e o clique no Status abre o mesmo minimodal do vínculo que o
                             marcador abria. Sem origem a marcar, o Status é o de sempre. */}
-                        <td className="celula-status px-0.5 py-1 text-center align-middle leading-tight" data-testid="celula-status"
-                            title={[stTitle ?? (stPilula || stEstagio ? null : stLabel), icone ? `origem: ${icone.significado}` : null].filter(Boolean).join(' · ') || undefined}
+                        <CelulaStatus title={[stTitle ?? (stPilula || stEstagio ? null : stLabel), icone ? `origem: ${icone.significado}` : null].filter(Boolean).join(' · ') || undefined}
                             onClick={icone ? (e) => e.stopPropagation() : undefined}>
                           {(() => {
-                            const rotulo = stPilula
-                              ? <span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>
-                              : <span className={cn('block truncate pr-0.5', stColor, stEstagio && 'font-semibold')} data-status={stKey}>{stLabel}</span>;
+                            const rotulo = <RotuloDoStatus st={st} />;
                             if (!icone) return rotulo;
                             return (
                               <MinimodalOrigemLancamento
@@ -3145,7 +3112,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                               </MinimodalOrigemLancamento>
                             );
                           })()}
-                        </td>
+                        </CelulaStatus>
                         {/* ⚠ UM BOTÃO "…" NO LUGAR DE DOIS ÍCONES — FIN-LISTA-LAYOUT-01. Dois
                             botões de 20px numa coluna de 36 disputavam espaço com a tabela
                             inteira, e o que eles faziam só se descobria no `title`. O menu diz
@@ -3196,14 +3163,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             </>)} />
                           </div>
                         </td>
-                      </tr>
+                      </LinhaDaLista>
                     );
                   })
                 )}
                   </>);
                 }} />
-              </tbody>
-            </table>
+            </TabelaDaLista>
           </div>
             {/* a barra da página: intervalo, "por página" e Anterior/Próxima, com lugar reservado (nada se desloca) */}
             <div className={cn(RODAPE_REGUA, 'flex h-[23px] items-center gap-1.5 whitespace-nowrap px-1.5')} data-testid="rodape-lancamentos">

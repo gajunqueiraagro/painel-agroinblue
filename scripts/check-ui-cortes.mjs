@@ -62,6 +62,15 @@ const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
 const clicarRotulo = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await p.waitForTimeout(500); };
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
+/* CONC-CRIAR-COM-NOTA-01 — o "Criar lançamento" da estação, a aba Documentos e (com `ler`) a NF SINTÉTICA da bancada solta no "Ler a NF" */
+const criarComNota = (ler) => async (p) => {
+  await clicarRotulo(/^Criar lançamento$/)(p);
+  await p.getByRole('tab', { name: 'Documentos' }).click(); await p.waitForTimeout(400);
+  if (!ler) return;
+  const xml = await p.evaluate(() => globalThis.__nfBancada);
+  await p.locator('[data-testid="doc-ler-nf-input"]').setInputFiles({ name: 'NFe-000012345.xml', mimeType: 'application/xml', buffer: Buffer.from(xml) });
+  await p.waitForTimeout(1500);
+};
 /* P74 — a nota no cartão em 4 (a prévia) e o "Parcelar este lançamento" em 4 (o Editar) */
 /* P102 — o Editar obrigação: o "Editar" do detalhe do contrato */
 const abrirEditarObrigacao = async (p) => {
@@ -1376,12 +1385,20 @@ const CENARIOS = [
       await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="barra-casar"]').getByRole('button', { name: 'Conferência' }).click();
       await p.locator('[data-testid="mesa-conferencia"]').waitFor(); await p.waitForTimeout(500);
       if (chip) await clicar(`[data-testid="${chip}"]`)(p); } })),
-  /* P159c — "Sugestões para casar" nos 10 tamanhos: o movimento do banco é a 1ª linha da mesma tabela (data sob data, valor sob valor);
-     a data inteira (dd/mm/aaaa) nunca corta nem quebra; texto em uma linha com "…" + title */
+  /* P159c — "Sugestões para casar" nos 10 tamanhos: a data inteira (dd/mm/aaaa) nunca corta nem quebra; texto em uma linha com "…" + title.
+     CONC-SUGESTOES-TABELA-01 (Gabriel 04/11): o extrato numa faixa própria e as duas listas na tabela da lista do Financeiro; `rural` = o caso
+     do BB 16/10 (−1.265,22, sintético) com o histórico procurado e dois lançamentos marcados (o rodapé em colunas) */
   ...[['casar-sugestoes', 'tela=sugestoes-casar'], ['casar-sugestoes-vazio', 'tela=sugestoes-casar&v=vazio']].map(([nome, url]) => ({ nome, url,
     tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]' })),
   /* P153 — o "Procurar no histórico" depois de procurar (8 achados, o quadro de 6 rola, a faixa amarela), no modal e na estação; e a
      estação com o banco SEM nome (D1: o campo vazio e a frase) */
+  { nome: 'casar-sugestoes-rural', url: 'tela=sugestoes-casar&v=rural', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor();
+      const cx = p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]'); await cx.nth(1).click(); await cx.nth(2).click(); await p.waitForTimeout(300); } },
+  /* o ajuste 07:55: MUITAS sugestões e achados — cada lista rola só dentro dela, o modal não rola nem muda de altura */
+  { nome: 'casar-sugestoes-rural-muitas', url: 'tela=sugestoes-casar&v=ruralmuitas', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
+    semRolagem: { dentro: '[data-testid="sugestoes-casar"]', exceto: '[data-testid="sugestoes-lista"], [data-testid="procurar-historico-quadro"]' },
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
   { nome: 'casar-sugestoes-procurado', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
   /* P153b — o caso da Guariroba (sintético): a sugestão "mesmo fornecedor · valor difere" e o histórico com Casar, Casar e trocar conta,
@@ -1394,6 +1411,15 @@ const CENARIOS = [
   { nome: 'casar-estacao-procurado', url: 'tela=estacao', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]',
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
   { nome: 'casar-estacao-sem-nome', url: 'tela=estacao&v=semnome', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]' },
+  /* CONC-CRIAR-COM-NOTA-01 — o Novo pelo extrato: a aba Documentos (o "Ler a NF" + os pendentes), o Geral PREENCHIDO pela nota (as faixas do
+     XML; rola no corpo como o "+ Da nota") e o "Casar com o banco" de hoje com a nota já lançada (a coluna NF, a linha a 9,5px sem quebrar) */
+  { nome: 'conc-criar-com-nota-documentos', url: 'tela=estacao&v=nota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    regiao: '[role="dialog"]:has([data-testid="doc-ler-nf"])', antes: criarComNota(false) },
+  /* ⚠ a Geral com as faixas da nota ROLA no corpo, como no Novo do "+ Da nota" de hoje (`lancamento-xml-Geral-*` não exige sem rolagem) */
+  { nome: 'conc-criar-com-nota-preenchido', url: 'tela=estacao&v=nota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    regiao: '[role="dialog"]:has([data-testid="xml-faixas"])', antes: criarComNota(true) },
+  { nome: 'conc-criar-com-nota-casar', url: 'tela=estacao&v=notaja', tamanhos: TAMANHOS_DO_P92,
+    regiao: '[role="dialog"]:has([data-testid="levado-nf"])', antes: async (p) => { await criarComNota(true)(p); await p.locator('[data-testid="levado-nf"]').waitFor(); } },
   /* P159b (CONC-TELAS-02) — as abas Sistema e Evolução do saldo do Casar (de 1000px para cima, a página da Conciliação); a Evolução também
      com os dias sem movimento à vista. O modal "Extrato do sistema" (o ↗, D5) já tem os cenários `conciliacao-extrato-do-sistema*`. */
   ...[['casar-sistema', 'Sistema', null], ['casar-evolucao', 'Evolução do saldo', null], ['casar-evolucao-com-vazios', 'Evolução do saldo', 'evolucao-mostrar-vazios']]

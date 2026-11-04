@@ -98,10 +98,14 @@ describe('a ligação nas telas (fonte)', () => {
     expect(tela).toContain("const rotuloForn = rotulosDoRecorte.get(l.favorecido_id || '');");
   });
   it('FIN-V2-FORNECEDOR-SEM-SUFIXO-01 — na tabela, SÓ o nome (corta com "…"); o detalhe vai no `title`; sem final nem "inativo" grudado', () => {
-    const ini = tela.indexOf('<td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground"');
-    const celula = tela.slice(ini, tela.indexOf('</td>', ini));
-    expect(celula).toContain("title={rotuloForn?.title ?? fornNome ?? ''} data-testid=\"celula-fornecedor\"");
-    expect(celula).toContain('{fornNome ? <span className="flex min-w-0"><span className="truncate pr-0.5">{fornNome}</span></span> : ');
+    /* CONC-SUGESTOES-TABELA-01 — a célula é a peça `CelulaFornecedor` (o `td` com o testid) e o nome a `NomeNaCelula` (TabelaDaLista.tsx) */
+    const ini = tela.indexOf('<CelulaFornecedor ');
+    const celula = tela.slice(ini, tela.indexOf('</CelulaFornecedor>', ini));
+    expect(celula).toContain("<CelulaFornecedor title={rotuloForn?.title ?? fornNome ?? ''}>");
+    expect(celula).toContain('{fornNome ? <NomeNaCelula nome={fornNome} /> : ');
+    const peca = readFileSync(resolve(__dirname, '../../components/financeiro-v2/TabelaDaLista.tsx'), 'utf8');
+    expect(peca).toContain('<td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground"\n      title={title} data-testid="celula-fornecedor">');
+    expect(peca).toContain('<span className="flex min-w-0"><span className="truncate pr-0.5">{nome}</span></span>');
     expect(tela).not.toContain('data-testid="final-fornecedor"');
     expect(tela).not.toContain('data-testid="inativo-fornecedor"');
     expect(celula).not.toContain('rotuloForn?.final');
