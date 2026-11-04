@@ -35,9 +35,15 @@ export interface BarraSecaoProps {
   atalho?: ReactNode;
   /** RESUMO-CLIENTES-01 — o ⚑ do consultor (só admin; quem passa reserva a largura). */
   aviso?: ReactNode;
+  /**
+   * VISAO-GERAL-02 (Gabriel 03/11/2026) — o caminho de VOLTA: "‹ Voltar à Visão Geral" à esquerda do caminho, em toda tela aberta
+   * por um atalho da Visão Geral. Mora na barra (que tem altura declarada de 32px), então aparecer não empurra nada da tela.
+   * Quem decide quando há volta é o `V2Index` (a regra de origem e volta).
+   */
+  voltar?: { rotulo: string; onVoltar: () => void };
 }
 
-export function BarraSecao({ area, secao, atalho, aviso }: BarraSecaoProps) {
+export function BarraSecao({ area, secao, atalho, aviso, voltar }: BarraSecaoProps) {
   const { nome } = useProfileAtual();
   const { signOut } = useAuth();
   return (
@@ -65,11 +71,20 @@ export function BarraSecao({ area, secao, atalho, aviso }: BarraSecaoProps) {
       {/* ⚠ 11px NOS TRÊS, e a hierarquia é só de PESO e de opacidade: o grupo se afirma
           (600, branco), a tela acompanha (400, /90) e o separador recua (/40) — ele
           organiza, não informa. Tamanhos diferentes fariam a linha subir e descer. */}
-      <p className="min-w-0 truncate text-[11px] leading-none text-white" style={{ letterSpacing: '0.275px' }}>
-        <span className="font-semibold">{area}</span>
-        <span className="mx-1 font-semibold text-white/40">/</span>
-        <span className="font-normal text-white/90">{secao}</span>
-      </p>
+      <div className="flex min-w-0 items-center gap-1.5">
+        {voltar && (
+          <button type="button" onClick={voltar.onVoltar} data-testid="barra-voltar"
+            className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white hover:bg-white/15"
+            style={{ letterSpacing: '0.275px' }}>
+            ‹ {voltar.rotulo}
+          </button>
+        )}
+        <p className="min-w-0 truncate text-[11px] leading-none text-white" style={{ letterSpacing: '0.275px' }}>
+          <span className="font-semibold">{area}</span>
+          <span className="mx-1 font-semibold text-white/40">/</span>
+          <span className="font-normal text-white/90">{secao}</span>
+        </p>
+      </div>
       {/* ⚠ `ml-auto` NO ATALHO: com o `justify-between` da barra e tres filhos, a margem
           automatica e' o que o gruda a' direita, colado no nome — em vez de flutuar no meio. */}
       {atalho && <span className="ml-auto flex shrink-0 items-center">{atalho}</span>}

@@ -435,6 +435,13 @@ const CENARIOS = [
       ['subcentro no gráfico', noLugar('[data-testid="analise-foco-linha-0"]')], ['volta (‹)', noLugar('[data-testid="analise-tabela-subir"]')],
       ['outra atividade', noLugar('[data-testid="analise-tabela-linha-1"]')]] },
   { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
+  /* VISAO-GERAL-02 — escolher uma atividade nas pílulas (e voltar a "Todas") e abrir a distribuição por fazenda não move nada acima */
+  { nome: 'visao-geral-02', url: 'tela=visao-geral-02', antes: (p) => espera(p, 2500), estados: [
+    /* `noTopo`: as pílulas e o link ficam abaixo da dobra e o clique rola a página até eles; a medida volta ao topo para comparar
+       o LUGAR das coisas, não a rolagem (a área dos blocos guarda a altura de "Todas": filtrar não encolhe a página) */
+    ['pílula Lavoura', noTopo(clicar('[data-testid="vg-atividades"] button:has-text("Lavoura")'))],
+    ['pílula Todas', noTopo(clicar('[data-testid="vg-atividades"] button:has-text("Todas")'))],
+    ['ver por fazenda (diálogo)', noTopo(clicar('[data-testid="vg-ver-por-fazenda"]'))]] },
   { nome: 'contas-lista', url: 'tela=contas&barra=32&n=longo', auto: true, estados: [
     ['busca com resultado', digitar('[data-testid="busca-contas"]', 'bradesco')], ['busca sem resultado', digitar('[data-testid="busca-contas"]', 'zzzz')],
     ['mostrar inativas', clicar('[data-testid="mostrar-inativas"]')]] },
@@ -649,6 +656,15 @@ const CENARIOS = [
   { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',
     estados: [['procurou', async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); }]] },
+  /* CONC-SUGESTOES-TABELA-01 — marcar e desmarcar as caixinhas (das sugestões e do histórico) não mexe em nada: o rodapé tem as colunas
+     reservadas (N · soma · extrato · diferença) e o "Casar selecionados" fica no lugar; o cabeçalho das listas e a faixa do extrato também */
+  { nome: 'casar-sugestoes-marcar', url: 'tela=sugestoes-casar&v=rural', tamanhos: TAMANHOS_DO_P92,
+    antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); },
+    presos: '[data-testid="sugestoes-extrato"], [data-testid="sugestoes-rodape"] > *, [data-testid="sugestoes-lista"] thead th, [data-testid="procurar-historico-quadro"] thead th',
+    estados: [['uma sugestão', async (p) => { await p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]').nth(0).click(); await espera(p); }],
+      ['e uma do histórico', async (p) => { await p.locator('[data-testid="procurar-historico-quadro"] tbody button[role="checkbox"]').first().click(); await espera(p); }],
+      ['desmarcadas', async (p) => { await p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]').nth(0).click();
+        await p.locator('[data-testid="procurar-historico-quadro"] tbody button[role="checkbox"]').first().click(); await espera(p); }]] },
   /* P153b — ordenar o histórico não mexe em nada fora do corpo da lista: o cabeçalho (a seta tem lugar reservado), a contagem, o botão */
   { nome: 'casar-sugestoes-guariroba-ordenar', url: 'tela=sugestoes-casar&v=guariroba', tamanhos: TAMANHOS_DO_P92,
     /* ⚠ abaixo do piso o quadro rola de lado: o clique do robô rolaria até o "Valor" e mediria a ROLAGEM dele, não a tela — o "Valor" vem à

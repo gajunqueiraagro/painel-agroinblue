@@ -531,7 +531,7 @@ describe('PR-CONC-SUGESTOES-CASAR-01 / P159a — os chips (Todos · Sem par · C
       const sug = await screen.findByTestId('sugestoes-casar');
       expect(within(sug).getAllByTestId('sugestao')).toHaveLength(n);
       expect(n).toBe(1);
-      fireEvent.click(within(sug).getByText('Fechar')); // o do rodapé (o X também se chama Fechar)
+      fireEvent.click(within(sug).getByRole('button', { name: 'Fechar' })); // CONC-SUGESTOES-TABELA-01: o ✕ do topo (o "Fechar" do rodapé saiu)
       await waitFor(() => expect(screen.queryByTestId('sugestoes-casar')).toBeNull());
     }
   });

@@ -36,6 +36,9 @@ export interface ValoresParaTodas {
 /** Um lançamento da prévia, na ordem das parcelas (1..N); `programada` = pode receber valor e vencimento da nota (caminho 2).
  *  P163-v4: `pagamento` (a data, a coluna Pgto.) só para mostrar. */
 export interface AlvoDaPrevia { id: string; programada: boolean; notaValorCent: number | null; notaVencimento: string | null; pagamento?: string | null;
+  /** NOTA-BOLETO-COMPOSTO-01 (PR 1) — "Substituir" nesta linha: a programada vira a parcela da nota (valor e vencimento da nota), como o
+   *  "Atualizar as programadas", so' nela. A paga nunca muda (a grade so' mexe na programada). */
+  substituir?: boolean;
   /** A descrição de HOJE (com a coluna Descrição desmarcada ela fica e ganha só o "i/N"). */
   descricaoHoje?: string | null;
   /** Caso 3 (o cartão, 29/10) — a POSIÇÃO desta parcela na nota ("6/10"): o "k/N" da descrição sai dela, nunca da ordem das achadas ("1/3") */
@@ -92,9 +95,9 @@ export function pedidoDaGrade(alvos: readonly AlvoDaPrevia[], todas: ValoresPara
       const venc = celulas.get(chaveDaGrade(a.id, 'vencimento'));
       const valor = celulas.get(chaveDaGrade(a.id, 'valor'));
       if (venc !== undefined && venc !== '') p.data_vencimento = venc;
-      else if (atualizarNaoPagas && a.notaVencimento) p.data_vencimento = a.notaVencimento;
+      else if ((atualizarNaoPagas || a.substituir) && a.notaVencimento) p.data_vencimento = a.notaVencimento;
       if (valor !== undefined && valor !== '') p.valor = valor;
-      else if (atualizarNaoPagas && a.notaValorCent !== null) p.valor = a.notaValorCent / 100;
+      else if ((atualizarNaoPagas || a.substituir) && a.notaValorCent !== null) p.valor = a.notaValorCent / 100;
     }
     return p;
   });

@@ -19,6 +19,8 @@ import { PilulaStatusDespesa } from '@/components/compra/TabelaDespesasOC';
 
 const dialogo = readFileSync(resolve(__dirname, './LancamentoV2Dialog.tsx'), 'utf8');
 const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
+/* CONC-SUGESTOES-TABELA-01 — as peças da tabela (casca, linha, células) moram em `TabelaDaLista.tsx` */
+const peca = readFileSync(resolve(__dirname, 'TabelaDaLista.tsx'), 'utf8');
 
 describe('pagamento x status — a regra', () => {
   it('realizado -> previsto/programado/agendado ZERA o pagamento', () => {
@@ -112,18 +114,19 @@ describe('FinanceiroV2Tab — a coluna ST', () => {
   /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-02 (Gabriel, 16/10, mock v4): Status 64→60, Valor 90→88, Doc 90→78. */
   /* ⚠ CONTRATO MUDOU NO FIN-V2-DESEMPENHO-01b: Valor 88→94 (o maior valor da casa pede 93px) */
   it('ST com 60px (a 8px), Valor 94, Doc 78, e o status em pílula', () => {
-    expect(tela).toContain('<col style={{ width: 60 }} />');
-    expect(tela).toContain('<col style={{ width: 94 }} />');
-    expect(tela).not.toContain('<col style={{ width: 88 }} />');
-    expect(tela).toContain('<col style={{ width: 78 }} />');
-    for (const velho of [64, 77, 70, 90]) expect(tela).not.toContain(`<col style={{ width: ${velho} }} />`);
-    expect(tela).toContain('<span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>');
+    /* CONC-SUGESTOES-TABELA-01 — as larguras são o array `larguras={[…]}` da tela; a pílula, a peça `RotuloDoStatus` */
+    const larg = tela.slice(tela.indexOf('<TabelaDaLista larguras={['), tela.indexOf(']} cabecalho={<>')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const fixas = [...larg.matchAll(/^\s*(\d+),\s*$/gm)].map((m) => Number(m[1]));
+    for (const w of [60, 94, 78]) expect(fixas, String(w)).toContain(w);
+    for (const velho of [64, 77, 70, 90, 88]) expect(fixas, String(velho)).not.toContain(velho);
+    expect(tela).toContain('const rotulo = <RotuloDoStatus st={st} />;');
+    expect(peca).toContain('<span className={cn(STATUS_PILULA_BASE, st.stPilula)} data-status={st.stKey}>{st.stLabel}</span>');
     expect(tela).not.toContain('text-[10px] leading-tight ${stColor}`}');
   });
   it('o "..." NÃO é fixo (fix1, decisão do Gabriel de 30/09): nenhum sticky à direita na tela', () => {
     expect(tela).not.toContain('sticky right-0');
     /* a busca sabe achar: os sticky da ESQUERDA (checkbox, origem, datas) continuam */
-    expect(tela).toContain('sticky left-0 z-10 bg-background');
+    expect(peca).toContain('sticky left-0 z-10 bg-background');   /* CONC-SUGESTOES-TABELA-01: a caixinha é a peça */
   });
 
   /* ⚠ A CONTA DE LARGURA, MEDIDA NA TELA (fix1): na janela do Gabriel o scroller tem 909px de `clientWidth` (innerWidth 1.135) e
@@ -132,11 +135,12 @@ describe('FinanceiroV2Tab — a coluna ST', () => {
   /* FIN-V2-COLUNAS-02: a barra lateral tem 176px desde o UI-BOTOES-LUGAR-FIXO-01 — o Chat mediu a tabela normal em 919px na
      janela de 1.133. A soma nova (906) cabe nesse piso. */
   it('a soma do colgroup no modo normal cabe nos 919px medidos', () => {
-    const grupo = tela.slice(tela.indexOf('<colgroup>'), tela.indexOf('</colgroup>'));
-    const cols = grupo.split('\n').filter(l => l.includes('<col style') && !l.includes('modoIntensivo &&'));
+    /* CONC-SUGESTOES-TABELA-01 — o array `larguras={[…]}` da tela, sem os comentários (o `colgroup` é da peça `TabelaDaLista`) */
+    const grupo = tela.slice(tela.indexOf('<TabelaDaLista larguras={['), tela.indexOf(']} cabecalho={<>')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const cols = grupo.split('\n').filter(l => /^\s*(\d+|modoIntensivo .+),\s*$/.test(l) && !l.includes('modoIntensivo &&'));
     const larguras = cols.map(l => {
-      const tern = l.match(/modoIntensivo \? .+ : (\d+) \}\}/);
-      return Number(tern ? tern[1] : l.match(/width: (\d+)/)![1]);
+      const tern = l.match(/modoIntensivo \? .+ : (\d+),/);
+      return Number(tern ? tern[1] : l.match(/(\d+),/)![1]);
     });
     expect(larguras.length).toBe(15);   // FIN-V2-COLUNAS-02: Macro e Centro viraram UMA coluna
     expect(larguras.reduce((a, b) => a + b, 0)).toBe(916);   // FIN-V2-DESEMPENHO-01b: datas dd/mm/aaaa e Valor 94

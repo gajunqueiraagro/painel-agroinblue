@@ -64,7 +64,8 @@ describe('FIN-MODAL-FAZENDA-TRAVA-01 — a lista não se redesenha pelo modal', 
     for (const proibido of ['dialogOpen', 'editingLanc', 'prefillDuplicar', 'prefillXml', 'linhaXmlAberta']) {
       expect(chave).not.toContain(proibido);
     }
-    const corpo = fonte.slice(fonte.indexOf('<CorpoDaListaMemo'), fonte.indexOf('</tbody>', fonte.indexOf('<CorpoDaListaMemo')));
+    /* CONC-SUGESTOES-TABELA-01 — o `<tbody>` é da peça `TabelaDaLista`: o corpo vai até o fim dela */
+    const corpo = fonte.slice(fonte.indexOf('<CorpoDaListaMemo'), fonte.indexOf('</TabelaDaLista>', fonte.indexOf('<CorpoDaListaMemo')));
     expect(corpo).not.toMatch(/dialogOpen|setDialogOpen|<DropdownMenu>/);
     // as ações das linhas entram pela referência estável
     expect(corpo).toContain('= acoesDaLista;');
