@@ -204,7 +204,8 @@ if (LATERAL) {
   const atual = FAZ === 'Global' ? { id: '__global__', nome: 'Global', owner_id: '' } : fazendas[0];
   g.__fazendaBancada = { fazendas, fazendaAtual: atual, isGlobal: atual.id === '__global__', fazendaId: atual.id, setFazendaAtual: () => {} };
 }
-const Lateral = () => LATERAL ? (
+/* CPR-LARGURA-01 — `&semlateral=1`: sem a barra lateral, como o app no Ampliar (o shell a esconde: `intensivo`) */
+const Lateral = () => q.get('semlateral') ? null : LATERAL ? (
   <TooltipProvider><V2Sidebar activeSection="financeiro-lanc" onNavigate={() => {}} drawerAtivo={q.get('submenu')} onDrawerToggle={() => {}}
     clienteSelector={<ClienteSelector />} fazendaSelector={q.get('umafaz') ? undefined : <FazendaSelector />} /></TooltipProvider>
 ) : <div style={{ width: LARGURA_DA_LATERAL, flexShrink: 0, background: '#1e3a5f' }} />;
