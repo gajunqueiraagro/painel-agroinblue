@@ -36,6 +36,8 @@ import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
 import * as CONC from './dados/conciliacao';
+import { FAZENDAS_VG as FAZENDAS_VG02, bancoVG02 } from './dados/visaoGeral02';
+import { V2Home } from '@/v2/pages/V2Home';
 import * as ESP from './dados/espelho';
 import type { SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { volumeNJ } from './dados/volumeNJ';
@@ -600,6 +602,22 @@ if (tela === 'mesclar') {
     const aba = q.get('aba');
     if (aba) setTimeout(() => (document.querySelector(`[data-testid="aba-conta-${aba}"]`) as HTMLElement | null)?.click(), 200);
   }, 400);
+} else if (tela === 'visao-geral-02') {
+  /* VISAO-GERAL-02 — a Visão Geral nova (V2Home) com o banco SINTÉTICO (`dados/visaoGeral02.ts`), out/2026. `&fz=fA` = uma fazenda;
+     sem ele, o Global com as 3. Cliente admin (vê a meta). */
+  const fz = q.get('fz');
+  const GLOBAL = { id: '__global__', nome: 'Global', owner_id: '' };
+  const uma = FAZENDAS_VG02.find((f) => f.id === fz);
+  g.__fazendaBancada = { fazendas: FAZENDAS_VG02, fazendasComPecuaria: FAZENDAS_VG02.filter((f) => f.tem_pecuaria), fazendaAtual: uma ?? GLOBAL,
+    isGlobal: !uma, fazendaId: uma ? uma.id : '__global__', setFazendaAtual: () => {}, loading: false };
+  g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }],
+    isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  g.__bancoBancada = bancoVG02;
+  montarNaUrl(
+    <div className="h-full overflow-auto" data-casca>
+      <BarraSecao area="Início" secao="Visão Geral" />
+      <V2Home ano="2026" mes="10" viewMode="mes" onViewModeChange={() => {}} onIrPara={() => {}} onMesChange={() => {}} />
+    </div>);
 } else if (tela === 'visao-geral') {
   /* FIN-VISAO-GERAL-01 PR 3 — Financeiro › Visão Geral: a BARRA REAL (`BarraSecao` com Contas · Fazenda · Safra · Atividade) e a tela, com
      hoje = 22/10/2026. Banco SINTÉTICO (`dados/visaoGeral.ts`); `globalThis.__vgReal` (posto pelo ensaio, nunca no repo) troca a

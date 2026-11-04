@@ -2,33 +2,32 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-/* VG-LEGADO-OCULTO-01 (Gabriel 03/11 07:50) — na Visão Geral ficam só Área no mês (com a distribuição por fazenda) e Caixa no
-   mês. Os blocos de números legados/errados e o chip "Financeiro (em construção)" não aparecem até a VISAO-GERAL-02. */
+/* VG-LEGADO-OCULTO-01 (Gabriel 03/11 07:50) → VISAO-GERAL-02 (mock aprovado, 03/11 11:09): os blocos de números legados/errados SAÍRAM
+   da Visão Geral (não ficam mais escondidos atrás de uma chave), e a tela segue a ordem do mock: cartões → Área | Caixa → Fazendas →
+   atenção e atalhos → um bloco por atividade. O chip "Financeiro (em construção)" não volta. */
 const fonte = readFileSync(path.resolve(__dirname, 'V2Home.tsx'), 'utf8');
 
-describe('Visão Geral sem os blocos legados (VG-LEGADO-OCULTO-01)', () => {
-  it('a chave dos blocos legados está desligada', () => {
-    expect(fonte).toMatch(/const MOSTRAR_BLOCOS_LEGADOS = false;/);
+describe('Visão Geral sem os blocos legados, na ordem do mock (VISAO-GERAL-02)', () => {
+  it('os blocos legados não estão mais no JSX, nem atrás de chave', () => {
+    for (const bloco of ["'Fechamento Pecuária — no mês'", "'Pecuária no mês'", 'title="Produção"', 'title="Eficiência"',
+      'title="Financeiro Produtivo"', 'title="Estrutura Financeira"', 'title="Disponível em conta"', 'MOSTRAR_BLOCOS_LEGADOS']) {
+      expect(fonte.includes(bloco), bloco).toBe(false);
+    }
   });
 
-  it('todo bloco legado está atrás da chave, e Área e Caixa ficam antes dela', () => {
-    const chave = fonte.indexOf('{MOSTRAR_BLOCOS_LEGADOS && (<>');
-    const fim = fonte.indexOf('</>)}', chave);
-    expect(chave).toBeGreaterThan(0);
-    for (const bloco of ["'Fechamento Pecuária — no mês'", "'Pecuária no mês'", 'title="Produção"', 'title="Eficiência"',
-      'title="Financeiro Produtivo"', 'title="Estrutura Financeira"', 'title="Disponível em conta"']) {
-      const onde = fonte.indexOf(bloco);
-      expect(onde, bloco).toBeGreaterThan(chave);
-      expect(onde, bloco).toBeLessThan(fim);
-    }
-    for (const fica of ["'Área no mês'", "'Caixa no mês'", 'Distribuição de áreas por fazenda']) {
-      const onde = fonte.indexOf(fica);
-      expect(onde, fica).toBeGreaterThan(0);
-      expect(onde, fica).toBeLessThan(chave);
-    }
+  it('a ordem do mock: cartões → Área → Caixa → Fazendas → atenção → atalhos → blocos por atividade', () => {
+    const marcos = ['<CartoesDoTopo', "'Área no mês'", "'Caixa no mês'", '<TabelaFazendasVG', '<PrecisaDeAtencao', '<AtalhosVG', '<BlocosPorAtividade'];
+    const posicoes = marcos.map((m) => fonte.indexOf(m));
+    for (const [i, p] of posicoes.entries()) expect(p, marcos[i]).toBeGreaterThan(0);
+    expect([...posicoes].sort((a, b) => a - b)).toEqual(posicoes);
   });
 
   it('o chip "Financeiro (em construção)" não é desenhado', () => {
     expect(fonte).not.toMatch(/>\s*Financeiro \(em construção\)\s*</);
+  });
+
+  it('título de bloco em sentence case (era 11px em caixa alta espaçada)', () => {
+    expect(fonte).not.toMatch(/<h3 className="text-\[11px\] font-black uppercase tracking-widest/);
+    expect(fonte).toContain('<h3 className="text-sm font-semibold text-foreground">{title}</h3>');
   });
 });
