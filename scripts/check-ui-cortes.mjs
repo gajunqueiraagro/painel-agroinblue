@@ -585,7 +585,16 @@ const CENARIOS = [
               await abrirPiquetes(url)(p); await p.locator('[data-testid="validacao-reabrir-lista"]').click(); await p.waitForTimeout(800); } },
           ]),
           ...casos.map(([nome, url]) => ({ nome: `mapa-validacao-${nome}-previa`, url, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
-            await abrirPiquetes(url)(p); await p.locator('[data-testid="piquetes-previa"]').click();
+            await abrirPiquetes(url)(p);
+            /* PIQUETE-POLIGONO-01: o "+ Piquete" abre desenhando; a prévia pede 2 piquetes — a metade oeste e a leste do P_01, fechando no 1º ponto */
+            const c = await p.locator('path[data-geo-id="g1"]').first().boundingBox();
+            const em = (fx, fy) => [c.x + fx * c.width, c.y + fy * c.height];
+            const piquete = async (cantos) => { for (const [fx, fy] of [...cantos, cantos[0]]) { const [x, y] = em(fx, fy); await p.mouse.click(x, y); await p.waitForTimeout(120); } };
+            await piquete([[0.02, 0.02], [0.5, 0.02], [0.5, 0.95], [0.02, 0.95]]);
+            await p.locator('[data-testid="piquetes-mais-piquete"]').click();
+            await piquete([[0.5, 0.02], [0.98, 0.02], [0.98, 0.95], [0.5, 0.95]]);
+            await p.waitForTimeout(300);
+            await p.locator('[data-testid="piquetes-previa"]').click();
             await p.locator('[data-testid="piquetes-dialogo-previa"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(400); } })),
         ];
       })(),

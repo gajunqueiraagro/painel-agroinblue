@@ -73,6 +73,8 @@ import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
 import MODULO03 from '@/lib/mapa/__fixtures__/modulo03StaTereza.json';
+import P6_PUREZA from '@/lib/mapa/__fixtures__/p6Pureza.json';
+import { areaDoBancoHa } from '@/lib/mapa/criarPiquetes';
 import { mapaGlobal } from './dados/mapaGlobal';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import { rotuloDoTipo } from '@/lib/mapa/tiposDeArea';
@@ -696,8 +698,10 @@ if (tela === 'mesclar') {
   /* MAPA-PRACA-ESTAVEL-01 (homologação 02/11 21:54, Agnaldo › Sta. Tereza › Modulo 03): `&modulo03=1` — o P_01 ganha a FORMA do Modulo 03
      (18 pontos com lados curtos e o furo no meio, lida do proto só leitura), levada para o canto do P_01; nenhum outro dado do cliente */
   const comModulo03 = <T extends { id: string; geojson: unknown }>(g: T): T => {
-    if (q.get('modulo03') !== '1' || g.id !== 'g1') return g;
-    const aneis = MODULO03.coordinates;
+    /* PIQUETE-POLIGONO-01: `&p6=1` — a FORMA do P6 da Pureza (com o furo da praça antiga; lida do proto só leitura), no lugar do P_01 */
+    const forma = q.get('p6') === '1' ? P6_PUREZA : q.get('modulo03') === '1' ? MODULO03 : null;
+    if (!forma || g.id !== 'g1') return g;
+    const aneis = forma.coordinates;
     const [dx, dy] = [-54.03 - Math.min(...aneis[0].map(p => p[0])), -19.63 - Math.max(...aneis[0].map(p => p[1]))];
     return { ...g, geojson: { type: 'Polygon', coordinates: aneis.map(a => a.map(p => [p[0] + dx, p[1] + dy])) } };
   };
@@ -713,7 +717,8 @@ if (tela === 'mesclar') {
           : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
           : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : [])].map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
-      : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
+      // PIQUETE-POLIGONO-01: `&p6=1` — o P_01 se chama P6 (o nome sugerido dos piquetes é P6-A, P6-B)
+      : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos.map(x => (q.get('p6') === '1' && x.id === 'p1' ? { ...x, nome: 'P6' } : x)), ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
           ...(q.get('grupo') === '1' ? ['P_01A', 'P_01B'].map((nome, i) => ({ ...MAPA.PASTOS[0], id: `p1${'ab'[i]}`, nome, grupo_id: 'gx', data_inicio: '2026-11-01', observacoes: null })) : [])]
       // MAPA-PIQUETES-03: `&unidade=1` — o grupo que nasceu de um pasto (o elo); MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o do P_01
       : t === 'pasto_grupos' ? [...(UNIDADE ? MAPA.UNIDADE_GRUPOS : []), ...(q.get('grupo') === '1' ? [{ id: 'gx', nome: 'P_01', pasto_origem_id: 'p1', cliente_id: 'cli' }] : [])]
@@ -744,6 +749,19 @@ if (tela === 'mesclar') {
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gabriel Junqueira', email: null, situacao: 'membro ativo' }]
       : fn === 'fn_piquetes_concluir' ? MAPA.previaDosPiquetes(a ?? {})   // MAPA-PIQUETES-02: a prévia sintética
       // MAPA-CRIAR-PIQUETES-01: a prévia sintética do "Criar piquetes" (caso novo, ou o grupo que já existe com `&grupo=1`)
+      /* PIQUETE-POLIGONO-01: com `&p6=1` a prévia sintética usa a área de cada polígono desenhado (a conta do banco) e o nome P6; o mês é o escolhido */
+      : fn === 'fn_piquetes_criar' && q.get('p6') === '1' ? ((pq: { nome: string; pasto_id: string | null; geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon | null }[]) => {
+          const areas = pq.map(x => (x.geojson ? Math.round(areaDoBancoHa(x.geojson) * 100) / 100 : 0));
+          const soma = Math.round(areas.reduce((t, v) => t + v, 0) * 100) / 100;
+          const mes = String(a?.p_mes ?? '2026-11-01');
+          const mm = `${mes.slice(5, 7)}/${mes.slice(0, 4)}`;
+          const fim = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 0);
+          const br = (v: number) => v.toFixed(2).replace('.', ',');
+          return { ok: true, simulado: !!a?.p_simular, caso: 'novo', contorno: { id: 'g1', criado: false, area_ha: soma },
+            piquetes: pq.map((x, i) => ({ nome: x.nome, area_ha: areas[i], liga: 'novo', pasto_id: null })), soma_ha: soma, dif_contorno_ha: 0,
+            concluir: { frase: `P6 vira o grupo P6 com ${pq.length} piquetes (${br(soma)} ha) a partir de ${mm}; P6 fica encerrado em ${String(fim.getDate()).padStart(2, '0')}/${String(fim.getMonth() + 1).padStart(2, '0')}/${fim.getFullYear()}.` },
+            ligar: null };
+        })(a?.p_piquetes ?? [])
       : fn === 'fn_piquetes_criar' ? ((pq: { nome: string; pasto_id: string | null }[]) => ({
           ok: true, simulado: !!a?.p_simular, caso: q.get('grupo') === '1' ? 'grupo_existente' : 'novo', contorno: { id: 'g1', criado: false, area_ha: 41.6 },
           piquetes: pq.map(x => ({ nome: x.nome, area_ha: Math.round(4160 / pq.length) / 100, liga: x.pasto_id ? 'existente' : 'novo', pasto_id: x.pasto_id })),

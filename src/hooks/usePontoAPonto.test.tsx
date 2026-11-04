@@ -90,6 +90,26 @@ describe('MEDIR-NO-MAPA-01 · a ferramenta ponto a ponto (uma só)', () => {
     expect(h.result.current.pontos).toHaveLength(3);
   });
 
+  it('o clique em cima de uma camada do mapa (o polígono vizinho) é ponto e não chega à camada; arrastar o mapa e os controles não marcam', () => {
+    const { h } = montar('linha');
+    const camada = document.createElement('div');
+    mapa.getPanes().overlayPane.appendChild(camada);
+    const daCamada = vi.fn();
+    camada.addEventListener('click', daCamada);
+    const evento = (tipo: string, x: number, y: number) => new MouseEvent(tipo, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+    act(() => { camada.dispatchEvent(evento('mousedown', 100, 100)); camada.dispatchEvent(evento('click', 100, 100)); });
+    expect(h.result.current.pontos).toHaveLength(1);
+    expect(daCamada).not.toHaveBeenCalled();
+    act(() => { camada.dispatchEvent(evento('mousedown', 100, 100)); camada.dispatchEvent(evento('click', 160, 100)); }); // arrastou 60 px
+    expect(h.result.current.pontos).toHaveLength(1);
+    const controle = document.createElement('div');
+    controle.className = 'leaflet-control';
+    L.DomEvent.disableClickPropagation(controle); // como os controles de verdade (zoom, créditos)
+    mapa.getContainer().appendChild(controle);
+    act(() => { controle.dispatchEvent(evento('mousedown', 300, 300)); controle.dispatchEvent(evento('click', 300, 300)); });
+    expect(h.result.current.pontos).toHaveLength(1);
+  });
+
   it('Esc cancela (os pontos somem, aoCancelar é chamado, nada termina); desligada, o clique não marca nada', () => {
     const { h, aoTerminar, aoCancelar } = montar('poligono');
     clicar(em(0, 0)); clicar(em(30, 0));

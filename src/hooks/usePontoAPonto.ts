@@ -60,20 +60,42 @@ export function usePontoAPonto({ mapa, forma, aoTerminar, aoCancelar }: Opcoes) 
     const contentor = mapa.getContainer();
     const cursor = contentor.style.cursor;
     const dava = mapa.doubleClickZoom.enabled();
-    const aoClicar = (ev: L.LeafletMouseEvent) => {
+    const marcar = (ll: L.LatLng) => {
       const pts = pontosRef.current;
-      const p: Ponto = [ev.latlng.lng, ev.latlng.lat];
+      const p: Ponto = [ll.lng, ll.lat];
       if (forma === 'poligono' && pts.length >= 3
-        && mapa.latLngToContainerPoint(L.latLng(pts[0][1], pts[0][0])).distanceTo(mapa.latLngToContainerPoint(ev.latlng)) <= FECHA_NO_PRIMEIRO_PX) { terminar(); return; }
+        && mapa.latLngToContainerPoint(L.latLng(pts[0][1], pts[0][0])).distanceTo(mapa.latLngToContainerPoint(ll)) <= FECHA_NO_PRIMEIRO_PX) { terminar(); return; }
       const u = pts[pts.length - 1];
       if (u && u[0] === p[0] && u[1] === p[1]) return; // o 2º clique do duplo clique
       trocar([...pts, p]);
     };
+    const aoClicar = (ev: L.LeafletMouseEvent) => marcar(ev.latlng);
     const aoDuplo = () => { terminar(); };
+    /* PIQUETE-POLIGONO-01: o clique em cima de um polígono do mapa (o vizinho, na Validação) era do polígono (selecionava e não chegava ao mapa):
+       a ferramenta pega o clique no CONTENTOR, na captura, antes de qualquer camada. Arrastar o mapa (> 5 px) e os controles (zoom, créditos)
+       seguem deles. O `click` do mapa (Leaflet) fica para quem dispara pelo mapa. */
+    let desceu: { x: number; y: number } | null = null;
+    const aoDescer = (ev: MouseEvent) => { desceu = { x: ev.clientX, y: ev.clientY }; };
+    const ehDoControle = (ev: Event) => ev.target instanceof Element && !!ev.target.closest('.leaflet-control');
+    const aoClicarNoContentor = (ev: MouseEvent) => {
+      if (ehDoControle(ev)) return;
+      const arrastou = desceu && Math.hypot(ev.clientX - desceu.x, ev.clientY - desceu.y) > 5;
+      desceu = null;
+      ev.stopPropagation(); // o arrasto também: o clique depois de arrastar o mapa não é ponto (nem do mapa, nem da camada)
+      if (arrastou) return;
+      marcar(mapa.mouseEventToLatLng(ev));
+    };
+    const aoDuploNoContentor = (ev: MouseEvent) => { if (ehDoControle(ev)) return; ev.stopPropagation(); terminar(); };
+    contentor.addEventListener('mousedown', aoDescer, true);
+    contentor.addEventListener('click', aoClicarNoContentor, true);
+    contentor.addEventListener('dblclick', aoDuploNoContentor, true);
     mapa.on('click', aoClicar); mapa.on('dblclick', aoDuplo);
     mapa.doubleClickZoom.disable();
     contentor.style.cursor = 'crosshair';
     return () => {
+      contentor.removeEventListener('mousedown', aoDescer, true);
+      contentor.removeEventListener('click', aoClicarNoContentor, true);
+      contentor.removeEventListener('dblclick', aoDuploNoContentor, true);
       mapa.off('click', aoClicar); mapa.off('dblclick', aoDuplo);
       if (dava) mapa.doubleClickZoom.enable();
       contentor.style.cursor = cursor;
@@ -121,5 +143,7 @@ export function usePontoAPonto({ mapa, forma, aoTerminar, aoCancelar }: Opcoes) 
     return () => { mapa.off('mousemove', aoMover); mapa.off('mouseout', aoSair); g.remove(); };
   }, [mapa, forma, pontos]);
 
-  return { pontos, terminar };
+  /** tira o último ponto (o Ctrl+Z de quem usa a ferramenta, que tem o seu próprio desfazer) */
+  const tirarUltimo = useCallback(() => { if (pontosRef.current.length) trocar(pontosRef.current.slice(0, -1)); }, [trocar]);
+  return { pontos, terminar, tirarUltimo };
 }
