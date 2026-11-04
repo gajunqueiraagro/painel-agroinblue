@@ -4,7 +4,7 @@ import { GLOBAL_FAZENDA, useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Segmentado } from '@/components/ui/segmentado';
-import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
+import { Upload, Maximize2, Minimize2, RefreshCw, Printer } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useMapaDoMes } from '@/hooks/useMapaDoMes';
@@ -23,7 +23,13 @@ import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
 /* MAPA-PIQUETES-03 — a unidade do mapa (pai + grupo que nasceu dele): os piquetes viram divisões em linha fina */
 import { useGruposComOrigem } from '@/hooks/useGruposComOrigem';
 import { avisoSemDesenho, pastosSemDesenho, unidadesDoMapa } from '@/lib/mapa/unidadesDoMapa';
-import { areaNoMesOuHoje } from '@/lib/pastos/areaDoPastoNoMes';
+import { areaNoMesOuHoje, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
+/* MAPA-IMPRESSAO-01 — "Imprimir mapa": a folha (PDF A3/A1/A0) do Gestor de UMA fazenda; a entrada só se monta ao clicar em "Baixar PDF" */
+import { ImprimirMapaDialog, type OpcoesDoPdf } from '@/components/mapa-geo/ImprimirMapaDialog';
+import { useCliente } from '@/contexts/ClienteContext';
+import { lerCadastroDaFazenda } from '@/lib/mapa/impressao/cadastroDaFazenda';
+import { entradaDaFolha } from '@/lib/mapa/impressao/dadosDaFolha';
+import { gerarPdfDoMapa } from '@/lib/mapa/impressao/gerarPdfDoMapa';
 
 export interface PastoMapData {
   pasto: any;
@@ -90,6 +96,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   }, [fazendaId, ultimoComFechamento.pronto, ultimoComFechamento.fazendaId, ultimoComFechamento.mes, anoMes, irPara]);
 
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [imprimirAberto, setImprimirAberto] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
   /* MAPA-AREA-TIPOS-02: a infraestrutura que o Gestor abre ao vir da Validação ("Ficha e Patrimônio no Gestor") */
   const [infraInicial, setInfraInicial] = useState<string | null>(null);
@@ -122,6 +129,20 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const semDesenhoDaFazenda = useMemo(() => (unidades.poligonos.length === 0 ? null
     : avisoSemDesenho(pastosSemDesenho(unidades.pastos, unidades.poligonos, anoMes), 60)), [unidades, anoMes]);
   const mapaDoMes = useMapaDoMes(isGlobal ? idsDoGlobal : fazendaId, anoMes, pastosDoMapa, categorias, unidades.unidadeDe);
+
+  /* MAPA-IMPRESSAO-01: a área do mês (a mesma do mapa) para a folha; o hook só lê com fazenda (nunca no Global) */
+  const { clienteAtual } = useCliente();
+  const areaDaFolha = useAreaDosPastosNoMes(fazendaId ? [fazendaId] : [], anoMes, anoMes);
+  const gerarPdf = async ({ tamanho, querImagem }: OpcoesDoPdf) => {
+    if (!fazendaId || !fazendaAtual) throw new Error('Escolha uma fazenda para imprimir o mapa.');
+    const cadastro = await lerCadastroDaFazenda(fazendaAtual.cliente_id, fazendaId);
+    const entrada = entradaDaFolha({
+      tamanho, anoMes, pastos, grupos: gruposComOrigem, poligonos: geometrias, areaDe: areaDaFolha.areaDe,
+      usoNoFechamento: id => mapaDoMes.dados.get(id)?.usoDoMes ?? null,
+      cadastro: { cliente: clienteAtual?.nome ?? '', fazenda: fazendaAtual.nome, ...cadastro }, hoje: hojeLocal(),
+    });
+    return gerarPdfDoMapa({ entrada, querImagem });
+  };
 
   const global = useMemo(() => {
     if (!isGlobal) return null;
@@ -231,6 +252,13 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
     );
   }
 
+  const botaoImprimir = (
+    <Button type="button" variant="outline" size="sm" className="h-[24px] w-[26px] p-0" title="Imprimir mapa (PDF A3/A1/A0)"
+      aria-label="Imprimir mapa" data-testid="mapa-imprimir" onClick={() => setImprimirAberto(true)}>
+      <Printer className="h-3.5 w-3.5" />
+    </Button>
+  );
+
   const trocaDeVista = (
     <Segmentado valor={viewMode} onEscolher={setViewMode} opcoes={VISTAS} altura={24} />
   );
@@ -286,6 +314,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         onRenderedChange={onRenderedChange}
         seletorDeMes={seletorDeMes}
         trocaDeVista={trocaDeVista}
+        acaoImprimir={fazendaId ? botaoImprimir : undefined}
         voltarAoGlobal={veioDoGlobal ? voltarAoGlobal : undefined}
         pastoInicialId={veioDoGlobal ? pastoInicial : null}
         infraInicialId={infraInicial}
@@ -329,6 +358,8 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   );
 
   const dialogo = (
+    <>
+    {fazendaId && <ImprimirMapaDialog open={imprimirAberto} onOpenChange={setImprimirAberto} anoMes={anoMes} aoGerar={gerarPdf} />}
     <KmlUploadDialog
       open={uploadOpen}
       onOpenChange={setUploadOpen}
@@ -340,6 +371,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
       fazendaCodigo={fazendaAtual?.codigo}
       fazendaNome={fazendaAtual?.nome}
     />
+    </>
   );
 
   // Expanded mode — fixed overlay above everything except bottom nav

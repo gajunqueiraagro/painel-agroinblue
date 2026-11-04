@@ -83,6 +83,8 @@ interface Props {
   seletorDeMes: ReactNode;
   /** A troca de vista (Gestor · Operação · Validação). */
   trocaDeVista: ReactNode;
+  /** MAPA-IMPRESSAO-01: o botão "Imprimir mapa" (lugar de 26px antes da troca de vista; só numa fazenda) */
+  acaoImprimir?: ReactNode;
 }
 
 const VIDRO = 'rounded-[10px] border border-white/60 bg-white/[0.78] shadow-[0_8px_28px_rgba(0,0,0,0.28)] backdrop-blur-[14px] backdrop-saturate-[1.2]';
@@ -280,7 +282,7 @@ function escaparHtml(t: string): string {
 
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
-  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, semDesenho = null,
+  seletorDeMes, trocaDeVista, acaoImprimir, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, semDesenho = null,
   infraInicialId, onInfraInicialUsada,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
@@ -792,6 +794,7 @@ export function MapaGestorView({
             options={opcoesBusca} allLabel="Buscar pasto…" allValue="" semTodos placeholder="Buscar pasto…"
             contentClassName={MENU_ACIMA} triggerClassName="h-[24px] text-[11px]" />
         </div>
+        <div className="w-[26px] flex-none" data-testid="mapa-imprimir-lugar">{acaoImprimir}</div>
         <div className="flex-none">{trocaDeVista}</div>
       </div>
 

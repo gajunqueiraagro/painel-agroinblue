@@ -76,7 +76,9 @@ describe('item 2 — a linha do Financeiro V2', () => {
   it('sem itálico na linha, e o texto que corta tem 2px à direita', () => {
     const tela = fonte('src/pages/FinanceiroV2Tab.tsx');
     expect(tela).not.toMatch(/border-b italic/);
-    expect(tela).toContain('<span className="truncate pr-0.5">{fornNome}</span>');
+    /* CONC-SUGESTOES-TABELA-01 — o nome do fornecedor na célula é a peça `NomeNaCelula` (TabelaDaLista.tsx) */
+    expect(tela).toContain('{fornNome ? <NomeNaCelula nome={fornNome} /> : ');
+    expect(fonte('src/components/financeiro-v2/TabelaDaLista.tsx')).toContain('<span className="flex min-w-0"><span className="truncate pr-0.5">{nome}</span></span>');
     expect(fonte('src/index.css')).toContain('padding-right: 2px !important;');
   });
 });

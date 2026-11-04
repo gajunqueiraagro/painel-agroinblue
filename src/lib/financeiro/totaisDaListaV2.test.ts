@@ -44,12 +44,13 @@ describe('totais do Financeiro V2: caixa x sem caixa', () => {
   it('FIN-V2-SEM-CAIXA-01: sai a coluna Tipo; no topo so dinheiro, e o sem caixa so com a chave (lido da fonte)', () => {
     /* a tela normal e a ampliada sao a MESMA tabela (o Ampliado so' acrescenta C. Origem/C. Destino) */
     const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
+    expect(tela).not.toContain('>Tipo</ThDaLista>');   // CONC-SUGESTOES-TABELA-01: o cabeçalho é a peça `ThDaLista`
     expect(tela).not.toContain('>Tipo</th>');
     expect(tela).not.toContain('tipoDaLinha');
     /* FIN-V2-HOMOLOG-FIX-01 (item 3): a coluna de 58px com o CODIGO da OC (`CelulaOC`) saiu da lista e continua fora.
        ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-OC-01: o ICONE da OC ganhou uma coluna propria de 16px, antes do Produto (ver
        finV2ColunasOC01.test.ts) — o cabecalho "OC" voltou, a celula do codigo nao. */
-    expect(tela).toContain('>Vínc.</th>');   // FIN-V2-COLUNAS-02: a coluna OC virou Vinc.
+    expect(tela).toContain('>Vínc.</ThDaLista>');   // FIN-V2-COLUNAS-02: a coluna OC virou Vinc. (CONC-SUGESTOES-TABELA-01: a peça do cabeçalho)
     expect(tela).not.toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
     for (const rotulo of ['Entradas:', 'Saídas:', 'Transf.:', 'lanç.']) expect(tela).toContain(rotulo);
     /* os dois totais sem caixa sairam da faixa padrao; o total sem caixa so' existe dentro de `mostrarSemCaixa &&` */
