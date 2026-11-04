@@ -62,6 +62,15 @@ const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
 const clicarRotulo = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await p.waitForTimeout(500); };
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
+/* CONC-CRIAR-COM-NOTA-01 — o "Criar lançamento" da estação, a aba Documentos e (com `ler`) a NF SINTÉTICA da bancada solta no "Ler a NF" */
+const criarComNota = (ler) => async (p) => {
+  await clicarRotulo(/^Criar lançamento$/)(p);
+  await p.getByRole('tab', { name: 'Documentos' }).click(); await p.waitForTimeout(400);
+  if (!ler) return;
+  const xml = await p.evaluate(() => globalThis.__nfBancada);
+  await p.locator('[data-testid="doc-ler-nf-input"]').setInputFiles({ name: 'NFe-000012345.xml', mimeType: 'application/xml', buffer: Buffer.from(xml) });
+  await p.waitForTimeout(1500);
+};
 /* P74 — a nota no cartão em 4 (a prévia) e o "Parcelar este lançamento" em 4 (o Editar) */
 /* P102 — o Editar obrigação: o "Editar" do detalhe do contrato */
 const abrirEditarObrigacao = async (p) => {
@@ -1371,6 +1380,15 @@ const CENARIOS = [
   { nome: 'casar-estacao-procurado', url: 'tela=estacao', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]',
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); } },
   { nome: 'casar-estacao-sem-nome', url: 'tela=estacao&v=semnome', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]' },
+  /* CONC-CRIAR-COM-NOTA-01 — o Novo pelo extrato: a aba Documentos (o "Ler a NF" + os pendentes), o Geral PREENCHIDO pela nota (as faixas do
+     XML; rola no corpo como o "+ Da nota") e o "Casar com o banco" de hoje com a nota já lançada (a coluna NF, a linha a 9,5px sem quebrar) */
+  { nome: 'conc-criar-com-nota-documentos', url: 'tela=estacao&v=nota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    regiao: '[role="dialog"]:has([data-testid="doc-ler-nf"])', antes: criarComNota(false) },
+  /* ⚠ a Geral com as faixas da nota ROLA no corpo, como no Novo do "+ Da nota" de hoje (`lancamento-xml-Geral-*` não exige sem rolagem) */
+  { nome: 'conc-criar-com-nota-preenchido', url: 'tela=estacao&v=nota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    regiao: '[role="dialog"]:has([data-testid="xml-faixas"])', antes: criarComNota(true) },
+  { nome: 'conc-criar-com-nota-casar', url: 'tela=estacao&v=notaja', tamanhos: TAMANHOS_DO_P92,
+    regiao: '[role="dialog"]:has([data-testid="levado-nf"])', antes: async (p) => { await criarComNota(true)(p); await p.locator('[data-testid="levado-nf"]').waitFor(); } },
   /* P159b (CONC-TELAS-02) — as abas Sistema e Evolução do saldo do Casar (de 1000px para cima, a página da Conciliação); a Evolução também
      com os dias sem movimento à vista. O modal "Extrato do sistema" (o ↗, D5) já tem os cenários `conciliacao-extrato-do-sistema*`. */
   ...[['casar-sistema', 'Sistema', null], ['casar-evolucao', 'Evolução do saldo', null], ['casar-evolucao-com-vazios', 'Evolução do saldo', 'evolucao-mostrar-vazios']]

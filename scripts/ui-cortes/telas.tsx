@@ -898,6 +898,38 @@ if (tela === 'mesclar') {
     montar(<DialogoDesfazerCompromisso operacaoId={OP} compromissoId="c1" versao={19} identidade={IDENT} rol={ROL} tipoOperacao="abate"
       onFechar={() => {}} onDesfeito={() => {}} onAbrirLancamento={() => {}} rpc={rpc as any} />);
   }
+} else if (tela === 'estacao' && (v === 'nota' || v === 'notadif' || v === 'notaja')) {
+  /* CONC-CRIAR-COM-NOTA-01 — o "Criar lançamento" da estação com a NF (o XML SINTÉTICO de sempre: nº 12.345, R$ 16.238,00, emitida em
+     30/09/2026), que o roteiro solta no "Ler a NF" do Documentos (`globalThis.__nfBancada`). `nota`: o extrato do mesmo valor (preenche e cria
+     pela RPC); `notadif`: o extrato de R$ 16.000,00 (cria com o da nota e abre o Casar com a diferença); `notaja`: a nota já lançada, realizada
+     e sem vínculo (o Casar com ela levada, o nº da NF na linha). Tudo SINTÉTICO. */
+  const valor = v === 'notadif' ? -16000 : -16238;
+  g.__nfBancada = montarNFe({ duplicatas: null });
+  const FORN = { id: 'agro', nome: 'Agropecuaria Exemplo Ltda', nome_fantasia: 'Casa do Campo', cpf_cnpj: '11.222.333/0001-81', fazenda_id: null, ativo: true };
+  g.__fornecedoresBancada = [FORN];
+  /* a última classificação do fornecedor (a sugestão da nota) e o plano dela */
+  const ULTIMA = { id: 'lanc-criado', plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação',
+    escopo_negocio: 'pecuaria', data_competencia: '2026-08-14', favorecido_id: 'agro', tipo_operacao: '2-Saídas', cancelado: false };
+  const JA = { id: 'lanc-ja', vencimento: '2026-11-10', pagamento: '2026-11-10', competencia: '2026-09-30', descricao: 'Compra de insumos sintéticos da nota',
+    valor_cent: 1623800, status: 'realizado', conciliado: false, numero_documento: '000012345', fornecedor_id: 'agro', fornecedor_nome: FORN.nome,
+    fornecedor_por: 'cnpj', parcelas: [{ n: 1, dif_cent: 0, dif_dias: 0 }], por: ['numero'], conta_bancaria_id: 'bb', cancelado: false };
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Exemplo', fazenda_id: 'f1', tipo_conta: 'conta_corrente', ativa: true }]
+      : t === 'financeiro_fornecedores' ? [FORN] : t === 'financeiro_lancamentos_v2' ? [ULTIMA]
+      : t === 'financeiro_plano_contas' ? [{ id: 'pl-nut', cliente_id: 'cli', tipo_operacao: '2-Saídas', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição',
+        centro_custo: 'Suplementação', subcentro: 'Nutrição Engorda', escopo_negocio: 'pecuaria', ativo: true, ordem_exibicao: 1 }] : [],
+    rpc: (fn: string) => fn === 'fn_nota_ja_lancada' ? (v === 'notaja' ? [JA] : [])
+      : fn === 'fn_criar_lancamento_de_extrato' ? { ok: true, lancamento_id: 'novo', cbi_id: 'cbi' }
+      : fn === 'fn_espelho_casar' ? (v === 'notadif' ? { ok: false, motivo: 'soma_nao_bate', no_extrato: valor, soma: -16238, diferenca: -16238 - valor }
+        : { ok: true, no_extrato: valor, soma: valor })
+      : fn === 'fin_documento_registrar' ? { documento_id: 'doc-1' }
+      : fn === 'fin_documento_editar' ? { documento_id: 'doc-1' }
+      : fn === 'fn_candidatos_conciliacao' || fn === 'fn_conciliacao_historico_buscar' ? [] : null,
+  };
+  montar(<EstacaoConciliar contaBancariaId="bb" aoFechar={() => {}} aoMudar={() => {}}
+    movimento={{ id: 'ext-1', data_movimento: '2026-10-05', descricao: 'COMPRA DEBITO AGROPECUARIA EXEMPLO', documento: null, valor,
+      valorConciliado: 0, valorAberto: valor, situacao: 'nao_conciliado', lancamentoId: null, vinculos: 0,
+      lancamentoDescricao: null, lancamentoFavorecido: null }} />);
 } else if (tela === 'estacao') {
   /* P153 — a estação "Conciliar movimento do extrato" (do Palco do mês) com o "Procurar no histórico": sem candidato (o caso que abriu
      a frente), SINTÉTICO. `&v=semnome`: o banco não trouxe o nome (Bradesco "PIX ENVIADO" — D1: o campo vazio e a frase). */

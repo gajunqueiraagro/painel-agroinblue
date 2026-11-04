@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,6 +8,12 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import type { MovimentoConciliacao } from '@/hooks/useConciliacaoDoMes';
 import type { ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
+import { notaParaAPrevia } from '@/components/financeiro-v2/NovoDeXmlDialog';
+import { notaJaLancada } from '@/lib/financeiro/nfeConsultas';
+import { casarJaLancados, parcelasParaCasar, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
+import { prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import { FRASE_SEM_DUPLICATAS } from '@/lib/financeiro/nfe/proporLancamento';
+import { fechaAoCentavo } from '@/lib/conciliacao/tolerancia';
 
 /**
  * CriarLancamentoDaLinha — o movimento sem candidato deixa de ser beco sem saída.
@@ -78,6 +84,57 @@ export function fraseDaRecusaCriar(msg: string): string {
   return m ? m[2] : msg;
 }
 
+/**
+ * CONC-CRIAR-COM-NOTA-01 — o levado que o "Casar com o banco" de hoje recebe (o `LevadoInicial` dele, sem importá-lo: o modal do casar já
+ * monta este componente, e o tipo de lá aqui faria o ciclo). Com o nº da NF: a linha do levado o mostra (Gabriel 04/11 06:28).
+ */
+export interface LevadoDaNota {
+  lancamento_id: string; descricao: string | null; fornecedor: string | null; valor_assinado: number;
+  data_vencimento: string | null; status_transacao: string | null; numero_documento: string | null;
+  trocarConta?: { de: string | null; para: string | null };
+}
+
+/**
+ * A NOTA LIDA no Criar pelo extrato vira o `prefill` do MESMO modal pelo caminho do "+ Da nota" (`prefillDaNota`: fornecedor, nº, tipo do
+ * documento, competência = EMISSÃO, classificação sugerida e a NF pendente), e por cima o que o EXTRATO dita: as contas, o pagamento, o
+ * vencimento (= o pagamento), o tipo e o status. ⚠ UM PAGAMENTO SÓ: as duplicatas da nota saem (o extrato é um movimento; o modal do extrato
+ * nem mostra o parcelamento). ⚠ O VALOR É O DA NOTA quando ela difere do extrato: o salvar cria sem vínculo e o "Casar com o banco" mostra a
+ * diferença e os ajustes (Gabriel 04/11 06:28, escolha 1).
+ */
+export function prefillDoExtratoComNota<T extends { fazenda_id?: string; conta_bancaria_id?: string; conta_destino_id?: string; tipo_operacao: string; descricao?: string }>(
+  doExtrato: T, doXml: DoXml, dataMov: string,
+) {
+  /* o aviso "sem duplicatas · preencha o vencimento" não vale aqui: o vencimento é o pagamento do extrato */
+  const daNota = prefillDaNota({ ...doXml, proposta: { ...doXml.proposta, duplicatas: [], parcelamento: { tipo: 'unico', vencimento: dataMov },
+    avisos: doXml.proposta.avisos.filter((a) => a !== FRASE_SEM_DUPLICATAS) } });
+  return {
+    ...daNota,
+    fazenda_id: daNota.fazenda_id || doExtrato.fazenda_id,
+    conta_bancaria_id: doExtrato.conta_bancaria_id,
+    conta_destino_id: doExtrato.conta_destino_id,
+    tipo_operacao: doExtrato.tipo_operacao,
+    status_transacao: 'realizado',
+    data_pagamento: dataMov,
+    data_vencimento: dataMov,
+    data_competencia: daNota.data_competencia || dataMov,
+    /* NOTA-NOVA-MODAL-REAL — a descrição nunca sai dos itens: fica a do extrato, como no Criar de sempre */
+    descricao: doExtrato.descricao,
+  };
+}
+
+/**
+ * A nota lida já está no sistema? A MESMA regra da prévia (`fn_nota_ja_lancada` + `casarJaLancados`): os ALVOS dela. Os conciliados não se
+ * casam de novo (esta nota já está paga e no banco). `null` = a nota não está lançada (ou só cancelada) — preenche e cria.
+ */
+export function oQueFazerComANota(achados: readonly LancamentoJaLancado[], parcelas: ReturnType<typeof parcelasParaCasar>, notaCent: number):
+  { caminho: 'criar' } | { caminho: 'casar'; alvos: LancamentoJaLancado[] } | { caminho: 'conciliada'; alvos: LancamentoJaLancado[] } {
+  const ja = casarJaLancados(parcelas, achados, notaCent);
+  const alvos = ja?.alvos.filter((l) => !l.cancelado) ?? [];
+  if (!alvos.length) return { caminho: 'criar' };
+  const abertos = alvos.filter((l) => !l.conciliado);
+  return abertos.length ? { caminho: 'casar', alvos: abertos } : { caminho: 'conciliada', alvos };
+}
+
 interface Props {
   movimento: MovimentoConciliacao;
   /** Conta do extrato — dá a fazenda por padrão, sem perguntar. */
@@ -115,9 +172,15 @@ interface Props {
   aoFechar: () => void;
   /** Recebe o id quando a criação foi sem vínculo, para a estação marcá-lo. */
   aoCriado: (idCriado?: string) => void | Promise<void>;
+  /**
+   * CONC-CRIAR-COM-NOTA-01 (Gabriel 04/11 06:28) — o "Casar com o banco" de HOJE, aberto pelo hospedeiro com estes levados: a NF lida JÁ
+   * ESTÁ lançada (casar, nunca criar em dobro), ou a nota difere do extrato (o criado com o valor da nota; lá estão o "Corrigir o valor do
+   * lançamento" e o "Criar lançamento pela diferença"). Ausente (ou `semVinculo`) = o Criar não lê a NF.
+   */
+  aoCasarComBanco?: (levados: LevadoDaNota[]) => void;
 }
 
-export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugerido, semVinculo, modelo, aoFechar, aoCriado }: Props) {
+export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugerido, semVinculo, modelo, aoFechar, aoCriado, aoCasarComBanco }: Props) {
   const { fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const {
@@ -153,7 +216,9 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
   const tiposPermitidos = useMemo(() => tiposDoExtrato(movimento.valor), [movimento.valor]);
   const dataMov = movimento.data_movimento.slice(0, 10);
 
-  const prefill = useMemo(() => ({
+  /* CONC-CRIAR-COM-NOTA-01 — a nota lida no Documentos (o `prefill` passa a ser o dela + o do extrato; o modal se rehidrata por ele) */
+  const [daNota, setDaNota] = useState<DoXml | null>(null);
+  const doExtrato = useMemo(() => ({
     fazenda_id: contaQ.data?.fazenda_id ?? undefined,
     /* Entrada cai na conta de DESTINO, saída sai da de ORIGEM — a mesma regra que
        a RPC aplica no INSERT. As duas concordam porque saem do mesmo sinal. */
@@ -180,6 +245,62 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
       centro_custo: modelo.centro_custo,
     } : {}),
   }), [contaQ.data, contaBancariaId, ehEntrada, dataMov, movimento, valorSugerido, modelo]);
+  const prefill = useMemo(() => (daNota ? prefillDoExtratoComNota(doExtrato, daNota, dataMov) : doExtrato), [daNota, doExtrato, dataMov]);
+
+  /* O criado (e o Casar que vem depois dele) só se avisam ao FECHAR o modal: os documentos pendentes sobem DEPOIS do `onSave`, no id
+     devolvido, e fechar a estação antes disso perderia o arquivo (FIN-NFE-PARCELAS-01: falhou = o modal fica com "Tentar de novo"). */
+  const criado = useRef<{ id: string } | null>(null);
+  const casarDepois = useRef<LevadoDaNota[] | null>(null);
+  const fechar = async () => {
+    const c = criado.current; const casar = casarDepois.current;
+    criado.current = null; casarDepois.current = null;
+    if (c) await aoCriado(semVinculo ? c.id : undefined);
+    aoFechar();
+    if (casar && aoCasarComBanco) aoCasarComBanco(casar);
+  };
+
+  const nomeDaConta = (id: string | null | undefined) => {
+    const c = id ? contasBancarias.find((x) => x.id === id) : undefined;
+    return c ? (c.nome_exibicao || c.nome_conta || null) : null;
+  };
+
+  /**
+   * CONC-CRIAR-COM-NOTA-01 — o "Ler a NF" do Documentos: o MESMO leitor da prévia (`notaParaAPrevia`) e a MESMA busca de "já lançada".
+   * Já lançada = o Casar com o banco de hoje com os alvos (o nº da NF na linha); conciliada = a frase, nada criado; senão = preenche.
+   * Devolve a frase do que impediu, ou `null`.
+   */
+  const lerNota = async (arquivo: File): Promise<string | null> => {
+    const cli = clienteAtual?.id;
+    if (!cli) return 'Sem cliente escolhido.';
+    const r = await notaParaAPrevia(cli, arquivo, fornecedores, fazendas);
+    if (r.ok === false) return r.frase;
+    const { lido, doXml } = r.nota;
+    const n = lido.nota; const p = doXml.proposta;
+    if (doXml.ocorrencias.some((o) => o.origem === 'oc')) return 'Esta nota já está registrada numa operação comercial (OC). Nada foi criado.';
+    const parcelas = parcelasParaCasar(p.duplicatas, n.totais.notaCent, p.duplicatas[0]?.vencimento ?? n.emissao);
+    const busca = await notaJaLancada(cli, {
+      parcelas, numero: p.numeroDocumento || n.numero, chave: n.chave, emitenteDocumento: n.emitente.documento, nomes: [n.emitente.nome, n.emitente.fantasia],
+    });
+    /* P146 — a consulta que falha nunca vira "não está lançada" */
+    if (busca.ok === false) return `Não consegui verificar se esta nota já está lançada (${busca.motivo}). Nada foi preenchido: tente de novo.`;
+    const o = oQueFazerComANota(busca.valor, parcelas, n.totais.notaCent);
+    if (o.caminho === 'conciliada') return `Esta nota já está lançada e conciliada (${o.alvos.length === 1 ? '1 lançamento' : `${o.alvos.length} lançamentos`}). Confira se este extrato é outro pagamento. Nada foi criado.`;
+    if (o.caminho === 'casar') {
+      if (!aoCasarComBanco) return 'Esta nota já está lançada: case pelo "Casar com o banco".';
+      const sinal = Math.sign(movimento.valor || 1);
+      const levados: LevadoDaNota[] = o.alvos.map((l) => ({
+        lancamento_id: l.id, descricao: l.descricao, fornecedor: l.fornecedorNome, valor_assinado: sinal * (l.valorCent / 100),
+        data_vencimento: l.vencimento, status_transacao: l.status, numero_documento: l.numeroDocumento || p.numeroDocumento || null,
+        ...(l.contaBancariaId && contaBancariaId && l.contaBancariaId !== contaBancariaId
+          ? { trocarConta: { de: nomeDaConta(l.contaBancariaId), para: nomeDaConta(contaBancariaId) } } : {}),
+      }));
+      aoFechar();
+      aoCasarComBanco(levados);
+      return null;
+    }
+    setDaNota(doXml);
+    return null;
+  };
 
   /**
    * ⚠ O QUE VAI AO BANCO É UM SUBCONJUNTO DELIBERADO DO FORMULÁRIO. Valor, contas,
@@ -189,7 +310,22 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
    * Macro, grupo, centro e escopo também ficam de fora: o gatilho
    * `trg_resolve_classificacao_plano` os resolve a partir do subcentro.
    */
-  const salvar = async (form: LancamentoV2Form): Promise<boolean> => {
+  const salvar = async (form: LancamentoV2Form): Promise<boolean | string> => {
+    /* CONC-CRIAR-COM-NOTA-01 (escolha 1) — a nota difere do extrato: cria COM O VALOR DA NOTA, sem vínculo (o writer comum, o form
+       inteiro, como o `semVinculo`), e ao fechar abre o Casar com o banco com ele levado — lá a diferença em colunas e os dois ajustes */
+    if (!semVinculo && daNota && !fechaAoCentavo(Math.abs(form.valor) - Math.abs(movimento.valor))) {
+      const id = await criarLancamentoComId(form, { origem: 'conciliacao', silent: true });
+      if (!id) { toast.error('Não foi possível criar o lançamento.'); return false; }
+      if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+      criado.current = { id };
+      casarDepois.current = [{
+        lancamento_id: id, descricao: form.descricao || movimento.descricao,
+        fornecedor: fornecedores.find((f) => f.id === form.favorecido_id)?.nome ?? daNota.emitenteNome,
+        valor_assinado: Math.sign(movimento.valor || 1) * Math.abs(form.valor), data_vencimento: form.data_vencimento || null,
+        status_transacao: form.status_transacao || null, numero_documento: form.numero_documento || null,
+      }];
+      return id;
+    }
     if (semVinculo) {
       /* ⚠ AQUI O FORM VAI INTEIRO, e a diferença com o caminho de baixo é o
          motivo: a RPC lê valor, contas, data e tipo do próprio movimento, então
@@ -199,12 +335,12 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
       const id = await criarLancamentoComId(form, { origem: 'conciliacao', silent: true });
       if (!id) { toast.error('Não foi possível criar o lançamento.'); return false; }
       toast.success('Lançamento criado e marcado na seleção — o vínculo vem ao confirmar o grupo.');
-      await aoCriado(id);
-      aoFechar();
-      return true;
+      /* CONC-CRIAR-COM-NOTA-01 (Fatia A) — o id volta ao modal (os documentos pendentes sobem nele); a estação sabe ao fechar */
+      criado.current = { id };
+      return id;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-    const { error } = await (supabase as any).rpc('fn_criar_lancamento_de_extrato', {
+    const { data, error } = await (supabase as any).rpc('fn_criar_lancamento_de_extrato', {
       p_extrato_id: movimento.id,
       p_fazenda_id: form.fazenda_id,
       p_subcentro: form.subcentro || null,
@@ -233,16 +369,20 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
     toast.success('Lançamento criado e vinculado — o movimento fechou.');
     /* CONC-SEM-F5-01 — gravou com a Conciliação montada: avisa o canal de lançamentos, e o dono relê sem F5. */
     if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
-    await aoCriado();
-    aoFechar();
-    return true;
+    /* CONC-CRIAR-COM-NOTA-01 (Fatia A) — a RPC devolve o `lancamento_id`: ele volta ao modal, que sobe os documentos pendentes nele */
+    const id: unknown = data && typeof data === 'object' ? Reflect.get(data, 'lancamento_id') : null;
+    criado.current = { id: typeof id === 'string' ? id : '' };
+    return typeof id === 'string' && id ? id : true;
   };
 
   return (
     <LancamentoV2Dialog
       open
-      onClose={aoFechar}
+      onClose={() => { void fechar(); }}
       onSave={salvar}
+      /* CONC-CRIAR-COM-NOTA-01 (Fatia A) — a aba Documentos do Novo: os pendentes sobem no id que o `salvar` devolve (D1 = a) */
+      documentosAntesDeSalvar
+      onLerNotaNoNovo={!semVinculo && aoCasarComBanco ? lerNota : undefined}
       fazendas={fazendas}
       contas={contasBancarias}
       classificacoes={classificacoes}
