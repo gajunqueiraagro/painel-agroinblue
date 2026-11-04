@@ -256,8 +256,10 @@ describe('(3) os pontos que não se montam em teste, lidos da FONTE', () => {
     expect(espelho).toContain('useReleDonoAoMudarLancamentos(clienteId);');
   });
   it('criar pela linha, importar extrato, desfazer importação e parcela de financiamento: aviso depois do sucesso', () => {
-    expect(fonte('src/components/conciliacao/CriarLancamentoDaLinha.tsx'))
-      .toContain("toast.success('Lançamento criado e vinculado — o movimento fechou.'); if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id); await aoCriado();");
+    /* CONC-CRIAR-COM-NOTA-01 — o aviso segue logo depois do sucesso; a estação (`aoCriado`) só sabe ao FECHAR o modal, depois dos documentos */
+    const criar = fonte('src/components/conciliacao/CriarLancamentoDaLinha.tsx');
+    expect(criar).toContain("toast.success('Lançamento criado e vinculado — o movimento fechou.'); if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id); const id: unknown");
+    expect(criar).toContain('if (c) await aoCriado(semVinculo ? c.id : undefined); aoFechar();');
     expect(fonte('src/hooks/useImportacaoExtrato.ts'))
       .toContain('const idsPorHash = new Map<string, string>(r.ids.map((x) => [x.hash, x.id])); notificarLancamentosMudaram(clienteAtual.id);');
     expect(fonte('src/components/conciliacao/PainelExtratoMes.tsx'))
