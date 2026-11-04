@@ -42,6 +42,8 @@ interface Props {
   onEditando: (editando: boolean) => void;
   onGravou: () => void;
   onFechar: () => void;
+  /** MEDIR-NO-MAPA-01: mede no mapa (o polígono em m² ou a régua em m); null = cancelou (o campo não muda) */
+  medir?: (forma: 'area' | 'linha') => Promise<number | null>;
 }
 
 const FIM_SEM_MUDANCA = '— nada para gravar.';
@@ -175,7 +177,7 @@ export function InfraPainel(p: Props) {
             <label className="flex flex-col gap-0.5"><span className="text-[9.5px] text-[#5A6472]">Observação</span>
               <Input value={observacao} onChange={e => setObservacao(e.target.value)} className="h-[24px] px-1.5 text-[10.5px]" /></label>
             <div className="mt-1 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Ficha</div>
-            <FichaEditar tipo={p.tipo} ficha={ficha} onChange={setFicha} />
+            <FichaEditar tipo={p.tipo} ficha={ficha} onChange={setFicha} medir={p.medir} />
           </div>
         )}
         {modo === 'desativar' && (

@@ -64,6 +64,7 @@ import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { COR_SINAL } from '@/lib/oc/contaCorrente';
 import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { larguraMinimaCpr, maiorValorCpr, reguaDaCpr, type Regua } from '@/lib/financeiro/cprLargura';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { docDaLinha, type DocumentoDaLinha } from '@/lib/financeiro/documentoHelper';
@@ -146,28 +147,14 @@ const CORTE_DESTAQUE = 100_000;
  * foi necessária: a conta fecha sem rolagem horizontal a 1168px.
  */
 /**
- * CPR-SALDO-DIA-01 — AS DUAS RÉGUAS, em px, uma por modo. Cabeçalho, "Saldo hoje", faixa do dia, linha e rodapé leem a MESMA.
- * 0 = a coluna não existe no modo. A Descrição é o que sobra (`flex-1`); número, data e status NUNCA cortam.
- * ⚠ MEDIDAS a 1.126px (ver CLAUDE.md): as três colunas de valor no pior caso "▼ −R$ 99.999.999,99" em negrito.
+ * CPR-SALDO-DIA-01 — A RÉGUA, em px, uma por modo. Cabeçalho, "Saldo hoje", faixa do dia, linha e rodapé leem a MESMA.
+ * 0 = a coluna não existe no modo. Número, data e status NUNCA cortam.
+ * CPR-LARGURA-01 (Gabriel 03/11 19:50): a régua é do dono (`reguaDaCpr`, `cprLargura.ts`) — datas, NF e Status justos, os três valores
+ * na largura do MAIOR VALOR do período (em degraus) e Descrição, Fornecedor e Subcentro dividem a sobra (`ESTICA`); a lista cabe a
+ * 1.280px, sem barra horizontal. Era P152 (Fornecedor 176 e Subcentro 166 fixos, NF 60 e os valores 80/94/94): 1.161px de mínimo.
  */
-interface Regua {
-  comp: number; venc: number; pgto: number; selo: number; fornecedor: number; subcentro: number; safra: number; faz: number;
-  nf: number; status: number; pagar: number; receber: number; saldo: number;
-}
-/* P152 (CPR-COLUNAS-01, mock v5 aprovado 28/10 07:55) — Comp. 50 · Venc. 50 · Pgto. 50 · selo 20 · Descrição 200 · Fornecedor 180 ·
-   Subcentro 170 · NF 64 · Status 74 · A receber 84 · A pagar 98 · Saldo 98: cada número abaixo é o do mock MENOS os 4px do `gap-1` da
-   linha (coluna + vão = a coluna do mock). O ampliado é a MESMA régua + Safra e Faz. (Gabriel 15:34, D2). */
-const REGUA_NORMAL: Regua = { comp: 46, venc: 46, pgto: 46, selo: 16, fornecedor: 176, subcentro: 166, safra: 0, faz: 0, nf: 60, status: 70, receber: 80, pagar: 94, saldo: 94 };
-const REGUA_AMPLIADA: Regua = { ...REGUA_NORMAL, safra: 56, faz: 26 };
-/** CPR-SEM-CORTE-01 — a largura mínima da lista (a régua de cada modo, com a Descrição no mínimo dela, 196px): abaixo disso a lista
- *  rola na horizontal dentro do cartão. P152: 24 (px-3) + 3 (filete) + as colunas + a Descrição + 4px por vão. */
-const DESCRICAO_MINIMA = 196;
-const larguraMinima = (r: Regua): number => {
-  const colunas = [r.comp, r.venc, r.pgto, r.selo, r.fornecedor, r.subcentro, r.safra, r.faz, r.nf, r.status, r.receber, r.pagar, r.saldo].filter((x) => x > 0);
-  return 24 + 3 + DESCRICAO_MINIMA + colunas.reduce((a, b) => a + b, 0) + 4 * colunas.length;
-};
-const LARGURA_MINIMA_NORMAL = larguraMinima(REGUA_NORMAL);
-const LARGURA_MINIMA_AMPLIADA = larguraMinima(REGUA_AMPLIADA);
+/** A sobra em partes iguais: Descrição, Fornecedor e Subcentro (a largura mínima da lista garante o piso de cada uma). */
+const ESTICA: CSSProperties = { flex: '1 1 0', minWidth: 0 };
 const larg = (px: number): CSSProperties => ({ width: px, flexShrink: 0 });
 /** As três células de valor de uma faixa (dia, vencidos, saldo hoje, rodapé): a MESMA grade das linhas. */
 const moedaComSinal = (v: number) => `${v < 0 ? '−' : ''}${formatMoeda(Math.abs(v))}`;
@@ -364,7 +351,6 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   const [ampliado, setAmpliado] = useState(retorno?.ampliado ?? false);
   useEffect(() => { onIntensiveToggle?.(ampliado); }, [ampliado, onIntensiveToggle]);
   useEffect(() => () => { onIntensiveToggle?.(false); }, [onIntensiveToggle]);
-  const regua = ampliado ? REGUA_AMPLIADA : REGUA_NORMAL;
 
   /**
    * ⚠ OS CATÁLOGOS CARREGAM COM A TELA, NÃO COM O CLIQUE — a lição está escrita em
@@ -739,6 +725,18 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   /* o que o gráfico desenha: EXATAMENTE as contas em aberto que a série do saldo soma (vencidos que contam + entre hoje e "de" +
      período), dos DOIS lados, em qualquer segmento — o saldo é da conta. O segmento vai à parte e só decide as barras (G). */
   const doFluxo = useMemo(() => linhasDoSaldoCpr(recorte), [recorte]);
+  /* CPR-LARGURA-01 — os três valores na largura do maior do período: do recorte e da série (o que a lista soma). ⚠ As pílulas de
+     status filtram NA CONSULTA (`statusLigados`): o teto só CRESCE enquanto cliente, período e conta são os mesmos — desligar
+     Previsto/Programado nunca estreita a régua (NADA SE DESLOCA); o segmento A pagar/A receber nem entra no recorte. */
+  const tetoDoValor = useRef({ chave: '', valor: 0 });
+  const maiorValor = useMemo(() => {
+    const chave = `${clienteId ?? ''}|${periodo.de}|${periodo.ate}|${contaSel ?? ''}`;
+    const agora = maiorValorCpr(recorte, serie);
+    const valor = tetoDoValor.current.chave === chave ? Math.max(tetoDoValor.current.valor, agora) : agora;
+    tetoDoValor.current = { chave, valor };
+    return valor;
+  }, [clienteId, periodo.de, periodo.ate, contaSel, recorte, serie]);
+  const regua = useMemo(() => reguaDaCpr(ampliado, maiorValor), [ampliado, maiorValor]);
 
   /**
    * Os grupos de vencimento.
@@ -1398,10 +1396,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
               )}
               {seloVencido}
             </span>
-            <span style={larg(regua.fornecedor)} className="truncate text-muted-foreground" title={fornecedor} data-reticencias-com-title="">
+            <span style={ESTICA} className="truncate text-muted-foreground" title={fornecedor} data-reticencias-com-title="">
               {fornecedor}
             </span>
-            <span style={larg(regua.subcentro)} className={cn(FONTE_FINA, 'truncate text-muted-foreground')} title={l.subcentro || '—'} data-reticencias-com-title="">
+            <span style={ESTICA} className={cn(FONTE_FINA, 'truncate text-muted-foreground')} title={l.subcentro || '—'} data-reticencias-com-title="">
               {l.subcentro || '—'}
             </span>
             {regua.safra > 0 && (
@@ -1689,7 +1687,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
             <div className="min-h-0 flex-1 overflow-auto rolagem-fina rolagem-sem-tampar !pb-0">
              {/* ⚠ UM SCROLLPORT SÓ, e TUDO o que é fixo mora DENTRO dele (cabeçalho, "Saldo hoje", faixas e o rodapé `sticky bottom-0`):
                  fora, o fixo teria a largura cheia e as linhas perderiam o gutter da barra — as colunas de valor desalinhariam. */}
-             <div data-tabela-que-rola className="flex min-h-full flex-col" style={{ minWidth: ampliado ? LARGURA_MINIMA_AMPLIADA : LARGURA_MINIMA_NORMAL }}>
+             <div data-tabela-que-rola className="flex min-h-full flex-col" style={{ minWidth: larguraMinimaCpr(regua) }}>
 
               {/* CABEÇALHO DE COLUNA — navy, 22px, a régua do modo. */}
               <div data-testid="cpr-cabecalho" className={cn(
@@ -1702,8 +1700,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
                 <span style={larg(regua.pgto)}>Pgto.</span>
                 <span style={larg(regua.selo)} aria-hidden />
                 <span className="min-w-0 flex-1" data-coluna-descricao>Descrição</span>
-                <span style={larg(regua.fornecedor)}>Fornecedor</span>
-                <span style={larg(regua.subcentro)}>Subcentro</span>
+                <span style={ESTICA}>Fornecedor</span>
+                <span style={ESTICA}>Subcentro</span>
                 {regua.safra > 0 && <span style={larg(regua.safra)}>Safra</span>}
                 {regua.faz > 0 && <span style={larg(regua.faz)}>Faz.</span>}
                 <span style={larg(regua.nf)}>NF</span>

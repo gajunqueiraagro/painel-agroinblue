@@ -490,8 +490,8 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
     expect(Array.from(tela.matchAll(/#fca5a5|#86efac/g)).length).toBe(2);       // os dois tons do navy, uma vez cada
     expect(tela).not.toMatch(/text-destructive'? : 'text-success|text-success' : 'text-destructive/);
   });
-  it('duas réguas, uma por modo; as mesmas três colunas de valor nas linhas e nas faixas', () => {
-    expect(tela).toContain('const regua = ampliado ? REGUA_AMPLIADA : REGUA_NORMAL;');
+  it('uma régua por modo (CPR-LARGURA-01: do dono, pelo maior valor do período); as mesmas três colunas de valor nas linhas e nas faixas', () => {
+    expect(tela).toContain('const regua = useMemo(() => reguaDaCpr(ampliado, maiorValor), [ampliado, maiorValor]);');
     for (const col of ['regua.pagar', 'regua.receber', 'regua.saldo']) expect(Array.from(tela.matchAll(new RegExp(`larg(?:ura=\\{|\\()${col.replace('.', '\\.')}`, 'g'))).length, col).toBe(3);
     expect(tela).not.toMatch(/COL\.(banco|origem|doc|valor)/);
     expect(tela).toContain('origem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || \'—\'}');

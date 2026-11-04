@@ -24,6 +24,8 @@ export interface CampoDaFicha {
   opcoes?: readonly string[];
   unidade?: string;
   casas?: number;
+  /** MEDIR-NO-MAPA-01: o botão ao lado do campo — 'area' = "Medir no mapa" (o polígono, m²), 'linha' = "Régua" (o comprimento, m) */
+  medir?: 'area' | 'linha';
 }
 
 interface DefinicaoDaFicha {
@@ -36,8 +38,8 @@ interface DefinicaoDaFicha {
 
 const MATERIAL = (opcoes: readonly string[]): CampoDaFicha => ({ chave: 'material', rotulo: 'Material', forma: 'texto', opcoes });
 const COBERTO: CampoDaFicha = { chave: 'coberto', rotulo: 'Coberto', forma: 'simnao' };
-const COMPRIMENTO: CampoDaFicha = { chave: 'comprimento_m', rotulo: 'Comprimento', forma: 'numero', unidade: 'm', casas: 1 };
-const AREA_CONSTRUIDA: CampoDaFicha = { chave: 'area_construida_m2', rotulo: 'Área construída', forma: 'numero', unidade: 'm²', casas: 0 };
+const COMPRIMENTO: CampoDaFicha = { chave: 'comprimento_m', rotulo: 'Comprimento', forma: 'numero', unidade: 'm', casas: 1, medir: 'linha' };
+const AREA_CONSTRUIDA: CampoDaFicha = { chave: 'area_construida_m2', rotulo: 'Área construída', forma: 'numero', unidade: 'm²', casas: 0, medir: 'area' };
 const MATERIAL_CONSTRUCAO = MATERIAL(['Alvenaria', 'Madeira', 'Metálico', 'Misto']);
 
 /** a vida útil pela tabela do material (ou de outro campo): o valor escolhido, sem diferenciar maiúscula */
@@ -94,7 +96,7 @@ export const FICHAS: Record<TipoInfra, DefinicaoDaFicha> = {
     vidaUtil: fixa(25),
   },
   curral: {
-    campos: [{ chave: 'area_m2', rotulo: 'Área', forma: 'numero', unidade: 'm²', casas: 0 }, MATERIAL(['Madeira', 'Concreto', 'Metal']),
+    campos: [{ chave: 'area_m2', rotulo: 'Área', forma: 'numero', unidade: 'm²', casas: 0, medir: 'area' }, MATERIAL(['Madeira', 'Concreto', 'Metal']),
       { chave: 'divisoes', rotulo: 'Nº de divisões', forma: 'inteiro' }],
     categoria: 'instalacoes',
     vidaUtil: porTabela('material', { Madeira: 15, Concreto: 25, Metal: 25 }),
@@ -112,7 +114,7 @@ export const FICHAS: Record<TipoInfra, DefinicaoDaFicha> = {
     vidaUtil: fixa(10),
   },
   porteira: {
-    campos: [MATERIAL(['Madeira', 'Metal']), { chave: 'largura_m', rotulo: 'Largura', forma: 'numero', unidade: 'm', casas: 1 }],
+    campos: [MATERIAL(['Madeira', 'Metal']), { chave: 'largura_m', rotulo: 'Largura', forma: 'numero', unidade: 'm', casas: 1, medir: 'linha' }],
     categoria: 'cercas',
     vidaUtil: porTabela('material', { Madeira: 10, Metal: 15 }),
   },
@@ -146,7 +148,7 @@ export const FICHAS: Record<TipoInfra, DefinicaoDaFicha> = {
   casa_funcionario: { campos: [AREA_CONSTRUIDA, MATERIAL_CONSTRUCAO], categoria: 'benfeitorias', vidaUtil: fixa(25) },
   escritorio: { campos: [AREA_CONSTRUIDA, MATERIAL_CONSTRUCAO], categoria: 'benfeitorias', vidaUtil: fixa(25) },
   confinamento: {
-    campos: [{ chave: 'area_m2', rotulo: 'Área', forma: 'numero', unidade: 'm²', casas: 0 },
+    campos: [{ chave: 'area_m2', rotulo: 'Área', forma: 'numero', unidade: 'm²', casas: 0, medir: 'area' },
       { chave: 'capacidade_cab', rotulo: 'Capacidade (cab.)', forma: 'inteiro' }, COBERTO],
     categoria: 'instalacoes', vidaUtil: fixa(20),
   },

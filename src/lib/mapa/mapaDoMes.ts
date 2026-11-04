@@ -26,6 +26,8 @@ export interface FechamentoLido {
   tipo_uso_mes: string | null;
   /** 'fechado' | 'aberto' | 'rascunho' (fix1 E: o aviso "fechamento aberto"). */
   status?: string | null;
+  /** MAPA-CARD-LOTE-01: o lote do CARD (`fechamento_pastos.lote_mes`) — o campo que o Fechamento mostra ("Lote:") e grava. */
+  lote_mes?: string | null;
 }
 
 export interface ItemLido {
@@ -33,7 +35,8 @@ export interface ItemLido {
   quantidade: number;
   peso_medio_kg: number | null;
   categoria_id: string;
-  /** MAPA-PAINEL-COMPACTO-01: o lote da linha do fechamento (texto livre do operador; null = sem lote). */
+  /** MAPA-CARD-LOTE-01: o lote do CARD a que a linha pertence (`lote_mes`, posto pela `separarFechamentosEItens`; null = sem lote).
+   *  Nunca a coluna `fechamento_pasto_itens.lote`: o Fechamento não a mostra nem a grava (o painel dizia "Sem lote" com lote no card). */
   lote?: string | null;
 }
 
@@ -283,8 +286,10 @@ export function separarFechamentosEItens(linhas: readonly FechamentoComItens[], 
   for (const l of linhas) {
     if ((l.fazenda_id != null && !fazendas.has(l.fazenda_id)) || !meses.has(l.ano_mes) || vistos.has(l.id)) continue;
     vistos.add(l.id);
-    fechamentos.push({ id: l.id, pasto_id: l.pasto_id, ano_mes: l.ano_mes, tipo_uso_mes: l.tipo_uso_mes, status: l.status });
-    for (const i of l.fechamento_pasto_itens ?? []) itens.push({ ...i, fechamento_id: l.id });
+    fechamentos.push({ id: l.id, pasto_id: l.pasto_id, ano_mes: l.ano_mes, tipo_uso_mes: l.tipo_uso_mes, status: l.status, lote_mes: l.lote_mes ?? null });
+    /* MAPA-CARD-LOTE-01: cada linha leva o lote do SEU card antes de a unidade juntar os cards (assim a unidade lista os lotes das divisões) */
+    const lote = l.lote_mes?.trim() || null;
+    for (const i of l.fechamento_pasto_itens ?? []) itens.push({ ...i, fechamento_id: l.id, lote });
   }
   return { fechamentos, itens };
 }

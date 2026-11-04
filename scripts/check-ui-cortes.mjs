@@ -806,6 +806,12 @@ const CENARIOS = [
   ...[['flx', ''], ['sai', ''], ['ent', ''], ['flx', '&faixa=per&de=2025-01&ate=2026-12'], ['sai', '&faixa=66']].map(([m, extra]) => ({
     nome: `visao-geral-${m}${extra ? extra.replace(/[&=]/g, '-') : ''}`, url: `tela=visao-geral&barra=0&modo=${m}${extra}`, tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } })),
+  /* VISAO-GERAL-02 — a Visão Geral nova (dado SINTÉTICO `dados/visaoGeral02.ts`): Global e uma fazenda, a distribuição por fazenda
+     (diálogo) e o filtro de uma atividade; nada corta nem sai do lugar nos tamanhos da VG */
+  { nome: 'visao-geral-02', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
+  { nome: 'visao-geral-02-fazenda', url: 'tela=visao-geral-02&fz=fA', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
+  { nome: 'visao-geral-02-por-fazenda', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, regiao: '[role="dialog"]',
+    antes: async (p) => { await p.waitForTimeout(2500); await clicar('[data-testid="vg-ver-por-fazenda"]')(p); await p.waitForTimeout(400); } },
   { nome: 'visao-geral-agricultura', url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' },
     /* abaixo de 768px os filtros da barra somem (`hidden md:flex`): ali o gesto não existe e é pulado */
@@ -969,6 +975,11 @@ const CENARIOS = [
     antes: async (p) => { await clicarTexto('Mês anterior')(p);
       await p.locator('[data-testid="cpr-grupo-saem_hoje"]').first().scrollIntoViewIfNeeded(); await p.waitForTimeout(400); } },
   { nome: 'cpr-ampliado', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicar('[data-testid="cpr-ampliar"]') },
+  /* CPR-LARGURA-01 (Gabriel 03/11 19:50) — a lista cabe a 1.280, 1.440 e 1.920 sem barra horizontal, cada número inteiro na sua célula; o
+     Ampliado sem a barra lateral (`&semlateral=1`), como no app (o Ampliar a esconde) */
+  ...[['cpr-largura', 'tela=cpr', undefined], ['cpr-largura-ampliado', 'tela=cpr&semlateral=1', clicar('[data-testid="cpr-ampliar"]')]].map(([nome, url, antes]) => ({
+    nome, url, antes, tamanhos: [[1280, 720], [1440, 800], [1920, 1000]],
+    semRolarNoX: { lista: '[data-tabela-que-rola]', celulas: '[data-celula-valor], [data-celula-nf], [data-celula-data], [data-celula-status], :has(> [data-valor-da-linha])' } })),
   { nome: 'cpr-selo-estimado', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-selo-estimado"]' },
   { nome: 'cpr-ampliado-totais', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-confirmado-estimado"]', antes: clicar('[data-testid="cpr-ampliar"]') },
   /* ACESSOS-PERFIL-01 — Acessos (lista + Novo, com as mensagens dos campos, + Editar) nos sete tamanhos, e a aba Auditoria do lançamento */
@@ -1448,6 +1459,23 @@ function medirSemRolarNoLugar(sel) {
   return achados;
 }
 
+/* CPR-LARGURA-01 (Gabriel 03/11) — roda NA PAGINA: a lista `lista` cabe na tela SEM BARRA HORIZONTAL (o rolador dela não rola no X) e
+   todo número/data/NF/status dela (`celulas`) cabe na PRÓPRIA célula (o texto da faixa "▼ −R$ 113.386,53" passava 9px da coluna de 94 e
+   "NF 000.000.000" entrava no Status: nada rola nem corta, e por isso as outras regras não viam) */
+function medirSemRolarNoX({ lista, celulas }) {
+  const achados = [];
+  const l = document.querySelector(lista); if (!l) return [{ regra: 'rolagem', texto: `${lista} nao achada` }];
+  const rolador = l.parentElement;
+  if (rolador.scrollWidth > rolador.clientWidth + 1) achados.push({ regra: 'rolagem', texto: `barra horizontal na lista: pede ${rolador.scrollWidth}px, tem ${rolador.clientWidth}` });
+  const rr = l.getBoundingClientRect();
+  for (const e of l.querySelectorAll(celulas)) {
+    const r = e.getBoundingClientRect(); if (r.width < 1) continue;
+    const rg = document.createRange(); rg.selectNodeContents(e); const t = rg.getBoundingClientRect();
+    if (t.width > 0 && (t.right > r.right + 0.5 || t.left < r.left - 0.5)) achados.push({ regra: 'numero-vaza', texto: `"${(e.textContent ?? '').trim()}" passa da celula (${Math.round(t.width)}px em ${Math.round(r.width)})` });
+    else if (r.right > Math.min(rr.right, innerWidth) + 0.5) achados.push({ regra: 'rolagem', texto: `"${(e.textContent ?? '').trim()}" fora da tela` });
+  }
+  return achados;
+}
 /* FIN-CONSORCIO-02 — roda NA PAGINA: dentro de `dentro`, nenhum elemento com conteúdo maior que a caixa na vertical (rolando ou
    cortado), fora `exceto` e o que mora nele; e o próprio `dentro` cabe na janela */
 function medirRolagem({ dentro, exceto }) {
@@ -2514,6 +2542,7 @@ try {
     if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
     const daRolagem = cen.semRolagem ? await p.evaluate(medirRolagem, cen.semRolagem) : [];
     if (cen.tabelaMinima) daRolagem.push(...(await p.evaluate(medirTabelaMinima, cen.tabelaMinima)));
+    if (cen.semRolarNoX) daRolagem.push(...(await p.evaluate(medirSemRolarNoX, cen.semRolarNoX))); // CPR-LARGURA-01
     if (cen.semRolarVertical) daRolagem.push(...(await p.evaluate(medirSemRolarVertical, cen.semRolarVertical)));
     if (cen.rotulosSvg) daRolagem.push(...(await p.evaluate(medirRotulosSvg, cen.rotulosSvg)));
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));

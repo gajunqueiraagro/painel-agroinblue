@@ -20,7 +20,9 @@ type P2 = [number, number];
 type Anel2 = P2[];
 type Poli2 = Anel2[];
 
-export interface LinhaDeCorte { id: string; pontos: Ponto[] }
+/** `seguir` (PIQUETES-PRACA-CONCAVO-01): a linha que sai do pasto e volta corta TODOS os pedaços de dentro (escolha do operador; o padrão é
+ *  cortar no 1º encontro com a borda). */
+export interface LinhaDeCorte { id: string; pontos: Ponto[]; seguir?: boolean }
 export type TipoDeAreaInterna = 'praca' | 'corredor';
 export interface AreaInterna {
   id: string; tipo: TipoDeAreaInterna; nome: string;
@@ -80,7 +82,7 @@ function areaPlanaM2(poli: Poli2): number {
 }
 
 // --- a cena: o pasto menos as áreas internas ----------------------------------------------------------------------------------------
-interface Cena { plano: Plano; trabalho: Poli2[]; aneis: Anel2[] }
+interface Cena { plano: Plano; pasto: Poli2; trabalho: Poli2[]; aneis: Anel2[] }
 interface Obst { a: P2; b: P2; tipo: 'borda' | 'linha' }
 
 const polisDe = (geo: GeoJSON.Polygon | GeoJSON.MultiPolygon, plano: Plano): Poli2[] => {
@@ -93,7 +95,7 @@ function cenaDe(g: GeoJSON.Polygon, internas: readonly Pick<AreaInterna, 'geojso
   const pasto = polisDe(g, plano)[0];
   const clips = internas.flatMap(a => polisDe(a.geojson, plano));
   const trabalho: Poli2[] = clips.length ? difference(pasto, ...clips).filter(p => p.length && p[0].length >= 4) : [pasto];
-  return { plano, trabalho, aneis: trabalho.flatMap(p => p) };
+  return { plano, pasto, trabalho, aneis: trabalho.flatMap(p => p) };
 }
 
 const segsDoAnel = (anel: Anel2): Obst[] => anel.slice(0, -1).map((a, i) => ({ a, b: anel[i + 1], tipo: 'borda' }));
@@ -142,13 +144,67 @@ function ajustarPonta(entrada: P2[], fim: boolean, cena: Cena, obs: readonly Obs
   return volta([...pts.slice(0, n), [e[0] + dir[0] * melhorT, e[1] + dir[1] * melhorT]]);
 }
 
-function resolverNoPlano(linhas: P2[][], cena: Cena): P2[][] {
+function resolverNoPlano(entrada: readonly LinhaDeCorte[], cena: Cena): P2[][] {
+  /* PIQUETES-PRACA-CONCAVO-01: a linha que sai do pasto e volta (contorno côncavo, furo) fica só até o 1º encontro com a borda — salvo `seguir` */
+  const linhas = entrada.map(l => { const pts = semRepetidos(noPlano(l, cena.plano)); return l.seguir ? pts : cortadaNaBorda(pts, cena.pasto); });
   return linhas.map((pts, i) => {
     const obs = obstaculos(cena, linhas, i);
-    const limpo = semRepetidos(pts);
-    return ajustarPonta(ajustarPonta(limpo, true, cena, obs), false, cena, obs);
+    return ajustarPonta(ajustarPonta(pts, true, cena, obs), false, cena, obs);
   });
 }
+
+// --- PIQUETES-PRACA-CONCAVO-01 (Gabriel 03/11 09:41, NJ › Pureza › P19A): a linha que SAI do pasto e VOLTA -------------------------------
+/* No contorno côncavo (ou com furo) a linha que atravessa a reentrância saía, voltava e cortava pedaços a mais ("Linha 4: 333 m · trechos
+   329 · 0 m", 6 divisões no lugar de 4). A borda aqui é a DO PASTO (anel externo e furos), nunca a praça nem o corredor (a linha que os
+   atravessa segue como sempre). */
+const comprimento = (pts: readonly P2[]) => pts.slice(1).reduce((s, q, i) => s + d2(pts[i], q), 0);
+function meioDoCaminho(pts: readonly P2[]): P2 {
+  let falta = comprimento(pts) / 2;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const len = d2(pts[i], pts[i + 1]);
+    if (len >= falta && len > 0) { const k = falta / len; return [pts[i][0] + k * (pts[i + 1][0] - pts[i][0]), pts[i][1] + k * (pts[i + 1][1] - pts[i][1])]; }
+    falta -= len;
+  }
+  return pts[pts.length - 1];
+}
+/** Os pedaços da linha que ficam DENTRO do pasto, na ordem do traçado (a linha partida em cada cruzamento com a borda do pasto). */
+function pedacosDentroDoPasto(pts: P2[], pasto: Poli2): P2[][] {
+  if (pts.length < 2) return [pts];
+  const bordas = pasto.flatMap(segsDoAnel);
+  const pedacos: P2[][] = [];
+  let atual: P2[] = [pts[0]];
+  const fecha = (sub: P2[]) => { if (comprimento(sub) > TOL_M && dentroDe(meioDoCaminho(sub), [pasto])) pedacos.push(sub); };
+  for (let i = 0; i + 1 < pts.length; i++) {
+    for (const c of cortesNoSegmento(pts[i], pts[i + 1], bordas)) { fecha([...atual, c.p]); atual = [c.p]; }
+    atual.push(pts[i + 1]);
+  }
+  fecha(atual);
+  return pedacos;
+}
+/** Sai e volta = 2 ou mais pedaços dentro: fica o 1º. A linha que só passa da borda (1 pedaço) fica como está. */
+function cortadaNaBorda(pts: P2[], pasto: Poli2): P2[] {
+  const p = pedacosDentroDoPasto(pts, pasto);
+  return p.length > 1 ? semRepetidos(p[0]) : pts;
+}
+
+export interface LinhaQueSaiEVolta { id: string; cruzamentos: number; corte: Ponto; seguida: boolean }
+/** As linhas que saem do pasto e voltam: quantas vezes cruzam a borda entre o 1º e o último pedaço de dentro e onde foram cortadas. */
+export function linhasQueSaemEVoltam(g: GeoJSON.Polygon, linhas: readonly LinhaDeCorte[]): LinhaQueSaiEVolta[] {
+  const plano = planoDe(g);
+  const pasto = polisDe(g, plano)[0];
+  return linhas.flatMap(l => {
+    const p = pedacosDentroDoPasto(semRepetidos(noPlano(l, plano)), pasto);
+    if (p.length < 2) return [];
+    const fim = p[0][p[0].length - 1];
+    return [{ id: l.id, cruzamentos: 2 * (p.length - 1), corte: doPlano(plano, fim), seguida: !!l.seguir }];
+  });
+}
+/** Divisão abaixo de 1 ha: âmbar na lista (pode ser pedaço que a linha cortou a mais). */
+export const DIVISAO_PEQUENA_HA = 1;
+export const ehDivisaoPequena = (areaHa: number) => areaHa > 0 && areaHa < DIVISAO_PEQUENA_HA;
+/** "cruza a borda 2×: cortada no 1º encontro" / "…: segue além da borda" (vai junto da frase da linha, no mapa e na barra) */
+export const fraseDaSaida = (cruzamentos: number, seguida = false) =>
+  `cruza a borda ${cruzamentos}×: ${seguida ? 'segue além da borda' : 'cortada no 1º encontro'}`;
 
 const noPlano = (l: LinhaDeCorte, plano: Plano): P2[] => l.pontos.map(p => paraPlano(plano, p));
 const emGraus = (pts: readonly P2[], plano: Plano): Ponto[] => pts.map(p => doPlano(plano, p));
@@ -156,8 +212,8 @@ const emGraus = (pts: readonly P2[], plano: Plano): Ponto[] => pts.map(p => doPl
 /** As linhas com as pontas resolvidas (aparadas ou levadas até a borda/outra linha). Os ids ficam. */
 export function resolverLinhas(g: GeoJSON.Polygon, linhas: readonly LinhaDeCorte[], internas: readonly Pick<AreaInterna, 'geojson'>[] = []): LinhaDeCorte[] {
   const cena = cenaDe(g, internas);
-  const r = resolverNoPlano(linhas.map(l => noPlano(l, cena.plano)), cena);
-  return linhas.map((l, i) => ({ id: l.id, pontos: emGraus(r[i], cena.plano) }));
+  const r = resolverNoPlano(linhas, cena);
+  return linhas.map((l, i) => ({ ...l, pontos: emGraus(r[i], cena.plano) }));
 }
 
 // --- o raio e o encaixe em px ------------------------------------------------------------------------------------------------------
@@ -216,7 +272,7 @@ function fitasDaLinha(pts: P2[], obs: readonly Obst[]): Poli2[] {
 export function divisoesDasLinhas(g: GeoJSON.Polygon, linhas: readonly LinhaDeCorte[], internas: readonly Pick<AreaInterna, 'geojson'>[] = []): Divisao[] {
   const cena = cenaDe(g, internas);
   if (!cena.trabalho.length) return [];
-  const lp = resolverNoPlano(linhas.map(l => noPlano(l, cena.plano)), cena);
+  const lp = resolverNoPlano(linhas, cena);
   const fitas = lp.flatMap((pts, i) => fitasDaLinha(pts, obstaculos(cena, lp, i)));
   const pedacos = (fitas.length ? difference(cena.trabalho, ...fitas) : cena.trabalho)
     .filter(p => p.length && p[0].length >= 4 && areaPlanaM2(p) >= AREA_MINIMA_M2);
@@ -301,7 +357,7 @@ export function deslizarParalela(g: GeoJSON.Polygon, internas: readonly Pick<Are
     }
     novos[i] = melhor;
   });
-  return { id: linha.id, pontos: emGraus(novos, cena.plano) };
+  return { ...linha, pontos: emGraus(novos, cena.plano) };
 }
 
 /** Acrescenta um ponto no trecho mais perto de `p` (a forma não muda: o ponto cai em cima da linha). */
@@ -312,15 +368,15 @@ export function comPontoNaLinha(linha: LinhaDeCorte, p: Ponto): LinhaDeCorte {
     if (r.dist < melhor.dist) melhor = { i, dist: r.dist, q: [r.q[0], r.q[1]] };
   });
   const pontos = [...linha.pontos.slice(0, melhor.i + 1), melhor.q, ...linha.pontos.slice(melhor.i + 1)];
-  return { id: linha.id, pontos };
+  return { ...linha, pontos };
 }
 export function comPontoMovido(linha: LinhaDeCorte, i: number, p: Ponto): LinhaDeCorte {
-  return { id: linha.id, pontos: linha.pontos.map((q, k) => (k === i ? p : q)) };
+  return { ...linha, pontos: linha.pontos.map((q, k) => (k === i ? p : q)) };
 }
 /** Tira o ponto i; a linha precisa de pelo menos 2 pontos (senão devolve null). */
 export function semPontoDaLinha(linha: LinhaDeCorte, i: number): LinhaDeCorte | null {
   if (linha.pontos.length <= 2) return null;
-  return { id: linha.id, pontos: linha.pontos.filter((_q, k) => k !== i) };
+  return { ...linha, pontos: linha.pontos.filter((_q, k) => k !== i) };
 }
 
 // --- pontos dentro das divisões ----------------------------------------------------------------------------------------------------
@@ -525,7 +581,7 @@ export function deduplicarSegmentos(segs: readonly SegmentoDaRegua[]): SegmentoD
  *  de cada linha entre cruzamentos (só o que fica no pasto, fora da praça e do corredor). */
 export function segmentosDaRegua(g: GeoJSON.Polygon, linhas: readonly LinhaDeCorte[], internas: readonly Pick<AreaInterna, 'geojson'>[] = []): SegmentoDaRegua[] {
   const cena = cenaDe(g, internas);
-  const lp = resolverNoPlano(linhas.map(l => noPlano(l, cena.plano)), cena);
+  const lp = resolverNoPlano(linhas, cena);
   const borda = cena.aneis.flatMap(segsDoAnel);
   const daLinha = lp.flatMap(segsDaLinha);
   const saida: { a: P2; b: P2 }[] = [];
@@ -550,7 +606,7 @@ export function trechosDaLinha(g: GeoJSON.Polygon, linhas: readonly LinhaDeCorte
   const cena = cenaDe(g, internas);
   const k = linhas.findIndex(l => l.id === linhaId);
   if (k < 0) return null;
-  const lp = resolverNoPlano(linhas.map(l => noPlano(l, cena.plano)), cena);
+  const lp = resolverNoPlano(linhas, cena);
   const pts = lp[k];
   const outros = obstaculos(cena, lp, k);
   const caminho = (de: P2[]) => de.slice(1).reduce((s, q, i) => s + distanciaM(doPlano(cena.plano, de[i]), doPlano(cena.plano, q)), 0);
