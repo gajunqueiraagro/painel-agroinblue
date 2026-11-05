@@ -87,6 +87,9 @@ import * as VG from './dados/visaoGeral';
 import * as DRE from './dados/dre';
 import { AgriDreLavouraTab } from '@/pages/AgriDreLavouraTab';
 import { BarraSecao } from '@/v2/components/BarraSecao';
+import AuthPage from '@/pages/AuthPage';
+import DefinirSenhaPage from '@/pages/DefinirSenhaPage';
+import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import { VisaoGeralFinanceiro } from '@/v2/pages/VisaoGeralFinanceiro';
 import { FiltrosBarraVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
 import { filtrosVG } from '@/lib/financeiro/visaoGeral';
@@ -693,6 +696,15 @@ if (tela === 'mesclar') {
      `&tipos=3` só compra/abate/venda · `&aberto=1` sem Fechamento · `&vazio=1` sem linha */
   g.__bancoBancada = { from: () => [], rpc: () => null };
   montar(<div className="h-full"><EvolucaoMesTab anoInicial={2026} mesInicial={9} onVoltar={() => {}} /></div>);
+} else if (tela === 'entrada' || tela === 'definir-senha') {
+  /* ACESSO-CONVITE-01 PR 1 — a tela de entrada (sem "Criar conta"; "Esqueci minha senha") e a página do link do e-mail
+     (`&token_hash=…&type=invite|recovery|email_change`, só verificada no clique). Tela inteira, sem a casca do V2. */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  raiz.render(<MemoryRouter>{tela === 'entrada' ? <AuthPage /> : <DefinirSenhaPage />}</MemoryRouter>);
+} else if (tela === 'trocar-senha') {
+  /* ACESSO-CONVITE-01 PR 1 — o "Trocar senha" (o mesmo gatilho da barra do topo; o cenário abre o modal) */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  montar(<div className="p-4"><AlterarSenhaDialog /></div>);
 } else if (tela === 'recorrencias') {
   /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
   g.__bancoBancada = {

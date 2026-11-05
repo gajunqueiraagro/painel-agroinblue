@@ -101,6 +101,16 @@ const mapaPasto = (nome) => async (p) => {
 };
 const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
+  /* ACESSO-CONVITE-01 PR 1 — a entrada (e o "Esqueci minha senha"), a página do link do e-mail (convite; o Enviar vazio mostra os erros
+     nos campos, no lugar reservado) e o "Trocar senha" (aberto; e com os três erros) */
+  { nome: 'entrada', url: 'tela=entrada' },
+  { nome: 'entrada-esqueci', url: 'tela=entrada', antes: clicar('[data-testid="entrada-trocar-modo"]') },
+  { nome: 'definir-senha-convite', url: 'tela=definir-senha&token_hash=bancada&type=invite' },
+  { nome: 'definir-senha-erros', url: 'tela=definir-senha&token_hash=bancada&type=invite', antes: clicar('[data-testid="definir-senha"] button[type="submit"]') },
+  { nome: 'definir-senha-sem-link', url: 'tela=definir-senha' },
+  { nome: 'trocar-senha', url: 'tela=trocar-senha', antes: clicarTexto('Trocar senha') },
+  { nome: 'trocar-senha-erros', url: 'tela=trocar-senha', antes: async (p) => {
+    await clicarTexto('Trocar senha')(p); await clicar('[data-testid="trocar-senha"] button[type="submit"]')(p); } },
   { nome: 'mesclar-vazio', url: 'tela=mesclar&vazio=1' },
   { nome: 'mesclar-comparar', url: 'tela=mesclar' },
   { nome: 'mesclar-uso', url: 'tela=mesclar', antes: clicarTexto('Uso') },
