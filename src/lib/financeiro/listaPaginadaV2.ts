@@ -189,7 +189,8 @@ export function aplicarPlanoNaView(inicial: BuilderView, plano: PlanoBaseV2): Bu
   if (plano.safraId) q = q.eq('safra_id', plano.safraId);
   if (plano.orDirecao) q = q.or(plano.orDirecao);
   if (plano.orDescricao) q = q.or(plano.orDescricao);
-  if (plano.favorecidoId) q = q.eq('favorecido_id', plano.favorecidoId);
+  if (plano.favorecidoIds) q = q.in('favorecido_id', [...plano.favorecidoIds]);
+  else if (plano.favorecidoId) q = q.eq('favorecido_id', plano.favorecidoId);
   if (plano.listaGrupoCusto) q = q.eq('grupo_custo', plano.listaGrupoCusto);
   if (plano.escopoNegocio) q = q.eq('escopo_negocio', plano.escopoNegocio);
   if (plano.orAtividadeOutros) q = q.or(plano.orAtividadeOutros);
@@ -462,6 +463,8 @@ export interface EstadoFiltrosLista {
   produto?: string;
   documento?: string;
   fornecedor?: string;
+  /** FIN-FILTRO-FILIAIS-01: o escolhido + as filiais (mais de um = "+ filiais" marcada) */
+  fornecedores?: readonly string[] | null;
   atividade?: string;
   grupo?: string;
 }
@@ -489,6 +492,7 @@ export function filtrosAplicadosDaLista(base: FiltrosV2, estado: EstadoFiltrosLi
     lista_produto: ativo(estado.produto),
     lista_documento: ativo(estado.documento),
     lista_fornecedor_id: ativo(estado.fornecedor),
+    lista_fornecedor_ids: estado.fornecedores && estado.fornecedores.length > 1 ? estado.fornecedores : undefined,
     lista_atividade: ativo(estado.atividade),
     lista_grupo_custo: ativo(estado.grupo),
   };

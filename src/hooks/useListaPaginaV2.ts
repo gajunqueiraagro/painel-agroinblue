@@ -90,6 +90,10 @@ export function useListaPaginaV2(clienteId: string | null | undefined, pedido: P
     } catch (e) {
       if (!vivo()) return;
       console.error('fn_fin_v2_lista_pagina', normalizarErro(e, 'listaPaginaV2').diagnostico);
+      /* FIN-LISTA-SEM-CAIXA-FILTROS-01: a página que estava na tela é de OUTRO pedido (outros filtros, outra página) — mantê-la
+         mostrava, sob "Tipo = Saídas", as entradas do recorte anterior. Falhou = nenhuma linha e a frase no corpo da lista. */
+      ultima.current = null;
+      setPagina(null);
       setErro(FRASE_LISTA_INDISPONIVEL);
     } finally {
       if (vivo()) { setCarregando(false); emVoo.current = false; }
