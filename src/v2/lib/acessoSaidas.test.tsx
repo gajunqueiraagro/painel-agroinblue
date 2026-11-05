@@ -29,9 +29,12 @@ describe('usePodeAbrir — so consulta o dono', () => {
     expect(pode('financiamentos')).toBe(true);
     expect(pode('fechamento')).toBe(true);
     /* os destinos das saidas tratadas no ACESSOS-FIN-01: nenhum e' dele */
-    for (const t of ['chuvas-lancamento', 'conferencia-mensal', 'mapa-pastos', 'home', 'financeiro-dashboard', 'rateio-adm', 'importacao-extratos'] as const) {
+    for (const t of ['chuvas-lancamento', 'mapa-pastos', 'home', 'financeiro-dashboard', 'rateio-adm', 'importacao-extratos'] as const) {
       expect(`${t}:${pode(t)}`).toBe(`${t}:false`);
     }
+    /* PEC-ABAS-01 (Gabriel 05/11/2026): a Evolução no ano e o mês dela, liberadas */
+    expect(pode('conferencia-mensal')).toBe(true);
+    expect(pode('evolucao-categoria')).toBe(true);
     /* quem segue de fora da OC: leitura e campo */
     for (const p of ['leitura', 'campo']) { como(p); expect(pode(TELA_DA_OPERACAO)).toBe(false); expect(pode('operacoes-comerciais')).toBe(false); }
   });
@@ -42,7 +45,9 @@ describe('usePodeAbrir — so consulta o dono', () => {
     expect(pode('operacoes-comerciais')).toBe(true);
     expect(pode('lancamentos-zoot')).toBe(true);
     expect(pode('financiamentos')).toBe(true);
-    for (const t of ['chuvas-lancamento', 'conferencia-mensal', 'mapa-pastos', 'home'] as const) expect(`${t}:${pode(t)}`).toBe(`${t}:false`);
+    for (const t of ['chuvas-lancamento', 'mapa-pastos', 'home'] as const) expect(`${t}:${pode(t)}`).toBe(`${t}:false`);
+    expect(pode('conferencia-mensal')).toBe(true);
+    expect(pode('evolucao-categoria')).toBe(true);
   });
   it('rota fora do V2 (`/caderno-importacao`): so o admin — o espelho declarado do `SoAdmin`', () => {
     const podeRota = () => renderHook(() => usePodeAbrirRotaSoAdmin()).result.current;
@@ -164,7 +169,8 @@ describe('ACESSOS-FIN-01 — as saidas das telas liberadas (V2Index, lido da FON
     expect(rota.match(/navigate\('\/caderno-importacao'/g)).toHaveLength(1);
   });
   it('"Lançar movimentação": o cartao Chuvas so recebe o callback com a tela de destino — e sem callback o cartao nao existe (LancamentosTab)', () => {
-    expect(rota).toContain("onNavegarChuvas={podeAbrirTela('chuvas-lancamento') ? () => setSection('chuvas-lancamento') : undefined}");
+    /* PEC-ABAS-01 — o callback grava a volta (`abrirChuvasComVolta`); a regra de acesso é a mesma */
+    expect(rota).toContain("onNavegarChuvas={podeAbrirTela('chuvas-lancamento') ? abrirChuvasComVolta : undefined}");
     expect(fonte('src/pages/LancamentosTab.tsx')).toContain(".filter(it => !it.navOnly || (it.value === 'chuvas' && !!onNavegarChuvas))");
   });
   it('"Fechamento Área": "Conferência do GMD" e "Mapa de Pastos" so recebem o callback com a tela de destino — e sem callback o botao nao existe (FechamentoTab)', () => {

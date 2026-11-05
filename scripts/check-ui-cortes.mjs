@@ -101,6 +101,16 @@ const mapaPasto = (nome) => async (p) => {
 };
 const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
+  /* ACESSO-CONVITE-01 PR 1 — a entrada (e o "Esqueci minha senha"), a página do link do e-mail (convite; o Enviar vazio mostra os erros
+     nos campos, no lugar reservado) e o "Trocar senha" (aberto; e com os três erros) */
+  { nome: 'entrada', url: 'tela=entrada' },
+  { nome: 'entrada-esqueci', url: 'tela=entrada', antes: clicar('[data-testid="entrada-trocar-modo"]') },
+  { nome: 'definir-senha-convite', url: 'tela=definir-senha&token_hash=bancada&type=invite' },
+  { nome: 'definir-senha-erros', url: 'tela=definir-senha&token_hash=bancada&type=invite', antes: clicar('[data-testid="definir-senha"] button[type="submit"]') },
+  { nome: 'definir-senha-sem-link', url: 'tela=definir-senha' },
+  { nome: 'trocar-senha', url: 'tela=trocar-senha', antes: clicarTexto('Trocar senha') },
+  { nome: 'trocar-senha-erros', url: 'tela=trocar-senha', antes: async (p) => {
+    await clicarTexto('Trocar senha')(p); await clicar('[data-testid="trocar-senha"] button[type="submit"]')(p); } },
   { nome: 'mesclar-vazio', url: 'tela=mesclar&vazio=1' },
   { nome: 'mesclar-comparar', url: 'tela=mesclar' },
   { nome: 'mesclar-uso', url: 'tela=mesclar', antes: clicarTexto('Uso') },
@@ -640,6 +650,11 @@ const CENARIOS = [
   /* MAPA-GLOBAL-01 — Geo Pastos em Global (dados sintéticos `dados/mapaGlobal.ts`): 2 fazendas; 5 com o nome mais longo, uma sem fechamento
      no mês e uma sem mapa; a visão Pastos com o filtro "Carga alta"; as abas Área por situação e Atividade do gráfico */
   { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
+  /* CHUVAS-LANCAR-01 — a planilha de Chuvas (uma fazenda; o Global = a escolha da estação) · PEC-ABAS-01 — a barra com as 4 abas e a volta */
+  { nome: 'chuvas-lancar', url: 'tela=chuvas-lancar', cabecalhoInteiro: true },
+  { nome: 'chuvas-lancar-global', url: 'tela=chuvas-lancar&global=1' },
+  { nome: 'barra-pecuaria', url: 'tela=barra-pecuaria&aba=lancamentos-zoot' },
+  { nome: 'barra-pecuaria-volta', url: 'tela=barra-pecuaria&aba=conferencia-mensal&de=lancamentos-zoot' },
   /* UI-PERIODO-01 — o componente único de período aberto (popup com os atalhos e os dois calendários; os modos mês e ano; a CPR) */
   ...[['periodo-datas', 'modo=datas&ativ=pec'], ['periodo-duas-atividades', 'modo=datas&ativ=duas'], ['periodo-mes', 'modo=mes'],
     ['periodo-ano', 'modo=ano'], ['periodo-cpr', 'modo=datas&cpr=1']].map(([nome, q]) => ({ nome, url: `tela=periodo&abrir=1&${q}`,
@@ -704,6 +719,9 @@ const CENARIOS = [
         antes: async (p) => { await clicarRotulo(/^Lavoura$/)(p); await tudo(p); await chip('R$/sc ou t')(p); } },
     ];
   }),
+  /* EVOLUCAO-TABELA-01 — metas pequenas: o Δ vira "+17 cab" / "+1,2 t" (o texto mais largo da coluna) e o card Desfrute em pontos */
+  { nome: 'evolucao-ano-meta-pequena', url: 'tela=evolucao-ano&barra=32&meta=pequena', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-meta-pequena-t', url: 'tela=evolucao-ano&barra=32&meta=pequena', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
   /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (o mês por categoria), pior caso (`mocks/evolucaoMes.ts`): os 8 tipos, 3 tipos, mês
      sem Fechamento, sem linha e a aba Composição; NENHUM número cortado a 1126 e a 1366 (Gabriel 30/10 17:16) */

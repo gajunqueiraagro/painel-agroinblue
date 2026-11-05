@@ -15,13 +15,20 @@ import { TELA_OPERACAO_COMERCIAL, type V2Section } from '@/v2/lib/navGrupos';
 const TELAS_QUE_HOSPEDAM_A_OC: readonly V2Section[] = ['lancamentos-zoot', TELA_OPERACAO_COMERCIAL];
 import { temParamsOC } from '@/lib/oc/paramsAberturaOC';
 
-export type SecaoAtalhoProducao = 'operacoes-comerciais' | 'lancamentos-zoot' | 'conferencia-lancamentos';
+export type SecaoAtalhoProducao = 'operacoes-comerciais' | 'lancamentos-zoot' | 'conferencia-lancamentos' | 'conferencia-mensal';
 
+/* PEC-ABAS-01 (Gabriel 04/11/2026) — a 4ª aba "Evolução no ano" (a tela que já existe, `conferencia-mensal`, PROD-EVOLUCAO-01) e a
+   ordem nova: Lançar movimentação · Lançamentos · Evolução no ano · Operações Comerciais (a ordem antiga não tinha motivo registrado). */
 export const OPCOES_ATALHO_PRODUCAO: ReadonlyArray<{ valor: SecaoAtalhoProducao; rotulo: string }> = [
-  { valor: 'operacoes-comerciais', rotulo: 'Operações Comerciais' },
   { valor: 'lancamentos-zoot', rotulo: 'Lançar movimentação' },
   { valor: 'conferencia-lancamentos', rotulo: 'Lançamentos' },
+  { valor: 'conferencia-mensal', rotulo: 'Evolução no ano' },
+  { valor: 'operacoes-comerciais', rotulo: 'Operações Comerciais' },
 ];
+
+/** PEC-ABAS-01 — as telas com o "‹ Voltar" reservado na barra do topo: as 4 abas e a planilha de Chuvas (aberta pelo card de "Lançar
+ *  movimentação"). A volta leva à tela de onde se veio (regra origem e volta); sem origem, o lugar fica reservado e vazio. */
+export const TELAS_COM_VOLTA: readonly V2Section[] = [...OPCOES_ATALHO_PRODUCAO.map((o) => o.valor), 'chuvas-lancamento'];
 
 /** ACESSOS-OC-02 (M7) — as opcoes que a pessoa pode abrir (atalho para tela sem acesso nao e' oferecido). Quem decide o acesso
  *  e' o dono (`nivelDaTela`); aqui so' se filtra, na ordem de sempre. */

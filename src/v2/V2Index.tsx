@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { CentralOperacoesComerciais } from '@/components/operacao-comercial/central/CentralOperacoesComerciais';
 import { paramsAberturaOC, semParamsOC, origemDaVolta } from '@/lib/oc/paramsAberturaOC';
-import { opcoesDoAtalho, secaoDoAtalho, saiDoLancarComOC, type SecaoAtalhoProducao } from '@/v2/lib/atalhosProducao';
+import { opcoesDoAtalho, secaoDoAtalho, saiDoLancarComOC, TELAS_COM_VOLTA, type SecaoAtalhoProducao } from '@/v2/lib/atalhosProducao';
+import { semFiltrosDeOutraTela } from '@/v2/lib/semFiltrosDeOutraTela';
 import { Segmentado } from '@/components/ui/segmentado';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useLancamento } from '@/hooks/useLancamento';
@@ -501,6 +502,8 @@ export default function V2Index() {
   /* VISAO-GERAL-02 (Gabriel 03/11/2026) — a tela aberta por um atalho da Visão Geral (cartão, tabela, atenção, atalho, bloco por
      atividade) mostra "‹ Voltar à Visão Geral" na barra do topo. Some ao voltar ou ao navegar pelo menu. */
   const [voltarAVisaoGeral, setVoltarAVisaoGeral] = useState(false);
+  /* PEC-ABAS-01 — a tela de onde se veio pelas abas da Pecuária (ou pelo card "Chuvas" de Lançar movimentação): o "‹ Voltar" da barra */
+  const [voltarPara, setVoltarPara] = useState<V2Section | null>(null);
   /* FECH-P2-TRAVA-AVISO-01 — a ida do pasto travado ao Valor do Rebanho: o mês com que ele abre e o pasto que a volta reabre.
      O pasto é estado (não ref): consumido, o Fechamento rerenderiza sem ele e não o reabre de novo. */
   const mesDoValorRebanhoRef = useRef<number | null>(null);
@@ -631,6 +634,13 @@ export default function V2Index() {
   };
 
   const [searchParams, setSearchParams] = useSearchParams();
+  /* CHUVAS-LANCAR-01 (Gabriel 04/11/2026) — as telas de Chuvas não leem filtro de URL: o `f_*` de outra tela (o `?f_tipo=abate` das
+     Operações Comerciais) não viaja com elas. Ao entrar numa delas, a barra perde os `f_*` (troca de endereço, `replace`). */
+  useEffect(() => {
+    if (section !== 'chuvas' && section !== 'chuvas-lancamento') return;
+    const p = semFiltrosDeOutraTela(window.location.search);
+    if (p) setSearchParams(p, { replace: true });
+  }, [section, setSearchParams]);
   // PR-OC-NAV-01 — navegação SPA soberana da Central de Operações Comerciais (sem window.location.assign,
   //   sem sessionStorage). Abertura intencional (botão "Abrir" da Central ou link direto ?oc_id) sinaliza o
   //   modal de Compra (?oc_compra=1&oc_id) e troca a seção para Lançamentos, onde o CompraModalShell vive.
@@ -1377,7 +1387,7 @@ export default function V2Index() {
           setSection('conferencia-lancamentos');
         }}
         /* ACESSOS-FIN-01 — o cartao "Chuvas" so' existe com o callback (`itensVisiveis`, LancamentosTab): sem a tela, sem cartao. */
-        onNavegarChuvas={podeAbrirTela('chuvas-lancamento') ? () => setSection('chuvas-lancamento') : undefined}
+        onNavegarChuvas={podeAbrirTela('chuvas-lancamento') ? abrirChuvasComVolta : undefined}
         onNavegarMapaRebanho={() => {
           // Mesma estratégia do hub legado LancarZooHubTab:
           // seta flag em sessionStorage, FechamentoTab abre o modal ao montar.
@@ -1394,7 +1404,7 @@ export default function V2Index() {
       <V2LancamentosWrapper
         cenarioInicial="meta"
         cenariosPermitidos={['meta']}
-        onNavegarChuvas={() => setSection('chuvas-lancamento')}
+        onNavegarChuvas={abrirChuvasComVolta}
       />
     );
     if (section === 'chuvas') return (
@@ -1685,8 +1695,14 @@ export default function V2Index() {
   /* O clique do atalho da barra — a mesma via do antigo "Ver Operações Comerciais": o V2Index troca
      a secao; a barra so' avisa qual. */
   function irPeloAtalho(s: SecaoAtalhoProducao) {
+    if (s !== section) setVoltarPara(section);
     limparOCAoSairDoLancar(s);
     setSection(s);
+  }
+  /* PEC-ABAS-01 — o card "Chuvas" de Lançar movimentação abre a planilha com a volta para lá */
+  function abrirChuvasComVolta() {
+    setVoltarPara(section);
+    setSection('chuvas-lancamento');
   }
 
   /* ⚠ OS ATALHOS DIRETOS DA SIDEBAR ("Visao Geral", "Configuracoes") E A BARRA DO CELULAR TAMBEM SAO
@@ -1695,6 +1711,7 @@ export default function V2Index() {
   function navegarPeloMenu(s: V2Section) {
     voltaAoResumoRef.current = null;
     setVoltarAVisaoGeral(false);
+    setVoltarPara(null);
     limparOCAoSairDoLancar(s);
     setSection(s);
   }
@@ -1702,6 +1719,7 @@ export default function V2Index() {
   function handleSelect(s: V2Section) {
     voltaAoResumoRef.current = null;
     setVoltarAVisaoGeral(false);
+    setVoltarPara(null);
     limparOCAoSairDoLancar(s);
     setSection(s);
     setDrawerAtivo(null);
@@ -1789,7 +1807,12 @@ export default function V2Index() {
         <BarraSecao area={modoResumo ? 'Resumo dos clientes' : rotulo.area} secao={modoResumo ? (abaResumo === 'esteira' ? 'Esteira do mês' : 'Pendências') : rotulo.secao}
           aviso={avisoDoConsultor}
           voltar={voltarAVisaoGeral && section !== 'home' && !modoResumo
-            ? { rotulo: 'Voltar à Visão Geral', onVoltar: () => { setVoltarAVisaoGeral(false); setSection('home'); } } : undefined}
+            ? { rotulo: 'Voltar à Visão Geral', onVoltar: () => { setVoltarAVisaoGeral(false); setSection('home'); } }
+            /* PEC-ABAS-01 — nas abas da Pecuária e na planilha de Chuvas, a volta para a tela de onde se veio */
+            : voltarPara && voltarPara !== section && TELAS_COM_VOLTA.includes(section) && !modoResumo
+              ? { rotulo: 'Voltar', onVoltar: () => { const o = voltarPara; setVoltarPara(null); limparOCAoSairDoLancar(o); setSection(o); } }
+              : undefined}
+          reservarVoltar={TELAS_COM_VOLTA.includes(section) && !modoResumo}
           atalho={(() => {
             if (modoResumo) return undefined;
             /* ACESSOS-02a — sem acesso a' tela, nenhum atalho para as vizinhas. */

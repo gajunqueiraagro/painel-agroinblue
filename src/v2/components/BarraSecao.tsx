@@ -16,8 +16,10 @@
  * havendo uma porta só — o que mudou foi qual: a sidebar não existe no mobile, e ali o
  * operador ficava sem saída.
  */
+import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
-import { LogOut } from 'lucide-react';
+import { KeyRound, LogOut } from 'lucide-react';
+import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfileAtual } from '@/v2/hooks/useProfileAtual';
 
@@ -41,9 +43,12 @@ export interface BarraSecaoProps {
    * Quem decide quando há volta é o `V2Index` (a regra de origem e volta).
    */
   voltar?: { rotulo: string; onVoltar: () => void };
+  /** PEC-ABAS-01 — a tela tem o "‹ Voltar" no lugar dela: sem volta, o lugar fica RESERVADO (invisível), e o caminho não anda quando
+   *  a volta aparece */
+  reservarVoltar?: boolean;
 }
 
-export function BarraSecao({ area, secao, atalho, aviso, voltar }: BarraSecaoProps) {
+export function BarraSecao({ area, secao, atalho, aviso, voltar, reservarVoltar = false }: BarraSecaoProps) {
   const { nome } = useProfileAtual();
   const { signOut } = useAuth();
   return (
@@ -79,10 +84,16 @@ export function BarraSecao({ area, secao, atalho, aviso, voltar }: BarraSecaoPro
             ‹ {voltar.rotulo}
           </button>
         )}
+        {!voltar && reservarVoltar && (
+          <span aria-hidden data-testid="barra-voltar-reservado" className="invisible shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold leading-none"
+            style={{ letterSpacing: '0.275px' }}>‹ Voltar</span>
+        )}
         <p className="min-w-0 truncate text-[11px] leading-none text-white" style={{ letterSpacing: '0.275px' }}>
           <span className="font-semibold">{area}</span>
-          <span className="mx-1 font-semibold text-white/40">/</span>
-          <span className="font-normal text-white/90">{secao}</span>
+          {/* PEC-ABAS-01 (gate de 05/11, 1000×600): com as abas na barra, a seção repete a aba marcada — abaixo de 1.100px ela sai e a
+              área fica (o "Lançar movimentação" cortava 6px); de 1.100px para cima, como aprovado */}
+          <span className={cn('mx-1 font-semibold text-white/40', atalho && 'hidden min-[1100px]:inline')}>/</span>
+          <span className={cn('font-normal text-white/90', atalho && 'hidden min-[1100px]:inline')} data-testid="barra-secao-nome">{secao}</span>
         </p>
       </div>
       {/* ⚠ `ml-auto` NO ATALHO: com o `justify-between` da barra e tres filhos, a margem
@@ -94,6 +105,14 @@ export function BarraSecao({ area, secao, atalho, aviso, voltar }: BarraSecaoPro
         {/* ⚠ "SAIR" PASSA A VIVER AQUI — adendo do 01c. Ele estava no rodapé da sidebar, que
             no mobile nem existe: quem operava pelo celular não tinha por onde sair. Um
             lugar só, e é este; o ícone da sidebar saiu no mesmo PR. */}
+        {/* ACESSO-CONVITE-01 (D5): o "Trocar senha" mora AQUI, ao lado do Sair — a barra existe no computador E no celular; a 🔑
+            da sidebar (só computador) saiu no mesmo PR. */}
+        <AlterarSenhaDialog trigger={
+          <button type="button" title="Trocar senha" aria-label="Trocar senha" data-testid="barra-trocar-senha"
+            className="shrink-0 text-white/80 transition-colors hover:text-white">
+            <KeyRound style={{ width: 15, height: 15 }} />
+          </button>
+        } />
         <button type="button" onClick={signOut} title="Sair" aria-label="Sair"
           className="shrink-0 text-white/80 transition-colors hover:text-white">
           <LogOut style={{ width: 16, height: 16 }} />
