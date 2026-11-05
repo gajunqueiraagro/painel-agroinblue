@@ -4,6 +4,9 @@
  * Cada tela registra o banco simulado em `globalThis.__bancoBancada` (mocks/supabase.ts) antes de montar.
  */
 import React from 'react';
+import { opcoesDoAtalho } from '@/v2/lib/atalhosProducao';
+
+import { ChuvasTab } from '@/pages/ChuvasTab';
 import { PainelPeriodoTab } from '@/components/financeiro-v2/PainelPeriodoTab';
 import { createRoot } from 'react-dom/client';
 import '@/index.css';
@@ -87,6 +90,9 @@ import * as VG from './dados/visaoGeral';
 import * as DRE from './dados/dre';
 import { AgriDreLavouraTab } from '@/pages/AgriDreLavouraTab';
 import { BarraSecao } from '@/v2/components/BarraSecao';
+import AuthPage from '@/pages/AuthPage';
+import DefinirSenhaPage from '@/pages/DefinirSenhaPage';
+import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import { VisaoGeralFinanceiro } from '@/v2/pages/VisaoGeralFinanceiro';
 import { FiltrosBarraVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
 import { filtrosVG } from '@/lib/financeiro/visaoGeral';
@@ -698,6 +704,15 @@ if (tela === 'mesclar') {
      `&tipos=3` só compra/abate/venda · `&aberto=1` sem Fechamento · `&vazio=1` sem linha */
   g.__bancoBancada = { from: () => [], rpc: () => null };
   montar(<div className="h-full"><EvolucaoMesTab anoInicial={2026} mesInicial={9} onVoltar={() => {}} /></div>);
+} else if (tela === 'entrada' || tela === 'definir-senha') {
+  /* ACESSO-CONVITE-01 PR 1 — a tela de entrada (sem "Criar conta"; "Esqueci minha senha") e a página do link do e-mail
+     (`&token_hash=…&type=invite|recovery|email_change`, só verificada no clique). Tela inteira, sem a casca do V2. */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  raiz.render(<MemoryRouter>{tela === 'entrada' ? <AuthPage /> : <DefinirSenhaPage />}</MemoryRouter>);
+} else if (tela === 'trocar-senha') {
+  /* ACESSO-CONVITE-01 PR 1 — o "Trocar senha" (o mesmo gatilho da barra do topo; o cenário abre o modal) */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  montar(<div className="p-4"><AlterarSenhaDialog /></div>);
 } else if (tela === 'recorrencias') {
   /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
   g.__bancoBancada = {
@@ -858,6 +873,40 @@ if (tela === 'mesclar') {
     rpc: () => null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
+} else if (tela === 'chuvas-lancar') {
+  /* CHUVAS-LANCAR-01 — Produção › Chuvas › lançar (a planilha do ano de UMA fazenda), banco SINTÉTICO: 2026 (jan → out, dias de chuva
+     espalhados; o pior caso de largura, 93,0 mm) e 2024–2025 (as linhas do histórico). `&global=1` = o Global (a escolha da estação). */
+  const FZ_CH = { id: 'fch', nome: 'Faz. Exemplo Chuva', codigo: 'EXC', cliente_id: 'cli', tem_pecuaria: true };
+  const global = q.get('global') === '1';
+  g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, loading: false };
+  g.__fazendaBancada = { fazendas: [FZ_CH], fazendasComPecuaria: [FZ_CH], loading: false, setFazendaAtual: () => {},
+    fazendaAtual: global ? { id: '__global__', nome: 'Global', owner_id: '' } : FZ_CH, isGlobal: global, fazendaId: global ? '__global__' : FZ_CH.id };
+  const CHUVAS_SINT: Record<string, unknown>[] = [];
+  let nCh = 0;
+  for (const ano of [2024, 2025, 2026]) for (let m = 1; m <= (ano === 2026 ? 10 : 12); m++) {
+    const chuvoso = m <= 3 || m >= 10;
+    for (let d = 1; d <= 28; d += chuvoso ? 3 : 9) {
+      nCh++;
+      const mm = Math.round(((nCh * 37) % 230) / 10 * (chuvoso ? 2.5 : 0.6) * 10) / 10;
+      if (mm <= 0) continue;
+      CHUVAS_SINT.push({ id: `ch${nCh}`, fazenda_id: FZ_CH.id, cliente_id: 'cli', data: `${ano}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+        milimetros: ano === 2026 && m === 1 && d === 1 ? 93 : mm, observacao: null });
+    }
+  }
+  g.__bancoBancada = { from: (t: string) => (t === 'chuvas' ? CHUVAS_SINT : []), rpc: () => null };
+  montar(<div className="flex h-full min-h-0 flex-col"><ChuvasTab mode="operacional" /></div>);
+} else if (tela === 'barra-pecuaria') {
+  /* PEC-ABAS-01 — a barra do topo das telas da Pecuária com as abas (o `Segmentado` do shell) e a volta ("‹ Voltar", reservado):
+     `&aba=<secao>` marca a aba; `&de=<secao>` = veio de outra aba (a volta aparece). */
+  const de = q.get('de');
+  const opcoes = opcoesDoAtalho(() => true);
+  const escolhida = opcoes.find((o) => o.valor === (q.get('aba') ?? 'lancamentos-zoot')) ?? opcoes[0];
+  const aba = escolhida.valor;
+  montar(<div className="h-full">
+    <BarraSecao area="Produção" secao={escolhida.rotulo} reservarVoltar
+      voltar={de ? { rotulo: 'Voltar', onVoltar: () => {} } : undefined}
+      atalho={<Segmentado altura={22} valor={aba} onEscolher={() => {}} opcoes={opcoes} className="bg-card" />} />
+  </div>);
 } else if (tela === 'periodo') {
   /* UI-PERIODO-01 — o componente único de período (mock ui-validar/periodo.html, aprovado 04/11 09:33) numa barra de tela, com o
      "hoje" fixo (04/11/2026) e as safras SINTÉTICAS do cadastro (pecuária jul–jun, lavoura set–ago: a data vem do cadastro).

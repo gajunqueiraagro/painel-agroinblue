@@ -1,6 +1,6 @@
 /* PROD-EVOLUCAO-01b — o hook do mês por categoria na bancada: linhas SINTÉTICAS no PIOR caso de largura (a regra do item, Gabriel 30/10 17:16:
  * nenhum número cortado) — as 9 categorias, saldo de 5 dígitos no total, os 8 tipos com movimento, produção de 6 dígitos negativa, GMD negativo,
- * pesos fora (âmbar e vermelho). A conta é a da `montarMesPorCategoria` (testada); aqui só o que ela recebe.
+ * pesos fora (âmbar e vermelho); Mamotes M com o kg/cab caindo de 212,1 para 30,0 no mês (EVOLUCAO-CATEGORIA-01, o caso da Vera). A conta é a da `montarMesPorCategoria` (testada); aqui só o que ela recebe.
  * `&tipos=3` = só compra, abate e venda (o mês comum); `&aberto=1` = mês sem Fechamento; `&vazio=1` = mês sem linha nenhuma. */
 import type { ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 import type { CategoriaDoRebanho, LancamentoDoMes } from '@/lib/producao/evolucaoMes';
@@ -14,7 +14,7 @@ const CATS: CategoriaDoRebanho[] = [
 
 /* [código, saldo inicial, kg/cab inicial, kg/cab final] — o total passa de 19 mil cabeças */
 const BASE: [string, number, number, number][] = [
-  ['mamotes_m', 1_987, 98.4, 121.7], ['desmama_m', 2_345, 188.1, 211.7], ['garrotes', 3_388, 330.2, 355.9], ['bois', 4_344, 488.6, 501.1], ['touros', 213, 610.3, 615.4],
+  ['mamotes_m', 1_987, 212.1, 30.0], ['desmama_m', 2_345, 188.1, 211.7], ['garrotes', 3_388, 330.2, 355.9], ['bois', 4_344, 488.6, 501.1], ['touros', 213, 610.3, 615.4],
   ['mamotes_f', 1_909, 95.2, 117.8], ['desmama_f', 1_876, 180.4, 199.6], ['novilhas', 1_543, 305.5, 322.0], ['vacas', 2_235, 440.1, 450.0],
 ];
 const mov = (cab: number, kg: number, so3 = false) => (POUCOS && !so3 ? [0, 0] : [cab, cab * kg]);

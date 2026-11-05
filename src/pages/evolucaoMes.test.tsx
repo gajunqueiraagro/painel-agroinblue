@@ -79,11 +79,11 @@ describe('PROD-EVOLUCAO-01b-fix1 (Gabriel 31/10) — a Evolução por Categoria'
     expect([linha('bois').className, linha('vacas').className].some((c) => c.includes('bg-[#f7f8fa]'))).toBe(true);
     expect(linha('total').className).toContain('bg-[#d5dfec]');
   });
-  it('item 4: o painel abre em Composição; Conferir pesos com dd/mm e nomes curtos (o inteiro no title)', () => {
+  /* EVOLUCAO-CATEGORIA-01 (04/11): a Composição virou a faixa de cima e "Conferir pesos" um botão que abre o painel (fechado ao abrir a tela) */
+  it('item 4: a Composição à vista; Conferir pesos com dd/mm e nomes curtos (o inteiro no title)', () => {
     render(<EvolucaoMesTab anoInicial={2026} mesInicial={9} />);
     expect(screen.getByTestId('evolucao-mes-composicao')).toBeInTheDocument();
-    const abas = screen.getAllByRole('button').filter((b) => /Composição|Conferir pesos/.test(b.textContent ?? ''));
-    expect(abas[0].textContent).toContain('Composição');
+    expect(screen.queryByTestId('evolucao-mes-pesos')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Conferir pesos/ }));
     const tr = document.querySelector('tr[data-peso="L1"]')!;
     expect(tr.querySelector('td')!.textContent).toBe('18/09');

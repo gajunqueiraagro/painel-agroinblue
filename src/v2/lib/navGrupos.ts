@@ -118,6 +118,13 @@ export const HOME_LIBERADA_CLIENTES = false;
 export const TELA_OPERACAO_COMERCIAL: V2Section = 'operacao-comercial';
 export const OPERACAO_COMERCIAL_LIBERADA_CLIENTES = true;
 
+/**
+ * A EVOLUÇÃO POR CATEGORIA (o mês, nível 2 da Evolução no ano) — PEC-ABAS-01 (Gabriel 05/11/2026: "a Evolução no ano é LIBERADA para
+ * os perfis de cliente, no menu e na aba"). Não é item de menu (abre-se clicando o mês), então a marca mora aqui; o nível é o das
+ * outras abas da Pecuária (`TELAS_DO_FINANCEIRO`): gestor e financeiro.
+ */
+export const EVOLUCAO_CATEGORIA_LIBERADA_CLIENTES = true;
+
 export interface NavSecao {
   /* Vazio = secao SEM cabecalho. Usado por "Fechamento Área", que deixou de ser
      exclusivo da pecuaria e por isso nao mora sob nenhum dos escopos. */
@@ -177,7 +184,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'rebanho-home',            label: 'Visão geral',          status: 'ready' },
           { id: 'conferencia-lancamentos', label: 'Lançamentos',          status: 'ready', liberadaClientes: true },
           { id: 'operacoes-comerciais',    label: 'Operações comerciais', status: 'ready', primary: true, liberadaClientes: true },
-          { id: 'conferencia-mensal',      label: 'Evolução no ano',      status: 'ready' },
+          { id: 'conferencia-mensal',      label: 'Evolução no ano',      status: 'ready', liberadaClientes: true },
           { id: 'mapa-pastos',             label: 'Mapa de pastos',       status: 'ready' },
           { id: 'mapa-geo-pastos',         label: 'Geo pastos',           status: 'ready' },
           { id: 'chuvas',                  label: 'Chuvas',               status: 'ready' },

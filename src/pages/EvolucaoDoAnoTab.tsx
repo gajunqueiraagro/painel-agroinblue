@@ -16,7 +16,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useEvolucaoDoAno } from '@/hooks/useEvolucaoDoAno';
 import {
-  avisosDaEvolucao, deltaSobreMeta, montarEvolucao, type Destino, type LinhaDaEvolucao, type Periodo, type Unidade,
+  avisosDaEvolucao, comparacaoComMeta, comparacaoDoCard, montarEvolucao, type Destino, type LinhaDaEvolucao, type Periodo, type Unidade,
 } from '@/lib/producao/evolucaoAno';
 import type { FluxoTipo } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -60,6 +60,23 @@ const SELO: Record<Destino, { rotulo: string; classe: string; title: string }> =
   lanc: { rotulo: 'Lanç.', classe: 'bg-[#e6ecf5] text-[#1e2d47]', title: 'Abre os lançamentos do tipo e do mês' },
   oc: { rotulo: 'OC', classe: 'bg-[#fde8d6] text-[#9a3412]', title: 'Abre as operações comerciais do tipo e do período' },
   fech: { rotulo: 'Fech.', classe: 'bg-[#e1f2e8] text-[#15803d]', title: 'Abre o Fechamento Área do mês' },
+};
+
+/* EVOLUCAO-TABELA-01 (Gabriel 04/11/2026) — a leitura da tabela, como no caderno de campo:
+   (1) separador vertical entre os trimestres (Mar|Abr, Jun|Jul, Set|Out) e um mais forte antes de Ano/Meta/Δ;
+   (2) linha horizontal marcada entre os blocos (Saldo início | Entradas | Saídas | Internas | Saldo final | indicadores) — colados, cor e linha;
+   (3) os indicadores do fim numa fonte MENOR (9,5 px, o piso) que as linhas de cabeças (10 px); Saldo início e Saldo final em destaque (11 px). */
+const TRIMESTRE_TH = 'border-l border-white/35';
+const TRIMESTRE_TD = 'border-l border-[#1e2d47]/20';
+const ANTES_DO_TOTAL_TH = 'border-l-2 border-white/60';
+const ANTES_DO_TOTAL_TD = 'border-l-2 border-[#1e2d47]/35';
+const LINHA_DE_BLOCO = 'border-t-2 border-[#1e2d47]/40';
+/** a linha que abre um bloco: o cabeçalho de Entradas/Saídas/Internas, o Saldo final e o primeiro indicador */
+const ABRE_BLOCO = (l: LinhaDaEvolucao, anterior: LinhaDaEvolucao) =>
+  l.nivel === 'bloco-entrada' || l.nivel === 'bloco-saida' || l.nivel === 'bloco-interna' || l.nivel === 'final'
+  || (l.nivel === 'indicador' && anterior.nivel !== 'indicador');
+const TAMANHO: Partial<Record<LinhaDaEvolucao['nivel'], string>> = {
+  saldo: '[&>td]:text-[11px]', final: '[&>td]:text-[11px]', indicador: '[&>td]:text-[9.5px]',
 };
 
 const FUNDO: Record<LinhaDaEvolucao['nivel'], string> = {
@@ -106,11 +123,16 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
     const s = fmtNum(n, casas);
     return l.comSinal && n > 0 ? `+${s}` : s;
   };
+  /* EVOLUCAO-TABELA-01 (item 4): Δ % só com meta significativa; meta pequena = a diferença absoluta na unidade da tela ("+17 cab") */
+  const SUFIXO: Record<Unidade, string> = { cab: ' cab', arroba: ' @', kg: ' t' };
   const exibirDelta = (l: LinhaDaEvolucao): string => {
-    const d = deltaSobreMeta(l);
-    if (d == null) return '';
-    const casas = l.deltaEmPontos || Math.abs(d) < 100 ? 1 : 0;
-    return `${d > 0 ? '+' : d < 0 ? '' : ''}${fmtNum(d, casas)}${l.deltaEmPontos ? ' pp' : '%'}`;
+    const emToneladas = unidade === 'kg' && l.nivel !== 'indicador';
+    const c = comparacaoComMeta(l, emToneladas ? 1000 : 1);
+    if (c == null) return '';
+    const sinal = c.valor > 0 ? '+' : '';
+    if (c.tipo === 'pontos') return `${sinal}${fmtNum(c.valor, 1)} pp`;
+    if (c.tipo === 'absoluta') return `${sinal}${fmtNum(c.valor, emToneladas ? 1 : l.casas)}${SUFIXO[unidade]}`;
+    return `${sinal}${fmtNum(c.valor, Math.abs(c.valor) < 100 ? 1 : 0)}%`;
   };
 
   const abrir = (l: LinhaDaEvolucao, mes: number | null) => {
@@ -188,18 +210,18 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
                 {MESES_COLS.map((m, i) => {
                   const aberto = ate == null || i + 1 > ate;
                   return (
-                    <th key={m.key} className={cn(TH_REGUA, 'cursor-pointer text-right', aberto && 'opacity-60')}
+                    <th key={m.key} className={cn(TH_REGUA, 'cursor-pointer text-right', aberto && 'opacity-60', i > 0 && i % 3 === 0 && TRIMESTRE_TH)}
                       title={`${m.label}/${ano} por categoria`} onClick={() => onAbrirMes?.(Number(ano), i + 1)}>{m.label}</th>
                   );
                 })}
-                <th className={cn(TH_REGUA, 'text-right')}>{periodo === 'mes' ? 'Mês' : 'Ano'}</th>
+                <th className={cn(TH_REGUA, 'text-right', ANTES_DO_TOTAL_TH)}>{periodo === 'mes' ? 'Mês' : 'Ano'}</th>
                 <th className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>Meta</th>
-                <th className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>Δ %</th>
+                <th className={cn(TH_REGUA, 'text-right font-normal opacity-80')} title="% sobre a meta; com meta pequena, a diferença (cab, @, t ou pp)">Δ</th>
               </tr>
             </thead>
             <tbody>
-              {ev.linhas.map((l) => (
-                <tr key={l.id} className={FUNDO[l.nivel]} data-linha={l.id}>
+              {ev.linhas.map((l, idx) => (
+                <tr key={l.id} className={cn(FUNDO[l.nivel], idx > 0 && ABRE_BLOCO(l, ev.linhas[idx - 1]) && LINHA_DE_BLOCO, TAMANHO[l.nivel])} data-linha={l.id}>
                   <td className={cn(TD_REGUA, 'pl-2')} title={l.title ?? l.rotulo}>
                     <span className="flex min-w-0 items-center gap-1">
                       <span className={cn('min-w-0 truncate', (l.nivel === 'entrada' || l.nivel === 'saida' || l.nivel === 'interna') && 'pl-2')}
@@ -216,7 +238,7 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
                     const aberto = ate == null || i + 1 > ate;
                     const clicavel = !!l.destino && v != null && v !== 0;
                     return (
-                      <td key={i} className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap',
+                      <td key={i} className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', i > 0 && i % 3 === 0 && TRIMESTRE_TD,
                         aberto && 'bg-[repeating-linear-gradient(135deg,rgba(0,0,0,.025)_0_3px,transparent_3px_6px)] text-muted-foreground',
                         v === 0 && 'text-muted-foreground/60 font-normal', v != null && v < 0 && l.nivel !== 'indicador' && 'text-[#c0262d]',
                         clicavel && 'cursor-pointer underline decoration-dotted decoration-[#8aa0bf] underline-offset-2')}
@@ -225,7 +247,7 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
                       </td>
                     );
                   })}
-                  <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap font-bold bg-[rgba(30,45,71,.05)]')} data-coluna="acum">
+                  <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap font-bold bg-[rgba(30,45,71,.05)]', ANTES_DO_TOTAL_TD)} data-coluna="acum">
                     {l.nivel === 'bloco-interna' ? '' : exibir(l, l.acum)}
                   </td>
                   {/* fix1 (item 7): Meta e Δ % são SECUNDÁRIOS — fonte bem menor, sem negrito, cor suave */}
@@ -265,14 +287,19 @@ export function EvolucaoDoAnoTab({ onAbrirOrigem, onAbrirMes }: Props) {
 /** Card: o realizado do período e o % da META DO ANO já feito (na mesma linha, à direita); embaixo a meta e a barra. Sem meta, "—".
  *  ⚠ O número nunca corta (regra do item): o % mora ao lado do valor, a barra é a que cede. */
 function Card({ titulo, valor, meta, unidade, casas, ano }: { titulo: string; valor: number | null; meta: number | null; unidade: string; casas: number; ano: string }) {
-  const pct = valor != null && meta != null && meta !== 0 ? (valor / meta) * 100 : null;
+  /* EVOLUCAO-TABELA-01 (item 4): com meta pequena, a DIFERENÇA ("+1,7 pp", "+17 cab") no lugar do "% da meta" (nunca "950%") */
+  const c = comparacaoDoCard(valor, meta, unidade);
+  const pct = c?.tipo === 'pct' ? c.valor : null;
+  const lado = c == null ? '—' : c.tipo === 'pct' ? `${fmtNum(c.valor, 0)}%`
+    : `${c.valor > 0 ? '+' : ''}${fmtNum(c.valor, c.tipo === 'pontos' ? 1 : casas)}${c.tipo === 'pontos' ? ' pp' : ` ${unidade}`}`;
   return (
     <div className="grid min-w-0 grid-rows-[12px_18px_12px] overflow-hidden rounded-md border border-border bg-card px-2 py-0.5" data-card={titulo}>
       <span className="truncate text-[9.5px] text-muted-foreground" title={titulo}>{titulo}</span>
       <span className="flex items-baseline gap-1 whitespace-nowrap tabular-nums">
         <span className="text-[14px] font-bold leading-[18px]">{valor == null ? '—' : fmtNum(valor, casas)}</span>
         <span className="text-[9.5px] font-semibold text-muted-foreground">{unidade}</span>
-        <span className={cn('ml-auto text-[#1d4ed8]/70', SECUNDARIO)} title={`${pct == null ? '—' : `${fmtNum(pct, 0)}%`} da meta de ${ano}`}>{pct == null ? '—' : `${fmtNum(pct, 0)}%`}</span>
+        <span className={cn('ml-auto text-[#1d4ed8]/70', SECUNDARIO)} data-comparacao=""
+          title={c?.tipo === 'pct' ? `${lado} da meta de ${ano}` : `${lado} sobre a meta de ${ano} (meta pequena: a diferença, não o %)`}>{lado}</span>
       </span>
       <span className={cn('flex items-center gap-1 whitespace-nowrap text-muted-foreground/80 tabular-nums', SECUNDARIO)}>
         <span>meta {ano} {meta == null ? '—' : fmtNum(meta, casas)}</span>

@@ -15,7 +15,7 @@
  *   nivel; o efeito e' PR seguinte. No piloto as tres telas liberadas sao 'editar' para gestor e financeiro.
  */
 import {
-  HOME_LIBERADA_CLIENTES, NAV_GRUPOS, OPERACAO_COMERCIAL_LIBERADA_CLIENTES, TELA_OPERACAO_COMERCIAL,
+  EVOLUCAO_CATEGORIA_LIBERADA_CLIENTES, HOME_LIBERADA_CLIENTES, NAV_GRUPOS, OPERACAO_COMERCIAL_LIBERADA_CLIENTES, TELA_OPERACAO_COMERCIAL,
   type NavGrupo, type NavItem, type V2Section,
 } from './navGrupos';
 
@@ -78,10 +78,18 @@ export const TELAS_DO_FINANCEIRO: readonly V2Section[] = [
   'patrimonio',
 ];
 
+/**
+ * A EVOLUÇÃO DO REBANHO — PEC-ABAS-01 (Gabriel 05/11/2026: "a Evolução no ano é LIBERADA para os perfis de cliente, no menu e na aba"):
+ * a Evolução no ano (item de menu e 4ª aba da Pecuária) e o mês dela (Evolução por Categoria, que se abre clicando o mês), no nível
+ * das outras abas da Pecuária: gestor e financeiro. Campo e leitura seguem fora (a decisão de 06/10 da Produção; e eles não veem meta).
+ */
+export const TELAS_DA_EVOLUCAO: readonly V2Section[] = ['conferencia-mensal', 'evolucao-categoria'];
+
 export const NIVEL_POR_TELA: Partial<Record<V2Section, Record<PerfilCliente, NivelTela>>> = {
   'operacoes-comerciais': GESTOR_E_FINANCEIRO,
   [TELA_OPERACAO_COMERCIAL]: GESTOR_E_FINANCEIRO,
   ...Object.fromEntries(TELAS_DO_FINANCEIRO.map((t) => [t, GESTOR_E_FINANCEIRO])),
+  ...Object.fromEntries(TELAS_DA_EVOLUCAO.map((t) => [t, GESTOR_E_FINANCEIRO])),
 };
 
 const PERFIS: readonly string[] = ['gestor_cliente', 'financeiro', 'campo', 'leitura'];
@@ -100,6 +108,7 @@ function infoDaTela(tela: V2Section): { grupo: GrupoAcesso; liberada: boolean } 
     const m = new Map<V2Section, { grupo: GrupoAcesso; liberada: boolean }>();
     m.set('home', { grupo: 'home', liberada: HOME_LIBERADA_CLIENTES });
     m.set(TELA_OPERACAO_COMERCIAL, { grupo: 'rebanho', liberada: OPERACAO_COMERCIAL_LIBERADA_CLIENTES });
+    m.set('evolucao-categoria', { grupo: 'rebanho', liberada: EVOLUCAO_CATEGORIA_LIBERADA_CLIENTES });
     for (const g of NAV_GRUPOS) {
       if (!ehGrupoAcesso(g.id)) continue;
       for (const sec of g.drawer) for (const item of sec.itens) m.set(item.id, { grupo: g.id, liberada: item.liberadaClientes === true });
