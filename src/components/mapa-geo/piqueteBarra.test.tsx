@@ -1,5 +1,5 @@
 /**
- * PIQUETE-POLIGONO-01 (Gabriel 03/11 21:37) — a barra do "+ Piquete": só "+ Piquete", Desfazer, Cancelar e "Prévia e gravar"; sem o menu do modo
+ * PIQUETE-POLIGONO-01 (Gabriel 03/11 21:37) e PIQUETE-PRO-01 (04/11 10:34) — a barra do "+ Piquete": só "+ Piquete", Desfazer, Cancelar e "Prévia e gravar"; sem o menu do modo
  * nem a "Área desejada"; desenhando, a 2ª linha diz como; fora disso o que falta vem em cinza (nunca vermelho); a lista com nome editável.
  */
 import L from 'leaflet';
@@ -57,12 +57,38 @@ async function abrir() {
 }
 
 describe('PIQUETE-POLIGONO-01 · a barra do "+ Piquete"', () => {
-  it('só "+ Piquete", Desfazer, Cancelar e "Prévia e gravar"; sem o menu do modo; a "Área desejada" fica reservada e invisível', async () => {
+  /* PIQUETE-PRO-01 (Gabriel 04/11 10:34): + "+ Área interna" e "Restante vira piquete"; a "Área desejada" saiu (a lista tem o rodapé dos 100%) */
+  it('"+ Piquete", "+ Área interna", "Restante vira piquete", Desfazer, Cancelar e "Prévia e gravar"; sem o menu do modo nem a "Área desejada"', async () => {
     await abrir();
     const barra = screen.getByTestId('barra-piquetes');
-    expect([...barra.querySelectorAll('button')].map(b => b.textContent?.trim())).toEqual(['+ Piquete', 'Desfazer', 'Cancelar', 'Prévia e gravar']);
+    expect([...barra.querySelectorAll('button')].map(b => b.textContent?.trim()))
+      .toEqual(['+ Piquete', '+ Área interna', 'Restante vira piquete', 'Desfazer', 'Cancelar', 'Prévia e gravar']);
     expect(screen.queryByTestId('piquetes-modo')).toBeNull();
-    expect(screen.getByTestId('piquetes-area-desejada').className).toContain('invisible');
+    expect(screen.queryByTestId('piquetes-area-desejada')).toBeNull();
+  });
+
+  it('a lista: Editar pontos · Renomear · Apagar em cada piquete; o rodapé Pasto · Piquetes · Praça/corredores · SEM PIQUETE (vermelho até zerar)', async () => {
+    await abrir();
+    /* nada desenhado: o pasto inteiro está SEM PIQUETE */
+    expect(screen.getByTestId('piquetes-sem-piquete').textContent).toBe(screen.getByTestId('piquetes-conta-pasto').textContent);
+    expect(screen.getByTestId('piquetes-sem-piquete').dataset.falta).toBe('1');
+    [[0, 0], [0.5, 0], [0.5, 1], [0, 1], [0, 0]].forEach(([k, j]) => clicar(k, j));
+    expect(screen.getByTestId('piquetes-restante').hasAttribute('disabled')).toBe(false);
+    fireEvent.click(screen.getByTestId('piquetes-restante'));
+    expect(screen.getByTestId('piquetes-sem-piquete').textContent).toBe('0,00');
+    expect(screen.getByTestId('piquetes-sem-piquete').dataset.falta).toBeUndefined();
+    expect(screen.getByTestId('piquetes-soma').textContent).toBe(screen.getByTestId('piquetes-conta-pasto').textContent);
+    expect(screen.getByTestId('piquetes-restante').hasAttribute('disabled')).toBe(true);
+    expect(screen.getByTestId('piquetes-previa').hasAttribute('disabled')).toBe(false);
+    /* Renomear põe o cursor no nome; Editar pontos liga a edição (o botão fica azul); Apagar tira o piquete */
+    fireEvent.click(screen.getAllByTestId('piquetes-renomear')[1]);
+    expect(document.activeElement).toBe(screen.getAllByTestId('piquetes-nome')[1]);
+    fireEvent.click(screen.getAllByTestId('piquetes-editar')[0]);
+    expect(piqAtual.editando).not.toBeNull();
+    expect(screen.getAllByTestId('piquetes-editar')[0].className).toContain('bg-blue-600');
+    fireEvent.click(screen.getAllByTestId('piquetes-apagar')[0]);
+    expect(screen.getAllByTestId('piquetes-linha')).toHaveLength(1);
+    expect(screen.getByTestId('piquetes-sem-piquete').dataset.falta).toBe('1');
   });
 
   it('desenhando, a 2ª linha diz como; fora disso o que falta vem em cinza; com 2 piquetes, a prévia libera', async () => {

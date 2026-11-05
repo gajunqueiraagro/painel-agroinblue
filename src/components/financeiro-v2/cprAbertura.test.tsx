@@ -2,8 +2,9 @@
  * P106 (Gabriel 26/10/2026) — Contas a Pagar e Receber: o PERÍODO por mês e a ABERTURA padrão, com a tela MONTADA.
  *   A1 abre SEMPRE em "Mês atual" + "Ambos" — mesmo com o instantâneo antigo da volta do contrato ("60 dias" + "A Pagar") e com um
  *      instantâneo novo ("Mês futuro" + "A Receber"): período e lado não se restauram; a visão e o ampliado, sim (como antes)
- *   A2 os três botões dão o mês inteiro (hoje 26/10/2026: set, out, nov) e as datas de/até mostram o intervalo; trocar de lado é livre
+ *   A2 os três botões dão o mês inteiro (hoje 26/10/2026: set, out, nov) e o intervalo em vigor fica à vista; trocar de lado é livre
  *   A3 "30 dias" e "60 dias" não existem mais; a ordem é Mês anterior · Mês atual · Mês futuro · Escolher datas
+ *   A4 (UI-PERIODO-01) "Escolher datas" é o componente único de período: aplicar um atalho dele passa a "Escolher datas" com aquelas datas
  * O banco é um falso vazio (a abertura não depende de linha nenhuma); o dia de hoje é fixado no relógio.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -41,9 +42,8 @@ const montar = async () => {
   await act(async () => { for (let i = 0; i < 8; i += 1) await Promise.resolve(); });
 };
 const ativo = (rotulo: string) => screen.getAllByRole('button', { name: rotulo }).some((b) => b.className.includes('bg-primary'));
-/* o campo de data é um input: o que a pessoa vê é o `value` dele */
-const valorDe = (id: string) => { const c = screen.getByTestId(id); return c.querySelector('input')?.value ?? c.textContent; };
-const datas = () => [valorDe('cpr-de'), valorDe('cpr-ate')];
+/* UI-PERIODO-01 — o intervalo em vigor, à vista ao lado do "Escolher datas" ("01/10/2026 – 31/10/2026") */
+const datas = () => (screen.getByTestId('cpr-intervalo').textContent ?? '').split(' – ');
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -91,5 +91,20 @@ describe('P106 — período por mês e abertura padrão (tela montada)', () => {
     const rotulos = screen.getAllByRole('button').map((b) => b.textContent);
     const i = rotulos.indexOf('Mês anterior');
     expect(rotulos.slice(i, i + 4)).toEqual(['Mês anterior', 'Mês atual', 'Mês futuro', 'Escolher datas']);
+  });
+
+  it('A4 "Escolher datas" abre o componente único; "Este ano" + Aplicar = o ano inteiro, e os botões de mês apagam', async () => {
+    await montar();
+    fireEvent.click(screen.getByTestId('cpr-periodo'));
+    fireEvent.click(screen.getByRole('button', { name: 'Este ano' }));
+    fireEvent.click(screen.getByTestId('cpr-periodo-aplicar'));
+    await act(async () => { await Promise.resolve(); });
+    expect(datas()).toEqual(['01/01/2026', '31/12/2026']);
+    expect(screen.getByTestId('cpr-periodo').textContent).toBe('2026');
+    expect(ativo('Mês atual')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Mês atual' }));
+    await act(async () => { await Promise.resolve(); });
+    expect(datas()).toEqual(['01/10/2026', '31/10/2026']);
+    expect(screen.getByTestId('cpr-periodo').textContent).toBe('Escolher datas');
   });
 });

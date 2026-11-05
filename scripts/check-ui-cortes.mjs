@@ -598,16 +598,28 @@ const CENARIOS = [
           ]),
           ...casos.map(([nome, url]) => ({ nome: `mapa-validacao-${nome}-previa`, url, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
             await abrirPiquetes(url)(p);
-            /* PIQUETE-POLIGONO-01: o "+ Piquete" abre desenhando; a prévia pede 2 piquetes — a metade oeste e a leste do P_01, fechando no 1º ponto */
+            /* PIQUETE-POLIGONO-01: o "+ Piquete" abre desenhando; a prévia pede 2 piquetes — a metade oeste do P_01, fechando no 1º ponto */
             const c = await p.locator('path[data-geo-id="g1"]').first().boundingBox();
             const em = (fx, fy) => [c.x + fx * c.width, c.y + fy * c.height];
             const piquete = async (cantos) => { for (const [fx, fy] of [...cantos, cantos[0]]) { const [x, y] = em(fx, fy); await p.mouse.click(x, y); await p.waitForTimeout(120); } };
             await piquete([[0.02, 0.02], [0.5, 0.02], [0.5, 0.95], [0.02, 0.95]]);
-            await p.locator('[data-testid="piquetes-mais-piquete"]').click();
-            await piquete([[0.5, 0.02], [0.98, 0.02], [0.98, 0.95], [0.5, 0.95]]);
+            /* PIQUETE-PRO-01: a prévia só com o pasto 100% em piquetes — o resto (a leste e a faixa da borda que os cliques deixam) vira o
+               2º piquete pelo "Restante" (com a divisão do cadastro, `&grupo=1`, o P_01 aceita no máximo 2 partes: desenhar as duas metades
+               e ainda o Restante daria 3) */
+            await p.locator('[data-testid="piquetes-restante"]').click();
             await p.waitForTimeout(300);
             await p.locator('[data-testid="piquetes-previa"]').click();
             await p.locator('[data-testid="piquetes-dialogo-previa"]').waitFor({ timeout: 3000 }); await p.waitForTimeout(400); } })),
+          /* PIQUETE-PRO-01: o "+ Área interna" ligado (o seletor Praça | Corredor | Benfeitoria na barra) e a lista com piquetes desenhados
+             (Editar pontos · Renomear · Apagar e o rodapé dos 100%, com o SEM PIQUETE vermelho) */
+          { nome: 'mapa-validacao-piquetes-area-interna', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="piquetes-tela"]', ...medir, antes: async (p) => {
+            await abrirPiquetes('tela=mapa-geo')(p);
+            await p.locator('[data-testid="piquetes-mais-area"]').click(); await p.waitForTimeout(400); } },
+          { nome: 'mapa-validacao-piquetes-lista-pro', url: 'tela=mapa-geo', tamanhos: T, regiao: '[data-testid="piquetes-lista"]', antes: async (p) => {
+            await abrirPiquetes('tela=mapa-geo')(p);
+            const c = await p.locator('path[data-geo-id="g1"]').first().boundingBox();
+            for (const [fx, fy] of [[0.02, 0.02], [0.5, 0.02], [0.5, 0.95], [0.02, 0.95], [0.02, 0.02]]) { await p.mouse.click(c.x + fx * c.width, c.y + fy * c.height); await p.waitForTimeout(120); }
+            await p.locator('[data-testid="piquetes-editar"]').first().click(); await p.waitForTimeout(400); } },
         ];
       })(),
     ];
@@ -633,6 +645,14 @@ const CENARIOS = [
   { nome: 'chuvas-lancar-global', url: 'tela=chuvas-lancar&global=1' },
   { nome: 'barra-pecuaria', url: 'tela=barra-pecuaria&aba=lancamentos-zoot' },
   { nome: 'barra-pecuaria-volta', url: 'tela=barra-pecuaria&aba=conferencia-mensal&de=lancamentos-zoot' },
+  /* UI-PERIODO-01 — o componente único de período aberto (popup com os atalhos e os dois calendários; os modos mês e ano; a CPR) */
+  ...[['periodo-datas', 'modo=datas&ativ=pec'], ['periodo-duas-atividades', 'modo=datas&ativ=duas'], ['periodo-mes', 'modo=mes'],
+    ['periodo-ano', 'modo=ano'], ['periodo-cpr', 'modo=datas&cpr=1']].map(([nome, q]) => ({ nome, url: `tela=periodo&abrir=1&${q}`,
+    antes: async (p) => { await p.locator('[data-testid="seletor-de-periodo-popup"]').waitFor(); await p.waitForTimeout(300); } })),
+  { nome: 'painel-periodo', url: 'tela=painel-periodo' },
+  { nome: 'painel-periodo-aberto', url: 'tela=painel-periodo&abrir=1', antes: async (p) => { await p.locator('[data-testid="painel-periodo-popup"]').waitFor(); await p.waitForTimeout(300); } },
+  { nome: 'periodo-selecionar-ano', url: 'tela=periodo&abrir=1&modo=datas&ativ=duas', antes: async (p) => {
+    await p.locator('[data-testid="seletor-de-periodo-popup"]').waitFor(); await p.locator('[data-atalho="selecionar-ano"]').click(); await p.waitForTimeout(300); } },
   { nome: 'mapa-global-5', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
   /* fix1 (1): o hover do cabeçalho que ordena, nas duas tabelas da visão Fazendas */
   { nome: 'mapa-global-hover-fazendas', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], hoverCabecalho: '[data-testid="global-card-fazendas"]' },
@@ -730,6 +750,9 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-modal', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
       { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
       { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
+      /* CADERNO-CAMPO-01 peça 1 — o diálogo "Exportar mês" (as folhas para marcar, a linha do motivo reservada, Cancelar/Gerar PDF) */
+      { nome: 'fechamento-grupo-exportar-mes', url: URL, tamanhos: T, regiao: '[data-testid="exportar-mes"]', antes: async (p) => { await grade(p);
+        await p.locator('button', { hasText: 'Exportar mês (PDF)' }).click(); await p.locator('[data-testid="exportar-mes"]').waitFor(); await p.waitForTimeout(800); } },
     ];
   })(),
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos, modo "Grupos" (dado SINTÉTICO no `tela=pastos`): a lista dos grupos, com os

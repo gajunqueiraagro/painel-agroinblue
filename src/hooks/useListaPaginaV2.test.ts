@@ -117,6 +117,23 @@ describe('useListaPaginaV2', () => {
     expect(result.current.pagina).toBeNull();
     erro.mockRestore();
   });
+
+  it('FIN-LISTA-SEM-CAIXA-FILTROS-01 — trocou o filtro e a ida falhou: a página do recorte ANTERIOR sai da tela (nunca as entradas sob "Saídas")', async () => {
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const com = (filtros: Record<string, unknown>) => ({ ...pedido(0), filtros });
+    const inicial: { f: Record<string, unknown> } = { f: { anos: [2026] } };
+    const { result, rerender } = renderHook(({ f }) => useListaPaginaV2('cli', com(f), true), { initialProps: inicial });
+    await act(async () => { banco.pedidos[0].resolver({ data: resposta(['entrada-1', 'entrada-2']), error: null }); });
+    expect(result.current.pagina?.linhas.map((l) => l.id)).toEqual(['entrada-1', 'entrada-2']);
+    rerender({ f: { anos: [2026], tipo_operacao: '2-Saídas' } });
+    await act(async () => { banco.pedidos[1].resolver({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }); });
+    expect(result.current.erro).toBe(FRASE_LISTA_INDISPONIVEL);
+    expect(result.current.pagina).toBeNull();
+    /* e a próxima ida é COMPLETA (não reaproveita totais de um recorte que não está mais na tela) */
+    rerender({ f: { anos: [2026] } });
+    expect(banco.pedidos[2].args.p_ordem).toEqual({ campo: 'default', dir: 'asc', nivel: 'centro' });
+    erro.mockRestore();
+  });
 });
 
 /* P73 — salvou UM lançamento: o canal traz o id e a lista relê SÓ essa linha (`so_ids`); os totais só quando o que mudou mexe neles */

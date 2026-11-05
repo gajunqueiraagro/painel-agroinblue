@@ -446,6 +446,14 @@ const CENARIOS = [
       ['outra atividade', noLugar('[data-testid="analise-tabela-linha-1"]')]] },
   { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
   /* VISAO-GERAL-02 — escolher uma atividade nas pílulas (e voltar a "Todas") e abrir a distribuição por fazenda não move nada acima */
+  /* UI-PERIODO-01 — com o popup aberto, nada do popup se desloca ao escolher atalho, dia, mês do calendário ou a grade de anos (a grade
+     abre POR CIMA dos calendários, na mesma altura) */
+  { nome: 'periodo', url: 'tela=periodo&abrir=1&modo=datas&ativ=duas', antes: async (p) => { await p.locator('[data-testid="seletor-de-periodo-popup"]').waitFor(); await espera(p, 300); }, estados: [
+    ['clique num dia (início)', clicar('[data-testid="seletor-de-periodo-cal-inicio"] [data-dia="2026-10-10"]')],
+    ['mês seguinte no calendário', clicar('[data-testid="seletor-de-periodo-cal-fim"] [aria-label="próximo mês"]')],
+    ['atalho Esta safra · Lavoura', clicar('[data-atalho="esta-safra-agricultura"]')],
+    ['atalho Últimos 12 meses', clicar('[data-atalho="ultimos-12"]')],
+    ['Selecionar o ano', clicar('[data-atalho="selecionar-ano"]')]] },
   { nome: 'visao-geral-02', url: 'tela=visao-geral-02', antes: (p) => espera(p, 2500), estados: [
     /* `noTopo`: as pílulas e o link ficam abaixo da dobra e o clique rola a página até eles; a medida volta ao topo para comparar
        o LUGAR das coisas, não a rolagem (a área dos blocos guarda a altura de "Todas": filtrar não encolhe a página) */

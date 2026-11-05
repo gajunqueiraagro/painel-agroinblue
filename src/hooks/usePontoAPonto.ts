@@ -24,9 +24,12 @@ export function areaDoAnelM2(pontos: readonly Ponto[]): number {
 }
 export const comprimentoM = (pontos: readonly Ponto[]) => reguaLivre(pontos).totalM;
 export const textoDaArea = (m2: number) => `${Math.round(m2).toLocaleString('pt-BR')} m²`;
-/** O texto da medida ao vivo: o comprimento (linha) ou a área (polígono). */
-export const textoDaMedida = (forma: FormaDoPontoAPonto, pontos: readonly Ponto[]) =>
-  (forma === 'linha' ? textoDoLado(comprimentoM(pontos)) : textoDaArea(areaDoAnelM2(pontos)));
+/** PIQUETE-PRO-01 (item 5): no piquete a área ao vivo é em hectare, 2 casas ("56,06 ha"), nunca m². */
+export const textoDaAreaHa = (m2: number) => `${(Math.round(m2 / 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha`;
+export type UnidadeDaArea = 'm2' | 'ha';
+/** O texto da medida ao vivo: o comprimento (linha, em m) ou a área (polígono; m² ou ha). */
+export const textoDaMedida = (forma: FormaDoPontoAPonto, pontos: readonly Ponto[], unidade: UnidadeDaArea = 'm2') =>
+  (forma === 'linha' ? textoDoLado(comprimentoM(pontos)) : unidade === 'ha' ? textoDaAreaHa(areaDoAnelM2(pontos)) : textoDaArea(areaDoAnelM2(pontos)));
 
 interface Opcoes {
   mapa: L.Map | null;
@@ -34,9 +37,17 @@ interface Opcoes {
   forma: FormaDoPontoAPonto | null;
   aoTerminar: (pontos: Ponto[]) => void;
   aoCancelar: () => void;
+  /** PIQUETE-PRO-01 (item 2): o ímã — o ponto clicado (e o cursor ao vivo) grudam onde o chamador mandar (borda do pasto, do vizinho) */
+  ajustar?: (p: Ponto) => Ponto;
+  unidade?: UnidadeDaArea;
+  /** a área ao vivo (m²) que o chamador conta (o piquete: o que vai ficar, já recortado pelo pasto e pelos vizinhos); sem ela, a do anel clicado */
+  areaM2?: (pontos: Ponto[]) => number;
 }
 
-export function usePontoAPonto({ mapa, forma, aoTerminar, aoCancelar }: Opcoes) {
+export function usePontoAPonto({ mapa, forma, aoTerminar, aoCancelar, ajustar, unidade = 'm2', areaM2 }: Opcoes) {
+  const ajustarRef = useRef(ajustar); ajustarRef.current = ajustar;
+  const areaRef = useRef(areaM2); areaRef.current = areaM2;
+  const noIma = useCallback((p: Ponto): Ponto => (ajustarRef.current ? ajustarRef.current(p) : p), []);
   const [pontos, setPontos] = useState<Ponto[]>([]);
   const pontosRef = useRef<Ponto[]>([]);
   const trocar = useCallback((p: Ponto[]) => { pontosRef.current = p; setPontos(p); }, []);
@@ -62,7 +73,7 @@ export function usePontoAPonto({ mapa, forma, aoTerminar, aoCancelar }: Opcoes) 
     const dava = mapa.doubleClickZoom.enabled();
     const marcar = (ll: L.LatLng) => {
       const pts = pontosRef.current;
-      const p: Ponto = [ll.lng, ll.lat];
+      const p: Ponto = noIma([ll.lng, ll.lat]);
       if (forma === 'poligono' && pts.length >= 3
         && mapa.latLngToContainerPoint(L.latLng(pts[0][1], pts[0][0])).distanceTo(mapa.latLngToContainerPoint(ll)) <= FECHA_NO_PRIMEIRO_PX) { terminar(); return; }
       const u = pts[pts.length - 1];
@@ -100,7 +111,7 @@ export function usePontoAPonto({ mapa, forma, aoTerminar, aoCancelar }: Opcoes) 
       if (dava) mapa.doubleClickZoom.enable();
       contentor.style.cursor = cursor;
     };
-  }, [mapa, forma, terminar, trocar]);
+  }, [mapa, forma, terminar, trocar, noIma]);
 
   /* o teclado: Enter termina, Backspace tira o último ponto, Esc cancela (antes de qualquer outro dono do Esc) */
   useEffect(() => {
@@ -130,18 +141,19 @@ export function usePontoAPonto({ mapa, forma, aoTerminar, aoCancelar }: Opcoes) 
       if (cursor && pts.length) {
         vivo.setLatLng(ll(cursor));
         vivo.setIcon(L.divIcon({ className: 'ponto-a-ponto-medida', iconSize: [0, 0],
-          html: `<span data-testid="ponto-a-ponto-medida" style="position:absolute;left:14px;top:-18px">${htmlDaMedida(textoDaMedida(forma, com))}</span>` }));
+          html: `<span data-testid="ponto-a-ponto-medida" style="position:absolute;left:14px;top:-18px">${htmlDaMedida(forma === 'poligono' && areaRef.current
+            ? (unidade === 'ha' ? textoDaAreaHa : textoDaArea)(com.length >= 3 ? areaRef.current(com) : 0) : textoDaMedida(forma, com, unidade))}</span>` }));
         if (!g.hasLayer(vivo)) vivo.addTo(g);
       } else vivo.remove();
     };
     pontosRef.current.forEach((p, i) => L.circleMarker(ll(p), { radius: i === 0 && forma === 'poligono' ? 5 : 3, color: '#7c3aed', weight: 2, fillColor: '#fff',
       fillOpacity: 1, interactive: false }).addTo(g));
     desenhar(null);
-    const aoMover = (ev: L.LeafletMouseEvent) => desenhar([ev.latlng.lng, ev.latlng.lat]);
+    const aoMover = (ev: L.LeafletMouseEvent) => desenhar(noIma([ev.latlng.lng, ev.latlng.lat]));
     const aoSair = () => desenhar(null);
     mapa.on('mousemove', aoMover); mapa.on('mouseout', aoSair);
     return () => { mapa.off('mousemove', aoMover); mapa.off('mouseout', aoSair); g.remove(); };
-  }, [mapa, forma, pontos]);
+  }, [mapa, forma, pontos, unidade, noIma]);
 
   /** tira o último ponto (o Ctrl+Z de quem usa a ferramenta, que tem o seu próprio desfazer) */
   const tirarUltimo = useCallback(() => { if (pontosRef.current.length) trocar(pontosRef.current.slice(0, -1)); }, [trocar]);

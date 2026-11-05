@@ -23,7 +23,8 @@ type Poli2 = Anel2[];
 /** `seguir` (PIQUETES-PRACA-CONCAVO-01): a linha que sai do pasto e volta corta TODOS os pedaços de dentro (escolha do operador; o padrão é
  *  cortar no 1º encontro com a borda). */
 export interface LinhaDeCorte { id: string; pontos: Ponto[]; seguir?: boolean }
-export type TipoDeAreaInterna = 'praca' | 'corredor';
+/** 'benfeitoria' (PIQUETE-PRO-01): a área interna desenhada no "+ Área interna" que não é praça nem corredor (sede, galpão…) */
+export type TipoDeAreaInterna = 'praca' | 'corredor' | 'benfeitoria';
 export interface AreaInterna {
   id: string; tipo: TipoDeAreaInterna; nome: string;
   geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon;
@@ -659,14 +660,127 @@ export function novaPraca(id: string, nome: string, anel: readonly Ponto[]): Are
  *  fora do pasto ou só por cima dos outros (menos de 0,5 m²) = nada. */
 export function piqueteDesenhado(g: GeoJSON.Polygon, existentes: readonly (GeoJSON.Polygon | GeoJSON.MultiPolygon)[], pontos: readonly Ponto[]): GeoJSON.Polygon | GeoJSON.MultiPolygon | null {
   if (pontos.length < 3) return null;
-  const plano = planoDe(g);
-  const anel = fechaAnel(pontos).map(q => paraPlano(plano, q));
-  const dentro = intersection(polisDe(g, plano)[0], [anel]);
-  const outros = existentes.flatMap(e => polisDe(e, plano));
-  const sobra = (outros.length ? difference(dentro, ...outros) : dentro).filter(p => p.length && p[0].length >= 4 && areaPlanaM2(p) >= AREA_MINIMA_M2);
+  return piqueteRecortado(g, existentes, { type: 'Polygon', coordinates: [fechaAnel(pontos)] });
+}
+
+// --- PIQUETE-PRO-01 (Gabriel 04/11 10:34): corrigir, encaixar e fechar 100% do pasto ---------------------------------------------------
+type Geo = GeoJSON.Polygon | GeoJSON.MultiPolygon;
+const deVolta = (plano: Plano, polis: Poli2[]): Geo | null => {
+  const sobra = polis.filter(p => p.length && p[0].length >= 4 && areaPlanaM2(p) >= AREA_MINIMA_M2);
   if (!sobra.length) return null;
   const partes = sobra.map(p => p.map(a => a.map(q => doPlano(plano, q))));
   return partes.length === 1 ? { type: 'Polygon', coordinates: partes[0] } : { type: 'MultiPolygon', coordinates: partes };
+};
+
+/** A forma (desenhada ou editada) DENTRO do pasto e sem cobrir `outros` (os piquetes vizinhos e as áreas internas ficam com o que é deles). */
+export function piqueteRecortado(g: GeoJSON.Polygon, outros: readonly Geo[], forma: Geo): Geo | null {
+  const plano = planoDe(g);
+  const dentro = intersection(polisDe(g, plano)[0], polisDe(forma, plano));
+  const obst = outros.flatMap(e => polisDe(e, plano));
+  return deVolta(plano, obst.length ? difference(dentro, ...obst) : dentro);
+}
+
+/** O que sobra do pasto fora de `cobertos` (piquetes + áreas internas): o "SEM PIQUETE" e o "Restante vira piquete". */
+export function sobraDoPasto(g: GeoJSON.Polygon, cobertos: readonly Geo[]): Geo | null {
+  const plano = planoDe(g);
+  const pasto = polisDe(g, plano)[0];
+  const obst = cobertos.flatMap(e => polisDe(e, plano));
+  return deVolta(plano, obst.length ? difference(pasto, ...obst) : [pasto]);
+}
+
+/** O ponto `p` em cima do anel (a até `epsM`): a posição ao longo dele (índice do trecho + fração), ou null. */
+function noAnelEm(plano: Plano, anel: readonly Ponto[], p: Ponto, epsM: number): number | null {
+  const q = paraPlano(plano, p);
+  let pos: number | null = null, dist = Infinity;
+  for (let i = 0; i + 1 < anel.length; i++) {
+    const r = maisPerto(q, paraPlano(plano, anel[i]), paraPlano(plano, anel[i + 1]));
+    if (r.dist <= epsM && r.dist < dist) { pos = i + r.k; dist = r.dist; }
+  }
+  return pos;
+}
+
+/** Os cantos do anel entre as posições `de` e `ate`, andando para a frente (o anel fechado: o último repete o primeiro). */
+function cantosEntre(anel: readonly Ponto[], de: number, ate: number): Ponto[] {
+  const n = anel.length - 1;
+  const fim = ate >= de ? ate : ate + n;
+  const r: Ponto[] = [];
+  for (let k = Math.floor(de) + 1; k < fim; k++) r.push(anel[k % n]);
+  return r;
+}
+const compPlano = (plano: Plano, pts: readonly Ponto[]) => pts.slice(1).reduce((s, p, i) => s + d2(paraPlano(plano, pts[i]), paraPlano(plano, p)), 0);
+
+/** A BORDA COMUM IGUAL (sem fresta): dois pontos seguidos em cima da mesma borda (do pasto, de um piquete vizinho, de uma área interna) e a borda
+ *  entre eles colada ao trecho reto (desvio até `desvioM`) = o trecho passa a seguir a borda, canto por canto. O corte reto que atravessa o
+ *  pasto (a borda entre os dois pontos vai longe) fica reto. `aneis` fechados, em lon/lat; o polígono fecha do último ponto ao 1º. */
+export function tracadoPelasBordas(pontos: readonly Ponto[], aneis: readonly (readonly Ponto[])[], desvioM: number): Ponto[] {
+  if (pontos.length < 2 || !aneis.length) return pontos.map((p): Ponto => [p[0], p[1]]);
+  const lons = pontos.map(p => p[0]), lats = pontos.map(p => p[1]);
+  const lat0 = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const plano: Plano = { lon0: (Math.min(...lons) + Math.max(...lons)) / 2, lat0, kx: 111320 * Math.cos(rad(lat0)), ky: 110540 };
+  const EPS_M = 0.05;
+  const r: Ponto[] = [];
+  pontos.forEach((a, i) => {
+    r.push([a[0], a[1]]);
+    const b = pontos[(i + 1) % pontos.length];
+    const pa = paraPlano(plano, a), pb = paraPlano(plano, b);
+    for (const anel of aneis) {
+      if (anel.length < 4) continue;
+      const da = noAnelEm(plano, anel, a, EPS_M), db = noAnelEm(plano, anel, b, EPS_M);
+      if (da == null || db == null) continue;
+      const ida = cantosEntre(anel, da, db), volta = cantosEntre(anel, db, da).reverse();
+      const caminho = compPlano(plano, [a, ...ida, b]) <= compPlano(plano, [a, ...volta, b]) ? ida : volta;
+      if (!caminho.length) break;
+      const desvio = Math.max(...caminho.map(c => maisPerto(paraPlano(plano, c), pa, pb).dist));
+      if (desvio > desvioM) continue;
+      caminho.forEach(c => r.push([c[0], c[1]]));
+      break;
+    }
+  });
+  return r;
+}
+
+/** Os cantos editáveis do piquete (o último de cada anel repete o primeiro e não conta). */
+export interface CantoDoPiquete { parte: number; anel: number; i: number; p: Ponto }
+type QualCanto = Pick<CantoDoPiquete, 'parte' | 'anel' | 'i'>;
+const partesDe = (geo: Geo): number[][][][] => (geo.type === 'Polygon' ? [geo.coordinates] : geo.coordinates);
+const geoDe = (partes: number[][][][]): Geo => (partes.length === 1 ? { type: 'Polygon', coordinates: partes[0] } : { type: 'MultiPolygon', coordinates: partes });
+export function cantosDoPiquete(geo: Geo): CantoDoPiquete[] {
+  return partesDe(geo).flatMap((poli, parte) => poli.flatMap((anel, k) => anel.slice(0, -1).map((p, i): CantoDoPiquete => ({ parte, anel: k, i, p: [p[0], p[1]] }))));
+}
+function comAnel(geo: Geo, parte: number, k: number, f: (abertos: number[][]) => number[][] | null): Geo | null {
+  const partes = partesDe(geo).map(poli => poli.map(anel => anel.map(p => [p[0], p[1]])));
+  const anel = partes[parte]?.[k];
+  if (!anel) return null;
+  const novo = f(anel.slice(0, -1));
+  if (!novo || novo.length < 3) return null;
+  partes[parte][k] = [...novo, [novo[0][0], novo[0][1]]];
+  return geoDe(partes);
+}
+/** Arrasta o canto (o anel continua fechado). */
+export const comCantoMovido = (geo: Geo, c: QualCanto, p: Ponto): Geo =>
+  comAnel(geo, c.parte, c.anel, a => a.map((q, i) => (i === c.i ? [p[0], p[1]] : q))) ?? geo;
+/** Tira o canto (o botão direito); com 3 cantos o anel não perde mais nenhum (null: o `comAnel` não aceita anel de menos de 3). */
+export const semCanto = (geo: Geo, c: QualCanto): Geo | null =>
+  comAnel(geo, c.parte, c.anel, a => a.filter((_q, i) => i !== c.i));
+/** Clicou na borda: um canto novo no trecho mais perto de `p` (a forma não muda). */
+export function comCantoNaBorda(geo: Geo, p: Ponto): Geo {
+  const kx = 111320 * Math.cos(rad(p[1])), ky = 110540;
+  const m = (q: readonly number[]): P2 => [(q[0] - p[0]) * kx, (q[1] - p[1]) * ky];
+  let alvo: { parte: number; anel: number; i: number; q: number[] } | null = null;
+  let dist = Infinity;
+  const partes = partesDe(geo);
+  for (let parte = 0; parte < partes.length; parte++) {
+    for (let k = 0; k < partes[parte].length; k++) {
+      const anel = partes[parte][k];
+      for (let i = 0; i + 1 < anel.length; i++) {
+        const r = maisPerto([0, 0], m(anel[i]), m(anel[i + 1]));
+        if (r.dist < dist) { dist = r.dist; alvo = { parte, anel: k, i, q: [anel[i][0] + r.k * (anel[i + 1][0] - anel[i][0]), anel[i][1] + r.k * (anel[i + 1][1] - anel[i][1])] }; }
+      }
+    }
+  }
+  if (!alvo) return geo;
+  const a0 = alvo;
+  return comAnel(geo, a0.parte, a0.anel, a => [...a.slice(0, a0.i + 1), a0.q, ...a.slice(a0.i + 1)]) ?? geo;
 }
 
 /** O círculo da praça: o centro e o raio em metros, aproximado por `lados` lados (48). */
@@ -756,7 +870,7 @@ export interface AreaParaGravar { nome: string; tipo: 'benfeitoria' | 'estrada';
 export function areasParaGravar(areas: readonly AreaInterna[]): AreaParaGravar[] {
   return areas.map((a): AreaParaGravar => (a.tipo === 'corredor'
     ? { nome: NOME_DO_CORREDOR, tipo: 'estrada', geojson: a.geojson }
-    : { nome: NOME_DA_PRACA, tipo: 'benfeitoria', geojson: a.geojson }));
+    : { nome: a.tipo === 'benfeitoria' ? a.nome : NOME_DA_PRACA, tipo: 'benfeitoria', geojson: a.geojson }));
 }
 
 /** O que vai em `p_infra`: o cocho, um PONTO no centro da praça. */

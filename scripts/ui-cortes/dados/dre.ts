@@ -82,4 +82,7 @@ export function dreLavoura(escala: number) {
     pool_compartilhado: { custeio: 676368.4 * escala }, nao_apropriado: { por_bloco: {}, total: 0 }, gerado_em: '2026-09-16',
   };
 }
-export const SAFRAS = [{ id: 's1', codigo: '25/26-Lav', nome: '25/26-Lav', data_inicio: '2025-07-01', data_fim: '2026-06-30', cliente_id: 'cli', ativo: true }];
+/* UI-PERIODO-01 — as safras da pecuária (jul–jun, sintéticas) para os atalhos "Esta safra / Última safra" do componente de período */
+export const SAFRAS = [{ id: 's1', codigo: '25/26-Lav', nome: '25/26-Lav', data_inicio: '2025-07-01', data_fim: '2026-06-30', cliente_id: 'cli', ativo: true, ativa: true, escopo_negocio: 'agricultura' },
+  { id: 'p27', codigo: '26/27-Pec', nome: '26/27-Pec', data_inicio: '2026-07-01', data_fim: '2027-06-30', cliente_id: 'cli', ativa: true, escopo_negocio: 'pecuaria' },
+  { id: 'p26', codigo: '25/26-Pec', nome: '25/26-Pec', data_inicio: '2025-07-01', data_fim: '2026-06-30', cliente_id: 'cli', ativa: true, escopo_negocio: 'pecuaria' }];

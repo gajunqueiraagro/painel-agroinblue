@@ -4,10 +4,10 @@
  * rascunho do navegador grava. Editar qualquer linha é o mesmo gesto para a cerca da praça e para a linha riscada; a diferença (a ponta da
  * praça leva o vértice, a da borda gira) mora aqui.
  */
-import { cortesIguais, montar, type Divisao } from '@/lib/mapa/criarPiquetes';
+import { areaDoBancoHa, cortesIguais, montar, type Divisao } from '@/lib/mapa/criarPiquetes';
 import type { Ponto } from '@/lib/mapa/edicaoDoPoligono';
 import {
-  areasParaGravar, comPontoMovido, piqueteDesenhado, comPontoNaLinha, deslizarParalela, divisoesDasLinhas, infraParaGravar, linhasDaGrade, novoCorredor, semPontoDaLinha,
+  areasParaGravar, comPontoMovido, piqueteDesenhado, piqueteRecortado, sobraDoPasto, comPontoNaLinha, deslizarParalela, divisoesDasLinhas, infraParaGravar, linhasDaGrade, novoCorredor, semPontoDaLinha,
   type AreaInterna, type AreaParaGravar, type InfraParaGravar, type LinhaDeCorte,
 } from '@/lib/mapa/linhasDosPiquetes';
 import {
@@ -23,12 +23,18 @@ export interface ConfigDosPiquetes {
   linhasGrade: number; colunas: number; girado: boolean; larguraCorredor: number; prefixo: string;
 }
 
-/** `piquetes` (PIQUETE-POLIGONO-01): os polígonos desenhados no "+ Piquete", na ordem em que nasceram; opcional, o rascunho de antes não tem. */
-export interface Desenho { praca: PracaCentral | null; linhas: LinhaDeCorte[]; corredor: AreaInterna | null; piquetes?: (GeoJSON.Polygon | GeoJSON.MultiPolygon)[] }
+/** `piquetes` (PIQUETE-POLIGONO-01): os polígonos desenhados no "+ Piquete", na ordem em que nasceram; opcional, o rascunho de antes não tem.
+ *  `internas` (PIQUETE-PRO-01): as áreas internas desenhadas no "+ Área interna" (praça, corredor, benfeitoria), que recortam os piquetes. */
+export interface Desenho {
+  praca: PracaCentral | null; linhas: LinhaDeCorte[]; corredor: AreaInterna | null; piquetes?: (GeoJSON.Polygon | GeoJSON.MultiPolygon)[]; internas?: AreaInterna[];
+}
+type Geo = GeoJSON.Polygon | GeoJSON.MultiPolygon;
+/** PIQUETE-PRO-01: o SEM PIQUETE aceito para gravar (regra do Gabriel: os piquetes preenchem 100% do pasto) */
+export const TOLERANCIA_SEM_PIQUETE_HA = 0.01;
 export const desenhoVazio = (): Desenho => ({ praca: null, linhas: [], corredor: null });
 
 export const linhasDoDesenho = (d: Desenho): LinhaDeCorte[] => [...(d.praca ? cercasComoLinhas(d.praca) : []), ...d.linhas];
-export const internasDoDesenho = (d: Desenho): AreaInterna[] => [...(d.praca ? [areaDaPraca(d.praca)] : []), ...(d.corredor ? [d.corredor] : [])];
+export const internasDoDesenho = (d: Desenho): AreaInterna[] => [...(d.praca ? [areaDaPraca(d.praca)] : []), ...(d.corredor ? [d.corredor] : []), ...(d.internas ?? [])];
 export const divisoesDoDesenho = (g: GeoJSON.Polygon, d: Desenho): Divisao[] => divisoesDasLinhas(g, linhasDoDesenho(d), internasDoDesenho(d));
 
 export const ehCerca = (d: Desenho, id: string) => !!d.praca?.cercas.some(c => c.id === id);
@@ -127,12 +133,73 @@ export function comLarguraDoCorredor(d: Desenho, larguraM: number): Desenho {
 }
 
 /** Há alguma coisa feita (é o que o Cancelar pergunta antes de descartar)? */
-export const temDesenho = (d: Desenho) => !!d.praca || d.linhas.length > 0 || !!d.corredor || !!d.piquetes?.length;
+export const temDesenho = (d: Desenho) => !!d.praca || d.linhas.length > 0 || !!d.corredor || !!d.piquetes?.length || !!d.internas?.length;
 
-/** "+ Piquete": acrescenta o polígono clicado, recortado pelo pasto e sem cobrir os piquetes já desenhados; nada sobrou = o desenho não muda. */
-export function comPiqueteDesenhado(g: GeoJSON.Polygon, d: Desenho, pontos: readonly Ponto[]): Desenho {
-  const p = piqueteDesenhado(g, d.piquetes ?? [], pontos);
+/** O que um piquete não pode cobrir: os outros piquetes (menos o `exceto`), as áreas internas desenhadas e as que já existem no pasto (`fixas`). */
+const obstaculos = (d: Desenho, fixas: readonly Geo[], exceto = -1): Geo[] =>
+  [...(d.piquetes ?? []).filter((_p, i) => i !== exceto), ...internasDoDesenho(d).map(a => a.geojson), ...fixas];
+
+/** "+ Piquete": acrescenta o polígono clicado, recortado pelo pasto e sem cobrir os piquetes já desenhados nem as áreas internas (PIQUETE-PRO-01:
+ *  as `fixas`, a praça que já existe no pasto, ficam fora sozinhas); nada sobrou = o desenho não muda. */
+export function comPiqueteDesenhado(g: GeoJSON.Polygon, d: Desenho, pontos: readonly Ponto[], fixas: readonly Geo[] = []): Desenho {
+  const p = piqueteDesenhado(g, obstaculos(d, fixas), pontos);
   return p ? { ...d, piquetes: [...(d.piquetes ?? []), p] } : d;
+}
+
+/** PIQUETE-PRO-01 — o piquete `i` com a forma do arrasto, AINDA SEM recortar (o arrasto ao vivo: os cantos não mudam de número no meio do gesto). */
+export function comPiqueteCru(d: Desenho, i: number, forma: Geo): Desenho {
+  return d.piquetes && d.piquetes[i] ? { ...d, piquetes: d.piquetes.map((p, k) => (k === i ? forma : p)) } : d;
+}
+/** O fim da edição do piquete `i`: recortado pelo pasto e pelos vizinhos (a sobreposição sai sozinha); se nada sobrar, fica a forma de `antes`. */
+export function comPiqueteEditado(g: GeoJSON.Polygon, d: Desenho, i: number, antes: Geo, fixas: readonly Geo[] = []): Desenho {
+  const atual = d.piquetes?.[i];
+  if (!atual) return d;
+  const r = piqueteRecortado(g, obstaculos(d, fixas, i), atual);
+  return comPiqueteCru(d, i, r ?? antes);
+}
+/** Apaga o piquete `i` (o que ele cobria volta a ser "sem piquete"). */
+export function semPiqueteNoDesenho(d: Desenho, i: number): Desenho {
+  return d.piquetes && d.piquetes[i] ? { ...d, piquetes: d.piquetes.filter((_p, k) => k !== i) } : d;
+}
+/** "Restante vira piquete": a área do pasto que nada cobre vira o próximo piquete (já encaixada: é a sobra exata). A sobra em pedaços soltos vira
+ *  um piquete por pedaço (o piquete em partes não grava); o farelo abaixo da tolerância (0,01 ha) não vira piquete. */
+export function comRestante(g: GeoJSON.Polygon, d: Desenho, fixas: readonly Geo[] = []): Desenho {
+  const sobra = sobraDoPasto(g, obstaculos(d, fixas));
+  if (!sobra) return d;
+  const pedacos: GeoJSON.Polygon[] = (sobra.type === 'Polygon' ? [sobra.coordinates] : sobra.coordinates).map(c => ({ type: 'Polygon', coordinates: c }));
+  const novos = pedacos.filter(p => areaDoBancoHa(p) >= TOLERANCIA_SEM_PIQUETE_HA).sort((a, b) => areaDoBancoHa(b) - areaDoBancoHa(a));
+  return novos.length ? { ...d, piquetes: [...(d.piquetes ?? []), ...novos] } : d;
+}
+
+/** "+ Área interna": a área desenhada (dentro do pasto, fora das que já existem) RECORTA os piquetes que ela cobre; nada sobrou = o desenho não muda. */
+export const NOME_DA_AREA_INTERNA: Record<AreaInterna['tipo'], string> = { praca: 'Praça de alimentação', corredor: 'Corredor', benfeitoria: 'Benfeitoria' };
+export function comAreaInterna(g: GeoJSON.Polygon, d: Desenho, tipo: AreaInterna['tipo'], pontos: readonly Ponto[], fixas: readonly Geo[] = []): Desenho {
+  const area = piqueteDesenhado(g, [...internasDoDesenho(d).map(a => a.geojson), ...fixas], pontos);
+  if (!area) return d;
+  const usados = new Set((d.internas ?? []).map(a => a.id));
+  let k = (d.internas ?? []).length + 1;
+  while (usados.has(`area-${k}`)) k++;
+  const nova: AreaInterna = { id: `area-${k}`, tipo, nome: NOME_DA_AREA_INTERNA[tipo], geojson: area };
+  const piquetes = (d.piquetes ?? []).flatMap(p => { const r = piqueteRecortado(g, [area], p); return r ? [r] : []; });
+  return { ...d, internas: [...(d.internas ?? []), nova], piquetes };
+}
+export function semAreaInterna(d: Desenho, id: string): Desenho {
+  return { ...d, internas: (d.internas ?? []).filter(a => a.id !== id) };
+}
+
+/** PIQUETE-PRO-01 (item 3): a conta dos 100% — "Pasto · piquetes · praça/corredores · SEM PIQUETE". O pasto é a área do contorno (a útil; o furo
+ *  da praça antiga já fica fora dela) e as áreas internas são as que existem dentro do contorno externo + as desenhadas (a regra da área cercada). */
+export interface ContaDoPasto { pastoHa: number; piquetesHa: number; internasHa: number; semPiqueteHa: number; semPiquete: Geo | null }
+export function contaDoPasto(g: GeoJSON.Polygon, d: Desenho, fixas: readonly Geo[] = []): ContaDoPasto {
+  const semPiquete = sobraDoPasto(g, obstaculos(d, fixas));
+  const ha = (x: Geo) => areaDoBancoHa(x);
+  return {
+    pastoHa: ha(g),
+    piquetesHa: (d.piquetes ?? []).reduce((s, p) => s + ha(p), 0),
+    internasHa: [...internasDoDesenho(d).map(a => a.geojson), ...fixas].reduce((s, p) => s + ha(p), 0),
+    semPiqueteHa: semPiquete ? ha(semPiquete) : 0,
+    semPiquete,
+  };
 }
 
 /** O que vai ao banco além dos piquetes: `p_areas` (praça = benfeitoria, corredor = estrada) e `p_infra` (o cocho no centro da praça). */

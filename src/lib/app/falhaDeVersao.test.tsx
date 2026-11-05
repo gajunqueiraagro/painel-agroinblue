@@ -177,8 +177,9 @@ describe('fonte: todo import() dinâmico passa pelo dono', () => {
        + 2 no FIN-NOTA-PDF-01: o pdfjs de `itensDoPdf` (a leitura do DANFE) e o de `PreviaDaNota` (a folha desenhada)
        + 3 no P90 (PDF da grade da Visão Geral): o gerador sob demanda (`CabecalhoGradeVG`) e, nele, o react-pdf e o documento
        + 1 no NJL-AJUSTES: o pdfjs do `VisualizadorDeDocumento` (a nota em tela cheia)
-       + 2 no MAPA-IMPRESSAO-01: o react-pdf e o documento da folha do mapa (`gerarPdfDoMapa`) */
-    expect(tratados).toBe(23);
+       + 2 no MAPA-IMPRESSAO-01: o react-pdf e o documento da folha do mapa (`gerarPdfDoMapa`)
+       + 2 no CADERNO-CAMPO-01: o react-pdf e o documento do caderno (`gerarCadernoDoMes`) */
+    expect(tratados).toBe(25);
   });
   it('quem usa o dono o importa ESTATICAMENTE', () => {
     for (const p of arquivos(resolve(process.cwd(), 'src'))) {

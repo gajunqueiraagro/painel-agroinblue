@@ -57,8 +57,23 @@ import {
 } from '@/hooks/useDrePecuaria';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
-  SeletorPeriodoPecuaria, safraCorrentePecuaria, useSafraDeAbertura,
+  periodoDoAno, safraCorrentePecuaria, useSafraDeAbertura,
 } from '@/components/agri/SeletorPeriodoPecuaria';
+import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
+import { fimDoMes, type AtividadeDaSafra, type Intervalo } from '@/lib/periodo/intervaloDeDatas';
+import type { Periodo } from '@/v2/lib/periodo';
+
+/* UI-PERIODO-01 — a ponte entre o período MENSAL da casa (`f_de`/`f_ate` na URL, { ano, mes }) e o intervalo de datas do componente */
+const ATIVIDADE_PEC: readonly AtividadeDaSafra[] = ['pecuaria'];
+const SEM_MES_SOLTO: readonly string[] = ['este-mes', 'mes-passado'];
+const intervaloDoPeriodo = (p: Periodo): Intervalo => ({
+  de: `${p.de.ano}-${String(p.de.mes).padStart(2, '0')}-01`, ate: fimDoMes(p.ate.ano, p.ate.mes - 1),
+});
+const periodoDoIntervalo = (i: Intervalo): Periodo => ({
+  de: { ano: Number(i.de.slice(0, 4)), mes: Number(i.de.slice(5, 7)) }, ate: { ano: Number(i.ate.slice(0, 4)), mes: Number(i.ate.slice(5, 7)) },
+});
+const anoAteMesFechado = (id: string, i: Intervalo): Intervalo =>
+  (id === 'este-ano' ? intervaloDoPeriodo(periodoDoAno(Number(i.de.slice(0, 4)))) : i);
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
 import { PecGraficoModal } from '@/components/agri/PecGraficoModal';
 import {
@@ -1072,8 +1087,11 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
                   120px de espaço reservado, que é o preço de a régua não se mexer. */}
               <div className="flex w-[250px] shrink-0 items-center justify-start">
                 {ehPec ? (
-                  <SeletorPeriodoPecuaria clienteId={clienteId}
-                    periodo={periodo} onPeriodoChange={setPeriodo} />
+                  /* UI-PERIODO-01 — o componente único de período (atalhos + dois calendários), POR MÊS (a DRE é mensal), sem mês solto
+                     (o botão "Mês" saiu em 23/09) e com o "Este ano" corrente até o mês fechado (`periodoDoAno`, decisão de 23/09) */
+                  <SeletorDePeriodo testid="dre-pec-periodo" porMes atividades={ATIVIDADE_PEC} atalhosOcultos={SEM_MES_SOLTO}
+                    ajustarAtalho={anoAteMesFechado} valor={intervaloDoPeriodo(periodo)}
+                    onChange={(i) => setPeriodo(periodoDoIntervalo(i))} />
                 ) : (
                   <Select value={safraId} onValueChange={setSafraId}>
                     <SelectTrigger className="h-[22px] w-[130px] text-[10px]">

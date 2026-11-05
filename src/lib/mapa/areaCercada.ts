@@ -51,11 +51,15 @@ export function areaCercadaDoPasto(
   geometrias: readonly { id: string; tipo: string; nome_original: string; geojson: GeoJSON.Geometry }[],
 ): AreaCercada {
   const utilHa = areaEmHectares(pasto.geojson);
-  const contornos = contornosExternos(pasto.geojson);
-  const internas = geometrias
-    .filter(g => g.id !== pasto.id && !NAO_CONTAM.has(g.tipo))
-    .filter(g => { const p = pontoInterno(g.geojson); return !!p && contornos.some(c => noAnel(p[0], p[1], c)); })
-    .map(g => ({ nome: g.nome_original, ha: areaEmHectares(g.geojson) }));
+  const internas = areasInternasDoPasto(pasto, geometrias).map(g => ({ nome: g.nome_original, ha: areaEmHectares(g.geojson) }));
   const internasHa = internas.reduce((s, i) => s + i.ha, 0);
   return { utilHa, internasHa, cercadaHa: utilHa + internasHa, internas };
+}
+
+/** PIQUETE-PRO-01: os polígonos de área interna do pasto (a MESMA regra da área cercada) — o "+ Piquete" os deixa fora dos piquetes sozinho. */
+export function areasInternasDoPasto<T extends { id: string; tipo: string; geojson: GeoJSON.Geometry }>(pasto: { id: string; geojson: GeoJSON.Geometry }, geometrias: readonly T[]): T[] {
+  const contornos = contornosExternos(pasto.geojson);
+  return geometrias
+    .filter(g => g.id !== pasto.id && !NAO_CONTAM.has(g.tipo))
+    .filter(g => { const p = pontoInterno(g.geojson); return !!p && contornos.some(c => noAnel(p[0], p[1], c)); });
 }
