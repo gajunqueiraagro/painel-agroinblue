@@ -23,7 +23,9 @@ import { carregarPartes, lerLancamentoDaLinha, porParte } from '@/lib/financeiro
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DatePicker } from '@/components/ui/date-picker';
+import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
+import { Segmentado } from '@/components/ui/segmentado';
+import { ehAnoInteiro, intervaloDoAno, type Intervalo } from '@/lib/periodo/intervaloDeDatas';
 import { Label } from '@/components/ui/label';
 import { ExtratoDistribuicaoEconomica } from '@/components/financeiro-v2/ExtratoDistribuicaoEconomica';
 import { ExtratoMaioresCompromissos } from '@/components/financeiro-v2/ExtratoMaioresCompromissos';
@@ -38,7 +40,7 @@ import { ATIVIDADES, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   RECORTE_PADRAO, janelaDoRecorte, impedimentoDoRecorte, descreverPeriodo, descreverEixo,
-  type RecortePainel, type ModoPeriodo, type EixoData, type FiltroStatus,
+  type RecortePainel, type EixoData, type FiltroStatus,
 } from '@/lib/financeiro/recortePainel';
 
 /* As colunas que as agregações e o drawer precisam. NÃO é `select('*')`: são 65 colunas na
@@ -61,10 +63,11 @@ interface LancRecorte {
 interface SafraOpcao { id: string; nome: string; escopo_negocio: string | null; }
 interface ContaOpcao { id: string; nome_conta: string; nome_exibicao: string | null; }
 
-const ANOS = (() => { const a: number[] = []; for (let y = 2030; y >= 2019; y--) a.push(y); return a; })();
-const MODOS: { k: ModoPeriodo; l: string }[] = [
-  { k: 'safra', l: 'Safra' }, { k: 'ano', l: 'Ano' }, { k: 'datas', l: 'Datas' },
-];
+/* UI-PERIODO-01 — a ponte entre o recorte do painel (ano | datas) e o intervalo do componente: o ano inteiro volta a ser o modo `ano` */
+const intervaloDoRecorte = (r: RecortePainel): Intervalo | null =>
+  r.modo === 'ano' && r.ano ? intervaloDoAno(r.ano) : r.modo === 'datas' && r.de && r.ate ? { de: r.de, ate: r.ate } : null;
+const recorteDoIntervalo = (i: Intervalo): Partial<RecortePainel> =>
+  (ehAnoInteiro(i) ? { modo: 'ano', ano: Number(i.de.slice(0, 4)), de: null, ate: null } : { modo: 'datas', de: i.de, ate: i.ate, ano: null });
 const EIXOS: { k: EixoData; l: string }[] = [
   { k: 'financeira', l: 'Financeira' }, { k: 'competencia', l: 'Competência' },
 ];
@@ -295,15 +298,19 @@ export function PainelPeriodoTab() {
             placeholder="Buscar conta..." dense triggerClassName="h-8 text-xs" />
         </div>
 
-        <div className="w-[110px]">
+        {/* UI-PERIODO-01 — o período é o componente único (atalhos + dois calendários); ANO e DATAS viraram uma coisa só (e saiu a lista
+            fixa de anos 2019–2030). A SAFRA DO LANÇAMENTO segue à parte, porque ela NÃO é janela de datas: é o `safra_id` de cada
+            lançamento (recortePainel.ts) — trocá-la por "datas da safra" mudaria o número. */}
+        <div>
           <Label className="text-[10px]">Período</Label>
-          <Select value={recorte.modo} onValueChange={(v) => {
-            const m = MODOS.find((x) => x.k === v);
-            if (m) mexer({ modo: m.k });
-          }}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>{MODOS.map((m) => <SelectItem key={m.k} value={m.k}>{m.l}</SelectItem>)}</SelectContent>
-          </Select>
+          <div className="flex h-8 items-center gap-1.5">
+            <Segmentado valor={recorte.modo === 'safra' ? 'safra' : 'periodo'} altura={24}
+              onEscolher={(v) => mexer(v === 'safra' ? { modo: 'safra' } : { modo: recorte.de && recorte.ate ? 'datas' : 'ano' })}
+              opcoes={[{ valor: 'periodo', rotulo: 'Datas' }, { valor: 'safra', rotulo: 'Safra do lançamento' }]} />
+            {recorte.modo !== 'safra' && (
+              <SeletorDePeriodo testid="painel-periodo" valor={intervaloDoRecorte(recorte)} onChange={(i) => mexer(recorteDoIntervalo(i))} />
+            )}
+          </div>
         </div>
 
         {recorte.modo === 'safra' && (
@@ -332,29 +339,6 @@ export function PainelPeriodoTab() {
               </SelectContent>
             </Select>
           </div>
-        )}
-
-        {recorte.modo === 'ano' && (
-          <div className="w-[100px]">
-            <Label className="text-[10px]">Ano</Label>
-            <Select value={recorte.ano ? String(recorte.ano) : ''} onValueChange={(v) => mexer({ ano: Number(v) })}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>{ANOS.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {recorte.modo === 'datas' && (
-          <>
-            <div className="w-[130px]">
-              <Label className="text-[10px]">De</Label>
-              <DatePicker value={recorte.de ?? ''} onChange={(v) => mexer({ de: v || null })} className="h-8 text-xs" />
-            </div>
-            <div className="w-[130px]">
-              <Label className="text-[10px]">Até</Label>
-              <DatePicker value={recorte.ate ?? ''} onChange={(v) => mexer({ ate: v || null })} className="h-8 text-xs" />
-            </div>
-          </>
         )}
 
         <div className="w-[130px]">

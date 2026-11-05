@@ -4,6 +4,7 @@
  * Cada tela registra o banco simulado em `globalThis.__bancoBancada` (mocks/supabase.ts) antes de montar.
  */
 import React from 'react';
+import { PainelPeriodoTab } from '@/components/financeiro-v2/PainelPeriodoTab';
 import { createRoot } from 'react-dom/client';
 import '@/index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -36,6 +37,8 @@ import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
 import * as CONC from './dados/conciliacao';
+import { FAZENDAS_VG as FAZENDAS_VG02, bancoVG02 } from './dados/visaoGeral02';
+import { V2Home } from '@/v2/pages/V2Home';
 import * as ESP from './dados/espelho';
 import type { SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { volumeNJ } from './dados/volumeNJ';
@@ -73,6 +76,9 @@ import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
 import MODULO03 from '@/lib/mapa/__fixtures__/modulo03StaTereza.json';
+import P6_PUREZA from '@/lib/mapa/__fixtures__/p6Pureza.json';
+import PRACA_P06 from '@/lib/mapa/__fixtures__/pracaP06Pureza.json';
+import { areaDoBancoHa } from '@/lib/mapa/criarPiquetes';
 import { mapaGlobal } from './dados/mapaGlobal';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import { rotuloDoTipo } from '@/lib/mapa/tiposDeArea';
@@ -102,6 +108,9 @@ import * as META from './dados/metaP109';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { EvolucaoDoAnoTab } from '@/pages/EvolucaoDoAnoTab';
 import { EvolucaoMesTab } from '@/pages/EvolucaoMesTab';
+import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
+import { Segmentado } from '@/components/ui/segmentado';
+import type { Intervalo } from '@/lib/periodo/intervaloDeDatas';
 import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
 
 /* Gabriel 29/10 08:26 — os parcelados do LR na nota já lançada (SINTÉTICOS): as 4 do sistema e a prévia da `fn_nota_completar` como o banco a faz */
@@ -207,7 +216,8 @@ if (LATERAL) {
   const atual = FAZ === 'Global' ? { id: '__global__', nome: 'Global', owner_id: '' } : fazendas[0];
   g.__fazendaBancada = { fazendas, fazendaAtual: atual, isGlobal: atual.id === '__global__', fazendaId: atual.id, setFazendaAtual: () => {} };
 }
-const Lateral = () => LATERAL ? (
+/* CPR-LARGURA-01 — `&semlateral=1`: sem a barra lateral, como o app no Ampliar (o shell a esconde: `intensivo`) */
+const Lateral = () => q.get('semlateral') ? null : LATERAL ? (
   <TooltipProvider><V2Sidebar activeSection="financeiro-lanc" onNavigate={() => {}} drawerAtivo={q.get('submenu')} onDrawerToggle={() => {}}
     clienteSelector={<ClienteSelector />} fazendaSelector={q.get('umafaz') ? undefined : <FazendaSelector />} /></TooltipProvider>
 ) : <div style={{ width: LARGURA_DA_LATERAL, flexShrink: 0, background: '#1e3a5f' }} />;
@@ -603,6 +613,27 @@ if (tela === 'mesclar') {
     const aba = q.get('aba');
     if (aba) setTimeout(() => (document.querySelector(`[data-testid="aba-conta-${aba}"]`) as HTMLElement | null)?.click(), 200);
   }, 400);
+} else if (tela === 'visao-geral-02') {
+  /* VISAO-GERAL-02 — a Visão Geral nova (V2Home) com o banco SINTÉTICO (`dados/visaoGeral02.ts`), out/2026. `&fz=fA` = uma fazenda;
+     sem ele, o Global com as 3. Cliente admin (vê a meta). */
+  const fz = q.get('fz');
+  const GLOBAL = { id: '__global__', nome: 'Global', owner_id: '' };
+  const uma = FAZENDAS_VG02.find((f) => f.id === fz);
+  /* VISAO-GERAL-04 — `&muitas=1`: mais 4 fazendas com pecuária e sem dado (miniaturas "sem mapa"), para provar que a coluna da direita não
+     cresce além da esquerda (as miniaturas rolam no card) */
+  const extras = q.get('muitas') === '1' ? ['fD', 'fE', 'fF', 'fG'].map((id, i) => ({ id, nome: `Faz. Exemplo ${i + 4}`, codigo: `EX${i + 4}`, cliente_id: 'cli',
+    tem_pecuaria: true, status_operacional: 'ativa' })) : [];
+  const comPec = [...FAZENDAS_VG02.filter((f) => f.tem_pecuaria), ...extras];
+  g.__fazendaBancada = { fazendas: [...FAZENDAS_VG02, ...extras], fazendasComPecuaria: comPec, fazendaAtual: uma ?? GLOBAL,
+    isGlobal: !uma, fazendaId: uma ? uma.id : '__global__', setFazendaAtual: () => {}, loading: false };
+  g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }],
+    isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  g.__bancoBancada = bancoVG02;
+  montarNaUrl(
+    <div className="h-full overflow-auto" data-casca>
+      <BarraSecao area="Início" secao="Visão Geral" />
+      <V2Home ano="2026" mes="10" viewMode="mes" onViewModeChange={() => {}} onIrPara={() => {}} onMesChange={() => {}} />
+    </div>);
 } else if (tela === 'visao-geral') {
   /* FIN-VISAO-GERAL-01 PR 3 — Financeiro › Visão Geral: a BARRA REAL (`BarraSecao` com Contas · Fazenda · Safra · Atividade) e a tela, com
      hoje = 22/10/2026. Banco SINTÉTICO (`dados/visaoGeral.ts`); `globalThis.__vgReal` (posto pelo ensaio, nunca no repo) troca a
@@ -706,10 +737,23 @@ if (tela === 'mesclar') {
   const formaNaEdicao = (g: { type: string; coordinates: unknown }) => q.get('laco') === '1' ? gravataDe(g) : q.get('amontoado') === '1' ? amontoadoDe(g) : g;
   /* MAPA-PRACA-ESTAVEL-01 (homologação 02/11 21:54, Agnaldo › Sta. Tereza › Modulo 03): `&modulo03=1` — o P_01 ganha a FORMA do Modulo 03
      (18 pontos com lados curtos e o furo no meio, lida do proto só leitura), levada para o canto do P_01; nenhum outro dado do cliente */
+  /* PIQUETE-PRO-01: com `&p6=1` a sede e o curral sintéticos do P_01 saem (caíam dentro do P6, que no proto não os tem); o P6 (e a Praça P_06 no furo dele) levados para o canto do P_01 SEM mudar a área: a longitude é corrigida pelo cosseno da
+     latitude nova (sem isso o P6 da bancada media 96,7 ha no lugar dos 95,59 do proto) */
+  const moverP6 = (p: number[]): number[] => {
+    const a0 = P6_PUREZA.coordinates[0];
+    const lon0 = Math.min(...a0.map(x => x[0])), lat0 = Math.max(...a0.map(x => x[1]));
+    const lat = p[1] + (-19.63 - lat0);
+    return [-54.03 + (p[0] - lon0) * Math.cos((p[1] * Math.PI) / 180) / Math.cos((lat * Math.PI) / 180), lat];
+  };
+  const PRACA_DO_P6 = { id: 'gp6', fazenda_id: 'f1', cliente_id: 'cli', pasto_id: null, tipo: 'praca_alimentacao', nome_original: 'Praça P_06', cor: null,
+    geojson: { type: 'Polygon', coordinates: PRACA_P06.coordinates.map(a => a.map(moverP6)) }, created_at: '2026-03-31T10:00:00Z', updated_at: '2026-03-31T10:00:00Z' };
   const comModulo03 = <T extends { id: string; geojson: unknown }>(g: T): T => {
-    if (q.get('modulo03') !== '1' || g.id !== 'g1') return g;
-    const aneis = MODULO03.coordinates;
+    /* PIQUETE-POLIGONO-01: `&p6=1` — a FORMA do P6 da Pureza (com o furo da praça antiga; lida do proto só leitura), no lugar do P_01 */
+    const forma = q.get('p6') === '1' ? P6_PUREZA : q.get('modulo03') === '1' ? MODULO03 : null;
+    if (!forma || g.id !== 'g1') return g;
+    const aneis = forma.coordinates;
     const [dx, dy] = [-54.03 - Math.min(...aneis[0].map(p => p[0])), -19.63 - Math.max(...aneis[0].map(p => p[1]))];
+    if (forma === P6_PUREZA) return { ...g, geojson: { type: 'Polygon', coordinates: aneis.map(a => a.map(moverP6)) } };
     return { ...g, geojson: { type: 'Polygon', coordinates: aneis.map(a => a.map(p => [p[0] + dx, p[1] + dy])) } };
   };
   /* MAPA-02a — Produção › Geo Pastos, o mapa de pastos em tela cheia (mock aprovado mock-mapa-pastos-v2). SINTÉTICO (`dados/mapaPastos.ts`):
@@ -722,9 +766,10 @@ if (tela === 'mesclar') {
         ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
           // MAPA-CRIAR-PIQUETES-01 2b: `versoesDosPoligonos` lê `.select('id, versao').in('id', …)` (a versão fresca do Mover linha / Juntar)
           : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
-          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : [])].map(comModulo03))
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : []), ...(q.get('p6') === '1' ? [PRACA_DO_P6] : [])].filter(x => q.get('p6') !== '1' || (x.id !== 'gi1' && x.id !== 'gi2')).map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
-      : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos, ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
+      // PIQUETE-POLIGONO-01: `&p6=1` — o P_01 se chama P6 (o nome sugerido dos piquetes é P6-A, P6-B)
+      : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos.map(x => (q.get('p6') === '1' && x.id === 'p1' ? { ...x, nome: 'P6' } : x)), ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
           ...(q.get('grupo') === '1' ? ['P_01A', 'P_01B'].map((nome, i) => ({ ...MAPA.PASTOS[0], id: `p1${'ab'[i]}`, nome, grupo_id: 'gx', data_inicio: '2026-11-01', observacoes: null })) : [])]
       // MAPA-PIQUETES-03: `&unidade=1` — o grupo que nasceu de um pasto (o elo); MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o do P_01
       : t === 'pasto_grupos' ? [...(UNIDADE ? MAPA.UNIDADE_GRUPOS : []), ...(q.get('grupo') === '1' ? [{ id: 'gx', nome: 'P_01', pasto_origem_id: 'p1', cliente_id: 'cli' }] : [])]
@@ -734,7 +779,8 @@ if (tela === 'mesclar') {
         .map(f => ({ ...f, fechamento_pasto_itens: [...MAPA.dadosDosCartoes(q.get('cartoes')).itens, ...(UNIDADE ? MAPA.UNIDADE_ITENS : [])].filter(i => i.fechamento_id === f.id) }))
       : t === 'fechamento_pasto_itens' ? MAPA.dadosDosCartoes(q.get('cartoes')).itens.filter((i) => !e.in.fechamento_id || e.in.fechamento_id.includes(i.fechamento_id))
       // MAPA-02f-b: a infraestrutura e os bens do Patrimônio (sintéticos)
-      : t === 'fazenda_infraestruturas' ? MAPA.INFRA
+      // MEDIR-NO-MAPA-01: `&galpao=1` — o Galpao Agricultura (a forma do Retiro Agricultura) e um cocho ao lado
+      : t === 'fazenda_infraestruturas' ? [...MAPA.INFRA, ...(q.get('galpao') === '1' ? MAPA.GALPAO_INFRA : [])]
       : t === 'patrimonio_bens' ? MAPA.BENS
       // MAPA-ATIVIDADE-LAVOURA-01: a lavoura do P5A (a safra vem embutida na linha)
       : t === 'agri_safra_area' ? MAPA.LAVOURA
@@ -754,6 +800,19 @@ if (tela === 'mesclar') {
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gabriel Junqueira', email: null, situacao: 'membro ativo' }]
       : fn === 'fn_piquetes_concluir' ? MAPA.previaDosPiquetes(a ?? {})   // MAPA-PIQUETES-02: a prévia sintética
       // MAPA-CRIAR-PIQUETES-01: a prévia sintética do "Criar piquetes" (caso novo, ou o grupo que já existe com `&grupo=1`)
+      /* PIQUETE-POLIGONO-01: com `&p6=1` a prévia sintética usa a área de cada polígono desenhado (a conta do banco) e o nome P6; o mês é o escolhido */
+      : fn === 'fn_piquetes_criar' && q.get('p6') === '1' ? ((pq: { nome: string; pasto_id: string | null; geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon | null }[]) => {
+          const areas = pq.map(x => (x.geojson ? Math.round(areaDoBancoHa(x.geojson) * 100) / 100 : 0));
+          const soma = Math.round(areas.reduce((t, v) => t + v, 0) * 100) / 100;
+          const mes = String(a?.p_mes ?? '2026-11-01');
+          const mm = `${mes.slice(5, 7)}/${mes.slice(0, 4)}`;
+          const fim = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 0);
+          const br = (v: number) => v.toFixed(2).replace('.', ',');
+          return { ok: true, simulado: !!a?.p_simular, caso: 'novo', contorno: { id: 'g1', criado: false, area_ha: soma },
+            piquetes: pq.map((x, i) => ({ nome: x.nome, area_ha: areas[i], liga: 'novo', pasto_id: null })), soma_ha: soma, dif_contorno_ha: 0,
+            concluir: { frase: `P6 vira o grupo P6 com ${pq.length} piquetes (${br(soma)} ha) a partir de ${mm}; P6 fica encerrado em ${String(fim.getDate()).padStart(2, '0')}/${String(fim.getMonth() + 1).padStart(2, '0')}/${fim.getFullYear()}.` },
+            ligar: null };
+        })(a?.p_piquetes ?? [])
       : fn === 'fn_piquetes_criar' ? ((pq: { nome: string; pasto_id: string | null }[]) => ({
           ok: true, simulado: !!a?.p_simular, caso: q.get('grupo') === '1' ? 'grupo_existente' : 'novo', contorno: { id: 'g1', criado: false, area_ha: 41.6 },
           piquetes: pq.map(x => ({ nome: x.nome, area_ha: Math.round(4160 / pq.length) / 100, liga: x.pasto_id ? 'existente' : 'novo', pasto_id: x.pasto_id })),
@@ -806,6 +865,47 @@ if (tela === 'mesclar') {
     rpc: () => null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
+} else if (tela === 'periodo') {
+  /* UI-PERIODO-01 — o componente único de período (mock ui-validar/periodo.html, aprovado 04/11 09:33) numa barra de tela, com o
+     "hoje" fixo (04/11/2026) e as safras SINTÉTICAS do cadastro (pecuária jul–jun, lavoura set–ago: a data vem do cadastro).
+     `&modo=datas|mes|ano`, `&ativ=pec|duas`, `&abrir=1` abre o popup; `&cpr=1` = os 3 botões da CPR + "Escolher datas". */
+  const modo = q.get('modo') === 'mes' ? 'mes' : q.get('modo') === 'ano' ? 'ano' : 'datas';
+  const atividades: ('pecuaria' | 'agricultura')[] = q.get('ativ') === 'duas' ? ['pecuaria', 'agricultura'] : q.get('ativ') === 'nenhuma' ? [] : ['pecuaria'];
+  g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, loading: false };
+  const SAFRAS_SINT = [
+    { id: 'p27', codigo: '26/27-Pec', escopo_negocio: 'pecuaria', data_inicio: '2026-07-01', data_fim: '2027-06-30', cliente_id: 'cli', ativa: true },
+    { id: 'p26', codigo: '25/26-Pec', escopo_negocio: 'pecuaria', data_inicio: '2025-07-01', data_fim: '2026-06-30', cliente_id: 'cli', ativa: true },
+    { id: 'l27', codigo: '26/27-Lav', escopo_negocio: 'agricultura', data_inicio: '2026-09-01', data_fim: '2027-08-31', cliente_id: 'cli', ativa: true },
+    { id: 'l26', codigo: '25/26-Lav', escopo_negocio: 'agricultura', data_inicio: '2025-09-01', data_fim: '2026-08-31', cliente_id: 'cli', ativa: true },
+  ];
+  g.__bancoBancada = { from: (t: string) => (t === 'financeiro_safras' ? SAFRAS_SINT : []), rpc: () => null };
+  function BarraComPeriodo() {
+    const [valor, setValor] = React.useState<Intervalo | null>(q.get('cpr') === '1' ? null : { de: '2026-10-01', ate: '2026-10-31' });
+    return (
+      <div className="p-3">
+        <div className="flex h-[34px] items-center gap-1.5 rounded-md border border-[#D9DEE5] bg-white px-2.5" data-testid="barra-periodo">
+          <span className="text-[11px] text-muted-foreground">Período</span>
+          {q.get('cpr') === '1' && <Segmentado valor="atual" onEscolher={() => {}} altura={24}
+            opcoes={[{ valor: 'anterior', rotulo: 'Mês anterior' }, { valor: 'atual', rotulo: 'Mês atual' }, { valor: 'futuro', rotulo: 'Mês futuro' }]} />}
+          <SeletorDePeriodo hoje="2026-11-04" valor={valor} onChange={setValor} modo={modo} atividades={atividades} anoMaisAntigo={2020}
+            padrao={{ de: '2026-10-01', ate: '2026-10-31' }} rotuloVazio="Escolher datas" />
+        </div>
+      </div>
+    );
+  }
+  montar(<BarraComPeriodo />);
+  if (q.get('abrir') === '1') setTimeout(() => document.querySelector<HTMLElement>('[data-testid="seletor-de-periodo"]')?.click(), 300);
+} else if (tela === 'painel-periodo') {
+  /* UI-PERIODO-01 — Financeiro › Painel por período (a faixa de filtros), banco SINTÉTICO: duas contas e as safras do cadastro; sem lançamento */
+  g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, loading: false };
+  g.__fazendaBancada = { fazendas: [], fazendaAtual: { id: '__global__', nome: 'Global', owner_id: '' }, isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {}, loading: false };
+  const CONTAS_PP = [{ id: 'c1', nome_conta: 'Conta Corrente Principal', nome_exibicao: 'Conta Corrente Principal', ativa: true, cliente_id: 'cli' },
+    { id: 'c2', nome_conta: 'Aplicação Automática', nome_exibicao: 'Aplicação Automática', ativa: true, cliente_id: 'cli' }];
+  const SAFRAS_PP = [{ id: 'p27', nome: '26/27-Pec', codigo: '26/27-Pec', escopo_negocio: 'pecuaria', data_inicio: '2026-07-01', data_fim: '2027-06-30', ativa: true, cliente_id: 'cli' },
+    { id: 'l27', nome: '26/27-Lav', codigo: '26/27-Lav', escopo_negocio: 'agricultura', data_inicio: '2026-07-01', data_fim: '2027-06-30', ativa: true, cliente_id: 'cli' }];
+  g.__bancoBancada = { from: (t: string) => (t === 'financeiro_contas_bancarias' ? CONTAS_PP : t === 'financeiro_safras' ? SAFRAS_PP : []), rpc: () => null };
+  montar(<div className="h-full overflow-auto p-3"><PainelPeriodoTab /></div>);
+  if (q.get('abrir') === '1') setTimeout(() => document.querySelector<HTMLElement>('[data-testid="painel-periodo"]')?.click(), 600);
 } else if (tela === 'acessos') {
   /* ACESSOS-PERFIL-01 — a lista (nome e e-mail pela fonte unica), o "Novo acesso" e o "Editar acesso" (`&v=editar`). SINTETICO. */
   const MEMBROS = [
@@ -908,6 +1008,38 @@ if (tela === 'mesclar') {
     montar(<DialogoDesfazerCompromisso operacaoId={OP} compromissoId="c1" versao={19} identidade={IDENT} rol={ROL} tipoOperacao="abate"
       onFechar={() => {}} onDesfeito={() => {}} onAbrirLancamento={() => {}} rpc={rpc as any} />);
   }
+} else if (tela === 'estacao' && (v === 'nota' || v === 'notadif' || v === 'notaja')) {
+  /* CONC-CRIAR-COM-NOTA-01 — o "Criar lançamento" da estação com a NF (o XML SINTÉTICO de sempre: nº 12.345, R$ 16.238,00, emitida em
+     30/09/2026), que o roteiro solta no "Ler a NF" do Documentos (`globalThis.__nfBancada`). `nota`: o extrato do mesmo valor (preenche e cria
+     pela RPC); `notadif`: o extrato de R$ 16.000,00 (cria com o da nota e abre o Casar com a diferença); `notaja`: a nota já lançada, realizada
+     e sem vínculo (o Casar com ela levada, o nº da NF na linha). Tudo SINTÉTICO. */
+  const valor = v === 'notadif' ? -16000 : -16238;
+  g.__nfBancada = montarNFe({ duplicatas: null });
+  const FORN = { id: 'agro', nome: 'Agropecuaria Exemplo Ltda', nome_fantasia: 'Casa do Campo', cpf_cnpj: '11.222.333/0001-81', fazenda_id: null, ativo: true };
+  g.__fornecedoresBancada = [FORN];
+  /* a última classificação do fornecedor (a sugestão da nota) e o plano dela */
+  const ULTIMA = { id: 'lanc-criado', plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação',
+    escopo_negocio: 'pecuaria', data_competencia: '2026-08-14', favorecido_id: 'agro', tipo_operacao: '2-Saídas', cancelado: false };
+  const JA = { id: 'lanc-ja', vencimento: '2026-11-10', pagamento: '2026-11-10', competencia: '2026-09-30', descricao: 'Compra de insumos sintéticos da nota',
+    valor_cent: 1623800, status: 'realizado', conciliado: false, numero_documento: '000012345', fornecedor_id: 'agro', fornecedor_nome: FORN.nome,
+    fornecedor_por: 'cnpj', parcelas: [{ n: 1, dif_cent: 0, dif_dias: 0 }], por: ['numero'], conta_bancaria_id: 'bb', cancelado: false };
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Exemplo', fazenda_id: 'f1', tipo_conta: 'conta_corrente', ativa: true }]
+      : t === 'financeiro_fornecedores' ? [FORN] : t === 'financeiro_lancamentos_v2' ? [ULTIMA]
+      : t === 'financeiro_plano_contas' ? [{ id: 'pl-nut', cliente_id: 'cli', tipo_operacao: '2-Saídas', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição',
+        centro_custo: 'Suplementação', subcentro: 'Nutrição Engorda', escopo_negocio: 'pecuaria', ativo: true, ordem_exibicao: 1 }] : [],
+    rpc: (fn: string) => fn === 'fn_nota_ja_lancada' ? (v === 'notaja' ? [JA] : [])
+      : fn === 'fn_criar_lancamento_de_extrato' ? { ok: true, lancamento_id: 'novo', cbi_id: 'cbi' }
+      : fn === 'fn_espelho_casar' ? (v === 'notadif' ? { ok: false, motivo: 'soma_nao_bate', no_extrato: valor, soma: -16238, diferenca: -16238 - valor }
+        : { ok: true, no_extrato: valor, soma: valor })
+      : fn === 'fin_documento_registrar' ? { documento_id: 'doc-1' }
+      : fn === 'fin_documento_editar' ? { documento_id: 'doc-1' }
+      : fn === 'fn_candidatos_conciliacao' || fn === 'fn_conciliacao_historico_buscar' ? [] : null,
+  };
+  montar(<EstacaoConciliar contaBancariaId="bb" aoFechar={() => {}} aoMudar={() => {}}
+    movimento={{ id: 'ext-1', data_movimento: '2026-10-05', descricao: 'COMPRA DEBITO AGROPECUARIA EXEMPLO', documento: null, valor,
+      valorConciliado: 0, valorAberto: valor, situacao: 'nao_conciliado', lancamentoId: null, vinculos: 0,
+      lancamentoDescricao: null, lancamentoFavorecido: null }} />);
 } else if (tela === 'estacao') {
   /* P153 — a estação "Conciliar movimento do extrato" (do Palco do mês) com o "Procurar no histórico": sem candidato (o caso que abriu
      a frente), SINTÉTICO. `&v=semnome`: o banco não trouxe o nome (Bradesco "PIX ENVIADO" — D1: o campo vazio e a frase). */
@@ -935,7 +1067,51 @@ if (tela === 'mesclar') {
     { tipo: 'nome_valor', motivo: 'nome · valor diferente · vencido set', diasDiff: 23, vencido: true, valorDiferente: true,
       lancamentos: [cs('n1', '2031-09-12', -12345678.9)] },
   ];
-  if (v === 'guariroba') {
+  if (v === 'rural' || v === 'ruralmuitas') {
+    /* CONC-SUGESTOES-TABELA-01 — o caso do Gabriel (04/11 06:36), SINTÉTICO: BB 16/10/2026, "PAGAMENTO DE BOLETO - FORNECEDOR RURAL", −1.265,22.
+       As sugestões (o mesmo fornecedor com valor diferente; a soma de 2) e o histórico (em aberto e pago), com o pagamento, a fazenda e a NF
+       de cada um lidos pelos ids (`lerComplementoDasLinhas`). Nomes e números inventados. */
+    const FR = 'Fornecedor Rural Sintético Ltda';
+    const c = (id: string, venc: string, valor: number, o: Partial<CandidatoSugestao> = {}): CandidatoSugestao => ({ lancamento_id: id, valor_assinado: valor,
+      data_vencimento: venc, competencia: '2026-10-01', descricao: 'Sal mineral proteinado para recria e engorda — lote de outubro', fornecedor: FR,
+      favorecido_id: 'fr', status_transacao: 'programado', ja_conciliado: false, ...o });
+    const SUGS_R: Sugestao[] = [
+      { tipo: 'mesmo_fornecedor', motivo: 'mesmo fornecedor · valor difere: programado 1.300,00', diasDiff: 1, vencido: false, valorDiferente: true,
+        lancamentos: [c('r1', '2026-10-15', -1300)] },
+      { tipo: 'soma', motivo: 'soma de 2 · 4 dias', diasDiff: 4, vencido: false, valorDiferente: false,
+        lancamentos: [c('r2', '2026-10-12', -632.61, { descricao: 'Sal mineral 1/2' }), c('r3', '2026-10-20', -632.61, { descricao: 'Sal mineral 2/2', status_transacao: 'previsto' })] },
+      /* `ruralmuitas` (AJUSTE 07:55): 14 sugestões a mais, com textos maiores que as colunas — a lista rola só DENTRO dela */
+      ...(v === 'ruralmuitas' ? Array.from({ length: 14 }, (_, i): Sugestao => ({ tipo: 'nome_valor', motivo: `nome · valor diferente · candidato sintético ${i + 1}`,
+        diasDiff: i, vencido: false, valorDiferente: true,
+        lancamentos: [c(`m${i}`, `2026-10-${String(1 + i).padStart(2, '0')}`, -(1000 + i * 37.5), {
+          descricao: `Lançamento sintético de nome bem comprido para medir o corte da coluna de descrição ${i + 1}`,
+          fornecedor: `Fornecedor Sintético de Nome Bem Comprido Agropecuária e Comércio ${i + 1} Ltda` })] })) : []),
+    ];
+    const COMPL = [
+      { id: 'r1', data_pagamento: null, fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.123.456' },
+      { id: 'r2', data_pagamento: null, fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.123.457' },
+      { id: 'r3', data_pagamento: null, fazenda_id: 'fz1', tipo_documento: null, numero_documento: null },
+      { id: 'h1', data_pagamento: null, fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.123.458' },
+      { id: 'h2', data_pagamento: '2026-09-16', fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.120.001' },
+    ];
+    const lin = (o: Record<string, unknown>) => ({ lancamento_id: 'x', data_pagamento: null, data_vencimento: '2026-10-18', data_competencia: '2026-10-01',
+      status_transacao: 'programado', conciliado: false, banco: null, descricao: 'Sal mineral proteinado', fornecedor_id: 'fr', fornecedor: FR,
+      plano_conta_id: 'p1', centro: 'Nutrição', subcentro: 'Suplementação', fazenda_id: 'fz1', fazenda: 'Fazenda Exemplo Retiro', fazenda_codigo: 'RET',
+      conta_bancaria_id: 'bb', conta: 'Banco do Brasil', valor: -1265.22, onde: ['fornecedor'], ...o });
+    const HIST_R = { total: v === 'ruralmuitas' ? 16 : 2, resumo: null, achados: [
+      ...(v === 'ruralmuitas' ? Array.from({ length: 14 }, (_, i) => lin({ lancamento_id: `hm${i}`, data_vencimento: `2026-09-${String(1 + i).padStart(2, '0')}`,
+        descricao: `Histórico sintético de nome comprido para medir o corte ${i + 1}`, valor: -(900 + i * 41.3),
+        ...(i % 3 === 0 ? { status_transacao: 'realizado', data_pagamento: `2026-09-${String(2 + i).padStart(2, '0')}`, conciliado: true } : {}) })) : []),
+      lin({ lancamento_id: 'h1' }),
+      lin({ lancamento_id: 'h2', status_transacao: 'realizado', data_pagamento: '2026-09-16', data_vencimento: '2026-09-15', data_competencia: '2026-09-01',
+        valor: -1240.5, conciliado: true, banco: 'PAGAMENTO DE BOLETO - FORNECEDOR RURAL' }),
+    ] };
+    const EXT_R = { data: '2026-10-16', historico: 'PAGAMENTO DE BOLETO - FORNECEDOR RURAL', valor: -1265.22 };
+    g.__bancoBancada = { from: (t: string) => (t === 'financeiro_lancamentos_v2' ? COMPL : t === 'fazendas' ? [{ id: 'fz1', nome: 'Fazenda Exemplo Retiro', codigo: 'RET' }] : []),
+      rpc: (fn: string) => fn === 'fn_conciliacao_historico_buscar' ? HIST_R : null };
+    montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} onCasarSelecionados={() => {}} sugestoes={SUGS_R} clienteId="cli"
+      onCriarIgual={() => {}} onCasarDoHistorico={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" extrato={EXT_R} />);
+  } else if (v === 'guariroba') {
     /* P153b — O CASO que abriu a frente, SINTÉTICO: BB 07/10, "PAGAMENTO FATURA DE ÁGUA - AGUAS GUARIROBA SA", −142,72; a sugestão nova
        ("mesmo fornecedor · valor difere: previsto 500,00", calculada pelo motor de verdade) e o histórico com os quatro casos: em aberto
        da mesma conta (Casar), em aberto de outra conta (Casar e trocar conta), pago (Criar igual) e conciliado de outra conta (o selo). */

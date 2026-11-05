@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Link2, Pencil, Trash2, CheckCheck, MapPin, Search, Filter,
-  X, Save, ChevronDown, ChevronRight, ChevronLeft, Spline, PenTool, Scissors, Merge, LayoutGrid, Tag, Layers, Maximize2, Scan, PenLine, Move, Combine, Undo2, type LucideIcon,
+  X, Save, ChevronDown, ChevronRight, ChevronLeft, Spline, PenTool, Scissors, Merge, Tag, Layers, Maximize2, Scan, PenLine, Move, Combine, Undo2, type LucideIcon,
   Landmark,
 } from 'lucide-react';
 import { casaNoNomeDoPoligono, TIPOS_DE_CONTORNO } from '@/lib/mapa/edicaoDoPoligono';
@@ -31,7 +31,10 @@ import { useInfraestruturas } from '@/hooks/useInfraestruturas';
 import { useClassificarPoligono } from '@/hooks/useClassificarPoligono';
 import { definicaoDoTipoDeArea, ehTipoDeArea, rotuloDoTipo, type TipoDeArea } from '@/lib/mapa/tiposDeArea';
 /* MAPA-DICAS-01 (área): a área do mapa é a do banco, nos quatro lugares (barra, lista, rótulo no mapa, dica) */
-import { areaDoMapaHa, dicaDasMedidas, fraseDoCadastro, numHa2, perimetroDoMapaM, rotuloDeAreaVisivel, textoHa1, textoHa2 } from '@/lib/mapa/areaNaValidacao';
+import {
+  areaDoMapaHa, dicaDasMedidas, ehRotuloDePraca, etiquetaDoVinculo, fraseDoCadastro, numHa2, perimetroDoMapaM, pracasEscondidas, rotuloDeAreaVisivel, textoHa1, textoHa2,
+  type CaixaDoRotulo,
+} from '@/lib/mapa/areaNaValidacao';
 /* MAPA-EDITAR-POLIGONO-01 — a edição de polígono é um módulo próprio (hook + barra); aqui só o encaixe */
 import { useEdicaoDoPoligono, type ModoDaEdicao } from '@/hooks/useEdicaoDoPoligono';
 import { BarraDeEdicaoDoPoligono, DesfazerUltimaEdicao } from '@/components/mapa-geo/BarraDeEdicaoDoPoligono';
@@ -113,11 +116,14 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     useStableLeafletMap({ debugName: 'ValidacaoPoligonos' });
   const boundsMap = useRef<Map<string, L.LatLngBounds>>(new Map());
   /* MAPA-DICAS-01 (área): os rótulos do mapa (nome + a linha da área, que só aparece com zoom e tamanho que comportem) */
-  const rotulosRef = useRef<Map<string, { marker: L.Marker; nome: string; area: string | null; comArea: boolean; bounds: L.LatLngBounds }>>(new Map());
-  const iconeDoRotulo = (nome: string, area: string | null, comArea: boolean) => L.divIcon({
+  const rotulosRef = useRef<Map<string, { marker: L.Marker; nome: string; area: string | null; comArea: boolean; bounds: L.LatLngBounds; praca: boolean; pasto: boolean }>>(new Map());
+  /* MAPA-LISTA-COMPACTA-01: o rótulo de praça é menor (8 px) e cinza */
+  const iconeDoRotulo = (nome: string, area: string | null, comArea: boolean, praca = false) => L.divIcon({
     className: 'pasto-label', iconSize: [0, 0],
     html: `<div style="position:absolute;transform:translate(-50%,-50%);white-space:nowrap;text-align:center;line-height:1.1">`
-      + `<span style="display:block;font-size:9px;font-weight:600;color:hsl(222,47%,11%);text-shadow:0 0 3px white,0 0 3px white;">${nome}</span>`
+      + (praca
+        ? `<span data-rotulo-praca="1" style="display:block;font-size:8px;font-weight:500;color:hsl(220,8%,42%);text-shadow:0 0 3px white,0 0 3px white;">${nome}</span>`
+        : `<span style="display:block;font-size:9px;font-weight:600;color:hsl(222,47%,11%);text-shadow:0 0 3px white,0 0 3px white;">${nome}</span>`)
       + (comArea && area ? `<span data-testid="rotulo-area" style="display:block;font-size:8px;font-weight:500;font-variant-numeric:tabular-nums;color:hsl(222,30%,25%);text-shadow:0 0 3px white,0 0 3px white;">${area}</span>` : '')
       + `</div>`,
   });
@@ -131,8 +137,19 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
         const sw = map.latLngToContainerPoint(r.bounds.getSouthWest()), ne = map.latLngToContainerPoint(r.bounds.getNorthEast());
         visivel = rotuloDeAreaVisivel(Math.abs(ne.x - sw.x), Math.abs(sw.y - ne.y), zoom, r.area);
       }
-      if (visivel !== r.comArea) { r.comArea = visivel; r.marker.setIcon(iconeDoRotulo(r.nome, r.area, visivel)); }
+      if (visivel !== r.comArea) { r.comArea = visivel; r.marker.setIcon(iconeDoRotulo(r.nome, r.area, visivel, r.praca)); }
     });
+    /* MAPA-LISTA-COMPACTA-01: o rótulo da praça que encosta no de um pasto não é desenhado (o pasto vence) — medido na tela a cada zoom/arraste */
+    const caixa = (id: string, el: HTMLElement | null | undefined): CaixaDoRotulo[] => {
+      const s = el?.querySelector('span'); if (!s) return [];
+      const r = s.getBoundingClientRect(); return r.width > 0 ? [{ id, left: r.left, top: r.top, right: r.right, bottom: r.bottom }] : [];
+    };
+    const todos = [...rotulosRef.current.entries()];
+    todos.forEach(([, r]) => { const el = r.marker.getElement(); if (r.praca && el) el.style.visibility = ''; });
+    const esconder = pracasEscondidas(
+      todos.flatMap(([id, r]) => (r.praca ? caixa(id, r.marker.getElement()) : [])),
+      todos.flatMap(([id, r]) => (r.pasto ? caixa(id, r.marker.getElement()) : [])));
+    todos.forEach(([id, r]) => { const el = r.marker.getElement(); if (el && esconder.has(id)) el.style.visibility = 'hidden'; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapInstance]);
   /* MAPA-ZOOM-ENTRE-VISOES-01 (era o -07: "a tela pula para a fazenda toda"): o mapa só se enquadra SOZINHO na troca de fazenda e na 1ª
@@ -369,8 +386,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             const center = b.getCenter();
             const ha = areaDoMapaHa(geo.geojson);
             const area = ha != null ? textoHa1(ha) : null;
-            const marker = L.marker(center, { icon: iconeDoRotulo(geo.nome_original, area, false), interactive: false }).addTo(lg);
-            rotulosRef.current.set(geo.id, { marker, nome: geo.nome_original, area, comArea: false, bounds: b });
+            const praca = ehRotuloDePraca(geo.tipo, geo.nome_original);
+            const marker = L.marker(center, { icon: iconeDoRotulo(geo.nome_original, area, false, praca), interactive: false }).addTo(lg);
+            rotulosRef.current.set(geo.id, { marker, nome: geo.nome_original, area, comArea: false, bounds: b, praca, pasto: !!geo.pasto_id });
           }
           if (candidataAJuntar) layer.on('click', () => escolherParaJuntarRef.current(geo.id));
           else if (!editando) layer.on('click', () => setFocusedId(geo.id));
@@ -535,16 +553,16 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
           <div className="px-2 py-1 border-b border-border space-y-1">
             <div className="flex gap-1.5">
               <div className="relative flex-1">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                 <Input
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                   placeholder="Buscar"
-                  className="h-6 pl-7 text-[11px]"
+                  className="h-[22px] pl-6 text-[10px]"
                 />
               </div>
               <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
-                <SelectTrigger className="h-6 w-[104px] text-[11px]">
+                <SelectTrigger className="h-[22px] w-[96px] px-2 text-[10px]">
                   <Filter className="h-3 w-3 mr-1" />
                   <SelectValue />
                 </SelectTrigger>
@@ -559,9 +577,10 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             {/* MAPA-LISTA-SEM-PULO-01 (Gabriel 02/11, UI-ESPACO-RESERVADO): a faixa de ações tem ALTURA FIXA (2 linhas de 24 px) e está SEMPRE
                 presente — os botões que dependem da seleção ficam à vista e inativos (o motivo no `title`), nunca somem nem aparecem; marcar
                 a caixa de um polígono não desloca a lista. O `title` do botão inativo vai também no invólucro (o inativo não recebe o mouse). */}
-            <div className="flex h-[50px] flex-col gap-0.5" data-testid="validacao-lista-acoes">
-              <div className="flex h-6 items-center gap-x-1.5">
-                <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={isAllSelected ? deselectAll : selectAll}
+            {/* MAPA-LISTA-COMPACTA-01 (Gabriel 03/11 11:01): a régua pequena — 2 linhas de 20 px (as 4 ações não cabem numa de 240 px) */}
+            <div className="flex h-[42px] flex-col gap-0.5" data-testid="validacao-lista-acoes">
+              <div className="flex h-5 items-center gap-x-1.5">
+                <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5" onClick={isAllSelected ? deselectAll : selectAll}
                   disabled={filtered.length === 0} title={filtered.length === 0 ? 'Nenhum polígono na lista para selecionar' : isAllSelected ? 'Tirar a marca de todos os polígonos da lista' : 'Marcar todos os polígonos da lista'}
                   data-testid="validacao-selecionar-todos">
                   <CheckCheck className="h-3 w-3 mr-1" />
@@ -571,7 +590,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 text-[10px] px-2 text-destructive hover:text-destructive disabled:text-muted-foreground"
+                    className="h-5 text-[10px] px-1.5 text-destructive hover:text-destructive disabled:text-muted-foreground"
                     data-testid="apagar-selecionados"
                     disabled={selectedIds.size === 0}
                     title={selectedIds.size > 0 ? `Apagar os ${selectedIds.size} polígonos marcados` : MOTIVO_APAGAR}
@@ -581,9 +600,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                   </Button>
                 </span>
               </div>
-              <div className="flex h-6 items-center gap-x-1.5">
+              <div className="flex h-5 items-center gap-x-1.5">
                 <span title={selectedIds.size >= 2 ? undefined : MOTIVO_UNIR} className="inline-flex">
-                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 disabled:text-muted-foreground" data-testid="unir-selecionados"
+                  <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5 disabled:text-muted-foreground" data-testid="unir-selecionados"
                     disabled={selectedIds.size < 2}
                     onClick={() => void edicao.iniciarUniao(Array.from(selectedIds))}
                     title={selectedIds.size >= 2 ? 'Unir selecionados: os marcados viram um polígono só (o primeiro fica; prévia antes de gravar)' : MOTIVO_UNIR}>
@@ -594,7 +613,7 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 text-[10px] px-2 text-destructive hover:text-destructive disabled:text-muted-foreground"
+                    className="h-5 text-[10px] px-1.5 text-destructive hover:text-destructive disabled:text-muted-foreground"
                     data-testid="apagar-sem-classificacao"
                     disabled={stats.semVinculo === 0}
                     title={stats.semVinculo > 0 ? `Apagar os ${stats.semVinculo} polígonos sem classificação (área classificada não entra)` : MOTIVO_SEM_CLASSIFICACAO}
@@ -618,8 +637,11 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             {filtered.length === 0 ? (
               <div className="p-4 text-center text-xs text-muted-foreground">Nenhum polígono encontrado.</div>
             ) : (
-              <table className="w-full table-fixed border-collapse text-[11px]">
-                <colgroup><col style={{ width: 22 }} /><col /><col style={{ width: 46 }} /><col style={{ width: 72 }} /><col style={{ width: 58 }} /></colgroup>
+              /* MAPA-LISTA-COMPACTA-01 (Gabriel 03/11 11:01, Pureza: "nada de texto grande"; nomes cortados em 40 px): a régua da tabela (10 px, linha
+                 de 26 px), 4 colunas — [caixa 18] nome (a SOBRA, ~134 px: o nome inteiro; o vínculo vira etiqueta cinza ao lado, que cede primeiro)
+                 · ha (42, 9,5 px, 2 casas, à direita) · ações (3 ícones de 12 px em 15 px, lugar reservado) */
+              <table className="w-full table-fixed border-collapse text-[10px]">
+                <colgroup><col style={{ width: 18 }} /><col /><col style={{ width: 42 }} /><col style={{ width: 50 }} /></colgroup>
                 <tbody>
                   {filtered.map(geo => {
                     const isFocused = focusedId === geo.id;
@@ -627,50 +649,54 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     const isEditing = editingId === geo.id;
                     const selo = pastoName ?? (geo.tipo === 'outra' ? 'sem vínculo' : rotuloDoTipo(geo.tipo));
                     return (
-                      <tr key={geo.id} className={`h-8 cursor-pointer border-b border-border ${isFocused ? 'bg-primary/5' : 'hover:bg-muted/50'}`}
+                      <tr key={geo.id} className={`h-[26px] cursor-pointer border-b border-border ${isFocused ? 'bg-primary/5' : 'hover:bg-muted/50'}`}
                         onClick={() => setFocusedId(geo.id)} data-testid="validacao-linha">
-                        <td className="pl-2 align-middle">
+                        <td className="pl-1.5 align-middle">
                           <Checkbox checked={selectedIds.has(geo.id)} onCheckedChange={() => toggleSelect(geo.id)} onClick={e => e.stopPropagation()}
-                            className="h-3.5 w-3.5" />
+                            className="h-3 w-3" />
                         </td>
                         {isEditing ? (
-                          <td colSpan={4} className="pr-1 align-middle">
+                          <td colSpan={3} className="pr-1 align-middle">
                             <div className="flex gap-1">
-                              <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-6 flex-1 text-[11px]" autoFocus
+                              <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-5 flex-1 px-1 text-[10px]" autoFocus
                                 onClick={e => e.stopPropagation()}
                                 onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingId(null); }} />
-                              <Button size="sm" className="h-6 w-6 p-0" onClick={e => { e.stopPropagation(); saveEdit(); }} disabled={saving}>
+                              <Button size="sm" className="h-5 w-5 p-0" onClick={e => { e.stopPropagation(); saveEdit(); }} disabled={saving}>
                                 <Save className="h-3 w-3" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={e => { e.stopPropagation(); setEditingId(null); }}>
+                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={e => { e.stopPropagation(); setEditingId(null); }}>
                                 <X className="h-3 w-3" />
                               </Button>
                             </div>
                           </td>
                         ) : (
                           <>
-                            <td className="truncate pr-1 align-middle font-medium text-foreground" title={geo.nome_original || 'Sem nome'} data-testid="validacao-nome">
-                              {geo.nome_original || 'Sem nome'}
+                            {/* o nome tem a prioridade (só corta se não couber sozinho; o inteiro no title); a etiqueta do vínculo cede primeiro */}
+                            <td className="overflow-hidden pr-1 align-middle" title={`${geo.nome_original || 'Sem nome'} · ${pastoName ? `Pasto → ${pastoName}` : selo}`}
+                              data-testid="validacao-nome">
+                              <div className="flex min-w-0 items-baseline gap-1">
+                                <span className="max-w-full flex-none truncate font-medium text-foreground" data-testid="validacao-nome-texto">{geo.nome_original || 'Sem nome'}</span>
+                                <span className={`min-w-0 truncate text-[9px] ${geo.tipo === 'outra' && !pastoName ? 'text-orange-600' : 'text-muted-foreground'}`}
+                                  title={pastoName ? `Pasto → ${pastoName}` : selo} data-testid={pastoName ? 'validacao-selo-pasto' : 'validacao-selo'}>
+                                  {etiquetaDoVinculo(geo.nome_original, pastoName, selo)}
+                                </span>
+                              </div>
                             </td>
-                            {/* MAPA-DICAS-01 (área): "ha" à direita do nome — 46 px = "9.999,99" a 10 px tabular (≈ 44), nunca corta */}
-                            <td className="whitespace-nowrap pr-1 text-right align-middle text-[10px] tabular-nums text-foreground" data-testid="validacao-area">
+                            {/* MAPA-DICAS-01 (área): "ha" à direita — 42 px = "9.999,99" a 9,5 px tabular (≈ 40), nunca corta */}
+                            <td className="whitespace-nowrap pr-1 text-right align-middle text-[9.5px] tabular-nums text-foreground" data-testid="validacao-area">
                               {(() => { const ha = areaDoMapaHa(geo.geojson); return ha != null ? numHa2(ha) : '—'; })()}
-                            </td>
-                            <td className={`truncate pr-1 align-middle text-[9.5px] ${pastoName ? 'text-green-700' : geo.tipo === 'outra' ? 'text-orange-600' : 'text-muted-foreground'}`}
-                              title={pastoName ? `Pasto → ${pastoName}` : selo} data-testid={pastoName ? 'validacao-selo-pasto' : undefined}>
-                              {selo}
                             </td>
                             <td className="pr-1 align-middle">
                               <div className="flex items-center justify-end gap-0">
-                                <Button variant="ghost" size="sm" className="h-[18px] w-[18px] p-0 text-muted-foreground hover:text-foreground"
+                                <Button variant="ghost" size="sm" className="h-[15px] w-[15px] p-0 text-muted-foreground [&_svg]:size-3 hover:text-foreground"
                                   onClick={e => { e.stopPropagation(); startLink(geo); }} title="Classificar (pasto ou área)">
                                   <Link2 className="h-3 w-3" />
                                 </Button>
-                                <Button variant="ghost" size="sm" className="h-[18px] w-[18px] p-0 text-muted-foreground hover:text-foreground"
+                                <Button variant="ghost" size="sm" className="h-[15px] w-[15px] p-0 text-muted-foreground [&_svg]:size-3 hover:text-foreground"
                                   onClick={e => { e.stopPropagation(); startEdit(geo); }} title="Editar nome">
                                   <Pencil className="h-3 w-3" />
                                 </Button>
-                                <Button variant="ghost" size="sm" className="h-[18px] w-[18px] p-0 text-muted-foreground hover:text-destructive"
+                                <Button variant="ghost" size="sm" className="h-[15px] w-[15px] p-0 text-muted-foreground [&_svg]:size-3 hover:text-destructive"
                                   onClick={e => { e.stopPropagation(); setFocusedId(geo.id); void edicao.iniciar('apagar', geo.id); }}
                                   title="Apagar (com motivo; dá para desfazer)">
                                   <Trash2 className="h-3 w-3" />
@@ -701,7 +727,16 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
           <BarraDeEdicaoDoPoligono edicao={edicao} geometrias={geometrias} nomeDoPasto={getPastoName}
             areaCadastroHa={pastos.find(p => p.id === edicao.alvo?.pasto_id)?.area_produtiva_ha ?? null} />
           {!piq.aberto && <DesfazerUltimaEdicao edicao={edicao} />}
-          <CriarPiquetesNoMapa piq={piq} />
+          {/* PIQUETES-PRACA-CONCAVO-01 (item 3): os soltos dentro do pasto vão para a espera do "É piquete de" (nada grava; o Concluir é o de sempre) */}
+          <CriarPiquetesNoMapa piq={piq} aoUsarPiqueteDe={soltos => {
+            const pai = piq.pai;
+            if (!pai) return;
+            const recusas = soltos.flatMap(p => { const r = piquetes.marcar(p, pai.pastoId); return r ? [`${p.nome_original || 'sem nome'}: ${r}`] : []; });
+            piq.fechar();
+            const marcados = soltos.length - recusas.length;
+            if (marcados) toast.success(`${marcados} ${marcados === 1 ? 'polígono espera' : 'polígonos esperam'} como piquete de ${pai.nome}: confira e conclua na lista.`);
+            if (recusas.length) toast.warning(`Ficaram de fora: ${recusas.join(' · ')}`);
+          }} />
           {/* MAPA-ZOOM-E-PAINEL-01 (Gabriel 02/11 07:40: "este modal está muito grande, tirando a visão do mapa"): no alto UMA linha — a BARRA
               do polígono (1 linha, ícones, a largura do conteúdo) à esquerda e os botões do mapa à direita; o nome cede ("…" + `title`), os
               botões nunca. O que está marcado `data-sobre-o-mapa` é descontado do enquadramento do "pasto inteiro". */}
@@ -754,10 +789,11 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     ))}
                     {/* MAPA-CRIAR-PIQUETES-01: só no polígono ligado a um pasto (o pasto vira o pai das divisões) */}
                     {geo.pasto_id && (
-                      <DicaDoMapa nome="Piquetes" frase="Criar as divisões (piquetes) dentro deste pasto.">
-                        <Button variant="ghost" size="sm" className={icone} data-testid="editar-piquetes" aria-label="Piquetes"
-                          onClick={() => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }); }}>
-                          <LayoutGrid className="h-3.5 w-3.5" />
+                      <DicaDoMapa nome="+ Piquete" frase="Desenhe um piquete dentro deste pasto: clique os pontos e feche no 1º ponto. O pasto continua; cada piquete vira pasto do cadastro na gravação.">
+                        {/* PIQUETE-POLIGONO-01 (Gabriel 03/11 21:37): o botão "+ Piquete" abre já desenhando o 1º piquete */}
+                        <Button variant="outline" size="sm" className="h-6 flex-none px-1 text-[9.5px]" data-testid="editar-piquetes" aria-label="+ Piquete"
+                          onClick={() => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }, 'poligonos'); }}>
+                          + Piquete
                         </Button>
                       </DicaDoMapa>
                     )}

@@ -44,7 +44,7 @@ export function nomesEmFrase(nomes: readonly string[]): string {
   return ordenados.length <= 4 ? ordenados.join(', ') : `${ordenados.slice(0, 3).join(', ')}…`;
 }
 
-/** A frase da prévia (a do mock): "4 pastos novos (Modulo 03-A…D, 24,40 ha cada) · Praça de alimentação 0,28 ha (área da fazenda, dentro de
+/** A frase da prévia (a do mock): "cria 4 pastos novos no cadastro (Modulo 03-A…D, 24,40 ha cada) · Praça de alimentação 0,28 ha (área da fazenda, dentro de
  *  Modulo 03) · Cocho no centro da praça (infraestrutura) · o contorno de Modulo 03 fica." */
 export function fraseDaPrevia(a: {
   paiNome: string; caso: 'novo' | 'grupo_existente'; piquetes: readonly { nome: string; areaHa: number }[]; areas: readonly AreaParaGravar[]; infra: readonly InfraParaGravar[];
@@ -54,7 +54,9 @@ export function fraseDaPrevia(a: {
   const iguais = has.length > 0 && has.every(x => x === has[0]);
   const medida = !n ? '' : iguais ? `${has[0]} ha cada` : `${haBr(Math.min(...a.piquetes.map(p => p.areaHa)))} a ${haBr(Math.max(...a.piquetes.map(p => p.areaHa)))} ha`;
   const quais = a.caso === 'novo' ? (n === 1 ? 'pasto novo' : 'pastos novos') : (n === 1 ? 'divisão do cadastro ligada' : 'divisões do cadastro ligadas');
-  const partes = [`${n} ${quais} (${[nomesEmFrase(a.piquetes.map(p => p.nome)), medida].filter(Boolean).join(', ')})`];
+  /* PIQUETE-POLIGONO-01 (Gabriel 03/11 21:5x): no caso novo a prévia diz que nasce cadastro ("cria 2 pastos novos no cadastro (…)") */
+  const oQue = `${n} ${quais}${a.caso === 'novo' ? ' no cadastro' : ''}`;
+  const partes = [`${a.caso === 'novo' ? 'cria ' : ''}${oQue} (${[nomesEmFrase(a.piquetes.map(p => p.nome)), medida].filter(Boolean).join(', ')})`];
   for (const x of a.areas) {
     partes.push(x.tipo === 'benfeitoria'
       ? `${NOME_DA_PRACA} ${haBr(areaDoBancoHa(x.geojson))} ha (área da fazenda, dentro de ${a.paiNome})`

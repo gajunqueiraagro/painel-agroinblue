@@ -3,8 +3,12 @@
  * - Opções-padrão pelo seletor da casa, com "Outro…" que abre um campo para digitar (o banco aceita qualquer texto; a lista é sugestão).
  * - Sim/não e lados pelo `Segmentado` (a seleção da casa); números pelo `CampoNumeroComConta` com a unidade dentro.
  * - Cocho: "Metros lineares úteis" = comprimento × lados, calculado na hora (não se digita, não se grava).
+ * - MEDIR-NO-MAPA-01 (Gabriel 03/11 20:54): o campo de área (m²) tem "Medir no mapa" e o de comprimento (m) a "Régua" (`CampoDaFicha.medir`);
+ *   a medida só PREENCHE o campo (segue editável; grava pelo "Ver prévia" de sempre); Esc no mapa cancela e o campo não muda.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Ruler, Spline } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -42,11 +46,24 @@ function CampoDeTexto({ c, valor, onChange }: { c: CampoDaFicha; valor: string; 
   );
 }
 
-export function FichaEditar({ tipo, ficha, onChange }: { tipo: TipoInfra; ficha: Ficha; onChange: (f: Ficha) => void }) {
+/** O número medido no mapa com as casas do campo (m² inteiro, m com 1 casa). */
+export const medidaNoCampo = (valor: number, casas: number) => Math.round(valor * 10 ** casas) / 10 ** casas;
+
+export function FichaEditar({ tipo, ficha, onChange, medir }: {
+  tipo: TipoInfra; ficha: Ficha; onChange: (f: Ficha) => void; medir?: (forma: 'area' | 'linha') => Promise<number | null>;
+}) {
+  const [medindo, setMedindo] = useState<string | null>(null);
+  /* a ficha mais nova (a medida chega depois de cliques no mapa; nesse meio o campo pode ter mudado) */
+  const fichaRef = useRef(ficha); fichaRef.current = ficha;
   const mudar = (chave: string, v: string | number | boolean | null) => {
-    const nova = { ...ficha };
+    const nova = { ...fichaRef.current };
     if (v === null || v === '') delete nova[chave]; else nova[chave] = v;
     onChange(nova);
+  };
+  const medirCampo = (c: CampoDaFicha) => {
+    if (!medir || !c.medir || medindo) return;
+    setMedindo(c.chave);
+    void medir(c.medir).then(v => { if (v != null && v > 0) mudar(c.chave, medidaNoCampo(v, c.casas ?? 0)); }).finally(() => setMedindo(null));
   };
   const uteis = metrosUteis(ficha);
   return (
@@ -57,9 +74,22 @@ export function FichaEditar({ tipo, ficha, onChange }: { tipo: TipoInfra; ficha:
           <div key={c.chave} className="flex flex-col gap-0.5">
             <span className="text-[9.5px] text-[#5A6472]">{c.rotulo}</span>
             {c.forma === 'texto' && <CampoDeTexto c={c} valor={typeof v === 'string' ? v : ''} onChange={t => mudar(c.chave, t)} />}
-            {(c.forma === 'numero' || c.forma === 'inteiro') && (
+            {(c.forma === 'numero' || c.forma === 'inteiro') && !(medir && c.medir) && (
               <CampoNumeroComConta valor={typeof v === 'number' ? v : null} onChange={n => mudar(c.chave, n)} casas={c.forma === 'inteiro' ? 0 : c.casas ?? 0}
                 sufixoDentro={c.unidade} className="h-[24px] text-[10.5px]" />
+            )}
+            {(c.forma === 'numero' || c.forma === 'inteiro') && medir && c.medir && (
+              <div className="flex items-center gap-1">
+                <CampoNumeroComConta valor={typeof v === 'number' ? v : null} onChange={n => mudar(c.chave, n)} casas={c.forma === 'inteiro' ? 0 : c.casas ?? 0}
+                  sufixoDentro={c.unidade} className="h-[24px] min-w-0 flex-1 text-[10.5px]" />
+                <Button type="button" variant={medindo === c.chave ? 'default' : 'outline'} size="sm" className="h-[24px] w-[100px] flex-none gap-1 px-1 text-[10px]"
+                  disabled={!!medindo && medindo !== c.chave} onClick={() => medirCampo(c)} data-testid={`infra-medir-${c.chave}`}
+                  title={c.medir === 'area' ? 'Clique os pontos no mapa; fecha no 1º ponto. A área entra no campo (Esc cancela)'
+                    : 'Clique os pontos no mapa; duplo clique termina. O comprimento entra no campo (Esc cancela)'}>
+                  {c.medir === 'area' ? <Spline className="h-3 w-3" /> : <Ruler className="h-3 w-3" />}
+                  {medindo === c.chave ? 'Medindo…' : c.medir === 'area' ? 'Medir no mapa' : 'Régua'}
+                </Button>
+              </div>
             )}
             {c.forma === 'simnao' && (
               <Segmentado valor={v === true ? 'sim' : v === false ? 'nao' : ''} altura={22} fonte={10}

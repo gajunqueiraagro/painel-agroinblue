@@ -151,10 +151,21 @@ export function medidasDaPraca(g: GeoJSON.Polygon, p: PracaCentral): MedidasDaPr
   return { raioM, diagonalM: 2 * raioM, ladoM: ladosM[0] ?? 0, ladosM, areaHa: areaDoBancoHa(areaDaPraca(p).geojson) };
 }
 
-/** O que impede a praça: ponta fora do pasto. */
+/** PIQUETES-PRACA-CONCAVO-01: as pontas da praça fora do pasto (o mapa as marca) e se caem num FURO do pasto (o centro parece dentro: o
+ *  P19A da Pureza tinha um furo de 0,51 ha onde ficava a praça antiga, e o aviso não dizia onde). */
+export function pontasForaDaPraca(g: GeoJSON.Polygon, p: PracaCentral): { indices: number[]; noFuro: boolean } {
+  const indices = p.vertices.flatMap((v, i) => (pontoDentro(g, v) ? [] : [i]));
+  const externo: GeoJSON.Polygon = { type: 'Polygon', coordinates: [g.coordinates[0]] };
+  return { indices, noFuro: indices.length > 0 && indices.every(i => pontoDentro(externo, p.vertices[i])) };
+}
+
+/** O que impede a praça: ponta fora do pasto (quantas e onde: no furo ou além da borda). */
 export function motivoDaPraca(g: GeoJSON.Polygon, p: PracaCentral): string | null {
-  if (p.vertices.some(v => !pontoDentro(g, v))) return 'A praça precisa ficar toda dentro do pasto: arraste o centro ou diminua a diagonal.';
-  return null;
+  const { indices, noFuro } = pontasForaDaPraca(g, p);
+  if (!indices.length) return null;
+  const n = indices.length;
+  const onde = noFuro ? `no furo do pasto` : `além da borda`;
+  return `A praça precisa ficar toda dentro do pasto: ${n} ${n === 1 ? 'ponta' : 'pontas'} ${onde} (em vermelho). Arraste o centro ou diminua a diagonal.`;
 }
 
 // --- mexer na praça ----------------------------------------------------------------------------------------------------------------

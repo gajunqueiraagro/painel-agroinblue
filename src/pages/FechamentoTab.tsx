@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, RefreshCw, FileDown } from 'lucide-react';
+import { ExportarMesDialog } from '@/components/caderno/ExportarMesDialog';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { ResumoPorAtividade } from '@/components/resumoAtividade/ResumoPorAtividade';
 import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, type Pasto } from '@/hooks/usePastos';
@@ -270,6 +271,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
   const [bulkClosing, setBulkClosing] = useState(false);
   const [showResumoAtividades, setShowResumoAtividades] = useState(false);
+  /* CADERNO-CAMPO-01 peça 1: o "Exportar mês" (o caderno de campo preenchido, de uma fazenda) */
+  const [exportarMesAberto, setExportarMesAberto] = useState(false);
   const [confirmBulkReopenOpen, setConfirmBulkReopenOpen] = useState(false);
   // Pré-checagem: pastos vazios sem tipo_uso_mes definido
   const [vazioCheckOpen, setVazioCheckOpen] = useState(false);
@@ -1507,6 +1510,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 <MapIcon className="h-3.5 w-3.5" /> Mapa de Pastos
               </Button>
             )}
+            {/* CADERNO-CAMPO-01 peça 1 — o caderno é de UMA fazenda: no Global o botão não aparece */}
+            {!isGlobal && fazendaAtual && (
+              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => setExportarMesAberto(true)}>
+                <FileDown className="h-3.5 w-3.5" /> Exportar mês (PDF)
+              </Button>
+            )}
+            <ExportarMesDialog open={exportarMesAberto} onOpenChange={setExportarMesAberto} ano={Number(anoFiltro)} mes={Number(mesFiltro)} />
 
             {/* FECH-DOCS-01 — "Documentos do mês · N": aparece SEMPRE (com zero também), no lugar que era do "Ver sugestões";
                 vem primeiro, e o "Ver sugestões" tem o lugar DELE reservado logo abaixo (28px, vazio sem sugestão). */}

@@ -45,6 +45,15 @@ export function areaNoMesOuHoje(p: { id?: string; area_produtiva_ha?: number | n
   return p.area_produtiva_ha ?? 0;
 }
 
+/** MAPA-IMPRESSAO-01 — como `areaNoMesOuHoje`, mas SEM área é `null` (nunca 0): a folha impressa escreve "—" (zero é valor real). */
+export function areaNoMesOuNada(p: { id?: string; area_produtiva_ha?: number | null }, anoMes: string | undefined, areaDe?: AreaDoPastoNoMes): number | null {
+  if (areaDe && anoMes && p.id) {
+    const a = areaDe(p.id, anoMes);
+    if (a !== undefined) return a;
+  }
+  return p.area_produtiva_ha ?? null;
+}
+
 /** PASTO-AREA-OFICIAL-02b — os pastos com a área DO MÊS no lugar da de hoje (o que o `areaDe` não sabe fica como está). Para telas de um
  *  mês que passam o pasto adiante (o card e o modal do Fechamento): uma troca na entrada, nenhuma conta mudada lá dentro. */
 export function comAreaDoMes<P extends { id: string; area_produtiva_ha: number | null }>(pastos: readonly P[], anoMes: string, areaDe: AreaDoPastoNoMes): P[] {

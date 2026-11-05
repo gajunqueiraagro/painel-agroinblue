@@ -171,7 +171,7 @@ describe('a barra e a lista', () => {
     expect(secao.textContent).toContain('Cocho');
     expect(secao.textContent).toContain('infraestrutura');
     const frase = screen.getByTestId('piquetes-previa-frase-local').textContent ?? '';
-    expect(frase).toContain('4 pastos novos (Modulo 03-A…D, 24,30 ha cada)');
+    expect(frase).toContain('cria 4 pastos novos no cadastro (Modulo 03-A…D, 24,30 ha cada)');
     expect(frase).toContain('Praça de alimentação 0,18 ha (área da fazenda, dentro de Modulo 03)');
     expect(frase).toContain('Cocho no centro da praça (infraestrutura)');
     expect(frase).toContain('o contorno de Modulo 03 fica.');

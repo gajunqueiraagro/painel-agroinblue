@@ -45,6 +45,7 @@ import { useLavouraDaFazenda } from '@/hooks/useLavouraDaFazenda';
 import { lavouraDoPastoNoMes, rotuloDaLavoura, type LavouraDoMes } from '@/lib/mapa/lavouraDoMes';
 import { familiaForaDaPecuaria, type FamiliaForaDaPecuaria } from '@/lib/mapa/usoDoPasto';
 import { dataBR } from '@/lib/datas/dataBR';
+import { areaDoAnelM2, comprimentoM, usePontoAPonto } from '@/hooks/usePontoAPonto';
 import { contagemPorTipo, definicaoDoTipo, iconeDaInfra, pastoNoPonto, pontoDaInfra, tipoDePontoPeloRotulo, type TipoInfra } from '@/lib/mapa/infraestrutura';
 /* MAPA-CONTROLES-01 / MAPA-COMPACTO-01: o que a legenda deixa livre à direita para os créditos no rodapé = 12 (a margem da legenda) +
    8 de folga + 10 (a margem do controle do Leaflet) + a largura MEDIDA dos créditos (o texto muda com a área à vista) */
@@ -82,6 +83,8 @@ interface Props {
   seletorDeMes: ReactNode;
   /** A troca de vista (Gestor · Operação · Validação). */
   trocaDeVista: ReactNode;
+  /** MAPA-IMPRESSAO-01: o botão "Imprimir mapa" (lugar de 26px antes da troca de vista; só numa fazenda) */
+  acaoImprimir?: ReactNode;
 }
 
 const VIDRO = 'rounded-[10px] border border-white/60 bg-white/[0.78] shadow-[0_8px_28px_rgba(0,0,0,0.28)] backdrop-blur-[14px] backdrop-saturate-[1.2]';
@@ -279,7 +282,7 @@ function escaparHtml(t: string): string {
 
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
-  seletorDeMes, trocaDeVista, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, semDesenho = null,
+  seletorDeMes, trocaDeVista, acaoImprimir, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, semDesenho = null,
   infraInicialId, onInfraInicialUsada,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
@@ -322,7 +325,22 @@ export function MapaGestorView({
   const infraLayerRef = useRef<L.LayerGroup | null>(null);
   const infraSel = infraSelId ? infras.find(i => i.id === infraSelId) ?? null : null;
   const infraPainelAberto = (!!colocandoTipo && !!pontoNovo) || !!infraSel;
-  const fecharInfra = () => { setColocandoTipo(null); setPontoNovo(null); setInfraSelId(null); setEditandoInfra(false); setPontoEditado(null); };
+  /* MEDIR-NO-MAPA-01: a ficha pede uma medida ("Medir no mapa" / "Régua"); a ferramenta ponto a ponto devolve o número (ou null no Esc) */
+  const [medindo, setMedindo] = useState<{ forma: 'area' | 'linha'; resolver: (v: number | null) => void } | null>(null);
+  const medindoRef = useRef(medindo); medindoRef.current = medindo;
+  const acabarMedida = (v: number | null) => { medindoRef.current?.resolver(v); medindoRef.current = null; setMedindo(null); };
+  const medirNoMapa = (forma: 'area' | 'linha') => new Promise<number | null>(resolver => {
+    medindoRef.current?.resolver(null);
+    const novo = { forma, resolver };
+    medindoRef.current = novo; setMedindo(novo);
+  });
+  usePontoAPonto({
+    mapa: mapStatus === 'ready' ? mapInstanceRef.current : null,
+    forma: medindo ? (medindo.forma === 'area' ? 'poligono' : 'linha') : null,
+    aoTerminar: pts => acabarMedida(medindoRef.current?.forma === 'area' ? areaDoAnelM2(pts) : comprimentoM(pts)),
+    aoCancelar: () => acabarMedida(null),
+  });
+  const fecharInfra = () => { acabarMedida(null); setColocandoTipo(null); setPontoNovo(null); setInfraSelId(null); setEditandoInfra(false); setPontoEditado(null); };
   const painelAberto = Boolean(geoSelecionada && pastoSelecionado) || infraPainelAberto;
   const dadosSelecionado = pastoSelecionado ? dadosDoMes.get(pastoSelecionado.id) ?? null : null;
   /* MAPA-ATIVIDADE-LAVOURA-01: a lavoura dos pastos da fazenda (a safra do mês se escolhe na lib, D4) */
@@ -434,7 +452,7 @@ export function MapaGestorView({
         if (b.isValid()) { limites.extend(b); desenhados++; }
         const nome = nomeDe(g);
         if (ehPasto) {
-          camadaGeo.on('click', () => { if (colocandoRef.current) return; setInfraSelId(null); setSelecionadoId(g.id); });
+          camadaGeo.on('click', () => { if (colocandoRef.current || medindoRef.current) return; setInfraSelId(null); setSelecionadoId(g.id); });
           /* MAPA-ROTULO-POR-CAMADA-01: a 2ª linha segue a camada (a mesma escolha que pinta e faz a legenda); "Mostrar área no rótulo" soma a área */
           const { sub, titulo } = rotuloDoPastoNaCamada(camada, {
             temFechamento: !!d?.temFechamento, cabecas: d?.cabecas ?? null, pesoMedioKg: d?.pesoMedioKg ?? null, kgHa: d?.kgHa ?? null,
@@ -471,7 +489,7 @@ export function MapaGestorView({
           }
           /* MAPA-AREA-TIPOS-02: a área que já é estrutura (infraestrutura com o elo) abre o painel dela — a ficha e o Patrimônio */
           const estrutura = infras.find(i => i.geometria_id === g.id);
-          if (estrutura) camadaGeo.on('click', () => { if (colocandoRef.current) return; setSelecionadoId(null); setPontoEditado(null); setInfraSelId(estrutura.id); });
+          if (estrutura) camadaGeo.on('click', () => { if (colocandoRef.current || medindoRef.current) return; setSelecionadoId(null); setPontoEditado(null); setInfraSelId(estrutura.id); });
         }
         camadaGeo.addTo(grupo);
         camadasRef.current.set(g.id, camadaGeo);
@@ -521,7 +539,7 @@ export function MapaGestorView({
         if (!pt) continue;
         const m = L.marker([pt.lat, pt.lon], { icon: icone(i.tipo, sel), draggable: sel && editandoInfra, keyboard: false, zIndexOffset: sel ? 1000 : 0 });
         m.bindTooltip(`${definicaoDoTipo(i.tipo)?.rotulo ?? i.tipo}${i.nome ? ` · ${i.nome}` : ''}`, { direction: 'top', offset: [0, -8] });
-        m.on('click', ev => { L.DomEvent.stopPropagation(ev); if (colocandoRef.current) return; setSelecionadoId(null); setPontoEditado(null); setInfraSelId(i.id); });
+        m.on('click', ev => { L.DomEvent.stopPropagation(ev); if (colocandoRef.current || medindoRef.current) return; setSelecionadoId(null); setPontoEditado(null); setInfraSelId(i.id); });
         m.on('dragend', () => { const ll = m.getLatLng(); setPontoEditado({ lon: ll.lng, lat: ll.lat }); });
         m.addTo(grupo);
       }
@@ -536,7 +554,7 @@ export function MapaGestorView({
   useEffect(() => {
     const mapa = mapInstanceRef.current;
     if (mapStatus !== 'ready' || !mapa || !colocandoTipo) return;
-    const aoClicar = (ev: L.LeafletMouseEvent) => setPontoNovo({ lon: ev.latlng.lng, lat: ev.latlng.lat });
+    const aoClicar = (ev: L.LeafletMouseEvent) => { if (medindoRef.current) return; setPontoNovo({ lon: ev.latlng.lng, lat: ev.latlng.lat }); };
     mapa.on('click', aoClicar);
     return () => { mapa.off('click', aoClicar); };
   }, [mapStatus, mapInstanceRef, colocandoTipo]);
@@ -776,6 +794,7 @@ export function MapaGestorView({
             options={opcoesBusca} allLabel="Buscar pasto…" allValue="" semTodos placeholder="Buscar pasto…"
             contentClassName={MENU_ACIMA} triggerClassName="h-[24px] text-[11px]" />
         </div>
+        <div className="w-[26px] flex-none" data-testid="mapa-imprimir-lugar">{acaoImprimir}</div>
         <div className="flex-none">{trocaDeVista}</div>
       </div>
 
@@ -892,7 +911,7 @@ export function MapaGestorView({
             pastos={pastos} bens={bens} salvar={salvarInfra} desativar={desativarInfra} criarBem={criarBemDaInfra}
             onEditando={setEditandoInfra}
             onGravou={() => { fecharInfra(); recarregarInfra(); }}
-            onFechar={fecharInfra} />
+            onFechar={fecharInfra} medir={medirNoMapa} />
         )}
 
         {geoSelecionada && pastoSelecionado && !infraPainelAberto && (

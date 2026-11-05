@@ -60,3 +60,21 @@ export function rotuloDeAreaVisivel(larguraPx: number, alturaPx: number, zoom: n
   if (zoom < ZOOM_MINIMO_DO_ROTULO_DE_AREA) return false;
   return larguraPx >= 2 * larguraDoRotulo(texto) && alturaPx >= 2 * ALTURA_DO_ROTULO_DE_AREA;
 }
+
+// --- MAPA-LISTA-COMPACTA-01 (Gabriel 03/11 11:01, Validação da Pureza) ------------------------------------------------------------------
+/** A etiqueta cinza do vínculo ao lado do nome na lista: o nome do pasto (quando é outro), "pasto" (quando é o mesmo nome — não repetir), ou o
+ *  selo de sempre ("sem vínculo", o tipo da área). */
+export function etiquetaDoVinculo(nome: string | null, pastoNome: string | null, selo: string): string {
+  if (!pastoNome) return selo;
+  return pastoNome.trim().toLowerCase() === (nome ?? '').trim().toLowerCase() ? 'pasto' : pastoNome;
+}
+
+/** O rótulo de praça no mapa (menor e cinza; cede ao do pasto): o tipo `praca_alimentacao` ou o nome que começa com "Praça". */
+export const ehRotuloDePraca = (tipo: string | null, nome: string | null) => tipo === 'praca_alimentacao' || /^pra[cç]a\b/i.test((nome ?? '').trim());
+
+export interface CaixaDoRotulo { id: string; left: number; top: number; right: number; bottom: number }
+/** As praças cujo rótulo encosta no rótulo de algum pasto (o pasto vence: a praça não é desenhada). Caixas em px da tela. */
+export function pracasEscondidas(pracas: readonly CaixaDoRotulo[], pastos: readonly CaixaDoRotulo[]): Set<string> {
+  const cobre = (a: CaixaDoRotulo, b: CaixaDoRotulo) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  return new Set(pracas.filter(p => pastos.some(q => cobre(p, q))).map(p => p.id));
+}

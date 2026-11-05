@@ -212,6 +212,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   gravacao. Fechamento P1: a autoridade e' `get_status_pilares_fechamento`.
 - FECH-P2-TRAVA-01: o Valor do Rebanho reabre SO' pela `fn_valor_rebanho_reabrir` (abre o fechamento E invalida o validado + cadeia, trilha);
   os pastos travam com QUALQUER das duas marcas (`_fn_fechamento_p2_travado`); a tela avisa pela `lerEstadoDoP2`, nunca reabre P2 sozinha.
+- MAPA-CARD-LOTE-01: o lote do pasto no mes e' o `fechamento_pastos.lote_mes` (o "Lote:" do card do Fechamento); `fechamento_pasto_itens.lote` nao e' fonte (o Fechamento nao o mostra nem grava).
 - Rateio administrativo e' por mes (`fn_rateio_admin_mes`); modal de linha do DRE soma as mesmas chaves da grade (`somaComposta`);
   `lucro_liquido` da RPC NAO e' a linha "Lucro liquido" da grade.
 - "Pec.3M-" no nome do fornecedor = pagamento por rateio (nota em nome do Higino): nunca juntar os dois lados.

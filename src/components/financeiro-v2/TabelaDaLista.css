@@ -1,0 +1,32 @@
+/* CONC-SUGESTOES-TABELA-01 (Gabriel 04/11 07:55 e 08:1x) — o TAMANHO GRANDE da tabela da lista (`TabelaDaLista grande`): as "Sugestões para
+   casar" e o "Procurar no histórico" usam o espaço do modal — letra de 12px (datas, NF e Status a 11px), linha de 26px, e o cabeçalho a 11px
+   SEM CAIXA ALTA (a regra de 28/10: só a 1ª letra maiúscula — "Comp. · Venc. · Pgto. · Descrição"). A lista do Financeiro NÃO leva a classe
+   e segue nos tamanhos dela (index.css, a exceção declarada "Lancamentos Financeiros"). Mais específico que as regras da `.table-financeiro`
+   (duas classes), por isso vence sem mexer nelas. */
+.table-financeiro.tabela-da-lista-grande th {
+  font-size: 11px !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+.table-financeiro.tabela-da-lista-grande td,
+.table-financeiro.tabela-da-lista-grande td * {
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+}
+.table-financeiro.tabela-da-lista-grande td.celula-data,
+.table-financeiro.tabela-da-lista-grande td.celula-data *,
+.table-financeiro.tabela-da-lista-grande td.celula-doc,
+.table-financeiro.tabela-da-lista-grande td.celula-doc *,
+.table-financeiro.tabela-da-lista-grande td.celula-status,
+.table-financeiro.tabela-da-lista-grande td.celula-status * {
+  font-size: 11px !important;
+  letter-spacing: 0 !important;
+}
+.table-financeiro.tabela-da-lista-grande td .selo-motivo {
+  font-size: 10.5px !important;
+  line-height: 16px !important;
+}
+.table-financeiro.tabela-da-lista-grande tr.linha-da-lista { height: 26px !important; }
+.table-financeiro.tabela-da-lista-grande tr.linha-da-lista > td { height: 25px !important; max-height: 25px; }
