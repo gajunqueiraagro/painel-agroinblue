@@ -17,7 +17,11 @@ export interface CartaoVG {
   /** VISAO-GERAL-05 — a unidade menor ao lado do número ("ha", "cab", "UA/ha") e a variação contra a meta e o ano anterior (%) */
   unidade?: string | null;
   meta?: number | null;
+  /** VG-RESULTADO-RS-01 — a diferença em R$ contra a meta, no lugar do % (o Resultado com valor ou meta ≤ 0) */
+  metaEmReais?: number | null;
   anoAnt?: number | null;
+  /** VG-RESULTADO-RS-01 — o mesmo contra o ano anterior */
+  anoAntEmReais?: number | null;
   tomDetalhe?: 'neutro' | 'positivo' | 'negativo';
   abrir: string;
   onAbrir?: () => void;
@@ -35,8 +39,8 @@ export function CartoesDoTopo({ cartoes, carregando }: { cartoes: readonly Carta
             variacao={<>
               {/* o detalhe ("+R$ 380K no mês", "61,5% de 7.450 ha") na linha de baixo, antes da comparação: no rótulo ele passava do card */}
               {c.detalhe && <span className="text-muted-foreground">{c.detalhe}</span>}
-              {c.detalhe && (c.meta != null || c.anoAnt != null) && <span className="text-muted-foreground"> · </span>}
-              <Comparacao i={{ meta: c.meta ?? null, anoAnt: c.anoAnt ?? null }} />
+              {c.detalhe && (c.meta != null || c.metaEmReais != null || c.anoAnt != null || c.anoAntEmReais != null) && <span className="text-muted-foreground"> · </span>}
+              <Comparacao i={{ meta: c.meta ?? null, metaEmReais: c.metaEmReais ?? null, anoAnt: c.anoAnt ?? null, anoAntEmReais: c.anoAntEmReais ?? null }} />
             </>} />
         </button>
       ))}

@@ -25,7 +25,9 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
 import { Segmentado } from '@/components/ui/segmentado';
-import { ehAnoInteiro, intervaloDoAno, type Intervalo } from '@/lib/periodo/intervaloDeDatas';
+import { ehAnoInteiro, intervaloDoAno, type AtividadeDaSafra, type Intervalo } from '@/lib/periodo/intervaloDeDatas';
+/* UI-PERIODO-01b (Gabriel 04/11 18:03): o Painel tem safra — "Esta safra · Última safra" pelas datas do cadastro, das duas atividades */
+const AS_DUAS_ATIVIDADES: readonly AtividadeDaSafra[] = ['pecuaria', 'agricultura'];
 import { Label } from '@/components/ui/label';
 import { ExtratoDistribuicaoEconomica } from '@/components/financeiro-v2/ExtratoDistribuicaoEconomica';
 import { ExtratoMaioresCompromissos } from '@/components/financeiro-v2/ExtratoMaioresCompromissos';
@@ -308,7 +310,7 @@ export function PainelPeriodoTab() {
               onEscolher={(v) => mexer(v === 'safra' ? { modo: 'safra' } : { modo: recorte.de && recorte.ate ? 'datas' : 'ano' })}
               opcoes={[{ valor: 'periodo', rotulo: 'Datas' }, { valor: 'safra', rotulo: 'Safra do lançamento' }]} />
             {recorte.modo !== 'safra' && (
-              <SeletorDePeriodo testid="painel-periodo" valor={intervaloDoRecorte(recorte)} onChange={(i) => mexer(recorteDoIntervalo(i))} />
+              <SeletorDePeriodo testid="painel-periodo" valor={intervaloDoRecorte(recorte)} onChange={(i) => mexer(recorteDoIntervalo(i))} atividades={AS_DUAS_ATIVIDADES} />
             )}
           </div>
         </div>

@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { useEvolucaoDoMes } from '@/hooks/useEvolucaoDoMes';
 import {
-  TIPOS_DO_MES, kgCabFinal, kgPorCab, desvio, tomDoDesvio, montarMesPorCategoria, pesosAConferir, categoriaCurta, tipoCurto, type LinhaDoMes,
+  TIPOS_DO_MES, kgCabFinal, kgPorCab, desvio, tomDoDesvio, montarMesPorCategoria, pesosAConferir, categoriaCurta, tipoCurto, quedaDoPeso, type LinhaDoMes,
 } from '@/lib/producao/evolucaoMes';
 import type { FluxoTipo } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -33,6 +33,9 @@ const vazio = (v: number | null | undefined, casas = 0): string => (v == null ||
 const KG_SECUNDARIO = 'text-[8.5px] text-muted-foreground/80';
 /* fix1 (item 3): zebra leve entre as categorias; os subtotais ficam com o fundo próprio */
 const ZEBRA = ['bg-card', 'bg-[#f7f8fa]'];
+/* EVOLUCAO-CATEGORIA-01 (item 3): o separador entre os grupos (Início · cada movimento · Entrou · Saiu · Final · Produção) */
+const GRUPO_TH = 'border-l border-white/35';
+const GRUPO_TD = 'border-l border-[#1e2d47]/15';
 const TOM = { vermelho: 'bg-[#fde1e1] text-[#a3161c] font-semibold', ambar: 'bg-[#fff1d6] text-[#8a4b00] font-semibold' } as const;
 const ROTULO_TIPO: Record<string, string> = Object.fromEntries([...TIPOS_DO_MES.map((t) => [t.tipo, t.rotulo]), ['reclassificacao', 'Evolução']]);
 
@@ -52,8 +55,8 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
   const [ano, setAno] = useState(anoInicial ?? new Date().getFullYear());
   const [mesEscolhido, setMes] = useState<number | null>(mesInicial ?? null);
   const [cenario, setCenario] = useState<'realizado' | 'meta'>('realizado');
-  /* fix1 (item 4): o painel abre SEMPRE em "Composição"; "Conferir pesos" é a 2ª aba */
-  const [aba, setAba] = useState<'pesos' | 'composicao'>('composicao');
+  /* EVOLUCAO-CATEGORIA-01 (item 2): "Conferir pesos" é um botão no cabeçalho do bloco; abre o painel POR CIMA da tabela (fechado ao abrir) */
+  const [verPesos, setVerPesos] = useState(false);
   /* sem mês dito, o último fechado; sem nenhum fechado, o mês de hoje */
   const prov = useEvolucaoDoMes(ano, mesEscolhido ?? 1, cenario);
   const mes = mesEscolhido ?? prov.ultimoFechado ?? new Date().getMonth() + 1;
@@ -89,8 +92,19 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
     const tom = l.nivel === 'categoria' && d.fechado ? tomDoDesvio(desvio(v, ref)) : null;
     return <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', KG_SECUNDARIO, tom && TOM[tom])}>{vazio(v, 1)}</td>;
   };
-  const celCab = (l: LinhaDoMes, v: number, abrir?: () => void) => (
-    <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap',
+  /* item 4: o kg/cab FINAL da categoria que caiu mais de 25% desde o início do mês — vermelho, com o aviso no title; não corrige */
+  const celKgFinal = (l: LinhaDoMes) => {
+    const ini = l.temDado ? kgPorCab(l.inicio) : null;
+    const fim = d.fechado ? kgCabFinal(l) : null;
+    const queda = l.nivel === 'categoria' ? quedaDoPeso(ini, fim) : null;
+    return (
+      <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', KG_SECUNDARIO, queda != null && TOM.vermelho)} data-queda={queda != null ? '' : undefined}
+        title={queda != null ? `O peso caiu de ${fmt(ini, 1)} para ${fmt(fim, 1)} kg/cab no mês (−${fmt(queda * 100, 0)}%). Conferir o Fechamento.` : undefined}>
+        {vazio(fim, 1)}</td>
+    );
+  };
+  const celCab = (l: LinhaDoMes, v: number, abrir?: () => void, grupo = false) => (
+    <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', grupo && GRUPO_TD,
       abrir && v !== 0 && 'cursor-pointer underline decoration-dotted decoration-[#8aa0bf] underline-offset-2')}
       onClick={abrir && v !== 0 ? abrir : undefined}>{l.temDado ? vazio(v) : ''}</td>
   );
@@ -121,106 +135,97 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
           sub={rotuloAnt ? `${rotuloAnt}: ${fmt(totalAnt?.gmd, 3)}` : ''} alerta={aConferir ? `${aConferir} ${aConferir === 1 ? 'peso' : 'pesos'} a conferir` : undefined} />
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_368px] gap-2.5">
-        {/* A TABELA DO MÊS POR CATEGORIA */}
-        <div className={cn(QUADRO_REGUA, 'min-h-0')}>
-          <div className="flex h-[24px] shrink-0 items-center gap-3 border-b border-border px-2 text-[10px]">
-            <span className="font-semibold">Rebanho por categoria</span>
-            {/* D4 (REBANHO-LEITURA-01): a leitura que falhou fala no lugar do subtítulo (a mesma faixa — nada se desloca) */}
-            {d.erroRebanho ? <AvisoErroRebanho texto={d.erroRebanho} onTentar={d.tentarDeNovo} />
-              : <span className="truncate text-muted-foreground">{rotuloMes.toLowerCase()} · cabeças e kg/cab de cada movimento · as 9 categorias</span>}
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto" data-testid="evolucao-mes-tabela">
-            <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-              <colgroup>
-                <col style={{ width: 84 }} />
-                <col style={{ width: 44 }} /><col style={{ width: 40 }} />
-                {tiposVis.map((t) => [<col key={`${t.tipo}c`} style={{ width: 36 }} />, <col key={`${t.tipo}k`} style={{ width: 40 }} />])}
-                <col style={{ width: 36 }} /><col style={{ width: 40 }} /><col style={{ width: 36 }} /><col style={{ width: 40 }} />
-                <col style={{ width: 46 }} /><col style={{ width: 40 }} />
-                <col style={{ width: 54 }} /><col style={{ width: 46 }} />
-              </colgroup>
-              <thead className="sticky top-0 z-10 bg-primary">
-                <tr>
-                  {/* com muitos tipos a tabela passa da largura (1126): a Categoria fica presa à esquerda e só os números rolam — número nunca corta */}
-                  <th className={cn(TH_REGUA, 'sticky left-0 z-20 bg-primary pl-2 text-left')} rowSpan={2}>Categoria</th>
-                  <th className={cn(TH_REGUA, 'text-center')} colSpan={2}>Início</th>
-                  {tiposVis.map((t) => (
-                    <th key={t.tipo} className={cn(TH_REGUA, 'text-center', t.lado === 'entrada' ? 'bg-[#1f6b3a]' : 'bg-[#7f1d1d]')} colSpan={2}>{t.rotulo}</th>
-                  ))}
-                  <th className={cn(TH_REGUA, 'bg-[#3b2f73] text-center')} colSpan={2}>Entrou</th>
-                  <th className={cn(TH_REGUA, 'bg-[#3b2f73] text-center')} colSpan={2}>Saiu</th>
-                  <th className={cn(TH_REGUA, 'text-center')} colSpan={2}>Final</th>
-                  <th className={cn(TH_REGUA, 'text-center')} colSpan={2}>Produção</th>
-                </tr>
-                <tr>
-                  {['Cab', 'kg'].map((x) => <th key={`i${x}`} className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>{x}</th>)}
-                  {tiposVis.flatMap((t) => ['Cab', 'kg'].map((x) => <th key={`${t.tipo}${x}`} className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>{x}</th>))}
-                  {['Cab', 'kg', 'Cab', 'kg', 'Cab', 'kg'].map((x, i) => <th key={`e${i}`} className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>{x}</th>)}
-                  <th className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>kg</th>
-                  <th className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>GMD</th>
-                </tr>
-              </thead>
-              <tbody>
-                {m.linhas.map((l) => {
-                  const zebra = ZEBRA[m.linhas.filter((x) => x.nivel === 'categoria').indexOf(l) % 2] ?? 'bg-card';
-                  const ref = m.referencia.get(l.id) ?? null;
-                  const abrir = (tipo: FluxoTipo | 'reclassificacao') => () => onAbrirLancamentos?.({ ano, mes, tipo, categoria: l.nivel === 'categoria' ? l.id : null, cenario });
-                  return (
-                    <tr key={l.id} data-linha={l.id} className={cn(l.nivel === 'subtotal' ? 'bg-[#e8eef6] font-bold' : l.nivel === 'total' ? 'bg-[#d5dfec] font-bold' : zebra)}>
-                      <td className={cn(TD_REGUA, 'sticky left-0 z-[1] pl-2', l.nivel === 'subtotal' ? 'bg-[#e8eef6]' : l.nivel === 'total' ? 'bg-[#d5dfec]' : zebra)}>
-                        <span className="block truncate" data-reticencias-com-title="" title={l.rotulo}>{l.rotulo}</span></td>
-                      {celCab(l, l.inicio.cab)}
-                      {celKg(l, l.temDado ? kgPorCab(l.inicio) : null, null)}
-                      {tiposVis.map((t) => [
-                        <Frag key={`${t.tipo}c`}>{celCab(l, l.tipos[t.tipo].cab, abrir(t.tipo))}</Frag>,
-                        <Frag key={`${t.tipo}k`}>{celKg(l, kgPorCab(l.tipos[t.tipo]), ref)}</Frag>,
-                      ])}
-                      {celCab(l, l.entrou.cab, abrir('reclassificacao'))}
-                      {celKg(l, kgPorCab(l.entrou), ref)}
-                      {celCab(l, l.saiu.cab, abrir('reclassificacao'))}
-                      {celKg(l, kgPorCab(l.saiu), null)}
-                      <td className={cn(TD_REGUA, 'text-right font-bold tabular-nums whitespace-nowrap')}>{l.temDado ? vazio(l.final.cab) : ''}</td>
-                      {celKg(l, d.fechado ? kgCabFinal(l) : null, null)}
-                      <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap')}>{d.fechado && l.temDado ? vazio(l.producaoKg) : ''}</td>
-                      <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', l.gmd != null && l.gmd < 0 && 'text-[#c0262d]')}>{d.fechado && l.temDado ? vazio(l.gmd, 3) : ''}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {/* EVOLUCAO-CATEGORIA-01 (Gabriel 04/11/2026): a tabela ocupa a largura toda (o donut saiu do lado) — todas as colunas à vista a 1.280 px,
+          sem rolagem para o lado; a composição vira a faixa de cima; "Conferir pesos" é um botão no cabeçalho e abre por cima */}
+      <div className={cn(QUADRO_REGUA, 'relative min-h-0 flex-1')}>
+        <div className="flex h-[24px] shrink-0 items-center gap-3 border-b border-border px-2 text-[10px]">
+          <span className="font-semibold">Rebanho por categoria</span>
+          {/* D4 (REBANHO-LEITURA-01): a leitura que falhou fala no lugar do subtítulo (a mesma faixa — nada se desloca) */}
+          {d.erroRebanho ? <AvisoErroRebanho texto={d.erroRebanho} onTentar={d.tentarDeNovo} />
+            : <span className="min-w-0 truncate text-muted-foreground">{rotuloMes.toLowerCase()} · cabeças e kg/cab de cada movimento · as 9 categorias</span>}
+          <button type="button" onClick={() => setVerPesos((v) => !v)} data-testid="evolucao-mes-botao-pesos" aria-pressed={verPesos}
+            className={cn('ml-auto h-[20px] shrink-0 rounded-md border px-2 font-semibold', verPesos ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
+              !verPesos && aConferir > 0 && 'text-[#a3161c]')}>
+            Conferir pesos · {pesos.length}
+          </button>
+        </div>
+        <Composicao linhas={m.linhas.filter((l) => l.nivel === 'categoria')} total={total.final.cab} />
+        <div className="min-h-0 flex-1 overflow-auto" data-testid="evolucao-mes-tabela">
+          {/* item 3: as colunas pelo conteúdo (sem largura fixa); um separador entre os grupos; o kg em fonte menor que as cabeças */}
+          <table className="w-full border-collapse">
+            <thead className="sticky top-0 z-10 bg-primary">
+              <tr>
+                <th className={cn(TH_REGUA, 'sticky left-0 z-20 bg-primary pl-2 text-left')} rowSpan={2}>Categoria</th>
+                <th className={cn(TH_REGUA, 'text-center', GRUPO_TH)} colSpan={2}>Início</th>
+                {tiposVis.map((t) => (
+                  <th key={t.tipo} className={cn(TH_REGUA, 'text-center', GRUPO_TH, t.lado === 'entrada' ? 'bg-[#1f6b3a]' : 'bg-[#7f1d1d]')} colSpan={2}>{t.rotulo}</th>
+                ))}
+                <th className={cn(TH_REGUA, 'bg-[#3b2f73] text-center', GRUPO_TH)} colSpan={2}>Entrou</th>
+                <th className={cn(TH_REGUA, 'bg-[#3b2f73] text-center', GRUPO_TH)} colSpan={2}>Saiu</th>
+                <th className={cn(TH_REGUA, 'text-center', GRUPO_TH)} colSpan={2}>Final</th>
+                <th className={cn(TH_REGUA, 'text-center', GRUPO_TH)} colSpan={2}>Produção</th>
+              </tr>
+              <tr>
+                {Array.from({ length: tiposVis.length + 4 }, (_, g) => ['Cab', 'kg'].map((x) => (
+                  <th key={`${g}${x}`} className={cn(TH_REGUA, 'text-right font-normal opacity-80', x === 'Cab' && GRUPO_TH)}>{x}</th>
+                )))}
+                <th className={cn(TH_REGUA, 'text-right font-normal opacity-80', GRUPO_TH)}>kg</th>
+                <th className={cn(TH_REGUA, 'text-right font-normal opacity-80')}>GMD</th>
+              </tr>
+            </thead>
+            <tbody>
+              {m.linhas.map((l) => {
+                const zebra = ZEBRA[m.linhas.filter((x) => x.nivel === 'categoria').indexOf(l) % 2] ?? 'bg-card';
+                const ref = m.referencia.get(l.id) ?? null;
+                const abrir = (tipo: FluxoTipo | 'reclassificacao') => () => onAbrirLancamentos?.({ ano, mes, tipo, categoria: l.nivel === 'categoria' ? l.id : null, cenario });
+                return (
+                  <tr key={l.id} data-linha={l.id} className={cn(l.nivel === 'subtotal' ? 'bg-[#e8eef6] font-bold' : l.nivel === 'total' ? 'bg-[#d5dfec] font-bold' : zebra)}>
+                    <td className={cn(TD_REGUA, 'sticky left-0 z-[1] whitespace-nowrap pl-2', l.nivel === 'subtotal' ? 'bg-[#e8eef6]' : l.nivel === 'total' ? 'bg-[#d5dfec]' : zebra)}>{l.rotulo}</td>
+                    {celCab(l, l.inicio.cab, undefined, true)}
+                    {celKg(l, l.temDado ? kgPorCab(l.inicio) : null, null)}
+                    {tiposVis.map((t) => [
+                      <Frag key={`${t.tipo}c`}>{celCab(l, l.tipos[t.tipo].cab, abrir(t.tipo), true)}</Frag>,
+                      <Frag key={`${t.tipo}k`}>{celKg(l, kgPorCab(l.tipos[t.tipo]), ref)}</Frag>,
+                    ])}
+                    {celCab(l, l.entrou.cab, abrir('reclassificacao'), true)}
+                    {celKg(l, kgPorCab(l.entrou), ref)}
+                    {celCab(l, l.saiu.cab, abrir('reclassificacao'), true)}
+                    {celKg(l, kgPorCab(l.saiu), null)}
+                    <td className={cn(TD_REGUA, 'text-right font-bold tabular-nums whitespace-nowrap', GRUPO_TD)}>{l.temDado ? vazio(l.final.cab) : ''}</td>
+                    {celKgFinal(l)}
+                    <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', GRUPO_TD)}>{d.fechado && l.temDado ? vazio(l.producaoKg) : ''}</td>
+                    <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', l.gmd != null && l.gmd < 0 && 'text-[#c0262d]')}>{d.fechado && l.temDado ? vazio(l.gmd, 3) : ''}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
             {/* CONFERE e os tipos escondidos */}
-            <div className="sticky left-0 border-t border-border bg-[#f6f4fc] px-2 py-1 text-[10px] tabular-nums" data-testid="evolucao-mes-confere">
-              Confere: {fmt(m.confere.inicio)} + {fmt(m.confere.entradas)} − {fmt(m.confere.saidas)} + {fmt(m.confere.entrou)} − {fmt(m.confere.saiu)} = {fmt(m.confere.calculado)}{' '}
-              {m.confere.bate ? <span className="font-semibold text-[#15803d]">✓</span>
-                : <span className="font-semibold text-[#c0262d]">≠ {fmt(m.confere.final)} no saldo final (diferença {fmt(m.confere.final - m.confere.calculado)})</span>}
-              {m.tiposEscondidos.length > 0 && (
-                <span className="text-muted-foreground"> · sem movimento em {rotuloMes.toLowerCase()} (colunas escondidas): {m.tiposEscondidos.map((t) => ROTULO_TIPO[t].toLowerCase()).join(', ')}</span>
-              )}
-            </div>
-            <div className="sticky left-0 px-2 py-1 text-[10px] text-muted-foreground">
-              <span className="mr-1 rounded-full bg-[#fff4e0] px-1.5 text-[9.5px] font-semibold text-[#a15c00]">pesos</span>
-              kg de cada movimento = o peso lançado; a cor compara com o kg/cab final da categoria no Fechamento:{' '}
-              <span className={cn('rounded px-1', TOM.ambar)}>âmbar ≥ 15%</span> · <span className={cn('rounded px-1', TOM.vermelho)}>vermelho ≥ 25%</span>
-              {!d.fechado && <span> · {rotuloMes.toLowerCase()} ainda sem Fechamento: sem kg final, produção e GMD.</span>}
-            </div>
+          <div className="sticky left-0 border-t border-border bg-[#f6f4fc] px-2 py-1 text-[10px] tabular-nums" data-testid="evolucao-mes-confere">
+            Confere: {fmt(m.confere.inicio)} + {fmt(m.confere.entradas)} − {fmt(m.confere.saidas)} + {fmt(m.confere.entrou)} − {fmt(m.confere.saiu)} = {fmt(m.confere.calculado)}{' '}
+            {m.confere.bate ? <span className="font-semibold text-[#15803d]">✓</span>
+              : <span className="font-semibold text-[#c0262d]">≠ {fmt(m.confere.final)} no saldo final (diferença {fmt(m.confere.final - m.confere.calculado)})</span>}
+            {m.tiposEscondidos.length > 0 && (
+              <span className="text-muted-foreground"> · sem movimento em {rotuloMes.toLowerCase()} (colunas escondidas): {m.tiposEscondidos.map((t) => ROTULO_TIPO[t].toLowerCase()).join(', ')}</span>
+            )}
+          </div>
+          <div className="sticky left-0 px-2 py-1 text-[10px] text-muted-foreground">
+            <span className="mr-1 rounded-full bg-[#fff4e0] px-1.5 text-[9.5px] font-semibold text-[#a15c00]">pesos</span>
+            kg de cada movimento = o peso lançado; a cor compara com o kg/cab final da categoria no Fechamento:{' '}
+            <span className={cn('rounded px-1', TOM.ambar)}>âmbar ≥ 15%</span> · <span className={cn('rounded px-1', TOM.vermelho)}>vermelho ≥ 25%</span>
+            {' '}· no kg final, <span className={cn('rounded px-1', TOM.vermelho)}>vermelho</span> = o peso da categoria caiu mais de 25% no mês
+            {!d.fechado && <span> · {rotuloMes.toLowerCase()} ainda sem Fechamento: sem kg final, produção e GMD.</span>}
           </div>
         </div>
 
-        {/* O PAINEL DA DIREITA — Conferir pesos | Composição */}
-        <div className={cn(QUADRO_REGUA, 'min-h-0')}>
-          <div className="flex h-[26px] shrink-0 border-b border-border text-[10px]">
-            {(['composicao', 'pesos'] as const).map((a) => (
-              <button key={a} type="button" onClick={() => setAba(a)} className={cn('px-2.5', aba === a ? 'font-bold shadow-[inset_0_-2px_0_hsl(var(--primary))]' : 'text-muted-foreground')}>
-                {/* a largura é a do NEGRITO nas duas abas (cópia invisível embaixo): marcar uma não desloca a outra (gate desloca 31/10) */}
-                <span className="inline-grid">
-                  <span aria-hidden className="invisible col-start-1 row-start-1 font-bold">{a === 'pesos' ? `Conferir pesos · ${pesos.length}` : 'Composição'}</span>
-                  <span className="col-start-1 row-start-1">{a === 'pesos' ? `Conferir pesos · ${pesos.length}` : 'Composição'}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-          {aba === 'pesos' ? (
+        {/* "Conferir pesos": o painel abre POR CIMA da tabela, à direita (a tabela não encolhe: nada pula); "✕" ou o botão de novo fecham */}
+        {verPesos && (
+          <div className="absolute bottom-0 right-0 top-[24px] z-30 flex w-[368px] flex-col border-l border-border bg-card shadow-[-4px_0_12px_rgb(0_0_0/0.08)]"
+            data-painel-por-cima="" data-testid="evolucao-mes-painel-pesos">
+            <div className="flex h-[24px] shrink-0 items-center border-b border-border px-2 text-[10px]">
+              <span className="font-semibold">Conferir pesos · {pesos.length}</span>
+              <button type="button" className="ml-auto px-1 text-muted-foreground" onClick={() => setVerPesos(false)} aria-label="Fechar o Conferir pesos">✕</button>
+            </div>
             <div className="min-h-0 flex-1 overflow-auto" data-testid="evolucao-mes-pesos">
               {d.erroLancamentos && <p className="px-2 py-2 text-[10px] text-destructive">{d.erroLancamentos}</p>}
               <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }} data-dia-mes="">
@@ -259,10 +264,8 @@ export function EvolucaoMesTab({ anoInicial, mesInicial, onVoltar, onAbrirFecham
                 </tbody>
               </table>
             </div>
-          ) : (
-            <Composicao linhas={m.linhas.filter((l) => l.nivel === 'categoria')} total={total.final.cab} />
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -290,38 +293,31 @@ function Card({ titulo, valor, unidade, sub, alerta, dica }: { titulo: string; v
   );
 }
 
-/** Composição do rebanho no fim do mês: donut em cima, tabela embaixo (cabeças, % e kg/cab final). */
+/** EVOLUCAO-CATEGORIA-01 (item 2) — a Composição do rebanho no fim do mês numa FAIXA de 18 px acima da tabela: a barra 100% empilhada (o donut
+ *  ficava ao lado e empurrava a tabela para a rolagem). Cada pedaço diz a categoria e o % quando cabe (≥ 7% do rebanho); o resto vai no `title`. */
 const CORES = ['#1d3a5d', '#2f5d8a', '#4f86b8', '#7fb0d8', '#b3d4ee', '#7c2d12', '#b45309', '#d97706', '#fbbf24'];
+const TEXTO_CLARO = new Set([0, 1, 2, 5, 6]);
+const ROTULO_NA_FAIXA = 0.07;
 function Composicao({ linhas, total }: { linhas: LinhaDoMes[]; total: number }) {
-  let acc = 0;
-  const R = 46; const C = 2 * Math.PI * R;
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-2 py-2" data-testid="evolucao-mes-composicao">
-      <svg viewBox="0 0 120 120" className="mx-auto block h-[120px] w-[120px]" role="img" aria-label="composição do rebanho">
-        <circle cx="60" cy="60" r={R} fill="none" stroke="#eef0f3" strokeWidth="18" />
+    <div className="flex h-[18px] shrink-0 items-center gap-2 border-b border-border px-2 text-[9.5px]" data-testid="evolucao-mes-composicao">
+      <span className="shrink-0 text-muted-foreground">Composição</span>
+      <span className="flex h-[12px] min-w-0 flex-1 overflow-hidden rounded-sm bg-[#eef0f3]" role="img" aria-label="composição do rebanho">
         {total > 0 && linhas.map((l, i) => {
-          const f = l.final.cab / total; const seg = (
-            <circle key={l.id} cx="60" cy="60" r={R} fill="none" stroke={CORES[i % CORES.length]} strokeWidth="18"
-              strokeDasharray={`${f * C} ${C}`} strokeDashoffset={-acc * C} transform="rotate(-90 60 60)" />
-          ); acc += f; return seg;
+          if (!l.temDado || l.final.cab <= 0) return null;
+          const f = l.final.cab / total;
+          const pct = `${fmt(f * 100, 1)}%`;
+          return (
+            <span key={l.id} data-categoria={l.id} className={cn('flex min-w-0 items-center justify-center overflow-hidden whitespace-nowrap leading-none',
+              TEXTO_CLARO.has(i % CORES.length) ? 'text-white' : 'text-[#1e2d47]')}
+              style={{ width: `${f * 100}%`, background: CORES[i % CORES.length] }}
+              title={`${l.rotulo}: ${fmt(l.final.cab)} cab (${pct}) · ${fmt(kgCabFinal(l), 1)} kg/cab`}>
+              {f >= ROTULO_NA_FAIXA ? `${categoriaCurta(l.id)} ${fmt(f * 100, 0)}%` : ''}
+            </span>
+          );
         })}
-        <text x="60" y="58" textAnchor="middle" className="fill-current text-[13px] font-bold">{fmt(total)}</text>
-        <text x="60" y="72" textAnchor="middle" className="fill-current text-[9.5px] opacity-60">cabeças</text>
-      </svg>
-      <table className="mt-2 w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-        <colgroup><col /><col style={{ width: 46 }} /><col style={{ width: 44 }} /><col style={{ width: 48 }} /></colgroup>
-        <tbody>
-          {linhas.map((l, i) => (
-            <tr key={l.id}>
-              <td className={TD_REGUA}><span className="flex min-w-0 items-center gap-1"><span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: CORES[i % CORES.length] }} />
-                <span className="truncate" data-reticencias-com-title="" title={l.rotulo}>{l.rotulo}</span></span></td>
-              <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap')}>{l.temDado ? vazio(l.final.cab) : ''}</td>
-              <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap text-muted-foreground')}>{total > 0 && l.temDado && l.final.cab ? `${fmt((l.final.cab / total) * 100, 1)}%` : ''}</td>
-              <td className={cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap', KG_SECUNDARIO)}>{vazio(kgCabFinal(l), 1)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      </span>
+      <span className="shrink-0 tabular-nums font-semibold">{fmt(total)} cab</span>
     </div>
   );
 }

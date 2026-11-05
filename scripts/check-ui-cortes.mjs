@@ -650,6 +650,11 @@ const CENARIOS = [
   /* MAPA-GLOBAL-01 — Geo Pastos em Global (dados sintéticos `dados/mapaGlobal.ts`): 2 fazendas; 5 com o nome mais longo, uma sem fechamento
      no mês e uma sem mapa; a visão Pastos com o filtro "Carga alta"; as abas Área por situação e Atividade do gráfico */
   { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
+  /* CHUVAS-LANCAR-01 — a planilha de Chuvas (uma fazenda; o Global = a escolha da estação) · PEC-ABAS-01 — a barra com as 4 abas e a volta */
+  { nome: 'chuvas-lancar', url: 'tela=chuvas-lancar', cabecalhoInteiro: true },
+  { nome: 'chuvas-lancar-global', url: 'tela=chuvas-lancar&global=1' },
+  { nome: 'barra-pecuaria', url: 'tela=barra-pecuaria&aba=lancamentos-zoot' },
+  { nome: 'barra-pecuaria-volta', url: 'tela=barra-pecuaria&aba=conferencia-mensal&de=lancamentos-zoot' },
   /* UI-PERIODO-01 — o componente único de período aberto (popup com os atalhos e os dois calendários; os modos mês e ano; a CPR) */
   ...[['periodo-datas', 'modo=datas&ativ=pec'], ['periodo-duas-atividades', 'modo=datas&ativ=duas'], ['periodo-mes', 'modo=mes'],
     ['periodo-ano', 'modo=ano'], ['periodo-cpr', 'modo=datas&cpr=1']].map(([nome, q]) => ({ nome, url: `tela=periodo&abrir=1&${q}`,
@@ -714,6 +719,9 @@ const CENARIOS = [
         antes: async (p) => { await clicarRotulo(/^Lavoura$/)(p); await tudo(p); await chip('R$/sc ou t')(p); } },
     ];
   }),
+  /* EVOLUCAO-TABELA-01 — metas pequenas: o Δ vira "+17 cab" / "+1,2 t" (o texto mais largo da coluna) e o card Desfrute em pontos */
+  { nome: 'evolucao-ano-meta-pequena', url: 'tela=evolucao-ano&barra=32&meta=pequena', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-meta-pequena-t', url: 'tela=evolucao-ano&barra=32&meta=pequena', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
   /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (o mês por categoria), pior caso (`mocks/evolucaoMes.ts`): os 8 tipos, 3 tipos, mês
      sem Fechamento, sem linha e a aba Composição; NENHUM número cortado a 1126 e a 1366 (Gabriel 30/10 17:16) */
@@ -863,6 +871,8 @@ const CENARIOS = [
   /* VISAO-GERAL-02 — a Visão Geral nova (dado SINTÉTICO `dados/visaoGeral02.ts`): Global e uma fazenda, a distribuição por fazenda
      (diálogo) e o filtro de uma atividade; nada corta nem sai do lugar nos tamanhos da VG */
   { nome: 'visao-geral-02', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
+  /* VG-RESULTADO-RS-01 — o Resultado em prejuízo: "+R$ 645 mil vs meta" no lugar do % (o texto mais largo da linha do cartão) */
+  { nome: 'visao-geral-02-prejuizo', url: 'tela=visao-geral-02&prejuizo=1', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
   { nome: 'visao-geral-02-fazenda', url: 'tela=visao-geral-02&fz=fA', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
   { nome: 'visao-geral-02-por-fazenda', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, regiao: '[role="dialog"]',
     antes: async (p) => { await p.waitForTimeout(2500); await clicar('[data-testid="vg-ver-por-fazenda"]')(p); await p.waitForTimeout(400); } },

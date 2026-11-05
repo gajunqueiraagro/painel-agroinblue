@@ -23,7 +23,7 @@ import { CartoesDoTopo, type CartaoVG } from '@/v2/pages/visaoGeral/CartoesDoTop
 import { TabelaFazendasVG } from '@/v2/pages/visaoGeral/TabelaFazendasVG';
 import { PrecisaDeAtencao, type ItemAtencao } from '@/v2/pages/visaoGeral/AtencaoEAtalhos';
 import { BlocosPorAtividade } from '@/v2/pages/visaoGeral/BlocosPorAtividade';
-import { indicadoresPecuaria, variacao } from '@/v2/pages/visaoGeral/indicadoresDaAtividade';
+import { diferencaEmReais, indicadoresPecuaria, variacao } from '@/v2/pages/visaoGeral/indicadoresDaAtividade';
 import { useAtividadesDoCliente, blocosDaVisao, type GrupoAtividade } from '@/v2/pages/visaoGeral/atividadesDaVisao';
 import { useConciliacaoSemCasar } from '@/v2/pages/visaoGeral/conciliacaoSemCasar';
 import { atividadesDaArea, rotuloDaFazenda, situacaoDoFechamento, type LinhaFazendaVG } from '@/v2/pages/visaoGeral/fazendasDaVisao';
@@ -738,6 +738,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     /* VISAO-GERAL-04 — a chuva saiu da faixa: fica só na tabela Fazendas (coluna "Chuva") */
     { id: 'resultado', titulo: 'Resultado do ano · pecuária', valor: fmtRAbreviado(resultadoAno),
       meta: soMeta(variacao(resultadoAno, resultadoMeta)), anoAnt: variacao(resultadoAno, drePecAnt?.lucro_liquido),
+      /* VG-RESULTADO-RS-01 (Gabriel 05/11): com resultado ou base ≤ 0, a diferença em R$ ("+R$ 645 mil vs meta", "+R$ 200 mil vs ano ant.")
+         no lugar do % */
+      metaEmReais: soMeta(diferencaEmReais(resultadoAno, resultadoMeta)), anoAntEmReais: diferencaEmReais(resultadoAno, drePecAnt?.lucro_liquido),
       abrir: 'Abrir DRE', onAbrir: () => irPara('dre') },
   ];
 
