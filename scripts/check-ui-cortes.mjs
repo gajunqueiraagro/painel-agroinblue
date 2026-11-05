@@ -628,6 +628,11 @@ const CENARIOS = [
   /* MAPA-GLOBAL-01 — Geo Pastos em Global (dados sintéticos `dados/mapaGlobal.ts`): 2 fazendas; 5 com o nome mais longo, uma sem fechamento
      no mês e uma sem mapa; a visão Pastos com o filtro "Carga alta"; as abas Área por situação e Atividade do gráfico */
   { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
+  /* CHUVAS-LANCAR-01 — a planilha de Chuvas (uma fazenda; o Global = a escolha da estação) · PEC-ABAS-01 — a barra com as 4 abas e a volta */
+  { nome: 'chuvas-lancar', url: 'tela=chuvas-lancar', cabecalhoInteiro: true },
+  { nome: 'chuvas-lancar-global', url: 'tela=chuvas-lancar&global=1' },
+  { nome: 'barra-pecuaria', url: 'tela=barra-pecuaria&aba=lancamentos-zoot' },
+  { nome: 'barra-pecuaria-volta', url: 'tela=barra-pecuaria&aba=conferencia-mensal&de=lancamentos-zoot' },
   { nome: 'mapa-global-5', url: 'tela=mapa-global&n=5', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
   /* fix1 (1): o hover do cabeçalho que ordena, nas duas tabelas da visão Fazendas */
   { nome: 'mapa-global-hover-fazendas', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768]], hoverCabecalho: '[data-testid="global-card-fazendas"]' },
@@ -684,6 +689,9 @@ const CENARIOS = [
         antes: async (p) => { await clicarRotulo(/^Lavoura$/)(p); await tudo(p); await chip('R$/sc ou t')(p); } },
     ];
   }),
+  /* EVOLUCAO-TABELA-01 — metas pequenas: o Δ vira "+17 cab" / "+1,2 t" (o texto mais largo da coluna) e o card Desfrute em pontos */
+  { nome: 'evolucao-ano-meta-pequena', url: 'tela=evolucao-ano&barra=32&meta=pequena', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-meta-pequena-t', url: 'tela=evolucao-ano&barra=32&meta=pequena', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
   /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (o mês por categoria), pior caso (`mocks/evolucaoMes.ts`): os 8 tipos, 3 tipos, mês
      sem Fechamento, sem linha e a aba Composição; NENHUM número cortado a 1126 e a 1366 (Gabriel 30/10 17:16) */

@@ -41,9 +41,12 @@ export interface BarraSecaoProps {
    * Quem decide quando há volta é o `V2Index` (a regra de origem e volta).
    */
   voltar?: { rotulo: string; onVoltar: () => void };
+  /** PEC-ABAS-01 — a tela tem o "‹ Voltar" no lugar dela: sem volta, o lugar fica RESERVADO (invisível), e o caminho não anda quando
+   *  a volta aparece */
+  reservarVoltar?: boolean;
 }
 
-export function BarraSecao({ area, secao, atalho, aviso, voltar }: BarraSecaoProps) {
+export function BarraSecao({ area, secao, atalho, aviso, voltar, reservarVoltar = false }: BarraSecaoProps) {
   const { nome } = useProfileAtual();
   const { signOut } = useAuth();
   return (
@@ -78,6 +81,10 @@ export function BarraSecao({ area, secao, atalho, aviso, voltar }: BarraSecaoPro
             style={{ letterSpacing: '0.275px' }}>
             ‹ {voltar.rotulo}
           </button>
+        )}
+        {!voltar && reservarVoltar && (
+          <span aria-hidden data-testid="barra-voltar-reservado" className="invisible shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold leading-none"
+            style={{ letterSpacing: '0.275px' }}>‹ Voltar</span>
         )}
         <p className="min-w-0 truncate text-[11px] leading-none text-white" style={{ letterSpacing: '0.275px' }}>
           <span className="font-semibold">{area}</span>

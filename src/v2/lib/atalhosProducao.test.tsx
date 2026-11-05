@@ -32,8 +32,10 @@ describe('onde o atalho existe', () => {
     }
   });
 
-  it('tres opcoes, nesta ordem e com estes rotulos', () => {
-    expect(OPCOES_ATALHO_PRODUCAO.map(o => o.rotulo)).toEqual(['Operações Comerciais', 'Lançar movimentação', 'Lançamentos']);
+  /* PEC-ABAS-01 (Gabriel 04/11/2026) — a 4ª aba "Evolução no ano" e a ordem nova */
+  it('quatro opcoes, nesta ordem e com estes rotulos', () => {
+    expect(OPCOES_ATALHO_PRODUCAO.map(o => o.rotulo)).toEqual(['Lançar movimentação', 'Lançamentos', 'Evolução no ano', 'Operações Comerciais']);
+    expect(OPCOES_ATALHO_PRODUCAO.map(o => o.valor)).toEqual(['lancamentos-zoot', 'conferencia-lancamentos', 'conferencia-mensal', 'operacoes-comerciais']);
   });
 });
 

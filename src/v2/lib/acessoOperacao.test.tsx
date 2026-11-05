@@ -110,9 +110,11 @@ describe('a faixa de atalhos de Produção (M7): atalho para tela sem acesso nã
   it('admin: as três de sempre, na ordem', () => {
     expect(pode('admin_agroinblue', true)).toEqual(OPCOES_ATALHO_PRODUCAO.map((o) => o.valor));
   });
-  it('gestor e financeiro (ACESSOS-FIN-01): as três, como o admin; leitura e campo, nenhuma — e com menos de duas a faixa some (a rota exige mais de uma)', () => {
-    expect(pode('gestor_cliente', false)).toEqual(OPCOES_ATALHO_PRODUCAO.map((o) => o.valor));
-    expect(pode('financeiro', false)).toEqual(OPCOES_ATALHO_PRODUCAO.map((o) => o.valor));
+  it('gestor e financeiro: as QUATRO abas (a "Evolução no ano" liberada a cliente, Gabriel 05/11); leitura e campo, nenhuma — e com menos de duas a faixa some (a rota exige mais de uma)', () => {
+    /* PEC-ABAS-01 — a aba segue o acesso da tela; o acesso é do dono (`nivelDaTela`) */
+    const todas = OPCOES_ATALHO_PRODUCAO.map((o) => o.valor);
+    expect(pode('gestor_cliente', false)).toEqual(todas);
+    expect(pode('financeiro', false)).toEqual(todas);
     expect(pode('leitura', false)).toEqual([]);
     expect(pode('campo', false)).toEqual([]);
     expect(fonte('src/v2/V2Index.tsx')).toContain("const opcoes = opcoesDoAtalho((s) => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao'); return ativa && opcoes.length > 1 ? (");

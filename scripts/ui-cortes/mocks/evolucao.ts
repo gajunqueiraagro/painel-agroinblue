@@ -1,7 +1,7 @@
 /* PROD-EVOLUCAO-01a — o hook da Evolução no Ano na bancada: meses SINTÉTICOS no PIOR caso de largura (a regra do item, Gabriel 30/10 17:16:
  * nenhum número cortado) — saldo de 5 dígitos, peso vivo em t de 7 caracteres, fluxos negativos de 4 dígitos, GMD negativo e 3,181, Δ de 4 dígitos.
  * A conta dos números é a da `montarEvolucao` (testada); aqui só o que ela recebe. `&faz=1` = uma fazenda (a transferência vira externa);
- * `&meta=aprovada` tira a etiqueta "rascunho". */
+ * `&meta=aprovada` tira a etiqueta "rascunho"; `&meta=pequena`, as metas pequenas (EVOLUCAO-TABELA-01). */
 import type { MesDaEvolucao } from '@/lib/producao/evolucaoAno';
 
 const q = new URLSearchParams(globalThis.location?.search ?? '');
@@ -20,7 +20,13 @@ const mes = (m: number, escala: number): MesDaEvolucao => {
   };
 };
 const REAL = Array.from({ length: 10 }, (_, i) => mes(i + 1, 1)); // out aberto, nov–dez sem dado
-const META = Array.from({ length: 12 }, (_, i) => ({ ...mes(i + 1, 0.97), fechado: true, cab: { ...mes(i + 1, 0.97).cab, abate: 41 } }));
+/* EVOLUCAO-TABELA-01: `&meta=pequena` = metas pequenas no ano (morte 5 cab, consumo 2 cab só em janeiro) — o Δ vira a diferença ("+17 cab") */
+const PEQUENA = q.get('meta') === 'pequena';
+const META = Array.from({ length: 12 }, (_, i) => {
+  const base = mes(i + 1, 0.97);
+  const cab = { ...base.cab, abate: 41, ...(PEQUENA ? { morte: i === 0 ? 5 : 0, consumo: i === 0 ? 2 : 0 } : {}) };
+  return { ...base, fechado: true, cab };
+});
 
 export function useEvolucaoDoAno(_ano: number) {
   return { mesesReal: REAL, mesesMeta: META, isGlobal: q.get('faz') !== '1', metaRascunho: q.get('meta') !== 'aprovada', carregando: false };

@@ -206,7 +206,9 @@ const CENARIOS = [
   /* PROD-EVOLUCAO-01b — as setas do mês, o cenário e as abas do painel não deslocam a barra, os cards nem a tabela */
   { nome: 'evolucao-mes', url: 'tela=evolucao-mes&barra=32', tamanhos: [[1126, 579], [1366, 768]], estados: [
     ['mês anterior', clicar('[aria-label="mês anterior"]')], ['mês seguinte', clicar('[aria-label="mês seguinte"]')],
-    ['meta', botao(/^Meta$/)], ['realizado', botao(/^Realizado$/)], ['pesos', botao(/^Conferir pesos/)], ['composição', botao(/^Composição$/)]] },
+    ['meta', botao(/^Meta$/)], ['realizado', botao(/^Realizado$/)], ['pesos abre', botao(/^Conferir pesos/)], ['pesos fecha', clicar('[aria-label="Fechar o Conferir pesos"]')],
+    /* EVOLUCAO-CATEGORIA-01: "Conferir pesos" é botão no cabeçalho e o painel abre POR CIMA (`data-painel-por-cima`); o botão de novo também fecha */
+    ['pesos pelo botão', botao(/^Conferir pesos/)], ['fecha pelo botão', botao(/^Conferir pesos/)]] },
   { nome: 'plano-contas', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, estados: [
     ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['inativos desligado', clicar('[data-testid="mostrar-inativos"]')],
     ['busca 4 contas', digitar('[data-testid="busca-plano"]', 'Outras Saídas')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],

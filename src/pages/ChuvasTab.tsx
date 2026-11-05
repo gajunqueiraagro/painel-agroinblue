@@ -11,7 +11,7 @@
  *
  * Default = 'operacional' (preserva comportamento legado em Index.tsx).
  */
-import { useState, useMemo, useEffect, Fragment } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useChuvas } from '@/hooks/useChuvas';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from 'sonner';
 import { ChuvasGlobalView } from './ChuvasGlobalView';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
+import { formatNum } from '@/lib/calculos/formatters';
+import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
+import { TD_REGUA, TD_REGUA_NUM, TH_REGUA } from '@/components/ui/regua-tabela';
+import { cn } from '@/lib/utils';
 
 export type ChuvasMode = 'operacional' | 'analitico';
 
@@ -181,6 +185,9 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
     return 'bg-blue-600 dark:bg-blue-500/80 text-white font-bold';
   };
 
+  /* CHUVAS-LANCAR-01 — o quadro da planilha vai até a base da tela (hook ANTES da saída do "Carregando": hook nunca condicional) */
+  const quadro = useAlturaAteOFim({ ativo: mode === 'operacional' && (!isGlobal || !!fazendaEscolhida) });
+
   if (loading) return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
 
   // Regras de finalidade ↓
@@ -200,9 +207,64 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
         ? `Comparativo entre fazendas — Jan a ${MESES[mesFiltro - 1]}/${anoFiltro}`
         : `Análise por fazenda — Jan a ${MESES[mesFiltro - 1]}/${anoFiltro}`);
 
+  /* CHUVAS-LANCAR-01 (Gabriel 04/11/2026, passada tela a tela) — o LANÇAR (planilha de uma fazenda):
+     · a barra é uma faixa baixa (34 px, a régua da Geo pastos): ano · "Total 862,0 mm" · Lançar; a tabela começa logo abaixo;
+     · UMA coluna "Dia" à esquerda (antes ela se repetia nos 12 meses) e cada mês é só a coluna mm — a sobra vai para os números;
+     · a régua de tabela da casa (a do Financeiro: cabeçalho navy 22 px, linha 19 px, 10 px), números com vírgula à direita, dia sem
+       chuva VAZIO; a linha Total no topo, presa e em destaque; o quadro vai ATÉ A BASE da tela (`useAlturaAteOFim`), os 31 dias à vista;
+     · a volta ("‹ Voltar" reservado) é da barra do topo (o shell sabe de onde se veio).
+     O modo ANALÍTICO segue com a barra de antes (fora deste pedido). */
+  const mm1 = (v: number) => (v > 0 ? formatNum(v, 1) : '');
+
   return (
-    <div className="pb-20">
-      {/* Header - sticky */}
+    <div className={isOperacional ? 'flex h-full min-h-0 flex-col' : 'pb-20'}>
+      {isOperacional ? (
+        <div className="flex h-[34px] flex-none items-center gap-2 border-b border-[#D9DEE5] bg-background px-2.5" data-testid="chuvas-barra">
+          {!anoInicial && (
+            <Select value={String(anoFiltro)} onValueChange={v => setAnoFiltro(Number(v))}>
+              <SelectTrigger className="h-[24px] w-[70px] text-[11px] font-semibold" data-testid="chuvas-ano"><SelectValue /></SelectTrigger>
+              <SelectContent>{anos.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}</SelectContent>
+            </Select>
+          )}
+          {comEstacao ? (
+            <span className="whitespace-nowrap text-[11px] text-muted-foreground" data-testid="chuvas-total">
+              Total <b className="tabular-nums text-foreground">{formatNum(yearTotal, 1)} mm</b>{nomeEscolhida ? ` · ${nomeEscolhida}` : ''}
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">Escolha a fazenda para lançar</span>
+          )}
+          {mostrarBotaoLancar && (
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="ml-auto h-[24px] gap-1 px-2 text-[11px]">
+                  <Plus className="h-3 w-3" /> Lançar
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Registrar Chuva</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label>Data</Label>
+                    <DatePicker value={novaData} onChange={setNovaData} />
+                  </div>
+                  <div>
+                    <Label>Milímetros (mm)</Label>
+                    <Input type="number" step="0.1" min="0" value={novaMm} onChange={e => setNovaMm(e.target.value)} placeholder="0.0" />
+                  </div>
+                  <div>
+                    <Label>Observação</Label>
+                    <Input value={novaObs} onChange={e => setNovaObs(e.target.value)} placeholder="Opcional" />
+                  </div>
+                  <Button onClick={handleSalvar} className="w-full">Salvar</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+      ) : (
+      /* Header - sticky (o painel analítico, como era) */
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -233,41 +295,12 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
             )}
             <span className="text-sm font-semibold text-muted-foreground">{headerSub}</span>
           </div>
-
-          {mostrarBotaoLancar && (
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-1">
-                  <Plus className="h-4 w-4" /> Lançar
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-sm">
-                <DialogHeader>
-                  <DialogTitle>Registrar Chuva</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div>
-                    <Label>Data</Label>
-                    <DatePicker value={novaData} onChange={setNovaData} />
-                  </div>
-                  <div>
-                    <Label>Milímetros (mm)</Label>
-                    <Input type="number" step="0.1" min="0" value={novaMm} onChange={e => setNovaMm(e.target.value)} placeholder="0.0" />
-                  </div>
-                  <div>
-                    <Label>Observação</Label>
-                    <Input value={novaObs} onChange={e => setNovaObs(e.target.value)} placeholder="Opcional" />
-                  </div>
-                  <Button onClick={handleSalvar} className="w-full">Salvar</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
         </div>
       </div>
+      )}
 
       {/* Bifurcação por finalidade ─────────────────────────────────────
-          operacional + Global   → bloqueio
+          operacional + Global   → escolha da estação
           operacional + Fazenda  → planilha (heatmap editável)
           analítico   + Global   → ChuvasGlobalView
           analítico   + Fazenda  → placeholder (em construção) */}
@@ -286,7 +319,7 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
         <PlaceholderAnaliticoFazenda />
       )}
       {isOperacional && comEstacao && (
-      <div className="px-2">{/* PLANILHA OPERACIONAL ─────────────────── */}
+      <div className="flex min-h-0 flex-1 flex-col px-2 pt-1.5">{/* PLANILHA OPERACIONAL ─────────────────── */}
 
       {/* A volta para a lista, e o nome de quem está sendo lançada — sem isso o operador
           em Global não teria como saber de qual estação é a planilha aberta. */}
@@ -301,120 +334,59 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
         </div>
       )}
 
-      {/* Grid anual — 12 blocos lado a lado, cada um com sub-colunas Dia|mm.
-          24 colunas no corpo (12 meses × 2) + 1 coluna lateral de label para
-          rodapé (Total/Acum./históricos). table-fixed + colgroup mantém
-          larguras constantes mesmo ao abrir input inline. text-[10px] +
-          padding mínimo para caber 12 meses sem rolagem horizontal em
-          desktop; min-w-[680px] aciona scroll horizontal só em tela pequena.
-          Linha "Total" aparece sticky no topo (visível sem rolar) e
-          duplicada no rodapé junto aos acumulados e históricos. */}
-      <div className="overflow-auto max-h-[calc(100vh-140px)]">
-        <table className="w-full text-[10px] tabular-nums leading-tight border-collapse min-w-[680px] table-fixed">
+      {/* O quadro vai até a base da tela; o cabeçalho (meses) e o Total ficam presos; rolam os 31 dias e, abaixo deles, o histórico. */}
+      <div ref={quadro.ref} style={{ height: quadro.altura }} className="min-h-0 overflow-auto rounded-lg border border-border bg-card [scrollbar-gutter:stable]"
+        data-testid="chuvas-quadro">
+        <table className="w-full border-collapse" style={{ tableLayout: 'fixed', minWidth: 640 }} data-testid="chuvas-tabela">
           <colgroup>
-            <col style={{ width: 32 }} />
-            {Array.from({ length: 24 }, (_, i) => (
-              <col key={i} style={{ width: i % 2 === 0 ? 22 : 32 }} />
-            ))}
+            <col style={{ width: 40 }} />
+            {MESES.map((m) => <col key={m} />)}
           </colgroup>
-          <thead className="sticky top-0 z-20">
-            {/* Linha 1: nome do mês (colspan=2 sobre Dia|mm) */}
-            <tr className="bg-[#1E3A5F] text-white">
-              <th rowSpan={2} className="border border-[#24466B] px-0.5 py-0.5 text-center font-semibold" />
-              {MESES.map((m, i) => (
-                <th key={i} colSpan={2} className="border border-[#24466B] px-1 py-0.5 text-center font-semibold">{m}</th>
-              ))}
+          <thead>
+            <tr>
+              <th className={cn(TH_REGUA, 'sticky top-0 z-[2] bg-primary text-left')}>Dia</th>
+              {MESES.map((m) => <th key={m} className={cn(TH_REGUA, 'sticky top-0 z-[2] bg-primary text-right')}>{m}</th>)}
             </tr>
-            {/* Linha 2: sub-cabeçalho Dia | mm */}
-            <tr className="bg-[#24466B] text-white/90">
-              {Array.from({ length: 12 }, (_, i) => (
-                <Fragment key={i}>
-                  <th className="border border-[#1E3A5F] px-0.5 py-0 text-center text-[9px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">Dia</th>
-                  <th className="border border-[#1E3A5F] px-0.5 py-0 text-center text-[9px] font-medium">mm</th>
-                </Fragment>
-              ))}
-            </tr>
-            {/* Linha 3: Total mensal STICKY (visível sem rolar) */}
-            <tr className="bg-blue-100/80 dark:bg-blue-900/40 font-bold border-b-2 border-[#1E3A5F]/40">
-              <th className="border border-border px-0.5 py-0.5 text-center text-[#1E3A5F] dark:text-blue-200">Tot</th>
+            {/* a linha Total no topo, presa e em destaque */}
+            <tr data-testid="chuvas-linha-total">
+              <th className={cn(TD_REGUA, 'sticky top-[22px] z-[2] bg-blue-100 text-left font-semibold text-[#1E3A5F]')}>Total</th>
               {monthlyTotals.map((t, i) => (
-                <th key={i} colSpan={2} className="border border-border px-1 py-0.5 text-center text-[#1E3A5F] dark:text-blue-200 font-bold">
-                  {t > 0 ? t.toFixed(1) : '-'}
-                </th>
+                <th key={i} className={cn(TD_REGUA_NUM, 'sticky top-[22px] z-[2] bg-blue-100 font-semibold text-[#1E3A5F]')}>{mm1(t)}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {/* Day rows — para cada dia 1..31, render 12 pares (Dia, mm).
-                Dia inexistente no mês (ex.: 30 fev, 31 abr) → célula
-                desabilitada (bg cinza, sem número, sem clique). */}
+            {/* Para cada dia 1..31, a coluna Dia e 12 células mm. Dia inexistente no mês (30 fev, 31 abr) → célula cinza, sem clique. */}
             {Array.from({ length: maxDays }, (_, dia) => (
-              <tr key={dia} className="hover:bg-muted/20">
-                <td aria-hidden className="border border-border" />
+              <tr key={dia} className="border-b border-border/50 hover:bg-muted/20">
+                <td className={cn(TD_REGUA, 'text-muted-foreground tabular-nums')}>{dia + 1}</td>
                 {Array.from({ length: 12 }, (_, mes) => {
                   const d = dia + 1;
-                  const maxD = diasNoMes(mes + 1, anoFiltro);
-                  const dayExists = d <= maxD;
+                  const dayExists = d <= diasNoMes(mes + 1, anoFiltro);
                   const key = `${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                   const mm = chuvaMap[key] || 0;
                   const isEditing = editCell?.dia === dia && editCell?.mes === mes;
-
-                  if (!dayExists) {
-                    return (
-                      <Fragment key={mes}>
-                        <td className="border border-border bg-muted/30" />
-                        <td className="border border-border bg-muted/30" />
-                      </Fragment>
-                    );
-                  }
-
+                  if (!dayExists) return <td key={mes} className={cn(TD_REGUA, 'bg-muted/40')} />;
                   if (isEditing) {
                     return (
-                      <Fragment key={mes}>
-                        <td className="border border-border px-0.5 py-0 text-center text-muted-foreground bg-slate-100 dark:bg-slate-800/40">{d}</td>
-                        <td className="border border-border p-0 overflow-hidden">
-                          <Input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            value={editMm}
-                            onChange={e => setEditMm(e.target.value)}
-                            onBlur={handleCellSave}
-                            onKeyDown={e => e.key === 'Enter' && handleCellSave()}
-                            autoFocus
-                            className="h-4 w-full min-w-0 text-[10px] px-0.5 rounded-none border-0 text-center tabular-nums box-border"
-                          />
-                        </td>
-                      </Fragment>
+                      <td key={mes} className={cn(TD_REGUA, 'p-0')}>
+                        <Input type="number" step="0.1" min="0" value={editMm} onChange={e => setEditMm(e.target.value)}
+                          onBlur={handleCellSave} onKeyDown={e => e.key === 'Enter' && handleCellSave()} autoFocus
+                          className="box-border h-[18px] w-full min-w-0 rounded-none border-0 px-1 text-right text-[10px] tabular-nums" />
+                      </td>
                     );
                   }
-
                   return (
-                    <Fragment key={mes}>
-                      <td className="border border-border px-0.5 py-0 text-center text-muted-foreground bg-slate-100 dark:bg-slate-800/40">{d}</td>
-                      <td
-                        className={`border border-border px-0.5 py-0 text-center cursor-pointer transition-colors ${getCellColor(mm)}`}
-                        onClick={() => handleCellClick(dia, mes)}
-                      >
-                        {mm > 0 ? mm.toFixed(1) : '-'}
-                      </td>
-                    </Fragment>
+                    <td key={mes} className={cn(TD_REGUA_NUM, 'cursor-pointer transition-colors', getCellColor(mm))}
+                      onClick={() => handleCellClick(dia, mes)} data-testid={`chuvas-${key}`}>
+                      {mm1(mm)}
+                    </td>
                   );
                 })}
               </tr>
             ))}
           </tbody>
           <tfoot>
-            {/* === TOTAL MENSAL (rodapé) === */}
-            <tr className="bg-blue-100/70 dark:bg-blue-900/30 font-bold border-t-2 border-[#1E3A5F]/40">
-              <td className="border border-border px-0.5 py-0.5 text-center text-[#1E3A5F] dark:text-blue-200">Tot</td>
-              {monthlyTotals.map((t, i) => (
-                <td key={i} colSpan={2} className="border border-border px-1 py-0.5 text-center text-[#1E3A5F] dark:text-blue-200 font-bold">
-                  {t > 0 ? t.toFixed(1) : '-'}
-                </td>
-              ))}
-            </tr>
-
             {/* Históricos — total mensal por ano */}
             {historicalYears.map(year => {
               const yearMap = historicalMaps[year] || {};
@@ -423,27 +395,18 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
                 const m = parseInt(key.slice(0, 2)) - 1;
                 if (m >= 0 && m < 12) mTotals[m] += mm;
               });
-
               return (
-                <tr key={`total-${year}`} className="bg-muted/30 text-muted-foreground">
-                  <td className="border border-border px-0.5 py-0.5 text-center font-semibold">{year}</td>
-                  {mTotals.map((t, i) => (
-                    <td key={i} colSpan={2} className="border border-border px-1 py-0.5 text-center">
-                      {t > 0 ? t.toFixed(1) : '-'}
-                    </td>
-                  ))}
+                <tr key={`total-${year}`} className="border-b border-border/50 bg-muted/30 text-muted-foreground">
+                  <td className={cn(TD_REGUA, 'font-semibold')}>{year}</td>
+                  {mTotals.map((t, i) => <td key={i} className={TD_REGUA_NUM}>{mm1(t)}</td>)}
                 </tr>
               );
             })}
 
             {/* === ACUMULADO === */}
-            <tr className="bg-blue-200/60 dark:bg-blue-900/40 font-bold border-t border-[#1E3A5F]/30">
-              <td className="border border-border px-0.5 py-0.5 text-center text-[#1E3A5F] dark:text-blue-100">Acum</td>
-              {accumulatedTotals.map((t, i) => (
-                <td key={i} colSpan={2} className="border border-border px-1 py-0.5 text-center text-[#1E3A5F] dark:text-blue-100 font-bold">
-                  {t > 0 ? t.toFixed(1) : '-'}
-                </td>
-              ))}
+            <tr className="border-b border-border/50 bg-blue-50 font-semibold text-[#1E3A5F]">
+              <td className={TD_REGUA}>Acum.</td>
+              {accumulatedTotals.map((t, i) => <td key={i} className={TD_REGUA_NUM}>{mm1(t)}</td>)}
             </tr>
 
             {/* Acumulados históricos */}
@@ -457,15 +420,10 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
               const acc: number[] = [];
               let sum = 0;
               mTotals.forEach(v => { sum += v; acc.push(sum); });
-
               return (
-                <tr key={`acum-${year}`} className="bg-muted/20 text-muted-foreground">
-                  <td className="border border-border px-0.5 py-0.5 text-center font-semibold">{year}</td>
-                  {acc.map((t, i) => (
-                    <td key={i} colSpan={2} className="border border-border px-1 py-0.5 text-center">
-                      {t > 0 ? t.toFixed(1) : '-'}
-                    </td>
-                  ))}
+                <tr key={`acum-${year}`} className="border-b border-border/50 bg-muted/20 text-muted-foreground">
+                  <td className={cn(TD_REGUA, 'font-semibold')}>{year}</td>
+                  {acc.map((t, i) => <td key={i} className={TD_REGUA_NUM}>{mm1(t)}</td>)}
                 </tr>
               );
             })}
