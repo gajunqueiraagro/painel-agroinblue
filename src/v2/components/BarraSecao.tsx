@@ -17,7 +17,8 @@
  * operador ficava sem saída.
  */
 import type { ReactNode } from 'react';
-import { LogOut } from 'lucide-react';
+import { KeyRound, LogOut } from 'lucide-react';
+import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfileAtual } from '@/v2/hooks/useProfileAtual';
 
@@ -101,6 +102,14 @@ export function BarraSecao({ area, secao, atalho, aviso, voltar, reservarVoltar 
         {/* ⚠ "SAIR" PASSA A VIVER AQUI — adendo do 01c. Ele estava no rodapé da sidebar, que
             no mobile nem existe: quem operava pelo celular não tinha por onde sair. Um
             lugar só, e é este; o ícone da sidebar saiu no mesmo PR. */}
+        {/* ACESSO-CONVITE-01 (D5): o "Trocar senha" mora AQUI, ao lado do Sair — a barra existe no computador E no celular; a 🔑
+            da sidebar (só computador) saiu no mesmo PR. */}
+        <AlterarSenhaDialog trigger={
+          <button type="button" title="Trocar senha" aria-label="Trocar senha" data-testid="barra-trocar-senha"
+            className="shrink-0 text-white/80 transition-colors hover:text-white">
+            <KeyRound style={{ width: 15, height: 15 }} />
+          </button>
+        } />
         <button type="button" onClick={signOut} title="Sair" aria-label="Sair"
           className="shrink-0 text-white/80 transition-colors hover:text-white">
           <LogOut style={{ width: 16, height: 16 }} />

@@ -61,10 +61,10 @@ describe('a barra com o atalho', () => {
     expect(onEscolher).toHaveBeenCalledWith('operacoes-comerciais');
   });
 
-  it('fora das tres secoes a barra fica como era — so o nome e o Sair', () => {
+  it('fora das tres secoes a barra fica como era — so o nome, o Trocar senha e o Sair (ACESSO-CONVITE-01)', () => {
     montar('financeiro-lanc');
     expect(screen.queryByText('Lançar movimentação')).toBeNull();
-    expect(screen.getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['Sair']);
+    expect(screen.getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['Trocar senha', 'Sair']);
   });
 });
 
