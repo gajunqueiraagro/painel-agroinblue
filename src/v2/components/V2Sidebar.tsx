@@ -14,12 +14,10 @@
 import { ReactNode } from 'react';
 import {
   LayoutDashboard, Beef, DollarSign, Target,
-  Settings, KeyRound, ChevronRight,
+  Settings, ChevronRight,
   Briefcase, ShieldCheck, Folder,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import logo from '@/assets/logo.png';
 import { useCliente } from '@/contexts/ClienteContext';
 import { SECTION_TO_GROUP } from '@/v2/lib/navGrupos';
@@ -194,24 +192,9 @@ export function V2Sidebar({
 
       </nav>
 
-      {/* Rodapé */}
-      <div className="shrink-0 border-t border-primary-foreground/10 px-1.5 py-2 flex items-center justify-end gap-0.5">
-        <AlterarSenhaDialog
-          trigger={
-            <Button
-              variant="ghost" size="icon"
-              className="h-7 w-7 text-primary-foreground/60 hover:text-primary-foreground hover:bg-primary-foreground/10"
-              title="Alterar Senha"
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-            </Button>
-          }
-        />
-        {/* ⚠ O "SAIR" SAIU DAQUI — adendo do PR-BARRA-UNICA-01c. Ele foi para a
-            `BarraSecao`, que existe no desktop E no mobile; aqui ele só existia no
-            desktop, e no celular não havia por onde sair. Uma porta só, e agora ela
-            aparece nos dois. */}
-      </div>
+      {/* ⚠ O RODAPÉ SAIU — ACESSO-CONVITE-01 (D5). Ele guardava só a 🔑 do "Alterar senha" (o "Sair" já tinha ido para a
+          `BarraSecao` no PR-BARRA-UNICA-01c). O "Trocar senha" foi para o mesmo lugar do Sair: a barra do topo existe no
+          computador E no celular, e a sidebar só no computador. */}
 
     </aside>
   );
