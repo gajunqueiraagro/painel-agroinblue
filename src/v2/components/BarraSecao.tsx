@@ -16,6 +16,7 @@
  * havendo uma porta só — o que mudou foi qual: a sidebar não existe no mobile, e ali o
  * operador ficava sem saída.
  */
+import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
 import { KeyRound, LogOut } from 'lucide-react';
 import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
@@ -89,8 +90,10 @@ export function BarraSecao({ area, secao, atalho, aviso, voltar, reservarVoltar 
         )}
         <p className="min-w-0 truncate text-[11px] leading-none text-white" style={{ letterSpacing: '0.275px' }}>
           <span className="font-semibold">{area}</span>
-          <span className="mx-1 font-semibold text-white/40">/</span>
-          <span className="font-normal text-white/90">{secao}</span>
+          {/* PEC-ABAS-01 (gate de 05/11, 1000×600): com as abas na barra, a seção repete a aba marcada — abaixo de 1.100px ela sai e a
+              área fica (o "Lançar movimentação" cortava 6px); de 1.100px para cima, como aprovado */}
+          <span className={cn('mx-1 font-semibold text-white/40', atalho && 'hidden min-[1100px]:inline')}>/</span>
+          <span className={cn('font-normal text-white/90', atalho && 'hidden min-[1100px]:inline')} data-testid="barra-secao-nome">{secao}</span>
         </p>
       </div>
       {/* ⚠ `ml-auto` NO ATALHO: com o `justify-between` da barra e tres filhos, a margem

@@ -72,6 +72,13 @@ describe('a volta (regra origem e volta) e as abas da Pecuária', () => {
     expect(screen.queryByTestId('barra-voltar-reservado')).toBeNull();
   });
 
+  it('com as abas na barra, a seção (que repete a aba marcada) sai abaixo de 1.100px; sem abas, fica sempre (gate 05/11, 1000×600)', () => {
+    const { rerender } = render(<BarraSecao area="Produção" secao="Lançar movimentação" atalho={<span>abas</span>} />);
+    expect(screen.getByTestId('barra-secao-nome').className).toContain('hidden min-[1100px]:inline');
+    rerender(<BarraSecao area="Produção" secao="Chuvas" />);
+    expect(screen.getByTestId('barra-secao-nome').className).not.toContain('hidden');
+  });
+
   it('o shell: a aba e o card "Chuvas" gravam a origem; o menu a apaga; a barra volta para ela nas telas com volta', () => {
     const shell = ler('v2/V2Index.tsx');
     expect(shell).toContain('if (s !== section) setVoltarPara(section);');
