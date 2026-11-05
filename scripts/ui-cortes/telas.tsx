@@ -111,6 +111,9 @@ import type { Intervalo } from '@/lib/periodo/intervaloDeDatas';
 import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
 
 /* Gabriel 29/10 08:26 — os parcelados do LR na nota já lançada (SINTÉTICOS): as 4 do sistema e a prévia da `fn_nota_completar` como o banco a faz */
+/* UI-PERIODO-01b — as safras SINTÉTICAS do cadastro (as duas atividades, julho a junho, 26/27 e 25/26) para o componente de período */
+const SAFRAS_DA_BANCADA = [['p27', '26/27-Pec', 'pecuaria', '2026'], ['l27', '26/27-Lav', 'agricultura', '2026'], ['p26', '25/26-Pec', 'pecuaria', '2025'], ['l26', '25/26-Lav', 'agricultura', '2025']]
+  .map(([id, codigo, escopo, a]) => ({ id, nome: codigo, codigo, escopo_negocio: escopo, data_inicio: `${a}-07-01`, data_fim: `${Number(a) + 1}-06-30`, ativa: true, cliente_id: 'cli' }));
 const DESCRICOES_DO_LR: Record<string, string[]> = {
   lr: ['Parcela 1 - None', 'Parcela 2 - None', 'Parcela 3 - Engate rapido sintetico do trator', 'Parcela 4 - None'],
   lr2: ['Reforma sintetica da ponte do retiro', 'Parcela 2 - None', 'Parcela 3 - None', 'Parcela 4 - None'],
@@ -572,6 +575,8 @@ if (tela === 'mesclar') {
     from: (t: string, e: any) => t === 'vw_financeiro_lancamentos_v2_doc' ? LINHAS_CPR
       : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1, tipo_conta: 'conta_corrente' }]
       : t === 'financeiro_recorrencias' ? [{ id: 'reg-1' }]
+      /* UI-PERIODO-01b — as safras do cadastro (Pecuária e Lavoura, jul–jun): o "Esta safra · Última safra" do Escolher datas */
+      : t === 'financeiro_safras' ? SAFRAS_DA_BANCADA
       /* P152 — o `recorrencia_id` dos ids visíveis (o selo R) */
       : t === 'financeiro_lancamentos_v2' && e.in.id ? [{ id: 'rec-1', recorrencia_id: 'reg-1' }, { id: 'ambas', recorrencia_id: 'reg-1' }]
       : t === 'vw_lancamento_documentos' ? [{ lancamento_id: 'parc-1', especie: 'nf', numero: '177472', cancelado: false, chave_acesso: null }]
@@ -890,7 +895,8 @@ if (tela === 'mesclar') {
   const CONTAS_PP = [{ id: 'c1', nome_conta: 'Conta Corrente Principal', nome_exibicao: 'Conta Corrente Principal', ativa: true, cliente_id: 'cli' },
     { id: 'c2', nome_conta: 'Aplicação Automática', nome_exibicao: 'Aplicação Automática', ativa: true, cliente_id: 'cli' }];
   const SAFRAS_PP = [{ id: 'p27', nome: '26/27-Pec', codigo: '26/27-Pec', escopo_negocio: 'pecuaria', data_inicio: '2026-07-01', data_fim: '2027-06-30', ativa: true, cliente_id: 'cli' },
-    { id: 'l27', nome: '26/27-Lav', codigo: '26/27-Lav', escopo_negocio: 'agricultura', data_inicio: '2026-07-01', data_fim: '2027-06-30', ativa: true, cliente_id: 'cli' }];
+    { id: 'l27', nome: '26/27-Lav', codigo: '26/27-Lav', escopo_negocio: 'agricultura', data_inicio: '2026-07-01', data_fim: '2027-06-30', ativa: true, cliente_id: 'cli' },
+    ...SAFRAS_DA_BANCADA.filter((x) => x.id.endsWith('26'))];
   g.__bancoBancada = { from: (t: string) => (t === 'financeiro_contas_bancarias' ? CONTAS_PP : t === 'financeiro_safras' ? SAFRAS_PP : []), rpc: () => null };
   montar(<div className="h-full overflow-auto p-3"><PainelPeriodoTab /></div>);
   if (q.get('abrir') === '1') setTimeout(() => document.querySelector<HTMLElement>('[data-testid="painel-periodo"]')?.click(), 600);

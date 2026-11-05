@@ -36,7 +36,9 @@ import { esperarGraficoNoDom, AVISO_PDF_SEM_GRAFICO, TAMANHO_DO_GRAFICO_NO_PDF }
 import { lerEstimadosDaCpr } from '@/lib/financeiro/estimadosDaCprBanco';
 import { origensPresentes, SEM_ESTIMADOS, tituloDoEstimado } from '@/lib/financeiro/estimadosDaCpr';
 import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
-import { dataCurta } from '@/lib/periodo/intervaloDeDatas';
+import { dataCurta, type AtividadeDaSafra } from '@/lib/periodo/intervaloDeDatas';
+/* UI-PERIODO-01b (Gabriel 04/11 18:03): a CPR soma as contas das duas atividades — "Esta safra" = os vencimentos da safra (do cadastro) */
+const AS_DUAS_ATIVIDADES: readonly AtividadeDaSafra[] = ['pecuaria', 'agricultura'];
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, ehTransferenciaCpr, chaveDaLinhaCpr, type ContaCpr,
@@ -1042,7 +1044,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   const ctlDatas = (
     <>
       <span data-testid="cpr-datas">
-        <SeletorDePeriodo testid="cpr-periodo" valor={atalho === 'datas' ? periodo : null} onChange={escolherDatas} rotuloVazio="Escolher datas"
+        <SeletorDePeriodo testid="cpr-periodo" valor={atalho === 'datas' ? periodo : null} onChange={escolherDatas} rotuloVazio="Escolher datas" atividades={AS_DUAS_ATIVIDADES}
           padrao={periodoDoAtalho('atual', hojeIso)}
           className={atalho === 'datas' ? 'border-primary bg-primary text-primary-foreground hover:border-primary [&_svg]:text-primary-foreground' : undefined} />
       </span>

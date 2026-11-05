@@ -23,7 +23,10 @@ import {
 } from '@/lib/periodo/intervaloDeDatas';
 
 const DIAS_DA_SEMANA = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
-const CHIP = 'inline-flex h-[22px] flex-none items-center whitespace-nowrap rounded-full border px-2.5 text-[11px]';
+/* UI-PERIODO-01b (Gabriel 04/11 18:03) — COMPACTO, no tamanho do modelo AgriWebb: chips de 12 px em uma ou duas linhas; dias de 13 px numa
+   casa de 32 × 28 px (largura FIXA: antes a casa esticava até 40 px e o popup ia a 560 × 347); mês/ano em 14 px; rodapé baixo (30 px).
+   Os 2 calendários lado a lado: ~480 × 310 px. */
+const CHIP = 'inline-flex h-[22px] flex-none items-center whitespace-nowrap rounded-full border px-2 text-[12px] leading-none';
 const CHIP_LIGADO = 'border-primary bg-primary text-primary-foreground';
 const CHIP_DESLIGADO = 'border-border bg-card hover:bg-muted';
 interface MesDoCalendario { ano: number; mes0: number }
@@ -32,7 +35,7 @@ const somarMes = (m: MesDoCalendario, n: number): MesDoCalendario => {
   const t = m.ano * 12 + m.mes0 + n;
   return { ano: Math.floor(t / 12), mes0: ((t % 12) + 12) % 12 };
 };
-const BOTAO_NAV = 'inline-flex h-[22px] w-[22px] items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted';
+const BOTAO_NAV = 'inline-flex h-[22px] w-[22px] items-center justify-center rounded-md text-muted-foreground hover:bg-muted';
 
 export interface SeletorDePeriodoProps {
   valor: Intervalo | null;
@@ -96,7 +99,7 @@ export function SeletorDePeriodo({
     onChange({ de: rascunho.de, ate: rascunho.ate, nome: rascunho.nome });
     setAberto(false);
   };
-  const largura = modo === 'datas' ? 'w-[560px]' : 'w-[340px]';
+  const largura = modo === 'datas' ? 'w-[481px]' : 'w-[300px]';
   const gradeDeAnos = (
           <div className="px-2.5 pb-2 pt-2">
             <div className="grid grid-cols-4 gap-1.5">
@@ -104,7 +107,7 @@ export function SeletorDePeriodo({
                 const i = intervaloDoAno(a);
                 return (
                   <button key={a} type="button" data-ano={a} onClick={() => (modo === 'datas' ? escolherAtalho(i) : setRascunho({ de: i.de, ate: i.ate, nome: null }))}
-                    className={cn('h-[30px] rounded-md border text-[12px] font-semibold', rascunho.de === i.de && rascunho.ate === i.ate ? CHIP_LIGADO : CHIP_DESLIGADO)}>
+                    className={cn('h-[28px] rounded-md border text-[12px] font-semibold', rascunho.de === i.de && rascunho.ate === i.ate ? CHIP_LIGADO : CHIP_DESLIGADO)}>
                     {a}
                   </button>
                 );
@@ -128,8 +131,8 @@ export function SeletorDePeriodo({
       </PopoverTrigger>
       {/* o foco fica no gatilho ao abrir: o contorno de foco no 1º atalho parecia uma escolha. `data-painel-por-cima`: o popup cobre a tela
           DE PROPÓSITO (a exceção declarada do check:ui-cortes) — o que está embaixo dele não está "sob um botão" */}
-      <PopoverContent align="start" className={cn('p-0', largura)} data-testid={`${testid}-popup`} data-painel-por-cima onOpenAutoFocus={(ev) => ev.preventDefault()}>
-        <div className="flex flex-wrap gap-1 border-b border-border p-2.5">
+      <PopoverContent align="start" side="bottom" sideOffset={4} className={cn('p-0', largura)} data-testid={`${testid}-popup`} data-painel-por-cima onOpenAutoFocus={(ev) => ev.preventDefault()}>
+        <div className="flex flex-wrap gap-1 border-b border-border px-2 py-1.5">
           {atalhos.map((a) => (
             <button key={a.id} type="button" title={a.titulo} data-atalho={a.id} onClick={() => escolherAtalho(a.intervalo)}
               className={cn(CHIP, rascunho.de === a.intervalo.de && rascunho.ate === a.intervalo.ate ? CHIP_LIGADO : CHIP_DESLIGADO)}>
@@ -172,7 +175,7 @@ export function SeletorDePeriodo({
                 const i = intervaloDoMes(anoDaGrade, m0);
                 return (
                   <button key={rot} type="button" data-mes={`${anoDaGrade}-${m0 + 1}`} onClick={() => setRascunho({ de: i.de, ate: i.ate, nome: null })}
-                    className={cn('h-[30px] rounded-md border text-[12px] font-semibold', rascunho.de === i.de && rascunho.ate === i.ate ? CHIP_LIGADO : CHIP_DESLIGADO)}>
+                    className={cn('h-[28px] rounded-md border text-[12px] font-semibold', rascunho.de === i.de && rascunho.ate === i.ate ? CHIP_LIGADO : CHIP_DESLIGADO)}>
                     {rot}
                   </button>
                 );
@@ -183,7 +186,7 @@ export function SeletorDePeriodo({
 
         {modo === 'ano' && gradeDeAnos}
 
-        <div className="flex items-center gap-2 border-t border-border px-2.5 py-2">
+        <div className="flex h-[30px] items-center gap-2 border-t border-border px-2">
           <span className="min-w-0 flex-1 whitespace-nowrap text-[11px] text-muted-foreground" data-testid={`${testid}-resumo`}>
             {pronto && rascunho.de && rascunho.ate
               ? <><b className="text-foreground">{rotuloDoIntervalo({ de: rascunho.de, ate: rascunho.ate, nome: rascunho.nome })}</b>
@@ -191,9 +194,9 @@ export function SeletorDePeriodo({
                 {modo === 'datas' && <> · {dataCurta(rascunho.de)} a {dataCurta(rascunho.ate)}</>}</>
               : rascunho.de ? <>Início <b className="text-foreground">{dataCurta(rascunho.de)}</b> · escolha o fim</> : 'Escolha o início e o fim'}
           </span>
-          <button type="button" onClick={() => setAberto(false)} className="h-[24px] rounded-md border border-border bg-card px-2.5 text-[11px] font-semibold hover:bg-muted">Cancelar</button>
+          <button type="button" onClick={() => setAberto(false)} className="h-[22px] rounded-md border border-border bg-card px-2.5 text-[11px] font-semibold hover:bg-muted">Cancelar</button>
           <button type="button" disabled={!pronto} onClick={aplicar} data-testid={`${testid}-aplicar`}
-            className="h-[24px] rounded-md bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground disabled:opacity-50">Aplicar</button>
+            className="h-[22px] rounded-md bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground disabled:opacity-50">Aplicar</button>
         </div>
       </PopoverContent>
     </Popover>
@@ -206,21 +209,24 @@ function CalendarioDoMes({ titulo, m, onMes, rascunho, hoje, onDia, testid, bord
   testid: string; borda?: boolean;
 }) {
   return (
-    <div className={cn('px-2.5 pb-1.5 pt-2', borda && 'border-l border-border')} data-testid={testid}>
-      <div className="text-[10px] text-muted-foreground">{titulo}</div>
-      <div className="mb-1 flex h-[24px] items-center justify-between">
-        <button type="button" aria-label="mês anterior" className={BOTAO_NAV} onClick={() => onMes(somarMes(m, -1))}><ChevronLeft className="h-3 w-3" /></button>
-        <b className="text-[12px]">{MESES_LONGOS[m.mes0]} {m.ano}</b>
-        <button type="button" aria-label="próximo mês" className={BOTAO_NAV} onClick={() => onMes(somarMes(m, 1))}><ChevronRight className="h-3 w-3" /></button>
+    <div className={cn('px-2 pb-1 pt-1', borda && 'border-l border-border')} data-testid={testid}>
+      {/* o "Início"/"Fim" na mesma linha do mês (antes era uma linha a mais) */}
+      <div className="flex h-[24px] items-center gap-1">
+        <button type="button" aria-label="mês anterior" className={BOTAO_NAV} onClick={() => onMes(somarMes(m, -1))}><ChevronLeft className="h-3.5 w-3.5" /></button>
+        <span className="flex min-w-0 flex-1 items-baseline justify-center gap-1.5 whitespace-nowrap">
+          <span className="text-[10px] text-muted-foreground">{titulo}</span>
+          <b className="text-[14px] font-semibold">{MESES_LONGOS[m.mes0]} {m.ano}</b>
+        </span>
+        <button type="button" aria-label="próximo mês" className={BOTAO_NAV} onClick={() => onMes(somarMes(m, 1))}><ChevronRight className="h-3.5 w-3.5" /></button>
       </div>
-      <div className="grid grid-cols-7 gap-px">
-        {DIAS_DA_SEMANA.map((d) => <div key={d} className="h-[16px] text-center text-[9.5px] text-muted-foreground">{d}</div>)}
+      <div className="grid grid-cols-[repeat(7,32px)]">
+        {DIAS_DA_SEMANA.map((d) => <div key={d} className="h-[16px] text-center text-[10px] leading-[16px] text-muted-foreground">{d}</div>)}
         {gradeDoMes(m.ano, m.mes0).map((c) => {
           const ponta = c.doMes && (c.data === rascunho.de || c.data === rascunho.ate);
           const entre = c.doMes && !!rascunho.de && !!rascunho.ate && c.data > rascunho.de && c.data < rascunho.ate;
           return (
             <button key={c.data} type="button" data-dia={c.data} onClick={() => onDia(c.data)}
-              className={cn('h-[26px] rounded-[5px] text-[11px] tabular-nums',
+              className={cn('h-[28px] w-[32px] rounded-[5px] text-[13px] tabular-nums',
                 !c.doMes && 'text-muted-foreground/40', c.data === hoje && 'ring-1 ring-inset ring-primary/50',
                 entre && 'rounded-none bg-primary/15', ponta ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
               {c.dia}
