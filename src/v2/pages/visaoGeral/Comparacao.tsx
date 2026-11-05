@@ -8,7 +8,7 @@ import { comparacoes, type IndicadorAtividade } from './indicadoresDaAtividade';
 const VERDE = 'text-[#2F9E5B]';
 const VERMELHO = 'text-[#D0453A]';
 
-export function Comparacao({ i }: { i: Pick<IndicadorAtividade, 'meta' | 'anoAnt' | 'menorMelhor'> }) {
+export function Comparacao({ i }: { i: Pick<IndicadorAtividade, 'meta' | 'anoAnt' | 'menorMelhor'> & { metaEmReais?: number | null; anoAntEmReais?: number | null } }) {
   const cs = comparacoes(i);
   if (cs.length === 0) return null;
   return (
