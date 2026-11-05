@@ -83,6 +83,7 @@ import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/Correca
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { rotulosDosFornecedores } from '@/lib/fornecedores/fornecedorTexto';
+import { filiaisDoFornecedor } from '@/lib/fornecedores/filiaisDoFornecedor';
 import { normalizarAtividade, casaTipoOperacao } from '@/lib/financeiro/filtrosListaV2';
 import { temFiltroLimitante, FRASE_SEM_FILTRO, SEM_SAFRA, SEM_CULTURA } from '@/lib/financeiro/filtroLimitante';
 import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
@@ -431,6 +432,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [produtoFiltro, setProdutoFiltro] = useState(defaults.produtoFiltro);
   const [documentoFiltro, setDocumentoFiltro] = useState(defaults.documentoFiltro);
   const [fornecedorFiltro, setFornecedorFiltro] = useState(defaults.fornecedorFiltro);
+  /* FIN-FILTRO-FILIAIS-01 (Gabriel 04/11) — "+ filiais (N)": o escolhido + os cadastros da mesma raiz do CNPJ (`filiaisDoFornecedor`, a regra
+     única; inativos entram, mesclado não). MARCADA por padrão; trocar de fornecedor volta a marcar. `conjuntoDoFornecedor` nulo = só o
+     escolhido (o filtro de sempre). */
+  const [soOEscolhido, setSoOEscolhido] = useState(false);
+  useEffect(() => { setSoOEscolhido(false); }, [fornecedorFiltro]);
+  const filiaisDoEscolhido = useMemo(() => (fornecedorFiltro === '__all__' ? [] : filiaisDoFornecedor(hook.fornecedores, fornecedorFiltro)),
+    [hook.fornecedores, fornecedorFiltro]);
+  const conjuntoDoFornecedor = !soOEscolhido && filiaisDoEscolhido.length > 1 ? filiaisDoEscolhido : null;
   const [atividadeFiltro, setAtividadeFiltro] = useState(defaults.atividadeFiltro);
   /**
    * O filtro de Safra — FIN-LISTA-FILTROS-01b.
@@ -1198,7 +1207,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
          nota), por dígitos sem zeros à esquerda, chave de acesso e tipo (`documentoCasaComFiltro`, o dono) */
       items = items.filter(l => documentoCasaComFiltro(documentoFiltro, l, documentosPorLancamento?.get(l.id)));
     }
-    if (fornecedorFiltro !== '__all__') {
+    if (conjuntoDoFornecedor) {
+      items = items.filter(l => !!l.favorecido_id && conjuntoDoFornecedor.includes(l.favorecido_id));
+    } else if (fornecedorFiltro !== '__all__') {
       items = items.filter(l => l.favorecido_id === fornecedorFiltro);
     }
     /* ⚠ O TIPO PASSA A SER CONFERIDO AQUI TAMBÉM — FIN-LISTA-ORDENA-FILTRO-01. Ele era o
@@ -1259,7 +1270,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
 
     return items;
-  }, [contaOrigem, contaDestino, produtoFiltro, documentoFiltro, documentosPorLancamento, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados]);
+  }, [contaOrigem, contaDestino, produtoFiltro, documentoFiltro, documentosPorLancamento, fornecedorFiltro, conjuntoDoFornecedor, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados]);
 
 
   // Sorted lancamentos
@@ -1291,9 +1302,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     fazendaId, anos: anosSelecionados, meses: mesesSelecionados, dimensao: dataPor, tipoOperacao, status: statusSelecionados,
     contaOrigem, contaDestino, macro: macroFiltro, grupo: grupoFiltro, centro: centroFiltro, subcentro: subcentroFiltro,
     safra: safraFiltro, cultura: culturaFiltro, atividade: atividadeFiltro, produto: produtoFiltro, documento: documentoFiltro,
-    fornecedor: fornecedorFiltro, modoSemCaixa,
+    fornecedor: fornecedorFiltro, fornecedores: conjuntoDoFornecedor, modoSemCaixa,
   }), [fazendaId, anosSelecionados, mesesSelecionados, dataPor, tipoOperacao, statusSelecionados, contaOrigem, contaDestino, macroFiltro,
-       grupoFiltro, centroFiltro, subcentroFiltro, safraFiltro, culturaFiltro, atividadeFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, modoSemCaixa]);
+       grupoFiltro, centroFiltro, subcentroFiltro, safraFiltro, culturaFiltro, atividadeFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, conjuntoDoFornecedor, modoSemCaixa]);
   const ordemV2 = useMemo(() => ordemDaPaginaV2(sortField, sortDir, nivelClassif), [sortField, sortDir, nivelClassif]);
   const chaveDoRecorte = JSON.stringify([filtrosV2, ordemV2, porPagina]);
   useEffect(() => { setPaginaV2(0); }, [chaveDoRecorte]);
@@ -1390,8 +1401,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const filtrosAplicados = useMemo(() => filtrosAplicadosDaLista(filtros, {
     contaOrigem, contaDestino,
     produto: produtoFiltro, documento: documentoFiltro,
-    fornecedor: fornecedorFiltro, atividade: atividadeFiltro, grupo: grupoFiltro,
-  }), [filtros, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro]);
+    fornecedor: fornecedorFiltro, fornecedores: conjuntoDoFornecedor, atividade: atividadeFiltro, grupo: grupoFiltro,
+  }), [filtros, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, conjuntoDoFornecedor, atividadeFiltro, grupoFiltro]);
   const incluirSemVencimentoAplicado = false;
 
   /* FIN-V2-DESEMPENHO-01b: a página do servidor (no máximo `porPagina` linhas, já filtradas e ordenadas no banco) */
@@ -2079,7 +2090,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   />
                 </div>
                 <div>
-                  <label className={lblCls}>Fornecedor</label>
+                  {/* FIN-FILTRO-FILIAIS-01: a caixinha na linha do rótulo (a barra não cresce); some sem filial, com o lugar reservado */}
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <label className={`${lblCls} !mb-0`}>Fornecedor</label>
+                    <label data-testid="filtro-fornecedor-filiais"
+                      className={`flex flex-none items-center gap-0.5 text-[9px] leading-none text-[hsl(213_52%_24%)] cursor-pointer ${filiaisDoEscolhido.length > 1 ? '' : 'invisible'}`}
+                      title={filiaisDoEscolhido.length > 1
+                        ? `${filiaisDoEscolhido.length} cadastros com a mesma raiz do CNPJ (inativos entram) — desmarque para ver só o escolhido`
+                        : undefined}>
+                      <Checkbox checked={!soOEscolhido} onCheckedChange={(v) => setSoOEscolhido(v !== true)} className="h-2.5 w-2.5"
+                        aria-label="Incluir filiais (mesma raiz)" disabled={filiaisDoEscolhido.length <= 1} />
+                      <span className="tabular-nums">+ filiais ({Math.max(filiaisDoEscolhido.length, 2)})</span>
+                    </label>
+                  </div>
                   <FavorecidoSelect
                     value={fornecedorFiltro === '__all__' ? '' : fornecedorFiltro}
                     onChange={(id) => setFornecedorFiltro(id || '__all__')}

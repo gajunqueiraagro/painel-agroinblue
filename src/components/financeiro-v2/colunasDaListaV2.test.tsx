@@ -60,7 +60,7 @@ describe('Sem caixa em três posições', () => {
     expect(tela).toContain("const totalSaidas = modoSemCaixa === 'so_dre' ? totais.saidasSemCaixa : totais.saidas;");
     /* ⚠ CONTRATO MUDOU NO FIN-V2-DESEMPENHO-01b: a grade por modo é feita no BANCO (`fn_fin_v2_lista_pagina`, `modo_sem_caixa`);
        a tela manda o modo e lê os totais do recorte inteiro */
-    expect(tela).toContain('fornecedor: fornecedorFiltro, modoSemCaixa,');
+    expect(tela).toContain('fornecedor: fornecedorFiltro, fornecedores: conjuntoDoFornecedor, modoSemCaixa,');
     expect(tela).toContain('const totais = paginaDaLista?.totais ?? TOTAIS_VAZIOS;');
     expect(tela).not.toContain('Mostrar lançamentos sem caixa (entregas, barter, consumo)');
   });

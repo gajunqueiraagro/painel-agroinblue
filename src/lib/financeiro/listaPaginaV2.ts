@@ -15,6 +15,8 @@ export interface FiltrosDaTelaV2 {
   tipoOperacao: string; status: readonly string[]; contaOrigem: string; contaDestino: string;
   macro: string; grupo: string; centro: string; subcentro: string; safra: string; cultura: string; atividade: string;
   produto: string; documento: string; fornecedor: string; modoSemCaixa: ModoSemCaixa;
+  /** FIN-FILTRO-FILIAIS-01: o escolhido + as filiais ("+ filiais (N)" marcada); vai como `fornecedor_ids` e manda sobre o `fornecedor` */
+  fornecedores?: readonly string[] | null;
 }
 
 const valor = (v: string) => (v && v !== '__all__' ? v : undefined);
@@ -35,6 +37,7 @@ export function filtrosDaPaginaV2(f: FiltrosDaTelaV2): Record<string, unknown> {
   if (anos.length) out.anos = anos;
   if (meses.length) out.meses = meses;
   if (f.status.length) out.status = [...f.status];
+  if (f.fornecedores && f.fornecedores.length > 1) out.fornecedor_ids = [...f.fornecedores];
   return out;
 }
 
