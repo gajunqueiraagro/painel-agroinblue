@@ -1738,6 +1738,32 @@ if (tela === 'mesclar') {
     montar(<FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} />);
   };
   void montarFechamento();
+} else if (tela === 'valor-rebanho') {
+  /* REVALIDAR-BG-SET26 — Valor do Rebanho (a tela REAL), dado SINTÉTICO de 2026: jul validado e fechado, ago com a cadeia quebrada,
+     set invalidado e aberto (o caso da BG), out sem snapshot. O aviso do snapshot é um ESTADO da faixa de 22px do topo: trocar de mês
+     não move a régua, a tabela nem os gráficos (o desloca prova). `v=sempreco`: o Revalidar desabilitado com o porquê. */
+  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  const VAL = [['2026-07', 'validado'], ['2026-08', 'cadeia_quebrada'], ['2026-09', 'invalidado']].map(([m, st]) => ({ fazenda_id: 'f1', cliente_id: 'cli', ano_mes: m, status: st,
+    valor_total: 3_300_000, cabecas: 980, peso_medio_kg: 310, arrobas_total: 10_100, preco_arroba_medio: 320, valor_cabeca_medio: 3370 }));
+  const FECH = [['2026-07', 'fechado'], ['2026-08', 'fechado'], ['2026-09', 'aberto']].map(([m, st]) => ({ fazenda_id: 'f1', cliente_id: 'cli', ano_mes: m, status: st,
+    valor_total: 3_300_000, peso_total_kg: 303_800, fechado_em: '2026-10-08T21:53:41Z' }));
+  const CARDS = ['2026-07', '2026-08', '2026-09'].map((m, i) => ({ id: `fp${i}`, pasto_id: 'p1', fazenda_id: 'f1', cliente_id: 'cli', ano_mes: m, status: 'fechado' }));
+  g.__bancoBancada = {
+    from: (t: string, e: { eq: Record<string, unknown> }) => (
+      t === 'valor_rebanho_realizado_validado' ? VAL.filter((r) => !e.eq.ano_mes || r.ano_mes === e.eq.ano_mes)
+      : t === 'valor_rebanho_fechamento' ? FECH.filter((r) => !e.eq.ano_mes || r.ano_mes === e.eq.ano_mes)
+      : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
+      : []),
+    rpc: () => null,
+  };
+  const montarValor = async () => {
+    const { ValorRebanhoTab } = await import('@/pages/ValorRebanhoTab');
+    montar(<ValorRebanhoTab lancamentos={[]} saldosIniciais={[]} filtroAnoInicial="2026" filtroMesInicial={9} />);
+  };
+  void montarValor();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */

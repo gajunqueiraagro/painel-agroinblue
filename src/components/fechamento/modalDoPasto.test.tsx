@@ -148,20 +148,22 @@ describe('modal do pasto', () => {
     expect(screen.queryByTestId('reabrir-valor-rebanho')).toBeNull();
   });
 
-  it('mes livre: nada da trava; salvar com o Valor do Rebanho reaberto lembra de revalidar (aviso, nada reabre sozinho)', async () => {
+  it('mes livre: nada da trava; salvar com o Valor do Rebanho a revalidar NÃO avisa a cada Salvar (FECH-REVALIDAR-AVISO-01: a pendência é da Visão Geral)', async () => {
     estadoP2.revalidar = true;
     abrirDialogo();
     await waitFor(() => expect(lerEstadoDoP2).toHaveBeenCalled());
     expect(screen.queryByTestId('trava-do-p2')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
-    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('Revalide o Valor do Rebanho de set/26 (o peso mudou).'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Fechamento salvo'));
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 
   it('mes nunca validado: salvar nao lembra de nada', async () => {
     abrirDialogo();
     fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Fechamento salvo'));
-    await waitFor(() => expect(lerEstadoDoP2).toHaveBeenCalledTimes(2));
+    /* FECH-REVALIDAR-AVISO-01: o Salvar não relê o P2 (só a abertura lê, para a trava) */
+    expect(lerEstadoDoP2).toHaveBeenCalledTimes(1);
     expect(toast.warning).not.toHaveBeenCalled();
   });
 

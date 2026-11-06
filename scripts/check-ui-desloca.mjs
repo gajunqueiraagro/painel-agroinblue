@@ -251,6 +251,11 @@ const CENARIOS = [
     },
     estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
   })),
+  /* REVALIDAR-BG-SET26 — Valor do Rebanho (SINTÉTICO): trocar entre o mês validado (jul), o da cadeia quebrada (ago), o invalidado e
+     aberto (set) e o sem snapshot (out) não move a régua, a tabela nem os gráficos — o aviso do snapshot é estado da faixa de 22px */
+  { nome: 'valor-rebanho-snapshot', url: 'tela=valor-rebanho&barra=32',
+    antes: async (p) => { await p.locator('[data-testid="faixa-snapshot"]').waitFor(); await espera(p, 600); },
+    estados: [['jul validado', botao(/^Jul$/)], ['ago cadeia quebrada', botao(/^⚠?Ago$/)], ['set invalidado', botao(/^⚠?Set$/)], ['out sem snapshot', botao(/^Out$/)]] },
   /* FECH-ROTACAO-01 fatia 3 — no quadro "Onde o lote esteve" do P10A: parte do grupo, marcar um piquete, voltar ao grupo inteiro e pôr um
      pasto em "também esteve em" não movem o botão, os títulos dos blocos nem o rodapé do modal */
   { nome: 'fechamento-grupo-lote', url: 'tela=fechamento-grupo&barra=32', regiao: '[data-testid="lote-quadro"]',

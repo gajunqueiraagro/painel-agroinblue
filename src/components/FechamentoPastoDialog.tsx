@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { motivoDoNomeDoPasto, NOTA_NOME_DO_CADASTRO } from '@/lib/pastos/nomeDoPasto';
 import { OndeOLoteEsteve, escolhaInicial, type ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
 import { pastosParaGravar, uaDosItens } from '@/lib/fechamento/loteNoGrupo';
-import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseRevalidarValorRebanho, lerEstadoDoP2, rotuloReabrirValorRebanho } from '@/lib/fechamento/travaDoP2';
+import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, lerEstadoDoP2, rotuloReabrirValorRebanho } from '@/lib/fechamento/travaDoP2';
 
 /* FECH-MAPA-PASTO-MODAL-01 — ALTURA FIXA (o corpo nao rola): topo + grade das 9 categorias + rodape. So' o painel da
    lavoura rola dentro do proprio quadro. */
@@ -307,9 +307,8 @@ export function FechamentoPastoDialog({
         setErroSalvar(r.erro); return;
       }
       toast.success('Fechamento salvo');
-      /* o mês já foi validado e está reaberto: o peso mudou, o Valor do Rebanho tem de ser revalidado (nada se reabre/fecha sozinho) */
-      const p2 = await lerEstadoDoP2(fechamento.fazenda_id, fechamento.ano_mes);
-      if (p2.ok && p2.valor.revalidar) toast.warning(fraseRevalidarValorRebanho(fechamento.ano_mes));
+      /* FECH-REVALIDAR-AVISO-01 (Gabriel 04/11): o "revalide o Valor do Rebanho" NÃO é aviso a cada Salvar (empilhava dezenas). A pendência
+         é UM estado: o item da Visão Geral (`useValorRebanhoARevalidar`) e a faixa da tela do Valor do Rebanho; some ao revalidar. */
       // Não fechar o pasto aqui. O fechamento oficial ocorre via "Fechar Mês".
       onOpenChange(false);
     } finally {

@@ -38,6 +38,7 @@ import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPa
 import { MapaRebanhoImportDialog, type MapaItem } from '@/components/MapaRebanhoImportDialog';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
+import { PopupDoPasto } from '@/components/fechamento/PopupDoPasto';
 import { ERROS_REGENERAR, somarFamilias } from '@/lib/pastos/regenerarArea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -1172,55 +1173,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-[260px] p-2 text-[10px] space-y-1">
-          <div className="font-bold text-xs">{p.nome}</div>
-          {/* PR-UI-TOOLTIP-PASTO-01 — Lote SEMPRE visivel, inclusive em pasto sem
-              gado: e o dado que identifica o lote do mes, e ausencia dele e
-              informacao. Travessao, nunca vazio — sentinela do CLAUDE.md. */}
-          <div className="text-muted-foreground">
-            Lote: <span className="font-semibold text-foreground">{(fech?.lote_mes ?? '').trim() || '—'}</span>
-          </div>
-          {resumo.totalCabecas > 0 && (
-            <>
-              {/* Total na MESMA coluna de valor das categorias: celula da esquerda
-                  vazia, valor a direita. Antes era texto corrido e nao alinhava
-                  com o breakdown logo abaixo. */}
-              <div className="flex justify-between text-muted-foreground">
-                <span />
-                <span className="tabular-nums">
-                  <span className="font-semibold text-foreground">{resumo.totalCabecas}</span> cab
-                  {resumo.pesoMedio && <> · <span className="font-semibold text-foreground">{formatNum(resumo.pesoMedio, 1)}</span> kg</>}
-                </span>
-              </div>
-              {resumo.catBreakdown.length > 0 && (
-                <div className="space-y-0.5 pt-1 border-t border-border/30">
-                  {resumo.catBreakdown.map(cb => (
-                    <div key={cb.sigla} className="flex justify-between">
-                      <span className="text-muted-foreground">{cb.sigla}</span>
-                      <span className="tabular-nums">{cb.qty} cab{cb.pesoMedio ? ` · ${formatNum(cb.pesoMedio, 0)} kg` : ''}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* Porteiro trocado de lotacaoKgHa para uaHa: com o kg/ha fora da
-                  exibicao, quem porteia o bloco tem que ser o dado que ele mostra.
-                  uaHa != null e SUPERCONJUNTO de lotacaoKgHa != null (calcUA
-                  devolve a quantidade quando nao ha peso), entao a troca nunca
-                  esconde rodape que aparecia antes. O calculo de lotacaoKgHa
-                  continua intacto — o grafico de kg/ha do painel consome ele. */}
-              {uaHaDoMes != null && (
-                <div className="pt-1 border-t border-border/30 text-muted-foreground">
-                  Lotação: <span className="text-sm font-bold text-foreground">{formatNum(uaHaDoMes, 2)} UA/ha</span>
-                </div>
-              )}
-            </>
-          )}
-          {/* FECH-ROTACAO-01 fatia 3 — quem só RECEBE o lote (sem cabeça própria) também mostra a lotação do mês, com a origem */}
-          {resumo.totalCabecas === 0 && origens.length > 0 && uaHaDoMes != null && (
-            <div className="pt-1 border-t border-border/30 text-muted-foreground">
-              Recebe o lote do {origens.join(', ')} · <span className="text-sm font-bold text-foreground">{formatNum(uaHaDoMes, 2)} UA/ha</span>
-            </div>
-          )}
+        {/* POPUP-PASTO-01 — o popup do pasto é UM componente (o mesmo do Geo pastos); os dados são os do card do mês (o `resumo`) */}
+        <TooltipContent side="top" className="p-0 border-0 shadow-lg">
+          <PopupDoPasto d={{
+            nome: p.nome, lote: fech?.lote_mes ?? null, totalCab: resumo.totalCabecas, pesoMedioKg: resumo.pesoMedio,
+            categorias: resumo.catBreakdown.map(cb => ({ sigla: cb.sigla, cab: cb.qty, pesoMedioKg: cb.pesoMedio })),
+            uaHa: uaHaDoMes ?? null, recebeDe: origens,
+          }} />
         </TooltipContent>
       </Tooltip>
     );
