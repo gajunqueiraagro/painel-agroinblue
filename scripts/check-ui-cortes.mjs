@@ -605,6 +605,10 @@ const CENARIOS = [
           { nome: 'mapa-validacao-volta-mudar-inicio-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
               await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
               await p.locator('[data-testid="mudar-inicio-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
+          /* bug do P17 (06/11 17:13): a tabela de 5 colunas (Mês · Antes · ha · Depois · ha) com os nomes e as áreas reais do P17 — nada corta */
+          { nome: 'mapa-validacao-volta-mudar-inicio-p17', url: `${URL_U}&caso=p17`, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
+              await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
+              await p.locator('[data-testid="mudar-inicio-dialogo"] tr[data-mes]').first().waitFor({ timeout: 5000 }); await comFrase(p); } },
           { nome: 'mapa-validacao-volta-mudar-inicio-fechado', url: `${URL_U}&fechado=1`, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
               await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
               await p.locator('[data-testid="mudar-inicio-dialogo"] [data-testid="reabrir-mes"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(400); } },

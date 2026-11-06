@@ -860,18 +860,26 @@ if (tela === 'mesclar') {
           __codigo: 'P0001', __hint: 'fechamento:2026-10',
           __erro: 'Os piquetes de P_09 Retiro de Cima não mudam para 11/2026: o fechamento de 10/2026 está fechado (reabra o mês no Fechamento antes); P_09A recebe lote antes de 11/2026. Nada foi gravado.',
         }
-      : fn === 'fn_piquetes_mudar_inicio' ? ((mes: string) => {
+      /* bug do P17 (06/11 17:13): as respostas no formato REAL (grupo, pai.fim_depois, lotação; a GRAVAÇÃO sem frase/meses/pastos); `&caso=p17` = os
+         nomes e as áreas reais do P17 da Pureza (a tabela de 5 colunas com o nome mais longo) */
+      : fn === 'fn_piquetes_mudar_inicio' && a?.p_simular === false ? { ok: true, simulado: false, trilha_id: 't-bancada', de: '2026-09-01', para: String(a?.p_mes) }
+      : fn === 'fn_piquetes_mudar_inicio' ? ((mes: string, p17: boolean) => {
           const ant = mes < '2026-09-01';
+          const pastos = p17 ? ['P17-A', 'P17-B', 'P17-C', 'P17-D'].map((nome, i) => ({ id: `p17${i}`, nome })) : [{ id: 'pua', nome: 'P_09A' }, { id: 'pub', nome: 'P_09B' }];
+          const fim = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 0);
           return {
-            ok: true, simulado: !!a?.p_simular, direcao: ant ? 'antecipar' : 'adiar', de: '2026-09-01', para: mes,
+            ok: true, simulado: true, direcao: ant ? 'antecipar' : 'adiar', de: '2026-09-01', para: mes,
             meses: ant ? ['2026-08'] : (mes >= '2026-11-01' ? ['2026-09', '2026-10'] : ['2026-09']),
-            pai: { id: 'pu', nome: 'P_09 Retiro de Cima' }, area_pai_ha: 2222.21, lotacao: { area_grupo_ha: 2222.21 },
-            pastos: [{ id: 'pua', nome: 'P_09A' }, { id: 'pub', nome: 'P_09B' }], cards: ant ? [{ id: 'c1' }] : [], cabecas_antes: ant ? 1234 : 0, card_vai_para: 'P_09A',
-            frase: ant
-              ? 'P_09 Retiro de Cima: os 2 piquetes passam a começar em 08/2026; P_09 Retiro de Cima fica encerrado em 31/07/2026; 1 card(s) de P_09 Retiro de Cima (1234 cab, 456789 kg, 1015,1 UA) passam inteiros a P_09A; lotação do grupo 0,46 UA/ha (2222,21 ha), de P_09A 0,79 UA/ha (1331,07 ha).'
-              : `P_09 Retiro de Cima: os 2 piquetes passam a começar em ${mes.slice(5, 7)}/${mes.slice(0, 4)}; P_09 Retiro de Cima volta a valer até a véspera (2222,21 ha); nenhum card muda.`,
+            grupo: { id: 'gu', nome: 'P_09 Retiro de Cima' },
+            pai: { id: 'pu', nome: 'P_09 Retiro de Cima', fim_antes: '2026-08-31', fim_depois: `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}` },
+            area_pai_ha: p17 ? 108.8 : 2222.21,
+            lotacao: p17 ? { kg: 0, ua: 0, cabecas: 0, piquete: 'P17-A', ua_ha_grupo: 0, area_grupo_ha: 108.83, ua_ha_piquete: 0, area_piquete_ha: 24.11 }
+              : { kg: ant ? 456789 : 0, ua: ant ? 1015.1 : 0, cabecas: ant ? 1234 : 0, piquete: 'P_09A', ua_ha_grupo: ant ? 0.46 : 0, area_grupo_ha: 2222.21, ua_ha_piquete: ant ? 0.79 : 0, area_piquete_ha: 1331.07 },
+            pastos, cards: ant ? [{ id: 'c1' }] : [], cabecas_antes: ant ? 1234 : 0, card_vai_para: pastos[0].nome,
+            frase: 'a frase do banco (com ponto decimal): a tela monta a dela',
           };
-        })(String(a?.p_mes ?? '2026-11-01'))
+        })(String(a?.p_mes ?? '2026-11-01'), q.get('caso') === 'p17')
+      : fn === 'fn_piquetes_mudar_inicio_desfazer' && a?.p_simular === false ? { ok: true, simulado: false, trilha_id: 't-bancada-2', desfez: 't1', de: '2026-11-01', para: '2026-09-01', cards: 0, cabecas: 0 }
       : fn === 'fn_piquetes_mudar_inicio_desfazer' ? {
           ok: true, simulado: !!a?.p_simular, direcao: 'antecipar', meses: ['2026-09', '2026-10'], de: '2026-11-01', para: '2026-09-01', trilha_id: 't1',
           gravada_em: '2026-11-05T21:18:00Z', motivo_do_gesto: 'teste', pai: { id: 'pu', nome: 'P_09 Retiro de Cima' }, cards: 0, cabecas: 0,

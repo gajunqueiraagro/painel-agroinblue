@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { mesesDeInicio } from './piquetesEmEspera';
 import {
   FRASE_ALGUEM_MEXEU, FRASE_LINHA_SEM_VIZINHA, FRASE_LINHA_SO_ENTRE_DUAS, fraseDaVolta, grupoDaDivisao, grupoDoPai, idsDoAlterar, irmasQueEncostam,
+  inicioDoGrupo, itensDoMapaDoInicio, lerGravouInicio,
   lerDesfazer, lerDesfazerInicio, lerJuntar, lerMoverLinha, lerMudarInicio, mesBr, mesFechadoDoErro, mesesParaMudarInicio, motivoDaLinha, nomesDosPiquetes, recortarPorPadrao, segmentosSemRepetir, travaDaLinha, uniaoDasDuas, vaiPelaLinha, vizinhosQuePerdem, type GrupoDoMapa,
 } from './piquetesVolta';
 
@@ -217,5 +218,30 @@ describe('PIQUETE-VIGENCIA-01: Mudar mês de início (parte pura)', () => {
     expect(nomesDosPiquetes([])).toBe('—');
     expect(mesBr('2026-10')).toBe('10/2026');
     expect(mesBr('2026-10-01')).toBe('10/2026');
+  });
+});
+
+describe('PIQUETE-VIGENCIA-01 — bugs do P9 e do P17 (06/11)', () => {
+  it('a GRAVAÇÃO tem o leitor dela: a resposta real (sem frase/meses/pastos) vale; a prévia não vale como gravação', () => {
+    const gravou = { ok: true, simulado: false, trilha_id: 'efddc735', de: '2026-11-01', para: '2026-10-01', direcao: 'antecipar', cards: [] };
+    expect(lerGravouInicio(gravou)).toEqual({ trilhaId: 'efddc735' });
+    expect(lerMudarInicio(gravou)).toBeNull();                       // o leitor da prévia não entende a gravação (era o bug)
+    expect(lerGravouInicio({ ...gravou, simulado: true })).toBeNull();
+    expect(lerGravouInicio({ ok: true, simulado: false })).toBeNull();
+  });
+
+  it('o início do grupo: todos no mesmo mês = esse mês; diferentes = desencontrados; vazio = nada', () => {
+    const p = (nome: string, inicio: string | null) => ({ pastoId: nome, nome, inicio });
+    expect(inicioDoGrupo([p('A', '2026-10-01'), p('B', '2026-10-15')])).toEqual({ mes: '2026-10-01', desencontrados: false });
+    expect(inicioDoGrupo([p('A', '2026-10-01'), p('B', '2026-11-01')])).toEqual({ mes: null, desencontrados: true });
+    expect(inicioDoGrupo([p('A', null), p('B', null)])).toEqual({ mes: null, desencontrados: false });
+    expect(inicioDoGrupo([])).toEqual({ mes: null, desencontrados: false });
+  });
+
+  it('o mini-mapa sem prévia mostra o que vale hoje (o pai e os piquetes) — nunca vazio', () => {
+    const pai = { chave: 'pai', nome: 'P9', geojson: quad(0, 0, 2, 1) }, piq = [{ pastoId: 'a', nome: 'P9-A', geojson: quad(0, 0, 1, 1) }];
+    expect(itensDoMapaDoInicio(null, pai, piq).map(i => [i.chave, !!i.antes, !!i.depois])).toEqual([['pai', true, false], ['a', false, true]]);
+    expect(itensDoMapaDoInicio('antecipar', pai, piq).map(i => [i.chave, !!i.antes, !!i.depois])).toEqual([['pai', true, false], ['a', false, true]]);
+    expect(itensDoMapaDoInicio('adiar', pai, piq).map(i => [i.chave, !!i.antes, !!i.depois])).toEqual([['pai', false, true], ['a', true, false]]);
   });
 });

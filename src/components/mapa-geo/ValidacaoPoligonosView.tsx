@@ -1012,7 +1012,6 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
             nomeDoPai={pastos.find(p => p.id === mudandoInicio.paiPastoId)?.nome ?? geometrias.find(g => g.pasto_id === mudandoInicio.paiPastoId)?.nome_original ?? 'o pasto'}
             geoDoPai={geometrias.find(g => g.pasto_id === mudandoInicio.paiPastoId)?.geojson ?? null}
             piquetes={doGrupo.map(p => ({ pastoId: p.id, nome: p.nome, geojson: geometrias.find(g => g.pasto_id === p.id)?.geojson ?? null }))}
-            inicioAtual={doGrupo.find(p => p.data_inicio)?.data_inicio ?? null}
             aoFechar={() => setMudandoInicio(null)} aoGravar={depoisDeMexerNosPastos} />
         );
       })()}
