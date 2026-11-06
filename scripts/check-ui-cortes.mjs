@@ -39,6 +39,24 @@ const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.a
 const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.split('x').map(Number)) : [[1000, 600], [1126, 579], [1440, 800]];
 const FOTOS = arg('--fotos');
 const SO = arg('--so');
+/* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
+   testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
+async function cliqueNoGesto(p, t) {
+  if (!(await p.locator(`[data-testid="validacao-painel-poligono"] [data-testid="${t}"]`).count()) && (await p.locator('[data-testid="editar-mais"]').count())) {
+    await p.locator('[data-testid="editar-mais"]').click(); await p.locator(`[role="menuitem"][data-testid="${t}"]`).waitFor({ timeout: 3000 });
+  }
+  await p.locator(`[data-testid="${t}"]`).first().click();
+}
+async function temGesto(p, t) {
+  if (await p.locator(`[data-testid="validacao-painel-poligono"] [data-testid="${t}"]`).count()) return true;
+  if (!(await p.locator('[data-testid="editar-mais"]').count())) return false;
+  await p.locator('[data-testid="editar-mais"]').click(); await p.waitForTimeout(200);
+  const ha = (await p.locator(`[role="menuitem"][data-testid="${t}"]`).count()) > 0;
+  /* o Esc devolve o foco ao "⋯" e o foco abre a dica dele (no meio da animação de entrada ela cruza a barra): tira o foco e espera fechar */
+  await p.keyboard.press('Escape'); await p.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+  await p.waitForTimeout(500);
+  return ha;
+}
 /* P163-2 — as variantes da bancada `nota-pdf` em que a nota JÁ ESTÁ LANÇADA (o modal em abas) */
 const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
 
@@ -571,7 +589,7 @@ const CENARIOS = [
           { nome: 'mapa-validacao-volta-painel-divisao', url: URL_U, tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]', antes: async (p) => { await divisao(p);
               for (const t of ['editar-mover-linha', 'editar-juntar']) if (!(await p.locator(`[data-testid="${t}"]`).count())) throw new Error(`falta o ícone ${t} na divisão`); }, ...barra },
           { nome: 'mapa-validacao-volta-painel-pai', url: URL_U, tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]', antes: async (p) => { await pai(p);
-              if (!(await p.locator('[data-testid="editar-desfazer-piquetes"]').count())) throw new Error('falta o ícone editar-desfazer-piquetes no pai'); }, ...barra },
+              for (const t of ['editar-desfazer-piquetes', 'editar-mudar-inicio']) if (!(await temGesto(p, t))) throw new Error(`falta o ícone ${t} no pai`); }, ...barra },
           { nome: 'mapa-validacao-volta-juntar-popover', url: URL_U, tamanhos: T3, regiao: '[data-testid="validacao-popover"]', antes: juntar },
           { nome: 'mapa-validacao-volta-mover-linha-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="mover-linha-dialogo"]', antes: async (p) => {
               await moverLinha('divisa')(p); await p.locator('[data-testid="edicao-previa"]').click();
@@ -580,8 +598,21 @@ const CENARIOS = [
               await juntar(p); await p.locator('[data-testid="juntar-escolher"] [data-juntar-com="P_09B"]').click();
               await p.locator('[data-testid="juntar-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
           { nome: 'mapa-validacao-volta-desfazer-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="desfazer-dialogo"]', antes: async (p) => {
-              await pai(p); await p.locator('[data-testid="editar-desfazer-piquetes"]').click();
+              await pai(p); await cliqueNoGesto(p, 'editar-desfazer-piquetes');
               await p.locator('[data-testid="desfazer-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
+          /* PIQUETE-VIGENCIA-01: o "Mudar mês de início" — a prévia (adiar, 2 meses), a recusa do mês FECHADO com o link do Reabrir na linha reservada, e o
+             "Desfazer a última mudança" (a frase mais longa) */
+          { nome: 'mapa-validacao-volta-mudar-inicio-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
+              await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
+              await p.locator('[data-testid="mudar-inicio-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
+          { nome: 'mapa-validacao-volta-mudar-inicio-fechado', url: `${URL_U}&fechado=1`, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
+              await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
+              await p.locator('[data-testid="mudar-inicio-dialogo"] [data-testid="reabrir-mes"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(400); } },
+          { nome: 'mapa-validacao-volta-mudar-inicio-desfazer', url: URL_U, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
+              await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
+              await p.locator('[data-testid="mudar-inicio-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p);
+              await p.getByRole('button', { name: 'Desfazer a última mudança' }).click();
+              await p.waitForFunction(() => /Desfaz a mudança/.test(document.querySelector('[data-testid="volta-frase"]')?.textContent ?? ''), null, { timeout: 5000 }); await p.waitForTimeout(400); } },
           /* o gesto fora da divisa (o vértice do canto de cima à esquerda, que não é comum às duas): a prévia trava e a frase vermelha fica na barra */
           { nome: 'mapa-validacao-volta-barra-mover-linha-travada', url: URL_U, tamanhos: T3, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
               await moverLinha('fora')(p);
@@ -594,7 +625,7 @@ const CENARIOS = [
       ...(() => {
         const abrirPiquetes = (url) => async (p) => {
           await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
-          await p.locator('[data-testid="editar-piquetes"]').click();
+          await cliqueNoGesto(p, 'editar-piquetes');
           await p.locator('[data-testid="barra-piquetes"]').waitFor(); await p.waitForTimeout(900); };
         const medir = { visivelNaTela: { sels: ['[data-testid="piquetes-previa"]', '[data-testid="piquetes-cancelar"]'], dentro: '[data-testid="barra-piquetes"]', altura: 50,
             inteirosEm: ['[data-testid="piquetes-zona"]', '[data-testid="piquetes-linha-2"]', '[data-testid="barra-piquetes"]', '[data-testid="piquetes-lista"]'] },

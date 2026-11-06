@@ -16,8 +16,10 @@ import {
 import {
   Link2, Pencil, Trash2, CheckCheck, MapPin, Search, Filter,
   X, Save, ChevronDown, ChevronRight, ChevronLeft, Spline, PenTool, Scissors, Merge, Tag, Layers, Maximize2, Scan, PenLine, Move, Combine, Undo2, type LucideIcon,
-  Landmark,
+  Landmark, CalendarClock, MoreHorizontal,
 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useBarraQueCabe } from '@/hooks/useBarraQueCabe';
 import { casaNoNomeDoPoligono, TIPOS_DE_CONTORNO } from '@/lib/mapa/edicaoDoPoligono';
 import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
@@ -48,7 +50,7 @@ import { usePiquetesEmEspera } from '@/hooks/usePiquetes';
 import { pastosMudaramPorFora } from '@/hooks/usePastos';
 import type { PiqueteEmEspera } from '@/lib/mapa/piquetesEmEspera';
 /* MAPA-CRIAR-PIQUETES-01 (2b, o caminho de volta): Mover linha · Juntar com… · Desfazer piquetes — diálogos de prévia com mini-mapa */
-import { DesfazerPiquetesDialog, EscolherVizinhaParaJuntar, JuntarDialog, MoverLinhaDialog } from '@/components/mapa-geo/PiquetesVolta';
+import { DesfazerPiquetesDialog, EscolherVizinhaParaJuntar, JuntarDialog, MoverLinhaDialog, MudarInicioDialog } from '@/components/mapa-geo/PiquetesVolta';
 import { grupoDaDivisao, grupoDoPai, irmasQueEncostam, uniaoDasDuas } from '@/lib/mapa/piquetesVolta';
 /* MAPA-PIQUETES-04 — o contorno do pai só pega o clique na borda (as divisões, no miolo) */
 import { contornosDePai } from '@/lib/mapa/unidadesDoMapa';
@@ -211,6 +213,10 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const [juntarRecusa, setJuntarRecusa] = useState<string | null>(null);
   const [juntando, setJuntando] = useState<{ fica: FazendaGeometria; sai: FazendaGeometria; uniao: GeoJSON.Polygon } | null>(null);
   const [desfazendo, setDesfazendo] = useState<{ grupoId: string; paiPastoId: string } | null>(null);
+  /* PIQUETE-VIGENCIA-01: o "Mudar mês de início" do pai (os piquetes do grupo dele começam noutro mês; o desfazer do gesto mora no mesmo diálogo) */
+  const [mudandoInicio, setMudandoInicio] = useState<{ grupoId: string; paiPastoId: string } | null>(null);
+  /* PIQUETE-VIGENCIA-01 (gate a 918): a barra do polígono vira compacta (os gestos no "⋯") só quando a inteira não cabe */
+  const barra = useBarraQueCabe(focusedId);
   /* MAPA-PIQUETES-MANUAL-01 (4): os polígonos que são divisões de um grupo ativo com origem (o desenho sobre eles nasce recortando) */
   const poligonosDePiquetes = useMemo(() => {
     const pastosEmGrupo = new Set(pastos.filter(p => p.grupo_id && grupos.some(g => g.id === p.grupo_id && g.ativo)).map(p => p.id));
@@ -765,9 +771,16 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
               const haDoMapa = areaDoMapaHa(geo.geojson);
               const cadastroHa = pastos.find(p => p.id === geo.pasto_id)?.area_produtiva_ha ?? null;
               const fraseCadastro = fraseDoCadastro(haDoMapa, cadastroHa);
+              const grupoPai = geo.pasto_id ? grupoDoPai(geo.pasto_id, grupos) : null;
+              const abrirPiquete = () => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }, 'poligonos'); };
+              const abrirDesfazer = () => { if (grupoPai && geo.pasto_id) setDesfazendo({ grupoId: grupoPai.id, paiPastoId: geo.pasto_id }); };
+              const abrirMudarInicio = () => { if (grupoPai && geo.pasto_id) setMudandoInicio({ grupoId: grupoPai.id, paiPastoId: geo.pasto_id }); };
               return (
-                <div className="pointer-events-auto flex h-8 min-w-0 items-center gap-0.5 rounded-md border border-border bg-card/95 px-1.5 text-[10px] shadow-sm backdrop-blur-sm"
+                <div ref={barra.ref} className="pointer-events-auto flex h-8 min-w-0 items-center gap-0.5 rounded-md border border-border bg-card/95 px-1.5 text-[10px] shadow-sm backdrop-blur-sm"
                   data-testid="validacao-painel-poligono" data-sobre-o-mapa>
+                  {/* compacta (PIQUETE-VIGENCIA-01): o nome em cima e a área com o cadastro embaixo, na mesma altura da barra; inteira: `contents`,
+                      o invólucro não existe para o layout e nada muda de lugar */}
+                  <div className={barra.compacta ? 'flex min-w-0 flex-col justify-center leading-[13px]' : 'contents'} data-testid="validacao-painel-medidas">
                   {/* MAPA-DICAS-01 (área): o nome cede ("…" e o inteiro na dica); a área e o cadastro são números e nunca cortam; o perímetro vai na dica */}
                   <DicaDoMapa nome={nome} frase={`${sub}. ${dicaDasMedidas(perimetroDoMapaM(geo.geojson), haDoMapa, cadastroHa)}`}>
                     <span tabIndex={0} aria-label={`${nome} · ${sub}`} className="min-w-0 max-w-[260px] flex-initial truncate pr-1 font-semibold text-foreground" data-testid="validacao-painel-nome">
@@ -778,9 +791,30 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                     {haDoMapa != null ? textoHa2(haDoMapa) : '— ha'}
                     {fraseCadastro && <span className="font-normal text-muted-foreground" data-testid="validacao-painel-cadastro"> · {fraseCadastro}</span>}
                   </span>
+                  </div>
                   {/* MAPA-EDITAR-POLIGONO-01 — os gestos da edição; o "É pasto / É área" é do Code 6 */}
                   <div className="flex flex-none items-center gap-0.5" data-testid="editar-poligono">
-                    {GESTOS.map(([m, rotulo, Icone]) => (
+                    {/* compacta: os gestos, o "+ Piquete" e os do grupo (Desfazer piquetes, Mudar mês de início) vão para o "⋯", com os MESMOS testids */}
+                    {barra.compacta && (
+                      <DropdownMenu>
+                        <DicaDoMapa nome="Mais gestos" frase="Os gestos de edição deste desenho: a barra não cabe inteira nesta largura.">
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className={icone} aria-label="Mais gestos" data-testid="editar-mais">
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </DicaDoMapa>
+                        <DropdownMenuContent align="start">
+                          {GESTOS.map(([m, rotulo, Icone]) => (
+                            <DropdownMenuItem key={m} onSelect={() => void edicao.iniciar(m, geo.id)}><Icone className="mr-1.5 h-3 w-3" />{rotulo}</DropdownMenuItem>
+                          ))}
+                          {geo.pasto_id && <DropdownMenuItem data-testid="editar-piquetes" onSelect={abrirPiquete}>+ Piquete</DropdownMenuItem>}
+                          {grupoPai && <DropdownMenuItem data-testid="editar-desfazer-piquetes" onSelect={abrirDesfazer}><Undo2 className="mr-1.5 h-3 w-3" />Desfazer piquetes</DropdownMenuItem>}
+                          {grupoPai && <DropdownMenuItem data-testid="editar-mudar-inicio" onSelect={abrirMudarInicio}><CalendarClock className="mr-1.5 h-3 w-3" />Mudar mês de início</DropdownMenuItem>}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    {!barra.compacta && GESTOS.map(([m, rotulo, Icone]) => (
                       <DicaDoMapa key={m} nome={rotulo} frase={FRASE_DO_GESTO[m] ?? rotulo}>
                         <Button variant="ghost" size="sm" className={icone} aria-label={rotulo} onClick={() => void edicao.iniciar(m, geo.id)}>
                           <Icone className="h-3.5 w-3.5" />
@@ -788,11 +822,11 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                       </DicaDoMapa>
                     ))}
                     {/* MAPA-CRIAR-PIQUETES-01: só no polígono ligado a um pasto (o pasto vira o pai das divisões) */}
-                    {geo.pasto_id && (
+                    {geo.pasto_id && !barra.compacta && (
                       <DicaDoMapa nome="+ Piquete" frase="Desenhe um piquete dentro deste pasto: clique os pontos e feche no 1º ponto. O pasto continua; cada piquete vira pasto do cadastro na gravação.">
                         {/* PIQUETE-POLIGONO-01 (Gabriel 03/11 21:37): o botão "+ Piquete" abre já desenhando o 1º piquete */}
                         <Button variant="outline" size="sm" className="h-6 flex-none px-1 text-[9.5px]" data-testid="editar-piquetes" aria-label="+ Piquete"
-                          onClick={() => { if (geo.pasto_id) piq.abrir({ geometriaId: geo.id, pastoId: geo.pasto_id, nome: pName ?? geo.nome_original, geojson: geo.geojson }, 'poligonos'); }}>
+                          onClick={abrirPiquete}>
                           + Piquete
                         </Button>
                       </DicaDoMapa>
@@ -828,11 +862,19 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
                         </>
                       );
                     })()}
-                    {geo.pasto_id && grupoDoPai(geo.pasto_id, grupos) && (
+                    {grupoPai && !barra.compacta && (
                       <DicaDoMapa nome="Desfazer piquetes" frase="Desfazer a divisão deste pasto em piquetes: ele volta a valer inteiro e as divisões ficam inativas. Só vale sem nada lançado nelas.">
                         <Button variant="ghost" size="sm" className={icone} data-testid="editar-desfazer-piquetes" aria-label="Desfazer piquetes"
-                          onClick={() => { const g = grupoDoPai(geo.pasto_id, grupos); if (g && geo.pasto_id) setDesfazendo({ grupoId: g.id, paiPastoId: geo.pasto_id }); }}>
+                          onClick={abrirDesfazer}>
                           <Undo2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </DicaDoMapa>
+                    )}
+                    {grupoPai && !barra.compacta && (
+                      <DicaDoMapa nome="Mudar mês de início" frase="Os piquetes deste pasto passam a começar noutro mês (antecipar ou adiar), com prévia e motivo; o mesmo diálogo desfaz a última mudança. Mês fechado não muda.">
+                        <Button variant="ghost" size="sm" className={icone} data-testid="editar-mudar-inicio" aria-label="Mudar mês de início"
+                          onClick={abrirMudarInicio}>
+                          <CalendarClock className="h-3.5 w-3.5" />
                         </Button>
                       </DicaDoMapa>
                     )}
@@ -962,6 +1004,18 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
           nomeDoPai={pastos.find(p => p.id === desfazendo.paiPastoId)?.nome ?? geometrias.find(g => g.pasto_id === desfazendo.paiPastoId)?.nome_original ?? 'o pasto'}
           geoDoPai={geometrias.find(g => g.pasto_id === desfazendo.paiPastoId)?.geojson ?? null} desenhos={desenhosPorId} />
       )}
+
+      {mudandoInicio && fazendaAtual && (() => {
+        const doGrupo = pastos.filter(p => p.grupo_id === mudandoInicio.grupoId && p.ativo);
+        return (
+          <MudarInicioDialog grupoId={mudandoInicio.grupoId} fazendaId={fazendaAtual.id} paiPastoId={mudandoInicio.paiPastoId}
+            nomeDoPai={pastos.find(p => p.id === mudandoInicio.paiPastoId)?.nome ?? geometrias.find(g => g.pasto_id === mudandoInicio.paiPastoId)?.nome_original ?? 'o pasto'}
+            geoDoPai={geometrias.find(g => g.pasto_id === mudandoInicio.paiPastoId)?.geojson ?? null}
+            piquetes={doGrupo.map(p => ({ pastoId: p.id, nome: p.nome, geojson: geometrias.find(g => g.pasto_id === p.id)?.geojson ?? null }))}
+            inicioAtual={doGrupo.find(p => p.data_inicio)?.data_inicio ?? null}
+            aoFechar={() => setMudandoInicio(null)} aoGravar={depoisDeMexerNosPastos} />
+        );
+      })()}
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>

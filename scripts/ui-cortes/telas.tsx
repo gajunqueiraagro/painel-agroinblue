@@ -854,6 +854,29 @@ if (tela === 'mesclar') {
           areas: [],
           frase: 'P_09 Retiro de Cima volta a valer inteiro (2.222,21 ha); P_09A e P_09B ficam inativos e o desenho de P_09A sai do mapa.',
         }
+      /* PIQUETE-VIGENCIA-01: o "Mudar mês de início" do pai P_09 (os piquetes começam em 09/2026): antes de 09 antecipa, depois adia; `&fechado=1` =
+         a recusa do mês fechado com o HINT (o link do Reabrir); o desfazer da última mudança com a frase mais longa */
+      : fn === 'fn_piquetes_mudar_inicio' && q.get('fechado') === '1' ? {
+          __codigo: 'P0001', __hint: 'fechamento:2026-10',
+          __erro: 'Os piquetes de P_09 Retiro de Cima não mudam para 11/2026: o fechamento de 10/2026 está fechado (reabra o mês no Fechamento antes); P_09A recebe lote antes de 11/2026. Nada foi gravado.',
+        }
+      : fn === 'fn_piquetes_mudar_inicio' ? ((mes: string) => {
+          const ant = mes < '2026-09-01';
+          return {
+            ok: true, simulado: !!a?.p_simular, direcao: ant ? 'antecipar' : 'adiar', de: '2026-09-01', para: mes,
+            meses: ant ? ['2026-08'] : (mes >= '2026-11-01' ? ['2026-09', '2026-10'] : ['2026-09']),
+            pai: { id: 'pu', nome: 'P_09 Retiro de Cima' }, area_pai_ha: 2222.21, lotacao: { area_grupo_ha: 2222.21 },
+            pastos: [{ id: 'pua', nome: 'P_09A' }, { id: 'pub', nome: 'P_09B' }], cards: ant ? [{ id: 'c1' }] : [], cabecas_antes: ant ? 1234 : 0, card_vai_para: 'P_09A',
+            frase: ant
+              ? 'P_09 Retiro de Cima: os 2 piquetes passam a começar em 08/2026; P_09 Retiro de Cima fica encerrado em 31/07/2026; 1 card(s) de P_09 Retiro de Cima (1234 cab, 456789 kg, 1015,1 UA) passam inteiros a P_09A; lotação do grupo 0,46 UA/ha (2222,21 ha), de P_09A 0,79 UA/ha (1331,07 ha).'
+              : `P_09 Retiro de Cima: os 2 piquetes passam a começar em ${mes.slice(5, 7)}/${mes.slice(0, 4)}; P_09 Retiro de Cima volta a valer até a véspera (2222,21 ha); nenhum card muda.`,
+          };
+        })(String(a?.p_mes ?? '2026-11-01'))
+      : fn === 'fn_piquetes_mudar_inicio_desfazer' ? {
+          ok: true, simulado: !!a?.p_simular, direcao: 'antecipar', meses: ['2026-09', '2026-10'], de: '2026-11-01', para: '2026-09-01', trilha_id: 't1',
+          gravada_em: '2026-11-05T21:18:00Z', motivo_do_gesto: 'teste', pai: { id: 'pu', nome: 'P_09 Retiro de Cima' }, cards: 0, cabecas: 0,
+          frase: 'Desfaz a mudança de 05/11/2026 18:18: os piquetes (P_09A, P_09B) voltam a começar em 09/2026; P_09 Retiro de Cima volta a valer até 31/08/2026; 0 card(s) (0 cab) voltam a P_09 Retiro de Cima.',
+        }
       : null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);

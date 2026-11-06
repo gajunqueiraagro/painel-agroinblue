@@ -4,6 +4,8 @@
  * (`fn_piquetes_desfazer`). A PRÉVIA é a própria função com `p_simular = true` (o que ela mostra é o que grava); o Gravar chama a mesma com false.
  * Recusa do banco = a frase pronta DENTRO do diálogo (lugar reservado; nunca toast), o diálogo não fecha. Os números são os do banco.
  * Layout fixo (nada se desloca): ~60% do diálogo é o mapa, a tabela ao lado, altura fixa, sem rolagem.
+ * PIQUETE-VIGENCIA-01 (Gabriel 05/11): o 4º, "Mudar mês de início" (`fn_piquetes_mudar_inicio`, antecipar OU adiar) com o caminho de volta DELE no
+ * mesmo diálogo ("Desfazer a última mudança", `fn_piquetes_mudar_inicio_desfazer`); mês fechado = a recusa do banco + o link do Reabrir (D3).
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -13,48 +15,60 @@ import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
 import { TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA } from '@/components/ui/regua-tabela';
 import { PreviaComMapa } from '@/components/mapa-geo/PreviaComMapa';
-import { desfazerPiquetes, juntarDivisoes, moverLinha, versoesDosPoligonos } from '@/hooks/usePiquetesVolta';
-import type { Consulta } from '@/lib/financeiro/nfeConsultas';
+import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
+import { ReabrirMesNaOC } from '@/components/operacao-comercial/ReabrirMesNaOC';
+import {
+  desfazerMudancaDeInicio, desfazerPiquetes, juntarDivisoes, moverLinha, mudarInicio, versoesDosPoligonos, type RespostaDaVolta,
+} from '@/hooks/usePiquetesVolta';
 import { dataBr, haBr, mesesDeInicio } from '@/lib/mapa/piquetesEmEspera';
-import type { ItemDaPreviaComMapa, PreviaDesfazer, PreviaJuntar, PreviaMoverLinha } from '@/lib/mapa/piquetesVolta';
+import {
+  mesBr, mesesParaMudarInicio, nomesDosPiquetes,
+  type ItemDaPreviaComMapa, type PreviaDesfazer, type PreviaDesfazerInicio, type PreviaJuntar, type PreviaMoverLinha, type PreviaMudarInicio,
+} from '@/lib/mapa/piquetesVolta';
 import { cn } from '@/lib/utils';
 
 /** A prévia não grava nada, mas as três funções exigem um motivo: ela roda com este até a pessoa digitar o dela (o Gravar exige o dela). */
 const MOTIVO_DA_PREVIA = 'prévia';
 
 // --- o que os três diálogos têm em comum ----------------------------------------------------------------------------------------------
-function usePreviaEGravar<T>(buscar: (motivo: string, simular: boolean) => Promise<Consulta<T>>, chaveDaPrevia: string) {
+function usePreviaEGravar<T>(buscar: (motivo: string, simular: boolean) => Promise<RespostaDaVolta<T>>, chaveDaPrevia: string) {
   const buscarRef = useRef(buscar);
   buscarRef.current = buscar;
   const [motivo, setMotivo] = useState('');
   const [previa, setPrevia] = useState<T | null>(null);
   const [recusa, setRecusa] = useState<string | null>(null);
+  /** o mês FECHADO que barrou a recusa (o HINT do banco): acende o link do Reabrir (D3) */
+  const [mesFechado, setMesFechado] = useState<string | null>(null);
   const [lendo, setLendo] = useState(true);
   const [gravando, setGravando] = useState(false);
   useEffect(() => {
     let vivo = true;
-    setLendo(true); setRecusa(null); setPrevia(null);
+    setLendo(true); setRecusa(null); setMesFechado(null); setPrevia(null);
     void buscarRef.current(MOTIVO_DA_PREVIA, true).then((r) => {
       if (!vivo) return;
       setLendo(false);
-      if ('motivo' in r) setRecusa(r.motivo); else setPrevia(r.valor);
+      if ('motivo' in r) { setRecusa(r.motivo); setMesFechado(r.mesFechado ?? null); } else setPrevia(r.valor);
     });
     return () => { vivo = false; };
   }, [chaveDaPrevia]);
   const gravar = async (aoGravar: (v: T) => void) => {
     if (!previa || !motivo.trim() || gravando) return;
-    setGravando(true); setRecusa(null);
+    setGravando(true); setRecusa(null); setMesFechado(null);
     const r = await buscarRef.current(motivo.trim(), false);
     setGravando(false);
-    if ('motivo' in r) setRecusa(r.motivo); else aoGravar(r.valor);
+    if ('motivo' in r) { setRecusa(r.motivo); setMesFechado(r.mesFechado ?? null); } else aoGravar(r.valor);
   };
   const motivoDoBloqueio = lendo ? 'Lendo a prévia…' : !previa ? 'Sem prévia: leia a frase em vermelho.' : !motivo.trim() ? 'Diga o motivo para gravar.' : null;
-  return { motivo, setMotivo, previa, recusa, lendo, gravando, gravar, motivoDoBloqueio };
+  return { motivo, setMotivo, previa, recusa, mesFechado, lendo, gravando, gravar, motivoDoBloqueio };
 }
 
-function QuadroDaVolta({ testid, titulo, descricao, mapa, controles, tabela, frase, recusa, gravando, motivoDoBloqueio, rotuloGravar, aoGravar, aoFechar }: {
+function QuadroDaVolta({ testid, titulo, descricao, mapa, controles, tabela, frase, recusa, abaixoDaRecusa, larguraGravar, gravando, motivoDoBloqueio, rotuloGravar, aoGravar, aoFechar }: {
   testid: string; titulo: string; descricao: string;
   mapa: ReactNode; controles: ReactNode; tabela: ReactNode; frase: string | null; recusa: string | null;
+  /** uma linha de 18px RESERVADA logo abaixo da recusa (só quem passa a prop; o link do Reabrir do "Mudar mês de início") */
+  abaixoDaRecusa?: ReactNode;
+  /** largura FIXA do Gravar quando o rótulo muda com o modo (o Cancelar ao lado não anda) */
+  larguraGravar?: number;
   gravando: boolean; motivoDoBloqueio: string | null; rotuloGravar: string; aoGravar: () => void; aoFechar: () => void;
 }) {
   return (
@@ -74,12 +88,16 @@ function QuadroDaVolta({ testid, titulo, descricao, mapa, controles, tabela, fra
             <p className="h-[42px] flex-none overflow-hidden text-[11px] font-medium leading-[14px] text-destructive" role={recusa ? 'alert' : undefined} data-testid="volta-recusa">
               {recusa ?? ''}
             </p>
+            {abaixoDaRecusa !== undefined && (
+              <div className="flex h-[18px] flex-none items-center gap-1 text-[10px] text-destructive" data-testid="volta-abaixo-da-recusa">{abaixoDaRecusa}</div>
+            )}
           </div>
         </div>
         <div className="flex flex-none items-center gap-2 border-t border-border px-4 py-2">
           <span className="min-w-0 flex-1 text-[10px] text-muted-foreground" data-testid="volta-bloqueio">{motivoDoBloqueio ?? ''}</span>
           <Button variant="outline" size="sm" onClick={aoFechar} disabled={gravando} data-testid="volta-cancelar">Cancelar</Button>
-          <Button size="sm" disabled={!!motivoDoBloqueio || gravando} title={motivoDoBloqueio ?? undefined} onClick={aoGravar} data-testid="volta-gravar">
+          <Button size="sm" disabled={!!motivoDoBloqueio || gravando} title={motivoDoBloqueio ?? undefined} onClick={aoGravar} data-testid="volta-gravar"
+            style={larguraGravar ? { width: larguraGravar } : undefined}>
             {gravando ? 'Gravando…' : rotuloGravar}
           </Button>
         </div>
@@ -88,8 +106,10 @@ function QuadroDaVolta({ testid, titulo, descricao, mapa, controles, tabela, fra
   );
 }
 
-function CampoMesEMotivo({ meses, mes, setMes, motivo, setMotivo, comMes, gravando }: {
+function CampoMesEMotivo({ meses, mes, setMes, motivo, setMotivo, comMes, gravando, mesNoLugar }: {
   meses: { valor: string; rotulo: string }[]; mes: string; setMes: (v: string) => void; motivo: string; setMotivo: (v: string) => void; comMes: boolean; gravando: boolean;
+  /** PIQUETE-VIGENCIA-01: sem o mês, a linha dele fica no lugar (22px) com esta frase: trocar de modo não desloca o motivo nem a tabela */
+  mesNoLugar?: ReactNode;
 }) {
   return (
     <div className="grid flex-none gap-1.5">
@@ -98,6 +118,9 @@ function CampoMesEMotivo({ meses, mes, setMes, motivo, setMotivo, comMes, gravan
           <span className="text-muted-foreground">Vale a partir de</span>
           <Segmentado valor={mes} onEscolher={setMes} altura={22} opcoes={meses.map(m => ({ valor: m.valor, rotulo: m.rotulo }))} />
         </div>
+      )}
+      {!comMes && mesNoLugar !== undefined && (
+        <div className="flex h-[22px] items-center text-[10px] text-muted-foreground" data-testid="volta-mes-no-lugar">{mesNoLugar}</div>
       )}
       <Input value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Motivo (obrigatório)" disabled={gravando}
         className="h-7 text-[11px]" data-testid="volta-motivo" />
@@ -271,6 +294,118 @@ export function DesfazerPiquetesDialog({ grupoId, nomeDoPai, geoDoPai, desenhos,
       )}
       frase={p?.frase ?? null} recusa={v.recusa} gravando={v.gravando} motivoDoBloqueio={v.motivoDoBloqueio} rotuloGravar="Desfazer piquetes"
       aoGravar={() => void v.gravar(() => { toast.success('Piquetes desfeitos.'); aoGravar(); aoFechar(); })} aoFechar={aoFechar} />
+  );
+}
+
+// --- Mudar mês de início (PIQUETE-VIGENCIA-01) ---------------------------------------------------------------------------------------
+export interface PiqueteDoGrupo { pastoId: string; nome: string; geojson: GeoJSON.Geometry | null }
+type ModoDoInicio = 'mudar' | 'desfazer';
+type PreviaDoInicio = { tipo: 'mudar'; p: PreviaMudarInicio } | { tipo: 'desfazer'; p: PreviaDesfazerInicio };
+const LINHAS_DE_MES = 6;
+
+/**
+ * O 4º gesto de volta, no pai de um grupo nascido do "Concluir piquetes": os piquetes passam a começar noutro mês dos últimos 4 (D1, a partir de
+ * hoje) — antes do início de hoje antecipa (o card do pai nesses meses vai INTEIRO ao 1º piquete), depois adia (recusa se um piquete tem uso
+ * nesses meses: D2). "Desfazer a última mudança" é o caminho de volta do próprio gesto. Mês fechado: a recusa do banco e o link do Reabrir ao lado
+ * (D3: nunca reabre sozinho; o Reabrir é o diálogo de sempre, com a cadeia dele). A prévia é a própria função com `p_simular`.
+ */
+export function MudarInicioDialog({ grupoId, fazendaId, nomeDoPai, paiPastoId, geoDoPai, piquetes, inicioAtual, hoje, aoFechar, aoGravar }: {
+  grupoId: string; fazendaId: string; nomeDoPai: string; paiPastoId: string; geoDoPai: GeoJSON.Geometry | null;
+  piquetes: readonly PiqueteDoGrupo[]; inicioAtual: string | null; hoje?: Date; aoFechar: () => void; aoGravar: () => void;
+}) {
+  const meses = useMemo(() => mesesParaMudarInicio(mesesDeInicio(hoje ?? new Date()), inicioAtual), [hoje, inicioAtual]);
+  const [modo, setModo] = useState<ModoDoInicio>('mudar');
+  const [mes, setMes] = useState(meses.length ? meses[meses.length - 1].valor : '');
+  const [releitura, setReleitura] = useState(0);
+  const [reabrindo, setReabrindo] = useState<string | null>(null);
+  const v = usePreviaEGravar<PreviaDoInicio>(async (motivo, simular): Promise<RespostaDaVolta<PreviaDoInicio>> => {
+    if (modo === 'desfazer') {
+      const r = await desfazerMudancaDeInicio({ grupoId, motivo, simular });
+      if ('motivo' in r) return { ok: false, motivo: r.motivo, mesFechado: r.mesFechado ?? null };
+      return { ok: true, valor: { tipo: 'desfazer', p: r.valor } };
+    }
+    const r = await mudarInicio({ grupoId, mes, motivo, simular });
+    if ('motivo' in r) return { ok: false, motivo: r.motivo, mesFechado: r.mesFechado ?? null };
+    return { ok: true, valor: { tipo: 'mudar', p: r.valor } };
+  }, `${modo}:${mes}:${releitura}`);
+  const prev = v.previa;
+  const direcao = prev?.p.direcao ?? null;
+  const ordenados = useMemo(() => [...piquetes].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true })), [piquetes]);
+  const nomesPiq = nomesDosPiquetes(prev?.tipo === 'mudar' ? prev.p.pastos.map(x => x.nome) : ordenados.map(x => x.nome));
+  /* nos meses que mudam: antecipar = antes valia o pai (cinza), depois valem os piquetes (azul); adiar = o contrário */
+  const itens = useMemo<ItemDaPreviaComMapa[]>(() => {
+    if (!direcao) return [];
+    const ant = direcao === 'antecipar';
+    return [
+      { chave: paiPastoId, nome: nomeDoPai, antes: ant ? geoDoPai : null, depois: ant ? null : geoDoPai },
+      ...ordenados.map(q => ({ chave: q.pastoId, nome: q.nome, antes: ant ? null : q.geojson, depois: ant ? q.geojson : null })),
+    ];
+  }, [direcao, paiPastoId, nomeDoPai, geoDoPai, ordenados]);
+  const haPai = prev?.tipo === 'mudar' && prev.p.areaPaiHa != null ? ` · ${haBr(prev.p.areaPaiHa)} ha` : '';
+  const haGrupo = prev?.tipo === 'mudar' && prev.p.areaGrupoHa != null ? ` · ${haBr(prev.p.areaGrupoHa)} ha` : '';
+  const celPai = `${nomeDoPai}${haPai}`, celPiq = `${nomesPiq}${haGrupo}`;
+  const mesesDaPrevia = prev?.p.meses ?? [];
+  const vistos = mesesDaPrevia.slice(0, LINHAS_DE_MES);
+  const restam = mesesDaPrevia.length - vistos.length;
+  const rotuloMes = mes ? mesBr(mes) : '—';
+  return (
+    <>
+      <QuadroDaVolta testid="mudar-inicio-dialogo" titulo={`Mês de início dos piquetes de ${nomeDoPai}`}
+        descricao={modo === 'mudar'
+          ? `Os piquetes passam a começar no mês escolhido: antes do início de hoje antecipa, depois adia. Os mesmos pastos e a mesma área; mês fechado não muda. Nada foi gravado ainda.`
+          : `Volta ao que era antes da última mudança de início: os piquetes, o fim de ${nomeDoPai}, a área oficial e os cards que o gesto moveu. Nada foi gravado ainda.`}
+        mapa={<PreviaComMapa itens={itens} acesa={null} aoPassar={() => {}} />}
+        controles={(
+          <div className="grid flex-none gap-1.5">
+            <div className="flex items-center gap-2 text-[10px]">
+              <Segmentado valor={modo} onEscolher={(m) => setModo(m === 'desfazer' ? 'desfazer' : 'mudar')} altura={22}
+                opcoes={[{ valor: 'mudar', rotulo: 'Mudar o mês' }, { valor: 'desfazer', rotulo: 'Desfazer a última mudança' }]} />
+              {/* lugar fixo à direita (regra de corte: fora de tabela nada de "…"; o texto é curto e nunca quebra) */}
+              <span className="ml-auto flex-none whitespace-nowrap text-muted-foreground" data-testid="mudar-inicio-hoje">
+                {inicioAtual ? `início ${mesBr(inicioAtual)}` : ''}
+              </span>
+            </div>
+            <CampoMesEMotivo meses={meses} mes={mes} setMes={setMes} motivo={v.motivo} setMotivo={v.setMotivo} comMes={modo === 'mudar'} gravando={v.gravando}
+              mesNoLugar="O mês volta ao de antes da última mudança." />
+          </div>
+        )}
+        tabela={prev && (
+          /* a 918 (135% de 1240) a coluna do mês, a flexível, ficava com 44px e cortava o "09/2026": Antes/Depois a 120 deixam ~84 */
+          <TabelaDaVolta colunas={[120, 120]} cabecalho={[['Mês', false], ['Antes', false], ['Depois', false]]}>
+            {vistos.map((m) => {
+              const antes = direcao === 'antecipar' ? celPai : celPiq;
+              const depois = direcao === 'antecipar' ? celPiq : celPai;
+              return (
+                <tr key={m} data-mes={m}>
+                  <td className={TD_REGUA_TEXTO}>{mesBr(m)}</td>
+                  <td className={TD_REGUA_TEXTO} title={antes}>{antes}</td>
+                  <td className={TD_REGUA_TEXTO} title={depois}>{depois}</td>
+                </tr>
+              );
+            })}
+            {restam > 0 && (
+              <tr><td colSpan={3} className={TD_REGUA_TEXTO} title={mesesDaPrevia.slice(LINHAS_DE_MES).map(mesBr).join(', ')}>… e mais {restam}</td></tr>
+            )}
+          </TabelaDaVolta>
+        )}
+        frase={prev?.p.frase ?? null} recusa={v.recusa}
+        abaixoDaRecusa={v.mesFechado ? (
+          <>
+            <span>{mesBr(v.mesFechado)} está fechado:</span>
+            <ReabrirMesNaOC forma="link" onAbrir={() => setReabrindo(v.mesFechado)} />
+          </>
+        ) : null}
+        gravando={v.gravando} motivoDoBloqueio={v.motivoDoBloqueio} larguraGravar={128}
+        rotuloGravar={modo === 'mudar' ? `Mudar para ${rotuloMes}` : 'Desfazer a mudança'}
+        aoGravar={() => void v.gravar(() => {
+          toast.success(modo === 'mudar' ? 'Mês de início mudado.' : 'Mudança de início desfeita.');
+          aoGravar(); aoFechar();
+        })} aoFechar={aoFechar} />
+      {reabrindo && (
+        <ReabrirP1Dialog open onOpenChange={(o) => { if (!o) setReabrindo(null); }} fazendaId={fazendaId} anoMes={reabrindo}
+          onReaberto={() => { setReabrindo(null); setReleitura(n => n + 1); }} />
+      )}
+    </>
   );
 }
 

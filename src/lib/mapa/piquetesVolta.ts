@@ -226,3 +226,77 @@ export function lerDesfazer(dado: unknown): PreviaDesfazer | null {
     areas: areas.map(a => ({ id: texto(a, 'id') ?? '', nome: texto(a, 'nome') ?? '—', tipo: texto(a, 'tipo') })),
   };
 }
+
+// --- PIQUETE-VIGENCIA-01: "Mudar mês de início" (fn_piquetes_mudar_inicio) e o caminho de volta dele (fn_piquetes_mudar_inicio_desfazer) ---------
+/** Um mês 'AAAA-MM' (ou 'AAAA-MM-DD') como 'MM/AAAA'. */
+export function mesBr(anoMes: string): string {
+  const [a, m] = anoMes.slice(0, 7).split('-');
+  return a && m ? `${m}/${a}` : anoMes;
+}
+
+/**
+ * D1 (Gabriel 05/11, pela recomendação): os meses oferecidos são os últimos 4 contados de HOJE, os mesmos do Concluir (`mesesDeInicio`), sem o mês em
+ * que os piquetes já começam. Antes do início = antecipar; depois = adiar. Mês fechado aparece: quem recusa é o banco, com o link do Reabrir (D3).
+ */
+export function mesesParaMudarInicio<M extends { valor: string }>(meses: readonly M[], inicioAtual: string | null): M[] {
+  const atual = inicioAtual ? `${inicioAtual.slice(0, 7)}-01` : null;
+  return meses.filter(m => m.valor !== atual);
+}
+
+/** D3: o banco põe o 1º mês fechado no HINT da recusa ('fechamento:AAAA-MM'); é ele que acende o link do Reabrir ao lado da frase. */
+export function mesFechadoDoErro(erro: unknown): string | null {
+  const h = erro && typeof erro === 'object' ? Reflect.get(erro, 'hint') : null;
+  const m = typeof h === 'string' ? /^fechamento:(\d{4}-\d{2})$/.exec(h.trim()) : null;
+  return m ? m[1] : null;
+}
+
+export interface PreviaMudarInicio {
+  direcao: 'antecipar' | 'adiar';
+  de: string; para: string; meses: string[];
+  pai: { id: string; nome: string };
+  areaPaiHa: number | null; areaGrupoHa: number | null;
+  pastos: { id: string; nome: string }[];
+  cards: number; cabecas: number; cardVaiPara: string | null;
+  frase: string;
+}
+const listaDeTextos = (v: unknown): string[] | null => (Array.isArray(v) && v.every(x => typeof x === 'string') ? v.map(String) : null);
+export function lerMudarInicio(dado: unknown): PreviaMudarInicio | null {
+  if (campo(dado, 'ok') !== true) return null;
+  const direcao = texto(dado, 'direcao'), de = texto(dado, 'de'), para = texto(dado, 'para'), frase = texto(dado, 'frase');
+  const pai = campo(dado, 'pai'), paiId = texto(pai, 'id'), paiNome = texto(pai, 'nome');
+  const meses = listaDeTextos(campo(dado, 'meses')), pastos = campo(dado, 'pastos'), cards = campo(dado, 'cards');
+  if ((direcao !== 'antecipar' && direcao !== 'adiar') || !de || !para || !frase || !paiId || !paiNome || !meses || !Array.isArray(pastos)) return null;
+  return {
+    direcao, de, para, meses, frase, pai: { id: paiId, nome: paiNome },
+    areaPaiHa: numero(dado, 'area_pai_ha'), areaGrupoHa: numero(campo(dado, 'lotacao'), 'area_grupo_ha'),
+    pastos: pastos.map(x => ({ id: texto(x, 'id') ?? '', nome: texto(x, 'nome') ?? '—' })),
+    cards: Array.isArray(cards) ? cards.length : 0, cabecas: numero(dado, 'cabecas_antes') ?? 0, cardVaiPara: texto(dado, 'card_vai_para'),
+  };
+}
+
+export interface PreviaDesfazerInicio {
+  direcao: 'antecipar' | 'adiar';
+  de: string; para: string; meses: string[];
+  pai: { id: string; nome: string };
+  cards: number; cabecas: number; gravadaEm: string | null; motivoDoGesto: string | null;
+  frase: string;
+}
+export function lerDesfazerInicio(dado: unknown): PreviaDesfazerInicio | null {
+  if (campo(dado, 'ok') !== true) return null;
+  const direcao = texto(dado, 'direcao'), de = texto(dado, 'de'), para = texto(dado, 'para'), frase = texto(dado, 'frase');
+  const pai = campo(dado, 'pai'), paiId = texto(pai, 'id'), paiNome = texto(pai, 'nome');
+  const meses = listaDeTextos(campo(dado, 'meses'));
+  if ((direcao !== 'antecipar' && direcao !== 'adiar') || !de || !para || !frase || !paiId || !paiNome || !meses) return null;
+  return {
+    direcao, de, para, meses, frase, pai: { id: paiId, nome: paiNome },
+    cards: numero(dado, 'cards') ?? 0, cabecas: numero(dado, 'cabecas') ?? 0,
+    gravadaEm: texto(dado, 'gravada_em'), motivoDoGesto: texto(dado, 'motivo_do_gesto'),
+  };
+}
+
+/** Os nomes dos piquetes numa célula curta: "7A–7D (4)"; um só = o nome. */
+export function nomesDosPiquetes(nomes: readonly string[]): string {
+  if (nomes.length === 0) return '—';
+  if (nomes.length === 1) return nomes[0];
+  return `${nomes[0]}–${nomes[nomes.length - 1]} (${nomes.length})`;
+}

@@ -3,9 +3,10 @@
  * a conta do aviso de perda (2%) e a leitura do que as três RPCs devolvem.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { mesesDeInicio } from './piquetesEmEspera';
 import {
   FRASE_ALGUEM_MEXEU, FRASE_LINHA_SEM_VIZINHA, FRASE_LINHA_SO_ENTRE_DUAS, fraseDaVolta, grupoDaDivisao, grupoDoPai, idsDoAlterar, irmasQueEncostam,
-  lerDesfazer, lerJuntar, lerMoverLinha, motivoDaLinha, recortarPorPadrao, segmentosSemRepetir, travaDaLinha, uniaoDasDuas, vaiPelaLinha, vizinhosQuePerdem, type GrupoDoMapa,
+  lerDesfazer, lerDesfazerInicio, lerJuntar, lerMoverLinha, lerMudarInicio, mesBr, mesFechadoDoErro, mesesParaMudarInicio, motivoDaLinha, nomesDosPiquetes, recortarPorPadrao, segmentosSemRepetir, travaDaLinha, uniaoDasDuas, vaiPelaLinha, vizinhosQuePerdem, type GrupoDoMapa,
 } from './piquetesVolta';
 
 const quad = (x0: number, y0: number, x1: number, y1: number): GeoJSON.Polygon => ({ type: 'Polygon', coordinates: [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]] });
@@ -175,5 +176,46 @@ describe('(4) o desenho à mão sobre um piquete nasce com o "Recortar vizinhos"
     expect(recortarPorPadrao(q(-47.896, -14.996, 0.002), [piq, solto], new Set(['gA']))).toBe(false);
     expect(recortarPorPadrao(null, [piq], new Set(['gA']))).toBe(false);
     expect(recortarPorPadrao(q(-47.996, -14.996, 0.002), [piq], new Set())).toBe(false);
+  });
+});
+
+// PIQUETE-VIGENCIA-01 — a parte pura do "Mudar mês de início"
+
+describe('PIQUETE-VIGENCIA-01: Mudar mês de início (parte pura)', () => {
+  it('D1: os últimos 4 meses a partir de hoje, sem o do início atual (o caso do P7: início 11/2026, hoje 05/11/2026)', () => {
+    const m = mesesParaMudarInicio(mesesDeInicio(new Date(2026, 10, 5)), '2026-11-01');
+    expect(m.map(x => x.rotulo)).toEqual(['08/2026', '09/2026', '10/2026']);
+    // início mais antigo que os 4 meses: os 4 ficam (todos são adiar)
+    expect(mesesParaMudarInicio(mesesDeInicio(new Date(2026, 10, 5)), '2026-03-01')).toHaveLength(4);
+    expect(mesesParaMudarInicio(mesesDeInicio(new Date(2026, 10, 5)), null)).toHaveLength(4);
+  });
+
+  it('D3: o mês fechado vem do HINT do banco, e só no formato dele', () => {
+    expect(mesFechadoDoErro({ code: 'P0001', message: 'x', hint: 'fechamento:2026-09' })).toBe('2026-09');
+    expect(mesFechadoDoErro({ code: 'P0001', message: 'x', hint: ' fechamento:2026-09 ' })).toBe('2026-09');
+    expect(mesFechadoDoErro({ code: 'P0001', message: 'x', hint: 'outra coisa' })).toBeNull();
+    expect(mesFechadoDoErro({ code: 'P0001', message: 'x' })).toBeNull();
+    expect(mesFechadoDoErro(null)).toBeNull();
+  });
+
+  it('lê a prévia do mudar e a do desfazer; fora do formato = null (nunca prévia vazia)', () => {
+    const boa = { ok: true, direcao: 'antecipar', de: '2026-11-01', para: '2026-10-01', meses: ['2026-10'], frase: 'f',
+      pai: { id: 'p7', nome: 'P7' }, area_pai_ha: '97.3', lotacao: { area_grupo_ha: 97.54 }, pastos: [{ id: 'a', nome: '7A' }], cards: [{}], cabecas_antes: 12 };
+    const l = lerMudarInicio(boa);
+    expect(l).toMatchObject({ direcao: 'antecipar', meses: ['2026-10'], areaPaiHa: 97.3, areaGrupoHa: 97.54, cards: 1, cabecas: 12 });
+    expect(lerMudarInicio({ ...boa, direcao: 'outra' })).toBeNull();
+    expect(lerMudarInicio({ ...boa, meses: [1] })).toBeNull();
+    expect(lerMudarInicio({ ...boa, ok: false })).toBeNull();
+    const d = { ok: true, direcao: 'adiar', de: '2026-10-01', para: '2026-11-01', meses: ['2026-10'], frase: 'f', pai: { id: 'p7', nome: 'P7' }, cards: 1, cabecas: 12 };
+    expect(lerDesfazerInicio(d)).toMatchObject({ direcao: 'adiar', cards: 1, cabecas: 12 });
+    expect(lerDesfazerInicio({ ...d, pai: null })).toBeNull();
+  });
+
+  it('nomes curtos dos piquetes e o mês em MM/AAAA', () => {
+    expect(nomesDosPiquetes(['7A', '7B', '7C', '7D'])).toBe('7A–7D (4)');
+    expect(nomesDosPiquetes(['7A'])).toBe('7A');
+    expect(nomesDosPiquetes([])).toBe('—');
+    expect(mesBr('2026-10')).toBe('10/2026');
+    expect(mesBr('2026-10-01')).toBe('10/2026');
   });
 });
