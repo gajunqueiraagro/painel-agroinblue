@@ -23,7 +23,7 @@ import {
 import { useMetaGmd, type MetaGmdRow } from '@/hooks/useMetaGmd';
 import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
 import { useEndividamentoMensal, type EndividamentoSeries } from '@/hooks/useEndividamentoMensal';
-import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
+import { FaixaDoSnapshot } from '@/components/SnapshotStatusBanner';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -2765,31 +2765,27 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
           </div>
         </div>
 
-        {/* ── Snapshot governance banners ── */}
-        {!isPrevisto && !isGlobal && (() => {
-          const comprometidos = snapshotStatusArray
-            .map((s, i) => ({ mes: i + 1, status: s }))
-            .filter(m => m.status === 'invalidado' || m.status === 'cadeia_quebrada');
-          if (comprometidos.length === 0) return null;
-          const primeiro = comprometidos[0];
-          const mesLabel = MESES_LABELS[primeiro.mes - 1] + '/' + ano;
-          return (
-            <div className="px-2 mt-1">
-              <SnapshotStatusBanner
+        {/* ── Snapshot governance — REVALIDAR-BG-SET26: UMA linha de 22px que existe SEMPRE (vazia sem mês comprometido, e também no
+             Previsto/Global). Era um bloco que só aparecia com o aviso (mais o "+N meses" embaixo) e empurrava os blocos ao trocar de
+             cenário ou de fazenda. O "Revalidar" daqui leva ao Valor do Rebanho, onde o mês se revalida (o "Salvar e Fechar"). */}
+        <div className="px-2 mt-1" style={{ height: 22 }} data-testid="painel-linha-snapshot">
+          {!isPrevisto && !isGlobal && (() => {
+            const comprometidos = snapshotStatusArray
+              .map((s, i) => ({ mes: i + 1, status: s }))
+              .filter(m => m.status === 'invalidado' || m.status === 'cadeia_quebrada');
+            if (comprometidos.length === 0) return null;
+            const primeiro = comprometidos[0];
+            return (
+              <FaixaDoSnapshot
                 status={primeiro.status}
-                mesLabel={mesLabel}
-                compact
+                mesLabel={MESES_LABELS[primeiro.mes - 1] + '/' + ano}
+                outros={comprometidos.length - 1}
                 onRevalidar={primeiro.status === 'invalidado' && onTabChange ? () => onTabChange('valor_rebanho') : undefined}
                 onIrMesAnterior={primeiro.status === 'cadeia_quebrada' && onTabChange ? () => onTabChange('valor_rebanho') : undefined}
               />
-              {comprometidos.length > 1 && (
-                <p className="text-[9px] text-muted-foreground mt-0.5 px-1">
-                  +{comprometidos.length - 1} mês(es) afetado(s)
-                </p>
-              )}
-            </div>
-          );
-        })()}
+            );
+          })()}
+        </div>
 
         {/* ── Content: collapsible blocks ── */}
         <div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">

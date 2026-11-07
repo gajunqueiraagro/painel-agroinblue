@@ -57,7 +57,14 @@ const ROTULO = REGUA_ROTULO;
 const CAMPO = REGUA_CAMPO;
 /* FIN-CONTRATO-CRONOGRAMA-01 — a régua da aba Condições: campos de 24px a 11px */
 const CAMPO24 = 'h-6 text-[11px]';
-/* O corpo do modal é cinza (bg-muted da casa) e os campos moram em blocos brancos — o bloco da tela do contrato, reusado. */
+/* FIN-FINANC-LAYOUT-01 — o campo se vê: entrada, seletor (combobox) e o gatilho de data com fundo azul-acinzentado claro e borda firme;
+   o desabilitado (travado) fica como era */
+const CAMPOS_VISIVEIS = ['[&_input:not([type=checkbox]):not([type=radio]):not(:disabled)]:bg-[#f5f8fc]', '[&_input:not([type=checkbox]):not([type=radio]):not(:disabled)]:border-[#94a3b8]',
+  '[&_[role=combobox]:not(:disabled)]:bg-[#f5f8fc]', '[&_[role=combobox]:not(:disabled)]:border-[#94a3b8]',
+  '[&_textarea:not(:disabled)]:bg-[#f5f8fc]', '[&_textarea:not(:disabled)]:border-[#94a3b8]'].join(' ');
+/* o gatilho do seletor com busca (SearchableSelect, FazendaSelect, contas) não tem `role`: a aparência vai pelo `triggerClassName` */
+const CAMPO_GATILHO = `${REGUA_CAMPO} bg-[#f5f8fc] border-[#94a3b8]`;
+/* O corpo do modal é cinza e os campos moram em blocos brancos — o bloco da tela do contrato, reusado. */
 function Bloco({ nome, children, grade, testId, className = '' }: { nome: string; children: React.ReactNode; grade: string; testId: string; className?: string }) {
   return (
     <section className={`${BLOCO_DO_CONTRATO} ${className}`} data-testid={testId}>
@@ -399,22 +406,24 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
           </div>
         ) : (
           <div className={`grid min-h-0 flex-1 ${comResumo ? 'grid-cols-[minmax(0,1fr)_240px]' : 'grid-cols-1'}`}>
-            <div className="campos-uma-linha flex min-h-0 min-w-0 flex-col bg-muted px-3 pt-2" data-testid="corpo-do-cadastro">
-              <div className="mb-1.5 shrink-0">
-                <Segmentado altura={22} valor={aba} onEscolher={setAba}
+            {/* FIN-FINANC-LAYOUT-01 (Gabriel 05/11/2026, regra UI-MODAL-BLOCOS): o corpo cinza FIRME e os blocos brancos; os campos com fundo
+                levemente tingido e borda firme (onde digitar se vê de longe) — só a aparência, nos campos deste modal */}
+            <div className={`campos-uma-linha flex min-h-0 min-w-0 flex-col bg-[#e4e9f0] px-3 pt-1.5 ${CAMPOS_VISIVEIS}`} data-testid="corpo-do-cadastro">
+              <div className="mb-1 shrink-0">
+                <Segmentado altura={20} valor={aba} onEscolher={setAba}
                   opcoes={abas.map((a) => ({ valor: a.valor, rotulo: a.rotulo, title: a.antes && !salvoId ? MOTIVO_SALVE_ANTES : undefined }))} />
               </div>
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid={`aba-${aba}`}>
                 {(aba === 'contrato' || aba === 'consorcio') && (
-                  <fieldset disabled={travado} className="flex min-h-0 flex-col gap-1.5">
+                  <fieldset disabled={travado} className="flex min-h-0 flex-col gap-1">
                     <Bloco nome="Identificação" testId="bloco-identificacao"
-                      grade={cons ? 'grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1.5fr)_minmax(0,1.8fr)_minmax(0,1.3fr)_minmax(0,1fr)]'}>
+                      grade={cons ? 'grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1.2fr)_minmax(0,2.2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]'}>
                       <Campo rotulo="Descrição" obrig>
                         <Input className={CAMPO} value={form.descricao} onChange={(e) => set('descricao', e.target.value)} placeholder={cons ? 'Consórcio John Deere · trator' : 'Investimento pecuário · reforma de pastagem'} />
                       </Campo>
                       <Campo rotulo={cons ? 'Administradora' : 'Credor (banco)'} obrig>
                         <FavorecidoSelect value={form.credorId ?? ''} onChange={(id) => set('credorId', id || null)} clienteId={clienteId} onCriarNovo={() => setNovoCredor(true)}
-                          triggerClassName={CAMPO} novoButtonClassName="h-7 w-7" />
+                          triggerClassName={CAMPO_GATILHO} novoButtonClassName="h-7 w-7" />
                       </Campo>
                       {cons ? (
                         <Campo rotulo="Grupo / cota" obrig>
@@ -424,7 +433,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                       ) : (
                         <Campo rotulo="Nº do contrato (cédula)" obrig><Input className={CAMPO} value={form.numeroContrato} onChange={(e) => set('numeroContrato', e.target.value)} /></Campo>
                       )}
-                      {!cons && <Campo rotulo="Linha de crédito"><SearchableSelect value={form.linhaCreditoId ?? ''} onValueChange={(v) => set('linhaCreditoId', v || null)} options={linhas} placeholder="—" semTodos triggerClassName={CAMPO} /></Campo>}
+                      {!cons && <Campo rotulo="Linha de crédito"><SearchableSelect value={form.linhaCreditoId ?? ''} onValueChange={(v) => set('linhaCreditoId', v || null)} options={linhas} placeholder="—" semTodos triggerClassName={CAMPO_GATILHO} /></Campo>}
                       <Campo rotulo="Atividade" obrig>
                         <Segmentado altura={26} valor={form.atividade} onEscolher={(v) => set('atividade', v)} opcoes={[{ valor: 'pecuaria', rotulo: 'Pecuária' }, { valor: 'agricultura', rotulo: 'Agricultura' }]} />
                       </Campo>
@@ -468,20 +477,22 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                         </Bloco>
                       </div>
                     )}
-                    <Bloco nome="Pagamento e classificação" testId="bloco-pagamento" grade="grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1.6fr)]">
-                      <Campo rotulo="Fazenda" obrig><FazendaSelect value={form.fazendaId ?? ''} onChange={(id) => set('fazendaId', id || null)} fazendas={fazendas} forcaAdministrativo={false} triggerClassName={CAMPO} hideAviso comBusca /></Campo>
+                    {/* FIN-FINANC-LAYOUT-01: Fazenda e Conta têm valor curto; os dois planos ("Amortização Financiamento Pecuária") pedem a largura — abaixo de
+                        1.200px de janela (1.024, zoom 135%) eles descem para a 2ª linha */}
+                    <Bloco nome="Pagamento e classificação" testId="bloco-pagamento" grade="grid-cols-2 min-[1200px]:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1.9fr)_minmax(0,1.9fr)]">
+                      <Campo rotulo="Fazenda" obrig><FazendaSelect value={form.fazendaId ?? ''} onChange={(id) => set('fazendaId', id || null)} fazendas={fazendas} forcaAdministrativo={false} triggerClassName={CAMPO_GATILHO} hideAviso comBusca /></Campo>
                       <Campo rotulo={cons ? 'Conta de pagamento' : 'Conta de captação'} obrig>
-                        <ContaBancariaSelect value={form.contaId ?? ''} onValueChange={(v) => set('contaId', v || null)} contas={contas} placeholder="Selecione" showBankDetails="banco" className={CAMPO} comBusca />
+                        <ContaBancariaSelect value={form.contaId ?? ''} onValueChange={(v) => set('contaId', v || null)} contas={contas} placeholder="Selecione" showBankDetails="banco" className={CAMPO_GATILHO} comBusca />
                       </Campo>
                       <Campo rotulo={cons ? 'Plano das parcelas' : 'Plano · parcela de principal'} obrig>
                         {cons ? <span className="flex h-7 items-center truncate rounded-md bg-muted px-2 text-[11px] text-muted-foreground" data-testid="plano-do-consorcio"
                           title="a parcela NÃO é despesa: vira crédito acumulado na carta">{SUBCENTRO_CONSORCIO} · fora do DRE</span>
                           : <PlanoSubcentroSelect value={subDe(form.planoPrincipalId)} onChange={() => undefined} onSelected={(_s, c) => set('planoPrincipalId', c?.id ?? null)}
-                              classificacoes={classificacoes} tipoOperacao="2-Saídas" search={buscaP} onSearchChange={setBuscaP} triggerClassName={CAMPO} />}
+                              classificacoes={classificacoes} tipoOperacao="2-Saídas" search={buscaP} onSearchChange={setBuscaP} triggerClassName={CAMPO_GATILHO} />}
                       </Campo>
                       <Campo rotulo={cons ? 'Plano da taxa adm. e seguro' : 'Plano · juros e encargos'} obrig>
                         <PlanoSubcentroSelect value={subDe(form.planoJurosId)} onChange={() => undefined} onSelected={(_s, c) => set('planoJurosId', c?.id ?? null)}
-                          classificacoes={classificacoes} tipoOperacao="2-Saídas" search={buscaJ} onSearchChange={setBuscaJ} triggerClassName={CAMPO} />
+                          classificacoes={classificacoes} tipoOperacao="2-Saídas" search={buscaJ} onSearchChange={setBuscaJ} triggerClassName={CAMPO_GATILHO} />
                       </Campo>
                     </Bloco>
                     {!cons && (

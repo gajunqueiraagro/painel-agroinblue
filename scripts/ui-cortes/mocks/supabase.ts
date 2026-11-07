@@ -34,11 +34,13 @@ const cadeia = (tabela: string) => {
 };
 export const supabase: any = {
   from: (t: string) => { anotar('from', t); return cadeia(t); },
-  /* a tela pode responder uma RECUSA do banco: `{ __erro: 'codigo: frase' }` vira `{ data: null, error: { message } }` */
+  /* a tela pode responder uma RECUSA do banco: `{ __erro: 'codigo: frase' }` vira `{ data: null, error: { message } }`; PIQUETE-VIGENCIA-01: com
+     `__codigo` (o SQLSTATE, ex. 'P0001') e `__hint` (ex. 'fechamento:2026-10') a recusa leva os dois, como o PostgREST */
   rpc: (fn: string, a: Record<string, unknown>) => {
     anotar('rpc', fn);
     const r: any = banco().rpc?.(fn, a ?? {}) ?? null;
-    const resposta = r && typeof r === 'object' && '__erro' in r ? { data: null, error: { code: 'CBLOC', message: r.__erro } } : { data: r, error: null };
+    const resposta = r && typeof r === 'object' && '__erro' in r
+      ? { data: null, error: { code: r.__codigo ?? 'CBLOC', message: r.__erro, ...(r.__hint ? { hint: r.__hint } : {}) } } : { data: r, error: null };
     /* Ajuste 11 — `&lento=1`: a busca "nota já lançada" demora 2 s (o print da 1ª abertura mostra o esqueleto, nunca a tela antiga) */
     const lento = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lento') === '1' && fn === 'fn_nota_ja_lancada';
     return lento ? new Promise((ok) => setTimeout(() => ok(resposta), 2000)) : Promise.resolve(resposta);

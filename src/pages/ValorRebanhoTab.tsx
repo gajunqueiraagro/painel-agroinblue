@@ -24,7 +24,8 @@ import { toast } from 'sonner';
 import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import { supabase } from '@/integrations/supabase/client';
 import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
-import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
+import { FaixaDoSnapshot } from '@/components/SnapshotStatusBanner';
+import { motivoParaRevalidar } from '@/lib/fechamento/travaDoP2';
 import { ComposedChart, Line, Area, ReferenceLine, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
@@ -857,7 +858,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const { itens: precosMercado } = usePrecoMercado(anoMes);
 
   // Governança do snapshot
-  const { getStatusByMonth: getSnapStatus } = useSnapshotStatus(Number(anoFiltro));
+  const { getStatusByMonth: getSnapStatus, refetch: refetchSnap } = useSnapshotStatus(Number(anoFiltro));
+  const [revalidando, setRevalidando] = useState(false);
   const snapStatusMes = getSnapStatus(Number(mesFiltro));
   const isSnapInvalidado = snapStatusMes === 'invalidado';
   const isSnapCadeiaQuebrada = snapStatusMes === 'cadeia_quebrada';
@@ -1528,6 +1530,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     await salvarPrecos(items, totalRebanhoLive, pesoTotalKgLive, snapshotDetalhado);
   };
 
+  /* REVALIDAR-BG-SET26 (Gabriel 05/11): o "Revalidar" do aviso só relia duas consultas (`invalidateQueries`) — não gravava nada e o
+     snapshot seguia invalidado, mudo. Revalidar É o "Salvar e Fechar" do mês (o mesmo gravador, que volta o validado); depois relê o
+     estado do snapshot. Sem poder, a faixa diz o porquê (`motivoParaRevalidar`). */
+  const handleRevalidar = async () => {
+    setRevalidando(true);
+    try {
+      await handleSalvar();
+    } finally {
+      setRevalidando(false);
+      await refetchSnap();
+      qc.invalidateQueries({ queryKey: ['valor-rebanho-snapshot', fazendaId, anoFiltro, mesFiltro] });
+      qc.invalidateQueries({ queryKey: ['fechamento-status', fazendaId, anoFiltro] });
+    }
+  };
+
   const handleCopiarMesAnterior = async () => {
     const prev = await loadPrecosMesAnterior();
     if (prev.length === 0) {
@@ -1706,6 +1723,22 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           <span className="shrink-0 rounded px-1.5 font-medium"
             style={{ fontSize: 9, lineHeight: '16px', backgroundColor: '#0C447C', color: '#fff' }}>Base</span>
         </div>
+      ) : !isGlobal && (isSnapInvalidado || isSnapCadeiaQuebrada) ? (
+        /* REVALIDAR-BG-SET26 — o aviso do snapshot é um ESTADO desta faixa (era um bloco no corpo, que empurrava a tabela) */
+        <FaixaDoSnapshot status={snapStatusMes} mesLabel={`${mesLabel}/${anoFiltro}`}
+          onRevalidar={isSnapInvalidado ? () => { void handleRevalidar(); } : undefined}
+          motivo={isSnapInvalidado ? motivoParaRevalidar({
+            podeEditar: uCanEdit, pastosOficiais: p1Fechado, anoMes,
+            semPreco: liveRows.filter(r => r.saldo > 0 && (!r.precoKg || r.precoKg <= 0)).map(r => r.nome),
+          }) : null}
+          revalidando={revalidando || saving}
+          onIrMesAnterior={isSnapCadeiaQuebrada ? () => {
+            const mesAtualNum = Number(mesFiltro);
+            const mesAnterior = mesAtualNum === 1 ? 12 : mesAtualNum - 1;
+            const anoAnterior = mesAtualNum === 1 ? Number(anoFiltro) - 1 : Number(anoFiltro);
+            setAnoFiltro(String(anoAnterior));
+            setMesFiltro(String(mesAnterior).padStart(2, '0'));
+          } : undefined} />
       ) : uFonteMes === 'live' && !isMesFuturo ? (
         /* ⚠ O AVISO DO MÊS ABERTO MORA AQUI, NA MESMA FAIXA — 03d. Ele era uma linha a MAIS, logo
            abaixo, e empurrava meses, tabela, indicadores e gráficos para baixo: trocar de Ago
@@ -1866,24 +1899,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       <div className="relative">
         <div className={mostrarOverlayP1 ? 'opacity-40 pointer-events-none' : ''}>
 
-      {/* Snapshot governance banner */}
-      {!isGlobal && (isSnapInvalidado || isSnapCadeiaQuebrada) && (
-        <SnapshotStatusBanner
-          status={snapStatusMes}
-          mesLabel={`${mesLabel}/${anoFiltro}`}
-          onRevalidar={isSnapInvalidado ? () => {
-            qc.invalidateQueries({ queryKey: ['valor-rebanho-snapshot', fazendaId, anoFiltro, mesFiltro] });
-            qc.invalidateQueries({ queryKey: ['fechamento-status', fazendaId, anoFiltro] });
-          } : undefined}
-          onIrMesAnterior={isSnapCadeiaQuebrada ? () => {
-            const mesAtualNum = Number(mesFiltro);
-            const mesAnterior = mesAtualNum === 1 ? 12 : mesAtualNum - 1;
-            const anoAnterior = mesAtualNum === 1 ? Number(anoFiltro) - 1 : Number(anoFiltro);
-            setAnoFiltro(String(anoAnterior));
-            setMesFiltro(String(mesAnterior).padStart(2, '0'));
-          } : undefined}
-        />
-      )}
+      {/* REVALIDAR-BG-SET26: o aviso do snapshot (invalidado · cadeia quebrada) subiu para a faixa de 22px do topo — era este bloco
+          de ~44px que empurrava a tabela e os gráficos para baixo ao trocar de mês. */}
 
       {/* ⚠ OS DOIS AVISOS DE MÊS ABERTO SAÍRAM DAQUI — 03d: subiram para a faixa de 22px do topo.
           Eram eles que empurravam a tela para baixo ao trocar de mês fechado para aberto. */}

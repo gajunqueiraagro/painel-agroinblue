@@ -366,14 +366,16 @@ export function barraDaDiferenca(cc: ContaCorrente, lado: LadoContaCorrente = 'v
       ? { frase: `Pagou R$ ${fmt} a menos do que o gado que entrou.`, valor: falta }
       : { frase: `Pagou R$ ${fmt} a mais do que o gado que entrou.`, valor: falta };
   }
-  if (c > 0 && prog > 0) {
-    return prog * 100 >= c
-      ? { frase: `Falta receber R$ ${fmt}, já programado.`, valor: falta }
-      : { frase: `Recebeu R$ ${fmt} a menos do que entregou; R$ ${brl(prog)} já está programado.`, valor: falta };
-  }
-  return c > 0
-    ? { frase: `Recebeu R$ ${fmt} a menos do que entregou.`, valor: falta }
-    : { frase: `Recebeu R$ ${fmt} a mais do que entregou.`, valor: falta };
+  if (c < 0) return { frase: `Recebeu R$ ${fmt} a mais do que entregou.`, valor: falta };
+  /* OC-BUSCAR-RECEBIMENTO-01 (Gabriel 07/11 08:31) — "recebeu a menos" com Recebido 0,00 era a frase errada: o dinheiro AINDA NÃO VEIO.
+     Nada recebido = "Falta receber"; parte recebida com a OC aberta = "Recebeu Y; faltam X"; "a menos do que entregou" SÓ com algo
+     recebido E a OC fechada (o que veio é o que vem). O programado continua dito. */
+  if (prog > 0 && prog * 100 >= c) return { frase: `Falta receber R$ ${fmt}, já programado.`, valor: falta };
+  const recebido = Math.round(Math.abs(cc.recebido) * 100) / 100;
+  const doProgramado = prog > 0 ? `; R$ ${brl(prog)} já está programado` : '';
+  if (recebido === 0) return { frase: `Falta receber R$ ${fmt}${doProgramado}.`, valor: falta };
+  if (cc.statusComercial !== 'fechada') return { frase: `Recebeu R$ ${brl(recebido)}; faltam R$ ${fmt}${doProgramado}.`, valor: falta };
+  return { frase: `Recebeu R$ ${fmt} a menos do que entregou${doProgramado}.`, valor: falta };
 }
 
 export const ROTULO_STATUS: Record<StatusLinhaContaCorrente, string> = {

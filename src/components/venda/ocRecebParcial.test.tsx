@@ -4,7 +4,7 @@
  * 04/09. A regra mora no banco (`_fn_conc_baixa_no_vinculo`); aqui se trava o que a TELA diz:
  *   T1 a OC mostra as duas partes como linhas proprias ("Receb. 1/2" e "Receb. 2/2") e a faixa diz o que falta de verdade
  *   T2 o "⋯": conciliado trava os tres gestos com UM motivo (com o proximo passo); o 2/2 em aberto deixa cancelar
- *   T3 "Buscar recebimento no Financeiro": os do proprio comprador primeiro, "Outro favorecido" depois, separados; nome numa linha
+ *   T3 "Buscar recebimento no Financeiro": os do proprio comprador primeiro, o de outro favorecido depois (com o nome); uma linha
  *   T4 a Conferencia: a linha do sistema diz a parcela ("· Receb. 1/2"), a falta tem frase propria — e a tela usa as duas
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -58,9 +58,13 @@ describe('OC-RECEB-PARCIAL-01 — o recebimento parcial dividido, na OC', () => 
 
   it('T1b falta maior que o programado: diz as duas coisas; sem programado, a frase de sempre', () => {
     const base = walter();
+    /* OC-BUSCAR-RECEBIMENTO-01: aberta = o que veio e o que falta; "a menos do que entregou" só com a OC fechada */
     expect(barraDaDiferenca({ ...base, programado: 20000 })?.frase)
+      .toBe('Recebeu R$ 100.000,00; faltam R$ 50.000,00; R$ 20.000,00 já está programado.');
+    expect(barraDaDiferenca({ ...base, programado: 0 })?.frase).toBe('Recebeu R$ 100.000,00; faltam R$ 50.000,00.');
+    expect(barraDaDiferenca({ ...base, programado: 20000, statusComercial: 'fechada' })?.frase)
       .toBe('Recebeu R$ 50.000,00 a menos do que entregou; R$ 20.000,00 já está programado.');
-    expect(barraDaDiferenca({ ...base, programado: 0 })?.frase).toBe('Recebeu R$ 50.000,00 a menos do que entregou.');
+    expect(barraDaDiferenca({ ...base, programado: 0, statusComercial: 'fechada' })?.frase).toBe('Recebeu R$ 50.000,00 a menos do que entregou.');
   });
 
   it('T2 o "⋯": conciliado trava os tres gestos com o mesmo motivo; o 2/2 em aberto (com compromisso) deixa cancelar', () => {
@@ -77,24 +81,23 @@ describe('OC-RECEB-PARCIAL-01 — o recebimento parcial dividido, na OC', () => 
     }
   });
 
-  it('T3 buscar recebimento: os do proprio comprador primeiro, "Outro favorecido" depois; nome numa linha com title', async () => {
+  it('T3 buscar recebimento (OC-BUSCAR-RECEBIMENTO-01): o do comprador primeiro, o de outro favorecido depois COM o nome dele na Descrição; uma linha com title', async () => {
     const itens: RecebimentoVinculavel[] = [
       { lancamentoId: 'o1', data: '2026-09-10', valor: 5000, descricao: 'Pix de terceiro com um nome muito comprido que nao cabe', subcentro: 'Venda de Desmama Fêmeas',
-        mesmoFavorecido: false, semContaBancaria: false, status: 'realizado', conciliado: false },
+        mesmoFavorecido: false, semContaBancaria: false, status: 'realizado', conciliado: false, pagamento: '2026-09-10', favorecido: 'Outra Pessoa' },
       { lancamentoId: 'm1', data: '2026-09-20', valor: 50000, descricao: 'Pix do comprador', subcentro: 'Venda de Desmama Fêmeas',
-        mesmoFavorecido: true, semContaBancaria: false, status: 'realizado', conciliado: false },
+        mesmoFavorecido: true, semContaBancaria: false, status: 'realizado', conciliado: false, pagamento: '2026-09-20', favorecido: 'Comprador' },
     ];
     render(<AbaContaCorrenteOC api={api(walter(), itens)} somenteLeitura={false} />);
     fireEvent.click(screen.getByRole('button', { name: '+ Buscar recebimento no Financeiro' }));
-    await waitFor(() => expect(screen.getByTestId('grupo-mesmo-favorecido')).toBeTruthy());
-    const linhas = [...document.querySelectorAll('tbody tr')].map(tr => tr.getAttribute('data-testid') ?? tr.getAttribute('data-lancamento'));
-    expect(linhas.filter(Boolean)).toEqual(['grupo-mesmo-favorecido', 'm1', 'grupo-outro-favorecido', 'o1']);
-    expect(screen.getByTestId('grupo-mesmo-favorecido').textContent).toBe('Do comprador da operação');
-    expect(screen.getByTestId('grupo-outro-favorecido').textContent).toBe('Outro favorecido');
+    await waitFor(() => expect(document.querySelector('tr[data-lancamento="m1"]')).toBeTruthy());
+    const linhas = [...screen.getByTestId('dialogo-buscar-recebimento').querySelectorAll('tbody tr')].map(tr => tr.getAttribute('data-lancamento'));
+    expect(linhas).toEqual(['m1', 'o1']);
     const celula = within(document.querySelector('tr[data-lancamento="o1"]') as HTMLElement).getByText(/Pix de terceiro/);
     expect(celula.className).toContain('truncate');
-    expect(celula.getAttribute('title')).toBe('Pix de terceiro com um nome muito comprido que nao cabe');
-    expect(document.body.textContent).not.toContain(' · outro favorecido');
+    expect(celula.getAttribute('title')).toBe('Pix de terceiro com um nome muito comprido que nao cabe · Outra Pessoa');
+    /* o do comprador não repete o nome (é o da OC) */
+    expect(within(document.querySelector('tr[data-lancamento="m1"]') as HTMLElement).getByText('Pix do comprador')).toBeTruthy();
   });
 });
 

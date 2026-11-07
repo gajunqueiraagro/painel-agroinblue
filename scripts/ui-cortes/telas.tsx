@@ -115,6 +115,7 @@ import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
 import { Segmentado } from '@/components/ui/segmentado';
 import type { Intervalo } from '@/lib/periodo/intervaloDeDatas';
 import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
+import * as LOTES_BANCADA from './dados/lotes';
 
 /* Gabriel 29/10 08:26 — os parcelados do LR na nota já lançada (SINTÉTICOS): as 4 do sistema e a prévia da `fn_nota_completar` como o banco a faz */
 /* UI-PERIODO-01b — as safras SINTÉTICAS do cadastro (as duas atividades, julho a junho, 26/27 e 25/26) para o componente de período */
@@ -149,8 +150,13 @@ const AVISTA_DA_NOTA = () => [{ id: 'jl-av', vencimento: '2026-10-10', pagamento
   descricao: 'Brincos de identificação sintéticos — pago à vista no Itaú Personalite, descrição comprida para o pior caso', valor_cent: 196656,
   status: 'realizado', conciliado: false, financiamento_id: null, conta_bancaria_id: 'sic', numero_documento: '937', fornecedor_id: 'agro-s',
   fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
+/* NOTA-ATUALIZA-PREVISTO-01 — `v=previsto`: o molde do caso da Vera (NF 69.134): a nota SEM duplicata e, no sistema, um PREVISTO de R$ 1.000,00
+   achado pelo número (linha "só no sistema"); a cena escolhe "É esta" e 70%. SINTÉTICO. */
+const PREVISTO_DA_NOTA = (): any[] => [{ id: 'jl-prev', vencimento: '2026-11-05', pagamento: null, competencia: '2026-10-05',
+  descricao: 'Supermercado sintetico da fazenda (70%)', valor_cent: 100000, status: 'previsto', conciliado: false, financiamento_id: null,
+  numero_documento: null, fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
 function completarDoLr(v: string, a: any) {
-  const doLr: any[] = (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA() : v === 'm2' ? M2_DA_NOTA() : v === 'avista' ? AVISTA_DA_NOTA() : LR_DA_NOTA(v);
+  const doLr: any[] = (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA() : v === 'm2' ? M2_DA_NOTA() : v === 'avista' ? AVISTA_DA_NOTA() : v === 'previsto' ? PREVISTO_DA_NOTA() : LR_DA_NOTA(v);
   const linhas = (a?.p_lancamentos ?? []).map((x: any) => {
     const i = doLr.findIndex((l) => l.id === x.id); const l = doLr[i]; const paga = l?.status === 'realizado';
     const hoje: Record<string, unknown> = { descricao: l?.descricao ?? null, favorecido_id: 'agro-s', fazenda_id: 'f-pur', conta_bancaria_id: 'sic', plano_conta_id: 'pl-vet',
@@ -383,6 +389,10 @@ if (tela === 'mesclar') {
       : base;
   const c: any = consorcio;
   if (v === 'consorcio') d.fin = { ...base.fin, id: c.tela.contrato.id, natureza: 'consorcio' };
+  /* FIN-PARCELA-VALOR-ZERO-01 — `&zero=1`: a 1ª parcela sem nada a pagar e não paga, vencida no calendário (o banco manda `sem_valor`) */
+  if (q.get('zero') === '1') d.situacao = { ...d.situacao, parcelas: d.situacao.parcelas.map((x: any, i: number) => (i === 0
+    ? { ...x, valor_principal: 0, valor_juros: 0, valor_total: 0, valor_pago: 0, situacao: 'pendente', sem_valor: true, pago_em: null, prazo: null, lancamento_id: null, lancamento_juros_id: null }
+    : x)) };
   /* PARC-DOCS-TABELA-01 — `&np=N`: a compra parcelada com N parcelas de R$ 344,00 (o caso real tem 2), todas com lançamento, e
      `&docs=1` uma nota da compra ligada a elas (a lista de documentos da aba ocupa a sua linha). Tudo SINTÉTICO. */
   const NP = Number(q.get('np') ?? 0);
@@ -854,6 +864,37 @@ if (tela === 'mesclar') {
           areas: [],
           frase: 'P_09 Retiro de Cima volta a valer inteiro (2.222,21 ha); P_09A e P_09B ficam inativos e o desenho de P_09A sai do mapa.',
         }
+      /* PIQUETE-VIGENCIA-01: o "Mudar mês de início" do pai P_09 (os piquetes começam em 09/2026): antes de 09 antecipa, depois adia; `&fechado=1` =
+         a recusa do mês fechado com o HINT (o link do Reabrir); o desfazer da última mudança com a frase mais longa */
+      : fn === 'fn_piquetes_mudar_inicio' && q.get('fechado') === '1' ? {
+          __codigo: 'P0001', __hint: 'fechamento:2026-10',
+          __erro: 'Os piquetes de P_09 Retiro de Cima não mudam para 11/2026: o fechamento de 10/2026 está fechado (reabra o mês no Fechamento antes); P_09A recebe lote antes de 11/2026. Nada foi gravado.',
+        }
+      /* bug do P17 (06/11 17:13): as respostas no formato REAL (grupo, pai.fim_depois, lotação; a GRAVAÇÃO sem frase/meses/pastos); `&caso=p17` = os
+         nomes e as áreas reais do P17 da Pureza (a tabela de 5 colunas com o nome mais longo) */
+      : fn === 'fn_piquetes_mudar_inicio' && a?.p_simular === false ? { ok: true, simulado: false, trilha_id: 't-bancada', de: '2026-09-01', para: String(a?.p_mes) }
+      : fn === 'fn_piquetes_mudar_inicio' ? ((mes: string, p17: boolean) => {
+          const ant = mes < '2026-09-01';
+          const pastos = p17 ? ['P17-A', 'P17-B', 'P17-C', 'P17-D'].map((nome, i) => ({ id: `p17${i}`, nome })) : [{ id: 'pua', nome: 'P_09A' }, { id: 'pub', nome: 'P_09B' }];
+          const fim = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 0);
+          return {
+            ok: true, simulado: true, direcao: ant ? 'antecipar' : 'adiar', de: '2026-09-01', para: mes,
+            meses: ant ? ['2026-08'] : (mes >= '2026-11-01' ? ['2026-09', '2026-10'] : ['2026-09']),
+            grupo: { id: 'gu', nome: 'P_09 Retiro de Cima' },
+            pai: { id: 'pu', nome: 'P_09 Retiro de Cima', fim_antes: '2026-08-31', fim_depois: `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}` },
+            area_pai_ha: p17 ? 108.8 : 2222.21,
+            lotacao: p17 ? { kg: 0, ua: 0, cabecas: 0, piquete: 'P17-A', ua_ha_grupo: 0, area_grupo_ha: 108.83, ua_ha_piquete: 0, area_piquete_ha: 24.11 }
+              : { kg: ant ? 456789 : 0, ua: ant ? 1015.1 : 0, cabecas: ant ? 1234 : 0, piquete: 'P_09A', ua_ha_grupo: ant ? 0.46 : 0, area_grupo_ha: 2222.21, ua_ha_piquete: ant ? 0.79 : 0, area_piquete_ha: 1331.07 },
+            pastos, cards: ant ? [{ id: 'c1' }] : [], cabecas_antes: ant ? 1234 : 0, card_vai_para: pastos[0].nome,
+            frase: 'a frase do banco (com ponto decimal): a tela monta a dela',
+          };
+        })(String(a?.p_mes ?? '2026-11-01'), q.get('caso') === 'p17')
+      : fn === 'fn_piquetes_mudar_inicio_desfazer' && a?.p_simular === false ? { ok: true, simulado: false, trilha_id: 't-bancada-2', desfez: 't1', de: '2026-11-01', para: '2026-09-01', cards: 0, cabecas: 0 }
+      : fn === 'fn_piquetes_mudar_inicio_desfazer' ? {
+          ok: true, simulado: !!a?.p_simular, direcao: 'antecipar', meses: ['2026-09', '2026-10'], de: '2026-11-01', para: '2026-09-01', trilha_id: 't1',
+          gravada_em: '2026-11-05T21:18:00Z', motivo_do_gesto: 'teste', pai: { id: 'pu', nome: 'P_09 Retiro de Cima' }, cards: 0, cabecas: 0,
+          frase: 'Desfaz a mudança de 05/11/2026 18:18: os piquetes (P_09A, P_09B) voltam a começar em 09/2026; P_09 Retiro de Cima volta a valer até 31/08/2026; 0 card(s) (0 cab) voltam a P_09 Retiro de Cima.',
+        }
       : null,
   };
   montar(<div className="flex h-full min-h-0 flex-col"><MapaGeoPastosTab /></div>);
@@ -1012,6 +1053,13 @@ if (tela === 'mesclar') {
     { ...comum, lancamentoId: 'o1', data: '2026-09-10', competencia: '2026-09-10', vencimento: '2026-09-10', pagamento: '2026-09-10', valor: 5000,
       descricao: 'Pix recebido de terceiro com um nome muito comprido que nao cabe na coluna', favorecido: 'Terceiro Exemplo',
       contaBancaria: 'Banco do Brasil', mesmoFavorecido: false, status: 'realizado', motivoExcluido: null },
+    /* OC-BUSCAR-RECEBIMENTO-01 — os ANTIGOS do caso real (2021, fora da janela da OC): só aparecem com "procurar em todo o histórico" */
+    { ...comum, lancamentoId: 'h1', data: '2021-04-24', competencia: '2021-04-24', vencimento: '2021-04-24', pagamento: '2021-04-24', valor: 180000,
+      descricao: 'Abate 060 Vacas · Recebimento do frigorífico com a descrição longa de sempre', favorecido: 'Exemplo da Silva Agropecuária Ltda',
+      contaBancaria: 'Cooperativa de Crédito Sicredi Exemplo', mesmoFavorecido: true, status: 'conciliado', conciliado: true, motivoExcluido: null },
+    { ...comum, lancamentoId: 'h2', data: '2021-05-20', competencia: '2021-05-20', vencimento: '2021-05-20', pagamento: '2021-05-20', valor: 1375000.55,
+      descricao: 'Abate 027 Vacas · Recebimento', favorecido: 'Exemplo da Silva Agropecuária Ltda', contaBancaria: 'Banco do Brasil',
+      mesmoFavorecido: true, status: 'realizado', motivoExcluido: null },
   ];
   const nada = async () => null;
   const api: any = { contaCorrente: cc, loading: false, erro: null, ocupado: false, recarregar: async () => {}, sincronizarEntregas: nada,
@@ -1391,7 +1439,7 @@ if (tela === 'mesclar') {
     /* P95 — `pelachave`: o PDF ESCANEADO (so' imagem, nenhum texto) seguido pela chave digitada (sintetica): a previa com o chip e a
        emissao e o valor em ambar; `irmas`: a nota sem duplicata achada em 4 parcelas soltas ("… - k/4"), a frase com soma e diferenca */
     if (v === 'pelachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
-    else for (const it of (v === 'semdup' || v === 'emparcela' || v === 'irmas' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
+    else for (const it of (v === 'semdup' || v === 'emparcela' || v === 'irmas' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'previsto' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
       const str = v === 'diverge' && it.str === 'Nº 000.000.937' ? 'Nº 000.000.938' : it.str;
       doc.setFontSize(Math.max(4, it.h * 1.15));
       doc.text(str, it.x, 595.28 - it.y);
@@ -1443,7 +1491,7 @@ if (tela === 'mesclar') {
         /* Gabriel 29/10 10:38 — "No sistema hoje": a fazenda, o subcentro e o fornecedor de cada achado (SINTÉTICOS; o mesmo para todos os ids da bancada) */
         if (t === 'financeiro_lancamentos_v2' && v === 'm2') return ['jl-m20', 'jl-m21', 'jl-m22'].map((id, i) => ({ id, fazenda_id: 'f-pur',
           subcentro: 'Manutenção de Máquinas Agrícolas', favorecido_id: 'agro-s', plano_conta_id: 'pl-lav', safra_id: i === 2 ? 's-soja-25' : 's-soja' }));
-        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'avista'].includes(v)) return ['jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
+        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'avista', 'previsto'].includes(v)) return ['jl-prev', 'jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
           'jl-irma-0', 'jl-irma-1', 'jl-irma-2', 'jl-irma-3', 'jl-p1', 'jl-lr0', 'jl-lr1', 'jl-lr2', 'jl-lr3', 'jl-g1', 'jl-av']
           .map((id) => ({ id, fazenda_id: 'f-pur', subcentro: 'Sanidade Animal — Vacinas e Medicamentos Veterinários', favorecido_id: 'agro-s', plano_conta_id: 'pl-vet' }));
         if (t === 'financeiro_lancamentos_v2' && (v === 'cadastrado' || v === 'parcelar')) return [{ id: 'l-ext', data_vencimento: '2026-10-20', data_competencia: '2026-10-20',
@@ -1491,7 +1539,8 @@ if (tela === 'mesclar') {
         : fn === 'fn_nota_ja_lancada' && (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'm2' ? M2_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'avista' ? AVISTA_DA_NOTA()
-        : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'avista') ? completarDoLr(v, a)
+        : fn === 'fn_nota_ja_lancada' && v === 'previsto' ? PREVISTO_DA_NOTA()
+        : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'avista' || v === 'previsto') ? completarDoLr(v, a)
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
           financiamento_id: null, numero_documento: 'NF_000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
@@ -1703,7 +1752,13 @@ if (tela === 'mesclar') {
   const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
     lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
-  const ITENS = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  const ITENS: (ReturnType<typeof item> & { lote_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
+  const COM_LOTES = v === 'lotes';
+  if (COM_LOTES) {
+    Object.assign(ITENS[0], { lote_id: 'l-dm6' });
+    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: 'l-px2' });
+  }
   const ALOC = [{ fechamento_id: 'fa', lote: '', pasto_id: 'p10a' }, { fechamento_id: 'fa', lote: '', pasto_id: 'p10b' },
     { fechamento_id: 'f11', lote: '', pasto_id: 'p11' }, { fechamento_id: 'f11', lote: '', pasto_id: 'p12' }];
   const lotacao = () => {
@@ -1730,8 +1785,13 @@ if (tela === 'mesclar') {
       t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? [{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true }]
       : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
-      : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC : []),
-    rpc: (fn: string) => (fn === 'fn_lotacao_do_mes' ? lotacao() : null),
+      : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC
+      : COM_LOTES && t === 'rebanho_lote_cadastros' ? LOTES_BANCADA.CADASTROS
+      /* FECH-REABRIR-JUNTO-01 — `&v=trava`: o Valor do Rebanho de out/26 VALIDADO (o caso EXP R_04): o modal abre com o aviso e o "Reabrir e editar" */
+      : v === 'trava' && t === 'valor_rebanho_realizado_validado' ? [{ fazenda_id: 'f1', ano_mes: '2026-10', status: 'validado' }]
+      : []),
+    rpc: (fn: string, a: Record<string, unknown>) => (fn === 'fn_lotacao_do_mes' ? lotacao()
+      : COM_LOTES ? LOTES_BANCADA.bancoDeLotes().rpc(fn, a) : null),
   };
   const montarFechamento = async () => {
     const { FechamentoTab } = await import('@/pages/FechamentoTab');
@@ -1743,6 +1803,45 @@ if (tela === 'mesclar') {
       : <FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} />);
   };
   void montarFechamento();
+} else if (tela === 'valor-rebanho') {
+  /* REVALIDAR-BG-SET26 — Valor do Rebanho (a tela REAL), dado SINTÉTICO de 2026: jul validado e fechado, ago com a cadeia quebrada,
+     set invalidado e aberto (o caso da BG), out sem snapshot. O aviso do snapshot é um ESTADO da faixa de 22px do topo: trocar de mês
+     não move a régua, a tabela nem os gráficos (o desloca prova). `v=sempreco`: o Revalidar desabilitado com o porquê. */
+  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  const VAL = [['2026-07', 'validado'], ['2026-08', 'cadeia_quebrada'], ['2026-09', 'invalidado']].map(([m, st]) => ({ fazenda_id: 'f1', cliente_id: 'cli', ano_mes: m, status: st,
+    valor_total: 3_300_000, cabecas: 980, peso_medio_kg: 310, arrobas_total: 10_100, preco_arroba_medio: 320, valor_cabeca_medio: 3370 }));
+  const FECH = [['2026-07', 'fechado'], ['2026-08', 'fechado'], ['2026-09', 'aberto']].map(([m, st]) => ({ fazenda_id: 'f1', cliente_id: 'cli', ano_mes: m, status: st,
+    valor_total: 3_300_000, peso_total_kg: 303_800, fechado_em: '2026-10-08T21:53:41Z' }));
+  const CARDS = ['2026-07', '2026-08', '2026-09'].map((m, i) => ({ id: `fp${i}`, pasto_id: 'p1', fazenda_id: 'f1', cliente_id: 'cli', ano_mes: m, status: 'fechado' }));
+  g.__bancoBancada = {
+    from: (t: string, e: { eq: Record<string, unknown> }) => (
+      t === 'valor_rebanho_realizado_validado' ? VAL.filter((r) => !e.eq.ano_mes || r.ano_mes === e.eq.ano_mes)
+      : t === 'valor_rebanho_fechamento' ? FECH.filter((r) => !e.eq.ano_mes || r.ano_mes === e.eq.ano_mes)
+      : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
+      : []),
+    rpc: () => null,
+  };
+  const montarValor = async () => {
+    const { ValorRebanhoTab } = await import('@/pages/ValorRebanhoTab');
+    montar(<ValorRebanhoTab lancamentos={[]} saldosIniciais={[]} filtroAnoInicial="2026" filtroMesInicial={9} />);
+  };
+  void montarValor();
+} else if (tela === 'lotes') {
+  /* LOTES-03 F1 — Produção › Lotes (a tela REAL), dado SINTÉTICO (dados/lotes.ts): a lista, o assistente "+ Novo lote" e a ficha.
+     `&v=vazio` = a fazenda sem nenhum lote */
+  const FAZ = { id: 'f1', nome: 'Faz. Pureza Sintética', codigo: 'PUR', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  g.__bancoBancada = LOTES_BANCADA.bancoDeLotes(v === 'vazio');
+  const montarLotes = async () => {
+    const { LotesTab } = await import('@/pages/LotesTab');
+    montar(<LotesTab />);
+  };
+  void montarLotes();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */
@@ -2126,7 +2225,7 @@ if (m === 'editar' && q.get('safra') === 'sem' && props.lancamento) props.lancam
 if (v === 'oc' || v === 'ocdesp') {
   const nat = v === 'oc' ? 'principal' : 'obrigacao';
   props.origemOC = { operacaoId: 'a1b2c3d4-0000-4000-8000-000000000000', versao: 8, natureza: nat, tipoOperacao: 'venda', rotulo: 'OC #a1b2c3d4 · Venda 140 Novilhas',
-    itens: [{ codigo: 'frete', nome: 'Frete' }], onVoltar: () => {}, aoLancar: async () => {} };
+    itens: [{ codigo: 'frete', nome: 'Frete' }], onVoltar: () => {}, aoLancar: async () => {}, dataDaEntrega: '2026-10-03' };
   props.lockedFields = [...(TRAVAS_DO_MODO_OC as any)[nat]];
   props.prefill = nat === 'principal'
     ? { fazenda_id: 'f-pur', tipo_operacao: '1-Entradas', status_transacao: 'programado', data_competencia: '2026-10-05', valor: 5000, descricao: 'Venda 140 Novilhas · Recebimento',

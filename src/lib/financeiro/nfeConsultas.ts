@@ -372,6 +372,18 @@ export async function registrarNaOperacao(operacao: string, criados: readonly st
     return null;
   } catch (e) { return falhou(e).motivo; }
 }
+/**
+ * NOTA-ATUALIZA-PREVISTO-01 (R3) — a PARTICIPAÇÃO % deste cliente na nota, guardada no documento anexado (a nota fica INTEIRA; a conferência
+ * documento × lançamento passa a comparar participação × nota). Só abaixo de 100. O desfazer da operação cancela o documento junto.
+ */
+export async function definirParticipacao(clienteId: string, documentos: readonly string[], participacaoPct: number): Promise<string | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { error } = await (supabase as any).rpc('fin_documento_participacao', { p_cliente: clienteId, p_documentos: documentos, p_participacao: participacaoPct });
+    if (error) { const r = recusaOuMotivo(error); return r.motivo; }
+    return null;
+  } catch (e) { return falhou(e).motivo; }
+}
 /** Desfazer a operação inteira (campos, junção, o que nasceu): o banco recusa se alguém mexeu depois, dizendo o quê. */
 export async function desfazerCompletar(operacao: string): Promise<string | null> {
   try {
@@ -407,4 +419,31 @@ export async function cancelarCriados(ids: readonly string[], porque: string): P
     } catch (e) { console.error('cancelarCriados', e); falhas += 1; }
   }
   return falhas;
+}
+
+/**
+ * NOTA-ATUALIZA-PREVISTO-01 (R3) — o HISTÓRICO da participação: os últimos lançamentos PAGOS deste fornecedor no cliente, cada um com o valor
+ * da nota anexada a ele (a de maior valor, viva). A sugestão do % sai daqui (`participacaoDoHistorico`), nunca da descrição. Falha = lista vazia
+ * (só não sugere: o padrão segue 100% e o operador escolhe).
+ */
+export async function historicoDaParticipacao(clienteId: string, fornecedorId: string): Promise<{ lancamentoCent: number; documentoCent: number }[]> {
+  try {
+    const { data: ls, error } = await supabase.from('financeiro_lancamentos_v2').select('id, valor')
+      .eq('cliente_id', clienteId).eq('favorecido_id', fornecedorId).eq('status_transacao', 'realizado').eq('cancelado', false)
+      .order('data_vencimento', { ascending: false }).limit(6);
+    if (error || !ls?.length) return [];
+    const ids = ls.flatMap((l) => (typeof l.id === 'string' ? [l.id] : []));
+    const { data: ds, error: e2 } = await supabase.from('financeiro_lancamento_documentos').select('lancamento_id, valor_documento')
+      .eq('cliente_id', clienteId).in('lancamento_id', ids).eq('cancelado', false).not('valor_documento', 'is', null);
+    if (e2) return [];
+    const doc = new Map<string, number>();
+    for (const d of ds ?? []) {
+      const v = Math.round(Number(d.valor_documento) * 100);
+      if (typeof d.lancamento_id === 'string' && v > 0) doc.set(d.lancamento_id, Math.max(doc.get(d.lancamento_id) ?? 0, v));
+    }
+    return ls.flatMap((l) => {
+      const dc = typeof l.id === 'string' ? doc.get(l.id) : undefined;
+      return dc ? [{ lancamentoCent: Math.round(Math.abs(Number(l.valor)) * 100), documentoCent: dc }] : [];
+    });
+  } catch (e) { console.error('historicoDaParticipacao', e); return []; }
 }

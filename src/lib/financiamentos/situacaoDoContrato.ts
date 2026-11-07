@@ -50,6 +50,8 @@ export interface ParcelaDoContrato {
   diverge: boolean;
   /** só com `p_detalhe`; nulo na leitura sem detalhe (o lote, os painéis) */
   detalhe: DetalheDaParcela | null;
+  /** FIN-PARCELA-VALOR-ZERO-01 — não paga e sem nada a pagar (o banco manda `sem_valor`): não vence. Ausente = falso. */
+  semValor?: boolean;
 }
 
 export interface CartoesDoContrato {
@@ -166,6 +168,7 @@ export function lerSituacaoDoContrato(dado: unknown): SituacaoDoContrato | null 
       id, numero: num(p.numero), dataVencimento: txt(p.data_vencimento), valorPrincipal: vp, valorJuros: vj, valorTotal: vt,
       situacao: sit, pagoEm: txt(p.pago_em), valorPago: vpg, lancamentoId: txt(p.lancamento_id), lancamentoJurosId: txt(p.lancamento_juros_id),
       fonte: p.fonte === 'parcela' ? 'parcela' : 'lancamento', diverge: p.diverge === true, detalhe,
+      semValor: p.sem_valor === true,
     });
   }
   const detalheDosCartoes = lerDetalheDosCartoes(c);
@@ -189,10 +192,15 @@ export function origemDaSituacao(p: ParcelaDoContrato): string {
 }
 export const MOTIVO_PARCELA_SEM_LANCAMENTO = 'Parcela sem lançamento no Financeiro.';
 
+/* FIN-PARCELA-VALOR-ZERO-01 (Gabriel 05/11/2026): a parcela de valor zero não vence — "sem pagamento", cinza, fora das pendências. */
+export const ROTULO_SEM_VALOR = 'sem pagamento';
+export const CLASSE_SEM_VALOR = 'bg-slate-100 text-slate-500';
+export const MOTIVO_SEM_VALOR = 'Parcela de valor zero: não há nada a pagar nela.';
+
 /* ── PARC-CADEIA-01 passo 4 — a parcela viva SEM lançamento vivo deixa de ser muda ─────────────────────────────────────── */
 
 /** Não paga e sem lançamento vivo: a situação que a tela escreve é "sem lançamento" (âmbar), com os dois gestos na linha. */
-export const semLancamento = (p: ParcelaDoContrato): boolean => p.lancamentoId === null && p.situacao !== 'paga';
+export const semLancamento = (p: ParcelaDoContrato): boolean => p.lancamentoId === null && p.situacao !== 'paga' && !p.semValor;
 export const ROTULO_SEM_LANCAMENTO = 'sem lançamento';
 export const CLASSE_SEM_LANCAMENTO = 'bg-amber-100 text-amber-800';
 
