@@ -828,7 +828,7 @@ const CENARIOS = [
   })(),
   /* LOTES-03 F1 — Produção › Lotes (`tela=lotes`, dado SINTÉTICO dados/lotes.ts): a lista (Ativos, Encerrados, a busca sem achado com o
      vazio dentro do quadro), o assistente "+ Novo lote" (passo 1 com os cartões, o "Cadastrar nova categoria", o passo 4 com os lotes da
-     combinação DF-NE-RC e o passo 5) e a ficha do DF-NE-RC-05 (Resumo e Histórico) */
+     combinação REC-DF-NE e o passo 5) e a ficha do REC-DF-NE-05 (Resumo e Histórico) */
   ...(() => {
     const URL = 'tela=lotes&barra=32';
     const T = TAMANHOS_DO_LOTES;
@@ -837,9 +837,9 @@ const CENARIOS = [
       await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await p.waitForTimeout(500); };
     const escolher = (re) => async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: re }).first().click(); await p.waitForTimeout(250);
       await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(450); };
-    const ateNumero = async (p) => { await novo(p); await escolher(/^DF/)(p); await escolher(/^NE/)(p); await escolher(/^RC/)(p);
+    const ateNumero = async (p) => { await novo(p); await escolher(/^REC/)(p); await escolher(/^DF/)(p); await escolher(/^NE/)(p);
       await p.locator('[data-testid="assistente-numero"]').waitFor(); await p.waitForTimeout(400); };
-    const ficha = async (p) => { await lista(p); await p.locator('[data-testid="linha-lote"]', { hasText: 'DF-NE-RC-05' }).first().click();
+    const ficha = async (p) => { await lista(p); await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click();
       await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await p.waitForTimeout(600); };
     return [
       { nome: 'lotes-lista', url: URL, tamanhos: T, antes: lista },
@@ -849,7 +849,16 @@ const CENARIOS = [
       { nome: 'lotes-assistente-categoria', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: novo },
       { nome: 'lotes-assistente-nova', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
         await p.locator('[data-testid="assistente-cadastrar-nova"]').click(); await p.locator('[data-testid="assistente-form"]').waitFor(); await p.waitForTimeout(400); } },
+      /* LOTE-SIGLA-EDITAR-01 — ✎ na categoria DF (em uso): sigla livre e a prévia "N lotes mudam: … → …" na linha dos botões */
+      { nome: 'lotes-assistente-sigla', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
+        await escolher(/^REC/)(p);
+        const c = p.locator('[data-testid="assistente-cartao"]', { hasText: /^DF/ }).first(); await c.hover();
+        await c.locator('[data-testid="assistente-editar-cadastro"]').click(); await p.locator('[data-testid="assistente-form"]').waitFor();
+        await p.locator('[data-testid="assistente-form-sigla"]').fill('DS'); await p.waitForTimeout(700); } },
       { nome: 'lotes-assistente-numero', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: ateNumero },
+      /* LOTES-04 — o nº digitado: um ocupado (05 é do REC-DF-NE-05: a frase de recusa no lugar da dica) */
+      { nome: 'lotes-assistente-numero-ocupado', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
+        await p.locator('[data-testid="assistente-numero-editar"]').fill('5'); await p.waitForTimeout(300); } },
       { nome: 'lotes-assistente-perfil', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
         await p.locator('[data-testid="assistente-avancar"]').click(); await p.locator('[data-testid="assistente-perfil"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'lotes-ficha-resumo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: ficha },

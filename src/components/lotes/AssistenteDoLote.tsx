@@ -1,7 +1,8 @@
 /**
  * LOTES-03 F1 — o assistente "+ Novo lote" (e "Editar identidade"), igual ao mock lotes-03-assistente.html (Gabriel 06/11 15:45):
  * Categoria → Raça → Atividade → Nº automático → Perfil e metas (opcional). Trilho à esquerda com o código CAT-RAÇA-ATIV-NN montando;
- * cartões do CADASTRO DO CLIENTE (nada de lista fixa) com busca, "Cadastrar nova…", ✎ editar (sigla travada se algum lote usa) e
+ * cartões do CADASTRO DO CLIENTE (nada de lista fixa) com busca, "Cadastrar nova…", ✎ editar (sigla em uso muda: os códigos mudam junto,
+ * LOTE-SIGLA-EDITAR-01, com a prévia no bloco) e
  * Desfazer logo depois de cadastrar. Modal de ALTURA FIXA, fundo cinza com blocos brancos, botões sempre no mesmo lugar; Esc fecha,
  * Enter e duplo clique avançam.
  * Grava só pelo banco: `fn_lote_cadastro_salvar` (cadastros) e `fn_lote_salvar` (o lote). Cabeça, peso, GMD e pasto não se digitam aqui.
@@ -19,10 +20,10 @@ import { cn } from '@/lib/utils';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { notificarLotesMudaram } from '@/hooks/useLotesDaFazenda';
 import { useCadastrosDoLote, fraseDoErro, type CadastroParaSalvar } from '@/hooks/useCadastrosDoLote';
-import type { CadastroDoLote, LoteDaLista, TipoDoCadastro } from '@/lib/lotes/tipos';
+import type { CadastroDoLote, LoteDaLista, TipoDoCadastro, TrocaDeCodigo } from '@/lib/lotes/tipos';
 import {
-  PASSOS, aceitaCarimbo, camposParaSalvar, codigoMontando, escolhidoNoPasso, filtrarCadastros, lotesDaCombinacao, lotesQueUsam,
-  mesmaCombinacao, nomeDe, perfilInicial, podeAvancar, siglaDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarPerfil,
+  PASSOS, aceitaCarimbo, camposParaSalvar, codigoMontando, escolhidoNoPasso, filtrarCadastros, fraseCurtaDaTroca, fraseDaTroca, lotesDaCombinacao, lotesQueUsam,
+  mesmaCombinacao, nomeDe, perfilInicial, podeAvancar, siglaDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarNumero, validarPerfil,
   type Escolha, type ErroNoCampo, type Perfil,
 } from '@/lib/lotes/assistente';
 
@@ -41,11 +42,14 @@ export const FRASE_ERRO_NUMERO = 'Não consegui ler o próximo número. Feche e 
 export const FRASE_ERRO_SALVAR = 'Não consegui gravar o lote. Tente de novo.';
 
 type TipoDeCartao = 'categoria' | 'raca' | 'atividade';
-const TIPO_DO_PASSO: Record<number, TipoDeCartao> = { 0: 'categoria', 1: 'raca', 2: 'atividade' };
+/* LOTES-04 — os passos na ordem do código: atividade · categoria · raça */
+const TIPO_DO_PASSO: Record<number, TipoDeCartao> = { 0: 'atividade', 1: 'categoria', 2: 'raca' };
 const COISA: Record<TipoDoCadastro, string> = { categoria: 'categoria', raca: 'raça', atividade: 'atividade', sistema: 'sistema', programa: 'programa', destino: 'destino' };
 
 /** O formulário do "Cadastrar nova…" / ✎ (no lugar dos cartões ou do passo 5). */
-interface FormDoCadastro { tipo: TipoDoCadastro; id: string | null; sigla: string; nome: string; categorias: string[]; usos: number }
+interface FormDoCadastro { tipo: TipoDoCadastro; id: string | null; sigla: string; siglaDeHoje: string; nome: string; categorias: string[]; usos: number }
+/** A prévia da troca de sigla em uso (do banco, `p_simular`): para qual sigla e os lotes que mudam de código. */
+interface PreviaDaSigla { sigla: string; trocas: TrocaDeCodigo[] }
 /** O aviso do topo (não empurra nada): o Desfazer depois de cadastrar, ou a recusa do banco. */
 interface Aviso { texto: string; erro: boolean; desfazer?: () => void }
 
@@ -53,7 +57,7 @@ const escolhaVazia: Escolha = { categoriaId: null, racaId: null, atividadeId: nu
 
 export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lotesDaFazenda, editar, onFechar, onPronto }: PropsDoAssistente) {
   const hoje = hojeLocal();
-  const { cadastros, categoriasDoRebanho, erro: erroDosCadastros, salvarCadastro } = useCadastrosDoLote(open ? clienteId : null);
+  const { cadastros, categoriasDoRebanho, erro: erroDosCadastros, salvarCadastro, simularCadastro } = useCadastrosDoLote(open ? clienteId : null);
   const [passo, setPasso] = useState(0);
   const [escolha, setEscolha] = useState<Escolha>(escolhaVazia);
   const [perfil, setPerfil] = useState<Perfil>(() => perfilInicial(hoje, editar));
@@ -63,13 +67,19 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
   const [erroDoPerfil, setErroDoPerfil] = useState<{ campo: keyof Perfil; mensagem: string } | null>(null);
   const [aviso, setAviso] = useState<Aviso | null>(null);
   const [proximo, setProximo] = useState<number | null>(null);
+  /* LOTES-04 — o nº digitado no passo 4 ('' = o automático) */
+  const [numeroDigitado, setNumeroDigitado] = useState('');
   const [gravando, setGravando] = useState(false);
+  const [previa, setPrevia] = useState<PreviaDaSigla | null>(null);
+  /* o código do lote em edição depois de uma troca de sigla (o `editar` que veio da lista é o de antes) */
+  const [codigoDoEditado, setCodigoDoEditado] = useState<string | null>(null);
   const buscaRef = useRef<HTMLInputElement>(null);
 
   /* abrir = começar do zero (ou da identidade do lote, na edição) */
   useEffect(() => {
     if (!open) return;
-    setPasso(0); setBusca(''); setForm(null); setAviso(null); setErroDoForm(null); setErroDoPerfil(null); setGravando(false);
+    setPasso(0); setBusca(''); setForm(null); setAviso(null); setErroDoForm(null); setErroDoPerfil(null); setGravando(false); setPrevia(null);
+    setCodigoDoEditado(null); setNumeroDigitado('');
     setEscolha(editar ? { categoriaId: editar.categoriaId, racaId: editar.racaId, atividadeId: editar.atividadeId } : escolhaVazia);
     setPerfil(perfilInicial(hoje, editar));
   }, [open, editar, hoje]);
@@ -97,6 +107,13 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
     return () => { vivo = false; };
   }, [open, completa, mesma, editar, fazendaId, escolha.categoriaId, escolha.racaId, escolha.atividadeId]);
 
+  /* trocou a combinação: o nº volta a ser o automático */
+  useEffect(() => { setNumeroDigitado(''); }, [escolha.categoriaId, escolha.racaId, escolha.atividadeId]);
+  const daCombinacao = useMemo(() => lotesDaCombinacao(lotesDaFazenda, escolha), [lotesDaFazenda, escolha]);
+  const erroDoNumero = validarNumero(numeroDigitado, daCombinacao, editar?.id ?? null);
+  const numeroEscolhido = numeroDigitado && !erroDoNumero ? Number(numeroDigitado) : null;
+  const numero = numeroEscolhido ?? proximo;
+
   const alcancavel = ultimoPassoAlcancavel(escolha);
   const tipoDoPasso = TIPO_DO_PASSO[passo];
   const opcoes = useMemo(() => (tipoDoPasso ? filtrarCadastros(cadastros, tipoDoPasso, busca) : []), [cadastros, tipoDoPasso, busca]);
@@ -117,8 +134,8 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
   const gravarLote = useCallback(async () => {
     const erroP = validarPerfil(perfil, hoje);
     if (erroP) { setErroDoPerfil(erroP); return; }
-    const campos = camposParaSalvar(escolha, perfil, editar);
-    if (editar && Object.keys(campos).length === 0) { onPronto({ id: editar.id, codigo: editar.codigo, codigoAntigo: null }); return; }
+    const campos = camposParaSalvar(escolha, perfil, editar, numeroEscolhido);
+    if (editar && Object.keys(campos).length === 0) { onPronto({ id: editar.id, codigo: codigoDoEditado ?? editar.codigo, codigoAntigo: null }); return; }
     setGravando(true);
     const { data, error } = await (supabase as any).rpc('fn_lote_salvar', editar
       ? { p_id: editar.id, p_fazenda: null, p_campos: campos, p_versao: editar.versao, p_motivo: null, p_simular: false }
@@ -135,12 +152,12 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
     if (typeof id !== 'string' || typeof codigo !== 'string') { setAviso({ texto: FRASE_ERRO_SALVAR, erro: true }); return; }
     notificarLotesMudaram(fazendaId);
     onPronto({ id, codigo, codigoAntigo: typeof antigo === 'string' ? antigo : null });
-  }, [perfil, hoje, escolha, editar, fazendaId, onPronto]);
+  }, [perfil, hoje, escolha, editar, numeroEscolhido, codigoDoEditado, fazendaId, onPronto]);
 
   const avancar = () => {
     if (form || gravando) return;
     if (!podeAvancar(escolha, passo)) return;
-    if (passo === 3 && proximo == null) return;
+    if (passo === 3 && (proximo == null || erroDoNumero)) return;
     if (!ultimo) { irPara(passo + 1); return; }
     void gravarLote();
   };
@@ -150,8 +167,34 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
     setErroDoForm(null);
     const termo = busca.trim();
     setForm(c
-      ? { tipo, id: c.id, sigla: c.sigla ?? '', nome: c.nome, categorias: [...c.categoriasRebanho], usos: lotesQueUsam(lotesDaFazenda, c, false) }
-      : { tipo, id: null, sigla: termo.length <= 3 ? siglaDigitada(termo) : '', nome: termo.length > 3 ? termo : '', categorias: [], usos: 0 });
+      ? { tipo, id: c.id, sigla: c.sigla ?? '', siglaDeHoje: c.sigla ?? '', nome: c.nome, categorias: [...c.categoriasRebanho], usos: lotesQueUsam(lotesDaFazenda, c, false) }
+      : { tipo, id: null, sigla: termo.length <= 3 ? siglaDigitada(termo) : '', siglaDeHoje: '', nome: termo.length > 3 ? termo : '', categorias: [], usos: 0 });
+  };
+
+  /* LOTE-SIGLA-EDITAR-01 — trocar a sigla de um cadastro que já existe: o banco diz (sem gravar) quais lotes mudam de código.
+     Vai com o nome e as categorias de hoje: a prévia mede só a sigla (o erro do nome aparece ao salvar, no campo dele). */
+  const siglaQueMuda = form && form.id && form.sigla !== form.siglaDeHoje && /^[A-Z0-9]{2,3}$/.test(form.sigla) ? form.sigla : null;
+  const cadastroDoForm = form?.id ? cadastros.find(c => c.id === form.id) ?? null : null;
+  useEffect(() => {
+    if (!siglaQueMuda || !cadastroDoForm) { setPrevia(null); return; }
+    let vivo = true;
+    const t = setTimeout(() => {
+      void simularCadastro({ tipo: cadastroDoForm.tipo, id: cadastroDoForm.id, sigla: siglaQueMuda, nome: cadastroDoForm.nome,
+        categorias: cadastroDoForm.categoriasRebanho, ativo: true }).then(r => {
+        if (!vivo) return;
+        if (r.ok) setPrevia({ sigla: siglaQueMuda, trocas: r.trocas });
+        else setErroDoForm({ campo: 'sigla', mensagem: r.mensagem });
+      });
+    }, 250);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [siglaQueMuda, cadastroDoForm, simularCadastro]);
+
+  /* depois de gravar uma troca: a lista relê e o cabeçalho mostra o código novo do lote em edição */
+  const aplicarTrocas = (trocas: readonly TrocaDeCodigo[]) => {
+    if (trocas.length === 0) return;
+    notificarLotesMudaram(fazendaId);
+    const minha = editar ? trocas.find(t => t.id === editar.id) : undefined;
+    if (minha) setCodigoDoEditado(minha.depois);
   };
 
   const gravarForm = async () => {
@@ -174,12 +217,15 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
         desescolher(form.tipo, r.id); setAviso(null);
       } });
     } else {
-      setAviso({ texto: `${rotulo} salva`, erro: false, desfazer: async () => {
+      aplicarTrocas(r.trocas);
+      const n = r.trocas.length;
+      setAviso({ texto: n ? `${rotulo} salva · ${n} lote${n > 1 ? 's mudaram' : ' mudou'} de código` : `${rotulo} salva`, erro: false, desfazer: async () => {
         const d = await salvarCadastro({ tipo: antes.tipo, id: antes.id, sigla: antes.sigla, nome: antes.nome, categorias: antes.categoriasRebanho, ativo: true });
+        if (d.ok) aplicarTrocas(d.trocas);
         setAviso(d.ok ? null : { texto: d.mensagem, erro: true });
       } });
     }
-    setForm(null); setBusca('');
+    setForm(null); setBusca(''); setPrevia(null);
   };
 
   const escolherDoForm = (tipo: TipoDoCadastro, id: string) => {
@@ -210,7 +256,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
     avancar();
   };
 
-  const codigo = codigoMontando(cadastros, escolha, proximo);
+  const codigo = codigoMontando(cadastros, escolha, numero);
   const passoAtual = PASSOS[passo];
   const dica = form ? '' : passo < 3 ? 'Clique para escolher · duplo clique ou Enter avança' : passo === 3 ? 'Confira o código antes de seguir'
     : editar ? 'Salvar grava a nova identidade; o código antigo fica no histórico' : 'Pode criar agora e preencher o resto na ficha';
@@ -223,7 +269,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
         className="flex h-[min(548px,calc(100vh-16px))] w-[min(900px,calc(100vw-20px))] max-w-none flex-col gap-0 overflow-hidden bg-[#e4e8ee] p-0 [&>button:last-child]:text-white">
         {/* cabeçalho navy */}
         <div className="flex h-[42px] flex-none items-center gap-2.5 whitespace-nowrap bg-primary px-3.5 pr-12 text-primary-foreground">
-          <DialogTitle className="text-[13.5px] font-semibold leading-none">{editar ? `Editar identidade · ${editar.codigo}` : 'Novo lote'}</DialogTitle>
+          <DialogTitle className="text-[13.5px] font-semibold leading-none">{editar ? `Editar identidade · ${codigoDoEditado ?? editar.codigo}` : 'Novo lote'}</DialogTitle>
           <DialogDescription className="text-[11px] text-primary-foreground/80" data-testid="assistente-fazenda">Fazenda {fazendaRotulo}</DialogDescription>
         </div>
 
@@ -242,7 +288,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
           <div className="flex min-h-0 flex-col rounded-lg border border-[#d3d9e2] bg-white p-2.5" data-testid="assistente-trilho">
             {PASSOS.map((s, i) => {
               const feito = i !== passo && (i < 3 ? escolhidoNoPasso(escolha, s.chave) != null : i === 3 ? completa : !!(perfil.sistemaId || perfil.programaId || perfil.destinoId));
-              const valor = valorDoPasso(i, cadastros, escolha, proximo, perfil, mesma);
+              const valor = valorDoPasso(i, cadastros, escolha, numero, perfil, mesma && numeroEscolhido == null, numeroEscolhido != null);
               return (
                 <button key={s.chave} type="button" disabled={i > alcancavel || !!form} onClick={() => irPara(i)} data-testid={`assistente-passo-${i}`}
                   className={cn('mb-0.5 grid grid-cols-[22px_minmax(0,1fr)] items-center gap-x-2 rounded-md px-1.5 py-1.5 text-left disabled:cursor-default',
@@ -285,7 +331,8 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
 
             {form ? (
               <FormularioDoCadastro form={form} erro={erroDoForm} categoriasDoRebanho={categoriasDoRebanho}
-                onMudar={f => { setForm(f); setErroDoForm(null); }} onCancelar={() => { setForm(null); setErroDoForm(null); }} onGravar={() => void gravarForm()} />
+                previa={previa && previa.sigla === form.sigla ? previa.trocas : null}
+                onMudar={f => { setForm(f); setErroDoForm(null); }} onCancelar={() => { setForm(null); setErroDoForm(null); setPrevia(null); }} onGravar={() => void gravarForm()} />
             ) : tipoDoPasso ? (
               <>
                 <div className="mb-2 flex h-[26px] items-center gap-2">
@@ -332,7 +379,8 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
                 </div>
               </>
             ) : passo === 3 ? (
-              <PassoDoNumero escolha={escolha} cadastros={cadastros} lotesDaFazenda={lotesDaFazenda} proximo={proximo} mesma={mesma}
+              <PassoDoNumero escolha={escolha} cadastros={cadastros} existentes={daCombinacao} proximo={proximo} mesma={mesma}
+                numeroDigitado={numeroDigitado} erroDoNumero={erroDoNumero} onNumero={setNumeroDigitado}
                 fazendaRotulo={fazendaRotulo} perfil={perfil} erro={erroDoPerfil} onPerfil={p => { setPerfil(p); setErroDoPerfil(null); }} hoje={hoje} />
             ) : (
               <PassoDoPerfil cadastros={cadastros} perfil={perfil} comCarimbo={comCarimbo} erro={erroDoPerfil}
@@ -349,7 +397,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
             <Button variant="outline" size="sm" className="h-[30px] min-w-[92px] text-[11.5px]" disabled={passo === 0 || !!form} onClick={() => irPara(passo - 1)}
               data-testid="assistente-voltar">‹ Voltar</Button>
             <Button size="sm" className="h-[30px] min-w-[92px] text-[11.5px]" data-testid="assistente-avancar"
-              disabled={!!form || gravando || !podeAvancar(escolha, passo) || (passo === 3 && proximo == null)} onClick={avancar}>
+              disabled={!!form || gravando || !podeAvancar(escolha, passo) || (passo === 3 && (proximo == null || !!erroDoNumero))} onClick={avancar}>
               {ultimo ? (editar ? 'Salvar' : 'Criar lote') : 'Avançar ›'}
             </Button>
           </div>
@@ -360,12 +408,14 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
 }
 
 /** O que o trilho escreve embaixo de cada passo. */
-function valorDoPasso(i: number, cadastros: readonly CadastroDoLote[], e: Escolha, proximo: number | null, p: Perfil, mesma: boolean): string | null {
+function valorDoPasso(i: number, cadastros: readonly CadastroDoLote[], e: Escolha, proximo: number | null, p: Perfil, mesma: boolean,
+  digitado: boolean): string | null {
   const parte = (id: string | null) => (id ? `${siglaDe(cadastros, id) ?? ''} · ${nomeDe(cadastros, id) ?? ''}` : null);
-  if (i === 0) return parte(e.categoriaId);
-  if (i === 1) return parte(e.racaId);
-  if (i === 2) return parte(e.atividadeId);
-  if (i === 3) return e.categoriaId && e.racaId && e.atividadeId && proximo != null ? `nº ${String(proximo).padStart(2, '0')} · ${mesma ? 'o mesmo' : 'automático'}` : null;
+  if (i === 0) return parte(e.atividadeId);
+  if (i === 1) return parte(e.categoriaId);
+  if (i === 2) return parte(e.racaId);
+  if (i === 3) return e.categoriaId && e.racaId && e.atividadeId && proximo != null
+    ? `nº ${String(proximo).padStart(2, '0')} · ${digitado ? 'digitado' : mesma ? 'o mesmo' : 'automático'}` : null;
   const partes = [nomeDe(cadastros, p.sistemaId), nomeDe(cadastros, p.programaId), nomeDe(cadastros, p.destinoId)].filter((x): x is string => !!x);
   return partes.length ? partes.join(' · ') : null;
 }
@@ -378,25 +428,26 @@ function Nota({ erro, children }: { erro?: string | null; children?: string }) {
   return <div className={cn('mt-0.5 h-[13px] truncate whitespace-nowrap text-[9.5px]', erro ? 'text-destructive' : 'text-muted-foreground')} title={erro ?? children}>{erro ?? children}</div>;
 }
 
-function FormularioDoCadastro({ form, erro, categoriasDoRebanho, onMudar, onCancelar, onGravar }: {
-  form: FormDoCadastro; erro: ErroNoCampo | null; categoriasDoRebanho: { id: string; nome: string }[];
+function FormularioDoCadastro({ form, erro, categoriasDoRebanho, previa, onMudar, onCancelar, onGravar }: {
+  form: FormDoCadastro; erro: ErroNoCampo | null; categoriasDoRebanho: { id: string; nome: string }[]; previa: TrocaDeCodigo[] | null;
   onMudar(f: FormDoCadastro): void; onCancelar(): void; onGravar(): void;
 }) {
   const comSigla = form.tipo === 'categoria' || form.tipo === 'raca' || form.tipo === 'atividade';
   const coisa = COISA[form.tipo];
-  const travada = !!form.id && form.usos > 0;
+  const fraseDaPrevia = previa ? fraseCurtaDaTroca(previa) || 'Nenhum lote muda de código.' : '';
+  const previaInteira = previa ? fraseDaTroca(previa) : '';
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-lg border-[1.5px] border-dashed border-[#b8c3d3] bg-[#fbfcfe] px-3.5 py-3" data-testid="assistente-form">
       <h3 className="m-0 mb-0.5 text-[12.5px] font-semibold text-[#0b1f3a]">{form.id ? `Editar ${coisa} · ${form.sigla || form.nome}` : `Nova ${coisa}`}</h3>
       <div className="mb-2.5 text-[10.5px] text-muted-foreground">
-        {form.id ? (travada ? `A sigla está travada: ${form.usos} lote${form.usos > 1 ? 's usam' : ' usa'} ${form.sigla} no código. O nome pode mudar.` : 'Nenhum lote usa este cadastro: dá para mudar a sigla e o nome.')
+        {form.id ? (comSigla ? 'Sigla e nome mudam. Os códigos dos lotes mudam junto.' : 'O nome muda em todos os lotes.')
           : 'Entra no cadastro do cliente e já fica escolhida neste lote. Dá para desfazer logo depois.'}
       </div>
       <div className={cn('grid max-w-[520px] gap-x-3 gap-y-2.5', comSigla ? 'grid-cols-[100px_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]')}>
         {comSigla && (
           <div>
             <Rotulo>Sigla</Rotulo>
-            <Input value={form.sigla} maxLength={3} disabled={travada} autoFocus={!travada} data-testid="assistente-form-sigla"
+            <Input value={form.sigla} maxLength={3} autoFocus data-testid="assistente-form-sigla"
               onChange={e => onMudar({ ...form, sigla: siglaDigitada(e.target.value) })}
               className={cn('h-[27px] text-[11.5px] font-bold', erro?.campo === 'sigla' && 'border-destructive')} />
             <Nota erro={erro?.campo === 'sigla' ? erro.mensagem : null}>2 ou 3 letras</Nota>
@@ -404,7 +455,7 @@ function FormularioDoCadastro({ form, erro, categoriasDoRebanho, onMudar, onCanc
         )}
         <div>
           <Rotulo>Nome</Rotulo>
-          <Input value={form.nome} maxLength={32} autoFocus={travada || !comSigla} data-testid="assistente-form-nome"
+          <Input value={form.nome} maxLength={32} autoFocus={!comSigla} data-testid="assistente-form-nome"
             onChange={e => onMudar({ ...form, nome: e.target.value })}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onGravar(); } }}
             className={cn('h-[27px] text-[11.5px]', erro?.campo === 'nome' && 'border-destructive')} />
@@ -429,7 +480,10 @@ function FormularioDoCadastro({ form, erro, categoriasDoRebanho, onMudar, onCanc
           </div>
         )}
       </div>
-      <div className="mt-auto flex justify-end gap-2">
+      <div className="mt-auto flex items-center justify-end gap-2">
+        <span className="mr-auto min-w-0 whitespace-nowrap text-[11px] text-[#24508f]" data-testid="assistente-form-previa" title={previaInteira || undefined}>
+          {fraseDaPrevia}
+        </span>
         <Button variant="outline" size="sm" className="h-[27px] text-[11.5px]" onClick={onCancelar} data-testid="assistente-form-cancelar">Cancelar</Button>
         <Button size="sm" className="h-[27px] text-[11.5px]" onClick={onGravar} data-testid="assistente-form-ok">{form.id ? 'Salvar' : 'Cadastrar e usar'}</Button>
       </div>
@@ -437,29 +491,41 @@ function FormularioDoCadastro({ form, erro, categoriasDoRebanho, onMudar, onCanc
   );
 }
 
-function PassoDoNumero({ escolha, cadastros, lotesDaFazenda, proximo, mesma, fazendaRotulo, perfil, erro, onPerfil, hoje }: {
-  escolha: Escolha; cadastros: readonly CadastroDoLote[]; lotesDaFazenda: readonly LoteDaLista[]; proximo: number | null; mesma: boolean;
+function PassoDoNumero({ escolha, cadastros, existentes, proximo, mesma, numeroDigitado, erroDoNumero, onNumero, fazendaRotulo, perfil, erro, onPerfil, hoje }: {
+  escolha: Escolha; cadastros: readonly CadastroDoLote[]; existentes: readonly LoteDaLista[]; proximo: number | null; mesma: boolean;
+  numeroDigitado: string; erroDoNumero: string | null; onNumero(v: string): void;
   fazendaRotulo: string; perfil: Perfil; erro: { campo: keyof Perfil; mensagem: string } | null; onPerfil(p: Perfil): void; hoje: string;
 }) {
   const nn = proximo == null ? '__' : String(proximo).padStart(2, '0');
-  const combo = `${siglaDe(cadastros, escolha.categoriaId)}-${siglaDe(cadastros, escolha.racaId)}-${siglaDe(cadastros, escolha.atividadeId)}`;
-  const existentes = lotesDaCombinacao(lotesDaFazenda, escolha);
-  const parte = (id: string | null, auto = false) => (
-    <div className={cn('min-w-[86px] rounded-lg border px-3 pb-[5px] pt-1.5 text-center', auto ? 'border-[#b9c9e0] bg-[#eef3fa]' : 'border-[#d3d9e2] bg-white')}>
-      <b className={cn('block text-[24px] font-extrabold leading-7', auto ? 'text-[#24508f]' : 'text-[#0b1f3a]')}>{auto ? nn : siglaDe(cadastros, id)}</b>
-      <span className="whitespace-nowrap text-[10px] text-muted-foreground">{auto ? (mesma ? 'o mesmo' : 'automático') : nomeDe(cadastros, id)}</span>
+  const digitado = numeroDigitado !== '';
+  const nnEscolhido = digitado && !erroDoNumero ? numeroDigitado.padStart(2, '0') : nn;
+  const combo = `${siglaDe(cadastros, escolha.atividadeId)}-${siglaDe(cadastros, escolha.categoriaId)}-${siglaDe(cadastros, escolha.racaId)}`;
+  const parte = (id: string | null) => (
+    <div className="min-w-[86px] rounded-lg border border-[#d3d9e2] bg-white px-3 pb-[5px] pt-1.5 text-center">
+      <b className="block text-[24px] font-extrabold leading-7 text-[#0b1f3a]">{siglaDe(cadastros, id)}</b>
+      <span className="whitespace-nowrap text-[10px] text-muted-foreground">{nomeDe(cadastros, id)}</span>
+    </div>
+  );
+  /* LOTES-04 — o nº se edita: digite outro (1 a 99, livre); vazio = o automático */
+  const caixaDoNumero = (
+    <div className={cn('w-[86px] rounded-lg border px-2 pb-[5px] pt-1.5 text-center', erroDoNumero ? 'border-destructive bg-white' : 'border-[#b9c9e0] bg-[#eef3fa]')}>
+      <Input value={numeroDigitado} placeholder={nn} inputMode="numeric" maxLength={2} aria-label="Número do lote" data-testid="assistente-numero-editar"
+        onChange={e => onNumero(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+        className="h-7 border-0 bg-transparent p-0 text-center text-[24px] font-extrabold leading-7 text-[#24508f] shadow-none placeholder:text-[#24508f] focus-visible:ring-0 focus-visible:ring-offset-0" />
+      <span className="whitespace-nowrap text-[10px] text-muted-foreground">{digitado ? 'digitado' : mesma ? 'o mesmo' : 'automático'}</span>
     </div>
   );
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="assistente-numero">
       <div className="mb-2.5 mt-0.5 flex items-stretch gap-1.5">
+        {parte(escolha.atividadeId)}<span className="self-center text-[22px] text-[#c2cad6]">-</span>
         {parte(escolha.categoriaId)}<span className="self-center text-[22px] text-[#c2cad6]">-</span>
         {parte(escolha.racaId)}<span className="self-center text-[22px] text-[#c2cad6]">-</span>
-        {parte(escolha.atividadeId)}<span className="self-center text-[22px] text-[#c2cad6]">-</span>
-        {parte(null, true)}
+        {caixaDoNumero}
       </div>
-      <div className="mb-2 flex h-4 items-center gap-1.5 whitespace-nowrap text-[11px] text-[#4b5563]" data-testid="assistente-numero-info">
-        {mesma ? `Mesma combinação: o número ${nn} continua.`
+      <div className={cn('mb-2 flex h-4 items-center gap-1.5 truncate whitespace-nowrap text-[11px]', erroDoNumero ? 'text-destructive' : 'text-[#4b5563]')}
+        data-testid="assistente-numero-info" title={erroDoNumero ?? undefined}>
+        {erroDoNumero ? erroDoNumero : digitado ? `Nº ${nnEscolhido} digitado · apague para voltar ao automático (${nn}).` : mesma ? `Mesma combinação: o número ${nn} continua.`
           : existentes.length ? `Já existem ${existentes.length} lote${existentes.length > 1 ? 's' : ''} ${combo} na ${fazendaRotulo} · o próximo livre é ${nn}.`
             : `Primeiro lote ${combo} na ${fazendaRotulo} · começa em 01.`}
       </div>
@@ -486,9 +552,9 @@ function PassoDoNumero({ escolha, cadastros, lotesDaFazenda, proximo, mesma, faz
                     {l.situacao === 'ativo' ? 'Ativo' : 'Encerrado'}</span></td>
                 </tr>
               ))}
-              {!mesma && (
+              {(!mesma || digitado) && (
                 <tr className="h-[21px]">
-                  <td className="px-2 font-bold text-[#24508f]">{combo}-{nn}</td><td className="px-2 text-muted-foreground">este lote</td>
+                  <td className="px-2 font-bold text-[#24508f]">{combo}-{nnEscolhido}</td><td className="px-2 text-muted-foreground">este lote</td>
                   <td className="px-2 text-right text-muted-foreground">—</td><td className="px-2 text-muted-foreground">—</td>
                   <td className="px-2"><span className="rounded bg-[#e3edfb] px-1.5 py-px text-[9.5px] font-semibold text-[#24508f]">Novo</span></td>
                 </tr>

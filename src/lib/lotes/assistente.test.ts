@@ -1,8 +1,8 @@
 /** LOTES-03 F1 — a regra do assistente "+ Novo lote" (passos, código, contagem, busca, validação, o que vai ao banco). */
 import { describe, it, expect } from 'vitest';
 import {
-  aceitaCarimbo, camposParaSalvar, codigoMontando, filtrarCadastros, lotesDaCombinacao, lotesQueUsam, mesmaCombinacao, perfilInicial,
-  podeAvancar, safraDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarPerfil, type Escolha,
+  PASSOS, aceitaCarimbo, camposParaSalvar, codigoMontando, filtrarCadastros, fraseCurtaDaTroca, fraseDaTroca, lotesDaCombinacao, lotesQueUsam, mesmaCombinacao, perfilInicial,
+  podeAvancar, safraDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarNumero, validarPerfil, type Escolha,
 } from './assistente';
 import type { CadastroDoLote, LoteDaLista } from './tipos';
 
@@ -19,22 +19,47 @@ const lote = (id: string, categoriaId: string, racaId: string, atividadeId: stri
 const E = (c: string | null, r: string | null, a: string | null): Escolha => ({ categoriaId: c, racaId: r, atividadeId: a });
 
 describe('passos', () => {
-  it('só se chega ao passo seguinte com o anterior escolhido; com os três, o número e o perfil', () => {
+  it('LOTES-04: os passos na ordem do código (atividade, categoria, raça); com os três, o número e o perfil', () => {
+    expect(PASSOS.slice(0, 3).map(p => p.chave)).toEqual(['atividade', 'categoria', 'raca']);
     expect(ultimoPassoAlcancavel(E(null, null, null))).toBe(0);
-    expect(ultimoPassoAlcancavel(E('df', null, null))).toBe(1);
-    expect(ultimoPassoAlcancavel(E('df', 'ne', null))).toBe(2);
+    expect(ultimoPassoAlcancavel(E('df', null, null))).toBe(0);
+    expect(ultimoPassoAlcancavel(E(null, null, 'rc'))).toBe(1);
+    expect(ultimoPassoAlcancavel(E('df', null, 'rc'))).toBe(2);
     expect(ultimoPassoAlcancavel(E('df', 'ne', 'rc'))).toBe(4);
-    expect(podeAvancar(E('df', null, null), 1)).toBe(false);
-    expect(podeAvancar(E('df', 'ne', null), 1)).toBe(true);
+    expect(podeAvancar(E(null, null, 'rc'), 1)).toBe(false);
+    expect(podeAvancar(E('df', null, 'rc'), 1)).toBe(true);
     expect(podeAvancar(E('df', 'ne', 'rc'), 4)).toBe(true);
   });
 });
 
 describe('código montando', () => {
-  it('CAT-RAÇA-ATIV-NN com "__" no que falta; o número só com os três', () => {
-    expect(codigoMontando(CAD, E('df', null, null), 5)).toBe('DF-__-__-__');
-    expect(codigoMontando(CAD, E('df', 'ne', 'rc'), 5)).toBe('DF-NE-RC-05');
-    expect(codigoMontando(CAD, E('df', 'ne', 'rc'), null)).toBe('DF-NE-RC-__');
+  it('LOTES-04: ATIV-CAT-RAÇA-NN com "__" no que falta; o número só com os três', () => {
+    expect(codigoMontando(CAD, E(null, null, 'rc'), 5)).toBe('RC-__-__-__');
+    expect(codigoMontando(CAD, E('df', null, 'rc'), 5)).toBe('RC-DF-__-__');
+    expect(codigoMontando(CAD, E('df', 'ne', 'rc'), 5)).toBe('RC-DF-NE-05');
+    expect(codigoMontando(CAD, E('df', 'ne', 'rc'), null)).toBe('RC-DF-NE-__');
+  });
+  it('LOTES-04: o nº digitado — 1 a 99 e livre na combinação; vazio = automático; o próprio lote não conta', () => {
+    const L = [lote('a', 'df', 'ne', 'rc', 1), lote('b', 'df', 'ne', 'rc', 5)];
+    expect(validarNumero('', L, null)).toBeNull();
+    expect(validarNumero('7', L, null)).toBeNull();
+    expect(validarNumero('0', L, null)).toBe('O nº vai de 1 a 99.');
+    expect(validarNumero('5', L, null)).toBe('O nº 05 já é do lote X-5. Escolha outro.');
+    expect(validarNumero('5', L, 'b')).toBeNull();
+  });
+  it('LOTES-04: o nº vai ao banco só quando digitado (criar) ou diferente do lote (editar)', () => {
+    const p = perfilInicial('2026-11-06');
+    expect(camposParaSalvar(E('df', 'ne', 'rc'), p).numero).toBeUndefined();
+    expect(camposParaSalvar(E('df', 'ne', 'rc'), p, null, 7).numero).toBe(7);
+    const l = lote('l', 'df', 'ne', 'rc', 5);
+    expect(camposParaSalvar(E('df', 'ne', 'rc'), perfilInicial('2026-11-06', l), l, 5)).toEqual({});
+    expect(camposParaSalvar(E('df', 'ne', 'rc'), perfilInicial('2026-11-06', l), l, 8)).toEqual({ numero: 8 });
+    expect(camposParaSalvar(E('df', 'ch', 'rc'), perfilInicial('2026-11-06', l), l, 5)).toEqual({ raca_id: 'ch', numero: 5 });
+  });
+  it('carimbo: a atividade de cria aceita, CRI (LOTES-04) ou CR (antes)', () => {
+    const C = [cad('cri', 'atividade', 'CRI', 'Cria'), cad('rec', 'atividade', 'REC', 'Recria'), cad('df', 'categoria', 'DF', 'Desmama', ['r-desf'])];
+    expect(aceitaCarimbo(C, E('df', 'ne', 'cri'), [])).toBe(true);
+    expect(aceitaCarimbo(C, E('df', 'ne', 'rec'), [])).toBe(false);
   });
 });
 
@@ -99,5 +124,19 @@ describe('perfil', () => {
     const l = { ...lote('1', 'df', 'ne', 'rc', 5), nomeCampeiro: 'L05', safra: '26/27' };
     expect(camposParaSalvar(E('df', 'ne', 'rc'), perfilInicial('2026-11-06', l), l)).toEqual({});
     expect(camposParaSalvar(E('df', 'ne', 'cr'), { ...perfilInicial('2026-11-06', l), sistemaId: 'conf' }, l)).toEqual({ atividade_id: 'cr', sistema_id: 'conf' });
+  });
+});
+
+describe('LOTE-SIGLA-EDITAR-01 — a prévia da troca de sigla', () => {
+  it('uma linha: quantos lotes e cada código antes → depois; nenhum = vazio', () => {
+    expect(fraseDaTroca([{ id: 'a', antes: 'DES-ANG-CRI-01', depois: 'DF-ANG-CRI-01' }, { id: 'b', antes: 'DES-CZ-REC-01', depois: 'DF-CZ-REC-01' }]))
+      .toBe('2 lotes mudam: DES-ANG-CRI-01 → DF-ANG-CRI-01 · DES-CZ-REC-01 → DF-CZ-REC-01');
+    expect(fraseDaTroca([{ id: 'a', antes: 'DES-ANG-CRI-01', depois: 'DF-ANG-CRI-01' }])).toBe('1 lote muda: DES-ANG-CRI-01 → DF-ANG-CRI-01');
+    expect(fraseDaTroca([])).toBe('');
+    /* na linha dos botões, sem cortar: o 1º e "+N" */
+    expect(fraseCurtaDaTroca([{ id: 'a', antes: 'REC-DES-ANG-01', depois: 'REC-DF-ANG-01' }, { id: 'b', antes: 'REC-DES-CZ-01', depois: 'REC-DF-CZ-01' }]))
+      .toBe('2 lotes mudam: REC-DES-ANG-01 → REC-DF-ANG-01 · +1');
+    expect(fraseCurtaDaTroca([{ id: 'a', antes: 'X', depois: 'Y' }])).toBe('1 lote muda: X → Y');
+    expect(fraseCurtaDaTroca([])).toBe('');
   });
 });

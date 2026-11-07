@@ -2,14 +2,15 @@
 import { describe, it, expect } from 'vitest';
 import { ordenarPorColuna } from '@/hooks/useOrdenacaoTabela';
 import {
-  chaveDoCarimbo, colunasDosLotes, filtrarLotes, loteDaLinha, mapaDoCadastro, motivoDoDesfazer, mudancasDaTrilha, oQueDaTrilha,
+  antigosCurto, chaveDoCarimbo, colunasDosLotes, faseDaAtividade, filtrarLotes, fraseDoGrupo, gruposPorAtividade, loteDaLinha, mapaDoCadastro, motivoDoDesfazer, mudancasDaTrilha, oQueDaTrilha,
   textoDosPastos, totalDosLotes, trilhaDaLinha, type ColunaDosLotes,
 } from './lista';
 import type { CadastroDoLote, LoteDaLista } from './tipos';
 
 const cad = (id: string, tipo: CadastroDoLote['tipo'], sigla: string | null, nome: string): CadastroDoLote =>
   ({ id, tipo, sigla, nome, categoriasRebanho: [], ordem: 0, ativo: true });
-const CADASTROS = [cad('rc', 'atividade', 'RC', 'Recria'), cad('eg', 'atividade', 'EG', 'Engorda'), cad('sp', 'sistema', null, 'Pasto'),
+const CADASTROS = [cad('rc', 'atividade', 'RC', 'Recria'), cad('eg', 'atividade', 'EG', 'Engorda'), cad('cri', 'atividade', 'CRI', 'Cria'),
+  cad('dc', 'atividade', 'DC', 'Descarte'), cad('pp', 'programa', null, 'Precoce'), cad('ps', 'programa', null, 'Superprecoce'), cad('sp', 'sistema', null, 'Pasto'),
   cad('sc', 'sistema', null, 'Confinamento'), cad('df', 'categoria', 'DF', 'Desmama fêmea'), cad('ne', 'raca', 'NE', 'Nelore')];
 const NOMES = mapaDoCadastro(CADASTROS);
 
@@ -60,22 +61,40 @@ describe('filtrarLotes', () => {
 });
 
 describe('ordenação: todas as colunas', () => {
-  const lotes = [L({ id: 'a', codigo: 'DF-NE-RC-02', carimbo: '10.1', cabecas: 10, sistema_id: 'sp' }),
-    L({ id: 'b', codigo: 'DF-NE-RC-01', carimbo: '7.2', cabecas: null, sistema_id: 'sc' }), L({ id: 'c', codigo: 'DF-NE-RC-03', carimbo: null, cabecas: 99, sistema_id: null })];
+  const lotes = [L({ id: 'a', codigo: 'RC-DF-NE-02', cabecas: 10, programa_id: 'ps' }),
+    L({ id: 'b', codigo: 'RC-DF-NE-01', cabecas: null, programa_id: 'pp' }), L({ id: 'c', codigo: 'RC-DF-NE-03', cabecas: 99, programa_id: null })];
   const ordem = (c: ColunaDosLotes, d: 'asc' | 'desc') =>
     ordenarPorColuna(lotes, colunasDosLotes(NOMES).find(x => x.coluna === c), d).map(l => l.id);
-  it('as onze colunas existem', () => {
-    expect(colunasDosLotes(NOMES).map(c => c.coluna)).toEqual(['codigo', 'nome', 'atividade', 'sistema', 'programa', 'destino', 'carimbo', 'cab', 'peso', 'gmd', 'pasto']);
+  it('LOTES-04: as oito colunas do mock (Nome, Sistema, Destino e Carimbo ficam na ficha)', () => {
+    expect(colunasDosLotes(NOMES).map(c => c.coluna)).toEqual(['codigo', 'categoria', 'raca', 'programa', 'cab', 'peso', 'gmd', 'pasto']);
   });
-  it('código em texto; carimbo pelo mês e depois o lote (7.2 antes de 10.1); sem carimbo/cab. vai para o fim; sistema pelo NOME', () => {
+  it('código em texto; sem cab. vai para o fim; categoria e programa pelo NOME; carimbo pelo mês e depois o lote', () => {
     expect(ordem('codigo', 'asc')).toEqual(['b', 'a', 'c']);
-    expect(ordem('carimbo', 'asc')).toEqual(['b', 'a', 'c']);
     expect(ordem('cab', 'desc')).toEqual(['c', 'a', 'b']);
-    expect(ordem('sistema', 'asc')).toEqual(['b', 'a', 'c']);   // Confinamento < Pasto < (vazio)
+    expect(ordem('programa', 'asc')).toEqual(['b', 'a', 'c']);   // Precoce < Superprecoce < (vazio)
     expect(chaveDoCarimbo('7.2')).toBeLessThan(chaveDoCarimbo('10.1') ?? 0);
   });
   it('o pasto na célula: um = o nome; vários = "N pastos"', () => {
     expect([textoDosPastos([]), textoDosPastos(['T-B1']), textoDosPastos(['T-A2', 'T-A3', 'T-B6'])]).toEqual([null, 'T-B1', '3 pastos']);
+  });
+});
+
+describe('LOTES-04: a lista agrupada por atividade', () => {
+  it('grupos na ordem da fase (cria, recria, engorda, as outras pelo nome), a ordem de dentro preservada, subtotal lotes · cab', () => {
+    const lotes = [L({ id: 'e1', atividade_id: 'eg', cabecas: 10 }), L({ id: 'r2', atividade_id: 'rc', cabecas: 5 }), L({ id: 'd1', atividade_id: 'dc', cabecas: null }),
+      L({ id: 'r1', atividade_id: 'rc', cabecas: 7 }), L({ id: 'c1', atividade_id: 'cri', cabecas: 1204 })];
+    const g = gruposPorAtividade(lotes, NOMES);
+    expect(g.map(x => [x.nome, x.lotes.map(l => l.id)])).toEqual([['Cria', ['c1']], ['Recria', ['r2', 'r1']], ['Engorda', ['e1']], ['Descarte', ['d1']]]);
+    expect(g.map(x => fraseDoGrupo(x.total))).toEqual(['1 lote · 1.204 cab', '2 lotes · 12 cab', '1 lote · 10 cab', '1 lote']);
+    expect(faseDaAtividade('REC')).toBe(1);
+  });
+});
+
+describe('LOTES-04: os códigos antigos na ficha', () => {
+  it('o mais recente e "+N"; nenhum = "—"', () => {
+    expect(antigosCurto(['ENG-DF-NE-05', 'DF-NE-RC-05'])).toBe('DF-NE-RC-05 · +1');
+    expect(antigosCurto(['DES-ANG-CRI-01'])).toBe('DES-ANG-CRI-01');
+    expect(antigosCurto([])).toBe('—');
   });
 });
 

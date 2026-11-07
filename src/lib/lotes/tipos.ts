@@ -16,6 +16,9 @@ export interface CadastroDoLote {
   ativo: boolean;
 }
 
+/** LOTE-SIGLA-EDITAR-01 — um lote cujo código muda quando a sigla em uso muda (prévia e resposta de `fn_lote_cadastro_salvar`). */
+export interface TrocaDeCodigo { id: string; antes: string; depois: string }
+
 export type SituacaoDoLote = 'ativo' | 'encerrado' | 'cancelado';
 
 /** Uma linha de `fn_lotes_da_fazenda(p_fazenda, p_ano_mes)`. Os números do fechamento são nulos sem lançamento ("—"). */
@@ -73,8 +76,9 @@ export interface CamposDoLote {
   conferir?: string;
 }
 
-/** O código CAT-RAÇA-ATIV-NN (D5 hífen); parte ainda não escolhida = "__". */
+/** O código ATIV-CAT-RAÇA-NN (LOTES-04, Gabriel 07/11: começa pela atividade; D5 hífen); parte ainda não escolhida = "__".
+ *  Mesma ordem da `_fn_lote_codigo` (113200). */
 export function codigoDoLote(cat: string | null, raca: string | null, ativ: string | null, numero: number | null): string {
   const p = (s: string | null) => s ?? '__';
-  return `${p(cat)}-${p(raca)}-${p(ativ)}-${numero == null ? '__' : String(numero).padStart(2, '0')}`;
+  return `${p(ativ)}-${p(cat)}-${p(raca)}-${numero == null ? '__' : String(numero).padStart(2, '0')}`;
 }

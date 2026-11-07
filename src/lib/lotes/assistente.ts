@@ -5,7 +5,7 @@
  * campo antes de ir ao banco.
  */
 import { casaNaBusca } from '@/lib/texto/busca';
-import { codigoDoLote, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type TipoDoCadastro } from '@/lib/lotes/tipos';
+import { codigoDoLote, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type TipoDoCadastro, type TrocaDeCodigo } from '@/lib/lotes/tipos';
 
 export type ChaveDoPasso = 'categoria' | 'raca' | 'atividade' | 'numero' | 'perfil';
 
@@ -23,22 +23,22 @@ export interface PassoDoAssistente {
 }
 
 export const PASSOS: readonly PassoDoAssistente[] = [
+  { chave: 'atividade', titulo: 'Atividade', pergunta: 'Em que atividade o lote está?', coisa: 'atividade', cadastrarNova: 'Cadastrar nova atividade',
+    subtitulo: 'Fase de produção. Separa o custo e os indicadores por fase (cria, recria, engorda).',
+    ajuda: { oQueE: 'A 1ª parte do código do lote (a sigla).', porQue: 'O custo e os indicadores se separam por fase.',
+      comoFazer: 'Mudou de fase depois (ex.: recria → engorda)? Edite a identidade na ficha: o código muda e o antigo fica no histórico.' } },
   { chave: 'categoria', titulo: 'Categoria', pergunta: 'Qual é a categoria do lote?', coisa: 'categoria', cadastrarNova: 'Cadastrar nova categoria',
     subtitulo: 'Quem forma o lote. Define quais categorias do rebanho podem ser lançadas nele.',
-    ajuda: { oQueE: 'A 1ª parte do código do lote (a sigla).', porQue: 'Diz quem forma o lote e quais categorias do rebanho entram nele.',
+    ajuda: { oQueE: 'A 2ª parte do código do lote.', porQue: 'Diz quem forma o lote e quais categorias do rebanho entram nele.',
       comoFazer: 'Escolha um cartão. A lista vem do cadastro do cliente: cadastre a que faltar em “Cadastrar nova categoria”.' } },
   { chave: 'raca', titulo: 'Raça', pergunta: 'Qual é a raça?', coisa: 'raça', cadastrarNova: 'Cadastrar nova raça',
     subtitulo: 'Raça predominante do lote. Lote cruzado: use Mestiço ou cadastre a sigla do cruzamento.',
-    ajuda: { oQueE: 'A 2ª parte do código do lote.', porQue: 'Separa os lotes da mesma categoria pela raça.',
+    ajuda: { oQueE: 'A 3ª parte do código do lote.', porQue: 'Separa os lotes da mesma categoria pela raça.',
       comoFazer: 'Escolha um cartão ou cadastre a raça que faltar.' } },
-  { chave: 'atividade', titulo: 'Atividade', pergunta: 'Em que atividade o lote está?', coisa: 'atividade', cadastrarNova: 'Cadastrar nova atividade',
-    subtitulo: 'Fase de produção. Separa o custo e os indicadores por fase (cria, recria, engorda).',
-    ajuda: { oQueE: 'A 3ª parte do código do lote.', porQue: 'O custo e os indicadores se separam por fase.',
-      comoFazer: 'Mudou de fase depois (ex.: recria → engorda)? Edite a identidade na ficha: o código muda e o antigo fica no histórico.' } },
   { chave: 'numero', titulo: 'Número', pergunta: 'Número do lote',
-    subtitulo: 'Sai sozinho: o próximo livre desta combinação na fazenda.',
-    ajuda: { oQueE: 'A 4ª parte do código.', porQue: 'Contado por fazenda e por combinação categoria · raça · atividade; número de lote encerrado não volta, para o histórico não confundir.',
-      comoFazer: 'Confira o código e os lotes que já existem nesta combinação. O nome do campeiro é opcional.' } },
+    subtitulo: 'Sai sozinho: o próximo livre desta combinação na fazenda. Dá para trocar.',
+    ajuda: { oQueE: 'A 4ª parte do código.', porQue: 'Contado por fazenda e por combinação atividade · categoria · raça; número de lote encerrado não volta, para o histórico não confundir.',
+      comoFazer: 'Confira o código e os lotes que já existem nesta combinação. Para outro número, digite no quadro do nº (1 a 99, livre). O nome do campeiro é opcional.' } },
   { chave: 'perfil', titulo: 'Perfil e metas', pergunta: 'Perfil e metas', opcional: true,
     subtitulo: 'Para montar a estratégia do lote. Pode pular e preencher depois na ficha.',
     ajuda: { oQueE: 'Sistema, programa, destino, safra, carimbo e metas.', porQue: 'Orientam o plano nutricional, a sanidade, a estação de monta e a escala de abates.',
@@ -58,11 +58,11 @@ export function escolhidoNoPasso(e: Escolha, passo: ChaveDoPasso): string | null
   return passo === 'categoria' || passo === 'raca' || passo === 'atividade' ? e[PARTE[passo]] : null;
 }
 
-/** O passo mais adiante que se pode abrir: os 3 de cartão em ordem; com os 3, o número e o perfil. */
+/** O passo mais adiante que se pode abrir: os 3 de cartão na ordem do código (atividade, categoria, raça); com os 3, o número e o perfil. */
 export function ultimoPassoAlcancavel(e: Escolha): number {
-  if (!e.categoriaId) return 0;
-  if (!e.racaId) return 1;
-  if (!e.atividadeId) return 2;
+  if (!e.atividadeId) return 0;
+  if (!e.categoriaId) return 1;
+  if (!e.racaId) return 2;
   return 4;
 }
 
@@ -77,7 +77,7 @@ export const siglaDe = (cadastros: readonly CadastroDoLote[], id: string | null)
 export const nomeDe = (cadastros: readonly CadastroDoLote[], id: string | null): string | null =>
   (id ? cadastros.find(c => c.id === id)?.nome ?? null : null);
 
-/** O código no trilho: "DF-NE-__-__" enquanto falta parte. */
+/** O código no trilho: "REC-DF-__-__" enquanto falta parte. */
 export function codigoMontando(cadastros: readonly CadastroDoLote[], e: Escolha, numero: number | null): string {
   const completo = e.categoriaId && e.racaId && e.atividadeId;
   return codigoDoLote(siglaDe(cadastros, e.categoriaId), siglaDe(cadastros, e.racaId), siglaDe(cadastros, e.atividadeId), completo ? numero : null);
@@ -112,6 +112,20 @@ export function mesmaCombinacao(editar: LoteDaLista | null | undefined, e: Escol
 
 /** A sigla como se digita: maiúscula, só letras e números, até 3. */
 export const siglaDigitada = (bruto: string): string => bruto.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+
+/** LOTE-SIGLA-EDITAR-01 — a prévia curta no bloco: "2 lotes mudam: DES-ANG-CRI-01 → DF-ANG-CRI-01 · …" ('' sem lote). */
+export function fraseDaTroca(trocas: readonly TrocaDeCodigo[]): string {
+  if (trocas.length === 0) return '';
+  const n = trocas.length;
+  return `${n} lote${n > 1 ? 's mudam' : ' muda'}: ${trocas.map(t => `${t.antes} → ${t.depois}`).join(' · ')}`;
+}
+
+/** A mesma prévia na linha dos botões, sem cortar: o 1º lote e "+N" (a lista inteira vai no `title`, pela `fraseDaTroca`). */
+export function fraseCurtaDaTroca(trocas: readonly TrocaDeCodigo[]): string {
+  if (trocas.length === 0) return '';
+  const n = trocas.length;
+  return `${n} lote${n > 1 ? 's mudam' : ' muda'}: ${trocas[0].antes} → ${trocas[0].depois}${n > 1 ? ` · +${n - 1}` : ''}`;
+}
 
 export interface ErroNoCampo { campo: 'sigla' | 'nome' | 'categorias'; mensagem: string }
 
@@ -169,9 +183,10 @@ export function safraDe(iso: string): string {
   return `${String(ini % 100).padStart(2, '0')}/${String((ini + 1) % 100).padStart(2, '0')}`;
 }
 
-/** Carimbo só em lote de cria: atividade de sigla CR ou categoria que leva mamotes. */
+/** Carimbo só em lote de cria: atividade de sigla CRI (CR antes do LOTES-04) ou categoria que leva mamotes. */
 export function aceitaCarimbo(cadastros: readonly CadastroDoLote[], e: Escolha, idsDosMamotes: readonly string[]): boolean {
-  if (siglaDe(cadastros, e.atividadeId) === 'CR') return true;
+  const ativ = siglaDe(cadastros, e.atividadeId);
+  if (ativ === 'CRI' || ativ === 'CR') return true;
   const cat = cadastros.find(c => c.id === e.categoriaId);
   return !!cat && cat.categoriasRebanho.some(id => idsDosMamotes.includes(id));
 }
@@ -187,8 +202,18 @@ export function validarPerfil(p: Perfil, hoje: string): { campo: keyof Perfil; m
   return null;
 }
 
-/** O `p_campos` de `fn_lote_salvar`: ao criar, tudo; ao editar, só o que mudou (a RPC mantém o resto). */
-export function camposParaSalvar(e: Escolha, p: Perfil, editar?: LoteDaLista | null): CamposDoLote {
+/** LOTES-04 — o nº digitado no passo 4 ('' = automático): 1 a 99 e livre na combinação da fazenda (a mesma frase da RPC). */
+export function validarNumero(digitado: string, existentes: readonly LoteDaLista[], idEditando: string | null): string | null {
+  if (!digitado) return null;
+  const n = Number(digitado);
+  if (!/^[0-9]{1,2}$/.test(digitado) || n < 1) return 'O nº vai de 1 a 99.';
+  const dono = existentes.find(l => l.numero === n && l.id !== idEditando);
+  return dono ? `O nº ${String(n).padStart(2, '0')} já é do lote ${dono.codigo}. Escolha outro.` : null;
+}
+
+/** O `p_campos` de `fn_lote_salvar`: ao criar, tudo; ao editar, só o que mudou (a RPC mantém o resto).
+ *  `numero` = o nº digitado (LOTES-04); sem ele, o banco usa o próximo livre (ou o do lote, na mesma combinação). */
+export function camposParaSalvar(e: Escolha, p: Perfil, editar?: LoteDaLista | null, numero?: number | null): CamposDoLote {
   const novo: CamposDoLote = {
     categoria_id: e.categoriaId ?? undefined, raca_id: e.racaId ?? undefined, atividade_id: e.atividadeId ?? undefined,
     nome_campeiro: p.nomeCampeiro.trim(), formado_em: p.formadoEm,
@@ -198,13 +223,14 @@ export function camposParaSalvar(e: Escolha, p: Perfil, editar?: LoteDaLista | n
     meta_peso_kg: p.metaPesoKg == null ? '' : String(p.metaPesoKg), meta_gmd_kg: p.metaGmdKg == null ? '' : String(p.metaGmdKg),
     meta_data: p.metaData,
   };
-  if (!editar) return novo;
+  if (!editar) return numero == null ? novo : { ...novo, numero };
   const antes = camposParaSalvar({ categoriaId: editar.categoriaId, racaId: editar.racaId, atividadeId: editar.atividadeId }, perfilInicial(editar.formadoEm, editar));
   const so: CamposDoLote = {};
   for (const k of CHAVES_DO_LOTE) {
     if (novo[k] !== antes[k]) Object.assign(so, { [k]: novo[k] });
   }
-  return so;
+  const mesmoNumero = numero === editar.numero && !so.categoria_id && !so.raca_id && !so.atividade_id;
+  return numero == null || mesmoNumero ? so : { ...so, numero };
 }
 
 const CHAVES_DO_LOTE: readonly (keyof CamposDoLote)[] = ['categoria_id', 'raca_id', 'atividade_id', 'nome_campeiro', 'formado_em', 'sistema_id',

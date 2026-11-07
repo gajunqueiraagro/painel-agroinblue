@@ -329,18 +329,21 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
       await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await espera(p, 500); },
     estados: [
-      ['escolher DF', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^DF/ }).first().click(); await espera(p); }],
+      ['escolher REC', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^REC/ }).first().click(); await espera(p); }],
       ['Cadastrar nova', clicar('[data-testid="assistente-cadastrar-nova"]')], ['cancelar o formulário', clicar('[data-testid="assistente-form-cancelar"]')],
       ['passo 2', clicar('[data-testid="assistente-avancar"]')],
-      ['escolher NE', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^NE/ }).first().click(); await espera(p); }],
+      ['escolher DF', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^DF/ }).first().click(); await espera(p); }],
       ['passo 3', clicar('[data-testid="assistente-avancar"]')],
-      ['escolher RC', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^RC/ }).first().click(); await espera(p); }],
-      ['passo 4', clicar('[data-testid="assistente-avancar"]')], ['passo 5', clicar('[data-testid="assistente-avancar"]')],
+      ['escolher NE', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^NE/ }).first().click(); await espera(p); }],
+      ['passo 4', clicar('[data-testid="assistente-avancar"]')], ['nº digitado', async (p) => { await p.locator('[data-testid="assistente-numero-editar"]').fill('9'); await espera(p); }],
+      ['nº ocupado', async (p) => { await p.locator('[data-testid="assistente-numero-editar"]').fill('5'); await espera(p); }],
+      ['nº automático', async (p) => { await p.locator('[data-testid="assistente-numero-editar"]').fill(''); await espera(p); }],
+      ['passo 5', clicar('[data-testid="assistente-avancar"]')],
       ['voltar', clicar('[data-testid="assistente-voltar"]')],
     ] },
   { nome: 'lotes-ficha-abas', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="ficha-do-lote"]',
     antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
-      await p.locator('[data-testid="linha-lote"]', { hasText: 'DF-NE-RC-05' }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await espera(p, 600); },
+      await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await espera(p, 600); },
     estados: [
       ['Histórico', async (p) => { await p.locator('[data-testid="ficha-do-lote"]').getByRole('button', { name: /^Histórico$/ }).click(); await espera(p, 600); }],
       ['Resumo', async (p) => { await p.locator('[data-testid="ficha-do-lote"]').getByRole('button', { name: /^Resumo$/ }).click(); await espera(p); }],

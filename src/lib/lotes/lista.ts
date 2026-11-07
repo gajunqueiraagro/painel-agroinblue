@@ -57,7 +57,7 @@ export function filtrarLotes(lotes: readonly LoteDaLista[], f: FiltroDosLotes): 
 }
 
 /* ── ordenação: todas as colunas ──────────────────────────────────────────────────────────────── */
-export type ColunaDosLotes = 'codigo' | 'nome' | 'atividade' | 'sistema' | 'programa' | 'destino' | 'carimbo' | 'cab' | 'peso' | 'gmd' | 'pasto';
+export type ColunaDosLotes = 'codigo' | 'categoria' | 'raca' | 'programa' | 'cab' | 'peso' | 'gmd' | 'pasto';
 
 /** Carimbo "mês.lote" ordena pelo mês e depois pelo lote (7.2 antes de 10.1); sem carimbo = fim. */
 export function chaveDoCarimbo(c: string | null): number | null {
@@ -65,15 +65,13 @@ export function chaveDoCarimbo(c: string | null): number | null {
   return m ? Number(m[1]) * 100 + Number(m[2]) : null;
 }
 
+/** LOTES-04 (mock lotes-codigo-lista.html) — as colunas da lista: Nome, Sistema, Destino e Carimbo ficam na ficha. */
 export function colunasDosLotes(nomes: NomesDoCadastro): ColunaOrdenavel<LoteDaLista, ColunaDosLotes>[] {
   return [
     { coluna: 'codigo', tipo: 'texto', valor: l => l.codigo },
-    { coluna: 'nome', tipo: 'texto', valor: l => l.nomeCampeiro },
-    { coluna: 'atividade', tipo: 'texto', valor: l => nomeDe(nomes, l.atividadeId) },
-    { coluna: 'sistema', tipo: 'texto', valor: l => nomeDe(nomes, l.sistemaId) },
+    { coluna: 'categoria', tipo: 'texto', valor: l => nomeDe(nomes, l.categoriaId) },
+    { coluna: 'raca', tipo: 'texto', valor: l => nomeDe(nomes, l.racaId) },
     { coluna: 'programa', tipo: 'texto', valor: l => nomeDe(nomes, l.programaId) },
-    { coluna: 'destino', tipo: 'texto', valor: l => nomeDe(nomes, l.destinoId) },
-    { coluna: 'carimbo', tipo: 'numero', valor: l => chaveDoCarimbo(l.carimbo) },
     { coluna: 'cab', tipo: 'numero', valor: l => l.cabecas },
     { coluna: 'peso', tipo: 'numero', valor: l => l.pesoMedioKg },
     { coluna: 'gmd', tipo: 'numero', valor: l => l.gmdKg },
@@ -81,8 +79,39 @@ export function colunasDosLotes(nomes: NomesDoCadastro): ColunaOrdenavel<LoteDaL
   ];
 }
 
+/* ── grupos por atividade (LOTES-04) ──────────────────────────────────────────────────────────── */
+export interface GrupoDaAtividade { atividadeId: string; nome: string; lotes: LoteDaLista[]; total: TotalDosLotes }
+
+/** A fase na ordem do rebanho: cria, recria, engorda; as outras atividades depois, pelo nome. */
+const ORDEM_DA_FASE: Readonly<Record<string, number>> = { CRI: 0, CR: 0, REC: 1, RC: 1, ENG: 2, EG: 2 };
+
+export const faseDaAtividade = (sigla: string | null): number => ORDEM_DA_FASE[sigla ?? ''] ?? 3;
+
+/** Os lotes (já ordenados pela coluna escolhida) em grupos por atividade, com subtotal; a ordem dentro do grupo é a de entrada. */
+export function gruposPorAtividade(lotes: readonly LoteDaLista[], nomes: NomesDoCadastro): GrupoDaAtividade[] {
+  const grupos = new Map<string, LoteDaLista[]>();
+  for (const l of lotes) grupos.set(l.atividadeId, [...(grupos.get(l.atividadeId) ?? []), l]);
+  const fase = (id: string) => faseDaAtividade(nomes.get(id)?.sigla ?? null);
+  return [...grupos.entries()]
+    .map(([atividadeId, ls]) => ({ atividadeId, nome: nomeDe(nomes, atividadeId) ?? '—', lotes: ls, total: totalDosLotes(ls) }))
+    .sort((a, b) => fase(a.atividadeId) - fase(b.atividadeId) || a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+/** O subtotal do grupo, curto: "3 lotes · 160 cab" (sem lançamento: só os lotes). */
+export function fraseDoGrupo(t: TotalDosLotes): string {
+  const lotes = `${t.lotes} ${t.lotes === 1 ? 'lote' : 'lotes'}`;
+  return t.cabecas == null ? lotes : `${lotes} · ${t.cabecas.toLocaleString('pt-BR')} cab`;
+}
+
 /** O pasto na célula: um = o nome; vários = "N pastos" (o inteiro vai no `title`). */
 export const textoDosPastos = (p: readonly string[]): string | null => (p.length === 0 ? null : p.length === 1 ? p[0] : `${p.length} pastos`);
+
+/** LOTES-04 — os códigos antigos numa linha, sem cortar: o mais recente (o último guardado) e "+N" (a lista inteira vai no `title`). */
+export function antigosCurto(antigos: readonly string[]): string {
+  if (antigos.length === 0) return '—';
+  const ultimo = antigos[antigos.length - 1];
+  return antigos.length > 1 ? `${ultimo} · +${antigos.length - 1}` : ultimo;
+}
 
 /* ── total ────────────────────────────────────────────────────────────────────────────────────── */
 export interface TotalDosLotes { lotes: number; cabecas: number | null; pesoMedioKg: number | null; gmdKg: number | null }

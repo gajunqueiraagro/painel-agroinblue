@@ -21,7 +21,7 @@ import { formatNum } from '@/lib/calculos/formatters';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { notificarLotesMudaram } from '@/hooks/useLotesDaFazenda';
 import { useHistoricoDoLote } from '@/hooks/useHistoricoDoLote';
-import { dataBr, mapaDoCadastro, motivoDoDesfazer, mudancasDaTrilha, nomeDe, oQueDaTrilha, type MudancaDoHistorico } from '@/lib/lotes/lista';
+import { antigosCurto, dataBr, mapaDoCadastro, motivoDoDesfazer, mudancasDaTrilha, nomeDe, oQueDaTrilha, type MudancaDoHistorico } from '@/lib/lotes/lista';
 import type { CadastroDoLote, CamposDoLote, LoteDaLista, SituacaoDoLote, TipoDoCadastro } from '@/lib/lotes/tipos';
 
 /** A altura da ficha: fixa, cabe em 1126×579 (a página nunca rola por causa dela). */
@@ -302,12 +302,12 @@ function AbaResumo({ lote: l, nomes, cadastros, gravando, salvar }: {
       <Bloco titulo="Identidade" ajuda="Código, categoria, raça e atividade. Editar identidade reabre o assistente; se a categoria, a raça ou a atividade mudar, o código muda e o antigo fica no histórico e na busca.">
         <div className={KV}>
           <Par rotulo="Código">{l.codigo}</Par>
+          <Par rotulo="Atividade">{sigla(l.atividadeId)}</Par>
           <Par rotulo="Categoria">{sigla(l.categoriaId)}</Par>
           <Par rotulo="Raça">{sigla(l.racaId)}</Par>
-          <Par rotulo="Atividade">{sigla(l.atividadeId)}</Par>
           <Par rotulo="Nome do campeiro" title={l.nomeCampeiro ?? undefined}>{l.nomeCampeiro ?? '—'}</Par>
           <Par rotulo="Formado em">{dataBr(l.formadoEm)}</Par>
-          <Par rotulo="Códigos antigos" title={l.codigosAntigos.join(' · ') || undefined}>{l.codigosAntigos.length ? l.codigosAntigos.join(' · ') : '—'}</Par>
+          <Par rotulo="Códigos antigos" title={l.codigosAntigos.join(' · ') || undefined}>{antigosCurto(l.codigosAntigos)}</Par>
         </div>
       </Bloco>
       <Bloco titulo="Perfil" ajuda="Sistema, programa e destino puxam a estratégia do lote; a safra amarra o lote ao ano-safra do custo." testid="bloco-perfil"
