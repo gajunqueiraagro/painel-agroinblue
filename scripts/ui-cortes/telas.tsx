@@ -115,6 +115,7 @@ import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
 import { Segmentado } from '@/components/ui/segmentado';
 import type { Intervalo } from '@/lib/periodo/intervaloDeDatas';
 import { PLANO as PLANO_DE_CONTAS, DIVIDENDOS as DIVIDENDOS_DO_PLANO } from './dados/planoContas';
+import * as LOTES_BANCADA from './dados/lotes';
 
 /* Gabriel 29/10 08:26 — os parcelados do LR na nota já lançada (SINTÉTICOS): as 4 do sistema e a prévia da `fn_nota_completar` como o banco a faz */
 /* UI-PERIODO-01b — as safras SINTÉTICAS do cadastro (as duas atividades, julho a junho, 26/27 e 25/26) para o componente de período */
@@ -1703,7 +1704,13 @@ if (tela === 'mesclar') {
   const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
     lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
-  const ITENS = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  const ITENS: (ReturnType<typeof item> & { lote_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
+  const COM_LOTES = v === 'lotes';
+  if (COM_LOTES) {
+    Object.assign(ITENS[0], { lote_id: 'l-dm6' });
+    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: 'l-px2' });
+  }
   const ALOC = [{ fechamento_id: 'fa', lote: '', pasto_id: 'p10a' }, { fechamento_id: 'fa', lote: '', pasto_id: 'p10b' },
     { fechamento_id: 'f11', lote: '', pasto_id: 'p11' }, { fechamento_id: 'f11', lote: '', pasto_id: 'p12' }];
   const lotacao = () => {
@@ -1730,14 +1737,29 @@ if (tela === 'mesclar') {
       t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? [{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true }]
       : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
-      : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC : []),
-    rpc: (fn: string) => (fn === 'fn_lotacao_do_mes' ? lotacao() : null),
+      : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC
+      : COM_LOTES && t === 'rebanho_lote_cadastros' ? LOTES_BANCADA.CADASTROS : []),
+    rpc: (fn: string, a: Record<string, unknown>) => (fn === 'fn_lotacao_do_mes' ? lotacao()
+      : COM_LOTES ? LOTES_BANCADA.bancoDeLotes().rpc(fn, a) : null),
   };
   const montarFechamento = async () => {
     const { FechamentoTab } = await import('@/pages/FechamentoTab');
     montar(<FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} />);
   };
   void montarFechamento();
+} else if (tela === 'lotes') {
+  /* LOTES-03 F1 — Produção › Lotes (a tela REAL), dado SINTÉTICO (dados/lotes.ts): a lista, o assistente "+ Novo lote" e a ficha.
+     `&v=vazio` = a fazenda sem nenhum lote */
+  const FAZ = { id: 'f1', nome: 'Faz. Pureza Sintética', codigo: 'PUR', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  g.__bancoBancada = LOTES_BANCADA.bancoDeLotes(v === 'vazio');
+  const montarLotes = async () => {
+    const { LotesTab } = await import('@/pages/LotesTab');
+    montar(<LotesTab />);
+  };
+  void montarLotes();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */
