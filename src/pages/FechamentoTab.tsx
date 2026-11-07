@@ -68,6 +68,13 @@ type PastoStatusConcil = 'nao_iniciado' | 'em_edicao' | 'inconsistente' | 'conci
 //   - inconsistente → laranja (rascunho com divergência)
 //   - em_edicao   → azul (em edição)
 //   - nao_iniciado → cinza/neutro
+/* FECH-TOPO-COMPACTO-01 — os botões da barra do topo: 22px, ícone + rótulo curto a 11px (o nome inteiro no `title`); "Sugestões" e
+   "Ajustar" em âmbar, o resto neutro */
+const BOTAO_DA_BARRA = 'h-[22px] flex-none gap-1 px-1.5 text-[11px] font-semibold';
+/* abaixo de 1.000px de janela (1.240 com zoom de 135% = 919) a barra não cabe com os ícones: fica só o rótulo curto */
+const ICONE_DA_BARRA = 'h-3 w-3 max-[999px]:hidden';
+const BOTAO_AMBAR = 'border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30';
+
 const STATUS_CARD_CLASSES: Record<PastoStatusConcil, string> = {
   nao_iniciado: 'bg-muted/50 border-border',
   em_edicao: 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700',
@@ -1263,10 +1270,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             "Fechar Mês" são `w-full` e seguem a trilha — o aviso perdeu o max-w-[220px],
             que era quem ditava os 236, e agora quebra em duas linhas dentro dos 150.
             Altura da COL 1 não afeta a COL 2, então quebrar não custa nada. */}
-        <div className="grid grid-cols-[150px_1fr_auto] gap-4 items-start">
+        <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 items-start">
 
-          {/* ── COL 1: Contexto / Filtros ── */}
-          <div className="flex flex-col gap-1.5">
+          {/* ── COL 1: Contexto / Filtros ── (FECH-TOPO-COMPACTO-01: gap 4px e o "Reabrir Mês" em 24px — a coluna cabe na altura da
+              COL 2, meses + barra + tabela, e nunca dita a altura do topo) */}
+          <div className="flex flex-col gap-1">
             {/* PR-V2-VOLTAR-ORIGEM-01 — este header nao tem TITULO: e a grade de tres
                 colunas direto. O canto superior esquerdo dele e o topo da COL 1, e e
                 onde a seta cabe sem redesenhar nada. Fora do grid ela roubaria largura
@@ -1295,6 +1303,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </button>
             )}
             </div>
+            {/* FECH-TOPO-COMPACTO-01 — o aviso das divergências na ponta esquerda da FAIXA do topo (a linha da barra de botões): 24px
+                reservados sempre; o aviso aparece e some sem mexer em nada (antes era um bloco de 2 linhas que empurrava o "Fechar Mês") */}
+            <div className="flex h-6 items-center whitespace-nowrap text-[10px] font-semibold text-red-700" data-testid="aviso-do-topo"
+              title={showCloseButton && hasDivergencia ? 'Corrija as divergências antes de fechar o mês.' : undefined}>
+              {showCloseButton && hasDivergencia ? '⚠ Corrija as divergências' : ''}
+            </div>
             <div className="flex flex-col gap-1">
               <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1 w-fit">
                 <CheckCircle className="h-3 w-3" />
@@ -1313,17 +1327,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </Badge>
             )}
             {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
-              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2.5 font-bold gap-1 text-destructive hover:text-destructive w-fit justify-start" onClick={() => setConfirmBulkReopenOpen(true)}>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2.5 font-bold gap-1 text-destructive hover:text-destructive w-full justify-start" onClick={() => setConfirmBulkReopenOpen(true)}>
                 <Unlock className="h-3.5 w-3.5" /> Reabrir Mês
               </Button>
             )}
             {showCloseButton && (
               <>
-                {hasDivergencia && (
-                  <div className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-tight text-red-700">
-                    ⚠ Corrija as divergências antes de fechar.
-                  </div>
-                )}
                 <Button
                   size="sm"
                   className="w-full h-8 text-xs font-bold gap-1"
@@ -1388,6 +1397,55 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               */}
             <FechamentoFitaMeses anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp}
               mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} statusPorMes={statusPorMes} />
+
+            {/* FECH-TOPO-COMPACTO-01 (Gabriel 05/11) — A BARRA DO TOPO: uma linha de 24px entre os meses e a tabela, sempre presente.
+                À esquerda, o aviso das divergências (a faixa fina do topo: some sem mexer em nada); à direita, os botões compactos em
+                lugares FIXOS — o seletor "Cards | Mapa" (MAPA-LOTES-01, Code 4) com o lugar reservado, e "Sugestões"/"Ajustar" com o
+                lugar deles mesmo sem divergência. Antes eram 7 botões empilhados numa 3ª coluna que ditava a altura do topo (230px) e
+                empurrava a grade dos pastos. */}
+            <div className="flex h-6 items-center gap-1.5" data-testid="barra-do-topo">
+              <div className="min-w-0 flex-1" />
+              <div className="w-[92px] flex-none" aria-hidden data-testid="lugar-seletor-cards-mapa" />
+              <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Resumo por Atividade" onClick={() => setShowResumoAtividades(true)}>
+                <BarChart3 className={ICONE_DA_BARRA} /> Resumo
+              </Button>
+              {onNavigateToConferenciaGmd && (
+                <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Conferência do GMD" onClick={() => onNavigateToConferenciaGmd({ ano: anoFiltro, mes: mesFiltro })}>
+                  <Activity className={ICONE_DA_BARRA} /> GMD
+                </Button>
+              )}
+              {onNavigateToMapaPastos && (
+                <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Mapa de Pastos" onClick={() => onNavigateToMapaPastos({ ano: anoFiltro, mes: mesFiltro })}>
+                  <MapIcon className={ICONE_DA_BARRA} /> Mapa
+                </Button>
+              )}
+              {/* CADERNO-CAMPO-01 peça 1 — o caderno é de UMA fazenda: no Global o botão não aparece */}
+              {!isGlobal && fazendaAtual && (
+                <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Exportar mês (PDF)" onClick={() => setExportarMesAberto(true)}>
+                  <FileDown className={ICONE_DA_BARRA} /> PDF
+                </Button>
+              )}
+              <ExportarMesDialog open={exportarMesAberto} onOpenChange={setExportarMesAberto} ano={Number(anoFiltro)} mes={Number(mesFiltro)} />
+              {/* FECH-DOCS-01 — "Documentos N": aparece SEMPRE (com zero também) */}
+              <BotaoDocumentosDoMes curto
+                clienteId={clienteAtual?.id ?? null}
+                fazendaId={fazendaAtual?.id ?? null}
+                fazendaNome={fazendaAtual?.nome ?? ''}
+                anoMes={anoMes}
+                classeDoIcone={`${ICONE_DA_BARRA} shrink-0`}
+                className={buttonVariants({ variant: 'outline', size: 'sm', className: BOTAO_DA_BARRA })}
+              />
+              {showAdjustButton && sugestoes.length > 0 ? (
+                <Button size="sm" variant="outline" className={`${BOTAO_DA_BARRA} w-[86px] ${BOTAO_AMBAR}`} title="Ver sugestões" onClick={() => setShowSugestoes(true)}>
+                  <Lightbulb className={ICONE_DA_BARRA} /> Sugestões
+                </Button>
+              ) : <div className="w-[86px] flex-none" aria-hidden data-testid="lugar-ver-sugestoes" />}
+              {showAdjustButton ? (
+                <Button size="sm" variant="outline" className={`${BOTAO_DA_BARRA} w-[70px] ${BOTAO_AMBAR}`} title="Ajustar Conciliação" onClick={() => setShowReclassModal(true)}>
+                  <Pencil className={ICONE_DA_BARRA} /> Ajustar
+                </Button>
+              ) : <div className="w-[70px] flex-none" aria-hidden data-testid="lugar-ajustar" />}
+            </div>
 
             <div className="flex justify-center overflow-x-auto">
             <TooltipProvider delayDuration={150}>
@@ -1493,66 +1551,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             </table>
             </TooltipProvider>
             </div>
-          </div>
-
-          {/* ── COL 3: Ações ── */}
-          <div className="flex flex-col gap-1.5 items-end min-w-[120px]">
-            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => setShowResumoAtividades(true)}>
-              <BarChart3 className="h-3.5 w-3.5" /> Resumo por Atividade
-            </Button>
-            {onNavigateToConferenciaGmd && (
-              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => onNavigateToConferenciaGmd({ ano: anoFiltro, mes: mesFiltro })}>
-                <Activity className="h-3.5 w-3.5" /> Conferência do GMD
-              </Button>
-            )}
-            {onNavigateToMapaPastos && (
-              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => onNavigateToMapaPastos({ ano: anoFiltro, mes: mesFiltro })}>
-                <MapIcon className="h-3.5 w-3.5" /> Mapa de Pastos
-              </Button>
-            )}
-            {/* CADERNO-CAMPO-01 peça 1 — o caderno é de UMA fazenda: no Global o botão não aparece */}
-            {!isGlobal && fazendaAtual && (
-              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => setExportarMesAberto(true)}>
-                <FileDown className="h-3.5 w-3.5" /> Exportar mês (PDF)
-              </Button>
-            )}
-            <ExportarMesDialog open={exportarMesAberto} onOpenChange={setExportarMesAberto} ano={Number(anoFiltro)} mes={Number(mesFiltro)} />
-
-            {/* FECH-DOCS-01 — "Documentos do mês · N": aparece SEMPRE (com zero também), no lugar que era do "Ver sugestões";
-                vem primeiro, e o "Ver sugestões" tem o lugar DELE reservado logo abaixo (28px, vazio sem sugestão). */}
-            <BotaoDocumentosDoMes
-              clienteId={clienteAtual?.id ?? null}
-              fazendaId={fazendaAtual?.id ?? null}
-              fazendaNome={fazendaAtual?.nome ?? ''}
-              anoMes={anoMes}
-              className={buttonVariants({ variant: 'outline', size: 'sm', className: 'h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start' })}
-            />
-
-            {showAdjustButton && (
-              <div className="flex flex-col gap-1 w-full">
-                {sugestoes.length > 0 ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full justify-start"
-                    onClick={() => setShowSugestoes(true)}
-                  >
-                    <Lightbulb className="h-3.5 w-3.5" /> Ver sugestões
-                  </Button>
-                ) : (
-                  <div className="h-7 w-full" aria-hidden data-testid="lugar-ver-sugestoes" />
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-[10px] font-bold gap-1 w-full justify-start"
-                  onClick={() => setShowReclassModal(true)}
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Ajustar Conciliação
-                </Button>
-              </div>
-            )}
-
           </div>
 
         </div>

@@ -1735,7 +1735,12 @@ if (tela === 'mesclar') {
   };
   const montarFechamento = async () => {
     const { FechamentoTab } = await import('@/pages/FechamentoTab');
-    montar(<FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} />);
+    /* FECH-TOPO-COMPACTO-01 — `v=topo`: o topo com TODOS os botões (os três que só aparecem com o hospedeiro que navega) */
+    const navegar = () => {};
+    montar(v === 'topo'
+      ? <FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} onNavigateToConferenciaGmd={navegar} onNavigateToMapaPastos={navegar}
+          onNavigateToValorRebanho={navegar} />
+      : <FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} />);
   };
   void montarFechamento();
 } else if (tela === 'comparar-cadastro') {

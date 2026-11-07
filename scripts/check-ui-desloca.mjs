@@ -251,6 +251,12 @@ const CENARIOS = [
     },
     estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
   })),
+  /* FECH-TOPO-COMPACTO-01 — o topo do Fechamento (`v=topo`, todos os botões): trocar de mês e abrir/fechar as Sugestões não movem os
+     meses, a barra de botões, o aviso, o "Fechar Mês" nem a tabela de conferência; o lugar do seletor "Cards | Mapa" é fixo */
+  { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="barra-do-topo"]').waitFor(); await espera(p, 900); },
+    estados: [['mês Set', botao(/^Set/)], ['mês Out', botao(/^Out/)],
+      ['abrir Sugestões', botao(/^Sugestões$/)], ['fechar Sugestões', async (p) => { await p.keyboard.press('Escape'); await espera(p, 500); }]] },
   /* FECH-ROTACAO-01 fatia 3 — no quadro "Onde o lote esteve" do P10A: parte do grupo, marcar um piquete, voltar ao grupo inteiro e pôr um
      pasto em "também esteve em" não movem o botão, os títulos dos blocos nem o rodapé do modal */
   { nome: 'fechamento-grupo-lote', url: 'tela=fechamento-grupo&barra=32', regiao: '[data-testid="lote-quadro"]',

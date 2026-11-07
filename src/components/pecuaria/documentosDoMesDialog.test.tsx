@@ -289,26 +289,33 @@ describe('FECH-DOCS-01 — os dois pontos de tela (fonte)', () => {
     expect(usosDoBotao('<div><BotaoDocumentosDoMes a="b" /></div>')).toBe(1);
     expect(usosDoBotao('// BotaoDocumentosDoMes sem a tag')).toBe(0);
   });
-  it('Fechamento Área: um botão, fora de qualquer condição de sugestão, antes do "Ver sugestões", que tem lugar reservado', () => {
+  it('Fechamento Área (FECH-TOPO-COMPACTO-01): um botão na barra do topo, fora de qualquer condição de sugestão, antes de "Sugestões" e "Ajustar", que têm lugar reservado', () => {
     const f = fonteDe('src/pages/FechamentoTab.tsx');
     expect(usosDoBotao(f)).toBe(1);
-    const iBotao = f.indexOf('<BotaoDocumentosDoMes');
-    const iAjuste = f.indexOf('{showAdjustButton && (', iBotao);
-    const iSugestoes = f.indexOf('Ver sugestões', iBotao);
-    const iAjustar = f.indexOf('Ajustar Conciliação', iBotao);
-    expect(iBotao).toBeGreaterThan(0);
-    expect(iAjuste).toBeGreaterThan(iBotao);
-    expect(iSugestoes).toBeGreaterThan(iAjuste);
+    const iBarra = f.indexOf('data-testid="barra-do-topo"');
+    const iBotao = f.indexOf('<BotaoDocumentosDoMes', iBarra);
+    const iSugestoes = f.indexOf('> Sugestões', iBotao);
+    const iAjustar = f.indexOf('> Ajustar', iSugestoes);
+    expect(iBarra).toBeGreaterThan(0);
+    expect(iBotao).toBeGreaterThan(iBarra);
+    expect(iSugestoes).toBeGreaterThan(iBotao);
     expect(iAjustar).toBeGreaterThan(iSugestoes);
-    const trecho = f.slice(iBotao, iAjuste);
+    const trecho = f.slice(iBotao, iSugestoes);
     expect(trecho).toContain('anoMes={anoMes}');
     expect(trecho).toContain('fazendaId={fazendaAtual?.id ?? null}');
-    expect(trecho).toContain('h-7');
-    expect(f.slice(iAjuste, iAjustar)).toContain('data-testid="lugar-ver-sugestoes"');
+    expect(trecho).toContain('BOTAO_DA_BARRA');
+    expect(trecho).toMatch(/<BotaoDocumentosDoMes curto/);
+    const fimDaBarra = f.indexOf('data-testid="lugar-ajustar"', iAjustar);
+    expect(f.slice(iSugestoes, fimDaBarra + 30)).toContain('data-testid="lugar-ver-sugestoes"');
     /* o botão não mora dentro de `sugestoes.length > 0` nem de `showAdjustButton` */
-    const antes = f.slice(f.lastIndexOf('COL 3: Ações', iBotao), iBotao);
+    const antes = f.slice(iBarra, iBotao);
     expect(antes).not.toContain('showAdjustButton');
     expect(antes).not.toContain('sugestoes.length');
+    /* o lugar do seletor "Cards | Mapa" (MAPA-LOTES-01) é fixo, na barra, antes dos botões */
+    expect(f.slice(iBarra, iBotao)).toContain('<div className="w-[92px] flex-none" aria-hidden data-testid="lugar-seletor-cards-mapa" />');
+    /* a 3ª coluna (os 7 botões empilhados que ditavam a altura do topo) não volta */
+    expect(f).not.toContain('COL 3: Ações');
+    expect(f).toContain('<div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 items-start">');
   });
   it('Lançar › Pecuária: um botão, na barra de atalhos, antes de "Movimentações por foto", no mês corrente local', () => {
     const f = fonteDe('src/v2/V2Index.tsx');
