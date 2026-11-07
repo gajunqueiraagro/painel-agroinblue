@@ -16,6 +16,7 @@ import { formAbateDoDetalhe, formAbateVazio, type FormAbate } from '@/lib/oc/for
 import { ROTULO_SEGMENTO, ESPECIES_DA_SAIDA, tipoDoDocumento, usaGradePorEspecie, camposDaEspecie, blocosDaLista } from '@/lib/oc/camposDaEspecie';
 import { formatCasas } from '@/lib/calculos/numeroBR';
 import { conferirDocumentosAbate, conferenciaDoDocumento, faixaDaConferencia, type ResultadoConferencia } from '@/lib/oc/conferirDocumentosAbate';
+import { PREFIXO_ESPECIE } from '@/lib/oc/prefixoDaEspecie';
 
 // Aba Documentos (PR-OC-DOC-UI-01). Tela OFICIAL de consulta e manutenção completa. O cadastro/edição
 //   é o form REUTILIZÁVEL DocumentoFormOC (mesma persistência/validação usada pelo registro rápido na
@@ -40,12 +41,7 @@ const fmtData = (iso: string | null) => (iso ? iso.split('-').reverse().join('/'
 /* Prefixo CURTO na identidade da linha, ao lado do numero: "NF 007.086.649" se le de
    uma vez. O rotulo por extenso (ESPECIE_LABEL) fica para quando NAO ha numero e a
    especie precisa carregar a linha sozinha. */
-const PREFIXO_ESPECIE: Record<EspecieDoc, string> = {
-  nf_principal: 'NF', nf_complementar: 'NF compl.', recibo: 'Recibo', outro: 'Doc.',
-  npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio',
-  nf_produtor: 'NF prod.', gta: 'GTA', guia: 'Guia', declaracao: 'Decl.',
-  contrato: 'Contrato', nf_entrada: 'NF entrada', comprovante: 'Comprov.',
-};
+/* o mapa mora em `src/lib/oc/prefixoDaEspecie.ts` (OC-BUSCAR-RECEBIMENTO-01: o modal do Financeiro também o lê) */
 
 /* "2 notas · 1 recibo". Conta o que ESTA VALENDO; cancelado vira um termo proprio, e
    nao um documento a menos escondido na contagem. */

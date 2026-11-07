@@ -1043,6 +1043,13 @@ if (tela === 'mesclar') {
     { ...comum, lancamentoId: 'o1', data: '2026-09-10', competencia: '2026-09-10', vencimento: '2026-09-10', pagamento: '2026-09-10', valor: 5000,
       descricao: 'Pix recebido de terceiro com um nome muito comprido que nao cabe na coluna', favorecido: 'Terceiro Exemplo',
       contaBancaria: 'Banco do Brasil', mesmoFavorecido: false, status: 'realizado', motivoExcluido: null },
+    /* OC-BUSCAR-RECEBIMENTO-01 — os ANTIGOS do caso real (2021, fora da janela da OC): só aparecem com "procurar em todo o histórico" */
+    { ...comum, lancamentoId: 'h1', data: '2021-04-24', competencia: '2021-04-24', vencimento: '2021-04-24', pagamento: '2021-04-24', valor: 180000,
+      descricao: 'Abate 060 Vacas · Recebimento do frigorífico com a descrição longa de sempre', favorecido: 'Exemplo da Silva Agropecuária Ltda',
+      contaBancaria: 'Cooperativa de Crédito Sicredi Exemplo', mesmoFavorecido: true, status: 'conciliado', conciliado: true, motivoExcluido: null },
+    { ...comum, lancamentoId: 'h2', data: '2021-05-20', competencia: '2021-05-20', vencimento: '2021-05-20', pagamento: '2021-05-20', valor: 1375000.55,
+      descricao: 'Abate 027 Vacas · Recebimento', favorecido: 'Exemplo da Silva Agropecuária Ltda', contaBancaria: 'Banco do Brasil',
+      mesmoFavorecido: true, status: 'realizado', motivoExcluido: null },
   ];
   const nada = async () => null;
   const api: any = { contaCorrente: cc, loading: false, erro: null, ocupado: false, recarregar: async () => {}, sincronizarEntregas: nada,
@@ -2152,7 +2159,7 @@ if (m === 'editar' && q.get('safra') === 'sem' && props.lancamento) props.lancam
 if (v === 'oc' || v === 'ocdesp') {
   const nat = v === 'oc' ? 'principal' : 'obrigacao';
   props.origemOC = { operacaoId: 'a1b2c3d4-0000-4000-8000-000000000000', versao: 8, natureza: nat, tipoOperacao: 'venda', rotulo: 'OC #a1b2c3d4 · Venda 140 Novilhas',
-    itens: [{ codigo: 'frete', nome: 'Frete' }], onVoltar: () => {}, aoLancar: async () => {} };
+    itens: [{ codigo: 'frete', nome: 'Frete' }], onVoltar: () => {}, aoLancar: async () => {}, dataDaEntrega: '2026-10-03' };
   props.lockedFields = [...(TRAVAS_DO_MODO_OC as any)[nat]];
   props.prefill = nat === 'principal'
     ? { fazenda_id: 'f-pur', tipo_operacao: '1-Entradas', status_transacao: 'programado', data_competencia: '2026-10-05', valor: 5000, descricao: 'Venda 140 Novilhas · Recebimento',

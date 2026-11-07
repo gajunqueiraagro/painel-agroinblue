@@ -132,6 +132,8 @@ import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, 
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
+import { Ajuda } from '@/components/ui/ajuda';
+import { DocumentosDaOperacaoAntesDeSalvar } from '@/components/operacao-comercial/DocumentosDaOperacaoAntesDeSalvar';
 import { DocumentosPendentes } from '@/components/financeiro-v2/DocumentosPendentes';
 import { ParcelasDaCompra } from '@/components/financeiro-v2/ParcelasDaCompra';
 import { ParcelarEsteLancamento } from './ParcelarEsteLancamento';
@@ -154,7 +156,7 @@ import {
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   type OrigemOC, type CampoTravavelDoModal, lancarPeloModal, parcelasParaRpc, classificacoesDaDespesa, fraseAcimaDoSaldo,
-  tituloDoModoOC, MOTIVO_ITEM_OBRIGATORIO, MOTIVO_VENCIMENTO_OBRIGATORIO, MOTIVO_STATUS_TRAVADO_OC, MOTIVO_CLASSIFICACAO_DA_OC,
+  tituloDoModoOC, textoDoDreDaOC, AJUDA_DRE_DA_OC, MOTIVO_ITEM_OBRIGATORIO, MOTIVO_VENCIMENTO_OBRIGATORIO, MOTIVO_STATUS_TRAVADO_OC, MOTIVO_CLASSIFICACAO_DA_OC,
 } from '@/lib/oc/lancarPeloModal';
 
 interface Props {
@@ -1498,7 +1500,7 @@ export function LancamentoV2Dialog({
   /* FIN-V2-CANCEL-MOTIVO-01 — TITULO COM PARTE VIVA DE OC NAO SE CANCELA PELO FINANCEIRO. Pela
      PARTE, nao pela `origem_lancamento`: um lancamento manual vinculado a OC tem parte viva e
      origem 'manual'. Guarda a OC e o tipo para o "Abrir OC" no lugar do botao. */
-  const [parteOCViva, setParteOCViva] = useState<{ operacaoId: string; tipo: string | null } | null>(null);
+  const [parteOCViva, setParteOCViva] = useState<{ operacaoId: string; tipo: string | null; data?: string | null } | null>(null);
   /* FIN-V2-HOMOLOG-FIX-01: so' depois de LIDA a parte o "Criar OC" pode aparecer — antes disso "sem parte" e' so' "ainda nao sei". */
   const [parteOCLida, setParteOCLida] = useState(false);
   const [criarOCAberto, setCriarOCAberto] = useState(false);
@@ -1520,11 +1522,11 @@ export function LancamentoV2Dialog({
       if (!parte?.operacao_id) { setParteOCLida(true); return; }
       const { data: op } = await supabase
         .from('zoo_operacoes_comerciais')
-        .select('tipo_operacao')
+        .select('tipo_operacao, data_operacao')
         .eq('id', parte.operacao_id)
         .maybeSingle();
       if (cancelled) return;
-      setParteOCViva({ operacaoId: parte.operacao_id, tipo: op?.tipo_operacao ?? null });
+      setParteOCViva({ operacaoId: parte.operacao_id, tipo: op?.tipo_operacao ?? null, data: op?.data_operacao ?? null });
       setParteOCLida(true);
     })();
     return () => { cancelled = true; };
@@ -3358,6 +3360,10 @@ export function LancamentoV2Dialog({
                  conta; a despesa segue a linha do plano. E cultura/fase nao se aplicam: o aviso de rateio nao aparece. */
               const principalDaOC = modoOC?.natureza === 'principal';
               const cd = principalDaOC ? false : usaPlano ? doPlano : lancamento?.compoe_dre;
+              /* OC-BUSCAR-RECEBIMENTO-01 (adendo 2) — o título de OC fora do DRE (o recebimento/pagamento: quem compõe é a entrega) diz POR
+                 QUÊ, com a data da entrega; o lançamento comum segue igual */
+              const dreDaOC = principalDaOC || (!!parteOCViva && !usaPlano && cd === false);
+              const entregaDaOC = principalDaOC ? (modoOC?.dataDaEntrega ?? null) : (parteOCViva?.data ?? null);
               const mostraDre = isEdit || !!subcentro;
               const aviso = modoOC ? null : atividade === 'agricultura' ? avisoCultura(cultura, culturasDaSafra)
                 : atividade === 'pecuaria' ? avisoFase(fase)
@@ -3368,12 +3374,17 @@ export function LancamentoV2Dialog({
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-snug">
                   {aviso && <span className={aviso.classe}>{aviso.texto}</span>}
                   {aviso && mostraDre && <span className="text-muted-foreground/50">·</span>}
-                  {mostraDre && (
+                  {mostraDre && dreDaOC && (
+                    <span className="inline-flex items-center gap-1 text-muted-foreground" data-testid="dre-do-principal-oc">
+                      {textoDoDreDaOC(entregaDaOC)}
+                      <Ajuda {...AJUDA_DRE_DA_OC} lado="top" />
+                    </span>
+                  )}
+                  {mostraDre && !dreDaOC && (
                     <span className="text-muted-foreground">
                       Compõe DRE:{' '}
                       <span className={cn('font-medium', cd === true ? 'text-success' : 'text-muted-foreground')}>{label}</span>
-                      {principalDaOC ? <span className="ml-1" data-testid="dre-do-principal-oc">· quem compõe o DRE é a entrega do gado</span>
-                        : usaPlano && cd != null && <span className="ml-1">ao salvar</span>}
+                      {usaPlano && cd != null && <span className="ml-1">ao salvar</span>}
                     </span>
                   )}
                 </div>
@@ -3687,6 +3698,9 @@ export function LancamentoV2Dialog({
                   onAnexarVarios={() => setAnexarBoletos('previa')}
                   travado={!!posSalvar} />
               </div>
+            ) : modoOC ? (
+              /* OC-BUSCAR-RECEBIMENTO-01 — o lançamento da OC ainda não salvo já mostra os documentos da operação (só leitura) */
+              <DocumentosDaOperacaoAntesDeSalvar operacaoId={modoOC.operacaoId} clienteId={clienteAtual?.id ?? null} />
             ) : documentosAntesDeSalvar ? (
               <DocumentosPendentes pendentes={pendentes} onMudar={setPendentes}
                 clienteId={clienteAtual?.id ?? null}
