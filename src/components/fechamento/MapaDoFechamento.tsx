@@ -20,12 +20,18 @@ interface Props<P extends PastoDoMapa> {
   situacaoDe: (pasto: P) => SituacaoDoCard;
   cabecasDe: (pasto: P) => number;
   onAbrir: (pasto: P) => void;
+  /** FECH-PASTO-UNIDADE-01 — piquete → pai: o polígono do piquete pinta e abre o card do PAI (o piquete não tem card) */
+  paiDe?: ReadonlyMap<string, string>;
 }
 
 const LEGENDA = ORDEM_DA_LEGENDA.map(s => ({ cor: COR_DA_SITUACAO[s], texto: NOME_DA_SITUACAO[s] }));
 
-export function MapaDoFechamento<P extends PastoDoMapa>({ pastos, situacaoDe, cabecasDe, onAbrir }: Props<P>) {
-  const { geometrias, loading } = usePastoGeometrias();
+export function MapaDoFechamento<P extends PastoDoMapa>({ pastos, situacaoDe, cabecasDe, onAbrir, paiDe }: Props<P>) {
+  const { geometrias: lidas, loading } = usePastoGeometrias();
+  const geometrias = useMemo(
+    () => (paiDe && paiDe.size > 0 ? lidas.map(g => { const pai = g.pasto_id ? paiDe.get(g.pasto_id) : undefined; return pai ? { ...g, pasto_id: pai } : g; }) : lidas),
+    [lidas, paiDe],
+  );
   const quadro = useAlturaAteOFim({ folga: 16, minimo: 320 });
   const porId = useMemo(() => new Map(pastos.map(p => [p.id, p])), [pastos]);
   const ids = useMemo(() => new Set(porId.keys()), [porId]);

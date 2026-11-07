@@ -134,9 +134,11 @@ describe('Mudar mês de início', () => {
     abrir();
     await waitFor(() => expect(screen.getByTestId('volta-frase').textContent).toContain('passam a começar em 10/2026'));
     const f = screen.getByTestId('volta-frase').textContent ?? '';
-    expect(f).toContain('lotação do grupo 0,00 UA/ha (89,24 ha), de TESTE-PIQ FURO-A 0,00 UA/ha (44,62 ha).');
-    expect(f).toContain('(0 cab, 0 kg, 0,0 UA)');
-    expect(f).toContain('fica encerrado em 30/09/2026');
+    /* FECH-PASTO-UNIDADE-01: o pai segue sendo o pasto e o card; sai "fica encerrado" e "passam inteiros a <1º piquete>" */
+    expect(f).toContain('TESTE-PIQ FURO segue sendo o pasto e o card de cada mês');
+    expect(f).toContain('nenhum card muda.');
+    expect(f).not.toContain('encerrado');
+    expect(f).not.toContain('inteiros');
     expect(f).not.toMatch(/\d\.\d/);
   });
 

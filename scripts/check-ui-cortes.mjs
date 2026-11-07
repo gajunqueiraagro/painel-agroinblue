@@ -810,6 +810,9 @@ const CENARIOS = [
     return [
       { nome: 'fechamento-grupo', url: URL, tamanhos: T, regiao: '[data-testid="grupo-no-fechamento"]', antes: grade },
       { nome: 'fechamento-grupo-modal', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      /* FECH-PASTO-UNIDADE-01 — `&v=piquetes`: o card do P6 com o selo "2 piquetes" (1ª linha: nome · selo · status) inteiro em todos os tamanhos */
+      { nome: 'fechamento-grupo-piquetes', url: URL + '&v=piquetes', tamanhos: T, regiao: 'button:has([data-testid="selo-piquetes"])',
+        antes: async (p) => { await p.locator('[data-testid="selo-piquetes"]').waitFor(); await p.waitForTimeout(600); } },
       /* FECH-REABRIR-JUNTO-01 — o modal com o Valor do Rebanho validado: a linha do aviso (frase · motivo opcional · "Reabrir e editar") inteira */
       { nome: 'fechamento-grupo-modal-trava', url: URL + '&v=trava', tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', botoesDentro: '[data-testid="trava-do-p2"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="reabrir-e-editar"]').waitFor(); await p.waitForTimeout(300); } },

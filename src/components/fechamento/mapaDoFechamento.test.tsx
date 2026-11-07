@@ -64,6 +64,19 @@ describe('a vista Mapa', () => {
     expect(onAbrir).toHaveBeenLastCalledWith(P_10);
     expect(screen.getByTestId('faixa-sem-desenho').textContent).toContain('Sem desenho no mapa (1):');
   });
+  it('FECH-PASTO-UNIDADE-01: o polígono do PIQUETE pinta e abre o card do PAI (o piquete não tem card) e o pai não vai à faixa', () => {
+    mapa.geometrias = [{ pasto_id: 'm1a', tipo: 'pasto', geojson: QUADRADO }, { pasto_id: 'm1b', tipo: 'pasto', geojson: QUADRADO }];
+    const onAbrir = vi.fn();
+    const M1 = { id: 'm1', nome: 'Módulo 01' };
+    render(<MapaDoFechamento pastos={[M1]} situacaoDe={() => 'conciliado'} cabecasDe={() => 747} onAbrir={onAbrir}
+      paiDe={new Map([['m1a', 'm1'], ['m1b', 'm1']])} />);
+    const p = mapa.props!;
+    expect((p.geometrias as { pasto_id: string }[]).map(g => g.pasto_id)).toEqual(['m1', 'm1']);
+    expect((p.corDe as (id: string) => string)('m1')).toBe(COR_DA_SITUACAO.conciliado);
+    (p.onPastoClick as (id: string) => void)('m1');
+    expect(onAbrir).toHaveBeenCalledWith(M1);
+    expect(screen.getByTestId('faixa-sem-desenho').textContent).toBe('');
+  });
   it('fazenda sem mapa importado: diz isso no lugar do mapa (nada de mapa em branco)', () => {
     mapa.geometrias = [];
     render(<MapaDoFechamento pastos={[P13]} situacaoDe={() => 'fechado'} cabecasDe={() => 0} onAbrir={vi.fn()} />);

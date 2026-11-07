@@ -1749,6 +1749,14 @@ if (tela === 'mesclar') {
     status: 'rascunho', responsavel_nome: null, lote_mes: null, tipo_uso_mes: null, qualidade_mes: null, observacao_mes: null, created_at: '2026-10-01', updated_at: '2026-10-01', ...extra });
   const CARDS = [card('fa', 'p10a', { lote_mes: 'L1', tipo_uso_mes: 'recria' }), card('fb', 'p10b'), card('fc', 'p10c', { tipo_uso_mes: 'vedado' }),
     card('f11', 'p11', { tipo_uso_mes: 'cria' }), card('f12', 'p12'), card('ft', 't1', { tipo_uso_mes: 'engorda', status: 'fechado' })];
+  /* FECH-PASTO-UNIDADE-01 — `&v=piquetes`: o P6 dividido em P6-A e P6-B (grupo com origem no P6): a grade mostra UM card, o do P6, com o
+     selo "2 piquetes"; os piquetes não têm card; no Mapa, os polígonos dos piquetes pintam e abrem o P6 */
+  const COM_PIQUETES = v === 'piquetes';
+  if (COM_PIQUETES) {
+    PASTOS.push(pasto('p6', 'P6', 95.6, 'cria', null, 7), { ...pasto('p6a', 'P6-A', 48.1, 'cria', 'g6', 8), data_inicio: '2026-10-01' },
+      { ...pasto('p6b', 'P6-B', 47.5, 'cria', 'g6', 9), data_inicio: '2026-10-01' });
+    CARDS.push(card('f6', 'p6', { tipo_uso_mes: 'cria' }));
+  }
   const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
     lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
@@ -1769,6 +1777,7 @@ if (tela === 'mesclar') {
     quadrado('g-p10c', 'p10c', 'pasto', -47.892, -15.804, 0.006, 0.008), quadrado('g-p11', 'p11', 'pasto', -47.904, -15.795, 0.01, 0.008),
     quadrado('g-t1', 't1', 'pasto', -47.893, -15.795, 0.005, 0.006)];
   if (v === 'mapa') { try { window.localStorage.setItem('fechamento-pastos:vista', 'mapa'); } catch { /* sem armazenamento */ } }
+  if (COM_PIQUETES) GEOS.push(quadrado('g-p6a', 'p6a', 'pasto', -47.887, -15.804, 0.005, 0.008), quadrado('g-p6b', 'p6b', 'pasto', -47.882, -15.804, 0.005, 0.008));
   const ALOC = [{ fechamento_id: 'fa', lote: '', pasto_id: 'p10a' }, { fechamento_id: 'fa', lote: '', pasto_id: 'p10b' },
     { fechamento_id: 'f11', lote: '', pasto_id: 'p11' }, { fechamento_id: 'f11', lote: '', pasto_id: 'p12' }];
   const lotacao = () => {
@@ -1792,7 +1801,8 @@ if (tela === 'mesclar') {
   };
   g.__bancoBancada = {
     from: (t: string, e: { eq: Record<string, unknown> }) => (
-      t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? [{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true }]
+      t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? [{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: null },
+        ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }] : [])]
       : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
       : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC

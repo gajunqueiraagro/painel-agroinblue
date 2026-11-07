@@ -3,7 +3,7 @@ import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3,
 import { ExportarMesDialog } from '@/components/caderno/ExportarMesDialog';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { ResumoPorAtividade } from '@/components/resumoAtividade/ResumoPorAtividade';
-import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, type Pasto } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, piquetesNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda, GLOBAL_FAZENDA } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -343,6 +343,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   }, [fechamentos, loadItens]);
 
   const pastosAtivos = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
+  /* FECH-PASTO-UNIDADE-01 — o card é do PASTO; os piquetes dele no mês viram o selo "N piquetes" (e, no mapa, o polígono do piquete é do pai) */
+  const piquetesDoMes = useMemo(() => piquetesNoMes(pastos, anoMes), [pastos, anoMes]);
+  const paiDoPiquete = useMemo(() => new Map([...piquetesDoMes].flatMap(([pai, piqs]) => piqs.map(q => [q.id, pai] as const))), [piquetesDoMes]);
 
   const getFechamento = useCallback(
     (pastoId: string) => fechamentos.find(f => f.pasto_id === pastoId) || null,
@@ -1062,7 +1065,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           >
             {/* Nome + status icon */}
             <div className="flex items-center justify-between gap-0.5">
-              <span className="font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
+              <span className="min-w-0 font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
+              {(piquetesDoMes.get(p.id)?.length ?? 0) > 0 && (
+                <span className="ml-auto flex-none whitespace-nowrap rounded bg-[#eaf1fb] px-1 text-[10px] font-medium leading-[14px] text-[#1f5fa8]" data-testid="selo-piquetes"
+                  title={`Piquetes de ${p.nome} no mês: ${(piquetesDoMes.get(p.id) ?? []).map(q => q.nome).join(', ')}`}>
+                  {piquetesDoMes.get(p.id)?.length} piquetes
+                </span>
+              )}
               <span className={`text-sm font-bold leading-none ${STATUS_ICON_COLOR[pastoStatus]}`}>
                 {STATUS_ICON[pastoStatus]}
               </span>
@@ -1459,7 +1468,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <p className="text-xs mt-1">Cadastre pastos na aba "Pastos" e marque "Entra na conciliação".</p>
           </div>
         ) : vista === 'mapa' ? (
-          <MapaDoFechamento pastos={pastosAtivos} situacaoDe={getPastoStatus} onAbrir={handleOpenPasto}
+          <MapaDoFechamento pastos={pastosAtivos} situacaoDe={getPastoStatus} onAbrir={handleOpenPasto} paiDe={paiDoPiquete}
             cabecasDe={p => getResumo(getFechamento(p.id), p).totalCabecas} />
         ) : (
           <TooltipProvider delayDuration={200}>
