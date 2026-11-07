@@ -67,7 +67,9 @@ describe('o diálogo', () => {
     expect(document.querySelector('tr[data-linha="soma"]')?.textContent).toContain('92,90');
     expect(document.querySelector('tr[data-linha="oficial"]')?.textContent).toContain('92,60');
     expect(document.querySelector('tr[data-linha="diferenca"]')?.textContent).toContain('+0,30 (+0,3%)');
-    expect(screen.getByTestId('previa-pai').textContent).toContain('encerrado em 31/10/2026');
+    /* FECH-PASTO-UNIDADE-01: o pai não se encerra mais — segue sendo o pasto e o card */
+    expect(screen.getByTestId('previa-pai').textContent).toContain('R_01 segue sendo o pasto e o card de cada mês');
+    expect(screen.getByTestId('previa-pai').textContent).not.toContain('encerrado');
   });
   it('trocar o mês pede outra prévia', async () => {
     abrir();

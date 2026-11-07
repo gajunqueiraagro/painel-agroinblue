@@ -141,7 +141,7 @@ export function ConcluirPiquetesDialog({ aberto, paiId, nomeDoPai, piquetes, hoj
         <DialogHeader>
           <DialogTitle className="text-[13px]">Concluir piquetes de {nomeDoPai}</DialogTitle>
           <DialogDescription className="text-[10px]">
-            Cada polígono vira um pasto com a área dele; os pastos novos formam o grupo {nomeDoPai}; {nomeDoPai} é encerrado no mês anterior.
+            Cada polígono vira um piquete (subárea) com a área dele; os piquetes formam o grupo {nomeDoPai}; {nomeDoPai} segue sendo o pasto e o card de cada mês.
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-2 text-[10px]">
@@ -182,7 +182,7 @@ export function ConcluirPiquetesDialog({ aberto, paiId, nomeDoPai, piquetes, hoj
           )}
           {previa && (
             <p className="mt-1.5 text-[10px] text-muted-foreground" data-testid="previa-pai">
-              {previa.pai.nome} fica encerrado em {dataBr(previa.pai.encerraEm)}; o histórico dele não muda.
+              {previa.pai.nome} segue sendo o pasto e o card de cada mês; o histórico dele não muda.
               {/* MAPA-PIQUETES-04: o contorno nasce no mesmo gesto (a união das divisões) */}
               {previa.contorno?.criado && ` O contorno de ${previa.pai.nome}${previa.contorno.areaHa == null ? '' : ` (${haBr(previa.contorno.areaHa)} ha)`} é a união das divisões e é gravado junto.`}
             </p>
