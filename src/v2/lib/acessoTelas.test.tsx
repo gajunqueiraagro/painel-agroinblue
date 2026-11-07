@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { NAV_GRUPOS, HOME_LIBERADA_CLIENTES, OPERACAO_COMERCIAL_LIBERADA_CLIENTES, TELA_OPERACAO_COMERCIAL, type V2Section } from './navGrupos';
-import { MATRIZ_ACESSO, NIVEL_POR_TELA, TELAS_DO_FINANCEIRO, TELA_DE_ENTRADA_PREFERIDA, gruposVisiveis, nivelDaTela, primeiraTelaPermitida, secoesVisiveis } from './acessoTelas';
+import { MATRIZ_ACESSO, NIVEL_POR_TELA, TELAS_DA_EVOLUCAO, TELAS_DO_FINANCEIRO, TELA_DE_ENTRADA_PREFERIDA, gruposVisiveis, nivelDaTela, primeiraTelaPermitida, secoesVisiveis } from './acessoTelas';
 import { V2Sidebar } from '@/v2/components/V2Sidebar';
 import { V2ContextDrawer } from '@/v2/components/V2ContextDrawer';
 import { V2MobileNav } from '@/v2/components/V2MobileNav';
@@ -30,14 +30,14 @@ beforeEach(() => como('financeiro'));
 const PILOTO: V2Section[] = ['fin-visao-geral', 'financeiro-lanc', 'conciliacao', 'contas-a-pagar-receber'];
 const PERFIS = ['gestor_cliente', 'financeiro', 'campo', 'leitura'] as const;
 /* ACESSOS-FIN-01 — o que o gestor e o financeiro veem no menu, na ORDEM do menu (ids e rotulos escritos a' mao, de proposito). */
-const PRODUCAO_FIN: V2Section[] = ['lancamentos-zoot', 'fechamento', 'conferencia-lancamentos', 'operacoes-comerciais', 'estoque-graos', 'barter-contratos'];
+const PRODUCAO_FIN: V2Section[] = ['lancamentos-zoot', 'fechamento', 'conferencia-lancamentos', 'operacoes-comerciais', 'conferencia-mensal', 'estoque-graos', 'barter-contratos'];
 const FINANCEIRO_FIN: V2Section[] = ['fin-visao-geral', 'financeiro-lanc', 'conciliacao', 'visao-consolidada', 'financiamentos', 'contratos', 'recorrencias',
   'fluxo-caixa', 'contas-a-pagar-receber', 'painel-financiamentos'];
 const EXECUTIVO_FIN: V2Section[] = ['painel-consultor', 'valor-rebanho', 'dre'];
 /* PATR-01 (Chat 30/10, ajuste 4): Cadastros › Patrimônio entra para gestor e financeiro */
 const CADASTROS_FIN: V2Section[] = ['contas-bancarias', 'fornecedores', 'patrimonio'];
 /* UI-VARREDURA-01 L5 — os rótulos do menu em sentence case (Gabriel 03/11/2026, M2) */
-const ROTULOS_PRODUCAO_FIN = ['Pecuária', 'Fechamento área', 'Lançamentos', 'Operações comerciais', 'Estoque de grãos', 'Barter'];
+const ROTULOS_PRODUCAO_FIN = ['Pecuária', 'Fechamento área', 'Lançamentos', 'Operações comerciais', 'Evolução no ano', 'Estoque de grãos', 'Barter'];
 const ROTULOS_FINANCEIRO_FIN = ['Visão geral', 'Lançamentos financeiros', 'Conciliação bancária', 'Visão consolidada', 'Financ. e parcelamentos', 'Contratos',
   'Recorrências', 'Fluxo de caixa', 'Contas a pagar/receber', 'Painel financiamentos'];
 const todosOsItens = NAV_GRUPOS.flatMap((g) => g.drawer.flatMap((s) => s.itens.map((i) => ({ grupo: g.id, item: i }))));
@@ -45,7 +45,8 @@ const todosOsItens = NAV_GRUPOS.flatMap((g) => g.drawer.flatMap((s) => s.itens.m
 describe('a marca de liberacao (navGrupos)', () => {
   it('as telas liberadas: as tres do piloto, a lista de Operações Comerciais (ACESSOS-OC-01) e as 16 do ACESSOS-FIN-01; a Visão Geral NAO', () => {
     expect(todosOsItens.filter((x) => x.item.liberadaClientes).map((x) => x.item.id)).toEqual([...PRODUCAO_FIN, ...FINANCEIRO_FIN, ...EXECUTIVO_FIN, ...CADASTROS_FIN]);
-    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(4 + 1 + 17);
+    /* + a Evolução no ano (PEC-ABAS-01, Gabriel 05/11/2026) */
+    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(4 + 1 + 17 + 1);
     /* nenhuma tela de Planejamento, Auditoria ou Validar tem a marca */
     expect(todosOsItens.filter((x) => x.item.liberadaClientes && ['planejamento', 'auditoria', 'validar'].includes(x.grupo))).toEqual([]);
     /* toda tela marcada fora do piloto tem linha propria no mapa por tela (marca sem linha cairia na matriz do grupo) */
@@ -117,10 +118,17 @@ describe('a excecao por tela (NIVEL_POR_TELA) — ACESSOS-OC-01', () => {
   });
   it('a excecao VENCE a matriz do grupo: no grupo `rebanho` o financeiro veria e o campo editaria', () => {
     expect(MATRIZ_ACESSO.rebanho).toEqual({ gestor_cliente: 'editar', financeiro: 'ver', campo: 'editar', leitura: 'ver' });
-    expect(Object.keys(NIVEL_POR_TELA).sort()).toEqual([...TELAS_DA_OC, ...TELAS_DO_FINANCEIRO].sort());
+    expect(Object.keys(NIVEL_POR_TELA).sort()).toEqual([...TELAS_DA_OC, ...TELAS_DO_FINANCEIRO, ...TELAS_DA_EVOLUCAO].sort());
+  });
+  /* PEC-ABAS-01 (Gabriel 05/11/2026): "a Evolução no ano é LIBERADA para os perfis de cliente, no menu e na aba" */
+  it('a Evolução no ano (item de menu) e o mês dela (Evolução por Categoria, fora do menu): gestor e financeiro editam; campo e leitura, nao', () => {
+    expect([...TELAS_DA_EVOLUCAO]).toEqual(['conferencia-mensal', 'evolucao-categoria']);
+    for (const t of TELAS_DA_EVOLUCAO) expect(`${t}:${PERFIS.map((p) => nivelDaTela(p, false, t)).join(',')}`).toBe(`${t}:editar,editar,nao,nao`);
+    expect(todosOsItens.find((x) => x.item.id === 'conferencia-mensal')?.item.liberadaClientes).toBe(true);
+    expect(todosOsItens.some((x) => x.item.id === 'evolucao-categoria')).toBe(false);
   });
   it('o resto do grupo `rebanho` continua fechado: as vizinhas sem a marca seguem "nao" para todo perfil', () => {
-    for (const p of PERFIS) for (const t of ['mapa-pastos', 'rebanho-home', 'chuvas', 'chuvas-lancamento', 'conferencia-mensal', 'pastos', 'lancamentos-meta-zoo'] as const) {
+    for (const p of PERFIS) for (const t of ['mapa-pastos', 'rebanho-home', 'chuvas', 'chuvas-lancamento', 'pastos', 'lancamentos-meta-zoo'] as const) {
       expect(nivelDaTela(p, false, t)).toBe('nao');
     }
   });

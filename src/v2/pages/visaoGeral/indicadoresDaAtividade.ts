@@ -132,14 +132,35 @@ export function indicadoresSilvicultura(ha: number | null): IndicadorAtividade[]
     fonte: 'Foto de área do mês (fechamento_area_snapshot): area_silvicultura_ha' }];
 }
 
-/** A linha pequena embaixo do valor: os pedaços que existem, cada um com a seta do sentido e a cor do bom/ruim. */
-export function comparacoes(i: Pick<IndicadorAtividade, 'meta' | 'anoAnt' | 'menorMelhor'>): { texto: string; bom: boolean }[] {
+/**
+ * VG-RESULTADO-RS-01 (Gabriel 05/11/2026, do bilhete do Code 5) — o % sobre um PREJUÍZO confunde ("R$ −300,5K · ▲ 68,2% meta"): com o valor
+ * ou a meta ≤ 0, a comparação com a meta é a DIFERENÇA em R$ ("+R$ 645 mil vs meta"). Valor e meta positivos: null (segue o %).
+ */
+export function diferencaEmReais(valor: number | null | undefined, meta: number | null | undefined): number | null {
+  if (valor == null || meta == null || !Number.isFinite(valor) || !Number.isFinite(meta)) return null;
+  return valor <= 0 || meta <= 0 ? valor - meta : null;
+}
+/** "R$ 645 mil", "R$ 1,2 mi", "R$ 950" — o tamanho, sem sinal (o sinal vai na frente do "R$") */
+export function reaisCurtos(v: number): string {
+  const a = Math.abs(v);
+  if (a >= 1e6) return `R$ ${formatNum(a / 1e6, 1)} mi`;
+  if (a >= 1e3) return `R$ ${formatNum(a / 1e3, 0)} mil`;
+  return `R$ ${formatNum(a, 0)}`;
+}
+
+/** A linha pequena embaixo do valor: os pedaços que existem, cada um com a seta do sentido e a cor do bom/ruim. `metaEmReais` e
+ *  `anoAntEmReais` (a diferença em R$ do Resultado com valor ou base ≤ 0; Gabriel 05/11 08:22: "mesma regra" no ano ant.) tomam o lugar
+ *  do % da meta e do ano anterior. */
+export function comparacoes(i: Pick<IndicadorAtividade, 'meta' | 'anoAnt' | 'menorMelhor'> & { metaEmReais?: number | null; anoAntEmReais?: number | null }): { texto: string; bom: boolean }[] {
   const pedaco = (v: number | null, onde: string) => {
     if (v == null) return [];
     const subiu = v >= 0;
     return [{ texto: `${subiu ? '▲' : '▼'} ${formatNum(Math.abs(v), 1)}% ${onde}`, bom: i.menorMelhor ? !subiu : subiu }];
   };
-  return [...pedaco(i.meta, 'meta'), ...pedaco(i.anoAnt, 'ano ant.')];
+  const emReais = (d: number, onde: string) => [{ texto: `${d >= 0 ? '+' : '−'}${reaisCurtos(d)} vs ${onde}`, bom: i.menorMelhor ? d <= 0 : d >= 0 }];
+  const daMeta = i.metaEmReais == null ? pedaco(i.meta, 'meta') : emReais(i.metaEmReais, 'meta');
+  const doAnoAnt = i.anoAntEmReais == null ? pedaco(i.anoAnt, 'ano ant.') : emReais(i.anoAntEmReais, 'ano ant.');
+  return [...daMeta, ...doAnoAnt];
 }
 
 /** Só os indicadores com dado (nunca "em breve") */

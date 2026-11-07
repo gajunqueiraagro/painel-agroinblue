@@ -273,6 +273,10 @@ function chuvas(): Reg[] {
 }
 
 /* ── DRE da pecuária ───────────────────────────────────────────────────────────── */
+/* VG-RESULTADO-RS-01 — `&prejuizo=1`: o resultado do ano em PREJUÍZO no Global (real −R$ 300,5 mil; meta −R$ 945 mil; ano ant. −R$ 500 mil),
+   o caso do bilhete do Code 5 */
+const PREJUIZO = new URLSearchParams(globalThis.location?.search ?? '').get('prejuizo') === '1';
+const lucroEmPrejuizo = (k: number, f: number) => Math.round((k === 1.07 ? -945_000 : k === 0.88 ? -500_000 : -300_500) * (f / 1.38));
 function linhasDre(k: number, f: number, meses: number, fazenda: string) {
   const a = (k * meses) / 12;
   const rec = (v: number) => Math.round(v * a * f);
@@ -285,7 +289,7 @@ function linhasDre(k: number, f: number, meses: number, fazenda: string) {
     vendas, outras_receitas: outras, receita_bruta: bruta, deducoes, receita_liquida: liquida,
     vpb_operacional: Math.round(liquida - reposicao + rec(900000)), reposicao, vbp: Math.round(liquida - reposicao + rec(900000)),
     custo_variavel: variavel, margem, custo_fixo: fixo, rateio_adm: adm, resultado_operacional: oper, juros, resultado_periodo: periodo,
-    efeito_mercado: rec(240000), resultado_com_mercado: periodo + rec(240000), investimento: invest, lucro_liquido: periodo - invest,
+    efeito_mercado: rec(240000), resultado_com_mercado: periodo + rec(240000), investimento: invest, lucro_liquido: PREJUIZO ? lucroEmPrejuizo(k, f) : periodo - invest,
     juros_proprio: Math.round(juros * 0.6), juros_rateado: Math.round(juros * 0.4), a_pagar: rec(310000),
     patrimonio: { v_ini_p0: rec(21000000), v_fim_p0: rec(21800000), v_fim_p1: rec(22900000), cab_ini: cab, cab_fim: cab + 60, cab_media: cab + 30 },
     producao: {

@@ -168,3 +168,13 @@ export function pesosAConferir(lancs: LancamentoDoMes[], referencia: Map<string,
     })
     .sort((a, b) => Math.abs(b.desvio ?? -1) - Math.abs(a.desvio ?? -1));
 }
+
+/* EVOLUCAO-CATEGORIA-01 (Gabriel 04/11/2026, item 4) — o kg/cab da CATEGORIA que cai mais de 25% no mês (do início ao final; ex.: Mamotes M
+   212,1 → 30,0) fica em vermelho para conferir. Só avisa: nada se corrige aqui. */
+export const QUEDA_DO_PESO = 0.25;
+/** a queda do kg/cab no mês (fração; 0,86 = caiu 86%), só quando passa de 25%; sem os dois pesos = null */
+export function quedaDoPeso(inicio: number | null, final: number | null): number | null {
+  if (inicio == null || final == null || inicio <= 0) return null;
+  const queda = (inicio - final) / inicio;
+  return queda > QUEDA_DO_PESO ? queda : null;
+}

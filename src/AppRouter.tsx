@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import AuthPage from '@/pages/AuthPage';
+import DefinirSenhaPage from '@/pages/DefinirSenhaPage';
+import { CAMINHO_DEFINIR_SENHA } from '@/lib/auth/senhaEConvite';
 import FazendaSetup from '@/pages/FazendaSetup';
 /* ⚠ O IMPORT DE `pages/Index` SAIU, o ARQUIVO NÃO — PR-BARRA-UNICA-01a. Ele deixou de ser
    rota; mantê-lo importado sem uso deixaria o v1 inteiro no bundle por um símbolo morto. */
@@ -58,6 +60,10 @@ export default function AppRouter() {
       </div>
     );
   }
+
+  /* ACESSO-CONVITE-01 — o LINK DO E-MAIL (convite, recuperação, troca de e-mail) abre ANTES da guarda de login: quem chega por ele
+     ainda não tem senha. Com o usuário já logado a página também abre (é lá que ele grava a senha nova). */
+  if (location.pathname === CAMINHO_DEFINIR_SENHA) return <DefinirSenhaPage />;
 
   if (!user) return <AuthPage />;
 

@@ -302,6 +302,38 @@ export function deltaSobreMeta(l: LinhaDaEvolucao): number | null {
   return ((l.acum - l.meta) / Math.abs(l.meta)) * 100;
 }
 
+/**
+ * EVOLUCAO-TABELA-01 (Gabriel 04/11/2026, item 4) — a comparação com a meta que a tabela MOSTRA: o Δ % só quando a meta é SIGNIFICATIVA.
+ * Meta pequena (abaixo de `META_SIGNIFICATIVA` na unidade da tela: 2 compras de meta e 19 feitas davam "+850%") mostra a diferença
+ * ABSOLUTA ("+17"), no tamanho, como o Δ % (as saídas negativas comparam o tamanho). Desfrute já é em pontos (pp). Indicadores (peso, GMD,
+ * lotação) seguem em % — a meta deles é pequena por natureza (GMD 0,6), não por ser pouca coisa; a @ produzida é contagem e entra na regra.
+ * `escala` = o divisor da exibição (as toneladas: o limiar vale no número que a tela mostra).
+ */
+export const META_SIGNIFICATIVA = 10;
+export type ComparacaoComMeta = { tipo: 'pct' | 'pontos' | 'absoluta'; valor: number };
+export function comparacaoComMeta(l: LinhaDaEvolucao, escala = 1): ComparacaoComMeta | null {
+  if (l.acum == null || l.meta == null) return null;
+  if (l.deltaEmPontos) return { tipo: 'pontos', valor: l.acum - l.meta };
+  const contagem = l.nivel !== 'indicador' || l.id === 'arrobas-produzidas';
+  if (contagem && Math.abs(l.meta / escala) < META_SIGNIFICATIVA) {
+    const tamanho = l.acum <= 0 && l.meta < 0 ? Math.abs(l.acum) - Math.abs(l.meta) : l.acum - l.meta;
+    return { tipo: 'absoluta', valor: tamanho / escala };
+  }
+  const d = deltaSobreMeta(l);
+  return d == null ? null : { tipo: 'pct', valor: d };
+}
+
+/**
+ * EVOLUCAO-TABELA-01 (item 4, o card) — "x% da meta já feito" só com meta significativa: com a meta pequena (Desfrute 0,2%, abaixo de 1
+ * ponto; contagem abaixo de 10) o card mostra a DIFERENÇA ("+1,7 pp", "+17 cab"), nunca "950%".
+ */
+export function comparacaoDoCard(valor: number | null, meta: number | null, unidade: string): ComparacaoComMeta | null {
+  if (valor == null || meta == null || meta === 0) return null;
+  /* meta pequena (abaixo de 10 — 10 cab, 10 @ ou 10% de desfrute): a diferença; em % ela vai em pontos ("+1,7 pp") */
+  if (Math.abs(meta) < META_SIGNIFICATIVA) return { tipo: unidade === '%' ? 'pontos' : 'absoluta', valor: valor - meta };
+  return { tipo: 'pct', valor: (valor / meta) * 100 };
+}
+
 /** "Conferir" (Gabriel 30/10): o mês fechado cujo GMD salta, e por quê (o peso médio final do mês anterior → o deste). */
 export interface AvisoDaEvolucao { mes: number; texto: string }
 export const GMD_ALTO = 1.5;

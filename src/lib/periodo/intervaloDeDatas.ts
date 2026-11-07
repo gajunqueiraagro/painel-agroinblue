@@ -92,7 +92,8 @@ export function safraAnteriorA(safras: readonly SafraDoCadastro[], s: SafraDoCad
 /**
  * Os atalhos, na ordem do pedido: Este mês · Mês passado · Este ano · Último ano · Esta safra · Última safra · Últimos 12 meses.
  * ("Selecionar o ano" e "Redefinir" são gestos do popup, não intervalos.) No modo `mes` só os de um mês; no `ano`, os de ano.
- * Com mais de uma atividade, os de safra saem por atividade ("Esta safra · Pecuária", "Esta safra · Lavoura").
+ * Com mais de uma atividade, os de safra saem por atividade ("Esta safra · Pecuária", "Esta safra · Lavoura") — salvo quando as datas são
+ * as mesmas nas atividades: aí um só ("Esta safra").
  */
 export function atalhosDoPeriodo(e: {
   hoje: string; modo: ModoDoPeriodo; safras: readonly SafraDoCadastro[]; atividades: readonly AtividadeDaSafra[];
@@ -107,8 +108,17 @@ export function atalhosDoPeriodo(e: {
   lista.push({ id: 'este-ano', rotulo: 'Este ano', intervalo: intervaloDoAno(ano) });
   lista.push({ id: 'ultimo-ano', rotulo: 'Último ano', intervalo: intervaloDoAno(ano - 1) });
   if (e.modo === 'ano') return lista;
-  const varias = e.atividades.length > 1;
-  for (const at of e.atividades) {
+  /* UI-PERIODO-01b (Gabriel 04/11 18:03): telas com as duas atividades (Painel, CPR) — quando a safra de hoje e a anterior têm as MESMAS datas
+     nas duas (hoje todas vão de julho a junho), um atalho só ("Esta safra"), sem o "· Pecuária"/"· Lavoura"; datas diferentes = um por atividade */
+  const chave = (at: AtividadeDaSafra) => {
+    const esta = safraQueContem(e.safras, at, e.hoje);
+    const ant = esta ? safraAnteriorA(e.safras, esta) : null;
+    return esta ? `${esta.de}|${esta.ate}|${ant?.de ?? ''}|${ant?.ate ?? ''}` : null;
+  };
+  const comSafra = e.atividades.filter((at) => chave(at) != null);
+  const mesmas = comSafra.length > 1 && comSafra.every((at) => chave(at) === chave(comSafra[0]));
+  const varias = e.atividades.length > 1 && !mesmas;
+  for (const at of mesmas ? comSafra.slice(0, 1) : e.atividades) {
     const esta = safraQueContem(e.safras, at, e.hoje);
     if (!esta) continue;
     const suf = varias ? ` · ${ROTULO_ATIVIDADE[at]}` : '';

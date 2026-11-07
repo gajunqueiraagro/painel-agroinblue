@@ -39,6 +39,24 @@ const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.a
 const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.split('x').map(Number)) : [[1000, 600], [1126, 579], [1440, 800]];
 const FOTOS = arg('--fotos');
 const SO = arg('--so');
+/* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
+   testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
+async function cliqueNoGesto(p, t) {
+  if (!(await p.locator(`[data-testid="validacao-painel-poligono"] [data-testid="${t}"]`).count()) && (await p.locator('[data-testid="editar-mais"]').count())) {
+    await p.locator('[data-testid="editar-mais"]').click(); await p.locator(`[role="menuitem"][data-testid="${t}"]`).waitFor({ timeout: 3000 });
+  }
+  await p.locator(`[data-testid="${t}"]`).first().click();
+}
+async function temGesto(p, t) {
+  if (await p.locator(`[data-testid="validacao-painel-poligono"] [data-testid="${t}"]`).count()) return true;
+  if (!(await p.locator('[data-testid="editar-mais"]').count())) return false;
+  await p.locator('[data-testid="editar-mais"]').click(); await p.waitForTimeout(200);
+  const ha = (await p.locator(`[role="menuitem"][data-testid="${t}"]`).count()) > 0;
+  /* o Esc devolve o foco ao "⋯" e o foco abre a dica dele (no meio da animação de entrada ela cruza a barra): tira o foco e espera fechar */
+  await p.keyboard.press('Escape'); await p.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+  await p.waitForTimeout(500);
+  return ha;
+}
 /* P163-2 — as variantes da bancada `nota-pdf` em que a nota JÁ ESTÁ LANÇADA (o modal em abas) */
 const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
 
@@ -101,6 +119,16 @@ const mapaPasto = (nome) => async (p) => {
 };
 const MAPA_TAMANHOS = [[1126, 579], [1300, 704], [1366, 768], [1440, 800]];
 const CENARIOS = [
+  /* ACESSO-CONVITE-01 PR 1 — a entrada (e o "Esqueci minha senha"), a página do link do e-mail (convite; o Enviar vazio mostra os erros
+     nos campos, no lugar reservado) e o "Trocar senha" (aberto; e com os três erros) */
+  { nome: 'entrada', url: 'tela=entrada' },
+  { nome: 'entrada-esqueci', url: 'tela=entrada', antes: clicar('[data-testid="entrada-trocar-modo"]') },
+  { nome: 'definir-senha-convite', url: 'tela=definir-senha&token_hash=bancada&type=invite' },
+  { nome: 'definir-senha-erros', url: 'tela=definir-senha&token_hash=bancada&type=invite', antes: clicar('[data-testid="definir-senha"] button[type="submit"]') },
+  { nome: 'definir-senha-sem-link', url: 'tela=definir-senha' },
+  { nome: 'trocar-senha', url: 'tela=trocar-senha', antes: clicarTexto('Trocar senha') },
+  { nome: 'trocar-senha-erros', url: 'tela=trocar-senha', antes: async (p) => {
+    await clicarTexto('Trocar senha')(p); await clicar('[data-testid="trocar-senha"] button[type="submit"]')(p); } },
   { nome: 'mesclar-vazio', url: 'tela=mesclar&vazio=1' },
   { nome: 'mesclar-comparar', url: 'tela=mesclar' },
   { nome: 'mesclar-uso', url: 'tela=mesclar', antes: clicarTexto('Uso') },
@@ -563,7 +591,7 @@ const CENARIOS = [
           { nome: 'mapa-validacao-volta-painel-divisao', url: URL_U, tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]', antes: async (p) => { await divisao(p);
               for (const t of ['editar-mover-linha', 'editar-juntar']) if (!(await p.locator(`[data-testid="${t}"]`).count())) throw new Error(`falta o ícone ${t} na divisão`); }, ...barra },
           { nome: 'mapa-validacao-volta-painel-pai', url: URL_U, tamanhos: T3, regiao: '[data-testid="validacao-painel-poligono"]', antes: async (p) => { await pai(p);
-              if (!(await p.locator('[data-testid="editar-desfazer-piquetes"]').count())) throw new Error('falta o ícone editar-desfazer-piquetes no pai'); }, ...barra },
+              for (const t of ['editar-desfazer-piquetes', 'editar-mudar-inicio']) if (!(await temGesto(p, t))) throw new Error(`falta o ícone ${t} no pai`); }, ...barra },
           { nome: 'mapa-validacao-volta-juntar-popover', url: URL_U, tamanhos: T3, regiao: '[data-testid="validacao-popover"]', antes: juntar },
           { nome: 'mapa-validacao-volta-mover-linha-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="mover-linha-dialogo"]', antes: async (p) => {
               await moverLinha('divisa')(p); await p.locator('[data-testid="edicao-previa"]').click();
@@ -572,8 +600,25 @@ const CENARIOS = [
               await juntar(p); await p.locator('[data-testid="juntar-escolher"] [data-juntar-com="P_09B"]').click();
               await p.locator('[data-testid="juntar-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
           { nome: 'mapa-validacao-volta-desfazer-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="desfazer-dialogo"]', antes: async (p) => {
-              await pai(p); await p.locator('[data-testid="editar-desfazer-piquetes"]').click();
+              await pai(p); await cliqueNoGesto(p, 'editar-desfazer-piquetes');
               await p.locator('[data-testid="desfazer-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
+          /* PIQUETE-VIGENCIA-01: o "Mudar mês de início" — a prévia (adiar, 2 meses), a recusa do mês FECHADO com o link do Reabrir na linha reservada, e o
+             "Desfazer a última mudança" (a frase mais longa) */
+          { nome: 'mapa-validacao-volta-mudar-inicio-dialogo', url: URL_U, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
+              await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
+              await p.locator('[data-testid="mudar-inicio-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p); } },
+          /* bug do P17 (06/11 17:13): a tabela de 5 colunas (Mês · Antes · ha · Depois · ha) com os nomes e as áreas reais do P17 — nada corta */
+          { nome: 'mapa-validacao-volta-mudar-inicio-p17', url: `${URL_U}&caso=p17`, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
+              await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
+              await p.locator('[data-testid="mudar-inicio-dialogo"] tr[data-mes]').first().waitFor({ timeout: 5000 }); await comFrase(p); } },
+          { nome: 'mapa-validacao-volta-mudar-inicio-fechado', url: `${URL_U}&fechado=1`, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
+              await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
+              await p.locator('[data-testid="mudar-inicio-dialogo"] [data-testid="reabrir-mes"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(400); } },
+          { nome: 'mapa-validacao-volta-mudar-inicio-desfazer', url: URL_U, tamanhos: T3, regiao: '[data-testid="mudar-inicio-dialogo"]', antes: async (p) => {
+              await pai(p); await cliqueNoGesto(p, 'editar-mudar-inicio');
+              await p.locator('[data-testid="mudar-inicio-dialogo"]').waitFor({ timeout: 3000 }); await comFrase(p);
+              await p.getByRole('button', { name: 'Desfazer a última mudança' }).click();
+              await p.waitForFunction(() => /Desfaz a mudança/.test(document.querySelector('[data-testid="volta-frase"]')?.textContent ?? ''), null, { timeout: 5000 }); await p.waitForTimeout(400); } },
           /* o gesto fora da divisa (o vértice do canto de cima à esquerda, que não é comum às duas): a prévia trava e a frase vermelha fica na barra */
           { nome: 'mapa-validacao-volta-barra-mover-linha-travada', url: URL_U, tamanhos: T3, regiao: '[data-testid="barra-edicao-poligono"]', antes: async (p) => {
               await moverLinha('fora')(p);
@@ -586,7 +631,7 @@ const CENARIOS = [
       ...(() => {
         const abrirPiquetes = (url) => async (p) => {
           await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
-          await p.locator('[data-testid="editar-piquetes"]').click();
+          await cliqueNoGesto(p, 'editar-piquetes');
           await p.locator('[data-testid="barra-piquetes"]').waitFor(); await p.waitForTimeout(900); };
         const medir = { visivelNaTela: { sels: ['[data-testid="piquetes-previa"]', '[data-testid="piquetes-cancelar"]'], dentro: '[data-testid="barra-piquetes"]', altura: 50,
             inteirosEm: ['[data-testid="piquetes-zona"]', '[data-testid="piquetes-linha-2"]', '[data-testid="barra-piquetes"]', '[data-testid="piquetes-lista"]'] },
@@ -642,6 +687,11 @@ const CENARIOS = [
   /* MAPA-GLOBAL-01 — Geo Pastos em Global (dados sintéticos `dados/mapaGlobal.ts`): 2 fazendas; 5 com o nome mais longo, uma sem fechamento
      no mês e uma sem mapa; a visão Pastos com o filtro "Carga alta"; as abas Área por situação e Atividade do gráfico */
   { nome: 'mapa-global-2', url: 'tela=mapa-global&n=2', tamanhos: MAPA_TAMANHOS, cabecalhoInteiro: true },
+  /* CHUVAS-LANCAR-01 — a planilha de Chuvas (uma fazenda; o Global = a escolha da estação) · PEC-ABAS-01 — a barra com as 4 abas e a volta */
+  { nome: 'chuvas-lancar', url: 'tela=chuvas-lancar', cabecalhoInteiro: true },
+  { nome: 'chuvas-lancar-global', url: 'tela=chuvas-lancar&global=1' },
+  { nome: 'barra-pecuaria', url: 'tela=barra-pecuaria&aba=lancamentos-zoot' },
+  { nome: 'barra-pecuaria-volta', url: 'tela=barra-pecuaria&aba=conferencia-mensal&de=lancamentos-zoot' },
   /* UI-PERIODO-01 — o componente único de período aberto (popup com os atalhos e os dois calendários; os modos mês e ano; a CPR) */
   ...[['periodo-datas', 'modo=datas&ativ=pec'], ['periodo-duas-atividades', 'modo=datas&ativ=duas'], ['periodo-mes', 'modo=mes'],
     ['periodo-ano', 'modo=ano'], ['periodo-cpr', 'modo=datas&cpr=1']].map(([nome, q]) => ({ nome, url: `tela=periodo&abrir=1&${q}`,
@@ -706,6 +756,9 @@ const CENARIOS = [
         antes: async (p) => { await clicarRotulo(/^Lavoura$/)(p); await tudo(p); await chip('R$/sc ou t')(p); } },
     ];
   }),
+  /* EVOLUCAO-TABELA-01 — metas pequenas: o Δ vira "+17 cab" / "+1,2 t" (o texto mais largo da coluna) e o card Desfrute em pontos */
+  { nome: 'evolucao-ano-meta-pequena', url: 'tela=evolucao-ano&barra=32&meta=pequena', tamanhos: [[1126, 579], [1366, 768]], inteiroDe: { sel: '[data-inteiro]', de: 1126 } },
+  { nome: 'evolucao-ano-meta-pequena-t', url: 'tela=evolucao-ano&barra=32&meta=pequena', tamanhos: [[1126, 579], [1366, 768]], antes: clicarRotulo(/^t$/) },
   { nome: 'evolucao-ano-sem-meta', url: 'tela=evolucao-ano&barra=32&meta=aprovada', tamanhos: [[1126, 579], [1366, 768]], antes: clicar('[data-testid="evolucao-com-meta"]') },
   /* PROD-EVOLUCAO-01b — Produção › Evolução por Categoria (o mês por categoria), pior caso (`mocks/evolucaoMes.ts`): os 8 tipos, 3 tipos, mês
      sem Fechamento, sem linha e a aba Composição; NENHUM número cortado a 1126 e a 1366 (Gabriel 30/10 17:16) */
@@ -855,6 +908,8 @@ const CENARIOS = [
   /* VISAO-GERAL-02 — a Visão Geral nova (dado SINTÉTICO `dados/visaoGeral02.ts`): Global e uma fazenda, a distribuição por fazenda
      (diálogo) e o filtro de uma atividade; nada corta nem sai do lugar nos tamanhos da VG */
   { nome: 'visao-geral-02', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
+  /* VG-RESULTADO-RS-01 — o Resultado em prejuízo: "+R$ 645 mil vs meta" no lugar do % (o texto mais largo da linha do cartão) */
+  { nome: 'visao-geral-02-prejuizo', url: 'tela=visao-geral-02&prejuizo=1', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
   { nome: 'visao-geral-02-fazenda', url: 'tela=visao-geral-02&fz=fA', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
   { nome: 'visao-geral-02-por-fazenda', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, regiao: '[role="dialog"]',
     antes: async (p) => { await p.waitForTimeout(2500); await clicar('[data-testid="vg-ver-por-fazenda"]')(p); await p.waitForTimeout(400); } },
