@@ -4,7 +4,7 @@ import { LancamentoDaParcelaDialog } from '@/components/financiamentos/Lancament
 import { useSituacaoDoContrato } from '@/hooks/useSituacaoDoContrato';
 import {
   CLASSE_SEM_LANCAMENTO, CLASSE_SITUACAO, MOTIVO_PARCELA_SEM_LANCAMENTO, ROTULO_SEM_LANCAMENTO, ROTULO_SITUACAO, TOM_DO_PRAZO,
-  origemDaSituacao, porQueSemLancamento, semLancamento, textoDasNotas, textoDoPrazo, textoDoPrazoCurto,
+  origemDaSituacao, porQueSemLancamento, semLancamento, ROTULO_SEM_VALOR, CLASSE_SEM_VALOR, MOTIVO_SEM_VALOR, textoDasNotas, textoDoPrazo, textoDoPrazoCurto,
 } from '@/lib/financiamentos/situacaoDoContrato';
 import { CancelarParcelaDialog } from '@/components/financiamentos/CancelarParcelaDialog';
 import { ExcluirCompraDialog, RecriarLancamentoDialog } from '@/components/financiamentos/GestosDoContratoDialogs';
@@ -31,7 +31,7 @@ import {
   SUBCENTRO_AMORTIZACAO, SUBCENTRO_JUROS, NOME_NATUREZA, PILULA_NATUREZA,
 } from '@/components/financiamentos/ObrigacaoDialog';
 import { FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
-import { alinhamentoDoCabecalho, colunasDasParcelas, type ColunaDasParcelas } from '@/lib/financiamentos/reguaDasParcelas';
+import { ABRE_GRUPO_DAS_PARCELAS, alinhamentoDoCabecalho, colunasDasParcelas, type ColunaDasParcelas } from '@/lib/financiamentos/reguaDasParcelas';
 import { TD_DATA_LANC, TD_VALOR_LANC, SeloDoContrato } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { GradeChaveValor } from '@/components/shared/GradeChaveValor';
 import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
@@ -92,6 +92,9 @@ const LINHA = 'h-[19px]';
 const E = ESCALA_DO_CONTRATO;
 const TH_V4 = `sticky top-0 z-10 h-[24px] whitespace-nowrap bg-[#1d3a5d] px-[2.5px] ${E.th} font-semibold text-white`;
 const TD_V4 = `h-[24px] whitespace-nowrap px-[2.5px] ${E.td} text-[#111827]`;
+/* FIN-FINANC-LAYOUT-01 — o separador entre os grupos do cronograma (parcela | valores | situação e lançamento) */
+const SEP_TH = 'border-l border-white/35';
+const SEP_TD = 'border-l border-[#c5ced9]';
 const TF_V4 = `sticky bottom-0 z-10 h-[24px] whitespace-nowrap bg-[#e4e9ef] px-[2.5px] ${E.total} text-[#111827] shadow-[inset_0_1px_0_#c5ced9]`;
 /* a tabela da COMPRA PARCELADA na mesma escala (deixou a régua de Lançamentos, 8/9px): cabeçalho 10px, célula 10,5px, total 10,5px bold */
 const TH_PARC = `h-[22px] px-2 py-0 align-middle ${FONTE_PARC.th} font-semibold normal-case tracking-normal text-primary-foreground`;
@@ -101,6 +104,8 @@ const DataDaLinha = ({ iso }: { iso: string | null }) => <span className={FONTE_
 const SELO_V4: Record<'paga' | 'vencida' | 'pendente' | 'parcial', string> = {
   vencida: 'bg-[#b42318] text-white', pendente: 'border border-[#8a96a8] text-[#334155]', paga: 'bg-[#dcf2e3] text-[#166534]', parcial: 'bg-[#fdf0dc] text-[#b45309]',
 };
+/** FIN-PARCELA-VALOR-ZERO-01 — "sem pagamento", cinza */
+const SELO_V4_SEM_VALOR = 'border border-[#d5dbe3] text-[#8a96a8]';
 
 /* ================================================================ */
 
@@ -595,6 +600,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           /* TELA DO CONTRATO v3 (Gabriel 18/10/2026) — título com selos e ações · Contrato em duas colunas + Resumo · A resolver */
           <TopoDoContrato numero={fin.numero_contrato ?? null} descricao={fin.descricao ?? ''} status={fin.status ?? null}
             saldo={situacao?.saldo} tela={credito.tela} parcelas={cartoes ? { total: cartoes.parcelas, pagas: cartoes.pagas } : null} quinta={quinta}
+            jurosNoCronograma={(cartoes?.jurosPrevistos ?? 0) > 0}
             onVoltar={onVoltar} onEditar={() => abrirEdicao('contrato')} pendencias={pendencias} onAbrirPendencias={() => setAbaDoCredito('a_resolver')}
             acaoDeJuntar={<BotaoJuntar status={fin.status ?? null} onAbrir={() => setJuntando(true)} />}
             acaoDeBaixa={<BotaoDarBaixa destaque status={fin.status ?? null} api={credito} onEscolher={setBaixaEscolhida} onDesfazer={() => setDesfazendoBaixa(true)} />} />
@@ -672,7 +678,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                 {colunas.map(c => (
                   <th key={c.chave} data-coluna={c.chave}
                     title={c.chave === 'lancamento' ? 'principal · juros · cada parcela casa com o lançamento do Financeiro (↔)' : undefined}
-                    className={`${TH_V4} ${alinhamentoDoCabecalho(c)}`}>{c.rotulo}</th>
+                    className={`${TH_V4} ${alinhamentoDoCabecalho(c)} ${ABRE_GRUPO_DAS_PARCELAS.includes(c.chave) ? SEP_TH : ''}`}>{c.rotulo}</th>
                 ))}
               </tr></thead>
               <tbody>
@@ -685,59 +691,77 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                   const d = p.detalhe;
                   const vencida = p.situacao === 'vencida';
                   const vs = credito.vinculos.filter(v => v.parcelaId === p.id);
-                  const podeBuscar = vs.length === 0 && (p.situacao !== 'paga' || (!p.lancamentoId && !p.lancamentoJurosId));
+                  const podeBuscar = vs.length === 0 && !p.semValor && (p.situacao !== 'paga' || (!p.lancamentoId && !p.lancamentoJurosId));
+                  // FIN-FINANC-LAYOUT-01: os gestos (↔ principal · ↔ juros · Buscar · lápis) a 10,5px, um passo abaixo, como as datas;
+                  // na parcela de valor zero eles moram na célula da situação (colSpan 2)
+                  const gestos = (
+                    <div className={`flex min-w-0 flex-wrap items-center ${E.data} [&>*]:whitespace-nowrap`}>
+                      {p.lancamentoId && (
+                        <button type="button" className="font-medium text-primary hover:underline" title="Abrir o lançamento do principal no Financeiro"
+                          onClick={(e) => { e.stopPropagation(); setLancamentoAberto(p.lancamentoId); }} data-testid="ver-principal">↔ principal</button>
+                      )}
+                      {p.lancamentoId && p.lancamentoJurosId && <span className={`px-[2px] ${COR_V4.rotulo}`}>·</span>}
+                      {p.lancamentoJurosId && (
+                        <button type="button" className="font-medium text-primary hover:underline" title="Abrir o lançamento dos juros desta parcela no Financeiro"
+                          onClick={(e) => { e.stopPropagation(); setLancamentoAberto(p.lancamentoJurosId); }} data-testid="ver-juros">↔ juros</button>
+                      )}
+                      {!p.lancamentoId && !p.lancamentoJurosId && !p.semValor && <span className={COR_V4.rotulo}>—</span>}
+                      {vs.length > 0 && (<>
+                        <span className={`px-[2px] ${COR_V4.rotulo}`}>·</span>
+                        <button type="button" className={`font-medium hover:underline ${COR_V4.vermelho}`} data-testid="desvincular-pagamento"
+                          title={`Pagamento vinculado (${vs.map(v => ROTULO_DO_PAPEL[v.papel]).join(', ')}) · desvincular volta a parcela como estava`}
+                          onClick={(e) => { e.stopPropagation(); setDesvinculando(vs[0]); }}>desvincular</button>
+                      </>)}
+                      {podeBuscar && (<>
+                        <span className={`px-[2px] ${COR_V4.rotulo}`}>·</span>
+                        <button type="button" className="font-medium text-primary hover:underline" data-testid="buscar-pagamento-botao"
+                          title="Procurar no Financeiro o lançamento que pagou esta parcela"
+                          onClick={(e) => { e.stopPropagation(); setBuscarPagamentoDe(p.id); }}>Buscar</button>
+                      </>)}
+                      {/* o lápis mora no FIM da mesma célula (a coluna própria saiu) */}
+                      <button type="button" className={`ml-auto flex size-[14px] shrink-0 items-center justify-center rounded hover:bg-[#e3e8ee] ${COR_V4.rotulo}`}
+                        onClick={(e) => { e.stopPropagation(); setFocoParcela(p.id); abrirEdicao('parcelas'); }}
+                        title="Editar as parcelas (esta em destaque)" aria-label="Editar a parcela" data-testid="lapis-da-parcela">
+                        <Pencil className="size-3" />
+                      </button>
+                    </div>
+                  );
                   return (
                     <tr key={p.id} className={`border-b ${COR_V4.bordaFina} ${vencida ? COR_V4.fundoVermelho : 'hover:bg-[#f4f6f9]'} ${p.lancamentoId ? 'cursor-pointer' : ''}`}
                       data-testid="linha-do-contrato" data-situacao={p.situacao}
                       onClick={() => { if (p.lancamentoId) setLancamentoAberto(p.lancamentoId); }} title={p.lancamentoId ? undefined : MOTIVO_PARCELA_SEM_LANCAMENTO}>
                       <td className={`${TD_V4} tabular-nums`}>{p.numero ?? '—'}{cartoes ? `/${cartoes.parcelas}` : ''}</td>
-                      <td className={`${TD_V4} tabular-nums ${vencida ? `font-semibold ${COR_V4.vermelho}` : ''}`}>{dataLonga(p.dataVencimento)}</td>
-                      <td className={`${TD_V4} tabular-nums`} data-testid="pago-em">{dataLonga(p.pagoEm)}</td>
+                      <td className={`${TD_V4} tabular-nums ${vencida ? `font-semibold ${COR_V4.vermelho}` : ''}`}><span className={E.data}>{dataLonga(p.dataVencimento)}</span></td>
+                      <td className={`${TD_V4} tabular-nums`} data-testid="pago-em"><span className={E.data}>{dataLonga(p.pagoEm)}</span></td>
                       <td className={`${TD_V4} ${d?.prazo && TOM_DO_PRAZO[d.prazo.tipo] === 'vermelho' ? COR_V4.vermelho : d?.prazo && TOM_DO_PRAZO[d.prazo.tipo] === 'verde' ? 'text-[#15803d]' : COR_V4.rotulo}`} data-testid="prazo">
                         {textoDoPrazoCurto(d?.prazo ?? null)}
                       </td>
-                      <td className={`${TD_V4} text-right tabular-nums`}>{p.valorPrincipal === 0 ? <span className={COR_V4.rotulo}>carência</span> : num2(p.valorPrincipal)}</td>
+                      <td className={`${TD_V4} ${SEP_TD} text-right tabular-nums`}>{p.valorPrincipal === 0 ? <span className={COR_V4.rotulo}>carência</span> : num2(p.valorPrincipal)}</td>
                       <td className={`${TD_V4} text-right tabular-nums`}>{num2(p.valorJuros)}</td>
                       <td className={`${TD_V4} text-right font-semibold tabular-nums`}>{num2(p.valorTotal)}</td>
                       <td className={`${TD_V4} text-right tabular-nums`} data-testid="saldo-apos">{saldoApos?.get(p.id) == null ? '—' : num2(saldoApos.get(p.id) ?? 0)}</td>
-                      <td className={TD_V4}>
-                        <span className={`inline-flex items-center whitespace-nowrap rounded px-[2px] text-[9.5px] font-semibold leading-[15px] ${SELO_V4[p.situacao]}`}
-                          title={origemDaSituacao(p)} data-testid="situacao-da-parcela">{ROTULO_SITUACAO[p.situacao]}</span>
-                        {ajustadas.has(p.id) && <> <SeloAjustada /></>}
+                      {/* FIN-PARCELA-VALOR-ZERO-01: "sem pagamento" é mais largo que a Situação; nessa linha não há lançamento, então a
+                          célula junta Situação + Lançamento (colSpan 2): o selo cabe sem vazar e a régua das outras linhas não muda */}
+                      <td colSpan={p.semValor ? 2 : undefined} className={`${TD_V4} ${SEP_TD}`}>
+                        {p.semValor ? (
+                          <div className="flex min-w-0 items-center">
+                            <span className={`inline-flex items-center whitespace-nowrap rounded px-[2px] text-[9.5px] font-semibold leading-[15px] ${SELO_V4_SEM_VALOR}`}
+                              title={MOTIVO_SEM_VALOR} data-testid="situacao-da-parcela">{ROTULO_SEM_VALOR}</span>
+                            {ajustadas.has(p.id) && <>&nbsp;<SeloAjustada /></>}
+                            <div className="ml-[6px] min-w-0 flex-1" data-testid="lancamento-da-parcela">{gestos}</div>
+                          </div>
+                        ) : (<>
+                          <span className={`inline-flex items-center whitespace-nowrap rounded px-[2px] text-[9.5px] font-semibold leading-[15px] ${SELO_V4[p.situacao]}`}
+                            title={origemDaSituacao(p)} data-testid="situacao-da-parcela">{ROTULO_SITUACAO[p.situacao]}</span>
+                          {ajustadas.has(p.id) && <> <SeloAjustada /></>}
+                        </>)}
                       </td>
                       {/* UI-SEM-CORTE-01 — sem corte calado: onde a coluna não comporta os gestos (750px de conteúdo), eles quebram a linha */}
-                      <td className={`${TD_V4} !overflow-visible !whitespace-normal py-[3px]`} data-testid="lancamento-da-parcela" title={d?.contaNome ? `conta: ${d.contaNome}` : undefined}>
-                        <div className={`flex min-w-0 flex-wrap items-center ${E.td} [&>*]:whitespace-nowrap`}>
-                          {p.lancamentoId && (
-                            <button type="button" className="font-medium text-primary hover:underline" title="Abrir o lançamento do principal no Financeiro"
-                              onClick={(e) => { e.stopPropagation(); setLancamentoAberto(p.lancamentoId); }} data-testid="ver-principal">↔ principal</button>
-                          )}
-                          {p.lancamentoId && p.lancamentoJurosId && <span className={`px-[2px] ${COR_V4.rotulo}`}>·</span>}
-                          {p.lancamentoJurosId && (
-                            <button type="button" className="font-medium text-primary hover:underline" title="Abrir o lançamento dos juros desta parcela no Financeiro"
-                              onClick={(e) => { e.stopPropagation(); setLancamentoAberto(p.lancamentoJurosId); }} data-testid="ver-juros">↔ juros</button>
-                          )}
-                          {!p.lancamentoId && !p.lancamentoJurosId && <span className={COR_V4.rotulo}>—</span>}
-                          {vs.length > 0 && (<>
-                            <span className={`px-[2px] ${COR_V4.rotulo}`}>·</span>
-                            <button type="button" className={`font-medium hover:underline ${COR_V4.vermelho}`} data-testid="desvincular-pagamento"
-                              title={`Pagamento vinculado (${vs.map(v => ROTULO_DO_PAPEL[v.papel]).join(', ')}) · desvincular volta a parcela como estava`}
-                              onClick={(e) => { e.stopPropagation(); setDesvinculando(vs[0]); }}>desvincular</button>
-                          </>)}
-                          {podeBuscar && (<>
-                            <span className={`px-[2px] ${COR_V4.rotulo}`}>·</span>
-                            <button type="button" className="font-medium text-primary hover:underline" data-testid="buscar-pagamento-botao"
-                              title="Procurar no Financeiro o lançamento que pagou esta parcela"
-                              onClick={(e) => { e.stopPropagation(); setBuscarPagamentoDe(p.id); }}>Buscar</button>
-                          </>)}
-                          {/* o lápis mora no FIM da mesma célula (a coluna própria saiu) */}
-                          <button type="button" className={`ml-auto flex size-[14px] shrink-0 items-center justify-center rounded hover:bg-[#e3e8ee] ${COR_V4.rotulo}`}
-                            onClick={(e) => { e.stopPropagation(); setFocoParcela(p.id); abrirEdicao('parcelas'); }}
-                            title="Editar as parcelas (esta em destaque)" aria-label="Editar a parcela" data-testid="lapis-da-parcela">
-                            <Pencil className="size-3" />
-                          </button>
-                        </div>
-                      </td>
+                      {!p.semValor && (
+                        <td className={`${TD_V4} !overflow-visible !whitespace-normal py-[3px]`} data-testid="lancamento-da-parcela" title={d?.contaNome ? `conta: ${d.contaNome}` : undefined}>
+                          {gestos}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -745,11 +769,11 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
               {linhas.length > 0 && (
                 <tfoot data-testid="rodape-das-parcelas"><tr>
                   <td colSpan={4} className={TF_V4}>Total{cartoes ? ` · ${cartoes.parcelas} ${cartoes.parcelas === 1 ? 'parcela' : 'parcelas'}` : ''}</td>
-                  <td className={`${TF_V4} text-right tabular-nums`}>{cartoes ? num2(cartoes.somaPrincipal) : '…'}</td>
+                  <td className={`${TF_V4} ${SEP_TD} text-right tabular-nums`}>{cartoes ? num2(cartoes.somaPrincipal) : '…'}</td>
                   <td className={`${TF_V4} text-right tabular-nums`}>{cartoes ? num2(cartoes.jurosPrevistos) : '…'}</td>
                   <td className={`${TF_V4} text-right tabular-nums`} data-testid="total-das-parcelas">{cartoes ? num2(cartoes.somaTotal) : '…'}</td>
                   <td className={TF_V4} />
-                  <td className={`${TF_V4} tabular-nums`} data-testid="total-pagas">{cartoes ? `${cartoes.pagas} de ${cartoes.parcelas}` : '…'}</td>
+                  <td className={`${TF_V4} ${SEP_TD} tabular-nums`} data-testid="total-pagas">{cartoes ? `${cartoes.pagas} de ${cartoes.parcelas}` : '…'}</td>
                   <td className={TF_V4} data-testid="total-pago">pago <span className="tabular-nums text-[#15803d]">{cartoes ? num2(cartoes.pago) : '…'}</span></td>
                 </tr></tfoot>
               )}
@@ -813,9 +837,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                       <TableCell className={`${MOEDA} font-semibold`}>{num2(p.valorTotal)}</TableCell>
                       {!ehParcelamento && <TableCell className={MOEDA} data-testid="saldo-apos">{saldoApos?.get(p.id) == null ? '—' : num2(saldoApos.get(p.id) ?? 0)}</TableCell>}
                       <TableCell className="celula-status">
-                        <span className={`inline-flex items-center whitespace-nowrap rounded px-1 py-0 text-[9px] font-normal leading-tight ${orfa ? CLASSE_SEM_LANCAMENTO : CLASSE_SITUACAO[p.situacao]}`}
-                              title={orfa ? porQueSemLancamento(p) : origemDaSituacao(p)} data-testid="situacao-da-parcela" data-sem-lancamento={orfa ? 'sim' : undefined}>
-                          {orfa ? ROTULO_SEM_LANCAMENTO : ROTULO_SITUACAO[p.situacao]}
+                        <span className={`inline-flex items-center whitespace-nowrap rounded px-1 py-0 text-[9px] font-normal leading-tight ${orfa ? CLASSE_SEM_LANCAMENTO : p.semValor ? CLASSE_SEM_VALOR : CLASSE_SITUACAO[p.situacao]}`}
+                              title={orfa ? porQueSemLancamento(p) : p.semValor ? MOTIVO_SEM_VALOR : origemDaSituacao(p)} data-testid="situacao-da-parcela" data-sem-lancamento={orfa ? 'sim' : undefined}>
+                          {orfa ? ROTULO_SEM_LANCAMENTO : p.semValor ? ROTULO_SEM_VALOR : ROTULO_SITUACAO[p.situacao]}
                         </span>
                         {/* EDITAR v2: a parcela ajustada à mão leva o selo (a coluna `ajustada` do banco), na mesma célula */}
                         {!ehParcelamento && ajustadas.has(p.id) && <> <SeloAjustada /></>}

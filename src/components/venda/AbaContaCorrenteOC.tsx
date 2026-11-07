@@ -1,5 +1,5 @@
 import { casaNaBusca as casaSemAcento } from '@/lib/texto/busca';
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -20,9 +20,14 @@ import { STATUS_PALETA } from '@/lib/financeiro/statusFinanceiro';
 import {
   barraDaDiferenca, classeDaEntregaNaTela, classeDoAjusteNaTela, classeDoDinheiroNaTela, classeDoSaldoNaTela, contaComNumero, corDoSaldoNaTela,
   dataCurta, descricaoDoEvento, dinheiroEmAberto, efeitoNoSaldo, linhaNaTela, linhasDaPreviaAjuste, noSinalDaFazenda, rotuloDoSaldo, rotuloExplicacao, totaisNaTela, liquidoNaTela,
-  rotuloSentidoAjuste, sugestaoAjuste, totalDoRascunho, valorAjusteParaRpc, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
+  rotuloSentidoAjuste, saldoNaTela, sugestaoAjuste, totalDoRascunho, valorAjusteParaRpc, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
   type ContaCorrente, type LadoContaCorrente, type LinhaContaCorrente, type LinhaPreviaAjuste, type SentidoAjuste, type TipoExplicacao,
 } from '@/lib/oc/contaCorrente';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Ajuda } from '@/components/ui/ajuda';
+import { useClienteIdSeHouver } from '@/contexts/ClienteContext';
+import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/conciliacao/complementoDasLinhas';
+import { listaParaVincular, ordenarPorColuna, type ColunaDaBusca } from '@/lib/oc/listaParaVincular';
 import type {
   ContaParaExplicacao, ExplicacaoRascunho, LoteParaAjuste, OcContaCorrenteApi, RecebimentoVinculavel,
 } from '@/hooks/useOcContaCorrente';
@@ -488,7 +493,11 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
           {barra && (
             <div className="flex h-6 flex-none items-center gap-2 rounded border border-[#fde68a] bg-[#fffbeb] px-2 text-[10.5px]" data-testid="barra-diferenca">
               <b>{barra.frase}</b>
-              <span className="text-muted-foreground">A OC fecha mesmo assim; o saldo fica pendente até ser explicado.</span>
+              {/* OC-BUSCAR-RECEBIMENTO-01 (regra soberana 06/11 17:33): a explicação vai para o ⓘ */}
+              <Ajuda titulo="Diferença da operação" lado="top"
+                oQueE="O que o dinheiro da operação ainda não cobre do que foi entregue (ou o que veio a mais)."
+                porQue="A OC fecha mesmo assim; o saldo fica pendente até ser explicado ou recebido."
+                comoFazer="Recebimento já lançado: + Buscar recebimento. Ainda por vir: + Programar recebimento. Desconto, ajuste de preço ou permuta: Explicar diferença." />
               <Button type="button" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado}
                 onClick={abrirExplicar}>
                 Explicar diferença
@@ -638,19 +647,22 @@ function LinhaExtrato({ l, linhas, lado, acoes, onAcao }: {
 }
 
 /* ─── Buscar recebimento no Financeiro (vincular recebimento ja lancado) ─── */
-/* ─── "Buscar recebimento/pagamento no Financeiro" — OC-CORRECOES-01 C3 (Gabriel 21/10, print 15h41 da 0731374f) ───────────────
-   ⚠ NUNCA ESCONDE EM SILENCIO O DO COMPRADOR: a lista vem de `oc_recebimentos_do_financeiro` — os vinculaveis de sempre e, do comprador
-     (com mesclados e filiais), tambem o que a regra exclui, APAGADO e com o motivo na coluna Status ("já está nesta operação (1/1)").
-   ⚠ MODAL FIXO (a tabela rola por dentro), na regua de tabela (Recorrencias): cabecalho 22, linha 19. Colunas na ordem pedida;
-     data (dd/mm/aaaa) e valor nunca cortam; texto longo "…" com o texto inteiro no `title`. Busca livre no topo (descricao, favorecido,
-     valor). */
-const COLUNAS_BUSCAR: { titulo: string; largura?: number; num?: boolean }[] = [
-  { titulo: '', largura: 22 }, { titulo: 'Competência', largura: 66 }, { titulo: 'Vencimento', largura: 66 }, { titulo: 'Pagamento', largura: 66 },
-  { titulo: 'Descrição' }, { titulo: 'Favorecido', largura: 130 }, { titulo: 'Conta (classificação)', largura: 140 },
-  { titulo: 'Conta bancária', largura: 100 }, { titulo: 'Status', largura: 112 }, { titulo: 'Valor', largura: 96, num: true },
+/* ─── "Buscar recebimento/pagamento no Financeiro" — OC-CORRECOES-01 C3 (Gabriel 21/10) e OC-BUSCAR-RECEBIMENTO-01 (Gabriel 07/11 08:31) ──
+   ⚠ A LISTA É DO BANCO (`oc_recebimentos_do_financeiro`: os vinculaveis e, do comprador, o que a regra exclui, apagado e com o motivo);
+     QUAIS aparecem e EM QUE ORDEM e' do `listaParaVincular`: sem os ligados a outra OC ("ver também os já vinculados"), só a janela da
+     OC (30 antes, 60 depois; "procurar em todo o histórico"), o mais provável primeiro. Toda coluna ordena pelo clique no cabeçalho.
+   ⚠ CABE SEM ROLAR DE LADO a 1240/1024/135%: ○ · Venc. · Pgto. · Descrição · Faz. · Conta bancária · Valor · Status, um dado por coluna;
+     datas dd/mm/aaaa (a regra da casa; o pedido dizia dd/mm/aa — a confirmar); o Valor colado à direita, nunca cortado; o favorecido só quando NÃO é o da OC (na Descrição);
+     a competência e a classificação saíram. O texto que explicava o vincular foi para o ⓘ. */
+type ColunaDoBuscar = { titulo: string; largura?: number; num?: boolean; ordena?: ColunaDaBusca };
+const COLUNAS_BUSCAR: ColunaDoBuscar[] = [
+  { titulo: '', largura: 22 }, { titulo: 'Venc.', largura: 64, ordena: 'vencimento' }, { titulo: 'Pgto.', largura: 64, ordena: 'pagamento' },
+  { titulo: 'Descrição', ordena: 'descricao' }, { titulo: 'Faz.', largura: 42, ordena: 'fazenda' },
+  { titulo: 'Conta bancária', largura: 112, ordena: 'contaBancaria' }, { titulo: 'Valor', largura: 92, num: true, ordena: 'valor' },
+  { titulo: 'Status', largura: 104, ordena: 'status' },
 ];
-/** A Descricao nunca some: abaixo disto (janela estreita) a tabela rola de lado, dentro do quadro. */
-const LARGURA_MINIMA_BUSCAR = COLUNAS_BUSCAR.reduce((s, c) => s + (c.largura ?? 160), 0);
+/** A Descricao nunca some: abaixo disto a tabela rola de lado, dentro do quadro (a 135% de 1280 ainda sobra). */
+const LARGURA_MINIMA_BUSCAR = COLUNAS_BUSCAR.reduce((s, c) => s + (c.largura ?? 140), 0);
 const dataInteira = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 /** A busca livre: descricao, favorecido ou valor (com ou sem pontuacao). */
 export function casaNaBusca(r: RecebimentoVinculavel, termo: string): boolean {
@@ -664,12 +676,17 @@ export function casaNaBusca(r: RecebimentoVinculavel, termo: string): boolean {
 
 function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrenteApi; lado: LadoContaCorrente; onFechar: () => void }) {
   const compra = lado === 'compra';
+  const clienteId = useClienteIdSeHouver();
   const [itens, setItens] = useState<RecebimentoVinculavel[] | null>(null);
+  const [fazendas, setFazendas] = useState<Map<string, ComplementoDaLinha> | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [escolhido, setEscolhido] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const [busca, setBusca] = useState('');
   const [tentou, setTentou] = useState(false);
+  const [verVinculados, setVerVinculados] = useState(false);
+  const [todoHistorico, setTodoHistorico] = useState(false);
+  const [ordem, setOrdem] = useState<{ coluna: ColunaDaBusca; crescente: boolean } | null>(null);
   const { listarVinculaveis } = api;
 
   useEffect(() => {
@@ -677,6 +694,13 @@ function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrent
     void listarVinculaveis().then(r => { if (vivo) { setItens(r.itens); setErro(r.erro); } });
     return () => { vivo = false; };
   }, [listarVinculaveis]);
+  /* a fazenda de cada um (o código), pela mesma leitura das listas da Conciliação; falhou = "—" (nada decide por ela) */
+  useEffect(() => {
+    if (!itens || !clienteId) return;
+    let vivo = true;
+    void lerComplementoDasLinhas(clienteId, itens.map(r => r.lancamentoId)).then(m => { if (vivo) setFazendas(m); });
+    return () => { vivo = false; };
+  }, [itens, clienteId]);
 
   const faltaMotivo = tentou && !motivo.trim();
   const faltaEscolha = tentou && !escolhido;
@@ -687,18 +711,30 @@ function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrent
     if (e) { setErro(e); return; }
     onFechar();
   };
-  const visiveis = itens?.filter(r => casaNaBusca(r, busca)) ?? null;
+  const cc = api.contaCorrente;
+  const lista = itens ? listaParaVincular(itens.filter(r => casaNaBusca(r, busca)), {
+    dataDaOc: cc?.ultimaEntrega ?? null, saldo: cc ? Math.max(0, saldoNaTela(cc, lado)) : 0, verVinculados, todoHistorico,
+  }) : null;
+  const fazendaDe = (r: RecebimentoVinculavel) => fazendas?.get(r.lancamentoId)?.fazendaCodigo ?? null;
+  const visiveis = lista ? (ordem ? ordenarPorColuna(lista.linhas, ordem.coluna, ordem.crescente, fazendaDe) : lista.linhas) : null;
   const nCol = COLUNAS_BUSCAR.length;
+  const clicarCabecalho = (c: ColunaDaBusca) =>
+    setOrdem(o => (o?.coluna === c ? (o.crescente ? { coluna: c, crescente: false } : null) : { coluna: c, crescente: true }));
 
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className="flex h-[560px] max-h-[90vh] w-[980px] max-w-[95vw] flex-col gap-2" data-testid="dialogo-buscar-recebimento">
-        <DialogHeader className="shrink-0"><DialogTitle className="text-[12px]">{compra ? 'Buscar pagamento no Financeiro' : 'Buscar recebimento no Financeiro'}</DialogTitle></DialogHeader>
-        <div className="shrink-0 text-[10px] text-muted-foreground">
-          {compra
-            ? 'O lançamento fica na conta da compra e sai do DRE pela OC (o custo entrou pela entrada do gado). Valor, datas, conta bancária e conciliação não mudam.'
-            : 'O lançamento fica na conta da venda e sai do DRE pela OC (a receita entrou pela entrega). Valor, datas, conta bancária e conciliação não mudam.'}
-        </div>
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="flex items-center gap-1.5 text-[12px]">
+            {compra ? 'Buscar pagamento no Financeiro' : 'Buscar recebimento no Financeiro'}
+            <Ajuda titulo={compra ? 'Buscar pagamento' : 'Buscar recebimento'}
+              oQueE={compra ? 'Um pagamento já lançado no Financeiro, para ligar a esta compra.' : 'Um recebimento já lançado no Financeiro, para ligar a esta operação.'}
+              porQue={compra
+                ? 'O lançamento fica na conta da compra e sai do DRE pela OC (o custo entrou pela entrada do gado). Valor, datas, conta bancária e conciliação não mudam.'
+                : 'O lançamento fica na conta da venda e sai do DRE pela OC (a receita entrou pela entrega). Valor, datas, conta bancária e conciliação não mudam.'}
+              comoFazer={`Vêm primeiro os do ${TEXTOS[lado].grupoSaldo.toLowerCase()} da operação, de 30 dias antes a 60 depois dela, com o valor igual ao saldo no topo. Os já ligados a outra OC e os antigos ficam de fora: ligue-os pelos botões abaixo da lista. Escolha um, escreva o motivo e clique em Vincular.`} />
+          </DialogTitle>
+        </DialogHeader>
         <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por descrição, favorecido ou valor"
           className="h-[24px] shrink-0 text-[11px]" data-testid="busca-recebimento" aria-label="Buscar" />
         <div className={`${QUADRO_REGUA} min-h-0 flex-1`}>
@@ -706,55 +742,63 @@ function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrent
             <table className="w-full table-fixed border-separate border-spacing-0" style={{ minWidth: LARGURA_MINIMA_BUSCAR }}>
               <colgroup>{COLUNAS_BUSCAR.map((c, i) => <col key={i} style={c.largura ? { width: c.largura } : undefined} />)}</colgroup>
               <thead className="sticky top-0 z-10 bg-primary">
-                <tr>{COLUNAS_BUSCAR.map((c, i) => <th key={i} className={`${TH_REGUA} ${c.num ? 'text-right' : 'text-left'}`}>{c.titulo}</th>)}</tr>
+                <tr>{COLUNAS_BUSCAR.map((c, i) => (
+                  <th key={i} className={`${TH_REGUA} ${c.num ? 'text-right' : 'text-left'}`}
+                    aria-sort={c.ordena && ordem?.coluna === c.ordena ? (ordem.crescente ? 'ascending' : 'descending') : undefined}>
+                    {c.ordena ? (
+                      <button type="button" className="inline-flex max-w-full items-center gap-0.5 hover:underline" data-testid={`ordenar-${c.ordena}`}
+                        onClick={() => { if (c.ordena) clicarCabecalho(c.ordena); }}>
+                        {c.titulo}{ordem?.coluna === c.ordena ? (ordem.crescente ? ' ▲' : ' ▼') : ''}
+                      </button>
+                    ) : c.titulo}
+                  </th>
+                ))}</tr>
               </thead>
               <tbody>
                 {visiveis === null && <tr><td colSpan={nCol} className={`${TD_REGUA} text-center text-muted-foreground`}>Carregando…</td></tr>}
                 {visiveis?.length === 0 && (
-                  <tr><td colSpan={nCol} className={`${TD_REGUA} text-center text-muted-foreground`}>
-                    {busca.trim() ? 'Nada com essa busca.' : compra ? 'Nenhuma saída do cliente disponível para vincular.' : 'Nenhuma entrada do cliente disponível para vincular.'}
+                  <tr><td colSpan={nCol} className={`${TD_REGUA} text-center text-muted-foreground`} data-testid="buscar-vazio">
+                    {busca.trim() ? 'Nada com essa busca.' : compra ? 'Nenhum pagamento perto da data da operação.' : 'Nenhum recebimento perto da data da operação.'}
                   </td></tr>
                 )}
-                {visiveis && visiveis.length > 0 && ([true, false] as const).map(doMesmo => {
-                  const grupo = visiveis.filter(r => r.mesmoFavorecido === doMesmo);
-                  if (grupo.length === 0) return null;
+                {visiveis?.map(r => {
+                  const excluido = !!r.motivoExcluido;
+                  const status = r.motivoExcluido ?? (r.conciliado ? 'conciliado' : r.semContaBancaria ? 'sem conta' : (r.status ?? '—'));
+                  /* o favorecido só quando não é o da operação (o de sempre é o mesmo: não ocupa coluna) */
+                  const descricao = r.mesmoFavorecido || !r.favorecido ? (r.descricao ?? '—') : `${r.descricao ?? '—'} · ${r.favorecido}`;
+                  const faz = fazendas?.get(r.lancamentoId);
                   return (
-                    <Fragment key={doMesmo ? 'mesmo' : 'outro'}>
-                      <tr data-testid={doMesmo ? 'grupo-mesmo-favorecido' : 'grupo-outro-favorecido'}>
-                        <td colSpan={nCol} className={`${TD_REGUA} bg-muted/40 font-medium text-muted-foreground`}>
-                          {doMesmo ? `Do ${TEXTOS[lado].grupoSaldo.toLowerCase()} da operação` : 'Outro favorecido'}
-                        </td>
-                      </tr>
-                      {grupo.map(r => {
-                        const excluido = !!r.motivoExcluido;
-                        const status = r.motivoExcluido ?? (r.conciliado ? 'conciliado' : r.semContaBancaria ? 'sem conta' : (r.status ?? '—'));
-                        const conta = rotuloDaConta(r.subcentro) ?? '—';
-                        return (
-                          <tr key={r.lancamentoId} data-lancamento={r.lancamentoId} data-excluido={excluido ? '' : undefined}
-                            className={excluido ? 'text-muted-foreground' : `cursor-pointer ${escolhido === r.lancamentoId ? 'bg-primary/10' : 'bg-white'}`}
-                            onClick={() => { if (!excluido) setEscolhido(r.lancamentoId); }} title={excluido ? r.motivoExcluido ?? undefined : undefined}>
-                            <td className={`${TD_REGUA} text-center`}>
-                              <input type="radio" aria-label={`Escolher ${r.descricao ?? r.lancamentoId}`} checked={escolhido === r.lancamentoId}
-                                disabled={excluido} onChange={() => setEscolhido(r.lancamentoId)} />
-                            </td>
-                            <td className={`${TD_REGUA} whitespace-nowrap tabular-nums`}>{dataInteira(r.competencia)}</td>
-                            <td className={`${TD_REGUA} whitespace-nowrap tabular-nums`}>{dataInteira(r.vencimento)}</td>
-                            <td className={`${TD_REGUA} whitespace-nowrap tabular-nums`}>{dataInteira(r.pagamento)}</td>
-                            <td className={TD_REGUA_TEXTO} title={r.descricao ?? undefined}>{r.descricao ?? '—'}</td>
-                            <td className={TD_REGUA_TEXTO} title={r.favorecido ?? undefined}>{r.favorecido ?? '—'}</td>
-                            <td className={TD_REGUA_TEXTO} title={conta}>{conta}</td>
-                            <td className={TD_REGUA_TEXTO} title={r.contaBancaria ?? undefined}>{r.contaBancaria ?? '—'}</td>
-                            <td className={`${TD_REGUA_TEXTO} ${excluido || r.semContaBancaria ? 'text-[#b45309]' : ''}`} title={status} data-testid="status-buscar">{status}</td>
-                            <td className={`${TD_REGUA_NUM} ${excluido ? '' : compra ? COR.neg : COR.pos}`}>{formatMoeda(r.valor)}</td>
-                          </tr>
-                        );
-                      })}
-                    </Fragment>
+                    <tr key={r.lancamentoId} data-lancamento={r.lancamentoId} data-excluido={excluido ? '' : undefined} data-testid="linha-buscar"
+                      className={excluido ? 'text-muted-foreground' : `cursor-pointer ${escolhido === r.lancamentoId ? 'bg-primary/10' : 'bg-white'}`}
+                      onClick={() => { if (!excluido) setEscolhido(r.lancamentoId); }} title={excluido ? r.motivoExcluido ?? undefined : undefined}>
+                      <td className={`${TD_REGUA} text-center`}>
+                        <input type="radio" aria-label={`Escolher ${r.descricao ?? r.lancamentoId}`} checked={escolhido === r.lancamentoId}
+                          disabled={excluido} onChange={() => setEscolhido(r.lancamentoId)} />
+                      </td>
+                      <td className={`${TD_REGUA} whitespace-nowrap tabular-nums`}>{dataInteira(r.vencimento)}</td>
+                      <td className={`${TD_REGUA} whitespace-nowrap tabular-nums`}>{dataInteira(r.pagamento)}</td>
+                      <td className={TD_REGUA_TEXTO} title={descricao}>{descricao}</td>
+                      <td className={`${TD_REGUA} whitespace-nowrap`} title={faz?.fazendaNome ?? undefined} data-testid="fazenda-buscar">{faz?.fazendaCodigo ?? '—'}</td>
+                      <td className={TD_REGUA_TEXTO} title={r.contaBancaria ?? undefined}>{r.contaBancaria ?? '—'}</td>
+                      <td className={`${TD_REGUA_NUM} ${excluido ? '' : compra ? COR.neg : COR.pos}`} data-testid="valor-buscar">{formatMoeda(r.valor)}</td>
+                      <td className={`${TD_REGUA_TEXTO} ${excluido || r.semContaBancaria ? 'text-[#b45309]' : ''}`} title={status} data-testid="status-buscar">{status}</td>
+                    </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+        </div>
+        {/* os dois caminhos para o que ficou de fora, com o número; lugar fixo (nada se desloca quando o número muda) */}
+        <div className="flex h-[18px] shrink-0 items-center gap-4 text-[10px] text-muted-foreground" data-testid="buscar-de-fora">
+          <label className="inline-flex items-center gap-1">
+            <Checkbox checked={verVinculados} onCheckedChange={v => setVerVinculados(v === true)} data-testid="ver-vinculados" className="h-3 w-3" />
+            ver também os já vinculados{lista && !verVinculados && lista.emOutraOc > 0 ? ` (${lista.emOutraOc})` : ''}
+          </label>
+          <label className="inline-flex items-center gap-1">
+            <Checkbox checked={todoHistorico} onCheckedChange={v => setTodoHistorico(v === true)} data-testid="todo-historico" className="h-3 w-3" />
+            procurar em todo o histórico{lista && !todoHistorico && lista.foraDaJanela > 0 ? ` (${lista.foraDaJanela} antigos)` : ''}
+          </label>
         </div>
         <div className="h-[14px] shrink-0 text-[10px] text-destructive">{faltaEscolha ? (compra ? 'Escolha o pagamento.' : 'Escolha o recebimento.') : ''}</div>
         <div className="shrink-0"><CampoMotivo id="motivo-buscar-recebimento" valor={motivo} onChange={setMotivo} falta={faltaMotivo} reservado /></div>

@@ -148,8 +148,9 @@ describe('a tela do contrato, lida da FONTE', () => {
   });
   it('a linha sem lançamento tem situação própria e os dois gestos; o resto da linha é o de antes', () => {
     expect(tela).toContain('const orfa = ehParcelamento && semLancamento(p);');
-    expect(tela).toContain('{orfa ? ROTULO_SEM_LANCAMENTO : ROTULO_SITUACAO[p.situacao]}');
-    expect(tela).toContain('title={orfa ? porQueSemLancamento(p) : origemDaSituacao(p)}');
+    /* FIN-PARCELA-VALOR-ZERO-01: entre "sem lançamento" e a situação, a de valor zero ("sem pagamento") */
+    expect(tela).toContain('{orfa ? ROTULO_SEM_LANCAMENTO : p.semValor ? ROTULO_SEM_VALOR : ROTULO_SITUACAO[p.situacao]}');
+    expect(tela).toContain('title={orfa ? porQueSemLancamento(p) : p.semValor ? MOTIVO_SEM_VALOR : origemDaSituacao(p)}');
     expect(tela).toContain('data-testid="recriar-da-linha"');
     expect(tela).toContain('data-testid="retirar-da-linha"');
     expect(tela).toContain("const r = await simularCancelarParcela({ parcelaId }, 'so_esta');");

@@ -3,7 +3,7 @@
  * POR PARCELA, as colunas na ordem da casa (Parc. · Comp. · Venc. · Pgto. · Descrição · Nº documento · [Fornecedor · Fazenda · Conta · Subcentro ·
  * Safra, só se MUDAM ou DIFEREM] · Valor · Status). Toda célula que pode mudar é um CAMPO (a parcela livre, célula a célula); a 1ª linha "Para
  * todas" aplica a coluna inteira (a caixinha do cabeçalho). A célula que vai mudar tem o fundo azul-claro com o valor NOVO e o de hoje no title —
- * sem riscado, sem "→". 🔒 na paga/conciliada só em Valor e Vencimento (e na Conta: o banco não a muda); nas programadas, Venc. e Valor são campos.
+ * sem riscado, sem "→" (exceção NOTA-ATUALIZA-PREVISTO-01: o valor do PREVISTO que a nota atualiza vem com o de hoje riscado ao lado). 🔒 na paga/conciliada só em Valor e Vencimento (e na Conta: o banco não a muda); nas programadas, Venc. e Valor são campos.
  * Fonte e linha = a régua (cabeçalho 22px 9,5 · linha 19px 10; as datas 9,5, como na lista de Lançamentos).
  * ⚠ A REGRA É DO BANCO: cada mudança pede a `fn_nota_completar` com `p_simular` e a grade desenha o que ela devolve (o que muda, o cadeado, o DRE).
  *   Nada é gravado antes do clique. P167 (uma compra só) e B2 (a soma não passa da nota) valem como antes.
@@ -215,9 +215,12 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
     const editada = celulas.has(k);
     const muda = editada ? String(celulas.get(k)) !== String(campo.hoje ?? '') : campo.muda;
     const texto = textos.get(k) ?? fmt(editada ? celulas.get(k) : campo.fica);
+    /* NOTA-ATUALIZA-PREVISTO-01 (R5) — o previsto que a nota atualiza: o valor de hoje RISCADO antes do novo (1.000,00 → 1.561,42) */
+    const riscado = qual === 'valor' && a.atualizar && muda;
     return (
-      <span title={`hoje: ${hoje}`} data-testid={muda ? 'previa-muda' : 'previa-igual'} data-hoje={hoje} className="block">
-        <Input value={texto} className={cn(CAMPO, qual === 'vencimento' ? DATA : 'text-right tabular-nums', muda && MUDA)}
+      <span title={`hoje: ${hoje}`} data-testid={muda ? 'previa-muda' : 'previa-igual'} data-hoje={hoje} className={riscado ? 'flex min-w-0 items-center gap-1' : 'block'}>
+        {riscado && <s className="shrink-0 tabular-nums text-muted-foreground" data-testid="previa-valor-riscado">{hoje}</s>}
+        <Input value={texto} className={cn(CAMPO, qual === 'vencimento' ? DATA : 'text-right tabular-nums', muda && MUDA, riscado && 'min-w-0 flex-1')}
           aria-label={`${qual === 'vencimento' ? 'Vencimento' : 'Valor'} de ${rotulos[a.id] ?? ''}`}
           onChange={(e) => { const t = e.target.value; editar(k, qual === 'vencimento' ? dataIso(t) : numeroDoValor(t), t); }} data-testid={`previa-campo-${qual}`} />
       </span>

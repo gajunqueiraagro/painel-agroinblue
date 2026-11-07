@@ -952,7 +952,9 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(screen.getByTestId('painel-a-resolver').textContent).toContain('8.119,00 abaixo do contratado');
     /* TELA DO CONTRATO v3 (18/10): a linha do título leva "nº · descrição", a situação e os botões; o Resumo é um bloco de 250px
        (os seis cartões saíram); Liberações, Pagamentos, Documentos e Histórico são abas — o cronograma acima é o de antes */
-    expect(screen.getByTestId('titulo-do-contrato').textContent).toContain('C-9');
+    /* FIN-FINANC-LAYOUT-01 (05/11): o título é a descrição; o nº vai pequeno ao lado, com o credor */
+    expect(screen.getByTestId('titulo-do-contrato').textContent).toBe('Trator');
+    expect(screen.getByTestId('credor-e-cedula').textContent).toContain('Nº C-9');
     expect(screen.queryByTestId('cartoes-do-credito')).toBeNull();
     expect(screen.getByTestId('bloco-resumo')).toBeTruthy();
     /* passo 5: o "Dar baixa ▾" acende no contrato vigente (o menu das quatro saídas) */

@@ -1537,6 +1537,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         {selectedPasto && activeFechamento && (
           <FechamentoPastoDialog
             open={dialogOpen}
+            fazendaRotulo={fazendas.find(f => f.id === activeFechamento?.fazenda_id)?.codigo ?? ''}
             onOpenChange={(o) => { setDialogOpen(o); if (!o) { setSelectedPasto(null); setActiveFechamento(null); loadFechamentos(anoMes); } }}
             pasto={selectedPasto}
             fechamento={activeFechamento}

@@ -10,7 +10,7 @@ import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { LancamentoDaOCDialog } from '@/components/operacao-comercial/LancamentoDaOCDialog';
-import { saldoAProgramar, type NaturezaDoModalOC, type RetornoLancarPeloModal } from '@/lib/oc/lancarPeloModal';
+import { saldoAProgramar, primeiraSaidaDaOC, type NaturezaDoModalOC, type RetornoLancarPeloModal } from '@/lib/oc/lancarPeloModal';
 import { executarDesfazerCompromisso, ErroDesfazer } from '@/lib/oc/desfazerCompromisso';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { produtoOCCompromisso, verboOC } from '@/lib/financeiro/produtoOC';
@@ -189,6 +189,7 @@ export function AbaFinanceiroOC(props: Props) {
       {erroModalOC && <div className="text-[10px] text-destructive" role="alert" data-testid="erro-modal-oc">{erroModalOC}</div>}
       <LancamentoDaOCDialog natureza={modalOC} operacaoId={operacaoId} versao={ocApi.versao} tipoOperacao={api.tipoOperacao}
         contraparteId={api.contraparteId} descricaoDaOC={descricaoDaOC} sugerido={saldoAProgramar(ccApi.contaCorrente)}
+        primeiraSaida={primeiraSaidaDaOC(ccApi.contaCorrente)}
         aoFechar={fecharModalOC} aoLancar={aoLancarPeloModal} aoFalhar={aoFalharModalOC} />
       <AbaContaCorrenteOC api={ccApi} somenteLeitura={props.financeiroNovoReadOnly}
         onProgramar={() => { setErroModalOC(null); setModalOC('principal'); }} cancelarProgramado={cancelarProgramado}

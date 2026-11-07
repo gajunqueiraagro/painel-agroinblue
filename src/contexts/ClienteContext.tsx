@@ -190,3 +190,9 @@ export function useCliente() {
   if (!context) throw new Error('useCliente must be used within ClienteProvider');
   return context;
 }
+
+/** OC-BUSCAR-RECEBIMENTO-01 — o id do cliente atual SEM exigir o provedor (nulo fora dele): para leitura COMPLEMENTAR de um componente que
+ *  também monta isolado (bancada, teste); o que decide continua no `useCliente`. */
+export function useClienteIdSeHouver(): string | null {
+  return useContext(ClienteContext)?.clienteAtual?.id ?? null;
+}

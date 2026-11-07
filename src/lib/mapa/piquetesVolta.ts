@@ -226,3 +226,136 @@ export function lerDesfazer(dado: unknown): PreviaDesfazer | null {
     areas: areas.map(a => ({ id: texto(a, 'id') ?? '', nome: texto(a, 'nome') ?? '—', tipo: texto(a, 'tipo') })),
   };
 }
+
+// --- PIQUETE-VIGENCIA-01: "Mudar mês de início" (fn_piquetes_mudar_inicio) e o caminho de volta dele (fn_piquetes_mudar_inicio_desfazer) ---------
+/** Um mês 'AAAA-MM' (ou 'AAAA-MM-DD') como 'MM/AAAA'. */
+export function mesBr(anoMes: string): string {
+  const [a, m] = anoMes.slice(0, 7).split('-');
+  return a && m ? `${m}/${a}` : anoMes;
+}
+
+/**
+ * D1 (Gabriel 05/11, pela recomendação): os meses oferecidos são os últimos 4 contados de HOJE, os mesmos do Concluir (`mesesDeInicio`), sem o mês em
+ * que os piquetes já começam. Antes do início = antecipar; depois = adiar. Mês fechado aparece: quem recusa é o banco, com o link do Reabrir (D3).
+ */
+export function mesesParaMudarInicio<M extends { valor: string }>(meses: readonly M[], inicioAtual: string | null): M[] {
+  const atual = inicioAtual ? `${inicioAtual.slice(0, 7)}-01` : null;
+  return meses.filter(m => m.valor !== atual);
+}
+
+/**
+ * PIQUETE-VIGENCIA-01 (bug do P9, Gabriel 06/11 17:11): o início dos piquetes vem do BANCO na abertura do diálogo — a mesma tabela que a
+ * `fn_piquetes_mudar_inicio` lê —, nunca da lista de pastos da tela (velha depois de gravar: o P9 já começava em 10/2026 e o diálogo dizia
+ * "início 11/2026", ofereceu 10/2026 e o banco recusou "já começam em 10/2026"). Todos no mesmo mês = esse mês; meses diferentes = desencontrados
+ * (a tela mostra cada piquete com o seu início).
+ */
+export interface InicioDoPiquete { pastoId: string; nome: string; inicio: string | null }
+export function inicioDoGrupo(inicios: readonly InicioDoPiquete[]): { mes: string | null; desencontrados: boolean } {
+  if (inicios.length === 0) return { mes: null, desencontrados: false };
+  const meses = new Set(inicios.map(i => (i.inicio ? `${i.inicio.slice(0, 7)}-01` : '')));
+  if (meses.size > 1) return { mes: null, desencontrados: true };
+  const [m] = [...meses];
+  return { mes: m || null, desencontrados: false };
+}
+
+/**
+ * O mini-mapa do diálogo: com a prévia, os meses que mudam (antecipar = antes o pai, depois os piquetes; adiar = o contrário); SEM prévia
+ * (lendo, ou recusada) o que vale HOJE — o pai em cinza e os piquetes por cima —, para o mapa sempre aproximar no pasto (antes ele abria no
+ * Brasil inteiro quando o banco recusava).
+ */
+export function itensDoMapaDoInicio(direcao: 'antecipar' | 'adiar' | null, pai: { chave: string; nome: string; geojson: GeoJSON.Geometry | null },
+  piquetes: readonly { pastoId: string; nome: string; geojson: GeoJSON.Geometry | null }[]): ItemDaPreviaComMapa[] {
+  const adiar = direcao === 'adiar';
+  return [
+    { chave: pai.chave, nome: pai.nome, antes: adiar ? null : pai.geojson, depois: adiar ? pai.geojson : null },
+    ...piquetes.map(q => ({ chave: q.pastoId, nome: q.nome, antes: adiar ? q.geojson : null, depois: adiar ? null : q.geojson })),
+  ];
+}
+
+/** D3: o banco põe o 1º mês fechado no HINT da recusa ('fechamento:AAAA-MM'); é ele que acende o link do Reabrir ao lado da frase. */
+export function mesFechadoDoErro(erro: unknown): string | null {
+  const h = erro && typeof erro === 'object' ? Reflect.get(erro, 'hint') : null;
+  const m = typeof h === 'string' ? /^fechamento:(\d{4}-\d{2})$/.exec(h.trim()) : null;
+  return m ? m[1] : null;
+}
+
+export interface PreviaMudarInicio {
+  direcao: 'antecipar' | 'adiar';
+  de: string; para: string; meses: string[];
+  pai: { id: string; nome: string };
+  areaPaiHa: number | null; areaGrupoHa: number | null;
+  pastos: { id: string; nome: string }[];
+  cards: number; cabecas: number; cardVaiPara: string | null;
+  /** a frase em pt-BR montada aqui (`fraseDoInicio`): a do banco sai com ponto decimal ("0.00 UA/ha", "108.83 ha") */
+  frase: string;
+  grupoNome: string | null; fimDepois: string | null;
+  lotacao: { kg: number | null; ua: number | null; uaHaGrupo: number | null; piquete: string | null; areaPiqueteHa: number | null; uaHaPiquete: number | null };
+}
+
+const nBr = (v: number | null, casas: number) => (v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }));
+const diaBr = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '—');
+/** PIQUETE-VIGENCIA-01 (Gabriel 06/11 17:13, P17): a frase da prévia com os números da casa (vírgula decimal, ponto de milhar), dos campos do banco */
+export function fraseDoInicio(p: Omit<PreviaMudarInicio, 'frase'>): string {
+  const grupo = p.grupoNome ?? p.pai.nome, n = p.pastos.length, mm = mesBr(p.para);
+  if (p.direcao === 'adiar') {
+    return `${grupo}: os ${n} piquetes passam a começar em ${mm}; ${p.pai.nome} volta a valer até ${diaBr(p.fimDepois)} (${nBr(p.areaPaiHa, 2)} ha); nenhum card muda.`;
+  }
+  const l = p.lotacao, piq = l.piquete ?? p.cardVaiPara ?? '—';
+  return `${grupo}: os ${n} piquetes passam a começar em ${mm}; ${p.pai.nome} fica encerrado em ${diaBr(p.fimDepois)}; ${p.cards} card(s) de ${p.pai.nome} `
+    + `(${nBr(p.cabecas, 0)} cab, ${nBr(l.kg, 0)} kg, ${nBr(l.ua, 1)} UA) passam inteiros a ${piq}; lotação do grupo ${nBr(l.uaHaGrupo, 2)} UA/ha `
+    + `(${nBr(p.areaGrupoHa, 2)} ha), de ${piq} ${nBr(l.uaHaPiquete, 2)} UA/ha (${nBr(l.areaPiqueteHa, 2)} ha).`;
+}
+
+/** PIQUETE-VIGENCIA-01 (Gabriel 06/11 17:13, P17): o que a GRAVAÇÃO devolve (as duas funções, `p_simular` false) — ela NÃO traz frase, meses nem
+ *  pastos; lida pelo leitor da prévia, a tela dizia "não entende… Nada foi gravado" com o gesto JÁ gravado (P9 17:10, P17 17:13). */
+export function lerGravouInicio(dado: unknown): { trilhaId: string } | null {
+  if (campo(dado, 'ok') !== true || campo(dado, 'simulado') !== false) return null;
+  const trilhaId = texto(dado, 'trilha_id');
+  return trilhaId ? { trilhaId } : null;
+}
+const listaDeTextos = (v: unknown): string[] | null => (Array.isArray(v) && v.every(x => typeof x === 'string') ? v.map(String) : null);
+export function lerMudarInicio(dado: unknown): PreviaMudarInicio | null {
+  if (campo(dado, 'ok') !== true) return null;
+  const direcao = texto(dado, 'direcao'), de = texto(dado, 'de'), para = texto(dado, 'para'), frase = texto(dado, 'frase');
+  const pai = campo(dado, 'pai'), paiId = texto(pai, 'id'), paiNome = texto(pai, 'nome');
+  const meses = listaDeTextos(campo(dado, 'meses')), pastos = campo(dado, 'pastos'), cards = campo(dado, 'cards');
+  if ((direcao !== 'antecipar' && direcao !== 'adiar') || !de || !para || !frase || !paiId || !paiNome || !meses || !Array.isArray(pastos)) return null;
+  const l = campo(dado, 'lotacao');
+  const sem: Omit<PreviaMudarInicio, 'frase'> = {
+    direcao, de, para, meses, pai: { id: paiId, nome: paiNome },
+    areaPaiHa: numero(dado, 'area_pai_ha'), areaGrupoHa: numero(l, 'area_grupo_ha'),
+    pastos: pastos.map(x => ({ id: texto(x, 'id') ?? '', nome: texto(x, 'nome') ?? '—' })),
+    cards: Array.isArray(cards) ? cards.length : 0, cabecas: numero(dado, 'cabecas_antes') ?? 0, cardVaiPara: texto(dado, 'card_vai_para'),
+    grupoNome: texto(campo(dado, 'grupo'), 'nome'), fimDepois: texto(pai, 'fim_depois'),
+    lotacao: { kg: numero(l, 'kg'), ua: numero(l, 'ua'), uaHaGrupo: numero(l, 'ua_ha_grupo'), piquete: texto(l, 'piquete'),
+      areaPiqueteHa: numero(l, 'area_piquete_ha'), uaHaPiquete: numero(l, 'ua_ha_piquete') },
+  };
+  return { ...sem, frase: fraseDoInicio(sem) };
+}
+
+export interface PreviaDesfazerInicio {
+  direcao: 'antecipar' | 'adiar';
+  de: string; para: string; meses: string[];
+  pai: { id: string; nome: string };
+  cards: number; cabecas: number; gravadaEm: string | null; motivoDoGesto: string | null;
+  frase: string;
+}
+export function lerDesfazerInicio(dado: unknown): PreviaDesfazerInicio | null {
+  if (campo(dado, 'ok') !== true) return null;
+  const direcao = texto(dado, 'direcao'), de = texto(dado, 'de'), para = texto(dado, 'para'), frase = texto(dado, 'frase');
+  const pai = campo(dado, 'pai'), paiId = texto(pai, 'id'), paiNome = texto(pai, 'nome');
+  const meses = listaDeTextos(campo(dado, 'meses'));
+  if ((direcao !== 'antecipar' && direcao !== 'adiar') || !de || !para || !frase || !paiId || !paiNome || !meses) return null;
+  return {
+    direcao, de, para, meses, frase, pai: { id: paiId, nome: paiNome },
+    cards: numero(dado, 'cards') ?? 0, cabecas: numero(dado, 'cabecas') ?? 0,
+    gravadaEm: texto(dado, 'gravada_em'), motivoDoGesto: texto(dado, 'motivo_do_gesto'),
+  };
+}
+
+/** Os nomes dos piquetes numa célula curta: "7A–7D (4)"; um só = o nome. */
+export function nomesDosPiquetes(nomes: readonly string[]): string {
+  if (nomes.length === 0) return '—';
+  if (nomes.length === 1) return nomes[0];
+  return `${nomes[0]}–${nomes[nomes.length - 1]} (${nomes.length})`;
+}
