@@ -27,6 +27,24 @@ import { filtroRapido } from './ui-gate-rapido.mjs';
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
 const SO = arg('--so');
+/* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
+   testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
+async function cliqueNoGesto(p, t) {
+  if (!(await p.locator(`[data-testid="validacao-painel-poligono"] [data-testid="${t}"]`).count()) && (await p.locator('[data-testid="editar-mais"]').count())) {
+    await p.locator('[data-testid="editar-mais"]').click(); await p.locator(`[role="menuitem"][data-testid="${t}"]`).waitFor({ timeout: 3000 });
+  }
+  await p.locator(`[data-testid="${t}"]`).first().click();
+}
+async function temGesto(p, t) {
+  if (await p.locator(`[data-testid="validacao-painel-poligono"] [data-testid="${t}"]`).count()) return true;
+  if (!(await p.locator('[data-testid="editar-mais"]').count())) return false;
+  await p.locator('[data-testid="editar-mais"]').click(); await p.waitForTimeout(200);
+  const ha = (await p.locator(`[role="menuitem"][data-testid="${t}"]`).count()) > 0;
+  /* o Esc devolve o foco ao "⋯" e o foco abre a dica dele (no meio da animação de entrada ela cruza a barra): tira o foco e espera fechar */
+  await p.keyboard.press('Escape'); await p.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+  await p.waitForTimeout(500);
+  return ha;
+}
 const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.split('x').map(Number))
   : [[750, 483], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 
@@ -177,6 +195,21 @@ const CENARIOS = [
       ['tamanho A1', async (p) => { await p.locator('[data-testid="imprimir-tamanho"] button', { hasText: 'A1' }).click(); await espera(p, 300); }],
       ['tamanho A0', async (p) => { await p.locator('[data-testid="imprimir-tamanho"] button', { hasText: 'A0' }).click(); await espera(p, 300); }],
       ['sem satélite', async (p) => { await p.locator('[data-testid="imprimir-imagem"] button', { hasText: 'Sem satélite' }).click(); await espera(p, 300); }],
+    ] },
+  /* PIQUETE-VIGENCIA-01 — no "Mudar mês de início" (o pai P_09 da unidade), trocar o mês e ir ao "Desfazer a última mudança" não move o motivo, a
+     tabela, a frase, a recusa nem os botões (a linha do mês fica no lugar com a frase; o Gravar tem largura fixa). O mini-mapa muda de desenho: não conta. */
+  { nome: 'mapa-mudar-inicio', url: 'tela=mapa-geo&unidade=1', tamanhos: [[1126, 579], [1366, 768]], regiao: '[data-testid="mudar-inicio-dialogo"]',
+    naoMede: '[data-testid="previa-com-mapa"]',
+    antes: async (p) => {
+      await p.locator('button', { hasText: 'Validação' }).first().click(); await p.locator('[data-testid="validacao-lista"]').waitFor(); await espera(p, 500);
+      await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_09 Retiro' }).first().click();
+      await p.locator('[data-testid="validacao-painel-poligono"]').waitFor({ timeout: 3000 }); await espera(p, 800);
+      await cliqueNoGesto(p, 'editar-mudar-inicio');
+      await p.waitForFunction(() => !!document.querySelector('[data-testid="volta-frase"]')?.textContent?.trim(), null, { timeout: 5000 }); await espera(p, 500);
+    },
+    estados: [
+      ['mês 10/2026', async (p) => { await p.locator('[data-testid="mudar-inicio-dialogo"] button', { hasText: '10/2026' }).click(); await espera(p, 700); }],
+      ['desfazer a última mudança', async (p) => { await p.getByRole('button', { name: 'Desfazer a última mudança' }).click(); await espera(p, 700); }],
     ] },
   /* MAPA-GLOBAL-01 — trocar a visão, o filtro, a aba do gráfico e a ordenação não desloca a barra, os cards nem as colunas */
   { nome: 'mapa-global', url: 'tela=mapa-global&n=5', tamanhos: [[1126, 579], [1366, 768], [1440, 800]], estados: [

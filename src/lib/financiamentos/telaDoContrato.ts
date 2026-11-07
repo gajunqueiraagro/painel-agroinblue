@@ -84,8 +84,12 @@ export const ROTULO_DA_SITUACAO: Record<string, string> = {
 const pct = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 export const dataBr = (iso: string | null): string | null => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : null);
 /** "0,6821 % a.m." — a gravada, com a unidade; nulo = não cadastrado */
-export const textoDaTaxa = (c: TelaDoContrato['condicoes']): string | null => (c.taxa === null || c.unidade === null ? null : `${pct(c.taxa)} % ${c.unidade}`);
-export const textoDaTaxaAa = (c: TelaDoContrato['condicoes']): string | null => (c.taxaAa === null ? null : `${pct(c.taxaAa)} % a.a.`);
+/* FIN-FINANC-LAYOUT-01 (b) (Gabriel 05/11/2026): taxa 0 com juros no cronograma não é "0,00%" — é taxa que ninguém cadastrou (os juros vieram
+   do cronograma do banco): `null` ("não cadastrado", laranja), como os outros campos faltando. Sem juros, o 0 é 0. */
+export const textoDaTaxa = (c: TelaDoContrato['condicoes'], jurosNoCronograma = false): string | null =>
+  (c.taxa === null || c.unidade === null || (c.taxa === 0 && jurosNoCronograma) ? null : `${pct(c.taxa)} % ${c.unidade}`);
+export const textoDaTaxaAa = (c: TelaDoContrato['condicoes'], jurosNoCronograma = false): string | null =>
+  (c.taxaAa === null || (c.taxaAa === 0 && jurosNoCronograma) ? null : `${pct(c.taxaAa)} % a.a.`);
 export const textoDoSistema = (s: string | null): string | null => (s === null ? null : SISTEMAS[s] ?? s);
 export const textoDaCarencia = (iso: string | null): string | null => (iso === null ? null : `até ${dataBr(iso)}`);
 export const textoDaAtividade = (a: string | null): string | null => (a === null ? null : ATIVIDADES[a] ?? a);

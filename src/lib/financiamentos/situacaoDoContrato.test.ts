@@ -13,7 +13,8 @@ describe('lerSituacaoDoContrato', () => {
     expect(s.cartoes).toEqual({ valorContrato: 35700, pago: 17850, aVencer: 11900, vencido: 5950, adiado: 0, adiadoQtde: 0, pagas: 3, parcelas: 6, jurosPrevistos: 0,
       somaPrincipal: 35700, somaTotal: 35700, divergentes: 3, detalhe: null });
     expect(s.parcelas[0]).toEqual({ id: 'p1', numero: 1, dataVencimento: '2026-07-05', valorPrincipal: 5950, valorJuros: 0, valorTotal: 5950,
-      situacao: 'paga', pagoEm: '2026-07-02', valorPago: 5950, lancamentoId: 'l1', lancamentoJurosId: null, fonte: 'lancamento', diverge: true, detalhe: null });
+      situacao: 'paga', pagoEm: '2026-07-02', valorPago: 5950, lancamentoId: 'l1', lancamentoJurosId: null, fonte: 'lancamento', diverge: true, detalhe: null,
+      semValor: false });
   });
   it('peça torta = nulo INTEIRO (cartão faltando, situação desconhecida, valor que não é número, raiz que não é objeto)', () => {
     expect(lerSituacaoDoContrato(null)).toBeNull();

@@ -23,7 +23,9 @@ const MAIOR_QUE_13 = /\btext-(sm|base|lg|xl|[2-9]xl)\b|\btext-\[(1[4-9]|[2-9]\d)
 /* FORN-01b (regra de corte de 21/10 07h25): texto em CÉLULA de tabela pode terminar em "…" com o inteiro no `title` — a constante da
    célula (`CELULA` / `E.celula`) é a única peça com `truncate`, e o teste abaixo cobra o `title` em todo uso dela */
 const CELULA_COM_TITLE = /const CELULA = 'block truncate';|celula: 'block truncate',/;
-const achados = (texto: string) => texto.split('\n').filter((l) => (CORTE.test(l) && !CELULA_COM_TITLE.test(l)) || MAIOR_QUE_13.test(l));
+/* FIN-FINANC-LAYOUT-01 (Gabriel 05/11, F1): acima de 13px, só as duas constantes aprovadas da escala (o nome na faixa e o valor do Resumo) */
+const ACIMA_DE_13_APROVADA = /^\s*(nome: 'text-\[15px\] font-semibold leading-\[16px\]'|resumoValor: 'text-\[14px\] font-bold leading-\[18px\]'),$/;
+const achados = (texto: string) => texto.split('\n').filter((l) => (CORTE.test(l) && !CELULA_COM_TITLE.test(l)) || (MAIOR_QUE_13.test(l) && !ACIMA_DE_13_APROVADA.test(l)));
 
 const CONTRATO = ler('ContratoDeCredito.tsx');
 const PECAS: Record<string, string> = {
@@ -67,15 +69,19 @@ describe('a fonte da tela do contrato', () => {
     expect(ESCALA_DO_CONTRATO.cartaoValor).toBe('text-[12px] font-semibold');
     expect(ESCALA_DO_CONTRATO.bloco).toBe('text-[11px] font-semibold');
     expect(ESCALA_DO_CONTRATO.th).toBe('text-[10px]');
-    expect(ESCALA_DO_CONTRATO.td).toBe('text-[10.5px]');
-    expect(ESCALA_DO_CONTRATO.total).toBe('text-[10.5px] font-bold');
+    expect(ESCALA_DO_CONTRATO.td).toBe('text-[11px]');
+    expect(ESCALA_DO_CONTRATO.total).toBe('text-[11px] font-bold');
+    expect(ESCALA_DO_CONTRATO.data).toBe('text-[10.5px]');
+    expect(ESCALA_DO_CONTRATO.nome).toBe('text-[15px] font-semibold leading-[16px]');
+    expect(ESCALA_DO_CONTRATO.resumoValor).toBe('text-[14px] font-bold leading-[18px]');
     expect(ESCALA_DO_CONTRATO.recado).toBe('text-[11px]');
     expect(ESCALA_DO_CONTRATO.rola).toBe('uma-linha-que-rola');
   });
 
   it('o título quebra dentro de um lugar de duas linhas, que não empurra a tela', () => {
     const v3 = PECAS['TelaDoContratoV3.tsx'];
-    expect(v3).toMatch(/max-h-\[32px\] min-w-0 overflow-y-auto break-words \$\{E\.titulo\}/);
+    /* FIN-FINANC-LAYOUT-01: na faixa do título, o nome é `E.nome` (15px) */
+    expect(v3).toMatch(/max-h-\[32px\] min-w-0 shrink overflow-y-auto break-words \$\{E\.nome\}/);
     expect(PECAS['FinanciamentoDetalhe.tsx']).toMatch(/max-h-\[32px\] min-w-0 overflow-y-auto break-words \$\{E\.titulo\}/);
   });
 

@@ -102,10 +102,10 @@ describe('(4) "não cadastrado" e as condições do banco', () => {
     expect(screen.getByTestId('campo-carencia').textContent).toBe('Carênciaaté 31/01/2027');
     expect(screen.getByTestId('campo-sistema').textContent).toBe('SistemaSAC');
   });
-  it('linha do título: só a seta, "nº · descrição" 13px (FIN-CONTRATO-TELA-FONTE-01), sem o selo das vencidas, o lugar reservado do Juntar', () => {
+  it('linha do título: a descrição é o título, 15px (FIN-FINANC-LAYOUT-01), sem o selo das vencidas, o lugar reservado do Juntar', () => {
     topo(tela());
-    expect(screen.getByTestId('titulo-do-contrato').textContent).toBe('SINT-78.179 · Armazém');
-    expect(screen.getByTestId('titulo-do-contrato').className).toContain('text-[13px]');
+    expect(screen.getByTestId('titulo-do-contrato').textContent).toBe('Armazém');
+    expect(screen.getByTestId('titulo-do-contrato').className).toContain('text-[15px]');
     expect(screen.getByTestId('voltar-do-contrato').textContent).toBe('');
     expect(screen.getByTestId('voltar-do-contrato').getAttribute('aria-label')).toBe('Voltar para Financiamentos');
     expect(screen.queryByTestId('selo-das-vencidas')).toBeNull();
@@ -159,7 +159,8 @@ describe('(5b) v4 — a FICHA: Resumo em 5 células + fatos em 3 colunas', () =>
     expect(resumo.children[4].lastElementChild?.className).toContain('text-[#b42318]');
     const grade = within(ficha).getByTestId('colunas-do-contrato');
     expect(grade.className).toContain('grid-cols-[max-content_minmax(0,max-content)_max-content]');
-    expect(grade.className).toContain('gap-x-6');
+    /* FIN-FINANC-LAYOUT-01: as 3 colunas à esquerda, 48px entre elas (antes o vão abria no meio) */
+    expect(grade.className).toContain('justify-start gap-x-12');
     const colunas = screen.getAllByTestId('coluna-do-contrato');
     expect(colunas).toHaveLength(3);
     /* cada coluna: rótulo da largura do maior DAQUELA coluna (max-content) e o valor colado a 10px */
@@ -189,8 +190,11 @@ describe('(5c) v4 — a página (fonte): uma faixa de caminho só, abas sem queb
     expect(barra).toContain('data-testid="editar-parcelas"');
   });
   it('o lápis mora DENTRO da célula Lançamento; Total preso no rodapé; vazio = uma linha', () => {
+    // os gestos (com o lápis) são um bloco só, que a célula Lançamento desenha (na parcela de valor zero, a célula Situação + Lançamento)
+    const gestos = fonte.slice(fonte.indexOf('const gestos = ('), fonte.indexOf('return (', fonte.indexOf('const gestos = (')));
+    expect(gestos).toContain('data-testid="lapis-da-parcela"');
     const cel = fonte.slice(fonte.indexOf('data-testid="lancamento-da-parcela" title={d?.contaNome'), fonte.indexOf('{linhas.length > 0 && ('));
-    expect(cel).toContain('data-testid="lapis-da-parcela"');
+    expect(cel).toMatch(/^data-testid="lancamento-da-parcela" title=\{[^\n]*\n\s*\{gestos\}\n\s*<\/td>/);
     expect(fonte).toContain('const TF_V4 = `sticky bottom-0 z-10');
     expect(fonte).toContain('const TH_V4 = `sticky top-0 z-10');
     expect(fonte).toContain('Sem parcelas. Use ✎ Editar parcelas ou Editar para gerar o cronograma.');
