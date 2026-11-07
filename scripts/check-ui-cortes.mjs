@@ -1432,7 +1432,7 @@ const CENARIOS = [
      "ver também os já vinculados": a tabela cabe SEM ROLAR DE LADO e o Valor nunca corta */
   { nome: 'oc-cc-buscar-historico', url: 'tela=oc-cc&v=buscar', tamanhos: [[1240, 700], [1024, 600], [948, 593], [1067, 667], [1440, 800]], regiao: '[data-testid="dialogo-buscar-recebimento"]',
     antes: async (p) => { await p.waitForTimeout(300); await clicar('[data-testid="todo-historico"]')(p); await clicar('[data-testid="ver-vinculados"]')(p); },
-    semRolagem: { dentro: '[data-testid="dialogo-buscar-recebimento"]' } },
+    semRolarNoX: { lista: '[data-testid="tabela-buscar-rola"] > table', celulas: '[data-testid="valor-buscar"], [data-testid="fazenda-buscar"]' } },
   /* o Programar recebimento: o DRE do principal da OC ("pela entrega da OC (dd/mm)" + ⓘ) e a aba Documentos com os da operação */
   { nome: 'lancamento-oc-Geral', url: 'tela=lancamento&m=novo&v=oc', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'lancamento-oc-Documentos', url: 'tela=lancamento&m=novo&v=oc', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Documentos') },
