@@ -202,7 +202,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
 
-  const { pastos: pastosDeHoje, categorias, editarPasto } = usePastos();
+  const { pastos: pastosDeHoje, categorias } = usePastos();
   const { lancamentos, saldosIniciais, adicionarLancamento } = useLancamentos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, copiarMesAnterior } = useFechamento();
   const { user } = useAuth();
@@ -349,7 +349,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const fazendaDoMes = fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
   const { lotacaoDoMes, alocacoesDoMes, membrosPorGrupo, impedidosDoMes, recebeDe, paraLote, contextoDoLote, areaDe: areaDoMesDoLote } = useLoteDoMes(fazendaDoMes, anoMes, pastosAtivos, fechamentos);
   const modalDoPasto = useModalDoPasto({
-    anoMes, fechamentos, categorias, pastosDaFazenda: pastos, editarPasto,
+    anoMes, fechamentos, categorias,
     lote: { contextoDoLote, areaDe: areaDoMesDoLote }, acoes: { criarFechamento, fecharPasto, copiarMesAnterior },
     aoFechar: () => { loadFechamentos(anoMes); },
     rotuloDaFazenda: (id) => fazendas.find(f => f.id === id)?.codigo ?? '',

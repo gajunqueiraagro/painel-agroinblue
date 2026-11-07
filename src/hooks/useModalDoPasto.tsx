@@ -1,6 +1,6 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
-import type { CategoriaRebanho, Pasto, usePastos } from '@/hooks/usePastos';
+import type { CategoriaRebanho, Pasto } from '@/hooks/usePastos';
 import type { FechamentoPasto, useFechamento } from '@/hooks/useFechamento';
 import type { useLoteDoMes } from '@/hooks/useLoteDoMes';
 import { comAreaDoMes } from '@/lib/pastos/areaDoPastoNoMes';
@@ -12,12 +12,9 @@ export interface EntradaDoModalDoPasto {
   /** os cards do mês já lidos (sem o card, `abrir` cria pelo mesmo `fn_obter_ou_criar_fechamento_pasto` do Fechamento) */
   fechamentos: readonly FechamentoPasto[];
   categorias: CategoriaRebanho[];
-  /** para recusar nome repetido no renomear */
-  pastosDaFazenda: readonly Pasto[];
   /** o grupo de pastejo e a área do mês (`useLoteDoMes`): o modal salva com a alocação do grupo e mostra a área DO MÊS */
   lote: Pick<ReturnType<typeof useLoteDoMes>, 'contextoDoLote' | 'areaDe'>;
   acoes: AcoesDoCard;
-  editarPasto: ReturnType<typeof usePastos>['editarPasto'];
   /** o modal fechou: quem abriu relê o mês (cards, mapa) — sem F5 */
   aoFechar: () => void;
   /** LOTES-03: o código da fazenda do card (o assistente do lote escreve "na PUR"); sem ele, vazio, como no modal de antes */
@@ -30,7 +27,7 @@ export interface EntradaDoModalDoPasto {
  * RPCs do card; o mês fechado se trava pelo próprio modal e pelo banco — quem abre não decide nada.
  */
 export function useModalDoPasto(e: EntradaDoModalDoPasto): { abrir: (pasto: Pasto) => Promise<void>; aberto: Pasto | null; modal: ReactNode } {
-  const { anoMes, fechamentos, categorias, pastosDaFazenda, lote, acoes, editarPasto, aoFechar, rotuloDaFazenda } = e;
+  const { anoMes, fechamentos, categorias, lote, acoes, aoFechar, rotuloDaFazenda } = e;
   const [aberto, setAberto] = useState<{ pasto: Pasto; fechamento: FechamentoPasto } | null>(null);
 
   const abrir = useCallback(async (pasto: Pasto) => {
@@ -49,8 +46,6 @@ export function useModalDoPasto(e: EntradaDoModalDoPasto): { abrir: (pasto: Past
       fechamento={aberto.fechamento}
       categorias={categorias}
       onFechar={async () => acoes.fecharPasto(aberto.fechamento.id)}
-      pastosDaFazenda={pastosDaFazenda}
-      onRenomear={async (nome, aoRecusar) => editarPasto(aberto.pasto.id, { nome }, { aoRecusar })}
       onCopiar={async () => acoes.copiarMesAnterior(aberto.pasto.id, anoMes, categorias)}
       lote={lote.contextoDoLote(aberto.pasto, aberto.fechamento.id)}
     />

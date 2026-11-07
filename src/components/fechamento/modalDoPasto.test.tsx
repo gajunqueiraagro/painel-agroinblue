@@ -79,7 +79,7 @@ const FECH_P2 = { id: 'fp2', pasto_id: 'p2', fazenda_id: 'f', ano_mes: '2026-09'
 
 function abrirDialogo(fechamento: Record<string, unknown> = FECH_P2, onOpenChange = vi.fn(), pasto: Record<string, unknown> = PASTOS[1]) {
   comQc(<FechamentoPastoDialog open onOpenChange={onOpenChange} pasto={pasto as never} fechamento={fechamento as never}
-    categorias={CATS as never} onFechar={vi.fn()} onCopiar={vi.fn()} pastosDaFazenda={PASTOS as never} onRenomear={editarPasto} />);
+    categorias={CATS as never} onFechar={vi.fn()} onCopiar={vi.fn()} />);
   return onOpenChange;
 }
 const FRASE_DO_BANCO = 'Mês 2026-09 possui Valor do Rebanho validado ou P2 fechado. Reabra o pilar P2 antes de alterar pastos.';
@@ -100,7 +100,7 @@ describe('Mapa de Pastos → modal do pasto', () => {
     const botoes = await screen.findAllByTestId('abrir-pasto');
     fireEvent.click(botoes[1]);
     await waitFor(() => expect(fech.criarFechamento).toHaveBeenCalledWith('p2', '2026-09'));
-    expect(((await screen.findByTestId('nome-do-pasto')) as HTMLInputElement).value).toBe('Retiro Velho');
+    expect((await screen.findByTestId('nome-do-pasto')).textContent).toBe('Retiro Velho');
   });
 
   it('pasto COM card abre o card que existe, sem criar outro', async () => {
@@ -113,24 +113,29 @@ describe('Mapa de Pastos → modal do pasto', () => {
 });
 
 describe('modal do pasto', () => {
-  it('nome vazio e nome repetido na fazenda sao recusados (a regra e o campo)', () => {
+  it('MODAL-PASTO-NOME-FIXO-01: o nome do pasto é só texto (sem campo, sem a nota do cadastro) e a área sai em pt-BR — o P_10 da 3 Muchachas', () => {
+    abrirDialogo(FECH_P2, vi.fn(), { ...PASTOS[1], nome: 'P_10', area_produtiva_ha: 59.7 });
+    const nome = screen.getByTestId('nome-do-pasto');
+    expect(nome.tagName).toBe('H2');
+    expect(nome.textContent).toBe('P_10');
+    expect(screen.queryByRole('textbox', { name: 'Nome do pasto' })).toBeNull();
+    expect(screen.queryByTestId('nota-do-nome')).toBeNull();
+    expect(screen.queryByText(/vale para todos os meses/)).toBeNull();
+    expect(screen.getByTestId('area-do-pasto').textContent).toBe('59,7 ha');
+  });
+
+  it('a regra do nome (a do mapa) segue a mesma: vazio e repetido na fazenda são recusados', () => {
     expect(motivoDoNomeDoPasto('  ', PASTOS[1], PASTOS)).toBe(FRASE_NOME_VAZIO);
     expect(motivoDoNomeDoPasto(' p_01 ', PASTOS[1], PASTOS)).toBe(FRASE_NOME_REPETIDO);
     expect(motivoDoNomeDoPasto('Retiro Velho', PASTOS[1], PASTOS)).toBeNull();
     expect(motivoDoNomeDoPasto('P_01', { ...PASTOS[1], fazenda_id: 'outra' }, PASTOS)).toBeNull();
-    abrirDialogo();
-    fireEvent.change(screen.getByTestId('nome-do-pasto'), { target: { value: 'P_01' } });
-    expect(screen.getByTestId('nota-do-nome').textContent).toBe(FRASE_NOME_REPETIDO);
-    expect(screen.getByRole('button', { name: /Salvar/ })).toHaveProperty('disabled', true);
   });
 
-  it('nome novo grava pelo editarPasto, depois o card pela RPC (campos + itens numa chamada)', async () => {
+  it('salvar grava só o card pela RPC (campos + itens numa chamada) — nunca o cadastro do pasto', async () => {
     const fechar = abrirDialogo();
-    fireEvent.change(screen.getByTestId('nome-do-pasto'), { target: { value: 'Retiro Novo' } });
     fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
     await waitFor(() => expect(salvarCard).toHaveBeenCalled());
-    expect(editarPasto.mock.calls[0][0]).toBe('Retiro Novo');
-    expect(editarPasto.mock.invocationCallOrder[0]).toBeLessThan(salvarCard.mock.invocationCallOrder[0]);
+    expect(editarPasto).not.toHaveBeenCalled();
     expect(salvarCard.mock.calls[0][0]).toBe('fp2');
     expect(salvarCard.mock.calls[0][1]).toEqual({ lote_mes: null, tipo_uso_mes: 'recria', qualidade_mes: null, observacao_mes: null });
     expect(fech.salvarItens).not.toHaveBeenCalled();

@@ -17,7 +17,6 @@ import { formatNum } from '@/lib/calculos/formatters';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { toast } from 'sonner';
-import { motivoDoNomeDoPasto, NOTA_NOME_DO_CADASTRO } from '@/lib/pastos/nomeDoPasto';
 import { OndeOLoteEsteve, escolhaInicial, type ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
 import { pastosParaGravar, uaDosItens } from '@/lib/fechamento/loteNoGrupo';
 import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseReabrirJunto, lerEstadoDoP2, motivoReabrirJunto, reabrirValorRebanhoJunto, ROTULO_REABRIR_E_EDITAR } from '@/lib/fechamento/travaDoP2';
@@ -156,9 +155,6 @@ interface Props {
   pasto: Pasto;
   fechamento: FechamentoPasto;
   categorias: CategoriaRebanho[];
-  /** o nome e' do cadastro (`editarPasto`); os pastos da fazenda servem para recusar nome repetido */
-  pastosDaFazenda: readonly Pasto[];
-  onRenomear: (nome: string, aoRecusar: (frase: string) => void) => Promise<boolean>;
   onFechar: () => Promise<boolean>;
   onCopiar: () => Promise<{ itens: FechamentoItem[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }>;
   /** FECH-ROTACAO-01 fatia 3 — onde o lote do card esteve (grupo, parte do grupo, também esteve em). Sem ele, o modal salva como sempre. */
@@ -169,7 +165,7 @@ interface Props {
 
 export function FechamentoPastoDialog({
   open, onOpenChange, pasto, fechamento,
-  categorias, onCopiar, pastosDaFazenda, onRenomear, lote, fazendaRotulo,
+  categorias, onCopiar, lote, fazendaRotulo,
 }: Props) {
   const { clienteAtual } = useCliente();
   /* LOTES-03 F1 — os lotes da fazenda (o MESMO leitor da tela de Lotes) e o assistente do "+ Novo lote" (null = fechado; categoria null =
@@ -184,8 +180,6 @@ export function FechamentoPastoDialog({
   const [tipoUsoMes, setTipoUsoMes] = useState(fechamento.tipo_uso_mes || pasto.tipo_uso || '');
   const [qualidadeMes, setQualidadeMes] = useState<number | null>(fechamento.qualidade_mes);
   const [observacaoMes, setObservacaoMes] = useState(fechamento.observacao_mes || '');
-  const [nomePasto, setNomePasto] = useState(pasto.nome);
-  const [erroNome, setErroNome] = useState<string | null>(null);
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
   /* FECH-P2-TRAVA-AVISO-01: o mês trava pelo Valor do Rebanho validado (ou P2 fechado). Lido ao abrir, para avisar ANTES de
      digitar; a recusa do banco com a mesma regra também liga. */
@@ -214,7 +208,7 @@ export function FechamentoPastoDialog({
   // Load items + meta when modal opens
   useEffect(() => {
     if (!open || !fechamento) return;
-    setNomePasto(pasto.nome); setErroNome(null); setErroSalvar(null); setTravadoPeloP2(false); setMotivoReabrir('');
+    setErroSalvar(null); setTravadoPeloP2(false); setMotivoReabrir('');
     const inicio = lote ? escolhaInicial(pasto.id, lote) : [pasto.id];
     setEscolhidos(inicio); setEscolhidosIniciais(inicio.join(','));
     let vivo = true;
@@ -278,7 +272,7 @@ export function FechamentoPastoDialog({
       // Set snapshot after items load (slight delay)
       const t = setTimeout(() => {
         setInitialItens(JSON.stringify(itens));
-        setInitialMeta(JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes, nomePasto }));
+        setInitialMeta(JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes }));
       }, 300);
       return () => clearTimeout(t);
     }
@@ -286,23 +280,17 @@ export function FechamentoPastoDialog({
 
   const isDirty = () => {
     return JSON.stringify(itens) !== initialItens ||
-      JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes, nomePasto }) !== initialMeta ||
+      JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes }) !== initialMeta ||
       escolhidos.join(',') !== escolhidosIniciais;
   };
 
-  /* O nome so' e' julgado quando mudou; a frase fica ao lado do campo. */
-  const nomeMudou = nomePasto.trim() !== pasto.nome;
-  const motivoDoNome = nomeMudou ? motivoDoNomeDoPasto(nomePasto, pasto, pastosDaFazenda) : null;
-
-  /* FECH-MAPA-PASTO-MODAL-01 — a ordem: nome (cadastro) -> campos do mes -> itens. Recusa em qualquer passo PARA ali e
-     fica escrita no modal; o toast "Fechamento salvo" (dos itens) so' sai se tudo gravou. */
+  /* FECH-MAPA-PASTO-MODAL-01 — a ordem: campos do mes -> itens. Recusa em qualquer passo PARA ali e fica escrita no modal; o toast
+     "Fechamento salvo" (dos itens) so' sai se tudo gravou. MODAL-PASTO-NOME-FIXO-01 (Gabriel 07/11): o nome do pasto é cadastro e
+     não se muda no lançamento do mês — renomear é só em Cadastros > Pastos. */
   const handleSave = async () => {
     setErroSalvar(null);
-    setErroNome(null);
-    if (motivoDoNome) { setErroNome(motivoDoNome); return; }
     try {
       setSaving(true);
-      if (nomeMudou && !(await onRenomear(nomePasto.trim(), setErroNome))) return;
       const campos = {
         lote_mes: loteMes || null,
         tipo_uso_mes: tipoUsoMes || null,
@@ -460,18 +448,11 @@ export function FechamentoPastoDialog({
       <DialogContent className={`${ALTURA_DO_MODAL_DO_PASTO} flex flex-col max-w-3xl p-0 gap-0 overflow-hidden`} data-testid="modal-do-pasto">
         {/* ── HEADER ESCURO ── */}
         <div className="shrink-0 bg-[hsl(215,30%,18%)] text-white px-5 pt-4 pb-3 space-y-2">
-          {/* Row 1: Name + status + copy */}
-          <div className="flex items-center gap-2">
-            <div className="flex min-w-0 flex-col">
-              <Input value={nomePasto} onChange={e => { setNomePasto(e.target.value); setErroNome(null); }} disabled={inputsDisabled}
-                aria-label="Nome do pasto" data-testid="nome-do-pasto"
-                className={`h-8 w-[220px] px-2 text-lg font-extrabold tracking-tight bg-white/10 border-white/15 text-white ${erroNome || motivoDoNome ? 'border-red-400' : ''}`} />
-              {/* lugar fixo de 14px: a nota do cadastro, ou a recusa do nome */}
-              <span className={`h-[14px] whitespace-nowrap text-[9px] leading-[14px] ${erroNome || motivoDoNome ? 'text-red-300' : 'text-white/50'}`} data-testid="nota-do-nome">
-                {erroNome || motivoDoNome || NOTA_NOME_DO_CADASTRO}
-              </span>
-            </div>
-            {pasto.area_produtiva_ha && <span className="self-start pt-1 text-base font-medium text-white/70">{pasto.area_produtiva_ha} ha</span>}
+          {/* Row 1: Name + status + copy — `pr-7` é o lugar do X de fechar (MODAL-PASTO-NOME-FIXO-01: sem a nota do nome a linha baixou e o "Copiar anterior" ia para baixo dele) */}
+          <div className="flex items-center gap-2 pr-7">
+            {/* MODAL-PASTO-NOME-FIXO-01: o nome é do cadastro — só texto, sem campo (renomear: Cadastros > Pastos) */}
+            <h2 className="min-w-0 break-words text-lg font-extrabold leading-8 tracking-tight" data-testid="nome-do-pasto">{pasto.nome}</h2>
+            {pasto.area_produtiva_ha ? <span className="flex-none whitespace-nowrap text-base font-medium tabular-nums text-white/70" data-testid="area-do-pasto">{formatNum(pasto.area_produtiva_ha, 1)} ha</span> : null}
             {isFechado && <Badge className="h-5 text-[10px] px-1.5 bg-white/15 text-white border-white/20"><Lock className="h-3 w-3 mr-0.5" />Fechado</Badge>}
             <div className="flex-1" />
             {!isFechado && !masterReadOnly && (
@@ -669,7 +650,7 @@ export function FechamentoPastoDialog({
               <Button variant="outline" size="sm" className="h-7 text-[11px] px-4" onClick={handleCancel}>
                 Cancelar
               </Button>
-              <Button onClick={handleSave} disabled={saving || masterReadOnly || !!motivoDoNome || travadoPeloP2} size="sm" className="h-7 text-[11px] px-4"
+              <Button onClick={handleSave} disabled={saving || masterReadOnly || travadoPeloP2} size="sm" className="h-7 text-[11px] px-4"
                 title={travadoPeloP2 ? fraseDaTravaDoPasto(fechamento.ano_mes) : undefined}>
                 <Save className="h-3 w-3 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
               </Button>

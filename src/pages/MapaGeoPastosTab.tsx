@@ -67,7 +67,7 @@ const VISTAS: { valor: ViewMode; rotulo: string }[] = [
  */
 export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado = {}) {
   const { isGlobal, fazendaAtual, fazendasComPecuaria, setFazendaAtual } = useFazenda();
-  const { pastos, categorias, editarPasto } = usePastos();
+  const { pastos, categorias } = usePastos();
   const {
     geometrias, loading: geoLoading, salvarGeometrias, removerGeometrias, loadGeometrias,
     atualizarGeometria, excluirGeometrias,
@@ -140,7 +140,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const pastosDoMes = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
   const loteDoMes = useLoteDoMes(fazendaId ?? null, anoMes, pastosDoMes, fechamentos);
   const modalDoPasto = useModalDoPasto({
-    anoMes, fechamentos, categorias, pastosDaFazenda: pastos, editarPasto, lote: loteDoMes,
+    anoMes, fechamentos, categorias, lote: loteDoMes,
     acoes: { criarFechamento, fecharPasto, copiarMesAnterior },
     aoFechar: () => { void loadFechamentos(anoMes); mapaDoMes.recarregar(); },
     rotuloDaFazenda: (id) => fazendasComPecuaria.find(f => f.id === id)?.codigo ?? '',

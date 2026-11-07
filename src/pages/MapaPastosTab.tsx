@@ -72,7 +72,7 @@ interface MapaPastosTabProps extends PeriodoControlado {
 
 export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, periodo, onPeriodoChange }: MapaPastosTabProps = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
-  const { pastos, categorias, editarPasto } = usePastos();
+  const { pastos, categorias } = usePastos();
   const {
     fechamentos, loadFechamentos, loadItens, setPesoAtualizadoPasto,
     criarFechamento, fecharPasto, copiarMesAnterior,
@@ -306,7 +306,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
   const pastosDoMes = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
   const loteDoMes = useLoteDoMes(fazendaDoMes, anoMes, pastosDoMes, fechamentos);
   const modalDoPasto = useModalDoPasto({
-    anoMes, fechamentos, categorias, pastosDaFazenda: pastos, editarPasto, lote: loteDoMes,
+    anoMes, fechamentos, categorias, lote: loteDoMes,
     acoes: { criarFechamento, fecharPasto, copiarMesAnterior },
     aoFechar: () => { loadFechamentos(anoMes); },
     rotuloDaFazenda: (id) => (fazendaAtual?.id === id ? fazendaAtual.codigo ?? '' : ''),

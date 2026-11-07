@@ -25,10 +25,8 @@ function entrada(mais: Partial<EntradaDoModalDoPasto> = {}): EntradaDoModalDoPas
     anoMes: '2026-10',
     fechamentos: [CARD as never],
     categorias: [],
-    pastosDaFazenda: [PASTO as never],
     lote: { contextoDoLote: vi.fn(() => CONTEXTO as never), areaDe: (id: string, mes: string) => (id === 'p1' && mes === '2026-10' ? 38 : undefined) },
     acoes: { criarFechamento: vi.fn(async () => ({ ...CARD, id: 'novo' })), fecharPasto: vi.fn(), copiarMesAnterior: vi.fn() } as never,
-    editarPasto: vi.fn() as never,
     aoFechar: vi.fn(),
     ...mais,
   };
