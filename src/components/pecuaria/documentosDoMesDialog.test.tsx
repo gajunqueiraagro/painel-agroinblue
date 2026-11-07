@@ -311,8 +311,9 @@ describe('FECH-DOCS-01 — os dois pontos de tela (fonte)', () => {
     const antes = f.slice(iBarra, iBotao);
     expect(antes).not.toContain('showAdjustButton');
     expect(antes).not.toContain('sugestoes.length');
-    /* o lugar do seletor "Cards | Mapa" (MAPA-LOTES-01) é fixo, na barra, antes dos botões */
-    expect(f.slice(iBarra, iBotao)).toContain('<div className="w-[92px] flex-none" aria-hidden data-testid="lugar-seletor-cards-mapa" />');
+    /* o lugar do seletor "Cards | Mapa" (MAPA-LOTES-01) é fixo, na barra, antes dos botões; o seletor mora nele */
+    expect(f.slice(iBarra, iBotao)).toContain('<div className="flex w-[92px] flex-none justify-end" data-testid="lugar-seletor-cards-mapa">');
+    expect(f.slice(iBarra, iBotao)).toContain('<Segmentado valor={vista} onEscolher={escolherVista} altura={22} fonte={11}');
     /* a 3ª coluna (os 7 botões empilhados que ditavam a altura do topo) não volta */
     expect(f).not.toContain('COL 3: Ações');
     expect(f).toContain('<div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 items-start">');

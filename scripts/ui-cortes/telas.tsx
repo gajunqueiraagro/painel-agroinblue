@@ -1759,6 +1759,16 @@ if (tela === 'mesclar') {
     Object.assign(ITENS[0], { lote_id: 'l-dm6' });
     ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: 'l-px2' });
   }
+  /* MAPA-LOTES-01 (C2) — `&v=mapa`: o Fechamento abre na vista Mapa (a escolha guardada); os polígonos SINTÉTICOS de 5 dos 6 pastos
+     (o P12 fica sem desenho: vai para a faixa) e a área total por baixo */
+  const quadrado = (id: string, pastoId: string | null, tipo: string, x: number, y: number, w: number, h: number) => ({ id, fazenda_id: 'f1', cliente_id: 'cli',
+    pasto_id: pastoId, tipo, nome_original: id, cor: null, created_at: '2026-01-01', updated_at: '2026-01-01',
+    geojson: { type: 'Polygon', coordinates: [[[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]]] } });
+  const GEOS = [quadrado('g-total', null, 'area_total', -47.905, -15.805, 0.03, 0.02),
+    quadrado('g-p10a', 'p10a', 'pasto', -47.904, -15.804, 0.006, 0.008), quadrado('g-p10b', 'p10b', 'pasto', -47.898, -15.804, 0.006, 0.008),
+    quadrado('g-p10c', 'p10c', 'pasto', -47.892, -15.804, 0.006, 0.008), quadrado('g-p11', 'p11', 'pasto', -47.904, -15.795, 0.01, 0.008),
+    quadrado('g-t1', 't1', 'pasto', -47.893, -15.795, 0.005, 0.006)];
+  if (v === 'mapa') { try { window.localStorage.setItem('fechamento-pastos:vista', 'mapa'); } catch { /* sem armazenamento */ } }
   const ALOC = [{ fechamento_id: 'fa', lote: '', pasto_id: 'p10a' }, { fechamento_id: 'fa', lote: '', pasto_id: 'p10b' },
     { fechamento_id: 'f11', lote: '', pasto_id: 'p11' }, { fechamento_id: 'f11', lote: '', pasto_id: 'p12' }];
   const lotacao = () => {
@@ -1786,6 +1796,7 @@ if (tela === 'mesclar') {
       : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
       : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC
+      : t === 'fazenda_geometrias' ? GEOS
       : COM_LOTES && t === 'rebanho_lote_cadastros' ? LOTES_BANCADA.CADASTROS
       /* FECH-REABRIR-JUNTO-01 — `&v=trava`: o Valor do Rebanho de out/26 VALIDADO (o caso EXP R_04): o modal abre com o aviso e o "Reabrir e editar" */
       : v === 'trava' && t === 'valor_rebanho_realizado_validado' ? [{ fazenda_id: 'f1', ano_mes: '2026-10', status: 'validado' }]

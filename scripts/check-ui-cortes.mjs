@@ -782,6 +782,12 @@ const CENARIOS = [
   /* FECH-TOPO-COMPACTO-01 — o topo do Fechamento com todos os botões numa linha (1.240, 1.024 e o zoom de 135% = 919×519): nada corta */
   { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
     regiao: '.sticky.top-0', antes: (p) => p.waitForTimeout(2000) },
+  /* MAPA-LOTES-01 (C2) — a vista Mapa do Fechamento (`v=mapa`, SINTÉTICO): o seletor "Cards | Mapa" no lugar reservado do topo, a faixa
+     "Sem desenho no mapa" (o P12) e o quadro do mapa até o fim da janela: nada corta (1.240, 1.024 e o zoom de 135% = 919×519) */
+  { nome: 'fechamento-mapa-topo', url: 'tela=fechamento-grupo&v=mapa&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500); } },
+  { nome: 'fechamento-mapa-faixa', url: 'tela=fechamento-grupo&v=mapa&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '[data-testid="faixa-sem-desenho"]', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500); } },
   /* REVALIDAR-BG-SET26 — Valor do Rebanho (SINTÉTICO): a faixa do snapshot de 22px (set invalidado, com o Revalidar e o motivo) não
      corta nem vaza. SÓ a faixa (`regiao`): a tela inteira nunca teve gate de corte e tem achados antigos fora deste item. */
   { nome: 'valor-rebanho-faixa-snapshot', url: 'tela=valor-rebanho&barra=32', tamanhos: [[1000, 600], [1126, 579], [1366, 768], [1750, 1000]],

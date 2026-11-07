@@ -30,6 +30,9 @@ import { useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlant
 import { safrasQueCobremOMes, labelDaCultura } from '@/lib/agri/areaPlantada';
 import { pastosDoFechamentoNoMes, useLoteDoMes } from '@/hooks/useLoteDoMes';
 import { useModalDoPasto } from '@/hooks/useModalDoPasto';
+import { Segmentado } from '@/components/ui/segmentado';
+import { MapaDoFechamento } from '@/components/fechamento/MapaDoFechamento';
+import { CHAVE_DA_VISTA, gravarVista, lerVista, type VistaDoFechamento } from '@/lib/fechamento/vistaDoFechamento';
 import { propostosComoVedado, resumoDoGrupo } from '@/lib/fechamento/loteNoGrupo';
 import { comAreaDoMes, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
 import { useReclassificacaoState, ReclassificacaoFormFields } from '@/components/ReclassificacaoForm';
@@ -277,6 +280,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [showResumoAtividades, setShowResumoAtividades] = useState(false);
   /* CADERNO-CAMPO-01 peça 1: o "Exportar mês" (o caderno de campo preenchido, de uma fazenda) */
   const [exportarMesAberto, setExportarMesAberto] = useState(false);
+  /* MAPA-LOTES-01 (C2) — "Cards | Mapa": a escolha fica no navegador; sem ela, Cards */
+  const [vista, setVista] = useState<VistaDoFechamento>(() => lerVista(() => window.localStorage.getItem(CHAVE_DA_VISTA)));
+  const escolherVista = (v: VistaDoFechamento) => { setVista(v); gravarVista(() => window.localStorage.setItem(CHAVE_DA_VISTA, v)); };
   const [confirmBulkReopenOpen, setConfirmBulkReopenOpen] = useState(false);
   // Pré-checagem: pastos vazios sem tipo_uso_mes definido
   const [vazioCheckOpen, setVazioCheckOpen] = useState(false);
@@ -1289,7 +1295,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 empurrava a grade dos pastos. */}
             <div className="flex h-6 items-center gap-1.5" data-testid="barra-do-topo">
               <div className="min-w-0 flex-1" />
-              <div className="w-[92px] flex-none" aria-hidden data-testid="lugar-seletor-cards-mapa" />
+              <div className="flex w-[92px] flex-none justify-end" data-testid="lugar-seletor-cards-mapa">
+                <Segmentado valor={vista} onEscolher={escolherVista} altura={22} fonte={11}
+                  opcoes={[{ valor: 'cards', rotulo: 'Cards', title: 'Os cards dos pastos' }, { valor: 'mapa', rotulo: 'Mapa', title: 'O mapa da fazenda: clique no pasto abre o card' }]} />
+              </div>
               <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Resumo por Atividade" onClick={() => setShowResumoAtividades(true)}>
                 <BarChart3 className={ICONE_DA_BARRA} /> Resumo
               </Button>
@@ -1449,6 +1458,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <p>Nenhum pasto ativo para conciliação.</p>
             <p className="text-xs mt-1">Cadastre pastos na aba "Pastos" e marque "Entra na conciliação".</p>
           </div>
+        ) : vista === 'mapa' ? (
+          <MapaDoFechamento pastos={pastosAtivos} situacaoDe={getPastoStatus} onAbrir={handleOpenPasto}
+            cabecasDe={p => getResumo(getFechamento(p.id), p).totalCabecas} />
         ) : (
           <TooltipProvider delayDuration={200}>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">

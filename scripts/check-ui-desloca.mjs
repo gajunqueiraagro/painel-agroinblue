@@ -292,6 +292,11 @@ const CENARIOS = [
     regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="barra-do-topo"]').waitFor(); await espera(p, 900); },
     estados: [['mês Set', botao(/^Set/)], ['mês Out', botao(/^Out/)],
       ['abrir Sugestões', botao(/^Sugestões$/)], ['fechar Sugestões', async (p) => { await p.keyboard.press('Escape'); await espera(p, 500); }]] },
+  /* MAPA-LOTES-01 (C2) — trocar Cards ↔ Mapa e trocar de mês na vista Mapa não movem os meses, a barra do topo nem o seletor (o lugar de
+     92px é fixo); a grade some e o mapa entra no MESMO lugar */
+  { nome: 'fechamento-mapa', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="barra-do-topo"]').waitFor(); await espera(p, 900); },
+    estados: [['vista Mapa', botao(/^Mapa$/)], ['mês Set', botao(/^Set/)], ['mês Out', botao(/^Out/)], ['vista Cards', botao(/^Cards$/)]] },
   /* REVALIDAR-BG-SET26 — Valor do Rebanho (SINTÉTICO): trocar entre o mês validado (jul), o da cadeia quebrada (ago), o invalidado e
      aberto (set) e o sem snapshot (out) não move a régua, a tabela nem os gráficos — o aviso do snapshot é estado da faixa de 22px */
   { nome: 'valor-rebanho-snapshot', url: 'tela=valor-rebanho&barra=32',
