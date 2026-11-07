@@ -11,7 +11,7 @@ const it3 = [
 const lote = (id: string, codigo: string, nomeCampeiro: string | null): LoteDaLista => ({
   id, codigo, nomeCampeiro, codigosAntigos: [], situacao: 'ativo', formadoEm: '2026-09-30', encerradoEm: null, categoriaId: 'c', racaId: 'r',
   atividadeId: 'a', numero: 5, sistemaId: null, programaId: null, destinoId: null, safra: null, carimbo: null, idadeMediaMeses: null,
-  metaPesoKg: null, metaGmdKg: null, metaData: null, versao: 1, anoMesDado: null, cabecas: null, pesoMedioKg: null, gmdKg: null, pastos: [], lancamentos: 0,
+  metaPesoKg: null, metaGmdKg: null, metaData: null, versao: 1, anoMesDado: null, cabecas: null, pesoMedioKg: null, gmdKg: null, pastos: [], lancamentos: 0, conferir: null,
 });
 const L = [lote('l5', 'DF-NE-RC-05', 'L05 - DF Nel. SP'), lote('n2', 'N2-NE-RP-01', null)];
 

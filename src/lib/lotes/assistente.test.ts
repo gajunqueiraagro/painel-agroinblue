@@ -14,7 +14,7 @@ const CAD = [cad('df', 'categoria', 'DF', 'Desmama fêmea', ['r-desf']), cad('pp
 const lote = (id: string, categoriaId: string, racaId: string, atividadeId: string, numero: number, situacao: LoteDaLista['situacao'] = 'ativo'): LoteDaLista => ({
   id, codigo: `X-${numero}`, codigosAntigos: [], nomeCampeiro: null, situacao, formadoEm: '2026-09-30', encerradoEm: null, categoriaId, racaId, atividadeId,
   numero, sistemaId: null, programaId: null, destinoId: null, safra: null, carimbo: null, idadeMediaMeses: null, metaPesoKg: null, metaGmdKg: null,
-  metaData: null, versao: 1, anoMesDado: null, cabecas: null, pesoMedioKg: null, gmdKg: null, pastos: [], lancamentos: 0,
+  metaData: null, versao: 1, anoMesDado: null, cabecas: null, pesoMedioKg: null, gmdKg: null, pastos: [], lancamentos: 0, conferir: null,
 });
 const E = (c: string | null, r: string | null, a: string | null): Escolha => ({ categoriaId: c, racaId: r, atividadeId: a });
 

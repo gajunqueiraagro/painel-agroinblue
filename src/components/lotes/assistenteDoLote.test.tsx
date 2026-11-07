@@ -99,7 +99,7 @@ describe('AssistenteDoLote', () => {
     const editar: LoteDaLista = { id: 'l5', codigo: 'DF-NE-RC-05', codigosAntigos: [], nomeCampeiro: 'L05', situacao: 'ativo', formadoEm: '2026-09-30',
       encerradoEm: null, categoriaId: 'df', racaId: 'ne', atividadeId: 'rc', numero: 5, sistemaId: null, programaId: null, destinoId: null, safra: null,
       carimbo: null, idadeMediaMeses: null, metaPesoKg: null, metaGmdKg: null, metaData: null, versao: 3, anoMesDado: null, cabecas: 80,
-      pesoMedioKg: 320, gmdKg: null, pastos: ['CONF.01'], lancamentos: 1 };
+      pesoMedioKg: 320, gmdKg: null, pastos: ['CONF.01'], lancamentos: 1, conferir: null };
     const { onPronto } = montar({ editar, lotesDaFazenda: [editar] });
     await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('DF-NE-RC-05'));
     fireEvent.click(screen.getByTestId('assistente-passo-4'));

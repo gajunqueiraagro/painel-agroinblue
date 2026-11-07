@@ -37,7 +37,7 @@ const lote = (id: string, c: string, r: string, a: string, numero: number, nome:
     id, codigo: `${sig(c)}-${sig(r)}-${sig(a)}-${String(numero).padStart(2, '0')}`, codigos_antigos: [], nome_campeiro: nome, situacao: 'ativo',
     formado_em: '2026-09-30', encerrado_em: null, categoria_id: c, raca_id: r, atividade_id: a, numero, sistema_id: 's-pa', programa_id: 'p-cv',
     destino_id: 'd-ab', safra: '26/27', carimbo: null, idade_media_meses: null, meta_peso_kg: null, meta_gmd_kg: null, meta_data: null, versao: 1,
-    ano_mes_dado: '2026-10', cabecas: null, peso_medio_kg: null, gmd_kg: null, pastos: [], lancamentos: 0, ...x,
+    ano_mes_dado: '2026-10', cabecas: null, peso_medio_kg: null, gmd_kg: null, pastos: [], lancamentos: 0, conferir: null, ...x,
   };
 };
 
@@ -45,7 +45,7 @@ export const LOTES = [
   lote('l-df5', 'c-df', 'r-ne', 'a-rc', 5, 'L05 - DF Nel. SP', { sistema_id: 's-co', programa_id: 'p-sp', destino_id: 'd-em', idade_media_meses: 9,
     meta_peso_kg: 380, meta_gmd_kg: 0.85, meta_data: '2026-12-15', cabecas: 80, peso_medio_kg: 345, gmd_kg: 0.833, pastos: ['CONF.01'], lancamentos: 2, versao: 3,
     codigos_antigos: ['DF-NE-EG-05'] }),
-  lote('l-df1', 'c-df', 'r-an', 'a-rc', 1, 'L01-DF Ang SP', { sistema_id: 's-co', programa_id: 'p-sp', destino_id: 'd-em', cabecas: 110, peso_medio_kg: 412, gmd_kg: 0.88, pastos: ['CONF.10'], lancamentos: 2 }),
+  lote('l-df1', 'c-df', 'r-an', 'a-rc', 1, 'L01-DF Ang SP', { sistema_id: 's-co', programa_id: 'p-sp', destino_id: 'd-em', cabecas: 110, peso_medio_kg: 412, gmd_kg: 0.88, pastos: ['CONF.10'], lancamentos: 2, conferir: 'o nome diz N1; o lançado é só novilha (N2)' }),
   lote('l-dm1', 'c-dm', 'r-an', 'a-eg', 1, 'DM Angus L1', { programa_id: 'p-pr', cabecas: 55, peso_medio_kg: 548, gmd_kg: 0.62, pastos: ['T-B1'], lancamentos: 2 }),
   lote('l-dm6', 'c-dm', 'r-an', 'a-eg', 6, 'DM Angus L6 · lote em três pastos do retiro de baixo', { programa_id: 'p-pr', cabecas: 162, peso_medio_kg: 421,
     gmd_kg: 0.55, pastos: ['T-A2', 'T-A3', 'T-B6'], lancamentos: 6 }),

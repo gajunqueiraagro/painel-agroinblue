@@ -26,6 +26,10 @@ describe('loteDaLinha: a linha da RPC, sem cast', () => {
     const l = L({});
     expect([l.pesoMedioKg, l.gmdKg, l.metaPesoKg, l.cabecas, l.pastos]).toEqual([320, 0.84, 380, 80, ['CONF.01']]);
   });
+  it('117440: lê o "conferir" (texto do que conferir; nulo = nada)', () => {
+    expect(L({ conferir: 'carimbo sem o nº do lote' }).conferir).toBe('carimbo sem o nº do lote');
+    expect(L({}).conferir).toBeNull();
+  });
   it('linha sem id, código, situação conhecida ou identidade fica fora', () => {
     expect(loteDaLinha(linha({ id: null }))).toBeNull();
     expect(loteDaLinha(linha({ situacao: 'sumido' }))).toBeNull();

@@ -180,6 +180,13 @@ export function FichaDoLote({ open, lote, clienteId, fazendaId, fazendaCodigo, c
         </div>
         {/* a faixa: lugar fixo de 26px (nunca empurra), a frase do banco inteira */}
         <div className="flex h-[26px] flex-none items-center gap-2 px-3 text-[11px]" data-testid="ficha-faixa">
+          {!faixa && l.conferir && (
+            <>
+              <span className="min-w-0 flex-1 truncate font-medium text-[#92400e]" title={l.conferir} data-testid="ficha-conferir">Conferir: {l.conferir}</span>
+              <button type="button" disabled={gravando} className="flex-none font-semibold text-[#24508f] hover:underline disabled:opacity-50" data-testid="ficha-conferido"
+                onClick={() => { void salvarCampos({ conferir: '' }, 'conferido'); }}>Conferido</button>
+            </>
+          )}
           {faixa && (
             <>
               <span className={cn('min-w-0 flex-1 truncate', faixa.erro ? 'font-medium text-[#9a3a2f]' : 'text-foreground')} title={faixa.texto}>{faixa.texto}</span>

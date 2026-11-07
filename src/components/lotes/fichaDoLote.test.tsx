@@ -20,7 +20,7 @@ const LOTE: LoteDaLista = {
   id: 'l1', codigo: 'DF-NE-RC-05', codigosAntigos: [], nomeCampeiro: 'L05 - DF Nel. SP', situacao: 'ativo', formadoEm: '2026-09-30', encerradoEm: null,
   categoriaId: 'df', racaId: 'ne', atividadeId: 'rc', numero: 5, sistemaId: 'sc', programaId: null, destinoId: null, safra: '26/27', carimbo: null,
   idadeMediaMeses: 9, metaPesoKg: 380, metaGmdKg: 0.85, metaData: null, versao: 4, anoMesDado: '2026-10', cabecas: 80, pesoMedioKg: 320, gmdKg: 0.84,
-  pastos: ['CONF.01'], lancamentos: 1,
+  pastos: ['CONF.01'], lancamentos: 1, conferir: null,
 };
 const cad = (id: string, tipo: CadastroDoLote['tipo'], sigla: string | null, nome: string): CadastroDoLote => ({ id, tipo, sigla, nome, categoriasRebanho: [], ordem: 0, ativo: true });
 const CADASTROS = [cad('df', 'categoria', 'DF', 'Desmama fêmea'), cad('ne', 'raca', 'NE', 'Nelore'), cad('rc', 'atividade', 'RC', 'Recria'), cad('sc', 'sistema', null, 'Confinamento')];
@@ -31,6 +31,19 @@ const montar = (l: LoteDaLista = LOTE, onFechar = vi.fn()) => render(
 beforeEach(() => { rpc.mockReset(); notificar.mockReset(); toastOk.mockReset(); eventos.lista = []; });
 
 describe('FichaDoLote', () => {
+  it('117440: lote marcado "conferir" mostra o motivo na faixa; Conferido grava conferir vazio com a versão e avisa', async () => {
+    rpc.mockResolvedValue({ data: { ok: true }, error: null });
+    montar({ ...LOTE, conferir: 'o nome diz N1; o lançado é N2' });
+    expect(screen.getByTestId('ficha-conferir').textContent).toBe('Conferir: o nome diz N1; o lançado é N2');
+    fireEvent.click(screen.getByTestId('ficha-conferido'));
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('fn_lote_salvar', { p_id: 'l1', p_fazenda: null, p_campos: { conferir: '' }, p_versao: 4, p_motivo: 'conferido', p_simular: false }));
+    expect(notificar).toHaveBeenCalledWith('f');
+  });
+  it('117440: lote sem "conferir" não mostra a linha nem o botão', () => {
+    montar();
+    expect(screen.queryByTestId('ficha-conferir')).toBeNull();
+    expect(screen.queryByTestId('ficha-conferido')).toBeNull();
+  });
   it('a faixa do sistema lê o fechamento (sem custo na F1) e só há Resumo e Histórico', () => {
     montar();
     const kpis = screen.getByTestId('ficha-kpis');

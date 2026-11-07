@@ -35,6 +35,7 @@ export function loteDaLinha(r: unknown): LoteDaLista | null {
     metaGmdKg: numero(r, 'meta_gmd_kg'), metaData: texto(r, 'meta_data'), versao,
     anoMesDado: texto(r, 'ano_mes_dado'), cabecas: numero(r, 'cabecas'), pesoMedioKg: numero(r, 'peso_medio_kg'), gmdKg: numero(r, 'gmd_kg'),
     pastos: textos(r, 'pastos'), lancamentos: numero(r, 'lancamentos') ?? 0,
+    conferir: texto(r, 'conferir'),
   };
 }
 

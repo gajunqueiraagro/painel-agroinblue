@@ -106,7 +106,8 @@ export function LotesTab() {
                 return (
                   <tr key={l.id} onClick={() => setFichaId(l.id)} data-testid="linha-lote"
                     className={cn('cursor-pointer border-b border-border/60 hover:bg-[#f5f8fc]', l.id === novoId && 'bg-[#eaf6ee]', l.situacao === 'encerrado' && 'text-muted-foreground')}>
-                    <td className={cn(TD_REGUA, 'whitespace-nowrap font-bold')} title={l.codigosAntigos.length ? `antes: ${l.codigosAntigos.join(' · ')}` : undefined}>{l.codigo}</td>
+                    <td className={cn(TD_REGUA, 'whitespace-nowrap font-bold')} title={l.codigosAntigos.length ? `antes: ${l.codigosAntigos.join(' · ')}` : undefined}>{l.codigo}
+                      {l.conferir && <span data-testid="lote-conferir" title={`Conferir: ${l.conferir}`} className="ml-1 inline-block h-[6px] w-[6px] rounded-full bg-[#d97706] align-middle" />}</td>
                     <td className={TD_REGUA_TEXTO} title={l.nomeCampeiro ?? undefined}>{l.nomeCampeiro ?? '—'}</td>
                     <td className={TD_REGUA}>
                       <span className={cn('inline-block w-[70px] truncate rounded text-center text-[9.5px] font-semibold', COR_DA_ATIVIDADE[ativ?.sigla ?? ''] ?? 'bg-[#f3f4f6] text-[#4b5563]')}

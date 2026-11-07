@@ -48,6 +48,8 @@ export interface LoteDaLista {
   gmdKg: number | null;
   pastos: string[];
   lancamentos: number;
+  /** o que falta conferir no lote (117440); nulo = nada a conferir */
+  conferir: string | null;
 }
 
 /** Os campos que `fn_lote_salvar` aceita em `p_campos` (só as chaves que vierem mudam). */
@@ -67,6 +69,8 @@ export interface CamposDoLote {
   meta_peso_kg?: string;
   meta_gmd_kg?: string;
   meta_data?: string;
+  /** vazio = conferido */
+  conferir?: string;
 }
 
 /** O código CAT-RAÇA-ATIV-NN (D5 hífen); parte ainda não escolhida = "__". */
