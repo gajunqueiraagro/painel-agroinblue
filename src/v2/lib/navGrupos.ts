@@ -11,7 +11,7 @@ export type V2Section =
   | 'rebanho-home' | 'pastos' | 'chuvas' | 'chuvas-lancamento' | 'lancamentos-zoot'
   | 'operacoes-comerciais'
   | 'operacao-comercial'   // a tela propria da Operacao Comercial (ACESSOS-OC-01/02): so' os modais da OC, sem item de menu
-  | 'mapa-pastos' | 'fechamento' | 'meta-gmd' | 'mapa-geo-pastos'
+  | 'mapa-pastos' | 'fechamento' | 'meta-gmd' | 'mapa-geo-pastos' | 'lotes'
   | 'conferencia-lancamentos' | 'conferencia-mensal'
   | 'resumo-pastos' | 'evolucao-categoria' | 'auditoria-tecnica'
   | 'auditoria-zoot' | 'valor-rebanho' | 'indicadores-zoot'
@@ -187,6 +187,8 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'conferencia-mensal',      label: 'Evolução no ano',      status: 'ready', liberadaClientes: true },
           { id: 'mapa-pastos',             label: 'Mapa de pastos',       status: 'ready' },
           { id: 'mapa-geo-pastos',         label: 'Geo pastos',           status: 'ready' },
+          /* LOTES-03 F1 (Gabriel 06/11): o cadastro de lotes por assistente + a ficha (mock lotes-03-assistente.html) */
+          { id: 'lotes',                   label: 'Lotes',                status: 'ready' },
           { id: 'chuvas',                  label: 'Chuvas',               status: 'ready' },
         ],
       },
@@ -415,7 +417,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'chuvas-lancamento': 'rebanho',
   'lancamentos-zoot': 'rebanho',
   'mapa-pastos': 'rebanho', 'fechamento': 'rebanho',
-  'mapa-geo-pastos': 'rebanho', 'resumo-pastos': 'rebanho',
+  'mapa-geo-pastos': 'rebanho', 'resumo-pastos': 'rebanho', 'lotes': 'rebanho',
   'evolucao-categoria': 'rebanho',
   'conferencia-lancamentos': 'rebanho', 'conferencia-mensal': 'rebanho',
 

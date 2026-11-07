@@ -21,6 +21,10 @@ import { motivoDoNomeDoPasto, NOTA_NOME_DO_CADASTRO } from '@/lib/pastos/nomeDoP
 import { OndeOLoteEsteve, escolhaInicial, type ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
 import { pastosParaGravar, uaDosItens } from '@/lib/fechamento/loteNoGrupo';
 import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseRevalidarValorRebanho, lerEstadoDoP2, rotuloReabrirValorRebanho } from '@/lib/fechamento/travaDoP2';
+import { CampoLoteDoPasto } from '@/components/fechamento/CampoLoteDoPasto';
+import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
+import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
+import { comLoteEmTodos, comLoteNaCategoria, lotesQueSeguem, semLoteNoZerado } from '@/lib/lotes/loteDoPasto';
 
 /* FECH-MAPA-PASTO-MODAL-01 — ALTURA FIXA (o corpo nao rola): topo + grade das 9 categorias + rodape. So' o painel da
    lavoura rola dentro do proprio quadro. */
@@ -45,6 +49,8 @@ interface FechamentoItem {
   lote: string | null;
   observacoes: string | null;
   origem_dado: string;
+  /** LOTES-03 F1 — o lote cadastrado desta categoria (opcional; sem a chave o gravador mantém o que estava) */
+  lote_id?: string | null;
 }
 
 // ── CategoriaCard extracted outside to prevent re-mount on parent re-render ──
@@ -159,13 +165,19 @@ interface Props {
   onReabrirValorRebanho?: () => void;
   /** FECH-ROTACAO-01 fatia 3 — onde o lote do card esteve (grupo, parte do grupo, também esteve em). Sem ele, o modal salva como sempre. */
   lote?: ContextoDoLote;
+  /** LOTES-03 F1 — a fazenda pelo código, no cabeçalho do assistente do "+ Novo lote" */
+  fazendaRotulo?: string;
 }
 
 export function FechamentoPastoDialog({
   open, onOpenChange, pasto, fechamento,
-  categorias, onCopiar, pastosDaFazenda, onRenomear, onReabrirValorRebanho, lote,
+  categorias, onCopiar, pastosDaFazenda, onRenomear, onReabrirValorRebanho, lote, fazendaRotulo,
 }: Props) {
   const { clienteAtual } = useCliente();
+  /* LOTES-03 F1 — os lotes da fazenda (o MESMO leitor da tela de Lotes) e o assistente do "+ Novo lote" (null = fechado; categoria null =
+     o lote novo vai no pasto inteiro) */
+  const lotesDaFazenda = useLotesDaFazenda(open ? fechamento.fazenda_id : null, fechamento.ano_mes);
+  const [novoLotePara, setNovoLotePara] = useState<{ categoriaId: string | null } | null>(null);
   const [itens, setItens] = useState<FechamentoItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(fechamento.status);
@@ -215,7 +227,7 @@ export function FechamentoPastoDialog({
         setItens(categorias.map(c => {
           const found = existing.find(e => e.categoria_id === c.id);
           return found
-            ? { categoria_id: c.id, quantidade: found.quantidade, peso_medio_kg: found.peso_medio_kg, lote: found.lote, observacoes: found.observacoes, origem_dado: found.origem_dado }
+            ? { categoria_id: c.id, quantidade: found.quantidade, peso_medio_kg: found.peso_medio_kg, lote: found.lote, observacoes: found.observacoes, origem_dado: found.origem_dado, lote_id: found.lote_id }
             : { categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' };
         }));
         setLoteMes(fechamento.lote_mes || '');
@@ -241,10 +253,10 @@ export function FechamentoPastoDialog({
   }, []);
 
   const onUpdateQtd = useCallback((catId: string, val: number) => {
-    setItens(prev => prev.map(item => item.categoria_id === catId
+    setItens(prev => semLoteNoZerado(prev.map(item => item.categoria_id === catId
       ? { ...item, quantidade: val, origem_dado: item.origem_dado === 'copiado_mes_anterior' ? 'ajustado' : item.origem_dado }
       : item
-    ));
+    )));
   }, []);
 
   const onUpdatePeso = useCallback((catId: string, val: number | null) => {
@@ -319,7 +331,8 @@ export function FechamentoPastoDialog({
 
   const handleCopiar = async () => {
     const { itens: copied, dadosMes } = await onCopiar();
-    setItens(copied);
+    /* LOTES-03: o lote do mês anterior segue só se ele ainda está ativo na fazenda */
+    setItens(lotesQueSeguem(copied, new Set(lotesDaFazenda.lotes.filter(l => l.situacao === 'ativo').map(l => l.id))));
     if (dadosMes.lote_mes) setLoteMes(dadosMes.lote_mes);
     if (dadosMes.tipo_uso_mes) setTipoUsoMes(dadosMes.tipo_uso_mes);
     if (dadosMes.qualidade_mes !== null) setQualidadeMes(dadosMes.qualidade_mes);
@@ -450,10 +463,25 @@ export function FechamentoPastoDialog({
 
           {/* Row 2: Lote + Qual + Tipo Uso + Obs */}
           <div className="flex gap-2 items-end">
-            <div className="flex-1 min-w-0 max-w-[200px]">
-              <Label className="text-[10px] text-white/50 leading-none">Lote</Label>
+            <div className="flex-1 min-w-0 max-w-[150px]">
+              <Label className="text-[10px] text-white/50 leading-none">Nome no caderno</Label>
               <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={inputsDisabled} placeholder="Lote..." className="h-7 text-xs px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30" />
             </div>
+            {/* LOTES-03 F1 — o lote cadastrado (por categoria); fora da lavoura e da conta de divergência */}
+            {!ehLavoura && !isDivergencia && (
+              <div className="w-[150px] shrink-0">
+                <Label className="text-[10px] text-white/50 leading-none">Lote</Label>
+                <CampoLoteDoPasto itens={itens} lotes={lotesDaFazenda.lotes} disabled={inputsDisabled}
+                  nomeDaCategoria={id => categorias.find(c => c.id === id)?.nome ?? '—'}
+                  onChange={novos => {
+                    setItens(novos);
+                    const ids = new Set(novos.flatMap(i => (i.quantidade > 0 && i.lote_id ? [i.lote_id] : [])));
+                    const unico = ids.size === 1 ? lotesDaFazenda.lotes.find(l => ids.has(l.id)) : undefined;
+                    if (!loteMes && unico?.nomeCampeiro) setLoteMes(unico.nomeCampeiro);
+                  }}
+                  onNovoLote={categoriaId => setNovoLotePara({ categoriaId })} />
+              </div>
+            )}
             <div className="w-12 shrink-0">
               <Label className="text-[10px] text-white/50 leading-none">Qual.</Label>
               <Select value={qualidadeMes?.toString() || 'none'} onValueChange={v => setQualidadeMes(v === 'none' ? null : Number(v))} disabled={inputsDisabled}>
@@ -641,6 +669,19 @@ export function FechamentoPastoDialog({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        {/* LOTES-03 F1 — "+ Novo lote" do campo Lote: o MESMO assistente da tela de Lotes; volta com o lote escolhido no item */}
+        {novoLotePara && clienteAtual && (
+          <AssistenteDoLote open clienteId={clienteAtual.id} fazendaId={fechamento.fazenda_id}
+            fazendaRotulo={fazendaRotulo ?? ''}
+            lotesDaFazenda={lotesDaFazenda.lotes} editar={null}
+            onFechar={() => setNovoLotePara(null)}
+            onPronto={r => {
+              const para = novoLotePara.categoriaId;
+              setItens(prev => (para ? comLoteNaCategoria(prev, para, r.id) : comLoteEmTodos(prev, r.id)));
+              setNovoLotePara(null);
+              lotesDaFazenda.recarregar();
+            }} />
+        )}
       </DialogContent>
     </Dialog>
   );

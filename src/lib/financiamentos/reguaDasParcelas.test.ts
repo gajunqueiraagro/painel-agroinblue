@@ -57,8 +57,10 @@ describe('a régua — o cabeçalho alinha como a coluna', () => {
        negrito 10,5px 77+5. UI-SEM-CORTE-01 (19/10): a data passou a dd/mm/aaaa, "01/10/2026" pede 64 com o padding -> 68. Fixas 602 — a
        750px de conteúdo sobram 130 ao Lançamento, que quebra a linha ali (nunca corta) */
     const c = porChave(false);
-    expect([c.get('numero')!.largura, c.get('vencimento')!.largura, c.get('pagamento')!.largura, c.get('prazo')!.largura]).toEqual([37, 68, 68, 70]);
-    expect(fixas(false)).toBe(602);
+    /* FIN-FINANC-LAYOUT-01 (05/11): célula a 11px e datas a 10,5px — Parc. 40, Venc. 66, Pgto. 64, Prazo 74; fixas 617 (medido nos 4
+       tamanhos: 0 corte, 0 quebra) */
+    expect([c.get('numero')!.largura, c.get('vencimento')!.largura, c.get('pagamento')!.largura, c.get('prazo')!.largura]).toEqual([40, 66, 64, 74]);
+    expect(fixas(false)).toBe(617);
     expect(c.has('lapis')).toBe(false);
     expect(c.get('lancamento')!.largura).toBeNull();
   });

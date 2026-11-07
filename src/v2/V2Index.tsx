@@ -52,6 +52,7 @@ import { PastosTab } from '@/pages/PastosTab';
 import { ChuvasTab } from '@/pages/ChuvasTab';
 import { MapaPastosTab } from '@/pages/MapaPastosTab';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
+import { LotesTab } from '@/pages/LotesTab';
 import { AuditoriaTecnicaTab } from '@/pages/AuditoriaTecnicaTab';
 import { AuditoriaZootecnicaTab } from '@/pages/AuditoriaZootecnicaTab';
 import { ResumoPastosTab } from '@/pages/ResumoPastosTab';
@@ -1341,6 +1342,8 @@ export default function V2Index() {
       /* MAPA-02a: o mapa geográfico lê o MESMO ano/mês do shell (FECH-MES-SELECIONADO-01) */
       <MapaGeoPastosTab periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento} />
     );
+    /* LOTES-03 F1 — Produção › Lotes (lista + ficha + assistente) */
+    if (section === 'lotes') return <LotesTab />;
     if (section === 'mapa-pastos') return (
       <MapaPastosTab
         onBack={mapaPastosOriginRef.current ? () => { mapaPastosOriginRef.current = false; setSection('fechamento'); } : undefined}
