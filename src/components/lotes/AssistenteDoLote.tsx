@@ -266,7 +266,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
                   porQue="É o que o campeiro escreve no caderno e o que aparece no Fechamento, no mapa e nos relatórios."
                   comoFazer="Escolha os três primeiros; o número sai no passo 4." />
               </div>
-              <div className="my-0.5 whitespace-nowrap text-[21px] font-extrabold tracking-[0.02em] text-[#0b1f3a]" data-testid="assistente-codigo">
+              <div className="my-0.5 whitespace-nowrap text-[21px] font-extrabold text-[#0b1f3a]" data-testid="assistente-codigo">
                 {codigo.split('-').map((p, i) => <span key={i}>{i > 0 ? '-' : ''}<span className={p === '__' ? 'text-[#c2cad6]' : ''}>{p}</span></span>)}
               </div>
               <div className="whitespace-nowrap text-[9.5px] text-muted-foreground">categoria · raça · atividade · nº</div>
@@ -310,7 +310,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
                         onKeyDown={ev => { if (ev.key === ' ') { ev.preventDefault(); escolher(tipoDoPasso, c.id); } }}
                         className={cn('group relative flex min-w-0 cursor-pointer flex-col justify-center rounded-lg border-[1.5px] bg-white px-2.5 py-[7px] text-left',
                           sel ? 'border-primary bg-[#eef3fa] shadow-[0_0_0_2px_rgba(31,58,95,.15)]' : 'border-[#d3d9e2] hover:border-[#94a3b8] hover:bg-[#fafcff]')}>
-                        <span className="text-[17px] font-extrabold leading-5 tracking-[0.02em] text-[#0b1f3a]">{c.sigla}</span>
+                        <span className="text-[17px] font-extrabold leading-5 text-[#0b1f3a]">{c.sigla}</span>
                         <span className="truncate text-[11px] leading-[15px]">{c.nome}</span>
                         <span className="max-h-[26px] overflow-hidden text-[10px] leading-[13px] text-muted-foreground" title={detalhe}>{detalhe}</span>
                         {tipoDoPasso === 'categoria' && n > 0 && <span className="absolute right-[26px] top-[7px] text-[9.5px] text-muted-foreground">{n} lote{n > 1 ? 's' : ''}</span>}
@@ -398,7 +398,7 @@ function FormularioDoCadastro({ form, erro, categoriasDoRebanho, onMudar, onCanc
             <Rotulo>Sigla</Rotulo>
             <Input value={form.sigla} maxLength={3} disabled={travada} autoFocus={!travada} data-testid="assistente-form-sigla"
               onChange={e => onMudar({ ...form, sigla: siglaDigitada(e.target.value) })}
-              className={cn('h-[27px] text-[11.5px] font-bold tracking-[0.04em]', erro?.campo === 'sigla' && 'border-destructive')} />
+              className={cn('h-[27px] text-[11.5px] font-bold', erro?.campo === 'sigla' && 'border-destructive')} />
             <Nota erro={erro?.campo === 'sigla' ? erro.mensagem : null}>2 ou 3 letras</Nota>
           </div>
         )}
@@ -446,7 +446,7 @@ function PassoDoNumero({ escolha, cadastros, lotesDaFazenda, proximo, mesma, faz
   const existentes = lotesDaCombinacao(lotesDaFazenda, escolha);
   const parte = (id: string | null, auto = false) => (
     <div className={cn('min-w-[86px] rounded-lg border px-3 pb-[5px] pt-1.5 text-center', auto ? 'border-[#b9c9e0] bg-[#eef3fa]' : 'border-[#d3d9e2] bg-white')}>
-      <b className={cn('block text-[24px] font-extrabold leading-7 tracking-[0.03em]', auto ? 'text-[#24508f]' : 'text-[#0b1f3a]')}>{auto ? nn : siglaDe(cadastros, id)}</b>
+      <b className={cn('block text-[24px] font-extrabold leading-7', auto ? 'text-[#24508f]' : 'text-[#0b1f3a]')}>{auto ? nn : siglaDe(cadastros, id)}</b>
       <span className="whitespace-nowrap text-[10px] text-muted-foreground">{auto ? (mesma ? 'o mesmo' : 'automático') : nomeDe(cadastros, id)}</span>
     </div>
   );

@@ -28,11 +28,10 @@ import { grupoDoTipoUso } from '@/lib/pastos/tiposUso';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
 import { safrasQueCobremOMes, labelDaCultura } from '@/lib/agri/areaPlantada';
-import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
-import { useGruposDePastejo } from '@/components/pastos/GruposDePastejo';
-import type { ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
-import { API_LOTE_NO_GRUPO, alocacaoDoCard, propostosComoVedado, quemRecebe, resumoDoGrupo, type AlocacaoDoMes, type LotacaoDoPasto, type PastoDoLote } from '@/lib/fechamento/loteNoGrupo';
-import { areaNoMesOuHoje, comAreaDoMes, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
+import { pastosDoFechamentoNoMes, useLoteDoMes } from '@/hooks/useLoteDoMes';
+import { useModalDoPasto } from '@/hooks/useModalDoPasto';
+import { propostosComoVedado, resumoDoGrupo } from '@/lib/fechamento/loteNoGrupo';
+import { comAreaDoMes, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
 import { useReclassificacaoState, ReclassificacaoFormFields } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { MapaRebanhoImportDialog, type MapaItem } from '@/components/MapaRebanhoImportDialog';
@@ -272,9 +271,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     if (filtroMesInicial) setMesFiltro(filtroMesInicial);
   }, [filtroAnoInicial, filtroMesInicial]);
 
-  const [selectedPasto, setSelectedPasto] = useState<Pasto | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [activeFechamento, setActiveFechamento] = useState<FechamentoPasto | null>(null);
   const [itensMap, setItensMap] = useState<Map<string, FechamentoItem[]>>(new Map());
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
   const [bulkClosing, setBulkClosing] = useState(false);
@@ -340,21 +336,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     else setItensMap(new Map());
   }, [fechamentos, loadItens]);
 
-  const pastosAtivos = useMemo(
-    () => {
-      // PR-PASTO-VIGENCIA-02 — esta era a ÚNICA reimplementação inline da regra de
-      // vigência, e discordava do helper e do banco: testava data_inicio contra o
-      // PRIMEIRO dia do mês e ignorava data_fim, então pasto encerrado em 2024 ainda
-      // gerava card em 2026. O dono da regra agora é isPastoAtivoNoMes, espelho de
-      // fn_pastos_aplicaveis_mes. entra_conciliacao saiu: foi aposentado.
-      const filtrados = pastosAtivosNoMes(pastos, anoMes);
-      // Pastos de divergência sempre no FINAL da lista
-      const normais = filtrados.filter(p => !isPastoDivergencia(p.tipo_uso));
-      const divergencia = filtrados.filter(p => isPastoDivergencia(p.tipo_uso));
-      return [...normais, ...divergencia];
-    },
-    [pastos, anoMes]
-  );
+  const pastosAtivos = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
 
   const getFechamento = useCallback(
     (pastoId: string) => fechamentos.find(f => f.pasto_id === pastoId) || null,
@@ -365,48 +347,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
      Os grupos ativos da fazenda, a lotação do mês pela `fn_lotacao_do_mes` (rateio por área; sem alocação = a conta de hoje) e
      onde cada lote esteve (`fechamento_alocacoes`). Relidos quando os cards do mês mudam (o modal fecha → loadFechamentos). */
   const fazendaDoMes = fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
-  const { grupos: gruposDePastejo } = useGruposDePastejo(fazendaDoMes);
-  /* a área de cada pasto NO MÊS (PASTO-AREA-OFICIAL-02a): enquanto não lê, a de hoje (`areaNoMesOuHoje`) */
-  const fazendasDaArea = useMemo(() => (fazendaDoMes ? [fazendaDoMes] : []), [fazendaDoMes]);
-  const { areaDe } = useAreaDosPastosNoMes(fazendasDaArea, anoMes, anoMes);
-  const paraLote = useCallback((p: Pasto): PastoDoLote => ({ id: p.id, nome: p.nome, grupo_id: p.grupo_id ?? null, area: areaNoMesOuHoje(p, anoMes, areaDe) }), [anoMes, areaDe]);
-  const [lotacaoDoMes, setLotacaoDoMes] = useState<Map<string, LotacaoDoPasto>>(new Map());
-  const [alocacoesDoMes, setAlocacoesDoMes] = useState<AlocacaoDoMes[]>([]);
-  useEffect(() => {
-    if (!fazendaDoMes) { setLotacaoDoMes(new Map()); setAlocacoesDoMes([]); return; }
-    let vivo = true;
-    void Promise.all([API_LOTE_NO_GRUPO.lotacaoDoMes(fazendaDoMes, anoMes), API_LOTE_NO_GRUPO.alocacoesDoMes(fazendaDoMes, anoMes)]).then(([l, a]) => {
-      if (!vivo) return;
-      setLotacaoDoMes(l.ok ? l.dados : new Map());
-      setAlocacoesDoMes(a.ok ? a.dados : []);
-    });
-    return () => { vivo = false; };
-  }, [fazendaDoMes, anoMes, fechamentos]);
-  /** os membros VIGENTES no mês de cada grupo ativo com 2 ou mais pastos (um grupo de 1 no mês não vira moldura) */
-  const membrosPorGrupo = useMemo(() => {
-    const ativos = new Map(gruposDePastejo.filter(g => g.ativo).map(g => [g.id, g.nome]));
-    const mapa = new Map<string, { nome: string; membros: Pasto[] }>();
-    for (const p of pastosAtivos) {
-      const nome = p.grupo_id ? ativos.get(p.grupo_id) : undefined;
-      if (!p.grupo_id || !nome) continue;
-      const atual = mapa.get(p.grupo_id) ?? { nome, membros: [] };
-      atual.membros.push(p);
-      mapa.set(p.grupo_id, atual);
-    }
-    for (const [id, g] of mapa) if (g.membros.length < 2) mapa.delete(id);
-    return mapa;
-  }, [gruposDePastejo, pastosAtivos]);
-  /** quem não recebe lote no mês: card vedado ou fechado */
-  const impedidosDoMes = useMemo(() => {
-    const mapa = new Map<string, 'vedado' | 'fechado'>();
-    for (const f of fechamentos) {
-      if (f.tipo_uso_mes === 'vedado') mapa.set(f.pasto_id, 'vedado');
-      else if (f.status === 'fechado') mapa.set(f.pasto_id, 'fechado');
-    }
-    return mapa;
-  }, [fechamentos]);
-  /** pasto que RECEBE o lote de outro card no mês → os pastos de origem */
-  const recebeDe = useMemo(() => quemRecebe(alocacoesDoMes, fechamentos), [alocacoesDoMes, fechamentos]);
+  const { lotacaoDoMes, alocacoesDoMes, membrosPorGrupo, impedidosDoMes, recebeDe, paraLote, contextoDoLote, areaDe: areaDoMesDoLote } = useLoteDoMes(fazendaDoMes, anoMes, pastosAtivos, fechamentos);
+  const modalDoPasto = useModalDoPasto({
+    anoMes, fechamentos, categorias, pastosDaFazenda: pastos, editarPasto,
+    lote: { contextoDoLote, areaDe: areaDoMesDoLote }, acoes: { criarFechamento, fecharPasto, copiarMesAnterior },
+    aoFechar: () => { loadFechamentos(anoMes); },
+    rotuloDaFazenda: (id) => fazendas.find(f => f.id === id)?.codigo ?? '',
+  });
   /** a grade em segmentos: pasto solto, ou o grupo inteiro numa moldura (no lugar do 1º membro) */
   const segmentosDaGrade = useMemo(() => {
     const feitos = new Set<string>();
@@ -420,21 +367,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
     return segs;
   }, [pastosAtivos, membrosPorGrupo]);
-  /** o contexto do lote para o modal do pasto (F3-1: por card) */
-  const contextoDoLote = useCallback((p: Pasto, fechamentoId: string): ContextoDoLote => {
-    const g = p.grupo_id ? membrosPorGrupo.get(p.grupo_id) : undefined;
-    const membros = g?.membros ?? [];
-    const idsDoGrupo = new Set(membros.map(m => m.id));
-    const impedidos = new Map([...impedidosDoMes].filter(([id]) => id !== p.id));
-    return {
-      proprio: paraLote(p),
-      nomeDoGrupo: g?.nome ?? null,
-      membros: membros.map(paraLote),
-      outrosPastos: pastosAtivos.filter(x => x.id !== p.id && !idsDoGrupo.has(x.id) && !isPastoDivergencia(x.tipo_uso)).map(paraLote),
-      impedidos,
-      gravada: alocacaoDoCard(alocacoesDoMes, fechamentoId),
-    };
-  }, [membrosPorGrupo, impedidosDoMes, pastosAtivos, alocacoesDoMes, paraLote]);
 
   const getResumo = useCallback((fech: FechamentoPasto | null, pasto: Pasto): PastoResumo => {
     if (!fech) return { totalCabecas: 0, pesoMedio: null, uaHa: null, uaTotal: 0, catBreakdown: [], lotacaoKgHa: null };
@@ -660,14 +592,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   }, [pastoDataByCat, saldoMap]);
 
   /* ── Handlers ── */
-  const handleOpenPasto = async (pasto: Pasto) => {
-    let fech = getFechamento(pasto.id);
-    if (!fech) fech = await criarFechamento(pasto.id, anoMes);
-    if (!fech) return;
-    setActiveFechamento(fech);
-    setSelectedPasto(pasto);
-    setDialogOpen(true);
-  };
+  const handleOpenPasto = modalDoPasto.abrir;
 
   /* FECH-P2-TRAVA-AVISO-01 — a volta do Valor do Rebanho reabre o pasto de onde se saiu, quando os cards DESTE mês chegaram */
   useEffect(() => {
@@ -1532,21 +1457,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           </TooltipProvider>
         )}
 
-        {selectedPasto && activeFechamento && (
-          <FechamentoPastoDialog
-            open={dialogOpen}
-            fazendaRotulo={fazendas.find(f => f.id === activeFechamento?.fazenda_id)?.codigo ?? ''}
-            onOpenChange={(o) => { setDialogOpen(o); if (!o) { setSelectedPasto(null); setActiveFechamento(null); loadFechamentos(anoMes); } }}
-            pasto={selectedPasto}
-            fechamento={activeFechamento}
-            categorias={categorias}
-            onFechar={async () => fecharPasto(activeFechamento.id)}
-            pastosDaFazenda={pastos}
-            onRenomear={async (nome, aoRecusar) => editarPasto(selectedPasto.id, { nome }, { aoRecusar })}
-            onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}
-            lote={contextoDoLote(selectedPasto, activeFechamento.id)}
-          />
-        )}
+        {/* MAPA-LOTES-01 fatia 1: o modal do pasto sai do gancho único (o mesmo do Mapa de pastos e do Geo pastos) */}
+        {modalDoPasto.modal}
 
         {onBackToConciliacao && (
           <button

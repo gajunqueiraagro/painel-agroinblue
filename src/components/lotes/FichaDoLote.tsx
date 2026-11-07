@@ -164,7 +164,7 @@ export function FichaDoLote({ open, lote, clienteId, fazendaId, fazendaCodigo, c
         <DialogDescription className="sr-only">Identidade, perfil, metas e histórico do lote.</DialogDescription>
         {/* cabeçalho */}
         <div className="flex h-[48px] flex-none items-center gap-3 whitespace-nowrap bg-primary pl-3.5 pr-2 text-primary-foreground">
-          <span className="text-[19px] font-extrabold tracking-wide" data-testid="ficha-codigo">{l.codigo}</span>
+          <span className="text-[19px] font-extrabold" data-testid="ficha-codigo">{l.codigo}</span>
           <span className="min-w-0 max-w-[260px] truncate text-[11.5px] opacity-85" title={l.nomeCampeiro ?? undefined}>{l.nomeCampeiro ?? 'sem nome do campeiro'}</span>
           <span className="rounded bg-white/15 px-1.5 text-[10px] font-semibold">{fazendaCodigo}</span>
           <span className={cn('rounded px-1.5 text-[10px] font-semibold', l.situacao === 'ativo' ? 'bg-[#2f8a5b]' : 'bg-[#6b7280]')} data-testid="ficha-situacao">

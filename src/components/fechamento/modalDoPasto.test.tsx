@@ -29,6 +29,17 @@ const editarPasto = vi.fn(async (_nome: string, _aoRecusar?: unknown) => true);
 vi.mock('@/hooks/usePastos', () => ({
   usePastos: () => ({ pastos: PASTOS, categorias: CATS, editarPasto }),
   isPastoAtivoNoMes: () => true,
+  pastosAtivosNoMes: <T,>(l: T[]) => l,
+}));
+/* MAPA-LOTES-01 fatia 1 — o Mapa de pastos monta o contexto do lote (`useLoteDoMes`): grupos, lotação, alocações e área do mês, sem rede */
+vi.mock('@/components/pastos/GruposDePastejo', () => ({ useGruposDePastejo: () => ({ grupos: [] }) }));
+vi.mock('@/lib/fechamento/loteNoGrupo', async (original) => ({
+  ...(await original<typeof import('@/lib/fechamento/loteNoGrupo')>()),
+  API_LOTE_NO_GRUPO: { lotacaoDoMes: async () => ({ ok: true, dados: new Map() }), alocacoesDoMes: async () => ({ ok: true, dados: [] }) },
+}));
+vi.mock('@/lib/pastos/areaDoPastoNoMes', async (original) => ({
+  ...(await original<typeof import('@/lib/pastos/areaDoPastoNoMes')>()),
+  useAreaDosPastosNoMes: () => ({ areaDe: () => undefined, carregando: false, erro: null }),
 }));
 vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ isGlobal: false, fazendaAtual: { id: 'f', nome: 'Faz' } }) }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli' } }) }));
@@ -279,11 +290,11 @@ describe('o modal grava so pelas RPCs do card (fonte)', () => {
     for (const proibido of ['atualizarCamposMensais', 'salvarItens', 'reabrirPasto', 'reabrir_pilar_fechamento', ".from('fechamento_pasto"]) {
       expect(dialogo).not.toContain(proibido);
     }
-    for (const arq of ['src/pages/FechamentoTab.tsx', 'src/pages/MapaPastosTab.tsx']) {
-      const src = readFileSync(arq, 'utf8');
-      const i = src.indexOf('<FechamentoPastoDialog');
-      expect(src.slice(i, src.indexOf('/>', i))).not.toMatch(/onSave=|onReabrir=/);
-    }
+    /* MAPA-LOTES-01 fatia 1: as telas montam o modal só pelo gancho único; quem o monta é ele (o trecho existe: indexOf ≥ 0) */
+    const gancho = readFileSync('src/hooks/useModalDoPasto.tsx', 'utf8');
+    const i = gancho.indexOf('<FechamentoPastoDialog');
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(gancho.slice(i, gancho.indexOf('/>', i))).not.toMatch(/onSave=|onReabrir=/);
     const hook = readFileSync('src/hooks/useFechamento.ts', 'utf8');
     expect(hook).not.toMatch(/const (reabrirPasto|atualizarCamposMensais) =/);
     /* auto-teste do detector */

@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { usePastos, isPastoAtivoNoMes, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto } from '@/hooks/useFechamento';
-import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
+import { pastosDoFechamentoNoMes, useLoteDoMes } from '@/hooks/useLoteDoMes';
+import { useModalDoPasto } from '@/hooks/useModalDoPasto';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -76,9 +77,6 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
     fechamentos, loadFechamentos, loadItens, setPesoAtualizadoPasto,
     criarFechamento, fecharPasto, copiarMesAnterior,
   } = useFechamento();
-  /* FECH-MAPA-PASTO-MODAL-01 — o nome do pasto abre o MESMO modal do Fechamento Área */
-  const [pastoAberto, setPastoAberto] = useState<Pasto | null>(null);
-  const [fechamentoAberto, setFechamentoAberto] = useState<FechamentoPasto | null>(null);
 
   const curYear = new Date().getFullYear();
   const [anosDisp, setAnosDisp] = useState<string[]>(() => {
@@ -302,18 +300,18 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
     }
   }, [setPesoAtualizadoPasto]);
 
-  /* sem card no mes, cria pelo mesmo `fn_obter_ou_criar_fechamento_pasto` do Fechamento */
-  const abrirPasto = useCallback(async (pasto: Pasto) => {
-    const fech = fechamentos.find(f => f.pasto_id === pasto.id) ?? await criarFechamento(pasto.id, anoMes);
-    if (!fech) return;
-    setFechamentoAberto(fech);
-    setPastoAberto(pasto);
-  }, [fechamentos, criarFechamento, anoMes]);
-  const fecharModalDoPasto = useCallback(() => {
-    setPastoAberto(null);
-    setFechamentoAberto(null);
-    loadFechamentos(anoMes);
-  }, [loadFechamentos, anoMes]);
+  /* MAPA-LOTES-01 fatia 1 — o MESMO modal do Fechamento pelo gancho único: com o grupo de pastejo do mês (`lote`) e a área do mês;
+     sem card no mês, cria pelo mesmo `fn_obter_ou_criar_fechamento_pasto` do Fechamento. O fechar relê o mês (sem F5). */
+  const fazendaDoMes = fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
+  const pastosDoMes = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
+  const loteDoMes = useLoteDoMes(fazendaDoMes, anoMes, pastosDoMes, fechamentos);
+  const modalDoPasto = useModalDoPasto({
+    anoMes, fechamentos, categorias, pastosDaFazenda: pastos, editarPasto, lote: loteDoMes,
+    acoes: { criarFechamento, fecharPasto, copiarMesAnterior },
+    aoFechar: () => { loadFechamentos(anoMes); },
+    rotuloDaFazenda: (id) => (fazendaAtual?.id === id ? fazendaAtual.codigo ?? '' : ''),
+  });
+  const abrirPasto = modalDoPasto.abrir;
 
   const getUaHaColor = (uaHa: number | null) => {
     if (!uaHa) return '';
@@ -409,19 +407,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
         )}
       </div>
 
-      {pastoAberto && fechamentoAberto && (
-        <FechamentoPastoDialog
-          open
-          onOpenChange={(o) => { if (!o) fecharModalDoPasto(); }}
-          pasto={pastoAberto}
-          fechamento={fechamentoAberto}
-          categorias={categorias}
-          onFechar={async () => fecharPasto(fechamentoAberto.id)}
-          onCopiar={async () => copiarMesAnterior(pastoAberto.id, anoMes, categorias)}
-          pastosDaFazenda={pastos}
-          onRenomear={async (nome, aoRecusar) => editarPasto(pastoAberto.id, { nome }, { aoRecusar })}
-        />
-      )}
+      {modalDoPasto.modal}
 
     </TooltipProvider>
   );

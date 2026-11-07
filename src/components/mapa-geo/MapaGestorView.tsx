@@ -28,6 +28,7 @@ import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
 import { divisoesNoPainel, type Divisao } from '@/lib/mapa/unidadesDoMapa';
+import { lancarDoPainel } from '@/lib/mapa/lancarDoPainel';
 import { areaCercadaDoPasto } from '@/lib/mapa/areaCercada';
 import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Ponto } from '@/lib/mapa/rotulosDoMapa';
 import { COR_DA_FAIXA, faixaDaLotacaoUa, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
@@ -85,6 +86,9 @@ interface Props {
   trocaDeVista: ReactNode;
   /** MAPA-IMPRESSAO-01: o botão "Imprimir mapa" (lugar de 26px antes da troca de vista; só numa fazenda) */
   acaoImprimir?: ReactNode;
+  /** MAPA-LOTES-01 fatia 1 (A): abre o modal do P1 (o MESMO do Fechamento, `useModalDoPasto`) no card do pasto; sem ele (Global, bancada),
+   *  o painel não tem o rodapé. O mapa não grava nada. */
+  onLancar?: (pastoId: string) => void;
 }
 
 const VIDRO = 'rounded-[10px] border border-white/60 bg-white/[0.78] shadow-[0_8px_28px_rgba(0,0,0,0.28)] backdrop-blur-[14px] backdrop-saturate-[1.2]';
@@ -283,7 +287,7 @@ function escaparHtml(t: string): string {
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
   seletorDeMes, trocaDeVista, acaoImprimir, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, semDesenho = null,
-  infraInicialId, onInfraInicialUsada,
+  infraInicialId, onInfraInicialUsada, onLancar,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
@@ -634,6 +638,10 @@ export function MapaGestorView({
     const lista = pastoSelecionado ? divisoes?.get(pastoSelecionado.id) ?? [] : [];
     return lista.length ? divisoesNoPainel(lista) : null;
   }, [pastoSelecionado, divisoes]);
+  /* MAPA-LOTES-01 fatia 1 (A): o rodapé do painel — abre o modal do P1 do pasto (ou da divisão escolhida) */
+  const lancar = pastoSelecionado && onLancar
+    ? lancarDoPainel({ pastoId: pastoSelecionado.id, dados: dadosSelecionado, divisoes: divisoes?.get(pastoSelecionado.id) ?? [], mes: mesDoMapa })
+    : null;
   const diferencaDaArea = (() => {
     const oficial = pastoSelecionado?.area_produtiva_ha;
     if (areaDoMapa == null || oficial == null) return null;
@@ -1040,6 +1048,37 @@ export function MapaGestorView({
               <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Satélite (vigor do capim)</div>
               <div className="text-[10px] text-[#5A6472]">Em breve.</div>
             </div>
+            {/* MAPA-LOTES-01 fatia 1 (A): rodapé de altura fixa — o botão tem lugar e largura fixos (trocar de pasto não move nada); desligado,
+                o motivo fica escrito ao lado. O modal é o do Fechamento; o mapa só o abre. */}
+            {lancar && onLancar && (
+              <div className="flex h-[32px] flex-none items-center gap-1.5 border-t border-black/[0.08] px-2" data-testid="mapa-painel-lancar">
+                {lancar.tipo === 'divisoes' ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" size="sm" className="h-[22px] w-[132px] flex-none gap-1 bg-[#1B2A44] px-2 text-[10px] text-white hover:bg-[#1B2A44]/90">
+                        {lancar.rotulo} <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className={`${MENU_ACIMA} max-h-[50vh] w-[180px] overflow-y-auto`} data-testid="menu-lancar-divisao">
+                      <DropdownMenuLabel>Qual divisão?</DropdownMenuLabel>
+                      {lancar.opcoes.map(d => (
+                        <DropdownMenuItem key={d.pastoId} onSelect={() => onLancar(d.pastoId)}>{d.nome}</DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Button type="button" size="sm" disabled={lancar.tipo === 'bloqueado'}
+                    title={lancar.tipo === 'bloqueado' ? lancar.motivo : 'Abre o mesmo modal do Fechamento de pastos'}
+                    className="h-[22px] w-[132px] flex-none px-2 text-[10px] bg-[#1B2A44] text-white hover:bg-[#1B2A44]/90"
+                    onClick={() => { if (lancar.tipo === 'um') onLancar(lancar.pastoId); }}>
+                    {lancar.rotulo}
+                  </Button>
+                )}
+                <span className="min-w-0 flex-1 text-[9.5px] leading-[12px] text-[#5A6472]" data-testid="mapa-painel-lancar-motivo">
+                  {lancar.tipo === 'bloqueado' ? lancar.motivo : ''}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
