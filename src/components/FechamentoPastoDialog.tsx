@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { motivoDoNomeDoPasto, NOTA_NOME_DO_CADASTRO } from '@/lib/pastos/nomeDoPasto';
 import { OndeOLoteEsteve, escolhaInicial, type ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
 import { pastosParaGravar, uaDosItens } from '@/lib/fechamento/loteNoGrupo';
-import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, lerEstadoDoP2, rotuloReabrirValorRebanho } from '@/lib/fechamento/travaDoP2';
+import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseReabrirJunto, lerEstadoDoP2, motivoReabrirJunto, reabrirValorRebanhoJunto, ROTULO_REABRIR_E_EDITAR } from '@/lib/fechamento/travaDoP2';
 import { CampoLoteDoPasto } from '@/components/fechamento/CampoLoteDoPasto';
 import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
 import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
@@ -161,8 +161,6 @@ interface Props {
   onRenomear: (nome: string, aoRecusar: (frase: string) => void) => Promise<boolean>;
   onFechar: () => Promise<boolean>;
   onCopiar: () => Promise<{ itens: FechamentoItem[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }>;
-  /** FECH-P2-TRAVA-AVISO-01: leva ao Valor do Rebanho do mês e volta a este pasto. Sem ele, a trava só se explica (sem botão). */
-  onReabrirValorRebanho?: () => void;
   /** FECH-ROTACAO-01 fatia 3 — onde o lote do card esteve (grupo, parte do grupo, também esteve em). Sem ele, o modal salva como sempre. */
   lote?: ContextoDoLote;
   /** LOTES-03 F1 — a fazenda pelo código, no cabeçalho do assistente do "+ Novo lote" */
@@ -171,7 +169,7 @@ interface Props {
 
 export function FechamentoPastoDialog({
   open, onOpenChange, pasto, fechamento,
-  categorias, onCopiar, pastosDaFazenda, onRenomear, onReabrirValorRebanho, lote, fazendaRotulo,
+  categorias, onCopiar, pastosDaFazenda, onRenomear, lote, fazendaRotulo,
 }: Props) {
   const { clienteAtual } = useCliente();
   /* LOTES-03 F1 — os lotes da fazenda (o MESMO leitor da tela de Lotes) e o assistente do "+ Novo lote" (null = fechado; categoria null =
@@ -192,6 +190,9 @@ export function FechamentoPastoDialog({
   /* FECH-P2-TRAVA-AVISO-01: o mês trava pelo Valor do Rebanho validado (ou P2 fechado). Lido ao abrir, para avisar ANTES de
      digitar; a recusa do banco com a mesma regra também liga. */
   const [travadoPeloP2, setTravadoPeloP2] = useState(false);
+  /* FECH-REABRIR-JUNTO-01: o motivo (opcional) do "Reabrir e editar" e o gesto em curso */
+  const [motivoReabrir, setMotivoReabrir] = useState('');
+  const [reabrindoJunto, setReabrindoJunto] = useState(false);
   /* FECH-ROTACAO-01 fatia 3 — os pastos onde o lote do card fica (o próprio sempre); começa no gravado ou no grupo inteiro (F3-2) */
   const [escolhidos, setEscolhidos] = useState<string[]>(() => (lote ? escolhaInicial(pasto.id, lote) : [pasto.id]));
   const [escolhidosIniciais, setEscolhidosIniciais] = useState('');
@@ -213,7 +214,7 @@ export function FechamentoPastoDialog({
   // Load items + meta when modal opens
   useEffect(() => {
     if (!open || !fechamento) return;
-    setNomePasto(pasto.nome); setErroNome(null); setErroSalvar(null); setTravadoPeloP2(false);
+    setNomePasto(pasto.nome); setErroNome(null); setErroSalvar(null); setTravadoPeloP2(false); setMotivoReabrir('');
     const inicio = lote ? escolhaInicial(pasto.id, lote) : [pasto.id];
     setEscolhidos(inicio); setEscolhidosIniciais(inicio.join(','));
     let vivo = true;
@@ -347,6 +348,26 @@ export function FechamentoPastoDialog({
     }
     toast.success('Pasto reaberto');
     setStatus('rascunho');
+  };
+
+  /* FECH-REABRIR-JUNTO-01 — UM gesto: reabre o Valor do Rebanho do mês (a função da tela dele) e, com o pasto fechado, o pasto. O que o
+     banco devolve depois manda: se o mês seguir travado (ex.: outro P2 fechado), a frase fica no rodapé e nada se libera. */
+  const handleReabrirJunto = async () => {
+    setErroSalvar(null);
+    setReabrindoJunto(true);
+    try {
+      const r = await reabrirValorRebanhoJunto(fechamento.fazenda_id, fechamento.ano_mes, motivoReabrirJunto(pasto.nome, motivoReabrir));
+      if (r.ok === false) { setErroSalvar(r.motivo); return; }
+      const p2 = await lerEstadoDoP2(fechamento.fazenda_id, fechamento.ano_mes);
+      if (p2.ok === false) { setErroSalvar(p2.motivo); return; }
+      if (p2.valor.travado) { setErroSalvar(fraseDaTravaDoPasto(fechamento.ano_mes)); return; }
+      setTravadoPeloP2(false);
+      setMotivoReabrir('');
+      toast.success('Valor do Rebanho reaberto');
+      if (isFechado) await handleReabrir();
+    } finally {
+      setReabrindoJunto(false);
+    }
   };
 
   const [cancelAlertOpen, setCancelAlertOpen] = useState(false);
@@ -599,17 +620,23 @@ export function FechamentoPastoDialog({
           )}
         </div>
 
-        {/* FECH-P2-TRAVA-AVISO-01 — a trava do Valor do Rebanho numa linha PRÓPRIA, a frase inteira (nunca cortada no rodapé) */}
+        {/* FECH-P2-TRAVA-AVISO-01 — a trava do Valor do Rebanho numa linha PRÓPRIA, a frase inteira (nunca cortada no rodapé).
+            FECH-REABRIR-JUNTO-01: a linha diz o que o gesto faz e o "Reabrir e editar" o faz ali mesmo (Fechamento e mapa: o mesmo modal). */}
         {travadoPeloP2 && (
           <div className="shrink-0 border-t border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-0.5 flex items-center gap-2" data-testid="trava-do-p2">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
             <span className="min-w-0 flex-1 text-[10.5px] leading-tight font-medium text-amber-900 dark:text-amber-200" data-testid="frase-da-trava-do-p2">
-              {fraseDaTravaDoPasto(fechamento.ano_mes)}
+              {fraseReabrirJunto(fechamento.ano_mes)}
             </span>
-            {onReabrirValorRebanho && (
-              <Button variant="outline" size="sm" className="h-6 shrink-0 text-[10.5px] px-2" onClick={onReabrirValorRebanho} data-testid="reabrir-valor-rebanho">
-                <LockOpen className="h-3 w-3 mr-1" />{rotuloReabrirValorRebanho(fechamento.ano_mes)}
-              </Button>
+            {!masterReadOnly && (
+              <>
+                <Input value={motivoReabrir} onChange={e => setMotivoReabrir(e.target.value)} placeholder="Motivo (opcional)"
+                  className="h-6 w-36 shrink-0 text-[10.5px] px-1.5" disabled={reabrindoJunto} data-testid="motivo-reabrir-junto" />
+                <Button variant="outline" size="sm" className="h-6 shrink-0 text-[10.5px] px-2" onClick={handleReabrirJunto}
+                  disabled={reabrindoJunto} data-testid="reabrir-e-editar">
+                  <LockOpen className="h-3 w-3 mr-1" />{ROTULO_REABRIR_E_EDITAR}
+                </Button>
+              </>
             )}
           </div>
         )}

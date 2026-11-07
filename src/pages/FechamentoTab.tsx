@@ -1547,11 +1547,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             onRenomear={async (nome, aoRecusar) => editarPasto(selectedPasto.id, { nome }, { aoRecusar })}
             onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}
             lote={contextoDoLote(selectedPasto, activeFechamento.id)}
-            onReabrirValorRebanho={onReabrirValorRebanho ? () => {
-              const pastoId = selectedPasto.id;
-              setDialogOpen(false); setSelectedPasto(null); setActiveFechamento(null);
-              onReabrirValorRebanho({ ano: anoFiltro, mes: mesFiltro, pastoId });
-            } : undefined}
           />
         )}
 

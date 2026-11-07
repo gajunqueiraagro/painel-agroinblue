@@ -801,6 +801,9 @@ const CENARIOS = [
     return [
       { nome: 'fechamento-grupo', url: URL, tamanhos: T, regiao: '[data-testid="grupo-no-fechamento"]', antes: grade },
       { nome: 'fechamento-grupo-modal', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      /* FECH-REABRIR-JUNTO-01 — o modal com o Valor do Rebanho validado: a linha do aviso (frase · motivo opcional · "Reabrir e editar") inteira */
+      { nome: 'fechamento-grupo-modal-trava', url: URL + '&v=trava', tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', botoesDentro: '[data-testid="trava-do-p2"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="reabrir-e-editar"]').waitFor(); await p.waitForTimeout(300); } },
       { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
       { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
       /* CADERNO-CAMPO-01 peça 1 — o diálogo "Exportar mês" (as folhas para marcar, a linha do motivo reservada, Cancelar/Gerar PDF) */

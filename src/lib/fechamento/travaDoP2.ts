@@ -49,6 +49,33 @@ export const fraseDaTravaDoPasto = (anoMes: string) =>
 
 export const rotuloReabrirValorRebanho = (anoMes: string) => `Reabrir Valor do Rebanho de ${mesCurto(anoMes)}`;
 
+/* FECH-REABRIR-JUNTO-01 (Gabriel 07/11 13:54) — editar um pasto num mês com o Valor do Rebanho validado é UM gesto no próprio modal: o
+   aviso diz o que acontece e o "Reabrir e editar" reabre o Valor do Rebanho pela MESMA função da tela dele (`fn_valor_rebanho_reabrir`:
+   abre o P2, o mês fica "a revalidar", a trilha leva o autor) e, se o pasto estava fechado, reabre o pasto. Quem recusa é o banco. */
+export const fraseReabrirJunto = (anoMes: string) =>
+  `O Valor do Rebanho de ${mesCurto(anoMes)} volta para aberto. Valide de novo depois do ajuste.`;
+export const ROTULO_REABRIR_E_EDITAR = 'Reabrir e editar';
+export const FRASE_REABRIR_JUNTO_FALHOU = 'Não consegui reabrir o Valor do Rebanho deste mês.';
+
+/** o motivo da trilha: o digitado (opcional) depois do pasto — nunca vazio */
+export function motivoReabrirJunto(pastoNome: string, digitado: string): string {
+  const extra = digitado.trim();
+  return `Reabrir e editar o pasto ${pastoNome}${extra ? `: ${extra}` : ''}`;
+}
+
+export type ReabriuJunto = { ok: true } | { ok: false; motivo: string };
+
+export async function reabrirValorRebanhoJunto(fazendaId: string, anoMes: string, motivo: string): Promise<ReabriuJunto> {
+  const { error } = await (supabase as any).rpc('fn_valor_rebanho_reabrir', {
+    p_fazenda_id: fazendaId, p_ano_mes: anoMes, p_motivo: motivo,
+  });
+  if (error) {
+    console.error('[travaDoP2] reabrir o Valor do Rebanho pelo pasto falhou', error);
+    return { ok: false, motivo: FRASE_REABRIR_JUNTO_FALHOU };
+  }
+  return { ok: true };
+}
+
 export const fraseDaTravaAoReabrirMes = (anoMes: string) =>
   `O Valor do Rebanho de ${mesCurto(anoMes)} está validado: para salvar mudanças nos pastos, reabra-o também.`;
 

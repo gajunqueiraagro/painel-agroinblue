@@ -1786,7 +1786,10 @@ if (tela === 'mesclar') {
       : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
       : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC
-      : COM_LOTES && t === 'rebanho_lote_cadastros' ? LOTES_BANCADA.CADASTROS : []),
+      : COM_LOTES && t === 'rebanho_lote_cadastros' ? LOTES_BANCADA.CADASTROS
+      /* FECH-REABRIR-JUNTO-01 — `&v=trava`: o Valor do Rebanho de out/26 VALIDADO (o caso EXP R_04): o modal abre com o aviso e o "Reabrir e editar" */
+      : v === 'trava' && t === 'valor_rebanho_realizado_validado' ? [{ fazenda_id: 'f1', ano_mes: '2026-10', status: 'validado' }]
+      : []),
     rpc: (fn: string, a: Record<string, unknown>) => (fn === 'fn_lotacao_do_mes' ? lotacao()
       : COM_LOTES ? LOTES_BANCADA.bancoDeLotes().rpc(fn, a) : null),
   };
