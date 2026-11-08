@@ -1,6 +1,7 @@
 /**
  * Hook for financeiro_lancamentos_v2 CRUD with pagination and filters.
  */
+import { campoDoErroDeFormato, type ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { edicaoSemMudanca } from '@/lib/financeiro/edicaoSemMudanca';
 import { soOQueMudou } from '@/lib/financeiro/camposMudados';
@@ -862,7 +863,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const criarLancamentoComId = useCallback(async (
     form: LancamentoV2Form,
     /** `onErro` entrega a mensagem real da recusa — 131, mesma forma do `editarLancamento`. */
-    opts?: { origem?: string; silent?: boolean; onErro?: (msg: string) => void },
+    opts?: { origem?: string; silent?: boolean; onErro?: (msg: string) => void; onErroDeCampo?: (e: ErroDeFormato) => void },
   ): Promise<string | null> => {
     if (!clienteId || !user) return null;
 
@@ -902,6 +903,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .single();
 
     if (error) {
+      /* NOTA-NFSE-LEITURA-02 — o 22P02 cuja coluna se acha vai ao CAMPO do modal (vermelho + frase no rodapé), nunca ao toast genérico */
+      const doCampo = opts?.onErroDeCampo ? campoDoErroDeFormato(error, row) : null;
+      if (doCampo && opts?.onErroDeCampo) { console.error('[criarLancamentoComId] formato sqlstate=22P02'); opts.onErroDeCampo(doCampo); return null; }
       // `silent` suprime o toast, nunca o diagnóstico: o console continua registrando.
       const n = reportarErro(error, 'criarLancamentoComId', opts?.silent ? () => {} : toast.error);
       opts?.onErro?.(n.mensagem);
@@ -924,7 +928,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
    * 131 veio matar, mas o modal de edição avulso continua avisando como sempre.
    */
   const editarLancamento = useCallback(async (
-    id: string, form: LancamentoV2Form, opts?: { silent?: boolean; onErro?: (msg: string) => void },
+    id: string, form: LancamentoV2Form, opts?: { silent?: boolean; onErro?: (msg: string) => void; onErroDeCampo?: (e: ErroDeFormato) => void },
   ) => {
     if (!clienteId || !user) return false;
 
@@ -1233,6 +1237,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     const { error } = await supabase.from('financeiro_lancamentos_v2').update(updatePayload as any).eq('id', id);
 
     if (error) {
+      const doCampo = opts?.onErroDeCampo ? campoDoErroDeFormato(error, updatePayload) : null;
+      if (doCampo && opts?.onErroDeCampo) { console.error('[editarLancamento] formato sqlstate=22P02'); opts.onErroDeCampo(doCampo); return false; }
       const n = reportarErro(error, 'editarLancamento', opts?.silent ? () => {} : toast.error);
       opts?.onErro?.(n.mensagem);
       return false;

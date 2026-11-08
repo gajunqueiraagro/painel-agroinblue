@@ -74,7 +74,7 @@ describe('o modal do lançamento, lido da FONTE', () => {
   const modal = readFileSync(resolve(__dirname, '../../components/financeiro-v2/LancamentoV2Dialog.tsx'), 'utf8');
   it('a gravação da parcela vai ANTES do gravador de sempre, só na edição e só quando mudou; a recusa para tudo', () => {
     const i = modal.indexOf('const recusa = await gravarParcelaDoModal(contratoDaParcela.financiamentoId, edicaoParcela.lista, edicaoParcela.totalDepoisCent, clienteAtual?.id);');
-    const j = modal.indexOf('const ok = await onSave(form, currentEditId || undefined);');
+    const j = modal.indexOf('const ok = await onSave(form, currentEditId || undefined,');
     expect(i).toBeGreaterThan(0);
     expect(i).toBeLessThan(j);
     expect(modal).toContain('if (currentIsEdit && contratoDaParcela && edicaoParcela && edicaoParcela.mudou) {');

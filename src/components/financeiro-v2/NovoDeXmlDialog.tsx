@@ -29,7 +29,7 @@ import { proporLancamento, type FazendaComIE, type PropostaDeLancamento } from '
 import { resolverEmitente, type FornecedorParaResolver, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { dataCurta, diaMes, documentoFormatado, numeroDaNota, reais } from '@/lib/financeiro/nfe/formatos';
 import {
-  aliasesDasFazendas, fornecedorPeloNome, iePorFazenda, notaJaLancada, notaJaRegistrada, ultimaClassificacaoDoFornecedor, type OcorrenciaDaNota,
+  aliasesDasFazendas, fazendaPeloHistoricoDoFornecedor, fazendasDoTomador, fornecedorPeloNome, iePorFazenda, notaJaLancada, notaJaRegistrada, ultimaClassificacaoDoFornecedor, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { arquivoXmlDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { parcelasParaCasar } from '@/lib/financeiro/nfe/jaLancada';
@@ -169,13 +169,16 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
     if (pelo.ok === false) falhas.push(`o fornecedor pelo nome (${pelo.motivo})`);
     resolucao = resolverEmitente(nota.emitente, fornecedores, pelo.ok === false ? null : pelo.valor);
   }
-  const [registrada, ultima] = await Promise.all([
+  /* NOTA-NFSE-LEITURA-02 (D2 a) — a fazenda pelo historico do fornecedor so' quando a nota nao a diz (sem IE do destinatario) */
+  const [registrada, ultima, fazendaDoHistorico, fazendasDoTomadorDaNota] = await Promise.all([
     notaJaRegistrada(cli, nota.chave),
     resolucao.propostoId ? ultimaClassificacaoDoFornecedor(cli, resolucao.propostoId) : Promise.resolve(null),
+    nota.destinatario.ie ? Promise.resolve(null) : fazendaPeloHistoricoDoFornecedor(cli, nota.emitente.documento),
+    nota.destinatario.ie ? Promise.resolve([]) : fazendasDoTomador(cli, nota.destinatario.documento, nota.servico?.competencia || nota.emissao),
   ]);
   if (registrada.ok === false) falhas.push(`se a nota já está registrada (${registrada.motivo})`);
   const ocorrencias = registrada.ok === false ? [] : registrada.valor;
-  const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima });
+  const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima, fazendaDoHistorico, fazendasDoTomador: fazendasDoTomadorDaNota });
   if (proposta.ok === false) return { ...base, nota, avisos, recusa: proposta.frase };
   const ehPdf = lido.origem === 'pdf';
   const doXml: DoXml = {

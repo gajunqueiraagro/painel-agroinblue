@@ -65,6 +65,7 @@ import { AlertCircle, AlertTriangle, Copy, RefreshCw, DollarSign, Beef, Repeat, 
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
+import { campoEmFormatoInvalido, type ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useQueryClient } from '@tanstack/react-query';
 /* PAR-02 — a montagem do payload e a previa, compartilhadas com a tela de Parcelamentos. */
 import { montarPayloadParcelamento, preverParcelas } from '@/lib/financiamentos/montarPayloadParcelamento';
@@ -179,7 +180,8 @@ interface Props {
    * para os chamadores de sempre; quem devolve o id (a `string`) é quem liga `documentosAntesDeSalvar`,
    * porque sem o id os documentos pendentes não teriam onde nascer.
    */
-  onSave: (form: LancamentoV2Form, id?: string) => Promise<boolean | string>;
+  /** NOTA-NFSE-LEITURA-02 — `onErroDeCampo`: o banco recusou um campo por formato; o modal o acende e escreve a frase no rodapé */
+  onSave: (form: LancamentoV2Form, id?: string, onErroDeCampo?: (e: ErroDeFormato) => void) => Promise<boolean | string>;
   /**
    * Liga a aba Documentos no "Novo lançamento" — FIN-NFE-PARCELAS-01, PR 1. Os documentos ficam
    * pendentes em memória e são gravados depois do salvar. ⚠ SÓ PARA QUEM DEVOLVE O ID NO `onSave`:
@@ -699,6 +701,8 @@ export function LancamentoV2Dialog({
   const [anexarBoletos, setAnexarBoletos] = useState<'previa' | 'irmas' | null>(null);
   const [irmas, setIrmas] = useState<ParcelaIrma[] | null>(null);
   const [erroAntesDeSalvar, setErroAntesDeSalvar] = useState<string | null>(null);
+  /* NOTA-NFSE-LEITURA-02 — o campo preenchido em formato que o banco recusaria: vermelho + a frase no rodapé (nunca o toast genérico) */
+  const [campoInvalido, setCampoInvalido] = useState<ErroDeFormato | null>(null);
   /* As irmãs de uma parcela aberta (a consulta do M6 da FASE 0). Só no editar; `null` = não é parcela. */
   useEffect(() => {
     let cancelado = false;
@@ -1562,6 +1566,15 @@ export function LancamentoV2Dialog({
 
   // Regenerate parcela rows when key inputs change
   const valorNum = parseBRL(valorDisplay);
+  /* NOTA-NFSE-LEITURA-02 — mexeu num campo: o vermelho do formato e a frase dele saem (a conferência roda de novo no Salvar) */
+  const campoInvalidoRef = useRef(campoInvalido);
+  campoInvalidoRef.current = campoInvalido;
+  useEffect(() => {
+    const c = campoInvalidoRef.current;
+    if (!c) return;
+    setCampoInvalido(null);
+    setErroAntesDeSalvar((e) => (e === c.frase ? null : e));
+  }, [dataCompetencia, dataVencimento, dataPagamento, fazendaId, favorecidoId, contaOrigemId, contaDestinoId, valorDisplay]);
 
   /**
    * A PRÉVIA — o que a RPC vai gravar, calculado pela mesma função. PAR-02.
@@ -2094,6 +2107,17 @@ export function LancamentoV2Dialog({
       return;
     }
 
+    /* NOTA-NFSE-LEITURA-02 (regra de 06/11) — o formato de cada campo ANTES do banco: o 22P02 virava "Um dos campos está em formato
+       inválido" sem dizer qual. Aqui o campo acende e a frase vai para a faixa do rodapé; nada é gravado. */
+    const formato = campoEmFormatoInvalido({ data_competencia: dataCompetencia, data_vencimento: dataVencimento, data_pagamento: dataPagamento, valor: valorNum });
+    if (formato) {
+      setCampoInvalido(formato);
+      setErroAntesDeSalvar(formato.frase);
+      setAbaAtiva('geral');
+      return;
+    }
+    setCampoInvalido(null);
+
     setSaving(true);
 
     // Capture the editing ID from the stable ref — prevents stale closure issues
@@ -2363,7 +2387,7 @@ export function LancamentoV2Dialog({
     }
 
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
-    const ok = await onSave(form, currentEditId || undefined);
+    const ok = await onSave(form, currentEditId || undefined, (e) => { setCampoInvalido(e); setErroAntesDeSalvar(e.frase); setAbaAtiva('geral'); });
     if (!ok) { setSaving(false); return; }
     /* P165 — "Salvar e dividir": o lancamento gravado, a divisao pelos itens DEPOIS (a mesma RPC do botao "Dividir…"). Recusou: o
        lancamento ja' esta' salvo e a frase diz que a divisao nao foi — o modal fica aberto, a conta por item continua a' vista */
@@ -2526,8 +2550,9 @@ export function LancamentoV2Dialog({
           && numParcelas === p.parcelamento.parcelas && dataVencimento === p.parcelamento.primeiroVencimento;
       case 'forma': return !!p.formaPagamento && formaPgto === p.formaPagamento;
       case 'documento': return notaFiscal === p.numeroDocumento;
-      /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a descrição é do operador, nunca da nota: nunca em âmbar */
-      case 'descricao': return false;
+      /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a descrição da NF-e é do operador: nunca em âmbar. NOTA-NFSE-LEITURA-02 — a curta da NFS-e
+         fica em âmbar enquanto é a da nota */
+      case 'descricao': return !!p.descricaoInicial && descricao === p.descricaoInicial;
       case 'vencimento': return p.parcelamento.tipo === 'unico' && dataVencimento === p.parcelamento.vencimento;
       default: return false;
     }
@@ -2925,6 +2950,7 @@ export function LancamentoV2Dialog({
                   conflito={xmlConflito}
                   onUsarConflito={(id) => { setFavorecidoId(id); setXmlFornecedorProposto(id); setXmlConflito(null); setXmlFaixaFechada(true); }} />
                 <AvisosDoXml xml={xml} registradaDispensada={xmlRegistradaDispensada}
+                  preenchido={{ fazenda: !!fazendaId, vencimento: /^\d{4}-\d{2}-\d{2}$/.test(dataVencimento) }}
                   onDispensarRegistrada={() => setXmlRegistradaDispensada(true)} onAbrirOcorrencia={abrirOcorrenciaDaNota} />
                 {xmlAmbar('subcentro') && (
                   <div className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
@@ -3022,7 +3048,7 @@ export function LancamentoV2Dialog({
               <div className="col-span-2" title={porqueOC('competencia')}>
                 <Label className={REGUA_ROTULO}>{/* em ambar o rotulo encurta: "Data Competência *" + a origem nao cabem na coluna (medido a 1.135) e quebravam a linha */}
                   {xmlAmbar('competencia') ? xmlRot('Competência *', 'competencia') : 'Data competência *'}</Label>
-                <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={cn(dateFieldCls, xmlCls('competencia'))} />
+                <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={cn(dateFieldCls, xmlCls('competencia'), campoInvalido?.campo === 'competencia' && 'border-destructive')} />
               </div>
               )}
               {/* Data Vencimento — PR-FIN-MODAL-VENCIMENTO-02B: campo funcional (mesmo DatePicker de
@@ -3037,14 +3063,14 @@ export function LancamentoV2Dialog({
                     : naFatura ? <span data-testid="vencimento-da-fatura" title={fraseDaFatura}>Data vencimento * 💳</span>
                     : xmlAmbar('vencimento') ? xmlRot('Vencimento *', 'vencimento') : 'Data vencimento *'}</Label>
                 {/* parcela paga: em leitura; o motivo está escrito no rodapé (`parcela-do-contrato`) — sem invólucro aqui, o HTML do lançamento comum não muda */}
-                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={(isOCTitulo && !ocAjustavel) || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro) && 'border-destructive')} />
+                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={(isOCTitulo && !ocAjustavel) || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro || campoInvalido?.campo === 'vencimento') && 'border-destructive')} />
               </div>
               {!modoOC && (
               <div className="col-span-2"
                 title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}>
                 <Label className={REGUA_ROTULO}>Data pagamento *</Label>
                 <DatePicker value={pagamentoMostrado} onChange={handleDataPagamentoChange}
-                  disabled={pagamentoTravado || !pagamentoPermitido || travaCasado.pagamento} tabIndex={3} className={dateFieldCls} />
+                  disabled={pagamentoTravado || !pagamentoPermitido || travaCasado.pagamento} tabIndex={3} className={cn(dateFieldCls, campoInvalido?.campo === 'pagamento' && 'border-destructive')} />
               </div>
               )}
               <div className="col-span-3" title={modoOC ? MOTIVO_STATUS_TRAVADO_OC : undefined}>

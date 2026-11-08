@@ -116,7 +116,7 @@ export const fraseDaChave = (d: readonly CampoConferido[], avulsa = false) => (d
   : `chave não confere: ${d.map((x) => NOME_DO_CONFERIDO[x]).join(', ')}`);
 
 const ROTULO_DO_CAMPO: Partial<Record<CampoDoEmitente, string>> = {
-  inscricao_estadual: 'IE', logradouro: 'endereço', numero: 'endereço', bairro: 'endereço', cep: 'endereço', municipio: 'cidade', uf: 'cidade',
+  inscricao_estadual: 'IE', inscricao_municipal: 'IM', logradouro: 'endereço', numero: 'endereço', bairro: 'endereço', cep: 'endereço', municipio: 'cidade', uf: 'cidade',
   telefone: 'telefone', nome_fantasia: 'fantasia',
 };
 /** "IE, endereço e cidade" — os campos que a nota completa no cadastro (sem repetir; `tipo_pessoa` nao se fala). */

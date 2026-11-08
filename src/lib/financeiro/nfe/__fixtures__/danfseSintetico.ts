@@ -10,6 +10,12 @@ export interface OpcoesDanfse {
   totalRetido?: string; liquido?: string;
   /** Troca a chave impressa (para a conferencia). */
   chave?: string;
+  /** NOTA-NFSE-LEITURA-02 — o quadro "TRIBUTAÇÃO IBS/CBS" (o da NF 402: base 2.828,95 · IBS UF 0,10% · CBS 0,90%), sintético */
+  ibsCbs?: boolean;
+  /** NOTA-NFSE-LEITURA-02 — a "Descrição do Serviço" em várias linhas (como a NF 402: serviço · deslocamento · objeto) */
+  descricao?: string[];
+  /** NOTA-NFSE-LEITURA-02 — sem a IE do tomador nas informações complementares (o caso comum da NFS-e) */
+  semIe?: boolean;
 }
 
 export const CNPJ_PRESTADOR_SINTETICO = '11222333000424';
@@ -68,8 +74,7 @@ export function danfseSintetico(o: OpcoesDanfse = {}): ItemDoDanfe[][] {
     rot('Código da NBS', 297, 552.7), it('120013110', 297, 544.5, 35),
     it('Lubrificação, limpeza, conserto e manutenção de máquinas, veículos, aparelhos, equipamentos,...', 7, 534.5, 536.9),
     rot('Descrição do Serviço', 7, 523.7),
-    it('CONSERTO DA BOMBA DO POCO SINTETICO', 7, 514.5, 200),
-    it('02 DESLOCAMENTO', 8.9, 506.6, 68.5),
+    ...(o.descricao ?? ['CONSERTO DA BOMBA DO POCO SINTETICO', '02 DESLOCAMENTO']).map((l, i) => it(l, i % 2 ? 8.9 : 7, 514.5 - i * 7.9, l.length * 3.4)),
     /* ISSQN (os rotulos a 1,3 pt acima do titulo: nao entram na descricao) */
     it('TRIBUTAÇÃO MUNICIPAL (ISSQN)', 8, 488.4, 115.4),
     rot('Tipo de Tributação do ISSQN', 152, 489.7), it('Operação tributável', 152, 481.6, 61.1),
@@ -84,6 +89,21 @@ export function danfseSintetico(o: OpcoesDanfse = {}): ItemDoDanfe[][] {
     it(R(o.irrf ?? '-'), 152, 408.6, 20), rot('IRRF', 152, 416.7),
     it(R(o.previdencia ?? '-'), 297, 408.6, 20), rot('Contribuição Previdenciária - Retida', 297, 416.7),
     rot('Contribuições Sociais - Retidas', 442, 416.7), it(R(o.contribuicoes ?? '-'), 442, 408.6, 20),
+    ...(o.ibsCbs ? [
+      it('TRIBUTAÇÃO IBS/CBS', 8, 399.4, 80),
+      rot('CST / cClassTrib', 152, 400.7), it('000 / 000001', 152, 392.6, 40),
+      rot('Exclusões e Reduções da Base de Cálculo', 7, 382.7), it('R$ 71,05', 7, 374.6, 30),
+      rot('Base de Cálculo Após Exclusões e Reduções', 152, 382.7), it('R$ 2.828,95', 152, 374.6, 36),
+      rot('Alíquota - IBS UF / IBS Mun', 442, 382.7), it('0,10 % / 0,00 %', 442, 374.6, 50),
+      rot('Alíq. Efetiva Municipal - IBS', 7, 364.7), it('0,00 %', 7, 356.6, 20),
+      rot('Valor Apurado Municipal - IBS', 152, 364.7), it('R$ 0,00', 152, 356.6, 24),
+      rot('Alíq. Efetiva Estadual - IBS', 297, 364.7), it('0,10 %', 297, 356.6, 20),
+      rot('Valor Apurado Estadual - IBS', 442, 364.7), it('R$ 2,83', 442, 356.6, 24),
+      rot('Valor Total Apurado - IBS', 7, 346.7), it('R$ 2,83', 7, 338.6, 24),
+      rot('Alíquota - CBS', 152, 346.7), it('0,90 %', 152, 338.6, 20),
+      rot('Alíquota Efetiva - CBS', 297, 346.7), it('0,90 %', 297, 338.6, 20),
+      rot('Valor Total Apurado - CBS', 442, 346.7), it('R$ 25,46', 442, 338.6, 28),
+    ] : []),
     /* VALOR TOTAL */
     it('VALOR TOTAL DA NFS-E', 8, 303.4, 84.7),
     rot('VALOR DA OPERAÇÃO / SERVIÇO', 152, 304.7), it(R(o.bruto ?? '980,00'), 152, 296.6, 32.3),
@@ -93,6 +113,6 @@ export function danfseSintetico(o: OpcoesDanfse = {}): ItemDoDanfe[][] {
     rot('VALOR LÍQUIDO DA NFS-e', 152, 286.7), it(R(o.liquido ?? '980,00'), 152, 278.6, 32.3),
     rot('VALOR LÍQUIDO DA NFS-E + IBS/CBS', 442, 286.7), it(R(o.liquido ?? '980,00'), 442, 278.6, 32.3),
     it('INFORMAÇÕES COMPLEMENTARES', 7, 265.3, 123.6),
-    it('Inf. Cont.: INSCRIÇÃO ESTADUAL: 280000001; | Totais Aproximados dos Tributos: Federais: R$0,00', 7, 255.6, 300),
+    it(o.semIe ? 'Totais Aproximados dos Tributos cfe. Lei nº 12.741/2012: Federais: R$0,00' : 'Inf. Cont.: INSCRIÇÃO ESTADUAL: 280000001; | Totais Aproximados dos Tributos: Federais: R$0,00', 7, 255.6, 300),
   ]];
 }

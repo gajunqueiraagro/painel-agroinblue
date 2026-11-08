@@ -37,8 +37,19 @@ export const FRASE_NOTA_DE_VENDA = 'Nota de venda entra pela Operação Comercia
 export const FRASE_FAZENDA_NAO_IDENTIFICADA = 'Fazenda não identificada pela inscrição estadual.';
 /** NOTA-FAZENDA-PELA-IE-01 — a origem da fazenda achada pelo nome no endereco do destinatario (sem a IE gravada): o operador confere. */
 export const ORIGEM_FAZENDA_PELO_ENDERECO = 'pelo endereço, confira';
+/** NOTA-NFSE-LEITURA-02 (D2 a) — a fazenda mais usada nos lancamentos do fornecedor (mesma raiz do CNPJ): o operador confere. */
+export const ORIGEM_FAZENDA_PELO_HISTORICO = 'pelo histórico do fornecedor, confira';
+/** NOTA-NFSE-LEITURA-02 (12:36) — a fazenda do titular fiscal com o CPF/CNPJ do tomador (uma só, vigente na data da nota). */
+export const ORIGEM_FAZENDA_PELO_TOMADOR = 'pelo tomador da nota';
+/** O tomador é titular em mais de uma fazenda: ninguém escolhe por ele. */
+export const fraseTomadorEmVarias = (n: number) => `O tomador da nota é titular em ${n} fazendas: escolha a fazenda.`;
 export const FRASE_SEM_DUPLICATAS = 'Nota sem duplicatas. Preencha o vencimento.';
 export const FRASE_SEM_PROTOCOLO = 'Nota sem protocolo de autorização.';
+/** NOTA-NFSE-LEITURA-02 (Gabriel 08/11) — o aviso que pede um campo SOME quando o campo foi preenchido: a lista da proposta e' calculada
+ *  na abertura; a tela passa o estado de agora. */
+export function avisosQueValem(avisos: readonly string[], preenchido: { fazenda: boolean; vencimento: boolean }): string[] {
+  return avisos.filter((a) => !(a === FRASE_FAZENDA_NAO_IDENTIFICADA && preenchido.fazenda) && !(a === FRASE_SEM_DUPLICATAS && preenchido.vencimento));
+}
 /** NFSE-MUNICIPAL-01 — a NFS-e da prefeitura sem o Identificador Nacional: nada confere o lido. */
 export const FRASE_SEM_CHAVE = 'NFS-e sem chave para conferir: confira os campos lidos.';
 /** NFSE-MUNICIPAL-01 — as parcelas calculadas pela condição escrita na nota (não impressas como duplicatas). */
@@ -113,6 +124,8 @@ export interface PropostaDeLancamento {
   formaPagamento: string;             // '' quando o tPag nao mapeia
   numeroDocumento: string;
   descricao: string;
+  /** NOTA-NFSE-LEITURA-02 — o que o campo Descrição traz ao abrir: '' na NF-e (30/10); a curta do serviço na NFS-e (D1 a, 08/11). */
+  descricaoInicial: string;
   /** O documento NF que nasce junto (o XML e' o arquivo dele). */
   documento: {
     numero: string; serie: string; chaveAcesso: string; dataEmissao: string; valorCent: number;
@@ -137,6 +150,43 @@ export function descricaoDaNota(nota: NotaLida): string {
   const partes = [nomes.slice(0, 2).join(', ')];
   if (nomes.length > 2) partes.push(`${nomes.length} itens`);
   return partes.join(' · ');
+}
+
+/* NOTA-NFSE-LEITURA-02 (Gabriel 08/11, D1 a) — SO' NA NFS-e a descricao nasce curta, tirada do servico (a NF-e segue vazia, 30/10).
+   O objeto do servico = as linhas curtas (ate' 3 palavras) que se repetem ou fecham outra linha ("CARREGADEIRA W130", "VAGÃO BRUTALICO");
+   o verbo vem do codigo (14.01 / 14.02 = manutencao); sem objeto, a 1a linha que nao e' deslocamento; nada legivel = "Serviço 14.01.01".
+   Primeira maiuscula, ate' 60 caracteres sem cortar palavra. O texto inteiro fica no item. */
+export const LIMITE_DA_DESCRICAO_CURTA = 60;
+const RE_DESLOCAMENTO = /^\d+\s+DESLOCAM/;
+const VERBO_DO_CODIGO: Readonly<Record<string, string>> = { '14.01': 'Manutenção', '14.02': 'Assistência técnica' };
+const semAcento = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+/** caixa de frase: tudo minusculo, menos o que tem digito (W130) */
+const fraseCurta = (s: string) => s.split(/\s+/).map((p) => (/\d/.test(p) ? p : p.toLowerCase())).join(' ');
+function cortarNaPalavra(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const corte = s.slice(0, max + 1);
+  const i = corte.lastIndexOf(' ');
+  return (i > 0 ? corte.slice(0, i) : s.slice(0, max)).replace(/[\s,;.\-–]+$/, '');
+}
+export function descricaoCurtaDoServico(nota: Pick<NotaLida, 'servico' | 'itens'>): string {
+  const s = nota.servico;
+  if (!s) return '';
+  const linhas = (s.linhas?.length ? s.linhas : [nota.itens[0]?.descricao ?? '']).map((l) => l.trim()).filter((l) => l && !RE_DESLOCAMENTO.test(semAcento(l)));
+  const chaves = linhas.map(semAcento);
+  const objetos: string[] = [];
+  linhas.forEach((l, i) => {
+    const k = chaves[i];
+    if (k.split(/\s+/).length > 3 || objetos.some((o) => semAcento(o) === k)) return;
+    const repete = chaves.some((o, j) => j !== i && (o === k || o.endsWith(` ${k}`)));
+    if (repete) objetos.push(l);
+  });
+  const verbo = VERBO_DO_CODIGO[(s.codigoTributacao ?? '').slice(0, 5)] ?? null;
+  let texto: string;
+  if (objetos.length) texto = [verbo, fraseCurta(objetos.join(' e '))].filter(Boolean).join(' ');
+  else if (linhas.length) texto = fraseCurta(linhas[0]);
+  else return s.codigoTributacao ? `Serviço ${s.codigoTributacao}` : '';
+  texto = cortarNaPalavra(texto, LIMITE_DA_DESCRICAO_CURTA);
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
 /** De que lado da nota o cliente esta', pela inscricao estadual das fazendas dele. */
@@ -172,6 +222,10 @@ export function proporLancamento(entrada: {
   /** O fornecedor que vale (o proposto, ou o que o operador escolheu entre dois). */
   favorecidoId: string | null;
   ultima: UltimaClassificacao | null;
+  /** NOTA-NFSE-LEITURA-02 — a fazenda mais usada do fornecedor (a tela a busca); so' entra sem IE e sem nome no endereco. */
+  fazendaDoHistorico?: string | null;
+  /** NOTA-NFSE-LEITURA-02 (12:36) — as fazendas do titular com o CPF/CNPJ do tomador (a tela as busca); passa na frente do historico. */
+  fazendasDoTomador?: readonly string[];
 }): ResultadoDaProposta {
   const { nota, avisosDoLeitor, fazendas, emitente, favorecidoId, ultima } = entrada;
 
@@ -183,7 +237,7 @@ export function proporLancamento(entrada: {
     tipo: 'Saída · do XML',
     competencia: 'emissão',
     documento: 'do XML',
-    descricao: 'do XML',
+    descricao: nota.modelo === 'nfse' ? 'do serviço da nota' : 'do XML',
   };
 
   /* O VALOR: com duplicatas, a soma delas (decisao 5); sem, o da nota. */
@@ -219,9 +273,19 @@ export function proporLancamento(entrada: {
 
   /* A FAZENDA: pela IE do destinatario; sem IE gravada, pelo nome no endereco dele (NOTA-FAZENDA-PELA-IE-01, "confira") */
   const pelaIe = lado.fazenda;
-  const peloEndereco = pelaIe ? null : fazendaPeloEndereco(nota.destinatario.endereco, fazendas);
+  /* NOTA-NFSE-LEITURA-02 — a ordem: a IE · o TOMADOR (uma fazenda vigente) · o nome no endereco · o historico do fornecedor (dentro das
+     fazendas do tomador, quando ele tem varias) */
+  const doTomador = fazendas.filter((f) => (entrada.fazendasDoTomador ?? []).includes(f.id));
+  const peloTomador = pelaIe || doTomador.length !== 1 ? null : doTomador[0];
+  const peloEndereco = pelaIe || peloTomador ? null : fazendaPeloEndereco(nota.destinatario.endereco, fazendas);
+  const historico = fazendas.find((f) => f.id === entrada.fazendaDoHistorico) ?? null;
+  const peloHistorico = pelaIe || peloTomador || peloEndereco || !historico ? null
+    : doTomador.length > 1 && !doTomador.some((f) => f.id === historico.id) ? null : historico;
   if (pelaIe) origens.fazenda = `IE ${nota.destinatario.ie ?? ''}`;
+  else if (peloTomador) origens.fazenda = ORIGEM_FAZENDA_PELO_TOMADOR;
   else if (peloEndereco) origens.fazenda = ORIGEM_FAZENDA_PELO_ENDERECO;
+  else if (peloHistorico) origens.fazenda = ORIGEM_FAZENDA_PELO_HISTORICO;
+  else if (doTomador.length > 1) avisos.push(fraseTomadorEmVarias(doTomador.length));
   else avisos.push(FRASE_FAZENDA_NAO_IDENTIFICADA);
 
   /* O FORNECEDOR. */
@@ -242,7 +306,7 @@ export function proporLancamento(entrada: {
       /* P174: a NFS-e tem competencia propria (o mes do servico); a NF-e segue na emissao */
       competencia: nota.servico?.competencia || nota.emissao,
       favorecidoId,
-      fazendaId: lado.fazenda?.id ?? peloEndereco?.id ?? null,
+      fazendaId: lado.fazenda?.id ?? peloTomador?.id ?? peloEndereco?.id ?? peloHistorico?.id ?? null,
       valorCent,
       classificacao: ultima,
       parcelamento,
@@ -251,6 +315,7 @@ export function proporLancamento(entrada: {
       /* P164 (Gabriel 28/10 15:22) — o nº no lançamento é "000.009.952" (sem "NF": o tipo diz Nota Fiscal); a mesma regra do lote */
       numeroDocumento: formatNFNumber(nota.numero) || nota.numero,
       descricao: descricaoDaNota(nota),
+      descricaoInicial: nota.modelo === 'nfse' ? descricaoCurtaDoServico(nota) : '',
       documento: {
         numero: numeroDaNota(nota.numero), serie: nota.serie, chaveAcesso: nota.chave, dataEmissao: nota.emissao,
         valorCent: nota.totais.notaCent, emitenteId: favorecidoId, emitenteNome: nota.emitente.nome,
