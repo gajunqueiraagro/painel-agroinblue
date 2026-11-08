@@ -261,6 +261,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
   desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
+- DOC-ANEXO-E-IMPORT-01 F1: SÓ A NF SE LÊ COMO NOTA — recibo/boleto/comprovante/outro nunca passam pelo `lerNota` nem pelo `extrairDanfe` e a
+  chave de acesso só aparece na NF; ler nunca troca o tipo escolhido; na porta da nota o PDF sem chave diz `FRASE_NAO_PARECE_NOTA` (+ ⓘ).
 - DOC-NOTA-XML-PDF-01: a mesma nota em PDF e XML = UMA linha (`linhasDosDocumentos`, a mesma regra do `fin_documento_confronto`, que nao
   a da' como repetida); abrir = o PDF, sem PDF os itens da nota — o XML nunca abre cru (e' dado de importacao).
 - NOTA-AVULSA-890-01: nota avulsa (serie 890–899) tem na chave o CNPJ do orgao emissor — nao se compara com o emitente; remessa de
