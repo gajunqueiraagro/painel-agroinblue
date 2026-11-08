@@ -903,6 +903,18 @@ const CENARIOS = [
     const abrir = (nome) => async (p) => { await grupos(p); await p.locator('[data-testid="grupo-linha"]', { hasText: nome }).first().click();
       await p.locator('[data-testid="grupo-dialog"]').waitFor(); await p.waitForTimeout(700); };
     return [
+      /* PASTO-FICHA-01 PR B — a LISTA (padrão): colunas do mock, o nome do pasto inteiro (a coluna é a do maior nome; a fonte desce até o
+         piso), o P10 aberto com os piquetes recuados e o "Por destino" com as mesmas linhas */
+      /* PASTO-FICHA-01 PR B — a FICHA do pasto (o mesmo modal no "+ Novo" e no lápis): o novo (e as pendências) e o P10 nas 6 abas */
+      { nome: 'pastos-ficha-novo', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => { await p.locator('[data-testid="pastos-novo"]').click();
+        await p.locator('[data-testid="ficha-do-pasto"]').waitFor(); await p.locator('[data-testid="ficha-salvar"]').click(); await p.waitForTimeout(500); } },
+      ...['cadastro', 'infra', 'avaliacoes', 'reformas', 'lotacao', 'documentos'].map((aba) => ({ nome: `pastos-ficha-${aba}`, url: URL, tamanhos: T,
+        regiao: '[role="dialog"]', antes: async (p) => { await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
+          await p.locator(`[data-testid="ficha-aba-${aba}"]`).click(); await p.waitForTimeout(600); } })),
+      { nome: 'pastos-lista', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="lista-pastos"]').waitFor(); await p.waitForTimeout(500); } },
+      { nome: 'pastos-lista-piquetes', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="abrir-piquetes"]').first().click(); await p.waitForTimeout(400); } },
+      { nome: 'pastos-lista-destino', url: URL, tamanhos: T, antes: async (p) => { await p.locator('button', { hasText: /^Por destino$/ }).first().click();
+        await p.locator('[data-testid="abrir-piquetes"]').first().click(); await p.waitForTimeout(400); } },
       { nome: 'pastos-grupos', url: URL, tamanhos: T, antes: grupos },
       { nome: 'pastos-grupos-inativos', url: URL, tamanhos: T, antes: async (p) => { await grupos(p); await p.getByText('Inativos', { exact: true }).click(); await p.waitForTimeout(400); } },
       { nome: 'pastos-grupo-editar', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: abrir('P10') },
