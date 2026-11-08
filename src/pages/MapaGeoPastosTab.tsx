@@ -8,6 +8,9 @@ import { Upload, Maximize2, Minimize2, RefreshCw, Printer } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useMapaDoMes } from '@/hooks/useMapaDoMes';
+import { useFechamento } from '@/hooks/useFechamento';
+import { pastosDoFechamentoNoMes, useLoteDoMes } from '@/hooks/useLoteDoMes';
+import { useModalDoPasto } from '@/hooks/useModalDoPasto';
 import { useUltimoMesComFechamento } from '@/hooks/useUltimoMesComFechamento';
 import { mesDeAbertura, resumoDosPastos } from '@/lib/mapa/mapaDoMes';
 import { pastosDoGlobal, resumoGlobal, situacaoDoPasto } from '@/lib/mapa/resumoGlobal';
@@ -129,6 +132,23 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const semDesenhoDaFazenda = useMemo(() => (unidades.poligonos.length === 0 ? null
     : avisoSemDesenho(pastosSemDesenho(unidades.pastos, unidades.poligonos, anoMes), 60)), [unidades, anoMes]);
   const mapaDoMes = useMapaDoMes(isGlobal ? idsDoGlobal : fazendaId, anoMes, pastosDoMapa, categorias, unidades.unidadeDe);
+  /* MAPA-LOTES-01 fatia 1 (A) — o "Lançar no fechamento" do painel abre o MESMO modal do P1 (`useModalDoPasto`, o do Fechamento e do
+     Mapa de pastos): os cards do mês pelo `useFechamento`, o grupo de pastejo e a área do mês pelo `useLoteDoMes`. O mapa não grava nada;
+     fechou o modal, relê os cards e o mês do mapa (sem F5). Só numa fazenda (no Global o modal não abre: D3). */
+  const { fechamentos, loadFechamentos, criarFechamento, fecharPasto, copiarMesAnterior } = useFechamento();
+  useEffect(() => { if (fazendaId) void loadFechamentos(anoMes); }, [fazendaId, anoMes, loadFechamentos]);
+  const pastosDoMes = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
+  const loteDoMes = useLoteDoMes(fazendaId ?? null, anoMes, pastosDoMes, fechamentos);
+  const modalDoPasto = useModalDoPasto({
+    anoMes, fechamentos, categorias, lote: loteDoMes,
+    acoes: { criarFechamento, fecharPasto, copiarMesAnterior },
+    aoFechar: () => { void loadFechamentos(anoMes); mapaDoMes.recarregar(); },
+    rotuloDaFazenda: (id) => fazendasComPecuaria.find(f => f.id === id)?.codigo ?? '',
+  });
+  const lancarNoPasto = useCallback((pastoId: string) => {
+    const pasto = pastos.find(p => p.id === pastoId);
+    if (pasto) void modalDoPasto.abrir(pasto);
+  }, [pastos, modalDoPasto.abrir]);
 
   /* MAPA-IMPRESSAO-01: a área do mês (a mesma do mapa) para a folha; o hook só lê com fazenda (nunca no Global) */
   const { clienteAtual } = useCliente();
@@ -319,6 +339,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         pastoInicialId={veioDoGlobal ? pastoInicial : null}
         infraInicialId={infraInicial}
         onInfraInicialUsada={() => setInfraInicial(null)}
+        onLancar={fazendaId ? lancarNoPasto : undefined}
       />
     </div>
   ) : (
@@ -359,6 +380,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
 
   const dialogo = (
     <>
+    {modalDoPasto.modal}
     {fazendaId && <ImprimirMapaDialog open={imprimirAberto} onOpenChange={setImprimirAberto} anoMes={anoMes} aoGerar={gerarPdf} />}
     <KmlUploadDialog
       open={uploadOpen}

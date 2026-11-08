@@ -18,6 +18,26 @@ if (!Reflect.get(toast, MARCA_EMBRULHO)) {
   Reflect.set(toast, MARCA_EMBRULHO, true);
 }
 
+/* FECH-REVALIDAR-AVISO-01 (Gabriel 04/11 13:19) — NENHUM AVISO REPETIDO: o mesmo texto do mesmo tipo, enquanto o anterior está na tela,
+   não abre outro — o sonner ATUALIZA o aviso que tem o mesmo `id` em vez de empilhar. Sem `id` na chamada e com texto, o `id` é o tipo +
+   o texto; quem passa `id` decide. Vale para success/info/warning/error/message (o `toast(...)` chamado direto não passa por aqui). */
+type FnTipo = typeof toast.success;
+export const idDoAviso = (tipo: string, mensagem: unknown): string | undefined =>
+  typeof mensagem === 'string' && mensagem.trim() ? `aviso:${tipo}:${mensagem}` : undefined;
+const semRepetir = (tipo: string, fn: FnTipo): FnTipo => (mensagem, dados) => {
+  const id = dados?.id ?? idDoAviso(tipo, mensagem);
+  return fn(mensagem, id === undefined ? dados : { ...dados, id });
+};
+const MARCA_SEM_REPETIR = '__fechRevalidarSemRepetir';
+if (!Reflect.get(toast, MARCA_SEM_REPETIR)) {
+  toast.success = semRepetir('success', toast.success);
+  toast.info = semRepetir('info', toast.info);
+  toast.warning = semRepetir('warning', toast.warning);
+  toast.error = semRepetir('error', toast.error);
+  toast.message = semRepetir('message', toast.message);
+  Reflect.set(toast, MARCA_SEM_REPETIR, true);
+}
+
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
 

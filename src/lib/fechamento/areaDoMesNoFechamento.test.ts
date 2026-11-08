@@ -39,7 +39,7 @@ describe('PASTO-AREA-OFICIAL-02b — o Fechamento lê a área do mês', () => {
 
   it('F3 a ligação na tela: comAreaDoMes + useAreaDosPastosNoMes no FechamentoTab, areaDe até as colunas', () => {
     const tab = readFileSync('src/pages/FechamentoTab.tsx', 'utf8');
-    expect(tab).toMatch(/const \{ pastos: pastosDeHoje, categorias, editarPasto \} = usePastos\(\);/);
+    expect(tab).toMatch(/const \{ pastos: pastosDeHoje, categorias \} = usePastos\(\);/);  // MODAL-PASTO-NOME-FIXO-01: o editarPasto saiu (o nome não se edita no modal)
     expect(tab).toMatch(/useAreaDosPastosNoMes\(fazendasDoAno, `\$\{Number\(anoFiltro\) - 1\}-12`, `\$\{anoFiltro\}-12`\)/);
     expect(tab).toMatch(/const pastos = useMemo\(\(\) => comAreaDoMes\(pastosDeHoje, anoMes, areaDoAno\)/);
     expect(tab).toMatch(/areaDe=\{areaDoAno\}/);

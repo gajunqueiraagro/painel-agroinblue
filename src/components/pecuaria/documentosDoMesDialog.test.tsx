@@ -289,26 +289,44 @@ describe('FECH-DOCS-01 — os dois pontos de tela (fonte)', () => {
     expect(usosDoBotao('<div><BotaoDocumentosDoMes a="b" /></div>')).toBe(1);
     expect(usosDoBotao('// BotaoDocumentosDoMes sem a tag')).toBe(0);
   });
-  it('Fechamento Área: um botão, fora de qualquer condição de sugestão, antes do "Ver sugestões", que tem lugar reservado', () => {
+  it('Fechamento Área (FECH-TOPO-02): um botão na coluna de botões à direita da tabela, fora de qualquer condição de sugestão, antes do "Ajustar", que tem lugar reservado; "Sugestões" saiu', () => {
     const f = fonteDe('src/pages/FechamentoTab.tsx');
     expect(usosDoBotao(f)).toBe(1);
-    const iBotao = f.indexOf('<BotaoDocumentosDoMes');
-    const iAjuste = f.indexOf('{showAdjustButton && (', iBotao);
-    const iSugestoes = f.indexOf('Ver sugestões', iBotao);
-    const iAjustar = f.indexOf('Ajustar Conciliação', iBotao);
-    expect(iBotao).toBeGreaterThan(0);
-    expect(iAjuste).toBeGreaterThan(iBotao);
-    expect(iSugestoes).toBeGreaterThan(iAjuste);
-    expect(iAjustar).toBeGreaterThan(iSugestoes);
-    const trecho = f.slice(iBotao, iAjuste);
+    const iBotoes = f.indexOf('data-testid="botoes-do-topo"');
+    const iBotao = f.indexOf('<BotaoDocumentosDoMes', iBotoes);
+    const iAjustar = f.indexOf('> Ajustar', iBotao);
+    const fimDosBotoes = f.indexOf('data-testid="lugar-ajustar"', iAjustar);
+    expect(iBotoes).toBeGreaterThan(0);
+    expect(iBotao).toBeGreaterThan(iBotoes);
+    expect(iAjustar).toBeGreaterThan(iBotao);
+    expect(fimDosBotoes).toBeGreaterThan(iAjustar);
+    const botoes = f.slice(iBotoes, fimDosBotoes);
+    /* os 6, com borda, em 2 colunas; "Sugestões" saiu (está dentro do Ajustar) */
+    expect(f).toContain('<div className="grid flex-none grid-cols-[auto_auto] content-start gap-1 max-[999px]:grid-cols-1" data-testid="botoes-do-topo">');
+    for (const r of ['> Resumo', '> GMD', '> Mapa', '> PDF', '> Ajustar']) expect(botoes).toContain(r);
+    expect(botoes).not.toContain('Sugestões');
+    expect(botoes).not.toContain('variant="ghost"');
+    expect(f).not.toContain('setShowSugestoes');
+    const trecho = f.slice(iBotao, iAjustar);
     expect(trecho).toContain('anoMes={anoMes}');
     expect(trecho).toContain('fazendaId={fazendaAtual?.id ?? null}');
-    expect(trecho).toContain('h-7');
-    expect(f.slice(iAjuste, iAjustar)).toContain('data-testid="lugar-ver-sugestoes"');
+    expect(trecho).toContain('BOTAO_DA_BARRA');
+    expect(trecho).toMatch(/<BotaoDocumentosDoMes curto/);
     /* o botão não mora dentro de `sugestoes.length > 0` nem de `showAdjustButton` */
-    const antes = f.slice(f.lastIndexOf('COL 3: Ações', iBotao), iBotao);
+    const antes = f.slice(iBotoes, iBotao);
     expect(antes).not.toContain('showAdjustButton');
     expect(antes).not.toContain('sugestoes.length');
+    /* os botões ficam À DIREITA da tabela (depois dela), na mesma linha do topo; a fita com o ano à esquerda */
+    const iTopo = f.indexOf('data-testid="topo-do-fechamento"');
+    const iTabela = f.indexOf('<table className="text-[10px] border-collapse table-fixed w-[530px]', iTopo);
+    expect(iTopo).toBeGreaterThan(0);
+    expect(iTabela).toBeGreaterThan(iTopo);
+    expect(iBotoes).toBeGreaterThan(iTabela);
+    expect(f.slice(iTopo, iTabela)).toContain('alinhadaAEsquerda');
+    /* a barra do topo (FECH-TOPO-COMPACTO-01) e a 3ª coluna não voltam */
+    expect(f).not.toContain('data-testid="barra-do-topo"');
+    expect(f).not.toContain('COL 3: Ações');
+    expect(f).toContain('<div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 items-start max-[1099px]:gap-3 max-[999px]:grid-cols-[128px_minmax(0,1fr)] max-[999px]:gap-2">');
   });
   it('Lançar › Pecuária: um botão, na barra de atalhos, antes de "Movimentações por foto", no mês corrente local', () => {
     const f = fonteDe('src/v2/V2Index.tsx');

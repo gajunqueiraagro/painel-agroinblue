@@ -388,6 +388,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   contagem e totais sao do banco; a tela nao le mais a lista inteira; faixa que quebra linha nunca tem altura fixa (`botoesDentro` olha a altura).
 - OC-CC-BOTAO-BUSCAR-DESLOCA-01: faixa com abas + texto + botoes = tres lugares — abas `flex-none`, texto no meio `min-w-0 flex-1
   truncate` com `title` (sempre presente), botoes `flex-none` a' direita; o `check:ui-cortes` tem `botoesDentro` (botao inteiro na faixa).
+- OC-BUSCAR-RECEBIMENTO-01: o que o "+ Buscar recebimento" mostra e a ordem = `listaParaVincular` (janela 30/60 da OC, sem os de outra OC);
+  a competência do "Programar recebimento" = `competenciaDoModoOC` (1ª saída, a mesma do banco), nunca `hojeLocal()` direto.
 - Acesso a tela por perfil tem um dono (`NIVEL_POR_TELA`); visibilidade nao e' permissao (quem permite e' o banco).
 - P172: Plano de Contas = régua da casa; "Mostrar inativos" lê pelo carregador (`incluirInativos`, SÓ esta tela; o padrão dos seletores segue só as
   ativas); subcentro do cliente SÓ pelas `fn_subcentro_cliente_*` (P171, simular antes, só o admin); `MOLDES_SUBCENTRO_CLIENTE` espelha `_fn_subcentro_cliente_molde`.

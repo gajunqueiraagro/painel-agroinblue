@@ -16,13 +16,13 @@ import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
 import { SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA } from '@/hooks/useOperacaoLiquidacao';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import {
-  lancarPeloModal, rotuloDaOrigemOC, tipoDoLancamentoOC, TRAVAS_DO_MODO_OC, STATUS_DO_MODO_OC,
+  competenciaDoModoOC, lancarPeloModal, rotuloDaOrigemOC, tipoDoLancamentoOC, TRAVAS_DO_MODO_OC, STATUS_DO_MODO_OC,
   type NaturezaDoModalOC, type OrigemOC, type RetornoLancarPeloModal, type TipoDaOC,
 } from '@/lib/oc/lancarPeloModal';
 
 const tipoDaOC = (t: string | null | undefined): TipoDaOC | null => (t === 'venda' || t === 'compra' || t === 'abate' ? t : null);
 
-export function LancamentoDaOCDialog({ natureza, operacaoId, versao, tipoOperacao, contraparteId, descricaoDaOC, sugerido, aoFechar, aoLancar, aoFalhar }: {
+export function LancamentoDaOCDialog({ natureza, operacaoId, versao, tipoOperacao, contraparteId, descricaoDaOC, sugerido, primeiraSaida = null, aoFechar, aoLancar, aoFalhar }: {
   /** Nulo = fechado. */
   natureza: NaturezaDoModalOC | null;
   operacaoId: string | null;
@@ -33,6 +33,8 @@ export function LancamentoDaOCDialog({ natureza, operacaoId, versao, tipoOperaca
   descricaoDaOC: string;
   /** O saldo em aberto (o valor sugerido do principal). Nulo = sem sugestão. */
   sugerido: number | null;
+  /** A 1ª saída do gado (`primeiraSaidaDaOC`): a competência do recebimento de venda/abate (FIN-COMPETENCIA-VENDA-01). Nula = hoje. */
+  primeiraSaida?: string | null;
   aoFechar: () => void;
   aoLancar: (retorno: RetornoLancarPeloModal) => void | Promise<void>;
   /** O modal não pôde abrir (a operação não foi lida, ou o banco recusou já na abertura): a frase vai para quem chamou. */
@@ -44,7 +46,7 @@ export function LancamentoDaOCDialog({ natureza, operacaoId, versao, tipoOperaca
   const tipo = tipoDaOC(tipoOperacao);
   const aberto = !!natureza && !!operacaoId && versao != null && !!tipo;
   /** O que só o banco sabe, lido a cada abertura: a fazenda da operação e, no principal, a conta dela. */
-  const [lido, setLido] = useState<{ fazendaId: string; subcentro: string | null; planoContaId: string | null } | null>(null);
+  const [lido, setLido] = useState<{ fazendaId: string; subcentro: string | null; planoContaId: string | null; pagamentoPrevisto?: string | null } | null>(null);
 
   /* os catálogos não se carregam sozinhos (a lição do Espelho): sem eles os seletores abrem vazios */
   useEffect(() => {
@@ -57,10 +59,12 @@ export function LancamentoDaOCDialog({ natureza, operacaoId, versao, tipoOperaca
     let vivo = true;
     void (async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma do repo: tabela da OC fora de types.ts
-      const { data, error } = await (supabase as any).from('zoo_operacoes_comerciais').select('fazenda_id').eq('id', operacaoId).maybeSingle();
+      const { data, error } = await (supabase as any).from('zoo_operacoes_comerciais').select('fazenda_id, data_pagamento_prevista').eq('id', operacaoId).maybeSingle();
       if (!vivo) return;
       const fazendaId = typeof data?.fazenda_id === 'string' ? data.fazenda_id : '';
       if (error || !fazendaId) { aoFalhar('Não foi possível ler a operação. Recarregue e tente de novo.'); return; }
+      /* o vencimento do recebimento: o PRAZO da negociação (`data_pagamento_prevista`); sem ele, vazio — o operador diz (nunca uma data inventada) */
+      const pagamentoPrevisto = typeof data?.data_pagamento_prevista === 'string' ? data.data_pagamento_prevista : null;
       if (natureza !== 'principal') { setLido({ fazendaId, subcentro: null, planoContaId: null }); return; }
       /* a conta do principal: a simulação de UM centavo, só para o banco dizer a classificação (nada grava) */
       const r = await lancarPeloModal({
@@ -70,7 +74,7 @@ export function LancamentoDaOCDialog({ natureza, operacaoId, versao, tipoOperaca
       });
       if (!vivo) return;
       if (r.ok !== true) { aoFalhar(r.ok === false ? r.erro : 'Não foi possível abrir.'); return; }
-      setLido({ fazendaId, subcentro: r.retorno.classificacao.subcentro, planoContaId: r.retorno.classificacao.planoContaId });
+      setLido({ fazendaId, subcentro: r.retorno.classificacao.subcentro, planoContaId: r.retorno.classificacao.planoContaId, pagamentoPrevisto });
     })();
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `aoFalhar` é de quem chama; reler a cada render dele repetiria a simulação
@@ -93,7 +97,9 @@ export function LancamentoDaOCDialog({ natureza, operacaoId, versao, tipoOperaca
       fazenda_id: lido.fazendaId,
       tipo_operacao: tipoDoLancamentoOC(natureza, tipo),
       status_transacao: STATUS_DO_MODO_OC,
-      data_competencia: hojeLocal(),
+      /* a competência que o banco vai gravar (a 1ª saída no recebimento de venda/abate), nunca HOJE no lugar dela */
+      data_competencia: competenciaDoModoOC(natureza, tipo, primeiraSaida, linha?.subcentro ?? subcentro, hojeLocal()),
+      ...(principal && lido.pagamentoPrevisto ? { data_vencimento: lido.pagamentoPrevisto } : {}),
       valor: principal && sugerido && sugerido > 0 ? sugerido : undefined,
       descricao: principal ? `${descricaoDaOC} · ${tipo === 'compra' ? 'Pagamento' : 'Recebimento'}` : '',
       favorecido_id: principal ? (contraparteId ?? undefined) : undefined,
@@ -104,7 +110,7 @@ export function LancamentoDaOCDialog({ natureza, operacaoId, versao, tipoOperaca
       plano_conta_id: linha?.id ?? (principal ? lido.planoContaId ?? undefined : undefined),
       escopo_negocio: 'pecuaria', cultura: '', fase: '',
     });
-  }, [aberto, natureza, tipo, lido, catalogosProntos, prefill, fin.classificacoes, sugerido, descricaoDaOC, contraparteId]);
+  }, [aberto, natureza, tipo, lido, catalogosProntos, prefill, fin.classificacoes, sugerido, descricaoDaOC, contraparteId, primeiraSaida]);
 
   const { porNatureza } = comps;
   const itens = useMemo(() => porNatureza('obrigacao').map(c => ({ codigo: c.codigo, nome: c.nome })), [porNatureza]);
@@ -112,9 +118,9 @@ export function LancamentoDaOCDialog({ natureza, operacaoId, versao, tipoOperaca
     if (!natureza || !tipo || !operacaoId || versao == null) return null;
     return {
       operacaoId, versao, natureza, tipoOperacao: tipo, rotulo: rotuloDaOrigemOC(operacaoId, descricaoDaOC), itens,
-      onVoltar: aoFechar, aoLancar,
+      onVoltar: aoFechar, aoLancar, dataDaEntrega: primeiraSaida,
     };
-  }, [natureza, tipo, operacaoId, versao, descricaoDaOC, itens, aoFechar, aoLancar]);
+  }, [natureza, tipo, operacaoId, versao, descricaoDaOC, itens, aoFechar, aoLancar, primeiraSaida]);
 
   return (
     <LancamentoV2Dialog

@@ -19,8 +19,10 @@ vi.mock('@/integrations/supabase/client', () => ({
 
 import {
   estadoDoP2, lerEstadoDoP2, ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, rotuloReabrirValorRebanho,
-  fraseDaTravaAoReabrirMes, fraseRevalidarValorRebanho,
+  fraseDaTravaAoReabrirMes, fraseRevalidarValorRebanho, lerARevalidar, fraseARevalidar,
 } from './travaDoP2';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 beforeEach(() => {
   respostas.valor_rebanho_realizado_validado = { data: null, error: null };
@@ -73,5 +75,34 @@ describe('frases (Gabriel 31/10)', () => {
     expect(ehRecusaDaTravaDoP2('Mês 2026-09 possui Valor do Rebanho validado ou P2 fechado. Reabra o pilar P2 antes de alterar pastos.')).toBe(true);
     expect(ehRecusaDaTravaDoP2('Card fechado não se salva.')).toBe(false);
     expect(ehRecusaDaTravaDoP2(null)).toBe(false);
+  });
+});
+
+describe('FECH-REVALIDAR-AVISO-01 — a pendência "revalidar" é UM estado (a linha invalidada), não um aviso a cada Salvar', () => {
+  it('só o status invalidado entra (validado não; linha torta não), em ordem de mês e fazenda', () => {
+    expect(lerARevalidar([
+      { fazenda_id: 'b', ano_mes: '2026-09', status: 'invalidado' },
+      { fazenda_id: 'a', ano_mes: '2026-09', status: 'validado' },
+      { fazenda_id: 'c', ano_mes: '2026-08', status: 'invalidado' },
+      { fazenda_id: 3, ano_mes: '2026-07', status: 'invalidado' },
+      null,
+    ])).toEqual([{ fazendaId: 'c', anoMes: '2026-08' }, { fazendaId: 'b', anoMes: '2026-09' }]);
+    expect(lerARevalidar(null)).toEqual([]);
+  });
+  it('a frase do item', () => {
+    expect(fraseARevalidar('2026-09')).toBe('Valor do Rebanho de set/26 a revalidar');
+  });
+});
+
+describe('FECH-REVALIDAR-AVISO-01 — a trava das duas pontas', () => {
+  const fonte = (f: string) => readFileSync(resolve(process.cwd(), f), 'utf8');
+  it('o Salvar do modal do pasto não avisa "revalide" (a frase não volta ao modal)', () => {
+    expect(fonte('src/components/FechamentoPastoDialog.tsx')).not.toMatch(/fraseRevalidarValorRebanho|Revalide o Valor/);
+  });
+  it('a Visão Geral lê a pendência pelo leitor daqui e o item leva ao Valor do Rebanho da fazenda', () => {
+    const vg = fonte('src/v2/pages/V2Home.tsx');
+    expect(vg).toMatch(/useValorRebanhoARevalidar\(idsARevalidar\)/);
+    expect(vg).toMatch(/aRevalidar\.pendentes\.map/);
+    expect(vg).toMatch(/onIrPara\?\.\('valor-rebanho', r\.fazendaId\)/);
   });
 });
