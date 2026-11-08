@@ -47,6 +47,14 @@ async function cliqueNoGesto(p, t) {
   }
   await p.locator(`[data-testid="${t}"]`).first().click();
 }
+/* F0 (gate a 918): os modos da edição (Vértices, Redesenhar, Dividir, Unir) ficam na linha pelo aria-label ou, na barra compacta, no "⋯"
+   como item do menu com o MESMO rótulo */
+async function cliqueNoModo(p, rotulo) {
+  const b = p.locator(`[data-testid="editar-poligono"] button[aria-label="${rotulo}"]`);
+  if (await b.count()) { await b.first().click(); return; }
+  await p.locator('[data-testid="editar-mais"]').click();
+  await p.locator('[role="menuitem"]', { hasText: rotulo }).first().click();
+}
 async function temGesto(p, t) {
   if (await p.locator(`[data-testid="validacao-painel-poligono"] [data-testid="${t}"]`).count()) return true;
   if (!(await p.locator('[data-testid="editar-mais"]').count())) return false;
@@ -468,7 +476,7 @@ const CENARIOS = [
       ...(() => {
         const abrir = (modo, url = '') => async (p) => {
           await validacao(p); await p.locator('[data-testid="validacao-nome"]', { hasText: 'P_01' }).first().click(); await p.waitForTimeout(400);
-          await p.locator(`[data-testid="editar-poligono"] button[aria-label="${modo}"]`).click();
+          await cliqueNoModo(p, modo);
           await p.locator('[data-testid="barra-edicao-poligono"]').waitFor(); await p.waitForTimeout(700); };
         const noMapa = async (p, pontos, duplo = false) => {
           const c = await p.locator('.leaflet-container').first().boundingBox();
@@ -2012,7 +2020,7 @@ async function medirSemReenquadrar(p) {
     await p.locator('[data-testid="validacao-painel-poligono"] button[aria-label="Fechar"]').click(); const a2 = await ler();
     if (a2 !== a0) achados.push({ regra: 'reenquadra', texto: `fechar a barra reenquadrou (${a0} -> ${a2})` });
     await linha.click(); await p.locator('[data-testid="validacao-painel-poligono"]').waitFor({ timeout: 3000 });
-    await p.locator('[data-testid="editar-poligono"] button[aria-label="Vértices"]').click();
+    await cliqueNoModo(p, 'Vértices');
     await p.locator('[data-testid="barra-edicao-poligono"]').waitFor({ timeout: 3000 });
     const b0 = await ler();
     await p.mouse.click(centro[0], centro[1]); const b1 = await ler();
