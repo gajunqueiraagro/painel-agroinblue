@@ -25,7 +25,7 @@ import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoO
 import { supabase } from '@/integrations/supabase/client';
 import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
 import { FaixaDoSnapshot } from '@/components/SnapshotStatusBanner';
-import { motivoParaRevalidar } from '@/lib/fechamento/travaDoP2';
+import { motivoParaRevalidar, podeRevalidarOMes } from '@/lib/fechamento/travaDoP2';
 import { ComposedChart, Line, Area, ReferenceLine, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
@@ -1593,6 +1593,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
   const { isReadOnly: isMesReadOnlyVR } = useMasterLock(anoMes);
   const masterReadOnlyVR = isMesReadOnlyVR(anoMes);
   const uCanEdit = isGlobal ? false : (canEdit && !masterReadOnlyVR);
+  /* BG-SET26-REVALIDAR — o Revalidar NÃO passa pela trava de tela (ver `podeRevalidarOMes`): o mês a revalidar é justamente o "travado" */
+  const podeRevalidar = podeRevalidarOMes({ global: isGlobal, fonteMes, mesFuturo: isMesFuturo });
   const uTabelaUsaSnapshot = isGlobal
     ? (globalData.fonteMes === 'snapshot')
     : tabelaUsaSnapshot;
@@ -1730,7 +1732,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
         <FaixaDoSnapshot status={snapStatusMes} mesLabel={`${mesLabel}/${anoFiltro}`}
           onRevalidar={isSnapInvalidado ? () => { void handleRevalidar(); } : undefined}
           motivo={isSnapInvalidado ? motivoParaRevalidar({
-            podeEditar: uCanEdit, pastosOficiais: p1Fechado, anoMes,
+            podeEditar: podeRevalidar, pastosOficiais: p1Fechado, anoMes,
             semPreco: liveRows.filter(r => r.saldo > 0 && (!r.precoKg || r.precoKg <= 0)).map(r => r.nome),
           }) : null}
           revalidando={revalidando || saving}
