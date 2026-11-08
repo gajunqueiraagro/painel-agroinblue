@@ -1,0 +1,237 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fechamento por pasto · piquete é subárea · mock FECH-PASTO-UNIDADE-01</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--navy:#1e2a3d;--sec:#4b5563;--ter:#6b7280;--b:#dde2e9;--b2:#c9d1dc;--az:#24508f}
+*{box-sizing:border-box}
+body{margin:0;background:#3a4252;font:12px Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#111827;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer}
+.topo{background:#0f1b2d;color:#cbd5e1;padding:6px 14px;font-size:11px;display:flex;gap:14px;white-space:nowrap;overflow:hidden}.topo b{color:#fff}
+.cen{display:flex;gap:6px;justify-content:center;padding:8px;flex-wrap:wrap}
+.ch{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px}
+.ch.on{background:#fff;color:#1e3a5f;font-weight:600}
+.tela{max-width:1180px;margin:0 auto 12px;background:#f4f6f9;border-radius:8px;padding:12px 14px 16px}
+.tt{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.tt h2{font-size:13px;margin:0;font-weight:600}
+.tt .s{color:var(--ter);font-size:11px}
+.seg{display:inline-flex;border:1px solid var(--b2);border-radius:6px;overflow:hidden;background:#fff}
+.seg button{border:0;background:none;padding:3px 10px;font-size:11px;height:24px}
+.seg button.on{background:var(--navy);color:#fff}
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:10px}
+.cd{background:#fff;border:1px solid var(--b);border-radius:8px;padding:8px 10px;cursor:pointer;min-width:0}
+.cd:hover{border-color:#8fb0de}
+.cd .l1{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.cd .nm{font-weight:700;font-size:13px}
+.cd .st{margin-left:auto;width:9px;height:9px;border-radius:50%;border:1.5px solid #9ca3af}
+.cd .st.ok{background:#16a34a;border-color:#16a34a}.cd .st.ra{background:#f59e0b;border-color:#f59e0b}
+.cd .big{font-size:15px;font-weight:700;margin:3px 0 1px}
+.cd .l3{display:flex;gap:8px;color:var(--ter);font-size:10.5px;white-space:nowrap}
+.cd .l3 .at{margin-left:auto;font-weight:600;color:#b45309}
+.cd .pq{font-size:10px;color:var(--az);background:#eaf1fb;border-radius:4px;padding:1px 5px;white-space:nowrap}
+.cd .pq.por{background:#fdf1e3;color:#8a5212}
+.ov{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:30}
+.ov.on{display:flex}
+.mod{width:min(880px,calc(100vw - 24px));height:min(560px,calc(100vh - 24px));background:#eef1f5;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.4)}
+.mh{background:var(--navy);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;white-space:nowrap;flex:none}
+.mh .nm{font-size:16px;font-weight:700}
+.mh .ha{opacity:.8;font-size:12px}
+.mh .seg{background:transparent;border-color:#4a5a75;margin-left:10px}
+.mh .seg button{color:#cbd5e1}.mh .seg button.on{background:#fff;color:var(--navy);font-weight:600}
+.mh .mn{margin-left:auto;font-size:11px;opacity:.8}
+.mh .x{border:0;background:none;color:#fff;font-size:15px;opacity:.8}
+.mb{flex:1;min-height:0;padding:10px 14px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.bl{background:#fff;border:1px solid var(--b);border-radius:8px;padding:8px 10px;min-width:0}
+.bl .bt{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--sec);margin-bottom:5px;white-space:nowrap}
+.bl .bt .i{font-weight:400;color:var(--ter);border:1px solid var(--b2);border-radius:50%;width:13px;height:13px;font-size:9px;display:inline-flex;align-items:center;justify-content:center}
+.bl .bt .r{margin-left:auto;font-weight:400}
+.lk{color:var(--az);border:0;background:none;padding:0;font-size:11px;font-weight:600;white-space:nowrap}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{font-size:10.5px;font-weight:500;color:var(--ter);text-align:left;padding:2px 6px;white-space:nowrap}
+td{font-size:11.5px;padding:3px 6px;border-top:1px solid #eef0f3;white-space:nowrap;overflow:hidden}
+.n{text-align:right}
+tr.tot td{font-weight:700;border-top:1px solid var(--b2)}
+.lt{font-weight:700;color:#0b1f3a}
+.txt{color:#8a5212}
+.cx{border:1px solid var(--b2);border-radius:5px;height:24px;display:flex;align-items:center;padding:0 6px;background:#fff;overflow:hidden;white-space:nowrap}
+.cx.n{justify-content:flex-end}
+.cx.foco{border-color:#5b8fd6;box-shadow:0 0 0 2px rgba(91,143,214,.2)}
+.cx .ph{color:#9ca3af}
+.del{border:0;background:none;color:#9ca3af;padding:0 4px}
+td.cp{overflow:visible}
+.scr.abre{overflow:visible}
+.it{flex:1;min-height:0;display:flex;flex-direction:column}
+.it .scr{flex:1;min-height:0;overflow-y:auto}
+.res{display:flex;gap:16px;white-space:nowrap;font-size:11.5px;padding-top:6px;border-top:1px solid #eef0f3}
+.res b{font-weight:700}
+.res .s{color:var(--ter)}
+.campo{position:relative}
+.dd{position:absolute;left:0;top:27px;width:440px;background:#fff;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.3);z-index:5;overflow:hidden;border:1px solid var(--b)}
+.dd .sec{font-size:10px;font-weight:600;color:var(--ter);padding:6px 10px 2px}
+.op{display:grid;grid-template-columns:96px minmax(0,1fr) 46px 52px;gap:6px;padding:4px 10px;font-size:11px;white-space:nowrap;cursor:pointer}
+.op:hover,.op.sel{background:#eef3fa}
+.op .c{font-weight:700;color:#0b1f3a}.op .m{color:var(--sec);overflow:hidden}.op .r{text-align:right}
+.acao{padding:6px 10px;font-size:11px;border-top:1px solid #eef0f3;cursor:pointer;white-space:nowrap}
+.acao:hover{background:#f5f7fa}
+.mf{flex:none;display:flex;align-items:center;gap:8px;padding:8px 14px;background:#fff;border-top:1px solid var(--b);white-space:nowrap}
+.b1{border:1px solid var(--b2);background:#fff;border-radius:6px;padding:0 12px;height:28px}
+.b1.p{background:#f2c14e;border-color:#f2c14e;font-weight:600}
+.mf .r{margin-left:auto;display:flex;gap:8px}
+.mf .s{color:var(--ter);font-size:11px}
+.av{font-size:11px;color:#8a5212;background:#fdf6ec;border:1px solid #f3dcb8;border-radius:6px;padding:5px 8px;white-space:nowrap;overflow:hidden}
+.pv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.marcas{max-width:1180px;margin:0 auto;padding:0 2px 70px}
+.marca{display:flex;gap:9px;align-items:center;margin:4px 0;padding:5px 10px;background:#fff;border-radius:7px;font-size:11.5px}
+.marca b{width:34px}
+.marca .tx{width:520px;white-space:nowrap;overflow:hidden;color:var(--sec)}
+.marca input[type=text]{flex:1;min-width:0;padding:3px 7px;border:1px solid var(--b);border-radius:5px;font:inherit;height:24px}
+.rod{position:fixed;left:0;right:0;bottom:0;background:#fff;padding:7px 14px;display:flex;gap:10px;align-items:center;z-index:20}
+.rod span{color:var(--ter);font-size:11px}
+@media (max-width:1000px){.marca .tx{width:400px}}
+</style></head><body>
+<div class="topo"><b>Mock FECH-PASTO-UNIDADE-01</b><span>Piquete é subárea do pasto · fechamento por pasto · Faz. Pureza out/26 · cabeças e lotes de exemplo</span></div>
+<div class="cen"><span style="color:#cbd5e1;font-size:11px;align-self:center">Estado:</span>
+ <button class="ch on" data-e="grade">1 · grade só pastos</button>
+ <button class="ch" data-e="inteiro">2 · P7 pasto inteiro</button>
+ <button class="ch" data-e="busca">3 · buscar lote</button>
+ <button class="ch" data-e="piq">4 · P7 por piquetes</button>
+ <button class="ch" data-e="simples">5 · pasto sem piquete</button>
+ <button class="ch" data-e="cad">6 · P5A e P5B viram piquetes do P5</button>
+</div>
+
+<div class="tela">
+ <div class="tt"><h2>Pastos · out/26</h2><span class="s">um card por pasto · piquetes ficam dentro do pasto</span>
+  <span style="margin-left:auto" class="seg"><button class="on">Cards</button><button>Mapa</button></span></div>
+ <div class="grade" id="grade"></div>
+</div>
+
+<div class="marcas" id="marcas"></div>
+<div class="rod"><button class="b1 p" id="copiar">Copiar marcas</button><span id="cpok">Marque ok / ajuste em cada item e copie para o Chat.</span></div>
+
+<div class="ov" id="ov"><div class="mod" id="mod"></div></div>
+
+<script>
+const fmt=(n,d=0)=>n.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const PASTOS=[
+ {n:'P1',ha:48.2,st:'ok',cab:92,peso:380,at:'Recria'},
+ {n:'P2',ha:51.7,st:'ok',cab:110,peso:410,at:'Recria'},
+ {n:'P5',ha:187.1,st:'',cab:0,peso:0,at:'Agricultura',pq:2},
+ {n:'P6',ha:95.6,st:'',cab:0,peso:0,at:'Cria',pq:4},
+ {n:'P7',ha:97.5,st:'ra',cab:215,peso:(120*310+95*420)/215,at:'Recria',pq:4,por:1},
+ {n:'P8',ha:85.3,st:'',cab:0,peso:0,at:'Cria',pq:4},
+ {n:'P9',ha:74.0,st:'ok',cab:160,peso:300,at:'Cria',pq:4},
+ {n:'P10',ha:62.4,st:'',cab:0,peso:0,at:'Recria'}];
+function grade(){document.getElementById('grade').innerHTML=PASTOS.map(p=>{
+ const kg=p.cab?fmt(p.cab*p.peso/p.ha)+' kg/ha':'—';
+ const pq=p.pq?`<span class="pq ${p.por?'por':''}">${p.pq} piquetes${p.por?' · por piquetes':''}</span>`:'';
+ return `<div class="cd" data-p="${p.n}"><div class="l1"><span class="nm">${p.n}</span>${pq}<span class="st ${p.st}"></span></div>
+ <div class="big">${p.cab?fmt(p.cab)+' cab':'—'}</div>
+ <div class="l3"><span>${fmt(p.ha,1)} ha</span><span>${kg}</span><span class="at">${p.at}</span></div></div>`}).join('');
+ document.querySelectorAll('.cd').forEach(c=>c.onclick=()=>{const n=c.dataset.p;if(n==='P7')est('inteiro');else if(n==='P5')est('cad');else est('simples')})}
+
+const PIQ=[['7A',24.8],['7B',25.1],['7C',24.4],['7D',23.3]];
+const ANT=[ // set/26 lançado por piquetes
+ {pq:'7A',lote:'PP-RE-NE-04',cat:'Novilhas',cab:120,peso:310},
+ {pq:'7C',lote:'PP-EN-BO-02',cat:'Bois',cab:95,peso:420}];
+let itens=[],modo='inteiro',busca=false;
+
+function head(nm,ha,comSeg){return `<div class="mh"><span class="nm">${nm}</span><span class="ha">${fmt(ha,1)} ha</span>
+ ${comSeg?`<span class="seg"><button data-m="inteiro" class="${modo==='inteiro'?'on':''}">Pasto inteiro</button><button data-m="piq" class="${modo==='piq'?'on':''}">Por piquetes</button></span>`:''}
+ <span class="mn">out/26 · rascunho</span><button class="x" data-fecha>✕</button></div>`}
+function foot(){return `<div class="mf"><button class="b1">⧉ Copiar anterior</button><span class="s">Nada é obrigatório</span><span class="r"><button class="b1" data-fecha>Cancelar</button><button class="b1 p">Salvar</button></span></div>`}
+
+function blocoAnt(){
+ const t=ANT.reduce((a,x)=>a+x.cab,0),pm=ANT.reduce((a,x)=>a+x.cab*x.peso,0)/t;
+ return `<div class="bl"><div class="bt">Mês anterior · set/26 <span class="i" title="Soma dos piquetes do pasto, com o lote de cada um">i</span><span class="r">lançado por piquetes</span><button class="lk" id="usarTudo">Usar tudo</button></div>
+ <table><colgroup><col style="width:70px"><col style="width:120px"><col><col style="width:70px"><col style="width:76px"><col style="width:56px"></colgroup>
+ <tr><th>Piquete</th><th>Lote</th><th>Categoria</th><th class="n">Cab</th><th class="n">Peso kg</th><th></th></tr>
+ ${ANT.map((x,i)=>`<tr><td>${x.pq}</td><td class="lt">${x.lote}</td><td>${x.cat}</td><td class="n">${fmt(x.cab)}</td><td class="n">${fmt(x.peso)}</td><td class="n"><button class="lk" data-usa="${i}">Usar</button></td></tr>`).join('')}
+ <tr class="tot"><td>P7</td><td></td><td></td><td class="n">${fmt(t)}</td><td class="n">${fmt(pm)}</td><td></td></tr></table></div>`}
+
+function blocoItens(ha,comPiq){
+ const t=itens.reduce((a,x)=>a+(x.cab||0),0),kg=itens.reduce((a,x)=>a+(x.cab||0)*(x.peso||0),0);
+ const cols=comPiq?`<col style="width:82px">`:'';
+ const linhas=itens.map((x,i)=>`<tr>${comPiq?`<td><div class="cx">${x.pq||'<span class="ph">piquete</span>'} ▾</div></td>`:''}
+  <td class="cp"><div class="campo"><div class="cx ${busca&&i===itens.length-1?'foco':''}">${x.lote?(x.txt?`<span class="txt">${x.lote}</span>`:`<span class="lt">${x.lote}</span>`):'<span class="ph">buscar ou digitar</span>'}</div>${busca&&i===itens.length-1?dd():''}</div></td>
+  <td><div class="cx">${x.cat||'<span class="ph">categoria</span>'}</div></td>
+  <td><div class="cx n">${x.cab?fmt(x.cab):''}</div></td><td><div class="cx n">${x.peso?fmt(x.peso):''}</div></td>
+  <td class="n"><button class="del" data-del="${i}">✕</button></td></tr>`).join('');
+ const sub=comPiq?`<div class="res" style="border:0;padding-top:2px">${PIQ.map(([p,h])=>{const c=itens.filter(x=>x.pq===p).reduce((a,x)=>a+(x.cab||0),0);return `<span class="s">${p} · ${fmt(h,1)} ha · <b style="color:#111">${c?fmt(c)+' cab':'vazio'}</b></span>`}).join('')}</div>`:'';
+ return `<div class="bl it"><div class="bt">Animais no pasto · out/26 <span class="i" title="Lote: busque um lote cadastrado, use o do mês anterior ou só digite">i</span><span class="r"></span><button class="lk" id="mais">+ Linha</button></div>
+ <div class="scr ${busca?'abre':''}"><table><colgroup>${cols}<col style="width:150px"><col><col style="width:76px"><col style="width:80px"><col style="width:36px"></colgroup>
+ <tr>${comPiq?'<th>Piquete</th>':''}<th>Lote</th><th>Categoria</th><th class="n">Cab</th><th class="n">Peso kg</th><th></th></tr>${linhas}</table></div>
+ ${sub}
+ <div class="res"><span class="s">Total</span><b>${fmt(t)} cab</b><span class="s">Peso médio</span><b>${t?fmt(kg/t):'—'} kg</b><span class="s">Lotação do pasto</span><b>${t?fmt(kg/ha):'—'} kg/ha</b><span class="s">Área</span><b>${fmt(ha,1)} ha</b></div></div>`}
+
+function dd(){return `<div class="dd"><div class="sec">Mês anterior · set/26</div>
+ <div class="op sel" data-pick="PP-RE-NE-04|Novilhas|120|310"><span class="c">PP-RE-NE-04</span><span class="m">7A · Novilhas</span><span class="r">120</span><span class="r">310 kg</span></div>
+ <div class="op" data-pick="PP-EN-BO-02|Bois|95|420"><span class="c">PP-EN-BO-02</span><span class="m">7C · Bois</span><span class="r">95</span><span class="r">420 kg</span></div>
+ <div class="sec">Lotes da fazenda</div>
+ <div class="op" data-pick="PP-RE-NE-05|Novilhas||"><span class="c">PP-RE-NE-05</span><span class="m">P9 · Novilhas</span><span class="r">160</span><span class="r">300 kg</span></div>
+ <div class="op" data-pick="PP-CR-VA-01|Vacas||"><span class="c">PP-CR-VA-01</span><span class="m">P1 · Vacas</span><span class="r">92</span><span class="r">380 kg</span></div>
+ <div class="acao"><b>+ Novo lote</b> · abre o assistente</div>
+ <div class="acao" data-txt>Usar só o texto digitado · sem lote</div></div>`}
+
+function render(){
+ const m=document.getElementById('mod');
+ if(E==='simples'){
+  itens=itens.length?itens:[{lote:'PP-CR-VA-01',cat:'Vacas',cab:92,peso:380}];
+  m.innerHTML=head('P1',48.2,false)+`<div class="mb">
+  <div class="bl"><div class="bt">Mês anterior · set/26<span class="r">pasto inteiro</span><button class="lk">Usar tudo</button></div>
+  <table><colgroup><col style="width:120px"><col><col style="width:70px"><col style="width:76px"><col style="width:56px"></colgroup>
+  <tr><th>Lote</th><th>Categoria</th><th class="n">Cab</th><th class="n">Peso kg</th><th></th></tr>
+  <tr><td class="lt">PP-CR-VA-01</td><td>Vacas</td><td class="n">92</td><td class="n">372</td><td class="n"><button class="lk">Usar</button></td></tr></table></div>
+  ${blocoItens(48.2,false)}
+  <div class="av" style="color:var(--sec);background:#fff;border-color:var(--b)">Pasto sem piquetes: não aparece a opção "Por piquetes".</div></div>`+foot();
+ } else if(E==='cad'){
+  m.innerHTML=`<div class="mh"><span class="nm">Arrumar cadastro</span><span class="ha">P5A e P5B viram piquetes do P5</span><span class="mn">vale de ago/26 em diante</span><button class="x" data-fecha>✕</button></div>
+  <div class="mb"><div class="bl"><div class="bt">Pasto <span class="i" title="O pasto que fica no fechamento, com a área somada">i</span></div>
+  <div style="display:flex;gap:10px;align-items:center;white-space:nowrap"><div class="cx" style="width:180px"><span class="lt">P5</span>&nbsp;· novo pasto</div><span class="s" style="color:var(--ter)">Início</span><div class="cx" style="width:96px">ago/2026 ▾</div></div></div>
+  <div class="bl"><div class="bt">Piquetes do P5<button class="lk" style="margin-left:auto">+ Escolher pasto</button></div>
+  <table><colgroup><col style="width:90px"><col style="width:90px"><col><col style="width:120px"></colgroup>
+  <tr><th>Hoje</th><th class="n">Área ha</th><th>Fica como</th><th class="n">Cards desde ago/26</th></tr>
+  <tr><td>P5A</td><td class="n">101,0</td><td>piquete P5A do P5</td><td class="n">3 · vazios</td></tr>
+  <tr><td>P5B</td><td class="n">86,1</td><td>piquete P5B do P5</td><td class="n">3 · vazios</td></tr>
+  <tr class="tot"><td>P5</td><td class="n">187,1</td><td></td><td class="n">3 cards no P5</td></tr></table></div>
+  <div class="pv"><div class="bl"><div class="bt">Antes</div>2 pastos · 2 cards por mês · contorno de cada um</div>
+  <div class="bl"><div class="bt">Depois</div>1 pasto · 1 card por mês · contorno do P5 = soma dos dois</div></div>
+  <div class="av">Nada é apagado. Dá para desfazer em Histórico.</div></div>
+  <div class="mf"><span class="s">Prévia antes de gravar</span><span class="r"><button class="b1" data-fecha>Cancelar</button><button class="b1 p">Confirmar</button></span></div>`;
+ } else {
+  m.innerHTML=head('P7',97.5,true)+`<div class="mb">${blocoAnt()}${blocoItens(97.5,modo==='piq')}</div>`+foot();
+ }
+ m.querySelectorAll('[data-fecha]').forEach(b=>b.onclick=()=>est('grade'));
+ m.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{modo=b.dataset.m;if(modo==='inteiro')itens.forEach(x=>delete x.pq);else itens.forEach((x,i)=>{if(!x.pq)x.pq=ANT.find(a=>a.lote===x.lote)?.pq||'7A'});busca=false;render()});
+ const ut=m.querySelector('#usarTudo');if(ut)ut.onclick=()=>{itens=ANT.map(x=>({...x,pq:modo==='piq'?x.pq:undefined}));busca=false;render()};
+ m.querySelectorAll('[data-usa]').forEach(b=>b.onclick=()=>{const x=ANT[+b.dataset.usa];itens.push({...x,pq:modo==='piq'?x.pq:undefined});busca=false;render()});
+ m.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{itens.splice(+b.dataset.del,1);busca=false;render()});
+ const mais=m.querySelector('#mais');if(mais)mais.onclick=()=>{itens.push({pq:modo==='piq'?'7B':undefined});busca=true;render()};
+ m.querySelectorAll('[data-pick]').forEach(o=>o.onclick=()=>{const [l,c,cb,p]=o.dataset.pick.split('|');Object.assign(itens[itens.length-1],{lote:l,cat:c,cab:+cb||0,peso:+p||0});busca=false;render()});
+ const tx=m.querySelector('[data-txt]');if(tx)tx.onclick=()=>{Object.assign(itens[itens.length-1],{lote:'novilhas do Zé',txt:1,cat:'Novilhas'});busca=false;render()};
+}
+let E='grade';
+function est(e){E=e;document.querySelectorAll('.ch').forEach(c=>c.classList.toggle('on',c.dataset.e===e));
+ const ov=document.getElementById('ov');
+ if(e==='grade'){ov.classList.remove('on');return}
+ if(e==='inteiro'){modo='inteiro';busca=false;itens=ANT.map(x=>({...x}))}
+ if(e==='busca'){modo='inteiro';itens=[{...ANT[1]},{}];busca=true}
+ if(e==='piq'){modo='piq';busca=false;itens=ANT.map(x=>({...x}))}
+ if(e==='simples'){itens=[];busca=false}
+ ov.classList.add('on');render()}
+document.querySelectorAll('.ch').forEach(c=>c.onclick=()=>est(c.dataset.e));
+grade();
+
+const M=[
+['M1','Grade: 1 card por pasto; o card mostra "4 piquetes".'],
+['M2','Card lançado por piquetes: selo "por piquetes".'],
+['M3','Área e lotação do pasto inteiro (soma dos piquetes).'],
+['M4','Mês anterior por piquetes: somado, com o lote de cada um.'],
+['M5','"Usar" por linha ou "Usar tudo" copia lote, cab e peso.'],
+['M6','Lote: buscar, mês anterior, + Novo lote ou só texto.'],
+['M7','"Pasto inteiro | Por piquetes" só em pasto com piquetes.'],
+['M8','Por piquetes: coluna Piquete + subtotal; lotação do pasto.'],
+['M9','Voltar a "Pasto inteiro" não perde cabeças.'],
+['M10','Pasto sem piquete: modal como hoje, sem a opção.'],
+['M11','Arrumar cadastro: pastos viram piquetes, com prévia e desfazer.']];
+document.getElementById('marcas').innerHTML=M.map(([k,t])=>`<div class="marca"><b>${k}</b><span class="tx" title="${t}">${t}</span><label><input type="checkbox" data-k="${k}"> ok</label><input type="text" data-a="${k}" placeholder="ajuste"></div>`).join('');
+document.getElementById('copiar').onclick=()=>{const s=M.map(([k])=>{const ok=document.querySelector(`[data-k=${k}]`).checked,a=document.querySelector(`[data-a=${k}]`).value.trim();return `${k}: ${a?a:(ok?'ok':'—')}`}).join('\n');
+ navigator.clipboard?.writeText(s).then(()=>document.getElementById('cpok').textContent='Copiado.').catch(()=>{document.getElementById('cpok').textContent=s.replace(/\n/g,' · ')})};
+</script></body></html>

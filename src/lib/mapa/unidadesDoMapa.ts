@@ -1,11 +1,15 @@
 /**
  * MAPA-PIQUETES-03 (Gabriel 01/11/2026, regra soberana do MAPA; cadastro na opção A: as divisões continuam PASTOS + grupo) — a UNIDADE do
  * mapa é o pasto-pai e o grupo que nasceu dele (`pasto_grupos.pasto_origem_id`, 20261028117080), como UMA coisa só:
- *  - fase 'pai': nos meses em que o pai é vigente (até o `data_fim` dele) a unidade é o pai, com o fechamento dele;
+ *  - fase 'pai': nos meses em que o pai é vigente (até o `data_fim` dele) a unidade é o pai, com o fechamento dele (e, desde a
+ *    FECH-PASTO-UNIDADE-01, os piquetes vigentes no mesmo mês são as divisões dele: o pai não encerra mais na divisão);
  *  - fase 'grupo': nos meses dos piquetes, a unidade são os membros vigentes do grupo (Σ dos fechamentos, Σ das áreas);
  *  - nome, rótulo, cor e lotação são os da unidade; o id é o do PAI (o contorno é o polígono do pai, em todos os meses);
  *  - os polígonos dos membros viram DIVISÕES: linhas finas por dentro, sem rótulo nem cor (só a Validação os mostra como hoje).
  * Grupo montado à mão no cadastro (sem `pasto_origem_id`) não vira unidade: os pastos dele seguem um a um, como antes.
+ * MAPA-PIQUETE-SUBAREA-01 (Gabriel 08/11, Sta. Tereza Modulo 05 · PUR P19A/P21A): o pai SEM contorno próprio também é unidade — o desenho
+ * dele são os desenhos dos piquetes juntos (um MultiPolygon só para mostrar, nunca gravado; id `piquetes-de:<pai>`): colorido pela unidade,
+ * UM rótulo, clique abre o pai, os piquetes ficam como linhas finas por dentro. Antes ele sumia e os piquetes viravam pastos cinza.
  * A área vem por uma função (`areaDe`): este arquivo não lê a área do cadastro (trava PASTO-AREA-OFICIAL-02a).
  */
 import { isPastoAtivoNoMes } from '@/hooks/usePastos';
@@ -25,7 +29,29 @@ export interface PastoDaUnidade {
 }
 
 /** O mínimo do polígono (a `FazendaGeometria` encaixa). */
-export interface PoligonoDaUnidade { id: string; pasto_id: string | null; tipo: string }
+export interface PoligonoDaUnidade { id: string; pasto_id: string | null; tipo: string; geojson?: unknown }
+
+/** MAPA-PIQUETE-SUBAREA-01 — o id do desenho do pai feito dos piquetes (não existe no banco: nenhuma escrita usa este id) */
+export const PREFIXO_DESENHO_DOS_PIQUETES = 'piquetes-de:';
+export const ehDesenhoDosPiquetes = (id: string) => id.startsWith(PREFIXO_DESENHO_DOS_PIQUETES);
+
+const ehAreaDesenhada = (g: unknown): g is GeoJSON.Polygon | GeoJSON.MultiPolygon =>
+  typeof g === 'object' && g !== null && 'type' in g && (g.type === 'Polygon' || g.type === 'MultiPolygon') && 'coordinates' in g && Array.isArray(g.coordinates);
+
+/** O desenho do pai sem contorno: as partes dos piquetes num MultiPolygon (null = nenhum piquete tem desenho). */
+function desenhoDosPiquetes<G extends PoligonoDaUnidade>(paiId: string, paiNome: string, desenhos: readonly G[]): G | null {
+  const partes: GeoJSON.Position[][][] = [];
+  for (const g of desenhos) {
+    const geo = g.geojson;
+    if (!ehAreaDesenhada(geo)) continue;
+    if (geo.type === 'Polygon') partes.push(geo.coordinates);
+    else partes.push(...geo.coordinates);
+  }
+  if (partes.length === 0) return null;
+  const base = desenhos[0];
+  return { ...base, ...('nome_original' in base ? { nome_original: paiNome } : {}), id: `${PREFIXO_DESENHO_DOS_PIQUETES}${paiId}`, pasto_id: paiId, tipo: 'pasto',
+    geojson: { type: 'MultiPolygon', coordinates: partes } };
+}
 
 export interface Divisao<G> { pastoId: string; nome: string; areaHa: number; poligono: G | null }
 
@@ -68,17 +94,27 @@ export function unidadesDoMapa<P extends PastoDaUnidade, G extends PoligonoDaUni
   const unidades = new Map<string, UnidadeDoMapa<P, G>>();
   const unidadeDe = new Map<string, string>();
   const membrosDeUnidade = new Set<string>();
+  const desenhosDosPiquetes: G[] = [];
   for (const gr of e.grupos) {
     const pai = gr.pasto_origem_id ? porId.get(gr.pasto_origem_id) : undefined;
     if (!pai) continue;
-    // MAPA-PIQUETES-04: o pai SEM contorno não vira unidade (ela seria desenhada pelo contorno e sumiria): o grupo segue pasto a pasto
-    if (!poligonoDe.has(pai.id)) continue;
     const membros = e.pastos.filter((p) => p.grupo_id === gr.id && p.id !== pai.id);
+    // MAPA-PIQUETE-SUBAREA-01: o pai SEM contorno é desenhado pelos piquetes (os vigentes no mês; sem nenhum, todos os que têm desenho).
+    // Nenhum piquete desenhado: o grupo segue pasto a pasto (MAPA-PIQUETES-04 — nada some em silêncio).
+    if (!poligonoDe.has(pai.id)) {
+      const vigentesComDesenho = membros.filter((m) => vigente(m, e.anoMes) && poligonoDe.has(m.id));
+      const fonte = (vigentesComDesenho.length > 0 ? vigentesComDesenho : membros).flatMap((m) => { const g = poligonoDe.get(m.id); return g ? [g] : []; });
+      const desenho = desenhoDosPiquetes(pai.id, pai.nome, fonte);
+      if (!desenho) continue;
+      desenhosDosPiquetes.push(desenho);
+    }
     for (const m of membros) { membrosDeUnidade.add(m.id); unidadeDe.set(m.id, pai.id); }
     unidadeDe.set(pai.id, pai.id);
     const membrosNoMes = membros.filter((m) => vigente(m, e.anoMes)).sort((a, b) => ordemNatural(a.nome, b.nome));
     if (vigente(pai, e.anoMes)) {
-      unidades.set(pai.id, { id: pai.id, pai, fase: 'pai', pastoIds: [pai.id], divisoes: [], areaHa: e.areaDe(pai) });
+      /* MAPA-PIQUETE-SUBAREA-01 / FECH-PASTO-UNIDADE-01: o pai segue valendo com os piquetes (subárea); os piquetes do mês são as divisões dele */
+      const divisoes = membrosNoMes.map((m) => ({ pastoId: m.id, nome: m.nome, areaHa: e.areaDe(m), poligono: poligonoDe.get(m.id) ?? null }));
+      unidades.set(pai.id, { id: pai.id, pai, fase: 'pai', pastoIds: [pai.id], divisoes, areaHa: e.areaDe(pai) });
     } else if (membrosNoMes.length > 0) {
       const divisoes = membrosNoMes.map((m) => ({ pastoId: m.id, nome: m.nome, areaHa: e.areaDe(m), poligono: poligonoDe.get(m.id) ?? null }));
       unidades.set(pai.id, {
@@ -95,7 +131,7 @@ export function unidadesDoMapa<P extends PastoDaUnidade, G extends PoligonoDaUni
     // a unidade vigente leva o pai SEM a vigência própria (na fase 'grupo' o pai já encerrou; quem diz se a unidade existe no mês é ela)
     pastos.push(u ? { ...p, data_inicio: null, data_fim: null } : p);
   }
-  const poligonos = e.poligonos.filter((g) => !(g.pasto_id && membrosDeUnidade.has(g.pasto_id)));
+  const poligonos = [...e.poligonos.filter((g) => !(g.pasto_id && membrosDeUnidade.has(g.pasto_id))), ...desenhosDosPiquetes];
   return { pastos, poligonos, unidades, unidadeDe };
 }
 

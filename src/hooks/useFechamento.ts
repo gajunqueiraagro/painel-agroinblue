@@ -5,6 +5,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
 import type { CategoriaRebanho } from './usePastos';
 import { salvarCardComAlocacaoNoBanco } from '@/lib/fechamento/loteNoGrupo';
+import { juntarAbas } from '@/lib/fechamento/porPiquetes';
 
 export interface FechamentoPasto {
   id: string;
@@ -33,6 +34,8 @@ export interface FechamentoItem {
   peso_atualizado: boolean;
   /** LOTES-03 F1 — o lote cadastrado da categoria (opcional; ausente = o gravador mantém o gravado) */
   lote_id?: string | null;
+  /** FECH-PASTO-UNIDADE-01 — o piquete da linha (nulo = o pasto inteiro) */
+  piquete_id?: string | null;
 }
 
 export function useFechamento() {
@@ -135,7 +138,7 @@ export function useFechamento() {
   const salvarCardDoPasto = useCallback(async (
     fechamentoId: string,
     campos: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null },
-    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; lote_id?: string | null }[],
+    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; lote_id?: string | null; piquete_id?: string | null }[],
   ): Promise<{ ok: boolean; erro: string | null }> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `(supabase as any).rpc` do repo
     const { error } = await (supabase as any).rpc('fn_fechamento_pasto_salvar', { p_fechamento_id: fechamentoId, p_campos: campos, p_itens: itens });
@@ -149,13 +152,13 @@ export function useFechamento() {
   const salvarCardComAlocacao = useCallback(async (
     fechamentoId: string,
     campos: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null },
-    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; lote_id?: string | null }[],
+    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; lote_id?: string | null; piquete_id?: string | null }[],
     pastoIds: string[] | null,
-  ): Promise<{ ok: boolean; erro: string | null }> => {
+  ): Promise<{ ok: boolean; erro: string | null; aviso?: string | null }> => {
     const r = await salvarCardComAlocacaoNoBanco(fechamentoId, campos, itens, pastoIds);
     if (!r.ok) return { ok: false, erro: r.erro };
     await qc.invalidateQueries({ queryKey: ['snapshot-area-anual'] });
-    return { ok: true, erro: null };
+    return { ok: true, erro: null, aviso: r.aviso };
   }, [qc]);
 
   const reabrirCardDoPasto = useCallback(async (fechamentoId: string, motivo: string): Promise<{ ok: boolean; erro: string | null }> => {
@@ -197,7 +200,9 @@ export function useFechamento() {
       };
     }
 
-    const itens = await loadItens(fechAnterior.id);
+    /* FECH-PASTO-UNIDADE-01 F2: o mês anterior lançado por piquetes tem várias linhas da mesma categoria — SOMADAS (peso ponderado),
+       a mesma regra da `fn_fechamento_pasto_inteiro`; pegar a primeira perdia as cabeças dos outros piquetes */
+    const itens = juntarAbas(categorias, [await loadItens(fechAnterior.id)]).filter(i => i.quantidade > 0);
     return {
       itens: categorias.map(c => {
         const found = itens.find(i => i.categoria_id === c.id);

@@ -23,6 +23,9 @@ import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
 import { GruposDePastejo, useGruposDePastejo } from '@/components/pastos/GruposDePastejo';
 import { AreasDosPastos } from '@/components/pastos/AreasDosPastos';
+import { ArrumarPiquetesDialog, DesfazerPiquetesDialog, podeVirarPiquete, rodadaDoPai } from '@/components/pastos/ArrumarPiquetesDialog';
+import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
+import { useCliente } from '@/contexts/ClienteContext';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -163,6 +166,13 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   const { pastos, loading, criarPasto, toggleAtivo, reorderPastos } = usePastos();
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
+  /* FECH-PASTO-UNIDADE-01 F2b (D1 a · D4 a) — "É piquete de outro pasto…" e o desfazer, no cadastro do pasto; só o admin (o banco recusa os outros) */
+  const { isAdmin } = useCliente();
+  const { geometrias: geometriasDaFazenda } = usePastoGeometrias();
+  const [arrumarDe, setArrumarDe] = useState<Pasto | null>(null);
+  const [desfazerDe, setDesfazerDe] = useState<{ rodada: string; nome: string } | null>(null);
+  const [rodadaDoEditado, setRodadaDoEditado] = useState<string | null>(null);
+  const paisDaFazenda = useMemo(() => new Set(pastos.flatMap((p) => (p.pai_id ? [p.pai_id] : []))), [pastos]);
 
   /* PR-AREA-REGENERAR-01J — o lote de regeneracao de area mora AQUI, no cadastro de
      pastos, e nao no fechamento de um mes: ele varre TODOS os meses da fazenda. */
@@ -174,6 +184,14 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   const [loteRelatorio, setLoteRelatorio] = useState<LoteRelatorio | null>(null);
   /* a FICHA aberta: `pastoId` nulo = pasto novo */
   const [ficha, setFicha] = useState<{ pastoId: string | null } | null>(null);
+  const editado = useMemo(() => (ficha?.pastoId ? pastos.find(p => p.id === ficha.pastoId) : undefined), [ficha, pastos]);
+  /* F2b (Code 4): o pai criado pelo gesto tem rodada na trilha → o "Voltar a pastos soltos…" (agora no cabeçalho da FICHA) */
+  useEffect(() => {
+    let vivo = true;
+    setRodadaDoEditado(null);
+    if (isAdmin && editado && paisDaFazenda.has(editado.id)) void rodadaDoPai(editado.id).then((r) => { if (vivo) setRodadaDoEditado(r); });
+    return () => { vivo = false; };
+  }, [isAdmin, editado, paisDaFazenda]);
   const [showInativos, setShowInativos] = useState(false);
   const [criandoDivergencia, setCriandoDivergencia] = useState(false);
   // PR-PASTOS-LISTA-01 — dois modos, porque são dois usos distintos: "destino"
@@ -469,6 +487,16 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
         <Button size="sm" className="h-7 text-xs" onClick={() => setFicha({ pastoId: null })} disabled={!canEdit('pastos')} data-testid="pastos-novo">
           <Plus className="h-3 w-3 mr-1" />Novo
         </Button>
+        {arrumarDe && (
+          <ArrumarPiquetesDialog pastoInicial={{ ...arrumarDe, area_ha: arrumarDe.area_produtiva_ha }} pastos={pastos.map((p) => ({ ...p, area_ha: p.area_produtiva_ha }))}
+            geometrias={geometriasDaFazenda} pais={paisDaFazenda}
+            onFechar={() => setArrumarDe(null)}
+            aoGravar={() => { toast.success('Os pastos viraram piquetes'); setFicha(null); if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id); }} />
+        )}
+        {desfazerDe && (
+          <DesfazerPiquetesDialog rodada={desfazerDe.rodada} nomeDoPai={desfazerDe.nome} onFechar={() => setDesfazerDe(null)}
+            aoGravar={() => { toast.success('Os pastos voltaram a valer'); setFicha(null); if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id); }} />
+        )}
       </div>
     </div>
   );
@@ -562,6 +590,16 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
           hoje={hoje}
           piquetes={ficha.pastoId ? pastos.filter(x => x.pai_id === ficha.pastoId).length : 0}
           podeEditar={canEdit('pastos')}
+          acoesDoCabecalho={isAdmin && editado ? (<>
+            {podeVirarPiquete({ ...editado, area_ha: editado.area_produtiva_ha }, paisDaFazenda) && (
+              <Button variant="outline" size="sm" className="h-6 border-white/40 bg-transparent text-[10.5px] text-white hover:bg-white/10" data-testid="abrir-arrumar-piquetes"
+                onClick={() => setArrumarDe(editado)}>É piquete de outro pasto…</Button>
+            )}
+            {rodadaDoEditado && (
+              <Button variant="outline" size="sm" className="h-6 border-white/40 bg-transparent text-[10.5px] text-white hover:bg-white/10" data-testid="abrir-desfazer-piquetes"
+                onClick={() => setDesfazerDe({ rodada: rodadaDoEditado, nome: editado.nome })}>Voltar a pastos soltos…</Button>
+            )}
+          </>) : undefined}
           aoFechar={() => setFicha(null)}
           aoGravar={() => { setFicha(null); setVersaoDaFicha(v => v + 1); if (fazendaAtual.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id); }}
         />

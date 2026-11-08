@@ -212,6 +212,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   de forma; o contorno 'area_total'/'area_fazenda' nunca é vizinho nem alvo de encaixe); sobreposição ≥ 0,1 ha; ao sair do zoom 22 da edição NUNCA `redraw()` (zoom fracionado).
 - Pasto no mes = vigencia + ativo (`fn_pasto_vigente_no_mes`). Saldo inicial se cadastra uma vez. O cache do rebanho se reconstroi na
   gravacao. Fechamento P1: a autoridade e' `get_status_pilares_fechamento`.
+- FECH-PASTO-UNIDADE-01: piquete é SUBÁREA do pasto (`_fn_pai_do_piquete`); o card é do pasto e a linha tem `piquete_id` (opcional). Quem lê o card lê TODAS as
+  linhas (nunca uma por categoria: perde cabeças). Modal: a MESMA grade; por piquetes = abas + Total só leitura; voltar a pasto inteiro SÓ pela `fn_fechamento_pasto_inteiro` (prévia).
 - FECH-P2-TRAVA-01: o Valor do Rebanho reabre SO' pela `fn_valor_rebanho_reabrir` (abre o fechamento E invalida o validado + cadeia, trilha);
   os pastos travam com QUALQUER das duas marcas (`_fn_fechamento_p2_travado`); a tela avisa pela `lerEstadoDoP2`, nunca reabre P2 sozinha.
 - MAPA-CARD-LOTE-01: o lote do pasto no mes e' o `fechamento_pastos.lote_mes` (o "Lote:" do card do Fechamento); `fechamento_pasto_itens.lote` nao e' fonte (o Fechamento nao o mostra nem grava).

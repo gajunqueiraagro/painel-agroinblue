@@ -325,6 +325,24 @@ const CENARIOS = [
       ['também esteve em', async (p) => { await p.locator('[data-testid="lote-quadro"] button', { hasText: /^Adicionar pasto/ }).click(); await espera(p, 200);
         await p.getByPlaceholder('Buscar pasto').fill('P11'); await espera(p, 200); await p.keyboard.press('Enter'); await espera(p); }],
     ] },
+  /* FECH-PASTO-UNIDADE-01 F2 — o modal do P7 por piquetes (`&v=piquetes7`): trocar de aba (7B, Total, 7D, 7A) não move a linha das abas, a
+     grade, o cabeçalho nem o rodapé; no P5 (card vazio), Pasto inteiro ↔ Por piquetes também não (a linha tem a mesma altura nos dois modos) */
+  { nome: 'fechamento-grupo-modal-piquetes', url: 'tela=fechamento-grupo&v=piquetes7&barra=32', regiao: '[data-testid="modal-do-pasto"]',
+    tamanhos: [[1240, 800], [1126, 579], [948, 593]],
+    antes: async (p) => {
+      await p.locator('[data-testid="grupo-no-fechamento"]').waitFor(); await espera(p, 600);
+      await p.locator('button', { hasText: /^P7/ }).first().click(); await p.locator('[data-testid="abas-dos-piquetes"]').waitFor(); await espera(p, 700);
+    },
+    estados: ['7B', 'Total', '7D', '7A'].map((aba) => [`aba ${aba}`, async (p) => {
+      await p.locator('[data-testid="abas-dos-piquetes"] button', { hasText: new RegExp(`^${aba}$`) }).click(); await espera(p); }]) },
+  { nome: 'fechamento-grupo-modal-piquetes-modo', url: 'tela=fechamento-grupo&v=piquetes7&barra=32', regiao: '[data-testid="modal-do-pasto"]',
+    tamanhos: [[1240, 800], [1126, 579], [948, 593]],
+    antes: async (p) => {
+      await p.locator('[data-testid="grupo-no-fechamento"]').waitFor(); await espera(p, 600);
+      await p.locator('button', { hasText: /^P5/ }).first().click(); await p.locator('[data-testid="abas-dos-piquetes"]').waitFor(); await espera(p, 700);
+    },
+    estados: [['Por piquetes', 'Por piquetes'], ['aba P5-B', 'P5-B'], ['Total', 'Total'], ['Pasto inteiro', 'Pasto inteiro']].map(([n, b]) => [n, async (p) => {
+      await p.locator('[data-testid="abas-dos-piquetes"] button', { hasText: new RegExp(`^${b}$`) }).click(); await espera(p); }]) },
   /* LOTES-03 F1 — Produção › Lotes (`tela=lotes`, SINTÉTICO): na lista, trocar a atividade, Ativos/Encerrados e buscar não movem a barra,
      os filtros nem o "+ Novo lote"; no assistente, andar pelos 5 passos (e abrir o "Cadastrar nova") não move o trilho, o código nem os
      botões do rodapé; na ficha, trocar Resumo/Histórico não move o cabeçalho nem as ações */

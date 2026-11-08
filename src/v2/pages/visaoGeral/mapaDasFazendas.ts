@@ -16,6 +16,7 @@ import { useGeometriasDasFazendas, type GeometriaDoGlobal } from '@/hooks/useGeo
 import { useGruposComOrigem } from '@/hooks/useGruposComOrigem';
 import { resumoGlobal, situacaoDoPasto, type LinhaDaFazenda, type Situacao } from '@/lib/mapa/resumoGlobal';
 import { unidadesDoMapa } from '@/lib/mapa/unidadesDoMapa';
+import { semAreaDaFazenda } from '@/lib/pastos/areaDaFazenda';
 import { areaNoMesOuHoje, comAreaDoMes, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
 
 export interface MapaDasFazendas {
@@ -37,7 +38,8 @@ export function useMapaDasFazendas(anoMes: string): MapaDasFazendas {
   const { grupos } = useGruposComOrigem(ids);
   const { areaDe: areaDoMes } = useAreaDosPastosNoMes(ids, anoMes || null, anoMes || null);
   const areaDe = useCallback((p: Pasto) => areaNoMesOuHoje(p, anoMes, areaDoMes), [anoMes, areaDoMes]);
-  const unidades = useMemo(() => unidadesDoMapa<Pasto, GeometriaDoGlobal>({ pastos, grupos, poligonos: geos.geometrias, anoMes, areaDe }),
+  /* MAPA-PIQUETE-SUBAREA-01 C1: a área da fazenda desde 11/2026 não é pasto do mapa */
+  const unidades = useMemo(() => unidadesDoMapa<Pasto, GeometriaDoGlobal>({ pastos: semAreaDaFazenda(pastos, anoMes), grupos, poligonos: geos.geometrias, anoMes, areaDe }),
     [pastos, grupos, geos.geometrias, anoMes, areaDe]);
   /* o pasto da unidade leva a área da unidade (a do pai, ou Σ dos piquetes vigentes no mês) */
   const pastosDoMapa = useMemo(() => comAreaDoMes(unidades.pastos, anoMes, (id) => unidades.unidades.get(id)?.areaHa), [unidades, anoMes]);

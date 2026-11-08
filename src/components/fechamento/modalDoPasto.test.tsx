@@ -19,6 +19,12 @@ const fech = {
   salvarItens: vi.fn(async () => true), fecharPasto: vi.fn(), copiarMesAnterior: vi.fn(),
   salvarCardDoPasto: salvarCard, reabrirCardDoPasto: reabrirCard,
 };
+/* FECH-PASTO-UNIDADE-01 F2 — o modal lê os piquetes do pasto e o mês anterior; aqui o pasto não tem piquete (nenhuma ida à rede) */
+vi.mock('@/lib/fechamento/piquetesDoPasto', async (original) => ({
+  ...(await original<typeof import('@/lib/fechamento/piquetesDoPasto')>()),
+  lerPiquetesDoPasto: async () => ({ ok: true, valor: { doMes: [], nomes: new Map() } }),
+  lerMesAnteriorDoPasto: async (_p: string, mes: string) => ({ ok: true, valor: { anoMes: mes, semCard: true, linhas: [], nomes: new Map() } }),
+}));
 vi.mock('@/hooks/useFechamento', () => ({ useFechamento: () => fech }));
 const PASTOS = [
   { id: 'p1', fazenda_id: 'f', nome: 'P_01', area_produtiva_ha: 10, tipo_uso: 'cria', ativo: true, entra_conciliacao: true, ordem_exibicao: 1, lote_padrao: null },

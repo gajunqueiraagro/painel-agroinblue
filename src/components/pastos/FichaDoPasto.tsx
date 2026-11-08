@@ -61,6 +61,8 @@ export interface FichaDoPastoProps {
   /** nº de piquetes do pasto (pai de grupo), só leitura */
   piquetes?: number;
   podeEditar: boolean;
+  /** FECH-PASTO-UNIDADE-01 F2b (Code 4): "É piquete de outro pasto…" / "Voltar a pastos soltos…" — só o admin, no cabeçalho */
+  acoesDoCabecalho?: ReactNode;
   aoFechar: () => void;
   /** depois de gravar (a lista relê) */
   aoGravar: () => void;
@@ -99,7 +101,7 @@ const ABAS: { v: Aba; rotulo: string }[] = [
 /* ── o modal ───────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
 export function FichaDoPasto({
-  pastoId, fazendaId, fazendaNome, clienteId, mesDeHoje, hoje, piquetes = 0, podeEditar, aoFechar, aoGravar, api = API_FICHA_DO_PASTO,
+  pastoId, fazendaId, fazendaNome, clienteId, mesDeHoje, hoje, piquetes = 0, podeEditar, acoesDoCabecalho, aoFechar, aoGravar, api = API_FICHA_DO_PASTO,
 }: FichaDoPastoProps) {
   const novo = pastoId == null;
   const [aba, setAba] = useState<Aba>('cadastro');
@@ -206,7 +208,10 @@ export function FichaDoPasto({
         {/* cabeçalho azul-marinho */}
         <div className="flex h-[32px] shrink-0 items-center justify-between bg-primary px-4 text-primary-foreground">
           <DialogTitle className="truncate text-[13px] font-semibold" title={titulo}>{titulo}</DialogTitle>
-          <button type="button" onClick={aoFechar} disabled={ocupado} aria-label="Fechar" className="text-white/80 hover:text-white"><X className="h-4 w-4" /></button>
+          <div className="flex shrink-0 items-center gap-2">
+            {acoesDoCabecalho}
+            <button type="button" onClick={aoFechar} disabled={ocupado} aria-label="Fechar" className="text-white/80 hover:text-white"><X className="h-4 w-4" /></button>
+          </div>
         </div>
         <DialogDescription className="sr-only">Ficha do pasto: cadastro, infraestrutura, avaliações, reformas, lotação e documentos</DialogDescription>
         {/* a faixa de resumo (5 lugares fixos) */}
