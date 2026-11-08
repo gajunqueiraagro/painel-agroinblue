@@ -243,6 +243,9 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     enquadrar: enquadrarEm, // MAPA-ZOOM-E-PAINEL-01: o enquadramento ao abrir os piquetes passa pelo módulo único
     aoGravar: () => {
       onRefresh();
+      /* MAPA-PIQUETES-FECHADOS-01 F0b (Gabriel 06/11 16:07, "não consigo clicar no 8A"): os grupos se releem — sem isso o pasto que virou
+         pai seguia desenhado como pasto comum (preenchido, por baixo do piquete) e fora do conjunto de pais da edição */
+      setTiqueDosGrupos(t => t + 1);
       if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id);
       toast.success('Piquetes gravados.');
     },
