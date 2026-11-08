@@ -51,7 +51,7 @@ import { pastosMudaramPorFora } from '@/hooks/usePastos';
 import type { PiqueteEmEspera } from '@/lib/mapa/piquetesEmEspera';
 /* MAPA-CRIAR-PIQUETES-01 (2b, o caminho de volta): Mover linha · Juntar com… · Desfazer piquetes — diálogos de prévia com mini-mapa */
 import { DesfazerPiquetesDialog, EscolherVizinhaParaJuntar, JuntarDialog, MoverLinhaDialog, MudarInicioDialog } from '@/components/mapa-geo/PiquetesVolta';
-import { grupoDaDivisao, grupoDoPai, irmasQueEncostam, uniaoDasDuas } from '@/lib/mapa/piquetesVolta';
+import { grupoDaDivisao, grupoDoPai, irmasQueEncostam, poligonosDosPais, uniaoDasDuas } from '@/lib/mapa/piquetesVolta';
 /* MAPA-PIQUETES-04 — o contorno do pai só pega o clique na borda (as divisões, no miolo) */
 import { contornosDePai } from '@/lib/mapa/unidadesDoMapa';
 import { useGruposComOrigem } from '@/hooks/useGruposComOrigem';
@@ -224,8 +224,10 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   }, [pastos, grupos, geometrias]);
   /* MAPA-AREA-TIPOS-02 (D3): as infraestruturas da fazenda, para saber qual estrutura com valor já virou infraestrutura */
   const { infras, estruturaDaArea, recarregar: recarregarInfras } = useInfraestruturas(fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : undefined);
+  /* MAPA-PIQUETES-FECHADOS-01 F0: os polígonos dos pais de grupo ativo — a edição nunca os mexe (o contorno é a união dos piquetes) */
+  const poligonosDePais = useMemo(() => poligonosDosPais(geometrias, grupos), [geometrias, grupos]);
   const edicao = useEdicaoDoPoligono({
-    divisoesDaLinha, piquetes: poligonosDePiquetes,
+    divisoesDaLinha, piquetes: poligonosDePiquetes, pais: poligonosDePais,
     mapa: statusDoMapa === 'ready' ? mapInstance.current : null,
     fazendaId: fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null,
     geometrias, aoMudar: aoMudarGeometrias,

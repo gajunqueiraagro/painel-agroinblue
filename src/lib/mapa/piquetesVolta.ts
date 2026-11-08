@@ -87,6 +87,21 @@ export function grupoDoPai(pastoId: string | null, grupos: readonly GrupoDoMapa[
   return pastoId ? grupos.find(g => g.pasto_origem_id === pastoId && g.ativo) ?? null : null;
 }
 
+/**
+ * MAPA-PIQUETES-FECHADOS-01 F0 (Gabriel 06/11 16:03: "os polígonos dos piquetes valem para o pasto macro"; D1 do Code 6): o polígono do PAI de
+ * grupo ATIVO (a mesma regra do "Desfazer piquetes", `grupoDoPai`) não é vizinho editável — o contorno dele é a união dos piquetes. Desde 02/11 o
+ * editor o tratava como vizinho: o recortar tirava o piquete de dentro dele e o "mover a divisa junto" o arrastava (8 cortes; P8 85,34 → 63,27 ha).
+ */
+export function poligonosDosPais<G extends { id: string; pasto_id: string | null }>(geometrias: readonly G[], grupos: readonly GrupoDoMapa[]): Set<string> {
+  return new Set(geometrias.filter(g => !!grupoDoPai(g.pasto_id, grupos)).map(g => g.id));
+}
+
+/** Os vizinhos que a edição pode mexer (recortar, divisa junto, aviso de sobreposição): sem o alvo, sem os unidos e sem o polígono de um pai. */
+export function vizinhosEditaveis<G extends { id: string }>(geometrias: readonly G[], alvoId: string | null, unidos: readonly string[],
+  pais: ReadonlySet<string> | null): G[] {
+  return geometrias.filter(g => g.id !== alvoId && !unidos.includes(g.id) && !(pais?.has(g.id) ?? false));
+}
+
 /** As irmãs do mesmo grupo que ENCOSTAM no polígono (até a fresta do KMZ): são as candidatas do "Juntar com…". */
 export function irmasQueEncostam(alvo: PoligonoDePasto, grupo: GrupoDoMapa, pastos: readonly PastoDoGrupo[], geometrias: readonly PoligonoDePasto[]): PoligonoDePasto[] {
   const doGrupo = new Set(pastos.filter(p => p.grupo_id === grupo.id).map(p => p.id));

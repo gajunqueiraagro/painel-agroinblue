@@ -16,7 +16,7 @@ import {
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
 import { desenharRotulosDosLados } from '@/lib/mapa/rotulosDosLados';
 import { fraseDo42501 } from '@/lib/mapa/fraseDaPermissao';
-import { idsDoAlterar, recortarPorPadrao, travaDaLinha, vaiPelaLinha } from '@/lib/mapa/piquetesVolta';
+import { idsDoAlterar, recortarPorPadrao, travaDaLinha, vaiPelaLinha, vizinhosEditaveis } from '@/lib/mapa/piquetesVolta';
 
 export type ModoDaEdicao = 'vertices' | 'redesenhar' | 'dividir' | 'unir' | 'apagar' | 'desenhar';
 
@@ -139,8 +139,10 @@ export function useEdicaoDoPoligono(args: {
   divisoesDaLinha?: ReadonlySet<string> | null;
   /** MAPA-PIQUETES-MANUAL-01 (4): os polígonos que são divisões de um grupo ativo (o desenho que cai sobre eles nasce com o recortar ligado) */
   piquetes?: ReadonlySet<string> | null;
+  /** MAPA-PIQUETES-FECHADOS-01 F0: os polígonos dos PAIS de grupo ativo — nunca vizinhos editáveis (nem recortar, nem divisa junto, nem aviso) */
+  pais?: ReadonlySet<string> | null;
 }) {
-  const { mapa, fazendaId, geometrias, aoMudar, clienteId, selecionado, divisoesDaLinha = null, piquetes = null } = args;
+  const { mapa, fazendaId, geometrias, aoMudar, clienteId, selecionado, divisoesDaLinha = null, piquetes = null, pais = null } = args;
   const camadaRef = useRef<L.FeatureGroup | null>(null);
   const [modo, setModo] = useState<ModoDaEdicao | null>(null);
   const [alvo, setAlvo] = useState<Alvo | null>(null);
@@ -745,8 +747,9 @@ export function useEdicaoDoPoligono(args: {
     }
   }, [mapa, modo, geometriaMedida, cruzamentos, desenhando, trajetoDoDesenho, fechaODesenho, verticeEscolhido]);
 
-  const vizinhosAntes = useMemo(() => geometrias.filter(g => g.id !== alvo?.id && !unidos.includes(g.id))
-    .map(g => ({ id: g.id, nome: g.nome_original, tipo: g.tipo, geojson: g.geojson })), [geometrias, alvo, unidos]);
+  /* F0 (06/11): o polígono do pai de grupo ativo não entra — o recortar e a divisa junto cortavam o pai (P8 85,34 → 63,27 ha) */
+  const vizinhosAntes = useMemo(() => vizinhosEditaveis(geometrias, alvo?.id ?? null, unidos, pais)
+    .map(g => ({ id: g.id, nome: g.nome_original, tipo: g.tipo, geojson: g.geojson })), [geometrias, alvo, unidos, pais]);
 
   useEffect(() => {
     if (modo !== 'desenhar' || recortarDecidido.current || !recortarPorPadrao(geometriaNova, vizinhosAntes, piquetes)) return;
