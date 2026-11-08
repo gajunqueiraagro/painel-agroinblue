@@ -60,6 +60,13 @@ describe('PopupDoPasto', () => {
     expect(screen.getByTestId('popup-do-pasto-rodape').className).toContain('bg-[rgba(52,96,160,0.72)] text-white');
     expect(screen.getByTestId('popup-do-pasto-categorias').className).toContain('bg-[rgba(255,255,255,0.80)]');
   });
+  it('o NOME nunca corta (gate de cortes, P10A do grupo): sem "…", quebra; sem lugar, o "cab · kg" desce para a linha de baixo', () => {
+    render(<PopupDoPasto d={{ ...P12, nome: 'Divergência do Campeiro' }} />);
+    const nome = within(screen.getByTestId('popup-do-pasto-cabecalho')).getByText('Divergência do Campeiro');
+    expect(nome.className).not.toContain('truncate');
+    expect(nome.className).toContain('break-words');
+    expect(nome.parentElement?.className).toContain('flex-wrap');
+  });
   it('o lote comprido corta SÓ ele, com o texto inteiro no title', () => {
     const lote = 'CRI-NOV-NEL-01 · Novilhas de reposição do lote de outubro';
     render(<PopupDoPasto d={{ ...P12, lote }} />);

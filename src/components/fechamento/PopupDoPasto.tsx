@@ -44,8 +44,9 @@ export function PopupDoPasto({ d }: { d: DadosDoPopupDoPasto }) {
        altura de linha são do popup (Inter): o card não herda as do tooltip do Radix nem o mapa a Helvetica do Leaflet */
     <div className="w-[120px] overflow-hidden rounded-[6px] font-sans text-[8.5px] leading-[11px] backdrop-blur-[3px]" data-testid="popup-do-pasto">
       <div className={`${FAIXA} px-[6px] py-[3px]`} data-testid="popup-do-pasto-cabecalho">
-        <div className="flex items-baseline justify-between gap-1">
-          <span className="min-w-0 truncate text-[11px] font-bold leading-[13px]" title={d.nome}>{d.nome}</span>
+        {/* o nome nunca corta (fora de tabela, nada de "…"): sem lugar ao lado, o "cab · kg" desce para a linha de baixo e o nome longo quebra */}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-1">
+          <span className="min-w-0 break-words text-[11px] font-bold leading-[13px]" title={d.nome}>{d.nome}</span>
           <span className="shrink-0 whitespace-nowrap tabular-nums text-[8.5px] opacity-90">
             {comGado ? <><b>{formatNum(d.totalCab, 0)}</b> cab</> : '—'}
             {comGado && d.pesoMedioKg != null && <> · <b>{formatNum(d.pesoMedioKg, 1)}</b> kg</>}
