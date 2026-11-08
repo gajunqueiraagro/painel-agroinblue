@@ -371,7 +371,7 @@ function AbaResumo({ lote: l, nomes, cadastros, gravando, salvar }: {
                   </span>
                   <span className="truncate text-muted-foreground">≈ {n0(proj.pesoNaData)} kg em {dataBr(l.metaData ?? '')}</span>
                 </>
-              ) : <span className="truncate text-muted-foreground">A projeção aparece com peso e GMD no fechamento e a meta preenchida.</span>}
+              ) : <span className="truncate text-muted-foreground" title="A projeção aparece com peso e GMD no fechamento e a meta preenchida.">Sem projeção: falta peso, GMD ou meta.</span>}
             </div>
           </>
         )}
