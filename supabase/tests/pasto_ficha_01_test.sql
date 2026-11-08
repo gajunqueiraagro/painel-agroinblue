@@ -39,7 +39,8 @@ begin
   if n <> 15 then raise exception 'T0: relevo+textura+sombra = % (esperado 15)', n; end if;
   select count(*) into n from public.catalogo_itens where cliente_id is null and ativo and lista = 'drenagem';
   if n <> 4 then raise exception 'T0: % drenagens (esperado 4)', n; end if;
-  select count(*) into n from public.catalogo_itens i where i.lista <> 'motivo_morte'
+  /* só as listas do pasto (outras frentes semeiam as delas: a `motivo_ajuste_inventario` de 04/11 nasceu sem trilha e não é desta) */
+  select count(*) into n from public.catalogo_itens i where i.lista in ('forrageira', 'relevo', 'textura_solo', 'drenagem', 'sombra', 'sistema_pasto')
      and not exists (select 1 from public.catalogo_itens_trilha t where t.item_id = i.id and t.acao = 'criar');
   if n <> 0 then raise exception 'T0: % itens semeados sem trilha', n; end if;
   if (select count(*) from pg_trigger where tgrelid = 'public.pastos'::regclass and tgname = 'trg_pastos_ficha_so_pelo_escritor') <> 1 then
