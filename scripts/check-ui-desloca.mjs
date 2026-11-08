@@ -380,8 +380,25 @@ const CENARIOS = [
   { nome: 'pastos', url: 'tela=pastos&barra=32', antes: async (p) => { await p.locator('[data-testid="pastos-modo-grupos"]').waitFor(); await espera(p, 600); }, estados: [
     ['modo Grupos', clicar('[data-testid="pastos-modo-grupos"]')], ['modo Áreas', clicar('[data-testid="pastos-modo-areas"]')],
     ['inativos', async (p) => { await p.getByText('Inativos', { exact: true }).click(); await espera(p); }],
-    ['modo Ordem manual', botao(/^Ordem manual$/)], ['modo Por destino', botao(/^Por destino$/)],
+    ['modo Ordem manual', botao(/^Ordem manual$/)], ['modo Lista', clicar('[data-testid="pastos-modo-lista"]')],
   ] },
+  /* PASTO-FICHA-01 PR B — na LISTA, abrir/fechar os piquetes, ordenar por outra coluna e buscar não movem o cabeçalho, o rodapé preso nem
+     a largura das colunas (a do Pasto é a do maior nome da FAZENDA, não a das linhas à vista) */
+  /* PASTO-FICHA-01 PR B — na FICHA, trocar de aba e abrir a prévia não movem o cabeçalho, a faixa, as abas nem o rodapé (tamanho fixo) */
+  { nome: 'pastos-ficha', url: 'tela=pastos&barra=32', regiao: '[data-testid="ficha-do-pasto"]',
+    antes: async (p) => { await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor(); await espera(p, 800); },
+    estados: [
+      ...['infra', 'avaliacoes', 'reformas', 'lotacao', 'documentos', 'cadastro'].map((aba) => [`aba ${aba}`, clicar(`[data-testid="ficha-aba-${aba}"]`)]),
+      ['manejo contínuo', async (p) => { await p.getByRole('button', { name: 'Contínuo' }).first().click(); await espera(p); }],
+      ['prévia', clicar('[data-testid="ficha-salvar"]')],
+    ] },
+  { nome: 'pastos-lista', url: 'tela=pastos&barra=32', regiao: '[data-testid="quadro-pastos"]',
+    antes: async (p) => { await p.locator('[data-testid="lista-pastos"]').waitFor(); await espera(p, 600); },
+    estados: [
+      ['abrir piquetes', clicar('[data-testid="abrir-piquetes"]')], ['fechar piquetes', clicar('[data-testid="abrir-piquetes"]')],
+      ['ordenar por lotação', async (p) => { await p.locator('th', { hasText: /^Lot\./ }).first().click(); await espera(p); }],
+      ['buscar', async (p) => { await p.locator('[data-testid="busca-pastos"]').fill('P1'); await espera(p); }],
+    ] },
   /* PASTO-AREA-OFICIAL-01 — no modo "Áreas", marcar um, marcar todos e trocar o mês não movem a faixa (mês · frase · botão de largura
      fixa), o cabeçalho nem o rodapé dos totais; no modal da prévia, digitar o motivo e gravar sem motivo (o aviso) não movem nada */
   { nome: 'pastos-areas', url: 'tela=pastos&barra=32',

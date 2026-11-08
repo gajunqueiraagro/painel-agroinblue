@@ -1675,7 +1675,10 @@ if (tela === 'mesclar') {
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (a tela REAL) com o modo "Grupos": dado SINTÉTICO, nomes de exemplo; um grupo de 3
      piquetes (P10A/B/C), um de nome longo com 4 pastos, um inativo e pastos soltos. O banco responde a prévia do `fn_pasto_grupo_salvar`
      a partir do pedido (a frase do banco, a área somada), sem gravar nada. */
-  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  /* PASTOS-CAD-02 — `globalThis.__casoPastos`: o caso REAL injetado SÓ pelo script de foto (`fotoPastosFicha.mjs --caso <json>`, arquivo fora do
+     repositório): a fazenda, os pastos, o mapa, a lotação e a matrícula. Sem ele, o dado SINTÉTICO de sempre (nada de cliente no repositório). */
+  const CASO: any = g.__casoPastos ?? null;
+  const FAZ = CASO ? CASO.fazenda : { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
   g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
   /* o `canEdit('pastos')` lê o perfil de `clienteAtual` (o padrão da bancada não traz): sem ele a tela abre só para leitura */
   const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
@@ -1689,16 +1692,87 @@ if (tela === 'mesclar') {
     pasto('ta3', 'T-A3 Piquete da terminação', 12, 'engorda', 'g2', true, 6), pasto('ta4', 'T-A4 Piquete da terminação', 9.75, 'engorda', 'g2', true, 7),
     pasto('p11', 'P11', 35.5, 'cria', null, true, 8), pasto('p13', 'P13 Retiro do córrego de baixo', 1234.56, 'cria', null, true, 9),
     pasto('p14', 'P14', 18, 'vedado', null, true, 10), pasto('p15', 'P15 velho', 9, 'recria', null, false, 11),
+    /* PASTO-FICHA-01 PR B — o PAI do grupo P10 (a origem do grupo): na lista ele vem com os piquetes P10A/B/C embaixo e a área = a soma */
+    pasto('p10', 'P10', 65.1, 'recria', null, true, 0),
   ];
+  /* PASTO-FICHA-01 PR B — o que a ficha acrescenta (SINTÉTICO): forrageira, implantação, avaliação, suporte e lotação do mês fechado */
+  const FORR: Record<string, [string, string | null]> = {
+    p10: ['fo1', '2019-03-01'], p10a: ['fo1', '2019-03-01'], p11: ['fo2', '2008-01-01'], p13: ['fo3', null], ta1: ['fo4', '2023-11-01'], p14: ['fo2', '2015-10-01'],
+  };
+  for (const x of PASTOS) { const f = FORR[x.id]; Object.assign(x, { forrageira_principal_id: f?.[0] ?? null, forrageira_implantada_em: f?.[1] ?? null }); }
+  if (CASO) PASTOS.splice(0, PASTOS.length, ...CASO.pastos);
+  const MES_HOJE = new Date().toISOString().slice(0, 7);
+  const [aH, mH] = MES_HOJE.split('-').map(Number);
+  const MES_FECHADO = `${mH === 1 ? aH - 1 : aH}-${String(mH === 1 ? 12 : mH - 1).padStart(2, '0')}`;
+  const FICHA_BANCADA = {
+    catalogo: [
+      ...[['fo1', 'Braquiarão — Marandu'], ['fo2', 'Humidícola — comum'], ['fo3', 'Mombaça'], ['fo4', 'Capim-elefante — BRS Capiaçu, de corte e silagem'],
+        ['fo5', 'Estilosantes Campo Grande']].map(([id, nome], i) => ({ id, nome, lista: 'forrageira', grupo: 'Braquiárias', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Plano (0–3%)', 'Suave ondulado (3–8%)', 'Ondulado (8–20%)'].map((nome, i) => ({ id: `re${i}`, nome, lista: 'relevo', grupo: 'Relevo', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Arenoso', 'Médio', 'Argiloso'].map((nome, i) => ({ id: `tx${i}`, nome, lista: 'textura_solo', grupo: 'Textura', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Boa', 'Moderada', 'Ruim'].map((nome, i) => ({ id: `dr${i}`, nome, lista: 'drenagem', grupo: 'Drenagem', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Natural — árvores / capões', 'Artificial — sombrite'].map((nome, i) => ({ id: `so${i}`, nome, lista: 'sombra', grupo: 'Sombra', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Pasto', 'Pasto intensivo / irrigado', 'Confinamento'].map((nome, i) => ({ id: `si${i}`, nome, lista: 'sistema_pasto', grupo: 'pasto', cliente_id: null, apelidos: [], ordem: i })),
+    ],
+    cards: PASTOS.flatMap((x) => [{ ano_mes: MES_FECHADO, status: 'fechado', pasto_id: x.id }, { ano_mes: MES_HOJE, status: 'aberto', pasto_id: x.id }]),
+    avaliacoes: [
+      { pasto_id: 'p10', data_avaliacao: '2026-08-14', degradacao: 'leve' }, { pasto_id: 'p11', data_avaliacao: '2025-03-02', degradacao: 'moderada' },
+      { pasto_id: 'p13', data_avaliacao: '2026-09-20', degradacao: 'forte' }, { pasto_id: 'ta1', data_avaliacao: '2026-10-01', degradacao: 'sem' },
+      { pasto_id: 'p10a', data_avaliacao: '2026-08-14', degradacao: 'muito forte' },
+    ],
+    potencial: [{ pasto_id: 'p10', potencial_ua_ha: 1.6 }, { pasto_id: 'p11', potencial_ua_ha: 1.1 }, { pasto_id: 'p13', potencial_ua_ha: 0.8 }, { pasto_id: 'ta1', potencial_ua_ha: 2.4 }],
+    lotacao: [{ pasto_id: 'p10', ua_ha: 1.42 }, { pasto_id: 'p11', ua_ha: 1.25 }, { pasto_id: 'p13', ua_ha: 0.55 }, { pasto_id: 'ta1', ua_ha: 1.95 }, { pasto_id: 'p14', ua_ha: 0.9 }],
+  };
   const GRUPOS = [
-    { id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true },
+    { id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: 'p10' },
     { id: 'g2', fazenda_id: 'f1', nome: 'Terminação intensiva do retiro de cima', ativo: true },
     { id: 'g3', fazenda_id: 'f1', nome: 'Antigo rotacionado', ativo: false },
   ];
   const br = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   g.__bancoBancada = {
-    from: (t: string) => (t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? GRUPOS : []),
+    from: (t: string, e: any) => (t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? (CASO ? [] : GRUPOS)
+      : t === 'fazenda_cadastros' && CASO ? [{ area_total_ha: CASO.matricula, matricula_conferida_em: CASO.conferida ? '2026-10-01' : null }]
+      : t === 'catalogo_itens' ? FICHA_BANCADA.catalogo.filter((i) => !e?.eq?.lista || i.lista === e.eq.lista)
+      : t === 'fechamento_pastos' ? FICHA_BANCADA.cards
+      : t === 'pasto_condicoes' ? FICHA_BANCADA.avaliacoes.filter((a) => !e?.eq?.pasto_id || a.pasto_id === e.eq.pasto_id)
+        .map((a, i) => ({ id: `av${i}`, cercas: 'bom', agua: 'regular', cochos: 'bom', invasoras: 'baixo', cupins: 'medio', erosao: 'sem', cobertura_pct: 85,
+          suporte_aguas_ua_ha: 1.6, suporte_seca_ua_ha: 1.0, avaliador: 'Exemplo', observacoes: null, ...a }))
+      : t === 'fazenda_infraestruturas' ? (e?.eq?.pasto_id === 'p10' ? [{ id: 'i1', tipo: 'bebedouro', nome: 'Bebedouro do P10', observacao: 'pilheta de alvenaria' },
+        { id: 'i2', tipo: 'cocho', nome: 'Cocho coberto 1', observacao: '18 m lineares' }] : [])
+      : t === 'patrimonio_bem_pastos' ? [{ pasto_id: 'p10' }] : []),
     rpc: (fn: string, a: any) => {
+      if (CASO && fn === 'fn_pastos_potencial_no_mes') return [];
+      if (CASO && fn === 'fn_lotacao_do_mes') return a.p_ano_mes === CASO.mes ? CASO.lotacao : [];
+      if (CASO && fn === 'fn_pastos_area_comparar') return CASO.mapa;
+      if (fn === 'fn_pastos_potencial_no_mes') return FICHA_BANCADA.potencial;
+      if (fn === 'fn_lotacao_do_mes') return FICHA_BANCADA.lotacao;
+      if (fn === 'fn_pasto_reformas') return a.p_pasto === 'p10' ? [{ bem_id: 'b1', data: '2019-03-01', descricao: 'Reforma do P10 (gradagem + Marandu)',
+        area_no_pasto_ha: 64.3, custo_rs: 96450, rs_ha: 1500, contabil_rs: 41200 }] : [];
+      /* PASTO-FICHA-01 PR B — a ficha (SINTÉTICA) do pasto pedido */
+      if (fn === 'fn_pasto_ficha') {
+        const x = PASTOS.find((y) => y.id === a.p_pasto) ?? PASTOS[0];
+        const f = FORR[x.id];
+        return { pasto: { ...x, posse: 'arrendada_de_terceiro', posse_contraparte_id: null, posse_desde: '2022-01-01', posse_ate: null, sistema_id: 'si0',
+            relevo_id: 're1', textura_id: 'tx0', drenagem_id: 'dr0', sombra_id: 'so0', sombra_cobertura: 'parcial', manejo: 'rotacionado', ficha_versao: 3,
+            forrageira_secundaria_id: x.id === 'p10' ? 'fo5' : null },
+          nomes: { forrageira_principal: FICHA_BANCADA.catalogo.find((i) => i.id === f?.[0])?.nome ?? null, forrageira_secundaria: x.id === 'p10' ? 'Estilosantes Campo Grande' : null,
+            relevo: 'Suave ondulado (3–8%)', textura: 'Arenoso', drenagem: 'Boa', sombra: 'Natural — árvores / capões', sistema: 'Pasto' },
+          ano_mes: MES_HOJE, area: { oficial_ha: x.area_produtiva_ha, mapa_ha: x.id === 'p10' ? 66.3 : null, trava: null },
+          ultima_avaliacao: FICHA_BANCADA.avaliacoes.find((v) => v.pasto_id === x.id) ?? null,
+          potencial: FICHA_BANCADA.potencial.find((v) => v.pasto_id === x.id) ? { potencial_ua_ha: FICHA_BANCADA.potencial.find((v) => v.pasto_id === x.id)?.potencial_ua_ha, epoca: 'águas' } : null,
+          ultima_reforma: x.id === 'p10' ? { bem_id: 'b1', data: '2019-03-01', descricao: 'Reforma do P10', idade_anos: 7 } : null };
+      }
+      if (fn === 'fn_pasto_lotacao_meses') {
+        return Array.from({ length: 12 }, (_, i) => {
+          const t = aH * 12 + (mH - 1) - 1 - i; const am = `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+          const uaHa = Math.round((1.1 + ((i * 37) % 9) / 10) * 100) / 100; const sup = (t % 12) + 1 >= 5 && (t % 12) + 1 <= 10 ? 1.0 : 1.6;
+          return { ano_mes: am, epoca: sup === 1.0 ? 'seca' : 'águas', area_ha: 64.3, cabecas: Math.round(uaHa * 64.3 / 0.9), ua: Math.round(uaHa * 64.3 * 100) / 100, ua_ha: uaHa, suporte_ua_ha: sup, acima: uaHa > sup };
+        });
+      }
+      if (fn === 'fn_pasto_ficha_salvar' || fn === 'fn_pasto_criar') {
+        return { ok: true, simulado: a.p_simular, sem_mudanca: false, versao: 3, area_ha: a.p_area_ha ?? null, vigente_desde: `${MES_HOJE}-01`,
+          muda: Object.entries(a.p_campos ?? {}).slice(0, 6).map(([campo, v]) => ({ campo, antes: null, depois: v })) };
+      }
       /* PASTO-AREA-OFICIAL-01 — o modo "Áreas" (SINTÉTICO): a área do mapa de cada pasto (a medição), um travado, um sem polígono, um já
          igual com a última mudança "do mapa" (desfazer) e o P11 que a PRÉVIA recusa (área da fazenda oficializada) */
       const AM = new Date().toISOString().slice(0, 7);
