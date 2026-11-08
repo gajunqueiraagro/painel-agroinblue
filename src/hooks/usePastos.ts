@@ -26,6 +26,9 @@ export interface Pasto {
   /** FECH-ROTACAO-01 fatia 2 — o grupo de pastejo (nulo = sem grupo). Muda SÓ pelo `fn_pasto_grupo_salvar` (gatilho de guarda no
    *  banco); o cadastro do pasto nunca o manda. Opcional pelo mesmo motivo do `data_fim`: fora do types.ts até a regeneração. */
   grupo_id?: string | null;
+  /** FECH-PASTO-UNIDADE-01 (Gabriel 07/11, modelo A) — o PAI deste pasto quando ele é PIQUETE (subárea): a origem do grupo ATIVO dele, se
+   *  não for ele mesmo (o espelho de `_fn_pai_do_piquete`). Nulo/ausente = pasto (é ele que tem o card do mês). Preenchido na leitura. */
+  pai_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -75,8 +78,34 @@ export function pastosAtivosNoMes<T extends {
   ativo: boolean;
   data_inicio?: string | null;
   data_fim?: string | null;
+  pai_id?: string | null;
 }>(lista: T[], anoMes: string): T[] {
-  return lista.filter(p => p.ativo && isPastoAtivoNoMes(p, anoMes));
+  /* FECH-PASTO-UNIDADE-01 — piquete NÃO é pasto, é subárea do pasto: fica fora do mês (sem card, fora da área, do resumo, do Global e do
+     mapa do rebanho), espelho de `fn_pastos_aplicaveis_mes` (`_fn_pai_do_piquete(...) IS NULL`) */
+  return lista.filter(p => p.ativo && !p.pai_id && isPastoAtivoNoMes(p, anoMes));
+}
+
+/** FECH-PASTO-UNIDADE-01 — o pai de cada piquete: a origem do grupo ATIVO, quando não é o próprio pasto (espelho de `_fn_pai_do_piquete`) */
+export function comPaiDoPiquete<T extends { id: string; grupo_id?: string | null }>(
+  pastos: readonly T[], grupos: readonly { id: string; pasto_origem_id: string | null; ativo: boolean }[],
+): (T & { pai_id: string | null })[] {
+  const origem = new Map(grupos.filter(g => g.ativo && g.pasto_origem_id).map(g => [g.id, g.pasto_origem_id]));
+  return pastos.map(p => {
+    const o = p.grupo_id ? origem.get(p.grupo_id) ?? null : null;
+    return { ...p, pai_id: o && o !== p.id ? o : null };
+  });
+}
+
+/** FECH-PASTO-UNIDADE-01 — os piquetes de cada pasto vigentes no mês (o selo "N piquetes" do card) */
+export function piquetesNoMes<T extends { id: string; ativo: boolean; data_inicio?: string | null; data_fim?: string | null; pai_id?: string | null }>(
+  lista: readonly T[], anoMes: string,
+): Map<string, T[]> {
+  const porPai = new Map<string, T[]>();
+  for (const p of lista) {
+    if (!p.pai_id || !p.ativo || !isPastoAtivoNoMes(p, anoMes)) continue;
+    porPai.set(p.pai_id, [...(porPai.get(p.pai_id) ?? []), p]);
+  }
+  return porPai;
 }
 
 // Re-export da fonte única — NÃO definir lista local.
@@ -151,7 +180,20 @@ async function fetchPastosShared(
         console.error(error);
         throw error;
       }
-      const result = data ?? [];
+      /* FECH-PASTO-UNIDADE-01 — quem é piquete: a origem do grupo ativo (uma leitura a mais, só dos grupos que os pastos citam) */
+      const grupoDe = (p: { id: string; grupo_id?: string | null }) => p.grupo_id ?? null;
+      const grupoIds = [...new Set((data ?? []).map(grupoDe).filter((g): g is string => !!g))];
+      let grupos: { id: string; pasto_origem_id: string | null; ativo: boolean }[] = [];
+      if (grupoIds.length > 0) {
+        const lidos = await (supabase as any).from('pasto_grupos').select('id, pasto_origem_id, ativo').in('id', grupoIds);
+        if (lidos.error) {
+          toast.error('Erro ao carregar pastos');
+          console.error(lidos.error);
+          throw lidos.error;
+        }
+        grupos = lidos.data ?? [];
+      }
+      const result = comPaiDoPiquete(data ?? [], grupos);
       pastosCacheByKey.set(cacheKey, result);
       return result;
     } finally {

@@ -3,7 +3,7 @@ import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3,
 import { ExportarMesDialog } from '@/components/caderno/ExportarMesDialog';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { ResumoPorAtividade } from '@/components/resumoAtividade/ResumoPorAtividade';
-import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, type Pasto } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, piquetesNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda, GLOBAL_FAZENDA } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,16 +28,19 @@ import { grupoDoTipoUso } from '@/lib/pastos/tiposUso';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
 import { safrasQueCobremOMes, labelDaCultura } from '@/lib/agri/areaPlantada';
-import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
-import { useGruposDePastejo } from '@/components/pastos/GruposDePastejo';
-import type { ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
-import { API_LOTE_NO_GRUPO, alocacaoDoCard, propostosComoVedado, quemRecebe, resumoDoGrupo, type AlocacaoDoMes, type LotacaoDoPasto, type PastoDoLote } from '@/lib/fechamento/loteNoGrupo';
-import { areaNoMesOuHoje, comAreaDoMes, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
+import { pastosDoFechamentoNoMes, useLoteDoMes } from '@/hooks/useLoteDoMes';
+import { useModalDoPasto } from '@/hooks/useModalDoPasto';
+import { Segmentado } from '@/components/ui/segmentado';
+import { MapaDoFechamento } from '@/components/fechamento/MapaDoFechamento';
+import { CHAVE_DA_VISTA, gravarVista, lerVista, type VistaDoFechamento } from '@/lib/fechamento/vistaDoFechamento';
+import { propostosComoVedado, resumoDoGrupo } from '@/lib/fechamento/loteNoGrupo';
+import { comAreaDoMes, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
 import { useReclassificacaoState, ReclassificacaoFormFields } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { MapaRebanhoImportDialog, type MapaItem } from '@/components/MapaRebanhoImportDialog';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
+import { PopupDoPasto } from '@/components/fechamento/PopupDoPasto';
 import { ERROS_REGENERAR, somarFamilias } from '@/lib/pastos/regenerarArea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -68,6 +71,13 @@ type PastoStatusConcil = 'nao_iniciado' | 'em_edicao' | 'inconsistente' | 'conci
 //   - inconsistente → laranja (rascunho com divergência)
 //   - em_edicao   → azul (em edição)
 //   - nao_iniciado → cinza/neutro
+/* FECH-TOPO-COMPACTO-01 — os botões da barra do topo: 22px, ícone + rótulo curto a 11px (o nome inteiro no `title`); "Sugestões" e
+   "Ajustar" em âmbar, o resto neutro */
+const BOTAO_DA_BARRA = 'h-[22px] flex-none gap-1 px-1.5 text-[11px] font-semibold';
+/* abaixo de 1.000px de janela (1.240 com zoom de 135% = 919) a barra não cabe com os ícones: fica só o rótulo curto */
+const ICONE_DA_BARRA = 'h-3 w-3 max-[999px]:hidden';
+const BOTAO_AMBAR = 'border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30';
+
 const STATUS_CARD_CLASSES: Record<PastoStatusConcil, string> = {
   nao_iniciado: 'bg-muted/50 border-border',
   em_edicao: 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700',
@@ -195,7 +205,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
 
-  const { pastos: pastosDeHoje, categorias, editarPasto } = usePastos();
+  const { pastos: pastosDeHoje, categorias } = usePastos();
   const { lancamentos, saldosIniciais, adicionarLancamento } = useLancamentos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, copiarMesAnterior } = useFechamento();
   const { user } = useAuth();
@@ -264,15 +274,15 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     if (filtroMesInicial) setMesFiltro(filtroMesInicial);
   }, [filtroAnoInicial, filtroMesInicial]);
 
-  const [selectedPasto, setSelectedPasto] = useState<Pasto | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [activeFechamento, setActiveFechamento] = useState<FechamentoPasto | null>(null);
   const [itensMap, setItensMap] = useState<Map<string, FechamentoItem[]>>(new Map());
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
   const [bulkClosing, setBulkClosing] = useState(false);
   const [showResumoAtividades, setShowResumoAtividades] = useState(false);
   /* CADERNO-CAMPO-01 peça 1: o "Exportar mês" (o caderno de campo preenchido, de uma fazenda) */
   const [exportarMesAberto, setExportarMesAberto] = useState(false);
+  /* MAPA-LOTES-01 (C2) — "Cards | Mapa": a escolha fica no navegador; sem ela, Cards */
+  const [vista, setVista] = useState<VistaDoFechamento>(() => lerVista(() => window.localStorage.getItem(CHAVE_DA_VISTA)));
+  const escolherVista = (v: VistaDoFechamento) => { setVista(v); gravarVista(() => window.localStorage.setItem(CHAVE_DA_VISTA, v)); };
   const [confirmBulkReopenOpen, setConfirmBulkReopenOpen] = useState(false);
   // Pré-checagem: pastos vazios sem tipo_uso_mes definido
   const [vazioCheckOpen, setVazioCheckOpen] = useState(false);
@@ -332,21 +342,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     else setItensMap(new Map());
   }, [fechamentos, loadItens]);
 
-  const pastosAtivos = useMemo(
-    () => {
-      // PR-PASTO-VIGENCIA-02 — esta era a ÚNICA reimplementação inline da regra de
-      // vigência, e discordava do helper e do banco: testava data_inicio contra o
-      // PRIMEIRO dia do mês e ignorava data_fim, então pasto encerrado em 2024 ainda
-      // gerava card em 2026. O dono da regra agora é isPastoAtivoNoMes, espelho de
-      // fn_pastos_aplicaveis_mes. entra_conciliacao saiu: foi aposentado.
-      const filtrados = pastosAtivosNoMes(pastos, anoMes);
-      // Pastos de divergência sempre no FINAL da lista
-      const normais = filtrados.filter(p => !isPastoDivergencia(p.tipo_uso));
-      const divergencia = filtrados.filter(p => isPastoDivergencia(p.tipo_uso));
-      return [...normais, ...divergencia];
-    },
-    [pastos, anoMes]
-  );
+  const pastosAtivos = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
+  /* FECH-PASTO-UNIDADE-01 — o card é do PASTO; os piquetes dele no mês viram o selo "N piquetes" (e, no mapa, o polígono do piquete é do pai) */
+  const piquetesDoMes = useMemo(() => piquetesNoMes(pastos, anoMes), [pastos, anoMes]);
+  const paiDoPiquete = useMemo(() => new Map([...piquetesDoMes].flatMap(([pai, piqs]) => piqs.map(q => [q.id, pai] as const))), [piquetesDoMes]);
 
   const getFechamento = useCallback(
     (pastoId: string) => fechamentos.find(f => f.pasto_id === pastoId) || null,
@@ -357,48 +356,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
      Os grupos ativos da fazenda, a lotação do mês pela `fn_lotacao_do_mes` (rateio por área; sem alocação = a conta de hoje) e
      onde cada lote esteve (`fechamento_alocacoes`). Relidos quando os cards do mês mudam (o modal fecha → loadFechamentos). */
   const fazendaDoMes = fazendaAtual && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
-  const { grupos: gruposDePastejo } = useGruposDePastejo(fazendaDoMes);
-  /* a área de cada pasto NO MÊS (PASTO-AREA-OFICIAL-02a): enquanto não lê, a de hoje (`areaNoMesOuHoje`) */
-  const fazendasDaArea = useMemo(() => (fazendaDoMes ? [fazendaDoMes] : []), [fazendaDoMes]);
-  const { areaDe } = useAreaDosPastosNoMes(fazendasDaArea, anoMes, anoMes);
-  const paraLote = useCallback((p: Pasto): PastoDoLote => ({ id: p.id, nome: p.nome, grupo_id: p.grupo_id ?? null, area: areaNoMesOuHoje(p, anoMes, areaDe) }), [anoMes, areaDe]);
-  const [lotacaoDoMes, setLotacaoDoMes] = useState<Map<string, LotacaoDoPasto>>(new Map());
-  const [alocacoesDoMes, setAlocacoesDoMes] = useState<AlocacaoDoMes[]>([]);
-  useEffect(() => {
-    if (!fazendaDoMes) { setLotacaoDoMes(new Map()); setAlocacoesDoMes([]); return; }
-    let vivo = true;
-    void Promise.all([API_LOTE_NO_GRUPO.lotacaoDoMes(fazendaDoMes, anoMes), API_LOTE_NO_GRUPO.alocacoesDoMes(fazendaDoMes, anoMes)]).then(([l, a]) => {
-      if (!vivo) return;
-      setLotacaoDoMes(l.ok ? l.dados : new Map());
-      setAlocacoesDoMes(a.ok ? a.dados : []);
-    });
-    return () => { vivo = false; };
-  }, [fazendaDoMes, anoMes, fechamentos]);
-  /** os membros VIGENTES no mês de cada grupo ativo com 2 ou mais pastos (um grupo de 1 no mês não vira moldura) */
-  const membrosPorGrupo = useMemo(() => {
-    const ativos = new Map(gruposDePastejo.filter(g => g.ativo).map(g => [g.id, g.nome]));
-    const mapa = new Map<string, { nome: string; membros: Pasto[] }>();
-    for (const p of pastosAtivos) {
-      const nome = p.grupo_id ? ativos.get(p.grupo_id) : undefined;
-      if (!p.grupo_id || !nome) continue;
-      const atual = mapa.get(p.grupo_id) ?? { nome, membros: [] };
-      atual.membros.push(p);
-      mapa.set(p.grupo_id, atual);
-    }
-    for (const [id, g] of mapa) if (g.membros.length < 2) mapa.delete(id);
-    return mapa;
-  }, [gruposDePastejo, pastosAtivos]);
-  /** quem não recebe lote no mês: card vedado ou fechado */
-  const impedidosDoMes = useMemo(() => {
-    const mapa = new Map<string, 'vedado' | 'fechado'>();
-    for (const f of fechamentos) {
-      if (f.tipo_uso_mes === 'vedado') mapa.set(f.pasto_id, 'vedado');
-      else if (f.status === 'fechado') mapa.set(f.pasto_id, 'fechado');
-    }
-    return mapa;
-  }, [fechamentos]);
-  /** pasto que RECEBE o lote de outro card no mês → os pastos de origem */
-  const recebeDe = useMemo(() => quemRecebe(alocacoesDoMes, fechamentos), [alocacoesDoMes, fechamentos]);
+  const { lotacaoDoMes, alocacoesDoMes, membrosPorGrupo, impedidosDoMes, recebeDe, paraLote, contextoDoLote, areaDe: areaDoMesDoLote } = useLoteDoMes(fazendaDoMes, anoMes, pastosAtivos, fechamentos);
+  const modalDoPasto = useModalDoPasto({
+    anoMes, fechamentos, categorias,
+    lote: { contextoDoLote, areaDe: areaDoMesDoLote }, acoes: { criarFechamento, fecharPasto, copiarMesAnterior },
+    aoFechar: () => { loadFechamentos(anoMes); },
+    rotuloDaFazenda: (id) => fazendas.find(f => f.id === id)?.codigo ?? '',
+  });
   /** a grade em segmentos: pasto solto, ou o grupo inteiro numa moldura (no lugar do 1º membro) */
   const segmentosDaGrade = useMemo(() => {
     const feitos = new Set<string>();
@@ -412,21 +376,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
     return segs;
   }, [pastosAtivos, membrosPorGrupo]);
-  /** o contexto do lote para o modal do pasto (F3-1: por card) */
-  const contextoDoLote = useCallback((p: Pasto, fechamentoId: string): ContextoDoLote => {
-    const g = p.grupo_id ? membrosPorGrupo.get(p.grupo_id) : undefined;
-    const membros = g?.membros ?? [];
-    const idsDoGrupo = new Set(membros.map(m => m.id));
-    const impedidos = new Map([...impedidosDoMes].filter(([id]) => id !== p.id));
-    return {
-      proprio: paraLote(p),
-      nomeDoGrupo: g?.nome ?? null,
-      membros: membros.map(paraLote),
-      outrosPastos: pastosAtivos.filter(x => x.id !== p.id && !idsDoGrupo.has(x.id) && !isPastoDivergencia(x.tipo_uso)).map(paraLote),
-      impedidos,
-      gravada: alocacaoDoCard(alocacoesDoMes, fechamentoId),
-    };
-  }, [membrosPorGrupo, impedidosDoMes, pastosAtivos, alocacoesDoMes, paraLote]);
 
   const getResumo = useCallback((fech: FechamentoPasto | null, pasto: Pasto): PastoResumo => {
     if (!fech) return { totalCabecas: 0, pesoMedio: null, uaHa: null, uaTotal: 0, catBreakdown: [], lotacaoKgHa: null };
@@ -652,14 +601,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   }, [pastoDataByCat, saldoMap]);
 
   /* ── Handlers ── */
-  const handleOpenPasto = async (pasto: Pasto) => {
-    let fech = getFechamento(pasto.id);
-    if (!fech) fech = await criarFechamento(pasto.id, anoMes);
-    if (!fech) return;
-    setActiveFechamento(fech);
-    setSelectedPasto(pasto);
-    setDialogOpen(true);
-  };
+  const handleOpenPasto = modalDoPasto.abrir;
 
   /* FECH-P2-TRAVA-AVISO-01 — a volta do Valor do Rebanho reabre o pasto de onde se saiu, quando os cards DESTE mês chegaram */
   useEffect(() => {
@@ -1123,7 +1065,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           >
             {/* Nome + status icon */}
             <div className="flex items-center justify-between gap-0.5">
-              <span className="font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
+              <span className="min-w-0 font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
+              {(piquetesDoMes.get(p.id)?.length ?? 0) > 0 && (
+                <span className="ml-auto flex-none whitespace-nowrap rounded bg-[#eaf1fb] px-1 text-[10px] font-medium leading-[14px] text-[#1f5fa8]" data-testid="selo-piquetes"
+                  title={`Piquetes de ${p.nome} no mês: ${(piquetesDoMes.get(p.id) ?? []).map(q => q.nome).join(', ')}`}>
+                  {piquetesDoMes.get(p.id)?.length} piquetes
+                </span>
+              )}
               <span className={`text-sm font-bold leading-none ${STATUS_ICON_COLOR[pastoStatus]}`}>
                 {STATUS_ICON[pastoStatus]}
               </span>
@@ -1172,55 +1120,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-[260px] p-2 text-[10px] space-y-1">
-          <div className="font-bold text-xs">{p.nome}</div>
-          {/* PR-UI-TOOLTIP-PASTO-01 — Lote SEMPRE visivel, inclusive em pasto sem
-              gado: e o dado que identifica o lote do mes, e ausencia dele e
-              informacao. Travessao, nunca vazio — sentinela do CLAUDE.md. */}
-          <div className="text-muted-foreground">
-            Lote: <span className="font-semibold text-foreground">{(fech?.lote_mes ?? '').trim() || '—'}</span>
-          </div>
-          {resumo.totalCabecas > 0 && (
-            <>
-              {/* Total na MESMA coluna de valor das categorias: celula da esquerda
-                  vazia, valor a direita. Antes era texto corrido e nao alinhava
-                  com o breakdown logo abaixo. */}
-              <div className="flex justify-between text-muted-foreground">
-                <span />
-                <span className="tabular-nums">
-                  <span className="font-semibold text-foreground">{resumo.totalCabecas}</span> cab
-                  {resumo.pesoMedio && <> · <span className="font-semibold text-foreground">{formatNum(resumo.pesoMedio, 1)}</span> kg</>}
-                </span>
-              </div>
-              {resumo.catBreakdown.length > 0 && (
-                <div className="space-y-0.5 pt-1 border-t border-border/30">
-                  {resumo.catBreakdown.map(cb => (
-                    <div key={cb.sigla} className="flex justify-between">
-                      <span className="text-muted-foreground">{cb.sigla}</span>
-                      <span className="tabular-nums">{cb.qty} cab{cb.pesoMedio ? ` · ${formatNum(cb.pesoMedio, 0)} kg` : ''}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* Porteiro trocado de lotacaoKgHa para uaHa: com o kg/ha fora da
-                  exibicao, quem porteia o bloco tem que ser o dado que ele mostra.
-                  uaHa != null e SUPERCONJUNTO de lotacaoKgHa != null (calcUA
-                  devolve a quantidade quando nao ha peso), entao a troca nunca
-                  esconde rodape que aparecia antes. O calculo de lotacaoKgHa
-                  continua intacto — o grafico de kg/ha do painel consome ele. */}
-              {uaHaDoMes != null && (
-                <div className="pt-1 border-t border-border/30 text-muted-foreground">
-                  Lotação: <span className="text-sm font-bold text-foreground">{formatNum(uaHaDoMes, 2)} UA/ha</span>
-                </div>
-              )}
-            </>
-          )}
-          {/* FECH-ROTACAO-01 fatia 3 — quem só RECEBE o lote (sem cabeça própria) também mostra a lotação do mês, com a origem */}
-          {resumo.totalCabecas === 0 && origens.length > 0 && uaHaDoMes != null && (
-            <div className="pt-1 border-t border-border/30 text-muted-foreground">
-              Recebe o lote do {origens.join(', ')} · <span className="text-sm font-bold text-foreground">{formatNum(uaHaDoMes, 2)} UA/ha</span>
-            </div>
-          )}
+        {/* POPUP-PASTO-01 — o popup do pasto é UM componente (o mesmo do Geo pastos); os dados são os do card do mês (o `resumo`) */}
+        <TooltipContent side="top" className="p-0 border-0 shadow-lg">
+          <PopupDoPasto d={{
+            nome: p.nome, lote: fech?.lote_mes ?? null, totalCab: resumo.totalCabecas, pesoMedioKg: resumo.pesoMedio,
+            categorias: resumo.catBreakdown.map(cb => ({ sigla: cb.sigla, cab: cb.qty, pesoMedioKg: cb.pesoMedio })),
+            uaHa: uaHaDoMes ?? null, recebeDe: origens,
+          }} />
         </TooltipContent>
       </Tooltip>
     );
@@ -1263,10 +1169,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             "Fechar Mês" são `w-full` e seguem a trilha — o aviso perdeu o max-w-[220px],
             que era quem ditava os 236, e agora quebra em duas linhas dentro dos 150.
             Altura da COL 1 não afeta a COL 2, então quebrar não custa nada. */}
-        <div className="grid grid-cols-[150px_1fr_auto] gap-4 items-start">
+        <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 items-start">
 
-          {/* ── COL 1: Contexto / Filtros ── */}
-          <div className="flex flex-col gap-1.5">
+          {/* ── COL 1: Contexto / Filtros ── (FECH-TOPO-COMPACTO-01: gap 4px e o "Reabrir Mês" em 24px — a coluna cabe na altura da
+              COL 2, meses + barra + tabela, e nunca dita a altura do topo) */}
+          <div className="flex flex-col gap-1">
             {/* PR-V2-VOLTAR-ORIGEM-01 — este header nao tem TITULO: e a grade de tres
                 colunas direto. O canto superior esquerdo dele e o topo da COL 1, e e
                 onde a seta cabe sem redesenhar nada. Fora do grid ela roubaria largura
@@ -1295,6 +1202,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </button>
             )}
             </div>
+            {/* FECH-TOPO-COMPACTO-01 — o aviso das divergências na ponta esquerda da FAIXA do topo (a linha da barra de botões): 24px
+                reservados sempre; o aviso aparece e some sem mexer em nada (antes era um bloco de 2 linhas que empurrava o "Fechar Mês") */}
+            <div className="flex h-6 items-center whitespace-nowrap text-[10px] font-semibold text-red-700" data-testid="aviso-do-topo"
+              title={showCloseButton && hasDivergencia ? 'Corrija as divergências antes de fechar o mês.' : undefined}>
+              {showCloseButton && hasDivergencia ? '⚠ Corrija as divergências' : ''}
+            </div>
             <div className="flex flex-col gap-1">
               <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1 w-fit">
                 <CheckCircle className="h-3 w-3" />
@@ -1313,17 +1226,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </Badge>
             )}
             {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
-              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2.5 font-bold gap-1 text-destructive hover:text-destructive w-fit justify-start" onClick={() => setConfirmBulkReopenOpen(true)}>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2.5 font-bold gap-1 text-destructive hover:text-destructive w-full justify-start" onClick={() => setConfirmBulkReopenOpen(true)}>
                 <Unlock className="h-3.5 w-3.5" /> Reabrir Mês
               </Button>
             )}
             {showCloseButton && (
               <>
-                {hasDivergencia && (
-                  <div className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-tight text-red-700">
-                    ⚠ Corrija as divergências antes de fechar.
-                  </div>
-                )}
                 <Button
                   size="sm"
                   className="w-full h-8 text-xs font-bold gap-1"
@@ -1388,6 +1296,58 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               */}
             <FechamentoFitaMeses anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp}
               mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} statusPorMes={statusPorMes} />
+
+            {/* FECH-TOPO-COMPACTO-01 (Gabriel 05/11) — A BARRA DO TOPO: uma linha de 24px entre os meses e a tabela, sempre presente.
+                À esquerda, o aviso das divergências (a faixa fina do topo: some sem mexer em nada); à direita, os botões compactos em
+                lugares FIXOS — o seletor "Cards | Mapa" (MAPA-LOTES-01, Code 4) com o lugar reservado, e "Sugestões"/"Ajustar" com o
+                lugar deles mesmo sem divergência. Antes eram 7 botões empilhados numa 3ª coluna que ditava a altura do topo (230px) e
+                empurrava a grade dos pastos. */}
+            <div className="flex h-6 items-center gap-1.5" data-testid="barra-do-topo">
+              <div className="min-w-0 flex-1" />
+              <div className="flex w-[92px] flex-none justify-end" data-testid="lugar-seletor-cards-mapa">
+                <Segmentado valor={vista} onEscolher={escolherVista} altura={22} fonte={11}
+                  opcoes={[{ valor: 'cards', rotulo: 'Cards', title: 'Os cards dos pastos' }, { valor: 'mapa', rotulo: 'Mapa', title: 'O mapa da fazenda: clique no pasto abre o card' }]} />
+              </div>
+              <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Resumo por Atividade" onClick={() => setShowResumoAtividades(true)}>
+                <BarChart3 className={ICONE_DA_BARRA} /> Resumo
+              </Button>
+              {onNavigateToConferenciaGmd && (
+                <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Conferência do GMD" onClick={() => onNavigateToConferenciaGmd({ ano: anoFiltro, mes: mesFiltro })}>
+                  <Activity className={ICONE_DA_BARRA} /> GMD
+                </Button>
+              )}
+              {onNavigateToMapaPastos && (
+                <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Mapa de Pastos" onClick={() => onNavigateToMapaPastos({ ano: anoFiltro, mes: mesFiltro })}>
+                  <MapIcon className={ICONE_DA_BARRA} /> Mapa
+                </Button>
+              )}
+              {/* CADERNO-CAMPO-01 peça 1 — o caderno é de UMA fazenda: no Global o botão não aparece */}
+              {!isGlobal && fazendaAtual && (
+                <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Exportar mês (PDF)" onClick={() => setExportarMesAberto(true)}>
+                  <FileDown className={ICONE_DA_BARRA} /> PDF
+                </Button>
+              )}
+              <ExportarMesDialog open={exportarMesAberto} onOpenChange={setExportarMesAberto} ano={Number(anoFiltro)} mes={Number(mesFiltro)} />
+              {/* FECH-DOCS-01 — "Documentos N": aparece SEMPRE (com zero também) */}
+              <BotaoDocumentosDoMes curto
+                clienteId={clienteAtual?.id ?? null}
+                fazendaId={fazendaAtual?.id ?? null}
+                fazendaNome={fazendaAtual?.nome ?? ''}
+                anoMes={anoMes}
+                classeDoIcone={`${ICONE_DA_BARRA} shrink-0`}
+                className={buttonVariants({ variant: 'outline', size: 'sm', className: BOTAO_DA_BARRA })}
+              />
+              {showAdjustButton && sugestoes.length > 0 ? (
+                <Button size="sm" variant="outline" className={`${BOTAO_DA_BARRA} w-[86px] ${BOTAO_AMBAR}`} title="Ver sugestões" onClick={() => setShowSugestoes(true)}>
+                  <Lightbulb className={ICONE_DA_BARRA} /> Sugestões
+                </Button>
+              ) : <div className="w-[86px] flex-none" aria-hidden data-testid="lugar-ver-sugestoes" />}
+              {showAdjustButton ? (
+                <Button size="sm" variant="outline" className={`${BOTAO_DA_BARRA} w-[70px] ${BOTAO_AMBAR}`} title="Ajustar Conciliação" onClick={() => setShowReclassModal(true)}>
+                  <Pencil className={ICONE_DA_BARRA} /> Ajustar
+                </Button>
+              ) : <div className="w-[70px] flex-none" aria-hidden data-testid="lugar-ajustar" />}
+            </div>
 
             <div className="flex justify-center overflow-x-auto">
             <TooltipProvider delayDuration={150}>
@@ -1495,66 +1455,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             </div>
           </div>
 
-          {/* ── COL 3: Ações ── */}
-          <div className="flex flex-col gap-1.5 items-end min-w-[120px]">
-            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => setShowResumoAtividades(true)}>
-              <BarChart3 className="h-3.5 w-3.5" /> Resumo por Atividade
-            </Button>
-            {onNavigateToConferenciaGmd && (
-              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => onNavigateToConferenciaGmd({ ano: anoFiltro, mes: mesFiltro })}>
-                <Activity className="h-3.5 w-3.5" /> Conferência do GMD
-              </Button>
-            )}
-            {onNavigateToMapaPastos && (
-              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => onNavigateToMapaPastos({ ano: anoFiltro, mes: mesFiltro })}>
-                <MapIcon className="h-3.5 w-3.5" /> Mapa de Pastos
-              </Button>
-            )}
-            {/* CADERNO-CAMPO-01 peça 1 — o caderno é de UMA fazenda: no Global o botão não aparece */}
-            {!isGlobal && fazendaAtual && (
-              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => setExportarMesAberto(true)}>
-                <FileDown className="h-3.5 w-3.5" /> Exportar mês (PDF)
-              </Button>
-            )}
-            <ExportarMesDialog open={exportarMesAberto} onOpenChange={setExportarMesAberto} ano={Number(anoFiltro)} mes={Number(mesFiltro)} />
-
-            {/* FECH-DOCS-01 — "Documentos do mês · N": aparece SEMPRE (com zero também), no lugar que era do "Ver sugestões";
-                vem primeiro, e o "Ver sugestões" tem o lugar DELE reservado logo abaixo (28px, vazio sem sugestão). */}
-            <BotaoDocumentosDoMes
-              clienteId={clienteAtual?.id ?? null}
-              fazendaId={fazendaAtual?.id ?? null}
-              fazendaNome={fazendaAtual?.nome ?? ''}
-              anoMes={anoMes}
-              className={buttonVariants({ variant: 'outline', size: 'sm', className: 'h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start' })}
-            />
-
-            {showAdjustButton && (
-              <div className="flex flex-col gap-1 w-full">
-                {sugestoes.length > 0 ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full justify-start"
-                    onClick={() => setShowSugestoes(true)}
-                  >
-                    <Lightbulb className="h-3.5 w-3.5" /> Ver sugestões
-                  </Button>
-                ) : (
-                  <div className="h-7 w-full" aria-hidden data-testid="lugar-ver-sugestoes" />
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-[10px] font-bold gap-1 w-full justify-start"
-                  onClick={() => setShowReclassModal(true)}
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Ajustar Conciliação
-                </Button>
-              </div>
-            )}
-
-          </div>
-
         </div>
       </div>
 
@@ -1567,6 +1467,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <p>Nenhum pasto ativo para conciliação.</p>
             <p className="text-xs mt-1">Cadastre pastos na aba "Pastos" e marque "Entra na conciliação".</p>
           </div>
+        ) : vista === 'mapa' ? (
+          <MapaDoFechamento pastos={pastosAtivos} situacaoDe={getPastoStatus} onAbrir={handleOpenPasto} paiDe={paiDoPiquete}
+            cabecasDe={p => getResumo(getFechamento(p.id), p).totalCabecas} />
         ) : (
           <TooltipProvider delayDuration={200}>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
@@ -1575,25 +1478,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           </TooltipProvider>
         )}
 
-        {selectedPasto && activeFechamento && (
-          <FechamentoPastoDialog
-            open={dialogOpen}
-            onOpenChange={(o) => { setDialogOpen(o); if (!o) { setSelectedPasto(null); setActiveFechamento(null); loadFechamentos(anoMes); } }}
-            pasto={selectedPasto}
-            fechamento={activeFechamento}
-            categorias={categorias}
-            onFechar={async () => fecharPasto(activeFechamento.id)}
-            pastosDaFazenda={pastos}
-            onRenomear={async (nome, aoRecusar) => editarPasto(selectedPasto.id, { nome }, { aoRecusar })}
-            onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}
-            lote={contextoDoLote(selectedPasto, activeFechamento.id)}
-            onReabrirValorRebanho={onReabrirValorRebanho ? () => {
-              const pastoId = selectedPasto.id;
-              setDialogOpen(false); setSelectedPasto(null); setActiveFechamento(null);
-              onReabrirValorRebanho({ ano: anoFiltro, mes: mesFiltro, pastoId });
-            } : undefined}
-          />
-        )}
+        {/* MAPA-LOTES-01 fatia 1: o modal do pasto sai do gancho único (o mesmo do Mapa de pastos e do Geo pastos) */}
+        {modalDoPasto.modal}
 
         {onBackToConciliacao && (
           <button

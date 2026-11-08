@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -256,7 +256,7 @@ describe('o modal em modo OC — principal (venda)', () => {
   });
 
   it('TRAVADOS: tipo, status (Programado), fazenda, favorecido e classificação; EDITÁVEL: o valor, sugerido com o saldo', async () => {
-    montar(origem('principal'), PREFILL_PRINCIPAL);
+    montar(origem('principal', { dataDaEntrega: '2026-10-22' }), PREFILL_PRINCIPAL);
     await aberto('5.000,00');
     expect(porTab(1)).toHaveProperty('disabled', true);
     expect(porTab(4)).toHaveProperty('disabled', true);
@@ -266,7 +266,10 @@ describe('o modal em modo OC — principal (venda)', () => {
     expect(document.body.textContent).toContain(MOTIVO_CLASSIFICACAO_DA_OC);
     expect(campoValor()).toHaveProperty('disabled', false);
     /* a tela NAO diz "Compõe DRE: Sim" num recebimento que fica fora do DRE, nem o aviso de rateio por fase */
-    expect(screen.getByTestId('dre-do-principal-oc').parentElement?.textContent).toMatch(/^Compõe DRE: Não· quem compõe o DRE é a entrega do gado$/);
+    /* OC-BUSCAR-RECEBIMENTO-01 (adendo 2): no lugar do "Compõe DRE: Não", o porquê com a data da entrega, e o ⓘ */
+    expect(screen.getByTestId('dre-do-principal-oc').textContent).toBe('DRE: pela entrega da OC (22/10)i');
+    expect(document.body.textContent).not.toContain('Compõe DRE');
+    expect(within(screen.getByTestId('dre-do-principal-oc')).getByRole('button', { name: 'Ajuda: DRE do recebimento da OC' })).toBeTruthy();
     expect(document.body.textContent).not.toContain('rateia entre as fases');
     expect(porTab(6)?.textContent).toContain('Comprador Exemplo');
   });

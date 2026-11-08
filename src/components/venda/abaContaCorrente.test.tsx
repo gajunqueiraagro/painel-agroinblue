@@ -107,7 +107,7 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
 
   it("barra da diferenca so' com as entregas concluidas; com gado a entregar nao ha barra", () => {
     const { rerender } = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
-    expect(screen.getByTestId('barra-diferenca').textContent).toContain('Recebeu R$ 1.357,89 a menos do que entregou.');
+    expect(screen.getByTestId('barra-diferenca').textContent).toContain('Recebeu R$ 992.138,24; faltam R$ 1.357,89.');
     rerender(<AbaContaCorrenteOC api={api(cc({ a_entregar: 1374463.02 }))} somenteLeitura={false} />);
     expect(screen.queryByTestId('barra-diferenca')).toBeNull();
   });
@@ -188,6 +188,10 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
     const a = api(cc());
     render(<AbaContaCorrenteOC api={a} somenteLeitura={false} />);
     fireEvent.click(screen.getByRole('button', { name: '+ Buscar recebimento no Financeiro' }));
+    /* OC-BUSCAR-RECEBIMENTO-01: o de 25/07 está 127 dias depois da entrega (fora da janela): só pelo "procurar em todo o histórico" */
+    await waitFor(() => expect(screen.getByTestId('buscar-de-fora').textContent).toContain('procurar em todo o histórico (1 antigos)'));
+    expect(screen.queryByText('Helder Hofig')).toBeNull();
+    fireEvent.click(screen.getByTestId('todo-historico'));
     await waitFor(() => expect(screen.getByText('Helder Hofig')).toBeTruthy());
     fireEvent.click(screen.getByText('Helder Hofig'));
     fireEvent.click(screen.getByRole('button', { name: 'Vincular' }));

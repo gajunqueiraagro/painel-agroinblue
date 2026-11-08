@@ -313,7 +313,7 @@ const LINHAS_DE_MES = 6;
 
 /**
  * O 4º gesto de volta, no pai de um grupo nascido do "Concluir piquetes": os piquetes passam a começar noutro mês dos últimos 4 (D1, a partir de
- * hoje) — antes do início de hoje antecipa (o card do pai nesses meses vai INTEIRO ao 1º piquete), depois adia (recusa se um piquete tem uso
+ * hoje) — antes do início de hoje antecipa, depois adia (FECH-PASTO-UNIDADE-01: o pai segue sendo o pasto e o card; adiar recusa se um piquete tem linha marcada
  * nesses meses: D2). "Desfazer a última mudança" é o caminho de volta do próprio gesto. Mês fechado: a recusa do banco e o link do Reabrir ao lado
  * (D3: nunca reabre sozinho; o Reabrir é o diálogo de sempre, com a cadeia dele). A prévia é a própria função com `p_simular`.
  * Bug do P9/P17 (Gabriel 06/11 17:11/17:13): o início dos piquetes vem do BANCO (`lerIniciosDoGrupo`, a tabela que a função lê), nunca da lista

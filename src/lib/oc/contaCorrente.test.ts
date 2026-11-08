@@ -57,7 +57,9 @@ describe('conta corrente da venda — leitura e sinal do caixa', () => {
     expect(cc.linhas[10].saldo).toBe(cc.saldo);
     /* OC-CC-SINAL-FAZENDA-01 — o rotulo recebe o saldo NA TELA, e a barra devolve o que falta na tela (positivo = falta) */
     expect(rotuloDoSaldo(saldoNaTela(cc, 'venda'))).toBe('Saldo · falta receber');
-    expect(barraDaDiferenca(cc)).toEqual({ frase: 'Recebeu R$ 1.357,89 a menos do que entregou.', valor: 1357.89 });
+    /* OC-BUSCAR-RECEBIMENTO-01: com a OC ABERTA, o que veio e o que falta; "a menos do que entregou" só FECHADA */
+    expect(barraDaDiferenca(cc)).toEqual({ frase: 'Recebeu R$ 2.365.243,37; faltam R$ 1.357,89.', valor: 1357.89 });
+    expect(barraDaDiferenca({ ...cc, statusComercial: 'fechada' })).toEqual({ frase: 'Recebeu R$ 1.357,89 a menos do que entregou.', valor: 1357.89 });
     expect(rotuloRecebimento(cc.linhas, 'r-2025-05-22')).toBe('Receb. 2/4');
   });
 
@@ -135,6 +137,26 @@ describe('conta corrente da venda — leitura e sinal do caixa', () => {
 /* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — os rotulos GERADOS do extrato: curtos, de UM lugar, e cabem na Descricao (92px uteis,
    medido em Inter 10px: o maior e' "Devol. fornecedor", 84,9). */
 import { descricaoDoEvento, rotuloCurtoExplicacao } from './contaCorrente';
+describe('OC-BUSCAR-RECEBIMENTO-01 — a frase da faixa (print do Gabriel 07/11 08:31: "Recebeu R$ 229.033,59 a menos" com Recebido 0,00)', () => {
+  /* o caso: abate entregue 229.033,59, nada recebido, OC fechada */
+  const abate = (recebido: number, status: string | null, programado = 0) => ({
+    ...lerContaCorrente({ ...HELDER, entregue: 229033.59, recebido, programado, saldo: -(229033.59 - recebido), falta_explicar: -(229033.59 - recebido) }),
+    statusComercial: status,
+  });
+  it('nada recebido = "Falta receber", fechada ou não', () => {
+    expect(barraDaDiferenca(abate(0, 'fechada'), 'abate')?.frase).toBe('Falta receber R$ 229.033,59.');
+    expect(barraDaDiferenca(abate(0, 'programada'), 'abate')?.frase).toBe('Falta receber R$ 229.033,59.');
+    expect(barraDaDiferenca(abate(0, 'fechada', 100000), 'abate')?.frase).toBe('Falta receber R$ 229.033,59; R$ 100.000,00 já está programado.');
+  });
+  it('parcial com a OC aberta: "Recebeu Y; faltam X"; fechada: "a menos do que entregou"', () => {
+    expect(barraDaDiferenca(abate(200000, 'programada'), 'abate')?.frase).toBe('Recebeu R$ 200.000,00; faltam R$ 29.033,59.');
+    expect(barraDaDiferenca(abate(200000, 'fechada'), 'abate')?.frase).toBe('Recebeu R$ 29.033,59 a menos do que entregou.');
+  });
+  it('o programado que cobre a falta: "Falta receber X, já programado" (o de sempre)', () => {
+    expect(barraDaDiferenca(abate(200000, 'fechada', 29033.59), 'abate')?.frase).toBe('Falta receber R$ 29.033,59, já programado.');
+  });
+});
+
 describe('rotulos curtos do extrato (fix2)', () => {
   const linha = (extra: Record<string, unknown>) => lerContaCorrente({ modelo: 'conta_corrente', linhas: [extra] })?.linhas[0];
   const cat = (s: string | null) => (s === 'desmama_m' ? 'Desmama M' : s ?? '—');

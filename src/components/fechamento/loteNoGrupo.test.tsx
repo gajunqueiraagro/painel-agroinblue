@@ -126,7 +126,7 @@ describe('D — o modal do pasto', () => {
     <QueryClientProvider client={new QueryClient()}>
       <FechamentoPastoDialog open onOpenChange={vi.fn()} pasto={PASTO_A} fechamento={FECH}
         categorias={CATS} onFechar={vi.fn()} onCopiar={vi.fn()}
-        pastosDaFazenda={[PASTO_A]} onRenomear={vi.fn()} lote={lote} />
+        lote={lote} />
     </QueryClientProvider>);
 
   it('D1 com o contexto: o botão aparece e o Salvar grava card + alocação "grupo inteiro" numa chamada', async () => {

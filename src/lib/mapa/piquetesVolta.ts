@@ -311,14 +311,10 @@ const nBr = (v: number | null, casas: number) => (v == null ? '—' : v.toLocale
 const diaBr = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '—');
 /** PIQUETE-VIGENCIA-01 (Gabriel 06/11 17:13, P17): a frase da prévia com os números da casa (vírgula decimal, ponto de milhar), dos campos do banco */
 export function fraseDoInicio(p: Omit<PreviaMudarInicio, 'frase'>): string {
+  /* FECH-PASTO-UNIDADE-01 (modelo A): o pai NUNCA se encerra e o card nunca vai a piquete — nas duas direções só muda o início dos piquetes
+     (a frase do banco desde a 117460: "segue sendo o pasto e o card de cada mês") */
   const grupo = p.grupoNome ?? p.pai.nome, n = p.pastos.length, mm = mesBr(p.para);
-  if (p.direcao === 'adiar') {
-    return `${grupo}: os ${n} piquetes passam a começar em ${mm}; ${p.pai.nome} volta a valer até ${diaBr(p.fimDepois)} (${nBr(p.areaPaiHa, 2)} ha); nenhum card muda.`;
-  }
-  const l = p.lotacao, piq = l.piquete ?? p.cardVaiPara ?? '—';
-  return `${grupo}: os ${n} piquetes passam a começar em ${mm}; ${p.pai.nome} fica encerrado em ${diaBr(p.fimDepois)}; ${p.cards} card(s) de ${p.pai.nome} `
-    + `(${nBr(p.cabecas, 0)} cab, ${nBr(l.kg, 0)} kg, ${nBr(l.ua, 1)} UA) passam inteiros a ${piq}; lotação do grupo ${nBr(l.uaHaGrupo, 2)} UA/ha `
-    + `(${nBr(p.areaGrupoHa, 2)} ha), de ${piq} ${nBr(l.uaHaPiquete, 2)} UA/ha (${nBr(l.areaPiqueteHa, 2)} ha).`;
+  return `${grupo}: os ${n} piquetes passam a começar em ${mm}; ${p.pai.nome} segue sendo o pasto e o card de cada mês (${nBr(p.areaPaiHa, 2)} ha); nenhum card muda.`;
 }
 
 /** PIQUETE-VIGENCIA-01 (Gabriel 06/11 17:13, P17): o que a GRAVAÇÃO devolve (as duas funções, `p_simular` false) — ela NÃO traz frase, meses nem

@@ -31,6 +31,8 @@ export interface FechamentoItem {
   observacoes: string | null;
   origem_dado: string;
   peso_atualizado: boolean;
+  /** LOTES-03 F1 — o lote cadastrado da categoria (opcional; ausente = o gravador mantém o gravado) */
+  lote_id?: string | null;
 }
 
 export function useFechamento() {
@@ -133,7 +135,7 @@ export function useFechamento() {
   const salvarCardDoPasto = useCallback(async (
     fechamentoId: string,
     campos: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null },
-    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[],
+    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; lote_id?: string | null }[],
   ): Promise<{ ok: boolean; erro: string | null }> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `(supabase as any).rpc` do repo
     const { error } = await (supabase as any).rpc('fn_fechamento_pasto_salvar', { p_fechamento_id: fechamentoId, p_campos: campos, p_itens: itens });
@@ -147,7 +149,7 @@ export function useFechamento() {
   const salvarCardComAlocacao = useCallback(async (
     fechamentoId: string,
     campos: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null },
-    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[],
+    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; lote_id?: string | null }[],
     pastoIds: string[] | null,
   ): Promise<{ ok: boolean; erro: string | null }> => {
     const r = await salvarCardComAlocacaoNoBanco(fechamentoId, campos, itens, pastoIds);
@@ -176,7 +178,7 @@ export function useFechamento() {
     pastoId: string,
     anoMesAtual: string,
     categorias: CategoriaRebanho[]
-  ): Promise<{ itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; peso_atualizado: boolean }[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }> => {
+  ): Promise<{ itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; peso_atualizado: boolean; lote_id?: string | null }[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }> => {
     const [y, m] = anoMesAtual.split('-').map(Number);
     const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
 
@@ -204,6 +206,8 @@ export function useFechamento() {
           quantidade: found?.quantidade || 0,
           peso_medio_kg: found?.peso_medio_kg || null,
           lote: found?.lote || null,
+          /* LOTES-03: o lote segue com a categoria; quem copia confere se ele ainda está ativo (`lotesQueSeguem`) */
+          lote_id: found?.lote_id ?? null,
           observacoes: null,
           origem_dado: found ? 'copiado_mes_anterior' : 'manual',
           peso_atualizado: false,

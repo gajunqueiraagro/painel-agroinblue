@@ -51,6 +51,8 @@ const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.s
 /* P92 — os nove tamanhos do Negociar lote (os sete do consórcio + 750x483 e 900x600) e o 1024x600, a fronteira em que o resumo de 400px aparece */
 const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 600], [1000, 600], [1024, 600], [1126, 579], [1300, 704], [1440, 800]];
 const espera = (p, ms = 450) => p.waitForTimeout(ms);
+/* LOTES-03 F1 — os três oficiais + 1240×800 e 1024×600 + o zoom de 135% de 1280×800 (948×593) e de 1440×900 (1067×667) */
+const TAMANHOS_DO_LOTES = [[1000, 600], [1126, 579], [1440, 800], [1240, 800], [1024, 600], [948, 593], [1067, 667]];
 /* P109 — a faixa em volta do rótulo do regime da meta (o pai dele) */
 const REGIAO_DO_ROTULO = '*:has(> [data-testid="meta-regime"])';
 const botao = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await espera(p); };
@@ -284,6 +286,22 @@ const CENARIOS = [
     },
     estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
   })),
+  /* FECH-TOPO-COMPACTO-01 — o topo do Fechamento (`v=topo`, todos os botões): trocar de mês e abrir/fechar as Sugestões não movem os
+     meses, a barra de botões, o aviso, o "Fechar Mês" nem a tabela de conferência; o lugar do seletor "Cards | Mapa" é fixo */
+  { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="barra-do-topo"]').waitFor(); await espera(p, 900); },
+    estados: [['mês Set', botao(/^Set/)], ['mês Out', botao(/^Out/)],
+      ['abrir Sugestões', botao(/^Sugestões$/)], ['fechar Sugestões', async (p) => { await p.keyboard.press('Escape'); await espera(p, 500); }]] },
+  /* MAPA-LOTES-01 (C2) — trocar Cards ↔ Mapa e trocar de mês na vista Mapa não movem os meses, a barra do topo nem o seletor (o lugar de
+     92px é fixo); a grade some e o mapa entra no MESMO lugar */
+  { nome: 'fechamento-mapa', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="barra-do-topo"]').waitFor(); await espera(p, 900); },
+    estados: [['vista Mapa', botao(/^Mapa$/)], ['mês Set', botao(/^Set/)], ['mês Out', botao(/^Out/)], ['vista Cards', botao(/^Cards$/)]] },
+  /* REVALIDAR-BG-SET26 — Valor do Rebanho (SINTÉTICO): trocar entre o mês validado (jul), o da cadeia quebrada (ago), o invalidado e
+     aberto (set) e o sem snapshot (out) não move a régua, a tabela nem os gráficos — o aviso do snapshot é estado da faixa de 22px */
+  { nome: 'valor-rebanho-snapshot', url: 'tela=valor-rebanho&barra=32',
+    antes: async (p) => { await p.locator('[data-testid="faixa-snapshot"]').waitFor(); await espera(p, 600); },
+    estados: [['jul validado', botao(/^Jul$/)], ['ago cadeia quebrada', botao(/^⚠?Ago$/)], ['set invalidado', botao(/^⚠?Set$/)], ['out sem snapshot', botao(/^Out$/)]] },
   /* FECH-ROTACAO-01 fatia 3 — no quadro "Onde o lote esteve" do P10A: parte do grupo, marcar um piquete, voltar ao grupo inteiro e pôr um
      pasto em "também esteve em" não movem o botão, os títulos dos blocos nem o rodapé do modal */
   { nome: 'fechamento-grupo-lote', url: 'tela=fechamento-grupo&barra=32', regiao: '[data-testid="lote-quadro"]',
@@ -298,6 +316,37 @@ const CENARIOS = [
       ['grupo inteiro', clicar('[data-testid="lote-grupo-inteiro"]')],
       ['também esteve em', async (p) => { await p.locator('[data-testid="lote-quadro"] button', { hasText: /^Adicionar pasto/ }).click(); await espera(p, 200);
         await p.getByPlaceholder('Buscar pasto').fill('P11'); await espera(p, 200); await p.keyboard.press('Enter'); await espera(p); }],
+    ] },
+  /* LOTES-03 F1 — Produção › Lotes (`tela=lotes`, SINTÉTICO): na lista, trocar a atividade, Ativos/Encerrados e buscar não movem a barra,
+     os filtros nem o "+ Novo lote"; no assistente, andar pelos 5 passos (e abrir o "Cadastrar nova") não move o trilho, o código nem os
+     botões do rodapé; na ficha, trocar Resumo/Histórico não move o cabeçalho nem as ações */
+  { nome: 'lotes-lista-filtros', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES,
+    antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600); }, estados: [
+      ['atividade Recria', botao(/^Recria$/)], ['atividade Todas', botao(/^Todas$/)], ['Encerrados', botao(/^Encerrados$/)], ['Ativos', botao(/^Ativos$/)],
+      ['busca sem achado', digitar('[data-testid="lotes-busca"]', 'nenhum lote com este nome')], ['busca DF', digitar('[data-testid="lotes-busca"]', 'DF')],
+    ] },
+  { nome: 'lotes-assistente-passos', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',
+    antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
+      await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await espera(p, 500); },
+    estados: [
+      ['escolher REC', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^REC/ }).first().click(); await espera(p); }],
+      ['Cadastrar nova', clicar('[data-testid="assistente-cadastrar-nova"]')], ['cancelar o formulário', clicar('[data-testid="assistente-form-cancelar"]')],
+      ['passo 2', clicar('[data-testid="assistente-avancar"]')],
+      ['escolher DF', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^DF/ }).first().click(); await espera(p); }],
+      ['passo 3', clicar('[data-testid="assistente-avancar"]')],
+      ['escolher NE', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^NE/ }).first().click(); await espera(p); }],
+      ['passo 4', clicar('[data-testid="assistente-avancar"]')], ['nº digitado', async (p) => { await p.locator('[data-testid="assistente-numero-editar"]').fill('9'); await espera(p); }],
+      ['nº ocupado', async (p) => { await p.locator('[data-testid="assistente-numero-editar"]').fill('5'); await espera(p); }],
+      ['nº automático', async (p) => { await p.locator('[data-testid="assistente-numero-editar"]').fill(''); await espera(p); }],
+      ['passo 5', clicar('[data-testid="assistente-avancar"]')],
+      ['voltar', clicar('[data-testid="assistente-voltar"]')],
+    ] },
+  { nome: 'lotes-ficha-abas', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="ficha-do-lote"]',
+    antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
+      await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await espera(p, 600); },
+    estados: [
+      ['Histórico', async (p) => { await p.locator('[data-testid="ficha-do-lote"]').getByRole('button', { name: /^Histórico$/ }).click(); await espera(p, 600); }],
+      ['Resumo', async (p) => { await p.locator('[data-testid="ficha-do-lote"]').getByRole('button', { name: /^Resumo$/ }).click(); await espera(p); }],
     ] },
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (`tela=pastos`, SINTÉTICO): trocar o modo (Grupos, Ordem manual, Por destino) e
      ligar os inativos não move a barra; no modal do grupo, tirar e pôr pasto, a prévia que troca e a desativação (com a frase que
