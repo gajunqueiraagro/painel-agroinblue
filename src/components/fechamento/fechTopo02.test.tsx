@@ -43,12 +43,15 @@ describe('"Preço do rebanho →": ida no mês do filtro e volta ao mesmo mês',
     expect(ida).toContain("origemPendenciaRef.current = 'fechamento';");
     expect(ida).toContain("setSection('valor-rebanho');");
     /* o Valor do Rebanho abre nesse mês e a volta vai para a origem (o Fechamento lê o mês do shell, que a ida pôs no do filtro) */
-    expect(rota).toContain('filtroMesInicial={voltaAoResumoRef.current ? mesVisivel : mesDoValorRebanhoRef.current ?? undefined}');
+    /* FECH-FAIXA-01: o Valor do Rebanho lê o MESMO ano/mês do shell (a ida acima já pôs o mês do filtro nele) */
+    const vr = rota.slice(rota.indexOf('<ValorRebanhoTab'), rota.indexOf('/>', rota.indexOf('<ValorRebanhoTab')));
+    expect(vr).toContain('periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}');
     expect(rota).toContain("? () => { const o = voltarParaOrigem(); setSection(o ?? 'rebanho-home'); }");
   });
   it('a volta diz para onde: "← Fechamento set/26" no lugar da seta', () => {
-    expect(rota).toContain("rotuloDaVolta={!voltaAoResumoRef.current && origemPendenciaRef.current === 'fechamento' && mesDoValorRebanhoRef.current != null");
-    expect(rota).toContain("? `Fechamento ${mesCurto(`${ano}-${String(mesDoValorRebanhoRef.current).padStart(2, '0')}`)}` : undefined}");
+    /* FECH-FAIXA-01: o rótulo usa o mês do shell (o mesmo que o Valor do Rebanho mostra e que o Fechamento abre na volta) */
+    expect(rota).toContain("rotuloDaVolta={!voltaAoResumoRef.current && origemPendenciaRef.current === 'fechamento'");
+    expect(rota).toContain("? `Fechamento ${mesCurto(`${ano}-${String(mesVisivel).padStart(2, '0')}`)}` : undefined}");
     expect(`Fechamento ${mesCurto(`2026-${String(9).padStart(2, '0')}`)}`).toBe('Fechamento set/26');
     const vr = readFileSync('src/pages/ValorRebanhoTab.tsx', 'utf8');
     expect(vr).toContain('{onBack && rotuloDaVolta ? (');

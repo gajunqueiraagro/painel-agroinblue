@@ -108,6 +108,7 @@ import { buscarOperacaoDoLancamento } from '@/hooks/useOperacaoDoLancamento';
    sobre enfase. */
 import { Camera, Loader2 } from 'lucide-react';
 import { mesCurto } from '@/lib/pecuaria/fechamentoGlobal';
+import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 
 /**
  * V2 → Financeiro → Financiamentos.
@@ -1012,6 +1013,16 @@ export default function V2Index() {
     setResumoClientes(true);
   };
 
+  /* FECH-FAIXA-01 — as etapas da faixa do fechamento (Fechamento área → Valor do Rebanho → Mapa do rebanho): cada uma abre a tela dela no
+     MESMO mês e fazenda (o ano/mês do shell é um só) e registra a origem, como a faixa de pendências — a seta de voltar retorna ao mesmo
+     mês. Só existe a etapa que a pessoa pode abrir (ACESSOS-FIN-01: sem a tela, sem botão). */
+  const etapasDoFechamento = (de: 'fechamento' | 'valor-rebanho' | 'mapa-pastos'): Partial<Record<EtapaDoFechamento, () => void>> => ({
+    pastos: de !== 'fechamento' && podeAbrirTela('fechamento') ? () => { origemPendenciaRef.current = de; setSection('fechamento'); } : undefined,
+    valor: de !== 'valor-rebanho' && podeAbrirTela('valor-rebanho') ? () => { origemPendenciaRef.current = de; setSection('valor-rebanho'); } : undefined,
+    mapa: de !== 'mapa-pastos' && podeAbrirTela('mapa-pastos')
+      ? () => { mapaPastosOriginRef.current = de === 'fechamento'; setSection('mapa-pastos'); } : undefined,
+  });
+
   const voltarParaOrigem = (): V2Section | null => {
     const o = origemPendenciaRef.current;
     origemPendenciaRef.current = null;
@@ -1213,12 +1224,11 @@ export default function V2Index() {
           <ValorRebanhoTab
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
-            /* ⚠ A PROP JÁ EXISTIA E NUNCA ERA PASSADA: a tela abria sempre no ano corrente, mesmo
-               quando quem a chamou sabia o ano. É o mesmo idioma de `MapaPastosTab` e
-               `AnaliseEconomica`. Ela só é lida na MONTAGEM, e basta — a section remonta. */
-            filtroAnoInicial={String(ano)}
-            /* RESUMO-CLIENTES-01 passo b — vindo da esteira, também o mês dela */
-            filtroMesInicial={voltaAoResumoRef.current ? mesVisivel : mesDoValorRebanhoRef.current ?? undefined}
+            /* FECH-FAIXA-01 — o MÊS ÚNICO do fechamento: o Valor do Rebanho lê e escreve o MESMO ano/mês do shell que o Fechamento e o
+               Mapa de pastos (FECH-MES-SELECIONADO-01). A esteira e o "Preço do rebanho →" do Fechamento já põem o mês no shell. Antes só
+               o ano vinha e o mês caía no de hoje (BG set/26 no Fechamento → Valor do Rebanho em nov/26). */
+            periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}
+            etapasDoFechamento={etapasDoFechamento('valor-rebanho')}
             /* ⚠ A SETA SÓ EXISTE QUANDO HÁ ORIGEM PARA VOLTAR — VALOR-REBANHO-COMPACTO-01. O
                `onBack` era passado SEMPRE, então quem chegava pelo menu via um "voltar" que caía na
                Home: um caminho que ele não percorreu. É o mesmo idioma que a faixa de pendências já
@@ -1227,8 +1237,8 @@ export default function V2Index() {
               ? () => { const o = voltarParaOrigem(); setSection(o ?? 'rebanho-home'); }
               : undefined}
             /* FECH-TOPO-02 — vindo do Fechamento, a volta diz para onde: "← Fechamento set/26" (o mês da ida) */
-            rotuloDaVolta={!voltaAoResumoRef.current && origemPendenciaRef.current === 'fechamento' && mesDoValorRebanhoRef.current != null
-              ? `Fechamento ${mesCurto(`${ano}-${String(mesDoValorRebanhoRef.current).padStart(2, '0')}`)}` : undefined}
+            rotuloDaVolta={!voltaAoResumoRef.current && origemPendenciaRef.current === 'fechamento'
+              ? `Fechamento ${mesCurto(`${ano}-${String(mesVisivel).padStart(2, '0')}`)}` : undefined}
           />
         )}
       </V2ZootWrapper>
@@ -1353,6 +1363,7 @@ export default function V2Index() {
         onBack={mapaPastosOriginRef.current ? () => { mapaPastosOriginRef.current = false; setSection('fechamento'); } : undefined}
         /* FECH-MES-SELECIONADO-01 — Fechamento, Resumo por Atividade e Mapa de Pastos leem e escrevem o MESMO ano/mês do shell. */
         periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}
+        etapasDoFechamento={etapasDoFechamento('mapa-pastos')}
       />
     );
     if (section === 'operacoes-comerciais') return (
@@ -1480,6 +1491,7 @@ export default function V2Index() {
     if (section === 'fechamento') return (
       <FechamentoTab
         periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}
+        etapasDoFechamento={etapasDoFechamento('fechamento')}
         onBack={voltaAoResumoRef.current ? voltarAoResumo : origemPendenciaRef.current
           ? () => { const o = voltarParaOrigem(); if (o) setSection(o); }
           : undefined}

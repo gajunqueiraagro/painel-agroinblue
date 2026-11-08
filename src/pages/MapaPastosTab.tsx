@@ -1,3 +1,6 @@
+import { useFaixaDoFechamento } from '@/hooks/useFaixaDoFechamento';
+import { FaixaDoFechamento } from '@/components/fechamento/FaixaDoFechamento';
+import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { usePastos, isPastoAtivoNoMes, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
@@ -66,11 +69,13 @@ const CAT_SIGLAS: Record<string, string> = {
 
 interface MapaPastosTabProps extends PeriodoControlado {
   onBack?: () => void;
+  /** FECH-FAIXA-01 — as etapas da faixa do fechamento que abrem as outras telas do mês (sem a função, só texto) */
+  etapasDoFechamento?: Partial<Record<EtapaDoFechamento, () => void>>;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
 
-export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, periodo, onPeriodoChange }: MapaPastosTabProps = {}) {
+export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, periodo, onPeriodoChange, etapasDoFechamento }: MapaPastosTabProps = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const {
@@ -132,6 +137,8 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
     if (filtroMesInicial !== undefined) setMesFiltro(filtroMesInicial);
   }, [filtroMesInicial]);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+  /* FECH-FAIXA-01 — a faixa do fechamento do mês (as mesmas leituras nas três telas) */
+  const faixaDoMes = useFaixaDoFechamento(anoMes);
 
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -340,6 +347,9 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
         }}
       >
         <div className="sticky top-0 flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 z-30">
+          {/* FECH-FAIXA-01 — a faixa do fechamento: a 1ª linha, no MESMO lugar nas três telas */}
+          {/* mt-0.5: o cabeçalho daqui tem 6px de folga (os outros 8) — a faixa fica no MESMO lugar (40px) nas três telas */}
+          <div className="mb-1.5 mt-0.5"><FaixaDoFechamento estado={faixaDoMes} atual="mapa" abrir={etapasDoFechamento} /></div>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               {onBack && (

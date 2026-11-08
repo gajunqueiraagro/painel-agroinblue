@@ -31,6 +31,9 @@ import { safrasQueCobremOMes, labelDaCultura } from '@/lib/agri/areaPlantada';
 import { pastosDoFechamentoNoMes, useLoteDoMes } from '@/hooks/useLoteDoMes';
 import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
 import { loteDoPopup } from '@/lib/lotes/loteDoPasto';
+import { useFaixaDoFechamento } from '@/hooks/useFaixaDoFechamento';
+import { FaixaDoFechamento } from '@/components/fechamento/FaixaDoFechamento';
+import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 import { useModalDoPasto } from '@/hooks/useModalDoPasto';
 import { Segmentado } from '@/components/ui/segmentado';
 import { MapaDoFechamento } from '@/components/fechamento/MapaDoFechamento';
@@ -137,6 +140,8 @@ interface Props {
   /** a volta do Valor do Rebanho: o pasto a reabrir quando os cards do mês chegarem */
   pastoParaAbrir?: string | null;
   onPastoParaAbrirConsumido?: () => void;
+  /** FECH-FAIXA-01 — as etapas da faixa do fechamento que abrem as outras telas do mês (sem a função, a etapa é só texto) */
+  etapasDoFechamento?: Partial<Record<EtapaDoFechamento, () => void>>;
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
@@ -206,7 +211,7 @@ function gmdColor(gmd: number | null): string {
   return 'text-emerald-600 dark:text-emerald-400';
 }
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack, periodo, onPeriodoChange, onReabrirValorRebanho, pastoParaAbrir, onPastoParaAbrirConsumido }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack, periodo, onPeriodoChange, onReabrirValorRebanho, pastoParaAbrir, onPastoParaAbrirConsumido, etapasDoFechamento }: Props = {}) {
   const { isGlobal, fazendaAtual, fazendas, setFazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
@@ -350,6 +355,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const pastosAtivos = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
   /* POPUP-ORIGINAL-COR — o lote do pasto no popup: os lotes da fazenda pelo MESMO leitor do modal (o texto é o do campo Lote) */
   const lotesDaFazenda = useLotesDaFazenda(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null, anoMes);
+  /* FECH-FAIXA-01 — a faixa do fechamento acompanha os cards desta tela (cada Fechar conta na hora, sem reler) */
+  const cardsDoMesDaFaixa = useMemo(() => fechamentos.filter(f => f.ano_mes === anoMes), [fechamentos, anoMes]);
+  const faixaDoMes = useFaixaDoFechamento(anoMes, cardsDoMesDaFaixa);
   /* FECH-PASTO-UNIDADE-01 — o card é do PASTO; os piquetes dele no mês viram o selo "N piquetes" (e, no mapa, o polígono do piquete é do pai) */
   const piquetesDoMes = useMemo(() => piquetesNoMes(pastos, anoMes), [pastos, anoMes]);
   const paiDoPiquete = useMemo(() => new Map([...piquetesDoMes].flatMap(([pai, piqs]) => piqs.map(q => [q.id, pai] as const))), [piquetesDoMes]);
@@ -1198,6 +1206,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     <div ref={setAreaDaTela} className="pb-24" data-testid="area-do-fechamento">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
       <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2 max-[999px]:px-2">
+        {/* FECH-FAIXA-01 — a faixa do fechamento do mês: a 1ª linha, no MESMO lugar nas três telas (Fechamento, Valor, Mapa do rebanho) */}
+        <div className="mb-1.5"><FaixaDoFechamento estado={faixaDoMes} atual="pastos" abrir={etapasDoFechamento} /></div>
         {/* PR-FECH-HEADER-LARGURA-02 — a COL 1 tem trilha FIXA e ESTREITA. Fixar resolveu
             a instabilidade (com `auto` ela crescia até o conteúdo do estado corrente e
             empurrava a COL 2, onde ficam os cards de mês e a tabela de conciliação, que
