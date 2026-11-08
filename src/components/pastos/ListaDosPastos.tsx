@@ -87,9 +87,10 @@ export interface ListaDosPastosProps {
 
 function Numero({ valor, rotulo, cor }: { valor: string; rotulo: string; cor?: string }) {
   return (
-    <div className="min-w-0 rounded-lg border bg-card px-3 py-1.5">
-      <div className={cn('truncate text-[15px] font-semibold tabular-nums leading-tight', cor)}>{valor}</div>
-      <div className="truncate text-[10px] text-muted-foreground" title={rotulo}>{rotulo}</div>
+    /* fora de tabela não há "…": o número nunca corta e o rótulo QUEBRA em até 2 linhas, de altura reservada (nada se desloca) */
+    <div className="min-w-0 rounded-lg border bg-card px-2.5 py-1">
+      <div className={cn('whitespace-nowrap text-[14px] font-semibold tabular-nums leading-[18px]', cor)}>{valor}</div>
+      <div className="h-[24px] text-[10px] leading-[12px] text-muted-foreground">{rotulo}</div>
     </div>
   );
 }
@@ -102,7 +103,7 @@ export function ListaDosPastos({
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<FiltroDeVigencia>('vigentes');
   const [agrupar, setAgrupar] = useState<Agrupar>('nenhum');
-  const quadro = useAlturaAteOFim({ folga: 12, minimo: 260 });
+  const quadro = useAlturaAteOFim({ folga: 96, minimo: 120 });
   const [rolo, setRolo] = useState<HTMLDivElement | null>(null);
   const [disponivel, setDisponivel] = useState(0);
   useLayoutEffect(() => {
@@ -149,7 +150,7 @@ export function ListaDosPastos({
     const porTipo = new Map<string, LinhaDaLista[]>();
     for (const l of ordenadas) porTipo.set(l.pasto.tipo_uso, [...(porTipo.get(l.pasto.tipo_uso) ?? []), l]);
     return [...porTipo.entries()]
-      .sort(([a], [b]) => (ordemDoTipo.indexOf(a) + 1 || 999) - (ordemDoTipo.indexOf(b) + 1 || 999))
+      .sort(([a], [b]) => (ordemDoTipo.findIndex(t => t === a) + 1 || 999) - (ordemDoTipo.findIndex(t => t === b) + 1 || 999))
       .map(([tipo, linhas]) => ({ chave: tipo, rotulo: `${familia(tipo)} › ${labelDoTipoUso(tipo)}`, cor: corTextoDoTipoUso(tipo), linhas }));
   }, [agrupar, ordenadas]);
 

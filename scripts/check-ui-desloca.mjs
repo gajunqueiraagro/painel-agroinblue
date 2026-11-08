@@ -362,7 +362,7 @@ const CENARIOS = [
   { nome: 'pastos', url: 'tela=pastos&barra=32', antes: async (p) => { await p.locator('[data-testid="pastos-modo-grupos"]').waitFor(); await espera(p, 600); }, estados: [
     ['modo Grupos', clicar('[data-testid="pastos-modo-grupos"]')], ['modo Áreas', clicar('[data-testid="pastos-modo-areas"]')],
     ['inativos', async (p) => { await p.getByText('Inativos', { exact: true }).click(); await espera(p); }],
-    ['modo Ordem manual', botao(/^Ordem manual$/)], ['modo Por destino', botao(/^Por destino$/)],
+    ['modo Ordem manual', botao(/^Ordem manual$/)], ['modo Lista', clicar('[data-testid="pastos-modo-lista"]')],
   ] },
   /* PASTO-FICHA-01 PR B — na LISTA, abrir/fechar os piquetes, ordenar por outra coluna e buscar não movem o cabeçalho, o rodapé preso nem
      a largura das colunas (a do Pasto é a do maior nome da FAZENDA, não a das linhas à vista) */

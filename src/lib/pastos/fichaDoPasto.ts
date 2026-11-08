@@ -228,7 +228,7 @@ export interface InfraDoPasto { id: string; tipo: string; nome: string | null; o
 export const API_FICHA_DO_PASTO = {
   ler: async (pastoId: string, anoMes: string): Promise<Resultado<FichaLida>> => {
     const r = await rpc('fn_pasto_ficha', { p_pasto: pastoId, p_ano_mes: anoMes });
-    if (!r.ok) return r;
+    if (!r.ok) return { ok: false, erro: r.erro ?? 'Não consegui falar com o banco.' };
     const f = lerFicha(r.dados);
     return f ? { ok: true, dados: f } : { ok: false, erro: 'Não consegui ler a ficha do pasto. Nada foi mudado.' };
   },
@@ -255,14 +255,14 @@ export const API_FICHA_DO_PASTO = {
     rpc('fn_pasto_avaliacao_desfazer', { p_id: id, p_motivo: motivo, p_simular: simular }),
   reformas: async (pastoId: string): Promise<Resultado<ReformaDoPasto[]>> => {
     const r = await rpc('fn_pasto_reformas', { p_pasto: pastoId });
-    if (!r.ok) return r;
+    if (!r.ok) return { ok: false, erro: r.erro ?? 'Não consegui falar com o banco.' };
     const lista: unknown[] = Array.isArray(r.dados) ? r.dados : [];
     return { ok: true, dados: lista.flatMap((x) => (ehObj(x) && txt(x.bem_id) ? [{ bemId: txt(x.bem_id) ?? '', data: txt(x.data), descricao: txt(x.descricao),
       areaHa: num(x.area_no_pasto_ha), custo: num(x.custo_rs), rsHa: num(x.rs_ha), contabil: num(x.contabil_rs) }] : [])) };
   },
   lotacao: async (pastoId: string, ate: string): Promise<Resultado<LotacaoDoMes[]>> => {
     const r = await rpc('fn_pasto_lotacao_meses', { p_pasto: pastoId, p_ate: ate, p_meses: 12 });
-    if (!r.ok) return r;
+    if (!r.ok) return { ok: false, erro: r.erro ?? 'Não consegui falar com o banco.' };
     const lista: unknown[] = Array.isArray(r.dados) ? r.dados : [];
     return { ok: true, dados: lista.flatMap((x) => (ehObj(x) && txt(x.ano_mes) ? [{ anoMes: txt(x.ano_mes) ?? '', epoca: txt(x.epoca), cabecas: num(x.cabecas),
       ua: num(x.ua), uaHa: num(x.ua_ha), suporte: num(x.suporte_ua_ha), acima: x.acima === true }] : [])) };

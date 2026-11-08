@@ -31,7 +31,7 @@ import type { ListaDoCatalogo } from '@/lib/catalogo/catalogo';
 import {
   API_FICHA_DO_PASTO, FORM_VAZIO, areaMudou, camposDoForm, camposQueMudaram, lerMudancas, pendencias,
   type ApiFichaDoPasto, type AvaliacaoDoPasto, type FichaLida, type FormDaFicha, type InfraDoPasto, type LotacaoDoMes,
-  type MudancaDaPrevia, type ReformaDoPasto,
+  type MudancaDaPrevia, type ReformaDoPasto, type Resultado,
 } from '@/lib/pastos/fichaDoPasto';
 
 type Aba = 'cadastro' | 'infra' | 'avaliacoes' | 'reformas' | 'lotacao' | 'documentos';
@@ -225,9 +225,13 @@ export function FichaDoPasto({
             return (
               <button key={a.v} type="button" role="tab" aria-selected={aba === a.v} disabled={desligada}
                 title={desligada ? 'Salve o pasto primeiro' : undefined} onClick={() => setAba(a.v)} data-testid={`ficha-aba-${a.v}`}
-                className={cn('h-[26px] border-b-2 px-3 text-[10.5px]', aba === a.v ? 'border-primary font-semibold text-primary' : 'border-transparent text-muted-foreground hover:text-foreground',
+                className={cn('h-[26px] border-b-2 px-3 text-[10.5px]', aba === a.v ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground',
                   desligada && 'cursor-not-allowed opacity-40')}>
-                {a.rotulo}
+                {/* a largura do NEGRITO reservada em toda aba (a cópia invisível): a ativa engrossa sem empurrar as outras */}
+                <span className="inline-grid">
+                  <span className="invisible col-start-1 row-start-1 font-semibold" aria-hidden>{a.rotulo}</span>
+                  <span className={cn('col-start-1 row-start-1', aba === a.v && 'font-semibold')}>{a.rotulo}</span>
+                </span>
                 {/* o lugar da contagem é RESERVADO nas abas que contam (as abas nunca se mexem quando ela chega) */}
                 {(a.v === 'avaliacoes' || a.v === 'reformas') && (
                   <span className={cn('ml-1 inline-block min-w-[16px] rounded bg-muted px-1 text-center text-[9.5px] text-muted-foreground', !(n != null && n > 0) && 'invisible')}>{n ?? 0}</span>
@@ -338,13 +342,14 @@ export function FichaDoPasto({
                   </div>
                 </BlocoFormulario>
                 <BlocoFormulario titulo="Solo, relevo e manejo">
-                  <div className="grid grid-cols-3 gap-x-2">
+                  {/* o relevo leva a linha (o maior nome do catálogo, "Forte ondulado (20–45%)", não cabe em 1/3); nada corta */}
+                  <div className="grid grid-cols-[1fr_136px] gap-x-2">
                     <Campo rotulo="relevo">{catalogo('relevo', 'relevo', 'ficha-relevo')}</Campo>
-                    <Campo rotulo="textura do solo">{catalogo('textura_solo', 'textura', 'ficha-textura')}</Campo>
                     <Campo rotulo="drenagem">{catalogo('drenagem', 'drenagem', 'ficha-drenagem')}</Campo>
                   </div>
-                  <div className="grid grid-cols-[auto_1fr] items-start gap-x-3">
-                    <Campo rotulo="manejo" ajuda={piquetes > 0 ? <span className="whitespace-nowrap text-[9.5px] leading-[13px] text-muted-foreground">{piquetes} piquetes</span> : undefined}>
+                  <div className="grid grid-cols-[136px_auto_1fr] items-start gap-x-2">
+                    <Campo rotulo="textura do solo">{catalogo('textura_solo', 'textura', 'ficha-textura')}</Campo>
+                    <Campo rotulo="manejo" ajuda={piquetes > 0 ? <span className="whitespace-nowrap text-[9.5px] leading-[13px] text-muted-foreground">{piquetes} piq.</span> : undefined}>
                       <Segmentado altura={28} fonte={10.5} valor={form.manejo ?? 'continuo'} onEscolher={(v) => trocar({ manejo: v })}
                         sugestao={form.manejo == null} opcoes={[{ valor: 'continuo', rotulo: 'Contínuo' }, { valor: 'rotacionado', rotulo: 'Rotacionado' }]} />
                     </Campo>
@@ -427,7 +432,7 @@ function textoDoValor(campo: string, v: string | null): string {
 
 /* ── as outras abas ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-function useLeitura<T>(ler: () => Promise<{ ok: true; dados: T } | { ok: false; erro: string }>, chave: string) {
+function useLeitura<T>(ler: () => Promise<Resultado<T>>, chave: string) {
   const [estado, setEstado] = useState<{ dados: T | null; erro: string | null }>({ dados: null, erro: null });
   const [versao, setVersao] = useState(0);
   useEffect(() => {
