@@ -15,5 +15,7 @@ export function usePeriodoDaTela(externo: PeriodoControlado, inicial: PeriodoDaT
   const atual = fora ? fora.periodo : local;
   const setAno = (ano: string) => (fora ? fora.mudar(ano, atual.mes) : setLocal(p => ({ ...p, ano })));
   const setMes = (mes: number) => (fora ? fora.mudar(atual.ano, mes) : setLocal(p => ({ ...p, mes })));
-  return { ano: atual.ano, mes: atual.mes, setAno, setMes, controlado: fora !== null };
+  /* FECH-FAIXA-01 — ano e mês JUNTOS (jan → dez do ano anterior): dois setters seguidos, controlados, perdiam o 1º (o 2º lê o ano antigo) */
+  const setPeriodo = (ano: string, mes: number) => (fora ? fora.mudar(ano, mes) : setLocal({ ano, mes }));
+  return { ano: atual.ano, mes: atual.mes, setAno, setMes, setPeriodo, controlado: fora !== null };
 }

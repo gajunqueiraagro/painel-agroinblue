@@ -24,8 +24,8 @@ const P14 = { id: 'p14', nome: 'P14' };
 const P_10 = { id: 'p10', nome: 'P_10' };
 /* FECH-TOPO-02 — a dica é o popup dos cards: os dados vêm prontos (a mesma conta do card) */
 const popupDe = (p: { id: string; nome: string }): DadosDoPopupDoPasto => p.id === 'p13'
-  ? { nome: 'P13', areaHa: 34.8, totalCab: 27, pesoMedioKg: 290, uaHa: 0.5, categorias: [{ nome: 'Desmama F', cab: 27, pesoMedioKg: 290 }] }
-  : { nome: p.nome, areaHa: 20, totalCab: 0, pesoMedioKg: null, uaHa: null, categorias: [] };
+  ? { nome: 'P13', lote: 'L-13', totalCab: 27, pesoMedioKg: 290, uaHa: 0.5, categorias: [{ nome: 'Desmama F', cab: 27, pesoMedioKg: 290 }] }
+  : { nome: p.nome, lote: null, totalCab: 0, pesoMedioKg: null, uaHa: null, categorias: [] };
 
 beforeEach(() => {
   mapa.props = null;
@@ -62,8 +62,8 @@ describe('a vista Mapa', () => {
     expect(corDe('p13')).toBe(COR_DA_SITUACAO.fechado);
     expect(corDe('p14')).toBe(COR_DA_SITUACAO.inconsistente);
     const dica = (id: string) => { const d = document.createElement('div'); d.innerHTML = p.dicaDe(id); return d; };
-    expect(dica('p13').querySelector('[data-testid="popup-do-pasto-cabecalho"]')?.textContent).toBe('P1334,8 ha');
-    expect(dica('p13').querySelector('[data-testid="popup-do-pasto-rodape"]')?.textContent).toBe('27 cab · 290,0 kg0,50 UA/ha');
+    expect(dica('p13').querySelector('[data-testid="popup-do-pasto-cabecalho"]')?.textContent).toBe('P1327 cab · 290,0 kgLote L-13');
+    expect(dica('p13').querySelector('[data-testid="popup-do-pasto-rodape"]')?.textContent).toBe('Lotação0,50 UA/ha');
     expect(dica('p14').querySelector('[data-testid="popup-do-pasto-rodape"]')).toBeNull();
     /* a caixa do Leaflet sem fundo: quem desenha é o popup */
     expect(p.classeDaDica).toContain('!bg-transparent');

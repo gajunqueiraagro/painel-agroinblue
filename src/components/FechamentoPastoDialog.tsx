@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { CHAVE_DA_FAIXA } from '@/hooks/useFaixaDoFechamento';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
 import { type FechamentoPasto, useFechamento } from '@/hooks/useFechamento';
@@ -197,6 +199,7 @@ export function FechamentoPastoDialog({
   const [travadoPeloP2, setTravadoPeloP2] = useState(false);
   /* REABRIR-AUTOMATICO-01: o gesto em curso (reabrir o Valor do Rebanho e o pasto numa ação) */
   const [reabrindoJunto, setReabrindoJunto] = useState(false);
+  const qc = useQueryClient();
   /* FECH-ROTACAO-01 fatia 3 — os pastos onde o lote do card fica (o próprio sempre); começa no gravado ou no grupo inteiro (F3-2) */
   const [escolhidos, setEscolhidos] = useState<string[]>(() => (lote ? escolhaInicial(pasto.id, lote) : [pasto.id]));
   const [escolhidosIniciais, setEscolhidosIniciais] = useState('');
@@ -493,6 +496,8 @@ export function FechamentoPastoDialog({
     if (p2.valor.travado) { setErroSalvar(fraseDaTravaDoPasto(fechamento.ano_mes)); return false; }
     setTravadoPeloP2(false);
     toast.success(fraseValorRebanhoReaberto(fechamento.ano_mes));
+    /* FECH-FAIXA-01: a faixa do mês relê na hora (o ② passa a "aberto") */
+    void qc.invalidateQueries({ queryKey: [CHAVE_DA_FAIXA] });
     return true;
   };
 

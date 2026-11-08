@@ -58,3 +58,9 @@ export function rotuloDoLote(card: LoteDoCard, lotes: readonly LoteDaLista[]): {
   if (card.tipo === 'um') return { texto: porId.get(card.loteId)?.codigo ?? 'Lote', title: nome(card.loteId) + falta(card.semLote) };
   return { texto: `${card.loteIds.length} lotes`, title: card.loteIds.map(nome).join(' · ') + falta(card.semLote) };
 }
+
+/** POPUP-ORIGINAL-COR — o lote no popup do pasto: o MESMO texto do campo Lote do modal (`rotuloDoLote`); sem lote = nulo (o popup mostra "—") */
+export function loteDoPopup(itens: readonly ItemComLote[], lotes: readonly LoteDaLista[]): string | null {
+  const card = loteDoCard(itens);
+  return card.tipo === 'nenhum' ? null : rotuloDoLote(card, lotes).texto;
+}

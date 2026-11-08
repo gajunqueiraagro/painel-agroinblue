@@ -791,6 +791,10 @@ const CENARIOS = [
   { nome: 'plano-contas-renomear-previa', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]', antes: async (p) => {
     await p.locator('[data-testid="renomear-subcentro"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="nome-subcentro"]').fill('Animais de terceiros'); await p.locator('[data-testid="conferir-subcentro"]').click(); await p.waitForTimeout(500); } },
+  /* MAPA-REBANHO-02 — o Mapa do rebanho (`tela=mapa-pastos`, SINTÉTICO): a tabela com a coluna "Programa", sem rolagem lateral e sem cortar
+     a 1.240, 1.024 e 135% (919×519) com o menu; o Lote (texto livre) é o único que corta, com "…" e o nome inteiro no title */
+  { nome: 'mapa-pastos', url: 'tela=mapa-pastos', tamanhos: [[1240, 700], [1024, 600], [919, 519]], regiao: 'table',
+    antes: async (p) => { await p.locator('[data-testid="programa-do-pasto"]').first().waitFor(); await p.waitForTimeout(800); } },
   /* FECH-TOPO-COMPACTO-01 — o topo do Fechamento com todos os botões numa linha (1.240, 1.024 e o zoom de 135% = 919×519): nada corta */
   { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
     regiao: '.sticky.top-0', antes: (p) => p.waitForTimeout(2000) },
@@ -933,6 +937,19 @@ const CENARIOS = [
     const abrir = (nome) => async (p) => { await grupos(p); await p.locator('[data-testid="grupo-linha"]', { hasText: nome }).first().click();
       await p.locator('[data-testid="grupo-dialog"]').waitFor(); await p.waitForTimeout(700); };
     return [
+      /* PASTO-FICHA-01 PR B — a LISTA (padrão): colunas do mock, o nome do pasto inteiro (a coluna é a do maior nome; a fonte desce até o
+         piso), o P10 aberto com os piquetes recuados e o "Por destino" com as mesmas linhas */
+      /* PASTO-FICHA-01 PR B — a FICHA do pasto (o mesmo modal no "+ Novo" e no lápis): o novo (e as pendências) e o P10 nas 6 abas.
+         O modal é de mesa (1000 × 580, Gabriel 08/11): medido de 900px para cima, com a 918 (= 1240 a 135%); a 750 ele não é desenhado. */
+      { nome: 'pastos-ficha-novo', url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)], regiao: '[role="dialog"]', antes: async (p) => { await p.locator('[data-testid="pastos-novo"]').click();
+        await p.locator('[data-testid="ficha-do-pasto"]').waitFor(); await p.locator('[data-testid="ficha-salvar"]').click(); await p.waitForTimeout(500); } },
+      ...['cadastro', 'infra', 'avaliacoes', 'reformas', 'lotacao', 'documentos'].map((aba) => ({ nome: `pastos-ficha-${aba}`, url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)],
+        regiao: '[role="dialog"]', antes: async (p) => { await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
+          await p.locator(`[data-testid="ficha-aba-${aba}"]`).click(); await p.waitForTimeout(600); } })),
+      { nome: 'pastos-lista', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="lista-pastos"]').waitFor(); await p.waitForTimeout(500); } },
+      { nome: 'pastos-lista-piquetes', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="abrir-piquetes"]').first().click(); await p.waitForTimeout(400); } },
+      { nome: 'pastos-lista-destino', url: URL, tamanhos: T, antes: async (p) => { await p.getByRole('button', { name: 'Destino', exact: true }).first().click();
+        await p.locator('[data-testid="abrir-piquetes"]').first().click(); await p.waitForTimeout(400); } },
       { nome: 'pastos-grupos', url: URL, tamanhos: T, antes: grupos },
       { nome: 'pastos-grupos-inativos', url: URL, tamanhos: T, antes: async (p) => { await grupos(p); await p.getByText('Inativos', { exact: true }).click(); await p.waitForTimeout(400); } },
       { nome: 'pastos-grupo-editar', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: abrir('P10') },
