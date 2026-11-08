@@ -832,8 +832,10 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-piquetes', url: URL + '&v=piquetes', tamanhos: T, regiao: 'button:has([data-testid="selo-piquetes"])',
         antes: async (p) => { await p.locator('[data-testid="selo-piquetes"]').waitFor(); await p.waitForTimeout(600); } },
       /* FECH-REABRIR-JUNTO-01 — o modal com o Valor do Rebanho validado: a linha do aviso (frase · motivo opcional · "Reabrir e editar") inteira */
-      { nome: 'fechamento-grupo-modal-trava', url: URL + '&v=trava', tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', botoesDentro: '[data-testid="trava-do-p2"]',
-        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="reabrir-e-editar"]').waitFor(); await p.waitForTimeout(300); } },
+      /* REABRIR-AUTOMATICO-01 (Gabriel 08/11 08:15) — o modal num mês com o Valor do Rebanho validado: sem a linha da trava (o reabrir é
+         automático); o lugar de 22px do topo fica e o rodapé tem o botão de sempre — nada corta */
+      { nome: 'fechamento-grupo-modal-trava', url: URL + '&v=trava', tamanhos: T, regiao: '[data-testid="modal-do-pasto"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="lugar-trava-master"]').waitFor({ state: 'attached' }); await p.waitForTimeout(600); } },
       /* FECH-BARRA-HOVER-01 — o popup do pasto ao passar o mouse no card (nome grande · área; categorias; total · UA/ha): nada corta */
       { nome: 'fechamento-grupo-popup', url: URL, tamanhos: T, regiao: '[data-testid="popup-do-pasto"]',
         /* o Radix põe uma 2ª cópia do conteúdo escondida (para o leitor de tela): a de cima é a que se vê */

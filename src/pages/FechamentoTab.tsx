@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
-import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia } from '@/lib/classificacaoArea';
+import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia, DIV_CURTA } from '@/lib/classificacaoArea';
 import { grupoDoTipoUso } from '@/lib/pastos/tiposUso';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
@@ -1100,7 +1100,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           >
             {/* Nome + status icon */}
             <div className="flex items-center justify-between gap-0.5">
-              <span className="min-w-0 font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
+              {/* FECH-DIV-CURTA (Gabriel 08/11 09:22): a Divergência do Campeiro é "⚠ Div." no card (cortava "Divergênci…"); o nome inteiro no title */}
+              <span className="min-w-0 font-bold text-xs text-foreground truncate leading-tight" title={p.nome} data-testid="nome-do-card">
+                {isDivergencia ? DIV_CURTA : p.nome}
+              </span>
               {(piquetesDoMes.get(p.id)?.length ?? 0) > 0 && (
                 <span className="ml-auto flex-none whitespace-nowrap rounded bg-[#eaf1fb] px-1 text-[10px] font-medium leading-[14px] text-[#1f5fa8]" data-testid="selo-piquetes"
                   title={`Piquetes de ${p.nome} no mês: ${(piquetesDoMes.get(p.id) ?? []).map(q => q.nome).join(', ')}`}>

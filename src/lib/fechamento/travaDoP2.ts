@@ -49,19 +49,13 @@ export const fraseDaTravaDoPasto = (anoMes: string) =>
 
 export const rotuloReabrirValorRebanho = (anoMes: string) => `Reabrir Valor do Rebanho de ${mesCurto(anoMes)}`;
 
-/* FECH-REABRIR-JUNTO-01 (Gabriel 07/11 13:54) — editar um pasto num mês com o Valor do Rebanho validado é UM gesto no próprio modal: o
-   aviso diz o que acontece e o "Reabrir e editar" reabre o Valor do Rebanho pela MESMA função da tela dele (`fn_valor_rebanho_reabrir`:
-   abre o P2, o mês fica "a revalidar", a trilha leva o autor) e, se o pasto estava fechado, reabre o pasto. Quem recusa é o banco. */
-export const fraseReabrirJunto = (anoMes: string) =>
-  `O Valor do Rebanho de ${mesCurto(anoMes)} volta para aberto. Valide de novo depois do ajuste.`;
-export const ROTULO_REABRIR_E_EDITAR = 'Reabrir e editar';
+/* FECH-REABRIR-JUNTO-01 (Gabriel 07/11 13:54) → REABRIR-AUTOMATICO-01 (Gabriel 08/11 08:15) — reabrir um pasto (ou salvar um card) num mês
+   com o Valor do Rebanho validado REABRE o Valor do Rebanho na MESMA ação, sem pedir autorização, sem motivo digitado e sem bloco de texto:
+   a MESMA função da tela dele (`fn_valor_rebanho_reabrir`: abre o P2, o mês fica "a revalidar", a trilha leva o autor), motivo automático
+   "Reabertura do pasto X", e a edição segue. O aviso é UMA linha (toast). Quem recusa é o banco: a frase dele no rodapé, nada se libera. */
+export const motivoReaberturaDoPasto = (pastoNome: string) => `Reabertura do pasto ${pastoNome}`;
+export const fraseValorRebanhoReaberto = (anoMes: string) => `Valor do rebanho de ${mesCurto(anoMes)} reaberto — valide de novo depois.`;
 export const FRASE_REABRIR_JUNTO_FALHOU = 'Não consegui reabrir o Valor do Rebanho deste mês.';
-
-/** o motivo da trilha: o digitado (opcional) depois do pasto — nunca vazio */
-export function motivoReabrirJunto(pastoNome: string, digitado: string): string {
-  const extra = digitado.trim();
-  return `Reabrir e editar o pasto ${pastoNome}${extra ? `: ${extra}` : ''}`;
-}
 
 export type ReabriuJunto = { ok: true } | { ok: false; motivo: string };
 
