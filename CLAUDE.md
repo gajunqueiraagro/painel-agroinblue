@@ -333,7 +333,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   O `th` alinha como o `td`; tabela de regua fixa (`table-layout: fixed`, `colgroup` em px medido) nao estica com a janela.
 - Piso de 9,5px (excecoes declaradas: grade do DRE, o secundario da Evolucao do rebanho a 8,5px — so' kg/cab, Meta e Δ (PROD-EVOLUCAO-01b-fix1), selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01;
   P141: os selos OFX/PDF (7px) de "Saldos por conta"; FORN-CAMPO-01: a linha "CNPJ · Cidade/UF" (8,5px) sob o Fornecedor da barra de Lançamentos e
-  sob o nome em cada opção da lista do `FavorecidoSelect`). Tamanhos do A18.
+  sob o nome em cada opção da lista do `FavorecidoSelect`; o popup do pasto (POPUP-MINI-01, 8–8,5px)). Tamanhos do A18.
 - P141/P166 (CONC-TELA-02): Conciliação = FAIXA do status (1 linha, altura fixa, `FaixaDoMes`: vermelho/verde/âmbar = conciliado com sem
   subcentro/cinza) + Saldos | Resumo do mês (1fr 260px, até o fim da janela), na régua da casa e sem CAIXA ALTA; Saldos com Data · OFX/PDF em
   lugar FIXO de 20px · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
