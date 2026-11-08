@@ -10,6 +10,7 @@
  */
 import type { LancDocumento } from '@/hooks/useLancamentoDocumentos';
 import { ehChaveDeNota } from '@/lib/financeiro/nfe/formatos';
+import type { DocumentoDaLinha } from '@/lib/financeiro/documentoHelper';
 
 export type FormatoDoArquivo = 'pdf' | 'xml' | 'outro';
 
@@ -88,4 +89,20 @@ export function oQueAbrir(l: LinhaDeDocumento): { tipo: 'arquivo'; doc: LancDocu
   if (l.pdf?.url) return { tipo: 'arquivo', doc: l.pdf };
   if (l.xml?.url) return { tipo: 'itens', doc: l.xml };
   return l.principal.url ? { tipo: 'arquivo', doc: l.principal } : null;
+}
+
+/* as espécies que são nota fiscal: a do lançamento e as da OC (a view entrega a da OC crua) */
+const ESPECIES_DE_NOTA: readonly string[] = ['nf', 'nf_principal', 'nf_complementar'];
+
+/** DOC-ANEXO-E-IMPORT-01 F2 — o NÚMERO do clipe da lista: as linhas da aba Documentos (PDF + XML da mesma nota = 1), dos documentos vivos
+ *  que a lista já carrega por cliente. É o mesmo `linhasDosDocumentos`: o clipe diz 2 só quando o popover vai mostrar 2. */
+export function quantasLinhasDoClipe(docs: readonly DocumentoDaLinha[] | null | undefined): number {
+  const vivos = (docs ?? []).filter((d) => !d.cancelado);
+  return linhasDosDocumentos(vivos.map((d, i): LancDocumento => ({
+    id: String(i), origem: d.origem === 'operacao' ? 'operacao' : 'lancamento', operacaoId: d.operacao_id ?? null,
+    especie: ESPECIES_DE_NOTA.includes(d.especie ?? '') ? 'nf' : 'outro', especieOC: null, nome: d.nome ?? '', numero: d.numero,
+    serie: d.serie ?? null, chaveAcesso: d.chave_acesso ?? null, dataEmissao: null, valorDocumento: d.valor_documento ?? null, url: null,
+    tipo: d.tipo ?? null, tamanhoBytes: null, observacao: null, emitenteId: null, emitenteNome: null, emitenteDocumento: d.emitente_documento ?? null,
+    cancelado: false, canceladoMotivo: null, versao: 1, ligadoAQtd: null,
+  }))).length;
 }

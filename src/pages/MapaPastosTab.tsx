@@ -1,3 +1,8 @@
+import { useFaixaDoFechamento } from '@/hooks/useFaixaDoFechamento';
+import { FaixaDoFechamento } from '@/components/fechamento/FaixaDoFechamento';
+import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
+import { porcentagensDoMapa, porcentagensDoMapaEstreito, LIMITE_ESTREITO } from '@/lib/mapa/larguraDoMapa';
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { usePastos, isPastoAtivoNoMes, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
@@ -20,11 +25,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchAllPaginated, MAX_ROWS } from '@/lib/supabase/fetchAllPaginated';
 import { toast } from 'sonner';
 import { isOperacionalPecuaria, grupoDoTipoUso, corDoTipoUso, tintDoTipoUso } from '@/lib/pastos/tiposUso';
+import { useCliente } from '@/contexts/ClienteContext';
+import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
+import { useCadastrosDoLote } from '@/hooks/useCadastrosDoLote';
+import { mapaDoCadastro } from '@/lib/lotes/lista';
+import { lotesDoPasto, programaDoPasto } from '@/lib/mapa/programaDoPasto';
+import { isPastoDivergencia, DIV_CURTA } from '@/lib/classificacaoArea';
 
 export interface PastoMapaRow {
   pasto: Pasto;
   fechamentoId: string | null;
   lote: string | null;
+  /** MAPA-REBANHO-02 — os lotes do pasto no mês (os `lote_id` dos itens com cabeça) e o programa deles (fonte única; null = "—") */
+  loteIds: string[];
+  programa: string | null;
   tipoUso: string | null;
   qualidade: number | null;
   categorias: Map<string, { quantidade: number; peso_medio_kg: number | null; peso_atualizado: boolean }>;
@@ -66,11 +80,13 @@ const CAT_SIGLAS: Record<string, string> = {
 
 interface MapaPastosTabProps extends PeriodoControlado {
   onBack?: () => void;
+  /** FECH-FAIXA-01 — as etapas da faixa do fechamento que abrem as outras telas do mês (sem a função, só texto) */
+  etapasDoFechamento?: Partial<Record<EtapaDoFechamento, () => void>>;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
 
-export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, periodo, onPeriodoChange }: MapaPastosTabProps = {}) {
+export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, periodo, onPeriodoChange, etapasDoFechamento }: MapaPastosTabProps = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const {
@@ -132,6 +148,8 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
     if (filtroMesInicial !== undefined) setMesFiltro(filtroMesInicial);
   }, [filtroMesInicial]);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+  /* FECH-FAIXA-01 — a faixa do fechamento do mês (as mesmas leituras nas três telas) */
+  const faixaDoMes = useFaixaDoFechamento(anoMes);
 
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -187,6 +205,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
         }
 
         const lote = fech?.lote_mes ?? null;
+        const loteIds = fech ? lotesDoPasto(itemsByFechId.get(fech.id) || []) : [];
         const tipoUso = fech?.tipo_uso_mes ?? null;
         const qualidade = fech?.qualidade_mes ?? null;
 
@@ -203,7 +222,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
         const itensComQtd = Array.from(catMap.values()).filter(v => v.quantidade > 0);
         const pesoAtualizado = itensComQtd.length > 0 && itensComQtd.every(v => v.peso_atualizado);
 
-        return { pasto, fechamentoId: fech?.id ?? null, lote, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa, pesoAtualizado };
+        return { pasto, fechamentoId: fech?.id ?? null, lote, loteIds, programa: null, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa, pesoAtualizado };
       });
 
       setRows(result);
@@ -313,6 +332,16 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
   });
   const abrirPasto = modalDoPasto.abrir;
 
+  /* MAPA-REBANHO-02 — a coluna "Programa": o programa do lote pela fonte única (os lotes do mês pela `fn_lotes_da_fazenda` e o nome pelo
+     cadastro do lote), nunca digitado aqui; as linhas da tela, do Excel e do PDF são as MESMAS (`linhas`) */
+  const { clienteAtual } = useCliente();
+  const { lotes: lotesDoMes } = useLotesDaFazenda(fazendaDoMes, anoMes);
+  const { cadastros: cadastrosDoLote } = useCadastrosDoLote(clienteAtual?.id ?? null);
+  const linhas = useMemo(() => {
+    const nomes = mapaDoCadastro(cadastrosDoLote);
+    return rows.map(r => ({ ...r, programa: programaDoPasto(r.loteIds, lotesDoMes, nomes) }));
+  }, [rows, lotesDoMes, cadastrosDoLote]);
+
   const getUaHaColor = (uaHa: number | null) => {
     if (!uaHa) return '';
     if (uaHa > 3) return 'text-red-600 font-bold';
@@ -340,6 +369,9 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
         }}
       >
         <div className="sticky top-0 flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 z-30">
+          {/* FECH-FAIXA-01 — a faixa do fechamento: a 1ª linha, no MESMO lugar nas três telas */}
+          {/* mt-0.5: o cabeçalho daqui tem 6px de folga (os outros 8) — a faixa fica no MESMO lugar (40px) nas três telas */}
+          <div className="mb-1.5 mt-0.5"><FaixaDoFechamento estado={faixaDoMes} atual="mapa" abrir={etapasDoFechamento} /></div>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               {onBack && (
@@ -377,12 +409,12 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
                   confirmar, saem num PR de faxina; não reconectar sem decisão explícita.
                   Excel e PDF ficam: são saída, não entrada. */}
               <Button variant="outline" size="sm" className="h-7 text-xs px-2"
-                onClick={() => exportMapaPastosXlsx(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
+                onClick={() => exportMapaPastosXlsx(linhas, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
                 disabled={rows.length === 0}>
                 <Download className="h-3.5 w-3.5 mr-1" />Excel
               </Button>
               <Button variant="outline" size="sm" className="h-7 text-xs px-2"
-                onClick={() => exportMapaPastosPdf(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
+                onClick={() => exportMapaPastosPdf(linhas, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
                 disabled={rows.length === 0}>
                 <FileText className="h-3.5 w-3.5 mr-1" />PDF
               </Button>
@@ -396,7 +428,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
           <div className="flex flex-1 min-h-0 items-center justify-center text-muted-foreground">Nenhum pasto ativo para conciliação.</div>
         ) : (
           <MapaTable
-            rows={rows}
+            rows={linhas}
             categorias={categorias}
             totais={totais}
             getUaHaColor={getUaHaColor}
@@ -416,12 +448,18 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
 const MACHOS_CODES = new Set(['mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros']);
 const FEMEAS_CODES = new Set(['mamotes_f', 'desmama_f', 'novilhas', 'vacas']);
 
+/* MAPA-REBANHO-02 opção B — a fonte da tabela abaixo de 1000px: toda célula 8,5px (com os textos a 9px faltavam 5px a 135%); quem está
+   dentro da célula herda */
+const FONTE_ESTREITA = '[&_td]:!text-[8.5px] [&_th]:!text-[8.5px] [&_td_*]:![font-size:inherit] [&_th_*]:![font-size:inherit] '
+  /* e a folga das 4 colunas de texto (e do selo da atividade) cai para 2px: os números já estão sem folga */
+  + '[&_td[data-texto]]:!px-[2px] [&_td[data-texto]_span]:!px-[2px]';
+
 function isMacho(cat: CategoriaRebanho) { return MACHOS_CODES.has(cat.codigo); }
 function isFemea(cat: CategoriaRebanho) { return FEMEAS_CODES.has(cat.codigo); }
 
-// Block separator: stronger border between Lote|MM, T|MF, V|Total, Total|Peso
+// Block separator: stronger border between Programa|MM (MAPA-REBANHO-02; era Lote|MM), T|MF, V|Total, Total|Peso
 function isBlockSeparator(catIdx: number, categorias: CategoriaRebanho[]) {
-  if (catIdx === 0) return true; // Lote → first cat
+  if (catIdx === 0) return true; // Programa → first cat
   const prev = categorias[catIdx - 1];
   const cur = categorias[catIdx];
   if (!prev || !cur) return false;
@@ -440,15 +478,17 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
   /** clicar no NOME abre o modal do pasto (a linha inteira nao e' clicavel) */
   onAbrirPasto: (pasto: Pasto) => void;
 }) {
-  const colWidths = useMemo(() => {
-    const base = [95, 80, 120];
-    const cats = categorias.map(() => 44);
-    // tail: Total, Peso, ✓Peso (nova), Área, UA/ha, Qual
-    const tail = [50, 50, 32, 45, 42, 34];
-    return [...base, ...cats, ...tail];
-  }, [categorias]);
-
-  const tableWidth = useMemo(() => colWidths.reduce((sum, width) => sum + width, 0), [colWidths]);
+  /* MAPA-REBANHO-02 (Gabriel 08/11 08:43, mock docs/mocks/mapa-rebanho-lote.html) — a tabela ocupa a LARGURA TODA da área (como antes),
+     com as colunas em PORCENTAGEM, na proporção do que o conteúdo pede (medido no caso real 3M e PUR out/26, em px: Pasto 89 · Atividade
+     73 · Lote 124 · Programa 84 · categoria ≤35 · Total 37 · Peso 39 · ✓ Peso 41 · Área 34 · UA/ha 33 · Qual 27 = 888 px):
+       · a 1.240 (área 1.096 px) nada corta;
+       · a 1.024 (880 px) os números cabem (categoria 36 px) e os textos mais compridos (Pasto, Lote, Programa) cortam com "…" e o title;
+       · a 135% (775 px) faltam 113 px: a decisão está com o Gabriel (rolagem lateral, fonte menor ou abreviar).
+     As categorias dividem o que sobra. Antes (07/11) eram px somando 760, centrados: estreita, e Lote e Programa cortavam. */
+  /* as porcentagens moram em `larguraDoMapa` (a MESMA fonte do PDF) */
+  /* opção B (Gabriel 08/11 10:00): abaixo de 1000px de janela, a fonte menor e as colunas medidas nela */
+  const estreito = useLarguraDaJanela() < LIMITE_ESTREITO;
+  const colWidths = useMemo(() => (estreito ? porcentagensDoMapaEstreito : porcentagensDoMapa)(categorias.length).map(p => `${p}%`), [categorias, estreito]);
 
   // Determine last macho and last femea index for V|Total separator
   const lastFemeaIdx = useMemo(() => {
@@ -507,16 +547,20 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden border-t border-border/30 bg-background">
       <div className="flex flex-1 min-h-0 overflow-x-auto">
-        <div className="flex h-full min-h-0 flex-col mx-auto" style={{ width: tableWidth }}>
+        <div className="flex h-full min-h-0 w-full flex-col">
           {/* ── TABLE (THEAD sticky + TBODY + TFOOT) ── */}
           <div className="flex-1 min-h-0 overflow-y-auto pb-3">
-            <table className="w-full border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
+            {/* opção B — estreito: a tabela a 8,5px (o que está DENTRO da célula herda) e as colunas de texto (`data-texto`) com folga de 2px */}
+            <table className={`w-full border-separate border-spacing-0 text-[11px] ${estreito ? FONTE_ESTREITA : ''}`} style={{ tableLayout: 'fixed' }}
+              data-estreito={estreito ? '' : undefined}>
               {renderColGroup()}
               <thead>
                 <tr className="h-7">
                   <th className="sticky left-0 top-0 z-50 px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Pasto</th>
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Atividade</th>
-                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[10px] font-bold border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderRightStyle: 'solid', borderRightWidth: 2, borderRightColor: 'hsl(220 13% 75%)', borderBottomWidth: 1, borderBottomColor: 'hsl(220 13% 75%)' }}>Lote</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[10px] font-bold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Lote</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[10px] font-bold border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderRightStyle: 'solid', borderRightWidth: 2, borderRightColor: 'hsl(220 13% 75%)', borderBottomWidth: 1, borderBottomColor: 'hsl(220 13% 75%)' }}
+                    title="O programa do lote (cadastro do lote)">Programa</th>
                   {categorias.map((cat, idx) => {
                     const bg = isMacho(cat) ? hdrBgMacho : isFemea(cat) ? hdrBgFemea : hdrBg;
                     const leftBdr = getCatBorderLeft(idx);
@@ -530,12 +574,12 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>Peso</th>
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[10px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }} title="Peso atualizado/conferido pelo operador">✓ Peso</th>
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Área</th>
-                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>UA/ha</th>
-                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Qual.</th>
+                  <th className="sticky top-0 z-40 px-px py-0.5 text-center text-[10px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>UA/ha</th>
+                  <th className="sticky top-0 z-40 px-px py-0.5 text-center text-[10px] font-medium border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Qual.</th>
                 </tr>
                 {/* ── BANDA STICKY TOTAL / MÉDIA (top:28, abaixo do header) ── */}
                 <tr className="font-bold h-7">
-                  <td colSpan={3} className="px-1.5 py-0.5 text-[11px] border-r" style={{ position: 'sticky', top: 28, left: 0, zIndex: 45, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)' }}>TOTAL / MÉDIA</td>
+                  <td colSpan={4} className="px-1.5 py-0.5 text-[11px] border-r" style={{ position: 'sticky', top: 28, left: 0, zIndex: 45, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)' }}>TOTAL / MÉDIA</td>
                   {categorias.map((cat, catIdx) => {
                     const t = totais.catTotals.get(cat.id);
                     const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
@@ -559,7 +603,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                     );
                   })}
                   <td className="px-0.5 py-0.5 text-center text-[11px] font-extrabold border-r" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.totalCab, 0)}</td>
-                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r tabular-nums" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
+                  <td className="px-px py-0.5 text-center text-[9.5px] italic border-r tabular-nums" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
                   <td className="px-0.5 py-0.5 text-center border-r" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)' }} />
                   <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)' }}>{formatNum(totais.areaTotal, 1)}</td>
                   <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r ${getUaHaColor(totais.uaHaGeral)}`} style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)' }}>
@@ -575,20 +619,20 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                 </tr>
                 {/* ── BANDA STICKY PESO KG (top:56, abaixo da TOTAL/MÉDIA) ── */}
                 <tr className="h-6">
-                  <td colSpan={3} className="px-1.5 py-0.5 text-[10px] font-semibold border-r italic text-muted-foreground" style={{ position: 'sticky', top: 56, left: 0, zIndex: 25, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)' }}>Peso Kg</td>
+                  <td colSpan={4} className="px-1.5 py-0.5 text-[10px] font-semibold border-r italic text-muted-foreground" style={{ position: 'sticky', top: 56, left: 0, zIndex: 25, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)' }}>Peso Kg</td>
                   {categorias.map((cat, catIdx) => {
                     const pesoMed = pesosPorCategoria.get(cat.id);
                     const color = isMacho(cat) ? txtMacho : isFemea(cat) ? txtFemea : undefined;
                     const leftBdr = getCatBorderLeft(catIdx);
                     return (
-                      <td key={cat.id} className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
+                      <td key={cat.id} className="px-0 py-0.5 text-center text-[9.5px] italic tabular-nums border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
                         {pesoMed ? (
                           <span style={color ? { color } : undefined}>{formatNum(pesoMed, 2)}</span>
                         ) : <span className="opacity-20">—</span>}
                       </td>
                     );
                   })}
-                  <td className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>
+                  <td className="px-0 py-0.5 text-center text-[9.5px] italic tabular-nums border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>
                     {totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}
                   </td>
                   <td className="border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }} />
@@ -603,21 +647,30 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                   // Tint suave por atividade (substitui zebra). Mesmo bgStyle vai para o td sticky de Pasto.
                   const bgStyle = { backgroundColor: tintDoTipoUso(row.tipoUso) };
                   const isAgri = grupoDoTipoUso(row.tipoUso) === 'agricultura';
+                  /* MAPA-REBANHO-02 — a "Divergência do Campeiro" vira "⚠ Div." (o nome inteiro no title), no Pasto e na Atividade */
+                  const ehDiv = isPastoDivergencia(row.pasto.tipo_uso) || isPastoDivergencia(row.tipoUso);
                   return (
                     <tr key={row.pasto.id} className="h-6" style={bgStyle}>
-                      <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] font-semibold border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis" style={bgStyle}>
-                        <button type="button" onClick={() => onAbrirPasto(row.pasto)} title={`Abrir ${row.pasto.nome}`}
+                      <td data-texto className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] font-semibold border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis" style={bgStyle}>
+                        <button type="button" onClick={() => onAbrirPasto(row.pasto)} title={ehDiv ? `${row.pasto.nome} · abrir` : `Abrir ${row.pasto.nome}`}
                           className="max-w-full cursor-pointer truncate text-left hover:underline" data-testid="abrir-pasto">
-                          {row.pasto.nome}
+                          {ehDiv ? DIV_CURTA : row.pasto.nome}
                         </button>
                       </td>
-                      <td className="px-1 py-0.5 text-[11px] border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis">
-                        <span className={`inline-flex items-center px-1.5 py-px rounded border text-[10px] font-medium ${corDoTipoUso(row.tipoUso)}`}>
-                          {tipoUsoLabel(row.tipoUso)}
+                      <td data-texto className="px-1 py-0.5 text-[11px] border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis">
+                        <span className={`inline-flex items-center px-1 py-px rounded border text-[10px] font-medium ${corDoTipoUso(row.tipoUso)}`}
+                          title={tipoUsoLabel(row.tipoUso)}>
+                          {ehDiv && isPastoDivergencia(row.tipoUso) ? DIV_CURTA : tipoUsoLabel(row.tipoUso)}
                         </span>
                       </td>
-                      <td className="px-1 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title={row.lote || ''} style={{ borderRight: blockBorder }}>
+                      {/* o Lote é texto livre: o comprido corta com o nome inteiro no title (só nesta coluna) */}
+                      <td data-texto className="px-1 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-border/30" title={row.lote || ''}>
                         {row.lote || <span className="opacity-20">—</span>}
+                      </td>
+                      {/* o Programa (nome do cadastro) corta como o Lote: "…" e o nome inteiro no title (o gate de cortes achou o corte seco) */}
+                      <td data-texto className="px-1 py-0.5 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis max-w-0" style={{ borderRight: blockBorder }}
+                        title={row.programa || ''} data-testid="programa-do-pasto">
+                        {row.programa || <span className="opacity-20">—</span>}
                       </td>
                       {categorias.map((cat, catIdx) => {
                         const val = row.categorias.get(cat.id);
@@ -646,7 +699,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                       <td className="px-0.5 py-0.5 text-center text-[11px] font-bold border-r border-border/30 bg-primary/5" style={{ borderLeft: totalLeftBorder }}>
                         {isAgri ? null : row.totalCabecas ? formatNum(row.totalCabecas, 0) : <span className="opacity-15">—</span>}
                       </td>
-                      <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 tabular-nums text-muted-foreground" style={{ borderLeft: pesoLeftBorder }}>
+                      <td className="px-0 py-0.5 text-center text-[9.5px] italic border-r border-border/30 tabular-nums text-muted-foreground" style={{ borderLeft: pesoLeftBorder }}>
                         {isAgri ? null : row.pesoMedio ? formatNum(row.pesoMedio, 2) : <span className="opacity-15">—</span>}
                       </td>
                       <td className="px-0.5 py-0.5 text-center border-r border-border/30">

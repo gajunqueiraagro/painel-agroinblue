@@ -22,7 +22,8 @@ import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import { itensDoPdf } from '@/lib/financeiro/nfe/lerNotaPdf';
-import { lidoDaChave, notaDaChaveDigitada, podeDigitarAChave } from '@/lib/financeiro/nfe/chaveDigitada';
+import { AJUDA_NAO_PARECE_NOTA, FRASE_NAO_PARECE_NOTA, fraseDaRecusaDaNota, lidoDaChave, notaDaChaveDigitada, podeDigitarAChave } from '@/lib/financeiro/nfe/chaveDigitada';
+import { Ajuda } from '@/components/ui/ajuda';
 import type { AvisoNFe, NotaLida } from '@/lib/financeiro/nfe/tipos';
 import { proporLancamento, type FazendaComIE, type PropostaDeLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente, type FornecedorParaResolver, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
@@ -144,7 +145,7 @@ export async function notaParaAPrevia(cli: string, arquivo: File, fornecedores: 
   fazendas: ReadonlyArray<{ id: string; nome: string }>): Promise<{ ok: true; nota: NotaParaLancar } | { ok: false; frase: string }> {
   const bytes = await arquivo.arrayBuffer();
   const lido = await lerNota(bytes);
-  if (lido.ok === false) return { ok: false, frase: lido.frase };
+  if (lido.ok === false) return { ok: false, frase: fraseDaRecusaDaNota(lido.frase) };
   const base = { id: 'porta-2', arquivoNome: arquivo.name, arquivoTamanho: arquivo.size, doXml: null, nota: null, avisos: [], fazenda: null, lancada: false };
   const linha = await montarLinhaDaNota(cli, base, arquivo, bytes, lido, await fazendasComIEDoCliente(cli, fazendas), fornecedores);
   if (linha.recusa) return { ok: false, frase: linha.recusa };
@@ -382,7 +383,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                   const sit = situacaoDaNota(linha);
                   if (sit === 'recusada') {
                     const quem = l.nota ? `NF ${numeroDaNota(l.nota.numero)}` : l.arquivoNome;
-                    const frase = errosDaChave[l.id] ?? l.recusa ?? '';
+                    const frase = errosDaChave[l.id] ?? fraseDaRecusaDaNota(l.recusa);
                     return (
                       <tr key={l.id} className="border-t bg-destructive/5" data-testid="xml-linha" data-situacao="recusada">
                         <td className={`${TD} tabular-nums`} title={quem}>{quem}</td>
@@ -392,6 +393,8 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                           <td colSpan={estreito ? 6 : 7} className="h-[18px] px-[7px]" data-testid="xml-recusa-digitar">
                             <div className="flex h-full min-w-0 items-center gap-1.5">
                               <span className="w-0 min-w-0 flex-1 truncate text-[10px] leading-none text-destructive" title={frase} data-testid="xml-recusa">{frase}</span>
+                              {/* DOC-ANEXO-E-IMPORT-01 F1 — o ⓘ diz por que o arquivo sem chave não entra aqui e onde vai o recibo */}
+                              {frase === FRASE_NAO_PARECE_NOTA && <Ajuda {...AJUDA_NAO_PARECE_NOTA} />}
                               <Input value={chaves[l.id] ?? ''} placeholder="Digitar a chave (44 ou 50 dígitos)" aria-label="Digitar a chave (44 ou 50 dígitos)"
                                 onChange={(e) => { const v = e.target.value; setChaves((c) => ({ ...c, [l.id]: v })); }}
                                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void usarChave(l); } }}
@@ -401,7 +404,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                             </div>
                           </td>
                         ) : (
-                          <td colSpan={estreito ? 6 : 7} className={`${TD} text-destructive`} title={l.recusa ?? ''} data-testid="xml-recusa">{l.recusa}</td>
+                          <td colSpan={estreito ? 6 : 7} className={`${TD} text-destructive`} title={fraseDaRecusaDaNota(l.recusa)} data-testid="xml-recusa">{fraseDaRecusaDaNota(l.recusa)}</td>
                         )}
                         <td className={`${TD_ACAO} ${DIVISOR}`}>
                           <Button type="button" size="sm" variant="outline" className="h-4 px-1.5 text-[9.5px]" disabled title={l.recusa ?? ''}>Abrir lançamento</Button>

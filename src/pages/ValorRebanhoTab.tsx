@@ -26,6 +26,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
 import { FaixaDoSnapshot } from '@/components/SnapshotStatusBanner';
 import { motivoParaRevalidar, podeRevalidarOMes } from '@/lib/fechamento/travaDoP2';
+import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
+import { useFaixaDoFechamento, CHAVE_DA_FAIXA } from '@/hooks/useFaixaDoFechamento';
+import { FaixaDoFechamento } from '@/components/fechamento/FaixaDoFechamento';
+import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 import { ComposedChart, Line, Area, ReferenceLine, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
@@ -44,6 +48,11 @@ interface Props {
   filtroMesInicial?: number;
   onNavigateToFechamentoPastos?: () => void;
   onNavigateToMovimentacoes?: () => void;
+  /** FECH-FAIXA-01 — o ano/mês do shell (o MESMO do Fechamento e do Mapa de pastos): com ele a tela não guarda mês próprio */
+  periodo?: PeriodoControlado['periodo'];
+  onPeriodoChange?: PeriodoControlado['onPeriodoChange'];
+  /** FECH-FAIXA-01 — as etapas da faixa do fechamento que abrem as outras telas do mês (sem a função, só texto) */
+  etapasDoFechamento?: Partial<Record<EtapaDoFechamento, () => void>>;
 }
 
 interface LinhaTabelaValor {
@@ -777,7 +786,7 @@ function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
   );
 }
 
-export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaVolta, filtroAnoInicial, filtroMesInicial, onNavigateToFechamentoPastos, onNavigateToMovimentacoes }: Props) {
+export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaVolta, filtroAnoInicial, filtroMesInicial, onNavigateToFechamentoPastos, onNavigateToMovimentacoes, periodo, onPeriodoChange, etapasDoFechamento }: Props) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
@@ -800,9 +809,17 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
-  const mesAtual = filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : String(new Date().getMonth() + 1).padStart(2, '0');
-  const [mesFiltro, setMesFiltro] = useState(mesAtual);
+  /* FECH-FAIXA-01 (Gabriel 08/11 07:17) — o MÊS ÚNICO do fechamento: com `periodo` (o ano/mês do shell, o mesmo do Fechamento e do Mapa
+     de pastos) a tela lê e escreve nele (`usePeriodoDaTela`, nenhuma cópia); sem ele, o estado é dela, como sempre. Antes o shell só
+     passava o ano e o mês caía no de HOJE: com a BG em set/26 no Fechamento, o Valor do Rebanho abria em nov/26. */
+  const periodoDaTela = usePeriodoDaTela({ periodo, onPeriodoChange }, {
+    ano: filtroAnoInicial || String(new Date().getFullYear()),
+    mes: filtroMesInicial || new Date().getMonth() + 1,
+  });
+  const anoFiltro = periodoDaTela.ano;
+  const mesFiltro = String(periodoDaTela.mes).padStart(2, '0');
+  const setAnoFiltro = periodoDaTela.setAno;
+  const setMesFiltro = (m: string) => periodoDaTela.setMes(Number(m));
   /**
    * O CARD "INÍCIO" — VALOR-REBANHO-COMPACTO-01.
    *
@@ -812,12 +829,18 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
    */
   const [verInicio, setVerInicio] = useState(false);
 
+  /* sem o shell (hospedeiro legado), a prop ainda semeia o mês quando muda; controlada, quem manda é o shell */
+  const controlado = periodoDaTela.controlado;
   useEffect(() => {
+    if (controlado) return;
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
     if (filtroMesInicial) setMesFiltro(String(filtroMesInicial).padStart(2, '0'));
-  }, [filtroAnoInicial, filtroMesInicial]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- os setters vêm do hook (o mesmo efeito de antes, só as props)
+  }, [filtroAnoInicial, filtroMesInicial, controlado]);
 
   const anoMes = `${anoFiltro}-${mesFiltro}`;
+  /* FECH-FAIXA-01 — a faixa do fechamento do mês (as mesmas leituras nas três telas) */
+  const faixaDoMes = useFaixaDoFechamento(anoMes);
   /* ⚠ SEMPRE CHAMADO, nunca dentro de `if`: hook condicional derruba a tela (check:hooks). Quando o
      card está fechado ele lê e ninguém olha — é uma consulta por ano, não por clique. */
   const { inicio, carregando: carregandoInicio } = useValorRebanhoInicio(Number(anoFiltro), fazendaId, clienteAtual?.id);
@@ -1530,6 +1553,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
     }));
 
     await salvarPrecos(items, totalRebanhoLive, pesoTotalKgLive, snapshotDetalhado);
+    /* FECH-FAIXA-01 — salvou e fechou: a faixa do mês relê (② passa a validado, com o valor do mês) */
+    qc.invalidateQueries({ queryKey: [CHAVE_DA_FAIXA] });
   };
 
   /* REVALIDAR-BG-SET26 (Gabriel 05/11): o "Revalidar" do aviso só relia duas consultas (`invalidateQueries`) — não gravava nada e o
@@ -1544,6 +1569,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
       await refetchSnap();
       qc.invalidateQueries({ queryKey: ['valor-rebanho-snapshot', fazendaId, anoFiltro, mesFiltro] });
       qc.invalidateQueries({ queryKey: ['fechamento-status', fazendaId, anoFiltro] });
+      /* FECH-FAIXA-01 — revalidou: a faixa do mês relê o snapshot (② deixa de dizer "invalidado") */
+      qc.invalidateQueries({ queryKey: [CHAVE_DA_FAIXA] });
     }
   };
 
@@ -1705,6 +1732,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
 
   return (
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
+      {/* FECH-FAIXA-01 — a faixa do fechamento: a 1ª linha, no MESMO lugar nas três telas */}
+      <FaixaDoFechamento estado={faixaDoMes} atual="valor" abrir={etapasDoFechamento} />
       {/* ⚠ O INÍCIO NÃO RECEBE O CADEADO DO MÊS: ele não é um mês, é a base. O banner falava de
           "2021-09 fechado" sobre um retrato de 1º de janeiro, e o overlay o deixava esmaecido como
           se houvesse algo a editar ali. */}
@@ -1740,8 +1769,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
             const mesAtualNum = Number(mesFiltro);
             const mesAnterior = mesAtualNum === 1 ? 12 : mesAtualNum - 1;
             const anoAnterior = mesAtualNum === 1 ? Number(anoFiltro) - 1 : Number(anoFiltro);
-            setAnoFiltro(String(anoAnterior));
-            setMesFiltro(String(mesAnterior).padStart(2, '0'));
+            periodoDaTela.setPeriodo(String(anoAnterior), mesAnterior);
           } : undefined} />
       ) : uFonteMes === 'live' && !isMesFuturo ? (
         /* ⚠ O AVISO DO MÊS ABERTO MORA AQUI, NA MESMA FAIXA — 03d. Ele era uma linha a MAIS, logo
@@ -1786,11 +1814,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
             montagem; ela nunca foi uma segunda fonte, só escondia o controle. */}
         <div className="flex h-[18px] shrink-0 items-center gap-0.5 rounded border bg-card px-0.5">
           <button type="button" aria-label="Ano anterior"
-            onClick={() => setAnoFiltro(a => String(Number(a) - 1))}
+            onClick={() => setAnoFiltro(String(Number(anoFiltro) - 1))}
             className="px-1 text-[11px] leading-none text-muted-foreground hover:text-foreground">◂</button>
           <span className="min-w-[30px] text-center text-[10px] font-semibold tabular-nums">{anoFiltro}</span>
           <button type="button" aria-label="Próximo ano"
-            onClick={() => setAnoFiltro(a => String(Number(a) + 1))}
+            onClick={() => setAnoFiltro(String(Number(anoFiltro) + 1))}
             className="px-1 text-[11px] leading-none text-muted-foreground hover:text-foreground">▸</button>
         </div>
 
@@ -2060,7 +2088,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
             </tbody>
             <tfoot>
               <tr style={{ height: 16, backgroundColor: '#D6D4CC' }}>
-                <td className="truncate px-1.5 py-0 text-left font-medium" style={{ fontSize: 10, lineHeight: 1 }}>Total</td>
+                {/* FECH-FAIXA-01 — "ver pastos" ao lado dos totais: o Fechamento do MESMO mês (a etapa ① da faixa, a mesma regra de acesso) */}
+                <td className="whitespace-nowrap px-1.5 py-0 text-left font-medium" style={{ fontSize: 10, lineHeight: 1 }}>
+                  Total
+                  {etapasDoFechamento?.pastos && (
+                    <button type="button" onClick={etapasDoFechamento.pastos} className="ml-1.5 font-normal text-[#1e3a5f] underline hover:no-underline"
+                      style={{ fontSize: 9.5 }} title="Os pastos deste mês no Fechamento" data-testid="vr-ver-pastos">ver pastos</button>
+                  )}
+                </td>
                 <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{formatNumNullable(uMetricasTabela.cabecas, 0)}</td>
                 <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{formatNumNullable(uMetricasTabela.pesoMedio, 2)}</td>
                 <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>

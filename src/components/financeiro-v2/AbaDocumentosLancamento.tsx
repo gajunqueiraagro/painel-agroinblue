@@ -16,7 +16,7 @@
  * fazem o documentado divergir do lançado sem que nada esteja errado — por isso âmbar e
  * uma frase, não vermelho e um bloqueio.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -503,9 +503,15 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
   const AMBAR = ' bg-amber-50 border-amber-300';
   /* ⚠ TROCAR O TIPO TROCA OS CAMPOS E PRESERVA O DIGITADO: número, data, valor, observação e emitente ficam no estado (o
      emitente volta a aparecer se o operador voltar a um tipo que o tem). Só a DATA AINDA SUGERIDA acompanha o tipo. */
+  /* DOC-ANEXO-E-IMPORT-01 F1 — SÓ A NF SE LÊ COMO NOTA: sair da NF apaga a leitura (aviso e "lido da nota"; o digitado fica) e voltar à NF
+     com o arquivo já escolhido lê ele. A `especieAgora` é a do clique, não a do render: a leitura que termina depois da troca não se aplica. */
+  const especieAgora = useRef(especie);
   const trocarEspecie = (nova: EspecieLancDoc) => {
     if (sug && dataEmissao === dataSugerida) setDataEmissao(dataSugeridaPara(nova));
+    especieAgora.current = nova;
     setEspecie(nova);
+    if (nova !== 'nf') { setLida(null); setAvisoDaNota(null); }
+    else if (arquivo) void lerArquivoDaNota(arquivo);
   };
 
   const OUTRO = '__outro__';
@@ -531,11 +537,14 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
        já eram da nota — senão o lado a lado sumiria */
     const antesDaNota = lida?.antes ?? null;
     setLida(null); setAvisoDaNota(null);
-    if (destinoOC || especieSoLeitura || !ehArquivoDeNota(f.name)) return;
+    /* ⚠ DOC-ANEXO-E-IMPORT-01 F1 (Gabriel 05/11): recibo, boleto, comprovante e outro NUNCA passam pelo leitor da nota — era daqui o
+       "Não consegui ler a chave da nota" num recibo em PDF */
+    if (destinoOC || especieSoLeitura || especieAgora.current !== 'nf' || !ehArquivoDeNota(f.name)) return;
     setLendoANota(true);
     try {
       const bytes = await f.arrayBuffer();
       const r = await lerNota(bytes);
+      if (especieAgora.current !== 'nf') return;
       if (r.ok === false) { setAvisoDaNota(FRASE_NOTA_NAO_LIDA); return; }
       const c = camposDaNota(r.nota);
       const res = resolverEmitente({ documento: c.emitenteDocumento, nome: c.emitenteNome, fantasia: r.nota.emitente.fantasia }, doLeitor.fornecedores, null);
@@ -546,9 +555,10 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
         const ja = await fornecedorPeloDocumento(clienteId, c.emitenteDocumento);
         if (ja.ok && ja.valor) propostoId = ja.valor.id;
       }
+      if (especieAgora.current !== 'nf') return;
       setLida({ campos: c, bytes, emitenteId: propostoId,
         antes: antesDaNota ?? { numero, dataEmissao, valor, emitenteId: emitenteEhOutro ? '' : emitenteId, emitenteNome: nomeDoEmitente } });
-      setEspecie('nf'); setNumero(c.numero); setSerie(c.serie); setDataEmissao(c.emissao); setValor(c.valor); setChave(c.chave);
+      setNumero(c.numero); setSerie(c.serie); setDataEmissao(c.emissao); setValor(c.valor); setChave(c.chave);
       if (propostoId) setEmitenteId(propostoId);
       else { setEmitenteId(OUTRO); setEmitenteNome(c.emitenteNome); setEmitenteDoc(c.emitenteDocumento); }
     } catch (e) {

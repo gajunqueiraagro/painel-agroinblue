@@ -212,6 +212,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   de forma; o contorno 'area_total'/'area_fazenda' nunca é vizinho nem alvo de encaixe); sobreposição ≥ 0,1 ha; ao sair do zoom 22 da edição NUNCA `redraw()` (zoom fracionado).
 - Pasto no mes = vigencia + ativo (`fn_pasto_vigente_no_mes`). Saldo inicial se cadastra uma vez. O cache do rebanho se reconstroi na
   gravacao. Fechamento P1: a autoridade e' `get_status_pilares_fechamento`.
+- FECH-PASTO-UNIDADE-01: piquete é SUBÁREA do pasto (`_fn_pai_do_piquete`); o card é do pasto e a linha tem `piquete_id` (opcional). Quem lê o card lê TODAS as
+  linhas (nunca uma por categoria: perde cabeças). Modal: a MESMA grade; por piquetes = abas + Total só leitura; voltar a pasto inteiro SÓ pela `fn_fechamento_pasto_inteiro` (prévia).
 - FECH-P2-TRAVA-01: o Valor do Rebanho reabre SO' pela `fn_valor_rebanho_reabrir` (abre o fechamento E invalida o validado + cadeia, trilha);
   os pastos travam com QUALQUER das duas marcas (`_fn_fechamento_p2_travado`); a tela avisa pela `lerEstadoDoP2`, nunca reabre P2 sozinha.
 - MAPA-CARD-LOTE-01: o lote do pasto no mes e' o `fechamento_pastos.lote_mes` (o "Lote:" do card do Fechamento); `fechamento_pasto_itens.lote` nao e' fonte (o Fechamento nao o mostra nem grava).
@@ -261,6 +263,10 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
   desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
+- DOC-ANEXO-E-IMPORT-01 F1: SÓ A NF SE LÊ COMO NOTA — recibo/boleto/comprovante/outro nunca passam pelo `lerNota` nem pelo `extrairDanfe` e a
+  chave de acesso só aparece na NF; ler nunca troca o tipo escolhido; na porta da nota o PDF sem chave diz `FRASE_NAO_PARECE_NOTA` (+ ⓘ).
+- DOC-ANEXO-E-IMPORT-01 F2: o clipe da lista ABRE (`ClipeDaLinha`: 1 = o arquivo; 2+ = popover lido no clique, `lerLinhasDoClipe`); o número = as
+  linhas da aba (`quantasLinhasDoClipe`); o tipo de documento em selo é UM componente (`SeloDoTipo`) e UMA regra (`tipoDoSelo`).
 - DOC-NOTA-XML-PDF-01: a mesma nota em PDF e XML = UMA linha (`linhasDosDocumentos`, a mesma regra do `fin_documento_confronto`, que nao
   a da' como repetida); abrir = o PDF, sem PDF os itens da nota — o XML nunca abre cru (e' dado de importacao).
 - NOTA-AVULSA-890-01: nota avulsa (serie 890–899) tem na chave o CNPJ do orgao emissor — nao se compara com o emitente; remessa de
@@ -327,7 +333,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   O `th` alinha como o `td`; tabela de regua fixa (`table-layout: fixed`, `colgroup` em px medido) nao estica com a janela.
 - Piso de 9,5px (excecoes declaradas: grade do DRE, o secundario da Evolucao do rebanho a 8,5px — so' kg/cab, Meta e Δ (PROD-EVOLUCAO-01b-fix1), selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01;
   P141: os selos OFX/PDF (7px) de "Saldos por conta"; FORN-CAMPO-01: a linha "CNPJ · Cidade/UF" (8,5px) sob o Fornecedor da barra de Lançamentos e
-  sob o nome em cada opção da lista do `FavorecidoSelect`). Tamanhos do A18.
+  sob o nome em cada opção da lista do `FavorecidoSelect`; o popup do pasto (POPUP-MINI-01, 8–8,5px); a tabela do Mapa do rebanho abaixo de 1060px (MAPA-REBANHO-02, 8,5px)). Tamanhos do A18.
 - P141/P166 (CONC-TELA-02): Conciliação = FAIXA do status (1 linha, altura fixa, `FaixaDoMes`: vermelho/verde/âmbar = conciliado com sem
   subcentro/cinza) + Saldos | Resumo do mês (1fr 260px, até o fim da janela), na régua da casa e sem CAIXA ALTA; Saldos com Data · OFX/PDF em
   lugar FIXO de 20px · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
@@ -355,6 +361,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P91: campo de NUMERO (kg, @, %, cab, dias) = `CampoNumeroComConta`; o gesto da conta e' UM hook (`useContaNoCampo`), o mesmo do `CampoMoeda`.
 - P88: formulario antigo com estado em TEXTO DE MAQUINA ('1234.56') troca o `type="number"` pelo campo do sistema sem mudar o estado (`numeroDoTextoDeMaquina`/`textoDeMaquina`).
 - P92: resumo do Negociar lote = 400px, colunas fixas (`colgroup` medido para o teto); acima do teto a fonte desce ate' 2px (piso 9,5), nunca quebra; o gate tem `numero-vaza` (numero fora da caixa de conteudo da celula; tabela maior que a caixa).
+- CONC-CRIAR-PERDE-DADOS-01: FORMULARIO ABERTO NUNCA PERDE DADOS — modal que hidrata/reinicia por efeito ve^ as props por CONTEUDO (`useConteudoEstavel`: `LancamentoV2Dialog` lancamento/prefill/travas, `CasarComBancoModal` extrato/iniciais/modelo), nunca pela identidade; o dono pode se repintar (react-query relê ao voltar o foco) sem apagar o digitado nem os levados.
 - UX-OBRIGATORIOS-01: Salvar com pendencia nao fecha nem grava; o campo pendente fica vermelho com a mensagem; UX-TOAST-01: validacao
   e erro de preenchimento nunca em toast. Dialogo/menu fechando nao aceita clique. Modal em blocos pela primitiva da casa; o
   `DialogContent` renderiza a 95%.

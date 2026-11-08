@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { pastosAtivosNoMes, type Pasto } from '@/hooks/usePastos';
+import { semAreaDaFazenda } from '@/lib/pastos/areaDaFazenda';
 import type { FechamentoPasto } from '@/hooks/useFechamento';
 import { isPastoDivergencia } from '@/lib/classificacaoArea';
 import { useGruposDePastejo } from '@/components/pastos/GruposDePastejo';
@@ -80,7 +81,8 @@ export function pastosDoFechamentoNoMes<T extends Pasto>(pastos: T[], anoMes: st
       // PRIMEIRO dia do mês e ignorava data_fim, então pasto encerrado em 2024 ainda
       // gerava card em 2026. O dono da regra agora é isPastoAtivoNoMes, espelho de
       // fn_pastos_aplicaveis_mes. entra_conciliacao saiu: foi aposentado.
-      const filtrados = pastosAtivosNoMes(pastos, anoMes);
+      /* MAPA-PIQUETE-SUBAREA-01 C1: Reserva, APP e Benfeitorias são área da fazenda desde 11/2026 — fora do fechamento (o banco recusa o card) */
+      const filtrados = semAreaDaFazenda(pastosAtivosNoMes(pastos, anoMes), anoMes);
       // Pastos de divergência sempre no FINAL da lista
       const normais = filtrados.filter(p => !isPastoDivergencia(p.tipo_uso));
       const divergencia = filtrados.filter(p => isPastoDivergencia(p.tipo_uso));

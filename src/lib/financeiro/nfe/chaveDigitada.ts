@@ -24,7 +24,21 @@ export function podeDigitarAChave(recusa: string | null | undefined): boolean {
   return recusa === FRASE_NOTA_SEM_CHAVE || recusa === FRASE_PDF_SEM_TEXTO;
 }
 
-export type NotaDaChave = { ok: true; nota: NotaLida; avulsa: boolean; mes: string } | { ok: false; frase: string };
+/** DOC-ANEXO-E-IMPORT-01 F1 (Gabriel 05/11) — o PDF sem chave na porta da NOTA ("+ Da nota", "Ler a NF") costuma ser um RECIBO ou um
+ *  comprovante: a linha diz isso e aponta o caminho (a aba Documentos), em vez de "Nota sem chave de acesso." — o campo de digitar a chave
+ *  continua ao lado (o DANFE com a chave ilegível segue por ele). */
+export const FRASE_NAO_PARECE_NOTA = 'Este arquivo não parece uma nota fiscal (sem chave). Se for recibo ou comprovante, anexe pela aba Documentos do lançamento.';
+export function fraseDaRecusaDaNota(recusa: string | null | undefined): string {
+  return recusa === FRASE_NOTA_SEM_CHAVE ? FRASE_NAO_PARECE_NOTA : (recusa ?? '');
+}
+export const AJUDA_NAO_PARECE_NOTA = {
+  titulo: 'Arquivo sem chave de acesso',
+  oQueE: 'A chave de acesso (44 dígitos) só existe na NF-e e na NFC-e; a NFS-e nacional tem 50. Recibo, comprovante, boleto e guia de imposto não têm chave.',
+  porQue: 'Esta porta cria ou completa o lançamento PELA NOTA, e a nota se confere pela chave. Um arquivo sem ela não é lido como nota.',
+  comoFazer: 'Se for uma nota com a chave ilegível (foto, escaneado), digite a chave ao lado e clique em Usar. Se for recibo ou comprovante, abra o lançamento e anexe pela aba Documentos, escolhendo o tipo.',
+} as const;
+
+export type NotaDaChave ={ ok: true; nota: NotaLida; avulsa: boolean; mes: string } | { ok: false; frase: string };
 
 /** A nota que a chave digitada da' (o resto em branco); `mes` = o ano/mes da chave ("2026-04"), para a previa sugerir a emissao. */
 export function notaDaChaveDigitada(texto: string): NotaDaChave {

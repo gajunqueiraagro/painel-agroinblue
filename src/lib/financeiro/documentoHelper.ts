@@ -197,7 +197,10 @@ export function parseDocumentoImport(raw: string | null): { tipo: TipoDocumento;
 /** O que a função precisa de cada documento (linha de `vw_lancamento_documentos`, que já traz os ligados). */
 export interface DocumentoDaLinha { especie: string | null; numero: string | null; cancelado?: boolean | null;
   /** FIN-FILTRO-DOC-01 — a chave de acesso (44 dígitos): o filtro Documento também acha por ela */
-  chave_acesso?: string | null }
+  chave_acesso?: string | null;
+  /** DOC-ANEXO-E-IMPORT-01 F2 — o que a contagem do clipe precisa para juntar o PDF e o XML da mesma nota numa linha (`quantasLinhasDoClipe`) */
+  origem?: string | null; operacao_id?: string | null; serie?: string | null; emitente_documento?: string | null; nome?: string | null;
+  tipo?: string | null; valor_documento?: number | null }
 
 const ESPECIES_NF: readonly string[] = ['nf', 'nf_principal', 'nf_complementar'];
 const ehNF = (d: DocumentoDaLinha) => ESPECIES_NF.includes(d.especie ?? '');

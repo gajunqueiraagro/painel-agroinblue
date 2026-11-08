@@ -30,7 +30,8 @@ export function useDocumentosDoCliente(clienteId: string | null | undefined) {
       for (let de = 0; ; de += PAGINA) {
         const { data, error } = await supabase
           .from('vw_lancamento_documentos')
-          .select('lancamento_id, especie, numero, cancelado, chave_acesso')
+          /* DOC-ANEXO-E-IMPORT-01 F2 — + o que a contagem do clipe precisa para juntar PDF+XML da mesma nota (`quantasLinhasDoClipe`) */
+          .select('lancamento_id, especie, numero, cancelado, chave_acesso, origem, operacao_id, serie, emitente_documento, nome, tipo, valor_documento')
           .eq('cliente_id', clienteId ?? '')
           .order('lancamento_id', { ascending: true })
           .order('documento_id', { ascending: true })
@@ -39,7 +40,9 @@ export function useDocumentosDoCliente(clienteId: string | null | undefined) {
         for (const d of data ?? []) {
           if (!d.lancamento_id) continue;
           const lista = mapa.get(d.lancamento_id) ?? [];
-          lista.push({ especie: d.especie, numero: d.numero, cancelado: d.cancelado, chave_acesso: d.chave_acesso });
+          lista.push({ especie: d.especie, numero: d.numero, cancelado: d.cancelado, chave_acesso: d.chave_acesso,
+            origem: d.origem, operacao_id: d.operacao_id, serie: d.serie, emitente_documento: d.emitente_documento, nome: d.nome, tipo: d.tipo,
+            valor_documento: d.valor_documento == null ? null : Number(d.valor_documento) });
           mapa.set(d.lancamento_id, lista);
         }
         if ((data ?? []).length < PAGINA) break;

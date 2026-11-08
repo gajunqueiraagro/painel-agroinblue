@@ -23,12 +23,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
-import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia } from '@/lib/classificacaoArea';
+import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia, DIV_CURTA } from '@/lib/classificacaoArea';
 import { grupoDoTipoUso } from '@/lib/pastos/tiposUso';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
 import { safrasQueCobremOMes, labelDaCultura } from '@/lib/agri/areaPlantada';
 import { pastosDoFechamentoNoMes, useLoteDoMes } from '@/hooks/useLoteDoMes';
+import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
+import { loteDoPopup } from '@/lib/lotes/loteDoPasto';
+import { useFaixaDoFechamento } from '@/hooks/useFaixaDoFechamento';
+import { FaixaDoFechamento } from '@/components/fechamento/FaixaDoFechamento';
+import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 import { useModalDoPasto } from '@/hooks/useModalDoPasto';
 import { Segmentado } from '@/components/ui/segmentado';
 import { MapaDoFechamento } from '@/components/fechamento/MapaDoFechamento';
@@ -135,6 +140,8 @@ interface Props {
   /** a volta do Valor do Rebanho: o pasto a reabrir quando os cards do mês chegarem */
   pastoParaAbrir?: string | null;
   onPastoParaAbrirConsumido?: () => void;
+  /** FECH-FAIXA-01 — as etapas da faixa do fechamento que abrem as outras telas do mês (sem a função, a etapa é só texto) */
+  etapasDoFechamento?: Partial<Record<EtapaDoFechamento, () => void>>;
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
@@ -204,7 +211,7 @@ function gmdColor(gmd: number | null): string {
   return 'text-emerald-600 dark:text-emerald-400';
 }
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack, periodo, onPeriodoChange, onReabrirValorRebanho, pastoParaAbrir, onPastoParaAbrirConsumido }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack, periodo, onPeriodoChange, onReabrirValorRebanho, pastoParaAbrir, onPastoParaAbrirConsumido, etapasDoFechamento }: Props = {}) {
   const { isGlobal, fazendaAtual, fazendas, setFazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
@@ -346,6 +353,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   }, [fechamentos, loadItens]);
 
   const pastosAtivos = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
+  /* POPUP-ORIGINAL-COR — o lote do pasto no popup: os lotes da fazenda pelo MESMO leitor do modal (o texto é o do campo Lote) */
+  const lotesDaFazenda = useLotesDaFazenda(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null, anoMes);
+  /* FECH-FAIXA-01 — a faixa do fechamento acompanha os cards desta tela (cada Fechar conta na hora, sem reler) */
+  const cardsDoMesDaFaixa = useMemo(() => fechamentos.filter(f => f.ano_mes === anoMes), [fechamentos, anoMes]);
+  const faixaDoMes = useFaixaDoFechamento(anoMes, cardsDoMesDaFaixa);
   /* FECH-PASTO-UNIDADE-01 — o card é do PASTO; os piquetes dele no mês viram o selo "N piquetes" (e, no mapa, o polígono do piquete é do pai) */
   const piquetesDoMes = useMemo(() => piquetesNoMes(pastos, anoMes), [pastos, anoMes]);
   const paiDoPiquete = useMemo(() => new Map([...piquetesDoMes].flatMap(([pai, piqs]) => piqs.map(q => [q.id, pai] as const))), [piquetesDoMes]);
@@ -1035,7 +1047,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     const uaHaDoMes = lotacaoDoPasto?.uaHa != null && lotacaoDoPasto.ua > 0 ? lotacaoDoPasto.uaHa : resumo.uaHa;
     const origens = (recebeDe.get(p.id) ?? []).map(id => pastos.find(x => x.id === id)?.nome).filter((n): n is string => !!n);
     return {
-      nome: p.nome, areaHa: isPastoDivergencia(fech?.tipo_uso_mes || p.tipo_uso) ? null : paraLote(p).area,
+      nome: p.nome, lote: loteDoPopup(fech ? itensMap.get(fech.id) ?? [] : [], lotesDaFazenda.lotes),
       totalCab: resumo.totalCabecas, pesoMedioKg: resumo.pesoMedio,
       categorias: resumo.catBreakdown.map(cb => ({ nome: catMap.get(cb.codigo) ?? '—', cab: cb.qty, pesoMedioKg: cb.pesoMedio })),
       uaHa: uaHaDoMes ?? null, recebeDe: origens,
@@ -1100,7 +1112,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           >
             {/* Nome + status icon */}
             <div className="flex items-center justify-between gap-0.5">
-              <span className="min-w-0 font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
+              {/* FECH-DIV-CURTA (Gabriel 08/11 09:22): a Divergência do Campeiro é "⚠ Div." no card (cortava "Divergênci…"); o nome inteiro no title */}
+              <span className="min-w-0 font-bold text-xs text-foreground truncate leading-tight" title={p.nome} data-testid="nome-do-card">
+                {isDivergencia ? DIV_CURTA : p.nome}
+              </span>
               {(piquetesDoMes.get(p.id)?.length ?? 0) > 0 && (
                 <span className="ml-auto flex-none whitespace-nowrap rounded bg-[#eaf1fb] px-1 text-[10px] font-medium leading-[14px] text-[#1f5fa8]" data-testid="selo-piquetes"
                   title={`Piquetes de ${p.nome} no mês: ${(piquetesDoMes.get(p.id) ?? []).map(q => q.nome).join(', ')}`}>
@@ -1191,6 +1206,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     <div ref={setAreaDaTela} className="pb-24" data-testid="area-do-fechamento">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
       <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2 max-[999px]:px-2">
+        {/* FECH-FAIXA-01 — a faixa do fechamento do mês: a 1ª linha, no MESMO lugar nas três telas (Fechamento, Valor, Mapa do rebanho) */}
+        <div className="mb-1.5"><FaixaDoFechamento estado={faixaDoMes} atual="pastos" abrir={etapasDoFechamento} /></div>
         {/* PR-FECH-HEADER-LARGURA-02 — a COL 1 tem trilha FIXA e ESTREITA. Fixar resolveu
             a instabilidade (com `auto` ela crescia até o conteúdo do estado corrente e
             empurrava a COL 2, onde ficam os cards de mês e a tabela de conciliação, que

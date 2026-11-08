@@ -69,3 +69,9 @@ export function textoDoLoteNoCaderno(itens: readonly ItemComLote[], lotes: reado
   }))];
   return nomes.length ? nomes.join(' · ') : null;
 }
+
+/** POPUP-ORIGINAL-COR — o lote no popup do pasto: o MESMO texto do campo Lote do modal (`rotuloDoLote`); sem lote = nulo (o popup mostra "—") */
+export function loteDoPopup(itens: readonly ItemComLote[], lotes: readonly LoteDaLista[]): string | null {
+  const card = loteDoCard(itens);
+  return card.tipo === 'nenhum' ? null : rotuloDoLote(card, lotes).texto;
+}

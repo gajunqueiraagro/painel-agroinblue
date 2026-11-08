@@ -38,6 +38,10 @@ export const TIPOS_PECUARIO_SEM_LOTACAO = new Set<string>([
 ]);
 
 /** Pasto especial de divergência do campeiro (não conta área/UA/lotação, mas entra na conciliação) */
+/** FECH-DIV-CURTA (Gabriel 08/11 09:22) — o rótulo curto da "Divergência do Campeiro" onde o nome inteiro não cabe (o card da grade do
+ *  Fechamento, a tabela do Mapa do rebanho): "⚠ Div.", com o nome inteiro no `title`. */
+export const DIV_CURTA = '⚠ Div.';
+
 export function isPastoDivergencia(tipo: string | null | undefined): boolean {
   return tipo === 'divergencia';
 }
