@@ -361,6 +361,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P91: campo de NUMERO (kg, @, %, cab, dias) = `CampoNumeroComConta`; o gesto da conta e' UM hook (`useContaNoCampo`), o mesmo do `CampoMoeda`.
 - P88: formulario antigo com estado em TEXTO DE MAQUINA ('1234.56') troca o `type="number"` pelo campo do sistema sem mudar o estado (`numeroDoTextoDeMaquina`/`textoDeMaquina`).
 - P92: resumo do Negociar lote = 400px, colunas fixas (`colgroup` medido para o teto); acima do teto a fonte desce ate' 2px (piso 9,5), nunca quebra; o gate tem `numero-vaza` (numero fora da caixa de conteudo da celula; tabela maior que a caixa).
+- CONC-CRIAR-PERDE-DADOS-01: FORMULARIO ABERTO NUNCA PERDE DADOS — modal que hidrata/reinicia por efeito ve^ as props por CONTEUDO (`useConteudoEstavel`: `LancamentoV2Dialog` lancamento/prefill/travas, `CasarComBancoModal` extrato/iniciais/modelo), nunca pela identidade; o dono pode se repintar (react-query relê ao voltar o foco) sem apagar o digitado nem os levados.
 - UX-OBRIGATORIOS-01: Salvar com pendencia nao fecha nem grava; o campo pendente fica vermelho com a mensagem; UX-TOAST-01: validacao
   e erro de preenchimento nunca em toast. Dialogo/menu fechando nao aceita clique. Modal em blocos pela primitiva da casa; o
   `DialogContent` renderiza a 95%.

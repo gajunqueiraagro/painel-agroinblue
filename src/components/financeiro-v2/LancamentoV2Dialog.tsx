@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useConteudoEstavel } from '@/lib/react/conteudoEstavel';
 import { FaixaDaReferencia, type ReferenciaOperacionalInfo } from './FaixaDaReferencia';
 import { BLOCO_FORMULARIO, BlocoFormulario, REGUA_ROTULO, TituloDoBloco } from '@/components/ui/bloco-formulario';
 import { useNavigate } from 'react-router-dom';
@@ -613,12 +614,20 @@ function getMonthLabel(dateStr: string): string {
 const REGRA_DA_NF_LIDA: RegraDeAceite = { tipos: ['xml', 'pdf'] };
 
 export function LancamentoV2Dialog({
-  open, carregando, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
-  fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields, onLancamentoCriado,
+  open, carregando, onClose, onSave, onDelete, lancamento: lancamentoDaProp, fazendas, contas, classificacoes,
+  fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill: prefillDaProp, lockedFields: travasDaProp, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos, origemOC,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato, onTrocarLancamento,
   documentosAntesDeSalvar, onLerNotaFiscal, onLerNotaNoNovo, abaInicial,
 }: Props) {
+  /* CONC-CRIAR-PERDE-DADOS-01 (Gabriel 08/11, URGENTE) — FORMULÁRIO ABERTO NUNCA PERDE DADOS. A hidratação do formulário (os efeitos com
+     `[open, lancamento, …, prefill, lockedFields]`) repunha TODOS os campos quando o dono passava um objeto NOVO e IGUAL — o "criar do
+     extrato" montava o `movimento` a cada render, e a releitura da Conciliação (react-query ao voltar o foco à janela) repintava o dono:
+     tudo o que foi digitado sumia. Daqui para baixo o corpo vê estas três por CONTEÚDO (`useConteudoEstavel`): a mesma referência enquanto
+     o dado não muda; o "+ Da nota" lido e outro lançamento (conteúdo novo) seguem hidratando. */
+  const lancamento = useConteudoEstavel(lancamentoDaProp);
+  const prefill = useConteudoEstavel(prefillDaProp);
+  const lockedFields = useConteudoEstavel(travasDaProp);
   /* P128a (porta 2) — a frase do que impediu a NF lida de abrir a previa (na propria area, nunca toast) e o "lendo" */
   const [recusaDaNotaLida, setRecusaDaNotaLida] = useState<string | null>(null);
   const [lendoANota, setLendoANota] = useState(false);
