@@ -11,6 +11,8 @@
  *   ficam em `servico`. NFS-e nao tem duplicatas: o vencimento e' o da NF-e sem duplicata (a previa pede).
  * ⚠ NFS-e nao tem protocolo da SEFAZ: a validade e' a SITUACAO ("NFS-e Gerada"). Cancelada ou substituida: recusa.
  * ⚠ O "-" do DANFSe e' "sem valor": conta 0.
+ * NOTA-NFSE-LEITURA-02 (Gabriel 08/11, NF 402): le^ tambem a inscricao municipal do prestador, o quadro do ISSQN (base, aliquota, apurado,
+ *   retido) e o da REFORMA (IBS/CBS) — este nas MESMAS chaves do grupo `IBSCBS` da NF-e (`ibsCbsDoDanfse`), para gravar no mesmo lugar.
  */
 import { soDigitos } from './formatos';
 import {
@@ -56,6 +58,34 @@ export function conferirChaveNfse(nota: Pick<NotaLida, 'chave' | 'numero' | 'emi
 
 const RE_CHAVE_NFSE = /^[\d\s]+$/;
 
+/** "2,45%" / "0,10 % / 0,00 %" -> as aliquotas com ponto ("2.45", "0.10"), na ordem; o "-" (sem valor) nao entra. */
+export function aliquotasDoTexto(s: string | null | undefined): string[] {
+  return Array.from((s ?? '').matchAll(/(\d+(?:,\d+)?)\s*%/g), (m) => m[1].replace(',', '.'));
+}
+/** centavos -> "2828.95" (como no XML). */
+const decimalDoXml = (cent: number) => (cent / 100).toFixed(2);
+
+/**
+ * NOTA-NFSE-LEITURA-02 — o quadro "TRIBUTAÇÃO IBS/CBS" do DANFSe nas chaves do `IBSCBS` da NF-e. `null` quando o quadro nao existe
+ * (DANFSe antigo) ou nao traz nada.
+ */
+export function ibsCbsDoDanfse(v: {
+  cstClass: string | null; base: string | null; aliqIbs: string | null; ibsUf: string | null; ibsMun: string | null; ibsTotal: string | null;
+  aliqCbs: string | null; cbs: string | null;
+}): Record<string, string> | null {
+  const o: Record<string, string> = {};
+  const [cst, cClass] = (v.cstClass ?? '').split('/').map((x) => x.trim()).filter((x) => x && x !== '-');
+  if (cst) o.CST = cst;
+  if (cClass) o.cClassTrib = cClass;
+  const c = (t: string | null) => { const n = t == null || t.trim() === '-' ? null : centavosBr(t); return n == null ? null : decimalDoXml(n); };
+  const [pUf, pMun] = aliquotasDoTexto(v.aliqIbs);
+  const [pCbs] = aliquotasDoTexto(v.aliqCbs);
+  const poe = (k: string, x: string | null | undefined) => { if (x != null) o[k] = x; };
+  poe('vBC', c(v.base)); poe('pIBSUF', pUf); poe('vIBSUF', c(v.ibsUf)); poe('pIBSMun', pMun); poe('vIBSMun', c(v.ibsMun));
+  poe('vIBS', c(v.ibsTotal)); poe('pCBS', pCbs); poe('vCBS', c(v.cbs));
+  return Object.keys(o).length ? o : null;
+}
+
 /** Le^ o DANFSe. */
 export function notaDoDanfse(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe {
   const d = new Danfe(paginas);
@@ -96,6 +126,7 @@ export function notaDoDanfse(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanf
   const itCepPrest = d.campo('CODIGO IBGE / CEP', noPrest);
   const itEnderPrest = d.campo('ENDERECO', noPrest);
   const itFonePrest = d.campo('TELEFONE', noPrest);
+  const itImPrest = d.campo('INSCRICAO MUNICIPAL', noPrest);
   d.marcar('emitente_cnpj', itDocPrest);
   d.marcar('emitente', itNomePrest);
   d.marcar('emitente_cidade', itCidadePrest);
@@ -112,12 +143,24 @@ export function notaDoDanfse(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanf
   const itNbs = d.campo('CODIGO DA NBS', noServ);
   const rotDescricao = d.rotulos('DESCRICAO DO SERVICO').find((r) => r.pagina === pg) ?? null;
   const linhasDescricao = rotDescricao ? d.linhasEntre(pg, rotDescricao.y - 1, (yIss ?? rotDescricao.y - 60) + 5) : [];
-  const descricao = linhasDescricao.map((l) => l.map((o) => o.str.trim()).join(' ')).join(' ').replace(/\s+/g, ' ').trim();
+  const linhasDoServico = linhasDescricao.map((l) => l.map((o) => o.str.trim()).join(' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const descricao = linhasDoServico.join(' ');
   for (const l of linhasDescricao) for (const o of l) d.marcar('itens', o);
 
   /* AS RETENCOES (o ISS so' conta quando "Retencao do ISSQN" diz retido) */
   const issRetido = /^RETIDO/.test(normalizar(texto(d.campo('RETENCAO DO ISSQN')) ?? ''));
   const issApurado = cent(d.campo('ISSQN APURADO'));
+  /* NOTA-NFSE-LEITURA-02 — o quadro do ISSQN inteiro (informacao; o lancamento segue o liquido impresso) */
+  const issqn = { baseCent: cent(d.campo('BC ISSQN')), aliquota: aliquotasDoTexto(texto(d.campo('ALIQUOTA APLICADA')))[0] ?? null, apuradoCent: issApurado, retido: issRetido };
+  /* NOTA-NFSE-LEITURA-02 — a REFORMA: o quadro "TRIBUTAÇÃO IBS/CBS", entre o titulo dele e o do valor total */
+  const yIbs = y('TRIBUTACAO IBS/CBS');
+  const noIbs = faixa(yIbs, yTotal);
+  const ibsCbs = yIbs == null ? null : ibsCbsDoDanfse({
+    cstClass: texto(d.campo('CST / CCLASSTRIB', noIbs)), base: texto(d.campo('BASE DE CALCULO APOS EXCLUSOES E REDUCOES', noIbs)),
+    aliqIbs: texto(d.campo('ALIQUOTA - IBS UF / IBS MUN', noIbs)), ibsUf: texto(d.campo('VALOR APURADO ESTADUAL - IBS', noIbs)),
+    ibsMun: texto(d.campo('VALOR APURADO MUNICIPAL - IBS', noIbs)), ibsTotal: texto(d.campo('VALOR TOTAL APURADO - IBS', noIbs)),
+    aliqCbs: texto(d.campo('ALIQUOTA - CBS', noIbs)), cbs: texto(d.campo('VALOR TOTAL APURADO - CBS', noIbs)),
+  });
   const retencoes = {
     issRetidoCent: issRetido ? issApurado : 0,
     irrfCent: cent(d.campo('IRRF')),
@@ -166,6 +209,7 @@ export function notaDoDanfse(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanf
     naturezaOperacao: 'Prestação de serviço',
     emitente: {
       documento: soDigitos(itDocPrest?.str) || documentoDaChaveNfse(chave), nome: nomeEmit, fantasia: null, ie: null,
+      inscricaoMunicipal: texto(itImPrest),
       endereco: { logradouro, numero: numeroEnd, complemento, bairro, municipio, uf, cep, telefone: soDigitos(texto(itFonePrest)) || null },
     },
     destinatario: { documento: soDigitos(itDocTom?.str) || null, nome: texto(itNomeTom), ie: ieTomador, endereco: texto(itEnderTom) },
@@ -180,7 +224,7 @@ export function notaDoDanfse(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanf
     cfops: [],
     servico: {
       competencia: dataIso(itCompetencia?.str) ?? emissao, codigoTributacao: texto(itCodigo), nbs: texto(itNbs),
-      brutoCent, retencoes, totalRetidoCent: cent(itRetido), liquidoCent,
+      brutoCent, retencoes, totalRetidoCent: cent(itRetido), liquidoCent, issqn, ibsCbs, linhas: linhasDoServico,
     },
   };
 
@@ -366,7 +410,7 @@ export function notaDaNfseMunicipal(paginas: readonly ItemDoDanfe[][]): Resultad
     finalidade: 'normal',
     naturezaOperacao: 'Prestação de serviço',
     emitente: {
-      documento, nome: nomeEmit, fantasia: null, ie: null,
+      documento, nome: nomeEmit, fantasia: null, ie: null, inscricaoMunicipal: imPrest?.str.trim() || null,
       endereco: { logradouro: logradouro?.replace(/\s*-?\s*CEP:.*$/i, '') || null, numero: null, complemento: null,
         bairro: bairroPrest?.str.trim() || (bairroDoEndereco && !/^CEP/i.test(bairroDoEndereco) ? bairroDoEndereco : null),
         municipio: munPrest?.str.trim() || null, uf: ufPrest?.str.trim() || null, cep, telefone: null },

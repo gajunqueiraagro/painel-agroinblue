@@ -2351,7 +2351,34 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
   /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO aqui, pelo `prefillDaNota` (o caminho da lista): `notapdf`
      o PDF sintético (4 duplicatas) · `notachave` só a chave digitada (sem valor nem data) · `notacartao` a nota sem duplicata paga no cartão
      Elo (a conta já escolhida; o cenário escolhe Parcelada 10× no Pagamento). O PDF é desenhado pelo jspdf e LIDO pelo caminho de verdade. */
-  if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
+  /* NOTA-NFSE-LEITURA-02 (Gabriel 08/11, a forma da NF 402) — `notanfse`: o DANFSe nacional sintético (sem IE, IBS/CBS, 3 linhas de serviço)
+     de uma filial cuja OUTRA filial é a cadastrada (a faixa nova), a fazenda pelo histórico do fornecedor e a descrição curta do serviço */
+  if (v === 'notanfse') {
+    void (async () => {
+      const { jsPDF } = await import('jspdf');
+      const { danfseSintetico } = await import('@/lib/financeiro/nfe/__fixtures__/danfseSintetico');
+      const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
+      const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [595.28, 841.89] });
+      for (const it of danfseSintetico({ bruto: '2.900,00', issApurado: '71,05', liquido: '2.900,00', ibsCbs: true, semIe: true,
+        descricao: ['TROCA BOMBA ALIMENTADORA DA CARREGADEIRA W130', '02 DESLOCAMENTOS', 'CARREGADEIRA W130'] })[0]) {
+        doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 841.89 - it.y);
+      }
+      const bytes: ArrayBuffer = doc.output('arraybuffer');
+      const lido: any = await lerNota(bytes);
+      if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+      const FILIAL = { ...AGRO, id: 'oficina-2', nome: 'Oficina Sintetica de Teste Ltda', cpf_cnpj: '11.222.333/0002-62' };
+      props.fornecedores = [FILIAL];
+      const resolucao = resolverEmitente(lido.nota.emitente, [FILIAL], 'oficina-2');
+      const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: FAZENDAS.map((f: any) => ({ ...f, ie: null })), emitente: resolucao,
+        favorecidoId: resolucao.propostoId, ultima: null, fazendaDoHistorico: 'f-pur' });
+      if (!p.ok) { raiz.render(<div>{p.frase}</div>); return; }
+      props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento,
+        emitente: lido.nota.emitente, resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, 'NF_57.pdf') } as any);
+      props.documentosAntesDeSalvar = true;
+      renderizar();
+    })();
+  } else if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
     void (async () => {
       const { jsPDF } = await import('jspdf');
       const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');

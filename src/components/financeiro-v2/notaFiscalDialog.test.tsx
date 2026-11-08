@@ -38,6 +38,9 @@ const consultas = vi.hoisted(() => ({
   /* NOTA-FAZENDA-PELA-IE-01 — gravar a IE na fazenda (simula e grava) */
   inscreverEmFazendas: vi.fn((_cb: (c: string) => void) => () => undefined),
   aliasesDasFazendas: vi.fn(async (): Promise<Record<string, string[]>> => ({})),
+  /* NOTA-NFSE-LEITURA-02 — a fazenda pelo histórico do fornecedor (padrão: nenhuma) */
+  fazendaPeloHistoricoDoFornecedor: vi.fn(async (_c: string, _d: string): Promise<string | null> => null),
+  fazendasDoTomador: vi.fn(async (_c: string, _d: string | null, _data: string): Promise<string[]> => []),
   gravarIeDaFazenda: vi.fn(async (_f: string, _ie: string, _r: string | null, simular: boolean, _c: string)
     : Promise<{ ok: true; frase: string | null; trilhaId: string | null } | { ok: false; frase: string }> => (simular
       ? { ok: true, frase: 'Faz. Sintetica passa a ter a IE 280000002: as próximas notas com esta IE de destinatário já vêm com a fazenda.', trilhaId: null }

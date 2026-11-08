@@ -75,7 +75,7 @@ export function oQueFalta(d: DadosDoFornecedor, opcoes: { documentoInvalido: boo
 export const abasComPendencia = (faltas: readonly Falta[]): Set<AbaDoFornecedor> => new Set(faltas.map((x) => x.aba));
 
 /* ── o XML da NF-e completa o cadastro: só campo VAZIO, nunca sobrescreve ── */
-export type CampoDoEmitente = 'nome_fantasia' | 'inscricao_estadual' | 'tipo_pessoa' | 'logradouro' | 'numero' | 'complemento' | 'bairro'
+export type CampoDoEmitente = 'nome_fantasia' | 'inscricao_estadual' | 'inscricao_municipal' | 'tipo_pessoa' | 'logradouro' | 'numero' | 'complemento' | 'bairro'
   | 'municipio' | 'uf' | 'cep' | 'telefone';
 export type PatchDoEmitente = Partial<Record<CampoDoEmitente, string>>;
 export function completarPeloEmitente(atual: Partial<Record<CampoDoFornecedor, unknown>>, e: EmitenteNFe): PatchDoEmitente {
@@ -84,6 +84,7 @@ export function completarPeloEmitente(atual: Partial<Record<CampoDoFornecedor, u
   const poe = (c: CampoDoEmitente, v: string | null | undefined) => { if (v && v.trim() && vazio(c)) p[c] = v.trim(); };
   poe('nome_fantasia', e.fantasia);
   poe('inscricao_estadual', e.ie);
+  poe('inscricao_municipal', e.inscricaoMunicipal);   /* NOTA-NFSE-LEITURA-02 — a IM do prestador da NFS-e */
   if (vazio('tipo_pessoa')) p.tipo_pessoa = e.documento.length === 11 ? 'PF' : 'PJ';
   const end = e.endereco;
   if (end) {

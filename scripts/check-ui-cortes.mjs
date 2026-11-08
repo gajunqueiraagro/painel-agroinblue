@@ -1256,7 +1256,7 @@ const CENARIOS = [
   /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO o Novo lançamento: o PDF (4 duplicatas), só a chave
      digitada (valor e data para o operador) e o cartão em 10× (D2: Parcelada 10× no Pagamento, a 1ª fatura sugerida); Geral, Pagamento e
      Documentos (o anexo clicável) nos sete tamanhos. Substitui a tela intermediária (`nota-pdf` da nota nova, `nota-pdf-aba-*`, `nota-pdf-cartao*`). */
-  ...['pdf', 'chave', 'cartao'].flatMap((v) => {
+  ...['pdf', 'chave', 'cartao', 'nfse'].flatMap((v) => {
     const pronto = async (p) => { await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(600); };
     const parcelada10 = async (p) => {
       await clicarTexto('Pagamento')(p);
