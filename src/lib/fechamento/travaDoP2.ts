@@ -122,6 +122,17 @@ export function useValorRebanhoARevalidar(fazendaIds: readonly string[]) {
  * fecha o mês e volta o snapshot a `validado`. O botão do aviso nunca fica mudo: quando não pode, diz o porquê (o primeiro que barra).
  * Quem recusa de verdade é o banco (a guarda do P1 no fechamento, a RLS, o perfil leitura) — e a recusa dele aparece com a mensagem dele.
  */
+/**
+ * BG-SET26-REVALIDAR (Gabriel 08/11 06:40) — QUEM pode revalidar: fazenda (não Global), mês do sistema ao vivo (o Valor do Rebanho do mês
+ * ABERTO: `fonteMes === 'live'`) e não futuro. ⚠ A trava de tela do `useMasterLock` NÃO entra: ela dá o mês como somente leitura quando
+ * todos os pastos estão fechados e há preço gravado — exatamente o estado de um mês a revalidar (o P1 fechado é condição do revalidar).
+ * Com ela, o Revalidar ficava desabilitado para TODOS ("Só quem edita…") no cliente sem master (Vera, BG set/26). Revalidar não edita
+ * preço: regrava os mesmos preços com o rebanho de agora (o "Salvar e Fechar"); quem recusa de verdade segue sendo o banco.
+ */
+export function podeRevalidarOMes(e: { global: boolean; fonteMes: string; mesFuturo: boolean }): boolean {
+  return !e.global && e.fonteMes === 'live' && !e.mesFuturo;
+}
+
 export function motivoParaRevalidar(e: {
   podeEditar: boolean; pastosOficiais: boolean; semPreco: readonly string[]; anoMes: string;
 }): string | null {
