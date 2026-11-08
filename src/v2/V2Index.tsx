@@ -107,6 +107,7 @@ import { buscarOperacaoDoLancamento } from '@/hooks/useOperacaoDoLancamento';
    camera ja diz que a entrada e' por foto, e o brilho ao lado do rotulo era enfase
    sobre enfase. */
 import { Camera, Loader2 } from 'lucide-react';
+import { mesCurto } from '@/lib/pecuaria/fechamentoGlobal';
 
 /**
  * V2 → Financeiro → Financiamentos.
@@ -1225,6 +1226,9 @@ export default function V2Index() {
             onBack={voltaAoResumoRef.current ? voltarAoResumo : origemPendenciaRef.current
               ? () => { const o = voltarParaOrigem(); setSection(o ?? 'rebanho-home'); }
               : undefined}
+            /* FECH-TOPO-02 — vindo do Fechamento, a volta diz para onde: "← Fechamento set/26" (o mês da ida) */
+            rotuloDaVolta={!voltaAoResumoRef.current && origemPendenciaRef.current === 'fechamento' && mesDoValorRebanhoRef.current != null
+              ? `Fechamento ${mesCurto(`${ano}-${String(mesDoValorRebanhoRef.current).padStart(2, '0')}`)}` : undefined}
           />
         )}
       </V2ZootWrapper>
@@ -1483,9 +1487,13 @@ export default function V2Index() {
           if (filtro) { setAno(filtro.ano); setMes(String(filtro.mes)); }
           setSection('lancamentos-zoot');
         }}
+        /* FECH-TOPO-02 (Gabriel 07/11 17:52) — "Preço do rebanho →" abre o Valor do Rebanho NO MÊS DO FILTRO desta tela (antes só o ano
+           ia: a tela abria no mês atual) e com a volta "← Fechamento set/26", que retorna no mesmo mês e na mesma fazenda (o shell não muda) */
         onNavigateToValorRebanho={(filtro) => {
           setAno(filtro.ano);
           setMes(String(filtro.mes));
+          mesDoValorRebanhoRef.current = filtro.mes;
+          origemPendenciaRef.current = 'fechamento';
           setSection('valor-rebanho');
         }}
         /* FECH-P2-TRAVA-AVISO-01 — ida e volta: a seta do Valor do Rebanho volta ao Fechamento, que reabre o pasto */

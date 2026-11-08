@@ -38,6 +38,8 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onBack?: () => void;
+  /** FECH-TOPO-02 — o destino da volta escrito ("Fechamento set/26"): a seta vira "← Fechamento set/26" no mesmo lugar */
+  rotuloDaVolta?: string;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
   onNavigateToFechamentoPastos?: () => void;
@@ -775,7 +777,7 @@ function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
   );
 }
 
-export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial, onNavigateToFechamentoPastos, onNavigateToMovimentacoes }: Props) {
+export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaVolta, filtroAnoInicial, filtroMesInicial, onNavigateToFechamentoPastos, onNavigateToMovimentacoes }: Props) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
@@ -1765,7 +1767,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           tabela e os gráficos nasciam em alturas diferentes conforme o que estava aberto. O
           `flex-wrap` também saiu: envolver era outra forma de crescer. */}
       <div className="flex items-center gap-1.5 overflow-hidden" style={{ height: 18 }}>
-        {onBack && (
+        {onBack && rotuloDaVolta ? (
+          <button type="button" onClick={onBack} data-testid="voltar-ao-fechamento" title={`Voltar ao ${rotuloDaVolta}`}
+            className="h-[18px] shrink-0 whitespace-nowrap rounded border border-border bg-muted px-1.5 text-[10px] font-bold leading-none text-muted-foreground hover:bg-muted/80">
+            ← {rotuloDaVolta}
+          </button>
+        ) : onBack && (
           <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onBack}>
             <ArrowLeft className="h-4 w-4" />
           </Button>

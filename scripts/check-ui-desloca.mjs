@@ -51,6 +51,9 @@ const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.s
 /* P92 — os nove tamanhos do Negociar lote (os sete do consórcio + 750x483 e 900x600) e o 1024x600, a fronteira em que o resumo de 400px aparece */
 const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 600], [1000, 600], [1024, 600], [1126, 579], [1300, 704], [1440, 800]];
 const espera = (p, ms = 450) => p.waitForTimeout(ms);
+/* FECH-TOPO-02 — a troca Cards ↔ Mapa pelo seletor da linha da vista (o "Mapa" do topo é outro botão, o que vai ao Mapa de pastos) */
+const clicarNoSeletor = (rotulo) => async (p) => {
+  await p.locator('[data-testid="lugar-seletor-cards-mapa"] button', { hasText: new RegExp(`^${rotulo}$`) }).first().click(); await espera(p, 900); };
 /* LOTES-03 F1 — os três oficiais + 1240×800 e 1024×600 + o zoom de 135% de 1280×800 (948×593) e de 1440×900 (1067×667) */
 const TAMANHOS_DO_LOTES = [[1000, 600], [1126, 579], [1440, 800], [1240, 800], [1024, 600], [948, 593], [1067, 667]];
 /* P109 — a faixa em volta do rótulo do regime da meta (o pai dele) */
@@ -286,17 +289,22 @@ const CENARIOS = [
     },
     estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
   })),
-  /* FECH-TOPO-COMPACTO-01 — o topo do Fechamento (`v=topo`, todos os botões): trocar de mês e abrir/fechar as Sugestões não movem os
-     meses, a barra de botões, o aviso, o "Fechar Mês" nem a tabela de conferência; o lugar do seletor "Cards | Mapa" é fixo */
+  /* FECH-TOPO-COMPACTO-01 → FECH-TOPO-02 — o topo do Fechamento (`v=topo`, todos os botões): trocar de mês e abrir/fechar o Ajustar não
+     movem os meses (com o ano à esquerda), os botões em 2 colunas à direita da tabela, o aviso, o "Fechar Mês" nem a tabela de conferência */
   { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
-    regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="barra-do-topo"]').waitFor(); await espera(p, 900); },
+    regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="botoes-do-topo"]').waitFor(); await espera(p, 900); },
     estados: [['mês Set', botao(/^Set/)], ['mês Out', botao(/^Out/)],
-      ['abrir Sugestões', botao(/^Sugestões$/)], ['fechar Sugestões', async (p) => { await p.keyboard.press('Escape'); await espera(p, 500); }]] },
-  /* MAPA-LOTES-01 (C2) — trocar Cards ↔ Mapa e trocar de mês na vista Mapa não movem os meses, a barra do topo nem o seletor (o lugar de
-     92px é fixo); a grade some e o mapa entra no MESMO lugar */
+      ['abrir Ajustar', botao(/^Ajustar$/)], ['fechar Ajustar', async (p) => { await p.keyboard.press('Escape'); await espera(p, 500); }]] },
+  /* MAPA-LOTES-01 (C2) — trocar Cards ↔ Mapa e trocar de mês na vista Mapa não movem os meses nem os botões do topo; a grade some e o
+     mapa entra no MESMO lugar. FECH-TOPO-02: o seletor mora na linha de 24px acima da grade e do mapa (`fechamento-mapa-linha`: o MESMO
+     lugar nas duas vistas). "Mapa" agora casa dois botões (o do topo, que vai ao Mapa de pastos, e o do seletor): a vista se troca pelo
+     seletor. */
   { nome: 'fechamento-mapa', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
-    regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="barra-do-topo"]').waitFor(); await espera(p, 900); },
-    estados: [['vista Mapa', botao(/^Mapa$/)], ['mês Set', botao(/^Set/)], ['mês Out', botao(/^Out/)], ['vista Cards', botao(/^Cards$/)]] },
+    regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="botoes-do-topo"]').waitFor(); await espera(p, 900); },
+    estados: [['vista Mapa', clicarNoSeletor('Mapa')], ['mês Set', botao(/^Set/)], ['mês Out', botao(/^Out/)], ['vista Cards', clicarNoSeletor('Cards')]] },
+  { nome: 'fechamento-mapa-linha', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '[data-testid="linha-da-vista"]', antes: async (p) => { await p.locator('[data-testid="linha-da-vista"]').waitFor(); await espera(p, 900); },
+    estados: [['vista Mapa', clicarNoSeletor('Mapa')], ['vista Cards', clicarNoSeletor('Cards')]] },
   /* REVALIDAR-BG-SET26 — Valor do Rebanho (SINTÉTICO): trocar entre o mês validado (jul), o da cadeia quebrada (ago), o invalidado e
      aberto (set) e o sem snapshot (out) não move a régua, a tabela nem os gráficos — o aviso do snapshot é estado da faixa de 22px */
   { nome: 'valor-rebanho-snapshot', url: 'tela=valor-rebanho&barra=32',

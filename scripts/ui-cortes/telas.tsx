@@ -1761,6 +1761,12 @@ if (tela === 'mesclar') {
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
     lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
   const ITENS: (ReturnType<typeof item> & { lote_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  /* FECH-TOPO-02 — `&mes=9`: set/26 com os MESMOS cards, todos FECHADOS (o mês fechado do print: "Mês fechado" e o "Preço do rebanho →") */
+  const MES_DA_BANCADA = q.get('mes') === '9' ? 9 : 10;
+  if (MES_DA_BANCADA === 9) {
+    CARDS.push(...CARDS.map((c) => ({ ...c, id: `${c.id}-9`, ano_mes: '2026-09', status: 'fechado' })));
+    ITENS.push(...ITENS.map((i) => ({ ...i, id: `${i.id}-9`, fechamento_id: `${i.fechamento_id}-9` })));
+  }
   /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
   const COM_LOTES = v === 'lotes';
   if (COM_LOTES) {
@@ -1818,10 +1824,12 @@ if (tela === 'mesclar') {
     const { FechamentoTab } = await import('@/pages/FechamentoTab');
     /* FECH-TOPO-COMPACTO-01 — `v=topo`: o topo com TODOS os botões (os três que só aparecem com o hospedeiro que navega) */
     const navegar = () => {};
-    montar(v === 'topo'
-      ? <FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} onNavigateToConferenciaGmd={navegar} onNavigateToMapaPastos={navegar}
+    /* FECH-TOPO-02 acerto 1: a vista Mapa (v=mapa) com o MESMO hospedeiro do topo — antes só o `v=topo` navegava e a foto do mapa saía
+       sem GMD e Mapa (na tela real eles estão nas duas vistas) */
+    montar(v === 'topo' || v === 'mapa'
+      ? <FechamentoTab filtroAnoInicial="2026" filtroMesInicial={MES_DA_BANCADA} onNavigateToConferenciaGmd={navegar} onNavigateToMapaPastos={navegar}
           onNavigateToValorRebanho={navegar} />
-      : <FechamentoTab filtroAnoInicial="2026" filtroMesInicial={10} />);
+      : <FechamentoTab filtroAnoInicial="2026" filtroMesInicial={MES_DA_BANCADA} />);
   };
   void montarFechamento();
 } else if (tela === 'valor-rebanho') {

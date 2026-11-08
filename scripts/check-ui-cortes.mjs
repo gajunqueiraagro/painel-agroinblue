@@ -795,7 +795,17 @@ const CENARIOS = [
   { nome: 'fechamento-mapa-topo', url: 'tela=fechamento-grupo&v=mapa&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
     regiao: '.sticky.top-0', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500); } },
   { nome: 'fechamento-mapa-faixa', url: 'tela=fechamento-grupo&v=mapa&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
-    regiao: '[data-testid="faixa-sem-desenho"]', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500); } },
+    regiao: '[data-testid="linha-da-vista"]', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500); } },
+  /* FECH-TOPO-02 — a linha da vista na vista Cards (o seletor no mesmo lugar) e o popup do pasto no MAPA (o mesmo dos cards): nada corta */
+  { nome: 'fechamento-mapa-linha-cards', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '[data-testid="linha-da-vista"]', antes: async (p) => { await p.locator('[data-testid="linha-da-vista"]').waitFor(); await p.waitForTimeout(1500); } },
+  { nome: 'fechamento-mapa-popup', url: 'tela=fechamento-grupo&v=mapa&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '.leaflet-tooltip', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500);
+      /* o mouse vai ao MEIO do 1º pasto (o contorno da área total, por cima, intercepta o hover do Playwright no elemento) */
+      const b = await p.locator('.leaflet-container path.leaflet-interactive').nth(1).boundingBox();
+      await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.waitForTimeout(200); await p.mouse.move(b.x + b.width / 2 + 2, b.y + b.height / 2 + 2);
+      await p.locator('.leaflet-tooltip [data-testid="popup-do-pasto"]').waitFor({ timeout: 4000 });
+      await p.waitForTimeout(400); } },
   /* REVALIDAR-BG-SET26 — Valor do Rebanho (SINTÉTICO): a faixa do snapshot de 22px (set invalidado, com o Revalidar e o motivo) não
      corta nem vaza. SÓ a faixa (`regiao`): a tela inteira nunca teve gate de corte e tem achados antigos fora deste item. */
   { nome: 'valor-rebanho-faixa-snapshot', url: 'tela=valor-rebanho&barra=32', tamanhos: [[1000, 600], [1126, 579], [1366, 768], [1750, 1000]],
@@ -824,6 +834,11 @@ const CENARIOS = [
       /* FECH-REABRIR-JUNTO-01 — o modal com o Valor do Rebanho validado: a linha do aviso (frase · motivo opcional · "Reabrir e editar") inteira */
       { nome: 'fechamento-grupo-modal-trava', url: URL + '&v=trava', tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', botoesDentro: '[data-testid="trava-do-p2"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="reabrir-e-editar"]').waitFor(); await p.waitForTimeout(300); } },
+      /* FECH-BARRA-HOVER-01 — o popup do pasto ao passar o mouse no card (nome grande · área; categorias; total · UA/ha): nada corta */
+      { nome: 'fechamento-grupo-popup', url: URL, tamanhos: T, regiao: '[data-testid="popup-do-pasto"]',
+        /* o Radix põe uma 2ª cópia do conteúdo escondida (para o leitor de tela): a de cima é a que se vê */
+        antes: async (p) => { await grade(p); await p.locator('button', { hasText: /^P11/ }).first().hover();
+          await p.locator('[data-testid="popup-do-pasto"]').first().waitFor(); await p.waitForTimeout(400); } },
       { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
       { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
       /* CADERNO-CAMPO-01 peça 1 — o diálogo "Exportar mês" (as folhas para marcar, a linha do motivo reservada, Cancelar/Gerar PDF) */

@@ -1,0 +1,123 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fechamento · barra mais limpa + mini-modal do pasto · mock FECH-BARRA-HOVER-01</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--navy:#1e2a3d;--sec:#4b5563;--ter:#6b7280;--b:#dde2e9;--b2:#c9d1dc;--az:#24508f}
+*{box-sizing:border-box}
+body{margin:0;background:#3a4252;font:12px Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#111827;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer}
+.topo{background:#0f1b2d;color:#cbd5e1;padding:6px 14px;font-size:11px;display:flex;gap:14px;white-space:nowrap;overflow:hidden}.topo b{color:#fff}
+.cen{display:flex;gap:6px;justify-content:center;padding:8px;flex-wrap:wrap}
+.ch{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px}
+.ch.on{background:#fff;color:#1e3a5f;font-weight:600}
+.tela{max-width:1180px;margin:0 auto 12px;background:#f4f6f9;border-radius:8px;padding:12px 14px 14px;position:relative}
+.cap{font-size:10.5px;color:var(--ter);margin:0 0 6px}
+.barra{display:flex;align-items:center;gap:4px;white-space:nowrap;height:28px}
+.seg{display:inline-flex;border:1px solid var(--b2);border-radius:6px;overflow:hidden;background:#fff;margin-right:8px}
+.seg button{border:0;background:none;padding:0 10px;height:24px;font-size:11px}
+.seg button.on{background:var(--navy);color:#fff}
+.gb{border:0;background:none;height:24px;padding:0 8px;border-radius:5px;font-size:11px;color:var(--sec);display:inline-flex;align-items:center;gap:5px}
+.gb:hover{background:#e7ebf1;color:#111827}
+.gb svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8}
+.gb.aj{color:#a16207;margin-left:6px}
+.sep{width:1px;height:16px;background:var(--b2);margin:0 4px}
+.velha .ob{border:1px solid var(--b2);background:#fff;border-radius:6px;height:26px;padding:0 9px;font-size:11px;margin-right:4px;display:inline-flex;align-items:center;gap:4px}
+.velha .ob.am{border-color:#f2c14e;color:#a16207}
+.velha .ob.x{position:relative}
+.velha .ob.x:after{content:"";position:absolute;left:4px;right:4px;top:50%;border-top:1.5px solid #dc2626}
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-top:12px}
+.cd{background:#fffbeb;border:1px solid #f3dca0;border-radius:8px;padding:7px 10px;cursor:pointer;position:relative;min-width:0}
+.cd .nm{font-weight:700;font-size:13px}
+.cd .big{font-size:15px;font-weight:700}
+.cd .l3{display:flex;gap:8px;color:var(--ter);font-size:10.5px;white-space:nowrap}.cd .l3 b{margin-left:auto;color:#b45309;font-weight:600;font-size:10px}
+.mapa{margin-top:12px;height:330px;border-radius:8px;position:relative;overflow:hidden;background:#6b7a55}
+.mapa svg{width:100%;height:100%;display:block}
+.mapa polygon{stroke:#fff;stroke-width:1.4;cursor:pointer}
+.mapa polygon:hover{stroke-width:3}
+.mm{position:absolute;z-index:8;width:200px;border-radius:8px;overflow:hidden;box-shadow:0 6px 18px rgba(15,23,42,.22);pointer-events:none;display:none;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+.mm.on{display:block}
+.mm .hd{background:rgba(52,96,160,.72);color:#fff;padding:6px 9px 5px}
+.mm .hd .l1{display:flex;align-items:baseline;white-space:nowrap}
+.mm .hd .n{font-size:16px;font-weight:700}
+.mm .hd .r{margin-left:auto;font-size:10.5px}.mm .hd .r b{font-size:12px}
+.mm .hd .lt{font-size:10.5px;opacity:.9;margin-top:1px;white-space:nowrap}
+.mm .bd{background:rgba(255,255,255,.80);padding:4px 9px}
+.mm table{width:100%;border-collapse:collapse;table-layout:fixed}
+.mm th{font-size:10px;font-weight:500;color:#4b5563;text-align:left;padding:1px 0}
+.mm td{font-size:11px;padding:2px 0;color:#111827;white-space:nowrap;overflow:hidden}
+.mm .n2{text-align:right}
+.mm .ft{background:rgba(52,96,160,.72);color:#fff;display:flex;align-items:baseline;padding:5px 9px;white-space:nowrap;font-size:11px}
+.mm .ft b{margin-left:auto;font-size:14px}.mm .ft b small{font-size:10px;font-weight:400}
+.marcas{max-width:1180px;margin:0 auto;padding:0 2px 70px}
+.marca{display:flex;gap:9px;align-items:center;margin:4px 0;padding:5px 10px;background:#fff;border-radius:7px;font-size:11.5px}
+.marca b{width:30px}
+.marca .tx{width:520px;white-space:nowrap;overflow:hidden;color:var(--sec)}
+.marca input[type=text]{flex:1;min-width:0;padding:3px 7px;border:1px solid var(--b);border-radius:5px;font:inherit;height:24px}
+.rod{position:fixed;left:0;right:0;bottom:0;background:#fff;padding:7px 14px;display:flex;gap:10px;align-items:center;z-index:20}
+.rod span{color:var(--ter);font-size:11px}
+@media (max-width:1000px){.marca .tx{width:400px}}
+</style></head><body>
+<div class="topo"><b>Mock FECH-BARRA-HOVER-01</b><span>Barra mais limpa + mini-modal do pasto nos cards e no mapa · Vera, 3 Muchachas out/26 (números do print)</span></div>
+<div class="cen"><span style="color:#cbd5e1;font-size:11px;align-self:center">Estado:</span>
+ <button class="ch on" data-e="cards">1 · cards (passe o mouse)</button><button class="ch" data-e="mapa">2 · mapa (passe o mouse)</button></div>
+
+<div class="tela">
+ <p class="cap">Hoje</p>
+ <div class="barra velha"><span class="seg"><button class="on">Cards</button><button>Mapa</button></span>
+  <span class="ob">Resumo</span><span class="ob">GMD</span><span class="ob x">Mapa</span><span class="ob">PDF</span><span class="ob">Documentos 6</span><span class="ob am x">Sugestões</span><span class="ob am">Ajustar</span></div>
+ <p class="cap" style="margin-top:10px">Proposta: botões sem borda, ícone + nome curto · sai "Sugestões" (já está em Ajustar) · sai o botão "Mapa" (o seletor já mostra)</p>
+ <div class="barra"><span class="seg" id="seg"><button data-v="cards" class="on">Cards</button><button data-v="mapa">Mapa</button></span>
+  <button class="gb"><svg viewBox="0 0 16 16"><path d="M3 13V8M8 13V3M13 13V6"/></svg>Resumo</button>
+  <button class="gb"><svg viewBox="0 0 16 16"><path d="M1 9h3l2-5 3 9 2-5h4"/></svg>GMD</button>
+  <button class="gb"><svg viewBox="0 0 16 16"><path d="M4 1h6l3 3v11H4z M8 7v5 M6 10l2 2 2-2"/></svg>PDF</button>
+  <button class="gb"><svg viewBox="0 0 16 16"><path d="M1 4h5l1 2h8v8H1z"/></svg>Documentos 6</button>
+  <span class="sep"></span>
+  <button class="gb aj"><svg viewBox="0 0 16 16"><path d="M11 2l3 3-8 8H3v-3z"/></svg>Ajustar</button></div>
+
+ <div class="grade" id="cards"></div>
+ <div class="mapa" id="mapa" style="display:none"><svg viewBox="0 0 1000 330" preserveAspectRatio="none" id="svg"></svg></div>
+ <div class="mm" id="mm"></div>
+</div>
+
+<div class="marcas" id="marcas"></div>
+<div class="rod"><button class="b1" id="copiar" style="border:1px solid #f2c14e;background:#f2c14e;border-radius:6px;height:28px;padding:0 12px;font-weight:600">Copiar marcas</button><span id="cpok">Marque ok / ajuste em cada item e copie para o Chat.</span></div>
+<script>
+const fmt=(n,d=0)=>n.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const P=[
+ {n:'P_07',cab:55,kg:275,ha:35.7,at:'Cria',lote:'—',cats:[['—',55,275]]},
+ {n:'P_09',cab:42,kg:226.2,ha:27.0,at:'Cria',lote:'—',cats:[['—',42,226]]},
+ {n:'P_10',cab:84,kg:353.2,ha:59.7,at:'Cria',lote:'NOV-NEL-INS-01',cats:[['Novilhas',84,353]]},
+ {n:'P_11',cab:27,kg:290,ha:34.8,at:'Recria',lote:'Des-Ang-Cri',cats:[['DF',27,290]],ua:0.50},
+ {n:'P_12',cab:31,kg:290,ha:31.2,at:'Recria',lote:'—',cats:[['—',31,290]]},
+ {n:'P_13',cab:69,kg:400,ha:69.4,at:'Recria',lote:'NOV-CZ-REC-01',cats:[['Novilhas',69,400]]},
+ {n:'P_14',cab:76,kg:230,ha:68.2,at:'Recria',lote:'DES-CZ-REC-01',cats:[['DF',76,230]]},
+ {n:'P_15',cab:73,kg:290,ha:53.0,at:'Recria',lote:'—',cats:[['—',73,290]]}];
+P.forEach(p=>{if(p.ua==null)p.ua=+(p.cab*p.kg/450/p.ha).toFixed(2)});
+const mm=document.getElementById('mm'),tela=document.querySelector('.tela');
+function show(p,x,y){
+ mm.innerHTML=`<div class="hd"><div class="l1"><span class="n">${p.n}</span><span class="r"><b>${p.cab}</b> cab · <b>${fmt(p.kg,1)}</b> kg</span></div><div class="lt">Lote ${p.lote}</div></div>
+ <div class="bd"><table><colgroup><col><col style="width:40px"><col style="width:40px"></colgroup><tr><th>Categoria</th><th class="n2">cab</th><th class="n2">kg</th></tr>${p.cats.map(c=>`<tr><td>${c[0]}</td><td class="n2">${c[1]}</td><td class="n2">${c[2]}</td></tr>`).join('')}</table></div>
+ <div class="ft"><span>Lotação</span><b>${fmt(p.ua,2)} <small>UA/ha</small></b></div>`;
+ mm.classList.add('on');const r=tela.getBoundingClientRect();let L=x-r.left+14,T=y-r.top+14;
+ if(L+204>r.width)L=x-r.left-214; mm.style.left=L+'px';mm.style.top=T+'px'}
+const hide=()=>mm.classList.remove('on');
+document.getElementById('cards').innerHTML=P.map((p,i)=>`<div class="cd" data-i="${i}"><div class="nm">${p.n}</div><div class="big">${p.cab} cab</div><div class="l3"><span>${fmt(p.kg,1)} kg · ${fmt(p.ha,1)} ha</span><b>${p.at}</b></div></div>`).join('');
+document.querySelectorAll('.cd').forEach(c=>{c.onmousemove=e=>show(P[+c.dataset.i],e.clientX,e.clientY);c.onmouseleave=hide});
+const POL=['40,20 230,10 260,150 60,170','230,10 420,30 400,160 260,150','420,30 610,20 640,170 400,160','610,20 820,40 800,180 640,170','60,170 260,150 280,310 30,320','260,150 400,160 430,300 280,310','400,160 640,170 620,320 430,300','640,170 800,180 960,320 620,320'];
+document.getElementById('svg').innerHTML=POL.map((pts,i)=>`<polygon data-i="${i}" points="${pts}" fill="${i%3?'#e9c84a':'#d9b437'}" fill-opacity=".85"/>`).join('');
+document.querySelectorAll('polygon').forEach(g=>{g.onmousemove=e=>show(P[+g.dataset.i],e.clientX,e.clientY);g.onmouseleave=hide});
+function vista(v){document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));document.querySelectorAll('.ch').forEach(b=>b.classList.toggle('on',b.dataset.e===v));
+ document.getElementById('cards').style.display=v==='cards'?'':'none';document.getElementById('mapa').style.display=v==='mapa'?'':'none';hide()}
+document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>vista(b.dataset.v));
+document.querySelectorAll('.ch').forEach(b=>b.onclick=()=>vista(b.dataset.e));
+window.demo=(v,i)=>{vista(v);const el=v==='cards'?document.querySelectorAll('.cd')[i]:document.querySelectorAll('polygon')[i];const r=el.getBoundingClientRect();show(P[i],r.left+r.width/2,r.top+r.height/2)};
+const M=[['B1','Barra: botões sem borda, ícone + nome curto, mesma linha.'],
+['B2','Sai "Sugestões" (já está em Ajustar).'],
+['B3','Sai o botão "Mapa" (o seletor Cards | Mapa já mostra).'],
+['H1','Mini-modal igual ao de hoje; só cabeçalho e rodapé em azul mais leve.'],
+['H2','Mais transparente, um pouco mais estreito, nome maior.'],
+['H3','Mesmo mini-modal nos cards e no mapa, ao passar o mouse.'],
+['H4','Mesmo conteúdo de hoje: cab · peso, lote, categorias, lotação.']];
+document.getElementById('marcas').innerHTML=M.map(([k,t])=>`<div class="marca"><b>${k}</b><span class="tx" title="${t}">${t}</span><label><input type="checkbox" data-k="${k}"> ok</label><input type="text" data-a="${k}" placeholder="ajuste"></div>`).join('');
+document.getElementById('copiar').onclick=()=>{const s=M.map(([k])=>{const ok=document.querySelector(`[data-k=${k}]`).checked,a=document.querySelector(`[data-a=${k}]`).value.trim();return `${k}: ${a?a:(ok?'ok':'—')}`}).join('\n');
+ navigator.clipboard?.writeText(s).then(()=>document.getElementById('cpok').textContent='Copiado.').catch(()=>{document.getElementById('cpok').textContent=s.replace(/\n/g,' · ')})};
+</script></body></html>
