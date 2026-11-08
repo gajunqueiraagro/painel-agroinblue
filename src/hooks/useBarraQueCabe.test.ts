@@ -20,6 +20,8 @@ describe('a barra do polígono que vira compacta', () => {
   it('a livre é a faixa do topo menos os botões da direita e o espaço entre os dois', () => {
     expect(larguraLivre({ clientWidth: 491 }, { offsetWidth: 93 }, 8)).toBe(390);
     expect(larguraLivre({ clientWidth: 491 }, null, 8)).toBe(491);
+    // faixa sem largura (não desenhada; o jsdom): sem medida = cabe — a barra nunca vira compacta por engano
+    expect(cabeInteira(larguraLivre({ clientWidth: 0 }, { offsetWidth: 0 }, 8), 480)).toBe(true);
   });
 
   it('cabe = a inteira não passa da livre (meio pixel de folga, a do gate)', () => {

@@ -13,8 +13,10 @@ export function larguraInteiraDaBarra(barra: { scrollWidth: number }, nome: { sc
   return barra.scrollWidth + Math.max(0, Math.min(nome.scrollWidth, tetoDoNome) - nome.clientWidth);
 }
 
-/** a largura livre para a barra: a faixa do topo menos os botões da direita e o espaço entre os dois */
+/** a largura livre para a barra: a faixa do topo menos os botões da direita e o espaço entre os dois. Faixa SEM largura = ainda não desenhada
+ *  (ou o jsdom dos testes): sem medida, a barra fica inteira (Infinity) — nunca compacta por engano */
 export function larguraLivre(topo: { clientWidth: number }, botoes: { offsetWidth: number } | null, espaco: number): number {
+  if (topo.clientWidth <= 0) return Number.POSITIVE_INFINITY;
   return topo.clientWidth - (botoes ? botoes.offsetWidth + espaco : 0);
 }
 
