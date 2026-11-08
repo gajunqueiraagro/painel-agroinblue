@@ -330,8 +330,25 @@ if (tela === 'mesclar') {
   const VOL = v === 'volume' ? volumeNJ() : null;
   if (VOL) { g.__fornecedoresBancada = VOL.fornecedores; g.__fazendaBancada = { fazendas: VOL.fazendas, fazendaAtual: { id: '__global__', nome: 'Global', owner_id: '' },
     isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} }; }
+  /* DOC-ANEXO-E-IMPORT-01 F2 — os documentos das linhas (o clipe e o popover): lf0 com 3 (boleto · comprovante · recibo, nomes longos = o pior
+     caso do popover), lf1 com 1 (abre direto), lf2 com a mesma NF em PDF + XML (1 linha) + 1 boleto. SINTÉTICOS. */
+  const docDoClipe = (id: string, lanc: string, especie: string, nome: string, data: string, extra: Record<string, unknown> = {}) => ({
+    documento_id: id, lancamento_id: lanc, cliente_id: 'cli', origem: 'lancamento', operacao_id: null, especie, numero: null, serie: null,
+    chave_acesso: null, nome, tipo: 'application/pdf', url: `cli/${lanc}/${id}.pdf`, data_emissao: data, valor_documento: null, emitente_id: null,
+    emitente_nome: null, emitente_documento: null, observacao: null, cancelado: false, cancelado_motivo: null, versao: 1, ligado_a_qtd: 1,
+    uploaded_em: '2026-10-02T12:00:00Z', ...extra });
+  const DOCS_DO_CLIPE = [
+    docDoClipe('dc1', 'lf0', 'boleto', 'Boleto da associação de produtores — mensalidade de setembro de 2026.pdf', '2026-09-11'),
+    docDoClipe('dc2', 'lf0', 'comprovante', 'Comprovante de pagamento Banco Alfa 18-09-2026.pdf', '2026-09-18'),
+    docDoClipe('dc3', 'lf0', 'recibo', 'Recibo do escritório de contabilidade set-2026.pdf', '2026-09-18'),
+    docDoClipe('dc4', 'lf1', 'nf', 'NF 000.000.518.pdf', '2026-10-03', { numero: '518' }),
+    docDoClipe('dc5', 'lf2', 'nf', 'NF 000.000.519.pdf', '2026-10-05', { numero: '519' }),
+    docDoClipe('dc6', 'lf2', 'nf', 'NF 000.000.519.xml', '2026-10-05', { numero: '519', tipo: 'application/xml', url: 'cli/lf2/dc6.xml' }),
+    docDoClipe('dc7', 'lf2', 'boleto', 'Boleto parcela 1.pdf', '2026-10-20'),
+  ];
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_lancamentos_v2' ? (e.in.id ? [] : VOL ? VOL.lancamentos : LANCAMENTOS)
+      : t === 'vw_lancamento_documentos' && !VOL ? DOCS_DO_CLIPE.filter((d) => e.eq.lancamento_id == null || d.lancamento_id === e.eq.lancamento_id)
       : t === 'financeiro_fornecedores' ? (VOL ? VOL.fornecedores : LISTA)
       : t === 'financeiro_safras' ? [{ id: 's-pec', nome: 'Pecuária 25/26', codigo: '25/26-Pec', escopo_negocio: 'pecuaria', ativa: true },
         { id: 's-lav', nome: 'Mandioca 25/26', codigo: '25/26-MAND', escopo_negocio: 'agricultura', ativa: true }]

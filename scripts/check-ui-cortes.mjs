@@ -1472,6 +1472,10 @@ const CENARIOS = [
   /* FIN-V2-DESEMPENHO-01b / FIN-V2-SEM-CORTE-01 — a TABELA inteira do Financeiro V2 entra nas regras (nome longo = uma linha com "…" e
      o texto no `title`; numero, valor, data nunca cortam), com o rodape da pagina dentro do quadro, nos sete tamanhos */
   { nome: 'financeiro-tabela', url: 'tela=financeiro', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* DOC-ANEXO-E-IMPORT-01 F2 — o POPOVER do clipe aberto (3 documentos, nomes longos: "…" + title; selo · nome · data dd/mm/aaaa, nunca quebra),
+     nos tamanhos do Gabriel (1240, 1024, zoom 135% de 1280×800 e de 1440×900) e nos do contrato */
+  { nome: 'financeiro-clipe-popover', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
+    tamanhos: [[1240, 700], [1024, 600], [948, 593], [1067, 667], ...TAMANHOS_DO_CONTRATO], antes: clicar('[data-testid="clipe-da-linha"]') },
   { nome: 'financeiro-tabela-pagina-2', url: 'tela=financeiro&v=volume&n=450', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: clicar('[data-testid="pagina-proxima"]') },
   /* o item 2 do 01b: a faixa de totais + controles nunca fica por cima do que vem embaixo — dez trocas de filtro e o "sobreposicao" */

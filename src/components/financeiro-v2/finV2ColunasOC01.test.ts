@@ -70,15 +70,17 @@ describe('a coluna Vínc. (FIN-V2-COLUNAS-02; era "OC")', () => {
 describe('as larguras (FIN-V2-COLUNAS-02)', () => {
   /* ⚠ CONTRATO MUDOU NO FIN-V2-DESEMPENHO-01b (FIN-V2-SEM-CORTE-01): datas dd/mm/aaaa 46, Valor 94 (o maior valor pede 93); Produto,
      Fornecedor e Classificação devolveram 14px — a soma fica em 916, dentro dos 919 medidos */
-  it('normal: datas 46 · Vínc 36 · Produto 123 · Fornecedor 117 · Classificação 120 · Faz 30 · Safra 50 · Valor 94 · Doc 78 · Status 60 = 916', () => {
+  /* ⚠ CONTRATO MUDOU NO DOC-ANEXO-E-IMPORT-01 F2 (mock D1, Gabriel 05/11): a coluna "Anexo" 14→36; os 22px saem de Produto (−8), Fornecedor
+     (−7) e Classificação (−7) — as três que cortam com o `title`; a soma segue 916 (e 1.088 no Ampliado) */
+  it('normal: datas 46 · Vínc 36 · Produto 115 · Fornecedor 110 · Classificação 113 · Faz 30 · Safra 50 · Valor 94 · Anexo 36 · Doc 78 · Status 60 = 916', () => {
     const n = larguras('normal');
-    expect(n).toEqual([28, 46, 46, 46, 36, 123, 117, 120, 30, 50, 94, 14, 78, 60, 28]);
+    expect(n).toEqual([28, 46, 46, 46, 36, 115, 110, 113, 30, 50, 94, 36, 78, 60, 28]);
     expect(soma(n)).toBe(916);
   });
   it('Ampliado com e sem as contas: a mesma soma (1.088); desligadas, os 184px vão para Produto, Fornecedor e Classificação', () => {
     const a = larguras('amp'); const s = larguras('ampSem');
-    expect(a).toEqual([28, 46, 46, 46, 36, 128, 104, 116, 30, 50, 92, 92, 94, 14, 78, 60, 28]);
-    expect(s).toEqual([28, 46, 46, 46, 36, 190, 165, 177, 30, 50, 94, 14, 78, 60, 28]);
+    expect(a).toEqual([28, 46, 46, 46, 36, 120, 97, 109, 30, 50, 92, 92, 94, 36, 78, 60, 28]);
+    expect(s).toEqual([28, 46, 46, 46, 36, 182, 158, 170, 30, 50, 94, 36, 78, 60, 28]);
     expect(soma(a)).toBe(1088); expect(soma(s)).toBe(1088);
     expect((s[5] - a[5]) + (s[6] - a[6]) + (s[7] - a[7])).toBe(92 + 92);
     expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 17 : 15}');
@@ -95,7 +97,7 @@ describe('as fontes — exceção ao piso só nesta lista, por classe da tabela 
     expect(css).toMatch(/\.table-financeiro td\.celula-status,\s*\.table-financeiro td\.celula-status \* \{\s*font-size: 8px !important;/);
     expect(css).toMatch(/\.table-financeiro td\.celula-classe,\s*\.table-financeiro td\.celula-classe \* \{\s*font-size: 8\.5px !important;/);
     expect(tela.match(/<td className="celula-classe truncate /g)?.length).toBe(1);   // FIN-V2-COLUNAS-02: uma coluna, a Classificação
-    expect(peca).toContain('<td className="celula-status px-0.5 py-1 text-center align-middle leading-tight"');
+    expect(peca).toContain("<td className={`celula-status px-0.5 py-1 text-center align-middle leading-tight${separador ? ' border-l border-[#c9d1dc]' : ''}`}");
     expect(tela).toContain('<CelulaStatus ');
     /* forma e cor continuam do dono */
     expect(peca).toContain('<span className={cn(STATUS_PILULA_BASE, st.stPilula)} data-status={st.stKey}>{st.stLabel}</span>');
@@ -109,7 +111,7 @@ describe('as fontes — exceção ao piso só nesta lista, por classe da tabela 
 
 /* ── PARC-LIVRES-01 passo 3 — o clipe no lugar do marcador de origem, e a coluna Doc. pela função única ───────────────────── */
 describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
-  it('a coluna de 14px é a do CLIPE, ENTRE VALOR E DOC. (item 6), no cabeçalho, na linha e no colgroup — também no Ampliado', () => {
+  it('a coluna do CLIPE ("Anexo", 36px desde o DOC-ANEXO-E-IMPORT-01 F2), ENTRE VALOR E DOC. (item 6), no cabeçalho, na linha e no colgroup — também no Ampliado', () => {
     const linha = tela.slice(tela.indexOf('<LinhaDaLista key={l.id}'), tela.indexOf('<MenuDaLinhaSobDemanda', tela.indexOf('<LinhaDaLista key={l.id}')));
     const ordem = (trecho: string, ...marcas: string[]) => marcas.map(m => trecho.indexOf(m));
     /* CONC-SUGESTOES-TABELA-01 — Valor e Doc. são as peças `CelulaValor` / `CelulaDoc` */
@@ -120,20 +122,21 @@ describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
     expect(linha.slice(clipe, docu).match(/<td|<Celula/g)).toBeNull();          // nada entre o clipe e o Doc.
     expect(linha.slice(valor, clipe).match(/<td|<Celula/g)?.length).toBe(2);    // o próprio Valor e o `<td` do clipe
     expect(/<td className="[^"]*sticky[^"]*" data-testid="celula-clipe"/.test(linha)).toBe(false);
-    const [thValor, thClipe, thDoc] = ordem(tela, "toggleSort('valor')}", 'aria-label="Documentos" title="Documentos"', "toggleSort('doc')}");
+    const [thValor, thClipe, thDoc] = ordem(tela, "toggleSort('valor')}", '>Anexo</ThDaLista>', "toggleSort('doc')}");
     expect(thClipe).toBeGreaterThan(thValor);
     expect(thDoc).toBeGreaterThan(thClipe);
     for (const modo of ['normal', 'amp', 'ampSem'] as const) {
       const n = larguras(modo);
-      expect(n.slice(-5)).toEqual([94, 14, 78, 60, 28]);               // FIN-V2-DESEMPENHO-01b: Valor 94, clipe 14, Doc 78, Status 60
+      expect(n.slice(-5)).toEqual([94, 36, 78, 60, 28]);               // Valor 94, Anexo 36 (DOC-ANEXO F2), Doc 78, Status 60
       expect(n[1]).toBe(46);
     }
   });
-  it('o clipe acende por `doc.clipe`, com o que tem no `title`', () => {
-    expect(tela).toContain('aria-label="Documentos" title="Documentos"');
+  /* DOC-ANEXO-E-IMPORT-01 F2 — o clipe ABRE (o `ClipeDaLinha`); o número sai das linhas da aba (`quantasLinhasDoClipe`) e o `title`, do resumo */
+  it('o clipe acende por `doc.clipe`, com o que tem no `title`, e é o `ClipeDaLinha` (abre sem o modal)', () => {
+    expect(tela).toContain('separador title="Documentos anexados: clique no clipe para abrir">Anexo</ThDaLista>');
     expect(tela).not.toContain('aria-label="Origem"');
-    expect(tela).toContain('{doc.clipe && (');
-    expect(tela).toContain('<span title={doc.resumo} aria-label={`Documentos: ${doc.resumo}`} data-testid="clipe-da-linha"');
+    expect(tela).toContain('qtd={doc.clipe ? Math.max(1, quantasLinhasDoClipe(documentosPorLancamento?.get(l.id))) : 0} resumo={doc.resumo} />');
+    expect(tela).toContain('<CelulaStatus separador title=');
   });
   it('a coluna Doc. escreve o texto do DONO (`docDaLinha`), nunca o número cru; a legenda dos ícones saiu', () => {
     expect(tela).toContain('const doc = docDaLinha(lancamentoParaDoc(l), documentosPorLancamento?.get(l.id));');

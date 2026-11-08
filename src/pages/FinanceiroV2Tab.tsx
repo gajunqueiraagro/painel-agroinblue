@@ -28,6 +28,8 @@ import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
 import { useContratosDoCliente } from '@/hooks/useContratosDoCliente';
 import { nomeEParcela } from '@/lib/financiamentos/nomeDaParcela';
 import { docDaLinha, documentoCasaComFiltro, PLACEHOLDER_FILTRO_DOCUMENTO } from '@/lib/financeiro/documentoHelper';
+import { quantasLinhasDoClipe } from '@/lib/financeiro/notaDosDocumentos';
+import { ClipeDaLinha } from '@/components/financeiro-v2/ClipeDaLinha';
 import { fraseDoLote } from '@/lib/financiamentos/cancelarParcela';
 import { fraseDoLoteDeSplit } from '@/lib/conciliacao/cancelarFilhoDeSplit';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
@@ -64,7 +66,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, Paperclip } from 'lucide-react';
+import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -2782,15 +2784,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 /* FIN-V2-DESEMPENHO-01b: no Ampliado 140→128 e 202→190 (com Fornecedor 116→104 e 177→165): as datas em dd/mm/aaaa
                     tomaram 18px e o Valor 6; a soma do Ampliado volta à de antes. Na normal, Produto 128→123, Fornecedor 122→117 e
                     Classificação 124→120: a soma vai a 916, dentro dos 919 medidos na janela do Gabriel (nomes cortam com o `title`) */
-                modoIntensivo ? (contasAmpliado ? 128 : 190) : 123,
+                modoIntensivo ? (contasAmpliado ? 120 : 182) : 115,
                 /* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */
                 /* ⚠ 100 → 124 — PARC-LIVRES-01 fechamento C (pedido do Gabriel: Fornecedor mais largo). Os 24px saem de Macro (49→33,
                     que já cortava em 5.250 de 5.251 linhas do NJ) e de Centro (49→41). Medido no NJ a 1.126. */
-                modoIntensivo ? (contasAmpliado ? 104 : 165) : 117,
+                modoIntensivo ? (contasAmpliado ? 97 : 158) : 110,
                 /* Macro e Centro 66→56, a 8,5px (`.celula-classe`, exceção ao piso só nesta lista): cortam com o texto inteiro no
                     `title`, como já cortavam — medido no NJ: 3 das 11 macros cabiam em 66 a 9px, e as mesmas 3 cabem em 56 a 8,5. */
                 /* FIN-V2-COLUNAS-02: Macro e Centro viram UMA coluna, a Classificação no nível escolhido. */
-                modoIntensivo ? (contasAmpliado ? 116 : 177) : 120,
+                modoIntensivo ? (contasAmpliado ? 109 : 170) : 113,
                 /* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
                     horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
                     icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */
@@ -2830,7 +2832,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 /* FIN-V2-DESEMPENHO-01b: 88→94 — o maior valor da casa, "-R$ 99.999.999,99", pede 93px (medido pelo gate) */
                 94,
                 /* PARC-FECHA-02 item 6 — o CLIPE, 14px, entre Valor e Doc. (vale também no Ampliado). Não é congelada. */
-                14,
+                /* DOC-ANEXO-E-IMPORT-01 F2 (mock D1): 14→36, a coluna "Anexo" (o rótulo a 8px e o clipe com o número "3"). Os 22px saem das
+                    três que cortam com o `title`: Produto −8, Fornecedor −7, Classificação −7 (normal e Ampliado); a soma não muda. */
+                36,
                 /* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
                     ⚠ A FONTE NÃO MUDA, e o briefing pedia 10px: a célula JÁ renderiza a 9px,
                     porque `.celula-doc` no index.css tem `font-size: 9px !important` e vence
@@ -2889,10 +2893,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <ThDaLista recuo="px-1">C. Destino</ThDaLista>
                   )}
                   <ThDaLista recuo="px-1" ordenar={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></ThDaLista>
-                  {/* PARC-FECHA-02 item 6 — o clipe, sem rótulo (14px), entre Valor e Doc. */}
-                  <ThDaLista recuo="px-0" semTexto aria-label="Documentos" title="Documentos" />
+                  {/* PARC-FECHA-02 item 6 — o clipe entre Valor e Doc.; DOC-ANEXO-E-IMPORT-01 F2 (mock D1): a coluna "Anexo", com o separador
+                      de grupo antes dela e antes do Status */}
+                  <ThDaLista recuo="px-0.5" separador title="Documentos anexados: clique no clipe para abrir">Anexo</ThDaLista>
                   <ThDaLista recuo="px-1" ordenar={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></ThDaLista>
-                  <ThDaLista recuo="px-1" ordenar={() => toggleSort('status')}>Status<SortIndicator field="status" /></ThDaLista>
+                  <ThDaLista recuo="px-1" separador ordenar={() => toggleSort('status')}>Status<SortIndicator field="status" /></ThDaLista>
                   {/* ⚠ O "…" NÃO É FIXO — decisão soberana do Gabriel, 30/09 (PR-FIN-V2-STATUS-PGTO-01-fix1),
                       e revoga a do FIN-V2-HOMOLOG-FIX-01 ("fixo à direita, nunca some na rolagem"). Fixo, ele
                       ficava POR CIMA do status sempre que a lista rolava. É a última coluna, no fim da linha;
@@ -3094,12 +3099,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </CelulaValor>
                         {/* O CLIPE (PARC-LIVRES-01 passo 3), entre Valor e Doc. desde o PARC-FECHA-02 item 6: aceso quando há documento —
                             arquivo anexado OU a nota da compra ligada —, com o que tem no `title`. Coluna de 14px, não congelada. */}
-                        <td className="px-0 py-1 align-middle text-center" data-testid="celula-clipe">
-                          {doc.clipe && (
-                            <span title={doc.resumo} aria-label={`Documentos: ${doc.resumo}`} data-testid="clipe-da-linha" className="inline-flex">
-                              <Paperclip className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />
-                            </span>
-                          )}
+                        {/* DOC-ANEXO-E-IMPORT-01 F2 — o clipe ABRE: 1 documento = o arquivo; 2+ = o número e o popover (lidos no clique) */}
+                        <td className="border-l border-[#c9d1dc] px-0 py-1 align-middle text-center" data-testid="celula-clipe">
+                          <ClipeDaLinha clienteId={clienteAtual?.id ?? null} lancamentoId={l.id}
+                            qtd={doc.clipe ? Math.max(1, quantasLinhasDoClipe(documentosPorLancamento?.get(l.id))) : 0} resumo={doc.resumo} />
                         </td>
                         {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}
                         <CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />
@@ -3118,7 +3121,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         {/* PARC-LIVRES-01 passo 3 — A ORIGEM (cru do banco, substituído, enriquecido, manual, sem par) saiu da coluna e veio
                             para CÁ: o `title` do Status a diz por extenso, e o clique no Status abre o mesmo minimodal do vínculo que o
                             marcador abria. Sem origem a marcar, o Status é o de sempre. */}
-                        <CelulaStatus title={[stTitle ?? (stPilula || stEstagio ? null : stLabel), icone ? `origem: ${icone.significado}` : null].filter(Boolean).join(' · ') || undefined}
+                        <CelulaStatus separador title={[stTitle ?? (stPilula || stEstagio ? null : stLabel), icone ? `origem: ${icone.significado}` : null].filter(Boolean).join(' · ') || undefined}
                             onClick={icone ? (e) => e.stopPropagation() : undefined}>
                           {(() => {
                             const rotulo = <RotuloDoStatus st={st} />;

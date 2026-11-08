@@ -317,7 +317,8 @@ export function rotuloEspecieDoc(d: Pick<LancDocumento, 'origem' | 'especie' | '
  *  que é o caminho conservador: o writer do próprio lançamento recusa o que não é dele. */
 const origemValida = (o: unknown): OrigemLancDoc => (o === 'operacao' ? 'operacao' : 'lancamento');
 
-function daLinha(r: DocRow): LancDocumento {
+/** A linha da `vw_lancamento_documentos` → o documento que as telas leem (a aba Documentos e o clipe da lista, DOC-ANEXO-E-IMPORT-01 F2). */
+export function daLinha(r: DocRow): LancDocumento {
   const n = (v: unknown) => (v == null ? null : Number(v));
   const s = (v: unknown) => (v == null ? null : String(v));
   return {
@@ -393,6 +394,15 @@ export function daConfronto(c: Json | null | undefined): Confronto | null {
       qtd: Number(c.grupo_qtd ?? 0),
     },
   };
+}
+
+/* ⚠ O ARQUIVO MORA NO BUCKET DA ORIGEM (ver `urlAssinada` abaixo). Fora do hook para o clipe da lista abrir o arquivo SEM o modal
+   (DOC-ANEXO-E-IMPORT-01 F2): o mesmo bucket, a mesma validade de 60 s. */
+export async function assinarDocumento(caminho: string, origem: OrigemLancDoc = 'lancamento'): Promise<string | null> {
+  const bucket = origem === 'operacao' ? BUCKET_OC : BUCKET;
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(caminho, 60);
+  if (error) return null;
+  return data?.signedUrl ?? null;
 }
 
 export function useLancamentoDocumentos(
@@ -626,12 +636,7 @@ export function useLancamentoDocumentos(
      diria "não foi possível abrir" sobre um arquivo que existe. A policy de leitura do
      `oc-documentos` é por CLIENTE (`foldername[1] IN get_user_cliente_ids`), não por
      operação — então quem abre o lançamento baixa a NF da OC sem permissão nova. */
-  const urlAssinada = useCallback(async (caminho: string, origem: OrigemLancDoc = 'lancamento') => {
-    const bucket = origem === 'operacao' ? BUCKET_OC : BUCKET;
-    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(caminho, 60);
-    if (error) return null;
-    return data?.signedUrl ?? null;
-  }, []);
+  const urlAssinada = useCallback(assinarDocumento, []);
 
   return { documentos, confronto, loading, saving, operacaoId, operacaoTipo,
     registrar, editar, cancelar, anexar, urlAssinada, recarregar };

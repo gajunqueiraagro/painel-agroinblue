@@ -49,12 +49,14 @@ export function TabelaDaLista({ larguras, cabecalho, cabecalhoPreso = true, gran
 }
 
 /** O `th` da lista: o recuo (`px-…`), o clique que ordena e, nas congeladas, o `sticky` + fundo. `semTexto` = a caixinha e o clipe. */
-export function ThDaLista({ recuo, ordenar, fixa, semTexto = false, children, ...resto }: {
+export function ThDaLista({ recuo, ordenar, fixa, semTexto = false, separador = false, children, ...resto }: {
   recuo: 'px-0' | 'px-0.5' | 'px-1'; ordenar?: () => void; fixa?: string; semTexto?: boolean; children?: ReactNode;
+  /** DOC-ANEXO-E-IMPORT-01 F2 — o separador de GRUPO à esquerda (mock: antes de Anexo e de Status) */
+  separador?: boolean;
   title?: string; 'aria-label'?: string; 'data-testid'?: string;
 }) {
   return (
-    <th className={`${recuo} py-[3px] text-center align-middle${semTexto ? '' : ' text-[8px] uppercase leading-tight font-semibold text-primary-foreground'}${ordenar ? ' cursor-pointer select-none' : ''}${fixa ? ` ${fixa}` : ''}`}
+    <th className={`${recuo} py-[3px] text-center align-middle${semTexto ? '' : ' text-[8px] uppercase leading-tight font-semibold text-primary-foreground'}${ordenar ? ' cursor-pointer select-none' : ''}${fixa ? ` ${fixa}` : ''}${separador ? ' border-l border-white/30' : ''}`}
       {...resto} onClick={ordenar}>{children}</th>
   );
 }
@@ -131,9 +133,11 @@ export function CelulaDoc({ rotulo, titulo }: { rotulo: string | null | undefine
 }
 
 /** Status: a célula (o rótulo vem de `RotuloDoStatus`, às vezes dentro de um botão). */
-export function CelulaStatus({ title, onClick, children }: { title: string | undefined; onClick?: (e: MouseEvent) => void; children: ReactNode }) {
+export function CelulaStatus({ title, onClick, separador = false, children }: { title: string | undefined; onClick?: (e: MouseEvent) => void;
+  /** DOC-ANEXO-E-IMPORT-01 F2 — o separador de grupo à esquerda (o Status fecha o grupo Anexo · Doc.) */
+  separador?: boolean; children: ReactNode }) {
   return (
-    <td className="celula-status px-0.5 py-1 text-center align-middle leading-tight" data-testid="celula-status"
+    <td className={`celula-status px-0.5 py-1 text-center align-middle leading-tight${separador ? ' border-l border-[#c9d1dc]' : ''}`} data-testid="celula-status"
         title={title}
         onClick={onClick}>
       {children}
