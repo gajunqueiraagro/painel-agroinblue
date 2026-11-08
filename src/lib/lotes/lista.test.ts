@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { ordenarPorColuna } from '@/hooks/useOrdenacaoTabela';
 import {
-  antigosCurto, chaveDoCarimbo, colunasDosLotes, faseDaAtividade, filtrarLotes, fraseDoGrupo, gruposPorAtividade, loteDaLinha, mapaDoCadastro, motivoDoDesfazer, mudancasDaTrilha, oQueDaTrilha,
-  textoDosPastos, totalDosLotes, trilhaDaLinha, type ColunaDosLotes,
+  antigosCurto, chaveDoCarimbo, colunasDosLotes, faseDaAtividade, filtrarLotes, gruposPorAtividade, loteDaLinha, mapaDoCadastro, motivoDoDesfazer, mudancasDaTrilha, oQueDaTrilha, textoDosLotes,
+  textoDosPastos, tituloDoCodigo, totalDosLotes, trilhaDaLinha, type ColunaDosLotes,
 } from './lista';
 import type { CadastroDoLote, LoteDaLista } from './tipos';
 
@@ -74,6 +74,20 @@ describe('ordenação: todas as colunas', () => {
     expect(ordem('programa', 'asc')).toEqual(['b', 'a', 'c']);   // Precoce < Superprecoce < (vazio)
     expect(chaveDoCarimbo('7.2')).toBeLessThan(chaveDoCarimbo('10.1') ?? 0);
   });
+  it('LOTES-05: o carimbo ordena pelo mês, a ressinc. depois dos lotes do mês (7.2 < 7R < 7R.2 < 8.1), e vem antes dos que têm só o código', () => {
+    const ord = ['8.1', '7R.2', '10.1', '7R', '7.2'].sort((a, b) => (chaveDoCarimbo(a) ?? 0) - (chaveDoCarimbo(b) ?? 0));
+    expect(ord).toEqual(['7.2', '7R', '7R.2', '8.1', '10.1']);
+    expect([chaveDoCarimbo(null), chaveDoCarimbo('7'), chaveDoCarimbo('x')]).toEqual([null, null, null]);
+    const cria = [L({ id: 'v', codigo: 'CRI-VAC-NEL-03' }), L({ id: 'd', codigo: 'CRI-VAC-NEL-02', carimbo: '10.1' }), L({ id: 's', codigo: 'CRI-VAC-NEL-07', carimbo: '9.2' })];
+    expect(ordenarPorColuna(cria, colunasDosLotes(NOMES).find(x => x.coluna === 'codigo'), 'asc').map(l => l.id)).toEqual(['s', 'd', 'v']);
+  });
+  it('LOTES-05: a busca acha pelo carimbo e pelo código; o title do nome traz o código e os de antes', () => {
+    const l = L({ id: 'c', codigo: 'CRI-VAC-NEL-04', carimbo: '7.1', codigos_antigos: ['VAC-NEL-CRI-04'] });
+    expect(filtrarLotes([l], { situacao: 'ativo', atividadeId: null, busca: '7.1' }).length).toBe(1);
+    expect(filtrarLotes([l], { situacao: 'ativo', atividadeId: null, busca: 'NEL-04' }).length).toBe(1);
+    expect(tituloDoCodigo(l)).toBe('CRI-VAC-NEL-04 · antes: VAC-NEL-CRI-04');
+    expect(tituloDoCodigo(L({ id: 'r', codigo: 'REC-DF-NE-01' }))).toBeUndefined();
+  });
   it('o pasto na célula: um = o nome; vários = "N pastos"', () => {
     expect([textoDosPastos([]), textoDosPastos(['T-B1']), textoDosPastos(['T-A2', 'T-A3', 'T-B6'])]).toEqual([null, 'T-B1', '3 pastos']);
   });
@@ -85,7 +99,7 @@ describe('LOTES-04: a lista agrupada por atividade', () => {
       L({ id: 'r1', atividade_id: 'rc', cabecas: 7 }), L({ id: 'c1', atividade_id: 'cri', cabecas: 1204 })];
     const g = gruposPorAtividade(lotes, NOMES);
     expect(g.map(x => [x.nome, x.lotes.map(l => l.id)])).toEqual([['Cria', ['c1']], ['Recria', ['r2', 'r1']], ['Engorda', ['e1']], ['Descarte', ['d1']]]);
-    expect(g.map(x => fraseDoGrupo(x.total))).toEqual(['1 lote · 1.204 cab', '2 lotes · 12 cab', '1 lote · 10 cab', '1 lote']);
+    expect(g.map(x => [textoDosLotes(x.total.lotes), x.total.cabecas])).toEqual([['1 lote', 1204], ['2 lotes', 12], ['1 lote', 10], ['1 lote', null]]);
     expect(faseDaAtividade('REC')).toBe(1);
   });
 });

@@ -50,6 +50,8 @@ export const LOTES = [
   lote('l-dm6', 'c-dm', 'r-an', 'a-eg', 6, 'DM Angus L6 · lote em três pastos do retiro de baixo', { programa_id: 'p-pr', cabecas: 162, peso_medio_kg: 421,
     gmd_kg: 0.55, pastos: ['T-A2', 'T-A3', 'T-B6'], lancamentos: 6 }),
   lote('l-pp1', 'c-pp', 'r-ne', 'a-cr', 1, 'Vaca Nel CAR_7.1', { programa_id: 'p-cv', destino_id: 'd-de', carimbo: '7.1', cabecas: 1204, peso_medio_kg: 270, gmd_kg: 0.7, pastos: ['P18'], lancamentos: 3 }),
+  /* LOTES-05 — a ressinc. de julho (7R) */
+  lote('l-pp7r', 'c-pp', 'r-ne', 'a-cr', 3, 'Vacas ressinc. jul', { programa_id: 'p-cv', destino_id: 'd-de', carimbo: '7R', cabecas: 312, peso_medio_kg: 268, gmd_kg: 0.6, pastos: ['P18', 'P20'], lancamentos: 2 }),
   lote('l-n1', 'c-n1', 'r-an', 'a-cr', 2, 'N1 Angus SP CAR_8.2', { programa_id: 'p-sp', destino_id: 'd-de', carimbo: '8.2', cabecas: 184, peso_medio_kg: 255, gmd_kg: null, pastos: ['P19A'], lancamentos: 1 }),
   lote('l-novo', 'c-n2', 'r-ne', 'a-rp', 1, null, { sistema_id: null, programa_id: null, destino_id: null, ano_mes_dado: null }),
   lote('l-px2', 'c-px', 'r-ne', 'a-dc', 2, 'Vacas PX antigas', { situacao: 'encerrado', encerrado_em: '2026-10-31', formado_em: '2026-03-15',

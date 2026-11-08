@@ -25,7 +25,7 @@ import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseValorRebanhoReaberto, le
 import { CampoLoteDoPasto } from '@/components/fechamento/CampoLoteDoPasto';
 import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
 import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
-import { comLoteEmTodos, comLoteNaCategoria, lotesQueSeguem, semLoteNoZerado } from '@/lib/lotes/loteDoPasto';
+import { comLoteEmTodos, comLoteNaCategoria, lotesQueSeguem, semLoteNoZerado, textoDoLoteNoCaderno } from '@/lib/lotes/loteDoPasto';
 import { AbasDosPiquetes, ABA_TOTAL } from '@/components/fechamento/AbasDosPiquetes';
 import { MesAnteriorDoPasto } from '@/components/fechamento/MesAnteriorDoPasto';
 import {
@@ -190,6 +190,9 @@ export function FechamentoPastoDialog({
   const [status, setStatus] = useState(fechamento.status);
 
   const [loteMes, setLoteMes] = useState(fechamento.lote_mes || '');
+  /* LOTES-05 — o texto do campeiro antes do "Usar o lote" (null = o botão não foi usado): "Voltar o texto" o devolve até salvar;
+     depois de salvar, o antigo fica na trilha do banco (gatilho da 113220) */
+  const [cadernoAntes, setCadernoAntes] = useState<string | null>(null);
   const [tipoUsoMes, setTipoUsoMes] = useState(fechamento.tipo_uso_mes || pasto.tipo_uso || '');
   const [qualidadeMes, setQualidadeMes] = useState<number | null>(fechamento.qualidade_mes);
   const [observacaoMes, setObservacaoMes] = useState(fechamento.observacao_mes || '');
@@ -257,12 +260,14 @@ export function FechamentoPastoDialog({
       if (existing.length > 0) {
         // Has saved data — load items + meta from DB record
         setLoteMes(fechamento.lote_mes || '');
+        setCadernoAntes(null);
         setTipoUsoMes(fechamento.tipo_uso_mes || pasto.tipo_uso || '');
         setQualidadeMes(fechamento.qualidade_mes);
         setObservacaoMes(fechamento.observacao_mes || '');
       } else {
         // No saved items — pasto não iniciado → everything blank
         setLoteMes('');
+        setCadernoAntes(null);
         setTipoUsoMes(fechamento.tipo_uso_mes || pasto.tipo_uso || '');
         setQualidadeMes(null);
         setObservacaoMes('');
@@ -571,6 +576,8 @@ export function FechamentoPastoDialog({
   // CategoriaCard is defined outside the component to avoid re-mount on parent re-render
 
   // ── Render de um grupo (machos ou fêmeas) ──
+  const textoDoLote = textoDoLoteNoCaderno(itens, lotesDaFazenda.lotes);
+
   const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string, tabBase: number) => (
     <div>
       <div className={`text-xs font-bold mb-2 ${colorAccent}`}>{label}</div>
@@ -630,8 +637,19 @@ export function FechamentoPastoDialog({
           {/* Row 2: Lote + Qual + Tipo Uso + Obs */}
           <div className="flex gap-2 items-end">
             <div className="flex-1 min-w-0 max-w-[150px]">
-              <Label className="text-[10px] text-white/50 leading-none">Nome no caderno</Label>
-              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={inputsDisabled} placeholder="Lote..." className="h-7 text-xs px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30" />
+              <div className="flex items-baseline justify-between gap-1">
+                <Label className="whitespace-nowrap text-[10px] text-white/50 leading-none">Nome no caderno</Label>
+                {cadernoAntes !== null ? (
+                  <button type="button" disabled={inputsDisabled} data-testid="caderno-voltar-texto" title={cadernoAntes ? `Voltar para "${cadernoAntes}"` : 'Voltar para o campo vazio'}
+                    onClick={() => { setLoteMes(cadernoAntes); setCadernoAntes(null); }}
+                    className="whitespace-nowrap text-[10px] leading-none text-white/70 underline-offset-2 hover:text-white hover:underline disabled:opacity-50">Voltar o texto</button>
+                ) : textoDoLote && textoDoLote !== loteMes.trim() ? (
+                  <button type="button" disabled={inputsDisabled} data-testid="caderno-usar-o-lote" title={`Troca o texto do campeiro por "${textoDoLote}". O texto antigo fica na trilha.`}
+                    onClick={() => { setCadernoAntes(loteMes); setLoteMes(textoDoLote); }}
+                    className="whitespace-nowrap text-[10px] leading-none text-white/70 underline-offset-2 hover:text-white hover:underline disabled:opacity-50">Usar o lote</button>
+                ) : null}
+              </div>
+              <Input value={loteMes} onChange={e => { setLoteMes(e.target.value); setCadernoAntes(null); }} disabled={inputsDisabled} placeholder="Lote..." className="h-7 text-xs px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30" />
             </div>
             {/* LOTES-03 F1 — o lote cadastrado (por categoria); fora da lavoura e da conta de divergência */}
             {!ehLavoura && !isDivergencia && (

@@ -22,7 +22,7 @@ import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { notificarLotesMudaram } from '@/hooks/useLotesDaFazenda';
 import { useHistoricoDoLote } from '@/hooks/useHistoricoDoLote';
 import { antigosCurto, dataBr, mapaDoCadastro, motivoDoDesfazer, mudancasDaTrilha, nomeDe, oQueDaTrilha, type MudancaDoHistorico } from '@/lib/lotes/lista';
-import type { CadastroDoLote, CamposDoLote, LoteDaLista, SituacaoDoLote, TipoDoCadastro } from '@/lib/lotes/tipos';
+import { CARIMBO_VALIDO, FRASE_CARIMBO_INVALIDO, nomeDoLote, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type SituacaoDoLote, type TipoDoCadastro } from '@/lib/lotes/tipos';
 
 /** A altura da ficha: fixa, cabe em 1126×579 (a página nunca rola por causa dela). */
 export const ALTURA_DA_FICHA = 'h-[min(560px,calc(100vh-16px))]';
@@ -110,7 +110,7 @@ export function FichaDoLote({ open, lote, clienteId, fazendaId, fazendaCodigo, c
   const clicarEncerrar = () => {
     if (l.situacao !== 'ativo') { void mudarSituacao('ativo', l.versao).then(ok => ok && setFaixa({ texto: 'Lote reaberto' })); return; }
     if ((l.cabecas ?? 0) > 0) {
-      setFaixa({ texto: `Encerrar ${l.codigo} com ${n0(l.cabecas)} cab. no fechamento? Primeiro mova ou dê saída nas cabeças.`,
+      setFaixa({ texto: `Encerrar ${nomeDoLote(l)} com ${n0(l.cabecas)} cab. no fechamento? Primeiro mova ou dê saída nas cabeças.`,
         acao: { rotulo: 'Encerrar mesmo assim (fim do mês)', fazer: () => { void encerrar(); } } });
       return;
     }
@@ -120,7 +120,7 @@ export function FichaDoLote({ open, lote, clienteId, fazendaId, fazendaCodigo, c
     if (await mudarSituacao('cancelado', l.versao)) {
       const versaoDepois = l.versao + 1;
       onFechar();
-      toast.success(`Lote ${l.codigo} cancelado (não tinha lançamentos)`, {
+      toast.success(`Lote ${nomeDoLote(l)} cancelado (não tinha lançamentos)`, {
         action: { label: 'Desfazer', onClick: () => {
           void (async () => {
             const { error } = await (supabase as any).rpc('fn_lote_situacao', { p_id: l.id, p_situacao: 'ativo', p_versao: versaoDepois, p_motivo: 'desfazer: cancelar', p_simular: false });
@@ -160,11 +160,11 @@ export function FichaDoLote({ open, lote, clienteId, fazendaId, fazendaCodigo, c
     <Dialog open={open} onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className={cn(ALTURA_DA_FICHA, 'flex w-[min(1000px,calc(100vw-20px))] max-w-none flex-col gap-0 bg-muted p-0 [&>button:last-child]:hidden')}
         data-testid="ficha-do-lote">
-        <DialogTitle className="sr-only">Ficha do lote {l.codigo}</DialogTitle>
+        <DialogTitle className="sr-only">Ficha do lote {nomeDoLote(l)}</DialogTitle>
         <DialogDescription className="sr-only">Identidade, perfil, metas e histórico do lote.</DialogDescription>
         {/* cabeçalho */}
         <div className="flex h-[48px] flex-none items-center gap-3 whitespace-nowrap bg-primary pl-3.5 pr-2 text-primary-foreground">
-          <span className="text-[19px] font-extrabold" data-testid="ficha-codigo">{l.codigo}</span>
+          <span className="text-[19px] font-extrabold" data-testid="ficha-codigo" title={l.carimbo ? l.codigo : undefined}>{nomeDoLote(l)}</span>
           <span className="min-w-0 max-w-[260px] truncate text-[11.5px] opacity-85" title={l.nomeCampeiro ?? undefined}>{l.nomeCampeiro ?? 'sem nome do campeiro'}</span>
           <span className="rounded bg-white/15 px-1.5 text-[10px] font-semibold">{fazendaCodigo}</span>
           <span className={cn('rounded px-1.5 text-[10px] font-semibold', l.situacao === 'ativo' ? 'bg-[#2f8a5b]' : 'bg-[#6b7280]')} data-testid="ficha-situacao">
@@ -271,7 +271,7 @@ function AbaResumo({ lote: l, nomes, cadastros, gravando, salvar }: {
   const salvarPerfil = async () => {
     if (!perfil) return;
     if (perfil.safra && !/^\d{2}\/\d{2}$/.test(perfil.safra)) { setErroPerfil('Safra: no formato 26/27.'); return; }
-    if (perfil.carimbo && !/^(1[0-2]|[1-9])\.[1-9]\d?$/.test(perfil.carimbo)) { setErroPerfil('Carimbo: mês.lote, ex.: 7.1.'); return; }
+    if (perfil.carimbo && !CARIMBO_VALIDO.test(perfil.carimbo)) { setErroPerfil(FRASE_CARIMBO_INVALIDO); return; }
     const campos: CamposDoLote = {};
     if (perfil.sistema !== (l.sistemaId ?? '')) campos.sistema_id = perfil.sistema;
     if (perfil.programa !== (l.programaId ?? '')) campos.programa_id = perfil.programa;
@@ -326,7 +326,7 @@ function AbaResumo({ lote: l, nomes, cadastros, gravando, salvar }: {
             <Input className={cn('h-[20px] px-1 text-[11px]', erroPerfil?.startsWith('Safra') && 'border-red-500')} value={perfil.safra} maxLength={5} placeholder="26/27"
               onChange={e => { setErroPerfil(null); setPerfil({ ...perfil, safra: e.target.value }); }} />
             <span className="text-muted-foreground">Carimbo</span>
-            <Input className={cn('h-[20px] px-1 text-[11px]', erroPerfil?.startsWith('Carimbo') && 'border-red-500')} value={perfil.carimbo} maxLength={5} placeholder="—"
+            <Input className={cn('h-[20px] px-1 text-[11px]', erroPerfil?.startsWith('Carimbo') && 'border-red-500')} value={perfil.carimbo} maxLength={6} placeholder="—"
               onChange={e => { setErroPerfil(null); setPerfil({ ...perfil, carimbo: e.target.value }); }} />
             <span className="text-muted-foreground">Idade média</span>
             <CampoNumeroComConta valor={perfil.idade} onChange={n => setPerfil({ ...perfil, idade: n })} casas={0} sufixoDentro="meses" className="h-[20px] text-[11px]" />
@@ -371,7 +371,7 @@ function AbaResumo({ lote: l, nomes, cadastros, gravando, salvar }: {
                   </span>
                   <span className="truncate text-muted-foreground">≈ {n0(proj.pesoNaData)} kg em {dataBr(l.metaData ?? '')}</span>
                 </>
-              ) : <span className="truncate text-muted-foreground">A projeção aparece com peso e GMD no fechamento e a meta preenchida.</span>}
+              ) : <span className="truncate text-muted-foreground" title="A projeção aparece com peso e GMD no fechamento e a meta preenchida.">Sem projeção: falta peso, GMD ou meta.</span>}
             </div>
           </>
         )}
