@@ -9,7 +9,7 @@ const dados = vi.hoisted(() => ({ lotes: [] as unknown[], cadastros: [] as unkno
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli' } }) }));
 vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ fazendaAtual: { id: 'faz', nome: 'Faz. 3 Muchachas', codigo: '3M' }, isGlobal: false }) }));
 vi.mock('@/hooks/useLotesDaFazenda', () => ({ useLotesDaFazenda: () => ({ lotes: dados.lotes, carregando: false, erro: null }) }));
-vi.mock('@/hooks/useCadastrosDoLote', () => ({ useCadastrosDoLote: () => ({ cadastros: dados.cadastros }) }));
+vi.mock('@/hooks/useCadastrosDoLote', () => ({ useCadastrosDoLote: () => ({ cadastros: dados.cadastros, categoriasDoRebanho: [] }) }));
 vi.mock('@/components/lotes/FichaDoLote', () => ({ FichaDoLote: () => null }));
 vi.mock('@/components/lotes/AssistenteDoLote', () => ({ AssistenteDoLote: () => null }));
 
@@ -56,5 +56,24 @@ describe('LotesTab — subtotal alinhado (LOTES-LISTA-ALINHAR-01)', () => {
     const decrescente = ['G Cria', 'CR-VAC-NE-01', 'CR-VAC-NE-02', 'S Subtotal Cria', 'G Recria', 'RC-VAC-NE-02', 'RC-VAC-NE-01', 'S Subtotal Recria'];
     expect([um, outro].sort()).toEqual([crescente, decrescente].sort());
     expect(celulas(screen.getAllByTestId('grupo-lotes-subtotal')[0])).toEqual(['Subtotal Cria', '2 lotes', '', '', '150', '367', '0,300', '']);
+  });
+});
+
+describe('LotesTab — LOTES-06, a aba Resumo', () => {
+  it('Resumo troca a tabela pelos números e quadros dos mesmos lotes; Lista volta', () => {
+    render(<LotesTab />);
+    fireEvent.click(within(screen.getByTestId('lotes-vista')).getByText('Resumo'));
+    expect(screen.queryByTestId('tabela-lotes')).toBeNull();
+    expect(screen.getByTestId('resumo-cabecas').textContent).toContain('190');
+    expect(screen.getByTestId('resumo-cabecas').textContent).toContain('cabeças em 4 lotes');
+    expect(screen.getAllByTestId('resumo-quadro')).toHaveLength(6);
+    fireEvent.click(within(screen.getByTestId('lotes-vista')).getByText('Lista'));
+    expect(screen.getByTestId('tabela-lotes')).toBeTruthy();
+  });
+  it('o filtro de cima vale no Resumo: só Cria = 150 cab em 2 lotes', () => {
+    render(<LotesTab />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cria' }));
+    fireEvent.click(within(screen.getByTestId('lotes-vista')).getByText('Resumo'));
+    expect(screen.getByTestId('resumo-cabecas').textContent).toBe('150cabeças em 2 lotes');
   });
 });

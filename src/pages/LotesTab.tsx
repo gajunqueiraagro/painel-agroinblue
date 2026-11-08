@@ -29,6 +29,8 @@ import {
 import { FichaDoLote } from '@/components/lotes/FichaDoLote';
 import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
 import { nomeDoLote, type LoteDaLista } from '@/lib/lotes/tipos';
+import { ResumoDosLotes } from '@/components/lotes/ResumoDosLotes';
+import { resumoDosLotes, sexoDosCodigos } from '@/lib/lotes/resumo';
 
 const n0 = (v: number | null) => (v == null ? '—' : formatNum(v, 0));
 const n3 = (v: number | null) => (v == null ? '—' : formatNum(v, 3));
@@ -54,7 +56,7 @@ export function LotesTab() {
   const anoMes = hojeLocal().slice(0, 7);
   const clienteId = clienteAtual?.id ?? null;
   const { lotes, carregando, erro } = useLotesDaFazenda(fazendaId, anoMes);
-  const { cadastros } = useCadastrosDoLote(clienteId);
+  const { cadastros, categoriasDoRebanho } = useCadastrosDoLote(clienteId);
   const nomes = useMemo(() => mapaDoCadastro(cadastros), [cadastros]);
   /* o filtro na ordem da fase (Cria · Recria · Engorda · as outras), do cadastro do cliente */
   const atividades = useMemo(() => cadastros.filter(c => c.tipo === 'atividade' && c.ativo)
@@ -66,12 +68,20 @@ export function LotesTab() {
   const [fichaId, setFichaId] = useState<string | null>(null);
   const [assistente, setAssistente] = useState<{ editar: LoteDaLista | null } | null>(null);
   const [novoId, setNovoId] = useState<string | null>(null);
+  /* LOTES-06 — Lista | Resumo (o filtro de cima vale nas duas) */
+  const [vista, setVista] = useState<'lista' | 'resumo'>('lista');
 
   const filtrados = useMemo(() => filtrarLotes(lotes, { situacao, atividadeId: atividade || null, busca }), [lotes, situacao, atividade, busca]);
   const colunas = useMemo(() => colunasDosLotes(nomes), [nomes]);
   const { ordem, alternar, ordenadas } = useOrdenacaoTabela<LoteDaLista, ColunaDosLotes>(filtrados, colunas, { coluna: 'codigo', direcao: 'asc' });
   const total = totalDosLotes(ordenadas);
   const grupos = useMemo(() => gruposPorAtividade(ordenadas, nomes), [ordenadas, nomes]);
+  /* LOTES-06 — o sexo do lote é o da categoria do rebanho a que a categoria do lote aponta (todos M, todas F, senão misto) */
+  const resumo = useMemo(() => {
+    const codigoDoRebanho = new Map(categoriasDoRebanho.map(c => [c.id, c.codigo]));
+    const sexo = (categoriaId: string) => sexoDosCodigos((nomes.get(categoriaId)?.categoriasRebanho ?? []).map(id => codigoDoRebanho.get(id) ?? ''));
+    return resumoDosLotes(filtrados, nomes, sexo);
+  }, [filtrados, nomes, categoriasDoRebanho]);
   const naSituacao = lotes.filter(l => l.situacao === situacao).length;
   const { ref: refQuadro, altura } = useAlturaAteOFim();
   const ficha = fichaId ? lotes.find(l => l.id === fichaId) ?? null : null;
@@ -100,12 +110,16 @@ export function LotesTab() {
           <span className="mx-1 h-4 w-px bg-border" />
           <Segmentado valor={situacao} onEscolher={setSituacao} altura={22}
             opcoes={[{ valor: 'ativo', rotulo: 'Ativos' }, { valor: 'encerrado', rotulo: 'Encerrados' }]} />
+          <span className="mx-1 h-4 w-px bg-border" />
+          <span data-testid="lotes-vista"><Segmentado valor={vista} onEscolher={setVista} altura={22}
+            opcoes={[{ valor: 'lista', rotulo: 'Lista' }, { valor: 'resumo', rotulo: 'Resumo' }]} /></span>
           <div className="ml-auto flex items-center gap-1.5">
             <Input className="h-[24px] w-[200px] px-2 text-[11px]" placeholder="Buscar código ou pasto" value={busca}
               onChange={e => setBusca(e.target.value)} data-testid="lotes-busca" />
             <span className="w-[72px] text-right text-[11px] tabular-nums text-muted-foreground" data-testid="lotes-contagem">{ordenadas.length} de {naSituacao}</span>
           </div>
         </div>
+        {vista === 'resumo' ? <ResumoDosLotes resumo={resumo} /> : <>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <table className="w-full table-fixed border-collapse" data-testid="tabela-lotes">
             <Colunas />
@@ -152,6 +166,7 @@ export function LotesTab() {
             <LinhaDeSoma rotulo="Total" t={total} />
           </tr></tbody>
         </table>
+        </>}
       </div>
 
       {fazendaId && (

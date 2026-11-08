@@ -908,6 +908,8 @@ const CENARIOS = [
     return [
       { nome: 'lotes-lista', url: URL, tamanhos: T, antes: lista },
       { nome: 'lotes-lista-encerrados', url: URL, tamanhos: T, antes: async (p) => { await lista(p); await clicarRotulo(/^Encerrados$/)(p); } },
+      /* LOTES-06 — a aba Resumo: os 4 números e os 6 quadros (número na coluna dele, nada corta) */
+      { nome: 'lotes-resumo', url: URL, tamanhos: T, antes: async (p) => { await lista(p); await clicarRotulo(/^Resumo$/)(p); await p.locator('[data-testid="resumo-dos-lotes"]').waitFor(); } },
       { nome: 'lotes-lista-vazia', url: URL, tamanhos: T, antes: async (p) => { await lista(p);
         await p.locator('[data-testid="lotes-busca"]').fill('nenhum lote com este nome'); await p.locator('[data-testid="lotes-vazio"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'lotes-assistente-categoria', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: novo },
