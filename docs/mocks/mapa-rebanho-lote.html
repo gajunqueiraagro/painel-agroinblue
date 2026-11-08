@@ -1,0 +1,106 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Mapa do rebanho · com lote e programa · mock MAPA-REBANHO-02</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--navy:#1e2a3d;--sec:#4b5563;--ter:#6b7280;--b:#dde2e9;--b2:#c9d1dc;--az:#24508f}
+*{box-sizing:border-box}
+body{margin:0;background:#3a4252;font:12px Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#111827;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer}
+.topo{background:#0f1b2d;color:#cbd5e1;padding:6px 14px;font-size:11px;display:flex;gap:14px;white-space:nowrap;overflow:hidden}.topo b{color:#fff}
+.app{display:flex;min-height:calc(100vh - 28px)}
+.side{width:210px;flex:none;background:#1f3150;color:#cbd5e1;padding:12px;font-size:12px}
+.side div{padding:7px 8px;border-radius:6px}.side .on{background:#2c4470;color:#fff}
+.main{flex:1;min-width:0;background:#f4f6f9;padding:10px 12px 70px}
+.bar{display:flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px}
+.sel{border:1px solid var(--b2);background:#fff;border-radius:6px;height:26px;padding:0 9px;display:inline-flex;align-items:center;font-size:12px}
+.kpi{background:var(--navy);color:#fff;border-radius:13px;height:26px;padding:0 11px;display:inline-flex;align-items:center;font-weight:600}
+.kpi.l{background:#fff;color:#111827;border:1px solid var(--b2)}
+.bar .r{margin-left:auto;display:flex;gap:6px}
+.tb{background:#fff;border:1px solid var(--b);border-radius:8px;overflow:hidden}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{font-size:10.5px;font-weight:600;color:#374151;background:#e9edf3;padding:5px 3px;white-space:nowrap;text-align:right;overflow:hidden}
+th.l,td.l{text-align:left}
+th.f{background:#f6e9ee}
+td{font-size:11.5px;padding:3px 3px;border-top:1px solid #eef0f3;white-space:nowrap;overflow:hidden;text-align:right}
+td.v{color:#c0c6cf}
+tr.tot td{font-weight:700;background:#eef2f7;border-top:0}
+tr.pk td{font-style:italic;color:var(--ter);font-size:10.5px;background:#f8fafc}
+tr.cri td:first-child{box-shadow:inset 3px 0 #16a34a}
+tr.rec td:first-child{box-shadow:inset 3px 0 #d97706}
+tr.eng td:first-child{box-shadow:inset 3px 0 #2563eb}
+.pn{font-weight:700;padding-left:6px}
+.at{font-size:10.5px;font-weight:600}
+.at.c{color:#15803d}.at.r{color:#b45309}.at.e{color:#1d4ed8}
+.lt{font-weight:700;color:#0b1f3a;font-size:10.5px}
+.tx{color:#8a5212;font-style:italic;font-size:11px}
+.pg{font-size:11px;color:#374151}
+.sep1{border-left:2px solid #c9d1dc}
+.tt{font-weight:700}
+.ck{width:12px;height:12px;border:1.5px solid #9ca3af;border-radius:3px;display:inline-block;vertical-align:middle}
+.q{display:inline-block;min-width:18px;height:16px;line-height:16px;border-radius:8px;background:#fdf1d6;color:#8a5212;font-size:10px;text-align:center}
+.i{display:inline-flex;width:12px;height:12px;border:1px solid #9ca3af;border-radius:50%;font-size:8px;align-items:center;justify-content:center;color:var(--ter);margin-left:2px;font-weight:400}
+.leg{display:flex;gap:14px;margin-top:6px;color:var(--ter);font-size:11px;white-space:nowrap}
+.leg b{display:inline-block;width:3px;height:10px;margin-right:4px;vertical-align:middle}
+.marcas{margin-top:12px}
+.marca{display:flex;gap:9px;align-items:center;margin:4px 0;padding:5px 10px;background:#fff;border-radius:7px;font-size:11.5px}
+.marca b{width:30px}
+.marca .tx2{width:440px;white-space:nowrap;overflow:hidden;color:var(--sec)}
+.marca input[type=text]{flex:1;min-width:0;padding:3px 7px;border:1px solid var(--b);border-radius:5px;font:inherit;height:24px}
+.rod{position:fixed;left:0;right:0;bottom:0;background:#fff;padding:7px 14px;display:flex;gap:10px;align-items:center;z-index:20}
+.rod span{color:var(--ter);font-size:11px}
+@media (max-width:1000px){.side{width:64px;font-size:0}.marca .tx2{width:250px}.marca{font-size:11px}}
+</style></head><body>
+<div class="topo"><b>Mock MAPA-REBANHO-02</b><span>Mapa do rebanho com lote e programa · Vera, 3 Muchachas out/26 (números reais do print 18:11)</span></div>
+<div class="app"><div class="side"><div>Visão geral</div><div class="on">Produção</div><div>Financeiro</div><div>Cadastros</div></div>
+<div class="main">
+ <div class="bar"><span class="sel">‹</span><span class="sel">2026 ▾</span><span class="sel">Out ▾</span><span class="kpi">731 cab</span><span class="kpi l">0,85 UA/ha</span><span class="r"><span class="sel">Excel</span><span class="sel">PDF</span></span></div>
+ <div class="tb"><table id="t"></table></div>
+ <div class="leg"><span><b style="background:#16a34a"></b>Cria</span><span><b style="background:#d97706"></b>Recria</span><span><b style="background:#2563eb"></b>Engorda</span><span><span class="lt">REC-DF-ANG-01</span> lote cadastrado</span><span><span class="tx">Leiteiras</span> só texto</span></div>
+ <div class="marcas" id="marcas"></div>
+</div></div>
+<div class="rod"><button id="copiar" style="border:1px solid #f2c14e;background:#f2c14e;border-radius:6px;height:28px;padding:0 12px;font-weight:600">Copiar marcas</button><span id="cpok">Marque ok / ajuste em cada item e copie para o Chat.</span></div>
+<script>
+const fmt=(n,d=0)=>n.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const C=['MM','DM','G','B','T','MF','DF','N','V'];
+// [pasto, ativ, lote, loteCad?, programa, cats{}, peso, area, ua, qual]
+const R=[
+['P_07','c','CRI-PRE-CZ-01',1,'—',{MM:13,MF:7,N:35},275.00,35.7,0.9,''],
+['P_09','c','CRI-PRE-CZ-01',1,'—',{MM:10,MF:11,N:21},226.19,27.0,0.8,'6'],
+['P_10','c','CRI-NOV-NEL-01',1,'1ª inseminação',{MM:9,MF:6,N:45,V:24},353.21,59.7,1.1,'6'],
+['P_11','r','REC-DF-ANG-01',1,'—',{DF:27},290.00,34.8,0.5,'6'],
+['P_12','r','REC-DF-ANG-01',1,'—',{DF:31},290.00,31.2,0.6,'6'],
+['P_13','r','REC-NOV-CZ-01',1,'—',{N:69},400.00,69.4,0.9,'6'],
+['P_14','r','REC-DF-CZ-01',1,'—',{DF:76},230.00,68.2,0.6,''],
+['P_15','r','REC-DF-ANG-01',1,'—',{DF:73},290.00,53.0,0.9,'6'],
+['P_16','r','REC-DM-CZ-01',1,'—',{DM:80},280.00,65.9,0.8,'6'],
+['P_17','','',0,'',{},0,65.7,0,''],
+['P_18','','',0,'',{},0,71.8,0,''],
+['P_19','','',0,'',{},0,58.7,0,''],
+['P_25','c','Leiteiras',0,'—',{MM:3,G:3,MF:10,N:6,V:12},302.06,32.2,0.7,''],
+['P_26','c','Nov-IATF',0,'—',{N:31},335.00,34.6,0.7,''],
+['P_27','e','Engorda',0,'—',{N:21,V:4},445.80,43.0,0.6,'7'],
+['P_28','r','Desm.F e Arrend.',0,'—',{DF:56,N:43,V:5},366.92,42.6,2.0,'5'],
+['Diverg.','','',0,'',{},0,0,0,'']];
+const AT={c:['Cria','c','cri'],r:['Recria','r','rec'],e:['Engorda','e','eng']};
+const TOT={MM:35,DM:80,G:3,B:0,T:0,MF:34,DF:263,N:271,V:45};
+const PK={MM:'87',DM:'280',G:'300',B:'—',T:'—',MF:'80',DF:'268',N:'402',V:'469'};
+let h=`<colgroup><col style="width:6%"><col style="width:7%"><col style="width:13%"><col style="width:11.5%">${C.map(()=>'<col style="width:3.9%">').join('')}<col style="width:5%"><col style="width:5%"><col style="width:3%"><col style="width:5%"><col style="width:5%"><col style="width:3.9%"></colgroup>`;
+h+=`<tr><th class="l" style="padding-left:6px">Pasto</th><th class="l">Atividade</th><th class="l">Lote</th><th class="l">Programa</th>${C.map((c,i)=>`<th class="${i>=5?'f':''} ${i===0||i===5?'sep1':''}">${c}</th>`).join('')}<th class="sep1">Total</th><th>Peso</th><th title="Peso conferido">✓</th><th>Área</th><th>UA/ha</th><th>Qual.</th></tr>`;
+h+=`<tr class="tot"><td class="l" colspan="4" style="padding-left:6px">Total / média</td>${C.map((c,i)=>`<td class="${i===0||i===5?'sep1':''}">${TOT[c]?TOT[c]:'—'}</td>`).join('')}<td class="sep1">731</td><td>314,3</td><td></td><td>597,3</td><td>0,85</td><td><span class="q">6,0</span></td></tr>`;
+h+=`<tr class="pk"><td class="l" colspan="4" style="padding-left:6px">Peso kg</td>${C.map((c,i)=>`<td class="${i===0||i===5?'sep1':''}">${PK[c]}</td>`).join('')}<td class="sep1">314</td><td colspan="5"></td></tr>`;
+R.forEach(([p,a,l,cad,pg,cs,pe,ar,ua,q])=>{const t=C.reduce((s,c)=>s+(cs[c]||0),0);const A=AT[a];
+ h+=`<tr class="${A?A[2]:''}"><td class="l pn" ${p==='Diverg.'?'title="Divergência do campeiro"':''}>${p==='Diverg.'?'⚠ Div.':p}</td><td class="l">${A?`<span class="at ${A[1]}">${A[0]}</span>`:'<span class="v">—</span>'}</td>
+ <td class="l">${l?(cad?`<span class="lt">${l}</span>`:`<span class="tx" title="${l}">${l}</span>`):'<span class="v">—</span>'}</td><td class="l pg">${pg&&pg!=='—'?pg:'<span class="v">—</span>'}</td>
+ ${C.map((c,i)=>`<td class="${cs[c]?'':'v'} ${i===0||i===5?'sep1':''}">${cs[c]||'—'}</td>`).join('')}
+ <td class="sep1 ${t?'tt':'v'}">${t||'—'}</td><td class="${pe?'':'v'}">${pe?fmt(pe,1):'—'}</td><td style="text-align:center">${t?'<span class="ck"></span>':''}</td><td class="${ar?'':'v'}">${ar?fmt(ar,1):'—'}</td><td class="${ua?'':'v'}">${ua?fmt(ua,1):'—'}</td><td>${q?`<span class="q">${q}</span>`:'<span class="v">—</span>'}</td></tr>`});
+document.getElementById('t').innerHTML=h;
+const M=[['M1','Coluna nova "Programa" (fase do lote).'],
+['M2','Lote: código novo (negrito) ou só texto (âmbar).'],
+['M3','Atividade em texto colorido + faixa na linha.'],
+['M4','Categorias, Área, UA/ha e Qual. mais estreitas.'],
+['M5','"✓ Peso" vira "✓". Nada corta.'],
+['M6','"Divergência do Campeiro" vira "⚠ Div.".'],
+['M7','PDF em paisagem, mesmas colunas.']];
+document.getElementById('marcas').innerHTML=M.map(([k,t])=>`<div class="marca"><b>${k}</b><span class="tx2" title="${t}">${t}</span><label><input type="checkbox" data-k="${k}"> ok</label><input type="text" data-a="${k}" placeholder="ajuste"></div>`).join('');
+document.getElementById('copiar').onclick=()=>{const s=M.map(([k])=>{const ok=document.querySelector(`[data-k=${k}]`).checked,a=document.querySelector(`[data-a=${k}]`).value.trim();return `${k}: ${a?a:(ok?'ok':'—')}`}).join('\n');
+ navigator.clipboard?.writeText(s).then(()=>document.getElementById('cpok').textContent='Copiado.').catch(()=>{document.getElementById('cpok').textContent=s.replace(/\n/g,' · ')})};
+</script></body></html>

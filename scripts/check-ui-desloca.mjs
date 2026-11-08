@@ -289,6 +289,11 @@ const CENARIOS = [
     },
     estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
   })),
+  /* MAPA-REBANHO-02 — o Mapa do rebanho: abrir e fechar o modal do pasto pelo nome não move o cabeçalho, as faixas presas nem as colunas */
+  { nome: 'mapa-pastos', url: 'tela=mapa-pastos', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    antes: async (p) => { await p.locator('[data-testid="programa-do-pasto"]').first().waitFor(); await espera(p, 800); },
+    estados: [['abrir A-01', async (p) => { await p.locator('[data-testid="abrir-pasto"]').first().click(); await espera(p, 900); }],
+      ['fechar', async (p) => { await p.keyboard.press('Escape'); await espera(p, 600); }]] },
   /* FECH-TOPO-COMPACTO-01 → FECH-TOPO-02 — o topo do Fechamento (`v=topo`, todos os botões): trocar de mês e abrir/fechar o Ajustar não
      movem os meses (com o ano à esquerda), os botões em 2 colunas à direita da tabela, o aviso, o "Fechar Mês" nem a tabela de conferência */
   { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],

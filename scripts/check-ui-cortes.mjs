@@ -791,6 +791,10 @@ const CENARIOS = [
   { nome: 'plano-contas-renomear-previa', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]', antes: async (p) => {
     await p.locator('[data-testid="renomear-subcentro"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="nome-subcentro"]').fill('Animais de terceiros'); await p.locator('[data-testid="conferir-subcentro"]').click(); await p.waitForTimeout(500); } },
+  /* MAPA-REBANHO-02 — o Mapa do rebanho (`tela=mapa-pastos`, SINTÉTICO): a tabela com a coluna "Programa", sem rolagem lateral e sem cortar
+     a 1.240, 1.024 e 135% (919×519) com o menu; o Lote (texto livre) é o único que corta, com "…" e o nome inteiro no title */
+  { nome: 'mapa-pastos', url: 'tela=mapa-pastos', tamanhos: [[1240, 700], [1024, 600], [919, 519]], regiao: 'table',
+    antes: async (p) => { await p.locator('[data-testid="programa-do-pasto"]').first().waitFor(); await p.waitForTimeout(800); } },
   /* FECH-TOPO-COMPACTO-01 — o topo do Fechamento com todos os botões numa linha (1.240, 1.024 e o zoom de 135% = 919×519): nada corta */
   { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
     regiao: '.sticky.top-0', antes: (p) => p.waitForTimeout(2000) },

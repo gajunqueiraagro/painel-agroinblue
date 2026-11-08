@@ -1825,6 +1825,63 @@ if (tela === 'mesclar') {
     montar(<PastosTab />);
   };
   void montarPastos();
+} else if (tela === 'mapa-pastos') {
+  /* MAPA-REBANHO-02 — Produção › Mapa de pastos (a tela REAL), dado SINTÉTICO de out/2026 no formato do mock: 9 categorias, pastos de cria,
+     recria e engorda, um lote com programa ("1ª inseminação"), um lote só texto e comprido (corta com o title), pastos vazios e a conta de
+     ajuste do campeiro ("⚠ Div."). Os lotes pela `fn_lotes_da_fazenda` e o nome do programa pelo cadastro do lote, como na tela de verdade. */
+  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  const COD = ['mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros', 'mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
+  const NOME = ['Mamotes M', 'Desmama M', 'Garrotes', 'Bois', 'Touros', 'Mamotes F', 'Desmama F', 'Novilhas', 'Vacas'];
+  const CATS = COD.map((c, i) => ({ id: `c-${c}`, codigo: c, nome: NOME[i], ordem_exibicao: i + 1, ativo: true }));
+  const pasto = (id: string, nome: string, area: number, tipo: string, ordem: number) => ({
+    id, fazenda_id: 'f1', cliente_id: 'cli', nome, lote_padrao: null, area_produtiva_ha: area, tipo_uso: tipo, qualidade: null, entra_conciliacao: true,
+    ativo: true, observacoes: null, ordem_exibicao: ordem, data_inicio: null, data_fim: null, grupo_id: null, created_at: '2026-01-01', updated_at: '2026-01-01' });
+  /* [id, nome, área, uso, lote do mês, lote cadastrado, {categoria: [cab, kg]}, qualidade] */
+  const LINHAS: [string, string, number, string, string | null, string | null, Record<string, [number, number]>, number | null][] = [
+    ['a1', 'A-01', 31.4, 'cria', 'Cria-Prec-1', 'l-cri1', { mamotes_m: [12, 88.5], mamotes_f: [9, 81.25], novilhas: [30, 402.13] }, 6],
+    ['a2', 'A-02', 25.0, 'cria', 'Cria-Prec-1', 'l-cri1', { mamotes_m: [8, 92], mamotes_f: [12, 79.5], novilhas: [20, 410] }, 6],
+    ['a3', 'A-03', 58.2, 'cria', 'Nov-Ins-01', 'l-ins', { mamotes_m: [7, 95], mamotes_f: [5, 90], novilhas: [41, 355.75], vacas: [22, 470.5] }, 6],
+    ['a4', 'A-04', 33.9, 'recria', 'Desm-F-01', 'l-df', { desmama_f: [26, 288.4] }, 6],
+    ['a5', 'A-05', 30.1, 'recria', 'Desm-F-01', 'l-df', { desmama_f: [33, 291.6] }, 6],
+    ['a6', 'A-06', 67.0, 'recria', 'Nov-Rec', 'l-nov', { novilhas: [70, 398.2] }, 6],
+    ['a7', 'A-07', 64.8, 'recria', 'DM-Rec', 'l-dm', { desmama_m: [78, 281.33] }, null],
+    ['a8', 'A-08', 61.0, 'recria', null, null, {}, null],
+    ['a9', 'A-09', 70.2, 'recria', null, null, {}, null],
+    ['b1', 'B-01', 30.5, 'cria', 'Leiteiras e vacas de descarte do retiro', null, { mamotes_m: [4, 85], garrotes: [3, 302.1], mamotes_f: [9, 80], novilhas: [5, 390], vacas: [11, 455.9] }, null],
+    ['b2', 'B-02', 41.7, 'engorda', 'Engorda', 'l-eng', { bois: [18, 455.8], touros: [2, 610.25], vacas: [5, 440] }, 7],
+    ['dv', '⚠️ Divergência do Campeiro', 0, 'divergencia', null, null, {}, null],
+  ];
+  const PASTOS = LINHAS.map(([id, nome, area, uso], i) => pasto(id, nome, area, uso, i + 1));
+  const CARDS = LINHAS.map(([id, , , uso, lote], i) => ({ id: `fc-${id}`, pasto_id: id, fazenda_id: 'f1', cliente_id: 'cli', ano_mes: '2026-10',
+    status: i < 3 ? 'fechado' : 'rascunho', responsavel_nome: null, lote_mes: lote, tipo_uso_mes: uso, qualidade_mes: LINHAS[i][7], observacao_mes: null,
+    created_at: '2026-10-01', updated_at: '2026-10-01' }));
+  const ITENS = LINHAS.flatMap(([id, , , , , loteId, cats]) => Object.entries(cats).map(([cod, [q, kg]]) => ({ id: `i-${id}-${cod}`, fechamento_id: `fc-${id}`,
+    categoria_id: `c-${cod}`, quantidade: q, peso_medio_kg: kg, lote: null, lote_id: loteId, observacoes: null, origem_dado: 'manual', peso_atualizado: id === 'a1' })));
+  const lote = (id: string, codigo: string, programa: string | null) => ({ id, codigo, codigos_antigos: [], nome_campeiro: null, situacao: 'ativo',
+    formado_em: '2026-01-01', encerrado_em: null, categoria_id: 'k-cat', raca_id: 'k-raca', atividade_id: 'k-ativ', numero: 1, sistema_id: null,
+    programa_id: programa, destino_id: null, safra: null, carimbo: null, idade_media_meses: null, meta_peso_kg: null, meta_gmd_kg: null, meta_data: null,
+    versao: 1, ano_mes_dado: '2026-10', cabecas: 0, peso_medio_kg: null, gmd_kg: null, pastos: [], lancamentos: 0, conferir: null });
+  const LOTES = [lote('l-cri1', 'CRI-PRE-01', null), lote('l-ins', 'CRI-NOV-01', 'k-prog-ins'), lote('l-df', 'REC-DF-01', null),
+    lote('l-nov', 'REC-NOV-01', null), lote('l-dm', 'REC-DM-01', null), lote('l-eng', 'ENG-BOI-01', null)];
+  const CADASTROS = [{ id: 'k-prog-ins', tipo: 'programa', sigla: null, nome: '1ª inseminação', categorias_rebanho: [], ordem: 1, ativo: true }];
+  g.__bancoBancada = {
+    from: (t: string, e: { eq: Record<string, unknown> }) => (
+      t === 'pastos' ? PASTOS
+      : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
+      : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
+      : t === 'categorias_rebanho' ? CATS
+      : t === 'rebanho_lote_cadastros' ? CADASTROS
+      : []),
+    rpc: (fn: string) => (fn === 'fn_lotes_da_fazenda' ? LOTES : null),
+  };
+  const montarMapa = async () => {
+    const { MapaPastosTab } = await import('@/pages/MapaPastosTab');
+    montar(<MapaPastosTab periodo={{ ano: '2026', mes: 10 }} onPeriodoChange={() => {}} />);
+  };
+  void montarMapa();
 } else if (tela === 'fechamento-grupo') {
   /* FECH-ROTACAO-01 fatia 3 — Fechamento de pastos (a tela REAL) com um grupo de pastejo, dado SINTÉTICO de out/2026: o grupo P10
      (P10A com o lote no grupo inteiro, P10B só recebe, P10C vedado), a rotação avulsa P11 → P12 Retiro, e um pasto solto. A lotação
