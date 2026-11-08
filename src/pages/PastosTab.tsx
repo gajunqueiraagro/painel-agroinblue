@@ -30,6 +30,9 @@ import {
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import { GruposDePastejo, useGruposDePastejo } from '@/components/pastos/GruposDePastejo';
 import { AreasDosPastos } from '@/components/pastos/AreasDosPastos';
+import { ArrumarPiquetesDialog, DesfazerPiquetesDialog, podeVirarPiquete, rodadaDoPai } from '@/components/pastos/ArrumarPiquetesDialog';
+import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
+import { useCliente } from '@/contexts/ClienteContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -640,6 +643,13 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   const { pastos, loading, criarPasto, editarPasto, toggleAtivo, reorderPastos } = usePastos();
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
+  /* FECH-PASTO-UNIDADE-01 F2b (D1 a · D4 a) — "É piquete de outro pasto…" e o desfazer, no cadastro do pasto; só o admin (o banco recusa os outros) */
+  const { isAdmin } = useCliente();
+  const { geometrias: geometriasDaFazenda } = usePastoGeometrias();
+  const [arrumarDe, setArrumarDe] = useState<Pasto | null>(null);
+  const [desfazerDe, setDesfazerDe] = useState<{ rodada: string; nome: string } | null>(null);
+  const [rodadaDoEditado, setRodadaDoEditado] = useState<string | null>(null);
+  const paisDaFazenda = useMemo(() => new Set(pastos.flatMap((p) => (p.pai_id ? [p.pai_id] : []))), [pastos]);
 
   /* PR-AREA-REGENERAR-01J — o lote de regeneracao de area mora AQUI, no cadastro de
      pastos, e nao no fechamento de um mes: ele varre TODOS os meses da fazenda. */
@@ -651,6 +661,13 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   const [loteRelatorio, setLoteRelatorio] = useState<LoteRelatorio | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPasto, setEditingPasto] = useState<Pasto | undefined>();
+  /* F2b: o pai criado pelo gesto tem rodada na trilha → o "Voltar a pastos soltos…" */
+  useEffect(() => {
+    let vivo = true;
+    setRodadaDoEditado(null);
+    if (isAdmin && editingPasto && paisDaFazenda.has(editingPasto.id)) void rodadaDoPai(editingPasto.id).then((r) => { if (vivo) setRodadaDoEditado(r); });
+    return () => { vivo = false; };
+  }, [isAdmin, editingPasto, paisDaFazenda]);
   const [showInativos, setShowInativos] = useState(false);
   const [criandoDivergencia, setCriandoDivergencia] = useState(false);
   // PR-PASTOS-LISTA-01 — dois modos, porque são dois usos distintos: "destino"
@@ -961,11 +978,31 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
               e LancamentoV2Dialog:1017. */}
           <DialogContent className="max-w-3xl h-[470px] max-h-[92vh] p-0 flex flex-col gap-0">
             <DialogHeader className="px-5 py-3 border-b shrink-0">
-              <DialogTitle className="text-sm font-semibold">{editingPasto ? 'Editar Pasto' : 'Novo Pasto'}</DialogTitle>
+              <div className="flex items-center gap-2 pr-6">
+                <DialogTitle className="text-sm font-semibold">{editingPasto ? 'Editar Pasto' : 'Novo Pasto'}</DialogTitle>
+                {isAdmin && editingPasto && podeVirarPiquete({ ...editingPasto, area_ha: editingPasto.area_produtiva_ha }, paisDaFazenda) && (
+                  <Button variant="outline" size="sm" className="ml-auto h-6 text-[11px]" data-testid="abrir-arrumar-piquetes"
+                    onClick={() => setArrumarDe(editingPasto)}>É piquete de outro pasto…</Button>
+                )}
+                {isAdmin && editingPasto && rodadaDoEditado && (
+                  <Button variant="outline" size="sm" className="ml-auto h-6 text-[11px]" data-testid="abrir-desfazer-piquetes"
+                    onClick={() => setDesfazerDe({ rodada: rodadaDoEditado, nome: editingPasto.nome })}>Voltar a pastos soltos…</Button>
+                )}
+              </div>
             </DialogHeader>
             <PastoForm pasto={editingPasto} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingPasto(undefined); }} />
           </DialogContent>
         </Dialog>
+        {arrumarDe && (
+          <ArrumarPiquetesDialog pastoInicial={{ ...arrumarDe, area_ha: arrumarDe.area_produtiva_ha }} pastos={pastos.map((p) => ({ ...p, area_ha: p.area_produtiva_ha }))}
+            geometrias={geometriasDaFazenda} pais={paisDaFazenda}
+            onFechar={() => setArrumarDe(null)}
+            aoGravar={() => { toast.success('Os pastos viraram piquetes'); setDialogOpen(false); setEditingPasto(undefined); if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id); }} />
+        )}
+        {desfazerDe && (
+          <DesfazerPiquetesDialog rodada={desfazerDe.rodada} nomeDoPai={desfazerDe.nome} onFechar={() => setDesfazerDe(null)}
+            aoGravar={() => { toast.success('Os pastos voltaram a valer'); setDialogOpen(false); setEditingPasto(undefined); if (fazendaAtual?.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id); }} />
+        )}
       </div>
     </div>
   );

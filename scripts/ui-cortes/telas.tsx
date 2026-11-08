@@ -801,7 +801,9 @@ if (tela === 'mesclar') {
         ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
           // MAPA-CRIAR-PIQUETES-01 2b: `versoesDosPoligonos` lê `.select('id, versao').in('id', …)` (a versão fresca do Mover linha / Juntar)
           : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
-          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : []), ...(q.get('p6') === '1' ? [PRACA_DO_P6] : [])].filter(x => q.get('p6') !== '1' || (x.id !== 'gi1' && x.id !== 'gi2')).map(comModulo03))
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : []), ...(q.get('p6') === '1' ? [PRACA_DO_P6] : [])].filter(x => q.get('p6') !== '1' || (x.id !== 'gi1' && x.id !== 'gi2'))
+            /* MAPA-PIQUETE-SUBAREA-01: `&semcontorno=1` — o P_09 SEM o contorno dele (o caso Modulo 05 da Sta. Tereza): o mapa o desenha pelos piquetes */
+            .filter(x => q.get('semcontorno') !== '1' || x.id !== 'gu-c').map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
       // PIQUETE-POLIGONO-01: `&p6=1` — o P_01 se chama P6 (o nome sugerido dos piquetes é P6-A, P6-B)
       : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos.map(x => (q.get('p6') === '1' && x.id === 'p1' ? { ...x, nome: 'P6' } : x)), ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
@@ -1777,7 +1779,27 @@ if (tela === 'mesclar') {
   const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
     lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
-  const ITENS: (ReturnType<typeof item> & { lote_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  const ITENS: (ReturnType<typeof item> & { lote_id?: string; piquete_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  /* FECH-PASTO-UNIDADE-01 F2 — `&v=piquetes7`: o modal do pasto COM piquetes, nas medidas do caso real (PUR out/26): o P7 (97,5 ha) em
+     7A 24,76 · 7B 25,11 · 7C 24,35 · 7D 23,32, lançado POR PIQUETES em out/26 e com set/26 também por piquetes (o mês anterior somado, com
+     o lote de cada piquete); o P5 (P5-A 101 · P5-B 86,1) com o card vazio (abre em "Pasto inteiro"). As 9 categorias de verdade (a grade
+     inteira, Machos e Fêmeas). Nomes e cabeças SINTÉTICOS. */
+  const COM_PIQUETES7 = v === 'piquetes7';
+  if (COM_PIQUETES7) {
+    CATS.splice(0, CATS.length, ...[['mamotes_m', 'Mamotes M'], ['desmama_m', 'Desmama M'], ['garrotes', 'Garrotes'], ['bois', 'Bois'], ['touros', 'Touros'],
+      ['mamotes_f', 'Mamotes F'], ['desmama_f', 'Desmama F'], ['novilhas', 'Novilhas'], ['vacas', 'Vacas']].map(([codigo, nome], i) => ({ id: `c-${codigo}`, codigo, nome, ordem_exibicao: i + 1 })));
+    PASTOS.push(pasto('p7', 'P7', 97.54, 'cria', null, 7),
+      ...[['7a', '7A', 24.76], ['7b', '7B', 25.11], ['7c', '7C', 24.35], ['7d', '7D', 23.32]].map(([id, nome, ha], i) =>
+        ({ ...pasto(`p${id}`, String(nome), Number(ha), 'cria', 'g7', 8 + i), data_inicio: '2026-10-01' })),
+      pasto('p5', 'P5', 187.1, 'cria', null, 12),
+      { ...pasto('p5a', 'P5-A', 101, 'cria', 'g5', 13), data_inicio: '2026-10-01' }, { ...pasto('p5b', 'P5-B', 86.1, 'cria', 'g5', 14), data_inicio: '2026-10-01' });
+    CARDS.push(card('f7', 'p7', { tipo_uso_mes: 'cria', qualidade_mes: 6 }), card('f7-9', 'p7', { ano_mes: '2026-09', status: 'fechado', tipo_uso_mes: 'cria' }),
+      card('f5', 'p5', { tipo_uso_mes: 'cria' }));
+    const piq = (f: string, cat: string, q: number, peso: number, p: string, lote?: string) => ({ ...item(f, `c-${cat}`, q, peso), id: `${f}-${cat}-${p}`, piquete_id: p, ...(lote ? { lote_id: lote } : {}) });
+    ITENS.push(piq('f7', 'vacas', 40, 450, 'p7a'), piq('f7', 'mamotes_f', 14, 32, 'p7a'), piq('f7', 'vacas', 34, 445, 'p7b'), piq('f7', 'mamotes_f', 14, 31, 'p7b'),
+      piq('f7', 'mamotes_m', 46, 31, 'p7c'), piq('f7', 'novilhas', 22, 290, 'p7d'),
+      piq('f7-9', 'vacas', 74, 450, 'p7a', 'l-dm6'), piq('f7-9', 'mamotes_f', 28, 30, 'p7b'), piq('f7-9', 'mamotes_m', 46, 30, 'p7c'), piq('f7-9', 'novilhas', 22, 285, 'p7d', 'l-px2'));
+  }
   /* FECH-TOPO-02 — `&mes=9`: set/26 com os MESMOS cards, todos FECHADOS (o mês fechado do print: "Mês fechado" e o "Preço do rebanho →") */
   const MES_DA_BANCADA = q.get('mes') === '9' ? 9 : 10;
   if (MES_DA_BANCADA === 9) {
@@ -1822,20 +1844,27 @@ if (tela === 'mesclar') {
     return [...porPasto].map(([id, v]) => ({ pasto_id: id, grupo_id: PASTOS.find((x) => x.id === id)?.grupo_id ?? null, area_ha: area(id), cabecas: v.cab, kg: v.kg, ua: v.ua,
       kg_ha: v.kg / area(id), ua_ha: v.ua / area(id), recebe_de_outro_card: v.recebe }));
   };
+  /* o filtro do `eq`/`in` só nas colunas que a linha tem (a linha sem a coluna passa, como antes) */
+  const filtrar = <T extends Record<string, unknown>>(linhas: T[], e: { eq: Record<string, unknown>; in?: Record<string, unknown[]> }) => linhas.filter((r) =>
+    Object.entries(e.eq).every(([k, x]) => !(k in r) || r[k] === x) && Object.entries(e.in ?? {}).every(([k, xs]) => !(k in r) || xs.includes(r[k])));
   g.__bancoBancada = {
-    from: (t: string, e: { eq: Record<string, unknown> }) => (
-      t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? [{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: null },
-        ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }] : [])]
-      : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
+    from: (t: string, e: { eq: Record<string, unknown>; in?: Record<string, unknown[]> }) => (
+      /* F2 `&v=piquetes7`: os leitores do modal filtram por grupo/origem/pasto (`in`/`eq`); sem a variante, a resposta de sempre */
+      t === 'pastos' ? (COM_PIQUETES7 ? filtrar(PASTOS, e) : PASTOS) : t === 'pasto_grupos' ? (COM_PIQUETES7 ? filtrar : (l: unknown[]) => l)([{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: null },
+        ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }] : []),
+        ...(COM_PIQUETES7 ? [{ id: 'g7', fazenda_id: 'f1', nome: 'P7', ativo: true, pasto_origem_id: 'p7' }, { id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }] : [])], e)
+      : t === 'fechamento_pastos' ? CARDS.filter((c) => (!e.eq.ano_mes || c.ano_mes === e.eq.ano_mes) && (!COM_PIQUETES7 || !e.eq.pasto_id || c.pasto_id === e.eq.pasto_id))
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
       : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC
       : t === 'fazenda_geometrias' ? GEOS
-      : COM_LOTES && t === 'rebanho_lote_cadastros' ? LOTES_BANCADA.CADASTROS
+      : (COM_LOTES || COM_PIQUETES7) && t === 'rebanho_lote_cadastros' ? LOTES_BANCADA.CADASTROS
       /* FECH-REABRIR-JUNTO-01 — `&v=trava`: o Valor do Rebanho de out/26 VALIDADO (o caso EXP R_04): o modal abre com o aviso e o "Reabrir e editar" */
       : v === 'trava' && t === 'valor_rebanho_realizado_validado' ? [{ fazenda_id: 'f1', ano_mes: '2026-10', status: 'validado' }]
       : []),
     rpc: (fn: string, a: Record<string, unknown>) => (fn === 'fn_lotacao_do_mes' ? lotacao()
-      : COM_LOTES ? LOTES_BANCADA.bancoDeLotes().rpc(fn, a) : null),
+      /* F2 `&v=piquetes7`: a área de cada piquete NO MÊS (a leitura da casa) */
+      : COM_PIQUETES7 && fn === 'fn_pastos_area_do_mes' ? PASTOS.map((x) => ({ pasto_id: x.id, ano_mes: a.p_de, area_ha: x.area_produtiva_ha, fonte: 'vigencia' }))
+      : COM_LOTES || COM_PIQUETES7 ? LOTES_BANCADA.bancoDeLotes().rpc(fn, a) : null),
   };
   const montarFechamento = async () => {
     const { FechamentoTab } = await import('@/pages/FechamentoTab');

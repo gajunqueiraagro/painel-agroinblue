@@ -7,6 +7,7 @@
  * "vazios → vedado" do fechar em lote (F3-4b).
  * Os números da lotação saem da `fn_lotacao_do_mes` (rateio por área): sem alocação são os de hoje, linha a linha (portão da fatia 1).
  */
+import { labelDoTipoUso } from '@/lib/pastos/tiposUso';
 import { supabase } from '@/integrations/supabase/client';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { fraseDoErro } from '@/lib/patrimonio/patrimonio';
@@ -147,10 +148,20 @@ export const API_LOTE_NO_GRUPO = {
   },
 };
 
+/** ROTACAO-LISTA-01 — o aviso de 1 linha do que o salvar mudou nos destinos ("P_02 passa a Cria; P_03 reabriu"); nada mudou = null */
+export function fraseDosDestinosMudados(mudados: unknown): string | null {
+  if (!Array.isArray(mudados) || mudados.length === 0) return null;
+  const partes = mudados.flatMap((m: { pasto?: string; para?: string; reaberto?: boolean }) => [
+    ...(m.reaberto ? [`${m.pasto} reabriu`] : []),
+    ...(m.para ? [`${m.pasto} passa a ${labelDoTipoUso(m.para)}`] : []),
+  ]);
+  return partes.length ? `${partes.join('; ')}.` : null;
+}
+
 /** O card + a alocação numa transação (F3-3). A recusa do banco vem como frase pronta (P0001) ou genérica (o resto vai ao console). */
 export async function salvarCardComAlocacaoNoBanco(fechamentoId: string, campos: Record<string, unknown>, itens: readonly Record<string, unknown>[],
-  pastoIds: string[] | null): Promise<{ ok: true; erro: null } | { ok: false; erro: string }> {
-  const { error } = await semTipo.rpc('fn_fechamento_pasto_salvar_com_alocacao', { p_fechamento_id: fechamentoId, p_campos: campos, p_itens: itens, p_pasto_ids: pastoIds });
+  pastoIds: string[] | null): Promise<{ ok: true; erro: null; aviso: string | null } | { ok: false; erro: string }> {
+  const { data, error } = await semTipo.rpc('fn_fechamento_pasto_salvar_com_alocacao', { p_fechamento_id: fechamentoId, p_campos: campos, p_itens: itens, p_pasto_ids: pastoIds });
   if (error) { console.error(error); return { ok: false, erro: error.message || 'Não foi possível salvar o pasto.' }; }
-  return { ok: true, erro: null };
+  return { ok: true, erro: null, aviso: fraseDosDestinosMudados(data?.destinos_mudados) };
 }
