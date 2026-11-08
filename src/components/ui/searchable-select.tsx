@@ -41,6 +41,32 @@ export interface OpcaoSearchable {
    * Quem passa grupos passa as opções JÁ ORDENADAS por grupo.
    */
   grupo?: string;
+  /**
+   * LISTAS-DIGITAVEIS-01 — os APELIDOS da opção (os termos do campo, já normalizados: "curso" → Diarreia). ENTRAM NA BUSCA e, quando
+   * foi por um deles que a opção casou (o nome não contém o digitado), o termo aparece à direita, apagado. ⚠ ADITIVA.
+   */
+  apelidos?: string[];
+}
+
+/** LISTAS-DIGITAVEIS-01 — a faixa do "+ Criar" que não criou: o banco achou parecidos ("Usar") ou recusou (a frase). */
+export interface FaixaDoCriar {
+  /** o texto que a gerou: a faixa só aparece enquanto a busca for esse texto */
+  texto: string;
+  mensagem: string;
+  opcoes: { value: string; label: string }[];
+  /** oferece "Criar mesmo assim" (parecido); a recusa não oferece */
+  mesmoAssim: boolean;
+}
+
+/** LISTAS-DIGITAVEIS-01 — o "+ Criar" com o texto digitado, no fim da lista (o "Outro (digitar)" sai). */
+export interface CriarComTexto {
+  /** o nome como vai ser gravado — a prévia da linha '+ Criar "…"' */
+  frase: (texto: string) => string;
+  /** o digitado já é uma opção (nome ou apelido exato)? então a linha não aparece */
+  jaExiste: (texto: string) => boolean;
+  /** cria: devolve o valor a escolher, ou `null` — o painel fica aberto e o chamador põe a `faixa` */
+  aoCriar: (texto: string, mesmoAssim: boolean) => Promise<string | null>;
+  faixa?: FaixaDoCriar | null;
 }
 
 const PREFIXO = 'ss-busca:';
@@ -123,6 +149,9 @@ interface SearchableSelectProps {
   /** P102 — o nome escolhido inteiro no gatilho, rolando no lugar (`uma-linha-que-rola`), nunca com "…" (fora de tabela, a regra da casa).
    *  Ausente = como sempre (truncate). */
   nomeInteiro?: boolean;
+  /** LISTAS-DIGITAVEIS-01 — a linha '+ Criar "texto"' quando o digitado não é uma opção; Enter sem resultado também cria.
+   *  Ausente = nada muda. */
+  criarComTexto?: CriarComTexto;
 }
 
 export function SearchableSelect({
@@ -143,8 +172,12 @@ export function SearchableSelect({
   tabIndex,
   valorInexistente = false,
   nomeInteiro = false,
+  criarComTexto,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
+  const [criando, setCriando] = useState(false);
+  const montado = useRef(true);
+  useEffect(() => () => { montado.current = false; }, []);
   /* "Ativo" = o campo está filtrando alguma coisa. É a mesma pergunta que decide se o
      gatilho mostra "Todos", então não há como a memória e o rótulo discordarem. */
   const filtroAtivo = value !== allValue && value !== '';
@@ -189,7 +222,8 @@ export function SearchableSelect({
   /* P134: a busca ignora acento, cedilha e maiúscula nos dois lados (`normalizarParaBusca`, a regra única). O texto de cada opção é
      normalizado UMA vez por lista, não por tecla. */
   const indiceDaBusca = useMemo(
-    () => options.map((o) => [normalizarParaBusca(o.label), normalizarParaBusca(o.sub), normalizarParaBusca(o.busca), normalizarParaBusca(o.grupo)]),
+    () => options.map((o) => [normalizarParaBusca(o.label), normalizarParaBusca(o.sub), normalizarParaBusca(o.busca), normalizarParaBusca(o.grupo),
+      ...(o.apelidos ?? []).map((a) => normalizarParaBusca(a))]),
     [options]);
   const filtered = useMemo(() => {
     if (!search.trim()) return options;
@@ -210,6 +244,17 @@ export function SearchableSelect({
   const selectableItems = useMemo(() => {
     return semTodos ? filteredVisiveis : [{ value: allValue, label: allLabel }, ...filteredVisiveis];
   }, [filteredVisiveis, allValue, allLabel, semTodos]);
+  /* LISTAS-DIGITAVEIS-01 — o apelido que casou, quando o nome (e o resto visível) não casou: ele vai à direita da opção */
+  const qBusca = normalizarParaBusca(search);
+  const apelidoQueCasou = (o: OpcaoSearchable): string | undefined => {
+    if (!qBusca || !o.apelidos?.length) return undefined;
+    if ([o.label, o.sub, o.busca, o.grupo].some((t) => normalizarParaBusca(t).includes(qBusca))) return undefined;
+    return o.apelidos.find((a) => normalizarParaBusca(a).includes(qBusca));
+  };
+  const textoDoCriar = search.trim();
+  const mostraCriar = !!criarComTexto && textoDoCriar !== '' && !criarComTexto.jaExiste(textoDoCriar);
+  const faixaAtual = criarComTexto?.faixa && normalizarParaBusca(criarComTexto.faixa.texto) === qBusca ? criarComTexto.faixa : null;
+
   /* o primeiro item REAL: com "Todos" na lista ele é o índice 1; sem, o 0 */
   const primeiroReal = semTodos ? 0 : (filteredVisiveis.length > 0 ? 1 : 0);
 
@@ -238,6 +283,18 @@ export function SearchableSelect({
     setOpen(false);
     esquecerAoFechar();
   }, [onValueChange, esquecerAoFechar]);
+
+  /* LISTAS-DIGITAVEIS-01 — criar com o texto digitado. Devolveu um valor = escolhe e fecha; `null` = fica aberto (a faixa diz o porquê). */
+  const criarDoTexto = useCallback(async (mesmoAssim: boolean) => {
+    if (!criarComTexto || criando || !textoDoCriar) return;
+    setCriando(true);
+    try {
+      const v = await criarComTexto.aoCriar(textoDoCriar, mesmoAssim);
+      if (montado.current && v) handleSelect(v);
+    } finally {
+      if (montado.current) setCriando(false);
+    }
+  }, [criarComTexto, criando, textoDoCriar, handleSelect]);
 
   /* Abrir para cima quando não cabe embaixo é do Radix agora (`avoidCollisions` vira o lado). O foco na busca vai
      no `onOpenAutoFocus` do painel — o `setTimeout` continua como reforço para o gatilho por teclado. */
@@ -273,6 +330,11 @@ export function SearchableSelect({
     }
     if (e.key === 'Enter') {
       e.preventDefault();
+      /* sem nenhuma opção achada, Enter cria (LISTAS-DIGITAVEIS-01); com opção, escolhe a realçada, como sempre */
+      if (mostraCriar && !faixaAtual && filteredVisiveis.length === 0) {
+        void criarDoTexto(false);
+        return;
+      }
       if (selectableItems[highlightIdx]) {
         handleSelect(selectableItems[highlightIdx].value);
       }
@@ -462,6 +524,9 @@ export function SearchableSelect({
                       identidade do item e o operador não tem como recuperá-la. */}
                   <span className="truncate" title={o.label}>{o.label}</span>
                   {o.hint ? <span className="shrink-0 opacity-60">· {o.hint}</span> : null}
+                  {'apelidos' in o && apelidoQueCasou(o) ? (
+                    <span className={cn('ml-auto shrink-0 pl-2', MENU_SECUNDARIO)} data-testid="ss-apelido">{apelidoQueCasou(o)}</span>
+                  ) : null}
                 </span>
                 {o.sub ? (
                   /* fix1: no painel cinza o amber-500 e o zinc-400 sumiam — amber-100 (6,94:1) e zinc-200 (6,09:1) sobre zinc-600 */
@@ -475,6 +540,37 @@ export function SearchableSelect({
             ))}
             {filtered.length === 0 && (
               <div className={cn('px-2 py-3 text-center', MENU_VAZIO)}>Nenhum resultado</div>
+            )}
+            {/* LISTAS-DIGITAVEIS-01 — o "+ Criar" com o texto já escrito como vai ser gravado; a faixa do parecido/recusa no lugar dele */}
+            {mostraCriar && criarComTexto && !faixaAtual && (
+              <button type="button" data-testid="ss-criar" disabled={criando} onMouseDown={e => e.preventDefault()}
+                onClick={() => { void criarDoTexto(false); }}
+                className={cn('w-full truncate text-left rounded-sm text-sky-100 border-t border-zinc-500/40', MENU_REALCE_HOVER, MENU_ITEM,
+                  criando && 'opacity-60')}
+                title={`Criar "${criarComTexto.frase(textoDoCriar)}"`}>
+                {criando ? 'Criando…' : `+ Criar "${criarComTexto.frase(textoDoCriar)}"`}
+              </button>
+            )}
+            {faixaAtual && (
+              <div data-testid="ss-faixa" className={cn('mt-0.5 rounded-sm border-t border-zinc-500/40 px-2 py-1.5 text-[9.5px] leading-[14px] text-white', MENU_REALCE)}>
+                <div className="mb-1">{faixaAtual.mensagem}</div>
+                <div className="flex flex-wrap gap-1">
+                  {faixaAtual.opcoes.map((op) => (
+                    <button key={op.value} type="button" data-testid="ss-usar" onMouseDown={e => e.preventDefault()}
+                      onClick={() => handleSelect(op.value)}
+                      className="max-w-full truncate rounded border border-white bg-white px-1.5 font-semibold text-[#1B2A44]" title={op.label}>
+                      Usar "{op.label}"
+                    </button>
+                  ))}
+                  {faixaAtual.mesmoAssim && (
+                    <button type="button" data-testid="ss-mesmo-assim" disabled={criando} onMouseDown={e => e.preventDefault()}
+                      onClick={() => { void criarDoTexto(true); }}
+                      className={cn('rounded border border-zinc-400 px-1.5 text-white', criando && 'opacity-60')}>
+                      {criando ? 'Criando…' : 'Criar mesmo assim'}
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
             {excedente > 0 && (
               <div className={cn('px-2 py-1 border-t border-zinc-500/40', MENU_VAZIO)}>
