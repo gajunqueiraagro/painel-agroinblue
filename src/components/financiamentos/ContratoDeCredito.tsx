@@ -156,7 +156,7 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
             const origem = `${ROTULO_DA_FORMA[l.forma]} · ${cf.texto}`;
             return (
               <tr key={l.id} className="border-b" data-testid="linha-liberacao">
-                <td className={`${TD} tabular-nums`}>{br(l.data)}</td>
+                <td className={`${TD} tabular-nums`}><span className="text-[10px]">{br(l.data)}</span></td>
                 <td className={TD} title={`${t?.destino ?? 'sem destinação'} · ${origem}`} data-testid="destino-da-liberacao">
                   {t?.destino ? <span className={CELULA}>{t.destino}</span> : <span className="text-amber-700">—</span>}
                 </td>

@@ -17,9 +17,12 @@ export interface FechamentoFitaMesesProps {
   mesFiltro: number;
   setMesFiltro: (mes: number) => void;
   statusPorMes: Partial<Record<number, StatusDoMesNaFita>>;
+  /** FECH-TOPO-02 (Gabriel 07/11 17:52) — o Fechamento área: o ano colado à esquerda dos meses e os meses ocupando a largura de quem
+   *  hospeda (a da tabela de conferência), sem o espelho. Sem a prop: como sempre (fita centrada, com o espelho). */
+  alinhadaAEsquerda?: boolean;
 }
 
-export function FechamentoFitaMeses({ anoFiltro, setAnoFiltro, anosDisp, mesFiltro, setMesFiltro, statusPorMes }: FechamentoFitaMesesProps) {
+export function FechamentoFitaMeses({ anoFiltro, setAnoFiltro, anosDisp, mesFiltro, setMesFiltro, statusPorMes, alinhadaAEsquerda }: FechamentoFitaMesesProps) {
   return (
     <div className="flex items-center gap-1.5">
       <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -35,7 +38,8 @@ export function FechamentoFitaMeses({ anoFiltro, setAnoFiltro, anosDisp, mesFilt
           ))}
         </SelectContent>
       </Select>
-      <div className="grid grid-cols-12 gap-0.5 w-full max-w-[400px] mx-auto">
+      <div className={alinhadaAEsquerda ? 'grid min-w-0 flex-1 grid-cols-12 gap-0.5' : 'grid grid-cols-12 gap-0.5 w-full max-w-[400px] mx-auto'}
+        data-testid="fita-dos-meses">
       {MESES_COLS.map((m, idx) => {
         const mesNum = idx + 1;
         const status = statusPorMes[mesNum] || 'vazio';
@@ -70,7 +74,7 @@ export function FechamentoFitaMeses({ anoFiltro, setAnoFiltro, anosDisp, mesFilt
       </div>
       {/* O espelho do card de ano: existe para a fita não se deslocar. Não é
           decoração — é a metade direita da conta que a mantém centrada. */}
-      <div className="h-6 w-[56px] shrink-0" aria-hidden="true" />
+      {!alinhadaAEsquerda && <div className="h-6 w-[56px] shrink-0" aria-hidden="true" />}
     </div>
   );
 }

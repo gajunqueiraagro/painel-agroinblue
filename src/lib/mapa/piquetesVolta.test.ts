@@ -3,9 +3,12 @@
  * a conta do aviso de perda (2%) e a leitura do que as três RPCs devolvem.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { mesesDeInicio } from './piquetesEmEspera';
+import { recortarDosVizinhos, vizinhosDaDivisa } from './edicaoDoPoligono';
 import {
   FRASE_ALGUEM_MEXEU, FRASE_LINHA_SEM_VIZINHA, FRASE_LINHA_SO_ENTRE_DUAS, fraseDaVolta, grupoDaDivisao, grupoDoPai, idsDoAlterar, irmasQueEncostam,
-  lerDesfazer, lerJuntar, lerMoverLinha, motivoDaLinha, recortarPorPadrao, segmentosSemRepetir, travaDaLinha, uniaoDasDuas, vaiPelaLinha, vizinhosQuePerdem, type GrupoDoMapa,
+  inicioDoGrupo, itensDoMapaDoInicio, lerGravouInicio, poligonosDosPais, vizinhosEditaveis,
+  lerDesfazer, lerDesfazerInicio, lerJuntar, lerMoverLinha, lerMudarInicio, mesBr, mesFechadoDoErro, mesesParaMudarInicio, motivoDaLinha, nomesDosPiquetes, recortarPorPadrao, segmentosSemRepetir, travaDaLinha, uniaoDasDuas, vaiPelaLinha, vizinhosQuePerdem, type GrupoDoMapa,
 } from './piquetesVolta';
 
 const quad = (x0: number, y0: number, x1: number, y1: number): GeoJSON.Polygon => ({ type: 'Polygon', coordinates: [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]] });
@@ -175,5 +178,109 @@ describe('(4) o desenho à mão sobre um piquete nasce com o "Recortar vizinhos"
     expect(recortarPorPadrao(q(-47.896, -14.996, 0.002), [piq, solto], new Set(['gA']))).toBe(false);
     expect(recortarPorPadrao(null, [piq], new Set(['gA']))).toBe(false);
     expect(recortarPorPadrao(q(-47.996, -14.996, 0.002), [piq], new Set())).toBe(false);
+  });
+});
+
+// PIQUETE-VIGENCIA-01 — a parte pura do "Mudar mês de início"
+
+describe('PIQUETE-VIGENCIA-01: Mudar mês de início (parte pura)', () => {
+  it('D1: os últimos 4 meses a partir de hoje, sem o do início atual (o caso do P7: início 11/2026, hoje 05/11/2026)', () => {
+    const m = mesesParaMudarInicio(mesesDeInicio(new Date(2026, 10, 5)), '2026-11-01');
+    expect(m.map(x => x.rotulo)).toEqual(['08/2026', '09/2026', '10/2026']);
+    // início mais antigo que os 4 meses: os 4 ficam (todos são adiar)
+    expect(mesesParaMudarInicio(mesesDeInicio(new Date(2026, 10, 5)), '2026-03-01')).toHaveLength(4);
+    expect(mesesParaMudarInicio(mesesDeInicio(new Date(2026, 10, 5)), null)).toHaveLength(4);
+  });
+
+  it('D3: o mês fechado vem do HINT do banco, e só no formato dele', () => {
+    expect(mesFechadoDoErro({ code: 'P0001', message: 'x', hint: 'fechamento:2026-09' })).toBe('2026-09');
+    expect(mesFechadoDoErro({ code: 'P0001', message: 'x', hint: ' fechamento:2026-09 ' })).toBe('2026-09');
+    expect(mesFechadoDoErro({ code: 'P0001', message: 'x', hint: 'outra coisa' })).toBeNull();
+    expect(mesFechadoDoErro({ code: 'P0001', message: 'x' })).toBeNull();
+    expect(mesFechadoDoErro(null)).toBeNull();
+  });
+
+  it('lê a prévia do mudar e a do desfazer; fora do formato = null (nunca prévia vazia)', () => {
+    const boa = { ok: true, direcao: 'antecipar', de: '2026-11-01', para: '2026-10-01', meses: ['2026-10'], frase: 'f',
+      pai: { id: 'p7', nome: 'P7' }, area_pai_ha: '97.3', lotacao: { area_grupo_ha: 97.54 }, pastos: [{ id: 'a', nome: '7A' }], cards: [{}], cabecas_antes: 12 };
+    const l = lerMudarInicio(boa);
+    expect(l).toMatchObject({ direcao: 'antecipar', meses: ['2026-10'], areaPaiHa: 97.3, areaGrupoHa: 97.54, cards: 1, cabecas: 12 });
+    expect(lerMudarInicio({ ...boa, direcao: 'outra' })).toBeNull();
+    expect(lerMudarInicio({ ...boa, meses: [1] })).toBeNull();
+    expect(lerMudarInicio({ ...boa, ok: false })).toBeNull();
+    const d = { ok: true, direcao: 'adiar', de: '2026-10-01', para: '2026-11-01', meses: ['2026-10'], frase: 'f', pai: { id: 'p7', nome: 'P7' }, cards: 1, cabecas: 12 };
+    expect(lerDesfazerInicio(d)).toMatchObject({ direcao: 'adiar', cards: 1, cabecas: 12 });
+    expect(lerDesfazerInicio({ ...d, pai: null })).toBeNull();
+  });
+
+  it('nomes curtos dos piquetes e o mês em MM/AAAA', () => {
+    expect(nomesDosPiquetes(['7A', '7B', '7C', '7D'])).toBe('7A–7D (4)');
+    expect(nomesDosPiquetes(['7A'])).toBe('7A');
+    expect(nomesDosPiquetes([])).toBe('—');
+    expect(mesBr('2026-10')).toBe('10/2026');
+    expect(mesBr('2026-10-01')).toBe('10/2026');
+  });
+});
+
+describe('PIQUETE-VIGENCIA-01 — bugs do P9 e do P17 (06/11)', () => {
+  it('a GRAVAÇÃO tem o leitor dela: a resposta real (sem frase/meses/pastos) vale; a prévia não vale como gravação', () => {
+    const gravou = { ok: true, simulado: false, trilha_id: 'efddc735', de: '2026-11-01', para: '2026-10-01', direcao: 'antecipar', cards: [] };
+    expect(lerGravouInicio(gravou)).toEqual({ trilhaId: 'efddc735' });
+    expect(lerMudarInicio(gravou)).toBeNull();                       // o leitor da prévia não entende a gravação (era o bug)
+    expect(lerGravouInicio({ ...gravou, simulado: true })).toBeNull();
+    expect(lerGravouInicio({ ok: true, simulado: false })).toBeNull();
+  });
+
+  it('o início do grupo: todos no mesmo mês = esse mês; diferentes = desencontrados; vazio = nada', () => {
+    const p = (nome: string, inicio: string | null) => ({ pastoId: nome, nome, inicio });
+    expect(inicioDoGrupo([p('A', '2026-10-01'), p('B', '2026-10-15')])).toEqual({ mes: '2026-10-01', desencontrados: false });
+    expect(inicioDoGrupo([p('A', '2026-10-01'), p('B', '2026-11-01')])).toEqual({ mes: null, desencontrados: true });
+    expect(inicioDoGrupo([p('A', null), p('B', null)])).toEqual({ mes: null, desencontrados: false });
+    expect(inicioDoGrupo([])).toEqual({ mes: null, desencontrados: false });
+  });
+
+  it('o mini-mapa sem prévia mostra o que vale hoje (o pai e os piquetes) — nunca vazio', () => {
+    const pai = { chave: 'pai', nome: 'P9', geojson: quad(0, 0, 2, 1) }, piq = [{ pastoId: 'a', nome: 'P9-A', geojson: quad(0, 0, 1, 1) }];
+    expect(itensDoMapaDoInicio(null, pai, piq).map(i => [i.chave, !!i.antes, !!i.depois])).toEqual([['pai', true, false], ['a', false, true]]);
+    expect(itensDoMapaDoInicio('antecipar', pai, piq).map(i => [i.chave, !!i.antes, !!i.depois])).toEqual([['pai', true, false], ['a', false, true]]);
+    expect(itensDoMapaDoInicio('adiar', pai, piq).map(i => [i.chave, !!i.antes, !!i.depois])).toEqual([['pai', false, true], ['a', true, false]]);
+  });
+});
+
+describe('MAPA-PIQUETES-FECHADOS-01 F0 — o editor não mexe no polígono do PAI de grupo ativo', () => {
+  /* o pai P8 cobre os dois piquetes (A à esquerda, B à direita); a borda de baixo do A é também a do pai */
+  const PAI = { id: 'g-p8', nome_original: 'P8', pasto_id: 'p8', geojson: quad(-48, -16, -47.98, -15.99) };
+  const A = { id: 'g-a', nome_original: 'P8-A', pasto_id: 'p8a', geojson: quad(-48, -16, -47.99, -15.99) };
+  const B = { id: 'g-b', nome_original: 'P8-B', pasto_id: 'p8b', geojson: quad(-47.99, -16, -47.98, -15.99) };
+  const geos = [PAI, A, B];
+  const grupos: GrupoDoMapa[] = [{ id: 'gr8', nome: 'P8', pasto_origem_id: 'p8', ativo: true }];
+  const comoVizinho = (g: { id: string; nome_original: string; geojson: GeoJSON.Geometry }) => ({ id: g.id, nome: g.nome_original, geojson: g.geojson });
+
+  it('o pai de grupo ATIVO é pai; de grupo inativo, não', () => {
+    expect([...poligonosDosPais(geos, grupos)]).toEqual(['g-p8']);
+    expect([...poligonosDosPais(geos, [{ ...grupos[0], ativo: false }])]).toEqual([]);
+  });
+
+  it('o recortar de um piquete editado: sem a exclusão o pai é recortado (o bug); com ela, o pai fica fora', () => {
+    const novoA = quad(-48, -16, -47.989, -15.99);   // o A cresce 0,001° sobre o B (e continua dentro do pai)
+    const todos = geos.filter(g => g.id !== A.id).map(comoVizinho);
+    const semExclusao = recortarDosVizinhos(novoA, todos);
+    expect('valor' in semExclusao && semExclusao.valor.map(v => v.id)).toContain('g-p8');   // prova que o cenário é real
+    const editaveis = vizinhosEditaveis(geos, A.id, [], poligonosDosPais(geos, grupos)).map(comoVizinho);
+    expect(editaveis.map(v => v.id)).toEqual(['g-b']);
+    const r = recortarDosVizinhos(novoA, editaveis);
+    expect('valor' in r && r.valor.map(v => v.id)).toEqual(['g-b']);
+  });
+
+  it('o "mover a divisa junto": o vértice da borda comum com o pai não arrasta o pai', () => {
+    const op = [{ tipo: 'mover' as const, de: [-48, -16] as [number, number], para: [-48.0005, -16.0005] as [number, number] }];
+    const todos = geos.filter(g => g.id !== A.id).map(comoVizinho);
+    expect(vizinhosDaDivisa(todos, op).map(v => v.id)).toContain('g-p8');   // sem a exclusão, o pai anda junto
+    const editaveis = vizinhosEditaveis(geos, A.id, [], poligonosDosPais(geos, grupos)).map(comoVizinho);
+    expect(vizinhosDaDivisa(editaveis, op).map(v => v.id)).not.toContain('g-p8');
+  });
+
+  it('sem conjunto de pais (outras telas) nada muda: só o alvo e os unidos saem', () => {
+    expect(vizinhosEditaveis(geos, A.id, ['g-b'], null).map(g => g.id)).toEqual(['g-p8']);
   });
 });

@@ -261,6 +261,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
   desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
+- DOC-ANEXO-E-IMPORT-01 F1: SÓ A NF SE LÊ COMO NOTA — recibo/boleto/comprovante/outro nunca passam pelo `lerNota` nem pelo `extrairDanfe` e a
+  chave de acesso só aparece na NF; ler nunca troca o tipo escolhido; na porta da nota o PDF sem chave diz `FRASE_NAO_PARECE_NOTA` (+ ⓘ).
 - DOC-ANEXO-E-IMPORT-01 F2: o clipe da lista ABRE (`ClipeDaLinha`: 1 = o arquivo; 2+ = popover lido no clique, `lerLinhasDoClipe`); o número = as
   linhas da aba (`quantasLinhasDoClipe`); o tipo de documento em selo é UM componente (`SeloDoTipo`) e UMA regra (`tipoDoSelo`).
 - DOC-NOTA-XML-PDF-01: a mesma nota em PDF e XML = UMA linha (`linhasDosDocumentos`, a mesma regra do `fin_documento_confronto`, que nao
@@ -388,6 +390,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   contagem e totais sao do banco; a tela nao le mais a lista inteira; faixa que quebra linha nunca tem altura fixa (`botoesDentro` olha a altura).
 - OC-CC-BOTAO-BUSCAR-DESLOCA-01: faixa com abas + texto + botoes = tres lugares — abas `flex-none`, texto no meio `min-w-0 flex-1
   truncate` com `title` (sempre presente), botoes `flex-none` a' direita; o `check:ui-cortes` tem `botoesDentro` (botao inteiro na faixa).
+- OC-BUSCAR-RECEBIMENTO-01: o que o "+ Buscar recebimento" mostra e a ordem = `listaParaVincular` (janela 30/60 da OC, sem os de outra OC);
+  a competência do "Programar recebimento" = `competenciaDoModoOC` (1ª saída, a mesma do banco), nunca `hojeLocal()` direto.
 - Acesso a tela por perfil tem um dono (`NIVEL_POR_TELA`); visibilidade nao e' permissao (quem permite e' o banco).
 - P172: Plano de Contas = régua da casa; "Mostrar inativos" lê pelo carregador (`incluirInativos`, SÓ esta tela; o padrão dos seletores segue só as
   ativas); subcentro do cliente SÓ pelas `fn_subcentro_cliente_*` (P171, simular antes, só o admin); `MOLDES_SUBCENTRO_CLIENTE` espelha `_fn_subcentro_cliente_molde`.

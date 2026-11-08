@@ -2,9 +2,10 @@
  * OC-CORRECOES-01 C3 · OC-CC-BUSCAR-01 — o "Buscar recebimento no Financeiro" (Gabriel 21/10, print 15h41 da 0731374f: so' aparecia
  * "Outro favorecido"). O banco devolve tambem o que e' do comprador e a regra exclui, com o motivo (`oc_recebimentos_do_financeiro`,
  * provado em `supabase/tests/oc_recebimentos_do_financeiro_01_test.sql`); aqui se trava o que a TELA faz com isso:
- *   B1 os dois avulsos do comprador aparecem em "Do comprador", apagados, com o motivo no Status e sem poder escolher
+ *   B1 os dois avulsos do comprador aparecem apagados, com o motivo no Status, sem poder escolher, DEPOIS do vinculavel
+ *      (OC-BUSCAR-RECEBIMENTO-01, 07/11: sem os grupos — a ordem e' a da `listaParaVincular`)
  *   B2 a busca livre: "118" acha os dois (descricao); favorecido e valor tambem casam; sem nada, a frase da busca
- *   B3 as nove colunas na ordem pedida; datas inteiras (dd/mm/aaaa) e valor nunca cortam; o modal e' fixo e so' a tabela rola
+ *   B3 as colunas de 07/11 na ordem; datas inteiras (dd/mm/aaaa) e valor nunca cortam; o modal e' fixo e so' a tabela rola
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -52,16 +53,17 @@ function api(itens = ITENS): OcContaCorrenteApi {
 async function abrir(a = api()) {
   render(<AbaContaCorrenteOC api={a} somenteLeitura={false} />);
   fireEvent.click(screen.getByRole('button', { name: '+ Buscar recebimento no Financeiro' }));
-  await waitFor(() => expect(screen.getByTestId('grupo-mesmo-favorecido')).toBeTruthy());
+  await waitFor(() => expect(document.querySelectorAll('tr[data-testid="linha-buscar"]').length).toBeGreaterThan(0));
   return a;
 }
 const linha = (id: string) => document.querySelector(`tr[data-lancamento="${id}"]`) as HTMLElement;
 
 describe('OC-CC-BUSCAR-01 — o Buscar recebimento no Financeiro', () => {
-  it('B1 os avulsos do comprador aparecem em "Do comprador", com o motivo, e nao se escolhem', async () => {
+  it('B1 os avulsos do comprador aparecem com o motivo, depois do vinculavel, e nao se escolhem', async () => {
     const a = await abrir();
-    const ordem = [...screen.getByTestId('dialogo-buscar-recebimento').querySelectorAll('tbody tr')].map(tr => tr.getAttribute('data-testid') ?? tr.getAttribute('data-lancamento'));
-    expect(ordem).toEqual(['grupo-mesmo-favorecido', 'a1', 'a2', 'grupo-outro-favorecido', 'o1']);
+    const ordem = [...screen.getByTestId('dialogo-buscar-recebimento').querySelectorAll('tbody tr')].map(tr => tr.getAttribute('data-lancamento'));
+    /* entre os do comprador, o valor mais perto do saldo primeiro (375.000 antes de 215.000) */
+    expect(ordem).toEqual(['o1', 'a2', 'a1']);
     for (const id of ['a1', 'a2']) {
       const st = within(linha(id)).getByTestId('status-buscar');
       expect(st.textContent).toBe('já está nesta operação (1/1)');
@@ -83,7 +85,6 @@ describe('OC-CC-BUSCAR-01 — o Buscar recebimento no Financeiro', () => {
     const busca = screen.getByTestId('busca-recebimento');
     fireEvent.change(busca, { target: { value: '118' } });
     expect(linha('a1')).toBeTruthy(); expect(linha('a2')).toBeTruthy(); expect(linha('o1')).toBeNull();
-    expect(screen.queryByTestId('grupo-outro-favorecido')).toBeNull();
     fireEvent.change(busca, { target: { value: 'zzz' } });
     expect(document.body.textContent).toContain('Nada com essa busca.');
     expect(casaNaBusca(ITENS[2], 'outra pessoa')).toBe(true);
@@ -92,19 +93,19 @@ describe('OC-CC-BUSCAR-01 — o Buscar recebimento no Financeiro', () => {
     expect(casaNaBusca(ITENS[2], '375')).toBe(false);
   });
 
-  it('B3 nove colunas na ordem; datas inteiras e valor sem corte; modal fixo, a tabela rola', async () => {
+  it('B3 as colunas na ordem; datas inteiras e valor sem corte; modal fixo, a tabela rola', async () => {
     await abrir();
     const ths = [...screen.getByTestId('dialogo-buscar-recebimento').querySelectorAll('thead th')].map(th => th.textContent);
-    expect(ths).toEqual(['', 'Competência', 'Vencimento', 'Pagamento', 'Descrição', 'Favorecido', 'Conta (classificação)',
-      'Conta bancária', 'Status', 'Valor']);
+    expect(ths).toEqual(['', 'Venc.', 'Pgto.', 'Descrição', 'Faz.', 'Conta bancária', 'Valor', 'Status']);
     const tds = linha('o1').querySelectorAll('td');
-    expect([...tds].slice(1, 4).map(td => td.textContent)).toEqual(['01/07/2026', '02/07/2026', '02/07/2026']);
-    for (const td of [...[...tds].slice(1, 4), tds[9]]) {
+    expect([...tds].slice(1, 3).map(td => td.textContent)).toEqual(['02/07/2026', '02/07/2026']);
+    for (const td of [tds[1], tds[2], tds[6]]) {
       expect(td.className).toContain('whitespace-nowrap');
       expect(td.className).not.toContain('truncate');
     }
-    expect(tds[4].className).toContain('truncate');
-    expect(tds[4].getAttribute('title')).toBe('Pix de terceiro');
+    /* o favorecido que nao e' o da OC vai na Descricao */
+    expect(tds[3].className).toContain('truncate');
+    expect(tds[3].getAttribute('title')).toBe('Pix de terceiro · Outra Pessoa');
     expect(screen.getByTestId('dialogo-buscar-recebimento').className).toMatch(/h-\[560px\]/);
     expect(screen.getByTestId('tabela-buscar-rola').className).toContain('overflow-auto');
   });

@@ -22,6 +22,7 @@ import { anoInteiro } from '@/v2/lib/periodo';
 import { CartoesDoTopo, type CartaoVG } from '@/v2/pages/visaoGeral/CartoesDoTopo';
 import { TabelaFazendasVG } from '@/v2/pages/visaoGeral/TabelaFazendasVG';
 import { PrecisaDeAtencao, type ItemAtencao } from '@/v2/pages/visaoGeral/AtencaoEAtalhos';
+import { fraseARevalidar, useValorRebanhoARevalidar } from '@/lib/fechamento/travaDoP2';
 import { BlocosPorAtividade } from '@/v2/pages/visaoGeral/BlocosPorAtividade';
 import { diferencaEmReais, indicadoresPecuaria, variacao } from '@/v2/pages/visaoGeral/indicadoresDaAtividade';
 import { useAtividadesDoCliente, blocosDaVisao, type GrupoAtividade } from '@/v2/pages/visaoGeral/atividadesDaVisao';
@@ -746,6 +747,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
   /* Precisa de atenção: só o que tem fonte (fechamento faltando, conciliação sem casar). Pastos sem desenho e contas da semana ficam
      fora até a tela dona expor a conta (o Geo Pastos e a CPR a fazem dentro do componente). */
+  /* FECH-REVALIDAR-AVISO-01 — o Valor do Rebanho validado que caiu (o peso mudou depois): UM item por fazenda × mês, até revalidar */
+  const idsARevalidar = useMemo(() => (isGlobal ? fazendas.map(f => f.id) : fazendaAtual ? [fazendaAtual.id] : []), [isGlobal, fazendas, fazendaAtual]);
+  const aRevalidar = useValorRebanhoARevalidar(idsARevalidar);
   const atencaoVG: ItemAtencao[] = [
     ...gradeAno
       .filter(c => c.mes === mesNum && (isGlobal || c.fazendaId === fazendaAtual?.id) && (c.p1 === 'pendente' || c.p2 === 'pendente'))
@@ -760,6 +764,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     ...(semCasar !== null && semCasar > 0
       ? [{ id: 'conc', texto: `Conciliação de ${mesCurtoVG}: ${fmtN(semCasar, 0)} sem casar`, acao: 'Conciliar', onIr: () => irPara('conciliacao') }]
       : []),
+    ...aRevalidar.pendentes.map((r): ItemAtencao => {
+      const f = fazendas.find(x => x.id === r.fazendaId);
+      return { id: `vr-${r.fazendaId}-${r.anoMes}`, texto: `${fraseARevalidar(r.anoMes)} · ${f?.codigo || f?.nome || ''}`,
+        title: `${fraseARevalidar(r.anoMes)} — ${f ? rotuloDaFazenda({ id: f.id, nome: f.nome, codigo: f.codigo ?? null }) : ''} (o peso mudou depois da validação)`,
+        acao: 'Revalidar', onIr: () => onIrPara?.('valor-rebanho', r.fazendaId) };
+    }),
+    ...(aRevalidar.erro ? [{ id: 'vr-erro', texto: aRevalidar.erro, acao: 'Abrir', onIr: () => irPara('valor-rebanho') }] : []),
   ];
 
   /* os blocos por atividade: as ligadas do cliente (Code 6); sem cadastro ou com falha, as famílias com área */
@@ -1661,7 +1672,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           </div>
           <div className="flex-none px-2.5 pb-2"><LegendaDasSituacoes /></div>
         </Card>
-        <PrecisaDeAtencao itens={atencaoVG} carregando={loadingGradeAno || carregandoConc} className="xl:flex-[1_0_auto]" />
+        <PrecisaDeAtencao itens={atencaoVG} carregando={loadingGradeAno || carregandoConc || aRevalidar.carregando} className="xl:flex-[1_0_auto]" />
       </div>
       </div>
 

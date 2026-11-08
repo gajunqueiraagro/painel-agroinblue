@@ -8,7 +8,7 @@ import {
 import { arquivoFake, criarFonteFake } from '@/test/fonteDeDocumentosDoMesFake';
 import {
   ESPECIES_DO_DOCUMENTO, FRASE_DOCUMENTO_MUDOU, FRASE_MOTIVO_OBRIGATORIO, FRASE_NOME_OBRIGATORIO, ROTULO_DA_ESPECIE,
-  dataETamanho, lerDocumentoDoMes, mesCurtoDoDocumento, mesPorExtenso, mesVizinho, rotuloDoBotaoDeDocumentos, textoDoTamanho, tituloDosDocumentos,
+  dataETamanho, lerDocumentoDoMes, mesCurtoDoDocumento, mesPorExtenso, mesVizinho, rotuloCurtoDoBotaoDeDocumentos, rotuloDoBotaoDeDocumentos, textoDoTamanho, tituloDosDocumentos,
 } from '@/lib/pecuaria/documentosDoMes';
 
 const CHAVE = { clienteId: 'cli', fazendaId: 'faz', anoMes: '2031-03' };
@@ -46,6 +46,10 @@ describe('FECH-DOCS-01 — dono puro', () => {
     expect(rotuloDoBotaoDeDocumentos(3)).toBe('Documentos do mês · 3');
     expect(rotuloDoBotaoDeDocumentos(null)).toBe('Documentos do mês · …');
     expect(rotuloDoBotaoDeDocumentos(5, true)).toBe('Documentos do mês · —');
+    /* FECH-TOPO-COMPACTO-01: o rótulo curto da barra do Fechamento */
+    expect(rotuloCurtoDoBotaoDeDocumentos('Documentos do mês · 11')).toBe('Documentos 11');
+    expect(rotuloCurtoDoBotaoDeDocumentos('Documentos do mês · …')).toBe('Documentos …');
+    expect(rotuloCurtoDoBotaoDeDocumentos('Documentos do mês · —')).toBe('Documentos —');
   });
 });
 

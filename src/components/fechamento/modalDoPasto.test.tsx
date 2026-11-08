@@ -29,6 +29,17 @@ const editarPasto = vi.fn(async (_nome: string, _aoRecusar?: unknown) => true);
 vi.mock('@/hooks/usePastos', () => ({
   usePastos: () => ({ pastos: PASTOS, categorias: CATS, editarPasto }),
   isPastoAtivoNoMes: () => true,
+  pastosAtivosNoMes: <T,>(l: T[]) => l,
+}));
+/* MAPA-LOTES-01 fatia 1 — o Mapa de pastos monta o contexto do lote (`useLoteDoMes`): grupos, lotação, alocações e área do mês, sem rede */
+vi.mock('@/components/pastos/GruposDePastejo', () => ({ useGruposDePastejo: () => ({ grupos: [] }) }));
+vi.mock('@/lib/fechamento/loteNoGrupo', async (original) => ({
+  ...(await original<typeof import('@/lib/fechamento/loteNoGrupo')>()),
+  API_LOTE_NO_GRUPO: { lotacaoDoMes: async () => ({ ok: true, dados: new Map() }), alocacoesDoMes: async () => ({ ok: true, dados: [] }) },
+}));
+vi.mock('@/lib/pastos/areaDoPastoNoMes', async (original) => ({
+  ...(await original<typeof import('@/lib/pastos/areaDoPastoNoMes')>()),
+  useAreaDosPastosNoMes: () => ({ areaDe: () => undefined, carregando: false, erro: null }),
 }));
 vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ isGlobal: false, fazendaAtual: { id: 'f', nome: 'Faz' } }) }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli' } }) }));
@@ -43,6 +54,21 @@ const { estadoP2, lerEstadoDoP2 } = vi.hoisted(() => {
   const estadoP2 = { travado: false, revalidar: false };
   return { estadoP2, lerEstadoDoP2: vi.fn(async (_faz: string, _mes: string) => ({ ok: true as const, valor: { ...estadoP2 } })) };
 });
+/* FECH-REABRIR-JUNTO-01 — só o rpc do client é de mentira (o resto segue o client de verdade); a leitura dos lotes também passa por ele */
+const { rpc, respostaDoReabrir } = vi.hoisted(() => {
+  const respostaDoReabrir: { erro: { message: string; code: string } | null; destrava: boolean } = { erro: null, destrava: true };
+  const rpc = vi.fn(async (fn: string, _args?: unknown) => {
+    if (fn !== 'fn_valor_rebanho_reabrir') return { data: [], error: null };
+    if (respostaDoReabrir.erro) return { data: null, error: respostaDoReabrir.erro };
+    if (respostaDoReabrir.destrava) { estadoP2.travado = false; estadoP2.revalidar = true; }
+    return { data: {}, error: null };
+  });
+  return { rpc, respostaDoReabrir };
+});
+vi.mock('@/integrations/supabase/client', async (original) => {
+  const m = await original<typeof import('@/integrations/supabase/client')>();
+  return { ...m, supabase: new Proxy(m.supabase, { get: (alvo, chave, rec) => (chave === 'rpc' ? rpc : Reflect.get(alvo, chave, rec)) }) };
+});
 vi.mock('@/lib/fechamento/travaDoP2', async (original) => ({ ...(await original<typeof import('@/lib/fechamento/travaDoP2')>()), lerEstadoDoP2 }));
 
 import { MapaPastosTab } from '@/pages/MapaPastosTab';
@@ -51,14 +77,14 @@ import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 const comQc = (ui: React.ReactElement) => render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 const FECH_P2 = { id: 'fp2', pasto_id: 'p2', fazenda_id: 'f', ano_mes: '2026-09', status: 'rascunho', tipo_uso_mes: 'recria', lote_mes: null, qualidade_mes: null, observacao_mes: null };
 
-function abrirDialogo(fechamento: Record<string, unknown> = FECH_P2, onOpenChange = vi.fn(), onReabrirValorRebanho?: () => void) {
-  comQc(<FechamentoPastoDialog open onOpenChange={onOpenChange} pasto={PASTOS[1] as never} fechamento={fechamento as never}
-    categorias={CATS as never} onFechar={vi.fn()} onCopiar={vi.fn()} pastosDaFazenda={PASTOS as never} onRenomear={editarPasto}
-    onReabrirValorRebanho={onReabrirValorRebanho} />);
+function abrirDialogo(fechamento: Record<string, unknown> = FECH_P2, onOpenChange = vi.fn(), pasto: Record<string, unknown> = PASTOS[1]) {
+  comQc(<FechamentoPastoDialog open onOpenChange={onOpenChange} pasto={pasto as never} fechamento={fechamento as never}
+    categorias={CATS as never} onFechar={vi.fn()} onCopiar={vi.fn()} />);
   return onOpenChange;
 }
 const FRASE_DO_BANCO = 'Mês 2026-09 possui Valor do Rebanho validado ou P2 fechado. Reabra o pilar P2 antes de alterar pastos.';
-const FRASE_DA_TELA = 'O Valor do Rebanho de set/26 está validado. Reabra-o para editar os pastos deste mês.';
+const FRASE_DA_TELA = 'O Valor do Rebanho de set/26 volta para aberto. Valide de novo depois do ajuste.';
+const FRASE_DO_SALVAR = 'O Valor do Rebanho de set/26 está validado. Reabra-o para editar os pastos deste mês.';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -74,7 +100,7 @@ describe('Mapa de Pastos → modal do pasto', () => {
     const botoes = await screen.findAllByTestId('abrir-pasto');
     fireEvent.click(botoes[1]);
     await waitFor(() => expect(fech.criarFechamento).toHaveBeenCalledWith('p2', '2026-09'));
-    expect(((await screen.findByTestId('nome-do-pasto')) as HTMLInputElement).value).toBe('Retiro Velho');
+    expect((await screen.findByTestId('nome-do-pasto')).textContent).toBe('Retiro Velho');
   });
 
   it('pasto COM card abre o card que existe, sem criar outro', async () => {
@@ -87,24 +113,29 @@ describe('Mapa de Pastos → modal do pasto', () => {
 });
 
 describe('modal do pasto', () => {
-  it('nome vazio e nome repetido na fazenda sao recusados (a regra e o campo)', () => {
+  it('MODAL-PASTO-NOME-FIXO-01: o nome do pasto é só texto (sem campo, sem a nota do cadastro) e a área sai em pt-BR — o P_10 da 3 Muchachas', () => {
+    abrirDialogo(FECH_P2, vi.fn(), { ...PASTOS[1], nome: 'P_10', area_produtiva_ha: 59.7 });
+    const nome = screen.getByTestId('nome-do-pasto');
+    expect(nome.tagName).toBe('H2');
+    expect(nome.textContent).toBe('P_10');
+    expect(screen.queryByRole('textbox', { name: 'Nome do pasto' })).toBeNull();
+    expect(screen.queryByTestId('nota-do-nome')).toBeNull();
+    expect(screen.queryByText(/vale para todos os meses/)).toBeNull();
+    expect(screen.getByTestId('area-do-pasto').textContent).toBe('59,7 ha');
+  });
+
+  it('a regra do nome (a do mapa) segue a mesma: vazio e repetido na fazenda são recusados', () => {
     expect(motivoDoNomeDoPasto('  ', PASTOS[1], PASTOS)).toBe(FRASE_NOME_VAZIO);
     expect(motivoDoNomeDoPasto(' p_01 ', PASTOS[1], PASTOS)).toBe(FRASE_NOME_REPETIDO);
     expect(motivoDoNomeDoPasto('Retiro Velho', PASTOS[1], PASTOS)).toBeNull();
     expect(motivoDoNomeDoPasto('P_01', { ...PASTOS[1], fazenda_id: 'outra' }, PASTOS)).toBeNull();
-    abrirDialogo();
-    fireEvent.change(screen.getByTestId('nome-do-pasto'), { target: { value: 'P_01' } });
-    expect(screen.getByTestId('nota-do-nome').textContent).toBe(FRASE_NOME_REPETIDO);
-    expect(screen.getByRole('button', { name: /Salvar/ })).toHaveProperty('disabled', true);
   });
 
-  it('nome novo grava pelo editarPasto, depois o card pela RPC (campos + itens numa chamada)', async () => {
+  it('salvar grava só o card pela RPC (campos + itens numa chamada) — nunca o cadastro do pasto', async () => {
     const fechar = abrirDialogo();
-    fireEvent.change(screen.getByTestId('nome-do-pasto'), { target: { value: 'Retiro Novo' } });
     fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
     await waitFor(() => expect(salvarCard).toHaveBeenCalled());
-    expect(editarPasto.mock.calls[0][0]).toBe('Retiro Novo');
-    expect(editarPasto.mock.invocationCallOrder[0]).toBeLessThan(salvarCard.mock.invocationCallOrder[0]);
+    expect(editarPasto).not.toHaveBeenCalled();
     expect(salvarCard.mock.calls[0][0]).toBe('fp2');
     expect(salvarCard.mock.calls[0][1]).toEqual({ lote_mes: null, tipo_uso_mes: 'recria', qualidade_mes: null, observacao_mes: null });
     expect(fech.salvarItens).not.toHaveBeenCalled();
@@ -128,40 +159,35 @@ describe('modal do pasto', () => {
     expect(screen.queryByTestId('trava-do-p2')).toBeNull();
   });
 
-  it('mes travado: a linha aparece ao ABRIR (antes de digitar), Salvar desabilitado com o porque, e o botao leva ao Valor do Rebanho', async () => {
+  it('mes travado: a linha aparece ao ABRIR (antes de digitar), Salvar desabilitado com o porque, e o "Reabrir e editar" ali mesmo', async () => {
     estadoP2.travado = true;
-    const ir = vi.fn();
-    abrirDialogo(FECH_P2, vi.fn(), ir);
+    abrirDialogo();
     expect((await screen.findByTestId('frase-da-trava-do-p2')).textContent).toBe(FRASE_DA_TELA);
     expect(lerEstadoDoP2).toHaveBeenCalledWith('f', '2026-09');
     const salvar = screen.getByRole('button', { name: /Salvar/ });
     expect(salvar).toHaveProperty('disabled', true);
-    expect(salvar.getAttribute('title')).toBe(FRASE_DA_TELA);
-    fireEvent.click(screen.getByRole('button', { name: 'Reabrir Valor do Rebanho de set/26' }));
-    expect(ir).toHaveBeenCalledTimes(1);
-  });
-
-  it('sem a ida (host sem callback) a trava se explica, sem botao', async () => {
-    estadoP2.travado = true;
-    abrirDialogo();
-    await screen.findByTestId('trava-do-p2');
+    expect(salvar.getAttribute('title')).toBe(FRASE_DO_SALVAR);
+    expect(screen.getByRole('button', { name: 'Reabrir e editar' })).toBeTruthy();
+    /* a ida à tela do Valor do Rebanho saiu: o gesto é um só, no modal */
     expect(screen.queryByTestId('reabrir-valor-rebanho')).toBeNull();
   });
 
-  it('mes livre: nada da trava; salvar com o Valor do Rebanho reaberto lembra de revalidar (aviso, nada reabre sozinho)', async () => {
+  it('mes livre: nada da trava; salvar com o Valor do Rebanho a revalidar NÃO avisa a cada Salvar (FECH-REVALIDAR-AVISO-01: a pendência é da Visão Geral)', async () => {
     estadoP2.revalidar = true;
     abrirDialogo();
     await waitFor(() => expect(lerEstadoDoP2).toHaveBeenCalled());
     expect(screen.queryByTestId('trava-do-p2')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
-    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('Revalide o Valor do Rebanho de set/26 (o peso mudou).'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Fechamento salvo'));
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 
   it('mes nunca validado: salvar nao lembra de nada', async () => {
     abrirDialogo();
     fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Fechamento salvo'));
-    await waitFor(() => expect(lerEstadoDoP2).toHaveBeenCalledTimes(2));
+    /* FECH-REVALIDAR-AVISO-01: o Salvar não relê o P2 (só a abertura lê, para a trava) */
+    expect(lerEstadoDoP2).toHaveBeenCalledTimes(1);
     expect(toast.warning).not.toHaveBeenCalled();
   });
 
@@ -192,6 +218,75 @@ describe('modal do pasto', () => {
   });
 });
 
+/* FECH-REABRIR-JUNTO-01 (Gabriel 07/11 13:54) — o caso real: EXP out/26, Valor do Rebanho VALIDADO, o pasto R_04 reaberto para arrumar e o
+   modal travado. Um gesto reabre o Valor do Rebanho (a função da tela dele) e libera o Salvar; com o pasto fechado, reabre o pasto junto. */
+describe('FECH-REABRIR-JUNTO-01 — Reabrir e editar (EXP R_04, out/26)', () => {
+  const EXP = 'c4193c43-aff5-4121-befd-e0349546b6d0';
+  const R04 = { ...PASTOS[1], id: 'r04', fazenda_id: EXP, nome: 'R_04' };
+  const CARD_R04 = { ...FECH_P2, id: 'fr04', pasto_id: 'r04', fazenda_id: EXP, ano_mes: '2026-10' };
+  const AVISO_OUT = 'O Valor do Rebanho de out/26 volta para aberto. Valide de novo depois do ajuste.';
+  beforeEach(() => {
+    estadoP2.travado = true;
+    respostaDoReabrir.erro = null; respostaDoReabrir.destrava = true;
+  });
+  /* só as chamadas do reabrir (o modal também lê os lotes por rpc) */
+  const doReabrir = () => rpc.mock.calls.filter((c) => c[0] === 'fn_valor_rebanho_reabrir');
+  const ordemDoReabrir = () => rpc.mock.invocationCallOrder[rpc.mock.calls.findIndex((c) => c[0] === 'fn_valor_rebanho_reabrir')];
+
+  it('R_04 em rascunho: o aviso curto; um clique reabre o Valor do Rebanho pela fn_valor_rebanho_reabrir e libera o Salvar', async () => {
+    abrirDialogo(CARD_R04, vi.fn(), R04);
+    expect((await screen.findByTestId('frase-da-trava-do-p2')).textContent).toBe(AVISO_OUT);
+    expect(screen.getByRole('button', { name: /Salvar/ })).toHaveProperty('disabled', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Reabrir e editar' }));
+    await waitFor(() => expect(screen.queryByTestId('trava-do-p2')).toBeNull());
+    expect(doReabrir()).toEqual([['fn_valor_rebanho_reabrir', { p_fazenda_id: EXP, p_ano_mes: '2026-10', p_motivo: 'Reabrir e editar o pasto R_04' }]]);
+    expect(screen.getByRole('button', { name: /Salvar/ })).toHaveProperty('disabled', false);
+    expect(reabrirCard).not.toHaveBeenCalled();
+  });
+
+  it('o motivo digitado (opcional) vai para a trilha depois do pasto', async () => {
+    abrirDialogo(CARD_R04, vi.fn(), R04);
+    fireEvent.change(await screen.findByTestId('motivo-reabrir-junto'), { target: { value: ' peso do lote 6 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reabrir e editar' }));
+    await waitFor(() => expect(doReabrir()).toHaveLength(1));
+    expect(doReabrir()[0][1]).toEqual({ p_fazenda_id: EXP, p_ano_mes: '2026-10', p_motivo: 'Reabrir e editar o pasto R_04: peso do lote 6' });
+  });
+
+  it('R_04 FECHADO: o mesmo clique reabre o Valor do Rebanho e DEPOIS o pasto (o Salvar aparece)', async () => {
+    abrirDialogo({ ...CARD_R04, status: 'fechado' }, vi.fn(), R04);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reabrir e editar' }));
+    await waitFor(() => expect(reabrirCard).toHaveBeenCalledWith('fr04', 'Reabertura individual via modal de pasto'));
+    expect(ordemDoReabrir()).toBeLessThan(reabrirCard.mock.invocationCallOrder[0]);
+    await screen.findByRole('button', { name: /Salvar/ });
+  });
+
+  it('o banco recusa: a frase fica no rodapé, a trava segue e o pasto não reabre', async () => {
+    respostaDoReabrir.erro = { message: 'sem_permissao', code: '42501' };
+    abrirDialogo({ ...CARD_R04, status: 'fechado' }, vi.fn(), R04);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reabrir e editar' }));
+    await waitFor(() => expect(screen.getByTestId('erro-do-pasto').textContent).toBe('Não consegui reabrir o Valor do Rebanho deste mês.'));
+    expect(screen.getByTestId('trava-do-p2')).toBeTruthy();
+    expect(reabrirCard).not.toHaveBeenCalled();
+  });
+
+  it('reaberto mas o mês SEGUE travado (o banco ainda trava): nada se libera e o rodapé diz o porquê', async () => {
+    respostaDoReabrir.destrava = false;
+    abrirDialogo(CARD_R04, vi.fn(), R04);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reabrir e editar' }));
+    await waitFor(() => expect(screen.getByTestId('erro-do-pasto').textContent)
+      .toBe('O Valor do Rebanho de out/26 está validado. Reabra-o para editar os pastos deste mês.'));
+    expect(screen.getByRole('button', { name: /Salvar/ })).toHaveProperty('disabled', true);
+  });
+
+  it('pelo MAPA de pastos (o mesmo modal): o "Reabrir e editar" está lá', async () => {
+    fech.fechamentos = [FECH_P2];
+    comQc(<MapaPastosTab periodo={{ ano: '2026', mes: 9 }} onPeriodoChange={() => {}} />);
+    fireEvent.click((await screen.findAllByTestId('abrir-pasto'))[1]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reabrir e editar' }));
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('fn_valor_rebanho_reabrir', expect.objectContaining({ p_ano_mes: '2026-09' })));
+  });
+});
+
 describe('o modal grava so pelas RPCs do card (fonte)', () => {
   it('nem o modal nem as telas que o montam chamam os escritores antigos', () => {
     const dialogo = readFileSync('src/components/FechamentoPastoDialog.tsx', 'utf8');
@@ -200,11 +295,11 @@ describe('o modal grava so pelas RPCs do card (fonte)', () => {
     for (const proibido of ['atualizarCamposMensais', 'salvarItens', 'reabrirPasto', 'reabrir_pilar_fechamento', ".from('fechamento_pasto"]) {
       expect(dialogo).not.toContain(proibido);
     }
-    for (const arq of ['src/pages/FechamentoTab.tsx', 'src/pages/MapaPastosTab.tsx']) {
-      const src = readFileSync(arq, 'utf8');
-      const i = src.indexOf('<FechamentoPastoDialog');
-      expect(src.slice(i, src.indexOf('/>', i))).not.toMatch(/onSave=|onReabrir=/);
-    }
+    /* MAPA-LOTES-01 fatia 1: as telas montam o modal só pelo gancho único; quem o monta é ele (o trecho existe: indexOf ≥ 0) */
+    const gancho = readFileSync('src/hooks/useModalDoPasto.tsx', 'utf8');
+    const i = gancho.indexOf('<FechamentoPastoDialog');
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(gancho.slice(i, gancho.indexOf('/>', i))).not.toMatch(/onSave=|onReabrir=/);
     const hook = readFileSync('src/hooks/useFechamento.ts', 'utf8');
     expect(hook).not.toMatch(/const (reabrirPasto|atualizarCamposMensais) =/);
     /* auto-teste do detector */

@@ -33,6 +33,24 @@ export const TRAVAS_DO_MODO_OC: Record<NaturezaDoModalOC, readonly CampoTravavel
 };
 export const STATUS_DO_MODO_OC = 'programado';
 
+/**
+ * OC-BUSCAR-RECEBIMENTO-01 (adendo, Gabriel 07/11 08:34) — A COMPETÊNCIA COM QUE O MODAL NASCE. Pela FIN-COMPETENCIA-VENDA-01 (29/09) o
+ * recebimento de venda/abate tem competência e safra da PRIMEIRA SAÍDA do gado, nunca de hoje nem do pagamento — o banco já grava assim
+ * (`oc_materializar_programacao` → `_oc_competencia_pela_saida`); a tela abria com HOJE e mostrava outra coisa. A saída é a 1ª ENTREGA da
+ * conta corrente (a entrega segue a saída: `oc_sincronizar_entregas`). Fora da regra, como sempre: compra, despesa e a Venda em Boitel
+ * (o banco deixa a data da OC). Sem saída ainda, hoje (nada a dizer).
+ */
+export function competenciaDoModoOC(natureza: NaturezaDoModalOC, tipo: TipoDaOC, primeiraSaida: string | null, subcentro: string | null,
+  hoje: string): string {
+  if (natureza !== 'principal' || tipo === 'compra' || subcentro === 'Venda em Boitel' || !primeiraSaida) return hoje;
+  return primeiraSaida;
+}
+/** A primeira entrega (saída) da conta corrente; nenhuma = nulo. */
+export function primeiraSaidaDaOC(cc: { linhas: readonly { tipo: string; data: string | null }[] } | null): string | null {
+  const datas = (cc?.linhas ?? []).filter((l) => l.tipo === 'entrega' && !!l.data).map((l) => (l.data ?? '').slice(0, 10)).sort();
+  return datas[0] ?? null;
+}
+
 /** A compra PAGA o principal; venda e abate RECEBEM. Despesa e' sempre saida. */
 export function tipoDoLancamentoOC(natureza: NaturezaDoModalOC, tipo: TipoDaOC): '1-Entradas' | '2-Saídas' {
   return natureza === 'principal' && tipo !== 'compra' ? '1-Entradas' : '2-Saídas';
@@ -70,7 +88,22 @@ export interface OrigemOC {
   onVoltar?: () => void;
   /** Depois de gravar: a OC rele e sobe a versao. */
   aoLancar: (retorno: RetornoLancarPeloModal) => void | Promise<void>;
+  /** OC-BUSCAR-RECEBIMENTO-01 — a 1ª entrega (saída) do gado: a data do "DRE: pela entrega da OC (dd/mm)". Nula = sem a data. */
+  dataDaEntrega?: string | null;
 }
+
+/** OC-BUSCAR-RECEBIMENTO-01 (adendo 2, Gabriel 07/11) — o "Compõe DRE: Não" do recebimento de OC estava certo e parecia errado: a receita
+ *  entrou no DRE pela ENTREGA do gado; este é o caixa. O texto diz isso, com a data da entrega (dd/mm); a explicação vai no ⓘ. */
+export function textoDoDreDaOC(dataDaEntrega: string | null | undefined): string {
+  const d = dataDaEntrega && /^\d{4}-\d{2}-\d{2}/.test(dataDaEntrega) ? ` (${dataDaEntrega.slice(8, 10)}/${dataDaEntrega.slice(5, 7)})` : '';
+  return `DRE: pela entrega da OC${d}`;
+}
+export const AJUDA_DRE_DA_OC = {
+  titulo: 'DRE do recebimento da OC',
+  oQueE: 'A receita entrou no DRE na entrega do gado. Este lançamento é o recebimento (caixa).',
+  porQue: 'Contar o recebimento também no DRE dobraria a receita da operação.',
+  comoFazer: 'Nada a fazer: o DRE da operação se vê na própria OC (a entrega).',
+} as const;
 
 export function tituloDoModoOC(natureza: NaturezaDoModalOC, tipo: TipoDaOC): string {
   if (natureza === 'obrigacao') return 'Nova despesa da operação';

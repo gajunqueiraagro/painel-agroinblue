@@ -28,8 +28,11 @@ import type { FazendaGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import { areaEmHectares } from '@/lib/mapa/areaDoPoligono';
 import { divisoesNoPainel, type Divisao } from '@/lib/mapa/unidadesDoMapa';
+import { lancarDoPainel } from '@/lib/mapa/lancarDoPainel';
 import { areaCercadaDoPasto } from '@/lib/mapa/areaCercada';
-import { arrumarRotulos, distanciaABorda, pontoMaisInterno, type Aneis, type Ponto } from '@/lib/mapa/rotulosDoMapa';
+import { pontoMaisInterno } from '@/lib/mapa/rotulosDoMapa';
+/* FECH-TOPO-02 (adendo 2) — a camada de rótulos saiu daqui VERBATIM para ser UMA (o Fechamento área usa a mesma) */
+import { aneisEmPixels, desenharRotulos, ZOOM_DE_MEDIDA, type RotuloDoPasto } from '@/lib/mapa/camadaDeRotulos';
 import { COR_DA_FAIXA, faixaDaLotacaoUa, textoUaHa, uaPorHa } from '@/lib/mapa/faixasLotacao';
 import { tituloDosLotes } from '@/lib/mapa/lotesDoPasto';
 import { fechamentoDoMesAberto, mesAbreviado, mesCurtoNumerico, resumoDosPastos, type DadosDoPastoNoMes } from '@/lib/mapa/mapaDoMes';
@@ -85,44 +88,12 @@ interface Props {
   trocaDeVista: ReactNode;
   /** MAPA-IMPRESSAO-01: o botão "Imprimir mapa" (lugar de 26px antes da troca de vista; só numa fazenda) */
   acaoImprimir?: ReactNode;
+  /** MAPA-LOTES-01 fatia 1 (A): abre o modal do P1 (o MESMO do Fechamento, `useModalDoPasto`) no card do pasto; sem ele (Global, bancada),
+   *  o painel não tem o rodapé. O mapa não grava nada. */
+  onLancar?: (pastoId: string) => void;
 }
 
 const VIDRO = 'rounded-[10px] border border-white/60 bg-white/[0.78] shadow-[0_8px_28px_rgba(0,0,0,0.28)] backdrop-blur-[14px] backdrop-saturate-[1.2]';
-/* fix1 (2): o rótulo do pasto — nome 10px/600, kg/ha 9,5px (o piso da casa) mais claro; tamanho fixo em qualquer zoom */
-const ROTULO_NOME_PX = 10;
-const ROTULO_SUB_PX = 9.5;
-const ROTULO_ALTURA_NOME = 12;
-const ROTULO_ALTURA_SUB = 11;
-/* o ponto interno e a largura do pasto se medem uma vez, nesta escala fixa; no zoom z vale × 2^(z − ZOOM_DE_MEDIDA) */
-const ZOOM_DE_MEDIDA = 20;
-
-interface RotuloDoPasto {
-  id: string; nome: string; sub: string; ancora: L.LatLng; folga: number; largura: number; prioridade: number;
-  /** Os anéis do pasto na escala de medida (para conferir se a caixa do rótulo fica dentro). */
-  aneis: Aneis;
-}
-
-let reguaDoTexto: CanvasRenderingContext2D | null = null;
-function larguraDoTexto(texto: string, px: number, peso: number): number {
-  if (typeof document === 'undefined') return texto.length * px * 0.6;
-  reguaDoTexto ??= document.createElement('canvas').getContext('2d');
-  if (!reguaDoTexto) return texto.length * px * 0.6;
-  reguaDoTexto.font = `${peso} ${px}px ${getComputedStyle(document.body).fontFamily}`;
-  return Math.ceil(reguaDoTexto.measureText(texto).width) + 2;
-}
-
-/** Os anéis do maior polígono da geometria (Polygon ou MultiPolygon), em pixels na escala de medida. */
-function aneisEmPixels(mapa: L.Map, geo: FazendaGeometria['geojson']): Aneis | null {
-  const para = (anel: number[][]): Ponto[] => anel.map(([lng, lat]) => { const pt = mapa.project(L.latLng(lat, lng), ZOOM_DE_MEDIDA); return [pt.x, pt.y]; });
-  const areaDe = (a: Ponto[]) => Math.abs(a.reduce((s, [x, y], i) => { const [x2, y2] = a[(i + 1) % a.length]; return s + x * y2 - x2 * y; }, 0)) / 2;
-  if (geo.type === 'Polygon') return geo.coordinates.map(para);
-  if (geo.type === 'MultiPolygon') {
-    let melhor: Aneis | null = null; let maior = -1;
-    for (const pol of geo.coordinates) { const a = pol.map(para); const ar = a[0] ? areaDe(a[0]) : 0; if (ar > maior) { maior = ar; melhor = a; } }
-    return melhor;
-  }
-  return null;
-}
 const MENU_ACIMA = 'z-[1100]';
 const SEM_ATIVIDADE = '__sem__';
 
@@ -230,37 +201,6 @@ function LinhaFiltro({ rotulo, marcado, onChange, n }: { rotulo: string; marcado
   );
 }
 
-/** Põe os rótulos no zoom atual: cada pasto mostra nome + kg/ha, só o nome ou nada (fica no hover); nunca dois se sobrepõem. */
-function desenharRotulos(mapa: L.Map, camada: L.LayerGroup, lista: readonly RotuloDoPasto[]) {
-  camada.clearLayers();
-  if (lista.length === 0) return;
-  const escala = Math.pow(2, mapa.getZoom() - ZOOM_DE_MEDIDA);
-  const porId = new Map(lista.map(r => [r.id, r]));
-  const modos = arrumarRotulos(lista.map(r => {
-    const pt = mapa.project(r.ancora, mapa.getZoom());
-    return {
-      id: r.id, x: pt.x, y: pt.y, folga: r.folga * escala, larguraDoPasto: r.largura * escala,
-      larguraNome: larguraDoTexto(r.nome, ROTULO_NOME_PX, 600), alturaNome: ROTULO_ALTURA_NOME,
-      larguraSub: larguraDoTexto(r.sub, ROTULO_SUB_PX, 400), alturaSub: ROTULO_ALTURA_SUB, prioridade: r.prioridade,
-      dentro: (x: number, y: number) => distanciaABorda(x / escala, y / escala, r.aneis) >= 0,
-    };
-  }));
-  modos.forEach((modo, id) => {
-    const r = porId.get(id);
-    if (!r || modo === 'oculto') return;
-    const sub = modo === 'completo'
-      ? `<div style="font-weight:400;font-size:${ROTULO_SUB_PX}px;line-height:${ROTULO_ALTURA_SUB}px;opacity:.88">${escaparHtml(r.sub)}</div>` : '';
-    L.marker(r.ancora, {
-      interactive: false,
-      icon: L.divIcon({
-        className: '',
-        iconSize: [0, 0],
-        html: `<div data-rotulo-pasto="${modo}" style="transform:translate(-50%,-50%);white-space:nowrap;text-align:center;color:#fff;font-size:${ROTULO_NOME_PX}px;font-weight:600;line-height:${ROTULO_ALTURA_NOME}px;text-shadow:0 1px 2px #000,0 0 2px #000">${escaparHtml(r.nome)}${sub}</div>`,
-      }),
-    }).addTo(camada);
-  });
-}
-
 /** O número em cima da barra do histórico: até 999 inteiro; de 1.000 em diante "1,1k" (a barra tem ~18px; o valor inteiro fica no title). */
 function valorDaBarra(v: number): string {
   return v >= 999.5 ? `${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : formatNum(v, 0);
@@ -276,14 +216,10 @@ function rotuloForaDaPecuaria(d: DadosDoPastoNoMes, lavoura: LavouraDoMes | null
   return familiaDoPasto(d) === 'lavoura' ? rotuloDaLavoura(lavoura) : rotuloDaAtividade(d.usoDoMes);
 }
 
-function escaparHtml(t: string): string {
-  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
   seletorDeMes, trocaDeVista, acaoImprimir, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, semDesenho = null,
-  infraInicialId, onInfraInicialUsada,
+  infraInicialId, onInfraInicialUsada, onLancar,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
@@ -634,6 +570,10 @@ export function MapaGestorView({
     const lista = pastoSelecionado ? divisoes?.get(pastoSelecionado.id) ?? [] : [];
     return lista.length ? divisoesNoPainel(lista) : null;
   }, [pastoSelecionado, divisoes]);
+  /* MAPA-LOTES-01 fatia 1 (A): o rodapé do painel — abre o modal do P1 do pasto (ou da divisão escolhida) */
+  const lancar = pastoSelecionado && onLancar
+    ? lancarDoPainel({ pastoId: pastoSelecionado.id, dados: dadosSelecionado, divisoes: divisoes?.get(pastoSelecionado.id) ?? [], mes: mesDoMapa })
+    : null;
   const diferencaDaArea = (() => {
     const oficial = pastoSelecionado?.area_produtiva_ha;
     if (areaDoMapa == null || oficial == null) return null;
@@ -1040,6 +980,37 @@ export function MapaGestorView({
               <div className="mb-0.5 mt-2 text-[9.5px] font-semibold leading-[12px] text-[#4A5361]">Satélite (vigor do capim)</div>
               <div className="text-[10px] text-[#5A6472]">Em breve.</div>
             </div>
+            {/* MAPA-LOTES-01 fatia 1 (A): rodapé de altura fixa — o botão tem lugar e largura fixos (trocar de pasto não move nada); desligado,
+                o motivo fica escrito ao lado. O modal é o do Fechamento; o mapa só o abre. */}
+            {lancar && onLancar && (
+              <div className="flex h-[32px] flex-none items-center gap-1.5 border-t border-black/[0.08] px-2" data-testid="mapa-painel-lancar">
+                {lancar.tipo === 'divisoes' ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" size="sm" className="h-[22px] w-[132px] flex-none gap-1 bg-[#1B2A44] px-2 text-[10px] text-white hover:bg-[#1B2A44]/90">
+                        {lancar.rotulo} <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className={`${MENU_ACIMA} max-h-[50vh] w-[180px] overflow-y-auto`} data-testid="menu-lancar-divisao">
+                      <DropdownMenuLabel>Qual divisão?</DropdownMenuLabel>
+                      {lancar.opcoes.map(d => (
+                        <DropdownMenuItem key={d.pastoId} onSelect={() => onLancar(d.pastoId)}>{d.nome}</DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Button type="button" size="sm" disabled={lancar.tipo === 'bloqueado'}
+                    title={lancar.tipo === 'bloqueado' ? lancar.motivo : 'Abre o mesmo modal do Fechamento de pastos'}
+                    className="h-[22px] w-[132px] flex-none px-2 text-[10px] bg-[#1B2A44] text-white hover:bg-[#1B2A44]/90"
+                    onClick={() => { if (lancar.tipo === 'um') onLancar(lancar.pastoId); }}>
+                    {lancar.rotulo}
+                  </Button>
+                )}
+                <span className="min-w-0 flex-1 text-[9.5px] leading-[12px] text-[#5A6472]" data-testid="mapa-painel-lancar-motivo">
+                  {lancar.tipo === 'bloqueado' ? lancar.motivo : ''}
+                </span>
+              </div>
+            )}
           </div>
         )}
 

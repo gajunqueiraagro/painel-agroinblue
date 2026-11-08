@@ -246,7 +246,9 @@ export function useValorRebanho(anoMes: string) {
       const precoArrobaMedio = totalArrobas > 0 ? (valorTotal ?? 0) / totalArrobas : 0;
       const valorCabecaMedio = totalCabecas > 0 ? (valorTotal ?? 0) / totalCabecas : 0;
 
-      await supabase
+      /* REVALIDAR-BG-SET26 (Gabriel 05/11): o upsert do validado NÃO conferia o erro — com o banco recusando, a tela dizia "salvos" e
+         o snapshot seguia invalidado, sem aviso. Agora a recusa vai ao toast com a mensagem do banco (e inteira ao console). */
+      const { error: validadoError } = await supabase
         .from('valor_rebanho_realizado_validado' as any)
         .upsert({
           fazenda_id: fazendaId,
@@ -260,6 +262,11 @@ export function useValorRebanho(anoMes: string) {
           valor_cabeca_medio: valorCabecaMedio,
           status: 'validado',
         } as any, { onConflict: 'fazenda_id,ano_mes' });
+
+      if (validadoError) {
+        console.error('[useValorRebanho] o validado do mês foi recusado', validadoError);
+        throw validadoError;
+      }
 
       toast.success('Valores salvos e fechamento registrado');
       await loadPrecos();

@@ -148,3 +148,8 @@ export function rotuloDoBotaoDeDocumentos(quantidade: number | null, semFazenda 
   if (semFazenda) return 'Documentos do mês · —';
   return `Documentos do mês · ${quantidade === null ? '…' : quantidade}`;
 }
+
+/** FECH-TOPO-COMPACTO-01 — o rótulo da barra compacta: "Documentos do mês · 11" -> "Documentos 11" (… e — seguem iguais). */
+export function rotuloCurtoDoBotaoDeDocumentos(rotulo: string): string {
+  return rotulo.replace(/^Documentos do mês · /, 'Documentos ');
+}

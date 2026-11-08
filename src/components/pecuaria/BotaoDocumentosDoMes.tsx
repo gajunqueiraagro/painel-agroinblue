@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDocumentosDoMes, type FonteDeDocumentosDoMes } from '@/hooks/useDocumentosDoMes';
-import { MOTIVO_SEM_FAZENDA, rotuloDoBotaoDeDocumentos } from '@/lib/pecuaria/documentosDoMes';
+import { MOTIVO_SEM_FAZENDA, rotuloCurtoDoBotaoDeDocumentos, rotuloDoBotaoDeDocumentos } from '@/lib/pecuaria/documentosDoMes';
 import { DocumentosDoMesDialog } from './DocumentosDoMesDialog';
 
 /**
@@ -25,11 +25,13 @@ export interface BotaoDocumentosDoMesProps {
   className?: string;
   classeDoIcone?: string;
   classeDoTexto?: string;
+  /** FECH-TOPO-COMPACTO-01 — "Documentos 11" (a barra compacta do Fechamento); o rótulo inteiro segue no `title` e no `aria-label`. */
+  curto?: boolean;
   fonte?: FonteDeDocumentosDoMes;
 }
 
 export function BotaoDocumentosDoMes({
-  clienteId, fazendaId, fazendaNome, anoMes, className, classeDoIcone = 'h-3.5 w-3.5 shrink-0', classeDoTexto, fonte,
+  clienteId, fazendaId, fazendaNome, anoMes, className, classeDoIcone = 'h-3.5 w-3.5 shrink-0', classeDoTexto, curto = false, fonte,
 }: BotaoDocumentosDoMesProps) {
   const [aberto, setAberto] = useState(false);
   const fazenda = fazendaId && fazendaId !== '__global__' ? fazendaId : null;
@@ -55,7 +57,7 @@ export function BotaoDocumentosDoMes({
         className={cn('disabled:cursor-not-allowed disabled:opacity-50', className)}
       >
         <FolderOpen className={classeDoIcone} />
-        <span className={cn('min-w-0 truncate', classeDoTexto)}>{rotulo}</span>
+        <span className={cn('min-w-0 truncate', classeDoTexto)}>{curto ? rotuloCurtoDoBotaoDeDocumentos(rotulo) : rotulo}</span>
       </button>
       {!semFazenda && (
         <DocumentosDoMesDialog aberto={aberto} aoFechar={fechar} fazendaNome={fazendaNome} anoMes={mesDoDialogo}

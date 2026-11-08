@@ -65,6 +65,9 @@ const consultas = vi.hoisted(() => ({
     complemento: null, bairro: null, cep: null, municipio: 'Campo Grande', uf: 'MS' })),
   atualizarCamposDoCadastro: vi.fn(async (_f: string, _c: Record<string, string>, _o: string, _r: string | null, _cli: string): Promise<{ ok: true; alteracaoId: string | null } | { ok: false; frase: string }> => ({ ok: true, alteracaoId: 'alt-1' })),
   desfazerCamposDoCadastro: vi.fn(async (): Promise<string | null> => null),
+  /* NOTA-ATUALIZA-PREVISTO-01 — o histórico da participação (padrão: nenhum, nada sugerido) e a gravação do % no documento */
+  historicoDaParticipacao: vi.fn(async (_c: string, _f: string): Promise<{ lancamentoCent: number; documentoCent: number }[]> => []),
+  definirParticipacao: vi.fn(async (_c: string, _d: readonly string[], _p: number): Promise<string | null> => null),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 /* Ajuste 12 — a aba Itens da nota já lançada: os itens fiscais (guardados ou do arquivo) num hook só; o teste diz o que ele responde */
@@ -80,13 +83,13 @@ const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async (_c: string)
 vi.mock('@/lib/financeiro/diasDoCartao', () => cartaoNoBanco);
 
 import { NotaFiscalDialog, fraseDoCompletar, quantidadeCurta, type NotaParaLancar } from './NotaFiscalDialog';
-import { NovoDeXmlDialog, arquivoPdfDaNota } from './NovoDeXmlDialog';
+import { NovoDeXmlDialog, arquivoPdfDaNota, notaParaAPrevia } from './NovoDeXmlDialog';
 import type { Gravadores } from './criarDaNota';
 import type { RespostaDoCnpj } from '@/lib/fornecedores/consultaCnpj';
 import type { PayloadParcelamento } from '@/lib/financiamentos/montarPayloadParcelamento';
 import type { DocumentoPendente, ParcelaGravada } from '@/lib/financeiro/documentosPendentes';
 import { FRASE_NOTA_SEM_CHAVE, FRASE_PDF_SEM_TEXTO, digitoDaChave, notaDoDanfe, type ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
-import { FRASE_CHAVE_INVALIDA, lidoDaChave, notaDaChaveDigitada } from '@/lib/financeiro/nfe/chaveDigitada';
+import { FRASE_CHAVE_INVALIDA, FRASE_NAO_PARECE_NOTA, lidoDaChave, notaDaChaveDigitada } from '@/lib/financeiro/nfe/chaveDigitada';
 import { proporLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { PAGINAS_DANFE_SINTETICO, danfeSinteticoAvulsa, danfeSinteticoSemDuplicata } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
@@ -106,6 +109,7 @@ beforeEach(() => {
   consultas.camposQueOEmitenteCompleta.mockResolvedValue([]);
   consultas.lancamentosAbertosComValor.mockResolvedValue({ ok: true, valor: [] });
   consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [] });
+  consultas.historicoDaParticipacao.mockResolvedValue([]);
   /* P128b — a recusa de um teste (J2/J3) não vaza para o próximo: a prévia volta a aceitar tudo */
   consultas.completarComANota.mockImplementation(async (_c, pedido, o) => ({ ok: true, valor: { ok: true, recusas: [], efeitoDre: [],
     operacao: o.simular ? null : 'op-1', financiamentoId: o.juntar && !o.simular ? 'fin-1' : null,
@@ -561,7 +565,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const bloco = await naAbaParcelas();
     expect(within(bloco).getAllByTestId('nota-ja-lancada-linha')).toHaveLength(4);
     expect(screen.queryByTestId('nota-criar')).toBeNull();
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('4 de 4 parcelas desta nota já estão lançadas');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('4 de 4 parcelas desta nota já estão lançadas');
     expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toBe('Nada é gravado antes de você clicar.');
     /* P128a (decisao c) — a 3/4 tem 1 centavo a mais no sistema: o valor em vermelho, nunca corrigido; as outras sem vermelho */
     const valores = within(bloco).getAllByTestId('nota-ja-lancada-valor-sistema');
@@ -594,8 +598,8 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const { g, comoGravadores } = gravadoresFalsos();
     const props = await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await naAbaParcelas();
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('3 de 4 parcelas desta nota já estão lançadas');
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('1 só na nota');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('3 de 4 parcelas desta nota já estão lançadas');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('1 só na nota');
     const linhas = within(screen.getByTestId('nota-ja-lancada')).getAllByTestId('nota-ja-lancada-linha');
     expect(linhas.map((l) => l.getAttribute('data-situacao'))).toEqual(['conciliada', 'conciliada', 'conciliada', 'so_na_nota']);
     /* mock da nota já lançada (29/10): a que falta diz "não existe no sistema" e a Ação é "Criar" */
@@ -658,8 +662,10 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     if (!daQuinta) throw new Error('a 5ª não nasceu fica de fora');
     fireEvent.keyDown(daQuinta, { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('nota-acao-vincular'));
-    expect((await screen.findByTestId('nota-recusa-compra')).textContent)
-      .toBe('⚠ As parcelas que receberiam a nota somam R$ 2.458,21, mais que a nota (R$ 1.966,56). Nada será gravado — confira se todas são desta compra.');
+    /* texto curto na tela (Gabriel 06/11 17:33), o porquê no title */
+    expect((await screen.findByTestId('nota-recusa-compra')).textContent).toBe('⚠ Soma passa da nota. Nada gravado.');
+    expect(screen.getByTestId('nota-recusa-compra').getAttribute('title'))
+      .toBe('As parcelas que receberiam a nota somam R$ 2.458,21, mais que a nota (R$ 1.966,56). Confira se todas são desta compra.');
     expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
   });
   it('P167 duas compras do mesmo fornecedor: a outra compra fica de fora (o chip diz) e não recebe a nota', async () => {
@@ -781,7 +787,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const parc = within(linhas[0]).getByTestId('nota-ja-lancada-parc');
     expect(parc.textContent).toBe('?/4');
     expect(parc.getAttribute('title')).toBe('parcela ? de 4 da nota: 4 × R$ 491,64 = R$ 1.966,56 (qual das 4, a nota não diz)');
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('1 de 4 parcelas desta nota já estão lançadas (R$ 491,64 cada)');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('1 de 4 parcelas desta nota já estão lançadas (R$ 491,64 cada)');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
     expect(screen.getByTestId('nota-completar-revisar').textContent).toMatch(/^Aplicar: vincular \d+$/);
   });
@@ -799,8 +805,8 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(within(linhas[4]).getByTestId('nota-selo-cancelado').textContent).toBe('cancelado');
     expect(linhas[4].textContent).not.toContain('programado');
     expect(linhas[5].textContent).not.toContain('agendado');
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('4 de 4 parcelas desta nota já estão lançadas');
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('2 cancelados (não contam)');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('4 de 4 parcelas desta nota já estão lançadas');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('2 cancelados (não contam)');
     expect(screen.getByTestId('nota-completar-revisar').textContent).toMatch(/^Aplicar: vincular \d+$/);
   });
   /* P128a (porta 2) — a previa aberta pelo Documentos do Editar lancamento, partindo dele */
@@ -885,7 +891,7 @@ describe('P95 — a nota achada em N parcelas soltas (as irmas da fracao)', () =
     const bloco = await naAbaParcelas();
     const parcs = within(bloco).getAllByTestId('nota-ja-lancada-parc').map((x) => x.textContent);
     expect(parcs).toEqual(['1/4', '2/4', '3/4', '4/4']);
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent)
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title'))
       .toBe('4 lançamentos soltos desta nota · soma R$ 1.966,52 × nota R$ 1.966,56 (diferença R$ 0,04) · achados pelo nº da nota · 4 conciliadas');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
     /* P128b — as 4 soltas achadas inteiras: a prévia JUNTA e padroniza numa gravação só */
@@ -1174,6 +1180,27 @@ describe('P95 — o mesmo arquivo duas vezes e DIGITAR A CHAVE', () => {
     expect(screen.getAllByTestId('xml-linha')).toHaveLength(1);
     expect(leitura.lerNota).toHaveBeenCalledTimes(1);
   });
+  it('DOC-ANEXO-E-IMPORT-01 F1 — o PDF sem chave "não parece uma nota fiscal" e aponta a aba Documentos (o recibo vai lá), com o ⓘ; o campo de digitar fica', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_NOTA_SEM_CHAVE });
+    lista();
+    soltar(pdf());
+    const linha = await screen.findByTestId('xml-recusa-digitar');
+    expect(screen.getByTestId('xml-recusa').textContent).toBe(FRASE_NAO_PARECE_NOTA);
+    expect(within(linha).getByRole('button', { name: 'Ajuda: Arquivo sem chave de acesso' })).toBeTruthy();
+    expect(screen.getByTestId('xml-digitar-chave')).toBeTruthy();
+  });
+  it('F1 — o "Ler a NF" do modal (a mesma porta, `notaParaAPrevia`) devolve a MESMA frase do recibo', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_NOTA_SEM_CHAVE });
+    expect(await notaParaAPrevia('cli', pdf(), [FORN], [])).toEqual({ ok: false, frase: FRASE_NAO_PARECE_NOTA });
+  });
+  it('a busca sabe achar: o PDF sem texto (foto) segue com a frase dele e SEM o ⓘ do recibo', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_PDF_SEM_TEXTO });
+    lista();
+    soltar(pdf());
+    const linha = await screen.findByTestId('xml-recusa-digitar');
+    expect(screen.getByTestId('xml-recusa').textContent).toBe(FRASE_PDF_SEM_TEXTO);
+    expect(within(linha).queryByRole('button', { name: 'Ajuda: Arquivo sem chave de acesso' })).toBeNull();
+  });
   it('o campo so\' na nota sem chave e no PDF sem texto; DV errado = a frase da chave invalida, nada muda', async () => {
     leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_PDF_SEM_TEXTO });
     lista();
@@ -1229,8 +1256,8 @@ describe('P162 — a nota de uma parcela já lançada não duplica', () => {
     const { g, comoGravadores } = gravadoresFalsos();
     const props = await abrir(nota, { g: comoGravadores, fornecedores: [FORN] });
     await naAbaParcelas();
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).not.toContain('só na nota');
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).not.toContain('só no sistema');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).not.toContain('só na nota');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).not.toContain('só no sistema');
     expect(screen.queryByTestId('nota-falta')).toBeNull();
     await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled(), { timeout: 3000 });
@@ -1415,7 +1442,7 @@ describe('NOTA-PAGA-A-VISTA-01 — a nota inteira paga à vista num lançamento'
       within(x).getByTestId('nota-ja-lancada-efeito').textContent])).toEqual([
       ['à vista', 'conciliada', 'Pago à vista▾', 'recebe a nota'],
       ...[1, 2, 3, 4].map((k) => [`${k}/4`, 'so_na_nota', 'Já paga▾', 'não cria nada'])]);
-    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('A nota inteira já está paga à vista num lançamento (R$ 1.966,56 ✓)');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('A nota inteira já está paga à vista num lançamento (R$ 1.966,56 ✓)');
     expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
     /* a barra Resultado em cinza "não junta (1 parcela)", nunca o âmbar "faltam ou sobram" (Gabriel 31/10 09:00) */
     expect(screen.queryByTestId('nota-juntar-frase')).toBeNull();
@@ -1452,8 +1479,78 @@ describe('NOTA-PAGA-A-VISTA-01 — a nota inteira paga à vista num lançamento'
     const linhas = within(screen.getByTestId('nota-ja-lancada')).getAllByTestId('nota-ja-lancada-linha');
     fireEvent.keyDown(within(linhas[2]).getByTestId('nota-acao'), { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('nota-acao-criar'));
-    expect((await screen.findByTestId('nota-recusa-compra')).textContent).toContain('somam R$ 2.458,20, mais que a nota (R$ 1.966,56)');
+    expect((await screen.findByTestId('nota-recusa-compra')).getAttribute('title')).toContain('somam R$ 2.458,20, mais que a nota (R$ 1.966,56)');
     expect(screen.queryByTestId('nota-nao-junta')).toBeNull();   // a barra volta ao âmbar: o cinza "1 parcela" é só do caso à vista
     expect(screen.getByTestId('nota-juntar-frase').textContent).toContain('⚠ não junta');
+  });
+});
+
+/* NOTA-ATUALIZA-PREVISTO-01 (Gabriel 06/11 17:30) — o molde do caso da Vera (NF 69.134: 1 parcela sem duplicata; no sistema o PREVISTO de
+   R$ 1.000,00 com venc. 05/11): "É esta" no previsto ATUALIZA o previsto (não cria a 1/1, não soma 1.000 + nota). Valores SINTÉTICOS: a NF 937
+   de R$ 1.966,56; a Vera paga 70% → 1.376,59; o resto (589,97) é de outro, só informativo. */
+describe('NOTA-ATUALIZA-PREVISTO-01 — a nota atualiza o previsto', () => {
+  const PREVISTO = jaLancado(1, '2026-11-05', 'previsto', { id: 'prev-vera', valorCent: 100000, parcelas: [], por: ['numero'], financiamentoId: null,
+    fornecedorId: 'f1', fornecedorPor: 'cnpj', descricao: 'Supermercado sintetico (70%)', pagamento: null, conciliado: false });
+  const escolherEEsta = async () => {
+    const fora = screen.getAllByTestId('nota-acao').find((b) => b.getAttribute('data-acao') === 'deixar');
+    if (!fora) throw new Error('o previsto não nasceu fica de fora');
+    fireEvent.keyDown(fora, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('nota-acao-vincular'));
+  };
+  it('R1: "É esta" no previsto = 1 atualiza · 0 cria, sem recusa; a parcela da nota vai para o previsto; o pedido leva o valor da nota e NÃO o vencimento (R2)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [PREVISTO] });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores, fornecedores: [FORN] });
+    await naAbaParcelas();
+    await escolherEEsta();
+    expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
+    expect(screen.getByTestId('nota-resultado-atualiza').textContent).toBe('1 atualiza');
+    expect(screen.getByTestId('nota-resultado').textContent).toContain('0 cria');
+    expect(screen.getByTestId('nota-resultado-soma').textContent).toBe('R$ 1.966,56');
+    expect(screen.getByTestId('nota-acao-no-previsto').textContent).toBe('no previsto');
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled(), { timeout: 3000 });
+    const { pedido, opcoes } = pedidoGravado();
+    expect(pedido).toHaveLength(1);
+    expect([pedido[0].id, pedido[0].valor, 'data_vencimento' in pedido[0], opcoes.valorNotaCent]).toEqual(['prev-vera', 1966.56, false, 196656]);
+    expect(g.lancamento).not.toHaveBeenCalled();
+    expect(consultas.definirParticipacao).not.toHaveBeenCalled();
+  });
+  it('R3: com 70% o previsto vale 1.376,59, o banco confere contra 70% da nota, o resto aparece como "outro paga" e o % vai para o documento', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [PREVISTO] });
+    const { g, comoGravadores } = gravadoresFalsos();
+    /* o documento que nasce da nota (o id que o banco devolve) recebe os 70% */
+    g.documentosDoParcelamento.mockImplementation(async (_c, _p, pend) => pend.map((x) => ({ ...x, gravado: true, documentoId: 'doc-nf' })));
+    const props = await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores, fornecedores: [FORN] });
+    await naAbaParcelas();
+    await escolherEEsta();
+    fireEvent.change(screen.getByTestId('nota-participacao-pct'), { target: { value: '70' } });
+    expect(screen.getByTestId('nota-resultado-soma').textContent).toBe('R$ 1.376,59');
+    expect(screen.getByTestId('nota-parte-de-outro').textContent).toBe('outro paga R$ 589,97');
+    expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled(), { timeout: 3000 });
+    const { pedido, opcoes } = pedidoGravado();
+    expect([pedido[0].valor, opcoes.valorNotaCent]).toEqual([1376.59, 137659]);
+    expect(consultas.definirParticipacao).toHaveBeenCalledWith('cli', ['doc-nf'], 70);
+  });
+  it('R3: o % sugerido pelo histórico do fornecedor (3 pagos a 70%) já vem no campo; nunca pela descrição', async () => {
+    consultas.historicoDaParticipacao.mockResolvedValue([1, 2, 3].map(() => ({ lancamentoCent: 70000, documentoCent: 100000 })));
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [PREVISTO] });
+    const { comoGravadores } = gravadoresFalsos();
+    await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores, fornecedores: [FORN] });
+    await naAbaParcelas();
+    await escolherEEsta();
+    await waitFor(() => expect(screen.getByTestId('nota-participacao-pct')).toHaveValue(70));
+    expect(screen.getByTestId('nota-participacao').getAttribute('title')).toContain('Sugerido pelos últimos pagamentos');
+  });
+  it('R4: o REALIZADO casado com a nota não muda de valor (nada de "atualiza"; a soma passa = recusa curta)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [{ ...PREVISTO, status: 'realizado', pagamento: '2026-11-05' }] });
+    const { comoGravadores } = gravadoresFalsos();
+    await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores, fornecedores: [FORN] });
+    await naAbaParcelas();
+    await escolherEEsta();
+    expect(screen.queryByTestId('nota-resultado-atualiza')).toBeNull();
+    expect((await screen.findByTestId('nota-recusa-compra')).textContent).toBe('⚠ Soma passa da nota. Nada gravado.');
   });
 });
