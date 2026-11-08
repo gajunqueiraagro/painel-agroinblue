@@ -847,6 +847,10 @@ const CENARIOS = [
       /* LOTES-03 F1 — o campo Lote do modal do P10A (`&v=lotes`: Bois no DM-AN-EG-06 e Vacas num 2º lote): o modal com o botão "2 lotes" e
          o painel aberto (o pasto inteiro + por categoria) */
       { nome: 'fechamento-grupo-campo-lote', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      /* LOTES-05 — "Usar o lote" clicado: o Nome no caderno com o lote e o "Voltar o texto" no lugar do botão */
+      { nome: 'fechamento-grupo-campo-lote-usar', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="caderno-usar-o-lote"]').click();
+          await p.locator('[data-testid="caderno-voltar-texto"]').waitFor(); await p.waitForTimeout(300); } },
       { nome: 'fechamento-grupo-campo-lote-painel', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
           await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
@@ -885,9 +889,19 @@ const CENARIOS = [
       /* LOTES-04 — o nº digitado: um ocupado (05 é do REC-DF-NE-05: a frase de recusa no lugar da dica) */
       { nome: 'lotes-assistente-numero-ocupado', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
         await p.locator('[data-testid="assistente-numero-editar"]').fill('5'); await p.waitForTimeout(300); } },
+      /* LOTES-05 — na cria o passo Nº pede o carimbo: o 7R da ressinc. (a frase "aparece como 7R") e um errado (a recusa no lugar) */
+      { nome: 'lotes-assistente-carimbo', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
+        await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-numero"]').waitFor();
+        await p.locator('[data-testid="assistente-carimbo"]').fill('7R'); await p.waitForTimeout(300); } },
+      { nome: 'lotes-assistente-carimbo-errado', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
+        await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-numero"]').waitFor();
+        await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await p.waitForTimeout(300); } },
       { nome: 'lotes-assistente-perfil', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
         await p.locator('[data-testid="assistente-avancar"]').click(); await p.locator('[data-testid="assistente-perfil"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'lotes-ficha-resumo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: ficha },
+      /* LOTES-05 — a ficha da cria com carimbo: "7R" no cabeçalho, o código na identidade */
+      { nome: 'lotes-ficha-carimbo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: async (p) => { await lista(p);
+        await p.locator('[data-testid="lote-nome"]', { hasText: /^7R$/ }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await p.waitForTimeout(600); } },
       { nome: 'lotes-ficha-historico', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: async (p) => { await ficha(p);
         await p.locator('[data-testid="ficha-do-lote"]').getByRole('button', { name: /^Histórico$/ }).click();
         await p.locator('[data-testid="linha-historico"]').first().waitFor(); await p.waitForTimeout(400); } },

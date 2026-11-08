@@ -349,6 +349,27 @@ const CENARIOS = [
       ['passo 5', clicar('[data-testid="assistente-avancar"]')],
       ['voltar', clicar('[data-testid="assistente-voltar"]')],
     ] },
+  /* LOTES-05 — na cria o passo Nº troca o nº pelo carimbo: digitado, errado e vazio não mexem em nada */
+  { nome: 'lotes-assistente-carimbo', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',
+    antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
+      await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await espera(p, 500);
+      for (const re of [/^CRI/, /^PP/, /^NE/]) { await p.locator('[data-testid="assistente-cartao"]', { hasText: re }).first().click(); await espera(p);
+        await p.locator('[data-testid="assistente-avancar"]').click(); await espera(p, 450); }
+      await p.locator('[data-testid="assistente-numero"]').waitFor(); },
+    estados: [
+      ['carimbo 7.1', async (p) => { await p.locator('[data-testid="assistente-carimbo"]').fill('7.1'); await espera(p); }],
+      ['carimbo 7R', async (p) => { await p.locator('[data-testid="assistente-carimbo"]').fill('7R'); await espera(p); }],
+      ['carimbo errado', async (p) => { await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await espera(p); }],
+      ['sem carimbo', async (p) => { await p.locator('[data-testid="assistente-carimbo"]').fill(''); await espera(p); }],
+    ] },
+  /* LOTES-05 — "Usar o lote" ↔ "Voltar o texto" no cabeçalho do modal: a linha do caderno não muda de altura nem empurra os campos */
+  { nome: 'fechamento-caderno-usar-o-lote', url: 'tela=fechamento-grupo&v=lotes&barra=32', regiao: '[data-testid="modal-do-pasto"]', tamanhos: TAMANHOS_DO_LOTES,
+    antes: async (p) => { await p.locator('button', { hasText: /^P10A/ }).first().waitFor(); await espera(p, 600);
+      await p.locator('button', { hasText: /^P10A/ }).first().click(); await p.locator('[data-testid="modal-do-pasto"]').waitFor(); await espera(p, 700); },
+    estados: [
+      ['usar o lote', clicar('[data-testid="caderno-usar-o-lote"]')],
+      ['voltar o texto', clicar('[data-testid="caderno-voltar-texto"]')],
+    ] },
   { nome: 'lotes-ficha-abas', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="ficha-do-lote"]',
     antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
       await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await espera(p, 600); },

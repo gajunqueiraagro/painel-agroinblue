@@ -20,9 +20,9 @@ import { cn } from '@/lib/utils';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { notificarLotesMudaram } from '@/hooks/useLotesDaFazenda';
 import { useCadastrosDoLote, fraseDoErro, type CadastroParaSalvar } from '@/hooks/useCadastrosDoLote';
-import type { CadastroDoLote, LoteDaLista, TipoDoCadastro, TrocaDeCodigo } from '@/lib/lotes/tipos';
+import { nomeDoLote, type CadastroDoLote, type LoteDaLista, type TipoDoCadastro, type TrocaDeCodigo } from '@/lib/lotes/tipos';
 import {
-  PASSOS, aceitaCarimbo, camposParaSalvar, codigoMontando, escolhidoNoPasso, filtrarCadastros, fraseCurtaDaTroca, fraseDaTroca, lotesDaCombinacao, lotesQueUsam,
+  PASSOS, aceitaCarimbo, validarCarimbo, camposParaSalvar, codigoMontando, escolhidoNoPasso, filtrarCadastros, fraseCurtaDaTroca, fraseDaTroca, lotesDaCombinacao, lotesQueUsam,
   mesmaCombinacao, nomeDe, perfilInicial, podeAvancar, siglaDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarNumero, validarPerfil,
   type Escolha, type ErroNoCampo, type Perfil,
 } from '@/lib/lotes/assistente';
@@ -119,6 +119,8 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
   const opcoes = useMemo(() => (tipoDoPasso ? filtrarCadastros(cadastros, tipoDoPasso, busca) : []), [cadastros, tipoDoPasso, busca]);
   const idsDosMamotes = useMemo(() => categoriasDoRebanho.filter(c => c.codigo.startsWith('mamotes')).map(c => c.id), [categoriasDoRebanho]);
   const comCarimbo = aceitaCarimbo(cadastros, escolha, idsDosMamotes);
+  /* LOTES-05 — na cria o lote é o carimbo do mês: o passo Nº pede o carimbo; o nº automático fica por dentro */
+  const erroDoCarimbo = comCarimbo ? validarCarimbo(perfil.carimbo) : null;
   const ultimo = passo === PASSOS.length - 1;
 
   const irPara = (i: number) => {
@@ -157,7 +159,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
   const avancar = () => {
     if (form || gravando) return;
     if (!podeAvancar(escolha, passo)) return;
-    if (passo === 3 && (proximo == null || erroDoNumero)) return;
+    if (passo === 3 && (proximo == null || erroDoNumero || erroDoCarimbo)) return;
     if (!ultimo) { irPara(passo + 1); return; }
     void gravarLote();
   };
@@ -380,10 +382,10 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
               </>
             ) : passo === 3 ? (
               <PassoDoNumero escolha={escolha} cadastros={cadastros} existentes={daCombinacao} proximo={proximo} mesma={mesma}
-                numeroDigitado={numeroDigitado} erroDoNumero={erroDoNumero} onNumero={setNumeroDigitado}
+                numeroDigitado={numeroDigitado} erroDoNumero={erroDoNumero} onNumero={setNumeroDigitado} comCarimbo={comCarimbo} erroDoCarimbo={erroDoCarimbo}
                 fazendaRotulo={fazendaRotulo} perfil={perfil} erro={erroDoPerfil} onPerfil={p => { setPerfil(p); setErroDoPerfil(null); }} hoje={hoje} />
             ) : (
-              <PassoDoPerfil cadastros={cadastros} perfil={perfil} comCarimbo={comCarimbo} erro={erroDoPerfil}
+              <PassoDoPerfil cadastros={cadastros} perfil={perfil} erro={erroDoPerfil}
                 onPerfil={p => { setPerfil(p); setErroDoPerfil(null); }} onCadastrar={t => abrirForm(t, null)} />
             )}
           </div>
@@ -397,7 +399,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
             <Button variant="outline" size="sm" className="h-[30px] min-w-[92px] text-[11.5px]" disabled={passo === 0 || !!form} onClick={() => irPara(passo - 1)}
               data-testid="assistente-voltar">‹ Voltar</Button>
             <Button size="sm" className="h-[30px] min-w-[92px] text-[11.5px]" data-testid="assistente-avancar"
-              disabled={!!form || gravando || !podeAvancar(escolha, passo) || (passo === 3 && (proximo == null || !!erroDoNumero))} onClick={avancar}>
+              disabled={!!form || gravando || !podeAvancar(escolha, passo) || (passo === 3 && (proximo == null || !!erroDoNumero || !!erroDoCarimbo))} onClick={avancar}>
               {ultimo ? (editar ? 'Salvar' : 'Criar lote') : 'Avançar ›'}
             </Button>
           </div>
@@ -491,9 +493,9 @@ function FormularioDoCadastro({ form, erro, categoriasDoRebanho, previa, onMudar
   );
 }
 
-function PassoDoNumero({ escolha, cadastros, existentes, proximo, mesma, numeroDigitado, erroDoNumero, onNumero, fazendaRotulo, perfil, erro, onPerfil, hoje }: {
+function PassoDoNumero({ escolha, cadastros, existentes, proximo, mesma, numeroDigitado, erroDoNumero, onNumero, comCarimbo, erroDoCarimbo, fazendaRotulo, perfil, erro, onPerfil, hoje }: {
   escolha: Escolha; cadastros: readonly CadastroDoLote[]; existentes: readonly LoteDaLista[]; proximo: number | null; mesma: boolean;
-  numeroDigitado: string; erroDoNumero: string | null; onNumero(v: string): void;
+  numeroDigitado: string; erroDoNumero: string | null; onNumero(v: string): void; comCarimbo: boolean; erroDoCarimbo: string | null;
   fazendaRotulo: string; perfil: Perfil; erro: { campo: keyof Perfil; mensagem: string } | null; onPerfil(p: Perfil): void; hoje: string;
 }) {
   const nn = proximo == null ? '__' : String(proximo).padStart(2, '0');
@@ -515,17 +517,29 @@ function PassoDoNumero({ escolha, cadastros, existentes, proximo, mesma, numeroD
       <span className="whitespace-nowrap text-[10px] text-muted-foreground">{digitado ? 'digitado' : mesma ? 'o mesmo' : 'automático'}</span>
     </div>
   );
+  /* LOTES-05 — na cria, no lugar do nº: o carimbo do mês (7.1, 7R); o nº automático segue no código, por dentro */
+  const carimbo = perfil.carimbo.trim();
+  const caixaDoCarimbo = (
+    <div className={cn('w-[86px] rounded-lg border px-2 pb-[5px] pt-1.5 text-center', erroDoCarimbo ? 'border-destructive bg-white' : 'border-[#b9c9e0] bg-[#eef3fa]')}>
+      <Input value={perfil.carimbo} placeholder="7.1" maxLength={6} aria-label="Carimbo do lote" data-testid="assistente-carimbo"
+        onChange={e => onPerfil({ ...perfil, carimbo: e.target.value.toUpperCase().replace(/[^0-9R.]/g, '') })}
+        className="h-7 border-0 bg-transparent p-0 text-center text-[24px] font-extrabold leading-7 text-[#24508f] shadow-none placeholder:text-[#9db3d3] focus-visible:ring-0 focus-visible:ring-offset-0" />
+      <span className="whitespace-nowrap text-[10px] text-muted-foreground">carimbo</span>
+    </div>
+  );
+  const infoDoCarimbo = erroDoCarimbo ?? (carimbo ? `Na tela o lote aparece como ${carimbo} · o nº ${nnEscolhido} fica no código, por dentro.`
+    : 'Lote de cria: digite o carimbo do mês (7.1 ou 7R). Sem carimbo, aparece pelo código.');
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="assistente-numero">
       <div className="mb-2.5 mt-0.5 flex items-stretch gap-1.5">
         {parte(escolha.atividadeId)}<span className="self-center text-[22px] text-[#c2cad6]">-</span>
         {parte(escolha.categoriaId)}<span className="self-center text-[22px] text-[#c2cad6]">-</span>
         {parte(escolha.racaId)}<span className="self-center text-[22px] text-[#c2cad6]">-</span>
-        {caixaDoNumero}
+        {comCarimbo ? caixaDoCarimbo : caixaDoNumero}
       </div>
-      <div className={cn('mb-2 flex h-4 items-center gap-1.5 truncate whitespace-nowrap text-[11px]', erroDoNumero ? 'text-destructive' : 'text-[#4b5563]')}
-        data-testid="assistente-numero-info" title={erroDoNumero ?? undefined}>
-        {erroDoNumero ? erroDoNumero : digitado ? `Nº ${nnEscolhido} digitado · apague para voltar ao automático (${nn}).` : mesma ? `Mesma combinação: o número ${nn} continua.`
+      <div className={cn('mb-2 flex h-4 items-center gap-1.5 truncate whitespace-nowrap text-[11px]', (erroDoNumero || erroDoCarimbo) ? 'text-destructive' : 'text-[#4b5563]')}
+        data-testid="assistente-numero-info" title={erroDoNumero ?? erroDoCarimbo ?? undefined}>
+        {comCarimbo && !erroDoNumero ? infoDoCarimbo : erroDoNumero ? erroDoNumero : digitado ? `Nº ${nnEscolhido} digitado · apague para voltar ao automático (${nn}).` : mesma ? `Mesma combinação: o número ${nn} continua.`
           : existentes.length ? `Já existem ${existentes.length} lote${existentes.length > 1 ? 's' : ''} ${combo} na ${fazendaRotulo} · o próximo livre é ${nn}.`
             : `Primeiro lote ${combo} na ${fazendaRotulo} · começa em 01.`}
       </div>
@@ -544,7 +558,7 @@ function PassoDoNumero({ escolha, cadastros, existentes, proximo, mesma, numeroD
             <tbody>
               {existentes.map(l => (
                 <tr key={l.id} className="h-[21px]">
-                  <td className="px-2 font-bold text-[#0b1f3a]">{l.codigo}</td>
+                  <td className="truncate px-2 font-bold text-[#0b1f3a]" title={l.carimbo ? l.codigo : undefined}>{nomeDoLote(l)}</td>
                   <td className="truncate px-2" title={l.nomeCampeiro ?? undefined}>{l.nomeCampeiro ?? '—'}</td>
                   <td className="px-2 text-right tabular-nums">{l.cabecas == null ? '—' : l.cabecas.toLocaleString('pt-BR')}</td>
                   <td className="truncate px-2" title={l.pastos.join(' · ') || undefined}>{l.pastos.length > 1 ? `${l.pastos.length} pastos` : l.pastos[0] ?? '—'}</td>
@@ -554,7 +568,7 @@ function PassoDoNumero({ escolha, cadastros, existentes, proximo, mesma, numeroD
               ))}
               {(!mesma || digitado) && (
                 <tr className="h-[21px]">
-                  <td className="px-2 font-bold text-[#24508f]">{combo}-{nnEscolhido}</td><td className="px-2 text-muted-foreground">este lote</td>
+                  <td className="truncate px-2 font-bold text-[#24508f]" title={`${combo}-${nnEscolhido}`}>{comCarimbo && carimbo ? carimbo : `${combo}-${nnEscolhido}`}</td><td className="px-2 text-muted-foreground">este lote</td>
                   <td className="px-2 text-right text-muted-foreground">—</td><td className="px-2 text-muted-foreground">—</td>
                   <td className="px-2"><span className="rounded bg-[#e3edfb] px-1.5 py-px text-[9.5px] font-semibold text-[#24508f]">Novo</span></td>
                 </tr>
@@ -581,8 +595,8 @@ function PassoDoNumero({ escolha, cadastros, existentes, proximo, mesma, numeroD
   );
 }
 
-function PassoDoPerfil({ cadastros, perfil, comCarimbo, erro, onPerfil, onCadastrar }: {
-  cadastros: readonly CadastroDoLote[]; perfil: Perfil; comCarimbo: boolean; erro: { campo: keyof Perfil; mensagem: string } | null;
+function PassoDoPerfil({ cadastros, perfil, erro, onPerfil, onCadastrar }: {
+  cadastros: readonly CadastroDoLote[]; perfil: Perfil; erro: { campo: keyof Perfil; mensagem: string } | null;
   onPerfil(p: Perfil): void; onCadastrar(t: TipoDoCadastro): void;
 }) {
   const opcoes = (tipo: 'sistema' | 'programa' | 'destino', campo: 'sistemaId' | 'programaId' | 'destinoId') => (
@@ -627,12 +641,6 @@ function PassoDoPerfil({ cadastros, perfil, comCarimbo, erro, onPerfil, onCadast
             <CampoNumeroComConta valor={perfil.idadeMediaMeses} casas={0} onChange={n => onPerfil({ ...perfil, idadeMediaMeses: n })} placeholder="ex.: 9"
               className="h-[27px] text-[11.5px]" invalido={erro?.campo === 'idadeMediaMeses'} />{nota('idadeMediaMeses')}</div>
         </div>
-      </>)}
-      {bloco('Carimbo', 'Lote de cria pelo carimbo do bezerro: mês.lote (nascidos em julho = 7.1; o 2º lote do mês = 7.2). Fica em campo próprio, fora do código.', <>
-        <Rotulo>Carimbo · mês.lote</Rotulo>
-        <Input value={perfil.carimbo} maxLength={5} disabled={!comCarimbo} placeholder={comCarimbo ? 'ex.: 7.1' : 'só lote de cria'} data-testid="assistente-carimbo"
-          onChange={e => onPerfil({ ...perfil, carimbo: e.target.value })} className={cn('h-[27px] text-[11.5px]', erro?.campo === 'carimbo' && 'border-destructive')} />
-        {nota('carimbo')}
       </>)}
       {bloco('Metas', 'A ficha compara o peso e o GMD do fechamento com estas metas e projeta quando o lote chega lá.', <>
         <div className="grid grid-cols-3 gap-2">

@@ -3,7 +3,7 @@
  * clicar no nome abre o pasto certo; sem card, cria; nome vazio / repetido recusado; o salvar e o reabrir vao SO' pelas duas RPCs
  * do card (nunca os hooks antigos) e a recusa fica escrita no rodape; altura fixa.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -220,6 +220,36 @@ describe('modal do pasto', () => {
 
 /* FECH-REABRIR-JUNTO-01 (Gabriel 07/11 13:54) — o caso real: EXP out/26, Valor do Rebanho VALIDADO, o pasto R_04 reaberto para arrumar e o
    modal travado. Um gesto reabre o Valor do Rebanho (a função da tela dele) e libera o Salvar; com o pasto fechado, reabre o pasto junto. */
+describe('LOTES-05 — "Usar o lote" no Nome no caderno (Baia Grande: "Vacas - CAR_07" → 7.1)', () => {
+  const LINHA = { id: 'l1', codigo: 'CRI-VAC-NEL-04', codigos_antigos: [], nome_campeiro: null, situacao: 'ativo', formado_em: '2026-07-01', encerrado_em: null,
+    categoria_id: 'cv', raca_id: 'rn', atividade_id: 'ac', numero: 4, carimbo: '7.1', versao: 1, pastos: [], lancamentos: 3 };
+  const FECH = { ...FECH_P2, lote_mes: 'Vacas - CAR_07' };
+  const rpcDeSempre = rpc.getMockImplementation();
+  afterEach(() => { if (rpcDeSempre) rpc.mockImplementation(rpcDeSempre); fech.loadItens.mockImplementation(async () => []); });
+  beforeEach(() => {
+    rpc.mockImplementation(async (fn: string) => ({ data: fn === 'fn_lotes_da_fazenda' ? [LINHA] : [], error: null }));
+    fech.loadItens.mockImplementation(async () => [{ categoria_id: 'c1', quantidade: 40, peso_medio_kg: 420, lote: null, observacoes: null, origem_dado: 'manual', lote_id: 'l1' }] as never);
+  });
+  it('troca o texto do campeiro pelo carimbo, o "Voltar o texto" devolve; o Salvar leva o texto novo (o antigo fica na trilha do banco)', async () => {
+    abrirDialogo(FECH);
+    fireEvent.click(await screen.findByTestId('caderno-usar-o-lote'));
+    expect(screen.getByPlaceholderText('Lote...')).toHaveValue('7.1');
+    fireEvent.click(screen.getByTestId('caderno-voltar-texto'));
+    expect(screen.getByPlaceholderText('Lote...')).toHaveValue('Vacas - CAR_07');
+    fireEvent.click(screen.getByTestId('caderno-usar-o-lote'));
+    fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
+    await waitFor(() => expect(salvarCard).toHaveBeenCalled());
+    expect(salvarCard.mock.calls[0][1]).toMatchObject({ lote_mes: '7.1' });
+  });
+  it('o texto já é o lote: o botão some; o campo Lote mostra 7.1 (o código no title); Machos sem caixa alta', async () => {
+    abrirDialogo({ ...FECH, lote_mes: '7.1' });
+    await waitFor(() => expect(screen.getByTestId('campo-lote-do-pasto').textContent).toBe('7.1'));
+    expect(screen.getByTestId('campo-lote-do-pasto').getAttribute('title')).toBe('7.1 · CRI-VAC-NEL-04');
+    expect(screen.queryByTestId('caderno-usar-o-lote')).toBeNull();
+    expect(screen.getByText('Machos').className).not.toMatch(/uppercase/);
+  });
+});
+
 describe('FECH-REABRIR-JUNTO-01 — Reabrir e editar (EXP R_04, out/26)', () => {
   const EXP = 'c4193c43-aff5-4121-befd-e0349546b6d0';
   const R04 = { ...PASTOS[1], id: 'r04', fazenda_id: EXP, nome: 'R_04' };

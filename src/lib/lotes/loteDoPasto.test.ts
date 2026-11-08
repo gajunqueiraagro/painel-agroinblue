@@ -1,6 +1,7 @@
 /** LOTES-03 F1 — o campo Lote do modal do pasto: o lote vai por categoria; só a categoria com cabeça leva lote. */
 import { describe, it, expect } from 'vitest';
-import { comLoteEmTodos, comLoteNaCategoria, loteDoCard, lotesQueSeguem, rotuloDoLote, semLoteNoZerado } from './loteDoPasto';
+import { comLoteEmTodos, comLoteNaCategoria, loteDoCard, lotesQueSeguem, rotuloDoLote, semLoteNoZerado, textoDoLoteNoCaderno } from './loteDoPasto';
+import { opcoesDosLotes } from '@/components/fechamento/CampoLoteDoPasto';
 import type { LoteDaLista } from './tipos';
 
 const it3 = [
@@ -41,5 +42,22 @@ describe('loteDoPasto', () => {
     expect(rotuloDoLote({ tipo: 'um', loteId: 'l5', semLote: 1 }, L).title).toBe('DF-NE-RC-05 · L05 - DF Nel. SP · 1 categoria sem lote');
     expect(rotuloDoLote({ tipo: 'varios', loteIds: ['l5', 'n2'], semLote: 0 }, L)).toEqual({ texto: '2 lotes', title: 'DF-NE-RC-05 · L05 - DF Nel. SP · N2-NE-RP-01' });
     expect(rotuloDoLote({ tipo: 'nenhum' }, L).texto).toBe('Sem lote');
+  });
+  it('LOTES-05: a cria com carimbo aparece como "7.1" (o código no title); na escolha, o código em cinza separa os "7.1" e a busca acha o código', () => {
+    const c1 = { ...lote('c1', 'CRI-PP-NE-05', 'Vaca CAR_7.1'), carimbo: '7.1' };
+    const c2 = { ...lote('c2', 'CRI-PP-NE-07', null), carimbo: '7.1' };
+    expect(rotuloDoLote({ tipo: 'um', loteId: 'c1', semLote: 0 }, [c1])).toEqual({ texto: '7.1', title: '7.1 · CRI-PP-NE-05 · Vaca CAR_7.1' });
+    expect(opcoesDosLotes([c1, c2, L[0]]).map(o => [o.label, o.sub, o.busca])).toEqual([
+      ['7.1', 'CRI-PP-NE-05 · Vaca CAR_7.1', 'CRI-PP-NE-05'], ['7.1', 'CRI-PP-NE-07', 'CRI-PP-NE-07'], ['DF-NE-RC-05', 'L05 - DF Nel. SP', 'DF-NE-RC-05']]);
+  });
+  it('LOTES-05: o texto do "Usar o lote" — um lote, dois (sem repetir), nenhum; categoria sem cabeça não conta', () => {
+    const c1 = { ...lote('c1', 'CRI-VAC-NEL-04', null), carimbo: '7.1' };
+    const c2 = { ...lote('c2', 'CRI-VAC-NEL-05', null), carimbo: '8.1' };
+    const itens = [{ categoria_id: 'a', quantidade: 9, lote_id: 'c1' }, { categoria_id: 'b', quantidade: 3, lote_id: 'c1' }];
+    expect(textoDoLoteNoCaderno(itens, [c1, c2])).toBe('7.1');
+    expect(textoDoLoteNoCaderno([...itens, { categoria_id: 'c', quantidade: 2, lote_id: 'c2' }], [c1, c2])).toBe('7.1 · 8.1');
+    expect(textoDoLoteNoCaderno([{ categoria_id: 'c', quantidade: 0, lote_id: 'c2' }], [c1, c2])).toBeNull();
+    expect(textoDoLoteNoCaderno([{ categoria_id: 'a', quantidade: 5, lote_id: 'l5' }], L)).toBe('DF-NE-RC-05');
+    expect(textoDoLoteNoCaderno(it3, L)).toBeNull();
   });
 });
