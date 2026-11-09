@@ -31,10 +31,11 @@ import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import { kgToArrobas, CATEGORIAS } from '@/types/cattle';
 import type { PatrimonioPec, CategoriaPatrimonio } from '@/hooks/useDrePecuaria';
-import { PecPonteTabela, PecPonteGrafico } from '@/components/agri/PecPonteAbas';
+import { PecPonteTabela } from '@/components/agri/PecPonteAbas';
+import { MiniChart } from '@/components/rebanho/MiniChartDoValor';
 import type { InsumosDidaticos } from '@/pages/PecDrePanel';
 import { PecVariacaoExplicacao, type CategoriaDaExplicacao } from '@/components/agri/PecVariacaoExplicacao';
-import type { LinhaDoRebanho } from '@/components/agri/variacaoExplica';
+import { seriesDoVR, type LinhaDoRebanho } from '@/components/agri/variacaoExplica';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const rotuloMes = (am: string) => {
@@ -616,7 +617,7 @@ export function PecPatrimonioModal({
                 totais={{ v0: T.v0, v1_p0: T.v1p0, v1_p1: T.v1p1, vpb: patrimonio.total.vpb, efeito: patrimonio.total.efeito,
                   agio: patrimonio.total.agio, at0: T.at0, at1: T.at1, p1_fonte: patrimonio.p1_fonte }}
                 total={linhaDoRebanho(T)}
-                jovens={jovens.length ? linhaDoRebanho({ ...tJov, nome: 'Jovens (mamotes e desmama)' }) : null}
+                jovens={jovens.length ? linhaDoRebanho({ ...tJov, nome: 'Jovens' }) : null}
                 adultos={adultos.length ? linhaDoRebanho({ ...tAdu, nome: 'Adultos' }) : null}
                 cats={cats.map(categoriaDaExplicacao)} meses={patrimonio.meses}
                 p0={rotuloMes(p0)} p1={rotuloMes(p1)} resumido={qual === 'ponte'} reposicao={insumos.reposicao} />
@@ -700,7 +701,8 @@ export function PecPatrimonioModal({
             </div>
             <div className={cn('flex min-h-0 flex-col gap-1.5',
               aba !== 'grafico' && 'invisible pointer-events-none')}>
-              <PecPonteGrafico m={patrimonio.movimentos} p0={p0} p1={p1} />
+              {/* ⚠ OS GRÁFICOS DA TELA DO VR (OK do Chat 09/11): o MESMO `MiniChart`, sobre os meses da RPC (o 1º é o Início) */}
+              <GraficosDoVR meses={patrimonio.meses} />
             </div>
             </div>
           )}
@@ -750,4 +752,19 @@ export function caminhadaDoValor(t: {
     { rot: 'Vale', arrobas: t.at1 === 0 ? null : t.at1, preco: preco(t.v1p1, t.at1),
       valor: t.v1p1, variacao: t.dTotal },
   ];
+}
+
+/** A aba Gráfico — os 3 gráficos de linha da tela do Valor do Rebanho, com as mesmas cores e legendas. */
+function GraficosDoVR({ meses }: { meses: PatrimonioPec['meses'] }) {
+  const s = useMemo(() => seriesDoVR(meses), [meses]);
+  if (meses.length === 0) return <div className="p-3 text-[10px] text-muted-foreground">—</div>;
+  return (
+    <div className="flex w-full gap-2 px-1 pt-1" data-testid="variacao-graficos-vr">
+      <MiniChart title="Valor do rebanho (R$)" unit="currency"
+        color="hsl(var(--primary))" serie2 rotulo1="com mercado" rotulo2="sem efeito de mercado" data={s.valor} />
+      <MiniChart data={s.arrobas} color="hsl(142, 71%, 45%)" title="Arrobas em estoque" unit="arroba" />
+      <MiniChart title="R$/@ médio" unit="currency"
+        color="hsl(217, 91%, 60%)" serie2 rotulo1="com mercado" rotulo2="sem efeito de mercado" data={s.preco} />
+    </div>
+  );
 }

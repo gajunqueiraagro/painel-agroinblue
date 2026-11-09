@@ -45,7 +45,7 @@ export const textosDoInfo = (p0: string): Record<'ponte' | 'producao' | 'evoluca
     porQue: 'Responde: tenho mais ou menos arrobas?', comoLer: 'Positivo: há mais arroba no fim do que no início.' },
   composicao: { titulo: 'Composição', oQue: 'Produção − Quantidade.',
     porQue: 'Responde: o tipo de gado mudou? Mais bezerro (@ cara) e menos vaca muda o valor sem mudar a arroba.', comoLer: 'Já sem a evolução de categoria, que tem barra própria.' },
-  v6: { titulo: `Rebanho de ${p0}`, oQue: 'O rebanho do início e quanto mudou até o fim, por jovens e adultos.',
+  v6: { titulo: `Rebanho de ${p0}`, oQue: 'O rebanho do início e quanto mudou até o fim. Jovens = mamotes e desmama (machos e fêmeas); adultos = garrotes, novilhas, bois, vacas e touros.',
     porQue: 'Mostra de onde a arroba saiu ou entrou.', comoLer: 'Participação: quanto da arroba total cada grupo é, no início e no fim.' },
   v3: { titulo: 'Por categoria', oQue: `Cada categoria com a Produção, a Evolução de categoria e o Mercado, a R$/@ de ${p0}.`,
     porQue: 'Mostra quais categorias puxaram a variação.', comoLer: 'Passe o mouse em Evolução para ver as cabeças que entraram e saíram.' },

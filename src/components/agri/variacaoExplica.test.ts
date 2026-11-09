@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  cardsDaProducao, fimPeloCadastro, fraseDaVariacao, linhaV6, ponteEmReais, producaoSemAgio, serieV4, type TotaisDaVariacao,
+  cardsDaProducao, fimPeloCadastro, fraseDaVariacao, linhaV6, ponteEmReais, producaoSemAgio, serieV4, seriesDoVR, type TotaisDaVariacao,
 } from './variacaoExplica';
 
 const BG: TotaisDaVariacao = {
@@ -90,5 +90,20 @@ describe('frase (V5)', () => {
   });
   it('fim pelo cadastro: o mercado sai sem número', () => {
     expect(fraseDaVariacao({ ...BG, p1_fonte: 'cadastro' }, R)).toContain('O mercado fica sem número');
+  });
+});
+
+describe('aba Gráfico = os gráficos da tela do VR', () => {
+  it('1º ponto é o Início ("I"); mês do cadastro sem ponto; sem mercado = a preço do início', () => {
+    const s = seriesDoVR([
+      { ano_mes: '2025-12', fonte: 'fechamento', arrobas: 100, v_ref: 30000, v_mes: 30000 },
+      { ano_mes: '2026-01', fonte: 'cadastro', arrobas: 110, v_ref: 33000, v_mes: null },
+      { ano_mes: '2026-02', fonte: 'fechamento', arrobas: 120, v_ref: 36000, v_mes: 42000 },
+    ]);
+    expect(s.valor.map(p => p.label)).toEqual(['I', 'J', 'F']);
+    expect(s.valor[1]).toEqual({ label: 'J', fullLabel: 'Jan/26', value: null, value2: null });
+    expect(s.arrobas[1].value).toBeNull();
+    expect(s.valor[2]).toMatchObject({ value: 42000, value2: 36000 });
+    expect(s.preco[2]).toMatchObject({ value: 350, value2: 300 });
   });
 });

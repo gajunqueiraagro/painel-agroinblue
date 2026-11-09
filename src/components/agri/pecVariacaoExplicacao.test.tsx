@@ -5,10 +5,13 @@
  * 100 desmama M de 200 kg a R$ 14/kg em dez/30 viram garrotes em mar/31 e terminam com 300 kg a R$ 12/kg em jun/31.
  * vpb 80.000 · ágio −50.000 (no destino, garrotes) · Produção = 130.000 · efeito 0.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
 import type { PatrimonioPec, ParcelaMov } from '@/hooks/useDrePecuaria';
+
+/* a aba Gráfico usa o `MiniChart` (recharts `ResponsiveContainer`), que pede ResizeObserver — o jsdom não tem */
+vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
 
 const zero: ParcelaMov = { cabecas: 0, arrobas: 0, valor: 0 };
 const BASE: PatrimonioPec = {
@@ -87,6 +90,12 @@ describe('modal da variação — a aba Explicação', () => {
     expect(linhaGarrote?.textContent).toContain('−50.000');
     expect(linhaGarrote?.querySelector('[title^="entraram 100 cab"]')).toBeTruthy();
     expect(within(screen.getByTestId('variacao-v3')).getByText('Bois').closest('tr')?.textContent).toContain('−300');
+  });
+
+  it('aba Gráfico: os 3 gráficos da tela do VR (Valor, Arrobas, R$/@ médio)', () => {
+    abrir('vpb');
+    const g = screen.getByTestId('variacao-graficos-vr');
+    expect([...g.querySelectorAll('p')].map(p => p.textContent)).toEqual(['Valor do rebanho (R$)', 'Arrobas em estoque', 'R$/@ médio']);
   });
 
   it('V4: o mês do cadastro não tem R$/@ do mês (a linha quebra ali)', () => {

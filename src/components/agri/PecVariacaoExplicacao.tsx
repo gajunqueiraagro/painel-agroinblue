@@ -161,8 +161,8 @@ export function PecVariacaoExplicacao({ totais, total, jovens, adultos, cats, me
 
   const linhaConta = (rotulo: string, valor: string, cor?: string, tt?: boolean) => (
     <Fragment key={rotulo}>
-      {/* ⚠ FORA DE TABELA NADA DE "…" (regra de corte): o rótulo da conta quebra a linha */}
-      <div className={cn('min-w-0 leading-[13px] text-muted-foreground', tt && 'border-t pt-0.5 font-semibold text-foreground')}>{rotulo}</div>
+      {/* ⚠ UMA LINHA (OK do Chat 09/11) e nada de "…" fora de tabela: os rótulos são curtos ("R$/@ set/26 · preço dez/25") e cabem a 918px */}
+      <div className={cn('whitespace-nowrap text-muted-foreground', tt && 'border-t pt-0.5 font-semibold text-foreground')}>{rotulo}</div>
       <div className={cn('text-right tabular-nums', tt && 'border-t pt-0.5 font-semibold', cor)}>{valor}</div>
     </Fragment>
   );
@@ -237,12 +237,12 @@ export function PecVariacaoExplicacao({ totais, total, jovens, adultos, cats, me
         {card('2', 'Composição', c.composicao, ROXO, <>
           {linhaConta('Produção', reaisComSinal(totais.vpb - (totais.agio ?? 0)))}
           {linhaConta('− Quantidade', reaisComSinal(c.quantidade == null ? null : -c.quantidade))}
-          {linhaConta(`R$/@ médio ${p1} (preço ${p0})`, n2(c.pkFimRef))}
+          {linhaConta(`R$/@ ${p1} · preço ${p0}`, n2(c.pkFimRef))}
           {linhaConta('= Composição', reaisComSinal(c.composicao), corDoSinal(c.composicao), true)}
         </>, <InfoDaVariacao texto={info.composicao} testid="info-composicao" />, 'variacao-card-composicao')}
         {card('3', 'Mercado', c.mercado, AMBAR, <>
-          {linhaConta(`R$/@ ${p1} a preço de ${p0}`, n2(c.pkFimRef))}
-          {linhaConta(`R$/@ ${p1} a preço de ${p1}`, n2(c.pkFimMes))}
+          {linhaConta(`R$/@ ${p1} · preço ${p0}`, n2(c.pkFimRef))}
+          {linhaConta(`R$/@ ${p1} · preço ${p1}`, n2(c.pkFimMes))}
           {linhaConta(`× @ em ${p1}`, n0(totais.at1))}
           {linhaConta('= efeito de mercado', reaisComSinal(c.mercado), corDoSinal(c.mercado), true)}
         </>, <InfoDaVariacao texto={info.mercado} testid="info-card-mercado" />, 'variacao-card-mercado')}

@@ -146,3 +146,28 @@ export function fraseDaVariacao(t: TotaisDaVariacao, rotulos: { p0: string; p1: 
   ];
   return partes.join(' ');
 }
+
+/**
+ * A ABA GRÁFICO = OS GRÁFICOS DA TELA DO VR (OK do Chat 09/11) — as séries do `MiniChart` a partir de `meses[]`.
+ * ⚠ AS REGRAS SÃO AS DA TELA DO VR: o 1º ponto é o Início ("I", a base das áreas); mês sem fechamento validado (cadastro) não tem ponto
+ * (nem com nem sem mercado: "sem fechamento, sem ponto", 03d). "Sem efeito de mercado" = a preço do início (`v_ref`).
+ */
+export interface PontoDoVR { label: string; fullLabel: string; value: number | null; value2?: number | null }
+const INICIAIS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+const NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+export function seriesDoVR(meses: readonly { ano_mes: string; fonte: 'fechamento' | 'cadastro'; arrobas: number | null; v_ref: number | null; v_mes: number | null }[]) {
+  const pontos = meses.map((m, i) => {
+    const mes = Number(m.ano_mes.slice(5, 7)) - 1;
+    const label = i === 0 ? 'I' : INICIAIS[mes] ?? '?';
+    const fullLabel = i === 0 ? `Inicial (${NOMES[mes] ?? ''}/${m.ano_mes.slice(2, 4)})` : `${NOMES[mes] ?? ''}/${m.ano_mes.slice(2, 4)}`;
+    const ok = i === 0 || m.fonte === 'fechamento';
+    const a = ok ? m.arrobas : null;
+    const div = (v: number | null) => (v == null || a == null || a === 0 ? null : v / a);
+    return { label, fullLabel, ok, a, vMes: ok ? m.v_mes : null, vRef: ok ? m.v_ref : null, pMes: ok ? div(m.v_mes) : null, pRef: ok ? div(m.v_ref) : null };
+  });
+  return {
+    valor: pontos.map((p): PontoDoVR => ({ label: p.label, fullLabel: p.fullLabel, value: p.vMes, value2: p.vRef })),
+    arrobas: pontos.map((p): PontoDoVR => ({ label: p.label, fullLabel: p.fullLabel, value: p.a })),
+    preco: pontos.map((p): PontoDoVR => ({ label: p.label, fullLabel: p.fullLabel, value: p.pMes, value2: p.pRef })),
+  };
+}
