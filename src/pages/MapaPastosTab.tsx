@@ -695,8 +695,9 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                         {row.lote
                           ? row.lote
                           : row.loteNoCaderno
-                            /* L2 ajuste — sem lote cadastrado: o texto do caderno em cinza itálico (o title diz "sem lote cadastrado") */
-                            ? <span className="italic text-slate-400" data-testid="lote-sem-cadastro">{row.loteNoCaderno}</span>
+                            /* L2 ajuste — sem lote cadastrado: o texto do caderno em CINZA (o title diz "sem lote cadastrado"). Sem itálico: o gate de
+                               cortes reprova SEMPRE o texto inclinado cortado (a inclinação come a última letra) e a coluna é estreita */
+                            ? <span className="block truncate text-slate-400" data-testid="lote-sem-cadastro">{row.loteNoCaderno}</span>
                             : <span className="opacity-20">—</span>}
                       </td>
                       {/* o Programa (nome do cadastro) corta como o Lote: "…" e o nome inteiro no title (o gate de cortes achou o corte seco) */}

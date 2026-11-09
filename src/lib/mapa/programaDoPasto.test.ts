@@ -43,12 +43,13 @@ describe('a coluna Lote do Mapa do rebanho (MAPA-REBANHO-L2)', () => {
     expect(loteDoMapa(['l-sem'], L)).toBe('CRI-VAC-NEL-02');
     expect(loteDoMapa(['l-cri', 'l-rec', 'l-cri'], L)).toBe('7.1 · REC-NOV-NEL-01');
   });
-  it('P_03 "Vacas Prenhas" sem lote cadastrado (ajuste 08:12): o lote é nulo, a célula mostra o caderno em cinza itálico, title "sem lote cadastrado"', () => {
+  it('P_03 "Vacas Prenhas" sem lote cadastrado (ajuste 08:12): o lote é nulo, a célula mostra o caderno em cinza, title "sem lote cadastrado"', () => {
     expect(loteDoMapa([], L)).toBeNull();
     expect(tituloDoLoteNoMapa([], L, 'Vacas Prenhas')).toBe('sem lote cadastrado — Vacas Prenhas');
     expect(tituloDoLoteNoMapa(['l-que-sumiu'], L, 'Vacas')).toBe('sem lote cadastrado — Vacas');
     const f = readFileSync('src/pages/MapaPastosTab.tsx', 'utf8');
-    expect(f).toContain('<span className="italic text-slate-400" data-testid="lote-sem-cadastro">{row.loteNoCaderno}</span>');
+    /* cinza e cortando com "…" DENTRO da célula; sem itálico (o gate reprova o inclinado cortado: 56px a 919px) */
+    expect(f).toContain('<span className="block truncate text-slate-400" data-testid="lote-sem-cadastro">{row.loteNoCaderno}</span>');
   });
   it('o title: o caderno e o código quando aparece o carimbo', () => {
     expect(tituloDoLoteNoMapa(['l-cri'], L, 'Vacas')).toBe('No caderno: Vacas · CRI-VAC-NEL-01');
