@@ -1906,6 +1906,10 @@ if (tela === 'mesclar') {
     PASTOS.push(pasto('p6', 'P6', 95.6, 'cria', null, 7), { ...pasto('p6a', 'P6-A', 48.1, 'cria', 'g6', 8), data_inicio: '2026-10-01' },
       { ...pasto('p6b', 'P6-B', 47.5, 'cria', 'g6', 9), data_inicio: '2026-10-01' });
     CARDS.push(card('f6', 'p6', { tipo_uso_mes: 'cria' }));
+    /* R1 (Gabriel 08/11 19:18, PUR out/26): o P19A com 4 piquetes — o selo na linha do nome cortava "P19A" em "P…" (agora "97,5 ha · 4 piq.") */
+    PASTOS.push(pasto('p19a', 'P19A', 97.5, 'cria', null, 10),
+      ...['A', 'B', 'C', 'D'].map((l, i) => ({ ...pasto(`p19a${l}`, `P19A-${l}`, 24.4, 'cria', 'g19', 11 + i), data_inicio: '2026-10-01' })));
+    CARDS.push(card('f19', 'p19a', { tipo_uso_mes: 'cria' }));
   }
   const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
@@ -1982,7 +1986,7 @@ if (tela === 'mesclar') {
     from: (t: string, e: { eq: Record<string, unknown>; in?: Record<string, unknown[]> }) => (
       /* F2 `&v=piquetes7`: os leitores do modal filtram por grupo/origem/pasto (`in`/`eq`); sem a variante, a resposta de sempre */
       t === 'pastos' ? (COM_PIQUETES7 ? filtrar(PASTOS, e) : PASTOS) : t === 'pasto_grupos' ? (COM_PIQUETES7 ? filtrar : (l: unknown[]) => l)([{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: null },
-        ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }] : []),
+        ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }, { id: 'g19', fazenda_id: 'f1', nome: 'P19A', ativo: true, pasto_origem_id: 'p19a' }] : []),
         ...(COM_PIQUETES7 ? [{ id: 'g7', fazenda_id: 'f1', nome: 'P7', ativo: true, pasto_origem_id: 'p7' }, { id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }] : [])], e)
       : t === 'fechamento_pastos' ? CARDS.filter((c) => (!e.eq.ano_mes || c.ano_mes === e.eq.ano_mes) && (!COM_PIQUETES7 || !e.eq.pasto_id || c.pasto_id === e.eq.pasto_id))
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)

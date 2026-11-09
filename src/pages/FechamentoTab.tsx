@@ -1096,6 +1096,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     const lotacaoDoPasto = lotacaoDoMes.get(p.id);
     const origens = (recebeDe.get(p.id) ?? []).map(id => pastos.find(x => x.id === id)?.nome).filter((n): n is string => !!n);
     const uaHaDoMes = lotacaoDoPasto?.uaHa != null && lotacaoDoPasto.ua > 0 ? lotacaoDoPasto.uaHa : resumo.uaHa;
+    const nPiquetes = piquetesDoMes.get(p.id)?.length ?? 0;
 
     return (
       <Tooltip key={p.id}>
@@ -1116,12 +1117,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <span className="min-w-0 font-bold text-xs text-foreground truncate leading-tight" title={p.nome} data-testid="nome-do-card">
                 {isDivergencia ? DIV_CURTA : p.nome}
               </span>
-              {(piquetesDoMes.get(p.id)?.length ?? 0) > 0 && (
-                <span className="ml-auto flex-none whitespace-nowrap rounded bg-[#eaf1fb] px-1 text-[10px] font-medium leading-[14px] text-[#1f5fa8]" data-testid="selo-piquetes"
-                  title={`Piquetes de ${p.nome} no mês: ${(piquetesDoMes.get(p.id) ?? []).map(q => q.nome).join(', ')}`}>
-                  {piquetesDoMes.get(p.id)?.length} piquetes
-                </span>
-              )}
               <span className={`text-sm font-bold leading-none ${STATUS_ICON_COLOR[pastoStatus]}`}>
                 {STATUS_ICON[pastoStatus]}
               </span>
@@ -1153,8 +1148,16 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <div className="flex items-center justify-between mt-0.5">
               {isDivergencia ? (
                 <span className="text-[7px] font-bold uppercase tracking-wider leading-none text-amber-800 dark:text-amber-300">⚠️ Divergência</span>
-              ) : p.area_produtiva_ha ? (
-                <span className="text-[8px] text-muted-foreground leading-none">{formatNum(p.area_produtiva_ha, 1)} ha</span>
+              ) : p.area_produtiva_ha || nPiquetes > 0 ? (
+                /* R1 (Gabriel 08/11 19:18): os piquetes NUNCA na linha do nome (o selo cortava "P19A" em "P…"): pequenos, ao lado da área */
+                <span className="whitespace-nowrap text-[8px] text-muted-foreground leading-none">
+                  {p.area_produtiva_ha ? `${formatNum(p.area_produtiva_ha, 1)} ha` : ''}
+                  {nPiquetes > 0 && (
+                    <span data-testid="selo-piquetes" title={`Piquetes de ${p.nome} no mês: ${(piquetesDoMes.get(p.id) ?? []).map(q => q.nome).join(', ')}`}>
+                      {p.area_produtiva_ha ? ' · ' : ''}{nPiquetes} piq.
+                    </span>
+                  )}
+                </span>
               ) : <span />}
               {!isDivergencia && tipoUsoEfetivo && (
                 <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
