@@ -128,7 +128,9 @@ function Linha({ pontos, series, fmt, testid }: {
         );
       })}
       {pontos.map((p, i) => (i === 0 || i === pontos.length - 1 || pontos.length <= 7) && (
-        <text key={i} x={X(i)} y={H - 4} fontSize={9.5} fill="#6B7280" textAnchor="middle">{p.ano_mes.slice(5)}/{p.ano_mes.slice(2, 4)}</text>
+        /* ⚠ AS PONTAS ANCORAM PARA DENTRO: centrado, o 1º e o último mês passam da borda do gráfico (o gate de cortes pegou) */
+        <text key={i} x={X(i)} y={H - 4} fontSize={9.5} fill="#6B7280"
+          textAnchor={pontos.length > 1 && i === 0 ? 'start' : pontos.length > 1 && i === pontos.length - 1 ? 'end' : 'middle'}>{p.ano_mes.slice(5)}/{p.ano_mes.slice(2, 4)}</text>
       ))}
     </svg>
   );
@@ -155,7 +157,8 @@ export function PecVariacaoExplicacao({ totais, total, jovens, adultos, cats, me
 
   const linhaConta = (rotulo: string, valor: string, cor?: string, tt?: boolean) => (
     <Fragment key={rotulo}>
-      <div className={cn('truncate text-muted-foreground', tt && 'border-t pt-0.5 font-semibold text-foreground')} title={rotulo}>{rotulo}</div>
+      {/* ⚠ FORA DE TABELA NADA DE "…" (regra de corte): o rótulo da conta quebra a linha */}
+      <div className={cn('min-w-0 leading-[13px] text-muted-foreground', tt && 'border-t pt-0.5 font-semibold text-foreground')}>{rotulo}</div>
       <div className={cn('text-right tabular-nums', tt && 'border-t pt-0.5 font-semibold', cor)}>{valor}</div>
     </Fragment>
   );
@@ -177,7 +180,9 @@ export function PecVariacaoExplicacao({ totais, total, jovens, adultos, cats, me
       <Fragment key={chave}>
         <tr className={cls} onClick={grupo ? () => setAberto(x => ({ ...x, [chave]: !ab })) : undefined}
           style={{ height: 16, cursor: grupo ? 'pointer' : undefined }}>
-          <td className="truncate px-1 text-left" title={r.nome}>{grupo && <span className="mr-0.5" aria-hidden>{ab ? '▾' : '▸'}</span>}{r.nome}</td>
+          {/* ⚠ A SETA É DESENHO (CSS), NÃO TEXTO: o `title` tem de ter o texto inteiro da célula (regra de corte) */}
+          <td className={cn('truncate px-1 text-left', grupo && 'before:mr-0.5 before:content-[attr(data-seta)]')} data-seta={grupo ? (ab ? '▾' : '▸') : undefined}
+            title={r.nome}>{r.nome}</td>
           <td className="border-l px-1">{n0(r.cab0)}</td><td className="px-1">{n0(r.at0)}</td><td className="px-1">{n1(r.atPorCab)}</td>
           <td className="px-1">{n2(r.pk0)}</td><td className="px-1">{n0(r.v0)}</td>
           <td className={cn('border-l px-1', corDoSinal(r.dCab))}>{sinal(r.dCab, 0)}</td><td className={cn('px-1', corDoSinal(r.dCab))}>{sinalPct(r.dCabPct)}</td>
