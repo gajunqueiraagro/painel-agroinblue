@@ -62,12 +62,16 @@ function Ponte({ passos }: { passos: PassoEmReais[] }) {
     if (p.tipo !== 'delta') { acc = v; return { p, a: 0, b: v }; }
     const a = acc; acc += v; return { p, a, b: acc };
   });
-  const todos = barras.flatMap(x => [x.a, x.b]);
   const temPonta = passos.some(p => p.tipo === 'ponta');
-  /* com as pontas (milhões) a base não começa no zero, senão as parcelas somem; sem pontas (Resumido), o zero entra */
+  /* ⚠ COM AS PONTAS (milhões) A RÉGUA É A DO MOCK de 05/11: mínimo = 86% da menor ponta, máximo = 103% do maior valor — o "a" da ponta
+     é o chão (0) e não entra na conta, senão o mínimo vira zero e as parcelas viram um risco (o print da Vera pegou). Sem pontas
+     (Resumido), o zero entra. */
+  const todos = barras.flatMap(x => (x.p.tipo === 'ponta' ? [x.b] : [x.a, x.b]));
   const mn0 = Math.min(...todos); const mx0 = Math.max(...todos);
   const folga = (mx0 - mn0) * 0.12 || 1;
-  const mn = temPonta ? mn0 - folga : Math.min(0, mn0) - folga; const mx = mx0 + folga;
+  const pontas = barras.filter(x => x.p.tipo === 'ponta').map(x => x.b);
+  const mn = temPonta ? Math.min(...pontas) * 0.86 : Math.min(0, mn0) - folga;
+  const mx = temPonta ? mx0 * 1.03 : mx0 + folga;
   const Y = (v: number) => T + (mx - v) * ((H - T - B) / (mx - mn));
   const cw = (W - 2 * L) / passos.length; const bw = cw * 0.5;
   const chao = temPonta ? H - B : Y(0);
