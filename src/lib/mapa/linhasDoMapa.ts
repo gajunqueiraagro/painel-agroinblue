@@ -6,7 +6,7 @@
  *   · a ordem é a do pai (as sub-linhas vêm logo abaixo dele, em ordem natural: 7A, 7B… 10A).
  * Tela, PDF e Excel usam as MESMAS linhas; os totais e o resumo contam só os pastos (`piqueteDe` nulo).
  */
-import { modoDasLinhas, SEM_PIQUETE } from '@/lib/fechamento/porPiquetes';
+import { SEM_PIQUETE } from '@/lib/fechamento/porPiquetes';
 
 export interface ItemDoMapa {
   categoria_id: string;
@@ -46,7 +46,8 @@ const ordemNatural = (a: { nome: string }, b: { nome: string }) => a.nome.locale
 /** as sub-linhas do card: nenhuma se o card é do pasto inteiro; por piquetes, uma por piquete com linha (e "Sem piquete" se sobrar cabeça
  *  sem piquete), em ordem natural */
 export function subLinhasPorPiquete<T extends ItemDoMapa>(itens: readonly T[], nomeDoPiquete: (id: string) => string | null): SubLinhaDoPiquete<T>[] {
-  if (modoDasLinhas(itens) !== 'piquetes') return [];
+  /* o critério do `modoDasLinhas` (porPiquetes.ts): o card foi lançado por piquetes se ALGUMA linha tem piquete */
+  if (!itens.some(i => !!i.piquete_id)) return [];
   const grupos = new Map<string, T[]>();
   for (const i of itens) {
     const k = i.piquete_id || SEM_PIQUETE;
