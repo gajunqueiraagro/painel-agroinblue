@@ -7,6 +7,7 @@ import logoUrl from '@/assets/logo.png';
 import { tipoUsoLabelCurto } from '@/lib/calculos/labels';
 import { formatNum as fmt } from '@/lib/calculos/formatters';
 import { isPastoDivergencia } from '@/lib/classificacaoArea';
+import { nomeNaSaida } from '@/lib/mapa/linhasDoMapa';
 
 /* MAPA-REBANHO-02 (Gabriel 07/11 18:33) — o PDF com as MESMAS colunas da tela: Pasto · Ativ. · Lote · Programa · categorias · Total · Peso Md
    · Peso conf. · Área · UA/ha · Qual, em paisagem, sem cortar (o texto comprido quebra na célula). A fonte padrão do PDF (helvetica) não tem
@@ -113,9 +114,11 @@ export async function exportMapaPastosPdf(
       return v?.quantidade ? String(v.quantidade) : '';
     });
     const ehDiv = isPastoDivergencia(row.pasto.tipo_uso) || isPastoDivergencia(row.tipoUso);
+    /* MAPA-REBANHO-R2 — a sub-linha do piquete sai recuada (as mesmas linhas da tela), sem a atividade (é a do pai) */
+    const ehPiquete = !!row.piqueteDe;
     return [
-      ehDiv ? DIV_NO_PDF : row.pasto.nome,
-      ehDiv && isPastoDivergencia(row.tipoUso) ? DIV_NO_PDF : tipoUsoLabelCurto(row.tipoUso),
+      ehPiquete ? nomeNaSaida(row.pasto.nome, true) : ehDiv ? DIV_NO_PDF : row.pasto.nome,
+      ehPiquete ? '' : ehDiv && isPastoDivergencia(row.tipoUso) ? DIV_NO_PDF : tipoUsoLabelCurto(row.tipoUso),
       row.lote || '',
       row.programa || '—',
       ...catVals,

@@ -1854,12 +1854,22 @@ if (tela === 'mesclar') {
     ['b2', 'B-02', 41.7, 'engorda', 'Engorda', 'l-eng', { bois: [18, 455.8], touros: [2, 610.25], vacas: [5, 440] }, 7],
     ['dv', '⚠️ Divergência do Campeiro', 0, 'divergencia', null, null, {}, null],
   ];
-  const PASTOS = LINHAS.map(([id, nome, area, uso], i) => pasto(id, nome, area, uso, i + 1));
+  /* MAPA-REBANHO-R2 — o caso da PUR (SINTÉTICO): o P7 lançado POR PIQUETES (7A e 7B, que no cadastro vêm ANTES do P7) e o P5 com piquete
+     no cadastro mas lançado inteiro. A tela mostra o P7 somando, o 7A e o 7B recuados logo abaixo dele, e o P5 sem sub-linha; nenhum piquete solto. */
+  const PIQUETES = [{ ...pasto('7a', '7A', 18.5, 'recria', 0), grupo_id: 'g7' }, { ...pasto('7b', '7B', 21.0, 'recria', 0), grupo_id: 'g7' },
+    { ...pasto('p5a', 'P5-A', 12, 'recria', 0), grupo_id: 'g5' }];
+  const PAIS = [{ ...pasto('p7', 'P7', 39.5, 'recria', 0), grupo_id: 'g7' }, { ...pasto('p5', 'P5', 12, 'recria', 0), grupo_id: 'g5' }];
+  const GRUPOS = [{ id: 'g7', nome: 'P7', pasto_origem_id: 'p7', ativo: true, cliente_id: 'cli' }, { id: 'g5', nome: 'P5', pasto_origem_id: 'p5', ativo: true, cliente_id: 'cli' }];
+  const PASTOS = [...LINHAS.map(([id, nome, area, uso], i) => pasto(id, nome, area, uso, i + 1)), ...PIQUETES.slice(0, 2), ...PAIS, PIQUETES[2]];
   const CARDS = LINHAS.map(([id, , , uso, lote], i) => ({ id: `fc-${id}`, pasto_id: id, fazenda_id: 'f1', cliente_id: 'cli', ano_mes: '2026-10',
     status: i < 3 ? 'fechado' : 'rascunho', responsavel_nome: null, lote_mes: lote, tipo_uso_mes: uso, qualidade_mes: LINHAS[i][7], observacao_mes: null,
     created_at: '2026-10-01', updated_at: '2026-10-01' }));
-  const ITENS = LINHAS.flatMap(([id, , , , , loteId, cats]) => Object.entries(cats).map(([cod, [q, kg]]) => ({ id: `i-${id}-${cod}`, fechamento_id: `fc-${id}`,
-    categoria_id: `c-${cod}`, quantidade: q, peso_medio_kg: kg, lote: null, lote_id: loteId, observacoes: null, origem_dado: 'manual', peso_atualizado: id === 'a1' })));
+  for (const [id, uso] of [['p7', 'recria'], ['p5', 'recria']]) CARDS.push({ ...CARDS[3], id: `fc-${id}`, pasto_id: id, lote_mes: null, tipo_uso_mes: uso, qualidade_mes: null });
+  const ITENS_R2 = [['p7', '7a', 'novilhas', 24, 352.4], ['p7', '7a', 'desmama_f', 10, 280], ['p7', '7b', 'novilhas', 31, 360.1], ['p5', null, 'novilhas', 15, 340]]
+    .map(([pid, piq, cod, q, kg]) => ({ id: `i-${pid}-${piq}-${cod}`, fechamento_id: `fc-${pid}`, categoria_id: `c-${cod}`, quantidade: q, peso_medio_kg: kg,
+      lote: null, lote_id: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false, piquete_id: piq }));
+  const ITENS = [...ITENS_R2, ...LINHAS.flatMap(([id, , , , , loteId, cats]) => Object.entries(cats).map(([cod, [q, kg]]) => ({ id: `i-${id}-${cod}`, fechamento_id: `fc-${id}`,
+    categoria_id: `c-${cod}`, quantidade: q, peso_medio_kg: kg, lote: null, lote_id: loteId, observacoes: null, origem_dado: 'manual', peso_atualizado: id === 'a1' })))];
   const lote = (id: string, codigo: string, programa: string | null) => ({ id, codigo, codigos_antigos: [], nome_campeiro: null, situacao: 'ativo',
     formado_em: '2026-01-01', encerrado_em: null, categoria_id: 'k-cat', raca_id: 'k-raca', atividade_id: 'k-ativ', numero: 1, sistema_id: null,
     programa_id: programa, destino_id: null, safra: null, carimbo: null, idade_media_meses: null, meta_peso_kg: null, meta_gmd_kg: null, meta_data: null,
@@ -1870,6 +1880,7 @@ if (tela === 'mesclar') {
   g.__bancoBancada = {
     from: (t: string, e: { eq: Record<string, unknown> }) => (
       t === 'pastos' ? PASTOS
+      : t === 'pasto_grupos' ? GRUPOS
       : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
       : t === 'categorias_rebanho' ? CATS

@@ -2,6 +2,7 @@ import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { PastoMapaRow, MapaTotais, AtividadeResumo } from '@/pages/MapaPastosTab';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
+import { nomeNaSaida } from '@/lib/mapa/linhasDoMapa';
 
 export function exportMapaPastosXlsx(
   rows: PastoMapaRow[],
@@ -14,7 +15,8 @@ export function exportMapaPastosXlsx(
   const headers = ['Pasto', 'Atividade', 'Lote', ...categorias.map(c => c.nome), 'Total Cab.', 'Peso Méd. (kg)', 'Área (ha)', 'UA/ha', 'Qualidade'];
 
   const dataQtde = rows.map(row => {
-    const vals: (string | number)[] = [row.pasto.nome, tipoUsoLabel(row.tipoUso), row.lote || ''];
+    /* MAPA-REBANHO-R2 — a sub-linha do piquete sai recuada, sem a atividade (é a do pai) */
+    const vals: (string | number)[] = [nomeNaSaida(row.pasto.nome, !!row.piqueteDe), row.piqueteDe ? '' : tipoUsoLabel(row.tipoUso), row.lote || ''];
     categorias.forEach(cat => {
       const v = row.categorias.get(cat.id);
       vals.push(v?.quantidade || 0);
@@ -28,7 +30,7 @@ export function exportMapaPastosXlsx(
   });
 
   const dataPeso = rows.map(row => {
-    const vals: (string | number)[] = [row.pasto.nome, '', 'Peso'];
+    const vals: (string | number)[] = [nomeNaSaida(row.pasto.nome, !!row.piqueteDe), '', 'Peso'];
     categorias.forEach(cat => {
       const v = row.categorias.get(cat.id);
       vals.push(v?.peso_medio_kg ? Number(v.peso_medio_kg.toFixed(0)) : 0);

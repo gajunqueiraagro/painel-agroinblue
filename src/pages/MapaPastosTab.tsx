@@ -5,7 +5,7 @@ import { porcentagensDoMapa, porcentagensDoMapaEstreito, LIMITE_ESTREITO } from 
 import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
-import { usePastos, isPastoAtivoNoMes, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
+import { usePastos, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto } from '@/hooks/useFechamento';
 import { pastosDoFechamentoNoMes, useLoteDoMes } from '@/hooks/useLoteDoMes';
 import { useModalDoPasto } from '@/hooks/useModalDoPasto';
@@ -31,6 +31,7 @@ import { useCadastrosDoLote } from '@/hooks/useCadastrosDoLote';
 import { mapaDoCadastro } from '@/lib/lotes/lista';
 import { lotesDoPasto, programaDoPasto } from '@/lib/mapa/programaDoPasto';
 import { isPastoDivergencia, DIV_CURTA } from '@/lib/classificacaoArea';
+import { categoriasDasLinhas, subLinhasPorPiquete, type ItemDoMapa } from '@/lib/mapa/linhasDoMapa';
 
 export interface PastoMapaRow {
   pasto: Pasto;
@@ -47,6 +48,8 @@ export interface PastoMapaRow {
   uaTotal: number;
   uaHa: number | null;
   pesoAtualizado: boolean;
+  /** MAPA-REBANHO-R2 — a sub-linha do piquete (card lançado por piquetes): o PAI dela; nulo = a linha é o pasto (só estas entram nos totais) */
+  piqueteDe: Pasto | null;
 }
 
 export interface MapaTotais {
@@ -185,29 +188,22 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
 
   useEffect(() => {
     const build = async () => {
-      const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao && isPastoAtivoNoMes(p, anoMes));
+      /* MAPA-REBANHO-R2 — o PASTO é a linha: os pastos do mês pela MESMA regra dos cards do Fechamento (piquete fora; antes o filtro
+         daqui era próprio e listava cada piquete como pasto, na ordem do nome: 7A antes do P7) */
+      const pastosAtivos = pastosDoFechamentoNoMes(pastos, anoMes);
       if (pastosAtivos.length === 0) { setRows([]); return; }
       setLoading(true);
 
       const fechMap = new Map(fechamentos.map(f => [f.pasto_id, f]));
       const allItems = await Promise.all(fechamentos.map(f => loadItens(f.id)));
       const itemsByFechId = new Map(fechamentos.map((f, i) => [f.id, allItems[i]]));
+      const pastoPorId = new Map(pastos.map(p => [p.id, p]));
 
-      const result: PastoMapaRow[] = pastosAtivos.map(pasto => {
-        const fech = fechMap.get(pasto.id);
-        const catMap = new Map<string, { quantidade: number; peso_medio_kg: number | null; peso_atualizado: boolean }>();
-
-        if (fech) {
-          const items = itemsByFechId.get(fech.id) || [];
-          items.forEach(item => {
-            catMap.set(item.categoria_id, { quantidade: item.quantidade, peso_medio_kg: item.peso_medio_kg, peso_atualizado: item.peso_atualizado });
-          });
-        }
-
-        const lote = fech?.lote_mes ?? null;
-        const loteIds = fech ? lotesDoPasto(itemsByFechId.get(fech.id) || []) : [];
+      const linhaDe = (pasto: Pasto, fech: FechamentoPasto | undefined, items: readonly ItemDoMapa[], piqueteDe: Pasto | null, lote: string | null, loteIds: string[]): PastoMapaRow => {
+        /* o pasto SOMA todas as linhas do card (por piquetes há uma linha por piquete em cada categoria) */
+        const catMap = categoriasDasLinhas(items);
         const tipoUso = fech?.tipo_uso_mes ?? null;
-        const qualidade = fech?.qualidade_mes ?? null;
+        const qualidade = piqueteDe ? null : fech?.qualidade_mes ?? null;
 
         const totalCab = Array.from(catMap.values()).reduce((s, v) => s + v.quantidade, 0);
 
@@ -222,7 +218,21 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
         const itensComQtd = Array.from(catMap.values()).filter(v => v.quantidade > 0);
         const pesoAtualizado = itensComQtd.length > 0 && itensComQtd.every(v => v.peso_atualizado);
 
-        return { pasto, fechamentoId: fech?.id ?? null, lote, loteIds, programa: null, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa, pesoAtualizado };
+        return { pasto, fechamentoId: fech?.id ?? null, lote, loteIds, programa: null, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa, pesoAtualizado, piqueteDe };
+      };
+
+      const result: PastoMapaRow[] = pastosAtivos.flatMap(pasto => {
+        const fech = fechMap.get(pasto.id);
+        const items = fech ? itemsByFechId.get(fech.id) || [] : [];
+        const doPasto = linhaDe(pasto, fech, items, null, fech?.lote_mes ?? null, lotesDoPasto(items));
+        /* lançado por piquetes: cada piquete numa sub-linha recuada logo abaixo do pai (a área é a do piquete; o lote, o das linhas dele) */
+        const subs = subLinhasPorPiquete(items, id => pastoPorId.get(id)?.nome ?? null).map(s => {
+          const piquete = pastoPorId.get(s.piqueteId);
+          const base: Pasto = piquete ?? { ...pasto, id: `${pasto.id}:${s.piqueteId || 'sem-piquete'}`, nome: s.nome, area_produtiva_ha: null };
+          const textos = [...new Set(s.itens.filter(i => i.quantidade > 0).map(i => i.lote).filter((t): t is string => !!t))];
+          return linhaDe(base, fech, s.itens, pasto, textos.length === 1 ? textos[0] : null, lotesDoPasto(s.itens));
+        });
+        return [doPasto, ...subs];
       });
 
       setRows(result);
@@ -231,11 +241,14 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
     build();
   }, [fechamentos, pastos, loadItens]);
 
+  /* MAPA-REBANHO-R2 — os totais e o resumo contam só os PASTOS (a sub-linha do piquete já está dentro do pai) */
+  const pastosDasLinhas = useMemo(() => rows.filter(r => !r.piqueteDe), [rows]);
+
   const totais: MapaTotais = useMemo(() => {
     const catTotals = new Map<string, { quantidade: number; pesoTotal: number; qtdComPeso: number }>();
     categorias.forEach(c => catTotals.set(c.id, { quantidade: 0, pesoTotal: 0, qtdComPeso: 0 }));
 
-    rows.forEach(row => {
+    pastosDasLinhas.forEach(row => {
       row.categorias.forEach((val, catId) => {
         const t = catTotals.get(catId);
         if (t) {
@@ -248,30 +261,30 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
       });
     });
 
-    const totalCab = rows.reduce((s, r) => s + r.totalCabecas, 0);
+    const totalCab = pastosDasLinhas.reduce((s, r) => s + r.totalCabecas, 0);
     // areaTotal pecuária-only: exclui agricultura/ambiental/infra. Corrige uaHaGeral automaticamente.
-    const areaTotal = rows
+    const areaTotal = pastosDasLinhas
       .filter(r => isOperacionalPecuaria(r.tipoUso))
       .reduce((s, r) => s + (r.pasto.area_produtiva_ha || 0), 0);
 
     const pesoMedioGeral = calcPesoMedioPonderado(
-      rows.filter(r => r.totalCabecas > 0).map(r => ({ quantidade: r.totalCabecas, pesoKg: r.pesoMedio }))
+      pastosDasLinhas.filter(r => r.totalCabecas > 0).map(r => ({ quantidade: r.totalCabecas, pesoKg: r.pesoMedio }))
     );
 
-    const uaTotal = rows.reduce((s, r) => s + r.uaTotal, 0);
+    const uaTotal = pastosDasLinhas.reduce((s, r) => s + r.uaTotal, 0);
     const uaHaGeral = calcUAHa(uaTotal, areaTotal);
 
-    const comQualidade = rows.filter(r => isOperacionalPecuaria(r.tipoUso) && r.qualidade !== null && r.qualidade > 0);
+    const comQualidade = pastosDasLinhas.filter(r => isOperacionalPecuaria(r.tipoUso) && r.qualidade !== null && r.qualidade > 0);
     const qualidadeMedia = comQualidade.length > 0
       ? comQualidade.reduce((s, r) => s + (r.qualidade || 0), 0) / comQualidade.length
       : null;
 
     return { catTotals, totalCab, areaTotal, pesoMedioGeral, uaTotal, uaHaGeral, qualidadeMedia };
-  }, [rows, categorias]);
+  }, [pastosDasLinhas, categorias]);
 
   const resumoAtividades: AtividadeResumo[] = useMemo(() => {
     const map = new Map<string, { area: number; cabecas: number; pesoTotal: number; qtdComPeso: number; uaTotal: number; qtdPastos: number }>();
-    rows.forEach(row => {
+    pastosDasLinhas.forEach(row => {
       const tipo = row.tipoUso || 'não definido';
       const entry = map.get(tipo) || { area: 0, cabecas: 0, pesoTotal: 0, qtdComPeso: 0, uaTotal: 0, qtdPastos: 0 };
       entry.area += row.pasto.area_produtiva_ha || 0;
@@ -293,7 +306,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
       uaHa: calcUAHa(d.uaTotal, d.area),
       qtdPastos: d.qtdPastos,
     })).sort((a, b) => b.cabecas - a.cabecas);
-  }, [rows]);
+  }, [pastosDasLinhas]);
 
   const handleTogglePesoAtualizado = useCallback(async (row: PastoMapaRow, value: boolean) => {
     if (!row.fechamentoId) return;
@@ -649,19 +662,24 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                   const isAgri = grupoDoTipoUso(row.tipoUso) === 'agricultura';
                   /* MAPA-REBANHO-02 — a "Divergência do Campeiro" vira "⚠ Div." (o nome inteiro no title), no Pasto e na Atividade */
                   const ehDiv = isPastoDivergencia(row.pasto.tipo_uso) || isPastoDivergencia(row.tipoUso);
+                  const pai = row.piqueteDe;
                   return (
-                    <tr key={row.pasto.id} className="h-6" style={bgStyle}>
-                      <td data-texto className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] font-semibold border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis" style={bgStyle}>
-                        <button type="button" onClick={() => onAbrirPasto(row.pasto)} title={ehDiv ? `${row.pasto.nome} · abrir` : `Abrir ${row.pasto.nome}`}
-                          className="max-w-full cursor-pointer truncate text-left hover:underline" data-testid="abrir-pasto">
-                          {ehDiv ? DIV_CURTA : row.pasto.nome}
+                    <tr key={row.pasto.id} className="h-6" style={bgStyle} data-testid={pai ? 'linha-do-piquete' : 'linha-do-pasto'}>
+                      {/* MAPA-REBANHO-R2 — a sub-linha do piquete vem recuada, sem negrito, e abre o PAI (o card é do pasto) */}
+                      <td data-texto className={`sticky left-0 z-10 py-0.5 border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis ${pai ? 'pl-4 pr-1.5 text-[10px] font-normal text-muted-foreground' : 'px-1.5 text-[11px] font-semibold'}`} style={bgStyle}>
+                        <button type="button" onClick={() => onAbrirPasto(pai ?? row.pasto)}
+                          title={pai ? `${row.pasto.nome} — piquete do ${pai.nome} · abrir o ${pai.nome}` : ehDiv ? `${row.pasto.nome} · abrir` : `Abrir ${row.pasto.nome}`}
+                          className="max-w-full cursor-pointer truncate text-left hover:underline" data-testid={pai ? 'abrir-pai-do-piquete' : 'abrir-pasto'}>
+                          {pai ? `· ${row.pasto.nome}` : ehDiv ? DIV_CURTA : row.pasto.nome}
                         </button>
                       </td>
                       <td data-texto className="px-1 py-0.5 text-[11px] border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis">
-                        <span className={`inline-flex items-center px-1 py-px rounded border text-[10px] font-medium ${corDoTipoUso(row.tipoUso)}`}
-                          title={tipoUsoLabel(row.tipoUso)}>
-                          {ehDiv && isPastoDivergencia(row.tipoUso) ? DIV_CURTA : tipoUsoLabel(row.tipoUso)}
-                        </span>
+                        {!pai && (
+                          <span className={`inline-flex items-center px-1 py-px rounded border text-[10px] font-medium ${corDoTipoUso(row.tipoUso)}`}
+                            title={tipoUsoLabel(row.tipoUso)}>
+                            {ehDiv && isPastoDivergencia(row.tipoUso) ? DIV_CURTA : tipoUsoLabel(row.tipoUso)}
+                          </span>
+                        )}
                       </td>
                       {/* o Lote é texto livre: o comprido corta com o nome inteiro no title (só nesta coluna) */}
                       <td data-texto className="px-1 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-border/30" title={row.lote || ''}>
@@ -703,7 +721,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                         {isAgri ? null : row.pesoMedio ? formatNum(row.pesoMedio, 2) : <span className="opacity-15">—</span>}
                       </td>
                       <td className="px-0.5 py-0.5 text-center border-r border-border/30">
-                        {isAgri ? null : (
+                        {isAgri || pai ? null : (
                           <input
                             type="checkbox"
                             checked={row.pesoAtualizado}
