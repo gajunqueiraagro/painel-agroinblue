@@ -3,7 +3,8 @@
  * Dados SINTÉTICOS (o caso do adendo: só o lote da inseminação tem programa).
  */
 import { describe, expect, it } from 'vitest';
-import { lotesDoPasto, programaDoPasto } from './programaDoPasto';
+import { lotesDoPasto, programaDoPasto, loteDoMapa, tituloDoLoteNoMapa } from './programaDoPasto';
+import { readFileSync } from 'node:fs';
 import { mapaDoCadastro } from '@/lib/lotes/lista';
 import type { CadastroDoLote } from '@/lib/lotes/tipos';
 
@@ -31,5 +32,34 @@ describe('o programa do pasto', () => {
   });
   it('mais de um programa no pasto: os nomes, sem repetir', () => {
     expect(programaDoPasto(['l-ins', 'l-cri', 'l-iatf', 'l-ins2'], LOTES, NOMES)).toBe('1ª inseminação · IATF');
+  });
+});
+
+/* MAPA-REBANHO-L2 (Gabriel 09/11 07:51, Raul · Monterrey · set/26) — a coluna Lote é o LOTE, o nome do caderno vai no title. SINTÉTICO. */
+describe('a coluna Lote do Mapa do rebanho (MAPA-REBANHO-L2)', () => {
+  const L = [{ id: 'l-cri', codigo: 'CRI-VAC-NEL-01', carimbo: '7.1' }, { id: 'l-sem', codigo: 'CRI-VAC-NEL-02', carimbo: null }, { id: 'l-rec', codigo: 'REC-NOV-NEL-01', carimbo: null }];
+  it('cria com carimbo = o carimbo; sem carimbo = o código (a regra única nomeDoLote); dois lotes = os dois, sem repetir', () => {
+    expect(loteDoMapa(['l-cri'], L)).toBe('7.1');
+    expect(loteDoMapa(['l-sem'], L)).toBe('CRI-VAC-NEL-02');
+    expect(loteDoMapa(['l-cri', 'l-rec', 'l-cri'], L)).toBe('7.1 · REC-NOV-NEL-01');
+  });
+  it('P_03 "Vacas Prenhas" sem lote cadastrado (ajuste 08:12): o lote é nulo, a célula mostra o caderno em cinza itálico, title "sem lote cadastrado"', () => {
+    expect(loteDoMapa([], L)).toBeNull();
+    expect(tituloDoLoteNoMapa([], L, 'Vacas Prenhas')).toBe('sem lote cadastrado — Vacas Prenhas');
+    expect(tituloDoLoteNoMapa(['l-que-sumiu'], L, 'Vacas')).toBe('sem lote cadastrado — Vacas');
+    const f = readFileSync('src/pages/MapaPastosTab.tsx', 'utf8');
+    expect(f).toContain('<span className="italic text-slate-400" data-testid="lote-sem-cadastro">{row.loteNoCaderno}</span>');
+  });
+  it('o title: o caderno e o código quando aparece o carimbo', () => {
+    expect(tituloDoLoteNoMapa(['l-cri'], L, 'Vacas')).toBe('No caderno: Vacas · CRI-VAC-NEL-01');
+    expect(tituloDoLoteNoMapa(['l-rec'], L, null)).toBe('');
+  });
+  it('a tela, o PDF e o Excel: a MESMA linha (o lote pelo loteDoMapa; o caderno no title da célula)', () => {
+    const f = readFileSync('src/pages/MapaPastosTab.tsx', 'utf8');
+    expect(f).toContain('lote: loteDoMapa(r.loteIds, lotesDoMes), tituloDoLote: tituloDoLoteNoMapa(r.loteIds, lotesDoMes, r.loteNoCaderno),');
+    expect(f).toContain('title={row.tituloDoLote}');
+    expect(f).toContain('lote: null, loteNoCaderno: lote,');
+    expect(readFileSync('src/lib/exportMapaPastosPdf.ts', 'utf8')).toContain("row.lote || row.loteNoCaderno || '',");
+    expect(readFileSync('src/lib/exportMapaPastos.ts', 'utf8')).toContain("row.lote || row.loteNoCaderno || ''");
   });
 });

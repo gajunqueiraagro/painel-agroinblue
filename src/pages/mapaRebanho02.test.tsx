@@ -34,7 +34,7 @@ const linha = (p: Pasto, lote: string | null, programa: string | null, cats: [st
   const categorias = new Map(cats.map(([id, q, kg]) => [id, { quantidade: q, peso_medio_kg: kg, peso_atualizado: pesoAtualizado }]));
   const total = cats.reduce((s, [, q]) => s + q, 0);
   const kg = cats.reduce((s, [, q, k]) => s + q * k, 0);
-  return { pasto: p, fechamentoId: `fc-${p.id}`, lote, loteIds: [], programa, tipoUso: p.tipo_uso, qualidade: null, categorias, totalCabecas: total,
+  return { pasto: p, fechamentoId: `fc-${p.id}`, lote, loteNoCaderno: null, tituloDoLote: '', loteIds: [], programa, tipoUso: p.tipo_uso, qualidade: null, categorias, totalCabecas: total,
     pesoMedio: total ? kg / total : null, uaTotal: kg / 450, uaHa: p.area_produtiva_ha ? kg / 450 / p.area_produtiva_ha : null, pesoAtualizado, piqueteDe: null };
 };
 const LINHAS = [
@@ -81,7 +81,7 @@ describe('a tela do Mapa do rebanho (fonte)', () => {
     expect(f).toContain('rows={linhas}');
     expect(f).toContain('onClick={() => exportMapaPastosXlsx(linhas, categorias,');
     expect(f).toContain('onClick={() => exportMapaPastosPdf(linhas, categorias,');
-    expect(f).toContain('return rows.map(r => ({ ...r, programa: programaDoPasto(r.loteIds, lotesDoMes, nomes) }));');
+    expect(f).toContain('programa: programaDoPasto(r.loteIds, lotesDoMes, nomes) }));');
     /* a faixa do total e a do peso cobrem as 4 colunas de texto */
     expect(f.match(/<td colSpan=\{4\}/g)).toHaveLength(2);
   });

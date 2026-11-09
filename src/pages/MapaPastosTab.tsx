@@ -30,14 +30,19 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
 import { useCadastrosDoLote } from '@/hooks/useCadastrosDoLote';
 import { mapaDoCadastro } from '@/lib/lotes/lista';
-import { lotesDoPasto, programaDoPasto } from '@/lib/mapa/programaDoPasto';
+import { lotesDoPasto, programaDoPasto, loteDoMapa, tituloDoLoteNoMapa } from '@/lib/mapa/programaDoPasto';
 import { isPastoDivergencia, DIV_CURTA } from '@/lib/classificacaoArea';
 import { categoriasDasLinhas, subLinhasPorPiquete, type ItemDoMapa } from '@/lib/mapa/linhasDoMapa';
 
 export interface PastoMapaRow {
   pasto: Pasto;
   fechamentoId: string | null;
+  /** MAPA-REBANHO-L2 — o LOTE (carimbo na cria, senão o código; `loteDoMapa`); null = "—" */
   lote: string | null;
+  /** MAPA-REBANHO-L2 — o nome no caderno (`lote_mes` do card; na sub-linha, o texto das linhas do piquete): só no title */
+  loteNoCaderno: string | null;
+  /** MAPA-REBANHO-L2 — o title da célula Lote: o nome no caderno e o código quando aparece o carimbo */
+  tituloDoLote: string;
   /** MAPA-REBANHO-02 — os lotes do pasto no mês (os `lote_id` dos itens com cabeça) e o programa deles (fonte única; null = "—") */
   loteIds: string[];
   programa: string | null;
@@ -219,7 +224,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
         const itensComQtd = Array.from(catMap.values()).filter(v => v.quantidade > 0);
         const pesoAtualizado = itensComQtd.length > 0 && itensComQtd.every(v => v.peso_atualizado);
 
-        return { pasto, fechamentoId: fech?.id ?? null, lote, loteIds, programa: null, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa, pesoAtualizado, piqueteDe };
+        return { pasto, fechamentoId: fech?.id ?? null, lote: null, loteNoCaderno: lote, tituloDoLote: '', loteIds, programa: null, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa, pesoAtualizado, piqueteDe };
       };
 
       const result: PastoMapaRow[] = pastosAtivos.flatMap(pasto => {
@@ -353,7 +358,8 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
   const { cadastros: cadastrosDoLote } = useCadastrosDoLote(clienteAtual?.id ?? null);
   const linhas = useMemo(() => {
     const nomes = mapaDoCadastro(cadastrosDoLote);
-    return rows.map(r => ({ ...r, programa: programaDoPasto(r.loteIds, lotesDoMes, nomes) }));
+    return rows.map(r => ({ ...r, lote: loteDoMapa(r.loteIds, lotesDoMes), tituloDoLote: tituloDoLoteNoMapa(r.loteIds, lotesDoMes, r.loteNoCaderno),
+      programa: programaDoPasto(r.loteIds, lotesDoMes, nomes) }));
   }, [rows, lotesDoMes, cadastrosDoLote]);
 
   const getUaHaColor = (uaHa: number | null) => {
@@ -684,8 +690,14 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                         )}
                       </td>
                       {/* o Lote é texto livre: o comprido corta com o nome inteiro no title (só nesta coluna) */}
-                      <td data-texto className="px-1 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-border/30" title={row.lote || ''}>
-                        {row.lote || <span className="opacity-20">—</span>}
+                      <td data-texto className="px-1 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-border/30" title={row.tituloDoLote}
+                        data-testid="lote-do-pasto">
+                        {row.lote
+                          ? row.lote
+                          : row.loteNoCaderno
+                            /* L2 ajuste — sem lote cadastrado: o texto do caderno em cinza itálico (o title diz "sem lote cadastrado") */
+                            ? <span className="italic text-slate-400" data-testid="lote-sem-cadastro">{row.loteNoCaderno}</span>
+                            : <span className="opacity-20">—</span>}
                       </td>
                       {/* o Programa (nome do cadastro) corta como o Lote: "…" e o nome inteiro no title (o gate de cortes achou o corte seco) */}
                       <td data-texto className="px-1 py-0.5 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis max-w-0" style={{ borderRight: blockBorder }}
