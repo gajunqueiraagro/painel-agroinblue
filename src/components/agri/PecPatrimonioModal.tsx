@@ -33,6 +33,8 @@ import { kgToArrobas, CATEGORIAS } from '@/types/cattle';
 import type { PatrimonioPec, CategoriaPatrimonio } from '@/hooks/useDrePecuaria';
 import { PecPonteTabela, PecPonteGrafico } from '@/components/agri/PecPonteAbas';
 import type { InsumosDidaticos } from '@/pages/PecDrePanel';
+import { PecVariacaoExplicacao, type CategoriaDaExplicacao } from '@/components/agri/PecVariacaoExplicacao';
+import type { LinhaDoRebanho } from '@/components/agri/variacaoExplica';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const rotuloMes = (am: string) => {
@@ -93,9 +95,10 @@ const pctDe = (v: number | null, base: number | null) =>
  * outro. O operador tinha de saber em que modo estava para saber o que ia ver. Agora é um modal
  * só, igual nos dois modos, e o que muda é a aba.
  */
-type Aba = 'resumo' | 'producao' | 'mercado' | 'movimentos' | 'grafico';
+/* DRE-VARIACAO-EXPLICA-01 fatia 1b: a "Explicação" (mock 05/11) é a primeira e é onde o modal abre — nas três linhas. */
+type Aba = 'explicacao' | 'resumo' | 'producao' | 'mercado' | 'movimentos' | 'grafico';
 const ABAS: readonly (readonly [Aba, string])[] = [
-  ['resumo', 'Resumo'], ['producao', 'Produção'], ['mercado', 'Mercado'],
+  ['explicacao', 'Explicação'], ['resumo', 'Resumo'], ['producao', 'Produção'], ['mercado', 'Mercado'],
   ['movimentos', 'Movimentos'], ['grafico', 'Gráfico'],
 ];
 
@@ -107,6 +110,9 @@ interface Cat {
   pk0: number | null; pk1: number | null;
   v0: number; v1p0: number; v1p1: number;
   dProd: number; dMerc: number; dTotal: number;
+  /** DRE-VARIACAO-EXPLICA-01: o ágio (dentro do dProd) e as reclassificações; `null` = a RPC não mandou. */
+  agio: number | null; agioSemPreco: boolean;
+  cabIn: number | null; cabOut: number | null; atIn: number | null; atOut: number | null;
 }
 
 /**
@@ -136,10 +142,13 @@ function montar(cats: readonly CategoriaPatrimonio[]): Cat[] {
       pk1: porAt(c.v1_p1, at1),
       v0: c.v0, v1p0: c.v1_p0, v1p1: c.v1_p1,
       dProd: c.vpb, dMerc: c.efeito, dTotal: c.vpb + c.efeito,
+      agio: c.agio, agioSemPreco: c.agio_sem_preco,
+      cabIn: c.cab_reclass_entrada, cabOut: c.cab_reclass_saida, atIn: c.at_reclass_entrada, atOut: c.at_reclass_saida,
     };
   /* ⚠ CATEGORIA ZERADA NAS DUAS PONTAS SOME: uma linha de zeros não responde pergunta nenhuma e
-     empurra para fora da tela as que respondem. */
-  }).filter(c => c.q0 !== 0 || c.q1 !== 0);
+     empurra para fora da tela as que respondem.
+     ⚠ MENOS a que só passou por reclassificação no período (DRE-VARIACAO-EXPLICA-01): o ágio dela é real. */
+  }).filter(c => c.q0 !== 0 || c.q1 !== 0 || (c.agio ?? 0) !== 0);
 }
 
 /** A soma de um conjunto — e o R$/@ dela é PONDERADO. */
@@ -147,14 +156,29 @@ function somar(cs: readonly Cat[], nome: string): Cat {
   const s = (f: (c: Cat) => number) => cs.reduce((a, c) => a + f(c), 0);
   const at0 = s(c => c.at0); const at1 = s(c => c.at1);
   const v0 = s(c => c.v0); const v1p0 = s(c => c.v1p0); const v1p1 = s(c => c.v1p1);
+  /* ⚠ ÁGIO DO CONJUNTO: "—" se nenhuma categoria trouxe a chave; senão a soma */
+  const comAgio = cs.filter(c => c.agio != null);
+  const somaOuNulo = (f: (c: Cat) => number | null) => (comAgio.length === 0 ? null : cs.reduce((a, c) => a + (f(c) ?? 0), 0));
   return {
     cod: nome, nome, jovem: false,
     q0: s(c => c.q0), q1: s(c => c.q1), at0, at1,
     pk0: porAt(v0, at0) ?? porAt(v1p0, at1), pk1: porAt(v1p1, at1),
     v0, v1p0, v1p1,
     dProd: s(c => c.dProd), dMerc: s(c => c.dMerc), dTotal: s(c => c.dTotal),
+    agio: somaOuNulo(c => c.agio), agioSemPreco: cs.some(c => c.agioSemPreco),
+    cabIn: somaOuNulo(c => c.cabIn), cabOut: somaOuNulo(c => c.cabOut), atIn: somaOuNulo(c => c.atIn), atOut: somaOuNulo(c => c.atOut),
   };
 }
+
+/** A linha da Explicação a partir de uma Cat da tela (a mesma montagem das outras abas). */
+const linhaDoRebanho = (c: Cat): LinhaDoRebanho => ({
+  nome: c.nome, q0: c.q0, q1: c.q1, at0: c.at0, at1: c.at1, v0: c.v0, v1p0: c.v1p0, v1p1: c.v1p1,
+  vpb: c.dProd, efeito: c.dMerc, agio: c.agio,
+});
+const categoriaDaExplicacao = (c: Cat): CategoriaDaExplicacao => ({
+  ...linhaDoRebanho(c), cod: c.cod, jovem: c.jovem,
+  cabIn: c.cabIn, cabOut: c.cabOut, atIn: c.atIn, atOut: c.atOut, agioSemPreco: c.agioSemPreco,
+});
 
 /**
  * A TABELA DE CATEGORIAS — mock v17c (forma) e v19 (colunas por aba).
@@ -322,7 +346,7 @@ export function PecPatrimonioModal({
    */
   onCorrigirPrecos?: (ano: number) => void;
 }) {
-  const [aba, setAba] = useState<Aba>(qual === 'ponte' ? 'movimentos' : 'resumo');
+  const [aba, setAba] = useState<Aba>('explicacao');
   /**
    * OS GRUPOS ABREM FECHADOS, e o estado é do MODAL, não da URL.
    *
@@ -440,7 +464,7 @@ export function PecPatrimonioModal({
      caminhada do topo mostra na linha "+ Produção". */
   /* ⚠ AS DUAS ABAS DA PONTE CAEM NO RECORTE DO RESUMO só para o `colsAba` existir; o bloco delas
      nem chega a montar esta tabela. */
-  const abaDeCategoria: AbaCat = aba === 'movimentos' || aba === 'grafico' ? 'resumo' : aba;
+  const abaDeCategoria: AbaCat = aba === 'movimentos' || aba === 'grafico' || aba === 'explicacao' ? 'resumo' : aba;
   const pkProducao = T.at1 === 0 ? null : T.v1p0 / T.at1;
   const { larguras: COLS_CAT, cols: colsAba } = pares(abaDeCategoria, pkProducao);
   /** Cada coluna achatada, com a marca de início de par (a borda) e de variação. */
@@ -586,6 +610,17 @@ export function PecPatrimonioModal({
             </div>
           ) : (
             <div className="grid min-h-0 flex-1 [&>*]:col-start-1 [&>*]:row-start-1">
+            {/* DRE-VARIACAO-EXPLICA-01 fatia 1b: a Explicação rola sozinha (o único scrollport dela) */}
+            <div className={cn('min-h-0 overflow-auto', aba !== 'explicacao' && 'invisible pointer-events-none')}>
+              <PecVariacaoExplicacao
+                totais={{ v0: T.v0, v1_p0: T.v1p0, v1_p1: T.v1p1, vpb: patrimonio.total.vpb, efeito: patrimonio.total.efeito,
+                  agio: patrimonio.total.agio, at0: T.at0, at1: T.at1, p1_fonte: patrimonio.p1_fonte }}
+                total={linhaDoRebanho(T)}
+                jovens={jovens.length ? linhaDoRebanho({ ...tJov, nome: 'Jovens (mamotes e desmama)' }) : null}
+                adultos={adultos.length ? linhaDoRebanho({ ...tAdu, nome: 'Adultos' }) : null}
+                cats={cats.map(categoriaDaExplicacao)} meses={patrimonio.meses}
+                p0={rotuloMes(p0)} p1={rotuloMes(p1)} resumido={qual === 'ponte'} reposicao={insumos.reposicao} />
+            </div>
             <div className={cn('flex min-h-0 flex-col gap-1.5',
               aba !== 'resumo' && aba !== 'producao' && aba !== 'mercado'
                 && 'invisible pointer-events-none')}>

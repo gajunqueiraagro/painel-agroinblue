@@ -86,3 +86,53 @@ export function dreLavoura(escala: number) {
 export const SAFRAS = [{ id: 's1', codigo: '25/26-Lav', nome: '25/26-Lav', data_inicio: '2025-07-01', data_fim: '2026-06-30', cliente_id: 'cli', ativo: true, ativa: true, escopo_negocio: 'agricultura' },
   { id: 'p27', codigo: '26/27-Pec', nome: '26/27-Pec', data_inicio: '2026-07-01', data_fim: '2027-06-30', cliente_id: 'cli', ativa: true, escopo_negocio: 'pecuaria' },
   { id: 'p26', codigo: '25/26-Pec', nome: '25/26-Pec', data_inicio: '2025-07-01', data_fim: '2026-06-30', cliente_id: 'cli', ativa: true, escopo_negocio: 'pecuaria' }];
+
+/* DRE-VARIACAO-EXPLICA-01 fatia 1b — a resposta SINTÉTICA da `fn_dre_pecuaria_patrimonio` (com a 115300: ágio, reclassificações e a
+   série da V4), coerente por construção: v0 = q0 × kg0 × R$/kg0; v1_p0 = q1 × kg1 × R$/kg de referência; v1_p1 = q1 × kg1 × R$/kg1.
+   `escala` multiplica as cabeças (10 = o pior caso de largura); `fimCadastro` = o fim sem fechamento validado (D3: mercado "—"). */
+const CATS_PAT: readonly (readonly [string, number, number, number, number, number, number, number, number, number])[] = [
+  /* categoria,   q0,  kg0, R$/kg0,  q1,  kg1, R$/kg1, ágio,      entrou, saiu */
+  ['mamotes_m',   420, 120, 15.2,    380, 130, 15.8,   0,         0,      400],
+  ['mamotes_f',   410, 115, 14.1,    390, 125, 14.6,   0,         0,      395],
+  ['desmama_m',   300, 210, 14.0,    340, 220, 14.5,   -12400.5,  400,    310],
+  ['desmama_f',   290, 200, 13.2,    300, 205, 13.6,   2210.0,    395,    280],
+  ['garrotes',    260, 330, 11.0,    250, 345, 11.6,   -98250.4,  310,    0],
+  ['novilhas',    310, 320, 10.6,    290, 330, 11.1,   -41820.3,  280,    120],
+  ['vacas',       640, 420, 9.2,     690, 425, 9.7,    -62100.0,  120,    0],
+  ['bois',        0,   0,   0,       0,   0,   0,      -300.0,    1,      1],
+];
+export function patrimonio(a: { p_de?: string; p_ate?: string }, escala: number, fimCadastro: boolean) {
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const categorias = CATS_PAT.map(([categoria, q0b, kg0, pk0, q1b, kg1, pk1, agio, ent, sai]) => {
+    const q0 = q0b * escala; const q1 = q1b * escala;
+    const ref = pk0 || pk1;
+    const v0 = r2(q0 * kg0 * pk0); const v1_p0 = r2(q1 * kg1 * ref); const v1_p1 = fimCadastro ? v1_p0 : r2(q1 * kg1 * pk1);
+    return { categoria, q0, pm0: q0 ? kg0 : null, pk0: q0 ? pk0 : null, v0, q1, pm1: q1 ? kg1 : null, pk1: q1 && !fimCadastro ? pk1 : null,
+      v1_p0, v1_p1, vpb: r2(v1_p0 - v0), efeito: r2(v1_p1 - v1_p0),
+      agio: r2(agio * escala), agio_sem_preco: false, cab_reclass_entrada: ent * escala, cab_reclass_saida: sai * escala,
+      at_reclass_entrada: r2((ent * escala * (kg1 || 300)) / 30), at_reclass_saida: r2((sai * escala * (kg0 || 300)) / 30) };
+  });
+  const s = (f: (c: (typeof categorias)[number]) => number) => r2(categorias.reduce((x, c) => x + f(c), 0));
+  const at0 = categorias.reduce((x, c) => x + c.q0 * (c.pm0 ?? 0), 0) / 30;
+  const at1 = categorias.reduce((x, c) => x + c.q1 * (c.pm1 ?? 0), 0) / 30;
+  const total = { q0: s(c => c.q0), v0: s(c => c.v0), q1: s(c => c.q1), v1_p0: s(c => c.v1_p0), v1_p1: s(c => c.v1_p1),
+    vpb: s(c => c.vpb), efeito: s(c => c.efeito), agio: s(c => c.agio), agio_sem_preco: false };
+  const MESES = ['2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'];
+  const meses = MESES.map((ano_mes, i) => {
+    const t = i / (MESES.length - 1);
+    const arrobas = r2(at0 + (at1 - at0) * t + Math.sin(i * 1.3) * at0 * 0.015);
+    const pRef = (total.v0 + (total.v1_p0 - total.v0) * t) / (at0 + (at1 - at0) * t);
+    const pMes = (total.v0 + (total.v1_p1 - total.v0) * t) / (at0 + (at1 - at0) * t);
+    /* ago/26 sem fechamento validado (o cadastro); no D3, set/26 também */
+    const cadastro = ano_mes === '2026-08' || (fimCadastro && ano_mes === '2026-09');
+    return { ano_mes, fonte: cadastro ? 'cadastro' : 'fechamento', arrobas, v_ref: r2(arrobas * pRef), v_mes: cadastro ? null : r2(arrobas * pMes) };
+  });
+  const z = { cabecas: 0, arrobas: 0, valor: 0 };
+  return {
+    p0: '2025-12', p1: String(a.p_ate ?? '2026-09').slice(0, 7), p0_fonte: 'fechamento', p1_fonte: fimCadastro ? 'cadastro' : 'fechamento',
+    categorias, total, meses,
+    movimentos: { inicio: { cabecas: total.q0, arrobas: r2(at0), valor: total.v0 }, fim: { cabecas: total.q1, arrobas: r2(at1), valor: total.v1_p1 },
+      produzidas: { cabecas: 0, arrobas: r2(at1 - at0), valor: total.vpb }, nascimentos: z, compradas: z, transf_entrada: z,
+      vendas_abates: z, mortes: z, transf_saida: z, ajustes: z },
+  };
+}

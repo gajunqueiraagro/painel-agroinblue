@@ -749,6 +749,13 @@ const CENARIOS = [
       { nome: `dre-pec-resumido${suf}`, url: URL_DRE, tamanhos: T },
       { nome: `dre-pec-resumido-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: tudo },
       { nome: `dre-pec-detalhado-cv${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await clicarTexto('(−) Custo variável')(p); } },
+      /* DRE-VARIACAO-EXPLICA-01 1b — o modal da variação na aba Explicação (V1–V6): pela linha do Detalhado, pela do Resumido (D2, com a
+         Reposição) e com o fim pelo cadastro (D3, selo + mercado "—"); o clique é na 1ª célula de valor da linha */
+      ...[['', 'Variação por produção', true, ''], ['-resumido', 'Variação do estoque', false, ''], ['-cadastro', 'Variação por produção', true, '&fim=cadastro']]
+        .map(([s2, linha, detalhado, extra]) => ({ nome: `dre-pec-variacao-explica${s2}${suf}`, url: URL_DRE + extra, tamanhos: T, regiao: '[role="dialog"]',
+          antes: async (p) => { if (detalhado) await det(p);
+            await p.locator('tr', { hasText: linha }).first().locator('td').nth(1).click();
+            await p.locator('[data-testid="variacao-explicacao"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(500); } })),
       { nome: `dre-pec-detalhado-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); } },
       { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^2$/)(p); } },
       { nome: `dre-pec-3anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^3$/)(p); } },
