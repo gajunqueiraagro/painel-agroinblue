@@ -1,4 +1,5 @@
 import { useFaixaDoFechamento } from '@/hooks/useFaixaDoFechamento';
+import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { FaixaDoFechamento } from '@/components/fechamento/FaixaDoFechamento';
 import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 import { porcentagensDoMapa, porcentagensDoMapaEstreito, LIMITE_ESTREITO } from '@/lib/mapa/larguraDoMapa';
@@ -384,7 +385,8 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
         <div className="sticky top-0 flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 z-30">
           {/* FECH-FAIXA-01 — a faixa do fechamento: a 1ª linha, no MESMO lugar nas três telas */}
           {/* mt-0.5: o cabeçalho daqui tem 6px de folga (os outros 8) — a faixa fica no MESMO lugar (40px) nas três telas */}
-          <div className="mb-1.5 mt-0.5"><FaixaDoFechamento estado={faixaDoMes} atual="mapa" abrir={etapasDoFechamento} /></div>
+          {/* VR-PRECO-EDITAR-01 ampliado — a trava do MÊS na linha da faixa */}
+          <div className="mb-1.5 mt-0.5 flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><FaixaDoFechamento estado={faixaDoMes} atual="mapa" abrir={etapasDoFechamento} /></div>{fazendaDoMes && <MasterLockBanner anoMes={anoMes} naFaixa />}</div>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               {onBack && (

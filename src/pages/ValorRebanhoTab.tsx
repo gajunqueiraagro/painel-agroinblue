@@ -2,7 +2,7 @@ import { useValorRebanhoInicio, type RebanhoInicio } from '@/hooks/useValorReban
 import { ehJovem } from '@/components/agri/PecPatrimonioModal';
 import { areasDaBase } from '@/lib/zootecnico/areasDaBase';
 import { useCliente } from '@/contexts/ClienteContext';
-import React, { useState, useMemo, useEffect, useCallback, useId } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useId, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,6 @@ import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 import { ComposedChart, Line, Area, ReferenceLine, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
-import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 
 type OrigemPeso = 'pastos' | 'lancamento' | 'saldo_inicial' | 'sem_base';
@@ -864,6 +863,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
     validadoComP2Aberto,
     isAdmin,
     reabrirFechamento,
+    reabrirPelaEdicao,
   } = useValorRebanho(anoMes);
 
   // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
@@ -1523,7 +1523,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
     });
   }, [viewDataAnoAtual, mesNum, inicio, mesTemFechamento]);
 
+  /* VR-PRECO-EDITAR-01 — o 1º preço mexido de um mês VALIDADO reabre a validação sozinho (uma vez; a recusa do banco libera de novo) */
+  const reabrindoPelaEdicao = useRef(false);
+  const aoMexerNoPreco = () => {
+    if (!validadoComP2Aberto || reabrindoPelaEdicao.current) return;
+    reabrindoPelaEdicao.current = true;
+    void reabrirPelaEdicao().finally(() => {
+      reabrindoPelaEdicao.current = false;
+      void refetchSnap();
+      qc.invalidateQueries({ queryKey: ['valor-rebanho-snapshot', fazendaId, anoFiltro, mesFiltro] });
+      qc.invalidateQueries({ queryKey: [CHAVE_DA_FAIXA] });
+    });
+  };
+
   const handlePrecoChange = (codigo: string, value: string) => {
+    aoMexerNoPreco();
     const sanitized = value.replace(/[^0-9.,]/g, '');
     setPrecosDisplay(prev => ({ ...prev, [codigo]: sanitized }));
     const num = parseFloat(sanitized.replace(',', '.'));
@@ -1590,6 +1604,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
       strMap[p.categoria] = fmtKg(v);
     });
 
+    aoMexerNoPreco();
     setPrecosLocal(numMap);
     setPrecosDisplay(strMap);
     toast.success(`${prev.length} preços copiados do mês anterior`);
@@ -1617,9 +1632,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
   const uBaseInicialIncompleta = isGlobal ? false : (isAnoInicial && baseInicialIncompleta);
   const uFonteMes = isGlobal ? globalData.fonteMes : fonteMes;
   const uHistoricoPorMes = isGlobal ? globalData.historicoPorMes : historicoPorMes;
-  const { isReadOnly: isMesReadOnlyVR } = useMasterLock(anoMes);
-  const masterReadOnlyVR = isMesReadOnlyVR(anoMes);
-  const uCanEdit = isGlobal ? false : (canEdit && !masterReadOnlyVR);
+  /* VR-PRECO-EDITAR-01 (Gabriel 09/11 06:42) — o preço do mês ABERTO não passa pela trava master (`useMasterLock`, só de tela): ela
+     mede "fechado" por pastos fechados + preço gravado, não pelo fechamento do Valor do Rebanho, e travava justamente o mês reaberto
+     (BG out/26: 16/16 pastos fechados, o VR aberto, cliente sem master → ninguém editava e o "Desbloquear" nem aparecia). A trava
+     desta tela é o fechamento do próprio Valor do Rebanho (`canEdit`); mês validado reabre sozinho ao mexer no preço. */
+  const uCanEdit = isGlobal ? false : canEdit;
   /* BG-SET26-REVALIDAR — o Revalidar NÃO passa pela trava de tela (ver `podeRevalidarOMes`): o mês a revalidar é justamente o "travado" */
   const podeRevalidar = podeRevalidarOMes({ global: isGlobal, fonteMes, mesFuturo: isMesFuturo });
   const uTabelaUsaSnapshot = isGlobal
@@ -1733,7 +1750,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
   return (
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
       {/* FECH-FAIXA-01 — a faixa do fechamento: a 1ª linha, no MESMO lugar nas três telas */}
-      <FaixaDoFechamento estado={faixaDoMes} atual="valor" abrir={etapasDoFechamento} />
+      {/* VR-PRECO-EDITAR-01 ampliado — a trava do MÊS na linha da faixa (o preço do VR não passa por ela; os pastos sim) */}
+      <div className="flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><FaixaDoFechamento estado={faixaDoMes} atual="valor" abrir={etapasDoFechamento} /></div>{!isGlobal && <MasterLockBanner anoMes={anoMes} naFaixa />}</div>
       {/* ⚠ O INÍCIO NÃO RECEBE O CADEADO DO MÊS: ele não é um mês, é a base. O banner falava de
           "2021-09 fechado" sobre um retrato de 1º de janeiro, e o overlay o deixava esmaecido como
           se houvesse algo a editar ali. */}
@@ -1790,7 +1808,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
       ) : isGlobal ? (
         <div style={{ height: 22 }} aria-hidden />
       ) : (
-        <div style={{ height: 22 }}><MasterLockBanner anoMes={anoMes} compacto /></div>
+        /* VR-PRECO-EDITAR-01 ampliado — a trava do mês subiu para a linha da faixa (uma só, nas 3 telas): aqui fica o lugar vazio */
+        <div style={{ height: 22 }} aria-hidden />
       )}
       {/* ⚠ A LINHA DE ESTADO TEM 18px FIXOS — A23. Ela media 28 no mês (por causa dos botões `h-7`)
           e 20 no Início, e essa diferença de 8px descia por toda a tela: a régua de meses, a

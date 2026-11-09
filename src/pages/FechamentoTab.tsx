@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Activity, Map as MapIcon, RefreshCw, FileDown } from 'lucide-react';
 import { ExportarMesDialog } from '@/components/caderno/ExportarMesDialog';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
@@ -1210,7 +1211,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
       <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2 max-[999px]:px-2">
         {/* FECH-FAIXA-01 — a faixa do fechamento do mês: a 1ª linha, no MESMO lugar nas três telas (Fechamento, Valor, Mapa do rebanho) */}
-        <div className="mb-1.5"><FaixaDoFechamento estado={faixaDoMes} atual="pastos" abrir={etapasDoFechamento} /></div>
+        {/* VR-PRECO-EDITAR-01 ampliado — a trava do MÊS na linha da faixa (um Desbloquear para todos os pastos + o Valor do Rebanho) */}
+        <div className="mb-1.5 flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><FaixaDoFechamento estado={faixaDoMes} atual="pastos" abrir={etapasDoFechamento} /></div>{fazendaAtual?.id && fazendaAtual.id !== '__global__' && <MasterLockBanner anoMes={anoMes} naFaixa />}</div>
         {/* PR-FECH-HEADER-LARGURA-02 — a COL 1 tem trilha FIXA e ESTREITA. Fixar resolveu
             a instabilidade (com `auto` ela crescia até o conteúdo do estado corrente e
             empurrava a COL 2, onde ficam os cards de mês e a tabela de conciliação, que
