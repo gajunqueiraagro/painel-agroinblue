@@ -41,7 +41,7 @@ describe('as telas leem a regra única', () => {
   it('Mapa do rebanho: as linhas (tela, Excel e PDF) saem da lotação do banco, com a marca "com P_xx"', () => {
     const tela = readFileSync('src/pages/MapaPastosTab.tsx', 'utf8');
     expect(tela).toContain('uaHa: uaHaDoMes(loteDoMes.lotacaoDoMes.get(r.pasto.id), r.uaHa)');
-    expect(tela).toContain('return rowsDoMes.map(r => ({ ...r, programa:');
+    expect(tela).toContain('return rowsDoMes.map(r => ({ ...r, lote: loteDoMapa(');
     expect(tela).toMatch(/rows=\{linhas\}/);
     expect(tela).toContain('data-testid="lote-com">com {row.comPastos.join');
   });
