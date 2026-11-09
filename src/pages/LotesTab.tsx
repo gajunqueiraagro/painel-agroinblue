@@ -113,8 +113,8 @@ export function LotesTab() {
           <span className="mx-1 h-4 w-px bg-border" />
           <span data-testid="lotes-vista"><Segmentado valor={vista} onEscolher={setVista} altura={22}
             opcoes={[{ valor: 'lista', rotulo: 'Lista' }, { valor: 'resumo', rotulo: 'Resumo' }]} /></span>
-          <div className="ml-auto flex items-center gap-1.5">
-            <Input className="h-[24px] w-[200px] px-2 text-[11px]" placeholder="Buscar código ou pasto" value={busca}
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
+            <Input className="h-[24px] w-[200px] min-w-[96px] shrink px-2 text-[11px]" placeholder="Buscar" title="Buscar código ou pasto" value={busca}
               onChange={e => setBusca(e.target.value)} data-testid="lotes-busca" />
             <span className="w-[72px] text-right text-[11px] tabular-nums text-muted-foreground" data-testid="lotes-contagem">{ordenadas.length} de {naSituacao}</span>
           </div>

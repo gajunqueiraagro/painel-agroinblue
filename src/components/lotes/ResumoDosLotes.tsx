@@ -12,11 +12,11 @@ import type { QuadroDoResumo, ResumoDosLotes as Resumo } from '@/lib/lotes/resum
 const n0 = (v: number | null) => (v == null ? '—' : formatNum(v, 0));
 const n1 = (v: number) => formatNum(v, 1);
 
-function Numero({ valor, rotulo, testid }: { valor: string; rotulo: string; testid: string }) {
+function Numero({ valor, rotulo, ajuda, testid }: { valor: string; rotulo: string; ajuda?: string; testid: string }) {
   return (
     <div className="flex min-w-0 flex-col justify-center rounded-md border border-border bg-card px-3 py-1.5" data-testid={testid}>
       <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{valor}</span>
-      <span className="truncate text-[10px] text-muted-foreground" title={rotulo}>{rotulo}</span>
+      <span className="truncate text-[10px] text-muted-foreground" title={ajuda ?? rotulo}>{rotulo}</span>
     </div>
   );
 }
@@ -59,7 +59,7 @@ export function ResumoDosLotes({ resumo }: { resumo: Resumo }) {
         <Numero testid="resumo-cabecas" valor={n0(t.cabecas)} rotulo={`cabeças em ${t.lotes} ${t.lotes === 1 ? 'lote' : 'lotes'}`} />
         <Numero testid="resumo-peso" valor={t.pesoMedioKg == null ? '—' : `${n0(t.pesoMedioKg)} kg`} rotulo="peso médio" />
         <Numero testid="resumo-sexo" valor={`${n0(resumo.machos)} · ${n0(resumo.femeas)}`} rotulo="machos · fêmeas" />
-        <Numero testid="resumo-arrobas" valor={resumo.arrobas == null ? '—' : `${n0(resumo.arrobas)} @`} rotulo="arrobas em estoque (peso vivo ÷ 30)" />
+        <Numero testid="resumo-arrobas" valor={resumo.arrobas == null ? '—' : `${n0(resumo.arrobas)} @`} rotulo="arrobas em estoque" ajuda="arrobas em estoque (peso vivo ÷ 30)" />
       </div>
       <div className="grid grid-cols-3 gap-2 max-[1100px]:grid-cols-2">
         {resumo.quadros.map((q) => <Quadro key={q.titulo} q={q} />)}
