@@ -54,6 +54,14 @@ describe('modal da variação — a aba Explicação', () => {
     expect(p[4].textos).toEqual(['R$ 360.000', 'Vale em jun/31']);
   });
 
+  it('a régua da ponte é a do mock (86% da menor ponta): a Produção é uma barra, não um risco', () => {
+    abrir('vpb');
+    const alt = (k: string) => Number(screen.getByTestId('variacao-ponte').querySelector(`[data-passo="${k}"] rect`)?.getAttribute('height'));
+    /* a régua vai de 240.800 (86% de 280.000) a 422.300 (103% de 410.000): os 130.000 dão ~54px dos 76 úteis; com o chão no zero, ~22px */
+    expect(alt('producao')).toBeGreaterThan(40);
+    expect(alt('inicio')).toBeLessThan(alt('fim'));
+  });
+
   it('D2: aberta pela linha do Resumido, a ponte termina na linha com a Reposição (sem as pontas)', () => {
     abrir('ponte');
     const p = passos();
