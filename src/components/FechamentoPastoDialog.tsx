@@ -20,7 +20,7 @@ import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { toast } from 'sonner';
 import { OndeOLoteEsteve, escolhaInicial, type ContextoDoLote } from '@/components/fechamento/OndeOLoteEsteve';
-import { pastosParaGravar, uaDosItens } from '@/lib/fechamento/loteNoGrupo';
+import { pastosParaGravar, somaDasAreas, uaDosItens } from '@/lib/fechamento/loteNoGrupo';
 import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseValorRebanhoReaberto, lerEstadoDoP2, motivoReaberturaDoPasto, reabrirValorRebanhoJunto } from '@/lib/fechamento/travaDoP2';
 import { CampoLoteDoPasto } from '@/components/fechamento/CampoLoteDoPasto';
 import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
@@ -533,7 +533,11 @@ export function FechamentoPastoDialog({
   const pesoTotalEstoque = itensDoCard.reduce((s, i) => s + (i.quantidade || 0) * (i.peso_medio_kg || 0), 0);
   const pesoMedioPonderado = total > 0 ? pesoTotalEstoque / total : 0;
   const uaTotal = itensDoCard.reduce((s, i) => s + calcUA(i.quantidade, i.peso_medio_kg), 0);
-  const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
+  /* L3 (Gabriel 09/11): o lote em 2+ pastos ("Também esteve em") divide pela SOMA das áreas, a regra do pasto com piquetes */
+  const doLote = lote ? [lote.proprio, ...lote.membros, ...lote.outrosPastos] : [];
+  const areaDoLote = escolhidos.length > 1 ? somaDasAreas(escolhidos.flatMap(id => doLote.find(p => p.id === id) ?? [])) : null;
+  const areaDaLotacao = areaDoLote ?? pasto.area_produtiva_ha;
+  const uaHa = areaDaLotacao && uaTotal > 0 ? uaTotal / areaDaLotacao : null;
   /* FECH-PASTO-UNIDADE-01 F2 — o subtotal da aba (área do piquete · cab) e o do pasto (a aba Total: área, cab e lotação do PASTO) */
   const piqueteAberto = piquetesDoMes.find(p => p.id === abaAtiva);
   const subtotalDaAba = `${nomeDoPiquete(abaAtiva)} · ${piqueteAberto?.area_ha ? `${formatNum(piqueteAberto.area_ha, 1)} ha · ` : ''}${formatNum(cabecasDe(gradeVisivel), 0)} cab`;

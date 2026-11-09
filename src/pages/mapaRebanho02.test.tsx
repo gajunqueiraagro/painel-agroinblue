@@ -66,6 +66,22 @@ describe('o PDF do Mapa do rebanho', () => {
   });
 });
 
+/* L3 (Gabriel 09/11) — o lote do P_02 também esteve no P_01: o PDF leva a mesma linha da tela — o P_01 sem cabeças (contam UMA vez, no P_02),
+   "com P_02" no Lote e a lotação do lote (UA ÷ soma das áreas: 1,11 nos dois) */
+describe('o PDF com o lote em 2 pastos (L3)', () => {
+  it('o P_01 sai com "com P_02" e 1,11 de UA/ha; o P_02 com o lote dele e 1,11', async () => {
+    pdf.chamadas.length = 0;
+    const p02 = { ...linha(pasto('p02', 'P_02', 'cria', 49.3), 'Vacas', null, [['c-v', 187, 265.7]]), uaHa: 1.11, comPastos: ['P_01'] };
+    const p01 = { ...linha(pasto('p01', 'P_01', 'cria', 50.2), null, null, []), uaHa: 1.11, comPastos: ['P_02'] };
+    await exportMapaPastosPdf([p01, p02], CATS, TOTAIS, [], '2026-09', 'Faz. Exemplo');
+    const [l01, l02] = pdf.chamadas[0].body ?? [];
+    expect(l01[2]).toBe('com P_02');
+    expect(l01[10]).toBe('1,11');
+    expect(l02[2]).toBe('Vacas');
+    expect(l02[10]).toBe('1,11');
+  });
+});
+
 describe('a tela do Mapa do rebanho (fonte)', () => {
   const f = readFileSync('src/pages/MapaPastosTab.tsx', 'utf8');
   it('a coluna "Programa" logo depois de Lote, com o separador do bloco; as linhas da tela, do Excel e do PDF são as mesmas (`linhas`)', () => {
@@ -81,7 +97,7 @@ describe('a tela do Mapa do rebanho (fonte)', () => {
     expect(f).toContain('rows={linhas}');
     expect(f).toContain('onClick={() => exportMapaPastosXlsx(linhas, categorias,');
     expect(f).toContain('onClick={() => exportMapaPastosPdf(linhas, categorias,');
-    expect(f).toContain('return rows.map(r => ({ ...r, programa: programaDoPasto(r.loteIds, lotesDoMes, nomes) }));');
+    expect(f).toContain('return rowsDoMes.map(r => ({ ...r, programa: programaDoPasto(r.loteIds, lotesDoMes, nomes) }));');
     /* a faixa do total e a do peso cobrem as 4 colunas de texto */
     expect(f.match(/<td colSpan=\{4\}/g)).toHaveLength(2);
   });

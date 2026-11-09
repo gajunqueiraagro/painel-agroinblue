@@ -810,6 +810,9 @@ const CENARIOS = [
      a 1.240, 1.024 e 135% (919×519) com o menu; o Lote (texto livre) é o único que corta, com "…" e o nome inteiro no title */
   { nome: 'mapa-pastos', url: 'tela=mapa-pastos', tamanhos: [[1240, 700], [1024, 600], [919, 519]], regiao: 'table',
     antes: async (p) => { await p.locator('[data-testid="programa-do-pasto"]').first().waitFor(); await p.waitForTimeout(800); } },
+  /* L3 (Gabriel 09/11) — o lote em 2 pastos: o P_01 com "com P_02" no Lote e a mesma UA/ha do P_02 (soma das áreas); nada corta */
+  { nome: 'mapa-pastos-rotacao', url: 'tela=mapa-pastos&v=rotacao', tamanhos: [[1240, 700], [1024, 600], [919, 519]], regiao: 'table',
+    antes: async (p) => { await p.locator('[data-testid="lote-com"]').first().waitFor(); await p.waitForTimeout(800); } },
   /* FECH-TOPO-COMPACTO-01 — o topo do Fechamento com todos os botões numa linha (1.240, 1.024 e o zoom de 135% = 919×519): nada corta */
   { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
     regiao: '.sticky.top-0', antes: (p) => p.waitForTimeout(2000) },
