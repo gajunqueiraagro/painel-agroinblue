@@ -54,6 +54,8 @@ export const rotuloReabrirValorRebanho = (anoMes: string) => `Reabrir Valor do R
    a MESMA função da tela dele (`fn_valor_rebanho_reabrir`: abre o P2, o mês fica "a revalidar", a trilha leva o autor), motivo automático
    "Reabertura do pasto X", e a edição segue. O aviso é UMA linha (toast). Quem recusa é o banco: a frase dele no rodapé, nada se libera. */
 export const motivoReaberturaDoPasto = (pastoNome: string) => `Reabertura do pasto ${pastoNome}`;
+/** VR-PRECO-EDITAR-01 — o motivo da reabertura que a edição do preço faz sozinha (mês validado) */
+export const MOTIVO_PRECO_ALTERADO = 'Preço do mês alterado';
 export const fraseValorRebanhoReaberto = (anoMes: string) => `Valor do rebanho de ${mesCurto(anoMes)} reaberto — valide de novo depois.`;
 export const FRASE_REABRIR_JUNTO_FALHOU = 'Não consegui reabrir o Valor do Rebanho deste mês.';
 

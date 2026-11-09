@@ -51,6 +51,21 @@ describe('a tela', () => {
     expect(hook).toContain('const result = comPaiDoPiquete(data ?? [], grupos);');
     const tela = readFileSync('src/pages/FechamentoTab.tsx', 'utf8');
     expect(tela).toContain('const piquetesDoMes = useMemo(() => piquetesNoMes(pastos, anoMes), [pastos, anoMes]);');
-    expect(tela).toMatch(/data-testid="selo-piquetes"[\s\S]{0,200}\{piquetesDoMes\.get\(p\.id\)\?\.length\} piquetes/);
+    expect(tela).toMatch(/data-testid="selo-piquetes"[\s\S]{0,200}\{nPiquetes\} piq\./);
+  });
+
+  /* R1 (Gabriel 08/11 19:18, PUR out/26): o selo "4 piquetes" na linha do nome cortava "P19A" em "P…". O nome NUNCA corta: a 1ª linha do
+     card é só nome + status; os piquetes vão pequenos ao lado da área ("97,5 ha · 4 piq."). */
+  it('R1: a linha do nome não tem o selo; ele mora na linha da área', () => {
+    const tela = readFileSync('src/pages/FechamentoTab.tsx', 'utf8');
+    const ini = tela.indexOf('data-testid="nome-do-card"');
+    const linhaDoNome = tela.slice(ini, tela.indexOf('</div>', ini));
+    expect(ini).toBeGreaterThan(0);
+    expect(linhaDoNome).toContain('STATUS_ICON[pastoStatus]');
+    expect(linhaDoNome).not.toContain('selo-piquetes');
+    const area = tela.indexOf('{/* Área + Tipo uso');
+    const linhaDaArea = tela.slice(area, tela.indexOf('</div>', area));
+    expect(linhaDaArea).toContain('data-testid="selo-piquetes"');
+    expect(linhaDaArea).toContain('text-[8px] text-muted-foreground');
   });
 });

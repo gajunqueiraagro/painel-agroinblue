@@ -9,6 +9,9 @@ interface Props {
   className?: string;
   /** A régua de 22px da Evolução Patrimonial — ver o comentário do componente. */
   compacto?: boolean;
+  /** VR-PRECO-EDITAR-01 ampliado (Gabriel 09/11 07:06): a trava é do MÊS inteiro — na linha da faixa do fechamento das 3 telas do mês
+   *  (Fechamento área, Valor do Rebanho, Mapa do rebanho), inclusive no mês aberto; curta e com 22px nos DOIS estados (nada desloca). */
+  naFaixa?: boolean;
 }
 
 /**
@@ -23,7 +26,7 @@ interface Props {
  * mexeria nas duas telas; a prop deixa a Evolução Patrimonial ter os 22px do mock sem arrastar
  * ninguém junto. Quem não passa nada não vê diferença nenhuma.
  */
-export function MasterLockBanner({ anoMes, className, compacto }: Props) {
+export function MasterLockBanner({ anoMes, className, compacto, naFaixa }: Props) {
   const { isMaster, isMesLocked, isUnlocked, unlockMes, lockMes } = useMasterLock(anoMes);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -31,6 +34,26 @@ export function MasterLockBanner({ anoMes, className, compacto }: Props) {
   if (!isMesLocked(anoMes)) return null;
 
   const unlockedNow = isUnlocked(anoMes);
+
+  /* naFaixa: um Desbloquear libera o MÊS inteiro (todos os pastos + o Valor do Rebanho) na sessão — nunca pasto por pasto */
+  if (naFaixa) {
+    return (
+      <>
+        <div className="flex h-[22px] flex-none items-center gap-1.5 whitespace-nowrap rounded border px-1.5 text-[10px]"
+          style={unlockedNow ? { backgroundColor: '#FEF6E7', borderColor: '#F3D08A', color: '#8A5A00' } : { backgroundColor: '#FBF0EF', borderColor: '#E8B9B6', color: '#A32D2D' }}
+          data-testid="trava-do-mes" title={unlockedNow ? 'Mês desbloqueado nesta sessão: as alterações ficam registradas' : 'Mês fechado: somente leitura até desbloquear (vale para todos os pastos do mês)'}>
+          {unlockedNow ? <LockOpen className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+          {/* só o cadeado e o botão: a faixa do fechamento ao lado nunca perde espaço (a 135% ela cortava); o texto inteiro no title */}
+          <button type="button" onClick={() => (unlockedNow ? lockMes(anoMes) : setDialogOpen(true))}
+            className="rounded border px-1.5 leading-[14px] hover:bg-white/60" style={{ borderColor: 'currentColor' }}
+            data-testid="trava-do-mes-botao">
+            {unlockedNow ? 'Re-bloquear' : 'Desbloquear'}
+          </button>
+        </div>
+        <MasterUnlockDialog open={dialogOpen} onOpenChange={setDialogOpen} anoMes={anoMes} onUnlock={unlockMes} />
+      </>
+    );
+  }
 
   if (unlockedNow) {
     return (

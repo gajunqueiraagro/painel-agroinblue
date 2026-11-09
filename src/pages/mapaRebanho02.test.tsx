@@ -35,7 +35,7 @@ const linha = (p: Pasto, lote: string | null, programa: string | null, cats: [st
   const total = cats.reduce((s, [, q]) => s + q, 0);
   const kg = cats.reduce((s, [, q, k]) => s + q * k, 0);
   return { pasto: p, fechamentoId: `fc-${p.id}`, lote, loteIds: [], programa, tipoUso: p.tipo_uso, qualidade: null, categorias, totalCabecas: total,
-    pesoMedio: total ? kg / total : null, uaTotal: kg / 450, uaHa: p.area_produtiva_ha ? kg / 450 / p.area_produtiva_ha : null, pesoAtualizado };
+    pesoMedio: total ? kg / total : null, uaTotal: kg / 450, uaHa: p.area_produtiva_ha ? kg / 450 / p.area_produtiva_ha : null, pesoAtualizado, piqueteDe: null };
 };
 const LINHAS = [
   linha(pasto('a3', 'A-03', 'cria', 58.2), 'Nov-Ins-01', '1ª inseminação', [['c-n', 41, 355.75], ['c-v', 22, 470.5]], true),
@@ -121,7 +121,7 @@ describe('a tela do Mapa do rebanho (fonte)', () => {
     /* FECH-DIV-CURTA: o rótulo é UM só, o de classificacaoArea (o mesmo do card do Fechamento) */
     expect(f).toContain("import { isPastoDivergencia, DIV_CURTA } from '@/lib/classificacaoArea';");
     expect(f).not.toContain("export const DIV_CURTA");
-    expect(f).toContain('{ehDiv ? DIV_CURTA : row.pasto.nome}');
-    expect(f).toContain("title={ehDiv ? `${row.pasto.nome} · abrir` : `Abrir ${row.pasto.nome}`}");
+    expect(f).toContain('{pai ? `· ${row.pasto.nome}` : ehDiv ? DIV_CURTA : row.pasto.nome}');
+    expect(f).toContain(": ehDiv ? `${row.pasto.nome} · abrir` : `Abrir ${row.pasto.nome}`}");
   });
 });
