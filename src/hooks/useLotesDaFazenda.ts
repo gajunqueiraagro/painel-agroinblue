@@ -6,7 +6,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { loteDaLinha } from '@/lib/lotes/lista';
-import type { LoteDaLista } from '@/lib/lotes/tipos';
+import { marcarDaCria } from '@/lib/lotes/assistente';
+import { cadastroDaLinha, lerCadastrosDoLote } from '@/hooks/useCadastrosDoLote';
+import type { CadastroDoLote, LoteDaLista } from '@/lib/lotes/tipos';
 
 export const FRASE_ERRO_LOTES = 'Não consegui ler os lotes da fazenda.';
 
@@ -17,6 +19,25 @@ export function notificarLotesMudaram(fazendaId: string): void {
   const subs = inscritos.get(fazendaId);
   if (!subs) return;
   for (const cb of [...subs]) cb();   // cópia: um callback pode desmontar durante a volta
+}
+
+/** L1 (Gabriel 09/11): qual lote leva carimbo — a regra do assistente, com a atividade e a categoria DO LOTE (ativas ou não).
+ *  Sem esta leitura (erro ou falha) o lote volta como veio e mostra o código, como antes: nunca "sem carimbo" à toa. */
+async function daCria(lidos: LoteDaLista[]): Promise<LoteDaLista[]> {
+  const ids = [...new Set(lidos.flatMap(l => [l.atividadeId, l.categoriaId]))];
+  if (!ids.length) return lidos;
+  try {
+    const [cad, reb] = await Promise.all([
+      lerCadastrosDoLote().in('id', ids),
+      supabase.from('categorias_rebanho').select('id, codigo').like('codigo', 'mamotes%'),
+    ]);
+    if (cad.error || reb.error || !Array.isArray(cad.data)) { console.error('[lotes] carimbo da cria', cad.error ?? reb.error); return lidos; }
+    const cadastros = cad.data.map(cadastroDaLinha).filter((c: unknown): c is CadastroDoLote => c !== null);
+    return marcarDaCria(lidos, cadastros, (reb.data ?? []).filter(r => (r.codigo ?? '').startsWith('mamotes')).map(r => r.id));
+  } catch (e) {
+    console.error('[lotes] carimbo da cria', e);
+    return lidos;
+  }
 }
 
 export function useLotesDaFazenda(fazendaId: string | null, anoMes: string): {
@@ -39,8 +60,12 @@ export function useLotesDaFazenda(fazendaId: string | null, anoMes: string): {
         setErro(FRASE_ERRO_LOTES); setCarregando(false); return;
       }
       const linhas: unknown[] = Array.isArray(data) ? data : [];
-      setLotes(linhas.map(loteDaLinha).filter((l): l is LoteDaLista => l !== null));
+      const lidos = linhas.map(loteDaLinha).filter((l): l is LoteDaLista => l !== null);
+      setLotes(lidos);
       setErro(null); setCarregando(false);
+      /* L1: a marca da cria chega num 2º passo (a lista não espera por ela) */
+      const marcados = await daCria(lidos);
+      if (meu === pedido.current && marcados !== lidos) setLotes(marcados);
     })();
   }, [fazendaId, anoMes]);
 

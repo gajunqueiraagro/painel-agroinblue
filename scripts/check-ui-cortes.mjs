@@ -814,6 +814,14 @@ const CENARIOS = [
       await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.waitForTimeout(200); await p.mouse.move(b.x + b.width / 2 + 2, b.y + b.height / 2 + 2);
       await p.locator('.leaflet-tooltip [data-testid="popup-do-pasto"]').waitFor({ timeout: 4000 });
       await p.waitForTimeout(400); } },
+  /* L1 (Gabriel 09/11) — o popup com a cria SEM carimbo (`&cria=1`): "sem carimbo · definir" no lugar do código, sem cortar */
+  { nome: 'fechamento-mapa-popup-cria', url: 'tela=fechamento-grupo&v=mapa&barra=32&cria=1', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '.leaflet-tooltip', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500);
+      /* o mouse vai ao MEIO do 1º pasto (o contorno da área total, por cima, intercepta o hover do Playwright no elemento) */
+      const b = await p.locator('.leaflet-container path.leaflet-interactive').nth(1).boundingBox();
+      await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.waitForTimeout(200); await p.mouse.move(b.x + b.width / 2 + 2, b.y + b.height / 2 + 2);
+      await p.locator('.leaflet-tooltip [data-testid="popup-do-pasto"]').waitFor({ timeout: 4000 });
+      await p.waitForTimeout(400); } },
   /* REVALIDAR-BG-SET26 — Valor do Rebanho (SINTÉTICO): a faixa do snapshot de 22px (set invalidado, com o Revalidar e o motivo) não
      corta nem vaza. SÓ a faixa (`regiao`): a tela inteira nunca teve gate de corte e tem achados antigos fora deste item. */
   { nome: 'valor-rebanho-faixa-snapshot', url: 'tela=valor-rebanho&barra=32', tamanhos: [[1000, 600], [1126, 579], [1366, 768], [1750, 1000]],
@@ -888,6 +896,11 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-campo-lote-usar', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="caderno-usar-o-lote"]').click();
           await p.locator('[data-testid="caderno-voltar-texto"]').waitFor(); await p.waitForTimeout(300); } },
+      /* L1 (Gabriel 09/11) — a cria SEM carimbo no P10A (`&cria=1`): o campo Lote e o painel (o seletor) com "sem carimbo · definir" */
+      { nome: 'fechamento-grupo-campo-lote-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-campo-lote-painel-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
+          await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
       { nome: 'fechamento-grupo-campo-lote-painel', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
           await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },

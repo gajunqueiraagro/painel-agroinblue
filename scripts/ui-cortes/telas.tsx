@@ -1953,9 +1953,11 @@ if (tela === 'mesclar') {
     ITENS.push(...ITENS.map((i) => ({ ...i, id: `${i.id}-9`, fechamento_id: `${i.fechamento_id}-9` })));
   }
   /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
-  const COM_LOTES = v === 'lotes';
+  /* L1 (Gabriel 09/11) — `&cria=1`: o lote do P10A é a cria SEM carimbo (l-vp4): "sem carimbo · definir" no campo Lote, no seletor e no popup */
+  const COM_CRIA = q.get('cria') === '1';
+  const COM_LOTES = v === 'lotes' || COM_CRIA;
   if (COM_LOTES) {
-    Object.assign(ITENS[0], { lote_id: 'l-dm6' });
+    Object.assign(ITENS[0], { lote_id: COM_CRIA ? 'l-vp4' : 'l-dm6' });
     ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: 'l-px2' });
   }
   /* MAPA-LOTES-01 (C2) — `&v=mapa`: o Fechamento abre na vista Mapa (a escolha guardada); os polígonos SINTÉTICOS de 5 dos 6 pastos

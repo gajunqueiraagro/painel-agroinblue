@@ -53,6 +53,8 @@ export const LOTES = [
   /* LOTES-05 — a ressinc. de julho (7R) */
   lote('l-pp7r', 'c-pp', 'r-ne', 'a-cr', 3, 'Vacas ressinc. jul', { programa_id: 'p-cv', destino_id: 'd-de', carimbo: '7R', cabecas: 312, peso_medio_kg: 268, gmd_kg: 0.6, pastos: ['P18', 'P20'], lancamentos: 2 }),
   lote('l-n1', 'c-n1', 'r-an', 'a-cr', 2, 'N1 Angus SP CAR_8.2', { programa_id: 'p-sp', destino_id: 'd-de', carimbo: '8.2', cabecas: 184, peso_medio_kg: 255, gmd_kg: null, pastos: ['P19A'], lancamentos: 1 }),
+  /* L1 (Gabriel 09/11) — a cria SEM carimbo: "sem carimbo · definir" na lista, no popup e no seletor */
+  lote('l-vp4', 'c-vp', 'r-ne', 'a-cr', 4, 'Vacas - CAR_07', { programa_id: 'p-cv', destino_id: 'd-de', cabecas: 96, peso_medio_kg: 410, gmd_kg: 0.3, pastos: ['P21'], lancamentos: 1 }),
   lote('l-novo', 'c-n2', 'r-ne', 'a-rp', 1, null, { sistema_id: null, programa_id: null, destino_id: null, ano_mes_dado: null }),
   lote('l-px2', 'c-px', 'r-ne', 'a-dc', 2, 'Vacas PX antigas', { situacao: 'encerrado', encerrado_em: '2026-10-31', formado_em: '2026-03-15',
     cabecas: 0, peso_medio_kg: null, gmd_kg: null, pastos: [], lancamentos: 4 }),
