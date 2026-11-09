@@ -354,6 +354,10 @@ const CENARIOS = [
   { nome: 'mapa-geo-unidade-mes-do-pai', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
     await mapaMes('Ago')(p); await mapaPasto('P_09 Retiro')(p);
     if (await p.locator('[data-testid="mapa-painel-divisoes"]').count()) throw new Error('mês do pai com a linha das divisões'); } },
+  /* MAPA-PIQUETE-SUBAREA-01 — `&semcontorno=1`: o P_09 sem contorno próprio é desenhado pelos piquetes (uma cor, um rótulo, linhas finas);
+     o painel do P_09 abre com as divisões (o clique em qualquer piquete abre o pasto) */
+  { nome: 'mapa-geo-unidade-sem-contorno', url: 'tela=mapa-geo&unidade=1&semcontorno=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
+    await mapaPasto('P_09 Retiro')(p); await p.locator('[data-testid="mapa-painel-divisoes"]').waitFor({ timeout: 3000 }); } },
   /* -03 caso P6: o contorno furado (a manga) e as divisões SEM polígono — "2 divisões sem desenho: P_10A, P_10B" */
   { nome: 'mapa-geo-unidade-sem-desenho', url: 'tela=mapa-geo&unidade=1', tamanhos: MAPA_TAMANHOS, antes: async (p) => {
     await mapaPasto('P_10 Manga')(p); await p.locator('[data-testid="mapa-painel-divisoes"]', { hasText: '2 divisões sem desenho: P_10A, P_10B' }).waitFor({ timeout: 3000 }); } },
@@ -794,6 +798,10 @@ const CENARIOS = [
   { nome: 'plano-contas-renomear-previa', url: 'tela=plano-contas', tamanhos: TAMANHOS_DO_P92, regiao: '[role="dialog"]', antes: async (p) => {
     await p.locator('[data-testid="renomear-subcentro"]').first().click(); await p.waitForTimeout(300);
     await p.locator('[data-testid="nome-subcentro"]').fill('Animais de terceiros'); await p.locator('[data-testid="conferir-subcentro"]').click(); await p.waitForTimeout(500); } },
+  /* MAPA-REBANHO-02 — o Mapa do rebanho (`tela=mapa-pastos`, SINTÉTICO): a tabela com a coluna "Programa", sem rolagem lateral e sem cortar
+     a 1.240, 1.024 e 135% (919×519) com o menu; o Lote (texto livre) é o único que corta, com "…" e o nome inteiro no title */
+  { nome: 'mapa-pastos', url: 'tela=mapa-pastos', tamanhos: [[1240, 700], [1024, 600], [919, 519]], regiao: 'table',
+    antes: async (p) => { await p.locator('[data-testid="programa-do-pasto"]').first().waitFor(); await p.waitForTimeout(800); } },
   /* FECH-TOPO-COMPACTO-01 — o topo do Fechamento com todos os botões numa linha (1.240, 1.024 e o zoom de 135% = 919×519): nada corta */
   { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
     regiao: '.sticky.top-0', antes: (p) => p.waitForTimeout(2000) },
@@ -835,12 +843,36 @@ const CENARIOS = [
     return [
       { nome: 'fechamento-grupo', url: URL, tamanhos: T, regiao: '[data-testid="grupo-no-fechamento"]', antes: grade },
       { nome: 'fechamento-grupo-modal', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
-      /* FECH-PASTO-UNIDADE-01 — `&v=piquetes`: o card do P6 com o selo "2 piquetes" (1ª linha: nome · selo · status) inteiro em todos os tamanhos */
+      /* FECH-PASTO-UNIDADE-01 — `&v=piquetes`: os cards do P6 e do P19A (R1, 08/11: o selo cortava o nome) — o nome inteiro na 1ª linha e
+         "97,5 ha · 4 piq." na de baixo, em todos os tamanhos */
       { nome: 'fechamento-grupo-piquetes', url: URL + '&v=piquetes', tamanhos: T, regiao: 'button:has([data-testid="selo-piquetes"])',
-        antes: async (p) => { await p.locator('[data-testid="selo-piquetes"]').waitFor(); await p.waitForTimeout(600); } },
+        antes: async (p) => { await p.locator('[data-testid="selo-piquetes"]').first().waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-piquetes-p19a', url: URL + '&v=piquetes', tamanhos: T, regiao: 'button:has([title^="Piquetes de P19A"])',
+        antes: async (p) => { await p.locator('[title^="Piquetes de P19A"]').waitFor(); await p.waitForTimeout(600); } },
       /* FECH-REABRIR-JUNTO-01 — o modal com o Valor do Rebanho validado: a linha do aviso (frase · motivo opcional · "Reabrir e editar") inteira */
-      { nome: 'fechamento-grupo-modal-trava', url: URL + '&v=trava', tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', botoesDentro: '[data-testid="trava-do-p2"]',
-        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="reabrir-e-editar"]').waitFor(); await p.waitForTimeout(300); } },
+      /* REABRIR-AUTOMATICO-01 (Gabriel 08/11 08:15) — o modal num mês com o Valor do Rebanho validado: sem a linha da trava (o reabrir é
+         automático); o lugar de 22px do topo fica e o rodapé tem o botão de sempre — nada corta */
+      { nome: 'fechamento-grupo-modal-trava', url: URL + '&v=trava', tamanhos: T, regiao: '[data-testid="modal-do-pasto"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="lugar-trava-master"]').waitFor({ state: 'attached' }); await p.waitForTimeout(600); } },
+      /* FECH-PASTO-UNIDADE-01 F2 — o modal do pasto COM piquetes (`&v=piquetes7`, as medidas do PUR P7/P5 de out/26, 9 categorias): a linha
+         "Pasto inteiro | Por piquetes" + as abas [7A]…[Total] + o subtotal no lugar fixo de 22px, a grade inteira (Machos/Fêmeas) sem cortar;
+         a aba Total (só leitura, a lotação do pasto); o mês anterior somado aberto; o P5 em "Pasto inteiro". Os oficiais + 1240×800 e o
+         zoom de 135% (948×593, 1067×667). */
+      ...(() => {
+        const TP = [...T, [1240, 800], [948, 593], [1067, 667]];
+        const UP = URL + '&v=piquetes7';
+        const abaDoP7 = (aba) => async (p) => { await soModal('P7')(p); await p.locator('[data-testid="abas-dos-piquetes"]').waitFor(); await p.waitForTimeout(300);
+          if (aba) { await p.locator('[data-testid="abas-dos-piquetes"] button', { hasText: new RegExp(`^${aba}$`) }).click(); await p.waitForTimeout(300); } };
+        return [
+          { nome: 'fechamento-grupo-modal-piquetes', url: UP, tamanhos: TP, regiao: '[data-testid="modal-do-pasto"]', botoesDentro: '[data-testid="abas-dos-piquetes"]', antes: abaDoP7(null) },
+          { nome: 'fechamento-grupo-modal-piquetes-total', url: UP, tamanhos: TP, regiao: '[data-testid="modal-do-pasto"]', botoesDentro: '[data-testid="abas-dos-piquetes"]', antes: abaDoP7('Total') },
+          { nome: 'fechamento-grupo-modal-piquetes-anterior', url: UP, tamanhos: TP, regiao: '[data-testid="painel-mes-anterior"]',
+            antes: async (p) => { await abaDoP7(null)(p); await p.locator('[data-testid="mes-anterior-do-pasto"]').click();
+              await p.locator('[data-testid="painel-mes-anterior"]').waitFor(); await p.waitForTimeout(400); } },
+          { nome: 'fechamento-grupo-modal-piquetes-p5', url: UP, tamanhos: TP, regiao: '[data-testid="modal-do-pasto"]', botoesDentro: '[data-testid="abas-dos-piquetes"]',
+            antes: async (p) => { await soModal('P5')(p); await p.locator('[data-testid="abas-dos-piquetes"]').waitFor(); await p.waitForTimeout(300); } },
+        ];
+      })(),
       /* FECH-BARRA-HOVER-01 — o popup do pasto ao passar o mouse no card (nome grande · área; categorias; total · UA/ha): nada corta */
       { nome: 'fechamento-grupo-popup', url: URL, tamanhos: T, regiao: '[data-testid="popup-do-pasto"]',
         /* o Radix põe uma 2ª cópia do conteúdo escondida (para o leitor de tela): a de cima é a que se vê */
@@ -848,12 +880,21 @@ const CENARIOS = [
           await p.locator('[data-testid="popup-do-pasto"]').first().waitFor(); await p.waitForTimeout(400); } },
       { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
       { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
+      /* ROTACAO-LISTA-01 — a lista aberta de "Também esteve em" do P11: TODOS os pastos do mês, o vedado (P10C, "vedado · passa a Cria ao
+         salvar") e o fechado (T-1, "fechado · reabre ao salvar") inclusive: nome, área e nota inteiros */
+      { nome: 'fechamento-grupo-quadro-lista', url: URL, tamanhos: T, regiao: '[data-testid="searchable-select-painel"]',
+        antes: async (p) => { await modal('P11')(p); await p.locator('[data-testid="lote-quadro"] button', { hasText: /^Adicionar pasto/ }).click();
+          await p.locator('[data-testid="searchable-select-painel"]').waitFor(); await p.waitForTimeout(300); } },
       /* CADERNO-CAMPO-01 peça 1 — o diálogo "Exportar mês" (as folhas para marcar, a linha do motivo reservada, Cancelar/Gerar PDF) */
       { nome: 'fechamento-grupo-exportar-mes', url: URL, tamanhos: T, regiao: '[data-testid="exportar-mes"]', antes: async (p) => { await grade(p);
         await p.locator('button[title="Exportar mês (PDF)"]').click(); await p.locator('[data-testid="exportar-mes"]').waitFor(); await p.waitForTimeout(800); } },
       /* LOTES-03 F1 — o campo Lote do modal do P10A (`&v=lotes`: Bois no DM-AN-EG-06 e Vacas num 2º lote): o modal com o botão "2 lotes" e
          o painel aberto (o pasto inteiro + por categoria) */
       { nome: 'fechamento-grupo-campo-lote', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      /* LOTES-05 — "Usar o lote" clicado: o Nome no caderno com o lote e o "Voltar o texto" no lugar do botão */
+      { nome: 'fechamento-grupo-campo-lote-usar', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="caderno-usar-o-lote"]').click();
+          await p.locator('[data-testid="caderno-voltar-texto"]').waitFor(); await p.waitForTimeout(300); } },
       { nome: 'fechamento-grupo-campo-lote-painel', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
           await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
@@ -892,9 +933,19 @@ const CENARIOS = [
       /* LOTES-04 — o nº digitado: um ocupado (05 é do REC-DF-NE-05: a frase de recusa no lugar da dica) */
       { nome: 'lotes-assistente-numero-ocupado', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
         await p.locator('[data-testid="assistente-numero-editar"]').fill('5'); await p.waitForTimeout(300); } },
+      /* LOTES-05 — na cria o passo Nº pede o carimbo: o 7R da ressinc. (a frase "aparece como 7R") e um errado (a recusa no lugar) */
+      { nome: 'lotes-assistente-carimbo', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
+        await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-numero"]').waitFor();
+        await p.locator('[data-testid="assistente-carimbo"]').fill('7R'); await p.waitForTimeout(300); } },
+      { nome: 'lotes-assistente-carimbo-errado', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
+        await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-numero"]').waitFor();
+        await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await p.waitForTimeout(300); } },
       { nome: 'lotes-assistente-perfil', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
         await p.locator('[data-testid="assistente-avancar"]').click(); await p.locator('[data-testid="assistente-perfil"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'lotes-ficha-resumo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: ficha },
+      /* LOTES-05 — a ficha da cria com carimbo: "7R" no cabeçalho, o código na identidade */
+      { nome: 'lotes-ficha-carimbo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: async (p) => { await lista(p);
+        await p.locator('[data-testid="lote-nome"]', { hasText: /^7R$/ }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await p.waitForTimeout(600); } },
       { nome: 'lotes-ficha-historico', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: async (p) => { await ficha(p);
         await p.locator('[data-testid="ficha-do-lote"]').getByRole('button', { name: /^Histórico$/ }).click();
         await p.locator('[data-testid="linha-historico"]').first().waitFor(); await p.waitForTimeout(400); } },
@@ -910,6 +961,19 @@ const CENARIOS = [
     const abrir = (nome) => async (p) => { await grupos(p); await p.locator('[data-testid="grupo-linha"]', { hasText: nome }).first().click();
       await p.locator('[data-testid="grupo-dialog"]').waitFor(); await p.waitForTimeout(700); };
     return [
+      /* PASTO-FICHA-01 PR B — a LISTA (padrão): colunas do mock, o nome do pasto inteiro (a coluna é a do maior nome; a fonte desce até o
+         piso), o P10 aberto com os piquetes recuados e o "Por destino" com as mesmas linhas */
+      /* PASTO-FICHA-01 PR B — a FICHA do pasto (o mesmo modal no "+ Novo" e no lápis): o novo (e as pendências) e o P10 nas 6 abas.
+         O modal é de mesa (1000 × 580, Gabriel 08/11): medido de 900px para cima, com a 918 (= 1240 a 135%); a 750 ele não é desenhado. */
+      { nome: 'pastos-ficha-novo', url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)], regiao: '[role="dialog"]', antes: async (p) => { await p.locator('[data-testid="pastos-novo"]').click();
+        await p.locator('[data-testid="ficha-do-pasto"]').waitFor(); await p.locator('[data-testid="ficha-salvar"]').click(); await p.waitForTimeout(500); } },
+      ...['cadastro', 'infra', 'avaliacoes', 'reformas', 'lotacao', 'documentos'].map((aba) => ({ nome: `pastos-ficha-${aba}`, url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)],
+        regiao: '[role="dialog"]', antes: async (p) => { await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
+          await p.locator(`[data-testid="ficha-aba-${aba}"]`).click(); await p.waitForTimeout(600); } })),
+      { nome: 'pastos-lista', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="lista-pastos"]').waitFor(); await p.waitForTimeout(500); } },
+      { nome: 'pastos-lista-piquetes', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="abrir-piquetes"]').first().click(); await p.waitForTimeout(400); } },
+      { nome: 'pastos-lista-destino', url: URL, tamanhos: T, antes: async (p) => { await p.getByRole('button', { name: 'Destino', exact: true }).first().click();
+        await p.locator('[data-testid="abrir-piquetes"]').first().click(); await p.waitForTimeout(400); } },
       { nome: 'pastos-grupos', url: URL, tamanhos: T, antes: grupos },
       { nome: 'pastos-grupos-inativos', url: URL, tamanhos: T, antes: async (p) => { await grupos(p); await p.getByText('Inativos', { exact: true }).click(); await p.waitForTimeout(400); } },
       { nome: 'pastos-grupo-editar', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: abrir('P10') },
@@ -1233,7 +1297,7 @@ const CENARIOS = [
   /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO o Novo lançamento: o PDF (4 duplicatas), só a chave
      digitada (valor e data para o operador) e o cartão em 10× (D2: Parcelada 10× no Pagamento, a 1ª fatura sugerida); Geral, Pagamento e
      Documentos (o anexo clicável) nos sete tamanhos. Substitui a tela intermediária (`nota-pdf` da nota nova, `nota-pdf-aba-*`, `nota-pdf-cartao*`). */
-  ...['pdf', 'chave', 'cartao'].flatMap((v) => {
+  ...['pdf', 'chave', 'cartao', 'nfse'].flatMap((v) => {
     const pronto = async (p) => { await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(600); };
     const parcelada10 = async (p) => {
       await clicarTexto('Pagamento')(p);
@@ -1628,6 +1692,10 @@ const CENARIOS = [
   /* FIN-V2-DESEMPENHO-01b / FIN-V2-SEM-CORTE-01 — a TABELA inteira do Financeiro V2 entra nas regras (nome longo = uma linha com "…" e
      o texto no `title`; numero, valor, data nunca cortam), com o rodape da pagina dentro do quadro, nos sete tamanhos */
   { nome: 'financeiro-tabela', url: 'tela=financeiro', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* DOC-ANEXO-E-IMPORT-01 F2 — o POPOVER do clipe aberto (3 documentos, nomes longos: "…" + title; selo · nome · data dd/mm/aaaa, nunca quebra),
+     nos tamanhos do Gabriel (1240, 1024, zoom 135% de 1280×800 e de 1440×900) e nos do contrato */
+  { nome: 'financeiro-clipe-popover', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
+    tamanhos: [[1240, 700], [1024, 600], [948, 593], [1067, 667], ...TAMANHOS_DO_CONTRATO], antes: clicar('[data-testid="clipe-da-linha"]') },
   { nome: 'financeiro-tabela-pagina-2', url: 'tela=financeiro&v=volume&n=450', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: clicar('[data-testid="pagina-proxima"]') },
   /* o item 2 do 01b: a faixa de totais + controles nunca fica por cima do que vem embaixo — dez trocas de filtro e o "sobreposicao" */

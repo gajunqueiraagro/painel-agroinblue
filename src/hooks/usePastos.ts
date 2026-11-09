@@ -29,6 +29,20 @@ export interface Pasto {
   /** FECH-PASTO-UNIDADE-01 (Gabriel 07/11, modelo A) — o PAI deste pasto quando ele é PIQUETE (subárea): a origem do grupo ATIVO dele, se
    *  não for ele mesmo (o espelho de `_fn_pai_do_piquete`). Nulo/ausente = pasto (é ele que tem o card do mês). Preenchido na leitura. */
   pai_id?: string | null;
+  /** PASTO-FICHA-01 (117230/117240) — os campos da ficha. Gravam SÓ pela ficha (`fn_pasto_ficha_salvar` / `fn_pasto_criar`; o gatilho
+   *  do banco recusa o resto). Opcionais pelo mesmo motivo do `data_fim`: o `select('*')` os traz, o types.ts ainda não. */
+  posse?: string | null;
+  forrageira_principal_id?: string | null;
+  forrageira_secundaria_id?: string | null;
+  forrageira_implantada_em?: string | null;
+  relevo_id?: string | null;
+  textura_id?: string | null;
+  drenagem_id?: string | null;
+  sombra_id?: string | null;
+  sombra_cobertura?: string | null;
+  manejo?: string | null;
+  sistema_id?: string | null;
+  ficha_versao?: number | null;
   created_at: string;
   updated_at: string;
 }

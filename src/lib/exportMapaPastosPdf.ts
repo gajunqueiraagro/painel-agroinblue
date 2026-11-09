@@ -1,10 +1,19 @@
 import jsPDF from 'jspdf';
+import { porcentagensDoMapa } from '@/lib/mapa/larguraDoMapa';
 import autoTable from 'jspdf-autotable';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { PastoMapaRow, MapaTotais, AtividadeResumo } from '@/pages/MapaPastosTab';
 import logoUrl from '@/assets/logo.png';
 import { tipoUsoLabelCurto } from '@/lib/calculos/labels';
 import { formatNum as fmt } from '@/lib/calculos/formatters';
+import { isPastoDivergencia } from '@/lib/classificacaoArea';
+import { nomeNaSaida } from '@/lib/mapa/linhasDoMapa';
+
+/* MAPA-REBANHO-02 (Gabriel 07/11 18:33) — o PDF com as MESMAS colunas da tela: Pasto · Ativ. · Lote · Programa · categorias · Total · Peso Md
+   · Peso conf. · Área · UA/ha · Qual, em paisagem, sem cortar (o texto comprido quebra na célula). A fonte padrão do PDF (helvetica) não tem
+   "⚠" nem "✓": a conta do campeiro vai como "Div." e o peso conferido como "Peso conf." / "sim". */
+const DIV_NO_PDF = 'Div.';
+export const COLUNAS_FIXAS_DO_PDF: readonly string[] = ['Pasto', 'Ativ.', 'Lote', 'Programa'];
 
 function loadLogoBase64(): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -92,25 +101,30 @@ export async function exportMapaPastosPdf(
   const tableStartY = drawHeader(doc, logoData, fazendaNome, anoMes, totais, pageWidth);
 
   const numCats = categorias.length;
-  const fixedColsWidth = 24 + 14 + 16 + 12 + 14 + 12 + 12 + 10;
-  const availableForCats = pageWidth - margins.left - margins.right - fixedColsWidth;
-  const catColWidth = Math.max(10, Math.floor(availableForCats / Math.max(numCats, 1)));
+  /* MAPA-REBANHO-02 (08/11 08:43) — "PDF igual": as MESMAS porcentagens da tela (`larguraDoMapa`) sobre a largura útil da página */
+  const util = pageWidth - margins.left - margins.right;
+  const larguras = porcentagensDoMapa(numCats).map(p => (p / 100) * util);
 
   const catCols = categorias.map(c => c.nome);
-  const head = [['Pasto', 'Ativ.', 'Lote', ...catCols, 'Total', 'Peso Md', 'Área', 'UA/ha', 'Qual']];
+  const head = [[...COLUNAS_FIXAS_DO_PDF, ...catCols, 'Total', 'Peso Md', 'Peso conf.', 'Área', 'UA/ha', 'Qual']];
 
   const body = rows.map(row => {
     const catVals = categorias.map(cat => {
       const v = row.categorias.get(cat.id);
       return v?.quantidade ? String(v.quantidade) : '';
     });
+    const ehDiv = isPastoDivergencia(row.pasto.tipo_uso) || isPastoDivergencia(row.tipoUso);
+    /* MAPA-REBANHO-R2 — a sub-linha do piquete sai recuada (as mesmas linhas da tela), sem a atividade (é a do pai) */
+    const ehPiquete = !!row.piqueteDe;
     return [
-      row.pasto.nome,
-      tipoUsoLabelCurto(row.tipoUso),
+      ehPiquete ? nomeNaSaida(row.pasto.nome, true) : ehDiv ? DIV_NO_PDF : row.pasto.nome,
+      ehPiquete ? '' : ehDiv && isPastoDivergencia(row.tipoUso) ? DIV_NO_PDF : tipoUsoLabelCurto(row.tipoUso),
       row.lote || '',
+      row.programa || '—',
       ...catVals,
       row.totalCabecas ? String(row.totalCabecas) : '',
       row.pesoMedio ? fmt(row.pesoMedio, 2) : '',
+      row.totalCabecas && row.pesoAtualizado ? 'sim' : '',
       row.pasto.area_produtiva_ha ? fmt(row.pasto.area_produtiva_ha, 1) : '',
       row.uaHa ? fmt(row.uaHa, 2) : '',
       row.qualidade ? String(row.qualidade) : '',
@@ -126,9 +140,11 @@ export async function exportMapaPastosPdf(
     'TOTAL',
     '',
     '',
+    '',
     ...totalCatVals,
     String(totais.totalCab),
     totais.pesoMedioGeral ? fmt(totais.pesoMedioGeral, 2) : '',
+    '',
     fmt(totais.areaTotal, 1),
     totais.uaHaGeral ? fmt(totais.uaHaGeral, 2) : '',
     totais.qualidadeMedia ? fmt(totais.qualidadeMedia, 1) : '',
@@ -146,7 +162,9 @@ export async function exportMapaPastosPdf(
     'PESO MÉDIO',
     '',
     '',
+    '',
     ...pesoMedioCatVals,
+    totais.pesoMedioGeral ? fmt(totais.pesoMedioGeral, 2) : '',
     '',
     '',
     '',
@@ -159,19 +177,22 @@ export async function exportMapaPastosPdf(
 
   // Column styles
   const colStyles: Record<number, any> = {
-    0: { cellWidth: 24, fontStyle: 'bold', halign: 'left' },
-    1: { cellWidth: 14, halign: 'left' },
-    2: { cellWidth: 16, halign: 'left' },
+    0: { cellWidth: larguras[0], fontStyle: 'bold', halign: 'left' },
+    1: { cellWidth: larguras[1], halign: 'left' },
+    2: { cellWidth: larguras[2], halign: 'left' },
+    3: { cellWidth: larguras[3], halign: 'left' },
   };
+  const primeiraCat = COLUNAS_FIXAS_DO_PDF.length;
   for (let i = 0; i < numCats; i++) {
-    colStyles[3 + i] = { cellWidth: catColWidth, halign: 'right' };
+    colStyles[primeiraCat + i] = { cellWidth: larguras[primeiraCat + i], halign: 'right' };
   }
-  const afterCats = 3 + numCats;
-  colStyles[afterCats] = { cellWidth: 12, halign: 'right', fontStyle: 'bold' };
-  colStyles[afterCats + 1] = { cellWidth: 14, halign: 'right' };
-  colStyles[afterCats + 2] = { cellWidth: 12, halign: 'right' };
-  colStyles[afterCats + 3] = { cellWidth: 12, halign: 'right' };
-  colStyles[afterCats + 4] = { cellWidth: 10, halign: 'center' };
+  const afterCats = primeiraCat + numCats;
+  colStyles[afterCats] = { cellWidth: larguras[afterCats], halign: 'right', fontStyle: 'bold' };
+  colStyles[afterCats + 1] = { cellWidth: larguras[afterCats + 1], halign: 'right' };
+  colStyles[afterCats + 2] = { cellWidth: larguras[afterCats + 2], halign: 'center' };
+  colStyles[afterCats + 3] = { cellWidth: larguras[afterCats + 3], halign: 'right' };
+  colStyles[afterCats + 4] = { cellWidth: larguras[afterCats + 4], halign: 'right' };
+  colStyles[afterCats + 5] = { cellWidth: larguras[afterCats + 5], halign: 'center' };
 
   autoTable(doc, {
     startY: tableStartY,

@@ -27,6 +27,7 @@ import type { TipoDeArea } from '@/lib/mapa/tiposDeArea';
 import { useGruposComOrigem } from '@/hooks/useGruposComOrigem';
 import { avisoSemDesenho, pastosSemDesenho, unidadesDoMapa } from '@/lib/mapa/unidadesDoMapa';
 import { areaNoMesOuHoje, useAreaDosPastosNoMes } from '@/lib/pastos/areaDoPastoNoMes';
+import { semAreaDaFazenda } from '@/lib/pastos/areaDaFazenda';
 /* MAPA-IMPRESSAO-01 — "Imprimir mapa": a folha (PDF A3/A1/A0) do Gestor de UMA fazenda; a entrada só se monta ao clicar em "Baixar PDF" */
 import { ImprimirMapaDialog, type OpcoesDoPdf } from '@/components/mapa-geo/ImprimirMapaDialog';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -118,10 +119,12 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const fazendasDaLeitura = useMemo(() => (isGlobal ? idsDoGlobal : fazendaId ? [fazendaId] : []), [isGlobal, idsDoGlobal, fazendaId]);
   const { grupos: gruposComOrigem } = useGruposComOrigem(fazendasDaLeitura);
   const areaDoPastoNoMes = useCallback((p: { id: string; area_produtiva_ha?: number | null }) => areaNoMesOuHoje(p, anoMes), [anoMes]);
-  const unidades = useMemo(() => unidadesDoMapa<Pasto, FazendaGeometria>({ pastos, grupos: gruposComOrigem, poligonos: geometrias, anoMes, areaDe: areaDoPastoNoMes }),
-    [pastos, gruposComOrigem, geometrias, anoMes, areaDoPastoNoMes]);
-  const unidadesDoGlobal = useMemo(() => unidadesDoMapa<Pasto, GeometriaDoGlobal>({ pastos, grupos: gruposComOrigem, poligonos: geosDoGlobal.geometrias, anoMes,
-    areaDe: areaDoPastoNoMes }), [pastos, gruposComOrigem, geosDoGlobal.geometrias, anoMes, areaDoPastoNoMes]);
+  /* MAPA-PIQUETE-SUBAREA-01 C1: a área da fazenda (Reserva, APP, Benfeitorias) desde 11/2026 não é pasto do mapa (nem "sem desenho"); o polígono dela segue como área */
+  const pastosDoMapaNoMes = useMemo(() => semAreaDaFazenda(pastos, anoMes), [pastos, anoMes]);
+  const unidades = useMemo(() => unidadesDoMapa<Pasto, FazendaGeometria>({ pastos: pastosDoMapaNoMes, grupos: gruposComOrigem, poligonos: geometrias, anoMes, areaDe: areaDoPastoNoMes }),
+    [pastosDoMapaNoMes, gruposComOrigem, geometrias, anoMes, areaDoPastoNoMes]);
+  const unidadesDoGlobal = useMemo(() => unidadesDoMapa<Pasto, GeometriaDoGlobal>({ pastos: pastosDoMapaNoMes, grupos: gruposComOrigem, poligonos: geosDoGlobal.geometrias, anoMes,
+    areaDe: areaDoPastoNoMes }), [pastosDoMapaNoMes, gruposComOrigem, geosDoGlobal.geometrias, anoMes, areaDoPastoNoMes]);
   /* o pasto da unidade leva a área da unidade (a do pai, ou Σ dos piquetes vigentes no mês) */
   const pastosDoMapa = useMemo(() => unidades.pastos.map(p => {
     const u = unidades.unidades.get(p.id);

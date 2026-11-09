@@ -20,6 +20,12 @@ const ITEM = { categoria_id: 'c1', quantidade: 100, peso_medio_kg: 450, lote: nu
 /* o hook de mentira devolve SEMPRE o mesmo objeto (como o `fech` do modalDoPasto.test): um objeto novo por render refaz o efeito que
    lê os itens, e o modal entra em laço */
 const FECH_HOOK = { loadItens: async () => [ITEM], salvarCardDoPasto: salvarCard, salvarCardComAlocacao: salvarComAlocacao, reabrirCardDoPasto: vi.fn() };
+/* FECH-PASTO-UNIDADE-01 F2 — o modal lê os piquetes do pasto e o mês anterior; aqui o pasto não tem piquete (nenhuma ida à rede) */
+vi.mock('@/lib/fechamento/piquetesDoPasto', async (original) => ({
+  ...(await original<typeof import('@/lib/fechamento/piquetesDoPasto')>()),
+  lerPiquetesDoPasto: async () => ({ ok: true, valor: { doMes: [], nomes: new Map() } }),
+  lerMesAnteriorDoPasto: async (_p: string, mes: string) => ({ ok: true, valor: { anoMes: mes, semCard: true, linhas: [], nomes: new Map() } }),
+}));
 vi.mock('@/hooks/useFechamento', () => ({ useFechamento: () => FECH_HOOK }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli' } }) }));
 vi.mock('@/hooks/useMasterLock', () => ({ useMasterLock: () => ({ isReadOnly: () => false, isMaster: true, isMesLocked: () => false }) }));

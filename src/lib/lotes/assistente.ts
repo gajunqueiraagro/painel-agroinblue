@@ -5,7 +5,7 @@
  * campo antes de ir ao banco.
  */
 import { casaNaBusca } from '@/lib/texto/busca';
-import { codigoDoLote, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type TipoDoCadastro, type TrocaDeCodigo } from '@/lib/lotes/tipos';
+import { CARIMBO_VALIDO, FRASE_CARIMBO_INVALIDO, codigoDoLote, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type TipoDoCadastro, type TrocaDeCodigo } from '@/lib/lotes/tipos';
 
 export type ChaveDoPasso = 'categoria' | 'raca' | 'atividade' | 'numero' | 'perfil';
 
@@ -38,10 +38,10 @@ export const PASSOS: readonly PassoDoAssistente[] = [
   { chave: 'numero', titulo: 'Número', pergunta: 'Número do lote',
     subtitulo: 'Sai sozinho: o próximo livre desta combinação na fazenda. Dá para trocar.',
     ajuda: { oQueE: 'A 4ª parte do código.', porQue: 'Contado por fazenda e por combinação atividade · categoria · raça; número de lote encerrado não volta, para o histórico não confundir.',
-      comoFazer: 'Confira o código e os lotes que já existem nesta combinação. Para outro número, digite no quadro do nº (1 a 99, livre). O nome do campeiro é opcional.' } },
+      comoFazer: 'Confira o código e os lotes que já existem nesta combinação. Para outro número, digite no quadro do nº (1 a 99, livre). Na cria, digite o carimbo do mês (7.1, 7R): o lote aparece por ele e o nº fica por dentro. O nome do campeiro é opcional.' } },
   { chave: 'perfil', titulo: 'Perfil e metas', pergunta: 'Perfil e metas', opcional: true,
     subtitulo: 'Para montar a estratégia do lote. Pode pular e preencher depois na ficha.',
-    ajuda: { oQueE: 'Sistema, programa, destino, safra, carimbo e metas.', porQue: 'Orientam o plano nutricional, a sanidade, a estação de monta e a escala de abates.',
+    ajuda: { oQueE: 'Sistema, programa, destino, safra e metas.', porQue: 'Orientam o plano nutricional, a sanidade, a estação de monta e a escala de abates.',
       comoFazer: 'Escolha o que já souber. Cabeças, peso, GMD, pasto e custo não se digitam: vêm do fechamento.' } },
 ];
 
@@ -196,7 +196,7 @@ export function validarPerfil(p: Perfil, hoje: string): { campo: keyof Perfil; m
   if (!p.formadoEm) return { campo: 'formadoEm', mensagem: 'Formado em: escolha a data.' };
   if (p.formadoEm > hoje) return { campo: 'formadoEm', mensagem: 'Formado em: a data não pode ser depois de hoje.' };
   if (p.safra.trim() && !/^[0-9]{2}\/[0-9]{2}$/.test(p.safra.trim())) return { campo: 'safra', mensagem: 'Safra: no formato 26/27.' };
-  if (p.carimbo.trim() && !/^(1[0-2]|[1-9])\.[1-9][0-9]?$/.test(p.carimbo.trim())) return { campo: 'carimbo', mensagem: 'Carimbo: mês.lote, ex.: 7.1.' };
+  if (p.carimbo.trim() && !CARIMBO_VALIDO.test(p.carimbo.trim())) return { campo: 'carimbo', mensagem: FRASE_CARIMBO_INVALIDO };
   if (p.idadeMediaMeses != null && (p.idadeMediaMeses < 0 || p.idadeMediaMeses > 400 || !Number.isInteger(p.idadeMediaMeses))) return { campo: 'idadeMediaMeses', mensagem: 'Idade média: em meses, só o número.' };
   if ((p.metaPesoKg != null && p.metaPesoKg <= 0) || (p.metaGmdKg != null && p.metaGmdKg <= 0)) return { campo: p.metaPesoKg != null && p.metaPesoKg <= 0 ? 'metaPesoKg' : 'metaGmdKg', mensagem: 'A meta precisa ser maior que zero.' };
   return null;
@@ -209,6 +209,12 @@ export function validarNumero(digitado: string, existentes: readonly LoteDaLista
   if (!/^[0-9]{1,2}$/.test(digitado) || n < 1) return 'O nº vai de 1 a 99.';
   const dono = existentes.find(l => l.numero === n && l.id !== idEditando);
   return dono ? `O nº ${String(n).padStart(2, '0')} já é do lote ${dono.codigo}. Escolha outro.` : null;
+}
+
+/** LOTES-05 (Gabriel 08/11) — o carimbo no passo Nº da cria: vazio vale (o lote aparece pelo código); errado trava o Avançar. */
+export function validarCarimbo(carimbo: string): string | null {
+  const t = carimbo.trim();
+  return t && !CARIMBO_VALIDO.test(t) ? FRASE_CARIMBO_INVALIDO : null;
 }
 
 /** O `p_campos` de `fn_lote_salvar`: ao criar, tudo; ao editar, só o que mudou (a RPC mantém o resto).

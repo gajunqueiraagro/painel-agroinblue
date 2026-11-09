@@ -53,22 +53,25 @@ export function filtrarLotes(lotes: readonly LoteDaLista[], f: FiltroDosLotes): 
   const termo = f.busca.trim();
   return lotes.filter(l => l.situacao === f.situacao
     && (!f.atividadeId || l.atividadeId === f.atividadeId)
-    && (!termo || [l.codigo, l.nomeCampeiro, ...l.pastos, ...l.codigosAntigos].some(t => casaNaBusca(t, termo))));
+    && (!termo || [l.codigo, l.carimbo, l.nomeCampeiro, ...l.pastos, ...l.codigosAntigos].some(t => casaNaBusca(t, termo))));
 }
 
 /* ── ordenação: todas as colunas ──────────────────────────────────────────────────────────────── */
 export type ColunaDosLotes = 'codigo' | 'categoria' | 'raca' | 'programa' | 'cab' | 'peso' | 'gmd' | 'pasto';
 
-/** Carimbo "mês.lote" ordena pelo mês e depois pelo lote (7.2 antes de 10.1); sem carimbo = fim. */
+/** Carimbo "mês.lote" ordena pelo mês e depois pelo lote (7.2 antes de 10.1); a ressinc. do mês vem depois dos lotes dele
+ *  (7.2 < 7R < 7R.2 < 8.1, LOTES-05); sem carimbo = fim. */
 export function chaveDoCarimbo(c: string | null): number | null {
-  const m = c ? /^(\d{1,2})\.(\d{1,2})$/.exec(c) : null;
-  return m ? Number(m[1]) * 100 + Number(m[2]) : null;
+  const m = c ? /^(\d{1,2})(R)?(?:\.(\d{1,2}))?$/.exec(c) : null;
+  if (!m || (!m[2] && !m[3])) return null;
+  return Number(m[1]) * 1000 + (m[2] ? 100 : 0) + Number(m[3] ?? 1);
 }
 
 /** LOTES-04 (mock lotes-codigo-lista.html) — as colunas da lista: Nome, Sistema, Destino e Carimbo ficam na ficha. */
 export function colunasDosLotes(nomes: NomesDoCadastro): ColunaOrdenavel<LoteDaLista, ColunaDosLotes>[] {
   return [
-    { coluna: 'codigo', tipo: 'texto', valor: l => l.codigo },
+    /* LOTES-05: o lote de cria com carimbo aparece e ordena pelo carimbo (7.1 … 7R … 10.1), antes dos que têm só o código */
+    { coluna: 'codigo', tipo: 'texto', valor: l => { const k = chaveDoCarimbo(l.carimbo); return k == null ? `1 ${l.codigo}` : `0 ${String(k).padStart(5, '0')}`; } },
     { coluna: 'categoria', tipo: 'texto', valor: l => nomeDe(nomes, l.categoriaId) },
     { coluna: 'raca', tipo: 'texto', valor: l => nomeDe(nomes, l.racaId) },
     { coluna: 'programa', tipo: 'texto', valor: l => nomeDe(nomes, l.programaId) },
@@ -97,16 +100,19 @@ export function gruposPorAtividade(lotes: readonly LoteDaLista[], nomes: NomesDo
     .sort((a, b) => fase(a.atividadeId) - fase(b.atividadeId) || a.nome.localeCompare(b.nome, 'pt-BR'));
 }
 
-/** O subtotal do grupo, curto: "3 lotes · 160 cab" (sem lançamento: só os lotes). */
-export function fraseDoGrupo(t: TotalDosLotes): string {
-  const lotes = `${t.lotes} ${t.lotes === 1 ? 'lote' : 'lotes'}`;
-  return t.cabecas == null ? lotes : `${lotes} · ${t.cabecas.toLocaleString('pt-BR')} cab`;
-}
+/** LOTES-LISTA-ALINHAR-01 — o nº de lotes na coluna Categoria do subtotal e do total: "1 lote", "6 lotes" (os números ficam nas colunas deles). */
+export const textoDosLotes = (n: number): string => `${n} ${n === 1 ? 'lote' : 'lotes'}`;
 
 /** O pasto na célula: um = o nome; vários = "N pastos" (o inteiro vai no `title`). */
 export const textoDosPastos = (p: readonly string[]): string | null => (p.length === 0 ? null : p.length === 1 ? p[0] : `${p.length} pastos`);
 
 /** LOTES-04 — os códigos antigos numa linha, sem cortar: o mais recente (o último guardado) e "+N" (a lista inteira vai no `title`). */
+/** LOTES-05 — o title do nome na lista: o código (quando aparece o carimbo) e os de antes. */
+export function tituloDoCodigo(l: Pick<LoteDaLista, 'codigo' | 'carimbo' | 'codigosAntigos'>): string | undefined {
+  const partes = [l.carimbo ? l.codigo : null, l.codigosAntigos.length ? `antes: ${l.codigosAntigos.join(' · ')}` : null].filter(Boolean);
+  return partes.length ? partes.join(' · ') : undefined;
+}
+
 export function antigosCurto(antigos: readonly string[]): string {
   if (antigos.length === 0) return '—';
   const ultimo = antigos[antigos.length - 1];

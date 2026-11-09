@@ -135,7 +135,8 @@ describe('o Ampliado com e sem as contas, e as preferências', () => {
     expect(tela).toContain('data-testid="chip-contas" aria-pressed={contasAmpliado} onClick={alternarContasAmpliado}');
     /* FIN-V2-DESEMPENHO-01b: o Ampliado devolveu às datas dd/mm/aaaa e ao Valor os 24px (140→128, 202→190) */
     /* CONC-SUGESTOES-TABELA-01 — as larguras são o array `larguras={[…]}` da tela (o `colgroup` é da peça `TabelaDaLista`) */
-    expect(tela).toContain('modoIntensivo ? (contasAmpliado ? 128 : 190) : 123,');
+    /* DOC-ANEXO-E-IMPORT-01 F2: a coluna "Anexo" (14→36) tirou 8px do Produto nos três modos */
+    expect(tela).toContain('modoIntensivo ? (contasAmpliado ? 120 : 182) : 115,');
   });
   it('a escolha é lembrada; valor desconhecido = o padrão', () => {
     instalarStorage();

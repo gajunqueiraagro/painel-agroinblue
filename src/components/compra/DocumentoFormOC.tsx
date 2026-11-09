@@ -238,7 +238,8 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, clienteId, 
   };
 
   const lerNota = async (file: File) => {
-    if (file.type !== 'application/pdf') { setAvisoLeitura(null); setSugeridos(new Set()); return; }
+    /* DOC-ANEXO-E-IMPORT-01 F1 — recibo e outro não se leem como DANFE (nem dizem "não reconheci o formato de DANFE") */
+    if (file.type !== 'application/pdf' || !ehNotaFiscal(form.especie)) { setAvisoLeitura(null); setSugeridos(new Set()); return; }
     setLendoNota(true); setAvisoLeitura(null);
     try {
       /* OC-DOC-ESPECIE-ABATE-01 passo 4: o texto em LINHAS (a chave so' com DV certo e o emitente parando no fim da
@@ -505,7 +506,10 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, clienteId, 
           <DatePicker value={form.dataEmissao} onChange={v => setForm(f => ({ ...f, dataEmissao: v }))}
             size="compact" className={`h-7 text-[11px] ${marcaSugerido('dataEmissao')}`} />
         </div>
-        <div className="lg:col-span-2"><label className="text-[10px] text-muted-foreground">Chave de acesso</label><Input value={form.chaveAcesso} onChange={e => setForm(f => ({ ...f, chaveAcesso: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('chaveAcesso')}`} /></div>
+        {/* DOC-ANEXO-E-IMPORT-01 F1 — a chave de acesso é SÓ da NF (recibo e outro não têm); o lugar fica reservado (nada se desloca) */}
+        {ehNotaFiscal(form.especie)
+          ? <div className="lg:col-span-2"><label className="text-[10px] text-muted-foreground">Chave de acesso</label><Input value={form.chaveAcesso} onChange={e => setForm(f => ({ ...f, chaveAcesso: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('chaveAcesso')}`} data-testid="oc-doc-chave" /></div>
+          : <div className="lg:col-span-2" aria-hidden data-testid="oc-doc-sem-chave" />}
         {/* ── EMITENTE ─────────────────────────────────────────────────────────
             Quem ASSINOU a nota, que nem sempre e quem negociou. Caso real: a
             contraparte intermediou e a nota veio de outra pessoa. Importa alem da

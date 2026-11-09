@@ -36,7 +36,7 @@ describe('o titulo de OC em aberto se ajusta no modal', () => {
   it('fonte: o modal manda os tres pela OC ANTES do gravador de sempre, e so trava o vencimento/classificacao fora do aberto', () => {
     const src = readFileSync('src/components/financeiro-v2/LancamentoV2Dialog.tsx', 'utf8');
     const rpc = src.indexOf("rpc('oc_titulo_ajustar'");
-    const salvar = src.indexOf('const ok = await onSave(form, currentEditId || undefined);');
+    const salvar = src.indexOf('const ok = await onSave(form, currentEditId || undefined,');
     expect(rpc).toBeGreaterThan(0);
     expect(rpc).toBeLessThan(salvar);
     expect(src).toContain('camposDoAjusteOC(lancamento, form)');

@@ -112,6 +112,61 @@ export async function ultimaClassificacaoDoFornecedor(clienteId: string, fornece
   };
 }
 
+/**
+ * NOTA-NFSE-LEITURA-02 (Gabriel 08/11, D2 a) — a fazenda do HISTORICO do fornecedor: os lancamentos vivos dos cadastros com a MESMA RAIZ
+ * do CNPJ (as filiais: a NF 402 e' da matriz, o historico e' da filial) ou o mesmo CPF. So' a fazenda mais usada, quando e' uma so'
+ * (`fazendaMaisUsada`); falha de leitura = nenhuma (a tela segue com "Fazenda não identificada"). So' le^.
+ */
+export async function fazendaPeloHistoricoDoFornecedor(clienteId: string, documento: string): Promise<string | null> {
+  const d = soDigitos(documento);
+  if (d.length !== 14 && d.length !== 11) return null;
+  const filtro = d.length === 14
+    ? `cpf_cnpj.like.${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}%,cpf_cnpj.like.${d.slice(0, 8)}%`
+    : `cpf_cnpj.eq.${d},cpf_cnpj.eq.${validarDocumento(d).formatado ?? d}`;
+  try {
+    const { data: fs, error } = await supabase.from('financeiro_fornecedores').select('id').eq('cliente_id', clienteId).or(filtro).limit(20);
+    const ids = !error && Array.isArray(fs) ? fs.map((f) => f.id) : [];
+    if (!ids.length) return null;
+    const { data: ls, error: e2 } = await supabase.from('financeiro_lancamentos_v2').select('fazenda_id')
+      .eq('cliente_id', clienteId).in('favorecido_id', ids).eq('cancelado', false).limit(1000);
+    if (e2 || !Array.isArray(ls)) return null;
+    return fazendaMaisUsada(ls.map((l) => l.fazenda_id));
+  } catch { return null; }
+}
+/**
+ * NOTA-NFSE-LEITURA-02 (Gabriel 08/11 12:36: "o tomador passa na frente do histórico") — as fazendas do TOMADOR da nota: o titular fiscal
+ * ativo com este CPF/CNPJ (`fiscal_titulares`) e as participações dele vigentes na data (`fiscal_fazenda_titulares`, a versão não
+ * substituída). Falha de leitura = nenhuma (segue o histórico). So' le^.
+ */
+export async function fazendasDoTomador(clienteId: string, documento: string | null, data: string): Promise<string[]> {
+  const d = soDigitos(documento);
+  if (d.length !== 11 && d.length !== 14) return [];
+  const formatos = [...new Set([d, validarDocumento(d).formatado].filter((x): x is string => !!x))];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as tabelas fiscais ainda nao estao nos tipos gerados
+    const db = supabase as any;
+    const { data: ts, error } = await db.from('fiscal_titulares').select('id').eq('cliente_id', clienteId).eq('ativo', true).in('documento', formatos).limit(5);
+    const ids: string[] = !error && Array.isArray(ts) ? ts.map((t: { id: string }) => t.id) : [];
+    if (!ids.length) return [];
+    const { data: ps, error: e2 } = await db.from('fiscal_fazenda_titulares').select('fazenda_id, vigencia_inicio, vigencia_fim')
+      .eq('cliente_id', clienteId).in('titular_id', ids).is('substituida_em', null).limit(100);
+    if (e2 || !Array.isArray(ps)) return [];
+    return fazendasVigentes(ps, data);
+  } catch { return []; }
+}
+/** As fazendas cuja participação vale na data ('AAAA-MM-DD'): início <= data e (sem fim ou fim >= data). Sem repetir. */
+export function fazendasVigentes(ps: readonly { fazenda_id: string; vigencia_inicio: string | null; vigencia_fim: string | null }[], data: string): string[] {
+  return [...new Set(ps.filter((p) => (!p.vigencia_inicio || p.vigencia_inicio <= data) && (!p.vigencia_fim || p.vigencia_fim >= data)).map((p) => p.fazenda_id))];
+}
+
+/** A fazenda que mais aparece; empate no topo (ou nenhuma) = `null` (nunca se escolhe por sorteio). */
+export function fazendaMaisUsada(fazendas: readonly (string | null | undefined)[]): string | null {
+  const n = new Map<string, number>();
+  for (const f of fazendas) if (f) n.set(f, (n.get(f) ?? 0) + 1);
+  const [a, b] = [...n.entries()].sort((x, y) => y[1] - x[1]);
+  return a && (!b || b[1] < a[1]) ? a[0] : null;
+}
+
 /** A inscricao estadual de cada fazenda do cliente (`fazenda_cadastros.ie`): fazenda_id -> ie. */
 export async function iePorFazenda(clienteId: string): Promise<Record<string, string>> {
   const { data, error } = await supabase.from('fazenda_cadastros').select('fazenda_id, ie').eq('cliente_id', clienteId);
@@ -180,7 +235,7 @@ export async function gravarDocumentoNoCadastro(clienteId: string, fornecedorId:
  */
 export async function completarCadastroPeloXml(clienteId: string, fornecedorId: string, emitente: EmitenteNFe): Promise<string | null> {
   const { data, error } = await supabase.from('financeiro_fornecedores')
-    .select('nome_fantasia, inscricao_estadual, tipo_pessoa, logradouro, numero, complemento, bairro, municipio, uf, cep, telefone')
+    .select('nome_fantasia, inscricao_estadual, inscricao_municipal, tipo_pessoa, logradouro, numero, complemento, bairro, municipio, uf, cep, telefone')
     .eq('id', fornecedorId).eq('cliente_id', clienteId).maybeSingle();
   if (error) return error.message;
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
@@ -198,12 +253,12 @@ export async function completarCadastroPeloXml(clienteId: string, fornecedorId: 
  */
 export async function camposQueOEmitenteCompleta(clienteId: string, fornecedorId: string, emitente: EmitenteNFe): Promise<CampoDoEmitente[]> {
   const { data, error } = await supabase.from('financeiro_fornecedores')
-    .select('nome_fantasia, inscricao_estadual, tipo_pessoa, logradouro, numero, complemento, bairro, municipio, uf, cep, telefone')
+    .select('nome_fantasia, inscricao_estadual, inscricao_municipal, tipo_pessoa, logradouro, numero, complemento, bairro, municipio, uf, cep, telefone')
     .eq('id', fornecedorId).eq('cliente_id', clienteId).maybeSingle();
   if (error || !data || typeof data !== 'object' || Array.isArray(data)) return [];
   return Object.keys(completarPeloEmitente(Object.fromEntries(Object.entries(data)), emitente)).filter(ehCampoDoEmitente);
 }
-const CAMPOS_DO_EMITENTE: readonly string[] = ['nome_fantasia', 'inscricao_estadual', 'tipo_pessoa', 'logradouro', 'numero', 'complemento', 'bairro', 'municipio', 'uf', 'cep', 'telefone'];
+const CAMPOS_DO_EMITENTE: readonly string[] = ['nome_fantasia', 'inscricao_estadual', 'inscricao_municipal', 'tipo_pessoa', 'logradouro', 'numero', 'complemento', 'bairro', 'municipio', 'uf', 'cep', 'telefone'];
 function ehCampoDoEmitente(c: string): c is CampoDoEmitente { return CAMPOS_DO_EMITENTE.includes(c); }
 
 /** Um lancamento ABERTO do fornecedor que pode ser o desta nota (criado antes, do extrato ou da planilha). */

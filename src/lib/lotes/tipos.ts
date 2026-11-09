@@ -82,3 +82,13 @@ export function codigoDoLote(cat: string | null, raca: string | null, ativ: stri
   const p = (s: string | null) => s ?? '__';
   return `${p(ativ)}-${p(cat)}-${p(raca)}-${numero == null ? '__' : String(numero).padStart(2, '0')}`;
 }
+
+/** LOTES-05 (Gabriel 08/11) — o carimbo do mês: 7.1, 7.2 … e a ressinc. 7R, 7R.2 (7R = o 1º). Mesma regra da 113220. */
+export const CARIMBO_VALIDO = /^(1[0-2]|[1-9])(\.[1-9][0-9]?|R(\.[1-9][0-9]?)?)$/;
+export const FRASE_CARIMBO_INVALIDO = 'Carimbo: mês.lote, ex.: 7.1 (julho, 1º lote) ou 7R (ressinc. de julho).';
+
+/** LOTES-05 — o nome do lote na tela (modal, lista, ficha): na cria com carimbo, só o carimbo ("7.1"); sem carimbo, o código
+ *  (recria, engorda, confinamento e a cria sem carimbo levam o nº automático). O código segue no banco, no title e na busca. */
+export function nomeDoLote(l: { codigo: string; carimbo: string | null }): string {
+  return l.carimbo?.trim() || l.codigo;
+}

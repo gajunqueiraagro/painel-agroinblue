@@ -8,7 +8,7 @@
  */
 import type { ReactNode } from 'react';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
-import type { CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
+import { avisosQueValem, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
 import { dataCurta, documentoFormatado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
 import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 
@@ -76,6 +76,8 @@ export function FaixaDoFornecedor({ xml, fechada, cadastro = null, onTrocar, onE
   const r = xml.resolucao;
   const doc = documentoFormatado(xml.emitenteDocumento);
   const rotuloDoc = soDigitos(xml.emitenteDocumento).length === 11 ? 'CPF' : 'CNPJ';
+  /* NOTA-NFSE-LEITURA-02 — a nota do PDF diz "o PDF traz", nunca "o XML traz" */
+  const fonte = xml.arquivo.type === 'application/pdf' ? 'o PDF' : 'o XML';
   const trocar = <button type="button" className={LINK} onClick={onTrocar} data-testid="xml-trocar-fornecedor">trocar fornecedor</button>;
   const comparar = cadastro && (cadastro.atualizado
     ? <span className="shrink-0 font-medium" data-testid="xml-cadastro-atualizado">cadastro atualizado</span>
@@ -113,7 +115,7 @@ export function FaixaDoFornecedor({ xml, fechada, cadastro = null, onTrocar, onE
     return <Faixa testid="xml-faixa-fornecedor" titulo={frase}><span className="min-w-0 truncate">{frase}</span><span className="ml-auto">{trocar}</span></Faixa>;
   }
   if (r.achadoPor === 'nome' && r.cadastroSemDocumento) {
-    const frase = `Fornecedor achado pelo nome · "${nome}" · cadastro sem ${rotuloDoc} · o XML traz ${doc}`;
+    const frase = `Fornecedor achado pelo nome · "${nome}" · cadastro sem ${rotuloDoc} · ${fonte} traz ${doc}`;
     /* O NOME encolhe primeiro (reticencias; inteiro no `title` dele, a frase toda no `title` da faixa), ate' 72px; so' depois o fim da frase
        cede. "comparar e atualizar o cadastro" e "trocar fornecedor" nao encolhem nunca. */
     return (
@@ -121,7 +123,7 @@ export function FaixaDoFornecedor({ xml, fechada, cadastro = null, onTrocar, onE
         <span className="flex min-w-0 items-center">
           <span className="shrink-0 whitespace-pre">{'Fornecedor achado pelo nome · '}</span>
           <span className="min-w-[72px] shrink-[10] truncate font-medium" title={nome} data-testid="xml-nome-do-fornecedor">"{nome}"</span>
-          <span className="min-w-0 truncate whitespace-pre">{` · cadastro sem ${rotuloDoc} · o XML traz ${doc}`}</span>
+          <span className="min-w-0 truncate whitespace-pre">{` · cadastro sem ${rotuloDoc} · ${fonte} traz ${doc}`}</span>
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-2">{comparar}{trocar}</span>
       </Faixa>
@@ -130,30 +132,34 @@ export function FaixaDoFornecedor({ xml, fechada, cadastro = null, onTrocar, onE
   /* FORN-FILIAL-01 — o cadastro achado pelo nome é OUTRA filial (mesma raiz, CNPJ diferente): não é proposto e nunca recebe este CNPJ;
      a faixa oferece criar o cadastro DESTA filial (nome, CNPJ e cidade do XML) */
   if (r.achadoPor === 'nome' && r.filialDiferente) {
-    const docDoCadastro = documentoFormatado(r.candidatos[0]?.cpf_cnpj ?? '');
-    const frase = `Fornecedor achado pelo nome · "${nome}" é outra filial (CNPJ ${docDoCadastro}) · o XML traz ${doc}`;
+    /* NOTA-NFSE-LEITURA-02 (Gabriel 08/11, NF 402) — a frase começa pelo CNPJ DA NOTA (o que importa não corta) e diz o que o cadastro
+       tem pelo fim do CNPJ ("só o 0002-54"); dois gestos: criar o cadastro deste CNPJ (já selecionado) ou usar o que existe */
+    const outro = r.candidatos[0];
+    const fimDoOutro = documentoFormatado(outro?.cpf_cnpj ?? '').slice(-7);
+    const end = xml.emitente?.endereco;
+    const cidade = end?.municipio ? ` (${[end.municipio, end.uf].filter(Boolean).join('/')})` : '';
+    const frase = `Nota do ${rotuloDoc} ${doc}${cidade} · cadastrado só o ${fimDoOutro}`;
     return (
-      <Faixa testid="xml-faixa-fornecedor" titulo={frase}>
-        <span className="flex min-w-0 items-center">
-          <span className="shrink-0 whitespace-pre">{'Fornecedor achado pelo nome · '}</span>
-          <span className="min-w-[72px] shrink-[10] truncate font-medium" title={nome} data-testid="xml-nome-do-fornecedor">"{nome}"</span>
-          <span className="min-w-0 truncate whitespace-pre" data-testid="xml-outra-filial">{` é outra filial (CNPJ ${docDoCadastro}) · o XML traz ${doc}`}</span>
+      <Faixa testid="xml-faixa-fornecedor" titulo={`${frase} ("${nome}")`}>
+        <span className="min-w-0 truncate" data-testid="xml-outra-filial">{frase}</span>
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          <button type="button" className={LINK} disabled={criando} onClick={onCriar} data-testid="xml-criar-filial">
+            {criando ? 'criando…' : 'Criar cadastro deste CNPJ'}
+          </button>
+          {outro && <><span>|</span>
+            <button type="button" className={LINK} onClick={() => onEscolher(outro.id)} data-testid="xml-usar-filial">Usar o {fimDoOutro}</button></>}
         </span>
-        <button type="button" className={`${LINK} ml-auto shrink-0`} disabled={criando} onClick={onCriar} data-testid="xml-criar-filial">
-          {criando ? 'criando…' : 'criar o cadastro desta filial'}
-        </button>
-        {trocar}
       </Faixa>
     );
   }
   if (r.achadoPor === 'nome') {
-    const frase = `Fornecedor achado pelo nome · "${nome}" · o cadastro tem outro documento · o XML traz ${doc}`;
+    const frase = `Fornecedor achado pelo nome · "${nome}" · o cadastro tem outro documento · ${fonte} traz ${doc}`;
     return (
       <Faixa testid="xml-faixa-fornecedor" titulo={frase}>
         <span className="flex min-w-0 items-center">
           <span className="shrink-0 whitespace-pre">{'Fornecedor achado pelo nome · '}</span>
           <span className="min-w-[72px] shrink-[10] truncate font-medium" title={nome} data-testid="xml-nome-do-fornecedor">"{nome}"</span>
-          <span className="min-w-0 truncate whitespace-pre">{` · o cadastro tem outro documento · o XML traz ${doc}`}</span>
+          <span className="min-w-0 truncate whitespace-pre">{` · o cadastro tem outro documento · ${fonte} traz ${doc}`}</span>
         </span>
         <span className="ml-auto shrink-0">{trocar}</span>
       </Faixa>
@@ -177,8 +183,10 @@ export function FaixaDoFornecedor({ xml, fechada, cadastro = null, onTrocar, onE
 }
 
 /** OS AVISOS — uma faixa por frase. A de "nota ja' registrada" oferece abrir e seguir; as outras so' dizem. */
-export function AvisosDoXml({ xml, registradaDispensada, onDispensarRegistrada, onAbrirOcorrencia }: {
+export function AvisosDoXml({ xml, registradaDispensada, onDispensarRegistrada, onAbrirOcorrencia, preenchido = { fazenda: false, vencimento: false } }: {
   xml: DoXml;
+  /** NOTA-NFSE-LEITURA-02 — o campo que o aviso pede ja' foi preenchido: o aviso some (fazenda, vencimento) */
+  preenchido?: { fazenda: boolean; vencimento: boolean };
   registradaDispensada: boolean;
   onDispensarRegistrada: () => void;
   onAbrirOcorrencia: (o: OcorrenciaDaNota) => void;
@@ -200,7 +208,7 @@ export function AvisosDoXml({ xml, registradaDispensada, onDispensarRegistrada, 
           </span>
         </Faixa>
       )}
-      {xml.proposta.avisos.map((a) => (
+      {avisosQueValem(xml.proposta.avisos, preenchido).map((a) => (
         <Faixa key={a} testid="xml-aviso" titulo={a}><span className="min-w-0 truncate">{a}</span></Faixa>
       ))}
     </>

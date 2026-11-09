@@ -336,8 +336,25 @@ if (tela === 'mesclar') {
   const VOL = v === 'volume' ? volumeNJ() : null;
   if (VOL) { g.__fornecedoresBancada = VOL.fornecedores; g.__fazendaBancada = { fazendas: VOL.fazendas, fazendaAtual: { id: '__global__', nome: 'Global', owner_id: '' },
     isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} }; }
+  /* DOC-ANEXO-E-IMPORT-01 F2 — os documentos das linhas (o clipe e o popover): lf0 com 3 (boleto · comprovante · recibo, nomes longos = o pior
+     caso do popover), lf1 com 1 (abre direto), lf2 com a mesma NF em PDF + XML (1 linha) + 1 boleto. SINTÉTICOS. */
+  const docDoClipe = (id: string, lanc: string, especie: string, nome: string, data: string, extra: Record<string, unknown> = {}) => ({
+    documento_id: id, lancamento_id: lanc, cliente_id: 'cli', origem: 'lancamento', operacao_id: null, especie, numero: null, serie: null,
+    chave_acesso: null, nome, tipo: 'application/pdf', url: `cli/${lanc}/${id}.pdf`, data_emissao: data, valor_documento: null, emitente_id: null,
+    emitente_nome: null, emitente_documento: null, observacao: null, cancelado: false, cancelado_motivo: null, versao: 1, ligado_a_qtd: 1,
+    uploaded_em: '2026-10-02T12:00:00Z', ...extra });
+  const DOCS_DO_CLIPE = [
+    docDoClipe('dc1', 'lf0', 'boleto', 'Boleto da associação de produtores — mensalidade de setembro de 2026.pdf', '2026-09-11'),
+    docDoClipe('dc2', 'lf0', 'comprovante', 'Comprovante de pagamento Banco Alfa 18-09-2026.pdf', '2026-09-18'),
+    docDoClipe('dc3', 'lf0', 'recibo', 'Recibo do escritório de contabilidade set-2026.pdf', '2026-09-18'),
+    docDoClipe('dc4', 'lf1', 'nf', 'NF 000.000.518.pdf', '2026-10-03', { numero: '518' }),
+    docDoClipe('dc5', 'lf2', 'nf', 'NF 000.000.519.pdf', '2026-10-05', { numero: '519' }),
+    docDoClipe('dc6', 'lf2', 'nf', 'NF 000.000.519.xml', '2026-10-05', { numero: '519', tipo: 'application/xml', url: 'cli/lf2/dc6.xml' }),
+    docDoClipe('dc7', 'lf2', 'boleto', 'Boleto parcela 1.pdf', '2026-10-20'),
+  ];
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_lancamentos_v2' ? (e.in.id ? [] : VOL ? VOL.lancamentos : LANCAMENTOS)
+      : t === 'vw_lancamento_documentos' && !VOL ? DOCS_DO_CLIPE.filter((d) => e.eq.lancamento_id == null || d.lancamento_id === e.eq.lancamento_id)
       : t === 'financeiro_fornecedores' ? (VOL ? VOL.fornecedores : LISTA)
       : t === 'financeiro_safras' ? [{ id: 's-pec', nome: 'Pecuária 25/26', codigo: '25/26-Pec', escopo_negocio: 'pecuaria', ativa: true },
         { id: 's-lav', nome: 'Mandioca 25/26', codigo: '25/26-MAND', escopo_negocio: 'agricultura', ativa: true }]
@@ -786,7 +803,9 @@ if (tela === 'mesclar') {
         ? ((geos) => (e.eq.id ? geos.filter(g => g.id === e.eq.id).map(g => ({ ...g, versao: 1, geojson: formaNaEdicao(g.geojson) }))
           // MAPA-CRIAR-PIQUETES-01 2b: `versoesDosPoligonos` lê `.select('id, versao').in('id', …)` (a versão fresca do Mover linha / Juntar)
           : e.in.id ? geos.filter(g => e.in.id.includes(g.id)).map(g => ({ ...g, versao: 1 }))
-          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : []), ...(q.get('p6') === '1' ? [PRACA_DO_P6] : [])].filter(x => q.get('p6') !== '1' || (x.id !== 'gi1' && x.id !== 'gi2')).map(comModulo03))
+          : geos))([...(q.get('piquetes') ? [...MAPA.GEOMETRIAS, ...MAPA.PIQUETES_SOLTOS] : MAPA.GEOMETRIAS), ...(UNIDADE ? MAPA.UNIDADE_POLIGONOS : []), ...(q.get('praca') === '1' ? MAPA.PRACA_SOBRE_PASTO : []), ...(q.get('galpao') === '1' ? [MAPA.GALPAO_GEOMETRIA] : []), ...(q.get('p6') === '1' ? [PRACA_DO_P6] : [])].filter(x => q.get('p6') !== '1' || (x.id !== 'gi1' && x.id !== 'gi2'))
+            /* MAPA-PIQUETE-SUBAREA-01: `&semcontorno=1` — o P_09 SEM o contorno dele (o caso Modulo 05 da Sta. Tereza): o mapa o desenha pelos piquetes */
+            .filter(x => q.get('semcontorno') !== '1' || x.id !== 'gu-c').map(comModulo03))
       // MAPA-CRIAR-PIQUETES-01: `&grupo=1` — o P_01 já originou o grupo P_01 com P_01A e P_01B SEM desenho (o caso P6 da Pureza)
       // PIQUETE-POLIGONO-01: `&p6=1` — o P_01 se chama P6 (o nome sugerido dos piquetes é P6-A, P6-B)
       : t === 'pastos' ? [...MAPA.dadosDosCartoes(q.get('cartoes')).pastos.map(x => (q.get('p6') === '1' && x.id === 'p1' ? { ...x, nome: 'P6' } : x)), ...(UNIDADE ? MAPA.UNIDADE_PASTOS : []),
@@ -1658,7 +1677,10 @@ if (tela === 'mesclar') {
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (a tela REAL) com o modo "Grupos": dado SINTÉTICO, nomes de exemplo; um grupo de 3
      piquetes (P10A/B/C), um de nome longo com 4 pastos, um inativo e pastos soltos. O banco responde a prévia do `fn_pasto_grupo_salvar`
      a partir do pedido (a frase do banco, a área somada), sem gravar nada. */
-  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  /* PASTOS-CAD-02 — `globalThis.__casoPastos`: o caso REAL injetado SÓ pelo script de foto (`fotoPastosFicha.mjs --caso <json>`, arquivo fora do
+     repositório): a fazenda, os pastos, o mapa, a lotação e a matrícula. Sem ele, o dado SINTÉTICO de sempre (nada de cliente no repositório). */
+  const CASO: any = g.__casoPastos ?? null;
+  const FAZ = CASO ? CASO.fazenda : { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
   g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
   /* o `canEdit('pastos')` lê o perfil de `clienteAtual` (o padrão da bancada não traz): sem ele a tela abre só para leitura */
   const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
@@ -1672,16 +1694,87 @@ if (tela === 'mesclar') {
     pasto('ta3', 'T-A3 Piquete da terminação', 12, 'engorda', 'g2', true, 6), pasto('ta4', 'T-A4 Piquete da terminação', 9.75, 'engorda', 'g2', true, 7),
     pasto('p11', 'P11', 35.5, 'cria', null, true, 8), pasto('p13', 'P13 Retiro do córrego de baixo', 1234.56, 'cria', null, true, 9),
     pasto('p14', 'P14', 18, 'vedado', null, true, 10), pasto('p15', 'P15 velho', 9, 'recria', null, false, 11),
+    /* PASTO-FICHA-01 PR B — o PAI do grupo P10 (a origem do grupo): na lista ele vem com os piquetes P10A/B/C embaixo e a área = a soma */
+    pasto('p10', 'P10', 65.1, 'recria', null, true, 0),
   ];
+  /* PASTO-FICHA-01 PR B — o que a ficha acrescenta (SINTÉTICO): forrageira, implantação, avaliação, suporte e lotação do mês fechado */
+  const FORR: Record<string, [string, string | null]> = {
+    p10: ['fo1', '2019-03-01'], p10a: ['fo1', '2019-03-01'], p11: ['fo2', '2008-01-01'], p13: ['fo3', null], ta1: ['fo4', '2023-11-01'], p14: ['fo2', '2015-10-01'],
+  };
+  for (const x of PASTOS) { const f = FORR[x.id]; Object.assign(x, { forrageira_principal_id: f?.[0] ?? null, forrageira_implantada_em: f?.[1] ?? null }); }
+  if (CASO) PASTOS.splice(0, PASTOS.length, ...CASO.pastos);
+  const MES_HOJE = new Date().toISOString().slice(0, 7);
+  const [aH, mH] = MES_HOJE.split('-').map(Number);
+  const MES_FECHADO = `${mH === 1 ? aH - 1 : aH}-${String(mH === 1 ? 12 : mH - 1).padStart(2, '0')}`;
+  const FICHA_BANCADA = {
+    catalogo: [
+      ...[['fo1', 'Braquiarão — Marandu'], ['fo2', 'Humidícola — comum'], ['fo3', 'Mombaça'], ['fo4', 'Capim-elefante — BRS Capiaçu, de corte e silagem'],
+        ['fo5', 'Estilosantes Campo Grande']].map(([id, nome], i) => ({ id, nome, lista: 'forrageira', grupo: 'Braquiárias', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Plano (0–3%)', 'Suave ondulado (3–8%)', 'Ondulado (8–20%)'].map((nome, i) => ({ id: `re${i}`, nome, lista: 'relevo', grupo: 'Relevo', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Arenoso', 'Médio', 'Argiloso'].map((nome, i) => ({ id: `tx${i}`, nome, lista: 'textura_solo', grupo: 'Textura', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Boa', 'Moderada', 'Ruim'].map((nome, i) => ({ id: `dr${i}`, nome, lista: 'drenagem', grupo: 'Drenagem', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Natural — árvores / capões', 'Artificial — sombrite'].map((nome, i) => ({ id: `so${i}`, nome, lista: 'sombra', grupo: 'Sombra', cliente_id: null, apelidos: [], ordem: i })),
+      ...['Pasto', 'Pasto intensivo / irrigado', 'Confinamento'].map((nome, i) => ({ id: `si${i}`, nome, lista: 'sistema_pasto', grupo: 'pasto', cliente_id: null, apelidos: [], ordem: i })),
+    ],
+    cards: PASTOS.flatMap((x) => [{ ano_mes: MES_FECHADO, status: 'fechado', pasto_id: x.id }, { ano_mes: MES_HOJE, status: 'aberto', pasto_id: x.id }]),
+    avaliacoes: [
+      { pasto_id: 'p10', data_avaliacao: '2026-08-14', degradacao: 'leve' }, { pasto_id: 'p11', data_avaliacao: '2025-03-02', degradacao: 'moderada' },
+      { pasto_id: 'p13', data_avaliacao: '2026-09-20', degradacao: 'forte' }, { pasto_id: 'ta1', data_avaliacao: '2026-10-01', degradacao: 'sem' },
+      { pasto_id: 'p10a', data_avaliacao: '2026-08-14', degradacao: 'muito forte' },
+    ],
+    potencial: [{ pasto_id: 'p10', potencial_ua_ha: 1.6 }, { pasto_id: 'p11', potencial_ua_ha: 1.1 }, { pasto_id: 'p13', potencial_ua_ha: 0.8 }, { pasto_id: 'ta1', potencial_ua_ha: 2.4 }],
+    lotacao: [{ pasto_id: 'p10', ua_ha: 1.42 }, { pasto_id: 'p11', ua_ha: 1.25 }, { pasto_id: 'p13', ua_ha: 0.55 }, { pasto_id: 'ta1', ua_ha: 1.95 }, { pasto_id: 'p14', ua_ha: 0.9 }],
+  };
   const GRUPOS = [
-    { id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true },
+    { id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: 'p10' },
     { id: 'g2', fazenda_id: 'f1', nome: 'Terminação intensiva do retiro de cima', ativo: true },
     { id: 'g3', fazenda_id: 'f1', nome: 'Antigo rotacionado', ativo: false },
   ];
   const br = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   g.__bancoBancada = {
-    from: (t: string) => (t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? GRUPOS : []),
+    from: (t: string, e: any) => (t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? (CASO ? [] : GRUPOS)
+      : t === 'fazenda_cadastros' && CASO ? [{ area_total_ha: CASO.matricula, matricula_conferida_em: CASO.conferida ? '2026-10-01' : null }]
+      : t === 'catalogo_itens' ? FICHA_BANCADA.catalogo.filter((i) => !e?.eq?.lista || i.lista === e.eq.lista)
+      : t === 'fechamento_pastos' ? FICHA_BANCADA.cards
+      : t === 'pasto_condicoes' ? FICHA_BANCADA.avaliacoes.filter((a) => !e?.eq?.pasto_id || a.pasto_id === e.eq.pasto_id)
+        .map((a, i) => ({ id: `av${i}`, cercas: 'bom', agua: 'regular', cochos: 'bom', invasoras: 'baixo', cupins: 'medio', erosao: 'sem', cobertura_pct: 85,
+          suporte_aguas_ua_ha: 1.6, suporte_seca_ua_ha: 1.0, avaliador: 'Exemplo', observacoes: null, ...a }))
+      : t === 'fazenda_infraestruturas' ? (e?.eq?.pasto_id === 'p10' ? [{ id: 'i1', tipo: 'bebedouro', nome: 'Bebedouro do P10', observacao: 'pilheta de alvenaria' },
+        { id: 'i2', tipo: 'cocho', nome: 'Cocho coberto 1', observacao: '18 m lineares' }] : [])
+      : t === 'patrimonio_bem_pastos' ? [{ pasto_id: 'p10' }] : []),
     rpc: (fn: string, a: any) => {
+      if (CASO && fn === 'fn_pastos_potencial_no_mes') return [];
+      if (CASO && fn === 'fn_lotacao_do_mes') return a.p_ano_mes === CASO.mes ? CASO.lotacao : [];
+      if (CASO && fn === 'fn_pastos_area_comparar') return CASO.mapa;
+      if (fn === 'fn_pastos_potencial_no_mes') return FICHA_BANCADA.potencial;
+      if (fn === 'fn_lotacao_do_mes') return FICHA_BANCADA.lotacao;
+      if (fn === 'fn_pasto_reformas') return a.p_pasto === 'p10' ? [{ bem_id: 'b1', data: '2019-03-01', descricao: 'Reforma do P10 (gradagem + Marandu)',
+        area_no_pasto_ha: 64.3, custo_rs: 96450, rs_ha: 1500, contabil_rs: 41200 }] : [];
+      /* PASTO-FICHA-01 PR B — a ficha (SINTÉTICA) do pasto pedido */
+      if (fn === 'fn_pasto_ficha') {
+        const x = PASTOS.find((y) => y.id === a.p_pasto) ?? PASTOS[0];
+        const f = FORR[x.id];
+        return { pasto: { ...x, posse: 'arrendada_de_terceiro', posse_contraparte_id: null, posse_desde: '2022-01-01', posse_ate: null, sistema_id: 'si0',
+            relevo_id: 're1', textura_id: 'tx0', drenagem_id: 'dr0', sombra_id: 'so0', sombra_cobertura: 'parcial', manejo: 'rotacionado', ficha_versao: 3,
+            forrageira_secundaria_id: x.id === 'p10' ? 'fo5' : null },
+          nomes: { forrageira_principal: FICHA_BANCADA.catalogo.find((i) => i.id === f?.[0])?.nome ?? null, forrageira_secundaria: x.id === 'p10' ? 'Estilosantes Campo Grande' : null,
+            relevo: 'Suave ondulado (3–8%)', textura: 'Arenoso', drenagem: 'Boa', sombra: 'Natural — árvores / capões', sistema: 'Pasto' },
+          ano_mes: MES_HOJE, area: { oficial_ha: x.area_produtiva_ha, mapa_ha: x.id === 'p10' ? 66.3 : null, trava: null },
+          ultima_avaliacao: FICHA_BANCADA.avaliacoes.find((v) => v.pasto_id === x.id) ?? null,
+          potencial: FICHA_BANCADA.potencial.find((v) => v.pasto_id === x.id) ? { potencial_ua_ha: FICHA_BANCADA.potencial.find((v) => v.pasto_id === x.id)?.potencial_ua_ha, epoca: 'águas' } : null,
+          ultima_reforma: x.id === 'p10' ? { bem_id: 'b1', data: '2019-03-01', descricao: 'Reforma do P10', idade_anos: 7 } : null };
+      }
+      if (fn === 'fn_pasto_lotacao_meses') {
+        return Array.from({ length: 12 }, (_, i) => {
+          const t = aH * 12 + (mH - 1) - 1 - i; const am = `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+          const uaHa = Math.round((1.1 + ((i * 37) % 9) / 10) * 100) / 100; const sup = (t % 12) + 1 >= 5 && (t % 12) + 1 <= 10 ? 1.0 : 1.6;
+          return { ano_mes: am, epoca: sup === 1.0 ? 'seca' : 'águas', area_ha: 64.3, cabecas: Math.round(uaHa * 64.3 / 0.9), ua: Math.round(uaHa * 64.3 * 100) / 100, ua_ha: uaHa, suporte_ua_ha: sup, acima: uaHa > sup };
+        });
+      }
+      if (fn === 'fn_pasto_ficha_salvar' || fn === 'fn_pasto_criar') {
+        return { ok: true, simulado: a.p_simular, sem_mudanca: false, versao: 3, area_ha: a.p_area_ha ?? null, vigente_desde: `${MES_HOJE}-01`,
+          muda: Object.entries(a.p_campos ?? {}).slice(0, 6).map(([campo, v]) => ({ campo, antes: null, depois: v })) };
+      }
       /* PASTO-AREA-OFICIAL-01 — o modo "Áreas" (SINTÉTICO): a área do mapa de cada pasto (a medição), um travado, um sem polígono, um já
          igual com a última mudança "do mapa" (desfazer) e o P11 que a PRÉVIA recusa (área da fazenda oficializada) */
       const AM = new Date().toISOString().slice(0, 7);
@@ -1734,6 +1827,74 @@ if (tela === 'mesclar') {
     montar(<PastosTab />);
   };
   void montarPastos();
+} else if (tela === 'mapa-pastos') {
+  /* MAPA-REBANHO-02 — Produção › Mapa de pastos (a tela REAL), dado SINTÉTICO de out/2026 no formato do mock: 9 categorias, pastos de cria,
+     recria e engorda, um lote com programa ("1ª inseminação"), um lote só texto e comprido (corta com o title), pastos vazios e a conta de
+     ajuste do campeiro ("⚠ Div."). Os lotes pela `fn_lotes_da_fazenda` e o nome do programa pelo cadastro do lote, como na tela de verdade. */
+  const FAZ = { id: 'f1', nome: 'Faz. Exemplo Sintética', codigo: 'EXS', cliente_id: 'cli', tem_pecuaria: true };
+  g.__fazendaBancada = { fazendas: [FAZ], fazendaAtual: FAZ, isGlobal: false, fazendaId: FAZ.id };
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  const COD = ['mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros', 'mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
+  const NOME = ['Mamotes M', 'Desmama M', 'Garrotes', 'Bois', 'Touros', 'Mamotes F', 'Desmama F', 'Novilhas', 'Vacas'];
+  const CATS = COD.map((c, i) => ({ id: `c-${c}`, codigo: c, nome: NOME[i], ordem_exibicao: i + 1, ativo: true }));
+  const pasto = (id: string, nome: string, area: number, tipo: string, ordem: number) => ({
+    id, fazenda_id: 'f1', cliente_id: 'cli', nome, lote_padrao: null, area_produtiva_ha: area, tipo_uso: tipo, qualidade: null, entra_conciliacao: true,
+    ativo: true, observacoes: null, ordem_exibicao: ordem, data_inicio: null, data_fim: null, grupo_id: null, created_at: '2026-01-01', updated_at: '2026-01-01' });
+  /* [id, nome, área, uso, lote do mês, lote cadastrado, {categoria: [cab, kg]}, qualidade] */
+  const LINHAS: [string, string, number, string, string | null, string | null, Record<string, [number, number]>, number | null][] = [
+    ['a1', 'A-01', 31.4, 'cria', 'Cria-Prec-1', 'l-cri1', { mamotes_m: [12, 88.5], mamotes_f: [9, 81.25], novilhas: [30, 402.13] }, 6],
+    ['a2', 'A-02', 25.0, 'cria', 'Cria-Prec-1', 'l-cri1', { mamotes_m: [8, 92], mamotes_f: [12, 79.5], novilhas: [20, 410] }, 6],
+    ['a3', 'A-03', 58.2, 'cria', 'Nov-Ins-01', 'l-ins', { mamotes_m: [7, 95], mamotes_f: [5, 90], novilhas: [41, 355.75], vacas: [22, 470.5] }, 6],
+    ['a4', 'A-04', 33.9, 'recria', 'Desm-F-01', 'l-df', { desmama_f: [26, 288.4] }, 6],
+    ['a5', 'A-05', 30.1, 'recria', 'Desm-F-01', 'l-df', { desmama_f: [33, 291.6] }, 6],
+    ['a6', 'A-06', 67.0, 'recria', 'Nov-Rec', 'l-nov', { novilhas: [70, 398.2] }, 6],
+    ['a7', 'A-07', 64.8, 'recria', 'DM-Rec', 'l-dm', { desmama_m: [78, 281.33] }, null],
+    ['a8', 'A-08', 61.0, 'recria', null, null, {}, null],
+    ['a9', 'A-09', 70.2, 'recria', null, null, {}, null],
+    ['b1', 'B-01', 30.5, 'cria', 'Leiteiras e vacas de descarte do retiro', null, { mamotes_m: [4, 85], garrotes: [3, 302.1], mamotes_f: [9, 80], novilhas: [5, 390], vacas: [11, 455.9] }, null],
+    ['b2', 'B-02', 41.7, 'engorda', 'Engorda', 'l-eng', { bois: [18, 455.8], touros: [2, 610.25], vacas: [5, 440] }, 7],
+    ['dv', '⚠️ Divergência do Campeiro', 0, 'divergencia', null, null, {}, null],
+  ];
+  /* MAPA-REBANHO-R2 — o caso da PUR (SINTÉTICO): o P7 lançado POR PIQUETES (7A e 7B, que no cadastro vêm ANTES do P7) e o P5 com piquete
+     no cadastro mas lançado inteiro. A tela mostra o P7 somando, o 7A e o 7B recuados logo abaixo dele, e o P5 sem sub-linha; nenhum piquete solto. */
+  const PIQUETES = [{ ...pasto('7a', '7A', 18.5, 'recria', 0), grupo_id: 'g7' }, { ...pasto('7b', '7B', 21.0, 'recria', 0), grupo_id: 'g7' },
+    { ...pasto('p5a', 'P5-A', 12, 'recria', 0), grupo_id: 'g5' }];
+  const PAIS = [{ ...pasto('p7', 'P7', 39.5, 'recria', 0), grupo_id: 'g7' }, { ...pasto('p5', 'P5', 12, 'recria', 0), grupo_id: 'g5' }];
+  const GRUPOS = [{ id: 'g7', nome: 'P7', pasto_origem_id: 'p7', ativo: true, cliente_id: 'cli' }, { id: 'g5', nome: 'P5', pasto_origem_id: 'p5', ativo: true, cliente_id: 'cli' }];
+  const PASTOS = [...LINHAS.map(([id, nome, area, uso], i) => pasto(id, nome, area, uso, i + 1)), ...PIQUETES.slice(0, 2), ...PAIS, PIQUETES[2]];
+  const CARDS = LINHAS.map(([id, , , uso, lote], i) => ({ id: `fc-${id}`, pasto_id: id, fazenda_id: 'f1', cliente_id: 'cli', ano_mes: '2026-10',
+    status: i < 3 ? 'fechado' : 'rascunho', responsavel_nome: null, lote_mes: lote, tipo_uso_mes: uso, qualidade_mes: LINHAS[i][7], observacao_mes: null,
+    created_at: '2026-10-01', updated_at: '2026-10-01' }));
+  for (const [id, uso] of [['p7', 'recria'], ['p5', 'recria']]) CARDS.push({ ...CARDS[3], id: `fc-${id}`, pasto_id: id, lote_mes: null, tipo_uso_mes: uso, qualidade_mes: null });
+  const ITENS_R2 = [['p7', '7a', 'novilhas', 24, 352.4], ['p7', '7a', 'desmama_f', 10, 280], ['p7', '7b', 'novilhas', 31, 360.1], ['p5', null, 'novilhas', 15, 340]]
+    .map(([pid, piq, cod, q, kg]) => ({ id: `i-${pid}-${piq}-${cod}`, fechamento_id: `fc-${pid}`, categoria_id: `c-${cod}`, quantidade: q, peso_medio_kg: kg,
+      lote: null, lote_id: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false, piquete_id: piq }));
+  const ITENS = [...ITENS_R2, ...LINHAS.flatMap(([id, , , , , loteId, cats]) => Object.entries(cats).map(([cod, [q, kg]]) => ({ id: `i-${id}-${cod}`, fechamento_id: `fc-${id}`,
+    categoria_id: `c-${cod}`, quantidade: q, peso_medio_kg: kg, lote: null, lote_id: loteId, observacoes: null, origem_dado: 'manual', peso_atualizado: id === 'a1' })))];
+  const lote = (id: string, codigo: string, programa: string | null) => ({ id, codigo, codigos_antigos: [], nome_campeiro: null, situacao: 'ativo',
+    formado_em: '2026-01-01', encerrado_em: null, categoria_id: 'k-cat', raca_id: 'k-raca', atividade_id: 'k-ativ', numero: 1, sistema_id: null,
+    programa_id: programa, destino_id: null, safra: null, carimbo: null, idade_media_meses: null, meta_peso_kg: null, meta_gmd_kg: null, meta_data: null,
+    versao: 1, ano_mes_dado: '2026-10', cabecas: 0, peso_medio_kg: null, gmd_kg: null, pastos: [], lancamentos: 0, conferir: null });
+  const LOTES = [lote('l-cri1', 'CRI-PRE-01', null), lote('l-ins', 'CRI-NOV-01', 'k-prog-ins'), lote('l-df', 'REC-DF-01', null),
+    lote('l-nov', 'REC-NOV-01', null), lote('l-dm', 'REC-DM-01', null), lote('l-eng', 'ENG-BOI-01', null)];
+  const CADASTROS = [{ id: 'k-prog-ins', tipo: 'programa', sigla: null, nome: '1ª inseminação', categorias_rebanho: [], ordem: 1, ativo: true }];
+  g.__bancoBancada = {
+    from: (t: string, e: { eq: Record<string, unknown> }) => (
+      t === 'pastos' ? PASTOS
+      : t === 'pasto_grupos' ? GRUPOS
+      : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
+      : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
+      : t === 'categorias_rebanho' ? CATS
+      : t === 'rebanho_lote_cadastros' ? CADASTROS
+      : []),
+    rpc: (fn: string) => (fn === 'fn_lotes_da_fazenda' ? LOTES : null),
+  };
+  const montarMapa = async () => {
+    const { MapaPastosTab } = await import('@/pages/MapaPastosTab');
+    montar(<MapaPastosTab periodo={{ ano: '2026', mes: 10 }} onPeriodoChange={() => {}} />);
+  };
+  void montarMapa();
 } else if (tela === 'fechamento-grupo') {
   /* FECH-ROTACAO-01 fatia 3 — Fechamento de pastos (a tela REAL) com um grupo de pastejo, dado SINTÉTICO de out/2026: o grupo P10
      (P10A com o lote no grupo inteiro, P10B só recebe, P10C vedado), a rotação avulsa P11 → P12 Retiro, e um pasto solto. A lotação
@@ -1758,11 +1919,35 @@ if (tela === 'mesclar') {
     PASTOS.push(pasto('p6', 'P6', 95.6, 'cria', null, 7), { ...pasto('p6a', 'P6-A', 48.1, 'cria', 'g6', 8), data_inicio: '2026-10-01' },
       { ...pasto('p6b', 'P6-B', 47.5, 'cria', 'g6', 9), data_inicio: '2026-10-01' });
     CARDS.push(card('f6', 'p6', { tipo_uso_mes: 'cria' }));
+    /* R1 (Gabriel 08/11 19:18, PUR out/26): o P19A com 4 piquetes — o selo na linha do nome cortava "P19A" em "P…" (agora "97,5 ha · 4 piq.") */
+    PASTOS.push(pasto('p19a', 'P19A', 97.5, 'cria', null, 10),
+      ...['A', 'B', 'C', 'D'].map((l, i) => ({ ...pasto(`p19a${l}`, `P19A-${l}`, 24.4, 'cria', 'g19', 11 + i), data_inicio: '2026-10-01' })));
+    CARDS.push(card('f19', 'p19a', { tipo_uso_mes: 'cria' }));
   }
   const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
     lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
-  const ITENS: (ReturnType<typeof item> & { lote_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  const ITENS: (ReturnType<typeof item> & { lote_id?: string; piquete_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  /* FECH-PASTO-UNIDADE-01 F2 — `&v=piquetes7`: o modal do pasto COM piquetes, nas medidas do caso real (PUR out/26): o P7 (97,5 ha) em
+     7A 24,76 · 7B 25,11 · 7C 24,35 · 7D 23,32, lançado POR PIQUETES em out/26 e com set/26 também por piquetes (o mês anterior somado, com
+     o lote de cada piquete); o P5 (P5-A 101 · P5-B 86,1) com o card vazio (abre em "Pasto inteiro"). As 9 categorias de verdade (a grade
+     inteira, Machos e Fêmeas). Nomes e cabeças SINTÉTICOS. */
+  const COM_PIQUETES7 = v === 'piquetes7';
+  if (COM_PIQUETES7) {
+    CATS.splice(0, CATS.length, ...[['mamotes_m', 'Mamotes M'], ['desmama_m', 'Desmama M'], ['garrotes', 'Garrotes'], ['bois', 'Bois'], ['touros', 'Touros'],
+      ['mamotes_f', 'Mamotes F'], ['desmama_f', 'Desmama F'], ['novilhas', 'Novilhas'], ['vacas', 'Vacas']].map(([codigo, nome], i) => ({ id: `c-${codigo}`, codigo, nome, ordem_exibicao: i + 1 })));
+    PASTOS.push(pasto('p7', 'P7', 97.54, 'cria', null, 7),
+      ...[['7a', '7A', 24.76], ['7b', '7B', 25.11], ['7c', '7C', 24.35], ['7d', '7D', 23.32]].map(([id, nome, ha], i) =>
+        ({ ...pasto(`p${id}`, String(nome), Number(ha), 'cria', 'g7', 8 + i), data_inicio: '2026-10-01' })),
+      pasto('p5', 'P5', 187.1, 'cria', null, 12),
+      { ...pasto('p5a', 'P5-A', 101, 'cria', 'g5', 13), data_inicio: '2026-10-01' }, { ...pasto('p5b', 'P5-B', 86.1, 'cria', 'g5', 14), data_inicio: '2026-10-01' });
+    CARDS.push(card('f7', 'p7', { tipo_uso_mes: 'cria', qualidade_mes: 6 }), card('f7-9', 'p7', { ano_mes: '2026-09', status: 'fechado', tipo_uso_mes: 'cria' }),
+      card('f5', 'p5', { tipo_uso_mes: 'cria' }));
+    const piq = (f: string, cat: string, q: number, peso: number, p: string, lote?: string) => ({ ...item(f, `c-${cat}`, q, peso), id: `${f}-${cat}-${p}`, piquete_id: p, ...(lote ? { lote_id: lote } : {}) });
+    ITENS.push(piq('f7', 'vacas', 40, 450, 'p7a'), piq('f7', 'mamotes_f', 14, 32, 'p7a'), piq('f7', 'vacas', 34, 445, 'p7b'), piq('f7', 'mamotes_f', 14, 31, 'p7b'),
+      piq('f7', 'mamotes_m', 46, 31, 'p7c'), piq('f7', 'novilhas', 22, 290, 'p7d'),
+      piq('f7-9', 'vacas', 74, 450, 'p7a', 'l-dm6'), piq('f7-9', 'mamotes_f', 28, 30, 'p7b'), piq('f7-9', 'mamotes_m', 46, 30, 'p7c'), piq('f7-9', 'novilhas', 22, 285, 'p7d', 'l-px2'));
+  }
   /* FECH-TOPO-02 — `&mes=9`: set/26 com os MESMOS cards, todos FECHADOS (o mês fechado do print: "Mês fechado" e o "Preço do rebanho →") */
   const MES_DA_BANCADA = q.get('mes') === '9' ? 9 : 10;
   if (MES_DA_BANCADA === 9) {
@@ -1807,20 +1992,27 @@ if (tela === 'mesclar') {
     return [...porPasto].map(([id, v]) => ({ pasto_id: id, grupo_id: PASTOS.find((x) => x.id === id)?.grupo_id ?? null, area_ha: area(id), cabecas: v.cab, kg: v.kg, ua: v.ua,
       kg_ha: v.kg / area(id), ua_ha: v.ua / area(id), recebe_de_outro_card: v.recebe }));
   };
+  /* o filtro do `eq`/`in` só nas colunas que a linha tem (a linha sem a coluna passa, como antes) */
+  const filtrar = <T extends Record<string, unknown>>(linhas: T[], e: { eq: Record<string, unknown>; in?: Record<string, unknown[]> }) => linhas.filter((r) =>
+    Object.entries(e.eq).every(([k, x]) => !(k in r) || r[k] === x) && Object.entries(e.in ?? {}).every(([k, xs]) => !(k in r) || xs.includes(r[k])));
   g.__bancoBancada = {
-    from: (t: string, e: { eq: Record<string, unknown> }) => (
-      t === 'pastos' ? PASTOS : t === 'pasto_grupos' ? [{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: null },
-        ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }] : [])]
-      : t === 'fechamento_pastos' ? CARDS.filter((c) => !e.eq.ano_mes || c.ano_mes === e.eq.ano_mes)
+    from: (t: string, e: { eq: Record<string, unknown>; in?: Record<string, unknown[]> }) => (
+      /* F2 `&v=piquetes7`: os leitores do modal filtram por grupo/origem/pasto (`in`/`eq`); sem a variante, a resposta de sempre */
+      t === 'pastos' ? (COM_PIQUETES7 ? filtrar(PASTOS, e) : PASTOS) : t === 'pasto_grupos' ? (COM_PIQUETES7 ? filtrar : (l: unknown[]) => l)([{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: null },
+        ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }, { id: 'g19', fazenda_id: 'f1', nome: 'P19A', ativo: true, pasto_origem_id: 'p19a' }] : []),
+        ...(COM_PIQUETES7 ? [{ id: 'g7', fazenda_id: 'f1', nome: 'P7', ativo: true, pasto_origem_id: 'p7' }, { id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }] : [])], e)
+      : t === 'fechamento_pastos' ? CARDS.filter((c) => (!e.eq.ano_mes || c.ano_mes === e.eq.ano_mes) && (!COM_PIQUETES7 || !e.eq.pasto_id || c.pasto_id === e.eq.pasto_id))
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
       : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC
       : t === 'fazenda_geometrias' ? GEOS
-      : COM_LOTES && t === 'rebanho_lote_cadastros' ? LOTES_BANCADA.CADASTROS
+      : (COM_LOTES || COM_PIQUETES7) && t === 'rebanho_lote_cadastros' ? LOTES_BANCADA.CADASTROS
       /* FECH-REABRIR-JUNTO-01 — `&v=trava`: o Valor do Rebanho de out/26 VALIDADO (o caso EXP R_04): o modal abre com o aviso e o "Reabrir e editar" */
       : v === 'trava' && t === 'valor_rebanho_realizado_validado' ? [{ fazenda_id: 'f1', ano_mes: '2026-10', status: 'validado' }]
       : []),
     rpc: (fn: string, a: Record<string, unknown>) => (fn === 'fn_lotacao_do_mes' ? lotacao()
-      : COM_LOTES ? LOTES_BANCADA.bancoDeLotes().rpc(fn, a) : null),
+      /* F2 `&v=piquetes7`: a área de cada piquete NO MÊS (a leitura da casa) */
+      : COM_PIQUETES7 && fn === 'fn_pastos_area_do_mes' ? PASTOS.map((x) => ({ pasto_id: x.id, ano_mes: a.p_de, area_ha: x.area_produtiva_ha, fonte: 'vigencia' }))
+      : COM_LOTES || COM_PIQUETES7 ? LOTES_BANCADA.bancoDeLotes().rpc(fn, a) : null),
   };
   const montarFechamento = async () => {
     const { FechamentoTab } = await import('@/pages/FechamentoTab');
@@ -2307,7 +2499,34 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
   /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO aqui, pelo `prefillDaNota` (o caminho da lista): `notapdf`
      o PDF sintético (4 duplicatas) · `notachave` só a chave digitada (sem valor nem data) · `notacartao` a nota sem duplicata paga no cartão
      Elo (a conta já escolhida; o cenário escolhe Parcelada 10× no Pagamento). O PDF é desenhado pelo jspdf e LIDO pelo caminho de verdade. */
-  if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
+  /* NOTA-NFSE-LEITURA-02 (Gabriel 08/11, a forma da NF 402) — `notanfse`: o DANFSe nacional sintético (sem IE, IBS/CBS, 3 linhas de serviço)
+     de uma filial cuja OUTRA filial é a cadastrada (a faixa nova), a fazenda pelo histórico do fornecedor e a descrição curta do serviço */
+  if (v === 'notanfse') {
+    void (async () => {
+      const { jsPDF } = await import('jspdf');
+      const { danfseSintetico } = await import('@/lib/financeiro/nfe/__fixtures__/danfseSintetico');
+      const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
+      const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [595.28, 841.89] });
+      for (const it of danfseSintetico({ bruto: '2.900,00', issApurado: '71,05', liquido: '2.900,00', ibsCbs: true, semIe: true,
+        descricao: ['TROCA BOMBA ALIMENTADORA DA CARREGADEIRA W130', '02 DESLOCAMENTOS', 'CARREGADEIRA W130'] })[0]) {
+        doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 841.89 - it.y);
+      }
+      const bytes: ArrayBuffer = doc.output('arraybuffer');
+      const lido: any = await lerNota(bytes);
+      if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+      const FILIAL = { ...AGRO, id: 'oficina-2', nome: 'Oficina Sintetica de Teste Ltda', cpf_cnpj: '11.222.333/0002-62' };
+      props.fornecedores = [FILIAL];
+      const resolucao = resolverEmitente(lido.nota.emitente, [FILIAL], 'oficina-2');
+      const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: FAZENDAS.map((f: any) => ({ ...f, ie: null })), emitente: resolucao,
+        favorecidoId: resolucao.propostoId, ultima: null, fazendaDoHistorico: 'f-pur' });
+      if (!p.ok) { raiz.render(<div>{p.frase}</div>); return; }
+      props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento,
+        emitente: lido.nota.emitente, resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, 'NF_57.pdf') } as any);
+      props.documentosAntesDeSalvar = true;
+      renderizar();
+    })();
+  } else if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
     void (async () => {
       const { jsPDF } = await import('jspdf');
       const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');

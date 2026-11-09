@@ -38,6 +38,9 @@ const consultas = vi.hoisted(() => ({
   /* NOTA-FAZENDA-PELA-IE-01 — gravar a IE na fazenda (simula e grava) */
   inscreverEmFazendas: vi.fn((_cb: (c: string) => void) => () => undefined),
   aliasesDasFazendas: vi.fn(async (): Promise<Record<string, string[]>> => ({})),
+  /* NOTA-NFSE-LEITURA-02 — a fazenda pelo histórico do fornecedor (padrão: nenhuma) */
+  fazendaPeloHistoricoDoFornecedor: vi.fn(async (_c: string, _d: string): Promise<string | null> => null),
+  fazendasDoTomador: vi.fn(async (_c: string, _d: string | null, _data: string): Promise<string[]> => []),
   gravarIeDaFazenda: vi.fn(async (_f: string, _ie: string, _r: string | null, simular: boolean, _c: string)
     : Promise<{ ok: true; frase: string | null; trilhaId: string | null } | { ok: false; frase: string }> => (simular
       ? { ok: true, frase: 'Faz. Sintetica passa a ter a IE 280000002: as próximas notas com esta IE de destinatário já vêm com a fazenda.', trilhaId: null }
@@ -83,13 +86,13 @@ const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async (_c: string)
 vi.mock('@/lib/financeiro/diasDoCartao', () => cartaoNoBanco);
 
 import { NotaFiscalDialog, fraseDoCompletar, quantidadeCurta, type NotaParaLancar } from './NotaFiscalDialog';
-import { NovoDeXmlDialog, arquivoPdfDaNota } from './NovoDeXmlDialog';
+import { NovoDeXmlDialog, arquivoPdfDaNota, notaParaAPrevia } from './NovoDeXmlDialog';
 import type { Gravadores } from './criarDaNota';
 import type { RespostaDoCnpj } from '@/lib/fornecedores/consultaCnpj';
 import type { PayloadParcelamento } from '@/lib/financiamentos/montarPayloadParcelamento';
 import type { DocumentoPendente, ParcelaGravada } from '@/lib/financeiro/documentosPendentes';
 import { FRASE_NOTA_SEM_CHAVE, FRASE_PDF_SEM_TEXTO, digitoDaChave, notaDoDanfe, type ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
-import { FRASE_CHAVE_INVALIDA, lidoDaChave, notaDaChaveDigitada } from '@/lib/financeiro/nfe/chaveDigitada';
+import { FRASE_CHAVE_INVALIDA, FRASE_NAO_PARECE_NOTA, lidoDaChave, notaDaChaveDigitada } from '@/lib/financeiro/nfe/chaveDigitada';
 import { proporLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { PAGINAS_DANFE_SINTETICO, danfeSinteticoAvulsa, danfeSinteticoSemDuplicata } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
@@ -1179,6 +1182,27 @@ describe('P95 — o mesmo arquivo duas vezes e DIGITAR A CHAVE', () => {
     await waitFor(() => expect(screen.getByTestId('xml-aviso').textContent).toBe('nota-sintetica.pdf já está na lista.'));
     expect(screen.getAllByTestId('xml-linha')).toHaveLength(1);
     expect(leitura.lerNota).toHaveBeenCalledTimes(1);
+  });
+  it('DOC-ANEXO-E-IMPORT-01 F1 — o PDF sem chave "não parece uma nota fiscal" e aponta a aba Documentos (o recibo vai lá), com o ⓘ; o campo de digitar fica', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_NOTA_SEM_CHAVE });
+    lista();
+    soltar(pdf());
+    const linha = await screen.findByTestId('xml-recusa-digitar');
+    expect(screen.getByTestId('xml-recusa').textContent).toBe(FRASE_NAO_PARECE_NOTA);
+    expect(within(linha).getByRole('button', { name: 'Ajuda: Arquivo sem chave de acesso' })).toBeTruthy();
+    expect(screen.getByTestId('xml-digitar-chave')).toBeTruthy();
+  });
+  it('F1 — o "Ler a NF" do modal (a mesma porta, `notaParaAPrevia`) devolve a MESMA frase do recibo', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_NOTA_SEM_CHAVE });
+    expect(await notaParaAPrevia('cli', pdf(), [FORN], [])).toEqual({ ok: false, frase: FRASE_NAO_PARECE_NOTA });
+  });
+  it('a busca sabe achar: o PDF sem texto (foto) segue com a frase dele e SEM o ⓘ do recibo', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_PDF_SEM_TEXTO });
+    lista();
+    soltar(pdf());
+    const linha = await screen.findByTestId('xml-recusa-digitar');
+    expect(screen.getByTestId('xml-recusa').textContent).toBe(FRASE_PDF_SEM_TEXTO);
+    expect(within(linha).queryByRole('button', { name: 'Ajuda: Arquivo sem chave de acesso' })).toBeNull();
   });
   it('o campo so\' na nota sem chave e no PDF sem texto; DV errado = a frase da chave invalida, nada muda', async () => {
     leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_PDF_SEM_TEXTO });

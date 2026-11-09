@@ -1,6 +1,6 @@
 /** MAPA-PIQUETES-03 — a unidade do mapa (pai + grupo), no formato do caso real da Faz. Pureza (P7 → 7A–7D desde 11/2026; P6 → 6A, 6B). */
 import { describe, expect, it } from 'vitest';
-import { avisoSemDesenho, contornosDePai, divisoesNoPainel, pastosSemDesenho, fechamentosDaUnidade, fraseDasDivisoes, unidadesDoMapa } from './unidadesDoMapa';
+import { avisoSemDesenho, contornosDePai, divisoesNoPainel, ehDesenhoDosPiquetes, pastosSemDesenho, fechamentosDaUnidade, fraseDasDivisoes, unidadesDoMapa } from './unidadesDoMapa';
 
 const pasto = (id: string, nome: string, o: { inicio?: string | null; fim?: string | null; grupo?: string | null; ativo?: boolean } = {}) =>
   ({ id, nome, fazenda_id: 'pur', ativo: o.ativo ?? true, data_inicio: o.inicio ?? null, data_fim: o.fim ?? null, grupo_id: o.grupo ?? null });
@@ -131,12 +131,62 @@ describe('o contorno do pai na Validação (MAPA-PIQUETES-04, Sta. Rita 20A-1)',
 });
 
 describe('nada some em silêncio (MAPA-PIQUETES-04)', () => {
-  it('pai SEM contorno (P18 da Pureza antes do backfill): não vira unidade; as divisões seguem como pastos, com o desenho delas', () => {
+  it('pai SEM contorno e piquetes SEM desenho: não vira unidade; os pastos seguem um a um (nada some)', () => {
     const r = unidadesDoMapa({ pastos: PASTOS, grupos: GRUPOS, poligonos: POLIGONOS.filter((g) => g.id !== 'gP7'), anoMes: '2026-11', areaDe: () => 1 });
     expect(r.unidades.has('p7')).toBe(false);
     expect(r.poligonos.map((g) => g.id)).toEqual(expect.arrayContaining(['gA', 'gB', 'gC', 'gD']));
     expect(r.pastos.map((p) => p.id)).toEqual(expect.arrayContaining(['a', 'b', 'c', 'd']));
   });
+});
+
+/* MAPA-PIQUETE-SUBAREA-01 (Gabriel 08/11) — no formato da Sta. Tereza out/26: o Modulo 05 (125 ha) SEM contorno, os 8 piquetes M5-A…M5-H
+   desenhados; o pai é vigente no mês e os piquetes também (piquete é subárea). Antes: o pai sumia e os 8 viravam pastos cinza. */
+describe('o pai sem contorno é desenhado pelos piquetes (MAPA-PIQUETE-SUBAREA-01)', () => {
+  const quad = (x: number): GeoJSON.Geometry => ({ type: 'Polygon', coordinates: [[[x, 0], [x + 1, 0], [x + 1, 1], [x, 1], [x, 0]]] });
+  const LETRAS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const P_ST = [pasto('m5', 'Modulo 05'), ...LETRAS.map((l) => pasto(`m5${l}`, `M5-${l}`, { grupo: 'g5' })), pasto('m4', 'Modulo 04'),
+    ...['A', 'B'].map((l) => pasto(`m4${l}`, `M4-${l}`, { grupo: 'g4' })), pasto('app', 'APP')];
+  const G_ST = [{ id: 'g5', nome: 'Modulo 05', pasto_origem_id: 'm5', ativo: true }, { id: 'g4', nome: 'Modulo 04', pasto_origem_id: 'm4', ativo: true }];
+  const poli = (id: string, pasto_id: string, x: number) => ({ id, pasto_id, tipo: 'pasto', nome_original: id, geojson: quad(x) });
+  const GEO_ST = [...LETRAS.map((l, i) => poli(`g-m5${l}`, `m5${l}`, i)), poli('g-m4', 'm4', 20), poli('g-m4A', 'm4A', 20), poli('g-m4B', 'm4B', 20.5)];
+  const r = unidadesDoMapa({ pastos: P_ST, grupos: G_ST, poligonos: GEO_ST, anoMes: '2026-10', areaDe: (p) => (p.id === 'm5' ? 125 : 1) });
+
+  it('o Modulo 05 é UMA unidade, como o Modulo 04 (que tem contorno): o mapa recebe o pai e nenhum piquete', () => {
+    expect(r.unidades.has('m5')).toBe(true);
+    expect(r.unidades.get('m5')?.areaHa).toBe(125);
+    expect(r.pastos.map((p) => p.nome)).toEqual(['Modulo 05', 'Modulo 04', 'APP']);
+    expect(r.unidadeDe.get('m5C')).toBe('m5');
+  });
+
+  it('o desenho do pai = os 8 desenhos dos piquetes num MultiPolygon (id próprio, nome do pai); os piquetes saem do desenho de pasto', () => {
+    const d = r.poligonos.find((g) => g.pasto_id === 'm5');
+    expect(d?.id).toBe('piquetes-de:m5');
+    expect(ehDesenhoDosPiquetes(d?.id ?? '')).toBe(true);
+    expect(d?.tipo).toBe('pasto');
+    expect(d?.nome_original).toBe('Modulo 05');
+    expect(d?.geojson.type).toBe('MultiPolygon');
+    expect(d?.geojson.type === 'MultiPolygon' && d.geojson.coordinates.length).toBe(8);
+    expect(r.poligonos.some((g) => g.pasto_id?.startsWith('m5') && g.pasto_id !== 'm5')).toBe(false);
+    /* o Modulo 04 segue com o contorno dele (nenhum desenho inventado) */
+    expect(r.poligonos.filter((g) => g.pasto_id === 'm4').map((g) => g.id)).toEqual(['g-m4']);
+  });
+
+  it('os piquetes do mês viram as divisões do pai (linhas finas, sem rótulo), com o desenho de cada um', () => {
+    const u = r.unidades.get('m5');
+    expect(u?.fase).toBe('pai');
+    expect(u?.divisoes.map((dv) => dv.nome)).toEqual(LETRAS.map((l) => `M5-${l}`));
+    expect(u?.divisoes.every((dv) => dv.poligono !== null)).toBe(true);
+    /* o Modulo 04 (com contorno) também mostra as linhas dos piquetes dele */
+    expect(r.unidades.get('m4')?.divisoes.map((dv) => dv.nome)).toEqual(['M4-A', 'M4-B']);
+  });
+
+  it('nada some: o Modulo 05 não está mais em "pastos sem desenho"; a contagem de pastos não leva piquete', () => {
+    expect(pastosSemDesenho(r.pastos, r.poligonos, '2026-10')).toEqual(['APP']);
+    expect(r.pastos).toHaveLength(3);
+  });
+});
+
+describe('nada some em silêncio (MAPA-PIQUETES-04) — cont.', () => {
   it('os pastos do mês sem polígono, em ordem natural; o aviso curto quando a lista é longa', () => {
     const r = rodar('2026-11');
     expect(pastosSemDesenho(r.pastos, r.poligonos, '2026-11')).toEqual([]);

@@ -41,10 +41,12 @@ describe('FORN-FILIAL-01 — o XML de uma filial não cai no cadastro de outra',
   it('o documento vence o nome: a própria filial achada pelo CNPJ', () => {
     expect(resolverEmitente({ documento: '11222333000424', nome: 'x' }, [TL, SEM], 'sem')).toMatchObject({ achadoPor: 'documento', propostoId: 'tl' });
   });
-  it('a faixa: "é outra filial (CNPJ …)" e "criar o cadastro desta filial" — sem a caixa de gravar o CNPJ', () => {
+  /* NOTA-NFSE-LEITURA-02 (Gabriel 08/11, NF 402) — a frase começa pelo CNPJ DA NOTA (o do cadastro cortava o dela) e há os dois gestos */
+  it('a faixa: "Nota do CNPJ … · cadastrado só o …", "Criar cadastro deste CNPJ" e "Usar o …" — sem a caixa de gravar o CNPJ', () => {
     const fonte = readFileSync(resolve(__dirname, '../../components/financeiro-v2/LancamentoDoXml.tsx'), 'utf8');
     const bloco = fonte.slice(fonte.indexOf("if (r.achadoPor === 'nome' && r.filialDiferente)"), fonte.indexOf("if (r.achadoPor === 'nome') {"));
-    expect(bloco).toContain('é outra filial (CNPJ ${docDoCadastro}) · o XML traz ${doc}');
+    expect(bloco).toContain('Nota do ${rotuloDoc} ${doc}${cidade} · cadastrado só o ${fimDoOutro}');
+    expect(bloco).toContain('data-testid="xml-usar-filial"');
     expect(bloco).toContain('data-testid="xml-criar-filial"');
     expect(bloco).toContain('onClick={onCriar}');
     expect(bloco).not.toContain('xml-gravar-documento');
