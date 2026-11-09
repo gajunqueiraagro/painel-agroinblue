@@ -28,16 +28,22 @@ import { toast } from 'sonner';
 import { isOperacionalPecuaria, grupoDoTipoUso, corDoTipoUso, tintDoTipoUso } from '@/lib/pastos/tiposUso';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
+import { companheirosDoLote, uaHaDoMes } from '@/lib/fechamento/lotacaoDoLote';
 import { useCadastrosDoLote } from '@/hooks/useCadastrosDoLote';
 import { mapaDoCadastro } from '@/lib/lotes/lista';
-import { lotesDoPasto, programaDoPasto } from '@/lib/mapa/programaDoPasto';
+import { lotesDoPasto, programaDoPasto, loteDoMapa, tituloDoLoteNoMapa } from '@/lib/mapa/programaDoPasto';
 import { isPastoDivergencia, DIV_CURTA } from '@/lib/classificacaoArea';
 import { categoriasDasLinhas, subLinhasPorPiquete, type ItemDoMapa } from '@/lib/mapa/linhasDoMapa';
 
 export interface PastoMapaRow {
   pasto: Pasto;
   fechamentoId: string | null;
+  /** MAPA-REBANHO-L2 — o LOTE (carimbo na cria, senão o código; `loteDoMapa`); null = "—" */
   lote: string | null;
+  /** MAPA-REBANHO-L2 — o nome no caderno (`lote_mes` do card; na sub-linha, o texto das linhas do piquete): só no title */
+  loteNoCaderno: string | null;
+  /** MAPA-REBANHO-L2 — o title da célula Lote: o nome no caderno e o código quando aparece o carimbo */
+  tituloDoLote: string;
   /** MAPA-REBANHO-02 — os lotes do pasto no mês (os `lote_id` dos itens com cabeça) e o programa deles (fonte única; null = "—") */
   loteIds: string[];
   programa: string | null;
@@ -51,6 +57,8 @@ export interface PastoMapaRow {
   pesoAtualizado: boolean;
   /** MAPA-REBANHO-R2 — a sub-linha do piquete (card lançado por piquetes): o PAI dela; nulo = a linha é o pasto (só estas entram nos totais) */
   piqueteDe: Pasto | null;
+  /** L3 — os pastos com quem este divide o lote no mês (rotação "Também esteve em"); vazio = o lote é só dele */
+  comPastos?: string[];
 }
 
 export interface MapaTotais {
@@ -219,7 +227,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
         const itensComQtd = Array.from(catMap.values()).filter(v => v.quantidade > 0);
         const pesoAtualizado = itensComQtd.length > 0 && itensComQtd.every(v => v.peso_atualizado);
 
-        return { pasto, fechamentoId: fech?.id ?? null, lote, loteIds, programa: null, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa, pesoAtualizado, piqueteDe };
+        return { pasto, fechamentoId: fech?.id ?? null, lote: null, loteNoCaderno: lote, tituloDoLote: '', loteIds, programa: null, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa, pesoAtualizado, piqueteDe };
       };
 
       const result: PastoMapaRow[] = pastosAtivos.flatMap(pasto => {
@@ -351,10 +359,20 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
   const { clienteAtual } = useCliente();
   const { lotes: lotesDoMes } = useLotesDaFazenda(fazendaDoMes, anoMes);
   const { cadastros: cadastrosDoLote } = useCadastrosDoLote(clienteAtual?.id ?? null);
+  /* L3 (Gabriel 09/11 07:51, Monterrey set/26) — lote em 2+ pastos: a UA/ha é a do banco (UA do lote ÷ SOMA das áreas, a mesma nos pastos;
+     `fn_lotacao_do_mes`), a regra do pasto com piquetes; as cabeças ficam UMA vez, no card de quem lançou. Tela, Excel e PDF. */
+  const rowsDoMes = useMemo(() => {
+    const pastoDoCard = new Map(fechamentos.map(f => [f.id, f.pasto_id]));
+    const com = companheirosDoLote(loteDoMes.alocacoesDoMes, pastoDoCard);
+    const nome = new Map(pastos.map(p => [p.id, p.nome]));
+    return rows.map(r => r.piqueteDe ? r : ({ ...r, uaHa: uaHaDoMes(loteDoMes.lotacaoDoMes.get(r.pasto.id), r.uaHa),
+      comPastos: (com.get(r.pasto.id) ?? []).map(id => nome.get(id) ?? '').filter(Boolean) }));
+  }, [rows, fechamentos, pastos, loteDoMes.alocacoesDoMes, loteDoMes.lotacaoDoMes]);
   const linhas = useMemo(() => {
     const nomes = mapaDoCadastro(cadastrosDoLote);
-    return rows.map(r => ({ ...r, programa: programaDoPasto(r.loteIds, lotesDoMes, nomes) }));
-  }, [rows, lotesDoMes, cadastrosDoLote]);
+    return rowsDoMes.map(r => ({ ...r, lote: loteDoMapa(r.loteIds, lotesDoMes), tituloDoLote: tituloDoLoteNoMapa(r.loteIds, lotesDoMes, r.loteNoCaderno),
+      programa: programaDoPasto(r.loteIds, lotesDoMes, nomes) }));
+  }, [rowsDoMes, lotesDoMes, cadastrosDoLote]);
 
   const getUaHaColor = (uaHa: number | null) => {
     if (!uaHa) return '';
@@ -684,8 +702,20 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                         )}
                       </td>
                       {/* o Lote é texto livre: o comprido corta com o nome inteiro no title (só nesta coluna) */}
-                      <td data-texto className="px-1 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-border/30" title={row.lote || ''}>
-                        {row.lote || <span className="opacity-20">—</span>}
+                      {/* L2 + L3: o lote cadastrado → o texto do caderno (cinza) → "com P_xx" (o lote de outro pasto esteve aqui) → "—";
+                          o title soma ao do L2 os pastos com quem o lote foi dividido */}
+                      <td data-texto className="px-1 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-border/30"
+                        title={[row.tituloDoLote, row.comPastos?.length ? `O lote também esteve em ${row.comPastos.join(', ')} no mês` : ''].filter(Boolean).join(' · ')}
+                        data-testid="lote-do-pasto">
+                        {row.lote
+                          ? row.lote
+                          : row.loteNoCaderno
+                            /* L2 ajuste — sem lote cadastrado: o texto do caderno em CINZA (o title diz "sem lote cadastrado"). Sem itálico: o gate de
+                               cortes reprova SEMPRE o texto inclinado cortado (a inclinação come a última letra) e a coluna é estreita */
+                            ? <span className="block truncate text-slate-400" data-testid="lote-sem-cadastro">{row.loteNoCaderno}</span>
+                            : row.comPastos?.length
+                              ? <span data-testid="lote-com">com {row.comPastos.join(', ')}</span>
+                              : <span className="opacity-20">—</span>}
                       </td>
                       {/* o Programa (nome do cadastro) corta como o Lote: "…" e o nome inteiro no title (o gate de cortes achou o corte seco) */}
                       <td data-texto className="px-1 py-0.5 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis max-w-0" style={{ borderRight: blockBorder }}
@@ -735,7 +765,8 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                         )}
                       </td>
                       <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 text-muted-foreground">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
-                      <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 ${getUaHaColor(row.uaHa)}`}>{isAgri ? null : row.uaHa ? formatNum(row.uaHa, 1) : <span className="opacity-15">—</span>}</td>
+                      <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 ${getUaHaColor(row.uaHa)}`}
+                        title={row.comPastos?.length ? `Lotação do lote com ${row.comPastos.join(', ')}: UA ÷ soma das áreas` : undefined} data-testid="ua-ha-da-linha">{isAgri ? null : row.uaHa ? formatNum(row.uaHa, 1) : <span className="opacity-15">—</span>}</td>
                       <td className="px-0.5 py-0.5 text-center text-[11px]">
                         {row.qualidade ? (
                           <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(row.qualidade)}`}>

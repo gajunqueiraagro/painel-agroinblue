@@ -5,6 +5,7 @@ import { ExportarMesDialog } from '@/components/caderno/ExportarMesDialog';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { ResumoPorAtividade } from '@/components/resumoAtividade/ResumoPorAtividade';
 import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, piquetesNoMes, type Pasto } from '@/hooks/usePastos';
+import { uaHaDoMes as uaHaDoLote } from '@/lib/fechamento/lotacaoDoLote';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda, GLOBAL_FAZENDA } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -1045,7 +1046,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     const fech = getFechamento(p.id);
     const resumo = getResumo(fech, p);
     const lotacaoDoPasto = lotacaoDoMes.get(p.id);
-    const uaHaDoMes = lotacaoDoPasto?.uaHa != null && lotacaoDoPasto.ua > 0 ? lotacaoDoPasto.uaHa : resumo.uaHa;
+    const uaHaDoMes = uaHaDoLote(lotacaoDoPasto, resumo.uaHa);
     const origens = (recebeDe.get(p.id) ?? []).map(id => pastos.find(x => x.id === id)?.nome).filter((n): n is string => !!n);
     return {
       nome: p.nome, lote: loteDoPopup(fech ? itensMap.get(fech.id) ?? [] : [], lotesDaFazenda.lotes),
@@ -1096,7 +1097,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     /* FECH-ROTACAO-01 fatia 3 — a lotação do mês pela função (com o rateio) e de quem este pasto recebe lote */
     const lotacaoDoPasto = lotacaoDoMes.get(p.id);
     const origens = (recebeDe.get(p.id) ?? []).map(id => pastos.find(x => x.id === id)?.nome).filter((n): n is string => !!n);
-    const uaHaDoMes = lotacaoDoPasto?.uaHa != null && lotacaoDoPasto.ua > 0 ? lotacaoDoPasto.uaHa : resumo.uaHa;
+    const uaHaDoMes = uaHaDoLote(lotacaoDoPasto, resumo.uaHa);
     const nPiquetes = piquetesDoMes.get(p.id)?.length ?? 0;
 
     return (
