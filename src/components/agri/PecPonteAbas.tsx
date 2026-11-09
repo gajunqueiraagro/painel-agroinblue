@@ -114,8 +114,9 @@ export function montarPassos(m: MovimentosPec | null): Passo[] {
            p: m.transf_saida, cor: '#B23A3A' }] : []),
     { chave: 'ajustes', rotulo: '(±) Ajustes', dir: 0, p: m.ajustes, cor: CINZA_AJUSTE, semPreco: true,
       title: ajPct != null && ajPct > 1
-        ? `reclassificação de categoria e arredondamento mensal — ${formatNum(ajPct, 1)} % do estoque inicial`
-        : 'reclassificação de categoria e arredondamento mensal' },
+        /* DRE-VARIACAO-EXPLICA-01 (FASE 1 item 6): a reclassificação NÃO mexe em arrobas (o kg que entra = o que sai; medido) */
+        ? `arredondamento mensal — ${formatNum(ajPct, 1)} % do estoque inicial`
+        : 'arredondamento mensal' },
     { chave: 'fim', rotulo: 'Total de arrobas finais', dir: 0, p: m.fim, cor: '#9AA6B2' },
   ];
   /* ⚠ MOVIMENTO QUE NÃO ACONTECEU SOME DA TABELA E DO GRÁFICO — mas as PONTAS e o AJUSTE ficam
