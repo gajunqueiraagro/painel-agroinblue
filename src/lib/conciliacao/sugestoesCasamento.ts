@@ -292,12 +292,18 @@ export interface CandidatoSugestao {
 export interface ExtratoParaSugerir { data: string | null; historico: string | null; valor: number; }
 
 /** Na ordem em que aparecem: o mais provável primeiro. */
-export type TipoSugestao = 'mesmo_valor_nome' | 'mesmo_valor' | 'soma' | 'mesmo_fornecedor' | 'nome_valor' | 'nome_soma' | 'soma_mista';
+export type TipoSugestao =
+  'mesmo_valor_nome' | 'mesmo_valor' | 'soma' | 'do_historico' | 'mesmo_fornecedor' | 'nome_valor' | 'nome_soma' | 'soma_mista';
 /* ⚠ A SOMA DE FORNECEDORES DIFERENTES VEM POR ÚLTIMO — nunca acima de uma pista de nome (decisão do Gabriel, 30/09).
    P153b: o "mesmo fornecedor · valor difere" (em aberto, ±5 dias) vem logo depois das somas exatas e antes da pista de nome solta. */
 const ORDEM_DO_TIPO: Record<TipoSugestao, number> = {
-  mesmo_valor_nome: 0, mesmo_valor: 1, soma: 2, mesmo_fornecedor: 3, nome_valor: 4, nome_soma: 5, soma_mista: 6,
+  mesmo_valor_nome: 0, mesmo_valor: 1, soma: 2, do_historico: 3, mesmo_fornecedor: 3, nome_valor: 4, nome_soma: 5, soma_mista: 6,
 };
+/* CONC-SUGESTOES-FONTE-01 item 4 (Gabriel 08/11, B): com o fornecedor que o HISTÓRICO conhece para o texto do banco, a ordem ganha uma
+   régua por cima da do tipo — 0 = tudo do fornecedor do histórico (no topo), 1 = o resto, 2 = SÓ TEXTO PARECIDO de outro fornecedor
+   (a pista de nome que o histórico desmente: o "LIDER" que casava com LIDERANÇA) — no FIM, depois até da soma mista. */
+const TIPOS_DE_NOME = new Set<TipoSugestao>(['mesmo_fornecedor', 'nome_valor', 'nome_soma']);
+export const SELO_SO_TEXTO = 'só texto parecido';
 
 export interface Sugestao {
   lancamentos: CandidatoSugestao[];
@@ -317,6 +323,11 @@ export interface OpcoesSugestao {
   orcamentoMs?: number;
   /** Teto da lista. */
   maximo?: number;
+  /**
+   * CONC-SUGESTOES-FONTE-01 item 4 — o fornecedor que o histórico conhece para o texto deste movimento (o `resumo` da
+   * `fn_conciliacao_fornecedores_do_historico`, a MESMA regra da faixa "Costuma ser…"). Sem ele, a lista é a de sempre.
+   */
+  fornecedorDoHistorico?: string | null;
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -429,6 +440,19 @@ export function sugerirCasamentos(
   /* No geral, os 30 mais perto da data — o mesmo corte da prévia —, mas com no máximo 3: acima disso é coincidência. */
   tentarSoma([...menores].sort((a, b) => dias(a) - dias(b)).slice(0, 30), 3);
 
+  // ── CONC-SUGESTOES-FONTE-01: o EM ABERTO do fornecedor que o HISTÓRICO conhece, vencendo a ±5 dias, valor diferente ──
+  /* O caso MECANICA LIDER (BB 08/10, −6.000,00): o histórico diz o fornecedor (5 vezes desde 10/04), mas o nome do cadastro não está no
+     texto do banco — sem isto, os em aberto dele nunca apareciam e só a LIDERANÇA (texto parecido) vinha. A janela é a do P153b. */
+  const doHist = opcoes.fornecedorDoHistorico ?? null;
+  if (doHist) {
+    for (const c of pool) {
+      if (c.favorecido_id !== doHist || iguais.has(c.lancamento_id)) continue;
+      if (!EM_ABERTO.has((c.status_transacao ?? '').toLowerCase()) || !c.data_vencimento) continue;
+      if (Math.abs(diasEntre(dataBanco, c.data_vencimento)) > JANELA_MESMO_FORNECEDOR_DIAS) continue;
+      pos('do_historico', [c], `do histórico · previsto ${valorSemMoeda(Number(c.valor_assinado))}`, true);
+    }
+  }
+
   // ── P153b: o EM ABERTO do mesmo fornecedor (o nome do extrato no fornecedor OU na descrição), vencendo a ±5 dias, valor diferente ──
   /* O caso da Guariroba (BB 07/10, −142,72): o recorrente "Agua e Esgoto" de R$ 500 previsto para 09/10. Âmbar: o casar de hoje abre
      com o valor do banco ("era R$ 500,00") — o mesmo caminho da E3, sem regra nova de gravação. */
@@ -456,6 +480,15 @@ export function sugerirCasamentos(
     pos('nome_soma', itens, 'nome · soma diferente', true);
   }
 
-  saida.sort((a, b) => ORDEM_DO_TIPO[a.tipo] - ORDEM_DO_TIPO[b.tipo] || b.forca - a.forca || a.diasDiff - b.diasDiff);
+  const regua = (s: Sugestao) => {
+    if (!doHist) return 1;
+    if (s.lancamentos.every((c) => c.favorecido_id === doHist)) return 0;
+    return TIPOS_DE_NOME.has(s.tipo) ? 2 : 1;
+  };
+  /* o selo troca o começo ("nome ·", "mesmo fornecedor · valor difere:") por "só texto parecido ·": o resto (valor, vencido) fica */
+  for (const s of saida) {
+    if (regua(s) === 2) s.motivo = `${SELO_SO_TEXTO} · ${s.motivo.replace(/^(nome · |mesmo fornecedor · valor difere: )/, '')}`;
+  }
+  saida.sort((a, b) => regua(a) - regua(b) || ORDEM_DO_TIPO[a.tipo] - ORDEM_DO_TIPO[b.tipo] || b.forca - a.forca || a.diasDiff - b.diasDiff);
   return saida.slice(0, maximo).map(({ forca: _f, ...s }) => s);
 }
