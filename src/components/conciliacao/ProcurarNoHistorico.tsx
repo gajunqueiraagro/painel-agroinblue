@@ -108,7 +108,7 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
     return () => { vivo = false; };
   }, [clienteId, estado]);
   const faixa = estado.tipo === 'pronto' ? fraseDaFaixa(estado.termo, estado.r.resumo) : null;
-  const frase = faixa ?? (!nomeDoBanco && estado.tipo === 'antes' ? 'o banco não trouxe o nome: digite' : null);
+  const frase = faixa?.curta ?? (!nomeDoBanco && estado.tipo === 'antes' ? 'o banco não trouxe o nome: digite' : null);
   const contagem = estado.tipo === 'pronto' ? contagemDosAchados(estado.r) : estado.tipo === 'procurando' ? 'procurando…' : '';
   const alturaFixa = ALTURA_DO_CABECALHO_PARA_CASAR + LINHAS_A_VISTA * ALTURA_DA_LINHA_PARA_CASAR + 2;
   /* o cabeçalho só fica PRESO quando o quadro rola de fato (mais linhas que as à vista) — preso num quadro que não rola é vão (P153) */
@@ -147,12 +147,12 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
       <div className={cn('mt-1 overflow-auto rounded-sm border bg-card', preencher && 'min-h-0 flex-1')}
         style={preencher ? { minHeight: ALTURA_DO_CABECALHO_PARA_CASAR + 2 * ALTURA_DA_LINHA_PARA_CASAR + 2 } : { height: alturaFixa }} data-testid="procurar-historico-quadro">
         <div style={{ minWidth: PISO_DO_QUADRO }} data-testid="procurar-historico-piso">
-        <TabelaDaLista larguras={COLUNAS_PARA_CASAR} grande cabecalhoPreso={!!preencher || linhasNoQuadro > LINHAS_A_VISTA} cabecalho={<CabecalhoParaCasar prefixo="procurar"
+        <TabelaDaLista larguras={COLUNAS_PARA_CASAR} cabecalhoPreso={!!preencher || linhasNoQuadro > LINHAS_A_VISTA} cabecalho={<CabecalhoParaCasar prefixo="procurar"
           ordenar={(k) => setOrdem((o) => proximaOrdem(o, k))} seta={(k) => (ordem.coluna === k ? (ordem.sentido === 'asc' ? '↑' : '↓') : '')} />}>
             {frase && (
               <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}>
                 <td colSpan={N_COLUNAS_PARA_CASAR} className={cn('truncate px-1', faixa ? 'bg-amber-50 text-amber-800' : 'text-muted-foreground')}
-                  title={frase} data-testid="procurar-historico-frase">{frase}</td>
+                  title={faixa?.inteira ?? frase} data-testid="procurar-historico-frase">{frase}</td>
               </tr>
             )}
             {estado.tipo === 'falhou' && (

@@ -15,7 +15,6 @@ import { format, parseISO } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL, STATUS_FILTRO_PILULA, STATUS_PILULA_BASE } from '@/lib/financeiro/statusFinanceiro';
-import './TabelaDaLista.css';
 
 export function fmtDate(d: string | null) {
   if (!d) return '-';
@@ -25,13 +24,13 @@ export function fmtDate(d: string | null) {
 
 /** A casca: a tabela de régua fixa, as larguras (`colgroup`, em px medido), o cabeçalho navy preso e o corpo. `cabecalhoPreso` = false: o
  *  quadro que não rola (preso num quadro que não rola é vão — a regra do gate, P153); o Financeiro não o passa (preso sempre). */
-export function TabelaDaLista({ larguras, cabecalho, cabecalhoPreso = true, grande = false, children }: {
-  larguras: readonly (number | null)[]; cabecalho: ReactNode; cabecalhoPreso?: boolean;
-  /** CONC-SUGESTOES-TABELA-01 — o tamanho grande (12px, linha de 26px, cabeçalho sem caixa alta; `TabelaDaLista.css`): as listas da Conciliação. O Financeiro não o passa. */
-  grande?: boolean; children: ReactNode;
+/*  CONC-SUGESTOES-FONTE-01 (Gabriel 08/11 10:26): a variante GRANDE de 04/11 (12px, linha de 26px) SAIU — foi erro, o pedido era fonte
+    menor. As listas da Conciliação desenham esta tabela no tamanho da lista do Financeiro, sem exceção. */
+export function TabelaDaLista({ larguras, cabecalho, cabecalhoPreso = true, children }: {
+  larguras: readonly (number | null)[]; cabecalho: ReactNode; cabecalhoPreso?: boolean; children: ReactNode;
 }) {
   return (
-    <table className={grande ? 'table-financeiro tabela-da-lista-grande w-full caption-bottom text-sm border-collapse' : 'table-financeiro w-full caption-bottom text-sm border-collapse'}
+    <table className="table-financeiro w-full caption-bottom text-sm border-collapse"
       style={{ tableLayout: 'fixed' }}>
       <colgroup>
         {larguras.map((w, i) => <col key={i} style={w == null ? undefined : { width: w }} />)}

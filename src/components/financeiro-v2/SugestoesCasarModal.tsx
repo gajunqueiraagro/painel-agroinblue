@@ -39,7 +39,6 @@ import { ProcurarNoHistorico } from '@/components/conciliacao/ProcurarNoHistoric
 import type { AchadoDoHistorico, ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 
 const corVal = (v: number) => (v < 0 ? 'text-rose-600' : 'text-emerald-600');
-/* `selo-motivo`: no tamanho grande da tabela o selo vai a 9,5px (`TabelaDaLista.css`) */
 const SELO = 'selo-motivo inline-block max-w-full truncate rounded-[3px] border px-[4px] py-[1px] align-middle text-[8px] font-semibold leading-[8px]';
 const SELO_CONFERE = 'border-dashed border-[#1d4ed8] text-[#1d4ed8]';
 const SELO_CONFERIR = 'border-solid border-amber-500 bg-amber-50 text-amber-700';
@@ -117,9 +116,10 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
       <DialogContent className="flex max-h-none max-w-[95vw] flex-col p-0 gap-0 overflow-hidden [&>button.absolute]:hidden"
         onOpenAutoFocus={(ev) => { if (sugestoes.length === 0 && campoProcurar.current) { ev.preventDefault(); campoProcurar.current.focus(); } }}
         style={{ width: LARGURA_MODAL, height: ALTURA_MODAL }} aria-describedby={undefined} data-testid="sugestoes-casar">
-        <div className="flex h-8 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
+        {/* CONC-SUGESTOES-FONTE-01 (08/11): o cabeçalho e a faixa do extrato UM DEGRAU menores (título 11, faixa 28px a 11, valor 13) */}
+        <div className="flex h-7 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
           {/* o nome da conta pode passar da largura: "…" e o título inteiro no `title` (a exceção declarada, como o da Conferência) */}
-          <DialogTitle className="min-w-0 truncate whitespace-nowrap text-[12px] font-medium" title={titulo} data-reticencias-com-title="">
+          <DialogTitle className="min-w-0 truncate whitespace-nowrap text-[11px] font-medium" title={titulo} data-reticencias-com-title="">
             {titulo}
           </DialogTitle>
           <button type="button" onClick={onClose} aria-label="Fechar" className="shrink-0 rounded p-0.5 opacity-80 hover:opacity-100 hover:bg-primary-foreground/10">
@@ -128,14 +128,14 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
         </div>
 
         {/* O TÍTULO: o lançamento do extrato numa faixa própria, separada das sugestões (data · texto do banco · valor, cada um no seu lugar) */}
-        <div className="mx-3 mt-2 grid h-[34px] shrink-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-3 rounded-sm border border-[#c9d6ea] bg-[#eef3fb] px-3 text-[12px]"
+        <div className="mx-3 mt-2 grid h-[28px] shrink-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-3 rounded-sm border border-[#c9d6ea] bg-[#eef3fb] px-3 text-[11px]"
           data-testid="sugestoes-extrato">
           <span className="whitespace-nowrap font-semibold text-[#1e3a5f]">Lançamento do extrato</span>
           <span className="whitespace-nowrap tabular-nums" data-testid="sugestoes-extrato-data">{dataBR(extrato.data)}</span>
           {/* a faixa é o TÍTULO do modal (Gabriel 04/11 06:36): o texto do banco que passa da largura leva "…" e o inteiro no `title` — a
               exceção declarada dos títulos (`data-reticencias-com-title`, a mesma do título "Sugestões para casar · <conta>") */}
           <span className="min-w-0 truncate font-semibold" title={tituloHistorico} data-testid="sugestoes-extrato-nome" data-reticencias-com-title="">{h.texto || '—'}</span>
-          <span className={cn('whitespace-nowrap text-right text-[15px] font-bold tabular-nums', corVal(extrato.valor))} data-testid="sugestoes-extrato-valor">{fmtBRL(extrato.valor)}</span>
+          <span className={cn('whitespace-nowrap text-right text-[13px] font-bold tabular-nums', corVal(extrato.valor))} data-testid="sugestoes-extrato-valor">{fmtBRL(extrato.valor)}</span>
         </div>
 
         {/* a legenda dos selos mora aqui (é deles que ela fala), à direita do título: o rodapé fica só com a seleção */}
@@ -147,7 +147,7 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
             navy fica, só as linhas rolam. O modal não muda de altura (a altura dele é a da janela). */}
         <div className="mx-3 min-h-0 flex-1 overflow-auto rounded-sm border bg-card" style={{ minHeight: PISO_DE_CADA_LISTA }} data-testid="sugestoes-lista">
           <div style={{ minWidth: PISO_PARA_CASAR }} data-testid="sugestoes-piso">
-          <TabelaDaLista larguras={COLUNAS_PARA_CASAR} cabecalho={<CabecalhoParaCasar />} grande>
+          <TabelaDaLista larguras={COLUNAS_PARA_CASAR} cabecalho={<CabecalhoParaCasar />}>
             {sugestoes.length === 0 && (
               <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}><td colSpan={N_COLUNAS_PARA_CASAR} className="px-1 py-1 italic text-muted-foreground" data-testid="sugestoes-nenhuma">Nenhuma sugestão automática</td></tr>
             )}

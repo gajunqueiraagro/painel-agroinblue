@@ -15,17 +15,18 @@ import {
 
 /** O link das ações ("casar", "Casar", "Criar igual"). */
 export const LINK_PARA_CASAR = 'font-semibold text-[#1d4ed8] underline underline-offset-2 hover:text-[#1e40af] whitespace-nowrap';
-/* CONC-SUGESTOES-TABELA-01 (Gabriel 04/11 07:55 e 08:1x) — a TABELA DA LISTA no tamanho GRANDE (`TabelaDaLista grande`, `TabelaDaLista.css`):
-   letra de 12px (datas, NF e Status a 11px), linha de 26px, cabeçalho de 11px sem caixa alta (26px). ⚠ AS LARGURAS para esse tamanho (o pior
-   texto + o recuo): caixinha 28 · as três datas 74 ("00/00/0000" a 11px tabular, com folga entre as três) · Faz. 40 ("ADM") · NF 102
-   ("NF 000.000.000" a 11px) · Valor 126 ("-R$ 99.999.999,99" a 12px negrito) · Status 86 (a pílula "Conciliado") · Motivo 170 (o selo
-   "1/2 · nome · soma de 2" a 10,5px) · ação 84 ("Criar igual"). Descrição e Fornecedor dividem o resto (`null`). Sem colunas congeladas. */
-export const ALTURA_DA_LINHA_PARA_CASAR = 26;
-export const ALTURA_DO_CABECALHO_PARA_CASAR = 26;
-export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 74, 74, 74, null, null, 40, 102, 126, 86, 170, 84];
+/* CONC-SUGESTOES-FONTE-01 (Gabriel 08/11 10:26) — a TABELA DA LISTA no tamanho DA LISTA DO FINANCEIRO (a variante grande de 04/11 saiu):
+   letra de 9px (datas, NF e Status a 8px), linha de 19px, cabeçalho de 8px. ⚠ AS LARGURAS são as da lista do Financeiro
+   (`FinanceiroV2Tab.tsx`): caixinha 28 · as três datas 46 · Faz. 30 · NF 78 · Valor 94 · Status 60; e as duas desta lista: Motivo 120 (o selo
+   a 8px; o texto inteiro no `title`) e a ação 62 ("Criar igual" a 9px negrito — NUNCA corta: é largura própria, não a sobra). Descrição e
+   Fornecedor dividem o resto (`null`). Sem colunas congeladas. */
+export const ALTURA_DA_LINHA_PARA_CASAR = 19;
+export const ALTURA_DO_CABECALHO_PARA_CASAR = 18;
+export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62];
 export const N_COLUNAS_PARA_CASAR = COLUNAS_PARA_CASAR.length;
-/** O piso das duas listas: as fixas + 2 × 120 para Descrição e Fornecedor. Abaixo dele a lista rola de lado DENTRO da caixa dela. */
-export const PISO_PARA_CASAR = COLUNAS_PARA_CASAR.reduce<number>((t, w) => t + (w ?? 0), 0) + 240;
+/** O piso das duas listas: as fixas + 2 × 110 para Descrição e Fornecedor (830px: cabe no modal a 1024 e a 135% de 1240, ~848 úteis — sem
+ *  rolagem de lado). Só abaixo dele (janela < ~900px) a lista rola de lado DENTRO da caixa dela. */
+export const PISO_PARA_CASAR = COLUNAS_PARA_CASAR.reduce<number>((t, w) => t + (w ?? 0), 0) + 220;
 
 export type ColunaQueOrdena = 'comp' | 'venc' | 'pgto' | 'descricao' | 'fornecedor' | 'fazenda' | 'valor' | 'status';
 

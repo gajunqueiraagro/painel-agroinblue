@@ -75,7 +75,10 @@ describe('o modal "Sugestões para casar"', () => {
     expect(nome.className).toContain('truncate');
     expect(nome.getAttribute('title')).toBe(`Pagamento de Boleto · BANCO RABOBANK INTERNATIONAL BRASIL S/\n${EXT_RABO.historico}`);
     expect(within(faixa).getByTestId('sugestoes-extrato-valor').textContent).toBe('-26.127,18');
-    expect(within(faixa).getByTestId('sugestoes-extrato-valor').className).toMatch(/text-\[15px\] font-bold/);
+    /* CONC-SUGESTOES-FONTE-01: a faixa um degrau menor (28px, 11; o valor 13) */
+    expect(within(faixa).getByTestId('sugestoes-extrato-valor').className).toMatch(/text-\[13px\] font-bold/);
+    expect(faixa.className).toMatch(/\bh-\[28px\].*\btext-\[11px\]/);
+    expect(modal.querySelector('h2')!.className).toContain('text-[11px]');
     /* a tabela só tem os lançamentos */
     expect(modal.querySelector('table tbody')!.textContent).not.toContain('RABOBANK INTERNATIONAL BRASIL S/');
   });
@@ -85,11 +88,11 @@ describe('o modal "Sugestões para casar"', () => {
     const { modal } = abrir();
     const t = modal.querySelector('table')!;
     expect(t.className).toContain('table-financeiro');
-    /* AJUSTES 07:55 e 08:1x — o tamanho GRANDE da tabela (12px, linha de 26px, cabeçalho sem caixa alta; `TabelaDaLista.css`) e as larguras dele */
-    expect(t.className).toContain('tabela-da-lista-grande');
+    /* CONC-SUGESTOES-FONTE-01 — o tamanho da lista do Financeiro (a variante grande de 04/11 saiu) e as larguras dela */
+    expect(t.className).not.toContain('tabela-da-lista-grande');
     expect(t.style.tableLayout).toBe('fixed');
     expect([...t.querySelectorAll('col')].map((x) => (x instanceof HTMLElement ? x.style.width : '?')))
-      .toEqual(['28px', '74px', '74px', '74px', '', '', '40px', '102px', '126px', '86px', '170px', '84px']);
+      .toEqual(['28px', '46px', '46px', '46px', '', '', '30px', '78px', '94px', '60px', '120px', '62px']);
     expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Faz.', 'NF', 'Valor', 'Status', 'Motivo', '']);
     const linhas = within(modal).getAllByTestId('sugestao');
     expect(linhas.length).toBeGreaterThan(0);
