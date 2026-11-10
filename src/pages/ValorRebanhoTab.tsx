@@ -1,8 +1,7 @@
 import { useValorRebanhoInicio, type RebanhoInicio } from '@/hooks/useValorRebanhoInicio';
 import { ehJovem } from '@/components/agri/PecPatrimonioModal';
-import { areasDaBase } from '@/lib/zootecnico/areasDaBase';
 import { useCliente } from '@/contexts/ClienteContext';
-import React, { useState, useMemo, useEffect, useCallback, useId } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -26,10 +25,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
 import { FaixaDoSnapshot } from '@/components/SnapshotStatusBanner';
 import { motivoParaRevalidar, podeRevalidarOMes } from '@/lib/fechamento/travaDoP2';
-import { ComposedChart, Line, Area, ReferenceLine, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
+import { useFaixaDoFechamento, CHAVE_DA_FAIXA } from '@/hooks/useFaixaDoFechamento';
+import { FaixaDoFechamento } from '@/components/fechamento/FaixaDoFechamento';
+import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
+import { MiniChart } from '@/components/rebanho/MiniChartDoValor';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
-import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 
 type OrigemPeso = 'pastos' | 'lancamento' | 'saldo_inicial' | 'sem_base';
@@ -44,6 +46,11 @@ interface Props {
   filtroMesInicial?: number;
   onNavigateToFechamentoPastos?: () => void;
   onNavigateToMovimentacoes?: () => void;
+  /** FECH-FAIXA-01 — o ano/mês do shell (o MESMO do Fechamento e do Mapa de pastos): com ele a tela não guarda mês próprio */
+  periodo?: PeriodoControlado['periodo'];
+  onPeriodoChange?: PeriodoControlado['onPeriodoChange'];
+  /** FECH-FAIXA-01 — as etapas da faixa do fechamento que abrem as outras telas do mês (sem a função, só texto) */
+  etapasDoFechamento?: Partial<Record<EtapaDoFechamento, () => void>>;
 }
 
 interface LinhaTabelaValor {
@@ -619,165 +626,9 @@ function GraficoComposicao({ dados, title }: {
   );
 }
 
-/**
- * A cor da linha "sem efeito de mercado" — laranja, nunca o cinza de antes.
- * ⚠ ELA É UMA RESPOSTA, NÃO UM APOIO. Em cinza tracejado ela lia como grade de fundo; a pergunta
- * "quanto do meu valor é rebanho e quanto é preço?" merece uma cor que se vê.
- */
-const COR_SEM_MERCADO = '#D97706';
+/* O `MiniChart` (e as cores da base) mudou para `@/components/rebanho/MiniChartDoValor` — a aba Gráfico do modal da variação usa o mesmo. */
 
-/**
- * A BASE É O INÍCIO, e a área contra ela é a resposta — VALOR-REBANHO-GRAFICOS-BASE-01.
- *
- * ⚠ A LINHA SOZINHA MOSTRAVA A FORMA E ESCONDIA O SINAL: para saber se o rebanho está acima ou
- * abaixo de onde começou, o olho tinha de achar o primeiro ponto e segui-lo até o fim. Com a
- * horizontal do Início e a área pintada, isso é uma olhada.
- */
-const COR_BASE = '#8A8880';
-const COR_ACIMA = '#2A7FE0';
-const COR_ABAIXO = '#E24B4A';
-const OPACIDADE_AREA = 0.14;
-/** A mesma opacidade em hex, para o miolo do quadradinho da legenda (0,14 x 255 = 36 = 0x24). */
-const ALFA_HEX = Math.round(OPACIDADE_AREA * 255).toString(16).padStart(2, '0');
-
-/**
- * O corte de cor sai de um gradiente VERTICAL com dois stops no mesmo offset — e não de dois
- * polígonos calculados à mão.
- *
- * ⚠ É O QUE FAZ A ÁREA GRUDAR NA LINHA. A borda da área é a MESMA curva `monotone` da série, e o
- * x em que a cor troca é o x em que essa curva corta a base — exato por construção, sem segundo
- * desenho que possa divergir do primeiro. Calcular os polígonos daria bordas RETAS sob uma linha
- * curva, e a lasca entre as duas apareceria na tela.
- */
-function GradienteDaBase({ id, fracao }: { id: string; fracao: number }) {
-  return (
-    <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-      <stop offset={0} stopColor={COR_ACIMA} stopOpacity={OPACIDADE_AREA} />
-      <stop offset={fracao} stopColor={COR_ACIMA} stopOpacity={OPACIDADE_AREA} />
-      <stop offset={fracao} stopColor={COR_ABAIXO} stopOpacity={OPACIDADE_AREA} />
-      <stop offset={1} stopColor={COR_ABAIXO} stopOpacity={OPACIDADE_AREA} />
-    </linearGradient>
-  );
-}
-
-function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
-  data: { label: string; fullLabel?: string; value: number | null; value2?: number | null }[];
-  color: string; title: string; unit?: 'currency' | 'arroba';
-  /** A segunda linha — cinza tracejada. Só o 4º gráfico a usa. */
-  serie2?: boolean; rotulo1?: string; rotulo2?: string;
-}) {
-  // Strip leading null points so the chart renders from the first real value (e.g. Jan)
-  const firstRealIdx = data.findIndex(d => d.value !== null);
-  const visibleData = firstRealIdx > 0 ? data.slice(firstRealIdx) : data;
-
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
-  /* ⚠ A BASE É O PONTO "I", NÃO O PRIMEIRO PONTO VISÍVEL. Sem Início não há base: nem a
-     horizontal, nem as áreas. Ver `areasDaBase` — ausência não vira zero. */
-  const base = data[0]?.label === 'I' && data[0].value != null && Number.isFinite(data[0].value)
-    ? data[0].value : null;
-  const r1 = base == null ? null : areasDaBase(visibleData.map(d => d.value), base);
-  const r2 = base == null || !serie2 ? null : areasDaBase(visibleData.map(d => d.value2), base);
-
-  return (
-    /* ⚠ 140px E LINHA INTEIRA — COMPACTO-03. Eram 60px espremidos ao lado dos indicadores, e uma
-       série de treze pontos em 60px não se lê. Descendo para uma faixa própria, os quatro cabem
-       lado a lado com altura para o eixo aparecer.
-       ⚠ E O EIXO Y GANHOU TRÊS RÓTULOS: sem eles o desenho mostrava a FORMA da curva e escondia a
-       ordem de grandeza — duas telas iguais para 8 e para 15 milhões. */
-    <div className="flex-1 min-w-0">
-      <p className="mb-0.5 truncate text-center font-medium" style={{ fontSize: 10, color: '#0C447C' }}>{title}</p>
-      <div className="h-[140px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={visibleData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-            <defs>
-              {r1?.fracaoDaBase != null && <GradienteDaBase id={`base1-${uid}`} fracao={r1.fracaoDaBase} />}
-              {r2?.fracaoDaBase != null && <GradienteDaBase id={`base2-${uid}`} fracao={r2.fracaoDaBase} />}
-            </defs>
-            <XAxis dataKey="label" tick={{ fontSize: 7 }} interval={0} tickLine={false} axisLine={false} />
-            <YAxis width={34} tick={{ fontSize: 8 }} tickLine={false} axisLine={false} tickCount={3}
-              domain={['auto', 'auto']}
-              tickFormatter={(v: number) => (Math.abs(v) >= 1_000_000
-                ? `${formatNum(v / 1_000_000, 1)}mi`
-                : Math.abs(v) >= 1000 ? `${formatNum(v / 1000, 0)}k` : formatNum(v, 0))} />
-            <RechartsTooltip
-              contentStyle={{ fontSize: 9, padding: '2px 6px' }}
-              labelStyle={{ fontSize: 8 }}
-              labelFormatter={(label: string, payload: any[]) => payload?.[0]?.payload?.fullLabel || label}
-              formatter={(v: number) => {
-                if (unit === 'currency') return ['R$ ' + formatNum(v, 0), ''];
-                if (unit === 'arroba') return [formatNum(v, 1) + ' @', ''];
-                return [formatNum(v, 1), ''];
-              }}
-            />
-            {/* ⚠ AS ÁREAS VÊM ANTES DAS LINHAS: o recharts desenha na ordem dos filhos, e elas
-                passam POR BAIXO. Cada série tem a sua; onde se sobrepõem, sobrepõem. */}
-            {r1?.fracaoDaBase != null && base != null && (
-              <Area type="monotone" dataKey="value" baseValue={base} stroke="none"
-                fill={`url(#base1-${uid})`} connectNulls={false} isAnimationActive={false}
-                activeDot={false} tooltipType="none" legendType="none" />
-            )}
-            {r2?.fracaoDaBase != null && base != null && (
-              <Area type="monotone" dataKey="value2" baseValue={base} stroke="none"
-                fill={`url(#base2-${uid})`} connectNulls={false} isAnimationActive={false}
-                activeDot={false} tooltipType="none" legendType="none" />
-            )}
-            {base != null && (
-              <ReferenceLine y={base} stroke={COR_BASE} strokeWidth={0.8} strokeDasharray="2 3" />
-            )}
-            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2, fill: color, strokeWidth: 0 }} activeDot={{ r: 3.5 }} connectNulls={false} />
-            {/* ⚠ A TRACEJADA É O MESMO REBANHO AO PREÇO DO INÍCIO: a distância até a cheia é o
-                efeito de mercado acumulado, e ela sozinha é a produção. */}
-            {serie2 && (
-              <Line type="monotone" dataKey="value2" stroke={COR_SEM_MERCADO} strokeWidth={1.5}
-                strokeDasharray="3 2" dot={{ r: 2, fill: COR_SEM_MERCADO, strokeWidth: 0 }}
-                activeDot={{ r: 3.5 }} connectNulls={false} />
-            )}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-      {(serie2 || base != null) && (
-        <div className="flex flex-wrap items-center justify-center gap-x-2" style={{ fontSize: 8 }}>
-          {serie2 && (
-            <>
-              <span className="flex items-center gap-1">
-                <span className="inline-block" style={{ width: 10, height: 2, backgroundColor: color }} />{rotulo1}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block" style={{ width: 10, height: 0, borderTop: `2px dashed ${COR_SEM_MERCADO}` }} />{rotulo2}
-              </span>
-            </>
-          )}
-          {base != null && (
-            /* ⚠ SÓ O SÍMBOLO, E O NOME NO `title`. Medido: com os rótulos escritos, os cinco itens
-               somavam 294,5px numa caixa de 220 — não cabiam em uma linha nem com espaçamento
-               zero, e a faixa dos gráficos crescia 12px. O símbolo aqui NÃO é abreviação de um
-               texto: a linha tracejada cinza e os dois quadradinhos são exatamente o que está
-               desenhado logo acima, e quem precisar do nome tem o `title`. */
-            /* Os três andam juntos e mais apertados que os itens de texto: são UM assunto. */
-            <div className="flex items-center" style={{ columnGap: 3 }}>
-              <span className="flex items-center gap-1" title="base: início">
-                <span className="inline-block" style={{ width: 10, height: 0, borderTop: `1px dashed ${COR_BASE}` }} />
-              </span>
-              {/* ⚠ O QUADRADINHO LEVA A BORDA SÓLIDA E O MIOLO A 14 %: no preenchimento da área
-                  essa opacidade é legível porque ela cobre altura; num quadrado de 8px ela
-                  sumiria, e uma legenda sólida mentiria sobre a cor que está no gráfico. */}
-              <span className="flex items-center gap-1" title="acima do início">
-                <span className="inline-block h-2 w-2 rounded-[1px]"
-                  style={{ backgroundColor: `${COR_ACIMA}${ALFA_HEX}`, outline: `1px solid ${COR_ACIMA}` }} />
-              </span>
-              <span className="flex items-center gap-1" title="abaixo do início">
-                <span className="inline-block h-2 w-2 rounded-[1px]"
-                  style={{ backgroundColor: `${COR_ABAIXO}${ALFA_HEX}`, outline: `1px solid ${COR_ABAIXO}` }} />
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaVolta, filtroAnoInicial, filtroMesInicial, onNavigateToFechamentoPastos, onNavigateToMovimentacoes }: Props) {
+export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaVolta, filtroAnoInicial, filtroMesInicial, onNavigateToFechamentoPastos, onNavigateToMovimentacoes, periodo, onPeriodoChange, etapasDoFechamento }: Props) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
@@ -800,9 +651,17 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
-  const mesAtual = filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : String(new Date().getMonth() + 1).padStart(2, '0');
-  const [mesFiltro, setMesFiltro] = useState(mesAtual);
+  /* FECH-FAIXA-01 (Gabriel 08/11 07:17) — o MÊS ÚNICO do fechamento: com `periodo` (o ano/mês do shell, o mesmo do Fechamento e do Mapa
+     de pastos) a tela lê e escreve nele (`usePeriodoDaTela`, nenhuma cópia); sem ele, o estado é dela, como sempre. Antes o shell só
+     passava o ano e o mês caía no de HOJE: com a BG em set/26 no Fechamento, o Valor do Rebanho abria em nov/26. */
+  const periodoDaTela = usePeriodoDaTela({ periodo, onPeriodoChange }, {
+    ano: filtroAnoInicial || String(new Date().getFullYear()),
+    mes: filtroMesInicial || new Date().getMonth() + 1,
+  });
+  const anoFiltro = periodoDaTela.ano;
+  const mesFiltro = String(periodoDaTela.mes).padStart(2, '0');
+  const setAnoFiltro = periodoDaTela.setAno;
+  const setMesFiltro = (m: string) => periodoDaTela.setMes(Number(m));
   /**
    * O CARD "INÍCIO" — VALOR-REBANHO-COMPACTO-01.
    *
@@ -812,12 +671,18 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
    */
   const [verInicio, setVerInicio] = useState(false);
 
+  /* sem o shell (hospedeiro legado), a prop ainda semeia o mês quando muda; controlada, quem manda é o shell */
+  const controlado = periodoDaTela.controlado;
   useEffect(() => {
+    if (controlado) return;
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
     if (filtroMesInicial) setMesFiltro(String(filtroMesInicial).padStart(2, '0'));
-  }, [filtroAnoInicial, filtroMesInicial]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- os setters vêm do hook (o mesmo efeito de antes, só as props)
+  }, [filtroAnoInicial, filtroMesInicial, controlado]);
 
   const anoMes = `${anoFiltro}-${mesFiltro}`;
+  /* FECH-FAIXA-01 — a faixa do fechamento do mês (as mesmas leituras nas três telas) */
+  const faixaDoMes = useFaixaDoFechamento(anoMes);
   /* ⚠ SEMPRE CHAMADO, nunca dentro de `if`: hook condicional derruba a tela (check:hooks). Quando o
      card está fechado ele lê e ninguém olha — é uma consulta por ano, não por clique. */
   const { inicio, carregando: carregandoInicio } = useValorRebanhoInicio(Number(anoFiltro), fazendaId, clienteAtual?.id);
@@ -841,6 +706,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
     validadoComP2Aberto,
     isAdmin,
     reabrirFechamento,
+    reabrirPelaEdicao,
   } = useValorRebanho(anoMes);
 
   // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
@@ -1500,7 +1366,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
     });
   }, [viewDataAnoAtual, mesNum, inicio, mesTemFechamento]);
 
+  /* VR-PRECO-EDITAR-01 — o 1º preço mexido de um mês VALIDADO reabre a validação sozinho (uma vez; a recusa do banco libera de novo) */
+  const reabrindoPelaEdicao = useRef(false);
+  const aoMexerNoPreco = () => {
+    if (!validadoComP2Aberto || reabrindoPelaEdicao.current) return;
+    reabrindoPelaEdicao.current = true;
+    void reabrirPelaEdicao().finally(() => {
+      reabrindoPelaEdicao.current = false;
+      void refetchSnap();
+      qc.invalidateQueries({ queryKey: ['valor-rebanho-snapshot', fazendaId, anoFiltro, mesFiltro] });
+      qc.invalidateQueries({ queryKey: [CHAVE_DA_FAIXA] });
+    });
+  };
+
   const handlePrecoChange = (codigo: string, value: string) => {
+    aoMexerNoPreco();
     const sanitized = value.replace(/[^0-9.,]/g, '');
     setPrecosDisplay(prev => ({ ...prev, [codigo]: sanitized }));
     const num = parseFloat(sanitized.replace(',', '.'));
@@ -1530,6 +1410,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
     }));
 
     await salvarPrecos(items, totalRebanhoLive, pesoTotalKgLive, snapshotDetalhado);
+    /* FECH-FAIXA-01 — salvou e fechou: a faixa do mês relê (② passa a validado, com o valor do mês) */
+    qc.invalidateQueries({ queryKey: [CHAVE_DA_FAIXA] });
   };
 
   /* REVALIDAR-BG-SET26 (Gabriel 05/11): o "Revalidar" do aviso só relia duas consultas (`invalidateQueries`) — não gravava nada e o
@@ -1544,6 +1426,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
       await refetchSnap();
       qc.invalidateQueries({ queryKey: ['valor-rebanho-snapshot', fazendaId, anoFiltro, mesFiltro] });
       qc.invalidateQueries({ queryKey: ['fechamento-status', fazendaId, anoFiltro] });
+      /* FECH-FAIXA-01 — revalidou: a faixa do mês relê o snapshot (② deixa de dizer "invalidado") */
+      qc.invalidateQueries({ queryKey: [CHAVE_DA_FAIXA] });
     }
   };
 
@@ -1563,6 +1447,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
       strMap[p.categoria] = fmtKg(v);
     });
 
+    aoMexerNoPreco();
     setPrecosLocal(numMap);
     setPrecosDisplay(strMap);
     toast.success(`${prev.length} preços copiados do mês anterior`);
@@ -1590,9 +1475,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
   const uBaseInicialIncompleta = isGlobal ? false : (isAnoInicial && baseInicialIncompleta);
   const uFonteMes = isGlobal ? globalData.fonteMes : fonteMes;
   const uHistoricoPorMes = isGlobal ? globalData.historicoPorMes : historicoPorMes;
-  const { isReadOnly: isMesReadOnlyVR } = useMasterLock(anoMes);
-  const masterReadOnlyVR = isMesReadOnlyVR(anoMes);
-  const uCanEdit = isGlobal ? false : (canEdit && !masterReadOnlyVR);
+  /* VR-PRECO-EDITAR-01 (Gabriel 09/11 06:42) — o preço do mês ABERTO não passa pela trava master (`useMasterLock`, só de tela): ela
+     mede "fechado" por pastos fechados + preço gravado, não pelo fechamento do Valor do Rebanho, e travava justamente o mês reaberto
+     (BG out/26: 16/16 pastos fechados, o VR aberto, cliente sem master → ninguém editava e o "Desbloquear" nem aparecia). A trava
+     desta tela é o fechamento do próprio Valor do Rebanho (`canEdit`); mês validado reabre sozinho ao mexer no preço. */
+  const uCanEdit = isGlobal ? false : canEdit;
   /* BG-SET26-REVALIDAR — o Revalidar NÃO passa pela trava de tela (ver `podeRevalidarOMes`): o mês a revalidar é justamente o "travado" */
   const podeRevalidar = podeRevalidarOMes({ global: isGlobal, fonteMes, mesFuturo: isMesFuturo });
   const uTabelaUsaSnapshot = isGlobal
@@ -1705,6 +1592,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
 
   return (
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
+      {/* FECH-FAIXA-01 — a faixa do fechamento: a 1ª linha, no MESMO lugar nas três telas */}
+      {/* VR-PRECO-EDITAR-01 ampliado — a trava do MÊS na linha da faixa (o preço do VR não passa por ela; os pastos sim) */}
+      <div className="flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><FaixaDoFechamento estado={faixaDoMes} atual="valor" abrir={etapasDoFechamento} /></div>{!isGlobal && <MasterLockBanner anoMes={anoMes} naFaixa />}</div>
       {/* ⚠ O INÍCIO NÃO RECEBE O CADEADO DO MÊS: ele não é um mês, é a base. O banner falava de
           "2021-09 fechado" sobre um retrato de 1º de janeiro, e o overlay o deixava esmaecido como
           se houvesse algo a editar ali. */}
@@ -1740,8 +1630,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
             const mesAtualNum = Number(mesFiltro);
             const mesAnterior = mesAtualNum === 1 ? 12 : mesAtualNum - 1;
             const anoAnterior = mesAtualNum === 1 ? Number(anoFiltro) - 1 : Number(anoFiltro);
-            setAnoFiltro(String(anoAnterior));
-            setMesFiltro(String(mesAnterior).padStart(2, '0'));
+            periodoDaTela.setPeriodo(String(anoAnterior), mesAnterior);
           } : undefined} />
       ) : uFonteMes === 'live' && !isMesFuturo ? (
         /* ⚠ O AVISO DO MÊS ABERTO MORA AQUI, NA MESMA FAIXA — 03d. Ele era uma linha a MAIS, logo
@@ -1762,7 +1651,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
       ) : isGlobal ? (
         <div style={{ height: 22 }} aria-hidden />
       ) : (
-        <div style={{ height: 22 }}><MasterLockBanner anoMes={anoMes} compacto /></div>
+        /* VR-PRECO-EDITAR-01 ampliado — a trava do mês subiu para a linha da faixa (uma só, nas 3 telas): aqui fica o lugar vazio */
+        <div style={{ height: 22 }} aria-hidden />
       )}
       {/* ⚠ A LINHA DE ESTADO TEM 18px FIXOS — A23. Ela media 28 no mês (por causa dos botões `h-7`)
           e 20 no Início, e essa diferença de 8px descia por toda a tela: a régua de meses, a
@@ -1786,11 +1676,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
             montagem; ela nunca foi uma segunda fonte, só escondia o controle. */}
         <div className="flex h-[18px] shrink-0 items-center gap-0.5 rounded border bg-card px-0.5">
           <button type="button" aria-label="Ano anterior"
-            onClick={() => setAnoFiltro(a => String(Number(a) - 1))}
+            onClick={() => setAnoFiltro(String(Number(anoFiltro) - 1))}
             className="px-1 text-[11px] leading-none text-muted-foreground hover:text-foreground">◂</button>
           <span className="min-w-[30px] text-center text-[10px] font-semibold tabular-nums">{anoFiltro}</span>
           <button type="button" aria-label="Próximo ano"
-            onClick={() => setAnoFiltro(a => String(Number(a) + 1))}
+            onClick={() => setAnoFiltro(String(Number(anoFiltro) + 1))}
             className="px-1 text-[11px] leading-none text-muted-foreground hover:text-foreground">▸</button>
         </div>
 
@@ -2060,7 +1950,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
             </tbody>
             <tfoot>
               <tr style={{ height: 16, backgroundColor: '#D6D4CC' }}>
-                <td className="truncate px-1.5 py-0 text-left font-medium" style={{ fontSize: 10, lineHeight: 1 }}>Total</td>
+                {/* FECH-FAIXA-01 — "ver pastos" ao lado dos totais: o Fechamento do MESMO mês (a etapa ① da faixa, a mesma regra de acesso) */}
+                <td className="whitespace-nowrap px-1.5 py-0 text-left font-medium" style={{ fontSize: 10, lineHeight: 1 }}>
+                  Total
+                  {etapasDoFechamento?.pastos && (
+                    <button type="button" onClick={etapasDoFechamento.pastos} className="ml-1.5 font-normal text-[#1e3a5f] underline hover:no-underline"
+                      style={{ fontSize: 9.5 }} title="Os pastos deste mês no Fechamento" data-testid="vr-ver-pastos">ver pastos</button>
+                  )}
+                </td>
                 <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{formatNumNullable(uMetricasTabela.cabecas, 0)}</td>
                 <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{formatNumNullable(uMetricasTabela.pesoMedio, 2)}</td>
                 <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>

@@ -19,6 +19,7 @@
  * lançamento ao Conciliar (`UPDATE ... SET valor`, com a data do extrato e status realizado): o
  * previsto vira o real. Nada concilia sozinho; o operador ainda clica Conciliar.
  */
+import { useConteudoEstavel } from '@/lib/react/conteudoEstavel';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fechaAoCentavo, podeCriarPelaDiferenca } from '@/lib/conciliacao/tolerancia';
 import { supabase } from '@/integrations/supabase/client';
@@ -110,7 +111,15 @@ interface Props {
   modelo?: ModeloDoHistorico | null;
 }
 
-export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta, contaBancariaId, onConciliado, clienteId, modelo }: Props) {
+export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, iniciais: iniciaisDaProp, nomeConta, contaBancariaId, onConciliado, clienteId,
+  modelo: modeloDaProp }: Props) {
+  /* CONC-CRIAR-PERDE-DADOS-01 item 2 (Gabriel 08/11) — o "Criar lançamento pela diferença" + salvar voltava com "levados (0)" e a diferença
+     cheia: o efeito que monta os levados (`[open, iniciais, extrato]`) rodava de novo quando o dono se repintava com um objeto NOVO e IGUAL
+     (a estação relê o mês depois que o lançamento grava e refaz o `extratoDoCasar`), e apagava o lançamento novo e a simulação. Daqui para
+     baixo o corpo vê os três por CONTEÚDO: o modal aberto só recomeça quando o dado muda de verdade (outro extrato, outros levados). */
+  const extrato = useConteudoEstavel(extratoDaProp);
+  const iniciais = useConteudoEstavel(iniciaisDaProp);
+  const modelo = useConteudoEstavel(modeloDaProp);
   const [levados, setLevados] = useState<Levado[]>([]);
   const [sim, setSim] = useState<Simulacao | null>(null);
   const [erroRodape, setErroRodape] = useState<string | null>(null);
@@ -300,7 +309,8 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
           <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-2.5">
             <div className="rounded-xl bg-muted px-3 py-2 grid grid-cols-[70px_1fr] gap-x-2 gap-y-0.5 items-baseline">
               <span className="text-[10px] text-muted-foreground">no banco</span>
-              <span className={cn('text-[11px] font-semibold tabular-nums', corVal(extrato.valor))}>{fmtBRL(extrato.valor)}</span>
+              {/* CONC-CRIAR-PERDE-DADOS-01 item 2 — a escala de modal (PADROES-UI A18): o valor do bloco de topo 15/500, o rótulo 10 */}
+              <span className={cn('text-[15px] font-medium tabular-nums', corVal(extrato.valor))} data-testid="casar-valor-banco">{fmtBRL(extrato.valor)}</span>
               <span className="text-[10px] text-muted-foreground">histórico</span>
               <span className="text-[11px] break-words">{extrato.historico ?? '—'}</span>
               <span className="text-[10px] text-muted-foreground">conta</span>
@@ -319,7 +329,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                     /* CONC-CRIAR-COM-NOTA-01 (Gabriel 04/11 06:28) — com a NF: a coluna do nº (000.000.000 a 9,5px mede 52) e a linha a 9,5px,
                        UMA linha só (nada quebra): descrição e fornecedor com "…" e o inteiro no `title`; o nº nunca corta */
                     if (comNF) return (
-                      <div className="grid grid-cols-[34px_58px_minmax(0,1fr)_minmax(0,1fr)_62px] gap-x-2 items-baseline whitespace-nowrap text-[9.5px]" data-testid="levado-identificacao">
+                      <div className="grid grid-cols-[34px_58px_minmax(0,1fr)_minmax(0,1fr)_62px] gap-x-2 items-baseline whitespace-nowrap text-[10px]" data-testid="levado-identificacao">
                         <span className="text-muted-foreground tabular-nums" title="vencimento">{vencCurto(l.data_vencimento)}</span>
                         <span className="tabular-nums" title="nº da nota fiscal" data-testid="levado-nf">{l.numero_documento ? (formatNFNumber(l.numero_documento) || l.numero_documento) : '—'}</span>
                         <span className="truncate" title={l.descricao ?? undefined}>{l.descricao ?? '—'}</span>
@@ -453,10 +463,11 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
             )}
           </div>
 
-          <div className="flex h-[34px] shrink-0 items-center justify-end gap-2 border-t px-3 whitespace-nowrap">
+          {/* a escala de modal (A18): rodapé de 32px, botões de 22px */}
+          <div className="flex h-8 shrink-0 items-center justify-end gap-2 border-t px-3 whitespace-nowrap" data-testid="casar-rodape">
             <button type="button" onClick={onClose} className="text-[11px] text-muted-foreground underline underline-offset-2">Cancelar</button>
-            <button type="button" disabled={!podeCriar} onClick={() => setCriando(true)}
-              className={cn('rounded border px-2 py-0.5 text-[11px]',
+            <button type="button" disabled={!podeCriar} onClick={() => setCriando(true)} data-testid="criar-pela-diferenca"
+              className={cn('h-[22px] rounded border px-2 text-[11px]',
                 podeCriar ? 'hover:bg-muted' : 'opacity-40 cursor-not-allowed')}>
               Criar lançamento pela diferença
             </button>
@@ -468,7 +479,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                   setAceitos(novos);
                   void conciliar(itensBase.map((i) => (novos.includes(i.lancamento_id) ? { ...i, aceitar_valor_extrato: true } : i)));
                 }}
-                className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
+                className={cn('h-[22px] rounded px-2.5 text-[11px] font-medium',
                   podeConciliar ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
                 Ligar com o valor do extrato
               </button>
@@ -476,7 +487,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
               <button type="button" disabled={!podeConciliar && !podeComDiferenca} data-testid="conciliar-casar"
                 title={!podeConciliar && !podeComDiferenca && editado && sim && !sim.ok ? 'Com um valor editado, a soma precisa fechar com o banco.' : undefined}
                 onClick={() => { if (podeConciliar) void conciliar(); else setComDiferenca(true); }}
-                className={cn('min-w-[86px] rounded px-2.5 py-0.5 text-[11px] font-medium',
+                className={cn('h-[22px] min-w-[86px] rounded px-2.5 text-[11px] font-medium',
                   podeConciliar || podeComDiferenca ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
                 {/* min-w: "Conciliar…" / "Conciliar" / "Conciliando…" trocam o texto, nunca a posicao dos botoes ao lado */}
                 {gravando ? 'Conciliando…' : podeComDiferenca ? 'Conciliar…' : trocaConta ? 'Conciliar e trocar a conta' : 'Conciliar'}

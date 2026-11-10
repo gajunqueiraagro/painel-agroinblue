@@ -18,6 +18,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
 import { formatarAreaBR } from '@/lib/areaBR';
+import { cn } from '@/lib/utils';
+import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
+import { QUADRO_REGUA, RODAPE_REGUA, TH_REGUA } from '@/components/ui/regua-tabela';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import {
   API_AREA_OFICIAL, mesesOferecidos, podeUsarMapa, porQueNaoMarca, soma,
@@ -33,7 +36,8 @@ const COLUNAS: readonly ColunaOrdenavel<LinhaDeArea, Coluna>[] = [
   { coluna: 'difPct', tipo: 'numero', valor: (l) => l.difPct },
   { coluna: 'ultima', tipo: 'texto', valor: (l) => l.ultimaDesde },
 ];
-const TH = 'sticky top-0 z-10 bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted/70';
+/* PASTO-FICHA-01 PR B (pedido 3) — o cabeçalho navy da régua, PRESO: só o corpo rola, dentro do quadro */
+const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary');
 const ROTULO_ORIGEM: Record<string, string> = { mapa: 'do mapa', manual: 'à mão', cadastro: 'no cadastro' };
 const mesBR = (am: string) => `${am.slice(5, 7)}/${am.slice(0, 4)}`;
 const ha = (v: number | null) => formatarAreaBR(v) || '—';
@@ -73,6 +77,7 @@ export function AreasDosPastos({ fazendaId, fazendaCodigo, podeEditar, api = API
   const todos = marcaveis.length > 0 && marcaveis.every((l) => marcados.has(l.pastoId));
   const alternarUm = (id: string) => setMarcados((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const alternarTodos = () => setMarcados(todos ? new Set() : new Set(marcaveis.map((l) => l.pastoId)));
+  const quadro = useAlturaAteOFim({ folga: 96, minimo: 120 });
   const depoisDeGravar = () => { setUsando(false); setDesfazendo(null); setMarcados(new Set()); void ler(); aoGravar(); };
 
   return (
@@ -97,7 +102,8 @@ export function AreasDosPastos({ fazendaId, fazendaCodigo, podeEditar, api = API
         )}
       </div>
       {erro && <p className="text-[11px] text-destructive" data-testid="areas-erro">{erro}</p>}
-      <div className="rounded border bg-card overflow-hidden">
+      <div ref={quadro.ref} className={QUADRO_REGUA} style={{ height: quadro.altura }} data-testid="areas-quadro">
+      <div className="min-h-0 flex-1 overflow-auto" style={{ scrollbarGutter: 'stable' }} data-tabela-que-rola="">
         <table className="w-full table-fixed text-[10px]" data-testid="areas-tabela">
           <colgroup>
             <col style={{ width: 28 }} /><col /><col style={{ width: 80 }} /><col style={{ width: 80 }} /><col style={{ width: 76 }} />
@@ -107,7 +113,7 @@ export function AreasDosPastos({ fazendaId, fazendaCodigo, podeEditar, api = API
             <tr>
               <th className={TH}>
                 {podeEditar && (
-                  <Checkbox checked={todos} onCheckedChange={alternarTodos} disabled={marcaveis.length === 0} className="h-3.5 w-3.5 align-middle"
+                  <Checkbox checked={todos} onCheckedChange={alternarTodos} disabled={marcaveis.length === 0} className="h-3.5 w-3.5 align-middle border-primary-foreground"
                     aria-label="Marcar todos os que podem usar a área do mapa" title="Marcar todos os que podem usar a área do mapa" data-testid="areas-marcar-todos" />
                 )}
               </th>
@@ -129,21 +135,21 @@ export function AreasDosPastos({ fazendaId, fazendaCodigo, podeEditar, api = API
               const ultima = l.ultimaOrigem && l.ultimaDesde ? `${ROTULO_ORIGEM[l.ultimaOrigem]} · desde ${mesBR(l.ultimaDesde)}` : '';
               return (
                 <tr key={l.pastoId} className={`border-b last:border-b-0 ${i % 2 ? 'bg-muted/30' : ''}`} data-testid="areas-linha">
-                  <td className="px-2 py-0.5">
+                  <td className="h-[19px] px-1 py-0">
                     {podeEditar && (
                       <Checkbox checked={marcados.has(l.pastoId)} onCheckedChange={() => alternarUm(l.pastoId)} disabled={!!motivo}
                         className="h-3.5 w-3.5 align-middle" aria-label={`Marcar ${l.nome}`} title={motivo ?? `Marcar ${l.nome}`} data-testid="areas-marcar" />
                     )}
                   </td>
                   {/* o `title` é o texto INTEIRO da célula (o gate confere a reticência contra ele); o motivo da trava mora na caixa */}
-                  <td className="truncate px-2 py-0.5 font-medium" title={l.trava ? `${l.nome} · travado` : l.nome}>
+                  <td className="truncate h-[19px] px-1 py-0 font-medium" title={l.trava ? `${l.nome} · travado` : l.nome}>
                     {l.nome}{l.trava && <span className="font-normal text-muted-foreground">{' · travado'}</span>}
                   </td>
-                  <td className="px-2 py-0.5 text-right tabular-nums">{ha(l.oficial)}</td>
-                  <td className="px-2 py-0.5 text-right tabular-nums" title={l.nPoligonos === 0 ? 'sem polígono no mapa' : undefined}>{ha(l.mapa)}</td>
-                  <td className={`px-2 py-0.5 text-right tabular-nums ${forte ? 'font-semibold text-amber-700' : ''}`}>{difHa(l.difHa)}</td>
-                  <td className={`px-2 py-0.5 text-right tabular-nums ${forte ? 'font-semibold text-amber-700' : ''}`}>{pct(l.difPct)}</td>
-                  <td className="px-2 py-0.5">
+                  <td className="h-[19px] px-1 py-0 text-right tabular-nums">{ha(l.oficial)}</td>
+                  <td className="h-[19px] px-1 py-0 text-right tabular-nums" title={l.nPoligonos === 0 ? 'sem polígono no mapa' : undefined}>{ha(l.mapa)}</td>
+                  <td className={`h-[19px] px-1 py-0 text-right tabular-nums ${forte ? 'font-semibold text-amber-700' : ''}`}>{difHa(l.difHa)}</td>
+                  <td className={`h-[19px] px-1 py-0 text-right tabular-nums ${forte ? 'font-semibold text-amber-700' : ''}`}>{pct(l.difPct)}</td>
+                  <td className="h-[19px] px-1 py-0">
                     <div className="flex items-center gap-1">
                       <span className="min-w-0 flex-1 truncate text-muted-foreground" title={ultima || undefined}>{ultima}</span>
                       {podeEditar && l.ultimaId && (
@@ -157,16 +163,26 @@ export function AreasDosPastos({ fazendaId, fazendaCodigo, podeEditar, api = API
               );
             })}
           </tbody>
-          <tfoot>
-            <tr className="border-t bg-muted/40 font-semibold" data-testid="areas-rodape">
+        </table>
+      </div>
+      {/* o rodapé PRESO no pé do quadro (régua): tabela própria, o mesmo colgroup, fora da rolagem */}
+      <div className={RODAPE_REGUA} style={{ scrollbarGutter: 'stable' }}>
+        <table className="w-full table-fixed text-[10px]">
+          <colgroup>
+            <col style={{ width: 28 }} /><col /><col style={{ width: 80 }} /><col style={{ width: 80 }} /><col style={{ width: 76 }} />
+            <col style={{ width: 64 }} /><col style={{ width: 150 }} />
+          </colgroup>
+          <tbody>
+            <tr className="font-semibold" data-testid="areas-rodape">
               <td />
-              <td className="px-2 py-0.5">{linhas.length} pasto{linhas.length === 1 ? '' : 's'}</td>
-              <td className="px-2 py-0.5 text-right tabular-nums">{ha(soma(linhas, 'oficial'))}</td>
-              <td className="px-2 py-0.5 text-right tabular-nums">{ha(soma(linhas.filter((l) => l.mapa != null), 'mapa'))}</td>
+              <td className="h-[22px] px-1 py-0">{linhas.length} pasto{linhas.length === 1 ? '' : 's'}</td>
+              <td className="h-[22px] px-1 py-0 text-right tabular-nums">{ha(soma(linhas, 'oficial'))}</td>
+              <td className="h-[22px] px-1 py-0 text-right tabular-nums">{ha(soma(linhas.filter((l) => l.mapa != null), 'mapa'))}</td>
               <td colSpan={3} />
             </tr>
-          </tfoot>
+          </tbody>
         </table>
+      </div>
       </div>
       {usando && (
         <UsarMapaDialog api={api} fazendaCodigo={fazendaCodigo} mes={mes} pastoIds={[...marcados]}

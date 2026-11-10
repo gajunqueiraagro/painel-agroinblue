@@ -31,7 +31,7 @@ describe('S1 — o DANFSe sintetico lido inteiro', () => {
     expect(n.chave).toBe(chaveNfseSintetica('57', '2610'));
     expect([n.numero, n.serie, n.emissao, n.tipoNota, n.finalidade]).toEqual(['57', '', '2026-10-06', 'saida', 'normal']);
     expect(n.emitente).toEqual({
-      documento: CNPJ_PRESTADOR_SINTETICO, nome: 'OFICINA SINTETICA DE TESTE LTDA', fantasia: null, ie: null,
+      documento: CNPJ_PRESTADOR_SINTETICO, nome: 'OFICINA SINTETICA DE TESTE LTDA', fantasia: null, ie: null, inscricaoMunicipal: '1234',
       endereco: { logradouro: 'RUA DAS FLORES', numero: '100', complemento: null, bairro: 'CENTRO', municipio: 'CAMPO GRANDE', uf: 'MS', cep: '79000000', telefone: null },
     });
     expect(n.destinatario).toEqual({ documento: '11144477735', nome: 'PRODUTOR SINTETICO DE TESTE', ie: '280000001', endereco: 'FAZENDA SINTETICA, S/N, ZONA RURAL' });
@@ -47,7 +47,10 @@ describe('S1 — o DANFSe sintetico lido inteiro', () => {
   it('os valores: sem retencao, liquido = bruto; o ISS "Nao Retido" nao conta', () => {
     expect(n.totais).toEqual({ produtosCent: 98000, freteCent: 0, descontoCent: 0, notaCent: 98000 });
     expect(n.servico).toEqual({ competencia: '2026-10-06', codigoTributacao: '14.01.01', nbs: '120013110', brutoCent: 98000,
-      retencoes: { issRetidoCent: 0, irrfCent: 0, previdenciaCent: 0, contribuicoesSociaisCent: 0 }, totalRetidoCent: 0, liquidoCent: 98000 });
+      retencoes: { issRetidoCent: 0, irrfCent: 0, previdenciaCent: 0, contribuicoesSociaisCent: 0 }, totalRetidoCent: 0, liquidoCent: 98000,
+      /* NOTA-NFSE-LEITURA-02 — o quadro do ISSQN inteiro (não retido: informação), sem o quadro IBS/CBS (DANFSe sem ele) e as linhas do serviço */
+      issqn: { baseCent: 98000, aliquota: '2.45', apuradoCent: 2401, retido: false }, ibsCbs: null,
+      linhas: ['CONSERTO DA BOMBA DO POCO SINTETICO', '02 DESLOCAMENTO'] });
   });
   it('marca no PDF o que leu', () => {
     expect(new Set(r.marcas.map((m) => m.campo))).toEqual(new Set(['chave', 'numero', 'emissao', 'emitente_cnpj', 'emitente', 'emitente_cidade',
@@ -94,9 +97,12 @@ describe("S3 — retencoes: o lancamento e' o liquido; a nota guardada fecha com
     expect(p.nota.chave_acesso).toHaveLength(50);
     expect(p.nota.totais.nota_cent).toBe(1000000);
     expect(p.nota.totais.servico).toEqual({ competencia: '2026-10-06', codigo_tributacao: '14.01.01', nbs: '120013110', bruto_cent: 1000000,
-      retencoes: { iss_retido_cent: 20000, irrf_cent: 15000, previdencia_cent: 110000, contribuicoes_sociais_cent: 46500 }, total_retido_cent: 191500, liquido_cent: 808500 });
+      retencoes: { iss_retido_cent: 20000, irrf_cent: 15000, previdencia_cent: 110000, contribuicoes_sociais_cent: 46500 }, total_retido_cent: 191500, liquido_cent: 808500,
+      issqn: { base_cent: 1000000, aliquota: '2.45', valor_cent: 20000, retido: true } });
     const volta = lidosDoBanco({ ...p.nota }, p.itens.map((i) => ({ ...i })));
-    expect(volta.lidos.totais.servico).toEqual(r.nota.servico);
+    /* volta igual, menos o que não mora no `totais`: as linhas do serviço (só a leitura) e o IBS/CBS (mora no item, `ibs_cbs`) */
+    const { linhas: _l, ibsCbs: _i, ...guardado } = r.nota.servico ?? { linhas: undefined, ibsCbs: undefined };
+    expect(volta.lidos.totais.servico).toEqual(guardado);
   });
   it('desconto incondicionado: o do quadro do valor total (nao o do ISSQN); o item fecha com bruto - desconto', () => {
     const d = lida(notaDoDanfse(danfseSintetico({ bruto: '1.000,00', desconto: '100,00', liquido: '900,00' })));

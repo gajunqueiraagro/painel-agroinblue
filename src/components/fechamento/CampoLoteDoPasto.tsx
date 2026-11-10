@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { Info } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
-import type { LoteDaLista } from '@/lib/lotes/tipos';
+import { codigoAoLado, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
 import { comLoteEmTodos, comLoteNaCategoria, loteDoCard, rotuloDoLote, type ItemComLote } from '@/lib/lotes/loteDoPasto';
 
 export const ROTULO_NOVO_LOTE = '+ Novo lote';
@@ -17,9 +17,11 @@ export const DICA_DO_LOTE = 'O lote é o grupo de animais manejado junto. Ele va
 export function opcoesDosLotes(lotes: readonly LoteDaLista[]): OpcaoSearchable[] {
   return lotes.filter(l => l.situacao === 'ativo').map(l => ({
     value: l.id,
-    label: l.codigo,
-    sub: l.nomeCampeiro ?? undefined,
-    busca: l.codigosAntigos.join(' '),
+    /* LOTES-05: a cria com carimbo aparece como "7.1"; o código vai em cinza ao lado (separa os "7.1" da mesma categoria) e na busca.
+     * L1: a cria sem carimbo, "sem carimbo · definir" (o código ao lado) */
+    label: nomeNaTela(l),
+    sub: [codigoAoLado(l), l.nomeCampeiro].filter(Boolean).join(' · ') || undefined,
+    busca: [l.codigo, ...l.codigosAntigos].join(' '),
   }));
 }
 
@@ -54,7 +56,7 @@ export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria
         </div>
         <SearchableSelect value={card.tipo === 'um' && card.semLote === 0 ? card.loteId : ''} options={opcoes}
           onValueChange={v => onChange(comLoteEmTodos(itens, v || null))} allLabel="Sem lote" allValue="" acaoFinal={novo(null)}
-          placeholder="Buscar código ou nome" disabled={disabled || comCabeca.length === 0} />
+          placeholder="Buscar lote, código ou nome" disabled={disabled || comCabeca.length === 0} />
         <div className="mb-1 mt-2 h-[16px] text-[10.5px] font-semibold">Por categoria</div>
         {comCabeca.length === 0 ? (
           <div className="h-[22px] text-[10.5px] text-muted-foreground">Lance as cabeças para escolher o lote.</div>
@@ -65,7 +67,7 @@ export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria
                 <span className="truncate text-[10.5px]" title={nomeDaCategoria(i.categoria_id)}>{nomeDaCategoria(i.categoria_id)}</span>
                 <span className="text-right text-[10.5px] tabular-nums">{i.quantidade}</span>
                 <SearchableSelect value={i.lote_id ?? ''} options={opcoes} allLabel="Sem lote" allValue="" acaoFinal={novo(i.categoria_id)}
-                  onValueChange={v => onChange(comLoteNaCategoria(itens, i.categoria_id, v || null))} placeholder="Buscar código ou nome" disabled={disabled} />
+                  onValueChange={v => onChange(comLoteNaCategoria(itens, i.categoria_id, v || null))} placeholder="Buscar lote, código ou nome" disabled={disabled} />
               </div>
             ))}
           </div>

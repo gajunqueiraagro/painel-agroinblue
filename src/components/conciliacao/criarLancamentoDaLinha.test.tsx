@@ -20,6 +20,7 @@ interface PropsCapturadas {
   lockedFields?: string[];
   tiposOperacaoPermitidos?: readonly string[];
   onSave: (f: LancamentoV2Form) => Promise<boolean>;
+  prefill?: { valor?: number; descricao?: string };
 }
 
 const M = vi.hoisted(() => ({
@@ -175,3 +176,19 @@ describe('o dialog filtra o Select de tipo pela prop (inspeção do fonte; nenhu
     expect(src).toMatch(/TIPOS_OPERACAO\.filter\(t => !tiposOperacaoPermitidos \|\| tiposOperacaoPermitidos\.includes\(t\.value\)\)/);
   });
 });
+
+/* CONC-CRIAR-PERDE-DADOS-01 (Gabriel 08/11) — o formulário aberto nunca perde dados: a estação recalcula "o que falta" a cada releitura */
+describe('com o modal aberto, a releitura não muda o prefill', () => {
+  it('o valor sugerido é o da abertura; o movimento relido (objeto novo, igual) não troca o prefill', () => {
+    const el = (v: number | undefined) => (
+      <CriarLancamentoDaLinha movimento={mov(-6000)} contaBancariaId="conta-extrato" valorSugerido={v} aoFechar={() => {}} aoCriado={() => {}} />
+    );
+    const r = render(el(1733.35));
+    const antes = M.props?.prefill;
+    expect(antes?.valor).toBe(1733.35);
+    r.rerender(el(500));
+    expect(M.props?.prefill?.valor).toBe(1733.35);
+    expect(M.props?.prefill).toEqual(antes);
+  });
+});
+

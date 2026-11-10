@@ -3,7 +3,7 @@
  * um lote para o pasto inteiro é o caso comum, e "por categoria" cobre o card com dois lotes (ex.: desmama F + as novilhas de outro lote).
  * Só a categoria com cabeça leva lote; zerou, o lote sai. Lote em 2+ pastos é permitido (o lote não é do pasto).
  */
-import type { LoteDaLista } from '@/lib/lotes/tipos';
+import { codigoAoLado, nomeDoLote, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
 
 export interface ItemComLote {
   categoria_id: string;
@@ -51,10 +51,27 @@ export function rotuloDoLote(card: LoteDoCard, lotes: readonly LoteDaLista[]): {
   const porId = new Map(lotes.map(l => [l.id, l]));
   const nome = (id: string) => {
     const l = porId.get(id);
-    return l ? (l.nomeCampeiro ? `${l.codigo} · ${l.nomeCampeiro}` : l.codigo) : 'lote fora da lista';
+    return l ? [nomeNaTela(l), codigoAoLado(l), l.nomeCampeiro].filter(Boolean).join(' · ') : 'lote fora da lista';
   };
   const falta = (n: number) => (n > 0 ? ` · ${n} categoria${n > 1 ? 's' : ''} sem lote` : '');
   if (card.tipo === 'nenhum') return { texto: 'Sem lote', title: 'Nenhuma categoria deste pasto tem lote' };
-  if (card.tipo === 'um') return { texto: porId.get(card.loteId)?.codigo ?? 'Lote', title: nome(card.loteId) + falta(card.semLote) };
+  if (card.tipo === 'um') return { texto: (() => { const l = porId.get(card.loteId); return l ? nomeNaTela(l) : 'Lote'; })(), title: nome(card.loteId) + falta(card.semLote) };
   return { texto: `${card.loteIds.length} lotes`, title: card.loteIds.map(nome).join(' · ') + falta(card.semLote) };
+}
+
+/** LOTES-05 (Gabriel 08/11) — o texto do "Usar o lote" no "Nome no caderno": o nome dos lotes do card na ordem das categorias
+ *  ("7.1"; com dois lotes "7.1 · 8.1"); card sem lote (ou lote fora da lista) = null, e o botão não aparece. */
+export function textoDoLoteNoCaderno(itens: readonly ItemComLote[], lotes: readonly LoteDaLista[]): string | null {
+  const porId = new Map(lotes.map(l => [l.id, l]));
+  const nomes = [...new Set(itens.flatMap(i => {
+    const l = i.quantidade > 0 && i.lote_id ? porId.get(i.lote_id) : undefined;
+    return l ? [nomeDoLote(l)] : [];
+  }))];
+  return nomes.length ? nomes.join(' · ') : null;
+}
+
+/** POPUP-ORIGINAL-COR — o lote no popup do pasto: o MESMO texto do campo Lote do modal (`rotuloDoLote`); sem lote = nulo (o popup mostra "—") */
+export function loteDoPopup(itens: readonly ItemComLote[], lotes: readonly LoteDaLista[]): string | null {
+  const card = loteDoCard(itens);
+  return card.tipo === 'nenhum' ? null : rotuloDoLote(card, lotes).texto;
 }

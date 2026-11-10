@@ -1,6 +1,6 @@
 /**
  * LOTES-03 F1 + LOTES-04 (mock lotes-codigo-lista.html, Gabriel 07/11 17:26) — Produção › Lotes: a lista dos lotes da fazenda,
- * AGRUPADA POR ATIVIDADE (cria, recria, engorda; subtotal lotes · cab). Colunas Código, Categoria, Raça, Programa, Cab, Peso kg, GMD,
+ * AGRUPADA POR ATIVIDADE (cria, recria, engorda: a linha do grupo só com o nome; no fim do grupo o Subtotal, cada número na coluna dele). Colunas Código, Categoria, Raça, Programa, Cab, Peso kg, GMD,
  * Pasto (Nome, Sistema, Destino e Carimbo ficam na ficha). Filtros: atividade do cadastro + Ativos/Encerrados + busca que acha também
  * os códigos antigos. Ordenável (dentro de cada grupo); linha de total (cab. somada; peso e GMD ponderados). Cab., peso, GMD e pasto
  * LIDOS do fechamento (`fn_lotes_da_fazenda`): lote sem lançamento = "—". "+ Novo lote" abre o assistente; a linha abre a ficha.
@@ -22,18 +22,31 @@ import { useOrdenacaoTabela } from '@/hooks/useOrdenacaoTabela';
 import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
 import { useCadastrosDoLote } from '@/hooks/useCadastrosDoLote';
 import {
-  colunasDosLotes, faseDaAtividade, filtrarLotes, fraseDoGrupo, gruposPorAtividade, mapaDoCadastro, nomeDe, textoDosPastos, totalDosLotes, type ColunaDosLotes,
+  colunasDosLotes, faseDaAtividade, filtrarLotes, gruposPorAtividade, mapaDoCadastro, nomeDe, textoDosLotes, textoDosPastos, tituloDoCodigo, totalDosLotes, type ColunaDosLotes,
+  type TotalDosLotes,
   type FiltroDeSituacao,
 } from '@/lib/lotes/lista';
 import { FichaDoLote } from '@/components/lotes/FichaDoLote';
 import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
-import type { LoteDaLista } from '@/lib/lotes/tipos';
+import { FRASE_SEM_CARIMBO, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
+import { ResumoDosLotes } from '@/components/lotes/ResumoDosLotes';
+import { resumoDosLotes, sexoDosCodigos } from '@/lib/lotes/resumo';
 
 const n0 = (v: number | null) => (v == null ? '—' : formatNum(v, 0));
 const n3 = (v: number | null) => (v == null ? '—' : formatNum(v, 3));
 /** as larguras do mock (a coluna Programa leva o resto) — a mesma régua no corpo e no total */
 const COLUNAS = [150, 120, 90, null, 64, 70, 60, 96];
 const Colunas = () => <colgroup>{COLUNAS.map((w, i) => <col key={i} style={w == null ? undefined : { width: w }} />)}</colgroup>;
+
+/** LOTES-LISTA-ALINHAR-01 — subtotal do grupo e total do rodapé na mesma régua: rótulo · nº de lotes · — · — · cab · peso · GMD · —. */
+const LinhaDeSoma = ({ rotulo, t }: { rotulo: string; t: TotalDosLotes }) => (
+  <>
+    <td className={cn(TD_REGUA, 'whitespace-nowrap')} title={rotulo}>{rotulo}</td><td className={TD_REGUA}>{textoDosLotes(t.lotes)}</td>
+    <td /><td />
+    <td className={TD_REGUA_NUM}>{n0(t.cabecas)}</td><td className={TD_REGUA_NUM}>{n0(t.pesoMedioKg)}</td>
+    <td className={TD_REGUA_NUM}>{n3(t.gmdKg)}</td><td />
+  </>
+);
 
 export function LotesTab() {
   const { clienteAtual } = useCliente();
@@ -43,7 +56,7 @@ export function LotesTab() {
   const anoMes = hojeLocal().slice(0, 7);
   const clienteId = clienteAtual?.id ?? null;
   const { lotes, carregando, erro } = useLotesDaFazenda(fazendaId, anoMes);
-  const { cadastros } = useCadastrosDoLote(clienteId);
+  const { cadastros, categoriasDoRebanho } = useCadastrosDoLote(clienteId);
   const nomes = useMemo(() => mapaDoCadastro(cadastros), [cadastros]);
   /* o filtro na ordem da fase (Cria · Recria · Engorda · as outras), do cadastro do cliente */
   const atividades = useMemo(() => cadastros.filter(c => c.tipo === 'atividade' && c.ativo)
@@ -55,12 +68,20 @@ export function LotesTab() {
   const [fichaId, setFichaId] = useState<string | null>(null);
   const [assistente, setAssistente] = useState<{ editar: LoteDaLista | null } | null>(null);
   const [novoId, setNovoId] = useState<string | null>(null);
+  /* LOTES-06 — Lista | Resumo (o filtro de cima vale nas duas) */
+  const [vista, setVista] = useState<'lista' | 'resumo'>('lista');
 
   const filtrados = useMemo(() => filtrarLotes(lotes, { situacao, atividadeId: atividade || null, busca }), [lotes, situacao, atividade, busca]);
   const colunas = useMemo(() => colunasDosLotes(nomes), [nomes]);
   const { ordem, alternar, ordenadas } = useOrdenacaoTabela<LoteDaLista, ColunaDosLotes>(filtrados, colunas, { coluna: 'codigo', direcao: 'asc' });
   const total = totalDosLotes(ordenadas);
   const grupos = useMemo(() => gruposPorAtividade(ordenadas, nomes), [ordenadas, nomes]);
+  /* LOTES-06 — o sexo do lote é o da categoria do rebanho a que a categoria do lote aponta (todos M, todas F, senão misto) */
+  const resumo = useMemo(() => {
+    const codigoDoRebanho = new Map(categoriasDoRebanho.map(c => [c.id, c.codigo]));
+    const sexo = (categoriaId: string) => sexoDosCodigos((nomes.get(categoriaId)?.categoriasRebanho ?? []).map(id => codigoDoRebanho.get(id) ?? ''));
+    return resumoDosLotes(filtrados, nomes, sexo);
+  }, [filtrados, nomes, categoriasDoRebanho]);
   const naSituacao = lotes.filter(l => l.situacao === situacao).length;
   const { ref: refQuadro, altura } = useAlturaAteOFim();
   const ficha = fichaId ? lotes.find(l => l.id === fichaId) ?? null : null;
@@ -89,12 +110,16 @@ export function LotesTab() {
           <span className="mx-1 h-4 w-px bg-border" />
           <Segmentado valor={situacao} onEscolher={setSituacao} altura={22}
             opcoes={[{ valor: 'ativo', rotulo: 'Ativos' }, { valor: 'encerrado', rotulo: 'Encerrados' }]} />
-          <div className="ml-auto flex items-center gap-1.5">
-            <Input className="h-[24px] w-[200px] px-2 text-[11px]" placeholder="Buscar código ou pasto" value={busca}
+          <span className="mx-1 h-4 w-px bg-border" />
+          <span data-testid="lotes-vista"><Segmentado valor={vista} onEscolher={setVista} altura={22}
+            opcoes={[{ valor: 'lista', rotulo: 'Lista' }, { valor: 'resumo', rotulo: 'Resumo' }]} /></span>
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
+            <Input className="h-[24px] w-[200px] min-w-[96px] shrink px-2 text-[11px]" placeholder="Buscar" title="Buscar código ou pasto" value={busca}
               onChange={e => setBusca(e.target.value)} data-testid="lotes-busca" />
             <span className="w-[72px] text-right text-[11px] tabular-nums text-muted-foreground" data-testid="lotes-contagem">{ordenadas.length} de {naSituacao}</span>
           </div>
         </div>
+        {vista === 'resumo' ? <ResumoDosLotes resumo={resumo} /> : <>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <table className="w-full table-fixed border-collapse" data-testid="tabela-lotes">
             <Colunas />
@@ -106,14 +131,13 @@ export function LotesTab() {
               {grupos.map(g => (
                 <Fragment key={g.atividadeId}>
                   <tr className="border-b border-border bg-[#eef2f7]" data-testid="grupo-lotes">
-                    <td colSpan={COLUNAS.length} className={cn(TD_REGUA, 'h-[21px] whitespace-nowrap font-semibold text-[#1f2937]')}>
-                      {g.nome}<span className="ml-1.5 font-normal text-muted-foreground" data-testid="grupo-lotes-subtotal">{fraseDoGrupo(g.total)}</span>
-                    </td>
+                    <td colSpan={COLUNAS.length} className={cn(TD_REGUA, 'h-[21px] whitespace-nowrap font-semibold text-[#1f2937]')}>{g.nome}</td>
                   </tr>
                   {g.lotes.map(l => (
                     <tr key={l.id} onClick={() => setFichaId(l.id)} data-testid="linha-lote"
                       className={cn('cursor-pointer border-b border-border/60 hover:bg-[#f5f8fc]', l.id === novoId && 'bg-[#eaf6ee]', l.situacao === 'encerrado' && 'text-muted-foreground')}>
-                      <td className={cn(TD_REGUA, 'whitespace-nowrap font-bold text-[#0b1f3a]')} title={l.codigosAntigos.length ? `antes: ${l.codigosAntigos.join(' · ')}` : undefined}>{l.codigo}
+                      <td className={cn(TD_REGUA, 'whitespace-nowrap font-bold text-[#0b1f3a]')} title={tituloDoCodigo(l)} data-testid="lote-nome">
+                        {nomeNaTela(l) === FRASE_SEM_CARIMBO ? <span className="font-semibold text-[#b45309]" data-testid="lote-sem-carimbo">{FRASE_SEM_CARIMBO}</span> : nomeNaTela(l)}
                         {l.conferir && <span data-testid="lote-conferir" title={`Conferir: ${l.conferir}`} className="ml-1 inline-block h-[6px] w-[6px] rounded-full bg-[#d97706] align-middle" />}</td>
                       <td className={TD_REGUA_TEXTO} title={nomeDe(nomes, l.categoriaId) ?? undefined}>{nomeDe(nomes, l.categoriaId) ?? '—'}</td>
                       <td className={TD_REGUA_TEXTO} title={nomeDe(nomes, l.racaId) ?? undefined}>{nomeDe(nomes, l.racaId) ?? '—'}</td>
@@ -124,6 +148,9 @@ export function LotesTab() {
                       <td className={TD_REGUA_TEXTO} title={l.pastos.join(' · ') || undefined}>{textoDosPastos(l.pastos) ?? '—'}</td>
                     </tr>
                   ))}
+                  <tr className="h-[22px] border-b border-border bg-[#f3f4f6] font-semibold" data-testid="grupo-lotes-subtotal">
+                    <LinhaDeSoma rotulo={`Subtotal ${g.nome}`} t={g.total} />
+                  </tr>
                 </Fragment>
               ))}
               {ordenadas.length === 0 && (
@@ -137,12 +164,10 @@ export function LotesTab() {
         <table className={cn(RODAPE_REGUA, 'w-full table-fixed border-collapse')} data-testid="lotes-total">
           <Colunas />
           <tbody><tr className="h-[23px] font-semibold">
-            <td className={TD_REGUA}>Total</td><td className={TD_REGUA}>{total.lotes} {total.lotes === 1 ? 'lote' : 'lotes'}</td>
-            <td /><td />
-            <td className={TD_REGUA_NUM}>{n0(total.cabecas)}</td><td className={TD_REGUA_NUM}>{n0(total.pesoMedioKg)}</td>
-            <td className={TD_REGUA_NUM}>{n3(total.gmdKg)}</td><td />
+            <LinhaDeSoma rotulo="Total" t={total} />
           </tr></tbody>
         </table>
+        </>}
       </div>
 
       {fazendaId && (

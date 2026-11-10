@@ -2,8 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   PASSOS, aceitaCarimbo, camposParaSalvar, codigoMontando, filtrarCadastros, fraseCurtaDaTroca, fraseDaTroca, lotesDaCombinacao, lotesQueUsam, mesmaCombinacao, perfilInicial,
-  podeAvancar, safraDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarNumero, validarPerfil, type Escolha,
+  podeAvancar, safraDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarCarimbo, validarNumero, validarPerfil, type Escolha,
 } from './assistente';
+import { FRASE_CARIMBO_INVALIDO, nomeDoLote } from './tipos';
 import type { CadastroDoLote, LoteDaLista } from './tipos';
 
 const cad = (id: string, tipo: CadastroDoLote['tipo'], sigla: string | null, nome: string, categoriasRebanho: string[] = []): CadastroDoLote =>
@@ -46,6 +47,16 @@ describe('código montando', () => {
     expect(validarNumero('0', L, null)).toBe('O nº vai de 1 a 99.');
     expect(validarNumero('5', L, null)).toBe('O nº 05 já é do lote X-5. Escolha outro.');
     expect(validarNumero('5', L, 'b')).toBeNull();
+  });
+  it('LOTES-05: o carimbo do mês — 7.1, 10.2, a ressinc. 7R e 7R.2; vazio vale; 7X, 13.1, 7.0 e 7R0 não', () => {
+    expect(['7.1', '10.2', '12.15', '7R', '7R.2', '', ' 7.1 '].map(validarCarimbo)).toEqual([null, null, null, null, null, null, null]);
+    expect(['7X', '13.1', '7.0', '7R0', '0.1', '7', 'R'].map(validarCarimbo)).toEqual(Array(7).fill(FRASE_CARIMBO_INVALIDO));
+  });
+  it('LOTES-05: na tela, a cria com carimbo é o carimbo; sem carimbo (recria, engorda, vacas), o código', () => {
+    expect(nomeDoLote({ codigo: 'CRI-VAC-NEL-04', carimbo: '7.1' })).toBe('7.1');
+    expect(nomeDoLote({ codigo: 'CRI-VAC-NEL-04', carimbo: '7R' })).toBe('7R');
+    expect(nomeDoLote({ codigo: 'REC-DF-NEL-01', carimbo: null })).toBe('REC-DF-NEL-01');
+    expect(nomeDoLote({ codigo: 'REC-DF-NEL-01', carimbo: '  ' })).toBe('REC-DF-NEL-01');
   });
   it('LOTES-04: o nº vai ao banco só quando digitado (criar) ou diferente do lote (editar)', () => {
     const p = perfilInicial('2026-11-06');

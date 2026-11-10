@@ -396,7 +396,7 @@ describe('CONC-BLOCOS-TELA-01 — Casar com o banco · bloco', () => {
  * ⚠ O jsdom NÃO FAZ LAYOUT: o teste prova o CONTRATO (as classes e o botão FORA do rolável); a medida vai no relatório.
  */
 describe('CONC-CASAR-ALTURA-01 — teto de 90vh, miolo rola, rodapé fixo', () => {
-  const contrato = (botao: RegExp | string) => {
+  const contrato = (botao: RegExp | string, rodape32 = false) => {
     const dlg = screen.getByRole('dialog');
     expect(dlg.className).toContain('max-h-[90vh]');
     expect(dlg.className).toContain('flex-col');
@@ -410,14 +410,15 @@ describe('CONC-CASAR-ALTURA-01 — teto de 90vh, miolo rola, rodapé fixo', () =
     expect(rolavel[0].contains(conciliar)).toBe(false);
     const rodape = filhos.find((el) => el.contains(conciliar))!;
     expect(rodape).toBe(filhos[filhos.length - 1]);
-    for (const c of ['shrink-0', 'border-t', 'h-[34px]']) expect(rodape.className).toContain(c);
+    /* CONC-CRIAR-PERDE-DADOS-01 item 2: o 1:N (Casar com o banco) passou à escala de modal (A18), rodapé de 32px; N:1 e bloco seguem com 34 */
+    for (const c of ['shrink-0', 'border-t', rodape32 ? 'h-8' : 'h-[34px]']) expect(rodape.className).toContain(c);
     /* o cabeçalho continua shrink-0 e a rolagem é UMA só (nenhum outro filho rola) */
     expect(filhos[0].className).toContain('shrink-0');
   };
 
   it('1:N: Conciliar, Criar e Cancelar no rodapé fixo, fora do miolo', () => {
     montar([VIVO]);
-    contrato(/^Conciliar$/);
+    contrato(/^Conciliar$/, true);
     const dlg = screen.getByRole('dialog');
     const rodape = [...dlg.children].filter((el) => el.tagName !== 'BUTTON').pop()!;
     if (!(rodape instanceof HTMLElement)) throw new Error('rodapé ausente');

@@ -16,6 +16,8 @@ export interface EmitenteNFe {
   fantasia: string | null;
   /** So' digitos; `null` quando ausente ou "ISENTO". */
   ie: string | null;
+  /** NOTA-NFSE-LEITURA-02 — a inscricao municipal do prestador (so' a NFS-e traz); completa o cadastro como a IE. */
+  inscricaoMunicipal?: string | null;
   /** FORN-CADASTRO-02 — `enderEmit`, como escrito (CEP e fone so' digitos); `null` sem o grupo. */
   endereco?: EnderecoNFe | null;
 }
@@ -60,6 +62,14 @@ export interface ServicoDaNfse {
   issCent?: number;
   /** NFSE-MUNICIPAL-01 — os dias da condicao de pagamento escrita na discriminacao ("COND.PAGTO.: 28/56/84/112 DIAS"), quando lidos. */
   condicoesPagamento?: number[] | null;
+  /** NOTA-NFSE-LEITURA-02 — o quadro do ISSQN da NFS-e nacional: base, aliquota ("2.45", ponto), apurado e se foi retido. Informacao:
+   *  o lancamento continua o liquido (so' o retido muda o liquido, e isso o DANFSe ja' imprime). */
+  issqn?: { baseCent: number; aliquota: string | null; apuradoCent: number; retido: boolean } | null;
+  /** NOTA-NFSE-LEITURA-02 — a REFORMA (IBS/CBS) da NFS-e com AS MESMAS CHAVES do grupo `IBSCBS` da NF-e (`nota_fiscal_itens.ibs_cbs`):
+   *  CST, cClassTrib, vBC, pIBSUF, vIBSUF, pIBSMun, vIBSMun, vIBS, pCBS, vCBS — valores como no XML (ponto decimal). Informacao. */
+  ibsCbs?: Record<string, string> | null;
+  /** NOTA-NFSE-LEITURA-02 — as linhas da "Descrição do Serviço" como impressas (a descricao curta do lancamento sai delas). */
+  linhas?: string[];
 }
 
 export interface NotaLida {

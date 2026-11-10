@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { lerEstadoDoP2 } from '@/lib/fechamento/travaDoP2';
+import { lerEstadoDoP2, reabrirValorRebanhoJunto, fraseValorRebanhoReaberto, MOTIVO_PRECO_ALTERADO, FRASE_REABRIR_JUNTO_FALHOU } from '@/lib/fechamento/travaDoP2';
 
 export interface PrecoCategoria {
   categoria: string;
@@ -297,6 +297,18 @@ export function useValorRebanho(anoMes: string) {
     }
   }, [fazendaId, anoMes, user, isAdmin, loadFechamentoStatus]);
 
+  /* VR-PRECO-EDITAR-01 (Gabriel 09/11 06:42, regra REABRIR-AUTOMATICO): mexer no preço de um mês VALIDADO reabre a validação SOZINHO —
+     sem motivo pedido, sem botão — pelo MESMO gravador do modal do pasto (`fn_valor_rebanho_reabrir`), com o aviso de 1 linha; o
+     Revalidar volta. A recusa do banco vira a frase curta. Devolve se reabriu. */
+  const reabrirPelaEdicao = useCallback(async (): Promise<boolean> => {
+    if (!fazendaId || fazendaId === '__global__') return false;
+    const r = await reabrirValorRebanhoJunto(fazendaId, anoMes, MOTIVO_PRECO_ALTERADO);
+    if (!r.ok) { toast.error(FRASE_REABRIR_JUNTO_FALHOU); return false; }
+    toast.success(fraseValorRebanhoReaberto(anoMes));
+    await loadFechamentoStatus();
+    return true;
+  }, [fazendaId, anoMes, loadFechamentoStatus]);
+
   return {
     precos,
     loading,
@@ -309,5 +321,6 @@ export function useValorRebanho(anoMes: string) {
     validadoComP2Aberto: fechamento.validadoComP2Aberto === true,
     isAdmin,
     reabrirFechamento,
+    reabrirPelaEdicao,
   };
 }

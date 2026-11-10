@@ -1,4 +1,5 @@
 import { casaNaBusca } from '@/lib/texto/busca';
+import type { ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { idDoLancamento, valorDividido } from '@/lib/financeiro/divisaoDaClassificacao';
@@ -975,7 +976,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   }, [filtros, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro]);
 
 
-  const handleSave = async (form: any, id?: string) => {
+  const handleSave = async (form: any, id?: string, onErroDeCampo?: (e: ErroDeFormato) => void) => {
     // Validação obrigatória antes de salvar
     // Regra 4 (Aporte Pessoal) só se aplica em novos registros (sem id)
     const formParaValidar = id
@@ -1005,8 +1006,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        acabou de nascer. `criarLancamentoComId` com a origem 'manual' é o mesmo insert (`buildInsertRow`,
        mesma origem, mesmo toast) do `criarLancamento`; o que ele não faz é avisar as outras instâncias,
        e por isso a notificação vem logo abaixo, só no sucesso — a mesma ordem do `criarLancamento`. */
-    const criadoId = id ? null : await hook.criarLancamentoComId(form, { origem: 'manual' });
-    const salvo = id ? await hook.editarLancamento(id, form) : !!criadoId;
+    /* NOTA-NFSE-LEITURA-02 — o modal recebe o campo que o banco recusou por formato (vermelho + frase no rodapé, sem o toast genérico) */
+    const criadoId = id ? null : await hook.criarLancamentoComId(form, { origem: 'manual', onErroDeCampo });
+    const salvo = id ? await hook.editarLancamento(id, form, { onErroDeCampo }) : !!criadoId;
     if (!salvo) return false;
     if (criadoId && clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
 

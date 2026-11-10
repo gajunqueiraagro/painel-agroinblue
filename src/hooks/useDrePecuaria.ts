@@ -688,6 +688,31 @@ export interface CategoriaPatrimonio {
   q1: number; pm1: number | null; pk1: number | null;
   v1_p0: number; v1_p1: number;
   vpb: number; efeito: number;
+  /**
+   * A EVOLUÇÃO DE CATEGORIA (ágio) — DRE-VARIACAO-EXPLICA-01 fatia 1a (migration 20261028115300).
+   *
+   * ⚠ ESTÁ DENTRO DO `vpb`: cada reclassificação do período × kg × (R$/kg do destino − R$/kg da origem), a preço de
+   * referência (dez/AA), lançada na categoria de DESTINO. A Produção "de verdade" é `vpb − agio` (conta da tela).
+   * ⚠ `null` = a RPC não mandou a chave (anterior à migration): a tela mostra "—", nunca zero.
+   */
+  agio: number | null;
+  /** Alguma reclassificação que entrou aqui não tem preço de referência: o ágio dela não foi somado. */
+  agio_sem_preco: boolean;
+  cab_reclass_entrada: number | null; cab_reclass_saida: number | null;
+  at_reclass_entrada: number | null; at_reclass_saida: number | null;
+}
+
+/**
+ * UM MÊS DA SÉRIE DA V4 — de P0 a P1, o rebanho do fim do mês.
+ * ⚠ `v_mes` é `null` quando o mês veio do CADASTRO (sem fechamento validado): não há preço do mês, e o gráfico
+ * mostra "—" ali, nunca o preço de referência no lugar.
+ */
+export interface MesDoPatrimonio {
+  ano_mes: string;
+  fonte: 'fechamento' | 'cadastro';
+  arrobas: number | null;
+  v_ref: number | null;
+  v_mes: number | null;
 }
 
 /** Uma parcela da ponte de arrobas, nas três unidades. */
@@ -755,7 +780,12 @@ export interface PatrimonioPec {
   total: {
     q0: number; v0: number; q1: number;
     v1_p0: number; v1_p1: number; vpb: number; efeito: number;
+    /** O ágio do período inteiro (`null` sem a chave). */
+    agio: number | null;
+    agio_sem_preco: boolean;
   };
+  /** A série da V4 (vazia sem a chave). */
+  meses: MesDoPatrimonio[];
   movimentos: MovimentosPec;
 }
 
@@ -820,12 +850,24 @@ async function buscarPatrimonio(
         q1: num(c.q1), pm1: numOuNulo(c.pm1), pk1: numOuNulo(c.pk1),
         v1_p0: num(c.v1_p0), v1_p1: num(c.v1_p1),
         vpb: num(c.vpb), efeito: num(c.efeito),
+        agio: numOuNulo(c.agio), agio_sem_preco: c.agio_sem_preco === true,
+        cab_reclass_entrada: numOuNulo(c.cab_reclass_entrada), cab_reclass_saida: numOuNulo(c.cab_reclass_saida),
+        at_reclass_entrada: numOuNulo(c.at_reclass_entrada), at_reclass_saida: numOuNulo(c.at_reclass_saida),
       };
     }),
     total: {
       q0: num(t.q0), v0: num(t.v0), q1: num(t.q1),
       v1_p0: num(t.v1_p0), v1_p1: num(t.v1_p1), vpb: num(t.vpb), efeito: num(t.efeito),
+      agio: numOuNulo(t.agio), agio_sem_preco: t.agio_sem_preco === true,
     },
+    meses: (Array.isArray(o.meses) ? o.meses : []).map((x: unknown): MesDoPatrimonio => {
+      const m = objeto(x);
+      return {
+        ano_mes: String(m.ano_mes ?? ''),
+        fonte: m.fonte === 'fechamento' ? 'fechamento' : 'cadastro',
+        arrobas: numOuNulo(m.arrobas), v_ref: numOuNulo(m.v_ref), v_mes: numOuNulo(m.v_mes),
+      };
+    }),
     movimentos: lerMovimentos(o.movimentos),
   };
 }

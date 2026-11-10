@@ -95,6 +95,24 @@ describe('AssistenteDoLote', () => {
     await waitFor(() => expect(banco.rpc).toHaveBeenCalledWith('fn_lote_salvar', expect.objectContaining({ p_campos: expect.objectContaining({ numero: 7 }) })));
   });
 
+  it('LOTES-05: na cria o passo Nº pede o carimbo (7R da ressinc.); errado trava o Avançar; o nº fica no código, por dentro', async () => {
+    banco.cadastros = [c('vac', 'categoria', 'VAC', 'Vacas'), c('nel', 'raca', 'NEL', 'Nelore'), c('cri', 'atividade', 'CRI', 'Cria')];
+    montar();
+    fireEvent.click(await cartao('CRI')); avancar(); fireEvent.click(await cartao('VAC')); avancar(); fireEvent.click(await cartao('NEL')); avancar();
+    await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('CRI-VAC-NEL-05'));
+    expect(screen.queryByTestId('assistente-numero-editar')).toBeNull();
+    expect(screen.getByTestId('assistente-numero-info').textContent).toBe('Lote de cria: digite o carimbo do mês (7.1 ou 7R). Sem carimbo, aparece pelo código.');
+    fireEvent.change(screen.getByTestId('assistente-carimbo'), { target: { value: '7x' } });
+    expect(screen.getByTestId('assistente-numero-info').textContent).toBe('Carimbo: mês.lote, ex.: 7.1 (julho, 1º lote) ou 7R (ressinc. de julho).');
+    expect(screen.getByTestId('assistente-avancar')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('assistente-carimbo'), { target: { value: '7r' } });
+    expect(screen.getByTestId('assistente-carimbo')).toHaveValue('7R');
+    expect(screen.getByTestId('assistente-numero-info').textContent).toBe('Na tela o lote aparece como 7R · o nº 05 fica no código, por dentro.');
+    expect(within(screen.getByTestId('assistente-numero-lotes')).getByText('7R')).toBeTruthy();
+    avancar(); avancar();
+    await waitFor(() => expect(banco.rpc).toHaveBeenCalledWith('fn_lote_salvar', expect.objectContaining({ p_campos: expect.objectContaining({ carimbo: '7R' }) })));
+  });
+
   it('cadastrar nova raça: valida no campo sem ir ao banco; grava, escolhe e o Desfazer tira da lista (ativo false)', async () => {
     montar();
     fireEvent.click(await cartao('RC')); avancar(); fireEvent.click(await cartao('DF')); avancar();

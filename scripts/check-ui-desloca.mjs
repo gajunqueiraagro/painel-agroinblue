@@ -289,6 +289,11 @@ const CENARIOS = [
     },
     estados: abas.map((a) => [`aba ${a}`, async (p) => { await p.locator('[data-testid="bem-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 600); }]),
   })),
+  /* MAPA-REBANHO-02 — o Mapa do rebanho: abrir e fechar o modal do pasto pelo nome não move o cabeçalho, as faixas presas nem as colunas */
+  { nome: 'mapa-pastos', url: 'tela=mapa-pastos', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    antes: async (p) => { await p.locator('[data-testid="programa-do-pasto"]').first().waitFor(); await espera(p, 800); },
+    estados: [['abrir A-01', async (p) => { await p.locator('[data-testid="abrir-pasto"]').first().click(); await espera(p, 900); }],
+      ['fechar', async (p) => { await p.keyboard.press('Escape'); await espera(p, 600); }]] },
   /* FECH-TOPO-COMPACTO-01 → FECH-TOPO-02 — o topo do Fechamento (`v=topo`, todos os botões): trocar de mês e abrir/fechar o Ajustar não
      movem os meses (com o ano à esquerda), os botões em 2 colunas à direita da tabela, o aviso, o "Fechar Mês" nem a tabela de conferência */
   { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
@@ -367,6 +372,27 @@ const CENARIOS = [
       ['passo 5', clicar('[data-testid="assistente-avancar"]')],
       ['voltar', clicar('[data-testid="assistente-voltar"]')],
     ] },
+  /* LOTES-05 — na cria o passo Nº troca o nº pelo carimbo: digitado, errado e vazio não mexem em nada */
+  { nome: 'lotes-assistente-carimbo', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',
+    antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
+      await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await espera(p, 500);
+      for (const re of [/^CRI/, /^PP/, /^NE/]) { await p.locator('[data-testid="assistente-cartao"]', { hasText: re }).first().click(); await espera(p);
+        await p.locator('[data-testid="assistente-avancar"]').click(); await espera(p, 450); }
+      await p.locator('[data-testid="assistente-numero"]').waitFor(); },
+    estados: [
+      ['carimbo 7.1', async (p) => { await p.locator('[data-testid="assistente-carimbo"]').fill('7.1'); await espera(p); }],
+      ['carimbo 7R', async (p) => { await p.locator('[data-testid="assistente-carimbo"]').fill('7R'); await espera(p); }],
+      ['carimbo errado', async (p) => { await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await espera(p); }],
+      ['sem carimbo', async (p) => { await p.locator('[data-testid="assistente-carimbo"]').fill(''); await espera(p); }],
+    ] },
+  /* LOTES-05 — "Usar o lote" ↔ "Voltar o texto" no cabeçalho do modal: a linha do caderno não muda de altura nem empurra os campos */
+  { nome: 'fechamento-caderno-usar-o-lote', url: 'tela=fechamento-grupo&v=lotes&barra=32', regiao: '[data-testid="modal-do-pasto"]', tamanhos: TAMANHOS_DO_LOTES,
+    antes: async (p) => { await p.locator('button', { hasText: /^P10A/ }).first().waitFor(); await espera(p, 600);
+      await p.locator('button', { hasText: /^P10A/ }).first().click(); await p.locator('[data-testid="modal-do-pasto"]').waitFor(); await espera(p, 700); },
+    estados: [
+      ['usar o lote', clicar('[data-testid="caderno-usar-o-lote"]')],
+      ['voltar o texto', clicar('[data-testid="caderno-voltar-texto"]')],
+    ] },
   { nome: 'lotes-ficha-abas', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="ficha-do-lote"]',
     antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
       await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await espera(p, 600); },
@@ -380,8 +406,25 @@ const CENARIOS = [
   { nome: 'pastos', url: 'tela=pastos&barra=32', antes: async (p) => { await p.locator('[data-testid="pastos-modo-grupos"]').waitFor(); await espera(p, 600); }, estados: [
     ['modo Grupos', clicar('[data-testid="pastos-modo-grupos"]')], ['modo Áreas', clicar('[data-testid="pastos-modo-areas"]')],
     ['inativos', async (p) => { await p.getByText('Inativos', { exact: true }).click(); await espera(p); }],
-    ['modo Ordem manual', botao(/^Ordem manual$/)], ['modo Por destino', botao(/^Por destino$/)],
+    ['modo Ordem manual', botao(/^Ordem manual$/)], ['modo Lista', clicar('[data-testid="pastos-modo-lista"]')],
   ] },
+  /* PASTO-FICHA-01 PR B — na LISTA, abrir/fechar os piquetes, ordenar por outra coluna e buscar não movem o cabeçalho, o rodapé preso nem
+     a largura das colunas (a do Pasto é a do maior nome da FAZENDA, não a das linhas à vista) */
+  /* PASTO-FICHA-01 PR B — na FICHA, trocar de aba e abrir a prévia não movem o cabeçalho, a faixa, as abas nem o rodapé (tamanho fixo) */
+  { nome: 'pastos-ficha', url: 'tela=pastos&barra=32', regiao: '[data-testid="ficha-do-pasto"]',
+    antes: async (p) => { await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor(); await espera(p, 800); },
+    estados: [
+      ...['infra', 'avaliacoes', 'reformas', 'lotacao', 'documentos', 'cadastro'].map((aba) => [`aba ${aba}`, clicar(`[data-testid="ficha-aba-${aba}"]`)]),
+      ['manejo contínuo', async (p) => { await p.getByRole('button', { name: 'Contínuo' }).first().click(); await espera(p); }],
+      ['prévia', clicar('[data-testid="ficha-salvar"]')],
+    ] },
+  { nome: 'pastos-lista', url: 'tela=pastos&barra=32', regiao: '[data-testid="quadro-pastos"]',
+    antes: async (p) => { await p.locator('[data-testid="lista-pastos"]').waitFor(); await espera(p, 600); },
+    estados: [
+      ['abrir piquetes', clicar('[data-testid="abrir-piquetes"]')], ['fechar piquetes', clicar('[data-testid="abrir-piquetes"]')],
+      ['ordenar por lotação', async (p) => { await p.locator('th', { hasText: /^Lot\./ }).first().click(); await espera(p); }],
+      ['buscar', async (p) => { await p.locator('[data-testid="busca-pastos"]').fill('P1'); await espera(p); }],
+    ] },
   /* PASTO-AREA-OFICIAL-01 — no modo "Áreas", marcar um, marcar todos e trocar o mês não movem a faixa (mês · frase · botão de largura
      fixa), o cabeçalho nem o rodapé dos totais; no modal da prévia, digitar o motivo e gravar sem motivo (o aviso) não movem nada */
   { nome: 'pastos-areas', url: 'tela=pastos&barra=32',

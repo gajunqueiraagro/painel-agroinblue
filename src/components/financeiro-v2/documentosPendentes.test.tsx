@@ -119,7 +119,7 @@ const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'),
 
 describe('ligação com o salvar (lida da fonte)', () => {
   it('à vista: o id que o onSave devolve recebe a cadeia antes de fechar; sem pendentes, fecha como antes', () => {
-    const trecho = dialogo.slice(dialogo.indexOf('const ok = await onSave(form, currentEditId || undefined);'));
+    const trecho = dialogo.slice(dialogo.indexOf('const ok = await onSave(form, currentEditId || undefined,'));
     expect(trecho).toContain("if (!currentIsEdit && pendentes.length > 0) {");
     expect(trecho).toContain("const idCriado = typeof ok === 'string' ? ok : null;");
     expect(trecho).toContain("const tudo = await gravarPendentesDepoisDoSalvar({ tipo: 'avista', lancamentoId: idCriado });");
@@ -148,7 +148,7 @@ describe('ligação com o salvar (lida da fonte)', () => {
 
   it('só o Financeiro V2 liga a aba antes de salvar, e ele devolve o id do lançamento criado', () => {
     expect(tela).toContain('documentosAntesDeSalvar');
-    expect(tela).toContain("const criadoId = id ? null : await hook.criarLancamentoComId(form, { origem: 'manual' });");
+    expect(tela).toContain("const criadoId = id ? null : await hook.criarLancamentoComId(form, { origem: 'manual', onErroDeCampo });");
     expect(tela).toContain('return criadoId ?? true;');
     expect(tela).toContain('if (criadoId && clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);');
     /* sem a prop, a aba segue dizendo para salvar antes (os outros 13 chamadores) */

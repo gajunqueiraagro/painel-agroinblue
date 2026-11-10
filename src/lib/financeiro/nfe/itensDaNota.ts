@@ -204,7 +204,8 @@ export function itensDoPdf(nota: NotaLida, extras: { seguroCent?: number; outras
       icms: f && (f.bcIcmsCent || f.vIcmsCent) ? { cst: f.cst ?? null, bcCent: f.bcIcmsCent ?? 0, aliquota: f.aliqIcms ?? null, valorCent: f.vIcmsCent ?? 0 } : null,
       icmsSt: st[k] ? { cst: null, bcCent: 0, aliquota: null, valorCent: st[k] } : null, fcp: null, fcpSt: null,
       ipi: ipi[k] ? { cst: null, bcCent: 0, aliquota: f?.aliqIpi ?? null, valorCent: ipi[k] } : null,
-      pis: null, cofins: null, ibsCbs: null,
+      /* NOTA-NFSE-LEITURA-02 — a NFS-e (1 item: o servico) leva o IBS/CBS do DANFSe nas chaves da NF-e */
+      pis: null, cofins: null, ibsCbs: nota.servico?.ibsCbs && nota.itens.length === 1 ? nota.servico.ibsCbs : null,
       rastro: i.detalhe ? [loteDoDetalhe(i.detalhe)] : [],
       infoAdicional: i.detalhe ?? null,
     };
@@ -237,10 +238,15 @@ export interface CabecalhoDaNota {
 }
 
 /** O payload da RPC: o cabecalho (com os totais em centavos e o XML original) e os itens com as chaves da tabela. */
-export function payloadDaNotaFiscal(nota: Pick<NotaLida, 'chave' | 'numero' | 'serie' | 'emissao' | 'naturezaOperacao' | 'emitente'>, l: ItensLidos, xmlOriginal: string | null) {
+export function payloadDaNotaFiscal(nota: Pick<NotaLida, 'chave' | 'numero' | 'serie' | 'emissao' | 'naturezaOperacao' | 'emitente'> & Partial<Pick<NotaLida, 'destinatario'>>,
+  l: ItensLidos, xmlOriginal: string | null) {
   const t = l.totais;
+  /* NOTA-NFSE-LEITURA-02 — o PDF nao tem o XML de onde o banco tira o destinatario (117280): vai o lido (o tomador da NFS-e) */
+  const dest = l.origem === 'pdf' && nota.destinatario && (nota.destinatario.documento || nota.destinatario.ie)
+    ? { destinatario: { documento: nota.destinatario.documento, nome: nota.destinatario.nome, ie: nota.destinatario.ie } } : {};
   return {
     nota: {
+      ...dest,
       chave_acesso: nota.chave, origem: l.origem, numero: nota.numero, serie: nota.serie, emissao: nota.emissao || null, natureza: nota.naturezaOperacao || null,
       regime: l.regime, emitente_documento: nota.emitente.documento, emitente_nome: nota.emitente.nome, xml_original: l.origem === 'xml' ? xmlOriginal : null,
       totais: {
@@ -279,6 +285,8 @@ function servicoParaOBanco(s: ServicoDaNfse) {
     retencoes: { iss_retido_cent: s.retencoes.issRetidoCent, irrf_cent: s.retencoes.irrfCent, previdencia_cent: s.retencoes.previdenciaCent,
       contribuicoes_sociais_cent: s.retencoes.contribuicoesSociaisCent },
     total_retido_cent: s.totalRetidoCent, liquido_cent: s.liquidoCent,
+    /* NOTA-NFSE-LEITURA-02 — o quadro do ISSQN (informacao; so' o retido entra no liquido) */
+    ...(s.issqn ? { issqn: { base_cent: s.issqn.baseCent, aliquota: s.issqn.aliquota, valor_cent: s.issqn.apuradoCent, retido: s.issqn.retido } } : {}),
   };
 }
 function servicoDoBanco(v: unknown): ServicoDaNfse | null {
@@ -290,6 +298,7 @@ function servicoDoBanco(v: unknown): ServicoDaNfse | null {
     retencoes: { issRetidoCent: num(r.iss_retido_cent), irrfCent: num(r.irrf_cent), previdenciaCent: num(r.previdencia_cent),
       contribuicoesSociaisCent: num(r.contribuicoes_sociais_cent) },
     totalRetidoCent: num(o.total_retido_cent), liquidoCent: num(o.liquido_cent),
+    issqn: ((q) => (q ? { baseCent: num(q.base_cent), aliquota: txt(q.aliquota), apuradoCent: num(q.valor_cent), retido: q.retido === true } : null))(objeto(o.issqn)),
   };
 }
 

@@ -180,7 +180,10 @@ interface Props {
   aoCasarComBanco?: (levados: LevadoDaNota[]) => void;
 }
 
-export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugerido, semVinculo, modelo, aoFechar, aoCriado, aoCasarComBanco }: Props) {
+export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugerido: valorSugeridoDaProp, semVinculo, modelo, aoFechar, aoCriado, aoCasarComBanco }: Props) {
+  /* CONC-CRIAR-PERDE-DADOS-01 — o valor sugerido é o de QUANDO O MODAL ABRIU: a estação o recalcula ("o que falta") a cada releitura dos
+     candidatos, e um valor novo no `prefill` reidrataria o formulário aberto (o que foi digitado sumia). */
+  const [valorSugerido] = useState(valorSugeridoDaProp);
   const { fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const {
