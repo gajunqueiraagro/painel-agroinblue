@@ -91,20 +91,21 @@ describe('VISAO-GERAL-04 — sem espaço sobrando', () => {
     expect(DA_VISAO.some(({ fonte }) => /function AtalhosVG/.test(fonte))).toBe(false);
   });
 
-  it('Área estreita (largura do conteúdo) ao lado do Caixa, na mesma altura', () => {
-    expect(V2HOME).toContain('<div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[auto_minmax(0,1fr)]">');
+  it('Área ao lado do Caixa (1 : 1,6 — VISAO-GERAL-04 de 08/11), na mesma altura', () => {
+    expect(V2HOME).toContain('<div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">');
     expect(V2HOME).toMatch(/title=\{isPeriodo \? 'Área média no período' : 'Área no mês'\}\s*className="h-full"/);
     expect(V2HOME).toMatch(/subtitle="regime de caixa · sem transferências"\s*className="h-full"/);
   });
 
-  it('a coluna da direita: mapas → atenção, que estica até o fim da coluna da esquerda; os blocos por atividade na largura toda, abaixo', () => {
-    const dir = V2HOME.indexOf('data-testid="vg-coluna-dir"');
-    expect(dir).toBeGreaterThan(0);
-    const depois = V2HOME.slice(dir);
+  it('VISAO-GERAL-04 (08/11, V2): logo abaixo dos cartões, o mapa das fazendas (maior) e, ao lado, a atenção; os blocos por atividade no fim', () => {
+    const linha = V2HOME.indexOf('data-testid="vg-linha-mapa"');
+    expect(linha).toBeGreaterThan(V2HOME.indexOf('<CartoesDoTopo'));
+    expect(V2HOME).toContain('lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]" data-testid="vg-linha-mapa"');
+    const depois = V2HOME.slice(linha);
     expect(depois.indexOf('<MiniaturaDaFazenda')).toBeLessThan(depois.indexOf('<PrecisaDeAtencao'));
-    expect(depois).toMatch(/<PrecisaDeAtencao [^>]*className="xl:flex-\[1_0_auto\]"/);
-    expect(V2HOME).toContain('xl:[contain:size]" data-testid="vg-coluna-dir"');
-    expect(V2HOME.indexOf('<BlocosPorAtividade')).toBeGreaterThan(dir);
+    expect(depois.indexOf('<PrecisaDeAtencao')).toBeLessThan(depois.indexOf("'Área no mês'"));
+    expect(V2HOME).not.toContain('vg-coluna-dir');
+    expect(V2HOME.indexOf('<BlocosPorAtividade')).toBeGreaterThan(V2HOME.indexOf('<TabelaFazendasVG'));
   });
 
   it('o quadro de atenção aceita a classe (para esticar)', () => {
@@ -124,17 +125,17 @@ describe('VISAO-GERAL-05 — indicadores das atividades e a tabela por uso', () 
     expect(variacao(5, 0)).toBeNull();
   });
 
-  it('Pecuária, na ordem: @ no ano · @/ha · GMD · UA/ha · custo/@ · margem/@; sem meta (quem não vê) o pedaço some', () => {
+  it('Pecuária, na ordem: @ no ano · @/ha · GMD · custo/@ · margem/@ (a Lotação saiu: VISAO-GERAL-04, V7); sem meta o pedaço some', () => {
     const l = (at: number, ha: number, custo: number, margem: number): DrePecLida => ({ custo_variavel: custo, margem, producao: { at_produzida: at, ha_medio: ha } });
     const ind = indicadoresPecuaria({
       real: l(1000, 100, 50000, 100000), meta: l(900, 100, 45000, 90000), anoAnt: l(800, 100, 40000, 120000),
-      gmd: { valor: 0.5, deltaMeta: 4, deltaAno: -2 }, uaHa: { valor: 1.2, deltaMeta: null, deltaAno: 3 }, podeVerMeta: false,
+      gmd: { valor: 0.5, deltaMeta: 4, deltaAno: -2 }, podeVerMeta: false,
     });
-    expect(ind.map((i) => i.id)).toEqual(['arrobas', 'arrobaHa', 'gmd', 'uaHa', 'custoArroba', 'margemArroba']);
-    expect(ind.map((i) => [i.valor, i.unidade])).toEqual([['1.000', '@'], ['10,00', '@/ha'], ['0,500', 'kg/dia'], ['1,20', 'UA/ha'], ['R$ 50,00', '/@'], ['R$ 100,00', '/@']]);
+    expect(ind.map((i) => i.id)).toEqual(['arrobas', 'arrobaHa', 'gmd', 'custoArroba', 'margemArroba']);
+    expect(ind.map((i) => [i.valor, i.unidade])).toEqual([['1.000', '@'], ['10,00', '@/ha'], ['0,500', 'kg/dia'], ['R$ 50,00', '/@'], ['R$ 100,00', '/@']]);
     expect(ind.every((i) => i.meta === null)).toBe(true);
     expect(ind[0].anoAnt).toBeCloseTo(25, 6);                       // 1.000 @ contra 800
-    expect(ind[5].anoAnt).toBeCloseTo((100 - 150) / 150 * 100, 6);   // margem/@: 100 contra 150
+    expect(ind[4].anoAnt).toBeCloseTo((100 - 150) / 150 * 100, 6);   // margem/@: 100 contra 150
     expect(ind.every((i) => i.fonte.length > 0)).toBe(true);
   });
 
@@ -181,7 +182,10 @@ describe('VISAO-GERAL-05 — indicadores das atividades e a tabela por uso', () 
   it('a tabela Fazendas: as áreas por uso (somam o total), sem as colunas "Atividades" e "Produtiva"', () => {
     const fonte = readFileSync(path.join(PASTA, 'TabelaFazendasVG.tsx'), 'utf8');
     const cab = [...fonte.matchAll(/<th className=\{th(?:Num)?\}>([^<]+)<\/th>/g)].map((m) => m[1]);
-    expect(cab).toEqual(['Fazenda', 'Pecuária ha', 'Agricultura ha', 'Silvicultura ha', 'Reserva/APP/benf. ha', 'Total ha', 'Cabeças', 'UA/ha', 'Chuva mm', 'Fechamento']);
+    expect(cab).toEqual(['Fazenda', 'Total ha', 'Cabeças', 'UA/ha', 'Chuva mm', 'Fechamento']);
+    /* VISAO-GERAL-04 (V6): as áreas por uso vêm de COLUNAS_DE_AREA (a que nenhuma fazenda tem sai) */
+    const usos = [...fonte.matchAll(/\{ k: '\w+', rotulo: '([^']+)' \}/g)].map((m) => m[1]);
+    expect(usos).toEqual(['Pecuária ha', 'Agricultura ha', 'Silvicultura ha', 'Reserva/APP/benf. ha']);
     expect(V2HOME).toContain('areaReservaAppBenf: a ? a.area_reserva_ha + a.area_app_ha + a.area_benfeitorias_ha + a.area_outras_ha : null');
   });
 

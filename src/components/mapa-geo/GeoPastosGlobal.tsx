@@ -230,8 +230,13 @@ const situacaoDaFazenda = (l: LinhaDaFazenda): Situacao | null => {
 /** A miniatura de UMA fazenda do "Mapa das fazendas" (sigla, kg/ha na cor da situação, os pastos pintados, "cab sem mapa"); clique abre.
  *  VISAO-GERAL-03: exportada para o card "Área produtiva" da Visão Geral usar a MESMA peça. Sem `onImportar`, a fazenda sem mapa só diz
  *  "sem mapa". */
-export function MiniaturaDaFazenda({ linha: l, geometrias, situacaoDoPasto, onAbrir, onImportar }: {
+export function MiniaturaDaFazenda({ linha: l, geometrias, situacaoDoPasto, onAbrir, onImportar, cabecas, w = 118, h = 72 }: {
   linha: LinhaDaFazenda; geometrias: GeometriaDoGlobal[]; situacaoDoPasto: (pastoId: string) => Situacao; onAbrir: () => void; onImportar?: () => void;
+  /** VISAO-GERAL-04 (Gabriel 08/11 10:09) — na Visão Geral o número do canto são as CABEÇAS da fazenda no mês ("936 cab.", cor neutra), não
+   *  o kg/ha sem explicação; sem a prop, o kg/ha na cor da situação (a Geo pastos) */
+  cabecas?: number | null;
+  /** o tamanho do desenho (a Visão Geral usa o mapa maior) */
+  w?: number; h?: number;
 }) {
   const sit = situacaoDaFazenda(l);
   return (
@@ -240,12 +245,18 @@ export function MiniaturaDaFazenda({ linha: l, geometrias, situacaoDoPasto, onAb
       className="cursor-pointer rounded-md border border-border p-1 hover:border-[#2B6CB0]" data-testid="global-miniatura">
       <div className="flex items-center justify-between text-[10px]">
         <b>{l.fazenda.codigo}</b>
-        <span className="tabular-nums" style={{ color: sit ? COR_SITUACAO[sit] : undefined }}>{n0(l.kgHa)}</span>
+        {cabecas !== undefined ? (
+          <span className="whitespace-nowrap tabular-nums" data-testid="miniatura-cabecas">
+            {cabecas == null ? '—' : <>{n0(cabecas)}<span className="ml-0.5 text-[9.5px] text-muted-foreground">cab.</span></>}
+          </span>
+        ) : (
+          <span className="tabular-nums" style={{ color: sit ? COR_SITUACAO[sit] : undefined }}>{n0(l.kgHa)}</span>
+        )}
       </div>
       {l.temMapa ? (
-        <MiniMapa geometrias={geometrias} situacaoDe={situacaoDoPasto} w={118} h={72} />
+        <MiniMapa geometrias={geometrias} situacaoDe={situacaoDoPasto} w={w} h={h} />
       ) : (
-        <div className="flex h-[72px] flex-col items-center justify-center gap-1 text-[9.5px] text-muted-foreground" data-testid="global-sem-mapa">
+        <div className="flex flex-col items-center justify-center gap-1 text-[9.5px] text-muted-foreground" style={{ height: h }} data-testid="global-sem-mapa">
           sem mapa
           {onImportar && (
             <Button type="button" size="sm" variant="outline" className="h-[20px] px-2 text-[10px]"

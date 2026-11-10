@@ -6,7 +6,8 @@
  * NENHUMA CONTA NASCE AQUI: cada número sai pronto da fonte da tela dona, e a divisão segue a régua de lá.
  *   · Pecuária — @ produzidas no ano, @/ha, custo/@ e margem/@: `fn_dre_pecuaria` (jan → mês; meta = cenário meta; ano anterior = os
  *     mesmos meses do ano anterior), com a base do R$/@ e do /ha da tela DRE (`arrobaDaBase` + `BASE_DO_ARROBA`; `producao.ha_medio`).
- *     GMD e UA/ha: os indicadores do PC-100 (rebanho do Fechamento), com o `deltaMeta` e o `deltaAno` que eles já trazem.
+ *     GMD: o indicador do PC-100 (rebanho do Fechamento), com o `deltaMeta` e o `deltaAno` que ele já traz. A Lotação (UA/ha) saiu na
+ *     VISAO-GERAL-04 (mock aprovado 08/11, V7): ela já é um cartão da faixa de cima.
  *   · Agricultura — produtividade, custo/ha e margem/ha: `fn_dre_lavoura` da safra do mês (ano anterior = a safra anterior), linhas
  *     `custo_variavel` e `margem_contribuicao` com o `por_ha` da RPC; área plantada: os talhões da safra; colhido: o Estoque de grãos.
  *   · Silvicultura — a área (a foto de área do mês). Idade e volume não têm cadastro: não aparecem.
@@ -68,7 +69,9 @@ const num = (v: number | null, d: number) => (v == null ? null : formatNum(v, d)
 export function indicadoresPecuaria(e: {
   real: DrePecLida | null; meta: DrePecLida | null; anoAnt: DrePecLida | null;
   gmd: { valor: number | null; deltaMeta: number | null; deltaAno: number | null } | null;
-  uaHa: { valor: number | null; deltaMeta: number | null; deltaAno: number | null } | null;
+  /** VISAO-GERAL-04 V8 (Gabriel 08/11, opção A) — o rótulo diz o período do número: "GMD no ano" (No ano: jan → mês, computePeriodGmd)
+   *  ou "GMD de set" (No mês) — os outros números da linha são do ano, e o GMD do mês ao lado deles enganava */
+  rotuloGmd?: string;
   podeVerMeta: boolean;
 }): IndicadorAtividade[] {
   const m = (v: number | null) => (e.podeVerMeta ? v : null);
@@ -82,10 +85,8 @@ export function indicadoresPecuaria(e: {
     { id: 'arrobaHa', rotulo: '@ por hectare', valor: num(arrobaPorHa(e.real), 2), unidade: '@/ha',
       meta: m(variacao(arrobaPorHa(e.real), arrobaPorHa(e.meta))), anoAnt: variacao(arrobaPorHa(e.real), arrobaPorHa(e.anoAnt)),
       fonte: `${DRE}: at_produzida ÷ producao.ha_medio (o "por hectare" da DRE)` },
-    { id: 'gmd', rotulo: 'GMD', valor: num(e.gmd?.valor ?? null, 3), unidade: 'kg/dia',
-      meta: m(e.gmd?.deltaMeta ?? null), anoAnt: e.gmd?.deltaAno ?? null, fonte: 'PC-100 (rebanho do Fechamento): GMD do mês, deltaMeta e deltaAno' },
-    { id: 'uaHa', rotulo: 'Lotação', valor: num(e.uaHa?.valor ?? null, 2), unidade: 'UA/ha',
-      meta: m(e.uaHa?.deltaMeta ?? null), anoAnt: e.uaHa?.deltaAno ?? null, fonte: 'PC-100 (rebanho do Fechamento + área do mês): UA/ha, deltaMeta e deltaAno' },
+    { id: 'gmd', rotulo: e.rotuloGmd ?? 'GMD', valor: num(e.gmd?.valor ?? null, 3), unidade: 'kg/dia',
+      meta: m(e.gmd?.deltaMeta ?? null), anoAnt: e.gmd?.deltaAno ?? null, fonte: 'PC-100 (rebanho do Fechamento): GMD do mês (No mês) ou de jan → mês (No ano), deltaMeta e deltaAno' },
     { id: 'custoArroba', rotulo: 'Custo variável', valor: reais(custo(e.real)), unidade: '/@', menorMelhor: true,
       meta: m(variacao(custo(e.real), custo(e.meta))), anoAnt: variacao(custo(e.real), custo(e.anoAnt)),
       fonte: `${DRE}: custo_variavel ÷ @ produzida (a base do R$/@ da DRE)` },
