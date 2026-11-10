@@ -2522,7 +2522,37 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
      Elo (a conta já escolhida; o cenário escolhe Parcelada 10× no Pagamento). O PDF é desenhado pelo jspdf e LIDO pelo caminho de verdade. */
   /* NOTA-NFSE-LEITURA-02 (Gabriel 08/11, a forma da NF 402) — `notanfse`: o DANFSe nacional sintético (sem IE, IBS/CBS, 3 linhas de serviço)
      de uma filial cuja OUTRA filial é a cadastrada (a faixa nova), a fazenda pelo histórico do fornecedor e a descrição curta do serviço */
-  if (v === 'notanfse') {
+  /* NOTA-LEITURA-PRINT-01 (Gabriel 10/11) — `notaprint` / `notaprintnfse`: a NF-e e a NFS-e de Campo Grande impressas pelo "Print To PDF"
+     (o fixture sintético com as posições dos reais), desenhadas pelo jspdf e LIDAS pelo caminho de verdade; o mesmo emitente nas duas */
+  if (v === 'notaprint' || v === 'notaprintnfse') {
+    void (async () => {
+      const { jsPDF } = await import('jspdf');
+      const { DANFE_PRINT_TO_PDF, NFSE_CAMPO_GRANDE } = await import('@/lib/financeiro/nfe/__fixtures__/notaPrintToPdfSintetica');
+      const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
+      const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [595.32, 841.92] });
+      /* a fonte do jspdf e' mais larga que a do original: cada texto encolhe ate' a largura dele (a chave nao passa da folha) */
+      for (const it of (v === 'notaprint' ? DANFE_PRINT_TO_PDF : NFSE_CAMPO_GRANDE)[0]) {
+        const t = Math.max(4, it.h * 1.15); doc.setFontSize(t);
+        const largura = doc.getTextWidth(it.str);
+        if (it.w > 0 && largura > it.w) doc.setFontSize(t * it.w / largura);
+        doc.text(it.str, it.x, 841.92 - it.y);
+      }
+      const bytes: ArrayBuffer = doc.output('arraybuffer');
+      const lido: any = await lerNota(bytes);
+      if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+      const OFICINA = { ...AGRO, id: 'oficina-p', nome: 'Agro Exemplo Pecas e Servicos Ltda', cpf_cnpj: '11.222.333/0004-24' };
+      props.fornecedores = [OFICINA];
+      const resolucao = resolverEmitente(lido.nota.emitente, [OFICINA], null);
+      const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: '123456789' }], emitente: resolucao,
+        favorecidoId: resolucao.propostoId, ultima: null });
+      if (!p.ok) { raiz.render(<div>{p.frase}</div>); return; }
+      props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento,
+        emitente: lido.nota.emitente, resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, v === 'notaprint' ? 'nfe-print.pdf' : 'nfse-print.pdf') } as any);
+      props.documentosAntesDeSalvar = true;
+      renderizar();
+    })();
+  } else if (v === 'notanfse') {
     void (async () => {
       const { jsPDF } = await import('jspdf');
       const { danfseSintetico } = await import('@/lib/financeiro/nfe/__fixtures__/danfseSintetico');
