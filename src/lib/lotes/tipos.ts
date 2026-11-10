@@ -53,6 +53,8 @@ export interface LoteDaLista {
   lancamentos: number;
   /** o que falta conferir no lote (117440); nulo = nada a conferir */
   conferir: string | null;
+  /** L1 (Gabriel 09/11) — o lote leva carimbo (a regra do assistente, `aceitaCarimbo`), lida no `useLotesDaFazenda`; sem a leitura = não */
+  daCria?: boolean;
 }
 
 /** Os campos que `fn_lote_salvar` aceita em `p_campos` (só as chaves que vierem mudam). */
@@ -92,3 +94,13 @@ export const FRASE_CARIMBO_INVALIDO = 'Carimbo: mês.lote, ex.: 7.1 (julho, 1º 
 export function nomeDoLote(l: { codigo: string; carimbo: string | null }): string {
   return l.carimbo?.trim() || l.codigo;
 }
+
+export const FRASE_SEM_CARIMBO = 'sem carimbo · definir';
+/** L1 (Gabriel 09/11 07:58) — o nome no POPUP, na LISTA e no SELETOR: a cria mostra o carimbo; a cria SEM carimbo mostra
+ *  "sem carimbo · definir" (o código vai no title/ao lado); fora da cria, o código. Frases e o "Usar o lote" seguem com `nomeDoLote`. */
+export function nomeNaTela(l: { codigo: string; carimbo: string | null; daCria?: boolean }): string {
+  return l.carimbo?.trim() || (l.daCria ? FRASE_SEM_CARIMBO : l.codigo);
+}
+/** O código aparece ao lado (title, cinza) quando o nome na tela não é ele. */
+export const codigoAoLado = (l: { codigo: string; carimbo: string | null; daCria?: boolean }): string | null =>
+  (nomeNaTela(l) === l.codigo ? null : l.codigo);

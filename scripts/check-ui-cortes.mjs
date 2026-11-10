@@ -812,6 +812,9 @@ const CENARIOS = [
      a 1.240, 1.024 e 135% (919×519) com o menu; o Lote (texto livre) é o único que corta, com "…" e o nome inteiro no title */
   { nome: 'mapa-pastos', url: 'tela=mapa-pastos', tamanhos: [[1240, 700], [1024, 600], [919, 519]], regiao: 'table',
     antes: async (p) => { await p.locator('[data-testid="programa-do-pasto"]').first().waitFor(); await p.waitForTimeout(800); } },
+  /* L3 (Gabriel 09/11) — o lote em 2 pastos: o P_01 com "com P_02" no Lote e a mesma UA/ha do P_02 (soma das áreas); nada corta */
+  { nome: 'mapa-pastos-rotacao', url: 'tela=mapa-pastos&v=rotacao', tamanhos: [[1240, 700], [1024, 600], [919, 519]], regiao: 'table',
+    antes: async (p) => { await p.locator('[data-testid="lote-com"]').first().waitFor(); await p.waitForTimeout(800); } },
   /* FECH-TOPO-COMPACTO-01 — o topo do Fechamento com todos os botões numa linha (1.240, 1.024 e o zoom de 135% = 919×519): nada corta */
   { nome: 'fechamento-topo', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
     regiao: '.sticky.top-0', antes: (p) => p.waitForTimeout(2000) },
@@ -825,6 +828,14 @@ const CENARIOS = [
   { nome: 'fechamento-mapa-linha-cards', url: 'tela=fechamento-grupo&v=topo&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
     regiao: '[data-testid="linha-da-vista"]', antes: async (p) => { await p.locator('[data-testid="linha-da-vista"]').waitFor(); await p.waitForTimeout(1500); } },
   { nome: 'fechamento-mapa-popup', url: 'tela=fechamento-grupo&v=mapa&barra=32', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '.leaflet-tooltip', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500);
+      /* o mouse vai ao MEIO do 1º pasto (o contorno da área total, por cima, intercepta o hover do Playwright no elemento) */
+      const b = await p.locator('.leaflet-container path.leaflet-interactive').nth(1).boundingBox();
+      await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.waitForTimeout(200); await p.mouse.move(b.x + b.width / 2 + 2, b.y + b.height / 2 + 2);
+      await p.locator('.leaflet-tooltip [data-testid="popup-do-pasto"]').waitFor({ timeout: 4000 });
+      await p.waitForTimeout(400); } },
+  /* L1 (Gabriel 09/11) — o popup com a cria SEM carimbo (`&cria=1`): "sem carimbo · definir" no lugar do código, sem cortar */
+  { nome: 'fechamento-mapa-popup-cria', url: 'tela=fechamento-grupo&v=mapa&barra=32&cria=1', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
     regiao: '.leaflet-tooltip', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500);
       /* o mouse vai ao MEIO do 1º pasto (o contorno da área total, por cima, intercepta o hover do Playwright no elemento) */
       const b = await p.locator('.leaflet-container path.leaflet-interactive').nth(1).boundingBox();
@@ -905,6 +916,11 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-campo-lote-usar', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="caderno-usar-o-lote"]').click();
           await p.locator('[data-testid="caderno-voltar-texto"]').waitFor(); await p.waitForTimeout(300); } },
+      /* L1 (Gabriel 09/11) — a cria SEM carimbo no P10A (`&cria=1`): o campo Lote e o painel (o seletor) com "sem carimbo · definir" */
+      { nome: 'fechamento-grupo-campo-lote-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-campo-lote-painel-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
+          await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
       { nome: 'fechamento-grupo-campo-lote-painel', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
           await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
@@ -928,6 +944,8 @@ const CENARIOS = [
     return [
       { nome: 'lotes-lista', url: URL, tamanhos: T, antes: lista },
       { nome: 'lotes-lista-encerrados', url: URL, tamanhos: T, antes: async (p) => { await lista(p); await clicarRotulo(/^Encerrados$/)(p); } },
+      /* LOTES-06 — a aba Resumo: os 4 números e os 6 quadros (número na coluna dele, nada corta) */
+      { nome: 'lotes-resumo', url: URL, tamanhos: T, antes: async (p) => { await lista(p); await clicarRotulo(/^Resumo$/)(p); await p.locator('[data-testid="resumo-dos-lotes"]').waitFor(); } },
       { nome: 'lotes-lista-vazia', url: URL, tamanhos: T, antes: async (p) => { await lista(p);
         await p.locator('[data-testid="lotes-busca"]').fill('nenhum lote com este nome'); await p.locator('[data-testid="lotes-vazio"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'lotes-assistente-categoria', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: novo },

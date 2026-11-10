@@ -16,7 +16,7 @@ export function exportMapaPastosXlsx(
 
   const dataQtde = rows.map(row => {
     /* MAPA-REBANHO-R2 — a sub-linha do piquete sai recuada, sem a atividade (é a do pai) */
-    const vals: (string | number)[] = [nomeNaSaida(row.pasto.nome, !!row.piqueteDe), row.piqueteDe ? '' : tipoUsoLabel(row.tipoUso), row.lote || ''];
+    const vals: (string | number)[] = [nomeNaSaida(row.pasto.nome, !!row.piqueteDe), row.piqueteDe ? '' : tipoUsoLabel(row.tipoUso), row.lote || row.loteNoCaderno || (row.comPastos?.length ? `com ${row.comPastos.join(', ')}` : '')];
     categorias.forEach(cat => {
       const v = row.categorias.get(cat.id);
       vals.push(v?.quantidade || 0);

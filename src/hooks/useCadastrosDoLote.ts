@@ -19,6 +19,10 @@ const numero = (v: unknown): number => (typeof v === 'number' ? v : 0);
 const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
 /** Uma linha do banco → `CadastroDoLote` (null se a linha não tem o formato). */
+/** A leitura da tabela dos cadastros (fora dos tipos gerados) — a ÚNICA, para o hook daqui e o carimbo da cria no `useLotesDaFazenda`. */
+export const lerCadastrosDoLote = () =>
+  (supabase as any).from('rebanho_lote_cadastros').select('id, tipo, sigla, nome, categorias_rebanho, ordem, ativo');
+
 export function cadastroDaLinha(l: unknown): CadastroDoLote | null {
   if (typeof l !== 'object' || l === null) return null;
   const id = texto(Reflect.get(l, 'id')); const tipo = Reflect.get(l, 'tipo'); const nome = texto(Reflect.get(l, 'nome'));
@@ -69,7 +73,7 @@ export function useCadastrosDoLote(clienteId: string | null) {
     if (!clienteId) { setCadastros([]); return; }
     setCarregando(true);
     const [cad, reb] = await Promise.all([
-      (supabase as any).from('rebanho_lote_cadastros').select('id, tipo, sigla, nome, categorias_rebanho, ordem, ativo')
+      lerCadastrosDoLote()
         .eq('cliente_id', clienteId).eq('ativo', true).order('ordem'),
       supabase.from('categorias_rebanho').select('id, nome, codigo, ordem_exibicao').eq('ativo', true).order('ordem_exibicao'),
     ]);

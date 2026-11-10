@@ -1875,6 +1875,24 @@ if (tela === 'mesclar') {
       lote: null, lote_id: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false, piquete_id: piq }));
   const ITENS = [...ITENS_R2, ...LINHAS.flatMap(([id, , , , , loteId, cats]) => Object.entries(cats).map(([cod, [q, kg]]) => ({ id: `i-${id}-${cod}`, fechamento_id: `fc-${id}`,
     categoria_id: `c-${cod}`, quantidade: q, peso_medio_kg: kg, lote: null, lote_id: loteId, observacoes: null, origem_dado: 'manual', peso_atualizado: id === 'a1' })))];
+  /* L3 (Gabriel 09/11, o caso Monterrey set/26 — SINTÉTICO, nos números do banco): `&v=rotacao` — o card do P_02 (49,3 ha) com 187 vacas e o
+     lote que também esteve no P_01 (50,2 ha, card vazio). A `fn_lotacao_do_mes` daqui faz o rateio por área do banco: 1,11 UA/ha nos dois. */
+  const ROTACAO = v === 'rotacao';
+  const ALOC: { fechamento_id: string; lote: string; pasto_id: string }[] = [];
+  const LOTACAO: Record<string, unknown>[] = [];
+  if (ROTACAO) {
+    PASTOS.push(pasto('p01', 'P_01', 50.2, 'cria', 20), pasto('p02', 'P_02', 49.3, 'cria', 21));
+    for (const id of ['p01', 'p02']) CARDS.push({ ...CARDS[3], id: `fc-${id}`, pasto_id: id, lote_mes: null, tipo_uso_mes: 'cria', qualidade_mes: null });
+    ITENS.push({ id: 'i-p02-vacas', fechamento_id: 'fc-p02', categoria_id: 'c-vacas', quantidade: 187, peso_medio_kg: 265.7, lote: null, lote_id: null,
+      observacoes: null, origem_dado: 'manual', peso_atualizado: false, piquete_id: null });
+    ALOC.push({ fechamento_id: 'fc-p02', lote: '', pasto_id: 'p02' }, { fechamento_id: 'fc-p02', lote: '', pasto_id: 'p01' });
+    const ua = 187 * 265.7 / 450;
+    for (const [id, area] of [['p01', 50.2], ['p02', 49.3]] as const) {
+      const f = area / 99.5;
+      LOTACAO.push({ pasto_id: id, grupo_id: null, area_ha: area, cabecas: 187 * f, kg: 187 * 265.7 * f, ua: ua * f, kg_ha: 187 * 265.7 / 99.5, ua_ha: ua / 99.5,
+        recebe_de_outro_card: id === 'p01' });
+    }
+  }
   const lote = (id: string, codigo: string, programa: string | null) => ({ id, codigo, codigos_antigos: [], nome_campeiro: null, situacao: 'ativo',
     formado_em: '2026-01-01', encerrado_em: null, categoria_id: 'k-cat', raca_id: 'k-raca', atividade_id: 'k-ativ', numero: 1, sistema_id: null,
     programa_id: programa, destino_id: null, safra: null, carimbo: null, idade_media_meses: null, meta_peso_kg: null, meta_gmd_kg: null, meta_data: null,
@@ -1890,8 +1908,9 @@ if (tela === 'mesclar') {
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
       : t === 'categorias_rebanho' ? CATS
       : t === 'rebanho_lote_cadastros' ? CADASTROS
+      : t === 'fechamento_alocacoes' ? ALOC
       : []),
-    rpc: (fn: string) => (fn === 'fn_lotes_da_fazenda' ? LOTES : null),
+    rpc: (fn: string) => (fn === 'fn_lotes_da_fazenda' ? LOTES : fn === 'fn_lotacao_do_mes' ? LOTACAO : null),
   };
   const montarMapa = async () => {
     const { MapaPastosTab } = await import('@/pages/MapaPastosTab');
@@ -1958,10 +1977,12 @@ if (tela === 'mesclar') {
     ITENS.push(...ITENS.map((i) => ({ ...i, id: `${i.id}-9`, fechamento_id: `${i.fechamento_id}-9` })));
   }
   /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
-  const COM_LOTES = v === 'lotes';
+  /* L1 (Gabriel 09/11) — `&cria=1`: o P10A inteiro (as 2 categorias) no lote da cria SEM carimbo (l-vp4): "sem carimbo · definir" no campo Lote, no seletor e no popup */
+  const COM_CRIA = q.get('cria') === '1';
+  const COM_LOTES = v === 'lotes' || COM_CRIA;
   if (COM_LOTES) {
-    Object.assign(ITENS[0], { lote_id: 'l-dm6' });
-    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: 'l-px2' });
+    Object.assign(ITENS[0], { lote_id: COM_CRIA ? 'l-vp4' : 'l-dm6' });
+    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: COM_CRIA ? 'l-vp4' : 'l-px2' });
   }
   /* MAPA-LOTES-01 (C2) — `&v=mapa`: o Fechamento abre na vista Mapa (a escolha guardada); os polígonos SINTÉTICOS de 5 dos 6 pastos
      (o P12 fica sem desenho: vai para a faixa) e a área total por baixo */

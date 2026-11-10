@@ -119,7 +119,8 @@ export async function exportMapaPastosPdf(
     return [
       ehPiquete ? nomeNaSaida(row.pasto.nome, true) : ehDiv ? DIV_NO_PDF : row.pasto.nome,
       ehPiquete ? '' : ehDiv && isPastoDivergencia(row.tipoUso) ? DIV_NO_PDF : tipoUsoLabelCurto(row.tipoUso),
-      row.lote || '',
+      /* L2 — o lote; sem lote cadastrado, o texto do caderno (as mesmas linhas da tela); L3 — sem os dois, "com P_xx" */
+      row.lote || row.loteNoCaderno || (row.comPastos?.length ? `com ${row.comPastos.join(', ')}` : ''),
       row.programa || '—',
       ...catVals,
       row.totalCabecas ? String(row.totalCabecas) : '',

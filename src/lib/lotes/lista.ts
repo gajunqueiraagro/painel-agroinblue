@@ -4,7 +4,7 @@
  */
 import { casaNaBusca } from '@/lib/texto/busca';
 import type { ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
-import type { CadastroDoLote, CamposDoLote, LoteDaLista, SituacaoDoLote } from '@/lib/lotes/tipos';
+import { codigoAoLado, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type SituacaoDoLote } from '@/lib/lotes/tipos';
 
 /* ── leitura sem cast ─────────────────────────────────────────────────────────────────────────── */
 const campo = (o: object, k: string): unknown => Reflect.get(o, k);
@@ -108,8 +108,8 @@ export const textoDosPastos = (p: readonly string[]): string | null => (p.length
 
 /** LOTES-04 — os códigos antigos numa linha, sem cortar: o mais recente (o último guardado) e "+N" (a lista inteira vai no `title`). */
 /** LOTES-05 — o title do nome na lista: o código (quando aparece o carimbo) e os de antes. */
-export function tituloDoCodigo(l: Pick<LoteDaLista, 'codigo' | 'carimbo' | 'codigosAntigos'>): string | undefined {
-  const partes = [l.carimbo ? l.codigo : null, l.codigosAntigos.length ? `antes: ${l.codigosAntigos.join(' · ')}` : null].filter(Boolean);
+export function tituloDoCodigo(l: Pick<LoteDaLista, 'codigo' | 'carimbo' | 'codigosAntigos' | 'daCria'>): string | undefined {
+  const partes = [codigoAoLado(l), l.codigosAntigos.length ? `antes: ${l.codigosAntigos.join(' · ')}` : null].filter(Boolean);
   return partes.length ? partes.join(' · ') : undefined;
 }
 

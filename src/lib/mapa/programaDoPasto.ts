@@ -5,6 +5,7 @@
  * lotes). Nada digitado aqui. Sem lote ou sem programa = null (a tela escreve "—"); mais de um programa no pasto = os nomes, sem repetir.
  */
 import { nomeDe, type NomesDoCadastro } from '@/lib/lotes/lista';
+import { nomeDoLote } from '@/lib/lotes/tipos';
 
 export interface LoteComPrograma { id: string; programaId: string | null }
 export interface ItemComLote { quantidade: number; lote_id?: string | null }
@@ -25,4 +26,33 @@ export function programaDoPasto(loteIds: readonly string[], lotes: readonly Lote
     if (nome && !vistos.includes(nome)) vistos.push(nome);
   }
   return vistos.length > 0 ? vistos.join(' · ') : null;
+}
+
+/**
+ * MAPA-REBANHO-L2 (Gabriel 09/11 07:51, prints Raul · Monterrey · set/26) — a coluna "Lote" mostra o LOTE, não o nome do caderno:
+ * o nome da regra única (`nomeDoLote`: carimbo na cria, senão o código) de cada lote do pasto, sem repetir ("7.1 · REC-NOV-01");
+ * sem lote cadastrado = null (a tela escreve "—"). O nome no caderno (`lote_mes`) vai no `title`, com o código quando aparece o carimbo.
+ */
+export interface LoteComNome { id: string; codigo: string; carimbo: string | null }
+
+export function loteDoMapa(loteIds: readonly string[], lotes: readonly LoteComNome[]): string | null {
+  const porId = new Map(lotes.map(l => [l.id, l]));
+  const nomes: string[] = [];
+  for (const id of loteIds) {
+    const l = porId.get(id);
+    const n = l ? nomeDoLote(l) : null;
+    if (n && !nomes.includes(n)) nomes.push(n);
+  }
+  return nomes.length > 0 ? nomes.join(' · ') : null;
+}
+
+/** L2 ajuste (Gabriel 09/11 08:12): sem lote cadastrado, a célula mostra o texto do caderno em cinza itálico (nunca "—") e o title diz
+ *  "sem lote cadastrado" — com o texto junto, porque o texto comprido corta e a regra de corte pede o inteiro no title. */
+export const SEM_LOTE_CADASTRADO = 'sem lote cadastrado';
+
+export function tituloDoLoteNoMapa(loteIds: readonly string[], lotes: readonly LoteComNome[], noCaderno: string | null): string {
+  const porId = new Map(lotes.map(l => [l.id, l]));
+  if (!loteIds.some(id => porId.has(id)) && noCaderno?.trim()) return `${SEM_LOTE_CADASTRADO} — ${noCaderno.trim()}`;
+  const codigos = loteIds.map(id => porId.get(id)).filter((l): l is LoteComNome => !!l && !!l.carimbo?.trim()).map(l => l.codigo);
+  return [noCaderno?.trim() ? `No caderno: ${noCaderno.trim()}` : null, codigos.length ? codigos.join(' · ') : null].filter(Boolean).join(' · ');
 }
