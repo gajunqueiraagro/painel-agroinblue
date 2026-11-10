@@ -69,6 +69,7 @@ import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { FinV2SaldosTab } from '@/pages/FinV2SaldosTab';
 import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
 import { VisaoGeralFinanceiro, type RetornoVG } from '@/v2/pages/VisaoGeralFinanceiro';
+import { inicialDaVisaoFinanceira } from '@/v2/pages/visaoGeral/caixaAbreVisaoFinanceira';
 import type { FinV2DrillFilters } from '@/pages/FinanceiroV2Tab';
 import { FiltrosBarraVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
@@ -908,7 +909,7 @@ export default function V2Index() {
   }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
   const rotulo = rotuloDaSecao(section);
   const { clientes, clienteAtual, setClienteAtual, isAdmin, resumoClientes, setResumoClientes } = useCliente();
-  const { fazendas, isGlobal, setFazendaAtual } = useFazenda();
+  const { fazendas, isGlobal, setFazendaAtual, fazendaAtual } = useFazenda();
   const { canEditMeta } = usePermissions();
 
   /* ═══ ACESSO POR PERFIL — ACESSOS-02a ═══════════════════════════════════════════════════════════════════════════════════
@@ -1103,6 +1104,8 @@ export default function V2Index() {
     /* FIN-VISAO-GERAL-01 PR 3 — a Visão Geral (render-only; o modal de análise é o PR 4) */
     if (section === 'fin-visao-geral') return (
       <VisaoGeralFinanceiro retorno={retornoVG}
+        /* VISAO-GERAL-03 — aberta do Início (o card Caixa): o mês e a fazenda de lá; pelo menu, o de sempre (mês vigente, a barra) */
+        inicial={voltarAVisaoGeral ? inicialDaVisaoFinanceira(ano, mes, isGlobal ? null : fazendaAtual?.id ?? null) : undefined}
         onVerNaLista={(f, volta) => {
           setRetornoVG(volta);
           setDrillDaVisaoGeral({ tipo: f.tipo, anos: f.anos, meses: f.meses, statusSelecionados: f.status, fazendaId: f.fazendaId ?? undefined,

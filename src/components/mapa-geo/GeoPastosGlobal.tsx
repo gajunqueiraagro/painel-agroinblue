@@ -199,18 +199,20 @@ export function Card({ titulo, extra, children, className, testid }: { titulo?: 
  *  `variacao` (▲ meta · ▼ ano ant., 11 px) embaixo do rótulo, só quando a tela a passa; o `aviso` (âmbar, "1 pasto sem desenho") também
  *  vai para essa linha — no rótulo, a 11 px, ele passava da largura do card. O card segue compacto: quem cresce é só o número.
  *  `className` ajusta a largura (na linha de uma atividade, pelo conteúdo). */
-export function Kpi({ rotulo, valor, unidade, aviso, alerta, testid, title, variacao, className }: {
+export function Kpi({ rotulo, valor, unidade, aviso, alerta, testid, title, variacao, className, compacto }: {
   rotulo: string; valor: ReactNode; unidade?: string | null; aviso?: string | null; alerta?: boolean; testid?: string; title?: string;
   variacao?: ReactNode; className?: string;
+  /** VISAO-GERAL-03 (Gabriel 08/11) — os cartões do Início: menos folga e a linha da comparação menor (9,5); o número fica igual */
+  compacto?: boolean;
 }) {
   return (
-    <div className={cn('min-w-0 flex-1 rounded-lg border bg-card px-2.5 py-1', alerta ? 'border-[#D0453A]' : 'border-border', className)} data-testid={testid} title={title}>
-      <div className="whitespace-nowrap text-[24px] font-bold leading-[28px] tabular-nums">
+    <div className={cn('min-w-0 flex-1 rounded-lg border bg-card', compacto ? 'px-2 py-[3px]' : 'px-2.5 py-1', alerta ? 'border-[#D0453A]' : 'border-border', className)} data-testid={testid} title={title}>
+      <div className={cn('whitespace-nowrap text-[24px] font-bold tabular-nums', compacto ? 'leading-[26px]' : 'leading-[28px]')}>
         {valor}{unidade ? <span className="ml-1 text-[12px] font-normal text-muted-foreground">{unidade}</span> : null}
       </div>
-      <div className="whitespace-nowrap text-[11px] leading-[14px] text-muted-foreground">{rotulo}</div>
+      <div className={cn('whitespace-nowrap text-[11px] text-muted-foreground', compacto ? 'leading-[13px]' : 'leading-[14px]')}>{rotulo}</div>
       {(variacao !== undefined || aviso) && (
-        <div className="h-[14px] whitespace-nowrap text-[11px] leading-[14px] tabular-nums">
+        <div className={cn('whitespace-nowrap tabular-nums', compacto ? 'h-[12px] text-[9.5px] leading-[12px]' : 'h-[14px] text-[11px] leading-[14px]')}>
           {aviso && <span className="text-[#8A5A00]">{aviso}</span>}{aviso && variacao ? ' · ' : null}{variacao}
         </div>
       )}

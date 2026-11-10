@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { anoInteiro } from '@/v2/lib/periodo';
 /* VISAO-GERAL-02 — as peças da Visão Geral nova (mock aprovado, 03/11/2026) */
+import { DESTINO_DO_CAIXA } from '@/v2/pages/visaoGeral/caixaAbreVisaoFinanceira';
 import { CartoesDoTopo, type CartaoVG } from '@/v2/pages/visaoGeral/CartoesDoTopo';
 import { TabelaFazendasVG } from '@/v2/pages/visaoGeral/TabelaFazendasVG';
 import { PrecisaDeAtencao, type ItemAtencao } from '@/v2/pages/visaoGeral/AtencaoEAtalhos';
@@ -735,7 +736,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     { id: 'caixa', titulo: 'Caixa no fim do mês', valor: fmtRAbreviado(saldoFinal),
       detalhe: variacaoCaixa === null ? null : `${variacaoCaixa >= 0 ? '+' : '−'}${fmtRAbreviado(Math.abs(variacaoCaixa))} no ${isPeriodo ? 'ano' : 'mês'}`,
       meta: soMeta(caixaIndicador?.deltaMeta), anoAnt: caixaIndicador?.deltaAno ?? null,
-      abrir: 'Abrir fluxo', onAbrir: () => irPara('fluxo-caixa') },
+      /* VISAO-GERAL-03 (08/11) — abre o Financeiro › Visão geral (não mais o fluxo de caixa antigo), no mês e na fazenda daqui */
+      abrir: 'Abrir Financeiro › Visão geral', onAbrir: () => irPara(DESTINO_DO_CAIXA) },
     /* VISAO-GERAL-04 — a chuva saiu da faixa: fica só na tabela Fazendas (coluna "Chuva") */
     { id: 'resultado', titulo: 'Resultado do ano · pecuária', valor: fmtRAbreviado(resultadoAno),
       meta: soMeta(variacao(resultadoAno, resultadoMeta)), anoAnt: variacao(resultadoAno, drePecAnt?.lucro_liquido),

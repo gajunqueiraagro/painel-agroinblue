@@ -38,9 +38,10 @@ describe('VISAO-GERAL-03 — a escala da Geo pastos', () => {
     expect(valor.querySelector('span')?.className).toContain('text-[12px]');
     expect(rotulo.className).toContain('text-[11px]');
     expect(rotulo.textContent).toContain('Rebanho');
-    expect(comparacao.className).toContain('text-[11px]');
+    /* VISAO-GERAL-03 (08/11): a comparação MENOR (9,5, o piso) e os cinco numa grade de 5 colunas iguais */
+    expect(comparacao.className).toContain('text-[9.5px]');
     expect(comparacao.textContent).toBe('▲ 2,5% meta · ▼ 1,2% ano ant.');
-    expect(screen.getByTestId('vg-cartoes').className).toMatch(/\bflex\b/);
+    expect(screen.getByTestId('vg-cartoes').className).toMatch(/\bgrid\b.*\bgrid-cols-5\b/);
     fireEvent.click(cartao);
     expect(abrir).toHaveBeenCalled();
     expect(screen.getByTestId('vg-cartao-caixa').textContent).toContain('—');
