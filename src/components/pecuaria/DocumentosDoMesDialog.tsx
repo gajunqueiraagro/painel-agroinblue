@@ -3,12 +3,13 @@ import { Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { useAlturaDaJanela } from '@/hooks/useLarguraDaJanela';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { REGRA_DO_DOCUMENTO_DO_MES, type DocumentosDoMesApi } from '@/hooks/useDocumentosDoMes';
 import {
-  CONVITE_DO_DOCUMENTO, ESPECIES_DO_DOCUMENTO, FRASE_MOTIVO_OBRIGATORIO, FRASE_SEM_DOCUMENTOS, ROTULO_DA_ESPECIE, dataETamanho, ehEspecie,
-  mesCurtoDoDocumento, mesVizinho, prefixoDoTituloDosDocumentos, tituloDosDocumentos, type DocumentoDoMes, type EspecieDoDocumento,
+  CONVITE_DO_DOCUMENTO, FRASE_MOTIVO_OBRIGATORIO, FRASE_SEM_DOCUMENTOS, NOME_DO_TIPO_AO_NASCER, dataDoEnvio, mesCurtoDoDocumento, mesVizinho,
+  nomeDoTipo, ordenarPorTipo, prefixoDoTituloDosDocumentos, textoDoTamanho, tituloDosDocumentos, type DocumentoDoMes,
 } from '@/lib/pecuaria/documentosDoMes';
 
 /**
@@ -25,12 +26,29 @@ import {
  * ⚠ FECH-DOCS-01b — O MÊS SE TROCA NO TÍTULO: "… · ‹ set/26 ›". As setas pedem o mês vizinho ao hospedeiro (`aoTrocarMes`), que
  *   troca o `anoMes` e a `api` (a lista). O mês tem largura fixa (as setas não andam) e o cabeçalho segue com 36px. Trocar de mês
  *   desfaz edição / cancelamento em curso. Quem conta no botão da tela é o hospedeiro, pelo mês de ABERTURA — não este diálogo.
+ * ⚠ FECH-DOCS-02 (Gabriel 05/11; D1 a D5 pela recomendação — confirmar de manhã):
+ *   - A LISTA CRESCE ATÉ CABER (`alturaDaLista`): linhas × 24, no mínimo 3, até o teto de 85% da janela menos as partes fixas (cabeçalho,
+ *     área, recado, rodapé); passou disso, SÓ a lista rola, com a barra numa calha própria (`scrollbar-gutter: stable`: nunca em cima do
+ *     "cancelar"). O TOPO DO DIÁLOGO É PRESO (7,5% da janela, D1): crescer ou trocar de mês nunca move o título com ‹ ›; só o rodapé desce.
+ *   - O TIPO VEM DO CATÁLOGO (`api.tipos`) e se escolhe com BUSCA (`SearchableSelect`, os grupos como cabeçalho); a lista vem ordenada por
+ *     tipo e nome (`ordenarPorTipo`, D4 a). Data dd/mm/aaaa e tamanho em colunas próprias (ALINHAMENTO SOBERANO).
  */
 
 export const ALTURA_DA_LINHA = 24;
 export const LINHAS_A_VISTA = 3;
-/** Espécie 96 | Nome (o resto, o único que corta) | data · tamanho | visualizar | lápis | cancelar */
-export const GRADE_DA_LINHA = 'grid grid-cols-[96px_minmax(0,1fr)_78px_56px_16px_48px] items-center gap-1.5';
+/** cabeçalho 36 + área (8 + 24 + 4) + recado 26 + rodapé 32: o que não rola */
+export const PARTES_FIXAS = 130;
+/** Tipo 132 | Nome (o resto: `null`; com o tipo, os únicos que cortam, "…" + `title`) | data 66 | tamanho 52 | visualizar | lápis | cancelar.
+ *  Uma TABELA de régua fixa (`table-layout: fixed` + `colgroup` em px; 3px de cada lado da célula = os 6px entre colunas): o corte com "…"
+ *  só vale em célula de tabela (REGRA DE CORTE; o gate de tela recusa "…" fora de `td`). */
+export const COLUNAS_DA_LINHA: ReadonlyArray<number | null> = [132 + 6, null, 66 + 6, 52 + 6, 56 + 6, 16 + 6, 48 + 6];
+const CELULA = 'px-[3px] align-middle';
+
+/** A altura da lista: linhas × 24 (mínimo 3), até o teto de 85% da janela menos as partes fixas (inteiro em linhas). */
+export function alturaDaLista(quantidade: number, alturaDaJanela: number): number {
+  const teto = Math.max(LINHAS_A_VISTA, Math.floor((alturaDaJanela * 0.85 - PARTES_FIXAS) / ALTURA_DA_LINHA));
+  return Math.min(Math.max(quantidade, LINHAS_A_VISTA), teto) * ALTURA_DA_LINHA;
+}
 
 export interface DocumentosDoMesDialogProps {
   aberto: boolean;
@@ -52,7 +70,7 @@ const abrirEmNovaAba = (url: string) => { window.open(url, '_blank', 'noopener,n
 
 export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, aoTrocarMes, api, abrirEndereco = abrirEmNovaAba }: DocumentosDoMesDialogProps) {
   const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [especie, setEspecie] = useState<EspecieDoDocumento>('outro');
+  const [tipoId, setTipoId] = useState('');
   const [nome, setNome] = useState('');
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
@@ -72,7 +90,7 @@ export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, a
 
   const editar = (d: DocumentoDoMes) => {
     setCancelandoId(null); setMotivo(''); setRecado(null);
-    setEditandoId(d.id); setEspecie(d.especie); setNome(d.nome);
+    setEditandoId(d.id); setTipoId(d.tipoId); setNome(d.nome);
   };
   const sairDaEdicao = () => { setEditandoId(null); setRecado(null); };
 
@@ -83,7 +101,10 @@ export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, a
       const r = await api.anexar(arquivo);
       if (!r.ok) setErroAnexo(r.erro ?? 'Não foi possível anexar o documento.');
       /* A linha nasce em edição — também quando o arquivo não subiu (a linha existe, "sem arquivo"). */
-      if (r.id) { setCancelandoId(null); setEditandoId(r.id); setEspecie('outro'); setNome(arquivo.name.trim() || 'documento'); }
+      if (r.id) {
+        setCancelandoId(null); setEditandoId(r.id); setNome(arquivo.name.trim() || 'documento');
+        setTipoId(api.tipos.find(t => t.nome === NOME_DO_TIPO_AO_NASCER)?.id ?? '');
+      }
     } finally { setOcupado(false); }
   };
 
@@ -91,7 +112,7 @@ export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, a
     if (ocupado) return;
     setOcupado(true);
     try {
-      const r = await api.renomear({ id: d.id, versao: d.versao }, { especie, nome });
+      const r = await api.renomear({ id: d.id, versao: d.versao }, { tipoId, nome });
       if (r.ok) { setEditandoId(null); setRecado(null); } else setRecado(r.erro);
     } finally { setOcupado(false); }
   };
@@ -111,14 +132,16 @@ export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, a
   };
 
   const titulo = tituloDosDocumentos(fazendaNome, anoMes);
-  const docs = api.documentos;
+  const docs = ordenarPorTipo(api.documentos, api.tipos);
+  const alturaDaJanela = useAlturaDaJanela();
+  const opcoesDoTipo = api.tipos.map(t => ({ value: t.id, label: t.nome, grupo: t.grupo ?? undefined }));
   const cancelando = cancelandoId ? docs.find(d => d.id === cancelandoId) ?? null : null;
   const recadoDaLista = recado ?? api.erro;
 
   return (
     <Dialog open={aberto} onOpenChange={(a) => { if (!a) aoFechar(); }}>
       <DialogContent
-        className="flex w-[94vw] max-w-md flex-col gap-0 overflow-hidden p-0"
+        className="top-[7.5vh] flex w-[94vw] max-w-[560px] translate-y-0 flex-col gap-0 overflow-hidden p-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-top-0"
         data-testid="documentos-do-mes"
         onEscapeKeyDown={(e) => {
           /* Esc na edição / no motivo desfaz o gesto e o diálogo FICA. */
@@ -148,63 +171,73 @@ export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, a
             desabilitado={ocupado} motivoDesabilitado="Gravando…" motivoExterno={erroAnexo}
             onArquivos={([f]) => { void soltar(f); }} />
 
-          <div className="mt-1 overflow-y-auto" style={{ height: ALTURA_DA_LINHA * LINHAS_A_VISTA }} data-testid="lista-documentos-do-mes">
+          <div className="mt-1 overflow-y-auto" style={{ height: alturaDaLista(docs.length, alturaDaJanela), scrollbarGutter: 'stable' }}
+            data-testid="lista-documentos-do-mes">
             {docs.length === 0 ? (
               <div className="pt-1 text-[10px] text-muted-foreground" data-testid="sem-documentos">
                 {api.lendo ? 'Lendo…' : FRASE_SEM_DOCUMENTOS}
               </div>
             ) : (
-              <ul>
+              <table className="w-full table-fixed border-collapse text-[10px]" data-testid="tabela-documentos-do-mes">
+                <colgroup>{COLUNAS_DA_LINHA.map((w, i) => <col key={i} style={w === null ? undefined : { width: w }} />)}</colgroup>
+                <tbody>
                 {docs.map(d => {
                   const emEdicao = editandoId === d.id;
                   return (
-                    <li key={d.id} data-testid="linha-documento" data-edicao={emEdicao ? 'sim' : undefined}
-                      className={`${GRADE_DA_LINHA} whitespace-nowrap border-b text-[10px] ${cancelandoId === d.id ? 'bg-destructive/5' : ''}`}
+                    <tr key={d.id} data-testid="linha-documento" data-edicao={emEdicao ? 'sim' : undefined}
+                      className={`whitespace-nowrap border-b ${cancelandoId === d.id ? 'bg-destructive/5' : ''}`}
                       style={{ height: ALTURA_DA_LINHA }}>
                       {emEdicao ? (
-                        <Select value={especie} onValueChange={(v) => { if (ehEspecie(v)) setEspecie(v); campoDoNome.current?.focus(); }}>
-                          <SelectTrigger className="h-5 px-1.5 py-0 text-[10px]" data-testid="edicao-especie" aria-label="Espécie">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ESPECIES_DO_DOCUMENTO.map(e => <SelectItem key={e} value={e}>{ROTULO_DA_ESPECIE[e]}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <td className={CELULA} data-testid="edicao-especie">
+                          <SearchableSelect value={tipoId} options={opcoesDoTipo} semTodos allValue="" allLabel="Tipo…"
+                            placeholder="Buscar tipo…" triggerClassName="h-5 px-1.5 py-0 text-[10px]"
+                            onValueChange={(v) => { if (v) setTipoId(v); campoDoNome.current?.focus(); }} />
+                        </td>
                       ) : (
-                        <span className="truncate text-muted-foreground" title={ROTULO_DA_ESPECIE[d.especie]} data-testid="cel-especie">
-                          {ROTULO_DA_ESPECIE[d.especie]}
-                        </span>
+                        <td className={`${CELULA} truncate text-muted-foreground`} title={nomeDoTipo(api.tipos, d.tipoId)} data-testid="cel-especie">
+                          {nomeDoTipo(api.tipos, d.tipoId)}
+                        </td>
                       )}
                       {emEdicao ? (
-                        <Input ref={campoDoNome} autoFocus value={nome} aria-label="Nome do documento" data-testid="edicao-nome"
-                          className="h-5 min-w-0 px-1.5 py-0 text-[10px]"
-                          onFocus={(e) => e.currentTarget.select()}
-                          onChange={(e) => setNome(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') { e.preventDefault(); void gravarEdicao(d); }
-                            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); sairDaEdicao(); }
-                          }} />
+                        <td className={CELULA}>
+                          <Input ref={campoDoNome} autoFocus value={nome} aria-label="Nome do documento" data-testid="edicao-nome"
+                            className="h-5 min-w-0 px-1.5 py-0 text-[10px]"
+                            onFocus={(e) => e.currentTarget.select()}
+                            onChange={(e) => setNome(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); void gravarEdicao(d); }
+                              else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); sairDaEdicao(); }
+                            }} />
+                        </td>
                       ) : (
-                        <span className="min-w-0 truncate" title={d.nome} data-testid="cel-nome">{d.nome}</span>
+                        <td className={`${CELULA} truncate`} title={d.nome} data-testid="cel-nome" data-nome-de-arquivo>{d.nome}</td>
                       )}
-                      <span className="text-right tabular-nums text-muted-foreground" data-testid="cel-data">{dataETamanho(d)}</span>
-                      {d.url ? (
-                        <button type="button" className="text-left text-primary underline"
-                          onClick={() => { void visualizar(d.url ?? ''); }}>visualizar</button>
-                      ) : (
-                        <span className="text-warning" title="O arquivo não subiu. Cancele e envie de novo.">sem arquivo</span>
-                      )}
-                      <button type="button" className="flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
-                        title="Editar espécie e nome" aria-label="Editar espécie e nome" data-testid="lapis-documento"
-                        onClick={() => editar(d)}>
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      <button type="button" className="text-left text-destructive underline" data-testid="cancelar-documento"
-                        onClick={() => { setEditandoId(null); setRecado(null); setCancelandoId(d.id); setMotivo(''); }}>cancelar</button>
-                    </li>
+                      <td className={`${CELULA} text-right tabular-nums text-muted-foreground`} data-testid="cel-data">{dataDoEnvio(d.uploadedEm)}</td>
+                      <td className={`${CELULA} text-right tabular-nums text-muted-foreground`} data-testid="cel-tamanho">{textoDoTamanho(d.tamanhoBytes)}</td>
+                      <td className={CELULA}>
+                        {d.url ? (
+                          <button type="button" className="text-left text-primary underline"
+                            onClick={() => { void visualizar(d.url ?? ''); }}>visualizar</button>
+                        ) : (
+                          <span className="text-warning" title="O arquivo não subiu. Cancele e envie de novo.">sem arquivo</span>
+                        )}
+                      </td>
+                      <td className={CELULA}>
+                        <button type="button" className="flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
+                          title="Editar tipo e nome" aria-label="Editar tipo e nome" data-testid="lapis-documento"
+                          onClick={() => editar(d)}>
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </td>
+                      <td className={CELULA}>
+                        <button type="button" className="text-left text-destructive underline" data-testid="cancelar-documento"
+                          onClick={() => { setEditandoId(null); setRecado(null); setCancelandoId(d.id); setMotivo(''); }}>cancelar</button>
+                      </td>
+                    </tr>
                   );
                 })}
-              </ul>
+                </tbody>
+              </table>
             )}
           </div>
 

@@ -708,7 +708,7 @@ const CENARIOS = [
   { nome: 'barra-pecuaria-volta', url: 'tela=barra-pecuaria&aba=conferencia-mensal&de=lancamentos-zoot' },
   /* UI-PERIODO-01 — o componente único de período aberto (popup com os atalhos e os dois calendários; os modos mês e ano; a CPR) */
   ...[['periodo-datas', 'modo=datas&ativ=pec'], ['periodo-duas-atividades', 'modo=datas&ativ=duas'], ['periodo-mes', 'modo=mes'],
-    ['periodo-ano', 'modo=ano'], ['periodo-cpr', 'modo=datas&cpr=1']].map(([nome, q]) => ({ nome, url: `tela=periodo&abrir=1&${q}`,
+    ['periodo-ano', 'modo=ano'], ['periodo-cpr', 'modo=datas&cpr=1'], ['periodo-dre-compacto', 'modo=datas&ativ=pec&dre=1']].map(([nome, q]) => ({ nome, url: `tela=periodo&abrir=1&${q}`,
     antes: async (p) => { await p.locator('[data-testid="seletor-de-periodo-popup"]').waitFor(); await p.waitForTimeout(300); } })),
   { nome: 'painel-periodo', url: 'tela=painel-periodo' },
   { nome: 'painel-periodo-aberto', url: 'tela=painel-periodo&abrir=1', antes: async (p) => { await p.locator('[data-testid="painel-periodo-popup"]').waitFor(); await p.waitForTimeout(300); } },
@@ -745,19 +745,21 @@ const CENARIOS = [
     const URL_DRE = `tela=dre&barra=32&f_de=2026-01&f_ate=2026-09${par}`;
     const T = [[1126, 579], [1366, 768]];
     const det = async (p) => { await clicarRotulo(/^Detalhado$/)(p); };
+    /* DRE-LAYOUT-04: a tela abre no Detalhado — os cenários do Resumido clicam nele */
+    const res = async (p) => { await clicarRotulo(/^Resumido$/)(p); };
     const tudo = async (p) => { await clicarRotulo(/^abrir tudo$/)(p); };
     const mais = (item) => async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: item }).first().click();
       await p.keyboard.press('Escape'); await p.waitForTimeout(400); };
     const chip = (rot) => async (p) => { await p.getByRole('button', { name: rot, exact: true }).first().click(); await p.waitForTimeout(400); };
     return [
-      { nome: `dre-pec-resumido${suf}`, url: URL_DRE, tamanhos: T },
-      { nome: `dre-pec-resumido-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: tudo },
+      { nome: `dre-pec-resumido${suf}`, url: URL_DRE, tamanhos: T, antes: res },
+      { nome: `dre-pec-resumido-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await res(p); await tudo(p); } },
       { nome: `dre-pec-detalhado-cv${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await clicarTexto('(−) Custo variável')(p); } },
       /* DRE-VARIACAO-EXPLICA-01 1b — o modal da variação na aba Explicação (V1–V6): pela linha do Detalhado, pela do Resumido (D2, com a
          Reposição) e com o fim pelo cadastro (D3, selo + mercado "—"); o clique é na 1ª célula de valor da linha */
       ...[['', 'Variação por produção', true, ''], ['-resumido', 'Variação do estoque', false, ''], ['-cadastro', 'Variação por produção', true, '&fim=cadastro']]
         .map(([s2, linha, detalhado, extra]) => ({ nome: `dre-pec-variacao-explica${s2}${suf}`, url: URL_DRE + extra, tamanhos: T, regiao: '[role="dialog"]',
-          antes: async (p) => { if (detalhado) await det(p);
+          antes: async (p) => { await (detalhado ? det(p) : res(p));
             await p.locator('tr', { hasText: linha }).first().locator('td').nth(1).click();
             await p.locator('[data-testid="variacao-explicacao"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(500); } })),
       /* 1b (OK do Chat 09/11) — a aba Gráfico do modal = os gráficos da tela do VR (o mesmo `MiniChart`) */
@@ -772,9 +774,9 @@ const CENARIOS = [
       { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^2$/)(p); } },
       { nome: `dre-pec-3anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^3$/)(p); } },
       { nome: `dre-pec-meta-delta${suf}`, url: URL_DRE, tamanhos: T,
-        antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^Meta$/)(p); await mais('Δ R$')(p); await mais('Δ %')(p); } },
+        antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^Meta$/)(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
       { nome: `dre-pec-ano-delta${suf}`, url: URL_DRE, tamanhos: T,
-        antes: async (p) => { await det(p); await tudo(p); await mais('Δ R$')(p); await mais('Δ %')(p); } },
+        antes: async (p) => { await det(p); await tudo(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
       { nome: `dre-pec-fazenda${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await mais(/^Ver por fazenda/)(p); } },
       { nome: `dre-pec-so-ha${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await chip('R$')(p); } },
       { nome: `dre-pec-rateio-grupos${suf}`, url: URL_DRE, tamanhos: T,
@@ -844,6 +846,10 @@ const CENARIOS = [
      corta nem vaza. SÓ a faixa (`regiao`): a tela inteira nunca teve gate de corte e tem achados antigos fora deste item. */
   { nome: 'valor-rebanho-faixa-snapshot', url: 'tela=valor-rebanho&barra=32', tamanhos: [[1000, 600], [1126, 579], [1366, 768], [1750, 1000]],
     regiao: '[data-testid="faixa-snapshot"]', antes: async (p) => { await p.locator('[data-testid="faixa-snapshot"]').waitFor(); await p.waitForTimeout(600); } },
+  /* FECH-DOCS-02 — o "Documentos do mês" com 11 e 25 documentos (nomes do WhatsApp, tipos longos do catálogo) a 1.240, 1.024 e no zoom de
+     135% (a janela de 1.240×700 vista a 135% = 919×519 de CSS): a lista cresce até o teto e só ela rola; nada corta seco; data dd/mm/aaaa */
+  ...[11, 25].map((n) => ({ nome: `documentos-do-mes-${n}`, url: `tela=documentos-do-mes&n=${n}`, tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '[data-testid="documentos-do-mes"]', antes: (p) => p.waitForTimeout(1200) })),
   /* FECH-ROTACAO-01 fatia 3 — Fechamento de pastos com o grupo (dado SINTÉTICO, `tela=fechamento-grupo`): a grade com a moldura do
      grupo P10 (um vedado) e o card que só recebe; o modal do P10A com o quadro "Onde o lote esteve" (grupo inteiro) e o do P11 com a
      rotação avulsa ("também esteve em" o P12 de nome longo) */

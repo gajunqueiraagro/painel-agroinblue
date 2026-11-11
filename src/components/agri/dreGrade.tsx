@@ -379,7 +379,7 @@ export const AMBAR = '#b45309';
  * transborda e é visível; faltando, o operador vê e a régua se ajusta. Só a coluna Cultura
  * trunca, porque ali o corte tem `title` para desfazer.
  */
-export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title, fonte, faixa, marcador, semSlotMarcador }: {
+export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title, fonte, faixa, marcador, semSlotMarcador, abaixo, tituloAbaixo }: {
   valor: number | null; cor: string; destaque?: DestaqueLinha;
   bordaEsquerda?: boolean;
   onAbrir?: () => void; filha?: boolean; fundo?: string; estilo?: CSSProperties;
@@ -404,6 +404,10 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
   semSlotMarcador?: boolean;
   /** Um porquê para a célula — "sem fechamento" na pecuária. Só quando há o que dizer. */
   title?: string;
+  /** DRE-LAYOUT-04 (Chat 09/11) — o "% do VBP" COLADO LOGO ABAIXO do número, na mesma célula (acima da régua que fecha a linha);
+      menor e cinza claro. `data-pct-abaixo` é por onde a prova de números iguais o separa do número. */
+  abaixo?: string;
+  tituloAbaixo?: string;
   /** ⚠ O VALOR SEGUE A FONTE DA LINHA (PR-10): subtotal em 12, filha em 9. Um número de 11px ao
       lado de um rótulo de 9 desmontaria a hierarquia que o rótulo acabou de declarar. */
   fonte?: number;
@@ -431,6 +435,11 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
           contrariada por um glifo. O slot continua reservado, vazio. */}
       <Marcador marcador={valor == null ? undefined : marcador} semSlot={semSlotMarcador} />
       {numeroDaCelula(valor)}
+      {abaixo !== undefined && (
+        <div data-pct-abaixo="" title={tituloAbaixo} className="font-normal text-muted-foreground/70" style={{ fontSize: 7.5, lineHeight: '9px' }}>
+          {abaixo}
+        </div>
+      )}
     </td>
   );
 }
