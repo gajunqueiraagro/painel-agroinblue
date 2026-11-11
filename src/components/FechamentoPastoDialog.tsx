@@ -25,6 +25,7 @@ import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseValorRebanhoReaberto, le
 import { CampoLoteDoPasto } from '@/components/fechamento/CampoLoteDoPasto';
 import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
 import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
+import { useLotesDoMesAnterior } from '@/hooks/useLotesDoMesAnterior';
 import { comLoteEmTodos, comLoteNaCategoria, lotesQueSeguem, semLoteNoZerado, textoDoLoteNoCaderno } from '@/lib/lotes/loteDoPasto';
 import { AbasDosPiquetes, ABA_TOTAL } from '@/components/fechamento/AbasDosPiquetes';
 import { MesAnteriorDoPasto } from '@/components/fechamento/MesAnteriorDoPasto';
@@ -184,6 +185,8 @@ export function FechamentoPastoDialog({
   /* LOTES-03 F1 — os lotes da fazenda (o MESMO leitor da tela de Lotes) e o assistente do "+ Novo lote" (null = fechado; categoria null =
      o lote novo vai no pasto inteiro) */
   const lotesDaFazenda = useLotesDaFazenda(open ? fechamento.fazenda_id : null, fechamento.ano_mes);
+  /* LOTE-BUSCA-01 — onde cada lote esteve no mês anterior (ligação, senão o texto do caderno): os grupos do campo Lote */
+  const lotesDoMesAnterior = useLotesDoMesAnterior(open ? fechamento.fazenda_id : null, fechamento.ano_mes);
   const [novoLotePara, setNovoLotePara] = useState<{ categoriaId: string | null } | null>(null);
   const [itens, setItens] = useState<FechamentoItem[]>([]);
   const [saving, setSaving] = useState(false);
@@ -660,6 +663,7 @@ export function FechamentoPastoDialog({
               <div className="w-[150px] shrink-0">
                 <Label className="text-[10px] text-white/50 leading-none">Lote</Label>
                 <CampoLoteDoPasto itens={gradeVisivel} lotes={lotesDaFazenda.lotes} disabled={inputsDisabled || naAbaTotal}
+                  contexto={{ pastoNome: pasto.nome, textoDoCaderno: loteMes, mesAnterior: lotesDoMesAnterior }}
                   nomeDaCategoria={id => categorias.find(c => c.id === id)?.nome ?? '—'}
                   onChange={novos => {
                     editarGrade(() => novos);

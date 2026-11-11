@@ -936,6 +936,18 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-campo-lote-painel', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
           await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
+      /* LOTE-BUSCA-01 — `&v=busca`: o seletor do lote do pasto inteiro ABERTO, com os grupos (caderno "LOT 8.2 F1" → os dois 8.2 no topo; neste pasto
+         e em outros pastos em set/26; os demais) e os 63 lotes sem corte; e a busca por palavras ("vacas 8.2") */
+      { nome: 'fechamento-grupo-campo-lote-busca', url: URL + '&v=busca', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="searchable-select-painel"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
+          const painel = p.locator('[data-testid="painel-lote-do-pasto"]'); await painel.waitFor();
+          await painel.locator('button', { hasText: /Sem lote/ }).first().click();
+          await p.locator('[data-testid="searchable-select-painel"]').waitFor(); await p.waitForTimeout(500); } },
+      { nome: 'fechamento-grupo-campo-lote-busca-palavras', url: URL + '&v=busca', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="searchable-select-painel"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
+          const painel = p.locator('[data-testid="painel-lote-do-pasto"]'); await painel.waitFor();
+          await painel.locator('button', { hasText: /Sem lote/ }).first().click();
+          await p.locator('[data-testid="searchable-select-painel"] input').fill('vacas 8.2'); await p.waitForTimeout(500); } },
     ];
   })(),
   /* LOTES-03 F1 — Produção › Lotes (`tela=lotes`, dado SINTÉTICO dados/lotes.ts): a lista (Ativos, Encerrados, a busca sem achado com o
