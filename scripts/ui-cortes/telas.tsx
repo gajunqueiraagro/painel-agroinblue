@@ -1676,6 +1676,17 @@ if (tela === 'mesclar') {
     montar(<PatrimonioApiProvider api={API_PATRIMONIO}><PatrimonioTela /></PatrimonioApiProvider>);
   };
   void montarPatrimonio();
+} else if (tela === 'produtores') {
+  /* FISCAL onda 1 (a) — Cadastros › Produtores: a tela real com a API em memória (`dados/produtores.ts`, SINTÉTICO); a prévia de cada
+     gravação se monta a partir do pedido e nada grava */
+  const montarProdutores = async () => {
+    const { ProdutoresTela } = await import('@/components/fiscal/ProdutoresTela');
+    const { ProdutoresApiProvider } = await import('@/hooks/useProdutores');
+    const { API_PRODUTORES, FAZENDAS_PRODUTORES } = await import('./dados/produtores');
+    g.__fazendaBancada = { fazendas: FAZENDAS_PRODUTORES, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
+    montar(<ProdutoresApiProvider api={API_PRODUTORES}><ProdutoresTela /></ProdutoresApiProvider>);
+  };
+  void montarProdutores();
 } else if (tela === 'pastos') {
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (a tela REAL) com o modo "Grupos": dado SINTÉTICO, nomes de exemplo; um grupo de 3
      piquetes (P10A/B/C), um de nome longo com 4 pastos, um inativo e pastos soltos. O banco responde a prévia do `fn_pasto_grupo_salvar`

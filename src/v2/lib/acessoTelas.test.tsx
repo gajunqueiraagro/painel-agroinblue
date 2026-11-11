@@ -186,7 +186,9 @@ describe('ACESSOS-FIN-01 — perfil × tela', () => {
       for (const p of PERFIS) expect(`${t}/${p}:${nivelDaTela(p, false, t)}`).toBe(`${t}/${p}:nao`);
     }
     const cadastros = doGrupo('cadastros');
-    expect(cadastros.length).toBe(10);
+    /* 11: FISCAL onda 1 (09/11) entrou Cadastros › Produtores, SEM a marca `liberadaClientes` (só o admin até o Gabriel liberar) — a linha
+       de baixo confere que o financeiro NÃO a abre */
+    expect(cadastros.length).toBe(11);
     for (const t of cadastros) expect(`${t}:${nivelDaTela('financeiro', false, t)}`).toBe(`${t}:${CADASTROS_FIN.includes(t) ? 'editar' : 'nao'}`);
     /* as telas de META fora do menu tambem */
     for (const t of ['fluxo-caixa-meta', 'lancamentos-meta-fin', 'lancamentos-meta-zoo', 'meta-cenario', 'meta-precos'] as const) expect(nivelDaTela('financeiro', false, t)).toBe('nao');
