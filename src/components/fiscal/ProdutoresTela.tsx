@@ -82,14 +82,17 @@ export function ProdutoresTela() {
                         <button type="button" onClick={() => setSelecionado(t.id)} data-testid="produtores-item"
                           className={cn('grid h-[38px] w-full grid-cols-[minmax(0,1fr)_auto] content-center gap-x-2 border-l-[3px] px-2.5 text-left hover:bg-muted/50',
                             t.id === selecionado ? 'border-l-primary bg-primary/5' : 'border-l-transparent', !t.ativo && 'opacity-60')}>
+                          {/* linha 1: o nome (cede) e os selos; linha 2: o documento inteiro, sempre (a 918 ele passava por baixo do selo) */}
                           <span className="truncate text-[11px] font-semibold leading-[15px]">{t.nome}</span>
-                          <span className={cn('justify-self-end rounded px-1 text-[9.5px] font-semibold leading-[14px]', TAG_TIPO[t.tipo])}>{t.tipo}</span>
-                          <span className="flex min-w-0 text-[10px] leading-[15px] text-muted-foreground">
+                          <span className="flex items-center gap-1 justify-self-end">
+                            <span className={cn('whitespace-nowrap rounded px-1 text-[9.5px] font-semibold leading-[14px]', TOM[selo.tom])}>{selo.texto}</span>
+                            <span className={cn('rounded px-1 text-[9.5px] font-semibold leading-[14px]', TAG_TIPO[t.tipo])}>{t.tipo}</span>
+                          </span>
+                          <span className="col-span-2 flex min-w-0 text-[10px] leading-[15px] text-muted-foreground">
                             <span className="flex-none whitespace-nowrap tabular-nums">{doc}</span>
                             <span className="min-w-0 truncate whitespace-pre">{resto}</span>
                             {t.pendencias.length ? <span className="flex-none whitespace-pre text-amber-700"> · incompleto</span> : null}
                           </span>
-                          <span className={cn('justify-self-end whitespace-nowrap rounded px-1 text-[9.5px] font-semibold leading-[14px]', TOM[selo.tom])}>{selo.texto}</span>
                         </button>
                       </td>
                     </tr>
