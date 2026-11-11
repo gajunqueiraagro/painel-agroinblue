@@ -57,11 +57,13 @@ async function rpc(nome: string, args: Record<string, unknown>, padrao?: string)
 export const apiDoBanco: ProdutoresApi = {
   async lista(clienteId) {
     const r = await rpc('fn_fiscal_titulares_lista', { p_cliente_id: clienteId }, 'Não consegui ler os produtores. Tente de novo.');
-    return r.ok ? { ok: true, dados: linhas(r.dados).map(titularDaLinha) } : r;
+    if (!r.ok) return { ok: false, erro: r.erro };
+    return { ok: true, dados: linhas(r.dados).map(titularDaLinha) };
   },
   async acordos(clienteId) {
     const r = await rpc('fn_fiscal_acordos_lista', { p_cliente_id: clienteId }, 'Não consegui ler os acordos. Tente de novo.');
-    return r.ok ? { ok: true, dados: linhas(r.dados).map(acordoDaLinha) } : r;
+    if (!r.ok) return { ok: false, erro: r.erro };
+    return { ok: true, dados: linhas(r.dados).map(acordoDaLinha) };
   },
   async historicoDaCondicao(clienteId, titularId) {
     const { data, error } = await tabela('fiscal_titular_condicao_ibs').select('id, condicao, vigencia_inicio, vigencia_fim, motivo')
