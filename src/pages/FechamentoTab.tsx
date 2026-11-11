@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { CLASSE_LINHA_PRESA, medirTopo, soNaPrimeiraLeitura } from '@/lib/fechamento/rolagemDoFechamento';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Activity, Map as MapIcon, RefreshCw, FileDown } from 'lucide-react';
 import { ExportarMesDialog } from '@/components/caderno/ExportarMesDialog';
@@ -366,6 +367,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   /* FECH-TOPO-02 acerto 2 (Chat 07/11 21:55) — o popup do card fica DENTRO da área da tela: o limite da colisão é a página (à direita
      do menu lateral), não a janela; o Radix vira/desliza para o lado que couber */
   const [areaDaTela, setAreaDaTela] = useState<HTMLDivElement | null>(null);
+  /* FECH-ROLAGEM-02 (1) — o cabeçalho fixo é medido: a linha "Cards | Mapa" fica presa logo abaixo dele */
+  const [topoFixo, setTopoFixo] = useState<HTMLDivElement | null>(null);
+  useEffect(() => medirTopo(topoFixo), [topoFixo]);
   /* FECH-TOPO-02 — a "Divergência do Campeiro" não é pasto: fora do mapa e da faixa "Sem desenho no mapa" (lista estável: o mapa só se
      redesenha quando ela muda) */
   const pastosDoMapa = useMemo(() => pastosAtivos.filter(p => !isPastoDivergencia(p.tipo_uso)), [pastosAtivos]);
@@ -1210,7 +1214,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   return (
     <div ref={setAreaDaTela} className="pb-24" data-testid="area-do-fechamento">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2 max-[999px]:px-2">
+      <div ref={setTopoFixo} className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2 max-[999px]:px-2">
         {/* FECH-FAIXA-01 — a faixa do fechamento do mês: a 1ª linha, no MESMO lugar nas três telas (Fechamento, Valor, Mapa do rebanho) */}
         {/* VR-PRECO-EDITAR-01 ampliado — a trava do MÊS na linha da faixa (um Desbloquear para todos os pastos + o Valor do Rebanho) */}
         <div className="mb-1.5 flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><FaixaDoFechamento estado={faixaDoMes} atual="pastos" abrir={etapasDoFechamento} /></div>{fazendaAtual?.id && fazendaAtual.id !== '__global__' && <MasterLockBanner anoMes={anoMes} naFaixa />}</div>
@@ -1518,7 +1522,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
       {/* ═══ CARDS DOS PASTOS ═══ */}
       <div className="px-2 pt-2 pb-4">
-        {loading ? (
+        {/* FECH-ROLAGEM-02 (2) — releitura (o modal salvou) não troca a grade por "Carregando...": a rolagem fica na mesma altura */}
+        {soNaPrimeiraLeitura(loading, fechamentos, anoMes, fazendaAtual?.id) ? (
           <div className="text-center py-8 text-muted-foreground">Carregando...</div>
         ) : pastosAtivos.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
@@ -1532,7 +1537,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         ) : (
           <div className="flex flex-col gap-1">
             {/* a MESMA linha de 24px da vista Mapa (lá ela tem a faixa "Sem desenho no mapa"): o seletor não sai do lugar ao trocar */}
-            <div className="flex h-6 flex-none items-center gap-2" data-testid="linha-da-vista">{seletorDaVista}</div>
+            <div className={`flex h-6 flex-none items-center gap-2 ${CLASSE_LINHA_PRESA}`} data-testid="linha-da-vista">{seletorDaVista}</div>
             <TooltipProvider delayDuration={200}>
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
                 {segmentosDaGrade.map(seg => seg.tipo === 'pasto' ? renderCardDoPasto(seg.pasto) : renderGrupoDoFechamento(seg))}

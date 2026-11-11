@@ -876,6 +876,19 @@ const CENARIOS = [
     return [
       { nome: 'fechamento-grupo', url: URL, tamanhos: T, regiao: '[data-testid="grupo-no-fechamento"]', antes: grade },
       { nome: 'fechamento-grupo-modal', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      /* FECH-CALC-01 — a conta no Peso do modal ("470,00+45" digitado, a dica "= 515,00" aberta): nada corta */
+      { nome: 'fechamento-grupo-modal-calc', url: URL, tamanhos: T, regiao: '[data-testid="modal-do-pasto"]', antes: async (p) => {
+          await soModal('P10A')(p);
+          await p.locator('[data-testid="modal-do-pasto"] input[placeholder="kg"]').first().fill('470,00+45'); await p.waitForTimeout(400); } },
+      /* FECH-ROLAGEM-02 (1) — a tela rolada: a linha "Cards | Mapa" presa logo abaixo do cabeçalho fixo, os cards por baixo */
+      { nome: 'fechamento-grupo-rolado', url: URL, tamanhos: T, regiao: '[data-testid="linha-da-vista"]', antes: async (p) => {
+          await p.locator('[data-testid="linha-da-vista"]').first().waitFor(); await p.waitForTimeout(600);
+          await p.evaluate(() => {
+            let e = document.querySelector('[data-testid="area-do-fechamento"]');
+            while (e && !(e.scrollHeight > e.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowY))) e = e.parentElement;
+            (e || document.scrollingElement).scrollTop = 300;
+          });
+          await p.waitForTimeout(400); } },
       /* FECH-PASTO-UNIDADE-01 — `&v=piquetes`: os cards do P6 e do P19A (R1, 08/11: o selo cortava o nome) — o nome inteiro na 1ª linha e
          "97,5 ha · 4 piq." na de baixo, em todos os tamanhos */
       { nome: 'fechamento-grupo-piquetes', url: URL + '&v=piquetes', tamanhos: T, regiao: 'button:has([data-testid="selo-piquetes"])',

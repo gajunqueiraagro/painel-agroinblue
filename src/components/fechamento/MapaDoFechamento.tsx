@@ -14,6 +14,7 @@ import { PopupDoPasto, type DadosDoPopupDoPasto } from '@/components/fechamento/
 import { formatNum } from '@/lib/calculos/formatters';
 import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
+import { CLASSE_LINHA_PRESA } from '@/lib/fechamento/rolagemDoFechamento';
 import { MapaDosPastos } from '@/components/mapa-geo/MapaDosPastos';
 import {
   COR_DA_SITUACAO, NOME_DA_SITUACAO, ORDEM_DA_LEGENDA, pastosSemDesenho, type SituacaoDoCard,
@@ -71,7 +72,7 @@ export function MapaDoFechamento<P extends PastoDoMapa>({ pastos, situacaoDe, po
 
   return (
     <div ref={quadro.ref} style={{ height: quadro.altura }} className="flex min-h-[320px] flex-col gap-1" data-testid="vista-mapa">
-      <div className="flex h-6 flex-none items-center gap-2" data-testid="linha-da-vista">
+      <div className={`flex h-6 flex-none items-center gap-2 ${CLASSE_LINHA_PRESA}`} data-testid="linha-da-vista">
       {seletor}
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap text-[10px]" data-testid="faixa-sem-desenho">
         {semDesenho.length > 0 && (
