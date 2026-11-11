@@ -992,7 +992,10 @@ if (tela === 'mesclar') {
           {q.get('cpr') === '1' && <Segmentado valor="atual" onEscolher={() => {}} altura={24}
             opcoes={[{ valor: 'anterior', rotulo: 'Mês anterior' }, { valor: 'atual', rotulo: 'Mês atual' }, { valor: 'futuro', rotulo: 'Mês futuro' }]} />}
           <SeletorDePeriodo hoje="2026-11-04" valor={valor} onChange={setValor} modo={modo} atividades={atividades} anoMaisAntigo={2020}
-            padrao={{ de: '2026-10-01', ate: '2026-10-31' }} rotuloVazio="Escolher datas" />
+            rotuloVazio="Escolher datas"
+            /* DRE-LAYOUT-04 — o calendário compacto do DRE (`&dre=1`): por mês, sem mês solto e sem "Redefinir" (o DRE não passa `padrao`) */
+            {...(q.get('dre') === '1' ? { compacto: true, porMes: true, atalhosOcultos: ['este-mes', 'mes-passado'] }
+              : { padrao: { de: '2026-10-01', ate: '2026-10-31' } })} />
         </div>
       </div>
     );

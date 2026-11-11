@@ -18,6 +18,12 @@ import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
 /* DRE-LEVE-01 — a coluna de % (`data-pct`: "% VBP" na pecuária, "% RL" na lavoura) tem prova própria em `dreLeveNumeros.test.tsx`; aqui as
    células de uma linha se leem SEM ela (`semPct`), nas posições de antes, e o que estes testes provam não muda. */
 declare global { interface HTMLTableRowElement { readonly semPct: HTMLTableCellElement[] } }
+/* DRE-LAYOUT-04 — nas 4 linhas de resultado o % do VBP mora ABAIXO do número, na mesma célula (`data-pct-abaixo`): o número se lê sem ele */
+const soNumero = (td?: Element | null) => {
+  const sub = td?.querySelector('[data-pct-abaixo]')?.textContent ?? '';
+  const t = td?.textContent ?? '';
+  return sub && t.endsWith(sub) ? t.slice(0, -sub.length) : t;
+};
 Object.defineProperty(HTMLTableRowElement.prototype, 'semPct', { configurable: true,
   get(this: HTMLTableRowElement) { return [...this.cells].filter(c => !c.hasAttribute('data-pct')); } });
 
@@ -184,13 +190,13 @@ describe('as unidades da pecuária', () => {
 
   it('cada chip marcado é uma coluna, na ordem fixa, e o R$ pode ficar de fora', () => {
     const { unmount } = montarCom(['rs', 'ha']);
-    /* DRE-LEVE-01: rótulo + R$ + "% VBP" + R$/ha — o % é coluna de todo período. */
-    expect([...document.querySelectorAll('colgroup col')]).toHaveLength(4);
+    /* DRE-LAYOUT-04: rótulo + R$ + R$/ha — a coluna "% VBP" saiu (o % é a linha fina abaixo das 4 de resultado). */
+    expect([...document.querySelectorAll('colgroup col')]).toHaveLength(3);
     unmount();
     montarCom(['ha', 'cab', 'arroba']);
-    /* Sem o R$: rótulo + "% VBP" + três unidades. */
+    /* Sem o R$: rótulo + três unidades. */
     const cols = [...document.querySelectorAll('colgroup col')];
-    expect(cols).toHaveLength(5);
+    expect(cols).toHaveLength(4);
     expect(document.body.textContent).toContain('R$/ha');
     expect(linhaDe('Vendas')?.semPct[1]?.textContent).toBe('1.000,00');
   });
@@ -205,24 +211,23 @@ describe('as unidades da pecuária', () => {
   const largurasDoColgroup = () =>
     [...document.querySelectorAll<HTMLTableColElement>('colgroup col')].map(c => c.style.width);
 
-  /* ⚠ DRE-LEVE-01: TODO GRUPO TEM A COLUNA "% VBP" (56px), então um chip só já passa do piso de 104 (56 + 80 = 136) e ninguém é esticado.
-     As larguras desceram 10px (114 → 104, 90 → 80): o slot do ▲/▼ saiu com o marcador. */
-  it('com um chip só, o "% VBP" faz o grupo passar do piso de 104px — nada se estica', () => {
+  /* ⚠ DRE-LAYOUT-04: SEM A COLUNA "% VBP" (56px), um chip só volta a ficar abaixo do piso — e o grupo vai a 104px. */
+  it('com um chip só, o grupo vai ao piso de 104px', () => {
     montarCom(['arroba']);
-    expect(largurasDoColgroup()).toEqual(['200px', '56px', '80px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '104px']);
   });
 
   it('duas unidades ficam como são; o padrão de abertura não muda', () => {
     const { unmount } = montarCom(['ha', 'cab']);
-    expect(largurasDoColgroup()).toEqual(['200px', '56px', '80px', '80px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '80px', '80px']);
     unmount();
     montarCom(['rs', 'ha']);
-    expect(largurasDoColgroup()).toEqual(['200px', '104px', '56px', '80px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '104px', '80px']);
   });
 
-  it('acima do piso ninguém é esticado: três unidades e o % ficam como são', () => {
+  it('acima do piso ninguém é esticado: três unidades ficam como são', () => {
     montarCom(['ha', 'cab', 'arroba']);
-    expect(largurasDoColgroup()).toEqual(['200px', '56px', '80px', '80px', '80px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '80px', '80px', '80px']);
   });
 });
 
@@ -254,9 +259,9 @@ describe('o rateio administrativo da pecuária', () => {
       alturaCartao={null} cartaoRef={{ current: null }} />);
     expect(linhaDe('(−) Rateio administrativo')?.semPct[1]?.textContent).toBe('120.000,00');
     /* ⚠ SEM ▲ DESDE O DRE-LEVE-01 (D6): o azul cheio saiu, e o número voltou a ter só a cor do sinal. */
-    expect(linhaDe('= Lucro operacional')?.semPct[1]?.textContent).toBe('680.000,00');
-    expect(linhaDe('= Lucro líquido')?.semPct[1]?.textContent).toBe('680.000,00');
-    expect(linhaDe('= Resultado econômico')?.semPct[1]?.textContent).toBe('700.000,00');
+    expect(soNumero(linhaDe('= Lucro operacional')?.semPct[1])).toBe('680.000,00');
+    expect(soNumero(linhaDe('= Lucro líquido')?.semPct[1])).toBe('680.000,00');
+    expect(soNumero(linhaDe('= Resultado econômico')?.semPct[1])).toBe('700.000,00');
     /* O que este caso proíbe: o resultado somado de volta ao rateio (800.000) em qualquer célula. */
     expect(document.body.textContent).not.toContain('800.000,00');
   });
@@ -320,7 +325,7 @@ describe('a cascata do DRE da pecuária', () => {
   /* ⚠ OS NÚMEROS DA HOMOLOGAÇÃO, na coluna Total: é o que o Gabriel confere primeiro. */
   it('a coluna Total traz os números do NJ', () => {
     montar();
-    const total = (rot: string) => linhaDe(rot)?.semPct[CEL_TOTAL_RS]?.textContent ?? '';
+    const total = (rot: string) => soNumero(linhaDe(rot)?.semPct[CEL_TOTAL_RS]);
     expect(total('Vendas')).toBe('17.869.000,08');
     expect(total('Variação por produção')).toBe('-193.238,00');
     expect(total('= Lucro líquido')).toBe('2.994.408,81');
@@ -343,18 +348,28 @@ describe('a cascata do DRE da pecuária', () => {
    * numerador e nunca passou pela receita. Trocar a base de volta muda estes números, e é aqui
    * que a mudança aparece em vez de passar calada.
    */
-  /* ⚠ DRE-LEVE-01 (D3/D4): A LINHA EXTRA "% do VBP" VIROU A COLUNA "% VBP" de cada período — do VBP para baixo, vazia acima dele e nos
-     subitens. A base continua o VBP, e o número continua travado. */
-  const pctDe = (rot: string) => [...(linhaDe(rot)?.cells ?? [])].filter(c => c.hasAttribute('data-pct')).map(c => c.textContent ?? '');
-  it('o % usa o VBP como base, na coluna "% VBP" — sem linha extra, vazio acima do VBP', () => {
+  /* ⚠ DRE-LAYOUT-04 (Gabriel 09/11 + ajuste do Chat 10:25): A COLUNA "% VBP" DO DRE-LEVE-01 SAIU — o % do VBP fica COLADO LOGO ABAIXO do
+     número, NA MESMA CÉLULA (`data-pct-abaixo`, acima da régua), só em Margem de contribuição, Lucro operacional, Lucro líquido e
+     Resultado econômico; sem linha própria (o rótulo vai no title). A base continua o VBP, e o número continua travado. */
+  const pctDe = (rot: string) => {
+    const subs = [...(linhaDe(rot)?.querySelectorAll('[data-pct-abaixo]') ?? [])].map(d => d.textContent ?? '');
+    return subs.length ? subs : null;
+  };
+  it('o % do VBP fica abaixo do número, na mesma célula, só nas 4 linhas de resultado', () => {
     montar();
     expect(rotulos().some(r => r.includes('% do VBP'))).toBe(false);
+    expect(linhaDe('= Margem de contribuição')?.querySelector('[data-pct-abaixo]')?.getAttribute('title')).toBe('Margem de contribuição em % do VBP desta coluna');
     /* ⚠ O NÚMERO, na coluna Total: 9.171.997,33 / 15.841.219,06 = 57,9 %. */
-    expect(pctDe('= Margem de contribuição')[0]).toBe('57,9 %');
-    expect(pctDe('= VBP')[0]).toBe('100,0 %');
-    /* acima do VBP, vazio */
-    expect(pctDe('Vendas').every(t => t === '')).toBe(true);
-    expect(pctDe('= Receita líquida').every(t => t === '')).toBe(true);
+    expect(pctDe('= Margem de contribuição')?.[0]).toBe('57,9 %');
+    expect(pctDe('= Lucro operacional')?.[0]).toMatch(/%$/);
+    expect(pctDe('= Lucro líquido')?.[0]).toMatch(/%$/);
+    expect(pctDe('= Resultado econômico')?.[0]).toMatch(/%$/);
+    /* nas outras, nada */
+    expect(pctDe('= VBP')).toBeNull();
+    expect(pctDe('Vendas')).toBeNull();
+    expect(pctDe('= Receita líquida')).toBeNull();
+    /* e nenhuma coluna de % na grade */
+    expect(document.querySelectorAll('[data-pct]')).toHaveLength(0);
   });
 
   /**
@@ -364,7 +379,7 @@ describe('a cascata do DRE da pecuária', () => {
   it('sem VBP positivo o percentual é traço, não 0%', () => {
     montar();
     /* as colunas de % na ordem: Total, a primeira fazenda, a segunda (VBP zero) */
-    expect(pctDe('= Margem de contribuição')[2]).toBe('—');
+    expect(pctDe('= Margem de contribuição')?.[2]).toBe('—');
   });
 
   /**
@@ -525,7 +540,7 @@ describe('as duas visões', () => {
        ao cabeçalho por engano falhe aqui. `cab_media` segue lida — o rateio administrativo é por
        cabeça média, e o caso do rateio, logo abaixo, é quem prova isso. */
     expect(h[1]).not.toContain('cab med.');
-    expect(linhaDe('= Lucro líquido')?.semPct[1]?.textContent).toBe('2.994.408,81');
+    expect(soNumero(linhaDe('= Lucro líquido')?.semPct[1])).toBe('2.994.408,81');
     /* O rateio aparece como linha também no Global: é custo da pecuária, só não se divide aqui. */
     expect(linhaDe('(−) Rateio administrativo')).toBeTruthy();
   });
@@ -968,7 +983,7 @@ describe('o custeio de produção do Resumido', () => {
       alturaCartao={null} cartaoRef={{ current: null }} />,
   );
   const num = (t: string | null | undefined) => Number((t ?? '').replace(/[^0-9,-]/g, '').replace(',', '.'));
-  const rs = (rot: string) => linhaDe(rot)?.semPct[1]?.textContent ?? null;
+  const rs = (rot: string) => { const td = linhaDe(rot)?.semPct[1]; return td ? soNumero(td) : null; };
 
   it('VBP − Custeio = Lucro operacional ao centavo, com o botão de rateio ligado e desligado', () => {
     for (const rateioNosGrupos of [false, true]) {
@@ -997,10 +1012,9 @@ describe('o custeio de produção do Resumido', () => {
     expect(rs('Nutrição')).toBe('249.420,35');
   });
 
-  /* ⚠ DRE-LEVE-01 (D3): o % virou coluna e vale do VBP para baixo em todo grupo e resultado — o Custeio (grupo) passa a ter o dele, como o
-     Custo variável e o Custo fixo do mock aprovado; a decisão de 23/09 ("custo não se compara em % do VBP") foi substituída. A sublinha
-     "por hectare" é subitem: sem fundo próprio e sem %. */
-  it('VBP e Custeio ganham "por hectare" (subitem, sem %); o Custeio tem o % VBP na coluna', () => {
+  /* ⚠ DRE-LAYOUT-04: o % do VBP é só das 4 linhas de resultado — VBP e Custeio não têm; a sublinha "por hectare" é subitem (sem fundo
+     próprio). O Lucro operacional, logo abaixo do Custeio, tem a linha de %. */
+  it('VBP e Custeio ganham "por hectare" (subitem, sem %); o Lucro operacional tem a linha de %', () => {
     montarRRCC({ unidades: ['rs'] });
     const rot = rotulos();
     const iVbp = rot.findIndex(r => r.startsWith('= VBP'));
@@ -1015,13 +1029,12 @@ describe('o custeio de produção do Resumido', () => {
     expect(linhas[iVbp + 1].className).toContain('bg-card');
     expect(linhas[iCusteio].className).toContain('bg-card');
     expect(linhas[iVbp + 1].style.height).toBe('13px');
-    const pct = (tr: HTMLTableRowElement) => [...tr.cells].filter(c => c.hasAttribute('data-pct')).map(c => c.textContent);
-    expect(pct(linhas[iVbp + 1])).toEqual(['']);
-    expect(pct(linhas[iCusteio])[0]).toMatch(/^\d+,\d %$/);
-    /* as filhas do Custeio (Custo variável e Custo fixo) são subitens: % vazio */
+    expect(linhas[iCusteio + 2].querySelector('[data-pct-abaixo]')?.textContent).toMatch(/^\d+,\d %$/);
+    /* as filhas do Custeio (Custo variável e Custo fixo) são subitens: sem linha de % */
     abrirCusteio();
-    expect(pct(linhaDe('(−) Custo variável')!)).toEqual(['']);
-    expect(pct(linhaDe('(−) Custo fixo')!)).toEqual(['']);
+    const temPct = (rot: string) => !!linhaDe(rot)?.querySelector('[data-pct-abaixo]');
+    expect(temPct('(−) Custo variável')).toBe(false);
+    expect(temPct('(−) Custo fixo')).toBe(false);
   });
 
   /* ⚠ DRE-LEVE-01 (D6): AS CORES DO MOCK — custo e negativo em vermelho, o resto na tinta da casa, o resultado-chave (Lucro operacional) em
