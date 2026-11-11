@@ -46,19 +46,19 @@ export function colunasDasParcelas(ehParcelamento: boolean): ColunaDasParcelas[]
     /* TELA DO CONTRATO v4 (18/10): célula de 10,5px com 3px de padding lateral; a régua cabe a 750px de conteúdo sem rolar na
        horizontal (o Lançamento fica com o resto e leva o lápis no fim — a coluna própria do lápis saiu). "Total (R$)" virou "Total". */
     return [
-      /* FIN-FINANC-LAYOUT-01 (Gabriel 05/11/2026): a célula foi a 11px — cada coluna cresceu na proporção (11/10,5) e foi
-         conferida na bancada (nenhuma corta a 1.240, 1.024 e zoom 135%); os grupos ganham separador (ABRE_GRUPO_DAS_PARCELAS) */
-      col('numero', 'Parc.', 40),
-      /* as datas a 10,5px (um passo abaixo da célula): "01/10/2026" pede ~62px com o padding -> 64 (a sobra vai ao Lançamento, que no
-         zoom 135% de 1280×800 pedia 166px para os gestos ficarem numa linha) */
-      col('vencimento', 'Venc.', 66),
-      col('pagamento', 'Pgto.', 64),
+      /* FIN-FINANC-LAYOUT-02 (Gabriel 11/11/2026, "olha o rolo"): cada coluna com a largura do MAIOR conteúdo dela + 12px (6 de cada
+         lado), medida na bancada (contrato sintético de 15 parcelas na casa dos milhões): "15/15" · "01/10/2026" a 10,5px em negrito (a
+         vencida) 62 + 12 = 74 → 78 · "em 1079 d" 57 + 12 = 69 → 74 ·
+         "15.888.600,00" negrito no Total do rodapé · o selo "A vencer". Antes, 2,5px de cada lado: o Total encostava no Saldo após. */
+      col('numero', 'Parc.', 44),
+      col('vencimento', 'Venc.', 78),
+      col('pagamento', 'Pgto.', 78),
       col('prazo', 'Prazo', 74),
-      col('principal', 'Principal', 78, 'direita'),
-      col('juros', 'Juros', 78, 'direita'),
-      col('total', 'Total', 84, 'direita'),
-      col('saldoApos', 'Saldo após', 78, 'direita'),
-      col('situacao', 'Situação', 55),
+      col('principal', 'Principal', 90, 'direita'),
+      col('juros', 'Juros', 90, 'direita'),
+      col('total', 'Total', 96, 'direita'),
+      col('saldoApos', 'Saldo após', 90, 'direita'),
+      col('situacao', 'Situação', 66),
       col('lancamento', 'Lançamento', null),
     ];
   }

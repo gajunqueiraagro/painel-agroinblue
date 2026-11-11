@@ -28,7 +28,8 @@ export const ESCALA_DO_CONTRATO = {
   cartaoRotulo: 'text-[10px]',
   cartaoValor: 'text-[12px] font-semibold',
   bloco: 'text-[11px] font-semibold',
-  th: 'text-[10px]',
+  /* FIN-FINANC-LAYOUT-02 (Gabriel 11/11): cabeçalho 10,5px, célula 11px */
+  th: 'text-[10.5px]',
   /* FIN-FINANC-LAYOUT-01 (Gabriel 05/11/2026): a tabela no padrão da casa, 11px (era 10,5) */
   td: 'text-[11px]',
   total: 'text-[11px] font-bold',
@@ -39,7 +40,9 @@ export const ESCALA_DO_CONTRATO = {
   data: 'text-[10.5px]',
   /* FIN-FINANC-LAYOUT-01 (Gabriel 05/11, F1): as DUAS fontes acima de 13px da tela, aprovadas — o nome na faixa do título e o valor do Resumo */
   nome: 'text-[15px] font-semibold leading-[16px]',
-  resumoValor: 'text-[14px] font-bold leading-[18px]',
+  /* FIN-FINANC-LAYOUT-02 (Gabriel 11/11): os cards do topo com o valor a 16px negrito (rótulo 10px); abaixo de 800px de janela (zoom
+     alto) 14px — a 750 "R$ 593.640,00" a 16px passava 8px do card (check-ui-cortes) */
+  resumoValor: 'text-[14px] font-bold leading-[20px] min-[800px]:text-[16px]',
   /* FORN-01b (regra de corte de 21/10 07h25) — texto em CÉLULA de tabela: uma linha, "…" quando não cabe, o inteiro no `title` */
   celula: 'block truncate',
 };
@@ -98,8 +101,8 @@ function ColunaDeFatos({ itens }: { itens: { rotulo: string; testId?: string; va
 function CelulaDoResumo({ rotulo, valor, title, vermelho, laranja }: { rotulo: string; valor: string; title?: string; vermelho?: boolean; laranja?: boolean }) {
   return (
     <div className={`min-w-0 border-l px-2 py-1 first:border-l-0 ${COR_V4.bordaFina}`} title={title} data-testid={`resumo-${rotulo.split(' ')[0]}`}>
-      {/* FIN-FINANC-LAYOUT-01: o padrão da casa — rótulo 10,5px, valor 14px negrito */}
-      <div className={`${E.rola} text-[10.5px] leading-[14px] ${vermelho ? COR_V4.vermelho : COR_V4.rotulo}`}>{rotulo}</div>
+      {/* FIN-FINANC-LAYOUT-02 (Gabriel 11/11): rótulo 10px, valor 16px negrito */}
+      <div className={`${E.rola} ${E.cartaoRotulo} leading-[14px] ${vermelho ? COR_V4.vermelho : COR_V4.rotulo}`}>{rotulo}</div>
       <div className={`whitespace-nowrap ${E.resumoValor} tabular-nums ${vermelho ? COR_V4.vermelho : laranja ? COR_V4.laranja : COR_V4.valor}`}>{valor}</div>
     </div>
   );

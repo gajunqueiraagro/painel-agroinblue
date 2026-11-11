@@ -406,10 +406,41 @@ if (tela === 'mesclar') {
       : base;
   const c: any = consorcio;
   if (v === 'consorcio') d.fin = { ...base.fin, id: c.tela.contrato.id, natureza: 'consorcio' };
+  /* FIN-FINANC-LAYOUT-02 — `&v=curto`: o mesmo crédito com 3 parcelas (a 1ª paga, a 2ª sem lançamento nenhum, a 3ª a vencer), valores de
+     milhares: o contrato CURTO do gate, ao lado do de 15 parcelas. SINTÉTICO. */
+  if (v === 'curto') {
+    const [a, b, cc]: any[] = base.situacao.parcelas.slice(5, 8);
+    const sit = [
+      { ...a, numero: 1, valor_principal: 40000, valor_juros: 1404.03, valor_total: 41404.03, situacao: 'paga', pago_em: '2026-07-24', valor_pago: 41404.03, prazo: { dias: 2, tipo: 'antes' } },
+      { ...b, numero: 2, valor_principal: 40000, valor_juros: 936.02, valor_total: 40936.02, lancamento_id: null, lancamento_juros_id: null, situacao: 'vencida', prazo: { dias: 41, tipo: 'vencida' } },
+      { ...cc, numero: 3, valor_principal: 40000, valor_juros: 468.01, valor_total: 40468.01, prazo: { dias: 324, tipo: 'a_vencer' } },
+    ];
+    d.situacao = { ...base.situacao, parcelas: sit, cartoes: { ...base.situacao.cartoes, parcelas: 3, pagas: 1, pago: 41404.03, a_vencer_qtde: 1, a_vencer: 40468.01,
+      vencido_qtde: 1, vencido: 40936.02, soma_principal: 120000, soma_total: 122808.06, juros_previstos: 2808.06, valor_contrato: 120000 } };
+    d.parcelas = base.parcelas.slice(5, 8).map((x: any, i: number) => ({ ...x, id: sit[i].id, numero_parcela: i + 1, lancamento_id: sit[i].lancamento_id, lancamento_juros_id: sit[i].lancamento_juros_id }));
+    d.fin = { ...base.fin, total_parcelas: 3, valor_total: 120000, descricao: 'Custeio Exemplo curto' };
+  }
   /* FIN-PARCELA-VALOR-ZERO-01 — `&zero=1`: a 1ª parcela sem nada a pagar e não paga, vencida no calendário (o banco manda `sem_valor`) */
   if (q.get('zero') === '1') d.situacao = { ...d.situacao, parcelas: d.situacao.parcelas.map((x: any, i: number) => (i === 0
     ? { ...x, valor_principal: 0, valor_juros: 0, valor_total: 0, valor_pago: 0, situacao: 'pendente', sem_valor: true, pago_em: null, prazo: null, lancamento_id: null, lancamento_juros_id: null }
     : x)) };
+  /* FIN-FINANC-LAYOUT-02 (a) — `&lib=formas`: as liberações nas três situações da tabela nova — em conta casada com desconto (tarifa/IOF:
+     bruto 238.425,00, entrou 236.890,12), em conta a casar, direto ao fornecedor (com o nome) e liquidação do anterior. SINTÉTICO. */
+  const LIB_FORMAS = q.get('lib') === 'formas';
+  if (LIB_FORMAS) {
+    const L = (id: string, data: string, valor: number, forma: string, extra: any = {}) => ({ id, data, valor, forma, lancamento_id: null, fornecedor_id: null,
+      contrato_liquidado_id: null, destinacao_id: null, observacao: null, cancelado_em: null, ...extra });
+    d.liberacoes = [
+      L('lb-1', '2026-07-30', 238425, 'conta', { lancamento_id: 'lc-lib-1' }),
+      L('lb-2', '2026-08-31', 42075, 'conta'),
+      L('lb-3', '2026-09-01', 280500, 'fornecedor', { fornecedor_id: 'fo-maq', destinacao_id: 'a6489445-256f-4802-8d88-a6f97985539a' }),
+      L('lb-4', '2026-09-15', 1150000, 'liquidacao', { contrato_liquidado_id: 'fin-ant' }),
+    ];
+    const T = (l: any, entrou: number | null, aid: number) => ({ id: l.id, data: l.data, forma: l.forma, valor: l.valor, destinacao_id: l.destinacao_id,
+      destino: l.destinacao_id ? 'Armazém Exemplo' : null, lancamento_id: l.lancamento_id, entrou, a_identificar: aid, excedente: 0 });
+    d.tela = { ...d.tela, liberacoes: [T(d.liberacoes[0], 236890.12, 1534.88), T(d.liberacoes[1], 0, 42075), T(d.liberacoes[2], null, 0), T(d.liberacoes[3], null, 0)],
+      liberacoes_total: { qtde: 4, liberado: 1711000, entrou: 236890.12, a_identificar: 43609.88, excedente: 0 } };
+  }
   /* PARC-DOCS-TABELA-01 — `&np=N`: a compra parcelada com N parcelas de R$ 344,00 (o caso real tem 2), todas com lançamento, e
      `&docs=1` uma nota da compra ligada a elas (a lista de documentos da aba ocupa a sua linha). Tudo SINTÉTICO. */
   const NP = Number(q.get('np') ?? 0);
@@ -447,8 +478,10 @@ if (tela === 'mesclar') {
         vencimento: ANTES_DA_VOLTA[0]?.vencimento ?? null, competencia: ANTES_DA_VOLTA[0]?.vencimento ?? null, descricao: d.fin.descricao, canceladas: Math.max(ANTES_DA_VOLTA.length - 1, 0),
         original_guardado: false, antes: ANTES_DA_VOLTA };
   g.__bancoBancada = {
-    from: (t: string, e: any) => t === 'financiamentos' ? [d.fin] : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
-      : t === 'financeiro_lancamentos_v2' ? LANC_DA_COMPRA : t === 'financeiro_contas_bancarias' ? CONTAS_DO_CONTRATO
+    from: (t: string, e: any) => t === 'financiamentos' ? (LIB_FORMAS && e?.in?.id ? [{ id: 'fin-ant', numero_contrato: '40/00123-4' }] : [d.fin]) : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
+      : t === 'financeiro_lancamentos_v2' ? (LIB_FORMAS ? [{ id: 'lc-lib-1', descricao: 'Liberação financiamento Moderfrota exemplo', data_pagamento: '2026-07-30', data_vencimento: '2026-07-30', conta_destino_id: null, conta_bancaria_id: d.fin.conta_bancaria_id }] : LANC_DA_COMPRA)
+      : t === 'financeiro_contas_bancarias' ? CONTAS_DO_CONTRATO
+      : t === 'financeiro_fornecedores' && LIB_FORMAS ? [{ id: 'fo-maq', nome: 'Máquinas Agrícolas Exemplo Ltda' }]
       : t === 'financiamento_destinacoes' ? d.destinacoes ?? [] : t === 'financiamento_documentos' ? d.documentos ?? []
       : t === 'vw_lancamento_documentos' ? DOCS_DA_COMPRA.filter((x) => (e?.eq?.especie == null || x.especie === e.eq.especie) && (e?.eq?.lancamento_id == null || x.lancamento_id === e.eq.lancamento_id)) : [],
     rpc: (fn: string) => fn === 'fn_financiamento_situacao' ? d.situacao : fn === 'fn_contrato_tela' ? d.tela ?? null : fn === 'fn_financiamento_captacoes_livres' ? []

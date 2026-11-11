@@ -178,6 +178,14 @@ const CENARIOS = [
      com a conta longa nas parcelas e o consórcio */
   ...['Cronograma', 'Liberações', 'Pagamentos', 'Histórico', 'Documentos', 'A resolver'].map((aba) => ({ nome: `contrato-v4-${aba}`, url: 'tela=contrato', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: aba === 'Cronograma' ? undefined : async (p) => { await p.getByRole('button', { name: new RegExp(`^${aba}`) }).first().click(); await p.waitForTimeout(500); } })),
+  /* FIN-FINANC-LAYOUT-02 (a): as Liberações nas 4 formas (casada com desconto, a casar, direto ao fornecedor, liquidação) e (b) o
+     modal Nova liberação; e o contrato CURTO (3 parcelas) no Cronograma */
+  { nome: 'contrato-liberacoes-formas', url: 'tela=contrato&lib=formas', tamanhos: TAMANHOS_DO_CONTRATO,
+    antes: async (p) => { await p.getByRole('button', { name: /^Liberações/ }).first().click(); await p.waitForTimeout(500); } },
+  { nome: 'contrato-nova-liberacao', url: 'tela=contrato&lib=formas', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    antes: async (p) => { await p.getByRole('button', { name: /^Liberações/ }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nova-liberacao"]').click(); await p.waitForTimeout(500); } },
+  { nome: 'contrato-curto', url: 'tela=contrato&v=curto', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contrato-titulo-longo', url: 'tela=contrato&v=titulo', tamanhos: TAMANHOS_DO_CONTRATO },
   /* FIN-PARCELA-VALOR-ZERO-01: a parcela de valor zero ("sem pagamento", o selo avança sobre o Lançamento vazio) */
   { nome: 'contrato-parcela-zero', url: 'tela=contrato&zero=1', tamanhos: TAMANHOS_DO_CONTRATO },

@@ -225,6 +225,19 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
   const salvarDestinacao = useCallback((id: string | null, descricao: string, orcado: number) => rpc('fn_financiamento_destinacao_salvar', {
     p_financiamento_id: financiamentoId, p_id: id, p_descricao: descricao, p_valor_orcado: orcado,
   }), [rpc, financiamentoId]);
+  /** FIN-FINANC-LAYOUT-02 (b): criar a destinação de dentro do modal da liberação — a MESMA RPC do "+ destinação", devolvendo o id
+   *  para o campo já ficar com ela escolhida; a recusa do banco volta escrita. */
+  const criarDestinacao = useCallback(async (descricao: string, orcado: number): Promise<{ id: string } | { erro: string }> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_destinacao_salvar', {
+      p_financiamento_id: financiamentoId, p_id: null, p_descricao: descricao, p_valor_orcado: orcado,
+    });
+    if (error) return { erro: fraseDoErro(error) };
+    const id: unknown = data && typeof data === 'object' ? Reflect.get(data, 'id') : null;
+    if (typeof id !== 'string') return { erro: 'A destinação foi gravada, mas o banco não devolveu o id: escolha-a na lista.' };
+    reler();
+    return { id };
+  }, [financiamentoId, reler]);
   const removerDestinacao = useCallback((id: string) => rpc('fn_financiamento_destinacao_remover', { p_id: id }), [rpc]);
   const removerDocumento = useCallback((id: string, motivo: string) => rpc('fn_financiamento_documento_remover', { p_id: id, p_motivo: motivo }), [rpc]);
 
@@ -390,7 +403,7 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     tela: tela.data ?? null, erroDaTela: tela.error ? 'Não foi possível ler o contrato.' : null, relerTela: () => void tela.refetch(),
     liberacoes: liberacoes.data ?? null, destinacoes: destinacoes.data ?? null, documentos: documentos.data ?? null, encargos: encargos.data ?? [],
     erroDeLeitura: liberacoes.error || destinacoes.error || documentos.error ? 'Não foi possível ler liberações, destinações ou documentos.' : null,
-    salvarLiberacao, removerLiberacao, salvarDestinacao, removerDestinacao, enviarDocumento, removerDocumento, urlDoDocumento,
+    salvarLiberacao, removerLiberacao, salvarDestinacao, criarDestinacao, removerDestinacao, enviarDocumento, removerDocumento, urlDoDocumento,
     lerCaptacoesLivres, lerContratosAnteriores,
     baixaViva: baixaViva.data ?? null, darBaixa, desfazerBaixa, lerSucessores,
     lerJuntaveis, juntar, desfazerJuncao,

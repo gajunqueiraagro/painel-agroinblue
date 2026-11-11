@@ -29,6 +29,7 @@ const api = (o: Partial<Api> = {}): Api => ({
   documentos: [{ id: 'doc-1', especie: 'aditivo', nome: 'aditivo.pdf', storagePath: 'c/financiamentos/f/doc-1.pdf', criadoEm: '2026-10-17T10:00:00Z', enviadoPor: 'Gabriel' }],
   encargos: [], erroDeLeitura: null,
   salvarLiberacao: vi.fn(async () => null), removerLiberacao: vi.fn(async () => null), salvarDestinacao: vi.fn(async () => null),
+  criarDestinacao: vi.fn(async () => ({ id: 'd-nova' })),
   removerDestinacao: vi.fn(async () => null), enviarDocumento: vi.fn(async () => null), removerDocumento: vi.fn(async () => null),
   urlDoDocumento: vi.fn(async () => null), lerCaptacoesLivres: vi.fn(async () => []), lerContratosAnteriores: vi.fn(async () => []),
   vinculos: [], buscar: vi.fn(async () => "x"), vincularPagamento: vi.fn(async () => "x"), desvincularPagamento: vi.fn(async () => "x"),
@@ -83,13 +84,41 @@ describe('(2) o total das liberações — TELA v3: os números vêm de fn_contr
     expect(TELA).not.toBeNull();
     render(<BlocoLiberacoes api={api({ tela: TELA })} contaDoContrato="Conta do contrato" onAbrirLancamento={() => undefined} clienteId="cli" />);
     expect(screen.getByTestId('total-liberacoes').textContent).toBe('955.395,01');
-    expect(screen.getByTestId('total-a-identificar').textContent).toBe('318.465,00');
-    expect(screen.getAllByTestId('a-identificar').map((c) => c.textContent)).toEqual(['318.465,00', '+120,00 a mais']);
-    expect(screen.getAllByTestId('entrou-na-conta').map((c) => c.textContent)).toEqual(['0,00', '636.930,01']);
-    expect(screen.getAllByTestId('destino-da-liberacao').map((c) => c.textContent)).toEqual(['—', 'Recuperação de solo']);
-    /* em conta sem lançamento = "a casar"; com lançamento = ↔ que abre no Financeiro */
-    expect(screen.getAllByTestId('linha-liberacao')[0].textContent).toContain('a casar');
-    expect(screen.getByTestId('liberacao-vinculada').textContent).toBe('↔ 22/12/2025');
+    /* FIN-FINANC-LAYOUT-02 (a): Data · Forma · Para quem · Bruto · Descontos · Líquido · Situação; a coluna que não vale fica vazia */
+    expect(Array.from(screen.getByTestId('cabecalho-liberacoes').querySelectorAll('th')).map((th) => th.textContent))
+      .toEqual(['Data', 'Forma', 'Para quem', 'Bruto', 'Descontos', 'Líquido', 'Situação', '']);
+    expect(screen.getByTestId('total-a-identificar').textContent).toBe('a identificar 318.465,00');
+    expect(screen.getByTestId('total-liquido').textContent).toBe('636.930,01');
+    /* a casar: sem líquido e sem descontos (nada de "0,00" nem "—" laranja); casada: os números do banco */
+    expect(screen.getAllByTestId('descontos-da-liberacao').map((c) => c.textContent)).toEqual(['', '0,00']);
+    expect(screen.getAllByTestId('liquido-da-liberacao').map((c) => c.textContent)).toEqual(['', '636.930,01']);
+    expect(screen.getAllByTestId('forma-da-liberacao').map((c) => c.textContent)).toEqual(['em conta', 'em conta']);
+    /* a destinação mora no title do Para quem */
+    expect(screen.getAllByTestId('para-quem')[1].querySelector('span')!.getAttribute('title')).toContain('destinação: Recuperação de solo');
+    expect(screen.getAllByTestId('para-quem')[0].querySelector('span')!.getAttribute('title')).toContain('sem destinação');
+    /* em conta sem lançamento = "a casar"; com lançamento = "casada ↔" que abre no Financeiro, o excedente ao lado */
+    expect(screen.getAllByTestId('situacao-da-liberacao')[0].textContent).toBe('a casar');
+    expect(screen.getByTestId('liberacao-vinculada').textContent).toBe('casada ↔+120,00');
+    expect(screen.queryByText('sem caixa')).toBeNull();
+  });
+  it('direto ao fornecedor: forma, o fornecedor em "Para quem", e Descontos/Líquido/Situação VAZIOS (nada de "sem caixa"); total sem nada a identificar fica vazio', () => {
+    const tela = lerTelaDoContrato({
+      condicoes: { taxa: null, unidade: null, taxa_aa: null, sistema: null, carencia_ate: null, tipo_taxa: null, periodicidade: null },
+      contrato: { data_contrato: null, vencimento_final: null, atividade: null, credor: null, credor_documento: null, primeira_liberacao: null, ultima_liberacao: null, vencidas: 0 },
+      liberacoes: [{ id: 'lib-f', data: '2026-09-01', forma: 'fornecedor', valor: 280500, destinacao_id: null, destino: null, lancamento_id: null, entrou: null, a_identificar: 0, excedente: 0 }],
+      liberacoes_total: { qtde: 1, liberado: 280500, entrou: 0, a_identificar: 0, excedente: 0 },
+      pagamentos: [], pagamentos_total: { qtde: 0, principal: 0, juros: 0, encargos: 0, total: 0 }, historico: [], a_resolver: [],
+    });
+    render(<BlocoLiberacoes api={api({ tela, liberacoes: [LIB({ id: 'lib-f', data: '2026-09-01', valor: 280500, forma: 'fornecedor', fornecedorId: 'fo-1', fornecedorNome: 'Máquinas Exemplo' })] })}
+      contaDoContrato="Conta do contrato" onAbrirLancamento={() => undefined} clienteId="cli" />);
+    expect(screen.getByTestId('forma-da-liberacao').textContent).toBe('direto ao fornecedor');
+    expect(screen.getByTestId('para-quem').textContent).toBe('Máquinas Exemplo');
+    expect([screen.getByTestId('descontos-da-liberacao').textContent, screen.getByTestId('liquido-da-liberacao').textContent, screen.getByTestId('situacao-da-liberacao').textContent]).toEqual(['', '', '']);
+    expect(screen.getByTestId('total-a-identificar').textContent).toBe('');
+  });
+  it('em conta sem conta definida (nem no lançamento nem no contrato): "Para quem" VAZIO, nunca "—" (ajuste do Chat 11/11 09:58)', () => {
+    render(<BlocoLiberacoes api={api({ liberacoes: [LIB()] })} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId="cli" />);
+    expect(screen.getByTestId('para-quem').textContent).toBe('');
   });
   it('sem a leitura da tela, "…" — nunca zero inventado; sem liberação, o bloco diz o vazio', () => {
     render(<BlocoLiberacoes api={api({ liberacoes: [] })} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId="cli" />);
@@ -183,3 +212,38 @@ describe('(6) a peça só desenha', () => {
     expect(soma(fonte)).toBe(false);
   });
 });
+
+describe('FIN-FINANC-LAYOUT-02 (b) — Nova liberação: a destinação que não existe se cria no próprio modal', () => {
+  const abrirDestinacao = async () => {
+    fireEvent.click(screen.getByTestId('nova-liberacao'));
+    const dlg = await screen.findByTestId('dialogo-liberacao');
+    /* o campo da linha "Destinação" (o rótulo e o campo moram na mesma linha) */
+    const rotulo = Array.from(dlg.querySelectorAll('span')).find((x) => x.textContent === 'Destinação');
+    const campo = rotulo?.nextElementSibling?.querySelector('button');
+    expect(campo).toBeTruthy();
+    fireEvent.click(campo!);
+    const busca = await screen.findByPlaceholderText('sem destinação');
+    fireEvent.change(busca, { target: { value: 'Plantadeira 1211' } });
+  };
+  it('"+ Criar" grava pela RPC (orçado 0) e o campo fica com a criada', async () => {
+    const a = api({ destinacoes: [] });
+    render(<BlocoLiberacoes api={a} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId="cli" />);
+    await abrirDestinacao();
+    fireEvent.click(await screen.findByTestId('ss-criar'));
+    await waitFor(() => expect(a.criarDestinacao).toHaveBeenCalledWith('Plantadeira 1211', 0));
+    await waitFor(() => expect(Array.from(screen.getByTestId('dialogo-liberacao').querySelectorAll('span')).some((c) => c.textContent === 'Destinação' && !!c.nextElementSibling?.textContent?.includes('Plantadeira 1211'))).toBe(true));
+  });
+  it('a recusa do banco fica escrita na faixa do campo; o que já existe não oferece criar', async () => {
+    const a = api({ destinacoes: [], criarDestinacao: vi.fn(async () => ({ erro: 'Destinação repetida no contrato.' })) });
+    render(<BlocoLiberacoes api={a} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId="cli" />);
+    await abrirDestinacao();
+    fireEvent.click(await screen.findByTestId('ss-criar'));
+    expect((await screen.findByTestId('ss-faixa')).textContent).toContain('Destinação repetida no contrato.');
+  });
+  it('o texto igual a uma destinação existente (sem acento/caixa) não mostra "+ Criar"', async () => {
+    render(<BlocoLiberacoes api={api({ destinacoes: [{ id: 'd-9', descricao: 'Plantadeira 1211', orcado: 0 }] })} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId="cli" />);
+    await abrirDestinacao();
+    await waitFor(() => expect(screen.queryByTestId('ss-criar')).toBeNull());
+  });
+});
+

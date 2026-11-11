@@ -20,7 +20,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { Segmentado } from '@/components/ui/segmentado';
-import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
+import { SearchableSelect, type CriarComTexto, type FaixaDoCriar, type OpcaoSearchable } from '@/components/ui/searchable-select';
+import { normalizarParaBusca } from '@/lib/texto/busca';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { REGRA_ARQUIVO_DO_DOCUMENTO } from '@/hooks/useLancamentoDocumentos';
@@ -134,44 +135,49 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
             title="Entradas do cliente que podem ser a captação deste contrato (e os encargos do credor perto delas)">Buscar entradas</Button>
           <Button variant="outline" size="sm" className="h-[20px] gap-1 px-2 text-[10px]" onClick={() => setEditando('nova')} data-testid="nova-liberacao"><Plus className="size-3" /> liberação</Button>
         </div>} />
-      {/* TELA DO CONTRATO v3 — Data · Destino · Liberado · Entrou na conta · A identificar · Lançamento. "Entrou" e "a identificar"
-          (e o excedente, em laranja) vêm de `fn_contrato_tela`; a tela não soma. Cabeçalho e total presos: só o corpo rola. */}
+      {/* FIN-FINANC-LAYOUT-02 (a) (Gabriel 11/11, print do John Deere): Data · Forma · Para quem · Bruto · Descontos · Líquido · Situação.
+          Saíram as colunas mortas ("Destino —", "Entrou na conta —", "A identificar 0,00", "sem caixa"): a coluna que não vale para a forma
+          fica VAZIA (sem "—" laranja). Os números são os de `fn_contrato_tela` (líquido = o que entrou na conta pelo lançamento ligado;
+          descontos = bruto − líquido, o `a_identificar` da linha casada); a tela não soma. A destinação mora no title do "Para quem". */}
       <div className="min-h-0 flex-1 overflow-auto" data-testid="area-que-rola-liberacoes">
-      <table className="w-full min-w-[680px] table-fixed border-collapse">
-        <colgroup><col style={{ width: 80 }} /><col /><col style={{ width: 96 }} /><col style={{ width: 104 }} /><col style={{ width: 112 }} /><col style={{ width: 110 }} /><col style={{ width: 44 }} /></colgroup>
+      <table className="w-full min-w-[720px] table-fixed border-collapse">
+        <colgroup><col style={{ width: 80 }} /><col style={{ width: 132 }} /><col /><col style={{ width: 100 }} /><col style={{ width: 92 }} /><col style={{ width: 100 }} /><col style={{ width: 104 }} /><col style={{ width: 44 }} /></colgroup>
         <thead data-testid="cabecalho-liberacoes"><tr>
-          <th className={`${TH} sticky top-0 z-10`}>Data</th><th className={`${TH} sticky top-0 z-10`}>Destino</th><th className={`${TH_R} sticky top-0 z-10`}>Liberado</th>
-          <th className={`${TH_R} sticky top-0 z-10`}>Entrou na conta</th><th className={`${TH_R} sticky top-0 z-10`}>A identificar</th>
-          <th className={`${TH} sticky top-0 z-10`}>Lançamento</th><th className={`${TH} sticky top-0 z-10`} />
+          <th className={`${TH} sticky top-0 z-10`}>Data</th><th className={`${TH} sticky top-0 z-10`}>Forma</th><th className={`${TH} sticky top-0 z-10`}>Para quem</th>
+          <th className={`${TH_R} sticky top-0 z-10`}>Bruto</th>
+          <th className={`${TH_R} sticky top-0 z-10`} title="tarifas e IOF retidos: bruto − líquido, na liberação em conta já casada">Descontos</th>
+          <th className={`${TH_R} sticky top-0 z-10`} title="o que entrou na conta (o lançamento ligado)">Líquido</th>
+          <th className={`${TH} sticky top-0 z-10`}>Situação</th><th className={`${TH} sticky top-0 z-10`} />
         </tr></thead>
         <tbody>
-          {libs === null && <tr><td colSpan={7} className={`${TD} text-muted-foreground`}>…</td></tr>}
+          {libs === null && <tr><td colSpan={8} className={`${TD} text-muted-foreground`}>…</td></tr>}
           {libs !== null && libs.length === 0 && (
-            <tr><td colSpan={7} className={`${TD} text-muted-foreground`} data-testid="liberacoes-vazio">Nenhuma liberação gravada.</td></tr>
+            <tr><td colSpan={8} className={`${TD} text-muted-foreground`} data-testid="liberacoes-vazio">Nenhuma liberação gravada.</td></tr>
           )}
           {(libs ?? []).map((l) => {
             const cf = contaOuFornecedor(l, contaDoContrato);
             const ex = estadoDoExtrato(l);
             const t = leitura.get(l.id) ?? null;
-            const origem = `${ROTULO_DA_FORMA[l.forma]} · ${cf.texto}`;
+            const casada = ex === 'vinculado' && !!l.lancamentoId;
             return (
               <tr key={l.id} className="border-b" data-testid="linha-liberacao">
                 <td className={`${TD} tabular-nums`}><span className="text-[10px]">{br(l.data)}</span></td>
-                <td className={TD} title={`${t?.destino ?? 'sem destinação'} · ${origem}`} data-testid="destino-da-liberacao">
-                  {t?.destino ? <span className={CELULA}>{t.destino}</span> : <span className="text-amber-700">—</span>}
+                <td className={TD} data-testid="forma-da-liberacao"><span className={CELULA} title={ROTULO_DA_FORMA[l.forma]}>{ROTULO_DA_FORMA[l.forma]}</span></td>
+                <td className={TD} data-testid="para-quem">
+                  <span className={CELULA} title={`${cf.title} · ${t?.destino ? `destinação: ${t.destino}` : 'sem destinação'}`}>{cf.texto === '—' ? '' : cf.texto}</span>
                 </td>
                 <td className={TD_R}>{num2(l.valor)}</td>
-                <td className={TD_R} data-testid="entrou-na-conta">{t === null ? '…' : t.entrou === null ? <span className="text-muted-foreground" title="não passa pela conta do cliente">—</span> : num2(t.entrou)}</td>
-                <td className={TD_R} data-testid="a-identificar">
-                  {t === null ? '…' : t.excedente > 0 ? <span className="text-amber-700" title="o lançamento vinculado passa do valor da liberação">+{num2(t.excedente)} a mais</span>
-                    : t.aIdentificar > 0 ? <span className="text-amber-700">{num2(t.aIdentificar)}</span> : <span className="text-muted-foreground">0,00</span>}
+                <td className={TD_R} data-testid="descontos-da-liberacao">
+                  {!casada ? '' : t === null ? '…' : t.aIdentificar > 0 ? <span className="text-amber-700" title="bruto − líquido: tarifas/IOF retidos ou ainda a identificar">{num2(t.aIdentificar)}</span>
+                    : <span className="text-muted-foreground">0,00</span>}
                 </td>
-                <td className={TD}>
-                  {ex === 'vinculado' && l.lancamentoId ? (
+                <td className={TD_R} data-testid="liquido-da-liberacao">{!casada ? '' : t === null ? '…' : t.entrou === null ? '' : num2(t.entrou)}</td>
+                <td className={TD} data-testid="situacao-da-liberacao">
+                  {casada ? (
                     <button type="button" className="text-primary hover:underline" onClick={() => onAbrirLancamento(l.lancamentoId!)}
-                      title={`${l.lancamento?.descricao ?? 'lançamento'} · abrir no Financeiro`} data-testid="liberacao-vinculada">↔ {br(l.lancamento?.data ?? l.data)}</button>
-                  ) : ex === 'a_casar' ? <span className="text-amber-700" title="sem lançamento ligado: casa com a entrada quando ela existir">a casar</span>
-                    : <span className="text-muted-foreground" title="não passa pela conta do cliente">sem caixa</span>}
+                      title={`${l.lancamento?.descricao ?? 'lançamento'} · ${br(l.lancamento?.data ?? l.data)} · abrir no Financeiro${t && t.excedente > 0 ? ` · o lançamento passa ${num2(t.excedente)} do valor da liberação` : ''}`}
+                      data-testid="liberacao-vinculada">casada ↔{t && t.excedente > 0 ? <span className="ml-1 text-amber-700">+{num2(t.excedente)}</span> : null}</button>
+                  ) : ex === 'a_casar' ? <span className="text-amber-700" title="sem lançamento ligado: casa com a entrada quando ela existir">a casar</span> : ''}
                 </td>
                 <td className={`${TD} text-right`}>
                   <button type="button" className="mr-1 align-middle text-muted-foreground hover:text-foreground" title="Editar liberação" onClick={() => setEditando(l)}><Pencil className="size-3" /></button>
@@ -183,13 +189,14 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
         </tbody>
         <tfoot data-testid="total-das-liberacoes">
           <tr>
-            <td className={`${TOTAL} sticky bottom-0 z-10`} colSpan={2}>Total{tot ? ` · ${tot.qtde} ${tot.qtde === 1 ? 'liberação' : 'liberações'}` : ''}</td>
+            <td className={`${TOTAL} sticky bottom-0 z-10`} colSpan={3}>Total{tot ? ` · ${tot.qtde} ${tot.qtde === 1 ? 'liberação' : 'liberações'}` : ''}</td>
             <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums`} data-testid="total-liberacoes">{tot ? num2(tot.liberado) : '…'}</td>
-            <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums`}>{tot ? num2(tot.entrou) : '…'}</td>
-            <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums ${tot && (tot.aIdentificar > 0 || tot.excedente > 0) ? 'text-amber-700' : ''}`} data-testid="total-a-identificar">
-              {tot ? (tot.aIdentificar > 0 ? num2(tot.aIdentificar) : tot.excedente > 0 ? `+${num2(tot.excedente)} a mais` : '0,00') : '…'}
+            <td className={`${TOTAL} sticky bottom-0 z-10`} />
+            <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums`} data-testid="total-liquido">{tot ? num2(tot.entrou) : '…'}</td>
+            <td className={`${TOTAL} sticky bottom-0 z-10 ${tot && tot.aIdentificar > 0 ? 'text-amber-700' : ''}`} colSpan={2} data-testid="total-a-identificar"
+              title="bruto que ainda não tem entrada explicada: as liberações a casar e os descontos das casadas">
+              {tot && tot.aIdentificar > 0 ? <>a identificar <span className="tabular-nums">{num2(tot.aIdentificar)}</span></> : ''}
             </td>
-            <td className={`${TOTAL} sticky bottom-0 z-10`} colSpan={2} />
           </tr>
         </tfoot>
       </table>
@@ -412,7 +419,24 @@ function LiberacaoDialog({ api, atual, aoFechar, clienteId }: { api: ApiDoContra
     ...(captacoes ?? []).map((c) => ({ value: c.id, label: `${br(c.data)} · ${reais(c.valor)} · ${c.descricao ?? '—'}`, sub: c.conta ?? undefined, busca: String(c.valor) })),
   ];
   const opcoesContrato: OpcaoSearchable[] = (contratos ?? []).map((c) => ({ value: c.id, label: c.numero || 'sem nº', sub: c.descricao ?? undefined }));
-  const opcoesDest: OpcaoSearchable[] = (api.destinacoes ?? []).map((d) => ({ value: d.id, label: d.descricao }));
+  /* FIN-FINANC-LAYOUT-02 (b): a destinação que não existe se cria AQUI ('+ Criar "Plantadeira…"'), sem sair do modal — a mesma RPC do
+     "+ destinação", com orçado 0 (o orçado se ajusta em Destinações). A criada entra na lista na hora (a releitura vem depois). */
+  const [criadas, setCriadas] = useState<{ id: string; descricao: string }[]>([]);
+  const [faixaDest, setFaixaDest] = useState<FaixaDoCriar | null>(null);
+  const todasDest = [...(api.destinacoes ?? []), ...criadas.filter((c) => !(api.destinacoes ?? []).some((d) => d.id === c.id))];
+  const opcoesDest: OpcaoSearchable[] = todasDest.map((d) => ({ value: d.id, label: d.descricao }));
+  const criarDestinacao: CriarComTexto = {
+    frase: (texto) => texto.trim(),
+    jaExiste: (texto) => todasDest.some((d) => normalizarParaBusca(d.descricao) === normalizarParaBusca(texto)),
+    aoCriar: async (texto) => {
+      const r = await api.criarDestinacao(texto.trim(), 0);
+      if ('erro' in r) { setFaixaDest({ texto, mensagem: r.erro, opcoes: [], mesmoAssim: false }); return null; }
+      setFaixaDest(null);
+      setCriadas((c) => [...c, { id: r.id, descricao: texto.trim() }]);
+      return r.id;
+    },
+    faixa: faixaDest,
+  };
 
   const gravar = async () => {
     if (!data) { setErro('Informe a data da liberação.'); return; }
@@ -453,7 +477,8 @@ function LiberacaoDialog({ api, atual, aoFechar, clienteId }: { api: ApiDoContra
           <SearchableSelect value={contratoId} onValueChange={setContratoId} options={opcoesContrato} semTodos dense placeholder="Escolha o contrato que esta liberação liquida" />
         </Rotulo>
       )}
-      <Rotulo texto="Destinação"><SearchableSelect value={destinacaoId} onValueChange={setDestinacaoId} options={opcoesDest} semTodos dense placeholder="sem destinação" /></Rotulo>
+      <Rotulo texto="Destinação"><SearchableSelect value={destinacaoId} onValueChange={setDestinacaoId} options={opcoesDest} semTodos dense placeholder="sem destinação"
+        criarComTexto={criarDestinacao} /></Rotulo>
       <Rotulo texto="Observação"><Input value={observacao} onChange={(e) => setObservacao(e.target.value)} className="h-[24px] text-[11px]" /></Rotulo>
       <p className="mt-1 text-[10px] leading-[14px] text-muted-foreground">
         {forma === 'conta' ? 'Em conta: aponta para a entrada que já existe no Financeiro (não cria lançamento). Sem ela, fica "a casar".'

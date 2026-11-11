@@ -145,8 +145,11 @@ describe('(a) FIN-PARCELA-VALOR-ZERO-01 — parcela de valor zero não vence', (
        (o check-ui-cortes acusava "vaza: pede 82px, tem 55" no contrato-parcela-zero) e os gestos (lápis) moram nela; nada de overflow */
     expect(fonte).toContain('<td colSpan={p.semValor ? 2 : undefined} className={`${TD_V4} ${SEP_TD}`}>');
     expect(fonte).toContain('<div className="ml-[6px] min-w-0 flex-1" data-testid="lancamento-da-parcela">{gestos}</div>');
-    expect(fonte).toMatch(/\{!p\.semValor && \(\s*<td className=\{`\$\{TD_V4\} !overflow-visible !whitespace-normal py-\[3px\]`\} data-testid="lancamento-da-parcela"/);
+    /* FIN-FINANC-LAYOUT-02: a célula Lançamento é uma linha só (a régua da linha, 22px), nada transborda para a vizinha */
+    expect(fonte).toMatch(/\{!p\.semValor && \(\s*<td className=\{TD_V4\} data-testid="lancamento-da-parcela">/);
     expect(fonte).not.toContain("'relative z-[1] !overflow-visible'");
-    expect(fonte).toContain('{!p.lancamentoId && !p.lancamentoJurosId && !p.semValor && <span className={COR_V4.rotulo}>—</span>}');
+    /* FIN-FINANC-LAYOUT-02: sem lançamento nenhum = "sem lançamento" laranja (o porquê no title); a de valor zero não diz isso */
+    expect(fonte).toContain('{semLanc && <span className={COR_V4.laranja}>{ROTULO_SEM_LANCAMENTO}</span>}');
+    expect(fonte).toContain('const semLanc = semLancamento(p) || (nenhum && !p.semValor);');
   });
 });
