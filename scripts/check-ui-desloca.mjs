@@ -315,6 +315,13 @@ const CENARIOS = [
   { nome: 'valor-rebanho-snapshot', url: 'tela=valor-rebanho&barra=32',
     antes: async (p) => { await p.locator('[data-testid="faixa-snapshot"]').waitFor(); await espera(p, 600); },
     estados: [['jul validado', botao(/^Jul$/)], ['ago cadeia quebrada', botao(/^⚠?Ago$/)], ['set invalidado', botao(/^⚠?Set$/)], ['out sem snapshot', botao(/^Out$/)]] },
+  /* FECH-DOCS-02 — o topo do "Documentos do mês" é preso: trocar de mês (25 → 0 → 3 → 25 documentos) não move o título, as setas, o mês
+     nem a área de soltar (só o rodapé desce ou sobe com a lista, de propósito: D1b a) */
+  { nome: 'documentos-do-mes-topo', url: 'tela=documentos-do-mes&n=25', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '[data-testid="titulo-documentos-do-mes"], [data-testid="area-documento-do-mes"]',
+    antes: async (p) => { await p.locator('[data-testid="documentos-do-mes"]').waitFor(); await espera(p, 900); },
+    estados: [['nov (0)', clicar('[data-testid="mes-seguinte"]')], ['out (25)', clicar('[data-testid="mes-anterior"]')],
+      ['set (3)', clicar('[data-testid="mes-anterior"]')], ['out de novo', clicar('[data-testid="mes-seguinte"]')]] },
   /* FECH-ROTACAO-01 fatia 3 — no quadro "Onde o lote esteve" do P10A: parte do grupo, marcar um piquete, voltar ao grupo inteiro e pôr um
      pasto em "também esteve em" não movem o botão, os títulos dos blocos nem o rodapé do modal */
   { nome: 'fechamento-grupo-lote', url: 'tela=fechamento-grupo&barra=32', regiao: '[data-testid="lote-quadro"]',

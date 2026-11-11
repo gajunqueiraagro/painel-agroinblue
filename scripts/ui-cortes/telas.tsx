@@ -992,7 +992,10 @@ if (tela === 'mesclar') {
           {q.get('cpr') === '1' && <Segmentado valor="atual" onEscolher={() => {}} altura={24}
             opcoes={[{ valor: 'anterior', rotulo: 'Mês anterior' }, { valor: 'atual', rotulo: 'Mês atual' }, { valor: 'futuro', rotulo: 'Mês futuro' }]} />}
           <SeletorDePeriodo hoje="2026-11-04" valor={valor} onChange={setValor} modo={modo} atividades={atividades} anoMaisAntigo={2020}
-            padrao={{ de: '2026-10-01', ate: '2026-10-31' }} rotuloVazio="Escolher datas" />
+            rotuloVazio="Escolher datas"
+            /* DRE-LAYOUT-04 — o calendário compacto do DRE (`&dre=1`): por mês, sem mês solto e sem "Redefinir" (o DRE não passa `padrao`) */
+            {...(q.get('dre') === '1' ? { compacto: true, porMes: true, atalhosOcultos: ['este-mes', 'mes-passado'] }
+              : { padrao: { de: '2026-10-01', ate: '2026-10-31' } })} />
         </div>
       </div>
     );
@@ -2086,6 +2089,33 @@ if (tela === 'mesclar') {
     montar(<LotesTab />);
   };
   void montarLotes();
+} else if (tela === 'documentos-do-mes') {
+  /* FECH-DOCS-02 — o "Documentos do mês" (dado SINTÉTICO): `&n=` documentos no mês (11 e 25 no gate), tipos do catálogo, nomes do
+     WhatsApp (o pior caso do corte), out/2026; as setas trocam para nov (0 documentos) e set (3). O topo do diálogo é preso: trocar de
+     mês só mexe no rodapé. */
+  const N = Number(q.get('n') ?? '11');
+  const TIPOS = ['Mapa de rebanho', 'Nascimentos', 'Entradas', 'Vendas', 'Transferências', 'Mortes', 'Desmama', 'Engorda e reclassificação',
+    'Pesagem', 'Abate e romaneio', 'Manejo sanitário e vacinação', 'Reprodução (IATF e diagnóstico)', 'Suplementação e trato', 'Chuvas',
+    'Estoque de insumos', 'Relatório do campeiro', 'Outro'].map((nome, k) => ({ id: `t${k}`, nome, grupo: k < 10 ? 'Rebanho' : k < 13 ? 'Manejo' : k < 16 ? 'Campo' : 'Outros', ordem: (k + 1) * 10 }));
+  const doc = (k: number, mes: string) => ({ id: `d-${mes}-${k}`, tipo_id: `t${(k * 5) % 17}`, ano_mes: mes, versao: 1, url: k % 9 === 4 ? null : `cli/f1/${mes}/d${k}.pdf`,
+    nome: k % 3 === 0 ? `WhatsApp Image 2026-10-${String((k % 28) + 1).padStart(2, '0')} at 14.32.${String(k).padStart(2, '0')} (1).jpeg` : `Doc ${k + 1}.pdf`,
+    tamanho_bytes: k % 4 === 0 ? 12_345_678 : 345_678, uploaded_em: `2026-10-${String((k % 28) + 1).padStart(2, '0')}T12:00:00Z` });
+  const DOCS = [...Array.from({ length: N }, (_, k) => doc(k, '2026-10')), ...Array.from({ length: 3 }, (_, k) => doc(k, '2026-09'))];
+  g.__bancoBancada = {
+    from: (t: string, e: { eq: Record<string, unknown> }) => (t === 'catalogo_itens' ? TIPOS
+      : t === 'pecuaria_fechamento_documentos' ? DOCS.filter((d) => d.ano_mes === e.eq.ano_mes) : []),
+  };
+  const montarDocs = async () => {
+    const { DocumentosDoMesDialog } = await import('@/components/pecuaria/DocumentosDoMesDialog');
+    const { useDocumentosDoMes } = await import('@/hooks/useDocumentosDoMes');
+    function Hospedeiro() {
+      const [mes, setMes] = React.useState('2026-10');
+      const api = useDocumentosDoMes('cli', 'f1', mes);
+      return <DocumentosDoMesDialog aberto aoFechar={() => {}} fazendaNome="Faz. Exemplo Sintética do Retiro" anoMes={mes} aoTrocarMes={setMes} api={api} />;
+    }
+    montar(<Hospedeiro />);
+  };
+  void montarDocs();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */

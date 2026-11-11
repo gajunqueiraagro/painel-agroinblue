@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useDocumentosDoMes, type FonteDeDocumentosDoMes } from '@/hooks/useDocumentosDoMes';
 import { arquivoFake, criarFonteFake } from '@/test/fonteDeDocumentosDoMesFake';
 import { CONVITE_DO_DOCUMENTO, FRASE_SEM_DOCUMENTOS } from '@/lib/pecuaria/documentosDoMes';
-import { ALTURA_DA_LINHA, DocumentosDoMesDialog, GRADE_DA_LINHA, LINHAS_A_VISTA } from './DocumentosDoMesDialog';
+import { ALTURA_DA_LINHA, COLUNAS_DA_LINHA, DocumentosDoMesDialog, LINHAS_A_VISTA, PARTES_FIXAS, alturaDaLista } from './DocumentosDoMesDialog';
 import { BotaoDocumentosDoMes } from './BotaoDocumentosDoMes';
 
 function Hospedeiro({ fonte, abrir, aoFechar }: { fonte: FonteDeDocumentosDoMes; abrir?: (u: string) => void; aoFechar?: () => void }) {
@@ -38,13 +38,13 @@ describe('FECH-DOCS-01 — o diálogo', () => {
     expect(linhas()).toHaveLength(0);
   });
 
-  it('soltar grava na hora e a linha nasce em edição; Enter grava espécie + nome', async () => {
+  it('soltar grava na hora e a linha nasce em edição; Enter grava tipo + nome', async () => {
     const { fonte, idas, linhas: banco } = criarFonteFake();
     render(<Hospedeiro fonte={fonte} />);
     await waitFor(() => screen.getByTestId('sem-documentos'));
     await soltar(arquivoFake('WhatsApp Image.pdf'));
     await waitFor(() => expect(linhas()).toHaveLength(1));
-    expect(banco[0]).toMatchObject({ especie: 'outro', nome: 'WhatsApp Image.pdf' }); // já está no banco, antes de qualquer Enter
+    expect(banco[0]).toMatchObject({ tipo_id: 't-outro', nome: 'WhatsApp Image.pdf' }); // já está no banco, antes de qualquer Enter
     expect(linhas()[0].getAttribute('data-edicao')).toBe('sim');
     const campo = screen.getByTestId('edicao-nome') as HTMLInputElement;
     expect(campo.value).toBe('WhatsApp Image.pdf');
@@ -52,7 +52,7 @@ describe('FECH-DOCS-01 — o diálogo', () => {
     fireEvent.change(campo, { target: { value: 'Nascimentos de março' } });
     await act(async () => { fireEvent.keyDown(campo, { key: 'Enter' }); });
     await waitFor(() => expect(linhas()[0].getAttribute('data-edicao')).toBeNull());
-    expect(idas.some(i => i.startsWith('renomear:doc-1:v1:outro:Nascimentos de março'))).toBe(true);
+    expect(idas.some(i => i.startsWith('renomear:doc-1:v1:t-outro:Nascimentos de março'))).toBe(true);
     expect(banco[0]).toMatchObject({ nome: 'Nascimentos de março', versao: 2 });
     expect(screen.getByTestId('cel-nome').textContent).toBe('Nascimentos de março');
     expect(screen.getByTestId('contagem-documentos').textContent).toBe('1 documento');
@@ -70,7 +70,7 @@ describe('FECH-DOCS-01 — o diálogo', () => {
     fireEvent.keyDown(campo, { key: 'Escape' });
     expect(screen.queryByTestId('edicao-nome')).toBeNull();
     expect(idas.some(i => i.startsWith('renomear'))).toBe(false);
-    expect(banco[0]).toMatchObject({ especie: 'outro', nome: 'IMG-0001.jpg', versao: 1 });
+    expect(banco[0]).toMatchObject({ tipo_id: 't-outro', nome: 'IMG-0001.jpg', versao: 1 });
     expect(screen.getByTestId('cel-nome').textContent).toBe('IMG-0001.jpg');
     expect(screen.getByTestId('cel-especie').textContent).toBe('Outro');
     expect(aoFechar).not.toHaveBeenCalled();
@@ -78,14 +78,13 @@ describe('FECH-DOCS-01 — o diálogo', () => {
   });
 
   it('o lápis reabre a edição com o que está gravado', async () => {
-    const { fonte } = criarFonteFake([{ id: 'd1', especie: 'vendas', nome: 'Venda 12 bois.pdf' }]);
+    const { fonte } = criarFonteFake([{ id: 'd1', tipo_id: 't-mortes', nome: 'Mortes de março.pdf' }]);
     render(<Hospedeiro fonte={fonte} />);
-    await waitFor(() => expect(linhas()).toHaveLength(1));
+    await waitFor(() => expect(screen.getByTestId('cel-especie').textContent).toBe('Mortes'));
     expect(screen.queryByTestId('edicao-nome')).toBeNull();
-    expect(screen.getByTestId('cel-especie').textContent).toBe('Vendas');
     fireEvent.click(screen.getByTestId('lapis-documento'));
-    expect((screen.getByTestId('edicao-nome') as HTMLInputElement).value).toBe('Venda 12 bois.pdf');
-    expect(screen.getByTestId('edicao-especie').textContent).toContain('Vendas');
+    expect((screen.getByTestId('edicao-nome') as HTMLInputElement).value).toBe('Mortes de março.pdf');
+    expect(screen.getByTestId('edicao-especie').textContent).toContain('Mortes');
   });
 
   it('cancelar pede motivo no lugar reservado, não apaga, e a linha sai da lista', async () => {
@@ -123,18 +122,79 @@ describe('FECH-DOCS-01 — o diálogo', () => {
     expect(idas.some(i => i.startsWith('inserir'))).toBe(false);
   });
 
-  it('contrato de layout: linha de altura fixa, grade em px, lista de três linhas, lugar do recado sempre presente', async () => {
+  it('contrato de layout: linha de altura fixa, grade em px, a lista na altura das linhas (FECH-DOCS-02), lugar do recado sempre presente', async () => {
     const { fonte } = criarFonteFake([{ id: 'd1' }, { id: 'd2' }, { id: 'd3' }, { id: 'd4' }]);
     render(<Hospedeiro fonte={fonte} />);
     await waitFor(() => expect(linhas()).toHaveLength(4));
-    expect(GRADE_DA_LINHA).toContain('grid-cols-[96px_minmax(0,1fr)_78px_56px_16px_48px]');
+    /* a lista é TABELA de régua fixa: o "…" do tipo e do nome só vale em célula (`td` com o texto inteiro no `title`) */
+    expect(COLUNAS_DA_LINHA).toEqual([138, null, 72, 58, 62, 22, 54]);
+    const tabela = screen.getByTestId('tabela-documentos-do-mes');
+    expect(tabela.tagName).toBe('TABLE');
+    expect(tabela.className).toContain('table-fixed');
+    expect([...tabela.querySelectorAll('col')].map(c => (c as HTMLElement).style.width)).toEqual(['138px', '', '72px', '58px', '62px', '22px', '54px']);
+    for (const l of linhas()) expect(l.tagName).toBe('TR');
+    for (const id of ['cel-nome', 'cel-especie']) for (const c of screen.getAllByTestId(id)) {
+      expect(c.tagName).toBe('TD'); expect(c.getAttribute('title')).toBe(c.textContent);
+    }
     for (const l of linhas()) expect((l as HTMLElement).style.height).toBe(`${ALTURA_DA_LINHA}px`);
     const lista = screen.getByTestId('lista-documentos-do-mes') as HTMLElement;
-    expect(lista.style.height).toBe(`${ALTURA_DA_LINHA * LINHAS_A_VISTA}px`);
+    expect(lista.style.height).toBe(`${ALTURA_DA_LINHA * 4}px`);
     expect(lista.className).toContain('overflow-y-auto');
     expect(screen.getByTestId('lugar-do-recado').className).toContain('h-[26px]');
     expect(screen.getByTestId('area-documento-do-mes').className).toContain('h-6');
-    expect(screen.getByTestId('documentos-do-mes').className).toContain('max-w-md');
+    expect(screen.getByTestId('documentos-do-mes').className).toContain('max-w-[560px]');
+  });
+});
+
+describe('FECH-DOCS-02 — a lista cresce até caber, o tipo é do catálogo', () => {
+  const muitos = (n: number) => Array.from({ length: n }, (_, k) => ({ id: `d${k}`, nome: `doc-${String(k).padStart(2, '0')}.pdf` }));
+  it('a conta: mínimo 3 linhas, linhas × 24 até o teto de 85% da janela menos as partes fixas', () => {
+    expect(PARTES_FIXAS).toBe(130);
+    expect(alturaDaLista(0, 768)).toBe(72);
+    expect(alturaDaLista(11, 768)).toBe(11 * 24);
+    expect(alturaDaLista(25, 768)).toBe(Math.floor((768 * 0.85 - 130) / 24) * 24);   // 21 linhas
+    expect(alturaDaLista(25, 200)).toBe(72);                                         // janela baixa: nunca abaixo de 3
+  });
+  it('11 documentos: os 11 à vista; 25: a lista para no teto e só ela rola, com a barra na calha própria', async () => {
+    const { fonte } = criarFonteFake(muitos(11));
+    const { unmount } = render(<Hospedeiro fonte={fonte} />);
+    await waitFor(() => expect(linhas()).toHaveLength(11));
+    let lista = screen.getByTestId('lista-documentos-do-mes') as HTMLElement;
+    expect(lista.style.height).toBe(`${alturaDaLista(11, window.innerHeight)}px`);
+    expect(lista.style.scrollbarGutter).toBe('stable');
+    unmount();
+    const outra = criarFonteFake(muitos(25));
+    render(<Hospedeiro fonte={outra.fonte} />);
+    await waitFor(() => expect(linhas()).toHaveLength(25));
+    lista = screen.getByTestId('lista-documentos-do-mes') as HTMLElement;
+    expect(lista.style.height).toBe(`${alturaDaLista(25, window.innerHeight)}px`);
+    expect(lista.className).toContain('overflow-y-auto');
+  });
+  it('o topo do diálogo é preso (crescer ou trocar de mês não move o título)', () => {
+    const fonte = readFileSync(resolve(__dirname, 'DocumentosDoMesDialog.tsx'), 'utf8');
+    expect(fonte).toMatch(/className="top-\[7\.5vh\] [^"]*translate-y-0/);
+  });
+  it('a linha: tipo pelo nome do catálogo, data dd/mm/aaaa e tamanho em colunas próprias; ordenada por tipo e nome', async () => {
+    const { fonte } = criarFonteFake([
+      { id: 'a', tipo_id: 't-outro', nome: 'b.pdf', tamanho_bytes: 2048 }, { id: 'b', tipo_id: 't-mapa', nome: 'z.pdf' },
+      { id: 'c', tipo_id: 't-outro', nome: 'a.pdf' }, { id: 'd', tipo_id: 't-chuvas', nome: 'chuva.jpg' },
+    ]);
+    render(<Hospedeiro fonte={fonte} />);
+    await waitFor(() => expect(screen.queryAllByTestId('cel-especie').map(c => c.textContent)).toEqual(['Mapa de rebanho', 'Chuvas', 'Outro', 'Outro']));
+    expect(nomesNaTela()).toEqual(['z.pdf', 'chuva.jpg', 'a.pdf', 'b.pdf']);
+    expect(screen.getAllByTestId('cel-data')[3].textContent).toBe('05/03/2031');
+    expect(screen.getAllByTestId('cel-tamanho')[3].textContent).toBe('2 KB');
+  });
+  it('trocar o tipo grava o tipo_id escolhido', async () => {
+    const { fonte, linhas: banco } = criarFonteFake([{ id: 'd1', nome: 'IMG.pdf' }]);
+    render(<Hospedeiro fonte={fonte} />);
+    await waitFor(() => expect(screen.getByTestId('cel-especie').textContent).toBe('Outro'));
+    fireEvent.click(screen.getByTestId('lapis-documento'));
+    fireEvent.click(within(screen.getByTestId('edicao-especie')).getAllByRole('button')[0]);
+    fireEvent.click(await screen.findByText('Chuvas'));
+    await act(async () => { fireEvent.keyDown(screen.getByTestId('edicao-nome'), { key: 'Enter' }); });
+    await waitFor(() => expect(banco[0]).toMatchObject({ tipo_id: 't-chuvas', versao: 2 }));
+    expect(screen.getByTestId('cel-especie').textContent).toBe('Chuvas');
   });
 });
 

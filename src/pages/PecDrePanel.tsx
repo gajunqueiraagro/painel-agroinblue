@@ -27,7 +27,7 @@ import { formatNum } from '@/lib/calculos/formatters';
 import {
   W_RS, W_HA, W_RS_TOTAL, larguraDoGrupo, FAIXA_TOTAL, VERDE, VERDE_70, VERMELHO, VERMELHO_70, NAVY_TOTAL, BORDA_TOTAL, BORDA_TOTAL_CAB, FUNDO_TOTAL, traco,
   corDoSinal, corDoTotal, corDoApoio, marcadorDoTotal, Marcador, numeroDaCelula, Celula, CelulaUnit, Etiqueta, REGUA_LINHA, tipoDaLinha,
-  fundoDaLinha, CelulaPct, W_PCT, REGUA_RESULTADO, LINHAS_CHAVE, FUNDO_CHAVE, FONTE_CHAVE, corNaGrade,
+  fundoDaLinha, REGUA_RESULTADO, LINHAS_CHAVE, FUNDO_CHAVE, FONTE_CHAVE, corNaGrade,
 } from '@/components/agri/dreGrade';
 import { Segmentado } from '@/components/ui/segmentado';
 import {
@@ -65,7 +65,6 @@ const W_SUB = W_HA;
 const TITULO_ARROBA = 'Divisor por linha: receita e deduções pela @ vendida, reposição pela @ comprada, '
   + 'demais pela @ produzida. Esta coluna não soma.';
 const TITULO_CAB = 'R$ por cabeça média do período, por mês';
-const TITULO_PCT_VBP = 'O R$ da linha em % do VBP desta coluna (do VBP para baixo; nos subitens, vazio)';
 
 /** O que o cabeçalho da sub-coluna explica: a unidade, o período e a ÁREA que dividiu. */
 const tituloHa = (c: ColunaPec) => {
@@ -390,15 +389,12 @@ const larguraUn = (c: ColunaPec) => (c.total ? W_HA : W_SUB);
  * outros: desmarcá-lo deixa a coluna só com as unidades. O delta não entra nessa conta — ele é
  * "Δ R$ + Δ %" e sempre foi.
  */
-/* ⚠ DRE-LEVE-01 (D2–D4): 'vbp' é a COLUNA "% VBP" de cada período — ela substitui a linha extra "% do VBP". Uma por coluna de valor, logo
-   depois do R$ (o % é sempre do R$, qualquer unidade marcada); o Δ não tem. */
-type SlotPec = UnidadePec | 'pct' | 'vbp';
-const comPctVbp = (s: readonly UnidadePec[]): readonly SlotPec[] => {
-  const i = s.indexOf('rs');
-  return i < 0 ? ['vbp', ...s] : [...s.slice(0, i + 1), 'vbp', ...s.slice(i + 1)];
-};
+/* ⚠ DRE-LAYOUT-04 (Gabriel 09/11): a COLUNA "% VBP" do DRE-LEVE-01 SAIU (poluía a grade) — o % do VBP voltou a ser a linha fina logo
+   ABAIXO do número, NA MESMA CÉLULA (`abaixo` da `Celula`, acima da régua; o rótulo no title — ajuste do Chat 09/11), só nas 4 linhas de
+   resultado (`COM_PERCENTUAL`). */
+type SlotPec = UnidadePec | 'pct';
 const slotsDaColuna = (c: ColunaPec, unidades: readonly UnidadePec[]): readonly SlotPec[] =>
-  (c.tipo === 'delta' ? (c.deltaSlots ?? ['rs', 'pct']) : comPctVbp(c.unidade === null ? ['rs'] : unidades));
+  (c.tipo === 'delta' ? (c.deltaSlots ?? ['rs', 'pct']) : (c.unidade === null ? ['rs'] : unidades));
 /* ⚠ A COLUNA DE Δ TEM LARGURA PRÓPRIA: ela carrega "▲ 12,3 %" ou um valor abreviado, nunca os
    milhões de uma coluna de R$ — mas a premissa de que ela é sempre menor ESTAVA ERRADA. Medido no
    fix6: o Δ do Lucro líquido é "-13.899.298,16", 71,4px numa caixa de 64, e o Δ é a diferença de
@@ -410,20 +406,11 @@ const W_DELTA_PCT = 70;
 const W_REFERENCIA = 98;
 const larguraSlot = (s: SlotPec, c: ColunaPec) => {
   if (c.tipo === 'delta') return s === 'pct' ? W_DELTA_PCT : W_DELTA_RS;
-  if (s === 'vbp') return W_PCT;
   if (c.comparacao) return s === 'rs' ? W_REFERENCIA : larguraUn(c);
   return s === 'rs' ? larguraRs(c) : larguraUn(c);
 };
 const rotuloSlot = (s: SlotPec, c: ColunaPec) =>
-  (s === 'pct' ? 'Δ %' : s === 'vbp' ? '% VBP' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
-/** DRE-LEVE-01 (D3) — a linha mostra o % do VBP só do VBP para baixo, e nunca num subitem (filha, filha de grupo, "por hectare"). */
-const pctNaLinha = (def: DefPec, defs: readonly DefPec[]) => {
-  const iVbp = defs.findIndex(d => d.chave === BASE_DO_PERCENTUAL && !d.agrupa);
-  return !def.grupo && iVbp >= 0 && defs.indexOf(def) >= iVbp;
-};
-/** O texto da célula "% VBP" de uma linha numa coluna de valor: o R$ da linha (composta inclusive) ÷ o VBP da coluna. */
-const textoPctVbp = (col: ColunaPec, v: number | null) =>
-  (!col.linhas || col.tipo === 'delta' ? '' : percentual(v, valorNaColuna(col, BASE_DO_PERCENTUAL) ?? 0));
+  (s === 'pct' ? 'Δ %' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
 
 /**
  * A COLUNA META SE MARCA POR UM CONTORNO FINO E CONTÍNUO — fix8, decisão do Gabriel de 23/09.
@@ -767,7 +754,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                     className={cn(!c.total && CINZA_CABECALHO, 'sticky px-[7px] text-right text-[10px] font-normal text-white',
                       c.total ? 'z-40' : 'z-20')}
                     title={sl === 'ha' ? tituloHa(c) : sl === 'arroba' ? TITULO_ARROBA : sl === 'cab' ? TITULO_CAB
-                      : sl === 'vbp' ? TITULO_PCT_VBP : undefined}
+                      : undefined}
                     style={c.total
                       ? { top: ALTURA_NOME, backgroundColor: NAVY_TOTAL,
                           ...(i === 0 ? { borderLeft: BORDA_TOTAL_CAB } : {}),
@@ -839,7 +826,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                `lucro_liquido`, que hoje encerra os dois modos, a base pula para o "Lucro por hectare"
                quando o chip R$/ha está desmarcado, porque é ele que aparece embaixo. */
             const ultima = iDef === defs.length - 1;
-            /* ⚠ DRE-LEVE-01 (D3): a linha extra "% do VBP" saiu — o % é a coluna "% VBP" da própria linha (`pctNaLinha`). */
+            /* ⚠ DRE-LAYOUT-04: o "% do VBP" mora DENTRO da linha de resultado (abaixo do número), não numa linha própria. */
             const comPercentual = false;
             const comPorHectare = (COM_POR_HECTARE.has(def.chave) || !!def.porHectare) && !unidades.includes('ha');
             const comFilhas = aberto && centros.length > 0;
@@ -853,7 +840,6 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
               <Fragment key={idLinha}>
                 <LinhaPec def={def} colunas={colunas} centros={centros} unidades={unidades}
                   aberto={aberto} onAlternar={() => alternar(idLinha)} base={base.linha} zebra={zebra}
-                  comPct={pctNaLinha(def, defs)}
                   onAbrirLista={onAbrirLista} onAbrirDidatico={onAbrirDidatico}
                   onAbrirHistorico={onAbrirHistorico} />
 
@@ -885,10 +871,8 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   );
 }
 
-function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, comPct = false, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirHistorico }: {
+function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirHistorico }: {
   def: DefPec;
-  /** DRE-LEVE-01 (D3) — a coluna "% VBP" tem número nesta linha (do VBP para baixo, fora dos subitens). */
-  comPct?: boolean;
   /** O fundo da filha de um grupo (zebra) — DRE-RESUMIDO-CUSTEIO-01. */
   zebra?: string;
   colunas: readonly ColunaPec[];
@@ -1129,10 +1113,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, comPct
         const abrir = abrirDaColuna(col);
         return (
           <Fragment key={col.chave}>
-            {slots.map((sl, i) => (sl === 'vbp' ? (
-              <CelulaPct key={sl} texto={comPct ? textoPctVbp(col, v) : ''} fundo={fundoForte ?? fundo}
-                estilo={{ ...estiloDoSlot(i), ...(col.total ? { backgroundColor: fundoForte ? undefined : FUNDO_TOTAL } : {}) }} />
-            ) : sl === 'rs' ? (
+            {slots.map((sl, i) => (sl === 'rs' ? (
               /* ⚠ A COR É DA LINHA, EM TODA COLUNA — fix8 item B. A coluna de comparação (a meta ou
                  o ano anterior) saía em `text-muted-foreground`: receita, custo e resultado ficavam
                  todos cinzas, e o operador perdia justamente na coluna que existe para comparar o
@@ -1151,7 +1132,10 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, comPct
                 semSlotMarcador={col.tipo === 'delta'}
                 onAbrir={abrir}
                 estilo={estiloDoSlot(i)}
-                title={porqueDoTraco} />
+                title={porqueDoTraco}
+                abaixo={COM_PERCENTUAL.has(def.chave) && col.tipo !== 'delta'
+                  ? percentual(v, valorNaColuna(col, BASE_DO_PERCENTUAL) ?? 0) : undefined}
+                tituloAbaixo={`${def.rotulo.replace(/^= /, '')} em ${ROTULO_DA_BASE} desta coluna`} />
             ) : (
               <CelulaUnit key={sl}
                 /* ⚠ O Δ% DO GRUPO DIVIDE PELA SOMA DO GRUPO na referencia, nao pela chave-lugar. */
@@ -1197,8 +1181,6 @@ function faixaDoApoio(def: DefPec) {
   };
 }
 
-/* ⚠ DRE-LEVE-01 (D3): a `LinhaPercentual` ("% do VBP" numa linha própria) saiu — o % virou a coluna "% VBP" de cada período. */
-
 /**
  * O LUCRO POR HECTARE — DRE-CASCATA-03a.
  *
@@ -1215,7 +1197,7 @@ function LinhaPorHectare({ def, colunas, unidades, base }: {
 }) {
   const apoio = faixaDoApoio(def);
   /* ⚠ DRE-LEVE-01 (D6): "por hectare" é SUBITEM da linha de cima — a régua da filha (13px, 8,5), rótulo e número em cinza (negativo em
-     vermelho); a coluna "% VBP" fica vazia. */
+     vermelho). */
   const regua = REGUA_LINHA.filha;
   return (
     <tr className={cn(apoio.fundo, 'font-normal')} style={{ height: regua.altura }}>
@@ -1251,9 +1233,7 @@ function LinhaPorHectare({ def, colunas, unidades, base }: {
                   : {}),
                 ...bordaDaMeta(col, i + 1, slots.length, base ? { base: true } : undefined),
               };
-              return sl === 'vbp'
-                ? <CelulaPct key={sl} texto="" fundo={apoio.fundo} estilo={estilo} />
-                : <td key={sl} className={cn(apoio.fundo)} style={estilo} />;
+              return <td key={sl} className={cn(apoio.fundo)} style={estilo} />;
             })}
           </Fragment>
         );
@@ -1358,9 +1338,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
            subtotal acima dele. */
         return (
           <Fragment key={col.chave}>
-            {slots.map((sl, i) => (sl === 'vbp' ? (
-              <CelulaPct key={sl} texto="" fundo="bg-card" estilo={estiloDoSlot(i)} />
-            ) : sl === 'rs' ? (
+            {slots.map((sl, i) => (sl === 'rs' ? (
               <Celula key={sl} valor={v} cor={cor} fonte={regua.fonte} filha
                 bordaEsquerda={!col.total && i === 0 && !ehMeta(col)} total={col.total} fundo="bg-card" onAbrir={abrir}
                 semSlotMarcador={col.tipo === 'delta'}

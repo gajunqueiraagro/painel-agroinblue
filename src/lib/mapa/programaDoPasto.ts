@@ -5,7 +5,7 @@
  * lotes). Nada digitado aqui. Sem lote ou sem programa = null (a tela escreve "—"); mais de um programa no pasto = os nomes, sem repetir.
  */
 import { nomeDe, type NomesDoCadastro } from '@/lib/lotes/lista';
-import { nomeDoLote } from '@/lib/lotes/tipos';
+import { nomeNaTela } from '@/lib/lotes/tipos';
 
 export interface LoteComPrograma { id: string; programaId: string | null }
 export interface ItemComLote { quantidade: number; lote_id?: string | null }
@@ -33,14 +33,15 @@ export function programaDoPasto(loteIds: readonly string[], lotes: readonly Lote
  * o nome da regra única (`nomeDoLote`: carimbo na cria, senão o código) de cada lote do pasto, sem repetir ("7.1 · REC-NOV-01");
  * sem lote cadastrado = null (a tela escreve "—"). O nome no caderno (`lote_mes`) vai no `title`, com o código quando aparece o carimbo.
  */
-export interface LoteComNome { id: string; codigo: string; carimbo: string | null }
+/** L1 (Code 1, 09/11): o nome na tela é o `nomeNaTela` — carimbo; cria sem carimbo = "sem carimbo · definir"; senão o código */
+export interface LoteComNome { id: string; codigo: string; carimbo: string | null; daCria?: boolean }
 
 export function loteDoMapa(loteIds: readonly string[], lotes: readonly LoteComNome[]): string | null {
   const porId = new Map(lotes.map(l => [l.id, l]));
   const nomes: string[] = [];
   for (const id of loteIds) {
     const l = porId.get(id);
-    const n = l ? nomeDoLote(l) : null;
+    const n = l ? nomeNaTela(l) : null;
     if (n && !nomes.includes(n)) nomes.push(n);
   }
   return nomes.length > 0 ? nomes.join(' · ') : null;
@@ -53,6 +54,7 @@ export const SEM_LOTE_CADASTRADO = 'sem lote cadastrado';
 export function tituloDoLoteNoMapa(loteIds: readonly string[], lotes: readonly LoteComNome[], noCaderno: string | null): string {
   const porId = new Map(lotes.map(l => [l.id, l]));
   if (!loteIds.some(id => porId.has(id)) && noCaderno?.trim()) return `${SEM_LOTE_CADASTRADO} — ${noCaderno.trim()}`;
-  const codigos = loteIds.map(id => porId.get(id)).filter((l): l is LoteComNome => !!l && !!l.carimbo?.trim()).map(l => l.codigo);
+  /* o código vai no title sempre que o nome na tela não é ele (o carimbo ou o "sem carimbo · definir") */
+  const codigos = loteIds.map(id => porId.get(id)).filter((l): l is LoteComNome => !!l && nomeNaTela(l) !== l.codigo).map(l => l.codigo);
   return [noCaderno?.trim() ? `No caderno: ${noCaderno.trim()}` : null, codigos.length ? codigos.join(' · ') : null].filter(Boolean).join(' · ');
 }

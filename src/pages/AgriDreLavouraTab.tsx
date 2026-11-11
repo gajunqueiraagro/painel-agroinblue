@@ -57,7 +57,7 @@ import {
 } from '@/hooks/useDrePecuaria';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
-  periodoDoAno, safraCorrentePecuaria, useSafraDeAbertura,
+  periodoDoAno, useAberturaAnoCivil,
 } from '@/components/agri/SeletorPeriodoPecuaria';
 import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
 import { fimDoMes, type AtividadeDaSafra, type Intervalo } from '@/lib/periodo/intervaloDeDatas';
@@ -322,11 +322,10 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
   /* ⚠ O PERÍODO DA PECUÁRIA É O DA CASA (`f_de`/`f_ate`), o mesmo do Financeiro — não um
      seletor novo. Ele mora na URL porque é filtro de período, e é assim que o resto do
      sistema o trata. Abre no mês corrente. */
-  /* ⚠ ABRE NA SAFRA CORRENTE DA PECUÁRIA (§1), não no mês: a pergunta do DRE é o ciclo, e um mês
-     solto mostra uma fatia que nunca fecha com o fechamento de rebanho. `safraCorrentePecuaria`
-     deriva jul→jun do calendário porque o `usePeriodoUrl` exige um padrão no primeiro render,
-     antes de o cadastro de safras chegar. */
-  const [periodo, setPeriodo] = usePeriodoUrl(safraCorrentePecuaria());
+  /* ⚠ DRE-LAYOUT-04 (Gabriel 09/11): ABRE SEMPRE NO ANO CIVIL, de jan ao último mês fechado — não mais na safra (§1 antigo). O
+     `usePeriodoUrl` exige um padrão no primeiro render, antes do banco responder: jan → mês anterior (`periodoDoAno`); a abertura
+     (`useAberturaAnoCivil`) troca pelo último fechado assim que chega. Safra só quando o usuário escolhe. */
+  const [periodo, setPeriodo] = usePeriodoUrl(periodoDoAno(new Date().getFullYear()));
 
   /* ⚠ `replace: true` SEMPRE: trocar de safra ou abrir o drill não é navegação, é filtro. Com
      `push` o botão Voltar do navegador percorreria cada clique de seletor antes de sair da
@@ -405,7 +404,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
    * ⚠ E UMA VEZ SÓ, pelo `aplicada`: sem a trava, trocar o período à mão seria desfeito no render
    * seguinte — o efeito veria a URL diferente do alvo e a puxaria de volta.
    */
-  const aberturaPec = useSafraDeAbertura(ehPec ? clienteId : null);
+  const aberturaPec = useAberturaAnoCivil(ehPec ? clienteId : null);
   const [aberturaAplicada, setAberturaAplicada] = useState(false);
 
   /**
@@ -465,7 +464,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
     if (!ehPec || aberturaAplicada || !aberturaPec) return;
     setAberturaAplicada(true);
     if (searchParams.get('f_de') || searchParams.get('f_ate')) return;
-    setPeriodo(aberturaPec.periodo);
+    setPeriodo(aberturaPec);
   }, [ehPec, aberturaAplicada, aberturaPec, searchParams, setPeriodo]);
 
   const pecDe = ehPec ? anoMes(periodo.de) : null;
@@ -532,7 +531,8 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
   }, [historicoPec, pecDe, pecAte]);
   const anosHistoricoPec = useDrePecuariaLista(
     historicoPec ? clienteId : null, periodosHistoricoPec);
-  const [modoPec, setModoPec] = useState<ModoDre>('resumido');
+  /* ⚠ DRE-LAYOUT-04: abre no DETALHADO (Gabriel 09/11). */
+  const [modoPec, setModoPec] = useState<ModoDre>('detalhado');
   /**
    * OS CHIPS DE Δ E A REFERÊNCIA — DRE-CASCATA-03b/adendo.
    *
@@ -544,7 +544,8 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
    * o `deltasAnos`. Uma referência, um Δ.
    */
   const [deltasPec, setDeltasPec] = useState<readonly ('rs' | 'pct')[]>(
-    () => (ehVisaoMetaLegada(searchParams.get('f_visao')) ? ['rs', 'pct'] : []));
+    /* ⚠ DRE-LAYOUT-04 (Gabriel 09/11): abre comparando com 1 ano e o Δ % LIGADO; o link antigo da meta segue com Δ R$ + Δ %. */
+    () => (ehVisaoMetaLegada(searchParams.get('f_visao')) ? ['rs', 'pct'] : ['pct']));
   /**
    * ESCOLHER A REFERÊNCIA — e o Δ vem junto, porque ele depende dela.
    *
@@ -1089,7 +1090,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
                 {ehPec ? (
                   /* UI-PERIODO-01 — o componente único de período (atalhos + dois calendários), POR MÊS (a DRE é mensal), sem mês solto
                      (o botão "Mês" saiu em 23/09) e com o "Este ano" corrente até o mês fechado (`periodoDoAno`, decisão de 23/09) */
-                  <SeletorDePeriodo testid="dre-pec-periodo" porMes atividades={ATIVIDADE_PEC} atalhosOcultos={SEM_MES_SOLTO}
+                  <SeletorDePeriodo testid="dre-pec-periodo" porMes compacto atividades={ATIVIDADE_PEC} atalhosOcultos={SEM_MES_SOLTO}
                     ajustarAtalho={anoAteMesFechado} valor={intervaloDoPeriodo(periodo)}
                     onChange={(i) => setPeriodo(periodoDoIntervalo(i))} />
                 ) : (

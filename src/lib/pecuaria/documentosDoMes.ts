@@ -7,26 +7,16 @@
  * Este arquivo é o dono PURO do vocabulário, dos rótulos, dos textos e do leitor da linha (sem cast: peça torta = nulo). Quem fala
  * com o banco é `src/hooks/useDocumentosDoMes.ts`.
  *
- * ⚠ O VOCABULÁRIO É ESPELHO DECLARADO do CHECK `ck_pec_fech_doc_especie` (migration 20261027197100): quem mexer num confere o outro.
+ * ⚠ FECH-DOCS-02 (Gabriel 05/11) — O TIPO VEM DO CATÁLOGO: a lista `tipo_documento_mes` do `catalogo_itens` (migration 20261028116230;
+ *   17 tipos globais + os do cliente, pela `fn_catalogo_item_criar`). Não há mais lista fixa aqui: a tela lê os tipos do banco e o documento
+ *   guarda o `tipo_id`. A `especie` da linha virou espelho legado (o gatilho a mantém) e NINGUÉM a lê.
  */
 
-export const ESPECIES_DO_DOCUMENTO = [
-  'mapa_rebanho', 'nascimentos', 'entradas', 'vendas', 'transferencias', 'mortes', 'outro',
-] as const;
-export type EspecieDoDocumento = typeof ESPECIES_DO_DOCUMENTO[number];
+/** Um tipo de documento (item ativo da lista `tipo_documento_mes`, global ou do cliente). */
+export interface TipoDeDocumento { id: string; nome: string; grupo: string | null; ordem: number }
 
-export const ROTULO_DA_ESPECIE: Record<EspecieDoDocumento, string> = {
-  mapa_rebanho: 'Mapa de rebanho',
-  nascimentos: 'Nascimentos',
-  entradas: 'Entradas',
-  vendas: 'Vendas',
-  transferencias: 'Transferências',
-  mortes: 'Mortes',
-  outro: 'Outro',
-};
-
-/** O arquivo solto nasce assim, com o nome que veio (o do WhatsApp); a linha abre em edição para o operador dizer o que é. */
-export const ESPECIE_AO_NASCER: EspecieDoDocumento = 'outro';
+/** O arquivo solto nasce "Outro" (o banco põe; D5): a linha abre em edição para o operador dizer o que é. */
+export const NOME_DO_TIPO_AO_NASCER = 'Outro';
 
 export const BUCKET_PEC_DOCUMENTOS = 'pec-documentos';
 
@@ -37,13 +27,10 @@ export const FRASE_NOME_OBRIGATORIO = 'Informe o nome do documento.';
 export const FRASE_DOCUMENTO_MUDOU = 'O documento mudou em outra tela. Feche e abra de novo.';
 export const MOTIVO_SEM_FAZENDA = 'Selecione uma fazenda para ver os documentos do mês.';
 
-export function ehEspecie(valor: unknown): valor is EspecieDoDocumento {
-  return typeof valor === 'string' && ESPECIES_DO_DOCUMENTO.some(e => e === valor);
-}
-
 export interface DocumentoDoMes {
   id: string;
-  especie: EspecieDoDocumento;
+  /** O item do catálogo (`tipo_id`). */
+  tipoId: string;
   nome: string;
   /** O caminho no bucket; nulo = a linha foi registrada e o arquivo não subiu ("sem arquivo"). */
   url: string | null;
@@ -59,16 +46,16 @@ function ehObjeto(v: unknown): v is Record<string, unknown> {
 /** A linha do banco, sem cast. Peça torta = nulo (a linha não entra na lista; nunca vira "outro" por palpite). */
 export function lerDocumentoDoMes(linha: unknown): DocumentoDoMes | null {
   if (!ehObjeto(linha)) return null;
-  const { id, especie, nome, url, tamanho_bytes: tamanho, uploaded_em: em, versao } = linha;
+  const { id, tipo_id: tipoId, nome, url, tamanho_bytes: tamanho, uploaded_em: em, versao } = linha;
   if (typeof id !== 'string' || !id) return null;
-  if (!ehEspecie(especie)) return null;
+  if (typeof tipoId !== 'string' || !tipoId) return null;
   if (typeof nome !== 'string' || !nome.trim()) return null;
   if (typeof em !== 'string' || !em) return null;
   if (typeof versao !== 'number' || !Number.isInteger(versao)) return null;
   if (url !== null && url !== undefined && typeof url !== 'string') return null;
   if (tamanho !== null && tamanho !== undefined && typeof tamanho !== 'number') return null;
   return {
-    id, especie, nome, url: typeof url === 'string' && url ? url : null,
+    id, tipoId, nome, url: typeof url === 'string' && url ? url : null,
     tamanhoBytes: typeof tamanho === 'number' ? tamanho : null, uploadedEm: em, versao,
   };
 }
@@ -80,6 +67,30 @@ export function lerDocumentosDoMes(linhas: readonly unknown[]): DocumentoDoMes[]
     if (d) lidos.push(d);
   }
   return lidos;
+}
+
+/** Os tipos do banco, sem cast, na ordem da lista (ordem, depois nome). Peça torta fica de fora. */
+export function lerTiposDeDocumento(linhas: readonly unknown[]): TipoDeDocumento[] {
+  const lidos: TipoDeDocumento[] = [];
+  for (const l of linhas) {
+    if (!ehObjeto(l)) continue;
+    const { id, nome, grupo, ordem } = l;
+    if (typeof id !== 'string' || !id || typeof nome !== 'string' || !nome.trim()) continue;
+    lidos.push({ id, nome, grupo: typeof grupo === 'string' && grupo ? grupo : null, ordem: typeof ordem === 'number' ? ordem : 1000 });
+  }
+  return lidos.sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+/** O nome do tipo; tipo que não está na lista (inativo, de outra carga) = "—", nunca um nome inventado. */
+export function nomeDoTipo(tipos: readonly TipoDeDocumento[], tipoId: string): string {
+  return tipos.find(t => t.id === tipoId)?.nome ?? '—';
+}
+
+/** D4 (a): a lista do mês agrupada por tipo — a ordem da lista de tipos, depois o nome; tipo desconhecido vai para o fim. */
+export function ordenarPorTipo(docs: readonly DocumentoDoMes[], tipos: readonly TipoDeDocumento[]): DocumentoDoMes[] {
+  const posicao = new Map(tipos.map((t, i) => [t.id, i]));
+  const pos = (d: DocumentoDoMes) => posicao.get(d.tipoId) ?? tipos.length;
+  return [...docs].sort((a, b) => pos(a) - pos(b) || a.nome.localeCompare(b.nome, 'pt-BR'));
 }
 
 /** `{cliente}/{fazenda}/{AAAA-MM}/{id}.{ext}` — a PRIMEIRA pasta é o cliente (é o que a policy do bucket confere), e a chave é o
@@ -98,15 +109,11 @@ export function textoDoTamanho(bytes: number | null): string {
   return `${numero0.format(Math.max(1, Math.round(bytes / 1024)))} KB`;
 }
 
-/** O dia em que o arquivo entrou, "dd/mm", na data LOCAL de quem olha. Instante ilegível = "—". */
-export function dataCurtaDoEnvio(iso: string): string {
+/** O dia em que o arquivo entrou, "dd/mm/aaaa" (a regra da casa), na data LOCAL de quem olha. Instante ilegível = "—". */
+export function dataDoEnvio(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-export function dataETamanho(doc: Pick<DocumentoDoMes, 'uploadedEm' | 'tamanhoBytes'>): string {
-  return `${dataCurtaDoEnvio(doc.uploadedEm)} · ${textoDoTamanho(doc.tamanhoBytes)}`;
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'] as const;

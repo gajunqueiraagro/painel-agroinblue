@@ -131,7 +131,7 @@ describe('as telas do passo 2 ligadas ao componente', () => {
   const ler = (f: string) => readFileSync(resolve(__dirname, '../..', f), 'utf8');
   it('DRE pecuária: SeletorDePeriodo porMes, sem os atalhos de mês, com a regra do ano corrente; o seletor antigo saiu da tela', () => {
     const dre = ler('pages/AgriDreLavouraTab.tsx');
-    expect(dre).toMatch(/<SeletorDePeriodo testid="dre-pec-periodo" porMes atividades=\{ATIVIDADE_PEC\} atalhosOcultos=\{SEM_MES_SOLTO\}\s+ajustarAtalho=\{anoAteMesFechado\}/);
+    expect(dre).toMatch(/<SeletorDePeriodo testid="dre-pec-periodo" porMes compacto atividades=\{ATIVIDADE_PEC\} atalhosOcultos=\{SEM_MES_SOLTO\}\s+ajustarAtalho=\{anoAteMesFechado\}/);
     expect(dre).toContain("const SEM_MES_SOLTO: readonly string[] = ['este-mes', 'mes-passado'];");
     expect(dre).toContain("(id === 'este-ano' ? intervaloDoPeriodo(periodoDoAno(");
     expect(dre).not.toMatch(/<SeletorPeriodoPecuaria/);

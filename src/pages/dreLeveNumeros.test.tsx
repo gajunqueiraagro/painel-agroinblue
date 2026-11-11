@@ -135,12 +135,19 @@ export function rotuloLimpo(texto: string): string {
   }
   return t;
 }
-const textoDaCelula = (td: Element) => (td.textContent ?? '').replace(/[▲▼]/g, '').trim();
+/* DRE-LAYOUT-04: o % do VBP abaixo do número (`data-pct-abaixo`) não é o número — sai do texto da célula e é lido à parte */
+const textoDaCelula = (td: Element) => {
+  const sub = td.querySelector('[data-pct-abaixo]')?.textContent ?? '';
+  const t = (td.textContent ?? '');
+  return (sub && t.endsWith(sub) ? t.slice(0, -sub.length) : t).replace(/[▲▼]/g, '').trim();
+};
+const pctAbaixo = (td: Element) => (td.querySelector('[data-pct-abaixo]')?.textContent ?? '').trim();
 
-export interface Leitura { linhas: Record<string, string[]>; pct: Record<string, string[]> }
+export interface Leitura { linhas: Record<string, string[]>; pct: Record<string, string[]>; abaixo?: Record<string, string[]> }
 export function lerGrade(raiz: ParentNode): Leitura {
   const linhas: Record<string, string[]> = {};
   const pct: Record<string, string[]> = {};
+  const abaixo: Record<string, string[]> = {};
   let pai = '';
   for (const tr of raiz.querySelectorAll('tbody tr')) {
     const tds = [...tr.querySelectorAll('td')];
@@ -151,10 +158,11 @@ export function lerGrade(raiz: ParentNode): Leitura {
     for (let n = 2; chave in linhas; n++) chave = `${APOIO.test(rot) ? `${pai} › ${rot}` : rot} #${n}`;
     const resto = tds.slice(1);
     linhas[chave] = resto.filter(td => !td.hasAttribute('data-pct')).map(textoDaCelula);
+    if (resto.some(td => td.querySelector('[data-pct-abaixo]'))) abaixo[chave] = resto.filter(td => !td.hasAttribute('data-pct')).map(pctAbaixo);
     const daPct = resto.filter(td => td.hasAttribute('data-pct')).map(textoDaCelula).filter(Boolean);
     if (daPct.length) pct[chave] = daPct;
   }
-  return { linhas, pct };
+  return { linhas, pct, abaixo };
 }
 
 /* ─────────────── os casos ─────────────── */
@@ -208,6 +216,23 @@ describe('DRE-LEVE-01: os números de cada linha são os de antes', () => {
     const antes: Record<string, Leitura> = JSON.parse(readFileSync(ARQUIVO, 'utf-8'));
     const a = antes[caso.nome];
     expect(a, 'o caso existe no arquivo de antes').toBeDefined();
+    /* ⚠ DRE-LAYOUT-04 (Gabriel 09/11 + ajuste do Chat 10:25): NA PECUÁRIA o % do VBP fica ABAIXO DO NÚMERO, na mesma célula (a coluna
+       saiu) — então a grade é a de ANTES do DRE-LEVE-01 linha por linha, com os mesmos números, e o que cada linha "› % do VBP" de antes
+       mostrava está agora abaixo do número da linha de cima, célula por célula; o do Lucro líquido é novo. */
+    if (caso.nome.startsWith('Pecuária')) {
+      const ehPct = (k: string) => PCT.test(k.split(' › ')[1]?.replace(/ #\d+$/, '') ?? '');
+      const semPct = Object.keys(a.linhas).filter(k => !ehPct(k));
+      expect(Object.keys(l.linhas)).toEqual(semPct);
+      for (const k of semPct) expect(l.linhas[k], k).toEqual(a.linhas[k]);
+      for (const k of Object.keys(a.linhas).filter(ehPct)) {
+        const pai = k.split(' › ')[0];
+        expect(l.abaixo?.[pai], `${pai} · %`).toEqual(a.linhas[k]);
+      }
+      expect(Object.keys(l.abaixo ?? {}).filter(k => !Object.keys(a.linhas).includes(`${k} › % do VBP`))).toEqual(
+        Object.keys(l.abaixo ?? {}).filter(k => k.startsWith('Lucro líquido')));
+      expect(Object.keys(l.pct)).toHaveLength(0);
+      return;
+    }
     const chavesAntes = Object.keys(a.linhas).filter(k => !PCT.test(k.split(' › ')[1] ?? ''));
     /* a linha extra de % não existe mais: o % é só coluna */
     expect(Object.keys(l.linhas).some(k => PCT.test(k.split(' › ')[1] ?? ''))).toBe(false);

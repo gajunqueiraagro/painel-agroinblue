@@ -363,3 +363,42 @@ export function useSafraDeAbertura(clienteId: string | null | undefined) {
     };
   }, [safras, limites]);
 }
+
+/**
+ * A ABERTURA DO DRE DA PECUÁRIA — DRE-LAYOUT-04 (Gabriel 09/11): SEMPRE o ANO CIVIL, de janeiro até o ÚLTIMO MÊS FECHADO.
+ *
+ * ⚠ "FECHADO" É O FECHAMENTO DO VALOR DO REBANHO (`valor_rebanho_fechamento`, status 'fechado') — o mesmo que o DRE usa como ponta da
+ *   variação (a `fn_dre_pecuaria_patrimonio` lê os itens dele; medido 09/11: cabeçalho e itens são as MESMAS 667 fazenda-mês).
+ * ⚠ GLOBAL = O ÚLTIMO MÊS FECHADO EM TODAS AS FAZENDAS: o menor dos "últimos" entre as fazendas que têm fechamento no ano; fazenda sem
+ *   nenhum fechamento no ano (sem gado, vendida) não segura o período.
+ * ⚠ O ANO é o do fechamento mais recente do cliente: em janeiro, sem nada fechado no ano novo, abre jan–dez do ano anterior.
+ * Safra e outros períodos só quando o usuário escolhe. Sem fechamento nenhum: `null` (a tela fica no padrão).
+ */
+export function anoCivilAteOUltimoFechado(fechados: readonly { fazenda_id: string; ano_mes: string }[]): Periodo | null {
+  const ultimo = new Map<string, string>();
+  for (const f of fechados) {
+    const u = ultimo.get(f.fazenda_id);
+    if (u === undefined || f.ano_mes > u) ultimo.set(f.fazenda_id, f.ano_mes);
+  }
+  const ultimos = [...ultimo.values()];
+  if (ultimos.length === 0) return null;
+  const ano = ultimos.reduce((a, b) => (b > a ? b : a)).slice(0, 4);
+  const ate = ultimos.filter(u => u >= `${ano}-01`).reduce((a, b) => (b < a ? b : a));
+  return ordenar({ de: ponto(`${ano}-01`), ate: ponto(ate) });
+}
+
+/** O leitor da abertura: os fechamentos do valor do rebanho dos últimos dois anos (uma linha por fazenda e mês). */
+export function useAberturaAnoCivil(clienteId: string | null | undefined): Periodo | null {
+  const { data } = useQuery({
+    queryKey: ['pec-abertura-ano-civil', clienteId ?? ''],
+    enabled: !!clienteId,
+    queryFn: async () => {
+      const desde = `${new Date().getFullYear() - 2}-01`;
+      const { data: linhas, error } = await (supabase as any).from('valor_rebanho_fechamento')
+        .select('fazenda_id, ano_mes').eq('cliente_id', clienteId).eq('status', 'fechado').gte('ano_mes', desde);
+      if (error) throw error;
+      return (linhas ?? []).map((l: { fazenda_id: string; ano_mes: string }) => ({ fazenda_id: l.fazenda_id, ano_mes: l.ano_mes }));
+    },
+  });
+  return useMemo(() => (data ? anoCivilAteOUltimoFechado(data) : null), [data]);
+}

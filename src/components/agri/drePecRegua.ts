@@ -105,7 +105,7 @@ export const ROTULO_DA_BASE = '% do VBP';
 
 /** As linhas que ganham a linha de % logo abaixo. */
 export const COM_PERCENTUAL: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>([
-  'margem', 'resultado_operacional', 'resultado_com_mercado',
+  'margem', 'resultado_operacional', 'resultado_periodo', 'resultado_com_mercado',
 ]);
 
 /**

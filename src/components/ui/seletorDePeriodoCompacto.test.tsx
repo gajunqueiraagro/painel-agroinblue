@@ -52,6 +52,32 @@ describe('o popup compacto', () => {
     expect(screen.getByTestId('seletor-de-periodo-aplicar').parentElement?.className).toContain('h-[30px]');
     expect([...pop.querySelectorAll('[data-atalho]')].map((b) => b.textContent)).toContain('Esta safra');
   });
+  it('DRE-LAYOUT-04 — `compacto` (o DRE): 360 px, dias 24 × 20 a 10 px, atalhos numa linha a 9,5 px com os rótulos curtos e o nome no title', () => {
+    render(<SeletorDePeriodo hoje={HOJE} valor={{ de: '2026-10-01', ate: '2026-10-31' }} onChange={vi.fn()} atividades={['pecuaria']} porMes compacto
+      atalhosOcultos={['este-mes', 'mes-passado']} />);
+    fireEvent.click(screen.getByTestId('seletor-de-periodo'));
+    const pop = screen.getByTestId('seletor-de-periodo-popup');
+    expect(pop.className).toContain('w-[360px]');
+    const dia = pop.querySelector('[data-dia="2026-10-15"]');
+    expect(dia?.className).toContain('h-[20px] w-[24px]');
+    expect(dia?.className).toContain('text-[10px]');
+    expect(dia?.parentElement?.className).toContain('grid-cols-[repeat(7,24px)]');
+    const chips = [...pop.querySelectorAll('[data-atalho]')];
+    expect(chips[0].parentElement?.className).toContain('flex-nowrap');
+    expect(chips.map((b) => b.textContent)).toEqual(['Este ano', 'Último ano', 'Esta safra', 'Última safra', '12 meses', 'Ano…']);
+    expect(pop.querySelector('[data-atalho="ultimos-12"]')?.getAttribute('title')).toBe('Últimos 12 meses');
+    expect(chips[0].className).toContain('text-[9.5px]');
+    expect(screen.getByTestId('seletor-de-periodo-aplicar').parentElement?.className).toContain('h-[26px]');
+  });
+  it('a DRE pecuária usa o compacto; o Financeiro não', () => {
+    const ler = (f: string) => readFileSync(resolve(__dirname, '../..', f), 'utf8');
+    expect(ler('pages/AgriDreLavouraTab.tsx')).toContain('<SeletorDePeriodo testid="dre-pec-periodo" porMes compacto');
+    for (const f of ['components/financeiro-v2/PainelPeriodoTab.tsx', 'components/financeiro-v2/ContasPagarReceberTab.tsx']) {
+      const t = ler(f);
+      const usa = t.slice(t.indexOf('<SeletorDePeriodo testid="'), t.indexOf('/>', t.indexOf('<SeletorDePeriodo testid="')));
+      expect(usa).not.toContain('compacto');
+    }
+  });
   it('ancorado ABAIXO do botão (side bottom, 4 px)', () => {
     const src = readFileSync(resolve(__dirname, 'seletor-de-periodo.tsx'), 'utf8');
     expect(src).toContain('<PopoverContent align="start" side="bottom" sideOffset={4}');
