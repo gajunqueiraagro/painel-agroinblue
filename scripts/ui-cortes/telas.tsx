@@ -1978,11 +1978,19 @@ if (tela === 'mesclar') {
   }
   /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
   /* L1 (Gabriel 09/11) — `&cria=1`: o P10A inteiro (as 2 categorias) no lote da cria SEM carimbo (l-vp4): "sem carimbo · definir" no campo Lote, no seletor e no popup */
-  const COM_CRIA = q.get('cria') === '1';
+  /* L1-CARIMBO-SO-COM-BEZERRO-01 (Gabriel 10/11, NJ · Pureza · P10A) — `&cria=1` é o P10A SEM bezerro (caderno "VC MOJADA"): o nome do
+     caderno em cinza, nunca o aviso; `&cria=bezerro`: o mesmo P10A com Mamotes F ao pé — "sem carimbo · definir" */
+  const COM_BEZERRO = q.get('cria') === 'bezerro';
+  const COM_CRIA = q.get('cria') === '1' || COM_BEZERRO;
   const COM_LOTES = v === 'lotes' || COM_CRIA;
   if (COM_LOTES) {
     Object.assign(ITENS[0], { lote_id: COM_CRIA ? 'l-vp4' : 'l-dm6' });
     ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: COM_CRIA ? 'l-vp4' : 'l-px2' });
+  }
+  if (COM_CRIA) Object.assign(CARDS[0], { lote_mes: 'VC MOJADA' });
+  if (COM_BEZERRO) {
+    CATS.push({ id: 'c-mamf', codigo: 'mamotes_f', nome: 'Mamotes F', ordem_exibicao: 3 });
+    ITENS.push({ ...item('fa', 'c-mamf', 12, 35), lote_id: 'l-vp4' });
   }
   /* MAPA-LOTES-01 (C2) — `&v=mapa`: o Fechamento abre na vista Mapa (a escolha guardada); os polígonos SINTÉTICOS de 5 dos 6 pastos
      (o P12 fica sem desenho: vai para a faixa) e a área total por baixo */
@@ -2026,6 +2034,11 @@ if (tela === 'mesclar') {
         ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }, { id: 'g19', fazenda_id: 'f1', nome: 'P19A', ativo: true, pasto_origem_id: 'p19a' }] : []),
         ...(COM_PIQUETES7 ? [{ id: 'g7', fazenda_id: 'f1', nome: 'P7', ativo: true, pasto_origem_id: 'p7' }, { id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }] : [])], e)
       : t === 'fechamento_pastos' ? CARDS.filter((c) => (!e.eq.ano_mes || c.ano_mes === e.eq.ano_mes) && (!COM_PIQUETES7 || !e.eq.pasto_id || c.pasto_id === e.eq.pasto_id))
+      /* L1-CARIMBO-SO-COM-BEZERRO-01 — os itens do mês com o pasto embutido (o `useLotesDaFazenda` lê o bezerro e o caderno do lote) */
+      : t === 'fechamento_pasto_itens' && e.eq['fechamento_pastos.ano_mes'] ? ITENS.flatMap((i) => {
+        const c = CARDS.find((x) => x.id === i.fechamento_id);
+        return c && c.ano_mes === e.eq['fechamento_pastos.ano_mes'] && i.quantidade > 0 ? [{ ...i, fechamento_pastos: { fazenda_id: c.fazenda_id, ano_mes: c.ano_mes, lote_mes: c.lote_mes } }] : [];
+      })
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
       : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC
       : t === 'fazenda_geometrias' ? GEOS

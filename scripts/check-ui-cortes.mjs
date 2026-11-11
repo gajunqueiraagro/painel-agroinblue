@@ -922,6 +922,8 @@ const CENARIOS = [
           await p.locator('[data-testid="caderno-voltar-texto"]').waitFor(); await p.waitForTimeout(300); } },
       /* L1 (Gabriel 09/11) — a cria SEM carimbo no P10A (`&cria=1`): o campo Lote e o painel (o seletor) com "sem carimbo · definir" */
       { nome: 'fechamento-grupo-campo-lote-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      /* L1-CARIMBO-SO-COM-BEZERRO-01 — o P10A com Mamotes F ao pé (`&cria=bezerro`): o aviso segue, sem cortar */
+      { nome: 'fechamento-grupo-campo-lote-cria-bezerro', url: URL + '&cria=bezerro', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
       { nome: 'fechamento-grupo-campo-lote-painel-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
           await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },

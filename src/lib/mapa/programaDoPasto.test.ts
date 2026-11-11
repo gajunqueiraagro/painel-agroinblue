@@ -42,8 +42,9 @@ describe('a coluna Lote do Mapa do rebanho (MAPA-REBANHO-L2)', () => {
   it('cria com carimbo = o carimbo; sem carimbo = o código (a regra única nomeDoLote); dois lotes = os dois, sem repetir', () => {
     expect(loteDoMapa(['l-cri'], L)).toBe('7.1');
     expect(loteDoMapa(['l-sem'], L)).toBe('CRI-VAC-NEL-02');
-    /* L1 — a CRIA sem carimbo (o CRI-VAC-NEL-01 da Monterrey): "sem carimbo · definir", nunca o "-01"; o código no title */
-    const cria = [{ id: 'l-cria', codigo: 'CRI-VAC-NEL-01', carimbo: null, daCria: true }];
+    /* L1 — a CRIA sem carimbo (o CRI-VAC-NEL-01 da Monterrey): "sem carimbo · definir", nunca o "-01"; o código no title.
+       L1-CARIMBO-SO-COM-BEZERRO-01 (Code 1): o aviso só com bezerro ao pé — este lote tem */
+    const cria = [{ id: 'l-cria', codigo: 'CRI-VAC-NEL-01', carimbo: null, daCria: true, comBezerro: true }];
     expect(loteDoMapa(['l-cria'], cria)).toBe(FRASE_SEM_CARIMBO);
     expect(tituloDoLoteNoMapa(['l-cria'], cria, 'Vacas')).toBe('No caderno: Vacas · CRI-VAC-NEL-01');
     expect(loteDoMapa(['l-cri', 'l-rec', 'l-cri'], L)).toBe('7.1 · REC-NOV-NEL-01');

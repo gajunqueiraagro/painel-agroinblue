@@ -55,6 +55,10 @@ export interface LoteDaLista {
   conferir: string | null;
   /** L1 (Gabriel 09/11) — o lote leva carimbo (a regra do assistente, `aceitaCarimbo`), lida no `useLotesDaFazenda`; sem a leitura = não */
   daCria?: boolean;
+  /** L1-CARIMBO-SO-COM-BEZERRO-01 (Gabriel 10/11) — algum pasto do lote no mês tem Mamotes M ou F com cabeça; sem a leitura = não */
+  comBezerro?: boolean;
+  /** o "Nome no caderno" dos pastos do lote no mês (sem repetir), senão o nome do campeiro; mostrado na cria sem bezerro e sem carimbo */
+  noCaderno?: string | null;
 }
 
 /** Os campos que `fn_lote_salvar` aceita em `p_campos` (só as chaves que vierem mudam). */
@@ -96,11 +100,19 @@ export function nomeDoLote(l: { codigo: string; carimbo: string | null }): strin
 }
 
 export const FRASE_SEM_CARIMBO = 'sem carimbo · definir';
+type NomeDoLote = { codigo: string; carimbo: string | null; daCria?: boolean; comBezerro?: boolean; noCaderno?: string | null };
 /** L1 (Gabriel 09/11 07:58) — o nome no POPUP, na LISTA e no SELETOR: a cria mostra o carimbo; a cria SEM carimbo mostra
- *  "sem carimbo · definir" (o código vai no title/ao lado); fora da cria, o código. Frases e o "Usar o lote" seguem com `nomeDoLote`. */
-export function nomeNaTela(l: { codigo: string; carimbo: string | null; daCria?: boolean }): string {
-  return l.carimbo?.trim() || (l.daCria ? FRASE_SEM_CARIMBO : l.codigo);
+ *  "sem carimbo · definir" (o código vai no title/ao lado); fora da cria, o código. Frases e o "Usar o lote" seguem com `nomeDoLote`.
+ *  L1-CARIMBO-SO-COM-BEZERRO-01 (Gabriel 10/11, NJ · Pureza · P10A): o aviso só com bezerro ao pé (Mamotes M/F no mês); a cria sem
+ *  bezerro e sem carimbo mostra o nome do caderno (cinza), senão o código — nunca pede carimbo. */
+export function nomeNaTela(l: NomeDoLote): string {
+  const carimbo = l.carimbo?.trim();
+  if (carimbo) return carimbo;
+  if (!l.daCria) return l.codigo;
+  return l.comBezerro ? FRASE_SEM_CARIMBO : l.noCaderno?.trim() || l.codigo;
 }
+/** O nome na tela é o do caderno (a tela o mostra em cinza). */
+export const nomeEhDoCaderno = (l: NomeDoLote): boolean => nomeNaTela(l) !== l.codigo && nomeNaTela(l) === l.noCaderno?.trim();
 /** O código aparece ao lado (title, cinza) quando o nome na tela não é ele. */
-export const codigoAoLado = (l: { codigo: string; carimbo: string | null; daCria?: boolean }): string | null =>
+export const codigoAoLado = (l: NomeDoLote): string | null =>
   (nomeNaTela(l) === l.codigo ? null : l.codigo);

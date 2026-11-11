@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { loteDaLinha } from '@/lib/lotes/lista';
-import { marcarDaCria } from '@/lib/lotes/assistente';
+import { marcarBezerro, marcarDaCria, type ItemDoMes } from '@/lib/lotes/assistente';
 import { cadastroDaLinha, lerCadastrosDoLote } from '@/hooks/useCadastrosDoLote';
 import type { CadastroDoLote, LoteDaLista } from '@/lib/lotes/tipos';
 
@@ -21,19 +21,51 @@ export function notificarLotesMudaram(fazendaId: string): void {
   for (const cb of [...subs]) cb();   // cópia: um callback pode desmontar durante a volta
 }
 
+const campo = (o: object, k: string): unknown => Reflect.get(o, k);
+const textoDe = (o: object, k: string): string | null => { const v = campo(o, k); return typeof v === 'string' && v !== '' ? v : null; };
+
+/** Uma linha dos itens do mês (com o pasto embutido) → `ItemDoMes`; sem fechamento, categoria ou quantidade = nula. */
+function itemDoMes(r: unknown): ItemDoMes | null {
+  if (typeof r !== 'object' || r === null) return null;
+  const fechamentoId = textoDe(r, 'fechamento_id'); const categoriaId = textoDe(r, 'categoria_id'); const q = Number(campo(r, 'quantidade'));
+  if (!fechamentoId || !categoriaId || !Number.isFinite(q)) return null;
+  const pasto = campo(r, 'fechamento_pastos');
+  const noCaderno = typeof pasto === 'object' && pasto !== null ? textoDe(pasto, 'lote_mes') : null;
+  return { fechamentoId, categoriaId, quantidade: q, loteId: textoDe(r, 'lote_id'), noCaderno };
+}
+
+/** L1-CARIMBO-SO-COM-BEZERRO-01 — os itens com cabeça do fechamento do mês da fazenda; falhou = nulo (o aviso não aparece). */
+async function itensDoMes(fazendaId: string, anoMes: string): Promise<ItemDoMes[] | null> {
+  try {
+    const { data, error } = await supabase.from('fechamento_pasto_itens')
+      .select('fechamento_id, categoria_id, quantidade, lote_id, fechamento_pastos!inner(fazenda_id, ano_mes, lote_mes)')
+      .eq('fechamento_pastos.fazenda_id', fazendaId).eq('fechamento_pastos.ano_mes', anoMes).gt('quantidade', 0);
+    if (error || !Array.isArray(data)) { console.error('[lotes] bezerro do lote', error); return null; }
+    const linhas: unknown[] = data;
+    return linhas.map(itemDoMes).filter((i): i is ItemDoMes => i !== null);
+  } catch (e) {
+    console.error('[lotes] bezerro do lote', e);
+    return null;
+  }
+}
+
 /** L1 (Gabriel 09/11): qual lote leva carimbo — a regra do assistente, com a atividade e a categoria DO LOTE (ativas ou não).
- *  Sem esta leitura (erro ou falha) o lote volta como veio e mostra o código, como antes: nunca "sem carimbo" à toa. */
-async function daCria(lidos: LoteDaLista[]): Promise<LoteDaLista[]> {
+ *  Sem esta leitura (erro ou falha) o lote volta como veio e mostra o código, como antes: nunca "sem carimbo" à toa.
+ *  L1-CARIMBO-SO-COM-BEZERRO-01: e o aviso só com bezerro ao pé no mês; sem a leitura dos itens, nunca o aviso. */
+async function daCria(lidos: LoteDaLista[], fazendaId: string, anoMes: string): Promise<LoteDaLista[]> {
   const ids = [...new Set(lidos.flatMap(l => [l.atividadeId, l.categoriaId]))];
   if (!ids.length) return lidos;
   try {
-    const [cad, reb] = await Promise.all([
+    const [cad, reb, itens] = await Promise.all([
       lerCadastrosDoLote().in('id', ids),
       supabase.from('categorias_rebanho').select('id, codigo').like('codigo', 'mamotes%'),
+      itensDoMes(fazendaId, anoMes),
     ]);
     if (cad.error || reb.error || !Array.isArray(cad.data)) { console.error('[lotes] carimbo da cria', cad.error ?? reb.error); return lidos; }
     const cadastros = cad.data.map(cadastroDaLinha).filter((c: unknown): c is CadastroDoLote => c !== null);
-    return marcarDaCria(lidos, cadastros, (reb.data ?? []).filter(r => (r.codigo ?? '').startsWith('mamotes')).map(r => r.id));
+    const mamotes = (reb.data ?? []).filter(r => (r.codigo ?? '').startsWith('mamotes')).map(r => r.id);
+    const cria = marcarDaCria(lidos, cadastros, mamotes);
+    return itens ? marcarBezerro(cria, itens, mamotes) : cria;
   } catch (e) {
     console.error('[lotes] carimbo da cria', e);
     return lidos;
@@ -64,7 +96,7 @@ export function useLotesDaFazenda(fazendaId: string | null, anoMes: string): {
       setLotes(lidos);
       setErro(null); setCarregando(false);
       /* L1: a marca da cria chega num 2º passo (a lista não espera por ela) */
-      const marcados = await daCria(lidos);
+      const marcados = await daCria(lidos, fazendaId, anoMes);
       if (meu === pedido.current && marcados !== lidos) setLotes(marcados);
     })();
   }, [fazendaId, anoMes]);
