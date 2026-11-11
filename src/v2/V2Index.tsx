@@ -76,6 +76,7 @@ import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { CadastroLocaisEstoqueTab } from '@/pages/CadastroLocaisEstoqueTab';
 import { PatrimonioTela } from '@/components/patrimonio/PatrimonioTela';
+import { ProdutoresTela } from '@/components/fiscal/ProdutoresTela';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
 import { AgriDreLavouraTab } from '@/pages/AgriDreLavouraTab';
 import { AgriColheitaTab } from '@/pages/AgriColheitaTab';
@@ -1159,6 +1160,8 @@ export default function V2Index() {
     if (section === 'locais-estoque') return <CadastroLocaisEstoqueTab />;
     /* Cadastros › Patrimônio — os bens ligados aos lançamentos de Investimento (PATR-01). */
     if (section === 'patrimonio') return <PatrimonioTela />;
+    /* Cadastros › Produtores — os titulares fiscais do cliente (FISCAL onda 1). */
+    if (section === 'produtores') return <ProdutoresTela />;
     if (section === 'rateio-admin') return (
       <FinV2RateioAdminTab />
     );
@@ -1775,6 +1778,8 @@ export default function V2Index() {
     /* FORN-01b — a lista de Fornecedores vai até o fim da tela: a altura vem do pai, não de `calc(100dvh-120px)` */
     /* PATR-01 — a lista de bens vai até o fim da tela (a altura vem do pai) */
     'patrimonio',
+    /* FISCAL onda 1 — a lista e a ficha dos produtores vão até o fim da tela (a altura vem do pai) */
+    'produtores',
     'fornecedores']);
   const appShell = modoResumo || SECOES_APP_SHELL.has(section);
 
