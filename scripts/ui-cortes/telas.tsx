@@ -2003,10 +2003,23 @@ if (tela === 'mesclar') {
       ...['A', 'B', 'C', 'D'].map((l, i) => ({ ...pasto(`p19a${l}`, `P19A-${l}`, 24.4, 'cria', 'g19', 11 + i), data_inicio: '2026-10-01' })));
     CARDS.push(card('f19', 'p19a', { tipo_uso_mes: 'cria' }));
   }
+  /* FECH-CARDS-QUEBRA-01 (Gabriel 11/11 15:15, PUR out/26) — `&v=quebra`: os 4 estados lado a lado — P5 AGRICULTURA 187,1 ha com 2 piquetes
+     (o selo vazava da borda), P8 VEDADO 85,3 ha com 4 piquetes e P16/P26 vedados (o bloco descia), P21A cria sem peso (inconsistente) */
+  const COM_QUEBRA = v === 'quebra';
+  if (COM_QUEBRA) {
+    PASTOS.push(pasto('p5', 'P5', 187.1, 'agricultura', null, 7),
+      ...['A', 'B'].map((l, i) => ({ ...pasto(`p5${l}`, `P5-${l}`, 93.5, 'agricultura', 'g5', 8 + i), data_inicio: '2026-10-01' })),
+      pasto('p8', 'P8', 85.3, 'recria', null, 10),
+      ...['A', 'B', 'C', 'D'].map((l, i) => ({ ...pasto(`p8${l}`, `P8-${l}`, 21.3, 'recria', 'g8', 11 + i), data_inicio: '2026-10-01' })),
+      pasto('p16', 'P16', 44.7, 'recria', null, 15), pasto('p21a', 'P21A', 62.4, 'cria', null, 16), pasto('p26', 'P26', 128.6, 'recria', null, 17));
+    CARDS.push(card('f5q', 'p5', { tipo_uso_mes: 'agricultura' }), card('f8q', 'p8', { tipo_uso_mes: 'vedado' }), card('f16q', 'p16', { tipo_uso_mes: 'vedado' }),
+      card('f21q', 'p21a', { tipo_uso_mes: 'cria' }), card('f26q', 'p26', { tipo_uso_mes: 'vedado' }));
+  }
   const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
     lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
   const ITENS: (ReturnType<typeof item> & { lote_id?: string; piquete_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  if (COM_QUEBRA) ITENS.push(item('f21q', 'c-vacas', 48, 0));
   /* FECH-PASTO-UNIDADE-01 F2 — `&v=piquetes7`: o modal do pasto COM piquetes, nas medidas do caso real (PUR out/26): o P7 (97,5 ha) em
      7A 24,76 · 7B 25,11 · 7C 24,35 · 7D 23,32, lançado POR PIQUETES em out/26 e com set/26 também por piquetes (o mês anterior somado, com
      o lote de cada piquete); o P5 (P5-A 101 · P5-B 86,1) com o card vazio (abre em "Pasto inteiro"). As 9 categorias de verdade (a grade
@@ -2098,6 +2111,7 @@ if (tela === 'mesclar') {
       /* F2 `&v=piquetes7`: os leitores do modal filtram por grupo/origem/pasto (`in`/`eq`); sem a variante, a resposta de sempre */
       t === 'pastos' ? (COM_PIQUETES7 ? filtrar(PASTOS, e) : PASTOS) : t === 'pasto_grupos' ? (COM_PIQUETES7 ? filtrar : (l: unknown[]) => l)([{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: null },
         ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }, { id: 'g19', fazenda_id: 'f1', nome: 'P19A', ativo: true, pasto_origem_id: 'p19a' }] : []),
+        ...(COM_QUEBRA ? [{ id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }, { id: 'g8', fazenda_id: 'f1', nome: 'P8', ativo: true, pasto_origem_id: 'p8' }] : []),
         ...(COM_PIQUETES7 ? [{ id: 'g7', fazenda_id: 'f1', nome: 'P7', ativo: true, pasto_origem_id: 'p7' }, { id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }] : [])], e)
       : t === 'fechamento_pastos' ? CARDS.filter((c) => (!e.eq.ano_mes || c.ano_mes === e.eq.ano_mes) && (!COM_PIQUETES7 || !e.eq.pasto_id || c.pasto_id === e.eq.pasto_id))
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)

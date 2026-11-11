@@ -895,6 +895,27 @@ const CENARIOS = [
         antes: async (p) => { await p.locator('[data-testid="selo-piquetes"]').first().waitFor(); await p.waitForTimeout(600); } },
       { nome: 'fechamento-grupo-piquetes-p19a', url: URL + '&v=piquetes', tamanhos: T, regiao: 'button:has([title^="Piquetes de P19A"])',
         antes: async (p) => { await p.locator('[title^="Piquetes de P19A"]').waitFor(); await p.waitForTimeout(600); } },
+      /* FECH-CARDS-QUEBRA-01 (Gabriel 11/11 15:15) — `&v=quebra`: os 4 estados (agricultura com piquetes, vedado com/sem piquetes, cria,
+         inconsistente) em 1126/1366/1440: o selo do tipo dentro do card, nada vaza */
+      { nome: 'fechamento-grupo-quebra-agricultura', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P5"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P5"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P5"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-quebra-vedado', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P8"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P8"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P8"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-quebra-vedado-sem-piq', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P26"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P26"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P26"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-quebra-inconsistente', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P21A"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P21A"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P21A"]').waitFor(); await p.waitForTimeout(600); } },
+      /* Chat 18:25 — o nome longo "P12 Retiro do córrego de baixo": nunca "…" (11px e quebra; o card e a fila crescem juntos) */
+      { nome: 'fechamento-grupo-quebra-nome-longo', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P12 Retiro do córrego de baixo"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P12 Retiro do córrego de baixo"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P12 Retiro do córrego de baixo"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-quebra-cria', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P11"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P11"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P11"]').waitFor(); await p.waitForTimeout(600); } },
       /* FECH-REABRIR-JUNTO-01 — o modal com o Valor do Rebanho validado: a linha do aviso (frase · motivo opcional · "Reabrir e editar") inteira */
       /* REABRIR-AUTOMATICO-01 (Gabriel 08/11 08:15) — o modal num mês com o Valor do Rebanho validado: sem a linha da trava (o reabrir é
          automático); o lugar de 22px do topo fica e o rodapé tem o botão de sempre — nada corta */
@@ -923,6 +944,14 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-popup', url: URL, tamanhos: T, regiao: '[data-testid="popup-do-pasto"]',
         /* o Radix põe uma 2ª cópia do conteúdo escondida (para o leitor de tela): a de cima é a que se vê */
         antes: async (p) => { await grade(p); await p.locator('button', { hasText: /^P11/ }).first().hover();
+          await p.locator('[data-testid="popup-do-pasto"]').first().waitFor(); await p.waitForTimeout(400); } },
+      /* FECH-CARDS-QUEBRA-01 (3) — o popup (o MESMO do mapa, POPUP-PASTO-01) do P5 agricultura: nada vaza */
+      { nome: 'fechamento-grupo-quebra-popup-agricultura', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: '[data-testid="popup-do-pasto"]',
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P5"]').first().hover();
+          await p.locator('[data-testid="popup-do-pasto"]').first().waitFor(); await p.waitForTimeout(400); } },
+      /* FECH-CARDS-QUEBRA-01 (3) — o popup (o MESMO do mapa, POPUP-PASTO-01) do P8 vedado: nada vaza */
+      { nome: 'fechamento-grupo-quebra-popup-vedado', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: '[data-testid="popup-do-pasto"]',
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P8"]').first().hover();
           await p.locator('[data-testid="popup-do-pasto"]').first().waitFor(); await p.waitForTimeout(400); } },
       { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
       { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
@@ -2401,6 +2430,21 @@ function medirBotoesDentro(sel) {
   }
   return achados;
 }
+/* FECH-CARDS-QUEBRA-01 — `topoIgual` (opcional, por cenário): os elementos (ex.: o nome do card) cujos CARDS começam na mesma linha da grade
+   começam na mesma altura (o card vedado descia o título: o botão centralizava o conteúdo mais curto) */
+function medirTopoIgual(sel) {
+  const porLinha = new Map();
+  for (const el of document.querySelectorAll(sel)) {
+    const card = el.closest('button') ?? el.parentElement; const r = el.getBoundingClientRect(); if (r.width < 2) continue;
+    const linha = Math.round(card.getBoundingClientRect().top); (porLinha.get(linha) ?? porLinha.set(linha, []).get(linha)).push([el.textContent.trim(), r.top]);
+  }
+  const achados = [];
+  for (const itens of porLinha.values()) {
+    const min = Math.min(...itens.map(i => i[1]));
+    for (const [t, top] of itens) if (top > min + 0.5) achados.push({ regra: 'topo', texto: `"${t.slice(0, 20)}" começa ${Math.round(top - min)}px abaixo dos vizinhos da linha` });
+  }
+  return achados;
+}
 /* MAPA-EDITAR-POLIGONO-09 (UI-ESPACO-RESERVADO) — `visivelNaTela` (opcional, por cenário): cada seletor existe, está INTEIRO dentro da janela,
    dentro do `dentro` e de todo ancestral que corta (overflow ≠ visible), e é ele (ou um filho) que está no centro (nada por cima). Com
    `altura`, o `dentro` tem exatamente essa altura (a barra não cresce nem encolhe com o que mostra). */
@@ -2948,6 +2992,7 @@ try {
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
     if (cen.visivelNaTela) daRolagem.push(...(await p.evaluate(medirVisivelNaTela, cen.visivelNaTela)));
+    if (cen.topoIgual) daRolagem.push(...(await p.evaluate(medirTopoIgual, cen.topoIgual)));
     if (cen.mesmoEnquadramento) daRolagem.push(...(await medirMesmoEnquadramento(p))); // MAPA-ZOOM-ENTRE-VISOES-01
     if (cen.zoomSensibilidade) daRolagem.push(...(await medirZoomSensibilidade(p))); // MAPA-ZOOM-E-PAINEL-01
     if (/^mapa-(geo|validacao)-/.test(cen.nome)) daRolagem.push(...(await p.evaluate(medirCromoDoMapa))); // MAPA-CROMO-01
