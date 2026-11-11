@@ -1047,20 +1047,20 @@ const CENARIOS = [
     const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(600); };
     return [
       { nome: 'produtores', url: URL, tamanhos: T },
-      { nome: 'produtores-fazendas', url: URL, tamanhos: T, antes: aba('Fazendas e participação') },
-      { nome: 'produtores-fiscal', url: URL, tamanhos: T, antes: aba('Fiscal e Reforma') },
-      { nome: 'produtores-contas', url: URL, tamanhos: T, antes: aba('Contas bancárias') },
-      { nome: 'produtores-certificado', url: URL, tamanhos: T, antes: aba('Certificado digital') },
+      { nome: 'produtores-fazendas', url: URL, tamanhos: T, antes: aba('Fazendas') },
+      { nome: 'produtores-fiscal', url: URL, tamanhos: T, antes: aba('Fiscal') },
+      { nome: 'produtores-contas', url: URL, tamanhos: T, antes: aba('Contas') },
+      { nome: 'produtores-certificado', url: URL, tamanhos: T, antes: aba('Certificado') },
       { nome: 'produtores-grupo', url: URL, tamanhos: T, antes: aba('Grupo') },
-      { nome: 'produtores-terceiro', url: URL, tamanhos: T, antes: seq(titular('Terceiro Exemplo'), aba('Fazendas e participação')) },
+      { nome: 'produtores-terceiro', url: URL, tamanhos: T, antes: seq(titular('Terceiro Exemplo'), aba('Fazendas')) },
       { nome: 'produtores-pj', url: URL, tamanhos: T, antes: titular('Agropecuária Exemplo') },
       { nome: 'produtores-novo', url: URL, tamanhos: T, antes: clicar('[data-testid="produtores-novo"]') },
       { nome: 'produtores-composicao', url: URL, tamanhos: T, regiao: '[role="dialog"]',
-        antes: seq(aba('Fazendas e participação'), clicar('[data-testid="produtor-fazenda"] button[title="editar a composição desta fazenda"]')) },
-      { nome: 'produtores-acordo', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: seq(aba('Fazendas e participação'), clicar('[data-testid="produtor-acordo-novo"]')) },
+        antes: seq(aba('Fazendas'), clicar('[data-testid="produtor-fazenda"] button[title="editar a composição desta fazenda"]')) },
+      { nome: 'produtores-acordo', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: seq(aba('Fazendas'), clicar('[data-testid="produtor-acordo-novo"]')) },
       { nome: 'produtores-grupo-dialog', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: seq(aba('Grupo'), clicar('[data-testid="produtor-grupo-editar"]')) },
       { nome: 'produtores-previa', url: URL, tamanhos: T, regiao: '[data-testid="produtores-previa"]',
-        antes: seq(aba('Fazendas e participação'), clicar('[data-testid="produtor-fazenda"] button[title="editar a composição desta fazenda"]'), clicar('[data-testid="produtor-composicao-previa"]')) },
+        antes: seq(aba('Fazendas'), clicar('[data-testid="produtor-fazenda"] button[title="editar a composição desta fazenda"]'), clicar('[data-testid="produtor-composicao-previa"]')) },
     ];
   })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):

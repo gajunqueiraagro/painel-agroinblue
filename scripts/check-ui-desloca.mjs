@@ -259,8 +259,8 @@ const CENARIOS = [
   /* FISCAL onda 1 (a) — Cadastros › Produtores: ir de aba em aba (as seis ficam no lugar) e de titular em titular não move a lista, o
      cabeçalho da ficha, as abas nem o rodapé (o miolo da aba é `data-desloca-livre`) */
   { nome: 'produtores', url: 'tela=produtores&barra=32', estados: [
-    ['aba Fazendas', botao(/^Fazendas e participação/)], ['aba Fiscal', botao(/^Fiscal e Reforma$/)], ['aba Contas', botao(/^Contas bancárias/)],
-    ['aba Certificado', botao(/^Certificado digital$/)], ['aba Grupo', botao(/^Grupo/)], ['aba Identificação', botao(/^Identificação$/)],
+    ['aba Fazendas', botao(/^Fazendas/)], ['aba Fiscal', botao(/^Fiscal( e Reforma)?$/)], ['aba Contas', botao(/^Contas/)],
+    ['aba Certificado', botao(/^Certificado( digital)?$/)], ['aba Grupo', botao(/^Grupo/)], ['aba Identificação', botao(/^Identificação$/)],
     ['o terceiro', botao(/Terceiro Exemplo/)], ['a PJ', botao(/Agropecuária Exemplo/)], ['o inativo', botao(/Produtor Antigo Exemplo/)],
     ['de volta à produtora', botao(/Produtora Sintética/)],
   ] },

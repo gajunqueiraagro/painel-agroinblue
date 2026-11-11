@@ -62,12 +62,12 @@ export function AbaFazendas({ titular, titulares, fazendas, imoveis, composicao,
     <div className="flex min-h-0 flex-1 flex-col gap-1.5" data-testid="produtor-aba-fazendas">
       <div className={cn(QUADRO_FICHA, 'max-h-[132px] shrink-0')}>
         <table className="w-full table-fixed border-collapse">
-          <colgroup><col /><col style={{ width: 140 }} /><col style={{ width: 86 }} /><col style={{ width: 70 }} /><col style={{ width: 74 }} /><col /><col style={{ width: 20 }} /></colgroup>
+          <colgroup><col /><col style={{ width: 140 }} /><col style={{ width: 86 }} /><col style={{ width: 70 }} /><col style={{ width: 82 }} /><col /><col style={{ width: 20 }} /></colgroup>
           <thead className="text-primary-foreground"><tr>
             <th className={TH_FICHA}>Fazenda</th><th className={TH_FICHA}>Imóvel</th>
             <th className={TH_FICHA}><span className="inline-flex items-center">Condição<Info texto="Proprietário, condômino, arrendatário, parceiro ou comodatário. Vai para o LCDPR, no cadastro do imóvel." /></span></th>
             <th className={TH_FICHA_NUM}><span className="inline-flex items-center">Particip.<Info texto="Parte do produtor nas receitas e despesas da fazenda. O livro caixa dele leva essa parte de cada lançamento, a não ser que o lançamento diga outra coisa." /></span></th>
-            <th className={TH_FICHA}>Vigência</th><th className={TH_FICHA}>Com quem divide</th><th className={TH_FICHA} />
+            <th className={TH_FICHA}>Vigência</th><th className={cn(TH_FICHA, 'truncate')} title="Divide com: os outros titulares desta fazenda">Divide com</th><th className={TH_FICHA} />
           </tr></thead>
           <tbody>
             {titular.fazendas.map(f => {
@@ -103,16 +103,20 @@ export function AbaFazendas({ titular, titulares, fazendas, imoveis, composicao,
       {ehProdutor && titular.fazendas.length > 0 && (
         <BlocoFormulario titulo="O que o financeiro desta fazenda registra" className="shrink-0"
           acao={<Info texto="Escolha como o financeiro foi lançado. Assim o livro caixa nunca divide duas vezes." />}>
-          <div className="flex max-h-[76px] flex-col gap-1 overflow-y-auto">
+          <div className="max-h-[76px] overflow-y-auto">
+            <table className="w-full table-fixed border-collapse"><colgroup><col style={{ width: 158 }} /><col /></colgroup><tbody>
             {titular.fazendas.map(f => (
-              <div key={f.fazenda_id} className="flex h-[24px] items-center gap-2" data-testid="produtor-registra">
-                <span className="w-[150px] shrink-0 truncate text-[10px]" title={f.fazenda}>{f.fazenda}</span>
+              <tr key={f.fazenda_id} className="h-[26px]" data-testid="produtor-registra">
+                <td className="truncate pr-2 text-[10px]" title={f.fazenda}>{f.fazenda}</td>
+                <td>
                 <Segmentado altura={22} fonte={10} valor={f.registra} onEscolher={v => { if (v !== f.registra) void trocarRegistra(f.fazenda_id, v); }} opcoes={[
-                  { valor: 'total', rotulo: 'O total da fazenda (o livro divide pela participação)' },
-                  { valor: 'so_a_parte', rotulo: `Só a parte de ${titular.nome.split(' ')[0]} (o livro leva 100%)` },
+                  { valor: 'total', rotulo: 'O total da fazenda', title: 'o financeiro registra o total da fazenda: o livro divide pela participação' },
+                  { valor: 'so_a_parte', rotulo: `Só a parte de ${titular.nome.split(' ')[0]}`, title: 'o financeiro registra só a parte dele: o livro leva 100%' },
                 ]} />
-              </div>
+                </td>
+              </tr>
             ))}
+            </tbody></table>
           </div>
         </BlocoFormulario>
       )}
@@ -193,19 +197,19 @@ function ComposicaoDialog({ fazenda, partes, incluir, titulares, previa, aoFecha
   };
   return (
     <Dialog open onOpenChange={v => { if (!v) aoFechar(); }}>
-      <DialogContent className="flex h-[360px] w-[700px] max-w-[calc(100vw-16px)] flex-col gap-0 overflow-hidden p-0 [&>button]:top-2 [&>button]:text-primary-foreground" data-testid="produtor-composicao-dialog">
+      <DialogContent className="flex h-[360px] w-[760px] max-w-[calc(100vw-16px)] flex-col gap-0 overflow-hidden p-0 [&>button]:top-2 [&>button]:text-primary-foreground" data-testid="produtor-composicao-dialog">
         <div className="flex h-[34px] shrink-0 items-center bg-primary px-3 pr-10 text-primary-foreground">
           <DialogTitle className="truncate text-[11px] font-semibold">{fazenda.nome} · quem é titular</DialogTitle>
           <DialogDescription className="sr-only">A composição da fazenda a partir do mês escolhido.</DialogDescription>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-1 bg-muted p-2">
           <div className="flex items-end gap-2">
-            <div className="w-[150px]"><Rotulo texto="Vale a partir de (mês)" /><CampoDoMes valor={mes} onMudar={setMes} anos={anosDasVersoes(hoje)} anoDeReferencia={Number(hoje.slice(0, 4))} testid="produtor-composicao-mes" /></div>
+            <div className="w-[170px]"><Rotulo texto="Vale a partir de (mês)" /><CampoDoMes valor={mes} onMudar={setMes} anos={anosDasVersoes(hoje)} anoDeReferencia={Number(hoje.slice(0, 4))} testid="produtor-composicao-mes" /></div>
             <p className="pb-1.5 text-[10px] text-muted-foreground">{desdeAtual ? `a versão de hoje vale desde ${mesBR(desdeAtual)}: o mesmo mês corrige; outro mês cria a nova` : 'primeira composição desta fazenda'}</p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto rounded border bg-card p-1">
             {linhasC.map((l, i) => (
-              <div key={i} className={cn(GRADE_FORMULARIO, 'mb-1 grid-cols-[minmax(0,1fr)_84px_120px_150px_20px] items-center')} data-testid="produtor-composicao-linha">
+              <div key={i} className={cn(GRADE_FORMULARIO, 'mb-1 grid-cols-[minmax(0,1fr)_84px_120px_132px_20px] items-center')} data-testid="produtor-composicao-linha">
                 <SearchableSelect value={l.titular_id} onValueChange={v => mudar(i, { titular_id: v })} semTodos allLabel="titular" allValue=""
                   options={ativos.map(t => ({ value: t.id, label: t.papel === 'terceiro' ? `${t.nome} (terceiro)` : t.nome }))} triggerClassName={REGUA_CAMPO} />
                 <CampoNumeroComConta valor={l.participacao} onChange={v => mudar(i, { participacao: v })} percentual sufixoDentro="%" className={REGUA_CAMPO} />
@@ -286,7 +290,7 @@ function AcordoDialog({ acordo, produtor, titulares, fazendas, clienteId, previa
             </div>
             <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[100px_minmax(0,1fr)_minmax(0,1fr)]')}>
               <div>
-                <div className="flex items-center"><Rotulo texto={`Parte de ${produtor.nome.split(' ')[0]}`} className="mb-0.5" /><Info texto="Vazio = a confirmar: os lançamentos ligados não entram no livro até a parte ser preenchida." /></div>
+                <div className="flex items-center"><Rotulo texto="Parte (%)" className="mb-0.5" /><Info texto={`A parte de ${produtor.nome.split(' ')[0]}. Vazio = a confirmar: os lançamentos ligados não entram no livro até a parte ser preenchida.`} /></div>
                 <CampoNumeroComConta valor={parte} onChange={setParte} percentual sufixoDentro="%" placeholder="a confirmar" className={REGUA_CAMPO} />
               </div>
               <div>

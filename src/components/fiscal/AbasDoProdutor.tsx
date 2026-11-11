@@ -4,7 +4,7 @@
  *
  * ⚠ IDENTIFICAÇÃO E O REGIME DO IR são o FORMULÁRIO da ficha (o Salvar do rodapé da tela). A condição no IBS/CBS, a conta e o grupo são
  * gestos próprios, cada um com a prévia do banco (`useGestoComPrevia`): as versões (condição, grupo) começam num MÊS.
- * ⚠ SEM NÚMERO INVENTADO: "Receita para o limite" e "LCDPR" ficam "—" até o Resumo fiscal (onda 2, lê o livro por produtor); o
+ * ⚠ SEM NÚMERO INVENTADO: "Receita (limite R$ 3,6 mi)" e "LCDPR" ficam "—" até o Resumo fiscal (onda 2, lê o livro por produtor); o
  * certificado é da frente FISCAL-DFE-01 (só o lugar, apagado).
  */
 import { useMemo, useState } from 'react';
@@ -154,7 +154,7 @@ export function AbaFiscal({ titular, clienteId, form, set, previa }: {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5" data-testid="produtor-aba-fiscal">
       <BlocoFormulario titulo="Condição e limites">
-        <div className={cn(GRADE_FORMULARIO, 'grid-cols-[minmax(0,1fr)_150px]')}>
+        <div className={cn(GRADE_FORMULARIO, 'grid-cols-[minmax(0,1fr)_170px]')}>
           <div>
             <div className="flex items-center"><Rotulo texto="Condição no IBS/CBS" obrig className="mb-0.5" />
               <Info texto="Não contribuinte: receita abaixo de R$ 3,6 mi no ano (somando as PJs agropecuárias em que tem participação). Pode optar por ser contribuinte: vale no mês seguinte e não volta no ano." /></div>
@@ -166,7 +166,7 @@ export function AbaFiscal({ titular, clienteId, form, set, previa }: {
             <CampoDoMes valor={mes} onMudar={v => { setMes(v); setErro(null); }} anos={anosDasVersoes(hoje)} anoDeReferencia={Number(hoje.slice(0, 4))} testid="produtor-condicao-mes" />
           </div>
         </div>
-        <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[minmax(0,1fr)_150px] items-end')}>
+        <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[minmax(0,1fr)_170px] items-end')}>
           <div>
             <Rotulo texto="Motivo da condição" />
             <Input value={motivo} onChange={e => { setMotivo(e.target.value); setErro(null); }} disabled={!ehProdutor} placeholder="ex.: receita do ano anterior abaixo do limite"
@@ -184,11 +184,11 @@ export function AbaFiscal({ titular, clienteId, form, set, previa }: {
             ]} />
           </div>
           <div>
-            <div className="flex items-center"><Rotulo texto="Receita para o limite de R$ 3,6 mi" className="mb-0.5" /><Info texto="Chega com o Resumo fiscal, que lê o livro caixa por produtor (próxima onda). Até lá, sem número." /></div>
+            <div className="flex items-center"><Rotulo texto="Receita (limite R$ 3,6 mi)" className="mb-0.5" /><Info texto="Chega com o Resumo fiscal, que lê o livro caixa por produtor (próxima onda). Até lá, sem número." /></div>
             <div className={cn(REGUA_CAMPO, 'flex items-center rounded-md border bg-muted/60 px-2 text-muted-foreground')} data-testid="produtor-receita-limite">—</div>
           </div>
           <div>
-            <div className="flex items-center"><Rotulo texto="LCDPR (limite R$ 4,8 mi, caixa)" className="mb-0.5" /><Info texto="Acima de R$ 4,8 mi de receita bruta no ano, o LCDPR é obrigatório. O número chega com o Resumo fiscal." /></div>
+            <div className="flex items-center"><Rotulo texto="LCDPR (R$ 4,8 mi)" className="mb-0.5" /><Info texto="Acima de R$ 4,8 mi de receita bruta no ano, o LCDPR é obrigatório. O número chega com o Resumo fiscal." /></div>
             <div className={cn(REGUA_CAMPO, 'flex items-center rounded-md border bg-muted/60 px-2 text-muted-foreground')}>—</div>
           </div>
         </div>
@@ -282,9 +282,9 @@ export function AbaGrupo({ titular, titulares, previa }: { titular: Titular; tit
     <div className="flex min-h-0 flex-1 flex-col gap-1" data-testid="produtor-aba-grupo">
       <div className={cn(QUADRO_FICHA, 'flex-1')}>
         <table className="w-full table-fixed border-collapse">
-          <colgroup><col /><col style={{ width: 130 }} /><col style={{ width: 84 }} /><col style={{ width: 130 }} /><col style={{ width: 96 }} /></colgroup>
+          <colgroup><col /><col style={{ width: 120 }} /><col style={{ width: 84 }} /><col style={{ width: 112 }} /><col style={{ width: 88 }} /></colgroup>
           <thead className="text-primary-foreground"><tr>
-            <th className={TH_FICHA}>Empresa ligada</th><th className={TH_FICHA}>CNPJ</th><th className={TH_FICHA_NUM}>Participação</th>
+            <th className={cn(TH_FICHA, 'truncate')} title="Empresa ligada">Empresa</th><th className={TH_FICHA}>CNPJ</th><th className={TH_FICHA_NUM}>Participação</th>
             <th className={TH_FICHA}>Atividade</th><th className={TH_FICHA}>Entra no limite?</th>
           </tr></thead>
           <tbody>
@@ -336,7 +336,7 @@ function GrupoDialog({ titular, titulares, previa, aoFechar }: { titular: Titula
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-1 bg-muted p-2">
           <div className="flex items-end gap-2">
-            <div className="w-[150px]"><Rotulo texto="Vale a partir de (mês)" /><CampoDoMes valor={mes} onMudar={setMes} anos={anosDasVersoes(hoje)} anoDeReferencia={Number(hoje.slice(0, 4))} testid="produtor-grupo-mes" /></div>
+            <div className="w-[170px]"><Rotulo texto="Vale a partir de (mês)" /><CampoDoMes valor={mes} onMudar={setMes} anos={anosDasVersoes(hoje)} anoDeReferencia={Number(hoje.slice(0, 4))} testid="produtor-grupo-mes" /></div>
             <p className="pb-1.5 text-[10px] text-muted-foreground">a versão de antes termina no mês anterior; o mesmo mês corrige a versão</p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto rounded border bg-card p-1">

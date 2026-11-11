@@ -17,6 +17,7 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { TextoReservado } from '@/components/ui/regua-tabela';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { cn } from '@/lib/utils';
 import {
   composicaoPorFazenda, dadosDoForm, formDoTitular, linhaDoTitular, pendenciasDoForm, seloDoTitular, tipoDoDocumento,
@@ -61,40 +62,55 @@ export function ProdutoresTela() {
       <div className="grid min-h-0 flex-1 grid-cols-[clamp(220px,24vw,300px)_minmax(0,1fr)] gap-2 px-4 pb-2 pt-1">
         {/* A LISTA — duas linhas de altura fixa por titular; só ela rola */}
         <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-card" data-testid="produtores-lista">
-          <div className="flex h-[28px] shrink-0 items-center border-b px-2.5 text-[11px] font-semibold">
-            <span className="min-w-0 truncate" title={clienteAtual?.nome}>Produtores do cliente {clienteAtual?.nome ?? ''}</span>
+          <div className="flex h-[28px] shrink-0 items-center justify-between border-b px-2.5 text-[11px] font-semibold">
+            <span>Produtores</span>
+            <span className="text-[10px] font-normal tabular-nums text-muted-foreground">{titulares.length}</span>
           </div>
-          <ul className="min-h-0 flex-1 overflow-y-auto py-0.5">
-            {titulares.map(t => {
-              const selo = seloDoTitular(t);
-              const linha = linhaDoTitular(t);
-              return (
-                <li key={t.id}>
-                  <button type="button" onClick={() => setSelecionado(t.id)} data-testid="produtores-item"
-                    className={cn('grid h-[38px] w-full grid-cols-[minmax(0,1fr)_auto] content-center gap-x-2 border-l-[3px] px-2.5 text-left hover:bg-muted/50',
-                      t.id === selecionado ? 'border-l-primary bg-primary/5' : 'border-l-transparent', !t.ativo && 'opacity-60')}>
-                    <span className="truncate text-[11px] font-semibold leading-[15px]" title={t.nome}>{t.nome}</span>
-                    <span className={cn('justify-self-end rounded px-1 text-[9.5px] font-semibold leading-[14px]', TAG_TIPO[t.tipo])}>{t.tipo}</span>
-                    <span className="truncate text-[10px] leading-[15px] text-muted-foreground" title={t.pendencias.length ? `${linha} · cadastro incompleto: ${t.pendencias.join(', ')}` : linha}>
-                      {linha}{t.pendencias.length ? <span className="text-amber-700"> · incompleto</span> : null}
-                    </span>
-                    <span className={cn('justify-self-end whitespace-nowrap rounded px-1 text-[9.5px] font-semibold leading-[14px]', TOM[selo.tom])}>{selo.texto}</span>
-                  </button>
-                </li>
-              );
-            })}
-            {titulares.length === 0 && (
-              <li className="px-2.5 py-4 text-center text-[10px] text-muted-foreground">
-                {isLoading ? 'Carregando…' : error ? 'Não consegui ler os produtores. Tente de novo.' : 'Nenhum produtor cadastrado: use “+ Produtor”.'}
-              </li>
-            )}
-            {selecionado === 'novo' && (
-              <li className="grid h-[38px] grid-cols-[minmax(0,1fr)_auto] content-center border-l-[3px] border-l-primary bg-primary/5 px-2.5">
-                <span className="text-[11px] font-semibold leading-[15px]">Novo produtor</span>
-                <span className="text-[10px] leading-[15px] text-muted-foreground">ainda não gravado</span>
-              </li>
-            )}
-          </ul>
+          {/* uma TABELA de uma coluna: o nome longo termina em "…" com o texto inteiro no title da célula (REGRA DE CORTE); o documento nunca corta */}
+          <div className="min-h-0 flex-1 overflow-y-auto py-0.5">
+            <table className="w-full table-fixed border-collapse">
+              <tbody>
+                {titulares.map(t => {
+                  const selo = seloDoTitular(t);
+                  const linha = linhaDoTitular(t);
+                  const doc = `${t.tipo === 'PF' ? 'CPF' : 'CNPJ'} ${t.documento_formatado}`;
+                  const resto = linha.startsWith(doc) ? linha.slice(doc.length) : '';
+                  const inteiro = `${t.nome} · ${linha}${t.pendencias.length ? ` · cadastro incompleto: ${t.pendencias.join(', ')}` : ''}`;
+                  return (
+                    <tr key={t.id}>
+                      <td className="p-0" title={inteiro}>
+                        <button type="button" onClick={() => setSelecionado(t.id)} data-testid="produtores-item"
+                          className={cn('grid h-[38px] w-full grid-cols-[minmax(0,1fr)_auto] content-center gap-x-2 border-l-[3px] px-2.5 text-left hover:bg-muted/50',
+                            t.id === selecionado ? 'border-l-primary bg-primary/5' : 'border-l-transparent', !t.ativo && 'opacity-60')}>
+                          <span className="truncate text-[11px] font-semibold leading-[15px]">{t.nome}</span>
+                          <span className={cn('justify-self-end rounded px-1 text-[9.5px] font-semibold leading-[14px]', TAG_TIPO[t.tipo])}>{t.tipo}</span>
+                          <span className="flex min-w-0 text-[10px] leading-[15px] text-muted-foreground">
+                            <span className="flex-none whitespace-nowrap tabular-nums">{doc}</span>
+                            <span className="min-w-0 truncate whitespace-pre">{resto}</span>
+                            {t.pendencias.length ? <span className="flex-none whitespace-pre text-amber-700"> · incompleto</span> : null}
+                          </span>
+                          <span className={cn('justify-self-end whitespace-nowrap rounded px-1 text-[9.5px] font-semibold leading-[14px]', TOM[selo.tom])}>{selo.texto}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {titulares.length === 0 && (
+                  <tr><td className="px-2.5 py-4 text-center text-[10px] text-muted-foreground">
+                    {isLoading ? 'Carregando…' : error ? 'Não consegui ler os produtores. Tente de novo.' : 'Nenhum produtor cadastrado: use “+ Produtor”.'}
+                  </td></tr>
+                )}
+                {selecionado === 'novo' && (
+                  <tr><td className="p-0">
+                    <div className="grid h-[38px] grid-cols-[minmax(0,1fr)_auto] content-center border-l-[3px] border-l-primary bg-primary/5 px-2.5">
+                      <span className="text-[11px] font-semibold leading-[15px]">Novo produtor</span>
+                      <span className="text-[10px] leading-[15px] text-muted-foreground">ainda não gravado</span>
+                    </div>
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         {/* A FICHA */}
@@ -172,19 +188,21 @@ function FichaDoProdutor({ titular, titulares, clienteId, aoCriar }: { titular: 
   const novo = !titular;
   const terceiro = (titular?.papel ?? form.papel) === 'terceiro';
   const motivoNovo = 'salve o produtor primeiro';
-  const abas: Array<{ valor: Aba; rotulo: string; desabilitada?: boolean; title?: string; n?: number }> = [
+  /* abaixo de 1000px as seis abas não cabem com o nome inteiro (a 918 a Grupo saía da ficha): o nome curto, o inteiro no title */
+  const curtas = useLarguraDaJanela() < 1000;
+  const abas: Array<{ valor: Aba; rotulo: string; curto?: string; desabilitada?: boolean; title?: string; n?: number }> = [
     { valor: 'identificacao', rotulo: 'Identificação' },
-    { valor: 'fazendas', rotulo: 'Fazendas e participação', desabilitada: novo, title: novo ? motivoNovo : undefined, n: titular?.fazendas.length },
-    { valor: 'fiscal', rotulo: 'Fiscal e Reforma', desabilitada: novo, title: novo ? motivoNovo : undefined },
-    { valor: 'contas', rotulo: 'Contas bancárias', desabilitada: novo, title: novo ? motivoNovo : undefined, n: titular?.contas.length },
-    { valor: 'certificado', rotulo: 'Certificado digital' },
+    { valor: 'fazendas', rotulo: 'Fazendas e participação', curto: 'Fazendas', desabilitada: novo, title: novo ? motivoNovo : undefined, n: titular?.fazendas.length },
+    { valor: 'fiscal', rotulo: 'Fiscal e Reforma', curto: 'Fiscal', desabilitada: novo, title: novo ? motivoNovo : undefined },
+    { valor: 'contas', rotulo: 'Contas bancárias', curto: 'Contas', desabilitada: novo, title: novo ? motivoNovo : undefined, n: titular?.contas.length },
+    { valor: 'certificado', rotulo: 'Certificado digital', curto: 'Certificado' },
     { valor: 'grupo', rotulo: 'Grupo', desabilitada: novo || terceiro, title: novo ? motivoNovo : terceiro ? 'o grupo é só do produtor' : undefined, n: titular?.grupo.length },
   ];
   const tipo = titular?.tipo ?? tipoDoDocumento(form.documento);
   const selo = titular ? seloDoTitular(titular) : null;
 
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-card" data-testid="produtor-ficha">
+    <section className="flex min-h-0 flex-col overflow-clip rounded-lg border bg-card" data-testid="produtor-ficha">
       <div className="flex h-[30px] shrink-0 items-center gap-2 border-b px-3">
         <span className="min-w-0 truncate text-[12px] font-semibold" title={titular?.nome}>{titular?.nome ?? 'Novo produtor'}</span>
         {tipo && <span className={cn('rounded px-1 text-[9.5px] font-semibold leading-[14px]', TAG_TIPO[tipo])}>{tipo}</span>}
@@ -195,12 +213,13 @@ function FichaDoProdutor({ titular, titulares, clienteId, aoCriar }: { titular: 
       </div>
       <div className="flex h-[32px] shrink-0 items-center border-b px-3">
         <Segmentado altura={22} fonte={10} valor={aba} onEscolher={setAba} opcoes={abas.map(a => ({
-          valor: a.valor, desabilitada: a.desabilitada, title: a.title,
-          rotulo: a.n != null ? <span>{a.rotulo} <TextoReservado texto={a.desabilitada ? '' : String(a.n)} reserva="99" className="ml-0.5 text-[9.5px] opacity-80" /></span> : a.rotulo,
+          valor: a.valor, desabilitada: a.desabilitada, title: a.title ?? (curtas && a.curto ? a.rotulo : undefined),
+          rotulo: a.n != null ? <span>{curtas && a.curto ? a.curto : a.rotulo} <TextoReservado texto={a.desabilitada ? '' : String(a.n)} reserva="99" className="ml-0.5 text-[9.5px] opacity-80" /></span> : curtas && a.curto ? a.curto : a.rotulo,
         }))} />
       </div>
-      {/* o miolo de cada aba troca de propósito (outros blocos): título, abas e rodapé ficam medidos */}
-      <div className="flex min-h-0 flex-1 flex-col bg-muted p-2" data-testid={`produtor-aba-${aba}-miolo`} data-desloca-livre="">
+      {/* o miolo de cada aba troca de propósito (outros blocos): título, abas e rodapé ficam medidos. Ele ROLA no lugar dele: a 918×516 a
+          Identificação não cabe, e sem isso ela passava por baixo do rodapé e fazia a página rolar (a ficha andava 7 px ao trocar de aba) */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-muted p-2 [scrollbar-gutter:stable]" data-testid={`produtor-aba-${aba}-miolo`} data-desloca-livre="">
         {aba === 'identificacao' && <AbaIdentificacao form={form} set={set} erros={erros} fazendas={fazendas} />}
         {aba === 'fazendas' && titular && (
           <AbaFazendas titular={titular} titulares={titulares} fazendas={fazendas} imoveis={imoveis} composicao={composicao} acordos={acordos} clienteId={clienteId} previa={gesto.previa} />
