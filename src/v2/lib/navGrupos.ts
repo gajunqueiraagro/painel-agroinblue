@@ -34,6 +34,8 @@ export type V2Section =
   | 'subcentro-aliases' | 'safras' | 'rateio-admin' | 'locais-estoque'
   // cadastros — patrimônio (PATR-01: máquinas, estruturas, pastagens e terra)
   | 'patrimonio'
+  // cadastros — produtores (FISCAL onda 1: titulares, IE, participação na fazenda, acordos de rateio)
+  | 'produtores'
   // financeiro — análise
   | 'analise-trimestral' | 'financeiro-caixa' | 'fluxo-anual'
   // planejamento (IDs legados preservados)
@@ -368,6 +370,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'plano-contas',      label: 'Plano de contas',     status: 'needs-wrapper' },
           /* PATR-01 — o cadastro dos bens (máquinas, estruturas, pastagens e terra), ligado aos lançamentos de Investimento */
           { id: 'patrimonio',        label: 'Patrimônio',          status: 'ready', liberadaClientes: true },
+          /* FISCAL onda 1 (Gabriel 09/11 10:36) — quem responde pelo imposto: titulares, IE, % por fazenda, acordos de rateio. Sem a marca
+             `liberadaClientes`: só o admin abre até o Gabriel liberar para gestor/financeiro. */
+          { id: 'produtores',        label: 'Produtores',          status: 'ready' },
           { id: 'safras',            label: 'Safras',              status: 'ready' },
           /* ⚠ ELE FICA EM CADASTROS, NÃO EM AGRICULTURA, e a diferença é o que o item É: um local
              de estoque é identidade que o resto referencia — como Fazendas e Fornecedores —, não
@@ -471,6 +476,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'safras':            'cadastros',
   'locais-estoque':    'cadastros',
   'patrimonio':        'cadastros',
+  'produtores':        'cadastros',
   'rateio-admin':      'cadastros',
   'subcentro-aliases': 'cadastros',
   'dividendos':        'cadastros',

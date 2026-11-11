@@ -256,6 +256,14 @@ const CENARIOS = [
     ['inativos ligado', clicar('[data-testid="mostrar-inativos"]')], ['busca 1 conta', digitar('[data-testid="busca-plano"]', 'Pagamento Estornado')],
     ['busca limpa', digitar('[data-testid="busca-plano"]', '')],
   ] },
+  /* FISCAL onda 1 (a) — Cadastros › Produtores: ir de aba em aba (as seis ficam no lugar) e de titular em titular não move a lista, o
+     cabeçalho da ficha, as abas nem o rodapé (o miolo da aba é `data-desloca-livre`) */
+  { nome: 'produtores', url: 'tela=produtores&barra=32', estados: [
+    ['aba Fazendas', botao(/^Fazendas e participação/)], ['aba Fiscal', botao(/^Fiscal e Reforma$/)], ['aba Contas', botao(/^Contas bancárias/)],
+    ['aba Certificado', botao(/^Certificado digital$/)], ['aba Grupo', botao(/^Grupo/)], ['aba Identificação', botao(/^Identificação$/)],
+    ['o terceiro', botao(/Terceiro Exemplo/)], ['a PJ', botao(/Agropecuária Exemplo/)], ['o inativo', botao(/Produtor Antigo Exemplo/)],
+    ['de volta à produtora', botao(/Produtora Sintética/)],
+  ] },
   /* PATR-01 PR B — Cadastros › Patrimônio: trocar a aba da tela, o chip e a busca (1/0 bens) não move os cartões, os filtros, o cabeçalho
      nem o rodapé; no modal do bem, ir de aba em aba (as seis ficam no lugar; a apagada não se clica) não move nada — o trator, a
      pastagem e o bem NOVO (Dados ↔ Lançamentos, a terra num passo) */
