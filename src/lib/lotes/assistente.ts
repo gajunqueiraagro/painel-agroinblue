@@ -191,6 +191,11 @@ export function aceitaCarimbo(cadastros: readonly CadastroDoLote[], e: Escolha, 
   return !!cat && cat.categoriasRebanho.some(id => idsDosMamotes.includes(id));
 }
 
+/** L1 — marca cada lote que leva carimbo, pela MESMA regra do assistente (atividade CRI/CR ou categoria de mamotes). */
+export function marcarDaCria(lotes: readonly LoteDaLista[], cadastros: readonly CadastroDoLote[], idsDosMamotes: readonly string[]): LoteDaLista[] {
+  return lotes.map(l => ({ ...l, daCria: aceitaCarimbo(cadastros, { atividadeId: l.atividadeId, categoriaId: l.categoriaId, racaId: l.racaId }, idsDosMamotes) }));
+}
+
 export function validarPerfil(p: Perfil, hoje: string): { campo: keyof Perfil; mensagem: string } | null {
   if (p.nomeCampeiro.trim().length > 40) return { campo: 'nomeCampeiro', mensagem: 'O nome do campeiro passa de 40 letras.' };
   if (!p.formadoEm) return { campo: 'formadoEm', mensagem: 'Formado em: escolha a data.' };

@@ -10,3 +10,14 @@ export function useLarguraDaJanela(): number {
   }, []);
   return l;
 }
+
+/** FECH-DOCS-02 — a altura da janela (o teto do diálogo que cresce até caber a lista) */
+export function useAlturaDaJanela(): number {
+  const [a, setA] = useState(() => (typeof window === 'undefined' ? 800 : window.innerHeight));
+  useEffect(() => {
+    const f = () => setA(window.innerHeight);
+    window.addEventListener('resize', f);
+    return () => window.removeEventListener('resize', f);
+  }, []);
+  return a;
+}

@@ -832,10 +832,22 @@ const CENARIOS = [
       await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.waitForTimeout(200); await p.mouse.move(b.x + b.width / 2 + 2, b.y + b.height / 2 + 2);
       await p.locator('.leaflet-tooltip [data-testid="popup-do-pasto"]').waitFor({ timeout: 4000 });
       await p.waitForTimeout(400); } },
+  /* L1 (Gabriel 09/11) — o popup com a cria SEM carimbo (`&cria=1`): "sem carimbo · definir" no lugar do código, sem cortar */
+  { nome: 'fechamento-mapa-popup-cria', url: 'tela=fechamento-grupo&v=mapa&barra=32&cria=1', tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '.leaflet-tooltip', antes: async (p) => { await p.locator('[data-testid="mapa-dos-pastos"]').waitFor(); await p.waitForTimeout(1500);
+      /* o mouse vai ao MEIO do 1º pasto (o contorno da área total, por cima, intercepta o hover do Playwright no elemento) */
+      const b = await p.locator('.leaflet-container path.leaflet-interactive').nth(1).boundingBox();
+      await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.waitForTimeout(200); await p.mouse.move(b.x + b.width / 2 + 2, b.y + b.height / 2 + 2);
+      await p.locator('.leaflet-tooltip [data-testid="popup-do-pasto"]').waitFor({ timeout: 4000 });
+      await p.waitForTimeout(400); } },
   /* REVALIDAR-BG-SET26 — Valor do Rebanho (SINTÉTICO): a faixa do snapshot de 22px (set invalidado, com o Revalidar e o motivo) não
      corta nem vaza. SÓ a faixa (`regiao`): a tela inteira nunca teve gate de corte e tem achados antigos fora deste item. */
   { nome: 'valor-rebanho-faixa-snapshot', url: 'tela=valor-rebanho&barra=32', tamanhos: [[1000, 600], [1126, 579], [1366, 768], [1750, 1000]],
     regiao: '[data-testid="faixa-snapshot"]', antes: async (p) => { await p.locator('[data-testid="faixa-snapshot"]').waitFor(); await p.waitForTimeout(600); } },
+  /* FECH-DOCS-02 — o "Documentos do mês" com 11 e 25 documentos (nomes do WhatsApp, tipos longos do catálogo) a 1.240, 1.024 e no zoom de
+     135% (a janela de 1.240×700 vista a 135% = 919×519 de CSS): a lista cresce até o teto e só ela rola; nada corta seco; data dd/mm/aaaa */
+  ...[11, 25].map((n) => ({ nome: `documentos-do-mes-${n}`, url: `tela=documentos-do-mes&n=${n}`, tamanhos: [[1240, 700], [1024, 600], [919, 519]],
+    regiao: '[data-testid="documentos-do-mes"]', antes: (p) => p.waitForTimeout(1200) })),
   /* FECH-ROTACAO-01 fatia 3 — Fechamento de pastos com o grupo (dado SINTÉTICO, `tela=fechamento-grupo`): a grade com a moldura do
      grupo P10 (um vedado) e o card que só recebe; o modal do P10A com o quadro "Onde o lote esteve" (grupo inteiro) e o do P11 com a
      rotação avulsa ("também esteve em" o P12 de nome longo) */
@@ -906,6 +918,11 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-campo-lote-usar', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="caderno-usar-o-lote"]').click();
           await p.locator('[data-testid="caderno-voltar-texto"]').waitFor(); await p.waitForTimeout(300); } },
+      /* L1 (Gabriel 09/11) — a cria SEM carimbo no P10A (`&cria=1`): o campo Lote e o painel (o seletor) com "sem carimbo · definir" */
+      { nome: 'fechamento-grupo-campo-lote-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-campo-lote-painel-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
+          await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
       { nome: 'fechamento-grupo-campo-lote-painel', url: URL + '&v=lotes', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
           await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
@@ -929,6 +946,8 @@ const CENARIOS = [
     return [
       { nome: 'lotes-lista', url: URL, tamanhos: T, antes: lista },
       { nome: 'lotes-lista-encerrados', url: URL, tamanhos: T, antes: async (p) => { await lista(p); await clicarRotulo(/^Encerrados$/)(p); } },
+      /* LOTES-06 — a aba Resumo: os 4 números e os 6 quadros (número na coluna dele, nada corta) */
+      { nome: 'lotes-resumo', url: URL, tamanhos: T, antes: async (p) => { await lista(p); await clicarRotulo(/^Resumo$/)(p); await p.locator('[data-testid="resumo-dos-lotes"]').waitFor(); } },
       { nome: 'lotes-lista-vazia', url: URL, tamanhos: T, antes: async (p) => { await lista(p);
         await p.locator('[data-testid="lotes-busca"]').fill('nenhum lote com este nome'); await p.locator('[data-testid="lotes-vazio"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'lotes-assistente-categoria', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: novo },

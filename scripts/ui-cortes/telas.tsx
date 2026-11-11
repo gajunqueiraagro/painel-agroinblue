@@ -1985,10 +1985,12 @@ if (tela === 'mesclar') {
     ITENS.push(...ITENS.map((i) => ({ ...i, id: `${i.id}-9`, fechamento_id: `${i.fechamento_id}-9` })));
   }
   /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
-  const COM_LOTES = v === 'lotes';
+  /* L1 (Gabriel 09/11) — `&cria=1`: o P10A inteiro (as 2 categorias) no lote da cria SEM carimbo (l-vp4): "sem carimbo · definir" no campo Lote, no seletor e no popup */
+  const COM_CRIA = q.get('cria') === '1';
+  const COM_LOTES = v === 'lotes' || COM_CRIA;
   if (COM_LOTES) {
-    Object.assign(ITENS[0], { lote_id: 'l-dm6' });
-    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: 'l-px2' });
+    Object.assign(ITENS[0], { lote_id: COM_CRIA ? 'l-vp4' : 'l-dm6' });
+    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: COM_CRIA ? 'l-vp4' : 'l-px2' });
   }
   /* MAPA-LOTES-01 (C2) — `&v=mapa`: o Fechamento abre na vista Mapa (a escolha guardada); os polígonos SINTÉTICOS de 5 dos 6 pastos
      (o P12 fica sem desenho: vai para a faixa) e a área total por baixo */
@@ -2095,6 +2097,33 @@ if (tela === 'mesclar') {
     montar(<LotesTab />);
   };
   void montarLotes();
+} else if (tela === 'documentos-do-mes') {
+  /* FECH-DOCS-02 — o "Documentos do mês" (dado SINTÉTICO): `&n=` documentos no mês (11 e 25 no gate), tipos do catálogo, nomes do
+     WhatsApp (o pior caso do corte), out/2026; as setas trocam para nov (0 documentos) e set (3). O topo do diálogo é preso: trocar de
+     mês só mexe no rodapé. */
+  const N = Number(q.get('n') ?? '11');
+  const TIPOS = ['Mapa de rebanho', 'Nascimentos', 'Entradas', 'Vendas', 'Transferências', 'Mortes', 'Desmama', 'Engorda e reclassificação',
+    'Pesagem', 'Abate e romaneio', 'Manejo sanitário e vacinação', 'Reprodução (IATF e diagnóstico)', 'Suplementação e trato', 'Chuvas',
+    'Estoque de insumos', 'Relatório do campeiro', 'Outro'].map((nome, k) => ({ id: `t${k}`, nome, grupo: k < 10 ? 'Rebanho' : k < 13 ? 'Manejo' : k < 16 ? 'Campo' : 'Outros', ordem: (k + 1) * 10 }));
+  const doc = (k: number, mes: string) => ({ id: `d-${mes}-${k}`, tipo_id: `t${(k * 5) % 17}`, ano_mes: mes, versao: 1, url: k % 9 === 4 ? null : `cli/f1/${mes}/d${k}.pdf`,
+    nome: k % 3 === 0 ? `WhatsApp Image 2026-10-${String((k % 28) + 1).padStart(2, '0')} at 14.32.${String(k).padStart(2, '0')} (1).jpeg` : `Doc ${k + 1}.pdf`,
+    tamanho_bytes: k % 4 === 0 ? 12_345_678 : 345_678, uploaded_em: `2026-10-${String((k % 28) + 1).padStart(2, '0')}T12:00:00Z` });
+  const DOCS = [...Array.from({ length: N }, (_, k) => doc(k, '2026-10')), ...Array.from({ length: 3 }, (_, k) => doc(k, '2026-09'))];
+  g.__bancoBancada = {
+    from: (t: string, e: { eq: Record<string, unknown> }) => (t === 'catalogo_itens' ? TIPOS
+      : t === 'pecuaria_fechamento_documentos' ? DOCS.filter((d) => d.ano_mes === e.eq.ano_mes) : []),
+  };
+  const montarDocs = async () => {
+    const { DocumentosDoMesDialog } = await import('@/components/pecuaria/DocumentosDoMesDialog');
+    const { useDocumentosDoMes } = await import('@/hooks/useDocumentosDoMes');
+    function Hospedeiro() {
+      const [mes, setMes] = React.useState('2026-10');
+      const api = useDocumentosDoMes('cli', 'f1', mes);
+      return <DocumentosDoMesDialog aberto aoFechar={() => {}} fazendaNome="Faz. Exemplo Sintética do Retiro" anoMes={mes} aoTrocarMes={setMes} api={api} />;
+    }
+    montar(<Hospedeiro />);
+  };
+  void montarDocs();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */
