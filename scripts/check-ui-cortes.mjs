@@ -1547,6 +1547,9 @@ const CENARIOS = [
   ...['novo', 'editar'].flatMap((m) => ['Contrato', 'Liberações', 'Condições e cronograma', 'Destinação', 'Documentos'].map((aba) => ({
     nome: `cadastro-contrato-${m}-${aba}`, url: `tela=cadastro-contrato&m=${m}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => { await p.getByRole('button', { name: aba, exact: true }).first().click(); await p.waitForTimeout(500); } }))),
+  /* FIN-FINANC-LAYOUT-02 (Chat 10:26): o modal Editar contrato › Liberações com as 4 formas — o mesmo `BlocoLiberacoes` da aba do contrato */
+  { nome: 'cadastro-contrato-editar-liberacoes-formas', url: 'tela=cadastro-contrato&m=editar&lib=formas', tamanhos: TAMANHOS_DO_CONSORCIO,
+    antes: async (p) => { await p.getByRole('button', { name: 'Liberações', exact: true }).first().click(); await p.waitForTimeout(600); } },
   { nome: 'cadastro-contrato-novo-falta', url: 'tela=cadastro-contrato&m=novo', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicar('[data-testid="salvar-cadastro"]') },
   /* FIN-CONTRATO-CRONOGRAMA-01 — a aba Condições e cronograma: os dois casos do relato (SINTÉTICOS), o novo SAC 60 mensais, a prévia do
      regerar no lugar da tabela, 120 parcelas e a descrição de 120 caracteres; `tabelaMinima`: cabeçalho, 3 linhas e o Total inteiros */

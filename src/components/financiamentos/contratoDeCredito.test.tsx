@@ -86,7 +86,7 @@ describe('(2) o total das liberações — TELA v3: os números vêm de fn_contr
     expect(screen.getByTestId('total-liberacoes').textContent).toBe('955.395,01');
     /* FIN-FINANC-LAYOUT-02 (a): Data · Forma · Para quem · Bruto · Descontos · Líquido · Situação; a coluna que não vale fica vazia */
     expect(Array.from(screen.getByTestId('cabecalho-liberacoes').querySelectorAll('th')).map((th) => th.textContent))
-      .toEqual(['Data', 'Forma', 'Para quem', 'Bruto', 'Descontos', 'Líquido', 'Situação', '']);
+      .toEqual(['Data', 'Forma', 'Para quem', 'Bruto', 'Descontos', 'Líquido', 'Situação', 'Obs.', '']);
     expect(screen.getByTestId('total-a-identificar').textContent).toBe('a identificar 318.465,00');
     expect(screen.getByTestId('total-liquido').textContent).toBe('636.930,01');
     /* a casar: sem líquido e sem descontos (nada de "0,00" nem "—" laranja); casada: os números do banco */
@@ -109,11 +109,17 @@ describe('(2) o total das liberações — TELA v3: os números vêm de fn_contr
       liberacoes_total: { qtde: 1, liberado: 280500, entrou: 0, a_identificar: 0, excedente: 0 },
       pagamentos: [], pagamentos_total: { qtde: 0, principal: 0, juros: 0, encargos: 0, total: 0 }, historico: [], a_resolver: [],
     });
-    render(<BlocoLiberacoes api={api({ tela, liberacoes: [LIB({ id: 'lib-f', data: '2026-09-01', valor: 280500, forma: 'fornecedor', fornecedorId: 'fo-1', fornecedorNome: 'Máquinas Exemplo' })] })}
+    render(<BlocoLiberacoes api={api({ tela, liberacoes: [LIB({ id: 'lib-f', data: '2026-09-01', valor: 280500, forma: 'fornecedor', fornecedorId: 'fo-1', fornecedorNome: 'Máquinas Exemplo',
+      observacao: 'Moderfrota · plantadeira 1211 · chassi 1CQ exemplo · NF 73.007 da filial 0015' })] })}
       contaDoContrato="Conta do contrato" onAbrirLancamento={() => undefined} clienteId="cli" />);
     expect(screen.getByTestId('forma-da-liberacao').textContent).toBe('direto ao fornecedor');
     expect(screen.getByTestId('para-quem').textContent).toBe('Máquinas Exemplo');
-    expect([screen.getByTestId('descontos-da-liberacao').textContent, screen.getByTestId('liquido-da-liberacao').textContent, screen.getByTestId('situacao-da-liberacao').textContent]).toEqual(['', '', '']);
+    expect([screen.getByTestId('descontos-da-liberacao').textContent, screen.getByTestId('liquido-da-liberacao').textContent]).toEqual(['', '']);
+    /* Chat 10:26: "pago direto" (o fornecedor inteiro no title); 10:24: a Observação visível, o inteiro no title */
+    const sit = screen.getByTestId('situacao-da-liberacao').querySelector('span')!;
+    expect([sit.textContent, sit.getAttribute('title')]).toEqual(['pago direto', 'pago direto a Máquinas Exemplo']);
+    const obs = screen.getByTestId('observacao-da-liberacao').querySelector('span')!;
+    expect(obs.getAttribute('title')).toBe('Moderfrota · plantadeira 1211 · chassi 1CQ exemplo · NF 73.007 da filial 0015');
     expect(screen.getByTestId('total-a-identificar').textContent).toBe('');
   });
   it('em conta sem conta definida (nem no lançamento nem no contrato): "Para quem" VAZIO, nunca "—" (ajuste do Chat 11/11 09:58)', () => {

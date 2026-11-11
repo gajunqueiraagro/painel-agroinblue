@@ -41,4 +41,13 @@ describe('FIN-FINANC-LAYOUT-02 — o cronograma do crédito', () => {
     expect(fonte).toMatch(/const TH_V4 = `sticky top-0 z-10 h-\[22px\] whitespace-nowrap bg-\[#1d3a5d\] px-\[6px\]/);
     expect(fonte).toMatch(/const TF_V4 = `sticky bottom-0 z-10 h-\[22px\] whitespace-nowrap bg-\[#e4e9ef\] px-\[6px\]/);
   });
+  it('o modal Editar contrato › Liberações é o MESMO BlocoLiberacoes da tela do contrato, com a conta do contrato (Chat 10:26)', () => {
+    const modal = readFileSync(resolve(__dirname, './CadastroDeContratoDialog.tsx'), 'utf8');
+    expect(modal).toContain("import { BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes } from '@/components/financiamentos/ContratoDeCredito';");
+    expect(modal).toContain('<BlocoLiberacoes api={credito} contaDoContrato={nomeDaContaDoContrato}');
+    expect(modal).toContain('const nomeDaContaDoContrato = contaDoForm ? (contaDoForm.nome_exibicao || contaDoForm.nome_conta || null) : null;');
+    /* nenhuma outra tabela de liberações no código (uma fonte só) */
+    expect(modal).not.toMatch(/Entrou na conta|A identificar/);
+    expect(fonte).not.toMatch(/Entrou na conta|A identificar/);
+  });
 });

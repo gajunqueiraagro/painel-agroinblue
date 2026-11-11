@@ -10,23 +10,7 @@ import { fileURLToPath } from 'node:url';
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const [PASTA, ROTULO = 'foto', V = '', EXTRA = ''] = process.argv.slice(2);
 if (PASTA) fs.mkdirSync(PASTA, { recursive: true });
-const ABAS = ['Cronograma', 'Liberações', 'Pagamentos', 'Documentos', 'Histórico', 'A resolver'];
-const servidor = await createServer({ configFile: path.join(AQUI, 'vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
-await servidor.listen();
-const base = `http://127.0.0.1:${servidor.httpServer.address().port}`;
-const navegador = await chromium.launch();
-let achados = 0;
-try {
-  for (const [w, h] of [[1126, 579], [1366, 768], [1440, 900]]) {
-    const p = await navegador.newPage({ viewport: { width: w, height: h } });
-    await p.goto(`${base}/index.html?tela=contrato${V ? `&v=${V}` : ''}${EXTRA ? `&${EXTRA}` : ''}`); await p.waitForTimeout(1500);
-    for (const aba of ABAS) {
-      if (aba !== 'Cronograma') {
-        const b = p.getByRole('button', { name: new RegExp(`^${aba}`) }).first();
-        if (!(await b.count())) continue;
-        await b.click(); await p.waitForTimeout(500);
-      }
-      const r = await p.evaluate(() => {
+const MEDIR = () => {
         const cortes = [], sobre = [];
         const vis = (e) => { const s = getComputedStyle(e); return s.visibility !== 'hidden' && s.display !== 'none'; };
         const nome = (e) => `${e.tagName.toLowerCase()}${e.dataset.testid ? `[${e.dataset.testid}]` : ''} "${(e.textContent ?? '').trim().slice(0, 40)}"`;
@@ -34,7 +18,9 @@ try {
           if (!vis(e) || !e.getClientRects().length) continue;
           const s = getComputedStyle(e);
           const rola = /(auto|scroll)/.test(s.overflowX);
-          if (!rola && !(e.tagName === 'INPUT' && e.type === 'file') && e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 0 && s.overflowX !== 'visible') cortes.push(`${nome(e)} ${e.scrollWidth}>${e.clientWidth}`);
+          /* permitido: "…" com o inteiro no title (regra de corte de 21/10) e o texto só para leitor de tela (sr-only, 1px) */
+          const reticencia = s.textOverflow === 'ellipsis' && !!e.closest('[title]');
+          if (!rola && !reticencia && e.clientWidth > 1 && !(e.tagName === 'INPUT' && e.type === 'file') && e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 0 && s.overflowX !== 'visible') cortes.push(`${nome(e)} ${e.scrollWidth}>${e.clientWidth}`);
         }
         /* textos: cada nó de texto não vazio vira uma caixa; duas caixas de células diferentes que se cruzam = sobreposição; caixa fora da célula = vaza */
         const caixas = [];
@@ -43,6 +29,8 @@ try {
           if (!n.textContent.trim() || !n.parentElement || !vis(n.parentElement)) continue;
           const rg = document.createRange(); rg.selectNodeContents(n);
           const cel = n.parentElement.closest('td,th');
+          /* o texto que termina em "…" (com title) tem a caixa do texto INTEIRO; o que se vê é a caixa do elemento */
+          if (getComputedStyle(n.parentElement).textOverflow === 'ellipsis' && n.parentElement.closest('[title]')) continue;
           /* o texto escondido atrás do cabeçalho/rodapé presos (a lista rolou por baixo) não conta: só o que se VÊ */
           for (const b of rg.getClientRects()) {
             if (b.width <= 0.5) continue;
@@ -65,7 +53,24 @@ try {
           if (x > 0.5 && y > 0.5) sobre.push(`"${a.t}" × "${b.t}"`);
         }
         return { cortes, sobre, rolaPagina: document.documentElement.scrollHeight > innerHeight + 1 || document.documentElement.scrollWidth > innerWidth + 1 };
-      });
+      };
+const ABAS = ['Cronograma', 'Liberações', 'Pagamentos', 'Documentos', 'Histórico', 'A resolver'];
+const servidor = await createServer({ configFile: path.join(AQUI, 'vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
+await servidor.listen();
+const base = `http://127.0.0.1:${servidor.httpServer.address().port}`;
+const navegador = await chromium.launch();
+let achados = 0;
+try {
+  for (const [w, h] of [[1126, 579], [1366, 768], [1440, 900]]) {
+    const p = await navegador.newPage({ viewport: { width: w, height: h } });
+    await p.goto(`${base}/index.html?tela=contrato${V ? `&v=${V}` : ''}${EXTRA ? `&${EXTRA}` : ''}`); await p.waitForTimeout(1500);
+    for (const aba of ABAS) {
+      if (aba !== 'Cronograma') {
+        const b = p.getByRole('button', { name: new RegExp(`^${aba}`) }).first();
+        if (!(await b.count())) continue;
+        await b.click(); await p.waitForTimeout(500);
+      }
+      const r = await p.evaluate(MEDIR);
       const n = r.cortes.length + r.sobre.length + (r.rolaPagina ? 1 : 0);
       achados += n;
       console.log(`${w}x${h} ${aba}: cortes ${r.cortes.length} · sobreposições ${r.sobre.length}${r.rolaPagina ? ' · A PÁGINA ROLA' : ''}`);
@@ -84,6 +89,20 @@ try {
     if (!criar) achados += 1;
     if (PASTA) await p.screenshot({ path: path.join(PASTA, `${ROTULO}-modal-criar-destinacao-${w}x${h}.png`) });
     await p.close();
+    /* Chat 10:26 — o modal Editar contrato › Liberações: o MESMO `BlocoLiberacoes` (4 formas, observação longa) */
+    const m = await navegador.newPage({ viewport: { width: w, height: h } });
+    await m.goto(`${base}/index.html?tela=cadastro-contrato&m=editar&lib=formas`); await m.waitForTimeout(1500);
+    await m.getByRole('button', { name: 'Liberações', exact: true }).first().click(); await m.waitForTimeout(700);
+    const rm = await m.evaluate(MEDIR);
+    /* a tabela das Liberações cabe no modal sem rolar na horizontal (a Observação à vista) */
+    const rolaX = await m.evaluate(() => { const a = document.querySelector('[data-testid="area-que-rola-liberacoes"]'); return !!a && a.scrollWidth > a.clientWidth + 1; });
+    if (rolaX) rm.cortes.push('a tabela das Liberações ROLA na horizontal no modal');
+    const nm = rm.cortes.length + rm.sobre.length;
+    achados += nm;
+    console.log(`${w}x${h} modal Editar contrato › Liberações: cortes ${rm.cortes.length} · sobreposições ${rm.sobre.length}`);
+    for (const x of [...rm.cortes, ...rm.sobre].slice(0, 8)) console.log('   ', x);
+    if (PASTA) await m.screenshot({ path: path.join(PASTA, `${ROTULO}-modal-editar-liberacoes-${w}x${h}.png`) });
+    await m.close();
   }
 } finally { await navegador.close(); await servidor.close(); }
 console.log(`TOTAL de achados: ${achados}`);

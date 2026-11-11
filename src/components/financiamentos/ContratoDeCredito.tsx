@@ -140,19 +140,22 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
           fica VAZIA (sem "—" laranja). Os números são os de `fn_contrato_tela` (líquido = o que entrou na conta pelo lançamento ligado;
           descontos = bruto − líquido, o `a_identificar` da linha casada); a tela não soma. A destinação mora no title do "Para quem". */}
       <div className="min-h-0 flex-1 overflow-auto" data-testid="area-que-rola-liberacoes">
-      <table className="w-full min-w-[720px] table-fixed border-collapse">
-        <colgroup><col style={{ width: 80 }} /><col style={{ width: 132 }} /><col /><col style={{ width: 100 }} /><col style={{ width: 92 }} /><col style={{ width: 100 }} /><col style={{ width: 104 }} /><col style={{ width: 44 }} /></colgroup>
+      {/* Chat 11/11 10:24: a Observação visível (a coluna que fica com o resto, "…" + o inteiro no title); "Para quem" com largura fixa.
+          Fixas 756 e tabela mín. 816: cabe no modal Editar contrato (≈ 820px úteis a 1.126) sem rolar; a Observação fica com o resto
+          (60px no modal, ~190 na aba do contrato a 1.126); "liquidação do anterior" termina em "…" com o inteiro no title */}
+      <table className="w-full min-w-[816px] table-fixed border-collapse">
+        <colgroup><col style={{ width: 80 }} /><col style={{ width: 120 }} /><col style={{ width: 140 }} /><col style={{ width: 96 }} /><col style={{ width: 84 }} /><col style={{ width: 96 }} /><col style={{ width: 96 }} /><col /><col style={{ width: 44 }} /></colgroup>
         <thead data-testid="cabecalho-liberacoes"><tr>
           <th className={`${TH} sticky top-0 z-10`}>Data</th><th className={`${TH} sticky top-0 z-10`}>Forma</th><th className={`${TH} sticky top-0 z-10`}>Para quem</th>
           <th className={`${TH_R} sticky top-0 z-10`}>Bruto</th>
           <th className={`${TH_R} sticky top-0 z-10`} title="tarifas e IOF retidos: bruto − líquido, na liberação em conta já casada">Descontos</th>
           <th className={`${TH_R} sticky top-0 z-10`} title="o que entrou na conta (o lançamento ligado)">Líquido</th>
-          <th className={`${TH} sticky top-0 z-10`}>Situação</th><th className={`${TH} sticky top-0 z-10`} />
+          <th className={`${TH} sticky top-0 z-10`}>Situação</th><th className={`${TH} sticky top-0 z-10`} title="Observação da liberação">Obs.</th><th className={`${TH} sticky top-0 z-10`} />
         </tr></thead>
         <tbody>
-          {libs === null && <tr><td colSpan={8} className={`${TD} text-muted-foreground`}>…</td></tr>}
+          {libs === null && <tr><td colSpan={9} className={`${TD} text-muted-foreground`}>…</td></tr>}
           {libs !== null && libs.length === 0 && (
-            <tr><td colSpan={8} className={`${TD} text-muted-foreground`} data-testid="liberacoes-vazio">Nenhuma liberação gravada.</td></tr>
+            <tr><td colSpan={9} className={`${TD} text-muted-foreground`} data-testid="liberacoes-vazio">Nenhuma liberação gravada.</td></tr>
           )}
           {(libs ?? []).map((l) => {
             const cf = contaOuFornecedor(l, contaDoContrato);
@@ -177,7 +180,12 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
                     <button type="button" className="text-primary hover:underline" onClick={() => onAbrirLancamento(l.lancamentoId!)}
                       title={`${l.lancamento?.descricao ?? 'lançamento'} · ${br(l.lancamento?.data ?? l.data)} · abrir no Financeiro${t && t.excedente > 0 ? ` · o lançamento passa ${num2(t.excedente)} do valor da liberação` : ''}`}
                       data-testid="liberacao-vinculada">casada ↔{t && t.excedente > 0 ? <span className="ml-1 text-amber-700">+{num2(t.excedente)}</span> : null}</button>
-                  ) : ex === 'a_casar' ? <span className="text-amber-700" title="sem lançamento ligado: casa com a entrada quando ela existir">a casar</span> : ''}
+                  ) : ex === 'a_casar' ? <span className="text-amber-700" title="sem lançamento ligado: casa com a entrada quando ela existir">a casar</span>
+                    /* Chat 11/11 10:26: o direto ao fornecedor diz que foi pago direto (o nome inteiro no title) */
+                    : l.forma === 'fornecedor' ? <span className={`${CELULA} text-muted-foreground`} title={cf.title}>pago direto</span> : ''}
+                </td>
+                <td className={TD} data-testid="observacao-da-liberacao">
+                  {l.observacao ? <span className={CELULA} title={l.observacao}>{l.observacao}</span> : ''}
                 </td>
                 <td className={`${TD} text-right`}>
                   <button type="button" className="mr-1 align-middle text-muted-foreground hover:text-foreground" title="Editar liberação" onClick={() => setEditando(l)}><Pencil className="size-3" /></button>
@@ -193,7 +201,7 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
             <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums`} data-testid="total-liberacoes">{tot ? num2(tot.liberado) : '…'}</td>
             <td className={`${TOTAL} sticky bottom-0 z-10`} />
             <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums`} data-testid="total-liquido">{tot ? num2(tot.entrou) : '…'}</td>
-            <td className={`${TOTAL} sticky bottom-0 z-10 ${tot && tot.aIdentificar > 0 ? 'text-amber-700' : ''}`} colSpan={2} data-testid="total-a-identificar"
+            <td className={`${TOTAL} sticky bottom-0 z-10 ${tot && tot.aIdentificar > 0 ? 'text-amber-700' : ''}`} colSpan={3} data-testid="total-a-identificar"
               title="bruto que ainda não tem entrada explicada: as liberações a casar e os descontos das casadas">
               {tot && tot.aIdentificar > 0 ? <>a identificar <span className="tabular-nums">{num2(tot.aIdentificar)}</span></> : ''}
             </td>

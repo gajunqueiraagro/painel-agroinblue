@@ -206,6 +206,26 @@ const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
 const m = q.get('m') ?? 'novo';
 const v = q.get('v') ?? '';
+/* FIN-FINANC-LAYOUT-02 (a) — `&lib=formas`: as liberações nas quatro situações da tabela nova — em conta casada com desconto (tarifa/IOF:
+   bruto 238.425,00, entrou 236.890,12), em conta a casar, direto ao fornecedor (com o nome e uma observação longa) e liquidação do anterior.
+   UMA fonte para a aba Liberações do contrato e para a do modal Editar contrato (o mesmo `BlocoLiberacoes`). SINTÉTICO. */
+function liberacoesDasFormas(telaBase: any): { libs: any[]; tela: any } {
+  const L = (id: string, data: string, valor: number, forma: string, extra: any = {}) => ({ id, data, valor, forma, lancamento_id: null, fornecedor_id: null,
+    contrato_liquidado_id: null, destinacao_id: null, observacao: null, cancelado_em: null, ...extra });
+  const libs = [
+    L('lb-1', '2026-07-30', 238425, 'conta', { lancamento_id: 'lc-lib-1' }),
+    L('lb-2', '2026-08-31', 42075, 'conta'),
+    L('lb-3', '2026-09-01', 280500, 'fornecedor', { fornecedor_id: 'fo-maq', destinacao_id: 'a6489445-256f-4802-8d88-a6f97985539a',
+      observacao: 'Moderfrota exemplo · plantadeira 1211 · chassi sintético 1CQ0000AAA0000000 · NF 73.000 da filial de exemplo' }),
+    L('lb-4', '2026-09-15', 1150000, 'liquidacao', { contrato_liquidado_id: 'fin-ant' }),
+  ];
+  const T = (l: any, entrou: number | null, aid: number) => ({ id: l.id, data: l.data, forma: l.forma, valor: l.valor, destinacao_id: l.destinacao_id,
+    destino: l.destinacao_id ? 'Armazém Exemplo' : null, lancamento_id: l.lancamento_id, entrou, a_identificar: aid, excedente: 0 });
+  return { libs, tela: { ...telaBase, liberacoes: [T(libs[0], 236890.12, 1534.88), T(libs[1], 0, 42075), T(libs[2], null, 0), T(libs[3], null, 0)],
+    liberacoes_total: { qtde: 4, liberado: 1711000, entrou: 236890.12, a_identificar: 43609.88, excedente: 0 } } };
+}
+const LANC_DA_LIBERACAO = [{ id: 'lc-lib-1', descricao: 'Liberação financiamento Moderfrota exemplo', data_pagamento: '2026-07-30', data_vencimento: '2026-07-30', conta_destino_id: null, conta_bancaria_id: 'bb' }];
+const FORNECEDOR_DA_LIBERACAO = [{ id: 'fo-maq', nome: 'Máquinas Agrícolas Exemplo Ltda' }];
 /* UI-TEXTO-LONGO-01 — `&desc=curto|longo`: a MESMA tela com uma descrição curta ou com 300 caracteres (o caso do sêmen bovino). O gate
    compara as alturas das duas (modal, resumo lateral, lista de parcelas). Texto sintético. */
 const desc = q.get('desc');
@@ -427,20 +447,7 @@ if (tela === 'mesclar') {
   /* FIN-FINANC-LAYOUT-02 (a) — `&lib=formas`: as liberações nas três situações da tabela nova — em conta casada com desconto (tarifa/IOF:
      bruto 238.425,00, entrou 236.890,12), em conta a casar, direto ao fornecedor (com o nome) e liquidação do anterior. SINTÉTICO. */
   const LIB_FORMAS = q.get('lib') === 'formas';
-  if (LIB_FORMAS) {
-    const L = (id: string, data: string, valor: number, forma: string, extra: any = {}) => ({ id, data, valor, forma, lancamento_id: null, fornecedor_id: null,
-      contrato_liquidado_id: null, destinacao_id: null, observacao: null, cancelado_em: null, ...extra });
-    d.liberacoes = [
-      L('lb-1', '2026-07-30', 238425, 'conta', { lancamento_id: 'lc-lib-1' }),
-      L('lb-2', '2026-08-31', 42075, 'conta'),
-      L('lb-3', '2026-09-01', 280500, 'fornecedor', { fornecedor_id: 'fo-maq', destinacao_id: 'a6489445-256f-4802-8d88-a6f97985539a' }),
-      L('lb-4', '2026-09-15', 1150000, 'liquidacao', { contrato_liquidado_id: 'fin-ant' }),
-    ];
-    const T = (l: any, entrou: number | null, aid: number) => ({ id: l.id, data: l.data, forma: l.forma, valor: l.valor, destinacao_id: l.destinacao_id,
-      destino: l.destinacao_id ? 'Armazém Exemplo' : null, lancamento_id: l.lancamento_id, entrou, a_identificar: aid, excedente: 0 });
-    d.tela = { ...d.tela, liberacoes: [T(d.liberacoes[0], 236890.12, 1534.88), T(d.liberacoes[1], 0, 42075), T(d.liberacoes[2], null, 0), T(d.liberacoes[3], null, 0)],
-      liberacoes_total: { qtde: 4, liberado: 1711000, entrou: 236890.12, a_identificar: 43609.88, excedente: 0 } };
-  }
+  if (LIB_FORMAS) { const lf = liberacoesDasFormas(d.tela); d.liberacoes = lf.libs; d.tela = lf.tela; }
   /* PARC-DOCS-TABELA-01 — `&np=N`: a compra parcelada com N parcelas de R$ 344,00 (o caso real tem 2), todas com lançamento, e
      `&docs=1` uma nota da compra ligada a elas (a lista de documentos da aba ocupa a sua linha). Tudo SINTÉTICO. */
   const NP = Number(q.get('np') ?? 0);
@@ -479,9 +486,9 @@ if (tela === 'mesclar') {
         original_guardado: false, antes: ANTES_DA_VOLTA };
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financiamentos' ? (LIB_FORMAS && e?.in?.id ? [{ id: 'fin-ant', numero_contrato: '40/00123-4' }] : [d.fin]) : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
-      : t === 'financeiro_lancamentos_v2' ? (LIB_FORMAS ? [{ id: 'lc-lib-1', descricao: 'Liberação financiamento Moderfrota exemplo', data_pagamento: '2026-07-30', data_vencimento: '2026-07-30', conta_destino_id: null, conta_bancaria_id: d.fin.conta_bancaria_id }] : LANC_DA_COMPRA)
+      : t === 'financeiro_lancamentos_v2' ? (LIB_FORMAS ? LANC_DA_LIBERACAO : LANC_DA_COMPRA)
       : t === 'financeiro_contas_bancarias' ? CONTAS_DO_CONTRATO
-      : t === 'financeiro_fornecedores' && LIB_FORMAS ? [{ id: 'fo-maq', nome: 'Máquinas Agrícolas Exemplo Ltda' }]
+      : t === 'financeiro_fornecedores' && LIB_FORMAS ? FORNECEDOR_DA_LIBERACAO
       : t === 'financiamento_destinacoes' ? d.destinacoes ?? [] : t === 'financiamento_documentos' ? d.documentos ?? []
       : t === 'vw_lancamento_documentos' ? DOCS_DA_COMPRA.filter((x) => (e?.eq?.especie == null || x.especie === e.eq.especie) && (e?.eq?.lancamento_id == null || x.lancamento_id === e.eq.lancamento_id)) : [],
     rpc: (fn: string) => fn === 'fn_financiamento_situacao' ? d.situacao : fn === 'fn_contrato_tela' ? d.tela ?? null : fn === 'fn_financiamento_captacoes_livres' ? []
@@ -589,12 +596,18 @@ if (tela === 'mesclar') {
   const cronSac60 = { recusa: null, parcelas: 60, parcelas_so_juros: 0, principal_total: 300000, juros_total: 95312.5, total: 395312.5, vencimento_final: '2031-06-10',
     linhas: Array.from({ length: 60 }, (_x, i) => ({ numero: i + 1, vencimento: somaMeses('2026-07-10', i), principal: 5000, juros: Math.round((300000 - i * 5000) * 0.0098 * 100) / 100,
       total: 5000 + Math.round((300000 - i * 5000) * 0.0098 * 100) / 100, saldo_apos: 300000 - (i + 1) * 5000 })) };
+  /* FIN-FINANC-LAYOUT-02 — `&lib=formas`: o modal Editar contrato › Liberações com as 4 formas (a MESMA fonte da aba do contrato) */
+  const LIB_CAD = q.get('lib') === 'formas' ? liberacoesDasFormas((contrato as any).tela) : null;
   g.__bancoBancada = {
-    from: (t: string) => t === 'financiamentos' ? [contratoDoCenario]
+    from: (t: string, e: any) => t === 'financiamentos' ? (LIB_CAD && e?.in?.id ? [{ id: 'fin-ant', numero_contrato: '40/00123-4' }] : [contratoDoCenario])
+      : LIB_CAD && t === 'financiamento_liberacoes' ? LIB_CAD.libs
+      : LIB_CAD && t === 'financeiro_lancamentos_v2' ? LANC_DA_LIBERACAO
+      : LIB_CAD && t === 'financeiro_fornecedores' ? FORNECEDOR_DA_LIBERACAO
+      : LIB_CAD && t === 'financeiro_contas_bancarias' ? [{ id: contratoDoCenario.conta_bancaria_id, nome_conta: 'Banco Exemplo Cooperativo', nome_exibicao: 'Banco Exemplo Cooperativo', banco: 'Exemplo', tipo_conta: 'cc' }]
       : t === 'financiamento_parcelas' ? (cenario ? cenario.linhas.map((l) => ({ id: l.id, numero_parcela: l.numero, data_vencimento: l.venc, status: l.paga ? 'pago' : 'pendente', ajustada: l.ajustada }))
         : d.vencimentos.map((v: string, i: number) => ({ data_vencimento: v, status: 'pendente', numero_parcela: i + 1 })))
       : t === 'financeiro_plano_contas' ? d.planos : [],
-    rpc: (fn: string) => fn === 'fn_financiamento_cronograma' ? (v === 'sac60' ? cronSac60 : d.cronograma)
+    rpc: (fn: string) => LIB_CAD && fn === 'fn_contrato_tela' ? LIB_CAD.tela : fn === 'fn_financiamento_cronograma' ? (v === 'sac60' ? cronSac60 : d.cronograma)
       : fn === 'fn_financiamento_situacao' ? situacaoDoCenario
       : fn === 'fn_financiamento_parcelas_regerar' && cenario ? { simulado: true, recusa: null, antes: fotoSint(cenario.linhas, 0), depois: fotoSint(cenario.linhas, 1234.56),
           base: { saldo: 480018, guardado: 0, principal: 480018, parcelas: 4, sistema: 'sac', taxa_aa: 12.5, periodicidade: 'anual' }, diferenca_do_saldo: 0 }
