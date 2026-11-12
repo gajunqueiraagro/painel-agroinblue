@@ -31,6 +31,7 @@ const vazia = (loteId: string): LinhaAbate => ({
   descontoQualidade: { valor: null, fonte: null },
   outrosDescontos: { valor: null, fonte: null },
   funrural: { valor: null, fonte: null },
+  senar: { valor: null, fonte: null },
 });
 
 describe('paraPayload — o que sobe para oc_salvar_abate', () => {
@@ -91,6 +92,7 @@ describe('daLinha — o que volta do banco', () => {
     desconto_qualidade_valor: null, desconto_qualidade_fonte: null,
     outros_descontos_valor: 10, outros_descontos_fonte: 'arroba',
     funrural_valor: 1.5, funrural_fonte: 'pct',
+    senar_valor: null, senar_fonte: null,
   };
 
   it('traduz par a par, mantendo a fonte', () => {

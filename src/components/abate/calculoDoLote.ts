@@ -21,6 +21,7 @@ export const linhaVazia = (loteId: string): LinhaAbate => ({
   descontoQualidade: { valor: null, fonte: null },
   outrosDescontos: { valor: null, fonte: null },
   funrural: { valor: null, fonte: null },
+  senar: { valor: null, fonte: null },
 });
 
 export interface LoteAbate {
@@ -63,6 +64,8 @@ export function paraCalculo(l: LinhaAbate, lote: LoteAbate) {
     outrosDescontosArroba: porFonte(l.outrosDescontos, 'arroba'),
     funruralPct: porFonte(l.funrural, 'pct'),
     funruralReais: porFonte(l.funrural, 'reais'),
+    senarPct: porFonte(l.senar, 'pct'),
+    senarReais: porFonte(l.senar, 'reais'),
   };
 }
 
@@ -97,6 +100,9 @@ export function totaisDoAbate(lotes: LoteAbate[], calculos: Map<string, AbateCal
       bruto: soma(c => c.valorBruto),
       liquido: soma(c => c.valorLiquido),
       funrural: soma(c => c.funruralTotal),
+      /* IMPORTAR-ABATE-01 (D5) — o SENAR à parte e a retenção inteira (Funrural + SENAR): a linha "Retenções" lê esta. */
+      senar: soma(c => c.senarTotal),
+      retencoes: soma(c => c.retencaoTotal),
       /* Divisões protegidas: sem cabeça ou sem arroba o certo é `—`, não infinito. */
       pesoMedio: cabecas > 0 ? pesoVivo / cabecas : 0,
       carcacaCab: cabecas > 0 ? carcaca / cabecas : 0,

@@ -1116,7 +1116,7 @@ export function AbateModalShell({
                 {/* ⚠ VERMELHO E COM SINAL: e' o que sai do bruto antes de virar NF, e
                     negativo em vermelho vale em toda a tela. */}
                 <LinhaResumo rotulo="Retenções" cor="text-destructive"
-                  valor={totaisAbate.funrural > 0 ? `− ${formatMoeda(totaisAbate.funrural)}` : null} />
+                  valor={totaisAbate.retencoes > 0 ? `− ${formatMoeda(totaisAbate.retencoes)}` : null} />
                 {/* ⚠ DOIS RÓTULOS PARA DUAS COISAS DIFERENTES. Com rascunho na tela, o
                     número é o que a conta diz e ainda não existe no banco — chamá-lo de
                     "Acordado (NF)" afirmaria um acordo que ninguém gravou. Depois de

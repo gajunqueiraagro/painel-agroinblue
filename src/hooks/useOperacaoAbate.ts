@@ -42,7 +42,7 @@ export type CenarioAbate = 'projetado' | 'realizado';
  * percentual de verdade: `valorBase * funruralPct / 100`.
  */
 export type FonteArroba = 'arroba' | 'reais';
-/** Só o Funrural: percentual do valor base, ou o total em reais. */
+/** Funrural e SENAR: percentual do bruto, ou o total em reais. */
 export type FontePct = 'pct' | 'reais';
 /** `outros_descontos` é o inverso dos bônus: o primeiro lado é o total. */
 export type FonteOutros = 'reais' | 'arroba';
@@ -81,6 +81,12 @@ export interface LinhaAbate {
   descontoQualidade: ValorComFonte;
   outrosDescontos: ValorComFonte<FonteOutros>;
   funrural: ValorComFonte<FontePct>;
+  /**
+   * IMPORTAR-ABATE-01 (D5) — o SENAR é retenção PRÓPRIA, nunca "funrural" (o Resumo Fiscal e a DRE separam os dois).
+   * ⚠ OBRIGATÓRIO NO TIPO DE PROPÓSITO: o `oc_salvar_abate` grava o que vier (`senar_valor = EXCLUDED.senar_valor`), e uma
+   * linha montada sem ele subiria sem o par — o SENAR gravado viraria nulo no próximo Salvar. Faltar aqui é erro de compilação.
+   */
+  senar: ValorComFonte<FontePct>;
   valorBaseOverride: number | null;
   /**
    * O LÍQUIDO do lote — derivado E persistido, e a exceção é deliberada.
@@ -144,6 +150,7 @@ export interface AbateRow {
   desconto_qualidade_valor: number | null; desconto_qualidade_fonte: string | null;
   outros_descontos_valor: number | null;   outros_descontos_fonte: string | null;
   funrural_valor: number | null;           funrural_fonte: string | null;
+  senar_valor: number | null;              senar_fonte: string | null;
   valor_base_override: number | null;
   valor_liquido: number | null;
 }
@@ -153,7 +160,7 @@ const COLUNAS =
   + ' preco_arroba, bonus_precoce_valor, bonus_precoce_fonte, bonus_qualidade_valor,'
   + ' bonus_qualidade_fonte, bonus_lista_trace_valor, bonus_lista_trace_fonte,'
   + ' desconto_qualidade_valor, desconto_qualidade_fonte, outros_descontos_valor,'
-  + ' outros_descontos_fonte, funrural_valor, funrural_fonte, valor_base_override, valor_liquido,'
+  + ' outros_descontos_fonte, funrural_valor, funrural_fonte, senar_valor, senar_fonte, valor_base_override, valor_liquido,'
   + ' peso_carcaca_fonte, preco_fonte';
 
 const comFonteArroba = (v: number | null, f: string | null): ValorComFonte<FonteArroba> => ({
@@ -189,6 +196,7 @@ export function daLinha(r: AbateRow): LinhaAbate {
     descontoQualidade: comFonteArroba(r.desconto_qualidade_valor, r.desconto_qualidade_fonte),
     outrosDescontos: comFonteOutros(r.outros_descontos_valor, r.outros_descontos_fonte),
     funrural: comFontePct(r.funrural_valor, r.funrural_fonte),
+    senar: comFontePct(r.senar_valor, r.senar_fonte),
     valorBaseOverride: r.valor_base_override,
     valorLiquido: r.valor_liquido,
   };
@@ -236,6 +244,7 @@ export function paraPayload(l: LinhaAbate): Record<string, Json | undefined> {
   par('desconto_qualidade', l.descontoQualidade);
   par('outros_descontos', l.outrosDescontos);
   par('funrural', l.funrural);
+  par('senar', l.senar);
   return p;
 }
 

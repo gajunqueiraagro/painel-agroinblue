@@ -543,11 +543,20 @@ if (tela === 'mesclar') {
     bonusPrecoce: { valor: n, fonte: 'reais' }, bonusQualidade: { valor: acima ? n : null, fonte: acima ? 'reais' : null },
     bonusListaTrace: { valor: acima ? n : null, fonte: acima ? 'reais' : null },
     descontoQualidade: { valor: n, fonte: 'reais' }, outrosDescontos: { valor: acima ? n : null, fonte: acima ? 'reais' : null },
-    funrural: { valor: n, fonte: 'reais' } });
+    funrural: { valor: n, fonte: 'reais' },
+    /* IMPORTAR-ABATE-01 (D5) — o SENAR no teto so' no `acima` (os outros casos ficam como eram, medidos) */
+    senar: { valor: acima ? n : null, fonte: acima ? 'reais' : null } });
+  /* IMPORTAR-ABATE-01 (D5) — `&v=lote6`: o lote 1 do lote 6 depois da reclassificacao (so' os NUMEROS do acerto; 26 vacas, carcaca
+     7.051,50 kg, R$ 351,4464/@, SENAR 330,43 no campo dele, Funrural vazio, liquido 164.884,52). `&v=composta`: Funrural + SENAR. */
+  const lote6 = { id: 'l1', ordem: 1, categoria: 'vacas', categoriaLabel: 'Vacas', quantidade: 26, pesoMedioKg: 518.59 };
+  const linha6 = (funrural: number | null, senar: number): LinhaAbate => ({ ...linhaVazia('l1'), pesoCarcacaKg: 7051.5, pesoCarcacaFonte: 'total',
+    precoArroba: 351.4464, precoFonte: 'arroba', funrural: { valor: funrural, fonte: funrural == null ? null : 'reais' },
+    senar: { valor: senar, fonte: 'reais' } });
   const linha: LinhaAbate = v === '99mi' ? grande(99999999.99, false) : v === 'teto' ? grande(999999999.99, false)
     : v === 'acima' ? grande(999999999.99, true)
+    : v === 'lote6' ? linha6(null, 330.43) : v === 'composta' ? linha6(1403.34, 196.27)
     : { ...linhaVazia('l1'), pesoCarcacaKg: 40676, pesoCarcacaFonte: 'total', precoArroba: 360, precoFonte: 'arroba' };
-  montar(<ModalNegociarLote lote={lote} linha={linha} cenario="realizado" onAplicar={() => {}} onFechar={() => {}} />);
+  montar(<ModalNegociarLote lote={v === 'lote6' || v === 'composta' ? lote6 : lote} linha={linha} cenario="realizado" onAplicar={() => {}} onFechar={() => {}} />);
 } else if (tela === 'consorcio') {
   /* FIN-CONSORCIO-02 — o cadastro do consórcio: a tela e o gerador vêm do banco simulado (dado SINTÉTICO, `dados/consorcio.json`, lido do
      banco num bloco revertido); `&novo=1` abre o cadastro novo (sem tela do banco: só o gerador) */

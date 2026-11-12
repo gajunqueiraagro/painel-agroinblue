@@ -1599,6 +1599,10 @@ const CENARIOS = [
      corte seco (regra 6); a folga entre o rotulo e o numero, >= 6px (regra 8). */
   ...[['real', ''], ['99mi', '&v=99mi'], ['teto', '&v=teto'], ['acima', '&v=acima']].map(([n, q]) => ({
     nome: `negociar-lote-resumo-${n}`, url: `tela=negociar-lote${q}`, tamanhos: TAMANHOS_DO_P92, folgaCelulas: '[data-testid="resultado-do-lote"]' })),
+  /* IMPORTAR-ABATE-01 (D5) — o SENAR no campo dele: o lote 6 (so' SENAR) e uma composta (Funrural + SENAR), na aba dos impostos. */
+  ...[['lote6', '&v=lote6'], ['composta', '&v=composta']].map(([n, q]) => ({
+    nome: `negociar-lote-senar-${n}`, url: `tela=negociar-lote${q}`, tamanhos: TAMANHOS_DO_P92, folgaCelulas: '[data-testid="resultado-do-lote"]',
+    antes: async (p) => { await p.getByRole('button', { name: 'Bônus, descontos e impostos', exact: true }).first().click(); await p.waitForTimeout(400); } })),
   /* UI-CAMPO-MOEDA-01 — os campos de valor de largura fixa dos modais fora da bancada (a regra `valor` os mede com 999.999.999,99) */
   { nome: 'campos-moeda', url: 'tela=campos-moeda', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* CONC-BLOCO-SINAL-MISTO-01 — o bloco da Conferência com saída + reembolso: o que fecha e a recusa, nos sete tamanhos */

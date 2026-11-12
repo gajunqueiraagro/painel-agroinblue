@@ -19,6 +19,9 @@ export interface AbateCalculationInput {
   descontoQualidadeReais?: string | number | null;
   funruralPct?: string | number | null;
   funruralReais?: string | number | null;
+  /** IMPORTAR-ABATE-01 (D5): o SENAR e' retencao PROPRIA, nunca "funrural". Opcional: quem nao o passa tem o numero de antes. */
+  senarPct?: string | number | null;
+  senarReais?: string | number | null;
   outrosDescontos?: string | number | null;
   outrosDescontosArroba?: string | number | null;
   formaReceb?: 'avista' | 'prazo';
@@ -38,6 +41,10 @@ export interface AbateCalculation {
   precoArroba: number;
   valorBase: number;
   funruralTotal: number;
+  /** IMPORTAR-ABATE-01 (D5): o SENAR do lote em R$ (0 sem SENAR). */
+  senarTotal: number;
+  /** Funrural + SENAR: o que sai do bruto antes do liquido. E' esta a linha "(−) Funrural e impostos" / "Retenções" das telas. */
+  retencaoTotal: number;
   valorBruto: number;
   bonusPrecoceTotal: number;
   bonusQualidadeTotal: number;
@@ -178,8 +185,13 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
   const funruralPct = parseNumericValue(input.funruralPct);
   const brutoParaFunruralRaw = cascataAbate(valorBaseRaw, totalBonusRaw, totalDescontosRaw, 0).valorBruto;
   const funruralTotalRaw = funruralReais > 0 ? funruralReais : (brutoParaFunruralRaw * funruralPct) / 100;
+  /* IMPORTAR-ABATE-01 (D5) — o SENAR, a mesma regra do Funrural (R$ vence; % sobre o bruto), e sai do bruto JUNTO com ele: a
+     cascata recebe a retencao inteira. Sem SENAR (todo chamador antigo) a conta e' a de antes, centavo por centavo. */
+  const senarReais = parseNumericValue(input.senarReais);
+  const senarPct = parseNumericValue(input.senarPct);
+  const senarTotalRaw = senarReais > 0 ? senarReais : (brutoParaFunruralRaw * senarPct) / 100;
   const { valorBruto: valorBrutoRaw, valorLiquido: valorLiquidoRaw } =
-    cascataAbate(valorBaseRaw, totalBonusRaw, totalDescontosRaw, funruralTotalRaw);
+    cascataAbate(valorBaseRaw, totalBonusRaw, totalDescontosRaw, funruralTotalRaw + senarTotalRaw);
 
   const liqArrobaRaw = totalArrobasRaw > 0 ? valorLiquidoRaw / totalArrobasRaw : 0;
   const liqCabecaRaw = quantidade > 0 ? valorLiquidoRaw / quantidade : 0;
@@ -193,6 +205,8 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
   const totalKg = roundValue(totalKgRaw, 4);
   const valorBase = roundValue(valorBaseRaw);
   const funruralTotal = roundValue(funruralTotalRaw);
+  const senarTotal = roundValue(senarTotalRaw);
+  const retencaoTotal = roundValue(funruralTotalRaw + senarTotalRaw);
   const valorBruto = roundValue(valorBrutoRaw);
   const bonusPrecoceTotal = roundValue(bonusPrecoceTotalRaw);
   const bonusQualidadeTotal = roundValue(bonusQualidadeTotalRaw);
@@ -223,6 +237,8 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
     precoArroba,
     valorBase,
     funruralTotal,
+    senarTotal,
+    retencaoTotal,
     valorBruto,
     bonusPrecoceTotal,
     bonusQualidadeTotal,
