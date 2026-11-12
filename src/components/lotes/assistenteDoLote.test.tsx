@@ -1,6 +1,6 @@
-/** LOTES-03 F1 — o assistente "+ Novo lote" na tela: os 5 passos até gravar, o "Cadastrar nova…" com Desfazer, a validação no campo
- *  (nunca no banco) e a edição na mesma combinação (o número fica, nada vai ao banco sem mudança).
- *  LOTES-04: os passos na ordem do código ATIVIDADE · CATEGORIA · RAÇA · Nº (RC-DF-NE-05). */
+/** LOTES-03 F1 + LOTE-ETAPAS-01 — o assistente "+ Novo lote" na tela: as 5 etapas até gravar (Atividade → Categoria e sexo → Situação
+ *  ou Programa e sistema → Raça e genética → Nome), o código novo ATIV-CAT-RAÇA[-carimbo], o carimbo obrigatório só na parida, o
+ *  "Cadastrar nova…" com Desfazer, a validação no campo (nunca no banco) e a edição sem mudança (nada vai ao banco). */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
@@ -11,7 +11,8 @@ const banco = vi.hoisted(() => ({
 vi.mock('@/integrations/supabase/client', () => {
   const tabela = (nome: string) => {
     const dado = nome === 'categorias_rebanho'
-      ? [{ id: 'r-desf', nome: 'Desmama F', codigo: 'desmama_f' }, { id: 'r-mamf', nome: 'Mamotes F', codigo: 'mamotes_f' }]
+      ? [{ id: 'r-desf', nome: 'Desmama F', codigo: 'desmama_f' }, { id: 'r-mamf', nome: 'Mamotes F', codigo: 'mamotes_f' },
+        { id: 'r-vacas', nome: 'Vacas', codigo: 'vacas' }]
       : banco.cadastros;
     const b: Record<string, unknown> = {};
     const eu = () => b;
@@ -36,8 +37,7 @@ beforeEach(() => {
   banco.rpc.mockReset();
   notificar.mockReset();
   banco.rpc.mockImplementation(async (fn: string) => {
-    if (fn === 'fn_lote_proximo_numero') return { data: 5, error: null };
-    if (fn === 'fn_lote_salvar') return { data: { id: 'novo', codigo: 'RC-DF-NE-05', codigo_antigo: null }, error: null };
+    if (fn === 'fn_lote_salvar') return { data: { id: 'novo', codigo: 'RC-DF-NE', codigo_antigo: null }, error: null };
     if (fn === 'fn_lote_cadastro_salvar') return { data: { id: 'an' }, error: null };
     return { data: null, error: null };
   });
@@ -55,67 +55,92 @@ const cartao = async (sigla: string) => {
 const avancar = () => fireEvent.click(screen.getByTestId('assistente-avancar'));
 
 describe('AssistenteDoLote', () => {
-  it('criar: atividade → categoria → raça → nº do banco → perfil; o código monta no trilho e vai ao banco pela fn_lote_salvar', async () => {
+  it('criar (recria): atividade → categoria → programa e sistema → raça → nome; código RC-DF-NE sem nº; apelido e anotação vão ao banco', async () => {
     const { onPronto } = montar();
     expect(screen.getByTestId('assistente-avancar')).toBeDisabled();
     fireEvent.click(await cartao('RC'));
-    expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-__-__-__');
+    expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-__-__');
+    expect(screen.getByTestId('assistente-legenda').textContent).toBe('atividade · categoria · raça · carimbo');
     avancar();
     fireEvent.click(await cartao('DF')); avancar();
-    fireEvent.dblClick(await cartao('NE'));
-    await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-DF-NE-05'));
-    expect(banco.rpc).toHaveBeenCalledWith('fn_lote_proximo_numero', { p_fazenda: 'faz', p_categoria: 'df', p_raca: 'ne', p_atividade: 'rc' });
-    expect(screen.getByTestId('assistente-numero-info').textContent).toContain('Primeiro lote RC-DF-NE na PUR');
-    fireEvent.change(screen.getByTestId('assistente-nome-campeiro'), { target: { value: 'L05 - DF Nel. SP' } });
-    avancar();
+    expect(screen.getByTestId('assistente-situacao')).toBeTruthy();
+    expect(screen.getByText('Programa e sistema', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('assistente-avancar')).not.toBeDisabled();              // nada aqui é obrigatório
     fireEvent.click(within(screen.getByTestId('assistente-opcoes-sistema')).getByText('Confinamento'));
-    expect(screen.getByTestId('assistente-avancar').textContent).toBe('Criar lote');
     avancar();
-    await waitFor(() => expect(onPronto).toHaveBeenCalledWith({ id: 'novo', codigo: 'RC-DF-NE-05', codigoAntigo: null }));
+    expect(screen.queryByTestId('assistente-mamotes')).toBeNull();                    // fora da cria, sem mamotes
+    fireEvent.dblClick(await cartao('NE'));
+    expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-DF-NE');
+    fireEvent.change(screen.getByTestId('assistente-nome-campeiro'), { target: { value: 'L05 - DF Nel. SP' } });
+    fireEvent.change(screen.getByTestId('assistente-anotacao'), { target: { value: 'veio da 3M' } });
+    expect(screen.getByTestId('assistente-nome-codigo').textContent).toBe('RC-DF-NE');
+    expect(screen.getByTestId('assistente-avancar').textContent).toBe('Salvar lote');
+    avancar();
+    await waitFor(() => expect(onPronto).toHaveBeenCalledWith({ id: 'novo', codigo: 'RC-DF-NE', codigoAntigo: null }));
     const salvar = banco.rpc.mock.calls.find(x => x[0] === 'fn_lote_salvar')!;
     expect(salvar[1]).toMatchObject({ p_id: null, p_fazenda: 'faz', p_versao: null, p_simular: false,
-      p_campos: { categoria_id: 'df', raca_id: 'ne', atividade_id: 'rc', nome_campeiro: 'L05 - DF Nel. SP', sistema_id: 'conf' } });
+      p_campos: { categoria_id: 'df', raca_id: 'ne', atividade_id: 'rc', nome_campeiro: 'L05 - DF Nel. SP', sistema_id: 'conf', anotacao: 'veio da 3M', situacao_cria: '' } });
+    expect(salvar[1].p_campos.numero).toBeUndefined();
+    expect(banco.rpc).not.toHaveBeenCalledWith('fn_lote_proximo_numero', expect.anything());
     expect(notificar).toHaveBeenCalledWith('faz');
   });
 
-  it('LOTES-04: o nº se edita no passo 4 — digitado vai ao banco; ocupado diz de quem é e não deixa seguir; vazio volta ao automático', async () => {
-    const outro: LoteDaLista = { id: 'l2', codigo: 'RC-DF-NE-02', codigosAntigos: [], nomeCampeiro: null, situacao: 'ativo', formadoEm: '2026-09-30',
-      encerradoEm: null, categoriaId: 'df', racaId: 'ne', atividadeId: 'rc', numero: 2, sistemaId: null, programaId: null, destinoId: null, safra: null,
-      carimbo: null, idadeMediaMeses: null, metaPesoKg: null, metaGmdKg: null, metaData: null, versao: 1, anoMesDado: null, cabecas: null,
-      pesoMedioKg: null, gmdKg: null, pastos: [], lancamentos: 0, conferir: null };
-    montar({ lotesDaFazenda: [outro] });
-    fireEvent.click(await cartao('RC')); avancar(); fireEvent.click(await cartao('DF')); avancar(); fireEvent.click(await cartao('NE')); avancar();
-    await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-DF-NE-05'));
-    fireEvent.change(screen.getByTestId('assistente-numero-editar'), { target: { value: '2' } });
-    expect(screen.getByTestId('assistente-numero-info').textContent).toBe('O nº 02 já é do lote RC-DF-NE-02. Escolha outro.');
+  it('cria parida: categoria filtrada pela atividade; PA pede o carimbo ("Falta o carimbo dos mamotes"); o carimbo entra no código', async () => {
+    banco.cadastros = [c('vac', 'categoria', 'VAC', 'Vacas', ['r-vacas']), c('df', 'categoria', 'DF', 'Desmama fêmea', ['r-desf']),
+      c('nel', 'raca', 'NEL', 'Nelore'), c('cri', 'atividade', 'CRI', 'Cria'), c('iatf', 'programa', null, 'IATF superprecoce')];
+    const { onPronto } = montar();
+    fireEvent.click(await cartao('CRI')); avancar();
+    await cartao('VAC');
+    expect(within(screen.getByTestId('assistente-cartoes')).queryByText('DF')).toBeNull();
+    expect(screen.getByTestId('assistente-todas-categorias').textContent).toBe('Mostrar todas (+1)');
+    fireEvent.click(await cartao('VAC')); avancar();
+    expect(screen.getByText('Situação e programa', { selector: 'h2' })).toBeTruthy();
+    /* Chat 12/11 09:20 — o programa do cadastro também na cria */
+    fireEvent.click(within(screen.getByTestId('assistente-opcoes-programa')).getByText('IATF superprecoce'));
+    fireEvent.click(within(screen.getByTestId('assistente-situacao-cria')).getByText('Parida com bezerro'));
+    fireEvent.click(within(screen.getByTestId('assistente-ordem-parto')).getByText('Multípara'));
+    avancar();
+    fireEvent.click(await cartao('NEL'));
     expect(screen.getByTestId('assistente-avancar')).toBeDisabled();
-    fireEvent.change(screen.getByTestId('assistente-numero-editar'), { target: { value: '7' } });
-    expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-DF-NE-07');
-    avancar(); avancar();
-    await waitFor(() => expect(banco.rpc).toHaveBeenCalledWith('fn_lote_salvar', expect.objectContaining({ p_campos: expect.objectContaining({ numero: 7 }) })));
+    expect(screen.getByTestId('assistente-dica').textContent).toBe('Falta o carimbo dos mamotes');
+    expect(within(screen.getByTestId('assistente-mamotes-sexo')).getByText('Misto').closest('button')).not.toBeDisabled();
+    fireEvent.change(screen.getByTestId('assistente-carimbo'), { target: { value: '7x' } });
+    expect(screen.getByTestId('assistente-avancar')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('assistente-carimbo'), { target: { value: '7.1' } });
+    expect(screen.getByTestId('assistente-codigo').textContent).toBe('CRI-VAC-NEL-7.1');
+    fireEvent.click(within(screen.getByTestId('assistente-mamotes-sexo')).getByText('Misto'));
+    fireEvent.click(within(screen.getByTestId('assistente-mamotes-cruzamento')).getByText('F1 Angus'));
+    avancar();
+    const ficha = screen.getByTestId('assistente-ficha');
+    expect(ficha.textContent).toContain('Parida com bezerro · Multípara');
+    expect(ficha.textContent).toContain('carimbo 7.1 · Misto · F1 Angus');
+    expect(ficha.textContent).toContain('IATF superprecoce');
+    expect(within(ficha).queryAllByTestId('assistente-completar')).toHaveLength(0);
+    avancar();
+    await waitFor(() => expect(onPronto).toHaveBeenCalled());
+    expect(banco.rpc).toHaveBeenCalledWith('fn_lote_salvar', expect.objectContaining({ p_campos: expect.objectContaining({
+      programa_id: 'iatf', situacao_cria: 'PA', ordem_parto: 'MUL', carimbo: '7.1', mamotes_sexo: 'MF', mamotes_cruzamento: 'f1_angus', mamotes_semen: '' }) }));
   });
 
-  it('LOTES-05: na cria o passo Nº pede o carimbo (7R da ressinc.); errado trava o Avançar; o nº fica no código, por dentro', async () => {
-    banco.cadastros = [c('vac', 'categoria', 'VAC', 'Vacas'), c('nel', 'raca', 'NEL', 'Nelore'), c('cri', 'atividade', 'CRI', 'Cria')];
+  it('cria mojada (PR): nunca pede carimbo; os mamotes ficam desligados; a ficha diz "completar" no que falta', async () => {
+    banco.cadastros = [c('vac', 'categoria', 'VAC', 'Vacas', ['r-vacas']), c('nel', 'raca', 'NEL', 'Nelore'), c('cri', 'atividade', 'CRI', 'Cria')];
     montar();
-    fireEvent.click(await cartao('CRI')); avancar(); fireEvent.click(await cartao('VAC')); avancar(); fireEvent.click(await cartao('NEL')); avancar();
-    await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('CRI-VAC-NEL-05'));
-    expect(screen.queryByTestId('assistente-numero-editar')).toBeNull();
-    expect(screen.getByTestId('assistente-numero-info').textContent).toBe('Lote de cria: digite o carimbo do mês (7.1 ou 7R). Sem carimbo, aparece pelo código.');
-    fireEvent.change(screen.getByTestId('assistente-carimbo'), { target: { value: '7x' } });
-    expect(screen.getByTestId('assistente-numero-info').textContent).toBe('Carimbo: mês.lote, ex.: 7.1 (julho, 1º lote) ou 7R (ressinc. de julho).');
-    expect(screen.getByTestId('assistente-avancar')).toBeDisabled();
-    fireEvent.change(screen.getByTestId('assistente-carimbo'), { target: { value: '7r' } });
-    expect(screen.getByTestId('assistente-carimbo')).toHaveValue('7R');
-    expect(screen.getByTestId('assistente-numero-info').textContent).toBe('Na tela o lote aparece como 7R · o nº 05 fica no código, por dentro.');
-    expect(within(screen.getByTestId('assistente-numero-lotes')).getByText('7R')).toBeTruthy();
-    avancar(); avancar();
-    await waitFor(() => expect(banco.rpc).toHaveBeenCalledWith('fn_lote_salvar', expect.objectContaining({ p_campos: expect.objectContaining({ carimbo: '7R' }) })));
+    fireEvent.click(await cartao('CRI')); avancar(); fireEvent.click(await cartao('VAC')); avancar();
+    fireEvent.click(within(screen.getByTestId('assistente-situacao-cria')).getByText('Prenha (mojada)'));
+    avancar(); fireEvent.click(await cartao('NEL'));
+    expect(screen.getByTestId('assistente-avancar')).not.toBeDisabled();
+    expect(within(screen.getByTestId('assistente-mamotes-sexo')).getByText('Misto').closest('button')).toBeDisabled();
+    expect(screen.getByTestId('assistente-codigo').textContent).toBe('CRI-VAC-NEL');
+    avancar();
+    /* só o programa falta: "completar", nunca trava */
+    expect(within(screen.getByTestId('assistente-ficha')).queryAllByTestId('assistente-completar')).toHaveLength(1);
+    expect(screen.getByTestId('assistente-avancar')).not.toBeDisabled();
+    expect(screen.getByTestId('assistente-ficha').textContent).toContain('sem cria ao pé');
   });
 
   it('cadastrar nova raça: valida no campo sem ir ao banco; grava, escolhe e o Desfazer tira da lista (ativo false)', async () => {
     montar();
-    fireEvent.click(await cartao('RC')); avancar(); fireEvent.click(await cartao('DF')); avancar();
+    fireEvent.click(await cartao('RC')); avancar(); fireEvent.click(await cartao('DF')); avancar(); avancar();
     fireEvent.click(await screen.findByTestId('assistente-cadastrar-nova'));
     fireEvent.click(screen.getByTestId('assistente-form-ok'));
     expect(screen.getByTestId('assistente-form').textContent).toContain('A sigla precisa de 2 ou 3 letras ou números.');
@@ -126,20 +151,22 @@ describe('AssistenteDoLote', () => {
     fireEvent.click(screen.getByTestId('assistente-form-ok'));
     await waitFor(() => expect(screen.getByTestId('assistente-aviso').textContent).toContain('Raça AN cadastrada e escolhida'));
     expect(banco.rpc).toHaveBeenCalledWith('fn_lote_cadastro_salvar', expect.objectContaining({ p_tipo: 'raca', p_id: null, p_sigla: 'AN', p_nome: 'Angus', p_ativo: true, p_simular: false }));
-    /* a raça é a última parte: com as três, o nº já sai do banco */
-    await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-DF-AN-05'));
+    await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-DF-AN'));
     fireEvent.click(screen.getByTestId('assistente-desfazer'));
     await waitFor(() => expect(banco.rpc).toHaveBeenCalledWith('fn_lote_cadastro_salvar', expect.objectContaining({ p_id: 'an', p_ativo: false })));
-    await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-DF-__-__'));
+    await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-DF-__'));
   });
 
-  it('editar na mesma combinação: o número é o dele (sem ler o próximo) e sem mudança nada vai ao banco', async () => {
+  it('editar um lote de antes (ATIV-CAT-RAÇA-NN) sem mudança: o código e a legenda com o nº ficam; nada vai ao banco', async () => {
     const editar: LoteDaLista = { id: 'l5', codigo: 'RC-DF-NE-05', codigosAntigos: [], nomeCampeiro: 'L05', situacao: 'ativo', formadoEm: '2026-09-30',
       encerradoEm: null, categoriaId: 'df', racaId: 'ne', atividadeId: 'rc', numero: 5, sistemaId: null, programaId: null, destinoId: null, safra: null,
       carimbo: null, idadeMediaMeses: null, metaPesoKg: null, metaGmdKg: null, metaData: null, versao: 3, anoMesDado: null, cabecas: 80,
       pesoMedioKg: 320, gmdKg: null, pastos: ['CONF.01'], lancamentos: 1, conferir: null };
     const { onPronto } = montar({ editar, lotesDaFazenda: [editar] });
     await waitFor(() => expect(screen.getByTestId('assistente-codigo').textContent).toBe('RC-DF-NE-05'));
+    expect(screen.getByTestId('assistente-legenda').textContent).toBe('atividade · categoria · raça · nº');
+    /* em lote existente as etapas se pulam, mas não somem: as 5 no trilho */
+    expect([0, 1, 2, 3, 4].map(i => screen.getByTestId(`assistente-passo-${i}`)).every(b => !(b as HTMLButtonElement).disabled)).toBe(true);
     fireEvent.click(screen.getByTestId('assistente-passo-4'));
     expect(screen.getByTestId('assistente-avancar').textContent).toBe('Salvar');
     avancar();
@@ -149,12 +176,10 @@ describe('AssistenteDoLote', () => {
   });
 
   it('a recusa do banco aparece no aviso do modal (nunca em toast) e o lote não fecha', async () => {
-    banco.rpc.mockImplementation(async (fn: string) => (fn === 'fn_lote_proximo_numero' ? { data: 1, error: null }
-      : { data: null, error: { code: 'P0001', message: 'Já existe o lote RC-DF-NE-01 nesta fazenda.' } }));
+    banco.rpc.mockImplementation(async () => ({ data: null, error: { code: 'P0001', message: 'Já existe o lote RC-DF-NE-01 nesta fazenda.' } }));
     const { onPronto } = montar();
-    fireEvent.click(await cartao('RC')); avancar(); fireEvent.click(await cartao('DF')); avancar(); fireEvent.click(await cartao('NE')); avancar();
-    await waitFor(() => expect(screen.getByTestId('assistente-avancar')).not.toBeDisabled());
-    avancar(); avancar();
+    fireEvent.click(await cartao('RC')); avancar(); fireEvent.click(await cartao('DF')); avancar(); avancar(); fireEvent.click(await cartao('NE')); avancar();
+    avancar();
     await waitFor(() => expect(screen.getByTestId('assistente-aviso').textContent).toContain('Já existe o lote RC-DF-NE-01 nesta fazenda.'));
     expect(onPronto).not.toHaveBeenCalled();
   });

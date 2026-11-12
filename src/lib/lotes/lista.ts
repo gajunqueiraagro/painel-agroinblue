@@ -4,7 +4,7 @@
  */
 import { casaNaBusca } from '@/lib/texto/busca';
 import type { ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
-import { codigoAoLado, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type SituacaoDoLote } from '@/lib/lotes/tipos';
+import { codigoAoLado, cruzamentoDosMamotes, ordemDoParto, semenDosMamotes, sexoDosMamotes, situacaoDaCria, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type SituacaoDoLote } from '@/lib/lotes/tipos';
 
 /* ── leitura sem cast ─────────────────────────────────────────────────────────────────────────── */
 const campo = (o: object, k: string): unknown => Reflect.get(o, k);
@@ -36,6 +36,10 @@ export function loteDaLinha(r: unknown): LoteDaLista | null {
     anoMesDado: texto(r, 'ano_mes_dado'), cabecas: numero(r, 'cabecas'), pesoMedioKg: numero(r, 'peso_medio_kg'), gmdKg: numero(r, 'gmd_kg'),
     pastos: textos(r, 'pastos'), lancamentos: numero(r, 'lancamentos') ?? 0,
     conferir: texto(r, 'conferir'),
+    situacaoCria: situacaoDaCria(texto(r, 'situacao_cria')), ordemParto: ordemDoParto(texto(r, 'ordem_parto')),
+    mamotesSexo: sexoDosMamotes(texto(r, 'mamotes_sexo')), mamotesCruzamento: cruzamentoDosMamotes(texto(r, 'mamotes_cruzamento')),
+    mamotesSemen: semenDosMamotes(texto(r, 'mamotes_semen')), anotacao: texto(r, 'anotacao'),
+    codigoRegra: texto(r, 'codigo_regra') === 'etapas' ? 'etapas' : null,
   };
 }
 

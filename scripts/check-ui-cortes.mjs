@@ -993,8 +993,8 @@ const CENARIOS = [
     ];
   })(),
   /* LOTES-03 F1 — Produção › Lotes (`tela=lotes`, dado SINTÉTICO dados/lotes.ts): a lista (Ativos, Encerrados, a busca sem achado com o
-     vazio dentro do quadro), o assistente "+ Novo lote" (passo 1 com os cartões, o "Cadastrar nova categoria", o passo 4 com os lotes da
-     combinação REC-DF-NE e o passo 5) e a ficha do REC-DF-NE-05 (Resumo e Histórico) */
+     vazio dentro do quadro), o assistente "+ Novo lote" (passo 1 com os cartões, o "Cadastrar nova categoria", a sigla em uso e as
+     etapas do LOTE-ETAPAS-01) e a ficha do REC-DF-NE-05 (Resumo e Histórico) */
   ...(() => {
     const URL = 'tela=lotes&barra=32';
     const T = TAMANHOS_DO_LOTES;
@@ -1003,8 +1003,6 @@ const CENARIOS = [
       await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await p.waitForTimeout(500); };
     const escolher = (re) => async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: re }).first().click(); await p.waitForTimeout(250);
       await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(450); };
-    const ateNumero = async (p) => { await novo(p); await escolher(/^REC/)(p); await escolher(/^DF/)(p); await escolher(/^NE/)(p);
-      await p.locator('[data-testid="assistente-numero"]').waitFor(); await p.waitForTimeout(400); };
     const ficha = async (p) => { await lista(p); await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click();
       await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await p.waitForTimeout(600); };
     return [
@@ -1023,19 +1021,42 @@ const CENARIOS = [
         const c = p.locator('[data-testid="assistente-cartao"]', { hasText: /^DF/ }).first(); await c.hover();
         await c.locator('[data-testid="assistente-editar-cadastro"]').click(); await p.locator('[data-testid="assistente-form"]').waitFor();
         await p.locator('[data-testid="assistente-form-sigla"]').fill('DS'); await p.waitForTimeout(700); } },
-      { nome: 'lotes-assistente-numero', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: ateNumero },
-      /* LOTES-04 — o nº digitado: um ocupado (05 é do REC-DF-NE-05: a frase de recusa no lugar da dica) */
-      { nome: 'lotes-assistente-numero-ocupado', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
-        await p.locator('[data-testid="assistente-numero-editar"]').fill('5'); await p.waitForTimeout(300); } },
-      /* LOTES-05 — na cria o passo Nº pede o carimbo: o 7R da ressinc. (a frase "aparece como 7R") e um errado (a recusa no lugar) */
-      { nome: 'lotes-assistente-carimbo', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
-        await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-numero"]').waitFor();
-        await p.locator('[data-testid="assistente-carimbo"]').fill('7R'); await p.waitForTimeout(300); } },
-      { nome: 'lotes-assistente-carimbo-errado', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
-        await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-numero"]').waitFor();
-        await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await p.waitForTimeout(300); } },
-      { nome: 'lotes-assistente-perfil', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
-        await p.locator('[data-testid="assistente-avancar"]').click(); await p.locator('[data-testid="assistente-perfil"]').waitFor(); await p.waitForTimeout(400); } },
+      /* LOTE-ETAPAS-01 (mock lote-etapas.html; Chat 11/11 14:45) — as etapas nas 3 atividades, em 1126/1366/1440 também, e o modal SEM
+         ROLAGEM: a categoria filtrada pela cria, a situação das matrizes (PA + MUL), o programa/sistema da recria, a raça da parida com o
+         carimbo faltando (o aviso laranja no rodapé) e com tudo (7R, MF, F1 Angus, sêmen), a mojada (mamotes desligados), o Nome com a ficha */
+      ...(() => {
+        const T2 = [...T, [1366, 768], [1440, 900]];
+        const R = { url: URL, tamanhos: T2, regiao: '[data-testid="assistente-do-lote"]', semRolagem: { dentro: '[role="dialog"]' } };
+        const chip = (testid, texto) => async (p) => { await p.locator(`[data-testid="${testid}"] button`, { hasText: texto }).first().click(); await p.waitForTimeout(150); };
+        const avancar = async (p) => { await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(400); };
+        const situacaoCria = async (p) => { await novo(p); await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await p.locator('[data-testid="assistente-situacao"]').waitFor(); };
+        const racaParida = async (p) => { await situacaoCria(p); await chip('assistente-situacao-cria', 'Parida com bezerro')(p); await chip('assistente-ordem-parto', 'Multípara')(p);
+          await avancar(p); await p.locator('[data-testid="assistente-cartao"]', { hasText: /^NE/ }).first().click(); await p.waitForTimeout(300); };
+        const racaParidaCompleta = async (p) => { await racaParida(p); await p.locator('[data-testid="assistente-carimbo"]').fill('7R');
+          await chip('assistente-mamotes-sexo', 'Misto')(p); await chip('assistente-mamotes-cruzamento', 'F1 Angus')(p); await chip('assistente-mamotes-semen', 'Sexado fêmea')(p); };
+        const nomeDe = (ativ, cat) => async (p) => { await novo(p); await escolher(ativ)(p); await escolher(cat)(p); await avancar(p);
+          await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-nome"]').waitFor();
+          await p.locator('[data-testid="assistente-nome-campeiro"]').fill('Retiro de baixo · vacas do 12'); await p.waitForTimeout(300); };
+        return [
+          { ...R, nome: 'lotes-assistente-etapas-atividade', antes: novo },
+          { ...R, nome: 'lotes-assistente-etapas-categoria-cria', antes: async (p) => { await novo(p); await escolher(/^CRI/)(p); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-etapas-situacao-cria', antes: async (p) => { await situacaoCria(p);
+            await chip('assistente-situacao-cria', 'Parida com bezerro')(p); await chip('assistente-ordem-parto', 'Multípara')(p); } },
+          { ...R, nome: 'lotes-assistente-etapas-programa-recria', antes: async (p) => { await novo(p); await escolher(/^REC/)(p); await escolher(/^DF/)(p);
+            await p.locator('[data-testid="assistente-situacao"]').waitFor(); await chip('assistente-opcoes-programa', 'Superprecoce')(p);
+            await chip('assistente-opcoes-sistema', 'Semiconfinamento')(p); } },
+          { ...R, nome: 'lotes-assistente-etapas-raca-parida-sem-carimbo', antes: racaParida },
+          { ...R, nome: 'lotes-assistente-etapas-raca-parida', antes: racaParidaCompleta },
+          { ...R, nome: 'lotes-assistente-etapas-raca-carimbo-errado', antes: async (p) => { await racaParida(p);
+            await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-etapas-raca-mojada', antes: async (p) => { await situacaoCria(p); await chip('assistente-situacao-cria', 'Prenha (mojada)')(p);
+            await avancar(p); await p.locator('[data-testid="assistente-cartao"]', { hasText: /^NE/ }).first().click(); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-etapas-nome-cria', antes: async (p) => { await racaParidaCompleta(p); await avancar(p);
+            await p.locator('[data-testid="assistente-nome"]').waitFor(); await p.locator('[data-testid="assistente-anotacao"]').fill('veio da 3M, brinco amarelo, IATF com sêmen sexado de julho'); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-etapas-nome-recria', antes: nomeDe(/^REC/, /^DF/) },
+          { ...R, nome: 'lotes-assistente-etapas-nome-engorda', antes: nomeDe(/^ENG/, /^BO/) },
+        ];
+      })(),
       { nome: 'lotes-ficha-resumo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: ficha },
       /* LOTES-05 — a ficha da cria com carimbo: "7R" no cabeçalho, o código na identidade */
       { nome: 'lotes-ficha-carimbo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: async (p) => { await lista(p);
