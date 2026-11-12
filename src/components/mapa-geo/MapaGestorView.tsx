@@ -872,17 +872,19 @@ export function MapaGestorView({
               <div className="flex items-start gap-1.5">
                 <b className="min-w-0 break-words text-[12px] leading-[15px]">{pastoSelecionado.nome}</b>
                 <span className="flex-none rounded-lg bg-[#E3F2E8] px-1.5 py-px text-[9.5px] font-semibold leading-[13px] text-[#2F6E45]">Vinculado</span>
-                <button type="button" aria-label="Fechar" className="ml-auto flex-none text-[#4A5361] hover:text-[#1d232b]" onClick={() => setSelecionadoId(null)}>
+                {/* PASTO-CADASTRO-GEO-01 P3: a ficha do cadastro por cima do mapa; fechar = voltar ao mapa. Na linha do título (altura que
+                    já existe): numa linha própria tirava 18 px do corpo e o painel passava a rolar a 1366×768 (gate mapa-geo-painel-sem-rolar). */}
+                {onAbrirCadastro && (
+                  <button type="button" className="ml-auto flex-none text-[10px] font-semibold leading-[15px] text-[#2B6CB0] hover:underline"
+                    title="Abrir o cadastro do pasto (a mesma ficha de Cadastros › Pastos)"
+                    onClick={() => onAbrirCadastro(pastoSelecionado.id)} data-testid="mapa-painel-abrir-cadastro">Cadastro ›</button>
+                )}
+                <button type="button" aria-label="Fechar" className={`${onAbrirCadastro ? '' : 'ml-auto '}flex-none text-[#4A5361] hover:text-[#1d232b]`} onClick={() => setSelecionadoId(null)}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
               {/* duas linhas reservadas: o subtítulo longo quebra (fora de tabela, nada de "…") e nada abaixo se desloca */}
               <div className="mt-0.5 h-[24px] overflow-hidden text-[9.5px] leading-[12px] text-[#4A5361]">{subtitulo}</div>
-              {/* PASTO-CADASTRO-GEO-01 P3: a ficha do cadastro por cima do mapa; fechar = voltar ao mapa (linha de altura fixa) */}
-              {onAbrirCadastro && (
-                <button type="button" className="mt-0.5 h-[16px] text-[10px] font-semibold leading-[16px] text-[#2B6CB0] hover:underline"
-                  onClick={() => onAbrirCadastro(pastoSelecionado.id)} data-testid="mapa-painel-abrir-cadastro">Abrir cadastro do pasto ›</button>
-              )}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
               <div className="grid grid-cols-2 gap-1">
