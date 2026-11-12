@@ -21,11 +21,11 @@ import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { notificarLotesMudaram } from '@/hooks/useLotesDaFazenda';
 import { useCadastrosDoLote, fraseDoErro, type CadastroParaSalvar } from '@/hooks/useCadastrosDoLote';
 import {
-  CRUZAMENTOS_DOS_MAMOTES, ORDENS_DO_PARTO, SEMENS_DOS_MAMOTES, SEXOS_DOS_MAMOTES, SITUACOES_DA_CRIA, ehParida,
+  CRUZAMENTOS_DOS_MAMOTES, FRASE_CARIMBO_INVALIDO, ORDENS_DO_PARTO, SEMENS_DOS_MAMOTES, SEXOS_DOS_MAMOTES, SITUACOES_DA_CRIA, ehParida,
   type CadastroDoLote, type LoteDaLista, type TipoDoCadastro, type TrocaDeCodigo,
 } from '@/lib/lotes/tipos';
 import {
-  PASSOS, aceitaCarimbo, camposParaSalvar, categoriasDaAtividade, codigoDoAssistente, escolhidoNoPasso, faseDaAtividade, faltaNoPasso,
+  PASSOS, aceitaCarimbo, camposParaSalvar, validarCarimbo, categoriasDaAtividade, codigoDoAssistente, escolhidoNoPasso, faseDaAtividade, faltaNoPasso,
   fichaDoAssistente, filtrarCadastros, fraseCurtaDaTroca, fraseDaTroca, legendaDoCodigo, lotesQueUsam, nomeDe, perfilInicial, resumoDoRebanho,
   siglaDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarPerfil,
   type Escolha, type ErroNoCampo, type Perfil,
@@ -86,7 +86,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
     setPerfil(perfilInicial(hoje, editar));
   }, [open, editar, hoje]);
 
-  const alcancavel = ultimoPassoAlcancavel(escolha);
+  const alcancavelSemCarimbo = ultimoPassoAlcancavel(escolha);
   const tipoDoPasso = TIPO_DO_PASSO[passo];
   const fase = faseDaAtividade(siglaDe(cadastros, escolha.atividadeId));
   const idsDosMamotes = useMemo(() => categoriasDoRebanho.filter(c => c.codigo.startsWith('mamotes')).map(c => c.id), [categoriasDoRebanho]);
@@ -101,6 +101,11 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
   const categoriasFora = tipoDoPasso === 'categoria' && !todasAsCategorias ? filtrarCadastros(cadastros, 'categoria', busca).length - opcoes.length : 0;
   const ultimo = passo === PASSOS.length - 1;
   const falta = faltaNoPasso(escolha, perfil, passo, cria);
+  /* LOTE-ETAPAS-02 (Gabriel 12/11 10:55, C-LEI-MIX da Vera): o carimbo (vazio na parida ou fora de mês.lote) trava o Salvar — o motivo vai
+     SEMPRE no rodapé, em laranja, e o passo 4 fica marcado no trilho, de qualquer passo */
+  const problemaDoCarimbo = escolha.racaId ? faltaNoPasso(escolha, perfil, 3, cria) : null;
+  /* e o carimbo errado é recusado NO PASSO 4: nem o Avançar nem o trilho levam ao Nome enquanto ele não estiver certo */
+  const alcancavel = problemaDoCarimbo ? Math.min(alcancavelSemCarimbo, 3) : alcancavelSemCarimbo;
 
   const irPara = (i: number) => {
     if (form || i > alcancavel || i < 0) return;
@@ -153,7 +158,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
 
   /* LOTE-SIGLA-EDITAR-01 — trocar a sigla de um cadastro que já existe: o banco diz (sem gravar) quais lotes mudam de código.
      Vai com o nome e as categorias de hoje: a prévia mede só a sigla (o erro do nome aparece ao salvar, no campo dele). */
-  const siglaQueMuda = form && form.id && form.sigla !== form.siglaDeHoje && /^[A-Z0-9]{2,3}$/.test(form.sigla) ? form.sigla : null;
+  const siglaQueMuda = form && form.id && form.sigla !== form.siglaDeHoje && (form.tipo === 'atividade' ? /^[A-Z0-9]{1,3}$/ : /^[A-Z0-9]{2,3}$/).test(form.sigla) ? form.sigla : null;
   const cadastroDoForm = form?.id ? cadastros.find(c => c.id === form.id) ?? null : null;
   useEffect(() => {
     if (!siglaQueMuda || !cadastroDoForm) { setPrevia(null); return; }
@@ -242,6 +247,10 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
   const pergunta = passo === 2 ? (cria ? 'Situação e programa' : 'Programa e sistema') : passoAtual.pergunta;
   const subtitulo = passo === 2 && !cria ? 'Como esse gado vai ser conduzido. Opcional.'
     : passo === 3 ? (cria ? 'Das matrizes e, se tiver cria ao pé, dos mamotes.' : passoAtual.subtitulo) : passoAtual.subtitulo;
+  /* o que trava ESTE passo (ou, no Nome, o carimbo lá atrás): sempre escrito; "Escolha …" antes de clicar não é trava, é a dica */
+  const curto = (f: string) => (f === FRASE_CARIMBO_INVALIDO ? `Carimbo “${perfil.carimbo.trim()}” fora de mês.lote (ex.: 7.1 ou 7R)` : f);
+  const motivo = falta && !falta.startsWith('Escolha')
+    ? (passo === 4 && problemaDoCarimbo ? `${curto(problemaDoCarimbo)} — volte ao passo 4` : curto(falta)) : null;
   const dica = form ? '' : tipoDoPasso ? 'Clique para escolher · duplo clique ou Enter avança' : passo === 2 ? 'Opcional · Enter avança'
     : editar ? 'Salvar grava a nova identidade; o código antigo fica no histórico' : 'O que faltar fica como “completar” na ficha';
 
@@ -272,21 +281,24 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
           <div className="flex min-h-0 flex-col rounded-lg border border-[#d3d9e2] bg-white p-2.5" data-testid="assistente-trilho">
             {PASSOS.map((s, i) => {
               const valor = valorDoPasso(i, cadastros, escolha, perfil, cria);
-              const feito = i !== passo && valor != null;
+              const comProblema = i === 3 && !!problemaDoCarimbo;
+              const feito = i !== passo && valor != null && !comProblema;
               return (
                 <button key={s.chave} type="button" disabled={i > alcancavel || !!form} onClick={() => irPara(i)} data-testid={`assistente-passo-${i}`}
                   className={cn('mb-0.5 grid grid-cols-[22px_minmax(0,1fr)] items-start gap-x-2 rounded-md px-1.5 py-1 text-left disabled:cursor-default',
                     i === passo ? 'bg-[#eef3fa]' : i <= alcancavel ? 'hover:bg-[#f3f6fa]' : '')}>
                   <span className={cn('row-span-2 flex h-5 w-5 items-center justify-center rounded-full border-[1.5px] text-[10.5px] font-bold',
-                    i === passo ? 'border-primary bg-primary text-white' : feito ? 'border-[#1f6b4a] bg-[#1f6b4a] text-white' : 'border-[#c2cad6] bg-white text-muted-foreground')}>
-                    {feito ? '✓' : i + 1}
+                    comProblema ? 'border-[#b45309] bg-[#b45309] text-white' : i === passo ? 'border-primary bg-primary text-white'
+                      : feito ? 'border-[#1f6b4a] bg-[#1f6b4a] text-white' : 'border-[#c2cad6] bg-white text-muted-foreground')} data-testid={comProblema ? 'assistente-passo-problema' : undefined}>
+                    {comProblema ? '!' : feito ? '✓' : i + 1}
                   </span>
                   <span className={cn('whitespace-nowrap text-[11.5px] font-semibold', i === passo ? 'text-primary' : 'text-[#4b5563]')}>
                     {i === 2 ? (cria ? 'Situação e programa' : 'Programa e sistema') : s.titulo}
                   </span>
-                  <span className={cn('h-[26px] break-words text-[10px] leading-[13px]', feito ? 'text-foreground' : 'text-muted-foreground')} title={valor ?? undefined}
-                    data-testid={`assistente-passo-valor-${i}`}>
-                    {valor ?? (i === passo ? 'escolhendo…' : '—')}
+                  <span className={cn('h-[26px] break-words text-[10px] leading-[13px]', comProblema ? 'font-semibold text-[#b45309]' : feito ? 'text-foreground' : 'text-muted-foreground')}
+                    title={comProblema ? problemaDoCarimbo ?? undefined : valor ?? undefined} data-testid={`assistente-passo-valor-${i}`}>
+                    {comProblema ? (problemaDoCarimbo === FRASE_FALTA_CARIMBO ? 'falta o carimbo · corrigir' : `carimbo “${perfil.carimbo.trim()}” fora de mês.lote · corrigir`)
+                      : valor ?? (i === passo ? 'escolhendo…' : '—')}
                   </span>
                 </button>
               );
@@ -370,7 +382,8 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
                     <span className="text-[11px] font-semibold">{passoAtual.cadastrarNova}</span>
                   </button>
                 </div>
-                {tipoDoPasso === 'raca' && cria && <MamotesAoPe perfil={perfil} parida={parida} erro={erroDoPerfil} onPerfil={mudarPerfil} />}
+                {tipoDoPasso === 'raca' && cria && <MamotesAoPe perfil={perfil} parida={parida} erro={erroDoPerfil} onPerfil={mudarPerfil}
+                  erroNaHora={perfil.carimbo.trim() ? validarCarimbo(perfil.carimbo) : null} />}
               </>
             ) : passo === 2 ? (
               <PassoDaSituacao cria={cria} cadastros={cadastros} perfil={perfil} onPerfil={mudarPerfil} onCadastrar={t => abrirForm(t, null)} />
@@ -383,8 +396,9 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
         {/* rodapé: os botões nunca mudam de lugar */}
         <div className="flex h-[50px] flex-none items-center gap-2 border-t border-[#dde2e9] bg-white px-3.5">
           <Button variant="ghost" size="sm" className="h-[30px] min-w-[92px] text-[11.5px]" onClick={onFechar} data-testid="assistente-cancelar">Cancelar</Button>
-          <span className={cn('truncate text-[10.5px]', falta === FRASE_FALTA_CARIMBO ? 'font-semibold text-[#b45309]' : 'text-muted-foreground')} data-testid="assistente-dica">
-            {form ? '' : falta === FRASE_FALTA_CARIMBO ? falta : dica}
+          <span className={cn('min-w-0 whitespace-nowrap text-[10.5px]', !form && motivo ? 'font-semibold text-[#b45309]' : 'text-muted-foreground')} data-testid="assistente-dica"
+            title={!form && motivo ? motivo : undefined}>
+            {form ? '' : motivo ?? dica}
           </span>
           <div className="ml-auto flex gap-2">
             <Button variant="outline" size="sm" className="h-[30px] min-w-[92px] text-[11.5px]" disabled={passo === 0 || !!form} onClick={() => irPara(passo - 1)}
@@ -488,10 +502,11 @@ function PassoDaSituacao({ cria, cadastros, perfil, onPerfil, onCadastrar }: {
 }
 
 /** Passo 4, embaixo das raças — os mamotes ao pé (cria). Parida: carimbo obrigatório e a genética; senão, só o carimbo (opcional). */
-function MamotesAoPe({ perfil, parida, erro, onPerfil }: {
-  perfil: Perfil; parida: boolean; erro: { campo: keyof Perfil; mensagem: string } | null; onPerfil(p: Perfil): void;
+function MamotesAoPe({ perfil, parida, erro, onPerfil, erroNaHora }: {
+  perfil: Perfil; parida: boolean; erro: { campo: keyof Perfil; mensagem: string } | null; onPerfil(p: Perfil): void; erroNaHora: string | null;
 }) {
-  const erroDoCarimbo = erro?.campo === 'carimbo' ? erro.mensagem : null;
+  /* LOTE-ETAPAS-02 — o carimbo fora de mês.lote acende no campo ao digitar (antes só depois de tentar salvar, e o botão nunca deixava) */
+  const erroDoCarimbo = erroNaHora ?? (erro?.campo === 'carimbo' ? erro.mensagem : null);
   return (
     <div className="mt-2 flex-none border-t border-[#e3e7ee] pt-1.5" data-testid="assistente-mamotes">
       <div className="mb-0.5 whitespace-nowrap text-[10.5px] font-semibold text-[#374151]">
@@ -592,7 +607,7 @@ function FormularioDoCadastro({ form, erro, categoriasDoRebanho, previa, onMudar
             <Input value={form.sigla} maxLength={3} autoFocus data-testid="assistente-form-sigla"
               onChange={e => onMudar({ ...form, sigla: siglaDigitada(e.target.value) })}
               className={cn('h-[27px] text-[11.5px] font-bold', erro?.campo === 'sigla' && 'border-destructive')} />
-            <Nota erro={erro?.campo === 'sigla' ? erro.mensagem : null}>2 ou 3 letras</Nota>
+            <Nota erro={erro?.campo === 'sigla' ? erro.mensagem : null}>{form.tipo === 'atividade' ? '1 a 3 letras (C, R, E)' : '2 ou 3 letras'}</Nota>
           </div>
         )}
         <div>

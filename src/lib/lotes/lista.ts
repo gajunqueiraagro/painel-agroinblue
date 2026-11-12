@@ -90,7 +90,8 @@ export function colunasDosLotes(nomes: NomesDoCadastro): ColunaOrdenavel<LoteDaL
 export interface GrupoDaAtividade { atividadeId: string; nome: string; lotes: LoteDaLista[]; total: TotalDosLotes }
 
 /** A fase na ordem do rebanho: cria, recria, engorda; as outras atividades depois, pelo nome. */
-const ORDEM_DA_FASE: Readonly<Record<string, number>> = { CRI: 0, CR: 0, REC: 1, RC: 1, ENG: 2, EG: 2 };
+/* LOTE-CODIGO-CURTO-01 (117550): C/R/E no cadastro; as siglas de antes seguem valendo */
+const ORDEM_DA_FASE: Readonly<Record<string, number>> = { C: 0, CRI: 0, CR: 0, R: 1, REC: 1, RC: 1, E: 2, ENG: 2, EG: 2 };
 
 export const faseDaAtividade = (sigla: string | null): number => ORDEM_DA_FASE[sigla ?? ''] ?? 3;
 

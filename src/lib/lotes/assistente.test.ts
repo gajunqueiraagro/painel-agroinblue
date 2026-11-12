@@ -129,6 +129,14 @@ describe('cadastrar nova / editar', () => {
     expect(validarCadastro({ ...base, tipo: 'sistema', sigla: '', nome: 'Pasto', categorias: [] })).toBeNull();
     expect(validarCadastro({ existentes: CAD, idEditando: 'ne', tipo: 'raca', sigla: 'NE', nome: 'Nelore PO', categorias: [] })).toBeNull();
   });
+  it('LOTE-CODIGO-CURTO-01: a atividade aceita 1 letra (C/R/E, as frases da 117550); categoria e raça seguem 2 a 3; C/R/E são as fases', () => {
+    const base = { existentes: CAD, idEditando: null, categorias: [] };
+    expect(validarCadastro({ ...base, tipo: 'atividade', sigla: 'C', nome: 'Cria nova' })).toBeNull();
+    expect(validarCadastro({ ...base, tipo: 'atividade', sigla: '', nome: 'X' })?.mensagem).toBe('A sigla da atividade precisa de 1 a 3 letras ou números.');
+    expect(validarCadastro({ ...base, tipo: 'raca', sigla: 'N', nome: 'X' })?.mensagem).toBe('A sigla precisa de 2 ou 3 letras ou números.');
+    expect([faseDaAtividade('C'), faseDaAtividade('R'), faseDaAtividade('E')]).toEqual(['cria', 'recria', 'engorda']);
+    expect(aceitaCarimbo([cad('c', 'atividade', 'C', 'Cria')], E('df', 'ne', 'c'), [])).toBe(true);
+  });
   it('a sigla se digita maiúscula, só letra e número, até 3', () => {
     expect(siglaDigitada('d-f9z')).toBe('DF9');
   });

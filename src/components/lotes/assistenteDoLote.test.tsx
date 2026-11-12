@@ -138,6 +138,33 @@ describe('AssistenteDoLote', () => {
     expect(screen.getByTestId('assistente-ficha').textContent).toContain('sem cria ao pé');
   });
 
+  it('LOTE-ETAPAS-02 (C-LEI-MIX da Vera): carimbo fora de mês.lote trava o Salvar COM o motivo — rodapé laranja, passo 4 marcado, campo na hora', async () => {
+    banco.cadastros = [c('lei', 'categoria', 'LEI', 'Leiteiras', ['r-vacas', 'r-mamf']), c('mix', 'raca', 'MIX', 'Mista'), c('cri', 'atividade', 'C', 'Cria')];
+    const editar: LoteDaLista = { id: 'lei1', codigo: 'C-LEI-MIX', codigosAntigos: ['CRI-LEI-MIX-01'], nomeCampeiro: null, situacao: 'ativo',
+      formadoEm: '2026-11-07', encerradoEm: null, categoriaId: 'lei', racaId: 'mix', atividadeId: 'cri', numero: 1, sistemaId: null, programaId: null,
+      destinoId: null, safra: null, carimbo: null, idadeMediaMeses: null, metaPesoKg: null, metaGmdKg: null, metaData: null, versao: 1,
+      anoMesDado: null, cabecas: null, pesoMedioKg: null, gmdKg: null, pastos: [], lancamentos: 0, conferir: null, codigoRegra: 'etapas' };
+    montar({ editar, lotesDaFazenda: [editar] });
+    await cartao('C');
+    fireEvent.click(screen.getByTestId('assistente-passo-3'));
+    fireEvent.change(await screen.findByTestId('assistente-carimbo'), { target: { value: '07' } });
+    expect(screen.getByTestId('assistente-carimbo-nota').textContent).toBe('Carimbo: mês.lote, ex.: 7.1 (julho, 1º lote) ou 7R (ressinc. de julho).');
+    expect(screen.getByTestId('assistente-dica').textContent).toBe('Carimbo “07” fora de mês.lote (ex.: 7.1 ou 7R)');
+    expect(screen.getByTestId('assistente-avancar')).toBeDisabled();
+    /* recusado NO PASSO 4: o trilho também não leva ao Nome */
+    expect(screen.getByTestId('assistente-passo-4')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('assistente-passo-4'));
+    expect(screen.getByText('Raça e genética', { selector: 'h2' })).toBeTruthy();
+    expect(within(screen.getByTestId('assistente-passo-3')).getByTestId('assistente-passo-problema').textContent).toBe('!');
+    expect(screen.getByTestId('assistente-passo-valor-3').textContent).toBe('carimbo “07” fora de mês.lote · corrigir');
+    /* consertado: a trava some, o passo volta ao normal */
+    fireEvent.click(screen.getByTestId('assistente-passo-3'));
+    fireEvent.change(screen.getByTestId('assistente-carimbo'), { target: { value: '7.1' } });
+    expect(screen.queryByTestId('assistente-passo-problema')).toBeNull();
+    fireEvent.click(screen.getByTestId('assistente-passo-4'));
+    expect(screen.getByTestId('assistente-avancar')).not.toBeDisabled();
+  });
+
   it('cadastrar nova raça: valida no campo sem ir ao banco; grava, escolhe e o Desfazer tira da lista (ativo false)', async () => {
     montar();
     fireEvent.click(await cartao('RC')); avancar(); fireEvent.click(await cartao('DF')); avancar(); avancar();

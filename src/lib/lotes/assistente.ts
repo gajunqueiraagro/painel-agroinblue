@@ -68,7 +68,9 @@ export function escolhidoNoPasso(e: Escolha, passo: ChaveDoPasso): string | null
 /** A fase pela sigla da atividade do cliente (CRI/REC/ENG; CR/RE/EN de antes do LOTES-04); outra sigla = sem fase (nada se filtra). */
 export type Fase = 'cria' | 'recria' | 'engorda';
 export function faseDaAtividade(sigla: string | null): Fase | null {
-  return sigla === 'CRI' || sigla === 'CR' ? 'cria' : sigla === 'REC' || sigla === 'RE' ? 'recria' : sigla === 'ENG' || sigla === 'EN' ? 'engorda' : null;
+  /* LOTE-CODIGO-CURTO-01 (Gabriel 12/11): C/R/E no cadastro; CRI/REC/ENG e CR/RE/EN de antes seguem valendo */
+  return sigla === 'C' || sigla === 'CRI' || sigla === 'CR' ? 'cria' : sigla === 'R' || sigla === 'REC' || sigla === 'RE' ? 'recria'
+    : sigla === 'E' || sigla === 'ENG' || sigla === 'EN' ? 'engorda' : null;
 }
 
 /** D3 — as categorias do rebanho de cada fase: a categoria do lote entra se tiver UMA delas. */
@@ -188,7 +190,9 @@ export function validarCadastro(e: {
   const comSigla = e.tipo === 'categoria' || e.tipo === 'raca' || e.tipo === 'atividade';
   const sigla = e.sigla.trim().toUpperCase();
   const nome = e.nome.trim();
-  if (comSigla && !/^[A-Z0-9]{2,3}$/.test(sigla)) return { campo: 'sigla', mensagem: 'A sigla precisa de 2 ou 3 letras ou números.' };
+  /* LOTE-CODIGO-CURTO-01 — a atividade com 1 a 3 (C cria · R recria · E engorda); categoria e raça 2 a 3 (as frases da RPC, 117550) */
+  if (e.tipo === 'atividade' && !/^[A-Z0-9]{1,3}$/.test(sigla)) return { campo: 'sigla', mensagem: 'A sigla da atividade precisa de 1 a 3 letras ou números.' };
+  if (comSigla && e.tipo !== 'atividade' && !/^[A-Z0-9]{2,3}$/.test(sigla)) return { campo: 'sigla', mensagem: 'A sigla precisa de 2 ou 3 letras ou números.' };
   const outros = e.existentes.filter(c => c.tipo === e.tipo && c.ativo && c.id !== e.idEditando);
   const dup = comSigla ? outros.find(c => c.sigla === sigla) : undefined;
   if (dup) return { campo: 'sigla', mensagem: `A sigla ${sigla} já é “${dup.nome}”. Escolha outra ou use a existente.` };
@@ -248,7 +252,7 @@ export function safraDe(iso: string): string {
 /** Carimbo só em lote de cria: atividade de sigla CRI (CR antes do LOTES-04) ou categoria que leva mamotes. */
 export function aceitaCarimbo(cadastros: readonly CadastroDoLote[], e: Escolha, idsDosMamotes: readonly string[]): boolean {
   const ativ = siglaDe(cadastros, e.atividadeId);
-  if (ativ === 'CRI' || ativ === 'CR') return true;
+  if (ativ === 'C' || ativ === 'CRI' || ativ === 'CR') return true;
   const cat = cadastros.find(c => c.id === e.categoriaId);
   return !!cat && cat.categoriasRebanho.some(id => idsDosMamotes.includes(id));
 }
