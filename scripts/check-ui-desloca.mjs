@@ -192,6 +192,20 @@ const CENARIOS = [
     ['fundo mapa', mapaCamada('Mapa')], ['fundo satélite', mapaCamada('Satélite')],
   ] },
   /* MAPA-IMPRESSAO-01 — no diálogo "Imprimir mapa", trocar o tamanho e a imagem não move nada (as áreas de mensagem têm altura fixa) */
+  /* DRE-VARIACAO-SIMPLES-01 — o modal da variação: trocar de aba (Resumo ↔ Por categoria) e de gráfico (Valor · Arrobas · Preço médio) não move
+     o cabeçalho, as abas, os cards nem o segmentado (as duas abas ficam montadas; o gráfico tem altura fixa). O desenho do gráfico muda: não conta. */
+  { nome: 'dre-pec-variacao', url: 'tela=dre&barra=32&f_de=2026-01&f_ate=2026-09', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
+    naoMede: '.recharts-wrapper',
+    antes: async (p) => { await p.getByRole('button', { name: /^Detalhado$/ }).first().click(); await espera(p, 300);
+      await p.locator('tr', { hasText: 'Variação por produção' }).first().locator('td').nth(1).click();
+      await p.locator('[data-testid="variacao-resumo"]').waitFor({ timeout: 5000 }); await espera(p, 2000); },
+    estados: [
+      ['gráfico Arrobas', async (p) => { await p.locator('[data-testid="variacao-grafico"] button', { hasText: /^Arrobas$/ }).click(); await espera(p, 2000); }],
+      ['gráfico Preço médio', async (p) => { await p.locator('[data-testid="variacao-grafico"] button', { hasText: /^Preço médio da @$/ }).click(); await espera(p, 2000); }],
+      ['gráfico Valor', async (p) => { await p.locator('[data-testid="variacao-grafico"] button', { hasText: /^Valor do rebanho$/ }).click(); await espera(p, 2000); }],
+      ['aba Por categoria', async (p) => { await p.locator('[role="dialog"] [data-aba="categoria"]').click(); await espera(p, 400); }],
+      ['aba Resumo', async (p) => { await p.locator('[role="dialog"] [data-aba="resumo"]').click(); await espera(p, 400); }],
+    ] },
   { nome: 'mapa-imprimir', url: 'tela=mapa-geo', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
     antes: async (p) => { await p.locator('[data-testid="mapa-imprimir"]').click(); await p.locator('[data-testid="imprimir-baixar"]').waitFor(); await espera(p, 400); },
     estados: [
