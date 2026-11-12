@@ -8,7 +8,7 @@
  * "em breve". As contas e as fontes moram em `indicadoresDaAtividade.ts`; esta peça só desenha. Os blocos de Agricultura carregam as
  * próprias consultas e só montam quando a atividade aparece.
  */
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { safraAnterior, safraDoMes } from './agriculturaDaVisao';
@@ -22,7 +22,7 @@ import type { AtividadeDoCliente, GrupoAtividade } from './atividadesDaVisao';
 /* VISAO-GERAL-05 (07:31) — cada indicador é o `Kpi` da Geo pastos (a mesma peça da faixa de cima): número 24 px em negrito com a unidade
    ao lado, o rótulo embaixo, a comparação embaixo do rótulo. Largura pelo conteúdo (`flex-none`); a fonte no `title`. */
 function Indicador({ i }: { i: IndicadorAtividade }) {
-  return <Kpi className="flex-none px-2" rotulo={i.rotulo} valor={i.valor} unidade={i.unidade ?? null} title={i.fonte} testid={`vg-ind-${i.id}`}
+  return <Kpi className="px-2" rotulo={i.rotulo} valor={i.valor} unidade={i.unidade ?? null} title={i.fonte} testid={`vg-ind-${i.id}`}
     variacao={<Comparacao i={i} />} />;
 }
 
@@ -30,17 +30,19 @@ function LinhaDaAtividade({ titulo, sub, abrir, onAbrir, indicadores, testid }: 
   titulo: string; sub?: string; abrir: string; onAbrir?: () => void; indicadores: readonly IndicadorAtividade[]; testid: string;
 }) {
   const itens = comDado(indicadores);
+  /* VISAO-GERAL-04 (mock aprovado 08/11, V7) — UMA linha na régua: o nome numa coluna de 120 px e os indicadores em colunas iguais na
+     largura toda; abaixo de 1024 px o nome sobe para a linha de cima e os indicadores ficam com a largura inteira */
   return (
-    <section className="flex flex-auto flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-1.5 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]"
-      data-testid={testid}>
+    <section className="grid grid-cols-[repeat(var(--n),minmax(0,1fr))] items-stretch gap-1.5 rounded-lg border border-border bg-card p-1.5 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)] lg:grid-cols-[120px_repeat(var(--n),minmax(0,1fr))]"
+      style={{ '--n': Math.max(itens.length, 1) } as CSSProperties} data-testid={testid}>
       {/* o nome, o detalhe e o link empilhados à esquerda (o link ao lado dos números empurrava a linha para duas a 1.280) */}
-      <div className="flex-none px-1">
+      <div className="col-span-full min-w-0 px-1 lg:col-span-1">
         <h3 className="whitespace-nowrap text-[11px] font-semibold leading-[18px]">{titulo}</h3>
         <div className="h-[12px] whitespace-nowrap text-[9.5px] leading-[12px] text-muted-foreground">{sub ?? ''}</div>
         {onAbrir && <button type="button" className="mt-1 whitespace-nowrap text-[10px] text-primary hover:underline" onClick={onAbrir}>{abrir} ›</button>}
       </div>
       {itens.map((i) => <Indicador key={i.id} i={i} />)}
-      {itens.length === 0 && <span className="text-[9.5px] text-muted-foreground">Sem números neste mês.</span>}
+      {itens.length === 0 && <span className="self-center text-[9.5px] text-muted-foreground">Sem números neste mês.</span>}
     </section>
   );
 }
@@ -107,8 +109,8 @@ export function BlocosPorAtividade({ atividades, pecuaria, silviculturaHa, clien
         {atividades.map((a) => pilula(a.id, a.nome))}
       </div>
       {/* os blocos TROCAM de propósito ao escolher uma atividade (`data-desloca-livre`); as pílulas acima continuam medidas.
-          VISAO-GERAL-05: lado a lado quando cabem (cada uma na largura do conteúdo, e a linha se fecha: `flex-auto`) */}
-      <div className="flex flex-wrap gap-1.5" data-desloca-livre>
+          VISAO-GERAL-04: uma atividade por linha, cada uma na largura toda */}
+      <div className="flex flex-col gap-1.5" data-desloca-livre>
       {visiveis.map((a) => a.grupo === 'pecuaria' ? (
         <LinhaDaAtividade key={a.id} testid="vg-bloco-pecuaria" titulo={a.nome} sub={subPorGrupo?.pecuaria} abrir="Fechamento"
           onAbrir={() => onAbrir('pecuaria')} indicadores={pecuaria} />

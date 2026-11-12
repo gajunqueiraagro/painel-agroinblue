@@ -82,13 +82,17 @@ describe('o componente', () => {
     await screen.findAllByTestId('procurar-historico-achado');
     /* CONC-SUGESTOES-TABELA-01 (Gabriel 04/11 06:36): as colunas da lista do Financeiro, as mesmas das sugestões */
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent?.replace(/[↑↓]/g, ''))).toEqual(
+      /* UI-FONTE-GATE-01 (escolha A, Chat 17:05): no histórico Faz. e NF sempre reservadas — mesmo sem NF nos achados, a coluna fica */
       ['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Faz.', 'NF', 'Valor', 'Status', 'Motivo', '']);
+    /* o campo cresce até os filtros (sem teto de largura): o termo inteiro à vista */
+    expect(screen.getByTestId('procurar-historico-termo').className).not.toMatch(/max-w-/);
+    expect(screen.getByTestId('procurar-historico-termo').className).toContain('flex-1');
     expect(M.rpc.mock.calls[0][1]).toMatchObject({ p_ate: '2031-11-30', p_de: '2031-01-01' });
-    /* a ordem padrão diz ↓ em lugar nenhum (é a data de referência), e a coluna clicada mostra a seta */
+    /* a ordem padrão diz ↓ em lugar nenhum (é a data de referência), e a coluna clicada mostra a seta (UI-FONTE-GATE-01: no Valor, à direita, a seta fica ANTES do rótulo — depois dele vazava o recuo) */
     fireEvent.click(screen.getByTestId('procurar-ordenar-valor'));
-    expect(screen.getByTestId('procurar-ordenar-valor').textContent).toBe('Valor↓');
+    expect(screen.getByTestId('procurar-ordenar-valor').textContent).toBe('↓Valor');
     fireEvent.click(screen.getByTestId('procurar-ordenar-valor'));
-    expect(screen.getByTestId('procurar-ordenar-valor').textContent).toBe('Valor↑');
+    expect(screen.getByTestId('procurar-ordenar-valor').textContent).toBe('↑Valor');
   });
 
   it('cada linha: a ação, o selo "outra conta", a fazenda pelo CÓDIGO e o status (conciliado)', async () => {

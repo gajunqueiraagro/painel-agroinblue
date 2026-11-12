@@ -1110,6 +1110,14 @@ const CENARIOS = [
       ...['cadastro', 'infra', 'avaliacoes', 'reformas', 'lotacao', 'documentos'].map((aba) => ({ nome: `pastos-ficha-${aba}`, url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)],
         regiao: '[role="dialog"]', antes: async (p) => { await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
           await p.locator(`[data-testid="ficha-aba-${aba}"]`).click(); await p.waitForTimeout(600); } })),
+      /* PASTO-CADASTRO-GEO-01 (4): a sombra mudada na Infraestrutura acende o Salvar (frase do rodapé) e o fechar pergunta */
+      { nome: 'pastos-ficha-infra-mudou', url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)], regiao: '[role="dialog"]', antes: async (p) => {
+        await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
+        await p.locator('[data-testid="ficha-aba-infra"]').click(); await p.getByRole('button', { name: 'Suficiente', exact: true }).click(); await p.waitForTimeout(500); } },
+      { nome: 'pastos-ficha-sair-sem-salvar', url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)], regiao: '[role="alertdialog"]', antes: async (p) => {
+        await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
+        await p.locator('[data-testid="ficha-aba-infra"]').click(); await p.getByRole('button', { name: 'Suficiente', exact: true }).click();
+        await p.getByRole('button', { name: 'Fechar', exact: true }).click(); await p.locator('[data-testid="ficha-perguntar-fechar"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'pastos-lista', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="lista-pastos"]').waitFor(); await p.waitForTimeout(500); } },
       { nome: 'pastos-lista-piquetes', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="abrir-piquetes"]').first().click(); await p.waitForTimeout(400); } },
       { nome: 'pastos-lista-destino', url: URL, tamanhos: T, antes: async (p) => { await p.getByRole('button', { name: 'Destino', exact: true }).first().click();

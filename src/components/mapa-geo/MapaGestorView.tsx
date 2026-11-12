@@ -91,6 +91,10 @@ interface Props {
   /** MAPA-LOTES-01 fatia 1 (A): abre o modal do P1 (o MESMO do Fechamento, `useModalDoPasto`) no card do pasto; sem ele (Global, bancada),
    *  o painel não tem o rodapé. O mapa não grava nada. */
   onLancar?: (pastoId: string) => void;
+  /** PASTO-CADASTRO-GEO-01 P3: "Abrir cadastro do pasto" no painel — a MESMA ficha do cadastro, aberta por cima do mapa (sem ele, sem a linha) */
+  onAbrirCadastro?: (pastoId: string) => void;
+  /** PASTO-CADASTRO-GEO-01 P2: veio da ficha do pasto — o lugar do "← Global" vira "← Cadastro" (a volta reabre a ficha) */
+  voltarAoCadastro?: () => void;
 }
 
 const VIDRO = 'rounded-[10px] border border-white/60 bg-white/[0.78] shadow-[0_8px_28px_rgba(0,0,0,0.28)] backdrop-blur-[14px] backdrop-saturate-[1.2]';
@@ -219,7 +223,7 @@ function rotuloForaDaPecuaria(d: DadosDoPastoNoMes, lavoura: LavouraDoMes | null
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
   seletorDeMes, trocaDeVista, acaoImprimir, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, semDesenho = null,
-  infraInicialId, onInfraInicialUsada, onLancar,
+  infraInicialId, onInfraInicialUsada, onLancar, onAbrirCadastro, voltarAoCadastro,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
@@ -625,8 +629,13 @@ export function MapaGestorView({
       {/* Barra 40px */}
       <div className="relative z-[600] flex h-[34px] flex-none items-center gap-1.5 border-b border-[#D9DEE5] bg-white px-2.5" data-testid="mapa-barra">
         {/* MAPA-GLOBAL-01 (D6): o lugar do "← Global" existe sempre (largura fixa): aparecer não empurra os outros botões */}
-        <div className="w-[56px] flex-none" data-testid="mapa-volta-global">
-          {voltarAoGlobal && (
+        <div className="w-[72px] flex-none" data-testid="mapa-volta-global">{/* 72: cabe o "‹ Cadastro" (PASTO-CADASTRO-GEO-01) */}
+          {voltarAoCadastro ? (
+            <Button type="button" variant="ghost" size="sm" className="h-[24px] w-full justify-start gap-0 px-0.5 text-[11px] font-semibold text-[#2B6CB0]" onClick={voltarAoCadastro}
+              title="Voltar ao cadastro do pasto (a ficha reabre)" data-testid="mapa-voltar-ao-cadastro">
+              <ChevronLeft className="h-3 w-3" /> Cadastro
+            </Button>
+          ) : voltarAoGlobal && (
             <Button type="button" variant="ghost" size="sm" className="h-[24px] w-full justify-start gap-0 px-0.5 text-[11px] font-semibold text-[#2B6CB0]" onClick={voltarAoGlobal}>
               <ChevronLeft className="h-3 w-3" /> Global
             </Button>
@@ -863,7 +872,14 @@ export function MapaGestorView({
               <div className="flex items-start gap-1.5">
                 <b className="min-w-0 break-words text-[12px] leading-[15px]">{pastoSelecionado.nome}</b>
                 <span className="flex-none rounded-lg bg-[#E3F2E8] px-1.5 py-px text-[9.5px] font-semibold leading-[13px] text-[#2F6E45]">Vinculado</span>
-                <button type="button" aria-label="Fechar" className="ml-auto flex-none text-[#4A5361] hover:text-[#1d232b]" onClick={() => setSelecionadoId(null)}>
+                {/* PASTO-CADASTRO-GEO-01 P3: a ficha do cadastro por cima do mapa; fechar = voltar ao mapa. Na linha do título (altura que
+                    já existe): numa linha própria tirava 18 px do corpo e o painel passava a rolar a 1366×768 (gate mapa-geo-painel-sem-rolar). */}
+                {onAbrirCadastro && (
+                  <button type="button" className="ml-auto flex-none text-[10px] font-semibold leading-[15px] text-[#2B6CB0] hover:underline"
+                    title="Abrir o cadastro do pasto (a mesma ficha de Cadastros › Pastos)"
+                    onClick={() => onAbrirCadastro(pastoSelecionado.id)} data-testid="mapa-painel-abrir-cadastro">Cadastro ›</button>
+                )}
+                <button type="button" aria-label="Fechar" className={`${onAbrirCadastro ? '' : 'ml-auto '}flex-none text-[#4A5361] hover:text-[#1d232b]`} onClick={() => setSelecionadoId(null)}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>

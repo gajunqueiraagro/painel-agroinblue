@@ -14,6 +14,14 @@ import { totalDasFazendas, type LinhaFazendaVG, type SituacaoFechamento } from '
 /* VISAO-GERAL-05 — a unidade mora no cabeçalho ("Pecuária ha"); a célula só o número */
 const ha = (v: number | null) => (v === null ? '—' : formatNum(v, 0));
 
+type ColunaDeArea = 'areaPecuaria' | 'areaAgricultura' | 'areaSilvicultura' | 'areaReservaAppBenf';
+const COLUNAS_DE_AREA: readonly { k: ColunaDeArea; rotulo: string }[] = [
+  { k: 'areaPecuaria', rotulo: 'Pecuária ha' },
+  { k: 'areaAgricultura', rotulo: 'Agricultura ha' },
+  { k: 'areaSilvicultura', rotulo: 'Silvicultura ha' },
+  { k: 'areaReservaAppBenf', rotulo: 'Reserva/APP/benf. ha' },
+];
+
 function TextoFechamento({ s, mesCurto }: { s: SituacaoFechamento; mesCurto: string }) {
   if (s === 'fechado') return <span className="text-emerald-700">{mesCurto} ✓</span>;
   if (s === 'falta') return <span className="text-amber-700">falta {mesCurto}</span>;
@@ -29,6 +37,9 @@ export function TabelaFazendasVG({ linhas, mesCurto, onEscolher }: {
   const total = totalDasFazendas(linhas);
   const th = cn(TH_REGUA, 'text-left');
   const thNum = cn(TH_REGUA, 'text-right');
+  /* VISAO-GERAL-04 (V6) — a coluna de área que nenhuma fazenda tem (todas zero ou sem dado) sai; Total, Cabeças, UA/ha, Chuva e Fechamento ficam */
+  const tem = (k: ColunaDeArea) => linhas.some((l) => (l[k] ?? 0) !== 0);
+  const colunas = COLUNAS_DE_AREA.filter((c) => tem(c.k));
   return (
     <Card titulo="Fazendas" testid="vg-fazendas"
       extra={<span className="ml-auto whitespace-nowrap text-[9.5px] text-muted-foreground">clique numa fazenda para filtrar o sistema inteiro</span>}>
@@ -37,10 +48,7 @@ export function TabelaFazendasVG({ linhas, mesCurto, onEscolher }: {
           <thead className="bg-primary text-primary-foreground">
             <tr>
               <th className={th}>Fazenda</th>
-              <th className={thNum}>Pecuária ha</th>
-              <th className={thNum}>Agricultura ha</th>
-              <th className={thNum}>Silvicultura ha</th>
-              <th className={thNum}>Reserva/APP/benf. ha</th>
+              {colunas.map((c) => <th key={c.k} className={thNum}>{c.rotulo}</th>)}
               <th className={thNum}>Total ha</th>
               <th className={thNum}>Cabeças</th>
               <th className={thNum}>UA/ha</th>
@@ -58,10 +66,7 @@ export function TabelaFazendasVG({ linhas, mesCurto, onEscolher }: {
                     </button>
                   ) : l.rotulo}
                 </td>
-                <td className={TD_REGUA_NUM}>{ha(l.areaPecuaria)}</td>
-                <td className={TD_REGUA_NUM}>{ha(l.areaAgricultura)}</td>
-                <td className={TD_REGUA_NUM}>{ha(l.areaSilvicultura)}</td>
-                <td className={TD_REGUA_NUM}>{ha(l.areaReservaAppBenf)}</td>
+                {colunas.map((c) => <td key={c.k} className={TD_REGUA_NUM}>{ha(l[c.k])}</td>)}
                 <td className={cn(TD_REGUA_NUM, 'font-semibold')}>{ha(l.areaTotal)}</td>
                 <td className={TD_REGUA_NUM}>{formatNum(l.cabecas, 0)}</td>
                 <td className={TD_REGUA_NUM}>{formatNum(l.uaHa, 2)}</td>
@@ -74,10 +79,7 @@ export function TabelaFazendasVG({ linhas, mesCurto, onEscolher }: {
             <tfoot>
               <tr className="bg-primary text-primary-foreground font-medium" data-testid="vg-fazendas-total">
                 <td className={cn(TD_REGUA, 'font-semibold')}>Total</td>
-                <td className={TD_REGUA_NUM}>{ha(total.areaPecuaria)}</td>
-                <td className={TD_REGUA_NUM}>{ha(total.areaAgricultura)}</td>
-                <td className={TD_REGUA_NUM}>{ha(total.areaSilvicultura)}</td>
-                <td className={TD_REGUA_NUM}>{ha(total.areaReservaAppBenf)}</td>
+                {colunas.map((c) => <td key={c.k} className={TD_REGUA_NUM}>{ha(total[c.k])}</td>)}
                 <td className={cn(TD_REGUA_NUM, 'font-semibold')}>{ha(total.areaTotal)}</td>
                 <td className={TD_REGUA_NUM}>{formatNum(total.cabecas, 0)}</td>
                 <td className={TD_REGUA_NUM}>{formatNum(total.uaHa, 2)}</td>
