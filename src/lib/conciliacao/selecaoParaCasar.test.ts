@@ -112,4 +112,16 @@ describe('as listas da Conciliação no tamanho da lista do Financeiro (sem a va
     /* sem rolagem de lado no modal a 1024 e a 135% de 1240 (≈ 848px úteis): o piso cabe */
     expect(PISO_PARA_CASAR).toBeLessThanOrEqual(848);
   });
+
+  /* UI-FONTE-GATE-01 (Chat 12/11 15:22) — Faz. e NF só quando alguma linha da lista tem o dado; vazias, a largura vai para Descrição/Fornecedor */
+  it('colunasParaCasar: Faz. e NF só com dado na lista; a ordem e as outras larguras não mudam', async () => {
+    const { colunasParaCasar, largurasParaCasar } = await import('@/components/conciliacao/TabelaParaCasar');
+    const vazia = { fazendaCodigo: null, fazendaNome: null, numeroDocumento: null };
+    expect(colunasParaCasar([vazia, vazia])).toEqual({ faz: false, nf: false });
+    expect(colunasParaCasar([vazia, { ...vazia, fazendaNome: 'Fazenda X' }])).toEqual({ faz: true, nf: false });
+    expect(colunasParaCasar([{ ...vazia, numeroDocumento: '518' }])).toEqual({ faz: false, nf: true });
+    expect(largurasParaCasar({ faz: false, nf: false })).toEqual([28, 46, 46, 46, null, null, 94, 60, 120, 62]);
+    expect(largurasParaCasar({ faz: true, nf: false })).toEqual([28, 46, 46, 46, null, null, 30, 94, 60, 120, 62]);
+    expect(largurasParaCasar({ faz: true, nf: true })).toEqual([28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62]);
+  });
 });

@@ -47,15 +47,20 @@ export function TabelaDaLista({ larguras, cabecalho, cabecalhoPreso = true, chil
   );
 }
 
+const ALINHAMENTO_DO_TH: Readonly<Record<'left' | 'center' | 'right', string>> = { left: 'text-left', center: 'text-center', right: 'text-right' };
+
 /** O `th` da lista: o recuo (`px-…`), o clique que ordena e, nas congeladas, o `sticky` + fundo. `semTexto` = a caixinha e o clipe. */
-export function ThDaLista({ recuo, ordenar, fixa, semTexto = false, separador = false, children, ...resto }: {
+export function ThDaLista({ recuo, ordenar, fixa, semTexto = false, separador = false, alinhar = 'center', children, ...resto }: {
   recuo: 'px-0' | 'px-0.5' | 'px-1'; ordenar?: () => void; fixa?: string; semTexto?: boolean; children?: ReactNode;
+  /** UI-FONTE-GATE-01 (Gabriel 12/11) — o rótulo alinhado como a coluna (texto à esquerda, número à direita). Sem ele, centro: a lista do
+   *  Financeiro segue igual. */
+  alinhar?: 'left' | 'center' | 'right';
   /** DOC-ANEXO-E-IMPORT-01 F2 — o separador de GRUPO à esquerda (mock: antes de Anexo e de Status) */
   separador?: boolean;
   title?: string; 'aria-label'?: string; 'data-testid'?: string;
 }) {
   return (
-    <th className={`${recuo} py-[3px] text-center align-middle${semTexto ? '' : ' text-[8px] uppercase leading-tight font-semibold text-primary-foreground'}${ordenar ? ' cursor-pointer select-none' : ''}${fixa ? ` ${fixa}` : ''}${separador ? ' border-l border-white/30' : ''}`}
+    <th className={`${recuo} py-[3px] ${ALINHAMENTO_DO_TH[alinhar]} align-middle${semTexto ? '' : ' text-[8px] uppercase leading-tight font-semibold text-primary-foreground'}${ordenar ? ' cursor-pointer select-none' : ''}${fixa ? ` ${fixa}` : ''}${separador ? ' border-l border-white/30' : ''}`}
       {...resto} onClick={ordenar}>{children}</th>
   );
 }
@@ -92,15 +97,17 @@ export function CelulaData({ iso, coluna, vencido = false, solta = false }: { is
   );
 }
 
-/** Produto / Descrição: uma linha, "…" e o inteiro no `title`. */
-export function CelulaProduto({ title, children }: { title: string; children: ReactNode }) {
-  return <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={title}>{children}</td>;
+/** Produto / Descrição: uma linha, "…" e o inteiro no `title`. `quebra` (UI-FONTE-GATE-01, Gabriel 12/11 — só as listas da Conciliação):
+ *  o nome NUNCA corta — quebra na própria célula e a linha cresce. A lista do Financeiro (linhas de 19px, virtual) não o passa. */
+const TEXTO_QUE_QUEBRA = 'whitespace-normal break-words [overflow-wrap:anywhere]';
+export function CelulaProduto({ title, quebra = false, children }: { title: string; quebra?: boolean; children: ReactNode }) {
+  return <td className={`${quebra ? TEXTO_QUE_QUEBRA : 'truncate'} px-1 py-1 align-middle text-[12px] font-medium leading-tight`} title={title}>{children}</td>;
 }
 
 /** Fornecedor: só o nome numa linha ("…"); CNPJ, cidade e "inativo" no `title` (FIN-V2-FORNECEDOR-SEM-SUFIXO-01). */
-export function CelulaFornecedor({ title, children }: { title: string; children: ReactNode }) {
+export function CelulaFornecedor({ title, quebra = false, children }: { title: string; quebra?: boolean; children: ReactNode }) {
   return (
-    <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground"
+    <td className={`${quebra ? TEXTO_QUE_QUEBRA : 'truncate'} px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground`}
       title={title} data-testid="celula-fornecedor">{children}</td>
   );
 }

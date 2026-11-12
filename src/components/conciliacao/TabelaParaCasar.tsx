@@ -9,11 +9,11 @@ import { docDaLinha } from '@/lib/financeiro/documentoHelper';
 import { valorAssinadoDaLinha } from '@/lib/financeiro/sinalPorConta';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import {
-  ThDaLista, LinhaDaLista, CelulaCaixinha, CelulaData, CelulaProduto, CelulaFornecedor, NomeNaCelula, CelulaFaz, CelulaValor, CelulaDoc,
+  ThDaLista, LinhaDaLista, CelulaCaixinha, CelulaData, CelulaProduto, CelulaFornecedor, CelulaFaz, CelulaValor, CelulaDoc,
   CelulaStatus, RotuloDoStatus, statusDaLinha,
 } from '@/components/financeiro-v2/TabelaDaLista';
 
-/** O link das ações ("casar", "Casar", "Criar igual"). */
+/** O link das ações ("Casar", "Criar igual"; UI-FONTE-GATE-01: "Casar" com maiúscula nas duas tabelas). */
 export const LINK_PARA_CASAR = 'font-semibold text-[#1d4ed8] underline underline-offset-2 hover:text-[#1e40af] whitespace-nowrap';
 /* CONC-SUGESTOES-FONTE-01 (Gabriel 08/11 10:26) — a TABELA DA LISTA no tamanho DA LISTA DO FINANCEIRO (a variante grande de 04/11 saiu):
    letra de 9px (datas, NF e Status a 8px), linha de 19px, cabeçalho de 8px. ⚠ AS LARGURAS são as da lista do Financeiro
@@ -28,13 +28,30 @@ export const N_COLUNAS_PARA_CASAR = COLUNAS_PARA_CASAR.length;
  *  rolagem de lado). Só abaixo dele (janela < ~900px) a lista rola de lado DENTRO da caixa dela. */
 export const PISO_PARA_CASAR = COLUNAS_PARA_CASAR.reduce<number>((t, w) => t + (w ?? 0), 0) + 220;
 
+/** UI-FONTE-GATE-01 (Chat 12/11 15:22) — Faz. e NF só existem quando alguma linha DESTA lista tem o dado: vazias, a largura delas vai
+ *  para Descrição e Fornecedor (as duas `null`). A ordem das colunas não muda. */
+export interface ColunasParaCasar { faz: boolean; nf: boolean }
+export const TODAS_AS_COLUNAS_PARA_CASAR: ColunasParaCasar = { faz: true, nf: true };
+const I_FAZ = 6;
+const I_NF = 7;
+export function colunasParaCasar(linhas: readonly Pick<LinhaParaCasar, 'fazendaCodigo' | 'fazendaNome' | 'numeroDocumento'>[]): ColunasParaCasar {
+  return { faz: linhas.some((l) => !!(l.fazendaCodigo || l.fazendaNome)), nf: linhas.some((l) => !!l.numeroDocumento) };
+}
+export function largurasParaCasar(c: ColunasParaCasar): (number | null)[] {
+  return COLUNAS_PARA_CASAR.filter((_, i) => (i !== I_FAZ || c.faz) && (i !== I_NF || c.nf));
+}
+
 export type ColunaQueOrdena = 'comp' | 'venc' | 'pgto' | 'descricao' | 'fornecedor' | 'fazenda' | 'valor' | 'status';
 
 /** O cabeçalho das duas listas: os rótulos da lista do Financeiro. Com `ordenar`, o clique no cabeçalho ordena e a seta tem lugar reservado
  *  (o cabeçalho não anda ao trocar a ordem); `prefixo` dá o testid de cada um (`<prefixo>-ordenar-<coluna>`). */
-export function CabecalhoParaCasar({ ordenar, seta, prefixo }: { ordenar?: (c: ColunaQueOrdena) => void; seta?: (c: ColunaQueOrdena) => string; prefixo?: string }) {
-  const th = (c: ColunaQueOrdena, rotulo: string, recuo: 'px-0.5' | 'px-1', fixa?: string, title?: string) => (
-    <ThDaLista recuo={recuo} ordenar={ordenar ? () => ordenar(c) : undefined} fixa={fixa} title={title}
+export function CabecalhoParaCasar({ ordenar, seta, prefixo, colunas = TODAS_AS_COLUNAS_PARA_CASAR }: {
+  ordenar?: (c: ColunaQueOrdena) => void; seta?: (c: ColunaQueOrdena) => string; prefixo?: string; colunas?: ColunasParaCasar;
+}) {
+  /* UI-FONTE-GATE-01 (Gabriel 12/11 13:38): o rótulo alinhado como a coluna — Descrição, Fornecedor e Motivo à esquerda; NF e Valor à
+     direita; datas, Faz. e Status no centro (a célula é centrada) */
+  const th = (c: ColunaQueOrdena, rotulo: string, recuo: 'px-0.5' | 'px-1', fixa?: string, title?: string, alinhar: 'left' | 'center' | 'right' = 'center') => (
+    <ThDaLista recuo={recuo} ordenar={ordenar ? () => ordenar(c) : undefined} fixa={fixa} title={title} alinhar={alinhar}
       data-testid={ordenar && prefixo ? `${prefixo}-ordenar-${c}` : undefined}>
       {/* a seta não ocupa largura (o cabeçalho não anda nem quebra ao trocar a ordem; "Faz." tem 30px): ela fica no recuo da célula */}
       {rotulo}{ordenar ? <span className="relative inline-block w-0"><span className="absolute left-[1px] top-1/2 -translate-y-1/2">{seta?.(c) ?? ''}</span></span> : null}
@@ -46,13 +63,13 @@ export function CabecalhoParaCasar({ ordenar, seta, prefixo }: { ordenar?: (c: C
     {th('comp', 'Comp.', 'px-0.5')}
     {th('venc', 'Venc.', 'px-0.5')}
     {th('pgto', 'Pgto.', 'px-0.5')}
-    {th('descricao', 'Descrição', 'px-1')}
-    {th('fornecedor', 'Fornecedor', 'px-1')}
-    {th('fazenda', 'Faz.', 'px-1', undefined, 'Fazenda')}
-    <ThDaLista recuo="px-1">NF</ThDaLista>
-    {th('valor', 'Valor', 'px-1')}
+    {th('descricao', 'Descrição', 'px-1', undefined, undefined, 'left')}
+    {th('fornecedor', 'Fornecedor', 'px-1', undefined, undefined, 'left')}
+    {colunas.faz && th('fazenda', 'Faz.', 'px-1', undefined, 'Fazenda')}
+    {colunas.nf && <ThDaLista recuo="px-1" alinhar="right">NF</ThDaLista>}
+    {th('valor', 'Valor', 'px-1', undefined, undefined, 'right')}
     {th('status', 'Status', 'px-1')}
-    <ThDaLista recuo="px-1">Motivo</ThDaLista>
+    <ThDaLista recuo="px-1" alinhar="left">Motivo</ThDaLista>
     <ThDaLista recuo="px-1" aria-label="Ações" />
   </>);
 }
@@ -65,8 +82,9 @@ export interface LinhaParaCasar {
 }
 
 /** Uma linha das duas listas: as células da lista do Financeiro + Motivo + a ação. */
-export function LinhaParaCasarNaTabela({ l, marcada, alternar, podeMarcar, motivoMarcar, motivo, acao, testid, testidDaLinha, dadoAcao }: {
-  l: LinhaParaCasar; marcada: boolean; alternar: () => void; podeMarcar: boolean; motivoMarcar?: string;
+export function LinhaParaCasarNaTabela({ l, marcada, alternar, podeMarcar, motivoMarcar, motivo, acao, testid, testidDaLinha, dadoAcao,
+  colunas = TODAS_AS_COLUNAS_PARA_CASAR }: {
+  l: LinhaParaCasar; colunas?: ColunasParaCasar; marcada: boolean; alternar: () => void; podeMarcar: boolean; motivoMarcar?: string;
   motivo: ReactNode; acao: ReactNode; testid: string; testidDaLinha?: string; dadoAcao?: string;
 }) {
   const v = valorAssinadoDaLinha(l.valor);
@@ -81,10 +99,11 @@ export function LinhaParaCasarNaTabela({ l, marcada, alternar, podeMarcar, motiv
       <CelulaData iso={l.comp} coluna="comp" solta />
       <CelulaData iso={l.venc} coluna="venc" vencido={vencido} solta />
       <CelulaData iso={l.pgto} coluna="pgto" solta />
-      <CelulaProduto title={l.tituloDescricao ?? (l.descricao || '')}>{l.descricao || '-'}</CelulaProduto>
-      <CelulaFornecedor title={l.fornecedor ?? ''}>{l.fornecedor ? <NomeNaCelula nome={l.fornecedor} /> : '-'}</CelulaFornecedor>
-      <CelulaFaz codigo={l.fazendaCodigo} nome={l.fazendaNome} />
-      <CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />
+      {/* UI-FONTE-GATE-01 (regra do Gabriel: nome nunca cortado): Descrição e Fornecedor QUEBRAM na célula, a linha cresce */}
+      <CelulaProduto title={l.tituloDescricao ?? (l.descricao || '')} quebra>{l.descricao || '-'}</CelulaProduto>
+      <CelulaFornecedor title={l.fornecedor ?? ''} quebra>{l.fornecedor || '-'}</CelulaFornecedor>
+      {colunas.faz && <CelulaFaz codigo={l.fazendaCodigo} nome={l.fazendaNome} />}
+      {colunas.nf && <CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />}
       <CelulaValor classe={v.classe}>{v.texto}</CelulaValor>
       <CelulaStatus title={st.stPilula || st.stEstagio ? undefined : st.stLabel}><RotuloDoStatus st={st} /></CelulaStatus>
       <td className="truncate px-1 py-1 align-middle leading-tight" data-testid={`${testid}-coluna-motivo`}>{motivo}</td>

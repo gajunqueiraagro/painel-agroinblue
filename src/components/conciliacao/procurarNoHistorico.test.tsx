@@ -135,7 +135,9 @@ describe('o componente ProcurarNoHistorico', () => {
     /* P153b: a coluna "O que o banco disse" saiu — o texto do banco vai no `title` da descrição */
     expect(within(linha).queryByText(ACHADO.banco)).toBeNull();
     const desc = within(linha).getByText('Ração de engorda');
-    expect(desc.className).toContain('truncate');
+    /* UI-FONTE-GATE-01: o nome quebra na célula, nunca "…" */
+    expect(desc.className).toContain('whitespace-normal');
+    expect(desc.className).not.toContain('truncate');
     expect(desc.getAttribute('title')).toBe(`Ração de engorda\nPecuária · Nutrição\nO banco: ${ACHADO.banco}`);
   });
 });

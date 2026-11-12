@@ -30,7 +30,7 @@ import { historicoDoBanco } from '@/lib/conciliacao/historicoDoBanco';
 import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/conciliacao/complementoDasLinhas';
 import { motivoCurto, resumoDaSelecao } from '@/lib/conciliacao/selecaoParaCasar';
 import { TabelaDaLista } from '@/components/financeiro-v2/TabelaDaLista';
-import { CabecalhoParaCasar, LinhaParaCasarNaTabela, COLUNAS_PARA_CASAR, N_COLUNAS_PARA_CASAR, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR,
+import { CabecalhoParaCasar, LinhaParaCasarNaTabela, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, colunasParaCasar, largurasParaCasar,
   ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR, type LinhaParaCasar } from '@/components/conciliacao/TabelaParaCasar';
 /* ⚠ SEM IMPORT DA CONFERÊNCIA NEM DO `CasarComBancoModal`: o tipo do extrato é o estrutural da lib. Importar de lá
    fecharia um ciclo (Espelho → este modal → Casar → Espelho), que o `madge` acusa. */
@@ -109,6 +109,9 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
       valor: Number(c.valor_assinado), status: c.status_transacao, conciliado: !!c.ja_conciliado,
     };
   };
+  /* UI-FONTE-GATE-01: Faz. e NF só quando alguma sugestão tem o dado (a largura vazia vai para Descrição e Fornecedor) */
+  const colunasDasSugestoes = colunasParaCasar(sugestoes.flatMap((s) => s.lancamentos.map(linhaDoCandidato)));
+  const largurasDasSugestoes = largurasParaCasar(colunasDasSugestoes);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -128,18 +131,18 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
         </div>
 
         {/* O TÍTULO: o lançamento do extrato numa faixa própria, separada das sugestões (data · texto do banco · valor, cada um no seu lugar) */}
-        <div className="mx-3 mt-2 grid h-[28px] shrink-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-3 rounded-sm border border-[#c9d6ea] bg-[#eef3fb] px-3 text-[11px]"
+        <div className="mx-3 mt-2 grid h-[28px] shrink-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-3 rounded-sm border border-[#c9d6ea] bg-[#eef3fb] px-3 text-[10px]"
           data-testid="sugestoes-extrato">
           <span className="whitespace-nowrap font-semibold text-[#1e3a5f]">Lançamento do extrato</span>
           <span className="whitespace-nowrap tabular-nums" data-testid="sugestoes-extrato-data">{dataBR(extrato.data)}</span>
           {/* a faixa é o TÍTULO do modal (Gabriel 04/11 06:36): o texto do banco que passa da largura leva "…" e o inteiro no `title` — a
               exceção declarada dos títulos (`data-reticencias-com-title`, a mesma do título "Sugestões para casar · <conta>") */}
           <span className="min-w-0 truncate font-semibold" title={tituloHistorico} data-testid="sugestoes-extrato-nome" data-reticencias-com-title="">{h.texto || '—'}</span>
-          <span className={cn('whitespace-nowrap text-right text-[13px] font-bold tabular-nums', corVal(extrato.valor))} data-testid="sugestoes-extrato-valor">{fmtBRL(extrato.valor)}</span>
+          <span className={cn('whitespace-nowrap text-right text-[11px] font-bold tabular-nums', corVal(extrato.valor))} data-testid="sugestoes-extrato-valor">{fmtBRL(extrato.valor)}</span>
         </div>
 
         {/* a legenda dos selos mora aqui (é deles que ela fala), à direita do título: o rodapé fica só com a seleção */}
-        <div className="mx-3 mt-2 flex h-[18px] shrink-0 items-center gap-2 whitespace-nowrap text-[11px] font-semibold">
+        <div className="mx-3 mt-2 flex h-[18px] shrink-0 items-center gap-2 whitespace-nowrap text-[10px] font-semibold">
           Sugestões <span className="font-normal text-muted-foreground">· mais provável primeiro</span>
           <span className="ml-auto font-normal text-muted-foreground">âmbar = conferir antes de casar</span>
         </div>
@@ -147,18 +150,18 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
             navy fica, só as linhas rolam. O modal não muda de altura (a altura dele é a da janela). */}
         <div className="mx-3 min-h-0 flex-1 overflow-auto rounded-sm border bg-card" style={{ minHeight: PISO_DE_CADA_LISTA }} data-testid="sugestoes-lista">
           <div style={{ minWidth: PISO_PARA_CASAR }} data-testid="sugestoes-piso">
-          <TabelaDaLista larguras={COLUNAS_PARA_CASAR} cabecalho={<CabecalhoParaCasar />}>
+          <TabelaDaLista larguras={largurasDasSugestoes} cabecalho={<CabecalhoParaCasar colunas={colunasDasSugestoes} />}>
             {sugestoes.length === 0 && (
-              <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}><td colSpan={N_COLUNAS_PARA_CASAR} className="px-1 py-1 italic text-muted-foreground" data-testid="sugestoes-nenhuma">Nenhuma sugestão automática</td></tr>
+              <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}><td colSpan={largurasDasSugestoes.length} className="px-1 py-1 italic text-muted-foreground" data-testid="sugestoes-nenhuma">Nenhuma sugestão automática</td></tr>
             )}
             {sugestoes.flatMap((s, i) => s.lancamentos.map((c, j) => (
-              <LinhaParaCasarNaTabela key={`${i}-${c.lancamento_id}`} l={linhaDoCandidato(c)} testid="sugestao" testidDaLinha="sugestao"
+              <LinhaParaCasarNaTabela key={`${i}-${c.lancamento_id}`} l={linhaDoCandidato(c)} colunas={colunasDasSugestoes} testid="sugestao" testidDaLinha="sugestao"
                 marcada={marcados.has(c.lancamento_id)} podeMarcar={!c.ja_conciliado} motivoMarcar="já conciliado"
                 alternar={() => alternar(c.lancamento_id, { de: 'sugestao', c })}
                 motivo={<span className={cn(SELO, s.valorDiferente ? SELO_CONFERIR : SELO_CONFERE)} title={s.motivo} data-testid="sugestao-motivo">
                   {s.lancamentos.length > 1 ? `${j + 1}/${s.lancamentos.length} · ` : ''}{motivoCurto(s)}</span>}
                 acao={<button type="button" onClick={() => onCasar(s)} className={LINK_PARA_CASAR} data-testid="sugestao-casar"
-                  title={s.lancamentos.length > 1 ? `Casar a sugestão inteira (${s.lancamentos.length} lançamentos)` : 'Casar com o movimento do banco'}>casar</button>} />
+                  title={s.lancamentos.length > 1 ? `Casar a sugestão inteira (${s.lancamentos.length} lançamentos)` : 'Casar com o movimento do banco'}>Casar</button>} />
             )))}
           </TabelaDaLista>
           </div>
@@ -175,7 +178,7 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
 
         {/* O RODAPÉ FIXO: Selecionados · soma · extrato · diferença, em colunas de largura reservada (nada se desloca ao marcar), e o
             "Casar selecionados". Cabe a 750px (o modal a 95%): o "Fechar" é o ✕ do topo e a legenda subiu para o título das sugestões. */}
-        <div className="mt-2 flex h-[36px] shrink-0 items-center gap-2 border-t px-3 text-[11px]" data-testid="sugestoes-rodape">
+        <div className="mt-2 flex h-[36px] shrink-0 items-center gap-2 border-t px-3 text-[10px]" data-testid="sugestoes-rodape">
           <span className="w-[96px] shrink-0 whitespace-nowrap tabular-nums" data-testid="selecionados-n">Selecionados {resumo.n}</span>
           <span className="flex w-[136px] shrink-0 justify-between gap-1 whitespace-nowrap tabular-nums"><span className="text-muted-foreground">soma</span>
             <span className={cn('font-semibold', resumo.n ? corVal(resumo.soma) : 'text-muted-foreground')} data-testid="selecionados-soma">{resumo.n ? fmtBRL(resumo.soma) : '—'}</span></span>

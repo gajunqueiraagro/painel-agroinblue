@@ -82,7 +82,11 @@ describe('o componente', () => {
     await screen.findAllByTestId('procurar-historico-achado');
     /* CONC-SUGESTOES-TABELA-01 (Gabriel 04/11 06:36): as colunas da lista do Financeiro, as mesmas das sugestões */
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent?.replace(/[↑↓]/g, ''))).toEqual(
-      ['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Faz.', 'NF', 'Valor', 'Status', 'Motivo', '']);
+      /* UI-FONTE-GATE-01: os achados têm fazenda e nenhuma NF — a NF sai, a Faz. fica */
+      ['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Faz.', 'Valor', 'Status', 'Motivo', '']);
+    /* o campo cresce até os filtros (sem teto de largura): o termo inteiro à vista */
+    expect(screen.getByTestId('procurar-historico-termo').className).not.toMatch(/max-w-/);
+    expect(screen.getByTestId('procurar-historico-termo').className).toContain('flex-1');
     expect(M.rpc.mock.calls[0][1]).toMatchObject({ p_ate: '2031-11-30', p_de: '2031-01-01' });
     /* a ordem padrão diz ↓ em lugar nenhum (é a data de referência), e a coluna clicada mostra a seta */
     fireEvent.click(screen.getByTestId('procurar-ordenar-valor'));
