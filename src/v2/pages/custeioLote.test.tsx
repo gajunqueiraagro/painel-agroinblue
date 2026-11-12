@@ -151,17 +151,40 @@ describe('CUSTEIO-HASH-01 — o topo numa linha, o botão e a lista compactos, e
     // uma linha por item, cada dado na sua célula da régua: ☐ · descrição · grupo › subgrupo · conta · valor · ação
     expect(contar(item, '<td className=')).toBe(6);
     expect(item).toContain('<td className={TD_REGUA_NUM}>{brl(it.valor)}</td>');
-    expect(item).toContain('title={it.produto_raw}');
+    // a Descrição nunca corta: quebra (a linha cresce), sem "…" (Chat 12/11 08:55)
+    const desc = trecho(item, '<td className={cn(TD_REGUA, \'h-auto', '</td>');
+    expect(desc).toContain('whitespace-normal break-words');
+    expect(desc).not.toContain('truncate');
     expect(item).not.toContain('text-[12px]');
     expect(contar(item, 'text-[9.5px]')).toBe(2);
     // o cabeçalho é a régua navy dentro do bloco fixo, e o corpo usa o MESMO colgroup
     const cab = trecho(TELA, 'data-testid="custeio-cabecalho"', '</table>');
     expect(contar(cab, 'TH_REGUA')).toBe(6);
-    expect(contar(TELA, '<ColunasDoCusteio />')).toBe(2);
+    expect(contar(TELA, '<ColunasDoCusteio grupo={larguras.grupo} conta={larguras.conta} />')).toBe(2);
     expect(TELA.indexOf('data-testid="custeio-cabecalho"')).toBeLessThan(TELA.indexOf('fim do topo fixo'));
     // nada abaixo de 9,5px na linha do item (o detector se prova num tamanho menor)
     expect(item).not.toMatch(/text-\[(?:[0-8](?:\.\d+)?|9(?:\.[0-4]\d*)?)px\]/);
     expect('text-[9px]').toMatch(/text-\[(?:[0-8](?:\.\d+)?|9(?:\.[0-4]\d*)?)px\]/);
+  });
+
+  it('Grupo e Conta pela largura do MAIOR texto (piso e teto); a medida usa o MESMO texto da linha', async () => {
+    const { larguraPeloMaior, textoDaConta, textoDoGrupo } = await import('@/v2/lib/custeio/larguraDasColunas');
+    const medir = (t: string) => t.length * 6;
+    expect(larguraPeloMaior(['AB', 'ABCDEFGHIJKLMNOPQRST'], medir, { piso: 96, teto: 260 })).toBe(132); // 20 × 6 + 12
+    expect(larguraPeloMaior(['AB'], medir, { piso: 96, teto: 260 })).toBe(96);
+    expect(larguraPeloMaior(['A'.repeat(80)], medir, { piso: 96, teto: 260 })).toBe(260);
+    expect(textoDoGrupo({ familia_raw: 'ANIMAIS', subfamilia_raw: 'Sal' })).toBe('ANIMAIS › Sal');
+    expect(textoDaConta(undefined)).toBe('—');
+    expect(textoDaConta({ subcentro: 'Sal mineral', fornecedorNome: 'Fornecedor X' })).toBe('Sal mineral · Fornecedor X');
+    const item = trecho(TELA, 'data-testid="custeio-item"', '</tr>');
+    expect(TELA).toContain('const grupo = textoDoGrupo(it);');
+    expect(TELA).toContain('const conta = textoDaConta(sugestao);');
+    expect(TELA).toContain('larguraPeloMaior((itens ?? []).map(textoDoGrupo), medirA10px');
+    expect(item).toContain('{grupo}');
+    const cols = trecho(TELA, 'function ColunasDoCusteio(', '</colgroup>');
+    expect(cols).toContain('<col style={{ width: grupo }} />');
+    expect(cols).toContain('<col style={{ width: conta }} />');
+    expect(contar(cols, '<col />')).toBe(1); // só a Descrição fica com a sobra
   });
 
   it('CONC-CUSTEIO-FONTE-01: a divergência por escopo em colunas (Escopo · Itens · Impresso · Dif.), valores em células próprias', () => {

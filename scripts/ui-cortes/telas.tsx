@@ -2272,7 +2272,7 @@ if (tela === 'mesclar') {
     let total = 0; let k = 0; let erradas = 0;
     const blocos = FAMILIAS.map(([fam, subs]) => {
       const linhasSub = subs.map(([sub, n]) => {
-        const itens = Array.from({ length: n }, (_, i) => { k += 1; return [`PRODUTO SINTETICO ${k} COM DESCRICAO COMPRIDA DO RELATORIO ${i % 3 ? 'LT' : 'KG'}`.slice(0, 42), 37.5 * k + 0.4] as [string, number]; });
+        const itens = Array.from({ length: n }, (_, i) => { k += 1; return [(k % 7 === 3 ? `PRODUTO SINTETICO ${k} COM DESCRICAO MUITO COMPRIDA DO RELATORIO DA FAZENDA QUE NAO CABE NUMA LINHA SO DA TABELA ${i % 3 ? 'LT' : 'KG'}` : `PRODUTO SINTETICO ${k} COM DESCRICAO COMPRIDA DO RELATORIO ${i % 3 ? 'LT' : 'KG'}`), 37.5 * k + 0.4] as [string, number]; });
         const soma = itens.reduce((x, [, v]) => x + v, 0);
         const impresso = erradas < 3 ? soma + 10 * (erradas++ + 1) : soma;
         return { sub, itens, soma, impresso };

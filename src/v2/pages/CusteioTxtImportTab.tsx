@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hashesDoCusteio } from '@/v2/lib/custeio/hashItemCusteio';
+import { larguraPeloMaior, medirA10px, textoDaConta, textoDoGrupo } from '@/v2/lib/custeio/larguraDasColunas';
 import {
   sugerirAliasDoItem,
   sugerirFornecedor,
@@ -73,10 +74,10 @@ function LinhasCurtas({ linhas, className, testId }: { linhas: string[]; classNa
  * COLUNAS — ☐ · Descrição · Grupo › subgrupo · Conta do plano · Valor · ação. O cabeçalho mora no bloco fixo do topo (preso, fundo opaco) e o
  * corpo usa o MESMO `colgroup`: valor sob valor. O texto do arquivo fica como veio; só o rótulo fixo deixou a caixa alta.
  */
-function ColunasDoCusteio() {
+function ColunasDoCusteio({ grupo, conta }: { grupo: number; conta: number }) {
   return (
     <colgroup>
-      <col style={{ width: 24 }} /><col /><col style={{ width: 200 }} /><col style={{ width: 190 }} /><col style={{ width: 96 }} /><col style={{ width: 66 }} />
+      <col style={{ width: 24 }} /><col /><col style={{ width: grupo }} /><col style={{ width: conta }} /><col style={{ width: 96 }} /><col style={{ width: 66 }} />
     </colgroup>
   );
 }
@@ -344,6 +345,11 @@ export default function CusteioTxtImportTab(
   }, [itens, aliasesSubcentro, fornecedoresComAliases, subcentroPorPlano]);
 
   /* A sugestão da linha que está no modal, e a hierarquia do plano para ela. */
+  /* Grupo e Conta pela largura do MAIOR texto da lista (piso = o cabeçalho; teto = a Descrição ainda respira); a Descrição fica com a sobra */
+  const larguras = useMemo(() => ({
+    grupo: larguraPeloMaior((itens ?? []).map(textoDoGrupo), medirA10px, { piso: 96, teto: 260 }),
+    conta: larguraPeloMaior((itens ?? []).map((it) => textoDaConta(sugestaoPorLinha.get(it.linha_num))), medirA10px, { piso: 90, teto: 260 }),
+  }), [itens, sugestaoPorLinha]);
   const sugestaoDoModal = dialogRow ? sugestaoPorLinha.get(dialogRow.linha_num) : undefined;
   const cls = sugestaoDoModal?.subcentro
     ? hookFin.classificacoes.find(c => c.subcentro === sugestaoDoModal.subcentro)
@@ -798,7 +804,7 @@ export default function CusteioTxtImportTab(
 
           {/* o CABEÇALHO da lista, preso com o topo (fundo opaco); o corpo abaixo usa o MESMO colgroup */}
           <table className="w-full min-w-[720px] table-fixed border-collapse" data-testid="custeio-cabecalho">
-            <ColunasDoCusteio />
+            <ColunasDoCusteio grupo={larguras.grupo} conta={larguras.conta} />
             <thead className="bg-primary"><tr>
               <th className={TH_REGUA} aria-label="Selecionar" />
               <th className={cn(TH_REGUA, 'text-left')}>Descrição</th>
@@ -840,15 +846,15 @@ export default function CusteioTxtImportTab(
                   tem altura porque a seção está no app-shell. Aqui a lista só cresce. */}
               <div>
                 <table className="w-full min-w-[720px] table-fixed border-collapse">
-                  <ColunasDoCusteio />
+                  <ColunasDoCusteio grupo={larguras.grupo} conta={larguras.conta} />
                   <tbody>
                   {resultado.itens.map((it) => {
                     const hash = hashPorLinha.get(it.linha_num);
                     const sugestao = sugestaoPorLinha.get(it.linha_num);
                     const lancamentoId = hash ? lancadoPorHash.get(hash) : undefined;
                     const lancada = !!lancamentoId;
-                    const grupo = `${it.familia_raw} › ${it.subfamilia_raw}`;
-                    const conta = sugestao ? `${sugestao.subcentro || '—'}${sugestao.fornecedorNome ? ` · ${sugestao.fornecedorNome}` : ''}` : '—';
+                    const grupo = textoDoGrupo(it);
+                    const conta = textoDaConta(sugestao);
                     return (
                       <tr key={it.linha_num} data-testid="custeio-item"
                         className={cn('border-b border-border/60', lancada && 'bg-emerald-50/40 dark:bg-emerald-950/20')}>
@@ -862,7 +868,8 @@ export default function CusteioTxtImportTab(
                               aria-label={`Selecionar ${it.produto_raw}`} />
                           ) : <span className="inline-block h-3 w-3" aria-hidden />}
                         </td>
-                        <td className={cn(TD_REGUA, 'truncate')} title={it.produto_raw}>{it.produto_raw}</td>
+                        {/* a Descrição fica com a sobra; não coube, QUEBRA (a linha cresce) — nunca corta (Chat 12/11 08:55) */}
+                        <td className={cn(TD_REGUA, 'h-auto whitespace-normal break-words py-[3px] leading-[13px]')} data-testid="custeio-descricao">{it.produto_raw}</td>
                         <td className={cn(TD_REGUA, 'truncate text-muted-foreground')} title={grupo}>{grupo}</td>
                         {/* ⚠ A SUGESTÃO É PROPOSTA: em azul, para não se confundir com o que o arquivo disse; sem memória, traço */}
                         <td className={cn(TD_REGUA, 'truncate', sugestao ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground/70')}
