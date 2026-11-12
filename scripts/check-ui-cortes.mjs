@@ -1721,6 +1721,13 @@ const CENARIOS = [
   { nome: 'pendencias-resumo', url: 'tela=pendencias&v=resumo', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* UI-SEM-CORTE-02 — o Casar com o banco 1:1 (Acessos: os cenarios do ACESSOS-PERFIL-01, acima) */
   { nome: 'casar-1x1-vazio', url: 'tela=casar-1x1', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* CONC-CUSTEIO-FONTE-01 — o "Relatório de custeio" na régua (45 itens sintéticos, divergência em 3 escopos); `-rolado` = a lista rolada com
+     o topo e o cabeçalho presos */
+  ...['', '-rolado'].map((v) => ({ nome: `custeio-txt${v}`, url: 'tela=custeio-txt', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="bancada-custeio"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="custeio-item"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(500);
+      if (v) { await p.locator('[data-testid="bancada-custeio"]').evaluate((e) => { e.scrollTop = 400; }); await p.waitForTimeout(300); }
+    } })),
   { nome: 'conciliar-sobra', url: 'tela=conciliar&v=sobra', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },
   { nome: 'conciliar-falta', url: 'tela=conciliar&v=falta', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },
   { nome: 'conciliar-igual', url: 'tela=conciliar&v=igual', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },

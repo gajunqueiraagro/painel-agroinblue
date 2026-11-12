@@ -2266,6 +2266,54 @@ if (tela === 'mesclar') {
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();
+} else if (tela === 'custeio-txt') {
+  /* CONC-CUSTEIO-FONTE-01 — Conciliação › Importar banco › "Relatório de custeio", no molde do caso do Gabriel (69 itens, divergência em 3
+     escopos), com TXT SINTÉTICO no formato do relatório: 3 famílias, 45 itens de nome comprido; os subtotais impressos de 3 sub-famílias
+     NÃO batem (a faixa de divergência com as 3 linhas). A seção imita a do `ImportarBancoInline` (cabeçalho preso + a aba), numa área que rola. */
+  const montarCusteio = async () => {
+    const { default: CusteioTxtImportTab } = await import('@/v2/pages/CusteioTxtImportTab');
+    const brlTxt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const linha = (rot: string, nome: string, v: number) => `    ${rot}${' '.repeat(Math.max(1, 13 - rot.length))}${nome.padEnd(40)}${brlTxt(v).padStart(12)}`;
+    const item = (nome: string, v: number) => `                 ${nome.padEnd(42)}${brlTxt(v).padStart(12)}`;
+    const FAMILIAS: [string, [string, number][]][] = [
+      ['ANIMAIS', [['Produtos Veterinarios', 15], ['Sal Mineral e Racao', 10]]],
+      ['MANUTENCAO', [['Pecas de Maquinas e Implementos Agricolas', 12]]],
+      ['DIVERSOS', [['Despesas Diversas de Escritorio', 8]]],
+    ];
+    const corpo: string[] = [];
+    let total = 0; let k = 0; let erradas = 0;
+    const blocos = FAMILIAS.map(([fam, subs]) => {
+      const linhasSub = subs.map(([sub, n]) => {
+        const itens = Array.from({ length: n }, (_, i) => { k += 1; return [(k % 7 === 3 ? `PRODUTO SINTETICO ${k} COM DESCRICAO MUITO COMPRIDA DO RELATORIO DA FAZENDA QUE NAO CABE NUMA LINHA SO DA TABELA ${i % 3 ? 'LT' : 'KG'}` : `PRODUTO SINTETICO ${k} COM DESCRICAO COMPRIDA DO RELATORIO ${i % 3 ? 'LT' : 'KG'}`), 37.5 * k + 0.4] as [string, number]; });
+        const soma = itens.reduce((x, [, v]) => x + v, 0);
+        const impresso = erradas < 3 ? soma + 10 * (erradas++ + 1) : soma;
+        return { sub, itens, soma, impresso };
+      });
+      const somaFam = linhasSub.reduce((x, l) => x + l.soma, 0);
+      total += somaFam;
+      return { fam, linhasSub, somaFam };
+    });
+    for (const b of blocos) {
+      corpo.push(linha('Família:', b.fam, b.somaFam));
+      for (const l of b.linhasSub) { corpo.push(linha('Sub-Fam:', l.sub, l.impresso)); for (const [n, v] of l.itens) corpo.push(item(n, v)); }
+    }
+    const txt = ['R J', 'Sistema de Compras', 'Emissão 06/11/2026 Hr. 14:29:06 Pag. 1', '------------------------------------------------------------------',
+      'Custeio Analítico                 Período: 01/10/2026 a 31/10/2026', 'Descrição                                             Valor em Real',
+      linha('Fazenda:', 'FAZENDA SINTETICA DA BANCADA', total), ...corpo].join('\r\n');
+    const arquivo = new File([txt], 'PLANILHA DESP FAZ SINTETICA 102026.txt', { type: 'text/plain' });
+    g.__bancoBancada = { from: () => [], rpc: () => null };
+    montar(
+      <div className="h-screen overflow-y-auto bg-background" data-testid="bancada-custeio">
+        <div className="rounded-lg border border-border bg-card px-2">
+          <div className="sticky top-0 z-30 flex h-[30px] items-center gap-2 bg-card">
+            <span className="text-[10px] font-semibold text-muted-foreground">Relatório de custeio</span>
+            <span className="truncate tabular-nums text-[10px]">{arquivo.name}</span>
+          </div>
+          <CusteioTxtImportTab arquivoInicial={arquivo} contaBancariaId="conta-bancada" />
+        </div>
+      </div>);
+  };
+  void montarCusteio();
 } else if (tela === 'documento-nota') {
   /* P127 + P128c — o "Novo documento" do Editar lançamento que LÊ A NOTA solta no Arquivo. O cenário solta o XML SINTÉTICO exposto aqui
      (`__xmlDaBancada`: NF 74974 no molde do print, R$ 408,77, 1 duplicata, 1 item, emitente com nome comprido) ou um PDF que não se lê.
