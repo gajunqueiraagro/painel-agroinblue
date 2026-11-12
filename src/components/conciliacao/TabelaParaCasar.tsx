@@ -54,7 +54,9 @@ export function CabecalhoParaCasar({ ordenar, seta, prefixo, colunas = TODAS_AS_
     <ThDaLista recuo={recuo} ordenar={ordenar ? () => ordenar(c) : undefined} fixa={fixa} title={title} alinhar={alinhar}
       data-testid={ordenar && prefixo ? `${prefixo}-ordenar-${c}` : undefined}>
       {/* a seta não ocupa largura (o cabeçalho não anda nem quebra ao trocar a ordem; "Faz." tem 30px): ela fica no recuo da célula */}
-      {rotulo}{ordenar ? <span className="relative inline-block w-0"><span className="absolute left-[1px] top-1/2 -translate-y-1/2">{seta?.(c) ?? ''}</span></span> : null}
+      {/* UI-FONTE-GATE-01: no rótulo à DIREITA (Valor, NF) a seta vai à ESQUERDA dele — depois do texto ela passava do recuo e vazava */}
+      {ordenar && alinhar === 'right' ? <span className="relative inline-block w-0"><span className="absolute right-[1px] top-1/2 -translate-y-1/2">{seta?.(c) ?? ''}</span></span> : null}
+      {rotulo}{ordenar && alinhar !== 'right' ? <span className="relative inline-block w-0"><span className="absolute left-[1px] top-1/2 -translate-y-1/2">{seta?.(c) ?? ''}</span></span> : null}
     </ThDaLista>
   );
   return (<>
