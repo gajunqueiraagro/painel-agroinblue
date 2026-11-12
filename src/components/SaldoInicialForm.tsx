@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { CATEGORIAS, Categoria, SaldoInicial } from '@/types/cattle';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { anosDoFechamento, mudancasDoSaldo, periodoDoFormulario, type LinhaDigitada, type Mudanca } from '@/lib/rebanho/saldoInicialEditar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -66,6 +67,17 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
 
   const mesOptions = useMemo(() => MESES_CURTOS.map((label, i) => ({ value: String(i + 1), label })), []);
 
+  /* REBANHO-INICIAL-EDITAR-01: com saldo cadastrado, o período é SEMPRE o de partida — nunca o ano
+     guardado no 1º render (lista ainda vazia = ano de hoje). Ver `periodoDoFormulario`. */
+  const periodo = useMemo(() => periodoDoFormulario(saldosIniciais, anoSelecionado), [saldosIniciais, anoSelecionado]);
+  const anosSeguintes = useMemo(() => anosDoFechamento(saldosIniciais), [saldosIniciais]);
+  useEffect(() => {
+    if (hasSaldo && anoSelecionado !== String(saldoBase.ano)) setAnoSelecionado(String(saldoBase.ano));
+  }, [hasSaldo, saldoBase.ano, anoSelecionado]);
+
+  const [previa, setPrevia] = useState<Mudanca[] | null>(null);
+  useEffect(() => { if (!open) setPrevia(null); }, [open]);
+
   const initDoneRef = useRef(false);
 
   useEffect(() => {
@@ -75,8 +87,8 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     }
     if (initDoneRef.current) return;
     initDoneRef.current = true;
-    const anoForm = Number(anoSelecionado);
-    const mesForm = Number(mesSelecionado);
+    const anoForm = periodo.ano;
+    const mesForm = periodo.mes;
     const v: Record<string, string> = {};
     const p: Record<string, string> = {};
     const pr: Record<string, string> = {};
@@ -93,7 +105,7 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
       setAnoSelecionado(String(saldoBase.ano));
       setMesSelecionado(String(saldoBase.mes));
     }
-  }, [open, saldosIniciais, saldoBase, hasSaldo]);
+  }, [open, saldosIniciais, saldoBase, hasSaldo, periodo]);
 
   const parseNumero = (v: string | null | undefined): number | undefined => {
     if (v == null || v === '') return undefined;
@@ -104,10 +116,27 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
 
   const [salvando, setSalvando] = useState(false);
 
+  const digitado = (): Partial<Record<Categoria, LinhaDigitada>> => {
+    const out: Partial<Record<Categoria, LinhaDigitada>> = {};
+    for (const c of CATEGORIAS) {
+      out[c.value] = {
+        quantidade: parseNumero(valores[c.value]) ?? 0,
+        pesoMedioKg: parseNumero(pesos[c.value]),
+        precoKg: parseNumero(precos[c.value]),
+      };
+    }
+    return out;
+  };
+
+  /* 1º clique: a prévia (antes × depois e o mês que grava). Gravar só no "Confirmar e gravar". */
+  const abrirPrevia = () => {
+    setPrevia(mudancasDoSaldo(saldosIniciais, periodo, digitado(), CATEGORIAS.map(c => c.value)));
+  };
+
   const handleSalvar = async () => {
     if (salvando) return;
     setSalvando(true);
-    const anoFinal = Number(anoSelecionado);
+    const anoFinal = periodo.ano;
     /* ⚠ SEMPRE JANEIRO — FAZ-ATIVIDADE-01a. O seletor de mês está desabilitado porque
        `fn_zoot_categoria_mensal` lê `saldos_iniciais` só por `ano` e ancora a série em `mes = 1`.
        Gravar outro mês criaria uma linha que o motor nunca leria: um dado que existe na tabela,
@@ -171,7 +200,12 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
               setValores={setValores}
               setPesos={setPesos}
               setPrecos={setPrecos}
-              onSalvar={handleSalvar}
+              onSalvar={abrirPrevia}
+              previa={previa}
+              onVoltar={() => setPrevia(null)}
+              onGravar={handleSalvar}
+              periodo={periodo}
+              anosSeguintes={anosSeguintes}
               mesFechado={false}
               showSelector
               anoSelecionado={anoSelecionado}
@@ -265,9 +299,14 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
           setValores={setValores}
           setPesos={setPesos}
           setPrecos={setPrecos}
-          onSalvar={handleSalvar}
+          onSalvar={abrirPrevia}
+          previa={previa}
+          onVoltar={() => setPrevia(null)}
+          onGravar={handleSalvar}
+          periodo={periodo}
+          anosSeguintes={anosSeguintes}
           mesFechado={mesFechado}
-          showSelector
+          showSelector={false}
           anoSelecionado={anoSelecionado}
           setAnoSelecionado={setAnoSelecionado}
           mesSelecionado={mesSelecionado}
@@ -292,6 +331,7 @@ const MESES_CURTOS_DIALOG = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'A
 // ── Dialog content ──
 function SaldoInicialDialogContent({
   anoSaldo, mesSaldo, valores, pesos, precos, setValores, setPesos, setPrecos, onSalvar,
+  previa, onVoltar, onGravar, periodo, anosSeguintes,
   mesFechado, showSelector, anoSelecionado, setAnoSelecionado, mesSelecionado, setMesSelecionado, anoOptions, mesOptions, salvando,
 }: {
   anoSaldo: number;
@@ -303,6 +343,11 @@ function SaldoInicialDialogContent({
   setPesos: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   setPrecos: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onSalvar: () => void;
+  previa: Mudanca[] | null;
+  onVoltar: () => void;
+  onGravar: () => void;
+  periodo: { ano: number; mes: number };
+  anosSeguintes: number[];
   mesFechado: boolean;
   showSelector?: boolean;
   salvando?: boolean;
@@ -313,15 +358,67 @@ function SaldoInicialDialogContent({
   anoOptions?: string[];
   mesOptions?: { value: string; label: string }[];
 }) {
-  const displayAno = showSelector && anoSelecionado ? Number(anoSelecionado) : anoSaldo;
-  const displayMes = showSelector && mesSelecionado ? Number(mesSelecionado) : mesSaldo;
+  /* REBANHO-INICIAL-EDITAR-01: o que se mostra é o que se grava — o `periodo` do formulário. */
+  const displayAno = periodo.ano;
+  const displayMes = periodo.mes;
   const mesLabel = MESES_CURTOS_DIALOG[displayMes - 1];
+  const rotuloCategoria = (v: string) => CATEGORIAS.find(c => c.value === v)?.label ?? v;
+  const fmtCampo = (n: number | null, campo: Mudanca['campo']) =>
+    n == null ? '—' : campo === 'Cabeças' ? n.toLocaleString('pt-BR')
+      : n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (previa) {
+    return (
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{`Conferir antes de gravar — ${mesLabel}/${displayAno}`}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs">
+            Grava no saldo de partida: <strong>{mesLabel}/{displayAno}</strong>.
+            {anosSeguintes.length > 0 && ` Os janeiros de ${anosSeguintes.join(', ')} vêm do fechamento de dezembro e não mudam aqui.`}
+          </p>
+          {previa.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nada a gravar: o saldo inicial já está assim.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left">Categoria</TableHead>
+                  <TableHead className="text-left">Campo</TableHead>
+                  <TableHead className="text-right">Antes</TableHead>
+                  <TableHead className="text-right">Depois</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {previa.map(m => (
+                  <TableRow key={`${m.categoria}-${m.campo}`}>
+                    <TableCell className="text-xs">{rotuloCategoria(m.categoria)}</TableCell>
+                    <TableCell className="text-xs">{m.campo}</TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">{fmtCampo(m.antes, m.campo)}</TableCell>
+                    <TableCell className="text-right text-xs tabular-nums font-semibold">{fmtCampo(m.depois, m.campo)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onVoltar} disabled={salvando}>Voltar</Button>
+            <Button className="font-bold" onClick={onGravar} disabled={salvando || previa.length === 0}
+              title={previa.length === 0 ? 'Nada mudou: não há o que gravar' : undefined}>
+              {salvando ? 'Gravando...' : 'Confirmar e gravar'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    );
+  }
 
   return (
     <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>
-          {showSelector ? 'Cadastrar Saldo Inicial' : `Editar Saldo Inicial — ${mesLabel}/${anoSaldo}`}
+          {showSelector ? 'Cadastrar Saldo Inicial' : `Editar Saldo Inicial — ${mesLabel}/${displayAno}`}
         </DialogTitle>
       </DialogHeader>
       <div className="space-y-3">
@@ -370,6 +467,11 @@ function SaldoInicialDialogContent({
                 ? '🔒 Mês fechado — apenas R$/kg pode ser editado. Quantidade e peso estão bloqueados.'
                 : '⚠️ Alterações no saldo inicial impactam toda a base histórica.'}
             </p>
+            {anosSeguintes.length > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {`Os janeiros de ${anosSeguintes.join(', ')} vêm do fechamento de dezembro: só leitura, não se editam aqui.`}
+              </p>
+            )}
           </div>
         )}
 
@@ -386,7 +488,7 @@ function SaldoInicialDialogContent({
               <TableHead className="text-center w-[70px]">R$/kg</TableHead>
               <TableHead className="text-right w-[70px]">R$/@</TableHead>
               <TableHead className="text-right w-[70px]">R$/cab</TableHead>
-              <TableHead className="text-right w-[80px]">Valor Total</TableHead>
+              <TableHead className="text-right w-[120px] whitespace-nowrap">Valor Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -439,7 +541,7 @@ function SaldoInicialDialogContent({
                   </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">{fmtBrl(precoArroba)}</TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">{fmtBrl(precoCab)}</TableCell>
-                  <TableCell className="text-right text-xs font-semibold">
+                  <TableCell className="text-right text-xs font-semibold whitespace-nowrap tabular-nums">
                     {valorTotal != null ? `R$ ${fmtBrl(valorTotal)}` : '—'}
                   </TableCell>
                 </TableRow>
@@ -455,7 +557,7 @@ function SaldoInicialDialogContent({
               <TableCell />
               <TableCell />
               <TableCell />
-              <TableCell className="text-right text-xs font-bold">
+              <TableCell className="text-right text-xs font-bold whitespace-nowrap tabular-nums">
                 {(() => {
                   const total = CATEGORIAS.reduce((s, c) => {
                     const q = Number(valores[c.value]) || 0;
@@ -470,9 +572,15 @@ function SaldoInicialDialogContent({
           </TableBody>
         </Table>
 
-        <Button className="w-full touch-target font-bold" onClick={onSalvar} disabled={salvando}>
-          {salvando ? 'Salvando...' : 'Salvar Saldo Inicial'}
-        </Button>
+        {/* REBANHO-INICIAL-EDITAR-01: os botões presos no pé do modal (o corpo rola, o Cancelar/Salvar ficam sempre à vista) */}
+        <div className="sticky -bottom-6 -mx-6 -mb-6 flex gap-2 border-t bg-background px-6 pb-6 pt-3">
+          <DialogClose asChild>
+            <Button variant="outline" className="touch-target">Cancelar</Button>
+          </DialogClose>
+          <Button className="flex-1 touch-target font-bold" onClick={onSalvar} disabled={salvando}>
+            {salvando ? 'Salvando...' : 'Salvar Saldo Inicial'}
+          </Button>
+        </div>
       </div>
     </DialogContent>
   );

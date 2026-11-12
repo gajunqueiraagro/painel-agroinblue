@@ -1079,6 +1079,18 @@ const CENARIOS = [
         await p.locator('[data-testid="linha-historico"]').first().waitFor(); await p.waitForTimeout(400); } },
     ];
   })(),
+  /* REBANHO-INICIAL-EDITAR-01 — o Editar do saldo inicial (dado SINTÉTICO, a lista chega depois do 1º render): abre em jan/2024 (nunca no
+     janeiro do fechamento), Cancelar sempre; e a prévia antes × depois com o mês que grava */
+  ...(() => {
+    const URL = 'tela=saldo-inicial';
+    const TAM = [[1126, 579], [1366, 768], [1440, 800]];
+    const editar = async (p) => { await p.getByText('Editar', { exact: true }).click(); await p.locator('[role="dialog"]').waitFor(); await p.waitForTimeout(400); };
+    return [
+      { nome: 'saldo-inicial-editar', url: URL, tamanhos: TAM, regiao: '[role="dialog"]', antes: editar },
+      { nome: 'saldo-inicial-previa', url: URL, tamanhos: TAM, regiao: '[role="dialog"]', antes: async (p) => { await editar(p);
+        await p.locator('[role="dialog"] input[value="210"]').fill('211'); await p.getByText('Salvar Saldo Inicial', { exact: true }).click(); await p.waitForTimeout(400); } },
+    ];
+  })(),
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos, modo "Grupos" (dado SINTÉTICO no `tela=pastos`): a lista dos grupos, com os
      inativos, o modal de editar (3 piquetes, a prévia "já está assim"), o novo grupo com o pasto de nome longo e área no milhar, a
      prévia da desativação, e a etiqueta do grupo no cartão do modo "Ordem manual" */

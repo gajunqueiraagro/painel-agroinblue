@@ -16,6 +16,7 @@ import { FazendasList } from '@/components/FazendasList';
 import { formatNum } from '@/lib/calculos/formatters';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
 
 // 'area' virou a aba "Cadastro" (Dados + Área fundidos). A CHAVE continua 'area'
 // para não mexer no default de activeTab nem nos blocos condicionais.
@@ -998,7 +999,7 @@ export function V2Fazendas() {
  */
 function AbaRebanhoInicial() {
   const { fazendaAtual, isGlobal } = useFazenda();
-  const { saldosIniciais, setSaldoInicial } = useLancamentos();
+  const { saldosIniciais, setSaldoInicial, lancamentos } = useLancamentos();
 
   /* ⚠ O QUE A FAZENDA JÁ TEM, por (ano, mês): o hook traz o recorte da fazenda selecionada. */
   const porPeriodo = useMemo(() => {
@@ -1027,6 +1028,14 @@ function AbaRebanhoInicial() {
        saiu. Quem voltar a listar vários anos precisa dele de volta. */
   const linhasDoCadastro = porPeriodo.length > 0 ? [porPeriodo[0]] : [];
 
+  /* REBANHO-INICIAL-EDITAR-01 (4): o formulário recebe o que precisa para a confirmação
+     ("Existem N movimentações…") e o selo "Mês fechado — só preço editável" — daqui nunca apareciam.
+     Mês fechado = o P1 do janeiro de partida oficial (`get_status_pilares_fechamento`, a autoridade). */
+  const partida = linhasDoCadastro[0];
+  const { status: pilaresDaPartida } = useStatusPilares(
+    fazendaAtual?.id, partida ? `${partida.ano}-${String(partida.mes).padStart(2, '0')}` : undefined, !!partida && !isGlobal);
+  const partidaFechada = pilaresDaPartida.p1_mapa_pastos.status === 'oficial';
+
   if (isGlobal || !fazendaAtual) {
     return (
       <div className="px-4 py-6 text-[11px] text-muted-foreground">
@@ -1045,7 +1054,8 @@ function AbaRebanhoInicial() {
             fechamento prevalece.
           </div>
         </div>
-        <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} alwaysVisible />
+        <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} alwaysVisible
+          totalLancamentos={lancamentos.length} mesFechado={partidaFechada} />
       </div>
 
       <div className="rounded-lg border border-border/60 bg-card overflow-hidden">

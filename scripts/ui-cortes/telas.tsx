@@ -1745,6 +1745,26 @@ if (tela === 'mesclar') {
     montar(<ProdutoresApiProvider api={API_PRODUTORES}><ProdutoresTela /></ProdutoresApiProvider>);
   };
   void montarProdutores();
+} else if (tela === 'saldo-inicial') {
+  /* REBANHO-INICIAL-EDITAR-01 — Cadastros › Fazendas e pastos › Rebanho inicial: o cartão e o Editar do saldo inicial (dado SINTÉTICO).
+     O caso do erro: a lista chega DEPOIS do 1º render (vazia → cheia); partida jan/2024 com preço e os janeiros 2025/2026 do fechamento.
+     O Editar tem de abrir e gravar jan/2024; a prévia mostra antes × depois. Nada grava (onSetSaldo vazio). */
+  const montarSaldo = async () => {
+    const { SaldoInicialForm } = await import('@/components/SaldoInicialForm');
+    const L = (ano: number, categoria: any, quantidade: number, pesoMedioKg: number, precoKg?: number) => ({ ano, mes: 1, categoria, quantidade, pesoMedioKg, precoKg });
+    const SALDOS = [
+      L(2024, 'mamotes_m', 120, 106.85, 14.5), L(2024, 'touros', 9, 650, 10.2), L(2024, 'mamotes_f', 140, 108.97, 13.9), L(2024, 'novilhas', 130, 380, 12.1), L(2024, 'vacas', 210, 468.31, 11.05),
+      L(2025, 'mamotes_m', 150, 110), L(2025, 'novilhas', 160, 390), L(2025, 'vacas', 260, 470),
+      L(2026, 'mamotes_m', 208, 106.85), L(2026, 'novilhas', 217, 450), L(2026, 'vacas', 313, 468.31),
+    ];
+    const Caixa = () => {
+      const [lista, setLista] = React.useState<any[]>([]);
+      React.useEffect(() => { const t = setTimeout(() => setLista(SALDOS), 50); return () => clearTimeout(t); }, []);
+      return <div className="p-4 w-[300px]"><SaldoInicialForm saldosIniciais={lista} onSetSaldo={() => {}} alwaysVisible totalLancamentos={0} /></div>;
+    };
+    montar(<Caixa />);
+  };
+  void montarSaldo();
 } else if (tela === 'pastos') {
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (a tela REAL) com o modo "Grupos": dado SINTÉTICO, nomes de exemplo; um grupo de 3
      piquetes (P10A/B/C), um de nome longo com 4 pastos, um inativo e pastos soltos. O banco responde a prévia do `fn_pasto_grupo_salvar`
