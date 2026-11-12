@@ -91,6 +91,10 @@ interface Props {
   /** MAPA-LOTES-01 fatia 1 (A): abre o modal do P1 (o MESMO do Fechamento, `useModalDoPasto`) no card do pasto; sem ele (Global, bancada),
    *  o painel não tem o rodapé. O mapa não grava nada. */
   onLancar?: (pastoId: string) => void;
+  /** PASTO-CADASTRO-GEO-01 P3: "Abrir cadastro do pasto" no painel — a MESMA ficha do cadastro, aberta por cima do mapa (sem ele, sem a linha) */
+  onAbrirCadastro?: (pastoId: string) => void;
+  /** PASTO-CADASTRO-GEO-01 P2: veio da ficha do pasto — o lugar do "← Global" vira "← Cadastro" (a volta reabre a ficha) */
+  voltarAoCadastro?: () => void;
 }
 
 const VIDRO = 'rounded-[10px] border border-white/60 bg-white/[0.78] shadow-[0_8px_28px_rgba(0,0,0,0.28)] backdrop-blur-[14px] backdrop-saturate-[1.2]';
@@ -219,7 +223,7 @@ function rotuloForaDaPecuaria(d: DadosDoPastoNoMes, lavoura: LavouraDoMes | null
 export function MapaGestorView({
   geometrias, pastos, anoMes, dadosDoMes, carregandoMes, erroDoMes, geoLoading, onImportar, onClassificarArea, onRenderedChange,
   seletorDeMes, trocaDeVista, acaoImprimir, voltarAoGlobal, pastoInicialId, fazendaId, clienteId, divisoes, semDesenho = null,
-  infraInicialId, onInfraInicialUsada, onLancar,
+  infraInicialId, onInfraInicialUsada, onLancar, onAbrirCadastro, voltarAoCadastro,
 }: Props) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [camada, setCamada] = useState<CamadaDoMapa>('situacao');
@@ -625,8 +629,13 @@ export function MapaGestorView({
       {/* Barra 40px */}
       <div className="relative z-[600] flex h-[34px] flex-none items-center gap-1.5 border-b border-[#D9DEE5] bg-white px-2.5" data-testid="mapa-barra">
         {/* MAPA-GLOBAL-01 (D6): o lugar do "← Global" existe sempre (largura fixa): aparecer não empurra os outros botões */}
-        <div className="w-[56px] flex-none" data-testid="mapa-volta-global">
-          {voltarAoGlobal && (
+        <div className="w-[72px] flex-none" data-testid="mapa-volta-global">{/* 72: cabe o "‹ Cadastro" (PASTO-CADASTRO-GEO-01) */}
+          {voltarAoCadastro ? (
+            <Button type="button" variant="ghost" size="sm" className="h-[24px] w-full justify-start gap-0 px-0.5 text-[11px] font-semibold text-[#2B6CB0]" onClick={voltarAoCadastro}
+              title="Voltar ao cadastro do pasto (a ficha reabre)" data-testid="mapa-voltar-ao-cadastro">
+              <ChevronLeft className="h-3 w-3" /> Cadastro
+            </Button>
+          ) : voltarAoGlobal && (
             <Button type="button" variant="ghost" size="sm" className="h-[24px] w-full justify-start gap-0 px-0.5 text-[11px] font-semibold text-[#2B6CB0]" onClick={voltarAoGlobal}>
               <ChevronLeft className="h-3 w-3" /> Global
             </Button>
@@ -869,6 +878,11 @@ export function MapaGestorView({
               </div>
               {/* duas linhas reservadas: o subtítulo longo quebra (fora de tabela, nada de "…") e nada abaixo se desloca */}
               <div className="mt-0.5 h-[24px] overflow-hidden text-[9.5px] leading-[12px] text-[#4A5361]">{subtitulo}</div>
+              {/* PASTO-CADASTRO-GEO-01 P3: a ficha do cadastro por cima do mapa; fechar = voltar ao mapa (linha de altura fixa) */}
+              {onAbrirCadastro && (
+                <button type="button" className="mt-0.5 h-[16px] text-[10px] font-semibold leading-[16px] text-[#2B6CB0] hover:underline"
+                  onClick={() => onAbrirCadastro(pastoSelecionado.id)} data-testid="mapa-painel-abrir-cadastro">Abrir cadastro do pasto ›</button>
+              )}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
               <div className="grid grid-cols-2 gap-1">

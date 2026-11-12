@@ -1884,7 +1884,9 @@ if (tela === 'mesclar') {
   };
   const montarPastos = async () => {
     const { PastosTab } = await import('@/pages/PastosTab');
-    montar(<PastosTab />);
+    /* PASTO-CADASTRO-GEO-01 (Chat 14:50): o hospedeiro é o da V2Fazendas, que sabe ir ao Geo — o topo da ficha mostra
+       "Ver/editar no mapa" ou, no P10 (sem desenho), "Desenhar no mapa" */
+    montar(<PastosTab aoAbrirPastoNoMapa={() => {}} />);
   };
   void montarPastos();
 } else if (tela === 'mapa-pastos') {
