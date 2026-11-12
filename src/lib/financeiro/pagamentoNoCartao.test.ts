@@ -152,3 +152,25 @@ describe('P74 — pagamento no cartão', () => {
     expect(fraseDaFaturaNoLancamento('Cartão Elo', '', { dia: 10, origem: 'digitado' }, 3)).toBe('');
   });
 });
+
+/* NOTA-PAGTO-PARCELADO-01 P2 — "Parcelado (boleto, PIX, transferência, débito)": a mesma grade do cartão, a forma escolhida, até 120 parcelas */
+import { MAX_PARCELAS_DO_PARCELADO, FORMAS_DO_PARCELADO, maxParcelasDe, pagaEmGrade } from './pagamentoNoCartao';
+describe('NOTA-PAGTO-PARCELADO-01 — parcelado sem cartão', () => {
+  it('grade no cartão e no parcelado; o máximo de cada um; as formas oferecidas (sem cartão)', () => {
+    expect((['duplicatas', 'avista', 'cartao', 'parcelado'] as const).map(pagaEmGrade)).toEqual([false, false, true, true]);
+    expect([maxParcelasDe('cartao'), maxParcelasDe('parcelado'), MAX_PARCELAS_DO_PARCELADO]).toEqual([24, 120, 120]);
+    expect(FORMAS_DO_PARCELADO).toEqual(['Boleto', 'PIX', 'Transferência', 'Débito', 'Débito Automático']);
+  });
+  it('comPagamento parcelado: as parcelas no lugar das duplicatas e a FORMA escolhida no lugar da do XML; no cartão a forma não muda', () => {
+    const base = { ...DOXML, proposta: { ...DOXML.proposta, formaPagamento: 'Cartão de crédito' } };
+    const pix = comPagamento(base, 'parcelado', [{ numero: '1', vencimento: '2026-07-29', valorCent: 11000000 }, { numero: '2', vencimento: '2026-10-10', valorCent: 2500000 }], 'PIX');
+    expect([pix.proposta.formaPagamento, pix.proposta.duplicatas.length, pix.proposta.valorCent, pix.proposta.parcelamento.tipo]).toEqual(['PIX', 2, 13500000, 'livres']);
+    expect(comPagamento(base, 'parcelado', parcelasDoCartao(100000, 2, '2026-09-10'), '').proposta.formaPagamento).toBe('Cartão de crédito');
+    expect(comPagamento(base, 'cartao', parcelasDoCartao(100000, 2, '2026-09-10'), 'PIX').proposta.formaPagamento).toBe('Cartão de crédito');
+  });
+  it('36 parcelas: no parcelado sai (máx. 120); no cartão não (máx. 24)', () => {
+    expect(parcelasDoCartao(3600000, 36, '2026-08-10', maxParcelasDe('parcelado'))).toHaveLength(36);
+    expect(parcelasDoCartao(3600000, 36, '2026-08-10')).toEqual([]);
+  });
+}); 
+
