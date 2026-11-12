@@ -154,4 +154,18 @@ describe('NOTA-LIGAR-LANCAMENTO-01 — o quadro sozinho', () => {
     fireEvent.click(screen.getByText('tentar de novo'));
     await waitFor(() => expect(screen.getByTestId('nota-x-sem-dono').textContent).toBe('todas com quem pague'));
   });
+  it('o cabeçalho do quadro só fica preso quando o quadro rola (4ª duplicata em diante); até 3, quem rola é o modal (regra do gate: cabeçalho preso)', async () => {
+    const nota = await notaLida();
+    const { unmount } = render(<NotaXLancamentoQuadro clienteId="cli" nota={nota} notaFornecedorId="f15" lancamento={{ ...LANC, fornecedor: null }} participacaoPct={null}
+      participacaoPadrao={null} onParticipacao={vi.fn()} onTrocado={vi.fn()} onCadastrado={vi.fn()} />);
+    expect(screen.getByTestId('nota-x-lancamento-cabecalho').className).not.toContain('sticky');
+    expect(screen.getByTestId('nota-x-lancamento-tabela').className).not.toContain('overflow-y-auto');
+    unmount();
+    const quatro = { ...nota, duplicatas: [1, 2, 3, 4].map((n) => ({ numero: `00${n}`, vencimento: `2026-0${n + 5}-02`, valorCent: 7_012_500 })) };
+    render(<NotaXLancamentoQuadro clienteId="cli" nota={quatro} notaFornecedorId="f15" lancamento={{ ...LANC, fornecedor: null }} participacaoPct={null}
+      participacaoPadrao={null} onParticipacao={vi.fn()} onTrocado={vi.fn()} onCadastrado={vi.fn()} />);
+    expect(screen.getByTestId('nota-x-lancamento-cabecalho').className).toContain('sticky');
+    expect(screen.getByTestId('nota-x-lancamento-tabela').className).toContain('overflow-y-auto');
+    await waitFor(() => expect(screen.getAllByTestId('nota-x-linha')).toHaveLength(4));
+  });
 });

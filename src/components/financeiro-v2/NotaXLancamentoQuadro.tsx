@@ -146,6 +146,8 @@ export function NotaXLancamentoQuadro({ clienteId, nota, notaFornecedorId, lanca
   };
 
   const nLinhas = Math.min(LINHAS_A_VISTA, quadro.linhas.length);
+  /* o cabeçalho só fica preso quando o quadro rola (da 4ª duplicata em diante); até 3, quem rola é o modal e o cabeçalho sobe com ele */
+  const quadroRola = quadro.linhas.length > LINHAS_A_VISTA;
   return (
     <div className="flex flex-col gap-1" data-testid="nota-x-lancamento">
       {filial && (
@@ -171,10 +173,10 @@ export function NotaXLancamentoQuadro({ clienteId, nota, notaFornecedorId, lanca
         </div>
       )}
       <div className={cn(QUADRO_REGUA, 'h-auto')}>
-        <div className="overflow-y-auto" style={{ height: 22 + nLinhas * 19 }} data-testid="nota-x-lancamento-tabela">
+        <div className={quadroRola ? 'overflow-y-auto' : undefined} style={{ height: 22 + nLinhas * 19 }} data-testid="nota-x-lancamento-tabela">
           <table className="w-full table-fixed border-collapse">
             <colgroup><col style={{ width: 70 }} /><col style={{ width: 78 }} /><col style={{ width: 92 }} /><col /></colgroup>
-            <thead className="sticky top-0 z-10 bg-primary">
+            <thead className={cn('bg-primary', quadroRola && 'sticky top-0 z-10')} data-testid="nota-x-lancamento-cabecalho">
               <tr>
                 <th className={cn(TH_REGUA, 'pl-2 text-left')}>Duplicata</th>
                 <th className={cn(TH_REGUA, 'text-left')}>Venc.</th>
