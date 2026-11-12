@@ -162,7 +162,15 @@ function lerMatriculaConferida(bruto: unknown): boolean {
   return typeof v === 'string' && v.trim() !== '';
 }
 
-export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}) {
+/** PASTO-CADASTRO-GEO-01 P2 — a volta do Geo reabre a MESMA ficha (`fichaInicial`, uma vez) e o "Ver/editar no mapa" da ficha leva ao Geo
+ *  (`aoAbrirPastoNoMapa`; quem não passa — o CadastrosTab antigo — fica sem o botão). */
+export interface PastosTabProps {
+  hostBarra?: HTMLElement | null;
+  fichaInicial?: string | null;
+  onFichaInicialAberta?: () => void;
+  aoAbrirPastoNoMapa?: (pastoId: string, desenhar: boolean) => void;
+}
+export function PastosTab({ hostBarra, fichaInicial = null, onFichaInicialAberta, aoAbrirPastoNoMapa }: PastosTabProps = {}) {
   const { pastos, loading, criarPasto, toggleAtivo, reorderPastos } = usePastos();
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
@@ -183,7 +191,12 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   const [loteRodando, setLoteRodando] = useState(false);
   const [loteRelatorio, setLoteRelatorio] = useState<LoteRelatorio | null>(null);
   /* a FICHA aberta: `pastoId` nulo = pasto novo */
-  const [ficha, setFicha] = useState<{ pastoId: string | null } | null>(null);
+  const [ficha, setFicha] = useState<{ pastoId: string | null } | null>(() => (fichaInicial ? { pastoId: fichaInicial } : null));
+  /* a volta do Geo é esquecida só quando a ficha reaberta SAI (fechada, gravada, trocada): o pai pode remontar esta tela no meio
+     (a V2Fazendas passa pelo "carregando") e a ficha tem de reabrir de novo */
+  useEffect(() => {
+    if (fichaInicial && ficha?.pastoId !== fichaInicial) onFichaInicialAberta?.();
+  }, [fichaInicial, ficha, onFichaInicialAberta]);
   const editado = useMemo(() => (ficha?.pastoId ? pastos.find(p => p.id === ficha.pastoId) : undefined), [ficha, pastos]);
   /* F2b (Code 4): o pai criado pelo gesto tem rodada na trilha → o "Voltar a pastos soltos…" (agora no cabeçalho da FICHA) */
   useEffect(() => {
@@ -502,7 +515,9 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   );
 
   return (
-    <div className="p-3 pt-1 pb-20 space-y-2">
+    /* PASTO-CADASTRO-GEO-01 (1): na Lista e nas Áreas a tabela vai até o fim da janela (`useAlturaAteOFim`, folga 28 = este pb-3 + o pé do pai, medido);
+       os pb-20 de antes (e a folga 96 que os descontava) deixavam um vão sob o quadro. Os outros modos seguem com o pb-20. */
+    <div className={`p-3 pt-1 space-y-2 ${modo === 'lista' || modo === 'areas' ? 'pb-3' : 'pb-20'}`}>
       {/* A barra é a MESMA em qualquer lugar; só o destino do render muda. Pai que
           passa hostBarra a recebe ao lado das abas; pai que não passa (CadastrosTab)
           continua com ela no topo do próprio conteúdo, como sempre. O portal preserva
@@ -600,6 +615,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                 onClick={() => setDesfazerDe({ rodada: rodadaDoEditado, nome: editado.nome })}>Voltar a pastos soltos…</Button>
             )}
           </>) : undefined}
+          aoAbrirNoMapa={aoAbrirPastoNoMapa && ficha.pastoId ? (desenhar) => { const id = ficha.pastoId; setFicha(null); if (id) aoAbrirPastoNoMapa(id, desenhar); } : undefined}
           aoFechar={() => setFicha(null)}
           aoGravar={() => { setFicha(null); setVersaoDaFicha(v => v + 1); if (fazendaAtual.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id); }}
         />

@@ -142,6 +142,10 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   const [novoCredor, setNovoCredor] = useState(false);
   const [buscaP, setBuscaP] = useState(''); const [buscaJ, setBuscaJ] = useState('');
   const [linhas, setLinhas] = useState<OpcaoSearchable[]>([]);
+  /* FIN-FINANC-LAYOUT-02 (Chat 10:26): a aba Liberações do modal é o MESMO `BlocoLiberacoes` da tela do contrato — e recebe a conta do contrato
+     como a tela (o nome de exibição; senão o nome da conta), para o "Para quem" da liberação em conta não ficar vazio */
+  const contaDoForm = contas.find((c) => c.id === form.contaId);
+  const nomeDaContaDoContrato = contaDoForm ? (contaDoForm.nome_exibicao || contaDoForm.nome_conta || null) : null;
   const credito = useContratoDeCredito(salvoId, clienteId);
   /* FIN-CONTRATO-SALVAR-01 — abaixo de 900px de janela o resumo lateral some (a régua do consórcio): os 240px vão para os campos */
   const comResumo = mostraResumo(useLarguraDaJanela());
@@ -569,7 +573,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                   <PainelAntesDeSalvar aba={aba} falta={falta} gravando={gravando} onSalvar={() => void salvar(aba)}
                     onIrPara={(item) => setAba(abaDoItem(item))} />
                 )}
-                {aba === 'liberacoes' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto"><BlocoLiberacoes api={credito} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId={clienteId} /></div>}
+                {aba === 'liberacoes' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto"><BlocoLiberacoes api={credito} contaDoContrato={nomeDaContaDoContrato} onAbrirLancamento={() => undefined} clienteId={clienteId} /></div>}
                 {aba === 'destinacao' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto"><BlocoDestinacoes api={credito} /></div>}
                 {aba === 'documentos' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto"><BlocoDocumentos api={credito} /></div>}
               </div>

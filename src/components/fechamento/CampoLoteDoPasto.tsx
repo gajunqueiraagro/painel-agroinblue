@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
 import { codigoAoLado, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
 import { comLoteEmTodos, comLoteNaCategoria, loteDoCard, rotuloDoLote, type ItemComLote } from '@/lib/lotes/loteDoPasto';
+import { opcoesDosLotesNoPasto, type ContextoDaBusca } from '@/lib/lotes/buscaDoLote';
 
 export const ROTULO_NOVO_LOTE = '+ Novo lote';
 export const DICA_DO_LOTE = 'O lote é o grupo de animais manejado junto. Ele vai em cada categoria deste pasto e pode estar em mais de um pasto. Cabeças e peso continuam sendo os do fechamento.';
@@ -25,10 +26,12 @@ export function opcoesDosLotes(lotes: readonly LoteDaLista[]): OpcaoSearchable[]
   }));
 }
 
-export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria, lotes, disabled, onChange, onNovoLote }: {
+export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria, lotes, contexto, disabled, onChange, onNovoLote }: {
   itens: readonly T[];
   nomeDaCategoria: (categoriaId: string) => string;
   lotes: readonly LoteDaLista[];
+  /** LOTE-BUSCA-01 — o pasto, o texto do caderno e o mês anterior: as opções em grupos (sem ele, a lista de sempre, inteira) */
+  contexto?: ContextoDaBusca;
   disabled?: boolean;
   onChange: (itens: T[]) => void;
   /** abre o assistente; `categoriaId` nulo = o lote novo vai no pasto inteiro */
@@ -37,7 +40,7 @@ export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria
   const [aberto, setAberto] = useState(false);
   const card = loteDoCard(itens);
   const rotulo = rotuloDoLote(card, lotes);
-  const opcoes = opcoesDosLotes(lotes);
+  const opcoes = contexto ? opcoesDosLotesNoPasto(lotes, contexto) : opcoesDosLotes(lotes);
   const comCabeca = itens.filter(i => i.quantidade > 0);
   const novo = (categoriaId: string | null) => ({ label: ROTULO_NOVO_LOTE, onSelect: () => { setAberto(false); onNovoLote(categoriaId); } });
 
@@ -56,7 +59,7 @@ export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria
         </div>
         <SearchableSelect value={card.tipo === 'um' && card.semLote === 0 ? card.loteId : ''} options={opcoes}
           onValueChange={v => onChange(comLoteEmTodos(itens, v || null))} allLabel="Sem lote" allValue="" acaoFinal={novo(null)}
-          placeholder="Buscar lote, código ou nome" disabled={disabled || comCabeca.length === 0} />
+          placeholder="Buscar lote, código ou nome" disabled={disabled || comCabeca.length === 0} buscaPorPalavras semCorte subInteiro />
         <div className="mb-1 mt-2 h-[16px] text-[10.5px] font-semibold">Por categoria</div>
         {comCabeca.length === 0 ? (
           <div className="h-[22px] text-[10.5px] text-muted-foreground">Lance as cabeças para escolher o lote.</div>
@@ -67,7 +70,7 @@ export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria
                 <span className="truncate text-[10.5px]" title={nomeDaCategoria(i.categoria_id)}>{nomeDaCategoria(i.categoria_id)}</span>
                 <span className="text-right text-[10.5px] tabular-nums">{i.quantidade}</span>
                 <SearchableSelect value={i.lote_id ?? ''} options={opcoes} allLabel="Sem lote" allValue="" acaoFinal={novo(i.categoria_id)}
-                  onValueChange={v => onChange(comLoteNaCategoria(itens, i.categoria_id, v || null))} placeholder="Buscar lote, código ou nome" disabled={disabled} />
+                  onValueChange={v => onChange(comLoteNaCategoria(itens, i.categoria_id, v || null))} placeholder="Buscar lote, código ou nome" disabled={disabled} buscaPorPalavras semCorte subInteiro />
               </div>
             ))}
           </div>

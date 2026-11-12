@@ -193,8 +193,8 @@ describe('(5c) v4 — a página (fonte): uma faixa de caminho só, abas sem queb
     // os gestos (com o lápis) são um bloco só, que a célula Lançamento desenha (na parcela de valor zero, a célula Situação + Lançamento)
     const gestos = fonte.slice(fonte.indexOf('const gestos = ('), fonte.indexOf('return (', fonte.indexOf('const gestos = (')));
     expect(gestos).toContain('data-testid="lapis-da-parcela"');
-    const cel = fonte.slice(fonte.indexOf('data-testid="lancamento-da-parcela" title={d?.contaNome'), fonte.indexOf('{linhas.length > 0 && ('));
-    expect(cel).toMatch(/^data-testid="lancamento-da-parcela" title=\{[^\n]*\n\s*\{gestos\}\n\s*<\/td>/);
+    const cel = fonte.slice(fonte.indexOf('<td className={TD_V4} data-testid="lancamento-da-parcela">'), fonte.indexOf('{linhas.length > 0 && ('));
+    expect(cel).toMatch(/^<td className=\{TD_V4\} data-testid="lancamento-da-parcela">\n\s*\{gestos\}\n\s*<\/td>/);
     expect(fonte).toContain('const TF_V4 = `sticky bottom-0 z-10');
     expect(fonte).toContain('const TH_V4 = `sticky top-0 z-10');
     expect(fonte).toContain('Sem parcelas. Use ✎ Editar parcelas ou Editar para gerar o cronograma.');

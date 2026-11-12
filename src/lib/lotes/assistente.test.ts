@@ -1,10 +1,11 @@
-/** LOTES-03 F1 — a regra do assistente "+ Novo lote" (passos, código, contagem, busca, validação, o que vai ao banco). */
+/** LOTES-03 F1 + LOTE-ETAPAS-01 — a regra do assistente "+ Novo lote" (etapas, código, contagem, busca, validação, o que vai ao banco). */
 import { describe, it, expect } from 'vitest';
 import {
-  PASSOS, aceitaCarimbo, camposParaSalvar, codigoMontando, filtrarCadastros, fraseCurtaDaTroca, fraseDaTroca, lotesDaCombinacao, lotesQueUsam, mesmaCombinacao, perfilInicial,
-  podeAvancar, safraDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarCarimbo, validarNumero, validarPerfil, type Escolha,
+  PASSOS, aceitaCarimbo, camposParaSalvar, categoriasDaAtividade, codigoDoAssistente, faltaNoPasso, faseDaAtividade, fichaDoAssistente, filtrarCadastros,
+  fraseCurtaDaTroca, fraseDaTroca, legendaDoCodigo, lotesQueUsam, perfilInicial, resumoDoRebanho, safraDe, siglaDigitada, ultimoPassoAlcancavel,
+  validarCadastro, validarCarimbo, validarPerfil, type Escolha,
 } from './assistente';
-import { FRASE_CARIMBO_INVALIDO, nomeDoLote } from './tipos';
+import { FRASE_CARIMBO_INVALIDO, codigoPorEtapas, nomeDoLote } from './tipos';
 import type { CadastroDoLote, LoteDaLista } from './tipos';
 
 const cad = (id: string, tipo: CadastroDoLote['tipo'], sigla: string | null, nome: string, categoriasRebanho: string[] = []): CadastroDoLote =>
@@ -19,34 +20,71 @@ const lote = (id: string, categoriaId: string, racaId: string, atividadeId: stri
 });
 const E = (c: string | null, r: string | null, a: string | null): Escolha => ({ categoriaId: c, racaId: r, atividadeId: a });
 
-describe('passos', () => {
-  it('LOTES-04: os passos na ordem do código (atividade, categoria, raça); com os três, o número e o perfil', () => {
-    expect(PASSOS.slice(0, 3).map(p => p.chave)).toEqual(['atividade', 'categoria', 'raca']);
+describe('etapas (LOTE-ETAPAS-01)', () => {
+  it('Atividade → Categoria e sexo → Situação → Raça e genética → Nome; obrigatório só atividade, categoria e raça', () => {
+    expect(PASSOS.map(p => p.chave)).toEqual(['atividade', 'categoria', 'situacao', 'raca', 'nome']);
     expect(ultimoPassoAlcancavel(E(null, null, null))).toBe(0);
     expect(ultimoPassoAlcancavel(E('df', null, null))).toBe(0);
     expect(ultimoPassoAlcancavel(E(null, null, 'rc'))).toBe(1);
-    expect(ultimoPassoAlcancavel(E('df', null, 'rc'))).toBe(2);
+    expect(ultimoPassoAlcancavel(E('df', null, 'rc'))).toBe(3);
     expect(ultimoPassoAlcancavel(E('df', 'ne', 'rc'))).toBe(4);
-    expect(podeAvancar(E(null, null, 'rc'), 1)).toBe(false);
-    expect(podeAvancar(E('df', null, 'rc'), 1)).toBe(true);
-    expect(podeAvancar(E('df', 'ne', 'rc'), 4)).toBe(true);
+    const p = perfilInicial('2026-11-12');
+    expect(faltaNoPasso(E(null, null, null), p, 0, false)).toBe('Escolha a atividade');
+    expect(faltaNoPasso(E(null, null, 'rc'), p, 1, false)).toBe('Escolha a categoria');
+    expect(faltaNoPasso(E('df', null, 'rc'), p, 2, false)).toBeNull();          // a situação nunca trava
+    expect(faltaNoPasso(E('df', null, 'rc'), p, 3, false)).toBe('Escolha a raça');
+    expect(faltaNoPasso(E('df', 'ne', 'rc'), p, 4, false)).toBeNull();          // apelido, anotação: "completar", nunca trava
+  });
+  it('parida (PA/PP/VZ) pede o carimbo; mojada, solteira e descarte nunca; carimbo errado trava', () => {
+    const p = perfilInicial('2026-11-12');
+    for (const s of ['PA', 'PP', 'VZ'] as const) expect(faltaNoPasso(E('pp', 'ne', 'cr'), { ...p, situacaoCria: s }, 3, true)).toBe('Falta o carimbo dos mamotes');
+    for (const s of ['PR', 'SL', 'DS', null] as const) expect(faltaNoPasso(E('pp', 'ne', 'cr'), { ...p, situacaoCria: s }, 3, true)).toBeNull();
+    expect(faltaNoPasso(E('pp', 'ne', 'cr'), { ...p, situacaoCria: 'PA', carimbo: '7.1' }, 4, true)).toBeNull();
+    expect(faltaNoPasso(E('pp', 'ne', 'cr'), { ...p, situacaoCria: 'PA', carimbo: '7X' }, 3, true)).toBe(FRASE_CARIMBO_INVALIDO);
+    expect(validarPerfil({ ...p, situacaoCria: 'PP' }, '2026-11-12')).toEqual({ campo: 'carimbo', mensagem: 'Parida: informe o carimbo (mês.lote, ex.: 7.1).' });
+    expect(validarPerfil({ ...p, situacaoCria: 'PR' }, '2026-11-12')).toBeNull();
+  });
+  it('D3: a categoria filtrada pela atividade pelas categorias do rebanho; sem fase = todas; a escolhida sempre fica', () => {
+    const REB = [{ id: 'r-va', codigo: 'vacas' }, { id: 'r-mf', codigo: 'mamotes_f' }, { id: 'r-df', codigo: 'desmama_f' }, { id: 'r-bo', codigo: 'bois' }, { id: 'r-no', codigo: 'novilhas' }];
+    const C = [cad('vc', 'categoria', 'VC', 'Vacas', ['r-va']), cad('pp', 'categoria', 'PP', 'Prenha parida', ['r-va', 'r-mf']),
+      cad('df', 'categoria', 'DF', 'Desmama F', ['r-df']), cad('bo', 'categoria', 'BO', 'Boi', ['r-bo']), cad('nv', 'categoria', 'NV', 'Novilhas', ['r-no'])];
+    expect(categoriasDaAtividade(C, 'cria', REB, null).map(c => c.id)).toEqual(['vc', 'pp', 'nv']);
+    expect(categoriasDaAtividade(C, 'recria', REB, null).map(c => c.id)).toEqual(['df', 'nv']);
+    expect(categoriasDaAtividade(C, 'engorda', REB, null).map(c => c.id)).toEqual(['vc', 'pp', 'bo', 'nv']);
+    expect(categoriasDaAtividade(C, null, REB, null).map(c => c.id)).toEqual(['vc', 'pp', 'df', 'bo', 'nv']);
+    expect(categoriasDaAtividade(C, 'recria', REB, 'bo').map(c => c.id)).toEqual(['df', 'bo', 'nv']);
+    expect([faseDaAtividade('CRI'), faseDaAtividade('CR'), faseDaAtividade('REC'), faseDaAtividade('ENG'), faseDaAtividade('RP'), faseDaAtividade(null)])
+      .toEqual(['cria', 'cria', 'recria', 'engorda', null, null]);
+  });
+  it('Chat 14:45: a linha do cartão da categoria em UMA linha — mamotes M+F = "mamotes", mais de 2 = "+N"', () => {
+    const r = (codigo: string, nome: string) => ({ codigo, nome });
+    expect(resumoDoRebanho([r('vacas', 'Vacas'), r('mamotes_m', 'Mamotes M'), r('mamotes_f', 'Mamotes F')])).toBe('vacas + mamotes');
+    expect(resumoDoRebanho([r('mamotes_m', 'Mamotes M'), r('mamotes_f', 'Mamotes F'), r('novilhas', 'Novilhas')])).toBe('novilhas + mamotes');
+    expect(resumoDoRebanho([r('desmama_m', 'Desmama M'), r('desmama_f', 'Desmama F')])).toBe('desmama');
+    expect(resumoDoRebanho([r('bois', 'Bois'), r('touros', 'Touros'), r('vacas', 'Vacas'), r('mamotes_m', 'Mamotes M')])).toBe('bois + touros +2');
   });
 });
 
-describe('código montando', () => {
-  it('LOTES-04: ATIV-CAT-RAÇA-NN com "__" no que falta; o número só com os três', () => {
-    expect(codigoMontando(CAD, E(null, null, 'rc'), 5)).toBe('RC-__-__-__');
-    expect(codigoMontando(CAD, E('df', null, 'rc'), 5)).toBe('RC-DF-__-__');
-    expect(codigoMontando(CAD, E('df', 'ne', 'rc'), 5)).toBe('RC-DF-NE-05');
-    expect(codigoMontando(CAD, E('df', 'ne', 'rc'), null)).toBe('RC-DF-NE-__');
+describe('código (D1)', () => {
+  const C = [cad('cri', 'atividade', 'CRI', 'Cria'), cad('vc', 'categoria', 'VC', 'Vacas', ['r-va']), cad('nel', 'raca', 'NEL', 'Nelore'), cad('ang', 'raca', 'ANG', 'Angus')];
+  it('lote NOVO = ATIV-CAT-RAÇA[-carimbo], "__" no que falta; -02/-03 só quando repetir entre os vivos da fazenda', () => {
+    expect(codigoDoAssistente(C, E(null, null, 'cri'), '', [])).toBe('CRI-__-__');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '', [])).toBe('CRI-VC-NEL');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ' 7.1 ', [])).toBe('CRI-VC-NEL-7.1');
+    const vivos = [{ ...lote('a', 'vc', 'nel', 'cri', 1), codigo: 'CRI-VC-NEL-7.1' }, { ...lote('b', 'vc', 'nel', 'cri', 2), codigo: 'CRI-VC-NEL-7.1-02' }];
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.1', vivos)).toBe('CRI-VC-NEL-7.1-03');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.1', [{ ...vivos[0], situacao: 'cancelado' }])).toBe('CRI-VC-NEL-7.1');
+    expect(codigoPorEtapas('CRI', 'VC', 'NEL', null, vivos, 'a')).toBe('CRI-VC-NEL');
+    expect(legendaDoCodigo(null)).toBe('atividade · categoria · raça · carimbo');
   });
-  it('LOTES-04: o nº digitado — 1 a 99 e livre na combinação; vazio = automático; o próprio lote não conta', () => {
-    const L = [lote('a', 'df', 'ne', 'rc', 1), lote('b', 'df', 'ne', 'rc', 5)];
-    expect(validarNumero('', L, null)).toBeNull();
-    expect(validarNumero('7', L, null)).toBeNull();
-    expect(validarNumero('0', L, null)).toBe('O nº vai de 1 a 99.');
-    expect(validarNumero('5', L, null)).toBe('O nº 05 já é do lote X-5. Escolha outro.');
-    expect(validarNumero('5', L, 'b')).toBeNull();
+  it('lote de ANTES (ATIV-CAT-RAÇA-NN): o mesmo código enquanto a identidade não muda; mudou = "-__" (o nº sai do banco)', () => {
+    const l = { ...lote('l', 'vc', 'nel', 'cri', 5), codigo: 'CRI-VC-NEL-05' };
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.1', [l], l)).toBe('CRI-VC-NEL-05');
+    expect(codigoDoAssistente(C, E('vc', 'ang', 'cri'), '', [l], l)).toBe('CRI-VC-ANG-__');
+    expect(legendaDoCodigo(l)).toBe('atividade · categoria · raça · nº');
+    const novo = { ...l, codigo: 'CRI-VC-NEL-7.1', carimbo: '7.1', codigoRegra: 'etapas' as const };
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.1', [novo], novo)).toBe('CRI-VC-NEL-7.1');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.2', [novo], novo)).toBe('CRI-VC-NEL-7.2');
   });
   it('LOTES-05: o carimbo do mês — 7.1, 10.2, a ressinc. 7R e 7R.2; vazio vale; 7X, 13.1, 7.0 e 7R0 não', () => {
     expect(['7.1', '10.2', '12.15', '7R', '7R.2', '', ' 7.1 '].map(validarCarimbo)).toEqual([null, null, null, null, null, null, null]);
@@ -58,19 +96,10 @@ describe('código montando', () => {
     expect(nomeDoLote({ codigo: 'REC-DF-NEL-01', carimbo: null })).toBe('REC-DF-NEL-01');
     expect(nomeDoLote({ codigo: 'REC-DF-NEL-01', carimbo: '  ' })).toBe('REC-DF-NEL-01');
   });
-  it('LOTES-04: o nº vai ao banco só quando digitado (criar) ou diferente do lote (editar)', () => {
-    const p = perfilInicial('2026-11-06');
-    expect(camposParaSalvar(E('df', 'ne', 'rc'), p).numero).toBeUndefined();
-    expect(camposParaSalvar(E('df', 'ne', 'rc'), p, null, 7).numero).toBe(7);
-    const l = lote('l', 'df', 'ne', 'rc', 5);
-    expect(camposParaSalvar(E('df', 'ne', 'rc'), perfilInicial('2026-11-06', l), l, 5)).toEqual({});
-    expect(camposParaSalvar(E('df', 'ne', 'rc'), perfilInicial('2026-11-06', l), l, 8)).toEqual({ numero: 8 });
-    expect(camposParaSalvar(E('df', 'ch', 'rc'), perfilInicial('2026-11-06', l), l, 5)).toEqual({ raca_id: 'ch', numero: 5 });
-  });
   it('carimbo: a atividade de cria aceita, CRI (LOTES-04) ou CR (antes)', () => {
-    const C = [cad('cri', 'atividade', 'CRI', 'Cria'), cad('rec', 'atividade', 'REC', 'Recria'), cad('df', 'categoria', 'DF', 'Desmama', ['r-desf'])];
-    expect(aceitaCarimbo(C, E('df', 'ne', 'cri'), [])).toBe(true);
-    expect(aceitaCarimbo(C, E('df', 'ne', 'rec'), [])).toBe(false);
+    const C2 = [cad('cri', 'atividade', 'CRI', 'Cria'), cad('rec', 'atividade', 'REC', 'Recria'), cad('df', 'categoria', 'DF', 'Desmama', ['r-desf'])];
+    expect(aceitaCarimbo(C2, E('df', 'ne', 'cri'), [])).toBe(true);
+    expect(aceitaCarimbo(C2, E('df', 'ne', 'rec'), [])).toBe(false);
   });
 });
 
@@ -87,12 +116,6 @@ describe('cartões', () => {
     expect(lotesQueUsam(L, CAD[0], false)).toBe(2);
     expect(lotesQueUsam(L, CAD[3], false)).toBe(0);
   });
-  it('os lotes da combinação (passo 4), em ordem de número, sem os cancelados', () => {
-    const L = [lote('b', 'df', 'ne', 'rc', 3), lote('a', 'df', 'ne', 'rc', 1), lote('c', 'df', 'ne', 'cr', 1), lote('d', 'df', 'ne', 'rc', 2, 'cancelado')];
-    expect(lotesDaCombinacao(L, E('df', 'ne', 'rc')).map(l => l.id)).toEqual(['a', 'b']);
-    expect(mesmaCombinacao(L[1], E('df', 'ne', 'rc'))).toBe(true);
-    expect(mesmaCombinacao(L[1], E('df', 'ch', 'rc'))).toBe(false);
-  });
 });
 
 describe('cadastrar nova / editar', () => {
@@ -105,6 +128,14 @@ describe('cadastrar nova / editar', () => {
     expect(validarCadastro({ ...base, tipo: 'sistema', sigla: '', nome: 'confinamento', categorias: [] })?.mensagem).toBe('“Confinamento” já está no cadastro.');
     expect(validarCadastro({ ...base, tipo: 'sistema', sigla: '', nome: 'Pasto', categorias: [] })).toBeNull();
     expect(validarCadastro({ existentes: CAD, idEditando: 'ne', tipo: 'raca', sigla: 'NE', nome: 'Nelore PO', categorias: [] })).toBeNull();
+  });
+  it('LOTE-CODIGO-CURTO-01: a atividade aceita 1 letra (C/R/E, as frases da 117550); categoria e raça seguem 2 a 3; C/R/E são as fases', () => {
+    const base = { existentes: CAD, idEditando: null, categorias: [] };
+    expect(validarCadastro({ ...base, tipo: 'atividade', sigla: 'C', nome: 'Cria nova' })).toBeNull();
+    expect(validarCadastro({ ...base, tipo: 'atividade', sigla: '', nome: 'X' })?.mensagem).toBe('A sigla da atividade precisa de 1 a 3 letras ou números.');
+    expect(validarCadastro({ ...base, tipo: 'raca', sigla: 'N', nome: 'X' })?.mensagem).toBe('A sigla precisa de 2 ou 3 letras ou números.');
+    expect([faseDaAtividade('C'), faseDaAtividade('R'), faseDaAtividade('E')]).toEqual(['cria', 'recria', 'engorda']);
+    expect(aceitaCarimbo([cad('c', 'atividade', 'C', 'Cria')], E('df', 'ne', 'c'), [])).toBe(true);
   });
   it('a sigla se digita maiúscula, só letra e número, até 3', () => {
     expect(siglaDigitada('d-f9z')).toBe('DF9');
@@ -120,21 +151,47 @@ describe('perfil', () => {
     expect(aceitaCarimbo(CAD, E('pp', 'ne', 'rc'), ['r-mamf'])).toBe(true);
     expect(aceitaCarimbo(CAD, E('df', 'ne', 'cr'), [])).toBe(true);
   });
-  it('validação no campo: formado em depois de hoje, safra, carimbo, meta', () => {
+  it('validação no campo: formado em depois de hoje, carimbo, apelido, anotação (a mesma frase da RPC)', () => {
     const p = perfilInicial('2026-11-06');
     expect(validarPerfil(p, '2026-11-06')).toBeNull();
     expect(validarPerfil({ ...p, formadoEm: '2026-11-07' }, '2026-11-06')?.campo).toBe('formadoEm');
-    expect(validarPerfil({ ...p, safra: '2026' }, '2026-11-06')?.campo).toBe('safra');
     expect(validarPerfil({ ...p, carimbo: '13.1' }, '2026-11-06')?.campo).toBe('carimbo');
-    expect(validarPerfil({ ...p, metaGmdKg: 0 }, '2026-11-06')?.campo).toBe('metaGmdKg');
+    expect(validarPerfil({ ...p, nomeCampeiro: 'x'.repeat(41) }, '2026-11-06')?.campo).toBe('nomeCampeiro');
+    expect(validarPerfil({ ...p, anotacao: 'x'.repeat(121) }, '2026-11-06')).toEqual({ campo: 'anotacao', mensagem: 'A anotação passa de 120 letras.' });
   });
-  it('criar manda tudo; editar manda só o que mudou (o banco mantém o resto)', () => {
-    const p = { ...perfilInicial('2026-11-06'), nomeCampeiro: ' L05 - DF Nel. SP ', sistemaId: 'conf' };
-    const c = camposParaSalvar(E('df', 'ne', 'rc'), p);
-    expect(c).toMatchObject({ categoria_id: 'df', raca_id: 'ne', atividade_id: 'rc', nome_campeiro: 'L05 - DF Nel. SP', sistema_id: 'conf', safra: '26/27', formado_em: '2026-11-06' });
+  it('criar manda tudo (as chaves novas inclusive); editar manda só o que mudou (o banco mantém o resto); o nº nunca vai', () => {
+    const p = { ...perfilInicial('2026-11-06'), nomeCampeiro: ' L05 - DF Nel. SP ', sistemaId: 'conf', anotacao: ' veio da 3M ' };
+    const c = camposParaSalvar(E('df', 'ne', 'rc'), p, false);
+    expect(c).toMatchObject({ categoria_id: 'df', raca_id: 'ne', atividade_id: 'rc', nome_campeiro: 'L05 - DF Nel. SP', sistema_id: 'conf', safra: '26/27',
+      formado_em: '2026-11-06', anotacao: 'veio da 3M', situacao_cria: '', mamotes_sexo: '' });
+    expect(c.numero).toBeUndefined();
     const l = { ...lote('1', 'df', 'ne', 'rc', 5), nomeCampeiro: 'L05', safra: '26/27' };
-    expect(camposParaSalvar(E('df', 'ne', 'rc'), perfilInicial('2026-11-06', l), l)).toEqual({});
-    expect(camposParaSalvar(E('df', 'ne', 'cr'), { ...perfilInicial('2026-11-06', l), sistemaId: 'conf' }, l)).toEqual({ atividade_id: 'cr', sistema_id: 'conf' });
+    expect(camposParaSalvar(E('df', 'ne', 'rc'), perfilInicial('2026-11-06', l), false, l)).toEqual({});
+    expect(camposParaSalvar(E('df', 'ne', 'cr'), { ...perfilInicial('2026-11-06', l), sistemaId: 'conf' }, true, l, false)).toEqual({ atividade_id: 'cr', sistema_id: 'conf' });
+  });
+  it('a cria leva situação e ordem; a parida leva os mamotes; fora da parida os mamotes vão vazios (a mojada não tem bezerro ao pé)', () => {
+    const p = { ...perfilInicial('2026-11-12'), situacaoCria: 'PA' as const, ordemParto: 'MUL' as const, carimbo: '7.1',
+      mamotesSexo: 'MF' as const, mamotesCruzamento: 'f1_angus' as const, mamotesSemen: 'convencional' as const };
+    expect(camposParaSalvar(E('pp', 'ne', 'cr'), p, true)).toMatchObject({ situacao_cria: 'PA', ordem_parto: 'MUL', carimbo: '7.1',
+      mamotes_sexo: 'MF', mamotes_cruzamento: 'f1_angus', mamotes_semen: 'convencional' });
+    expect(camposParaSalvar(E('pp', 'ne', 'cr'), { ...p, situacaoCria: 'PR' }, true)).toMatchObject({ situacao_cria: 'PR', mamotes_sexo: '', mamotes_cruzamento: '', mamotes_semen: '' });
+    expect(camposParaSalvar(E('df', 'ne', 'rc'), p, false)).toMatchObject({ situacao_cria: '', ordem_parto: '', mamotes_sexo: '' });
+    const l = { ...lote('1', 'pp', 'ne', 'cr', 1), carimbo: '7.1', situacaoCria: 'PA' as const, mamotesSexo: 'MF' as const };
+    expect(camposParaSalvar(E('pp', 'ne', 'cr'), { ...perfilInicial('2026-11-12', l), situacaoCria: 'PP' }, true, l, true)).toEqual({ situacao_cria: 'PP' });
+  });
+  it('a ficha do passo Nome: uma linha por etapa; vazio = null ("completar")', () => {
+    const C = [cad('cri', 'atividade', 'CRI', 'Cria'), cad('pp', 'categoria', 'PP', 'Prenha parida'), cad('ne', 'raca', 'NE', 'Nelore')];
+    const p = { ...perfilInicial('2026-11-12'), situacaoCria: 'PA' as const, carimbo: '7.1', mamotesSexo: 'MF' as const };
+    expect(fichaDoAssistente(C, E('pp', 'ne', 'cri'), p, true)).toEqual([
+      { rotulo: 'Atividade', valor: 'CRI · Cria' }, { rotulo: 'Categoria e sexo', valor: 'PP · Prenha parida' },
+      { rotulo: 'Situação', valor: 'Parida com bezerro' }, { rotulo: 'Programa e sistema', valor: null }, { rotulo: 'Raça', valor: 'NE · Nelore' },
+      { rotulo: 'Mamotes ao pé', valor: 'carimbo 7.1 · Misto' },
+    ]);
+    expect(fichaDoAssistente(C, E('pp', null, 'cri'), perfilInicial('2026-11-12'), false).map(l => l.valor)).toEqual(['CRI · Cria', 'PP · Prenha parida', null, null]);
+    /* Chat 12/11 09:20 — o programa também na cria */
+    const C2 = [...C, cad('iatf', 'programa', null, 'IATF superprecoce'), cad('pas', 'sistema', null, 'Pasto')];
+    expect(fichaDoAssistente(C2, E('pp', 'ne', 'cri'), { ...p, programaId: 'iatf', sistemaId: 'pas' }, true)[3]).toEqual({ rotulo: 'Programa e sistema', valor: 'IATF superprecoce · Pasto' });
+    expect(camposParaSalvar(E('pp', 'ne', 'cri'), { ...p, programaId: 'iatf' }, true)).toMatchObject({ programa_id: 'iatf', situacao_cria: 'PA' });
   });
 });
 

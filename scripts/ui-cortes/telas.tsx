@@ -206,6 +206,26 @@ const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
 const m = q.get('m') ?? 'novo';
 const v = q.get('v') ?? '';
+/* FIN-FINANC-LAYOUT-02 (a) — `&lib=formas`: as liberações nas quatro situações da tabela nova — em conta casada com desconto (tarifa/IOF:
+   bruto 238.425,00, entrou 236.890,12), em conta a casar, direto ao fornecedor (com o nome e uma observação longa) e liquidação do anterior.
+   UMA fonte para a aba Liberações do contrato e para a do modal Editar contrato (o mesmo `BlocoLiberacoes`). SINTÉTICO. */
+function liberacoesDasFormas(telaBase: any): { libs: any[]; tela: any } {
+  const L = (id: string, data: string, valor: number, forma: string, extra: any = {}) => ({ id, data, valor, forma, lancamento_id: null, fornecedor_id: null,
+    contrato_liquidado_id: null, destinacao_id: null, observacao: null, cancelado_em: null, ...extra });
+  const libs = [
+    L('lb-1', '2026-07-30', 238425, 'conta', { lancamento_id: 'lc-lib-1' }),
+    L('lb-2', '2026-08-31', 42075, 'conta'),
+    L('lb-3', '2026-09-01', 280500, 'fornecedor', { fornecedor_id: 'fo-maq', destinacao_id: 'a6489445-256f-4802-8d88-a6f97985539a',
+      observacao: 'Moderfrota exemplo · plantadeira 1211 · chassi sintético 1CQ0000AAA0000000 · NF 73.000 da filial de exemplo' }),
+    L('lb-4', '2026-09-15', 1150000, 'liquidacao', { contrato_liquidado_id: 'fin-ant' }),
+  ];
+  const T = (l: any, entrou: number | null, aid: number) => ({ id: l.id, data: l.data, forma: l.forma, valor: l.valor, destinacao_id: l.destinacao_id,
+    destino: l.destinacao_id ? 'Armazém Exemplo' : null, lancamento_id: l.lancamento_id, entrou, a_identificar: aid, excedente: 0 });
+  return { libs, tela: { ...telaBase, liberacoes: [T(libs[0], 236890.12, 1534.88), T(libs[1], 0, 42075), T(libs[2], null, 0), T(libs[3], null, 0)],
+    liberacoes_total: { qtde: 4, liberado: 1711000, entrou: 236890.12, a_identificar: 43609.88, excedente: 0 } } };
+}
+const LANC_DA_LIBERACAO = [{ id: 'lc-lib-1', descricao: 'Liberação financiamento Moderfrota exemplo', data_pagamento: '2026-07-30', data_vencimento: '2026-07-30', conta_destino_id: null, conta_bancaria_id: 'bb' }];
+const FORNECEDOR_DA_LIBERACAO = [{ id: 'fo-maq', nome: 'Máquinas Agrícolas Exemplo Ltda' }];
 /* UI-TEXTO-LONGO-01 — `&desc=curto|longo`: a MESMA tela com uma descrição curta ou com 300 caracteres (o caso do sêmen bovino). O gate
    compara as alturas das duas (modal, resumo lateral, lista de parcelas). Texto sintético. */
 const desc = q.get('desc');
@@ -406,10 +426,28 @@ if (tela === 'mesclar') {
       : base;
   const c: any = consorcio;
   if (v === 'consorcio') d.fin = { ...base.fin, id: c.tela.contrato.id, natureza: 'consorcio' };
+  /* FIN-FINANC-LAYOUT-02 — `&v=curto`: o mesmo crédito com 3 parcelas (a 1ª paga, a 2ª sem lançamento nenhum, a 3ª a vencer), valores de
+     milhares: o contrato CURTO do gate, ao lado do de 15 parcelas. SINTÉTICO. */
+  if (v === 'curto') {
+    const [a, b, cc]: any[] = base.situacao.parcelas.slice(5, 8);
+    const sit = [
+      { ...a, numero: 1, valor_principal: 40000, valor_juros: 1404.03, valor_total: 41404.03, situacao: 'paga', pago_em: '2026-07-24', valor_pago: 41404.03, prazo: { dias: 2, tipo: 'antes' } },
+      { ...b, numero: 2, valor_principal: 40000, valor_juros: 936.02, valor_total: 40936.02, lancamento_id: null, lancamento_juros_id: null, situacao: 'vencida', prazo: { dias: 41, tipo: 'vencida' } },
+      { ...cc, numero: 3, valor_principal: 40000, valor_juros: 468.01, valor_total: 40468.01, prazo: { dias: 324, tipo: 'a_vencer' } },
+    ];
+    d.situacao = { ...base.situacao, parcelas: sit, cartoes: { ...base.situacao.cartoes, parcelas: 3, pagas: 1, pago: 41404.03, a_vencer_qtde: 1, a_vencer: 40468.01,
+      vencido_qtde: 1, vencido: 40936.02, soma_principal: 120000, soma_total: 122808.06, juros_previstos: 2808.06, valor_contrato: 120000 } };
+    d.parcelas = base.parcelas.slice(5, 8).map((x: any, i: number) => ({ ...x, id: sit[i].id, numero_parcela: i + 1, lancamento_id: sit[i].lancamento_id, lancamento_juros_id: sit[i].lancamento_juros_id }));
+    d.fin = { ...base.fin, total_parcelas: 3, valor_total: 120000, descricao: 'Custeio Exemplo curto' };
+  }
   /* FIN-PARCELA-VALOR-ZERO-01 — `&zero=1`: a 1ª parcela sem nada a pagar e não paga, vencida no calendário (o banco manda `sem_valor`) */
   if (q.get('zero') === '1') d.situacao = { ...d.situacao, parcelas: d.situacao.parcelas.map((x: any, i: number) => (i === 0
     ? { ...x, valor_principal: 0, valor_juros: 0, valor_total: 0, valor_pago: 0, situacao: 'pendente', sem_valor: true, pago_em: null, prazo: null, lancamento_id: null, lancamento_juros_id: null }
     : x)) };
+  /* FIN-FINANC-LAYOUT-02 (a) — `&lib=formas`: as liberações nas três situações da tabela nova — em conta casada com desconto (tarifa/IOF:
+     bruto 238.425,00, entrou 236.890,12), em conta a casar, direto ao fornecedor (com o nome) e liquidação do anterior. SINTÉTICO. */
+  const LIB_FORMAS = q.get('lib') === 'formas';
+  if (LIB_FORMAS) { const lf = liberacoesDasFormas(d.tela); d.liberacoes = lf.libs; d.tela = lf.tela; }
   /* PARC-DOCS-TABELA-01 — `&np=N`: a compra parcelada com N parcelas de R$ 344,00 (o caso real tem 2), todas com lançamento, e
      `&docs=1` uma nota da compra ligada a elas (a lista de documentos da aba ocupa a sua linha). Tudo SINTÉTICO. */
   const NP = Number(q.get('np') ?? 0);
@@ -447,8 +485,10 @@ if (tela === 'mesclar') {
         vencimento: ANTES_DA_VOLTA[0]?.vencimento ?? null, competencia: ANTES_DA_VOLTA[0]?.vencimento ?? null, descricao: d.fin.descricao, canceladas: Math.max(ANTES_DA_VOLTA.length - 1, 0),
         original_guardado: false, antes: ANTES_DA_VOLTA };
   g.__bancoBancada = {
-    from: (t: string, e: any) => t === 'financiamentos' ? [d.fin] : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
-      : t === 'financeiro_lancamentos_v2' ? LANC_DA_COMPRA : t === 'financeiro_contas_bancarias' ? CONTAS_DO_CONTRATO
+    from: (t: string, e: any) => t === 'financiamentos' ? (LIB_FORMAS && e?.in?.id ? [{ id: 'fin-ant', numero_contrato: '40/00123-4' }] : [d.fin]) : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
+      : t === 'financeiro_lancamentos_v2' ? (LIB_FORMAS ? LANC_DA_LIBERACAO : LANC_DA_COMPRA)
+      : t === 'financeiro_contas_bancarias' ? CONTAS_DO_CONTRATO
+      : t === 'financeiro_fornecedores' && LIB_FORMAS ? FORNECEDOR_DA_LIBERACAO
       : t === 'financiamento_destinacoes' ? d.destinacoes ?? [] : t === 'financiamento_documentos' ? d.documentos ?? []
       : t === 'vw_lancamento_documentos' ? DOCS_DA_COMPRA.filter((x) => (e?.eq?.especie == null || x.especie === e.eq.especie) && (e?.eq?.lancamento_id == null || x.lancamento_id === e.eq.lancamento_id)) : [],
     rpc: (fn: string) => fn === 'fn_financiamento_situacao' ? d.situacao : fn === 'fn_contrato_tela' ? d.tela ?? null : fn === 'fn_financiamento_captacoes_livres' ? []
@@ -556,12 +596,18 @@ if (tela === 'mesclar') {
   const cronSac60 = { recusa: null, parcelas: 60, parcelas_so_juros: 0, principal_total: 300000, juros_total: 95312.5, total: 395312.5, vencimento_final: '2031-06-10',
     linhas: Array.from({ length: 60 }, (_x, i) => ({ numero: i + 1, vencimento: somaMeses('2026-07-10', i), principal: 5000, juros: Math.round((300000 - i * 5000) * 0.0098 * 100) / 100,
       total: 5000 + Math.round((300000 - i * 5000) * 0.0098 * 100) / 100, saldo_apos: 300000 - (i + 1) * 5000 })) };
+  /* FIN-FINANC-LAYOUT-02 — `&lib=formas`: o modal Editar contrato › Liberações com as 4 formas (a MESMA fonte da aba do contrato) */
+  const LIB_CAD = q.get('lib') === 'formas' ? liberacoesDasFormas((contrato as any).tela) : null;
   g.__bancoBancada = {
-    from: (t: string) => t === 'financiamentos' ? [contratoDoCenario]
+    from: (t: string, e: any) => t === 'financiamentos' ? (LIB_CAD && e?.in?.id ? [{ id: 'fin-ant', numero_contrato: '40/00123-4' }] : [contratoDoCenario])
+      : LIB_CAD && t === 'financiamento_liberacoes' ? LIB_CAD.libs
+      : LIB_CAD && t === 'financeiro_lancamentos_v2' ? LANC_DA_LIBERACAO
+      : LIB_CAD && t === 'financeiro_fornecedores' ? FORNECEDOR_DA_LIBERACAO
+      : LIB_CAD && t === 'financeiro_contas_bancarias' ? [{ id: contratoDoCenario.conta_bancaria_id, nome_conta: 'Banco Exemplo Cooperativo', nome_exibicao: 'Banco Exemplo Cooperativo', banco: 'Exemplo', tipo_conta: 'cc' }]
       : t === 'financiamento_parcelas' ? (cenario ? cenario.linhas.map((l) => ({ id: l.id, numero_parcela: l.numero, data_vencimento: l.venc, status: l.paga ? 'pago' : 'pendente', ajustada: l.ajustada }))
         : d.vencimentos.map((v: string, i: number) => ({ data_vencimento: v, status: 'pendente', numero_parcela: i + 1 })))
       : t === 'financeiro_plano_contas' ? d.planos : [],
-    rpc: (fn: string) => fn === 'fn_financiamento_cronograma' ? (v === 'sac60' ? cronSac60 : d.cronograma)
+    rpc: (fn: string) => LIB_CAD && fn === 'fn_contrato_tela' ? LIB_CAD.tela : fn === 'fn_financiamento_cronograma' ? (v === 'sac60' ? cronSac60 : d.cronograma)
       : fn === 'fn_financiamento_situacao' ? situacaoDoCenario
       : fn === 'fn_financiamento_parcelas_regerar' && cenario ? { simulado: true, recusa: null, antes: fotoSint(cenario.linhas, 0), depois: fotoSint(cenario.linhas, 1234.56),
           base: { saldo: 480018, guardado: 0, principal: 480018, parcelas: 4, sistema: 'sac', taxa_aa: 12.5, periodicidade: 'anual' }, diferenca_do_saldo: 0 }
@@ -1477,6 +1523,16 @@ if (tela === 'mesclar') {
       lido = lidoDaChave(r.nota, [{ largura: 841.89, altura: 595.28 }]);
     } else lido = await lerNota(bytes);
     if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+    /* NOTA-PAGTO-PARCELADO-01 P3 — `&natureza=conserto`: a mesma nota como REMESSA PARA CONSERTO (CFOP 6915): o aviso "não é compra" */
+    if (q.get('natureza') === 'conserto') { lido.nota.naturezaOperacao = 'REMESSA DE MERCADORIA OU BEM PARA CONSERTO OU REPARO'; lido.nota.cfops = ['6915']; }
+    /* NOTA-PAGTO-PARCELADO-01 P1 — `&outros=1`: os lançamentos SOLTOS do mesmo fornecedor no período: a 4ª parcela desta nota paga por um PIX à
+       parte (491,64: marcada, a soma confere com a nota) e duas de outras compras. SINTÉTICOS. */
+    const OUTROS = q.get('outros') === '1' ? ([
+      ['2027-01-20', null, 491.64, 'programado', 'Medicamentos bovinos sintéticos — a 4ª parcela, paga por PIX à parte (descrição comprida para medir o corte)'],
+      ['2026-10-29', '2026-10-26', 2533.79, 'realizado', 'Manutenção de máquina exemplo 1/2'],
+      ['2026-07-29', '2026-07-29', 110000, 'realizado', 'Compra de máquina exemplo — outra compra do mesmo fornecedor'],
+    ] as any[]).map(([venc, pg, valor, st, desc], i) => ({ id: `ou-${i}`, data_vencimento: venc, data_pagamento: pg, data_competencia: '2026-09-15', descricao: desc,
+        valor, status_transacao: st, financiamento_id: null, numero_documento: null, conta_bancaria_id: 'sic', favorecido_id: 'agro-s', cancelado: false, cenario: 'realizado' })) : null;
     if (v === 'gulartlongo') {
       lido.nota.emitente.nome = 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO CENTRO OESTE LTDA';
       lido.nota.emitente.endereco = { ...(lido.nota.emitente.endereco ?? {}), logradouro: 'RODOVIA BR SINTETICA 163 KM 512 SAIDA PARA O DISTRITO INDUSTRIAL', municipio: 'SAO GABRIEL DO OESTE SINTETICO', uf: 'MS' };
@@ -1507,7 +1563,9 @@ if (tela === 'mesclar') {
       fornecedor_id: 'sem-cnpj', fornecedor_nome: 'Cooperativa Agroindustrial Sintetica dos Produtores Rurais de Exemplo SA', fornecedor_por: 'nome',
       parcelas: [], por: ['numero', 'chave'], cancelado: true }));
     g.__bancoBancada = {
-      from: (t: string) => {
+      from: (t: string, e: any) => {
+        if (OUTROS && t === 'financeiro_fornecedores' && !e?.eq?.id) return [{ id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24' }];
+        if (OUTROS && t === 'financeiro_lancamentos_v2' && e?.in?.favorecido_id) return OUTROS;
         if (t === 'financeiro_fornecedores') return [{ nome_fantasia: null, inscricao_estadual: null, tipo_pessoa: 'PJ', logradouro: null, numero: null, complemento: null, bairro: null, municipio: null, uf: null, cep: null, telefone: null }];
         /* P96a — `v=irmas`: a 4/4 com a NF DIGITADA À MÃO (valor da parcela, emissão do vencimento) — a faixa "Usar a nota lida". SINTÉTICA. */
         if (t === 'financeiro_lancamento_documentos' && v === 'irmas') return [{ id: 'doc-irma-3', lancamento_id: 'jl-irma-3', versao: 2, especie: 'nf',
@@ -1838,7 +1896,9 @@ if (tela === 'mesclar') {
   };
   const montarPastos = async () => {
     const { PastosTab } = await import('@/pages/PastosTab');
-    montar(<PastosTab />);
+    /* PASTO-CADASTRO-GEO-01 (Chat 14:50): o hospedeiro é o da V2Fazendas, que sabe ir ao Geo — o topo da ficha mostra
+       "Ver/editar no mapa" ou, no P10 (sem desenho), "Desenhar no mapa" */
+    montar(<PastosTab aoAbrirPastoNoMapa={() => {}} />);
   };
   void montarPastos();
 } else if (tela === 'mapa-pastos') {
@@ -1957,10 +2017,23 @@ if (tela === 'mesclar') {
       ...['A', 'B', 'C', 'D'].map((l, i) => ({ ...pasto(`p19a${l}`, `P19A-${l}`, 24.4, 'cria', 'g19', 11 + i), data_inicio: '2026-10-01' })));
     CARDS.push(card('f19', 'p19a', { tipo_uso_mes: 'cria' }));
   }
+  /* FECH-CARDS-QUEBRA-01 (Gabriel 11/11 15:15, PUR out/26) — `&v=quebra`: os 4 estados lado a lado — P5 AGRICULTURA 187,1 ha com 2 piquetes
+     (o selo vazava da borda), P8 VEDADO 85,3 ha com 4 piquetes e P16/P26 vedados (o bloco descia), P21A cria sem peso (inconsistente) */
+  const COM_QUEBRA = v === 'quebra';
+  if (COM_QUEBRA) {
+    PASTOS.push(pasto('p5', 'P5', 187.1, 'agricultura', null, 7),
+      ...['A', 'B'].map((l, i) => ({ ...pasto(`p5${l}`, `P5-${l}`, 93.5, 'agricultura', 'g5', 8 + i), data_inicio: '2026-10-01' })),
+      pasto('p8', 'P8', 85.3, 'recria', null, 10),
+      ...['A', 'B', 'C', 'D'].map((l, i) => ({ ...pasto(`p8${l}`, `P8-${l}`, 21.3, 'recria', 'g8', 11 + i), data_inicio: '2026-10-01' })),
+      pasto('p16', 'P16', 44.7, 'recria', null, 15), pasto('p21a', 'P21A', 62.4, 'cria', null, 16), pasto('p26', 'P26', 128.6, 'recria', null, 17));
+    CARDS.push(card('f5q', 'p5', { tipo_uso_mes: 'agricultura' }), card('f8q', 'p8', { tipo_uso_mes: 'vedado' }), card('f16q', 'p16', { tipo_uso_mes: 'vedado' }),
+      card('f21q', 'p21a', { tipo_uso_mes: 'cria' }), card('f26q', 'p26', { tipo_uso_mes: 'vedado' }));
+  }
   const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
     lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
   const ITENS: (ReturnType<typeof item> & { lote_id?: string; piquete_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  if (COM_QUEBRA) ITENS.push(item('f21q', 'c-vacas', 48, 0));
   /* FECH-PASTO-UNIDADE-01 F2 — `&v=piquetes7`: o modal do pasto COM piquetes, nas medidas do caso real (PUR out/26): o P7 (97,5 ha) em
      7A 24,76 · 7B 25,11 · 7C 24,35 · 7D 23,32, lançado POR PIQUETES em out/26 e com set/26 também por piquetes (o mês anterior somado, com
      o lote de cada piquete); o P5 (P5-A 101 · P5-B 86,1) com o card vazio (abre em "Pasto inteiro"). As 9 categorias de verdade (a grade
@@ -1990,7 +2063,24 @@ if (tela === 'mesclar') {
   /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
   /* L1 (Gabriel 09/11) — `&cria=1`: o P10A inteiro (as 2 categorias) no lote da cria SEM carimbo (l-vp4): "sem carimbo · definir" no campo Lote, no seletor e no popup */
   const COM_CRIA = q.get('cria') === '1';
-  const COM_LOTES = v === 'lotes' || COM_CRIA;
+  /* LOTE-BUSCA-01 — `&v=busca`: o campo Lote com 63 lotes (55 de recria a mais: o corte de 50 escondia o fim), DOIS 8.2 e o caderno "LOT 8.2 F1"
+     no P10A; em set/26 o ENG-DM-AN-06 ligado no P10A (100 cab) e o CRI-PP-NE-01 (7.1) no P11; o 7R só no TEXTO do card do P12 (sem ligação) */
+  const BUSCA = v === 'busca';
+  const COM_LOTES = v === 'lotes' || COM_CRIA || BUSCA;
+  const base = LOTES_BANCADA.LOTES[0];
+  const LOTES_DA_BUSCA = [...LOTES_BANCADA.LOTES,
+    { ...base, id: 'l-pp82', codigo: 'CRI-PP-NE-02', nome_campeiro: 'Vacas Nel CAR_8.2', carimbo: '8.2', categoria_id: 'c-pp', atividade_id: 'a-cr', pastos: [], codigos_antigos: [] },
+    ...Array.from({ length: 53 }, (_, i) => ({ ...base, id: `l-rec${i}`, codigo: `REC-DM-NE-${String(i + 10).padStart(2, '0')}`, nome_campeiro: null,
+      categoria_id: 'c-dm', pastos: [], codigos_antigos: [] }))];
+  const lotesDaBusca = (mes: unknown) => (mes !== '2026-09' ? LOTES_DA_BUSCA : LOTES_DA_BUSCA.map((l) => (
+    l.id === 'l-dm6' ? { ...l, ano_mes_dado: '2026-09', pastos: ['P10A'], cabecas: 100 }
+    : l.id === 'l-pp1' ? { ...l, ano_mes_dado: '2026-09', pastos: ['P11'], cabecas: 60 }
+    : { ...l, ano_mes_dado: '2026-08' })));
+  if (BUSCA) {
+    Object.assign(CARDS[0], { lote_mes: 'LOT 8.2 F1' });
+    CARDS.push(...[['p10a', 'P10A', 'DM Angus L6'], ['p11', 'P11', 'Vaca Nel CAR_7.1'], ['p12', 'P12 Retiro do córrego de baixo', 'Vacas ressinc. 7R']].map(([id, nome, texto]) =>
+      card(`f9-${id}`, id, { ano_mes: '2026-09', status: 'fechado', lote_mes: texto, pastos: { nome } })));
+  }
   if (COM_LOTES) {
     Object.assign(ITENS[0], { lote_id: COM_CRIA ? 'l-vp4' : 'l-dm6' });
     ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: COM_CRIA ? 'l-vp4' : 'l-px2' });
@@ -2035,6 +2125,7 @@ if (tela === 'mesclar') {
       /* F2 `&v=piquetes7`: os leitores do modal filtram por grupo/origem/pasto (`in`/`eq`); sem a variante, a resposta de sempre */
       t === 'pastos' ? (COM_PIQUETES7 ? filtrar(PASTOS, e) : PASTOS) : t === 'pasto_grupos' ? (COM_PIQUETES7 ? filtrar : (l: unknown[]) => l)([{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: null },
         ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }, { id: 'g19', fazenda_id: 'f1', nome: 'P19A', ativo: true, pasto_origem_id: 'p19a' }] : []),
+        ...(COM_QUEBRA ? [{ id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }, { id: 'g8', fazenda_id: 'f1', nome: 'P8', ativo: true, pasto_origem_id: 'p8' }] : []),
         ...(COM_PIQUETES7 ? [{ id: 'g7', fazenda_id: 'f1', nome: 'P7', ativo: true, pasto_origem_id: 'p7' }, { id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }] : [])], e)
       : t === 'fechamento_pastos' ? CARDS.filter((c) => (!e.eq.ano_mes || c.ano_mes === e.eq.ano_mes) && (!COM_PIQUETES7 || !e.eq.pasto_id || c.pasto_id === e.eq.pasto_id))
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
@@ -2047,6 +2138,7 @@ if (tela === 'mesclar') {
     rpc: (fn: string, a: Record<string, unknown>) => (fn === 'fn_lotacao_do_mes' ? lotacao()
       /* F2 `&v=piquetes7`: a área de cada piquete NO MÊS (a leitura da casa) */
       : COM_PIQUETES7 && fn === 'fn_pastos_area_do_mes' ? PASTOS.map((x) => ({ pasto_id: x.id, ano_mes: a.p_de, area_ha: x.area_produtiva_ha, fonte: 'vigencia' }))
+      : BUSCA && fn === 'fn_lotes_da_fazenda' ? lotesDaBusca(a.p_ano_mes)
       : COM_LOTES || COM_PIQUETES7 ? LOTES_BANCADA.bancoDeLotes().rpc(fn, a) : null),
   };
   const montarFechamento = async () => {
@@ -2176,6 +2268,54 @@ if (tela === 'mesclar') {
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();
+} else if (tela === 'custeio-txt') {
+  /* CONC-CUSTEIO-FONTE-01 — Conciliação › Importar banco › "Relatório de custeio", no molde do caso do Gabriel (69 itens, divergência em 3
+     escopos), com TXT SINTÉTICO no formato do relatório: 3 famílias, 45 itens de nome comprido; os subtotais impressos de 3 sub-famílias
+     NÃO batem (a faixa de divergência com as 3 linhas). A seção imita a do `ImportarBancoInline` (cabeçalho preso + a aba), numa área que rola. */
+  const montarCusteio = async () => {
+    const { default: CusteioTxtImportTab } = await import('@/v2/pages/CusteioTxtImportTab');
+    const brlTxt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const linha = (rot: string, nome: string, v: number) => `    ${rot}${' '.repeat(Math.max(1, 13 - rot.length))}${nome.padEnd(40)}${brlTxt(v).padStart(12)}`;
+    const item = (nome: string, v: number) => `                 ${nome.padEnd(42)}${brlTxt(v).padStart(12)}`;
+    const FAMILIAS: [string, [string, number][]][] = [
+      ['ANIMAIS', [['Produtos Veterinarios', 15], ['Sal Mineral e Racao', 10]]],
+      ['MANUTENCAO', [['Pecas de Maquinas e Implementos Agricolas', 12]]],
+      ['DIVERSOS', [['Despesas Diversas de Escritorio', 8]]],
+    ];
+    const corpo: string[] = [];
+    let total = 0; let k = 0; let erradas = 0;
+    const blocos = FAMILIAS.map(([fam, subs]) => {
+      const linhasSub = subs.map(([sub, n]) => {
+        const itens = Array.from({ length: n }, (_, i) => { k += 1; return [(k % 7 === 3 ? `PRODUTO SINTETICO ${k} COM DESCRICAO MUITO COMPRIDA DO RELATORIO DA FAZENDA QUE NAO CABE NUMA LINHA SO DA TABELA ${i % 3 ? 'LT' : 'KG'}` : `PRODUTO SINTETICO ${k} COM DESCRICAO COMPRIDA DO RELATORIO ${i % 3 ? 'LT' : 'KG'}`), 37.5 * k + 0.4] as [string, number]; });
+        const soma = itens.reduce((x, [, v]) => x + v, 0);
+        const impresso = erradas < 3 ? soma + 10 * (erradas++ + 1) : soma;
+        return { sub, itens, soma, impresso };
+      });
+      const somaFam = linhasSub.reduce((x, l) => x + l.soma, 0);
+      total += somaFam;
+      return { fam, linhasSub, somaFam };
+    });
+    for (const b of blocos) {
+      corpo.push(linha('Família:', b.fam, b.somaFam));
+      for (const l of b.linhasSub) { corpo.push(linha('Sub-Fam:', l.sub, l.impresso)); for (const [n, v] of l.itens) corpo.push(item(n, v)); }
+    }
+    const txt = ['R J', 'Sistema de Compras', 'Emissão 06/11/2026 Hr. 14:29:06 Pag. 1', '------------------------------------------------------------------',
+      'Custeio Analítico                 Período: 01/10/2026 a 31/10/2026', 'Descrição                                             Valor em Real',
+      linha('Fazenda:', 'FAZENDA SINTETICA DA BANCADA', total), ...corpo].join('\r\n');
+    const arquivo = new File([txt], 'PLANILHA DESP FAZ SINTETICA 102026.txt', { type: 'text/plain' });
+    g.__bancoBancada = { from: () => [], rpc: () => null };
+    montar(
+      <div className="h-screen overflow-y-auto bg-background" data-testid="bancada-custeio">
+        <div className="rounded-lg border border-border bg-card px-2">
+          <div className="sticky top-0 z-30 flex h-[30px] items-center gap-2 bg-card">
+            <span className="text-[10px] font-semibold text-muted-foreground">Relatório de custeio</span>
+            <span className="truncate tabular-nums text-[10px]">{arquivo.name}</span>
+          </div>
+          <CusteioTxtImportTab arquivoInicial={arquivo} contaBancariaId="conta-bancada" />
+        </div>
+      </div>);
+  };
+  void montarCusteio();
 } else if (tela === 'documento-nota') {
   /* P127 + P128c — o "Novo documento" do Editar lançamento que LÊ A NOTA solta no Arquivo. O cenário solta o XML SINTÉTICO exposto aqui
      (`__xmlDaBancada`: NF 74974 no molde do print, R$ 408,77, 1 duplicata, 1 item, emitente com nome comprido) ou um PDF que não se lê.
@@ -2198,6 +2338,29 @@ if (tela === 'mesclar') {
       emitenteId: null, emitenteNome: 'COMERCIO SINTETICO DE PARAFUSOS E FERRAMENTAS INDUSTRIAIS DO CENTRO OESTE LTDA', emitenteDocumento: null, cancelado: false,
       canceladoMotivo: null, versao: 1, ligadoAQtd: 6 };
     if (q.get('v') === 'repetida') api.documentos = [DOC_BANCADA];
+    /* NOTA-LIGAR-LANCAMENTO-01 — `v=ligar`: o molde do caso NJ, SINTÉTICO — nota de R$ 280.500 em 2 duplicatas (15% + 85%) da filial 0001-81 anexada
+       a um lançamento de 42.075 da filial 0014-94 (mesma razão social): a linha da filial com "Trocar para a filial da nota", o quadro (a 001 é este
+       lançamento, a 002 a liberação direta de um contrato) e a participação sugerida 15%. `&troca=1` no cenário abre a prévia da troca. */
+    const ligar = q.get('v') === 'ligar';
+    if (ligar) {
+      g.__xmlDaBancada = montarNFe({ numero: '73007', vNF: '280500.00', duplicatas: [['001', '2026-09-02', '42075.00'], ['002', '2026-10-01', '238425.00']],
+        nomeEmitente: 'MAQUINAS AGRICOLAS SINTETICAS DO CENTRO OESTE E REGIAO DO BOLSAO SUL-MATO-GROSSENSE LTDA',
+        itens: [['PLANTADEIRA SINTETICA ARTICULADA DE 12 LINHAS COM KIT DE ADUBO', '1.0000', 'UN', '280500.00']] });
+      const F01: any = { ...LEITOR[0], id: 'maq-0001', nome: 'Maquinas Agricolas Sinteticas do Centro Oeste e Regiao do Bolsao Sul-mato-grossense Ltda', cpf_cnpj: '11.222.333/0001-81', ativo: true };
+      const F14: any = { ...F01, id: 'maq-0014', cpf_cnpj: '11.222.333/0014-94' };
+      g.__fornecedoresBancada = [...LEITOR, F01, F14];
+      g.__bancoBancada = {
+        from: (t: string, e: any) => {
+          if (t === 'financeiro_fornecedores' && e?.in?.cpf_cnpj) return [F01];
+          if (t === 'financeiro_fornecedores') return [F01, F14];
+          if (t === 'financiamento_liberacoes') return [{ id: 'lib-1', data: '2026-10-01', valor: 238425, financiamento_id: 'fin-1' }];
+          if (t === 'financiamentos') return [{ id: 'fin-1', numero_contrato: 'CT-6362662/26-SINTETICO' }];
+          return [];
+        },
+        rpc: (fn: string) => (fn === 'fn_nota_ja_lancada' ? [] : fn === 'fn_lancamentos_trocar_favorecido' ? { ok: true, lancamentos: 1, soma: 42075, origens: [],
+          meses_fechados: [], conciliados: 0 } : null),
+      };
+    }
     if (confere) g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => (fn !== 'fn_nota_completar' ? null : { ok: true, recusas: [], efeito_dre: [],
       linhas: (a.p_lancamentos ?? []).map((x: any) => ({ id: x.id, descricao: null, situacao: 'conciliada', parcela_n: null, campos: {
         numero_documento: { hoje: '74974', fica: x.numero_documento, muda: true, hoje_nome: null, fica_nome: null, cadeado: null },
@@ -2205,8 +2368,10 @@ if (tela === 'mesclar') {
         data_competencia: { hoje: '2026-08-24', fica: x.data_competencia, muda: true, hoje_nome: null, fica_nome: null, cadeado: null } } })) }) };
     montar(<FormDocumento api={api} documento={q.get('v') === 'cancelar' ? DOC_BANCADA : null} clienteId="cli" onFechar={() => {}} onAbrirExistente={() => {}}
       sugestao={confere ? { numero: '74974', dataEmissao: '2026-08-24', valor: 408.77, emitenteId: null }
+        : ligar ? { numero: null, dataEmissao: '2026-09-01', valor: 42075, emitenteId: 'maq-0014', vencimento: '2026-09-02' }
         : { numero: '74974', dataEmissao: '2026-08-24', valor: 400, emitenteId: LEITOR[0]?.id ?? null }}
-      completarPelaNota={confere ? { lancamentoId: 'lanc-bancada', onCompletado: () => {} } : undefined}
+      completarPelaNota={confere || ligar ? { lancamentoId: 'lanc-bancada', onCompletado: () => {}, onFornecedorTrocado: () => {} } : undefined}
+      onCriarFornecedor={async () => 'bancada'}
       onVerOQueANotaMuda={async () => null} />);
   };
   void montarDoc();
@@ -2588,14 +2753,18 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
       props.documentosAntesDeSalvar = true;
       renderizar();
     })();
-  } else if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
+  } else if (v === 'notapdf' || v === 'notachave' || v === 'notacartao' || v === 'notacoluna') {
     void (async () => {
       const { jsPDF } = await import('jspdf');
-      const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+      const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata, danfeSinteticoFaturaEmColuna } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
       const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
       const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
-      if (v === 'notachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
+      /* NOTA-PDF-REGRESSAO-01 — `notacoluna`: o DANFE em pé com a FATURA em coluna e o item em meias-linhas (o leiaute da NF que não se lia);
+         a fonte do tamanho do real (maior, a chave passa da borda e sai cortada) */
+      const emPe = v === 'notacoluna';
+      const doc = emPe ? new jsPDF({ orientation: 'portrait', unit: 'pt', format: [595.28, 841.89] }) : new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
+      if (emPe) for (const it of danfeSinteticoFaturaEmColuna()[0]) { doc.setFontSize(Math.max(4, it.h)); doc.text(it.str, it.x, 841.89 - it.y); }
+      else if (v === 'notachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
       else for (const it of (v === 'notacartao' ? danfeSinteticoSemDuplicata() : PAGINAS_DANFE_SINTETICO)[0]) { doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 595.28 - it.y); }
       const bytes: ArrayBuffer = doc.output('arraybuffer');
       let lido: any;
@@ -2612,7 +2781,7 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
       const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: '280000002' }], emitente: resolucao,
         favorecidoId: resolucao.propostoId, ultima: { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' } });
       props.prefill = { ...prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente,
-        resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, '000.000.937.pdf') } as any), ...(v === 'notacartao' ? { conta_bancaria_id: 'elo' } : {}) };
+        resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, emPe ? '000.004.321.pdf' : '000.000.937.pdf') } as any), ...(v === 'notacartao' ? { conta_bancaria_id: 'elo' } : {}) };
       props.documentosAntesDeSalvar = true;
       renderizar();
     })();

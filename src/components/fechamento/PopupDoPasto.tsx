@@ -29,6 +29,8 @@ export interface DadosDoPopupDoPasto {
   uaHa: number | null;
   /** os pastos de onde este recebe o lote no mês (FECH-ROTACAO-01) */
   recebeDe?: readonly string[];
+  /** FECH-CARDS-QUEBRA-01: o pasto vedado no mês — sem gado é "0 cab" (zero de verdade), como no card; nos outros, "—" */
+  vedado?: boolean;
 }
 
 /* as cores (07:58): azul mais leve e transparente nas faixas, o meio branco transparente */
@@ -48,7 +50,7 @@ export function PopupDoPasto({ d }: { d: DadosDoPopupDoPasto }) {
         <div className="flex flex-wrap items-baseline justify-between gap-x-1">
           <span className="min-w-0 break-words text-[11px] font-bold leading-[13px]" title={d.nome}>{d.nome}</span>
           <span className="shrink-0 whitespace-nowrap tabular-nums text-[8.5px] opacity-90">
-            {comGado ? <><b>{formatNum(d.totalCab, 0)}</b> cab</> : '—'}
+            {comGado ? <><b>{formatNum(d.totalCab, 0)}</b> cab</> : d.vedado ? <><b>0</b> cab</> : '—'}
             {comGado && d.pesoMedioKg != null && <> · <b>{formatNum(d.pesoMedioKg, 1)}</b> kg</>}
           </span>
         </div>

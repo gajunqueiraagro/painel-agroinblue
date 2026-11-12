@@ -101,6 +101,7 @@ describe('LOTES-04: a lista agrupada por atividade', () => {
     expect(g.map(x => [x.nome, x.lotes.map(l => l.id)])).toEqual([['Cria', ['c1']], ['Recria', ['r2', 'r1']], ['Engorda', ['e1']], ['Descarte', ['d1']]]);
     expect(g.map(x => [textoDosLotes(x.total.lotes), x.total.cabecas])).toEqual([['1 lote', 1204], ['2 lotes', 12], ['1 lote', 10], ['1 lote', null]]);
     expect(faseDaAtividade('REC')).toBe(1);
+    expect([faseDaAtividade('C'), faseDaAtividade('R'), faseDaAtividade('E')]).toEqual([0, 1, 2]);   // LOTE-CODIGO-CURTO-01
   });
 });
 

@@ -23,8 +23,9 @@ const MAIOR_QUE_13 = /\btext-(sm|base|lg|xl|[2-9]xl)\b|\btext-\[(1[4-9]|[2-9]\d)
 /* FORN-01b (regra de corte de 21/10 07h25): texto em CÉLULA de tabela pode terminar em "…" com o inteiro no `title` — a constante da
    célula (`CELULA` / `E.celula`) é a única peça com `truncate`, e o teste abaixo cobra o `title` em todo uso dela */
 const CELULA_COM_TITLE = /const CELULA = 'block truncate';|celula: 'block truncate',/;
-/* FIN-FINANC-LAYOUT-01 (Gabriel 05/11, F1): acima de 13px, só as duas constantes aprovadas da escala (o nome na faixa e o valor do Resumo) */
-const ACIMA_DE_13_APROVADA = /^\s*(nome: 'text-\[15px\] font-semibold leading-\[16px\]'|resumoValor: 'text-\[14px\] font-bold leading-\[18px\]'),$/;
+/* FIN-FINANC-LAYOUT-01 (Gabriel 05/11, F1): acima de 13px, só as duas constantes aprovadas da escala (o nome na faixa e o valor do Resumo);
+   FIN-FINANC-LAYOUT-02 (Gabriel 11/11): o valor dos cards do topo a 16px negrito */
+const ACIMA_DE_13_APROVADA = /^\s*(nome: 'text-\[15px\] font-semibold leading-\[16px\]'|resumoValor: 'text-\[14px\] font-bold leading-\[20px\] min-\[800px\]:text-\[16px\]'),$/;
 const achados = (texto: string) => texto.split('\n').filter((l) => (CORTE.test(l) && !CELULA_COM_TITLE.test(l)) || (MAIOR_QUE_13.test(l) && !ACIMA_DE_13_APROVADA.test(l)));
 
 const CONTRATO = ler('ContratoDeCredito.tsx');
@@ -68,12 +69,12 @@ describe('a fonte da tela do contrato', () => {
     expect(ESCALA_DO_CONTRATO.cartaoRotulo).toBe('text-[10px]');
     expect(ESCALA_DO_CONTRATO.cartaoValor).toBe('text-[12px] font-semibold');
     expect(ESCALA_DO_CONTRATO.bloco).toBe('text-[11px] font-semibold');
-    expect(ESCALA_DO_CONTRATO.th).toBe('text-[10px]');
+    expect(ESCALA_DO_CONTRATO.th).toBe('text-[10.5px]');
     expect(ESCALA_DO_CONTRATO.td).toBe('text-[11px]');
     expect(ESCALA_DO_CONTRATO.total).toBe('text-[11px] font-bold');
     expect(ESCALA_DO_CONTRATO.data).toBe('text-[10.5px]');
     expect(ESCALA_DO_CONTRATO.nome).toBe('text-[15px] font-semibold leading-[16px]');
-    expect(ESCALA_DO_CONTRATO.resumoValor).toBe('text-[14px] font-bold leading-[18px]');
+    expect(ESCALA_DO_CONTRATO.resumoValor).toBe('text-[14px] font-bold leading-[20px] min-[800px]:text-[16px]');
     expect(ESCALA_DO_CONTRATO.recado).toBe('text-[11px]');
     expect(ESCALA_DO_CONTRATO.rola).toBe('uma-linha-que-rola');
   });

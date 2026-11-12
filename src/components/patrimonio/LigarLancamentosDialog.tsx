@@ -19,6 +19,10 @@ import type { ItemDoVinculo, PreviaLigar } from '@/lib/patrimonio/patrimonioApi'
 import { QUADRO_MODAL, TD_MODAL, TD_MODAL_NUM, TD_MODAL_TEXTO, TH_MODAL, TH_MODAL_NUM } from './pecas';
 
 const chave = (i: ItemDoVinculo) => `${i.lancamento_id}#${i.parte_ordem}`;
+const faltamDoContrato = (p: PreviaLigar) => p.contratos.reduce((t, c) => t + c.n_faltam, 0);
+/** a prévia do banco deixa gravar: nada recusado, o contrato inteiro na escolha, repetida só com a confirmação */
+export const previaLimpa = (p: PreviaLigar, confirmaRepetidas: boolean) =>
+  p.n_recusas === 0 && faltamDoContrato(p) === 0 && (p.n_repetidas === 0 || confirmaRepetidas);
 
 export function LigarLancamentosDialog({ bemId, clienteId, aoFechar, aoLigar }: {
   bemId: string; clienteId: string; aoFechar: () => void;
@@ -55,9 +59,17 @@ export function LigarLancamentosDialog({ bemId, clienteId, aoFechar, aoLigar }: 
     setMarcados(m => { const n = new Map(m); for (const c of previa.contratos) for (const f of c.faltam) n.set(chave(f), f); return n; });
     setPrevia(null);
   };
+  /* PATR-LIGAR-FINANC-01 (1): o Ligar CONFERE e grava no MESMO gesto — antes ficava desabilitado até o "Conferir" e marcar uma linha
+     zerava a prévia; o motivo só no title de um botão desabilitado (pointer-events-none) nunca aparecia: clique morto. Prévia com
+     recusa, parcelas do contrato faltando ou repetida sem a confirmação = para e mostra a prévia (o motivo escrito na linha dela). */
   const ligar = async () => {
     setIndo(true); setErro(null);
-    const r = await api.ligar(bemId, [...marcados.values()], confirmaRepetidas, false);
+    const itensDaVez = [...marcados.values()];
+    const s = await api.ligar(bemId, itensDaVez, confirmaRepetidas, true);
+    if (!s.ok) { setIndo(false); setErro(s.erro); return; }
+    setPrevia(s.dados);
+    if (!previaLimpa(s.dados, confirmaRepetidas)) { setIndo(false); return; }
+    const r = await api.ligar(bemId, itensDaVez, confirmaRepetidas, false);
     setIndo(false);
     if (!r.ok) { setErro(r.erro); return; }
     await aoLigar?.();
@@ -66,8 +78,8 @@ export function LigarLancamentosDialog({ bemId, clienteId, aoFechar, aoLigar }: 
     aoFechar();
   };
 
-  const faltamContrato = previa?.contratos.reduce((t, c) => t + c.n_faltam, 0) ?? 0;
-  const podeLigar = !!previa && previa.n_recusas === 0 && faltamContrato === 0 && (previa.n_repetidas === 0 || confirmaRepetidas) && marcados.size > 0;
+  const faltamContrato = previa ? faltamDoContrato(previa) : 0;
+  const nenhumMarcado = marcados.size === 0;
 
   return (
     <Dialog open onOpenChange={v => { if (!v) aoFechar(); }}>
@@ -144,12 +156,12 @@ export function LigarLancamentosDialog({ bemId, clienteId, aoFechar, aoLigar }: 
         </div>
         <div className="flex h-[40px] shrink-0 items-center gap-2 border-t bg-card px-3">
           <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
-            {marcados.size} escolhido(s) · {brl(somaMarcada)}{erro && previa ? ` · ${erro}` : ''}
+            {nenhumMarcado ? 'marque ao menos um lançamento para ligar' : `${marcados.size} escolhido(s) · ${brl(somaMarcada)}`}{erro && previa ? ` · ${erro}` : ''}
           </span>
           <Button variant="outline" size="sm" className="h-[26px] text-[11px]" onClick={aoFechar}>Fechar</Button>
           <Button variant="outline" size="sm" className="h-[26px] w-[72px] text-[11px]" disabled={indo || marcados.size === 0} onClick={() => void conferir()} data-testid="ligar-conferir">Conferir</Button>
-          <Button size="sm" className="h-[26px] w-[72px] text-[11px]" disabled={indo || !podeLigar} onClick={() => void ligar()}
-            title={podeLigar ? undefined : 'confira antes (a prévia do banco)'} data-testid="ligar-confirmar">Ligar</Button>
+          <Button size="sm" className="h-[26px] w-[72px] text-[11px]" disabled={indo || nenhumMarcado} onClick={() => void ligar()}
+            data-testid="ligar-confirmar">Ligar</Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -108,10 +108,13 @@ describe('P127 — o Novo documento lê a nota solta no campo Arquivo', () => {
     const divs = screen.getAllByTestId('nota-divergencia');
     expect(divs.map((d) => d.getAttribute('data-campo'))).toEqual(['emissao', 'valor', 'emitente']);
     const valor = divs[1];
-    expect(valor.textContent).toContain('nota 408,77');
-    expect(valor.textContent).toContain('400,00');
+    /* NOTA-LIGAR-LANCAMENTO-01 (Chat 18:25) — tabelinha Campo | Nota | Lançamento | ação: cada valor na sua coluna, sem riscado */
+    expect([within(valor).getByTestId('nota-divergencia-nota').textContent, within(valor).getByTestId('nota-divergencia-lancamento').textContent]).toEqual(['408,77', '400,00']);
+    expect(screen.getByTestId('nota-divergencias').innerHTML).not.toContain('line-through');
+    expect(within(valor).getByTestId('nota-divergencia-nota').className).toContain('font-semibold');
     fireEvent.click(within(valor).getByTestId('nota-divergencia-trocar'));
     expect(within(screen.getAllByTestId('nota-divergencia')[1]).getByTestId('nota-divergencia-trocar').textContent).toBe('usar o da nota');
+    expect(within(screen.getAllByTestId('nota-divergencia')[1]).getByTestId('nota-divergencia-lancamento').className).toContain('font-semibold');
     fireEvent.click(screen.getByTestId('doc-registrar'));
     await waitFor(() => expect(registrar).toHaveBeenCalled());
     const p = registrar.mock.calls[0][0];
