@@ -1523,6 +1523,16 @@ if (tela === 'mesclar') {
       lido = lidoDaChave(r.nota, [{ largura: 841.89, altura: 595.28 }]);
     } else lido = await lerNota(bytes);
     if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+    /* NOTA-PAGTO-PARCELADO-01 P3 — `&natureza=conserto`: a mesma nota como REMESSA PARA CONSERTO (CFOP 6915): o aviso "não é compra" */
+    if (q.get('natureza') === 'conserto') { lido.nota.naturezaOperacao = 'REMESSA DE MERCADORIA OU BEM PARA CONSERTO OU REPARO'; lido.nota.cfops = ['6915']; }
+    /* NOTA-PAGTO-PARCELADO-01 P1 — `&outros=1`: os lançamentos SOLTOS do mesmo fornecedor no período: a 4ª parcela desta nota paga por um PIX à
+       parte (491,64: marcada, a soma confere com a nota) e duas de outras compras. SINTÉTICOS. */
+    const OUTROS = q.get('outros') === '1' ? ([
+      ['2027-01-20', null, 491.64, 'programado', 'Medicamentos bovinos sintéticos — a 4ª parcela, paga por PIX à parte (descrição comprida para medir o corte)'],
+      ['2026-10-29', '2026-10-26', 2533.79, 'realizado', 'Manutenção de máquina exemplo 1/2'],
+      ['2026-07-29', '2026-07-29', 110000, 'realizado', 'Compra de máquina exemplo — outra compra do mesmo fornecedor'],
+    ] as any[]).map(([venc, pg, valor, st, desc], i) => ({ id: `ou-${i}`, data_vencimento: venc, data_pagamento: pg, data_competencia: '2026-09-15', descricao: desc,
+        valor, status_transacao: st, financiamento_id: null, numero_documento: null, conta_bancaria_id: 'sic', favorecido_id: 'agro-s', cancelado: false, cenario: 'realizado' })) : null;
     if (v === 'gulartlongo') {
       lido.nota.emitente.nome = 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO CENTRO OESTE LTDA';
       lido.nota.emitente.endereco = { ...(lido.nota.emitente.endereco ?? {}), logradouro: 'RODOVIA BR SINTETICA 163 KM 512 SAIDA PARA O DISTRITO INDUSTRIAL', municipio: 'SAO GABRIEL DO OESTE SINTETICO', uf: 'MS' };
@@ -1553,7 +1563,9 @@ if (tela === 'mesclar') {
       fornecedor_id: 'sem-cnpj', fornecedor_nome: 'Cooperativa Agroindustrial Sintetica dos Produtores Rurais de Exemplo SA', fornecedor_por: 'nome',
       parcelas: [], por: ['numero', 'chave'], cancelado: true }));
     g.__bancoBancada = {
-      from: (t: string) => {
+      from: (t: string, e: any) => {
+        if (OUTROS && t === 'financeiro_fornecedores' && !e?.eq?.id) return [{ id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24' }];
+        if (OUTROS && t === 'financeiro_lancamentos_v2' && e?.in?.favorecido_id) return OUTROS;
         if (t === 'financeiro_fornecedores') return [{ nome_fantasia: null, inscricao_estadual: null, tipo_pessoa: 'PJ', logradouro: null, numero: null, complemento: null, bairro: null, municipio: null, uf: null, cep: null, telefone: null }];
         /* P96a — `v=irmas`: a 4/4 com a NF DIGITADA À MÃO (valor da parcela, emissão do vencimento) — a faixa "Usar a nota lida". SINTÉTICA. */
         if (t === 'financeiro_lancamento_documentos' && v === 'irmas') return [{ id: 'doc-irma-3', lancamento_id: 'jl-irma-3', versao: 2, especie: 'nf',
@@ -2256,6 +2268,54 @@ if (tela === 'mesclar') {
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();
+} else if (tela === 'custeio-txt') {
+  /* CONC-CUSTEIO-FONTE-01 — Conciliação › Importar banco › "Relatório de custeio", no molde do caso do Gabriel (69 itens, divergência em 3
+     escopos), com TXT SINTÉTICO no formato do relatório: 3 famílias, 45 itens de nome comprido; os subtotais impressos de 3 sub-famílias
+     NÃO batem (a faixa de divergência com as 3 linhas). A seção imita a do `ImportarBancoInline` (cabeçalho preso + a aba), numa área que rola. */
+  const montarCusteio = async () => {
+    const { default: CusteioTxtImportTab } = await import('@/v2/pages/CusteioTxtImportTab');
+    const brlTxt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const linha = (rot: string, nome: string, v: number) => `    ${rot}${' '.repeat(Math.max(1, 13 - rot.length))}${nome.padEnd(40)}${brlTxt(v).padStart(12)}`;
+    const item = (nome: string, v: number) => `                 ${nome.padEnd(42)}${brlTxt(v).padStart(12)}`;
+    const FAMILIAS: [string, [string, number][]][] = [
+      ['ANIMAIS', [['Produtos Veterinarios', 15], ['Sal Mineral e Racao', 10]]],
+      ['MANUTENCAO', [['Pecas de Maquinas e Implementos Agricolas', 12]]],
+      ['DIVERSOS', [['Despesas Diversas de Escritorio', 8]]],
+    ];
+    const corpo: string[] = [];
+    let total = 0; let k = 0; let erradas = 0;
+    const blocos = FAMILIAS.map(([fam, subs]) => {
+      const linhasSub = subs.map(([sub, n]) => {
+        const itens = Array.from({ length: n }, (_, i) => { k += 1; return [(k % 7 === 3 ? `PRODUTO SINTETICO ${k} COM DESCRICAO MUITO COMPRIDA DO RELATORIO DA FAZENDA QUE NAO CABE NUMA LINHA SO DA TABELA ${i % 3 ? 'LT' : 'KG'}` : `PRODUTO SINTETICO ${k} COM DESCRICAO COMPRIDA DO RELATORIO ${i % 3 ? 'LT' : 'KG'}`), 37.5 * k + 0.4] as [string, number]; });
+        const soma = itens.reduce((x, [, v]) => x + v, 0);
+        const impresso = erradas < 3 ? soma + 10 * (erradas++ + 1) : soma;
+        return { sub, itens, soma, impresso };
+      });
+      const somaFam = linhasSub.reduce((x, l) => x + l.soma, 0);
+      total += somaFam;
+      return { fam, linhasSub, somaFam };
+    });
+    for (const b of blocos) {
+      corpo.push(linha('Família:', b.fam, b.somaFam));
+      for (const l of b.linhasSub) { corpo.push(linha('Sub-Fam:', l.sub, l.impresso)); for (const [n, v] of l.itens) corpo.push(item(n, v)); }
+    }
+    const txt = ['R J', 'Sistema de Compras', 'Emissão 06/11/2026 Hr. 14:29:06 Pag. 1', '------------------------------------------------------------------',
+      'Custeio Analítico                 Período: 01/10/2026 a 31/10/2026', 'Descrição                                             Valor em Real',
+      linha('Fazenda:', 'FAZENDA SINTETICA DA BANCADA', total), ...corpo].join('\r\n');
+    const arquivo = new File([txt], 'PLANILHA DESP FAZ SINTETICA 102026.txt', { type: 'text/plain' });
+    g.__bancoBancada = { from: () => [], rpc: () => null };
+    montar(
+      <div className="h-screen overflow-y-auto bg-background" data-testid="bancada-custeio">
+        <div className="rounded-lg border border-border bg-card px-2">
+          <div className="sticky top-0 z-30 flex h-[30px] items-center gap-2 bg-card">
+            <span className="text-[10px] font-semibold text-muted-foreground">Relatório de custeio</span>
+            <span className="truncate tabular-nums text-[10px]">{arquivo.name}</span>
+          </div>
+          <CusteioTxtImportTab arquivoInicial={arquivo} contaBancariaId="conta-bancada" />
+        </div>
+      </div>);
+  };
+  void montarCusteio();
 } else if (tela === 'documento-nota') {
   /* P127 + P128c — o "Novo documento" do Editar lançamento que LÊ A NOTA solta no Arquivo. O cenário solta o XML SINTÉTICO exposto aqui
      (`__xmlDaBancada`: NF 74974 no molde do print, R$ 408,77, 1 duplicata, 1 item, emitente com nome comprido) ou um PDF que não se lê.
@@ -2278,6 +2338,29 @@ if (tela === 'mesclar') {
       emitenteId: null, emitenteNome: 'COMERCIO SINTETICO DE PARAFUSOS E FERRAMENTAS INDUSTRIAIS DO CENTRO OESTE LTDA', emitenteDocumento: null, cancelado: false,
       canceladoMotivo: null, versao: 1, ligadoAQtd: 6 };
     if (q.get('v') === 'repetida') api.documentos = [DOC_BANCADA];
+    /* NOTA-LIGAR-LANCAMENTO-01 — `v=ligar`: o molde do caso NJ, SINTÉTICO — nota de R$ 280.500 em 2 duplicatas (15% + 85%) da filial 0001-81 anexada
+       a um lançamento de 42.075 da filial 0014-94 (mesma razão social): a linha da filial com "Trocar para a filial da nota", o quadro (a 001 é este
+       lançamento, a 002 a liberação direta de um contrato) e a participação sugerida 15%. `&troca=1` no cenário abre a prévia da troca. */
+    const ligar = q.get('v') === 'ligar';
+    if (ligar) {
+      g.__xmlDaBancada = montarNFe({ numero: '73007', vNF: '280500.00', duplicatas: [['001', '2026-09-02', '42075.00'], ['002', '2026-10-01', '238425.00']],
+        nomeEmitente: 'MAQUINAS AGRICOLAS SINTETICAS DO CENTRO OESTE E REGIAO DO BOLSAO SUL-MATO-GROSSENSE LTDA',
+        itens: [['PLANTADEIRA SINTETICA ARTICULADA DE 12 LINHAS COM KIT DE ADUBO', '1.0000', 'UN', '280500.00']] });
+      const F01: any = { ...LEITOR[0], id: 'maq-0001', nome: 'Maquinas Agricolas Sinteticas do Centro Oeste e Regiao do Bolsao Sul-mato-grossense Ltda', cpf_cnpj: '11.222.333/0001-81', ativo: true };
+      const F14: any = { ...F01, id: 'maq-0014', cpf_cnpj: '11.222.333/0014-94' };
+      g.__fornecedoresBancada = [...LEITOR, F01, F14];
+      g.__bancoBancada = {
+        from: (t: string, e: any) => {
+          if (t === 'financeiro_fornecedores' && e?.in?.cpf_cnpj) return [F01];
+          if (t === 'financeiro_fornecedores') return [F01, F14];
+          if (t === 'financiamento_liberacoes') return [{ id: 'lib-1', data: '2026-10-01', valor: 238425, financiamento_id: 'fin-1' }];
+          if (t === 'financiamentos') return [{ id: 'fin-1', numero_contrato: 'CT-6362662/26-SINTETICO' }];
+          return [];
+        },
+        rpc: (fn: string) => (fn === 'fn_nota_ja_lancada' ? [] : fn === 'fn_lancamentos_trocar_favorecido' ? { ok: true, lancamentos: 1, soma: 42075, origens: [],
+          meses_fechados: [], conciliados: 0 } : null),
+      };
+    }
     if (confere) g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => (fn !== 'fn_nota_completar' ? null : { ok: true, recusas: [], efeito_dre: [],
       linhas: (a.p_lancamentos ?? []).map((x: any) => ({ id: x.id, descricao: null, situacao: 'conciliada', parcela_n: null, campos: {
         numero_documento: { hoje: '74974', fica: x.numero_documento, muda: true, hoje_nome: null, fica_nome: null, cadeado: null },
@@ -2285,8 +2368,10 @@ if (tela === 'mesclar') {
         data_competencia: { hoje: '2026-08-24', fica: x.data_competencia, muda: true, hoje_nome: null, fica_nome: null, cadeado: null } } })) }) };
     montar(<FormDocumento api={api} documento={q.get('v') === 'cancelar' ? DOC_BANCADA : null} clienteId="cli" onFechar={() => {}} onAbrirExistente={() => {}}
       sugestao={confere ? { numero: '74974', dataEmissao: '2026-08-24', valor: 408.77, emitenteId: null }
+        : ligar ? { numero: null, dataEmissao: '2026-09-01', valor: 42075, emitenteId: 'maq-0014', vencimento: '2026-09-02' }
         : { numero: '74974', dataEmissao: '2026-08-24', valor: 400, emitenteId: LEITOR[0]?.id ?? null }}
-      completarPelaNota={confere ? { lancamentoId: 'lanc-bancada', onCompletado: () => {} } : undefined}
+      completarPelaNota={confere || ligar ? { lancamentoId: 'lanc-bancada', onCompletado: () => {}, onFornecedorTrocado: () => {} } : undefined}
+      onCriarFornecedor={async () => 'bancada'}
       onVerOQueANotaMuda={async () => null} />);
   };
   void montarDoc();
@@ -2668,14 +2753,18 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
       props.documentosAntesDeSalvar = true;
       renderizar();
     })();
-  } else if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
+  } else if (v === 'notapdf' || v === 'notachave' || v === 'notacartao' || v === 'notacoluna') {
     void (async () => {
       const { jsPDF } = await import('jspdf');
-      const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+      const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata, danfeSinteticoFaturaEmColuna } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
       const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
       const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
-      if (v === 'notachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
+      /* NOTA-PDF-REGRESSAO-01 — `notacoluna`: o DANFE em pé com a FATURA em coluna e o item em meias-linhas (o leiaute da NF que não se lia);
+         a fonte do tamanho do real (maior, a chave passa da borda e sai cortada) */
+      const emPe = v === 'notacoluna';
+      const doc = emPe ? new jsPDF({ orientation: 'portrait', unit: 'pt', format: [595.28, 841.89] }) : new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
+      if (emPe) for (const it of danfeSinteticoFaturaEmColuna()[0]) { doc.setFontSize(Math.max(4, it.h)); doc.text(it.str, it.x, 841.89 - it.y); }
+      else if (v === 'notachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
       else for (const it of (v === 'notacartao' ? danfeSinteticoSemDuplicata() : PAGINAS_DANFE_SINTETICO)[0]) { doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 595.28 - it.y); }
       const bytes: ArrayBuffer = doc.output('arraybuffer');
       let lido: any;
@@ -2692,7 +2781,7 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
       const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: '280000002' }], emitente: resolucao,
         favorecidoId: resolucao.propostoId, ultima: { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' } });
       props.prefill = { ...prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente,
-        resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, '000.000.937.pdf') } as any), ...(v === 'notacartao' ? { conta_bancaria_id: 'elo' } : {}) };
+        resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, emPe ? '000.004.321.pdf' : '000.000.937.pdf') } as any), ...(v === 'notacartao' ? { conta_bancaria_id: 'elo' } : {}) };
       props.documentosAntesDeSalvar = true;
       renderizar();
     })();

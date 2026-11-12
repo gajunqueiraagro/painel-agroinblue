@@ -55,6 +55,15 @@ export interface LoteDaLista {
   conferir: string | null;
   /** L1 (Gabriel 09/11) — o lote leva carimbo (a regra do assistente, `aceitaCarimbo`), lida no `useLotesDaFazenda`; sem a leitura = não */
   daCria?: boolean;
+  /** LOTE-ETAPAS-01 (117540) — fora do código; nulos nos lotes de antes. Opcionais: a lista antiga (e os testes dela) seguem valendo. */
+  situacaoCria?: SituacaoDaCria | null;
+  ordemParto?: OrdemDoParto | null;
+  mamotesSexo?: SexoDosMamotes | null;
+  mamotesCruzamento?: CruzamentoDosMamotes | null;
+  mamotesSemen?: SemenDosMamotes | null;
+  anotacao?: string | null;
+  /** nulo = código ATIV-CAT-RAÇA-NN (lotes até 11/11); 'etapas' = ATIV-CAT-RAÇA[-carimbo], -02/-03 só quando repetir */
+  codigoRegra?: 'etapas' | null;
 }
 
 /** Os campos que `fn_lote_salvar` aceita em `p_campos` (só as chaves que vierem mudam). */
@@ -76,6 +85,60 @@ export interface CamposDoLote {
   meta_data?: string;
   /** vazio = conferido */
   conferir?: string;
+  /** LOTE-ETAPAS-01 — vazio = limpar */
+  situacao_cria?: string;
+  ordem_parto?: string;
+  mamotes_sexo?: string;
+  mamotes_cruzamento?: string;
+  mamotes_semen?: string;
+  anotacao?: string;
+}
+
+/* ── LOTE-ETAPAS-01 (Gabriel 11/11 08:45, D2/D3) — as listas fixas: as MESMAS dos CHECK da 117540 ─────────────────────────────── */
+export type SituacaoDaCria = 'PR' | 'PA' | 'PP' | 'VZ' | 'SL' | 'DS';
+export type OrdemDoParto = 'PRI' | 'SEC' | 'MUL';
+export type SexoDosMamotes = 'M' | 'F' | 'MF';
+export type CruzamentoDosMamotes = 'nelore' | 'f1_angus' | 'meio_charoles' | 'meio_senepol' | 'outro';
+export type SemenDosMamotes = 'convencional' | 'sexado_f' | 'sexado_m' | 'touro';
+
+/** [valor gravado, sigla no chip, nome] */
+export const SITUACOES_DA_CRIA: readonly (readonly [SituacaoDaCria, string, string])[] = [
+  ['PR', 'PR', 'Prenha (mojada)'], ['PA', 'PA', 'Parida com bezerro'], ['PP', 'PP', 'Parida prenha'], ['VZ', 'VZ', 'Parida vazia'],
+  ['SL', 'SL', 'Solteira (sem cria)'], ['DS', 'DS', 'Descarte'],
+];
+export const ORDENS_DO_PARTO: readonly (readonly [OrdemDoParto, string, string])[] = [['PRI', 'PRI', 'Primípara'], ['SEC', 'SEC', 'Secundípara'], ['MUL', 'MUL', 'Multípara']];
+export const SEXOS_DOS_MAMOTES: readonly (readonly [SexoDosMamotes, string, string])[] = [['M', 'M', 'Machos'], ['F', 'F', 'Fêmeas'], ['MF', 'MF', 'Misto']];
+export const CRUZAMENTOS_DOS_MAMOTES: readonly (readonly [CruzamentoDosMamotes, string, string])[] = [
+  ['nelore', 'NEL', 'Nelore'], ['f1_angus', '½ANG', 'F1 Angus'], ['meio_charoles', '½CHA', '½ Charolês'], ['meio_senepol', '½SEN', '½ Senepol'], ['outro', 'OUT', 'Outro'],
+];
+export const SEMENS_DOS_MAMOTES: readonly (readonly [SemenDosMamotes, string, string])[] = [
+  ['convencional', 'CONV', 'Convencional'], ['sexado_f', 'SXF', 'Sexado fêmea'], ['sexado_m', 'SXM', 'Sexado macho'], ['touro', 'TOU', 'Touro'],
+];
+/** parida = PA, PP ou VZ: pede o carimbo e os mamotes ao pé; a mojada (PR) nunca pede (a mesma regra da `fn_lote_salvar`) */
+export const ehParida = (s: SituacaoDaCria | null | undefined): boolean => s === 'PA' || s === 'PP' || s === 'VZ';
+
+const daLista = <T extends string>(lista: readonly (readonly [T, string, string])[], v: unknown): T | null =>
+  lista.find(x => x[0] === v)?.[0] ?? null;
+export const situacaoDaCria = (v: unknown) => daLista(SITUACOES_DA_CRIA, v);
+export const ordemDoParto = (v: unknown) => daLista(ORDENS_DO_PARTO, v);
+export const sexoDosMamotes = (v: unknown) => daLista(SEXOS_DOS_MAMOTES, v);
+export const cruzamentoDosMamotes = (v: unknown) => daLista(CRUZAMENTOS_DOS_MAMOTES, v);
+export const semenDosMamotes = (v: unknown) => daLista(SEMENS_DOS_MAMOTES, v);
+export const nomeNaLista = (lista: readonly (readonly [string, string, string])[], v: string | null | undefined): string | null =>
+  lista.find(x => x[0] === v)?.[2] ?? null;
+
+/** LOTE-ETAPAS-01 (D1) — o código dos lotes NOVOS: ATIV-CAT-RAÇA[-carimbo]; repetido entre os vivos da fazenda = -02, -03… (o próprio
+ *  lote não conta). Espelho da `_fn_lote_codigo_etapas` (117540): quem grava é o banco; aqui é só a prévia do trilho. Parte que falta = "__". */
+export function codigoPorEtapas(ativ: string | null, cat: string | null, raca: string | null, carimbo: string | null,
+  vivos: readonly { id: string; codigo: string; situacao: SituacaoDoLote }[] = [], idProprio: string | null = null): string {
+  const p = (s: string | null) => s ?? '__';
+  const c = carimbo?.trim();
+  const base = `${p(ativ)}-${p(cat)}-${p(raca)}${c ? `-${c}` : ''}`;
+  if (!ativ || !cat || !raca) return base;
+  const usados = new Set(vivos.filter(l => l.situacao !== 'cancelado' && l.id !== idProprio).map(l => l.codigo));
+  let cod = base;
+  for (let i = 2; usados.has(cod) && i <= 99; i++) cod = `${base}-${String(i).padStart(2, '0')}`;
+  return cod;
 }
 
 /** O código ATIV-CAT-RAÇA-NN (LOTES-04, Gabriel 07/11: começa pela atividade; D5 hífen); parte ainda não escolhida = "__".

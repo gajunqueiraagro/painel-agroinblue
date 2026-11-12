@@ -13,7 +13,7 @@ import { danfseSintetico } from './__fixtures__/danfseSintetico';
 import { aliquotasDoTexto, ibsCbsDoDanfse, notaDoDanfse } from './danfse';
 import { itensDoPdf, lidosDoBanco, payloadDaNotaFiscal } from './itensDaNota';
 import {
-  FRASE_FAZENDA_NAO_IDENTIFICADA, FRASE_SEM_DUPLICATAS, ORIGEM_FAZENDA_PELO_HISTORICO, ORIGEM_FAZENDA_PELO_TOMADOR, avisosQueValem, fraseTomadorEmVarias, descricaoCurtaDoServico, proporLancamento,
+  FRASE_FAZENDA_NAO_IDENTIFICADA, FRASE_SEM_DUPLICATAS, ORIGEM_FAZENDA_PELO_HISTORICO, ORIGEM_FAZENDA_PELO_TOMADOR, avisosQueValem, fraseTomadorEmVarias, descricaoCurtaDoItem, descricaoCurtaDoServico, proporLancamento,
 } from './proporLancamento';
 import { resolverEmitente } from './resolverEmitente';
 import { fazendaMaisUsada, fazendasVigentes } from '@/lib/financeiro/nfeConsultas';
@@ -93,17 +93,19 @@ describe('L2 — a descrição curta (só NFS-e; a NF-e abre vazia, 30/10)', () 
     expect(longa.length).toBeLessThanOrEqual(60);
     expect(longa).toBe('Reforma completa do galpao de maquinas com troca de telhas e');
   });
-  it('a proposta: NFS-e com a curta (origem "do serviço da nota"); NF-e com vazio', () => {
+  it('a proposta: NFS-e com a curta (origem "do serviço da nota"); NF-e com a do 1o item', () => {
     const ok = proporLancamento({ nota: n, avisosDoLeitor: ['sem_duplicatas'], fazendas: [], emitente: resolverEmitente(n.emitente, [], null), favorecidoId: null, ultima: null });
     if (ok.ok === false) throw new Error(ok.frase);
     expect([ok.proposta.descricaoInicial, ok.proposta.origens.descricao]).toEqual(['Manutenção carregadeira W130', 'do serviço da nota']);
     const nfe = proporLancamento({ nota: { ...n, modelo: '55' }, avisosDoLeitor: [], fazendas: [], emitente: resolverEmitente(n.emitente, [], null), favorecidoId: null, ultima: null });
     if (nfe.ok === false) throw new Error(nfe.frase);
-    expect(nfe.proposta.descricaoInicial).toBe('');
-    /* o modal abre com o que a proposta diz: a curta na NFS-e, vazio na NF-e */
+    /* NOTA-PDF-REGRESSAO-01 (12/11): a NF-e abre com a sugerida pelo 1o item (antes, 30/10, vazia) */
+    expect(nfe.proposta.descricaoInicial).toBe(descricaoCurtaDoItem(n));
+    expect(nfe.proposta.descricaoInicial).not.toBe('');
+    /* o modal abre com o que a proposta diz: a curta na NFS-e, a do item na NF-e */
     const d = (proposta: typeof ok.proposta) => ({ proposta, emitenteNome: '', emitenteDocumento: '', resolucao: resolverEmitente(n.emitente, [], null),
       ocorrencias: [], arquivo: new File([''], 'n.pdf') });
-    expect([prefillDaNota(d(ok.proposta)).descricao, prefillDaNota(d(nfe.proposta)).descricao]).toEqual(['Manutenção carregadeira W130', '']);
+    expect([prefillDaNota(d(ok.proposta)).descricao, prefillDaNota(d(nfe.proposta)).descricao]).toEqual(['Manutenção carregadeira W130', descricaoCurtaDoItem(n)]);
   });
 });
 

@@ -80,8 +80,9 @@ describe('proporLancamento — F1, a nota inteira', () => {
       formaPagamento: 'Boleto',
       numeroDocumento: '000.012.345',
       descricao: 'SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens',
-      /* NOTA-NOVA-MODAL-REAL (30/10) — na NF-e o campo Descrição abre vazio (a curta é só da NFS-e, NOTA-NFSE-LEITURA-02) */
-      descricaoInicial: '',
+      /* NOTA-PDF-REGRESSAO-01 (12/11) — a NF-e abre com a descrição sugerida pelo 1o item (antes, 30/10, vazia) */
+      descricaoInicial: 'Sal mineral 80 p sc 30KG · 6 itens',
+      ncmDeBem: null,
       documento: {
         numero: '000.012.345', serie: '1', chaveAcesso: p.documento.chaveAcesso, dataEmissao: '2026-09-30', valorCent: 1623800,
         emitenteId: 'forn-1', emitenteNome: 'AGROPECUARIA EXEMPLO LTDA', emitenteDocumento: '11.222.333/0001-81',

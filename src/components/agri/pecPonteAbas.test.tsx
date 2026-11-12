@@ -33,7 +33,7 @@ const NJ: PatrimonioPec = {
   p0: '2025-06', p1: '2026-06', p0_fonte: 'fechamento', p1_fonte: 'fechamento',
   categorias: [],
   total: { q0: 5510, v0: 22754807, q1: 5511, v1_p0: 22561569, v1_p1: 25180131,
-    vpb: -193238, efeito: 2618562, agio: null, agio_sem_preco: false },
+    vpb: -193238, efeito: 2618562, agio: null, agio_sem_preco: false, preco_ref_do_fim: [] },
   meses: [],
   movimentos: {
     inicio: p(5510, 67927.83, 22754807),
