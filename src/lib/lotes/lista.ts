@@ -4,7 +4,7 @@
  */
 import { casaNaBusca } from '@/lib/texto/busca';
 import type { ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
-import { codigoAoLado, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type SituacaoDoLote } from '@/lib/lotes/tipos';
+import { codigoAoLado, cruzamentoDosMamotes, ordemDoParto, semenDosMamotes, sexoDosMamotes, situacaoDaCria, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type SituacaoDoLote } from '@/lib/lotes/tipos';
 
 /* ── leitura sem cast ─────────────────────────────────────────────────────────────────────────── */
 const campo = (o: object, k: string): unknown => Reflect.get(o, k);
@@ -36,6 +36,10 @@ export function loteDaLinha(r: unknown): LoteDaLista | null {
     anoMesDado: texto(r, 'ano_mes_dado'), cabecas: numero(r, 'cabecas'), pesoMedioKg: numero(r, 'peso_medio_kg'), gmdKg: numero(r, 'gmd_kg'),
     pastos: textos(r, 'pastos'), lancamentos: numero(r, 'lancamentos') ?? 0,
     conferir: texto(r, 'conferir'),
+    situacaoCria: situacaoDaCria(texto(r, 'situacao_cria')), ordemParto: ordemDoParto(texto(r, 'ordem_parto')),
+    mamotesSexo: sexoDosMamotes(texto(r, 'mamotes_sexo')), mamotesCruzamento: cruzamentoDosMamotes(texto(r, 'mamotes_cruzamento')),
+    mamotesSemen: semenDosMamotes(texto(r, 'mamotes_semen')), anotacao: texto(r, 'anotacao'),
+    codigoRegra: texto(r, 'codigo_regra') === 'etapas' ? 'etapas' : null,
   };
 }
 
@@ -86,7 +90,8 @@ export function colunasDosLotes(nomes: NomesDoCadastro): ColunaOrdenavel<LoteDaL
 export interface GrupoDaAtividade { atividadeId: string; nome: string; lotes: LoteDaLista[]; total: TotalDosLotes }
 
 /** A fase na ordem do rebanho: cria, recria, engorda; as outras atividades depois, pelo nome. */
-const ORDEM_DA_FASE: Readonly<Record<string, number>> = { CRI: 0, CR: 0, REC: 1, RC: 1, ENG: 2, EG: 2 };
+/* LOTE-CODIGO-CURTO-01 (117550): C/R/E no cadastro; as siglas de antes seguem valendo */
+const ORDEM_DA_FASE: Readonly<Record<string, number>> = { C: 0, CRI: 0, CR: 0, R: 1, REC: 1, RC: 1, E: 2, ENG: 2, EG: 2 };
 
 export const faseDaAtividade = (sigla: string | null): number => ORDEM_DA_FASE[sigla ?? ''] ?? 3;
 

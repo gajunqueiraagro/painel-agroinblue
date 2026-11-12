@@ -1,13 +1,19 @@
 /**
- * LOTES-03 F1 — a regra do assistente "+ Novo lote" (mock lotes-03-assistente.html, aprovado 06/11 15:45), sem tela:
- * os 5 passos, até onde se pode ir, o código montando, a contagem de lotes por cadastro, a busca e a validação do "Cadastrar nova…".
- * Quem grava é o banco (`fn_lote_cadastro_salvar`, `fn_lote_salvar`); as mensagens daqui são as MESMAS da RPC, para o erro aparecer no
- * campo antes de ir ao banco.
+ * LOTE-ETAPAS-01 (Gabriel 11/11 08:45, D1–D4; mock ui-validar/lote-etapas.html) — a regra do assistente "+ Novo lote" / "Editar
+ * identidade", sem tela: Atividade → Categoria e sexo (filtrada pela atividade) → Situação (cria) ou Programa e sistema (recria,
+ * engorda) → Raça e genética (mamotes ao pé da parida) → Nome do lote. Obrigatório SÓ atividade, categoria e raça, e o carimbo da parida
+ * (PA/PP/VZ); o resto é "completar" e nunca trava. Plano = fatia 2. Quem grava é o banco (`fn_lote_cadastro_salvar`, `fn_lote_salvar`);
+ * as mensagens daqui são as MESMAS da RPC, para o erro aparecer no campo antes de ir ao banco.
  */
 import { casaNaBusca } from '@/lib/texto/busca';
-import { CARIMBO_VALIDO, FRASE_CARIMBO_INVALIDO, codigoDoLote, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type TipoDoCadastro, type TrocaDeCodigo } from '@/lib/lotes/tipos';
+import {
+  CARIMBO_VALIDO, FRASE_CARIMBO_INVALIDO, CRUZAMENTOS_DOS_MAMOTES, ORDENS_DO_PARTO, SEMENS_DOS_MAMOTES, SEXOS_DOS_MAMOTES, SITUACOES_DA_CRIA,
+  codigoDoLote, codigoPorEtapas, ehParida, nomeNaLista,
+  type CadastroDoLote, type CamposDoLote, type CruzamentoDosMamotes, type LoteDaLista, type OrdemDoParto, type SemenDosMamotes,
+  type SexoDosMamotes, type SituacaoDaCria, type TipoDoCadastro, type TrocaDeCodigo,
+} from '@/lib/lotes/tipos';
 
-export type ChaveDoPasso = 'categoria' | 'raca' | 'atividade' | 'numero' | 'perfil';
+export type ChaveDoPasso = 'atividade' | 'categoria' | 'situacao' | 'raca' | 'nome';
 
 export interface PassoDoAssistente {
   chave: ChaveDoPasso;
@@ -19,30 +25,31 @@ export interface PassoDoAssistente {
   cadastrarNova?: string;
   /** o nome da coisa, minúsculo ("categoria", "raça", "atividade") */
   coisa?: string;
-  opcional?: boolean;
 }
 
 export const PASSOS: readonly PassoDoAssistente[] = [
   { chave: 'atividade', titulo: 'Atividade', pergunta: 'Em que atividade o lote está?', coisa: 'atividade', cadastrarNova: 'Cadastrar nova atividade',
-    subtitulo: 'Fase de produção. Separa o custo e os indicadores por fase (cria, recria, engorda).',
-    ajuda: { oQueE: 'A 1ª parte do código do lote (a sigla).', porQue: 'O custo e os indicadores se separam por fase.',
+    subtitulo: 'Define quais opções aparecem nas próximas etapas.',
+    ajuda: { oQueE: 'A 1ª parte do código do lote (a sigla).', porQue: 'O custo e os indicadores se separam por fase; a atividade abre as opções dela.',
       comoFazer: 'Mudou de fase depois (ex.: recria → engorda)? Edite a identidade na ficha: o código muda e o antigo fica no histórico.' } },
-  { chave: 'categoria', titulo: 'Categoria', pergunta: 'Qual é a categoria do lote?', coisa: 'categoria', cadastrarNova: 'Cadastrar nova categoria',
-    subtitulo: 'Quem forma o lote. Define quais categorias do rebanho podem ser lançadas nele.',
+  { chave: 'categoria', titulo: 'Categoria e sexo', pergunta: 'Qual categoria?', coisa: 'categoria', cadastrarNova: 'Cadastrar nova categoria',
+    subtitulo: 'O sexo vem junto da categoria. Só aparecem as categorias da atividade.',
     ajuda: { oQueE: 'A 2ª parte do código do lote.', porQue: 'Diz quem forma o lote e quais categorias do rebanho entram nele.',
-      comoFazer: 'Escolha um cartão. A lista vem do cadastro do cliente: cadastre a que faltar em “Cadastrar nova categoria”.' } },
-  { chave: 'raca', titulo: 'Raça', pergunta: 'Qual é a raça?', coisa: 'raça', cadastrarNova: 'Cadastrar nova raça',
-    subtitulo: 'Raça predominante do lote. Lote cruzado: use Mestiço ou cadastre a sigla do cruzamento.',
-    ajuda: { oQueE: 'A 3ª parte do código do lote.', porQue: 'Separa os lotes da mesma categoria pela raça.',
-      comoFazer: 'Escolha um cartão ou cadastre a raça que faltar.' } },
-  { chave: 'numero', titulo: 'Número', pergunta: 'Número do lote',
-    subtitulo: 'Sai sozinho: o próximo livre desta combinação na fazenda. Dá para trocar.',
-    ajuda: { oQueE: 'A 4ª parte do código.', porQue: 'Contado por fazenda e por combinação atividade · categoria · raça; número de lote encerrado não volta, para o histórico não confundir.',
-      comoFazer: 'Confira o código e os lotes que já existem nesta combinação. Para outro número, digite no quadro do nº (1 a 99, livre). Na cria, digite o carimbo do mês (7.1, 7R): o lote aparece por ele e o nº fica por dentro. O nome do campeiro é opcional.' } },
-  { chave: 'perfil', titulo: 'Perfil e metas', pergunta: 'Perfil e metas', opcional: true,
-    subtitulo: 'Para montar a estratégia do lote. Pode pular e preencher depois na ficha.',
-    ajuda: { oQueE: 'Sistema, programa, destino, safra e metas.', porQue: 'Orientam o plano nutricional, a sanidade, a estação de monta e a escala de abates.',
-      comoFazer: 'Escolha o que já souber. Cabeças, peso, GMD, pasto e custo não se digitam: vêm do fechamento.' } },
+      comoFazer: 'Escolha um cartão. A lista vem do cadastro do cliente, filtrada pela atividade; “Mostrar todas” traz as outras.' } },
+  { chave: 'situacao', titulo: 'Situação', pergunta: 'Situação das matrizes',
+    subtitulo: 'Hoje. Depois muda pelos manejos (diagnóstico, parto, desmama), sem trocar o nome do lote.',
+    ajuda: { oQueE: 'Na cria, a situação das matrizes e a ordem de parto; em todas as atividades, o programa e o sistema (do cadastro do cliente).',
+      porQue: 'Fica fora do código: o lote não muda de nome quando a situação muda.',
+      comoFazer: 'Escolha o que já souber. Não trava: o que faltar aparece como “completar” na ficha.' } },
+  { chave: 'raca', titulo: 'Raça e genética', pergunta: 'Raça e genética', coisa: 'raça', cadastrarNova: 'Cadastrar nova raça',
+    subtitulo: 'Do gado do lote.',
+    ajuda: { oQueE: 'A 3ª parte do código; na parida, o carimbo e a genética dos mamotes ao pé.',
+      porQue: 'A raça separa os lotes da mesma categoria; o carimbo (mês.lote) é como o campeiro chama o lote da cria.',
+      comoFazer: 'Escolha a raça. Parida (PA, PP ou VZ): o carimbo é obrigatório; sexo, cruzamento e sêmen, se souber.' } },
+  { chave: 'nome', titulo: 'Nome do lote', pergunta: 'Nome do lote',
+    subtitulo: 'O código é montado sozinho. O apelido é como a fazenda chama o lote.',
+    ajuda: { oQueE: 'O código, o apelido, a anotação e a data de formação.', porQue: 'O apelido entra na busca e no mapa do rebanho; a anotação fica na ficha.',
+      comoFazer: 'Confira a ficha embaixo: “completar” é o que ainda falta (não trava). Cabeças, peso, GMD e pasto vêm do fechamento.' } },
 ];
 
 /** O que o assistente já escolheu (ids do cadastro). */
@@ -58,18 +65,62 @@ export function escolhidoNoPasso(e: Escolha, passo: ChaveDoPasso): string | null
   return passo === 'categoria' || passo === 'raca' || passo === 'atividade' ? e[PARTE[passo]] : null;
 }
 
-/** O passo mais adiante que se pode abrir: os 3 de cartão na ordem do código (atividade, categoria, raça); com os 3, o número e o perfil. */
+/** A fase pela sigla da atividade do cliente (CRI/REC/ENG; CR/RE/EN de antes do LOTES-04); outra sigla = sem fase (nada se filtra). */
+export type Fase = 'cria' | 'recria' | 'engorda';
+export function faseDaAtividade(sigla: string | null): Fase | null {
+  /* LOTE-CODIGO-CURTO-01 (Gabriel 12/11): C/R/E no cadastro; CRI/REC/ENG e CR/RE/EN de antes seguem valendo */
+  return sigla === 'C' || sigla === 'CRI' || sigla === 'CR' ? 'cria' : sigla === 'R' || sigla === 'REC' || sigla === 'RE' ? 'recria'
+    : sigla === 'E' || sigla === 'ENG' || sigla === 'EN' ? 'engorda' : null;
+}
+
+/** D3 — as categorias do rebanho de cada fase: a categoria do lote entra se tiver UMA delas. */
+const REBANHO_DA_FASE: Record<Fase, readonly string[]> = {
+  cria: ['vacas', 'novilhas', 'touros', 'mamotes_m', 'mamotes_f'],
+  recria: ['desmama_m', 'desmama_f', 'garrotes', 'novilhas'],
+  engorda: ['bois', 'garrotes', 'novilhas', 'vacas'],
+};
+
+/** D3 (Gabriel 11/11 08:45) — a categoria filtrada pela atividade, derivada das categorias do rebanho dela (sem coluna nova).
+ *  Sem fase (atividade do cliente fora de CRI/REC/ENG) = todas. A escolhida sempre fica (editar um lote que já era de outra). */
+export function categoriasDaAtividade(categorias: readonly CadastroDoLote[], fase: Fase | null,
+  rebanho: readonly { id: string; codigo: string }[], escolhida: string | null): CadastroDoLote[] {
+  if (!fase) return [...categorias];
+  const ids = new Set(rebanho.filter(r => REBANHO_DA_FASE[fase].includes(r.codigo)).map(r => r.id));
+  return categorias.filter(c => c.id === escolhida || c.categoriasRebanho.some(id => ids.has(id)));
+}
+
+/** A linha de baixo do cartão da categoria, em UMA linha (Chat 11/11 14:45: nunca cortar): mamotes M + F = "mamotes", desmama M + F =
+ *  "desmama"; mais de 2 = as 2 primeiras e "+N" (a lista inteira vai no title). */
+export function resumoDoRebanho(nomes: readonly { codigo: string; nome: string }[]): string {
+  const partes: string[] = [];
+  for (const r of nomes) {
+    const p = r.codigo.startsWith('mamotes') ? 'mamotes' : r.codigo.startsWith('desmama') ? 'desmama' : r.nome.toLowerCase();
+    if (!partes.includes(p)) partes.push(p);
+  }
+  const ordem = [...partes.filter(p => p !== 'mamotes'), ...partes.filter(p => p === 'mamotes')];
+  return ordem.length > 2 ? `${ordem.slice(0, 2).join(' + ')} +${ordem.length - 2}` : ordem.join(' + ');
+}
+
+/** O passo mais adiante que se pode abrir: atividade, depois categoria; com as duas, situação e raça; com a raça, o nome. */
 export function ultimoPassoAlcancavel(e: Escolha): number {
   if (!e.atividadeId) return 0;
   if (!e.categoriaId) return 1;
-  if (!e.racaId) return 2;
+  if (!e.racaId) return 3;
   return 4;
 }
 
-export function podeAvancar(e: Escolha, passo: number): boolean {
+/** O que falta para seguir (ou salvar) neste passo; null = pode. Só atividade, categoria, raça e o carimbo da parida travam. */
+export function faltaNoPasso(e: Escolha, p: Perfil, passo: number, cria: boolean): string | null {
   const k = PASSOS[passo]?.chave;
-  if (k === 'categoria' || k === 'raca' || k === 'atividade') return escolhidoNoPasso(e, k) != null;
-  return passo < PASSOS.length;
+  if (k === 'atividade' && !e.atividadeId) return 'Escolha a atividade';
+  if (k === 'categoria' && !e.categoriaId) return 'Escolha a categoria';
+  if (k === 'raca' || k === 'nome') {
+    if (!e.racaId) return 'Escolha a raça';
+    if (cria && ehParida(p.situacaoCria) && !p.carimbo.trim()) return 'Falta o carimbo dos mamotes';
+    if (cria && p.carimbo.trim() && !CARIMBO_VALIDO.test(p.carimbo.trim())) return FRASE_CARIMBO_INVALIDO;
+  }
+  if (k === 'nome' && (!e.atividadeId || !e.categoriaId)) return 'Falta atividade ou categoria';
+  return null;
 }
 
 export const siglaDe = (cadastros: readonly CadastroDoLote[], id: string | null): string | null =>
@@ -77,10 +128,23 @@ export const siglaDe = (cadastros: readonly CadastroDoLote[], id: string | null)
 export const nomeDe = (cadastros: readonly CadastroDoLote[], id: string | null): string | null =>
   (id ? cadastros.find(c => c.id === id)?.nome ?? null : null);
 
-/** O código no trilho: "REC-DF-__-__" enquanto falta parte. */
-export function codigoMontando(cadastros: readonly CadastroDoLote[], e: Escolha, numero: number | null): string {
-  const completo = e.categoriaId && e.racaId && e.atividadeId;
-  return codigoDoLote(siglaDe(cadastros, e.categoriaId), siglaDe(cadastros, e.racaId), siglaDe(cadastros, e.atividadeId), completo ? numero : null);
+/** O código no trilho. Lote NOVO (e lote 'etapas'): ATIV-CAT-RAÇA[-carimbo], -02 se repetir entre os lotes da fazenda (`codigoPorEtapas`).
+ *  Lote de antes (código ATIV-CAT-RAÇA-NN): o mesmo código enquanto a identidade não muda; mudou = "-__" (o nº sai do banco ao salvar). */
+export function codigoDoAssistente(cadastros: readonly CadastroDoLote[], e: Escolha, carimbo: string, lotes: readonly LoteDaLista[],
+  editar?: LoteDaLista | null): string {
+  const s = (id: string | null) => siglaDe(cadastros, id);
+  if (editar && editar.codigoRegra !== 'etapas') {
+    const mesma = editar.categoriaId === e.categoriaId && editar.racaId === e.racaId && editar.atividadeId === e.atividadeId;
+    return mesma ? editar.codigo : codigoDoLote(s(e.categoriaId), s(e.racaId), s(e.atividadeId), null);
+  }
+  if (editar && editar.categoriaId === e.categoriaId && editar.racaId === e.racaId && editar.atividadeId === e.atividadeId
+    && (editar.carimbo ?? '') === carimbo.trim()) return editar.codigo;
+  return codigoPorEtapas(s(e.atividadeId), s(e.categoriaId), s(e.racaId), carimbo, lotes, editar?.id ?? null);
+}
+
+/** A legenda embaixo do código (Chat 11/11 14:45: na ordem do código). */
+export function legendaDoCodigo(editar?: LoteDaLista | null): string {
+  return editar && editar.codigoRegra !== 'etapas' ? 'atividade · categoria · raça · nº' : 'atividade · categoria · raça · carimbo';
 }
 
 const CAMPO_DO_TIPO: Partial<Record<TipoDoCadastro, keyof LoteDaLista>> = {
@@ -97,17 +161,6 @@ export function lotesQueUsam(lotes: readonly LoteDaLista[], c: Pick<CadastroDoLo
 /** A busca do passo: sigla ou nome, sem acento nem maiúscula. */
 export function filtrarCadastros(cadastros: readonly CadastroDoLote[], tipo: TipoDoCadastro, termo: string): CadastroDoLote[] {
   return cadastros.filter(c => c.tipo === tipo && c.ativo && (casaNaBusca(c.sigla, termo) || casaNaBusca(c.nome, termo)));
-}
-
-/** Os lotes que já existem nesta combinação na fazenda (o quadro do passo 4), em ordem de número. */
-export function lotesDaCombinacao(lotes: readonly LoteDaLista[], e: Escolha): LoteDaLista[] {
-  return lotes.filter(l => l.situacao !== 'cancelado' && l.categoriaId === e.categoriaId && l.racaId === e.racaId && l.atividadeId === e.atividadeId)
-    .sort((a, b) => a.numero - b.numero);
-}
-
-/** Na edição com a MESMA combinação, o número continua o do lote; senão, o próximo livre (lido do banco). */
-export function mesmaCombinacao(editar: LoteDaLista | null | undefined, e: Escolha): boolean {
-  return !!editar && editar.categoriaId === e.categoriaId && editar.racaId === e.racaId && editar.atividadeId === e.atividadeId;
 }
 
 /** A sigla como se digita: maiúscula, só letras e números, até 3. */
@@ -137,7 +190,9 @@ export function validarCadastro(e: {
   const comSigla = e.tipo === 'categoria' || e.tipo === 'raca' || e.tipo === 'atividade';
   const sigla = e.sigla.trim().toUpperCase();
   const nome = e.nome.trim();
-  if (comSigla && !/^[A-Z0-9]{2,3}$/.test(sigla)) return { campo: 'sigla', mensagem: 'A sigla precisa de 2 ou 3 letras ou números.' };
+  /* LOTE-CODIGO-CURTO-01 — a atividade com 1 a 3 (C cria · R recria · E engorda); categoria e raça 2 a 3 (as frases da RPC, 117550) */
+  if (e.tipo === 'atividade' && !/^[A-Z0-9]{1,3}$/.test(sigla)) return { campo: 'sigla', mensagem: 'A sigla da atividade precisa de 1 a 3 letras ou números.' };
+  if (comSigla && e.tipo !== 'atividade' && !/^[A-Z0-9]{2,3}$/.test(sigla)) return { campo: 'sigla', mensagem: 'A sigla precisa de 2 ou 3 letras ou números.' };
   const outros = e.existentes.filter(c => c.tipo === e.tipo && c.ativo && c.id !== e.idEditando);
   const dup = comSigla ? outros.find(c => c.sigla === sigla) : undefined;
   if (dup) return { campo: 'sigla', mensagem: `A sigla ${sigla} já é “${dup.nome}”. Escolha outra ou use a existente.` };
@@ -149,7 +204,8 @@ export function validarCadastro(e: {
   return null;
 }
 
-/** O perfil do passo 5 (ids do cadastro, texto do campo, data em 'aaaa-mm-dd'). */
+/** O que o assistente guarda além da identidade (texto do campo, data em 'aaaa-mm-dd'). Sistema, programa, destino, safra, idade e
+ *  metas não se digitam aqui (a ficha edita): vêm do lote e voltam iguais. */
 export interface Perfil {
   nomeCampeiro: string;
   formadoEm: string;
@@ -162,6 +218,13 @@ export interface Perfil {
   metaPesoKg: number | null;
   metaGmdKg: number | null;
   metaData: string;
+  /* LOTE-ETAPAS-01 */
+  anotacao: string;
+  situacaoCria: SituacaoDaCria | null;
+  ordemParto: OrdemDoParto | null;
+  mamotesSexo: SexoDosMamotes | null;
+  mamotesCruzamento: CruzamentoDosMamotes | null;
+  mamotesSemen: SemenDosMamotes | null;
 }
 
 export function perfilInicial(hoje: string, editar?: LoteDaLista | null): Perfil {
@@ -170,10 +233,13 @@ export function perfilInicial(hoje: string, editar?: LoteDaLista | null): Perfil
       nomeCampeiro: editar.nomeCampeiro ?? '', formadoEm: editar.formadoEm, sistemaId: editar.sistemaId, programaId: editar.programaId,
       destinoId: editar.destinoId, safra: editar.safra ?? '', carimbo: editar.carimbo ?? '', idadeMediaMeses: editar.idadeMediaMeses,
       metaPesoKg: editar.metaPesoKg, metaGmdKg: editar.metaGmdKg, metaData: editar.metaData ?? '',
+      anotacao: editar.anotacao ?? '', situacaoCria: editar.situacaoCria ?? null, ordemParto: editar.ordemParto ?? null,
+      mamotesSexo: editar.mamotesSexo ?? null, mamotesCruzamento: editar.mamotesCruzamento ?? null, mamotesSemen: editar.mamotesSemen ?? null,
     };
   }
   return { nomeCampeiro: '', formadoEm: hoje, sistemaId: null, programaId: null, destinoId: null, safra: safraDe(hoje), carimbo: '',
-    idadeMediaMeses: null, metaPesoKg: null, metaGmdKg: null, metaData: '' };
+    idadeMediaMeses: null, metaPesoKg: null, metaGmdKg: null, metaData: '',
+    anotacao: '', situacaoCria: null, ordemParto: null, mamotesSexo: null, mamotesCruzamento: null, mamotesSemen: null };
 }
 
 /** A safra do dia (jul–jun): 06/11/2026 → "26/27"; 15/03/2027 → "26/27". */
@@ -186,7 +252,7 @@ export function safraDe(iso: string): string {
 /** Carimbo só em lote de cria: atividade de sigla CRI (CR antes do LOTES-04) ou categoria que leva mamotes. */
 export function aceitaCarimbo(cadastros: readonly CadastroDoLote[], e: Escolha, idsDosMamotes: readonly string[]): boolean {
   const ativ = siglaDe(cadastros, e.atividadeId);
-  if (ativ === 'CRI' || ativ === 'CR') return true;
+  if (ativ === 'C' || ativ === 'CRI' || ativ === 'CR') return true;
   const cat = cadastros.find(c => c.id === e.categoriaId);
   return !!cat && cat.categoriasRebanho.some(id => idsDosMamotes.includes(id));
 }
@@ -197,23 +263,13 @@ export function marcarDaCria(lotes: readonly LoteDaLista[], cadastros: readonly 
 }
 
 export function validarPerfil(p: Perfil, hoje: string): { campo: keyof Perfil; mensagem: string } | null {
-  if (p.nomeCampeiro.trim().length > 40) return { campo: 'nomeCampeiro', mensagem: 'O nome do campeiro passa de 40 letras.' };
+  if (p.nomeCampeiro.trim().length > 40) return { campo: 'nomeCampeiro', mensagem: 'O apelido passa de 40 letras.' };
+  if (p.anotacao.trim().length > 120) return { campo: 'anotacao', mensagem: 'A anotação passa de 120 letras.' };
   if (!p.formadoEm) return { campo: 'formadoEm', mensagem: 'Formado em: escolha a data.' };
   if (p.formadoEm > hoje) return { campo: 'formadoEm', mensagem: 'Formado em: a data não pode ser depois de hoje.' };
-  if (p.safra.trim() && !/^[0-9]{2}\/[0-9]{2}$/.test(p.safra.trim())) return { campo: 'safra', mensagem: 'Safra: no formato 26/27.' };
   if (p.carimbo.trim() && !CARIMBO_VALIDO.test(p.carimbo.trim())) return { campo: 'carimbo', mensagem: FRASE_CARIMBO_INVALIDO };
-  if (p.idadeMediaMeses != null && (p.idadeMediaMeses < 0 || p.idadeMediaMeses > 400 || !Number.isInteger(p.idadeMediaMeses))) return { campo: 'idadeMediaMeses', mensagem: 'Idade média: em meses, só o número.' };
-  if ((p.metaPesoKg != null && p.metaPesoKg <= 0) || (p.metaGmdKg != null && p.metaGmdKg <= 0)) return { campo: p.metaPesoKg != null && p.metaPesoKg <= 0 ? 'metaPesoKg' : 'metaGmdKg', mensagem: 'A meta precisa ser maior que zero.' };
+  if (ehParida(p.situacaoCria) && !p.carimbo.trim()) return { campo: 'carimbo', mensagem: 'Parida: informe o carimbo (mês.lote, ex.: 7.1).' };
   return null;
-}
-
-/** LOTES-04 — o nº digitado no passo 4 ('' = automático): 1 a 99 e livre na combinação da fazenda (a mesma frase da RPC). */
-export function validarNumero(digitado: string, existentes: readonly LoteDaLista[], idEditando: string | null): string | null {
-  if (!digitado) return null;
-  const n = Number(digitado);
-  if (!/^[0-9]{1,2}$/.test(digitado) || n < 1) return 'O nº vai de 1 a 99.';
-  const dono = existentes.find(l => l.numero === n && l.id !== idEditando);
-  return dono ? `O nº ${String(n).padStart(2, '0')} já é do lote ${dono.codigo}. Escolha outro.` : null;
 }
 
 /** LOTES-05 (Gabriel 08/11) — o carimbo no passo Nº da cria: vazio vale (o lote aparece pelo código); errado trava o Avançar. */
@@ -222,9 +278,10 @@ export function validarCarimbo(carimbo: string): string | null {
   return t && !CARIMBO_VALIDO.test(t) ? FRASE_CARIMBO_INVALIDO : null;
 }
 
-/** O `p_campos` de `fn_lote_salvar`: ao criar, tudo; ao editar, só o que mudou (a RPC mantém o resto).
- *  `numero` = o nº digitado (LOTES-04); sem ele, o banco usa o próximo livre (ou o do lote, na mesma combinação). */
-export function camposParaSalvar(e: Escolha, p: Perfil, editar?: LoteDaLista | null, numero?: number | null): CamposDoLote {
+/** O `p_campos` de `fn_lote_salvar`: ao criar, tudo; ao editar, só o que mudou (a RPC mantém o resto). Fora da cria a situação e a ordem
+ *  de parto vão vazias; fora da parida, os mamotes (a mojada não tem bezerro ao pé). O nº nunca vai: o banco decide. */
+export function camposParaSalvar(e: Escolha, p: Perfil, cria: boolean, editar?: LoteDaLista | null, criaAntes?: boolean): CamposDoLote {
+  const parida = cria && ehParida(p.situacaoCria);
   const novo: CamposDoLote = {
     categoria_id: e.categoriaId ?? undefined, raca_id: e.racaId ?? undefined, atividade_id: e.atividadeId ?? undefined,
     nome_campeiro: p.nomeCampeiro.trim(), formado_em: p.formadoEm,
@@ -233,16 +290,44 @@ export function camposParaSalvar(e: Escolha, p: Perfil, editar?: LoteDaLista | n
     idade_media_meses: p.idadeMediaMeses == null ? '' : String(p.idadeMediaMeses),
     meta_peso_kg: p.metaPesoKg == null ? '' : String(p.metaPesoKg), meta_gmd_kg: p.metaGmdKg == null ? '' : String(p.metaGmdKg),
     meta_data: p.metaData,
+    situacao_cria: cria ? p.situacaoCria ?? '' : '', ordem_parto: cria ? p.ordemParto ?? '' : '',
+    mamotes_sexo: parida ? p.mamotesSexo ?? '' : '', mamotes_cruzamento: parida ? p.mamotesCruzamento ?? '' : '',
+    mamotes_semen: parida ? p.mamotesSemen ?? '' : '', anotacao: p.anotacao.trim(),
   };
-  if (!editar) return numero == null ? novo : { ...novo, numero };
-  const antes = camposParaSalvar({ categoriaId: editar.categoriaId, racaId: editar.racaId, atividadeId: editar.atividadeId }, perfilInicial(editar.formadoEm, editar));
+  if (!editar) return novo;
+  const antes = camposParaSalvar({ categoriaId: editar.categoriaId, racaId: editar.racaId, atividadeId: editar.atividadeId },
+    perfilInicial(editar.formadoEm, editar), criaAntes ?? cria);
   const so: CamposDoLote = {};
   for (const k of CHAVES_DO_LOTE) {
     if (novo[k] !== antes[k]) Object.assign(so, { [k]: novo[k] });
   }
-  const mesmoNumero = numero === editar.numero && !so.categoria_id && !so.raca_id && !so.atividade_id;
-  return numero == null || mesmoNumero ? so : { ...so, numero };
+  return so;
 }
 
 const CHAVES_DO_LOTE: readonly (keyof CamposDoLote)[] = ['categoria_id', 'raca_id', 'atividade_id', 'nome_campeiro', 'formado_em', 'sistema_id',
-  'programa_id', 'destino_id', 'safra', 'carimbo', 'idade_media_meses', 'meta_peso_kg', 'meta_gmd_kg', 'meta_data'];
+  'programa_id', 'destino_id', 'safra', 'carimbo', 'idade_media_meses', 'meta_peso_kg', 'meta_gmd_kg', 'meta_data',
+  'situacao_cria', 'ordem_parto', 'mamotes_sexo', 'mamotes_cruzamento', 'mamotes_semen', 'anotacao'];
+
+/** A ficha do passo Nome: uma linha por etapa; vazio = null (a tela escreve "completar" em laranja, nunca trava). */
+export interface LinhaDaFicha { rotulo: string; valor: string | null }
+export function fichaDoAssistente(cadastros: readonly CadastroDoLote[], e: Escolha, p: Perfil, cria: boolean): LinhaDaFicha[] {
+  const parte = (id: string | null) => (id ? [siglaDe(cadastros, id), nomeDe(cadastros, id)].filter(Boolean).join(' · ') : null);
+  const situacao = [nomeNaLista(SITUACOES_DA_CRIA, p.situacaoCria), nomeNaLista(ORDENS_DO_PARTO, p.ordemParto)].filter(Boolean).join(' · ') || null;
+  const programa = [nomeDe(cadastros, p.programaId), nomeDe(cadastros, p.sistemaId)].filter(Boolean).join(' · ') || null;
+  /* Chat 12/11 09:20 — o programa vale em todas as atividades (a novilha em reprodução também) */
+  const linhas: LinhaDaFicha[] = [
+    { rotulo: 'Atividade', valor: parte(e.atividadeId) },
+    { rotulo: 'Categoria e sexo', valor: parte(e.categoriaId) },
+    ...(cria ? [{ rotulo: 'Situação', valor: situacao }] : []),
+    { rotulo: 'Programa e sistema', valor: programa },
+    { rotulo: 'Raça', valor: parte(e.racaId) },
+  ];
+  if (cria) {
+    const mamotes = ehParida(p.situacaoCria)
+      ? [p.carimbo.trim() ? `carimbo ${p.carimbo.trim()}` : null, nomeNaLista(SEXOS_DOS_MAMOTES, p.mamotesSexo),
+        nomeNaLista(CRUZAMENTOS_DOS_MAMOTES, p.mamotesCruzamento), nomeNaLista(SEMENS_DOS_MAMOTES, p.mamotesSemen)].filter(Boolean).join(' · ') || null
+      : p.situacaoCria ? 'sem cria ao pé' : null;
+    linhas.push({ rotulo: 'Mamotes ao pé', valor: mamotes });
+  }
+  return linhas;
+}
