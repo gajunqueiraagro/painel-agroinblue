@@ -2015,10 +2015,23 @@ if (tela === 'mesclar') {
       ...['A', 'B', 'C', 'D'].map((l, i) => ({ ...pasto(`p19a${l}`, `P19A-${l}`, 24.4, 'cria', 'g19', 11 + i), data_inicio: '2026-10-01' })));
     CARDS.push(card('f19', 'p19a', { tipo_uso_mes: 'cria' }));
   }
+  /* FECH-CARDS-QUEBRA-01 (Gabriel 11/11 15:15, PUR out/26) — `&v=quebra`: os 4 estados lado a lado — P5 AGRICULTURA 187,1 ha com 2 piquetes
+     (o selo vazava da borda), P8 VEDADO 85,3 ha com 4 piquetes e P16/P26 vedados (o bloco descia), P21A cria sem peso (inconsistente) */
+  const COM_QUEBRA = v === 'quebra';
+  if (COM_QUEBRA) {
+    PASTOS.push(pasto('p5', 'P5', 187.1, 'agricultura', null, 7),
+      ...['A', 'B'].map((l, i) => ({ ...pasto(`p5${l}`, `P5-${l}`, 93.5, 'agricultura', 'g5', 8 + i), data_inicio: '2026-10-01' })),
+      pasto('p8', 'P8', 85.3, 'recria', null, 10),
+      ...['A', 'B', 'C', 'D'].map((l, i) => ({ ...pasto(`p8${l}`, `P8-${l}`, 21.3, 'recria', 'g8', 11 + i), data_inicio: '2026-10-01' })),
+      pasto('p16', 'P16', 44.7, 'recria', null, 15), pasto('p21a', 'P21A', 62.4, 'cria', null, 16), pasto('p26', 'P26', 128.6, 'recria', null, 17));
+    CARDS.push(card('f5q', 'p5', { tipo_uso_mes: 'agricultura' }), card('f8q', 'p8', { tipo_uso_mes: 'vedado' }), card('f16q', 'p16', { tipo_uso_mes: 'vedado' }),
+      card('f21q', 'p21a', { tipo_uso_mes: 'cria' }), card('f26q', 'p26', { tipo_uso_mes: 'vedado' }));
+  }
   const CATS = [{ id: 'c-bois', codigo: 'bois', nome: 'Bois', ordem_exibicao: 1 }, { id: 'c-vacas', codigo: 'vacas', nome: 'Vacas', ordem_exibicao: 2 }];
   const item = (f: string, cat: string, q: number, peso: number) => ({ id: `${f}-${cat}`, fechamento_id: f, categoria_id: cat, quantidade: q, peso_medio_kg: peso,
     lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false });
   const ITENS: (ReturnType<typeof item> & { lote_id?: string; piquete_id?: string })[] = [item('fa', 'c-bois', 100, 450), item('f11', 'c-vacas', 60, 400), item('ft', 'c-bois', 20, 300)];
+  if (COM_QUEBRA) ITENS.push(item('f21q', 'c-vacas', 48, 0));
   /* FECH-PASTO-UNIDADE-01 F2 — `&v=piquetes7`: o modal do pasto COM piquetes, nas medidas do caso real (PUR out/26): o P7 (97,5 ha) em
      7A 24,76 · 7B 25,11 · 7C 24,35 · 7D 23,32, lançado POR PIQUETES em out/26 e com set/26 também por piquetes (o mês anterior somado, com
      o lote de cada piquete); o P5 (P5-A 101 · P5-B 86,1) com o card vazio (abre em "Pasto inteiro"). As 9 categorias de verdade (a grade
@@ -2048,7 +2061,24 @@ if (tela === 'mesclar') {
   /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
   /* L1 (Gabriel 09/11) — `&cria=1`: o P10A inteiro (as 2 categorias) no lote da cria SEM carimbo (l-vp4): "sem carimbo · definir" no campo Lote, no seletor e no popup */
   const COM_CRIA = q.get('cria') === '1';
-  const COM_LOTES = v === 'lotes' || COM_CRIA;
+  /* LOTE-BUSCA-01 — `&v=busca`: o campo Lote com 63 lotes (55 de recria a mais: o corte de 50 escondia o fim), DOIS 8.2 e o caderno "LOT 8.2 F1"
+     no P10A; em set/26 o ENG-DM-AN-06 ligado no P10A (100 cab) e o CRI-PP-NE-01 (7.1) no P11; o 7R só no TEXTO do card do P12 (sem ligação) */
+  const BUSCA = v === 'busca';
+  const COM_LOTES = v === 'lotes' || COM_CRIA || BUSCA;
+  const base = LOTES_BANCADA.LOTES[0];
+  const LOTES_DA_BUSCA = [...LOTES_BANCADA.LOTES,
+    { ...base, id: 'l-pp82', codigo: 'CRI-PP-NE-02', nome_campeiro: 'Vacas Nel CAR_8.2', carimbo: '8.2', categoria_id: 'c-pp', atividade_id: 'a-cr', pastos: [], codigos_antigos: [] },
+    ...Array.from({ length: 53 }, (_, i) => ({ ...base, id: `l-rec${i}`, codigo: `REC-DM-NE-${String(i + 10).padStart(2, '0')}`, nome_campeiro: null,
+      categoria_id: 'c-dm', pastos: [], codigos_antigos: [] }))];
+  const lotesDaBusca = (mes: unknown) => (mes !== '2026-09' ? LOTES_DA_BUSCA : LOTES_DA_BUSCA.map((l) => (
+    l.id === 'l-dm6' ? { ...l, ano_mes_dado: '2026-09', pastos: ['P10A'], cabecas: 100 }
+    : l.id === 'l-pp1' ? { ...l, ano_mes_dado: '2026-09', pastos: ['P11'], cabecas: 60 }
+    : { ...l, ano_mes_dado: '2026-08' })));
+  if (BUSCA) {
+    Object.assign(CARDS[0], { lote_mes: 'LOT 8.2 F1' });
+    CARDS.push(...[['p10a', 'P10A', 'DM Angus L6'], ['p11', 'P11', 'Vaca Nel CAR_7.1'], ['p12', 'P12 Retiro do córrego de baixo', 'Vacas ressinc. 7R']].map(([id, nome, texto]) =>
+      card(`f9-${id}`, id, { ano_mes: '2026-09', status: 'fechado', lote_mes: texto, pastos: { nome } })));
+  }
   if (COM_LOTES) {
     Object.assign(ITENS[0], { lote_id: COM_CRIA ? 'l-vp4' : 'l-dm6' });
     ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: COM_CRIA ? 'l-vp4' : 'l-px2' });
@@ -2093,6 +2123,7 @@ if (tela === 'mesclar') {
       /* F2 `&v=piquetes7`: os leitores do modal filtram por grupo/origem/pasto (`in`/`eq`); sem a variante, a resposta de sempre */
       t === 'pastos' ? (COM_PIQUETES7 ? filtrar(PASTOS, e) : PASTOS) : t === 'pasto_grupos' ? (COM_PIQUETES7 ? filtrar : (l: unknown[]) => l)([{ id: 'g1', fazenda_id: 'f1', nome: 'P10', ativo: true, pasto_origem_id: null },
         ...(COM_PIQUETES ? [{ id: 'g6', fazenda_id: 'f1', nome: 'P6', ativo: true, pasto_origem_id: 'p6' }, { id: 'g19', fazenda_id: 'f1', nome: 'P19A', ativo: true, pasto_origem_id: 'p19a' }] : []),
+        ...(COM_QUEBRA ? [{ id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }, { id: 'g8', fazenda_id: 'f1', nome: 'P8', ativo: true, pasto_origem_id: 'p8' }] : []),
         ...(COM_PIQUETES7 ? [{ id: 'g7', fazenda_id: 'f1', nome: 'P7', ativo: true, pasto_origem_id: 'p7' }, { id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }] : [])], e)
       : t === 'fechamento_pastos' ? CARDS.filter((c) => (!e.eq.ano_mes || c.ano_mes === e.eq.ano_mes) && (!COM_PIQUETES7 || !e.eq.pasto_id || c.pasto_id === e.eq.pasto_id))
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
@@ -2105,6 +2136,7 @@ if (tela === 'mesclar') {
     rpc: (fn: string, a: Record<string, unknown>) => (fn === 'fn_lotacao_do_mes' ? lotacao()
       /* F2 `&v=piquetes7`: a área de cada piquete NO MÊS (a leitura da casa) */
       : COM_PIQUETES7 && fn === 'fn_pastos_area_do_mes' ? PASTOS.map((x) => ({ pasto_id: x.id, ano_mes: a.p_de, area_ha: x.area_produtiva_ha, fonte: 'vigencia' }))
+      : BUSCA && fn === 'fn_lotes_da_fazenda' ? lotesDaBusca(a.p_ano_mes)
       : COM_LOTES || COM_PIQUETES7 ? LOTES_BANCADA.bancoDeLotes().rpc(fn, a) : null),
   };
   const montarFechamento = async () => {

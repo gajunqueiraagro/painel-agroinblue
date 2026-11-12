@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { fonteDoNomeDoCard, nomesAteOito } from '@/lib/fechamento/nomesAteOito';
+import { CLASSE_LINHA_PRESA, medirTopo, soNaPrimeiraLeitura } from '@/lib/fechamento/rolagemDoFechamento';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Activity, Map as MapIcon, RefreshCw, FileDown } from 'lucide-react';
 import { ExportarMesDialog } from '@/components/caderno/ExportarMesDialog';
@@ -366,6 +368,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   /* FECH-TOPO-02 acerto 2 (Chat 07/11 21:55) — o popup do card fica DENTRO da área da tela: o limite da colisão é a página (à direita
      do menu lateral), não a janela; o Radix vira/desliza para o lado que couber */
   const [areaDaTela, setAreaDaTela] = useState<HTMLDivElement | null>(null);
+  /* FECH-ROLAGEM-02 (1) — o cabeçalho fixo é medido: a linha "Cards | Mapa" fica presa logo abaixo dele */
+  const [topoFixo, setTopoFixo] = useState<HTMLDivElement | null>(null);
+  useEffect(() => medirTopo(topoFixo), [topoFixo]);
   /* FECH-TOPO-02 — a "Divergência do Campeiro" não é pasto: fora do mapa e da faixa "Sem desenho no mapa" (lista estável: o mapa só se
      redesenha quando ela muda) */
   const pastosDoMapa = useMemo(() => pastosAtivos.filter(p => !isPastoDivergencia(p.tipo_uso)), [pastosAtivos]);
@@ -1053,6 +1058,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       totalCab: resumo.totalCabecas, pesoMedioKg: resumo.pesoMedio,
       categorias: resumo.catBreakdown.map(cb => ({ nome: catMap.get(cb.codigo) ?? '—', cab: cb.qty, pesoMedioKg: cb.pesoMedio })),
       uaHa: uaHaDoMes ?? null, recebeDe: origens,
+      vedado: normalizeTipoUso(fech?.tipo_uso_mes || p.tipo_uso) === 'vedado',
     };
   };
 
@@ -1105,21 +1111,28 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         <TooltipTrigger asChild>
           <button
             onClick={() => handleOpenPasto(p)}
-            className={`w-full rounded-lg border px-2 py-1.5 text-left hover:ring-1 hover:ring-primary/40 transition-all ${
+            data-testid="card-do-pasto"
+            /* FECH-CARDS-QUEBRA-01 (Gabriel 11/11 15:15): o botão centralizava o conteúdo na altura da linha da grade — o card com uma linha
+               a menos (vedado sem peso) descia o título. Agora o conteúdo começa no topo e o esqueleto é o mesmo em todo card. */
+            className={`flex w-full flex-col justify-start [container-type:inline-size] rounded-lg border text-left hover:ring-1 hover:ring-primary/40 transition-all ${
               isDivergencia
-                ? 'bg-amber-100 dark:bg-amber-950/40 border-amber-500 dark:border-amber-600 border-2'
+                /* a borda de 2px come 1px do padding: o título fica na mesma altura dos vizinhos (FECH-CARDS-QUEBRA-01) */
+                ? 'bg-amber-100 dark:bg-amber-950/40 border-amber-500 dark:border-amber-600 border-2 px-[7px] py-[5px]'
                 : ehLavoura
-                ? `${STATUS_CARD_CLASSES[pastoStatus]} !border-violet-500 dark:!border-violet-400 border-2`
-                : STATUS_CARD_CLASSES[pastoStatus]
+                ? `${STATUS_CARD_CLASSES[pastoStatus]} !border-violet-500 dark:!border-violet-400 border-2 px-[7px] py-[5px]`
+                : `${STATUS_CARD_CLASSES[pastoStatus]} px-2 py-1.5`
             }`}
           >
             {/* Nome + status icon */}
-            <div className="flex items-center justify-between gap-0.5">
-              {/* FECH-DIV-CURTA (Gabriel 08/11 09:22): a Divergência do Campeiro é "⚠ Div." no card (cortava "Divergênci…"); o nome inteiro no title */}
-              <span className="min-w-0 font-bold text-xs text-foreground truncate leading-tight" title={p.nome} data-testid="nome-do-card">
+            <div className="flex items-start justify-between gap-0.5">
+              {/* FECH-DIV-CURTA (Gabriel 08/11 09:22): a Divergência do Campeiro é "⚠ Div." no card (cortava "Divergênci…"); o nome inteiro no title.
+                  FECH-CARDS-QUEBRA-01 (Chat 18:25): o nome do pasto NUNCA com "…" — o nome longo desce a 11px e, se ainda não couber, quebra
+                  em linhas (o card cresce, e a grade cresce a fila inteira junto) */}
+              <span className={`min-w-0 break-words font-bold text-foreground leading-tight ${fonteDoNomeDoCard(isDivergencia ? DIV_CURTA : p.nome)}`}
+                title={p.nome} data-testid="nome-do-card">
                 {isDivergencia ? DIV_CURTA : p.nome}
               </span>
-              <span className={`text-sm font-bold leading-none ${STATUS_ICON_COLOR[pastoStatus]}`}>
+              <span className={`flex-none text-sm font-bold leading-none ${STATUS_ICON_COLOR[pastoStatus]}`}>
                 {STATUS_ICON[pastoStatus]}
               </span>
             </div>
@@ -1127,32 +1140,35 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <div className="font-extrabold text-[13px] tabular-nums text-foreground leading-tight mt-0.5">
               {ehLavoura
                 ? (lavoura ? `${formatNum(lavoura.totalHa, 1)} ha` : '—')
-                : resumo.totalCabecas > 0 ? `${formatNum(resumo.totalCabecas, 0)} cab` : '—'}
+                : resumo.totalCabecas > 0 ? `${formatNum(resumo.totalCabecas, 0)} cab`
+                /* vedado sem gado = zero de verdade, não dado ausente */
+                : tipoNorm === 'vedado' ? '0 cab' : '—'}
             </div>
             {origens.length > 0 && (
               <div className="uma-linha-que-rola text-[8px] font-semibold leading-none text-primary mt-0.5" data-testid="card-recebe-lote">↘ lote do {origens.join(', ')}</div>
             )}
             {/* Peso médio — na lavoura, a(s) cultura(s) da safra ocupam a linha:
                 "kg" num talhão de amendoim seria a resposta de outra pergunta. */}
-            {ehLavoura ? (
-              lavoura && lavoura.culturas.length > 0 && (
-                <div className="text-[8px] text-muted-foreground leading-none mt-0.5 truncate"
-                  title={lavoura.culturas.map(labelDaCultura).join(' · ')}>
-                  {lavoura.culturas.map(labelDaCultura).join(' · ')}
-                </div>
-              )
-            ) : resumo.pesoMedio ? (
-              <div className="text-[8px] text-muted-foreground leading-none mt-0.5 tabular-nums">
+            {/* FECH-CARDS-QUEBRA-01: a linha do peso/cultura EXISTE sempre (8px reservados), vazia quando não há o que dizer */}
+            {ehLavoura && lavoura && lavoura.culturas.length > 0 ? (
+              <div className="h-2 text-[8px] text-muted-foreground leading-none mt-0.5 truncate"
+                title={lavoura.culturas.map(labelDaCultura).join(' · ')}>
+                {lavoura.culturas.map(labelDaCultura).join(' · ')}
+              </div>
+            ) : !ehLavoura && resumo.pesoMedio ? (
+              <div className="h-2 text-[8px] text-muted-foreground leading-none mt-0.5 tabular-nums">
                 {formatNum(resumo.pesoMedio, 1)} kg
               </div>
-            ) : null}
+            ) : <div className="h-2 mt-0.5" data-testid="linha-do-peso-vazia" />}
             {/* Área + Tipo uso (área omitida em pastos de divergência) */}
-            <div className="flex items-center justify-between mt-0.5">
+            {/* FECH-CARDS-QUEBRA-01: o selo do tipo tem lugar próprio (flex-none) e a área cede — nunca passa da borda */}
+            <div className="mt-auto flex items-center justify-between gap-1 pt-0.5" data-testid="linha-de-baixo-do-card">
               {isDivergencia ? (
                 <span className="text-[7px] font-bold uppercase tracking-wider leading-none text-amber-800 dark:text-amber-300">⚠️ Divergência</span>
               ) : p.area_produtiva_ha || nPiquetes > 0 ? (
                 /* R1 (Gabriel 08/11 19:18): os piquetes NUNCA na linha do nome (o selo cortava "P19A" em "P…"): pequenos, ao lado da área */
-                <span className="whitespace-nowrap text-[8px] text-muted-foreground leading-none">
+                <span className="min-w-0 overflow-hidden whitespace-nowrap text-[8px] text-muted-foreground leading-none"
+                  title={[p.area_produtiva_ha ? `${formatNum(p.area_produtiva_ha, 1)} ha` : '', nPiquetes > 0 ? `${nPiquetes} piquetes` : ''].filter(Boolean).join(' · ')}>
                   {p.area_produtiva_ha ? `${formatNum(p.area_produtiva_ha, 1)} ha` : ''}
                   {nPiquetes > 0 && (
                     <span data-testid="selo-piquetes" title={`Piquetes de ${p.nome} no mês: ${(piquetesDoMes.get(p.id) ?? []).map(q => q.nome).join(', ')}`}>
@@ -1162,14 +1178,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 </span>
               ) : <span />}
               {!isDivergencia && tipoUsoEfetivo && (
-                <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
+                <span title={tipoUsoEfetivo} data-testid="selo-do-tipo" className={`flex-none text-[7px] font-bold uppercase tracking-wider leading-none ${
                   ehLavoura ? 'text-violet-700 dark:text-violet-300'
                   : tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
                   : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
                   : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
                   : 'text-muted-foreground'
                 }`}>
-                  {tipoUsoEfetivo!.toUpperCase()}
+                  {/* a lavoura: "AGRICULTURA" no card largo, "AGRIC." no estreito (o nome inteiro no title) */}
+                  {ehLavoura ? (<>
+                    <span className="[@container(max-width:150px)]:hidden">{tipoUsoEfetivo!.toUpperCase()}</span>
+                    <span className="hidden [@container(max-width:150px)]:inline">AGRIC.</span>
+                  </>) : tipoUsoEfetivo!.toUpperCase()}
                 </span>
               )}
             </div>
@@ -1210,7 +1230,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   return (
     <div ref={setAreaDaTela} className="pb-24" data-testid="area-do-fechamento">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2 max-[999px]:px-2">
+      <div ref={setTopoFixo} className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2 max-[999px]:px-2">
         {/* FECH-FAIXA-01 — a faixa do fechamento do mês: a 1ª linha, no MESMO lugar nas três telas (Fechamento, Valor, Mapa do rebanho) */}
         {/* VR-PRECO-EDITAR-01 ampliado — a trava do MÊS na linha da faixa (um Desbloquear para todos os pastos + o Valor do Rebanho) */}
         <div className="mb-1.5 flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><FaixaDoFechamento estado={faixaDoMes} atual="pastos" abrir={etapasDoFechamento} /></div>{fazendaAtual?.id && fazendaAtual.id !== '__global__' && <MasterLockBanner anoMes={anoMes} naFaixa />}</div>
@@ -1518,7 +1538,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
       {/* ═══ CARDS DOS PASTOS ═══ */}
       <div className="px-2 pt-2 pb-4">
-        {loading ? (
+        {/* FECH-ROLAGEM-02 (2) — releitura (o modal salvou) não troca a grade por "Carregando...": a rolagem fica na mesma altura */}
+        {soNaPrimeiraLeitura(loading, fechamentos, anoMes, fazendaAtual?.id) ? (
           <div className="text-center py-8 text-muted-foreground">Carregando...</div>
         ) : pastosAtivos.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
@@ -1532,7 +1553,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         ) : (
           <div className="flex flex-col gap-1">
             {/* a MESMA linha de 24px da vista Mapa (lá ela tem a faixa "Sem desenho no mapa"): o seletor não sai do lugar ao trocar */}
-            <div className="flex h-6 flex-none items-center gap-2" data-testid="linha-da-vista">{seletorDaVista}</div>
+            <div className={`flex h-6 flex-none items-center gap-2 ${CLASSE_LINHA_PRESA}`} data-testid="linha-da-vista">{seletorDaVista}</div>
             <TooltipProvider delayDuration={200}>
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
                 {segmentosDaGrade.map(seg => seg.tipo === 'pasto' ? renderCardDoPasto(seg.pasto) : renderGrupoDoFechamento(seg))}
@@ -1623,8 +1644,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               Pastos sem Tipo de Uso
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm leading-relaxed">
-              <strong>{pastosVaziosIds.length} pasto(s)</strong> estão vazios e sem Tipo de Uso definido.
-              <br /><br />
+              <strong>{pastosVaziosIds.length} pasto(s)</strong> estão vazios e sem Tipo de Uso definido:
+              {/* FECH-CARDS-QUEBRA-01 (4): QUAIS — até 8 nomes, depois "+N" (a lista inteira no title) */}
+              <span className="mt-1 block font-semibold text-foreground" data-testid="pastos-sem-tipo"
+                title={pastosVaziosIds.map(id => pastos.find(x => x.id === id)?.nome ?? '?').join(', ')}>
+                {nomesAteOito(pastosVaziosIds.map(id => pastos.find(x => x.id === id)?.nome ?? '?'))}
+              </span>
+              <br />
               Deseja marcá-los automaticamente como <strong>"Vedado"</strong> antes de fechar?
             </AlertDialogDescription>
           </AlertDialogHeader>

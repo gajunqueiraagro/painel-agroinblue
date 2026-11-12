@@ -5,6 +5,7 @@ import { type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
 import { type FechamentoPasto, useFechamento } from '@/hooks/useFechamento';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CampoNumeroComConta } from '@/components/ui/campo-numero-com-conta';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -25,6 +26,7 @@ import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseValorRebanhoReaberto, le
 import { CampoLoteDoPasto } from '@/components/fechamento/CampoLoteDoPasto';
 import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
 import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
+import { useLotesDoMesAnterior } from '@/hooks/useLotesDoMesAnterior';
 import { comLoteEmTodos, comLoteNaCategoria, lotesQueSeguem, semLoteNoZerado, textoDoLoteNoCaderno } from '@/lib/lotes/loteDoPasto';
 import { AbasDosPiquetes, ABA_TOTAL } from '@/components/fechamento/AbasDosPiquetes';
 import { MesAnteriorDoPasto } from '@/components/fechamento/MesAnteriorDoPasto';
@@ -78,86 +80,31 @@ interface CategoriaCardProps {
   onUpdatePeso: (catId: string, val: number | null) => void;
 }
 
-const CategoriaCard = React.memo(function CategoriaCard({
+export const CategoriaCard = React.memo(function CategoriaCard({
   c, idx, tabBase, quantidade, pesoMedioKg, origemDado, disabled, onUpdateQtd, onUpdatePeso
 }: CategoriaCardProps) {
-  const [qtdLocal, setQtdLocal] = useState(() => quantidade > 0 ? String(quantidade) : '');
-  const [pesoLocal, setPesoLocal] = useState(() =>
-    pesoMedioKg != null && pesoMedioKg !== 0 ? pesoMedioKg.toFixed(2).replace('.', ',') : ''
-  );
-  const [qtdFocused, setQtdFocused] = useState(false);
-  const [pesoFocused, setPesoFocused] = useState(false);
-
-  // Sync from external changes (e.g. "Copiar anterior") only when not focused
-  useEffect(() => {
-    if (!qtdFocused) {
-      setQtdLocal(quantidade > 0 ? String(quantidade) : '');
-    }
-  }, [quantidade, qtdFocused]);
-
-  useEffect(() => {
-    if (!pesoFocused) {
-      setPesoLocal(pesoMedioKg != null && pesoMedioKg !== 0 ? pesoMedioKg.toFixed(2).replace('.', ',') : '');
-    }
-  }, [pesoMedioKg, pesoFocused]);
-
   return (
     <div className="flex flex-col items-center gap-1 min-w-0 w-full sm:w-auto" style={{ minWidth: 0 }}>
       <span className="text-[11px] font-semibold text-foreground whitespace-nowrap mb-0.5">{c.nome}</span>
-      <div className="relative">
-        <Input
-          type="text" inputMode="numeric"
-          tabIndex={tabBase + idx * 2}
-          value={qtdLocal}
-          onChange={e => setQtdLocal(e.target.value)}
-          onFocus={() => setQtdFocused(true)}
-          onBlur={() => {
-            setQtdFocused(false);
-            const parsed = parseInt(qtdLocal, 10);
-            if (!isNaN(parsed) && parsed > 0) {
-              onUpdateQtd(c.id, parsed);
-              setQtdLocal(String(parsed));
-            } else {
-              onUpdateQtd(c.id, 0);
-              setQtdLocal('');
-            }
-          }}
-          disabled={disabled}
-          className="h-8 text-xs font-bold px-1.5 text-center tabular-nums w-full sm:w-[58px]"
-          placeholder="0"
+      {/* FECH-CALC-01 — Qtde e Peso com a CONTA (o mesmo campo do sistema, P91: "42+10", "470,5*2", "=19740/42"; resolve ao sair
+          ou no Enter, a dica "= 515,00" enquanto digita; nunca grava texto). Qtde em cabeças (0 casas), Peso em 2 casas. */}
+      <div className="relative w-full sm:w-[58px]">
+        <CampoNumeroComConta
+          valor={quantidade > 0 ? quantidade : null} casas={0} soAoSair tabIndex={tabBase + idx * 2}
+          onChange={n => onUpdateQtd(c.id, n != null && n > 0 ? n : 0)}
+          disabled={disabled} className="w-full h-8 text-xs font-bold px-1.5" placeholder="0"
         />
         {origemDado === 'copiado_mes_anterior' && (
           <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 text-[6px] h-3 px-0.5 leading-none">Cop</Badge>
         )}
       </div>
-      <Input
-        type="text" inputMode="decimal"
-        tabIndex={tabBase + idx * 2 + 1}
-        value={pesoLocal}
-        onChange={e => setPesoLocal(e.target.value)}
-        onFocus={() => setPesoFocused(true)}
-        onBlur={() => {
-          setPesoFocused(false);
-          const raw = pesoLocal.replace(',', '.');
-          if (raw === '' || raw.trim() === '') {
-            onUpdatePeso(c.id, null);
-            setPesoLocal('');
-          } else {
-            const parsed = parseFloat(raw);
-            if (!isNaN(parsed)) {
-              const valorFinal = Math.round(parsed * 100) / 100;
-              onUpdatePeso(c.id, valorFinal);
-              setPesoLocal(valorFinal.toFixed(2).replace('.', ','));
-            } else {
-              onUpdatePeso(c.id, null);
-              setPesoLocal('');
-            }
-          }
-        }}
-        disabled={disabled}
-        className="h-8 text-xs px-1.5 text-center tabular-nums w-full sm:w-[58px]"
-        placeholder="kg"
-      />
+      <div className="w-full sm:w-[58px]">
+        <CampoNumeroComConta
+          valor={pesoMedioKg != null && pesoMedioKg !== 0 ? pesoMedioKg : null} casas={2} soAoSair tabIndex={tabBase + idx * 2 + 1}
+          onChange={n => onUpdatePeso(c.id, n)}
+          disabled={disabled} className="w-full h-8 text-xs px-1.5" placeholder="kg"
+        />
+      </div>
     </div>
   );
 });
@@ -184,6 +131,8 @@ export function FechamentoPastoDialog({
   /* LOTES-03 F1 — os lotes da fazenda (o MESMO leitor da tela de Lotes) e o assistente do "+ Novo lote" (null = fechado; categoria null =
      o lote novo vai no pasto inteiro) */
   const lotesDaFazenda = useLotesDaFazenda(open ? fechamento.fazenda_id : null, fechamento.ano_mes);
+  /* LOTE-BUSCA-01 — onde cada lote esteve no mês anterior (ligação, senão o texto do caderno): os grupos do campo Lote */
+  const lotesDoMesAnterior = useLotesDoMesAnterior(open ? fechamento.fazenda_id : null, fechamento.ano_mes);
   const [novoLotePara, setNovoLotePara] = useState<{ categoriaId: string | null } | null>(null);
   const [itens, setItens] = useState<FechamentoItem[]>([]);
   const [saving, setSaving] = useState(false);
@@ -660,6 +609,7 @@ export function FechamentoPastoDialog({
               <div className="w-[150px] shrink-0">
                 <Label className="text-[10px] text-white/50 leading-none">Lote</Label>
                 <CampoLoteDoPasto itens={gradeVisivel} lotes={lotesDaFazenda.lotes} disabled={inputsDisabled || naAbaTotal}
+                  contexto={{ pastoNome: pasto.nome, textoDoCaderno: loteMes, mesAnterior: lotesDoMesAnterior }}
                   nomeDaCategoria={id => categorias.find(c => c.id === id)?.nome ?? '—'}
                   onChange={novos => {
                     editarGrade(() => novos);
