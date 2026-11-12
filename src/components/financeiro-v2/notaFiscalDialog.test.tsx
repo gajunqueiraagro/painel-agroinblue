@@ -240,7 +240,7 @@ describe('N5 — NOTA-NOVA-MODAL-REAL: o "+ Da nota" com um PDF só abre direto 
     Object.defineProperty(pdf, 'arrayBuffer', { value: async () => new TextEncoder().encode('%PDF-1.4 x').buffer });
     fireEvent.change(screen.getByTestId('xml-input'), { target: { files: [pdf] } });
   };
-  it('a nota que NÃO está no sistema abre o Novo lançamento (nunca a tela intermediária), com o PDF como application/pdf e a descrição vazia', async () => {
+  it('a nota que NÃO está no sistema abre o Novo lançamento (nunca a tela intermediária), com o PDF como application/pdf e a descrição sugerida pelo item', async () => {
     leitura.lerNota.mockResolvedValue(montarNota().lido);
     const onAbrirNota = vi.fn();
     const onAbrirLancamento = vi.fn();
@@ -251,7 +251,8 @@ describe('N5 — NOTA-NOVA-MODAL-REAL: o "+ Da nota" com um PDF só abre direto 
     expect(doXml.arquivo.type).toBe('application/pdf');
     expect(doXml.proposta.parcelamento).toEqual({ tipo: 'parcelado', parcelas: 4, primeiroVencimento: '2026-10-20' });
     expect(doXml.proposta.fazendaId).toBe('faz-1');
-    expect(prefillDaNota(doXml).descricao).toBe('');
+    /* NOTA-PDF-REGRESSAO-01 (12/11): a NF-e abre com a descrição sugerida pelo 1º item (antes, 30/10, vazia) */
+    expect(prefillDaNota(doXml).descricao).toBe('Herbicida sintetico 5 lt · 3 itens');
   });
   it('a nota JÁ lançada abre a tela da nota (as abas), nunca o Novo lançamento', async () => {
     leitura.lerNota.mockResolvedValue(montarNota().lido);
@@ -280,12 +281,12 @@ describe('NOTA-NOVA-MODAL-REAL — a tela da nota nunca cria: a nota nova passa 
     return props.onAbrirNoLancamento.mock.calls[0][0];
   };
 
-  it('nada achado: passa UMA vez ao Novo lançamento com o que a nota leu — fornecedor pelo CNPJ, fazenda pela IE, as 4 duplicatas, nº 000.000.000, Nota Fiscal, o PDF — e a descrição VAZIA; nada gravado; "Como foi pago?" e "Criar" nunca aparecem', async () => {
+  it('nada achado: passa UMA vez ao Novo lançamento com o que a nota leu — fornecedor pelo CNPJ, fazenda pela IE, as 4 duplicatas, nº 000.000.000, Nota Fiscal, o PDF — e a descrição sugerida pelo item; nada gravado; "Como foi pago?" e "Criar" nunca aparecem', async () => {
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrirSemEsperar(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     const prefill = await passou(props);
     expect(prefill).toMatchObject({ favorecido_id: 'f1', fazenda_id: 'faz-1', numero_documento: '000.000.937', tipo_documento: 'Nota Fiscal',
-      status_transacao: 'programado', data_vencimento: '2026-10-20', valor: 1966.56, descricao: '' });
+      status_transacao: 'programado', data_vencimento: '2026-10-20', valor: 1966.56, descricao: 'Herbicida sintetico 5 lt · 3 itens' });
     expect(prefill.doXml.proposta.duplicatas.map((d: { vencimento: string }) => d.vencimento)).toEqual(['2026-10-20', '2026-11-20', '2026-12-20', '2027-01-20']);
     expect(prefill.doXml.arquivo.type).toBe('application/pdf');
     /* nada escolhido aqui: nem conta, nem subcentro decidido pela tela (a tela nem apareceu) */
@@ -359,7 +360,7 @@ describe('NOTA-NOVA-MODAL-REAL — a tela da nota nunca cria: a nota nova passa 
     fireEvent.change(screen.getByTestId('nota-mesmo-assim-motivo'), { target: { value: 'outra compra igual no mesmo dia' } });
     fireEvent.click(screen.getByTestId('nota-mesmo-assim-confirmar'));
     const prefill = await passou(props);
-    expect([prefill.observacao, prefill.descricao, prefill.numero_documento]).toEqual(['Criado mesmo com a nota parecendo já lançada: outra compra igual no mesmo dia', '', '000.000.937']);
+    expect([prefill.observacao, prefill.descricao, prefill.numero_documento]).toEqual(['Criado mesmo com a nota parecendo já lançada: outra compra igual no mesmo dia', 'Herbicida sintetico 5 lt · 3 itens', '000.000.937']);
     nadaGravado(g, props);
   });
   it('porta 2 (Ler a NF do Editar): o lançamento aberto NÃO achado pela nota — a frase; não passa ao Novo lançamento (criaria a compra em dobro) e nada se cria daqui', async () => {

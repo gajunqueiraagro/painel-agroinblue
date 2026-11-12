@@ -116,23 +116,32 @@ export function patrimonio(a: { p_de?: string; p_ate?: string }, escala: number,
   const at0 = categorias.reduce((x, c) => x + c.q0 * (c.pm0 ?? 0), 0) / 30;
   const at1 = categorias.reduce((x, c) => x + c.q1 * (c.pm1 ?? 0), 0) / 30;
   const total = { q0: s(c => c.q0), v0: s(c => c.v0), q1: s(c => c.q1), v1_p0: s(c => c.v1_p0), v1_p1: s(c => c.v1_p1),
-    vpb: s(c => c.vpb), efeito: s(c => c.efeito), agio: s(c => c.agio), agio_sem_preco: false };
-  const MESES = ['2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'];
+    vpb: s(c => c.vpb), efeito: s(c => c.efeito), agio: s(c => c.agio), agio_sem_preco: false,
+    /* DRE-PRECO-REF-01: no pior caso de largura (escala 10) o rodapé leva o aviso do preço do fim — o gate o mede */
+    preco_ref_do_fim: escala >= 10 ? ['desmama_m', 'desmama_f', 'novilhas'] : [] };
+  /* DRE-VARIACAO-SIMPLES-01: os meses são os do período PEDIDO (P0 = o mês anterior ao início) — com o comparar 1 ano a 1ª coluna é o ano
+     anterior, e um P0 fixo em dez/25 dava "01/01/2026 a 30/09/2025" no cabeçalho do modal */
+  const ate = String(a.p_ate ?? '2026-09').slice(0, 7);
+  const de = String(a.p_de ?? `${ate.slice(0, 4)}-01`).slice(0, 7);
+  const somaMes = (am: string, k: number) => { const t = Number(am.slice(0, 4)) * 12 + Number(am.slice(5, 7)) - 1 + k; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; };
+  const MESES: string[] = []; for (let m = somaMes(de, -1); m <= ate; m = somaMes(m, 1)) MESES.push(m);
   const meses = MESES.map((ano_mes, i) => {
     const t = i / (MESES.length - 1);
     const arrobas = r2(at0 + (at1 - at0) * t + Math.sin(i * 1.3) * at0 * 0.015);
     const pRef = (total.v0 + (total.v1_p0 - total.v0) * t) / (at0 + (at1 - at0) * t);
     const pMes = (total.v0 + (total.v1_p1 - total.v0) * t) / (at0 + (at1 - at0) * t);
     /* ago/26 sem fechamento validado (o cadastro); no D3, set/26 também */
-    const cadastro = ano_mes === '2026-08' || (fimCadastro && ano_mes === '2026-09');
+    const cadastro = ano_mes === somaMes(ate, -1) || (fimCadastro && ano_mes === ate);
     return { ano_mes, fonte: cadastro ? 'cadastro' : 'fechamento', arrobas, v_ref: r2(arrobas * pRef), v_mes: cadastro ? null : r2(arrobas * pMes) };
   });
   const z = { cabecas: 0, arrobas: 0, valor: 0 };
   return {
-    p0: '2025-12', p1: String(a.p_ate ?? '2026-09').slice(0, 7), p0_fonte: 'fechamento', p1_fonte: fimCadastro ? 'cadastro' : 'fechamento',
+    p0: MESES[0], p1: ate, p0_fonte: 'fechamento', p1_fonte: fimCadastro ? 'cadastro' : 'fechamento',
     categorias, total, meses,
     movimentos: { inicio: { cabecas: total.q0, arrobas: r2(at0), valor: total.v0 }, fim: { cabecas: total.q1, arrobas: r2(at1), valor: total.v1_p1 },
-      produzidas: { cabecas: 0, arrobas: r2(at1 - at0), valor: total.vpb }, nascimentos: z, compradas: z, transf_entrada: z,
-      vendas_abates: z, mortes: z, transf_saida: z, ajustes: z },
+      /* DRE-VARIACAO-SIMPLES-01 (P5): um extrato com nascimento, venda e morte — o ganho de peso fecha a diferença na tela */
+      produzidas: { cabecas: 0, arrobas: r2(at1 - at0), valor: total.vpb }, nascimentos: { cabecas: 60, arrobas: r2(at0 * 0.04), valor: 0 },
+      compradas: z, transf_entrada: z, vendas_abates: { cabecas: 180, arrobas: r2(at0 * 0.3), valor: 0 }, mortes: { cabecas: 5, arrobas: r2(at0 * 0.01), valor: 0 },
+      transf_saida: z, ajustes: z },
   };
 }

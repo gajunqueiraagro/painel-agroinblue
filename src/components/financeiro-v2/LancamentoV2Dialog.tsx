@@ -1823,6 +1823,8 @@ export function LancamentoV2Dialog({
     emitenteId: favorecidoId || null,
     /* FIN-DOCUMENTO-FORM-01 — o comprovante sugere a data do PAGAMENTO, não a competência */
     dataPagamento: dataPagamento || null,
+    /* NOTA-LIGAR-LANCAMENTO-01 P2 — o quadro Nota × lançamento avisa o vencimento que difere do da duplicata */
+    vencimento: dataVencimento || null,
   };
 
   const contasDisponiveis = contas;
@@ -2952,7 +2954,14 @@ export function LancamentoV2Dialog({
                 <AvisosDoXml xml={xml} registradaDispensada={xmlRegistradaDispensada}
                   preenchido={{ fazenda: !!fazendaId, vencimento: /^\d{4}-\d{2}-\d{2}$/.test(dataVencimento) }}
                   onDispensarRegistrada={() => setXmlRegistradaDispensada(true)} onAbrirOcorrencia={abrirOcorrenciaDaNota} />
-                {xmlAmbar('subcentro') && (
+                {/* NOTA-PDF-REGRESSAO-01 (Chat 12/11 13:45) — item com NCM de máquina/implemento/veículo (84xx/87xx): a nota pode ser BEM DO
+                    PATRIMÔNIO; o aviso vem no lugar da última classe do fornecedor (que segue no title) */}
+                {xml.proposta.ncmDeBem ? (
+                  <div className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-bem"
+                    title={`NCM ${xml.proposta.ncmDeBem}: máquina, implemento ou veículo. Se for bem durável, ligue em Patrimônio.${xml.proposta.classificacao?.subcentro ? ` Última classe deste fornecedor: ${xml.proposta.classificacao.subcentro}.` : ''}`}>
+                    <span className="min-w-0 truncate">Pode ser bem do patrimônio (NCM {xml.proposta.ncmDeBem}) — ligar em Patrimônio</span>
+                  </div>
+                ) : xmlAmbar('subcentro') && (
                   <div className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
                     title={`Classificação sugerida: ${xml.proposta.classificacao?.subcentro ?? ''} · ${xml.proposta.origens.subcentro ?? ''}`}>
                     <span className="min-w-0 truncate">Classificação sugerida: {xml.proposta.classificacao?.subcentro} · {xml.proposta.origens.subcentro} deste fornecedor</span>
@@ -3710,7 +3719,15 @@ export function LancamentoV2Dialog({
                     setClassificacao((c) => ({ ...c, safra_id: fica.safraId ?? '' }));
                     if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id, null, [lancamento.id]);
                   },
+                  /* NOTA-LIGAR-LANCAMENTO-01 P1 — a troca para a filial da nota já gravou (a RPC avisou a lista): o modal mostra o novo */
+                  onFornecedorTrocado: (id) => setFavorecidoId(id),
                 } : undefined}
+                /* NOTA-LIGAR-LANCAMENTO-01 P1 — "Cadastrar esta filial": a MESMA criação do "+ novo fornecedor" deste modal (pede a fazenda) */
+                onCriarFornecedor={async (nome, cpfCnpj) => {
+                  if (!fazendaId) return 'Escolha a fazenda do lançamento antes de cadastrar a filial.';
+                  const f = await onCriarFornecedor(nome, fazendaId, cpfCnpj);
+                  return f ? { id: f.id, nome: f.nome } : 'A filial não foi cadastrada.';
+                }}
                 onAnexarBoletosDasParcelas={irmas ? () => setAnexarBoletos('irmas') : undefined} />
             ) : documentosAntesDeSalvar && formaPagamentoParc === 'parcelada' && numParcelas >= 2 ? (
               /* PR 2b — PARCELADO: os documentos da COMPRA (ligados às N) e a grade de parcelas com o boleto

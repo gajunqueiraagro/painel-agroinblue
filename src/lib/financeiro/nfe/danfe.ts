@@ -118,6 +118,23 @@ export function textoDosDadosAdicionais(d: { itens: readonly ItemNaPagina[] }): 
 }
 
 const TOL_LINHA = 1.5;
+/** NOTA-PDF-REGRESSAO-01 — a linha abaixo do item que e' INFORMACAO (lote, beneficio fiscal, tributos, descontos, as complementares), nunca
+ *  continuacao da descricao. */
+const RE_INFO_DO_ITEM = /^-?\s*(LOTE|CBENEF|D\.FAB|DESC\b|DESCONTO|TRIB|TOTAL APROX|CST\/|COD\.|CONTINUACAO DAS|PESO|VALOR|REF|#|INF|OBS|FCI|N\.? ?FCI|VAL\b|FAB\b|PEDIDO|FONTE DA CARGA|BC\b|VLR\b|[SN]\s*\|\s*[SN]\b)/;
+/** NOTA-PDF-REGRESSAO-01 — a linha de dados "CHAVE:valor;CHAVE:valor" (o que o emissor anexa ao item) tambem e' informacao. */
+const RE_CHAVE_VALOR = /^\S{2,14}\s?:\S*;/;
+/** NOTA-PDF-REGRESSAO-01 — junta a linha seguinte a' descricao: o NUMERO partido na quebra ("ANO: 202" + "6CHASSI") junta sem espaco e o
+ *  texto colado ao numero se separa ("2026 CHASSI"); o resto, com um espaco. */
+export function continuarDescricao(acima: string, abaixo: string): string {
+  const a = acima.trimEnd(); const b = abaixo.trimStart();
+  if (/\d$/.test(a) && /^\d/.test(b)) {
+    const m = /^(\d+)([A-ZÀ-Ú]{2,}.*)$/.exec(b);
+    return m ? `${a}${m[1]} ${m[2]}` : `${a}${b}`;
+  }
+  return `${a} ${b}`;
+}
+/** NOTA-PDF-REGRESSAO-01 — ate' quanto duas meias-linhas do mesmo item (descricao × valores) podem distar. */
+const MEIA_LINHA = 3;
 const ABAIXO_MAX = 16;
 
 /** O leitor por posicao sobre todos os itens do documento. P174: o DANFSe (`danfse.ts`) usa o mesmo. */
@@ -462,6 +479,20 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
         }
       }
     }
+    /* NOTA-PDF-REGRESSAO-01 — a FATURA em COLUNA: numero, vencimento e valor um embaixo do outro (cada um na sua linha); nenhuma linha
+       deu duplicata → cada coluna (mesmo x) se le^ de cima para baixo */
+    if (!duplicatas.length) {
+      const naFaixa = d.itens.filter((o) => o.pagina === pg && o.y < rotFatura.y && o.y > yImposto && o.str.trim()).sort((a, b) => b.y - a.y);
+      const colunas: ItemNaPagina[][] = [];
+      for (const o of naFaixa) { const c = colunas.find((x) => Math.abs(x[0].x - o.x) <= 2); if (c) c.push(o); else colunas.push([o]); }
+      for (const c of colunas.sort((a, b) => a[0].x - b[0].x)) {
+        const t = c.map((o) => normalizar(o.str)).join(' ');
+        for (const m of t.matchAll(RE_DUPLICATA)) {
+          const venc = dataIso(m[2]); const valor = centavosBr(m[3]);
+          if (venc && valor != null) { duplicatas.push({ numero: m[1], vencimento: venc, valorCent: valor }); for (const it of c) d.marcar('duplicatas', it); }
+        }
+      }
+    }
   }
 
   /* TOTAIS (o quadro do calculo do imposto). */
@@ -517,7 +548,13 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
         const g = o.x + o.w < c.x ? c.x - (o.x + o.w) : o.x > c.x + c.w ? o.x - (c.x + c.w) : 0;
         if (g < dist) { dist = g; perto = k; }
       });
-      return melhor >= 0 ? melhor : perto;
+      if (melhor >= 0) return melhor;
+      /* NOTA-PDF-REGRESSAO-01 — sem sobrepor nenhum, um NUMERO (texto segue na mais perto: o cabecalho centrado da descricao): o cabecalho
+         a' esquerda e o numero a' direita da coluna; vale a coluna onde o numero TERMINA (do inicio dela ao inicio da seguinte) */
+      if (!/^[\d.,%]+$/.test(o.str.trim())) return perto;
+      const fim = o.x + o.w;
+      const onde = cab.findIndex((c, k) => fim > c.x && fim <= (cab[k + 1]?.x ?? Number.POSITIVE_INFINITY) && o.x > c.x);
+      return onde >= 0 ? onde : perto;
     };
     const cDesc = col((n) => n.startsWith('DESCRICAO'));
     const cUn = col((n) => n === 'UN.' || n === 'UN' || n === 'UND' || n.startsWith('UNID'));
@@ -532,8 +569,8 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
     const cBcIcms = col((n) => n.startsWith('BC.ICMS') || n.startsWith('B.CALC') || n.startsWith('BC ICMS') || n.startsWith('BASE CALC'));
     const cVIcms = col((n) => n.startsWith('V.ICMS') || n === 'VALOR ICMS' || n.startsWith('VLR.ICMS') || n.startsWith('V. ICMS'));
     const cVIpi = col((n) => n.startsWith('V.IPI') || n === 'VALOR IPI' || n.startsWith('VLR.IPI') || n.startsWith('V. IPI'));
-    const cAIcms = col((n) => n.startsWith('%ICMS') || n.startsWith('ALIQ. ICMS') || n.startsWith('ALIQ.ICMS'));
-    const cAIpi = col((n) => n.startsWith('%IPI') || n.startsWith('ALIQ. IPI') || n.startsWith('ALIQ.IPI'));
+    const cAIcms = col((n) => n.startsWith('%ICMS') || n.startsWith('ALIQ. ICMS') || n.startsWith('ALIQ.ICMS') || n === 'A.ICMS');
+    const cAIpi = col((n) => n.startsWith('%IPI') || n.startsWith('ALIQ. IPI') || n.startsWith('ALIQ.IPI') || n === 'A.IPI');
     const rotFim = d.itens.filter((o) => o.pagina === folha && o.y < (rotDescr?.y ?? Number.POSITIVE_INFINITY) && /^(DADOS ADICIONAIS|CALCULO DO ISSQN|INFORMACOES COMPLEMENTARES)/.test(normalizar(o.str))).sort((a, b) => b.y - a.y)[0];
     /* o que comeca antes da 1a coluna nao e' da tabela (o canhoto girado na margem, que a largura faria sobrepor a descricao) */
     const inicioDaTabela = Math.min(...cab.map((c) => c.x)) - 4;
@@ -542,8 +579,23 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
     const inicioDasColunas = cab.map((c) => c.x - 4);
     const atravessa = (o: ItemNaPagina) => inicioDasColunas.some((x) => x > o.x + 1 && x < o.x + o.w - 1);
     const fimDaDescricao = cDesc?.ate ?? 0;
+    const totalDe = (linha: ItemNaPagina[]) => centavosBr(naCol(linha, cTotal).map((o) => o.str).join('').trim());
+    const temDescricao = (linha: ItemNaPagina[]) => naCol(linha, cDesc).some((o) => o.str.trim());
+    /* NOTA-PDF-REGRESSAO-01 — o ITEM EM DUAS MEIAS-LINHAS: a descricao (fonte de um tamanho) e os valores (de outro) com a base a ~2pt uma
+       da outra, mais que a tolerancia da linha → a meia-linha so' com descricao e a vizinha so' com o total viram UMA */
+    const linhasDosItens: ItemNaPagina[][] = [];
     for (const linhaCrua of d.linhasEntre(folha, Math.min(rotDescr?.y ?? Number.POSITIVE_INFINITY, yFimCab) - TOL_LINHA, rotFim?.y ?? 0)) {
       const linha = linhaCrua.flatMap((o) => (o.x >= fimDaDescricao && atravessa(o) ? partirPelosEspacos(o) : [o]));
+      const ant = linhasDosItens[linhasDosItens.length - 1];
+      const meias = ant && Math.abs(ant[0].y - linha[0].y) <= MEIA_LINHA
+        && ((temDescricao(ant) && totalDe(ant) == null && totalDe(linha) != null && !temDescricao(linha))
+          || (totalDe(ant) != null && !temDescricao(ant) && temDescricao(linha) && totalDe(linha) == null));
+      if (meias) ant.push(...linha); else linhasDosItens.push(linha);
+    }
+    /* NOTA-PDF-REGRESSAO-01 (Chat 12/11 13:45) — a DESCRICAO QUE QUEBRA LINHA: a linha logo abaixo da descricao (colada: ate' 1,6 altura) que
+       nao e' informacao fiscal continua a descricao; o resto vai ao detalhe. `yDaDescr` = a ultima linha da descricao do ultimo item. */
+    let colado = false; let yDaDescr = 0;
+    for (const linha of linhasDosItens) {
       const total = centavosBr(naCol(linha, cTotal).map((o) => o.str).join('').trim());
       const descr = naCol(linha, cDesc).map((o) => o.str.trim()).join(' ').trim();
       if (total != null && descr) {
@@ -560,9 +612,21 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
         });
         for (const o of naCol(linha, cDesc)) d.marcar('itens', o);
         itensNestaFolha++;
-      } else if (descr && itens.length && itensNestaFolha > 0) {
+        colado = true; yDaDescr = Math.min(...naCol(linha, cDesc).map((o) => o.y));
+      } else if (descr && !/^[-\s]+$/.test(descr) && itens.length && itensNestaFolha > 0) {
         const ult = itens[itens.length - 1];
-        ult.detalhe = ult.detalhe ? `${ult.detalhe} · ${descr}` : descr;
+        const pedacos = naCol(linha, cDesc);
+        const yAqui = Math.max(...pedacos.map((o) => o.y)); const altura = Math.max(...pedacos.map((o) => o.h));
+        /* NOTA-PDF-REGRESSAO-01 — o emissor que repete a descricao abaixo do item (informacao adicional do produto): repetido nao entra */
+        const semEspaco = (t: string) => t.replace(/\s+/g, '');
+        const repetido = semEspaco(ult.descricao).includes(semEspaco(descr)) || (ult.detalhe ?? '').split(' · ').includes(descr);
+        if (colado && !repetido && yDaDescr - yAqui <= altura * 1.6 + 1 && !RE_INFO_DO_ITEM.test(normalizar(descr)) && !RE_CHAVE_VALOR.test(descr)) {
+          ult.descricao = continuarDescricao(ult.descricao, descr); yDaDescr = yAqui;
+          for (const o of pedacos) d.marcar('itens', o);
+        } else {
+          colado = false;
+          if (!repetido) ult.detalhe = ult.detalhe ? `${ult.detalhe} · ${descr}` : descr;
+        }
       }
     }
   }

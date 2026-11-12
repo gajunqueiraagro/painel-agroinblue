@@ -763,21 +763,34 @@ const CENARIOS = [
       { nome: `dre-pec-resumido${suf}`, url: URL_DRE, tamanhos: T, antes: res },
       { nome: `dre-pec-resumido-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await res(p); await tudo(p); } },
       { nome: `dre-pec-detalhado-cv${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await clicarTexto('(−) Custo variável')(p); } },
-      /* DRE-VARIACAO-EXPLICA-01 1b — o modal da variação na aba Explicação (V1–V6): pela linha do Detalhado, pela do Resumido (D2, com a
-         Reposição) e com o fim pelo cadastro (D3, selo + mercado "—"); o clique é na 1ª célula de valor da linha */
+      /* DRE-VARIACAO-SIMPLES-01 — o modal da variação de 2 abas (Resumo · Por categoria): aberto pela linha do Detalhado, pela do Resumido
+         e com o fim pelo cadastro; o clique é na 1ª célula de valor da linha */
       ...[['', 'Variação por produção', true, ''], ['-resumido', 'Variação do estoque', false, ''], ['-cadastro', 'Variação por produção', true, '&fim=cadastro']]
-        .map(([s2, linha, detalhado, extra]) => ({ nome: `dre-pec-variacao-explica${s2}${suf}`, url: URL_DRE + extra, tamanhos: T, regiao: '[role="dialog"]',
+        .map(([s2, linha, detalhado, extra]) => ({ nome: `dre-pec-variacao-resumo${s2}${suf}`, url: URL_DRE + extra, tamanhos: T, regiao: '[role="dialog"]',
+          /* ajuste do Chat 11/11 05:52: o modal NÃO ROLA e nada passa do rodapé (o gráfico fica com a altura que sobra) */
+          semRolagem: { dentro: '[role="dialog"]' },
           antes: async (p) => { await (detalhado ? det(p) : res(p));
             await p.locator('tr', { hasText: linha }).first().locator('td').nth(1).click();
-            await p.locator('[data-testid="variacao-explicacao"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(500); } })),
-      /* 1b (OK do Chat 09/11) — a aba Gráfico do modal = os gráficos da tela do VR (o mesmo `MiniChart`) */
-      { nome: `dre-pec-variacao-grafico${suf}`, url: URL_DRE, tamanhos: T, regiao: '[role="dialog"]',
+            await p.locator('[data-testid="variacao-resumo"]').waitFor({ timeout: 5000 });
+            /* a Line do recharts anima (~1,5 s): antes disso o print mostra a área sem a linha */
+            await p.waitForTimeout(2000); } })),
+      { nome: `dre-pec-variacao-categoria${suf}`, url: URL_DRE, tamanhos: T, regiao: '[role="dialog"]',
+          /* ajuste do Chat 11/11 05:52: o modal NÃO ROLA e nada passa do rodapé (o gráfico fica com a altura que sobra) */
+          semRolagem: { dentro: '[role="dialog"]' },
         antes: async (p) => { await det(p);
           await p.locator('tr', { hasText: 'Variação por produção' }).first().locator('td').nth(1).click();
-          await p.locator('[role="dialog"] button', { hasText: /^Gráfico$/ }).click();
-          await p.locator('[data-testid="variacao-graficos-vr"]').waitFor({ timeout: 5000 });
-          /* a Line do recharts anima (~1,5 s); a Area não: antes disso o print mostra a área sem a linha */
-          await p.waitForTimeout(2000); } },
+          await p.locator('[role="dialog"] [data-aba="categoria"]').click();
+          await p.locator('[data-testid="variacao-por-categoria"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(400); } },
+      /* P7 — um gráfico grande de cada vez (o segmentado troca Valor · Arrobas · Preço médio) */
+      ...[['arrobas', /^Arrobas$/], ['preco', /^Preço médio da @$/]].map(([g, rot]) => ({
+        nome: `dre-pec-variacao-grafico-${g}${suf}`, url: URL_DRE, tamanhos: T, regiao: '[role="dialog"]',
+          /* ajuste do Chat 11/11 05:52: o modal NÃO ROLA e nada passa do rodapé (o gráfico fica com a altura que sobra) */
+          semRolagem: { dentro: '[role="dialog"]' },
+        antes: async (p) => { await det(p);
+          await p.locator('tr', { hasText: 'Variação por produção' }).first().locator('td').nth(1).click();
+          await p.locator('[data-testid="variacao-grafico"]').waitFor({ timeout: 5000 });
+          await p.locator('[data-testid="variacao-grafico"] button', { hasText: rot }).click();
+          await p.waitForTimeout(2000); } })),
       { nome: `dre-pec-detalhado-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); } },
       { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^2$/)(p); } },
       { nome: `dre-pec-3anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^3$/)(p); } },
@@ -895,6 +908,27 @@ const CENARIOS = [
         antes: async (p) => { await p.locator('[data-testid="selo-piquetes"]').first().waitFor(); await p.waitForTimeout(600); } },
       { nome: 'fechamento-grupo-piquetes-p19a', url: URL + '&v=piquetes', tamanhos: T, regiao: 'button:has([title^="Piquetes de P19A"])',
         antes: async (p) => { await p.locator('[title^="Piquetes de P19A"]').waitFor(); await p.waitForTimeout(600); } },
+      /* FECH-CARDS-QUEBRA-01 (Gabriel 11/11 15:15) — `&v=quebra`: os 4 estados (agricultura com piquetes, vedado com/sem piquetes, cria,
+         inconsistente) em 1126/1366/1440: o selo do tipo dentro do card, nada vaza */
+      { nome: 'fechamento-grupo-quebra-agricultura', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P5"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P5"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P5"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-quebra-vedado', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P8"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P8"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P8"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-quebra-vedado-sem-piq', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P26"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P26"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P26"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-quebra-inconsistente', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P21A"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P21A"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P21A"]').waitFor(); await p.waitForTimeout(600); } },
+      /* Chat 18:25 — o nome longo "P12 Retiro do córrego de baixo": nunca "…" (11px e quebra; o card e a fila crescem juntos) */
+      { nome: 'fechamento-grupo-quebra-nome-longo', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P12 Retiro do córrego de baixo"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P12 Retiro do córrego de baixo"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P12 Retiro do córrego de baixo"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-quebra-cria', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: 'button:has([data-testid="nome-do-card"][title="P11"])', topoIgual: '[data-testid="nome-do-card"]',
+        visivelNaTela: { sels: ['button:has([data-testid="nome-do-card"][title="P11"])'], inteirosEm: ['[data-testid="card-do-pasto"]'] },
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P11"]').waitFor(); await p.waitForTimeout(600); } },
       /* FECH-REABRIR-JUNTO-01 — o modal com o Valor do Rebanho validado: a linha do aviso (frase · motivo opcional · "Reabrir e editar") inteira */
       /* REABRIR-AUTOMATICO-01 (Gabriel 08/11 08:15) — o modal num mês com o Valor do Rebanho validado: sem a linha da trava (o reabrir é
          automático); o lugar de 22px do topo fica e o rodapé tem o botão de sempre — nada corta */
@@ -923,6 +957,14 @@ const CENARIOS = [
       { nome: 'fechamento-grupo-popup', url: URL, tamanhos: T, regiao: '[data-testid="popup-do-pasto"]',
         /* o Radix põe uma 2ª cópia do conteúdo escondida (para o leitor de tela): a de cima é a que se vê */
         antes: async (p) => { await grade(p); await p.locator('button', { hasText: /^P11/ }).first().hover();
+          await p.locator('[data-testid="popup-do-pasto"]').first().waitFor(); await p.waitForTimeout(400); } },
+      /* FECH-CARDS-QUEBRA-01 (3) — o popup (o MESMO do mapa, POPUP-PASTO-01) do P5 agricultura: nada vaza */
+      { nome: 'fechamento-grupo-quebra-popup-agricultura', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: '[data-testid="popup-do-pasto"]',
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P5"]').first().hover();
+          await p.locator('[data-testid="popup-do-pasto"]').first().waitFor(); await p.waitForTimeout(400); } },
+      /* FECH-CARDS-QUEBRA-01 (3) — o popup (o MESMO do mapa, POPUP-PASTO-01) do P8 vedado: nada vaza */
+      { nome: 'fechamento-grupo-quebra-popup-vedado', url: URL + '&v=quebra', tamanhos: [[1126, 579], [1366, 768], [1440, 900]], regiao: '[data-testid="popup-do-pasto"]',
+        antes: async (p) => { await p.locator('[data-testid="nome-do-card"][title="P8"]').first().hover();
           await p.locator('[data-testid="popup-do-pasto"]').first().waitFor(); await p.waitForTimeout(400); } },
       { nome: 'fechamento-grupo-quadro', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P10A') },
       { nome: 'fechamento-grupo-quadro-rotacao', url: URL, tamanhos: T, regiao: '[data-testid="lote-quadro"]', antes: modal('P11') },
@@ -964,8 +1006,8 @@ const CENARIOS = [
     ];
   })(),
   /* LOTES-03 F1 — Produção › Lotes (`tela=lotes`, dado SINTÉTICO dados/lotes.ts): a lista (Ativos, Encerrados, a busca sem achado com o
-     vazio dentro do quadro), o assistente "+ Novo lote" (passo 1 com os cartões, o "Cadastrar nova categoria", o passo 4 com os lotes da
-     combinação REC-DF-NE e o passo 5) e a ficha do REC-DF-NE-05 (Resumo e Histórico) */
+     vazio dentro do quadro), o assistente "+ Novo lote" (passo 1 com os cartões, o "Cadastrar nova categoria", a sigla em uso e as
+     etapas do LOTE-ETAPAS-01) e a ficha do REC-DF-NE-05 (Resumo e Histórico) */
   ...(() => {
     const URL = 'tela=lotes&barra=32';
     const T = TAMANHOS_DO_LOTES;
@@ -974,8 +1016,6 @@ const CENARIOS = [
       await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await p.waitForTimeout(500); };
     const escolher = (re) => async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: re }).first().click(); await p.waitForTimeout(250);
       await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(450); };
-    const ateNumero = async (p) => { await novo(p); await escolher(/^REC/)(p); await escolher(/^DF/)(p); await escolher(/^NE/)(p);
-      await p.locator('[data-testid="assistente-numero"]').waitFor(); await p.waitForTimeout(400); };
     const ficha = async (p) => { await lista(p); await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click();
       await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await p.waitForTimeout(600); };
     return [
@@ -994,19 +1034,42 @@ const CENARIOS = [
         const c = p.locator('[data-testid="assistente-cartao"]', { hasText: /^DF/ }).first(); await c.hover();
         await c.locator('[data-testid="assistente-editar-cadastro"]').click(); await p.locator('[data-testid="assistente-form"]').waitFor();
         await p.locator('[data-testid="assistente-form-sigla"]').fill('DS'); await p.waitForTimeout(700); } },
-      { nome: 'lotes-assistente-numero', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: ateNumero },
-      /* LOTES-04 — o nº digitado: um ocupado (05 é do REC-DF-NE-05: a frase de recusa no lugar da dica) */
-      { nome: 'lotes-assistente-numero-ocupado', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
-        await p.locator('[data-testid="assistente-numero-editar"]').fill('5'); await p.waitForTimeout(300); } },
-      /* LOTES-05 — na cria o passo Nº pede o carimbo: o 7R da ressinc. (a frase "aparece como 7R") e um errado (a recusa no lugar) */
-      { nome: 'lotes-assistente-carimbo', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
-        await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-numero"]').waitFor();
-        await p.locator('[data-testid="assistente-carimbo"]').fill('7R'); await p.waitForTimeout(300); } },
-      { nome: 'lotes-assistente-carimbo-errado', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
-        await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-numero"]').waitFor();
-        await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await p.waitForTimeout(300); } },
-      { nome: 'lotes-assistente-perfil', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await ateNumero(p);
-        await p.locator('[data-testid="assistente-avancar"]').click(); await p.locator('[data-testid="assistente-perfil"]').waitFor(); await p.waitForTimeout(400); } },
+      /* LOTE-ETAPAS-01 (mock lote-etapas.html; Chat 11/11 14:45) — as etapas nas 3 atividades, em 1126/1366/1440 também, e o modal SEM
+         ROLAGEM: a categoria filtrada pela cria, a situação das matrizes (PA + MUL), o programa/sistema da recria, a raça da parida com o
+         carimbo faltando (o aviso laranja no rodapé) e com tudo (7R, MF, F1 Angus, sêmen), a mojada (mamotes desligados), o Nome com a ficha */
+      ...(() => {
+        const T2 = [...T, [1366, 768], [1440, 900]];
+        const R = { url: URL, tamanhos: T2, regiao: '[data-testid="assistente-do-lote"]', semRolagem: { dentro: '[role="dialog"]' } };
+        const chip = (testid, texto) => async (p) => { await p.locator(`[data-testid="${testid}"] button`, { hasText: texto }).first().click(); await p.waitForTimeout(150); };
+        const avancar = async (p) => { await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(400); };
+        const situacaoCria = async (p) => { await novo(p); await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await p.locator('[data-testid="assistente-situacao"]').waitFor(); };
+        const racaParida = async (p) => { await situacaoCria(p); await chip('assistente-situacao-cria', 'Parida com bezerro')(p); await chip('assistente-ordem-parto', 'Multípara')(p);
+          await avancar(p); await p.locator('[data-testid="assistente-cartao"]', { hasText: /^NE/ }).first().click(); await p.waitForTimeout(300); };
+        const racaParidaCompleta = async (p) => { await racaParida(p); await p.locator('[data-testid="assistente-carimbo"]').fill('7R');
+          await chip('assistente-mamotes-sexo', 'Misto')(p); await chip('assistente-mamotes-cruzamento', 'F1 Angus')(p); await chip('assistente-mamotes-semen', 'Sexado fêmea')(p); };
+        const nomeDe = (ativ, cat) => async (p) => { await novo(p); await escolher(ativ)(p); await escolher(cat)(p); await avancar(p);
+          await escolher(/^NE/)(p); await p.locator('[data-testid="assistente-nome"]').waitFor();
+          await p.locator('[data-testid="assistente-nome-campeiro"]').fill('Retiro de baixo · vacas do 12'); await p.waitForTimeout(300); };
+        return [
+          { ...R, nome: 'lotes-assistente-etapas-atividade', antes: novo },
+          { ...R, nome: 'lotes-assistente-etapas-categoria-cria', antes: async (p) => { await novo(p); await escolher(/^CRI/)(p); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-etapas-situacao-cria', antes: async (p) => { await situacaoCria(p);
+            await chip('assistente-situacao-cria', 'Parida com bezerro')(p); await chip('assistente-ordem-parto', 'Multípara')(p); } },
+          { ...R, nome: 'lotes-assistente-etapas-programa-recria', antes: async (p) => { await novo(p); await escolher(/^REC/)(p); await escolher(/^DF/)(p);
+            await p.locator('[data-testid="assistente-situacao"]').waitFor(); await chip('assistente-opcoes-programa', 'Superprecoce')(p);
+            await chip('assistente-opcoes-sistema', 'Semiconfinamento')(p); } },
+          { ...R, nome: 'lotes-assistente-etapas-raca-parida-sem-carimbo', antes: racaParida },
+          { ...R, nome: 'lotes-assistente-etapas-raca-parida', antes: racaParidaCompleta },
+          { ...R, nome: 'lotes-assistente-etapas-raca-carimbo-errado', antes: async (p) => { await racaParida(p);
+            await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-etapas-raca-mojada', antes: async (p) => { await situacaoCria(p); await chip('assistente-situacao-cria', 'Prenha (mojada)')(p);
+            await avancar(p); await p.locator('[data-testid="assistente-cartao"]', { hasText: /^NE/ }).first().click(); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-etapas-nome-cria', antes: async (p) => { await racaParidaCompleta(p); await avancar(p);
+            await p.locator('[data-testid="assistente-nome"]').waitFor(); await p.locator('[data-testid="assistente-anotacao"]').fill('veio da 3M, brinco amarelo, IATF com sêmen sexado de julho'); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-etapas-nome-recria', antes: nomeDe(/^REC/, /^DF/) },
+          { ...R, nome: 'lotes-assistente-etapas-nome-engorda', antes: nomeDe(/^ENG/, /^BO/) },
+        ];
+      })(),
       { nome: 'lotes-ficha-resumo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: ficha },
       /* LOTES-05 — a ficha da cria com carimbo: "7R" no cabeçalho, o código na identidade */
       { nome: 'lotes-ficha-carimbo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: async (p) => { await lista(p);
@@ -1035,6 +1098,14 @@ const CENARIOS = [
       ...['cadastro', 'infra', 'avaliacoes', 'reformas', 'lotacao', 'documentos'].map((aba) => ({ nome: `pastos-ficha-${aba}`, url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)],
         regiao: '[role="dialog"]', antes: async (p) => { await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
           await p.locator(`[data-testid="ficha-aba-${aba}"]`).click(); await p.waitForTimeout(600); } })),
+      /* PASTO-CADASTRO-GEO-01 (4): a sombra mudada na Infraestrutura acende o Salvar (frase do rodapé) e o fechar pergunta */
+      { nome: 'pastos-ficha-infra-mudou', url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)], regiao: '[role="dialog"]', antes: async (p) => {
+        await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
+        await p.locator('[data-testid="ficha-aba-infra"]').click(); await p.getByRole('button', { name: 'Suficiente', exact: true }).click(); await p.waitForTimeout(500); } },
+      { nome: 'pastos-ficha-sair-sem-salvar', url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)], regiao: '[role="alertdialog"]', antes: async (p) => {
+        await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
+        await p.locator('[data-testid="ficha-aba-infra"]').click(); await p.getByRole('button', { name: 'Suficiente', exact: true }).click();
+        await p.getByRole('button', { name: 'Fechar', exact: true }).click(); await p.locator('[data-testid="ficha-perguntar-fechar"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'pastos-lista', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="lista-pastos"]').waitFor(); await p.waitForTimeout(500); } },
       { nome: 'pastos-lista-piquetes', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="abrir-piquetes"]').first().click(); await p.waitForTimeout(400); } },
       { nome: 'pastos-lista-destino', url: URL, tamanhos: T, antes: async (p) => { await p.getByRole('button', { name: 'Destino', exact: true }).first().click();
@@ -1375,6 +1446,25 @@ const CENARIOS = [
   ...['diverge', 'jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
   })),
+  /* NOTA-PAGTO-PARCELADO-01 (Gabriel 11/11) — P3 o aviso "não é compra" (a nota de conserto); P1 o "Outros lançamentos do fornecedor" com 2
+     marcados (o rodapé soma × nota × diferença); P2 o "Como foi pago? › Parcelado" no caminho Criar (a forma, as parcelas, a grade) */
+  { nome: 'nota-pdf-semcompra', url: 'tela=nota-pdf&v=jalancada&natureza=conserto', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' } },
+  { nome: 'nota-pdf-outros', url: 'tela=nota-pdf&v=jalancada&outros=1', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="outros-lancamentos"]',
+    antes: async (p) => {
+      await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(800);
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-outros-abrir"]').click(); await p.waitForTimeout(800);
+      const c = p.locator('[data-testid="outros-marcar"]:not([disabled])'); await c.nth(0).click(); await p.waitForTimeout(300);
+    } },
+  { nome: 'nota-pdf-criar-parcelado', url: 'tela=nota-pdf&v=jalancada', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(800);
+      await p.locator('[data-testid="nota-mais"]').click(); await p.waitForTimeout(300); await p.locator('[data-testid="nota-mais-criar-novo"]').click(); await p.waitForTimeout(500);
+      const aba = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' }); if (await aba.count()) { await aba.first().click(); await p.waitForTimeout(300); }
+      await p.locator('[data-testid="nota-como-foi-pago"]').click(); await p.waitForTimeout(300); await p.locator('[data-testid="nota-como-parcelado"]').click(); await p.waitForTimeout(500);
+    } },
   /* P101 — abaixo de 1000px a prévia tem três abas: as outras duas (Parcelas e lançamento; Arquivo) em todas as variantes, nos estreitos. P163-2: a
      nota JÁ LANÇADA tem as abas dela (abaixo, `nota-pdf-ja-*`) */
   ...['diverge']
@@ -1389,7 +1479,8 @@ const CENARIOS = [
   /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO o Novo lançamento: o PDF (4 duplicatas), só a chave
      digitada (valor e data para o operador) e o cartão em 10× (D2: Parcelada 10× no Pagamento, a 1ª fatura sugerida); Geral, Pagamento e
      Documentos (o anexo clicável) nos sete tamanhos. Substitui a tela intermediária (`nota-pdf` da nota nova, `nota-pdf-aba-*`, `nota-pdf-cartao*`). */
-  ...['pdf', 'chave', 'cartao', 'nfse'].flatMap((v) => {
+  /* NOTA-PDF-REGRESSAO-01 — `coluna`: a NF com a FATURA em coluna e o item em meias-linhas (o vencimento e os itens lidos) */
+  ...['pdf', 'chave', 'cartao', 'nfse', 'coluna'].flatMap((v) => {
     const pronto = async (p) => { await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(600); };
     const parcelada10 = async (p) => {
       await clicarTexto('Pagamento')(p);
@@ -1492,6 +1583,15 @@ const CENARIOS = [
       await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: nome, mimeType: nome.endsWith('.xml') ? 'application/xml' : 'application/pdf', buffer: Buffer.from(conteudo) });
       await p.locator(nome.endsWith('.xml') ? '[data-testid="nota-lida"]' : '[data-testid="nota-nao-lida"]').waitFor({ timeout: 8000 });
       if (v === 'confere') await p.locator('[data-testid="nota-lancamento-fica"]').waitFor({ timeout: 8000 });
+      await p.waitForTimeout(400);
+    } })),
+  /* NOTA-LIGAR-LANCAMENTO-01 — a nota de outra filial: a linha da filial (Trocar), o quadro Nota × lançamento e a participação; `-troca` = a prévia da troca */
+  ...['ligar', 'ligar-troca'].map((v) => ({ nome: `documento-nota-${v}`, url: 'tela=documento-nota&v=ligar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    antes: async (p) => {
+      const conteudo = await p.evaluate(() => globalThis.__xmlDaBancada);
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: 'nota.xml', mimeType: 'application/xml', buffer: Buffer.from(conteudo) });
+      await p.locator('[data-testid="nota-x-linha"][data-quem="liberacao"]').waitFor({ timeout: 8000 });
+      if (v === 'ligar-troca') { await p.locator('[data-testid="nota-filial-trocar"]').click(); await p.locator('[data-testid="nota-filial-confirmar"]').waitFor({ timeout: 4000 }); }
       await p.waitForTimeout(400);
     } })),
   /* P167 — o modal do documento: a confirmação do cancelamento da nota NO RODAPÉ (à vista; o Salvar some) e a faixa da NF repetida */
@@ -1668,6 +1768,13 @@ const CENARIOS = [
   { nome: 'pendencias-resumo', url: 'tela=pendencias&v=resumo', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* UI-SEM-CORTE-02 — o Casar com o banco 1:1 (Acessos: os cenarios do ACESSOS-PERFIL-01, acima) */
   { nome: 'casar-1x1-vazio', url: 'tela=casar-1x1', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* CONC-CUSTEIO-FONTE-01 — o "Relatório de custeio" na régua (45 itens sintéticos, divergência em 3 escopos); `-rolado` = a lista rolada com
+     o topo e o cabeçalho presos */
+  ...['', '-rolado'].map((v) => ({ nome: `custeio-txt${v}`, url: 'tela=custeio-txt', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="bancada-custeio"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="custeio-item"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(500);
+      if (v) { await p.locator('[data-testid="bancada-custeio"]').evaluate((e) => { e.scrollTop = 400; }); await p.waitForTimeout(300); }
+    } })),
   { nome: 'conciliar-sobra', url: 'tela=conciliar&v=sobra', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },
   { nome: 'conciliar-falta', url: 'tela=conciliar&v=falta', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },
   { nome: 'conciliar-igual', url: 'tela=conciliar&v=igual', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },
@@ -2405,6 +2512,21 @@ function medirBotoesDentro(sel) {
   }
   return achados;
 }
+/* FECH-CARDS-QUEBRA-01 — `topoIgual` (opcional, por cenário): os elementos (ex.: o nome do card) cujos CARDS começam na mesma linha da grade
+   começam na mesma altura (o card vedado descia o título: o botão centralizava o conteúdo mais curto) */
+function medirTopoIgual(sel) {
+  const porLinha = new Map();
+  for (const el of document.querySelectorAll(sel)) {
+    const card = el.closest('button') ?? el.parentElement; const r = el.getBoundingClientRect(); if (r.width < 2) continue;
+    const linha = Math.round(card.getBoundingClientRect().top); (porLinha.get(linha) ?? porLinha.set(linha, []).get(linha)).push([el.textContent.trim(), r.top]);
+  }
+  const achados = [];
+  for (const itens of porLinha.values()) {
+    const min = Math.min(...itens.map(i => i[1]));
+    for (const [t, top] of itens) if (top > min + 0.5) achados.push({ regra: 'topo', texto: `"${t.slice(0, 20)}" começa ${Math.round(top - min)}px abaixo dos vizinhos da linha` });
+  }
+  return achados;
+}
 /* MAPA-EDITAR-POLIGONO-09 (UI-ESPACO-RESERVADO) — `visivelNaTela` (opcional, por cenário): cada seletor existe, está INTEIRO dentro da janela,
    dentro do `dentro` e de todo ancestral que corta (overflow ≠ visible), e é ele (ou um filho) que está no centro (nada por cima). Com
    `altura`, o `dentro` tem exatamente essa altura (a barra não cresce nem encolhe com o que mostra). */
@@ -2952,6 +3074,7 @@ try {
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
     if (cen.visivelNaTela) daRolagem.push(...(await p.evaluate(medirVisivelNaTela, cen.visivelNaTela)));
+    if (cen.topoIgual) daRolagem.push(...(await p.evaluate(medirTopoIgual, cen.topoIgual)));
     if (cen.mesmoEnquadramento) daRolagem.push(...(await medirMesmoEnquadramento(p))); // MAPA-ZOOM-ENTRE-VISOES-01
     if (cen.zoomSensibilidade) daRolagem.push(...(await medirZoomSensibilidade(p))); // MAPA-ZOOM-E-PAINEL-01
     if (/^mapa-(geo|validacao)-/.test(cen.nome)) daRolagem.push(...(await p.evaluate(medirCromoDoMapa))); // MAPA-CROMO-01

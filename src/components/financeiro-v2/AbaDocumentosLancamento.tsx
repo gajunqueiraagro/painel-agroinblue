@@ -44,7 +44,10 @@ import { ItensDaNotaDialog } from './ItensDaNotaDialog';
 import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
-import { completarComANota, desfazerCompletar, fornecedorPeloDocumento } from '@/lib/financeiro/nfeConsultas';
+import { completarComANota, definirParticipacao, desfazerCompletar, fornecedorPeloDocumento } from '@/lib/financeiro/nfeConsultas';
+import type { NotaLida } from '@/lib/financeiro/nfe/tipos';
+import { participacaoSugerida } from '@/lib/financeiro/nfe/notaXLancamento';
+import { NotaXLancamentoQuadro } from './NotaXLancamentoQuadro';
 import { camposDaNota, divergenciasDaNota, ehArquivoDeNota, FRASE_NOTA_NAO_LIDA, type CamposDaNota, type CampoDivergente } from '@/lib/financeiro/nfe/documentoDaNota';
 import {
   ESPECIES_LANC_DOC, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
@@ -82,10 +85,17 @@ function larguraDaColunaDocumento(ls: readonly LinhaDeDocumento[]): number {
 /** P164 — o que a nota que CONFERE deixou no lançamento (o modal aberto passa a mostrar isso; senão o Salvar seguinte gravaria por cima) */
 export interface FicaNoLancamento { numeroDocumento: string | null; tipoDocumento: string | null; dataCompetencia: string | null; safraId: string | null }
 /** P164 — o lançamento SALVO que a nota que confere completa (nº, tipo, competência) e quem fica sabendo do que o banco deixou */
-export interface CompletarPelaNota { lancamentoId: string; onCompletado: (fica: FicaNoLancamento) => void }
+export interface CompletarPelaNota { lancamentoId: string; onCompletado: (fica: FicaNoLancamento) => void;
+  /** NOTA-LIGAR-LANCAMENTO-01 P1 — a troca para a filial da nota gravou: o modal aberto passa a mostrar o fornecedor novo (senão o Salvar
+   *  seguinte gravaria o antigo por cima) */
+  onFornecedorTrocado?: (fornecedorId: string) => void }
+/** NOTA-LIGAR-LANCAMENTO-01 P1 — a criação de cadastro do hospedeiro ("Cadastrar esta filial"); devolve o criado ou a frase do que impediu */
+export type CriarFornecedorDoDocumento = (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | string>;
 
-export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto, onVerOQueANotaMuda, completarPelaNota }: {
+export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto, onVerOQueANotaMuda, completarPelaNota, onCriarFornecedor }: {
   api: LancamentoDocumentosApi;
+  /** NOTA-LIGAR-LANCAMENTO-01 P1 — "Cadastrar esta filial" (ausente = sem o gesto) */
+  onCriarFornecedor?: CriarFornecedorDoDocumento;
   completarPelaNota?: CompletarPelaNota;
   /** P127 + P128c — a nota lida no "Novo documento" abre a MESMA prévia do "+ Da nota" partindo deste lançamento (o caminho do "Ler a NF"
    *  do P128a). Devolve a frase pronta do que impediu, ou `null` (a prévia abriu). Ausente = sem o gesto. */
@@ -363,7 +373,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
 
       {formAberto && (
         <FormDocumento key={editando?.id ?? 'novo'} api={api} documento={editando} clienteId={clienteId} sugestao={sugestao} semBoleto={semBoleto}
-          onVerOQueANotaMuda={onVerOQueANotaMuda} completarPelaNota={completarPelaNota}
+          onVerOQueANotaMuda={onVerOQueANotaMuda} completarPelaNota={completarPelaNota} onCriarFornecedor={onCriarFornecedor}
           onAbrirExistente={(d) => { setEditando(d); setFormAberto(true); }}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
@@ -405,6 +415,8 @@ export interface SugestaoDocumento {
   emitenteId: string | null;
   /** A data de PAGAMENTO do lançamento: é a data sugerida quando o documento é um COMPROVANTE (FIN-DOCUMENTO-FORM-01). */
   dataPagamento?: string | null;
+  /** NOTA-LIGAR-LANCAMENTO-01 P2 — o VENCIMENTO do lançamento: o quadro Nota × lançamento avisa quando difere do da duplicata */
+  vencimento?: string | null;
   /** De onde a sugestão veio, na frase da faixa âmbar ("o lançamento" por padrão; no contrato de parcelamento, "o contrato" — 2a-fix1). */
   origem?: string;
 }
@@ -440,8 +452,10 @@ export const CAMPOS_POR_ESPECIE: Record<EspecieLancDoc, {
   outro: { numero: 'Identificação', data: 'Data', valor: 'Valor', emitente: 'Emitente', serie: false, chave: false, dataNaSugestao: 'data' },
 };
 
-export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao, onVerOQueANotaMuda, completarPelaNota, onAbrirExistente }: {
+export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao, onVerOQueANotaMuda, completarPelaNota, onAbrirExistente, onCriarFornecedor }: {
   api: LancamentoDocumentosApi;
+  /** NOTA-LIGAR-LANCAMENTO-01 P1 — "Cadastrar esta filial" (ausente = sem o gesto) */
+  onCriarFornecedor?: CriarFornecedorDoDocumento;
   /** P167 — a mesma NF já registrada aqui: abrir a que existe (no lugar de registrar outra) */
   onAbrirExistente?: (d: LancDocumento) => void;
   /** P164 — o lançamento salvo que a nota que confere completa (ausente = o documento só se registra, como sempre) */
@@ -478,7 +492,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
   const [enviando, setEnviando] = useState(false);
   /* P127 + P128c — A NOTA LIDA do arquivo (o MESMO leitor do "+ Da nota"): os campos dela, os bytes (os itens se gravam pela chave) e o
      que o formulário tinha ANTES (o que o lançamento diz), para mostrar lado a lado onde divergem. `avisoDaNota`: a nota que não se leu. */
-  const [lida, setLida] = useState<{ campos: CamposDaNota; bytes: ArrayBuffer; emitenteId: string | null;
+  const [lida, setLida] = useState<{ campos: CamposDaNota; nota: NotaLida; bytes: ArrayBuffer; emitenteId: string | null;
     antes: { numero: string; dataEmissao: string; valor: number | null; emitenteId: string; emitenteNome: string | null } } | null>(null);
   const [avisoDaNota, setAvisoDaNota] = useState<string | null>(null);
   const [lendoANota, setLendoANota] = useState(false);
@@ -556,7 +570,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
         if (ja.ok && ja.valor) propostoId = ja.valor.id;
       }
       if (especieAgora.current !== 'nf') return;
-      setLida({ campos: c, bytes, emitenteId: propostoId,
+      setLida({ campos: c, nota: r.nota, bytes, emitenteId: propostoId,
         antes: antesDaNota ?? { numero, dataEmissao, valor, emitenteId: emitenteEhOutro ? '' : emitenteId, emitenteNome: nomeDoEmitente } });
       setNumero(c.numero); setSerie(c.serie); setDataEmissao(c.emissao); setValor(c.valor); setChave(c.chave);
       if (propostoId) setEmitenteId(propostoId);
@@ -619,6 +633,16 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
     return () => { vivo = false; };
   }, [chaveDoPedido, clienteId, lida]);
   const previaAtual = previaDaNota && previaDaNota.chave === chaveDoPedido ? previaDaNota : null;
+
+  /* NOTA-LIGAR-LANCAMENTO-01 P1–P3 — o quadro Nota × lançamento: só no documento NOVO de um lançamento (há sugestão), fora da OC. A
+     participação (P3) só no lançamento salvo (o documento pendente ainda não tem id): sugerida = lançamento ÷ nota; o operador muda. */
+  const quadroPossivel = !!sug && !documento && !destinoOC && !!clienteId;
+  const comQuadro = quadroPossivel && !!lida;
+  const lancamentoCent = sug?.valor != null ? Math.round(Math.abs(sug.valor) * 100) : null;
+  const participacaoPadrao = lida && !pendente ? participacaoSugerida(lancamentoCent, lida.nota.totais.notaCent) : null;
+  const [participacaoEscolhida, setParticipacaoEscolhida] = useState<number | null>(null);
+  const participacaoPct = participacaoPadrao === null ? null : (participacaoEscolhida ?? participacaoPadrao);
+  const fornecedorDoLancamento = sug?.emitenteId ? doLeitor.fornecedores.find((f) => f.id === sug.emitenteId) ?? null : null;
   /** grava no lançamento pela função; devolve a operação (para desfazer se o documento falhar) e o que ficou, ou a frase da recusa */
   const completarOLancamento = async (): Promise<{ ok: true; operacao: string | null; fica: FicaNoLancamento | null } | { ok: false; frase: string }> => {
     if (!pedidoDaNota || !clienteId || !lida || (previaAtual && previaAtual.muda.length === 0 && !previaAtual.recusa)) return { ok: true, operacao: null, fica: null };
@@ -729,6 +753,11 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
         const erroItens = await gravarItensSemTravar(clienteId, lida.bytes);
         if (erroItens) toast.error(`Os itens da nota não foram guardados: ${erroItens}`);
       }
+      /* NOTA-LIGAR-LANCAMENTO-01 P3 — a participação deste lançamento na nota (a nota fica inteira); a falha não desfaz o documento, mas diz */
+      if (!documento && !pendente && clienteId && id && comQuadro && participacaoPct !== null && participacaoPct < 100) {
+        const eP = await definirParticipacao(clienteId, [id], participacaoPct);
+        if (eP) toast.error(`O documento foi registrado; os ${participacaoPct}% não foram guardados: ${eP}`);
+      }
       onFechar();
     } catch (e) {
       /* ⚠ A MENSAGEM DA RPC, INTEIRA: ela nomeia o que recusou (espécie inválida, versão
@@ -748,7 +777,10 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
           Observação | Arquivo) no lugar da coluna única que pedia rolagem para chegar ao Arquivo. Largura da família dos modais do
           lançamento; ALTURA FIXA de 492px (o pior caso medido: NF + aviso da sugestão + emitente "Outro" = 485), a mesma em todo tipo —
           trocar o tipo não muda o tamanho do modal. Teto na janela: só abaixo de ~524px de altura o corpo rola por dentro. */}
-      <DialogContent className="max-w-none w-[min(860px,calc(100vw-32px))] p-0 gap-0 overflow-hidden flex h-[min(492px,calc(100dvh-32px))] flex-col">
+      {/* NOTA-LIGAR-LANCAMENTO-01 — o documento NOVO de um lançamento pode ganhar o quadro Nota × lançamento (filial 24 + tabela de 3 linhas 79 +
+          rodapé 24 + vãos = +136px): a altura já nasce com ele (628), para ler a nota não mover o título nem o rodapé (UI-SEM-DESLOCAR-01). */}
+      <DialogContent className={cn('max-w-none w-[min(860px,calc(100vw-32px))] p-0 gap-0 overflow-hidden flex flex-col',
+        quadroPossivel ? 'h-[min(628px,calc(100dvh-32px))]' : 'h-[min(492px,calc(100dvh-32px))]')}>
         <div className="bg-primary px-4 py-2.5 text-primary-foreground flex shrink-0 items-center justify-between">
           <DialogTitle className="text-[14px] font-semibold">
             {documento ? 'Editar documento' : 'Novo documento'}
@@ -775,21 +807,43 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
           <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-[14px] text-destructive" role="alert" data-testid="nota-nao-lida">
             {avisoDaNota}</p>
         ) : lida ? (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-sky-300 bg-sky-50 px-2 py-1 text-[10px] leading-[14px] text-sky-900"
-            data-testid="nota-lida">
-            <span className="font-medium">Lido da nota {lida.campos.numero} (chave conferida){divergencias.length ? ` · difere ${sug ? `do que ${sug.origem ?? 'o lançamento'} diz` : 'do documento'}:` : ` · confere com ${sug?.origem ?? 'o lançamento'}`}</span>
-            {previaAtual && (previaAtual.recusa
-              ? <span className="text-destructive" data-testid="nota-lancamento-recusa">· o lançamento não muda: {previaAtual.recusa}</span>
-              : previaAtual.muda.length > 0 && <span data-testid="nota-lancamento-fica">· ao registrar, o lançamento fica com {previaAtual.muda.join(', ')}</span>)}
-            {divergencias.map((d) => (
-              <span key={d.campo} className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="nota-divergencia" data-campo={d.campo}>
-                {d.rotulo}: <b className={usaANota(d.campo) ? 'text-sky-900' : 'font-normal text-muted-foreground line-through'}>nota {d.nota}</b>
-                <span className={usaANota(d.campo) ? 'text-muted-foreground line-through' : 'font-semibold text-foreground'}>· {sug?.origem ?? 'lanç.'} {d.lancamento}</span>
-                <button type="button" className="underline underline-offset-2" onClick={() => trocarCampo(d.campo)} data-testid="nota-divergencia-trocar"
-                  data-trocar={d.campo}>
-                  {usaANota(d.campo) ? `usar o ${sug ? 'do lançamento' : 'do documento'}` : 'usar o da nota'}</button>
-              </span>
-            ))}
+          <div className="rounded border border-sky-300 bg-sky-50 px-2 py-1 text-[10px] leading-[14px] text-sky-900" data-testid="nota-lida">
+            <div className="flex flex-wrap items-center gap-x-2">
+              <span className="font-medium">Lido da nota {lida.campos.numero} (chave conferida){divergencias.length ? ` · difere ${sug ? `do que ${sug.origem ?? 'o lançamento'} diz` : 'do documento'}:` : ` · confere com ${sug?.origem ?? 'o lançamento'}`}</span>
+              {previaAtual && (previaAtual.recusa
+                ? <span className="text-destructive" data-testid="nota-lancamento-recusa">· o lançamento não muda: {previaAtual.recusa}</span>
+                : previaAtual.muda.length > 0 && <span data-testid="nota-lancamento-fica">· ao registrar, o lançamento fica com {previaAtual.muda.join(', ')}</span>)}
+            </div>
+            {/* NOTA-LIGAR-LANCAMENTO-01 (Chat 11/11 18:25, ALINHAMENTO SOBERANO) — onde a nota e o lançamento divergem é uma TABELINHA: Campo | Nota |
+                Lançamento | ação, uma linha por campo; o valor que vale fica em negrito (o outro, cinza — sem riscado); o emitente longo quebra, nunca "…" */}
+            {divergencias.length > 0 && (
+              <table className="mt-0.5 w-full table-fixed border-collapse" data-testid="nota-divergencias">
+                <colgroup><col style={{ width: 62 }} /><col /><col /><col style={{ width: 128 }} /></colgroup>
+                <thead><tr className="text-left text-[9.5px] text-sky-800">
+                  <th className="h-[16px] font-medium">Campo</th><th className="h-[16px] font-medium">Nota</th>
+                  <th className="h-[16px] font-medium">{sug ? 'Lançamento' : 'Documento'}</th><th className="h-[16px]" />
+                </tr></thead>
+                <tbody>
+                  {divergencias.map((d) => {
+                    const daNotaVale = usaANota(d.campo);
+                    return (
+                      <tr key={d.campo} className="border-t border-sky-200 align-top" data-testid="nota-divergencia" data-campo={d.campo}>
+                        <td className="py-px pr-2 text-muted-foreground">{d.rotulo}</td>
+                        <td className={cn('py-px pr-2 break-words', d.campo === 'emitente' ? '' : 'tabular-nums', daNotaVale ? 'font-semibold text-sky-900' : 'text-muted-foreground')}
+                          data-testid="nota-divergencia-nota">{d.nota}</td>
+                        <td className={cn('py-px pr-2 break-words', d.campo === 'emitente' ? '' : 'tabular-nums', daNotaVale ? 'text-muted-foreground' : 'font-semibold text-foreground')}
+                          data-testid="nota-divergencia-lancamento">{d.lancamento}</td>
+                        <td className="py-px text-right">
+                          <button type="button" className="whitespace-nowrap underline underline-offset-2" onClick={() => trocarCampo(d.campo)} data-testid="nota-divergencia-trocar"
+                            data-trocar={d.campo}>
+                            {daNotaVale ? `usar o ${sug ? 'do lançamento' : 'do documento'}` : 'usar o da nota'}</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         ) : (sugNumero || sugData || sugValor || sugEmitente) && (
           <p className="truncate rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] leading-[14px] text-amber-900" data-testid="sugestao-do-lancamento"
@@ -806,6 +860,19 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
                 data-testid="nota-abrir-existente">Abrir a que já existe</button>
             )}
           </p>
+        )}
+        {comQuadro && lida && clienteId && (
+          <NotaXLancamentoQuadro clienteId={clienteId} nota={lida.nota} notaFornecedorId={lida.emitenteId}
+            lancamento={{ id: completarPelaNota?.lancamentoId ?? null, valorCent: lancamentoCent, vencimento: sug?.vencimento ?? null, competencia: sug?.dataEmissao ?? null,
+              fornecedor: fornecedorDoLancamento ? { id: fornecedorDoLancamento.id, nome: fornecedorDoLancamento.nome, documento: fornecedorDoLancamento.cpf_cnpj } : null }}
+            participacaoPct={participacaoPct} participacaoPadrao={participacaoPadrao} onParticipacao={setParticipacaoEscolhida}
+            onCriarFornecedor={onCriarFornecedor}
+            onCadastrado={(id) => { setLida((l) => (l ? { ...l, emitenteId: id } : l)); setEmitenteId(id); }}
+            onTrocado={(id, nome) => {
+              /* o lançamento agora é da filial da nota: o "antes" (o lado a lado) passa a dizer isso, e o modal do lançamento também */
+              setLida((l) => (l ? { ...l, antes: { ...l.antes, emitenteId: id, emitenteNome: nome } } : l));
+              completarPelaNota?.onFornecedorTrocado?.(id);
+            }} />
         )}
         <BlocoFormulario titulo="Documento" testId="bloco-documento">
         <div className="grid grid-cols-4 gap-x-2 gap-y-1" data-testid="grade-do-documento">

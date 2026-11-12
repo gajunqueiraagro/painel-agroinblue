@@ -16,9 +16,21 @@ import type { DuplicataNFe } from '@/lib/financeiro/nfe/tipos';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { FORMA_CARTAO_CREDITO } from '@/lib/financeiro/formasPagamentoV2';
 
-export type ComoFoiPago = 'duplicatas' | 'avista' | 'cartao';
+export type ComoFoiPago = 'duplicatas' | 'avista' | 'cartao' | 'parcelado';
 export const MIN_PARCELAS_DO_CARTAO = 2;
 export const MAX_PARCELAS_DO_CARTAO = 24;
+/**
+ * NOTA-PAGTO-PARCELADO-01 (Gabriel 11/11, NF do trator: 110.000 + 4 × 25.000 por PIX) — "Parcelado (boleto, PIX, transferência, débito)":
+ * as MESMAS parcelas e a MESMA grade do cartão (iguais todo mês ou livres), com a conta normal do lançamento e a forma escolhida aqui.
+ * O gravador é o de sempre (`comPagamento` → `fn_parcelamento_cadastrar`): nada novo no banco.
+ */
+export const MIN_PARCELAS_DO_PARCELADO = 2;
+export const MAX_PARCELAS_DO_PARCELADO = 120;
+export const FORMAS_DO_PARCELADO: readonly string[] = ['Boleto', 'PIX', 'Transferência', 'Débito', 'Débito Automático'];
+/** a grade de parcelas (cartão ou parcelado): o máximo de parcelas de cada um */
+export const maxParcelasDe = (como: ComoFoiPago): number => (como === 'parcelado' ? MAX_PARCELAS_DO_PARCELADO : MAX_PARCELAS_DO_CARTAO);
+/** as formas que desenham a grade de parcelas no lugar das duplicatas */
+export const pagaEmGrade = (como: ComoFoiPago): boolean => como === 'cartao' || como === 'parcelado';
 export const FRASE_NOTA_SEM_DUPLICATAS = 'A nota não traz duplicatas.';
 
 /** Como a prévia abre: com duplicatas, nelas; sem, à vista. Depois, só o operador muda. */
@@ -152,17 +164,18 @@ export const nomeCurtoDoCartao = (nome: string) => nome.replace(/^\s*cart[ãa]o\
 export const rotuloDaSugestao = (nomeDoCartao: string, dia: number) => `1ª fatura · sugerido (${nomeCurtoDoCartao(nomeDoCartao)}, dia ${dia})`;
 
 /** As N parcelas iguais, todo mês no mesmo dia, pelo arredondamento do Novo lançamento › Parcelada (a última absorve a sobra). */
-export function parcelasDoCartao(totalCent: number, n: number, primeira: string): DuplicataNFe[] {
-  if (!(n >= MIN_PARCELAS_DO_CARTAO && n <= MAX_PARCELAS_DO_CARTAO) || !/^\d{4}-\d{2}-\d{2}$/.test(primeira) || !(totalCent > 0)) return [];
+export function parcelasDoCartao(totalCent: number, n: number, primeira: string, max: number = MAX_PARCELAS_DO_CARTAO): DuplicataNFe[] {
+  if (!(n >= MIN_PARCELAS_DO_CARTAO && n <= max) || !/^\d{4}-\d{2}-\d{2}$/.test(primeira) || !(totalCent > 0)) return [];
   return preverParcelas(totalCent / 100, n, primeira).map((x) => ({ numero: String(x.numero), vencimento: x.dataVencimento, valorCent: Math.round(x.valor * 100) }));
 }
 
 /**
  * A nota COMO FOI PAGA — a proposta que vai para a gravação, a busca e o Novo lançamento:
  *   duplicatas = a da nota, intocada · à vista = sem duplicatas (um lançamento, o vencimento escolhido) ·
- *   cartão = as parcelas do cartão no lugar das duplicatas (o valor = a soma delas; mensal se cabem no parcelamento de hoje, senão livres).
+ *   cartão / parcelado = as parcelas escolhidas no lugar das duplicatas (o valor = a soma delas; mensal se cabem no parcelamento de hoje,
+ *   senão livres); no parcelado a FORMA escolhida (boleto, PIX…) entra no lugar da do XML.
  */
-export function comPagamento(d: DoXml, como: ComoFoiPago, parcelas: readonly DuplicataNFe[] = []): DoXml {
+export function comPagamento(d: DoXml, como: ComoFoiPago, parcelas: readonly DuplicataNFe[] = [], forma = ''): DoXml {
   if (como === 'duplicatas') return d;
   const p = d.proposta;
   if (como === 'avista') return { ...d, proposta: { ...p, duplicatas: [], parcelamento: { tipo: 'unico', vencimento: '' } } };
@@ -171,7 +184,8 @@ export function comPagamento(d: DoXml, como: ComoFoiPago, parcelas: readonly Dup
   const parcelamento: ParcelamentoProposto = duplicatasCabemNoParcelamentoDeHoje(lista)
     ? { tipo: 'parcelado', parcelas: lista.length, primeiroVencimento: lista[0]?.vencimento ?? '' }
     : { tipo: 'livres', parcelas: lista.length };
-  return { ...d, proposta: { ...p, duplicatas: lista, valorCent: somaCent, parcelamento } };
+  const formaPagamento = como === 'parcelado' && forma ? forma : p.formaPagamento;
+  return { ...d, proposta: { ...p, duplicatas: lista, valorCent: somaCent, parcelamento, formaPagamento } };
 }
 
 /** O rodapé com o cartão: "O PDF fica anexado às 4 parcelas como a NF 778.618 · 4 saídas no Cartão Elo, uma em cada fatura." */

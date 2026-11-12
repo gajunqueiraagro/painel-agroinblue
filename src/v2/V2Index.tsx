@@ -512,6 +512,9 @@ export default function V2Index() {
      O pasto é estado (não ref): consumido, o Fechamento rerenderiza sem ele e não o reabre de novo. */
   const mesDoValorRebanhoRef = useRef<number | null>(null);
   const [voltaAoPasto, setVoltaAoPasto] = useState<string | null>(null);
+  /* PASTO-CADASTRO-GEO-01 P2 — a ida da ficha do pasto (Cadastros › Pastos) ao Geo e a volta, que reabre a MESMA ficha */
+  const [idaDoCadastroAoMapa, setIdaDoCadastroAoMapa] = useState<{ pastoId: string; desenhar: boolean } | null>(null);
+  const [fichaDoPastoNaVolta, setFichaDoPastoNaVolta] = useState<string | null>(null);
   // Estado para edição completa de Abate/Venda vinda da Conferência.
   // Quando setado, navega para `lancamentos-zoot` e abre LancamentosTab em edit mode.
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
@@ -555,6 +558,9 @@ export default function V2Index() {
   useEffect(() => {
     if (section !== 'valor-rebanho') mesDoValorRebanhoRef.current = null;
     if (section !== 'valor-rebanho' && section !== 'fechamento') setVoltaAoPasto(null);
+    /* saiu do Geo por outro caminho (a barra lateral): a ida acabou; fora do cadastro, a volta pendente também */
+    if (section !== 'mapa-geo-pastos') setIdaDoCadastroAoMapa(null);
+    if (section !== 'config-fazendas') setFichaDoPastoNaVolta(null);
   }, [section]);
   // Quando o lápis do modal "Lançamentos do mês" da Conciliação Bancária é clicado,
   // navegamos para 'financeiro-lanc' com ano/mês do contexto e habilitamos onBack
@@ -1357,7 +1363,13 @@ export default function V2Index() {
     );
     if (section === 'mapa-geo-pastos') return (
       /* MAPA-02a: o mapa geográfico lê o MESMO ano/mês do shell (FECH-MES-SELECIONADO-01) */
-      <MapaGeoPastosTab periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento} />
+      <MapaGeoPastosTab periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}
+        idaDoCadastro={idaDoCadastroAoMapa}
+        voltarAoCadastro={idaDoCadastroAoMapa ? () => {
+          setFichaDoPastoNaVolta(idaDoCadastroAoMapa.pastoId);
+          setIdaDoCadastroAoMapa(null);
+          setSection('config-fazendas');
+        } : undefined} />
     );
     /* LOTES-03 F1 — Produção › Lotes (lista + ficha + assistente) */
     if (section === 'lotes') return <LotesTab />;
@@ -1618,7 +1630,11 @@ export default function V2Index() {
     if (section === 'config-auditoria') return <AuditoriaTab />;
     /* ACESSOS-TELA-01 — so' admin: a secao nao tem a marca `liberadaClientes`, e a guarda unica da rota barra o resto. */
     if (section === 'config-acessos') return <AcessosTab />;
-    if (section === 'config-fazendas') return <V2Fazendas />;
+    if (section === 'config-fazendas') return (
+      <V2Fazendas fichaDoPastoParaAbrir={fichaDoPastoNaVolta} onFichaDoPastoAberta={() => setFichaDoPastoNaVolta(null)}
+        /* sem acesso ao Geo pastos, sem o botão (ACESSOS-FIN-01: sem a tela de destino, sem botão) */
+        aoAbrirPastoNoMapa={podeAbrirTela('mapa-geo-pastos') ? (pastoId, desenhar) => { setIdaDoCadastroAoMapa({ pastoId, desenhar }); setSection('mapa-geo-pastos'); } : undefined} />
+    );
     if (section === 'rebanho-home') return (
       /* ⚠ AS DUAS PROPS QUE FALTAVAM — PR-SELETOR-PERIODO-02. Esta montagem passava `ano` e
          `mes` sem os respectivos `onChange`, e ambos eram opcionais na tela: o seletor de lá

@@ -103,7 +103,7 @@ export function ListaDosPastos({
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<FiltroDeVigencia>('vigentes');
   const [agrupar, setAgrupar] = useState<Agrupar>('nenhum');
-  const quadro = useAlturaAteOFim({ folga: 96, minimo: 120 });
+  const quadro = useAlturaAteOFim({ folga: 28, minimo: 120 }); /* o pb-3 da PastosTab + o pé do pai (PASTO-CADASTRO-GEO-01: medido, a página não rola) */
   const [rolo, setRolo] = useState<HTMLDivElement | null>(null);
   const [disponivel, setDisponivel] = useState(0);
   useLayoutEffect(() => {

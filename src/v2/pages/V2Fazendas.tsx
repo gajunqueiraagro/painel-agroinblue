@@ -58,7 +58,13 @@ const EMPTY: CadastroRow = {
 
 const n = (v: string) => (v.trim() === '' ? 0 : Number(v));
 
-export function V2Fazendas() {
+/** PASTO-CADASTRO-GEO-01 P2 — a ficha do pasto que a volta do Geo reabre (abre direto na aba Pastos) e a ida ao Geo */
+export interface V2FazendasProps {
+  fichaDoPastoParaAbrir?: string | null;
+  onFichaDoPastoAberta?: () => void;
+  aoAbrirPastoNoMapa?: (pastoId: string, desenhar: boolean) => void;
+}
+export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta, aoAbrirPastoNoMapa }: V2FazendasProps = {}) {
   const { fazendaAtual, isGlobal, fazendas, setFazendaAtual, reloadFazendas, criarFazenda } = useFazenda();
   const { clienteAtual } = useCliente();
   const { pastos } = usePastos();
@@ -123,7 +129,7 @@ export function V2Fazendas() {
   // Callback ref, NÃO useRef: useRef não dispara re-render quando o nó monta, e o
   // portal do PastosTab renderizaria contra null na primeira passada.
   const [hostBarra, setHostBarra] = useState<HTMLDivElement | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>('area');
+  const [activeTab, setActiveTab] = useState<TabKey>(fichaDoPastoParaAbrir ? 'pastos' : 'area');
   const [data, setData] = useState<CadastroRow>(EMPTY);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -978,7 +984,8 @@ export function V2Fazendas() {
         </div>
       )}
 
-      {activeTab === 'pastos' && <PastosTab hostBarra={hostBarra} />}
+      {activeTab === 'pastos' && <PastosTab hostBarra={hostBarra} fichaInicial={fichaDoPastoParaAbrir} onFichaInicialAberta={onFichaDoPastoAberta}
+        aoAbrirPastoNoMapa={aoAbrirPastoNoMapa} />}
 
       {activeTab === 'rebanho' && <AbaRebanhoInicial />}
 
