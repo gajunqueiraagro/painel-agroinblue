@@ -28,7 +28,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { nomeDoHistorico } from '@/lib/conciliacao/nomeDoHistorico';
 import { TabelaDaLista } from '@/components/financeiro-v2/TabelaDaLista';
-import { CabecalhoParaCasar, LinhaParaCasarNaTabela, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, colunasParaCasar, largurasParaCasar,
+import { CabecalhoParaCasar, LinhaParaCasarNaTabela, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, TODAS_AS_COLUNAS_PARA_CASAR, largurasParaCasar,
   ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR } from '@/components/conciliacao/TabelaParaCasar';
 import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/conciliacao/complementoDasLinhas';
 import {
@@ -113,9 +113,9 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
   const alturaFixa = ALTURA_DO_CABECALHO_PARA_CASAR + LINHAS_A_VISTA * ALTURA_DA_LINHA_PARA_CASAR + 2;
   /* o cabeçalho só fica PRESO quando o quadro rola de fato (mais linhas que as à vista) — preso num quadro que não rola é vão (P153) */
   const linhasNoQuadro = (frase ? 1 : 0) + (estado.tipo === 'pronto' ? Math.max(1, achados.length) : estado.tipo === 'falhou' ? 1 : 0);
-  /* UI-FONTE-GATE-01: Faz. e NF só quando algum achado tem o dado (a largura vazia vai para Descrição e Fornecedor) */
-  const colunas = colunasParaCasar(achados.map((a) => ({ fazendaCodigo: a.fazendaCodigo ?? a.fazenda ?? null, fazendaNome: a.fazenda ?? null,
-    numeroDocumento: complemento.get(a.lancamentoId)?.numeroDocumento ?? null })));
+  /* UI-FONTE-GATE-01 (Chat 12/11 17:05, escolha A): no histórico Faz. e NF ficam SEMPRE reservadas — os achados chegam por gesto e a NF
+     ainda depois (o complemento); colunas pelo dado fariam o cabeçalho andar (desloca casar-sugestoes-procurar). Só as Sugestões as tiram. */
+  const colunas = TODAS_AS_COLUNAS_PARA_CASAR;
   const larguras = largurasParaCasar(colunas);
 
   return (
