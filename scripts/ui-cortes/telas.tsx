@@ -2751,14 +2751,18 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
       props.documentosAntesDeSalvar = true;
       renderizar();
     })();
-  } else if (v === 'notapdf' || v === 'notachave' || v === 'notacartao') {
+  } else if (v === 'notapdf' || v === 'notachave' || v === 'notacartao' || v === 'notacoluna') {
     void (async () => {
       const { jsPDF } = await import('jspdf');
-      const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+      const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata, danfeSinteticoFaturaEmColuna } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
       const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
       const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
-      if (v === 'notachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
+      /* NOTA-PDF-REGRESSAO-01 — `notacoluna`: o DANFE em pé com a FATURA em coluna e o item em meias-linhas (o leiaute da NF que não se lia);
+         a fonte do tamanho do real (maior, a chave passa da borda e sai cortada) */
+      const emPe = v === 'notacoluna';
+      const doc = emPe ? new jsPDF({ orientation: 'portrait', unit: 'pt', format: [595.28, 841.89] }) : new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
+      if (emPe) for (const it of danfeSinteticoFaturaEmColuna()[0]) { doc.setFontSize(Math.max(4, it.h)); doc.text(it.str, it.x, 841.89 - it.y); }
+      else if (v === 'notachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
       else for (const it of (v === 'notacartao' ? danfeSinteticoSemDuplicata() : PAGINAS_DANFE_SINTETICO)[0]) { doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 595.28 - it.y); }
       const bytes: ArrayBuffer = doc.output('arraybuffer');
       let lido: any;
@@ -2775,7 +2779,7 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
       const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: '280000002' }], emitente: resolucao,
         favorecidoId: resolucao.propostoId, ultima: { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' } });
       props.prefill = { ...prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente,
-        resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, '000.000.937.pdf') } as any), ...(v === 'notacartao' ? { conta_bancaria_id: 'elo' } : {}) };
+        resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, emPe ? '000.004.321.pdf' : '000.000.937.pdf') } as any), ...(v === 'notacartao' ? { conta_bancaria_id: 'elo' } : {}) };
       props.documentosAntesDeSalvar = true;
       renderizar();
     })();

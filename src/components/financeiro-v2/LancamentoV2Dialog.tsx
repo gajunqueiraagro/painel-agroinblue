@@ -2954,7 +2954,14 @@ export function LancamentoV2Dialog({
                 <AvisosDoXml xml={xml} registradaDispensada={xmlRegistradaDispensada}
                   preenchido={{ fazenda: !!fazendaId, vencimento: /^\d{4}-\d{2}-\d{2}$/.test(dataVencimento) }}
                   onDispensarRegistrada={() => setXmlRegistradaDispensada(true)} onAbrirOcorrencia={abrirOcorrenciaDaNota} />
-                {xmlAmbar('subcentro') && (
+                {/* NOTA-PDF-REGRESSAO-01 (Chat 12/11 13:45) — item com NCM de máquina/implemento/veículo (84xx/87xx): a nota pode ser BEM DO
+                    PATRIMÔNIO; o aviso vem no lugar da última classe do fornecedor (que segue no title) */}
+                {xml.proposta.ncmDeBem ? (
+                  <div className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-bem"
+                    title={`NCM ${xml.proposta.ncmDeBem}: máquina, implemento ou veículo. Se for bem durável, ligue em Patrimônio.${xml.proposta.classificacao?.subcentro ? ` Última classe deste fornecedor: ${xml.proposta.classificacao.subcentro}.` : ''}`}>
+                    <span className="min-w-0 truncate">Pode ser bem do patrimônio (NCM {xml.proposta.ncmDeBem}) — ligar em Patrimônio</span>
+                  </div>
+                ) : xmlAmbar('subcentro') && (
                   <div className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
                     title={`Classificação sugerida: ${xml.proposta.classificacao?.subcentro ?? ''} · ${xml.proposta.origens.subcentro ?? ''}`}>
                     <span className="min-w-0 truncate">Classificação sugerida: {xml.proposta.classificacao?.subcentro} · {xml.proposta.origens.subcentro} deste fornecedor</span>

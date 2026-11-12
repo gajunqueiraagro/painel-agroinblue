@@ -124,8 +124,12 @@ export interface PropostaDeLancamento {
   formaPagamento: string;             // '' quando o tPag nao mapeia
   numeroDocumento: string;
   descricao: string;
-  /** NOTA-NFSE-LEITURA-02 — o que o campo Descrição traz ao abrir: '' na NF-e (30/10); a curta do serviço na NFS-e (D1 a, 08/11). */
+  /** NOTA-NFSE-LEITURA-02 — o que o campo Descrição traz ao abrir: a curta do serviço na NFS-e (D1 a, 08/11); na NF-e a do 1o item
+   *  (NOTA-PDF-REGRESSAO-01, 12/11; antes, 30/10, vazia). */
   descricaoInicial: string;
+  /** NOTA-PDF-REGRESSAO-01 (Chat 12/11 13:45) — o NCM de maquina/implemento/veiculo (84xx/87xx) de um item: a nota pode ser BEM DO
+   *  PATRIMONIO; a tela avisa em vez de so' repetir a ultima classe do fornecedor. `null` = nenhum. */
+  ncmDeBem: string | null;
   /** O documento NF que nasce junto (o XML e' o arquivo dele). */
   documento: {
     numero: string; serie: string; chaveAcesso: string; dataEmissao: string; valorCent: number;
@@ -187,6 +191,26 @@ export function descricaoCurtaDoServico(nota: Pick<NotaLida, 'servico' | 'itens'
   else return s.codigoTributacao ? `Serviço ${s.codigoTributacao}` : '';
   texto = cortarNaPalavra(texto, LIMITE_DA_DESCRICAO_CURTA);
   return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** NOTA-PDF-REGRESSAO-01 (Chat 12/11 13:15, Gabriel 12:56: "descrição vazia") — a NF-e tambem nasce com a descricao SUGERIDA pelo item
+ *  (antes, 30/10, vazia): o 1o item em caixa de frase, ate' 60 caracteres sem cortar palavra, e "· N itens" quando ha' mais; sem item = vazia. */
+export function descricaoCurtaDoItem(nota: Pick<NotaLida, 'itens'>): string {
+  const nomes = nota.itens.map((i) => i.descricao.trim()).filter(Boolean);
+  if (!nomes.length) return '';
+  const sufixo = nomes.length > 1 ? ` · ${nomes.length} itens` : '';
+  const texto = cortarNaPalavra(fraseCurta(nomes[0]), LIMITE_DA_DESCRICAO_CURTA - sufixo.length) + sufixo;
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** NOTA-PDF-REGRESSAO-01 — o 1o NCM de bem duravel entre os itens: capitulo 84 (maquinas e implementos) ou 87 (veiculos, tratores,
+ *  reboques). So' NF-e; a NFS-e nao tem NCM. */
+export function ncmDeBemDoPatrimonio(nota: Pick<NotaLida, 'itens'>): string | null {
+  for (const i of nota.itens) {
+    const ncm = (i.fiscal?.ncm ?? '').replace(/\D/g, '');
+    if (/^(84|87)\d{6}$/.test(ncm)) return ncm;
+  }
+  return null;
 }
 
 /** De que lado da nota o cliente esta', pela inscricao estadual das fazendas dele. */
@@ -322,7 +346,8 @@ export function proporLancamento(entrada: {
       /* P164 (Gabriel 28/10 15:22) — o nº no lançamento é "000.009.952" (sem "NF": o tipo diz Nota Fiscal); a mesma regra do lote */
       numeroDocumento: formatNFNumber(nota.numero) || nota.numero,
       descricao: descricaoDaNota(nota),
-      descricaoInicial: nota.modelo === 'nfse' ? descricaoCurtaDoServico(nota) : '',
+      descricaoInicial: nota.modelo === 'nfse' ? descricaoCurtaDoServico(nota) : descricaoCurtaDoItem(nota),
+      ncmDeBem: ncmDeBemDoPatrimonio(nota),
       documento: {
         numero: numeroDaNota(nota.numero), serie: nota.serie, chaveAcesso: nota.chave, dataEmissao: nota.emissao,
         valorCent: nota.totais.notaCent, emitenteId: favorecidoId, emitenteNome: nota.emitente.nome,
