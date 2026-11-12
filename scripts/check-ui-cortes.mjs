@@ -1350,6 +1350,25 @@ const CENARIOS = [
   ...['diverge', 'jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
   })),
+  /* NOTA-PAGTO-PARCELADO-01 (Gabriel 11/11) — P3 o aviso "não é compra" (a nota de conserto); P1 o "Outros lançamentos do fornecedor" com 2
+     marcados (o rodapé soma × nota × diferença); P2 o "Como foi pago? › Parcelado" no caminho Criar (a forma, as parcelas, a grade) */
+  { nome: 'nota-pdf-semcompra', url: 'tela=nota-pdf&v=jalancada&natureza=conserto', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' } },
+  { nome: 'nota-pdf-outros', url: 'tela=nota-pdf&v=jalancada&outros=1', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="outros-lancamentos"]',
+    antes: async (p) => {
+      await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(800);
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-outros-abrir"]').click(); await p.waitForTimeout(800);
+      const c = p.locator('[data-testid="outros-marcar"]:not([disabled])'); await c.nth(0).click(); await p.waitForTimeout(300);
+    } },
+  { nome: 'nota-pdf-criar-parcelado', url: 'tela=nota-pdf&v=jalancada', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(800);
+      await p.locator('[data-testid="nota-mais"]').click(); await p.waitForTimeout(300); await p.locator('[data-testid="nota-mais-criar-novo"]').click(); await p.waitForTimeout(500);
+      const aba = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' }); if (await aba.count()) { await aba.first().click(); await p.waitForTimeout(300); }
+      await p.locator('[data-testid="nota-como-foi-pago"]').click(); await p.waitForTimeout(300); await p.locator('[data-testid="nota-como-parcelado"]').click(); await p.waitForTimeout(500);
+    } },
   /* P101 — abaixo de 1000px a prévia tem três abas: as outras duas (Parcelas e lançamento; Arquivo) em todas as variantes, nos estreitos. P163-2: a
      nota JÁ LANÇADA tem as abas dela (abaixo, `nota-pdf-ja-*`) */
   ...['diverge']
@@ -1467,6 +1486,15 @@ const CENARIOS = [
       await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: nome, mimeType: nome.endsWith('.xml') ? 'application/xml' : 'application/pdf', buffer: Buffer.from(conteudo) });
       await p.locator(nome.endsWith('.xml') ? '[data-testid="nota-lida"]' : '[data-testid="nota-nao-lida"]').waitFor({ timeout: 8000 });
       if (v === 'confere') await p.locator('[data-testid="nota-lancamento-fica"]').waitFor({ timeout: 8000 });
+      await p.waitForTimeout(400);
+    } })),
+  /* NOTA-LIGAR-LANCAMENTO-01 — a nota de outra filial: a linha da filial (Trocar), o quadro Nota × lançamento e a participação; `-troca` = a prévia da troca */
+  ...['ligar', 'ligar-troca'].map((v) => ({ nome: `documento-nota-${v}`, url: 'tela=documento-nota&v=ligar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    antes: async (p) => {
+      const conteudo = await p.evaluate(() => globalThis.__xmlDaBancada);
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: 'nota.xml', mimeType: 'application/xml', buffer: Buffer.from(conteudo) });
+      await p.locator('[data-testid="nota-x-linha"][data-quem="liberacao"]').waitFor({ timeout: 8000 });
+      if (v === 'ligar-troca') { await p.locator('[data-testid="nota-filial-trocar"]').click(); await p.locator('[data-testid="nota-filial-confirmar"]').waitFor({ timeout: 4000 }); }
       await p.waitForTimeout(400);
     } })),
   /* P167 — o modal do documento: a confirmação do cancelamento da nota NO RODAPÉ (à vista; o Salvar some) e a faixa da NF repetida */

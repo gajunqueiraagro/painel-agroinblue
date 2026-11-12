@@ -1823,6 +1823,8 @@ export function LancamentoV2Dialog({
     emitenteId: favorecidoId || null,
     /* FIN-DOCUMENTO-FORM-01 — o comprovante sugere a data do PAGAMENTO, não a competência */
     dataPagamento: dataPagamento || null,
+    /* NOTA-LIGAR-LANCAMENTO-01 P2 — o quadro Nota × lançamento avisa o vencimento que difere do da duplicata */
+    vencimento: dataVencimento || null,
   };
 
   const contasDisponiveis = contas;
@@ -3710,7 +3712,15 @@ export function LancamentoV2Dialog({
                     setClassificacao((c) => ({ ...c, safra_id: fica.safraId ?? '' }));
                     if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id, null, [lancamento.id]);
                   },
+                  /* NOTA-LIGAR-LANCAMENTO-01 P1 — a troca para a filial da nota já gravou (a RPC avisou a lista): o modal mostra o novo */
+                  onFornecedorTrocado: (id) => setFavorecidoId(id),
                 } : undefined}
+                /* NOTA-LIGAR-LANCAMENTO-01 P1 — "Cadastrar esta filial": a MESMA criação do "+ novo fornecedor" deste modal (pede a fazenda) */
+                onCriarFornecedor={async (nome, cpfCnpj) => {
+                  if (!fazendaId) return 'Escolha a fazenda do lançamento antes de cadastrar a filial.';
+                  const f = await onCriarFornecedor(nome, fazendaId, cpfCnpj);
+                  return f ? { id: f.id, nome: f.nome } : 'A filial não foi cadastrada.';
+                }}
                 onAnexarBoletosDasParcelas={irmas ? () => setAnexarBoletos('irmas') : undefined} />
             ) : documentosAntesDeSalvar && formaPagamentoParc === 'parcelada' && numParcelas >= 2 ? (
               /* PR 2b — PARCELADO: os documentos da COMPRA (ligados às N) e a grade de parcelas com o boleto

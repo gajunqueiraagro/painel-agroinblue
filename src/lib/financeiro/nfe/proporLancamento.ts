@@ -19,7 +19,7 @@ import type { AvisoNFe, DuplicataNFe, NotaLida } from './tipos';
 import type { ResolucaoEmitente } from './resolverEmitente';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from './formatos';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
-import { fraseDaRemessa } from './remessaEntregaFutura';
+import { fraseDaRemessa, fraseDeSemCompra } from './remessaEntregaFutura';
 
 /** O `tPag` da nota -> a forma de pagamento do SISTEMA (`FORMAS_PAGAMENTO_V2`). Mapa FECHADO: o que nao esta' aqui fica vazio
  *  (cheque 02 e deposito 16 nao tem forma correspondente na lista do sistema). */
@@ -248,9 +248,16 @@ export function proporLancamento(entrada: {
     avisos.push(`Duplicatas ${reais(nota.somaDuplicatasCent)} · nota ${reais(nota.totais.notaCent)}. Lançamento = ${reais(nota.somaDuplicatasCent)} · diferença ${reais(nota.somaDuplicatasCent - nota.totais.notaCent)}`);
   }
 
+  /* NOTA-PAGTO-PARCELADO-01 P3 — a nota que NÃO É COMPRA (conserto, retorno, demonstração, simples faturamento…): o aviso vai PRIMEIRO
+     e a proposta não sugere pagamento (sem duplicatas, sem vencimento, sem forma) */
+  const semCompra = fraseDeSemCompra(nota);
+  if (semCompra) avisos.unshift(semCompra);
+
   /* AS PARCELAS. */
   let parcelamento: ParcelamentoProposto;
-  if (!temDuplicatas) {
+  if (semCompra) {
+    parcelamento = { tipo: 'unico', vencimento: '' };
+  } else if (!temDuplicatas) {
     parcelamento = { tipo: 'unico', vencimento: '' };
     avisos.push(FRASE_SEM_DUPLICATAS);
   } else if (nota.duplicatas.length === 1) {
@@ -295,7 +302,7 @@ export function proporLancamento(entrada: {
   if (ultima) origens.subcentro = `último · ${dataCurta(ultima.data)}`;
 
   /* A FORMA: o primeiro tPag que o mapa conhece. */
-  const formaPagamento = nota.pagamentos.map((p) => FORMA_POR_TPAG[p.tPag]).find((f) => !!f) ?? '';
+  const formaPagamento = semCompra ? '' : nota.pagamentos.map((p) => FORMA_POR_TPAG[p.tPag]).find((f) => !!f) ?? '';
   if (formaPagamento) origens.forma = 'do XML';
 
   return {
@@ -310,7 +317,7 @@ export function proporLancamento(entrada: {
       valorCent,
       classificacao: ultima,
       parcelamento,
-      duplicatas: nota.duplicatas,
+      duplicatas: semCompra ? [] : nota.duplicatas,
       formaPagamento,
       /* P164 (Gabriel 28/10 15:22) — o nº no lançamento é "000.009.952" (sem "NF": o tipo diz Nota Fiscal); a mesma regra do lote */
       numeroDocumento: formatNFNumber(nota.numero) || nota.numero,
