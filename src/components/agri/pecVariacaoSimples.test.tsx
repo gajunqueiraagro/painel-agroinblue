@@ -23,7 +23,7 @@ const BASE: PatrimonioPec = {
     { categoria: 'garrotes', q0: 0, pm0: null, pk0: null, v0: 0, q1: 100, pm1: 300, pk1: 12, v1_p0: 360000, v1_p1: 360000,
       vpb: 360000.4, efeito: 0, agio: -50000, agio_sem_preco: false, cab_reclass_entrada: 100, cab_reclass_saida: 0, at_reclass_entrada: 666.67, at_reclass_saida: 0 },
   ],
-  total: { q0: 100, v0: 280000, q1: 100, v1_p0: 360000, v1_p1: 360000, vpb: 80000, efeito: 0, agio: -50000, agio_sem_preco: false },
+  total: { q0: 100, v0: 280000, q1: 100, v1_p0: 360000, v1_p1: 360000, vpb: 80000, efeito: 0, agio: -50000, agio_sem_preco: false, preco_ref_do_fim: [] },
   meses: [
     { ano_mes: '2030-12', fonte: 'fechamento', arrobas: 666.67, v_ref: 280000, v_mes: 280000 },
     { ano_mes: '2031-06', fonte: 'fechamento', arrobas: 1000, v_ref: 360000, v_mes: 360000 },
@@ -117,5 +117,16 @@ describe('modal da variação — 2 abas', () => {
     expect(screen.getByTestId('variacao-card-producao').textContent).toContain('VBP');
     expect(screen.getByTestId('variacao-card-producao').textContent).not.toContain('Variação por produção');
     expect(screen.getByTestId('variacao-no-dre').textContent).toContain('jan–jun/31');
+  });
+
+  it('DRE-PRECO-REF-01: o aviso do preço do fim só aparece com `preco_ref_do_fim`, com os nomes da casa no title', () => {
+    const { unmount } = abrir();
+    expect(screen.queryByTestId('variacao-aviso-preco-fim')).toBeNull();
+    unmount();
+    abrir({ total: { ...BASE.total, preco_ref_do_fim: ['desmama_m', 'desmama_f'] } });
+    const av = screen.getByTestId('variacao-aviso-preco-fim');
+    expect(av.textContent).toContain('2 categorias usaram o preço do fim');
+    expect(av.textContent).toContain('01/01/2031');
+    expect(av.getAttribute('title')).toContain('Desmama M, Desmama F');
   });
 });

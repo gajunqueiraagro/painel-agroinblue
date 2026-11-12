@@ -96,6 +96,9 @@ export function PecPatrimonioModal({
   const anoP1 = /^\d{4}-\d{2}$/.test(p1) ? Number(p1.slice(0, 4)) : null;
   const cats = useMemo(() => montar(patrimonio?.categorias ?? []), [patrimonio]);
   const datas = useMemo(() => datasDasPontas(p0, p1), [p0, p1]);
+  const nomesFim = useMemo(() => (patrimonio?.total.preco_ref_do_fim ?? []).map(nomeDe), [patrimonio]);
+  const avisoFim = nomesFim.length === 0 ? null
+    : `Sem fechamento nem tabela de preços em ${datas.inicio === '—' ? 'o início' : datas.inicio}: ${nomesFim.join(', ')} — valoradas ao preço do fim (a produção delas fica sem efeito de mercado). Corrija na tabela do Valor do Rebanho.`;
 
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
@@ -152,8 +155,15 @@ export function PecPatrimonioModal({
           )}
         </div>
 
-        <div className="shrink-0 truncate px-3 text-[9.5px] leading-[22px] text-white/80" style={{ backgroundColor: NAVY }}>
-          Valores estimados · preços do valor do rebanho de cada mês · arrobas = kg vivo ÷ 30
+        {/* ⚠ DRE-PRECO-REF-01: a categoria SEM preço no início (nem fechamento nem tabela no mês de P0) foi valorada ao preço do
+            FIM — a produção dela fica sem efeito de mercado. O aviso mora no RODAPÉ (altura fixa): aparecer não move o modal. */}
+        <div className="flex shrink-0 items-center gap-2 px-3 text-[9.5px] leading-[22px] text-white/80" style={{ backgroundColor: NAVY }}>
+          {avisoFim && (
+            <span data-testid="variacao-aviso-preco-fim" title={avisoFim} className="shrink-0 font-medium" style={{ color: '#FAC775' }}>
+              ⚠ Sem preço em {datas.inicio}: {nomesFim.length} {nomesFim.length === 1 ? 'categoria usou' : 'categorias usaram'} o preço do fim
+            </span>
+          )}
+          <span className="min-w-0 truncate">Valores estimados · preços do valor do rebanho de cada mês · arrobas = kg vivo ÷ 30</span>
         </div>
       </DialogContent>
     </Dialog>

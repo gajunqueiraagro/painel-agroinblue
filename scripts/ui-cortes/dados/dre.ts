@@ -116,7 +116,9 @@ export function patrimonio(a: { p_de?: string; p_ate?: string }, escala: number,
   const at0 = categorias.reduce((x, c) => x + c.q0 * (c.pm0 ?? 0), 0) / 30;
   const at1 = categorias.reduce((x, c) => x + c.q1 * (c.pm1 ?? 0), 0) / 30;
   const total = { q0: s(c => c.q0), v0: s(c => c.v0), q1: s(c => c.q1), v1_p0: s(c => c.v1_p0), v1_p1: s(c => c.v1_p1),
-    vpb: s(c => c.vpb), efeito: s(c => c.efeito), agio: s(c => c.agio), agio_sem_preco: false };
+    vpb: s(c => c.vpb), efeito: s(c => c.efeito), agio: s(c => c.agio), agio_sem_preco: false,
+    /* DRE-PRECO-REF-01: no pior caso de largura (escala 10) o rodapé leva o aviso do preço do fim — o gate o mede */
+    preco_ref_do_fim: escala >= 10 ? ['desmama_m', 'desmama_f', 'novilhas'] : [] };
   /* DRE-VARIACAO-SIMPLES-01: os meses são os do período PEDIDO (P0 = o mês anterior ao início) — com o comparar 1 ano a 1ª coluna é o ano
      anterior, e um P0 fixo em dez/25 dava "01/01/2026 a 30/09/2025" no cabeçalho do modal */
   const ate = String(a.p_ate ?? '2026-09').slice(0, 7);
