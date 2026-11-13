@@ -1444,7 +1444,7 @@ export default function V2Index() {
       />
     );
     if (section === 'chuvas') return (
-      <ChuvasTab mode="analitico" />
+      <ChuvasTab mode="analitico" onLancar={podeAbrirTela('chuvas-lancamento') ? abrirChuvasComVolta : undefined} />
     );
     if (section === 'chuvas-lancamento') return (
       <ChuvasTab mode="operacional" />
