@@ -237,6 +237,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   difere" só em aberto a ±5 dias (`JANELA_MESMO_FORNECEDOR_DIAS`; a E3 segue); modal até 1400px e altura toda, 9px/17/8,5 (exceção declarada).
 - CONC-SUGESTOES-FONTE-01: o fornecedor que o HISTÓRICO conhece (o `resumo` da busca do P153, pela `fn_conciliacao_fornecedores_do_historico`, nunca regra
   na tela) vem primeiro nas sugestões e a pista de nome de OUTRO fornecedor vai ao fim com "só texto parecido"; o Sugestões para casar usa a fonte da lista do Financeiro (sem variante grande).
+- CONC-ORDENAR-01: na Conciliação TODA tabela ordena pelo `ThOrdenavel` (Palco; Saldos por conta DENTRO do grupo, Total e faixas parados); o Resumo do mês é exceção declarada (`data-ordenar-excecao`, linhas fixas da conta).
 - UI-FONTE-GATE-01 (1): nas tabelas de casar o nome QUEBRA (`quebra`), nunca "…"; Faz./NF nas Sugestões só com dado, no histórico SEMPRE reservadas (chegam por gesto: o cabeçalho não anda); seta da ordem antes do rótulo à direita.
 - P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
   seguem sem os sem caixa.

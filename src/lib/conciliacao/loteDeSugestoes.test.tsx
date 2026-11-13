@@ -140,3 +140,29 @@ describe('P124 — o palco do mês', () => {
     expect(within(conferir).getByTestId('resultado-par')).toHaveTextContent('recusado');
   });
 });
+
+/* CONC-ORDENAR-01 (regra soberana de 29/10, gate check-ui-ordenar) — toda coluna do palco ordena; a ordem padrão é a de sempre (data) */
+describe('CONC-ORDENAR-01 — o palco ordena pelo cabeçalho', () => {
+  const montar = () => render(<PalcoDoMes clienteId="cli" contaId="bb" contaNome="Banco Exemplo" ano={2031} mes={10} aoFechar={vi.fn()} />);
+  const ids = () => screen.getAllByTestId('linha-palco').map((l) => within(l).getAllByRole('cell')[2].textContent);
+  beforeEach(() => {
+    B.movimentos = [mov('a', -50, { data_movimento: '2031-10-01' }), mov('b', -900, { data_movimento: '2031-10-02' }), mov('c', -300, { data_movimento: '2031-10-03' })];
+    B.rpc.mockResolvedValue({ data: [], error: null });
+  });
+  it('sem clique, a ordem de sempre (data, a mais antiga primeiro) e nenhuma seta; Valor ordena (maior primeiro) e o 2º clique inverte', () => {
+    montar();
+    expect(ids()).toEqual(['PIX - ENVIADO a', 'PIX - ENVIADO b', 'PIX - ENVIADO c']);
+    const valor = screen.getByTitle('Ordenar por Valor');
+    expect(valor.getAttribute('aria-sort')).toBe('none');
+    fireEvent.click(valor);
+    expect(valor.getAttribute('aria-sort')).toBe('descending');
+    expect(ids()).toEqual(['PIX - ENVIADO a', 'PIX - ENVIADO c', 'PIX - ENVIADO b']);   // −50 > −300 > −900
+    fireEvent.click(valor);
+    expect(ids()).toEqual(['PIX - ENVIADO b', 'PIX - ENVIADO c', 'PIX - ENVIADO a']);
+  });
+  it('as dez colunas de dado têm cabeçalho que ordena', () => {
+    montar();
+    const rotulos = [...screen.getByTestId('tabela-palco').querySelectorAll('thead th[aria-sort]')].map((th) => th.textContent);
+    expect(rotulos).toEqual(['Data', 'Movimento do banco', 'Valor', 'Estado', 'Sugestão do sistema', 'Favorecido', 'Venc.', 'Valor sist.', 'Δ R$', 'Δ dias']);
+  });
+});
