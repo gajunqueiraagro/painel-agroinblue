@@ -40,6 +40,7 @@ export function loteDaLinha(r: unknown): LoteDaLista | null {
     mamotesSexo: sexoDosMamotes(texto(r, 'mamotes_sexo')), mamotesCruzamento: cruzamentoDosMamotes(texto(r, 'mamotes_cruzamento')),
     mamotesSemen: semenDosMamotes(texto(r, 'mamotes_semen')), anotacao: texto(r, 'anotacao'),
     codigoRegra: texto(r, 'codigo_regra') === 'etapas' ? 'etapas' : null,
+    carimbos: textos(r, 'carimbos').length ? textos(r, 'carimbos') : null,
   };
 }
 

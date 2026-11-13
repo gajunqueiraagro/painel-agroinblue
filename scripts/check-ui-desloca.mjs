@@ -390,8 +390,9 @@ const CENARIOS = [
       await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await espera(p, 500); },
     estados: [
       ['escolher REC', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^REC/ }).first().click(); await espera(p); }],
-      ['Cadastrar nova', clicar('[data-testid="assistente-cadastrar-nova"]')], ['cancelar o formulário', clicar('[data-testid="assistente-form-cancelar"]')],
+      /* a atividade é lista fixa (Chat 12/11 14:05): o "Cadastrar nova" abre no passo 2 (categoria) */
       ['passo 2', clicar('[data-testid="assistente-avancar"]')],
+      ['Cadastrar nova', clicar('[data-testid="assistente-cadastrar-nova"]')], ['cancelar o formulário', clicar('[data-testid="assistente-form-cancelar"]')],
       ['escolher DF', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^DF/ }).first().click(); await espera(p); }],
       /* LOTE-ETAPAS-01 — programa e sistema (recria), raça, nome com apelido e anotação */
       ['passo 3', clicar('[data-testid="assistente-avancar"]')],
