@@ -11,6 +11,7 @@
  * (`conferirSoma`: a prova da tela, o selo verde). Dinheiro em CENTAVOS inteiros; quantidade e unitario como texto decimal com ponto.
  * ⚠ So' le^: sem rede, sem banco, sem React.
  */
+import { ibsCbsDoItem, ibsCbsTotalDaNota } from './ibsCbsDoPdf';
 import { decodificarPeloCharsetDeclarado } from '@/lib/financeiro/parser/decodificarExtrato';
 import { centavosDoTexto } from './centavos';
 import type { NotaLida, ServicoDaNfse } from './tipos';
@@ -65,6 +66,9 @@ export interface TotaisDaNota {
   /** P174 — so' na NFS-e: o bruto, as retencoes e o liquido (Gabriel 29/10, T2: no `totais` da `nota_fiscal`, sem coluna nova).
    *  Aqui `notaCent` e' o bruto menos o desconto (a soma dos itens fecha); o lancamento nasce com `servico.liquidoCent`. */
   servico?: ServicoDaNfse | null;
+  /** NOTA-PDF-IBS-CBS-01 — o TOTAL de IBS/CBS ESCRITO no DANFE em PDF (rodapé / informações complementares; `ibsCbsDoTotal`), nas chaves do
+   *  grupo `IBSCBS` do XML; vai em `nota_fiscal.totais.ibs_cbs` (jsonb, sem coluna nova). Nunca rateado pelos itens. Ausente = o papel não traz. */
+  ibsCbs?: Record<string, string> | null;
 }
 
 export interface ItensLidos {
@@ -204,8 +208,9 @@ export function itensDoPdf(nota: NotaLida, extras: { seguroCent?: number; outras
       icms: f && (f.bcIcmsCent || f.vIcmsCent) ? { cst: f.cst ?? null, bcCent: f.bcIcmsCent ?? 0, aliquota: f.aliqIcms ?? null, valorCent: f.vIcmsCent ?? 0 } : null,
       icmsSt: st[k] ? { cst: null, bcCent: 0, aliquota: null, valorCent: st[k] } : null, fcp: null, fcpSt: null,
       ipi: ipi[k] ? { cst: null, bcCent: 0, aliquota: f?.aliqIpi ?? null, valorCent: ipi[k] } : null,
-      /* NOTA-NFSE-LEITURA-02 — a NFS-e (1 item: o servico) leva o IBS/CBS do DANFSe nas chaves da NF-e */
-      pis: null, cofins: null, ibsCbs: nota.servico?.ibsCbs && nota.itens.length === 1 ? nota.servico.ibsCbs : null,
+      /* NOTA-NFSE-LEITURA-02 — a NFS-e (1 item: o servico) leva o IBS/CBS do DANFSe nas chaves da NF-e; NOTA-PDF-IBS-CBS-01 — no DANFE, o
+         IBS/CBS escrito na linha de baixo do item (`ibsCbsDoItem`) */
+      pis: null, cofins: null, ibsCbs: nota.servico?.ibsCbs && nota.itens.length === 1 ? nota.servico.ibsCbs : ibsCbsDoItem(i.detalhe),
       rastro: i.detalhe ? [loteDoDetalhe(i.detalhe)] : [],
       infoAdicional: i.detalhe ?? null,
     };
@@ -221,6 +226,7 @@ export function itensDoPdf(nota: NotaLida, extras: { seguroCent?: number; outras
       notaCent: nota.servico ? nota.servico.brutoCent - nota.totais.descontoCent : nota.totais.notaCent,
       tributosAproxCent: extras.tributosAproxCent ?? null,
       ...(nota.servico ? { servico: nota.servico } : {}),
+      ...((g) => (g ? { ibsCbs: g } : {}))(nota.servico ? null : ibsCbsTotalDaNota(nota.informacoesComplementares, nota.itens.map((i) => i.detalhe))),
     },
   };
 }
@@ -253,6 +259,7 @@ export function payloadDaNotaFiscal(nota: Pick<NotaLida, 'chave' | 'numero' | 's
         produtos_cent: t.produtosCent, desconto_cent: t.descontoCent, frete_cent: t.freteCent, seguro_cent: t.seguroCent, outras_cent: t.outrasCent,
         ipi_cent: t.ipiCent, st_cent: t.stCent, fcp_st_cent: t.fcpStCent, icms_cent: t.icmsCent, pis_cent: t.pisCent, cofins_cent: t.cofinsCent,
         nota_cent: t.notaCent, tributos_aprox_cent: t.tributosAproxCent,
+        ...(t.ibsCbs ? { ibs_cbs: t.ibsCbs } : {}),
         ...(t.servico ? { servico: servicoParaOBanco(t.servico) } : {}),
       },
     },
@@ -319,6 +326,7 @@ export function lidosDoBanco(nota: Record<string, unknown>, itens: readonly Reco
         pisCent: num(t.pis_cent), cofinsCent: num(t.cofins_cent), notaCent: num(t.nota_cent),
         tributosAproxCent: t.tributos_aprox_cent == null ? null : num(t.tributos_aprox_cent),
         ...((sv) => (sv ? { servico: sv } : {}))(servicoDoBanco(t.servico)),
+        ...((g) => (g ? { ibsCbs: g } : {}))(textosDoBanco(t.ibs_cbs)),
       },
       itens: [...itens].sort((a, b) => num(a.n_item) - num(b.n_item)).map((r) => ({
         nItem: num(r.n_item), codigo: txt(r.codigo), ean: txt(r.ean), descricao: txt(r.descricao) ?? '', ncm: txt(r.ncm), cest: txt(r.cest), cfop: txt(r.cfop),
