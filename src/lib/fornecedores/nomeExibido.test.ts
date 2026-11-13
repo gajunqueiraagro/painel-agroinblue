@@ -104,7 +104,9 @@ describe('a ligação nas telas (fonte)', () => {
     expect(celula).toContain("<CelulaFornecedor title={rotuloForn?.title ?? fornNome ?? ''}>");
     expect(celula).toContain('{fornNome ? <NomeNaCelula nome={fornNome} /> : ');
     const peca = readFileSync(resolve(__dirname, '../../components/financeiro-v2/TabelaDaLista.tsx'), 'utf8');
-    expect(peca).toContain('<td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground"\n      title={title} data-testid="celula-fornecedor">');
+    /* UI-FONTE-GATE-01: na lista do Financeiro (sem `quebra`) segue `truncate`; nas tabelas de casar o nome quebra em 2 linhas */
+    expect(peca).toContain("export function CelulaFornecedor({ title, quebra = false, children }");
+    expect(peca).toContain("<td className={`${quebra ? TEXTO_QUE_QUEBRA : 'truncate'} px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground`}\n      title={title} data-testid=\"celula-fornecedor\">");
     expect(peca).toContain('<span className="flex min-w-0"><span className="truncate pr-0.5">{nome}</span></span>');
     expect(tela).not.toContain('data-testid="final-fornecedor"');
     expect(tela).not.toContain('data-testid="inativo-fornecedor"');
