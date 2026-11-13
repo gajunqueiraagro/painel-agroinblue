@@ -243,6 +243,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
   PAR A PAR pelo gravador de hoje (`vincularSelecao`); buscar é GESTO; a caixa "Vincular os exatos" saiu do palco (o ConciliarMesDialog ficou: dívida).
 - P115: venda em pé "Por total" = o valor digitado é o TOTAL (R$/cab = total ÷ cabeças); tela → motor por UMA regra (`tipoPrecoDoMotor`).
+- FIN-GUARDA-CHUVA G1/G2: a LINHA DE CRÉDITO (cédula-mãe) se grava SÓ pelas `fn_linha_credito_salvar`/`_cancelar` (prévia = `p_simular`) e se lê
+  pela `fn_linha_credito_tela` (limite × filhos; liquidação de irmão da mesma linha não soma); a tela lê as linhas pelo leitor único `useLinhasDeCredito`.
 - Financiamento: o saldo devedor tem uma fonte (`fn_financiamento_saldo`); captacao segue o creditado em conta; o valor do lancamento
   vinculado a' parcela manda na parcela; consorcio e' natureza propria (gerador no banco); parcela adiada e' divida mas nao vencida.
 - Recorrencia gera a vigencia inteira e nunca omite em silencio; o valor do mes tem marca e o propagar pula as marcadas.
