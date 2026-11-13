@@ -2149,25 +2149,31 @@ if (tela === 'mesclar') {
   const COM_CRIA = q.get('cria') === '1';
   /* LOTE-BUSCA-01 — `&v=busca`: o campo Lote com 63 lotes (55 de recria a mais: o corte de 50 escondia o fim), DOIS 8.2 e o caderno "LOT 8.2 F1"
      no P10A; em set/26 o ENG-DM-AN-06 ligado no P10A (100 cab) e o CRI-PP-NE-01 (7.1) no P11; o 7R só no TEXTO do card do P12 (sem ligação) */
-  const BUSCA = v === 'busca';
+  /* LOTE-BUSCA-02 — `&v=busca2`: o caso da Santa Rita 20R-2 (sintético): o lote 10.1 "L20 SP+F1" existe e o caderno do P10A diz "L20 F1+SP C10" */
+  const BUSCA2 = v === 'busca2';
+  const BUSCA = v === 'busca' || BUSCA2;
   const COM_LOTES = v === 'lotes' || COM_CRIA || BUSCA;
   const base = LOTES_BANCADA.LOTES[0];
   const LOTES_DA_BUSCA = [...LOTES_BANCADA.LOTES,
     { ...base, id: 'l-pp82', codigo: 'CRI-PP-NE-02', nome_campeiro: 'Vacas Nel CAR_8.2', carimbo: '8.2', categoria_id: 'c-pp', atividade_id: 'a-cr', pastos: [], codigos_antigos: [] },
     ...Array.from({ length: 53 }, (_, i) => ({ ...base, id: `l-rec${i}`, codigo: `REC-DM-NE-${String(i + 10).padStart(2, '0')}`, nome_campeiro: null,
-      categoria_id: 'c-dm', pastos: [], codigos_antigos: [] }))];
+      categoria_id: 'c-dm', pastos: [], codigos_antigos: [] })),
+    ...(BUSCA2 ? [{ ...base, id: 'l-l20', codigo: 'CRI-N2-NE-10.1', nome_campeiro: 'L20 SP+F1', carimbo: '10.1', categoria_id: 'c-n2', atividade_id: 'a-cr',
+      pastos: [], codigos_antigos: [], codigo_regra: 'etapas' }] : [])];
   const lotesDaBusca = (mes: unknown) => (mes !== '2026-09' ? LOTES_DA_BUSCA : LOTES_DA_BUSCA.map((l) => (
     l.id === 'l-dm6' ? { ...l, ano_mes_dado: '2026-09', pastos: ['P10A'], cabecas: 100 }
     : l.id === 'l-pp1' ? { ...l, ano_mes_dado: '2026-09', pastos: ['P11'], cabecas: 60 }
     : { ...l, ano_mes_dado: '2026-08' })));
   if (BUSCA) {
-    Object.assign(CARDS[0], { lote_mes: 'LOT 8.2 F1' });
+    Object.assign(CARDS[0], { lote_mes: BUSCA2 ? 'L20 F1+SP C10' : 'LOT 8.2 F1' });
     CARDS.push(...[['p10a', 'P10A', 'DM Angus L6'], ['p11', 'P11', 'Vaca Nel CAR_7.1'], ['p12', 'P12 Retiro do córrego de baixo', 'Vacas ressinc. 7R']].map(([id, nome, texto]) =>
       card(`f9-${id}`, id, { ano_mes: '2026-09', status: 'fechado', lote_mes: texto, pastos: { nome } })));
   }
+  /* L1 — `&semlote=1`: os itens do P10A SEM lote (a sugestão do campo Lote aparece: busca2 = 1 "Usar", busca = 2, lotes = nenhuma) */
+  const SEM_LOTE = q.get('semlote') === '1';
   if (COM_LOTES) {
-    Object.assign(ITENS[0], { lote_id: COM_CRIA ? 'l-vp4' : 'l-dm6' });
-    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: COM_CRIA ? 'l-vp4' : 'l-px2' });
+    Object.assign(ITENS[0], { lote_id: SEM_LOTE ? null : COM_CRIA ? 'l-vp4' : 'l-dm6' });
+    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: SEM_LOTE ? null : COM_CRIA ? 'l-vp4' : 'l-px2' });
   }
   /* MAPA-LOTES-01 (C2) — `&v=mapa`: o Fechamento abre na vista Mapa (a escolha guardada); os polígonos SINTÉTICOS de 5 dos 6 pastos
      (o P12 fica sem desenho: vai para a faixa) e a área total por baixo */
