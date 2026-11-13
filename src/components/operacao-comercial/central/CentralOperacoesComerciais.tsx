@@ -26,7 +26,8 @@ import {
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText, Paperclip } from 'lucide-react';
+import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText, Paperclip, Upload } from 'lucide-react';
+import { ImportarAbateDialog } from '@/components/abate/ImportarAbateDialog';
 import { ItemDeMenuOC } from '@/components/venda/AbaContaCorrenteOC';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
@@ -436,7 +437,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
      valia para as outras.
      ⚠ NO NAVEGADOR, sobre a carga por cliente: trocar de fazenda e' instantaneo e nao faz
      consulta nova. `fazendaAtual` ainda nulo (contexto carregando) conta como Global. */
-  const { fazendaAtual, isGlobal } = useFazenda();
+  const { fazendaAtual, isGlobal, fazendas: fazendasDoCliente } = useFazenda();
   const fazendaSel: string | null = !isGlobal && fazendaAtual?.id ? fazendaAtual.id : null;
   const rpc = useOperacaoComercial();
 
@@ -487,6 +488,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
      estado do ciclo asc -> desc -> padrao. Uma coluna ativa por vez. */
   const [ord, setOrd] = useFiltroUrl<Ordenacao | null>('f_ord', null, ORD.ler, ORD.escrever);
   const [resumoAberto, setResumoAberto] = useState(false);
+  /* IMPORTAR-ABATE-01: os PDFs do frigorífico viram a OC de abate (prévia do banco antes de criar) */
+  const [importarAberto, setImportarAberto] = useState(false);
 
   /* O que o cabeçalho do resumo escreve — os mesmos filtros da barra, em palavras. Sem
      filtro de fazenda a resposta é "todas as fazendas", nunca em branco. */
@@ -934,6 +937,11 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             onClick={() => setResumoAberto(true)}>
             <FileText className="h-3 w-3" /> Resumo
           </Button>
+          <Button variant="outline" size="sm" className="h-6 gap-1 text-[11px]" disabled={!clienteId}
+            title="Os PDFs do frigorífico (NF, acerto, romaneio) viram a OC de abate · prévia antes de criar"
+            onClick={() => setImportarAberto(true)} data-testid="central-importar-abate">
+            <Upload className="h-3 w-3" /> Importar abate
+          </Button>
         </div>
       </div>
 
@@ -1325,6 +1333,10 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ImportarAbateDialog open={importarAberto} onOpenChange={setImportarAberto} clienteId={clienteId}
+        fazendas={(fazendasDoCliente ?? []).filter(f => f.id !== '__global__').map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo ?? null }))}
+        fazendaInicialId={!isGlobal && fazendaAtual?.id ? fazendaAtual.id : null}
+        onAbrirOperacao={id => { setImportarAberto(false); onAbrirOperacao?.(id, 'abate'); }} />
       <ResumoOperacoesModal
         open={resumoAberto}
         onClose={() => setResumoAberto(false)}
