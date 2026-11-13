@@ -50,7 +50,8 @@ export function colunasDasParcelas(ehParcelamento: boolean): ColunaDasParcelas[]
          lado), medida na bancada (contrato sintético de 15 parcelas na casa dos milhões): "15/15" · "01/10/2026" a 10,5px em negrito (a
          vencida) 62 + 12 = 74 → 78 · "em 1079 d" 57 + 12 = 69 → 74 ·
          "15.888.600,00" negrito no Total do rodapé · o selo "A vencer". Antes, 2,5px de cada lado: o Total encostava no Saldo após. */
-      col('numero', 'Parc.', 44),
+      /* FIN-FINANC-LAYOUT-03: o cabeçalho ordena (a seta pede ~12px): Parc. 44 → 52, Situação 66 → 76; medidas a 11px (régua única) */
+      col('numero', 'Parc.', 52),
       col('vencimento', 'Venc.', 78),
       col('pagamento', 'Pgto.', 78),
       col('prazo', 'Prazo', 74),
@@ -58,7 +59,7 @@ export function colunasDasParcelas(ehParcelamento: boolean): ColunaDasParcelas[]
       col('juros', 'Juros', 90, 'direita'),
       col('total', 'Total', 96, 'direita'),
       col('saldoApos', 'Saldo após', 90, 'direita'),
-      col('situacao', 'Situação', 66),
+      col('situacao', 'Situação', 76),
       col('lancamento', 'Lançamento', null),
     ];
   }

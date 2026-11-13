@@ -73,10 +73,13 @@ describe('F1 — a faixa do título dentro do card', () => {
     expect(within(linha).getByTestId('voltar-do-contrato')).toBeTruthy();
     expect(within(linha).getByTestId('botoes-do-credito')).toBeTruthy();
   });
-  it('as datas do bloco Dados um passo abaixo (10,5px)', () => {
+  /* FIN-FINANC-LAYOUT-03 (Gabriel 12/11): os fatos viraram BLOCOS (rótulo pequeno em cima, valor embaixo, nada ao lado) — a data é o valor
+     do bloco, inteira, no tamanho dos outros valores (o "passo abaixo" de 05/11 valia para a data AO LADO de um texto; segue nas tabelas) */
+  it('a data do bloco Dados: o valor inteiro (dd/mm/aaaa), com o rótulo em cima', () => {
     topo();
-    const data = screen.getByTestId('campo-data-do-contrato').querySelector('span.tabular-nums');
-    expect(data?.className).toContain('text-[10.5px]');
+    const bloco = screen.getByTestId('campo-data-do-contrato');
+    expect(bloco.children[0].textContent).toBe('Data do contrato');
+    const data = bloco.querySelector('span.tabular-nums');
     expect(data?.textContent).toBe('10/11/2025');
   });
 });
