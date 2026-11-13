@@ -24,7 +24,7 @@ import { OndeOLoteEsteve, escolhaInicial, type ContextoDoLote } from '@/componen
 import { pastosParaGravar, somaDasAreas, uaDosItens } from '@/lib/fechamento/loteNoGrupo';
 import { ehRecusaDaTravaDoP2, fraseDaTravaDoPasto, fraseValorRebanhoReaberto, lerEstadoDoP2, motivoReaberturaDoPasto, reabrirValorRebanhoJunto } from '@/lib/fechamento/travaDoP2';
 import { CampoLoteDoPasto } from '@/components/fechamento/CampoLoteDoPasto';
-import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
+import { AssistenteDoLotePadrao } from '@/components/lotes/AssistenteDoLotePadrao';
 import { useLotesDaFazenda } from '@/hooks/useLotesDaFazenda';
 import { useLotesDoMesAnterior } from '@/hooks/useLotesDoMesAnterior';
 import { comLoteEmTodos, comLoteNaCategoria, lotesQueSeguem, semLoteNoZerado, textoDoLoteNoCaderno } from '@/lib/lotes/loteDoPasto';
@@ -607,8 +607,7 @@ export function FechamentoPastoDialog({
             {/* LOTES-03 F1 — o lote cadastrado (por categoria); fora da lavoura e da conta de divergência */}
             {!ehLavoura && !isDivergencia && (
               <div className="w-[150px] shrink-0">
-                <Label className="text-[10px] text-white/50 leading-none">Lote</Label>
-                <CampoLoteDoPasto itens={gradeVisivel} lotes={lotesDaFazenda.lotes} disabled={inputsDisabled || naAbaTotal}
+                <CampoLoteDoPasto comRotulo itens={gradeVisivel} lotes={lotesDaFazenda.lotes} disabled={inputsDisabled || naAbaTotal}
                   contexto={{ pastoNome: pasto.nome, textoDoCaderno: loteMes, mesAnterior: lotesDoMesAnterior }}
                   nomeDaCategoria={id => categorias.find(c => c.id === id)?.nome ?? '—'}
                   onChange={novos => {
@@ -821,7 +820,7 @@ export function FechamentoPastoDialog({
         </AlertDialog>
         {/* LOTES-03 F1 — "+ Novo lote" do campo Lote: o MESMO assistente da tela de Lotes; volta com o lote escolhido no item */}
         {novoLotePara && clienteAtual && (
-          <AssistenteDoLote open clienteId={clienteAtual.id} fazendaId={fechamento.fazenda_id}
+          <AssistenteDoLotePadrao open clienteId={clienteAtual.id} fazendaId={fechamento.fazenda_id}
             fazendaRotulo={fazendaRotulo ?? ''}
             lotesDaFazenda={lotesDaFazenda.lotes} editar={null}
             onFechar={() => setNovoLotePara(null)}

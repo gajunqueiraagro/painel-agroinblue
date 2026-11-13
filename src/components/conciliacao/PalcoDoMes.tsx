@@ -11,6 +11,8 @@ import {
 } from '@/hooks/useConciliacaoDoMes';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
 import { TH_REGUA, TD_REGUA, TD_REGUA_TEXTO, TD_REGUA_NUM, TextoReservado } from '@/components/ui/regua-tabela';
+import { ThOrdenavel } from '@/components/ui/th-ordenavel';
+import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
 import {
   buscarSugestoesDoMes, conciliarEmLote, fraseDoResultado, valorDoPar,
   type BaldeDoLote, type RespostaDoMotor, type ResultadoDoPar,
@@ -90,6 +92,7 @@ interface Props {
  * `situacao`, que é a soma dos `valor_aplicado` ativos. Nenhum depende de palpite, e por isso
  * nenhum pode ficar "ausente": a contagem é sempre um número.
  */
+type ColunaDoPalco = 'data' | 'movimento' | 'valor' | 'estado' | 'sugestao' | 'favorecido' | 'venc' | 'valorSist' | 'deltaValor' | 'deltaDias';
 type FiltroDoPalco = 'todos' | 'parcial' | 'conciliado' | 'sem_vinculo';
 const CHIPS: readonly { filtro: FiltroDoPalco; rotulo: string; cor: string }[] = [
   { filtro: 'todos',       rotulo: 'Todos',        cor: 'bg-muted text-muted-foreground' },
@@ -148,6 +151,29 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
     return v;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `baldeDe` lê `sugestoes`, que está na lista
   }, [movimentos, filtro, filtroSug, sugestoes]);
+
+  /* CONC-ORDENAR-01 (regra soberana de 29/10, gate check-ui-ordenar): toda coluna do palco ordena; a ordem padrão é a de sempre (data,
+     a mais antiga primeiro — o banco lê por `data_movimento` e a ordenação é estável). As colunas da sugestão leem a sugestão do motor. */
+  const colunasDoPalco = useMemo((): ColunaOrdenavel<MovimentoConciliacao, ColunaDoPalco>[] => {
+    const cand = (m: MovimentoConciliacao) => { const r = sugestoes?.get(m.id); return r?.ok ? r.sugestao?.candidato ?? null : null; };
+    return [
+      { coluna: 'data', tipo: 'data', valor: m => m.data_movimento },
+      { coluna: 'movimento', tipo: 'texto', valor: m => m.descricao },
+      { coluna: 'valor', tipo: 'numero', valor: m => m.valor },
+      { coluna: 'estado', tipo: 'texto', valor: m => m.situacao },
+      { coluna: 'sugestao', tipo: 'texto', valor: m => cand(m)?.descricao ?? null },
+      { coluna: 'favorecido', tipo: 'texto', valor: m => cand(m)?.favorecido ?? null },
+      { coluna: 'venc', tipo: 'data', valor: m => cand(m)?.vencimento ?? cand(m)?.dataReferencia ?? null },
+      { coluna: 'valorSist', tipo: 'numero', valor: m => { const c = cand(m); return c ? Math.abs(c.valor) : null; } },
+      { coluna: 'deltaValor', tipo: 'numero', valor: m => cand(m)?.deltaValor ?? null },
+      { coluna: 'deltaDias', tipo: 'numero', valor: m => cand(m)?.deltaDias ?? null },
+    ];
+  }, [sugestoes]);
+  const { ordem: ordemDoPalco, alternar: ordenarPalco, ordenadas: visiveisOrdenadas } =
+    useOrdenacaoTabela<MovimentoConciliacao, ColunaDoPalco>(visiveis, colunasDoPalco, { coluna: 'data', direcao: 'asc' });
+  const th = (coluna: ColunaDoPalco, rotulo: string, direita = false) => (
+    <ThOrdenavel coluna={coluna} rotulo={rotulo} ordem={ordemDoPalco} onOrdenar={ordenarPalco} className={TH_REGUA} alinhaDireita={direita} />
+  );
 
   const contagemDoChip = (f: FiltroDoPalco): number => {
     switch (f) {
@@ -282,16 +308,16 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-primary">
                   <tr>
-                    <th className={TH_REGUA} aria-label="Marcar" /><th className={cn(TH_REGUA, 'text-left')}>Data</th>
-                    <th className={cn(TH_REGUA, 'text-left')}>Movimento do banco</th><th className={cn(TH_REGUA, 'text-right')}>Valor</th>
-                    <th className={cn(TH_REGUA, 'text-left')}>Estado</th><th className={cn(TH_REGUA, 'text-left')}>Sugestão do sistema</th>
-                    <th className={cn(TH_REGUA, 'text-left')}>Favorecido</th><th className={cn(TH_REGUA, 'text-left')}>Venc.</th>
-                    <th className={cn(TH_REGUA, 'text-right')}>Valor sist.</th><th className={cn(TH_REGUA, 'text-right')}>Δ R$</th>
-                    <th className={cn(TH_REGUA, 'text-right')}>Δ dias</th><th className={TH_REGUA} />
+                    <th className={TH_REGUA} aria-label="Marcar" />{th('data', 'Data')}
+                    {th('movimento', 'Movimento do banco')}{th('valor', 'Valor', true)}
+                    {th('estado', 'Estado')}{th('sugestao', 'Sugestão do sistema')}
+                    {th('favorecido', 'Favorecido')}{th('venc', 'Venc.')}
+                    {th('valorSist', 'Valor sist.', true)}{th('deltaValor', 'Δ R$', true)}
+                    {th('deltaDias', 'Δ dias', true)}<th className={TH_REGUA} />
                   </tr>
                 </thead>
                 <tbody>
-                  {visiveis.map(m => {
+                  {visiveisOrdenadas.map(m => {
                     const r = sugestoes?.get(m.id);
                     const sug = r?.ok ? r.sugestao : null;
                     const c = sug?.candidato ?? null;

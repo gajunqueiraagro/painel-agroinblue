@@ -15,6 +15,7 @@ import {
   montarListaDeFinanciamentos, pendenciaCurta, somaConhecida, textoDasPendencias, temNumero,
   type ColunaDaLista, type ContratoDaLista, type GrupoDaLista, type Soma,
 } from '@/lib/financiamentos/listaDeFinanciamentos';
+import type { ItemDaFaixa } from '@/lib/financiamentos/linhaDeCredito';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtReal = (v: number) => `R$ ${fmt(v)}`;
@@ -150,10 +151,15 @@ function LinhaDoContrato({ c, encerrado, aoAbrir }: { c: ContratoDaLista; encerr
   );
 }
 
-export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternarEncerrados, aoAbrir, filtros, aoAbrirCronograma, parcelasAPagar }: {
+export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternarEncerrados, aoAbrir, filtros, aoAbrirCronograma, parcelasAPagar, faixasDasLinhas, aoAbrirLinha }: {
   contratos: readonly ContratoDaLista[];
   /** ⚠ SEM EFEITO desde o FIN-FINANC-LAYOUT-03 (Chat 18:00, escolha A): a coluna Banco saiu da tabela (o banco vai na linha do grupo).
    *  Fica declarada porque a página ainda a passa (FIN-FINANC-28-P3-FIX2: "false quando a lista é agrupada só por banco"). */
+  /** FIN-GUARDA-CHUVA G2 — a faixa de cada linha de crédito (id da linha → Limite · Liberado · Falta liberar · Saldo · Juros), da
+   *  `fn_linha_credito_tela`. Ausente = o grupo da linha fica como antes (só a soma dos contratos). */
+  faixasDasLinhas?: ReadonlyMap<string, ItemDaFaixa[]>;
+  /** abre a linha (o modal com os contratos-filhos) pelo ✎ do grupo */
+  aoAbrirLinha?: (linhaId: string) => void;
   mostrarBanco?: boolean;
   /** a fileira de filtros da tela (a mesma da aba "Compras parceladas"), entre os cards e a tabela */
   filtros?: ReactNode;
@@ -249,7 +255,9 @@ export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternar
           </thead>
           <tbody>
             {lista.grupos.map((g) => (
-              <GrupoDaTabela key={g.chave} g={g} aoAbrir={aoAbrir} />
+              <GrupoDaTabela key={g.chave} g={g} aoAbrir={aoAbrir}
+                faixa={g.tipo === 'linha' ? faixasDasLinhas?.get(g.chave.slice('linha:'.length)) : undefined}
+                aoAbrirLinha={g.tipo === 'linha' && aoAbrirLinha ? () => aoAbrirLinha(g.chave.slice('linha:'.length)) : undefined} />
             ))}
             <tr
               role="button" tabIndex={0} data-testid="lista-fin-encerrados"
@@ -286,7 +294,12 @@ export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternar
   );
 }
 
-function GrupoDaTabela({ g, aoAbrir }: { g: GrupoDaLista; aoAbrir: (id: string) => void }) {
+/* FIN-GUARDA-CHUVA G2 — liberado e pago em verde; falta liberar e saldo devedor em vermelho (Chat 22:35) */
+const TOM_DA_FAIXA: Record<ItemDaFaixa['tom'], string> = { verde: 'text-[#15803d]', vermelho: 'text-[#b91c1c]', neutro: 'text-[#1d3a5d]' };
+
+function GrupoDaTabela({ g, aoAbrir, faixa, aoAbrirLinha }: {
+  g: GrupoDaLista; aoAbrir: (id: string) => void; faixa?: ItemDaFaixa[]; aoAbrirLinha?: () => void;
+}) {
   return (
     <>
       <tr className="border-b border-[#eef0f3] bg-[#e8eef5] font-semibold text-[#1d3a5d]" data-testid="lista-fin-grupo">
@@ -299,8 +312,26 @@ function GrupoDaTabela({ g, aoAbrir }: { g: GrupoDaLista; aoAbrir: (id: string) 
         <td className={`${NUM} font-bold`}><ValorDaSoma s={g.liberado} /></td>
         <td className={`${NUM} font-bold`}><ValorDaSoma s={g.amortizado} /></td>
         <td className={`${NUM} font-bold`}><ValorDaSoma s={g.saldo} /></td>
-        <td colSpan={2} className={TD_LISTA} />
+        {/* FIN-GUARDA-CHUVA G2: o ✎ da linha mora no lugar vazio das 2 últimas colunas (nada se desloca) */}
+        <td colSpan={2} className={`${TD_LISTA} text-right`}>
+          {aoAbrirLinha && (
+            <button type="button" className="rounded px-1 text-[10px] font-semibold text-primary hover:bg-white/70"
+              onClick={aoAbrirLinha} title="Abrir a linha de crédito: limite, contratos e edição" data-testid="abrir-linha">✎ linha</button>
+          )}
+        </td>
       </tr>
+      {faixa && (
+        <tr className="h-[20px] border-b border-[#eef0f3] bg-[#f4f7fb]" data-testid="faixa-da-linha-no-grupo">
+          <td colSpan={10} className="px-1">
+            <div className="flex items-center gap-x-4 text-[10px]">
+              {faixa.map((i) => (
+                <span key={i.rotulo} className="whitespace-nowrap"><span className="text-muted-foreground">{i.rotulo} </span>
+                  <span className={`font-semibold tabular-nums ${TOM_DA_FAIXA[i.tom]}`}>{i.valor}</span></span>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
       {g.contratos.map((c) => <LinhaDoContrato key={c.id} c={c} aoAbrir={aoAbrir} />)}
     </>
   );

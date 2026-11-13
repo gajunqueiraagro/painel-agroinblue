@@ -27,7 +27,7 @@ import {
   type FiltroDeSituacao,
 } from '@/lib/lotes/lista';
 import { FichaDoLote } from '@/components/lotes/FichaDoLote';
-import { AssistenteDoLote } from '@/components/lotes/AssistenteDoLote';
+import { AssistenteDoLotePadrao } from '@/components/lotes/AssistenteDoLotePadrao';
 import { FRASE_SEM_CARIMBO, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
 import { ResumoDosLotes } from '@/components/lotes/ResumoDosLotes';
 import { resumoDosLotes, sexoDosCodigos } from '@/lib/lotes/resumo';
@@ -175,7 +175,7 @@ export function LotesTab() {
           cadastros={cadastros} onFechar={() => setFichaId(null)} onEditarIdentidade={l => setAssistente({ editar: l })} />
       )}
       {fazendaId && assistente && (
-        <AssistenteDoLote open clienteId={clienteId} fazendaId={fazendaId} fazendaRotulo={`${fazendaCodigo} · ${fazendaAtual?.nome ?? ''}`}
+        <AssistenteDoLotePadrao open clienteId={clienteId} fazendaId={fazendaId} fazendaRotulo={`${fazendaCodigo} · ${fazendaAtual?.nome ?? ''}`}
           lotesDaFazenda={lotes} editar={assistente.editar} onFechar={() => setAssistente(null)}
           onPronto={r => { setAssistente(null); setNovoId(r.id); if (assistente.editar) setFichaId(r.id); }} />
       )}

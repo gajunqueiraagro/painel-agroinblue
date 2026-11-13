@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { fonteDoNomeDoCard, nomesAteOito } from '@/lib/fechamento/nomesAteOito';
 import { CLASSE_LINHA_PRESA, medirTopo, soNaPrimeiraLeitura } from '@/lib/fechamento/rolagemDoFechamento';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
-import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Activity, Map as MapIcon, RefreshCw, FileDown } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Activity, Map as MapIcon, RefreshCw, FileDown, Layers } from 'lucide-react';
 import { ExportarMesDialog } from '@/components/caderno/ExportarMesDialog';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { ResumoPorAtividade } from '@/components/resumoAtividade/ResumoPorAtividade';
@@ -29,6 +29,7 @@ import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia, DIV_CURTA } from '@/lib/classificacaoArea';
 import { grupoDoTipoUso } from '@/lib/pastos/tiposUso';
+import { ligacaoDoMes, textoDaLigacao } from '@/lib/lotes/ligacaoDoLote';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
 import { safrasQueCobremOMes, labelDaCultura } from '@/lib/agri/areaPlantada';
@@ -357,6 +358,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   }, [fechamentos, loadItens]);
 
   const pastosAtivos = useMemo(() => pastosDoFechamentoNoMes(pastos, anoMes), [pastos, anoMes]);
+  /* L1 (c) — "Itens com lote N/M" (Chat 14:12): itens com cabeça do mês que têm lote (sem divergência e lavoura, que não levam lote); nunca bloqueia fechar */
+  const ligacaoDosLotes = useMemo(() => textoDaLigacao(ligacaoDoMes(pastosAtivos.flatMap(p => {
+    const f = fechamentos.find(x => x.pasto_id === p.id);
+    const t = f?.tipo_uso_mes || p.tipo_uso;
+    if (!f || t === 'divergencia' || grupoDoTipoUso(t) === 'agricultura') return [];
+    return [itensMap.get(f.id) ?? []];
+  }))), [pastosAtivos, fechamentos, itensMap]);
   /* POPUP-ORIGINAL-COR — o lote do pasto no popup: os lotes da fazenda pelo MESMO leitor do modal (o texto é o do campo Lote) */
   const lotesDaFazenda = useLotesDaFazenda(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null, anoMes);
   /* FECH-FAIXA-01 — a faixa do fechamento acompanha os cards desta tela (cada Fechar conta na hora, sem reler) */
@@ -1530,6 +1538,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   <Pencil className={ICONE_DA_BARRA} /> Ajustar
                 </Button>
               )}
+              {ligacaoDosLotes ? (
+                <span className={buttonVariants({ variant: 'outline', size: 'sm', className: `${BOTAO_DA_BARRA} min-w-[136px] cursor-default tabular-nums ${ligacaoDosLotes.completo ? '' : BOTAO_AMBAR}` })}
+                  title={ligacaoDosLotes.title} data-testid="ligacao-dos-lotes">
+                  <Layers className={ICONE_DA_BARRA} /> {ligacaoDosLotes.texto}
+                </span>
+              ) : <span className={`${LUGAR_DO_BOTAO} min-w-[136px]`} aria-hidden data-testid="lugar-ligacao"><Layers className={ICONE_DA_BARRA} /> Itens com lote 0/0</span>}
             </div>
           </div>
 

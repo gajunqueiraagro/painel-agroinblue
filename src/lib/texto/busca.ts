@@ -26,6 +26,7 @@ export function casaNaBusca(texto: string | null | undefined, termo: string | nu
 /** LOTE-BUSCA-01 — a busca POR PALAVRAS: cada palavra do termo (normalizado) está em ALGUM dos textos (já normalizados uma vez por
  *  lista). "vacas 9.2" acha o lote "9.2" do campeiro "Vacas CAR_9.2"; termo vazio casa com tudo. Opt-in no `SearchableSelect`. */
 export function casaPorPalavras(textosNormalizados: readonly string[], termo: string | null | undefined): boolean {
-  const palavras = normalizarParaBusca(termo).split(' ').filter(Boolean);
+  /* LOTE-BUSCA-02 (Santa Rita 20R-2): "+", "/", "_" e "-" também separam palavras — "L20 F1+SP" acha o apelido "L20 SP+F1" */
+  const palavras = normalizarParaBusca(termo).split(/[\s+/_-]+/).filter(Boolean);
   return palavras.every(p => textosNormalizados.some(t => t.includes(p)));
 }

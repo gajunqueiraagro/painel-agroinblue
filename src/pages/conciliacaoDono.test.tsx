@@ -893,8 +893,11 @@ describe('P166 — a tela da Conciliação sem CAIXA ALTA, abas e o Resumo do m�
     expect(screen.queryByText(/o mês fecha\?/)).toBeNull();
     /* o cabeçalho das colunas do Resumo é o mesmo do Saldos (22px), e o card tem a mesma barra (26px) */
     const thResumo = within(screen.getByTestId('card-resumo')).getByText('Movimento');
-    const thSaldos = within(screen.getByTestId('card-saldos')).getByText('Conta');
-    expect(thResumo.className).toBe(thSaldos.className.replace(' truncate', ''));
+    /* CONC-ORDENAR-01: o "Conta" do Saldos é o `ThOrdenavel` (o rótulo num span dentro do th, + cursor/hover da ordenação); a régua do
+       cabeçalho (TH_SALDOS, recuo e alinhamento) é a mesma: toda classe do th do Resumo está no th do Saldos */
+    const thSaldos = within(screen.getByTestId('card-saldos')).getByText('Conta').closest('th');
+    expect(thSaldos?.getAttribute('aria-sort')).toBe('none');
+    for (const c of thResumo.className.split(/\s+/).filter(Boolean)) expect(thSaldos?.className.split(/\s+/)).toContain(c);
   });
 });
 
@@ -959,5 +962,34 @@ describe('P159a — a barra do Casar lançamentos', () => {
     const abas = ['Conferência', 'Extrato (banco)'].map((r) => within(barra).getByRole('button', { name: r }));
     expect(abas[1].className).toContain('bg-primary');
     expect(abas[0].parentElement?.className).toContain('ml-auto');
+  });
+});
+
+/* CONC-ORDENAR-01 (regra soberana de 29/10, gate check-ui-ordenar) — Saldos por conta: Conta, Sistema, Extrato e Diferença ordenam as contas
+   DENTRO de cada grupo; sem clique, a ordem do cadastro; o Total e as faixas não andam. Dado sintético. */
+describe('CONC-ORDENAR-01 — Saldos por conta ordena dentro do grupo', () => {
+  it('sem clique a ordem do cadastro e nenhuma seta; Sistema (maior primeiro), 2º clique inverte; Conta volta a A→Z; o grupo não muda', async () => {
+    B.contas = [...B.contas, conta('zeta', 'Zeta Banco')];
+    B.resumo['2026-09'] = [...B.resumo['2026-09'], linhaConta({ conta_id: 'zeta', conta_nome: 'Zeta Banco', tipo_conta: 'cc', status: 'conciliado',
+      saldo_inicial: 0, saldo_sistema: 900000, saldo_extrato: 900000, diferenca: 0 })];
+    montar();
+    const doGrupoCc = async () => (await screen.findAllByTestId('linha-saldo-conta')).map((r) => r.getAttribute('data-conta')).filter((id) => id === ID_LAV || id === 'zeta');
+    expect(await doGrupoCc()).toEqual([ID_LAV, 'zeta']);
+    const sistema = screen.getByTitle('Ordenar por Sistema');
+    expect(sistema.getAttribute('aria-sort')).toBe('none');
+    fireEvent.click(sistema);
+    expect(sistema.getAttribute('aria-sort')).toBe('descending');
+    expect(await doGrupoCc()).toEqual(['zeta', ID_LAV]);
+    fireEvent.click(sistema);
+    expect(await doGrupoCc()).toEqual([ID_LAV, 'zeta']);
+    fireEvent.click(screen.getByTitle('Ordenar por Conta'));
+    expect(await doGrupoCc()).toEqual([ID_LAV, 'zeta']);
+    /* as faixas dos grupos ficam na ordem de sempre */
+    expect(screen.getAllByTestId('faixa-grupo').map((g) => n(g.textContent))).toEqual(['Conta corrente', 'Investimentos', 'Cartão']);
+  });
+  it('o Resumo do mês é EXCEÇÃO DECLARADA (linhas fixas), com o motivo', async () => {
+    montar();
+    const resumo = (await screen.findByTestId('card-resumo')).querySelector('table');
+    expect(resumo?.getAttribute('data-ordenar-excecao')).toMatch(/linhas fixas/);
   });
 });

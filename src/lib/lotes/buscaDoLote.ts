@@ -38,11 +38,46 @@ export function carimbosDoTexto(texto: string | null | undefined): string[] {
 const mesmoTexto = (a: string | null | undefined, b: string | null | undefined) =>
   !!normalizarParaBusca(a) && normalizarParaBusca(a) === normalizarParaBusca(b);
 
-/** O lote está escrito no texto? Pelo nome do campeiro (igual) ou, sem nome igual na fazenda, pelo carimbo. */
+/** As palavras de um texto do caderno, maiúsculas, sem acento: "L20 F1+SP C10" → [L20, F1, SP, C10] (o "." fica: é do carimbo). */
+export function palavrasDoTexto(texto: string | null | undefined): string[] {
+  return normalizarParaBusca(texto).toUpperCase().split(/[^0-9A-Z.]+/).map(p => p.replace(/^\.+|\.+$/g, '')).filter(Boolean);
+}
+
+/** LOTE-BUSCA-02 — todas as palavras do apelido estão no texto, em qualquer ordem ("L20 SP+F1" ⊂ "L20 F1+SP C10"). */
+function apelidoNoTexto(texto: string, apelido: string | null | undefined): boolean {
+  const doApelido = palavrasDoTexto(apelido);
+  if (!doApelido.length) return false;
+  const doTexto = new Set(palavrasDoTexto(texto));
+  return doApelido.every(p => doTexto.has(p));
+}
+
+/** LOTE-BUSCA-02 — os meses escritos como "C10", "C8/9", "CAR_09", "C_07e08" (o carimbo do mês sem o .lote): "C8/9" → [8, 9]. */
+export function mesesDoTexto(texto: string | null | undefined): number[] {
+  const meses = new Set<number>();
+  const MES = /^(0?[1-9]|1[0-2])(?:E(0?[1-9]|1[0-2]))?$/;
+  const anotar = (m: RegExpExecArray | null) => { if (m) { meses.add(Number(m[1])); if (m[2]) meses.add(Number(m[2])); } };
+  const palavras = palavrasDoTexto(texto);
+  palavras.forEach((p, i) => {
+    const prox = palavras[i + 1];
+    const junto = /^(?:C|CAR)(0?[1-9]|1[0-2])$/.exec(p);           // "C10", "CAR09"
+    if (junto) { anotar(junto); if (prox) anotar(/^(0?[1-9]|1[0-2])$/.exec(prox)); }   // "C8/9" → o 9 também
+    else if ((p === 'C' || p === 'CAR') && prox) anotar(MES.exec(prox));               // "CAR_09", "C_07e08"
+  });
+  return [...meses].sort((a, b) => a - b);
+}
+
+/** O lote está escrito no texto? Pelo nome do campeiro (igual, ou todas as palavras dele em qualquer ordem) ou, sem nome de OUTRO
+ *  lote no texto, pelo carimbo. */
 function textoCitaOLote(texto: string, l: LoteDaLista, ativos: readonly LoteDaLista[]): boolean {
-  if (mesmoTexto(texto, l.nomeCampeiro)) return true;
-  if (ativos.some(o => mesmoTexto(texto, o.nomeCampeiro))) return false;   // o texto é o nome de OUTRO lote: o carimbo não decide
+  if (mesmoTexto(texto, l.nomeCampeiro) || apelidoNoTexto(texto, l.nomeCampeiro)) return true;
+  if (ativos.some(o => mesmoTexto(texto, o.nomeCampeiro) || apelidoNoTexto(texto, o.nomeCampeiro))) return false;   // o texto é o nome de OUTRO lote: o carimbo não decide
   return !!l.carimbo && carimbosDoTexto(texto).includes(l.carimbo.trim().toUpperCase());
+}
+
+/** Sem nada pelo nome nem pelo carimbo: o mês escrito ("C10") sugere os lotes de carimbo daquele mês (10.1, 10.2, 10R). */
+function doMesEscrito(texto: string, l: LoteDaLista): boolean {
+  const mes = l.carimbo ? /^(1[0-2]|[1-9])[.R]/.exec(l.carimbo.trim().toUpperCase()) : null;
+  return !!mes && mesesDoTexto(texto).includes(Number(mes[1]));
 }
 
 interface OndeEsteve { pastos: string[]; texto: string }
@@ -68,9 +103,10 @@ export function opcoesDosLotesNoPasto(lotes: readonly LoteDaLista[], ctx: Contex
   const ativos = lotes.filter(l => l.situacao === 'ativo');
   const neste = normalizarParaBusca(ctx.pastoNome);
   const grupos: OpcaoSearchable[][] = [[], [], [], []];
+  const algumPeloNome = ativos.some(l => sugeridoPeloCaderno(ctx.textoDoCaderno, l, ativos));
   for (const l of ativos) {
     const onde = ctx.mesAnterior ? ondeEsteve(l, ctx.mesAnterior, ativos) : null;
-    const i = sugeridoPeloCaderno(ctx.textoDoCaderno, l, ativos) ? 0
+    const i = sugeridoPeloCaderno(ctx.textoDoCaderno, l, ativos) || (!algumPeloNome && doMesEscrito(ctx.textoDoCaderno, l)) ? 0
       : !onde ? 3
       : onde.pastos.some(p => normalizarParaBusca(p) === neste) ? 1 : 2;
     grupos[i].push({

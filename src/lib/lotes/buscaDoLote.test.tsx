@@ -12,7 +12,7 @@ import { CampoLoteDoPasto } from '@/components/fechamento/CampoLoteDoPasto';
 import { casaPorPalavras, normalizarParaBusca } from '@/lib/texto/busca';
 import type { LoteDaLista } from './tipos';
 import {
-  carimbosDoTexto, opcoesDosLotesNoPasto, GRUPO_DEMAIS, GRUPO_DO_CADERNO, GRUPO_NESTE_PASTO, GRUPO_OUTROS_PASTOS,
+  carimbosDoTexto, mesesDoTexto, opcoesDosLotesNoPasto, GRUPO_DEMAIS, GRUPO_DO_CADERNO, GRUPO_NESTE_PASTO, GRUPO_OUTROS_PASTOS,
   type MesAnteriorDoLote,
 } from './buscaDoLote';
 
@@ -159,5 +159,41 @@ describe('as telas leem a regra', () => {
     const campo = readFileSync('src/components/fechamento/CampoLoteDoPasto.tsx', 'utf8');
     expect(campo.match(/buscaPorPalavras semCorte subInteiro/g)).toHaveLength(2);
     expect(readFileSync('src/components/FechamentoPastoDialog.tsx', 'utf8')).toContain('mesAnterior: lotesDoMesAnterior');
+  });
+});
+
+/* LOTE-BUSCA-02 (Gabriel 12/11 10:23) — o caso da Santa Rita, nomes genéricos: o lote do L20 existia (10.1, apelido "L20 SP+F1"); no 20R-2
+   o caderno diz "L20 F1+SP C10" e nem a busca nem a sugestão achavam (ordem trocada no "+", e "C10" é o mês, não o carimbo 10.1). */
+describe('LOTE-BUSCA-02 — o caderno com palavras em outra ordem e o mês escrito', () => {
+  const L20 = lote('l20', 'CRI-PRE-NEL-01', '10.1', 'L20 SP+F1');
+  const L19 = lote('l19', 'CRI-VAC-NEL-02', '10.2', 'L19 MULT');
+  const L18 = lote('l18', 'CRI-VAC-NEL-9.3', '9.3', 'L18');
+  const L1 = lote('l1', 'CRI-VAC-NEL-7.1', '7.1', 'L1VC NEL C6/7');
+  const SR = [L20, L19, L18, L1];
+  it('a busca por palavras parte também em "+", "/", "_" e "-": "L20 F1+SP" acha "L20 SP+F1"', () => {
+    const textos = ['10.1', 'l20 sp+f1', 'cri-pre-nel-01'];
+    expect(casaPorPalavras(textos, 'L20 F1+SP')).toBe(true);
+    expect(casaPorPalavras(textos, 'f1/sp')).toBe(true);
+    expect(casaPorPalavras(textos, 'L20 F1+SX')).toBe(false);
+    expect(casaPorPalavras(['l18 prim. c9'], 'L1')).toBe(true);           // por palavra contida, como antes
+  });
+  it('a sugestão: todas as palavras do apelido no texto do caderno, em qualquer ordem', () => {
+    const ops = opcoesDosLotesNoPasto(SR, ctx('20R-2', 'L20 F1+SP C10'));
+    expect(grupoDe(ops, 'l20')).toBe(GRUPO_DO_CADERNO);
+    expect(grupoDe(ops, 'l19')).toBe(GRUPO_DEMAIS);                         // 10.2 é do mês 10, mas o nome já achou: o mês não entra
+    expect(ops[0].value).toBe('l20');
+  });
+  it('apelido curto casa a palavra inteira, nunca um pedaço ("L1" não é "L18"; "L18" está em "L18 Prim. C9")', () => {
+    expect(grupoDe(opcoesDosLotesNoPasto(SR, ctx('14 D-2', 'L18 Prim. C9')), 'l18')).toBe(GRUPO_DO_CADERNO);
+    expect(grupoDe(opcoesDosLotesNoPasto([lote('x', 'X', null, 'L1')], ctx('P', 'L18 Prim. C9')), 'x')).toBeUndefined();
+  });
+  it('sem nada pelo nome nem pelo carimbo, o mês escrito ("C10", "C8/9", "CAR_09") sugere os lotes daquele mês', () => {
+    expect(mesesDoTexto('L20 F1+SP C10')).toEqual([10]);
+    expect(mesesDoTexto('L15 PRIM+SEC C8/9')).toEqual([8, 9]);
+    expect(mesesDoTexto('Prim. CAR_09')).toEqual([9]);
+    expect(mesesDoTexto('L09 Vaca Nel C_07e08')).toEqual([7, 8]);
+    expect(mesesDoTexto('N1 Angus SP 2026')).toEqual([]);
+    const ops = opcoesDosLotesNoPasto(SR, ctx('P', 'Lote novo C10'));
+    expect([grupoDe(ops, 'l20'), grupoDe(ops, 'l19'), grupoDe(ops, 'l18')]).toEqual([GRUPO_DO_CADERNO, GRUPO_DO_CADERNO, GRUPO_DEMAIS]);
   });
 });

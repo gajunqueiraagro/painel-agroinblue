@@ -149,6 +149,7 @@ function FinanciamentosViewV2({ initialFinanciamentoId, onVoltarParaOrigem }: Fi
     return (
       <FinanciamentoDetalhe
         id={view.id}
+        onAbrirOutro={(outro) => setView({ mode: 'detalhe', id: outro })}
         onVoltar={() => {
           if (veioDeOrigemExterna && onVoltarParaOrigem) {
             onVoltarParaOrigem();

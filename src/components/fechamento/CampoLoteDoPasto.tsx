@@ -11,6 +11,7 @@ import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchab
 import { codigoAoLado, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
 import { comLoteEmTodos, comLoteNaCategoria, loteDoCard, rotuloDoLote, type ItemComLote } from '@/lib/lotes/loteDoPasto';
 import { opcoesDosLotesNoPasto, type ContextoDaBusca } from '@/lib/lotes/buscaDoLote';
+import { sugestaoDoLote } from '@/lib/lotes/ligacaoDoLote';
 
 export const ROTULO_NOVO_LOTE = '+ Novo lote';
 export const DICA_DO_LOTE = 'O lote é o grupo de animais manejado junto. Ele vai em cada categoria deste pasto e pode estar em mais de um pasto. Cabeças e peso continuam sendo os do fechamento.';
@@ -26,7 +27,7 @@ export function opcoesDosLotes(lotes: readonly LoteDaLista[]): OpcaoSearchable[]
   }));
 }
 
-export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria, lotes, contexto, disabled, onChange, onNovoLote }: {
+export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria, lotes, contexto, disabled, onChange, onNovoLote, comRotulo }: {
   itens: readonly T[];
   nomeDaCategoria: (categoriaId: string) => string;
   lotes: readonly LoteDaLista[];
@@ -36,6 +37,8 @@ export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria
   onChange: (itens: T[]) => void;
   /** abre o assistente; `categoriaId` nulo = o lote novo vai no pasto inteiro */
   onNovoLote: (categoriaId: string | null) => void;
+  /** L1 — desenha a linha do rótulo "Lote" com a sugestão à direita (o padrão do "Usar o lote" do Nome no caderno; a altura não muda) */
+  comRotulo?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   const card = loteDoCard(itens);
@@ -43,8 +46,10 @@ export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria
   const opcoes = contexto ? opcoesDosLotesNoPasto(lotes, contexto) : opcoesDosLotes(lotes);
   const comCabeca = itens.filter(i => i.quantidade > 0);
   const novo = (categoriaId: string | null) => ({ label: ROTULO_NOVO_LOTE, onSelect: () => { setAberto(false); onNovoLote(categoriaId); } });
+  /* L1 (b) — card com cabeça e sem lote: a sugestão das MESMAS opções do seletor; 1 = "Usar" (1 clique, todas as categorias), 2+ = abre o painel */
+  const sugestao = contexto && !disabled ? sugestaoDoLote(opcoes, itens) : null;
 
-  return (
+  const campo = (
     <Popover open={aberto} onOpenChange={setAberto}>
       <PopoverTrigger asChild>
         <button type="button" disabled={disabled} title={rotulo.title} data-testid="campo-lote-do-pasto"
@@ -77,5 +82,27 @@ export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria
         )}
       </PopoverContent>
     </Popover>
+  );
+  if (!comRotulo) return campo;
+  return (
+    <>
+      <div className="flex items-baseline justify-between gap-1">
+        <span className="text-[10px] leading-none text-white/50">Lote</span>
+        {sugestao && (sugestao.opcoes.length === 1 ? (
+          <button type="button" data-testid="lote-sugestao-usar" title={`Sugestão ${sugestao.porque}: ${sugestao.opcoes[0].label}${sugestao.opcoes[0].sub ? ` · ${sugestao.opcoes[0].sub}` : ''}. Liga todas as categorias; grava no Salvar.`}
+            onClick={() => onChange(comLoteEmTodos(itens, sugestao.opcoes[0].value))}
+            className="whitespace-nowrap text-[10px] font-semibold leading-none text-amber-200 underline-offset-2 hover:text-white hover:underline">
+            Usar {sugestao.opcoes[0].label}
+          </button>
+        ) : (
+          <button type="button" data-testid="lote-sugestao-varias" title={`${sugestao.opcoes.length} lotes ${sugestao.porque}: ${sugestao.opcoes.map(o => o.label).join(', ')}`}
+            onClick={() => setAberto(true)}
+            className="whitespace-nowrap text-[10px] font-semibold leading-none text-amber-200 underline-offset-2 hover:text-white hover:underline">
+            {sugestao.opcoes.length} sugestões
+          </button>
+        ))}
+      </div>
+      {campo}
+    </>
   );
 }
