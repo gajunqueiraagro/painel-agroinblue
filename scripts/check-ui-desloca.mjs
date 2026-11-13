@@ -387,7 +387,9 @@ const CENARIOS = [
     ] },
   { nome: 'lotes-assistente-passos', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',
     antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
-      await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await espera(p, 500); },
+      /* LOTE-PADRAO-V3 — o assistente de antes abre pela ficha de um lote de antes (o "+ Novo lote" é o v3) */
+      await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await espera(p, 500);
+      await p.locator('[data-testid="ficha-editar-identidade"]').click(); await p.locator('[data-testid="assistente-do-lote"]:not([data-versao])').waitFor(); await espera(p, 500); },
     estados: [
       ['escolher REC', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^REC/ }).first().click(); await espera(p); }],
       /* a atividade é lista fixa (Chat 12/11 14:05): o "Cadastrar nova" abre no passo 2 (categoria) */
@@ -405,11 +407,31 @@ const CENARIOS = [
       ['anotação', async (p) => { await p.locator('[data-testid="assistente-anotacao"]').fill('veio da 3M, brinco amarelo'); await espera(p); }],
       ['voltar', clicar('[data-testid="assistente-voltar"]')],
     ] },
+  /* LOTE-PADRAO-V3 · L2 — o assistente v3: andar pelos passos, trocar parida/solteira, prenha/vazia, pôr e tirar carimbo e marcador não
+     move o trilho, o código nem os botões do rodapé (o que não vale fica apagado no lugar dele) */
+  { nome: 'lotes-assistente-v3-passos', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',
+    antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
+      await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"][data-versao="v3"]').waitFor(); await espera(p, 500); },
+    estados: (() => {
+      const op = (testid, texto) => async (p) => { await p.locator(`[data-testid="${testid}"] button`, { hasText: texto }).first().click(); await espera(p); };
+      const av = clicar('[data-testid="assistente-avancar"]');
+      const digitarEnter = (sel, t) => async (p) => { await p.locator(sel).fill(t); await p.locator(sel).press('Enter'); await espera(p); };
+      return [
+        ['Cria', op('assistente-atividades', 'Cria')], ['passo 2', av], ['Vacas', op('assistente-categorias', 'Vacas')], ['passo 3', av],
+        ['Nelore', op('assistente-racas', 'Nelore')], ['composição Angus', op('assistente-composicao', 'Angus')], ['passo 4', av],
+        ['parida', op('assistente-cria-ao-pe', 'Parida')], ['carimbo 7.1', digitarEnter('[data-testid="assistente-carimbo"]', '7.1')],
+        ['carimbo 8.1', digitarEnter('[data-testid="assistente-carimbo"]', '8.1')], ['prenha', op('assistente-prenhez', 'Prenha')],
+        ['vazia', op('assistente-prenhez', 'Vazia')], ['solteira', op('assistente-cria-ao-pe', 'Solteira')], ['parida de novo', op('assistente-cria-ao-pe', 'Parida')],
+        ['passo 5', av], ['passo 6', av], ['reprodução', op('assistente-programa', 'Reprodução')], ['passo 7', av], ['passo 8', av],
+        ['marcador', digitarEnter('[data-testid="assistente-marcador"]', 'Gêmeos')], ['voltar', clicar('[data-testid="assistente-voltar"]')],
+      ];
+    })() },
   /* LOTES-05 + LOTE-ETAPAS-01 — a raça da parida: o carimbo (digitado, ressinc., errado, vazio = "Falta o carimbo dos mamotes" no rodapé)
      e a genética dos mamotes não mexem em nada */
   { nome: 'lotes-assistente-carimbo', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',
     antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
-      await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await espera(p, 500);
+      await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await espera(p, 500);
+      await p.locator('[data-testid="ficha-editar-identidade"]').click(); await p.locator('[data-testid="assistente-do-lote"]:not([data-versao])').waitFor(); await espera(p, 500);
       for (const re of [/^CRI/, /^PP/]) { await p.locator('[data-testid="assistente-cartao"]', { hasText: re }).first().click(); await espera(p);
         await p.locator('[data-testid="assistente-avancar"]').click(); await espera(p, 450); }
       await p.locator('[data-testid="assistente-situacao-cria"] button', { hasText: 'Parida com bezerro' }).first().click(); await espera(p);

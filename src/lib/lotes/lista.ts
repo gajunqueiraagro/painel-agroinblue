@@ -16,6 +16,9 @@ const numero = (o: object, k: string): number | null => {
   return null;
 };
 const textos = (o: object, k: string): string[] => { const v = campo(o, k); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; };
+/** LOTE-PADRAO-V3 — as cabeças por carimbo (inteiro ou nulo em cada posição); sem lista = null */
+const cabecasPorCarimbo = (v: unknown): (number | null)[] | null =>
+  (Array.isArray(v) && v.length ? v.map(x => (typeof x === 'number' && Number.isFinite(x) ? x : null)) : null);
 const ehObjeto = (v: unknown): v is object => typeof v === 'object' && v !== null && !Array.isArray(v);
 const SITUACOES: readonly SituacaoDoLote[] = ['ativo', 'encerrado', 'cancelado'];
 const situacao = (v: string | null): SituacaoDoLote | null => SITUACOES.find(s => s === v) ?? null;
@@ -41,6 +44,14 @@ export function loteDaLinha(r: unknown): LoteDaLista | null {
     mamotesSemen: semenDosMamotes(texto(r, 'mamotes_semen')), anotacao: texto(r, 'anotacao'),
     codigoRegra: texto(r, 'codigo_regra') === 'etapas' ? 'etapas' : null,
     carimbos: textos(r, 'carimbos').length ? textos(r, 'carimbos') : null,
+    /* LOTE-PADRAO-V3 · L2 (117595) */
+    categoriaFixa: texto(r, 'categoria_fixa'),
+    composicaoRacas: textos(r, 'composicao_racas').length ? textos(r, 'composicao_racas') : null,
+    nascidoDe: texto(r, 'nascido_de'), nascidoAte: texto(r, 'nascido_ate'), criaAoPe: texto(r, 'cria_ao_pe'), prenhez: texto(r, 'prenhez'),
+    prenhaDe: texto(r, 'prenha_de'), prenhaRacaId: texto(r, 'prenha_raca_id'), partoPrevisto: texto(r, 'parto_previsto'),
+    bezerrosPaiRacaId: texto(r, 'bezerros_pai_raca_id'), carimbosCab: cabecasPorCarimbo(campo(r, 'carimbos_cab')),
+    programaLote: texto(r, 'programa_lote'), metodoReproducao: texto(r, 'metodo_reproducao'), entradaNovilha: texto(r, 'entrada_novilha'),
+    sistemaLote: texto(r, 'sistema_lote'), marcadores: textos(r, 'marcadores').length ? textos(r, 'marcadores') : null,
   };
 }
 
