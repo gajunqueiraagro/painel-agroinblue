@@ -76,6 +76,7 @@ const TAMANHOS_DA_VG = [[1000, 600], [1126, 579], [1130, 580], [1440, 800], [144
 const TAMANHOS_DO_LOTES = [[1000, 600], [1126, 579], [1440, 800], [1240, 800], [1024, 600], [948, 593], [1067, 667]];
 /* P141 (Gabriel 28/10, decisão a) — a Conciliação (3 cards lado a lado) só de 1000px para cima: abaixo disso ela nunca coube, nem no código
    antigo — dívida declarada CONC-ESTREITA (docs/DIVIDAS-ABERTAS.md); empilhar os cards é item próprio, com mock */
+const TAMANHOS_DAS_CHUVAS = [[1000, 600], [1126, 579], [1366, 768], [1440, 800]];
 const TAMANHOS_DA_CONCILIACAO = [[1000, 600], [1024, 600], [1126, 579], [1130, 580], [1300, 704], [1366, 768], [1440, 800], [1440, 860], [1750, 1000]];
 const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* P121 — nos cenários dos Itens da nota o `semRolagem` deixa de fora a tabela dos itens (rola por dentro) e o RESUMO do lançamento: os
@@ -191,6 +192,15 @@ const CENARIOS = [
   { nome: 'contrato-parcela-zero', url: 'tela=contrato&zero=1', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contrato-parcelamento', url: 'tela=contrato&v=parcelamento', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contrato-consorcio', url: 'tela=contrato&v=consorcio', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* FIN-FINANC-LAYOUT-03 (Chat 12/11 18:35/22:00) — a lista de Financiamentos na régua única: 10/9 abaixo de 1.350px e 11/10 acima, todas as
+     colunas, sem rolagem horizontal de 1.126px para cima (a regra vale dali para cima); com os tamanhos reais do proto e os encerrados abertos */
+  { nome: 'financiamentos-lista', url: 'tela=financiamentos-lista&enc=1', tamanhos: [[1126, 579], [1240, 700], [1349, 768], [1366, 768], [1440, 900]] },
+  /* FIN-GUARDA-CHUVA G2 — o grupo da linha com o ✎ e a faixa (maiores valores); o modal da linha (editar, nova, com a revisão feita) */
+  { nome: 'financiamentos-linha-grupo', url: 'tela=financiamentos-lista&linha=1', tamanhos: [[1126, 579], [1240, 700], [1349, 768], [1366, 768], [1440, 900]] },
+  { nome: 'financiamentos-linha-modal', url: 'tela=linha-credito', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]' },
+  { nome: 'financiamentos-linha-nova', url: 'tela=linha-credito&v=nova', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]' },
+  { nome: 'financiamentos-linha-previa', url: 'tela=linha-credito', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
+    antes: async (p) => { await p.locator('[data-testid="revisar-linha"]').click(); await p.waitForTimeout(500); } },
   /* PARC-DOCS-TABELA-01 — Editar obrigação › Documentos da compra parcelada com 2 (o caso real), 18 e 36 parcelas e uma nota: a tabela das
      Parcelas vai até o fim do modal, cabeçalho e Total inteiros, só o corpo rola; as 2 nunca rolam; as 18 não rolam a 1440x800 (abaixo,
      o bloco dos documentos da compra deixa menos que as 18 linhas compactas: o corpo rola com cabeçalho e Total presos) */
@@ -712,6 +722,11 @@ const CENARIOS = [
   /* CHUVAS-LANCAR-01 — a planilha de Chuvas (uma fazenda; o Global = a escolha da estação) · PEC-ABAS-01 — a barra com as 4 abas e a volta */
   { nome: 'chuvas-lancar', url: 'tela=chuvas-lancar', cabecalhoInteiro: true },
   { nome: 'chuvas-lancar-global', url: 'tela=chuvas-lancar&global=1' },
+  /* CHUVAS-ANALISE-01 F1 — a análise: Todas as fazendas (Global), Uma fazenda com histórico e a sem histórico (1º ano) */
+  /* CHUVAS-ANALISE-01 F1: os três oficiais + 1366×768 (o Chat confere a 1126 e a 1366) */
+  { nome: 'chuvas-analise-todas', url: 'tela=chuvas-analise&global=1', tamanhos: TAMANHOS_DAS_CHUVAS },
+  { nome: 'chuvas-analise-uma', url: 'tela=chuvas-analise&faz=f1', tamanhos: TAMANHOS_DAS_CHUVAS },
+  { nome: 'chuvas-analise-sem-historico', url: 'tela=chuvas-analise&faz=f4', tamanhos: TAMANHOS_DAS_CHUVAS },
   { nome: 'barra-pecuaria', url: 'tela=barra-pecuaria&aba=lancamentos-zoot' },
   { nome: 'barra-pecuaria-volta', url: 'tela=barra-pecuaria&aba=conferencia-mensal&de=lancamentos-zoot' },
   /* UI-PERIODO-01 — o componente único de período aberto (popup com os atalhos e os dois calendários; os modos mês e ano; a CPR) */
@@ -1003,6 +1018,28 @@ const CENARIOS = [
           const painel = p.locator('[data-testid="painel-lote-do-pasto"]'); await painel.waitFor();
           await painel.locator('button', { hasText: /Sem lote/ }).first().click();
           await p.locator('[data-testid="searchable-select-painel"] input').fill('vacas 8.2'); await p.waitForTimeout(500); } },
+      /* LOTE-BUSCA-02 — `&v=busca2` (Santa Rita 20R-2, sintético): caderno "L20 F1+SP C10" → o lote "L20 SP+F1" (10.1) no topo, pelo caderno;
+         e a busca digitada com o "+" na outra ordem */
+      { nome: 'fechamento-grupo-campo-lote-busca2', url: URL + '&v=busca2', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="searchable-select-painel"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
+          const painel = p.locator('[data-testid="painel-lote-do-pasto"]'); await painel.waitFor();
+          await painel.locator('button', { hasText: /Sem lote/ }).first().click();
+          await p.locator('[data-testid="searchable-select-painel"]').waitFor(); await p.waitForTimeout(500); } },
+      /* L1 (b) — a sugestão na linha do rótulo "Lote" (o pasto sem lote): 1 = "Usar 10.1" (busca2), 2 = "2 sugestões" (busca: os dois 8.2
+         do caderno), nenhuma (lotes, sem caderno nem mês anterior); e (c) o "Lotes N/M" no topo */
+      /* L1 (c) — o topo do Fechamento com "Itens com lote N/M" (Chat 12/11 14:12): faltando lote (âmbar) e completo; a tela inteira */
+      { nome: 'fechamento-grupo-l1-topo-faltando', url: URL + '&v=busca2&semlote=1', tamanhos: TAMANHOS_DO_LOTES,
+        antes: async (p) => { await p.locator('[data-testid="ligacao-dos-lotes"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-l1-topo-completo', url: URL + '&v=busca2', tamanhos: TAMANHOS_DO_LOTES,
+        antes: async (p) => { await p.locator('[data-testid="ligacao-dos-lotes"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-l1-sugestao-uma', url: URL + '&v=busca2&semlote=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-l1-sugestao-duas', url: URL + '&v=busca&semlote=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-l1-sugestao-nenhuma', url: URL + '&v=lotes&semlote=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-campo-lote-busca2-palavras', url: URL + '&v=busca2', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="searchable-select-painel"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
+          const painel = p.locator('[data-testid="painel-lote-do-pasto"]'); await painel.waitFor();
+          await painel.locator('button', { hasText: /Sem lote/ }).first().click();
+          await p.locator('[data-testid="searchable-select-painel"] input').fill('L20 F1+SP'); await p.waitForTimeout(500); } },
     ];
   })(),
   /* LOTES-03 F1 — Produção › Lotes (`tela=lotes`, dado SINTÉTICO dados/lotes.ts): a lista (Ativos, Encerrados, a busca sem achado com o
@@ -1012,8 +1049,12 @@ const CENARIOS = [
     const URL = 'tela=lotes&barra=32';
     const T = TAMANHOS_DO_LOTES;
     const lista = async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await p.waitForTimeout(600); };
-    const novo = async (p) => { await lista(p); await p.locator('[data-testid="lotes-novo"]').click();
-      await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await p.waitForTimeout(500); };
+    /* LOTE-PADRAO-V3 · L2 — o "+ Novo lote" abre o v3; o assistente de antes segue no ar só para o lote de antes (categoria do cliente):
+       os cenários dele entram pela ficha do REC-DF-NE-05, "✎ Editar identidade" */
+    const novo = async (p) => { await ficha(p); await p.locator('[data-testid="ficha-editar-identidade"]').click();
+      await p.locator('[data-testid="assistente-do-lote"]:not([data-versao])').waitFor(); await p.waitForTimeout(500); };
+    const novoV3 = async (p) => { await lista(p); await p.locator('[data-testid="lotes-novo"]').click();
+      await p.locator('[data-testid="assistente-do-lote"][data-versao="v3"]').waitFor(); await p.waitForTimeout(500); };
     const escolher = (re) => async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: re }).first().click(); await p.waitForTimeout(250);
       await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(450); };
     const ficha = async (p) => { await lista(p); await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click();
@@ -1026,7 +1067,8 @@ const CENARIOS = [
       { nome: 'lotes-lista-vazia', url: URL, tamanhos: T, antes: async (p) => { await lista(p);
         await p.locator('[data-testid="lotes-busca"]').fill('nenhum lote com este nome'); await p.locator('[data-testid="lotes-vazio"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'lotes-assistente-categoria', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: novo },
-      { nome: 'lotes-assistente-nova', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
+      /* a atividade é lista fixa (Chat 12/11 14:05: sem "Cadastrar nova atividade") — o "Cadastrar nova categoria" do passo 2 */
+      { nome: 'lotes-assistente-nova', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p); await escolher(/^REC/)(p);
         await p.locator('[data-testid="assistente-cadastrar-nova"]').click(); await p.locator('[data-testid="assistente-form"]').waitFor(); await p.waitForTimeout(400); } },
       /* LOTE-SIGLA-EDITAR-01 — ✎ na categoria DF (em uso): sigla livre e a prévia "N lotes mudam: … → …" na linha dos botões */
       { nome: 'lotes-assistente-sigla', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
@@ -1039,7 +1081,7 @@ const CENARIOS = [
          carimbo faltando (o aviso laranja no rodapé) e com tudo (7R, MF, F1 Angus, sêmen), a mojada (mamotes desligados), o Nome com a ficha */
       ...(() => {
         const T2 = [...T, [1366, 768], [1440, 900]];
-        const R = { url: URL, tamanhos: T2, regiao: '[data-testid="assistente-do-lote"]', semRolagem: { dentro: '[role="dialog"]' } };
+        const R = { url: URL, tamanhos: T2, regiao: '[data-testid="assistente-do-lote"]', semRolagem: { dentro: '[data-testid="assistente-do-lote"]' } };
         const chip = (testid, texto) => async (p) => { await p.locator(`[data-testid="${testid}"] button`, { hasText: texto }).first().click(); await p.waitForTimeout(150); };
         const avancar = async (p) => { await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(400); };
         const situacaoCria = async (p) => { await novo(p); await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await p.locator('[data-testid="assistente-situacao"]').waitFor(); };
@@ -1062,12 +1104,61 @@ const CENARIOS = [
           { ...R, nome: 'lotes-assistente-etapas-raca-parida', antes: racaParidaCompleta },
           { ...R, nome: 'lotes-assistente-etapas-raca-carimbo-errado', antes: async (p) => { await racaParida(p);
             await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await p.waitForTimeout(300); } },
+          /* LOTE-CARIMBOS-01 — vários carimbos (chips por Enter): 7.1, 8.1 e 9.2 → o código com a faixa 7/8/9 */
+          { ...R, nome: 'lotes-assistente-etapas-raca-carimbos', antes: async (p) => { await racaParida(p);
+            for (const c of ['7.1', '8.1', '9.2']) { await p.locator('[data-testid="assistente-carimbo"]').fill(c); await p.locator('[data-testid="assistente-carimbo"]').press('Enter'); }
+            await chip('assistente-mamotes-sexo', 'Misto')(p); await p.waitForTimeout(300); } },
           { ...R, nome: 'lotes-assistente-etapas-raca-mojada', antes: async (p) => { await situacaoCria(p); await chip('assistente-situacao-cria', 'Prenha (mojada)')(p);
             await avancar(p); await p.locator('[data-testid="assistente-cartao"]', { hasText: /^NE/ }).first().click(); await p.waitForTimeout(300); } },
           { ...R, nome: 'lotes-assistente-etapas-nome-cria', antes: async (p) => { await racaParidaCompleta(p); await avancar(p);
             await p.locator('[data-testid="assistente-nome"]').waitFor(); await p.locator('[data-testid="assistente-anotacao"]').fill('veio da 3M, brinco amarelo, IATF com sêmen sexado de julho'); await p.waitForTimeout(300); } },
           { ...R, nome: 'lotes-assistente-etapas-nome-recria', antes: nomeDe(/^REC/, /^DF/) },
           { ...R, nome: 'lotes-assistente-etapas-nome-engorda', antes: nomeDe(/^ENG/, /^BO/) },
+        ];
+      })(),
+      /* LOTE-PADRAO-V3 · L2 (mock lote-padrao-v3.html) — o assistente v3 nos 8 passos, por extenso, em 1126/1366/1440 e SEM ROLAGEM: as
+         atividades C/R/E, as categorias fixas da cria, a raça com composição e nascimento (idade), a situação da parida com 2 carimbos e
+         cabeças + a prenha (de quê, raça, parto), o carimbo errado (motivo no rodapé), a ordem de parto, o programa da novilha em reprodução
+         (método + entrada), o onde, e o Nome com marcadores e as etiquetas — na cria e na recria (Situação e Ordem "não se aplica") */
+      ...(() => {
+        const T2 = [...T, [1366, 768], [1440, 900]];
+        const R = { url: URL, tamanhos: T2, regiao: '[data-testid="assistente-do-lote"]', semRolagem: { dentro: '[data-testid="assistente-do-lote"]' } };
+        const op = (testid, texto) => async (p) => { await p.locator(`[data-testid="${testid}"] button`, { hasText: texto }).first().click(); await p.waitForTimeout(150); };
+        const av = async (p) => { await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(350); };
+        const ate = (ativ, cat) => async (p) => { await novoV3(p); await op('assistente-atividades', ativ)(p); await av(p); await op('assistente-categorias', cat)(p); await av(p); };
+        const raca = async (p) => { await ate('Cria', 'Vacas')(p); await op('assistente-racas', 'Nelore')(p); await op('assistente-composicao', 'Angus')(p);
+          for (const [k, d] of [['de', '01/09/2021'], ['ate', '31/12/2021']]) { const c = p.locator(`input[data-testid="assistente-nascido-${k}"]`); await c.fill(d); await c.press('Enter'); }
+          await p.waitForTimeout(300); };
+        const situacao = async (p) => { await raca(p); await av(p); await op('assistente-cria-ao-pe', 'Parida')(p); };
+        const parida = async (p) => { await situacao(p);
+          for (const c of ['7.1', '8.1']) { await p.locator('[data-testid="assistente-carimbo"]').fill(c); await p.locator('[data-testid="assistente-carimbo"]').press('Enter'); }
+          await p.locator('[data-testid="assistente-carimbo-chip"] input').first().fill('142');
+          await op('assistente-bezerros-sexo', 'Fêmeas')(p); await op('assistente-bezerros-semen', 'Sexado fêmea')(p); await op('assistente-bezerros-pai', 'Nelore')(p);
+          await op('assistente-prenhez', 'Prenha')(p); await op('assistente-prenha-de', 'IATF')(p); await op('assistente-prenha-raca', 'Angus')(p); };
+        const nome = async (p) => { await av(p); await p.locator('[data-testid="assistente-nome"]').waitFor();
+          await p.locator('[data-testid="assistente-nome-campeiro"]').fill('Sexada F do retiro de baixo');
+          for (const m of ['Gêmeos', 'Leiteiras', 'Retiro']) { await p.locator('[data-testid="assistente-marcador"]').fill(m); await p.locator('[data-testid="assistente-marcador"]').press('Enter'); }
+          await p.locator('[data-testid="assistente-anotacao"]').fill('veio da 3M, brinco amarelo, IATF com sêmen sexado de julho'); await p.waitForTimeout(300); };
+        return [
+          { ...R, nome: 'lotes-assistente-v3-atividade', antes: novoV3 },
+          { ...R, nome: 'lotes-assistente-v3-categoria-cria', antes: async (p) => { await novoV3(p); await op('assistente-atividades', 'Cria')(p); await av(p); } },
+          { ...R, nome: 'lotes-assistente-v3-raca', antes: raca },
+          { ...R, nome: 'lotes-assistente-v3-situacao-sem-carimbo', antes: situacao },
+          { ...R, nome: 'lotes-assistente-v3-situacao-parida-prenha', antes: parida },
+          /* cria PRENHA sem bezerro (Chat 22:15: prints de cria parida, cria prenha e recria) — os bezerros apagados no lugar deles */
+          { ...R, nome: 'lotes-assistente-v3-situacao-prenha', antes: async (p) => { await raca(p); await av(p); await op('assistente-cria-ao-pe', 'Solteira')(p);
+            await op('assistente-prenhez', 'Prenha')(p); await op('assistente-prenha-de', 'Monta natural')(p); await op('assistente-prenha-raca', 'Nelore')(p); } },
+          { ...R, nome: 'lotes-assistente-v3-nome-prenha', antes: async (p) => { await raca(p); await av(p); await op('assistente-cria-ao-pe', 'Solteira')(p);
+            await op('assistente-prenhez', 'Prenha')(p); await op('assistente-prenha-de', 'IATF')(p); await av(p); await op('assistente-ordem-parto', 'Primípara')(p);
+            await av(p); await op('assistente-programa', 'Reprodução')(p); await av(p); await op('assistente-sistema', 'Pasto')(p); await nome(p); } },
+          { ...R, nome: 'lotes-assistente-v3-situacao-carimbo-errado', antes: async (p) => { await situacao(p); await p.locator('[data-testid="assistente-carimbo"]').fill('13.1'); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-v3-ordem', antes: async (p) => { await parida(p); await av(p); await op('assistente-ordem-parto', 'Multípara')(p); } },
+          { ...R, nome: 'lotes-assistente-v3-programa-novilhas', antes: async (p) => { await ate('Cria', 'Novilhas')(p); await op('assistente-racas', 'Nelore')(p);
+            await av(p); await av(p); await av(p); await op('assistente-programa', 'Reprodução')(p); await op('assistente-metodo', 'IATF + repasse')(p); await op('assistente-entrada', 'Superprecoce')(p); } },
+          { ...R, nome: 'lotes-assistente-v3-nome-cria', antes: async (p) => { await parida(p); await av(p); await op('assistente-ordem-parto', 'Multípara')(p); await av(p);
+            await op('assistente-programa', 'Reprodução')(p); await op('assistente-metodo', 'IATF')(p); await av(p); await op('assistente-sistema', 'Pasto + suplemento')(p); await nome(p); } },
+          { ...R, nome: 'lotes-assistente-v3-nome-recria', antes: async (p) => { await ate('Recria', 'Desmama macho')(p); await op('assistente-racas', 'Nelore')(p); await av(p);
+            await op('assistente-programa', 'Recria')(p); await av(p); await op('assistente-sistema', 'Semiconfinamento')(p); await nome(p); } },
         ];
       })(),
       { nome: 'lotes-ficha-resumo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: ficha },
@@ -1077,6 +1168,18 @@ const CENARIOS = [
       { nome: 'lotes-ficha-historico', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: async (p) => { await ficha(p);
         await p.locator('[data-testid="ficha-do-lote"]').getByRole('button', { name: /^Histórico$/ }).click();
         await p.locator('[data-testid="linha-historico"]').first().waitFor(); await p.waitForTimeout(400); } },
+    ];
+  })(),
+  /* REBANHO-INICIAL-EDITAR-01 — o Editar do saldo inicial (dado SINTÉTICO, a lista chega depois do 1º render): abre em jan/2024 (nunca no
+     janeiro do fechamento), Cancelar sempre; e a prévia antes × depois com o mês que grava */
+  ...(() => {
+    const URL = 'tela=saldo-inicial';
+    const TAM = [[1126, 579], [1366, 768], [1440, 800]];
+    const editar = async (p) => { await p.getByText('Editar', { exact: true }).click(); await p.locator('[role="dialog"]').waitFor(); await p.waitForTimeout(400); };
+    return [
+      { nome: 'saldo-inicial-editar', url: URL, tamanhos: TAM, regiao: '[role="dialog"]', antes: editar },
+      { nome: 'saldo-inicial-previa', url: URL, tamanhos: TAM, regiao: '[role="dialog"]', antes: async (p) => { await editar(p);
+        await p.locator('[role="dialog"] input[value="210"]').fill('211'); await p.getByText('Salvar Saldo Inicial', { exact: true }).click(); await p.waitForTimeout(400); } },
     ];
   })(),
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos, modo "Grupos" (dado SINTÉTICO no `tela=pastos`): a lista dos grupos, com os
@@ -1658,6 +1761,9 @@ const CENARIOS = [
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),
   { nome: 'comparar-cadastro-confirmar', url: 'tela=comparar-cadastro', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' },
     antes: clicar('[data-testid="comparar-atualizar"]') },
+  /* NOTA-PDF-IBS-CBS-01 — o selo do IBS/CBS na nota lida do PDF (sem a informação / só o total), nos dois modos da aba (Valores e Fiscal) */
+  ...[['pdf-sem-ibs', ''], ['pdf-sem-ibs', 'Fiscal'], ['pdf-ibs-total', '']].map(([x, f]) => ({ nome: `itens-nota-${x}${f ? '-fiscal' : ''}`, url: `tela=itens-nota&v=${x}`,
+    tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS }, antes: f ? clicarTexto(f) : undefined })),
   { nome: 'itens-nota-guardadas', url: 'tela=itens-nota&v=guardadas', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]' } },
   { nome: 'itens-nota-guardadas-simulado', url: 'tela=itens-nota&v=guardadas', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-guardadas"] .overflow-y-auto' },

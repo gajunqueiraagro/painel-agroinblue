@@ -27,6 +27,9 @@ import {
   ListaDeFinanciamentos, SeloDoContrato, TABELA_LANC, TD_DATA_LANC, TD_VALOR_LANC, LINHA_LANC, TH_LANC,
 } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { contratoDaLista, ehCompraParcelada, ENCERRADOS, type ContratoDaLista } from '@/lib/financiamentos/listaDeFinanciamentos';
+import { faixaDaLinha, lerTelaDaLinha, rotuloDaLinha, type ItemDaFaixa, type LinhaDoCadastro } from '@/lib/financiamentos/linhaDeCredito';
+import { useLinhasDeCredito } from '@/hooks/useLinhasDeCredito';
+import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
 
 /* ── Types ── */
 /* ⚠ CLASSES LIDAS DO CÓDIGO DA REFERÊNCIA, não estimadas: `NUM` e `APOIO` são
@@ -237,6 +240,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         .eq('cliente_id', clienteId!);
       if (e3) throw e3;
       const nomeDaLinha = new Map<string, string>();
+      /* FIN-GUARDA-CHUVA G2 — o rótulo da casa (nº · programa) vem do leitor único; aqui o nome de reserva */
       for (const l of linhas ?? []) nomeDaLinha.set(l.id, l.programa || l.descricao || 'Linha de crédito');
       // 4) FIN-FINANC-28-P3-FIX — a data da 1ª liberação VIVA de cada contrato (a coluna Data; sem liberação, a do contrato)
       const { data: libs, error: e4 } = await supabase
@@ -425,6 +429,30 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   /* FIN-FINANC-28 P3-GRAFICO — o cronograma do que falta pagar, sobre AS MESMAS LINHAS dos cards: em Compras parceladas, as que o
      filtro deixou (`filtered`); em Financiamentos, as vigentes da aba (o conjunto dos cards dela). Só o lote: nenhuma consulta. */
   const [cadastroNovoAberto, setCadastroNovoAberto] = useState(false);
+  /* FIN-GUARDA-CHUVA G2 — a linha de crédito aberta no modal ('nova' = criar) e a faixa de cada linha no grupo da lista */
+  const [linhaAberta, setLinhaAberta] = useState<LinhaDoCadastro | 'nova' | null>(null);
+  const linhasDeCredito = useLinhasDeCredito(clienteId).data ?? [];
+  const rotuloPorLinha = useMemo(() => new Map(linhasDeCredito.map(l => [l.id, rotuloDaLinha(l)])), [linhasDeCredito]);
+  const linhasComContrato = useMemo(
+    () => [...new Set(financiamentos.flatMap(f => (f.paraLista.linhaCreditoId ? [f.paraLista.linhaCreditoId] : [])))].sort(),
+    [financiamentos]);
+  const { data: faixasDasLinhas } = useQuery({
+    queryKey: ['linhas-credito-faixas', clienteId, hoje, linhasComContrato.join(',')],
+    enabled: !!clienteId && linhasComContrato.length > 0,
+    queryFn: async () => {
+      const m = new Map<string, ItemDaFaixa[]>();
+      await Promise.all(linhasComContrato.map(async (id) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        const { data, error } = await (supabase as any).rpc('fn_linha_credito_tela', { p_id: id, p_hoje: hoje });
+        const t = error ? null : lerTelaDaLinha(data);
+        if (t) m.set(id, faixaDaLinha(t.totais, t.linha.limite));
+      }));
+      return m;
+    },
+  });
+  const releLinhas = () => {
+    for (const k of ['linhas-credito', 'linhas-credito-faixas', 'financiamentos-lista']) void qc.invalidateQueries({ queryKey: [k, clienteId] });
+  };
   const [cronogramaAberto, setCronogramaAberto] = useState<'mensal' | 'anual' | null>(null);
   const vigentesFinanciamento = useMemo(
     () => financiamentos.filter(f => !ehCompraParcelada(f.natureza) && daAba(f.natureza) && !ENCERRADOS.includes(f.status)
@@ -442,9 +470,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       .filter(f => !ehCompraParcelada(f.natureza) && daAba(f.natureza)
         && (filtroNatureza === 'todas' || f.natureza === filtroNatureza)
         && passaNosFiltros(f, filtroSituacaoFin))
-      .map(f => f.paraLista),
+      .map(f => (f.paraLista.linhaCreditoId && rotuloPorLinha.has(f.paraLista.linhaCreditoId)
+        ? { ...f.paraLista, linhaCreditoNome: rotuloPorLinha.get(f.paraLista.linhaCreditoId) ?? f.paraLista.linhaCreditoNome }
+        : f.paraLista)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `daAba` resume a aba
-    [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin, aba]);
+    [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin, aba, rotuloPorLinha]);
 
   /* FIN-FINANC-28-P3-FIX2 — a coluna Banco só aparece quando há linha de crédito (grupo que não é banco): decidido sobre TODOS
      os financiamentos, nunca sobre o recorte do filtro (filtrar não muda coluna). */
@@ -686,6 +716,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               onClick={() => setEncerradosAbertos(v => !v)}>
               {encerradosAbertos ? 'Ocultar encerrados' : 'Mostrar encerrados'}
             </Button>
+            {/* FIN-GUARDA-CHUVA G2 — LUGAR RESERVADO: invisível fora da aba Financiamentos (o "Nova obrigação" não anda) */}
+            <Button variant="outline" size="sm"
+              className={`h-7 w-[128px] gap-1 px-2 text-xs ${aba === 'financiamentos' ? '' : 'invisible'}`}
+              aria-hidden={aba !== 'financiamentos'} tabIndex={aba === 'financiamentos' ? 0 : -1}
+              onClick={() => setLinhaAberta('nova')} data-testid="nova-linha-credito">
+              <Plus className="size-3.5" /> Linha de crédito
+            </Button>
             {/* CTA da casa: o mesmo `bg-cta` do resto do sistema, em 28px. */}
             <Button size="sm" className="h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover"
               onClick={() => setCadastroNovoAberto(true)} data-testid="nova-obrigacao">
@@ -764,7 +801,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             : <ListaDeFinanciamentos contratos={contratosFinanciamento} encerradosAbertos={encerradosAbertos}
                 aoAlternarEncerrados={() => setEncerradosAbertos(v => !v)} aoAbrir={abrirContrato} filtros={filtros}
                 mostrarBanco={mostrarBanco} aoAbrirCronograma={() => setCronogramaAberto('anual')}
-                parcelasAPagar={isLoading ? null : graficoFinanciamentos.principalCent / 100} />
+                parcelasAPagar={isLoading ? null : graficoFinanciamentos.principalCent / 100}
+                faixasDasLinhas={faixasDasLinhas}
+                aoAbrirLinha={(id) => { const l = linhasDeCredito.find(x => x.id === id); if (l) setLinhaAberta(l); }} />
         ) : (
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
         {filtros}
@@ -920,6 +959,10 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         recorte={`${cronogramaAberto === 'anual'
           ? `${vigentesFinanciamento.length} ${vigentesFinanciamento.length === 1 ? 'contrato vigente' : 'contratos vigentes'}`
           : `${filtered.length} ${filtered.length === 1 ? 'compra' : 'compras'}`} · os filtros da aba${textoDoIntervalo ? ` · ${textoDoIntervalo}` : ''}`} />
+      {linhaAberta && (
+        <LinhaCreditoDialog key={linhaAberta === 'nova' ? 'nova' : linhaAberta.id} aberto clienteId={clienteId ?? null}
+          linha={linhaAberta === 'nova' ? null : linhaAberta} aoFechar={() => setLinhaAberta(null)} aoGravar={releLinhas} aoAbrirContrato={abrirContrato} />
+      )}
       {/* FIN-FINANC-28 passo 7 — o cadastro novo (financiamento, empréstimo, consórcio); a compra parcelada abre o formulário aprovado */}
       {cadastroNovoAberto && (
         <CadastroDeContratoDialog aberto aoFechar={() => setCadastroNovoAberto(false)}

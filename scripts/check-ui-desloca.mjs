@@ -387,11 +387,14 @@ const CENARIOS = [
     ] },
   { nome: 'lotes-assistente-passos', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',
     antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
-      await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await espera(p, 500); },
+      /* LOTE-PADRAO-V3 — o assistente de antes abre pela ficha de um lote de antes (o "+ Novo lote" é o v3) */
+      await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await espera(p, 500);
+      await p.locator('[data-testid="ficha-editar-identidade"]').click(); await p.locator('[data-testid="assistente-do-lote"]:not([data-versao])').waitFor(); await espera(p, 500); },
     estados: [
       ['escolher REC', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^REC/ }).first().click(); await espera(p); }],
-      ['Cadastrar nova', clicar('[data-testid="assistente-cadastrar-nova"]')], ['cancelar o formulário', clicar('[data-testid="assistente-form-cancelar"]')],
+      /* a atividade é lista fixa (Chat 12/11 14:05): o "Cadastrar nova" abre no passo 2 (categoria) */
       ['passo 2', clicar('[data-testid="assistente-avancar"]')],
+      ['Cadastrar nova', clicar('[data-testid="assistente-cadastrar-nova"]')], ['cancelar o formulário', clicar('[data-testid="assistente-form-cancelar"]')],
       ['escolher DF', async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: /^DF/ }).first().click(); await espera(p); }],
       /* LOTE-ETAPAS-01 — programa e sistema (recria), raça, nome com apelido e anotação */
       ['passo 3', clicar('[data-testid="assistente-avancar"]')],
@@ -404,11 +407,31 @@ const CENARIOS = [
       ['anotação', async (p) => { await p.locator('[data-testid="assistente-anotacao"]').fill('veio da 3M, brinco amarelo'); await espera(p); }],
       ['voltar', clicar('[data-testid="assistente-voltar"]')],
     ] },
+  /* LOTE-PADRAO-V3 · L2 — o assistente v3: andar pelos passos, trocar parida/solteira, prenha/vazia, pôr e tirar carimbo e marcador não
+     move o trilho, o código nem os botões do rodapé (o que não vale fica apagado no lugar dele) */
+  { nome: 'lotes-assistente-v3-passos', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',
+    antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
+      await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"][data-versao="v3"]').waitFor(); await espera(p, 500); },
+    estados: (() => {
+      const op = (testid, texto) => async (p) => { await p.locator(`[data-testid="${testid}"] button`, { hasText: texto }).first().click(); await espera(p); };
+      const av = clicar('[data-testid="assistente-avancar"]');
+      const digitarEnter = (sel, t) => async (p) => { await p.locator(sel).fill(t); await p.locator(sel).press('Enter'); await espera(p); };
+      return [
+        ['Cria', op('assistente-atividades', 'Cria')], ['passo 2', av], ['Vacas', op('assistente-categorias', 'Vacas')], ['passo 3', av],
+        ['Nelore', op('assistente-racas', 'Nelore')], ['composição Angus', op('assistente-composicao', 'Angus')], ['passo 4', av],
+        ['parida', op('assistente-cria-ao-pe', 'Parida')], ['carimbo 7.1', digitarEnter('[data-testid="assistente-carimbo"]', '7.1')],
+        ['carimbo 8.1', digitarEnter('[data-testid="assistente-carimbo"]', '8.1')], ['prenha', op('assistente-prenhez', 'Prenha')],
+        ['vazia', op('assistente-prenhez', 'Vazia')], ['solteira', op('assistente-cria-ao-pe', 'Solteira')], ['parida de novo', op('assistente-cria-ao-pe', 'Parida')],
+        ['passo 5', av], ['passo 6', av], ['reprodução', op('assistente-programa', 'Reprodução')], ['passo 7', av], ['passo 8', av],
+        ['marcador', digitarEnter('[data-testid="assistente-marcador"]', 'Gêmeos')], ['voltar', clicar('[data-testid="assistente-voltar"]')],
+      ];
+    })() },
   /* LOTES-05 + LOTE-ETAPAS-01 — a raça da parida: o carimbo (digitado, ressinc., errado, vazio = "Falta o carimbo dos mamotes" no rodapé)
      e a genética dos mamotes não mexem em nada */
   { nome: 'lotes-assistente-carimbo', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',
     antes: async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await espera(p, 600);
-      await p.locator('[data-testid="lotes-novo"]').click(); await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await espera(p, 500);
+      await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click(); await p.locator('[data-testid="ficha-do-lote"]').waitFor(); await espera(p, 500);
+      await p.locator('[data-testid="ficha-editar-identidade"]').click(); await p.locator('[data-testid="assistente-do-lote"]:not([data-versao])').waitFor(); await espera(p, 500);
       for (const re of [/^CRI/, /^PP/]) { await p.locator('[data-testid="assistente-cartao"]', { hasText: re }).first().click(); await espera(p);
         await p.locator('[data-testid="assistente-avancar"]').click(); await espera(p, 450); }
       await p.locator('[data-testid="assistente-situacao-cria"] button', { hasText: 'Parida com bezerro' }).first().click(); await espera(p);
@@ -739,6 +762,14 @@ const CENARIOS = [
   { nome: 'obrigacao-editar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', antes: async (p) => {
     await p.locator('[data-testid="botoes-do-contrato"] button', { hasText: 'Editar' }).first().click(); await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900);
   }, estados: [1, 2, 3].map((i) => [`aba ${i}`, async (p) => { const t = p.locator('[role="dialog"] [role="tab"]').nth(i); if (await t.count()) { await t.click(); await espera(p, 500); } }]) },
+  /* FIN-GUARDA-CHUVA G2 — o modal da linha: Revisar (a prévia entra na área FIXA de 96px, o botão vira Salvar) e ordenar os contratos não
+     movem os blocos, o cabeçalho nem o rodapé; Cancelar linha troca a Revisão pelo motivo no mesmo lugar */
+  { nome: 'financiamentos-linha-modal', url: 'tela=linha-credito', tamanhos: [[1126, 579], [1366, 768]],
+    antes: async (p) => { await p.locator('[data-testid="tabela-contratos-da-linha"]').waitFor(); await espera(p, 600); }, estados: [
+    ['Revisar', async (p) => { await p.locator('[data-testid="revisar-linha"]').click(); await espera(p, 600); }],
+    ['ordenar por Saldo', async (p) => { await p.locator('[data-testid="tabela-contratos-da-linha"] th button', { hasText: 'Saldo' }).click(); await espera(p, 400); }],
+    ['Cancelar linha', async (p) => { await p.locator('[data-testid="cancelar-linha"]').click(); await espera(p, 500); }],
+  ] },
   /* P116 — a aba Auditoria (coluna do autor sempre, 62px): ir e voltar não move a barra de abas, o cabeçalho nem o rodapé; com uma pessoa só, idem */
   ...['', '&aud=um'].map((a) => ({ nome: `lancamento-auditoria${a ? '-um' : ''}`, url: `tela=lancamento&m=editar${a}`, estados: [
     ['aba Auditoria', async (p) => { await p.getByRole('tab', { name: /Auditoria/ }).first().click(); await espera(p, 700); }],

@@ -226,7 +226,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - OC-VINCULO-VALOR (Gabriel 30/10): VINCULAR SÓ LIGA — `oc_vincular_lancamento` nunca muda valor/descrição/classificação/competência/datas/status
   de lançamento (guarda no banco); parcela ocupada por lançamento que a OC não gerou = recusa + "Criar compromisso novo"; fornecedor diferente = pergunta; título programado da OC só muda com `p_aceitar_titulo_oc` (o clique na prévia).
   A previa e' a propria RPC com `p_simular`. Um gesto de desfazer = um motivo + um `estorno_id`. As recusas da OC vem prontas do banco.
-- Conciliacao: tolerancia de MEIO centavo (R$ 0,01 e' diferenca); a data do banco manda na conferencia; o resumo da conta tem dono no
+- Conciliacao: tolerancia de MEIO centavo (R$ 0,01 e' diferenca); a suspeita de duplicata da importacao tambem e' centavo IGUAL (CENTAVO-IGUAL-01, `valorIgual`); a data do banco manda na conferencia; o resumo da conta tem dono no
   banco; todo vinculo com extrato da' baixa e o parcial vira divisao explicita; F5 nunca e' necessario; transferencia de OFX = 1
   lancamento + 2 vinculos; arquivo de extrato se le^ pelo charset declarado.
 - P153: "Procurar no histórico" = UMA busca (`fn_conciliacao_historico_buscar`: texto do banco casado · descrição · fornecedor, só realizado, sem
@@ -235,11 +235,17 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   P153b (Gabriel 29/10): a busca acha TODOS os status (até = fim do mês seguinte ao extrato); em aberto = "Casar" (de outra conta, "Casar e trocar a
   conta" = `fn_espelho_casar` com `trocar_conta`, na mesma transação); pago = "Criar igual" (+ selo "outra conta"); sugestão "mesmo fornecedor · valor
   difere" só em aberto a ±5 dias (`JANELA_MESMO_FORNECEDOR_DIAS`; a E3 segue); modal até 1400px e altura toda, 9px/17/8,5 (exceção declarada).
+- CONC-SUGESTOES-FONTE-01: o fornecedor que o HISTÓRICO conhece (o `resumo` da busca do P153, pela `fn_conciliacao_fornecedores_do_historico`, nunca regra
+  na tela) vem primeiro nas sugestões e a pista de nome de OUTRO fornecedor vai ao fim com "só texto parecido"; o Sugestões para casar usa a fonte da lista do Financeiro (sem variante grande).
+- CONC-ORDENAR-01: na Conciliação TODA tabela ordena pelo `ThOrdenavel` (Palco; Saldos por conta DENTRO do grupo, Total e faixas parados); o Resumo do mês é exceção declarada (`data-ordenar-excecao`, linhas fixas da conta).
+- UI-FONTE-GATE-01 (1): nas tabelas de casar o nome QUEBRA (`quebra`), nunca "…"; Faz./NF nas Sugestões só com dado, no histórico SEMPRE reservadas (chegam por gesto: o cabeçalho não anda); seta da ordem antes do rótulo à direita.
 - P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
   seguem sem os sem caixa.
 - P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
   PAR A PAR pelo gravador de hoje (`vincularSelecao`); buscar é GESTO; a caixa "Vincular os exatos" saiu do palco (o ConciliarMesDialog ficou: dívida).
 - P115: venda em pé "Por total" = o valor digitado é o TOTAL (R$/cab = total ÷ cabeças); tela → motor por UMA regra (`tipoPrecoDoMotor`).
+- FIN-GUARDA-CHUVA G1/G2: a LINHA DE CRÉDITO (cédula-mãe) se grava SÓ pelas `fn_linha_credito_salvar`/`_cancelar` (prévia = `p_simular`) e se lê
+  pela `fn_linha_credito_tela` (limite × filhos; liquidação de irmão da mesma linha não soma); a tela lê as linhas pelo leitor único `useLinhasDeCredito`.
 - Financiamento: o saldo devedor tem uma fonte (`fn_financiamento_saldo`); captacao segue o creditado em conta; o valor do lancamento
   vinculado a' parcela manda na parcela; consorcio e' natureza propria (gerador no banco); parcela adiada e' divida mas nao vencida.
 - Recorrencia gera a vigencia inteira e nunca omite em silencio; o valor do mes tem marca e o propagar pula as marcadas.

@@ -154,3 +154,30 @@ describe('ItensDasNotasGuardadasDialog — o backfill com trilha', () => {
     expect(banco.gravarItensDoArquivo).not.toHaveBeenCalled();
   });
 });
+
+describe('NOTA-PDF-IBS-CBS-01 — o IBS/CBS da nota lida do PDF: de onde veio, nunca zero, nunca calculado', () => {
+  it('o PDF que não escreve o imposto: selo âmbar "não informado no PDF · falta o XML"', () => {
+    const l = doPdf();
+    expect(l.itens.every((i) => i.ibsCbs === null)).toBe(true);
+    render(<ItensDaNota cabecalho={{ ...CAB, origem: 'pdf' }} lidos={l} />);
+    const selo = screen.getByTestId('itens-ibs-cbs-pdf');
+    expect(selo.textContent).toBe('IBS/CBS não informado no PDF · falta o XML');
+    expect(selo.className).toContain('amber');
+  });
+  it('só o total escrito: o selo mostra o total lido (CBS · IBS), sem ratear nos itens', () => {
+    const l = doPdf();
+    render(<ItensDaNota cabecalho={{ ...CAB, origem: 'pdf' }} lidos={{ ...l, totais: { ...l.totais, ibsCbs: { vCBS: '30.42', vIBSUF: '3.38', vIBSMun: '0.00', vIBS: '3.38' } } }} />);
+    expect(screen.getByTestId('itens-ibs-cbs-pdf').textContent).toBe('IBS/CBS do PDF: CBS 30,42 · IBS 3,38');
+  });
+  it('escrito por item: sem selo (a coluna IBS/CBS mostra o cClassTrib); a nota do XML: nunca selo', () => {
+    const l = doPdf();
+    const comItem = { ...l, itens: l.itens.map((i, k) => (k === 0 ? { ...i, ibsCbs: { CST: '000', cClassTrib: '000001', vBC: '1.00', vIBSUF: '0.00', vIBSMun: '0.00', vIBS: '0.00', vCBS: '0.01' } } : i)) };
+    const { unmount } = render(<ItensDaNota cabecalho={{ ...CAB, origem: 'pdf' }} lidos={comItem} />);
+    expect(screen.queryByTestId('itens-ibs-cbs-pdf')).toBeNull();
+    unmount();
+    /* o XML sem IBS/CBS também não ganha selo: o selo é só da nota lida do PDF */
+    const x = doXml();
+    render(<ItensDaNota cabecalho={CAB} lidos={{ ...x, itens: x.itens.map((i) => ({ ...i, ibsCbs: null })) }} />);
+    expect(screen.queryByTestId('itens-ibs-cbs-pdf')).toBeNull();
+  });
+});

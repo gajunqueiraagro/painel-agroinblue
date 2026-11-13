@@ -16,6 +16,9 @@ import { MesclarFornecedoresDialog } from '@/components/financeiro-v2/MesclarFor
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
+import { ListaDeFinanciamentos } from '@/components/financiamentos/ListaDeFinanciamentos';
+import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
+import { faixaDaLinha } from '@/lib/financiamentos/linhaDeCredito';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
@@ -234,6 +237,9 @@ const DESC_LONGA = ('Sêmen Bovino - SAV EXEMPLO 1234/ 5678 · touro de teste co
 const g = globalThis as any;
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const raiz = createRoot(document.getElementById('root')!);
+/* FIN-FINANC-LAYOUT-03 — `&regua=10|11`: a régua única das tabelas de financiamento num dos dois tamanhos (os prints lado a lado para o
+   Gabriel escolher); sem o parâmetro, a escolhida (`:root` de reguaDoFinanciamento.css). Na raiz do documento: vale também nos modais. */
+if (q.get('regua') === '10' || q.get('regua') === '11') document.documentElement.classList.add(`regua-fin-${q.get('regua')}`);
 /* UI-SIDEBAR-ESTREITA-01 — `&lateral=1` poe a barra lateral DE VERDADE (V2Sidebar com os seletores) no lugar do bloco azul. O nome do
    cliente e o da fazenda escolhidos vem de `&cli=` e `&faz=` (`Global` = o global); `&submenu=<grupo>` acende o grupo com a gaveta
    aberta. Sem os parametros, nomes SINTETICOS do pior caso (cliente e fazenda maiores que os reais). */
@@ -411,6 +417,65 @@ if (tela === 'mesclar') {
   montar(<FornecedorFormDialog open onClose={() => {}} editing={linha as any} allFornecedores={[]} fazendas={[{ id: 'f1', nome: 'Faz. Exemplo' }] as any} clienteId="cli" onSaved={() => {}}
     lerCadastro={async () => []} lerLinha={async () => linha}
     lerUso={async () => ({ cadastradoEm: '2026-01-05T10:00:00Z', lancamentos: 6, comprasParceladas: 1, documentos: 4, ultimoLancamento: '2026-09-30' } as any)} />);
+} else if (tela === 'financiamentos-lista') {
+  /* FIN-FINANC-LAYOUT-03 — a aba Financiamentos da lista (o `ListaDeFinanciamentos`, que só desenha: os contratos chegam prontos), no
+     pior caso SINTÉTICO com os TAMANHOS REAIS do proto (12/11: descrição até 43 caracteres, credor até 39, nº até 20): o nº de contrato mais
+     longo, valores na casa das dezenas de milhões, um contrato sem liberação gravada ("?" e "+ ?" na soma), as pendências mais largas
+     ("amort. s/ lanç. +1 pendência") e os encerrados. */
+  const sal = (contratado: number, liberado: number | null, amortizado: number, pend: string[] = []) => ({ aplicaSaldo: true, regra: null, contratado,
+    liberado, liberacoes: liberado === null ? 0 : 1, amortizado, saldo: liberado === null ? null : liberado - amortizado, jurosPagos: 0, jurosPrevistos: 0, foraDasSomas: false, pendencias: pend });
+  const k = (id: string, numero: string | null, banco: string, descricao: string, status: string, saldo: any, linha: [string, string] | null, data: string, prox: string | null): any => ({
+    id, numeroContrato: numero, banco, bancoDocumento: '11.222.333/0001-81', descricao, status, linhaCreditoId: linha?.[0] ?? null, linhaCreditoNome: linha?.[1] ?? null,
+    sucessorNumero: status === 'rolado' ? 'C_998.877.665.540001' : null, saldo, proxVencimento: prox, data, dataOrigem: 'liberacao' });
+  const FCO: [string, string] = ['l-fco', 'FCO Rural Exemplo · Investimento Pecuário'];
+  const contratos = [
+    k('c1', 'C_102.022.070.010200', 'Banco Exemplo de Desenvolvimento Regional', 'Custeio pecuário de reforma de pastagem ex', 'ativo', sal(48500000, 48500000, 12125000, ['amortizacao_sem_lancamento', 'sem_documento']), FCO, '2025-11-21', '2026-12-15'),
+    k('c2', 'PR-78.179-EX', 'Banco Exemplo', 'Armazém e máquinas · contrato sintético', 'ativo', sal(7200000, 7188000, 0, ['amortizacao_sem_lancamento']), FCO, '2025-11-21', '2027-01-10'),
+    k('c3', '40/00123-4', 'Cooperativa Exemplo', 'Capital de giro', 'ativo', sal(950000, null, 0, ['sem_liberacao']), null, '2026-03-02', '2026-11-30'),
+    k('c4', 'CT-6362662/26', 'Máquinas Exemplo', 'Trator 6M exemplo', 'prorrogado', sal(1480000, 1480000, 370000, ['aditivo_a_anexar']), null, '2026-02-10', '2026-12-05'),
+    k('c5', '123456789', 'Banco Exemplo', 'Empréstimo pessoal sintético', 'ativo', sal(250000, 250000, 125000), null, '2024-06-14', '2026-12-14'),
+    k('c6', 'C_100.000.000.000001', 'Banco Exemplo', 'Contrato quitado', 'quitado', sal(100000, 100000, 100000), null, '2022-01-05', null),
+    k('c7', 'C_100.000.000.000002', 'Banco Exemplo', 'Contrato rolado', 'rolado', sal(300000, 300000, 300000), null, '2023-01-05', null),
+  ];
+  const Lista = () => { const [ab, setAb] = React.useState(q.get('enc') === '1');
+    return <div style={{ height: '100%', padding: '8px 16px 4px' }}><ListaDeFinanciamentos contratos={contratos} encerradosAbertos={ab} aoAlternarEncerrados={() => setAb((x) => !x)}
+      aoAbrir={() => {}} mostrarBanco parcelasAPagar={14230500} aoAbrirCronograma={() => {}}
+      /* FIN-GUARDA-CHUVA G2 — `&linha=1`: o grupo da linha FCO com o ✎ e a faixa Limite · Liberado · Falta liberar · Saldo · Juros (maiores valores) */
+      faixasDasLinhas={q.get('linha') === '1' ? new Map([['l-fco', faixaDaLinha({ contratos: 2, contratado: 55700000, liberado: 55688000, liberadoPorLiquidacao: 0,
+        faltaLiberar: 12312000, saldo: 43563000, jurosPagos: 12345678.9 }, 68000000)]]) : undefined}
+      aoAbrirLinha={q.get('linha') === '1' ? () => {} : undefined} /></div>; };
+  montar(<Lista />);
+} else if (tela === 'linha-credito') {
+  /* FIN-GUARDA-CHUVA G2 — o modal da LINHA DE CRÉDITO (820×560), SINTÉTICO: a linha com limite e 4 contratos-filhos (descrição longa, um de
+     outro banco, um sem liberação), o aviso de outro credor; `&v=nova` = linha nova (sem contratos); `&v=previa` abre com a revisão feita
+     (o `antes` clica em Revisar: a prévia antes × depois na área fixa de 96px). */
+  const CREDOR = String(LISTA[0].id);
+  const linhaB: any = { id: 'l1', credorId: CREDOR, credorNome: String(LISTA[0].nome), numero: 'PR-78.179-EX', programa: 'FCO Rural Exemplo · Investimento Pecuário',
+    descricao: 'Linha sintética de investimento', limite: 68000000, vigenciaInicio: '2025-11-21', vigenciaFim: '2027-11-21', cancelada: false };
+  const ct = (id: string, numero: string, descricao: string, contratado: number, liberado: number, saldo: number, juros: number, outro = false) =>
+    ({ id, numero, descricao, status: 'ativo', contratado, liberado, liberado_por_liquidacao: 0, saldo, juros_pagos: juros, credor_diferente: outro });
+  g.__bancoBancada = {
+    from: bancoDeFornecedores.from,
+    rpc: (fn: string) => fn === 'fn_linha_credito_tela' ? {
+      linha: { id: 'l1', credor_id: CREDOR, credor: linhaB.credorNome, numero: linhaB.numero, programa: linhaB.programa, descricao: linhaB.descricao,
+        limite: 68000000, vigencia_inicio: '2025-11-21', vigencia_fim: '2027-11-21' },
+      contratos: [
+        ct('c1', 'C_102.022.070.010200', 'Custeio pecuário de reforma de pastagem e aquisição de máquinas exemplo', 48500000, 48500000, 36375000, 9876543.21),
+        ct('c2', 'PR-78.179-EX-2', 'Armazém e máquinas · contrato sintético', 7200000, 7188000, 7188000, 2469135.69),
+        ct('c3', '40/00123-4', 'Capital de giro', 950000, 0, 0, 0),
+        ct('c4', 'CT-6362662/26', 'Trator de outro banco', 1480000, 1480000, 1110000, 0, true),
+        ct('c5', 'PR-78.192-EX', 'Balança e currais', 636939, 318456, 318456, 41234.5),
+        ct('c6', 'PR-79.502-EX', 'Máquinas agrícolas', 2000000, 2000000, 1800000, 150000),
+        ct('c7', 'C_102.022.070.010201', 'Reforma de cercas', 400000, 400000, 400000, 0),
+      ],
+      totais: { contratos: 4, contratado: 58130000, liberado: 57168000, liberado_por_liquidacao: 0, falta_liberar: 10832000, saldo: 44673000, juros_pagos: 12345678.9 },
+      avisos: [{ codigo: 'contrato_de_outro_credor' }],
+    } : fn === 'fn_linha_credito_salvar' ? { ok: true, simulado: true, sem_mudanca: false, id: 'l1',
+      antes: { credor_id: CREDOR, numero: linhaB.numero, programa: linhaB.programa, descricao: linhaB.descricao, limite: 68000000, vigencia_inicio: '2025-11-21', vigencia_fim: '2027-11-21' },
+      depois: { credor_id: CREDOR, numero: linhaB.numero, programa: linhaB.programa, descricao: linhaB.descricao, limite: 72500000, vigencia_inicio: '2025-11-21', vigencia_fim: '2028-11-21' },
+      avisos: [{ codigo: 'contratado_maior_que_limite' }] } : null,
+  };
+  montar(<LinhaCreditoDialog aberto aoFechar={() => {}} clienteId="cli" linha={v === 'nova' ? null : linhaB} aoGravar={() => {}} aoAbrirContrato={() => {}} />);
 } else if (tela === 'contrato') {
   /* FIN-CONTRATO-TELA-FONTE-01 — `&v=titulo` (título de 120 caracteres), `&v=parcelamento` (compra parcelada com conta longa nas parcelas),
      `&v=consorcio` (o detalhe entrega ao modal do consórcio); sem `v`, o financiamento de sempre. Tudo SINTÉTICO. */
@@ -484,12 +549,17 @@ if (tela === 'mesclar') {
     : { ok: true, simulado: true, financiamento_id: d.fin.id, lancamento_id: LANC_DA_COMPRA[0]?.id ?? 'lp-1', valor: ANTES_DA_VOLTA.reduce((s: number, x: any) => s + Number(x.valor), 0),
         vencimento: ANTES_DA_VOLTA[0]?.vencimento ?? null, competencia: ANTES_DA_VOLTA[0]?.vencimento ?? null, descricao: d.fin.descricao, canceladas: Math.max(ANTES_DA_VOLTA.length - 1, 0),
         original_guardado: false, antes: ANTES_DA_VOLTA };
+  const ENCARGOS_DO_CONTRATO = [{ id: 'enc-1', papel: 'tarifa', valor: 23854.16, cancelado: false }, { id: 'enc-2', papel: 'iof', valor: 57.46, cancelado: false },
+    { id: 'enc-3', papel: 'iof', valor: 950, cancelado: false }];
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financiamentos' ? (LIB_FORMAS && e?.in?.id ? [{ id: 'fin-ant', numero_contrato: '40/00123-4' }] : [d.fin]) : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
+      : t === 'financeiro_lancamentos_v2' && Array.isArray(e?.in?.id) && e.in.id.some((x: string) => x.startsWith('enc-')) ? ENCARGOS_DO_CONTRATO
       : t === 'financeiro_lancamentos_v2' ? (LIB_FORMAS ? LANC_DA_LIBERACAO : LANC_DA_COMPRA)
       : t === 'financeiro_contas_bancarias' ? CONTAS_DO_CONTRATO
       : t === 'financeiro_fornecedores' && LIB_FORMAS ? FORNECEDOR_DA_LIBERACAO
       : t === 'financiamento_destinacoes' ? d.destinacoes ?? [] : t === 'financiamento_documentos' ? d.documentos ?? []
+      /* FIN-FINANC-LAYOUT-03 — os encargos ligados ao contrato (tarifa + 2 IOF, como o caso real; valores SINTÉTICOS): o cartão "Encargos na liberação" */
+      : t === 'financiamento_encargos' ? (v === 'parcelamento' ? [] : ENCARGOS_DO_CONTRATO.map((x) => ({ papel: x.papel, lancamento_id: x.id }))) 
       : t === 'vw_lancamento_documentos' ? DOCS_DA_COMPRA.filter((x) => (e?.eq?.especie == null || x.especie === e.eq.especie) && (e?.eq?.lancamento_id == null || x.lancamento_id === e.eq.lancamento_id)) : [],
     rpc: (fn: string) => fn === 'fn_financiamento_situacao' ? d.situacao : fn === 'fn_contrato_tela' ? d.tela ?? null : fn === 'fn_financiamento_captacoes_livres' ? []
       : fn === 'fn_consorcio_tela' ? c.tela : fn === 'fn_consorcio_cronograma' ? c.cronograma
@@ -1012,6 +1082,37 @@ if (tela === 'mesclar') {
   }
   g.__bancoBancada = { from: (t: string) => (t === 'chuvas' ? CHUVAS_SINT : []), rpc: () => null };
   montar(<div className="flex h-full min-h-0 flex-col"><ChuvasTab mode="operacional" /></div>);
+} else if (tela === 'chuvas-analise') {
+  /* CHUVAS-ANALISE-01 F1 — Produção › Chuvas (análise), banco SINTÉTICO de 4 fazendas: SCL/BVT com histórico (2023–2025), RNVX (o
+     código mais largo) desde 2025 e NOVA só em 2026 (sem histórico). `&global=1` = Todas as fazendas; `&faz=<id>` = Uma fazenda. */
+  const FZS = [
+    { id: 'f1', nome: 'Faz. Santa Clara do Norte', codigo: 'SCL', cliente_id: 'cli', tem_pecuaria: true, desde: 2023 },
+    { id: 'f2', nome: 'Faz. Boa Vista', codigo: 'BVT', cliente_id: 'cli', tem_pecuaria: true, desde: 2023 },
+    { id: 'f3', nome: 'Faz. Retiro Novo', codigo: 'RNVX', cliente_id: 'cli', tem_pecuaria: true, desde: 2025 },
+    { id: 'f4', nome: 'Faz. Nova Aquisição', codigo: 'NOVA', cliente_id: 'cli', tem_pecuaria: true, desde: 2026 },
+  ];
+  const global = q.get('global') === '1';
+  const faz = FZS.find(f => f.id === q.get('faz')) ?? FZS[0];
+  g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, loading: false };
+  g.__fazendaBancada = { fazendas: FZS, fazendasComPecuaria: FZS, loading: false, setFazendaAtual: () => {},
+    fazendaAtual: global ? { id: '__global__', nome: 'Global', owner_id: '' } : faz, isGlobal: global, fazendaId: global ? '__global__' : faz.id };
+  const CH: Record<string, unknown>[] = [];
+  let n = 0;
+  for (const f of FZS) for (let ano = f.desde; ano <= 2026; ano++) for (let m = 1; m <= (ano === 2026 ? 10 : 12); m++) {
+    /* perfil do cerrado mês a mês (Chat 12/11 17:30: com só "chuvoso × seco" a média despencava em abr e saltava em out) */
+    const fator = [1, 0.9, 0.8, 0.45, 0.2, 0.06, 0.05, 0.1, 0.3, 0.55, 0.85, 1][m - 1];
+    for (let d = 2; d <= 28; d += fator >= 0.5 ? 3 : fator >= 0.2 ? 5 : 11) {
+      n++;
+      const mm = Math.round(((n * 37 + f.id.charCodeAt(1) * 13) % 230) / 10 * 2.6 * Math.max(fator, 0.25) * 10) / 10;
+      if (mm <= 0) continue;
+      CH.push({ id: `ca${n}`, fazenda_id: f.id, cliente_id: 'cli', data: `${ano}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, milimetros: mm, observacao: null });
+    }
+  }
+  g.__bancoBancada = {
+    from: (t: string, e: any) => (t === 'chuvas' ? CH.filter(c => (e?.in?.fazenda_id ? e.in.fazenda_id.includes(c.fazenda_id) : e?.eq?.fazenda_id ? c.fazenda_id === e.eq.fazenda_id : true)) : []),
+    rpc: () => null,
+  };
+  montar(<div className="h-full overflow-auto"><ChuvasTab mode="analitico" onLancar={() => {}} /></div>);
 } else if (tela === 'barra-pecuaria') {
   /* PEC-ABAS-01 — a barra do topo das telas da Pecuária com as abas (o `Segmentado` do shell) e a volta ("‹ Voltar", reservado):
      `&aba=<secao>` marca a aba; `&de=<secao>` = veio de outra aba (a volta aparece). */
@@ -1754,6 +1855,26 @@ if (tela === 'mesclar') {
     montar(<ProdutoresApiProvider api={API_PRODUTORES}><ProdutoresTela /></ProdutoresApiProvider>);
   };
   void montarProdutores();
+} else if (tela === 'saldo-inicial') {
+  /* REBANHO-INICIAL-EDITAR-01 — Cadastros › Fazendas e pastos › Rebanho inicial: o cartão e o Editar do saldo inicial (dado SINTÉTICO).
+     O caso do erro: a lista chega DEPOIS do 1º render (vazia → cheia); partida jan/2024 com preço e os janeiros 2025/2026 do fechamento.
+     O Editar tem de abrir e gravar jan/2024; a prévia mostra antes × depois. Nada grava (onSetSaldo vazio). */
+  const montarSaldo = async () => {
+    const { SaldoInicialForm } = await import('@/components/SaldoInicialForm');
+    const L = (ano: number, categoria: any, quantidade: number, pesoMedioKg: number, precoKg?: number) => ({ ano, mes: 1, categoria, quantidade, pesoMedioKg, precoKg });
+    const SALDOS = [
+      L(2024, 'mamotes_m', 120, 106.85, 14.5), L(2024, 'touros', 9, 650, 10.2), L(2024, 'mamotes_f', 140, 108.97, 13.9), L(2024, 'novilhas', 130, 380, 12.1), L(2024, 'vacas', 210, 468.31, 11.05),
+      L(2025, 'mamotes_m', 150, 110), L(2025, 'novilhas', 160, 390), L(2025, 'vacas', 260, 470),
+      L(2026, 'mamotes_m', 208, 106.85), L(2026, 'novilhas', 217, 450), L(2026, 'vacas', 313, 468.31),
+    ];
+    const Caixa = () => {
+      const [lista, setLista] = React.useState<any[]>([]);
+      React.useEffect(() => { const t = setTimeout(() => setLista(SALDOS), 50); return () => clearTimeout(t); }, []);
+      return <div className="p-4 w-[300px]"><SaldoInicialForm saldosIniciais={lista} onSetSaldo={() => {}} alwaysVisible totalLancamentos={0} /></div>;
+    };
+    montar(<Caixa />);
+  };
+  void montarSaldo();
 } else if (tela === 'pastos') {
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (a tela REAL) com o modo "Grupos": dado SINTÉTICO, nomes de exemplo; um grupo de 3
      piquetes (P10A/B/C), um de nome longo com 4 pastos, um inativo e pastos soltos. O banco responde a prévia do `fn_pasto_grupo_salvar`
@@ -2074,25 +2195,31 @@ if (tela === 'mesclar') {
   const COM_CRIA = q.get('cria') === '1';
   /* LOTE-BUSCA-01 — `&v=busca`: o campo Lote com 63 lotes (55 de recria a mais: o corte de 50 escondia o fim), DOIS 8.2 e o caderno "LOT 8.2 F1"
      no P10A; em set/26 o ENG-DM-AN-06 ligado no P10A (100 cab) e o CRI-PP-NE-01 (7.1) no P11; o 7R só no TEXTO do card do P12 (sem ligação) */
-  const BUSCA = v === 'busca';
+  /* LOTE-BUSCA-02 — `&v=busca2`: o caso da Santa Rita 20R-2 (sintético): o lote 10.1 "L20 SP+F1" existe e o caderno do P10A diz "L20 F1+SP C10" */
+  const BUSCA2 = v === 'busca2';
+  const BUSCA = v === 'busca' || BUSCA2;
   const COM_LOTES = v === 'lotes' || COM_CRIA || BUSCA;
   const base = LOTES_BANCADA.LOTES[0];
   const LOTES_DA_BUSCA = [...LOTES_BANCADA.LOTES,
     { ...base, id: 'l-pp82', codigo: 'CRI-PP-NE-02', nome_campeiro: 'Vacas Nel CAR_8.2', carimbo: '8.2', categoria_id: 'c-pp', atividade_id: 'a-cr', pastos: [], codigos_antigos: [] },
     ...Array.from({ length: 53 }, (_, i) => ({ ...base, id: `l-rec${i}`, codigo: `REC-DM-NE-${String(i + 10).padStart(2, '0')}`, nome_campeiro: null,
-      categoria_id: 'c-dm', pastos: [], codigos_antigos: [] }))];
+      categoria_id: 'c-dm', pastos: [], codigos_antigos: [] })),
+    ...(BUSCA2 ? [{ ...base, id: 'l-l20', codigo: 'CRI-N2-NE-10.1', nome_campeiro: 'L20 SP+F1', carimbo: '10.1', categoria_id: 'c-n2', atividade_id: 'a-cr',
+      pastos: [], codigos_antigos: [], codigo_regra: 'etapas' }] : [])];
   const lotesDaBusca = (mes: unknown) => (mes !== '2026-09' ? LOTES_DA_BUSCA : LOTES_DA_BUSCA.map((l) => (
     l.id === 'l-dm6' ? { ...l, ano_mes_dado: '2026-09', pastos: ['P10A'], cabecas: 100 }
     : l.id === 'l-pp1' ? { ...l, ano_mes_dado: '2026-09', pastos: ['P11'], cabecas: 60 }
     : { ...l, ano_mes_dado: '2026-08' })));
   if (BUSCA) {
-    Object.assign(CARDS[0], { lote_mes: 'LOT 8.2 F1' });
+    Object.assign(CARDS[0], { lote_mes: BUSCA2 ? 'L20 F1+SP C10' : 'LOT 8.2 F1' });
     CARDS.push(...[['p10a', 'P10A', 'DM Angus L6'], ['p11', 'P11', 'Vaca Nel CAR_7.1'], ['p12', 'P12 Retiro do córrego de baixo', 'Vacas ressinc. 7R']].map(([id, nome, texto]) =>
       card(`f9-${id}`, id, { ano_mes: '2026-09', status: 'fechado', lote_mes: texto, pastos: { nome } })));
   }
+  /* L1 — `&semlote=1`: os itens do P10A SEM lote (a sugestão do campo Lote aparece: busca2 = 1 "Usar", busca = 2, lotes = nenhuma) */
+  const SEM_LOTE = q.get('semlote') === '1';
   if (COM_LOTES) {
-    Object.assign(ITENS[0], { lote_id: COM_CRIA ? 'l-vp4' : 'l-dm6' });
-    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: COM_CRIA ? 'l-vp4' : 'l-px2' });
+    Object.assign(ITENS[0], { lote_id: SEM_LOTE ? null : COM_CRIA ? 'l-vp4' : 'l-dm6' });
+    ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: SEM_LOTE ? null : COM_CRIA ? 'l-vp4' : 'l-px2' });
   }
   /* MAPA-LOTES-01 (C2) — `&v=mapa`: o Fechamento abre na vista Mapa (a escolha guardada); os polígonos SINTÉTICOS de 5 dos 6 pastos
      (o P12 fica sem desenho: vai para a faixa) e a área total por baixo */
@@ -2274,6 +2401,14 @@ if (tela === 'mesclar') {
       freteCent: soma((i) => i.freteCent), seguroCent: soma((i) => i.seguroCent), outrasCent: soma((i) => i.outrasCent), notaCent: soma((i) => i.liquidoCent) } };
     const cabecalho = { chave: '50260911222333000424550010000032411000000010', origem: 'xml', numero: '3241', serie: '1', emissao: '2026-09-29', natureza: 'VENDA',
       regime: '3', emitenteDocumento: '11222333000424', emitenteNome: 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA' };
+    /* NOTA-PDF-IBS-CBS-01 — `v=pdf-sem-ibs`: a nota lida do PDF que não escreve o IBS/CBS (o selo âmbar "falta o XML"); `v=pdf-ibs-total`:
+       o PDF que escreve só o TOTAL (o selo com o total lido). Os mesmos 40 itens, SINTÉTICOS. */
+    if (v === 'pdf-sem-ibs' || v === 'pdf-ibs-total') {
+      cabecalho.origem = 'pdf';
+      lidos.origem = 'pdf';
+      lidos.itens = lidos.itens.map((i: any) => ({ ...i, ibsCbs: null }));
+      if (v === 'pdf-ibs-total') lidos.totais = { ...lidos.totais, ibsCbs: { vCBS: '30.42', vIBSUF: '3.38', vIBSMun: '0.00', vIBS: '3.38' } };
+    }
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();

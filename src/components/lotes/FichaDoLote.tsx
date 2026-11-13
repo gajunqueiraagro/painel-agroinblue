@@ -23,6 +23,7 @@ import { notificarLotesMudaram } from '@/hooks/useLotesDaFazenda';
 import { useHistoricoDoLote } from '@/hooks/useHistoricoDoLote';
 import { antigosCurto, dataBr, mapaDoCadastro, motivoDoDesfazer, mudancasDaTrilha, nomeDe, oQueDaTrilha, type MudancaDoHistorico } from '@/lib/lotes/lista';
 import { CARIMBO_VALIDO, FRASE_CARIMBO_INVALIDO, nomeDoLote, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type SituacaoDoLote, type TipoDoCadastro } from '@/lib/lotes/tipos';
+import { carimbosDoLote } from '@/lib/lotes/assistente';
 
 /** A altura da ficha: fixa, cabe em 1126×579 (a página nunca rola por causa dela). */
 export const ALTURA_DA_FICHA = 'h-[min(560px,calc(100vh-16px))]';
@@ -149,7 +150,7 @@ export function FichaDoLote({ open, lote, clienteId, fazendaId, fazendaCodigo, c
       detalhe: gmdOk == null ? (l.gmdKg == null && l.cabecas != null ? 'precisa de 2 meses' : '—') : `meta ${n3(l.metaGmdKg)} · ${gmdOk ? 'ok' : 'abaixo'}`,
       tom: gmdOk == null ? undefined : gmdOk ? 'ok' : 'alerta' },
     { rotulo: 'Idade média', valor: l.idadeMediaMeses == null ? '—' : String(l.idadeMediaMeses), unidade: l.idadeMediaMeses == null ? undefined : 'meses',
-      detalhe: l.carimbo ? `carimbo ${l.carimbo}` : 'informada na ficha' },
+      detalhe: carimbosDoLote(l).length ? `carimbo${carimbosDoLote(l).length > 1 ? 's' : ''} ${carimbosDoLote(l).join(', ')}` : 'informada na ficha' },
     { rotulo: 'Pasto', valor: l.pastos.length === 0 ? '—' : l.pastos.length === 1 ? l.pastos[0] : `${l.pastos.length} pastos`,
       detalhe: l.pastos.length > 1 ? l.pastos.join(' · ') : l.pastos.length ? 'do fechamento' : '—', title: l.pastos.join(' · ') || undefined },
     { rotulo: 'Peso total', valor: n0(pesoTotal), unidade: pesoTotal == null ? undefined : 'kg',
@@ -164,7 +165,7 @@ export function FichaDoLote({ open, lote, clienteId, fazendaId, fazendaCodigo, c
         <DialogDescription className="sr-only">Identidade, perfil, metas e histórico do lote.</DialogDescription>
         {/* cabeçalho */}
         <div className="flex h-[48px] flex-none items-center gap-3 whitespace-nowrap bg-primary pl-3.5 pr-2 text-primary-foreground">
-          <span className="text-[19px] font-extrabold" data-testid="ficha-codigo" title={l.carimbo ? l.codigo : undefined}>{nomeDoLote(l)}</span>
+          <span className="text-[19px] font-extrabold" data-testid="ficha-codigo" title={l.carimbo ? l.codigo : undefined}>{carimbosDoLote(l).length > 1 ? carimbosDoLote(l).join(' · ') : nomeDoLote(l)}</span>
           <span className="min-w-0 max-w-[260px] truncate text-[11.5px] opacity-85" title={l.nomeCampeiro ?? undefined}>{l.nomeCampeiro ?? 'sem nome do campeiro'}</span>
           <span className="rounded bg-white/15 px-1.5 text-[10px] font-semibold">{fazendaCodigo}</span>
           <span className={cn('rounded px-1.5 text-[10px] font-semibold', l.situacao === 'ativo' ? 'bg-[#2f8a5b]' : 'bg-[#6b7280]')} data-testid="ficha-situacao">
@@ -271,13 +272,15 @@ function AbaResumo({ lote: l, nomes, cadastros, gravando, salvar }: {
   const salvarPerfil = async () => {
     if (!perfil) return;
     if (perfil.safra && !/^\d{2}\/\d{2}$/.test(perfil.safra)) { setErroPerfil('Safra: no formato 26/27.'); return; }
-    if (perfil.carimbo && !CARIMBO_VALIDO.test(perfil.carimbo)) { setErroPerfil(FRASE_CARIMBO_INVALIDO); return; }
+    /* LOTE-CARIMBOS-01 — a lista inteira, separada por vírgula ("7.1, 8.1"); nunca só o 1º (a chave antiga apagaria os outros) */
+    const lista = [...new Set(perfil.carimbo.toUpperCase().split(/[,; ]+/).map(c => c.trim()).filter(Boolean))];
+    if (lista.some(c => !CARIMBO_VALIDO.test(c))) { setErroPerfil(FRASE_CARIMBO_INVALIDO); return; }
     const campos: CamposDoLote = {};
     if (perfil.sistema !== (l.sistemaId ?? '')) campos.sistema_id = perfil.sistema;
     if (perfil.programa !== (l.programaId ?? '')) campos.programa_id = perfil.programa;
     if (perfil.destino !== (l.destinoId ?? '')) campos.destino_id = perfil.destino;
     if (perfil.safra !== (l.safra ?? '')) campos.safra = perfil.safra;
-    if (perfil.carimbo !== (l.carimbo ?? '')) campos.carimbo = perfil.carimbo;
+    if (lista.join(',') !== carimbosDoLote(l).join(',')) campos.carimbos = lista;
     if (perfil.idade !== l.idadeMediaMeses) campos.idade_media_meses = perfil.idade == null ? '' : String(Math.round(perfil.idade));
     if (Object.keys(campos).length === 0) { setPerfil(null); return; }
     if (await salvar(campos)) setPerfil(null);
@@ -312,7 +315,7 @@ function AbaResumo({ lote: l, nomes, cadastros, gravando, salvar }: {
       </Bloco>
       <Bloco titulo="Perfil" ajuda="Sistema, programa e destino puxam a estratégia do lote; a safra amarra o lote ao ano-safra do custo." testid="bloco-perfil"
         acao={editarSalvar(perfil !== null,
-          () => { setErroPerfil(null); setPerfil({ sistema: l.sistemaId ?? '', programa: l.programaId ?? '', destino: l.destinoId ?? '', safra: l.safra ?? '', carimbo: l.carimbo ?? '', idade: l.idadeMediaMeses }); },
+          () => { setErroPerfil(null); setPerfil({ sistema: l.sistemaId ?? '', programa: l.programaId ?? '', destino: l.destinoId ?? '', safra: l.safra ?? '', carimbo: carimbosDoLote(l).join(', '), idade: l.idadeMediaMeses }); },
           () => { setPerfil(null); setErroPerfil(null); }, () => { void salvarPerfil(); }, 'perfil')}>
         {perfil ? (
           <div className={KV}>
@@ -326,7 +329,7 @@ function AbaResumo({ lote: l, nomes, cadastros, gravando, salvar }: {
             <Input className={cn('h-[20px] px-1 text-[11px]', erroPerfil?.startsWith('Safra') && 'border-red-500')} value={perfil.safra} maxLength={5} placeholder="26/27"
               onChange={e => { setErroPerfil(null); setPerfil({ ...perfil, safra: e.target.value }); }} />
             <span className="text-muted-foreground">Carimbo</span>
-            <Input className={cn('h-[20px] px-1 text-[11px]', erroPerfil?.startsWith('Carimbo') && 'border-red-500')} value={perfil.carimbo} maxLength={6} placeholder="—"
+            <Input className={cn('h-[20px] px-1 text-[11px]', erroPerfil?.startsWith('Carimbo') && 'border-red-500')} value={perfil.carimbo} maxLength={40} placeholder="ex.: 7.1, 8.1"
               onChange={e => { setErroPerfil(null); setPerfil({ ...perfil, carimbo: e.target.value }); }} />
             <span className="text-muted-foreground">Idade média</span>
             <CampoNumeroComConta valor={perfil.idade} onChange={n => setPerfil({ ...perfil, idade: n })} casas={0} sufixoDentro="meses" className="h-[20px] text-[11px]" />
@@ -339,7 +342,7 @@ function AbaResumo({ lote: l, nomes, cadastros, gravando, salvar }: {
             <Par rotulo="Programa">{nomeDe(nomes, l.programaId) ?? '—'}</Par>
             <Par rotulo="Destino">{nomeDe(nomes, l.destinoId) ?? '—'}</Par>
             <Par rotulo="Safra">{l.safra ?? '—'}</Par>
-            <Par rotulo="Carimbo">{l.carimbo ?? '—'}</Par>
+            <Par rotulo="Carimbo">{carimbosDoLote(l).join(', ') || '—'}</Par>
             <Par rotulo="Idade média">{l.idadeMediaMeses == null ? '—' : `${l.idadeMediaMeses} meses`}</Par>
           </div>
         )}

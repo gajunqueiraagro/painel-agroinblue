@@ -14,6 +14,8 @@ export interface CadastroDoLote {
   categoriasRebanho: string[];
   ordem: number;
   ativo: boolean;
+  /** LOTE-PADRAO-V3 · L2 — o cadastro de uma categoria FIXA do rebanho (117590) */
+  fixo?: boolean;
 }
 
 /** LOTE-SIGLA-EDITAR-01 — um lote cujo código muda quando a sigla em uso muda (prévia e resposta de `fn_lote_cadastro_salvar`). */
@@ -64,6 +66,26 @@ export interface LoteDaLista {
   anotacao?: string | null;
   /** nulo = código ATIV-CAT-RAÇA-NN (lotes até 11/11); 'etapas' = ATIV-CAT-RAÇA[-carimbo], -02/-03 só quando repetir */
   codigoRegra?: 'etapas' | null;
+  /** LOTE-CARIMBOS-01 (117580) — os carimbos dos bezerros ao pé (1..n); `carimbo` = o 1º */
+  carimbos?: string[] | null;
+  /** LOTE-PADRAO-V3 · L2 (117590/117595) — o cadastro padrão; nulos no legado. `categoriaFixa` = o código da categoria do rebanho do
+   *  cadastro marcado fixo (nula = lote de antes, que segue no assistente antigo até a L6) */
+  categoriaFixa?: string | null;
+  composicaoRacas?: string[] | null;
+  nascidoDe?: string | null;
+  nascidoAte?: string | null;
+  criaAoPe?: string | null;
+  prenhez?: string | null;
+  prenhaDe?: string | null;
+  prenhaRacaId?: string | null;
+  partoPrevisto?: string | null;
+  bezerrosPaiRacaId?: string | null;
+  carimbosCab?: (number | null)[] | null;
+  programaLote?: string | null;
+  metodoReproducao?: string | null;
+  entradaNovilha?: string | null;
+  sistemaLote?: string | null;
+  marcadores?: string[] | null;
 }
 
 /** Os campos que `fn_lote_salvar` aceita em `p_campos` (só as chaves que vierem mudam). */
@@ -92,6 +114,39 @@ export interface CamposDoLote {
   mamotes_cruzamento?: string;
   mamotes_semen?: string;
   anotacao?: string;
+  /** LOTE-CARIMBOS-01 — a lista inteira (vazia = sem carimbo); substitui `carimbo` nas gravações novas */
+  carimbos?: string[];
+  /** LOTE-PADRAO-V3 · L2 (117590) — vazio/[] = limpar; `categoria_rebanho` = o código fixo (o banco acha ou cria o cadastro) */
+  categoria_rebanho?: string;
+  composicao_racas?: string[];
+  nascido_de?: string;
+  nascido_ate?: string;
+  cria_ao_pe?: string;
+  prenhez?: string;
+  prenha_de?: string;
+  prenha_raca_id?: string;
+  parto_previsto?: string;
+  bezerros_pai_raca_id?: string;
+  carimbos_cab?: (number | null)[];
+  programa_lote?: string;
+  metodo_reproducao?: string;
+  entrada_novilha?: string;
+  sistema_lote?: string;
+  marcadores?: string[];
+}
+
+/** LOTE-CARIMBOS-01 — a faixa do código, espelho da `_fn_carimbos_faixa` (117580): 1 carimbo = ele mesmo; vários = os meses distintos
+ *  em ordem, a ressinc. à parte ("7.1, 7.2, 8.1" → "7/8"; "7.1, 7R" → "7/7R"); nenhum = null. */
+export function carimbosFaixa(carimbos: readonly string[] | null | undefined): string | null {
+  const lista = (carimbos ?? []).filter(Boolean);
+  if (lista.length === 0) return null;
+  if (lista.length === 1) return lista[0];
+  const partes = new Map<string, [number, number]>();
+  for (const c of lista) {
+    const m = Number(/^[0-9]+/.exec(c)?.[0] ?? 0); const r = c.includes('R') ? 1 : 0;
+    partes.set(`${m}${r ? 'R' : ''}`, [m, r]);
+  }
+  return [...partes.entries()].sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1]).map(([t]) => t).join('/');
 }
 
 /* ── LOTE-ETAPAS-01 (Gabriel 11/11 08:45, D2/D3) — as listas fixas: as MESMAS dos CHECK da 117540 ─────────────────────────────── */
@@ -161,7 +216,9 @@ export function nomeDoLote(l: { codigo: string; carimbo: string | null }): strin
 export const FRASE_SEM_CARIMBO = 'sem carimbo · definir';
 /** L1 (Gabriel 09/11 07:58) — o nome no POPUP, na LISTA e no SELETOR: a cria mostra o carimbo; a cria SEM carimbo mostra
  *  "sem carimbo · definir" (o código vai no title/ao lado); fora da cria, o código. Frases e o "Usar o lote" seguem com `nomeDoLote`. */
-export function nomeNaTela(l: { codigo: string; carimbo: string | null; daCria?: boolean }): string {
+export function nomeNaTela(l: { codigo: string; carimbo: string | null; daCria?: boolean; carimbos?: string[] | null }): string {
+  /* LOTE-CARIMBOS-01 — com vários carimbos, todos ("7.1 · 7.2 · 8.1") */
+  if (l.carimbos && l.carimbos.length > 1) return l.carimbos.join(' · ');
   return l.carimbo?.trim() || (l.daCria ? FRASE_SEM_CARIMBO : l.codigo);
 }
 /** O código aparece ao lado (title, cinza) quando o nome na tela não é ele. */
