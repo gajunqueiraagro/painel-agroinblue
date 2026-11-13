@@ -226,7 +226,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - OC-VINCULO-VALOR (Gabriel 30/10): VINCULAR SÓ LIGA — `oc_vincular_lancamento` nunca muda valor/descrição/classificação/competência/datas/status
   de lançamento (guarda no banco); parcela ocupada por lançamento que a OC não gerou = recusa + "Criar compromisso novo"; fornecedor diferente = pergunta; título programado da OC só muda com `p_aceitar_titulo_oc` (o clique na prévia).
   A previa e' a propria RPC com `p_simular`. Um gesto de desfazer = um motivo + um `estorno_id`. As recusas da OC vem prontas do banco.
-- Conciliacao: tolerancia de MEIO centavo (R$ 0,01 e' diferenca); a data do banco manda na conferencia; o resumo da conta tem dono no
+- Conciliacao: tolerancia de MEIO centavo (R$ 0,01 e' diferenca); a suspeita de duplicata da importacao tambem e' centavo IGUAL (CENTAVO-IGUAL-01, `valorIgual`); a data do banco manda na conferencia; o resumo da conta tem dono no
   banco; todo vinculo com extrato da' baixa e o parcial vira divisao explicita; F5 nunca e' necessario; transferencia de OFX = 1
   lancamento + 2 vinculos; arquivo de extrato se le^ pelo charset declarado.
 - P153: "Procurar no histórico" = UMA busca (`fn_conciliacao_historico_buscar`: texto do banco casado · descrição · fornecedor, só realizado, sem
