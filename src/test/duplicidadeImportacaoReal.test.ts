@@ -194,12 +194,12 @@ describe('Validação 3 — Duplicado exato não é agressivo demais', () => {
     expect(r.classificacao).not.toBe('DUPLICADO_EXATO');
   });
 
-  it('Valor com diferença de 1 centavo (R$221.53 vs R$221.54) deve ser DUPLICADO se resto bate', () => {
+  it('CENTAVO-IGUAL-01: 1 centavo de diferença (R$221.53 vs R$221.54) NÃO é duplicado exato; o mesmo centavo é', () => {
     const existentes = [makeExistente({ valor: 221.53 })];
-    const linha = makeLinha({ valor: 221.54 }); // ±R$0.01
+    const linha = makeLinha({ valor: 221.54 });
     const r = classificarLinha(linha, existentes);
-    // A tolerância de ±R$0.01 deve considerar como valor igual
-    expect(r.classificacao).toBe('DUPLICADO_EXATO');
+    expect(r.classificacao).not.toBe('DUPLICADO_EXATO');
+    expect(classificarLinha(makeLinha({ valor: 221.53 }), existentes).classificacao).toBe('DUPLICADO_EXATO');
   });
 
   it('Valor com diferença de 2 centavos NÃO deve ser duplicado exato', () => {

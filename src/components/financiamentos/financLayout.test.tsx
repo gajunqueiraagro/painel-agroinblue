@@ -42,7 +42,7 @@ const tela = (k?: Record<string, unknown>): TelaDoContrato => { const t = lerTel
 const topo = (jurosNoCronograma = false, k?: Record<string, unknown>) => render(
   <TopoDoContrato numero="SINT-C541" descricao="FCO - Curral" status="ativo" tela={tela(k)} onEditar={() => undefined}
     parcelas={{ total: 12, pagas: 0 }} quinta={null} pendencias={{ qtde: 2, vencido: false }} onAbrirPendencias={() => undefined}
-    saldo={null} jurosNoCronograma={jurosNoCronograma} />);
+    saldo={null} aLiberar={null} encargos={null} jurosNoCronograma={jurosNoCronograma} />);
 
 describe('F1 — a faixa do título dentro do card', () => {
   it('a faixa é a 1ª linha da ficha, com a cor, a borda, os cantos e o respiro da referência', () => {
@@ -73,10 +73,13 @@ describe('F1 — a faixa do título dentro do card', () => {
     expect(within(linha).getByTestId('voltar-do-contrato')).toBeTruthy();
     expect(within(linha).getByTestId('botoes-do-credito')).toBeTruthy();
   });
-  it('as datas do bloco Dados um passo abaixo (10,5px)', () => {
+  /* FIN-FINANC-LAYOUT-03 (Gabriel 12/11): os fatos viraram BLOCOS (rótulo pequeno em cima, valor embaixo, nada ao lado) — a data é o valor
+     do bloco, inteira, no tamanho dos outros valores (o "passo abaixo" de 05/11 valia para a data AO LADO de um texto; segue nas tabelas) */
+  it('a data do bloco Dados: o valor inteiro (dd/mm/aaaa), com o rótulo em cima', () => {
     topo();
-    const data = screen.getByTestId('campo-data-do-contrato').querySelector('span.tabular-nums');
-    expect(data?.className).toContain('text-[10.5px]');
+    const bloco = screen.getByTestId('campo-data-do-contrato');
+    expect(bloco.children[0].textContent).toBe('Data do contrato');
+    const data = bloco.querySelector('span.tabular-nums');
     expect(data?.textContent).toBe('10/11/2025');
   });
 });

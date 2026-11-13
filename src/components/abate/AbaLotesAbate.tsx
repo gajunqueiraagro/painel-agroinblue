@@ -78,7 +78,7 @@ export function BlocoResumoLote({ c, vazio }: { c: AbateCalculation; vazio?: boo
       <LinhaSum vazio={vazio} rotulo="(+) Bônus" valor={c.totalBonus} cor={vazio ? undefined : 'text-emerald-600'} />
       <LinhaSum vazio={vazio} rotulo="(−) Descontos" valor={-c.totalDescontos} cor={vazio ? undefined : CLS_NEG} />
       <LinhaSum vazio={vazio} rotulo="Bruto" valor={c.valorBruto} forte />
-      <LinhaSum vazio={vazio} rotulo="(−) Funrural e impostos" valor={-c.funruralTotal} cor={vazio ? undefined : CLS_NEG} />
+      <LinhaSum vazio={vazio} rotulo="(−) Funrural e impostos" valor={-c.retencaoTotal} cor={vazio ? undefined : CLS_NEG} />
       <LinhaSum vazio={vazio} rotulo="Líquido do lote" valor={c.valorLiquido} forte />
     </div>
   );

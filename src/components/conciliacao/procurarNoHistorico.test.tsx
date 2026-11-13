@@ -37,8 +37,11 @@ describe('a lib do Procurar no histórico', () => {
   });
   it('a faixa só aparece quando o nome do banco não está no fornecedor', () => {
     const resumo = { fornecedorId: 'f1', fornecedor: 'Comércio Sintético de Rações Ltda', vezes: 7, desde: '2026-02-03' };
-    expect(fraseDaFaixa('ZEBRALUX SINT', resumo))
-      .toBe('O banco escreve "ZEBRALUX SINT"; o fornecedor costuma ser Comércio Sintético de Rações Ltda (7 vezes desde 03/02/2026).');
+    /* CONC-SUGESTOES-FONTE-01: a faixa curta (uma linha) e a frase inteira no title */
+    expect(fraseDaFaixa('ZEBRALUX SINT', resumo)).toEqual({
+      curta: 'Costuma ser Comércio Sintético de Rações Ltda · 7 vezes desde 03/02/2026',
+      inteira: 'O banco escreve "ZEBRALUX SINT"; o fornecedor costuma ser Comércio Sintético de Rações Ltda (7 vezes desde 03/02/2026).',
+    });
     expect(fraseDaFaixa('comercio sintetico', resumo)).toBeNull();
     expect(fraseDaFaixa('ZEBRALUX', null)).toBeNull();
   });
@@ -113,11 +116,12 @@ describe('o componente ProcurarNoHistorico', () => {
   });
 
   /* CONC-SUGESTOES-TABELA-01 (ajustes 07:55 e 08:1x): a tabela no tamanho grande — linha de 26px, cabeçalho de 26px; o piso = as fixas (858) + 2 × 120 */
-  it('LAYOUT FIXO: o quadro tem a altura de 6 linhas e piso de 1.098px; a frase é a 1ª linha DO QUADRO (o "…" com o title vale em tabela)', async () => {
+  it('LAYOUT FIXO: o quadro tem a altura de 6 linhas e piso de 830px; a frase é a 1ª linha DO QUADRO (o "…" com o title vale em tabela)', async () => {
     const { container } = render(<ProcurarNoHistorico clienteId="cli" movimento={MOV_BB} onCriarIgual={() => {}} />);
     const quadro = screen.getByTestId('procurar-historico-quadro');
-    expect(quadro.style.height).toBe('184px');
-    expect(screen.getByTestId('procurar-historico-piso').style.minWidth).toBe('1098px');
+    /* CONC-SUGESTOES-FONTE-01: cabeçalho 18 + 6 linhas de 19 (a lista do Financeiro) + 2 de borda; o piso cabe no modal a 1024/135% */
+    expect(quadro.style.height).toBe('134px');
+    expect(screen.getByTestId('procurar-historico-piso').style.minWidth).toBe('830px');
     /* com 1 achado o quadro não rola: o cabeçalho não fica preso (preso num quadro que não rola é vão no gate) */
     expect(container.querySelector('thead')?.className).not.toContain('sticky');
     fireEvent.click(screen.getByTestId('procurar-historico-botao'));
@@ -125,11 +129,15 @@ describe('o componente ProcurarNoHistorico', () => {
     const frase = screen.getByTestId('procurar-historico-frase');
     expect(frase.tagName).toBe('TD');
     expect(frase.className).toContain('truncate');
-    expect(frase.getAttribute('title')).toBe(frase.textContent);
+    /* CONC-SUGESTOES-FONTE-01: a faixa CURTA na linha, a frase inteira no title */
+    expect(frase.textContent).toBe('Costuma ser Comércio Sintético de Rações Ltda · 7 vezes desde 03/02/2026');
+    expect(frase.getAttribute('title')).toBe('O banco escreve "ZEBRALUX SINT"; o fornecedor costuma ser Comércio Sintético de Rações Ltda (7 vezes desde 03/02/2026).');
     /* P153b: a coluna "O que o banco disse" saiu — o texto do banco vai no `title` da descrição */
     expect(within(linha).queryByText(ACHADO.banco)).toBeNull();
     const desc = within(linha).getByText('Ração de engorda');
-    expect(desc.className).toContain('truncate');
+    /* UI-FONTE-GATE-01: o nome quebra na célula, nunca "…" */
+    expect(desc.className).toContain('whitespace-normal');
+    expect(desc.className).not.toContain('truncate');
     expect(desc.getAttribute('title')).toBe(`Ração de engorda\nPecuária · Nutrição\nO banco: ${ACHADO.banco}`);
   });
 });

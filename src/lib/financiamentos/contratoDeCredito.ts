@@ -87,6 +87,14 @@ export function encargosDoContrato(encs: readonly EncargoDoContrato[]): { total:
   return { total: t / 100, papeis: [...papeis].join(' · ') };
 }
 
+/** FIN-FINANC-LAYOUT-03 (Gabriel 12/11) — o cartão "A liberar": contratado − liberado, os dois do saldo do banco (`fn_financiamento_saldo`).
+ *  Sem um dos dois, nulo ("?" na tela, nunca deduzido); liberado acima do contratado não vira negativo aqui — a pendência
+ *  `liberado_maior_que_contratado` já o diz. */
+export function aLiberarDoContrato(saldo: { contratado: number | null; liberado: number | null } | null | undefined): number | null {
+  if (!saldo || saldo.contratado === null || saldo.liberado === null) return null;
+  return Math.max(0, cent(saldo.contratado) - cent(saldo.liberado)) / 100;
+}
+
 /** "Saldo após" de cada parcela: contratado − principal acumulado, na ordem do cronograma. Sem contratado, nulo. */
 export function saldoAposDasParcelas(contratado: number | null, parcelas: readonly ParcelaDoContrato[]): Map<string, number | null> {
   const m = new Map<string, number | null>();

@@ -29,13 +29,13 @@ export interface CartaoVG {
 
 export function CartoesDoTopo({ cartoes, carregando }: { cartoes: readonly CartaoVG[]; carregando?: boolean }) {
   return (
-    /* VISAO-GERAL-05: com o número a 24 px, abaixo de 1.280 os cinco não cabem numa linha — quebram (210 px no mínimo), e a última linha
-       estica até a borda (sem buraco) */
-    <section aria-label="Resumo" className="flex flex-none flex-wrap gap-1.5" data-testid="vg-cartoes">
+    /* VISAO-GERAL-03 (Gabriel 08/11 09:04): os cinco na MESMA régua, numa linha só e do mesmo tamanho (o "Resultado do ano" não ocupa mais
+       a linha inteira); o cartão compacto (`Kpi compacto`) */
+    <section aria-label="Resumo" className="grid flex-none grid-cols-5 gap-1.5" data-testid="vg-cartoes">
       {cartoes.map((c) => (
         <button key={c.id} type="button" onClick={c.onAbrir} disabled={!c.onAbrir} title={`${c.abrir} ›`} data-testid={`vg-cartao-${c.id}`}
-          className="flex min-w-[210px] flex-1 text-left disabled:cursor-default [&>div]:hover:border-[#2B6CB0]">
-          <Kpi rotulo={c.titulo} valor={carregando && c.valor == null ? '…' : (c.valor ?? '—')} unidade={c.valor == null ? null : c.unidade ?? null}
+          className="flex min-w-0 text-left disabled:cursor-default [&>div]:hover:border-[#2B6CB0]">
+          <Kpi compacto rotulo={c.titulo} valor={carregando && c.valor == null ? '…' : (c.valor ?? '—')} unidade={c.valor == null ? null : c.unidade ?? null}
             variacao={<>
               {/* o detalhe ("+R$ 380K no mês", "61,5% de 7.450 ha") na linha de baixo, antes da comparação: no rótulo ele passava do card */}
               {c.detalhe && <span className="text-muted-foreground">{c.detalhe}</span>}

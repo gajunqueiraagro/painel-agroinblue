@@ -88,6 +88,7 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
     { h: 'PIS/COFINS', w: 62, num: true, f: (i) => reais((i.pis?.valorCent ?? 0) + (i.cofins?.valorCent ?? 0)) },
     { h: 'IBS/CBS', w: 54, f: (i) => i.ibsCbs?.cClassTrib ?? (i.ibsCbs ? 'sim' : '—'), titulo: (i) => (i.ibsCbs ? Object.entries(i.ibsCbs).map(([k, v]) => `${k} ${v}`).join(' · ') : '') },
   ];
+  const reformaDoPdf = lidos.origem === 'pdf' ? seloDaReformaNoPdf(lidos) : null;
   const colgroup = <colgroup>{cols.map((c) => <col key={c.h} style={c.w ? { width: c.w } : undefined} />)}</colgroup>;
   const soma = (f: (i: ItemFiscal) => number) => reais(lidos.itens.reduce((s, i) => s + f(i), 0));
 
@@ -126,6 +127,10 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
           {prova.confere ? '✓ Soma dos itens = valor da nota' : `Soma dos itens ${reais(prova.somaCent)} · nota ${reais(prova.notaCent)}`}
         </span>
         {rateado && <span className={cn(CHIP, 'bg-amber-50 text-amber-800')} title="O PDF só traz desconto, frete, seguro e outras no total: repartidos pelo valor de cada item.">desconto/frete rateados</span>}
+        {/* NOTA-PDF-IBS-CBS-01 (Chat 12/11 22:00): na nota lida do PDF, o IBS/CBS diz de onde veio — nunca zero, nunca calculado */}
+        {reformaDoPdf && (
+          <span className={cn(CHIP, 'shrink-0', reformaDoPdf.tom)} title={reformaDoPdf.title} data-testid="itens-ibs-cbs-pdf">{reformaDoPdf.texto}</span>
+        )}
         <span className="ml-auto" />
         <span className={cn(CHIP, 'min-w-0 shrink bg-sky-50 text-sky-800')} title={contaDoLancamento ? `Conta do lançamento: ${contaDoLancamento}` : undefined}>
           {/* min-w-0: o selo encolhe e o texto rola no lugar dele (a 750 a barra passava da largura: o texto segurava o selo) */}
@@ -172,4 +177,18 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
       )}
     </div>
   );
+}
+
+/** NOTA-PDF-IBS-CBS-01 — o selo do IBS/CBS na nota lida do PDF: o papel que não escreve o imposto diz que falta o XML (a fonte dele);
+ *  o total escrito no papel aparece como foi lido; o escrito por item já está na coluna IBS/CBS (sem selo). */
+export function seloDaReformaNoPdf(l: Pick<ItensLidos, 'itens' | 'totais'>): { texto: string; title: string; tom: string } | null {
+  if (l.itens.some((i) => i.ibsCbs)) return null;
+  const t = l.totais.ibsCbs;
+  if (t) {
+    const ibs = t.vIBS ?? t.vIBSUF;
+    return { texto: `IBS/CBS do PDF: CBS ${reais(Math.round(Number(t.vCBS) * 100))} · IBS ${reais(Math.round(Number(ibs) * 100))}`,
+      title: 'O total de IBS/CBS escrito no PDF (o papel não traz por item); o XML traz o detalhe de cada item.', tom: 'bg-sky-50 text-sky-800' };
+  }
+  return { texto: 'IBS/CBS não informado no PDF · falta o XML', title: 'Este PDF não escreve o IBS/CBS. A fonte é o XML da nota (buscar pela chave de acesso); nada foi calculado nem zerado.',
+    tom: 'bg-amber-50 text-amber-800' };
 }

@@ -16,7 +16,7 @@
  *     salvo, o canal de lançamentos avisa (`inscreverEmLancamentos`) e a `versao` sobe — a Visão Geral, o modal e a gaveta releem o que mostram, sem F5. "Ver na lista de Lançamentos ›" leva os
  *     filtros equivalentes e o LUGAR (`RetornoVG`): o Voltar da lista reabre a tela, o modal e a gaveta onde estavam.
  */
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -43,7 +43,7 @@ import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
   COR, MESES_ABR, amDe, amHoje, anoDe, contarMeses, corSinal, faixaDoPeriodo, mil1, primeiroDia, rotuloMes, somarMeses, ultimoDia,
   dataCurta, escreverStatusVG, escreverVencidosVG, lerStatusVG, lerVencidosVG,
-  rotuloAtividade, type AlvoAnaliseVG, type CriterioTelaVG, type FaixaVG, type ModoVG, type TelaVG,
+  filtrosVG, rotuloAtividade, type AlvoAnaliseVG, type CriterioTelaVG, type FaixaVG, type ModoVG, type TelaVG,
 } from '@/lib/financeiro/visaoGeral';
 
 /* as pílulas: os três status não realizados (o realizado entra sempre, sem pílula) e a dos vencidos */
@@ -60,8 +60,9 @@ const hojeLocal = () => { const d = new Date(); return `${d.getFullYear()}-${Str
 
 export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial, retorno, onVerNaLista }: {
   hoje?: string; onAnalisar?: (a: AlvoAnaliseVG) => void;
-  /** só a bancada/teste abrem noutro estado; o app abre SEMPRE em Entradas × saídas, Ano, mês vigente */
-  inicial?: { modo?: ModoVG; faixa?: FaixaVG; de?: string; ate?: string; sel?: string };
+  /** só a bancada/teste abrem noutro estado; o app abre SEMPRE em Entradas × saídas, Ano, mês vigente — exceto vindo do card Caixa do
+   *  Início (VISAO-GERAL-03, 08/11): o mês (`sel`) e a fazenda de lá (`fazenda`: nulo = Global; ausente = a da barra) */
+  inicial?: { modo?: ModoVG; faixa?: FaixaVG; de?: string; ate?: string; sel?: string; fazenda?: string | null };
   /** a volta da lista de Lançamentos (o Voltar dela): a tela, o modal e a gaveta onde estavam */
   retorno?: RetornoVG | null;
   /** "Ver na lista de Lançamentos ›" da gaveta: os filtros equivalentes e o lugar para voltar */
@@ -70,6 +71,15 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial, 
   const { clienteAtual } = useCliente();
   const filtros = useCarregarFiltrosVG();
   const atual = amHoje(hoje);
+  /* VISAO-GERAL-03 — a fazenda do Início vai à barra UMA vez, depois que a lista do cliente chegou (a carga dela zera a fazenda); a volta
+     da lista de Lançamentos (`retorno`) nunca a troca */
+  const fazendaAplicada = useRef(false);
+  const fazendaInicial = retorno ? undefined : inicial?.fazenda;
+  useEffect(() => {
+    if (fazendaInicial === undefined || fazendaAplicada.current || !filtros.lista) return;
+    fazendaAplicada.current = true;
+    if (filtros.fazenda !== fazendaInicial) filtrosVG.mudar({ fazenda: fazendaInicial });
+  }, [fazendaInicial, filtros.lista, filtros.fazenda]);
   const [modo, setModo] = useState<ModoVG>(retorno?.modo ?? inicial?.modo ?? 'flx');
   const [sel, setSel] = useState(retorno?.sel ?? inicial?.sel ?? atual);
   const [faixa, setFaixa] = useState<FaixaVG>(retorno?.faixa ?? inicial?.faixa ?? 'ano');

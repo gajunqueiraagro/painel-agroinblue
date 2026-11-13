@@ -91,19 +91,37 @@ describe('os levados do "Casar selecionados"', () => {
   });
 });
 
-describe('o tamanho grande da tabela (ajustes 07:55 e 08:1x) é só das listas da Conciliação', () => {
-  it('a classe e o CSS dela (12px, linha de 26px, cabeçalho SEM caixa alta); o Financeiro não a passa', async () => {
-    const { readFileSync } = await import('node:fs');
+/* CONC-SUGESTOES-FONTE-01 (Gabriel 08/11 10:26): o tamanho grande de 04/11 SAIU — as listas da Conciliação são a lista do Financeiro */
+describe('as listas da Conciliação no tamanho da lista do Financeiro (sem a variante grande)', () => {
+  it('a tabela não tem mais o tamanho grande: nem a prop, nem a classe, nem o CSS', async () => {
+    const { existsSync, readFileSync } = await import('node:fs');
     const peca = readFileSync('src/components/financeiro-v2/TabelaDaLista.tsx', 'utf8');
-    const css = readFileSync('src/components/financeiro-v2/TabelaDaLista.css', 'utf8');
-    const tela = readFileSync('src/pages/FinanceiroV2Tab.tsx', 'utf8');
-    expect(peca).toContain("grande ? 'table-financeiro tabela-da-lista-grande w-full caption-bottom text-sm border-collapse' : 'table-financeiro w-full caption-bottom text-sm border-collapse'");
-    expect(css).toMatch(/\.table-financeiro\.tabela-da-lista-grande td,\s*\.table-financeiro\.tabela-da-lista-grande td \* \{\s*font-size: 12px !important;/);
-    expect(css).toMatch(/\.table-financeiro\.tabela-da-lista-grande th \{\s*font-size: 11px !important;\s*text-transform: none !important;/);
-    expect(css).toMatch(/\.table-financeiro\.tabela-da-lista-grande tr\.linha-da-lista \{ height: 26px !important; \}/);
-    expect(tela).not.toMatch(/<TabelaDaLista[^>]*\bgrande\b/);
+    expect(peca).not.toMatch(/\bgrande\b|tabela-da-lista-grande|TabelaDaLista\.css/);
+    expect(peca).toContain('<table className="table-financeiro w-full caption-bottom text-sm border-collapse"');
+    expect(existsSync('src/components/financeiro-v2/TabelaDaLista.css')).toBe(false);
     for (const f of ['src/components/financeiro-v2/SugestoesCasarModal.tsx', 'src/components/conciliacao/ProcurarNoHistorico.tsx']) {
-      expect(readFileSync(f, 'utf8'), f).toMatch(/<TabelaDaLista larguras=\{COLUNAS_PARA_CASAR\}[^\n]*\bgrande\b/);
+      expect(readFileSync(f, 'utf8'), f).not.toMatch(/<TabelaDaLista[^>]*\bgrande\b/);
     }
+  });
+
+  it('as larguras e a linha da lista do Financeiro (19px; datas 46, Faz. 30, NF 78, Valor 94, Status 60); a ação com largura própria', async () => {
+    const { COLUNAS_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, PISO_PARA_CASAR } = await import('@/components/conciliacao/TabelaParaCasar');
+    const { ALTURA_DA_LINHA } = await import('@/components/financeiro-v2/corpoDaLista');
+    expect(ALTURA_DA_LINHA_PARA_CASAR).toBe(ALTURA_DA_LINHA);
+    expect(COLUNAS_PARA_CASAR).toEqual([28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62]);
+    /* sem rolagem de lado no modal a 1024 e a 135% de 1240 (≈ 848px úteis): o piso cabe */
+    expect(PISO_PARA_CASAR).toBeLessThanOrEqual(848);
+  });
+
+  /* UI-FONTE-GATE-01 (Chat 12/11 15:22) — Faz. e NF só quando alguma linha da lista tem o dado; vazias, a largura vai para Descrição/Fornecedor */
+  it('colunasParaCasar: Faz. e NF só com dado na lista; a ordem e as outras larguras não mudam', async () => {
+    const { colunasParaCasar, largurasParaCasar } = await import('@/components/conciliacao/TabelaParaCasar');
+    const vazia = { fazendaCodigo: null, fazendaNome: null, numeroDocumento: null };
+    expect(colunasParaCasar([vazia, vazia])).toEqual({ faz: false, nf: false });
+    expect(colunasParaCasar([vazia, { ...vazia, fazendaNome: 'Fazenda X' }])).toEqual({ faz: true, nf: false });
+    expect(colunasParaCasar([{ ...vazia, numeroDocumento: '518' }])).toEqual({ faz: false, nf: true });
+    expect(largurasParaCasar({ faz: false, nf: false })).toEqual([28, 46, 46, 46, null, null, 94, 60, 120, 62]);
+    expect(largurasParaCasar({ faz: true, nf: false })).toEqual([28, 46, 46, 46, null, null, 30, 94, 60, 120, 62]);
+    expect(largurasParaCasar({ faz: true, nf: true })).toEqual([28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62]);
   });
 });

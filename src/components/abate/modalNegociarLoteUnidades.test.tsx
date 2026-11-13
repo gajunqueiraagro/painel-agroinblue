@@ -315,7 +315,9 @@ describe('ABATE-PROJETADO-01a — a unidade escolhida antes de digitar vale', ()
     { rotulo: 'Lista / trace', chave: 'bonusListaTrace', botao: '@', fonte: 'arroba', gravado: { valor: 2, fonte: 'arroba' } },
     { rotulo: 'Desconto qualidade', chave: 'descontoQualidade', botao: '@', fonte: 'arroba', gravado: { valor: 2, fonte: 'arroba' } },
     { rotulo: 'Outros descontos', chave: 'outrosDescontos', botao: '@', fonte: 'arroba', gravado: { valor: 2, fonte: 'arroba' } },
-    { rotulo: 'Funrural + SENAR', chave: 'funrural', botao: '%', fonte: 'pct', gravado: { valor: 1000, fonte: 'reais' } },
+    { rotulo: 'Funrural', chave: 'funrural', botao: '%', fonte: 'pct', gravado: { valor: 1000, fonte: 'reais' } },
+    /* IMPORTAR-ABATE-01 (D5) — o SENAR e' campo PROPRIO, com a mesma regra do Funrural (% sobre o bruto, gravado em R$). */
+    { rotulo: 'SENAR', chave: 'senar', botao: '%', fonte: 'pct', gravado: { valor: 1000, fonte: 'reais' } },
   ];
   const botaoDoCampo = (rotulo: string, texto: string) => {
     const label = screen.getAllByText(rotulo).find(el => el.tagName === 'LABEL')!;
@@ -364,13 +366,13 @@ describe('ABATE-PROJETADO-01a — Funrural / SENAR em % sobre o BRUTO, gravado e
     ...linhaVazia('l1'), pesoCarcacaKg: 2500, pesoCarcacaFonte: 'total', precoFonte: 'total', valorBaseOverride: 98135.31, ...extra,
   });
   const botaoPct = () => {
-    const label = screen.getAllByText('Funrural + SENAR').find(el => el.tagName === 'LABEL')!;
+    const label = screen.getAllByText('Funrural').find(el => el.tagName === 'LABEL')!;
     return Array.from(label.parentElement!.querySelectorAll('button')).find(b => b.textContent === '%')!;
   };
   const digitarPct = (texto: string) => {
     irPara('Bônus, descontos e impostos');
     fireEvent.click(botaoPct());
-    const campo = campoPorRotulo('Funrural + SENAR');
+    const campo = campoPorRotulo('Funrural');
     fireEvent.focus(campo);
     fireEvent.change(campo, { target: { value: texto } });
     fireEvent.blur(campo);
@@ -389,7 +391,7 @@ describe('ABATE-PROJETADO-01a — Funrural / SENAR em % sobre o BRUTO, gravado e
   it('conta no campo: "1,63+0,3" = 1,93% -> R$ 1.894,01', () => {
     const onAplicar = montar(LT10());
     digitarPct('1,63+0,3');
-    expect(campoPorRotulo('Funrural + SENAR').value).toBe('1,93');
+    expect(campoPorRotulo('Funrural').value).toBe('1,93');
     fireEvent.click(screen.getByText('Aplicar'));
     expect((onAplicar.mock.calls[0][0] as LinhaAbate).funrural).toEqual({ valor: 1894.01, fonte: 'reais' });
   });
@@ -405,14 +407,14 @@ describe('ABATE-PROJETADO-01a — Funrural / SENAR em % sobre o BRUTO, gravado e
     montar(LT10({ funrural: { valor: 1599.61, fonte: 'reais' } }));
     irPara('Bônus, descontos e impostos');
     expect(screen.getByText(/= 1,63% do bruto/)).toBeTruthy();
-    expect(campoPorRotulo('Funrural + SENAR').value.replace(/\s/g, ' ')).toBe('1.599,61'); // UI-CAMPO-MOEDA-01: o "R$" é o prefixo fixo do campo, não o texto
+    expect(campoPorRotulo('Funrural').value.replace(/\s/g, ' ')).toBe('1.599,61'); // UI-CAMPO-MOEDA-01: o "R$" é o prefixo fixo do campo, não o texto
   });
 
   it('conta que não fecha é recusada com a frase do dono e o campo volta ao que tinha', () => {
     montar(LT10());
     digitarPct('1,63+');
     expect(screen.getByTestId('recusa-conta-funrural').textContent).toBeTruthy();
-    expect(campoPorRotulo('Funrural + SENAR').value).toBe('');
+    expect(campoPorRotulo('Funrural').value).toBe('');
   });
 
   it('sem bruto não há o que converter: Aplicar apagado com o motivo escrito', () => {

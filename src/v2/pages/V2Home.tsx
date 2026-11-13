@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { anoInteiro } from '@/v2/lib/periodo';
 /* VISAO-GERAL-02 — as peças da Visão Geral nova (mock aprovado, 03/11/2026) */
+import { DESTINO_DO_CAIXA } from '@/v2/pages/visaoGeral/caixaAbreVisaoFinanceira';
 import { CartoesDoTopo, type CartaoVG } from '@/v2/pages/visaoGeral/CartoesDoTopo';
 import { TabelaFazendasVG } from '@/v2/pages/visaoGeral/TabelaFazendasVG';
 import { PrecisaDeAtencao, type ItemAtencao } from '@/v2/pages/visaoGeral/AtencaoEAtalhos';
@@ -172,11 +173,13 @@ function LinhaCaixaClicavel({ label, valor, onClick }: {
   valor: number | null;
   onClick: () => void;
 }) {
+  /* VISAO-GERAL-04 (V5) — o texto e o valor na MESMA régua da LinhaCaixa de detalhe ("Outras saídas" não clica e ficava 4 px fora): o fundo
+     do hover passa 4 px de cada lado (`-mx-1`), e o `pl-3`/`pr-1` devolve o texto aos 8 px do detalhe e o valor à borda */
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-baseline justify-between gap-3 rounded px-1 -mx-1 text-[9px] leading-tight text-muted-foreground pl-2 text-left transition-colors hover:bg-muted/30 cursor-pointer"
+      className="-mx-1 flex w-[calc(100%+0.5rem)] items-baseline justify-between gap-3 rounded pl-3 pr-1 text-left text-[9px] leading-tight text-muted-foreground transition-colors hover:bg-muted/30 cursor-pointer"
     >
       <span className="truncate">{label}</span>
       <span className="tabular-nums shrink-0">{valor == null ? '—' : fmtR(valor)}</span>
@@ -499,10 +502,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     : new Date(anoNum, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
 
-  /* Fatia do donut sob o mouse. Guarda o LABEL, nao o indice: `fatias` muda de
-     tamanho conforme familias zeram, e indice apontaria para outra fatia. */
-  const [fatiaHover, setFatiaHover] = useState<string | null>(null);
-
   /* Modo do bloco Caixa. NAO persiste: abre sempre em 'resumido', inclusive
      ao trocar de mes ou de viewMode. */
   const [modoCaixa, setModoCaixa] = useState<'resumido' | 'macro'>('resumido');
@@ -715,6 +714,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const irPara = (s: V2Section) => onIrPara?.(s, '');
   /* VISAO-GERAL-03/04 — o "Mapa das fazendas" da coluna da direita (a leitura da Geo pastos › Global, no mês da Visão Geral) */
   const mapaDasFazendas = useMapaDasFazendas(anoMesStatus ?? '');
+  /* VISAO-GERAL-04 (Gabriel 08/11 10:09) — o número do minimapa: as cabeças da fazenda no mês, as MESMAS da tabela Fazendas (rebanho oficial) */
+  const cabecasDaFazendaVG = useMemo(() => new Map(linhasFazendasVG.map(l => [l.id, l.cabecas])), [linhasFazendasVG]);
 
   /* VISAO-GERAL-05 (07:31) — o número e a unidade separados (a unidade menor ao lado) e, embaixo do rótulo, a variação contra a meta (só
      para quem a vê) e contra o ano anterior, quando a fonte as tem: rebanho e lotação pelo PC-100 (deltaMeta/deltaAno), caixa pelo
@@ -735,7 +736,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     { id: 'caixa', titulo: 'Caixa no fim do mês', valor: fmtRAbreviado(saldoFinal),
       detalhe: variacaoCaixa === null ? null : `${variacaoCaixa >= 0 ? '+' : '−'}${fmtRAbreviado(Math.abs(variacaoCaixa))} no ${isPeriodo ? 'ano' : 'mês'}`,
       meta: soMeta(caixaIndicador?.deltaMeta), anoAnt: caixaIndicador?.deltaAno ?? null,
-      abrir: 'Abrir fluxo', onAbrir: () => irPara('fluxo-caixa') },
+      /* VISAO-GERAL-03 (08/11) — abre o Financeiro › Visão geral (não mais o fluxo de caixa antigo), no mês e na fazenda daqui */
+      abrir: 'Abrir Financeiro › Visão geral', onAbrir: () => irPara(DESTINO_DO_CAIXA) },
     /* VISAO-GERAL-04 — a chuva saiu da faixa: fica só na tabela Fazendas (coluna "Chuva") */
     { id: 'resultado', titulo: 'Resultado do ano · pecuária', valor: fmtRAbreviado(resultadoAno),
       meta: soMeta(variacao(resultadoAno, resultadoMeta)), anoAnt: variacao(resultadoAno, drePecAnt?.lucro_liquido),
@@ -750,6 +752,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   /* FECH-REVALIDAR-AVISO-01 — o Valor do Rebanho validado que caiu (o peso mudou depois): UM item por fazenda × mês, até revalidar */
   const idsARevalidar = useMemo(() => (isGlobal ? fazendas.map(f => f.id) : fazendaAtual ? [fazendaAtual.id] : []), [isGlobal, fazendas, fazendaAtual]);
   const aRevalidar = useValorRebanhoARevalidar(idsARevalidar);
+  /* VISAO-GERAL-04 (V3, Gabriel 08/11) — a atenção segue o mês da régua (o mês vai no cabeçalho, "set/26"): a pendência de um mês ANTERIOR
+     continua, com o mês dela no texto; a de um mês POSTERIOR ao escolhido nunca aparece */
+  const mesDaAtencaoVG = anoNum && mesCurtoVG ? `${mesCurtoVG}/${String(anoNum).slice(2)}` : undefined;
+  const revalidarDoMes = aRevalidar.pendentes.filter(r => r.anoMes <= anoMesVG);
   const atencaoVG: ItemAtencao[] = [
     ...gradeAno
       .filter(c => c.mes === mesNum && (isGlobal || c.fazendaId === fazendaAtual?.id) && (c.p1 === 'pendente' || c.p2 === 'pendente'))
@@ -764,7 +770,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     ...(semCasar !== null && semCasar > 0
       ? [{ id: 'conc', texto: `Conciliação de ${mesCurtoVG}: ${fmtN(semCasar, 0)} sem casar`, acao: 'Conciliar', onIr: () => irPara('conciliacao') }]
       : []),
-    ...aRevalidar.pendentes.map((r): ItemAtencao => {
+    ...revalidarDoMes.map((r): ItemAtencao => {
       const f = fazendas.find(x => x.id === r.fazendaId);
       return { id: `vr-${r.fazendaId}-${r.anoMes}`, texto: `${fraseARevalidar(r.anoMes)} · ${f?.codigo || f?.nome || ''}`,
         title: `${fraseARevalidar(r.anoMes)} — ${f ? rotuloDaFazenda({ id: f.id, nome: f.nome, codigo: f.codigo ?? null }) : ''} (o peso mudou depois da validação)`,
@@ -787,7 +793,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const pecuariaVG = indicadoresPecuaria({
     real: drePecReal, meta: drePecMeta, anoAnt: drePecAnt,
     gmd: gmdIndicador ? { valor: gmdIndicador.valor, deltaMeta: gmdIndicador.deltaMeta, deltaAno: gmdIndicador.deltaAno } : null,
-    uaHa: uaHaIndicador ? { valor: uaHaIndicador.valor, deltaMeta: uaHaIndicador.deltaMeta, deltaAno: uaHaIndicador.deltaAno } : null,
+    rotuloGmd: isPeriodo ? 'GMD no ano' : `GMD de ${mesCurtoVG}`,
     podeVerMeta,
   });
   const [verPorFazenda, setVerPorFazenda] = useState(false);
@@ -1220,19 +1226,32 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           Caixa no fim do mês · Resultado do ano */}
       <CartoesDoTopo cartoes={cartoesVG} carregando={loadingPainel} />
 
-      {/* VISAO-GERAL-03 — as duas colunas da Geo pastos › Global (de 1280 px para cima): o conteúdo à esquerda e, à direita, 272 px com o
-          mapa das fazendas. Abaixo disso a coluna dos mapas sobe para o topo, na largura toda (a 1000 px os 272 apertavam a tabela). */}
-      <div className="grid min-w-0 grid-cols-1 gap-1.5 xl:grid-cols-[minmax(0,1fr)_272px]">
-      <div className="flex min-w-0 flex-col gap-1.5" data-testid="vg-coluna-esq">
+      {/* VISAO-GERAL-04 (mock aprovado 08/11 10:09, V2) — logo abaixo dos cartões, o "Mapa das fazendas" com os mapas MAIORES e, ao lado,
+          "Precisa de atenção", os dois na mesma altura (era a coluna estreita de 272 px à direita). Abaixo de 1024 px um embaixo do outro. */}
+      <div className="grid min-w-0 grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]" data-testid="vg-linha-mapa">
+        <Card titulo="Mapa das fazendas" className="min-h-[96px]" testid="vg-mapa-fazendas"
+          extra={<span className="ml-auto whitespace-nowrap text-[9.5px] text-muted-foreground">clique para abrir</span>}>
+          <div className="grid max-h-[300px] min-h-0 grid-cols-[repeat(auto-fill,minmax(184px,1fr))] gap-1.5 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable]">
+            {mapaDasFazendas.fazendas.map(l => (
+              <MiniaturaDaFazenda key={l.fazenda.id} linha={l} geometrias={mapaDasFazendas.geometriasPorFazenda.get(l.fazenda.id) ?? []}
+                situacaoDoPasto={mapaDasFazendas.situacaoDoPasto} onAbrir={() => onIrPara?.('mapa-geo-pastos', l.fazenda.id)}
+                cabecas={cabecasDaFazendaVG.get(l.fazenda.id) ?? null} w={174} h={116} />
+            ))}
+            {mapaDasFazendas.fazendas.length === 0 && (
+              <span className="col-span-full text-[9.5px] text-muted-foreground">{mapaDasFazendas.carregando ? 'Lendo o mês…' : 'Nenhuma fazenda com pecuária.'}</span>
+            )}
+          </div>
+          <div className="mt-auto flex-none px-2.5 pb-2"><LegendaDasSituacoes /></div>
+        </Card>
+        <PrecisaDeAtencao itens={atencaoVG} carregando={loadingGradeAno || carregandoConc || aRevalidar.carregando} mes={mesDaAtencaoVG} />
+      </div>
 
       {/* PRIMEIRA LINHA: Area e Caixa sao filhos DIRETOS do grid, entao a linha
           alinha a altura dos dois. Decisao explicita (Gabriel, 21/08), ciente de
           que o card mais baixo ganha espaco vazio embaixo — e o oposto do que
-          motivou e948a653. Com as duas tabelas dentro do card de Area, ele tende
-          a ser o mais alto e o branco cai no Caixa.
-          Os DEMAIS blocos seguem em duas colunas empilhadas, logo abaixo. */}
-      {/* VISAO-GERAL-04 — Área num card ESTREITO (a largura da rosca + legenda) e, ao lado, o Caixa com a sobra, os dois na MESMA altura */}
-      <div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[auto_minmax(0,1fr)]">
+          motivou e948a653. */}
+      {/* VISAO-GERAL-04 (V4) — Área (barra + só as áreas que a fazenda tem) e, ao lado, o Caixa com a sobra, os dois na MESMA altura */}
+      <div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
 
         <div className="min-w-0">
         {/* col-span-2 porque o miolo do SectionBlock e uma grade de DUAS colunas,
@@ -1249,159 +1268,49 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         >
           <div className="col-span-2 space-y-3">
             {(() => {
-              /* Duas classes por parte: `cor` (bg-*) para o ponto da legenda e
-                 `stroke` (stroke-*) para a fatia do donut. Tailwind v3 gera
-                 stroke-* a partir das mesmas cores do tema, entao os quatro
-                 tokens do design system valem nas duas formas. */
-              /* Legenda mostra as QUATRO familias sempre, mesmo zeradas: o operador
-                 compara clientes e fazendas entre si, e linha que some muda a posicao
-                 das outras. Zero e informacao. */
-              const partesLegenda = [
-                { label: 'Pecuária',    valor: areaPec   ?? 0, cor: 'bg-success', stroke: 'stroke-success' },
-                { label: 'Agricultura', valor: areaAgri  ?? 0, cor: 'bg-cta', stroke: 'stroke-cta' },
-                { label: 'Silvicultura',valor: areaSilvi ?? 0, cor: 'bg-primary', stroke: 'stroke-primary' },
+              /* VISAO-GERAL-04 (mock aprovado 08/11, V4) — sem a rosca e sem linha zerada: a barra empilhada e, embaixo, SÓ as áreas que a
+                 fazenda tem (o % sobre a soma delas), a Área total (matrícula) e a Área produtiva em cinza (o % sobre a matrícula: PODE
+                 passar de 100% com pasto arrendado de terceiro — não truncar). Os dois tokens por parte seguem: `cor` (bg-*) na barra e no ponto. */
+              const partes = [
+                { label: 'Pecuária',    valor: areaPec   ?? 0, cor: 'bg-success' },
+                { label: 'Agricultura', valor: areaAgri  ?? 0, cor: 'bg-cta' },
+                { label: 'Silvicultura',valor: areaSilvi ?? 0, cor: 'bg-primary' },
                 { label: 'Reserva, APP, benf.',
                   valor: (areaReserva ?? 0) + (areaApp ?? 0) + (areaBenf ?? 0) + (areaOutras ?? 0),
-                  cor: 'bg-muted-foreground/40', stroke: 'stroke-muted-foreground/40' },
-              ];
-              const soma = partesLegenda.reduce((s, p) => s + p.valor, 0);
+                  cor: 'bg-muted-foreground/40' },
+              ].filter(p => p.valor > 0);
+              const soma = partes.reduce((s, p) => s + p.valor, 0);
               if (soma <= 0) return <p className="text-[11px] text-muted-foreground">—</p>;
-
-              /* Donut em SVG puro: sem dependencia nova, sem recharts. Circunferencia
-                 do raio 34 = 213.63; cada fatia usa stroke-dasharray + offset. */
-              const R = 34, C = 2 * Math.PI * R;
-              let acc = 0;
-              /* Donut so desenha fatia com valor: arco de comprimento zero nao
-                 renderiza e ainda consome offset. */
-              const fatias = partesLegenda.filter(p => p.valor > 0).map(p => {
-                const frac = p.valor / soma;
-                const el = { ...p, dash: frac * C, offset: -acc * C };
-                acc += frac;
-                return el;
-              });
-
+              const ha = (v: number) => <>{v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} <span className="font-normal text-muted-foreground">ha</span></>;
+              const pct = (v: number, base: number) => `${((v / base) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
               return (
-                <div className="flex items-start gap-3">
-                  {/* Donut maior: coluna propria a esquerda. O viewBox e a
-                      espessura sao os mesmos — so a caixa renderizada cresce,
-                      entao a proporcao do anel nao muda. */}
-                  <svg viewBox="0 0 80 80" className="h-24 w-24 shrink-0 -rotate-90">
-                    {fatias.map(f => (
-                      <circle key={f.label} cx="40" cy="40" r={R} fill="none"
-                        strokeWidth="12" className={`${f.stroke} cursor-default`}
-                        strokeDasharray={`${f.dash} ${C - f.dash}`}
-                        strokeDashoffset={f.offset}
-                        onMouseEnter={() => setFatiaHover(f.label)}
-                        onMouseLeave={() => setFatiaHover(null)} />
-                    ))}
-                    {/* Miolo do donut. O <svg> tem -rotate-90: sem o <g> que
-                        desfaz, o texto sairia deitado. Sem hover o miolo fica
-                        VAZIO — nao mostrar total fixo. */}
-                    {fatiaHover && (() => {
-                      const f = fatias.find(x => x.label === fatiaHover);
-                      if (!f) return null;
-                      /* Rotulo curto: o miolo comporta ~12 caracteres por linha.
-                         "Reserva, APP, benf." nao cabe — so essa precisa abreviar. */
-                      const curto = f.label.startsWith('Reserva') ? 'Reserva' : f.label;
-                      return (
-                        <g transform="rotate(90 40 40)">
-                          <text x="40" y="38" textAnchor="middle"
-                                className="fill-foreground text-[7px] font-medium">
-                            {curto}
-                          </text>
-                          <text x="40" y="47" textAnchor="middle"
-                                className="fill-muted-foreground text-[8px] tabular-nums">
-                            {((f.valor / soma) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
-                          </text>
-                        </g>
-                      );
-                    })()}
-                  </svg>
-                  <div className="min-w-0">
-                    {/* Grid de 3 colunas com largura de conteudo: rotulo, valor e
-                        percentual alinham entre si, e o rotulo NAO e esticado —
-                        e o que aproxima "Pecuaria" do numero. Valor e % em
-                        <span> separados: juntos, a largura variavel do %
-                        deslocava o numero. */}
-                    {/* text-[10px]: os rotulos de familia competiam em peso com os
-                        numeros da propria legenda. O bloco inteiro desce um degrau —
-                        rotulo, valor e % juntos, para nao desalinhar a grade. */}
-                    <div className="grid grid-cols-[auto_auto_auto] justify-start gap-x-3 gap-y-0.5 text-[9px]">
-                      {partesLegenda.map(f => (
-                        <div key={f.label} className="contents">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${f.cor}`} />
-                            {f.label}
-                          </span>
-                          {/* Formatacao direta, NAO fmtHaInt: ele devolve "—" para zero,
-                              e aqui zero e familia sem area, nao ausencia de fechamento.
-                              fmtHaInt fica intacto — outros blocos dependem dele. */}
-                          <span className="tabular-nums text-right text-foreground">
-                            {f.valor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} <span className="text-muted-foreground font-normal">ha</span>
-                          </span>
-                          <span className="tabular-nums text-right text-muted-foreground">
-                            {((f.valor / soma) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
-                          </span>
-                        </div>
-                      ))}
-                      {/* Total e a MATRICULA (areaTotal), nao `soma`: quando ha area alem
-                          da matricula, `soma` e maior — e a linha de excedente abaixo
-                          explica a diferenca. Duas formas de dizer a mesma coisa. */}
-                      <div className="contents">
-                        <span className="flex items-center gap-1.5 pt-1 font-medium text-foreground border-t border-border">
-                          <span className="inline-block h-2 w-2 shrink-0" />
-                          Área Total
-                        </span>
-                        <span className="tabular-nums text-right pt-1 font-medium text-foreground border-t border-border">
-                          {/* Sem sufixo quando o valor nao existe: fmtHaInt devolve "—" para
-                              null E para zero, e "— ha" nao quer dizer nada. */}
-                          {areaTotal == null || areaTotal === 0
-                            ? '—'
-                            : <>{fmtHaInt(areaTotal)} <span className="text-muted-foreground font-normal">ha</span></>}
-                        </span>
-                        <span className="tabular-nums text-right pt-1 font-medium text-muted-foreground border-t border-border">
-                          {areaTotal == null ? '—' : '100%'}
-                        </span>
-                      </div>
-                      {/* Produtiva NAO e familia: e o subconjunto pec+agri+silvi. Vem depois
-                          do Total de proposito — primeiro quanto a fazenda tem, depois quanto
-                          disso produz. Fora do donut e de partesLegenda.
-
-                          Base do percentual e areaTotal (matricula), NAO `soma`. Com `soma`,
-                          Produtiva seria subconjunto de si mesma e nunca passaria de 100% —
-                          escondendo o caso de terra arrendada de terceiro. Mesma base da
-                          linha "% da area" da tabela por fazenda. PODE ultrapassar 100%:
-                          nao truncar. */}
-                      {/* Cinza leve, ao contrario do Total: o numero grande a direita
-                          passou a ser o destaque de Area Produtiva, e dois destaques
-                          para o mesmo dado competiriam. Aqui ela vira conferencia. */}
-                      <div className="contents">
-                        <span className="flex items-center gap-1.5 font-normal text-muted-foreground">
-                          <span className="inline-block h-2 w-2 shrink-0" />
-                          Área Produtiva
-                        </span>
-                        <span className="tabular-nums text-right font-normal text-muted-foreground">
-                          {areaProdutiva == null || areaProdutiva === 0
-                            ? '—'
-                            : <>{fmtHaInt(areaProdutiva)} <span className="text-muted-foreground font-normal">ha</span></>}
-                        </span>
-                        <span className="tabular-nums text-right font-normal text-muted-foreground">
-                          {(areaProdutiva == null || areaTotal == null || areaTotal <= 0)
-                            ? '—'
-                            : `${((areaProdutiva / areaTotal) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Excecao acompanha a legenda, no MESMO tamanho de fonte dela, e
-                        em fmtHa (2 casas): valor de excecao — a precisao importa. */}
-                    {areaExcedente != null && (
-                      <p className="text-[10px] text-warning pt-1">
-                        Área além da matrícula: {fmtHa(areaExcedente)}
-                      </p>
-                    )}
+                <div data-testid="vg-area-lista">
+                  <div className="mb-1.5 flex h-2 overflow-hidden rounded-full" data-testid="vg-area-barra">
+                    {partes.map(p => <div key={p.label} className={p.cor} style={{ width: `${(p.valor / soma) * 100}%` }} title={`${p.label}: ${pct(p.valor, soma)}`} />)}
                   </div>
-                  {/* VISAO-GERAL-02 — o destaque grande da Área Produtiva (24px) saiu: "nada de texto grande" (regra do Gabriel), e o número
-                      agora é o do cartão "Área produtiva" no topo — a mesma conta, um lugar só. A linha "Área Produtiva" da legenda fica. */}
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-3 gap-y-0.5 text-[10px] tabular-nums">
+                    {partes.map(p => (
+                      <div key={p.label} className="contents" data-testid="vg-area-parte">
+                        <span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-foreground">
+                          <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${p.cor}`} />{p.label}
+                        </span>
+                        <span className="whitespace-nowrap text-right">{ha(p.valor)}</span>
+                        <span className="text-right text-muted-foreground">{pct(p.valor, soma)}</span>
+                      </div>
+                    ))}
+                    {/* o Total é a MATRÍCULA (areaTotal), não `soma`: com área além da matrícula a linha de excedente explica a diferença */}
+                    <span className="border-t border-border pt-0.5 font-semibold">Área total</span>
+                    <span className="whitespace-nowrap border-t border-border pt-0.5 text-right font-semibold">{areaTotal == null || areaTotal === 0 ? '—' : ha(areaTotal)}</span>
+                    <span className="border-t border-border pt-0.5 text-right text-muted-foreground">{areaTotal == null || areaTotal === 0 ? '—' : '100%'}</span>
+                    <span className="text-muted-foreground">Área produtiva</span>
+                    <span className="whitespace-nowrap text-right text-muted-foreground">{areaProdutiva == null || areaProdutiva === 0 ? '—' : ha(areaProdutiva)}</span>
+                    <span className="text-right text-muted-foreground">{areaProdutiva == null || areaTotal == null || areaTotal <= 0 ? '—' : pct(areaProdutiva, areaTotal)}</span>
+                  </div>
+                  {/* Excecao: fmtHa (2 casas) — valor de excecao, a precisao importa */}
+                  {areaExcedente != null && (
+                    <p className="pt-1 text-[10px] text-warning">Área além da matrícula: {fmtHa(areaExcedente)}</p>
+                  )}
+                  <p className="pt-1 text-[9.5px] text-muted-foreground">Só aparecem as áreas que a fazenda tem.</p>
                 </div>
               );
             })()}
@@ -1649,32 +1558,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         <TabelaFazendasVG linhas={linhasFazendasVG} mesCurto={mesCurtoVG}
           onEscolher={isGlobal ? (id) => { const f = fazendas.find(x => x.id === id); if (f) setFazendaAtual(f); } : undefined} />
       )}
-      {/* VISAO-GERAL-04 — os Atalhos saíram (o menu lateral já faz isso); "Precisa de atenção" foi para a coluna da direita */}
-      </div>
-
-      {/* VISAO-GERAL-03/04 — a coluna da direita, preenchida de cima a baixo: o "Mapa das fazendas" (a MESMA peça da Geo pastos: sigla,
-          kg/ha na cor da situação, "cab sem mapa"; o clique abre a fazenda na Geo pastos, com "‹ Voltar à Visão Geral") e, embaixo,
-          "Precisa de atenção", que estica até o fim da coluna da esquerda (nada de branco embaixo). */}
-      {/* `contain: size` (de 1280 px para cima): a coluna da direita NÃO dita a altura da linha — ela tem a altura da esquerda. Com muitas
-          fazendas, as miniaturas rolam dentro do card (como na Geo pastos) e "Precisa de atenção" fica inteiro embaixo; com poucas, ela
-          estica até o fim. Nos dois casos nenhuma coluna fica com branco no pé. */}
-      <div className="order-first flex min-w-0 flex-col gap-1.5 xl:order-none xl:[contain:size]" data-testid="vg-coluna-dir">
-        <Card titulo="Mapa das fazendas" className="min-h-[96px] flex-[0_1_auto]" testid="vg-mapa-fazendas"
-          extra={<span className="ml-auto whitespace-nowrap text-[9.5px] text-muted-foreground">clique para abrir</span>}>
-          <div className="grid max-h-[260px] min-h-0 grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-1.5 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable] xl:grid-cols-2">
-            {mapaDasFazendas.fazendas.map(l => (
-              <MiniaturaDaFazenda key={l.fazenda.id} linha={l} geometrias={mapaDasFazendas.geometriasPorFazenda.get(l.fazenda.id) ?? []}
-                situacaoDoPasto={mapaDasFazendas.situacaoDoPasto} onAbrir={() => onIrPara?.('mapa-geo-pastos', l.fazenda.id)} />
-            ))}
-            {mapaDasFazendas.fazendas.length === 0 && (
-              <span className="col-span-2 text-[9.5px] text-muted-foreground">{mapaDasFazendas.carregando ? 'Lendo o mês…' : 'Nenhuma fazenda com pecuária.'}</span>
-            )}
-          </div>
-          <div className="flex-none px-2.5 pb-2"><LegendaDasSituacoes /></div>
-        </Card>
-        <PrecisaDeAtencao itens={atencaoVG} carregando={loadingGradeAno || carregandoConc || aRevalidar.carregando} className="xl:flex-[1_0_auto]" />
-      </div>
-      </div>
+      {/* VISAO-GERAL-04 — os Atalhos saíram (o menu lateral já faz isso); "Precisa de atenção" foi para a linha do mapa */}
 
       {/* VISAO-GERAL-04 — os blocos por atividade na largura toda, abaixo das duas colunas: a grade fecha nas duas (o bloco é largo; na
           coluna da esquerda ele deixava a da direita com um buraco embaixo) */}

@@ -21,11 +21,11 @@ import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { notificarLotesMudaram } from '@/hooks/useLotesDaFazenda';
 import { useCadastrosDoLote, fraseDoErro, type CadastroParaSalvar } from '@/hooks/useCadastrosDoLote';
 import {
-  CRUZAMENTOS_DOS_MAMOTES, FRASE_CARIMBO_INVALIDO, ORDENS_DO_PARTO, SEMENS_DOS_MAMOTES, SEXOS_DOS_MAMOTES, SITUACOES_DA_CRIA, ehParida,
+  CARIMBO_VALIDO, CRUZAMENTOS_DOS_MAMOTES, FRASE_CARIMBO_INVALIDO, ORDENS_DO_PARTO, carimbosFaixa, SEMENS_DOS_MAMOTES, SEXOS_DOS_MAMOTES, SITUACOES_DA_CRIA, ehParida,
   type CadastroDoLote, type LoteDaLista, type TipoDoCadastro, type TrocaDeCodigo,
 } from '@/lib/lotes/tipos';
 import {
-  PASSOS, aceitaCarimbo, camposParaSalvar, validarCarimbo, categoriasDaAtividade, codigoDoAssistente, escolhidoNoPasso, faseDaAtividade, faltaNoPasso,
+  PASSOS, aceitaCarimbo, camposParaSalvar, listaDeCarimbos, validarCarimbo, categoriasDaAtividade, codigoDoAssistente, escolhidoNoPasso, faseDaAtividade, faltaNoPasso,
   fichaDoAssistente, filtrarCadastros, fraseCurtaDaTroca, fraseDaTroca, legendaDoCodigo, lotesQueUsam, nomeDe, perfilInicial, resumoDoRebanho,
   siglaDe, siglaDigitada, ultimoPassoAlcancavel, validarCadastro, validarPerfil,
   type Escolha, type ErroNoCampo, type Perfil,
@@ -96,6 +96,8 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
   const opcoes = useMemo(() => {
     if (!tipoDoPasso) return [];
     const achados = filtrarCadastros(cadastros, tipoDoPasso, busca);
+    /* Chat 12/11 14:05 — a atividade é lista FIXA (cria · recria · engorda): as outras do cadastro não aparecem (a escolhida fica) */
+    if (tipoDoPasso === 'atividade') return achados.filter(c => faseDaAtividade(c.sigla) !== null || c.id === escolha.atividadeId);
     return tipoDoPasso === 'categoria' && !todasAsCategorias ? categoriasDaAtividade(achados, fase, categoriasDoRebanho, escolha.categoriaId) : achados;
   }, [cadastros, tipoDoPasso, busca, todasAsCategorias, fase, categoriasDoRebanho, escolha.categoriaId]);
   const categoriasFora = tipoDoPasso === 'categoria' && !todasAsCategorias ? filtrarCadastros(cadastros, 'categoria', busca).length - opcoes.length : 0;
@@ -241,7 +243,7 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
     avancar();
   };
 
-  const codigo = codigoDoAssistente(cadastros, escolha, perfil.carimbo, lotesDaFazenda, editar);
+  const codigo = codigoDoAssistente(cadastros, escolha, listaDeCarimbos(perfil), lotesDaFazenda, editar);
   const passoAtual = PASSOS[passo];
   const mudarPerfil = (p: Perfil) => { setPerfil(p); setErroDoPerfil(null); };
   const pergunta = passo === 2 ? (cria ? 'Situação e programa' : 'Programa e sistema') : passoAtual.pergunta;
@@ -366,21 +368,21 @@ export function AssistenteDoLote({ open, clienteId, fazendaId, fazendaRotulo, lo
                         <span className="truncate text-[11px] leading-[15px]">{c.nome}</span>
                         <span className="whitespace-nowrap text-[10px] leading-[13px] text-muted-foreground" title={detalheInteiro} data-testid="assistente-cartao-detalhe">{detalhe}</span>
                         {tipoDoPasso === 'categoria' && n > 0 && <span className="absolute right-[26px] top-[7px] text-[9.5px] text-muted-foreground">{n} lote{n > 1 ? 's' : ''}</span>}
-                        <button type="button" aria-label={`Editar o cadastro ${c.sigla}`} title="Editar cadastro" data-testid="assistente-editar-cadastro"
+                        {tipoDoPasso !== 'atividade' && <button type="button" aria-label={`Editar o cadastro ${c.sigla}`} title="Editar cadastro" data-testid="assistente-editar-cadastro"
                           onClick={ev => { ev.stopPropagation(); abrirForm(tipoDoPasso, c); }}
                           className="absolute right-1 top-1 hidden h-[19px] w-[19px] items-center justify-center rounded text-muted-foreground hover:bg-[#e9eef5] hover:text-[#0b1f3a] group-hover:flex">
                           <Pencil className="h-3 w-3" />
-                        </button>
+                        </button>}
                         {sel && <span className="absolute bottom-1.5 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">✓</span>}
                       </div>
                     );
                   })}
                   {opcoes.length === 0 && busca.trim() && <div className="col-span-full px-1 py-4 text-[11px] text-muted-foreground">Nada com “{busca.trim()}”. Cadastre ao lado.</div>}
-                  <button type="button" onClick={() => abrirForm(tipoDoPasso, null)} data-testid="assistente-cadastrar-nova"
+                  {tipoDoPasso !== 'atividade' && <button type="button" onClick={() => abrirForm(tipoDoPasso, null)} data-testid="assistente-cadastrar-nova"
                     className="flex min-w-0 flex-col items-center justify-center rounded-lg border-[1.5px] border-dashed border-[#d3d9e2] bg-[#fbfcfe] text-center text-primary hover:border-[#94a3b8]">
                     <Plus className="h-4 w-4" />
                     <span className="text-[11px] font-semibold">{passoAtual.cadastrarNova}</span>
-                  </button>
+                  </button>}
                 </div>
                 {tipoDoPasso === 'raca' && cria && <MamotesAoPe perfil={perfil} parida={parida} erro={erroDoPerfil} onPerfil={mudarPerfil}
                   erroNaHora={perfil.carimbo.trim() ? validarCarimbo(perfil.carimbo) : null} />}
@@ -425,7 +427,7 @@ function valorDoPasso(i: number, cadastros: readonly CadastroDoLote[], e: Escolh
       .filter((x): x is string => !!x);
     return partes.length ? partes.join(' · ') : null;
   }
-  if (i === 3) return e.racaId ? `${parte(e.racaId)}${cria && ehParida(p.situacaoCria) ? ` · mamotes ${p.carimbo.trim() || '?'}` : ''}` : null;
+  if (i === 3) return e.racaId ? `${parte(e.racaId)}${cria && ehParida(p.situacaoCria) ? ` · mamotes ${carimbosFaixa(listaDeCarimbos(p)) ?? '?'}` : ''}` : null;
   return p.nomeCampeiro.trim() || null;
 }
 
@@ -507,16 +509,34 @@ function MamotesAoPe({ perfil, parida, erro, onPerfil, erroNaHora }: {
 }) {
   /* LOTE-ETAPAS-02 — o carimbo fora de mês.lote acende no campo ao digitar (antes só depois de tentar salvar, e o botão nunca deixava) */
   const erroDoCarimbo = erroNaHora ?? (erro?.campo === 'carimbo' ? erro.mensagem : null);
+  /* LOTE-CARIMBOS-01 — vários carimbos: digitar e Enter (ou vírgula/espaço) põe na lista; × tira; o digitado válido conta ao avançar */
+  const adicionar = () => {
+    const c = perfil.carimbo.trim().toUpperCase();
+    if (!c || !CARIMBO_VALIDO.test(c)) return;
+    onPerfil({ ...perfil, carimbo: '', carimbos: perfil.carimbos.includes(c) ? perfil.carimbos : [...perfil.carimbos, c] });
+  };
   return (
     <div className="mt-2 flex-none border-t border-[#e3e7ee] pt-1.5" data-testid="assistente-mamotes">
       <div className="mb-0.5 whitespace-nowrap text-[10.5px] font-semibold text-[#374151]">
         Mamotes ao pé{!parida && <span className="font-normal text-muted-foreground"> · só na parida (PA, PP ou VZ)</span>}
       </div>
       <Linha rotulo={parida ? 'Carimbo' : 'Carimbo · opcional'} obrigatorio={parida}>
-        <div className="flex items-center gap-2">
-          <Input value={perfil.carimbo} placeholder="7.1" maxLength={6} aria-label="Carimbo do lote" data-testid="assistente-carimbo"
-            onChange={e => onPerfil({ ...perfil, carimbo: e.target.value.toUpperCase().replace(/[^0-9R.]/g, '') })}
-            className={cn('h-[24px] w-[72px] text-[11.5px] font-bold', erroDoCarimbo && 'border-destructive')} />
+        <div className="flex items-center gap-1.5">
+          {perfil.carimbos.map(c => (
+            <span key={c} className="flex h-[23px] flex-none items-center gap-1 rounded-[5px] border border-primary bg-primary px-1.5 text-[11px] font-bold text-primary-foreground" data-testid="assistente-carimbo-chip">
+              {c}
+              <button type="button" aria-label={`Tirar o carimbo ${c}`} className="opacity-70 hover:opacity-100"
+                onClick={() => onPerfil({ ...perfil, carimbos: perfil.carimbos.filter(x => x !== c) })}><X className="h-3 w-3" /></button>
+            </span>
+          ))}
+          <Input value={perfil.carimbo} placeholder={perfil.carimbos.length ? '+ carimbo' : '7.1'} maxLength={6} aria-label="Carimbo do lote" data-testid="assistente-carimbo"
+            onChange={e => {
+              const v = e.target.value.toUpperCase();
+              if (/[,; ]$/.test(v)) { const c = v.replace(/[,; ]+$/, ''); if (CARIMBO_VALIDO.test(c)) { onPerfil({ ...perfil, carimbo: '', carimbos: perfil.carimbos.includes(c) ? perfil.carimbos : [...perfil.carimbos, c] }); return; } }
+              onPerfil({ ...perfil, carimbo: v.replace(/[^0-9R.]/g, '') });
+            }}
+            onKeyDown={e => { if (e.key === 'Enter' && perfil.carimbo.trim()) { e.preventDefault(); e.stopPropagation(); adicionar(); } }}
+            className={cn('h-[24px] w-[72px] flex-none text-[11.5px] font-bold', erroDoCarimbo && 'border-destructive')} />
           <span className={cn('min-w-0 whitespace-nowrap text-[9.5px]', erroDoCarimbo ? 'text-destructive' : 'text-muted-foreground')} data-testid="assistente-carimbo-nota">
             {erroDoCarimbo ?? 'mês.lote: 7.1 ou 7R (ressinc.)'}
           </span>

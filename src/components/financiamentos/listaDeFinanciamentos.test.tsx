@@ -49,7 +49,8 @@ describe('ListaDeFinanciamentos', () => {
   it('grupo de linha de crédito e de banco, com subtotal', () => {
     montar([c('a'), c('b', { linhaCreditoId: 'L1', linhaCreditoNome: 'PRONAMP' })]);
     const grupos = screen.getAllByTestId('lista-fin-grupo').map((g) => g.textContent ?? '');
-    expect(grupos[0]).toContain('Linha · PRONAMP · 1 contrato');
+    /* FIN-FINANC-LAYOUT-03 (escolha A): o grupo de LINHA leva os bancos (a coluna Banco saiu) */
+    expect(grupos[0]).toContain('Linha · PRONAMP · Banco A · 1 contrato');
     expect(grupos[1]).toContain('Banco A · 1 contrato');
     expect(grupos[1]).toContain('800,00');
   });
@@ -75,14 +76,18 @@ describe('ListaDeFinanciamentos', () => {
     expect(aoAbrir).toHaveBeenCalledWith('a');
   });
 
-  it('régua fixa: table-fixed e colgroup em px, só a Descrição sem largura', () => {
+  it('régua fixa: table-fixed e colgroup em em da régua, só a Descrição sem largura; sem a coluna Banco; sem largura mínima (nunca rola)', () => {
     montar([c('a')]);
     const tabela = screen.getByTestId('lista-fin-tabela');
     expect(tabela.className).toContain('table-fixed');
     const cols = Array.from(tabela.querySelectorAll('col'));
-    expect(cols).toHaveLength(11);
+    expect(cols).toHaveLength(10);
     expect(cols.filter((x) => !x.getAttribute('style')).length).toBe(1);
-    expect(cols[3].getAttribute('style')).toBeNull();
+    expect(cols[2].getAttribute('style')).toBeNull();
+    for (const x of cols.filter((k) => k.getAttribute('style'))) expect(x.style.width).toMatch(/em$/);
+    expect(tabela.style.minWidth).toBe('');
+    expect(screen.getByTestId('lista-fin-rolagem').className).toContain('overflow-x-hidden');
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).not.toContain('Banco');
   });
 });
 
@@ -102,21 +107,30 @@ describe('as duas abas na fonte da página (o conteúdo de "Compras parceladas" 
   });
 });
 
-describe('régua de Lançamentos na tabela nova', () => {
-  it('tabela table-financeiro, valor celula-valor sem mono, data celula-data, selo na forma do status, linha de 25px', () => {
+describe('FIN-FINANC-LAYOUT-03 — a lista na RÉGUA ÚNICA com o contrato (saiu da régua de Lançamentos)', () => {
+  it('sem table-financeiro: célula e cabeçalho pelas variáveis da régua; valor em negrito tabular; selo na forma do status; todo cabeçalho de dado ordena', () => {
     montar([c('a')]);
-    expect(screen.getByTestId('lista-fin-tabela').className).toContain('table-financeiro');
+    const tabela = screen.getByTestId('lista-fin-tabela');
+    expect(tabela.className).not.toContain('table-financeiro');
+    expect(tabela.className).toContain('text-[length:var(--fin-td)]');
     const linha = screen.getAllByTestId('lista-fin-contrato')[0];
-    expect(linha.className).toContain('h-[25px]');
     const saldo = within(linha).getByTestId('cel-saldo');
-    expect(saldo.className).toContain('celula-valor');
+    expect(saldo.className).toMatch(/text-right font-semibold tabular-nums/);
+    expect(saldo.className).toContain('h-[var(--fin-linha)]');
     expect(saldo.className).not.toContain('font-mono');
     const tds = linha.querySelectorAll('td');
-    expect(tds[0].className).toContain('celula-data');
-    expect(tds[9].className).toContain('celula-data');
-    expect(tds[4].className).toContain('celula-status');
-    expect(tds[4].querySelector('span')?.className).toContain('rounded-[7px]');
-    expect(screen.getAllByTestId('lista-fin-grupo')[0].className).toContain('h-[27px]');
+    expect(tds[3].querySelector('span')?.className).toContain('rounded-[7px]');
+    const ths = screen.getAllByRole('columnheader');
+    expect(ths[0].className).toContain('text-[length:var(--fin-th)]');
+    /* Chat 22:00: TODA coluna ordena, Próx. venc. e Pendência também */
+    expect(ths.map((th) => th.getAttribute('aria-sort'))).not.toContain(null);
+    expect(ths).toHaveLength(10);
+  });
+  it('a Descrição é a única célula que quebra a linha; número, data e valor nunca', () => {
+    montar([c('a')]);
+    const linha = screen.getAllByTestId('lista-fin-contrato')[0];
+    expect(within(linha).getByTestId('cel-descricao').className).toContain('whitespace-normal');
+    for (const id of ['cel-data', 'cel-numero', 'cel-saldo', 'cel-pendencia']) expect(within(linha).getByTestId(id).className).toContain('whitespace-nowrap');
   });
 });
 
@@ -152,25 +166,39 @@ describe('FIN-FINANC-28-P3-FIX', () => {
     expect(card('Saldo devedor').querySelector('span')?.getAttribute('title')).toContain('principal');
   });
 
-  it('FIX4 — banco pelo NOME DO CADASTRO INTEIRO (o nome curto acabou), cortando com reticências; title "Nome · CNPJ"; Data é a primeira coluna', () => {
-    montar([c('a', { banco: 'Banco do Brasil S.A. (001)', bancoDocumento: '00000000000191' }), c('b', { banco: 'Sicoob Ltda' })]);
-    const [b, b2] = screen.getAllByTestId('cel-banco');
-    expect(b.textContent).toBe('Banco do Brasil S.A. (001)');
-    expect(b.className).toContain('truncate');
-    expect(b.getAttribute('title')).toBe('Banco do Brasil S.A. (001) · 00.000.000/0001-91');
-    expect(b2.getAttribute('title')).toBe('Sicoob Ltda');
+  it('FIX4 + FIN-FINANC-LAYOUT-03 (escolha A) — o banco pelo NOME INTEIRO na linha do grupo (cada nome numa peça que não quebra) e "Nome · CNPJ" no title da Descrição; Data primeiro, dd/mm/aaaa', () => {
+    montar([c('a', { banco: 'Banco do Brasil S.A. (001)', bancoDocumento: '00000000000191', linhaCreditoId: 'L1', linhaCreditoNome: 'PRONAMP' }),
+      c('b', { banco: 'Sicoob Ltda', linhaCreditoId: 'L1', linhaCreditoNome: 'PRONAMP' })]);
+    expect(screen.queryByTestId('cel-banco')).toBeNull();
+    const rotulo = screen.getByTestId('rotulo-do-grupo');
+    expect([...rotulo.children].map((x) => x.textContent?.replace(/^ · /, ''))).toEqual(['Linha · PRONAMP', 'Banco do Brasil S.A. (001)', 'Sicoob Ltda', '2 contratos']);
+    for (const x of [...rotulo.children]) expect(x.className).toContain('whitespace-nowrap');
+    const desc = screen.getAllByTestId('cel-descricao');
+    expect(desc.map((d) => d.getAttribute('title'))).toEqual(['Contrato a · Banco do Brasil S.A. (001) · 00.000.000/0001-91', 'Contrato b · Sicoob Ltda']);
     expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Data');
-    expect(screen.getAllByTestId('cel-data')[0].textContent).toBe('10/01/25');
-    expect(screen.getAllByTestId('cel-data')[0].className).toContain('celula-data');
+    expect(screen.getAllByTestId('cel-data')[0].textContent).toBe('10/01/2025');
   });
 
-  it('duas pendências: a 1ª curta + "+1" na coluna estreita; as duas por extenso no title', () => {
+  it('ordenar pela Pendência: pelo texto da 1ª; sem pendência no fim (Chat 22:00)', () => {
+    montar([c('a', { banco: 'B' }), c('b', { banco: 'B', saldo: saldo({ pendencias: ['sem_numero_contrato'] }) }), c('d', { banco: 'B', saldo: saldo({ pendencias: ['sem_documento'] }) })]);
+    fireEvent.click(within(screen.getByRole('columnheader', { name: /Pendência/ })).getByRole('button'));
+    expect(screen.getAllByTestId('cel-pendencia').map((x) => x.textContent)).toEqual(['sem doc', 'sem nº', '—']);
+  });
+  it('o rolado: a seta pode quebrar, o número do sucessor fica INTEIRO numa linha (Chat 22:00)', () => {
+    montar([c('r', { status: 'rolado', sucessorNumero: 'C_998.877.665.540001' })], true);
+    const cel = screen.getByTestId('cel-pendencia');
+    expect(cel.textContent).toBe('→ C_998.877.665.540001');
+    expect(cel.querySelector('span')?.className).toContain('whitespace-nowrap');
+    expect(cel.querySelector('span')?.textContent).toBe('C_998.877.665.540001');
+  });
+  it('duas pendências: a 1ª curta + o selo "+1" (Chat 18:00); as duas por extenso no title', () => {
     montar([c('a', { numeroContrato: 'Sem dados', saldo: saldo({ liberado: null, saldo: null, pendencias: ['sem_liberacao', 'sem_numero_contrato'] }) })]);
     expect(screen.getByTestId('cel-pendencia').textContent).toBe('sem lib. +1');
+    expect(screen.getByTestId('mais-pendencias').className).toContain('rounded-full');
     expect(screen.getByTestId('cel-pendencia').getAttribute('title')).toBe('liberação não gravada · falta nº do contrato');
   });
 
-  it('FIX2 — agrupada só por banco (mostrarBanco=false): a coluna Banco some e o banco vai no title da Descrição', () => {
+  it('FIX2 — agrupada só por banco: a coluna Banco não existe e o banco vai no title da Descrição (desde o FIN-FINANC-LAYOUT-03, sempre)', () => {
     render(<ListaDeFinanciamentos contratos={[c('a', { banco: 'Banco do Brasil' })]} encerradosAbertos={false}
       aoAlternarEncerrados={vi.fn()} aoAbrir={vi.fn()} mostrarBanco={false} />);
     expect(screen.queryByTestId('cel-banco')).toBeNull();

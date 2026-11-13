@@ -22,7 +22,8 @@ import { SEPARADOR_DE_CELULA } from '@/lib/oc/leitura/montarLinhas';
 /** Os CNPJs de cada frigorifico (so' digitos). Unidade nova entra AQUI quando houver PDF dela — nunca pela raiz nem pelo nome. */
 type Frigorifico = 'minerva' | 'jbs';
 export const CNPJS_DO_FRIGORIFICO: Record<Frigorifico, string[]> = {
-  minerva: ['52168923000231'],
+  /* IMPORTAR-ABATE-01 (11/11): + a unidade de José Bonifácio-SP (o caso real SM-LT06, OC 77562) */
+  minerva: ['52168923000231', '67620377000386'],
   jbs: ['02916265007768'],
 };
 /* 7f (OC-DOC-SAIDA-FAZENDA-01): os documentos da SAIDA DA FAZENDA — a NFP-e do produtor, a e-GTA e as declaracoes (Modelo B,

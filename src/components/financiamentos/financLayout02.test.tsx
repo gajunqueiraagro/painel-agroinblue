@@ -37,9 +37,10 @@ describe('FIN-FINANC-LAYOUT-02 — o cronograma do crédito', () => {
   it('a linha não tem title (o tooltip cobria a linha); régua 22px com 6px de cada lado', () => {
     const linha = cronograma.slice(cronograma.indexOf('data-testid="linha-do-contrato"'), cronograma.indexOf('<td', cronograma.indexOf('data-testid="linha-do-contrato"')));
     expect(linha).not.toContain('title=');
-    expect(fonte).toContain('const TD_V4 = `h-[22px] overflow-hidden whitespace-nowrap px-[6px] ${E.td} leading-[21px] text-[#111827]`;');
-    expect(fonte).toMatch(/const TH_V4 = `sticky top-0 z-10 h-\[22px\] whitespace-nowrap bg-\[#1d3a5d\] px-\[6px\]/);
-    expect(fonte).toMatch(/const TF_V4 = `sticky bottom-0 z-10 h-\[22px\] whitespace-nowrap bg-\[#e4e9ef\] px-\[6px\]/);
+    /* FIN-FINANC-LAYOUT-03: a altura (22px a 11) e a entrelinha são as da régua única */
+    expect(fonte).toContain('const TD_V4 = `${REGUA_FIN.linha} overflow-hidden whitespace-nowrap px-[6px] ${E.td} ${REGUA_FIN.entrelinha} text-[#111827]`;');
+    expect(fonte).toMatch(/const TH_V4 = `sticky top-0 z-10 \$\{REGUA_FIN\.linha\} whitespace-nowrap bg-\[#1d3a5d\] px-\[6px\]/);
+    expect(fonte).toMatch(/const TF_V4 = `sticky bottom-0 z-10 \$\{REGUA_FIN\.linha\} whitespace-nowrap bg-\[#e4e9ef\] px-\[6px\]/);
   });
   it('o modal Editar contrato › Liberações é o MESMO BlocoLiberacoes da tela do contrato, com a conta do contrato (Chat 10:26)', () => {
     const modal = readFileSync(resolve(__dirname, './CadastroDeContratoDialog.tsx'), 'utf8');

@@ -109,7 +109,7 @@ export function ModalResumoLotes({ lotes, linhas, cenario, lotesApi, onFechar }:
                     <Td valor={c.totalBonus} vazio={vazio} />
                     <Td valor={c.totalDescontos} negativo vazio={vazio} />
                     <Td valor={c.valorBruto} vazio={vazio} />
-                    <Td valor={c.funruralTotal} negativo vazio={vazio} />
+                    <Td valor={c.retencaoTotal} negativo vazio={vazio} />
                     <Td valor={c.valorLiquido} forte vazio={vazio} />
                     <td className="whitespace-nowrap px-2.5 py-1 text-right text-[11px] tabular-nums">
                       {vazio ? '—' : formatMoeda(c.liqArroba)}
@@ -130,7 +130,7 @@ export function ModalResumoLotes({ lotes, linhas, cenario, lotesApi, onFechar }:
                 <Td valor={t.bonus} forte />
                 <Td valor={t.descontos} negativo forte />
                 <Td valor={t.bruto} forte />
-                <Td valor={t.funrural} negativo forte />
+                <Td valor={t.retencoes} negativo forte />
                 <Td valor={t.liquido} forte />
                 <td className="whitespace-nowrap px-2.5 py-1 text-right text-[12px] font-semibold tabular-nums">
                   {porArroba(t.liquido)}

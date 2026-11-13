@@ -334,13 +334,20 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
    * Funrural em reais (o banco recusa `pct`), entao o lote sai daqui com `fonte = 'reais'` e o total que o dono calculou; o
    * percentual fica so' como leitura ("= 1,93% do bruto"). Sem bruto nao ha' o que converter: o Aplicar fica apagado com o motivo.
    */
+  /* IMPORTAR-ABATE-01 (D5) — o SENAR segue a MESMA regra (o conta corrente tambem o recusa em %): vira R$ no Aplicar. */
   const funruralEmPct = atual.funrural.fonte === 'pct' && atual.funrural.valor != null;
-  const motivoNaoAplica = funruralEmPct && !(c.valorBruto > 0)
-    ? 'Funrural em %: informe preço e carcaça para converter em R$.' : null;
+  const senarEmPct = atual.senar.fonte === 'pct' && atual.senar.valor != null;
+  const motivoNaoAplica = (funruralEmPct || senarEmPct) && !(c.valorBruto > 0)
+    ? `${funruralEmPct ? 'Funrural' : 'SENAR'} em %: informe preço e carcaça para converter em R$.` : null;
   const paraAplicar = (l: LinhaAbate): LinhaAbate => {
-    if (l.funrural.fonte !== 'pct' || l.funrural.valor == null) return l;
-    const funrural: LinhaAbate['funrural'] = { valor: buildAbateCalculation(paraCalculo(l, lote)).funruralTotal, fonte: 'reais' };
-    const convertida = { ...l, funrural };
+    const emPct = (v: LinhaAbate['funrural']) => v.fonte === 'pct' && v.valor != null;
+    if (!emPct(l.funrural) && !emPct(l.senar)) return l;
+    const calcDoPct = buildAbateCalculation(paraCalculo(l, lote));
+    const convertida: LinhaAbate = {
+      ...l,
+      funrural: emPct(l.funrural) ? { valor: calcDoPct.funruralTotal, fonte: 'reais' } : l.funrural,
+      senar: emPct(l.senar) ? { valor: calcDoPct.senarTotal, fonte: 'reais' } : l.senar,
+    };
     return { ...convertida, valorLiquido: buildAbateCalculation(paraCalculo(convertida, lote)).valorLiquido };
   };
 
@@ -574,13 +581,21 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                   {/* ⚠ O FUNRURAL É PERCENTUAL, não R$/@ — e a sub-linha mostra o percentual
                       efetivo sobre o bruto, que é como ele se confere na nota.
                       ABATE-PROJETADO-01a: em % aceita conta e vira R$ no Aplicar (paraAplicar). */}
-                  <CampoComUnidade rotulo="Funrural + SENAR" fonteA="pct" rotuloA="%" vermelho somenteLeitura={somenteLeitura}
+                  <CampoComUnidade rotulo="Funrural" fonteA="pct" rotuloA="%" vermelho somenteLeitura={somenteLeitura}
                     valor={atual.funrural} total={c.funruralTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
                     contaNaUnidadeA
                     subExtra={atual.funrural.fonte === 'pct'
                       ? `= ${formatMoeda(c.funruralTotal)}`
                       : c.valorBruto > 0 ? `= ${num((c.funruralTotal / c.valorBruto) * 100)}% do bruto` : null}
                     onChange={v => trocar({ funrural: { valor: v.valor, fonte: v.fonte === 'pct' || v.fonte === 'reais' ? v.fonte : null } })} />
+                  {/* IMPORTAR-ABATE-01 (D5) — o SENAR e' retencao PROPRIA (nunca dentro do Funrural): o mesmo campo, a mesma regra. */}
+                  <CampoComUnidade rotulo="SENAR" fonteA="pct" rotuloA="%" vermelho somenteLeitura={somenteLeitura}
+                    valor={atual.senar} total={c.senarTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
+                    contaNaUnidadeA
+                    subExtra={atual.senar.fonte === 'pct'
+                      ? `= ${formatMoeda(c.senarTotal)}`
+                      : c.valorBruto > 0 ? `= ${num((c.senarTotal / c.valorBruto) * 100)}% do bruto` : null}
+                    onChange={v => trocar({ senar: { valor: v.valor, fonte: v.fonte === 'pct' || v.fonte === 'reais' ? v.fonte : null } })} />
                 </div>
               </>)}
             </div>
@@ -612,7 +627,7 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                   <LinhaResultado rotulo="Bruto" forte
                     total={formatMoeda(c.valorBruto)} porArroba={porArroba(c.valorBruto)} />
                   <LinhaResultado rotulo="(−) Funrural e impostos" cor="text-destructive"
-                    total={neg(c.funruralTotal)} porArroba={negAt(c.funruralTotal)} />
+                    total={neg(c.retencaoTotal)} porArroba={negAt(c.retencaoTotal)} />
                   <LinhaResultado rotulo="Líquido do lote" forte
                     total={formatMoeda(c.valorLiquido)} porArroba={porArroba(c.valorLiquido)} />
                   <LinhaResultado rotulo="por cabeça"

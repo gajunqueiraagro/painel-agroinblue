@@ -5,9 +5,7 @@
  *   • mode='operacional' (lançamento)
  *       - Fazenda → planilha diária editável
  *       - Global  → BLOQUEADO (mensagem "Selecione uma fazenda")
- *   • mode='analitico' (dashboard)
- *       - Global  → ChuvasGlobalView (comparativo entre fazendas)
- *       - Fazenda → placeholder "Análise pluviométrica por fazenda — em construção"
+ *   • mode='analitico' (dashboard) → `ChuvasAnalise` (CHUVAS-ANALISE-01): "Todas as fazendas" em Global, "Uma fazenda" fora
  *
  * Default = 'operacional' (preserva comportamento legado em Index.tsx).
  */
@@ -19,10 +17,10 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CloudRain, Plus, BarChart3, Construction } from 'lucide-react';
+import { CloudRain, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { ChuvasGlobalView } from './ChuvasGlobalView';
+import { ChuvasAnalise } from '@/components/chuvas/ChuvasAnalise';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
@@ -39,33 +37,25 @@ interface Props {
   anoInicial?: string;
   /** Define a finalidade da tela. Default 'operacional' (planilha). */
   mode?: ChuvasMode;
+  /** CHUVAS-ANALISE-01 — "Ver lançamentos" / "+ Lançar chuva" da análise: abre a planilha de lançar. */
+  onLancar?: () => void;
 }
 
-export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
+export function ChuvasTab({ anoInicial, mode = 'operacional', onLancar }: Props = {}) {
   /* A fazenda escolhida NA TELA quando o filtro está em Global — 114c. `null` = ninguém
      escolheu ainda, e é aí que a lista aparece. Sair dela volta para a lista, e o filtro
      do app continua em Global o tempo todo. */
   const [fazendaEscolhida, setFazendaEscolhida] = useState<string | null>(null);
-  const { chuvas, loading, salvarChuva } = useChuvas(fazendaEscolhida);
-  const { isGlobal, fazendas } = useFazenda();
+  const { chuvas, loading, salvarChuva, removerChuva } = useChuvas(fazendaEscolhida);
+  const { isGlobal, fazendas, fazendaAtual } = useFazenda();
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
   const [anoFiltro, setAnoFiltro] = useState(currentYear);
-  // Filtro de mês limita o período (01/jan → fim do mês).
-  // Default = mês atual quando ano filtro = ano corrente; senão Dez.
-  const [mesFiltro, setMesFiltro] = useState(currentMonth);
 
   useEffect(() => {
     if (anoInicial) setAnoFiltro(Number(anoInicial));
   }, [anoInicial]);
 
-  // Quando troca de ano: se ano selecionado < corrente, ir para Dez (ano completo);
-  // se ano = corrente, voltar para mês atual; ano futuro → Dez.
-  useEffect(() => {
-    if (anoFiltro < currentYear) setMesFiltro(12);
-    else if (anoFiltro === currentYear) setMesFiltro(currentMonth);
-    else setMesFiltro(12);
-  }, [anoFiltro, currentYear, currentMonth]);
 
   // Dialog state for quick entry
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -188,22 +178,24 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
 
   if (loading) return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
 
+  /* CHUVAS-ANALISE-01 (mock ui-validar/chuvas-analise.html, Gabriel 12/11) — a análise é uma tela própria, com a barra dela
+     (período civil/safra, mês, lançar). Ela lê as MESMAS leituras deste `useChuvas` e grava pelo mesmo `salvarChuva`. Em Global,
+     abrir uma fazenda é a mesma escolha (`fazendaEscolhida`) que a planilha de lançar já usa. */
+  if (mode === 'analitico') {
+    return (
+      <ChuvasAnalise chuvas={chuvas} fazendas={fazendas.filter(f => f.id !== '__global__')} isGlobal={isGlobal}
+        fazendaAtualId={fazendaAtual?.id ?? null} fazendaEscolhida={fazendaEscolhida} onEscolherFazenda={setFazendaEscolhida}
+        salvarChuva={(d, mm) => salvarChuva(d, mm)} removerChuva={removerChuva} onLancar={onLancar} />
+    );
+  }
+
   // Regras de finalidade ↓
   const isOperacional = mode === 'operacional';
-  const isAnalitico   = mode === 'analitico';
-  const mostrarFiltroMes = isAnalitico; // filtro mês só faz sentido em painel
   /* Em Global COM fazenda escolhida a planilha é a mesma de sempre: o que decide não é
      mais o filtro, é haver uma estação definida. */
   const comEstacao = !isGlobal || !!fazendaEscolhida;
   const mostrarBotaoLancar = isOperacional && comEstacao;
   const nomeEscolhida = fazendas.find(f => f.id === fazendaEscolhida)?.nome ?? null;
-  const headerSub = isOperacional
-    ? (comEstacao
-        ? `Total: ${yearTotal.toFixed(1)} mm${nomeEscolhida ? ` · ${nomeEscolhida}` : ''}`
-        : 'Escolha a fazenda para lançar')
-    : (isGlobal
-        ? `Comparativo entre fazendas — Jan a ${MESES[mesFiltro - 1]}/${anoFiltro}`
-        : `Análise por fazenda — Jan a ${MESES[mesFiltro - 1]}/${anoFiltro}`);
 
   /* CHUVAS-LANCAR-01 (Gabriel 04/11/2026) — a barra do LANÇAR é uma faixa baixa (34 px): ano · "Total 862,0 mm" · Lançar.
      CHUVAS-VOLTAR-01 (Gabriel 12/11/2026: "volte como era antes") — a TABELA voltou ao layout de antes do CHUVAS-LANCAR-01: por mês
@@ -258,47 +250,12 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
             </Dialog>
           )}
         </div>
-      ) : (
-      /* Header - sticky (o painel analítico, como era) */
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <CloudRain className="h-5 w-5 text-blue-500" />
-            {!anoInicial && (
-            <Select value={String(anoFiltro)} onValueChange={v => setAnoFiltro(Number(v))}>
-              <SelectTrigger className="w-24 h-8 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {anos.map(a => (
-                  <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            )}
-            {mostrarFiltroMes && (
-              <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-                <SelectTrigger className="w-24 h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MESES.map((m, i) => (
-                    <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <span className="text-sm font-semibold text-muted-foreground">{headerSub}</span>
-          </div>
-        </div>
-      </div>
-      )}
+      ) : null}
 
       {/* Bifurcação por finalidade ─────────────────────────────────────
           operacional + Global   → escolha da estação
           operacional + Fazenda  → planilha (heatmap editável)
-          analítico   + Global   → ChuvasGlobalView
-          analítico   + Fazenda  → placeholder (em construção) */}
+          (o analítico saiu antes, para a `ChuvasAnalise`) */}
       {/* ⚠ GLOBAL DEIXOU DE SER PORTA FECHADA — 114c. Antes, quem estava em Global via
           "Selecione uma fazenda" e tinha de trocar o filtro do app (e perder a tela em que
           estava) para lançar 3 mm. Agora escolhe a estação aqui, lança, e continua em
@@ -306,12 +263,6 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
       {isOperacional && isGlobal && !fazendaEscolhida && (
         <EscolhaDaEstacao fazendas={fazendas.filter(f => f.id !== '__global__')}
           anoFiltro={anoFiltro} onEscolher={setFazendaEscolhida} />
-      )}
-      {isAnalitico && isGlobal && (
-        <ChuvasGlobalView anoFiltro={anoFiltro} mesFiltro={mesFiltro} />
-      )}
-      {isAnalitico && !isGlobal && (
-        <PlaceholderAnaliticoFazenda />
       )}
       {isOperacional && comEstacao && (
       <div className="flex min-h-0 flex-1 flex-col px-2 pt-1.5">{/* PLANILHA OPERACIONAL ─────────────────── */}
@@ -545,27 +496,6 @@ function EscolhaDaEstacao({ fazendas, anoFiltro, onEscolher }: {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function PlaceholderAnaliticoFazenda() {
-  return (
-    <div className="px-4 py-12 flex flex-col items-center justify-center text-center gap-3">
-      <div className="rounded-full bg-amber-50 dark:bg-amber-950/30 p-4">
-        <Construction className="h-8 w-8 text-amber-600 dark:text-amber-400" />
-      </div>
-      <div className="text-base font-semibold text-foreground">
-        Análise pluviométrica por fazenda — em construção
-      </div>
-      <div className="text-sm text-muted-foreground max-w-md">
-        Em breve: acumulado mensal, comparativo com histórico, intervalo entre chuvas e
-        ranking interno. Para registrar chuvas, acesse <span className="font-medium">Lançar Movimentações &gt; Chuvas</span>.
-      </div>
-      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-        <BarChart3 className="h-4 w-4" />
-        <span>Espaço reservado para gráficos e cards.</span>
-      </div>
     </div>
   );
 }

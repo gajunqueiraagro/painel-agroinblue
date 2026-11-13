@@ -15,8 +15,8 @@ describe('Visão Geral sem os blocos legados, na ordem do mock (VISAO-GERAL-02)'
     }
   });
 
-  it('a ordem (VISAO-GERAL-04): cartões → Área → Caixa → Fazendas → [coluna da direita: mapas → atenção] → blocos por atividade', () => {
-    const marcos = ['<CartoesDoTopo', "'Área no mês'", "'Caixa no mês'", '<TabelaFazendasVG', '<MiniaturaDaFazenda', '<PrecisaDeAtencao', '<BlocosPorAtividade'];
+  it('a ordem (VISAO-GERAL-04 de 08/11): cartões → [mapas | atenção] → [Área | Caixa] → Fazendas → blocos por atividade', () => {
+    const marcos = ['<CartoesDoTopo', '<MiniaturaDaFazenda', '<PrecisaDeAtencao', "'Área no mês'", "'Caixa no mês'", '<TabelaFazendasVG', '<BlocosPorAtividade'];
     const posicoes = marcos.map((m) => fonte.indexOf(m));
     for (const [i, p] of posicoes.entries()) expect(p, marcos[i]).toBeGreaterThan(0);
     expect([...posicoes].sort((a, b) => a - b)).toEqual(posicoes);

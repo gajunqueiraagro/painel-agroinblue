@@ -69,7 +69,9 @@ function norm(value: string | null | undefined): string {
 
 function valorIgual(a: number, b: number | null): boolean {
   if (b === null) return false;
-  return Math.abs(Math.round(a * 100) - Math.round(b * 100)) <= 1; // ±R$0,01
+  /* CENTAVO-IGUAL-01 (Chat 12/11 20:58): centavo IGUAL — a folga de ±R$ 0,01 marcava "duplicado?" débito real de 1 centavo de diferença
+     (4 pares reais no proto) e, pelo padrão (duplicar é pior que faltar), ele não entrava */
+  return Math.round(a * 100) === Math.round(b * 100);
 }
 
 function valorProximo(a: number, b: number | null, pct = 0.05): boolean {

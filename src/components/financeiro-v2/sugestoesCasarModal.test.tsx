@@ -75,7 +75,11 @@ describe('o modal "Sugestões para casar"', () => {
     expect(nome.className).toContain('truncate');
     expect(nome.getAttribute('title')).toBe(`Pagamento de Boleto · BANCO RABOBANK INTERNATIONAL BRASIL S/\n${EXT_RABO.historico}`);
     expect(within(faixa).getByTestId('sugestoes-extrato-valor').textContent).toBe('-26.127,18');
-    expect(within(faixa).getByTestId('sugestoes-extrato-valor').className).toMatch(/text-\[15px\] font-bold/);
+    /* UI-FONTE-GATE-01 (Gabriel 12/11): a faixa e o rodapé na régua — 28px, 10; o valor 11 em negrito */
+    expect(within(faixa).getByTestId('sugestoes-extrato-valor').className).toMatch(/text-\[11px\] font-bold/);
+    expect(faixa.className).toMatch(/\bh-\[28px\].*\btext-\[10px\]/);
+    expect(within(modal).getByTestId('sugestoes-rodape').className).toContain('text-[10px]');
+    expect(modal.querySelector('h2')!.className).toContain('text-[11px]');
     /* a tabela só tem os lançamentos */
     expect(modal.querySelector('table tbody')!.textContent).not.toContain('RABOBANK INTERNATIONAL BRASIL S/');
   });
@@ -85,19 +89,23 @@ describe('o modal "Sugestões para casar"', () => {
     const { modal } = abrir();
     const t = modal.querySelector('table')!;
     expect(t.className).toContain('table-financeiro');
-    /* AJUSTES 07:55 e 08:1x — o tamanho GRANDE da tabela (12px, linha de 26px, cabeçalho sem caixa alta; `TabelaDaLista.css`) e as larguras dele */
-    expect(t.className).toContain('tabela-da-lista-grande');
+    /* CONC-SUGESTOES-FONTE-01 — o tamanho da lista do Financeiro (a variante grande de 04/11 saiu) e as larguras dela */
+    expect(t.className).not.toContain('tabela-da-lista-grande');
     expect(t.style.tableLayout).toBe('fixed');
+    /* UI-FONTE-GATE-01 (Chat 12/11 15:22): sem fazenda nem NF nas sugestões, Faz. e NF saem e a largura vai para Descrição/Fornecedor */
     expect([...t.querySelectorAll('col')].map((x) => (x instanceof HTMLElement ? x.style.width : '?')))
-      .toEqual(['28px', '74px', '74px', '74px', '', '', '40px', '102px', '126px', '86px', '170px', '84px']);
-    expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Faz.', 'NF', 'Valor', 'Status', 'Motivo', '']);
+      .toEqual(['28px', '46px', '46px', '46px', '', '', '94px', '60px', '120px', '62px']);
+    expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Valor', 'Status', 'Motivo', '']);
+    /* UI-FONTE-GATE-01: o cabeçalho alinha como a coluna (texto à esquerda, número à direita), nunca tudo no centro */
+    expect([...t.querySelectorAll('th')].map((x) => (/\btext-left\b/.test(x.className) ? 'E' : /\btext-right\b/.test(x.className) ? 'D' : 'C')))
+      .toEqual(['C', 'C', 'C', 'C', 'E', 'E', 'D', 'C', 'E', 'C']);
     const linhas = within(modal).getAllByTestId('sugestao');
     expect(linhas.length).toBeGreaterThan(0);
     for (const tr of linhas) {
       expect(tr.className).toContain('linha-da-lista');
       expect(tr.querySelectorAll('td.celula-data')).toHaveLength(3);
       expect(tr.querySelector('td.celula-valor')).not.toBeNull();
-      expect(tr.querySelector('td.celula-doc')).not.toBeNull();
+      expect(tr.querySelector('td.celula-doc')).toBeNull(); // sem NF na lista, a coluna sai (UI-FONTE-GATE-01)
       expect(tr.querySelector('td.celula-status')).not.toBeNull();
     }
   });
@@ -116,18 +124,25 @@ describe('o modal "Sugestões para casar"', () => {
     /* cada lançamento com o SEU valor, na coluna Valor */
     expect(linhas.map((l) => (l.querySelector('td.celula-valor')!.textContent ?? '').replace(/\s/g, ' '))).toEqual(['-R$ 26.127,18', '-R$ 22.719,29', '-R$ 3.407,89', '-R$ 22.719,29', '-R$ 3.407,89']);
     expect(within(modal).getAllByTestId('sugestao-casar')).toHaveLength(5);
+    /* UI-FONTE-GATE-01 (Chat 12/11 14:12): a ação é "Casar", a mesma grafia do Procurar no histórico */
+    expect(within(modal).getAllByTestId('sugestao-casar').map((b) => b.textContent)).toEqual(Array(5).fill('Casar'));
   });
 
   /* A REGRA DE CORTE (21/10): uma linha; texto com "…" e o inteiro no title; data dd/mm/aaaa nas três colunas */
-  it('nada quebra: descrição e fornecedor cortam com o texto inteiro no title; as datas são dd/mm/aaaa', () => {
+  /* UI-FONTE-GATE-01 (regra do Gabriel, Chat 12/11 15:22): nome NUNCA corta — Descrição e Fornecedor quebram na célula (a linha cresce);
+     data, valor e status seguem numa linha */
+  it('nome nunca corta: descrição e fornecedor quebram na célula (sem "…"); as datas são dd/mm/aaaa numa linha', () => {
     const { modal } = abrir();
     for (const tr of within(modal).getAllByTestId('sugestao')) {
-      const [desc, forn] = [...tr.querySelectorAll('td.truncate')];
+      const quebram = [...tr.querySelectorAll('td')].filter((td) => td.className.includes('whitespace-normal'));
+      expect(quebram).toHaveLength(2);
+      const [desc, forn] = quebram;
+      expect(desc.className).not.toContain('truncate');
+      expect(forn.className).not.toContain('truncate');
+      expect(forn.querySelector('.truncate')).toBeNull();
       expect(desc.getAttribute('title')).toBe(desc.textContent);
-      expect(forn.getAttribute('title') ?? '').toBe(forn.textContent === '-' ? '' : forn.textContent);
       for (const d of tr.querySelectorAll('td.celula-data')) expect(d.textContent).toMatch(/^(\d{2}\/\d{2}\/\d{4}|-)$/);
     }
-    expect([...modal.querySelectorAll('td')].filter((td) => td.className.includes('whitespace-normal'))).toEqual([]);
   });
 
   it('valor diferente: selo âmbar cheio ("mesmo forn. · valor ≠", o motivo inteiro no title)', () => {

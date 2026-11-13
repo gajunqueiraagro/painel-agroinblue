@@ -8,7 +8,7 @@
 import { casaNaBusca } from '@/lib/texto/busca';
 import {
   CARIMBO_VALIDO, FRASE_CARIMBO_INVALIDO, CRUZAMENTOS_DOS_MAMOTES, ORDENS_DO_PARTO, SEMENS_DOS_MAMOTES, SEXOS_DOS_MAMOTES, SITUACOES_DA_CRIA,
-  codigoDoLote, codigoPorEtapas, ehParida, nomeNaLista,
+  carimbosFaixa, codigoDoLote, codigoPorEtapas, ehParida, nomeNaLista,
   type CadastroDoLote, type CamposDoLote, type CruzamentoDosMamotes, type LoteDaLista, type OrdemDoParto, type SemenDosMamotes,
   type SexoDosMamotes, type SituacaoDaCria, type TipoDoCadastro, type TrocaDeCodigo,
 } from '@/lib/lotes/tipos';
@@ -116,8 +116,8 @@ export function faltaNoPasso(e: Escolha, p: Perfil, passo: number, cria: boolean
   if (k === 'categoria' && !e.categoriaId) return 'Escolha a categoria';
   if (k === 'raca' || k === 'nome') {
     if (!e.racaId) return 'Escolha a raça';
-    if (cria && ehParida(p.situacaoCria) && !p.carimbo.trim()) return 'Falta o carimbo dos mamotes';
-    if (cria && p.carimbo.trim() && !CARIMBO_VALIDO.test(p.carimbo.trim())) return FRASE_CARIMBO_INVALIDO;
+    if (cria && p.carimbo.trim() && !CARIMBO_VALIDO.test(p.carimbo.trim().toUpperCase())) return FRASE_CARIMBO_INVALIDO;
+    if (cria && ehParida(p.situacaoCria) && listaDeCarimbos(p).length === 0) return 'Falta o carimbo dos mamotes';
   }
   if (k === 'nome' && (!e.atividadeId || !e.categoriaId)) return 'Falta atividade ou categoria';
   return null;
@@ -130,7 +130,7 @@ export const nomeDe = (cadastros: readonly CadastroDoLote[], id: string | null):
 
 /** O código no trilho. Lote NOVO (e lote 'etapas'): ATIV-CAT-RAÇA[-carimbo], -02 se repetir entre os lotes da fazenda (`codigoPorEtapas`).
  *  Lote de antes (código ATIV-CAT-RAÇA-NN): o mesmo código enquanto a identidade não muda; mudou = "-__" (o nº sai do banco ao salvar). */
-export function codigoDoAssistente(cadastros: readonly CadastroDoLote[], e: Escolha, carimbo: string, lotes: readonly LoteDaLista[],
+export function codigoDoAssistente(cadastros: readonly CadastroDoLote[], e: Escolha, carimbos: readonly string[], lotes: readonly LoteDaLista[],
   editar?: LoteDaLista | null): string {
   const s = (id: string | null) => siglaDe(cadastros, id);
   if (editar && editar.codigoRegra !== 'etapas') {
@@ -138,8 +138,19 @@ export function codigoDoAssistente(cadastros: readonly CadastroDoLote[], e: Esco
     return mesma ? editar.codigo : codigoDoLote(s(e.categoriaId), s(e.racaId), s(e.atividadeId), null);
   }
   if (editar && editar.categoriaId === e.categoriaId && editar.racaId === e.racaId && editar.atividadeId === e.atividadeId
-    && (editar.carimbo ?? '') === carimbo.trim()) return editar.codigo;
-  return codigoPorEtapas(s(e.atividadeId), s(e.categoriaId), s(e.racaId), carimbo, lotes, editar?.id ?? null);
+    && mesmaLista(carimbosDoLote(editar), carimbos)) return editar.codigo;
+  return codigoPorEtapas(s(e.atividadeId), s(e.categoriaId), s(e.racaId), carimbosFaixa(carimbos), lotes, editar?.id ?? null);
+}
+
+/** LOTE-CARIMBOS-01 — a lista do lote (o 1º carimbo sozinho, nos lotes lidos antes da 117580). */
+export const carimbosDoLote = (l: Pick<LoteDaLista, 'carimbo' | 'carimbos'>): string[] =>
+  l.carimbos?.length ? [...l.carimbos] : l.carimbo ? [l.carimbo] : [];
+const mesmaLista = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((c, i) => c === b[i]);
+
+/** A lista do assistente: a escolhida + o que está digitado no campo, se for um carimbo válido que ainda não está nela. */
+export function listaDeCarimbos(p: Pick<Perfil, 'carimbo' | 'carimbos'>): string[] {
+  const digitado = p.carimbo.trim().toUpperCase();
+  return digitado && CARIMBO_VALIDO.test(digitado) && !p.carimbos.includes(digitado) ? [...p.carimbos, digitado] : [...p.carimbos];
 }
 
 /** A legenda embaixo do código (Chat 11/11 14:45: na ordem do código). */
@@ -213,7 +224,10 @@ export interface Perfil {
   programaId: string | null;
   destinoId: string | null;
   safra: string;
+  /** o que está digitado no campo "+ carimbo" (ainda não na lista) */
   carimbo: string;
+  /** LOTE-CARIMBOS-01 — a lista */
+  carimbos: string[];
   idadeMediaMeses: number | null;
   metaPesoKg: number | null;
   metaGmdKg: number | null;
@@ -231,13 +245,13 @@ export function perfilInicial(hoje: string, editar?: LoteDaLista | null): Perfil
   if (editar) {
     return {
       nomeCampeiro: editar.nomeCampeiro ?? '', formadoEm: editar.formadoEm, sistemaId: editar.sistemaId, programaId: editar.programaId,
-      destinoId: editar.destinoId, safra: editar.safra ?? '', carimbo: editar.carimbo ?? '', idadeMediaMeses: editar.idadeMediaMeses,
+      destinoId: editar.destinoId, safra: editar.safra ?? '', carimbo: '', carimbos: carimbosDoLote(editar), idadeMediaMeses: editar.idadeMediaMeses,
       metaPesoKg: editar.metaPesoKg, metaGmdKg: editar.metaGmdKg, metaData: editar.metaData ?? '',
       anotacao: editar.anotacao ?? '', situacaoCria: editar.situacaoCria ?? null, ordemParto: editar.ordemParto ?? null,
       mamotesSexo: editar.mamotesSexo ?? null, mamotesCruzamento: editar.mamotesCruzamento ?? null, mamotesSemen: editar.mamotesSemen ?? null,
     };
   }
-  return { nomeCampeiro: '', formadoEm: hoje, sistemaId: null, programaId: null, destinoId: null, safra: safraDe(hoje), carimbo: '',
+  return { nomeCampeiro: '', formadoEm: hoje, sistemaId: null, programaId: null, destinoId: null, safra: safraDe(hoje), carimbo: '', carimbos: [],
     idadeMediaMeses: null, metaPesoKg: null, metaGmdKg: null, metaData: '',
     anotacao: '', situacaoCria: null, ordemParto: null, mamotesSexo: null, mamotesCruzamento: null, mamotesSemen: null };
 }
@@ -267,8 +281,8 @@ export function validarPerfil(p: Perfil, hoje: string): { campo: keyof Perfil; m
   if (p.anotacao.trim().length > 120) return { campo: 'anotacao', mensagem: 'A anotação passa de 120 letras.' };
   if (!p.formadoEm) return { campo: 'formadoEm', mensagem: 'Formado em: escolha a data.' };
   if (p.formadoEm > hoje) return { campo: 'formadoEm', mensagem: 'Formado em: a data não pode ser depois de hoje.' };
-  if (p.carimbo.trim() && !CARIMBO_VALIDO.test(p.carimbo.trim())) return { campo: 'carimbo', mensagem: FRASE_CARIMBO_INVALIDO };
-  if (ehParida(p.situacaoCria) && !p.carimbo.trim()) return { campo: 'carimbo', mensagem: 'Parida: informe o carimbo (mês.lote, ex.: 7.1).' };
+  if (p.carimbo.trim() && !CARIMBO_VALIDO.test(p.carimbo.trim().toUpperCase())) return { campo: 'carimbo', mensagem: FRASE_CARIMBO_INVALIDO };
+  if (ehParida(p.situacaoCria) && listaDeCarimbos(p).length === 0) return { campo: 'carimbo', mensagem: 'Parida: informe o carimbo (mês.lote, ex.: 7.1).' };
   return null;
 }
 
@@ -286,7 +300,7 @@ export function camposParaSalvar(e: Escolha, p: Perfil, cria: boolean, editar?: 
     categoria_id: e.categoriaId ?? undefined, raca_id: e.racaId ?? undefined, atividade_id: e.atividadeId ?? undefined,
     nome_campeiro: p.nomeCampeiro.trim(), formado_em: p.formadoEm,
     sistema_id: p.sistemaId ?? '', programa_id: p.programaId ?? '', destino_id: p.destinoId ?? '',
-    safra: p.safra.trim(), carimbo: p.carimbo.trim(),
+    safra: p.safra.trim(), carimbos: listaDeCarimbos(p),
     idade_media_meses: p.idadeMediaMeses == null ? '' : String(p.idadeMediaMeses),
     meta_peso_kg: p.metaPesoKg == null ? '' : String(p.metaPesoKg), meta_gmd_kg: p.metaGmdKg == null ? '' : String(p.metaGmdKg),
     meta_data: p.metaData,
@@ -299,13 +313,13 @@ export function camposParaSalvar(e: Escolha, p: Perfil, cria: boolean, editar?: 
     perfilInicial(editar.formadoEm, editar), criaAntes ?? cria);
   const so: CamposDoLote = {};
   for (const k of CHAVES_DO_LOTE) {
-    if (novo[k] !== antes[k]) Object.assign(so, { [k]: novo[k] });
+    if (JSON.stringify(novo[k]) !== JSON.stringify(antes[k])) Object.assign(so, { [k]: novo[k] });
   }
   return so;
 }
 
 const CHAVES_DO_LOTE: readonly (keyof CamposDoLote)[] = ['categoria_id', 'raca_id', 'atividade_id', 'nome_campeiro', 'formado_em', 'sistema_id',
-  'programa_id', 'destino_id', 'safra', 'carimbo', 'idade_media_meses', 'meta_peso_kg', 'meta_gmd_kg', 'meta_data',
+  'programa_id', 'destino_id', 'safra', 'carimbos', 'idade_media_meses', 'meta_peso_kg', 'meta_gmd_kg', 'meta_data',
   'situacao_cria', 'ordem_parto', 'mamotes_sexo', 'mamotes_cruzamento', 'mamotes_semen', 'anotacao'];
 
 /** A ficha do passo Nome: uma linha por etapa; vazio = null (a tela escreve "completar" em laranja, nunca trava). */
@@ -324,7 +338,7 @@ export function fichaDoAssistente(cadastros: readonly CadastroDoLote[], e: Escol
   ];
   if (cria) {
     const mamotes = ehParida(p.situacaoCria)
-      ? [p.carimbo.trim() ? `carimbo ${p.carimbo.trim()}` : null, nomeNaLista(SEXOS_DOS_MAMOTES, p.mamotesSexo),
+      ? [listaDeCarimbos(p).length ? `carimbo${listaDeCarimbos(p).length > 1 ? 's' : ''} ${listaDeCarimbos(p).join(', ')}` : null, nomeNaLista(SEXOS_DOS_MAMOTES, p.mamotesSexo),
         nomeNaLista(CRUZAMENTOS_DOS_MAMOTES, p.mamotesCruzamento), nomeNaLista(SEMENS_DOS_MAMOTES, p.mamotesSemen)].filter(Boolean).join(' · ') || null
       : p.situacaoCria ? 'sem cria ao pé' : null;
     linhas.push({ rotulo: 'Mamotes ao pé', valor: mamotes });

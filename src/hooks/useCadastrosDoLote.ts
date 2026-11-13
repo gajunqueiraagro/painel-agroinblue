@@ -21,14 +21,14 @@ const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is str
 /** Uma linha do banco → `CadastroDoLote` (null se a linha não tem o formato). */
 /** A leitura da tabela dos cadastros (fora dos tipos gerados) — a ÚNICA, para o hook daqui e o carimbo da cria no `useLotesDaFazenda`. */
 export const lerCadastrosDoLote = () =>
-  (supabase as any).from('rebanho_lote_cadastros').select('id, tipo, sigla, nome, categorias_rebanho, ordem, ativo');
+  (supabase as any).from('rebanho_lote_cadastros').select('id, tipo, sigla, nome, categorias_rebanho, ordem, ativo, fixo');
 
 export function cadastroDaLinha(l: unknown): CadastroDoLote | null {
   if (typeof l !== 'object' || l === null) return null;
   const id = texto(Reflect.get(l, 'id')); const tipo = Reflect.get(l, 'tipo'); const nome = texto(Reflect.get(l, 'nome'));
   if (!id || !ehTipo(tipo) || !nome) return null;
   return { id, tipo, nome, sigla: texto(Reflect.get(l, 'sigla')), categoriasRebanho: ids(Reflect.get(l, 'categorias_rebanho')),
-    ordem: numero(Reflect.get(l, 'ordem')), ativo: Reflect.get(l, 'ativo') !== false };
+    ordem: numero(Reflect.get(l, 'ordem')), ativo: Reflect.get(l, 'ativo') !== false, fixo: Reflect.get(l, 'fixo') === true };
 }
 
 /** LOTE-SIGLA-EDITAR-01 — os lotes que mudam de código (`lotes` da resposta da RPC); o que não tiver o formato fica fora. */
