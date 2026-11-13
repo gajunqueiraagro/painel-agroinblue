@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   PASSOS, aceitaCarimbo, camposParaSalvar, categoriasDaAtividade, codigoDoAssistente, faltaNoPasso, faseDaAtividade, fichaDoAssistente, filtrarCadastros,
   fraseCurtaDaTroca, fraseDaTroca, legendaDoCodigo, lotesQueUsam, perfilInicial, resumoDoRebanho, safraDe, siglaDigitada, ultimoPassoAlcancavel,
-  validarCadastro, validarCarimbo, validarPerfil, type Escolha,
+  validarCadastro, validarCarimbo, validarPerfil, listaDeCarimbos, type Escolha,
 } from './assistente';
 import { FRASE_CARIMBO_INVALIDO, codigoPorEtapas, nomeDoLote } from './tipos';
 import type { CadastroDoLote, LoteDaLista } from './tipos';
@@ -68,23 +68,38 @@ describe('etapas (LOTE-ETAPAS-01)', () => {
 describe('código (D1)', () => {
   const C = [cad('cri', 'atividade', 'CRI', 'Cria'), cad('vc', 'categoria', 'VC', 'Vacas', ['r-va']), cad('nel', 'raca', 'NEL', 'Nelore'), cad('ang', 'raca', 'ANG', 'Angus')];
   it('lote NOVO = ATIV-CAT-RAÇA[-carimbo], "__" no que falta; -02/-03 só quando repetir entre os vivos da fazenda', () => {
-    expect(codigoDoAssistente(C, E(null, null, 'cri'), '', [])).toBe('CRI-__-__');
-    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '', [])).toBe('CRI-VC-NEL');
-    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ' 7.1 ', [])).toBe('CRI-VC-NEL-7.1');
+    expect(codigoDoAssistente(C, E(null, null, 'cri'), [], [])).toBe('CRI-__-__');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), [], [])).toBe('CRI-VC-NEL');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ['7.1'], [])).toBe('CRI-VC-NEL-7.1');
     const vivos = [{ ...lote('a', 'vc', 'nel', 'cri', 1), codigo: 'CRI-VC-NEL-7.1' }, { ...lote('b', 'vc', 'nel', 'cri', 2), codigo: 'CRI-VC-NEL-7.1-02' }];
-    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.1', vivos)).toBe('CRI-VC-NEL-7.1-03');
-    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.1', [{ ...vivos[0], situacao: 'cancelado' }])).toBe('CRI-VC-NEL-7.1');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ['7.1'], vivos)).toBe('CRI-VC-NEL-7.1-03');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ['7.1'], [{ ...vivos[0], situacao: 'cancelado' }])).toBe('CRI-VC-NEL-7.1');
     expect(codigoPorEtapas('CRI', 'VC', 'NEL', null, vivos, 'a')).toBe('CRI-VC-NEL');
     expect(legendaDoCodigo(null)).toBe('atividade · categoria · raça · carimbo');
   });
   it('lote de ANTES (ATIV-CAT-RAÇA-NN): o mesmo código enquanto a identidade não muda; mudou = "-__" (o nº sai do banco)', () => {
     const l = { ...lote('l', 'vc', 'nel', 'cri', 5), codigo: 'CRI-VC-NEL-05' };
-    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.1', [l], l)).toBe('CRI-VC-NEL-05');
-    expect(codigoDoAssistente(C, E('vc', 'ang', 'cri'), '', [l], l)).toBe('CRI-VC-ANG-__');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ['7.1'], [l], l)).toBe('CRI-VC-NEL-05');
+    expect(codigoDoAssistente(C, E('vc', 'ang', 'cri'), [], [l], l)).toBe('CRI-VC-ANG-__');
     expect(legendaDoCodigo(l)).toBe('atividade · categoria · raça · nº');
     const novo = { ...l, codigo: 'CRI-VC-NEL-7.1', carimbo: '7.1', codigoRegra: 'etapas' as const };
-    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.1', [novo], novo)).toBe('CRI-VC-NEL-7.1');
-    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), '7.2', [novo], novo)).toBe('CRI-VC-NEL-7.2');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ['7.1'], [novo], novo)).toBe('CRI-VC-NEL-7.1');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ['7.2'], [novo], novo)).toBe('CRI-VC-NEL-7.2');
+  });
+  it('LOTE-CARIMBOS-01: vários carimbos — o código leva a faixa de meses (1 = ele mesmo); o digitado válido entra na lista', () => {
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ['7.1', '7.2', '8.1'], [])).toBe('CRI-VC-NEL-7/8');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ['7.1', '7R'], [])).toBe('CRI-VC-NEL-7/7R');
+    expect(codigoDoAssistente(C, E('vc', 'nel', 'cri'), ['10.1', '9.2'], [])).toBe('CRI-VC-NEL-9/10');
+    expect(listaDeCarimbos({ carimbo: ' 8.1 ', carimbos: ['7.1'] })).toEqual(['7.1', '8.1']);
+    expect(listaDeCarimbos({ carimbo: '7.1', carimbos: ['7.1'] })).toEqual(['7.1']);
+    expect(listaDeCarimbos({ carimbo: '13', carimbos: ['7.1'] })).toEqual(['7.1']);
+    const p = { ...perfilInicial('2026-11-12'), situacaoCria: 'PA' as const };
+    expect(faltaNoPasso(E('vc', 'nel', 'cri'), { ...p, carimbos: ['7.1', '8.1'] }, 3, true)).toBeNull();
+    expect(faltaNoPasso(E('vc', 'nel', 'cri'), { ...p, carimbos: ['7.1'], carimbo: '13' }, 3, true)).toBe(FRASE_CARIMBO_INVALIDO);
+    expect(camposParaSalvar(E('vc', 'nel', 'cri'), { ...p, carimbos: ['7.1', '8.1'] }, true).carimbos).toEqual(['7.1', '8.1']);
+    const l = { ...lote('1', 'vc', 'nel', 'cri', 1), carimbo: '7.1', carimbos: ['7.1'], situacaoCria: 'PA' as const };
+    expect(camposParaSalvar(E('vc', 'nel', 'cri'), perfilInicial('2026-11-12', l), true, l, true)).toEqual({});
+    expect(camposParaSalvar(E('vc', 'nel', 'cri'), { ...perfilInicial('2026-11-12', l), carimbo: '8.1' }, true, l, true)).toEqual({ carimbos: ['7.1', '8.1'] });
   });
   it('LOTES-05: o carimbo do mês — 7.1, 10.2, a ressinc. 7R e 7R.2; vazio vale; 7X, 13.1, 7.0 e 7R0 não', () => {
     expect(['7.1', '10.2', '12.15', '7R', '7R.2', '', ' 7.1 '].map(validarCarimbo)).toEqual([null, null, null, null, null, null, null]);
@@ -172,7 +187,7 @@ describe('perfil', () => {
   it('a cria leva situação e ordem; a parida leva os mamotes; fora da parida os mamotes vão vazios (a mojada não tem bezerro ao pé)', () => {
     const p = { ...perfilInicial('2026-11-12'), situacaoCria: 'PA' as const, ordemParto: 'MUL' as const, carimbo: '7.1',
       mamotesSexo: 'MF' as const, mamotesCruzamento: 'f1_angus' as const, mamotesSemen: 'convencional' as const };
-    expect(camposParaSalvar(E('pp', 'ne', 'cr'), p, true)).toMatchObject({ situacao_cria: 'PA', ordem_parto: 'MUL', carimbo: '7.1',
+    expect(camposParaSalvar(E('pp', 'ne', 'cr'), p, true)).toMatchObject({ situacao_cria: 'PA', ordem_parto: 'MUL', carimbos: ['7.1'],
       mamotes_sexo: 'MF', mamotes_cruzamento: 'f1_angus', mamotes_semen: 'convencional' });
     expect(camposParaSalvar(E('pp', 'ne', 'cr'), { ...p, situacaoCria: 'PR' }, true)).toMatchObject({ situacao_cria: 'PR', mamotes_sexo: '', mamotes_cruzamento: '', mamotes_semen: '' });
     expect(camposParaSalvar(E('df', 'ne', 'rc'), p, false)).toMatchObject({ situacao_cria: '', ordem_parto: '', mamotes_sexo: '' });

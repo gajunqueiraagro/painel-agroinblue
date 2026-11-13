@@ -1012,6 +1012,28 @@ const CENARIOS = [
           const painel = p.locator('[data-testid="painel-lote-do-pasto"]'); await painel.waitFor();
           await painel.locator('button', { hasText: /Sem lote/ }).first().click();
           await p.locator('[data-testid="searchable-select-painel"] input').fill('vacas 8.2'); await p.waitForTimeout(500); } },
+      /* LOTE-BUSCA-02 — `&v=busca2` (Santa Rita 20R-2, sintético): caderno "L20 F1+SP C10" → o lote "L20 SP+F1" (10.1) no topo, pelo caderno;
+         e a busca digitada com o "+" na outra ordem */
+      { nome: 'fechamento-grupo-campo-lote-busca2', url: URL + '&v=busca2', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="searchable-select-painel"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
+          const painel = p.locator('[data-testid="painel-lote-do-pasto"]'); await painel.waitFor();
+          await painel.locator('button', { hasText: /Sem lote/ }).first().click();
+          await p.locator('[data-testid="searchable-select-painel"]').waitFor(); await p.waitForTimeout(500); } },
+      /* L1 (b) — a sugestão na linha do rótulo "Lote" (o pasto sem lote): 1 = "Usar 10.1" (busca2), 2 = "2 sugestões" (busca: os dois 8.2
+         do caderno), nenhuma (lotes, sem caderno nem mês anterior); e (c) o "Lotes N/M" no topo */
+      /* L1 (c) — o topo do Fechamento com "Itens com lote N/M" (Chat 12/11 14:12): faltando lote (âmbar) e completo; a tela inteira */
+      { nome: 'fechamento-grupo-l1-topo-faltando', url: URL + '&v=busca2&semlote=1', tamanhos: TAMANHOS_DO_LOTES,
+        antes: async (p) => { await p.locator('[data-testid="ligacao-dos-lotes"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-l1-topo-completo', url: URL + '&v=busca2', tamanhos: TAMANHOS_DO_LOTES,
+        antes: async (p) => { await p.locator('[data-testid="ligacao-dos-lotes"]').waitFor(); await p.waitForTimeout(600); } },
+      { nome: 'fechamento-grupo-l1-sugestao-uma', url: URL + '&v=busca2&semlote=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-l1-sugestao-duas', url: URL + '&v=busca&semlote=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-l1-sugestao-nenhuma', url: URL + '&v=lotes&semlote=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      { nome: 'fechamento-grupo-campo-lote-busca2-palavras', url: URL + '&v=busca2', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="searchable-select-painel"]',
+        antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
+          const painel = p.locator('[data-testid="painel-lote-do-pasto"]'); await painel.waitFor();
+          await painel.locator('button', { hasText: /Sem lote/ }).first().click();
+          await p.locator('[data-testid="searchable-select-painel"] input').fill('L20 F1+SP'); await p.waitForTimeout(500); } },
     ];
   })(),
   /* LOTES-03 F1 — Produção › Lotes (`tela=lotes`, dado SINTÉTICO dados/lotes.ts): a lista (Ativos, Encerrados, a busca sem achado com o
@@ -1035,7 +1057,8 @@ const CENARIOS = [
       { nome: 'lotes-lista-vazia', url: URL, tamanhos: T, antes: async (p) => { await lista(p);
         await p.locator('[data-testid="lotes-busca"]').fill('nenhum lote com este nome'); await p.locator('[data-testid="lotes-vazio"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'lotes-assistente-categoria', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: novo },
-      { nome: 'lotes-assistente-nova', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
+      /* a atividade é lista fixa (Chat 12/11 14:05: sem "Cadastrar nova atividade") — o "Cadastrar nova categoria" do passo 2 */
+      { nome: 'lotes-assistente-nova', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p); await escolher(/^REC/)(p);
         await p.locator('[data-testid="assistente-cadastrar-nova"]').click(); await p.locator('[data-testid="assistente-form"]').waitFor(); await p.waitForTimeout(400); } },
       /* LOTE-SIGLA-EDITAR-01 — ✎ na categoria DF (em uso): sigla livre e a prévia "N lotes mudam: … → …" na linha dos botões */
       { nome: 'lotes-assistente-sigla', url: URL, tamanhos: T, regiao: '[data-testid="assistente-do-lote"]', antes: async (p) => { await novo(p);
@@ -1071,6 +1094,10 @@ const CENARIOS = [
           { ...R, nome: 'lotes-assistente-etapas-raca-parida', antes: racaParidaCompleta },
           { ...R, nome: 'lotes-assistente-etapas-raca-carimbo-errado', antes: async (p) => { await racaParida(p);
             await p.locator('[data-testid="assistente-carimbo"]').fill('7X'); await p.waitForTimeout(300); } },
+          /* LOTE-CARIMBOS-01 — vários carimbos (chips por Enter): 7.1, 8.1 e 9.2 → o código com a faixa 7/8/9 */
+          { ...R, nome: 'lotes-assistente-etapas-raca-carimbos', antes: async (p) => { await racaParida(p);
+            for (const c of ['7.1', '8.1', '9.2']) { await p.locator('[data-testid="assistente-carimbo"]').fill(c); await p.locator('[data-testid="assistente-carimbo"]').press('Enter'); }
+            await chip('assistente-mamotes-sexo', 'Misto')(p); await p.waitForTimeout(300); } },
           { ...R, nome: 'lotes-assistente-etapas-raca-mojada', antes: async (p) => { await situacaoCria(p); await chip('assistente-situacao-cria', 'Prenha (mojada)')(p);
             await avancar(p); await p.locator('[data-testid="assistente-cartao"]', { hasText: /^NE/ }).first().click(); await p.waitForTimeout(300); } },
           { ...R, nome: 'lotes-assistente-etapas-nome-cria', antes: async (p) => { await racaParidaCompleta(p); await avancar(p);

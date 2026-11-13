@@ -607,8 +607,7 @@ export function FechamentoPastoDialog({
             {/* LOTES-03 F1 — o lote cadastrado (por categoria); fora da lavoura e da conta de divergência */}
             {!ehLavoura && !isDivergencia && (
               <div className="w-[150px] shrink-0">
-                <Label className="text-[10px] text-white/50 leading-none">Lote</Label>
-                <CampoLoteDoPasto itens={gradeVisivel} lotes={lotesDaFazenda.lotes} disabled={inputsDisabled || naAbaTotal}
+                <CampoLoteDoPasto comRotulo itens={gradeVisivel} lotes={lotesDaFazenda.lotes} disabled={inputsDisabled || naAbaTotal}
                   contexto={{ pastoNome: pasto.nome, textoDoCaderno: loteMes, mesAnterior: lotesDoMesAnterior }}
                   nomeDaCategoria={id => categorias.find(c => c.id === id)?.nome ?? '—'}
                   onChange={novos => {
