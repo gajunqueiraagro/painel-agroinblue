@@ -5,7 +5,7 @@
  * (4) "sem doc" na coluna Pendência da lista; (5) o dono puro (saldo após, avisos, destinações, encargos); (6) a peça não soma.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes, CabecalhoDoCredito } from './ContratoDeCredito';
@@ -86,7 +86,8 @@ describe('(2) o total das liberações — TELA v3: os números vêm de fn_contr
     expect(screen.getByTestId('total-liberacoes').textContent).toBe('955.395,01');
     /* FIN-FINANC-LAYOUT-02 (a): Data · Forma · Para quem · Bruto · Descontos · Líquido · Situação; a coluna que não vale fica vazia */
     expect(Array.from(screen.getByTestId('cabecalho-liberacoes').querySelectorAll('th')).map((th) => th.textContent))
-      .toEqual(['Data', 'Forma', 'Para quem', 'Bruto', 'Descontos', 'Líquido', 'Situação', 'Obs.', '']);
+      /* FIN-FINANC-LAYOUT-03 (Chat 18:35/22:00): a Obs. não é coluna — é a 2ª linha da liberação */
+      .toEqual(['Data', 'Forma', 'Para quem', 'Bruto', 'Descontos', 'Líquido', 'Situação', '']);
     expect(screen.getByTestId('total-a-identificar').textContent).toBe('a identificar 318.465,00');
     expect(screen.getByTestId('total-liquido').textContent).toBe('636.930,01');
     /* a casar: sem líquido e sem descontos (nada de "0,00" nem "—" laranja); casada: os números do banco */
@@ -100,6 +101,20 @@ describe('(2) o total das liberações — TELA v3: os números vêm de fn_contr
     expect(screen.getAllByTestId('situacao-da-liberacao')[0].textContent).toBe('a casar');
     expect(screen.getByTestId('liberacao-vinculada').textContent).toBe('casada ↔+120,00');
     expect(screen.queryByText('sem caixa')).toBeNull();
+  });
+  it('FIN-FINANC-LAYOUT-03: o 0,00 dos Descontos diz onde estão as tarifas (title); o cabeçalho ordena — Bruto decrescente, depois a data volta', () => {
+    render(<BlocoLiberacoes api={api({ tela: TELA })} contaDoContrato="Conta do contrato" onAbrirLancamento={() => undefined} clienteId="cli" />);
+    expect(screen.getByTestId('descontos-em-encargos').getAttribute('title')).toBe('tarifas e IOF desta liberação estão em Encargos');
+    const datas = () => screen.getAllByTestId('linha-liberacao').map((l) => l.firstElementChild?.textContent);
+    expect(datas()).toEqual(['21/11/2025', '22/12/2025']);
+    const cab = screen.getByTestId('cabecalho-liberacoes');
+    const bruto = within(cab).getByRole('columnheader', { name: /Bruto/ });
+    fireEvent.click(within(bruto).getByRole('button')); fireEvent.click(within(bruto).getByRole('button'));
+    expect(bruto.getAttribute('aria-sort')).toBe('descending');
+    expect(datas()).toEqual(['22/12/2025', '21/11/2025']);
+    /* o total não se mexe */
+    expect(screen.getByTestId('total-liberacoes').textContent).toBe('955.395,01');
+    for (const th of [...cab.querySelectorAll('th')].slice(0, 7)) expect(th.getAttribute('aria-sort')).not.toBeNull();
   });
   it('direto ao fornecedor: forma, o fornecedor em "Para quem", e Descontos/Líquido/Situação VAZIOS (nada de "sem caixa"); total sem nada a identificar fica vazio', () => {
     const tela = lerTelaDoContrato({
@@ -118,8 +133,11 @@ describe('(2) o total das liberações — TELA v3: os números vêm de fn_contr
     /* Chat 10:26: "pago direto" (o fornecedor inteiro no title); 10:24: a Observação visível, o inteiro no title */
     const sit = screen.getByTestId('situacao-da-liberacao').querySelector('span')!;
     expect([sit.textContent, sit.getAttribute('title')]).toEqual(['pago direto', 'pago direto a Máquinas Exemplo']);
-    const obs = screen.getByTestId('observacao-da-liberacao').querySelector('span')!;
-    expect(obs.getAttribute('title')).toBe('Moderfrota · plantadeira 1211 · chassi 1CQ exemplo · NF 73.007 da filial 0015');
+    /* FIN-FINANC-LAYOUT-03 (Chat 18:35/22:00): a Obs. INTEIRA numa 2ª linha da mesma liberação, na largura toda da tabela (colSpan) */
+    const obs = screen.getByTestId('observacao-da-liberacao');
+    expect(obs.textContent).toBe('Obs.: Moderfrota · plantadeira 1211 · chassi 1CQ exemplo · NF 73.007 da filial 0015');
+    expect(obs.getAttribute('colspan')).toBe('8');
+    expect(obs.closest('tr')?.previousElementSibling?.getAttribute('data-testid')).toBe('linha-liberacao');
     expect(screen.getByTestId('total-a-identificar').textContent).toBe('');
   });
   it('em conta sem conta definida (nem no lançamento nem no contrato): "Para quem" VAZIO, nunca "—" (ajuste do Chat 11/11 09:58)', () => {

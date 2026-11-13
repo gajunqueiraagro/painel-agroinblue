@@ -113,7 +113,8 @@ function subtotais(contratos: readonly ContratoDaLista[]): SubtotaisDaLista {
 export const SEM_BANCO = 'Sem banco';
 
 /** Ordem dentro do grupo: a coluna e a direção pedidas; empate pelo número do contrato e pelo id (estável). */
-export type ColunaDaLista = 'data' | 'numero' | 'banco' | 'descricao' | 'status' | 'contratado' | 'liberado' | 'amortizado' | 'saldo' | 'proxVencimento';
+/** FIN-FINANC-LAYOUT-03 (Chat 22:00, regra soberana: toda coluna ordena) — + 'pendencia': pelo texto da 1ª pendência; sem pendência, no fim */
+export type ColunaDaLista = 'data' | 'numero' | 'banco' | 'descricao' | 'status' | 'contratado' | 'liberado' | 'amortizado' | 'saldo' | 'proxVencimento' | 'pendencia';
 
 function valorDaColuna(c: ContratoDaLista, col: ColunaDaLista): string | number | null {
   switch (col) {
@@ -123,6 +124,7 @@ function valorDaColuna(c: ContratoDaLista, col: ColunaDaLista): string | number 
     case 'descricao': return c.descricao;
     case 'status': return c.status;
     case 'proxVencimento': return c.proxVencimento;
+    case 'pendencia': { const p = c.saldo?.pendencias ?? []; return p.length ? (TEXTO_PENDENCIA_CURTO[p[0]] ?? p[0]) : null; }
     default: return c.saldo ? c.saldo[col] : null;
   }
 }

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ESCALA_DO_CONTRATO } from './TelaDoContratoV3';
+import { REGUA_FIN } from './reguaDoFinanciamento';
 
 const ler = (rel: string) => readFileSync(resolve(__dirname, rel), 'utf8').replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}|\/\/.*$/gm, '');
 
@@ -24,8 +25,8 @@ const MAIOR_QUE_13 = /\btext-(sm|base|lg|xl|[2-9]xl)\b|\btext-\[(1[4-9]|[2-9]\d)
    célula (`CELULA` / `E.celula`) é a única peça com `truncate`, e o teste abaixo cobra o `title` em todo uso dela */
 const CELULA_COM_TITLE = /const CELULA = 'block truncate';|celula: 'block truncate',/;
 /* FIN-FINANC-LAYOUT-01 (Gabriel 05/11, F1): acima de 13px, só as duas constantes aprovadas da escala (o nome na faixa e o valor do Resumo);
-   FIN-FINANC-LAYOUT-02 (Gabriel 11/11): o valor dos cards do topo a 16px negrito */
-const ACIMA_DE_13_APROVADA = /^\s*(nome: 'text-\[15px\] font-semibold leading-\[16px\]'|resumoValor: 'text-\[14px\] font-bold leading-\[20px\] min-\[800px\]:text-\[16px\]'),$/;
+   FIN-FINANC-LAYOUT-02 (Gabriel 11/11): o valor dos cards do topo a 16px negrito; FIN-FINANC-LAYOUT-03 (12/11): com 7 cards, 13px até 1.400px */
+const ACIMA_DE_13_APROVADA = /^\s*(nome: 'text-\[15px\] font-semibold leading-\[16px\]'|resumoValor: 'text-\[13px\] font-bold leading-\[20px\] min-\[1400px\]:text-\[16px\]'),$/;
 const achados = (texto: string) => texto.split('\n').filter((l) => (CORTE.test(l) && !CELULA_COM_TITLE.test(l)) || (MAIOR_QUE_13.test(l) && !ACIMA_DE_13_APROVADA.test(l)));
 
 const CONTRATO = ler('ContratoDeCredito.tsx');
@@ -57,7 +58,8 @@ describe('a fonte da tela do contrato', () => {
   it('FORN-01b — todo texto de célula que pode terminar em "…" leva o inteiro no title (na linha ou no td logo acima)', () => {
     for (const fonte of [CONTRATO, ler('TelaDoContratoV3.tsx'), ler('../../pages/FinanciamentoDetalhe.tsx')]) {
       const linhas = fonte.split('\n');
-      const usos = linhas.map((l, i) => [l, i] as const).filter(([l]) => /className=\{(CELULA|E\.celula)\}/.test(l));
+      /* FIN-FINANC-LAYOUT-03 (16:58 "sem quebrar"): a célula de texto do contrato é `REGUA_FIN.inteiro` (inteira numa linha); o title segue */
+      const usos = linhas.map((l, i) => [l, i] as const).filter(([l]) => /className=\{(CELULA|E\.celula|REGUA_FIN\.inteiro)\}/.test(l));
       expect(usos.length).toBeGreaterThan(0);
       for (const [l, i] of usos) expect(/title=/.test(l) || /<td[^>]*title=/.test(linhas[i - 1] ?? ''), l.trim()).toBe(true);
     }
@@ -69,12 +71,13 @@ describe('a fonte da tela do contrato', () => {
     expect(ESCALA_DO_CONTRATO.cartaoRotulo).toBe('text-[10px]');
     expect(ESCALA_DO_CONTRATO.cartaoValor).toBe('text-[12px] font-semibold');
     expect(ESCALA_DO_CONTRATO.bloco).toBe('text-[11px] font-semibold');
-    expect(ESCALA_DO_CONTRATO.th).toBe('text-[10.5px]');
-    expect(ESCALA_DO_CONTRATO.td).toBe('text-[11px]');
-    expect(ESCALA_DO_CONTRATO.total).toBe('text-[11px] font-bold');
-    expect(ESCALA_DO_CONTRATO.data).toBe('text-[10.5px]');
+    /* FIN-FINANC-LAYOUT-03: as fontes de TABELA são as da régua única com a lista (variáveis CSS; 10 ou 11, a escolha do Gabriel) */
+    expect(ESCALA_DO_CONTRATO.th).toBe(REGUA_FIN.th);
+    expect(ESCALA_DO_CONTRATO.td).toBe(REGUA_FIN.td);
+    expect(ESCALA_DO_CONTRATO.total).toBe(REGUA_FIN.total);
+    expect(ESCALA_DO_CONTRATO.data).toBe(REGUA_FIN.data);
     expect(ESCALA_DO_CONTRATO.nome).toBe('text-[15px] font-semibold leading-[16px]');
-    expect(ESCALA_DO_CONTRATO.resumoValor).toBe('text-[14px] font-bold leading-[20px] min-[800px]:text-[16px]');
+    expect(ESCALA_DO_CONTRATO.resumoValor).toBe('text-[13px] font-bold leading-[20px] min-[1400px]:text-[16px]');
     expect(ESCALA_DO_CONTRATO.recado).toBe('text-[11px]');
     expect(ESCALA_DO_CONTRATO.rola).toBe('uma-linha-que-rola');
   });

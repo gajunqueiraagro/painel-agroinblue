@@ -62,9 +62,10 @@ describe('a régua — o cabeçalho alinha como a coluna', () => {
     /* FIN-FINANC-LAYOUT-02 (11/11): 6px de cada lado e a largura do maior conteúdo — Parc. 44, Venc./Pgto. 78 (a data vencida é negrito),
        Prazo 74 ("em 1079 d"), Principal/Juros/Saldo 90, Total 96, Situação 66; fixas 706 (fotoContrato: 0 corte e 0 sobreposição em
        1126×579, 1366×768 e 1440×900, contrato de 15 e de 3 parcelas) */
-    expect([c.get('numero')!.largura, c.get('vencimento')!.largura, c.get('pagamento')!.largura, c.get('prazo')!.largura]).toEqual([44, 78, 78, 74]);
-    expect([c.get('principal')!.largura, c.get('juros')!.largura, c.get('total')!.largura, c.get('saldoApos')!.largura, c.get('situacao')!.largura]).toEqual([90, 90, 96, 90, 66]);
-    expect(fixas(false)).toBe(706);
+    /* FIN-FINANC-LAYOUT-03 (12/11): o cabeçalho ordena (a seta) — Parc. 52 e Situação 76; fixas 724, medidas a 11px e levadas em `em` */
+    expect([c.get('numero')!.largura, c.get('vencimento')!.largura, c.get('pagamento')!.largura, c.get('prazo')!.largura]).toEqual([52, 78, 78, 74]);
+    expect([c.get('principal')!.largura, c.get('juros')!.largura, c.get('total')!.largura, c.get('saldoApos')!.largura, c.get('situacao')!.largura]).toEqual([90, 90, 96, 90, 76]);
+    expect(fixas(false)).toBe(724);
     expect(c.has('lapis')).toBe(false);
     expect(c.get('lancamento')!.largura).toBeNull();
   });
@@ -101,7 +102,8 @@ describe('a tela usa a régua (fonte)', () => {
     expect(FONTE).toContain('const colunas = colunasDasParcelas(ehParcelamento);');
     const cg = bloco(FONTE, 'colgroup');
     expect(cg).toContain('colunas.map(');
-    expect(cg).toContain('c.largura === null ? undefined : { width: c.largura }');
+    /* FIN-FINANC-LAYOUT-03: no crédito a largura vai em `em` da régua (a mesma lista) */
+    expect(cg).toContain('c.largura === null ? undefined : { width: emDaRegua(c.largura) }');
     expect(larguraNaMao(cg)).toBe(false);
     const linhaDoCabecalho = bloco(bloco(FONTE, 'TableHeader'), 'TableRow');
     expect(linhaDoCabecalho).toContain('colunas.map(c => <ThDet key={c.chave} coluna={c} />)');
