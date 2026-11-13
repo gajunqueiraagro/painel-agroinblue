@@ -15,12 +15,13 @@ vi.mock('@/lib/oc/leitura/linhasDoPdf', () => ({
 }));
 const rpc = vi.hoisted(() => vi.fn());
 /* a consulta da "OC parecida" (zoo_operacoes_comerciais): a cadeia do supabase, respondendo `parecidas` */
-const banco = vi.hoisted(() => ({ parecidas: [] as unknown[], lotes: [] as unknown[], partes: [] as unknown[] }));
+const banco = vi.hoisted(() => ({ parecidas: [] as unknown[], lotes: [] as unknown[], partes: [] as unknown[], nfs: [] as unknown[] }));
 vi.mock('@/integrations/supabase/client', () => {
   const cadeia = (tabela: string) => {
     const c: Record<string, unknown> = {};
-    for (const m of ['select', 'eq', 'neq', 'gte', 'lte', 'order']) c[m] = () => c;
-    const dados = () => (tabela === 'zoo_operacao_lotes' ? banco.lotes : tabela === 'zoo_operacao_partes' ? banco.partes : banco.parecidas);
+    for (const m of ['select', 'eq', 'neq', 'gte', 'lte', 'order', 'in', 'not']) c[m] = () => c;
+    const dados = () => (tabela === 'zoo_operacao_lotes' ? banco.lotes : tabela === 'zoo_operacao_partes' ? banco.partes
+      : tabela === 'zoo_operacao_documentos' ? banco.nfs : banco.parecidas);
     c.then = (ok: (r: unknown) => unknown) => Promise.resolve({ data: dados(), error: null }).then(ok);
     return c;
   };
@@ -44,11 +45,18 @@ const PREVIA = { ok: true, ja_existe: false, simulado: true, resumo: {
 const pdf = (nome: string) => new File(['%PDF'], nome, { type: 'application/pdf' });
 
 beforeEach(() => {
-  banco.parecidas = []; banco.lotes = []; banco.partes = [];
+  banco.parecidas = []; banco.lotes = []; banco.partes = []; banco.nfs = [];
   rpc.mockReset();
   rpc.mockResolvedValue({ data: PREVIA, error: null });
   definirFornecedoresDoLeitor([{ id: 'minerva-jb', nome: 'Minerva S.A.', cpf_cnpj: '67.620.377/0003-86' }]);
 });
+
+/* o peso GERAL pelo rótulo da dúvida (depois dele vêm os campos de peso por lote, 117539) */
+function campoDoPesoGeral() {
+  const rotulo = document.getElementById('importar-duvida-peso');
+  if (!rotulo) throw new Error('sem a dúvida do peso');
+  return within(rotulo).getByRole('textbox');
+}
 
 async function abrirComOsPdfs(fazendaInicialId: string | null = 'faz-sm') {
   render(<ImportarAbateDialog open onOpenChange={() => {}} clienteId="cli" fazendas={[{ id: 'faz-sm', nome: 'Faz. Exemplo', codigo: 'SM' }]}
@@ -86,7 +94,7 @@ describe('importar abate — a tela', () => {
     if (!gatilho) throw new Error('sem o seletor de categoria');
     fireEvent.click(gatilho);
     fireEvent.click(await screen.findByText('Bois'));
-    const peso = within(screen.getByTestId('importar-duvidas')).getAllByRole('textbox').at(-1);
+    const peso = campoDoPesoGeral();
     if (!peso) throw new Error('sem campo de peso');
     fireEvent.change(peso, { target: { value: '520' } });
     fireEvent.blur(peso);
@@ -113,11 +121,22 @@ describe('importar abate — a tela', () => {
     if (!gatilho) throw new Error('sem o seletor de categoria');
     fireEvent.click(gatilho);
     fireEvent.click(await screen.findByText('Bois'));
-    const campos = within(screen.getByTestId('importar-duvidas')).getAllByRole('textbox');
-    const peso = campos[campos.length - 1];
+    const peso = campoDoPesoGeral();
     fireEvent.change(peso, { target: { value: '520' } });
     fireEvent.blur(peso);
   }
+
+  it('OUTRO abate do mesmo dia (OC com NF de outra chave, Chat 13/11 10:10): não vira anexar; o Criar segue e a outra OC fica dita', async () => {
+    banco.parecidas = [{ id: 'oc-novilhas', data_operacao: '2026-11-10', status_comercial: 'fechada', valor_acordado: 125648.87, numero_documento: null }];
+    banco.nfs = [{ operacao_id: 'oc-novilhas', chave_acesso: '50261152168923000231550020000092321000451807', numero: '9232' }];
+    await abrirComOsPdfs();
+    await responderCategoriaEPeso();
+    await waitFor(() => expect(screen.getByTestId('importar-outro-abate').textContent).toContain('NF 9232'));
+    expect(screen.queryByTestId('importar-oc-repetida')).toBeNull();
+    expect(screen.queryByTestId('importar-anexar')).toBeNull();
+    expect(screen.getByTestId('importar-criar')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('importar-motivo').textContent).toBe('Veja a prévia antes de criar'));
+  });
 
   it('o MESMO abate já lançado à mão: não cria — ANEXA à OC existente (lado a lado; o centavo já no líquido não entra 2×)', async () => {
     banco.parecidas = [{ id: 'oc-manual', data_operacao: '2026-11-10', status_comercial: 'fechada', valor_acordado: 119531.53, numero_documento: null }];

@@ -20,6 +20,8 @@ export interface LoteDoPacote {
   categoria?: string;
   /** 117537: o crédito do acerto (Fortunceres: "Incentivo Proape-Precoce/MS") que já está DENTRO do `valor_liquido`; só quando há */
   incentivo?: number;
+  /** 117539 (IMPORTAR-ABATE-PESO-POR-LOTE-01): o peso vivo médio DESTE lote; sem ele, o geral do pacote */
+  peso_vivo_kg?: number;
 }
 export interface PacoteDoAbate {
   fazenda_id: string; contraparte_id: string; data_abate: string; categoria: string; peso_vivo_medio_kg: number; observacoes: string;
@@ -43,6 +45,8 @@ export interface EntradaDoPacote extends AcertoDaEntrada {
   fazendaId: string | null; contraparteId: string | null; categoria: string | null; pesoVivoMedioKg: number | null;
   /** 117535 (Chat 17:15 ajuste 3): a categoria de um lote (pela ordem) que não é a do lote 1; ausente = a de todos */
   categoriasPorLote?: Record<number, string | null>;
+  /** 117539 (Chat 13/11 10:25): o peso vivo médio de um lote (pela ordem); o do lote manda, sem ele vale o geral */
+  pesosPorLote?: Record<number, number | null>;
   /** 117537 (proposta A, Chat 18:35): os OUTROS acertos do mesmo abate (Fortunceres: um por ordem de compra) → um lote cada, na MESMA OC */
   maisAcertos?: AcertoDaEntrada[];
   /** com `maisAcertos`: de qual acerto (0 = o de cima) é cada documento, na ordem de `documentos`; nulo = de todos */
@@ -106,21 +110,30 @@ const precoBR = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits
 const textoDaComposicao = (d: DetalhesDoAcerto) => (d.composicaoDoPreco
   ? ` · @ ${precoBR(d.composicaoDoPreco.base)} + idade ${precoBR(d.composicaoDoPreco.idade)} + programa ${precoBR(d.composicaoDoPreco.programa)}` : '');
 
-function duvidasDa(e: EntradaDoPacote): Duvida[] {
+/** O peso vivo próprio do lote `k` (pela ordem), só quando informado e > 0 */
+export function pesoProprioDoLote(e: Pick<EntradaDoPacote, 'pesosPorLote'>, k: number): number | null {
+  const p = e.pesosPorLote?.[k];
+  return p != null && p > 0 ? p : null;
+}
+
+/** O peso vivo é dúvida enquanto algum dos `nLotes` lotes fica sem peso: nem o dele, nem o geral */
+function duvidasDa(e: EntradaDoPacote, nLotes: number): Duvida[] {
   const duvidas: Duvida[] = [];
   if (!e.fazendaId) duvidas.push('fazenda');
   if (!e.contraparteId) duvidas.push('contraparte');
   if (!e.categoria) duvidas.push('categoria');
-  if (!(e.pesoVivoMedioKg != null && e.pesoVivoMedioKg > 0)) duvidas.push('peso_vivo');
+  const geral = e.pesoVivoMedioKg != null && e.pesoVivoMedioKg > 0;
+  if (!geral && Array.from({ length: Math.max(nLotes, 1) }, (_, i) => pesoProprioDoLote(e, i + 1)).some(p => p == null)) duvidas.push('peso_vivo');
   return duvidas;
 }
+const comPesoProprio = (e: EntradaDoPacote, k: number) => { const p = pesoProprioDoLote(e, k); return p != null ? { peso_vivo_kg: p } : {}; };
 
 /* ── VÁRIOS ACERTOS NO MESMO ABATE (proposta A, Chat 12/11 18:35; banco 117537) ───────────────────────────────────────────────────
    Fortunceres (NJ · Pureza 12/11): um acerto por ordem de compra → UM LOTE por acerto na MESMA OC (o padrão das OCs da Fortunceres já
    lançadas); o crédito do acerto (incentivo) fica DENTRO do líquido do lote e vai no lote (`incentivo`); a NF e o romaneio de cada
    acerto se ligam só ao lote dele (`lote_ordem`) e a conferência do bruto é por NF; acerto sem NF = AVISO (não trava). */
 function montarVariosAcertos(e: EntradaDoPacote, grupos: AcertoDaEntrada[]): Montagem {
-  const duvidas = duvidasDa(e);
+  const duvidas = duvidasDa(e, grupos.length);
   const diferencas: Diferenca[] = [];
   const avisos: string[] = [];
   const lotes: LoteDoPacote[] = [];
@@ -146,6 +159,7 @@ function montarVariosAcertos(e: EntradaDoPacote, grupos: AcertoDaEntrada[]): Mon
       observacao: `Ordem de compra ${g.acerto.ordemCompra ?? '—'} · faixa do acerto: ${f.descricao}${textoDaComposicao(g.detalhes)}`,
       ...(() => { const c = e.categoriasPorLote?.[k]; return c && c !== e.categoria ? { categoria: c } : {}; })(),
       ...(incentivo > 0 ? { incentivo: real(incentivo) } : {}),
+      ...comPesoProprio(e, k),
     });
   }
   const g0 = grupos[0].acerto;
@@ -182,7 +196,7 @@ function montarVariosAcertos(e: EntradaDoPacote, grupos: AcertoDaEntrada[]): Mon
 export function montarPacoteDoAbate(e: EntradaDoPacote): Montagem {
   if (e.maisAcertos && e.maisAcertos.length > 0) return montarVariosAcertos(e, [e, ...e.maisAcertos]);
   const diferencas = diferencasDoAbate(e);
-  const duvidas = duvidasDa(e);
+  const duvidas = duvidasDa(e, e.detalhes.faixas.length);
   const faixas = [...e.detalhes.faixas].sort((a, b) => b.cab - a.cab);
   if (faixas.length === 0) return { pacote: null, duvidas, diferencas, recusa: 'O acerto não trouxe nenhuma faixa de preço.', lotes: [] };
   const dataAbate = e.acerto.dataAbate ?? e.nf?.dataAbate;
@@ -215,6 +229,7 @@ export function montarPacoteDoAbate(e: EntradaDoPacote): Montagem {
     observacao: `Faixa do acerto: ${f.descricao}${textoDaComposicao(e.detalhes)}`,
     ...(() => { const c = e.categoriasPorLote?.[i + 1]; return c && c !== e.categoria ? { categoria: c } : {}; })(),
     ...(incentivo[i] > 0 ? { incentivo: real(incentivo[i]) } : {}),
+    ...comPesoProprio(e, i + 1),
   }));
   if (duvidas.length > 0) return { pacote: null, duvidas, diferencas, recusa: null, lotes };
   return {
@@ -255,6 +270,24 @@ export interface LinhaDocsXOc { campo: string; documentos: string; oc: string; d
 const fmt = (n: number | null | undefined) => (n == null ? '—' : brl(n));
 const fmtData = (s: string | null | undefined) => (s ? s.slice(0, 10).split('-').reverse().join('/') : '—');
 const soma = (ns: (number | null)[]) => real(ns.reduce<number>((a, n) => a + cent(n ?? 0), 0));
+
+/** As chaves das NFs do frigorífico que o pacote leva (a `chave_nf` e as de todo documento `nf_principal`), sem repetir. */
+export function chavesDoPacote(pacote: PacoteDoAbate): string[] {
+  const cs = [pacote.chave_nf, ...pacote.documentos.map(d => (d.especie === 'nf_principal' && typeof d.chave_acesso === 'string' ? d.chave_acesso : null))];
+  return Array.from(new Set(cs.filter((c): c is string => !!c && c.trim() !== '').map(c => c.trim())));
+}
+
+/**
+ * A OC PARECIDA (viva, mesma fazenda + comprador, abate a ±3 dias) É ESTE ABATE? (Chat 13/11 10:10: a Pureza teve 3 ordens de compra no
+ * mesmo dia — os bois numa NF, as novilhas noutra; a OC das novilhas não pode virar "anexar" para os bois.)
+ *  - a OC sem NF do frigorífico pode ser este abate lançado à mão (o caso SM-LT06): bloqueia, como antes;
+ *  - o pacote sem chave não tem como provar que é outro: bloqueia;
+ *  - com chave dos dois lados: só é este abate se alguma chave da OC está no pacote. NF de outra chave = outro abate, não bloqueia.
+ */
+export function ocParecidaEDesteAbate(chavesDaOc: readonly string[], chavesDoPacoteAtual: readonly string[]): boolean {
+  if (chavesDaOc.length === 0 || chavesDoPacoteAtual.length === 0) return true;
+  return chavesDaOc.some(c => chavesDoPacoteAtual.includes(c));
+}
 
 export function docsXOc(pacote: PacoteDoAbate, oc: OcExistente): LinhaDocsXOc[] {
   const L = pacote.lotes;

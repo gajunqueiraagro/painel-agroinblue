@@ -59,7 +59,9 @@ export function payloadDoDocumentoLido(d: DocumentoDoImport, emitente: { id: str
 
 export type FaltaNoImport = 'acerto' | 'acerto_sem_faixas';
 export interface Respostas { fazendaId: string | null; contraparteId: string | null; contraparteNome: string | null; categoria: string | null; pesoVivoMedioKg: number | null;
-  categoriasPorLote?: Record<number, string | null> }
+  categoriasPorLote?: Record<number, string | null>;
+  /** 117539: o peso vivo de um lote (pela ordem); sem ele, o geral */
+  pesosPorLote?: Record<number, number | null> }
 
 const camposDe = (d: DocumentoDoImport): CamposLidos | null => (d.leitura.tipo === 'lido' ? d.leitura.campos : null);
 const centKg = (n: number | undefined) => (n == null ? null : Math.round(n * 100));
@@ -90,7 +92,7 @@ export function entradaDoImport(docs: DocumentoDoImport[], r: Respostas, cnpjFri
     entrada: {
       nf: camposNf, acerto: acerto.leitura.campos, detalhes, romaneio: rom ? detalhesDoRomaneioMinerva(rom.linhas) : null, documentos,
       fazendaId: r.fazendaId, contraparteId: r.contraparteId, categoria: r.categoria, pesoVivoMedioKg: r.pesoVivoMedioKg,
-      categoriasPorLote: r.categoriasPorLote,
+      categoriasPorLote: r.categoriasPorLote, pesosPorLote: r.pesosPorLote,
     },
     falta: null,
   };
@@ -135,7 +137,7 @@ function entradaDeVariosAcertos(docs: DocumentoDoImport[], acertos: DocumentoDoI
     entrada: {
       ...g0, documentos, acertoDoDocumento, maisAcertos: resto,
       fazendaId: r.fazendaId, contraparteId: r.contraparteId, categoria: r.categoria, pesoVivoMedioKg: r.pesoVivoMedioKg,
-      categoriasPorLote: r.categoriasPorLote,
+      categoriasPorLote: r.categoriasPorLote, pesosPorLote: r.pesosPorLote,
     },
     falta: null,
   };

@@ -24,7 +24,7 @@ import { extrairLinhasPdf } from '@/lib/oc/leitura/linhasDoPdf';
 import { lerDocumentosDoImport, entradaDoImport, fazendaPelaNf, remetenteDaNfFrigorifico, documentoDoPdf, marcaDoPdf, type DocumentoDoImport, type FazendaSugerida, type MarcaDoPdf } from '@/lib/oc/importar/leituraDoImport';
 import { fazendasComIEDoCliente } from '@/components/financeiro-v2/NovoDeXmlDialog';
 import type { FazendaComIE } from '@/lib/financeiro/nfe/proporLancamento';
-import { diferencaCabeNaOc, docsXOc, lotesComPrecoDiferente, montarPacoteDoAbate, type Duvida, type OcExistente } from '@/lib/oc/importar/pacoteDoAbate';
+import { chavesDoPacote, diferencaCabeNaOc, docsXOc, lotesComPrecoDiferente, montarPacoteDoAbate, ocParecidaEDesteAbate, type Duvida, type OcExistente } from '@/lib/oc/importar/pacoteDoAbate';
 import { CATEGORIAS } from '@/types/cattle';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 
@@ -50,7 +50,12 @@ const irParaADuvida = (d: Duvida) => {
   campo?.querySelector<HTMLElement>('button, input')?.focus();
 };
 
-interface LoteDoResumo { ordem: number; cab: number; peso_carcaca_kg: number | null; preco_arroba: number | null; valor_liquido: number | null; senar: number | null; funrural: number | null }
+interface LoteDoResumo { ordem: number; cab: number; peso_carcaca_kg: number | null; preco_arroba: number | null; valor_liquido: number | null; senar: number | null; funrural: number | null;
+  /** 117539: o peso vivo médio que vai a ESTE lote (o dele ou o geral) */
+  peso_vivo_medio_kg?: number | null }
+/** Rendimento de carcaça do lote: carcaça ÷ (cab × peso vivo); sem peso, nulo ("—") */
+const rendimentoDoLote = (l: LoteDoResumo) => (l.peso_carcaca_kg != null && l.peso_vivo_medio_kg != null && l.peso_vivo_medio_kg > 0 && l.cab > 0
+  ? (l.peso_carcaca_kg / (l.cab * l.peso_vivo_medio_kg)) * 100 : null);
 interface Resumo { data: string | null; lotes: LoteDoResumo[]; recebimento: { valor: number | null; vencimento: string | null } | null; documentos: string[]; diferenca_acerto: number | null }
 interface Previa {
   ok: boolean; ja_existe: boolean; simulado: boolean; operacao_id?: string; rotulo?: string; nada_muda?: boolean;
@@ -101,6 +106,8 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
   const [pesoVivo, setPesoVivo] = useState<number | null>(null);
   /* 117535: a categoria de cada lote (pela ordem); sem escolha = a do lote 1 (a 'Categoria que saiu') */
   const [categoriasPorLote, setCategoriasPorLote] = useState<Record<number, string | null>>({});
+  /* IMPORTAR-ABATE-PESO-POR-LOTE-01 (Chat 13/11 10:25): Pureza — lote 1 Angus, lote 2 Charolês, pesos diferentes; o do lote manda */
+  const [pesosPorLote, setPesosPorLote] = useState<Record<number, number | null>>({});
   /* Chat 12/11 17:50: a fazenda que a TELA escolheu (pela NF) precisa do toque do operador; a escolhida por ele (ou a da Central) já vale */
   const [fazendaConfirmada, setFazendaConfirmada] = useState(fazendaInicialId != null);
   const [previa, setPrevia] = useState<Previa | null>(null);
@@ -114,7 +121,7 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
   useEffect(() => {
     if (open) return;
     setArquivos([]); setLidos(null); setPrevia(null); setRecusa(null); setCriada(null); setAnexos(null); setAnexada(false);
-    setContraparte(null); setCategoria(null); setPesoVivo(null); setCategoriasPorLote({}); setFazendaId(fazendaInicialId); setFazendaConfirmada(fazendaInicialId != null);
+    setContraparte(null); setCategoria(null); setPesoVivo(null); setCategoriasPorLote({}); setPesosPorLote({}); setFazendaId(fazendaInicialId); setFazendaConfirmada(fazendaInicialId != null);
   }, [open, fazendaInicialId]);
 
   /* O comprador pelo CNPJ lido (exato): sugerido, nunca escolhido por cima do que o operador já marcou. */
@@ -159,22 +166,26 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
   const montagem = useMemo(() => {
     if (!lidos) return null;
     const { entrada, falta } = entradaDoImport(lidos.documentos, {
-      fazendaId, contraparteId: contraparte?.id ?? null, contraparteNome: contraparte?.nome ?? null, categoria, pesoVivoMedioKg: pesoVivo, categoriasPorLote,
+      fazendaId, contraparteId: contraparte?.id ?? null, contraparteNome: contraparte?.nome ?? null, categoria, pesoVivoMedioKg: pesoVivo, categoriasPorLote, pesosPorLote,
     }, lidos.cnpjFrigorifico);
     if (!entrada) return { falta, m: null };
     return { falta: null, m: montarPacoteDoAbate(entrada) };
-  }, [lidos, fazendaId, contraparte, categoria, pesoVivo, categoriasPorLote]);
+  }, [lidos, fazendaId, contraparte, categoria, pesoVivo, categoriasPorLote, pesosPorLote]);
 
-  useEffect(() => { setPrevia(null); }, [fazendaId, contraparte, categoria, pesoVivo, categoriasPorLote]);
+  useEffect(() => { setPrevia(null); }, [fazendaId, contraparte, categoria, pesoVivo, categoriasPorLote, pesosPorLote]);
 
   const pacote = montagem?.m?.pacote ?? null;
   /* A MESMA OC LANÇADA À MÃO (caso real SM-LT06, 12/11): o "já existe" do banco é pela chave da NF; OC lançada sem documentos passa.
      Antes do Criar: OC de abate VIVA da mesma fazenda e do mesmo comprador com abate a ±3 dias. Achou = não cria (abrir a OC e anexar
-     os documentos nela). A consulta que DECIDE nunca falha calada (P146): falhou = "Não consegui verificar" e o Criar fica apagado. */
+     os documentos nela). A consulta que DECIDE nunca falha calada (P146): falhou = "Não consegui verificar" e o Criar fica apagado.
+     Chat 13/11 10:10: a OC parecida com NF do frigorífico de OUTRA chave é outro abate do mesmo dia (outra ordem de compra) e não
+     bloqueia (`ocParecidaEDesteAbate`); ela fica dita em `outrosAbates`. */
   type OcParecida = { id: string; data_operacao: string; status_comercial: string; valor_acordado: number | null; numero_documento: string | null };
-  const [parecidas, setParecidas] = useState<{ ok: true; valor: OcParecida[] } | { ok: false } | null>(null);
+  const [parecidas, setParecidas] = useState<{ ok: true; valor: OcParecida[]; outros: { oc: OcParecida; nfs: string[] }[] } | { ok: false } | null>(null);
   const [tentativa, setTentativa] = useState(0);
   const dataDoAbate = montagem?.m?.pacote?.data_abate ?? null;
+  const chavesDaImportacao = useMemo(() => (montagem?.m?.pacote ? chavesDoPacote(montagem.m.pacote) : []), [montagem]);
+  const chavesTexto = chavesDaImportacao.join(',');
   useEffect(() => {
     setParecidas(null);
     if (!open || !clienteId || !fazendaId || !contraparte?.id || !dataDoAbate) return;
@@ -188,10 +199,27 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
         .eq('rascunho', false).neq('status_comercial', 'cancelada').gte('data_operacao', dia(-3)).lte('data_operacao', dia(3));
       if (!vivo) return;
       if (error) { console.error('[importar abate] OC parecida', error); setParecidas({ ok: false }); return; }
-      setParecidas({ ok: true, valor: data ?? [] });
+      const achadas: OcParecida[] = data ?? [];
+      const nfsPorOc = new Map<string, { chave: string; numero: string | null }[]>();
+      if (achadas.length > 0) {
+        const docs = await (supabase as any).from('zoo_operacao_documentos').select('operacao_id, chave_acesso, numero')
+          .in('operacao_id', achadas.map(o => o.id)).eq('especie', 'nf_principal').not('cancelado', 'is', true);
+        if (!vivo) return;
+        if (docs.error) { console.error('[importar abate] NFs da OC parecida', docs.error); setParecidas({ ok: false }); return; }
+        const linhas: { operacao_id: string; chave_acesso: string | null; numero: string | null }[] = docs.data ?? [];
+        for (const d of linhas) {
+          if (!d.chave_acesso) continue;
+          nfsPorOc.set(d.operacao_id, [...(nfsPorOc.get(d.operacao_id) ?? []), { chave: d.chave_acesso.trim(), numero: d.numero }]);
+        }
+      }
+      const chaves = chavesTexto ? chavesTexto.split(',') : [];
+      const deste = achadas.filter(o => ocParecidaEDesteAbate((nfsPorOc.get(o.id) ?? []).map(n => n.chave), chaves));
+      const outros = achadas.filter(o => !deste.includes(o))
+        .map(o => ({ oc: o, nfs: (nfsPorOc.get(o.id) ?? []).map(n => n.numero ?? '?') }));
+      setParecidas({ ok: true, valor: deste, outros });
     })();
     return () => { vivo = false; };
-  }, [open, clienteId, fazendaId, contraparte?.id, dataDoAbate, tentativa]);
+  }, [open, clienteId, fazendaId, contraparte?.id, dataDoAbate, chavesTexto, tentativa]);
   const ocRepetida = parecidas?.ok ? parecidas.valor[0] ?? null : null;
 
   /* ANEXAR À OC EXISTENTE (Chat 18:00): a OC de hoje lida para o lado a lado (lotes + abate realizado + recebimento) e os ids dos lotes
@@ -392,6 +420,11 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
                   <Button size="sm" variant="outline" className="mt-1 h-6 text-[11px]" onClick={() => { onAbrirOperacao(ocRepetida.id); onOpenChange(false); }}>Só abrir a OC</Button>
                 </div>
               )}
+              {parecidas?.ok === true && parecidas.outros.length > 0 && !ocRepetida && (
+                <div className="mb-2 text-[11px] text-[#5A6472]" data-testid="importar-outro-abate">
+                  {parecidas.outros.map(x => `Já há a OC de ${x.oc.data_operacao.split('-').reverse().join('/')} deste comprador (NF ${x.nfs.join(', ') || '—'})`).join(' · ')}: é outra NF, outro abate — não bloqueia.
+                </div>
+              )}
               {parecidas?.ok === false && (
                 <div className="mb-2 text-[11px] text-red-700" data-testid="importar-oc-nao-verificou">Não consegui verificar se este abate já está lançado.
                   {' '}<button type="button" className="underline" onClick={() => setTentativa(t => t + 1)}>Tentar de novo</button></div>
@@ -422,9 +455,11 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
                     <div><div className="text-muted-foreground">Vencimento</div><div className="font-semibold tabular-nums">{dataBR(resumo.recebimento?.vencimento)}</div></div>
                   </div>
                   <table className="w-full table-fixed">
-                    <colgroup><col className="w-[44px]" /><col className="w-[40px]" /><col /><col /><col /><col />{comIncentivo && <col />}<col /></colgroup>
+                    <colgroup><col className="w-[44px]" /><col className="w-[40px]" /><col /><col className="w-[64px]" /><col className="w-[56px]" /><col /><col /><col />{comIncentivo && <col />}<col /></colgroup>
                     <thead><tr className="h-[22px] bg-[#1B2A44] text-[9.5px] font-medium text-white">
                       <th className="px-1 text-left">Lote</th><th className="px-1 text-right">Cab.</th><th className="px-1 text-right">Carcaça kg</th>
+                      <th className="px-1 text-right" title="Peso vivo médio por cabeça que vai ao lote (o do lote ou o geral)">Vivo kg</th>
+                      <th className="px-1 text-right" title="Rendimento de carcaça: carcaça ÷ (cab × peso vivo)">Rend. %</th>
                       <th className="px-1 text-right">R$/@</th><th className="px-1 text-right">SENAR</th><th className="px-1 text-right">Funrural</th>
                       {comIncentivo && <th className="px-1 text-right" title="Crédito do acerto (ex.: Incentivo Proape-Precoce), já dentro do líquido">Incentivo</th>}
                       <th className="px-1 text-right">Líquido R$</th></tr></thead>
@@ -433,6 +468,7 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
                         <tr key={l.ordem} className={`h-[19px] border-b border-black/[0.06] tabular-nums ${precoDiferente.includes(l.ordem) ? 'bg-amber-50 text-amber-900' : ''}`}
                           title={[loteLido(l.ordem)?.observacao, precoDiferente.includes(l.ordem) ? 'Preço por arroba diferente dos outros lotes: confira a categoria' : null].filter(Boolean).join(' · ') || undefined}>
                           <td className="px-1">{l.ordem}</td><td className="px-1 text-right">{l.cab}</td><td className="px-1 text-right">{brl(l.peso_carcaca_kg)}</td>
+                          <td className="px-1 text-right">{brl(l.peso_vivo_medio_kg)}</td><td className="px-1 text-right">{brl(rendimentoDoLote(l))}</td>
                           <td className="px-1 text-right">{brl(l.preco_arroba)}</td><td className="px-1 text-right text-red-700">{brl(l.senar)}</td>
                           <td className="px-1 text-right text-red-700">{brl(l.funrural)}</td>
                           {comIncentivo && <td className="px-1 text-right text-emerald-700">{brl(loteLido(l.ordem)?.incentivo ?? 0)}</td>}
@@ -440,13 +476,13 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
                         </tr>))}
                       {(resumo.diferenca_acerto ?? 0) !== 0 && (
                         <tr className="h-[19px] border-b border-black/[0.06] tabular-nums text-amber-800">
-                          <td className="px-1" colSpan={comIncentivo ? 7 : 6}>Diferença do acerto (componente explícito)</td><td className="px-1 text-right">{brl(resumo.diferenca_acerto)}</td>
+                          <td className="px-1" colSpan={comIncentivo ? 9 : 8}>Diferença do acerto (componente explícito)</td><td className="px-1 text-right">{brl(resumo.diferenca_acerto)}</td>
                         </tr>)}
                     </tbody>
                     {/* ajuste 1: o TOTAL = o que entra na OC; o líquido total é o a receber */}
                     <tfoot><tr className="h-[22px] bg-[#1B2A44] font-semibold tabular-nums text-white" data-testid="importar-total">
                       <td className="px-1">Total</td><td className="px-1 text-right">{totais.cab}</td><td className="px-1 text-right">{brl(totais.kg)}</td>
-                      <td /><td className="px-1 text-right">{brl(totais.senar)}</td><td className="px-1 text-right">{brl(totais.funrural)}</td>
+                      <td /><td /><td /><td className="px-1 text-right">{brl(totais.senar)}</td><td className="px-1 text-right">{brl(totais.funrural)}</td>
                       {comIncentivo && <td className="px-1 text-right">{brl(totalIncentivo)}</td>}
                       <td className="px-1 text-right">{brl(totais.liquido)}</td></tr></tfoot>
                   </table>
@@ -474,15 +510,17 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
           {/* ── Dúvidas ── */}
           <div className="flex min-h-0 flex-col gap-2 overflow-y-auto" data-testid="importar-duvidas">
             <div className="text-[11px] font-semibold">Dúvidas {duvidas.length > 0 ? `· ${duvidas.length} em aberto` : '· respondidas'}</div>
-            <label className="text-[10.5px]" id={ID_DA_DUVIDA.fazenda}>{FRASE_DUVIDA.fazenda}
+            <label className={`text-[10.5px] ${fazendaId && !fazendaConfirmada ? 'rounded-sm bg-amber-50 px-1 ring-1 ring-amber-500' : ''}`} id={ID_DA_DUVIDA.fazenda}>{FRASE_DUVIDA.fazenda}
               <SearchableSelect value={fazendaId ?? ''} onValueChange={v => { setFazendaId(v || null); setFazendaConfirmada(v !== ''); }} semTodos allValue="" allLabel="Escolha a fazenda" placeholder="Buscar fazenda"
                 options={fazendas.map(f => ({ value: f.id, label: f.codigo ? `${f.codigo} · ${f.nome}` : f.nome }))} triggerClassName="h-[22px] text-[11px]" />
               {fazendaSugerida && (fazendaId === fazendaSugerida.fazenda.id
                 ? (fazendaConfirmada
                     ? <span className="text-[9.5px] text-muted-foreground" data-testid="importar-fazenda-sugerida">{fazendaSugerida.pela === 'ie' ? 'Pela inscrição estadual da NF' : 'Pelo endereço da NF'} · confirmada</span>
-                    : <span className={`text-[9.5px] ${fazendaSugerida.pela === 'ie' ? 'text-[#5A6472]' : 'font-semibold text-amber-700'}`} data-testid="importar-fazenda-sugerida">
-                        {fazendaSugerida.pela === 'ie' ? 'Sugerida pela inscrição estadual da NF' : 'Sugerida pelo endereço da NF — CONFIRA'}
-                        {' · '}<button type="button" className="underline" onClick={() => setFazendaConfirmada(true)} data-testid="importar-confirmar-fazenda">Confirmar</button>
+                    : <span className="mt-0.5 flex items-center gap-2" data-testid="importar-fazenda-sugerida">
+                        <span className={`text-[9.5px] ${fazendaSugerida.pela === 'ie' ? 'text-[#5A6472]' : 'font-semibold text-amber-700'}`}>
+                          {fazendaSugerida.pela === 'ie' ? 'Sugerida pela inscrição estadual da NF' : 'Sugerida pelo endereço da NF — CONFIRA'}</span>
+                        <Button type="button" size="sm" className="h-[22px] flex-none px-2 text-[10.5px]" onClick={() => setFazendaConfirmada(true)}
+                          data-testid="importar-confirmar-fazenda">Confirmar a fazenda</Button>
                       </span>)
                 : <span className="text-[9.5px] text-amber-700" data-testid="importar-fazenda-sugerida">A NF indica {fazendaSugerida.fazenda.nome}</span>)}
             </label>
@@ -513,12 +551,27 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
               <CampoNumeroComConta valor={pesoVivo} onChange={setPesoVivo} casas={2} className="h-[22px] text-[11px]" />
               <span className="text-[9.5px] text-muted-foreground">O romaneio traz só a carcaça: o peso vivo é o da saída da fazenda.</span>
             </label>
+            {lotesLidos.length > 1 && (
+              <div className="text-[10.5px]" data-testid="importar-peso-por-lote">
+                <div className="text-muted-foreground">Peso vivo por lote (vazio, o de cima)</div>
+                {lotesLidos.map(l => (
+                  <div key={l.ordem} className="mt-0.5 grid grid-cols-[134px_1fr] items-center gap-1" data-testid={`importar-peso-lote-${l.ordem}`}>
+                    <span className="whitespace-nowrap tabular-nums" title={l.observacao}>Lote {l.ordem} · {l.cab} cab</span>
+                    <CampoNumeroComConta valor={pesosPorLote[l.ordem] ?? null} onChange={v => setPesosPorLote(p => ({ ...p, [l.ordem]: v }))} casas={2}
+                      placeholder={pesoVivo != null && pesoVivo > 0 ? `${brl(pesoVivo)} (o de cima)` : 'o de cima'} className="h-[22px] text-[11px]" />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         {/* ── Rodapé ── */}
         <div className="flex h-[32px] flex-none items-center gap-2 border-t pt-2">
-          <span className={`min-w-0 flex-1 text-[10.5px] ${recusa ? 'text-red-700' : 'text-[#5A6472]'}`} data-testid="importar-motivo">
+          <Button variant="outline" size="sm" className="h-7 flex-none text-[11px]" onClick={() => onOpenChange(false)} disabled={gravando}>
+            {criada ? 'Fechar' : 'Cancelar'}</Button>
+          {/* Chat 13/11 10:10: o motivo do botão apagado fica AO LADO do botão (o Gabriel não o via no canto esquerdo) */}
+          <span className={`min-w-0 flex-1 text-right text-[10.5px] ${recusa ? 'text-red-700' : motivoDoCriar && !criada ? 'font-semibold text-amber-800' : 'text-[#5A6472]'}`} data-testid="importar-motivo">
             {recusa ?? (criada ? (anexos ?? (anexada ? 'Documentos registrados · anexando os PDFs…' : 'OC criada · anexando os PDFs…'))
               : duvidas.length > 0 && montagem?.m && !montagem.m.recusa
                 ? <>Responda as dúvidas: {duvidas.map((d, i) => (
@@ -526,8 +579,6 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
                       data-testid={`importar-ir-${d}`}>{FRASE_DUVIDA[d].replace('?', '')}</button></span>))}</>
                 : motivoDoCriar ?? 'Pronto para criar')}
           </span>
-          <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => onOpenChange(false)} disabled={gravando}>
-            {criada ? 'Fechar' : 'Cancelar'}</Button>
           <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => void verPrevia()}
             disabled={!pacote || conferindo || gravando || criada != null}>{conferindo ? 'Conferindo…' : 'Ver prévia'}</Button>
           {ocRepetida ? (
