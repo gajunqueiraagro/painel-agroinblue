@@ -12,7 +12,7 @@
  * ⚠ DIÁLOGOS DE TAMANHO FIXO: o campo que depende da forma (lançamento / fornecedor / contrato anterior) ocupa SEMPRE a mesma linha.
  */
 import { BLOCO_FORMULARIO, TituloDoBloco } from '@/components/ui/bloco-formulario';
-import { forwardRef, useEffect, useState } from 'react';
+import { Fragment, forwardRef, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, Paperclip, Pencil, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,8 @@ import {
 } from '@/lib/financiamentos/contratoDeCredito';
 import type { SaldoDoContrato } from '@/lib/financiamentos/situacaoDoContrato';
 import { BuscarEntradasDialog } from '@/components/financiamentos/BuscarNoContrato';
+import { REGUA_FIN, ThOrdenavel, emDaRegua, larguraDoMaior } from '@/components/financiamentos/reguaDoFinanciamento';
+import { ordenarPor, proximaOrdem, type Ordem, type ValorDeOrdem } from '@/lib/financiamentos/ordemDaTabela';
 
 type ApiDoContrato = ReturnType<typeof useContratoDeCredito>;
 
@@ -45,14 +47,17 @@ const br = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)
 /* a régua de tabela da casa: cabeçalho navy 9,5px, linha de 25px a 10px, `table-fixed` com larguras explícitas */
 /* FIN-CONTRATO-TELA-FONTE-01 — a escala da tela do contrato (cabeçalho 10px, célula 10,5px, total 10,5px bold), sem "…": texto longo rola
    dentro da célula (`.uma-linha-que-rola`) */
-const TH = 'h-[22px] bg-primary px-2 text-left text-[10px] font-semibold text-primary-foreground whitespace-nowrap';
+/* FIN-FINANC-LAYOUT-03 (Gabriel 12/11): a RÉGUA ÚNICA da lista e do contrato (`reguaDoFinanciamento`) — célula N, cabeçalho N−1, linha
+   da régua; as larguras em `em` da célula (`emDaRegua`). Antes: cabeçalho 10px, linha de 25px a 10,5px. */
+const TH = `${REGUA_FIN.linha} bg-primary px-[6px] text-left ${REGUA_FIN.th} font-semibold text-primary-foreground whitespace-nowrap`;
 const TH_R = `${TH} text-right`;
-const TD = 'h-[25px] px-2 text-[10.5px] whitespace-nowrap';
+const TD = `${REGUA_FIN.linha} px-[6px] ${REGUA_FIN.td} whitespace-nowrap`;
 const ROLA = 'uma-linha-que-rola';
-/* FORN-01b (regra de corte de 21/10 07h25) — texto em CÉLULA de tabela: uma linha, "…" quando não cabe, o inteiro no `title` */
-const CELULA = 'block truncate';
+/* FIN-FINANC-LAYOUT-03 (Gabriel, Chat 12/11 16:58: "sem quebrar"): texto de célula INTEIRO numa linha (`REGUA_FIN.inteiro`) — a coluna
+   tem a largura do maior texto (`larguraDoMaior`); nunca "…" nem 2 linhas (só a Obs. quebra). Antes (FORN-01b): `block truncate`. */
 const TD_R = `${TD} text-right tabular-nums`;
-const TOTAL = 'h-[25px] px-2 text-[10.5px] font-bold bg-[#E8E6DF] whitespace-nowrap';
+const TOTAL = `${REGUA_FIN.linha} px-[6px] ${REGUA_FIN.total} bg-[#E8E6DF] whitespace-nowrap`;
+const col = (px11: number) => <col style={{ width: emDaRegua(px11) }} />;
 
 export const TEXTO_SALDO_SEM_LIBERACAO = 'Sem liberação gravada: o saldo devedor não se deduz do contratado.';
 
@@ -117,6 +122,9 @@ function Cartao({ rotulo, valor, interrogacao, title, testId }: { rotulo: string
   );
 }
 
+type ColunaDaLiberacao = 'data' | 'forma' | 'para' | 'bruto' | 'descontos' | 'liquido' | 'situacao';
+
+type ColunaDoDocumento = 'especie' | 'arquivo' | 'data' | 'enviado';
 /* ═══ LIBERAÇÕES ═════════════════════════════════════════════════════════════════════════════════════════════════════════ */
 export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clienteId }: {
   api: ApiDoContrato; contaDoContrato: string | null; onAbrirLancamento: (id: string) => void; clienteId: string;
@@ -127,6 +135,35 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
   const [buscando, setBuscando] = useState(false);
   const leitura = new Map((api.tela?.liberacoes ?? []).map((t) => [t.id, t]));
   const tot = api.tela?.liberacoesTotal ?? null;
+  /* FIN-FINANC-LAYOUT-03 — todo cabeçalho ordena (padrão: a data); o total fica no rodapé */
+  const [ordem, setOrdem] = useState<Ordem<ColunaDaLiberacao>>({ col: 'data', dir: 'asc' });
+  const aoOrdenar = (c: ColunaDaLiberacao) => setOrdem((o) => proximaOrdem(o, c));
+  const linhasEmOrdem = useMemo(() => {
+    if (libs === null) return null;
+    const valor = (l: LiberacaoDoContrato, c: ColunaDaLiberacao): ValorDeOrdem => {
+      const t = leitura.get(l.id) ?? null;
+      const casada = estadoDoExtrato(l) === 'vinculado' && !!l.lancamentoId;
+      if (c === 'data') return l.data;
+      if (c === 'forma') return ROTULO_DA_FORMA[l.forma];
+      if (c === 'para') { const cf = contaOuFornecedor(l, contaDoContrato); return cf.texto === '—' ? null : cf.texto; }
+      if (c === 'bruto') return l.valor;
+      if (c === 'descontos') return casada && t ? t.aIdentificar : null;
+      if (c === 'liquido') return casada && t ? t.entrou : null;
+      return casada ? 'casada' : estadoDoExtrato(l) === 'a_casar' ? 'a casar' : l.forma === 'fornecedor' ? 'pago direto' : null;
+    };
+    return ordenarPor(libs, ordem, valor);
+  }, [libs, ordem, api.tela, contaDoContrato]); // eslint-disable-line react-hooks/exhaustive-deps
+  const th = { ordem, aoOrdenar, className: `${TH} sticky top-0 z-10` };
+  /* FIN-FINANC-LAYOUT-03 (Chat 16:45 + decisão de 16:58 "sem quebrar"): Forma e Para quem com a largura do MAIOR texto da lista
+     (`larguraDoMaior`, a régua `larguraPeloMaior` do custeio), inteiros numa linha. A Obs. fica com a sobra e é a única que quebra. */
+  const largForma = larguraDoMaior((libs ?? []).map((l) => ROTULO_DA_FORMA[l.forma]), { piso: 66, folga: 14 });
+  const largPara = larguraDoMaior((libs ?? []).map((l) => contaOuFornecedor(l, contaDoContrato).texto), { piso: 86, folga: 14 });
+  /* as fixas a 11px com 6px de cada lado (medidas na bancada, cabeçalho com a seta): Data 80 · Bruto 92 · Descontos 88 · Líquido 92 ·
+     Situação (a sobra) · ações 44. A Obs. vai numa 2ª linha da liberação (não é coluna) */
+  const minimaDaTabela = 80 + largForma + largPara + 92 + 88 + 92 + 88 + 44;
+  /* FIN-FINANC-LAYOUT-03 (Chat 18:35 + 22:00): a Obs. NÃO é coluna — é uma 2ª linha da mesma liberação (largura inteira, fonte menor), na
+     tela do contrato e no modal Editar contrato; a Situação fica com a sobra. Nada rola de 1.126 para cima. */
+  const colunas = 8;
   return (
     <div className={`${BLOCO_FORMULARIO} h-full min-h-0`} data-testid="bloco-liberacoes">
       <Titulo nome="Liberações" dica="em conta casa com o extrato · direto ao fornecedor = dívida + investimento sem caixa"
@@ -143,36 +180,39 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
       {/* Chat 11/11 10:24: a Observação visível (a coluna que fica com o resto, "…" + o inteiro no title); "Para quem" com largura fixa.
           Fixas 756 e tabela mín. 816: cabe no modal Editar contrato (≈ 820px úteis a 1.126) sem rolar; a Observação fica com o resto
           (60px no modal, ~190 na aba do contrato a 1.126); "liquidação do anterior" termina em "…" com o inteiro no title */}
-      <table className="w-full min-w-[816px] table-fixed border-collapse">
-        <colgroup><col style={{ width: 80 }} /><col style={{ width: 120 }} /><col style={{ width: 140 }} /><col style={{ width: 96 }} /><col style={{ width: 84 }} /><col style={{ width: 96 }} /><col style={{ width: 96 }} /><col /><col style={{ width: 44 }} /></colgroup>
+      <table className={`w-full table-fixed border-collapse ${REGUA_FIN.tabela}`} style={{ minWidth: emDaRegua(minimaDaTabela) }}>
+        <colgroup>{col(80)}{col(largForma)}{col(largPara)}{col(92)}{col(88)}{col(92)}<col />{col(44)}</colgroup>
         <thead data-testid="cabecalho-liberacoes"><tr>
-          <th className={`${TH} sticky top-0 z-10`}>Data</th><th className={`${TH} sticky top-0 z-10`}>Forma</th><th className={`${TH} sticky top-0 z-10`}>Para quem</th>
-          <th className={`${TH_R} sticky top-0 z-10`}>Bruto</th>
-          <th className={`${TH_R} sticky top-0 z-10`} title="tarifas e IOF retidos: bruto − líquido, na liberação em conta já casada">Descontos</th>
-          <th className={`${TH_R} sticky top-0 z-10`} title="o que entrou na conta (o lançamento ligado)">Líquido</th>
-          <th className={`${TH} sticky top-0 z-10`}>Situação</th><th className={`${TH} sticky top-0 z-10`} title="Observação da liberação">Obs.</th><th className={`${TH} sticky top-0 z-10`} />
+          <ThOrdenavel col="data" {...th}>Data</ThOrdenavel><ThOrdenavel col="forma" {...th}>Forma</ThOrdenavel><ThOrdenavel col="para" {...th}>Para quem</ThOrdenavel>
+          <ThOrdenavel col="bruto" direita {...th}>Bruto</ThOrdenavel>
+          <ThOrdenavel col="descontos" direita {...th} title="tarifas e IOF retidos: bruto − líquido, na liberação em conta já casada">Descontos</ThOrdenavel>
+          <ThOrdenavel col="liquido" direita {...th} title="o que entrou na conta (o lançamento ligado)">Líquido</ThOrdenavel>
+          <ThOrdenavel col="situacao" {...th}>Situação</ThOrdenavel><th className={`${TH} sticky top-0 z-10`} />
         </tr></thead>
         <tbody>
-          {libs === null && <tr><td colSpan={9} className={`${TD} text-muted-foreground`}>…</td></tr>}
+          {libs === null && <tr><td colSpan={colunas} className={`${TD} text-muted-foreground`}>…</td></tr>}
           {libs !== null && libs.length === 0 && (
-            <tr><td colSpan={9} className={`${TD} text-muted-foreground`} data-testid="liberacoes-vazio">Nenhuma liberação gravada.</td></tr>
+            <tr><td colSpan={colunas} className={`${TD} text-muted-foreground`} data-testid="liberacoes-vazio">Nenhuma liberação gravada.</td></tr>
           )}
-          {(libs ?? []).map((l) => {
+          {(linhasEmOrdem ?? []).map((l) => {
             const cf = contaOuFornecedor(l, contaDoContrato);
             const ex = estadoDoExtrato(l);
             const t = leitura.get(l.id) ?? null;
             const casada = ex === 'vinculado' && !!l.lancamentoId;
+            const obsNaLinha = !!l.observacao;
             return (
-              <tr key={l.id} className="border-b" data-testid="linha-liberacao">
-                <td className={`${TD} tabular-nums`}><span className="text-[10px]">{br(l.data)}</span></td>
-                <td className={TD} data-testid="forma-da-liberacao"><span className={CELULA} title={ROTULO_DA_FORMA[l.forma]}>{ROTULO_DA_FORMA[l.forma]}</span></td>
+              <Fragment key={l.id}>
+              <tr className={obsNaLinha ? '' : 'border-b'} data-testid="linha-liberacao">
+                <td className={`${TD} tabular-nums`}><span className={REGUA_FIN.data}>{br(l.data)}</span></td>
+                <td className={TD} data-testid="forma-da-liberacao"><span className={REGUA_FIN.inteiro} title={ROTULO_DA_FORMA[l.forma]}>{ROTULO_DA_FORMA[l.forma]}</span></td>
                 <td className={TD} data-testid="para-quem">
-                  <span className={CELULA} title={`${cf.title} · ${t?.destino ? `destinação: ${t.destino}` : 'sem destinação'}`}>{cf.texto === '—' ? '' : cf.texto}</span>
+                  <span className={REGUA_FIN.inteiro} title={`${cf.title} · ${t?.destino ? `destinação: ${t.destino}` : 'sem destinação'}`}>{cf.texto === '—' ? '' : cf.texto}</span>
                 </td>
                 <td className={TD_R}>{num2(l.valor)}</td>
                 <td className={TD_R} data-testid="descontos-da-liberacao">
                   {!casada ? '' : t === null ? '…' : t.aIdentificar > 0 ? <span className="text-amber-700" title="bruto − líquido: tarifas/IOF retidos ou ainda a identificar">{num2(t.aIdentificar)}</span>
-                    : <span className="text-muted-foreground">0,00</span>}
+                    /* FIN-FINANC-LAYOUT-03 (Gabriel 12/11): 0,00 aqui = o desconto foi lançado à parte, com caixa (no cartão Encargos) */
+                    : <span className="text-muted-foreground" title="tarifas e IOF desta liberação estão em Encargos" data-testid="descontos-em-encargos">0,00</span>}
                 </td>
                 <td className={TD_R} data-testid="liquido-da-liberacao">{!casada ? '' : t === null ? '…' : t.entrou === null ? '' : num2(t.entrou)}</td>
                 <td className={TD} data-testid="situacao-da-liberacao">
@@ -182,16 +222,21 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
                       data-testid="liberacao-vinculada">casada ↔{t && t.excedente > 0 ? <span className="ml-1 text-amber-700">+{num2(t.excedente)}</span> : null}</button>
                   ) : ex === 'a_casar' ? <span className="text-amber-700" title="sem lançamento ligado: casa com a entrada quando ela existir">a casar</span>
                     /* Chat 11/11 10:26: o direto ao fornecedor diz que foi pago direto (o nome inteiro no title) */
-                    : l.forma === 'fornecedor' ? <span className={`${CELULA} text-muted-foreground`} title={cf.title}>pago direto</span> : ''}
-                </td>
-                <td className={TD} data-testid="observacao-da-liberacao">
-                  {l.observacao ? <span className={CELULA} title={l.observacao}>{l.observacao}</span> : ''}
+                    : l.forma === 'fornecedor' ? <span className={`${REGUA_FIN.inteiro} text-muted-foreground`} title={cf.title}>pago direto</span> : ''}
                 </td>
                 <td className={`${TD} text-right`}>
                   <button type="button" className="mr-1 align-middle text-muted-foreground hover:text-foreground" title="Editar liberação" onClick={() => setEditando(l)}><Pencil className="size-3" /></button>
                   <button type="button" className="align-middle text-muted-foreground hover:text-destructive" title="Remover liberação" onClick={() => setRemovendo(l)} data-testid="remover-liberacao"><X className="size-3" /></button>
                 </td>
               </tr>
+              {obsNaLinha && (
+                <tr className="border-b" data-testid="obs-na-linha">
+                  <td colSpan={colunas} className="px-[6px] pb-[3px] pt-0 text-[10px] leading-[13px] text-muted-foreground" data-testid="observacao-da-liberacao">
+                    <span className="block whitespace-normal break-words">Obs.: {l.observacao}</span>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </tbody>
@@ -201,7 +246,7 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
             <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums`} data-testid="total-liberacoes">{tot ? num2(tot.liberado) : '…'}</td>
             <td className={`${TOTAL} sticky bottom-0 z-10`} />
             <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums`} data-testid="total-liquido">{tot ? num2(tot.entrou) : '…'}</td>
-            <td className={`${TOTAL} sticky bottom-0 z-10 ${tot && tot.aIdentificar > 0 ? 'text-amber-700' : ''}`} colSpan={3} data-testid="total-a-identificar"
+            <td className={`${TOTAL} sticky bottom-0 z-10 ${tot && tot.aIdentificar > 0 ? 'text-amber-700' : ''}`} colSpan={2} data-testid="total-a-identificar"
               title="bruto que ainda não tem entrada explicada: as liberações a casar e os descontos das casadas">
               {tot && tot.aIdentificar > 0 ? <>a identificar <span className="tabular-nums">{num2(tot.aIdentificar)}</span></> : ''}
             </td>
@@ -294,6 +339,16 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
   const [recado, setRecado] = useState<string | null>(null);
   const [removendo, setRemovendo] = useState<{ id: string; nome: string } | null>(null);
   const docs = api.documentos;
+  /* FIN-FINANC-LAYOUT-03 — todo cabeçalho ordena (padrão: a data do envio) */
+  const [ordem, setOrdem] = useState<Ordem<ColunaDoDocumento>>({ col: 'data', dir: 'asc' });
+  const aoOrdenar = (c: ColunaDoDocumento) => setOrdem((o) => proximaOrdem(o, c));
+  const docsEmOrdem = useMemo(() => (docs === null ? null : ordenarPor(docs, ordem, (d, c): ValorDeOrdem =>
+    c === 'especie' ? ROTULO_DA_ESPECIE[d.especie] : c === 'arquivo' ? d.nome : c === 'data' ? d.criadoEm : d.enviadoPor)), [docs, ordem]);
+  const th = { ordem, aoOrdenar, className: TH };
+  /* FIN-FINANC-LAYOUT-03 (16:58 "sem quebrar"): Espécie e Enviado por pelo maior texto; o Arquivo fica com a sobra e tem como mínimo o maior nome */
+  const largEspecie = larguraDoMaior((docs ?? []).map((d) => ROTULO_DA_ESPECIE[d.especie]).concat('Cédula / Contrato'), { piso: 90, folga: 14 });
+  const largEnviado = larguraDoMaior((docs ?? []).map((d) => d.enviadoPor ?? '—'), { piso: 100, folga: 14 });
+  const minimoDoArquivo = larguraDoMaior((docs ?? []).map((d) => d.nome), { piso: 120, folga: 14 });
   const receber = (arquivos: File[], vereditos: { arquivo: File; motivo: string | null }[]) => {
     setRecado(null);
     const novos = vereditos.length > 0 ? vereditos : arquivos.map((a) => ({ arquivo: a, motivo: null }));
@@ -345,20 +400,23 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
           </div>
         </div>
       )}
-      <table className="mt-1 w-full table-fixed border-collapse">
-        <colgroup><col style={{ width: 160 }} /><col /><col style={{ width: 80 }} /><col style={{ width: 130 }} /><col style={{ width: 100 }} /></colgroup>
-        <thead><tr><th className={TH}>Espécie</th><th className={TH}>Arquivo</th><th className={TH}>Data</th><th className={TH}>Enviado por</th><th className={TH} /></tr></thead>
+      <table className={`mt-1 w-full table-fixed border-collapse ${REGUA_FIN.tabela}`} style={{ minWidth: emDaRegua(largEspecie + minimoDoArquivo + 84 + largEnviado + 100) }}>
+        <colgroup>{col(largEspecie)}<col />{col(84)}{col(largEnviado)}{col(100)}</colgroup>
+        <thead><tr>
+          <ThOrdenavel col="especie" {...th}>Espécie</ThOrdenavel><ThOrdenavel col="arquivo" {...th}>Arquivo</ThOrdenavel>
+          <ThOrdenavel col="data" {...th}>Data</ThOrdenavel><ThOrdenavel col="enviado" {...th}>Enviado por</ThOrdenavel><th className={TH} />
+        </tr></thead>
         <tbody>
           {docs !== null && faltaCedula(docs) && (
             <tr className="border-b" data-testid="falta-cedula"><td className={`${TD} font-medium text-orange-600`}>Cédula / Contrato</td><td className={`${TD} text-orange-600`} colSpan={4}>falta — anexe a cédula do contrato</td></tr>
           )}
           {docs === null && <tr><td colSpan={5} className={`${TD} text-muted-foreground`}>…</td></tr>}
-          {(docs ?? []).map((d) => (
+          {(docsEmOrdem ?? []).map((d) => (
             <tr key={d.id} className="border-b" data-testid="linha-documento">
-              <td className={TD}><span className={CELULA} title={ROTULO_DA_ESPECIE[d.especie]}>{ROTULO_DA_ESPECIE[d.especie]}</span></td>
-              <td className={TD}><span className={CELULA} title={d.nome}>{d.nome}</span></td>
-              <td className={`${TD} tabular-nums`}>{br(d.criadoEm.slice(0, 10))}</td>
-              <td className={TD}><span className={CELULA} title={d.enviadoPor ?? undefined}>{d.enviadoPor ?? '—'}</span></td>
+              <td className={TD}><span className={REGUA_FIN.inteiro} title={ROTULO_DA_ESPECIE[d.especie]}>{ROTULO_DA_ESPECIE[d.especie]}</span></td>
+              <td className={TD}><span className={REGUA_FIN.inteiro} title={d.nome}>{d.nome}</span></td>
+              <td className={`${TD} tabular-nums`}><span className={REGUA_FIN.data}>{br(d.criadoEm.slice(0, 10))}</span></td>
+              <td className={TD}><span className={REGUA_FIN.inteiro} title={d.enviadoPor ?? undefined}>{d.enviadoPor ?? '—'}</span></td>
               <td className={`${TD} text-right`}>
                 <button type="button" className="mr-2 text-primary hover:underline" onClick={() => void abrir(d.storagePath)}>abrir</button>
                 <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => setRemovendo({ id: d.id, nome: d.nome })} data-testid="remover-documento">remover</button>

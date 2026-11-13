@@ -38,7 +38,7 @@ const tela = (o?: Record<string, unknown>, c?: Record<string, unknown>, k?: Reco
 const topo = (t: TelaDoContrato | null, pendencias = { qtde: 2, vencido: true }, onAbrirPendencias = vi.fn()) => render(
   <TopoDoContrato numero="SINT-78.179" descricao="Armazém" status="ativo" tela={t} onEditar={() => undefined}
     parcelas={{ total: 15, pagas: 0 }} quinta={{ rotulo: 'Vencido', valor: 'R$ 8.119,00', vermelho: true }}
-    pendencias={pendencias} onAbrirPendencias={onAbrirPendencias}
+    pendencias={pendencias} onAbrirPendencias={onAbrirPendencias} aLiberar={null} encargos={null}
     saldo={{ aplicaSaldo: true, regra: 'calculado', contratado: 6412049, liberado: 6412049, liberacoes: 3, amortizado: 0, saldo: 6412049, jurosPagos: 0,
       jurosPrevistos: 0, foraDasSomas: false, pendencias: [] }} />);
 
@@ -48,7 +48,8 @@ describe('(1) cabeçalho e total fora da rolagem', () => {
     const area = screen.getByTestId('area-que-rola-pagamentos');
     /* FIN-CONTRATO-TELA-FONTE-01: a área rola nos dois eixos e a tabela tem largura mínima (janela estreita rola dentro do cartão) */
     expect(area.className).toMatch(/\boverflow-auto\b/);
-    expect(screen.getByTestId('tabela-pagamentos').className).toMatch(/min-w-\[720px\]/);
+    /* FIN-FINANC-LAYOUT-03: a largura mínima é em `em` da régua (as fixas + o maior Item inteiro); abaixo dela rola dentro do quadro */
+    expect(screen.getByTestId('tabela-pagamentos').style.minWidth).toMatch(/^\d+(\.\d+)?em$/);
     expect(area.className).toMatch(/\bh-full\b/);
     for (const th of within(screen.getByTestId('cabecalho-pagamentos')).getAllByRole('columnheader')) expect(th.className).toMatch(/sticky top-0/);
     for (const td of screen.getByTestId('total-pagamentos').querySelectorAll('td')) expect(td.className).toMatch(/sticky bottom-0/);
@@ -148,32 +149,76 @@ describe('(5) "A resolver" é ABA (B3): nenhum bloco de pendências no corpo; o 
   });
 });
 
-describe('(5b) v4 — a FICHA: Resumo em 5 células + fatos em 3 colunas', () => {
-  it('um card só; o Resumo tem 5 células iguais (Vencido vermelho); os fatos, 3 colunas de 4 linhas', () => {
-    topo(tela());
+describe('(5b) FIN-FINANC-LAYOUT-03 — a FICHA: Resumo em 7 cartões + fatos em grade na largura inteira', () => {
+  it('um card só; o Resumo tem 7 cartões (A liberar e Encargos na liberação ao lado do Liberado; Vencido vermelho); os fatos, rótulo em cima do valor', () => {
+    render(<TopoDoContrato numero="SINT-78.179" descricao="Armazém" status="ativo" tela={tela()} onEditar={() => undefined}
+      parcelas={{ total: 15, pagas: 0 }} quinta={{ rotulo: 'Vencido', valor: 'R$ 8.119,00', vermelho: true }}
+      pendencias={{ qtde: 2, vencido: true }} onAbrirPendencias={() => undefined} aLiberar={12000} encargos={{ total: 124308.08, papeis: 'tarifa · iof' }}
+      saldo={{ aplicaSaldo: true, regra: 'calculado', contratado: 7200000, liberado: 7188000, liberacoes: 3, amortizado: 0, saldo: 7188000, jurosPagos: 0,
+        jurosPrevistos: 0, foraDasSomas: false, pendencias: [] }} />);
     const ficha = screen.getByTestId('ficha-do-contrato');
     const resumo = within(ficha).getByTestId('bloco-resumo');
-    expect(resumo.className).toContain('grid-cols-5');
-    expect(resumo.children.length).toBe(5);
-    expect([...resumo.children].map((c) => c.firstElementChild?.textContent)).toEqual(['Contratado', 'Liberado', 'Principal pago', 'Saldo devedor', 'Vencido']);
-    expect(resumo.children[4].lastElementChild?.className).toContain('text-[#b42318]');
+    /* 7 numa fileira a partir de 1.100px de janela; abaixo, 4 + 3 */
+    expect(resumo.className).toContain('grid-cols-4');
+    expect(resumo.className).toContain('min-[1100px]:grid-cols-7');
+    expect([...resumo.children].map((c) => c.firstElementChild?.textContent))
+      .toEqual(['Contratado', 'Liberado', 'A liberar', 'Encargos na liberação', 'Principal pago', 'Saldo devedor', 'Vencido']);
+    expect(screen.getByTestId('resumo-a-liberar').lastElementChild?.textContent).toBe('R$ 12.000,00');
+    expect(screen.getByTestId('resumo-encargos').lastElementChild?.textContent).toBe('R$ 124.308,08');
+    expect(screen.getByTestId('resumo-encargos').getAttribute('title')).toBe('encargos ligados ao contrato: tarifa · iof');
+    expect(resumo.children[6].lastElementChild?.className).toContain('text-[#b42318]');
     const grade = within(ficha).getByTestId('colunas-do-contrato');
-    expect(grade.className).toContain('grid-cols-[max-content_minmax(0,max-content)_max-content]');
-    /* FIN-FINANC-LAYOUT-01: as 3 colunas à esquerda, 48px entre elas (antes o vão abria no meio) */
-    expect(grade.className).toContain('justify-start gap-x-12');
-    const colunas = screen.getAllByTestId('coluna-do-contrato');
-    expect(colunas).toHaveLength(3);
-    /* cada coluna: rótulo da largura do maior DAQUELA coluna (max-content) e o valor colado a 10px */
-    for (const c of colunas) expect(c.className).toContain('grid-cols-[max-content_minmax(0,max-content)] content-start gap-x-[10px]');
-    expect(colunas.map((c) => c.children.length)).toEqual([4, 4, 4]);
+    expect(grade.className).toContain('grid-cols-4');
+    expect(grade.className).toContain('min-[1100px]:grid-cols-7');
+    /* o Credor ocupa duas colunas; cada fato: o rótulo pequeno EM CIMA, o valor embaixo */
+    expect(screen.getByTestId('campo-credor').className).toContain('col-span-2');
+    expect(grade.children.length).toBe(12);
+    for (const f of [...grade.children]) expect(f.children.length).toBe(2);
     expect(screen.getByTestId('campo-parcelas').textContent).toBe('Parcelas15 · 0 pagas');
     expect(screen.getByTestId('campo-atividade').textContent).toContain('Agricultura');
   });
-  it('sem vencido a 5ª célula é a que a tela mandar (próximo pagamento / quitado em)', () => {
+  it('sem liberação gravada: Liberado, A liberar e Saldo devedor "?" (nunca deduzido); sem encargo, R$ 0,00', () => {
+    render(<TopoDoContrato numero="X" descricao="Y" status="ativo" tela={tela()} onEditar={() => undefined} parcelas={null} quinta={null}
+      pendencias={{ qtde: 0, vencido: false }} onAbrirPendencias={() => undefined} aLiberar={null} encargos={null}
+      saldo={{ aplicaSaldo: true, regra: 'calculado', contratado: 100, liberado: null, liberacoes: 0, amortizado: 0, saldo: null, jurosPagos: 0, jurosPrevistos: 0, foraDasSomas: false, pendencias: [] }} />);
+    expect(screen.getByTestId('resumo-a-liberar').lastElementChild?.textContent).toBe('?');
+    expect(screen.getByTestId('resumo-encargos').lastElementChild?.textContent).toBe('R$ 0,00');
+  });
+  it('sem vencido a última célula é a que a tela mandar (próximo pagamento / quitado em)', () => {
     render(<TopoDoContrato numero="X" descricao="Y" status="quitado" tela={tela()} onEditar={() => undefined} parcelas={{ total: 1, pagas: 1 }}
-      quinta={{ rotulo: 'Quitado em', valor: '21/07/2025' }} pendencias={{ qtde: 0, vencido: false }} onAbrirPendencias={() => undefined} saldo={null} />);
+      quinta={{ rotulo: 'Quitado em', valor: '21/07/2025' }} pendencias={{ qtde: 0, vencido: false }} onAbrirPendencias={() => undefined} saldo={null}
+      aLiberar={null} encargos={undefined} />);
     const resumo = screen.getByTestId('bloco-resumo');
-    expect(resumo.children[4].textContent).toBe('Quitado em21/07/2025');
+    expect(resumo.children[6].textContent).toBe('Quitado em21/07/2025');
+    expect(screen.getByTestId('resumo-encargos').lastElementChild?.textContent).toBe('…');
+  });
+});
+
+describe('(5d) FIN-FINANC-LAYOUT-03 — ordenação: todo cabeçalho ordena, padrão pela data, o total não se mexe', () => {
+  const ordem = (testId: string) => screen.getAllByTestId(testId).map((l) => l.textContent?.slice(0, 10));
+  it('Histórico: a data em ordem crescente por padrão; o clique inverte; outra coluna começa crescente', () => {
+    render(<TabelaDoHistorico tela={tela()} />);
+    expect(ordem('linha-historico')).toEqual(['21/11/2025', '22/07/2026']);
+    const data = screen.getByRole('columnheader', { name: /Data/ });
+    expect(data.getAttribute('aria-sort')).toBe('ascending');
+    fireEvent.click(within(data).getByRole('button'));
+    expect(ordem('linha-historico')).toEqual(['22/07/2026', '21/11/2025']);
+    expect(data.getAttribute('aria-sort')).toBe('descending');
+    const valor = screen.getByRole('columnheader', { name: /Valor/ });
+    fireEvent.click(within(valor).getByRole('button'));
+    expect(valor.getAttribute('aria-sort')).toBe('ascending');
+    expect(data.getAttribute('aria-sort')).toBe('none');
+    expect(screen.getAllByTestId('linha-historico').map((l) => l.textContent?.includes('Encargo'))).toEqual([true, false]);
+  });
+  it('Pagamentos: ordenar pelo Total decrescente; o rodapé continua o mesmo, preso', () => {
+    render(<TabelaDePagamentos tela={tela()} onAbrirLancamento={() => undefined} />);
+    const total = screen.getByRole('columnheader', { name: /^Total/ });
+    fireEvent.click(within(total).getByRole('button')); fireEvent.click(within(total).getByRole('button'));
+    expect(screen.getAllByTestId('linha-pagamento').map((l) => l.textContent?.includes('Parcela 1/15'))).toEqual([true, false]);
+    fireEvent.click(within(total).getByRole('button'));
+    expect(screen.getAllByTestId('linha-pagamento').map((l) => l.textContent?.includes('Parcela 1/15'))).toEqual([false, true]);
+    expect(screen.getByTestId('total-pagamentos').textContent).toContain('1.088,00');
+    for (const th of within(screen.getByTestId('cabecalho-pagamentos')).getAllByRole('columnheader')) expect(th.getAttribute('aria-sort')).not.toBeNull();
   });
 });
 

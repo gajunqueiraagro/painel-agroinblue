@@ -192,6 +192,9 @@ const CENARIOS = [
   { nome: 'contrato-parcela-zero', url: 'tela=contrato&zero=1', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contrato-parcelamento', url: 'tela=contrato&v=parcelamento', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contrato-consorcio', url: 'tela=contrato&v=consorcio', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* FIN-FINANC-LAYOUT-03 (Chat 12/11 18:35/22:00) — a lista de Financiamentos na régua única: 10/9 abaixo de 1.350px e 11/10 acima, todas as
+     colunas, sem rolagem horizontal de 1.126px para cima (a regra vale dali para cima); com os tamanhos reais do proto e os encerrados abertos */
+  { nome: 'financiamentos-lista', url: 'tela=financiamentos-lista&enc=1', tamanhos: [[1126, 579], [1240, 700], [1349, 768], [1366, 768], [1440, 900]] },
   /* PARC-DOCS-TABELA-01 — Editar obrigação › Documentos da compra parcelada com 2 (o caso real), 18 e 36 parcelas e uma nota: a tabela das
      Parcelas vai até o fim do modal, cabeçalho e Total inteiros, só o corpo rola; as 2 nunca rolam; as 18 não rolam a 1440x800 (abaixo,
      o bloco dos documentos da compra deixa menos que as 18 linhas compactas: o corpo rola com cabeçalho e Total presos) */
@@ -1085,6 +1088,18 @@ const CENARIOS = [
         await p.locator('[data-testid="linha-historico"]').first().waitFor(); await p.waitForTimeout(400); } },
     ];
   })(),
+  /* REBANHO-INICIAL-EDITAR-01 — o Editar do saldo inicial (dado SINTÉTICO, a lista chega depois do 1º render): abre em jan/2024 (nunca no
+     janeiro do fechamento), Cancelar sempre; e a prévia antes × depois com o mês que grava */
+  ...(() => {
+    const URL = 'tela=saldo-inicial';
+    const TAM = [[1126, 579], [1366, 768], [1440, 800]];
+    const editar = async (p) => { await p.getByText('Editar', { exact: true }).click(); await p.locator('[role="dialog"]').waitFor(); await p.waitForTimeout(400); };
+    return [
+      { nome: 'saldo-inicial-editar', url: URL, tamanhos: TAM, regiao: '[role="dialog"]', antes: editar },
+      { nome: 'saldo-inicial-previa', url: URL, tamanhos: TAM, regiao: '[role="dialog"]', antes: async (p) => { await editar(p);
+        await p.locator('[role="dialog"] input[value="210"]').fill('211'); await p.getByText('Salvar Saldo Inicial', { exact: true }).click(); await p.waitForTimeout(400); } },
+    ];
+  })(),
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos, modo "Grupos" (dado SINTÉTICO no `tela=pastos`): a lista dos grupos, com os
      inativos, o modal de editar (3 piquetes, a prévia "já está assim"), o novo grupo com o pasto de nome longo e área no milhar, a
      prévia da desativação, e a etiqueta do grupo no cartão do modo "Ordem manual" */
@@ -1104,6 +1119,14 @@ const CENARIOS = [
       ...['cadastro', 'infra', 'avaliacoes', 'reformas', 'lotacao', 'documentos'].map((aba) => ({ nome: `pastos-ficha-${aba}`, url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)],
         regiao: '[role="dialog"]', antes: async (p) => { await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
           await p.locator(`[data-testid="ficha-aba-${aba}"]`).click(); await p.waitForTimeout(600); } })),
+      /* PASTO-CADASTRO-GEO-01 (4): a sombra mudada na Infraestrutura acende o Salvar (frase do rodapé) e o fechar pergunta */
+      { nome: 'pastos-ficha-infra-mudou', url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)], regiao: '[role="dialog"]', antes: async (p) => {
+        await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
+        await p.locator('[data-testid="ficha-aba-infra"]').click(); await p.getByRole('button', { name: 'Suficiente', exact: true }).click(); await p.waitForTimeout(500); } },
+      { nome: 'pastos-ficha-sair-sem-salvar', url: URL, tamanhos: [[918, 516], ...T.filter(([w]) => w >= 900)], regiao: '[role="alertdialog"]', antes: async (p) => {
+        await p.locator('[data-testid="editar-pasto"]').first().click(); await p.locator('[data-testid="ficha-do-pasto"]').waitFor();
+        await p.locator('[data-testid="ficha-aba-infra"]').click(); await p.getByRole('button', { name: 'Suficiente', exact: true }).click();
+        await p.getByRole('button', { name: 'Fechar', exact: true }).click(); await p.locator('[data-testid="ficha-perguntar-fechar"]').waitFor(); await p.waitForTimeout(400); } },
       { nome: 'pastos-lista', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="lista-pastos"]').waitFor(); await p.waitForTimeout(500); } },
       { nome: 'pastos-lista-piquetes', url: URL, tamanhos: T, antes: async (p) => { await p.locator('[data-testid="abrir-piquetes"]').first().click(); await p.waitForTimeout(400); } },
       { nome: 'pastos-lista-destino', url: URL, tamanhos: T, antes: async (p) => { await p.getByRole('button', { name: 'Destino', exact: true }).first().click();

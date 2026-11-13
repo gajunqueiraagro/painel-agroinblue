@@ -28,7 +28,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { nomeDoHistorico } from '@/lib/conciliacao/nomeDoHistorico';
 import { TabelaDaLista } from '@/components/financeiro-v2/TabelaDaLista';
-import { CabecalhoParaCasar, LinhaParaCasarNaTabela, COLUNAS_PARA_CASAR, N_COLUNAS_PARA_CASAR, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR,
+import { CabecalhoParaCasar, LinhaParaCasarNaTabela, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, TODAS_AS_COLUNAS_PARA_CASAR, largurasParaCasar,
   ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR } from '@/components/conciliacao/TabelaParaCasar';
 import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/conciliacao/complementoDasLinhas';
 import {
@@ -108,11 +108,15 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
     return () => { vivo = false; };
   }, [clienteId, estado]);
   const faixa = estado.tipo === 'pronto' ? fraseDaFaixa(estado.termo, estado.r.resumo) : null;
-  const frase = faixa ?? (!nomeDoBanco && estado.tipo === 'antes' ? 'o banco não trouxe o nome: digite' : null);
+  const frase = faixa?.curta ?? (!nomeDoBanco && estado.tipo === 'antes' ? 'o banco não trouxe o nome: digite' : null);
   const contagem = estado.tipo === 'pronto' ? contagemDosAchados(estado.r) : estado.tipo === 'procurando' ? 'procurando…' : '';
   const alturaFixa = ALTURA_DO_CABECALHO_PARA_CASAR + LINHAS_A_VISTA * ALTURA_DA_LINHA_PARA_CASAR + 2;
   /* o cabeçalho só fica PRESO quando o quadro rola de fato (mais linhas que as à vista) — preso num quadro que não rola é vão (P153) */
   const linhasNoQuadro = (frase ? 1 : 0) + (estado.tipo === 'pronto' ? Math.max(1, achados.length) : estado.tipo === 'falhou' ? 1 : 0);
+  /* UI-FONTE-GATE-01 (Chat 12/11 17:05, escolha A): no histórico Faz. e NF ficam SEMPRE reservadas — os achados chegam por gesto e a NF
+     ainda depois (o complemento); colunas pelo dado fariam o cabeçalho andar (desloca casar-sugestoes-procurar). Só as Sugestões as tiram. */
+  const colunas = TODAS_AS_COLUNAS_PARA_CASAR;
+  const larguras = largurasParaCasar(colunas);
 
   return (
     <div className={cn('mt-2', preencher && 'flex min-h-0 flex-1 flex-col')} data-testid="procurar-historico">
@@ -122,7 +126,7 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
         <span className="shrink-0 whitespace-nowrap font-semibold text-foreground">Procurar<span className="hidden min-[900px]:inline"> no histórico</span></span>
         <Input ref={campoRef} value={termo} onChange={(e) => setTermo(e.target.value)} placeholder="nome do fornecedor ou do banco"
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void procurar(); } }}
-          className="h-[22px] w-auto min-w-[80px] max-w-[200px] flex-1 px-1.5 text-[10px]" data-testid="procurar-historico-termo" aria-label="Procurar no histórico" />
+          className="h-[22px] w-auto min-w-[80px] flex-1 px-1.5 text-[10px]" data-testid="procurar-historico-termo" aria-label="Procurar no histórico" />
         {ONDE_TODOS.map((o) => (
           <label key={o} className="flex shrink-0 items-center gap-1 whitespace-nowrap text-muted-foreground">
             <Checkbox checked={onde.has(o)} onCheckedChange={() => alternar(o)} className="h-3 w-3" data-testid={`procurar-onde-${o}`} />
@@ -139,7 +143,7 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
           Procurar
         </button>
         {/* a contagem tem lugar reservado: "procurando…", "N achados" e vazio ocupam o mesmo (vazio = um espaço fixo) */}
-        <span className="ml-auto w-[96px] shrink-0 truncate text-right tabular-nums text-muted-foreground" title={contagem || undefined}
+        <span className="ml-auto w-[64px] shrink-0 truncate text-right tabular-nums text-muted-foreground" title={contagem || undefined}
           data-testid="procurar-historico-contagem">{contagem || ' '}</span>
       </div>
 
@@ -147,24 +151,24 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
       <div className={cn('mt-1 overflow-auto rounded-sm border bg-card', preencher && 'min-h-0 flex-1')}
         style={preencher ? { minHeight: ALTURA_DO_CABECALHO_PARA_CASAR + 2 * ALTURA_DA_LINHA_PARA_CASAR + 2 } : { height: alturaFixa }} data-testid="procurar-historico-quadro">
         <div style={{ minWidth: PISO_DO_QUADRO }} data-testid="procurar-historico-piso">
-        <TabelaDaLista larguras={COLUNAS_PARA_CASAR} grande cabecalhoPreso={!!preencher || linhasNoQuadro > LINHAS_A_VISTA} cabecalho={<CabecalhoParaCasar prefixo="procurar"
+        <TabelaDaLista larguras={larguras} cabecalhoPreso={!!preencher || linhasNoQuadro > LINHAS_A_VISTA} cabecalho={<CabecalhoParaCasar prefixo="procurar" colunas={colunas}
           ordenar={(k) => setOrdem((o) => proximaOrdem(o, k))} seta={(k) => (ordem.coluna === k ? (ordem.sentido === 'asc' ? '↑' : '↓') : '')} />}>
             {frase && (
               <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}>
-                <td colSpan={N_COLUNAS_PARA_CASAR} className={cn('truncate px-1', faixa ? 'bg-amber-50 text-amber-800' : 'text-muted-foreground')}
-                  title={frase} data-testid="procurar-historico-frase">{frase}</td>
+                <td colSpan={larguras.length} className={cn('truncate px-1', faixa ? 'bg-amber-50 text-amber-800' : 'text-muted-foreground')}
+                  title={faixa?.inteira ?? frase} data-testid="procurar-historico-frase">{frase}</td>
               </tr>
             )}
             {estado.tipo === 'falhou' && (
               <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}>
-                <td colSpan={N_COLUNAS_PARA_CASAR} className="truncate px-1 text-muted-foreground">
+                <td colSpan={larguras.length} className="truncate px-1 text-muted-foreground">
                   Não consegui procurar: {estado.motivo}.{' '}
                   <button type="button" onClick={() => void procurar()} className="font-semibold text-[#1d4ed8] underline underline-offset-2">Tentar de novo</button>
                 </td>
               </tr>
             )}
             {estado.tipo === 'pronto' && achados.length === 0 && (
-              <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}><td colSpan={N_COLUNAS_PARA_CASAR} className="px-1 italic text-muted-foreground">nada achado com "{estado.termo}"</td></tr>
+              <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}><td colSpan={larguras.length} className="px-1 italic text-muted-foreground">nada achado com "{estado.termo}"</td></tr>
             )}
             {achados.map((a) => {
               const acao = acaoDoAchado(a, contaId, !!onCasar);
@@ -174,7 +178,7 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
               const x = complemento.get(a.lancamentoId);
               const casa = acao !== 'criar_igual';
               return (
-                <LinhaParaCasarNaTabela key={a.lancamentoId} testidDaLinha="procurar-historico-achado" dadoAcao={acao} testid="procurar-acao"
+                <LinhaParaCasarNaTabela key={a.lancamentoId} colunas={colunas} testidDaLinha="procurar-historico-achado" dadoAcao={acao} testid="procurar-acao"
                   l={{ id: a.lancamentoId, comp: a.dataCompetencia, venc: a.dataVencimento, pgto: a.dataPagamento, descricao: a.descricao, tituloDescricao,
                     fornecedor: a.fornecedor, fazendaCodigo: a.fazendaCodigo ?? a.fazenda, fazendaNome: a.fazenda,
                     tipoDocumento: x?.tipoDocumento ?? null, numeroDocumento: x?.numeroDocumento ?? null, valor: a.valor, status: a.status, conciliado: a.conciliado }}

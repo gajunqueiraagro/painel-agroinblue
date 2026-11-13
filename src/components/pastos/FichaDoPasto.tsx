@@ -8,10 +8,13 @@
  *   · texto longo mora no ⓘ (`Ajuda`); rótulo curto, sem caixa alta; recusa do banco na faixa do rodapé, nunca toast.
  * As contas e as chamadas são da lib (`fichaDoPasto.ts`).
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -29,7 +32,7 @@ import { formatarAreaBR } from '@/lib/areaBR';
 import { TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido, labelDoTipoUso } from '@/lib/pastos/tiposUso';
 import type { ListaDoCatalogo } from '@/lib/catalogo/catalogo';
 import {
-  API_FICHA_DO_PASTO, FORM_VAZIO, areaMudou, camposDoForm, camposQueMudaram, lerMudancas, pendencias,
+  API_FICHA_DO_PASTO, FORM_VAZIO, areaMudou, cadastroXMapa, camposDoForm, camposQueMudaram, lerMudancas, pendencias,
   type ApiFichaDoPasto, type AvaliacaoDoPasto, type FichaLida, type FormDaFicha, type InfraDoPasto, type LotacaoDoMes,
   type MudancaDaPrevia, type ReformaDoPasto, type Resultado,
 } from '@/lib/pastos/fichaDoPasto';
@@ -63,6 +66,9 @@ export interface FichaDoPastoProps {
   podeEditar: boolean;
   /** FECH-PASTO-UNIDADE-01 F2b (Code 4): "É piquete de outro pasto…" / "Voltar a pastos soltos…" — só o admin, no cabeçalho */
   acoesDoCabecalho?: ReactNode;
+  /** PASTO-CADASTRO-GEO-01 P2: "Ver/editar no mapa" (com desenho) ou "Desenhar no mapa" (sem). Sem a prop (ex.: a ficha aberta no
+   *  próprio mapa), o botão não aparece. Com mudança não salva, pergunta antes de sair. */
+  aoAbrirNoMapa?: (desenhar: boolean) => void;
   aoFechar: () => void;
   /** depois de gravar (a lista relê) */
   aoGravar: () => void;
@@ -71,24 +77,25 @@ export interface FichaDoPastoProps {
 
 /* ── peças pequenas ────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-function Campo({ rotulo, obrig, erro, ajuda, children, className }: {
-  rotulo: string; obrig?: boolean; erro?: string; ajuda?: ReactNode; children: ReactNode; className?: string;
+function Campo({ rotulo, obrig, erro, nota, ajuda, children, className }: {
+  rotulo: string; obrig?: boolean; erro?: string; nota?: string; ajuda?: ReactNode; children: ReactNode; className?: string;
 }) {
   return (
     <div className={cn('relative min-w-0 pb-[11px]', className)}>
       <div className="flex h-[13px] items-center gap-1"><Rotulo texto={rotulo} obrig={obrig} className="mb-0 flex-1 text-[9.5px] leading-[13px]" />{ajuda}</div>
       {children}
-      {/* a frase da pendência mora no vão de baixo, de altura FIXA (nada se desloca quando ela aparece) */}
-      <p className="absolute inset-x-0 bottom-0 h-[11px] truncate text-[9.5px] leading-[11px] text-destructive" title={erro}>{erro ?? ''}</p>
+      {/* a frase da pendência (ou, sem ela, a nota cinza do campo) mora no vão de baixo, de altura FIXA (nada se desloca quando ela aparece) */}
+      <p className={cn('absolute inset-x-0 bottom-0 h-[11px] truncate text-[9.5px] leading-[11px]', erro ? 'text-destructive' : 'text-muted-foreground')}
+        title={erro ?? nota}>{erro ?? nota ?? ''}</p>
     </div>
   );
 }
 
-function CelulaDaFaixa({ rotulo, valor }: { rotulo: string; valor: ReactNode }) {
+function CelulaDaFaixa({ rotulo, valor, title }: { rotulo: string; valor: ReactNode; title?: string }) {
   return (
     <div className="min-w-0 border-r border-white/15 px-3 py-0.5 last:border-r-0">
       <div className="truncate text-[9.5px] text-white/70">{rotulo}</div>
-      <div className="truncate text-[11.5px] font-semibold text-white">{valor}</div>
+      <div className="truncate text-[11.5px] font-semibold text-white" title={title}>{valor}</div>
     </div>
   );
 }
@@ -101,13 +108,20 @@ const ABAS: { v: Aba; rotulo: string }[] = [
 /* ── o modal ───────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
 export function FichaDoPasto({
-  pastoId, fazendaId, fazendaNome, clienteId, mesDeHoje, hoje, piquetes = 0, podeEditar, acoesDoCabecalho, aoFechar, aoGravar, api = API_FICHA_DO_PASTO,
+  pastoId, fazendaId, fazendaNome, clienteId, mesDeHoje, hoje, piquetes = 0, podeEditar, acoesDoCabecalho, aoAbrirNoMapa, aoFechar, aoGravar, api = API_FICHA_DO_PASTO,
 }: FichaDoPastoProps) {
   const novo = pastoId == null;
   const [aba, setAba] = useState<Aba>('cadastro');
   const [lida, setLida] = useState<FichaLida | null>(null);
   const [erroDeLeitura, setErroDeLeitura] = useState<string | null>(null);
-  const [form, setForm] = useState<FormDaFicha>({ ...FORM_VAZIO, mesInicio: mesDeHoje, areaDesde: mesDeHoje });
+  /* o formulário como nasceu no NOVO: a régua do "mudou alguma coisa?" antes de existir a ficha lida */
+  const [formInicial] = useState<FormDaFicha>(() => ({ ...FORM_VAZIO, mesInicio: mesDeHoje, areaDesde: mesDeHoje }));
+  const [form, setForm] = useState<FormDaFicha>(formInicial);
+  /* as abas já abertas ficam MONTADAS (escondidas): trocar de aba não perde nada, nem a avaliação em aberto */
+  const [visitadas, setVisitadas] = useState<ReadonlySet<Aba>>(() => new Set<Aba>(['cadastro']));
+  const [avaliacaoAberta, setAvaliacaoAberta] = useState(false);
+  /* a saída pedida com mudança não salva (fechar ou ir ao mapa): espera o "Sair sem salvar?" */
+  const [saidaPedida, setSaidaPedida] = useState<'fechar' | 'mapa' | null>(null);
   const [mostrarPendencias, setMostrarPendencias] = useState(false);
   const [previa, setPrevia] = useState<{ mudancas: MudancaDaPrevia[]; area: string | null } | null>(null);
   const [motivo, setMotivo] = useState('');
@@ -127,7 +141,23 @@ export function FichaDoPasto({
 
   const base = lida?.form ?? FORM_VAZIO;
   const pend = useMemo(() => pendencias(form, novo), [form, novo]);
-  const mudou = novo || Object.keys(camposQueMudaram(base, form)).length > 0 || areaMudou(base, form);
+  /* PASTO-CADASTRO-GEO-01 (4): o estado sujo é do MODAL INTEIRO — Cadastro e Infraestrutura (sombra) editam o mesmo `form`; o Salvar
+     do rodapé acende com qualquer mudança deles, em qualquer aba. A avaliação em aberto não é do Salvar (grava no botão dela). */
+  const formMudou = useMemo(() => {
+    const regua = lida?.form ?? (novo ? formInicial : null);
+    return regua != null && (Object.keys(camposQueMudaram(regua, form)).length > 0 || areaMudou(regua, form));
+  }, [lida, novo, formInicial, form]);
+  const mudou = novo || formMudou;
+  const sujo = formMudou || avaliacaoAberta;
+  /* a contagem das abas: funções ESTÁVEIS e sem estado novo quando o número não muda — com uma função nova a cada render, o efeito
+     da aba (deps [dados, aoContar]) chamava de novo, o estado mudava e o render voltava: laço sem fim (com as abas montadas, para sempre) */
+  const contarAvaliacoes = useCallback((n: number) => setContagem((c) => (c.avaliacoes === n ? c : { ...c, avaliacoes: n })), []);
+  const contarReformas = useCallback((n: number) => setContagem((c) => (c.reformas === n ? c : { ...c, reformas: n })), []);
+  const irPara = (a: Aba) => { setAba(a); setVisitadas((v) => (v.has(a) ? v : new Set(v).add(a))); };
+  const pedirFechar = () => { if (ocupado) return; if (sujo) setSaidaPedida('fechar'); else aoFechar(); };
+  const semDesenho = (lida?.nPoligonos ?? 0) === 0;
+  const irAoMapa = () => { if (ocupado || !aoAbrirNoMapa) return; if (sujo) setSaidaPedida('mapa'); else aoAbrirNoMapa(semDesenho); };
+  const sairDeVez = () => { const s = saidaPedida; setSaidaPedida(null); if (s === 'mapa' && aoAbrirNoMapa) aoAbrirNoMapa(semDesenho); else aoFechar(); };
   const pede = (k: keyof FormDaFicha) => (mostrarPendencias ? pend[k] : undefined);
   const trocar = (patch: Partial<FormDaFicha>) => { setForm((f) => ({ ...f, ...patch })); setPrevia(null); setFaixa(null); };
   const anos = useMemo(() => anosDoCampo(mesDeHoje), [mesDeHoje]);
@@ -137,7 +167,7 @@ export function FichaDoPasto({
 
   /* ── gravar: prévia → confirmar ─────────────────────────────────────────────────────────────────────────────────────── */
   const pedirPrevia = async () => {
-    if (Object.keys(pend).length > 0) { setMostrarPendencias(true); setFaixa({ texto: 'Falta preencher o que está em vermelho.', erro: true }); return; }
+    if (Object.keys(pend).length > 0) { setMostrarPendencias(true); irPara('cadastro'); setFaixa({ texto: 'Falta preencher o que está em vermelho.', erro: true }); return; }
     setOcupado(true); setFaixa(null);
     if (novo) {
       const r = await api.criar(fazendaId, camposDoForm(form), form.area ?? 0, true);
@@ -203,20 +233,31 @@ export function FichaDoPasto({
   );
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o && !ocupado) aoFechar(); }}>
+    <>
+    <Dialog open onOpenChange={(o) => { if (!o) pedirFechar(); }}>
       <DialogContent className="flex h-[580px] max-h-[94vh] w-[1000px] max-w-[96vw] flex-col gap-0 overflow-hidden p-0 [&>button]:hidden" data-testid="ficha-do-pasto">
         {/* cabeçalho azul-marinho */}
         <div className="flex h-[32px] shrink-0 items-center justify-between bg-primary px-4 text-primary-foreground">
           <DialogTitle className="truncate text-[13px] font-semibold" title={titulo}>{titulo}</DialogTitle>
           <div className="flex shrink-0 items-center gap-2">
             {acoesDoCabecalho}
-            <button type="button" onClick={aoFechar} disabled={ocupado} aria-label="Fechar" className="text-white/80 hover:text-white"><X className="h-4 w-4" /></button>
+            {aoAbrirNoMapa && !novo && lida && (
+              <Button variant="outline" size="sm" className="h-6 border-white/40 bg-transparent text-[10.5px] text-white hover:bg-white/10" onClick={irAoMapa}
+                disabled={ocupado} data-testid="ficha-abrir-no-mapa" title={semDesenho ? 'Abre o Geo pastos para desenhar este pasto (volta para esta ficha)'
+                  : 'Abre o Geo pastos com este pasto selecionado (volta para esta ficha)'}>{semDesenho ? 'Desenhar no mapa' : 'Ver/editar no mapa'}</Button>
+            )}
+            <button type="button" onClick={pedirFechar} disabled={ocupado} aria-label="Fechar" className="text-white/80 hover:text-white"><X className="h-4 w-4" /></button>
           </div>
         </div>
         <DialogDescription className="sr-only">Ficha do pasto: cadastro, infraestrutura, avaliações, reformas, lotação e documentos</DialogDescription>
         {/* a faixa de resumo (5 lugares fixos) */}
-        <div className="grid h-[38px] shrink-0 grid-cols-5 bg-[hsl(var(--primary)/0.88)]" data-testid="ficha-faixa">
-          <CelulaDaFaixa rotulo="área" valor={lida?.areaOficial != null ? `${formatarAreaBR(lida.areaOficial)} ha` : novo && form.area ? `${formatarAreaBR(form.area)} ha` : '—'} />
+        {/* PASTO-CADASTRO-GEO-01 P1: a 1ª célula é "cadastro × mapa" (mais larga: os dois números e a %) */}
+        <div className="grid h-[38px] shrink-0 grid-cols-[1.5fr_1fr_1fr_1fr_1fr] bg-[hsl(var(--primary)/0.88)]" data-testid="ficha-faixa">
+          {lida ? (() => {
+            const cxm = cadastroXMapa(lida, (n) => formatarAreaBR(n));
+            return <CelulaDaFaixa rotulo="área · cadastro × mapa" valor={<span className={cn(cxm.alerta && 'text-amber-300')} data-testid="ficha-cadastro-x-mapa">{cxm.texto}</span>}
+              title={cxm.texto} />;
+          })() : <CelulaDaFaixa rotulo="área" valor={novo && form.area ? `${formatarAreaBR(form.area)} ha` : '—'} />}
           <CelulaDaFaixa rotulo="forrageira" valor={r?.forrageira ?? form.forrageiraPrincipal.nome ?? '—'} />
           <CelulaDaFaixa rotulo="última reforma" valor={r?.reforma ? `${r.reforma.data.slice(0, 4)}${r.reforma.idadeAnos != null ? ` · ${r.reforma.idadeAnos} anos` : ''}` : '—'} />
           <CelulaDaFaixa rotulo={`suporte${r?.epoca ? ` (${r.epoca})` : ''} · UA/ha`} valor={dec2(r?.suporte)} />
@@ -229,7 +270,7 @@ export function FichaDoPasto({
             const n = a.v === 'avaliacoes' ? contagem.avaliacoes : a.v === 'reformas' ? contagem.reformas : null;
             return (
               <button key={a.v} type="button" role="tab" aria-selected={aba === a.v} disabled={desligada}
-                title={desligada ? 'Salve o pasto primeiro' : undefined} onClick={() => setAba(a.v)} data-testid={`ficha-aba-${a.v}`}
+                title={desligada ? 'Salve o pasto primeiro' : undefined} onClick={() => irPara(a.v)} data-testid={`ficha-aba-${a.v}`}
                 className={cn('h-[26px] border-b-2 px-3 text-[10.5px]', aba === a.v ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground',
                   desligada && 'cursor-not-allowed opacity-40')}>
                 {/* a largura do NEGRITO reservada em toda aba (a cópia invisível): a ativa engrossa sem empurrar as outras */}
@@ -265,8 +306,11 @@ export function FichaDoPasto({
                       <CampoNumeroComConta valor={form.area} onChange={(n) => trocar({ area: n })} disabled={somenteLeitura} invalido={!!pede('area')}
                         className={REGUA_CAMPO} />
                     </Campo>
-                    <Campo rotulo="a partir de">
-                      <div className={cn((novo || !areaMudou(base, form)) && 'pointer-events-none opacity-50')} title={novo ? 'No pasto novo, a área vale desde o "em uso desde"' : undefined}>
+                    {/* PASTO-CADASTRO-GEO-01 (2): travado DE PROPÓSITO — o "a partir de" é o mês em que a área NOVA passa a valer; sem área
+                        nova não há o que datar (no novo, a área vale desde o "em uso desde"). A nota cinza diz isso no lugar do campo. */}
+                    <Campo rotulo="a partir de" nota={novo ? 'vale desde o "em uso desde"' : !areaMudou(base, form) ? 'mude a área para escolher' : undefined}>
+                      <div className={cn((novo || !areaMudou(base, form)) && 'pointer-events-none opacity-50')}
+                        title={novo ? 'No pasto novo, a área vale desde o "em uso desde"' : !areaMudou(base, form) ? 'Mude a área para escolher a partir de quando ela vale' : undefined}>
                         <CampoDoMes valor={novo ? form.mesInicio : form.areaDesde} onMudar={(v) => trocar(novo ? { mesInicio: v } : { areaDesde: v })}
                           anos={anos} anoDeReferencia={Number(mesDeHoje.slice(0, 4))} testid="ficha-area-desde" />
                       </div>
@@ -366,23 +410,30 @@ export function FichaDoPasto({
                 </BlocoFormulario>
               </div>
             </div>
-          ) : aba === 'infra' && pastoId ? (
-            <AbaInfra api={api} pastoId={pastoId} form={form} trocar={trocar} clienteId={clienteId} somenteLeitura={somenteLeitura} />
-          ) : aba === 'avaliacoes' && pastoId ? (
-            <AbaAvaliacoes api={api} pastoId={pastoId} hoje={hoje} podeEditar={podeEditar}
-              aoContar={(n) => setContagem((c) => ({ ...c, avaliacoes: n }))} aoGravar={aoGravar} />
-          ) : aba === 'reformas' && pastoId ? (
-            <AbaReformas api={api} pastoId={pastoId} aoContar={(n) => setContagem((c) => ({ ...c, reformas: n }))} />
-          ) : aba === 'lotacao' && pastoId ? (
-            <AbaLotacao api={api} pastoId={pastoId} ate={lida?.anoMes || mesDeHoje} />
           ) : aba === 'documentos' ? (
             <BlocoFormulario titulo="Documentos e fotos">
               <p className="py-6 text-center text-[11px] text-muted-foreground">Em breve: análise de solo, fotos, croqui, laudo e o contrato de arrendamento.</p>
             </BlocoFormulario>
           ) : null}
+          {/* as abas com leitura própria: montadas na 1ª visita e só ESCONDIDAS depois (o rascunho da avaliação sobrevive à troca de aba) */}
+          {pastoId && !erroDeLeitura && (<>
+            {visitadas.has('infra') && <div hidden={aba !== 'infra'}>
+              <AbaInfra api={api} pastoId={pastoId} form={form} trocar={trocar} clienteId={clienteId} somenteLeitura={somenteLeitura} />
+            </div>}
+            {visitadas.has('avaliacoes') && <div hidden={aba !== 'avaliacoes'}>
+              <AbaAvaliacoes api={api} pastoId={pastoId} hoje={hoje} podeEditar={podeEditar} aoRascunho={setAvaliacaoAberta}
+                aoContar={contarAvaliacoes} aoGravar={aoGravar} />
+            </div>}
+            {visitadas.has('reformas') && <div hidden={aba !== 'reformas'}>
+              <AbaReformas api={api} pastoId={pastoId} aoContar={contarReformas} />
+            </div>}
+            {visitadas.has('lotacao') && <div hidden={aba !== 'lotacao'}>
+              <AbaLotacao api={api} pastoId={pastoId} ate={lida?.anoMes || mesDeHoje} />
+            </div>}
+          </>)}
 
-          {/* a PRÉVIA do banco (o que muda), antes de gravar */}
-          {previa && aba === 'cadastro' && (
+          {/* a PRÉVIA do banco (o que muda), antes de gravar — em qualquer aba: o Salvar é um só */}
+          {previa && (
             <section className="mt-2 rounded-lg border border-primary/40 bg-card px-2.5 py-1.5" data-testid="ficha-previa">
               <h3 className="text-[11px] font-semibold">O que muda</h3>
               <table className="w-full table-fixed text-[10px]">
@@ -412,18 +463,38 @@ export function FichaDoPasto({
         {/* o rodapé: a frase (lugar fixo) e os botões */}
         <div className="flex h-[40px] shrink-0 items-center gap-2 border-t bg-card px-4">
           <p className={cn('min-w-0 flex-1 truncate text-[10.5px]', faixa?.erro ? 'text-destructive' : 'text-muted-foreground')} title={faixa?.texto} data-testid="ficha-frase">
-            {faixa?.texto ?? (previa ? 'Confira o que muda e grave.' : '')}
+            {faixa?.texto ?? (previa ? 'Confira o que muda e grave.'
+              : !novo && formMudou ? 'Há mudança não salva: o Salvar grava o Cadastro e a Sombra juntos.'
+              : avaliacaoAberta ? 'A avaliação em aberto grava no botão dela, na aba Avaliações.' : '')}
           </p>
-          <Button variant="outline" size="sm" className="h-7 w-[90px] text-[11px]" onClick={aoFechar} disabled={ocupado}>Cancelar</Button>
+          <Button variant="outline" size="sm" className="h-7 w-[90px] text-[11px]" onClick={pedirFechar} disabled={ocupado}>Cancelar</Button>
           {podeEditar && (previa ? (
             <Button size="sm" className="h-7 w-[110px] text-[11px]" onClick={gravar} disabled={ocupado} data-testid="ficha-gravar">{ocupado ? 'Gravando' : 'Gravar'}</Button>
           ) : (
-            <Button size="sm" className="h-7 w-[110px] text-[11px]" onClick={pedirPrevia} disabled={ocupado || !mudou || aba !== 'cadastro'}
-              title={aba !== 'cadastro' ? 'O Salvar é do Cadastro' : !mudou ? 'Nada mudou' : undefined} data-testid="ficha-salvar">{ocupado ? 'Conferindo' : 'Salvar'}</Button>
+            <Button size="sm" className="h-7 w-[110px] text-[11px]" onClick={pedirPrevia} disabled={ocupado || !mudou}
+              title={!mudou ? (avaliacaoAberta ? 'Nada mudou no cadastro; a avaliação grava no botão dela' : 'Nada mudou') : 'Grava o Cadastro e a Sombra (prévia antes)'}
+              data-testid="ficha-salvar">{ocupado ? 'Conferindo' : 'Salvar'}</Button>
           ))}
         </div>
       </DialogContent>
     </Dialog>
+    {/* fechar com mudança não salva: pergunta antes (nada se perde por engano) */}
+    <AlertDialog open={saidaPedida != null} onOpenChange={(o) => { if (!o) setSaidaPedida(null); }}>
+      <AlertDialogContent className="max-w-sm" data-testid="ficha-perguntar-fechar">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-[13px]">Sair sem salvar?</AlertDialogTitle>
+          <AlertDialogDescription className="text-[11px]">
+            {formMudou && avaliacaoAberta ? 'As mudanças da ficha e a avaliação em aberto se perdem.'
+              : avaliacaoAberta ? 'A avaliação em aberto se perde.' : 'As mudanças da ficha se perdem.'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="h-7 text-[11px]">Continuar editando</AlertDialogCancel>
+          <AlertDialogAction className="h-7 text-[11px]" onClick={sairDeVez} data-testid="ficha-sair-sem-salvar">{saidaPedida === 'mapa' ? 'Ir ao mapa sem salvar' : 'Sair sem salvar'}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
@@ -492,7 +563,7 @@ function AbaInfra({ api, pastoId, form, trocar, clienteId, somenteLeitura }: {
           <Segmentado altura={28} valor={form.sombraCobertura ?? 'parcial'} sugestao={form.sombraCobertura == null} onEscolher={(v) => trocar({ sombraCobertura: v })}
             opcoes={[{ valor: 'insuficiente', rotulo: 'Insuficiente' }, { valor: 'parcial', rotulo: 'Parcial' }, { valor: 'suficiente', rotulo: 'Suficiente' }]} />
         </Campo>
-        <p className="text-[10px] text-muted-foreground">Sombra e manejo gravam com o Salvar do Cadastro.</p>
+        <p className="text-[10px] text-muted-foreground">A sombra grava com o Salvar do rodapé (o mesmo do Cadastro).</p>
       </BlocoFormulario>
     </div>
   );
@@ -503,12 +574,15 @@ const NIVEL_DO_BANCO: Record<string, string> = { medio: 'médio', media: 'média
 const NIVEL3: { valor: string; rotulo: string }[] = [{ valor: 'bom', rotulo: 'Bom' }, { valor: 'regular', rotulo: 'Regular' }, { valor: 'ruim', rotulo: 'Ruim' }];
 const NIVEL_BMA: { valor: string; rotulo: string }[] = [{ valor: 'baixo', rotulo: 'Baixo' }, { valor: 'medio', rotulo: 'Médio' }, { valor: 'alto', rotulo: 'Alto' }];
 
-function AbaAvaliacoes({ api, pastoId, hoje, podeEditar, aoContar, aoGravar }: {
+function AbaAvaliacoes({ api, pastoId, hoje, podeEditar, aoContar, aoGravar, aoRascunho }: {
   api: ApiFichaDoPasto; pastoId: string; hoje: string; podeEditar: boolean; aoContar: (n: number) => void; aoGravar: () => void;
+  /** avisa o modal que há uma avaliação em aberto (o "sair sem salvar?" pergunta por ela também) */
+  aoRascunho: (aberta: boolean) => void;
 }) {
   const l = useLeitura<AvaliacaoDoPasto[]>(() => api.avaliacoes(pastoId), pastoId);
   useEffect(() => { if (l.dados) aoContar(l.dados.length); }, [l.dados, aoContar]);
   const [nova, setNova] = useState<Record<string, string | number | null> | null>(null);
+  useEffect(() => { aoRascunho(nova != null); }, [nova, aoRascunho]);
   const [frase, setFrase] = useState<{ t: string; erro: boolean } | null>(null);
   const campo = (k: string) => (nova ? nova[k] ?? null : null);
   const por = (k: string, v: string | number | null) => setNova((n) => ({ ...(n ?? {}), [k]: v }));
@@ -523,7 +597,7 @@ function AbaAvaliacoes({ api, pastoId, hoje, podeEditar, aoContar, aoGravar }: {
   const COL = 'whitespace-nowrap';
   return (
     <div className="flex flex-col gap-2">
-      <BlocoFormulario titulo="Avaliações de campo" dica="a mais recente vale para a ficha e para a lista"
+      <BlocoFormulario titulo="Avaliações de campo" dica="a mais recente vale para a ficha e para a lista · cada avaliação grava no botão dela, não no Salvar"
         acao={podeEditar && !nova ? <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => setNova({ data: hoje })} data-testid="ficha-nova-avaliacao">+ nova avaliação</Button> : undefined}>
         <Quadro testid="ficha-avaliacoes">
           <table className="w-full table-fixed border-collapse">

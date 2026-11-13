@@ -16,6 +16,7 @@ import { FazendasList } from '@/components/FazendasList';
 import { formatNum } from '@/lib/calculos/formatters';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
 
 // 'area' virou a aba "Cadastro" (Dados + Área fundidos). A CHAVE continua 'area'
 // para não mexer no default de activeTab nem nos blocos condicionais.
@@ -58,7 +59,13 @@ const EMPTY: CadastroRow = {
 
 const n = (v: string) => (v.trim() === '' ? 0 : Number(v));
 
-export function V2Fazendas() {
+/** PASTO-CADASTRO-GEO-01 P2 — a ficha do pasto que a volta do Geo reabre (abre direto na aba Pastos) e a ida ao Geo */
+export interface V2FazendasProps {
+  fichaDoPastoParaAbrir?: string | null;
+  onFichaDoPastoAberta?: () => void;
+  aoAbrirPastoNoMapa?: (pastoId: string, desenhar: boolean) => void;
+}
+export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta, aoAbrirPastoNoMapa }: V2FazendasProps = {}) {
   const { fazendaAtual, isGlobal, fazendas, setFazendaAtual, reloadFazendas, criarFazenda } = useFazenda();
   const { clienteAtual } = useCliente();
   const { pastos } = usePastos();
@@ -123,7 +130,7 @@ export function V2Fazendas() {
   // Callback ref, NÃO useRef: useRef não dispara re-render quando o nó monta, e o
   // portal do PastosTab renderizaria contra null na primeira passada.
   const [hostBarra, setHostBarra] = useState<HTMLDivElement | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>('area');
+  const [activeTab, setActiveTab] = useState<TabKey>(fichaDoPastoParaAbrir ? 'pastos' : 'area');
   const [data, setData] = useState<CadastroRow>(EMPTY);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -978,7 +985,8 @@ export function V2Fazendas() {
         </div>
       )}
 
-      {activeTab === 'pastos' && <PastosTab hostBarra={hostBarra} />}
+      {activeTab === 'pastos' && <PastosTab hostBarra={hostBarra} fichaInicial={fichaDoPastoParaAbrir} onFichaInicialAberta={onFichaDoPastoAberta}
+        aoAbrirPastoNoMapa={aoAbrirPastoNoMapa} />}
 
       {activeTab === 'rebanho' && <AbaRebanhoInicial />}
 
@@ -998,7 +1006,7 @@ export function V2Fazendas() {
  */
 function AbaRebanhoInicial() {
   const { fazendaAtual, isGlobal } = useFazenda();
-  const { saldosIniciais, setSaldoInicial } = useLancamentos();
+  const { saldosIniciais, setSaldoInicial, lancamentos } = useLancamentos();
 
   /* ⚠ O QUE A FAZENDA JÁ TEM, por (ano, mês): o hook traz o recorte da fazenda selecionada. */
   const porPeriodo = useMemo(() => {
@@ -1027,6 +1035,14 @@ function AbaRebanhoInicial() {
        saiu. Quem voltar a listar vários anos precisa dele de volta. */
   const linhasDoCadastro = porPeriodo.length > 0 ? [porPeriodo[0]] : [];
 
+  /* REBANHO-INICIAL-EDITAR-01 (4): o formulário recebe o que precisa para a confirmação
+     ("Existem N movimentações…") e o selo "Mês fechado — só preço editável" — daqui nunca apareciam.
+     Mês fechado = o P1 do janeiro de partida oficial (`get_status_pilares_fechamento`, a autoridade). */
+  const partida = linhasDoCadastro[0];
+  const { status: pilaresDaPartida } = useStatusPilares(
+    fazendaAtual?.id, partida ? `${partida.ano}-${String(partida.mes).padStart(2, '0')}` : undefined, !!partida && !isGlobal);
+  const partidaFechada = pilaresDaPartida.p1_mapa_pastos.status === 'oficial';
+
   if (isGlobal || !fazendaAtual) {
     return (
       <div className="px-4 py-6 text-[11px] text-muted-foreground">
@@ -1045,7 +1061,8 @@ function AbaRebanhoInicial() {
             fechamento prevalece.
           </div>
         </div>
-        <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} alwaysVisible />
+        <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} alwaysVisible
+          totalLancamentos={lancamentos.length} mesFechado={partidaFechada} />
       </div>
 
       <div className="rounded-lg border border-border/60 bg-card overflow-hidden">

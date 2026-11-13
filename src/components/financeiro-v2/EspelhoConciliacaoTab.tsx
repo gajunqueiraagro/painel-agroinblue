@@ -54,6 +54,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { sugerirCasamentos, type Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
+import { fornecedorDoMovimento, termosDosMovimentos } from '@/lib/conciliacao/fornecedoresDoHistorico';
+import { useFornecedoresDoHistorico } from '@/hooks/useFornecedoresDoHistorico';
 import { SugestoesCasarModal, type Marcado } from '@/components/financeiro-v2/SugestoesCasarModal';
 import type { AchadoDoHistorico, ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 /* ⚠ A MESA DO DIA MUDOU DE CASA — PR-CONC-CONFERENCIA-FECHAMENTO-DIA: tipos do Espelho, `montarMesa`, `totaisDoEspelho`,
@@ -904,9 +906,14 @@ const CHIPS_DA_CONFERENCIA: readonly { k: FiltroConferencia; rotulo: string }[] 
  * medido no Camargo). P159a: saiu da Conferência para quem a monta, porque o Extrato (banco) ganhou o mesmo botão [Sugestões] — a
  * MESMA lista nas duas telas. Sem candidatos (o modal do Espelho), toda lista é vazia.
  */
-export function sugestoesDaMesa(dias: readonly DiaConf[], candidatos: readonly EspCandidato[]): Map<string, Sugestao[]> {
+export function sugestoesDaMesa(
+  dias: readonly DiaConf[], candidatos: readonly EspCandidato[], doHistorico: ReadonlyMap<string, string> = new Map(),
+): Map<string, Sugestao[]> {
   const m = new Map<string, Sugestao[]>();
-  for (const d of dias) for (const e of d.extratosSemPar) m.set(e.extrato_id, sugerirCasamentos(e, [...candidatos], { orcamentoMs: 30 }));
+  /* CONC-SUGESTOES-FONTE-01 item 4: o fornecedor que o histórico conhece para o texto de cada linha (o mesmo para o "(N)" e o modal) */
+  for (const d of dias) for (const e of d.extratosSemPar) {
+    m.set(e.extrato_id, sugerirCasamentos(e, [...candidatos], { orcamentoMs: 30, fornecedorDoHistorico: fornecedorDoMovimento(doHistorico, e) }));
+  }
   return m;
 }
 /** "casar" numa sugestão abre o `CasarComBancoModal` já com os levados; um lançamento de valor diferente abre com o valor do banco. */
@@ -2111,9 +2118,12 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
     for (const r of montarEvolucao(data, internas.lancamentosInternos)) m.set(`${ym}-${String(r.dia).padStart(2, '0')}`, r.saldoOfx);
     return m;
   }, [data, internas.lancamentosInternos, anoMes]);
+  const termosDoMes = useMemo(
+    () => (mostrarCandidatos ? termosDosMovimentos(diasDaMesa.flatMap((d) => d.extratosSemPar)) : []), [diasDaMesa, mostrarCandidatos]);
+  const doHistorico = useFornecedoresDoHistorico(clienteId, anoMes, termosDoMes);
   const sugestoesPorLinha = useMemo(
-    () => sugestoesDaMesa(diasDaMesa, mostrarCandidatos ? (data?.sistema_candidatos ?? []) : []),
-    [diasDaMesa, data, mostrarCandidatos]);
+    () => sugestoesDaMesa(diasDaMesa, mostrarCandidatos ? (data?.sistema_candidatos ?? []) : [], doHistorico),
+    [diasDaMesa, data, mostrarCandidatos, doHistorico]);
   const ehParcialDaMesa = (p: Pareado) => faltaDoExtrato(p.diferenca) != null;
   const chips = contagensDaMesa(diasDaMesa, ehParcialDaMesa);
   const nVencidos = mostrarCandidatos ? (data?.sistema_candidatos ?? []).filter((c) => c.vencido).length : 0;
