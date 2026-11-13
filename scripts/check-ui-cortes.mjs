@@ -1049,8 +1049,12 @@ const CENARIOS = [
     const URL = 'tela=lotes&barra=32';
     const T = TAMANHOS_DO_LOTES;
     const lista = async (p) => { await p.locator('[data-testid="tabela-lotes"]').waitFor(); await p.waitForTimeout(600); };
-    const novo = async (p) => { await lista(p); await p.locator('[data-testid="lotes-novo"]').click();
-      await p.locator('[data-testid="assistente-do-lote"]').waitFor(); await p.waitForTimeout(500); };
+    /* LOTE-PADRAO-V3 · L2 — o "+ Novo lote" abre o v3; o assistente de antes segue no ar só para o lote de antes (categoria do cliente):
+       os cenários dele entram pela ficha do REC-DF-NE-05, "✎ Editar identidade" */
+    const novo = async (p) => { await ficha(p); await p.locator('[data-testid="ficha-editar-identidade"]').click();
+      await p.locator('[data-testid="assistente-do-lote"]:not([data-versao])').waitFor(); await p.waitForTimeout(500); };
+    const novoV3 = async (p) => { await lista(p); await p.locator('[data-testid="lotes-novo"]').click();
+      await p.locator('[data-testid="assistente-do-lote"][data-versao="v3"]').waitFor(); await p.waitForTimeout(500); };
     const escolher = (re) => async (p) => { await p.locator('[data-testid="assistente-cartao"]', { hasText: re }).first().click(); await p.waitForTimeout(250);
       await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(450); };
     const ficha = async (p) => { await lista(p); await p.locator('[data-testid="linha-lote"]', { hasText: 'REC-DF-NE-05' }).first().click();
@@ -1077,7 +1081,7 @@ const CENARIOS = [
          carimbo faltando (o aviso laranja no rodapé) e com tudo (7R, MF, F1 Angus, sêmen), a mojada (mamotes desligados), o Nome com a ficha */
       ...(() => {
         const T2 = [...T, [1366, 768], [1440, 900]];
-        const R = { url: URL, tamanhos: T2, regiao: '[data-testid="assistente-do-lote"]', semRolagem: { dentro: '[role="dialog"]' } };
+        const R = { url: URL, tamanhos: T2, regiao: '[data-testid="assistente-do-lote"]', semRolagem: { dentro: '[data-testid="assistente-do-lote"]' } };
         const chip = (testid, texto) => async (p) => { await p.locator(`[data-testid="${testid}"] button`, { hasText: texto }).first().click(); await p.waitForTimeout(150); };
         const avancar = async (p) => { await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(400); };
         const situacaoCria = async (p) => { await novo(p); await escolher(/^CRI/)(p); await escolher(/^PP/)(p); await p.locator('[data-testid="assistente-situacao"]').waitFor(); };
@@ -1110,6 +1114,51 @@ const CENARIOS = [
             await p.locator('[data-testid="assistente-nome"]').waitFor(); await p.locator('[data-testid="assistente-anotacao"]').fill('veio da 3M, brinco amarelo, IATF com sêmen sexado de julho'); await p.waitForTimeout(300); } },
           { ...R, nome: 'lotes-assistente-etapas-nome-recria', antes: nomeDe(/^REC/, /^DF/) },
           { ...R, nome: 'lotes-assistente-etapas-nome-engorda', antes: nomeDe(/^ENG/, /^BO/) },
+        ];
+      })(),
+      /* LOTE-PADRAO-V3 · L2 (mock lote-padrao-v3.html) — o assistente v3 nos 8 passos, por extenso, em 1126/1366/1440 e SEM ROLAGEM: as
+         atividades C/R/E, as categorias fixas da cria, a raça com composição e nascimento (idade), a situação da parida com 2 carimbos e
+         cabeças + a prenha (de quê, raça, parto), o carimbo errado (motivo no rodapé), a ordem de parto, o programa da novilha em reprodução
+         (método + entrada), o onde, e o Nome com marcadores e as etiquetas — na cria e na recria (Situação e Ordem "não se aplica") */
+      ...(() => {
+        const T2 = [...T, [1366, 768], [1440, 900]];
+        const R = { url: URL, tamanhos: T2, regiao: '[data-testid="assistente-do-lote"]', semRolagem: { dentro: '[data-testid="assistente-do-lote"]' } };
+        const op = (testid, texto) => async (p) => { await p.locator(`[data-testid="${testid}"] button`, { hasText: texto }).first().click(); await p.waitForTimeout(150); };
+        const av = async (p) => { await p.locator('[data-testid="assistente-avancar"]').click(); await p.waitForTimeout(350); };
+        const ate = (ativ, cat) => async (p) => { await novoV3(p); await op('assistente-atividades', ativ)(p); await av(p); await op('assistente-categorias', cat)(p); await av(p); };
+        const raca = async (p) => { await ate('Cria', 'Vacas')(p); await op('assistente-racas', 'Nelore')(p); await op('assistente-composicao', 'Angus')(p);
+          for (const [k, d] of [['de', '01/09/2021'], ['ate', '31/12/2021']]) { const c = p.locator(`input[data-testid="assistente-nascido-${k}"]`); await c.fill(d); await c.press('Enter'); }
+          await p.waitForTimeout(300); };
+        const situacao = async (p) => { await raca(p); await av(p); await op('assistente-cria-ao-pe', 'Parida')(p); };
+        const parida = async (p) => { await situacao(p);
+          for (const c of ['7.1', '8.1']) { await p.locator('[data-testid="assistente-carimbo"]').fill(c); await p.locator('[data-testid="assistente-carimbo"]').press('Enter'); }
+          await p.locator('[data-testid="assistente-carimbo-chip"] input').first().fill('142');
+          await op('assistente-bezerros-sexo', 'Fêmeas')(p); await op('assistente-bezerros-semen', 'Sexado fêmea')(p); await op('assistente-bezerros-pai', 'Nelore')(p);
+          await op('assistente-prenhez', 'Prenha')(p); await op('assistente-prenha-de', 'IATF')(p); await op('assistente-prenha-raca', 'Angus')(p); };
+        const nome = async (p) => { await av(p); await p.locator('[data-testid="assistente-nome"]').waitFor();
+          await p.locator('[data-testid="assistente-nome-campeiro"]').fill('Sexada F do retiro de baixo');
+          for (const m of ['Gêmeos', 'Leiteiras', 'Retiro']) { await p.locator('[data-testid="assistente-marcador"]').fill(m); await p.locator('[data-testid="assistente-marcador"]').press('Enter'); }
+          await p.locator('[data-testid="assistente-anotacao"]').fill('veio da 3M, brinco amarelo, IATF com sêmen sexado de julho'); await p.waitForTimeout(300); };
+        return [
+          { ...R, nome: 'lotes-assistente-v3-atividade', antes: novoV3 },
+          { ...R, nome: 'lotes-assistente-v3-categoria-cria', antes: async (p) => { await novoV3(p); await op('assistente-atividades', 'Cria')(p); await av(p); } },
+          { ...R, nome: 'lotes-assistente-v3-raca', antes: raca },
+          { ...R, nome: 'lotes-assistente-v3-situacao-sem-carimbo', antes: situacao },
+          { ...R, nome: 'lotes-assistente-v3-situacao-parida-prenha', antes: parida },
+          /* cria PRENHA sem bezerro (Chat 22:15: prints de cria parida, cria prenha e recria) — os bezerros apagados no lugar deles */
+          { ...R, nome: 'lotes-assistente-v3-situacao-prenha', antes: async (p) => { await raca(p); await av(p); await op('assistente-cria-ao-pe', 'Solteira')(p);
+            await op('assistente-prenhez', 'Prenha')(p); await op('assistente-prenha-de', 'Monta natural')(p); await op('assistente-prenha-raca', 'Nelore')(p); } },
+          { ...R, nome: 'lotes-assistente-v3-nome-prenha', antes: async (p) => { await raca(p); await av(p); await op('assistente-cria-ao-pe', 'Solteira')(p);
+            await op('assistente-prenhez', 'Prenha')(p); await op('assistente-prenha-de', 'IATF')(p); await av(p); await op('assistente-ordem-parto', 'Primípara')(p);
+            await av(p); await op('assistente-programa', 'Reprodução')(p); await av(p); await op('assistente-sistema', 'Pasto')(p); await nome(p); } },
+          { ...R, nome: 'lotes-assistente-v3-situacao-carimbo-errado', antes: async (p) => { await situacao(p); await p.locator('[data-testid="assistente-carimbo"]').fill('13.1'); await p.waitForTimeout(300); } },
+          { ...R, nome: 'lotes-assistente-v3-ordem', antes: async (p) => { await parida(p); await av(p); await op('assistente-ordem-parto', 'Multípara')(p); } },
+          { ...R, nome: 'lotes-assistente-v3-programa-novilhas', antes: async (p) => { await ate('Cria', 'Novilhas')(p); await op('assistente-racas', 'Nelore')(p);
+            await av(p); await av(p); await av(p); await op('assistente-programa', 'Reprodução')(p); await op('assistente-metodo', 'IATF + repasse')(p); await op('assistente-entrada', 'Superprecoce')(p); } },
+          { ...R, nome: 'lotes-assistente-v3-nome-cria', antes: async (p) => { await parida(p); await av(p); await op('assistente-ordem-parto', 'Multípara')(p); await av(p);
+            await op('assistente-programa', 'Reprodução')(p); await op('assistente-metodo', 'IATF')(p); await av(p); await op('assistente-sistema', 'Pasto + suplemento')(p); await nome(p); } },
+          { ...R, nome: 'lotes-assistente-v3-nome-recria', antes: async (p) => { await ate('Recria', 'Desmama macho')(p); await op('assistente-racas', 'Nelore')(p); await av(p);
+            await op('assistente-programa', 'Recria')(p); await av(p); await op('assistente-sistema', 'Semiconfinamento')(p); await nome(p); } },
         ];
       })(),
       { nome: 'lotes-ficha-resumo', url: URL, tamanhos: T, regiao: '[data-testid="ficha-do-lote"]', antes: ficha },

@@ -14,6 +14,8 @@ export interface CadastroDoLote {
   categoriasRebanho: string[];
   ordem: number;
   ativo: boolean;
+  /** LOTE-PADRAO-V3 · L2 — o cadastro de uma categoria FIXA do rebanho (117590) */
+  fixo?: boolean;
 }
 
 /** LOTE-SIGLA-EDITAR-01 — um lote cujo código muda quando a sigla em uso muda (prévia e resposta de `fn_lote_cadastro_salvar`). */
@@ -66,6 +68,24 @@ export interface LoteDaLista {
   codigoRegra?: 'etapas' | null;
   /** LOTE-CARIMBOS-01 (117580) — os carimbos dos bezerros ao pé (1..n); `carimbo` = o 1º */
   carimbos?: string[] | null;
+  /** LOTE-PADRAO-V3 · L2 (117590/117595) — o cadastro padrão; nulos no legado. `categoriaFixa` = o código da categoria do rebanho do
+   *  cadastro marcado fixo (nula = lote de antes, que segue no assistente antigo até a L6) */
+  categoriaFixa?: string | null;
+  composicaoRacas?: string[] | null;
+  nascidoDe?: string | null;
+  nascidoAte?: string | null;
+  criaAoPe?: string | null;
+  prenhez?: string | null;
+  prenhaDe?: string | null;
+  prenhaRacaId?: string | null;
+  partoPrevisto?: string | null;
+  bezerrosPaiRacaId?: string | null;
+  carimbosCab?: (number | null)[] | null;
+  programaLote?: string | null;
+  metodoReproducao?: string | null;
+  entradaNovilha?: string | null;
+  sistemaLote?: string | null;
+  marcadores?: string[] | null;
 }
 
 /** Os campos que `fn_lote_salvar` aceita em `p_campos` (só as chaves que vierem mudam). */
@@ -96,6 +116,23 @@ export interface CamposDoLote {
   anotacao?: string;
   /** LOTE-CARIMBOS-01 — a lista inteira (vazia = sem carimbo); substitui `carimbo` nas gravações novas */
   carimbos?: string[];
+  /** LOTE-PADRAO-V3 · L2 (117590) — vazio/[] = limpar; `categoria_rebanho` = o código fixo (o banco acha ou cria o cadastro) */
+  categoria_rebanho?: string;
+  composicao_racas?: string[];
+  nascido_de?: string;
+  nascido_ate?: string;
+  cria_ao_pe?: string;
+  prenhez?: string;
+  prenha_de?: string;
+  prenha_raca_id?: string;
+  parto_previsto?: string;
+  bezerros_pai_raca_id?: string;
+  carimbos_cab?: (number | null)[];
+  programa_lote?: string;
+  metodo_reproducao?: string;
+  entrada_novilha?: string;
+  sistema_lote?: string;
+  marcadores?: string[];
 }
 
 /** LOTE-CARIMBOS-01 — a faixa do código, espelho da `_fn_carimbos_faixa` (117580): 1 carimbo = ele mesmo; vários = os meses distintos

@@ -11,7 +11,7 @@ vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ fazendaAtual:
 vi.mock('@/hooks/useLotesDaFazenda', () => ({ useLotesDaFazenda: () => ({ lotes: dados.lotes, carregando: false, erro: null }) }));
 vi.mock('@/hooks/useCadastrosDoLote', () => ({ useCadastrosDoLote: () => ({ cadastros: dados.cadastros, categoriasDoRebanho: [] }) }));
 vi.mock('@/components/lotes/FichaDoLote', () => ({ FichaDoLote: () => null }));
-vi.mock('@/components/lotes/AssistenteDoLote', () => ({ AssistenteDoLote: () => null }));
+vi.mock('@/components/lotes/AssistenteDoLotePadrao', () => ({ AssistenteDoLotePadrao: () => null }));
 
 import { LotesTab } from './LotesTab';
 
