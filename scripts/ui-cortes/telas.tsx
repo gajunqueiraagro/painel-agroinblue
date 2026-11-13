@@ -1003,6 +1003,37 @@ if (tela === 'mesclar') {
   }
   g.__bancoBancada = { from: (t: string) => (t === 'chuvas' ? CHUVAS_SINT : []), rpc: () => null };
   montar(<div className="flex h-full min-h-0 flex-col"><ChuvasTab mode="operacional" /></div>);
+} else if (tela === 'chuvas-analise') {
+  /* CHUVAS-ANALISE-01 F1 — Produção › Chuvas (análise), banco SINTÉTICO de 4 fazendas: SCL/BVT com histórico (2023–2025), RNVX (o
+     código mais largo) desde 2025 e NOVA só em 2026 (sem histórico). `&global=1` = Todas as fazendas; `&faz=<id>` = Uma fazenda. */
+  const FZS = [
+    { id: 'f1', nome: 'Faz. Santa Clara do Norte', codigo: 'SCL', cliente_id: 'cli', tem_pecuaria: true, desde: 2023 },
+    { id: 'f2', nome: 'Faz. Boa Vista', codigo: 'BVT', cliente_id: 'cli', tem_pecuaria: true, desde: 2023 },
+    { id: 'f3', nome: 'Faz. Retiro Novo', codigo: 'RNVX', cliente_id: 'cli', tem_pecuaria: true, desde: 2025 },
+    { id: 'f4', nome: 'Faz. Nova Aquisição', codigo: 'NOVA', cliente_id: 'cli', tem_pecuaria: true, desde: 2026 },
+  ];
+  const global = q.get('global') === '1';
+  const faz = FZS.find(f => f.id === q.get('faz')) ?? FZS[0];
+  g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo' }, clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, loading: false };
+  g.__fazendaBancada = { fazendas: FZS, fazendasComPecuaria: FZS, loading: false, setFazendaAtual: () => {},
+    fazendaAtual: global ? { id: '__global__', nome: 'Global', owner_id: '' } : faz, isGlobal: global, fazendaId: global ? '__global__' : faz.id };
+  const CH: Record<string, unknown>[] = [];
+  let n = 0;
+  for (const f of FZS) for (let ano = f.desde; ano <= 2026; ano++) for (let m = 1; m <= (ano === 2026 ? 10 : 12); m++) {
+    /* perfil do cerrado mês a mês (Chat 12/11 17:30: com só "chuvoso × seco" a média despencava em abr e saltava em out) */
+    const fator = [1, 0.9, 0.8, 0.45, 0.2, 0.06, 0.05, 0.1, 0.3, 0.55, 0.85, 1][m - 1];
+    for (let d = 2; d <= 28; d += fator >= 0.5 ? 3 : fator >= 0.2 ? 5 : 11) {
+      n++;
+      const mm = Math.round(((n * 37 + f.id.charCodeAt(1) * 13) % 230) / 10 * 2.6 * Math.max(fator, 0.25) * 10) / 10;
+      if (mm <= 0) continue;
+      CH.push({ id: `ca${n}`, fazenda_id: f.id, cliente_id: 'cli', data: `${ano}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, milimetros: mm, observacao: null });
+    }
+  }
+  g.__bancoBancada = {
+    from: (t: string, e: any) => (t === 'chuvas' ? CH.filter(c => (e?.in?.fazenda_id ? e.in.fazenda_id.includes(c.fazenda_id) : e?.eq?.fazenda_id ? c.fazenda_id === e.eq.fazenda_id : true)) : []),
+    rpc: () => null,
+  };
+  montar(<div className="h-full overflow-auto"><ChuvasTab mode="analitico" onLancar={() => {}} /></div>);
 } else if (tela === 'barra-pecuaria') {
   /* PEC-ABAS-01 — a barra do topo das telas da Pecuária com as abas (o `Segmentado` do shell) e a volta ("‹ Voltar", reservado):
      `&aba=<secao>` marca a aba; `&de=<secao>` = veio de outra aba (a volta aparece). */

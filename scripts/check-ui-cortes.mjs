@@ -76,6 +76,7 @@ const TAMANHOS_DA_VG = [[1000, 600], [1126, 579], [1130, 580], [1440, 800], [144
 const TAMANHOS_DO_LOTES = [[1000, 600], [1126, 579], [1440, 800], [1240, 800], [1024, 600], [948, 593], [1067, 667]];
 /* P141 (Gabriel 28/10, decisão a) — a Conciliação (3 cards lado a lado) só de 1000px para cima: abaixo disso ela nunca coube, nem no código
    antigo — dívida declarada CONC-ESTREITA (docs/DIVIDAS-ABERTAS.md); empilhar os cards é item próprio, com mock */
+const TAMANHOS_DAS_CHUVAS = [[1000, 600], [1126, 579], [1366, 768], [1440, 800]];
 const TAMANHOS_DA_CONCILIACAO = [[1000, 600], [1024, 600], [1126, 579], [1130, 580], [1300, 704], [1366, 768], [1440, 800], [1440, 860], [1750, 1000]];
 const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* P121 — nos cenários dos Itens da nota o `semRolagem` deixa de fora a tabela dos itens (rola por dentro) e o RESUMO do lançamento: os
@@ -712,6 +713,11 @@ const CENARIOS = [
   /* CHUVAS-LANCAR-01 — a planilha de Chuvas (uma fazenda; o Global = a escolha da estação) · PEC-ABAS-01 — a barra com as 4 abas e a volta */
   { nome: 'chuvas-lancar', url: 'tela=chuvas-lancar', cabecalhoInteiro: true },
   { nome: 'chuvas-lancar-global', url: 'tela=chuvas-lancar&global=1' },
+  /* CHUVAS-ANALISE-01 F1 — a análise: Todas as fazendas (Global), Uma fazenda com histórico e a sem histórico (1º ano) */
+  /* CHUVAS-ANALISE-01 F1: os três oficiais + 1366×768 (o Chat confere a 1126 e a 1366) */
+  { nome: 'chuvas-analise-todas', url: 'tela=chuvas-analise&global=1', tamanhos: TAMANHOS_DAS_CHUVAS },
+  { nome: 'chuvas-analise-uma', url: 'tela=chuvas-analise&faz=f1', tamanhos: TAMANHOS_DAS_CHUVAS },
+  { nome: 'chuvas-analise-sem-historico', url: 'tela=chuvas-analise&faz=f4', tamanhos: TAMANHOS_DAS_CHUVAS },
   { nome: 'barra-pecuaria', url: 'tela=barra-pecuaria&aba=lancamentos-zoot' },
   { nome: 'barra-pecuaria-volta', url: 'tela=barra-pecuaria&aba=conferencia-mensal&de=lancamentos-zoot' },
   /* UI-PERIODO-01 — o componente único de período aberto (popup com os atalhos e os dois calendários; os modos mês e ano; a CPR) */
