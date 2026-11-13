@@ -20,22 +20,22 @@ type Coluna = 'codigo' | 'nome' | 'local' | 'situacao' | 'atividades' | 'matricu
   | 'rebanho' | 'noAno' | 'lotacao' | 'pendencias';
 
 const COLUNAS: readonly (ColunaOrdenavel<LinhaDaFazenda, Coluna> & { rotulo: string; largura?: number; direita?: boolean })[] = [
-  { coluna: 'codigo', rotulo: 'Cód.', largura: 44, tipo: 'texto', valor: l => l.codigo },
+  { coluna: 'codigo', rotulo: 'Cód.', largura: 40, tipo: 'texto', valor: l => l.codigo },
   { coluna: 'nome', rotulo: 'Fazenda', tipo: 'texto', valor: l => l.nome },
-  { coluna: 'local', rotulo: 'Município', largura: 112, tipo: 'texto', valor: l => l.local },
-  { coluna: 'situacao', rotulo: 'Situação', largura: 58, tipo: 'texto', valor: l => l.situacao },
-  { coluna: 'atividades', rotulo: 'Atividades', largura: 108, tipo: 'texto', valor: l => l.atividades.join(' · ') || null },
-  { coluna: 'matricula', rotulo: 'Matrícula ha', largura: 72, direita: true, tipo: 'numero', valor: l => l.matriculaHa },
-  { coluna: 'pastosHa', rotulo: 'Pastos ha', largura: 68, direita: true,
+  { coluna: 'local', rotulo: 'Município', largura: 96, tipo: 'texto', valor: l => l.local },
+  { coluna: 'situacao', rotulo: 'Situação', largura: 56, tipo: 'texto', valor: l => l.situacao },
+  { coluna: 'atividades', rotulo: 'Atividades', largura: 92, tipo: 'texto', valor: l => l.atividades.join(' · ') || null },
+  { coluna: 'matricula', rotulo: 'Matrícula ha', largura: 74, direita: true, tipo: 'numero', valor: l => l.matriculaHa },
+  { coluna: 'pastosHa', rotulo: 'Pastos ha', largura: 66, direita: true,
     tipo: 'numero', valor: l => l.pastosHa },
-  { coluna: 'diferenca', rotulo: 'Diferença', largura: 62, direita: true, tipo: 'numero', valor: l => l.diferencaHa },
+  { coluna: 'diferenca', rotulo: 'Diferença', largura: 60, direita: true, tipo: 'numero', valor: l => l.diferencaHa },
   { coluna: 'nPastos', rotulo: 'Pastos', largura: 50, direita: true, tipo: 'numero', valor: l => l.nPastos },
   { coluna: 'noMapa', rotulo: 'No mapa', largura: 60, direita: true, tipo: 'numero', valor: l => l.noMapa },
   { coluna: 'rebanho', rotulo: 'Rebanho', largura: 56, direita: true, tipo: 'numero', valor: l => l.rebanho },
   /* regra geral do rebanho (Gabriel 12/11 20:27): delta e % no ano contra o saldo inicial do ano, na coluna DELA (ALINHAMENTO SOBERANO) */
-  { coluna: 'noAno', rotulo: 'No ano', largura: 84, direita: true, tipo: 'numero', valor: l => variacaoNoAno(l.rebanho, l.rebanhoInicioDoAno)?.pct ?? null },
+  { coluna: 'noAno', rotulo: 'No ano', largura: 76, direita: true, tipo: 'numero', valor: l => variacaoNoAno(l.rebanho, l.rebanhoInicioDoAno)?.pct ?? null },
   { coluna: 'lotacao', rotulo: 'UA/ha', largura: 46, direita: true, tipo: 'numero', valor: l => l.lotacao },
-  { coluna: 'pendencias', rotulo: 'Pendências do cadastro', largura: 128, tipo: 'texto', valor: l => (l.ativa ? l.pendencias.length : -1) },
+  { coluna: 'pendencias', rotulo: 'Pendências', largura: 104, tipo: 'texto', valor: l => (l.ativa ? l.pendencias.length : -1) },
 ];
 
 const area = (v: number | null) => (v == null ? '—' : formatNum(v, 2));
