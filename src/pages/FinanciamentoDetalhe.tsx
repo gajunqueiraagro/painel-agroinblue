@@ -56,6 +56,9 @@ import { resumoDoContratoNaLista } from '@/lib/financiamentos/situacaoEmLote';
 import { REGUA_FIN, ThOrdenavel, emDaRegua } from '@/components/financiamentos/reguaDoFinanciamento';
 import { ordenarPor, proximaOrdem, type Ordem, type ValorDeOrdem } from '@/lib/financiamentos/ordemDaTabela';
 import { aLiberarDoContrato, encargosDoContrato } from '@/lib/financiamentos/contratoDeCredito';
+import { useLinhasDeCredito } from '@/hooks/useLinhasDeCredito';
+import { rotuloDaLinha, type LinhaDoCadastro } from '@/lib/financiamentos/linhaDeCredito';
+import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -119,12 +122,17 @@ interface FinanciamentoDetalheProps {
   id?: string;
   onVoltar?: () => void;
   from?: 'lancamentos';
+  /** FIN-GUARDA-CHUVA G2 — abre OUTRO contrato (o nº do aviso "contrato de outro banco" no modal da linha); ausente = o nº sem link */
+  onAbrirOutro?: (id: string) => void;
 }
 
-export default function FinanciamentoDetalhe({ id, onVoltar, from }: FinanciamentoDetalheProps = {}) {
+export default function FinanciamentoDetalhe({ id, onVoltar, from, onAbrirOutro }: FinanciamentoDetalheProps = {}) {
   const qc = useQueryClient();
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
+  /* FIN-GUARDA-CHUVA G2 — a linha de crédito do contrato (o link no topo abre o modal da linha) */
+  const linhasDeCredito = useLinhasDeCredito(clienteId).data ?? [];
+  const [linhaAberta, setLinhaAberta] = useState<LinhaDoCadastro | null>(null);
 
   const [editOpen, setEditOpen] = useState(false);
   /* a aba em que o Editar obrigação abre: Contrato (Editar), Documentos ou Parcelas ("Editar parcelas") */
@@ -617,12 +625,23 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         </div>
         </>) : (
           /* TELA DO CONTRATO v3 (Gabriel 18/10/2026) — título com selos e ações · Contrato em duas colunas + Resumo · A resolver */
-          <TopoDoContrato numero={fin.numero_contrato ?? null} descricao={fin.descricao ?? ''} status={fin.status ?? null}
+          <><TopoDoContrato numero={fin.numero_contrato ?? null} descricao={fin.descricao ?? ''} status={fin.status ?? null}
             saldo={situacao?.saldo} aLiberar={aLiberar} encargos={encargosLigados} tela={credito.tela} parcelas={cartoes ? { total: cartoes.parcelas, pagas: cartoes.pagas } : null} quinta={quinta}
             jurosNoCronograma={(cartoes?.jurosPrevistos ?? 0) > 0}
             onVoltar={onVoltar} onEditar={() => abrirEdicao('contrato')} pendencias={pendencias} onAbrirPendencias={() => setAbaDoCredito('a_resolver')}
             acaoDeJuntar={<BotaoJuntar status={fin.status ?? null} onAbrir={() => setJuntando(true)} />}
-            acaoDeBaixa={<BotaoDarBaixa destaque status={fin.status ?? null} api={credito} onEscolher={setBaixaEscolhida} onDesfazer={() => setDesfazendoBaixa(true)} />} />
+            acaoDeBaixa={<BotaoDarBaixa destaque status={fin.status ?? null} api={credito} onEscolher={setBaixaEscolhida} onDesfazer={() => setDesfazendoBaixa(true)} />}
+            acaoDaLinha={(() => {
+              const l = fin.linha_credito_id ? linhasDeCredito.find((x) => x.id === fin.linha_credito_id) : undefined;
+              return l ? (
+                <button type="button" onClick={() => setLinhaAberta(l)} className="uma-linha-que-rola max-w-full rounded px-1.5 text-[11px] text-primary hover:bg-[#dfe5ec]"
+                  title={`Abrir a linha de crédito ${rotuloDaLinha(l)}`} data-testid="abrir-linha-do-contrato">Linha · {rotuloDaLinha(l)} ›</button>
+              ) : null;
+            })()} />
+            {linhaAberta && (
+              <LinhaCreditoDialog aberto clienteId={clienteAtual?.id ?? null} linha={linhaAberta} aoFechar={() => setLinhaAberta(null)} aoAbrirContrato={onAbrirOutro}
+                aoGravar={() => { for (const k of ['linhas-credito', 'linhas-credito-faixas', 'financiamentos-lista']) void qc.invalidateQueries({ queryKey: [k, clienteAtual?.id] }); }} />
+            )}</>
         )}
       </div>
 

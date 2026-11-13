@@ -17,6 +17,8 @@ import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormD
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import { ListaDeFinanciamentos } from '@/components/financiamentos/ListaDeFinanciamentos';
+import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
+import { faixaDaLinha } from '@/lib/financiamentos/linhaDeCredito';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
@@ -437,8 +439,43 @@ if (tela === 'mesclar') {
   ];
   const Lista = () => { const [ab, setAb] = React.useState(q.get('enc') === '1');
     return <div style={{ height: '100%', padding: '8px 16px 4px' }}><ListaDeFinanciamentos contratos={contratos} encerradosAbertos={ab} aoAlternarEncerrados={() => setAb((x) => !x)}
-      aoAbrir={() => {}} mostrarBanco parcelasAPagar={14230500} aoAbrirCronograma={() => {}} /></div>; };
+      aoAbrir={() => {}} mostrarBanco parcelasAPagar={14230500} aoAbrirCronograma={() => {}}
+      /* FIN-GUARDA-CHUVA G2 — `&linha=1`: o grupo da linha FCO com o ✎ e a faixa Limite · Liberado · Falta liberar · Saldo · Juros (maiores valores) */
+      faixasDasLinhas={q.get('linha') === '1' ? new Map([['l-fco', faixaDaLinha({ contratos: 2, contratado: 55700000, liberado: 55688000, liberadoPorLiquidacao: 0,
+        faltaLiberar: 12312000, saldo: 43563000, jurosPagos: 12345678.9 }, 68000000)]]) : undefined}
+      aoAbrirLinha={q.get('linha') === '1' ? () => {} : undefined} /></div>; };
   montar(<Lista />);
+} else if (tela === 'linha-credito') {
+  /* FIN-GUARDA-CHUVA G2 — o modal da LINHA DE CRÉDITO (820×560), SINTÉTICO: a linha com limite e 4 contratos-filhos (descrição longa, um de
+     outro banco, um sem liberação), o aviso de outro credor; `&v=nova` = linha nova (sem contratos); `&v=previa` abre com a revisão feita
+     (o `antes` clica em Revisar: a prévia antes × depois na área fixa de 96px). */
+  const CREDOR = String(LISTA[0].id);
+  const linhaB: any = { id: 'l1', credorId: CREDOR, credorNome: String(LISTA[0].nome), numero: 'PR-78.179-EX', programa: 'FCO Rural Exemplo · Investimento Pecuário',
+    descricao: 'Linha sintética de investimento', limite: 68000000, vigenciaInicio: '2025-11-21', vigenciaFim: '2027-11-21', cancelada: false };
+  const ct = (id: string, numero: string, descricao: string, contratado: number, liberado: number, saldo: number, juros: number, outro = false) =>
+    ({ id, numero, descricao, status: 'ativo', contratado, liberado, liberado_por_liquidacao: 0, saldo, juros_pagos: juros, credor_diferente: outro });
+  g.__bancoBancada = {
+    from: bancoDeFornecedores.from,
+    rpc: (fn: string) => fn === 'fn_linha_credito_tela' ? {
+      linha: { id: 'l1', credor_id: CREDOR, credor: linhaB.credorNome, numero: linhaB.numero, programa: linhaB.programa, descricao: linhaB.descricao,
+        limite: 68000000, vigencia_inicio: '2025-11-21', vigencia_fim: '2027-11-21' },
+      contratos: [
+        ct('c1', 'C_102.022.070.010200', 'Custeio pecuário de reforma de pastagem e aquisição de máquinas exemplo', 48500000, 48500000, 36375000, 9876543.21),
+        ct('c2', 'PR-78.179-EX-2', 'Armazém e máquinas · contrato sintético', 7200000, 7188000, 7188000, 2469135.69),
+        ct('c3', '40/00123-4', 'Capital de giro', 950000, 0, 0, 0),
+        ct('c4', 'CT-6362662/26', 'Trator de outro banco', 1480000, 1480000, 1110000, 0, true),
+        ct('c5', 'PR-78.192-EX', 'Balança e currais', 636939, 318456, 318456, 41234.5),
+        ct('c6', 'PR-79.502-EX', 'Máquinas agrícolas', 2000000, 2000000, 1800000, 150000),
+        ct('c7', 'C_102.022.070.010201', 'Reforma de cercas', 400000, 400000, 400000, 0),
+      ],
+      totais: { contratos: 4, contratado: 58130000, liberado: 57168000, liberado_por_liquidacao: 0, falta_liberar: 10832000, saldo: 44673000, juros_pagos: 12345678.9 },
+      avisos: [{ codigo: 'contrato_de_outro_credor' }],
+    } : fn === 'fn_linha_credito_salvar' ? { ok: true, simulado: true, sem_mudanca: false, id: 'l1',
+      antes: { credor_id: CREDOR, numero: linhaB.numero, programa: linhaB.programa, descricao: linhaB.descricao, limite: 68000000, vigencia_inicio: '2025-11-21', vigencia_fim: '2027-11-21' },
+      depois: { credor_id: CREDOR, numero: linhaB.numero, programa: linhaB.programa, descricao: linhaB.descricao, limite: 72500000, vigencia_inicio: '2025-11-21', vigencia_fim: '2028-11-21' },
+      avisos: [{ codigo: 'contratado_maior_que_limite' }] } : null,
+  };
+  montar(<LinhaCreditoDialog aberto aoFechar={() => {}} clienteId="cli" linha={v === 'nova' ? null : linhaB} aoGravar={() => {}} aoAbrirContrato={() => {}} />);
 } else if (tela === 'contrato') {
   /* FIN-CONTRATO-TELA-FONTE-01 — `&v=titulo` (título de 120 caracteres), `&v=parcelamento` (compra parcelada com conta longa nas parcelas),
      `&v=consorcio` (o detalhe entrega ao modal do consórcio); sem `v`, o financiamento de sempre. Tudo SINTÉTICO. */

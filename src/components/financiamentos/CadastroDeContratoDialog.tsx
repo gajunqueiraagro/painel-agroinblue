@@ -30,6 +30,8 @@ import { BLOCO_FORMULARIO as BLOCO_DO_CONTRATO, GRADE_FORMULARIO, TituloDoBloco 
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFinanciamentoCadastro } from '@/hooks/useFinanciamentoCadastro';
+import { lerLinhasDeCredito } from '@/hooks/useLinhasDeCredito';
+import { opcoesDeLinha, type LinhaDoCadastro } from '@/lib/financiamentos/linhaDeCredito';
 import { useContratoDeCredito } from '@/hooks/useContratoDeCredito';
 import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { mostraResumo } from '@/lib/financiamentos/consorcio';
@@ -141,7 +143,6 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   const edicao = useEdicaoDoContrato(financiamentoId ?? null, clienteAtual?.id ?? null);
   const [novoCredor, setNovoCredor] = useState(false);
   const [buscaP, setBuscaP] = useState(''); const [buscaJ, setBuscaJ] = useState('');
-  const [linhas, setLinhas] = useState<OpcaoSearchable[]>([]);
   /* FIN-FINANC-LAYOUT-02 (Chat 10:26): a aba Liberações do modal é o MESMO `BlocoLiberacoes` da tela do contrato — e recebe a conta do contrato
      como a tela (o nome de exibição; senão o nome da conta), para o "Para quem" da liberação em conta não ficar vazio */
   const contaDoForm = contas.find((c) => c.id === form.contaId);
@@ -187,11 +188,18 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   }, [aberto, financiamentoId]); // eslint-disable-line react-hooks/exhaustive-deps -- carrega uma vez por abertura
   const cons = form.natureza === 'consorcio';
 
+  /* FIN-GUARDA-CHUVA G2 — o seletor de linha lê do leitor único (`lerLinhasDeCredito`, a mesma leitura da lista): só as vivas (a do
+     contrato aparece mesmo cancelada, marcada), as do MESMO banco do contrato primeiro; o rótulo leva nº · programa · banco.
+     Leitura por efeito (como antes), sem cache: o cadastro não depende de QueryClient. Falhou = lista vazia (o campo é opcional). */
+  const [linhasDoCliente, setLinhasDoCliente] = useState<LinhaDoCadastro[]>([]);
   useEffect(() => {
     if (!clienteId) return;
-    void supabase.from('financiamento_linhas_credito').select('id, programa, descricao').eq('cliente_id', clienteId).then(({ data }) =>
-      setLinhas((data ?? []).map((l) => ({ value: l.id, label: [l.programa, l.descricao].filter(Boolean).join(' · ') || 'linha de crédito' }))));
+    let vivo = true;
+    lerLinhasDeCredito(clienteId).then((ls) => { if (vivo) setLinhasDoCliente(ls); }, () => { if (vivo) setLinhasDoCliente([]); });
+    return () => { vivo = false; };
   }, [clienteId]);
+  const linhas: OpcaoSearchable[] = useMemo(() => opcoesDeLinha(linhasDoCliente, form.credorId ?? null, form.linhaCreditoId ?? null),
+    [linhasDoCliente, form.credorId, form.linhaCreditoId]);
 
   /* os planos padrão pela atividade (os mesmos do motor); o do consórcio é o "Consórcio a contemplar". FIN-CONTRATO-SALVAR-01: o dos
      JUROS também (o contrato antigo veio sem ele), e no editar depois de carregar — só preenche o que está vazio */

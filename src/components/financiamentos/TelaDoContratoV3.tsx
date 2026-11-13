@@ -109,7 +109,7 @@ function CelulaDoResumo({ rotulo, valor, title, vermelho, laranja, testId }: { r
   );
 }
 
-export function TopoDoContrato({ numero, descricao, status, saldo, aLiberar, encargos, tela, parcelas, quinta, onVoltar, onEditar, acaoDeBaixa, acaoDeJuntar, pendencias, onAbrirPendencias, jurosNoCronograma = false }: {
+export function TopoDoContrato({ numero, descricao, status, saldo, aLiberar, encargos, tela, parcelas, quinta, onVoltar, onEditar, acaoDeBaixa, acaoDeJuntar, pendencias, onAbrirPendencias, jurosNoCronograma = false, acaoDaLinha }: {
   numero: string | null; descricao: string; status: string | null; saldo: SaldoDoContrato | null | undefined;
   /** FIN-FINANC-LAYOUT-03: contratado − liberado (`aLiberarDoContrato`, do saldo do banco); nulo = "—" */
   aLiberar: number | null;
@@ -123,6 +123,8 @@ export function TopoDoContrato({ numero, descricao, status, saldo, aLiberar, enc
   acaoDeJuntar?: ReactNode;
   /** quantas pendências a aba "A resolver" tem; o selo laranja a abre e some sem pendência */
   pendencias: { qtde: number; vencido: boolean }; onAbrirPendencias: () => void;
+  /** FIN-GUARDA-CHUVA G2 — o link "Linha · <nº> ›" que abre a linha de crédito do contrato (ausente = contrato sem linha) */
+  acaoDaLinha?: ReactNode;
 }) {
   const s = saldo ?? null;
   const semLiberacao = s !== null && s.liberado === null;
@@ -141,6 +143,7 @@ export function TopoDoContrato({ numero, descricao, status, saldo, aLiberar, enc
           title="Voltar para Financiamentos" aria-label="Voltar para Financiamentos" data-testid="voltar-do-contrato">
           <ArrowLeft className="size-4" />
         </button>
+        {acaoDaLinha && <div className="min-w-0 shrink" data-testid="lugar-da-linha">{acaoDaLinha}</div>}
         <div className="ml-auto flex shrink-0 items-center gap-1.5" data-testid="botoes-do-credito">
           <Button variant="outline" size="sm" className="h-[26px] gap-1 px-2.5 text-[11px]" onClick={onEditar}><Pencil className="size-3" /> Editar</Button>
           {/* FIN-CONTRATO-JUNTAR-01 — o lugar do "Juntar" é reservado (nada se move quando ele acende) */}
