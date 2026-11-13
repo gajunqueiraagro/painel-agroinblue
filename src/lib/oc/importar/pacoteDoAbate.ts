@@ -116,12 +116,20 @@ export function pesoProprioDoLote(e: Pick<EntradaDoPacote, 'pesosPorLote'>, k: n
   return p != null && p > 0 ? p : null;
 }
 
-/** O peso vivo é dúvida enquanto algum dos `nLotes` lotes fica sem peso: nem o dele, nem o geral */
+/** A categoria geral do pacote: a escolhida; sem ela, com TODOS os `nLotes` lotes com a sua, a do lote 1 (Chat 13/11 12:39, a mesma
+    regra do peso — o banco exige a geral e só a usa para o lote sem a dele); senão nula (é dúvida) */
+export function categoriaGeralDe(e: Pick<EntradaDoPacote, 'categoria' | 'categoriasPorLote'>, nLotes: number): string | null {
+  if (e.categoria) return e.categoria;
+  const dosLotes = Array.from({ length: Math.max(nLotes, 1) }, (_, i) => e.categoriasPorLote?.[i + 1] || null);
+  return dosLotes.every(c => c != null) ? dosLotes[0] : null;
+}
+
+/** O peso vivo é dúvida enquanto algum dos `nLotes` lotes fica sem peso: nem o dele, nem o geral (a categoria, idem) */
 function duvidasDa(e: EntradaDoPacote, nLotes: number): Duvida[] {
   const duvidas: Duvida[] = [];
   if (!e.fazendaId) duvidas.push('fazenda');
   if (!e.contraparteId) duvidas.push('contraparte');
-  if (!e.categoria) duvidas.push('categoria');
+  if (!categoriaGeralDe(e, nLotes)) duvidas.push('categoria');
   const geral = e.pesoVivoMedioKg != null && e.pesoVivoMedioKg > 0;
   if (!geral && Array.from({ length: Math.max(nLotes, 1) }, (_, i) => pesoProprioDoLote(e, i + 1)).some(p => p == null)) duvidas.push('peso_vivo');
   return duvidas;
@@ -134,6 +142,7 @@ const comPesoProprio = (e: EntradaDoPacote, k: number) => { const p = pesoPropri
    acerto se ligam só ao lote dele (`lote_ordem`) e a conferência do bruto é por NF; acerto sem NF = AVISO (não trava). */
 function montarVariosAcertos(e: EntradaDoPacote, grupos: AcertoDaEntrada[]): Montagem {
   const duvidas = duvidasDa(e, grupos.length);
+  const cat = categoriaGeralDe(e, grupos.length);
   const diferencas: Diferenca[] = [];
   const avisos: string[] = [];
   const lotes: LoteDoPacote[] = [];
@@ -157,7 +166,7 @@ function montarVariosAcertos(e: EntradaDoPacote, grupos: AcertoDaEntrada[]): Mon
       ordem: k, cab: f.cab, peso_carcaca_kg: f.kg, preco_arroba: f.precoArroba,
       valor_liquido: real(total - senar - funrural + incentivo), senar: real(senar), funrural: real(funrural),
       observacao: `Ordem de compra ${g.acerto.ordemCompra ?? '—'} · faixa do acerto: ${f.descricao}${textoDaComposicao(g.detalhes)}`,
-      ...(() => { const c = e.categoriasPorLote?.[k]; return c && c !== e.categoria ? { categoria: c } : {}; })(),
+      ...(() => { const c = e.categoriasPorLote?.[k]; return c && c !== cat ? { categoria: c } : {}; })(),
       ...(incentivo > 0 ? { incentivo: real(incentivo) } : {}),
       ...comPesoProprio(e, k),
     });
@@ -180,7 +189,7 @@ function montarVariosAcertos(e: EntradaDoPacote, grupos: AcertoDaEntrada[]): Mon
   });
   return {
     pacote: {
-      fazenda_id: e.fazendaId ?? '', contraparte_id: e.contraparteId ?? '', data_abate: dataAbate, categoria: e.categoria ?? '',
+      fazenda_id: e.fazendaId ?? '', contraparte_id: e.contraparteId ?? '', data_abate: dataAbate, categoria: cat ?? '',
       peso_vivo_medio_kg: e.pesoVivoMedioKg ?? 0,
       observacoes: [`Importado dos documentos do frigorífico (${grupos.map(g => `OC ${g.acerto.ordemCompra ?? '—'}, lote ${g.acerto.loteFrigorifico ?? '—'}`).join(' · ')}).`,
         ...diferencas.map(d => d.frase)].join(' '),
@@ -197,6 +206,7 @@ export function montarPacoteDoAbate(e: EntradaDoPacote): Montagem {
   if (e.maisAcertos && e.maisAcertos.length > 0) return montarVariosAcertos(e, [e, ...e.maisAcertos]);
   const diferencas = diferencasDoAbate(e);
   const duvidas = duvidasDa(e, e.detalhes.faixas.length);
+  const cat = categoriaGeralDe(e, e.detalhes.faixas.length);
   const faixas = [...e.detalhes.faixas].sort((a, b) => b.cab - a.cab);
   if (faixas.length === 0) return { pacote: null, duvidas, diferencas, recusa: 'O acerto não trouxe nenhuma faixa de preço.', lotes: [] };
   const dataAbate = e.acerto.dataAbate ?? e.nf?.dataAbate;
@@ -227,14 +237,14 @@ export function montarPacoteDoAbate(e: EntradaDoPacote): Montagem {
     ordem: i + 1, cab: f.cab, peso_carcaca_kg: f.kg, preco_arroba: f.precoArroba,
     valor_liquido: real(pesos[i] - senar[i] - funrural[i] + incentivo[i]), senar: real(senar[i]), funrural: real(funrural[i]),
     observacao: `Faixa do acerto: ${f.descricao}${textoDaComposicao(e.detalhes)}`,
-    ...(() => { const c = e.categoriasPorLote?.[i + 1]; return c && c !== e.categoria ? { categoria: c } : {}; })(),
+    ...(() => { const c = e.categoriasPorLote?.[i + 1]; return c && c !== cat ? { categoria: c } : {}; })(),
     ...(incentivo[i] > 0 ? { incentivo: real(incentivo[i]) } : {}),
     ...comPesoProprio(e, i + 1),
   }));
   if (duvidas.length > 0) return { pacote: null, duvidas, diferencas, recusa: null, lotes };
   return {
     pacote: {
-      fazenda_id: e.fazendaId ?? '', contraparte_id: e.contraparteId ?? '', data_abate: dataAbate, categoria: e.categoria ?? '',
+      fazenda_id: e.fazendaId ?? '', contraparte_id: e.contraparteId ?? '', data_abate: dataAbate, categoria: cat ?? '',
       peso_vivo_medio_kg: e.pesoVivoMedioKg ?? 0,
       observacoes: [`Importado dos documentos do frigorífico (OC ${e.acerto.ordemCompra ?? '—'}, lote ${e.acerto.loteFrigorifico ?? '—'}).`,
         ...diferencas.map(d => d.frase)].join(' '),
