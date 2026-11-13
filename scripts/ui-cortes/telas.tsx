@@ -2355,6 +2355,14 @@ if (tela === 'mesclar') {
       freteCent: soma((i) => i.freteCent), seguroCent: soma((i) => i.seguroCent), outrasCent: soma((i) => i.outrasCent), notaCent: soma((i) => i.liquidoCent) } };
     const cabecalho = { chave: '50260911222333000424550010000032411000000010', origem: 'xml', numero: '3241', serie: '1', emissao: '2026-09-29', natureza: 'VENDA',
       regime: '3', emitenteDocumento: '11222333000424', emitenteNome: 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA' };
+    /* NOTA-PDF-IBS-CBS-01 — `v=pdf-sem-ibs`: a nota lida do PDF que não escreve o IBS/CBS (o selo âmbar "falta o XML"); `v=pdf-ibs-total`:
+       o PDF que escreve só o TOTAL (o selo com o total lido). Os mesmos 40 itens, SINTÉTICOS. */
+    if (v === 'pdf-sem-ibs' || v === 'pdf-ibs-total') {
+      cabecalho.origem = 'pdf';
+      lidos.origem = 'pdf';
+      lidos.itens = lidos.itens.map((i: any) => ({ ...i, ibsCbs: null }));
+      if (v === 'pdf-ibs-total') lidos.totais = { ...lidos.totais, ibsCbs: { vCBS: '30.42', vIBSUF: '3.38', vIBSMun: '0.00', vIBS: '3.38' } };
+    }
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();
