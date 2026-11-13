@@ -33,7 +33,7 @@ const dataCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slic
    "48.500.000,00" 81 e "+ ?" no subtotal ~100 · Pendência pelo maior texto (`larguraDoMaior`). A coluna Banco SAIU (o banco vai na linha do
    grupo); a Descrição fica com a sobra e é a única que quebra a linha. A tabela não tem largura mínima: de 1.126px para cima nunca rola. */
 export const REGUA_LISTA_FINANCIAMENTOS: Record<'data' | 'numero' | 'situacao' | 'contratado' | 'liberado' | 'amortizado' | 'saldo' | 'prox' | 'pendencia', number> = {
-  data: 72, numero: 136, situacao: 72, contratado: 88, liberado: 106, amortizado: 88, saldo: 106, prox: 68, pendencia: 88,
+  data: 72, numero: 136, situacao: 78, contratado: 88, liberado: 106, amortizado: 88, saldo: 106, prox: 68, pendencia: 88,
 };
 
 /* A RÉGUA DE "LANÇAMENTOS FINANCEIROS" (a classe `table-financeiro`: cabeçalho 8px maiúsculo, célula 9px) — as MESMAS strings de

@@ -42,7 +42,7 @@ const tela = (k?: Record<string, unknown>): TelaDoContrato => { const t = lerTel
 const topo = (jurosNoCronograma = false, k?: Record<string, unknown>) => render(
   <TopoDoContrato numero="SINT-C541" descricao="FCO - Curral" status="ativo" tela={tela(k)} onEditar={() => undefined}
     parcelas={{ total: 12, pagas: 0 }} quinta={null} pendencias={{ qtde: 2, vencido: false }} onAbrirPendencias={() => undefined}
-    saldo={null} jurosNoCronograma={jurosNoCronograma} />);
+    saldo={null} aLiberar={null} encargos={null} jurosNoCronograma={jurosNoCronograma} />);
 
 describe('F1 — a faixa do título dentro do card', () => {
   it('a faixa é a 1ª linha da ficha, com a cor, a borda, os cantos e o respiro da referência', () => {

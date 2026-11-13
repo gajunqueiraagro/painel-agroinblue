@@ -38,7 +38,7 @@ const tela = (o?: Record<string, unknown>, c?: Record<string, unknown>, k?: Reco
 const topo = (t: TelaDoContrato | null, pendencias = { qtde: 2, vencido: true }, onAbrirPendencias = vi.fn()) => render(
   <TopoDoContrato numero="SINT-78.179" descricao="Armazém" status="ativo" tela={t} onEditar={() => undefined}
     parcelas={{ total: 15, pagas: 0 }} quinta={{ rotulo: 'Vencido', valor: 'R$ 8.119,00', vermelho: true }}
-    pendencias={pendencias} onAbrirPendencias={onAbrirPendencias}
+    pendencias={pendencias} onAbrirPendencias={onAbrirPendencias} aLiberar={null} encargos={null}
     saldo={{ aplicaSaldo: true, regra: 'calculado', contratado: 6412049, liberado: 6412049, liberacoes: 3, amortizado: 0, saldo: 6412049, jurosPagos: 0,
       jurosPrevistos: 0, foraDasSomas: false, pendencias: [] }} />);
 
