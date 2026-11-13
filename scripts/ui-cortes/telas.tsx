@@ -1875,6 +1875,92 @@ if (tela === 'mesclar') {
     montar(<Caixa />);
   };
   void montarSaldo();
+} else if (tela === 'fazendas') {
+  /* FAZENDA-CADASTRO-01 · F1a/F1b — Cadastros › Fazendas e pastos (a tela REAL, V2Fazendas), dado SINTÉTICO com nomes de exemplo:
+     `&f=lista` = o Global (a lista de fazendas + a composição de hoje embaixo); `&f=cadastro` = a aba Cadastro de uma fazenda.
+     Casos: uma fazenda com PIQUETES (o pai 120 ha + 2 piquetes de 60: a área conta 120, nunca 240), uma com diferença de área, uma inativa,
+     uma sem pasto (linha com "—", nunca zero), a unidade administrativa (linha à parte), nome comprido (corta com o title). Nada grava. */
+  const modo = new URLSearchParams(location.search).get('f') ?? 'lista';
+  const CLI = { id: 'cli', nome: 'Cliente Bancada', perfil: 'admin_agroinblue' };
+  g.__clienteBancada = { clienteAtual: CLI, clientes: [CLI], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
+  const F = (id: string, nome: string, codigo: string, status = 'ativa') => ({ id, nome, codigo, codigo_importacao: codigo, cliente_id: 'cli', owner_id: 'u1',
+    tem_pecuaria: true, status_operacional: status });
+  const FAZENDAS = [F('f1', 'Santa Clara', 'SCL'), F('f2', 'Boa Vista do Retiro de Cima das Três Barras', 'BVT'), F('f3', 'Retiro Novo', 'RNV'),
+    F('f4', 'Água Limpa', 'ALP', 'inativa'), F('f5', 'Lagoa Seca', 'LGS'), F('f6', 'Administrativo', 'ADM')];
+  const atual = modo === 'cadastro' ? FAZENDAS[0] : { id: '__global__', nome: 'Global', owner_id: '' };
+  g.__fazendaBancada = { fazendas: FAZENDAS, fazendaAtual: atual, isGlobal: modo !== 'cadastro', fazendaId: atual.id,
+    setFazendaAtual: () => {}, reloadFazendas: async () => {}, criarFazenda: async () => null };
+  const P = (id: string, fazenda: string, nome: string, ha: number, tipo: string, mais: Record<string, unknown> = {}) => ({ id, fazenda_id: fazenda, cliente_id: 'cli',
+    nome, lote_padrao: null, area_produtiva_ha: ha, tipo_uso: tipo, qualidade: null, entra_conciliacao: true, ativo: true, observacoes: null, ordem_exibicao: 0,
+    data_inicio: '2024-01-01', data_fim: null, grupo_id: null, posse: null, created_at: '2024-01-01', updated_at: '2024-01-01', ...mais });
+  const PASTOS = [
+    P('p01', 'f1', 'P 01', 61.2, 'cria'), P('p02', 'f1', 'P 02', 67.3, 'cria'), P('p03', 'f1', 'P 03', 120, 'cria', { grupo_id: 'g3' }),
+    P('p3a', 'f1', 'Piquete 3A', 60, 'cria', { grupo_id: 'g3' }), P('p3b', 'f1', 'Piquete 3B', 60, 'cria', { grupo_id: 'g3' }),
+    P('p04', 'f1', 'P 04', 76.1, 'recria'), P('p05', 'f1', 'P 05', 60, 'reforma_pecuaria'), P('prl', 'f1', 'Reserva', 78, 'reserva'),
+    P('pbf', 'f1', 'Sede e estradas', 54, 'benfeitorias'), P('pdv', 'f1', '⚠️ Divergência do Campeiro', 0, 'divergencia'),
+    P('b1', 'f2', 'B 01', 300, 'cria'), P('b2', 'f2', 'B 02', 243.5, 'recria'), P('b3', 'f2', 'B 03', 300, 'engorda', { posse: 'arrendada_de_terceiro' }),
+    P('r1', 'f3', 'R 01', 1500, 'recria'), P('r2', 'f3', 'R 02', 875.02, 'engorda'), P('r3', 'f3', 'Lavoura', 500, 'agricultura'),
+    P('a1', 'f4', 'A 01', 515.5, 'cria'),
+  ];
+  const GRUPOS = [{ id: 'g3', nome: 'P 03', pasto_origem_id: 'p03', ativo: true, cliente_id: 'cli' }];
+  const C = (fazenda_id: string, mais: Record<string, unknown>) => ({ id: `cad-${fazenda_id}`, fazenda_id, cliente_id: 'cli', municipio: null, estado: null, car: null,
+    nirf: null, ccir: null, ie: null, roteiro: null, area_total_ha: null, matricula_conferida_em: null, area_pecuaria_ha: null, area_agricultura_ha: null,
+    area_app_ha: null, area_reserva_ha: null, area_benfeitorias_ha: null, area_outras_ha: null, area_produtiva_ha: null, ...mais });
+  const CADASTROS = [
+    C('f1', { municipio: 'Rio Verde de Mato Grosso', estado: 'MS', car: null, nirf: '1.234.567-8', ie: '28.867.397-2', roteiro: null, area_total_ha: 576.6,
+      matricula_conferida_em: '2026-08-22T12:00:00Z' }),
+    C('f2', { municipio: 'Coxim', estado: 'MS', car: 'MS-5003-ABC', nirf: '2', ie: '3', roteiro: 'BR-163, km 720', area_total_ha: 843.5 }),
+    C('f3', { municipio: 'Bataguassu', estado: 'MS', car: 'MS-1', nirf: '4', ie: '5', roteiro: 'MS-395', area_total_ha: 2890.32 }),
+    C('f4', { municipio: 'Camapuã', estado: 'Mato Grosso do Sul', area_total_ha: 515.5 }),
+  ];
+  const cache = (fazenda_id: string, ano_mes: string, cab: number[], fonte = 'fechamento') => cab.map((saldo_final, i) => ({ fazenda_id, cliente_id: 'cli',
+    cenario: 'realizado', ano_mes, categoria_id: `c${i}`, saldo_final, fonte_oficial_mes: fonte }));
+  /* o saldo inicial do ano (janeiro): SCL ▲ (verde), BVT e RNV ▼ (vermelho) — a regra do rebanho no ano */
+  const jan = (fazenda_id: string, ini: number[]) => ini.map((saldo_inicial, i) => ({ fazenda_id, cliente_id: 'cli', cenario: 'realizado', ano_mes: '2026-01',
+    categoria_id: `c${i}`, saldo_inicial, saldo_final: saldo_inicial, fonte_oficial_mes: 'fallback_movimentacao' }));
+  const CACHE = [...jan('f1', [500, 480]), ...jan('f2', [720, 520]), ...jan('f3', [1400, 1300]), ...cache('f1', '2026-09', [500, 520]), ...cache('f1', '2026-10', [510, 521]), ...cache('f1', '2026-11', [515, 520], 'projecao'),
+    ...cache('f2', '2026-10', [700, 512]), ...cache('f3', '2026-09', [1500, 1193])];
+  const LOT: Record<string, { pasto_id: string; area_ha: number; ua: number }[]> = {
+    f1: [{ pasto_id: 'p01', area_ha: 61.2, ua: 44 }, { pasto_id: 'p02', area_ha: 67.3, ua: 54.5 }, { pasto_id: 'p03', area_ha: 120, ua: 93.6 }, { pasto_id: 'p04', area_ha: 76.1, ua: 92.8 }],
+    f2: [{ pasto_id: 'b1', area_ha: 300, ua: 282 }, { pasto_id: 'b2', area_ha: 243.5, ua: 228.9 }, { pasto_id: 'b3', area_ha: 300, ua: 600 }],
+    f3: [{ pasto_id: 'r1', area_ha: 1500, ua: 1680 }, { pasto_id: 'r2', area_ha: 875.02, ua: 980 }],
+  };
+  const GEOS = ['p01', 'p02', 'p03', 'p3a', 'p3b', 'p04', 'prl', 'pbf', 'b1', 'b2', 'r1', 'a1'].map((pasto_id) => ({ pasto_id, fazenda_id: PASTOS.find((p) => p.id === pasto_id)?.fazenda_id }));
+  const MAPA: Record<string, number> = { p01: 61.05, p02: 67.1, p03: 116.4, p04: 76, prl: 77.6, pbf: 53.4 };
+  const TRILHA = [
+    { created_at: '2026-08-22T14:00:00Z', usuario_id: 'u1', via: null, acao: 'editou', resumo: null, dados_anteriores: { area_total_ha: 560, matricula_conferida_em: null },
+      dados_novos: { area_total_ha: 576.6, matricula_conferida_em: '2026-08-22T12:00:00Z' } },
+    { created_at: '2026-02-10T10:00:00Z', usuario_id: null, via: 'sistema:notas-fazenda', acao: 'editou', resumo: 'IE vazia → 28.867.397-2 · pela nota do destinatário',
+      dados_anteriores: null, dados_novos: null },
+  ];
+  g.__bancoBancada = {
+    from: (t: string, e: any) => {
+      const daFaz = (ls: any[]) => (e.eq.fazenda_id ? ls.filter((l) => l.fazenda_id === e.eq.fazenda_id) : ls);
+      if (t === 'pastos') return daFaz(PASTOS);
+      if (t === 'pasto_grupos') return GRUPOS;
+      if (t === 'fazenda_cadastros') return daFaz(CADASTROS);
+      if (t === 'fazenda_geometrias') return e.eq.tipo === 'area_fazenda' ? [] : daFaz(GEOS);
+      if (t === 'saldos_iniciais') return daFaz([{ fazenda_id: 'f1', ano: 2024, mes: 1, quantidade: 609 }, { fazenda_id: 'f2', ano: 2024, mes: 1, quantidade: 900 }]);
+      if (t === 'zoot_mensal_cache') return daFaz(CACHE);
+      if (t === 'chuvas') return daFaz([{ fazenda_id: 'f1', data: '2026-01-10', milimetros: 42 }, { fazenda_id: 'f1', data: '2026-02-03', milimetros: 18.5 },
+        { fazenda_id: 'f1', data: '2026-03-01', milimetros: 0 }]);
+      if (t === 'fazenda_infraestruturas') return daFaz([{ fazenda_id: 'f1', geometria: { type: 'Point', coordinates: [-54.8437, -18.9241] } }]);
+      if (t === 'audit_log') return e.eq.fazenda_id === 'f1' ? TRILHA : [];
+      if (t === 'profiles') return [{ user_id: 'u1', nome: 'Consultor Exemplo' }];
+      return [];
+    },
+    rpc: (fn: string, a: any) => {
+      if (fn === 'fn_lotacao_do_mes') return LOT[a.p_fazenda_id] ?? [];
+      if (fn === 'fn_pastos_area_comparar') return PASTOS.filter((p) => p.fazenda_id === a.p_fazenda)
+        .map((p) => ({ pasto_id: p.id, nome: p.nome, area_mapa_ha: MAPA[p.id] ?? null, n_poligonos: MAPA[p.id] ? 1 : 0 }));
+      return null;
+    },
+  };
+  const montarFazendas = async () => {
+    const { V2Fazendas } = await import('@/v2/pages/V2Fazendas');
+    montar(<V2Fazendas />);
+  };
+  void montarFazendas();
 } else if (tela === 'pastos') {
   /* FECH-ROTACAO-01 fatia 2 — Cadastros › Pastos (a tela REAL) com o modo "Grupos": dado SINTÉTICO, nomes de exemplo; um grupo de 3
      piquetes (P10A/B/C), um de nome longo com 4 pastos, um inativo e pastos soltos. O banco responde a prévia do `fn_pasto_grupo_salvar`

@@ -407,6 +407,20 @@ const CENARIOS = [
       ['anotação', async (p) => { await p.locator('[data-testid="assistente-anotacao"]').fill('veio da 3M, brinco amarelo'); await espera(p); }],
       ['voltar', clicar('[data-testid="assistente-voltar"]')],
     ] },
+  /* FAZENDA-CADASTRO-01 · F1b — o cadastro sem modo Editar: digitar acende Salvar/Cancelar no LUGAR deles (a frase ao lado tem largura
+     reservada), Cancelar volta, marcar a matrícula como conferida e trocar a situação não movem os blocos nem o topo */
+  { nome: 'fazenda-cadastro-salvar', url: 'tela=fazendas&f=cadastro', tamanhos: [[1126, 579], [1366, 768]], regiao: '#root',
+    antes: noTopo(async (p) => { await p.locator('[data-testid="cadastro-historico"]').waitFor(); await espera(p, 600); }),
+    estados: (() => {
+      /* a página do cadastro rola (é mais alta que a janela): o foco no campo rola até ele — mede-se o LUGAR das coisas, com a rolagem no topo */
+      const digitar = (sel, t) => noTopo(async (p) => { await p.locator(sel).fill(t); await espera(p); });
+      return [
+        ['CCIR digitado', digitar('[data-testid="cadastro-ccir"]', '950.123.456.789-0')], ['Cancelar', noTopo(clicar('[data-testid="cadastro-cancelar"]'))],
+        ['roteiro', digitar('[data-testid="cadastro-roteiro"]', 'BR-163, km 720, entrada à direita depois do posto')],
+        ['nome vazio', digitar('[data-testid="cadastro-nome"]', '')], ['Salvar com erro', noTopo(clicar('[data-testid="cadastro-salvar"]'))],
+        ['nome de volta', digitar('[data-testid="cadastro-nome"]', 'Santa Clara')],
+      ];
+    })() },
   /* LOTE-PADRAO-V3 · L2 — o assistente v3: andar pelos passos, trocar parida/solteira, prenha/vazia, pôr e tirar carimbo e marcador não
      move o trilho, o código nem os botões do rodapé (o que não vale fica apagado no lugar dele) */
   { nome: 'lotes-assistente-v3-passos', url: 'tela=lotes&barra=32', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="assistente-do-lote"]',

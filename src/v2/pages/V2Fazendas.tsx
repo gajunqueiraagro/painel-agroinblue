@@ -8,7 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Save, Pencil, ArrowLeft, Plus } from 'lucide-react';
+import { Save, ArrowLeft, Plus } from 'lucide-react';
+import { Segmentado } from '@/components/ui/segmentado';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { BlocoFormulario, Rotulo, REGUA_CAMPO } from '@/components/ui/bloco-formulario';
+import { BlocoArea, BlocoHistorico, BlocoResumoDeHoje, FaixaDePendencias, type LinhaDoUso } from '@/components/fazendas/BlocosDoCadastro';
+import { useResumoDaFazenda } from '@/hooks/useResumoDaFazenda';
+import { camposQueMudaram, ehUf, emUsoDesde, mesAnoBR, UFS } from '@/lib/fazendas/cadastroDaFazenda';
+import { isPastoAtivoNoMes } from '@/hooks/usePastos';
 import { PastosTab } from '@/pages/PastosTab';
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import { formatarAreaBR, parseAreaBR } from '@/lib/areaBR';
@@ -17,6 +24,10 @@ import { formatNum } from '@/lib/calculos/formatters';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { ListaDeFazendas } from '@/components/fazendas/ListaDeFazendas';
+import { useListaDeFazendas } from '@/hooks/useListaDeFazendas';
+import { linhasDaLista, pastosDaArea, pendenciasDoCadastro, rotuloDaSituacao, totaisDaLista } from '@/lib/fazendas/listaDeFazendas';
+import { fazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
 
 // 'area' virou a aba "Cadastro" (Dados + Área fundidos). A CHAVE continua 'area'
 // para não mexer no default de activeTab nem nos blocos condicionais.
@@ -33,6 +44,8 @@ interface CadastroRow {
   estado: string;
   car: string;
   nirf: string;
+  /** FAZENDA-CADASTRO-01 · F1b — a coluna já existia em `fazenda_cadastros` e não tinha tela */
+  ccir: string;
   area_total_ha: string;
   area_pecuaria_ha: string;
   area_agricultura_ha: string;
@@ -48,7 +61,7 @@ interface CadastroRow {
 }
 
 const EMPTY: CadastroRow = {
-  municipio: '', estado: '', car: '', nirf: '',
+  municipio: '', estado: '', car: '', nirf: '', ccir: '',
   area_total_ha: '', area_pecuaria_ha: '', area_agricultura_ha: '',
   area_app_ha: '', area_reserva_ha: '', area_benfeitorias_ha: '', area_outras_ha: '',
   ie: '',
@@ -90,7 +103,9 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }, []);
   const agrupado = useMemo(
-    () => agruparPastosPorFamilia(pastos.filter(p => p.ativo !== false), mesCorrente),
+    /* FAZENDA-CADASTRO-01: sem piquete — ele é subárea do pai, que já tem a área dele (FECH-PASTO-UNIDADE-01); somar os dois
+       contava a mesma terra duas vezes (Pureza 6.471,92 × 4.650,61 ha, medido 13/11) */
+    () => agruparPastosPorFamilia(pastosDaArea(pastos), mesCorrente),
     [pastos, mesCorrente],
   );
 
@@ -120,7 +135,7 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
     () => new Map(fazendasDoConsolidado.map(f => [
       f.id,
       agruparPastosPorFamilia(
-        pastos.filter(p => p.fazenda_id === f.id && p.ativo !== false),
+        pastosDaArea(pastos.filter(p => p.fazenda_id === f.id)),
         mesCorrente,
       ),
     ])),
@@ -132,7 +147,11 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
   const [hostBarra, setHostBarra] = useState<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>(fichaDoPastoParaAbrir ? 'pastos' : 'area');
   const [data, setData] = useState<CadastroRow>(EMPTY);
-  const [editing, setEditing] = useState(false);
+  /* FAZENDA-CADASTRO-01 · F1b — sem modo "Editar": a tela é o formulário. O que se LEU fica guardado; o Salvar acende só quando algo
+     difere disso, e o Cancelar volta ao lido. Erro nunca vai ao toast (UX-TOAST-01 / OC-ABRIR-LENTO-01): fica ao lado do Salvar. */
+  const [lido, setLido] = useState<{ data: CadastroRow; nome: string; codigo: string }>({ data: EMPTY, nome: '', codigo: '' });
+  const [erroDoCadastro, setErroDoCadastro] = useState<string | null>(null);
+  const [versaoDoCadastro, setVersaoDoCadastro] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [codigoFazenda, setCodigoFazenda] = useState('');
@@ -145,6 +164,27 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
   const [novaNome, setNovaNome] = useState('');
   const [novaCodigo, setNovaCodigo] = useState('');
   const [criando, setCriando] = useState(false);
+
+  /* FAZENDA-CADASTRO-01 · F1a — a lista de fazendas (só no Global). Hook aqui em cima: nunca depois de um early return. */
+  const dadosDaLista = useListaDeFazendas(clienteAtual?.id, pastos, isGlobal);
+  const administrativa = useMemo(() => {
+    const adm = fazendaAdministrativa(fazendas.filter(f => f.id !== '__global__'));
+    return adm && !pastos.some(p => p.fazenda_id === adm.id && p.ativo !== false)
+      ? { id: adm.id, nome: adm.nome, codigo: adm.codigo_importacao ?? adm.codigo ?? null } : null;
+  }, [fazendas, pastos]);
+  const lista = useMemo(() => {
+    const linhas = linhasDaLista({
+      fazendas: fazendas.filter(f => f.id !== '__global__' && f.id !== administrativa?.id)
+        .map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo_importacao ?? f.codigo ?? null, status: f.status_operacional ?? null })),
+      cadastros: dadosDaLista.cadastros, pastos, desenhados: dadosDaLista.desenhados, fechamentos: dadosDaLista.fechamentos,
+      comRebanhoInicial: dadosDaLista.comRebanhoInicial, mesRef: mesCorrente,
+    });
+    const pec = agrupado.familias.find(f => f.grupo === 'pecuaria')?.somaHa ?? null;
+    return { linhas, totais: totaisDaLista(linhas, pec) };
+  }, [fazendas, administrativa, dadosDaLista, pastos, mesCorrente, agrupado]);
+
+  /* FAZENDA-CADASTRO-01 · F1b — o que a tela do cadastro lê além do cadastro (último fechamento, chuva, sede, desenho, histórico) */
+  const resumo = useResumoDaFazenda(clienteAtual?.id, isGlobal ? null : fazendaAtual?.id, pastos, mesCorrente, versaoDoCadastro);
 
   const loadData = useCallback(async () => {
     if (isGlobal || !fazendaAtual?.id || fazendaAtual.id === '__global__' || !clienteAtual?.id) {
@@ -161,17 +201,22 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
       .eq('cliente_id', clienteAtual.id)
       .maybeSingle();
     if (error) {
-      toast.error('Erro ao carregar cadastro da fazenda: ' + error.message);
+      console.error('[cadastro da fazenda] leitura', error);
+      setErroDoCadastro('Não consegui ler o cadastro da fazenda. Tente de novo em instantes.');
       setLoading(false);
       return;
     }
+    setErroDoCadastro(null);
+    const codigoLido = (fazendaAtual as any).codigo_importacao ?? (fazendaAtual as any).codigo ?? '';
+    const nomeLido = fazendaAtual.nome ?? '';
     if (row) {
-      setData({
+      const lidoAgora: CadastroRow = {
         id: row.id,
         municipio: (row as any).municipio ?? '',
         estado: (row as any).estado ?? '',
         car: (row as any).car ?? '',
         nirf: (row as any).nirf ?? '',
+        ccir: (row as any).ccir ?? '',
         ie: (row as any).ie ?? '',
         // PR-FIX-MATRICULA-PARSE-01 — entra JÁ FORMATADO em BR. Com String() o
         // state ficava em formato americano ("3665.54"), e o blur passava esse texto
@@ -193,14 +238,16 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
         status_operacional: fazendaAtual.status_operacional ?? '',
         roteiro: (row as any).roteiro ?? '',
         matricula_conferida_em: (row as any).matricula_conferida_em ?? '',
-      });
-      setEditing(false);
+      };
+      setData(lidoAgora);
+      setLido({ data: lidoAgora, nome: nomeLido, codigo: codigoLido });
     } else {
-      setData({ ...EMPTY, status_operacional: fazendaAtual.status_operacional ?? '' });
-      setEditing(true);
+      const novo = { ...EMPTY, status_operacional: fazendaAtual.status_operacional ?? '' };
+      setData(novo);
+      setLido({ data: novo, nome: nomeLido, codigo: codigoLido });
     }
-    setCodigoFazenda((fazendaAtual as any).codigo_importacao ?? (fazendaAtual as any).codigo ?? '');
-    setNomeFazenda(fazendaAtual.nome ?? '');
+    setCodigoFazenda(codigoLido);
+    setNomeFazenda(nomeLido);
     setLoading(false);
   }, [fazendaAtual, clienteAtual?.id, isGlobal]);
 
@@ -231,7 +278,7 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
 
   const handleSave = async () => {
     if (!fazendaAtual?.id || !clienteAtual?.id) {
-      toast.error('Cliente ou fazenda não selecionado.');
+      setErroDoCadastro('Escolha o cliente e a fazenda antes de salvar.');
       return;
     }
 
@@ -241,9 +288,10 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
        desde sempre (`codigo_importacao: codigoFazenda || null`, logo abaixo).
        Exigi-lo agora mudaria o comportamento de um campo fora do escopo. */
     if (!nomeFazenda.trim()) {
-      toast.error('Nome é obrigatório.');
+      setErroDoCadastro('Falta o nome da fazenda.');
       return;
     }
+    setErroDoCadastro(null);
 
     // area_produtiva_ha alimenta fn_gerar_area_de_snapshot, que lança
     // 'fazenda_cadastros_sem_area' quando o valor é NULL — sem ele a fazenda não
@@ -261,6 +309,7 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
       estado: data.estado || null,
       car: data.car || null,
       nirf: data.nirf || null,
+      ccir: data.ccir || null,
       // PR-AREA-MATRICULA-01 — area_total_ha e a area da MATRICULA, documento
       // digitado, sem correspondente nos pastos. Antes era a soma das seis colunas
       // de area do cadastro, que deixaram de ser editaveis no 77cec994 — o valor
@@ -286,7 +335,8 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
       setData(prev => ({ ...prev, id: (saved as any).id }));
     }
     if (error) {
-      toast.error('Erro ao salvar: ' + error.message);
+      console.error('[cadastro da fazenda] gravar cadastro', error);
+      setErroDoCadastro('Não consegui gravar o cadastro. Nada mudou; tente de novo.');
       setSaving(false);
       return;
     }
@@ -302,7 +352,8 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
       .update({ nome: nomeFazenda.trim(), codigo_importacao: codigoFazenda || null, status_operacional: data.status_operacional || null } as any)
       .eq('id', fazendaAtual.id);
     if (fazendaError) {
-      toast.error('Erro ao salvar código da fazenda: ' + fazendaError.message);
+      console.error('[cadastro da fazenda] gravar nome/código/situação', fazendaError);
+      setErroDoCadastro('O cadastro foi gravado; o nome, o código e a situação não. Tente salvar de novo.');
       setSaving(false);
       return;
     }
@@ -312,9 +363,9 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
        refresh. Mesmo gesto do handleUpdate da FazendasList:70. */
     await reloadFazendas();
 
-    toast.success('Área salva com sucesso!');
-    setEditing(false);
+    toast.success('Cadastro salvo.');
     await loadData();
+    setVersaoDoCadastro(v => v + 1);
     setSaving(false);
   };
 
@@ -365,15 +416,15 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
       <div className="px-4 py-4 w-full max-w-[1100px]">
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-bold text-foreground">Fazendas e Pastos</h2>
+            <h2 className="text-sm font-bold text-foreground">Fazendas e pastos</h2>
             <p className="text-[10px] text-muted-foreground">
-              Composição da área por fazenda — clique no nome de uma coluna para entrar nela
+              {lista.totais.fazendas} fazenda{lista.totais.fazendas === 1 ? '' : 's'} · {lista.totais.ativas} ativa{lista.totais.ativas === 1 ? '' : 's'} · clique na fazenda para abrir o cadastro
             </p>
           </div>
           <Dialog open={novaOpen} onOpenChange={(o) => { setNovaOpen(o); if (!o) { setNovaNome(''); setNovaCodigo(''); } }}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="h-7 text-xs shrink-0">
-                <Plus className="h-3 w-3 mr-1" /> Adicionar fazenda
+                <Plus className="h-3 w-3 mr-1" /> Fazenda
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-sm">
@@ -422,6 +473,15 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
           </Dialog>
         </div>
 
+        <div className="mb-4">
+          <ListaDeFazendas linhas={lista.linhas} totais={lista.totais} administrativa={administrativa} erro={dadosDaLista.erro}
+            carregando={dadosDaLista.carregando} onAbrir={id => { const f = fazendas.find(x => x.id === id); if (f) setFazendaAtual(f); }} />
+        </div>
+
+        {/* a composição de hoje, embaixo (P1): mesma tabela, sem coluna de % (D1) e com as famílias zeradas (D2) */}
+        <p className="mb-1 text-[11px] font-semibold text-foreground">
+          Composição da área por fazenda <span className="font-normal text-muted-foreground">· ha · clique no nome de uma coluna para entrar nela</span>
+        </p>
         {fazendasDoConsolidado.length === 0 ? (
           <p className="text-xs text-muted-foreground mb-4">
             Nenhuma fazenda com pasto vigente neste mês.
@@ -511,36 +571,8 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
             renomear na aba Cadastro desde 91c8352d. O componente continua vivo no
             app legado (CadastrosTab:286). */}
 
-        {/* Fazenda sem pasto NAO vira coluna — a regra de e821e4ab continua de pe,
-            porque uma coluna de zeros afirmaria "zero hectare" onde o fato e "nao
-            cadastrou pasto". Mas ela tambem nao pode sumir da tela: fazenda recem
-            criada ficaria invisivel, e o Administrativo ja estava. Entao ela vira
-            NOME, sem numero nenhum — o que e exatamente o que se sabe dela. Clicavel,
-            para ser a porta de entrada que os cards eram. */}
-        {(() => {
-          const semPasto = fazendas
-            .filter(f => f.id !== '__global__' && !fazendasDoConsolidado.some(x => x.id === f.id))
-            .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-          if (semPasto.length === 0) return null;
-          return (
-            <p className="text-[10px] text-muted-foreground">
-              Sem pasto cadastrado:{' '}
-              {semPasto.map((f, i) => (
-                <span key={f.id}>
-                  {i > 0 && ' · '}
-                  <button
-                    type="button"
-                    onClick={() => setFazendaAtual(f)}
-                    title={`Abrir ${f.nome}`}
-                    className="underline underline-offset-2 hover:text-foreground"
-                  >
-                    {f.nome}
-                  </button>
-                </span>
-              ))}
-            </p>
-          );
-        })()}
+        {/* FAZENDA-CADASTRO-01 · F1a: a fazenda sem pasto deixou de ser só um NOME aqui embaixo — virou LINHA da tabela de fazendas (com
+            "—" na área, nunca zero), e a unidade administrativa tem a linha à parte dela. No pivô ela continua sem coluna (e821e4ab). */}
       </div>
     );
   }
@@ -557,117 +589,62 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
     return <div className="px-4 py-6 text-xs text-muted-foreground">Carregando...</div>;
   }
 
+  /* FAZENDA-CADASTRO-01 · F1b — os contadores das abas: pastos VIGENTES no mês, sem piquete e sem a Divergência (D6), e as cabeças da partida */
+  const pastosVigentes = pastosDaArea(pastos).filter(p => p.fazenda_id === fazendaAtual.id && isPastoAtivoNoMes(p, mesCorrente)
+    && p.tipo_uso !== 'divergencia').length;
   const TABS: { key: TabKey; label: string }[] = [
     { key: 'area', label: 'Cadastro' },
-    { key: 'pastos', label: 'Pastos' },
-    { key: 'rebanho', label: 'Rebanho inicial' },
+    { key: 'pastos', label: `Pastos ${pastosVigentes}` },
+    { key: 'rebanho', label: resumo.partida ? `Rebanho inicial ${formatNum(resumo.partida.cabecas, 0)} cab` : 'Rebanho inicial' },
   ];
 
   // ── Derivação por família/destino ───────────────────────────────────────────
   // familias[].tipos[] traz `.pastos`, não `.somaHa` — o módulo devolve a forma
   // canônica e a tela soma do lado dela, como o próprio comentário dele autoriza.
-  const somaFamilia = (grupo: string) =>
-    agrupado.familias.find(f => f.grupo === grupo)?.somaHa ?? 0;
-  const somaDestino = (tipo: string) => {
-    for (const f of agrupado.familias) {
-      const t = f.tipos.find(x => x.tipo === tipo);
-      if (t) return t.pastos.reduce((acc, p) => acc + (p.area_produtiva_ha ?? 0), 0);
-    }
-    return 0;
-  };
   const somaPastosTotal = agrupado.familias.reduce((acc, f) => acc + f.somaHa, 0);
-  /** Destinos de uma família, já somados — o módulo devolve `.pastos`, não `.somaHa`. */
-  const destinosDaFamilia = (grupo: string) =>
-    (agrupado.familias.find(f => f.grupo === grupo)?.tipos ?? []).map(t => ({
-      tipo: t.tipo,
-      label: t.label,
-      somaHa: t.pastos.reduce((acc, p) => acc + (p.area_produtiva_ha ?? 0), 0),
-    }));
-  /**
-   * Percentual no idioma da lista de pastos: família sobre o total geral, destino
-   * sobre a própria família. Base zero devolve `—`, nunca "0,0%" — sem denominador
-   * não há proporção, e zero por cento afirmaria uma que não existe.
-   */
-  const pct = (valor: number, base: number) =>
-    base > 0 ? `${formatNum((valor / base) * 100, 1)}%` : '—';
+  /* "Uso da área": família sobre o total, destino sobre a própria família (D3); família com 0,00 continua aparecendo — é informação (D2) */
+  const FAMILIAS_DO_CADASTRO: [string, string][] = [
+    ['pecuaria', 'Pecuária'], ['agricultura', 'Agricultura'], ['silvicultura', 'Silvicultura'], ['ambiental', 'Ambiental'], ['infraestrutura', 'Infraestrutura'],
+  ];
+  const usoDaArea: LinhaDoUso[] = FAMILIAS_DO_CADASTRO.flatMap(([grupo, rotulo]) => {
+    const fam = agrupado.familias.find(f => f.grupo === grupo);
+    const somaFam = fam?.somaHa ?? 0;
+    const tipos = fam?.tipos ?? [];
+    return [
+      { rotulo, ha: somaFam, base: somaPastosTotal, pastos: tipos.reduce((s, t) => s + t.pastos.length, 0) },
+      ...tipos.map(t => ({ rotulo: t.label, ha: t.pastos.reduce((acc, p) => acc + (p.area_produtiva_ha ?? 0), 0), base: somaFam, pastos: t.pastos.length,
+        destino: true })),
+    ];
+  });
+  const totalDePastosNoUso = usoDaArea.filter(l => !l.destino).reduce((s, l) => s + l.pastos, 0);
   const matriculaHa = parseAreaBR(data.area_total_ha);
-  const diferencaMatricula = matriculaHa !== null ? matriculaHa - somaPastosTotal : null;
   const matriculaConferida = !!data.matricula_conferida_em;
 
-  // PR-AREA-LAYOUT-01 — a coluna CADASTRO saiu: os valores digitados em
-  // fazenda_cadastros foram conferidos contra os pastos e descartados como lixo.
-  // A tela passa a exibir SÓ o derivado. As colunas do banco continuam sendo
-  // gravadas pelo handleSave com o que veio do load — deixaram de ser exibidas,
-  // não de existir. `areaField` saiu junto, órfão; `textField` segue em uso.
-  // Rótulo | ha | %. Cor fica em título e subtítulo — nunca tint na linha inteira.
-  // A hierarquia é peso e recuo: família semibold, destino menor, muted e recuado.
-  // PR-AREA-LAYOUT-03 — o PERCENTUAL da família ganha o peso principal: é ele que
-  // responde "como esta fazenda se reparte", que é a leitura para a qual a tabela
-  // existe. O valor em ha vira apoio. Destinos encolhem (text-[9px], py-0) porque
-  // são 10 linhas no pior caso e é neles que há altura a recuperar.
-  /* Hierarquia de TRES niveis, padrao A10 do PADROES-UI:
-       cabecalho e TOTAL -> bg-primary (azul, texto branco)
-       FAMILIA           -> bg-primary/10 (azul claro)
-       TIPO              -> zebra odd:bg-muted/30 even:bg-card
-     `idx` so existe para a zebra dos tipos: `odd:`/`even:` do CSS contam
-     filhos do mesmo pai, e cada familia e um <div> proprio — a alternancia
-     reiniciaria em cada bloco. */
-  const linhaArea = (
-    rotulo: string, valor: number, base: number,
-    opts?: { destino?: boolean; idx?: number },
-  ) => (
-    <div key={rotulo} className={`grid grid-cols-[1fr_84px_58px] gap-1 items-baseline ${
-      opts?.destino
-        ? `py-0 ${(opts.idx ?? 0) % 2 === 0 ? 'bg-muted/30' : 'bg-card'}`
-        : 'py-1 bg-primary/10'
-    }`}>
-      <span className={opts?.destino
-        ? 'text-[9px] text-muted-foreground pl-4'
-        : 'text-[11px] font-medium text-foreground pl-1'}>
-        {rotulo}
-      </span>
-      <span className={`tabular-nums text-right px-1 ${opts?.destino ? 'text-[9px] text-muted-foreground' : 'text-[11px] font-medium text-foreground'}`}>
-        {formatNum(valor, 2)}
-      </span>
-      <span className={`tabular-nums text-right px-1 ${opts?.destino ? 'text-[9px] text-muted-foreground/70' : 'text-[11px] font-medium text-foreground'}`}>
-        {valor > 0 ? pct(valor, base) : '—'}
-      </span>
-    </div>
+  /* o Salvar acende só com mudança; o Cancelar volta ao que se leu */
+  const mudancas = [...camposQueMudaram({ ...lido.data }, { ...data }), ...(nomeFazenda !== lido.nome ? ['nome'] : []),
+    ...(codigoFazenda !== lido.codigo ? ['codigo'] : [])];
+  const mudou = mudancas.length > 0;
+  const cancelar = () => { setData(lido.data); setNomeFazenda(lido.nome); setCodigoFazenda(lido.codigo); setErroDoCadastro(null); };
+  const fraseDoSalvar = erroDoCadastro ?? (saving ? 'Gravando…' : mudou ? 'Há mudança não salva.' : 'Nada a salvar: o cadastro já está assim.');
+  const pendencias = pendenciasDoCadastro(
+    { id: fazendaAtual.id, nome: nomeFazenda, codigo: codigoFazenda || null, status: data.status_operacional || null },
+    { fazenda_id: fazendaAtual.id, municipio: data.municipio, estado: data.estado, car: data.car, nirf: data.nirf, ie: data.ie, roteiro: data.roteiro,
+      area_total_ha: matriculaHa },
+    !!resumo.partida,
   );
+  const desde = emUsoDesde(resumo.partida?.anoMes ?? null, pastos.filter(p => p.fazenda_id === fazendaAtual.id).map(p => p.data_inicio));
+  const opcoesUf = [
+    ...(data.estado && !ehUf(data.estado) ? [{ value: data.estado, label: `${data.estado} (valor inexistente)` }] : []),
+    ...UFS.map(u => ({ value: u, label: u })),
+  ];
+  const situacaoLida = data.status_operacional || 'ativa';
 
-  /** Família + seus destinos. Família com 0,00 continua aparecendo — é informação. */
-  const blocoFamilia = (grupo: string, rotulo: string) => {
-    const soma = somaFamilia(grupo);
-    return (
-      <div key={grupo}>
-        {linhaArea(rotulo, soma, somaPastosTotal)}
-        {destinosDaFamilia(grupo).map((d, i) => linhaArea(d.label, d.somaHa, soma, { destino: true, idx: i }))}
-      </div>
-    );
-  };
-
-  /* 10px, nao 9, nos DEZ rotulos de "Dados da Fazenda": a cor ja e
-     --foreground (222 47% 11%, quase preto), tem definicao unica no projeto e
-     e a MESMA que os valores herdam — nao ha tom mais escuro para onde ir.
-     O que lia como cinza era o traco fino de 9px em uppercase com
-     tracking-wide. Tamanho ataca a causa; cor nao tinha alavanca.
-     Custo aceito: ~1px de altura por rotulo. */
-  const textField = (label: string, key: keyof CadastroRow) => (
-    <div className="space-y-0.5">
-      <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
-        {label}
-      </Label>
-      {editing ? (
-        <Input
-          value={data[key]}
-          onChange={e => setData(prev => ({ ...prev, [key]: e.target.value }))}
-          className="h-6 text-[11px]"
-        />
-      ) : (
-        <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px]">
-          {data[key] || <span className="text-muted-foreground italic">—</span>}
-        </p>
-      )}
+  /* um campo de texto do cadastro (a régua da casa: rótulo em cima, campo de 28px) */
+  const campo = (rotulo: string, key: keyof CadastroRow, testid: string) => (
+    <div className="min-w-0">
+      <Rotulo texto={rotulo} />
+      <Input value={data[key]} onChange={e => setData(prev => ({ ...prev, [key]: e.target.value }))} className={REGUA_CAMPO}
+        placeholder="não informado" data-testid={testid} />
     </div>
   );
 
@@ -681,8 +658,8 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
           o operador perde de vista em que fazenda está. Um bloco só (título + abas)
           para que nada deslize por baixo do outro. */}
       <div className="sticky top-0 z-30 bg-background pt-1 -mx-4 px-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex min-w-0 items-center gap-1.5">
           {/* Voltar ao Global. Condiciona em fazendas.length > 1, NAO em isGlobal:
               cliente de fazenda unica nunca entra em Global — FazendaContext:108 e
               :110 caem direto em list[0] nos dois ramos, o do localStorage e o do
@@ -693,42 +670,56 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
             <button
               type="button"
               onClick={() => setFazendaAtual(GLOBAL_FAZENDA)}
-              title="Voltar ao consolidado de todas as fazendas"
-              className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+              title="Voltar à lista de fazendas"
+              className="flex h-6 flex-none items-center gap-0.5 rounded px-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              data-testid="cadastro-voltar"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-3.5 w-3.5" /> Fazendas
             </button>
           )}
-          <div>
-            <h2 className="text-sm font-bold text-foreground">{fazendaAtual.nome}</h2>
-            <p className="text-[10px] text-muted-foreground">Cadastro da fazenda</p>
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+              {lido.codigo && <span className="text-muted-foreground">{lido.codigo}</span>}
+              <span className="truncate" title={fazendaAtual.nome}>{fazendaAtual.nome}</span>
+              <span className={`flex-none rounded px-1.5 py-px text-[9.5px] font-medium ${situacaoLida === 'ativa' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+                data-testid="cadastro-situacao-selo">
+                {rotuloDaSituacao(lido.data.status_operacional || null)}
+              </span>
+            </h2>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {[lido.data.municipio, lido.data.estado].filter(Boolean).join(' · ') || 'município não informado'}
+              {' · '}{matriculaHa != null ? `${formatNum(matriculaHa, 2)} ha na matrícula` : 'matrícula não informada'}
+            </p>
           </div>
         </div>
-        <div className="flex gap-1.5">
-          {!editing && (
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>
-              <Pencil className="h-3 w-3 mr-1" /> Editar
+        {activeTab === 'area' && (
+          <div className="flex flex-none items-center gap-1.5">
+            <span className={`w-[300px] truncate text-right text-[10px] ${erroDoCadastro ? 'text-red-700' : 'text-muted-foreground'}`} title={fraseDoSalvar}
+              data-testid="cadastro-frase-salvar">
+              {fraseDoSalvar}
+            </span>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={cancelar} disabled={!mudou || saving} data-testid="cadastro-cancelar">
+              Cancelar
             </Button>
-          )}
-          {editing && (
-            <Button size="sm" className="h-7 text-xs" onClick={handleSave} disabled={saving}>
+            <Button size="sm" className="h-7 text-xs" onClick={handleSave} disabled={!mudou || saving} data-testid="cadastro-salvar">
               <Save className="h-3 w-3 mr-1" /> {saving ? 'Salvando...' : 'Salvar'}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      <div className="flex items-end justify-between gap-4 mb-4 border-b border-border">
+      <div className="flex items-end justify-between gap-4 mb-3 border-b border-border">
         <div className="flex gap-0.5">
           {TABS.map(t => (
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key)}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
+              className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                 activeTab === t.key
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
+              data-testid={`cadastro-aba-${t.key}`}
             >
               {t.label}
             </button>
@@ -740,246 +731,118 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
       </div>
 
       {activeTab === 'area' && (
-        // PR-AREA-LAYOUT-02 — composição à ESQUERDA, dados à DIREITA. A área é o que
-        // o operador vem conferir; a identificação é referência.
-        <div className="grid grid-cols-2 gap-4 items-start">
+        <div data-testid="cadastro-da-fazenda">
+          <FaixaDePendencias pendencias={pendencias} />
+          {resumo.erro && <p className="mb-1 text-[10px] text-red-700" data-testid="cadastro-erro-leitura">{resumo.erro}</p>}
+          <div className="grid grid-cols-2 gap-3 items-start">
+            {/* ── ESQUERDA — o que se digita ─────────────────────────────────────── */}
+            <div className="space-y-2">
+              <BlocoFormulario titulo="Identificação" testId="cadastro-identificacao">
+                <div className="grid grid-cols-[1fr_110px] gap-x-3 gap-y-1">
+                  {/* NOME editavel: esta tela e a escritora de `fazendas` no /v2 — grava codigo_importacao e status_operacional no mesmo update. */}
+                  <div className="min-w-0">
+                    <Rotulo texto="Nome da fazenda" obrig />
+                    <Input value={nomeFazenda} onChange={e => setNomeFazenda(e.target.value)} placeholder="Ex: Faz. 3 Muchachas" data-testid="cadastro-nome"
+                      className={`${REGUA_CAMPO} ${!nomeFazenda.trim() ? 'border-red-500' : ''}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <Rotulo texto="Código" />
+                    <Input value={codigoFazenda} onChange={e => setCodigoFazenda(e.target.value)} placeholder="Ex: BG, 3M" className={REGUA_CAMPO}
+                      data-testid="cadastro-codigo" />
+                  </div>
+                </div>
+                <div className="mt-1">
+                  <Rotulo texto="Situação" />
+                  {/* as 4 opções de hoje continuam (inventário: status com 4 opções) — Segmentado da casa, nunca seletor nativo */}
+                  <Segmentado valor={data.status_operacional || 'ativa'} onEscolher={v => setData(prev => ({ ...prev, status_operacional: v }))} altura={24}
+                    opcoes={[{ valor: 'ativa', rotulo: 'Ativa' }, { valor: 'inativa', rotulo: 'Inativa' }, { valor: 'arrendada', rotulo: 'Arrendada' },
+                      { valor: 'suspensa', rotulo: 'Suspensa' }]} />
+                </div>
+                <div className="mt-1 grid grid-cols-[1fr_96px_96px] gap-x-3">
+                  {campo('Município', 'municipio', 'cadastro-municipio')}
+                  <div className="min-w-0">
+                    <Rotulo texto="Estado" />
+                    <SearchableSelect value={data.estado} onValueChange={v => setData(prev => ({ ...prev, estado: v }))} options={opcoesUf} semTodos
+                      placeholder="UF" className={REGUA_CAMPO} />
+                  </div>
+                  <div className="min-w-0">
+                    <Rotulo texto="Em uso desde" />
+                    <p className="flex h-7 items-center rounded border bg-muted/40 px-2 text-[11px] tabular-nums" title="o mês de partida do rebanho; sem ele, o início mais antigo dos pastos">
+                      {mesAnoBR(desde)}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-1 text-[9.5px] text-muted-foreground">O código aparece em todas as tabelas do sistema. Fazenda inativa mantém o histórico.</p>
+              </BlocoFormulario>
 
-          {/* ── ESQUERDA — composição derivada dos pastos ───────────────────── */}
-          <div className="space-y-2">
-            {/* PR-AREA-CARD-CONFERIDA-01 — três colunas: rótulo | valor | estado.
-                O estado da conferência é atributo DA MATRÍCULA, não informação de
-                mesmo nível das outras duas linhas — por isso vai na terceira coluna
-                da própria linha, e não numa quarta linha do card.
-                A diferença é exibida SEMPRE, inclusive zero: informação permanente,
-                não alerta. */}
-            <div className="rounded-lg border border-border bg-muted/40 p-2 space-y-1">
-              <div className="grid grid-cols-[1fr_112px_auto] gap-2 items-baseline">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Matrícula</span>
-                <span className="text-[11px] font-medium tabular-nums text-right whitespace-nowrap">
-                  {matriculaHa !== null
-                    ? `${formatNum(matriculaHa, 2)} ha`
-                    : <span className="text-muted-foreground italic">—</span>}
-                </span>
-                {/* PR-AREA-CONFERIDA-BOTAO-01 — o botão só existe no modo de EDIÇÃO.
-                    Ele escreve apenas no state; a persistência é do handleSave. Fora
-                    da edição não há Salvar na tela, então clicar e sair perdia a
-                    marcação em silêncio — o botão parecia ação imediata e não é.
-                    Oferecido só onde há Salvar visível, a expectativa não se cria.
-                    O ESTADO continua legível nas duas situações: o que muda é se há
-                    ou não o que fazer a respeito dele aqui.
+              {/* A MATRÍCULA é documento, não derivado — terceira referência do sistema, ao lado dos pastos e do fechamento. Alterar o valor
+                  limpa a conferência: número novo é número não conferido. */}
+              <BlocoFormulario titulo="Matrícula" dica="área do documento; mudar a área limpa a conferência" testId="cadastro-matricula">
+                <div className="grid grid-cols-[140px_1fr] items-end gap-x-3">
+                  <div>
+                    <Rotulo texto="Área da matrícula (ha)" />
+                    <Input
+                      value={data.area_total_ha}
+                      onChange={e => setData(prev => ({ ...prev, area_total_ha: e.target.value, matricula_conferida_em: '' }))}
+                      onBlur={e => setData(prev => ({ ...prev, area_total_ha: formatarAreaBR(parseAreaBR(e.target.value)) }))}
+                      className={`${REGUA_CAMPO} text-right tabular-nums`}
+                      placeholder="0,00"
+                      data-testid="cadastro-matricula-area"
+                    />
+                  </div>
+                  <div className="flex h-7 items-center">
+                    {matriculaConferida ? (
+                      <span className="text-[10px] text-muted-foreground">Conferida em {new Date(data.matricula_conferida_em).toLocaleDateString('pt-BR')}</span>
+                    ) : (
+                      /* grava no Salvar, que agora fica sempre à vista e acende com a marcação */
+                      <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] text-amber-700 border-amber-300 hover:bg-amber-50"
+                        onClick={() => setData(prev => ({ ...prev, matricula_conferida_em: new Date().toISOString() }))} data-testid="cadastro-marcar-conferida">
+                        Marcar como conferida
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </BlocoFormulario>
 
-                    PR-AREA-CARD-CONFERIDA-02 — quando o botão aparece, ele dispensa o
-                    rótulo: só existe enquanto não foi conferida. Texto em duas linhas
-                    para ocupar a largura da maior palavra, não da frase inteira. */}
-                <span className="flex items-center justify-end">
-                  {matriculaConferida ? (
-                    <span className="text-[9px] text-muted-foreground whitespace-nowrap">
-                      Conferida em {new Date(data.matricula_conferida_em).toLocaleDateString('pt-BR')}
-                    </span>
-                  ) : editing ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-auto py-0.5 px-1.5 text-[10px] leading-tight text-amber-700 border-amber-300 hover:bg-amber-50 whitespace-normal"
-                      onClick={() => setData(prev => ({ ...prev, matricula_conferida_em: new Date().toISOString() }))}
-                    >
-                      Marcar como<br />conferida
-                    </Button>
-                  ) : (
-                    <span className="text-[9px] font-semibold text-amber-700 whitespace-nowrap">
-                      Não conferida
-                    </span>
-                  )}
-                </span>
-              </div>
-              <div className="grid grid-cols-[1fr_112px_auto] gap-2 items-baseline">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Soma dos pastos</span>
-                <span className="text-base font-bold tabular-nums leading-tight text-right whitespace-nowrap">{formatNum(somaPastosTotal, 2)} ha</span>
-                <span />
-              </div>
-              {/* Diferença é a menos consultada das três — peso menor que Matrícula
-                  e Soma dos pastos. A cor (âmbar/verde) continua carregando o sinal. */}
-              <div className="grid grid-cols-[1fr_112px_auto] gap-2 items-baseline py-0.5 border-t border-border/60">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Diferença</span>
-                {/* VERDE só depois de conferida. Enquanto matricula_conferida_em for
-                    NULL, Δ zero NÃO vira verde: as 12 fazendas herdaram em
-                    area_total_ha o resíduo do cálculo antigo, que coincide com a soma
-                    dos pastos em 9 delas. Verde ali seria conferência APARENTE. */}
-                <span className={`text-[10px] font-semibold tabular-nums text-right whitespace-nowrap ${
-                  diferencaMatricula === null ? ''
-                    : matriculaConferida && Math.abs(diferencaMatricula) < 0.01 ? 'text-emerald-700'
-                    : 'text-amber-700'
-                }`}>
-                  {diferencaMatricula === null
-                    ? <span className="text-muted-foreground italic font-normal">—</span>
-                    : `${diferencaMatricula > 0 ? '+' : ''}${formatNum(diferencaMatricula, 2)} ha`}
-                </span>
-                <span />
-              </div>
-            </div>
+              <BlocoFormulario titulo="Documentos e inscrições" testId="cadastro-documentos">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                  {campo('CAR', 'car', 'cadastro-car')}
+                  {campo('NIRF', 'nirf', 'cadastro-nirf')}
+                  {campo('CCIR', 'ccir', 'cadastro-ccir')}
+                  {campo('Inscrição estadual', 'ie', 'cadastro-ie')}
+                </div>
+                <p className="mt-1 text-[9.5px] text-muted-foreground">Produtores e inscrições usados nas notas ficam em Cadastros › Produtores, ligados à fazenda.</p>
+              </BlocoFormulario>
 
-            <div>
-              {/* A10: cabecalho em bg-primary. NENHUM texto sobre azul pode ficar
-                  em text-foreground ou text-muted-foreground — o <tr> inteiro leva
-                  primary-foreground e as celulas nao redefinem cor. */}
-              <div className="grid grid-cols-[1fr_84px_58px] gap-1 py-1 bg-primary text-primary-foreground">
-                <p className="text-[9px] font-semibold uppercase tracking-wide pl-1">
-                  Composição da Área
-                </p>
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-right px-1">ha</p>
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-right px-1">%</p>
-              </div>
-
-              {blocoFamilia('pecuaria', 'Pecuária')}
-              {blocoFamilia('agricultura', 'Agricultura')}
-              {blocoFamilia('silvicultura', 'Silvicultura')}
-              {blocoFamilia('ambiental', 'Ambiental')}
-              {blocoFamilia('infraestrutura', 'Infraestrutura')}
-
-              <div className="grid grid-cols-[1fr_84px_58px] gap-1 items-baseline py-1 bg-primary text-primary-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wide pl-1">Total</span>
-                <span className="text-xs font-semibold tabular-nums text-right px-1">{formatNum(somaPastosTotal, 2)}</span>
-                <span className="text-[10px] tabular-nums text-right px-1">
-                  {somaPastosTotal > 0 ? '100,0%' : '—'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* ── DIREITA — dados da fazenda ───────────────────────────────────── */}
-          {/* PR-AREA-LAYOUT-03 — cabeçalho com borda inferior (mesmo tratamento de
-              "Composição da Área") e separador sutil entre os grupos de campos: o
-              bloco era opaco, sem hierarquia entre rótulo e conteúdo. */}
-          <div>
-            <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground pb-1 border-b border-border">
-              Dados da Fazenda
-            </p>
-
-            <div className="divide-y divide-border/40">
-            <div className="grid grid-cols-2 gap-1.5 py-1">
-              {/* NOME editavel: esta tela e a escritora de `fazendas` no /v2 — ja
-                  grava codigo_importacao e status_operacional no mesmo update. A
-                  restricao anterior existia para impedir dois escritores enquanto a
-                  FazendasList vivia no /v2; ela sai em PR proprio, e ate la os dois
-                  gravam o mesmo campo pelo mesmo caminho, sem conflito de fonte. */}
-              <div className="space-y-0.5">
-                <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
-                  Nome da Fazenda
-                </Label>
-                {editing ? (
-                  <Input
-                    value={nomeFazenda}
-                    onChange={e => setNomeFazenda(e.target.value)}
-                    className="h-6 text-[11px]"
-                    placeholder="Ex: Faz. 3 Muchachas"
+              <BlocoFormulario titulo="Acesso e localização" testId="cadastro-acesso">
+                <div>
+                  <Rotulo texto="Sede no mapa" />
+                  <p className="flex h-7 items-center rounded border bg-muted/40 px-2 text-[11px] tabular-nums"
+                    title="o ponto da sede desenhado no Geo pastos (latitude · longitude)" data-testid="cadastro-sede">
+                    {resumo.sede?.texto ?? <span className="text-muted-foreground">sem sede marcada no mapa</span>}
+                  </p>
+                </div>
+                <div className="mt-1">
+                  <Rotulo texto="Roteiro de acesso" />
+                  <textarea
+                    value={data.roteiro}
+                    onChange={e => setData(prev => ({ ...prev, roteiro: e.target.value }))}
+                    className="h-14 w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-[11px]"
+                    placeholder="como chegar, para visitas, transportadoras e frigoríficos"
+                    data-testid="cadastro-roteiro"
                   />
-                ) : (
-                  <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px]">
-                    {nomeFazenda || <span className="text-muted-foreground italic">—</span>}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-0.5">
-                <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
-                  Código da Fazenda
-                </Label>
-                {editing ? (
-                  <Input
-                    value={codigoFazenda}
-                    onChange={e => setCodigoFazenda(e.target.value)}
-                    className="h-6 text-[11px]"
-                    placeholder="Ex: BG, 3M"
-                  />
-                ) : (
-                  <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px]">
-                    {codigoFazenda || <span className="text-muted-foreground italic">—</span>}
-                  </p>
-                )}
-              </div>
+                </div>
+              </BlocoFormulario>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 py-1">
-              {textField('Município', 'municipio')}
-              {textField('Estado', 'estado')}
-              {textField('CAR', 'car')}
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5 py-1">
-              {textField('NIRF', 'nirf')}
-              {textField('IE / Inscrição Estadual', 'ie')}
-            </div>
-
-              {/* Status Operacional — fonte: tabela fazendas */}
-              <div className="space-y-0.5 py-1">
-                <label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
-                  Status Operacional
-                </label>
-                {editing ? (
-                  <select
-                    value={data.status_operacional}
-                    onChange={e => setData(prev => ({ ...prev, status_operacional: e.target.value }))}
-                    className="h-6 text-[11px] w-full rounded-md border border-input bg-background px-3"
-                  >
-                    <option value="ativa">Ativa</option>
-                    <option value="inativa">Inativa</option>
-                    <option value="arrendada">Arrendada</option>
-                    <option value="suspensa">Suspensa</option>
-                  </select>
-                ) : (
-                  <p className={`text-[11px] font-medium px-2 py-0.5 rounded min-h-[24px] ${
-                    data.status_operacional === 'ativa'
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : 'bg-amber-50 text-amber-700'
-                  }`}>
-                    {data.status_operacional === 'ativa' ? '✅ Ativa'
-                      : data.status_operacional === 'arrendada' ? '⚠️ Arrendada'
-                      : data.status_operacional === 'inativa' ? '⚠️ Inativa'
-                      : '⚠️ Suspensa'}
-                  </p>
-                )}
-              </div>
-
-            <div className="space-y-0.5 py-1">
-              <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
-                Roteiro
-              </Label>
-              {editing ? (
-                <textarea
-                  value={data.roteiro}
-                  onChange={e => setData(prev => ({ ...prev, roteiro: e.target.value }))}
-                  className="h-12 w-full text-[11px] rounded-md border border-input bg-background px-2 py-1 resize-none"
-                  placeholder="Roteiro de acesso à fazenda"
-                />
-              ) : (
-                <p className="text-[11px] font-medium px-2 py-1 rounded bg-muted/50 min-h-[48px] whitespace-pre-wrap">
-                  {data.roteiro || <span className="text-muted-foreground italic">—</span>}
-                </p>
-              )}
-            </div>
-
-            {/* A MATRÍCULA é documento, não derivado — terceira referência do sistema,
-                ao lado dos pastos e do fechamento. Alterar o valor limpa a conferência:
-                número novo é número não conferido. */}
-            <div className="space-y-0.5 py-1">
-              <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
-                Área da Matrícula (ha)
-              </Label>
-              {editing ? (
-                <Input
-                  value={data.area_total_ha}
-                  onChange={e => setData(prev => ({ ...prev, area_total_ha: e.target.value, matricula_conferida_em: '' }))}
-                  onBlur={e => setData(prev => ({ ...prev, area_total_ha: formatarAreaBR(parseAreaBR(e.target.value)) }))}
-                  className="h-6 text-[11px] text-right tabular-nums"
-                  placeholder="0,00"
-                />
-              ) : (
-                <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px] text-right tabular-nums">
-                  {data.area_total_ha
-                    ? formatarAreaBR(parseAreaBR(data.area_total_ha))
-                    : <span className="text-muted-foreground italic">—</span>}
-                </p>
-              )}
-            </div>
+            {/* ── DIREITA — o que se lê ─────────────────────────────────────────── */}
+            <div className="space-y-2">
+              <BlocoArea matriculaHa={matriculaHa} pastosHa={somaPastosTotal} desenho={resumo.desenho} uso={usoDaArea} total={somaPastosTotal}
+                totalPastos={totalDePastosNoUso}
+                conferida={matriculaConferida ? new Date(data.matricula_conferida_em).toLocaleDateString('pt-BR') : null}
+                acaoConferir={<span className="font-medium text-amber-700">não conferida</span>} />
+              <BlocoResumoDeHoje resumo={resumo} />
+              <BlocoHistorico historico={resumo.historico} />
             </div>
           </div>
         </div>
