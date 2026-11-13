@@ -31,7 +31,7 @@ import {
   SUBCENTRO_AMORTIZACAO, SUBCENTRO_JUROS, NOME_NATUREZA, PILULA_NATUREZA,
 } from '@/components/financiamentos/ObrigacaoDialog';
 import { FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
-import { ABRE_GRUPO_DAS_PARCELAS, alinhamentoDoCabecalho, colunasDasParcelas, type ColunaDasParcelas } from '@/lib/financiamentos/reguaDasParcelas';
+import { ABRE_GRUPO_DAS_PARCELAS, alinhamentoDoCabecalho, colunasDasParcelas, type ChaveDaColuna, type ColunaDasParcelas } from '@/lib/financiamentos/reguaDasParcelas';
 import { TD_DATA_LANC, TD_VALOR_LANC, SeloDoContrato } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { GradeChaveValor } from '@/components/shared/GradeChaveValor';
 import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
@@ -53,6 +53,9 @@ import type { VinculoDePagamento } from '@/hooks/useContratoDeCredito';
 import { useContratoDeCredito } from '@/hooks/useContratoDeCredito';
 import { avisoDoPrincipal, avisosDoCronograma, saldoAposDasParcelas, subtituloDoContrato } from '@/lib/financiamentos/contratoDeCredito';
 import { resumoDoContratoNaLista } from '@/lib/financiamentos/situacaoEmLote';
+import { REGUA_FIN, ThOrdenavel, emDaRegua } from '@/components/financiamentos/reguaDoFinanciamento';
+import { ordenarPor, proximaOrdem, type Ordem, type ValorDeOrdem } from '@/lib/financiamentos/ordemDaTabela';
+import { aLiberarDoContrato, encargosDoContrato } from '@/lib/financiamentos/contratoDeCredito';
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -92,12 +95,13 @@ const LINHA = 'h-[19px]';
 const E = ESCALA_DO_CONTRATO;
 /* FIN-FINANC-LAYOUT-02 (Gabriel 11/11, "olha o rolo"): linha de 22px e 6px de cada lado — dois números vizinhos ficam a 12px um do
    outro (com 2,5px o Total encostava no Saldo após); a célula corta (nada passa para a vizinha) */
-const TH_V4 = `sticky top-0 z-10 h-[22px] whitespace-nowrap bg-[#1d3a5d] px-[6px] ${E.th} font-semibold text-white`;
-const TD_V4 = `h-[22px] overflow-hidden whitespace-nowrap px-[6px] ${E.td} leading-[21px] text-[#111827]`;
+/* FIN-FINANC-LAYOUT-03 (Gabriel 12/11): a altura e a fonte são as da RÉGUA ÚNICA (`reguaDoFinanciamento`); as larguras em `em` da célula */
+const TH_V4 = `sticky top-0 z-10 ${REGUA_FIN.linha} whitespace-nowrap bg-[#1d3a5d] px-[6px] ${E.th} font-semibold text-white`;
+const TD_V4 = `${REGUA_FIN.linha} overflow-hidden whitespace-nowrap px-[6px] ${E.td} ${REGUA_FIN.entrelinha} text-[#111827]`;
 /* FIN-FINANC-LAYOUT-01 — o separador entre os grupos do cronograma (parcela | valores | situação e lançamento) */
 const SEP_TH = 'border-l border-white/35';
 const SEP_TD = 'border-l border-[#c5ced9]';
-const TF_V4 = `sticky bottom-0 z-10 h-[22px] whitespace-nowrap bg-[#e4e9ef] px-[6px] ${E.total} text-[#111827] shadow-[inset_0_1px_0_#c5ced9]`;
+const TF_V4 = `sticky bottom-0 z-10 ${REGUA_FIN.linha} whitespace-nowrap bg-[#e4e9ef] px-[6px] ${E.total} text-[#111827] shadow-[inset_0_1px_0_#c5ced9]`;
 /* a tabela da COMPRA PARCELADA na mesma escala (deixou a régua de Lançamentos, 8/9px): cabeçalho 10px, célula 10,5px, total 10,5px bold */
 const TH_PARC = `h-[22px] px-2 py-0 align-middle ${FONTE_PARC.th} font-semibold normal-case tracking-normal text-primary-foreground`;
 const TD_PARC = `${FONTE_PARC.td} whitespace-nowrap`;
@@ -199,6 +203,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   const [buscarPagamentoDe, setBuscarPagamentoDe] = useState<string | null>(null);
   /* TELA DO CONTRATO v3 — a aba do crédito (o cronograma abre primeiro) */
   const [abaDoCredito, setAbaDoCredito] = useState<AbaDoCredito>('cronograma');
+  /* FIN-FINANC-LAYOUT-03 — o cronograma ordena por qualquer coluna (padrão: o vencimento); o Total fica no rodapé */
+  const [ordemDoCronograma, setOrdemDoCronograma] = useState<Ordem<ChaveDaColuna>>({ col: 'vencimento', dir: 'asc' });
+  const ordenarCronograma = (c: ChaveDaColuna) => setOrdemDoCronograma((o) => proximaOrdem(o, c));
   const [desvinculando, setDesvinculando] = useState<VinculoDePagamento | null>(null);
   /* PASSO 5 — a baixa escolhida no menu e o "Desfazer baixa" */
   const [baixaEscolhida, setBaixaEscolhida] = useState<TipoDeBaixa | null>(null);
@@ -443,6 +450,16 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   const resumoDoCredito = resumoDoContratoNaLista(situacao);
   const contratadoDoCredito = situacao?.saldo?.contratado ?? null;
   const saldoApos = ehParcelamento ? null : saldoAposDasParcelas(contratadoDoCredito, linhas);
+  /* FIN-FINANC-LAYOUT-03 — a ordem do cronograma do crédito (só reordena: o saldo após é por parcela, calculado na ordem do cronograma) */
+  const valorNoCronograma = (p: (typeof linhas)[number], c: ChaveDaColuna): ValorDeOrdem =>
+    c === 'numero' ? p.numero : c === 'vencimento' || c === 'prazo' ? p.dataVencimento : c === 'pagamento' ? p.pagoEm
+    : c === 'principal' ? p.valorPrincipal : c === 'juros' ? p.valorJuros : c === 'total' ? p.valorTotal
+    : c === 'saldoApos' ? saldoApos?.get(p.id) ?? null : c === 'situacao' ? (p.semValor ? ROTULO_SEM_VALOR : ROTULO_SITUACAO[p.situacao])
+    : c === 'lancamento' ? (semLancamento(p) ? 0 : (p.lancamentoId ? 1 : 0) + (p.lancamentoJurosId ? 1 : 0)) : null;
+  const linhasDoCronograma = ehParcelamento ? linhas : ordenarPor(linhas, ordemDoCronograma, valorNoCronograma);
+  /* FIN-FINANC-LAYOUT-03 — os cartões novos: "A liberar" do saldo do banco; "Encargos na liberação" = os encargos ligados (o MESMO dono da linha das destinações) */
+  const aLiberar = aLiberarDoContrato(situacao?.saldo);
+  const encargosLigados = credito.liberacoes === null ? undefined : encargosDoContrato(credito.encargos);
   /* B3 (18/10): o aviso do principal que não fecha com o contratado sai de baixo do cronograma e vira item da aba "A resolver";
      os outros avisos (a 1ª parcela) ficam sob o cronograma */
   const principalDifere = ehParcelamento ? null : avisoDoPrincipal({ contratado: contratadoDoCredito, somaPrincipal: cartoes ? cartoes.somaPrincipal : null });
@@ -601,7 +618,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         </>) : (
           /* TELA DO CONTRATO v3 (Gabriel 18/10/2026) — título com selos e ações · Contrato em duas colunas + Resumo · A resolver */
           <TopoDoContrato numero={fin.numero_contrato ?? null} descricao={fin.descricao ?? ''} status={fin.status ?? null}
-            saldo={situacao?.saldo} tela={credito.tela} parcelas={cartoes ? { total: cartoes.parcelas, pagas: cartoes.pagas } : null} quinta={quinta}
+            saldo={situacao?.saldo} aLiberar={aLiberar} encargos={encargosLigados} tela={credito.tela} parcelas={cartoes ? { total: cartoes.parcelas, pagas: cartoes.pagas } : null} quinta={quinta}
             jurosNoCronograma={(cartoes?.jurosPrevistos ?? 0) > 0}
             onVoltar={onVoltar} onEditar={() => abrirEdicao('contrato')} pendencias={pendencias} onAbrirPendencias={() => setAbaDoCredito('a_resolver')}
             acaoDeJuntar={<BotaoJuntar status={fin.status ?? null} onAbrir={() => setJuntando(true)} />}
@@ -672,15 +689,15 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           {/* ⚠ JANELA ESTREITA: a tabela tem largura mínima (as colunas fixas + 150px do Lançamento) e ROLA NA HORIZONTAL DENTRO DO CARD,
               com o cabeçalho e o Total presos no mesmo scrollport — a decisão do FIN-LISTA-COMPACTA-01; a página nunca rola */}
           <div className="min-h-0 overflow-auto" data-testid="area-que-rola-cronograma">
-            <table className="w-full min-w-[900px] table-fixed border-collapse" data-testid="tabela-cronograma">
+            <table className={`w-full min-w-[900px] table-fixed border-collapse ${REGUA_FIN.tabela}`} data-testid="tabela-cronograma">
               <colgroup>
-                {colunas.map(c => <col key={c.chave} style={c.largura === null ? undefined : { width: c.largura }} />)}
+                {colunas.map(c => <col key={c.chave} style={c.largura === null ? undefined : { width: emDaRegua(c.largura) }} />)}
               </colgroup>
               <thead data-testid="cabecalho-cronograma"><tr>
                 {colunas.map(c => (
-                  <th key={c.chave} data-coluna={c.chave}
+                  <ThOrdenavel key={c.chave} col={c.chave} ordem={ordemDoCronograma} aoOrdenar={ordenarCronograma} direita={c.alinha === 'direita'} testId={`th-${c.chave}`}
                     title={c.chave === 'lancamento' ? 'principal · juros · cada parcela casa com o lançamento do Financeiro (↔)' : undefined}
-                    className={`${TH_V4} ${alinhamentoDoCabecalho(c)} ${ABRE_GRUPO_DAS_PARCELAS.includes(c.chave) ? SEP_TH : ''}`}>{c.rotulo}</th>
+                    className={`${TH_V4} ${ABRE_GRUPO_DAS_PARCELAS.includes(c.chave) ? SEP_TH : ''}`}>{c.rotulo}</ThOrdenavel>
                 ))}
               </tr></thead>
               <tbody>
@@ -689,7 +706,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                     Sem parcelas. Use ✎ Editar parcelas ou Editar para gerar o cronograma.
                   </td></tr>
                 )}
-                {linhas.map(p => {
+                {linhasDoCronograma.map(p => {
                   const d = p.detalhe;
                   const vencida = p.situacao === 'vencida';
                   const vs = credito.vinculos.filter(v => v.parcelaId === p.id);
