@@ -1277,6 +1277,13 @@ const CENARIOS = [
       { nome: 'produtores-fiscal', url: URL, tamanhos: T, antes: aba('Fiscal') },
       { nome: 'produtores-contas', url: URL, tamanhos: T, antes: aba('Contas') },
       { nome: 'produtores-certificado', url: URL, tamanhos: T, antes: aba('Certificado') },
+      /* NOTAS-RECEITA-A1-01 F2 — o certificado ativo (aviso de validade) visto pelo gestor, e a recusa de não-A1 escrita junto do botão;
+         + 1126 e 1168 (as larguras do Gabriel) */
+      { nome: 'produtores-certificado-ativo', url: `${URL}&cert=1`, tamanhos: [...T, [1126, 579], [1168, 657]], antes: aba('Certificado') },
+      { nome: 'produtores-certificado-recusa', url: `${URL}&cert=1`, tamanhos: [...T, [1126, 579], [1168, 657]],
+        antes: seq(aba('Certificado'), async (p) => { await p.locator('[data-testid="certificado-senha"]').fill('x');
+          await p.locator('[data-testid="certificado-arquivo"] input[type="file"]').setInputFiles({ name: 'vera.cer', mimeType: 'application/x-pkcs12', buffer: Buffer.from([48, 130, 1]) });
+          await p.locator('[data-testid="certificado-subir"]').click(); await p.waitForTimeout(500); }) },
       { nome: 'produtores-grupo', url: URL, tamanhos: T, antes: aba('Grupo') },
       { nome: 'produtores-terceiro', url: URL, tamanhos: T, antes: seq(titular('Terceiro Exemplo'), aba('Fazendas')) },
       { nome: 'produtores-pj', url: URL, tamanhos: T, antes: titular('Agropecuária Exemplo') },

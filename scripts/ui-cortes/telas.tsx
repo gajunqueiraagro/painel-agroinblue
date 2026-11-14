@@ -1852,6 +1852,22 @@ if (tela === 'mesclar') {
     const { ProdutoresApiProvider } = await import('@/hooks/useProdutores');
     const { API_PRODUTORES, FAZENDAS_PRODUTORES } = await import('./dados/produtores');
     g.__fazendaBancada = { fazendas: FAZENDAS_PRODUTORES, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
+    /* NOTAS-RECEITA-A1-01 F2 — a aba Certificado: `&cert=1` = um ativo (SINTÉTICO) que vence em 20 dias + a trilha, visto pelo gestor (o bloco
+       de subir aparece); `&cert=1&recusa=1` = a recusa de não-A1 escrita junto do botão. A tela dos produtores não lê o perfil: nada muda nas outras cenas. */
+    if (q.get('cert') === '1') {
+      const ate = new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10);
+      g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Bancada', perfil: 'gestor_cliente' }, clientes: [{ id: 'cli', nome: 'Cliente Bancada' }], isAdmin: false, perfil: 'gestor_cliente', loading: false };
+      g.__bancoBancada = { ...(g.__bancoBancada ?? {}),
+        from: (t: string) => (t === 'fiscal_certificados' ? [{ id: 'cert-sint', situacao: 'ativo', documento: '52998224725',
+          emissor: 'AC SINTETICA DE TESTE DA BANCADA RFB v5', numero_serie: '0a1b2c', impressao_digital: 'ab12cd34ef567890'.padEnd(64, '0'),
+          valido_de: '2026-01-01T00:00:00+00:00', valido_ate: `${ate}T00:00:00+00:00`, enviado_em: '2026-11-13T10:00:00+00:00' }]
+          : t === 'fiscal_certificados_trilha' ? [
+            { id: 3, acao: 'trocou', em: '2026-11-13T10:00:00Z', motivo: null }, { id: 2, acao: 'recusado_upload', em: '2026-11-12T10:00:00Z', motivo: 'nao_a1' },
+            { id: 1, acao: 'subiu', em: '2026-01-02T10:00:00Z', motivo: null }] : []),
+        funcao: () => ({ data: null, error: { message: 'non-2xx', context: new Response(JSON.stringify({ ok: false, recusa: 'nao_a1',
+          frase: 'Este arquivo não é um certificado A1: não traz a chave. Certificado em cartão ou token (A3) não funciona aqui: é preciso um A1 (arquivo .pfx ou .p12).' }), { status: 422 }) } }),
+      };
+    }
     montar(<ProdutoresApiProvider api={API_PRODUTORES}><ProdutoresTela /></ProdutoresApiProvider>);
   };
   void montarProdutores();
