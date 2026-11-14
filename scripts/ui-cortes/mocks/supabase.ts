@@ -1,7 +1,7 @@
 /* UI-SEM-CORTE-01 — o cliente Supabase da bancada: nada sai da maquina. Cada tela registra o seu banco em `globalThis.__bancoBancada`
  * (from(tabela, estado) -> linhas; rpc(fn, args) -> dado); a cadeia guarda os filtros que importam (eq, in, is, range, single). */
 type Estado = { eq: Record<string, unknown>; in: Record<string, unknown[]>; is: Record<string, unknown>; range: [number, number] | null; um: boolean };
-type Banco = { from?: (t: string, e: Estado) => unknown[]; rpc?: (fn: string, a: Record<string, unknown>) => unknown };
+type Banco = { from?: (t: string, e: Estado) => unknown[]; rpc?: (fn: string, a: Record<string, unknown>) => unknown; funcao?: (nome: string, op: unknown) => { data: unknown; error: unknown } };
 const banco = (): Banco => (globalThis as unknown as { __bancoBancada?: Banco }).__bancoBancada ?? {};
 /* OC-HOSPEDEIRO-LEVE-01 — cada pedido ao banco fica anotado em `globalThis.__pedidosBancada` (tipo, nome, instante): a medicao do
    hospedeiro da OC le^ dali o que disparou ate' a OC ficar pronta */
@@ -52,5 +52,7 @@ export const supabase: any = {
     const a = (globalThis as unknown as { __arquivosBancada?: Record<string, ArrayBuffer> }).__arquivosBancada?.[c];
     return a ? { data: new Blob([a]), error: null } : { data: null, error: { message: 'Object not found' } };
   } }) },
+  /* NOTAS-RECEITA-A1-01 F2 — a função de borda: a tela registra a resposta em `__bancoBancada.funcao(nome, opções)`; sem ela, erro de rede */
+  functions: { invoke: async (nome: string, op: unknown) => banco().funcao?.(nome, op) ?? { data: null, error: { message: 'sem função na bancada' } } },
   channel: () => ({ on() { return this; }, subscribe() { return this; } }), removeChannel() {},
 };

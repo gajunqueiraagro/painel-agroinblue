@@ -229,7 +229,7 @@ function FichaDoProdutor({ titular, titulares, clienteId, aoCriar }: { titular: 
         )}
         {aba === 'fiscal' && titular && <AbaFiscal titular={titular} clienteId={clienteId} form={form} set={set} previa={gesto.previa} />}
         {aba === 'contas' && titular && <AbaContas titular={titular} contas={contas} previa={gesto.previa} />}
-        {aba === 'certificado' && <AbaCertificado />}
+        {aba === 'certificado' && <AbaCertificado titularId={titular?.id ?? null} />}
         {aba === 'grupo' && titular && <AbaGrupo titular={titular} titulares={titulares} previa={gesto.previa} />}
       </div>
       {/* O RODAPÉ — a frase (pendência/recusa) no lugar reservado; Inativar · Desfazer · Salvar à direita */}
