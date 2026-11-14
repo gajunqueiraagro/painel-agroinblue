@@ -21,14 +21,15 @@ import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
 import { useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import { useOperacaoDocumentos, type EspecieDoc } from '@/hooks/useOperacaoDocumentos';
 import { extrairLinhasPdf } from '@/lib/oc/leitura/linhasDoPdf';
-import { lerDocumentosDoImport, entradaDoImport, fazendaPelaNf, remetenteDaNfFrigorifico, documentoDoPdf, marcaDoPdf, type DocumentoDoImport, type FazendaSugerida, type MarcaDoPdf } from '@/lib/oc/importar/leituraDoImport';
+import { lerDocumentosDoImport, entradaDoImport, fazendaPelaNf, remetenteDaNfFrigorifico, documentoDoPdf, marcaDoPdf, documentosSemLeitura, ehImagemDoImport, ESPECIES_SEM_LEITURA, especieSemLeitura, ROTULO_SEM_LEITURA, type EspecieSemLeitura, type DocumentoDoImport, type FazendaSugerida, type MarcaDoPdf } from '@/lib/oc/importar/leituraDoImport';
 import { fazendasComIEDoCliente } from '@/components/financeiro-v2/NovoDeXmlDialog';
 import type { FazendaComIE } from '@/lib/financeiro/nfe/proporLancamento';
 import { chavesDoPacote, diferencaCabeNaOc, docsXOc, lotesComPrecoDiferente, montarPacoteDoAbate, ocParecidaEDesteAbate, type Duvida, type OcExistente } from '@/lib/oc/importar/pacoteDoAbate';
 import { CATEGORIAS } from '@/types/cattle';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 
-const REGRA_PDFS: RegraDeAceite = { tipos: ['pdf'], tamanhoMaxBytes: 10 * 1024 * 1024, varios: true };
+/* NPR-IMAGEM: a foto (JPG/PNG) entra também — não é lida, sobe anexada como a espécie escolhida */
+const REGRA_PDFS: RegraDeAceite = { tipos: ['pdf', 'jpg', 'png'], tamanhoMaxBytes: 10 * 1024 * 1024, varios: true };
 const ROTULO_ESPECIE: Partial<Record<EspecieDoc, string>> = { nf_principal: 'NF do frigorífico', acerto: 'Acerto do abate', romaneio: 'Romaneio', nf_produtor: 'NF de produtor', gta: 'GTA' };
 const TODAS_AS_DUVIDAS: Duvida[] = ['fazenda', 'contraparte', 'categoria', 'peso_vivo'];
 const FRASE_DUVIDA: Record<Duvida, string> = { fazenda: 'De qual fazenda saiu o gado?', contraparte: 'Quem comprou (o frigorífico)?', categoria: 'Categoria que saiu', peso_vivo: 'Peso vivo médio (kg)' };
@@ -73,8 +74,11 @@ export interface ImportarAbateDialogProps {
 }
 
 /* Depois de criar: cada documento registrado recebe o PDF DELE (`documentoDoPdf`: espécie + número + cab + kg), pelo MESMO anexar da aba Documentos. */
-function AnexarOsPdfs({ operacaoId, clienteId, arquivos, aoTerminar }: {
-  operacaoId: string; clienteId: string; arquivos: { marca: MarcaDoPdf; arquivo: File }[]; aoTerminar: (falhas: number) => void;
+export function AnexarOsPdfs({ operacaoId, clienteId, arquivos, semLeitura, aoTerminar }: {
+  operacaoId: string; clienteId: string; arquivos: { marca: MarcaDoPdf; arquivo: File }[];
+  /** NPR-IMAGEM: os sem leitura — cada um ganha um documento da espécie escolhida (sem valores) e o arquivo sobe nele */
+  semLeitura: { especie: EspecieSemLeitura; arquivo: File }[];
+  aoTerminar: (falhas: number) => void;
 }) {
   const api = useOperacaoDocumentos({ operacaoId, clienteId, enabled: true });
   const feito = useRef(false);
@@ -90,9 +94,14 @@ function AnexarOsPdfs({ operacaoId, clienteId, arquivos, aoTerminar }: {
         usados.add(doc.documentoId);
         if (!(await api.anexarArquivo(doc.documentoId, 1, a.arquivo))) falhas += 1;
       }
+      for (const s of semLeitura) {
+        const id = await api.registrar({ especie: s.especie, componentes: [], lotes: [],
+          observacao: `Sem leitura: ${s.arquivo.name} anexado pela importação do abate — confira os campos aqui.` });
+        if (!id || !(await api.anexarArquivo(id, 1, s.arquivo))) falhas += 1;
+      }
       aoTerminar(falhas);
     })();
-  }, [api.loading, api.documentos, api, arquivos, aoTerminar]);
+  }, [api.loading, api.documentos, api, arquivos, semLeitura, aoTerminar]);
   return null;
 }
 
@@ -106,6 +115,8 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
   const [pesoVivo, setPesoVivo] = useState<number | null>(null);
   /* 117535: a categoria de cada lote (pela ordem); sem escolha = a do lote 1 (a 'Categoria que saiu') */
   const [categoriasPorLote, setCategoriasPorLote] = useState<Record<number, string | null>>({});
+  /* NPR-IMAGEM: a espécie de cada documento sem leitura, pelo nome do arquivo (sem escolha = NPR; null = não anexar) */
+  const [anexarComo, setAnexarComo] = useState<Record<string, EspecieSemLeitura | null>>({});
   /* IMPORTAR-ABATE-PESO-POR-LOTE-01 (Chat 13/11 10:25): Pureza — lote 1 Angus, lote 2 Charolês, pesos diferentes; o do lote manda */
   const [pesosPorLote, setPesosPorLote] = useState<Record<number, number | null>>({});
   /* Chat 12/11 17:50: a fazenda que a TELA escolheu (pela NF) precisa do toque do operador; a escolhida por ele (ou a da Central) já vale */
@@ -121,7 +132,7 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
   useEffect(() => {
     if (open) return;
     setArquivos([]); setLidos(null); setPrevia(null); setRecusa(null); setCriada(null); setAnexos(null); setAnexada(false);
-    setContraparte(null); setCategoria(null); setPesoVivo(null); setCategoriasPorLote({}); setPesosPorLote({}); setFazendaId(fazendaInicialId); setFazendaConfirmada(fazendaInicialId != null);
+    setContraparte(null); setCategoria(null); setPesoVivo(null); setCategoriasPorLote({}); setPesosPorLote({}); setAnexarComo({}); setFazendaId(fazendaInicialId); setFazendaConfirmada(fazendaInicialId != null);
   }, [open, fazendaInicialId]);
 
   /* O comprador pelo CNPJ lido (exato): sugerido, nunca escolhido por cima do que o operador já marcou. */
@@ -154,7 +165,7 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
     if (todos.length === 0) { setLidos(null); return; }
     setLendo(true);
     try {
-      const pdfs = await Promise.all(todos.map(async f => ({ nome: f.name, ...(await extrairLinhasPdf(f)) })));
+      const pdfs = await Promise.all(todos.map(async f => ({ nome: f.name, ...(ehImagemDoImport(f) ? { linhas: [], temTexto: false } : await extrairLinhasPdf(f)) })));
       setLidos(lerDocumentosDoImport(pdfs));
     } catch {
       setRecusa('Não consegui ler os PDFs: confira os arquivos e tente de novo.');
@@ -312,6 +323,8 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
   const arquivosPorEspecie = useMemo(() => (lidos?.documentos ?? [])
     .map(d => ({ marca: marcaDoPdf(d), arquivo: arquivos.find(a => a.name === d.nome) }))
     .filter((x): x is { marca: MarcaDoPdf; arquivo: File } => x.marca != null && x.arquivo != null), [lidos, arquivos]);
+  const arquivosSemLeitura = useMemo(() => documentosSemLeitura(lidos?.documentos ?? [], anexarComo)
+    .flatMap(s => { const arquivo = arquivos.find(a => a.name === s.nome); return arquivo ? [{ especie: s.especie, arquivo }] : []; }), [lidos, anexarComo, arquivos]);
 
   const resumo = previa?.resumo ?? null;
   const totais = useMemo(() => {
@@ -351,7 +364,7 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
           {/* ── Documentos + prévia ── */}
           <div className="flex min-h-0 flex-col gap-2">
             <AreaDeArquivo regra={REGRA_PDFS} modo="um" className="h-10 flex-none" testId="importar-area"
-              convite="Arraste os PDFs aqui ou clique para escolher" detalhe="NF, acerto e romaneio · PDF"
+              convite="Arraste os PDFs aqui ou clique para escolher" detalhe="NF, acerto e romaneio · PDF · NPR em foto (JPG/PNG)"
               onArquivos={fs => void receber(fs)} desabilitado={lendo || gravando || criada != null} />
             <table className="w-full table-fixed text-[10.5px]" data-testid="importar-documentos">
               <colgroup><col className="w-[150px]" /><col /><col className="w-[24px]" /></colgroup>
@@ -360,9 +373,18 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
               <tbody>
                 {(lidos?.documentos ?? []).map(d => (
                   <tr key={d.nome} className="h-[19px] border-b border-black/[0.06]">
-                    <td className="px-1 font-medium">{d.especie ? (ROTULO_ESPECIE[d.especie] ?? d.especie) : 'Não reconhecido'}</td>
+                    <td className="px-1 font-medium">{d.especie ? (ROTULO_ESPECIE[d.especie] ?? d.especie) : (
+                      /* NPR-IMAGEM: sem leitura, o documento sobe anexado como a espécie escolhida (NPR por padrão) */
+                      <span data-testid={`importar-anexar-como-${d.nome}`}>
+                        <SearchableSelect value={d.nome in anexarComo ? (anexarComo[d.nome] ?? '') : 'npr'} semTodos allValue="" allLabel="Não anexar"
+                          placeholder="Anexar como" onValueChange={v => setAnexarComo(a => ({ ...a, [d.nome]: especieSemLeitura(v) }))}
+                          options={ESPECIES_SEM_LEITURA.map(k => ({ value: k, label: `Anexar como ${ROTULO_SEM_LEITURA[k]}` }))}
+                          triggerClassName="h-[18px] text-[10px]" />
+                      </span>)}</td>
                     <td className="truncate px-1" title={`${d.nome} · ${d.leitura.tipo === 'lido' ? d.leitura.rotulo : d.leitura.frase}`}>
-                      {d.leitura.tipo === 'lido' ? `${d.leitura.rotulo} · lido` : <span className="text-amber-700">{d.leitura.frase}</span>}
+                      {d.leitura.tipo === 'lido' ? `${d.leitura.rotulo} · lido`
+                        : <span className="text-amber-700">{d.especie == null && ehImagemDoImport({ name: d.nome })
+                            ? 'Foto: não é lida · sobe anexada; preencha os campos na aba Documentos' : d.leitura.frase}</span>}
                     </td>
                     <td><button type="button" className="text-[#4A5361] hover:text-red-700" aria-label={`Tirar ${d.nome}`}
                       onClick={() => void tirar(d.nome)} disabled={gravando || criada != null}>✕</button></td>
@@ -593,7 +615,7 @@ export function ImportarAbateDialog({ open, onOpenChange, clienteId, fazendas, f
         </div>
 
         {criada && (
-          <AnexarOsPdfs operacaoId={criada} clienteId={clienteId} arquivos={arquivosPorEspecie}
+          <AnexarOsPdfs operacaoId={criada} clienteId={clienteId} arquivos={arquivosPorEspecie} semLeitura={arquivosSemLeitura}
             aoTerminar={falhas => {
               setAnexos(falhas === 0 ? (anexada ? 'Documentos anexados à OC existente.' : 'OC criada com os PDFs anexados.')
                 : `${anexada ? 'Documentos registrados' : 'OC criada'} · ${falhas} PDF(s) não anexaram: anexe na aba Documentos.`);

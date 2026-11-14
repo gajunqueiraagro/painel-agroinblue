@@ -31,6 +31,8 @@ export interface LoteAbate {
   categoriaLabel: string;
   quantidade: number;
   pesoMedioKg: number;
+  /** 117541: o peso vivo é o médio do abate (rendimento estimado; selo no cartão) */
+  pesoDaMediaDoAbate?: boolean;
 }
 
 export function paraCalculo(l: LinhaAbate, lote: LoteAbate) {

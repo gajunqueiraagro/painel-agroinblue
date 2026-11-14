@@ -190,3 +190,24 @@ export function documentoDoPdf<T extends { documentoId: string; especie: string;
     && (m.pesoKg == null || (d.pesoKg != null && Math.round(d.pesoKg * 100) === Math.round(m.pesoKg * 100)));
   return livres.find(casa) ?? livres[0] ?? null;
 }
+
+/* ── O DOCUMENTO SEM LEITURA SOBE SOZINHO (NPR-IMAGEM, Chat 13/11 10:25 item 3) ─────────────────────────────────────────────────────
+   A NPR chega em FOTO (JPG/PNG) ou em PDF escaneado: o leitor não a lê, e ela ficava "Não reconhecido" e fora da OC. Agora ela sobe
+   anexada a um documento da espécie escolhida ("Anexar como", NPR por padrão), registrado depois de criar pelo MESMO gravador da aba
+   Documentos, sem valores (os campos se preenchem lá). Ler a foto (OCR) é outra frente. */
+export type EspecieSemLeitura = 'npr' | 'gta' | 'outro';
+export const ROTULO_SEM_LEITURA: Record<EspecieSemLeitura, string> = { npr: 'NPR', gta: 'GTA', outro: 'Outro' };
+export const ESPECIES_SEM_LEITURA: readonly EspecieSemLeitura[] = ['npr', 'gta', 'outro'];
+/** A foto não passa pelo leitor de PDF: entra como "sem texto" */
+export const ehImagemDoImport = (f: { name: string; type?: string }): boolean =>
+  /^image\/(jpeg|png)$/.test(f.type ?? '') || /\.(jpe?g|png)$/i.test(f.name);
+/** Os documentos que o leitor não reconheceu e a espécie de cada um: a escolhida; sem escolha, NPR; `null` = não anexar */
+export function documentosSemLeitura(docs: readonly DocumentoDoImport[], escolhas: Readonly<Record<string, EspecieSemLeitura | null>>):
+  { nome: string; especie: EspecieSemLeitura }[] {
+  return docs.filter(d => d.especie == null).flatMap(d => {
+    const e = d.nome in escolhas ? escolhas[d.nome] : 'npr';
+    return e ? [{ nome: d.nome, especie: e }] : [];
+  });
+}
+/** O valor do seletor "Anexar como" (texto) na espécie; vazio = não anexar */
+export const especieSemLeitura = (v: string): EspecieSemLeitura | null => (v === 'npr' || v === 'gta' || v === 'outro' ? v : null);

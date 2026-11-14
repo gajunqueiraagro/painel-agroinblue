@@ -30,13 +30,15 @@ vi.mock('@/integrations/supabase/client', () => {
 vi.mock('@/components/financeiro-v2/NovoDeXmlDialog', () => ({
   fazendasComIEDoCliente: async () => [{ id: 'faz-sm', nome: 'Faz. Teste', ie: '000000000000' }],
 }));
+/* a aba Documentos de mentira: por padrão carregando (nada anexa); o teste da NPR em foto a solta */
+const docsApi = vi.hoisted(() => ({ documentos: [] as unknown[], loading: true, anexarArquivo: vi.fn(), registrar: vi.fn() }));
 vi.mock('@/hooks/useOperacaoDocumentos', async (orig) => ({
   ...(await orig<typeof import('@/hooks/useOperacaoDocumentos')>()),
-  useOperacaoDocumentos: () => ({ documentos: [], loading: true, anexarArquivo: vi.fn() }),
+  useOperacaoDocumentos: () => docsApi,
 }));
 
 import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
-import { ImportarAbateDialog } from './ImportarAbateDialog';
+import { AnexarOsPdfs, ImportarAbateDialog } from './ImportarAbateDialog';
 
 const PREVIA = { ok: true, ja_existe: false, simulado: true, resumo: {
   data: '2026-11-10', recebimento: { valor: 119531.53, vencimento: '2026-11-12' }, documentos: ['acerto:', 'nf_principal:45854', 'romaneio:'], diferenca_acerto: 0.01,
@@ -46,6 +48,7 @@ const pdf = (nome: string) => new File(['%PDF'], nome, { type: 'application/pdf'
 
 beforeEach(() => {
   banco.parecidas = []; banco.lotes = []; banco.partes = []; banco.nfs = [];
+  docsApi.documentos = []; docsApi.loading = true; docsApi.anexarArquivo.mockReset(); docsApi.registrar.mockReset();
   rpc.mockReset();
   rpc.mockResolvedValue({ data: PREVIA, error: null });
   definirFornecedoresDoLeitor([{ id: 'minerva-jb', nome: 'Minerva S.A.', cpf_cnpj: '67.620.377/0003-86' }]);
@@ -166,5 +169,31 @@ describe('importar abate — a tela', () => {
     await waitFor(() => expect(screen.getByTestId('importar-motivo').textContent).toBe('Confirme a fazenda (sugerida pela NF)'));
     fireEvent.click(screen.getByTestId('importar-confirmar-fazenda'));
     await waitFor(() => expect(screen.getByTestId('importar-motivo').textContent).toBe('Veja a prévia antes de criar'));
+  });
+});
+
+describe('NPR em foto (NPR-IMAGEM): sobe sozinha anexada', () => {
+  it('a foto entra na lista sem passar pelo leitor, com "Anexar como NPR" já escolhido', async () => {
+    await abrirComOsPdfs();
+    const input = screen.getByTestId('importar-area').querySelector('input[type="file"]');
+    if (!input) throw new Error('sem input de arquivo');
+    fireEvent.change(input, { target: { files: [new File(['jpg'], 'NPR_9232.jpg', { type: 'image/jpeg' })] } });
+    /* o leitor de mentira lê como ROMANEIO todo nome desconhecido: se a foto passasse por ele, viraria romaneio */
+    const seletor = await screen.findByTestId('importar-anexar-como-NPR_9232.jpg');
+    expect(seletor.textContent).toContain('Anexar como NPR');
+    expect(screen.getByTestId('importar-documentos').textContent).toContain('Foto: não é lida');
+  });
+  it('depois de criar: registra um documento NPR sem valores e sobe a foto nele (o mesmo gravador da aba Documentos)', async () => {
+    const foto = new File(['jpg'], 'NPR_9232.jpg', { type: 'image/jpeg' });
+    docsApi.loading = false;
+    docsApi.documentos = [{ documentoId: 'd-acerto', especie: 'acerto', numero: null, cancelado: false }];
+    docsApi.registrar.mockResolvedValue('d-npr');
+    docsApi.anexarArquivo.mockResolvedValue(true);
+    const aoTerminar = vi.fn();
+    render(<AnexarOsPdfs operacaoId="op" clienteId="cli" arquivos={[]} semLeitura={[{ especie: 'npr', arquivo: foto }]} aoTerminar={aoTerminar} />);
+    await waitFor(() => expect(aoTerminar).toHaveBeenCalledWith(0));
+    expect(docsApi.registrar).toHaveBeenCalledTimes(1);
+    expect(docsApi.registrar.mock.calls[0][0]).toMatchObject({ especie: 'npr', componentes: [], lotes: [] });
+    expect(docsApi.anexarArquivo).toHaveBeenCalledWith('d-npr', 1, foto);
   });
 });

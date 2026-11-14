@@ -638,6 +638,7 @@ export function AbateModalShell({
          uma cabeça e um quarto sem nenhum aviso. */
       quantidade: parseNumericValue(l.quantidade),
       pesoMedioKg: parseNumericValue(l.pesoMedioKg),
+      pesoDaMediaDoAbate: l.pesoDaMediaDoAbate === true,
     })),
     [lotesApi?.lotes, categoriasDisponiveis],
   );

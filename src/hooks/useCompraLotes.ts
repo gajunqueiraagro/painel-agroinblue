@@ -28,6 +28,18 @@ export interface LoteForm {
      produtor identifica o lote no papel que recebe. Nasce vazio e nao entra em conta
      nenhuma: quem some ou classifica sao as outras cinco colunas. */
   observacao: string;
+  /* 117541 — o peso vivo do lote é o MÉDIO DO ABATE (importado com vários lotes e só o peso geral): o rendimento é estimado e o
+     cartão do abate mostra o selo. SÓ DE LEITURA: não vai no payload; corrigir o peso na tela o apaga (e o banco grava 'lote'). */
+  pesoDaMediaDoAbate?: boolean;
+}
+
+/** 117541: a coluna `peso_vivo_fonte` do lote diz se o peso é o médio do abate */
+export const pesoEhDaMediaDoAbate = (fonte: unknown): boolean => fonte === 'media_do_abate';
+
+/** O lote depois de uma edição: peso que muda deixa de ser o médio do abate */
+export function comEdicao(l: LoteForm, patch: Partial<LoteForm>): LoteForm {
+  const pesoMudou = patch.pesoMedioKg !== undefined && patch.pesoMedioKg !== l.pesoMedioKg;
+  return { ...l, ...patch, ...(pesoMudou ? { pesoDaMediaDoAbate: false } : {}) };
 }
 
 export interface CompraLotesApi {
@@ -94,6 +106,7 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
         criterioValor: (r.criterio_valor ?? 'kg') as CriterioValor,
         observacao: r.observacao ?? '',
         valorInformado: r.valor_informado != null ? String(r.valor_informado) : '',
+        pesoDaMediaDoAbate: pesoEhDaMediaDoAbate(r.peso_vivo_fonte),
       })));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar lotes.');
@@ -119,7 +132,7 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
   }, []);
 
   const editarLote = useCallback((idLocal: string, patch: Partial<LoteForm>) => {
-    setLotes(prev => prev.map(l => (l.idLocal === idLocal ? { ...l, ...patch } : l)));
+    setLotes(prev => prev.map(l => (l.idLocal === idLocal ? comEdicao(l, patch) : l)));
   }, []);
 
   const removerLote = useCallback((idLocal: string) => {
