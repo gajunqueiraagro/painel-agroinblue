@@ -80,16 +80,16 @@ export function CertificadoDoProdutor({ titularId }: { titularId: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5" data-testid="produtor-aba-certificado">
       <BlocoFormulario titulo="Certificado digital A1">
-        <div className={cn(GRADE_FORMULARIO, 'grid-cols-4')}>
+        <div className={cn(GRADE_FORMULARIO, 'grid-cols-2')}>
           <div><Rotulo texto="Situação" />
             <div className={cn(CAIXA, cert?.situacao === 'ativo' ? '' : 'text-muted-foreground')} data-testid="certificado-situacao">
               {leitura.isLoading ? '…' : cert ? ROTULO_DA_SITUACAO[cert.situacao] : 'não cadastrado'}</div></div>
           <div><Rotulo texto="Validade" />
-            <div className={cn(CAIXA, 'tabular-nums', validade?.tom === 'vencido' ? 'text-destructive' : validade?.tom === 'aviso' ? 'text-amber-700' : '')}
+            <div className={cn(CAIXA, 'tabular-nums whitespace-nowrap', validade?.tom === 'vencido' ? 'text-destructive' : validade?.tom === 'aviso' ? 'text-amber-700' : '')}
               data-testid="certificado-validade">{validade ? validade.frase : cert ? `até ${dataBR(cert.validoAte.slice(0, 10))}` : '—'}</div></div>
           <div><Rotulo texto="Emissor" /><div className={cn(CAIXA, 'uma-linha-que-rola')} title={cert?.emissor ?? undefined}>{cert?.emissor ?? '—'}</div></div>
           <div><Rotulo texto="Impressão digital" />
-            <div className={cn(CAIXA, 'font-mono text-[10px]')} title={cert?.impressaoDigital || undefined} data-testid="certificado-impressao">
+            <div className={cn(CAIXA, 'tabular-nums text-[10px]')} title={cert?.impressaoDigital || undefined} data-testid="certificado-impressao">
               {cert ? impressaoCurta(cert.impressaoDigital) : '—'}</div></div>
         </div>
       </BlocoFormulario>
@@ -97,9 +97,10 @@ export function CertificadoDoProdutor({ titularId }: { titularId: string }) {
       {isManager && (
         <BlocoFormulario titulo={cert?.situacao === 'ativo' ? 'Trocar o certificado' : 'Subir o certificado'}>
           <p className="text-[10px] text-muted-foreground" data-testid="certificado-a3-explicacao">{FRASE_A3_NAO_SERVE}</p>
-          <div className={cn(GRADE_FORMULARIO, 'grid-cols-[1fr_200px_auto] items-end')}>
-            <AreaDeArquivo regra={REGRA_DO_CERTIFICADO} onArquivos={(a) => { setArquivo(a[0] ?? null); setRecado(null); }}
-              convite="Arraste o arquivo .pfx ou .p12, ou clique" fixo={arquivo?.name} onRemover={() => setArquivo(null)} testId="certificado-arquivo" />
+          {/* a área do arquivo numa linha inteira (ao lado da senha ela cortava o texto a 1126–1366); senha e botão embaixo */}
+          <AreaDeArquivo regra={REGRA_DO_CERTIFICADO} onArquivos={(a) => { setArquivo(a[0] ?? null); setRecado(null); }}
+            convite="Arraste o arquivo ou clique" detalhe=".pfx ou .p12 · até 64 KB" fixo={arquivo?.name} onRemover={() => setArquivo(null)} testId="certificado-arquivo" />
+          <div className={cn(GRADE_FORMULARIO, 'grid-cols-[200px_auto_1fr] items-end')}>
             <div><Rotulo texto="Senha do certificado" />
               <Input type="password" autoComplete="off" value={senha} onChange={(e) => { setSenha(e.target.value); setRecado(null); }} className={REGUA_CAMPO}
                 data-testid="certificado-senha" /></div>
