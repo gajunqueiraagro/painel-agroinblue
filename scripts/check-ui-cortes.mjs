@@ -1170,6 +1170,23 @@ const CENARIOS = [
         await p.locator('[data-testid="linha-historico"]').first().waitFor(); await p.waitForTimeout(400); } },
     ];
   })(),
+  /* FAZENDA-CADASTRO-01 · F1a/F1b — Cadastros › Fazendas e pastos (dado SINTÉTICO, `tela=fazendas`): a lista de fazendas com os números do
+     topo, a tabela até o fim da janela e a composição de hoje embaixo; e a aba Cadastro (blocos, três medidas da área, resumo, histórico) */
+  ...(() => {
+    const TAM = [[1126, 579], [1366, 768], [1440, 800]];
+    const pronta = (sel) => async (p) => { await p.locator(sel).first().waitFor(); await p.waitForTimeout(600); };
+    return [
+      /* a coluna Fazenda é a ÚNICA flexível: com as fixas largas demais ela some sem corte nenhum (visto no print de 13/11 com o "No ano") —
+         a cena recusa se ela ficar abaixo de 70 px */
+      { nome: 'fazendas-lista', url: 'tela=fazendas&f=lista', tamanhos: TAM, regiao: '[data-testid="lista-de-fazendas"]', antes: async (p) => {
+        await pronta('[data-testid="fazenda-linha"]')(p);
+        const w = await p.locator('[data-testid="tabela-fazendas"] thead th').nth(1).evaluate((e) => e.getBoundingClientRect().width);
+        if (w < 70) throw new Error(`a coluna Fazenda tem ${Math.round(w)} px (mínimo 70)`); } },
+      { nome: 'fazenda-cadastro', url: 'tela=fazendas&f=cadastro', tamanhos: TAM, regiao: '[data-testid="cadastro-da-fazenda"]', antes: pronta('[data-testid="cadastro-historico"]') },
+      { nome: 'fazenda-cadastro-topo', url: 'tela=fazendas&f=cadastro', tamanhos: TAM, regiao: 'div.sticky', antes: async (p) => {
+        await pronta('[data-testid="cadastro-historico"]')(p); await p.locator('[data-testid="cadastro-ccir"]').fill('950.123.456.789-0'); await p.waitForTimeout(300); } },
+    ];
+  })(),
   /* REBANHO-INICIAL-EDITAR-01 — o Editar do saldo inicial (dado SINTÉTICO, a lista chega depois do 1º render): abre em jan/2024 (nunca no
      janeiro do fechamento), Cancelar sempre; e a prévia antes × depois com o mês que grava */
   ...(() => {

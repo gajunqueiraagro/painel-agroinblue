@@ -29,7 +29,12 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
     /* PATR-01: `_fn_patrimonio_bem_do_usuario(bem)` e' a guarda pelo cliente do BEM (tenant_ok + 42501), o molde do contrato, presa abaixo */
     const guardada = /tenant_ok\s*\(/i.test(p) || /_fn_exigir_tenant(_das_linhas)?\s*\(/i.test(p)
       || /_fn_contrato_do_usuario\s*\(/i.test(p) || /_fn_subcentro_cliente_rodar\s*\(/i.test(p) || /(?<!function\s+public\.)_fn_patrimonio_bem_do_usuario\s*\(/i.test(p)
-      || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p));
+      || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p))
+      /* NOTAS-RECEITA-A1-01 F1: `_fn_fiscal_certificado_pode(cliente)` e' o PREDICADO da guarda do certificado (admin ou gestor DAQUELE
+         cliente, so' devolve boolean, fechado a authenticated); quem o chama com 42501 esta' guardado; ele mesmo, preso abaixo */
+      || (/(?<!function\s+public\.)_fn_fiscal_certificado_pode\s*\(/i.test(p) && /42501/.test(p))
+      || (nome === 'public._fn_fiscal_certificado_pode' && /returns\s+boolean/i.test(p)
+        && /revoke all on function public\._fn_fiscal_certificado_pode\(uuid\) from public, anon, authenticated;/i.test(p));
     /* IMPORTAR-ABATE-01: corpo `AS %L` = o texto do PROPRIO BANCO (pg_get_functiondef/prosrc patchado por md5), que o arquivo nao
        mostra — a guarda dele e' a da definicao anterior (ver `ultimasSemGuarda`) */
     return [{ nome, guardada, ...(/\bAS\s+%L/i.test(p) ? { doBanco: true } : {}) }];
@@ -132,6 +137,23 @@ describe('guarda de cliente nas migrations novas', () => {
     expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\._fn_subcentro_cliente_rodar\(text, jsonb, boolean\) FROM PUBLIC, anon, authenticated;/);
     expect(definicoesExpostas(sql).map((d) => d.nome)).toEqual(['public.fn_subcentro_cliente_criar', 'public.fn_subcentro_cliente_renomear',
       'public.fn_subcentro_cliente_inativar', 'public.fn_subcentro_cliente_reativar']);
+    expect(semGuarda(sql)).toEqual([]);
+  });
+
+  it('o predicado do certificado e\' aceito como guarda, so\' devolve boolean (admin ou gestor do cliente) e nasce fechado (NOTAS-RECEITA-A1-01 F1)', () => {
+    const peloPredicado = `CREATE FUNCTION public.fn_q(p_cert uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      begin if not public._fn_fiscal_certificado_pode(x) then raise exception using errcode = '42501'; end if; return '{}'; end $$;`;
+    const predicadoAberto = `CREATE FUNCTION public._fn_fiscal_certificado_pode(p_cliente uuid) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$ select true $$;`;
+    expect(semGuarda([peloPredicado, predicadoAberto].join('\n'))).toEqual(['public._fn_fiscal_certificado_pode']);
+    const sql = readFileSync(join(DIR, '20261028113300_notas_receita_a1_f1.sql'), 'utf8');
+    const inicio = sql.indexOf('create or replace function public._fn_fiscal_certificado_pode');
+    const corpo = sql.slice(inicio, sql.indexOf('$$;', sql.indexOf('as $$', inicio)));
+    expect(corpo).toMatch(/returns boolean/);
+    expect(corpo).toMatch(/is_admin_agroinblue\(auth\.uid\(\)\)/);
+    expect(corpo).toMatch(/get_user_perfil\(auth\.uid\(\), p_cliente\)::text = 'gestor_cliente'/);
+    /* o corpo INTEIRO: as duas condicoes e nada mais (um `or true` ou uma leitura de tabela reprova) */
+    expect(corpo.slice(corpo.indexOf('as $$') + 5).replace(/\s+/g, ' ').trim()).toBe(
+      "select coalesce(public.is_admin_agroinblue(auth.uid()), false) or coalesce(public.get_user_perfil(auth.uid(), p_cliente)::text = 'gestor_cliente', false)");
     expect(semGuarda(sql)).toEqual([]);
   });
 
