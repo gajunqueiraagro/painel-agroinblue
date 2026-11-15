@@ -45,7 +45,7 @@ export function NovoMenuLancamentos({ boletosPedemAcao, onEmBranco, onDaNota, on
         </DropdownMenuItem>
         <DropdownMenuItem className={item} onSelect={onDaNota} data-testid="btn-novo-de-xml">
           <span className="font-semibold">Da nota fiscal</span>
-          <span className="text-zinc-200">XML ou PDF da NF-e: a nota preenche fornecedor, valor e parcelas</span>
+          <span className="text-zinc-200">XML ou PDF: a nota preenche fornecedor, valor e parcelas</span>
         </DropdownMenuItem>
         <DropdownMenuItem className={item} onSelect={onDosBoletos} data-testid="novo-dos-boletos">
           <span className="flex w-full justify-between font-semibold">

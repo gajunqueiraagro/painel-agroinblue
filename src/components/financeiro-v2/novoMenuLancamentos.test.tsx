@@ -37,7 +37,7 @@ describe('o botão "+ Novo ▾"', () => {
     abrir();
     const menu = await screen.findByTestId('menu-novo');
     expect(menu.textContent).toContain('Lançamento em brancopreencher tudo à mão');
-    expect(menu.textContent).toContain('Da nota fiscalXML ou PDF da NF-e');
+    expect(menu.textContent).toContain('Da nota fiscalXML ou PDF: a nota preenche');
     expect(menu.textContent).toContain('3 pedem ação');
     expect(menu.textContent).not.toMatch(/planilha/i);
     fireEvent.click(screen.getByTestId('novo-dos-boletos'));

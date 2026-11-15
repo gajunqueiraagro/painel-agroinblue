@@ -71,6 +71,7 @@ function LinhaChegando({ item, sugestoes, aoAlternar, aoTirar, aoTentarSenha }: 
   const pedeSenha = item.estado === 'senha' || item.estado === 'senha_errada';
   const avisos = r?.ok === true ? [...r.avisos, ...r.situacao.avisos] : [];
   const frase = item.frase ?? (item.estado === 'entrou' ? 'na caixa' : item.estado === 'lendo' ? 'lendo…' : item.estado === 'gravando' ? 'gravando…' : null);
+  const textoDaLinha = pedeSenha ? 'digite a senha para ler (ela não é guardada)' : frase ?? achado?.texto ?? '';
   const titulo = [achado?.texto, ...avisos.map(fraseDoAviso), item.frase].filter(Boolean).join(' · ');
   return (
     <tr className={cn(LINHA, item.estado === 'recusado' || item.estado === 'erro' ? 'bg-red-50' : item.marcado && 'bg-primary/5')} data-testid="boleto-chegando">
@@ -89,7 +90,7 @@ function LinhaChegando({ item, sugestoes, aoAlternar, aoTirar, aoTentarSenha }: 
           {item.repetidoNaLeva && <SeloDaCaixa s={{ texto: 'repetido nesta leva', tom: 'ambar' }} />}
           {pedeSenha && <SeloDaCaixa s={{ texto: item.estado === 'senha' ? 'protegido por senha' : 'senha não abriu', tom: 'vermelho' }} />}
           {achado && !pedeSenha && achado.selos.map((s) => <SeloDaCaixa key={s.texto} s={s} />)}
-          <span className="min-w-0 truncate text-muted-foreground">{pedeSenha ? 'digite a senha para ler (ela não é guardada)' : frase ?? achado?.texto ?? ''}</span>
+          <span className="min-w-0 truncate text-muted-foreground" title={textoDaLinha}>{textoDaLinha}</span>
         </span>
       </td>
       <td className={TD_REGUA}>
@@ -169,7 +170,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, le
           <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card" data-testid="quadro-da-caixa" data-desloca-livre>
             {aba === 'chegando' ? (
               <table className="w-full min-w-[980px] table-fixed border-collapse">
-                <colgroup><col style={{ width: 24 }} /><col style={{ width: 150 }} /><col style={{ width: 170 }} /><col style={{ width: 76 }} /><col style={{ width: 82 }} /><col /><col style={{ width: 176 }} /></colgroup>
+                <colgroup><col style={{ width: 24 }} /><col style={{ width: 150 }} /><col style={{ width: 158 }} /><col style={{ width: 76 }} /><col style={{ width: 82 }} /><col /><col style={{ width: 188 }} /></colgroup>
                 <thead><tr className="h-[22px]">
                   <th className={TH} /><th className={TH}>Arquivo</th><th className={TH}>Beneficiário</th><th className={TH}>Venc.</th>
                   <th className={TH_NUM}>Valor</th><th className={TH}>Achado no sistema</th><th className={TH} />
