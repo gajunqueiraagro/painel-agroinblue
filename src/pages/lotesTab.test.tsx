@@ -81,7 +81,8 @@ describe('LotesTab — LOTES-06, a aba Resumo', () => {
 describe('LotesTab — L1: a cria sem carimbo (Gabriel 09/11 07:58)', () => {
   it('mostra "sem carimbo · definir" em âmbar com o código no title; com carimbo, o carimbo; fora da cria, o código', () => {
     const antes = dados.lotes;
-    dados.lotes = [{ ...lote('a', 'cr', 'CR-VAC-NE-01', 100, 400, 0.2), daCria: true },
+    /* L1-CARIMBO-SO-COM-BEZERRO-01: o aviso só com bezerro ao pé (sem ele, o caderno/código — l1CarimboSoComBezerro.test.tsx) */
+    dados.lotes = [{ ...lote('a', 'cr', 'CR-VAC-NE-01', 100, 400, 0.2), daCria: true, comBezerro: true },
       { ...lote('b', 'cr', 'CR-VAC-NE-02', 50, 300, 0.5), daCria: true, carimbo: '7R' }, { ...lote('c', 'rc', 'RC-VAC-NE-01', 10, 250, 1), daCria: false }];
     render(<LotesTab />);
     const nomes = screen.getAllByTestId('lote-nome');
