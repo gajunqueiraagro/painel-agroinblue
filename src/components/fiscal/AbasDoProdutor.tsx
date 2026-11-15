@@ -26,6 +26,7 @@ import {
   type CondicaoIbs, type FormTitular, type RegimeIr, type Titular,
 } from '@/lib/fiscal/produtores';
 import type { ContaDoCliente } from '@/lib/fiscal/produtoresApi';
+import type { CampoPendente } from '@/lib/fiscal/pendenciasDoProdutor';
 import { useHistoricoDaCondicao, useProdutoresApi } from '@/hooks/useProdutores';
 import type { Pedido } from './PreviaDoBanco';
 import { CertificadoDoProdutor } from './CertificadoDoProdutor';
@@ -43,13 +44,22 @@ export function Info({ texto }: { texto: string }) {
 }
 
 type SetForm = <K extends keyof FormTitular>(k: K, v: FormTitular[K]) => void;
+/** PROD-PENDENCIAS-VISIVEIS-01: a frase do banco por campo que falta (vazio = nada falta). */
+type Frases = Partial<Record<CampoPendente, string>>;
+const AMBAR = 'border-amber-500 ring-1 ring-amber-400/60';
+/** A frase curta embaixo do campo: lugar SEMPRE reservado (12px), vazio quando nada falta — nada se desloca ao gravar. */
+function FraseDoCampo({ texto, testid }: { texto?: string; testid?: string }) {
+  return <p className="h-[12px] truncate text-[9.5px] leading-[12px] text-amber-700" title={texto} data-testid={testid}>{texto ?? ''}</p>;
+}
 type Previa = (titulo: string, pedido: Pedido, depois?: (r: unknown) => void) => Promise<string | null>;
 
 /* ── Identificação ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
-export function AbaIdentificacao({ form, set, erros, fazendas }: {
+export function AbaIdentificacao({ form, set, erros, fazendas, frases = {} }: {
   form: FormTitular; set: SetForm; erros: Partial<Record<'nome' | 'documento' | 'ies', string>>;
-  fazendas: ReadonlyArray<{ id: string; nome: string }>;
+  fazendas: ReadonlyArray<{ id: string; nome: string }>; frases?: Frases;
 }) {
+  /* o endereço incompleto marca só as partes VAZIAS do formulário (a pendência é do banco; a parte que falta, o próprio campo mostra) */
+  const faltaEnd = (v: string) => !!frases.endereco && !v.trim();
   const tipo = tipoDoDocumento(form.documento);
   const pf = tipo !== 'PJ';
   const mudarIe = (i: number, campo: 'uf' | 'ie' | 'fazenda_id', v: string) =>
@@ -76,15 +86,16 @@ export function AbaIdentificacao({ form, set, erros, fazendas }: {
             <Input value={form.nome} onChange={e => set('nome', e.target.value)} className={cn(REGUA_CAMPO, erros.nome && 'border-destructive')} data-testid="produtor-nome" />
           </div>
         </div>
-        {/* PF: CNPJ do produtor e nascimento; PJ: o lugar fica reservado (a altura do bloco não muda) */}
+        {/* PF: o CNPJ (agora por inscrição estadual, 115380) e o nascimento; PJ: o lugar fica reservado (a altura do bloco não muda) */}
         <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[150px_150px_minmax(0,1fr)]')}>
           <div className={cn(!pf && 'invisible')} aria-hidden={!pf || undefined}>
-            <div className="flex items-center"><Rotulo texto="CNPJ do produtor PF" className="mb-0.5" /><Info texto="Novo em 2027: o produtor PF terá CNPJ (inclusive alfanumérico). Deixe vazio até ter." /></div>
-            <Input value={form.cnpj_produtor} onChange={e => set('cnpj_produtor', e.target.value)} placeholder="a partir de 2027" className={cn(REGUA_CAMPO, 'tabular-nums')} data-testid="produtor-cnpj-pf" />
+            <div className="flex items-center"><Rotulo texto="CNPJ (2027)" className="mb-0.5" /><Info texto="A partir de 2027 o produtor PF tem um CNPJ por inscrição estadual (cada fazenda com IE é um estabelecimento: matriz e filiais). O CNPJ fica em cada IE da lista abaixo; o CPF continua valendo para o imposto de renda." /></div>
+            <p className={cn(REGUA_CAMPO, 'flex items-center truncate text-muted-foreground')} title="O CNPJ fica em cada inscrição estadual da lista abaixo" data-testid="produtor-cnpj-por-ie">por inscrição estadual</p>
           </div>
-          <div className={cn(!pf && 'invisible')} aria-hidden={!pf || undefined}>
+          <div className={cn(!pf && 'invisible')} aria-hidden={!pf || undefined} data-campo-pendente="nascimento">
             <Rotulo texto="Nascimento" />
-            <DatePicker value={form.nascimento} onChange={v => set('nascimento', v ?? '')} className={REGUA_CAMPO} />
+            <DatePicker value={form.nascimento} onChange={v => set('nascimento', v ?? '')} className={cn(REGUA_CAMPO, frases.nascimento && AMBAR)} />
+            <FraseDoCampo texto={pf ? frases.nascimento : undefined} testid="produtor-frase-nascimento" />
           </div>
           <div />
         </div>
@@ -93,8 +104,9 @@ export function AbaIdentificacao({ form, set, erros, fazendas }: {
       <BlocoFormulario titulo="Inscrições estaduais" dica="uma por estado onde produz; é a IE das notas de venda e da GTA"
         acao={<button type="button" className="text-[10px] font-medium text-primary hover:underline" onClick={() => set('ies', [...form.ies, { uf: '', ie: '', fazenda_id: null }])}
           data-testid="produtor-ie-mais">+ estado</button>}>
-        <div className="flex flex-col gap-1">
-          {form.ies.length === 0 && <p className="h-7 text-[10px] leading-7 text-muted-foreground">nenhuma IE: o produtor fica com o aviso "cadastro incompleto"</p>}
+        <div className="flex flex-col gap-1" data-campo-pendente="ies">
+          {form.ies.length === 0 && <p className={cn('h-7 rounded px-1 text-[10px] leading-7', frases.ies ? 'border border-amber-500 text-amber-700' : 'text-muted-foreground')}
+            data-testid="produtor-frase-ies">{frases.ies ? `${frases.ies}: use “+ estado”` : 'nenhuma IE: o produtor fica com o aviso "cadastro incompleto"'}</p>}
           {form.ies.map((ie, i) => (
             <div key={i} className={cn(GRADE_FORMULARIO, 'grid-cols-[70px_150px_minmax(0,1fr)_20px] items-center')} data-testid="produtor-ie">
               <SearchableSelect value={ie.uf} onValueChange={v => mudarIe(i, 'uf', v)} semTodos allLabel="UF" allValue="" options={UFS.map(u => ({ value: u, label: u }))}
@@ -111,16 +123,20 @@ export function AbaIdentificacao({ form, set, erros, fazendas }: {
 
       <BlocoFormulario titulo="Contato fiscal">
         <div className={cn(GRADE_FORMULARIO, 'grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]')}>
-          <div><Rotulo texto="E-mail fiscal / contador" /><Input value={form.email_fiscal} onChange={e => set('email_fiscal', e.target.value)} className={REGUA_CAMPO} /></div>
-          <div><Rotulo texto="Endereço fiscal" /><Input value={form.endereco} onChange={e => set('endereco', e.target.value)} className={REGUA_CAMPO} /></div>
+          <div data-campo-pendente="email_fiscal"><Rotulo texto="E-mail fiscal / contador" />
+            <Input value={form.email_fiscal} onChange={e => set('email_fiscal', e.target.value)} className={cn(REGUA_CAMPO, frases.email_fiscal && AMBAR)} />
+            <FraseDoCampo texto={frases.email_fiscal} testid="produtor-frase-email" /></div>
+          <div data-campo-pendente="endereco"><Rotulo texto="Endereço fiscal" />
+            <Input value={form.endereco} onChange={e => set('endereco', e.target.value)} className={cn(REGUA_CAMPO, faltaEnd(form.endereco) && AMBAR)} />
+            <FraseDoCampo texto={frases.endereco} testid="produtor-frase-endereco" /></div>
         </div>
         <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[minmax(0,1fr)_70px_100px]')}>
-          <div><Rotulo texto="Município" /><Input value={form.municipio} onChange={e => set('municipio', e.target.value)} className={REGUA_CAMPO} /></div>
+          <div><Rotulo texto="Município" /><Input value={form.municipio} onChange={e => set('municipio', e.target.value)} className={cn(REGUA_CAMPO, faltaEnd(form.municipio) && AMBAR)} /></div>
           <div>
             <Rotulo texto="UF" />
-            <SearchableSelect value={form.uf} onValueChange={v => set('uf', v)} allLabel="—" allValue="" options={UFS.map(u => ({ value: u, label: u }))} triggerClassName={REGUA_CAMPO} />
+            <SearchableSelect value={form.uf} onValueChange={v => set('uf', v)} allLabel="—" allValue="" options={UFS.map(u => ({ value: u, label: u }))} triggerClassName={cn(REGUA_CAMPO, faltaEnd(form.uf) && AMBAR)} />
           </div>
-          <div><Rotulo texto="CEP" /><Input value={form.cep} onChange={e => set('cep', e.target.value)} className={cn(REGUA_CAMPO, 'tabular-nums')} placeholder="00000-000" /></div>
+          <div><Rotulo texto="CEP" /><Input value={form.cep} onChange={e => set('cep', e.target.value)} className={cn(REGUA_CAMPO, 'tabular-nums', faltaEnd(form.cep) && AMBAR)} placeholder="00000-000" /></div>
         </div>
       </BlocoFormulario>
       <p className="text-[10px] text-muted-foreground">CPF/CNPJ e nome são obrigatórios. O resto falta como aviso ("cadastro incompleto"): nada é bloqueado.</p>
@@ -131,13 +147,13 @@ export function AbaIdentificacao({ form, set, erros, fazendas }: {
 const rotuloDaCondicao = (v: string): string => { const c = CONDICOES_IBS.find(x => x === v); return c ? ROTULO_CONDICAO_IBS[c] : v; };
 
 /* ── Fiscal e Reforma ──────────────────────────────────────────────────────────────────────────────────────────────────────── */
-export function AbaFiscal({ titular, clienteId, form, set, previa }: {
-  titular: Titular; clienteId: string; form: FormTitular; set: SetForm; previa: Previa;
+export function AbaFiscal({ titular, clienteId, form, set, previa, frases = {} }: {
+  titular: Titular; clienteId: string; form: FormTitular; set: SetForm; previa: Previa; frases?: Frases;
 }) {
   const api = useProdutoresApi();
   const hoje = hojeLocal();
   const { data: historico = [], isLoading } = useHistoricoDaCondicao(clienteId, titular.id);
-  const [condicao, setCondicao] = useState<CondicaoIbs>(titular.condicao_ibs?.condicao ?? 'nao_contribuinte');
+  const [condicao, setCondicao] = useState<CondicaoIbs>(titular.condicao_ibs?.condicao ?? 'contribuinte_pelo_limite');
   const [mes, setMes] = useState<string | null>(hoje.slice(0, 7));
   const [motivo, setMotivo] = useState('');
   const [erro, setErro] = useState<string | null>(null);
@@ -156,9 +172,9 @@ export function AbaFiscal({ titular, clienteId, form, set, previa }: {
     <div className="flex min-h-0 flex-1 flex-col gap-1.5" data-testid="produtor-aba-fiscal">
       <BlocoFormulario titulo="Condição e limites">
         <div className={cn(GRADE_FORMULARIO, 'grid-cols-[minmax(0,1fr)_170px]')}>
-          <div>
+          <div data-campo-pendente="condicao_ibs" className={cn('rounded', frases.condicao_ibs && AMBAR)}>
             <div className="flex items-center"><Rotulo texto="Condição no IBS/CBS" obrig className="mb-0.5" />
-              <Info texto="Não contribuinte: receita abaixo de R$ 3,6 mi no ano (somando as PJs agropecuárias em que tem participação). Pode optar por ser contribuinte: vale no mês seguinte e não volta no ano." /></div>
+              <Info texto="Em 2027 o caso padrão é CONTRIBUINTE. Não contribuinte é a exceção: receita do ano anterior abaixo de R$ 3,6 mi (somando as PJs agropecuárias em que tem participação) e só se o produtor escolher; quem é não contribuinte pode optar por ser contribuinte (vale no mês seguinte e não volta no ano)." /></div>
             <Segmentado altura={28} fonte={10} valor={condicao} onEscolher={v => { setCondicao(v); setErro(null); }}
               opcoes={CONDICOES_IBS.map(c => ({ valor: c, rotulo: ROTULO_CONDICAO_IBS[c], desabilitada: !ehProdutor, title: ehProdutor ? undefined : 'a condição no IBS/CBS é só do produtor' }))} />
           </div>
@@ -170,19 +186,24 @@ export function AbaFiscal({ titular, clienteId, form, set, previa }: {
         <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[minmax(0,1fr)_170px] items-end')}>
           <div>
             <Rotulo texto="Motivo da condição" />
-            <Input value={motivo} onChange={e => { setMotivo(e.target.value); setErro(null); }} disabled={!ehProdutor} placeholder="ex.: receita do ano anterior abaixo do limite"
+            <Input value={motivo} onChange={e => { setMotivo(e.target.value); setErro(null); }} disabled={!ehProdutor} placeholder="ex.: receita do ano anterior acima do limite"
               className={cn(REGUA_CAMPO, erro && 'border-destructive')} data-testid="produtor-condicao-motivo" />
           </div>
           <Button size="sm" variant="outline" className="h-7 text-[11px]" disabled={!ehProdutor} onClick={() => void gravarCondicao()} data-testid="produtor-condicao-gravar"
             title={ehProdutor ? 'mostra a prévia antes de gravar' : 'a condição no IBS/CBS é só do produtor'}>Gravar condição…</Button>
         </div>
-        <p className="mt-0.5 h-[13px] truncate text-[10px] text-destructive" title={erro ?? undefined}>{erro ?? ''}</p>
+        {/* a recusa (vermelho) passa na frente; sem ela, a pendência do banco (âmbar) no mesmo lugar reservado */}
+        <p className={cn('mt-0.5 h-[13px] truncate text-[10px]', erro ? 'text-destructive' : 'text-amber-700')} title={erro ?? frases.condicao_ibs}
+          data-testid="produtor-frase-condicao">{erro ?? frases.condicao_ibs ?? ''}</p>
         <div className={cn(GRADE_FORMULARIO, 'mt-0.5 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]')}>
-          <div>
+          <div data-campo-pendente="regime_ir">
             <Rotulo texto="Regime do IR" />
-            <Segmentado altura={28} fonte={10} valor={form.regime_ir || '__nenhum'} onEscolher={v => set('regime_ir', v === '__nenhum' ? '' : v)} opcoes={[
-              ...regimes.map(r => ({ valor: r, rotulo: ROTULO_REGIME[r] })),
-            ]} />
+            <div className={cn('rounded', frases.regime_ir && AMBAR)}>
+              <Segmentado altura={28} fonte={10} valor={form.regime_ir || '__nenhum'} onEscolher={v => set('regime_ir', v === '__nenhum' ? '' : v)} opcoes={[
+                ...regimes.map(r => ({ valor: r, rotulo: ROTULO_REGIME[r] })),
+              ]} />
+            </div>
+            <FraseDoCampo texto={frases.regime_ir} testid="produtor-frase-regime" />
           </div>
           <div>
             <div className="flex items-center"><Rotulo texto="Receita (limite R$ 3,6 mi)" className="mb-0.5" /><Info texto="Chega com o Resumo fiscal, que lê o livro caixa por produtor (próxima onda). Até lá, sem número." /></div>

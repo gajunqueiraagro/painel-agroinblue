@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  comQuemDivide, composicaoPorFazenda, dadosDoForm, formDoTitular, lerPrevia, pendenciasDoForm, seloDoTitular, titularDaLinha, FORM_VAZIO,
+  comQuemDivide, composicaoPorFazenda, dadosDoForm, formDoTitular, lerPrevia, pendenciasDoForm, seloDoTitular, titularDaLinha, FORM_VAZIO, CONDICOES_IBS,
 } from './produtores';
 
 const VERA = {
@@ -46,6 +46,16 @@ describe('lista', () => {
     expect(seloDoTitular(titularDaLinha(HIGINO)).texto).toBe('terceiro');
     expect(seloDoTitular(titularDaLinha({ ...VERA, condicao_ibs: { condicao: 'optante' } })).texto).toBe('contribuinte');
     expect(seloDoTitular(titularDaLinha({ ...VERA, ativo: false })).texto).toBe('inativo');
+  });
+  it('L8 o CNPJ do produtor não vai mais no titular (115380: é por inscrição estadual)', () => {
+    expect(dadosDoForm(FORM_VAZIO, { ...FORM_VAZIO, cnpj_produtor: '11.222.333/0001-81' })).toEqual({});
+    expect(dadosDoForm(null, { ...FORM_VAZIO, nome: 'Nova', documento: '111.444.777-35', cnpj_produtor: '11.222.333/0001-81' })).not.toHaveProperty('cnpj_produtor');
+  });
+  it('L7 premissa 15/11: contribuinte é o padrão (verde, vem primeiro); não contribuinte é a exceção (âmbar, por último)', () => {
+    expect(seloDoTitular(titularDaLinha({ ...VERA, condicao_ibs: { condicao: 'contribuinte_pelo_limite' } })).tom).toBe('verde');
+    expect(seloDoTitular(titularDaLinha(VERA)).tom).toBe('ambar');
+    expect(CONDICOES_IBS[0]).toBe('contribuinte_pelo_limite');
+    expect(CONDICOES_IBS[CONDICOES_IBS.length - 1]).toBe('nao_contribuinte');
   });
 });
 
