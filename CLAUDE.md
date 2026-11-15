@@ -164,6 +164,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   para migration, DDL ou backfill (regra corrigida 17/10, reafirmada 20/10). Dado de cliente: nada de UPDATE/DELETE/backfill sem OK.
 - GO ANTES DE APLICAR (FIN-LISTA-SEM-CAIXA-FILTROS-01, Gabriel 04/11): NENHUMA migration nem escrita no banco sem o GO escrito do Gabriel,
   MESMO conserto de desempenho de funcao so' de leitura com saida provada identica (a 114110 foi aplicada sem GO: desvio). Ensaio em RAISE pode antes.
+- APROVACAO-EM-LOTE (Gabriel 14/11, SO' PROTO; producao segue com ele no terminal): o GO pode ser a linha "APROVADO PELO GABRIEL · lote N"
+  na FILA; aplica-se sozinho so' com md5(statements) = o aprovado + ensaio de novo verde, previa igual; diferenca = nao grava, avisa e espera.
 - LEDGER = ARQUIVO, VERSAO INCLUSIVE: o `apply_migration` grava a versao com o timestamp do dia; NO MESMO PASSO, UPDATE de
   `supabase_migrations.schema_migrations.version` para o numero do arquivo (guardado por nome + md5 dos statements + "a versao nova nao
   existe") e conferencia md5(arquivo sem o `\n` final) = md5(statements), antes do commit.
