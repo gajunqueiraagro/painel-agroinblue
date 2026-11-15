@@ -4,7 +4,7 @@
  *   RPC no `boleto_d1_test.sql`. Aqui se prende o GESTO: nada grava antes do clique, a senha não vai ao banco, a sugestão vem dos
  *   titulares, o repetido na leva fica desmarcado, o arquivo que não sobe é dito.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), from: vi.fn(), storage: { from: vi.fn() } } }));
@@ -42,14 +42,14 @@ function respostaDoBanco(linha: string, simular: boolean) {
   });
 }
 
-let api: CaixaApi & { entrar: ReturnType<typeof vi.fn>; subirArquivo: ReturnType<typeof vi.fn>; documentosDosTitulares: ReturnType<typeof vi.fn> };
+let api: { [K in keyof CaixaApi]: Mock<CaixaApi[K]> };
 beforeEach(() => {
   ler.mockClear();
   api = {
-    lista: vi.fn(async () => ({ ok: true, dados: listaDaCaixa({ contadores: { novo: 0, sem_par: 0 }, itens: [] }) })),
-    entrar: vi.fn(async (_c: string, l: Record<string, unknown>, simular: boolean) => ({ ok: true, dados: respostaDoBanco(String(l.linha), simular) })),
-    subirArquivo: vi.fn(async () => ({ ok: true, dados: true })),
-    documentosDosTitulares: vi.fn(async () => ({ ok: true, dados: ['111.444.777-35', '11.222.333/0001-81'] })),
+    lista: vi.fn<CaixaApi['lista']>(async () => ({ ok: true, dados: listaDaCaixa({ contadores: { novo: 0, sem_par: 0 }, itens: [] }) })),
+    entrar: vi.fn<CaixaApi['entrar']>(async (_c, l, simular) => ({ ok: true, dados: respostaDoBanco(String(l.linha), simular) })),
+    subirArquivo: vi.fn<CaixaApi['subirArquivo']>(async () => ({ ok: true, dados: true })),
+    documentosDosTitulares: vi.fn<CaixaApi['documentosDosTitulares']>(async () => ({ ok: true, dados: ['111.444.777-35', '11.222.333/0001-81'] })),
   };
   if (!Blob.prototype.arrayBuffer) {
     Blob.prototype.arrayBuffer = function (this: Blob) {
