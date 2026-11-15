@@ -1844,6 +1844,15 @@ if (tela === 'mesclar') {
     montar(<PatrimonioApiProvider api={API_PATRIMONIO}><PatrimonioTela /></PatrimonioApiProvider>);
   };
   void montarPatrimonio();
+} else if (tela === 'caixa-boletos') {
+  /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos: o modal real com a API e o leitor em memória (`dados/caixaBoletos.ts`, SINTÉTICO);
+     o gate solta os PDFs pelo input (o conteúdo é o nome: o leitor da bancada lê por ele) */
+  const montarCaixa = async () => {
+    const { CaixaDeBoletosDialog } = await import('@/components/financeiro-v2/CaixaDeBoletosDialog');
+    const { API_CAIXA_BANCADA, LER_CAIXA_BANCADA } = await import('./dados/caixaBoletos');
+    montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} aoFechar={() => {}} />);
+  };
+  void montarCaixa();
 } else if (tela === 'produtores') {
   /* FISCAL onda 1 (a) — Cadastros › Produtores: a tela real com a API em memória (`dados/produtores.ts`, SINTÉTICO); a prévia de cada
      gravação se monta a partir do pedido e nada grava */
