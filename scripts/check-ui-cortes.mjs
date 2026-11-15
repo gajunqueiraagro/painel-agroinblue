@@ -1005,6 +1005,8 @@ const CENARIOS = [
           await p.locator('[data-testid="caderno-voltar-texto"]').waitFor(); await p.waitForTimeout(300); } },
       /* L1 (Gabriel 09/11) — a cria SEM carimbo no P10A (`&cria=1`): o campo Lote e o painel (o seletor) com "sem carimbo · definir" */
       { nome: 'fechamento-grupo-campo-lote-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      /* L1-CARIMBO-SO-COM-BEZERRO-01 — o P10A com Mamotes F ao pé (`&cria=bezerro`): o aviso segue, sem cortar */
+      { nome: 'fechamento-grupo-campo-lote-cria-bezerro', url: URL + '&cria=bezerro', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
       { nome: 'fechamento-grupo-campo-lote-painel-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
           await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
@@ -1635,7 +1637,8 @@ const CENARIOS = [
      digitada (valor e data para o operador) e o cartão em 10× (D2: Parcelada 10× no Pagamento, a 1ª fatura sugerida); Geral, Pagamento e
      Documentos (o anexo clicável) nos sete tamanhos. Substitui a tela intermediária (`nota-pdf` da nota nova, `nota-pdf-aba-*`, `nota-pdf-cartao*`). */
   /* NOTA-PDF-REGRESSAO-01 — `coluna`: a NF com a FATURA em coluna e o item em meias-linhas (o vencimento e os itens lidos) */
-  ...['pdf', 'chave', 'cartao', 'nfse', 'coluna'].flatMap((v) => {
+  /* NOTA-LEITURA-PRINT-01 — `print` / `printnfse`: a NF-e e a NFS-e impressas pelo "Print To PDF" (antes recusadas), lidas */
+  ...['pdf', 'chave', 'cartao', 'nfse', 'coluna', 'print', 'printnfse'].flatMap((v) => {
     const pronto = async (p) => { await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(600); };
     const parcelada10 = async (p) => {
       await clicarTexto('Pagamento')(p);

@@ -276,6 +276,28 @@ export function marcarDaCria(lotes: readonly LoteDaLista[], cadastros: readonly 
   return lotes.map(l => ({ ...l, daCria: aceitaCarimbo(cadastros, { atividadeId: l.atividadeId, categoriaId: l.categoriaId, racaId: l.racaId }, idsDosMamotes) }));
 }
 
+/** L1-CARIMBO-SO-COM-BEZERRO-01 — um item do fechamento do mês, com o "Nome no caderno" do pasto dele */
+export interface ItemDoMes { fechamentoId: string; categoriaId: string; quantidade: number; loteId: string | null; noCaderno: string | null }
+
+/** Marca cada lote com o bezerro ao pé (algum pasto dele no mês tem Mamotes M ou F com cabeça, com lote ou sem) e o nome do caderno
+ *  (o dos pastos dele, sem repetir; senão o do campeiro). */
+export function marcarBezerro(lotes: readonly LoteDaLista[], itens: readonly ItemDoMes[], idsDosMamotes: readonly string[]): LoteDaLista[] {
+  const comMamote = new Set(itens.filter(i => i.quantidade > 0 && idsDosMamotes.includes(i.categoriaId)).map(i => i.fechamentoId));
+  const doLote = new Map<string, { bezerro: boolean; cadernos: string[] }>();
+  for (const i of itens) {
+    if (i.quantidade <= 0 || !i.loteId) continue;
+    const m = doLote.get(i.loteId) ?? { bezerro: false, cadernos: [] };
+    m.bezerro ||= comMamote.has(i.fechamentoId);
+    const c = i.noCaderno?.trim();
+    if (c && !m.cadernos.includes(c)) m.cadernos.push(c);
+    doLote.set(i.loteId, m);
+  }
+  return lotes.map(l => {
+    const m = doLote.get(l.id);
+    return { ...l, comBezerro: m?.bezerro ?? false, noCaderno: m?.cadernos.join(' · ') || l.nomeCampeiro?.trim() || null };
+  });
+}
+
 export function validarPerfil(p: Perfil, hoje: string): { campo: keyof Perfil; mensagem: string } | null {
   if (p.nomeCampeiro.trim().length > 40) return { campo: 'nomeCampeiro', mensagem: 'O apelido passa de 40 letras.' };
   if (p.anotacao.trim().length > 120) return { campo: 'anotacao', mensagem: 'A anotação passa de 120 letras.' };

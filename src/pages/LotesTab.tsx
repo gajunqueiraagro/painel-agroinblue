@@ -28,7 +28,7 @@ import {
 } from '@/lib/lotes/lista';
 import { FichaDoLote } from '@/components/lotes/FichaDoLote';
 import { AssistenteDoLotePadrao } from '@/components/lotes/AssistenteDoLotePadrao';
-import { FRASE_SEM_CARIMBO, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
+import { FRASE_SEM_CARIMBO, nomeEhDoCaderno, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
 import { ResumoDosLotes } from '@/components/lotes/ResumoDosLotes';
 import { resumoDosLotes, sexoDosCodigos } from '@/lib/lotes/resumo';
 
@@ -137,7 +137,8 @@ export function LotesTab() {
                     <tr key={l.id} onClick={() => setFichaId(l.id)} data-testid="linha-lote"
                       className={cn('cursor-pointer border-b border-border/60 hover:bg-[#f5f8fc]', l.id === novoId && 'bg-[#eaf6ee]', l.situacao === 'encerrado' && 'text-muted-foreground')}>
                       <td className={cn(TD_REGUA, 'whitespace-nowrap font-bold text-[#0b1f3a]')} title={tituloDoCodigo(l)} data-testid="lote-nome">
-                        {nomeNaTela(l) === FRASE_SEM_CARIMBO ? <span className="font-semibold text-[#b45309]" data-testid="lote-sem-carimbo">{FRASE_SEM_CARIMBO}</span> : nomeNaTela(l)}
+                        {nomeNaTela(l) === FRASE_SEM_CARIMBO ? <span className="font-semibold text-[#b45309]" data-testid="lote-sem-carimbo">{FRASE_SEM_CARIMBO}</span>
+                          : nomeEhDoCaderno(l) ? <span className="font-normal text-slate-400" data-testid="lote-do-caderno">{nomeNaTela(l)}</span> : nomeNaTela(l)}
                         {l.conferir && <span data-testid="lote-conferir" title={`Conferir: ${l.conferir}`} className="ml-1 inline-block h-[6px] w-[6px] rounded-full bg-[#d97706] align-middle" />}</td>
                       <td className={TD_REGUA_TEXTO} title={nomeDe(nomes, l.categoriaId) ?? undefined}>{nomeDe(nomes, l.categoriaId) ?? '—'}</td>
                       <td className={TD_REGUA_TEXTO} title={nomeDe(nomes, l.racaId) ?? undefined}>{nomeDe(nomes, l.racaId) ?? '—'}</td>

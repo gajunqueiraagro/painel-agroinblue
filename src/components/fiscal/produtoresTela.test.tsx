@@ -62,6 +62,8 @@ const previa = () => screen.getByTestId('produtores-previa');
 
 beforeEach(() => {
   cleanup(); toastErro.mockReset();
+  /* a tela de mesa (≥ 1200px): abas com o nome inteiro; o T7 mede a janela estreita */
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1440 });
   gravarTitular = vi.fn(); gravarComposicao = vi.fn();
   respostaTitular = (d, s) => ({ ok: true, dados: { frase: s ? 'Atualiza Produtora Sintética (CPF 529.982.247-25).' : '', diferencas: Object.keys(d).map(k => ({ campo: k, antes: null, depois: d[k] })), titular_id: 't-vera' } });
 });
@@ -150,5 +152,17 @@ describe('Cadastros › Produtores', () => {
     const gravar = await screen.findByTestId('produtores-previa-gravar');
     expect(gravar).toHaveProperty('disabled', true);
     expect(gravar.getAttribute('title')).toBe('nada muda: não há o que gravar');
+  });
+
+  it('T7 abaixo de 1200px: abas com o nome curto (o inteiro no title) e o botão da ficha só com o ícone (o nome do produtor cabe)', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1126 });
+    montar();
+    await screen.findAllByTestId('produtores-item');
+    const guia = screen.getByTestId('produtor-guia-fazendas');
+    expect(guia.textContent).toMatch(/^Fazendas\b/);
+    expect(guia.textContent).not.toContain('participação');
+    const botao = screen.getByTestId('produtor-ficha-cadastro');
+    expect(botao.textContent?.trim()).toBe('');
+    expect(botao.getAttribute('aria-label')).toBe('Emitir ficha de cadastro');
   });
 });

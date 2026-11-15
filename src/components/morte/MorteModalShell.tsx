@@ -27,7 +27,7 @@
  * meta tem caminho próprio. A pílula do cabeçalho é ROTULO, não controle — e por isso
  * ela diz o cenário REAL (ver `cenarioRotulo`), nunca um "Realizado" cravado.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -155,6 +155,11 @@ export function MorteModalShell({
     ? (motivoMorteCustom || null)
     : (motivoMorte || null);
   const motivoFalta = !motivoEfetivo;
+  /* MORTE-OUTRO-FOCO-01 (Santa Rita, 10/11: 'Outro' + 'Não mamou' gravou 'Parto distócico', sem a observação) — escolhido o "Outro
+     (digitar)", o Select devolvia o foco ao PROPRIO gatilho; o que se digitava dali ia para a busca por letra do Select (o "P" escolhia
+     "Parto distócico") e nada chegava ao campo do motivo nem a' observacao. Agora o foco vai ao "Digite o motivo". */
+  const campoOutro = useRef<HTMLInputElement>(null);
+  const focarOutro = useRef(false);
   /* ⚠ PESO E' OBRIGATORIO NA MORTE, e sempre foi: o funil de registro recusa sem ele
      (`Informe o Peso (kg)`). O campo e' que nao dizia — sem asterisco e sem bloqueio,
      o operador preenchia a tela inteira para levar um toast no fim.
@@ -354,18 +359,21 @@ export function MorteModalShell({
               </div>
               <div className="min-w-0">
                 <Label className="text-[10px] text-muted-foreground">Motivo da morte <span className="text-destructive">*</span></Label>
-                <Select value={motivoMorte} onValueChange={setMotivoMorte}>
+                <Select value={motivoMorte} onValueChange={(v) => { focarOutro.current = v === '__custom__'; setMotivoMorte(v); }}>
                   <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${motivoFalta ? 'border-destructive' : ''}`}>
                     <SelectValue placeholder="Selecione o motivo" />
                   </SelectTrigger>
-                  <SelectContent className="max-h-52 overflow-y-auto">
+                  <SelectContent className="max-h-52 overflow-y-auto" onCloseAutoFocus={(e) => {
+                    if (!focarOutro.current) return;
+                    focarOutro.current = false; e.preventDefault(); campoOutro.current?.focus();
+                  }}>
                     {motivosDisponiveis.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                     <SelectItem value="__custom__">Outro (digitar)</SelectItem>
                   </SelectContent>
                 </Select>
                 {motivoMorte === '__custom__' && (
-                  <Input value={motivoMorteCustom} onChange={e => setMotivoMorteCustom(e.target.value)} placeholder="Digite o motivo"
-                    className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                  <Input ref={campoOutro} value={motivoMorteCustom} onChange={e => setMotivoMorteCustom(e.target.value)} placeholder="Digite o motivo"
+                    className="mt-[3px] h-8 px-2.5 text-[12px]" data-testid="morte-motivo-outro" />
                 )}
                 {motivoFalta && (
                   <p className="mt-[3px] text-[10px] text-destructive">Informe o motivo da morte.</p>

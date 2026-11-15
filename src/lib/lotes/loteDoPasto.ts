@@ -3,7 +3,7 @@
  * um lote para o pasto inteiro é o caso comum, e "por categoria" cobre o card com dois lotes (ex.: desmama F + as novilhas de outro lote).
  * Só a categoria com cabeça leva lote; zerou, o lote sai. Lote em 2+ pastos é permitido (o lote não é do pasto).
  */
-import { codigoAoLado, nomeDoLote, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
+import { codigoAoLado, nomeDoLote, nomeEhDoCaderno, nomeNaTela, type LoteDaLista } from '@/lib/lotes/tipos';
 
 export interface ItemComLote {
   categoria_id: string;
@@ -47,7 +47,7 @@ export function lotesQueSeguem<T extends ItemComLote>(itens: readonly T[], ativo
 }
 
 /** O texto do botão do campo: o código (e o nome do campeiro no title), "2 lotes" ou "Sem lote". */
-export function rotuloDoLote(card: LoteDoCard, lotes: readonly LoteDaLista[]): { texto: string; title: string } {
+export function rotuloDoLote(card: LoteDoCard, lotes: readonly LoteDaLista[]): { texto: string; title: string; doCaderno?: boolean } {
   const porId = new Map(lotes.map(l => [l.id, l]));
   const nome = (id: string) => {
     const l = porId.get(id);
@@ -55,7 +55,10 @@ export function rotuloDoLote(card: LoteDoCard, lotes: readonly LoteDaLista[]): {
   };
   const falta = (n: number) => (n > 0 ? ` · ${n} categoria${n > 1 ? 's' : ''} sem lote` : '');
   if (card.tipo === 'nenhum') return { texto: 'Sem lote', title: 'Nenhuma categoria deste pasto tem lote' };
-  if (card.tipo === 'um') return { texto: (() => { const l = porId.get(card.loteId); return l ? nomeNaTela(l) : 'Lote'; })(), title: nome(card.loteId) + falta(card.semLote) };
+  if (card.tipo === 'um') {
+    const l = porId.get(card.loteId);
+    return { texto: l ? nomeNaTela(l) : 'Lote', title: nome(card.loteId) + falta(card.semLote), ...(l && nomeEhDoCaderno(l) ? { doCaderno: true } : {}) };
+  }
   return { texto: `${card.loteIds.length} lotes`, title: card.loteIds.map(nome).join(' · ') + falta(card.semLote) };
 }
 
