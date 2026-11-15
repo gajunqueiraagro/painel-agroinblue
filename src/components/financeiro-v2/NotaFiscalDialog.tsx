@@ -45,8 +45,8 @@ import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
 import { motivoNaoSalva, parcelasDoMensal, type ParcelaLivre } from '@/lib/financiamentos/parcelasLivres';
 import {
-  FRASE_NOTA_SEM_DUPLICATAS, MAX_PARCELAS_DO_CARTAO, MIN_PARCELAS_DO_CARTAO, comPagamento, comoAbre, diaMaisFrequente, fraseDoRodapeDoCartao,
-  parcelasDoCartao, primeiraFatura, rotuloDaSugestao, type ComoFoiPago,
+  FORMAS_DO_PARCELADO, FRASE_NOTA_SEM_DUPLICATAS, MIN_PARCELAS_DO_CARTAO, comPagamento, comoAbre, diaMaisFrequente, fraseDoRodapeDoCartao,
+  maxParcelasDe, pagaEmGrade, parcelasDoCartao, primeiraFatura, rotuloDaSugestao, type ComoFoiPago,
 } from '@/lib/financeiro/pagamentoNoCartao';
 import { diasDoCartao } from '@/lib/financeiro/diasDoCartao';
 import type { ParcelaDoPayload } from '@/lib/financiamentos/montarPayloadParcelamento';
@@ -55,7 +55,7 @@ import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
-import { canceladosDaNota, casarJaLancados, contaUnicaDasIrmas, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, nDasParcelas, parcelasParaCasar,
+import { canceladosDaNota, casarJaLancados, comEscolhidos, contaUnicaDasIrmas, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, nDasParcelas, parcelasParaCasar,
   parcelasQueFaltamNoCartao, posicoesNoCartao, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
   type LinhaSistemaNota, type SituacaoNaTabela, ficaDeForaPorPadrao, rotuloDoAplicar } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
@@ -76,7 +76,8 @@ import { GravarIeDaFazendaDialog } from './GravarIeDaFazendaDialog';
 import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { lerNota, type NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
 import { ehSerieAvulsa, type CampoConferido, type CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
-import { fraseDaRemessa } from '@/lib/financeiro/nfe/remessaEntregaFutura';
+import { avisoDaNatureza } from '@/lib/financeiro/nfe/remessaEntregaFutura';
+import { OutrosLancamentosDaNota, periodoPadrao } from '@/components/financeiro-v2/OutrosLancamentosDaNota';
 import { ORIGEM_FAZENDA_PELO_ENDERECO } from '@/lib/financeiro/nfe/proporLancamento';
 import type { EmitenteNFe, NotaLida } from '@/lib/financeiro/nfe/tipos';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
@@ -243,6 +244,10 @@ export function NotaFiscalDialog({
      "No Novo lançamento" e o "Atualizar e parcelar". Abre em Duplicatas quando a nota as traz, senão À vista; só o operador muda. */
   const nDuplicatasDaNota = doXmlLido.proposta.duplicatas.length;
   const [como, setComo] = useState<ComoFoiPago>(() => comoAbre(nDuplicatasDaNota));
+  /* NOTA-PAGTO-PARCELADO-01 — "Parcelado (boleto, PIX, transf., débito)": a MESMA grade do cartão, a conta normal e a forma escolhida */
+  const emGrade = pagaEmGrade(como);
+  const maxParcelas = maxParcelasDe(como);
+  const [formaDoParcelado, setFormaDoParcelado] = useState('');
   const [cartaoId, setCartaoId] = useState('');
   const [nCartaoTexto, setNCartaoTexto] = useState('');
   const [primeira, setPrimeira] = useState('');
@@ -256,7 +261,7 @@ export function NotaFiscalDialog({
   const cartao = cartoes.find((c) => c.id === cartaoId) ?? null;
   const nomeDoCartao = cartao ? (cartao.nome_exibicao || cartao.nome_conta) : '';
   const nCartao = /^\d+$/.test(nCartaoTexto.trim()) ? Number(nCartaoTexto.trim()) : 0;
-  const nCartaoValido = nCartao >= MIN_PARCELAS_DO_CARTAO && nCartao <= MAX_PARCELAS_DO_CARTAO;
+  const nCartaoValido = nCartao >= MIN_PARCELAS_DO_CARTAO && nCartao <= maxParcelas;
   /* a 1ª fatura SUGERIDA: o dia mais frequente do cartão nos últimos 12 meses, no mês seguinte à emissão (sem histórico: vazio) */
   useEffect(() => {
     let vivo = true;
@@ -264,20 +269,21 @@ export function NotaFiscalDialog({
     void diasDoCartao(cartaoId).then((d) => { if (vivo) setDiaSugerido(diaMaisFrequente(d)); }, () => { if (vivo) setDiaSugerido(null); });
     return () => { vivo = false; };
   }, [cartaoId]);
-  const primeiraSugerida = diaSugerido ? primeiraFatura(n.emissao, diaSugerido) : '';
+  /* a sugestão da 1ª fatura é só do cartão (no parcelado o 1º vencimento é digitado) */
+  const primeiraSugerida = como === 'cartao' && diaSugerido ? primeiraFatura(n.emissao, diaSugerido) : '';
   useEffect(() => { if (!primeiraEditada) setPrimeira(primeiraSugerida); }, [primeiraSugerida, primeiraEditada]);
   const sugeridaAtiva = !!primeiraSugerida && !primeiraEditada && primeira === primeiraSugerida;
   const mensalDoCartao = useMemo(() => (nCartaoValido && primeira
-    ? parcelasDoMensal(parcelasDoCartao(n.totais.notaCent, nCartao, primeira).map((x) => ({ numero: Number(x.numero), dataVencimento: x.vencimento, valor: x.valorCent / 100 })))
-    : []), [nCartaoValido, primeira, n.totais.notaCent, nCartao]);
+    ? parcelasDoMensal(parcelasDoCartao(n.totais.notaCent, nCartao, primeira, maxParcelas).map((x) => ({ numero: Number(x.numero), dataVencimento: x.vencimento, valor: x.valorCent / 100 })))
+    : []), [nCartaoValido, primeira, n.totais.notaCent, nCartao, maxParcelas]);
   const gradeDoCartao = modoCartao === 'livres' ? livresCartao : mensalDoCartao;
   const parcelasEscolhidas = useMemo(() => gradeDoCartao.map((x, i) => ({ numero: String(i + 1), vencimento: x.vencimento, valorCent: x.valorCent })), [gradeDoCartao]);
-  const doXml = useMemo(() => comPagamento(doXmlLido, como, como === 'cartao' ? parcelasEscolhidas : []), [doXmlLido, como, parcelasEscolhidas]);
+  const doXml = useMemo(() => comPagamento(doXmlLido, como, emGrade ? parcelasEscolhidas : [], formaDoParcelado), [doXmlLido, como, emGrade, parcelasEscolhidas, formaDoParcelado]);
   const trocarModoDoCartao = (m: ModoDasParcelas) => {
     if (m === 'livres') { setLivresCartao(mensalDoCartao); setBaseLivresCartao(mensalDoCartao); } else { setLivresCartao([]); setBaseLivresCartao(null); }
     setModoCartao(m);
   };
-  const motivoDoCartao = como !== 'cartao' || modoCartao !== 'livres' ? null
+  const motivoDoCartao = !emGrade || modoCartao !== 'livres' ? null
     : livresCartao.length < MIN_PARCELAS_DO_CARTAO ? 'o parcelado pede ao menos duas parcelas' : motivoNaoSalva(livresCartao, n.totais.notaCent, 'a nota');
   const p = doXml.proposta;
   /* NOTA-FORNECEDOR-DUPLICA-01 — a resolucao e' refeita com a lista DE AGORA (a da leitura pode estar velha: o cadastro criado depois
@@ -384,7 +390,12 @@ export function NotaFiscalDialog({
   }, [clienteId, doXml.ocorrencias.length, parcelasDaBusca, p.numeroDocumento, n.numero, n.chave, n.emitente.documento, n.emitente.nome, n.emitente.fantasia, receitaNome, tentativa, partindoDe]);
   /* D — a nota que so' tem lancamento CANCELADO nao esta' lancada: o rodape so' diz quantos */
   const canceladosSo = useMemo(() => (achados && !achados.some((l) => !l.cancelado) ? canceladosDaNota(achados) : []), [achados]);
-  const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
+  /* NOTA-PAGTO-PARCELADO-01 P1 — os lançamentos que o operador ESCOLHEU À MÃO ("Outros lançamentos do fornecedor") entram nos achados como
+     'escolhido' e seguem o caminho de sempre (Parcelas × sistema, a ação Vincular, o Aplicar) */
+  const [escolhidos, setEscolhidos] = useState<LancamentoJaLancado[]>([]);
+  const [vendoOutros, setVendoOutros] = useState(false);
+  const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, comEscolhidos(achados, escolhidos), n.totais.notaCent) : null),
+    [achados, escolhidos, parcelasDaBusca, n.totais.notaCent]);
   /* Caso 3 (Gabriel 29/10 11:33, a M2 NF 14.222) — a nota À VISTA no CARTÃO em N (1 duplicata; as achadas valem nota ÷ N): N é o da divisão
      (nunca o número achado); a POSIÇÃO de cada uma pela descrição ou pela ordem das faturas — discordam, a tela PERGUNTA (`leituraDoCartao`) e
      nada se grava antes; as que faltam nascem nas faturas (o mesmo dia, mês a mês). */
@@ -576,6 +587,8 @@ export function NotaFiscalDialog({
     const naCompra = juntarAgora ? ` · entra na compra como ${x.rotulo}` : '';
     if (x.situacao === 'so_na_nota') {
       const nF = numeroDaFalta(x);
+      /* NOTA-PAGTO-PARCELADO-01 P1 — com lançamentos escolhidos pelo operador nada "falta": a parcela da nota não nasce (seria em dobro) */
+      if (nF === null && escolhidos.length > 0) return { texto: 'não é criada: os lançamentos escolhidos pagam a nota', curto: 'não é criada', cadeado: false };
       if (nF !== null && acaoDaFalta(nF) === 'deixar') return { texto: 'não é criada', curto: 'não é criada', cadeado: false };
       if (nF !== null && acaoDaFalta(nF) === 'jaPaga') return { texto: 'já paga no lançamento acima: não cria nada', curto: 'não cria nada', cadeado: false };
       /* NOTA-ATUALIZA-PREVISTO-01 — a parcela que vai para o previsto não nasce */
@@ -749,7 +762,11 @@ export function NotaFiscalDialog({
   const acaoDaIe: 'gravar' | 'diverge' | null = !fazendaId || !ieDaNota || ieDaFazenda === null ? null
     : ieDaFazenda === '' ? 'gravar' : ieDaFazenda !== ieDaNota ? 'diverge' : null;
   const nomeDaFazenda = fazendas.find((f) => f.id === fazendaId)?.nome ?? 'A fazenda';
-  const remessa = fraseDaRemessa(n);
+  /* NOTA-AVULSA-890-01 + NOTA-PAGTO-PARCELADO-01 P3 — o aviso da natureza: "não é compra" (conserto, retorno, simples faturamento…) em
+     DESTAQUE (vermelho claro), ou a remessa de entrega futura (âmbar); nunca bloqueia */
+  const avisoNatureza = avisoDaNatureza(n);
+  const remessa = avisoNatureza?.frase ?? null;
+  const semCompra = !!avisoNatureza?.semCompra;
   const somaItens = (itensDoXml ?? n.itens).reduce((s, i) => s + i.valorCent, 0);
 
   const faltas: string[] = [];
@@ -760,11 +777,12 @@ export function NotaFiscalDialog({
   if (jaLancada && caminho !== 'criar' && criarFaltam && faltamQueNascem.length > 0 && como !== 'cartao' && (!contaId || contaId === '__none__')) faltas.push('conta');
   if (lavoura && !safraId) faltas.push('safra');
   if (lavoura && cultura === null) faltas.push('cultura');
-  if (como !== 'cartao' && !cabeAqui && !vencimento) faltas.push('vencimento');
-  if (como === 'cartao') {
-    if (!cartaoId) faltas.push('cartão');
-    if (modoCartao === 'mensal' && !nCartaoValido) faltas.push(`nº de parcelas (${MIN_PARCELAS_DO_CARTAO} a ${MAX_PARCELAS_DO_CARTAO})`);
-    if (modoCartao === 'mensal' && !primeira) faltas.push('1ª fatura');
+  if (!emGrade && !cabeAqui && !vencimento) faltas.push('vencimento');
+  if (emGrade) {
+    if (como === 'cartao' && !cartaoId) faltas.push('cartão');
+    if (como === 'parcelado' && !formaDoParcelado) faltas.push('forma de pagamento');
+    if (modoCartao === 'mensal' && !nCartaoValido) faltas.push(`nº de parcelas (${MIN_PARCELAS_DO_CARTAO} a ${maxParcelas})`);
+    if (modoCartao === 'mensal' && !primeira) faltas.push(como === 'cartao' ? '1ª fatura' : '1º vencimento');
     if (motivoDoCartao) faltas.push(motivoDoCartao);
   }
   if (pelaChave && !digitado.emissao) faltas.push('emissão');
@@ -1203,7 +1221,7 @@ export function NotaFiscalDialog({
                 `Destinatário: ${n.destinatario.nome ? caixaDeTitulo(n.destinatario.nome) : '—'}${clienteNome ? ` · ${clienteNome}` : ''}`,
                 `Dados adicionais: ${n.informacoesComplementares || '—'}`].join('\n')}>
               <TituloDoBloco nome="Nota" acao={<span className="flex items-center gap-1">
-                {remessa && <span className={CHIP_AVISO} title={remessa} data-testid="nota-aviso-remessa">remessa</span>}
+                {remessa && <span className={semCompra ? CHIP_ERRO : CHIP_AVISO} title={remessa} data-testid="nota-aviso-remessa">{semCompra ? 'não é compra' : 'remessa'}</span>}
                 <span className={pelaChave ? CHIP_AVISO : divergencias.length ? CHIP_ERRO : CHIP_OK} data-testid="nota-chave"
                   title={pelaChave ? ROTULO_PELA_CHAVE : fraseDaChave(divergencias, avulsa)}>{pelaChave ? 'pela chave' : divergencias.length ? 'chave diverge' : 'chave confere'}</span>
               </span>} />
@@ -1328,7 +1346,8 @@ export function NotaFiscalDialog({
                 {/* NOTA-AVULSA-890-01 — UMA LINHA RESERVADA (nada se desloca de uma nota para outra): os dados adicionais da nota; na remessa
                     de entrega futura, o aviso (ambar, nunca bloqueio) */}
                 {remessa ? (
-                  <div className="col-span-full flex h-[16px] min-w-0 items-center rounded-sm bg-amber-50 px-1 text-[10px] text-amber-900" data-testid="nota-aviso-remessa" title={remessa}>
+                  <div className={cn('col-span-full flex h-[16px] min-w-0 items-center rounded-sm px-1 text-[10px]', semCompra ? 'bg-red-50 font-semibold text-red-800' : 'bg-amber-50 text-amber-900')}
+                    data-testid="nota-aviso-remessa" data-sem-compra={semCompra ? '' : undefined} title={remessa}>
                     <span className="min-w-0 uma-linha-que-rola">{remessa}</span>
                   </div>
                 ) : (
@@ -1436,6 +1455,16 @@ export function NotaFiscalDialog({
                 {/* Mock da nota já lançada (29/10) — "PARCELAS × SISTEMA": cada parcela da NOTA ao lado do que está no SISTEMA HOJE (as passadas pagas/
                     conciliadas inclusive) e O QUE ACONTECE com ela — a Ação (escolha na linha) e o Efeito; os 3 cartões de caminho saíram. A diferença
                     da nota em vermelho; a parecida (achada só pelo valor) em âmbar. O quadro rola por dentro (de lado, na janela estreita). */}
+                {/* NOTA-PAGTO-PARCELADO-01 P1 — a nota paga em VÁRIOS lançamentos soltos (110.000 + 4 × 25.000): o operador junta os outros do
+                    mesmo fornecedor (todas as filiais) — linha de altura fixa, o botão à direita */}
+                <div className="mb-1 flex h-[22px] shrink-0 items-center gap-2 text-[10px]" data-testid="nota-outros-barra">
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground" title="A nota foi paga em vários lançamentos? Junte os outros do mesmo fornecedor (todas as filiais) e confira a soma × a nota.">
+                    {escolhidos.length ? `${escolhidos.length} escolhido${escolhidos.length === 1 ? '' : 's'} por você` : 'Paga em vários lançamentos? Junte os outros do fornecedor.'}
+                  </span>
+                  <Button type="button" variant="outline" size="sm" className="h-[20px] shrink-0 px-2 text-[10px]" onClick={() => setVendoOutros(true)} data-testid="nota-outros-abrir">
+                    + Outros lançamentos do fornecedor
+                  </Button>
+                </div>
                 <div className="min-h-0 flex-1 overflow-auto" data-testid="nota-ja-lancada-rolagem">
                   {/* de 1024 para cima a tabela CABE (nada corta): Ação e Efeito curtos (o inteiro no title); estreita, rola de lado */}
                   <table className="w-full min-w-[780px] table-fixed border-collapse">
@@ -1573,41 +1602,57 @@ export function NotaFiscalDialog({
               )
             )) : (
             <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5">
-              <section className={cn(BLOCO, 'min-h-0', como === 'cartao' && 'col-span-2')} data-testid="nota-bloco-parcelas">
+              <section className={cn(BLOCO, 'min-h-0', emGrade && 'col-span-2')} data-testid="nota-bloco-parcelas">
                 {/* P74 — "Como foi pago?" no lugar de "Parcelas da nota": a escolha no título; o conteúdo troca DENTRO do bloco (a altura é a
                     do bloco, nada de fora se desloca) */}
                 {/* o seletor no título: suspenso (cabe em qualquer largura; o segmentado de três opções não cabia na meia coluna a 750px) e LOGO DEPOIS
                     do nome, à esquerda — no cartão o bloco fica mais largo, e na ponta direita o seletor andaria (o título é o do TituloDoBloco) */}
                 <div className="mb-1 flex min-h-[16px] min-w-0 items-center gap-2 border-b border-border/60" data-titulo-do-bloco="">
                   <h3 className="shrink-0 text-[11px] font-semibold leading-[15px] text-foreground">Como foi pago?</h3>
-                  <Select value={como} onValueChange={(v) => { if (v === 'duplicatas' || v === 'avista' || v === 'cartao') setComo(v); }}>
+                  <Select value={como} onValueChange={(v) => { if (v === 'duplicatas' || v === 'avista' || v === 'cartao' || v === 'parcelado') setComo(v); }}>
                     <SelectTrigger className="h-[18px] w-[128px] shrink-0 whitespace-nowrap px-1.5 text-[10px]" data-testid="nota-como-foi-pago" title={como === 'duplicatas' ? `Duplicatas da nota (${nDuplicatasDaNota})` : undefined}>
                       {/* no gatilho, o rótulo curto (largura fixa: nada anda de uma nota para outra); na lista, o nome inteiro */}
-                      <SelectValue>{como === 'duplicatas' ? `Duplicatas (${nDuplicatasDaNota})` : como === 'avista' ? 'À vista' : 'Cartão em N×'}</SelectValue>
+                      <SelectValue>{como === 'duplicatas' ? `Duplicatas (${nDuplicatasDaNota})` : como === 'avista' ? 'À vista' : como === 'parcelado' ? 'Parcelado' : 'Cartão em N×'}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="duplicatas" disabled={nDuplicatasDaNota === 0} title={nDuplicatasDaNota === 0 ? FRASE_NOTA_SEM_DUPLICATAS : undefined}
                         data-testid="nota-como-duplicatas">Duplicatas da nota ({nDuplicatasDaNota})</SelectItem>
                       <SelectItem value="avista" data-testid="nota-como-avista">À vista</SelectItem>
                       <SelectItem value="cartao" data-testid="nota-como-cartao">Cartão em N×</SelectItem>
+                      <SelectItem value="parcelado" data-testid="nota-como-parcelado">Parcelado (boleto, PIX, transf., débito)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                {como === 'cartao' ? (
+                {emGrade ? (
                   /* P74 — no cartão o bloco ocupa também o lugar dos Itens (a grade de sempre não cabe em meia coluna): os campos à esquerda, a
                      grade (Igual todo mês / Parcelas livres) à direita, na altura do bloco */
                   <div className="grid min-h-0 flex-1 gap-2" style={{ gridTemplateColumns: '176px minmax(0, 1fr)' }} data-testid="nota-cartao">
                     <div className="campos-uma-linha flex min-w-0 flex-col gap-1">
+                      {como === 'cartao' ? (
                       <div className="min-w-0">
                         <span className={cn(REGUA_ROTULO, !cartaoId && 'text-destructive')}>Cartão</span>
                         <ContaBancariaSelect value={cartaoId || '__none__'} onValueChange={(v) => { setCartaoId(v === '__none__' ? '' : v); setPrimeiraEditada(false); }}
                           contas={cartoes} placeholder="Selecione" prependItems={[{ value: '__none__', label: 'Selecione o cartão' }]}
                           className={cn('h-[22px] text-[10.5px]', !cartaoId && 'border-destructive')} />
                       </div>
+                      ) : (
+                      /* NOTA-PAGTO-PARCELADO-01 — no parcelado, o 1º campo é a FORMA (a conta é a do bloco Lançamento, a normal) */
+                      <div className="min-w-0">
+                        <span className={cn(REGUA_ROTULO, !formaDoParcelado && 'text-destructive')}>Forma</span>
+                        <Select value={formaDoParcelado || undefined} onValueChange={setFormaDoParcelado}>
+                          <SelectTrigger className={cn('h-[22px] px-2 text-[10.5px]', !formaDoParcelado && 'border-destructive')} data-testid="nota-parcelado-forma">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FORMAS_DO_PARCELADO.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      )}
                       <div className="min-w-0">
                         <span className={cn(REGUA_ROTULO, modoCartao === 'mensal' && !nCartaoValido && 'text-destructive')}>Parcelas</span>
-                        <Input value={modoCartao === 'livres' ? String(livresCartao.length) : nCartaoTexto} onChange={(e) => setNCartaoTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                          disabled={modoCartao === 'livres'} inputMode="numeric" placeholder={`${MIN_PARCELAS_DO_CARTAO} a ${MAX_PARCELAS_DO_CARTAO}`} data-testid="nota-cartao-parcelas"
+                        <Input value={modoCartao === 'livres' ? String(livresCartao.length) : nCartaoTexto} onChange={(e) => setNCartaoTexto(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                          disabled={modoCartao === 'livres'} inputMode="numeric" placeholder={`${MIN_PARCELAS_DO_CARTAO} a ${maxParcelas}`} data-testid="nota-cartao-parcelas"
                           title={modoCartao === 'livres' ? 'Em Parcelas livres, acrescente ou retire na grade.' : undefined}
                           className={cn('h-[22px] px-2 text-[10.5px] tabular-nums', modoCartao === 'mensal' && !nCartaoValido && 'border-destructive')} />
                       </div>
@@ -1616,7 +1661,7 @@ export function NotaFiscalDialog({
                         <span className={cn('mb-0.5 block h-[26px] overflow-hidden whitespace-normal break-words text-[9.5px] font-normal leading-[13px] text-muted-foreground',
                           sugeridaAtiva && 'text-amber-800', modoCartao === 'mensal' && !primeira && 'text-destructive')}
                           data-testid="nota-cartao-rotulo-fatura" title={sugeridaAtiva ? 'O dia mais frequente das faturas deste cartão nos últimos 12 meses, no mês seguinte à emissão.' : undefined}>
-                          {sugeridaAtiva && diaSugerido ? rotuloDaSugestao(nomeDoCartao, diaSugerido) : '1ª fatura'}</span>
+                          {sugeridaAtiva && diaSugerido ? rotuloDaSugestao(nomeDoCartao, diaSugerido) : como === 'parcelado' ? '1º vencimento' : '1ª fatura'}</span>
                         <DatePicker value={modoCartao === 'livres' ? (livresCartao[0]?.vencimento ?? '') : primeira} disabled={modoCartao === 'livres'} data-testid="nota-cartao-fatura"
                           onChange={(v) => { setPrimeira(v); setPrimeiraEditada(true); }}
                           className={cn('h-[22px] text-[10.5px]', sugeridaAtiva && 'border-amber-400 bg-amber-50', modoCartao === 'mensal' && !primeira && 'border-destructive')} />
@@ -1656,7 +1701,7 @@ export function NotaFiscalDialog({
                 </div>
                 )}
               </section>
-              {como !== 'cartao' && quadroDosItens}
+              {!emGrade && quadroDosItens}
             </div>
             )}
 
@@ -1747,11 +1792,11 @@ export function NotaFiscalDialog({
                 </div>
                 </>)}
                 <div className="col-span-2 min-w-0" data-testid="nota-vencimento">
-                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', como !== 'cartao' && !cabeAqui && semDuplicata && 'text-amber-800')}>
-                    {como === 'cartao' ? 'Vencimento · pelas faturas do cartão' : cabeAqui ? 'Vencimento · pelas parcelas da nota' : semDuplicata ? 'Vencimento · nota sem duplicata: confira o vencimento'
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', !emGrade && !cabeAqui && semDuplicata && 'text-amber-800')}>
+                    {como === 'cartao' ? 'Vencimento · pelas faturas do cartão' : como === 'parcelado' ? 'Vencimento · pelas parcelas' : cabeAqui ? 'Vencimento · pelas parcelas da nota' : semDuplicata ? 'Vencimento · nota sem duplicata: confira o vencimento'
                       : como === 'avista' ? 'Vencimento · à vista' : 'Vencimento · da duplicata'}
                   </span>
-                  {como === 'cartao' && !cabeAqui
+                  {emGrade && !cabeAqui
                     ? <div className="flex h-[22px] items-center rounded-md border bg-muted/40 px-2 text-[10.5px] tabular-nums">—</div>
                     : cabeAqui
                     ? <div className="flex h-[22px] items-center rounded-md border bg-muted/40 px-2 text-[10.5px] tabular-nums">{dataInteira(p.duplicatas[0]?.vencimento)} a {dataInteira(p.duplicatas[nParcelas - 1]?.vencimento)}</div>
@@ -1878,6 +1923,9 @@ export function NotaFiscalDialog({
             <span className="min-w-0 uma-linha-que-rola text-amber-900" data-testid="nota-cartao-falta-posicao">⚠ Diga a posição das parcelas no cartão (aba Parcelas × sistema).</span>
           ) : !bloqueio && !erro && jaLancada && modoJa && estadoDaPrevia?.impedimento ? (
             <span className="min-w-0 uma-linha-que-rola text-destructive" title={estadoDaPrevia.impedimento} data-testid="nota-previa-impede">⚠ {estadoDaPrevia.impedimento}</span>
+          ) : !bloqueio && !erro && semCompra && remessa ? (
+            /* NOTA-PAGTO-PARCELADO-01 P3 — a nota que não é compra: o aviso em DESTAQUE no rodapé (o selo do bloco Nota diz o mesmo); nunca bloqueia */
+            <span className="min-w-0 uma-linha-que-rola font-semibold text-red-700" title={remessa} data-testid="nota-sem-compra-rodape">⚠ {remessa}</span>
           ) : !bloqueio && !erro && jaLancada && !recusaDaCompra && !faltasQueContam.length ? (
             <span className="min-w-0 uma-linha-que-rola font-medium text-amber-900" data-testid="nota-ja-lancada-frase">Nada é gravado antes de você clicar.</span>
           ) : !bloqueio && !erro && !telaJa ? (
@@ -1989,6 +2037,13 @@ export function NotaFiscalDialog({
               action: { label: 'Desfazer', onClick: () => { void desfazerIeDaFazenda(trilha, clienteId).then((e) => (e ? toast.error(e) : toast.success('Desfeito'))); } },
             } : undefined);
           }} />
+      )}
+
+      {vendoOutros && (
+        <OutrosLancamentosDaNota clienteId={clienteId} emitenteDocumento={n.emitente.documento} emitenteNome={caixaDeTitulo(n.emitente.nome)} notaCent={n.totais.notaCent}
+          periodo={periodoPadrao(n.emissao, p.duplicatas[p.duplicatas.length - 1]?.vencimento ?? null)} jaNaLista={jaLancada?.alvos ?? []}
+          onJuntar={(novos) => { setEscolhidos((e) => [...e, ...novos.filter((x) => !e.some((y) => y.id === x.id))]); setVendoOutros(false); }}
+          onFechar={() => setVendoOutros(false)} />
       )}
 
       {/* NOTA-JA-LANCADA-01 — "Criar mesmo assim": e' outra compra; o motivo fica na observacao do que nasce */}

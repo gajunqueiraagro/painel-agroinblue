@@ -45,6 +45,13 @@ export interface Previa {
 
 type Gesto = Record<string, unknown>;
 
+/** O polígono que o "desenhar" cria; com o pasto pedido pela ficha ("Desenhar no mapa", PASTO-CADASTRO-GEO-01 P2) ele já nasce ligado. */
+export function criarDoDesenho(geojson: unknown, nome: string, pastoId: string | null): Record<string, unknown> {
+  const criar: Record<string, unknown> = { geojson, nome_original: nome.trim() };
+  if (pastoId) criar.pasto_id = pastoId;
+  return criar;
+}
+
 /** O que a função do banco devolve como frase pronta (22023/40001/P0002 já vêm em português); o resto vira frase genérica. */
 function fraseDoErro(e: { code?: string; message?: string } | null): string {
   if (!e) return 'Não consegui gravar o polígono.';
@@ -156,6 +163,9 @@ export function useEdicaoDoPoligono(args: {
   const [ficaComDe, setFicaComDe] = useState<string>('');
   const [motivo, setMotivo] = useState('');
   const [destinoDoPasto, setDestinoDoPasto] = useState<string | null>(null);
+  /* PASTO-CADASTRO-GEO-01 P2: o desenho novo pedido pela ficha do pasto ("Desenhar no mapa") já nasce LIGADO a ele (criar.pasto_id;
+     o gravador confere que o pasto é da fazenda) */
+  const [pastoDoDesenho, setPastoDoDesenho] = useState<string | null>(null);
   const [nomeNovo, setNomeNovo] = useState('');
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -223,7 +233,7 @@ export function useEdicaoDoPoligono(args: {
   const encerrar = useCallback(() => {
     limparCamada();
     setModo(null); setAlvo(null); setGeometriaNova(null); setDivisao(null); setUnidos([]); setFicaComDe('');
-    setOriginalFicaCom('a'); setPastoVaiParaNova(false); setMotivo(''); setDestinoDoPasto(null); setNomeNovo(''); setPrevia(null);
+    setOriginalFicaCom('a'); setPastoVaiParaNova(false); setMotivo(''); setDestinoDoPasto(null); setPastoDoDesenho(null); setNomeNovo(''); setPrevia(null);
     setErro(null); setOperacoes([]); setRecortarEstado(false); recortarDecidido.current = false; setMoverLinha(false); setLinhaAberta(false);
     passosRef.current = []; setNPassos(0); editadoRef.current = null; depoisDoUltimoRef.current = null; acrescentarRef.current = null;
     setPontosDoDesenho([]); setCursorDoDesenho(null); setTemRascunho(false); setConfirmarCancelar(false); desenhoRef.current = null;
@@ -889,12 +899,12 @@ export function useEdicaoDoPoligono(args: {
     }
     if (modo === 'desenhar' && geometriaNova) {
       if (afetados.erro) return null;
-      const g: Gesto = { acao: 'desenhar', criar: [{ geojson: geometriaNova, nome_original: nomeNovo.trim() }] };
+      const g: Gesto = { acao: 'desenhar', criar: [criarDoDesenho(geometriaNova, nomeNovo, pastoDoDesenho)] };
       if (juntos.length) g.alterar = juntos;
       return { g, antes: 0, depois: areaEmHectares(geometriaNova) };
     }
     return null;
-  }, [modo, alvo, geometriaNova, divisao, originalFicaCom, pastoVaiParaNova, nomeNovo, membrosDaUniao, ficaComDe, somaDaUniaoHa, geometrias, motivo, destinoDoPasto, afetados, cruzamentos]);
+  }, [modo, alvo, geometriaNova, divisao, originalFicaCom, pastoVaiParaNova, nomeNovo, membrosDaUniao, ficaComDe, somaDaUniaoHa, geometrias, motivo, destinoDoPasto, pastoDoDesenho, afetados, cruzamentos]);
 
   /** A versão de cada polígono que entra no gesto sem ser o alvo (vizinho do unir, destino do apagar) é lida na hora. */
   const comVersoesFrescas = useCallback(async (g: Gesto): Promise<Gesto | null> => {
@@ -1010,7 +1020,7 @@ export function useEdicaoDoPoligono(args: {
     modo, alvo, iniciar, cancelar: encerrar, medidas, avisos, gesto, previa, setPrevia, prever, gravar, gravando, erro, setErro,
     divisao, originalFicaCom, setOriginalFicaCom, pastoVaiParaNova, setPastoVaiParaNova,
     candidatosAUnir, unidos, alternarNaUniao, iniciarUniao, membrosDaUniao, ficaComDe, setFicaComDe, somaDaUniaoHa,
-    motivo, setMotivo, destinoDoPasto, setDestinoDoPasto, nomeNovo, setNomeNovo,
+    motivo, setMotivo, destinoDoPasto, setDestinoDoPasto, nomeNovo, setNomeNovo, pastoDoDesenho, setPastoDoDesenho,
     ultimoGesto, desfazer, apagarVarios,
     encaixe, setEncaixe, divisaJunto, setDivisaJunto, recortar, setRecortar, afetados: afetados.lista, erroDoRecorte: afetados.erro,
     reenquadrar, desfazerPasso, podeDesfazerPasso: nPassos > 0, desenhando, temRascunho,

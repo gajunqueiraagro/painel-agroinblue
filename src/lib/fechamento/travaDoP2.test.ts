@@ -102,7 +102,9 @@ describe('FECH-REVALIDAR-AVISO-01 — a trava das duas pontas', () => {
   it('a Visão Geral lê a pendência pelo leitor daqui e o item leva ao Valor do Rebanho da fazenda', () => {
     const vg = fonte('src/v2/pages/V2Home.tsx');
     expect(vg).toMatch(/useValorRebanhoARevalidar\(idsARevalidar\)/);
-    expect(vg).toMatch(/aRevalidar\.pendentes\.map/);
+    /* VISAO-GERAL-04 V3 (Gabriel 08/11): a pendência de mês anterior fica com o mês dela; a de mês posterior ao selecionado nunca aparece */
+    expect(vg).toMatch(/const revalidarDoMes = aRevalidar\.pendentes\.filter\(r => r\.anoMes <= anoMesVG\)/);
+    expect(vg).toMatch(/revalidarDoMes\.map/);
     expect(vg).toMatch(/onIrPara\?\.\('valor-rebanho', r\.fazendaId\)/);
   });
 });

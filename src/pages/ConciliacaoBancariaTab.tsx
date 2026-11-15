@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { ThOrdenavel } from '@/components/ui/th-ordenavel';
+import { ordenarPorColuna, type ColunaOrdenavel, type OrdemTabela } from '@/hooks/useOrdenacaoTabela';
 import { Segmentado } from '@/components/ui/segmentado';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -224,6 +226,9 @@ function sortContas(contas: ContaRef[]): ContaRef[] {
 }
 
 function getContaLabel(c: ContaRef): string { return c.nome_exibicao || c.nome_conta; }
+
+/** CONC-ORDENAR-01 — as colunas que ordenam "Saldos por conta"; `padrao` = a ordem do cadastro (nenhuma coluna ativa) */
+type ColunaDosSaldos = 'padrao' | 'conta' | 'sistema' | 'extrato' | 'diferenca';
 
 function classifyLanc(l: LancamentoResumo, contaId: string): 'entrada'|'saida'|'transf_entrada'|'transf_saida' {
   const t = (l.tipo_operacao||'').toLowerCase().replace(/[\s\-–—]/g,'');
@@ -782,9 +787,24 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      todo tipo, com o rótulo e a ordem que o dropdown do Importar Banco já usa.
      ⚠ O SUBTOTAL É A LINHA 'tipo' DO DONO (PR-CONC-SALDO-UMA-REGUA-02), com a MESMA chave de `grupoDaConta`; a tela
      não soma. Sem linha do dono para o grupo, o subtotal fica em "—". */
+  const [ordemSaldos, setOrdemSaldos] = useState<OrdemTabela<ColunaDosSaldos>>({ coluna: 'padrao', direcao: 'asc' });
   const gruposSaldos = agruparContasPorTipo(
     contasVisiveis.map(c => ({ ...c, tipo_conta: c.linha.tipo_conta ?? c.conta.tipo_conta, label: getContaLabel(c.conta) })),
   ).map(g => ({ ...g, subtotal: resumo?.find(l => l.nivel === 'tipo' && l.tipo_conta === g.chave) ?? null }));
+  /* CONC-ORDENAR-01 (regra soberana de 29/10, gate check-ui-ordenar): Conta, Sistema, Extrato e Diferença ordenam as contas DENTRO de cada
+     grupo (o Total e as faixas dos grupos ficam onde estão). Sem clique, a ordem é a de sempre (a do cadastro, `agruparContasPorTipo`). */
+  type ContaDoGrupo = (typeof gruposSaldos)[number]['contas'][number];
+  const colunasDosSaldos: ColunaOrdenavel<ContaDoGrupo, ColunaDosSaldos>[] = [
+    { coluna: 'conta', tipo: 'texto', valor: c => c.label },
+    { coluna: 'sistema', tipo: 'numero', valor: c => saldosDaLinha(c.linha).saldo_sistema },
+    { coluna: 'extrato', tipo: 'numero', valor: c => saldosDaLinha(c.linha).saldo_extrato },
+    { coluna: 'diferenca', tipo: 'numero', valor: c => saldosDaLinha(c.linha).diferenca },
+  ];
+  const ordenarSaldos = (coluna: ColunaDosSaldos) => setOrdemSaldos(atual => (atual.coluna === coluna
+    ? { coluna, direcao: atual.direcao === 'asc' ? 'desc' : 'asc' }
+    : { coluna, direcao: coluna === 'conta' ? 'asc' : 'desc' }));
+  const contasNaOrdem = (contasDoGrupo: readonly ContaDoGrupo[]) =>
+    ordenarPorColuna(contasDoGrupo, colunasDosSaldos.find(c => c.coluna === ordemSaldos.coluna), ordemSaldos.direcao);
 
   /* A diferença do resumo — `null` quando não há saldo de extrato. Ausência é
      traço, nunca "confere". "Todas" compara o total do extrato com o do sistema,
@@ -1322,13 +1342,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         OPACO em duas camadas; a régua da casa (22px, 9,5/500). Cada célula leva 1px de navy para cada lado (a emenda
                         de subpixel, ver `TH_SALDOS`). */}
                     <tr className="bg-primary bg-[linear-gradient(hsl(var(--primary-foreground)/0.10),hsl(var(--primary-foreground)/0.10))]">
-                      <th className={`${TH_SALDOS} pl-2 pr-2 text-left truncate`} title="Conta">Conta</th>
+                      <ThOrdenavel coluna="conta" rotulo="Conta" ordem={ordemSaldos} onOrdenar={ordenarSaldos} className={`${TH_SALDOS} pl-2 pr-2`} />
                       {/* P141 — Data e Arquivos sem rótulo, como no mock: o "30/09" e os selos OFX/PDF se explicam sozinhos */}
                       <th className={TH_SALDOS} aria-label="Data do saldo do extrato" />
                       <th className={TH_SALDOS} aria-label="Arquivos do extrato" />
-                      <th className={`${TH_SALDOS} px-1 text-right`}>Sistema</th>
-                      <th className={`${TH_SALDOS} px-1 text-right`}>Extrato</th>
-                      <th className={`${TH_SALDOS_DIF} px-1 text-right`}>Diferença</th>
+                      <ThOrdenavel coluna="sistema" rotulo="Sistema" ordem={ordemSaldos} onOrdenar={ordenarSaldos} className={`${TH_SALDOS} px-1`} alinhaDireita />
+                      <ThOrdenavel coluna="extrato" rotulo="Extrato" ordem={ordemSaldos} onOrdenar={ordenarSaldos} className={`${TH_SALDOS} px-1`} alinhaDireita />
+                      <ThOrdenavel coluna="diferenca" rotulo="Diferença" ordem={ordemSaldos} onOrdenar={ordenarSaldos} className={`${TH_SALDOS_DIF} px-1`} alinhaDireita />
                       <th className={TH_SALDOS} />
                     </tr>
                     {/* ⚠ O TOTAL E' UMA FAIXA NAVY ESCURA, TEXTO BRANCO — CONC-SALDOS-LAYOUT-02. Negativo e "confere" nos dois tons
@@ -1384,7 +1404,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       </tr>
                         );
                       })()}
-                      {g.contas.map(s=>(
+                      {contasNaOrdem(g.contas).map(s=>(
                       <SaldoContaRow key={s.conta.id} data={s}
                         isActive={selectedConta===s.conta.id}
                         isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
@@ -1432,7 +1452,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   <span className="text-[10px] font-medium whitespace-nowrap">Resumo do mês</span>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto" data-testid="rolagem-resumo">
-                <table className="w-full border-collapse" style={{fontSize:'10px', tableLayout:'fixed'}}>
+                {/* CONC-ORDENAR-01 — EXCEÇÃO DECLARADA ao check-ui-ordenar (proposta ao Chat 13/11): o Resumo é a conta do mês em linhas FIXAS
+                    (saldo inicial → entradas → saídas → saldo final); ordenar por valor desmontaria a conta */}
+                <table className="w-full border-collapse" style={{fontSize:'10px', tableLayout:'fixed'}}
+                  data-ordenar-excecao="Resumo do mês: a conta do mês em linhas fixas (saldo inicial → entradas → saídas → saldo final)">
                   <colgroup><col /><col style={{width:`${LARGURA_VALOR_RESUMO}px`}} /></colgroup>
                   <thead className="sticky top-0 z-[9] bg-card">
                     <tr className="bg-primary bg-[linear-gradient(hsl(var(--primary-foreground)/0.10),hsl(var(--primary-foreground)/0.10))]">

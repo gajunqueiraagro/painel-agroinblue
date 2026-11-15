@@ -144,20 +144,55 @@ describe('CUSTEIO-HASH-01 — o topo numa linha, o botão e a lista compactos, e
     expect(contar(linha, 'shrink-0')).toBe(3);
   });
 
-  it('o botão do lote tem 22px / 10px, e a lista tem linha de 18 + 14px com caixa de 12px e botões de 16px a 9,5px', () => {
+  it('o botão do lote tem 22px / 10px; CONC-CUSTEIO-FONTE-01: a lista é a RÉGUA (linha 19px, colunas, cabeçalho preso com o mesmo colgroup)', () => {
     expect(contar(TELA, '<Button size="sm" className="h-[22px] text-[10px]"')).toBe(1);
     expect(TELA).not.toContain('className="h-7 text-[11px]"');
-    const item = trecho(TELA, 'data-testid="custeio-item"', 'Sem memória para este item ainda');
-    expect(item).toContain('flex h-[18px] items-center gap-2 leading-[18px]');
-    expect(item).toContain('flex h-[14px] min-w-0 items-center gap-1.5 text-[10px] leading-[14px]');
-    expect(contar(item, 'h-3 w-3 shrink-0')).toBe(2);
-    expect(item).not.toContain('h-3.5');
+    const item = trecho(TELA, 'data-testid="custeio-item"', '</tr>');
+    // uma linha por item, cada dado na sua célula da régua: ☐ · descrição · grupo › subgrupo · conta · valor · ação
+    expect(contar(item, '<td className=')).toBe(6);
+    expect(item).toContain('<td className={TD_REGUA_NUM}>{brl(it.valor)}</td>');
+    // a Descrição nunca corta: quebra (a linha cresce), sem "…" (Chat 12/11 08:55)
+    const desc = trecho(item, '<td className={cn(TD_REGUA, \'h-auto', '</td>');
+    expect(desc).toContain('whitespace-normal break-words');
+    expect(desc).not.toContain('truncate');
+    expect(item).not.toContain('text-[12px]');
     expect(contar(item, 'text-[9.5px]')).toBe(2);
-    expect(contar(item, 'h-4 shrink-0')).toBe(2);
-    expect(item).toContain('shrink-0 text-[12px] font-medium tabular-nums');
+    // o cabeçalho é a régua navy dentro do bloco fixo, e o corpo usa o MESMO colgroup
+    const cab = trecho(TELA, 'data-testid="custeio-cabecalho"', '</table>');
+    expect(contar(cab, 'TH_REGUA')).toBe(6);
+    expect(contar(TELA, '<ColunasDoCusteio grupo={larguras.grupo} conta={larguras.conta} />')).toBe(2);
+    expect(TELA.indexOf('data-testid="custeio-cabecalho"')).toBeLessThan(TELA.indexOf('fim do topo fixo'));
     // nada abaixo de 9,5px na linha do item (o detector se prova num tamanho menor)
     expect(item).not.toMatch(/text-\[(?:[0-8](?:\.\d+)?|9(?:\.[0-4]\d*)?)px\]/);
     expect('text-[9px]').toMatch(/text-\[(?:[0-8](?:\.\d+)?|9(?:\.[0-4]\d*)?)px\]/);
+  });
+
+  it('Grupo e Conta pela largura do MAIOR texto (piso e teto); a medida usa o MESMO texto da linha', async () => {
+    const { larguraPeloMaior, textoDaConta, textoDoGrupo } = await import('@/v2/lib/custeio/larguraDasColunas');
+    const medir = (t: string) => t.length * 6;
+    expect(larguraPeloMaior(['AB', 'ABCDEFGHIJKLMNOPQRST'], medir, { piso: 96, teto: 260 })).toBe(132); // 20 × 6 + 12
+    expect(larguraPeloMaior(['AB'], medir, { piso: 96, teto: 260 })).toBe(96);
+    expect(larguraPeloMaior(['A'.repeat(80)], medir, { piso: 96, teto: 260 })).toBe(260);
+    expect(textoDoGrupo({ familia_raw: 'ANIMAIS', subfamilia_raw: 'Sal' })).toBe('ANIMAIS › Sal');
+    expect(textoDaConta(undefined)).toBe('—');
+    expect(textoDaConta({ subcentro: 'Sal mineral', fornecedorNome: 'Fornecedor X' })).toBe('Sal mineral · Fornecedor X');
+    const item = trecho(TELA, 'data-testid="custeio-item"', '</tr>');
+    expect(TELA).toContain('const grupo = textoDoGrupo(it);');
+    expect(TELA).toContain('const conta = textoDaConta(sugestao);');
+    expect(TELA).toContain('larguraPeloMaior((itens ?? []).map(textoDoGrupo), medirA10px');
+    expect(item).toContain('{grupo}');
+    const cols = trecho(TELA, 'function ColunasDoCusteio(', '</colgroup>');
+    expect(cols).toContain('<col style={{ width: grupo }} />');
+    expect(cols).toContain('<col style={{ width: conta }} />');
+    expect(contar(cols, '<col />')).toBe(1); // só a Descrição fica com a sobra
+  });
+
+  it('CONC-CUSTEIO-FONTE-01: a divergência por escopo em colunas (Escopo · Itens · Impresso · Dif.), valores em células próprias', () => {
+    const div = trecho(TELA, 'data-testid="custeio-divergencias"', '</table>');
+    expect(div).toContain('{brl(d.soma_itens)}</td>');
+    expect(div).toContain('{brl(d.subtotal_impresso)}</td>');
+    expect(div).toContain('{brl(d.diferenca)}</td>');
+    expect(TELA).not.toContain('itens ${brl(d.soma_itens)} × impresso');
   });
 
   it('a conferência dos lançados usa o hash do ARQUIVO (com a ocorrência), nunca o hash item a item', () => {

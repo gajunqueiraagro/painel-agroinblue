@@ -12,6 +12,7 @@ import { validarDocumento } from '@/lib/fornecedores/documentoFiscal';
 import { completarPeloEmitente, type CampoDoEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { lerJaLancados, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
+import type { LiberacaoDireta } from '@/lib/financeiro/nfe/notaXLancamento';
 import type { CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { lerResultadoCompletar, type ResultadoCompletar } from '@/lib/financeiro/nfe/notaCompletar';
 
@@ -501,4 +502,69 @@ export async function historicoDaParticipacao(clienteId: string, fornecedorId: s
       return dc ? [{ lancamentoCent: Math.round(Math.abs(Number(l.valor)) * 100), documentoCent: dc }] : [];
     });
   } catch (e) { console.error('historicoDaParticipacao', e); return []; }
+}
+
+/**
+ * NOTA-PAGTO-PARCELADO-01 P1 (Gabriel 11/11, o trator: 110.000 + 4 × 25.000 em PIX soltos que a busca da nota não juntava) — os lançamentos
+ * de SAÍDA do MESMO FORNECEDOR (o CNPJ raiz: todas as filiais) num período, em qualquer status (não cancelados, nunca meta), para o operador
+ * marcar os que pagam a nota. Só leitura, com o cliente; sai no MESMO formato dos achados (`lerJaLancados`). P146: falha = `{ ok: false }`.
+ */
+/** Os cadastros do MESMO CNPJ raiz (os 8 primeiros dígitos: todas as filiais) — gravado formatado ou só dígitos. */
+async function fornecedoresDaRaiz(clienteId: string, documento: string): Promise<Consulta<{ id: string; nome: string; cpf_cnpj: string | null }[]>> {
+  const raiz = soDigitos(documento).slice(0, 8);
+  if (raiz.length < 8) return deu([]);
+  const raizFormatada = `${raiz.slice(0, 2)}.${raiz.slice(2, 5)}.${raiz.slice(5, 8)}`;
+  const f = await supabase.from('financeiro_fornecedores').select('id, nome, cpf_cnpj')
+    .eq('cliente_id', clienteId).or(`cpf_cnpj.like.${raiz}%,cpf_cnpj.like.${raizFormatada}%`);
+  if (f.error) return falhou(f.error);
+  return deu((f.data ?? []).filter((x) => soDigitos(x.cpf_cnpj ?? '').startsWith(raiz)));
+}
+
+export const LIMITE_DE_OUTROS_LANCAMENTOS = 300;
+export async function lancamentosDoFornecedorNoPeriodo(clienteId: string, documentoDoEmitente: string, de: string, ate: string): Promise<Consulta<LancamentoJaLancado[]>> {
+  if (soDigitos(documentoDoEmitente).length < 8 || !de || !ate) return deu([]);
+  try {
+    const f = await fornecedoresDaRaiz(clienteId, documentoDoEmitente);
+    if (f.ok === false) return f;
+    const fornecedores = f.valor;
+    if (!fornecedores.length) return deu([]);
+    const l = await supabase.from('financeiro_lancamentos_v2')
+      .select('id, data_vencimento, data_pagamento, data_competencia, descricao, valor, status_transacao, financiamento_id, numero_documento, conta_bancaria_id, favorecido_id, cancelado, cenario')
+      .eq('cliente_id', clienteId).in('favorecido_id', fornecedores.map((x) => x.id)).eq('cancelado', false).eq('tipo_operacao', '2-Saídas')
+      .gte('data_vencimento', de).lte('data_vencimento', ate).order('data_vencimento', { ascending: true }).limit(LIMITE_DE_OUTROS_LANCAMENTOS);
+    if (l.error) return falhou(l.error);
+    const nome = new Map(fornecedores.map((x) => [x.id, x.nome]));
+    return deu(lerJaLancados((l.data ?? []).filter((x) => x.cenario !== 'meta').map((x) => ({
+      id: x.id, vencimento: x.data_vencimento, pagamento: x.data_pagamento, competencia: x.data_competencia, descricao: x.descricao,
+      valor_cent: Math.round(Math.abs(Number(x.valor)) * 100), status: x.status_transacao, conciliado: x.status_transacao === 'conciliado',
+      financiamento_id: x.financiamento_id, numero_documento: x.numero_documento, conta_bancaria_id: x.conta_bancaria_id,
+      fornecedor_id: x.favorecido_id, fornecedor_nome: x.favorecido_id ? nome.get(x.favorecido_id) ?? null : null, fornecedor_por: 'cnpj',
+      parcelas: [], por: ['escolhido'], cancelado: false,
+    }))));
+  } catch (e) { return falhou(e); }
+}
+
+/**
+ * NOTA-LIGAR-LANCAMENTO-01 P2 — as liberações "direto ao fornecedor" (não canceladas) de contratos do cliente pagas a QUALQUER filial do
+ * CNPJ raiz da nota, com o nº do contrato: o quadro Nota × lançamento diz "paga pela liberação do contrato X". Só leitura.
+ */
+export async function liberacoesDiretasDoFornecedor(clienteId: string, documentoDoEmitente: string): Promise<Consulta<LiberacaoDireta[]>> {
+  if (soDigitos(documentoDoEmitente).length < 8) return deu([]);
+  try {
+    const f = await fornecedoresDaRaiz(clienteId, documentoDoEmitente);
+    if (f.ok === false) return f;
+    if (!f.valor.length) return deu([]);
+    const l = await supabase.from('financiamento_liberacoes').select('id, data, valor, financiamento_id')
+      .eq('cliente_id', clienteId).eq('forma', 'fornecedor').is('cancelado_em', null).in('fornecedor_id', f.valor.map((x) => x.id));
+    if (l.error) return falhou(l.error);
+    const rows = l.data ?? [];
+    const ids = [...new Set(rows.map((r) => r.financiamento_id))];
+    const contratos = new Map<string, string | null>();
+    if (ids.length) {
+      const c = await supabase.from('financiamentos').select('id, numero_contrato').in('id', ids);
+      if (c.error) return falhou(c.error);
+      for (const x of c.data ?? []) contratos.set(x.id, x.numero_contrato);
+    }
+    return deu(rows.map((r) => ({ id: r.id, data: r.data, valorCent: Math.round(Math.abs(Number(r.valor)) * 100), contrato: contratos.get(r.financiamento_id) ?? null })));
+  } catch (e) { return falhou(e); }
 }

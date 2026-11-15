@@ -77,7 +77,7 @@ export function AreasDosPastos({ fazendaId, fazendaCodigo, podeEditar, api = API
   const todos = marcaveis.length > 0 && marcaveis.every((l) => marcados.has(l.pastoId));
   const alternarUm = (id: string) => setMarcados((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const alternarTodos = () => setMarcados(todos ? new Set() : new Set(marcaveis.map((l) => l.pastoId)));
-  const quadro = useAlturaAteOFim({ folga: 96, minimo: 120 });
+  const quadro = useAlturaAteOFim({ folga: 28, minimo: 120 }); /* o pb-3 da PastosTab + o pé do pai (PASTO-CADASTRO-GEO-01: medido, a página não rola) */
   const depoisDeGravar = () => { setUsando(false); setDesfazendo(null); setMarcados(new Set()); void ler(); aoGravar(); };
 
   return (

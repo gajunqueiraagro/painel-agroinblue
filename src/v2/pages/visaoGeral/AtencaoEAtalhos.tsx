@@ -5,6 +5,7 @@
  * VISAO-GERAL-03: o quadro é o `Card` da Geo pastos › Global (título 11 px); os itens a 11 px.
  * VISAO-GERAL-04 (Gabriel 04/11 07:04): os Atalhos saíram da Visão Geral (o menu lateral já faz isso); o quadro de atenção mora na coluna
  * da direita e estica até o fim dela (`className`).
+ * VISAO-GERAL-04 (mock aprovado 08/11): o quadro fica ao lado do "Mapa das fazendas", com o mês no cabeçalho.
  */
 import { Card } from '@/components/mapa-geo/GeoPastosGlobal';
 
@@ -17,9 +18,14 @@ export interface ItemAtencao {
   onIr: () => void;
 }
 
-export function PrecisaDeAtencao({ itens, carregando, className }: { itens: readonly ItemAtencao[]; carregando?: boolean; className?: string }) {
+export function PrecisaDeAtencao({ itens, carregando, className, mes }: {
+  itens: readonly ItemAtencao[]; carregando?: boolean; className?: string;
+  /** VISAO-GERAL-04 (V3) — o mês da régua no cabeçalho ("set/26"): a lista segue esse mês */
+  mes?: string;
+}) {
   return (
-    <Card titulo="Precisa de atenção" testid="vg-atencao" className={className}>
+    <Card titulo="Precisa de atenção" testid="vg-atencao" className={className}
+      extra={mes ? <span className="ml-auto whitespace-nowrap text-[9.5px] text-muted-foreground" data-testid="vg-atencao-mes">{mes}</span> : undefined}>
       <ul className="space-y-1 px-2.5 pb-2.5">
         {carregando && itens.length === 0 ? (
           <li className="text-[11px] text-muted-foreground">Conferindo…</li>

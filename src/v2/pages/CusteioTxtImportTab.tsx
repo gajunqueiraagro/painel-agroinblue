@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hashesDoCusteio } from '@/v2/lib/custeio/hashItemCusteio';
+import { larguraPeloMaior, medirA10px, textoDaConta, textoDoGrupo } from '@/v2/lib/custeio/larguraDasColunas';
 import {
   sugerirAliasDoItem,
   sugerirFornecedor,
@@ -37,6 +38,8 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Upload } from 'lucide-react';
+import { TD_REGUA, TD_REGUA_NUM, TH_REGUA } from '@/components/ui/regua-tabela';
+import { cn } from '@/lib/utils';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
@@ -63,6 +66,19 @@ function LinhasCurtas({ linhas, className, testId }: { linhas: string[]; classNa
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * CONC-CUSTEIO-FONTE-01 (Gabriel 11/11) — a lista do relatório de custeio na RÉGUA DA CASA (a de Recorrências): uma linha de 19px por item, em
+ * COLUNAS — ☐ · Descrição · Grupo › subgrupo · Conta do plano · Valor · ação. O cabeçalho mora no bloco fixo do topo (preso, fundo opaco) e o
+ * corpo usa o MESMO `colgroup`: valor sob valor. O texto do arquivo fica como veio; só o rótulo fixo deixou a caixa alta.
+ */
+function ColunasDoCusteio({ grupo, conta }: { grupo: number; conta: number }) {
+  return (
+    <colgroup>
+      <col style={{ width: 24 }} /><col /><col style={{ width: grupo }} /><col style={{ width: conta }} /><col style={{ width: 96 }} /><col style={{ width: 66 }} />
+    </colgroup>
   );
 }
 
@@ -329,6 +345,11 @@ export default function CusteioTxtImportTab(
   }, [itens, aliasesSubcentro, fornecedoresComAliases, subcentroPorPlano]);
 
   /* A sugestão da linha que está no modal, e a hierarquia do plano para ela. */
+  /* Grupo e Conta pela largura do MAIOR texto da lista (piso = o cabeçalho; teto = a Descrição ainda respira); a Descrição fica com a sobra */
+  const larguras = useMemo(() => ({
+    grupo: larguraPeloMaior((itens ?? []).map(textoDoGrupo), medirA10px, { piso: 96, teto: 260 }),
+    conta: larguraPeloMaior((itens ?? []).map((it) => textoDaConta(sugestaoPorLinha.get(it.linha_num))), medirA10px, { piso: 90, teto: 260 }),
+  }), [itens, sugestaoPorLinha]);
   const sugestaoDoModal = dialogRow ? sugestaoPorLinha.get(dialogRow.linha_num) : undefined;
   const cls = sugestaoDoModal?.subcentro
     ? hookFin.classificacoes.find(c => c.subcentro === sugestaoDoModal.subcentro)
@@ -649,8 +670,8 @@ export default function CusteioTxtImportTab(
             texto: `Divergência de reconciliação — ${divergencias.length} escopo${divergencias.length === 1 ? '' : 's'}`,
             dica: 'A soma dos itens não bate com algum subtotal impresso. Verifique se um subtotal foi lido como item (dupla contagem) ou se o parser perdeu linhas.',
           };
-  const linhasDeDivergencia = divergencias.map(d =>
-    `${d.escopo}: itens ${brl(d.soma_itens)} × impresso ${brl(d.subtotal_impresso)} (dif. ${brl(d.diferenca)})`);
+  /* CONC-CUSTEIO-FONTE-01 — a divergência por escopo em COLUNAS (Escopo · Itens · Impresso · Dif.), o mesmo conteúdo da frase de antes */
+  const corDaDivergencia = soArredondamento ? 'text-amber-700 dark:text-amber-400' : 'text-destructive';
 
   return (
     <div className="space-y-4">
@@ -705,7 +726,7 @@ export default function CusteioTxtImportTab(
               baixo — transparente é pior que não fixar.
               A altura vem do app-shell: a seção `conciliacao` já está em
               `SECOES_APP_SHELL` (V2Index) desde antes do 117. */}
-          <div className="sticky top-[30px] z-20 space-y-3 bg-card pb-2">
+          <div className="sticky top-[30px] z-20 space-y-3 bg-card">
           {/* ⚠ O TOPO É UMA LINHA DE 18px, SEM CARD — CUSTEIO-HASH-01 (A18). Eram quatro cartões
               cinza para dizer quatro coisas curtas. A fazenda é o NOME DO CADASTRO quando o
               relatório a resolve; senão, o texto do TXT em âmbar, com o porquê no `title`. Só o
@@ -755,19 +776,53 @@ export default function CusteioTxtImportTab(
               className={`h-[18px] truncate text-[10px] font-medium leading-[18px] ${statusReconciliacao.tom}`}>
               {statusReconciliacao.texto}
             </p>
-            <LinhasCurtas testId="custeio-divergencias" linhas={linhasDeDivergencia}
-              className={soArredondamento ? 'text-amber-700 dark:text-amber-400' : 'text-destructive'} />
+            {divergencias.length > 0 && (
+              <table data-testid="custeio-divergencias" className={cn('w-auto table-fixed border-collapse text-[10px] tabular-nums', corDaDivergencia)}>
+                <colgroup><col style={{ width: 220 }} /><col style={{ width: 104 }} /><col style={{ width: 104 }} /><col style={{ width: 90 }} /></colgroup>
+                <thead><tr className="text-left text-[9.5px] text-muted-foreground">
+                  <th className="h-4 font-medium">Escopo</th><th className="h-4 text-right font-medium">Itens</th>
+                  <th className="h-4 text-right font-medium">Impresso</th><th className="h-4 text-right font-medium">Dif.</th>
+                </tr></thead>
+                <tbody>
+                  {divergencias.slice(0, LINHAS_CURTAS_VISIVEIS).map((d, i) => (
+                    <tr key={`${d.escopo}-${i}`} data-testid="custeio-divergencia">
+                      <td className="h-4 truncate pr-2" title={d.escopo}>{d.escopo}</td>
+                      <td className="h-4 text-right">{brl(d.soma_itens)}</td>
+                      <td className="h-4 text-right">{brl(d.subtotal_impresso)}</td>
+                      <td className="h-4 text-right font-medium">{brl(d.diferenca)}</td>
+                    </tr>
+                  ))}
+                  {divergencias.length > LINHAS_CURTAS_VISIVEIS && (
+                    <tr><td colSpan={4} className="h-4" title={divergencias.map((d) => `${d.escopo}: ${brl(d.diferenca)}`).join('\n')}>
+                      e mais {divergencias.length - LINHAS_CURTAS_VISIVEIS}</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
             <LinhasCurtas testId="custeio-avisos" linhas={resultado.avisos} className="text-muted-foreground" />
           </div>
 
+          {/* o CABEÇALHO da lista, preso com o topo (fundo opaco); o corpo abaixo usa o MESMO colgroup */}
+          <table className="w-full min-w-[720px] table-fixed border-collapse" data-testid="custeio-cabecalho">
+            <ColunasDoCusteio grupo={larguras.grupo} conta={larguras.conta} />
+            <thead className="bg-primary"><tr>
+              <th className={TH_REGUA} aria-label="Selecionar" />
+              <th className={cn(TH_REGUA, 'text-left')}>Descrição</th>
+              <th className={cn(TH_REGUA, 'text-left')}>Grupo › subgrupo</th>
+              <th className={cn(TH_REGUA, 'text-left')}>Conta do plano</th>
+              <th className={cn(TH_REGUA, 'text-right')}>Valor</th>
+              <th className={TH_REGUA} />
+            </tr></thead>
+          </table>
           </div>{/* fim do topo fixo */}
 
           {/* ⚠ SEM CABEÇALHO PRÓPRIO: "Itens (43)" já está no bloco cinza acima, e repetir
               gastava uma faixa inteira para dizer o mesmo número duas vezes. */}
-          <Card>
-            <CardContent className="p-0">
+          {/* CONC-CUSTEIO-FONTE-01 — o corpo encosta no cabeçalho preso (sem card nem vão): coluna sob coluna */}
+          <div className="!mt-0">
+            <div>
               {!auxLoaded && (
-                <p className="px-4 pb-2 text-xs text-muted-foreground">
+                <p className="h-[19px] px-1 text-[10px] leading-[19px] text-muted-foreground">
                   Carregando contas e classificações do cliente… o botão de criar lançamento
                   habilita quando terminar.
                 </p>
@@ -780,13 +835,9 @@ export default function CusteioTxtImportTab(
                   Financeiro antes de lançar — os itens abaixo podem já existir.
                 </p>
               )}
-              {/* ⚠ LISTA DE DUAS ALTURAS, NÃO TABELA — CUSTEIO-TXT-02 (A18). Sete colunas
-                  para quatro dados obrigavam a ler na horizontal item por item; o número
-                  da linha do TXT e as duas colunas da hierarquia gastavam largura que a
-                  descrição precisava. Agora a linha 1 responde "o que é e quanto" e a
-                  linha 2 diz de onde veio — o mesmo par que o cartão da OC usa.
-                  ⚠ SÓ A LISTA ROLA (A21): o bloco de números e a reconciliação ficam
-                  fixos acima, senão some justamente o que o operador confere. */}
+              {/* ⚠ DE VOLTA À TABELA, NA RÉGUA DA CASA — CONC-CUSTEIO-FONTE-01 (Gabriel 11/11, troca a lista de duas alturas do CUSTEIO-TXT-02):
+                  uma linha de 19px por item, cada informação na sua coluna (nada de texto e valor na mesma linha corrida). O cabeçalho está no
+                  bloco fixo acima (mesmo colgroup). ⚠ SÓ A LISTA ROLA (A21): números e reconciliação ficam fixos acima. */}
               {/* ⚠ SEM SCROLLER PRÓPRIO — A21. O `max-h-[60vh] overflow-y-auto` que estava
                   aqui criava um SEGUNDO scrollport dentro do da aba: duas barras, e rolar
                   a de dentro não move o topo fixo, então o operador via a lista andar sem
@@ -794,87 +845,69 @@ export default function CusteioTxtImportTab(
                   `md:flex-1 md:min-h-0 md:overflow-y-auto` da ConciliacaoBancariaTab, que
                   tem altura porque a seção está no app-shell. Aqui a lista só cresce. */}
               <div>
-                <div className="divide-y divide-border/70">
+                <table className="w-full min-w-[720px] table-fixed border-collapse">
+                  <ColunasDoCusteio grupo={larguras.grupo} conta={larguras.conta} />
+                  <tbody>
                   {resultado.itens.map((it) => {
                     const hash = hashPorLinha.get(it.linha_num);
                     const sugestao = sugestaoPorLinha.get(it.linha_num);
                     const lancamentoId = hash ? lancadoPorHash.get(hash) : undefined;
                     const lancada = !!lancamentoId;
+                    const grupo = textoDoGrupo(it);
+                    const conta = textoDaConta(sugestao);
                     return (
-                      <div key={it.linha_num}
-                           data-testid="custeio-item"
-                           className={`px-3 ${lancada ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''}`}>
-                        {/* Linha 1 em 18px e linha 2 em 14px: 32px por item, sem respiro vertical. */}
-                        <div className="flex h-[18px] items-center gap-2 leading-[18px]">
-                          {/* ⚠ O CHECKBOX SÓ APARECE NA LINHA QUE O LOTE CONSEGUE LANÇAR:
-                              com competência, conta da régua e ainda não lançada. Ter ou
-                              não sugestão não muda isso desde o CUSTEIO-TXT-03 — a linha
-                              sem sugestão entra no lote sem classificação. */}
+                      <tr key={it.linha_num} data-testid="custeio-item"
+                        className={cn('border-b border-border/60', lancada && 'bg-emerald-50/40 dark:bg-emerald-950/20')}>
+                        <td className={TD_REGUA}>
+                          {/* ⚠ O CHECKBOX SÓ APARECE NA LINHA QUE O LOTE CONSEGUE LANÇAR: com competência, conta da régua e ainda não
+                              lançada (ter ou não sugestão não muda isso desde o CUSTEIO-TXT-03) */}
                           {elegivelAoLote(it.linha_num) ? (
-                            <Checkbox className="h-3 w-3 shrink-0"
+                            <Checkbox className="h-3 w-3"
                               checked={estaSelecionada(it.linha_num)}
                               onCheckedChange={() => alternarSelecao(it.linha_num)}
                               aria-label={`Selecionar ${it.produto_raw}`} />
-                          ) : (
-                            <span className="h-3 w-3 shrink-0" aria-hidden />
-                          )}
-                          <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{it.produto_raw}</span>
-                          <span className="shrink-0 text-[12px] font-medium tabular-nums">{brl(it.valor)}</span>
+                          ) : <span className="inline-block h-3 w-3" aria-hidden />}
+                        </td>
+                        {/* a Descrição fica com a sobra; não coube, QUEBRA (a linha cresce) — nunca corta (Chat 12/11 08:55) */}
+                        <td className={cn(TD_REGUA, 'h-auto whitespace-normal break-words py-[3px] leading-[13px]')} data-testid="custeio-descricao">{it.produto_raw}</td>
+                        <td className={cn(TD_REGUA, 'truncate text-muted-foreground')} title={grupo}>{grupo}</td>
+                        {/* ⚠ A SUGESTÃO É PROPOSTA: em azul, para não se confundir com o que o arquivo disse; sem memória, traço */}
+                        <td className={cn(TD_REGUA, 'truncate', sugestao ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground/70')}
+                          title={sugestao ? `${conta} — sugerido pela memória de apelidos${sugestao.subcentro ? ` (${sugestao.por === 'descricao' ? 'pela descrição' : 'pela sub-família'})` : ''}` : 'Sem memória para este item ainda'}>
+                          {conta}
+                        </td>
+                        <td className={TD_REGUA_NUM}>{brl(it.valor)}</td>
+                        <td className={cn(TD_REGUA, 'text-center')}>
                           {lancada ? (
-                            /* ⚠ O CARIMBO VIRA ENDEREÇO. `?flancId=` é o drill que já existe
-                               (V2Index troca de seção e abre o modal oficial no lançamento):
-                               nenhuma rota nova, e o operador confere o que lançou sem
-                               refazer o caminho. */
+                            /* ⚠ O CARIMBO VIRA ENDEREÇO: `?flancId=` é o drill que já existe (abre o modal oficial no lançamento) */
                             <button type="button"
                               title="Abrir o lançamento no Financeiro"
                               onClick={() => navigate(`/v2?section=financeiro-lanc&flancId=${lancamentoId}`)}
-                              className="h-4 shrink-0 rounded-full bg-emerald-100 px-1.5 text-[9.5px] leading-4 text-emerald-700 underline-offset-2 hover:underline dark:bg-emerald-900/40 dark:text-emerald-300">
+                              className="h-4 rounded-full bg-emerald-100 px-1.5 text-[9.5px] leading-4 text-emerald-700 underline-offset-2 hover:underline dark:bg-emerald-900/40 dark:text-emerald-300">
                               lançado
                             </button>
                           ) : (
                             <button type="button" disabled={!auxLoaded}
                               title={auxLoaded ? 'Abrir o formulário oficial de lançamento' : 'Carregando contas e classificações…'}
                               onClick={() => setDialogRow(it)}
-                              className="box-border h-4 shrink-0 rounded-full border px-2 text-[9.5px] leading-[14px] text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50">
+                              className="box-border h-4 rounded-full border px-2 text-[9.5px] leading-[14px] text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50">
                               lançar
                             </button>
                           )}
-                        </div>
-                        {/* ⚠ A HIERARQUIA É CONTEXTO, NÃO IDENTIDADE: 10px, cinza, na segunda
-                            linha. Ela responde "de onde veio" depois de a linha 1 já ter dito
-                            o que é — e é onde a sugestão do de-para vai aparecer. */}
-                        {/* ⚠ A HIERARQUIA É CONTEXTO E A SUGESTÃO É PROPOSTA: as duas na
-                            segunda linha, em 10px, e a sugestão em azul para não se
-                            confundir com o que o arquivo disse. Sem memória, traço —
-                            "não sei" escrito, e não um campo que some. */}
-                        <div className="flex h-[14px] min-w-0 items-center gap-1.5 text-[10px] leading-[14px]">
-                          <span className="truncate text-muted-foreground">
-                            {it.familia_raw} › {it.subfamilia_raw}
-                          </span>
-                          {sugestao ? (
-                            <span className="shrink-0 truncate text-blue-600 dark:text-blue-400"
-                              title={sugestao.subcentro
-                                ? `Sugerido pela memória de apelidos (${sugestao.por === 'descricao' ? 'pela descrição' : 'pela sub-família'})`
-                                : 'Fornecedor sugerido pela memória de apelidos'}>
-                              {sugestao.subcentro || '—'}
-                              {sugestao.fornecedorNome ? ` · ${sugestao.fornecedorNome}` : ''}
-                            </span>
-                          ) : (
-                            <span className="shrink-0 text-muted-foreground/70" title="Sem memória para este item ainda">—</span>
-                          )}
-                        </div>
-                      </div>
+                        </td>
+                      </tr>
                     );
                   })}
-                </div>
+                  </tbody>
+                </table>
                 {resultado.itens.length === 0 && (
                   <p className="py-8 text-center text-[11px] text-muted-foreground">
                     Nenhum item reconhecido no arquivo.
                   </p>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* O contrato da tela, numa linha e onde ele importa: ao lado da lista. */}
           <p className="text-[10px] text-muted-foreground">

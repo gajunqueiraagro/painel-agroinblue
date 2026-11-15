@@ -72,6 +72,9 @@ export interface FichaLida {
   /** a área oficial do mês e a do mapa (a faixa e o "usar a do mapa") */
   areaOficial: number | null;
   areaMapa: number | null;
+  /** PASTO-CADASTRO-GEO-01 P1: a diferença mapa × oficial em % (do banco) e quantos desenhos o pasto tem (0 = sem desenho; 2+ = sem área única) */
+  difPct: number | null;
+  nPoligonos: number;
   /** o mês travado (área não muda nele): a frase do banco */
   travaDaArea: string | null;
   anoMes: string;
@@ -98,6 +101,8 @@ export function lerFicha(dados: unknown): FichaLida | null {
     versao: num(p.ficha_versao) ?? 1,
     areaOficial: oficial,
     areaMapa: num(a.mapa_ha),
+    difPct: num(a.dif_pct),
+    nPoligonos: num(a.n_poligonos) ?? 0,
     travaDaArea: txt(a.trava),
     anoMes,
     form: {
@@ -209,6 +214,18 @@ async function rpc(fn: string, args: Record<string, unknown>): Promise<Resultado
 
 /** Uma diferença da prévia do banco ("Forrageira: Marandu → Mombaça"). */
 export interface MudancaDaPrevia { campo: string; antes: string | null; depois: string | null }
+/** PASTO-CADASTRO-GEO-01 P1 — a célula "cadastro × mapa" da faixa da ficha. Âmbar a partir de 20% (a régua da aba Áreas).
+ *  0 desenho = "sem desenho"; 2+ = "N desenhos" (o banco não dá área única: sem %). */
+export function cadastroXMapa(f: Pick<FichaLida, 'areaOficial' | 'areaMapa' | 'difPct' | 'nPoligonos'>, fmt: (n: number) => string):
+  { texto: string; alerta: boolean } {
+  const cad = f.areaOficial == null ? '—' : fmt(f.areaOficial);
+  if (f.nPoligonos === 0) return { texto: `${cad} ha · sem desenho`, alerta: true };
+  if (f.nPoligonos > 1) return { texto: `${cad} ha · ${f.nPoligonos} desenhos`, alerta: true };
+  if (f.areaMapa == null) return { texto: `${cad} ha · mapa —`, alerta: false };
+  const pct = f.difPct == null ? '' : ` · ${f.difPct > 0 ? '+' : ''}${f.difPct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  return { texto: `${cad} × ${fmt(f.areaMapa)} ha${pct}`, alerta: f.difPct != null && Math.abs(f.difPct) >= 20 };
+}
+
 export function lerMudancas(v: unknown): MudancaDaPrevia[] {
   const lista = ehObj(v) && Array.isArray(v.muda) ? v.muda : [];
   /* `_fn_pasto_ficha_diferencas`: campo, antes, depois e, nos itens do catálogo, o NOME (antes_nome/depois_nome) — o id nunca vai à tela */

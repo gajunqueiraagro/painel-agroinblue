@@ -4,7 +4,7 @@
  */
 import { casaNaBusca } from '@/lib/texto/busca';
 import type { ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
-import { codigoAoLado, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type SituacaoDoLote } from '@/lib/lotes/tipos';
+import { codigoAoLado, cruzamentoDosMamotes, ordemDoParto, semenDosMamotes, sexoDosMamotes, situacaoDaCria, type CadastroDoLote, type CamposDoLote, type LoteDaLista, type SituacaoDoLote } from '@/lib/lotes/tipos';
 
 /* ── leitura sem cast ─────────────────────────────────────────────────────────────────────────── */
 const campo = (o: object, k: string): unknown => Reflect.get(o, k);
@@ -16,6 +16,9 @@ const numero = (o: object, k: string): number | null => {
   return null;
 };
 const textos = (o: object, k: string): string[] => { const v = campo(o, k); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; };
+/** LOTE-PADRAO-V3 — as cabeças por carimbo (inteiro ou nulo em cada posição); sem lista = null */
+const cabecasPorCarimbo = (v: unknown): (number | null)[] | null =>
+  (Array.isArray(v) && v.length ? v.map(x => (typeof x === 'number' && Number.isFinite(x) ? x : null)) : null);
 const ehObjeto = (v: unknown): v is object => typeof v === 'object' && v !== null && !Array.isArray(v);
 const SITUACOES: readonly SituacaoDoLote[] = ['ativo', 'encerrado', 'cancelado'];
 const situacao = (v: string | null): SituacaoDoLote | null => SITUACOES.find(s => s === v) ?? null;
@@ -36,6 +39,19 @@ export function loteDaLinha(r: unknown): LoteDaLista | null {
     anoMesDado: texto(r, 'ano_mes_dado'), cabecas: numero(r, 'cabecas'), pesoMedioKg: numero(r, 'peso_medio_kg'), gmdKg: numero(r, 'gmd_kg'),
     pastos: textos(r, 'pastos'), lancamentos: numero(r, 'lancamentos') ?? 0,
     conferir: texto(r, 'conferir'),
+    situacaoCria: situacaoDaCria(texto(r, 'situacao_cria')), ordemParto: ordemDoParto(texto(r, 'ordem_parto')),
+    mamotesSexo: sexoDosMamotes(texto(r, 'mamotes_sexo')), mamotesCruzamento: cruzamentoDosMamotes(texto(r, 'mamotes_cruzamento')),
+    mamotesSemen: semenDosMamotes(texto(r, 'mamotes_semen')), anotacao: texto(r, 'anotacao'),
+    codigoRegra: texto(r, 'codigo_regra') === 'etapas' ? 'etapas' : null,
+    carimbos: textos(r, 'carimbos').length ? textos(r, 'carimbos') : null,
+    /* LOTE-PADRAO-V3 · L2 (117595) */
+    categoriaFixa: texto(r, 'categoria_fixa'),
+    composicaoRacas: textos(r, 'composicao_racas').length ? textos(r, 'composicao_racas') : null,
+    nascidoDe: texto(r, 'nascido_de'), nascidoAte: texto(r, 'nascido_ate'), criaAoPe: texto(r, 'cria_ao_pe'), prenhez: texto(r, 'prenhez'),
+    prenhaDe: texto(r, 'prenha_de'), prenhaRacaId: texto(r, 'prenha_raca_id'), partoPrevisto: texto(r, 'parto_previsto'),
+    bezerrosPaiRacaId: texto(r, 'bezerros_pai_raca_id'), carimbosCab: cabecasPorCarimbo(campo(r, 'carimbos_cab')),
+    programaLote: texto(r, 'programa_lote'), metodoReproducao: texto(r, 'metodo_reproducao'), entradaNovilha: texto(r, 'entrada_novilha'),
+    sistemaLote: texto(r, 'sistema_lote'), marcadores: textos(r, 'marcadores').length ? textos(r, 'marcadores') : null,
   };
 }
 
@@ -86,7 +102,8 @@ export function colunasDosLotes(nomes: NomesDoCadastro): ColunaOrdenavel<LoteDaL
 export interface GrupoDaAtividade { atividadeId: string; nome: string; lotes: LoteDaLista[]; total: TotalDosLotes }
 
 /** A fase na ordem do rebanho: cria, recria, engorda; as outras atividades depois, pelo nome. */
-const ORDEM_DA_FASE: Readonly<Record<string, number>> = { CRI: 0, CR: 0, REC: 1, RC: 1, ENG: 2, EG: 2 };
+/* LOTE-CODIGO-CURTO-01 (117550): C/R/E no cadastro; as siglas de antes seguem valendo */
+const ORDEM_DA_FASE: Readonly<Record<string, number>> = { C: 0, CRI: 0, CR: 0, R: 1, REC: 1, RC: 1, E: 2, ENG: 2, EG: 2 };
 
 export const faseDaAtividade = (sigla: string | null): number => ORDEM_DA_FASE[sigla ?? ''] ?? 3;
 

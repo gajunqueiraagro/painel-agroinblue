@@ -285,7 +285,8 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
               em `top-[30px]` — 24px de altura + os 6px do `pb-1.5` que substituiu o `mb`,
               para o próprio espaçamento ficar coberto e as linhas não aparecerem na fresta. */}
           <div className="sticky top-0 z-30 flex items-center gap-2 bg-card pb-1.5">
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {/* CONC-CUSTEIO-FONTE-01 — rótulo fixo sem caixa alta (o nome do arquivo, ao lado, fica como veio) */}
+            <span className="text-[10px] font-semibold text-muted-foreground">
               Relatório de custeio
             </span>
             <span className="truncate tabular-nums text-[10px]">{arquivo.name}</span>

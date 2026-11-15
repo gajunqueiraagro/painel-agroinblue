@@ -1,0 +1,35 @@
+/* FIN-FINANC-LAYOUT-03 (Gabriel 12/11 15:40) — UMA RÉGUA para a lista de Financiamentos e para TODAS as tabelas do contrato.
+   O tamanho mora nestas variáveis: célula N px, cabeçalho N−1, data N−0,5, linha. O padrão (`:root`) é o escolhido
+   (`REGUA_ESCOLHIDA` em reguaDoFinanciamento.tsx — um teste confere os dois); `.regua-fin-10` / `.regua-fin-11` só existem para a
+   bancada mostrar as duas lado a lado. As larguras das colunas são em `em` (`emDaRegua`): crescem e encolhem com a fonte. */
+:root {
+  --fin-td: 11px;
+  --fin-th: 10px;
+  --fin-data: 10.5px;
+  --fin-linha: 22px;
+}
+.regua-fin-10 {
+  --fin-td: 10px;
+  --fin-th: 9px;
+  --fin-data: 9.5px;
+  --fin-linha: 20px;
+}
+.regua-fin-11 {
+  --fin-td: 11px;
+  --fin-th: 10px;
+  --fin-data: 10.5px;
+  --fin-linha: 22px;
+}
+
+/* FIN-FINANC-LAYOUT-03 (Chat 12/11 18:35): a LISTA de Financiamentos abaixo do corte desce para célula 10 · cabeçalho 9 (as colunas fixas,
+   em `em`, encolhem junto ~80px) e a Descrição quebra em até 2 linhas — todas as colunas ficam, nada rola. Acima, a régua escolhida (11/10)
+   com a Descrição em 1 linha. O corte é 1.350px (o Chat estimou ~1.310): medido na bancada, a maior descrição REAL do proto (43 letras)
+   só cabe numa linha a 11px de 1.350px para cima. Só a lista: as tabelas do contrato seguem 11/10 em toda largura. */
+@media (max-width: 1349.98px) {
+  .regua-fin-lista {
+    --fin-td: 10px;
+    --fin-th: 9px;
+    --fin-data: 9.5px;
+    --fin-linha: 20px;
+  }
+}

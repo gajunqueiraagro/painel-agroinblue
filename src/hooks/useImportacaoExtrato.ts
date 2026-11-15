@@ -36,6 +36,7 @@ import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { parseOFX, lerSaldoDeclaradoOFX, lerPeriodoDeclaradoOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
 import { separarLinhasDeSaldo, conferirSaldoDoExtrato, type ConferenciaSaldoExtrato } from '@/lib/financeiro/parser/linhaDeSaldo';
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
+import type { FonteDoExtrato, FormatoDoExtrato } from '@/lib/financeiro/parser/fonteDoExtrato';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { hashesDoArquivo, normalizarTexto } from '@/lib/financeiro/extratoHash';
 import { decodificarExtrato } from '@/lib/financeiro/parser/decodificarExtrato';
@@ -70,6 +71,10 @@ function ehErroDeLayoutCsv(e: unknown): boolean {
   return typeof e === 'object' && e !== null
     && (e as { name?: unknown }).name === 'CsvLayoutError';
 }
+
+/** OPENFINANCE-PILOTO-01 — a busca no banco voltou sem movimento lançado (o PENDENTE não conta: ainda não é extrato). */
+const MSG_OPEN_FINANCE_VAZIO =
+  'O banco não devolveu nenhum movimento lançado neste período pelo Open Finance. Nada para importar.';
 
 const MSG_CSV_LAYOUT =
   'O CSV não está num layout reconhecido, ou tem linhas com valor monetário '
@@ -255,7 +260,8 @@ export interface PreviewResult {
    * (todas as colunas monetárias vazias), puladas como informativas. 0 para OFX.
    */
   linhasInformativas: number;
-  formato: 'OFX' | 'CSV';
+  /** OPENFINANCE-PILOTO-01 — 'OPEN_FINANCE' é a fonte nova; vai como está ao `tipo_arquivo` do lote (como 'OFX'/'CSV'). */
+  formato: FormatoDoExtrato;
   /**
    * FIN-OFX-LEDGERBAL-PARSER-01 — o saldo que o BANCO declara no arquivo
    * (`LEDGERBAL/BALAMT`), repassado do parser SEM transformação: o motor não
@@ -423,7 +429,7 @@ async function buscarPersistidosPorHash(
 export interface ConfirmarParams {
   contaBancariaId: string;
   nomeArquivo: string;
-  formato: 'OFX' | 'CSV';
+  formato: FormatoDoExtrato;
   /**
    * 1B — quando true, importa TODAS as suspeitas (ignora dupImportar===false).
    * Usado pela ação "Importar tudo" do alerta. Default/false respeita a decisão
@@ -438,6 +444,69 @@ function detectarFormato(nomeArquivo: string, conteudo: string): 'OFX' | 'CSV' |
   if (lower.endsWith('.ofx') || /<OFX>/i.test(conteudo)) return 'OFX';
   if (lower.endsWith('.csv') || lower.endsWith('.txt')) return 'CSV';
   return null;
+}
+
+/**
+ * O ARQUIVO (OFX/CSV) → a fonte da prévia. OPENFINANCE-PILOTO-01: este é o trecho de leitura do `gerarPreview`, MOVIDO
+ * verbatim (só a indentação mudou) para a prévia aceitar outra fonte. PDF, charset, saldo e período declarados: como sempre.
+ */
+async function lerArquivoDeExtrato(params: { arquivo: File }): Promise<FonteDoExtrato> {
+  // Guard PDF: detectar pelo nome antes de ler como texto (arquivo PDF
+  // eh binario; arquivo.text() retornaria lixo UTF-8). Parser PDF
+  // definitivo fica para PR-B. Aqui apenas guard com mensagem clara.
+  const lowerName = params.arquivo.name.toLowerCase();
+  if (lowerName.endsWith('.pdf')) {
+    const { hasTextLayer } = await extractPdfText(params.arquivo);
+    if (!hasTextLayer) {
+      throw new ErroUsuarioSeguro(
+        'Este PDF parece ser escaneado/imagem. Envie OFX, CSV ou PDF digital baixado do banco. OCR sera tratado futuramente.'
+      );
+    }
+    throw new ErroUsuarioSeguro(
+      'PDF digital detectado, mas o parser PDF ainda esta em desenvolvimento. Use OFX/CSV por enquanto, ou aguarde a proxima versao.'
+    );
+  }
+
+  /* ⚠ PELO CHARSET DECLARADO, NUNCA `.text()` — PR-CONC-CRIAR-LOTE-LAYOUT-01. `.text()` é sempre UTF-8, e o OFX
+     do BB e do Bradesco vem em cp1252: "Cartão" gravava como "Cart\uFFFDo" (326 linhas no proto em 30/09). */
+  const conteudo = decodificarExtrato(await params.arquivo.arrayBuffer());
+  const formato = detectarFormato(params.arquivo.name, conteudo);
+  if (!formato) throw new ErroUsuarioSeguro('Formato não reconhecido (espera-se .ofx, .csv ou .pdf)');
+  // Defensivo: o branch PDF acima sempre throwa antes de chegar aqui.
+  // Esse narrowing existe pra TS estreitar formato pra 'OFX' | 'CSV'
+  // (o tipo de retorno de detectarFormato inclui 'PDF').
+  if (formato === 'PDF') throw new Error('PDF deveria ter sido tratado pelo guard acima.');
+
+  // BUG-CSV-PARSE-VALOR-01: CSV usa parseCSVComRelatorio p/ contabilizar linhas
+  // datadas SEM valor monetário (informativas), que são puladas — nunca gravadas 0.
+  let movimentosBrutos: MovimentoBruto[];
+  let linhasInformativas = 0;
+  // FIN-OFX-LEDGERBAL-PARSER-01 — leitura à parte, e à parte de propósito: o
+  // saldo declarado NÃO entra na lista de movimentos, não gera hash, não é
+  // comparado com nada e não muda uma linha do que se grava. Só atravessa.
+  let saldoDeclarado: number | null = null;
+  let saldoDeclaradoData: string | null = null;
+  let periodoDeclaradoInicio: string | null = null;
+  let periodoDeclaradoFim: string | null = null;
+  if (formato === 'OFX') {
+    movimentosBrutos = parseOFX(conteudo);
+    const saldo = lerSaldoDeclaradoOFX(conteudo);
+    saldoDeclarado = saldo?.saldoDeclarado ?? null;
+    saldoDeclaradoData = saldo?.saldoData ?? null;
+    /* Também à parte dos movimentos, e pelo mesmo motivo: é fato do arquivo,
+       não linha de extrato. */
+    const periodo = lerPeriodoDeclaradoOFX(conteudo);
+    periodoDeclaradoInicio = periodo?.inicio ?? null;
+    periodoDeclaradoFim = periodo?.fim ?? null;
+  } else {
+    const rel = parseCSVComRelatorio(conteudo);
+    movimentosBrutos = rel.movimentos;
+    linhasInformativas = rel.linhasInformativas.length;
+  }
+  return {
+    formato, movimentos: movimentosBrutos, linhasInformativas,
+    saldoDeclarado, saldoDeclaradoData, periodoDeclaradoInicio, periodoDeclaradoFim,
+  };
 }
 
 function addDays(iso: string, n: number): string {
@@ -520,67 +589,21 @@ export function useImportacaoExtrato() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function gerarPreview(params: {
-    arquivo: File;
+  async function montarPreview(params: {
     contaBancariaId: string;
+    ler: () => Promise<FonteDoExtrato>;
   }): Promise<PreviewResult> {
     setLoading(true);
     setError(null);
     try {
       if (!clienteAtual?.id) throw new ErroUsuarioSeguro('Cliente não selecionado');
 
-      // Guard PDF: detectar pelo nome antes de ler como texto (arquivo PDF
-      // eh binario; arquivo.text() retornaria lixo UTF-8). Parser PDF
-      // definitivo fica para PR-B. Aqui apenas guard com mensagem clara.
-      const lowerName = params.arquivo.name.toLowerCase();
-      if (lowerName.endsWith('.pdf')) {
-        const { hasTextLayer } = await extractPdfText(params.arquivo);
-        if (!hasTextLayer) {
-          throw new ErroUsuarioSeguro(
-            'Este PDF parece ser escaneado/imagem. Envie OFX, CSV ou PDF digital baixado do banco. OCR sera tratado futuramente.'
-          );
-        }
-        throw new ErroUsuarioSeguro(
-          'PDF digital detectado, mas o parser PDF ainda esta em desenvolvimento. Use OFX/CSV por enquanto, ou aguarde a proxima versao.'
-        );
-      }
-
-      /* ⚠ PELO CHARSET DECLARADO, NUNCA `.text()` — PR-CONC-CRIAR-LOTE-LAYOUT-01. `.text()` é sempre UTF-8, e o OFX
-         do BB e do Bradesco vem em cp1252: "Cartão" gravava como "Cart\uFFFDo" (326 linhas no proto em 30/09). */
-      const conteudo = decodificarExtrato(await params.arquivo.arrayBuffer());
-      const formato = detectarFormato(params.arquivo.name, conteudo);
-      if (!formato) throw new ErroUsuarioSeguro('Formato não reconhecido (espera-se .ofx, .csv ou .pdf)');
-      // Defensivo: o branch PDF acima sempre throwa antes de chegar aqui.
-      // Esse narrowing existe pra TS estreitar formato pra 'OFX' | 'CSV'
-      // (o tipo de retorno de detectarFormato inclui 'PDF').
-      if (formato === 'PDF') throw new Error('PDF deveria ter sido tratado pelo guard acima.');
-
-      // BUG-CSV-PARSE-VALOR-01: CSV usa parseCSVComRelatorio p/ contabilizar linhas
-      // datadas SEM valor monetário (informativas), que são puladas — nunca gravadas 0.
-      let movimentosBrutos: MovimentoBruto[];
-      let linhasInformativas = 0;
-      // FIN-OFX-LEDGERBAL-PARSER-01 — leitura à parte, e à parte de propósito: o
-      // saldo declarado NÃO entra na lista de movimentos, não gera hash, não é
-      // comparado com nada e não muda uma linha do que se grava. Só atravessa.
-      let saldoDeclarado: number | null = null;
-      let saldoDeclaradoData: string | null = null;
-      let periodoDeclaradoInicio: string | null = null;
-      let periodoDeclaradoFim: string | null = null;
-      if (formato === 'OFX') {
-        movimentosBrutos = parseOFX(conteudo);
-        const saldo = lerSaldoDeclaradoOFX(conteudo);
-        saldoDeclarado = saldo?.saldoDeclarado ?? null;
-        saldoDeclaradoData = saldo?.saldoData ?? null;
-        /* Também à parte dos movimentos, e pelo mesmo motivo: é fato do arquivo,
-           não linha de extrato. */
-        const periodo = lerPeriodoDeclaradoOFX(conteudo);
-        periodoDeclaradoInicio = periodo?.inicio ?? null;
-        periodoDeclaradoFim = periodo?.fim ?? null;
-      } else {
-        const rel = parseCSVComRelatorio(conteudo);
-        movimentosBrutos = rel.movimentos;
-        linhasInformativas = rel.linhasInformativas.length;
-      }
+      /* OPENFINANCE-PILOTO-01 — A FONTE: o arquivo (OFX/CSV: `lerArquivoDeExtrato`, o mesmo código de antes, movido) ou uma
+         fonte já lida (o Open Finance: `fonteDoOpenFinance`). Daqui para baixo a prévia é UMA só para todas — o mesmo hash,
+         a mesma dedupe (hash, chave natural, FORTE/PROVÁVEL/GÊMEA) e o mesmo casamento. */
+      const fonte = await params.ler();
+      const { formato, linhasInformativas, saldoDeclarado, saldoDeclaradoData, periodoDeclaradoInicio, periodoDeclaradoFim } = fonte;
+      let movimentosBrutos: MovimentoBruto[] = fonte.movimentos;
       /* ⚠ LINHA DE SALDO NÃO É MOVIMENTO — PR-CONC-OFX-LINHA-SALDO-01. O Itaú manda "SALDO ANTERIOR" e "SALDO TOTAL
          DISPONÍVEL DIA" como `<STMTTRN>`, com o saldo inteiro no valor: importadas, viravam entradas do tamanho do caixa
          (NJ, jul/26: cinco de R$ 1,7 mi). Saem AQUI, antes do hash — um helper só, para OFX e CSV. A identidade dos
@@ -589,6 +612,8 @@ export function useImportacaoExtrato() {
       movimentosBrutos = separadas.movimentos;
       const linhasSaldo = separadas.saldos;
       if (movimentosBrutos.length === 0) {
+        /* OPENFINANCE-PILOTO-01 — o banco não devolveu movimento LANÇADO no período: não é arquivo inválido. */
+        if (formato === 'OPEN_FINANCE') throw new ErroUsuarioSeguro(MSG_OPEN_FINANCE_VAZIO);
         // Caminho real do "OFX inválido": parseOFX não lança — um arquivo
         // corrompido, truncado ou que não é OFX simplesmente não produz
         // movimento. `formato` é o literal 'OFX' | 'CSV' da nossa própria
@@ -1110,6 +1135,16 @@ export function useImportacaoExtrato() {
     }
   }
 
+  /** O arquivo (OFX/CSV) → a prévia. A assinatura de sempre. */
+  function gerarPreview(params: { arquivo: File; contaBancariaId: string }): Promise<PreviewResult> {
+    return montarPreview({ contaBancariaId: params.contaBancariaId, ler: () => lerArquivoDeExtrato({ arquivo: params.arquivo }) });
+  }
+
+  /** OPENFINANCE-PILOTO-01 — uma fonte JÁ LIDA (o Open Finance, `fonteDoOpenFinance`) → a MESMA prévia do arquivo. */
+  function gerarPreviewDaFonte(params: { fonte: FonteDoExtrato; contaBancariaId: string }): Promise<PreviewResult> {
+    return montarPreview({ contaBancariaId: params.contaBancariaId, ler: () => Promise.resolve(params.fonte) });
+  }
+
   async function confirmarImportacao(params: ConfirmarParams): Promise<ResultadoImportacao> {
     // Invariante de programação, não erro de operador: segue Error comum e
     // chega à tela como mensagem genérica — é bug nosso, não ação do usuário.
@@ -1332,6 +1367,7 @@ export function useImportacaoExtrato() {
     loading,
     error,
     gerarPreview,
+    gerarPreviewDaFonte,
     confirmarImportacao,
     refreshStatusPersistidos,
     reset,

@@ -97,11 +97,13 @@ interface Props {
   onAbrirInfraNoGestor?: (infraId: string) => void;
   /** MAPA-AREA-TIPOS-02: como o pedido abre — "desenhar" (padrão, Adicionar › Área) ou "escolher" (a infraestrutura de área existente) */
   modoInicialDoPedido?: 'desenhar' | 'escolher';
+  /** PASTO-CADASTRO-GEO-01 P2: "Desenhar no mapa" da ficha do pasto — abre o desenho novo com o nome do pasto e já LIGADO a ele (uma vez) */
+  desenharParaPasto?: { pastoId: string; nome: string } | null;
 }
 
 /* MAPA-AREA-TIPO-01 (Gabriel 01/11): o vínculo e o tipo de área saem do UPDATE direto e vão pelo escritor do banco
    (`fn_mapa_geometria_classificar`: prévia, trilha e a memória que o "Atualizar mapa" respeita), no painel do polígono. */
-export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdate, onDelete, onRefresh, tipoPedido, onTipoPedidoUsado, onAbrirInfraNoGestor, modoInicialDoPedido }: Props) {
+export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdate, onDelete, onRefresh, tipoPedido, onTipoPedidoUsado, onAbrirInfraNoGestor, modoInicialDoPedido, desenharParaPasto = null }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -273,6 +275,14 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
   const recolherLista = () => (editando ? setListaReaberta(false) : setRecolhidaFora(true));
   const abrirLista = () => (editando ? setListaReaberta(true) : setRecolhidaFora(false));
   useEffect(() => { if (!editando) setListaReaberta(false); }, [editando]);
+  /* PASTO-CADASTRO-GEO-01 P2: o pedido da ficha começa o desenho assim que o mapa está pronto, uma vez por pasto */
+  const desenhoDaFichaFeitoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!desenharParaPasto || desenhoDaFichaFeitoRef.current === desenharParaPasto.pastoId || statusDoMapa !== 'ready' || edicao.modo) return;
+    desenhoDaFichaFeitoRef.current = desenharParaPasto.pastoId;
+    const { pastoId, nome } = desenharParaPasto;
+    void edicao.iniciar('desenhar', null).then(() => { edicao.setNomeNovo(nome); edicao.setPastoDoDesenho(pastoId); });
+  }, [desenharParaPasto, statusDoMapa, edicao]);
   const { reenquadrar } = edicao;
   useEffect(() => {
     const t = setTimeout(() => reenquadrar(), 60);

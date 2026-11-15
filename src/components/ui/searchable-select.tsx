@@ -5,7 +5,7 @@ import { ChevronsUpDown, X } from 'lucide-react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
-import { normalizarParaBusca } from '@/lib/texto/busca';
+import { casaPorPalavras, normalizarParaBusca } from '@/lib/texto/busca';
 import { CLASSE_DO_INEXISTENTE, FRASE_VALOR_INEXISTENTE } from '@/components/shared/ValorInexistente';
 import {
   MENU_BUSCA, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
@@ -152,6 +152,13 @@ interface SearchableSelectProps {
   /** LISTAS-DIGITAVEIS-01 — a linha '+ Criar "texto"' quando o digitado não é uma opção; Enter sem resultado também cria.
    *  Ausente = nada muda. */
   criarComTexto?: CriarComTexto;
+  /** LOTE-BUSCA-01 — cada PALAVRA digitada casa em qualquer texto da opção ("vacas 9.2"); sem ela, o texto inteiro como trecho. Ausente = nada muda. */
+  buscaPorPalavras?: boolean;
+  /** LOTE-BUSCA-01 — desenha TODAS as opções (lista curta em grupos, ex.: os lotes da fazenda), sem o corte de 50. Ausente = nada muda. */
+  semCorte?: boolean;
+  /** LOTE-BUSCA-01 — a linha de baixo da opção (`sub`) inteira, QUEBRANDO a linha, nunca com "…" (fora de tabela, a regra da casa;
+   *  o "onde esteve" do lote é longo). Ausente = como sempre (truncate). */
+  subInteiro?: boolean;
 }
 
 export function SearchableSelect({
@@ -173,6 +180,9 @@ export function SearchableSelect({
   valorInexistente = false,
   nomeInteiro = false,
   criarComTexto,
+  buscaPorPalavras = false,
+  semCorte = false,
+  subInteiro = false,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [criando, setCriando] = useState(false);
@@ -227,9 +237,10 @@ export function SearchableSelect({
     [options]);
   const filtered = useMemo(() => {
     if (!search.trim()) return options;
+    if (buscaPorPalavras) return options.filter((_, i) => casaPorPalavras(indiceDaBusca[i], search));
     const q = normalizarParaBusca(search);
     return options.filter((_, i) => indiceDaBusca[i].some((t) => t.includes(q)));
-  }, [options, indiceDaBusca, search]);
+  }, [options, indiceDaBusca, search, buscaPorPalavras]);
 
   // Cap de render: sem virtualização, listas grandes (milhares de contrapartes)
   // geravam DOM gigante e travavam o dropdown. Limite de 50 itens visíveis,
@@ -238,7 +249,7 @@ export function SearchableSelect({
   // completa — o cap afeta apenas o DOM. Para listas pequenas, comportamento
   // idêntico ao anterior.
   const RENDER_CAP = 50;
-  const filteredVisiveis = useMemo(() => filtered.slice(0, RENDER_CAP), [filtered]);
+  const filteredVisiveis = useMemo(() => (semCorte ? filtered : filtered.slice(0, RENDER_CAP)), [filtered, semCorte]);
   const excedente = filtered.length - filteredVisiveis.length;
 
   const selectableItems = useMemo(() => {
@@ -530,7 +541,7 @@ export function SearchableSelect({
                 </span>
                 {o.sub ? (
                   /* fix1: no painel cinza o amber-500 e o zinc-400 sumiam — amber-100 (6,94:1) e zinc-200 (6,09:1) sobre zinc-600 */
-                  <span className={cn('block truncate text-[9.5px]',
+                  <span className={cn('block text-[9.5px]', subInteiro ? 'whitespace-normal break-words' : 'truncate',
                     o.subAlerta ? 'text-amber-100' : MENU_SECUNDARIO)} title={o.sub}>
                     {o.sub}
                   </span>

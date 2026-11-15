@@ -101,6 +101,21 @@ describe('FichaDoLote', () => {
     expect(notificar).toHaveBeenCalledWith('f');
   });
 
+  it('LOTE-CARIMBOS-01: a ficha mostra TODOS os carimbos e edita a lista inteira (nunca só o 1º); sem mudar a lista, nada vai', async () => {
+    rpc.mockResolvedValue({ data: { ok: true }, error: null });
+    montar({ ...LOTE, carimbo: '7.1', carimbos: ['7.1', '8.1'] });
+    expect(screen.getByTestId('ficha-codigo').textContent).toBe('7.1 · 8.1');
+    fireEvent.click(screen.getByTestId('perfil-editar'));
+    const campo = screen.getByDisplayValue('7.1, 8.1');
+    fireEvent.change(campo, { target: { value: '7.1, 8.1, 13.1' } });
+    fireEvent.click(screen.getByTestId('perfil-salvar'));
+    expect(screen.getByTestId('perfil-erro').textContent).toContain('Carimbo: mês.lote');
+    expect(rpc).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByDisplayValue('7.1, 8.1, 13.1'), { target: { value: '7.1 8.1 9.1' } });
+    fireEvent.click(screen.getByTestId('perfil-salvar'));
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('fn_lote_salvar', expect.objectContaining({ p_campos: { carimbos: ['7.1', '8.1', '9.1'] } })));
+  });
+
   it('Histórico: Desfazer grava o ANTES pela mesma RPC, com o motivo "desfazer: …"', async () => {
     rpc.mockResolvedValue({ data: { ok: true }, error: null });
     eventos.lista = [{ id: 'a1', criadoEm: '2026-11-06T17:45:00-03:00', usuarioId: 'u', via: null, acao: 'editou', resumo: 'motivo: lote editado', autor: 'Gabriel',

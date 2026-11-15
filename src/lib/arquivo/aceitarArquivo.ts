@@ -14,7 +14,7 @@
  *   `porArquivo` na linha de cada um.
  */
 
-export type TipoDeArquivo = 'pdf' | 'jpg' | 'png' | 'xml' | 'ofx' | 'xlsx' | 'xls' | 'csv' | 'txt' | 'kml' | 'kmz' | 'geojson';
+export type TipoDeArquivo = 'pdf' | 'jpg' | 'png' | 'xml' | 'ofx' | 'xlsx' | 'xls' | 'csv' | 'txt' | 'kml' | 'kmz' | 'geojson' | 'pfx';
 
 /**
  * O CATÁLOGO: por tipo, as extensões, os MIME PRÓPRIOS e os MIME GENÉRICOS que o navegador costuma mandar no lugar deles.
@@ -37,9 +37,11 @@ const CATALOGO: Record<TipoDeArquivo, { extensoes: readonly string[]; mimes: rea
   kml: { extensoes: ['kml'], mimes: ['application/vnd.google-earth.kml+xml'], genericos: ['application/xml', 'text/xml'] },
   kmz: { extensoes: ['kmz'], mimes: ['application/vnd.google-earth.kmz'], genericos: ['application/zip', 'application/x-zip-compressed'] },
   geojson: { extensoes: ['geojson', 'json'], mimes: ['application/geo+json'], genericos: ['application/json'] },
+  /* NOTAS-RECEITA-A1-01 F2 — o certificado A1 (PKCS#12). Quem diz se é A1 de verdade (abre com a senha e traz a chave) é a borda. */
+  pfx: { extensoes: ['pfx', 'p12'], mimes: ['application/x-pkcs12', 'application/pkcs12'], genericos: [] },
 };
 /* ⚠ Os do mapa vão no FIM: pelo MIME sozinho, `application/xml` continua sendo XML. */
-const TODOS: readonly TipoDeArquivo[] = ['pdf', 'jpg', 'png', 'xml', 'ofx', 'xlsx', 'xls', 'csv', 'txt', 'kml', 'kmz', 'geojson'];
+const TODOS: readonly TipoDeArquivo[] = ['pdf', 'jpg', 'png', 'xml', 'ofx', 'xlsx', 'xls', 'csv', 'txt', 'kml', 'kmz', 'geojson', 'pfx'];
 /** O que o navegador manda quando NÃO sabe o tipo. */
 const SEM_MIME: readonly string[] = ['', 'application/octet-stream'];
 
@@ -83,7 +85,7 @@ export function tipoDoArquivo(arquivo: Pick<File, 'name' | 'type'>): TipoDeArqui
 
 const NOMES: Record<TipoDeArquivo, string> = {
   pdf: 'PDF', jpg: 'imagem', png: 'imagem', xml: 'XML', ofx: 'OFX', xlsx: 'Excel', xls: 'Excel', csv: 'CSV', txt: 'TXT',
-  kml: 'KML', kmz: 'KMZ', geojson: 'GeoJSON',
+  kml: 'KML', kmz: 'KMZ', geojson: 'GeoJSON', pfx: 'certificado A1 (.pfx/.p12)',
 };
 /** "PDF, imagem ou XML" — os tipos da regra, em português, sem repetir "imagem". */
 export function tiposPorExtenso(tipos: readonly TipoDeArquivo[]): string {
@@ -93,7 +95,7 @@ export function tiposPorExtenso(tipos: readonly TipoDeArquivo[]): string {
 }
 const SIGLAS: Record<TipoDeArquivo, string> = {
   pdf: 'PDF', jpg: 'JPG', png: 'PNG', xml: 'XML', ofx: 'OFX', xlsx: 'XLSX', xls: 'XLS', csv: 'CSV', txt: 'TXT',
-  kml: 'KML', kmz: 'KMZ', geojson: 'GeoJSON',
+  kml: 'KML', kmz: 'KMZ', geojson: 'GeoJSON', pfx: 'PFX/P12',
 };
 /** "PDF, JPG, PNG ou XML" — os tipos da regra pela sigla, para a frase de recusa e a ajuda. */
 export function tiposPorSigla(tipos: readonly TipoDeArquivo[]): string {

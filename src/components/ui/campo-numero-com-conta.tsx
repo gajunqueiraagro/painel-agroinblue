@@ -20,7 +20,7 @@ import { roundCasas, formatCasas, parseMoeda } from '@/lib/calculos/numeroBR';
  * ⚠ `percentual`: o "%" digitado é a unidade do campo, não o operador — sai do texto. Num campo de percentual, "1,5%" é 1,5.
  * ⚠ O vazio é vazio (`null`), nunca zero inventado.
  */
-export function CampoNumeroComConta({ valor, onChange, casas = 2, soAoSair = false, percentual = false, sufixoDentro, placeholder, className, disabled, title, invalido }: {
+export function CampoNumeroComConta({ valor, onChange, casas = 2, soAoSair = false, percentual = false, sufixoDentro, placeholder, className, disabled, title, invalido, tabIndex }: {
   valor: number | null;
   onChange: (n: number | null) => void;
   casas?: number;
@@ -34,6 +34,8 @@ export function CampoNumeroComConta({ valor, onChange, casas = 2, soAoSair = fal
   title?: string;
   /** Borda vermelha — a mensagem mora em quem chama. */
   invalido?: boolean;
+  /** FECH-CALC-01 — a ordem de tabulação (o modal do pasto numera Qtde e Peso). Ausente = como sempre. */
+  tabIndex?: number;
 }) {
   const escrever = (n: number) => formatCasas(n, casas);
   const ler = (t: string): number | null => parseMoeda(t);
@@ -55,7 +57,7 @@ export function CampoNumeroComConta({ valor, onChange, casas = 2, soAoSair = fal
     <div className={cn('relative', fora)} data-testid="campo-numero">
       <Input
         ref={c.campoRef}
-        inputMode="decimal" value={c.emConta ? c.conta : texto} placeholder={placeholder} disabled={disabled} title={title}
+        inputMode="decimal" value={c.emConta ? c.conta : texto} placeholder={placeholder} disabled={disabled} title={title} tabIndex={tabIndex}
         className={cn(dentro, 'text-right tabular-nums', sufixoDentro != null && 'pr-7', invalido && 'border-destructive')}
         onFocus={() => { setEditando(true); c.focar(); }}
         onPaste={c.colar}

@@ -41,8 +41,23 @@ export interface LancamentoJaLancado {
   cancelado: boolean;
 }
 
-export type PorDoAchado = 'valor' | 'numero' | 'chave' | 'fracao' | 'documento' | 'soma' | 'parcelamento' | 'lancamento';
-const PORES: readonly PorDoAchado[] = ['valor', 'numero', 'chave', 'fracao', 'documento', 'soma', 'parcelamento', 'lancamento'];
+/** NOTA-PAGTO-PARCELADO-01 P1 — 'escolhido': o operador marcou o lançamento à mão ("Outros lançamentos do fornecedor"): é da nota */
+export type PorDoAchado = 'valor' | 'numero' | 'chave' | 'fracao' | 'documento' | 'soma' | 'parcelamento' | 'lancamento' | 'escolhido';
+const PORES: readonly PorDoAchado[] = ['valor', 'numero', 'chave', 'fracao', 'documento', 'soma', 'parcelamento', 'lancamento', 'escolhido'];
+
+/**
+ * NOTA-PAGTO-PARCELADO-01 P1 (Gabriel 11/11, o trator: 110.000 + 4 × 25.000 em PIX soltos) — os lançamentos ESCOLHIDOS À MÃO entram nos
+ * achados da busca como 'escolhido' e daí seguem o caminho de sempre (a tabela Parcelas × sistema, a ação "Vincular", o Aplicar): o que já
+ * foi achado ganha a marca; o novo entra no fim. Nada é gravado aqui. PURO.
+ */
+const ESCOLHIDO: PorDoAchado = 'escolhido';
+export function comEscolhidos(achados: readonly LancamentoJaLancado[], escolhidos: readonly LancamentoJaLancado[]): LancamentoJaLancado[] {
+  const ids = new Set(escolhidos.map((l) => l.id));
+  const marcar = (l: LancamentoJaLancado): LancamentoJaLancado => (l.por.includes(ESCOLHIDO) ? l : { ...l, por: [...l.por, ESCOLHIDO] });
+  const marcados = achados.map((l) => (ids.has(l.id) ? marcar(l) : l));
+  const novos = escolhidos.filter((e) => !achados.some((l) => l.id === e.id)).map(marcar);
+  return [...marcados, ...novos];
+}
 
 export interface ParcelaDaNotaParaCasar { n: number; vencimento: string; valorCent: number }
 
@@ -82,7 +97,7 @@ export function compraDaNota(achados: readonly LancamentoJaLancado[]): { grupo: 
   if (fins.length <= 1) return { grupo: fins[0] ?? null, ambigua: false };
   const ancora = achados.find((l) => l.financiamentoId && l.por.includes('lancamento'));
   if (ancora?.financiamentoId) return { grupo: ancora.financiamentoId, ambigua: false };
-  const forca = (l: LancamentoJaLancado) => l.por.filter((x) => x === 'numero' || x === 'chave' || x === 'documento').length * 3 + l.parcelas.length;
+  const forca = (l: LancamentoJaLancado) => l.por.filter((x) => x === 'numero' || x === 'chave' || x === 'documento' || x === 'escolhido').length * 3 + l.parcelas.length;
   const placar = fins.map((f) => ({ f, pontos: achados.filter((l) => l.financiamentoId === f).reduce((s, l) => s + forca(l), 0) }))
     .sort((a, b) => b.pontos - a.pontos);
   if (placar[0].pontos === placar[1].pontos) return { grupo: null, ambigua: true };
@@ -243,8 +258,9 @@ export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], tod
     porParcela, pelaNota, outrosParecidos, fracoes, emParcelas, cancelados: canceladosDaNota(todos), outraCompra, compraAmbigua: compra.ambigua, aVista,
     /* P128a — o irmão achado SÓ por ser do mesmo parcelamento ("só no sistema", a parcela que sobra) nunca recebe a nota: ele não é dela */
     alvos: [...(aVista ? [aVista] : []), ...porParcela.flatMap((x) => (x.lancamento ? [x.lancamento] : [])), ...pelaNota.filter((l) => l.por.some((x) => x !== 'parcelamento'))],
-    /* P167 — ambígua: nada se cria (a que "falta" pode ser a outra compra) */
-    faltam: emParcelas || compra.ambigua ? [] : porParcela.filter((x) => !x.lancamento).map((x) => x.parcela),
+    /* P167 — ambígua: nada se cria (a que "falta" pode ser a outra compra). NOTA-PAGTO-PARCELADO-01 P1 — com lançamentos ESCOLHIDOS pelo
+       operador, ele disse quais pagam a nota: nada "falta" para criar (criaria a nota em dobro); a diferença fica na soma × nota */
+    faltam: emParcelas || compra.ambigua || achados.some((l) => l.por.includes('escolhido')) ? [] : porParcela.filter((x) => !x.lancamento).map((x) => x.parcela),
   };
 }
 
@@ -325,6 +341,8 @@ export type SituacaoNaTabela = 'conciliada' | 'realizada' | 'programada' | 'so_n
 export function ficaDeForaPorPadrao(j: NotaJaLancada | null | undefined, lancamentoId: string): boolean {
   if (!j || j.emParcelas) return false;
   if (j.aVista?.id === lancamentoId || j.porParcela.some((x) => x.lancamento?.id === lancamentoId)) return false;
+  /* NOTA-PAGTO-PARCELADO-01 P1 — o lançamento ESCOLHIDO pelo operador é da nota: vem em "Vincular" */
+  if (j.pelaNota.some((l) => l.id === lancamentoId && l.por.includes('escolhido'))) return false;
   return j.pelaNota.some((l) => l.id === lancamentoId);
 }
 export interface LinhaSistemaNota {
@@ -391,8 +409,11 @@ export function linhasSistemaNota(j: NotaJaLancada, notaCent: number): LinhaSist
     difData: !!l && (l.vencimento ?? l.pagamento ?? l.competencia) !== parcela.vencimento,
   }))];
   for (const l of j.pelaNota) {
+    /* NOTA-PAGTO-PARCELADO-01 P1 — o ESCOLHIDO pelo operador paga a nota: mostra o status dele (nunca "só no sistema") */
+    const escolhido = l.por.includes('escolhido');
     linhas.push({ chave: l.id, rotulo: l.parcelaN ? `${l.parcelaN}/?` : '—', sistema: l, notaVencimento: null, notaValorCent: null,
-      situacao: 'so_no_sistema', difValor: false, difData: false });
+      situacao: escolhido ? situacaoDe(l) : 'so_no_sistema', difValor: false, difData: false,
+      ...(escolhido ? { dica: 'escolhido por você: paga a nota (recebe a nota no Aplicar)' } : {}) });
   }
   return linhas;
 }
@@ -406,6 +427,7 @@ function comoAchou(achados: readonly LancamentoJaLancado[]): string {
   if (tem('soma')) partes.push('pela soma');
   /* P128c — a porta 2: o lançamento aberto é a âncora, ache a nota ele ou não */
   if (tem('lancamento')) partes.push('a partir do lançamento aberto');
+  if (tem('escolhido')) partes.push('escolhidos por você');
   if (tem('valor') && !partes.length) partes.push('pelo valor e vencimento');
   return partes.join(' · ');
 }

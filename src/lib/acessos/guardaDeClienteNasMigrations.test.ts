@@ -14,7 +14,7 @@ const DIR = 'supabase/migrations';
 const DESDE = '20261027198600';
 
 /** Cada funcao SECURITY DEFINER exposta (parametro de cliente, ou so' o id) de um texto de migration, e se tem guarda. */
-export function definicoesExpostas(sql: string): { nome: string; guardada: boolean }[] {
+export function definicoesExpostas(sql: string): { nome: string; guardada: boolean; doBanco?: boolean }[] {
   const partes = sql.split(/(?=CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s)/i).filter(p => /^CREATE\s/i.test(p));
   return partes.flatMap(p => {
     const cab = p.match(/^CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)\s*\(([^)]*)\)/i);
@@ -29,8 +29,15 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
     /* PATR-01: `_fn_patrimonio_bem_do_usuario(bem)` e' a guarda pelo cliente do BEM (tenant_ok + 42501), o molde do contrato, presa abaixo */
     const guardada = /tenant_ok\s*\(/i.test(p) || /_fn_exigir_tenant(_das_linhas)?\s*\(/i.test(p)
       || /_fn_contrato_do_usuario\s*\(/i.test(p) || /_fn_subcentro_cliente_rodar\s*\(/i.test(p) || /(?<!function\s+public\.)_fn_patrimonio_bem_do_usuario\s*\(/i.test(p)
-      || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p));
-    return [{ nome, guardada }];
+      || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p))
+      /* NOTAS-RECEITA-A1-01 F1: `_fn_fiscal_certificado_pode(cliente)` e' o PREDICADO da guarda do certificado (admin ou gestor DAQUELE
+         cliente, so' devolve boolean, fechado a authenticated); quem o chama com 42501 esta' guardado; ele mesmo, preso abaixo */
+      || (/(?<!function\s+public\.)_fn_fiscal_certificado_pode\s*\(/i.test(p) && /42501/.test(p))
+      || (nome === 'public._fn_fiscal_certificado_pode' && /returns\s+boolean/i.test(p)
+        && /revoke all on function public\._fn_fiscal_certificado_pode\(uuid\) from public, anon, authenticated;/i.test(p));
+    /* IMPORTAR-ABATE-01: corpo `AS %L` = o texto do PROPRIO BANCO (pg_get_functiondef/prosrc patchado por md5), que o arquivo nao
+       mostra — a guarda dele e' a da definicao anterior (ver `ultimasSemGuarda`) */
+    return [{ nome, guardada, ...(/\bAS\s+%L/i.test(p) ? { doBanco: true } : {}) }];
   });
 }
 
@@ -54,8 +61,14 @@ export function ultimasSemGuarda(arquivos: readonly { arquivo: string; sql: stri
   for (const a of arquivos) {
     /* PATR-01: a redefinicao que DEIXA de ser exposta (SECURITY INVOKER, ou sem parametro de cliente/id) tambem e' a ultima — ela fecha a
        anterior. Sem isto, uma funcao que vira INVOKER numa migration seguinte continuava reprovada pela definicao velha. */
-    for (const nome of todasAsDefinicoes(a.sql)) ultima.set(nome.toLowerCase(), { arquivo: a.arquivo, guardada: true });
-    for (const d of definicoesExpostas(a.sql)) ultima.set(d.nome.toLowerCase(), { arquivo: a.arquivo, guardada: d.guardada });
+    const doBanco = new Set(definicoesExpostas(a.sql).filter(d => d.doBanco).map(d => d.nome.toLowerCase()));
+    for (const nome of todasAsDefinicoes(a.sql)) if (!doBanco.has(nome.toLowerCase())) ultima.set(nome.toLowerCase(), { arquivo: a.arquivo, guardada: true });
+    for (const d of definicoesExpostas(a.sql)) {
+      const chave = d.nome.toLowerCase();
+      /* IMPORTAR-ABATE-01: corpo do banco herda a anterior; sem anterior nos arquivos, nada prova a guarda = reprova */
+      if (d.doBanco) { if (!ultima.has(chave)) ultima.set(chave, { arquivo: a.arquivo, guardada: false }); continue; }
+      ultima.set(chave, { arquivo: a.arquivo, guardada: d.guardada });
+    }
   }
   return [...ultima.entries()].filter(([, v]) => !v.guardada).map(([nome, v]) => `${v.arquivo}: ${nome}`);
 }
@@ -127,6 +140,23 @@ describe('guarda de cliente nas migrations novas', () => {
     expect(semGuarda(sql)).toEqual([]);
   });
 
+  it('o predicado do certificado e\' aceito como guarda, so\' devolve boolean (admin ou gestor do cliente) e nasce fechado (NOTAS-RECEITA-A1-01 F1)', () => {
+    const peloPredicado = `CREATE FUNCTION public.fn_q(p_cert uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      begin if not public._fn_fiscal_certificado_pode(x) then raise exception using errcode = '42501'; end if; return '{}'; end $$;`;
+    const predicadoAberto = `CREATE FUNCTION public._fn_fiscal_certificado_pode(p_cliente uuid) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$ select true $$;`;
+    expect(semGuarda([peloPredicado, predicadoAberto].join('\n'))).toEqual(['public._fn_fiscal_certificado_pode']);
+    const sql = readFileSync(join(DIR, '20261028113300_notas_receita_a1_f1.sql'), 'utf8');
+    const inicio = sql.indexOf('create or replace function public._fn_fiscal_certificado_pode');
+    const corpo = sql.slice(inicio, sql.indexOf('$$;', sql.indexOf('as $$', inicio)));
+    expect(corpo).toMatch(/returns boolean/);
+    expect(corpo).toMatch(/is_admin_agroinblue\(auth\.uid\(\)\)/);
+    expect(corpo).toMatch(/get_user_perfil\(auth\.uid\(\), p_cliente\)::text = 'gestor_cliente'/);
+    /* o corpo INTEIRO: as duas condicoes e nada mais (um `or true` ou uma leitura de tabela reprova) */
+    expect(corpo.slice(corpo.indexOf('as $$') + 5).replace(/\s+/g, ' ').trim()).toBe(
+      "select coalesce(public.is_admin_agroinblue(auth.uid()), false) or coalesce(public.get_user_perfil(auth.uid(), p_cliente)::text = 'gestor_cliente', false)");
+    expect(semGuarda(sql)).toEqual([]);
+  });
+
   it('nenhuma migration nova tem funcao SECURITY DEFINER com parametro de cliente sem guarda', () => {
     const novas = readdirSync(DIR).filter(f => f.endsWith('.sql') && f >= DESDE).sort();
     expect(novas).toContain('20261027198600_seg_dre_tenant_01.sql');
@@ -147,6 +177,22 @@ describe('guarda de cliente nas migrations novas', () => {
     const sql = readFileSync(join(DIR, '20261027200400_fin_financ_28_p4b_guarda.sql'), 'utf8');
     expect(semGuarda(sql)).toEqual([]);
     expect(definicoesExpostas(sql).map((d) => d.nome)).toEqual(['public.fn_financiamento_parcela_vincular', 'public.fn_financiamento_parcela_desvincular']);
+  });
+
+  it('corpo do banco (AS %L) herda a guarda da definicao anterior; sem anterior, reprova (IMPORTAR-ABATE-01)', () => {
+    const com = `CREATE OR REPLACE FUNCTION public.fn_k(p_cliente_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      begin if not public.tenant_ok(p_cliente_id) then raise exception using errcode = '42501'; end if; return '{}'; end $$;`;
+    const sem = `CREATE OR REPLACE FUNCTION public.fn_k(p_cliente_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$ begin return '{}'; end $$;`;
+    const doBanco = `DO $p$ BEGIN EXECUTE format($f$CREATE OR REPLACE FUNCTION public.fn_k(p_cliente_id uuid)
+      RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS %L$f$, v_novo); END $p$;`;
+    expect(ultimasSemGuarda([{ arquivo: 'a.sql', sql: com }, { arquivo: 'b.sql', sql: doBanco }])).toEqual([]);
+    expect(ultimasSemGuarda([{ arquivo: 'a.sql', sql: sem }, { arquivo: 'b.sql', sql: doBanco }])).toEqual(['a.sql: public.fn_k']);
+    expect(ultimasSemGuarda([{ arquivo: 'b.sql', sql: doBanco }])).toEqual(['b.sql: public.fn_k']);
+    /* o caso real: a 117530 troca o corpo da oc_importar_abate da 117510 (que tem tenant_ok + 42501) */
+    const real = ['20261028117510_importar_abate_01_oc_importar.sql', '20261028117530_importar_abate_01_diferenca_acerto.sql']
+      .map(f => ({ arquivo: f, sql: readFileSync(join(DIR, f), 'utf8') }));
+    expect(definicoesExpostas(real[1].sql).filter(d => d.doBanco).map(d => d.nome)).toEqual(['public.oc_importar_abate']);
+    expect(ultimasSemGuarda(real).filter(x => x.includes('oc_importar_abate'))).toEqual([]);
   });
 
   it('a migration do DRE poe a guarda nas 7 funcoes da familia (tenant_ok) e fecha a interna', () => {

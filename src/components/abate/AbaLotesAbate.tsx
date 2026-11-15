@@ -78,7 +78,7 @@ export function BlocoResumoLote({ c, vazio }: { c: AbateCalculation; vazio?: boo
       <LinhaSum vazio={vazio} rotulo="(+) Bônus" valor={c.totalBonus} cor={vazio ? undefined : 'text-emerald-600'} />
       <LinhaSum vazio={vazio} rotulo="(−) Descontos" valor={-c.totalDescontos} cor={vazio ? undefined : CLS_NEG} />
       <LinhaSum vazio={vazio} rotulo="Bruto" valor={c.valorBruto} forte />
-      <LinhaSum vazio={vazio} rotulo="(−) Funrural e impostos" valor={-c.funruralTotal} cor={vazio ? undefined : CLS_NEG} />
+      <LinhaSum vazio={vazio} rotulo="(−) Funrural e impostos" valor={-c.retencaoTotal} cor={vazio ? undefined : CLS_NEG} />
       <LinhaSum vazio={vazio} rotulo="Líquido do lote" valor={c.valorLiquido} forte />
     </div>
   );
@@ -318,6 +318,13 @@ export function AbaLotesAbate({
                   {/* Sem peso vivo não há rendimento — e o traço diz isso, em vez de 0,0%. */}
                   {lote.pesoMedioKg > 0 && c.rendCalc > 0 ? `RC ${formatNum(c.rendCalc, 1)}%` : 'RC —'}
                 </div>
+                {/* 117541 — o peso vivo deste lote é o MÉDIO DO ABATE (importado com vários lotes e só o peso geral): o RC é estimado */}
+                {lote.pesoDaMediaDoAbate && (
+                  <div className="whitespace-nowrap text-[9.5px] font-semibold text-amber-700" data-testid="selo-peso-medio-do-abate"
+                    title="O peso vivo deste lote é o médio do abate, não o dele: o rendimento é estimado. Para o RC do lote, informe o peso dele em Lotes (reabra a negociação).">
+                    peso médio do abate
+                  </div>
+                )}
 
                 <div className="mt-0.5 whitespace-nowrap text-[10px] text-muted-foreground">Líquido do lote</div>
                 {negociado ? (<>

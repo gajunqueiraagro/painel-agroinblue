@@ -28,6 +28,7 @@ import {
 import type { ContaDoCliente } from '@/lib/fiscal/produtoresApi';
 import { useHistoricoDaCondicao, useProdutoresApi } from '@/hooks/useProdutores';
 import type { Pedido } from './PreviaDoBanco';
+import { CertificadoDoProdutor } from './CertificadoDoProdutor';
 
 export const TH_FICHA = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-left');
 export const TH_FICHA_NUM = cn(TH_FICHA, 'text-right');
@@ -258,20 +259,16 @@ export function AbaContas({ titular, contas, previa }: { titular: Titular; conta
   );
 }
 
-/* ── Certificado digital (FISCAL-DFE-01: só o lugar) ──────────────────────────────────────────────────────────────────────── */
-export function AbaCertificado() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-1.5" data-testid="produtor-aba-certificado">
-      <BlocoFormulario titulo="Certificado digital A1">
-        <div className={cn(GRADE_FORMULARIO, 'grid-cols-3')}>
-          <div><Rotulo texto="Certificado A1" /><div className={cn(REGUA_CAMPO, 'flex items-center rounded-md border bg-muted/60 px-2 text-muted-foreground')}>não cadastrado</div></div>
-          <div><Rotulo texto="Validade" /><div className={cn(REGUA_CAMPO, 'flex items-center rounded-md border bg-muted/60 px-2 text-muted-foreground')}>—</div></div>
-          <div><Rotulo texto="Última busca" /><div className={cn(REGUA_CAMPO, 'flex items-center rounded-md border bg-muted/60 px-2 text-muted-foreground')}>—</div></div>
-        </div>
-      </BlocoFormulario>
-      <p className="text-[10px] text-muted-foreground">Frente FISCAL-DFE-01 (desenho de segurança em andamento). Até lá, as notas entram por XML/PDF e o sistema reconhece o produtor pelo CPF/CNPJ do destinatário.</p>
-    </div>
-  );
+/* ── Certificado digital — NOTAS-RECEITA-A1-01 F2: a aba de verdade mora em `CertificadoDoProdutor` (só metadados; o arquivo vai à borda) ── */
+export function AbaCertificado({ titularId }: { titularId: string | null }) {
+  if (!titularId) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5" data-testid="produtor-aba-certificado">
+        <p className="text-[10px] text-muted-foreground">Salve o produtor para subir o certificado digital A1 dele.</p>
+      </div>
+    );
+  }
+  return <CertificadoDoProdutor titularId={titularId} />;
 }
 
 /* ── Grupo (as PJs do produtor) ────────────────────────────────────────────────────────────────────────────────────────────── */

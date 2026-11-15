@@ -783,6 +783,11 @@ export interface PatrimonioPec {
     /** O ágio do período inteiro (`null` sem a chave). */
     agio: number | null;
     agio_sem_preco: boolean;
+    /**
+     * DRE-PRECO-REF-01: as categorias cujo preço do INÍCIO não existia (sem fechamento nem tabela no mês de P0) e foram
+     * valoradas ao preço do FIM — vira aviso no modal. Vazia sem a chave (RPC anterior à migration 20261028115310).
+     */
+    preco_ref_do_fim: string[];
   };
   /** A série da V4 (vazia sem a chave). */
   meses: MesDoPatrimonio[];
@@ -859,6 +864,7 @@ async function buscarPatrimonio(
       q0: num(t.q0), v0: num(t.v0), q1: num(t.q1),
       v1_p0: num(t.v1_p0), v1_p1: num(t.v1_p1), vpb: num(t.vpb), efeito: num(t.efeito),
       agio: numOuNulo(t.agio), agio_sem_preco: t.agio_sem_preco === true,
+      preco_ref_do_fim: (Array.isArray(t.preco_ref_do_fim) ? t.preco_ref_do_fim : []).map((x: unknown) => String(x)),
     },
     meses: (Array.isArray(o.meses) ? o.meses : []).map((x: unknown): MesDoPatrimonio => {
       const m = objeto(x);

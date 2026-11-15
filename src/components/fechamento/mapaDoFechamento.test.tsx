@@ -113,7 +113,7 @@ describe('o encaixe no Fechamento', () => {
     /* fora do topo: o seletor é um só (`seletorDaVista`) e entra nas duas vistas */
     expect(f.indexOf('data-testid="topo-do-fechamento"')).toBeGreaterThan(0);
     expect(f.match(/data-testid="lugar-seletor-cards-mapa"/g)).toHaveLength(1);
-    expect(f).toContain('<div className="flex h-6 flex-none items-center gap-2" data-testid="linha-da-vista">{seletorDaVista}</div>');
+    expect(f).toContain('<div className={`flex h-6 flex-none items-center gap-2 ${CLASSE_LINHA_PRESA}`} data-testid="linha-da-vista">{seletorDaVista}</div>');
     /* FECH-PASTO-UNIDADE-01 (merge): o piquete pinta o pai (`paiDe`) */
     expect(f).toContain("<MapaDoFechamento pastos={pastosDoMapa} situacaoDe={getPastoStatus} paiDe={paiDoPiquete}\n            onAbrir={handleOpenPasto} popupDe={dadosDoPopupDe} seletor={seletorDaVista} />");
     expect(f).toContain('const pastosDoMapa = useMemo(() => pastosAtivos.filter(p => !isPastoDivergencia(p.tipo_uso)), [pastosAtivos]);');

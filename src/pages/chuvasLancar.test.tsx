@@ -31,27 +31,34 @@ describe('Chuvas › lançar (a planilha de uma fazenda)', () => {
     expect(screen.getByRole('button', { name: /Lançar/ })).toBeTruthy();
   });
 
-  it('UMA coluna Dia e uma coluna por mês (13 cabeçalhos); a linha Total presa no topo, no cabeçalho', () => {
+  it('CHUVAS-VOLTAR-01: o layout de ANTES — por mês Dia | mm (12 × 2 colunas + a lateral), Tot preso no topo e repetido no rodapé', () => {
     render(<ChuvasTab mode="operacional" />);
     const tabela = screen.getByTestId('chuvas-tabela');
-    const cab = [...tabela.querySelectorAll('thead tr:first-child th')].map((t) => t.textContent);
-    expect(cab).toEqual(['Dia', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']);
+    expect(tabela.className).toContain('text-[10px]');
+    expect(tabela.className).toContain('leading-tight');
+    const meses = [...tabela.querySelectorAll('thead tr:first-child th')].map((t) => t.textContent);
+    expect(meses).toEqual(['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']);
+    const sub = [...tabela.querySelectorAll('thead tr:nth-child(2) th')].map((t) => t.textContent);
+    expect(sub).toHaveLength(24);
+    expect(sub.slice(0, 4)).toEqual(['Dia', 'mm', 'Dia', 'mm']);
+    expect(tabela.querySelector('thead')?.className).toContain('sticky');
     const total = screen.getByTestId('chuvas-linha-total');
     expect(total.closest('thead')).toBeTruthy();
-    expect(total.querySelector('th')?.className).toContain('sticky');
-    expect([...total.querySelectorAll('th')].slice(1, 4).map((t) => t.textContent)).toEqual(['113,5', '', '1.000,3']);
-    /* 31 linhas de dia, cada uma com 13 células (Dia + 12 meses) */
+    expect([...total.querySelectorAll('th')].slice(1, 4).map((t) => t.textContent)).toEqual(['113,5', '-', '1.000,3']);
+    /* 31 linhas de dia, cada uma com a lateral + 12 pares Dia|mm */
     expect(tabela.querySelectorAll('tbody tr')).toHaveLength(31);
-    expect(tabela.querySelectorAll('tbody tr:first-child td')).toHaveLength(13);
+    expect(tabela.querySelectorAll('tbody tr:first-child td')).toHaveLength(25);
+    /* o rodapé: Tot, os anos anteriores, Acum e os acumulados anteriores */
+    const rodape = [...tabela.querySelectorAll('tfoot tr')].map((t) => t.querySelector('td')?.textContent);
+    expect(rodape).toEqual(['Tot', '2025', 'Acum', '2025']);
   });
 
-  it('número com vírgula, à direita; dia sem chuva VAZIO (nunca "-")', () => {
+  it('número com vírgula decimal (do novo); dia sem chuva com "-" (como antes); nunca o ponto decimal', () => {
     render(<ChuvasTab mode="operacional" />);
-    const jan1 = screen.getByTestId('chuvas-01-01');
-    expect(jan1.textContent).toBe('93,0');
-    expect(jan1.className).toContain('text-right');
-    expect(screen.getByTestId('chuvas-01-02').textContent).toBe('');
-    expect(within(screen.getByTestId('chuvas-tabela')).queryAllByText('-')).toHaveLength(0);
+    expect(screen.getByTestId('chuvas-01-01').textContent).toBe('93,0');
+    expect(screen.getByTestId('chuvas-01-04').textContent).toBe('20,5');
+    expect(screen.getByTestId('chuvas-01-02').textContent).toBe('-');
+    expect(screen.getByTestId('chuvas-tabela').textContent).not.toMatch(/\d\.\d(?!\d{2})/);
   });
 
   it('o quadro vai até a base da tela (useAlturaAteOFim) e o hook vem antes da saída do "Carregando" (nunca condicional)', () => {

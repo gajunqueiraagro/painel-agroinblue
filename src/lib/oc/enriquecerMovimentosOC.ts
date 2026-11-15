@@ -41,6 +41,7 @@ export interface EnriquecimentoOC {
     descontoQualidade: number | null; descontoQualidadeFonte: string | null;
     outrosDescontos: number | null; outrosDescontosFonte: string | null;
     funrural: number | null; funruralFonte: string | null;
+    senar: number | null; senarFonte: string | null;
     valorLiquido: number | null;
     qtdLote: number | null;
   } | null;
@@ -105,8 +106,12 @@ export function aplicarEnriquecimentoOC(
       bonusQualidade: ab.bonusQualidade ?? l.bonusQualidade,
       bonusListaTrace: ab.bonusListaTrace ?? l.bonusListaTrace,
       descontoQualidade: ab.descontoQualidade ?? l.descontoQualidade,
-      descontoFunrural: ab.funrural != null && ab.funruralFonte === 'reais'
-        ? ab.funrural * proporcao : l.descontoFunrural,
+      /* IMPORTAR-ABATE-01 (D5) — o Rebanho tem UM campo de retencao (`descontoFunrural`, somado nos descontos por `economicos`):
+         ele recebe a retencao INTEIRA do lote, Funrural + SENAR. A separacao dos dois mora na OC; aqui so' muda de nome o que
+         sempre foi a mesma soma (depois da reclassificacao, o numero da lista e' o de antes). */
+      descontoFunrural: (ab.funrural != null && ab.funruralFonte === 'reais') || (ab.senar != null && ab.senarFonte === 'reais')
+        ? ((ab.funruralFonte === 'reais' ? ab.funrural ?? 0 : 0) + (ab.senarFonte === 'reais' ? ab.senar ?? 0 : 0)) * proporcao
+        : l.descontoFunrural,
       /* O RECEBIDO NF do abate vindo de OC — ZOOT-LISTA-01. `valor_total` do lançamento é
          cópia velha: em 3 dos 12 abates de OC do proto ele ficou para trás de uma
          revaloração (−9.009,85, −4.774,56, −3.555,71), porque `oc_salvar_abate` não
@@ -164,7 +169,7 @@ export async function enriquecerMovimentosOC(lancamentos: Lancamento[]): Promise
         .select('operacao_lote_id, peso_carcaca_kg, preco_arroba, bonus_precoce_valor, bonus_precoce_fonte,'
           + ' bonus_qualidade_valor, bonus_qualidade_fonte, bonus_lista_trace_valor, bonus_lista_trace_fonte,'
           + ' desconto_qualidade_valor, desconto_qualidade_fonte, outros_descontos_valor, outros_descontos_fonte,'
-          + ' funrural_valor, funrural_fonte, valor_liquido')
+          + ' funrural_valor, funrural_fonte, senar_valor, senar_fonte, valor_liquido')
         .in('operacao_lote_id', loteIds).eq('cenario', 'realizado')
     : { data: [] };
 
@@ -220,6 +225,7 @@ export async function enriquecerMovimentosOC(lancamentos: Lancamento[]): Promise
           descontoQualidade: num(a.desconto_qualidade_valor), descontoQualidadeFonte: txt(a.desconto_qualidade_fonte),
           outrosDescontos: num(a.outros_descontos_valor), outrosDescontosFonte: txt(a.outros_descontos_fonte),
           funrural: num(a.funrural_valor), funruralFonte: txt(a.funrural_fonte),
+          senar: num(a.senar_valor), senarFonte: txt(a.senar_fonte),
           valorLiquido: num(a.valor_liquido),
           qtdLote: lote?.qtd_negociada != null ? Number(lote.qtd_negociada) : null,
         };

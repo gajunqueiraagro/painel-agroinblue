@@ -1,0 +1,36 @@
+{
+  "_origem": "OPENFINANCE-PILOTO-01 — SINTÉTICO, no formato de GET /accounts e GET /transactions da doc da Pluggy (docs.pluggy.ai, Accounts/Transactions, lida em 13/11/2026). NÃO é captura do sandbox: a Pluggy não foi chamada. No dia 1 do trial troca-se pela resposta real do Pluggy Bank (CPF de teste 761.092.776-73), e os testes têm de continuar verdes.",
+  "conta": {
+    "id": "acc-sandbox-cc-0001",
+    "itemId": "item-sandbox-0001",
+    "type": "BANK",
+    "subtype": "CHECKING_ACCOUNT",
+    "name": "Conta Corrente",
+    "number": "0001/12345-0",
+    "balance": 15234.56,
+    "currencyCode": "BRL"
+  },
+  "cartao": {
+    "id": "acc-sandbox-cartao-0001",
+    "itemId": "item-sandbox-0001",
+    "type": "CREDIT",
+    "subtype": "CREDIT_CARD",
+    "name": "Cartão Platinum",
+    "number": "xxxx-4321",
+    "balance": 812.3,
+    "currencyCode": "BRL"
+  },
+  "transacoes": [
+    { "id": "tx-0001", "accountId": "acc-sandbox-cc-0001", "description": "PIX RECEBIDO JOAO DA SILVA", "descriptionRaw": "PIX RECEBIDO 03/11 JOAO DA SILVA", "currencyCode": "BRL", "amount": 1500, "date": "2026-11-03T03:00:00.000Z", "balance": 13984.96, "status": "POSTED", "type": "CREDIT", "providerId": "OF-BB-20261103-0001" },
+    { "id": "tx-0002", "accountId": "acc-sandbox-cc-0001", "description": "TARIFA PACOTE SERVICOS", "descriptionRaw": null, "currencyCode": "BRL", "amount": -250.4, "date": "2026-11-04T12:00:00.000Z", "balance": 13734.56, "status": "POSTED", "type": "DEBIT", "providerId": "OF-BB-20261104-0002" },
+    { "id": "tx-0003", "accountId": "acc-sandbox-cc-0001", "description": "PIX ENVIADO FORNECEDOR RACAO", "descriptionRaw": null, "currencyCode": "BRL", "amount": 80, "date": "2026-11-05T01:30:00.000Z", "balance": 13654.56, "status": "POSTED", "type": "DEBIT", "providerId": "OF-BB-20261104-0003" },
+    { "id": "tx-0004", "accountId": "acc-sandbox-cc-0001", "description": "COMPRA CARTAO DEBITO POSTO", "descriptionRaw": null, "currencyCode": "BRL", "amount": -99.9, "date": "2026-11-05T15:00:00.000Z", "balance": null, "status": "PENDING", "type": "DEBIT", "providerId": null },
+    { "id": "tx-0005", "accountId": "acc-sandbox-cc-0001", "description": "", "descriptionRaw": "RENDIMENTO POUPANCA AUT", "currencyCode": "BRL", "amount": 0.13, "date": "2026-11-06T03:00:00.000Z", "balance": 13654.69, "status": "POSTED", "type": "CREDIT", "providerId": null },
+    { "id": "tx-0006", "accountId": "acc-sandbox-cc-0001", "description": "", "descriptionRaw": "RENDIMENTO POUPANCA AUT", "currencyCode": "BRL", "amount": 0.13, "date": "2026-11-06T03:00:00.000Z", "balance": 13654.82, "status": "POSTED", "type": "CREDIT", "providerId": null },
+    { "id": "tx-0007", "accountId": "acc-sandbox-cc-0001", "description": "AJUSTE SEM VALOR", "descriptionRaw": null, "currencyCode": "BRL", "amount": 0, "date": "2026-11-07T03:00:00.000Z", "balance": 13654.82, "status": "POSTED", "type": "CREDIT", "providerId": "OF-BB-20261107-0007" },
+    { "id": "tx-0001", "accountId": "acc-sandbox-cc-0001", "description": "PIX RECEBIDO JOAO DA SILVA", "descriptionRaw": "PIX RECEBIDO 03/11 JOAO DA SILVA", "currencyCode": "BRL", "amount": 1500, "date": "2026-11-03T03:00:00.000Z", "balance": 13984.96, "status": "POSTED", "type": "CREDIT", "providerId": "OF-BB-20261103-0001" },
+    { "id": "tx-0008", "accountId": "acc-sandbox-cc-0001", "description": "PAGAMENTO BOLETO ENERGIA", "descriptionRaw": null, "currencyCode": "BRL", "amount": -1200, "date": "2026-10-28T03:00:00.000Z", "balance": 12484.96, "status": "POSTED", "type": "DEBIT", "providerId": "OF-BB-20261028-0008" },
+    { "id": "tx-0009", "accountId": "acc-sandbox-cc-0001", "description": "DEP DINHEIRO AGENCIA", "descriptionRaw": null, "currencyCode": "BRL", "amount": 5580, "date": "2026-11-10T03:00:00.000Z", "balance": 15234.82, "status": "POSTED", "type": "CREDIT", "providerId": "OF-BB-20261110-0009" },
+    { "id": "tx-0010", "accountId": "acc-sandbox-cc-0001", "description": "TARIFA DOC AVULSA", "descriptionRaw": null, "currencyCode": "BRL", "amount": -0.26, "date": "2026-11-10T13:00:00.000Z", "balance": 15234.56, "status": "POSTED", "type": "DEBIT", "providerId": "OF-BB-20261110-0010" }
+  ]
+}

@@ -48,11 +48,22 @@ function GradienteDaBase({ id, fracao }: { id: string; fracao: number }) {
   );
 }
 
-export function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
-  data: { label: string; fullLabel?: string; value: number | null; value2?: number | null }[];
+export function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2, altura = 140, ligarFalhas = false, semLegendaDaBase = false, chaveEixo = 'label', fonteEixo = 7, margemDireita = 4 }: {
+  data: { label: string; fullLabel?: string; eixo?: string; value: number | null; value2?: number | null }[];
   color: string; title: string; unit?: 'currency' | 'arroba';
   /** A segunda linha — cinza tracejada. Só o 4º gráfico a usa. */
   serie2?: boolean; rotulo1?: string; rotulo2?: string;
+  /** DRE-VARIACAO-SIMPLES-01 (P7): o gráfico grande do modal da variação; sem a prop, os 140px da tela do VR. */
+  altura?: number;
+  /* DRE-VARIACAO-SIMPLES-01 v4 (Chat 11/11 08:35) — o gráfico grande do modal da variação; sem as props, o da tela do VR:
+     `ligarFalhas`: a linha passa por cima do mês sem fechamento (o cadastro) em vez de deixar pontos soltos;
+     `semLegendaDaBase`: sem os três símbolos da base (tracejada + 2 quadradinhos); `chaveEixo`/`fonteEixo`: o rótulo e a fonte do eixo X. */
+  ligarFalhas?: boolean;
+  semLegendaDaBase?: boolean;
+  chaveEixo?: 'label' | 'eixo';
+  fonteEixo?: number;
+  /** o espaço à direita do desenho: com a fonte 9 do eixo, o último mês ("set") cortava em "se" com os 4px de sempre */
+  margemDireita?: number;
 }) {
   // Strip leading null points so the chart renders from the first real value (e.g. Jan)
   const firstRealIdx = data.findIndex(d => d.value !== null);
@@ -73,15 +84,15 @@ export function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }
        ⚠ E O EIXO Y GANHOU TRÊS RÓTULOS: sem eles o desenho mostrava a FORMA da curva e escondia a
        ordem de grandeza — duas telas iguais para 8 e para 15 milhões. */
     <div className="flex-1 min-w-0">
-      <p className="mb-0.5 truncate text-center font-medium" style={{ fontSize: 10, color: '#0C447C' }}>{title}</p>
-      <div className="h-[140px] w-full">
+      {title && <p className="mb-0.5 truncate text-center font-medium" style={{ fontSize: 10, color: '#0C447C' }}>{title}</p>}
+      <div className="w-full" style={{ height: altura }}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={visibleData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+          <ComposedChart data={visibleData} margin={{ top: 4, right: margemDireita, bottom: 0, left: 4 }}>
             <defs>
               {r1?.fracaoDaBase != null && <GradienteDaBase id={`base1-${uid}`} fracao={r1.fracaoDaBase} />}
               {r2?.fracaoDaBase != null && <GradienteDaBase id={`base2-${uid}`} fracao={r2.fracaoDaBase} />}
             </defs>
-            <XAxis dataKey="label" tick={{ fontSize: 7 }} interval={0} tickLine={false} axisLine={false} />
+            <XAxis dataKey={chaveEixo} tick={{ fontSize: fonteEixo }} interval={0} tickLine={false} axisLine={false} />
             <YAxis width={34} tick={{ fontSize: 8 }} tickLine={false} axisLine={false} tickCount={3}
               domain={['auto', 'auto']}
               tickFormatter={(v: number) => (Math.abs(v) >= 1_000_000
@@ -101,29 +112,29 @@ export function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }
                 passam POR BAIXO. Cada série tem a sua; onde se sobrepõem, sobrepõem. */}
             {r1?.fracaoDaBase != null && base != null && (
               <Area type="monotone" dataKey="value" baseValue={base} stroke="none"
-                fill={`url(#base1-${uid})`} connectNulls={false} isAnimationActive={false}
+                fill={`url(#base1-${uid})`} connectNulls={ligarFalhas} isAnimationActive={false}
                 activeDot={false} tooltipType="none" legendType="none" />
             )}
             {r2?.fracaoDaBase != null && base != null && (
               <Area type="monotone" dataKey="value2" baseValue={base} stroke="none"
-                fill={`url(#base2-${uid})`} connectNulls={false} isAnimationActive={false}
+                fill={`url(#base2-${uid})`} connectNulls={ligarFalhas} isAnimationActive={false}
                 activeDot={false} tooltipType="none" legendType="none" />
             )}
             {base != null && (
               <ReferenceLine y={base} stroke={COR_BASE} strokeWidth={0.8} strokeDasharray="2 3" />
             )}
-            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2, fill: color, strokeWidth: 0 }} activeDot={{ r: 3.5 }} connectNulls={false} />
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2, fill: color, strokeWidth: 0 }} activeDot={{ r: 3.5 }} connectNulls={ligarFalhas} />
             {/* ⚠ A TRACEJADA É O MESMO REBANHO AO PREÇO DO INÍCIO: a distância até a cheia é o
                 efeito de mercado acumulado, e ela sozinha é a produção. */}
             {serie2 && (
               <Line type="monotone" dataKey="value2" stroke={COR_SEM_MERCADO} strokeWidth={1.5}
                 strokeDasharray="3 2" dot={{ r: 2, fill: COR_SEM_MERCADO, strokeWidth: 0 }}
-                activeDot={{ r: 3.5 }} connectNulls={false} />
+                activeDot={{ r: 3.5 }} connectNulls={ligarFalhas} />
             )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      {(serie2 || base != null) && (
+      {(serie2 || (base != null && !semLegendaDaBase)) && (
         <div className="flex flex-wrap items-center justify-center gap-x-2" style={{ fontSize: 8 }}>
           {serie2 && (
             <>
@@ -135,7 +146,7 @@ export function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }
               </span>
             </>
           )}
-          {base != null && (
+          {base != null && !semLegendaDaBase && (
             /* ⚠ SÓ O SÍMBOLO, E O NOME NO `title`. Medido: com os rótulos escritos, os cinco itens
                somavam 294,5px numa caixa de 220 — não cabiam em uma linha nem com espaçamento
                zero, e a faixa dos gráficos crescia 12px. O símbolo aqui NÃO é abreviação de um

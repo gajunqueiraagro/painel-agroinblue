@@ -6,7 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Segmentado } from '@/components/ui/segmentado';
 import { Upload, Maximize2, Minimize2, RefreshCw, Printer } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
-import { usePastos, type Pasto } from '@/hooks/usePastos';
+import { usePastos, pastosMudaramPorFora, type Pasto } from '@/hooks/usePastos';
+import { usePermissions } from '@/hooks/usePermissions';
+import { FichaDoPasto } from '@/components/pastos/FichaDoPasto';
 import { useMapaDoMes } from '@/hooks/useMapaDoMes';
 import { useFechamento } from '@/hooks/useFechamento';
 import { pastosDoFechamentoNoMes, useLoteDoMes } from '@/hooks/useLoteDoMes';
@@ -66,7 +68,13 @@ const VISTAS: { valor: ViewMode; rotulo: string }[] = [
  * para o último mês fechado (Q3) e mostra "← Global" no Gestor; a volta (pelo botão ou pela barra lateral) acha o Global como estava: o
  * estado mora aqui enquanto a tela Geo Pastos está aberta (Q4).
  */
-export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado = {}) {
+/** PASTO-CADASTRO-GEO-01 P2 — a ida da ficha do pasto: o pasto abre selecionado no Gestor (ou o desenho começa na Validação, já ligado
+ *  a ele) e o "← Cadastro" volta reabrindo a ficha. */
+export interface MapaGeoPastosTabProps extends PeriodoControlado {
+  idaDoCadastro?: { pastoId: string; desenhar: boolean } | null;
+  voltarAoCadastro?: () => void;
+}
+export function MapaGeoPastosTab({ periodo, onPeriodoChange, idaDoCadastro = null, voltarAoCadastro }: MapaGeoPastosTabProps = {}) {
   const { isGlobal, fazendaAtual, fazendasComPecuaria, setFazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const {
@@ -101,7 +109,10 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [imprimirAberto, setImprimirAberto] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('gestor');
+  const [viewMode, setViewMode] = useState<ViewMode>(idaDoCadastro?.desenhar ? 'validacao' : 'gestor');
+  /* PASTO-CADASTRO-GEO-01 P3: a ficha do cadastro aberta POR CIMA do mapa (o mesmo componente da aba Pastos); fechar = voltar ao mapa */
+  const [fichaNoMapa, setFichaNoMapa] = useState<string | null>(null);
+  const { canEdit } = usePermissions();
   /* MAPA-AREA-TIPOS-02: a infraestrutura que o Gestor abre ao vir da Validação ("Ficha e Patrimônio no Gestor") */
   const [infraInicial, setInfraInicial] = useState<string | null>(null);
   /* MAPA-AREA-TIPOS-02: como o pedido abre na Validação (Adicionar › Área = desenhar; a infraestrutura de área existente = escolher) */
@@ -290,6 +301,10 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const barraSimples = (
     <div className="flex h-10 flex-shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-3">
       <div className="flex min-w-0 items-center gap-2">
+        {voltarAoCadastro && (
+          <Button variant="ghost" size="sm" className="h-6 gap-0 px-0.5 text-[11px] font-semibold text-[#2B6CB0]" onClick={voltarAoCadastro}
+            title="Voltar ao cadastro do pasto (a ficha reabre)" data-testid="mapa-voltar-ao-cadastro">‹ Cadastro</Button>
+        )}
         {expanded && (
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground" onClick={() => setExpanded(false)}>
             <Minimize2 className="h-3.5 w-3.5" />
@@ -339,7 +354,9 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
         trocaDeVista={trocaDeVista}
         acaoImprimir={fazendaId ? botaoImprimir : undefined}
         voltarAoGlobal={veioDoGlobal ? voltarAoGlobal : undefined}
-        pastoInicialId={veioDoGlobal ? pastoInicial : null}
+        voltarAoCadastro={voltarAoCadastro}
+        pastoInicialId={idaDoCadastro && !idaDoCadastro.desenhar ? idaDoCadastro.pastoId : veioDoGlobal ? pastoInicial : null}
+        onAbrirCadastro={fazendaId ? setFichaNoMapa : undefined}
         infraInicialId={infraInicial}
         onInfraInicialUsada={() => setInfraInicial(null)}
         onLancar={fazendaId ? lancarNoPasto : undefined}
@@ -375,6 +392,7 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
             onTipoPedidoUsado={() => setTipoPedido(null)}
             onAbrirInfraNoGestor={id => { setInfraInicial(id); setViewMode('gestor'); }}
             modoInicialDoPedido={modoDoPedido}
+            desenharParaPasto={idaDoCadastro?.desenhar ? { pastoId: idaDoCadastro.pastoId, nome: pastos.find(p => p.id === idaDoCadastro.pastoId)?.nome ?? '' } : null}
           />
         )}
       </div>
@@ -384,6 +402,14 @@ export function MapaGeoPastosTab({ periodo, onPeriodoChange }: PeriodoControlado
   const dialogo = (
     <>
     {modalDoPasto.modal}
+    {fichaNoMapa && fazendaId && fazendaAtual && (
+      <FichaDoPasto pastoId={fichaNoMapa} fazendaId={fazendaId}
+        fazendaNome={fazendaAtual.codigo ? `${fazendaAtual.codigo} · ${fazendaAtual.nome}` : fazendaAtual.nome}
+        clienteId={fazendaAtual.cliente_id ?? null} mesDeHoje={hojeLocal().slice(0, 7)} hoje={hojeLocal()}
+        piquetes={pastos.filter(x => x.pai_id === fichaNoMapa).length} podeEditar={canEdit('pastos')}
+        aoFechar={() => setFichaNoMapa(null)}
+        aoGravar={() => { setFichaNoMapa(null); if (fazendaAtual.cliente_id) pastosMudaramPorFora(fazendaAtual.cliente_id); }} />
+    )}
     {fazendaId && <ImprimirMapaDialog open={imprimirAberto} onOpenChange={setImprimirAberto} anoMes={anoMes} aoGerar={gerarPdf} />}
     <KmlUploadDialog
       open={uploadOpen}

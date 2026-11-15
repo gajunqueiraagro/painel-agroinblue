@@ -81,14 +81,19 @@ export function lerResultado(data: unknown): ResultadoDoHistorico | null {
 
 /**
  * A faixa amarela: o nome que o banco escreve NÃO é o do fornecedor que o histórico mostra (o banco corta, abrevia ou usa a razão
- * social) — "o banco escreve X; o fornecedor costuma ser Y (N vezes desde dd/mm/aaaa)". Nome contido no fornecedor = sem faixa.
+ * social). Nome contido no fornecedor = sem faixa.
+ * CONC-SUGESTOES-FONTE-01 (Gabriel 08/11): a faixa é UMA linha CURTA ("Costuma ser Y · N vezes desde dd/mm/aaaa"); a frase inteira ("o banco
+ * escreve X; o fornecedor costuma ser Y…") fica no `title`.
  */
-export function fraseDaFaixa(termo: string, resumo: ResumoDoHistorico | null): string | null {
+export function fraseDaFaixa(termo: string, resumo: ResumoDoHistorico | null): { curta: string; inteira: string } | null {
   const t = normalizarParaBusca(termo);
   if (!resumo || !t) return null;
   if (normalizarParaBusca(resumo.fornecedor).includes(t)) return null;
-  const vezes = `${resumo.vezes} ${resumo.vezes === 1 ? 'vez' : 'vezes'}`;
-  return `O banco escreve "${termo.trim()}"; o fornecedor costuma ser ${resumo.fornecedor} (${vezes}${resumo.desde ? ` desde ${dataBR(resumo.desde)}` : ''}).`;
+  const vezes = `${resumo.vezes} ${resumo.vezes === 1 ? 'vez' : 'vezes'}${resumo.desde ? ` desde ${dataBR(resumo.desde)}` : ''}`;
+  return {
+    curta: `Costuma ser ${resumo.fornecedor} · ${vezes}`,
+    inteira: `O banco escreve "${termo.trim()}"; o fornecedor costuma ser ${resumo.fornecedor} (${vezes}).`,
+  };
 }
 
 /** O achado → o modelo do Criar. Só o que ensina a classificação: fornecedor, subcentro (a conta do plano), fazenda e descrição. */

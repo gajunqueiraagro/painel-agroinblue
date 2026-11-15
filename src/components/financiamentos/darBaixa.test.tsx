@@ -16,7 +16,7 @@ function api(o: Partial<Api> = {}): Api {
   return {
     tela: null, erroDaTela: null, relerTela: vi.fn(),
     liberacoes: [], destinacoes: [], documentos: [], encargos: [], erroDeLeitura: null,
-    salvarLiberacao: vi.fn(async () => null), removerLiberacao: vi.fn(async () => null), salvarDestinacao: vi.fn(async () => null),
+    salvarLiberacao: vi.fn(async () => null), removerLiberacao: vi.fn(async () => null), salvarDestinacao: vi.fn(async () => null), criarDestinacao: vi.fn(async () => ({ id: 'd-nova' })),
     removerDestinacao: vi.fn(async () => null), enviarDocumento: vi.fn(async () => null), removerDocumento: vi.fn(async () => null),
     urlDoDocumento: vi.fn(async () => null), lerCaptacoesLivres: vi.fn(async () => []), lerContratosAnteriores: vi.fn(async () => []),
     baixaViva: null, darBaixa: vi.fn(async (_t: string, _d: Record<string, unknown>, simular: boolean) => lerResultadoDaBaixa({ ...OK, simulado: simular }) ?? 'x'),

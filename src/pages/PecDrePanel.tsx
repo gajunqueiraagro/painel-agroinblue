@@ -329,6 +329,10 @@ export interface InsumosDidaticos {
   atProduzida: number | null;
   /** `total.vendas` — a receita do desfrute. */
   vendas: number | null;
+  /** DRE-VARIACAO-SIMPLES-01 (P6 "Onde aparece no DRE"): as linhas da MESMA coluna, para o modal mostrar onde a variação entra. */
+  receitaLiquida: number | null;
+  vbp: number | null;
+  resultadoComMercado: number | null;
 }
 
 export function valorDaLinha(col: ColunaPec, def: DefPec): number | null {
@@ -996,6 +1000,9 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
             custeio: col.linhas == null ? null : col.linhas.custo_variavel + col.linhas.custo_fixo,
             atProduzida: col.linhas?.producao.at_produzida ?? null,
             vendas: col.linhas?.vendas ?? null,
+            receitaLiquida: col.linhas?.receita_liquida ?? null,
+            vbp: col.linhas?.vbp ?? null,
+            resultadoComMercado: col.linhas?.resultado_com_mercado ?? null,
           })
         : undefined;
     }
