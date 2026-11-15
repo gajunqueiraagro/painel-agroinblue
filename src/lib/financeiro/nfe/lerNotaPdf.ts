@@ -23,13 +23,14 @@ export function itemDoPdfjs(it: unknown): ItemDoDanfe | null {
 
 /** O pedaco do pdfjs que a extracao usa (o teste passa o build `legacy`, que roda no node). */
 export interface PdfjsMinimo {
-  getDocument: (src: { data: Uint8Array }) => { promise: Promise<{
+  getDocument: (src: { data: Uint8Array; password?: string }) => { promise: Promise<{
     numPages: number;
     getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: unknown[] }>; getViewport: (o: { scale: number }) => { width: number; height: number } }>;
   }> };
 }
 
-export async function itensDoPdf(bytes: ArrayBuffer, pdfjsInjetado?: PdfjsMinimo): Promise<PaginasDoPdf> {
+/** `opcoes.senha`: a do PDF protegido (o boleto, BOLETO-D1b), digitada pelo operador; nunca guardada. */
+export async function itensDoPdf(bytes: ArrayBuffer, pdfjsInjetado?: PdfjsMinimo, opcoes: { senha?: string } = {}): Promise<PaginasDoPdf> {
   let pdfjs: PdfjsMinimo;
   if (pdfjsInjetado) pdfjs = pdfjsInjetado;
   else {
@@ -38,7 +39,7 @@ export async function itensDoPdf(bytes: ArrayBuffer, pdfjsInjetado?: PdfjsMinimo
     pdfjs = m;
   }
   /* copia: o pdfjs transfere o buffer para o worker, e quem chamou ainda vai usar os bytes (anexo, previa) */
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes.slice(0)), ...(opcoes.senha ? { password: opcoes.senha } : {}) }).promise;
   const paginas: ItemDoDanfe[][] = [];
   const tamanhos: { largura: number; altura: number }[] = [];
   for (let n = 1; n <= pdf.numPages; n++) {

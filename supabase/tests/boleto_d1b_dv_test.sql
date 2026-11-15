@@ -1,0 +1,40 @@
+-- BOLETO-DDA-API-01 · D1b — a REGUA DO DV do boleto e' UMA: os casos de `src/lib/financeiro/linhaDigitavel.casos.json` rodam aqui na
+-- `_fn_boleto_normalizar` (migration 20261028118100) e no vitest na `normalizarBoleto` da tela (`linhaDigitavelDv.test.ts` confere que a lista e
+-- este arquivo batem, caso a caso). Linha 47 (bancario), 48 (arrecadacao) e o codigo de barras de 44; DV de campo, de bloco e geral.
+-- Roda como `postgres` e TERMINA EM RAISE: nada fica no banco. Sucesso = "OK ...". Sem dado de cliente: as linhas sinteticas tem DV
+-- calculado; a do banco 341 e' a do teste `linhaDigitavel.test.ts` (FIN-NFE-PARCELAS-01).
+begin;
+set local statement_timeout = '10s';
+do $t$
+declare r record; n int := 0;
+begin
+  for r in select * from (values
+    ('34191090080488182004919646100008816110000300650', '{"ok": true, "codigo_barras": "34198161100003006501090004881820041964610000", "linha": "34191090080488182004919646100008816110000300650", "tipo": "bancario", "banco": "341", "valor": 3006.5, "vencimento": "2026-10-26"}'),
+    ('34191.09008 04881.820049 19646.100008 8 16110000300650', '{"ok": true, "codigo_barras": "34198161100003006501090004881820041964610000", "linha": "34191090080488182004919646100008816110000300650", "tipo": "bancario", "banco": "341", "valor": 3006.5, "vencimento": "2026-10-26"}'),
+    ('34191090050488182004919646100008816110000300650', '{"ok": false, "motivo": "dv_campo"}'),
+    ('34191090080488182004919646100008916110000300650', '{"ok": false, "motivo": "dv_geral"}'),
+    ('34190900830488204919264610000800800000000300650', '{"ok": true, "codigo_barras": "34198000000003006500900804882049196461000080", "linha": "34190900830488204919264610000800800000000300650", "tipo": "bancario", "banco": "341", "valor": 3006.5, "vencimento": null}'),
+    ('23791234546789012345767890123457416500000000000', '{"ok": true, "codigo_barras": "23794165000000000001234567890123456789012345", "linha": "23791234546789012345767890123457416500000000000", "tipo": "bancario", "banco": "237", "valor": null, "vencimento": "2026-12-04"}'),
+    ('00190000090234567890412345678176117000000125075', '{"ok": true, "codigo_barras": "00191170000001250750000002345678901234567817", "linha": "00190000090234567890412345678176117000000125075", "tipo": "bancario", "banco": "001", "valor": 1250.75, "vencimento": "2027-01-23"}'),
+    ('00191170000001250750000002345678901234567817', '{"ok": true, "codigo_barras": "00191170000001250750000002345678901234567817", "linha": "00190000090234567890412345678176117000000125075", "tipo": "bancario", "banco": "001", "valor": 1250.75, "vencimento": "2027-01-23"}'),
+    ('00191170000001250750000002345678901234567818', '{"ok": false, "motivo": "dv_geral"}'),
+    ('816600000011234500011114222233334440455556666770', '{"ok": true, "codigo_barras": "81660000001234500011112222333344445555666677", "linha": "816600000011234500011114222233334440455556666770", "tipo": "arrecadacao", "banco": null, "valor": 123.45, "vencimento": null}'),
+    ('81660000001-1 23450001111-4 22223333444-0 45555666677-0', '{"ok": true, "codigo_barras": "81660000001234500011112222333344445555666677", "linha": "816600000011234500011114222233334440455556666770", "tipo": "arrecadacao", "banco": null, "valor": 123.45, "vencimento": null}'),
+    ('818600000099876012345670890123456785901234567894', '{"ok": true, "codigo_barras": "81860000009876012345678901234567890123456789", "linha": "818600000099876012345670890123456785901234567894", "tipo": "arrecadacao", "banco": null, "valor": 987.6, "vencimento": null}'),
+    ('817600000050000099998882877776666555554444333328', '{"ok": true, "codigo_barras": "81760000005000099998888777766665555444433332", "linha": "817600000050000099998882877776666555554444333328", "tipo": "arrecadacao", "banco": null, "valor": null, "vencimento": null}'),
+    ('816600000019234500011114222233334440455556666770', '{"ok": false, "motivo": "dv_bloco"}'),
+    ('716600000011234500011114222233334440455556666770', '{"ok": false, "motivo": "arrecadacao_sem_8"}'),
+    ('81660000001234500011112222333344445555666677', '{"ok": true, "codigo_barras": "81660000001234500011112222333344445555666677", "linha": "816600000011234500011114222233334440455556666770", "tipo": "arrecadacao", "banco": null, "valor": 123.45, "vencimento": null}'),
+    ('81660000001234500011112222333344445555666678', '{"ok": false, "motivo": "dv_geral"}'),
+    ('', '{"ok": false, "motivo": "tamanho"}'),
+    ('123', '{"ok": false, "motivo": "tamanho"}'),
+    ('3419109008048818200491964610000881611000030065', '{"ok": false, "motivo": "tamanho"}')
+  ) c(e, s) loop
+    if public._fn_boleto_normalizar(r.e) is distinct from r.s::jsonb then
+      raise exception 'DV % -> % (esperado %)', r.e, public._fn_boleto_normalizar(r.e), r.s;
+    end if;
+    n := n + 1;
+  end loop;
+  raise exception 'OK BOLETO-D1B DV: % casos iguais aos da tela', n;
+end $t$;
+rollback;
