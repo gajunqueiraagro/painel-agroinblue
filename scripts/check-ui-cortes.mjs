@@ -31,6 +31,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { filtroRapido } from './ui-gate-rapido.mjs';
+import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
+  paginasDaMedicao } from './ui-cortes/teto.mjs';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const EXCECOES = [];   // { tela, regra, texto } — vazia por decisao do Gabriel (19/10/2026)
@@ -3056,6 +3058,12 @@ const naRapida = RAPIDO ? filtroRapido('check-ui-cortes') : () => true;
    reprovava o modal da OC a 750/814, largura em que ele nao tem desenho e que o completo nao mede (57 achados na prova de 21/10) */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS);
 const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
+/* GATE-TELA-TETO-01 — o plano da rodada (fatia, --de) e o relógio contam desde o início do processo */
+const INICIO = Date.now() - process.uptime() * 1000;
+let OPCOES, PLANO;
+try { OPCOES = lerOpcoesDaRodada(process.argv); PLANO = planoDaRodada(ESCOLHIDOS, tamanhosDe, OPCOES); }
+catch (e) { console.error(`check-ui-cortes: ${e.message}`); process.exit(2); }
+const registrar = criarRegistro(OPCOES.log);
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
 const base = `http://127.0.0.1:${servidor.config.server.port === 0 ? servidor.httpServer.address().port : servidor.httpServer.address().port}`;
@@ -3201,17 +3209,28 @@ try {
   if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem', 'valor', 'tabela', 'sobreposicao', 'italico', 'numero'].every((r) => prova.includes(r))
     || prova.filter((r) => r === 'cabecalho').length < 3 || daSobre0.filter((a) => a.regra === 'sobreposicao').length < 2) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }
 
-  const todos = [];
-  for (const cen of ESCOLHIDOS) for (const [w, h] of tamanhosDe(cen)) {
-    const p = await navegador.newPage({ viewport: { width: w, height: h } });
+  /* GATE-TELA-TETO-01 — AUTO-TESTE DO TETO: uma página em laço infinito tem de virar estouro (o contexto fecha) em ~2 s, não prender */
+  const tt0 = Date.now(); const pgTeto = paginasDaMedicao(navegador); const pt = await pgTeto.nova({ viewport: { width: 400, height: 300 } });
+  const rTeto = await comTeto(2000, async () => { await pt.setContent('<p>laço</p>'); await pt.evaluate(() => { for (;;) { /* preso */ } }); }, () => pgTeto.fecharTodas());
+  if (!rTeto.estourou || Date.now() - tt0 > 15_000) { console.error(`check-ui-cortes: AUTO-TESTE DO TETO FALHOU (${JSON.stringify(rTeto)}, ${Date.now() - tt0} ms)`); process.exit(2); }
+
+  /* a 1a carga da bancada (o Vite empacota as dependências no cacheDir do worktree) fica fora do teto da medição, dentro do da rodada */
+  { const pq = await navegador.newPage(); await pq.goto(`${base}/index.html?`, { timeout: 180_000 }); await pq.context().close(); }
+  registrar(`check-ui-cortes: ${PLANO.length} medições nesta rodada${OPCOES.fatia ? ` (fatia ${OPCOES.fatia.k}/${OPCOES.fatia.n})` : ''}${OPCOES.de ? ` desde ${OPCOES.de}` : ''}; teto ${OPCOES.tetoMedicaoMs / 1000} s por medição, ${OPCOES.tetoRodadaMs / 60_000} min na rodada`);
+  const todos = []; let feitas = 0; let gastoMs = 0; let parcial = null;
+  for (const [n, { cen, w, h, chave }] of PLANO.entries()) {
+    if (deveParar({ decorridoMs: Date.now() - INICIO, feitas, gastoMs, tetoRodadaMs: OPCOES.tetoRodadaMs })) { parcial = chave; break; }
+    const t0 = Date.now(); const rastro = { passo: 'abrir' }; const paginas = paginasDaMedicao(navegador);
+    const r = await comTeto(OPCOES.tetoMedicaoMs, async () => { const meus = [];
+    const p = await paginas.nova({ viewport: { width: w, height: h } });
     const erros = []; p.on('pageerror', (e) => erros.push(String(e).slice(0, 160)));
     await p.goto(`${base}/index.html?${cen.url}`); await p.evaluate(() => document.fonts.ready); await p.waitForTimeout(1300);
     const alturaAntes = cen.alturaFixa ? await alturaDe(p, cen.alturaFixa) : null;
-    try { if (cen.antes) await cen.antes(p); } catch (e) { erros.push(`gesto: ${String(e).slice(0, 100)}`); }
+    rastro.passo = 'gesto'; try { if (cen.antes) await cen.antes(p); } catch (e) { erros.push(`gesto: ${String(e).slice(0, 100)}`); }
     const daAltura = cen.alturaFixa ? achadoDaAltura(cen.alturaFixa, alturaAntes, await alturaDe(p, cen.alturaFixa)) : null;
     const dasAlturas = [];
     if (cen.alturasComo) {
-      const pc = await navegador.newPage({ viewport: { width: w, height: h } });
+      rastro.passo = 'altura (texto curto)'; const pc = await paginas.nova({ viewport: { width: w, height: h } });
       await pc.goto(`${base}/index.html?${cen.alturasComo}`); await pc.evaluate(() => document.fonts.ready); await pc.waitForTimeout(1300);
       try { if (cen.antes) await cen.antes(pc); } catch (e) { erros.push(`gesto (curto): ${String(e).slice(0, 100)}`); }
       const curto = await alturasDe(pc); await pc.close();
@@ -3224,6 +3243,7 @@ try {
           dasAlturas.push({ regra: 'altura', texto: `${s} curto x longo: caixa ${a.caixa} x ${b.caixa}, conteudo ${a.conteudo} x ${b.conteudo}` });
       });
     }
+    rastro.passo = 'medir';
     if (FOTOS) { fs.mkdirSync(FOTOS, { recursive: true }); await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}.png`) }); }
     /* FORN-BUSCA-UNICA-01 — `regiao` (opcional): o cenário varre só o que o seletor pega (a tela inteira sem ele) */
     if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
@@ -3274,14 +3294,24 @@ try {
     /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra
        so' pelo texto inclinado e pela sobreposicao. Erro de pagina conta sempre. */
     const achados = cen.soRegras ? achadosTodos.filter((a) => a.regra === 'erro' || cen.soRegras.includes(a.regra)) : achadosTodos;
-    for (const a of achados) if (!EXCECOES.some((x) => x.tela === cen.nome && x.regra === a.regra && x.texto === a.texto)) todos.push({ tela: cen.nome, tamanho: `${w}x${h}`, ...a });
+    for (const a of achados) if (!EXCECOES.some((x) => x.tela === cen.nome && x.regra === a.regra && x.texto === a.texto)) meus.push({ tela: cen.nome, tamanho: `${w}x${h}`, ...a });
     await p.close();
+    return meus; }, () => paginas.fecharTodas());
+    /* o teto e o erro solto da medição são ACHADOS (reprovam); nada da medição estourada entra além dele */
+    const meus = r.ok ? r.valor : [{ tela: cen.nome, tamanho: `${w}x${h}`, regra: r.estourou ? 'teto' : 'erro',
+      texto: r.estourou ? textoDoTeto(OPCOES.tetoMedicaoMs, rastro.passo) : `medição: ${String(r.erro).slice(0, 100)}` }];
+    if (!r.ok && !r.estourou) await paginas.fecharTodas();
+    todos.push(...meus); feitas++; gastoMs += Date.now() - t0;
+    registrar(linhaDaMedicao({ i: n + 1, total: PLANO.length, chave, ms: Date.now() - t0, achados: meus.length, teto: !r.ok && !!r.estourou }));
   }
   const unicos = [...new Map(todos.map((a) => [`${a.tela}|${a.regra}|${a.texto}`, a])).values()];
+  const telasFeitas = new Set(PLANO.slice(0, feitas).map((x) => x.cen.nome)).size;
+  codigo = codigoDaRodada({ achados: unicos.length, parcial });
   if (unicos.length) {
-    codigo = 1;
     console.error(`check-ui-cortes: ${unicos.length} achado(s) (baseline: ${EXCECOES.length} excecoes):`);
     for (const a of unicos) console.error(`  ${a.tela} [${todos.filter((x) => x.tela === a.tela && x.regra === a.regra && x.texto === a.texto).map((x) => x.tamanho).join(' ')}] ${a.regra}: ${a.texto}`);
-  } else console.log(`check-ui-cortes: ${ESCOLHIDOS.length} telas, ${ESCOLHIDOS.reduce((n, c) => n + tamanhosDe(c).length, 0)} medicoes, sem reticencias, sem vao no cabecalho preso e com data dd/mm/aaaa (baseline: ${EXCECOES.length} excecoes).`);
+  }
+  if (parcial) console.error(fraseDoParcial('check-ui-cortes', feitas, PLANO.length, parcial));
+  else if (!unicos.length) console.log(`check-ui-cortes: ${OPCOES.fatia ? `fatia ${OPCOES.fatia.k}/${OPCOES.fatia.n} — ` : ''}${OPCOES.de ? `desde ${OPCOES.de} — ` : ''}${telasFeitas} telas, ${feitas} medicoes, sem reticencias, sem vao no cabecalho preso e com data dd/mm/aaaa (baseline: ${EXCECOES.length} excecoes).`);
 } finally { await navegador.close(); await servidor.close(); }
 process.exit(codigo);

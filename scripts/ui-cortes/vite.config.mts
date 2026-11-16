@@ -9,6 +9,9 @@ const RAIZ = path.resolve(AQUI, '../..');
 const m = (f: string) => path.join(AQUI, 'mocks', f);
 export default defineConfig({
   root: AQUI, base: './', envDir: AQUI, plugins: [react()], logLevel: 'error',
+  /* GATE-TELA-TETO-01 — o cache de dependências da bancada é DO WORKTREE (o node_modules é um link dividido por todos: com o cache dele,
+     um worktree re-empacotava as dependências do outro e a página recarregava no meio da cena) */
+  cacheDir: path.join(RAIZ, '.vite-bancada'),
   resolve: { alias: [
     { find: /^@\/integrations\/supabase\/client$/, replacement: m('supabase.ts') },
     { find: /^@\/contexts\/ClienteContext$/, replacement: m('cliente.ts') },

@@ -23,6 +23,8 @@ import { chromium } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { filtroRapido } from './ui-gate-rapido.mjs';
+import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
+  paginasDaMedicao } from './ui-cortes/teto.mjs';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
@@ -1057,6 +1059,12 @@ const TAMANHOS_DA_VEZ = TAMANHOS;
 /* P92 — o cenario pode pedir os PROPRIOS tamanhos (`tamanhos`), como no check-ui-cortes; o `--tamanhos` da linha de comando manda sobre eles */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS_DA_VEZ);
 const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
+/* GATE-TELA-TETO-01 — o plano da rodada (fatia, --de; sem os tamanhos abaixo do `minLargura`) e o relógio desde o início do processo */
+const INICIO = Date.now() - process.uptime() * 1000;
+let OPCOES, PLANO;
+try { OPCOES = lerOpcoesDaRodada(process.argv); PLANO = planoDaRodada(ESCOLHIDOS, (c) => tamanhosDe(c).filter(([w]) => w >= (c.minLargura ?? 0)), OPCOES); }
+catch (e) { console.error(`check-ui-desloca: ${e.message}`); process.exit(2); }
+const registrar = criarRegistro(OPCOES.log);
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
 const base = `http://127.0.0.1:${servidor.httpServer.address().port}`;
@@ -1087,14 +1095,23 @@ try {
     console.error(`check-ui-desloca: AUTO-TESTE DOS PRESOS FALHOU (${JSON.stringify(q1)})`); process.exit(2);
   }
 
-  const todos = []; let medicoes = 0;
-  for (const cen of ESCOLHIDOS) for (const [w, h] of tamanhosDe(cen)) {
-    if (w < (cen.minLargura ?? 0)) continue; /* tela sem desenho abaixo desta largura (o modal da OC: >= 1000) */
-    const p = await navegador.newPage({ viewport: { width: w, height: h } });
+  /* a 1a carga da bancada (o Vite empacota as dependências no cacheDir do worktree) fica fora do teto da medição, dentro do da rodada */
+  { const pq = await navegador.newPage(); await pq.goto(`${base}/index.html?`, { timeout: 180_000 }); await pq.context().close(); }
+  registrar(`check-ui-desloca: ${PLANO.length} medições nesta rodada${OPCOES.fatia ? ` (fatia ${OPCOES.fatia.k}/${OPCOES.fatia.n})` : ''}${OPCOES.de ? ` desde ${OPCOES.de}` : ''}; teto ${OPCOES.tetoMedicaoMs / 1000} s por medição, ${OPCOES.tetoRodadaMs / 60_000} min na rodada`);
+  const todos = []; let medicoes = 0; let feitas = 0; let gastoMs = 0; let parcial = null;
+  for (const [n, { cen, w, h, chave }] of PLANO.entries()) {
+    if (deveParar({ decorridoMs: Date.now() - INICIO, feitas, gastoMs, tetoRodadaMs: OPCOES.tetoRodadaMs })) { parcial = chave; break; }
+    const t0 = Date.now(); const rastro = { passo: 'abrir' }; const paginas = paginasDaMedicao(navegador);
+    const r = await comTeto(OPCOES.tetoMedicaoMs, async () => { const meus = [];
+    const p = await paginas.nova({ viewport: { width: w, height: h } });
     const erros = []; p.on('pageerror', (e) => erros.push(String(e).slice(0, 160)));
     const abrir = async (pg, url) => { await pg.goto(`${base}/index.html?${url}`); await pg.evaluate(() => document.fonts.ready); await espera(pg, 1300); };
     await abrir(p, cen.url);
-    if (cen.antes) await cen.antes(p);
+    /* o gesto inicial quebrado é ACHADO desta medição (antes derrubava a corrida inteira e perdia o já medido) */
+    rastro.passo = 'gesto'; try { if (cen.antes) await cen.antes(p); } catch (e) {
+      meus.push({ tela: cen.nome, tamanho: `${w}x${h}`, estado: 'erro', texto: `gesto: ${String(e).slice(0, 100)}` }, ...erros.map((x) => ({ tela: cen.nome, tamanho: `${w}x${h}`, estado: 'erro', texto: x })));
+      await p.close(); return meus; }
+    rastro.passo = 'medir';
     const inicial = await p.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null, cen.naoMede ?? null]);
     /* `auto`: as escolhas da tela, por indice (a lista e' relida na tela recem-aberta a cada troca) */
     /* o `Segmentado` da casa: `div.inline-flex.shrink-0.overflow-hidden.rounded-md.border` com os botoes filhos (src/components/ui/segmentado) */
@@ -1110,24 +1127,34 @@ try {
       }]));
     }
     for (const [nome, gesto] of estados) {
-      medicoes++;
+      medicoes++; rastro.passo = nome;
       if (typeof gesto === 'function') {
         try { await gesto(p); } catch (e) { erros.push(`${nome}: ${String(e).slice(0, 100)}`); continue; }
-        todos.push(...comparar(inicial, await p.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null, cen.naoMede ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
+        meus.push(...comparar(inicial, await p.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null, cen.naoMede ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
       } else {
-        const pu = await navegador.newPage({ viewport: { width: w, height: h } }); await abrir(pu, gesto.url);
-        todos.push(...comparar(inicial, await pu.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null, cen.naoMede ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
+        const pu = await paginas.nova({ viewport: { width: w, height: h } }); await abrir(pu, gesto.url);
+        meus.push(...comparar(inicial, await pu.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null, cen.naoMede ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
         await pu.close();
       }
     }
-    todos.push(...erros.map((e) => ({ tela: cen.nome, tamanho: `${w}x${h}`, estado: 'erro', texto: e })));
+    meus.push(...erros.map((e) => ({ tela: cen.nome, tamanho: `${w}x${h}`, estado: 'erro', texto: e })));
     await p.close();
+    return meus; }, () => paginas.fecharTodas());
+    /* o teto e o erro solto da medição são ACHADOS (reprovam); nada da medição estourada entra além dele */
+    const meus = r.ok ? r.valor : [{ tela: cen.nome, tamanho: `${w}x${h}`, estado: r.estourou ? 'teto' : 'erro',
+      texto: r.estourou ? textoDoTeto(OPCOES.tetoMedicaoMs, rastro.passo) : `medição: ${String(r.erro).slice(0, 100)}` }];
+    if (!r.ok && !r.estourou) await paginas.fecharTodas();
+    todos.push(...meus); feitas++; gastoMs += Date.now() - t0;
+    registrar(linhaDaMedicao({ i: n + 1, total: PLANO.length, chave, ms: Date.now() - t0, achados: meus.length, teto: !r.ok && !!r.estourou }));
   }
   const unicos = [...new Map(todos.map((a) => [`${a.tela}|${a.estado}|${a.texto}`, a])).values()];
+  const telasFeitas = new Set(PLANO.slice(0, feitas).map((x) => x.cen.nome)).size;
+  codigo = codigoDaRodada({ achados: unicos.length, parcial });
   if (unicos.length) {
-    codigo = 1;
     console.error(`check-ui-desloca: ${unicos.length} achado(s):`);
     for (const a of unicos) console.error(`  ${a.tela} [${todos.filter((x) => x.tela === a.tela && x.estado === a.estado && x.texto === a.texto).map((x) => x.tamanho).join(' ')}] ${a.estado}: ${a.texto}`);
-  } else console.log(`check-ui-desloca: ${ESCOLHIDOS.length} telas, ${medicoes} trocas de estado medidas (${new Set(ESCOLHIDOS.flatMap((c) => tamanhosDe(c).map((t) => t.join('x')))).size} tamanhos): nada se desloca.`);
+  }
+  if (parcial) console.error(fraseDoParcial('check-ui-desloca', feitas, PLANO.length, parcial));
+  else if (!unicos.length) console.log(`check-ui-desloca: ${OPCOES.fatia ? `fatia ${OPCOES.fatia.k}/${OPCOES.fatia.n} — ` : ''}${OPCOES.de ? `desde ${OPCOES.de} — ` : ''}${telasFeitas} telas, ${medicoes} trocas de estado medidas (${new Set(PLANO.map((x) => `${x.w}x${x.h}`)).size} tamanhos): nada se desloca.`);
 } finally { await navegador.close(); await servidor.close(); }
 process.exit(codigo);
