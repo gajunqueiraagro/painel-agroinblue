@@ -1306,7 +1306,7 @@ const CENARIOS = [
   /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos (dado SINTÉTICO, `dados/caixaBoletos.ts`): vazia; os 8 PDFs soltos (exato, soma de 2, já
      no sistema, por nome, parece já pago, nome/beneficiário longos e valor no teto, senha, escaneado); a senha digitada; as abas do gravado */
   ...(() => {
-    const T = [[1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+    const T = [[918, 600], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
     const URL = 'tela=caixa-boletos';
     const NOMES = ['boleto-0031283.pdf', 'boleto_dez_G.pdf', 'boleto-condominio.pdf', 'boleto_insumos.pdf', 'boleto-pago-antes.pdf',
       'boleto com nome de arquivo muito comprido que não cabe na coluna 2026-12.pdf', 'Boleto_Unimed.pdf', 'boleto-escaneado.pdf'];
@@ -1324,6 +1324,21 @@ const CENARIOS = [
       { nome: 'caixa-boletos-na-caixa', url: URL, tamanhos: T, regiao: R, antes: aba(/^Na caixa/) },
       { nome: 'caixa-boletos-sem-par', url: URL, tamanhos: T, regiao: R, antes: aba(/^Sem par/) },
       { nome: 'caixa-boletos-todos', url: URL, tamanhos: T, regiao: R, antes: aba(/^Todos/) },
+    ];
+  })(),
+  /* LANC-PATRIMONIO-VINCULO-01 — o "Patrimônio" do rodapé do Editar lançamento (dado SINTÉTICO, `dados/patrimonioLancamento.ts`): o rodapé
+     sem bem / ligado / ligado com nome longo; o minimodal nas duas abas, com a recusa do banco, o previsto (D2), o contrato inteiro (D4), a
+     repetida, a conta sem categoria sugerida e a lista com um bem de nome longo e valor no teto */
+  ...(() => {
+    const T = [[918, 600], [1000, 600], [1126, 579], [1366, 768]];
+    const U = (caso, aba) => `tela=patrimonio-lancamento&caso=${caso}${aba ? `&aba=${aba}` : ''}`;
+    const RODAPE = '[data-testid="rodape-da-bancada"]'; const DIALOGO = '[data-testid="patrimonio-do-lancamento-dialog"]';
+    const espera = async (p) => { await p.waitForTimeout(900); };
+    return [
+      ...['sem_bem', 'ligado', 'ligado_longo'].map((c) => ({ nome: `patrimonio-lancamento-rodape-${c}`, url: U(c), tamanhos: T, regiao: RODAPE, antes: espera })),
+      ...[['ligar', 'sem_bem'], ['ligar', 'recusa'], ['ligar', 'previsto'], ['ligar', 'contrato'], ['ligar', 'repetida'], ['criar', 'sem_bem'], ['criar', 'sem_categoria'], ['criar', 'contrato']]
+        .map(([a, c]) => ({ nome: `patrimonio-lancamento-${a}-${c}`, url: U(c, a), tamanhos: T, regiao: DIALOGO,
+          antes: async (p) => { await espera(p); if (a === 'ligar') { await p.locator('[data-testid="bem-para-ligar"]').first().click(); await espera(p); } } })),
     ];
   })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
