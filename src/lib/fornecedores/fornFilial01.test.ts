@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { resolverEmitente, raizDoCnpj } from '@/lib/financeiro/nfe/resolverEmitente';
 import {
-  consultarCnpj, preencherVazios, fraseDoPreenchido, caixaDeTitulo, FRASE_CONSULTA_INDISPONIVEL, FRASE_CNPJ_NAO_ACHADO, FRASE_CNPJ_ALFANUMERICO,
+  consultarCnpj, preencherVazios, fraseDoPreenchido, caixaDeTitulo, FRASE_CONSULTA_INDISPONIVEL, FRASE_CNPJ_NAO_ACHADO, FRASE_CNPJ_ALFANUMERICO, FRASE_CONSULTA_NO_LIMITE,
   type DadosDoCnpj,
 } from './consultaCnpj';
 import { VAZIO } from './cadastroDoFornecedor';
@@ -78,7 +78,7 @@ describe('FORN-FILIAL-01 — a consulta pública do CNPJ', () => {
   });
   it('falha NUNCA trava: rede fora, limite (429), não achado (404), tempo esgotado e CNPJ alfanumérico viram frase', async () => {
     expect(await consultarCnpj('11222333003873', { buscar: async () => { throw new Error('offline'); } })).toEqual({ ok: false, frase: FRASE_CONSULTA_INDISPONIVEL });
-    expect(await consultarCnpj('11222333003873', { buscar: async () => resp(429, {}) })).toEqual({ ok: false, frase: FRASE_CONSULTA_INDISPONIVEL });
+    expect(await consultarCnpj('11222333003873', { buscar: async () => resp(429, {}) })).toEqual({ ok: false, frase: FRASE_CONSULTA_NO_LIMITE }); // FORN-CNPJ-BUSCA-01: as duas no limite
     expect(await consultarCnpj('11222333003873', { buscar: async () => resp(404, {}) })).toEqual({ ok: false, frase: FRASE_CNPJ_NAO_ACHADO });
     const lento = await consultarCnpj('11222333003873', { ms: 20, buscar: (_u, init) => new Promise((_ok, falha) => {
       init?.signal?.addEventListener('abort', () => falha(new Error('abortado')));

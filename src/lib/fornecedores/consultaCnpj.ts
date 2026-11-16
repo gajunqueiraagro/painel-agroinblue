@@ -6,6 +6,9 @@
  * ⚠ NUNCA TRAVA O CADASTRO: rede fora, CNPJ não achado, limite de uso, tempo esgotado (6s) ou CNPJ alfanumérico (a API só tem o numérico)
  *   viram `{ ok: false, frase }` — o cadastro segue à mão. Nada aqui grava: quem preenche é o formulário, e SÓ campo vazio
  *   (`preencherVazios`).
+ * FORN-CNPJ-BUSCA-01 (Gabriel 16/11/2026, D1): a base da BrasilAPI não tem toda empresa (28.450.960/0001-72, ativa desde 2017: 404).
+ *   2ª fonte, SÓ quando a BrasilAPI dá 404, falha ou estoura o prazo: a CNPJá aberta (`https://open.cnpja.com/office/<14>`, sem chave,
+ *   CORS aberto, ~5 consultas/min por IP → 429). A frase final é a da 2ª: 404 = não achei nas duas · 429 = limite · outra = indisponível.
  */
 import type { DadosDoFornecedor } from './cadastroDoFornecedor';
 
@@ -18,7 +21,8 @@ export interface DadosDoCnpj {
 export type RespostaDoCnpj = { ok: true; dados: DadosDoCnpj } | { ok: false; frase: string };
 
 export const FRASE_CONSULTA_INDISPONIVEL = 'Consulta do CNPJ indisponível agora: preencha à mão (o cadastro não depende dela).';
-export const FRASE_CNPJ_NAO_ACHADO = 'CNPJ não encontrado na consulta pública: preencha à mão.';
+export const FRASE_CNPJ_NAO_ACHADO = 'Não achei o CNPJ nas consultas públicas (podem estar atrasadas): preencha à mão.';
+export const FRASE_CONSULTA_NO_LIMITE = 'Consulta do CNPJ no limite agora: tente de novo em 1 minuto ou preencha à mão.';
 export const FRASE_CNPJ_ALFANUMERICO = 'A consulta pública ainda não tem o CNPJ alfanumérico: preencha à mão.';
 
 const PEQUENAS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'd']);
@@ -38,6 +42,55 @@ async function comPrazo<T>(ms: number, f: (sinal: AbortSignal) => Promise<T>): P
   try { return await f(ctl.signal); } finally { clearTimeout(t); }
 }
 
+/** O que cada fonte devolve, já no formato comum (o município ainda cru; o nome certo sai do IBGE pelo código). */
+interface Lido { razaoSocial: string; fantasia: string; municipio: string; ibge: string; uf: string; logradouro: string; numero: string;
+  complemento: string; bairro: string; cep: string; matrizFilial: string }
+type Tentativa = { tipo: 'achou'; lido: Lido } | { tipo: 'nao_achou' } | { tipo: 'limite' } | { tipo: 'falhou' };
+const objeto = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? Object.fromEntries(Object.entries(v)) : {});
+
+async function perguntar(buscar: Buscar, ms: number, url: string, ler: (j: Record<string, unknown>) => Lido): Promise<Tentativa> {
+  try {
+    const r = await comPrazo(ms, (signal) => buscar(url, { signal }));
+    if (r.status === 404) return { tipo: 'nao_achou' };
+    if (r.status === 429) return { tipo: 'limite' };
+    if (!r.ok) return { tipo: 'falhou' };
+    const j = await r.json();
+    if (!j || typeof j !== 'object') return { tipo: 'falhou' };
+    return { tipo: 'achou', lido: ler(objeto(j)) };
+  } catch {
+    return { tipo: 'falhou' };
+  }
+}
+
+/** BrasilAPI (1ª fonte) */
+function lerBrasilApi(bruto: Record<string, unknown>): Lido {
+  const tipoLogradouro = texto(bruto.descricao_tipo_de_logradouro);
+  const logradouro = texto(bruto.logradouro);
+  return {
+    razaoSocial: texto(bruto.razao_social), fantasia: texto(bruto.nome_fantasia), municipio: texto(bruto.municipio),
+    ibge: texto(bruto.codigo_municipio_ibge), uf: texto(bruto.uf),
+    logradouro: tipoLogradouro && logradouro && !logradouro.toUpperCase().startsWith(tipoLogradouro.toUpperCase()) ? `${tipoLogradouro} ${logradouro}` : logradouro,
+    numero: texto(bruto.numero), complemento: texto(bruto.complemento), bairro: texto(bruto.bairro), cep: texto(bruto.cep),
+    matrizFilial: texto(bruto.descricao_identificador_matriz_filial),
+  };
+}
+
+/** CNPJá aberta (2ª fonte): `company.name`, `alias`, `head` (matriz), `address.*` (o tipo já vem no `street`; `municipality` = código IBGE) */
+function lerCnpja(bruto: Record<string, unknown>): Lido {
+  const empresa = objeto(bruto.company);
+  const end = objeto(bruto.address);
+  const head = bruto.head;
+  return {
+    razaoSocial: texto(empresa.name), fantasia: texto(bruto.alias), municipio: texto(end.city), ibge: texto(end.municipality),
+    uf: texto(end.state), logradouro: texto(end.street), numero: texto(end.number), complemento: texto(end.details),
+    bairro: texto(end.district), cep: texto(end.zip), matrizFilial: head === true ? 'MATRIZ' : head === false ? 'FILIAL' : '',
+  };
+}
+
+const FRASE_DA_TENTATIVA: Record<Exclude<Tentativa['tipo'], 'achou'>, string> = {
+  nao_achou: FRASE_CNPJ_NAO_ACHADO, limite: FRASE_CONSULTA_NO_LIMITE, falhou: FRASE_CONSULTA_INDISPONIVEL,
+};
+
 /** A consulta. `buscar` = o `fetch` (trocável no teste). */
 export async function consultarCnpj(cnpj: string, opcoes: { buscar?: Buscar; ms?: number } = {}): Promise<RespostaDoCnpj> {
   const buscar: Buscar = opcoes.buscar ?? ((u, i) => fetch(u, i));
@@ -45,23 +98,15 @@ export async function consultarCnpj(cnpj: string, opcoes: { buscar?: Buscar; ms?
   const chave = cnpj.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
   if (chave.length !== 14) return { ok: false, frase: FRASE_CNPJ_NAO_ACHADO };
   if (!/^\d{14}$/.test(chave)) return { ok: false, frase: FRASE_CNPJ_ALFANUMERICO };
-  let bruto: Record<string, unknown>;
-  try {
-    const r = await comPrazo(ms, (signal) => buscar(`https://brasilapi.com.br/api/cnpj/v1/${chave}`, { signal }));
-    if (r.status === 404) return { ok: false, frase: FRASE_CNPJ_NAO_ACHADO };
-    if (!r.ok) return { ok: false, frase: FRASE_CONSULTA_INDISPONIVEL };
-    const j = await r.json();
-    if (!j || typeof j !== 'object') return { ok: false, frase: FRASE_CONSULTA_INDISPONIVEL };
-    bruto = Object.fromEntries(Object.entries(j));
-  } catch {
-    return { ok: false, frase: FRASE_CONSULTA_INDISPONIVEL };
-  }
+  let t = await perguntar(buscar, ms, `https://brasilapi.com.br/api/cnpj/v1/${chave}`, lerBrasilApi);
+  if (t.tipo !== 'achou') t = await perguntar(buscar, ms, `https://open.cnpja.com/office/${chave}`, lerCnpja);
+  if (t.tipo !== 'achou') return { ok: false, frase: FRASE_DA_TENTATIVA[t.tipo] };
+  const l = t.lido;
   /* o nome do município como o IBGE escreve (com acento); sem ele, a caixa de título — a falha aqui não derruba a consulta */
-  let municipio = caixaDeTitulo(texto(bruto.municipio));
-  const ibge = texto(bruto.codigo_municipio_ibge);
-  if (/^\d{7}$/.test(ibge)) {
+  let municipio = caixaDeTitulo(l.municipio);
+  if (/^\d{7}$/.test(l.ibge)) {
     try {
-      const r = await comPrazo(ms, (signal) => buscar(`https://servicodados.ibge.gov.br/api/v1/localidades/municipios/${ibge}`, { signal }));
+      const r = await comPrazo(ms, (signal) => buscar(`https://servicodados.ibge.gov.br/api/v1/localidades/municipios/${l.ibge}`, { signal }));
       if (r.ok) {
         const j = await r.json();
         const nome = j && typeof j === 'object' ? texto(Reflect.get(j, 'nome')) : '';
@@ -69,13 +114,10 @@ export async function consultarCnpj(cnpj: string, opcoes: { buscar?: Buscar; ms?
       }
     } catch { /* fica a caixa de título */ }
   }
-  const tipoLogradouro = texto(bruto.descricao_tipo_de_logradouro);
-  const logradouro = texto(bruto.logradouro);
   return { ok: true, dados: {
-    razaoSocial: texto(bruto.razao_social), fantasia: texto(bruto.nome_fantasia), municipio, uf: texto(bruto.uf).toUpperCase(),
-    logradouro: tipoLogradouro && logradouro && !logradouro.toUpperCase().startsWith(tipoLogradouro.toUpperCase()) ? `${tipoLogradouro} ${logradouro}` : logradouro,
-    numero: texto(bruto.numero), complemento: texto(bruto.complemento), bairro: texto(bruto.bairro),
-    cep: texto(bruto.cep).replace(/^(\d{5})(\d{3})$/, '$1-$2'), matrizFilial: texto(bruto.descricao_identificador_matriz_filial).toUpperCase(),
+    razaoSocial: l.razaoSocial, fantasia: l.fantasia, municipio, uf: l.uf.toUpperCase(), logradouro: l.logradouro,
+    numero: l.numero, complemento: l.complemento, bairro: l.bairro,
+    cep: l.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2'), matrizFilial: l.matrizFilial.toUpperCase(),
   } };
 }
 
