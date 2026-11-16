@@ -1,1 +1,5 @@
 project_id = "agroinblue-local"
+# OPENFINANCE-PILOTO-01 · P2 — o webhook da Pluggy é PÚBLICO (a Pluggy não manda JWT do Supabase): quem protege é o cabeçalho
+# secreto conferido na função (`_shared/pluggy.ts`, `receberAviso`). As outras duas funções seguem com o JWT.
+[functions.openfinance-webhook]
+verify_jwt = false
