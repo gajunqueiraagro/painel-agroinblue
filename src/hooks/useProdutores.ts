@@ -4,8 +4,10 @@
  * imóveis e as contas releem juntos.
  */
 import { createContext, createElement, useCallback, useContext, type ReactNode } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiDoBanco, type ProdutoresApi, type Resultado } from '@/lib/fiscal/produtoresApi';
+import { condicaoFutura, type CondicaoFutura, type Titular } from '@/lib/fiscal/produtores';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 const ApiContext = createContext<ProdutoresApi>(apiDoBanco);
 
@@ -41,6 +43,25 @@ export function useHistoricoDaCondicao(clienteId: string | null, titularId: stri
     queryKey: [RAIZ, 'historico', clienteId, titularId], enabled: !!clienteId && !!titularId,
     queryFn: () => dados(api.historicoDaCondicao(clienteId ?? '', titularId ?? '')),
   });
+}
+/** PROD-SELO-CONDICAO-01: a condição FUTURA de quem não tem condição hoje — lê o histórico (a mesma chave do `useHistoricoDaCondicao`,
+ * o cache é um só) SÓ desses titulares (ativos, não terceiros); os outros não pedem nada. Sem migration (Chat 16/11). */
+export function useCondicoesFuturas(clienteId: string | null, titulares: readonly Titular[]): ReadonlyMap<string, CondicaoFutura> {
+  const api = useProdutoresApi();
+  const sem = titulares.filter(t => t.ativo && t.papel !== 'terceiro' && !t.condicao_ibs);
+  const r = useQueries({
+    queries: sem.map(t => ({
+      queryKey: [RAIZ, 'historico', clienteId, t.id], enabled: !!clienteId,
+      queryFn: () => dados(api.historicoDaCondicao(clienteId ?? '', t.id)),
+    })),
+  });
+  const hoje = hojeLocal();
+  const mapa = new Map<string, CondicaoFutura>();
+  sem.forEach((t, i) => {
+    const f = condicaoFutura(r[i]?.data ?? [], hoje);
+    if (f) mapa.set(t.id, f);
+  });
+  return mapa;
 }
 export function useImoveis(clienteId: string | null) {
   const api = useProdutoresApi();

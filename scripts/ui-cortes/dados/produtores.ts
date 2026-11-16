@@ -44,7 +44,13 @@ const INATIVO = titularDaLinha({
   id: 't4', nome: 'Produtor Antigo Exemplo', documento: '11144477735', documento_formatado: '111.444.777-35', tipo: 'PF', papel: 'produtor', ativo: false,
   ies: [], fazendas: [], grupo: [], contas: [], acordos: 0, pendencias: ['Sem inscrição estadual', 'Sem fazenda'],
 });
-export const TITULARES_BANCADA: Titular[] = [PROD, TERC, PJ, INATIVO];
+/* PROD-SELO-CONDICAO-01: sem condição hoje, com uma futura (1º de janeiro do ano que vem) → o selo mais comprido "contribuinte desde 01/AAAA" */
+const FUTURA = titularDaLinha({
+  id: 't5', nome: 'Produtora Futura Exemplo de Nome Comprido', documento: '39053344705', documento_formatado: '390.533.447-05', tipo: 'PF', papel: 'produtor', ativo: true,
+  uf: 'MS', regime_ir: 'pf_atividade_rural', ies: [], fazendas: [], grupo: [], contas: [], acordos: 0, pendencias: ['Sem inscrição estadual'],
+});
+const INICIO_FUTURO = `${new Date().getFullYear() + 1}-01-01`;
+export const TITULARES_BANCADA: Titular[] = [PROD, TERC, PJ, FUTURA, INATIVO];
 
 const acordo = (id: string, nome: string, parte: number | null, doc: Acordo['documento_em'], como: Acordo['como_paga'], ligados: number, soma: number): Acordo => ({
   acordo_id: id, nome, produtor_id: 't1', produtor: PROD.nome, terceiro_id: 't2', terceiro: TERC.nome, fazenda_id: 'fPUR', fazenda: 'Faz. Pureza', parte_produtor: parte,
@@ -71,7 +77,7 @@ const CONTAS: ContaDoCliente[] = [
 
 const ok = <T,>(dados: T): Promise<Resultado<T>> => Promise.resolve({ ok: true, dados });
 export const API_PRODUTORES: ProdutoresApi = {
-  lista: () => ok(TITULARES_BANCADA), acordos: () => ok(ACORDOS), historicoDaCondicao: () => ok(HISTORICO), imoveis: () => ok(IMOVEIS), contas: () => ok(CONTAS),
+  lista: () => ok(TITULARES_BANCADA), acordos: () => ok(ACORDOS), historicoDaCondicao: (_c, id) => ok(id === 't5' ? [{ id: 'h5', condicao: 'contribuinte_pelo_limite', vigencia_inicio: INICIO_FUTURO, vigencia_fim: null, motivo: 'acima do limite' }] : HISTORICO), imoveis: () => ok(IMOVEIS), contas: () => ok(CONTAS),
   gravarTitular: (_c, id, d) => ok({ frase: id ? 'Atualiza a ficha (CPF 529.982.247-25).' : 'Cria o produtor.',
     diferencas: Object.keys(d).map(k => ({ campo: k, antes: null, depois: d[k] })), pendencias: id ? [] : ['Sem fazenda', 'Sem condição no IBS/CBS'] }),
   gravarComposicao: (_f, inicio, partes) => ok({ frase: `Nova composição a partir de ${inicio.split('-').reverse().join('/')}.`,

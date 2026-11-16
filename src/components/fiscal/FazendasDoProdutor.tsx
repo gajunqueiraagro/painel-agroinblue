@@ -12,6 +12,7 @@
 import { useMemo, useState } from 'react';
 import { Pencil, Plus, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { CAMPOS_DA_FICHA } from './camposDaFicha';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
@@ -202,7 +203,7 @@ function ComposicaoDialog({ fazenda, partes, incluir, titulares, previa, aoFecha
           <DialogTitle className="truncate text-[11px] font-semibold">{fazenda.nome} · quem é titular</DialogTitle>
           <DialogDescription className="sr-only">A composição da fazenda a partir do mês escolhido.</DialogDescription>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-1 bg-muted p-2">
+        <div className={cn('flex min-h-0 flex-1 flex-col gap-1 p-2', CAMPOS_DA_FICHA)} data-campos-da-ficha="">
           <div className="flex items-end gap-2">
             <div className="w-[170px]"><Rotulo texto="Vale a partir de (mês)" /><CampoDoMes valor={mes} onMudar={setMes} anos={anosDasVersoes(hoje)} anoDeReferencia={Number(hoje.slice(0, 4))} testid="produtor-composicao-mes" /></div>
             <p className="pb-1.5 text-[10px] text-muted-foreground">{desdeAtual ? `a versão de hoje vale desde ${mesBR(desdeAtual)}: o mesmo mês corrige; outro mês cria a nova` : 'primeira composição desta fazenda'}</p>
@@ -274,7 +275,7 @@ function AcordoDialog({ acordo, produtor, titulares, fazendas, clienteId, previa
           <DialogTitle className="truncate text-[11px] font-semibold">{acordo ? `Acordo ${acordo.nome}` : `Novo acordo de rateio · ${produtor.nome}`}</DialogTitle>
           <DialogDescription className="sr-only">O acordo de rateio do produtor com um terceiro.</DialogDescription>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-1.5 bg-muted p-2">
+        <div className={cn('flex min-h-0 flex-1 flex-col gap-1.5 p-2', CAMPOS_DA_FICHA)} data-campos-da-ficha="">
           <BlocoFormulario titulo="O acordo">
             <div className={cn(GRADE_FORMULARIO, 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]')}>
               <div><Rotulo texto="Nome" obrig /><Input value={nome} onChange={e => { setNome(e.target.value); setErro(null); }} placeholder="Rateio folha" className={REGUA_CAMPO} data-testid="produtor-acordo-nome" /></div>

@@ -22,17 +22,18 @@ import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { cn } from '@/lib/utils';
 import {
   composicaoPorFazenda, dadosDoForm, formDoTitular, linhaDoTitular, pendenciasDoForm, seloDoTitular, tipoDoDocumento,
-  type FormTitular, type Titular,
+  type CondicaoFutura, type FormTitular, type Titular,
 } from '@/lib/fiscal/produtores';
 import { documentoNaTabela } from '@/lib/fiscal/documentoNaTabela';
 import { baixarFichas, fichaDoProdutor, pendentesDoCliente } from '@/lib/fiscal/fichaDeCadastro';
 import { carregarLogoBase64 } from '@/lib/pdf/pdfChassi';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { ABAS_COM_PENDENCIA, frasesPorCampo, pendenciasDaFicha, pendenciasPorAba, type AbaDaFicha, type CampoPendente } from '@/lib/fiscal/pendenciasDoProdutor';
-import { useAcordos, useContasDoCliente, useImoveis, useProdutoresApi, useTitulares } from '@/hooks/useProdutores';
+import { useAcordos, useCondicoesFuturas, useContasDoCliente, useImoveis, useProdutoresApi, useTitulares } from '@/hooks/useProdutores';
 import { useGestoComPrevia } from './PreviaDoBanco';
 import { AbaCertificado, AbaContas, AbaFiscal, AbaGrupo, AbaIdentificacao } from './AbasDoProdutor';
 import { AbaFazendas } from './FazendasDoProdutor';
+import { CAMPOS_DA_FICHA } from './camposDaFicha';
 
 type Aba = AbaDaFicha;
 const TOM: Record<'verde' | 'ambar' | 'cinza', string> = {
@@ -42,17 +43,6 @@ const par = (a: string, b: string): [string, string] => [a, b];
 const TAG_TIPO: Record<'PF' | 'PJ', string> = { PF: 'bg-slate-100 text-slate-700', PJ: 'bg-violet-50 text-violet-800' };
 /** nome de arquivo sem acento nem espaço ("Faz. São José" → "faz-sao-jose") */
 const nomeDeArquivo = (s: string): string => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cliente';
-/* PROD-CAMPOS-01 (mock aprovado pelo Gabriel 16/11 09:09): três camadas que não se confundem, SÓ nesta ficha (o padrão global fica como está;
-   se aprovado em uso, vira o padrão dos formulários): fundo cinza · bloco (e quadro de tabela) branco com borda e sombra leve · campo
-   BRANCO com borda mais escura e foco azul. O campo pendente (âmbar) e o com erro (vermelho) mantêm a borda deles. Classes literais
-   (o Tailwind só gera o que está escrito por inteiro). */
-const CAMPOS_DA_FICHA = cn(
-  'bg-[#e9edf2]',
-  '[&_section]:border-[#d5dce5] [&_section]:bg-white [&_section]:shadow-[0_1px_2px_rgba(20,40,70,0.05)]',
-  '[&_.bg-card]:border-[#d5dce5] [&_.bg-card]:bg-white',
-  '[&_.border-input]:bg-white [&_.border-input:not([class*=amber]):not([class*=destructive])]:border-[#aab6c4]',
-  '[&_.border-input:focus-visible]:border-[#1F3A5F] [&_.border-input:focus-visible]:ring-2 [&_.border-input:focus-visible]:ring-[#1F3A5F]/15 [&_.border-input:focus-visible]:ring-offset-0',
-);
 const ROTULO_ABA: Record<Aba, string> = {
   identificacao: 'Identificação', fazendas: 'Fazendas', fiscal: 'Fiscal', contas: 'Contas', certificado: 'Certificado', grupo: 'Grupo',
 };
@@ -62,6 +52,7 @@ export function ProdutoresTela() {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
   const { data: titulares = [], isLoading, error } = useTitulares(clienteId);
+  const futuras = useCondicoesFuturas(clienteId, titulares);
   const [selecionado, setSelecionado] = useState<string | 'novo' | null>(null);
 
   /* abre no primeiro titular; quem some da lista (troca de cliente) solta a seleção */
@@ -94,7 +85,7 @@ export function ProdutoresTela() {
             <table className="w-full table-fixed border-collapse">
               <tbody>
                 {titulares.map(t => {
-                  const selo = seloDoTitular(t);
+                  const selo = seloDoTitular(t, futuras.get(t.id) ?? null);
                   const linha = linhaDoTitular(t);
                   /* PROD-PENDENCIAS-VISIVEIS-01: na LISTA o CPF vai mascarado (o inteiro só na ficha), também no title */
                   const docInteiro = `${t.tipo === 'PF' ? 'CPF' : 'CNPJ'} ${t.documento_formatado}`;
@@ -143,7 +134,7 @@ export function ProdutoresTela() {
 
         {/* A FICHA */}
         {clienteId && (selecionado === 'novo' || titular) ? (
-          <FichaDoProdutor key={selecionado === 'novo' ? 'novo' : titular?.id} titular={titular} titulares={titulares} clienteId={clienteId} cliente={clienteAtual?.nome ?? ''}
+          <FichaDoProdutor key={selecionado === 'novo' ? 'novo' : titular?.id} titular={titular} titulares={titulares} futura={titular ? futuras.get(titular.id) ?? null : null} clienteId={clienteId} cliente={clienteAtual?.nome ?? ''}
             aoCriar={id => setSelecionado(id)} />
         ) : (
           <section className="flex min-h-0 items-center justify-center rounded-lg border bg-card text-[11px] text-muted-foreground">
@@ -155,7 +146,7 @@ export function ProdutoresTela() {
   );
 }
 
-function FichaDoProdutor({ titular, titulares, clienteId, cliente, aoCriar }: { titular: Titular | null; titulares: readonly Titular[]; clienteId: string; cliente: string; aoCriar: (id: string) => void }) {
+function FichaDoProdutor({ titular, titulares, futura, clienteId, cliente, aoCriar }: { titular: Titular | null; titulares: readonly Titular[]; futura: CondicaoFutura | null; clienteId: string; cliente: string; aoCriar: (id: string) => void }) {
   const api = useProdutoresApi();
   const { fazendas: todasFazendas } = useFazenda();
   const fazendas = useMemo(() => todasFazendas.filter(f => f.id !== '__global__').map(f => ({ id: f.id, nome: f.nome })), [todasFazendas]);
@@ -256,7 +247,7 @@ function FichaDoProdutor({ titular, titulares, clienteId, cliente, aoCriar }: { 
     { valor: 'grupo', rotulo: 'Grupo', desabilitada: novo || terceiro, title: novo ? motivoNovo : terceiro ? 'o grupo é só do produtor' : undefined, n: titular?.grupo.length },
   ];
   const tipo = titular?.tipo ?? tipoDoDocumento(form.documento);
-  const selo = titular ? seloDoTitular(titular) : null;
+  const selo = titular ? seloDoTitular(titular, futura) : null;
 
   return (
     <section className="flex min-h-0 flex-col overflow-clip rounded-lg border bg-card" data-testid="produtor-ficha">

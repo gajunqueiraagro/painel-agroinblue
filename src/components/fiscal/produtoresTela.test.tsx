@@ -21,7 +21,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: (...a: unknown[]) =
 import { ProdutoresTela } from './ProdutoresTela';
 import { ProdutoresApiProvider } from '@/hooks/useProdutores';
 import { titularDaLinha, type Titular } from '@/lib/fiscal/produtores';
-import type { ProdutoresApi, Resultado } from '@/lib/fiscal/produtoresApi';
+import type { CondicaoDoHistorico, ProdutoresApi, Resultado } from '@/lib/fiscal/produtoresApi';
 
 const VERA = titularDaLinha({
   id: 't-vera', nome: 'Produtora Sintética', documento: '52998224725', documento_formatado: '529.982.247-25', tipo: 'PF', papel: 'produtor',
@@ -37,12 +37,13 @@ const HIGINO = titularDaLinha({
 
 let gravarTitular: ReturnType<typeof vi.fn>;
 let gravarComposicao: ReturnType<typeof vi.fn>;
+let pediuHistorico: (id: string) => void;
 let respostaTitular: (dados: Record<string, unknown>, simular: boolean) => Resultado<unknown>;
 
-function api(titulares: Titular[]): ProdutoresApi {
+function api(titulares: Titular[], historico: Record<string, CondicaoDoHistorico[]> = {}): ProdutoresApi {
   const ok = <T,>(dados: T): Promise<Resultado<T>> => Promise.resolve({ ok: true, dados });
   return {
-    lista: () => ok([...titulares]), acordos: () => ok([]), historicoDaCondicao: () => ok([]), imoveis: () => ok([]), contas: () => ok([]),
+    lista: () => ok([...titulares]), acordos: () => ok([]), historicoDaCondicao: (_c, id) => { pediuHistorico(id); return ok(historico[id] ?? []); }, imoveis: () => ok([]), contas: () => ok([]),
     gravarTitular: (c, id, d, s) => {
       gravarTitular(c, id, d, s);
       const r = respostaTitular(d, s);
@@ -54,9 +55,9 @@ function api(titulares: Titular[]): ProdutoresApi {
     gravarCondicao: () => ok({}), gravarGrupo: () => ok({}), gravarContaTitular: () => ok({}), gravarAcordo: () => ok({}),
   };
 }
-function montar(titulares: Titular[] = [{ ...VERA }, { ...HIGINO }]) {
+function montar(titulares: Titular[] = [{ ...VERA }, { ...HIGINO }], historico: Record<string, CondicaoDoHistorico[]> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={qc}><ProdutoresApiProvider api={api(titulares)}><ProdutoresTela /></ProdutoresApiProvider></QueryClientProvider>);
+  return render(<QueryClientProvider client={qc}><ProdutoresApiProvider api={api(titulares, historico)}><ProdutoresTela /></ProdutoresApiProvider></QueryClientProvider>);
 }
 const previa = () => screen.getByTestId('produtores-previa');
 
@@ -64,7 +65,7 @@ beforeEach(() => {
   cleanup(); toastErro.mockReset();
   /* a tela de mesa (≥ 1200px): abas com o nome inteiro; o T7 mede a janela estreita */
   Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1440 });
-  gravarTitular = vi.fn(); gravarComposicao = vi.fn();
+  gravarTitular = vi.fn(); gravarComposicao = vi.fn(); pediuHistorico = vi.fn();
   respostaTitular = (d, s) => ({ ok: true, dados: { frase: s ? 'Atualiza Produtora Sintética (CPF 529.982.247-25).' : '', diferencas: Object.keys(d).map(k => ({ campo: k, antes: null, depois: d[k] })), titular_id: 't-vera' } });
 });
 
@@ -179,5 +180,34 @@ describe('Cadastros › Produtores', () => {
     fireEvent.click(screen.getByRole('button', { name: /Fiscal e Reforma/ }));
     const receita = await screen.findByTestId('produtor-receita-limite');
     expect(receita.className).not.toMatch(/\bborder\b/);
+  });
+  it('T10 LIMPEZA-TELAS-01 item 3: os modais de composição e de acordo de rateio levam as três camadas da ficha (campo branco, borda escura, foco azul)', async () => {
+    montar();
+    await screen.findByTestId('produtor-nome');
+    fireEvent.click(screen.getByRole('button', { name: /Fazendas e participação/ }));
+    const camadas = ['bg-[#e9edf2]', '[&_.border-input]:bg-white', '[&_.border-input:focus-visible]:border-[#1F3A5F]'];
+    const miolo = (d: HTMLElement) => d.querySelector('[data-campos-da-ficha]');
+    fireEvent.click(within(await screen.findByTestId('produtor-fazenda')).getByTitle('editar a composição desta fazenda'));
+    const comp = miolo(await screen.findByTestId('produtor-composicao-dialog'));
+    expect(comp?.className.split(/\s+/)).toEqual(expect.arrayContaining(camadas));
+    expect(comp?.className.split(/\s+/)).not.toContain('bg-muted');
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('produtor-composicao-dialog')).toBeNull());
+    fireEvent.click(screen.getByTestId('produtor-acordo-novo'));
+    const acordo = miolo(await screen.findByTestId('produtor-acordo-dialog'));
+    expect(acordo?.className.split(/\s+/)).toEqual(expect.arrayContaining(camadas));
+    expect(acordo?.className.split(/\s+/)).not.toContain('bg-muted');
+  });
+  it('T9 PROD-SELO-CONDICAO-01: sem condição hoje e com uma futura gravada, lista e cabeçalho dizem "contribuinte desde MM/AAAA"; só quem não tem condição hoje lê o histórico', async () => {
+    const semHoje = { ...VERA, condicao_ibs: null };
+    montar([semHoje, { ...HIGINO }], {
+      [VERA.id]: [{ id: 'c1', condicao: 'contribuinte_pelo_limite', vigencia_inicio: '2099-01-01', vigencia_fim: null, motivo: 'acima do limite' }],
+    });
+    const itens = await screen.findAllByTestId('produtores-item');
+    await waitFor(() => expect(itens[0].textContent).toContain('contribuinte desde 01/2099'));
+    expect(itens[0].textContent).not.toContain('sem condição');
+    expect(screen.getByTestId('produtor-ficha').textContent).toContain('contribuinte desde 01/2099');
+    expect(pediuHistorico).toHaveBeenCalledWith(VERA.id);
+    expect(pediuHistorico).not.toHaveBeenCalledWith(HIGINO.id);
   });
 });

@@ -98,11 +98,26 @@ export const ROTULO_CONDICAO_IMOVEL: Record<CondicaoImovel, string> = {
 export const ROTULO_CONDICAO_IBS: Record<CondicaoIbs, string> = {
   nao_contribuinte: 'Não contribuinte', contribuinte_pelo_limite: 'Contribuinte (limite)', optante: 'Optante', integrado: 'Integrado',
 };
-/** O selo curto da lista (mock: "não contribuinte", "contribuinte", "terceiro"). Contribuinte = o padrão (verde); não contribuinte = a exceção (âmbar). */
-export function seloDoTitular(t: Titular): { texto: string; tom: 'verde' | 'ambar' | 'cinza' } {
+/** Uma condição IBS/CBS que começa DEPOIS de hoje (o histórico da tabela, PROD-SELO-CONDICAO-01). */
+export interface CondicaoFutura { condicao: string; vigencia_inicio: string }
+/** PROD-SELO-CONDICAO-01 (Chat 16/11 14:34): a lista do banco só traz a condição vigente HOJE. Sem ela, a mais próxima que começa depois
+ * de hoje (`hoje` em ISO, o `hojeLocal()` da casa); nenhuma = null. */
+export function condicaoFutura(historico: readonly CondicaoFutura[], hoje: string): CondicaoFutura | null {
+  const depois = historico.filter(h => /^\d{4}-\d{2}-\d{2}/.test(h.vigencia_inicio) && h.vigencia_inicio.slice(0, 10) > hoje);
+  if (!depois.length) return null;
+  return depois.reduce((a, h) => (h.vigencia_inicio < a.vigencia_inicio ? h : a));
+}
+/** O selo curto da lista (mock: "não contribuinte", "contribuinte", "terceiro"). Contribuinte = o padrão (verde); não contribuinte = a exceção (âmbar).
+ * PROD-SELO-CONDICAO-01: sem condição hoje mas com uma futura gravada, o selo diz a futura com o mês ("contribuinte desde 01/2027");
+ * "sem condição" só quando não há nenhuma gravada. */
+export function seloDoTitular(t: Titular, futura: CondicaoFutura | null = null): { texto: string; tom: 'verde' | 'ambar' | 'cinza' } {
   if (!t.ativo) return { texto: 'inativo', tom: 'cinza' };
   if (t.papel === 'terceiro') return { texto: 'terceiro', tom: 'ambar' };
-  if (!t.condicao_ibs) return { texto: 'sem condição', tom: 'cinza' };
+  if (!t.condicao_ibs) {
+    if (!futura) return { texto: 'sem condição', tom: 'cinza' };
+    const desde = mesBR(futura.vigencia_inicio);
+    return futura.condicao === 'nao_contribuinte' ? { texto: `não contribuinte desde ${desde}`, tom: 'ambar' } : { texto: `contribuinte desde ${desde}`, tom: 'verde' };
+  }
   return t.condicao_ibs.condicao === 'nao_contribuinte' ? { texto: 'não contribuinte', tom: 'ambar' } : { texto: 'contribuinte', tom: 'verde' };
 }
 export const ROTULO_REGIME: Record<RegimeIr, string> = {

@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  comQuemDivide, composicaoPorFazenda, dadosDoForm, formDoTitular, lerPrevia, pendenciasDoForm, seloDoTitular, titularDaLinha, FORM_VAZIO, CONDICOES_IBS,
+  comQuemDivide, condicaoFutura, composicaoPorFazenda, dadosDoForm, formDoTitular, lerPrevia, pendenciasDoForm, seloDoTitular, titularDaLinha, FORM_VAZIO, CONDICOES_IBS,
 } from './produtores';
 
 const VERA = {
@@ -46,6 +46,22 @@ describe('lista', () => {
     expect(seloDoTitular(titularDaLinha(HIGINO)).texto).toBe('terceiro');
     expect(seloDoTitular(titularDaLinha({ ...VERA, condicao_ibs: { condicao: 'optante' } })).texto).toBe('contribuinte');
     expect(seloDoTitular(titularDaLinha({ ...VERA, ativo: false })).texto).toBe('inativo');
+  });
+  it('L9 PROD-SELO-CONDICAO-01: sem condição hoje e com uma futura, o selo diz a futura com o mês; sem nenhuma, "sem condição"', () => {
+    const sem = titularDaLinha({ ...VERA, condicao_ibs: null });
+    const hist = [
+      { condicao: 'contribuinte_pelo_limite', vigencia_inicio: '2028-01-01' },
+      { condicao: 'contribuinte_pelo_limite', vigencia_inicio: '2027-01-01' },
+      { condicao: 'nao_contribuinte', vigencia_inicio: '2025-01-01' },
+    ];
+    const f = condicaoFutura(hist, '2026-11-16');
+    expect(f?.vigencia_inicio).toBe('2027-01-01');
+    expect(seloDoTitular(sem, f)).toEqual({ texto: 'contribuinte desde 01/2027', tom: 'verde' });
+    expect(seloDoTitular(sem, { condicao: 'nao_contribuinte', vigencia_inicio: '2027-01-01' }).texto).toBe('não contribuinte desde 01/2027');
+    expect(condicaoFutura(hist.slice(2), '2026-11-16')).toBeNull();
+    expect(condicaoFutura([{ condicao: 'optante', vigencia_inicio: '2026-11-16' }], '2026-11-16')).toBeNull();
+    expect(seloDoTitular(sem, null).texto).toBe('sem condição');
+    expect(seloDoTitular(titularDaLinha(VERA), f).texto).toBe('não contribuinte');
   });
   it('L8 o CNPJ do produtor não vai mais no titular (115380: é por inscrição estadual)', () => {
     expect(dadosDoForm(FORM_VAZIO, { ...FORM_VAZIO, cnpj_produtor: '11.222.333/0001-81' })).toEqual({});
