@@ -1,0 +1,15 @@
+{
+  "name": "agroinblue-ses-entrada",
+  "private": true,
+  "type": "module",
+  "description": "BOLETO D3b — Lambda do SES (sa-east-1): separa os anexos PDF/XML do e-mail e manda à Edge Function entrada-email. O corpo é descartado.",
+  "scripts": {
+    "zip": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --external:@aws-sdk/* --outfile=dist/index.mjs && cd dist && zip -q -X ../entrada-email.zip index.mjs"
+  },
+  "dependencies": {
+    "postal-mime": "2.4.4"
+  },
+  "devDependencies": {
+    "esbuild": "0.21.5"
+  }
+}

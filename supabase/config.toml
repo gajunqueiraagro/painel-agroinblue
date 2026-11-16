@@ -3,3 +3,7 @@ project_id = "agroinblue-local"
 # secreto conferido na função (`_shared/pluggy.ts`, `receberAviso`). As outras duas funções seguem com o JWT.
 [functions.openfinance-webhook]
 verify_jwt = false
+# BOLETO D3b — a porta do e-mail de boletos é PÚBLICA (a Lambda do SES não tem JWT do Supabase): quem protege é a assinatura HMAC
+# conferida na função (`_shared/entradaEmail.ts`, `receber`).
+[functions.entrada-email]
+verify_jwt = false
