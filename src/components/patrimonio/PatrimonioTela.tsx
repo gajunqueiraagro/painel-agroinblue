@@ -31,7 +31,7 @@ import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { cn } from '@/lib/utils';
 import { useCategoriasPatrimonio, useListaPatrimonio, useSemBemResumo } from '@/hooks/usePatrimonio';
 import {
-  brl, chipsDeCategoria, COLUNAS_ORDENAVEIS, dataBR, dataDoBem, filtrarBens, n2, nomeCurtoDaCategoria, ROTULO_SITUACAO, rotuloOrigem, rotuloSemDepreciacao,
+  brl, chipsDeCategoria, COLUNAS_ORDENAVEIS, dataBR, dataDoBem, filtrarBens, n2, ROTULO_SITUACAO, rotuloOrigem, rotuloSemDepreciacao,
   rotuloVida, tituloDaLinha, totaisDaLista, type BemDaLista, type ColunaBem,
 } from '@/lib/patrimonio/patrimonio';
 import { BemDialog } from './BemDialog';
@@ -107,14 +107,16 @@ function ChipsDeCategoria({ chips, valor, onEscolher }: { chips: ReadonlyArray<{
  *  Categoria 100 = o NOME CURTO (`nomeCurtoDaCategoria`; o maior, "Formação de área"/"Correção de solo", cabe sem corte — a regra do
  *  Gabriel 31/10: a coluna Categoria não corta a 1170), o nome completo no `title`. B2: + Código 62 (`LARGURA_CODIGO`) → soma das
  *  fixas 824 + 20 das ações; "Bem" fica com o resto e corta com o `title` (gate --so patrimonio verde nos 4 tamanhos, 31/10). */
-/** Código: o teto "MAQ-1000" (o contador passa de 999 sem cortar, C5) a 10 px + o padding de 4+4; o cabeçalho "Código" + a seta
- *  reservada cabem na mesma largura. MEDIDO no gate de tela (B2). */
-export const LARGURA_CODIGO = 62;
+/** Código: o teto "MAQ-1000" (o contador passa de 999 sem cortar, C5) a 9 px + o padding de 4+4; o cabeçalho "Código" + a seta
+ *  reservada cabem na mesma largura. MEDIDO no gate de tela (B2).
+ *  LIMPEZA-TELAS-01 C3 (Gabriel 16/11 11:11): a coluna CATEGORIA SAI da tabela (o filtro de categorias em cima continua; o nome vai no
+ *  `title` do "Bem") e Data/Código descem a 9 px (Data 60→58 = "dd/mm/aaaa" a 9 px medido no gate; Código 62→52) — exceção ao piso de
+ *  9,5 declarada no CLAUDE.md. "Bem" ganha 112 px em toda largura. */
+export const LARGURA_CODIGO = 52;
 export const COLUNAS_DA_LISTA: ReadonlyArray<{ coluna: ColunaBem; rotulo: string; largura: number | null; direita?: boolean }> = [
-  { coluna: 'data', rotulo: 'Data', largura: 60 },
+  { coluna: 'data', rotulo: 'Data', largura: 58 },
   { coluna: 'codigo', rotulo: 'Código', largura: LARGURA_CODIGO },
   { coluna: 'bem', rotulo: 'Bem', largura: null },
-  { coluna: 'categoria', rotulo: 'Categoria', largura: 100 },
   { coluna: 'fazenda', rotulo: 'Faz.', largura: 40 },
   { coluna: 'situacao', rotulo: 'Situação', largura: 74 },
   { coluna: 'vida', rotulo: 'Vida', largura: 40, direita: true },
@@ -258,10 +260,9 @@ export function PatrimonioTela() {
                         onClick={() => setAberto({ bemId: b.bem_id })}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setAberto({ bemId: b.bem_id }); } }}
                         data-testid="patrimonio-linha">
-                        <td className={cn(TD_REGUA_NUM, 'text-left text-[9.5px]')}>{dataBR(dataDoBem(b))}</td>
-                        <td className={cn(TD_REGUA, 'whitespace-nowrap tabular-nums')} title={b.codigo || undefined} data-testid="patrimonio-codigo">{b.codigo || '—'}</td>
-                        <td className={TD_REGUA_TEXTO} title={titulo}>{b.descricao}</td>
-                        <td className={TD_REGUA_TEXTO} title={b.categoria_nome}>{nomeCurtoDaCategoria(b)}</td>
+                        <td className={cn(TD_REGUA_NUM, 'text-left text-[9px]')}>{dataBR(dataDoBem(b))}</td>
+                        <td className={cn(TD_REGUA, 'whitespace-nowrap text-[9px] tabular-nums')} title={b.codigo || undefined} data-testid="patrimonio-codigo">{b.codigo || '—'}</td>
+                        <td className={TD_REGUA_TEXTO} title={`${titulo} · ${b.categoria_nome}`} data-testid="patrimonio-bem">{b.descricao}</td>
                         <td className={cn(TD_REGUA, 'whitespace-nowrap')} title={b.fazenda_codigo ?? undefined}>{b.fazenda_codigo ?? codigoDa.get(b.fazenda_id) ?? '—'}</td>
                         <td className={cn(TD_REGUA, 'whitespace-nowrap')}>
                           <span className={cn('rounded px-1 text-[9.5px] leading-[14px]', SITUACAO_COR[b.situacao])}>{ROTULO_SITUACAO[b.situacao]}</span>
@@ -306,7 +307,7 @@ export function PatrimonioTela() {
                     <td />
                     <td />
                     <td className="truncate px-1" title={`${totais.n} ${totais.n === 1 ? 'bem' : 'bens'}`}>{totais.n} {totais.n === 1 ? 'bem' : 'bens'}</td>
-                    <td colSpan={4} />
+                    <td colSpan={3} />
                     <td className="whitespace-nowrap px-1 text-right tabular-nums">{n2(totais.aquisicao)}</td>
                     <td className="whitespace-nowrap px-1 text-right tabular-nums">{n2(totais.depreciado)}</td>
                     <td className="whitespace-nowrap px-1 text-right tabular-nums">{n2(totais.contabil)}</td>

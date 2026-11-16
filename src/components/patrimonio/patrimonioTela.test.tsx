@@ -121,11 +121,14 @@ const desligarOPrimeiro = async () => {
 };
 
 describe('PATR-01 · PR B — a tela de Patrimônio', () => {
-  it('P1 a lista: 12 colunas ordenam, fazenda pelo código, terra "não deprecia", rodapé soma', async () => {
+  it('P1 a lista: 11 colunas ordenam (sem Categoria: o nome no title do Bem), fazenda pelo código, terra "não deprecia", rodapé soma', async () => {
     montar();
     await screen.findAllByTestId('patrimonio-linha');
     const ordenaveis = screen.getAllByRole('columnheader').filter(th => th.getAttribute('aria-sort') != null);
-    expect(ordenaveis.length).toBe(12);
+    expect(ordenaveis.length).toBe(11);
+    expect(screen.getAllByRole('columnheader').map(th => th.textContent)).not.toContain('Categoria');
+    const terraBem = screen.getAllByTestId('patrimonio-bem').find(td => td.textContent === 'Terra sintética');
+    expect(terraBem?.getAttribute('title')).toMatch(/ · Terra$/);
     expect(screen.getAllByRole('columnheader').find(th => th.textContent === 'Data')?.getAttribute('aria-sort')).toBe('ascending');
     const terra = screen.getAllByTestId('patrimonio-linha').find(tr => tr.textContent?.includes('Terra sintética'));
     expect(terra?.textContent).toContain('RET');
