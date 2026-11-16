@@ -165,4 +165,19 @@ describe('Cadastros › Produtores', () => {
     expect(botao.textContent?.trim()).toBe('');
     expect(botao.getAttribute('aria-label')).toBe('Emitir ficha de cadastro');
   });
+
+  it('T8 PROD-CAMPOS-01: o miolo da ficha leva as três camadas (só aqui) e o campo pendente/com erro guarda a borda dele', async () => {
+    montar();
+    await screen.findAllByTestId('produtores-item');
+    const miolo = screen.getByTestId('produtor-aba-identificacao-miolo');
+    const classe = miolo.className.split(/\s+/);
+    expect(classe).toEqual(expect.arrayContaining([
+      'bg-[#e9edf2]', '[&_section]:bg-white', '[&_.border-input]:bg-white',
+      '[&_.border-input:not([class*=amber]):not([class*=destructive])]:border-[#aab6c4]', '[&_.border-input:focus-visible]:border-[#1F3A5F]',
+    ]));
+    expect(classe).not.toContain('bg-muted');
+    fireEvent.click(screen.getByRole('button', { name: /Fiscal e Reforma/ }));
+    const receita = await screen.findByTestId('produtor-receita-limite');
+    expect(receita.className).not.toMatch(/\bborder\b/);
+  });
 });

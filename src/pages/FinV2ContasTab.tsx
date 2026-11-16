@@ -1,7 +1,9 @@
 /**
  * Financeiro › Contas bancárias — CAD-CONTAS-BANCARIAS-01 (mock aprovado 20/10 12h53, vista "Lista").
- *   · colunas: Cód. · Nome da conta · Tipo · Banco · Agência · Conta · Fazenda · Gerente · Telefone · Início · Saldo inicial · Status · ✎
- *   · faixas por tipo ("Conta corrente · 5"), rodapé preso com "N contas · N ativas" e a soma do saldo inicial
+ *   · colunas: Cód. · Nome da conta · Tipo · Banco · Agência · Conta · Fazenda · Gerente · Telefone · Início · Status · ✎
+ *   · faixas por tipo ("Conta corrente · 5"), rodapé preso com "N contas · N ativas"
+ *   · LIMPEZA-TELAS-01 C1 (Gabriel 16/11): sem a coluna "Saldo inicial" nem o total dela (sem a data, não diz de quando é; o saldo
+ *     inicial segue no modal da conta) e a tabela 1 ponto menor
  *   · vazio "não inf." em cinza; caixa físico "não se aplica"; sem saldo/início em âmbar
  *   · barra: busca (conta, banco ou gerente) · Todas/Conta corrente/Investimento/Cartão · fazenda · Mostrar inativas · + Nova conta
  *   · estreitando, somem Telefone e Início, depois Gerente e Agência, depois Fazenda (`colunasEscondidas`, pela largura da lista)
@@ -19,7 +21,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/lib/utils';
 import { ContaBancariaModal } from '@/components/financeiro-v2/ContaBancariaModal';
 import {
-  brl, celulaAgencia, celulaBanco, celulaConta, celulaGerente, celulaInicio, celulaSaldo, celulaTelefone, colunasEscondidas,
+  celulaAgencia, celulaBanco, celulaConta, celulaGerente, celulaInicio, celulaTelefone, colunasEscondidas,
   faixaDaConta, faixasDaLista, filtrarContas, nomeDaConta, rodapeDaLista, SELO_TIPO,
   type BancoReferencia, type Celula, type ColunaOpcional, type ContaBancariaCadastro, type SegmentoDaLista,
 } from '@/lib/financeiro/contasBancarias';
@@ -42,9 +44,9 @@ const SELO_CLASSE: Record<'cc' | 'inv' | 'cartao', string> = {
   inv: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200',
   cartao: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
 };
-const TH = 'sticky top-0 z-[2] h-[23px] whitespace-nowrap bg-primary px-1.5 text-left text-[10.5px] font-semibold text-primary-foreground';
-const TD = 'h-[22px] whitespace-nowrap border-b border-border/60 px-1.5 text-[11px]';
-const TF = 'sticky bottom-0 z-[2] h-[23px] whitespace-nowrap border-t bg-muted px-1.5 text-[11px] font-semibold';
+const TH = 'sticky top-0 z-[2] h-[23px] whitespace-nowrap bg-primary px-1.5 text-left text-[9.5px] font-semibold text-primary-foreground';
+const TD = 'h-[22px] whitespace-nowrap border-b border-border/60 px-1.5 text-[10px]';
+const TF = 'sticky bottom-0 z-[2] h-[23px] whitespace-nowrap border-t bg-muted px-1.5 text-[10px] font-semibold';
 
 function Cel({ c, className }: { c: Celula; className?: string }) {
   return <td title={c.texto} className={cn(TD, c.tom === 'vazio' && 'text-muted-foreground', c.tom === 'aviso' && 'font-semibold text-amber-700 dark:text-amber-400', className)}>{c.texto}</td>;
@@ -110,7 +112,7 @@ export function FinV2ContasTab() {
   }, []);
   const escondidas = colunasEscondidas(largura);
   const mostra = (c: ColunaOpcional) => !escondidas.has(c);
-  const nColunas = 13 - escondidas.size;
+  const nColunas = 12 - escondidas.size;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-1.5 px-3 pb-2.5 pt-2" data-testid="tela-contas-bancarias">
@@ -142,14 +144,14 @@ export function FinV2ContasTab() {
             {mostra('agencia') && <col style={{ width: 80 }} />}<col style={{ width: 92 }} />
             {mostra('fazenda') && <col style={{ width: 120 }} />}{mostra('gerente') && <col />}
             {mostra('telefone') && <col style={{ width: 112 }} />}{mostra('inicio') && <col style={{ width: 84 }} />}
-            <col style={{ width: 128 }} /><col style={{ width: 54 }} /><col style={{ width: 24 }} />
+            <col style={{ width: 54 }} /><col style={{ width: 24 }} />
           </colgroup>
           <thead><tr>
             <th className={TH}>Cód.</th><th className={TH}>Nome da conta</th><th className={TH}>Tipo</th><th className={TH}>Banco</th>
             {mostra('agencia') && <th className={TH}>Agência</th>}<th className={TH}>Conta</th>
             {mostra('fazenda') && <th className={TH}>Fazenda</th>}{mostra('gerente') && <th className={TH}>Gerente</th>}
             {mostra('telefone') && <th className={TH}>Telefone</th>}{mostra('inicio') && <th className={TH}>Início</th>}
-            <th className={cn(TH, 'text-right')}>Saldo inicial</th><th className={cn(TH, 'text-center')}>Status</th><th className={TH} aria-label="Editar" />
+            <th className={cn(TH, 'text-center')}>Status</th><th className={TH} aria-label="Editar" />
           </tr></thead>
           <tbody>
             {carregando && contas.length === 0 && <tr><td colSpan={nColunas} className={cn(TD, 'text-muted-foreground')}>Carregando…</td></tr>}
@@ -171,14 +173,13 @@ export function FinV2ContasTab() {
                       {mostra('gerente') && <Cel c={celulaGerente(c)} className="max-w-0 truncate" />}
                       {mostra('telefone') && <Cel c={celulaTelefone(c)} className="tabular-nums" />}
                       {mostra('inicio') && <Cel c={celulaInicio(c)} className="tabular-nums" />}
-                      <Cel c={celulaSaldo(c)} className="text-right tabular-nums" />
                       <td className={cn(TD, 'text-center')}>
-                        <span className={cn('inline-block rounded-full px-1.5 text-[10px] font-semibold leading-[15px]',
+                        <span className={cn('inline-block rounded-full px-1.5 text-[9.5px] font-semibold leading-[15px]',
                           c.ativa ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-muted text-muted-foreground')}>
                           {c.ativa ? 'Ativa' : 'Inativa'}
                         </span>
                       </td>
-                      <td className={cn(TD, 'text-[12px] text-muted-foreground')} aria-label="Editar">✎</td>
+                      <td className={cn(TD, 'text-[11px] text-muted-foreground')} aria-label="Editar">✎</td>
                     </tr>
                   );
                 })}
@@ -188,8 +189,7 @@ export function FinV2ContasTab() {
             <tr aria-hidden="true" className="h-full"><td colSpan={nColunas} className="p-0" /></tr>
           </tbody>
           <tfoot><tr data-testid="rodape-contas">
-            <td colSpan={nColunas - 3} className={TF}>{rodape.texto}</td>
-            <td className={cn(TF, 'text-right tabular-nums')}>{brl(rodape.saldo)}</td><td className={TF} /><td className={TF} />
+            <td colSpan={nColunas} className={TF}>{rodape.texto}</td>
           </tr></tfoot>
         </table>
       </div>

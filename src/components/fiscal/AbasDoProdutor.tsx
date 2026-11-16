@@ -207,11 +207,12 @@ export function AbaFiscal({ titular, clienteId, form, set, previa, frases = {} }
           </div>
           <div>
             <div className="flex items-center"><Rotulo texto="Receita (limite R$ 3,6 mi)" className="mb-0.5" /><Info texto="Chega com o Resumo fiscal, que lê o livro caixa por produtor (próxima onda). Até lá, sem número." /></div>
-            <div className={cn(REGUA_CAMPO, 'flex items-center rounded-md border bg-muted/60 px-2 text-muted-foreground')} data-testid="produtor-receita-limite">—</div>
+            {/* PROD-CAMPOS-01: texto que só informa fica SEM caixa (não parece campo) */}
+            <div className={cn(REGUA_CAMPO, 'flex items-center text-muted-foreground')} data-testid="produtor-receita-limite">—</div>
           </div>
           <div>
             <div className="flex items-center"><Rotulo texto="LCDPR (R$ 4,8 mi)" className="mb-0.5" /><Info texto="Acima de R$ 4,8 mi de receita bruta no ano, o LCDPR é obrigatório. O número chega com o Resumo fiscal." /></div>
-            <div className={cn(REGUA_CAMPO, 'flex items-center rounded-md border bg-muted/60 px-2 text-muted-foreground')}>—</div>
+            <div className={cn(REGUA_CAMPO, 'flex items-center text-muted-foreground')}>—</div>
           </div>
         </div>
       </BlocoFormulario>
