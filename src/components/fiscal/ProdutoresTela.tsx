@@ -42,6 +42,17 @@ const par = (a: string, b: string): [string, string] => [a, b];
 const TAG_TIPO: Record<'PF' | 'PJ', string> = { PF: 'bg-slate-100 text-slate-700', PJ: 'bg-violet-50 text-violet-800' };
 /** nome de arquivo sem acento nem espaço ("Faz. São José" → "faz-sao-jose") */
 const nomeDeArquivo = (s: string): string => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cliente';
+/* PROD-CAMPOS-01 (mock aprovado pelo Gabriel 16/11 09:09): três camadas que não se confundem, SÓ nesta ficha (o padrão global fica como está;
+   se aprovado em uso, vira o padrão dos formulários): fundo cinza · bloco (e quadro de tabela) branco com borda e sombra leve · campo
+   BRANCO com borda mais escura e foco azul. O campo pendente (âmbar) e o com erro (vermelho) mantêm a borda deles. Classes literais
+   (o Tailwind só gera o que está escrito por inteiro). */
+const CAMPOS_DA_FICHA = cn(
+  'bg-[#e9edf2]',
+  '[&_section]:border-[#d5dce5] [&_section]:bg-white [&_section]:shadow-[0_1px_2px_rgba(20,40,70,0.05)]',
+  '[&_.bg-card]:border-[#d5dce5] [&_.bg-card]:bg-white',
+  '[&_.border-input]:bg-white [&_.border-input:not([class*=amber]):not([class*=destructive])]:border-[#aab6c4]',
+  '[&_.border-input:focus-visible]:border-[#1F3A5F] [&_.border-input:focus-visible]:ring-2 [&_.border-input:focus-visible]:ring-[#1F3A5F]/15 [&_.border-input:focus-visible]:ring-offset-0',
+);
 const ROTULO_ABA: Record<Aba, string> = {
   identificacao: 'Identificação', fazendas: 'Fazendas', fiscal: 'Fiscal', contas: 'Contas', certificado: 'Certificado', grupo: 'Grupo',
 };
@@ -313,7 +324,7 @@ function FichaDoProdutor({ titular, titulares, clienteId, cliente, aoCriar }: { 
       </div>
       {/* o miolo de cada aba troca de propósito (outros blocos): título, abas e rodapé ficam medidos. Ele ROLA no lugar dele: a 918×516 a
           Identificação não cabe, e sem isso ela passava por baixo do rodapé e fazia a página rolar (a ficha andava 7 px ao trocar de aba) */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-muted p-2 [scrollbar-gutter:stable]" data-testid={`produtor-aba-${aba}-miolo`} data-desloca-livre="">
+      <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto p-2 [scrollbar-gutter:stable]', CAMPOS_DA_FICHA)} data-testid={`produtor-aba-${aba}-miolo`} data-desloca-livre="" data-campos-da-ficha="">
         {aba === 'identificacao' && <AbaIdentificacao form={form} set={set} erros={erros} fazendas={fazendas} frases={frases} />}
         {aba === 'fazendas' && titular && (
           <AbaFazendas titular={titular} titulares={titulares} fazendas={fazendas} imoveis={imoveis} composicao={composicao} acordos={acordos} clienteId={clienteId} previa={gesto.previa} />
