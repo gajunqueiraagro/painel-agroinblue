@@ -5,8 +5,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
-  avisoDoCorpo, CABECALHO_SEGREDO, chaveDaApi, conectar, iguaisEmTempoConstante, receberAviso, registrarWebhook,
-  type Busca, type PecasConectar,
+  avisoDoCorpo, CABECALHO_SEGREDO, chaveDaApi, conectar, conectorRegulado, desconectar, iguaisEmTempoConstante, receberAviso,
+  registrarWebhook, type Busca, type PecasConectar, type PecasDesconectar,
 } from '../../../supabase/functions/_shared/pluggy';
 
 const SEGREDO = 'segredo-sintetico-0123456789abcdef';
@@ -25,6 +25,17 @@ function pluggyFalsa(rotas: Record<string, { status: number; corpo: unknown }>) 
   };
   return { busca, pedidos };
 }
+
+/** OPENFINANCE-SEG-01 (a): a lista da Pluggy MISTURA o regulado com o que pediria senha — só o 601 pode passar */
+const ROTA_CONECTORES = 'GET /connectors?isOpenFinance=true&countries=BR';
+const CONECTORES = { results: [
+  { id: 601, name: 'Itaú (Open Finance)', isOpenFinance: true, oauth: true, credentials: [{ name: 'cpf', type: 'number' }] },
+  { id: 201, name: 'Itaú (direto)', isOpenFinance: false, oauth: false, credentials: [{ name: 'user', type: 'text' }, { name: 'password', type: 'password' }] },
+  { id: 602, name: 'OF com senha?', isOpenFinance: true, oauth: true, credentials: [{ name: 'password', type: 'password' }] },
+  { id: 603, name: 'OF sem OAuth', isOpenFinance: true, oauth: false, credentials: [] },
+  { id: '604', name: 'id texto', isOpenFinance: true, oauth: true, credentials: [] },
+  { id: 605, name: 'OAuth fora do Open Finance', isOpenFinance: false, oauth: true, credentials: [] },
+] };
 
 const avisoItem = { event: 'item/created', eventId: 'ev-1', clientId: CLIENT_ID, itemId: 'item-1', clientUserId: CLIENTE, triggeredBy: 'USER' };
 
@@ -88,6 +99,7 @@ describe('OPENFINANCE P2 — o webhook (receberAviso)', () => {
 describe('OPENFINANCE P2 — o connect token (conectar)', () => {
   const pecas = (p: Partial<PecasConectar> = {}, rotas: Record<string, { status: number; corpo: unknown }> = {
     'POST /auth': { status: 200, corpo: { apiKey: 'api-key-sintetica' } },
+    [ROTA_CONECTORES]: { status: 200, corpo: CONECTORES },
     'POST /connect_token': { status: 200, corpo: { accessToken: 'connect-token-sintetico' } },
   }) => {
     const falsa = pluggyFalsa(rotas);
@@ -104,9 +116,10 @@ describe('OPENFINANCE P2 — o connect token (conectar)', () => {
   it('quem pode: o token de 30 min com o cliente no clientUserId (avoidDuplicates) e a trilha; a API key nunca sai', async () => {
     const { falsa, registrar, pecas: pc } = pecas();
     const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE }, pc);
-    expect(r).toEqual({ status: 200, corpo: { ok: true, accessToken: 'connect-token-sintetico' } });
+    expect(r).toEqual({ status: 200, corpo: { ok: true, accessToken: 'connect-token-sintetico', connectorIds: [601] } });
     expect(JSON.stringify(r)).not.toContain('api-key-sintetica');
-    expect(falsa.pedidos[1]).toEqual({ metodo: 'POST', caminho: '/connect_token', headers: { 'Content-Type': 'application/json', 'X-API-KEY': 'api-key-sintetica' },
+    expect(falsa.pedidos[1]).toMatchObject({ metodo: 'GET', caminho: '/connectors?isOpenFinance=true&countries=BR' });
+    expect(falsa.pedidos[2]).toEqual({ metodo: 'POST', caminho: '/connect_token', headers: { 'Content-Type': 'application/json', 'X-API-KEY': 'api-key-sintetica' },
       corpo: { options: { clientUserId: CLIENTE, avoidDuplicates: true } } });
     expect(registrar).toHaveBeenCalledWith({ origem: 'agroinblue', evento: 'agroinblue/connect_token', client_user_id: CLIENTE, autor: 'autor-1' });
   });
@@ -131,7 +144,8 @@ describe('OPENFINANCE P2 — o connect token (conectar)', () => {
     const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE }, recusa.pecas);
     expect(r.status).toBe(502);
     expect(JSON.stringify(r)).not.toContain('eco');
-    const semToken = pecas({}, { 'POST /auth': { status: 200, corpo: { apiKey: 'k' } }, 'POST /connect_token': { status: 500, corpo: {} } });
+    const semToken = pecas({}, { 'POST /auth': { status: 200, corpo: { apiKey: 'k' } }, [ROTA_CONECTORES]: { status: 200, corpo: CONECTORES },
+      'POST /connect_token': { status: 500, corpo: {} } });
     expect((await conectar({ token: 'jwt-bom', clienteId: CLIENTE }, semToken.pecas)).status).toBe(502);
     expect(semToken.registrar).not.toHaveBeenCalled();
   });
@@ -167,5 +181,80 @@ describe('OPENFINANCE P2 — o registro do webhook', () => {
     const auth = pluggyFalsa({ 'POST /auth': { status: 200, corpo: { apiKey: 'k2' } } });
     expect(await chaveDaApi(auth.busca, CLIENT_ID, 's')).toEqual({ ok: true, valor: 'k2' });
     expect(auth.pedidos[0].corpo).toEqual({ clientId: CLIENT_ID, clientSecret: 's' });
+  });
+});
+
+describe('OPENFINANCE-SEG-01 (a) — só o Open Finance regulado (nunca senha do banco)', () => {
+  it('passa só isOpenFinance + oauth + sem campo de senha + id numérico', () => {
+    expect(CONECTORES.results.map(conectorRegulado)).toEqual([601, null, null, null, null, null]);
+  });
+  it('nenhum regulado na lista = 502 e o token NEM é pedido (nunca cai para os diretos)', async () => {
+    const falsa = pluggyFalsa({ 'POST /auth': { status: 200, corpo: { apiKey: 'k' } },
+      [ROTA_CONECTORES]: { status: 200, corpo: { results: [CONECTORES.results[1]] } }, 'POST /connect_token': { status: 200, corpo: { accessToken: 't' } } });
+    const registrar = vi.fn(async () => true);
+    const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE }, { autorDoToken: async () => 'a', podeConectar: async () => true,
+      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, registrar });
+    expect(r.status).toBe(502);
+    expect(r.corpo.accessToken).toBeUndefined();
+    expect(falsa.pedidos.map(p => p.caminho)).not.toContain('/connect_token');
+    expect(registrar).not.toHaveBeenCalled();
+  });
+});
+
+describe('OPENFINANCE-SEG-01 (b)+(c) — desconectar, preso ao cliente', () => {
+  const ITEM = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const OUTRO = '99999999-8888-7777-6666-555555555555';
+  const montar = (rotas: Record<string, { status: number; corpo: unknown }>, p: Partial<PecasDesconectar> = {}) => {
+    const falsa = pluggyFalsa({ 'POST /auth': { status: 200, corpo: { apiKey: 'k' } }, ...rotas });
+    const registrar = vi.fn(async () => true);
+    const pecas: PecasDesconectar = { autorDoToken: async (t) => (t === 'jwt-bom' ? 'admin-1' : null), ehAdmin: async () => true,
+      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, registrar, ...p };
+    return { falsa, registrar, pecas };
+  };
+  it('o item é deste cliente: DELETE na Pluggy e o registro do desligamento', async () => {
+    const { falsa, registrar, pecas } = montar({ [`GET /items/${ITEM}`]: { status: 200, corpo: { id: ITEM, clientUserId: CLIENTE } },
+      [`DELETE /items/${ITEM}`]: { status: 200, corpo: {} } });
+    expect(await desconectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, pecas)).toEqual({ status: 200, corpo: { ok: true, ja_nao_existia: false } });
+    expect(falsa.pedidos.map(p => `${p.metodo} ${p.caminho}`)).toContain(`DELETE /items/${ITEM}`);
+    expect(registrar).toHaveBeenCalledWith({ origem: 'agroinblue', evento: 'agroinblue/item_desconectado', item_id: ITEM, client_user_id: CLIENTE, autor: 'admin-1' });
+  });
+  it('(c) item de OUTRO cliente ou sem cliente: 409, nada apagado, nada registrado', async () => {
+    for (const dono of [OUTRO, undefined]) {
+      const { falsa, registrar, pecas } = montar({ [`GET /items/${ITEM}`]: { status: 200, corpo: { id: ITEM, clientUserId: dono } },
+        [`DELETE /items/${ITEM}`]: { status: 200, corpo: {} } });
+      expect((await desconectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, pecas)).status).toBe(409);
+      expect(falsa.pedidos.some(p => p.metodo === 'DELETE')).toBe(false);
+      expect(registrar).not.toHaveBeenCalled();
+    }
+  });
+  it('o item já não existe na Pluggy: só registra (repetir é seguro)', async () => {
+    const { falsa, registrar, pecas } = montar({});
+    expect(await desconectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, pecas)).toEqual({ status: 200, corpo: { ok: true, ja_nao_existia: true } });
+    expect(falsa.pedidos.some(p => p.metodo === 'DELETE')).toBe(false);
+    expect(registrar).toHaveBeenCalled();
+  });
+  it('sem login 401 · ids inválidos 400 · não admin 403 · sem secrets 503 — e a Pluggy nem é chamada', async () => {
+    const casos: Array<[{ token: string | null; clienteId: string; itemId: string }, Partial<PecasDesconectar>, number]> = [
+      [{ token: null, clienteId: CLIENTE, itemId: ITEM }, {}, 401],
+      [{ token: 'jwt-bom', clienteId: CLIENTE, itemId: 'item-1' }, {}, 400],
+      [{ token: 'jwt-bom', clienteId: 'x', itemId: ITEM }, {}, 400],
+      [{ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, { ehAdmin: async () => false }, 403],
+      [{ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, { credenciais: () => null }, 503],
+    ];
+    for (const [pedido, extra, status] of casos) {
+      const { falsa, pecas } = montar({}, extra);
+      expect((await desconectar(pedido, pecas)).status).toBe(status);
+      expect(falsa.pedidos).toHaveLength(0);
+    }
+  });
+  it('a Pluggy não apaga: 502 e NADA registrado; o registro que falha depois do DELETE: 500 com a frase de tentar de novo', async () => {
+    const a = montar({ [`GET /items/${ITEM}`]: { status: 200, corpo: { clientUserId: CLIENTE } }, [`DELETE /items/${ITEM}`]: { status: 500, corpo: {} } });
+    expect((await desconectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, a.pecas)).status).toBe(502);
+    expect(a.registrar).not.toHaveBeenCalled();
+    const b = montar({ [`GET /items/${ITEM}`]: { status: 200, corpo: { clientUserId: CLIENTE } }, [`DELETE /items/${ITEM}`]: { status: 204, corpo: {} } },
+      { registrar: async () => false });
+    const r = await desconectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, b.pecas);
+    expect(r.status).toBe(500);
+    expect(r.corpo.frase).toMatch(/Clique de novo/);
   });
 });

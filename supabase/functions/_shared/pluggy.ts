@@ -61,6 +61,30 @@ export async function pedirConnectToken(busca: Busca, apiKey: string, clienteId:
   return token ? { ok: true, valor: token } : { ok: false, status: 502, frase: 'A Pluggy não devolveu o token de conexão.' };
 }
 
+/**
+ * OPENFINANCE-SEG-01 (a) — SÓ o Open Finance REGULADO: o consentimento é dado no app do banco (OAuth); o AgroinBlue nunca vê nem pede
+ * login/senha. `GET /connectors?isOpenFinance=true` e, por garantia, só o que vem com `isOpenFinance` E `oauth` verdadeiros e SEM campo
+ * de senha. O Widget abre preso a esta lista (`connectorIds`); lista vazia = não abre (nunca cai para os conectores diretos).
+ */
+export function conectorRegulado(c: unknown): number | null {
+  const o = objeto(c);
+  if (!o || o.isOpenFinance !== true || o.oauth !== true || typeof o.id !== 'number') return null;
+  const creds = Array.isArray(o.credentials) ? o.credentials.map(objeto) : [];
+  if (creds.some((k) => k?.type === 'password')) return null;
+  return o.id;
+}
+export async function conectoresOpenFinance(busca: Busca, apiKey: string): Promise<Resultado<number[]>> {
+  let r;
+  try {
+    r = await busca(`${PLUGGY_BASE}/connectors?isOpenFinance=true&countries=BR`, { method: 'GET', headers: { 'X-API-KEY': apiKey } });
+  } catch { return { ok: false, status: 502, frase: 'Não consegui falar com a Pluggy agora. Tente de novo.' }; }
+  if (!r.ok) return { ok: false, status: 502, frase: 'Não consegui ler os bancos do Open Finance agora. Tente de novo.' };
+  const lista = objeto(await r.json())?.results;
+  const ids = (Array.isArray(lista) ? lista : []).map(conectorRegulado).filter((n): n is number => n !== null);
+  return ids.length > 0 ? { ok: true, valor: ids }
+    : { ok: false, status: 502, frase: 'A Pluggy não devolveu nenhum banco do Open Finance; nada foi aberto.' };
+}
+
 /** Cria o webhook `all` com o cabeçalho secreto; se já existe um para a MESMA URL, não cria outro. Nunca devolve os headers. */
 export async function registrarWebhook(busca: Busca, apiKey: string, url: string, segredo: string):
   Promise<Resultado<{ id: string; jaExistia: boolean }>> {
@@ -129,7 +153,7 @@ export interface PecasConectar {
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function conectar(pedido: { token: string | null; clienteId: unknown }, pecas: PecasConectar):
-  Promise<{ status: number; corpo: { ok: boolean; accessToken?: string; frase?: string } }> {
+  Promise<{ status: number; corpo: { ok: boolean; accessToken?: string; connectorIds?: number[]; frase?: string } }> {
   const autor = pedido.token ? await pecas.autorDoToken(pedido.token) : null;
   if (!autor) return { status: 401, corpo: { ok: false, frase: 'Entre de novo no sistema.' } };
   const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
@@ -139,10 +163,56 @@ export async function conectar(pedido: { token: string | null; clienteId: unknow
   if (!cred) return { status: 503, corpo: { ok: false, frase: 'O Open Finance ainda não está configurado neste ambiente.' } };
   const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
   if (chave.ok === false) return { status: chave.status, corpo: { ok: false, frase: chave.frase } };
+  const regulados = await conectoresOpenFinance(pecas.busca, chave.valor);
+  if (regulados.ok === false) return { status: regulados.status, corpo: { ok: false, frase: regulados.frase } };
   const t = await pedirConnectToken(pecas.busca, chave.valor, clienteId);
   if (t.ok === false) return { status: t.status, corpo: { ok: false, frase: t.frase } };
   if (!(await pecas.registrar({ origem: 'agroinblue', evento: 'agroinblue/connect_token', client_user_id: clienteId, autor }))) {
     return { status: 500, corpo: { ok: false, frase: 'Não consegui registrar o pedido; nada foi aberto.' } };
   }
-  return { status: 200, corpo: { ok: true, accessToken: t.valor } };
+  return { status: 200, corpo: { ok: true, accessToken: t.valor, connectorIds: regulados.valor } };
+}
+
+/**
+ * OPENFINANCE-SEG-01 (b)+(c) — DESCONECTAR: só o admin AgroinBlue. A conexão é PRESA A UM CLIENTE: o item tem o `clientUserId` que o NOSSO
+ * connect token gravou; item de outro cliente (ou sem cliente) = 409, nada apagado. Apaga o item na Pluggy (`DELETE /items/{id}`; o
+ * consentimento cai) e registra `agroinblue/item_desconectado` na fila (o vínculo some da tela). Extratos já importados ficam.
+ * Repetir é seguro: o item que já não existe na Pluggy só registra.
+ */
+export interface PecasDesconectar {
+  autorDoToken: (token: string) => Promise<string | null>;
+  ehAdmin: (autor: string) => Promise<boolean>;
+  credenciais: () => { clientId: string; clientSecret: string } | null;
+  busca: Busca;
+  registrar: (a: { origem: 'agroinblue'; evento: 'agroinblue/item_desconectado'; item_id: string; client_user_id: string; autor: string }) => Promise<boolean>;
+}
+export async function desconectar(pedido: { token: string | null; clienteId: unknown; itemId: unknown }, pecas: PecasDesconectar):
+  Promise<{ status: number; corpo: { ok: boolean; ja_nao_existia?: boolean; frase?: string } }> {
+  const autor = pedido.token ? await pecas.autorDoToken(pedido.token) : null;
+  if (!autor) return { status: 401, corpo: { ok: false, frase: 'Entre de novo no sistema.' } };
+  const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
+  const itemId = typeof pedido.itemId === 'string' && UUID.test(pedido.itemId) ? pedido.itemId : null;
+  if (!clienteId || !itemId) return { status: 400, corpo: { ok: false, frase: 'Escolha o cliente e o banco.' } };
+  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AgroinBlue desconecta um banco.' } };
+  const cred = pecas.credenciais();
+  if (!cred) return { status: 503, corpo: { ok: false, frase: 'O Open Finance ainda não está configurado neste ambiente.' } };
+  const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
+  if (chave.ok === false) return { status: chave.status, corpo: { ok: false, frase: chave.frase } };
+  const h = { 'Content-Type': 'application/json', 'X-API-KEY': chave.valor };
+  let jaNaoExistia = false;
+  try {
+    const item = await pecas.busca(`${PLUGGY_BASE}/items/${itemId}`, { method: 'GET', headers: h });
+    if (item.status === 404) jaNaoExistia = true;
+    else if (!item.ok) return { status: 502, corpo: { ok: false, frase: 'Não consegui ler a conexão na Pluggy. Nada foi apagado.' } };
+    else {
+      const dono = objeto(await item.json())?.clientUserId;
+      if (dono !== clienteId) return { status: 409, corpo: { ok: false, frase: 'Esta conexão não é deste cliente. Nada foi apagado.' } };
+      const apagou = await pecas.busca(`${PLUGGY_BASE}/items/${itemId}`, { method: 'DELETE', headers: h });
+      if (!apagou.ok && apagou.status !== 404) return { status: 502, corpo: { ok: false, frase: 'A Pluggy não apagou a conexão agora. Tente de novo.' } };
+    }
+  } catch { return { status: 502, corpo: { ok: false, frase: 'Não consegui falar com a Pluggy agora. Tente de novo.' } }; }
+  if (!(await pecas.registrar({ origem: 'agroinblue', evento: 'agroinblue/item_desconectado', item_id: itemId, client_user_id: clienteId, autor }))) {
+    return { status: 500, corpo: { ok: false, frase: 'A conexão saiu da Pluggy, mas não consegui registrar aqui. Clique de novo para registrar.' } };
+  }
+  return { status: 200, corpo: { ok: true, ja_nao_existia: jaNaoExistia } };
 }
