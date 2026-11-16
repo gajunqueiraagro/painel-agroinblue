@@ -31,8 +31,11 @@ const TH = 'sticky top-0 z-10 h-[22px] bg-primary px-2 text-left text-[9.5px] fo
 const TD = 'h-[22px] px-2 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis';
 
 /** o pedaço do rodapé do modal: onde o lançamento está, ou o botão de vincular */
-export function FinanciamentoDoLancamento({ lancamentoId, clienteId, onAbrirContrato, onCriarContrato, parcelaDaCompra }: {
+export function FinanciamentoDoLancamento({ lancamentoId, clienteId, onAbrirContrato, onCriarContrato, parcelaDaCompra, podeVincular = true }: {
   lancamentoId: string; clienteId: string; onAbrirContrato?: (financiamentoId: string) => void;
+  /** LANC-PATRIMONIO-VINCULO-01 D3 — o botão de VINCULAR só nas contas de financiamento (`contaPedeFinanciamento`); o "↔ …" de onde o
+   *  lançamento já está aparece SEMPRE (a parcela de compra parcelada nunca perde o elo). */
+  podeVincular?: boolean;
   /** UI-TEXTO-LONGO-01 — a parcela de compra parcelada (posição e total, do dono da situação): a origem diz "Parcela 3/5 · Compra …" */
   parcelaDaCompra?: ParcelaDaCompraNoModal | null;
   onCriarContrato?: (l: LancamentoNoFinanciamento) => void;
@@ -63,6 +66,7 @@ export function FinanciamentoDoLancamento({ lancamentoId, clienteId, onAbrirCont
       </span>
     );
   }
+  if (!podeVincular) return null;
   const ehSaida = (d.tipoOperacao ?? '').startsWith('2-'); const ehEntrada = (d.tipoOperacao ?? '').startsWith('1-');
   if (!ehSaida && !ehEntrada) return null;
   const n = ehSaida ? d.parcelas.length : d.liberacoes.length;

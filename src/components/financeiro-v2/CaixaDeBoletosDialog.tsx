@@ -168,8 +168,10 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, le
             convite="Clique ou arraste vários boletos em PDF" rotuloDoBotao="Escolher arquivos"
             onArquivos={(_a, vereditos) => { caixa.receber(vereditos); setAba('chegando'); }} />
           <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card" data-testid="quadro-da-caixa" data-desloca-livre>
+            {/* fatia (b): a 918 o modal tem ~900px — o piso de 980 das tabelas jogava a coluna da senha (e o "Entrou em") para fora, atrás da
+                rolagem lateral; com 860 as colunas fixas (678px) deixam ~200px ao "Achado" e a senha cabe inteira */}
             {aba === 'chegando' ? (
-              <table className="w-full min-w-[980px] table-fixed border-collapse">
+              <table className="w-full min-w-[860px] table-fixed border-collapse">
                 <colgroup><col style={{ width: 24 }} /><col style={{ width: 150 }} /><col style={{ width: 158 }} /><col style={{ width: 76 }} /><col style={{ width: 82 }} /><col /><col style={{ width: 188 }} /></colgroup>
                 <thead><tr className="h-[22px]">
                   <th className={TH} /><th className={TH}>Arquivo</th><th className={TH}>Beneficiário</th><th className={TH}>Venc.</th>
@@ -186,7 +188,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, le
                 </tbody>
               </table>
             ) : (
-              <table className="w-full min-w-[980px] table-fixed border-collapse">
+              <table className="w-full min-w-[860px] table-fixed border-collapse">
                 <colgroup><col style={{ width: 86 }} /><col style={{ width: 190 }} /><col style={{ width: 76 }} /><col style={{ width: 82 }} /><col /><col style={{ width: 76 }} /></colgroup>
                 <thead><tr className="h-[22px]">
                   <th className={TH}>Situação</th><th className={TH}>Beneficiário</th><th className={TH}>Venc.</th><th className={TH_NUM}>Valor</th>

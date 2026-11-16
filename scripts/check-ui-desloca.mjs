@@ -290,6 +290,11 @@ const CENARIOS = [
       await espera(p, 900); }],
     ['abrir a senha', clicar('[data-testid="sugestao-de-senha"]')], ['aba Todos de novo', botao(/^Todos/)],
   ] },
+  /* LANC-PATRIMONIO-VINCULO-01 — o minimodal do "Patrimônio": trocar a aba, escolher o bem e buscar não move as abas, a prévia nem o rodapé
+     (a lista e o formulário são `data-desloca-livre`, a prévia e o motivo têm lugar fixo) */
+  { nome: 'patrimonio-lancamento', url: 'tela=patrimonio-lancamento&caso=sem_bem&aba=ligar', regiao: '[data-testid="patrimonio-do-lancamento-dialog"]', estados: [
+    ['escolher o bem', clicar('[data-testid="bem-para-ligar"]')], ['aba Criar o bem', botao(/^Criar o bem$/)], ['aba Ligar a um bem', botao(/^Ligar a um bem$/)],
+  ] },
   /* PATR-01 PR B — Cadastros › Patrimônio: trocar a aba da tela, o chip e a busca (1/0 bens) não move os cartões, os filtros, o cabeçalho
      nem o rodapé; no modal do bem, ir de aba em aba (as seis ficam no lugar; a apagada não se clica) não move nada — o trator, a
      pastagem e o bem NOVO (Dados ↔ Lançamentos, a terra num passo) */

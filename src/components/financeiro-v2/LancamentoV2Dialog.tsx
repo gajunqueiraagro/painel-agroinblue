@@ -26,6 +26,8 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { usePodeAbrir, usePodeAlterarOperacao, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
 import { FinanciamentoDoLancamento } from '@/components/financiamentos/FinanciamentoDoLancamento';
+import { PatrimonioDoLancamento } from '@/components/patrimonio/PatrimonioDoLancamento';
+import { contaPedeFinanciamento } from '@/lib/patrimonio/patrimonioDoLancamento';
 import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
@@ -3914,8 +3916,15 @@ export function LancamentoV2Dialog({
             )}
             {/* FIN-FINANC-28 passo 6 — o lançamento e o financiamento: onde ele está (abre o contrato; o contrário quando se desfaz
                 por aqui) ou "Financiamento" (vincular como parcela, liberação ou encargo). Título de OC fica fora (é da operação). */}
+            {/* LANC-PATRIMONIO-VINCULO-01 — "Patrimônio": só em Investimento na Fazenda fora do RH (D1, decidido pelas partes GRAVADAS, lidas do
+                banco — nunca pelo formulário em edição); sem bem = selo, nunca bloqueio do Salvar (D5). Ligar só liga. */}
+            {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && (
+              <PatrimonioDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id} descricao={lancamento.descricao ?? null}
+                valor={Math.abs(Number(lancamento.valor) || 0)} fornecedor={resumoFavorecido} fazendaRotulo={resumoFazenda} />
+            )}
             {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && parteOCLida && !parteOCViva && (
               <FinanciamentoDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id} parcelaDaCompra={parcelaDaCompra}
+                podeVincular={contaPedeFinanciamento(lancamento.subcentro)}
                 onAbrirContrato={onAbrirContrato ? (finId) => { onClose(); onAbrirContrato(finId); } : undefined} />
             )}
             {/* FIN-V2-HOMOLOG-FIX-01 (item 2): "Criar OC a partir deste lançamento" tambem aqui, ao lado do Vincular — a MESMA

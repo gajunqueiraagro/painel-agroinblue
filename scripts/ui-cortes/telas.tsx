@@ -1844,6 +1844,29 @@ if (tela === 'mesclar') {
     montar(<PatrimonioApiProvider api={API_PATRIMONIO}><PatrimonioTela /></PatrimonioApiProvider>);
   };
   void montarPatrimonio();
+} else if (tela === 'patrimonio-lancamento') {
+  /* LANC-PATRIMONIO-VINCULO-01 — o "Patrimônio" do rodapé do Editar lançamento: o pedaço REAL num rodapé da largura do modal (95%), com a
+     API em memória (`dados/patrimonioLancamento.ts`, SINTÉTICO) por `caso=`; `aba=ligar|criar` abre o minimodal já aberto */
+  const montarPatrimonioDoLancamento = async () => {
+    const { PatrimonioDoLancamento } = await import('@/components/patrimonio/PatrimonioDoLancamento');
+    const { apiDaBancada } = await import('./dados/patrimonioLancamento');
+    const caso = q.get('caso') ?? 'sem_bem';
+    const aba = q.get('aba');
+    montar(
+      <div className="flex h-screen items-end justify-center bg-muted">
+        <div className="mb-4 flex h-[40px] w-[95vw] items-center gap-2 border-t bg-card px-3" data-testid="rodape-da-bancada">
+          <button type="button" className="h-[22px] shrink-0 rounded border px-[9px] text-[10px]">Documentos (1)</button>
+          <PatrimonioDoLancamento lancamentoId="L1" clienteId="cli" descricao="Inversor 2000W Curral Pasto 23" valor={caso === 'contrato' ? 42000 : 3480}
+            fornecedor="Fornecedor X Comércio de Materiais Elétricos" fazendaRotulo="FAZ-A" api={apiDaBancada(caso)} onAbrirBem={() => {}}
+            abertoEm={aba === 'ligar' || aba === 'criar' ? aba : undefined} />
+          <div className="flex-1" />
+          <button type="button" className="h-[26px] shrink-0 rounded border px-3 text-[11px]">Cancelar</button>
+          <button type="button" className="h-[26px] shrink-0 rounded bg-primary px-3 text-[11px] text-primary-foreground">Salvar</button>
+        </div>
+      </div>,
+    );
+  };
+  void montarPatrimonioDoLancamento();
 } else if (tela === 'caixa-boletos') {
   /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos: o modal real com a API e o leitor em memória (`dados/caixaBoletos.ts`, SINTÉTICO);
      o gate solta os PDFs pelo input (o conteúdo é o nome: o leitor da bancada lê por ele) */
