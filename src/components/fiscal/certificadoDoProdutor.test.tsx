@@ -68,4 +68,31 @@ describe('CertificadoDoProdutor', () => {
     expect(screen.getByTestId('certificado-recado').textContent).toBe('Escolha o arquivo .pfx ou .p12.');
     expect(funcao).not.toHaveBeenCalled();
   });
+  it('Testar certificado: SÓ admin com certificado ativo; manda ensaio:true à fiscal-dfe-buscar e mostra titular, validade e a cadeia', async () => {
+    const { unmount } = montar({ perfil: 'gestor_cliente', certs: [CERT] });
+    await waitFor(() => expect(screen.getByTestId('certificado-situacao').textContent).toBe('ativo'));
+    expect(screen.queryByTestId('certificado-testar')).toBeNull();
+    unmount();
+    const chamadas: { nome: string; corpo: unknown }[] = [];
+    montar({ perfil: 'admin_agroinblue', certs: [CERT], funcao: (nome, op) => {
+      chamadas.push({ nome, corpo: op && typeof op === 'object' ? Reflect.get(op, 'body') : null });
+      return { data: { ok: true, ensaio: true, uf: 35, cadeia: { ok: true, raiz: 'AC Raiz Brasileira v5', caminho: [
+        { nome: 'PRODUTORA SINTETICA:52998224725', ate: '2027-11-16T15:27:00.000Z' }, { nome: 'AC SINTETICA Multipla v5', ate: '2029-01-01T00:00:00.000Z' },
+        { nome: 'AC SINTETICA v5', ate: '2029-01-01T00:00:00.000Z' }, { nome: 'AC Raiz Brasileira v5', ate: '2029-03-02T23:59:38.000Z' }] } }, error: null };
+    } });
+    fireEvent.click(await screen.findByTestId('certificado-testar'));
+    await waitFor(() => expect(screen.getByTestId('certificado-teste').textContent).toContain('PRODUTORA SINTETICA · 529.982.247-25'));
+    expect(chamadas).toEqual([{ nome: 'fiscal-dfe-buscar', corpo: { titular_id: 't1', ambiente: 'producao', ensaio: true } }]);
+    const txt = screen.getByTestId('certificado-teste').textContent;
+    expect(txt).toContain('até 16/11/2027');
+    expect(txt).toContain('AC SINTETICA Multipla v5 → AC SINTETICA v5 → AC Raiz Brasileira v5 ✓ ICP-Brasil');
+  });
+  it('Testar certificado recusado (cadeia sem a AC): a frase da borda e onde a cadeia parou, escritos (nunca toast)', async () => {
+    montar({ perfil: 'admin_agroinblue', certs: [CERT], funcao: () => ({ data: null, error: { message: 'non-2xx', context: new Response(JSON.stringify({
+      ok: false, recusa: 'cadeia', frase: 'A cadeia do certificado não veio inteira no arquivo. Nada foi pedido à Receita.',
+      cadeia: { ok: false, motivo: 'sem_intermediaria', caminho: [{ nome: 'PRODUTORA SINTETICA:52998224725', ate: '2027-11-16T15:27:00.000Z' }] } }), { status: 422 }) } }) });
+    fireEvent.click(await screen.findByTestId('certificado-testar'));
+    await waitFor(() => expect(screen.getByTestId('certificado-teste').textContent).toContain('não veio inteira'));
+    expect(screen.getByTestId('certificado-teste').textContent).toContain('✗ falta a AC no arquivo');
+  });
 });

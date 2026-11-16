@@ -1,6 +1,7 @@
 /** NOTAS-RECEITA-A1-01 · F2 — as regras da aba Certificado: leitura sem cast, validade (aviso 30 dias), trilha e a resposta da borda. */
 import { describe, expect, it } from 'vitest';
 import {
+  CORPO_DO_TESTE, lerRespostaDoTeste,
   certificadoDaFicha, estadoDaValidade, FRASE_A3_NAO_SERVE, fraseDoPasso, impressaoCurta, lerCertificados, lerRespostaDoSubir, lerTrilha,
 } from './certificadoTela';
 
@@ -43,5 +44,18 @@ describe('certificadoTela', () => {
     const erro = { message: 'non-2xx', context: new Response(JSON.stringify({ ok: false, recusa: 'nao_a1', frase: `Não é A1. ${FRASE_A3_NAO_SERVE}` }), { status: 422 }) };
     expect(await lerRespostaDoSubir({ data: null, error: erro })).toEqual({ ok: false, frase: `Não é A1. ${FRASE_A3_NAO_SERVE}` });
     expect(await lerRespostaDoSubir({ data: null, error: { message: 'rede' } })).toEqual({ ok: false, frase: 'Não consegui enviar o certificado. Nada foi gravado; tente de novo.' });
+  });
+});
+
+describe('lerRespostaDoTeste — o "Testar certificado" só dá ✓ com o ENSAIO e a cadeia conferida', () => {
+  const caminho = [{ nome: 'PRODUTORA SINTETICA:52998224725', ate: '2027-11-16T15:27:00.000Z' }, { nome: 'AC X', ate: '2029-01-01T00:00:00.000Z' }];
+  it('o corpo pede SEMPRE o ensaio', () => {
+    expect(CORPO_DO_TESTE('t1')).toEqual({ titular_id: 't1', ambiente: 'producao', ensaio: true });
+  });
+  it('200 SEM "ensaio: true" (seria uma busca de verdade) ou com a cadeia não ok: nunca ✓', async () => {
+    expect((await lerRespostaDoTeste({ data: { ok: true, cstat: '137', cadeia: { ok: true, raiz: 'R', caminho } }, error: null })).ok).toBe(false);
+    expect((await lerRespostaDoTeste({ data: { ok: true, ensaio: true, cadeia: { ok: false, motivo: 'assinatura', caminho } }, error: null })).ok).toBe(false);
+    expect(await lerRespostaDoTeste({ data: { ok: true, ensaio: true, cadeia: { ok: true, raiz: 'R', caminho } }, error: null }))
+      .toEqual({ ok: true, titular: 'PRODUTORA SINTETICA · 529.982.247-25', validade: 'até 16/11/2027', cadeia: 'AC X ✓ ICP-Brasil' });
   });
 });

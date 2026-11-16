@@ -5,6 +5,8 @@
  *    o navegador não lê o certificado; a recusa da borda fica ESCRITA junto do botão (nunca em toast);
  *  · a frase fixa explica que A3 (cartão/token) não serve aqui (Chat 10:45);
  *  · "Revogar" pela `fn_fiscal_certificado_revogar`: simula (a frase do banco) → motivo → revoga.
+ *  · "Testar certificado" (SÓ admin AgroinBlue, Gabriel 16/11): o ENSAIO da borda `fiscal-dfe-buscar` (`ensaio: true`) — abre o A1 do
+ *    cofre e confere titular, validade e a cadeia ICP; NÃO chama a Receita e NÃO grava nada. O resultado fica em 3 linhas reservadas.
  */
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,8 +21,8 @@ import { dataBR } from '@/lib/datas/dataBR';
 import { cn } from '@/lib/utils';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import {
-  certificadoDaFicha, estadoDaValidade, FRASE_A3_NAO_SERVE, fraseDoPasso, impressaoCurta, lerCertificados, lerRespostaDoSubir, lerTrilha,
-  ROTULO_DA_SITUACAO,
+  certificadoDaFicha, CORPO_DO_TESTE, estadoDaValidade, FRASE_A3_NAO_SERVE, fraseDoPasso, impressaoCurta, lerCertificados, lerRespostaDoSubir,
+  lerRespostaDoTeste, lerTrilha, ROTULO_DA_SITUACAO, type ResultadoDoTeste,
 } from '@/lib/fiscal/certificadoTela';
 
 const REGRA_DO_CERTIFICADO: RegraDeAceite = { tipos: ['pfx'], tamanhoMaxBytes: 64 * 1024 };
@@ -28,7 +30,8 @@ const CAIXA = cn(REGUA_CAMPO, 'flex items-center rounded-md border bg-muted/60 p
 
 export function CertificadoDoProdutor({ titularId }: { titularId: string }) {
   const qc = useQueryClient();
-  const { isManager } = usePermissions();
+  const { isManager, perfil } = usePermissions();
+  const ehAdmin = perfil === 'admin_agroinblue';
   const chave = ['fiscal-certificado', titularId];
   const leitura = useQuery({
     queryKey: chave,
@@ -52,6 +55,14 @@ export function CertificadoDoProdutor({ titularId }: { titularId: string }) {
   const [enviando, setEnviando] = useState(false);
   const [recado, setRecado] = useState<{ tom: 'erro' | 'ok'; frase: string } | null>(null);
   const [revogando, setRevogando] = useState<{ frase: string; motivo: string } | null>(null);
+  const [testando, setTestando] = useState(false);
+  const [teste, setTeste] = useState<ResultadoDoTeste | null>(null);
+
+  async function testar() {
+    setTestando(true); setTeste(null);
+    setTeste(await lerRespostaDoTeste(await supabase.functions.invoke('fiscal-dfe-buscar', { body: CORPO_DO_TESTE(titularId) })));
+    setTestando(false);
+  }
 
   async function subir() {
     if (!arquivo || !senha) { setRecado({ tom: 'erro', frase: !arquivo ? 'Escolha o arquivo .pfx ou .p12.' : 'Digite a senha do certificado.' }); return; }
@@ -93,6 +104,29 @@ export function CertificadoDoProdutor({ titularId }: { titularId: string }) {
               {cert ? impressaoCurta(cert.impressaoDigital) : '—'}</div></div>
         </div>
       </BlocoFormulario>
+
+      {ehAdmin && cert?.situacao === 'ativo' && (
+        <BlocoFormulario titulo="Testar certificado">
+          <div className="flex items-start gap-2">
+            <Button variant="outline" size="sm" className="h-[24px] shrink-0 text-[10px]" disabled={testando} onClick={() => void testar()}
+              title="Abre o certificado do cofre e confere titular, validade e a cadeia ICP. Não consulta a Receita e não grava nada."
+              data-testid="certificado-testar">{testando ? 'Testando…' : 'Testar certificado'}</Button>
+            {/* 3 linhas reservadas: antes, durante e depois do teste a altura é a mesma */}
+            <div className="grid min-w-0 flex-1 grid-cols-[64px_1fr] gap-x-2 text-[10px] leading-[14px] min-h-[42px]" data-testid="certificado-teste">
+              {teste?.ok === true && (<>
+                <span className="text-muted-foreground">Titular</span><span className="truncate" title={teste.titular}>{teste.titular}</span>
+                <span className="text-muted-foreground">Validade</span><span className="tabular-nums">{teste.validade}</span>
+                <span className="text-muted-foreground">Cadeia</span><span className="truncate text-emerald-700" title={teste.cadeia}>{teste.cadeia}</span>
+              </>)}
+              {teste?.ok === false && (<>
+                <span className="text-muted-foreground">Recusa</span><span className="text-destructive">{teste.frase}</span>
+                {teste.cadeia && (<><span className="text-muted-foreground">Cadeia</span><span className="truncate" title={teste.cadeia}>{teste.cadeia}</span></>)}
+              </>)}
+              {!teste && <span className="col-span-2 text-muted-foreground">{testando ? '' : 'Não consulta a Receita e não grava nada.'}</span>}
+            </div>
+          </div>
+        </BlocoFormulario>
+      )}
 
       {isManager && (
         <BlocoFormulario titulo={cert?.situacao === 'ativo' ? 'Trocar o certificado' : 'Subir o certificado'}>
