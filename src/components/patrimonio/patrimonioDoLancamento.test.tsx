@@ -60,7 +60,9 @@ describe('o rodapé', () => {
   it('(b) já ligado: "↔ código nome" + desligar (com motivo, pela RPC de desligar)', async () => {
     lido = { partes: [parte()], vinculos: [{ bem_id: 'b9', codigo: 'IMP-014', descricao: 'Roçadeira hidráulica', parte_ordem: 1 }] };
     montar();
-    expect((await screen.findByTestId('abrir-bem-do-lancamento')).textContent).toBe('↔ IMP-014 Roçadeira hidráulica');
+    const link = await screen.findByTestId('abrir-bem-do-lancamento');
+    expect(link.textContent).toBe('↔ IMP-014');
+    expect(link.getAttribute('title')).toBe('Patrimônio: IMP-014 Roçadeira hidráulica · abrir o bem');
     expect(screen.queryByTestId('acao-patrimonio')).toBeNull();
     fireEvent.click(screen.getByTestId('desligar-bem'));
     fireEvent.change(await screen.findByPlaceholderText('motivo'), { target: { value: 'era de outro bem' } });

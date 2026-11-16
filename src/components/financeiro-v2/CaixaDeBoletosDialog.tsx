@@ -42,6 +42,7 @@ function SeloDaCaixa({ s }: { s: Selo }) {
   return <span className={cn('mr-1 inline-block shrink-0 rounded-[3px] px-1 text-[9.5px] font-semibold leading-[15px]', TOM[s.tom])}>{s.texto}</span>;
 }
 const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-left');
+const MAX_SELOS_A_VISTA = 2;
 const TH_NUM = cn(TH, 'text-right');
 const LINHA = 'h-[19px] border-b border-border/40';
 
@@ -73,6 +74,13 @@ function LinhaChegando({ item, sugestoes, aoAlternar, aoTirar, aoTentarSenha }: 
   const frase = item.frase ?? (item.estado === 'entrou' ? 'na caixa' : item.estado === 'lendo' ? 'lendo…' : item.estado === 'gravando' ? 'gravando…' : null);
   const textoDaLinha = pedeSenha ? 'digite a senha para ler (ela não é guardada)' : frase ?? achado?.texto ?? '';
   const titulo = [achado?.texto, ...avisos.map(fraseDoAviso), item.frase].filter(Boolean).join(' · ');
+  /* 918 px: no máximo 2 selos à vista; os outros viram "+N" com os textos no title (selo nunca corta, nem cobre o "tirar") */
+  const selos: Selo[] = [];
+  if (item.repetidoNaLeva) selos.push({ texto: 'repetido nesta leva', tom: 'ambar' });
+  if (pedeSenha) selos.push({ texto: item.estado === 'senha' ? 'protegido por senha' : 'senha não abriu', tom: 'vermelho' });
+  else if (achado) selos.push(...achado.selos);
+  const selosAVista = selos.slice(0, MAX_SELOS_A_VISTA);
+  const selosDoMais = selos.slice(MAX_SELOS_A_VISTA);
   return (
     <tr className={cn(LINHA, item.estado === 'recusado' || item.estado === 'erro' ? 'bg-red-50' : item.marcado && 'bg-primary/5')} data-testid="boleto-chegando">
       <td className={cn(TD_REGUA, 'px-1')}>
@@ -87,9 +95,12 @@ function LinhaChegando({ item, sugestoes, aoAlternar, aoTirar, aoTentarSenha }: 
       <td className={TD_REGUA_NUM}>{valorBR(b?.valor)}</td>
       <td className={TD_REGUA} title={titulo || undefined}>
         <span className="flex min-w-0 items-center">
-          {item.repetidoNaLeva && <SeloDaCaixa s={{ texto: 'repetido nesta leva', tom: 'ambar' }} />}
-          {pedeSenha && <SeloDaCaixa s={{ texto: item.estado === 'senha' ? 'protegido por senha' : 'senha não abriu', tom: 'vermelho' }} />}
-          {achado && !pedeSenha && achado.selos.map((s) => <SeloDaCaixa key={s.texto} s={s} />)}
+          {selosAVista.map((s) => <SeloDaCaixa key={s.texto} s={s} />)}
+          {selosDoMais.length > 0 && (
+            <span title={selosDoMais.map((s) => s.texto).join(' · ')} data-testid="selos-do-mais">
+              <SeloDaCaixa s={{ texto: `+${selosDoMais.length}`, tom: 'cinza' }} />
+            </span>
+          )}
           <span className="min-w-0 truncate text-muted-foreground" title={textoDaLinha}>{textoDaLinha}</span>
         </span>
       </td>

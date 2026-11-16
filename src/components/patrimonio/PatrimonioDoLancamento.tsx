@@ -76,9 +76,10 @@ export function PatrimonioDoLancamento({ lancamentoId, clienteId, descricao, val
         <>
           {estado.vinculos.map((v) => (
             <span key={`${v.bem_id}#${v.parte_ordem}`} className="flex min-w-0 items-center gap-1">
-              <button type="button" className="min-w-0 max-w-[220px] truncate font-medium text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+              {/* fora de tabela nada de "…": o rodapé mostra o CÓDIGO (identificador, não corta); o nome do bem vai no title */}
+              <button type="button" className="shrink-0 whitespace-nowrap font-medium text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
                 disabled={!onAbrirBem} onClick={() => onAbrirBem?.(v.bem_id)} title={`Patrimônio: ${v.codigo} ${v.descricao} · abrir o bem`}
-                data-testid="abrir-bem-do-lancamento">↔ <span className="tabular-nums">{v.codigo}</span> {v.descricao}</button>
+                data-testid="abrir-bem-do-lancamento">↔ <span className="tabular-nums">{v.codigo}</span></button>
               <button type="button" className="shrink-0 text-destructive hover:underline" onClick={() => setDesligando(v)} data-testid="desligar-bem">desligar</button>
             </span>
           ))}
