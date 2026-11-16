@@ -104,13 +104,18 @@ export interface NavItem {
    *   esta tela?" e' UM dono, `nivelDaTela` (`src/v2/lib/acessoTelas.ts`); menu e rota so' consultam.
    */
   liberadaClientes?: boolean;
+  /** ESCONDIDO DO MENU — PERFIL-GESTOR-01 (limpeza, Gabriel 16/11/2026: "esconder antes de apagar"). Sai do menu para TODOS, inclusive
+   *  o admin; a tela, a rota e o código ficam (o admin ainda abre pelo endereço). Só para tela sem uso ou repetida, à espera de
+   *  remover depois. Não muda quem PODE abrir: isso segue com `nivelDaTela`. */
+  escondido?: boolean;
   /** o grupo de atividade do item (só nos itens do "Lançar"; os demais herdam o da seção) */
   grupoDaAtividade?: GrupoDaAtividade;
 }
 
 /** A Visao Geral ('home') nao e' item do `NAV_GRUPOS` (e' o botao do topo da lateral), entao a marca dela mora aqui, ao lado da
- *  lista. NAO liberada no piloto (ACESSOS-02a): quem nao e' admin entra direto na primeira tela permitida. */
-export const HOME_LIBERADA_CLIENTES = false;
+ *  lista. NAO liberada no piloto (ACESSOS-02a). PERFIL-GESTOR-01 (Gabriel 16/11/2026): LIBERADA — so' o GESTOR a ve^ (a linha dela
+ *  em `NIVEL_POR_TELA`), e ele entra por ela; os outros perfis seguem entrando na primeira tela permitida. */
+export const HOME_LIBERADA_CLIENTES = true;
 
 /**
  * A TELA PROPRIA DA OPERACAO COMERCIAL — ACESSOS-OC-01. E' onde a OC (compra, venda, abate) abre: os tres modais, sem os cards,
@@ -126,6 +131,12 @@ export const OPERACAO_COMERCIAL_LIBERADA_CLIENTES = true;
  * outras abas da Pecuária (`TELAS_DO_FINANCEIRO`): gestor e financeiro.
  */
 export const EVOLUCAO_CATEGORIA_LIBERADA_CLIENTES = true;
+
+/**
+ * O LANÇAR DA CHUVA (`chuvas-lancamento`) — PERFIL-GESTOR-01. Não é item de menu (abre-se pelo "Lançar" da tela Chuvas), então a
+ * marca mora aqui. Sem ela, quem tem a tela Chuvas a veria SEM o botão Lançar (o V2Index só passa o `onLancar` a quem abre esta).
+ */
+export const CHUVAS_LANCAMENTO_LIBERADA_CLIENTES = true;
 
 export interface NavSecao {
   /* Vazio = secao SEM cabecalho. Usado por "Fechamento Área", que deixou de ser
@@ -167,7 +178,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
         titulo: 'Lançar',
         itens: [
           { id: 'lancamentos-zoot',          label: 'Pecuária',     status: 'ready', primary: true, liberadaClientes: true, grupoDaAtividade: 'pecuaria' },
-          { id: 'lancamentos-agricultura',   label: 'Agricultura',  status: 'ready', grupoDaAtividade: 'agricultura' },
+          { id: 'lancamentos-agricultura',   label: 'Agricultura',  status: 'ready', liberadaClientes: true, grupoDaAtividade: 'agricultura' },
           { id: 'lancamentos-silvicultura',  label: 'Silvicultura', status: 'ready', emConstrucao: true, grupoDaAtividade: 'silvicultura' },
         ],
       },
@@ -183,15 +194,15 @@ export const NAV_GRUPOS: NavGrupo[] = [
         titulo: 'Pecuária',
         grupoDaAtividade: 'pecuaria',
         itens: [
-          { id: 'rebanho-home',            label: 'Visão geral',          status: 'ready' },
+          { id: 'rebanho-home',            label: 'Visão geral',          status: 'ready', liberadaClientes: true },
           { id: 'conferencia-lancamentos', label: 'Lançamentos',          status: 'ready', liberadaClientes: true },
           { id: 'operacoes-comerciais',    label: 'Operações comerciais', status: 'ready', primary: true, liberadaClientes: true },
           { id: 'conferencia-mensal',      label: 'Evolução no ano',      status: 'ready', liberadaClientes: true },
-          { id: 'mapa-pastos',             label: 'Mapa de pastos',       status: 'ready' },
-          { id: 'mapa-geo-pastos',         label: 'Geo pastos',           status: 'ready' },
+          { id: 'mapa-pastos',             label: 'Mapa de pastos',       status: 'ready', liberadaClientes: true },
+          { id: 'mapa-geo-pastos',         label: 'Geo pastos',           status: 'ready', liberadaClientes: true },
           /* LOTES-03 F1 (Gabriel 06/11): o cadastro de lotes por assistente + a ficha (mock lotes-03-assistente.html) */
-          { id: 'lotes',                   label: 'Lotes',                status: 'ready' },
-          { id: 'chuvas',                  label: 'Chuvas',               status: 'ready' },
+          { id: 'lotes',                   label: 'Lotes',                status: 'ready', liberadaClientes: true },
+          { id: 'chuvas',                  label: 'Chuvas',               status: 'ready', liberadaClientes: true },
         ],
       },
       {
@@ -265,13 +276,13 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Gestão',
         itens: [
-          { id: 'financeiro-dashboard',  label: 'Dashboard financeiro',  status: 'needs-wrapper' },
+          { id: 'financeiro-dashboard',  label: 'Dashboard financeiro',  status: 'needs-wrapper', escondido: true },
           { id: 'fluxo-caixa',           label: 'Fluxo de caixa',           status: 'needs-wrapper', liberadaClientes: true },
-          { id: 'rateio-adm',            label: 'Rateio ADM',            status: 'needs-wrapper' },
+          { id: 'rateio-adm',            label: 'Rateio ADM',            status: 'needs-wrapper', escondido: true },
           /* A mesma leitura do Extrato Gerencial, com o recorte do fechamento — FIN-PAINEL-SAFRA-01.
              Fica em Gestão, e não em Conciliação, porque Conciliação é operação de UMA conta num
              mês; aqui a pergunta é por safra, ano ou datas, com todas as contas. */
-          { id: 'painel-periodo',        label: 'Painel por período',    status: 'ready' },
+          { id: 'painel-periodo',        label: 'Painel por período',    status: 'ready', liberadaClientes: true },
           /* ⚠ FICA EM GESTÃO, AO LADO DO PAINEL POR PERÍODO, e não em Operação — PR-CPR-2A.
              Operação é o que se faz numa conta e num mês; aqui a pergunta é "o que vence,
              quando, somando todas as contas", que é a mesma família do Painel por Período:
@@ -292,7 +303,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
         titulo: 'Planejamento',
         itens: [
           { id: 'lancamentos-meta-zoo', label: 'Lançamentos META zoo',       status: 'ready' },
-          { id: 'lancamentos-meta-fin', label: 'Lançamentos META financeiro', status: 'ready' },
+          { id: 'lancamentos-meta-fin', label: 'Lançamentos META financeiro', status: 'ready', liberadaClientes: true },
           { id: 'meta-gmd',             label: 'GMD META',                    status: 'ready' },
           { id: 'meta-precos',          label: 'Preços META',                 status: 'ready' },
           { id: 'areas-meta',           label: 'Áreas META',                  status: 'ready' },
@@ -301,7 +312,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Gestão',
         itens: [
-          { id: 'planejamento-home', label: 'Visão geral do planejamento', status: 'ready' },
+          { id: 'planejamento-home', label: 'Visão geral do planejamento', status: 'ready', liberadaClientes: true },
         ],
       },
     ],
@@ -316,8 +327,8 @@ export const NAV_GRUPOS: NavGrupo[] = [
         titulo: 'Visão executiva',
         itens: [
           { id: 'painel-consultor',    label: 'PC-100',                       status: 'ready', liberadaClientes: true },
-          { id: 'fechamento-periodo',  label: 'Fechamento do período',        status: 'ready' },
-          { id: 'indicadores-zoot',    label: 'Indicadores',                  status: 'needs-wrapper' },
+          { id: 'fechamento-periodo',  label: 'Fechamento do período',        status: 'ready', liberadaClientes: true },
+          { id: 'indicadores-zoot',    label: 'Indicadores',                  status: 'needs-wrapper', liberadaClientes: true },
           { id: 'valor-rebanho',       label: 'Evolução patrimonial',         status: 'needs-wrapper', liberadaClientes: true },
           /* ⚠ A GRADE UNICA DA LAVOURA — compara as culturas da safra, abre os centros e, no
              clique do cabecalho de uma cultura, vira o painel dela (Resultado, Producao,
@@ -364,7 +375,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           /* O item abre a tela com as abas Cadastro e Pastos — "Fazendas" sozinho
              escondia metade do que ha ali. */
-          { id: 'config-fazendas',   label: 'Fazendas e pastos',   status: 'ready' },
+          { id: 'config-fazendas',   label: 'Fazendas e pastos',   status: 'ready', liberadaClientes: true },
           { id: 'contas-bancarias',  label: 'Contas bancárias',    status: 'needs-wrapper', liberadaClientes: true },
           { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper', liberadaClientes: true },
           { id: 'plano-contas',      label: 'Plano de contas',     status: 'needs-wrapper' },
@@ -372,19 +383,19 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'patrimonio',        label: 'Patrimônio',          status: 'ready', liberadaClientes: true },
           /* FISCAL onda 1 (Gabriel 09/11 10:36) — quem responde pelo imposto: titulares, IE, % por fazenda, acordos de rateio. Sem a marca
              `liberadaClientes`: só o admin abre até o Gabriel liberar para gestor/financeiro. */
-          { id: 'produtores',        label: 'Produtores',          status: 'ready' },
-          { id: 'safras',            label: 'Safras',              status: 'ready' },
+          { id: 'produtores',        label: 'Produtores',          status: 'ready', liberadaClientes: true },
+          { id: 'safras',            label: 'Safras',              status: 'ready', liberadaClientes: true },
           /* ⚠ ELE FICA EM CADASTROS, NÃO EM AGRICULTURA, e a diferença é o que o item É: um local
              de estoque é identidade que o resto referencia — como Fazendas e Fornecedores —, não
              uma operação que se lança. O grão passa por ele; ele não passa pelo grão. */
-          { id: 'locais-estoque',    label: 'Locais de estoque',   status: 'ready' },
+          { id: 'locais-estoque',    label: 'Locais de estoque',   status: 'ready', liberadaClientes: true },
           /* ⚠ "Rateio administrativo" NÃO É o "Rateio ADM" do Financeiro, e os nomes vão
              conviver: aquele distribui o administrativo entre FAZENDAS pelo rebanho médio
              (derivado, tela de conferência); este declara quanto do administrativo é de cada
              ATIVIDADE, por ano — cadastro, decisão do produtor. */
           { id: 'rateio-admin',      label: 'Rateio administrativo', status: 'ready' },
           { id: 'subcentro-aliases', label: 'Aliases de subcentro', status: 'needs-wrapper' },
-          { id: 'dividendos',        label: 'Dividendos',          status: 'needs-wrapper' },
+          { id: 'dividendos',        label: 'Dividendos',          status: 'needs-wrapper', liberadaClientes: true },
         ],
       },
     ],

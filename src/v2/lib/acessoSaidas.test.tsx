@@ -45,7 +45,10 @@ describe('usePodeAbrir — so consulta o dono', () => {
     expect(pode('operacoes-comerciais')).toBe(true);
     expect(pode('lancamentos-zoot')).toBe(true);
     expect(pode('financiamentos')).toBe(true);
-    for (const t of ['chuvas-lancamento', 'mapa-pastos', 'home'] as const) expect(`${t}:${pode(t)}`).toBe(`${t}:false`);
+    /* PERFIL-GESTOR-01 (Gabriel 16/11/2026): o gestor ganhou a Visão geral, o Mapa de pastos e o Lançar da chuva — as saídas
+       para elas passam a ser oferecidas a ele; o que segue de fora é do consultor */
+    for (const t of ['chuvas-lancamento', 'mapa-pastos', 'home'] as const) expect(`${t}:${pode(t)}`).toBe(`${t}:true`);
+    for (const t of ['financeiro-dashboard', 'rateio-adm', 'importacao-extratos', 'plano-contas'] as const) expect(`${t}:${pode(t)}`).toBe(`${t}:false`);
     expect(pode('conferencia-mensal')).toBe(true);
     expect(pode('evolucao-categoria')).toBe(true);
   });

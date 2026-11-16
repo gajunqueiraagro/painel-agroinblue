@@ -198,12 +198,15 @@ describe('"Lançar › Pecuária" continua sem oferecer o cenário Meta (lido da
     expect(tela).toContain('const blockedByCenarios = cenariosPermitidos ? !cenariosPermitidos.includes(s.value) : false;');
     expect(tela).toContain("const blockedByPermission = s.value === 'meta' && !canEditMeta;");
   });
-  it('nenhuma tela de Planejamento ganhou a marca: seguem fechadas a todo não admin', () => {
+  it('do Planejamento, só as 2 que respeitam a trava da meta ganharam a marca (PERFIL-GESTOR-01, Gabriel 16/11); as de META sem a trava seguem fechadas', () => {
     const nav = readFileSync('src/v2/lib/navGrupos.ts', 'utf8');
-    for (const id of ['meta-gmd', 'meta-precos', 'areas-meta', 'lancamentos-meta-zoo', 'lancamentos-meta-fin', 'planejamento-home']) {
+    const marca = (id: string) => {
       const linha = nav.split('\n').find((l) => l.includes(`{ id: '${id}',`)) ?? '';
-      expect(`${id}:${linha.length > 0}:${linha.includes('liberadaClientes')}`).toBe(`${id}:true:false`);
-    }
+      return `${id}:${linha.length > 0}:${linha.includes('liberadaClientes')}`;
+    };
+    for (const id of ['meta-gmd', 'meta-precos', 'areas-meta', 'lancamentos-meta-zoo']) expect(marca(id)).toBe(`${id}:true:false`);
+    /* a grade META do Lançamentos META financeiro consulta `EDITA_META`; a Visão geral do planejamento só mostra */
+    for (const id of ['lancamentos-meta-fin', 'planejamento-home']) expect(marca(id)).toBe(`${id}:true:true`);
   });
 });
 

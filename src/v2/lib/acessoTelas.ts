@@ -15,7 +15,7 @@
  *   nivel; o efeito e' PR seguinte. No piloto as tres telas liberadas sao 'editar' para gestor e financeiro.
  */
 import {
-  EVOLUCAO_CATEGORIA_LIBERADA_CLIENTES, HOME_LIBERADA_CLIENTES, NAV_GRUPOS, OPERACAO_COMERCIAL_LIBERADA_CLIENTES, TELA_OPERACAO_COMERCIAL,
+  CHUVAS_LANCAMENTO_LIBERADA_CLIENTES, EVOLUCAO_CATEGORIA_LIBERADA_CLIENTES, HOME_LIBERADA_CLIENTES, NAV_GRUPOS, OPERACAO_COMERCIAL_LIBERADA_CLIENTES, TELA_OPERACAO_COMERCIAL,
   type NavGrupo, type NavItem, type V2Section,
 } from './navGrupos';
 
@@ -85,11 +85,31 @@ export const TELAS_DO_FINANCEIRO: readonly V2Section[] = [
  */
 export const TELAS_DA_EVOLUCAO: readonly V2Section[] = ['conferencia-mensal', 'evolucao-categoria'];
 
+/**
+ * AS TELAS DO GESTOR DO CLIENTE — PERFIL-GESTOR-01 (Gabriel 16/11/2026: "a Amanda tem que ter acesso a QUASE TUDO"). O gestor VÊ e
+ * EDITA todas as telas do cliente: Visão geral, Produção, Financeiro, Planejamento, Executivo e os Cadastros do cliente. Estas são as
+ * que ele ganha além das que já tinha (`TELAS_DO_FINANCEIRO`, OC, Evolução); financeiro, campo e leitura seguem 'nao' nelas.
+ * ⚠ FICAM SÓ COM O CONSULTOR (sem a marca): Plano de contas, Aliases de subcentro, os dois rateios, Auditoria, Validar e Configurações.
+ * ⚠ A GRADE META segue só do admin: no Planejamento o gestor entra, mas criar/editar meta continua barrado por `EDITA_META` (abaixo),
+ *   onde a tela o consulta (a grade do Fluxo de caixa e a linha de meta da Pecuária).
+ */
+export const TELAS_DO_GESTOR: readonly V2Section[] = [
+  'home', 'rebanho-home', 'mapa-pastos', 'mapa-geo-pastos', 'lotes', 'chuvas', 'chuvas-lancamento', 'lancamentos-agricultura',
+  'painel-periodo',
+  /* do Planejamento, SÓ as que respeitam a trava da meta (`EDITA_META`) — Gabriel 16/11: GMD, Preços, Áreas META e Lançamentos META
+     zoo (o "Lançar meta" cria sem consultar a trava) entram quando a respeitarem */
+  'planejamento-home', 'lancamentos-meta-fin',
+  'fechamento-periodo', 'indicadores-zoot',
+  'config-fazendas', 'produtores', 'safras', 'locais-estoque', 'dividendos',
+];
+const SO_GESTOR: Record<PerfilCliente, NivelTela> = { gestor_cliente: 'editar', financeiro: 'nao', campo: 'nao', leitura: 'nao' };
+
 export const NIVEL_POR_TELA: Partial<Record<V2Section, Record<PerfilCliente, NivelTela>>> = {
   'operacoes-comerciais': GESTOR_E_FINANCEIRO,
   [TELA_OPERACAO_COMERCIAL]: GESTOR_E_FINANCEIRO,
   ...Object.fromEntries(TELAS_DO_FINANCEIRO.map((t) => [t, GESTOR_E_FINANCEIRO])),
   ...Object.fromEntries(TELAS_DA_EVOLUCAO.map((t) => [t, GESTOR_E_FINANCEIRO])),
+  ...Object.fromEntries(TELAS_DO_GESTOR.map((t) => [t, SO_GESTOR])),
 };
 
 const PERFIS: readonly string[] = ['gestor_cliente', 'financeiro', 'campo', 'leitura'];
@@ -109,6 +129,7 @@ function infoDaTela(tela: V2Section): { grupo: GrupoAcesso; liberada: boolean } 
     m.set('home', { grupo: 'home', liberada: HOME_LIBERADA_CLIENTES });
     m.set(TELA_OPERACAO_COMERCIAL, { grupo: 'rebanho', liberada: OPERACAO_COMERCIAL_LIBERADA_CLIENTES });
     m.set('evolucao-categoria', { grupo: 'rebanho', liberada: EVOLUCAO_CATEGORIA_LIBERADA_CLIENTES });
+    m.set('chuvas-lancamento', { grupo: 'rebanho', liberada: CHUVAS_LANCAMENTO_LIBERADA_CLIENTES });
     for (const g of NAV_GRUPOS) {
       if (!ehGrupoAcesso(g.id)) continue;
       for (const sec of g.drawer) for (const item of sec.itens) m.set(item.id, { grupo: g.id, liberada: item.liberadaClientes === true });
@@ -171,7 +192,7 @@ export function nivelDaTela(perfil: string | null | undefined, isAdmin: boolean,
 /** A pessoa ve^ este item do menu? UI-VARREDURA-01 L5 (Gabriel 03/11/2026): item "em construção" NAO aparece para ninguem, nem
  *  para o admin — volta ao menu quando a tela existir (basta tirar o `emConstrucao` do item). A secao que fica sem item some. */
 export const itemVisivel = (perfil: string | null | undefined, isAdmin: boolean, item: NavItem): boolean =>
-  !item.emConstrucao && nivelDaTela(perfil, isAdmin, item.id) !== 'nao';
+  !item.emConstrucao && !item.escondido && nivelDaTela(perfil, isAdmin, item.id) !== 'nao';
 
 /** As secoes do drawer de um grupo, so' com os itens visiveis; a secao sem item some. */
 export function secoesVisiveis(perfil: string | null | undefined, isAdmin: boolean, grupo: NavGrupo): NavGrupo['drawer'] {
