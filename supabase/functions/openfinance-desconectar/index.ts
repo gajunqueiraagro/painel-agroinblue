@@ -36,6 +36,12 @@ Deno.serve(async (req) => {
     },
     busca: (u, init) => fetch(u, init),
     registrar: async (a) => !(await admin.rpc("_fn_openfinance_evento_registrar", { p: a })).error,
+    // P3a (118130): lista vazia = desliga todas as permitidas do item; item sem vínculo nesta fila (42501) não tem o que desligar
+    desligarContas: async ({ clienteId, itemId, autor }) => {
+      const { error } = await admin.rpc("_fn_openfinance_contas_gravar",
+        { p_cliente: clienteId, p_item: itemId, p_contas: [], p_autor: autor, p_simular: false });
+      return !error || error.code === "42501";
+    },
   });
   return json(r.status, r.corpo);
 });

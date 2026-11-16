@@ -103,3 +103,73 @@ describe('OPENFINANCE-SEG-01 na tela', () => {
     await waitFor(() => expect(screen.getByTestId('openfinance-sem-conexao')).toBeTruthy());
   });
 });
+
+describe('OPENFINANCE-P3a — Escolher contas', () => {
+  const C = '43f32d07-dba8-4670-900c-bf645440c04a';
+  const ITEM = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const LISTA = { ok: true, contas: [
+    { account_id: 'acc-cc', tipo_legivel: 'Conta corrente', banco: 'Itaú', final4: '3456', titular: 'Fulano T. S.', documento: '***.456.789-**', permitida: false },
+    { account_id: 'acc-cartao', tipo_legivel: 'Cartão de crédito', banco: 'Itaú', final4: '9876', titular: 'Beltrana S.', documento: null, permitida: false },
+  ] };
+  const abrir = async () => {
+    fila.linhas = [{ evento: 'item/created', item_id: ITEM, cliente_id: C, client_user_id: C, connector_id: null, recebido_em: '2026-11-16T20:10:37Z' }];
+    render(<OpenFinanceDoAdmin clienteId={C} />);
+    fireEvent.click(screen.getByTestId('openfinance-desconectar'));
+    await waitFor(() => expect(screen.getAllByTestId('openfinance-conexao')).toHaveLength(1));
+    fireEvent.click(screen.getByTestId('openfinance-escolher-contas'));
+    await waitFor(() => expect(screen.getAllByTestId('openfinance-conta')).toHaveLength(2));
+  };
+
+  it('tudo DESMARCADO por padrão; sem marcar, nada a gravar; lista só com o que a função mandou', async () => {
+    invoke.mockResolvedValue({ data: LISTA, error: null });
+    await abrir();
+    expect(invoke).toHaveBeenCalledWith('openfinance-contas', { body: { acao: 'listar', cliente_id: C, item_id: ITEM } });
+    for (const cb of screen.getAllByTestId('openfinance-conta-marcar')) expect(cb.getAttribute('data-state')).toBe('unchecked');
+    expect(screen.getByTestId('openfinance-ver-previa')).toHaveProperty('disabled', true);
+    expect(screen.getByTestId('openfinance-contador').textContent).toBe('0 de 2 marcadas');
+  });
+
+  it('marca UMA → prévia (simular) → gravar só ela', async () => {
+    invoke.mockImplementation(async (_n: string, o: { body: { acao: string; simular?: boolean } }) => (o.body.acao === 'listar'
+      ? { data: LISTA, error: null }
+      : { data: { ok: true, simulado: o.body.simular, ligar: 1, manter: 0, desligar: 0 }, error: null }));
+    await abrir();
+    fireEvent.click(screen.getAllByTestId('openfinance-conta-marcar')[0]);
+    fireEvent.click(screen.getByTestId('openfinance-ver-previa'));
+    await waitFor(() => expect(screen.getByTestId('openfinance-previa').textContent).toMatch(/^Entram 1 · continuam 0 · saem 0/));
+    expect(invoke).toHaveBeenCalledWith('openfinance-contas', { body: { acao: 'permitir', cliente_id: C, item_id: ITEM, account_ids: ['acc-cc'], simular: true } });
+    expect(invoke).not.toHaveBeenCalledWith('openfinance-contas', expect.objectContaining({ body: expect.objectContaining({ simular: false }) }));
+    fireEvent.click(screen.getByTestId('openfinance-gravar-escolha'));
+    await waitFor(() => expect(avisos.success).toHaveBeenCalledWith(expect.stringMatching(/^Escolha gravada: 1 conta entra/)));
+    expect(invoke).toHaveBeenCalledWith('openfinance-contas', { body: { acao: 'permitir', cliente_id: C, item_id: ITEM, account_ids: ['acc-cc'], simular: false } });
+  });
+
+  it('logo depois de conectar (onSuccess do Widget) abre o Escolher contas do item novo', async () => {
+    invoke.mockImplementation(async (n: string) => (n === 'openfinance-conectar'
+      ? { data: { ok: true, accessToken: 'tok', connectorIds: [601] }, error: null } : { data: LISTA, error: null }));
+    const recebeu: Array<{ onSuccess: (d: unknown) => void }> = [];
+    function PluggyConnect(this: unknown, o: { onSuccess: (d: unknown) => void }) { recebeu.push(o); return { init: async () => undefined }; }
+    Reflect.set(window, 'PluggyConnect', PluggyConnect);
+    try {
+      render(<OpenFinanceDoAdmin clienteId={C} />);
+      fireEvent.click(screen.getByTestId('openfinance-conectar'));
+      await waitFor(() => expect(recebeu).toHaveLength(1));
+      recebeu[0].onSuccess({ item: { id: ITEM, connector: { name: 'Itaú' } } });
+      await waitFor(() => expect(screen.getAllByTestId('openfinance-conta')).toHaveLength(2));
+      expect(invoke).toHaveBeenCalledWith('openfinance-contas', { body: { acao: 'listar', cliente_id: C, item_id: ITEM } });
+    } finally { Reflect.deleteProperty(window, 'PluggyConnect'); }
+  });
+
+  it('mexer na marcação depois da prévia apaga a prévia (nunca grava o que não foi conferido)', async () => {
+    invoke.mockImplementation(async (_n: string, o: { body: { acao: string } }) => (o.body.acao === 'listar'
+      ? { data: LISTA, error: null } : { data: { ok: true, ligar: 1, manter: 0, desligar: 0 }, error: null }));
+    await abrir();
+    const cbs = screen.getAllByTestId('openfinance-conta-marcar');
+    fireEvent.click(cbs[0]);
+    fireEvent.click(screen.getByTestId('openfinance-ver-previa'));
+    await waitFor(() => expect(screen.getByTestId('openfinance-gravar-escolha')).toBeTruthy());
+    fireEvent.click(cbs[1]);
+    expect(screen.queryByTestId('openfinance-gravar-escolha')).toBeNull();
+    expect(screen.getByTestId('openfinance-ver-previa')).toBeTruthy();
+  });
+});

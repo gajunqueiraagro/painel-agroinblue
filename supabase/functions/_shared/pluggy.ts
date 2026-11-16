@@ -185,6 +185,8 @@ export interface PecasDesconectar {
   credenciais: () => { clientId: string; clientSecret: string } | null;
   busca: Busca;
   registrar: (a: { origem: 'agroinblue'; evento: 'agroinblue/item_desconectado'; item_id: string; client_user_id: string; autor: string }) => Promise<boolean>;
+  /** P3a: as contas permitidas do item saem junto (desligadas, nunca apagadas); repetir é seguro */
+  desligarContas: (a: { clienteId: string; itemId: string; autor: string }) => Promise<boolean>;
 }
 export async function desconectar(pedido: { token: string | null; clienteId: unknown; itemId: unknown }, pecas: PecasDesconectar):
   Promise<{ status: number; corpo: { ok: boolean; ja_nao_existia?: boolean; frase?: string } }> {
@@ -214,5 +216,126 @@ export async function desconectar(pedido: { token: string | null; clienteId: unk
   if (!(await pecas.registrar({ origem: 'agroinblue', evento: 'agroinblue/item_desconectado', item_id: itemId, client_user_id: clienteId, autor }))) {
     return { status: 500, corpo: { ok: false, frase: 'A conexão saiu da Pluggy, mas não consegui registrar aqui. Clique de novo para registrar.' } };
   }
+  if (!(await pecas.desligarContas({ clienteId, itemId, autor }))) {
+    return { status: 500, corpo: { ok: false, frase: 'A conexão saiu da Pluggy, mas não desliguei as contas permitidas aqui. Clique de novo.' } };
+  }
   return { status: 200, corpo: { ok: true, ja_nao_existia: jaNaoExistia } };
+}
+
+/**
+ * OPENFINANCE-P3a — CONTAS PERMITIDAS (Gabriel 16/11, saída A: o consentimento do Itaú da Vera pegou o CPF inteiro do Gabriel).
+ * `openfinance-contas`, só o admin AgroinBlue:
+ *  · 'listar'   → confere na Pluggy que o item é deste cliente e devolve, por conta, SÓ tipo · banco · 4 últimos dígitos · titular e
+ *                 documento MASCARADOS · se já é permitida. Nunca saldo, limite nem transação; nunca chama /transactions.
+ *  · 'permitir' → relê as contas na Pluggy, recusa accountId que não é do item e grava (`_fn_openfinance_contas_gravar`, 118130) a lista
+ *                 marcada com tipo/final/rótulo do que a PLUGGY disse (nunca do que a tela mandou). `simular` = a prévia.
+ */
+export interface ContaParaEscolher {
+  account_id: string; tipo: 'BANK' | 'CREDIT'; subtipo: string | null; tipo_legivel: string; banco: string;
+  final4: string | null; titular: string | null; documento: string | null; permitida: boolean;
+}
+const TIPO_LEGIVEL: Record<string, string> = {
+  CHECKING_ACCOUNT: 'Conta corrente', SAVINGS_ACCOUNT: 'Poupança', CREDIT_CARD: 'Cartão de crédito',
+};
+/** "GABRIEL JUNQUEIRA MILANI" → "Gabriel J. M." (o 1º nome e as iniciais; sem nome = nulo) */
+export function mascararTitular(nome: unknown): string | null {
+  const partes = typeof nome === 'string' ? nome.trim().split(/\s+/).filter(Boolean) : [];
+  if (partes.length === 0) return null;
+  const cap = (p: string) => p.charAt(0).toLocaleUpperCase('pt-BR') + p.slice(1).toLocaleLowerCase('pt-BR');
+  const iniciais = partes.slice(1).filter((p) => !/^(d[aeo]s?|e)$/i.test(p)).map((p) => `${p.charAt(0).toLocaleUpperCase('pt-BR')}.`);
+  return [cap(partes[0]), ...iniciais].join(' ').slice(0, 60);
+}
+/** CPF → ***.914.048-** (a régua do sistema); CNPJ → **.123.456/****-**; outro = nulo (nunca o número inteiro) */
+export function mascararDocumento(doc: unknown): string | null {
+  const d = typeof doc === 'string' ? doc.replace(/\D/g, '') : '';
+  if (d.length === 11) return `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**`;
+  if (d.length === 14) return `**.${d.slice(2, 5)}.${d.slice(5, 8)}/****-**`;
+  return null;
+}
+/** os 4 últimos ALGARISMOS do número da conta/cartão ("XXXX1234", "12345-6"); menos de 4 = nulo */
+export function finalDaConta(numero: unknown): string | null {
+  const d = typeof numero === 'string' ? numero.replace(/\D/g, '') : '';
+  return d.length >= 4 ? d.slice(-4) : null;
+}
+export function contaDaPluggy(a: unknown, banco: string, permitidas: ReadonlySet<string>): ContaParaEscolher | null {
+  const o = objeto(a);
+  const id = texto(o?.id, 128);
+  const tipo = o?.type === 'BANK' || o?.type === 'CREDIT' ? o.type : null;
+  if (!o || !id || !tipo) return null;
+  const subtipo = texto(o.subtype, 32);
+  return {
+    account_id: id, tipo, subtipo, tipo_legivel: (subtipo && TIPO_LEGIVEL[subtipo]) || (tipo === 'CREDIT' ? 'Crédito' : 'Conta'),
+    banco, final4: finalDaConta(o.number), titular: mascararTitular(o.owner), documento: mascararDocumento(o.taxNumber),
+    permitida: permitidas.has(id),
+  };
+}
+export function rotuloDaConta(c: ContaParaEscolher): string {
+  return [c.banco, c.tipo_legivel, c.final4].filter(Boolean).join(' · ').slice(0, 80);
+}
+
+export interface PecasContas {
+  autorDoToken: (token: string) => Promise<string | null>;
+  ehAdmin: (autor: string) => Promise<boolean>;
+  credenciais: () => { clientId: string; clientSecret: string } | null;
+  busca: Busca;
+  permitidasDoItem: (itemId: string) => Promise<string[] | null>;
+  gravar: (p: { p_cliente: string; p_item: string; p_contas: unknown[]; p_autor: string; p_simular: boolean }) =>
+    Promise<{ ok: true; corpo: Record<string, unknown> } | { ok: false; codigo: string | null }>;
+}
+type RespostaContas = { status: number; corpo: { ok: boolean; frase?: string; contas?: ContaParaEscolher[]; [k: string]: unknown } };
+export async function contas(pedido: { token: string | null; acao: unknown; clienteId: unknown; itemId: unknown; accountIds?: unknown; simular?: unknown },
+  pecas: PecasContas): Promise<RespostaContas> {
+  const autor = pedido.token ? await pecas.autorDoToken(pedido.token) : null;
+  if (!autor) return { status: 401, corpo: { ok: false, frase: 'Entre de novo no sistema.' } };
+  const acao = pedido.acao === 'listar' || pedido.acao === 'permitir' ? pedido.acao : null;
+  const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
+  const itemId = typeof pedido.itemId === 'string' && UUID.test(pedido.itemId) ? pedido.itemId : null;
+  if (!acao || !clienteId || !itemId) return { status: 400, corpo: { ok: false, frase: 'Escolha o cliente e o banco.' } };
+  let marcadas: string[] = [];
+  if (acao === 'permitir') {
+    const v = pedido.accountIds;
+    if (!Array.isArray(v) || v.some((x) => typeof x !== 'string' || !x) || new Set(v).size !== v.length || v.length > 50) {
+      return { status: 400, corpo: { ok: false, frase: 'A lista de contas veio inválida. Nada foi gravado.' } };
+    }
+    marcadas = v;
+  }
+  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AgroinBlue escolhe as contas do banco.' } };
+  const cred = pecas.credenciais();
+  if (!cred) return { status: 503, corpo: { ok: false, frase: 'O Open Finance ainda não está configurado neste ambiente.' } };
+  const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
+  if (chave.ok === false) return { status: chave.status, corpo: { ok: false, frase: chave.frase } };
+  const h = { 'Content-Type': 'application/json', 'X-API-KEY': chave.valor };
+  let lidas: ContaParaEscolher[];
+  try {
+    const item = await pecas.busca(`${PLUGGY_BASE}/items/${itemId}`, { method: 'GET', headers: h });
+    if (item.status === 404) return { status: 404, corpo: { ok: false, frase: 'Esta conexão não existe mais na Pluggy.' } };
+    if (!item.ok) return { status: 502, corpo: { ok: false, frase: 'Não consegui ler a conexão na Pluggy. Tente de novo.' } };
+    const it = objeto(await item.json());
+    if (it?.clientUserId !== clienteId) return { status: 409, corpo: { ok: false, frase: 'Esta conexão não é deste cliente. Nada foi lido.' } };
+    const banco = texto(objeto(it.connector)?.name, 40) ?? 'Banco';
+    const permitidas = await pecas.permitidasDoItem(itemId);
+    if (!permitidas) return { status: 500, corpo: { ok: false, frase: 'Não consegui ler as contas já escolhidas. Tente de novo.' } };
+    const r = await pecas.busca(`${PLUGGY_BASE}/accounts?itemId=${itemId}`, { method: 'GET', headers: h });
+    if (!r.ok) return { status: 502, corpo: { ok: false, frase: 'Não consegui ler as contas na Pluggy. Tente de novo.' } };
+    const lista = objeto(await r.json())?.results;
+    const set = new Set(permitidas);
+    lidas = (Array.isArray(lista) ? lista : []).map((a) => contaDaPluggy(a, banco, set)).filter((c): c is ContaParaEscolher => c !== null);
+  } catch { return { status: 502, corpo: { ok: false, frase: 'Não consegui falar com a Pluggy agora. Tente de novo.' } }; }
+  if (acao === 'listar') return { status: 200, corpo: { ok: true, contas: lidas } };
+
+  const porId = new Map(lidas.map((c) => [c.account_id, c]));
+  if (marcadas.some((id) => !porId.has(id))) {
+    return { status: 400, corpo: { ok: false, frase: 'Uma das contas não é desta conexão. Nada foi gravado.' } };
+  }
+  const p_contas = marcadas.flatMap((id) => {
+    const c = porId.get(id);
+    return c ? [{ account_id: c.account_id, tipo: c.tipo, subtipo: c.subtipo, final4: c.final4, rotulo: rotuloDaConta(c) }] : [];
+  });
+  const g = await pecas.gravar({ p_cliente: clienteId, p_item: itemId, p_contas, p_autor: autor, p_simular: pedido.simular === true });
+  if (g.ok === false) {
+    if (g.codigo === '42501') return { status: 409, corpo: { ok: false, frase: 'Esta conexão não está ligada a este cliente. Nada foi gravado.' } };
+    if (g.codigo === '23505') return { status: 409, corpo: { ok: false, frase: 'Uma das contas já está ligada a outra conexão. Nada foi gravado.' } };
+    return { status: 500, corpo: { ok: false, frase: 'Não consegui gravar a escolha agora. Nada foi gravado; tente de novo.' } };
+  }
+  return { status: 200, corpo: { ...g.corpo, ok: true } };
 }

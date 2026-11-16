@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   avisoDoCorpo, CABECALHO_SEGREDO, chaveDaApi, conectar, conectorRegulado, desconectar, iguaisEmTempoConstante, receberAviso,
   registrarWebhook, type Busca, type PecasConectar, type PecasDesconectar,
+  contas, finalDaConta, mascararDocumento, mascararTitular, type PecasContas,
 } from '../../../supabase/functions/_shared/pluggy';
 
 const SEGREDO = 'segredo-sintetico-0123456789abcdef';
@@ -207,9 +208,10 @@ describe('OPENFINANCE-SEG-01 (b)+(c) — desconectar, preso ao cliente', () => {
   const montar = (rotas: Record<string, { status: number; corpo: unknown }>, p: Partial<PecasDesconectar> = {}) => {
     const falsa = pluggyFalsa({ 'POST /auth': { status: 200, corpo: { apiKey: 'k' } }, ...rotas });
     const registrar = vi.fn(async () => true);
+    const desligarContas = vi.fn(async () => true);
     const pecas: PecasDesconectar = { autorDoToken: async (t) => (t === 'jwt-bom' ? 'admin-1' : null), ehAdmin: async () => true,
-      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, registrar, ...p };
-    return { falsa, registrar, pecas };
+      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, registrar, desligarContas, ...p };
+    return { falsa, registrar, desligarContas, pecas };
   };
   it('o item é deste cliente: DELETE na Pluggy e o registro do desligamento', async () => {
     const { falsa, registrar, pecas } = montar({ [`GET /items/${ITEM}`]: { status: 200, corpo: { id: ITEM, clientUserId: CLIENTE } },
@@ -217,6 +219,16 @@ describe('OPENFINANCE-SEG-01 (b)+(c) — desconectar, preso ao cliente', () => {
     expect(await desconectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, pecas)).toEqual({ status: 200, corpo: { ok: true, ja_nao_existia: false } });
     expect(falsa.pedidos.map(p => `${p.metodo} ${p.caminho}`)).toContain(`DELETE /items/${ITEM}`);
     expect(registrar).toHaveBeenCalledWith({ origem: 'agroinblue', evento: 'agroinblue/item_desconectado', item_id: ITEM, client_user_id: CLIENTE, autor: 'admin-1' });
+  });
+  it('P3a: as contas permitidas do item saem junto; se não saírem, 500 com "Clique de novo"', async () => {
+    const ok = montar({ [`GET /items/${ITEM}`]: { status: 200, corpo: { clientUserId: CLIENTE } }, [`DELETE /items/${ITEM}`]: { status: 204, corpo: {} } });
+    await desconectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, ok.pecas);
+    expect(ok.desligarContas).toHaveBeenCalledWith({ clienteId: CLIENTE, itemId: ITEM, autor: 'admin-1' });
+    const falha = montar({ [`GET /items/${ITEM}`]: { status: 200, corpo: { clientUserId: CLIENTE } }, [`DELETE /items/${ITEM}`]: { status: 204, corpo: {} } },
+      { desligarContas: async () => false });
+    const r = await desconectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, falha.pecas);
+    expect(r.status).toBe(500);
+    expect(r.corpo.frase).toMatch(/contas permitidas.*Clique de novo/);
   });
   it('(c) item de OUTRO cliente ou sem cliente: 409, nada apagado, nada registrado', async () => {
     for (const dono of [OUTRO, undefined]) {
@@ -256,5 +268,91 @@ describe('OPENFINANCE-SEG-01 (b)+(c) — desconectar, preso ao cliente', () => {
     const r = await desconectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM }, b.pecas);
     expect(r.status).toBe(500);
     expect(r.corpo.frase).toMatch(/Clique de novo/);
+  });
+});
+
+describe('OPENFINANCE-P3a — as contas da conexão (só as marcadas entram; o resto nunca é lido nem gravado)', () => {
+  const ITEM = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const OUTRO = '99999999-8888-7777-6666-555555555555';
+  // dados SINTÉTICOS: uma conta corrente, um cartão, uma poupança; saldo/limite vêm na Pluggy e NÃO podem sair
+  const CONTAS = { results: [
+    { id: 'acc-cc', type: 'BANK', subtype: 'CHECKING_ACCOUNT', number: '12345-6', owner: 'FULANO DE TAL SILVA', taxNumber: '123.456.789-01', balance: 999.99 },
+    { id: 'acc-cartao', type: 'CREDIT', subtype: 'CREDIT_CARD', number: 'XXXX XXXX XXXX 9876', owner: 'BELTRANA SOUZA', creditData: { availableCreditLimit: 5000 } },
+    { id: 'acc-poup', type: 'BANK', subtype: 'SAVINGS_ACCOUNT', number: '77', owner: '', balance: 1 },
+    { id: 'acc-estranha', type: 'INVESTMENT' },
+  ] };
+  const montar = (p: Partial<PecasContas> = {}, rotas: Record<string, { status: number; corpo: unknown }> = {}) => {
+    const falsa = pluggyFalsa({ 'POST /auth': { status: 200, corpo: { apiKey: 'k' } },
+      [`GET /items/${ITEM}`]: { status: 200, corpo: { id: ITEM, clientUserId: CLIENTE, connector: { name: 'Itaú' } } },
+      [`GET /accounts?itemId=${ITEM}`]: { status: 200, corpo: CONTAS }, ...rotas });
+    const gravar = vi.fn<PecasContas['gravar']>(async () => ({ ok: true, corpo: { ok: true, simulado: true, ligar: 1, manter: 0, desligar: 0 } }));
+    const pecas: PecasContas = { autorDoToken: async (t) => (t === 'jwt-bom' ? 'admin-1' : null), ehAdmin: async () => true,
+      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, permitidasDoItem: async () => ['acc-cartao'], gravar, ...p };
+    return { falsa, gravar, pecas };
+  };
+  const base = { token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM };
+
+  it('máscaras: 1º nome + iniciais; CPF/CNPJ no meio; os 4 últimos algarismos', () => {
+    expect(mascararTitular('GABRIEL JUNQUEIRA DE MILANI')).toBe('Gabriel J. M.');
+    expect(mascararTitular('  ')).toBeNull();
+    expect(mascararDocumento('123.914.048-01')).toBe('***.914.048-**');
+    expect(mascararDocumento('12.345.678/0001-90')).toBe('**.345.678/****-**');
+    expect(mascararDocumento('123')).toBeNull();
+    expect(finalDaConta('XXXX XXXX XXXX 9876')).toBe('9876');
+    expect(finalDaConta('12')).toBeNull();
+  });
+  it('listar: só tipo · banco · final · titular/documento mascarados · permitida — nunca saldo nem limite; nunca /transactions', async () => {
+    const { falsa, gravar, pecas } = montar();
+    const r = await contas({ ...base, acao: 'listar' }, pecas);
+    expect(r.status).toBe(200);
+    expect(r.corpo.contas).toEqual([
+      { account_id: 'acc-cc', tipo: 'BANK', subtipo: 'CHECKING_ACCOUNT', tipo_legivel: 'Conta corrente', banco: 'Itaú', final4: '3456',
+        titular: 'Fulano T. S.', documento: '***.456.789-**', permitida: false },
+      { account_id: 'acc-cartao', tipo: 'CREDIT', subtipo: 'CREDIT_CARD', tipo_legivel: 'Cartão de crédito', banco: 'Itaú', final4: '9876',
+        titular: 'Beltrana S.', documento: null, permitida: true },
+      { account_id: 'acc-poup', tipo: 'BANK', subtipo: 'SAVINGS_ACCOUNT', tipo_legivel: 'Poupança', banco: 'Itaú', final4: null,
+        titular: null, documento: null, permitida: false },
+    ]);
+    const texto = JSON.stringify(r.corpo);
+    expect(texto).not.toMatch(/999|5000|balance|creditData|availableCreditLimit|FULANO|SILVA|123\.456/);
+    expect(falsa.pedidos.some(p => p.caminho.includes('transactions'))).toBe(false);
+    expect(gravar).not.toHaveBeenCalled();
+  });
+  it('item de OUTRO cliente: 409 e as contas NEM são lidas', async () => {
+    const { falsa, pecas } = montar({}, { [`GET /items/${ITEM}`]: { status: 200, corpo: { clientUserId: OUTRO } } });
+    expect((await contas({ ...base, acao: 'listar' }, pecas)).status).toBe(409);
+    expect(falsa.pedidos.some(p => p.caminho.startsWith('/accounts'))).toBe(false);
+  });
+  it('sem login 401 · pedido inválido 400 · não admin 403 · sem secrets 503 — a Pluggy nem é chamada', async () => {
+    const casos: Array<[Record<string, unknown>, Partial<PecasContas>, number]> = [
+      [{ ...base, token: null, acao: 'listar' }, {}, 401],
+      [{ ...base, acao: 'apagar' }, {}, 400],
+      [{ ...base, itemId: 'x', acao: 'listar' }, {}, 400],
+      [{ ...base, acao: 'permitir', accountIds: ['a', 'a'] }, {}, 400],
+      [{ ...base, acao: 'permitir', accountIds: 'acc-cc' }, {}, 400],
+      [{ ...base, acao: 'listar' }, { ehAdmin: async () => false }, 403],
+      [{ ...base, acao: 'listar' }, { credenciais: () => null }, 503],
+    ];
+    for (const [pedido, extra, status] of casos) {
+      const { falsa, pecas } = montar(extra);
+      expect((await contas({ token: null, acao: null, clienteId: null, itemId: null, ...pedido }, pecas)).status).toBe(status);
+      expect(falsa.pedidos).toHaveLength(0);
+    }
+  });
+  it('permitir: grava SÓ as marcadas, com tipo/final/rótulo do que a PLUGGY disse, autor = o admin; simular passa', async () => {
+    const { gravar, pecas } = montar();
+    const r = await contas({ ...base, acao: 'permitir', accountIds: ['acc-cc'], simular: true }, pecas);
+    expect(r).toEqual({ status: 200, corpo: { ok: true, simulado: true, ligar: 1, manter: 0, desligar: 0 } });
+    expect(gravar).toHaveBeenCalledWith({ p_cliente: CLIENTE, p_item: ITEM, p_autor: 'admin-1', p_simular: true,
+      p_contas: [{ account_id: 'acc-cc', tipo: 'BANK', subtipo: 'CHECKING_ACCOUNT', final4: '3456', rotulo: 'Itaú · Conta corrente · 3456' }] });
+  });
+  it('permitir: conta que não é da conexão = 400 e NADA gravado; recusa do banco vira a frase', async () => {
+    const a = montar();
+    expect((await contas({ ...base, acao: 'permitir', accountIds: ['acc-cc', 'acc-de-fora'] }, a.pecas)).status).toBe(400);
+    expect(a.gravar).not.toHaveBeenCalled();
+    const b = montar({ gravar: async () => ({ ok: false, codigo: '23505' }) });
+    const r = await contas({ ...base, acao: 'permitir', accountIds: ['acc-cc'] }, b.pecas);
+    expect(r.status).toBe(409);
+    expect(r.corpo.frase).toMatch(/outra conexão/);
   });
 });

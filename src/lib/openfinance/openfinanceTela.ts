@@ -127,3 +127,43 @@ export function fraseDoDesconectar(corpo: Record<string, unknown>): string {
     ? 'A conexão já não existia na Pluggy; ficou registrada como desconectada.'
     : 'Banco desconectado: a Pluggy apagou a conexão. Os extratos já importados ficam.';
 }
+
+/**
+ * OPENFINANCE-P3a — "Escolher contas": a lista que `openfinance-contas` devolve (tipo · banco · final · titular/documento mascarados) e
+ * a escolha do admin. TUDO DESMARCADO na 1ª vez (só a já permitida vem marcada); só as marcadas entram, o resto nunca é lido nem gravado.
+ */
+export interface ContaDaConexao {
+  accountId: string; tipoLegivel: string; banco: string; final4: string | null; titular: string | null; documento: string | null; permitida: boolean;
+}
+export function contasDaResposta(corpo: Record<string, unknown>): ContaDaConexao[] {
+  const v = corpo.contas;
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((c): ContaDaConexao[] => {
+    const id = textoDe(c, 'account_id');
+    if (!id || !ehObjeto(c)) return [];
+    return [{ accountId: id, tipoLegivel: textoDe(c, 'tipo_legivel') ?? 'Conta', banco: textoDe(c, 'banco') ?? 'Banco',
+      final4: textoDe(c, 'final4'), titular: textoDe(c, 'titular'), documento: textoDe(c, 'documento'), permitida: c.permitida === true }];
+  });
+}
+/** o conjunto marcado de partida: SÓ o que já está permitido (nada novo vem marcado) */
+export const marcadasDePartida = (contas: readonly ContaDaConexao[]): Set<string> => new Set(contas.filter(c => c.permitida).map(c => c.accountId));
+/** há o que gravar? (a escolha difere do que já está permitido) */
+export function escolhaMudou(contas: readonly ContaDaConexao[], marcadas: ReadonlySet<string>): boolean {
+  const antes = marcadasDePartida(contas);
+  return antes.size !== marcadas.size || [...marcadas].some(id => !antes.has(id));
+}
+const inteiroDe = (o: Record<string, unknown>, k: string): number => (typeof o[k] === 'number' && Number.isFinite(o[k]) ? Math.trunc(Number(o[k])) : 0);
+export function frasePrevia(corpo: Record<string, unknown>): string {
+  return `Entram ${inteiroDe(corpo, 'ligar')} · continuam ${inteiroDe(corpo, 'manter')} · saem ${inteiroDe(corpo, 'desligar')}. As não marcadas nunca são lidas.`;
+}
+export function fraseDoPermitir(corpo: Record<string, unknown>): string {
+  const n = inteiroDe(corpo, 'ligar') + inteiroDe(corpo, 'manter');
+  return n === 0 ? 'Nenhuma conta deste banco entra no AgroinBlue.' : `Escolha gravada: ${n} ${n === 1 ? 'conta entra' : 'contas entram'} no AgroinBlue; as outras nunca são lidas.`;
+}
+/** o item que o Widget acabou de conectar (para abrir "Escolher contas" logo depois) */
+export function itemDoSucesso(dados: unknown): string | null {
+  const item = ehObjeto(dados) ? dados.item : null;
+  return textoDe(item, 'id');
+}
+export const FRASE_CONTAS_FALHOU = 'Não consegui ler as contas deste banco agora. Tente de novo.';
+export const FRASE_PERMITIR_FALHOU = 'Não consegui gravar a escolha agora. Nada foi gravado; tente de novo.';

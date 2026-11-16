@@ -3,20 +3,22 @@
  * Contas bancárias:
  *  · "Conectar banco"     → `openfinance-conectar` com o cliente aberto → o Widget oficial da Pluggy PRESO aos bancos do Open Finance
  *    REGULADO (`connectorIds` que a função devolve; consentimento no app do banco, nunca login/senha; sem os bancos de teste);
- *  · "Desconectar banco"  → a lista das conexões DESTE cliente (`conexoesDoCliente`) → confirmação → `openfinance-desconectar`;
+ *  · "Bancos conectados"  → a lista das conexões DESTE cliente (`conexoesDoCliente`): "Escolher contas" (P3a, `EscolherContasDoBanco`)
+ *    ou "Desconectar" → confirmação → `openfinance-desconectar`;
  *  · "Registrar webhook"  → `openfinance-webhook-registrar` pelo login do admin (idempotente na função).
  * Fora do admin, nada aparece. A tela não grava nada direto: quem grava são as funções; as transações são a P3 completa.
  * Os rótulos não mudam durante o pedido (nada se desloca): o botão só fica desabilitado.
  */
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EscolherContasDoBanco } from './EscolherContasDoBanco';
 import {
   carregarWidget, conectoresDaConexao, conexoesDoCliente, FRASE_CONECTAR_FALHOU, FRASE_DESCONECTAR_FALHOU, FRASE_REGISTRO_FALHOU,
-  FRASE_SEM_REGULADOS, FRASE_WIDGET_FALHOU, fraseDoDesconectar, fraseDoItem, fraseDoRegistro, lerRespostaDaBorda, tokenDaConexao,
+  FRASE_SEM_REGULADOS, FRASE_WIDGET_FALHOU, fraseDoDesconectar, fraseDoItem, fraseDoRegistro, itemDoSucesso, lerRespostaDaBorda, tokenDaConexao,
   type ConexaoDoCliente, type EventoDaFila,
 } from '@/lib/openfinance/openfinanceTela';
 
@@ -28,6 +30,8 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
   const [lista, setLista] = useState<ConexaoDoCliente[] | null>(null);
   const [aberto, setAberto] = useState(false);
   const [confirmar, setConfirmar] = useState<ConexaoDoCliente | null>(null);
+  const [escolher, setEscolher] = useState<string | null>(null); // P3a: o item cujas contas o admin escolhe
+  const fecharEscolher = useCallback(() => setEscolher(null), []);
   if (!isAdmin) return null;
 
   const registrar = async () => {
@@ -54,7 +58,8 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
         connectToken: token,
         includeSandbox: false,
         connectorIds: regulados, // SÓ o Open Finance regulado: o banco pede o consentimento no app dele; nunca login/senha aqui
-        onSuccess: (dados) => toast.success(fraseDoItem(dados)),
+        // P3a: logo depois de conectar, o admin escolhe as contas que entram (nada entra sem marcar)
+        onSuccess: (dados) => { toast.success(fraseDoItem(dados)); setEscolher(itemDoSucesso(dados)); },
         onError: () => toast.error('A conexão com o banco não terminou. Nada foi gravado; tente de novo.'),
       });
       await w.init();
@@ -89,16 +94,16 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
       <Button size="sm" variant="outline" className="h-6 px-2.5 text-[11px]" disabled={ocupado !== null} onClick={() => void conectar()}
         title="Admin AgroinBlue · Open Finance regulado (Pluggy): o consentimento é dado no app do banco; nunca senha aqui" data-testid="openfinance-conectar">Conectar banco</Button>
       <Button size="sm" variant="outline" className="h-6 px-2.5 text-[11px]" disabled={ocupado !== null} onClick={() => void abrirDesconectar()}
-        title="Admin AgroinBlue · apaga a conexão na Pluggy (o consentimento cai); os extratos já importados ficam" data-testid="openfinance-desconectar">Desconectar banco</Button>
+        title="Admin AgroinBlue · os bancos conectados deste cliente: escolher as contas que entram ou desconectar" data-testid="openfinance-desconectar">Bancos conectados</Button>
       <Button size="sm" variant="outline" className="h-6 px-2.5 text-[11px]" disabled={ocupado !== null} onClick={() => void registrar()}
         title="Admin AgroinBlue · registra na Pluggy o webhook do AgroinBlue (uma vez; não duplica)" data-testid="openfinance-registrar">Registrar webhook</Button>
 
       <Dialog open={aberto} onOpenChange={(v) => { if (!v && ocupado !== 'desconectar') setAberto(false); }}>
         <DialogContent className="max-w-[460px]" data-testid="openfinance-desconectar-dialogo">
           <DialogHeader>
-            <DialogTitle className="text-[13px]">Desconectar banco</DialogTitle>
+            <DialogTitle className="text-[13px]">Bancos conectados</DialogTitle>
             <DialogDescription className="text-[11px]">
-              Conexões do Open Finance deste cliente. Desconectar apaga a conexão na Pluggy e o consentimento cai; os extratos já importados ficam.
+              Conexões do Open Finance deste cliente. Só as contas escolhidas entram. Desconectar apaga a conexão na Pluggy e o consentimento cai; os extratos já importados ficam.
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-[96px] rounded-md border text-[11px]">
@@ -108,6 +113,8 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
                 <div key={c.itemId} className="flex h-[26px] items-center gap-2 border-b px-2 last:border-b-0" data-testid="openfinance-conexao">
                   <span className="min-w-0 flex-1 truncate" title={`Conexão ${c.itemId}`}>Banco (conector {c.connectorId ?? '—'})</span>
                   <span className="w-[86px] flex-none tabular-nums text-muted-foreground">desde {dataCurta(c.desde)}</span>
+                  <Button size="sm" variant="ghost" className="h-5 flex-none px-2 text-[11px]" disabled={ocupado !== null}
+                    onClick={() => { setAberto(false); setConfirmar(null); setEscolher(c.itemId); }} data-testid="openfinance-escolher-contas">Escolher contas</Button>
                   <Button size="sm" variant="ghost" className="h-5 flex-none px-2 text-[11px] text-rose-700" disabled={ocupado !== null}
                     onClick={() => setConfirmar(c)} data-testid="openfinance-desconectar-este">Desconectar</Button>
                 </div>
@@ -127,6 +134,7 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
           )}
         </DialogContent>
       </Dialog>
+      {clienteId && <EscolherContasDoBanco clienteId={clienteId} itemId={escolher} onFechar={fecharEscolher} />}
     </div>
   );
 }

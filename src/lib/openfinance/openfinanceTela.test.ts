@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   carregarWidget, conectoresDaConexao, conexoesDoCliente, type EventoDaFila, FRASE_REGISTRO_FALHOU, fraseDoItem, fraseDoRegistro, lerRespostaDaBorda, PLUGGY_CONNECT_URL, tokenDaConexao,
+  contasDaResposta, escolhaMudou, fraseDoPermitir, frasePrevia, itemDoSucesso, marcadasDePartida,
 } from './openfinanceTela';
 
 describe('OPENFINANCE P3 mínima — a resposta da borda', () => {
@@ -97,5 +98,33 @@ describe('OPENFINANCE-SEG-01 — os regulados e o vínculo com o cliente', () =>
   it('a ordem vem do recebido_em, não da posição na lista', () => {
     const fila = [ev('agroinblue/item_desconectado', 'i1', null, A, '2026-11-16T10:05'), ev('item/created', 'i1', A, A, '2026-11-16T10:00')];
     expect(conexoesDoCliente(fila, A)).toEqual([]);
+  });
+});
+
+describe('OPENFINANCE-P3a — Escolher contas (regras da tela)', () => {
+  const bruto = { contas: [
+    { account_id: 'a', tipo_legivel: 'Conta corrente', banco: 'Itaú', final4: '1234', titular: 'Fulano T.', documento: '***.1', permitida: true },
+    { account_id: 'b', tipo_legivel: 'Cartão de crédito', banco: 'Itaú', final4: null, titular: null, documento: null, permitida: false },
+    { tipo_legivel: 'sem id' },
+  ] };
+  it('a lista só com conta que tem id; de partida, SÓ a já permitida vem marcada', () => {
+    const l = contasDaResposta(bruto);
+    expect(l.map(c => c.accountId)).toEqual(['a', 'b']);
+    expect([...marcadasDePartida(l)]).toEqual(['a']);
+    expect(contasDaResposta({})).toEqual([]);
+  });
+  it('mudou = a escolha difere do permitido (mesmo tamanho, outra conta, também)', () => {
+    const l = contasDaResposta(bruto);
+    expect(escolhaMudou(l, new Set(['a']))).toBe(false);
+    expect(escolhaMudou(l, new Set(['b']))).toBe(true);
+    expect(escolhaMudou(l, new Set())).toBe(true);
+    expect(escolhaMudou(l, new Set(['a', 'b']))).toBe(true);
+  });
+  it('frases: prévia e gravado; o item do Widget', () => {
+    expect(frasePrevia({ ligar: 1, manter: 2, desligar: 3 })).toMatch(/^Entram 1 · continuam 2 · saem 3\./);
+    expect(fraseDoPermitir({ ligar: 0, manter: 0 })).toMatch(/^Nenhuma conta/);
+    expect(fraseDoPermitir({ ligar: 1, manter: 1 })).toMatch(/^Escolha gravada: 2 contas entram/);
+    expect(itemDoSucesso({ item: { id: 'i-1' } })).toBe('i-1');
+    expect(itemDoSucesso({})).toBeNull();
   });
 });
