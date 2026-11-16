@@ -21,7 +21,7 @@ beforeAll(() => {
 }, 60000);
 
 const nome = (cn: string) => [{ shortName: 'CN', value: cn }, { shortName: 'O', value: 'ICP-Brasil' }];
-function cert(o: { cn: string; emissor: string; pub: forge.pki.PublicKey; assina: forge.pki.PrivateKey; ac: boolean; serie: string;
+function cert(o: { cn: string; emissor: string; pub: forge.pki.PublicKey; assina: forge.pki.rsa.PrivateKey; ac: boolean; serie: string;
   ate?: string; san?: boolean; semBc?: boolean }): forge.pki.Certificate {
   const c = forge.pki.createCertificate();
   c.publicKey = o.pub; c.serialNumber = o.serie;
@@ -43,7 +43,7 @@ function cert(o: { cn: string; emissor: string; pub: forge.pki.PublicKey; assina
   return c;
 }
 const raiz = () => cert({ cn: 'AC RAIZ SINTETICA', emissor: 'AC RAIZ SINTETICA', pub: kRaiz.publicKey, assina: kRaiz.privateKey, ac: true, serie: '01' });
-const ac = (o: { ate?: string; semBc?: boolean; assina?: forge.pki.PrivateKey } = {}) =>
+const ac = (o: { ate?: string; semBc?: boolean; assina?: forge.pki.rsa.PrivateKey } = {}) =>
   cert({ cn: 'AC SINTETICA v1', emissor: 'AC RAIZ SINTETICA', pub: kAc.publicKey, assina: o.assina ?? kRaiz.privateKey, ac: !o.semBc, serie: '02', ...o });
 const folha = () => cert({ cn: `PRODUTORA SINTETICA:${CPF}`, emissor: 'AC SINTETICA v1', pub: kFolha.publicKey, assina: kAc.privateKey, ac: false,
   serie: '03', san: true });
