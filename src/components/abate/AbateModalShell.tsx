@@ -77,6 +77,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { DICA_MES_FECHADO, mesFechadoMotivo as fraseDoMesFechado } from '@/lib/zootecnico/mesFechadoP1';
 import { AvisoMesFechado } from '@/components/lancamento/AvisoMesFechado';
 import { useAoVoltarAoFoco } from '@/hooks/useAoVoltarAoFoco';
+import { RodapeDaOC } from '@/components/compra/RodapeDaOC';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -226,6 +227,9 @@ export interface AbateModalShellProps {
   ocEntregaEncerrada?: boolean;
   /** Nada mudou desde a ultima gravacao bem-sucedida — o botao apaga. */
   semAlteracoes?: boolean;
+  /* OC-SALVAR-RODAPE-01 — o estado do rodape: ha o que salvar (dados, lotes ou linhas do abate) e a hora do ultimo salvar */
+  pendente?: boolean;
+  salvoAs?: string | null;
   /** `oc_confirmar` pelo `useOperacaoRecebimento`. Devolve se concluiu. */
   /** Recebe a versão fresca do salvar — `oc_confirmar` tem lock otimista. */
   onConcluirNegociacao?: (versaoOverride?: number) => void | Promise<unknown>;
@@ -263,7 +267,7 @@ export function AbateModalShell({
   cenarioAbate = 'projetado', onCenarioAbateChange, onIniciarRealizado,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
-  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, recusaNegociacao = null, onFecharRecusaNegociacao, semAlteracoes = false,
+  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, recusaNegociacao = null, onFecharRecusaNegociacao, semAlteracoes = false, pendente = false, salvoAs = null,
   onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null, acessoOC = ACESSO_TOTAL,
 }: AbateModalShellProps) {
   /* ACESSOS-OC-03a — no ABATE a Negociacao INTEIRA fica so' leitura para quem nao tem 'negociar_abate_boitel' (ate' o 03b
@@ -1227,13 +1231,9 @@ export function AbateModalShell({
       {/* ZOOT-MES-FECHADO-MODAL-01 — a faixa do mês fechado, logo acima dos botões, em lugar reservado */}
       <AvisoMesFechado p1={mesFechadoMotivo}
         acaoP1={<span className="shrink-0"><ReabrirMesNaOC forma="link" onAbrir={() => setReabrirP1Aberto(true)} /></span>} />
-      <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-between gap-2">
-        <Button type="button" variant="ghost" onClick={onFechar}
-          className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
-          Fechar
-        </Button>
-        {/* Os botoes da aba vivem juntos a direita; o Fechar fica sozinho a esquerda. */}
-        <div className="flex items-center gap-2">
+      {/* OC-SALVAR-RODAPE-01 — o rodape da OC (o mesmo nas tres): Fechar · o estado · os botoes da aba a direita. Fechar com
+          pendencia pergunta (o pai decide: `onFechar`). */}
+      <RodapeDaOC onFechar={onFechar} pendente={pendente} salvoAs={salvoAs}>
         {/* ⚠ A VENDA NAO TINHA COMO CONCLUIR — PR-OC-VENDA-ENTREGA-01B. A aba Entrega
             exige `status='fechada'` e dizia "conclua a negociação", mas o gatilho nao
             existia em lugar nenhum do shell: o operador salvava achando que concluia.
@@ -1340,8 +1340,7 @@ export function AbateModalShell({
             <Check className="h-3 w-3" /> Concluir negociação
           </Button>
         </>)}
-        </div>
-      </div>
+      </RodapeDaOC>
 
       {/* ⚠ MOTIVO OBRIGATORIO AQUI, e e' DIVERGENCIA DELIBERADA da compra — decisao do
           Gabriel. Medido: `oc_reabrir` NAO exige motivo (nao ha guard sobre `p_motivo`, ele

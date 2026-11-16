@@ -55,7 +55,7 @@ export interface CompraLotesApi {
      precisa gravar um valor derivado passa o array pronto.
      ⚠ ADITIVO: sem o parametro, nada muda. A compra nao o passa em nenhum dos tres
      call sites (CompraModalShell 253, 789 e 852). */
-  salvar: (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[]; aoRecusar?: (frase: string) => void }) => Promise<number | null>;   // retorna a nova versão oficial | null em falha
+  salvar: (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[]; aoRecusar?: (frase: string) => void; versaoEsperada?: number }) => Promise<number | null>;   // retorna a nova versão oficial | null em falha
   /* ⚠ RELER O BANCO — B-12. Quem escreve nos lotes POR FORA deste hook (hoje
      `oc_revalorar_lote`, no Aplicar do realizado) deixa o estado local velho, e o proximo
      `salvar` despeja o velho por cima do que a RPC acabou de gravar. Era metade da
@@ -65,6 +65,9 @@ export interface CompraLotesApi {
      admitir que o hook nao e' o unico escritor daquela tabela — e enquanto nao fosse
      admitido, quem escrevia por fora nao tinha como avisar. */
   recarregar: () => Promise<void>;
+  /* OC-SALVAR-RODAPE-01 — os lotes da tela diferem dos últimos lidos do banco (editado, criado ou removido e não salvo).
+     Toda leitura do banco (abrir, salvar, excluir lote, revalorar) zera a diferença. Opcional só para os mocks. */
+  alterados?: boolean;
   totais: { lotes: number; animais: number; pesoTotal: number; valorNegociado: number };
 }
 
@@ -88,15 +91,17 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
   const [lotes, setLotes] = useState<LoteForm[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  /* OC-SALVAR-RODAPE-01 — a assinatura do que veio do banco na última leitura */
+  const [assinaturaCarregada, setAssinaturaCarregada] = useState(assinaturaDosLotes([]));
 
   const carregar = useCallback(async () => {
-    if (!enabled || !operacaoId) { setLotes([]); return; }
+    if (!enabled || !operacaoId) { setLotes([]); setAssinaturaCarregada(assinaturaDosLotes([])); return; }
     setLoading(true);
     try {
       const { data, error } = await (supabase as any)
         .from('zoo_operacao_lotes').select('*').eq('operacao_id', operacaoId).order('ordem');
       if (error) throw new Error(error.message);
-      setLotes((data ?? []).map((r: any) => ({
+      const lidos: LoteForm[] = (data ?? []).map((r: any) => ({
         idLocal: novoIdLocal(),
         id: r.id,
         ordem: r.ordem,
@@ -107,7 +112,9 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
         observacao: r.observacao ?? '',
         valorInformado: r.valor_informado != null ? String(r.valor_informado) : '',
         pesoDaMediaDoAbate: pesoEhDaMediaDoAbate(r.peso_vivo_fonte),
-      })));
+      }));
+      setLotes(lidos);
+      setAssinaturaCarregada(assinaturaDosLotes(lidos));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar lotes.');
     } finally {
@@ -144,7 +151,7 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
   //   salvar → concluir sem versão stale). `silent` controla APENAS o toast — não muda regra/persistência.
   /* OC-LOTE-FISICO-POS-SAIDA-01 (D4) — `aoRecusar`: com ele NAO HA TOAST; toda recusa (a do banco, a de "reabra para editar", as da
      tela) vai ao callback, e quem chama a mostra num modal centrado. Sem ele, identico a antes. */
-  const salvar = useCallback(async (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[]; aoRecusar?: (frase: string) => void }): Promise<number | null> => {
+  const salvar = useCallback(async (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[]; aoRecusar?: (frase: string) => void; versaoEsperada?: number }): Promise<number | null> => {
     /* A FONTE DA VERDADE DESTA GRAVACAO. Sem sobrescrita, e' o estado local — o
        comportamento de sempre, e o unico que a compra exercita. */
     const fonte = opts?.lotesSobrescritos ?? lotes;
@@ -193,13 +200,15 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
         };
       });
       const { data, error } = await (supabase as any).rpc('oc_salvar_lotes', {
-        p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versao, p_lotes: payload,
+        p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: opts?.versaoEsperada ?? versao, p_lotes: payload,
       });
       /* ⚠ O CONFLITO DE VERSÃO TEM TEXTO PRÓPRIO, pelo mapa canônico da OC.
          Antes a mensagem crua do Postgres ("could not serialize access due to
          concurrent update") chegava ao operador — verdadeira e inútil. */
       if (error) throw normalizarErroRpc(error);
-      const novaVersao: number = data?.versao != null ? data.versao : versao;
+      /* OC-SALVAR-RODAPE-01 — `versaoEsperada`: quem salva os dados e os lotes no mesmo gesto passa a versão que o 1º devolveu
+         (o `versao` daqui só muda no próximo render: mandá-lo daria 40001). */
+      const novaVersao: number = data?.versao != null ? data.versao : (opts?.versaoEsperada ?? versao);
       if (data?.versao != null) onVersaoChange(data.versao);
       if (!opts?.silent) toast.success('Rascunho dos lotes salvo.');
       await carregar();
@@ -228,8 +237,14 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
   }, [operacaoId, clienteId, versao, lotes, onVersaoChange, carregar, onReabrir]);
 
   const totais = useMemo(() => totaisDosLotes(lotes), [lotes]);
+  const alterados = useMemo(() => assinaturaDosLotes(lotes) !== assinaturaCarregada, [lotes, assinaturaCarregada]);
 
-  return { lotes, loading, saving, adicionarLote, editarLote, removerLote, salvar, recarregar: carregar, totais };
+  return { lotes, loading, saving, adicionarLote, editarLote, removerLote, salvar, recarregar: carregar, alterados, totais };
+}
+
+/** OC-SALVAR-RODAPE-01 — o que conta como alteração de um lote: os campos que o `salvar` grava (o `idLocal` e o selo, não) */
+export function assinaturaDosLotes(lotes: Pick<LoteForm, 'ordem' | 'categoria' | 'quantidade' | 'pesoMedioKg' | 'criterioValor' | 'valorInformado' | 'observacao'>[]): string {
+  return JSON.stringify(lotes.map(l => [l.ordem, l.categoria, l.quantidade, l.pesoMedioKg, l.criterioValor, l.valorInformado, l.observacao]));
 }
 
 /* OC-VENDA-ENTREGAS-01a — O TOTAL DA TELA E' O NUMERO QUE O BANCO GRAVA. `_oc_valor_do_lote` arredonda CADA lote a centavos
