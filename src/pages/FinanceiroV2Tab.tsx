@@ -78,6 +78,9 @@ import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { prefillDeDuplicar, type PrefillDuplicar } from '@/lib/financeiro/prefillDeDuplicar';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { NovoDeXmlDialog, notaParaAPrevia } from '@/components/financeiro-v2/NovoDeXmlDialog';
+import { NovoMenuLancamentos } from '@/components/financeiro-v2/NovoMenuLancamentos';
+import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
+import { contarBoletosQuePedemAcao } from '@/lib/financeiro/boleto/caixaApi';
 import { NotaFiscalDialog, type NotaParaLancar } from '@/components/financeiro-v2/NotaFiscalDialog';
 import { prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
@@ -671,6 +674,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      aberto por cima (so' escondida), para a linha voltar marcada "lançada". Nada daqui e' gravado: quem grava e' o Salvar do
      lancamento, pelo caminho de sempre. */
   const [xmlAberto, setXmlAberto] = useState(false);
+  /* BOLETO-DDA-API-01 D1c — a caixa de boletos (aberta pelo "+ Novo ▾") e o selo do botão: os que pedem ação, relidos ao fechar a caixa */
+  const [caixaAberta, setCaixaAberta] = useState(false);
+  const [boletosPedemAcao, setBoletosPedemAcao] = useState<number | null>(null);
+  useEffect(() => {
+    if (!clienteAtual?.id || caixaAberta) return;
+    let vivo = true;
+    void contarBoletosQuePedemAcao(clienteAtual.id).then((n) => { if (vivo) setBoletosPedemAcao(n); });
+    return () => { vivo = false; };
+  }, [clienteAtual?.id, caixaAberta]);
   /* FIN-NOTA-PDF-01b — o prefill do XML (`prefillDaNota`) OU o do modal da nota (`prefillDoModal`: a nota + tudo o que foi escolhido) */
   const [prefillXml, setPrefillXml] = useState<React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] | null>(null);
   const [linhaXmlAberta, setLinhaXmlAberta] = useState<string | null>(null);
@@ -1777,18 +1789,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const quadroAteOFim = useAlturaAteOFim({ ativo: !modoIntensivo });
 
   /* UI-BOTOES-LUGAR-FIXO-01 — O BLOCO DE AÇÕES DO DESKTOP É UMA GRADE FIXA de 2 colunas × 3 linhas, 190px, células iguais:
-         Novo   | Exportar
-         Do XML | Ampliar (ou Retornar)
-         Voltar | Limpar
+         Novo ▾  | Exportar
+         (vazia) | Ampliar (ou Retornar)
+         Voltar  | Limpar
+     BOLETO-DDA-API-01 D1c (Gabriel 15/11 07:28): "+ Novo" e "+ Da nota" viraram UM botão "+ Novo ▾" (`NovoMenuLancamentos`: em branco ·
+     da nota fiscal · dos boletos); a célula do "Da nota" ficou VAZIA e reservada — nenhum outro botão muda de lugar.
      BOTÃO PONTUAL TEM LUGAR RESERVADO: a célula do Voltar existe SEMPRE; sem `onBack` fica vazia, fora da tabulação. Com
      `onBack` eram TRÊS botões numa linha de 190px (Voltar + Do XML + Ampliar) e o bloco vazava por cima dos filtros Fazenda e
      Documento. A entrada do Voltar não muda posição, tamanho nem linha de nenhum outro botão, e o cabeçalho tem a mesma altura
      com e sem ele. */
+  const menuNovo = (className?: string) => (
+    <NovoMenuLancamentos className={className} boletosPedemAcao={boletosPedemAcao}
+      onEmBranco={openNew} onDaNota={() => setXmlAberto(true)} onDosBoletos={() => setCaixaAberta(true)} />
+  );
   const blocoDeAcoesDesktop = (
     <div data-testid="bloco-acoes" className="grid w-[190px] shrink-0 grid-cols-2 gap-1 [&>*]:min-w-0">
-      <Button size="sm" onClick={openNew} className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
-        <Plus className="h-3 w-3" /> Novo
-      </Button>
+      {menuNovo('w-full')}
       <div className="flex items-center [&>*]:w-full [&_button]:w-full">
         <FinanceiroV2ExportMenu
           carregarConjunto={carregarConjuntoExportacao}
@@ -1802,10 +1818,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           safras={hook.safras}
         />
       </div>
-      <Button size="sm" onClick={() => setXmlAberto(true)} data-testid="btn-novo-de-xml"
-        className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo a partir da nota (XML ou PDF)" aria-label="Novo a partir da nota (XML ou PDF)">
-        <Plus className="h-3 w-3" /> Da nota
-      </Button>
+      <div data-testid="celula-reservada" aria-hidden="true" className="h-6" />
       <Button
         size="sm"
         variant={modoIntensivo ? "default" : "outline"}
@@ -1834,9 +1847,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const actionButtons = (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
-        <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
-          <Plus className="h-3 w-3" /> Novo
-        </Button>
+        {menuNovo()}
         <FinanceiroV2ExportMenu
           carregarConjunto={carregarConjuntoExportacao}
           fornecedores={hook.fornecedores}
@@ -1855,13 +1866,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             <ChevronLeft className="h-3 w-3" /> Voltar
           </Button>
         )}
-        {/* FIN-NFE-XML-01d — na SEGUNDA linha do bloco, com o estilo do Novo. "Do XML" e nao "Novo a partir de XML": o bloco tem a
-            largura de dois botoes curtos (medido a 1.135: um terceiro na primeira linha encostava no filtro de Fazenda); o nome
-            inteiro vai no `title`. */}
-        <Button size="sm" onClick={() => setXmlAberto(true)} data-testid="btn-novo-de-xml"
-          className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo a partir da nota (XML ou PDF)" aria-label="Novo a partir da nota (XML ou PDF)">
-          <Plus className="h-3 w-3" /> Da nota
-        </Button>
+        {/* BOLETO-DDA-API-01 D1c — o "Da nota" (FIN-NFE-XML-01d) mora no menu do "+ Novo ▾" (o mesmo do desktop). */}
         <Button
           size="sm"
           variant={modoIntensivo ? "default" : "outline"}
@@ -3317,6 +3322,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       />
 
       {/* FIN-NFE-XML-01d — a lista de notas. Fica montada (e escondida) enquanto o lancamento de uma delas esta' aberto. */}
+      {caixaAberta && clienteAtual?.id && (
+        <CaixaDeBoletosDialog clienteId={clienteAtual.id} clienteNome={clienteAtual.nome} aoFechar={() => setCaixaAberta(false)} />
+      )}
       <NovoDeXmlDialog
         open={xmlAberto && !dialogOpen && !notaAberta}
         onClose={() => { setXmlAberto(false); setLinhasXmlLancadas(new Set()); }}

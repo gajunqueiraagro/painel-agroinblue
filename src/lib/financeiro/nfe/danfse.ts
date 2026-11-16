@@ -310,9 +310,22 @@ export function notaDaNfseMunicipal(paginas: readonly ItemDoDanfe[][]): Resultad
     }
     return null;
   };
-  const abaixo = (rotulo: string) => d.campo(rotulo, { abaixoDe: undefined }, true);
+  /* NOTA-LEITURA-PRINT-01 — sem valor na coluna do rotulo, o que passa por baixo do MEIO dele (o codigo de verificacao de Campo Grande,
+     centrado e mais largo que o rotulo) */
+  const abaixo = (rotulo: string) => d.campo(rotulo, { abaixoDe: undefined }, true) ?? d.valorQue(rotulo, {}, true, () => true);
+  /** NOTA-LEITURA-PRINT-01 — o quadro em linha (Campo Grande: "Total de deduções | Desconto | Base | Alíquota | Valor do ISS | Crédito",
+   *  os valores alinhados a' direita na linha de baixo, longe do rotulo): com o MESMO numero de rotulos e de valores, o de mesma posicao. */
+  const naLinhaDeValores = (rotulo: string): ItemNaPagina | null => {
+    const r = d.rotulos(rotulo, true).find((o) => o.pagina === pg);
+    if (!r) return null;
+    const rots = naPg.filter((o) => Math.abs(o.y - r.y) <= 1.5).sort((a, b) => a.x - b.x);
+    const abaixoDele = naPg.filter((o) => o.y < r.y - 2 && o.y >= r.y - 30).sort((a, b) => b.y - a.y);
+    const vals = abaixoDele.filter((o) => Math.abs(o.y - (abaixoDele[0]?.y ?? 0)) <= 1.5).sort((a, b) => a.x - b.x);
+    return vals.length === rots.length && vals.every((v) => centDoTexto(v.str) != null) ? vals[rots.indexOf(r)] ?? null : null;
+  };
 
-  const itNumero = abaixo('NUMERO DA NOTA');
+  /* NOTA-LEITURA-PRINT-01 — Campo Grande: "Número da NFS-e" */
+  const itNumero = abaixo('NUMERO DA NOTA') ?? abaixo('NUMERO DA NFS-E');
   const itEmissao = abaixo('DATA E HORA DE EMISSAO');
   const itCodigo = abaixo('CODIGO DE VERIFICACAO');
   d.marcar('numero', itNumero);
@@ -324,7 +337,8 @@ export function notaDaNfseMunicipal(paginas: readonly ItemDoDanfe[][]): Resultad
   if (chave) d.marcar('chave', idNac?.it);
 
   const docPrest = aoLadoDe('CPF/CNPJ', noPrest);
-  const nomePrest = aoLadoDe('NOME/RAZAO SOCIAL', noPrest);
+  /* NOTA-LEITURA-PRINT-01 — Campo Grande: "Razão Social:" sem o "Nome/" */
+  const nomePrest = aoLadoDe('NOME/RAZAO SOCIAL', noPrest) ?? aoLadoDe('RAZAO SOCIAL', noPrest);
   const imPrest = aoLadoDe('INSCRICAO MUNICIPAL', noPrest);
   const enderPrest = aoLadoDe('ENDERECO', noPrest) ?? aoLadoDe('LOGRADOURO', noPrest);
   const bairroPrest = aoLadoDe('BAIRRO', noPrest);
@@ -350,13 +364,14 @@ export function notaDaNfseMunicipal(paginas: readonly ItemDoDanfe[][]): Resultad
 
   /* OS VALORES: o liquido e o total impressos numa linha so' */
   const linhaDe = (re: RegExp) => naPg.find((it) => re.test(normalizar(it.str))) ?? null;
-  const itLiquido = linhaDe(/^VALOR LIQUIDO DA (NOTA FISCAL|NFS-E)\b/);
+  /* NOTA-LEITURA-PRINT-01 — Campo Grande: "VALOR LIQUIDO NFSE = R$ …" (sem o "DA" e sem o hifen) */
+  const itLiquido = linhaDe(/^VALOR LIQUIDO (DA )?(NOTA FISCAL|NFS-?E)\b/);
   const itTotal = linhaDe(/^VALOR TOTAL D[AO] (NOTA FISCAL|SERVICO|NFS-E)\b/);
   d.marcar('valor_nota', itLiquido ?? itTotal);
   const totalCent = centDoTexto(itTotal?.str) ?? centDoTexto(itLiquido?.str);
 
   /* AS RETENCOES (os quadros com o valor abaixo; "-" ou vazio = 0) */
-  const cent = (rotulo: string) => centDoTexto(abaixo(rotulo)?.str) ?? 0;
+  const cent = (rotulo: string) => centDoTexto(d.campo(rotulo, {}, true)?.str) ?? centDoTexto(naLinhaDeValores(rotulo)?.str) ?? 0;
   const issRetido = /^RETIDO/.test(normalizar(abaixo('ISS RETIDO')?.str ?? ''));
   const issCent = cent('VALOR DO ISS');
   const retencoes = {
@@ -392,7 +407,19 @@ export function notaDaNfseMunicipal(paginas: readonly ItemDoDanfe[][]): Resultad
   /* o item: a linha da tabela de servicos (PP: "SERVICO MECANICA") ou o codigo do servico (SP: "99999 - …"); o detalhe e' a discriminacao */
   const yTabela = naPg.find((it) => /^DISCRIMINACAO D[EO]S? SERVICOS$/.test(normalizar(it.str)) && yDisc != null && it.y < yDisc - 1)?.y ?? null;
   const linhaTabela = yTabela != null ? d.linhasEntre(pg, yTabela - 1, yTabela - 30)[0] ?? null : null;
-  const doCodigo = abaixo('CODIGO DO SERVICO')?.str.replace(/^\s*\d+\s*-\s*/, '').trim() || null;
+  /* NOTA-LEITURA-PRINT-01 — o texto do codigo em varias linhas (Campo Grande): as linhas logo abaixo, sozinhas e no mesmo x, entram juntas
+     (a linha seguinte com mais de um item e' o quadro dos valores) */
+  const itCodServ = abaixo('CODIGO DO SERVICO');
+  const TOL = 1.5;
+  const linhasDoCodigo = itCodServ ? [itCodServ] : [];
+  for (let ult = itCodServ; ult;) {
+    const { x, y } = ult;
+    const prox = naPg.filter((o) => o.y < y - TOL && o.y >= y - 12).sort((a, b) => b.y - a.y);
+    const linha = prox.filter((o) => Math.abs(o.y - (prox[0]?.y ?? 0)) <= TOL);
+    if (linha.length !== 1 || Math.abs(linha[0].x - x) > 2) break;
+    linhasDoCodigo.push(linha[0]); ult = linha[0];
+  }
+  const doCodigo = linhasDoCodigo.map((o) => o.str.trim()).join(' ').replace(/^\s*\d+\s*-\s*/, '').trim() || null;
   const descricaoItem = linhaTabela?.filter((o) => /[A-Za-zÀ-ÿ]/.test(o.str) && !/R\$/.test(o.str)).map((o) => o.str.trim()).join(' ').trim()
     || doCodigo || discriminacao.slice(0, 120) || 'Serviço';
 
@@ -411,7 +438,7 @@ export function notaDaNfseMunicipal(paginas: readonly ItemDoDanfe[][]): Resultad
     naturezaOperacao: 'Prestação de serviço',
     emitente: {
       documento, nome: nomeEmit, fantasia: null, ie: null, inscricaoMunicipal: imPrest?.str.trim() || null,
-      endereco: { logradouro: logradouro?.replace(/\s*-?\s*CEP:.*$/i, '') || null, numero: null, complemento: null,
+      endereco: { logradouro: logradouro?.replace(/\s*-?\s*CEP:.*$/i, '').replace(/[\s,.]+$/, '') || null, numero: null, complemento: null,
         bairro: bairroPrest?.str.trim() || (bairroDoEndereco && !/^CEP/i.test(bairroDoEndereco) ? bairroDoEndereco : null),
         municipio: munPrest?.str.trim() || null, uf: ufPrest?.str.trim() || null, cep, telefone: null },
     },

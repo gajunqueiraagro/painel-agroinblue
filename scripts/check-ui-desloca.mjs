@@ -278,6 +278,16 @@ const CENARIOS = [
     ['o terceiro', botao(/Terceiro Exemplo/)], ['a PJ', botao(/Agropecuária Exemplo/)], ['o inativo', botao(/Produtor Antigo Exemplo/)],
     ['de volta à produtora', botao(/Produtora Sintética/)],
   ] },
+  /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos: trocar a aba e soltar os PDFs não move as abas, a área de soltar, o cabeçalho nem o
+     rodapé (o quadro da tabela é `data-desloca-livre`; o contador das abas e o do botão têm lugar reservado) */
+  { nome: 'caixa-boletos', url: 'tela=caixa-boletos', regiao: '[data-testid="caixa-de-boletos"]', estados: [
+    ['aba Na caixa', botao(/^Na caixa/)], ['aba Sem par', botao(/^Sem par/)], ['aba Todos', botao(/^Todos/)], ['aba Chegando', botao(/^Chegando/)],
+    ['soltar os PDFs', async (p) => {
+      const nomes = ['boleto-0031283.pdf', 'boleto_dez_G.pdf', 'boleto-condominio.pdf', 'boleto-pago-antes.pdf', 'Boleto_Unimed.pdf'];
+      await p.locator('[data-testid="input-da-caixa"]').setInputFiles(nomes.map((n) => ({ name: n, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
+      await espera(p, 900); }],
+    ['abrir a senha', clicar('[data-testid="sugestao-de-senha"]')], ['aba Todos de novo', botao(/^Todos/)],
+  ] },
   /* PATR-01 PR B — Cadastros › Patrimônio: trocar a aba da tela, o chip e a busca (1/0 bens) não move os cartões, os filtros, o cabeçalho
      nem o rodapé; no modal do bem, ir de aba em aba (as seis ficam no lugar; a apagada não se clica) não move nada — o trator, a
      pastagem e o bem NOVO (Dados ↔ Lançamentos, a terra num passo) */

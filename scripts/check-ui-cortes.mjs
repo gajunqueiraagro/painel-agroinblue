@@ -161,6 +161,11 @@ const CENARIOS = [
   /* FORN-BUSCA-UNICA-01 — SO' OS FILTROS do Financeiro V2 (decisao do Gabriel, 19/10): a TABELA tem 60 achados (reticencias em Produto,
      Fornecedor e Centro; datas dd/mm/aa; cabecalho) e e' a frente FIN-V2-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
   { nome: 'financeiro-filtros', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]' },
+  /* BOLETO-DDA-API-01 D1c — o "+ Novo ▾" (Gabriel 15/11): o bloco de ações (a célula do antigo "Da nota" reservada) e o menu aberto nas 3
+     larguras do mock (918/1126/1366): as 3 entradas com a linha curta, o menu dentro da tela */
+  { nome: 'financeiro-bloco-acoes', url: 'tela=financeiro', regiao: '[data-testid="bloco-acoes"]', tamanhos: [[918, 600], [1126, 579], [1366, 768]] },
+  { nome: 'financeiro-novo-menu', url: 'tela=financeiro', regiao: '[data-testid="menu-novo"]', tamanhos: [[918, 600], [1126, 579], [1366, 768]],
+    antes: clicar('[data-testid="btn-novo"]') },
   /* P94 — os avisos da conferência e os chips do que veio da OC, na faixa dos totais: rolam no lugar reservado, sem "…"; e os seletores da
      barra com o valor fora das opções ("valor inexistente (limpar)", vermelho) na largura da barra */
   { nome: 'financeiro-fantasma', url: 'tela=financeiro&fantasma=1', regiao: '[data-testid="faixa-totais"]' },
@@ -1000,6 +1005,8 @@ const CENARIOS = [
           await p.locator('[data-testid="caderno-voltar-texto"]').waitFor(); await p.waitForTimeout(300); } },
       /* L1 (Gabriel 09/11) — a cria SEM carimbo no P10A (`&cria=1`): o campo Lote e o painel (o seletor) com "sem carimbo · definir" */
       { nome: 'fechamento-grupo-campo-lote-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
+      /* L1-CARIMBO-SO-COM-BEZERRO-01 — o P10A com Mamotes F ao pé (`&cria=bezerro`): o aviso segue, sem cortar */
+      { nome: 'fechamento-grupo-campo-lote-cria-bezerro', url: URL + '&cria=bezerro', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="modal-do-pasto"]', antes: soModal('P10A') },
       { nome: 'fechamento-grupo-campo-lote-painel-cria', url: URL + '&cria=1', tamanhos: TAMANHOS_DO_LOTES, regiao: '[data-testid="painel-lote-do-pasto"]',
         antes: async (p) => { await soModal('P10A')(p); await p.locator('[data-testid="campo-lote-do-pasto"]').click();
           await p.locator('[data-testid="painel-lote-do-pasto"]').waitFor(); await p.waitForTimeout(500); } },
@@ -1294,6 +1301,29 @@ const CENARIOS = [
       { nome: 'produtores-grupo-dialog', url: URL, tamanhos: T, regiao: '[role="dialog"]', antes: seq(aba('Grupo'), clicar('[data-testid="produtor-grupo-editar"]')) },
       { nome: 'produtores-previa', url: URL, tamanhos: T, regiao: '[data-testid="produtores-previa"]',
         antes: seq(aba('Fazendas'), clicar('[data-testid="produtor-fazenda"] button[title="editar a composição desta fazenda"]'), clicar('[data-testid="produtor-composicao-previa"]')) },
+    ];
+  })(),
+  /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos (dado SINTÉTICO, `dados/caixaBoletos.ts`): vazia; os 8 PDFs soltos (exato, soma de 2, já
+     no sistema, por nome, parece já pago, nome/beneficiário longos e valor no teto, senha, escaneado); a senha digitada; as abas do gravado */
+  ...(() => {
+    const T = [[1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+    const URL = 'tela=caixa-boletos';
+    const NOMES = ['boleto-0031283.pdf', 'boleto_dez_G.pdf', 'boleto-condominio.pdf', 'boleto_insumos.pdf', 'boleto-pago-antes.pdf',
+      'boleto com nome de arquivo muito comprido que não cabe na coluna 2026-12.pdf', 'Boleto_Unimed.pdf', 'boleto-escaneado.pdf'];
+    const soltar = async (p) => {
+      await p.locator('[data-testid="input-da-caixa"]').setInputFiles(NOMES.map((n) => ({ name: n, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
+      await p.waitForTimeout(900);
+    };
+    const aba = (re) => async (p) => { await p.locator('[data-testid="caixa-de-boletos"] button', { hasText: re }).first().click(); await p.waitForTimeout(500); };
+    const R = '[data-testid="caixa-de-boletos"]';
+    return [
+      { nome: 'caixa-boletos', url: URL, tamanhos: T, regiao: R },
+      { nome: 'caixa-boletos-chegando', url: URL, tamanhos: T, regiao: R, antes: soltar },
+      { nome: 'caixa-boletos-senha-aberta', url: URL, tamanhos: T, regiao: R, antes: async (p) => {
+        await soltar(p); await p.locator('[data-testid="sugestao-de-senha"]').first().click(); await p.waitForTimeout(700); } },
+      { nome: 'caixa-boletos-na-caixa', url: URL, tamanhos: T, regiao: R, antes: aba(/^Na caixa/) },
+      { nome: 'caixa-boletos-sem-par', url: URL, tamanhos: T, regiao: R, antes: aba(/^Sem par/) },
+      { nome: 'caixa-boletos-todos', url: URL, tamanhos: T, regiao: R, antes: aba(/^Todos/) },
     ];
   })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
@@ -1607,7 +1637,8 @@ const CENARIOS = [
      digitada (valor e data para o operador) e o cartão em 10× (D2: Parcelada 10× no Pagamento, a 1ª fatura sugerida); Geral, Pagamento e
      Documentos (o anexo clicável) nos sete tamanhos. Substitui a tela intermediária (`nota-pdf` da nota nova, `nota-pdf-aba-*`, `nota-pdf-cartao*`). */
   /* NOTA-PDF-REGRESSAO-01 — `coluna`: a NF com a FATURA em coluna e o item em meias-linhas (o vencimento e os itens lidos) */
-  ...['pdf', 'chave', 'cartao', 'nfse', 'coluna'].flatMap((v) => {
+  /* NOTA-LEITURA-PRINT-01 — `print` / `printnfse`: a NF-e e a NFS-e impressas pelo "Print To PDF" (antes recusadas), lidas */
+  ...['pdf', 'chave', 'cartao', 'nfse', 'coluna', 'print', 'printnfse'].flatMap((v) => {
     const pronto = async (p) => { await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(600); };
     const parcelada10 = async (p) => {
       await clicarTexto('Pagamento')(p);

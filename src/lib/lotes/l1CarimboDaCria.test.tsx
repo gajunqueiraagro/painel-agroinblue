@@ -21,6 +21,12 @@ vi.mock('@/integrations/supabase/client', () => ({
             { id: 'vac', tipo: 'categoria', sigla: 'VAC', nome: 'Vaca', categorias_rebanho: [], ordem: 1, ativo: true },
             { id: 'boi', tipo: 'categoria', sigla: 'BOI', nome: 'Boi', categorias_rebanho: ['r-bois'], ordem: 2, ativo: true },
           ], error: null }) }
+        /* L1-CARIMBO-SO-COM-BEZERRO-01: os itens do mês — a cria 'b' com bezerro ao pé (Mamotes no pasto dela) */
+        : tabela === 'fechamento_pasto_itens'
+          ? { eq: () => ({ eq: () => ({ gt: () => Promise.resolve({ data: [
+              { fechamento_id: 'f1', categoria_id: 'vac', quantidade: 10, lote_id: 'b', fechamento_pastos: { lote_mes: 'VC PARIDA' } },
+              { fechamento_id: 'f1', categoria_id: 'mam', quantidade: 5, lote_id: 'b', fechamento_pastos: { lote_mes: 'VC PARIDA' } },
+            ], error: null }) }) }) }
         /* o `like` pode não filtrar (a bancada não filtra): o hook confere o código dos mamotes */
         : { like: () => Promise.resolve({ data: [{ id: 'mam', codigo: 'mamotes_m' }, { id: 'r-bois', codigo: 'bois' }], error: null }) },
     }),
@@ -38,7 +44,8 @@ const lote = (id: string, codigo: string, carimbo: string | null, daCria: boolea
   id, codigo, codigosAntigos: [], nomeCampeiro: null, situacao: 'ativo', formadoEm: '2026-01-01', encerradoEm: null, categoriaId, racaId: 'ne',
   atividadeId, numero: 1, sistemaId: null, programaId: null, destinoId: null, safra: null, carimbo, idadeMediaMeses: null, metaPesoKg: null,
   metaGmdKg: null, metaData: null, versao: 1, anoMesDado: '2026-11', cabecas: 10, pesoMedioKg: 200, gmdKg: null, pastos: [], lancamentos: 1, conferir: null,
-  ...(daCria === undefined ? {} : { daCria }),
+  /* a cria daqui tem bezerro ao pé (o sem bezerro está no l1CarimboSoComBezerro) */
+  ...(daCria === undefined ? {} : { daCria, comBezerro: daCria }),
 });
 const item = (lote_id: string) => [{ categoria_id: 'vac', quantidade: 10, lote_id }];
 

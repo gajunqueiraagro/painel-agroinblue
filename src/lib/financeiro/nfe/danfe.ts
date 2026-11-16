@@ -348,15 +348,17 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   const nums = candidatos(/^N[º°O]?\.?:?$/).map(({ it, texto }) => ({ it, m: RE_NUMERO.exec(texto) })).filter((x) => x.m)
     .sort((a, b) => soDigitos(b.m?.[1] ?? '').length - soDigitos(a.m?.[1] ?? '').length);
   const itNumero = nums[0]?.it ?? null;
-  const numero = soDigitos(nums[0]?.m?.[1] ?? '').replace(/^0+(?=\d)/, '');
+  /* NOTA-LEITURA-PRINT-01 — sem o "Nº" legivel, o numero da chave (44 digitos com o DV certo: nunca adivinhado) */
+  const numero = (soDigitos(nums[0]?.m?.[1] ?? '') || partesDaChave(chave).numero).replace(/^0+(?=\d)/, '');
   d.marcar('numero', itNumero);
   const series = candidatos(/^SERIE:?$/).map(({ it, texto }) => ({ it, m: RE_SERIE.exec(texto) })).filter((x) => x.m)
     .sort((a, b) => (itNumero ? Math.hypot(a.it.x - itNumero.x, a.it.y - itNumero.y) - Math.hypot(b.it.x - itNumero.x, b.it.y - itNumero.y) : 0));
-  const serie = series[0]?.m?.[1] ?? '';
+  const serie = series[0]?.m?.[1] ?? partesDaChave(chave).serie;
   d.marcar('serie', series[0]?.it);
 
   /* EMITENTE. */
-  const RE_CANHOTO = /RECEBEMOS DE\s+'?(.+?)'?,?\s+OS PRODUTOS?/i;
+  /* NOTA-LEITURA-PRINT-01 — e o "RECEBEMOS DE:" com dois-pontos (o DANFE impresso pelo "Print To PDF" da Kampai) */
+  const RE_CANHOTO = /RECEBEMOS DE:?\s+'?(.+?)'?,?\s+OS PRODUTOS?/i;
   /* NF-LEITOR-PALAVRAS-01 — o canhoto partido em itens ("RECEBEMOS" | "DE" | "<nome> OS PRODUTOS…"): os pedacos CONTIGUOS a partir do
      "RECEBEMOS" (o vao de `partidos`; outro texto na mesma altura, como o "DATA DE RECEBIMENTO" ao lado, nao entra), lidos juntos pela
      mesma regra */
@@ -414,19 +416,26 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
     for (const o of bloco) {
       const t = o.str.trim();
       const mCep = /(\d{5})-?(\d{3})/.exec(t);
-      const mCidade = /^(.+?)\s+-\s+([A-Z]{2})$/.exec(t);
-      if (/^FONE/i.test(t)) telefone = soDigitos(t);
-      else if (mCep && soDigitos(t).length === 8) cep = mCep[1] + mCep[2];
-      else if (mCidade) { municipio = mCidade[1].trim(); uf = mCidade[2]; d.marcar('emitente_cidade', o); }
+      /* NOTA-LEITURA-PRINT-01 — a cidade com o CEP/telefone na mesma linha ("CAMPO GRANDE - MS Cep:79003020 Fone:") e o telefone sozinho */
+      const mCidade = /^(.+?)\s+-\s+([A-Z]{2})(?:\s+(?:CEP|Cep|FONE|Fone)\b.*)?$/.exec(t);
+      if (/^FONE/i.test(t) || /^\(?\d{2}\)?\s*\d{4,5}-?\d{4}$/.test(t)) telefone = soDigitos(t);
+      else if (mCidade) {
+        municipio = mCidade[1].trim(); uf = mCidade[2]; d.marcar('emitente_cidade', o);
+        const mCepNaCidade = /CEP:?\s*(\d{5})-?(\d{3})/i.exec(t);
+        if (mCepNaCidade) cep = mCepNaCidade[1] + mCepNaCidade[2];
+      } else if (mCep && soDigitos(t).length === 8) cep = mCep[1] + mCep[2];
       else livres.push(o);
     }
     if (livres[0]) {
       const m = /^(.*?),\s*([^,]+)$/.exec(livres[0].str.trim());
       logradouro = m ? m[1].trim() : livres[0].str.trim();
       numeroEnd = m ? m[2].trim() : null;
+      /* NOTA-LEITURA-PRINT-01 — o bairro na mesma linha, depois do numero ("2525 . Itanhanga Park") */
+      const mBairro = numeroEnd ? /^(\S+)\s+[.-]\s+(.+)$/.exec(numeroEnd) : null;
+      if (mBairro) { numeroEnd = mBairro[1]; bairro = mBairro[2].trim(); }
       d.marcar('emitente_endereco', livres[0]);
     }
-    if (livres[1]) bairro = livres[1].str.trim();
+    if (livres[1] && !bairro) bairro = livres[1].str.trim();
   }
 
   /* DESTINATARIO. */
@@ -497,7 +506,8 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
 
   /* TOTAIS (o quadro do calculo do imposto). */
   const faixaImp = { abaixoDe: yImposto + 1, acimaDe: yProdutos };
-  const itProdutos = d.campo('VALOR TOTAL DOS PRODUTOS', faixaImp) ?? d.campo('VALOR TOTAL PRODUTOS', faixaImp) ?? d.campo('VLR TOTAL PRODUTOS', faixaImp) ?? d.campo('VALOR PRODUTOS', faixaImp);
+  /* NOTA-LEITURA-PRINT-01 — e o "VALOR TOTAL DOS PRODUTOS/SERVIÇOS" */
+  const itProdutos = d.campo('VALOR TOTAL DOS PRODUTOS', faixaImp) ?? d.campo('VALOR TOTAL DOS PRODUTOS/SERVICOS', faixaImp) ?? d.campo('VALOR TOTAL PRODUTOS', faixaImp) ?? d.campo('VLR TOTAL PRODUTOS', faixaImp) ?? d.campo('VALOR PRODUTOS', faixaImp);
   const itFrete = d.campo('VALOR DO FRETE', faixaImp);
   const itDesconto = d.campo('DESCONTO', faixaImp) ?? d.campo('VALOR DO DESCONTO', faixaImp);
   const itTotal = d.campo('VALOR TOTAL DA NOTA', faixaImp) ?? d.campo('VLR TOTAL NOTA', faixaImp) ?? d.campo('VALOR TOTAL', faixaImp);
@@ -551,18 +561,23 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
       if (melhor >= 0) return melhor;
       /* NOTA-PDF-REGRESSAO-01 — sem sobrepor nenhum, um NUMERO (texto segue na mais perto: o cabecalho centrado da descricao): o cabecalho
          a' esquerda e o numero a' direita da coluna; vale a coluna onde o numero TERMINA (do inicio dela ao inicio da seguinte) */
-      if (!/^[\d.,%]+$/.test(o.str.trim())) return perto;
-      const fim = o.x + o.w;
-      const onde = cab.findIndex((c, k) => fim > c.x && fim <= (cab[k + 1]?.x ?? Number.POSITIVE_INFINITY) && o.x > c.x);
-      return onde >= 0 ? onde : perto;
+      if (/^[\d.,%]+$/.test(o.str.trim())) {
+        const fim = o.x + o.w;
+        const onde = cab.findIndex((c, k) => fim > c.x && fim <= (cab[k + 1]?.x ?? Number.POSITIVE_INFINITY) && o.x > c.x);
+        if (onde >= 0) return onde;
+      }
+      /* NOTA-LEITURA-PRINT-01 — sem sobrepor cabecalho, o pedaco INTEIRO dentro da faixa de uma coluna (do inicio dela ao da seguinte) e' dela:
+         a marca "TPC" no fim da descricao (ate' antes do NCM) nao vira o comeco do NCM so' por estar mais perto dele */
+      const dentro = cab.findIndex((c, k) => o.x >= c.x - 4 && o.x + o.w <= (cab[k + 1]?.x ?? 1e9) - 4);
+      return dentro >= 0 ? dentro : perto;
     };
     const cDesc = col((n) => n.startsWith('DESCRICAO'));
     const cUn = col((n) => n === 'UN.' || n === 'UN' || n === 'UND' || n.startsWith('UNID'));
     const cQtd = col((n) => n.startsWith('QTD') || n.startsWith('QUANT'));
-    const cUnit = col((n) => n.startsWith('V.UNIT') || n.startsWith('VALOR UNIT') || n.startsWith('VLR. UNIT') || n.startsWith('V. UNIT') || n === 'PRECO');
+    const cUnit = col((n) => n.startsWith('V.UNIT') || n.startsWith('VALOR UNIT') || n.startsWith('VLR. UNIT') || n.startsWith('VLR UNIT') || n.startsWith('V. UNIT') || n === 'PRECO');
     const cTotal = col((n) => n.startsWith('V.TOTAL') || n.startsWith('VALOR TOTAL') || n.startsWith('VLR. TOTAL') || n.startsWith('V. TOTAL') || n === 'PRECO TOTAL');
     /* ITENS-NOTA-01 — as colunas fiscais do item, quando o DANFE as tem */
-    const cCod = col((n) => n.startsWith('CODIGO') || n.startsWith('COD.'));
+    const cCod = col((n) => n.startsWith('CODIGO') || n.startsWith('COD.') || n.startsWith('COD PROD'));
     const cNcm = col((n) => n.startsWith('NCM'));
     const cCst = col((n) => n === 'CST' || n.startsWith('CST') || n.startsWith('CSOSN') || n.startsWith('O/CST') || n.startsWith('O/CSOSN'));
     const cCfop = col((n) => n.startsWith('CFOP'));

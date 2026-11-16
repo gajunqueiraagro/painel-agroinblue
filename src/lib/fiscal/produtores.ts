@@ -51,7 +51,8 @@ const textos = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is 
 function umDe<T extends string>(lista: readonly T[], v: unknown): T | null { return lista.find(x => x === v) ?? null; }
 
 export const CONDICOES_IMOVEL: readonly CondicaoImovel[] = ['proprietario', 'condomino', 'arrendatario', 'parceiro', 'comodatario'];
-export const CONDICOES_IBS: readonly CondicaoIbs[] = ['nao_contribuinte', 'contribuinte_pelo_limite', 'optante', 'integrado'];
+/** PREMISSA DA FRENTE FISCAL (Gabriel 15/11 07:42): contribuinte é o caso padrão em 2027; não contribuinte é a exceção (vem por último). */
+export const CONDICOES_IBS: readonly CondicaoIbs[] = ['contribuinte_pelo_limite', 'optante', 'integrado', 'nao_contribuinte'];
 const REGIMES: readonly RegimeIr[] = ['pf_atividade_rural', 'pj_presumido', 'pj_real', 'pj_simples'];
 const DOC_EM: readonly DocumentoEm[] = ['produtor', 'terceiro', 'alterna'];
 const COMO: readonly ComoPaga[] = ['transfere_ao_terceiro', 'direto'];
@@ -97,12 +98,12 @@ export const ROTULO_CONDICAO_IMOVEL: Record<CondicaoImovel, string> = {
 export const ROTULO_CONDICAO_IBS: Record<CondicaoIbs, string> = {
   nao_contribuinte: 'Não contribuinte', contribuinte_pelo_limite: 'Contribuinte (limite)', optante: 'Optante', integrado: 'Integrado',
 };
-/** O selo curto da lista (mock: "não contribuinte", "contribuinte", "terceiro"). */
+/** O selo curto da lista (mock: "não contribuinte", "contribuinte", "terceiro"). Contribuinte = o padrão (verde); não contribuinte = a exceção (âmbar). */
 export function seloDoTitular(t: Titular): { texto: string; tom: 'verde' | 'ambar' | 'cinza' } {
   if (!t.ativo) return { texto: 'inativo', tom: 'cinza' };
   if (t.papel === 'terceiro') return { texto: 'terceiro', tom: 'ambar' };
   if (!t.condicao_ibs) return { texto: 'sem condição', tom: 'cinza' };
-  return t.condicao_ibs.condicao === 'nao_contribuinte' ? { texto: 'não contribuinte', tom: 'verde' } : { texto: 'contribuinte', tom: 'ambar' };
+  return t.condicao_ibs.condicao === 'nao_contribuinte' ? { texto: 'não contribuinte', tom: 'ambar' } : { texto: 'contribuinte', tom: 'verde' };
 }
 export const ROTULO_REGIME: Record<RegimeIr, string> = {
   pf_atividade_rural: 'PF · livro caixa', pj_presumido: 'PJ · presumido', pj_real: 'PJ · real', pj_simples: 'PJ · Simples',
@@ -171,12 +172,12 @@ const iesIguais = (a: readonly IeDoTitular[], b: readonly IeDoTitular[]): boolea
 };
 /** O `p_dados` da `fn_fiscal_titular_gravar`: no NOVO, tudo; na edição, só o que mudou (chave ausente = o banco mantém; vazio = limpa). */
 export function dadosDoForm(antes: FormTitular | null, depois: FormTitular): Record<string, unknown> {
-  const campos: Array<keyof Omit<FormTitular, 'ies'>> = ['nome', 'documento', 'papel', 'cnpj_produtor', 'nascimento', 'email_fiscal', 'endereco',
+  const campos: Array<keyof Omit<FormTitular, 'ies'>> = ['nome', 'documento', 'papel', 'nascimento', 'email_fiscal', 'endereco',
     'municipio', 'uf', 'cep', 'regime_ir'];
   const d: Record<string, unknown> = {};
   for (const c of campos) {
     const v = depois[c].trim();
-    const igual = antes != null && (c === 'documento' || c === 'cnpj_produtor' ? soDocumento(antes[c]) === soDocumento(v) : antes[c].trim() === v);
+    const igual = antes != null && (c === 'documento' ? soDocumento(antes[c]) === soDocumento(v) : antes[c].trim() === v);
     if (antes == null ? v !== '' : !igual) d[c] = v;
   }
   if (antes == null ? depois.ies.length > 0 : !iesIguais(antes.ies, depois.ies)) {

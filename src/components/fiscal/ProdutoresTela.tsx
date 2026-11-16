@@ -11,9 +11,10 @@
  * ⚠ NOVO PRODUTOR: só a Identificação vale até o primeiro Salvar; depois a ficha segue aberta nele.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, UserRound } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileDown, Plus, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Segmentado } from '@/components/ui/segmentado';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { TextoReservado } from '@/components/ui/regua-tabela';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -23,17 +24,28 @@ import {
   composicaoPorFazenda, dadosDoForm, formDoTitular, linhaDoTitular, pendenciasDoForm, seloDoTitular, tipoDoDocumento,
   type FormTitular, type Titular,
 } from '@/lib/fiscal/produtores';
+import { documentoNaTabela } from '@/lib/fiscal/documentoNaTabela';
+import { baixarFichas, fichaDoProdutor, pendentesDoCliente } from '@/lib/fiscal/fichaDeCadastro';
+import { carregarLogoBase64 } from '@/lib/pdf/pdfChassi';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
+import { ABAS_COM_PENDENCIA, frasesPorCampo, pendenciasDaFicha, pendenciasPorAba, type AbaDaFicha, type CampoPendente } from '@/lib/fiscal/pendenciasDoProdutor';
 import { useAcordos, useContasDoCliente, useImoveis, useProdutoresApi, useTitulares } from '@/hooks/useProdutores';
 import { useGestoComPrevia } from './PreviaDoBanco';
 import { AbaCertificado, AbaContas, AbaFiscal, AbaGrupo, AbaIdentificacao } from './AbasDoProdutor';
 import { AbaFazendas } from './FazendasDoProdutor';
 
-type Aba = 'identificacao' | 'fazendas' | 'fiscal' | 'contas' | 'certificado' | 'grupo';
+type Aba = AbaDaFicha;
 const TOM: Record<'verde' | 'ambar' | 'cinza', string> = {
   verde: 'bg-emerald-50 text-emerald-800', ambar: 'bg-amber-50 text-amber-800', cinza: 'bg-muted text-muted-foreground',
 };
 const par = (a: string, b: string): [string, string] => [a, b];
 const TAG_TIPO: Record<'PF' | 'PJ', string> = { PF: 'bg-slate-100 text-slate-700', PJ: 'bg-violet-50 text-violet-800' };
+/** nome de arquivo sem acento nem espaço ("Faz. São José" → "faz-sao-jose") */
+const nomeDeArquivo = (s: string): string => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cliente';
+const ROTULO_ABA: Record<Aba, string> = {
+  identificacao: 'Identificação', fazendas: 'Fazendas', fiscal: 'Fiscal', contas: 'Contas', certificado: 'Certificado', grupo: 'Grupo',
+};
+
 
 export function ProdutoresTela() {
   const { clienteAtual } = useCliente();
@@ -73,9 +85,11 @@ export function ProdutoresTela() {
                 {titulares.map(t => {
                   const selo = seloDoTitular(t);
                   const linha = linhaDoTitular(t);
-                  const doc = `${t.tipo === 'PF' ? 'CPF' : 'CNPJ'} ${t.documento_formatado}`;
-                  const resto = linha.startsWith(doc) ? linha.slice(doc.length) : '';
-                  const inteiro = `${t.nome} · ${linha}${t.pendencias.length ? ` · cadastro incompleto: ${t.pendencias.join(', ')}` : ''}`;
+                  /* PROD-PENDENCIAS-VISIVEIS-01: na LISTA o CPF vai mascarado (o inteiro só na ficha), também no title */
+                  const docInteiro = `${t.tipo === 'PF' ? 'CPF' : 'CNPJ'} ${t.documento_formatado}`;
+                  const doc = `${t.tipo === 'PF' ? 'CPF' : 'CNPJ'} ${documentoNaTabela(t.documento)}`;
+                  const resto = linha.startsWith(docInteiro) ? linha.slice(docInteiro.length) : '';
+                  const inteiro = `${t.nome} · ${doc}${resto}${t.pendencias.length ? ` · cadastro incompleto: ${t.pendencias.join(', ')}` : ''}`;
                   return (
                     <tr key={t.id}>
                       <td className="p-0" title={inteiro}>
@@ -118,7 +132,7 @@ export function ProdutoresTela() {
 
         {/* A FICHA */}
         {clienteId && (selecionado === 'novo' || titular) ? (
-          <FichaDoProdutor key={selecionado === 'novo' ? 'novo' : titular?.id} titular={titular} titulares={titulares} clienteId={clienteId}
+          <FichaDoProdutor key={selecionado === 'novo' ? 'novo' : titular?.id} titular={titular} titulares={titulares} clienteId={clienteId} cliente={clienteAtual?.nome ?? ''}
             aoCriar={id => setSelecionado(id)} />
         ) : (
           <section className="flex min-h-0 items-center justify-center rounded-lg border bg-card text-[11px] text-muted-foreground">
@@ -130,7 +144,7 @@ export function ProdutoresTela() {
   );
 }
 
-function FichaDoProdutor({ titular, titulares, clienteId, aoCriar }: { titular: Titular | null; titulares: readonly Titular[]; clienteId: string; aoCriar: (id: string) => void }) {
+function FichaDoProdutor({ titular, titulares, clienteId, cliente, aoCriar }: { titular: Titular | null; titulares: readonly Titular[]; clienteId: string; cliente: string; aoCriar: (id: string) => void }) {
   const api = useProdutoresApi();
   const { fazendas: todasFazendas } = useFazenda();
   const fazendas = useMemo(() => todasFazendas.filter(f => f.id !== '__global__').map(f => ({ id: f.id, nome: f.nome })), [todasFazendas]);
@@ -144,6 +158,34 @@ function FichaDoProdutor({ titular, titulares, clienteId, aoCriar }: { titular: 
   const base = useMemo(() => formDoTitular(titular), [titular]);
   const [form, setForm] = useState<FormTitular>(base);
   const [aba, setAba] = useState<Aba>('identificacao');
+  /* PROD-PENDENCIAS-VISIVEIS-01: as pendências são as do BANCO (titular.pendencias); aqui só o lugar de cada uma */
+  const pendencias = useMemo(() => pendenciasDaFicha(titular?.pendencias ?? []), [titular]);
+  const porAba = useMemo(() => pendenciasPorAba(titular?.pendencias ?? []), [titular]);
+  const frases = useMemo(() => frasesPorCampo(titular?.pendencias ?? []), [titular]);
+  const [listaAberta, setListaAberta] = useState(false);
+  /* PROD-FICHA-CADASTRO-01: a ficha para o cliente preencher à caneta (PDF) — deste produtor ou de todos os pendentes do cliente */
+  const [fichaAberta, setFichaAberta] = useState(false);
+  const pendentes = useMemo(() => pendentesDoCliente(titulares), [titulares]);
+  const emitirFicha = async (quem: readonly Titular[], arquivo: string) => {
+    setFichaAberta(false);
+    if (!quem.length) return;
+    const logo = await carregarLogoBase64().catch(() => undefined);
+    const hoje = hojeLocal();
+    const naoCouberam = baixarFichas(quem.map(t => fichaDoProdutor(t, titulares, cliente, hoje)), arquivo, logo);
+    if (naoCouberam.length) console.warn('[ficha de cadastro] texto que não coube:', naoCouberam);
+  };
+  const irPara = (destino: Aba | null, campo: CampoPendente | null) => {
+    setListaAberta(false);
+    if (!destino) return;
+    setAba(destino);
+    /* depois que a aba desenha: o campo aparece e recebe o foco (o miolo rola até ele) */
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const alvo = campo ? document.querySelector<HTMLElement>(`[data-campo-pendente="${campo}"]`) : null;
+      if (!alvo) return;
+      alvo.scrollIntoView({ block: 'nearest' });
+      alvo.querySelector<HTMLElement>('input, button')?.focus();
+    }));
+  };
   const [erros, setErros] = useState<Partial<Record<'nome' | 'documento' | 'ies', string>>>({});
   const [rodape, setRodape] = useState<string | null>(null);
   /** a ficha como era ANTES da última gravação desta sessão (o Desfazer); nula = nada a desfazer */
@@ -191,8 +233,9 @@ function FichaDoProdutor({ titular, titulares, clienteId, aoCriar }: { titular: 
   const novo = !titular;
   const terceiro = (titular?.papel ?? form.papel) === 'terceiro';
   const motivoNovo = 'salve o produtor primeiro';
-  /* abaixo de 1000px as seis abas não cabem com o nome inteiro (a 918 a Grupo saía da ficha): o nome curto, o inteiro no title */
-  const curtas = useLarguraDaJanela() < 1000;
+  /* abaixo de 1200px as seis abas não cabem com o nome inteiro (a 918 a Grupo saía da ficha; com o "● N" das pendências, também a 1000):
+     o nome curto, o inteiro no title. A mesma largura deixa o botão da ficha de cadastro só com o ícone (o nome do produtor cabe inteiro) */
+  const curtas = useLarguraDaJanela() < 1200;
   const abas: Array<{ valor: Aba; rotulo: string; curto?: string; desabilitada?: boolean; title?: string; n?: number }> = [
     { valor: 'identificacao', rotulo: 'Identificação' },
     { valor: 'fazendas', rotulo: 'Fazendas e participação', curto: 'Fazendas', desabilitada: novo, title: novo ? motivoNovo : undefined, n: titular?.fazendas.length },
@@ -210,24 +253,72 @@ function FichaDoProdutor({ titular, titulares, clienteId, aoCriar }: { titular: 
         <span className="min-w-0 truncate text-[12px] font-semibold" title={titular?.nome}>{titular?.nome ?? 'Novo produtor'}</span>
         {tipo && <span className={cn('rounded px-1 text-[9.5px] font-semibold leading-[14px]', TAG_TIPO[tipo])}>{tipo}</span>}
         {selo && <span className={cn('whitespace-nowrap rounded px-1 text-[9.5px] font-semibold leading-[14px]', TOM[selo.tom])}>{selo.texto}</span>}
-        {titular && titular.pendencias.length > 0 && (
-          <span className="min-w-0 truncate text-[10px] text-amber-700" title={titular.pendencias.join(' · ')}>cadastro incompleto: {titular.pendencias.length}</span>
+        {titular && pendencias.length > 0 && (
+          <Popover open={listaAberta} onOpenChange={setListaAberta}>
+            <PopoverTrigger asChild>
+              <button type="button" className="inline-flex min-w-0 flex-none items-center gap-1 whitespace-nowrap rounded px-1 text-[10px] text-amber-700 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-600"
+                title="ver o que falta" data-testid="produtor-pendencias-botao">
+                cadastro incompleto: <span className="tabular-nums">{pendencias.length}</span>
+                <span className="inline-flex h-[12px] w-[12px] items-center justify-center rounded-full border border-current text-[8px] font-bold leading-none">i</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-[280px] p-1.5" data-testid="produtor-pendencias-lista">
+              <p className="px-1.5 pb-1 text-[10px] text-muted-foreground">O que falta (aviso; nada é bloqueado)</p>
+              <ul>
+                {pendencias.map(p => (
+                  <li key={p.texto}>
+                    <button type="button" onClick={() => irPara(p.aba, p.campo)} disabled={!p.aba} data-testid="produtor-pendencia"
+                      className="grid h-[22px] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-1.5 text-left text-[10.5px] hover:bg-muted disabled:cursor-default disabled:hover:bg-transparent">
+                      <span className="truncate" title={p.texto}>{p.texto}</span>
+                      <span className="inline-flex items-center whitespace-nowrap text-[9.5px] text-primary">{p.aba ? <>{ROTULO_ABA[p.aba]}<ChevronRight className="h-3 w-3" /></> : ''}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </PopoverContent>
+          </Popover>
         )}
+        <span className="min-w-0 flex-1" />
+        <Popover open={fichaAberta} onOpenChange={setFichaAberta}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-[22px] flex-none gap-1 px-2 text-[10.5px]" data-testid="produtor-ficha-cadastro"
+              disabled={!titular && pendentes.length === 0} title="Emitir ficha de cadastro: a ficha em PDF para o cliente conferir e preencher à caneta" aria-label="Emitir ficha de cadastro">
+              <FileDown className="h-3 w-3" />{!curtas && ' Emitir ficha de cadastro '}<ChevronDown className="h-3 w-3" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-[250px] p-1" data-testid="produtor-ficha-cadastro-menu">
+            <button type="button" disabled={!titular || titular.papel !== 'produtor'} data-testid="produtor-ficha-este"
+              title={!titular ? 'salve o produtor primeiro' : titular.papel !== 'produtor' ? 'a ficha é do produtor (este é terceiro)' : undefined}
+              onClick={() => titular && void emitirFicha([titular], `ficha-de-cadastro-${nomeDeArquivo(titular.nome)}.pdf`)}
+              className="flex h-[24px] w-full items-center rounded px-2 text-left text-[10.5px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">Deste produtor</button>
+            <button type="button" disabled={pendentes.length === 0} data-testid="produtor-ficha-pendentes"
+              title={pendentes.length === 0 ? 'nenhum produtor com cadastro incompleto' : pendentes.map(p => p.nome).join(' · ')}
+              onClick={() => void emitirFicha(pendentes, `fichas-de-cadastro-pendentes-${nomeDeArquivo(cliente)}.pdf`)}
+              className="grid h-[24px] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 text-left text-[10.5px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
+              <span className="truncate">Todos os pendentes do cliente</span><span className="tabular-nums text-muted-foreground">{pendentes.length}</span>
+            </button>
+          </PopoverContent>
+        </Popover>
       </div>
       <div className="flex h-[32px] shrink-0 items-center border-b px-3">
         <Segmentado altura={22} fonte={10} valor={aba} onEscolher={setAba} opcoes={abas.map(a => ({
-          valor: a.valor, desabilitada: a.desabilitada, title: a.title ?? (curtas && a.curto ? a.rotulo : undefined),
-          rotulo: a.n != null ? <span>{curtas && a.curto ? a.curto : a.rotulo} <TextoReservado texto={a.desabilitada ? '' : String(a.n)} reserva="99" className="ml-0.5 text-[9.5px] opacity-80" /></span> : curtas && a.curto ? a.curto : a.rotulo,
+          valor: a.valor, desabilitada: a.desabilitada,
+          title: a.title ?? ([curtas && a.curto ? a.rotulo : '', curtas && porAba[a.valor] ? `${porAba[a.valor]} pendência(s)` : ''].filter(Boolean).join(' · ') || undefined),
+          rotulo: <span data-testid={`produtor-guia-${a.valor}`}>{curtas && a.curto ? a.curto : a.rotulo}{a.n != null && <> <TextoReservado texto={a.desabilitada ? '' : String(a.n)} reserva="99" className="ml-0.5 text-[9.5px] opacity-80" /></>}
+            {/* o ponto âmbar + nº de pendências da aba: lugar sempre reservado nas abas que podem ter (nada se desloca ao gravar) */}
+            {/* estreita (< 1200px): as seis abas mal cabem a 750px e o ponto encostava na aba vizinha — o nº vai só no title da aba
+                (o "cadastro incompleto: N" do cabeçalho segue na tela) */}
+            {ABAS_COM_PENDENCIA.has(a.valor) && !curtas && <TextoReservado texto={porAba[a.valor] ? `● ${porAba[a.valor]}` : ''} reserva="● 9" className="ml-1 text-[9.5px] text-amber-600" />}</span>,
         }))} />
       </div>
       {/* o miolo de cada aba troca de propósito (outros blocos): título, abas e rodapé ficam medidos. Ele ROLA no lugar dele: a 918×516 a
           Identificação não cabe, e sem isso ela passava por baixo do rodapé e fazia a página rolar (a ficha andava 7 px ao trocar de aba) */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-muted p-2 [scrollbar-gutter:stable]" data-testid={`produtor-aba-${aba}-miolo`} data-desloca-livre="">
-        {aba === 'identificacao' && <AbaIdentificacao form={form} set={set} erros={erros} fazendas={fazendas} />}
+        {aba === 'identificacao' && <AbaIdentificacao form={form} set={set} erros={erros} fazendas={fazendas} frases={frases} />}
         {aba === 'fazendas' && titular && (
           <AbaFazendas titular={titular} titulares={titulares} fazendas={fazendas} imoveis={imoveis} composicao={composicao} acordos={acordos} clienteId={clienteId} previa={gesto.previa} />
         )}
-        {aba === 'fiscal' && titular && <AbaFiscal titular={titular} clienteId={clienteId} form={form} set={set} previa={gesto.previa} />}
+        {aba === 'fiscal' && titular && <AbaFiscal titular={titular} clienteId={clienteId} form={form} set={set} previa={gesto.previa} frases={frases} />}
         {aba === 'contas' && titular && <AbaContas titular={titular} contas={contas} previa={gesto.previa} />}
         {aba === 'certificado' && <AbaCertificado titularId={titular?.id ?? null} />}
         {aba === 'grupo' && titular && <AbaGrupo titular={titular} titulares={titulares} previa={gesto.previa} />}

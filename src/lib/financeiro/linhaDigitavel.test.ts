@@ -41,7 +41,10 @@ describe('linha digitável — os 8 boletos da Vera', () => {
   it('sem linha digitável -> null; linha curta -> null; fator 0000 -> vencimento null', () => {
     expect(lerLinhaDigitavel('Boleto sem linha, só texto 3.006,50 26/10/2026')).toBeNull();
     expect(lerLinhaDigitavel('3419109008048818200491964610000881611000030065')).toBeNull();
-    const semVenc = '34191090080488182004919646100008800000000300650';
+    /* D1b: a linha sem vencimento é SINTÉTICA com o DV geral refeito; a de antes (o fator zerado na linha da Vera, DV de lá)
+       não confere mais — é exatamente a linha lida errada que o DV passou a barrar. */
+    const semVenc = '34190900830488204919264610000800800000000300650';
     expect(lerLinhaDigitavel(semVenc)).toEqual({ linha: semVenc, vencimento: null, valor: 3006.5 });
+    expect(lerLinhaDigitavel('34191090080488182004919646100008800000000300650')).toBeNull();
   });
 });

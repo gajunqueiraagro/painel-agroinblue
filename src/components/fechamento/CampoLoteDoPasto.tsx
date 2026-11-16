@@ -53,7 +53,7 @@ export function CampoLoteDoPasto<T extends ItemComLote>({ itens, nomeDaCategoria
     <Popover open={aberto} onOpenChange={setAberto}>
       <PopoverTrigger asChild>
         <button type="button" disabled={disabled} title={rotulo.title} data-testid="campo-lote-do-pasto"
-          className="h-7 w-[150px] truncate rounded-md border border-white/15 bg-white/10 px-2 text-left text-xs font-semibold text-white disabled:opacity-50">
+          className={`h-7 w-[150px] truncate rounded-md border border-white/15 bg-white/10 px-2 text-left text-xs disabled:opacity-50 ${rotulo.doCaderno ? 'font-normal text-white/60' : 'font-semibold text-white'}`}>
           {rotulo.texto}
         </button>
       </PopoverTrigger>

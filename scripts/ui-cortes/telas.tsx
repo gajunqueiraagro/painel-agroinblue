@@ -1844,6 +1844,15 @@ if (tela === 'mesclar') {
     montar(<PatrimonioApiProvider api={API_PATRIMONIO}><PatrimonioTela /></PatrimonioApiProvider>);
   };
   void montarPatrimonio();
+} else if (tela === 'caixa-boletos') {
+  /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos: o modal real com a API e o leitor em memória (`dados/caixaBoletos.ts`, SINTÉTICO);
+     o gate solta os PDFs pelo input (o conteúdo é o nome: o leitor da bancada lê por ele) */
+  const montarCaixa = async () => {
+    const { CaixaDeBoletosDialog } = await import('@/components/financeiro-v2/CaixaDeBoletosDialog');
+    const { API_CAIXA_BANCADA, LER_CAIXA_BANCADA } = await import('./dados/caixaBoletos');
+    montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} aoFechar={() => {}} />);
+  };
+  void montarCaixa();
 } else if (tela === 'produtores') {
   /* FISCAL onda 1 (a) — Cadastros › Produtores: a tela real com a API em memória (`dados/produtores.ts`, SINTÉTICO); a prévia de cada
      gravação se monta a partir do pedido e nada grava */
@@ -2294,7 +2303,10 @@ if (tela === 'mesclar') {
   }
   /* LOTES-03 F1 — `&v=lotes`: o P10A com 2 categorias com cabeça e lote (o campo Lote do modal); sem o `v`, o cenário de sempre */
   /* L1 (Gabriel 09/11) — `&cria=1`: o P10A inteiro (as 2 categorias) no lote da cria SEM carimbo (l-vp4): "sem carimbo · definir" no campo Lote, no seletor e no popup */
-  const COM_CRIA = q.get('cria') === '1';
+  /* L1-CARIMBO-SO-COM-BEZERRO-01 (Gabriel 10/11, NJ · Pureza · P10A) — `&cria=1` é o P10A SEM bezerro (caderno "VC MOJADA"): o nome do
+     caderno em cinza, nunca o aviso; `&cria=bezerro`: o mesmo P10A com Mamotes F ao pé — "sem carimbo · definir" */
+  const COM_BEZERRO = q.get('cria') === 'bezerro';
+  const COM_CRIA = q.get('cria') === '1' || COM_BEZERRO;
   /* LOTE-BUSCA-01 — `&v=busca`: o campo Lote com 63 lotes (55 de recria a mais: o corte de 50 escondia o fim), DOIS 8.2 e o caderno "LOT 8.2 F1"
      no P10A; em set/26 o ENG-DM-AN-06 ligado no P10A (100 cab) e o CRI-PP-NE-01 (7.1) no P11; o 7R só no TEXTO do card do P12 (sem ligação) */
   /* LOTE-BUSCA-02 — `&v=busca2`: o caso da Santa Rita 20R-2 (sintético): o lote 10.1 "L20 SP+F1" existe e o caderno do P10A diz "L20 F1+SP C10" */
@@ -2322,6 +2334,11 @@ if (tela === 'mesclar') {
   if (COM_LOTES) {
     Object.assign(ITENS[0], { lote_id: SEM_LOTE ? null : COM_CRIA ? 'l-vp4' : 'l-dm6' });
     ITENS.push({ ...item('fa', 'c-vacas', 30, 420), lote_id: SEM_LOTE ? null : COM_CRIA ? 'l-vp4' : 'l-px2' });
+  }
+  if (COM_CRIA) Object.assign(CARDS[0], { lote_mes: 'VC MOJADA' });
+  if (COM_BEZERRO) {
+    CATS.push({ id: 'c-mamf', codigo: 'mamotes_f', nome: 'Mamotes F', ordem_exibicao: 3 });
+    ITENS.push({ ...item('fa', 'c-mamf', 12, 35), lote_id: 'l-vp4' });
   }
   /* MAPA-LOTES-01 (C2) — `&v=mapa`: o Fechamento abre na vista Mapa (a escolha guardada); os polígonos SINTÉTICOS de 5 dos 6 pastos
      (o P12 fica sem desenho: vai para a faixa) e a área total por baixo */
@@ -2366,6 +2383,11 @@ if (tela === 'mesclar') {
         ...(COM_QUEBRA ? [{ id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }, { id: 'g8', fazenda_id: 'f1', nome: 'P8', ativo: true, pasto_origem_id: 'p8' }] : []),
         ...(COM_PIQUETES7 ? [{ id: 'g7', fazenda_id: 'f1', nome: 'P7', ativo: true, pasto_origem_id: 'p7' }, { id: 'g5', fazenda_id: 'f1', nome: 'P5', ativo: true, pasto_origem_id: 'p5' }] : [])], e)
       : t === 'fechamento_pastos' ? CARDS.filter((c) => (!e.eq.ano_mes || c.ano_mes === e.eq.ano_mes) && (!COM_PIQUETES7 || !e.eq.pasto_id || c.pasto_id === e.eq.pasto_id))
+      /* L1-CARIMBO-SO-COM-BEZERRO-01 — os itens do mês com o pasto embutido (o `useLotesDaFazenda` lê o bezerro e o caderno do lote) */
+      : t === 'fechamento_pasto_itens' && e.eq['fechamento_pastos.ano_mes'] ? ITENS.flatMap((i) => {
+        const c = CARDS.find((x) => x.id === i.fechamento_id);
+        return c && c.ano_mes === e.eq['fechamento_pastos.ano_mes'] && i.quantidade > 0 ? [{ ...i, fechamento_pastos: { fazenda_id: c.fazenda_id, ano_mes: c.ano_mes, lote_mes: c.lote_mes } }] : [];
+      })
       : t === 'fechamento_pasto_itens' ? ITENS.filter((i) => !e.eq.fechamento_id || i.fechamento_id === e.eq.fechamento_id)
       : t === 'categorias_rebanho' ? CATS : t === 'fechamento_alocacoes' ? ALOC
       : t === 'fazenda_geometrias' ? GEOS
@@ -2974,7 +2996,37 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
      Elo (a conta já escolhida; o cenário escolhe Parcelada 10× no Pagamento). O PDF é desenhado pelo jspdf e LIDO pelo caminho de verdade. */
   /* NOTA-NFSE-LEITURA-02 (Gabriel 08/11, a forma da NF 402) — `notanfse`: o DANFSe nacional sintético (sem IE, IBS/CBS, 3 linhas de serviço)
      de uma filial cuja OUTRA filial é a cadastrada (a faixa nova), a fazenda pelo histórico do fornecedor e a descrição curta do serviço */
-  if (v === 'notanfse') {
+  /* NOTA-LEITURA-PRINT-01 (Gabriel 10/11) — `notaprint` / `notaprintnfse`: a NF-e e a NFS-e de Campo Grande impressas pelo "Print To PDF"
+     (o fixture sintético com as posições dos reais), desenhadas pelo jspdf e LIDAS pelo caminho de verdade; o mesmo emitente nas duas */
+  if (v === 'notaprint' || v === 'notaprintnfse') {
+    void (async () => {
+      const { jsPDF } = await import('jspdf');
+      const { DANFE_PRINT_TO_PDF, NFSE_CAMPO_GRANDE } = await import('@/lib/financeiro/nfe/__fixtures__/notaPrintToPdfSintetica');
+      const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
+      const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [595.32, 841.92] });
+      /* a fonte do jspdf e' mais larga que a do original: cada texto encolhe ate' a largura dele (a chave nao passa da folha) */
+      for (const it of (v === 'notaprint' ? DANFE_PRINT_TO_PDF : NFSE_CAMPO_GRANDE)[0]) {
+        const t = Math.max(4, it.h * 1.15); doc.setFontSize(t);
+        const largura = doc.getTextWidth(it.str);
+        if (it.w > 0 && largura > it.w) doc.setFontSize(t * it.w / largura);
+        doc.text(it.str, it.x, 841.92 - it.y);
+      }
+      const bytes: ArrayBuffer = doc.output('arraybuffer');
+      const lido: any = await lerNota(bytes);
+      if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+      const OFICINA = { ...AGRO, id: 'oficina-p', nome: 'Agro Exemplo Pecas e Servicos Ltda', cpf_cnpj: '11.222.333/0004-24' };
+      props.fornecedores = [OFICINA];
+      const resolucao = resolverEmitente(lido.nota.emitente, [OFICINA], null);
+      const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: '123456789' }], emitente: resolucao,
+        favorecidoId: resolucao.propostoId, ultima: null });
+      if (!p.ok) { raiz.render(<div>{p.frase}</div>); return; }
+      props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento,
+        emitente: lido.nota.emitente, resolucao, ocorrencias: [], arquivo: arquivoPdfDaNota(bytes, v === 'notaprint' ? 'nfe-print.pdf' : 'nfse-print.pdf') } as any);
+      props.documentosAntesDeSalvar = true;
+      renderizar();
+    })();
+  } else if (v === 'notanfse') {
     void (async () => {
       const { jsPDF } = await import('jspdf');
       const { danfseSintetico } = await import('@/lib/financeiro/nfe/__fixtures__/danfseSintetico');
