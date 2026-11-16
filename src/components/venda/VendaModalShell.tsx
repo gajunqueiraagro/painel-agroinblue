@@ -72,6 +72,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { DICA_MES_FECHADO, mesFechadoMotivo as fraseDoMesFechado } from '@/lib/zootecnico/mesFechadoP1';
 import { AvisoMesFechado } from '@/components/lancamento/AvisoMesFechado';
 import { useAoVoltarAoFoco } from '@/hooks/useAoVoltarAoFoco';
+import { RodapeDaOC } from '@/components/compra/RodapeDaOC';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -212,6 +213,9 @@ export interface VendaModalShellProps {
   ocEntregaEncerrada?: boolean;
   /** Nada mudou desde a ultima gravacao bem-sucedida — o botao apaga. */
   semAlteracoes?: boolean;
+  /** OC-SALVAR-RODAPE-01 F2 — o estado do rodape: ha algo por salvar / a hora do ultimo salvar desta abertura. */
+  pendente?: boolean;
+  salvoAs?: string | null;
   /** `oc_confirmar` pelo `useOperacaoRecebimento`. Devolve se concluiu. */
   /** Recebe a versão fresca do salvar — `oc_confirmar` tem lock otimista. */
   onConcluirNegociacao?: (versaoOverride?: number) => void | Promise<unknown>;
@@ -241,7 +245,7 @@ export function VendaModalShell({
   boitelRealSalvo = null, pendenciaRealizado = null, erroRealizado = null,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
-  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, recusaNegociacao = null, onFecharRecusaNegociacao, onCancelarContaCorrente, semAlteracoes = false,
+  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, recusaNegociacao = null, onFecharRecusaNegociacao, onCancelarContaCorrente, semAlteracoes = false, pendente = false, salvoAs = null,
   onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null, acessoOC = ACESSO_TOTAL,
 }: VendaModalShellProps) {
   /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
@@ -1081,18 +1085,15 @@ export function VendaModalShell({
       {/* ZOOT-MES-FECHADO-MODAL-01 — a faixa do mês fechado, logo acima dos botões, em lugar reservado */}
       <AvisoMesFechado p1={mesFechadoMotivo}
         acaoP1={<span className="shrink-0"><ReabrirMesNaOC forma="link" onAbrir={() => setReabrirP1Aberto(true)} /></span>} />
-      <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-end gap-2">
+      {/* OC-SALVAR-RODAPE-01 F2 — o rodape unico da OC (o do abate): Fechar · o estado · as acoes da aba. */}
+      <RodapeDaOC onFechar={onFechar} pendente={pendente} salvoAs={salvoAs}>
         {/* OC-VENDA-ENTREGAS-01c, decisao 2 — a venda em conta corrente ganha o Cancelar; o dialogo lista o que sera desfeito. */}
         {cc && onCancelarContaCorrente && ocStatusComercial !== 'cancelada' && (
           <Button type="button" variant="ghost" onClick={() => setCancelarCcAberto(true)} disabled={submitting}
-            className="mr-auto h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white">
+            className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white">
             Cancelar operação
           </Button>
         )}
-        <Button type="button" variant="ghost" onClick={onFechar}
-          className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
-          Fechar
-        </Button>
         {/* ⚠ A VENDA NAO TINHA COMO CONCLUIR — PR-OC-VENDA-ENTREGA-01B. A aba Entrega
             exige `status='fechada'` e dizia "conclua a negociação", mas o gatilho nao
             existia em lugar nenhum do shell: o operador salvava achando que concluia.
@@ -1190,7 +1191,7 @@ export function VendaModalShell({
             : (<>Salvar e continuar para Negociação <ArrowRight className="h-3 w-3" /></>)}
         </Button>
         </>)}
-      </div>
+      </RodapeDaOC>
 
       {/* ⚠ MOTIVO OBRIGATORIO AQUI, e e' DIVERGENCIA DELIBERADA da compra — decisao do
           Gabriel. Medido: `oc_reabrir` NAO exige motivo (nao ha guard sobre `p_motivo`, ele

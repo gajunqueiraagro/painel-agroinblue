@@ -42,7 +42,6 @@ import { VendaMetaModalShell } from '@/components/venda/VendaMetaModalShell';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { AbateModalShell } from '@/components/abate/AbateModalShell';
 import { boitelVazio, payloadBoitel, boitelDeLinha, pendenciaDoRealizado, realizadoNaoSalvo, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { liquidoDaVendaBoitel, realizadoAplicadoNoLote, valorDaVendaBoitel, slotDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
@@ -92,7 +91,8 @@ import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/use
 import { toast } from 'sonner';
 import { decidirHidratacao, vaiHidratar } from '@/lib/oc/hidratacaoOC';
 import {
-  assinaturaDosDadosDoAbate, dadosDoAbateDaOperacao, dadosDoAbateNovo, passosPendentes, salvarEmOrdem, temPendencia, type PendenciaOC,
+  assinaturaDosDadosDaVenda, assinaturaDosDadosDoAbate, dadosDaVendaDaOperacao, dadosDaVendaNova, dadosDoAbateDaOperacao, dadosDoAbateNovo,
+  passosPendentes, salvarEmOrdem, temPendencia, type PendenciaOC,
 } from '@/lib/oc/fecharOC';
 import { PerguntaAoFecharOC } from '@/components/compra/RodapeDaOC';
 import { caminhoDoSalvarOC, soCadastrais } from '@/lib/oc/edicaoCadastralOC';
@@ -904,17 +904,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [erroSalvarOC, setErroSalvarOC] = useState<string | null>(null);
   /* OC-LOTE-FISICO-POS-SAIDA-01 (D4) — a recusa do Salvar da negociacao (venda e abate), mostrada num modal centrado pelo shell. */
   const [recusaNegociacaoOC, setRecusaNegociacaoOC] = useState<string | null>(null);
-  /* PR-OC-VENDA-REABRIR-01E — A ASSINATURA DO QUE FOI GRAVADO NA ULTIMA VEZ.
-     ⚠ O botao da venda ficava aceso para sempre: nao havia estado de sujo/pristino, entao
-     "Salvar alteracoes" parecia prometer que havia algo a salvar mesmo logo depois de
-     salvar. E' a mesma mentira do "Salvar e Gerar Financeiro" que ja corrigimos.
-     ⚠ ASSINATURA DE CONTEUDO, e nao de identidade: `lotesApi.salvar` recarrega os lotes do
-     banco e os objetos trocam de referencia com o mesmo conteudo. Comparar por JSON e' o
-     que faz o botao apagar em vez de reacender sozinho no render seguinte.
-     ⚠ `null` = NADA FOI SALVO NESTE MODAL AINDA, e ai o botao fica aceso — inclusive logo
-     apos reabrir. E' o estado de hoje, e nao e' mentira: o operador ainda nao gravou nada
-     nesta sessao. So' a gravacao bem-sucedida apaga o botao. */
-  const [ocVendaAssinaturaSalva, setOcVendaAssinaturaSalva] = useState<string | null>(null);
+  /* OC-SALVAR-RODAPE-01 F2 — as bases da VENDA: os dados (comprador, data, fazenda, tipo, destino, observacao, NF) como vieram do
+     banco ou foram salvos — `null` = venda nova, cuja base e' a tela nova (`dadosDaVendaNova`, com a fazenda semeada pelo filtro) —
+     e o planejamento do boitel. Os LOTES tem a sua no hook (`lotesApi.alterados`); o realizado, `realizadoSujo`. Era UMA assinatura
+     da tela inteira nula ao abrir (PR-OC-VENDA-REABRIR-01E): o botao ficava aceso e o fechar nao sabia se havia o que perder. */
+  const [ocVendaDadosBase, setOcVendaDadosBase] = useState<string | null>(null);
+  const [ocVendaBoitelBase, setOcVendaBoitelBase] = useState<string>('null');
+  const [perguntaFecharVenda, setPerguntaFecharVenda] = useState(false);
   /* OC-SALVAR-RODAPE-01 — a base dos DADOS do abate (frigorifico, data, fazenda, observacao, NF): o que veio do banco ao abrir,
      o padrao numa OC nova, e o que acabou de ser salvo. Os LOTES tem a sua no hook (`lotesApi.alterados`); as linhas do abate
      sao rascunho (`abateLinhas`). */
@@ -1143,6 +1139,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setVendaTipoVenda(tipoCarregado);
         ocSnapshotRef.current = { ...ocSnapshotRef.current, tipo_venda: tipoCarregado };
         setOcBoitel(bd ?? null);
+        /* OC-SALVAR-RODAPE-01 F2 — as bases nascem do que o banco tem */
+        setOcVendaDadosBase(dadosDaVendaDaOperacao(op, tipoCarregado));
+        setOcVendaBoitelBase(JSON.stringify(bd ? payloadBoitel(bd) : null));
 
         /* ⚠ A SEGUNDA LINHA, quando existir — PR-OC-VENDA-REALIZADO-02. Mesma leitura por
            PostgREST do projetado; `maybeSingle` porque ela e' opcional por natureza. */
@@ -2762,6 +2761,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOcBoitelRealSalvo(null);
     setErroRealizado(null);
     setErroSalvarOC(null);
+    // OC-SALVAR-RODAPE-01 F2 — as bases e a pergunta do fechar
+    setOcVendaDadosBase(null); setOcVendaBoitelBase('null'); setOcSalvoAs(null); setPerguntaFecharVenda(false);
     // As flags da OC — mesmas quatro da compra.
     setOcAberturaExistente(false); setOcTemTitulo(false); setOcRascunho(false); setOcHidratacaoErro(null);
   }, []);
@@ -3050,20 +3051,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   });
   const pendenciaRealizado = decisaoRealizado === 'recusar' ? pendenciaDoRealizado(boitelRealDaVenda) : null;
 
-  /* A assinatura do que esta' na tela AGORA. Recalculada a cada render de proposito — sao
-     dois JSON pequenos, e memorizar traria o risco de dependencia esquecida, caro justamente
-     aqui, onde errar significa o botao mentir num dos dois sentidos. */
-  const ocVendaAssinaturaAtual = JSON.stringify({
-    comprador: vendaDestinoFornecedorId, data, fazenda: vendaFazendaId,
-    tipo: vendaTipoVenda, destino: vendaPropriedadeDestino,
-    observacao, notaFiscal,
-    lotes: lotesApi.lotes.map(l => [l.ordem, l.categoria, l.quantidade, l.pesoMedioKg, l.criterioValor, l.valorInformado]),
-    boitel: ocBoitel ? payloadBoitel(ocBoitel) : null,
-    /* ⚠ O RASCUNHO DO REALIZADO E' ALTERACAO — OC-BOITEL-REALIZADO-UX-01: com o Aplicar so'
-       local, sem ele aqui o botao ficaria cinza ("nada alterado") com o realizado por gravar. */
-    realizado: ocBoitelReal ? payloadBoitel(ocBoitelReal) : null,
+  /* OC-SALVAR-RODAPE-01 F2 — O PENDENTE DA VENDA, a regra do abate: os dados contra a base (fechada: so' os cadastrais, pelo
+     snapshot), os lotes contra a ultima leitura do banco, o planejamento do boitel contra o gravado e o rascunho do realizado
+     (`realizadoSujo`, que tinha pergunta propria ao fechar e agora entra na mesma).
+     ⚠ O LOTE DIVERGENTE DO ACERTO NAO E' PENDENCIA: nao foi digitado, e reabrir a OC o mostra igual. Ele so' acende o Salvar. */
+  const fazendaSemeadaDaVenda = fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '';
+  const ocVendaDadosAtual = assinaturaDosDadosDaVenda({
+    comprador: vendaDestinoFornecedorId, data, fazenda: vendaFazendaId, tipo: vendaTipoVenda || '',
+    destino: vendaPropriedadeDestino || '', observacao, notaFiscal,
   });
-  const ocVendaSemAlteracoes = ocVendaAssinaturaSalva !== null && ocVendaAssinaturaSalva === ocVendaAssinaturaAtual;
+  const ocVendaBoitelAtual = JSON.stringify(ocBoitel ? payloadBoitel(ocBoitel) : null);
+  const ocVendaPendencia: PendenciaOC = {
+    status: ocStatusComercial,
+    dadosSujos: ocStatusComercial === 'fechada' ? ocDadosSujos : ocVendaDadosAtual !== (ocVendaDadosBase ?? dadosDaVendaNova(fazendaSemeadaDaVenda)),
+    negociacaoSuja: !!lotesApi.alterados || realizadoSujo || (vendaTipoVenda === 'boitel' && ocVendaBoitelAtual !== ocVendaBoitelBase),
+  };
+  const ocVendaPendente = !ocHidratando && temPendencia(ocVendaPendencia);
+  /* Venda nova sempre pode salvar (criar); existente, so' com algo pendente. */
+  const ocVendaSemAlteracoes = !!ocOperacaoId && !ocVendaPendente;
 
   /* ⚠ MESMO DESENHO DA VENDA, e existe para o CONCLUIR não regravar o que já está gravado.
      Medido no banco (OC 9b2b5e6b): `salvar_abate` às 12:28 e `salvar_lotes` de novo às
@@ -3370,7 +3375,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          existe, entao a instrucao aponta para algo que da' para fazer. Ela ficou fora
          enquanto nao havia — mandar fazer o impossivel ensina a ignorar a mensagem. */
       if (criando) toast.success('Operação de venda criada. Agora informe os lotes negociados.');
-      setOcVendaAssinaturaSalva(ocVendaAssinaturaAtual);
+      setOcVendaDadosBase(ocVendaDadosAtual); setOcSalvoAs(format(new Date(), 'HH:mm'));
       return { operacaoId: env.operacao_id, versao: env.versao };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação de venda.');
@@ -3406,10 +3411,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       const e = env as { versao: number; status_comercial?: string };
       setOcVersao(e.versao);
       if (e.status_comercial) setOcStatusComercial(e.status_comercial);
-      /* ⚠ A ASSINATURA VOLTA A NULA: reabrir muda a versao no servidor, e o que estava
-         "salvo" deixou de corresponder. Manter a marca faria o botao de salvar nascer
-         apagado numa tela que precisa ser gravada de novo. */
-      setOcVendaAssinaturaSalva(null);
+      /* OC-SALVAR-RODAPE-01 F2 — reabrir nao zera mais nada: o pendente compara com o banco (o Concluir salva por dentro). */
       toast.success('Negociação reaberta — voltou para programada.');
       return true;
     } catch (e) {
@@ -3429,7 +3431,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
    * ⚠ QUANDO HÁ BOITEL, VALE A VERSÃO DELE: `salvarBoitel` grava depois dos lotes e
    * incrementa de novo. Devolver a dos lotes ali seria repetir o defeito um passo à frente.
    */
-  const salvarNegociacaoVendaOC = async (): Promise<number | false> => {
+  const salvarNegociacaoVendaOC = async (versaoOverride?: number): Promise<number | false> => {
     const clienteId = clienteAtual?.id;
     if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Venda primeiro.'); return false; }
     /* UX-OBRIGATORIOS-01 — com o realizado pela metade o Salvar nao grava nada. O botao ja'
@@ -3488,7 +3490,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
       /* `silent` porque o aviso de sucesso sai daqui: numa venda boitel ainda falta gravar
          o planejamento, e dois toasts seguidos para um clique so' e' ruido. */
-      const novaVersao = await lotesApi.salvar({ silent: true, lotesSobrescritos: sobrescritos, aoRecusar: setRecusaNegociacaoOC });
+      /* OC-SALVAR-RODAPE-01 F2 — no "Salvar e fechar" a versao vem dos dados recem-gravados (o estado so' muda no proximo render) */
+      const novaVersao = await lotesApi.salvar({ silent: true, lotesSobrescritos: sobrescritos, aoRecusar: setRecusaNegociacaoOC, versaoEsperada: versaoOverride });
       if (novaVersao == null) return false;   // o hook ja avisou o que impediu
       let versaoFinal = novaVersao;
       if (boitelDaVenda) {
@@ -3521,10 +3524,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setErroRealizado(null);
       toast.success(sucesso);
       if (avisoPendente) toast.warning(avisoPendente);
-      /* ⚠ A ASSINATURA DO MOMENTO DA CHAMADA, e nao a do fim: `lotesApi.salvar` recarregou
-         os lotes, mas o estado so' chega no proximo render. Assinar o que foi ENVIADO e' o
-         que corresponde ao que o banco passou a ter. */
-      setOcVendaAssinaturaSalva(ocVendaAssinaturaAtual);
+      /* ⚠ A BASE DO MOMENTO DA CHAMADA, e nao a do fim: assinar o que foi ENVIADO e' o que corresponde ao que o banco passou a ter.
+         Os lotes zeram sozinhos (o hook releu o banco); o realizado, pelo `setOcBoitelRealSalvo` de quem o gravou. */
+      setOcVendaBoitelBase(ocVendaBoitelAtual); setOcSalvoAs(format(new Date(), 'HH:mm'));
       return versaoFinal;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a negociação.');
@@ -3603,13 +3605,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [fecharPendente, setFecharPendente] = useState<string | null>(null);
   /* OC-EDITAR-CADASTRAL-01 — a recusa inline fala do status em que nasceu; reabrir ou fechar a apaga. */
   useEffect(() => { setErroSalvarOC(null); }, [ocStatusComercial]);
-  /* OC-BOITEL-REALIZADO-UX-01b — na VENDA so' o realizado do boitel pergunta ao fechar. E' o
-     unico rascunho da venda com estado sujo EXATO (`realizadoSujo`: o salvo vem da carga); a
-     assinatura geral nasce nula ao abrir e perguntaria em todo fechamento. Sem autosave: o
-     realizado so' se grava pelo Salvar da negociacao, e fechar pergunta se descarta. */
-  const [fecharRealizadoPendente, setFecharRealizadoPendente] = useState(false);
   const fecharModalOCComAutosave = useCallback(() => {
-    if (modoOCVenda && realizadoSujo) { setFecharRealizadoPendente(true); return; }
     /* OC-SALVAR-RODAPE-01 F1 (D1) — O ABATE NAO SALVA CALADO AO FECHAR: com algo pendente (dados, lotes ou linhas) PERGUNTA
        ("Salvar e fechar" · "Fechar sem salvar" · "Voltar"); sem nada, fecha. A venda e a compra seguem como antes ate' F2/F3. */
     if (modoOCAbate) {
@@ -3617,11 +3613,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       fecharModalOC();
       return;
     }
-    /* OC-EDITAR-CADASTRAL-01 — venda FECHADA grava os cadastrais sujos ao fechar, pelo mesmo caminho da
-       compra. Comprador vazio nao grava: pergunta, como a compra. Aberta, a venda segue como antes. */
-    if (modoOCVenda && ocStatusComercial === 'fechada' && ocDadosSujos) {
-      if (!contraparteDoModoOC) { setFecharPendente('Selecione o comprador.'); return; }
-      void salvarDadosOperacaoOC();
+    /* OC-SALVAR-RODAPE-01 F2 — A VENDA TAMBEM: com algo pendente (dados, lotes, boitel ou o realizado) PERGUNTA; sem nada, fecha.
+       Sai o salvar calado dos cadastrais da venda fechada (D1) e a pergunta propria do realizado (OC-BOITEL-REALIZADO-UX-01b). */
+    if (modoOCVenda) {
+      if (ocVendaPendente) { setPerguntaFecharVenda(true); return; }
+      fecharModalOC();
+      return;
     }
     if (modoOCCompra && ocDadosSujos && ocStatusComercial !== 'cancelada') {
       const impedimento = motivoImpedeSalvarOC();
@@ -3630,7 +3627,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     fecharModalOC();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modoOCCompra, modoOCVenda, modoOCAbate, ocAbatePendente, realizadoSujo, ocDadosSujos, ocStatusComercial, fecharModalOC, data, ocFazendaId, compraFornecedorId, contraparteDoModoOC, clienteAtual?.id]);
+  }, [modoOCCompra, modoOCVenda, modoOCAbate, ocAbatePendente, ocVendaPendente, ocDadosSujos, ocStatusComercial, fecharModalOC, data, ocFazendaId, compraFornecedorId, clienteAtual?.id]);
 
   /* OC-SALVAR-RODAPE-01 — os DADOS do abate pelo gravador de hoje (fechada: so' os cadastrais). Passou: a base anda e o rodape diz
      a hora. Devolve a versao nova (aberta) ou `true` (fechada: a versao fica no estado); `false` = recusou. */
@@ -3661,6 +3658,31 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   };
 
+  /* OC-SALVAR-RODAPE-01 F2 — os DADOS da venda pelo gravador de hoje (fechada: so' os cadastrais), como os do abate. */
+  const salvarDadosDaVenda = async (): Promise<number | boolean> => {
+    const dadosAgora = ocVendaDadosAtual;
+    if (caminhoDoSalvarOC(ocStatusComercial) === 'editar_dados') {
+      const ok = await salvarDadosOperacaoOC();
+      if (ok) { setOcVendaDadosBase(dadosAgora); setOcSalvoAs(format(new Date(), 'HH:mm')); }
+      return ok;
+    }
+    const r = await salvarOperacaoVendaOC();
+    return r ? r.versao : false;
+  };
+
+  /* OC-SALVAR-RODAPE-01 F2 (D3) — "Salvar e fechar" da venda: dados → negociacao (lotes, boitel, realizado), parando na 1a recusa. */
+  const salvarEFecharVenda = async () => {
+    setSalvandoAoFechar(true);
+    try {
+      const r = await salvarEmOrdem(passosPendentes(ocVendaPendencia), (passo, versao) =>
+        passo === 'dados' ? salvarDadosDaVenda() : salvarNegociacaoVendaOC(versao));
+      setPerguntaFecharVenda(false);
+      if (r.ok) fecharModalOC();
+    } finally {
+      setSalvandoAoFechar(false);
+    }
+  };
+
   // PR-OC-EDIT-01B — recarrega a OP aberta pelo backend (SOBERANO) após uma ação de ciclo, sem fechar
   //   o modal. Re-hidrata status/versão/título → a editabilidade volta a ser derivada pelas regras do 01A.
   const recarregarOperacaoOC = async () => {
@@ -3685,6 +3707,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     };
     /* OC-SALVAR-RODAPE-01 — a base dos dados do abate e' o banco que acabou de ser relido */
     if (modoOCAbate) setOcAbateDadosBase(dadosDoAbateDaOperacao(op));
+    if (modoOCVenda) setOcVendaDadosBase(dadosDaVendaDaOperacao(op, tipoRecarregado));
     setOcVersao(op.versao);
     setOcStatusComercial(op.status_comercial);
     setOcEntregaEncerrada(!!op.entrega_encerrada);   // PR-HOTFIX-P0 — reidrata entrega soberana no refetch
@@ -6256,6 +6279,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         onSalvarEFechar={() => { void salvarEFecharAbate(); }}
         onFecharSemSalvar={() => { setPerguntaFecharAbate(false); fecharModalOC(); }}
         onVoltar={() => setPerguntaFecharAbate(false)} />
+      {/* OC-SALVAR-RODAPE-01 F2 — a mesma pergunta na venda (substitui o "Realizado do boitel não salvo"). */}
+      <PerguntaAoFecharOC aberta={perguntaFecharVenda} salvando={salvandoAoFechar}
+        onSalvarEFechar={() => { void salvarEFecharVenda(); }}
+        onFecharSemSalvar={() => { setPerguntaFecharVenda(false); fecharModalOC(); }}
+        onVoltar={() => setPerguntaFecharVenda(false)} />
       {/* PR-OC-AUTOSAVE-01 (fatia 4) — so aparece quando ha edicao pendente que NAO
           pode ser gravada. Com tudo valido, grava e fecha sem interromper ninguem. */}
       <Dialog open={fecharPendente !== null} onOpenChange={(o) => { if (!o) setFecharPendente(null); }}>
@@ -6273,25 +6301,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* OC-BOITEL-REALIZADO-UX-01b — o AlertDialog da casa (o mesmo do A4b). "Continuar editando"
-          e' o padrao: o Cancel do Radix recebe o foco, e ESC/fora so' fecham ESTE dialogo. Os
-          tres caminhos de fechar a venda (X, Fechar, ESC) passam por `fecharModalOCComAutosave`;
-          o clique fora do modal ja' e' bloqueado. */}
-      <AlertDialog open={fecharRealizadoPendente} onOpenChange={(o) => { if (!o) setFecharRealizadoPendente(false); }}>
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-[14px]">Realizado do boitel não salvo</AlertDialogTitle>
-            <AlertDialogDescription className="text-[12px]">
-              Você aplicou dados do realizado que ainda não foram salvos. Se fechar agora, eles serão descartados.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setFecharRealizadoPendente(false)}>Continuar editando</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setFecharRealizadoPendente(false); fecharModalOC(); }}>Descartar e fechar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <Dialog open={lancModalOpen} onOpenChange={(open) => { if (open) setLancModalOpen(true); else fecharModalOCComAutosave(); }}>
       <DialogContent
@@ -6439,13 +6448,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           pesoKgNum={parseNumericValue(pesoKg) || 0}
           submitting={submitting}
           /* OC-EDITAR-CADASTRAL-01 — mesmo roteamento do abate e da compra. */
-          onSalvarOperacao={() => (caminhoDoSalvarOC(ocStatusComercial) === 'editar_dados' ? salvarDadosOperacaoOC() : salvarOperacaoVendaOC())}
+          onSalvarOperacao={() => salvarDadosDaVenda()}
           onSalvarNegociacao={() => salvarNegociacaoVendaOC()}
           recusaNegociacao={recusaNegociacaoOC}
           onFecharRecusaNegociacao={() => setRecusaNegociacaoOC(null)}
           onCancelarContaCorrente={cancelarVendaContaCorrenteOC}
           /* OC-BOITEL-REVALORAR-SALVAR-01 — lote divergente do acerto E' o que salvar: o botao acende sem nada editado. */
           semAlteracoes={ocStatusComercial === 'fechada' ? !ocDadosSujos : (ocVendaSemAlteracoes && decisaoRealizado !== 'gravar')}
+          /* OC-SALVAR-RODAPE-01 F2 — o estado do rodape */
+          pendente={ocVendaPendente} salvoAs={ocSalvoAs}
           erroSalvar={erroSalvarOC}
           /* As tres apis, no mesmo idioma da compra. A venda as MONTA; nao as edita. */
           documentosApi={documentosApi}

@@ -45,7 +45,7 @@ describe('a fiação do Abate (LancamentosTab)', () => {
   const fonte = readFileSync('src/pages/LancamentosTab.tsx', 'utf8');
   const fechar = fonte.slice(fonte.indexOf('const fecharModalOCComAutosave = useCallback('));
   const blocoFechar = fechar.slice(0, fechar.indexOf('}, ['));
-  const blocoAbate = blocoFechar.slice(blocoFechar.indexOf('if (modoOCAbate) {'), blocoFechar.indexOf('if (modoOCVenda && ocStatusComercial'));
+  const blocoAbate = blocoFechar.slice(blocoFechar.indexOf('if (modoOCAbate) {'), blocoFechar.indexOf('if (modoOCVenda) {'));
   it('fechar o abate com pendência PERGUNTA e não salva calado (D1)', () => {
     expect(blocoAbate).toContain('if (ocAbatePendente) { setPerguntaFecharAbate(true); return; }');
     expect(blocoAbate).not.toMatch(/salvar\w*\(/);

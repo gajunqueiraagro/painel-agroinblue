@@ -70,3 +70,27 @@ export function dadosDoAbateDaOperacao(op: {
     observacao: op.observacoes ?? '', notaFiscal: op.numero_documento ?? '',
   });
 }
+
+/* ─── OS DADOS DA VENDA (F2) ────────────────────────────────────────────────────────────────────────────────────────────
+   Os da aba Venda: comprador, data, fazenda, tipo de venda, propriedade de destino, observação e NF. */
+export interface DadosDaVenda {
+  comprador: string; data: string; fazenda: string; tipo: string; destino: string; observacao: string; notaFiscal: string;
+}
+
+export const assinaturaDosDadosDaVenda = (d: DadosDaVenda): string =>
+  JSON.stringify([d.comprador, d.data, d.fazenda, d.tipo, d.destino.trim(), d.observacao, d.notaFiscal]);
+
+/** Venda nova: a data de hoje e a fazenda que a tela semeia pelo filtro (Global = vazia); o resto vazio. */
+export const dadosDaVendaNova = (fazendaSemeada: string, agora: Date = new Date()): string =>
+  assinaturaDosDadosDaVenda({ comprador: '', data: hojeISO(agora), fazenda: fazendaSemeada, tipo: '', destino: '', observacao: '', notaFiscal: '' });
+
+/** Venda aberta do banco: o que a hidratação põe na tela (o tipo é o resolvido na carga). */
+export function dadosDaVendaDaOperacao(op: {
+  contraparte_id?: string | null; data_operacao?: string | null; fazenda_id?: string | null; observacoes?: string | null;
+  numero_documento?: string | null; propriedade_destino?: string | null;
+}, tipo: string, agora: Date = new Date()): string {
+  return assinaturaDosDadosDaVenda({
+    comprador: op.contraparte_id ?? '', data: op.data_operacao ?? hojeISO(agora), fazenda: op.fazenda_id ?? '', tipo,
+    destino: op.propriedade_destino ?? '', observacao: op.observacoes ?? '', notaFiscal: op.numero_documento ?? '',
+  });
+}

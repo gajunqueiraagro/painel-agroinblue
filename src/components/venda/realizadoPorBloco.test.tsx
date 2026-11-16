@@ -173,16 +173,18 @@ describe('aviso ao fechar a venda — realizado nao salvo', () => {
     expect(realizadoNaoSalvo(rascunho, salvoDepois)).toBe(false);
   });
 
+  /* OC-SALVAR-RODAPE-01 F2 (D1) — a pergunta propria do realizado virou a pergunta UNICA da OC: o realizado sujo e' pendencia da
+     negociacao, e a pendencia pergunta antes de fechar ("Salvar e fechar" · "Fechar sem salvar" · "Voltar"). */
   it('o fechamento da venda consulta o realizado sujo ANTES de fechar, e so' + "'" + ' na venda', () => {
     const fonte = readFileSync('src/pages/LancamentosTab.tsx', 'utf8');
     const corpo = fonte.slice(fonte.indexOf('const fecharModalOCComAutosave = useCallback('));
     const bloco = corpo.slice(0, corpo.indexOf('}, ['));
-    expect(bloco).toMatch(/if \(modoOCVenda && realizadoSujo\) \{ setFecharRealizadoPendente\(true\); return; \}/);
+    expect(fonte).toMatch(/negociacaoSuja: !!lotesApi\.alterados \|\| realizadoSujo \|\|/);
+    expect(bloco).toContain('if (modoOCVenda) {\n      if (ocVendaPendente) { setPerguntaFecharVenda(true); return; }');
     /* a pergunta vem ANTES do `fecharModalOC()` — senao o modal fecha e o aviso chega tarde */
-    expect(bloco.indexOf('setFecharRealizadoPendente(true)')).toBeLessThan(bloco.indexOf('fecharModalOC();'));
-    expect(fonte).toContain('Realizado do boitel não salvo');
-    expect(fonte).toContain('>Continuar editando</AlertDialogCancel>');
-    expect(fonte).toContain('>Descartar e fechar</AlertDialogAction>');
+    const venda = bloco.slice(bloco.indexOf('if (modoOCVenda) {'));
+    expect(venda.indexOf('setPerguntaFecharVenda(true)')).toBeLessThan(venda.indexOf('fecharModalOC();'));
+    expect(fonte).toContain('<PerguntaAoFecharOC aberta={perguntaFecharVenda}');
   });
 });
 
