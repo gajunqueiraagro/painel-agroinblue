@@ -21,6 +21,7 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
+import { PageHeader } from '@/components/ui/page-header';
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { TH_REGUA, TD_REGUA, TD_REGUA_TEXTO, TD_REGUA_NUM, QUADRO_REGUA, RODAPE_REGUA, TextoReservado } from '@/components/ui/regua-tabela';
 import { useOrdenacaoTabela } from '@/hooks/useOrdenacaoTabela';
@@ -179,10 +180,10 @@ export function PatrimonioTela() {
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col bg-background" data-testid="patrimonio-tela">
       <div className="shrink-0 space-y-1.5 px-4 pb-1.5 pt-2">
-        {/* O TOPO: o que a tela é · fazenda · posição · novo bem */}
-        <div className="flex h-[28px] items-center gap-2">
-          {/* a frase não corta (fora de tabela, nada de "…"): curta o bastante para a menor janela do gate (1000 px) */}
-          <p className="min-w-0 flex-1 whitespace-nowrap text-[10px] text-muted-foreground">o valor vem dos lançamentos ligados a cada bem</p>
+        {/* O TOPO: o nome da tela no padrão da casa (`PageHeader`: título + linha de apoio; LIMPEZA-TELAS-01 C3) · fazenda · posição ·
+            novo bem. A linha de apoio não corta nem quebra (fora de tabela): curta o bastante para 918 px */}
+        <div className="flex h-[32px] items-center gap-2">
+          <div className="min-w-0 flex-1 whitespace-nowrap"><PageHeader titulo="Patrimônio" subtitulo="o valor vem dos lançamentos ligados" /></div>
           <span className="shrink-0 text-[10px] text-muted-foreground">Fazenda</span>
           <SearchableSelect value={fazendaId} onValueChange={setFazendaId} allLabel="Todas" allValue=""
             options={fazendasOperacionais.map(f => ({ value: f.id, label: f.codigo ? `${f.codigo} · ${f.nome}` : f.nome }))}

@@ -29,3 +29,6 @@ dist-ssr
 
 # Diretorio de trabalho local (backups, scripts, gates) — nunca versionar
 scratchpad/
+
+# GATE-TELA-TETO-01 — o cache do Vite da bancada do gate de tela, por worktree
+.vite-bancada/

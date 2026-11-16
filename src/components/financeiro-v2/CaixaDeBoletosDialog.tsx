@@ -42,6 +42,7 @@ function SeloDaCaixa({ s }: { s: Selo }) {
   return <span className={cn('mr-1 inline-block shrink-0 rounded-[3px] px-1 text-[9.5px] font-semibold leading-[15px]', TOM[s.tom])}>{s.texto}</span>;
 }
 const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-left');
+const MAX_SELOS_A_VISTA = 2;
 const TH_NUM = cn(TH, 'text-right');
 const LINHA = 'h-[19px] border-b border-border/40';
 
@@ -73,6 +74,13 @@ function LinhaChegando({ item, sugestoes, aoAlternar, aoTirar, aoTentarSenha }: 
   const frase = item.frase ?? (item.estado === 'entrou' ? 'na caixa' : item.estado === 'lendo' ? 'lendo…' : item.estado === 'gravando' ? 'gravando…' : null);
   const textoDaLinha = pedeSenha ? 'digite a senha para ler (ela não é guardada)' : frase ?? achado?.texto ?? '';
   const titulo = [achado?.texto, ...avisos.map(fraseDoAviso), item.frase].filter(Boolean).join(' · ');
+  /* 918 px: no máximo 2 selos à vista; os outros viram "+N" com os textos no title (selo nunca corta, nem cobre o "tirar") */
+  const selos: Selo[] = [];
+  if (item.repetidoNaLeva) selos.push({ texto: 'repetido nesta leva', tom: 'ambar' });
+  if (pedeSenha) selos.push({ texto: item.estado === 'senha' ? 'protegido por senha' : 'senha não abriu', tom: 'vermelho' });
+  else if (achado) selos.push(...achado.selos);
+  const selosAVista = selos.slice(0, MAX_SELOS_A_VISTA);
+  const selosDoMais = selos.slice(MAX_SELOS_A_VISTA);
   return (
     <tr className={cn(LINHA, item.estado === 'recusado' || item.estado === 'erro' ? 'bg-red-50' : item.marcado && 'bg-primary/5')} data-testid="boleto-chegando">
       <td className={cn(TD_REGUA, 'px-1')}>
@@ -87,9 +95,12 @@ function LinhaChegando({ item, sugestoes, aoAlternar, aoTirar, aoTentarSenha }: 
       <td className={TD_REGUA_NUM}>{valorBR(b?.valor)}</td>
       <td className={TD_REGUA} title={titulo || undefined}>
         <span className="flex min-w-0 items-center">
-          {item.repetidoNaLeva && <SeloDaCaixa s={{ texto: 'repetido nesta leva', tom: 'ambar' }} />}
-          {pedeSenha && <SeloDaCaixa s={{ texto: item.estado === 'senha' ? 'protegido por senha' : 'senha não abriu', tom: 'vermelho' }} />}
-          {achado && !pedeSenha && achado.selos.map((s) => <SeloDaCaixa key={s.texto} s={s} />)}
+          {selosAVista.map((s) => <SeloDaCaixa key={s.texto} s={s} />)}
+          {selosDoMais.length > 0 && (
+            <span title={selosDoMais.map((s) => s.texto).join(' · ')} data-testid="selos-do-mais">
+              <SeloDaCaixa s={{ texto: `+${selosDoMais.length}`, tom: 'cinza' }} />
+            </span>
+          )}
           <span className="min-w-0 truncate text-muted-foreground" title={textoDaLinha}>{textoDaLinha}</span>
         </span>
       </td>
@@ -168,8 +179,10 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, le
             convite="Clique ou arraste vários boletos em PDF" rotuloDoBotao="Escolher arquivos"
             onArquivos={(_a, vereditos) => { caixa.receber(vereditos); setAba('chegando'); }} />
           <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card" data-testid="quadro-da-caixa" data-desloca-livre>
+            {/* fatia (b): a 918 o modal tem ~900px — o piso de 980 das tabelas jogava a coluna da senha (e o "Entrou em") para fora, atrás da
+                rolagem lateral; com 860 as colunas fixas (678px) deixam ~200px ao "Achado" e a senha cabe inteira */}
             {aba === 'chegando' ? (
-              <table className="w-full min-w-[980px] table-fixed border-collapse">
+              <table className="w-full min-w-[860px] table-fixed border-collapse">
                 <colgroup><col style={{ width: 24 }} /><col style={{ width: 150 }} /><col style={{ width: 158 }} /><col style={{ width: 76 }} /><col style={{ width: 82 }} /><col /><col style={{ width: 188 }} /></colgroup>
                 <thead><tr className="h-[22px]">
                   <th className={TH} /><th className={TH}>Arquivo</th><th className={TH}>Beneficiário</th><th className={TH}>Venc.</th>
@@ -186,7 +199,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, le
                 </tbody>
               </table>
             ) : (
-              <table className="w-full min-w-[980px] table-fixed border-collapse">
+              <table className="w-full min-w-[860px] table-fixed border-collapse">
                 <colgroup><col style={{ width: 86 }} /><col style={{ width: 190 }} /><col style={{ width: 76 }} /><col style={{ width: 82 }} /><col /><col style={{ width: 76 }} /></colgroup>
                 <thead><tr className="h-[22px]">
                   <th className={TH}>Situação</th><th className={TH}>Beneficiário</th><th className={TH}>Venc.</th><th className={TH_NUM}>Valor</th>

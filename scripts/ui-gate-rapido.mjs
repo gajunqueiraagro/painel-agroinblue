@@ -27,6 +27,7 @@ const git = (...a) => execFileSync('git', a, { cwd: RAIZ, encoding: 'utf8' });
 export const COMPARTILHADOS = [
   /^src\/components\/ui\//, /^src\/index\.css$/, /^tailwind\.config\./, /^src\/v2\/components\/V2Sidebar/, /^src\/components\/layout\//,
   /^scripts\/ui-cortes\/mocks\//, /^scripts\/ui-cortes\/vite\.config\.mts$/, /^scripts\/check-ui-[^/]+\.mjs$/, /^scripts\/ui-gate-rapido\.mjs$/,
+  /^scripts\/ui-cortes\/teto\.mjs$/, // GATE-TELA-TETO-01: o relógio do gate é o próprio gate
 ];
 const TELAS_ARQ = path.join(RAIZ, 'scripts/ui-cortes/telas.tsx');
 
