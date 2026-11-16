@@ -20,6 +20,7 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/lib/utils';
 import { ContaBancariaModal } from '@/components/financeiro-v2/ContaBancariaModal';
+import { OpenFinanceDoAdmin } from '@/components/financeiro-v2/OpenFinanceDoAdmin';
 import {
   celulaAgencia, celulaBanco, celulaConta, celulaGerente, celulaInicio, celulaTelefone, colunasEscondidas,
   faixaDaConta, faixasDaLista, filtrarContas, nomeDaConta, rodapeDaLista, SELO_TIPO,
@@ -133,6 +134,8 @@ export function FinV2ContasTab() {
           <Checkbox checked={mostrarInativas} onCheckedChange={v => setMostrarInativas(v === true)} data-testid="mostrar-inativas" />Mostrar inativas
         </label>
         <Button size="sm" className="ml-auto h-6 px-2.5 text-[11px]" onClick={() => setModal({ conta: null })} data-testid="nova-conta">+ Nova conta</Button>
+        {/* OPENFINANCE-PILOTO-01 · P3 mínima: só o admin AgroinBlue vê (Conectar banco · Registrar webhook) */}
+        <OpenFinanceDoAdmin clienteId={clienteId} />
       </div>
 
       <div ref={caixaRef} className="min-h-0 flex-1 overflow-auto rounded-lg border bg-card" data-testid="lista-contas">
