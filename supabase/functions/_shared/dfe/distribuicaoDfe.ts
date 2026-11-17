@@ -93,6 +93,15 @@ export function lerRetornoDistDFe(xml: string): RetornoDistDFe {
     dhResp: texto(ret, 'dhResp'), docs };
 }
 
+/** VERA-INVESTIGACAO (Gabriel 17/11) — a resposta BRUTA para a trilha: o retDistDFeInt inteiro (com a abertura e os atributos), com o CONTEÚDO de
+ *  cada docZip trocado pelo tamanho (nada de nota: chave, valor, emitente ficam no zip). Sem retDistDFeInt = o começo do corpo. Até 2000 caracteres. */
+export function respostaBruta(xml: string): string {
+  const m = /<(?:[\w.-]+:)?retDistDFeInt[\s>][\s\S]*?<\/(?:[\w.-]+:)?retDistDFeInt>/.exec(xml);
+  const base = m ? m[0] : xml.slice(0, 600);
+  return base.replace(/(<(?:[\w.-]+:)?docZip(?:\s[^>]*)?>)([\s\S]*?)(<\/(?:[\w.-]+:)?docZip>)/g, (_, a: string, c: string, f: string) =>
+    `${a}[${c.replace(/\s+/g, '').length} b64]${f}`).slice(0, 2000);
+}
+
 /** base64 + gzip → o XML (UTF-8) */
 export async function abrirDocZip(base64: string): Promise<string> {
   const bin = atob(base64);

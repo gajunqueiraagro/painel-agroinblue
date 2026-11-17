@@ -14,7 +14,7 @@
  *     o NSU NÃO anda (registra com ult/max nulos), a espera de 1 h vale do mesmo jeito, os documentos do 138 gravam como na busca.
  *  ⚠ Nunca devolve nem loga a senha, a chave, o .pfx ou o XML; a resposta leva só contagens, cStat, NSUs e a cadeia (nomes e datas).
  */
-import { type Ambiente, abrirDocZip, envelopeDistDFe, FRASE_DO_CSTAT, lerDocumento, lerRetornoDistDFe, type EventoDaCaixa, type LinhaDaCaixa } from './distribuicaoDfe.ts';
+import { type Ambiente, abrirDocZip, envelopeDistDFe, FRASE_DO_CSTAT, lerDocumento, lerRetornoDistDFe, respostaBruta, type EventoDaCaixa, type LinhaDaCaixa } from './distribuicaoDfe.ts';
 import { depoisDaResposta } from './relogioDfe.ts';
 import type { CadeiaConferida, ResultadoDaCredencial } from './credencialA1.ts';
 
@@ -142,7 +142,7 @@ export async function buscarDfe(p: Pedido, pecas: Pecas): Promise<Resposta> {
     lidos = { retorno, documentos, eventos, outros };
   } catch (e) {
     /* um documento que não se lê não pode ser pulado: o NSU não anda e nada da resposta é gravado */
-    await pecas.fecharPedido(titular.id, 'leitura', cred.certificadoId, { ...detalheBase, http: http.status, erro: erroCurto(e) });
+    await pecas.fecharPedido(titular.id, 'leitura', cred.certificadoId, { ...detalheBase, http: http.status, erro: erroCurto(e), bruto: respostaBruta(http.corpo) });
     return nao(502, 'leitura', 'A resposta da Receita não se leu. Nada foi gravado além da trilha; o NSU não andou.', { http: http.status, erro: erroCurto(e) });
   }
 
@@ -160,7 +160,7 @@ export async function buscarDfe(p: Pedido, pecas: Pecas): Promise<Resposta> {
     maxNsu: andaNsu ? depois.estado.maxNsu : null,
     naoAntesDe: chaveNFe ? umaHora : depois.estado.naoAntesDe,
     documentos: so138 ? lidos.documentos : [], eventos: so138 ? lidos.eventos : [], certificadoId: cred.certificadoId,
-    detalhe: { ...detalheBase, http: http.status, xMotivo: retorno.xMotivo, dhResp: retorno.dhResp, outros: lidos.outros,
+    detalhe: { ...detalheBase, http: http.status, xMotivo: retorno.xMotivo, dhResp: retorno.dhResp, outros: lidos.outros, bruto: respostaBruta(http.corpo),
       continuar: depois.continuar },
   });
   if (chaveNFe) {

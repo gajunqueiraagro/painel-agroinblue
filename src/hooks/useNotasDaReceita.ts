@@ -1,12 +1,12 @@
 /**
  * NOTAS-RECEITA-A1-01 · F3.4 MÍNIMA — a leitura da lista "Notas da Receita" (só SELECT, pela RLS de hoje: `tenant_ok(cliente_id)`).
- * "Já no sistema" = a chave numa nota_fiscal OU o critério do "+ Da nota" (`fn_nota_ja_lancada`), calculado a cada leitura (F34-SITUACAO-01).
+ * "Já no sistema" = a chave numa nota_fiscal OU o critério do "+ Da nota", calculado a cada leitura (F34-SITUACAO-01) numa pergunta só para
+ * todas as notas (`fn_notas_ja_lancadas`, NJ-NOTAS-LENTAS: era 1 `fn_nota_ja_lancada` por nota, 4–6 s no NJ).
  * O XML (pesado) NÃO vem na lista: só quando alguém pede "Lançar" ou "PDF" (`lerXmlDaReceita`).
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { jaLancadaPelosAchados, lerLinhasRecebidas, montarLista, precisaConferirLancamento, type NotaNaLista } from '@/lib/fiscal/notasDaReceita';
-import { notaJaLancada } from '@/lib/financeiro/nfeConsultas';
+import { chavesJaLancadas, lerLinhasRecebidas, montarLista, precisaConferirLancamento, type NotaNaLista } from '@/lib/fiscal/notasDaReceita';
 
 export interface DadosDaReceita {
   lista: NotaNaLista[];
@@ -38,14 +38,15 @@ export async function lerNotasDaReceita(clienteId: string): Promise<DadosDaRecei
   }
   /* F34-SITUACAO-01: a nota lançada à mão (sem a chave numa nota_fiscal) se acha como o "+ Da nota" acha — na hora, a cada leitura */
   const conferir = linhas.filter((l) => precisaConferirLancamento(l, noSistema));
-  for (let i = 0; i < conferir.length; i += 6) {
-    const lote = await Promise.all(conferir.slice(i, i + 6).map(async (l) => ({ l, r: await notaJaLancada(clienteId, {
-      parcelas: [], numero: l.chave.slice(25, 34), chave: l.chave, emitenteDocumento: l.emitenteDocumento, nomes: [l.emitenteNome],
-    }) })));
-    for (const { l, r } of lote) {
-      if (!r.ok) throw new Error('Não consegui conferir quais notas já estão no sistema.');
-      if (jaLancadaPelosAchados(r.valor)) noSistema.add(l.chave);
-    }
+  if (conferir.length > 0) {
+    const { data, error } = await db().rpc('fn_notas_ja_lancadas', {
+      p_cliente: clienteId,
+      p_notas: conferir.map((l) => ({ chave: l.chave, numero: l.chave.slice(25, 34), emitente_documento: l.emitenteDocumento, nome: l.emitenteNome })),
+    });
+    const achadas = error ? null : chavesJaLancadas(data);
+    /* P146: a conferência que falha NUNCA vira "Nova" */
+    if (!achadas) throw new Error('Não consegui conferir quais notas já estão no sistema.');
+    for (const ch of achadas) noSistema.add(ch);
   }
   const titulares = ((t.data ?? []) as { id: string; nome: string | null }[]).map((x) => ({ id: x.id, nome: x.nome ?? '—' }));
   const controle = (c.data ?? []) as { ultima_busca_em: string | null; nao_antes_de: string | null }[];
