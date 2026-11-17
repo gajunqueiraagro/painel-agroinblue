@@ -379,6 +379,8 @@ if (tela === 'mesclar') {
     docDoClipe('dc5', 'lf2', 'nf', 'NF 000.000.519.pdf', '2026-10-05', { numero: '519' }),
     docDoClipe('dc6', 'lf2', 'nf', 'NF 000.000.519.xml', '2026-10-05', { numero: '519', tipo: 'application/xml', url: 'cli/lf2/dc6.xml' }),
     docDoClipe('dc7', 'lf2', 'boleto', 'Boleto parcela 1.pdf', '2026-10-20'),
+    /* ANEXO-COL-ALINHA-01 — lf3 com 12 (o contador de 2 dígitos: o clipe não sai do lugar). SINTÉTICOS. */
+    ...Array.from({ length: 12 }, (_, i) => docDoClipe(`dc3-${i}`, 'lf3', 'recibo', `Recibo sintético ${i + 1}.pdf`, '2026-10-07')),
   ];
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_lancamentos_v2' ? (e.in.id ? [] : VOL ? VOL.lancamentos : LANCAMENTOS)
@@ -1927,8 +1929,10 @@ if (tela === 'mesclar') {
      o gate solta os PDFs pelo input (o conteúdo é o nome: o leitor da bancada lê por ele) */
   const montarCaixa = async () => {
     const { CaixaDeBoletosDialog } = await import('@/components/financeiro-v2/CaixaDeBoletosDialog');
-    const { API_CAIXA_BANCADA, LER_CAIXA_BANCADA } = await import('./dados/caixaBoletos');
-    montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} aoFechar={() => {}} />);
+    const { API_CAIXA_BANCADA, LER_CAIXA_BANCADA, API_ENTRADA_BANCADA, API_ENTRADA_BANCADA_SEM_ENDERECO } = await import('./dados/caixaBoletos');
+    /* BOLETO D3c: `caso=sem_endereco` = o cliente sem endereço (o "Gerar") */
+    const entrada = q.get('caso') === 'sem_endereco' ? API_ENTRADA_BANCADA_SEM_ENDERECO : API_ENTRADA_BANCADA;
+    montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} entrada={entrada} aoFechar={() => {}} />);
   };
   void montarCaixa();
 } else if (tela === 'notas-receita' || tela === 'notas-receita-menu') {

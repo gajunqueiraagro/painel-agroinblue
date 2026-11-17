@@ -129,6 +129,17 @@ describe('F2 — o clipe da lista', () => {
     const PDF = DOC({ ...XML, id: 'p', nome: 'nf 518.pdf', tipo: 'application/pdf', url: 'cli/l/p.pdf' });
     expect(quantasLinhasDoClipe([XML, PDF].map((d) => ({ especie: d.especie, numero: d.numero, chave_acesso: d.chaveAcesso, nome: d.nome, tipo: d.tipo })))).toBe(1);
   });
+  /* ANEXO-COL-ALINHA-01 — o clipe no MESMO x em toda linha: o mesmo grupo de largura fixa com 0, 1 e 12; o lugar do contador sempre lá
+     (vazio com 0 e 1); o "—" no lugar do clipe */
+  it.each([0, 1, 12])('com %s: o grupo de largura fixa = lugar do clipe (11px) + lugar reservado do contador (18px)', (qtd) => {
+    const { container } = render(<ClipeDaLinha clienteId="cli" lancamentoId="lanc-1" qtd={qtd} resumo="r" />);
+    const grupo = container.querySelector('[data-clipe-grupo]');
+    expect(grupo?.className).toContain('w-[31px]');
+    const lugares = Array.from(grupo?.children ?? []);
+    expect(lugares.map((l) => /w-\[(\d+)px\]/.exec(l.className)?.[1])).toEqual(['11', '18']);
+    expect(lugares[0].textContent).toBe(qtd === 0 ? '—' : '');
+    expect(lugares[1].textContent).toBe(qtd >= 2 ? String(qtd) : '');
+  });
   it('sem documento: "—" no lugar do clipe', () => {
     monta(0);
     expect(screen.queryByTestId('clipe-da-linha')).toBeNull();

@@ -10,9 +10,11 @@
  *  5. UMA chamada (distNSU a partir do ult_nsu guardado). Nunca uma segunda página na mesma execução: quem continua é a próxima;
  *     sem resposta (rede, TLS, tempo) ou resposta que não se lê = fecha com "sem resposta"; o NSU NÃO anda;
  *  6. a resposta → documentos/eventos → o relógio (`depoisDaResposta`) → `fn_fiscal_dfe_registrar` (com a cadeia no detalhe).
+ *  CONSULTA POR CHAVE (`chave`: 44 dígitos; Gabriel 17/11, caso-prova da Vera): o mesmo caminho, mas o pedido é consChNFe dessa chave;
+ *     o NSU NÃO anda (registra com ult/max nulos), a espera de 1 h vale do mesmo jeito, os documentos do 138 gravam como na busca.
  *  ⚠ Nunca devolve nem loga a senha, a chave, o .pfx ou o XML; a resposta leva só contagens, cStat, NSUs e a cadeia (nomes e datas).
  */
-import { type Ambiente, abrirDocZip, envelopeDistDFe, FRASE_DO_CSTAT, lerDocumento, lerRetornoDistDFe, type EventoDaCaixa, type LinhaDaCaixa } from './distribuicaoDfe.ts';
+import { type Ambiente, abrirDocZip, envelopeDistDFe, FRASE_DO_CSTAT, lerDocumento, lerRetornoDistDFe, respostaBruta, type EventoDaCaixa, type LinhaDaCaixa } from './distribuicaoDfe.ts';
 import { depoisDaResposta } from './relogioDfe.ts';
 import type { CadeiaConferida, ResultadoDaCredencial } from './credencialA1.ts';
 
@@ -46,7 +48,7 @@ export interface Pecas {
   url(ambiente: Ambiente): string;
   agora(): Date;
 }
-export interface Pedido { token: string | null; titularId: string | null; ambiente: unknown; ensaio: unknown }
+export interface Pedido { token: string | null; titularId: string | null; ambiente: unknown; ensaio: unknown; chave?: unknown }
 
 type Corpo = Record<string, unknown>;
 export type Resposta = { status: 200 | 400 | 401 | 403 | 404 | 409 | 422 | 500 | 502; corpo: Corpo };
@@ -69,6 +71,10 @@ export async function buscarDfe(p: Pedido, pecas: Pecas): Promise<Resposta> {
   if (p.ambiente !== 'producao' && p.ambiente !== 'homologacao') return nao(400, 'ambiente', 'Diga o ambiente: "producao" ou "homologacao".');
   const ambiente: Ambiente = p.ambiente;
   const ensaio = p.ensaio === true;
+  if (p.chave !== undefined && p.chave !== null && (typeof p.chave !== 'string' || !/^\d{44}$/.test(p.chave))) {
+    return nao(400, 'chave', 'A chave da NF-e tem 44 dígitos.');
+  }
+  const chaveNFe = typeof p.chave === 'string' ? p.chave : null;
   const titular = await pecas.lerTitular(p.titularId);
   if (!titular) return nao(404, 'sem_titular', 'Produtor não encontrado.');
   if (autor && !(await pecas.podeBuscar(autor, titular.cliente_id))) return nao(403, 'sem_permissao', 'Só o administrador ou o gestor deste cliente busca as notas.');
@@ -106,14 +112,16 @@ export async function buscarDfe(p: Pedido, pecas: Pecas): Promise<Resposta> {
     if (!ensaio) await pecas.fecharPedido(titular.id, 'certificado', cred.certificadoId, { ambiente, erro: 'UF do produtor vazia', cadeia });
     return nao(422, 'uf', 'O cadastro do produtor não tem a UF. Nada foi pedido à Receita.', { cadeia });
   }
-  const envelope = envelopeDistDFe({ ambiente, uf, documento: cred.documento, pedido: { tipo: 'distNSU', ultNsu } });
+  const envelope = envelopeDistDFe({ ambiente, uf, documento: cred.documento,
+    pedido: chaveNFe ? { tipo: 'consChNFe', chave: chaveNFe } : { tipo: 'distNSU', ultNsu } });
+  const tipoDoPedido = chaveNFe ? 'consChNFe' : 'distNSU';
   if (ensaio) {
-    return { status: 200, corpo: { ok: true, ensaio: true, ambiente, cadeia, uf, ult_nsu: ultNsu.toString(), envelope_bytes: envelope.length,
+    return { status: 200, corpo: { ok: true, ensaio: true, ambiente, cadeia, uf, pedido: tipoDoPedido, ult_nsu: ultNsu.toString(), envelope_bytes: envelope.length,
       frase: 'Ensaio: o certificado abriu e a cadeia confere. Nada foi pedido à Receita e nada foi gravado.' } };
   }
 
   /* 5. UMA chamada */
-  const detalheBase = { ambiente, cadeia, uf };
+  const detalheBase = { ambiente, cadeia, uf, pedido: tipoDoPedido };
   let http: RespostaHttp;
   try {
     http = await pecas.postarComCertificado(pecas.url(ambiente), resultado.par, envelope);
@@ -134,7 +142,7 @@ export async function buscarDfe(p: Pedido, pecas: Pecas): Promise<Resposta> {
     lidos = { retorno, documentos, eventos, outros };
   } catch (e) {
     /* um documento que não se lê não pode ser pulado: o NSU não anda e nada da resposta é gravado */
-    await pecas.fecharPedido(titular.id, 'leitura', cred.certificadoId, { ...detalheBase, http: http.status, erro: erroCurto(e) });
+    await pecas.fecharPedido(titular.id, 'leitura', cred.certificadoId, { ...detalheBase, http: http.status, erro: erroCurto(e), bruto: respostaBruta(http.corpo) });
     return nao(502, 'leitura', 'A resposta da Receita não se leu. Nada foi gravado além da trilha; o NSU não andou.', { http: http.status, erro: erroCurto(e) });
   }
 
@@ -143,15 +151,25 @@ export async function buscarDfe(p: Pedido, pecas: Pecas): Promise<Resposta> {
   const depois = depoisDaResposta({ ultNsu, maxNsu: ultNsu, naoAntesDe: null, ultimoCstat: null },
     { cStat: retorno.cStat, ultNsu: retorno.ultNsu, maxNsu: retorno.maxNsu }, pecas.agora());
   const so138 = retorno.cStat === '138';
+  /* consulta por chave: o NSU não anda e a próxima busca espera 1 h, qualquer que seja a resposta */
+  const umaHora = new Date(pecas.agora().getTime() + 3_600_000).toISOString();
+  const andaNsu = !chaveNFe && (retorno.cStat === '138' || retorno.cStat === '137');
   const gravado = await pecas.registrar({
     titularId: titular.id, cstat: retorno.cStat,
-    ultNsu: retorno.cStat === '138' || retorno.cStat === '137' ? depois.estado.ultNsu : null,
-    maxNsu: retorno.cStat === '138' || retorno.cStat === '137' ? depois.estado.maxNsu : null,
-    naoAntesDe: depois.estado.naoAntesDe,
+    ultNsu: andaNsu ? depois.estado.ultNsu : null,
+    maxNsu: andaNsu ? depois.estado.maxNsu : null,
+    naoAntesDe: chaveNFe ? umaHora : depois.estado.naoAntesDe,
     documentos: so138 ? lidos.documentos : [], eventos: so138 ? lidos.eventos : [], certificadoId: cred.certificadoId,
-    detalhe: { ...detalheBase, http: http.status, xMotivo: retorno.xMotivo, dhResp: retorno.dhResp, outros: lidos.outros,
+    detalhe: { ...detalheBase, http: http.status, xMotivo: retorno.xMotivo, dhResp: retorno.dhResp, outros: lidos.outros, bruto: respostaBruta(http.corpo),
       continuar: depois.continuar },
   });
+  if (chaveNFe) {
+    return { status: 200, corpo: {
+      ok: so138, pedido: 'consChNFe', cstat: retorno.cStat, frase: FRASE_DO_CSTAT[retorno.cStat] ?? `A Receita respondeu ${retorno.cStat}: ${retorno.xMotivo}`,
+      xmotivo: retorno.xMotivo, ult_nsu: ultNsu.toString(), nao_antes_de: umaHora,
+      documentos: lidos.documentos.length, eventos: lidos.eventos.length, outros: lidos.outros.length,
+      esquemas: retorno.docs.map((d) => d.esquema), ...gravado, cadeia } };
+  }
   return { status: 200, corpo: {
     ok: !depois.parouPorErro, cstat: retorno.cStat, frase: FRASE_DO_CSTAT[retorno.cStat] ?? `A Receita respondeu ${retorno.cStat}: ${retorno.xMotivo}`,
     ult_nsu_antes: ultNsu.toString(), ult_nsu: depois.estado.ultNsu.toString(), max_nsu: depois.estado.maxNsu.toString(),

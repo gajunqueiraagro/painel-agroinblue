@@ -1340,6 +1340,32 @@ const CENARIOS = [
       { nome: 'caixa-boletos-na-caixa', url: URL, tamanhos: T, regiao: R, antes: aba(/^Na caixa/) },
       { nome: 'caixa-boletos-sem-par', url: URL, tamanhos: T, regiao: R, antes: aba(/^Sem par/) },
       { nome: 'caixa-boletos-todos', url: URL, tamanhos: T, regiao: R, antes: aba(/^Todos/) },
+      /* BOLETO D3c — "Por e-mail" (um de cada estado + remetente/assunto/arquivo longos) e o PDF do e-mail lido em "Chegando" */
+      { nome: 'caixa-boletos-por-email', url: URL, tamanhos: T, regiao: R, antes: aba(/^Por e-mail/) },
+      { nome: 'caixa-boletos-email-lido', url: URL, tamanhos: T, regiao: R, antes: async (p) => {
+        await aba(/^Por e-mail/)(p); await p.locator('[data-testid="ler-do-email"]').first().click(); await p.waitForTimeout(900); } },
+    ];
+  })(),
+  /* BOLETO D3c — o endereço de boletos (dado SINTÉTICO: o slug no teto de 40): ver; trocar sem motivo (vermelho) e com a prévia; revogar;
+     o passo a passo dos 3 provedores; o cliente sem endereço com a prévia do "Gerar" */
+  ...(() => {
+    const T = [[918, 600], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+    const URL = 'tela=caixa-boletos';
+    const R = '[data-testid="endereco-de-boletos"]';
+    const espera = (p, ms = 600) => p.waitForTimeout(ms);
+    const clique = (sel) => async (p) => { await p.locator(sel).first().click(); await espera(p); };
+    const abrir = clique('[data-testid="abrir-endereco-de-boletos"]');
+    const seq = (...f) => async (p) => { for (const x of f) await x(p); };
+    const motivo = async (p) => { await p.locator('[data-testid="motivo-do-endereco"]').fill('o endereço foi divulgado num grupo'); await espera(p, 200); };
+    const provedor = (re) => async (p) => { await p.locator(R).getByRole('button', { name: re }).first().click(); await espera(p, 300); };
+    return [
+      { nome: 'endereco-boletos', url: URL, tamanhos: T, regiao: R, antes: abrir },
+      { nome: 'endereco-boletos-trocar-sem-motivo', url: URL, tamanhos: T, regiao: R, antes: seq(abrir, clique('[data-testid="trocar-endereco"]'), clique('[data-testid="previa-do-endereco"]')) },
+      { nome: 'endereco-boletos-trocar-previa', url: URL, tamanhos: T, regiao: R, antes: seq(abrir, clique('[data-testid="trocar-endereco"]'), motivo, clique('[data-testid="previa-do-endereco"]')) },
+      { nome: 'endereco-boletos-revogar-previa', url: URL, tamanhos: T, regiao: R, antes: seq(abrir, clique('[data-testid="revogar-endereco"]'), motivo, clique('[data-testid="previa-do-endereco"]')) },
+      { nome: 'endereco-boletos-outlook', url: URL, tamanhos: T, regiao: R, antes: seq(abrir, provedor(/^Hotmail/)) },
+      { nome: 'endereco-boletos-m365', url: URL, tamanhos: T, regiao: R, antes: seq(abrir, provedor(/^Microsoft 365/)) },
+      { nome: 'endereco-boletos-gerar', url: `${URL}&caso=sem_endereco`, tamanhos: T, regiao: R, antes: seq(abrir, clique('[data-testid="gerar-endereco"]'), clique('[data-testid="previa-do-endereco"]')) },
     ];
   })(),
   /* LANC-PATRIMONIO-VINCULO-01 — o "Patrimônio" do rodapé do Editar lançamento (dado SINTÉTICO, `dados/patrimonioLancamento.ts`): o rodapé

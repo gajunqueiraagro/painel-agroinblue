@@ -6,6 +6,7 @@
 import { listaDaCaixa, respostaDeEntrar, type CaixaApi } from '@/lib/financeiro/boleto/caixaApi';
 import type { LerArquivoDeBoleto } from '@/hooks/useCaixaDeBoletos';
 import { FRASE_SEM_TEXTO, FRASE_SENHA, type LeituraDoBoleto } from '@/lib/financeiro/boleto/lerBoleto';
+import { entradaDaLinha, respostaDoEndereco, type EntradaEmailApi } from '@/lib/financeiro/boleto/entradaEmailApi';
 
 const lanc = (id: string, descricao: string, valor: number, m: Record<string, unknown> = {}) => ({
   id, descricao, valor, status: 'previsto', cancelado: false, vencimento: '2026-12-10', agendado_para: null, pagamento: null,
@@ -72,3 +73,40 @@ export const API_CAIXA_BANCADA: CaixaApi = {
 };
 /** Os arquivos que o gate solta (o conteúdo é o próprio nome: o leitor da bancada lê por ele). */
 export const ARQUIVOS_DA_BANCADA = [...Object.keys(CASOS), 'Boleto_Unimed.pdf', 'boleto-escaneado.pdf'];
+
+/* ── BOLETO D3c — o e-mail de boletos (SINTÉTICO): a área de espera com um de cada estado e o pior caso (remetente e assunto longos,
+   arquivo de nome comprido); o endereço com o slug no teto (40) ── */
+const email = (id: string, m: Record<string, unknown>) => entradaDaLinha({
+  id, mensagem_id: `<${id}@exemplo.invalid>`, remetente: 'cobranca@fornecedor-a.example', assunto: 'Boleto NF 31.283', recebido_em: '2026-11-16T22:00:00Z',
+  arquivo_nome: 'boleto-0031283.pdf', tipo: 'pdf', tamanho_bytes: 5487, storage_path: `cli/entrada/${id}.pdf`, estado: 'a_ler', ...m,
+});
+const PENDENTES = [
+  email('e1', {}),
+  email('e2', { remetente: 'financeiro.contas.a.receber@fornecedor-b-nutricao-animal-centro-oeste.example', assunto: 'Seu boleto de dezembro chegou — Fornecedor B Nutrição Animal e Comércio de Rações do Centro-Oeste Ltda — vencimento 10/12/2026',
+    arquivo_nome: 'boleto com nome de arquivo muito comprido que não cabe na coluna 2026-12.pdf' }),
+  email('e3', { arquivo_nome: 'danfe-4410.pdf', estado: 'nao_reconhecido', motivo: null }),
+  email('e4', { arquivo_nome: 'nota-4410.xml', tipo: 'xml', storage_path: 'cli/entrada/e4.xml' }),
+  email('e5', { arquivo_nome: null, tipo: null, tamanho_bytes: null, storage_path: null, estado: 'sem_anexo', motivo: 'chegou sem PDF nem XML', assunto: 'Segue o link do boleto' }),
+  email('e6', { arquivo_nome: 'planilha.zip', tipo: null, tamanho_bytes: null, storage_path: null, estado: 'recusado', motivo: 'arquivo de 14 MB: acima do limite de 10 MB' }),
+  email('e7', { remetente: 'forwarding-noreply@google.com', assunto: '(#123456789) Confirmação de encaminhamento do Gmail - Receber e-mails de cliente@exemplo.invalid',
+    arquivo_nome: null, tipo: null, tamanho_bytes: null, storage_path: null, estado: 'confirmacao_gmail' }),
+];
+const LOCAL_NO_TETO = 'agropecuaria-exemplo-de-nome-bem-comprido-k3m9q2x7wa';
+const enderecoDaBancada: string | null = `${LOCAL_NO_TETO}@boletos.agroinblue.com.br`;
+export const API_ENTRADA_BANCADA: EntradaEmailApi = {
+  endereco: async () => ({ ok: true, dados: { dominio: 'boletos.agroinblue.com.br', endereco: enderecoDaBancada, criadoEm: '2026-11-16T19:39:00Z' } }),
+  gerar: async (_c, _m, simular) => ({ ok: true, dados: respostaDoEndereco({
+    simulado: simular, endereco: simular ? 'agropecuaria-exemplo-de-nome-bem-comprido-…@boletos.agroinblue.com.br' : enderecoDaBancada, antigo: enderecoDaBancada,
+  }) }),
+  revogar: async (_c, _m, simular) => ({ ok: true, dados: respostaDoEndereco({ simulado: simular, endereco: enderecoDaBancada }) }),
+  pendentes: async () => ({ ok: true, dados: PENDENTES }),
+  /* o conteúdo é o nome do arquivo: o leitor da bancada lê por ele */
+  baixar: async (caminho) => ({ ok: true, dados: new Blob([`%PDF ${PENDENTES.find((p) => p.storagePath === caminho)?.arquivoNome ?? ''}`]) }),
+  marcarLido: async () => ({ ok: true, dados: true }),
+  dispensar: async () => ({ ok: true, dados: true }),
+};
+/** A bancada sem endereço (o "Gerar"). */
+export const API_ENTRADA_BANCADA_SEM_ENDERECO: EntradaEmailApi = {
+  ...API_ENTRADA_BANCADA,
+  endereco: async () => ({ ok: true, dados: { dominio: 'boletos.agroinblue.com.br', endereco: null, criadoEm: null } }),
+};

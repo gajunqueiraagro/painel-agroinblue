@@ -3336,7 +3336,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       )}
       <NovoDeXmlDialog
         open={xmlAberto && !dialogOpen && !notaAberta}
-        onClose={() => { setXmlAberto(false); setLinhasXmlLancadas(new Set()); setXmlDaReceita(null); }}
+        onClose={() => { setXmlAberto(false); setLinhasXmlLancadas(new Set()); if (xmlDaReceita) void receita.refetch(); setXmlDaReceita(null); }}
         clienteId={clienteAtual?.id ?? null}
         fazendas={fazOperacionais}
         fornecedores={hook.fornecedores}
@@ -3345,7 +3345,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         lancadas={linhasXmlLancadas}
         arquivosIniciais={xmlDaReceita}
         notasDaReceita={receita.data?.lista.length ?? null}
-        onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); }}
+        onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); void receita.refetch(); }}
       />
       {receitaAberta && (
         <NotasDaReceitaDialog clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}

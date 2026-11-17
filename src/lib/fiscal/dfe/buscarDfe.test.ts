@@ -6,6 +6,7 @@
  *   Q4 cadeia/credencial recusada: fecha "não chamou" com a cadeia e NUNCA chama a Receita
  *   Q5 sem resposta (rede) e resposta que não se lê: fecha, não registra, o NSU não anda
  *   Q6 137 · 656 · 138: UMA chamada, o relógio e o registro (documentos e eventos só no 138; ha_mais quando ult < max)
+ *   Q7 consulta por chave (consChNFe, Gabriel 17/11): envelope com a chave, o NSU NÃO anda, espera 1 h; chave inválida = 400 sem nada lido
  */
 import { describe, expect, it } from 'vitest';
 import { buscarDfe, type Pecas, type Pedido, type Registro } from '../../../../supabase/functions/_shared/dfe/buscarDfe';
@@ -170,5 +171,61 @@ describe('F3.2 buscarDfe — Q6 a resposta', () => {
     const r = await buscarDfe(pedido(), a.p);
     expect(r.corpo).toMatchObject({ ok: false, cstat: '215' });
     expect(a.d.registros[0]).toMatchObject({ cstat: '215', ultNsu: null, documentos: [] });
+  });
+});
+
+describe('F3.2 buscarDfe — Q7 consulta por chave (consChNFe)', () => {
+  it('chave fora de 44 dígitos = 400 e nada é lido', async () => {
+    const a = pecas();
+    expect((await buscarDfe(pedido({ chave: '123' }), a.p)).corpo).toMatchObject({ recusa: 'chave' });
+    expect(a.d.chamadas).not.toContain('titular');
+  });
+  it('138 com a nota: UM consChNFe da chave pela UF da credencial, grava a nota, o NSU NÃO anda e a próxima espera 1 h', async () => {
+    const a = pecas({ uf: 'MS', ultNsu: 202n, resposta: async () => ({ status: 200, corpo: ret('138', '000000000000203', '000000000000203',
+      `<docZip NSU="000000000000203" schema="resNFe_v1.01.xsd">${await zipar(RES_NFE)}</docZip>`) }) });
+    const r = await buscarDfe(pedido({ chave: CHAVE }), a.p);
+    expect(r.corpo).toMatchObject({ ok: true, pedido: 'consChNFe', cstat: '138', documentos: 1, ult_nsu: '202', nao_antes_de: '2026-11-16T19:00:00.000Z',
+      esquemas: ['resNFe_v1.01.xsd'] });
+    expect(a.d.chamadas.filter((c) => c === 'post')).toHaveLength(1);
+    expect(a.d.envelopes[0]).toContain(`<tpAmb>1</tpAmb><cUFAutor>50</cUFAutor><CPF>${CPF}</CPF><consChNFe><chNFe>${CHAVE}</chNFe></consChNFe>`);
+    expect(a.d.envelopes[0]).not.toContain('distNSU');
+    expect(a.d.registros[0]).toMatchObject({ cstat: '138', ultNsu: null, maxNsu: null, naoAntesDe: '2026-11-16T19:00:00.000Z',
+      detalhe: expect.objectContaining({ pedido: 'consChNFe', uf: 50 }) });
+    expect(a.d.registros[0].documentos[0]).toMatchObject({ chave: CHAVE });
+  });
+  it('137/640 por chave: ok=false, nada gravado de documento, o NSU não anda', async () => {
+    const a = pecas({ uf: 'MS', resposta: async () => ({ status: 200, corpo: ret('640', '000000000000000', '000000000000000') }) });
+    const r = await buscarDfe(pedido({ chave: CHAVE }), a.p);
+    expect(r.corpo).toMatchObject({ ok: false, pedido: 'consChNFe', cstat: '640', documentos: 0 });
+    expect(a.d.registros[0]).toMatchObject({ cstat: '640', ultNsu: null, maxNsu: null, documentos: [] });
+  });
+  it('o ensaio por chave diz o pedido e a UF, sem chamar nem gravar', async () => {
+    const a = pecas({ uf: 'MS' });
+    const r = await buscarDfe(pedido({ chave: CHAVE, ensaio: true }), a.p);
+    expect(r.corpo).toMatchObject({ ok: true, ensaio: true, uf: 50, pedido: 'consChNFe' });
+    expect(a.d.chamadas).not.toContain('post'); expect(a.d.registros).toEqual([]);
+  });
+});
+
+describe('VERA-INVESTIGACAO — a resposta bruta na trilha', () => {
+  it('137: o retDistDFeInt inteiro vai ao detalhe', async () => {
+    const a = pecas();
+    await buscarDfe(pedido(), a.p);
+    expect(a.d.registros[0].detalhe.bruto).toBe('<retDistDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><tpAmb>1</tpAmb><cStat>137</cStat>'
+      + '<xMotivo>motivo 137</xMotivo><dhResp>2026-11-16T15:00:00-03:00</dhResp><ultNSU>000000000000000</ultNSU><maxNSU>000000000000000</maxNSU></retDistDFeInt>');
+  });
+  it('138: o conteúdo de cada docZip vira o tamanho (nada da nota na trilha); os atributos ficam', async () => {
+    const z = await zipar(RES_NFE);
+    const a = pecas({ resposta: async () => ({ status: 200, corpo: ret('138', '000000000000001', '000000000000001',
+      `<docZip NSU="000000000000001" schema="resNFe_v1.01.xsd">${z}</docZip>`) }) });
+    await buscarDfe(pedido(), a.p);
+    const bruto = String(a.d.registros[0].detalhe.bruto);
+    expect(bruto).toContain(`<docZip NSU="000000000000001" schema="resNFe_v1.01.xsd">[${z.length} b64]</docZip>`);
+    expect(bruto).not.toContain(z.slice(0, 20));
+  });
+  it('o que não se lê guarda o começo do corpo no fechamento', async () => {
+    const a = pecas({ resposta: async () => ({ status: 403, corpo: '<html><title>403 - Forbidden</title></html>' }) });
+    await buscarDfe(pedido(), a.p);
+    expect(a.d.fechados[0].detalhe.bruto).toBe('<html><title>403 - Forbidden</title></html>');
   });
 });

@@ -115,6 +115,27 @@ export const SITUACAO_NA_TELA: Record<SituacaoNaLista, { rotulo: string; cor: st
   ignorada: { rotulo: 'Ignorada', cor: 'bg-zinc-200 text-zinc-700', dica: 'marcada para não lançar' },
 };
 
+/** F34-SITUACAO-01 + NJ-NOTAS-LENTAS — "já no sistema" pelo critério do "+ Da nota", numa pergunta só (`fn_notas_ja_lancadas`, equivalente à
+ *  `fn_nota_ja_lancada` sem parcelas: achado vivo pela chave, pelo nº com o fornecedor do emitente ou pelo nº num documento). A resposta
+ *  `[{chave, ja_lancada}]` → as chaves já lançadas; fora do formato = `null` (quem lê trata como falha, nunca como "Nova"). */
+export function chavesJaLancadas(dados: unknown): Set<string> | null {
+  if (!Array.isArray(dados)) return null;
+  const saida = new Set<string>();
+  for (const d of dados) {
+    if (!d || typeof d !== 'object') return null;
+    const chave: unknown = Reflect.get(d, 'chave');
+    const ja: unknown = Reflect.get(d, 'ja_lancada');
+    if (typeof chave !== 'string' || typeof ja !== 'boolean') return null;
+    if (ja) saida.add(chave);
+  }
+  return saida;
+}
+/** só estas perguntam ao banco: a cancelada/ignorada/ligada não muda de aba por isso */
+export function precisaConferirLancamento(l: LinhaRecebida, chavesNoSistema: ReadonlySet<string>): boolean {
+  const sit = situacaoNaLista(l, chavesNoSistema);
+  return sit === 'nova' || sit === 'pede_ciencia' || sit === 'esperando_xml';
+}
+
 /** total das que valem (sem canceladas/ignoradas) */
 export const totalDaLista = (lista: readonly NotaNaLista[]): number =>
   lista.filter((n) => n.sit !== 'cancelada' && n.sit !== 'ignorada').reduce((s, n) => s + (n.valorCent ?? 0), 0);

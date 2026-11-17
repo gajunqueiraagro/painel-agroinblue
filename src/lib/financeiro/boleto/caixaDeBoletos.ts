@@ -11,9 +11,10 @@ import type {
   AvisoDoBoleto, CandidatoDoBoleto, ItemDaCaixa, LancamentoDaCaixa, ListaDaCaixa, RespostaDeEntrar, SituacaoDoTitulo,
 } from './caixaApi';
 
-export type AbaDaCaixa = 'chegando' | 'na_caixa' | 'sem_par' | 'todos';
+/* BOLETO D3c: "Por e-mail" = a área de espera do que chegou no endereço de boletos (a lista é da `entrada_arquivos`, não dos boletos) */
+export type AbaDaCaixa = 'chegando' | 'por_email' | 'na_caixa' | 'sem_par' | 'todos';
 export const ABAS_DA_CAIXA: readonly { valor: AbaDaCaixa; rotulo: string }[] = [
-  { valor: 'chegando', rotulo: 'Chegando' }, { valor: 'na_caixa', rotulo: 'Na caixa' },
+  { valor: 'chegando', rotulo: 'Chegando' }, { valor: 'por_email', rotulo: 'Por e-mail' }, { valor: 'na_caixa', rotulo: 'Na caixa' },
   { valor: 'sem_par', rotulo: 'Sem par' }, { valor: 'todos', rotulo: 'Todos' },
 ];
 
@@ -108,7 +109,7 @@ export const rotuloDaSituacao = (s: SituacaoDoTitulo): string => ROTULO_DA_SITUA
 
 /** Os itens gravados que cada aba mostra (Chegando é dos arquivos desta sessão, não da lista). */
 export function itensDaAba(lista: ListaDaCaixa | null, aba: AbaDaCaixa): ItemDaCaixa[] {
-  if (!lista || aba === 'chegando') return [];
+  if (!lista || aba === 'chegando' || aba === 'por_email') return [];
   if (aba === 'todos') return lista.itens;
   const s: SituacaoDoTitulo = aba === 'na_caixa' ? 'novo' : 'sem_par';
   return lista.itens.filter((i) => i.boleto.situacao === s);
