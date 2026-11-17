@@ -11,7 +11,7 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { PainelDaConta, FUNDO_ESCURO } from '@/components/conciliacao/PainelDaConta';
-import { larguraDaConta } from '@/lib/conciliacao/painelDaConta';
+import { contaNaTela, larguraDaConta } from '@/lib/conciliacao/painelDaConta';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab, ABAS_ESPELHO, type AbaEspelho } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
@@ -755,6 +755,27 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      número de contas (TABELA-ALTURA-FIXA-01); só a tabela de cada um rola. O cabeçalho do card saiu do rolador, então o
      `thead` gruda no topo dele (a medida do cabeçalho do card, PR-CONCILIA-SALDOS-UI-01, não é mais necessária). */
   const { ref: refBlocos, altura: alturaBlocos } = useAlturaAteOFim({ ativo: vistaExtrato === 'conciliacao' && !!resumo, folga: 8, minimo: 240 });
+  /* CONC-PAINEL-CONTA-01 (Gabriel 12:42) — a LARGURA dos blocos, para a Conta nunca empurrar o Resumo para fora (o card Saldos é `max-content`) */
+  const [elBlocos, setElBlocos] = useState<HTMLElement | null>(null);
+  const [larguraBlocos, setLarguraBlocos] = useState<number | null>(null);
+  const [barraSaldos, setBarraSaldos] = useState(0);
+  const refDosBlocos = useCallback((el: HTMLElement | null) => { refBlocos(el); setElBlocos(el); }, [refBlocos]);
+  useEffect(() => {
+    if (!elBlocos) return;
+    /* a barra de rolagem que EXISTE no rolador da tabela (0 sem barra, ou com barra sobreposta) */
+    const medir = () => {
+      setLarguraBlocos(elBlocos.clientWidth);
+      const rol = elBlocos.querySelector<HTMLElement>('[data-testid="rolagem-saldos"]');
+      setBarraSaldos(rol ? rol.offsetWidth - rol.clientWidth : 0);
+    };
+    medir();
+    const obs = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(medir);
+    obs?.observe(elBlocos);
+    const rol = elBlocos.querySelector<HTMLElement>('[data-testid="rolagem-saldos"]');
+    if (rol) obs?.observe(rol);
+    window.addEventListener('resize', medir);
+    return () => { obs?.disconnect(); window.removeEventListener('resize', medir); };
+  }, [elBlocos]);
   /* A altura do `thead` fixo (colunas + Total) — PR-CONCILIA-GRUPOS-STICKY-02. A faixa de grupo gruda logo abaixo dele.
      Medida, não escrita: o Total muda de altura com a fonte. Callback ref: o card só monta na aba Conciliação. */
   const [alturaThead, setAlturaThead] = useState(0);
@@ -813,6 +834,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const larguraConta = useMemo(() => larguraDaConta(
     ['Total', ...gruposSaldos.flatMap(g => [g.rotulo, ...g.contas.map(c => c.label)])], medirTexto10Negrito,
   ), [gruposSaldos]);
+  /* o teto da Conta pelo espaço (`contaNaTela`): o Resumo nunca sai da tela */
+  const larguraContaNaTela = contaNaTela(larguraConta, larguraBlocos, REGUA_SALDOS.reduce((a, b) => a + b, 0), barraSaldos);
   /* CONC-ORDENAR-01 (regra soberana de 29/10, gate check-ui-ordenar): Conta, Sistema, Extrato e Diferença ordenam as contas DENTRO de cada
      grupo (o Total e as faixas dos grupos ficam onde estão). Sem clique, a ordem é a de sempre (a do cadastro, `agruparContasPorTipo`). */
   type ContaDoGrupo = (typeof gruposSaldos)[number]['contas'][number];
@@ -1310,7 +1333,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 (P141, 3.05fr 1.7fr 0.7fr); o Status virou a faixa acima. Os dois blocos vão até o fim da janela (`useAlturaAteOFim`): a
                 altura nunca depende do número de contas e só a tabela de cada um rola. Os cabeçalhos têm a MESMA altura (26px) e o das
                 colunas também (22px): a 1ª linha do Resumo (Saldo inicial) fica na altura do Total. ════ */}
-            <div ref={refBlocos} className="grid gap-2 px-3" style={{gridTemplateColumns:'minmax(0,1fr) 260px', height:alturaBlocos}}
+            {/* CONC-PAINEL-CONTA-01 (Gabriel 12:42) — SEM ESPAÇO SOBRANDO: o card Saldos tem a largura da TABELA (`max-content`: a Conta pelo
+                maior nome + a régua; com a barra de rolagem, se houver) e o Resumo do mês CRESCE com o resto (piso de 260px). */}
+            <div ref={refDosBlocos} className="grid gap-2 px-3" style={{gridTemplateColumns:'max-content minmax(260px,1fr)', height:alturaBlocos}}
                  data-testid="blocos-conciliacao">
 
               {/* ── Saldos por conta ── */}
@@ -1351,16 +1376,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 </div>
 
                 {/* ⚠ SÓ A TABELA ROLA (P166): o cabeçalho do card fica fora do rolador; o das colunas e o Total grudam no topo dele. */}
-                <div className="min-h-0 flex-1 overflow-y-auto" data-testid="rolagem-saldos">
+                {/* CONC-PAINEL-CONTA-01 — o lugar da barra fica RESERVADO (`scrollbar-gutter: stable`): a barra que aparece/some com a altura não
+                    muda a largura da Conta (o desloca acusou 8px ao voltar para "Todas") */}
+                <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]" data-testid="rolagem-saldos">
                 {/* ⚠ `table-layout: FIXED` COM COLGROUP EM px — CONC-SALDOS-LAYOUT-02. As colunas da direita tem px medidos no pior
                     texto (`REGUA_SALDOS`) e a Conta e' a unica que estica; o nome corta numa linha so' quando nao cabe (inteiro no
                     `title` da linha) — de 1024px para cima, com os 260px do Resumo, o nome real cabe inteiro (P166). */}
                 {/* CONC-PAINEL-CONTA-01 (item 3) — a Conta na largura do MAIOR nome (medido), não "o resto": Sistema · Extrato · Diferença
                     ficam perto do nome; a tabela não estica com a janela (largura = Conta + a régua) */}
-                <table className="border-collapse" style={{fontSize:'10px', tableLayout:'fixed', width: larguraConta + REGUA_SALDOS.reduce((a, b) => a + b, 0), maxWidth: '100%'}}
+                <table className="border-collapse" style={{fontSize:'10px', tableLayout:'fixed', width: larguraContaNaTela + REGUA_SALDOS.reduce((a, b) => a + b, 0)}}
                   data-testid="tabela-saldos">
                   <colgroup>
-                    <col style={{width:`${larguraConta}px`}} />
+                    <col style={{width:`${larguraContaNaTela}px`}} />
                     {REGUA_SALDOS.map((w, i) => <col key={i} style={{width:`${w}px`}} />)}
                   </colgroup>
                   {/* O Total mora no `thead`: gruda junto com o cabeçalho das colunas no topo do rolador. A borda inferior é sombra

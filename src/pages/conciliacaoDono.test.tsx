@@ -842,14 +842,15 @@ describe('T9 — nenhum arquivo tocado importa a conta antiga', () => {
 
 /* ── CONC-CARDS-ORDEM-01 → P141 → P166 (CONC-TELA-02): a faixa do status em cima, e DOIS blocos: Saldos por conta | Resumo do mês ── */
 describe('ORDEM — a faixa do status e os 2 blocos: Saldos por conta | Resumo do mês (P166)', () => {
-  it('a faixa vem antes dos blocos; o grid tem Saldos (o resto) e Resumo (260px); o card Status não existe', async () => {
+  it('a faixa vem antes dos blocos; o grid tem Saldos (a largura da tabela) e Resumo (o resto, piso 260px); o card Status não existe', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
     const faixa = screen.getByTestId('faixa-status');
     const grid = screen.getByTestId('blocos-conciliacao');
     const antes = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     expect(antes(faixa, grid)).toBe(true);
-    expect(grid.style.gridTemplateColumns).toBe('minmax(0,1fr) 260px');
+    /* CONC-PAINEL-CONTA-01 (Gabriel 12:42): sem espaço sobrando — Saldos na largura da tabela, o Resumo cresce */
+    expect(grid.style.gridTemplateColumns).toBe('max-content minmax(260px,1fr)');
     expect([...grid.children].map((c) => c.getAttribute('data-testid'))).toEqual(['card-saldos', 'card-resumo']);
     expect(within(grid.children[0] as HTMLElement).getByText('Saldos por conta')).toBeInTheDocument();
     expect(within(grid.children[1] as HTMLElement).getByText('Resumo do mês')).toBeInTheDocument();

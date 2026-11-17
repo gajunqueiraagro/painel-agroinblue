@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fonteDaConta, larguraDaConta, passosDaConta, PISO_DA_CONTA, TETO_DA_CONTA } from '@/lib/conciliacao/painelDaConta';
+import { contaNaTela, fonteDaConta, larguraDaConta, passosDaConta, PISO_DA_CONTA, RESUMO_MINIMO, TETO_DA_CONTA } from '@/lib/conciliacao/painelDaConta';
 import type { LinhaResumo, StatusDono } from '@/lib/conciliacao/resumoDoDono';
 
 const NIVEL_CONTA: LinhaResumo['nivel'] = 'conta';
@@ -61,6 +61,17 @@ describe('as regras (puras)', () => {
     expect(fonteDaConta(false, { tipo_arquivo: 'ofx', saldo_declarado_data: '2026-11-13', data_importacao: null }).rotulo).toBe('OFX até 13/11/2026');
     expect(fonteDaConta(false, null).tipo).toBe('sem_extrato');
     expect(fonteDaConta(false, { tipo_arquivo: null, saldo_declarado_data: null, data_importacao: null }).rotulo).toBe('Arquivo');
+  });
+  it('a Conta na tela nunca empurra o Resumo (piso 260) para fora; com espaço, a do nome', () => {
+    const regua = 378;
+    expect(contaNaTela(219, 1400, regua)).toBe(219);
+    const apertado = contaNaTela(219, 840, regua, 15);
+    expect(apertado).toBe(840 - 24 - 8 - RESUMO_MINIMO - regua - 2 - 15);
+    expect(24 + apertado + regua + 2 + 15 + 8 + RESUMO_MINIMO).toBeLessThanOrEqual(840);
+    /* sem barra de rolagem, nada se reserva para ela */
+    expect(contaNaTela(219, 840, regua)).toBe(840 - 24 - 8 - RESUMO_MINIMO - regua - 2);
+    expect(contaNaTela(219, 500, regua)).toBe(PISO_DA_CONTA);
+    expect(contaNaTela(219, null, regua)).toBe(219);
   });
   it('a coluna Conta = o maior nome + a folga, entre o piso e o teto', () => {
     const medir = (t: string) => t.length * 6;

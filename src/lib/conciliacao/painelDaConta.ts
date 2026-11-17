@@ -62,3 +62,12 @@ export function larguraDaConta(nomes: readonly string[], medir: (t: string) => n
   const maior = nomes.reduce((m, n) => Math.max(m, medir(n)), 0);
   return Math.min(TETO_DA_CONTA, Math.max(PISO_DA_CONTA, Math.ceil(maior + FOLGA_DA_CONTA)));
 }
+
+/** CONC-PAINEL-CONTA-01 (Gabriel 12:42) — a Conta NA TELA: a do maior nome, mas sem empurrar o Resumo (piso de 260px) para fora — os blocos
+ *  − o padding (24) − o vão (8) − o Resumo (260) − a régua − as bordas (2) − a barra de rolagem que EXISTE (medida: 0 sem barra); nunca
+ *  abaixo do piso. Sem medida ainda, a do nome. */
+export const RESUMO_MINIMO = 260;
+export function contaNaTela(larguraDoNome: number, larguraDosBlocos: number | null, regua: number, barra = 0): number {
+  if (larguraDosBlocos == null) return larguraDoNome;
+  return Math.max(PISO_DA_CONTA, Math.min(larguraDoNome, larguraDosBlocos - 24 - 8 - RESUMO_MINIMO - regua - 2 - barra));
+}
