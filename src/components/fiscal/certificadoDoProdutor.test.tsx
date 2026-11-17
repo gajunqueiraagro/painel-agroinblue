@@ -81,7 +81,9 @@ describe('CertificadoDoProdutor', () => {
         { nome: 'AC SINTETICA v5', ate: '2029-01-01T00:00:00.000Z' }, { nome: 'AC Raiz Brasileira v5', ate: '2029-03-02T23:59:38.000Z' }] } }, error: null };
     } });
     fireEvent.click(await screen.findByTestId('certificado-testar'));
-    await waitFor(() => expect(screen.getByTestId('certificado-teste').textContent).toContain('PRODUTORA SINTETICA · 529.982.247-25'));
+    await waitFor(() => expect(screen.getByTestId('certificado-teste').textContent).toContain('PRODUTORA SINTETICA · ***.982.247-**'));
+    /* o CPF inteiro não sai nem no title (tooltip) do Titular */
+    expect(screen.getByTestId('certificado-teste').innerHTML).not.toMatch(/529\.?982\.?247-?25/);
     expect(chamadas).toEqual([{ nome: 'fiscal-dfe-buscar', corpo: { titular_id: 't1', ambiente: 'producao', ensaio: true } }]);
     const txt = screen.getByTestId('certificado-teste').textContent;
     expect(txt).toContain('até 16/11/2027');
@@ -94,5 +96,23 @@ describe('CertificadoDoProdutor', () => {
     fireEvent.click(await screen.findByTestId('certificado-testar'));
     await waitFor(() => expect(screen.getByTestId('certificado-teste').textContent).toContain('não veio inteira'));
     expect(screen.getByTestId('certificado-teste').textContent).toContain('✗ falta a AC no arquivo');
+  });
+});
+
+describe('CERT-ABA-UX-01 (Amanda 16/11: salvou, mas parecia que não)', () => {
+  it('sem arquivo escolhido não há "remover"; depois de subir com sucesso, arquivo e senha limpos e o aviso diz que não precisa Salvar', async () => {
+    montar({ perfil: 'gestor_cliente', funcao: () => ({ data: { ok: true, acao: 'subiu', avisos: [] }, error: null }) });
+    const area = await screen.findByTestId('certificado-arquivo');
+    expect(area.textContent).not.toContain('remover');
+    const entrada = area.querySelector('input[type="file"]');
+    if (!entrada) throw new Error('sem campo de arquivo');
+    fireEvent.change(entrada, { target: { files: [new File([new Uint8Array([48, 130, 1])], 'natalino.pfx', { type: 'application/x-pkcs12' })] } });
+    await waitFor(() => expect(screen.getByTestId('certificado-arquivo').textContent).toContain('remover'));
+    fireEvent.change(screen.getByTestId('certificado-senha'), { target: { value: 'segredo' } });
+    fireEvent.click(screen.getByTestId('certificado-subir'));
+    await waitFor(() => expect(screen.getByTestId('certificado-recado').textContent).toBe('Certificado guardado — não precisa clicar em Salvar.'));
+    expect(screen.getByTestId('certificado-arquivo').textContent).not.toContain('natalino.pfx');
+    expect(screen.getByTestId('certificado-arquivo').textContent).not.toContain('remover');
+    expect(screen.getByTestId('certificado-senha')).toHaveProperty('value', '');
   });
 });

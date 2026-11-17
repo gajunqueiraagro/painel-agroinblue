@@ -1,0 +1,9 @@
+{
+  "name": "agroinblue-dfe-mtls",
+  "private": true,
+  "type": "module",
+  "description": "NOTAS-RECEITA-A1-01 — Lambda (sa-east-1, Function URL): o POST mTLS da Distribuição DF-e da Receita (renegociação TLS que o Deno do Supabase não faz). Sem dependência: só node:* e o AWS SDK do próprio runtime.",
+  "scripts": {
+    "zip": "../../node_modules/.bin/esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --external:@aws-sdk/* --outfile=dist/index.mjs && cd dist && rm -f ../dfe-mtls.zip && zip -q -X ../dfe-mtls.zip index.mjs"
+  }
+}

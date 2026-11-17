@@ -79,6 +79,9 @@ import { prefillDeDuplicar, type PrefillDuplicar } from '@/lib/financeiro/prefil
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { NovoDeXmlDialog, notaParaAPrevia } from '@/components/financeiro-v2/NovoDeXmlDialog';
 import { NovoMenuLancamentos } from '@/components/financeiro-v2/NovoMenuLancamentos';
+import { NotasDaReceitaDialog } from '@/components/fiscal/NotasDaReceitaDialog';
+import { useNotasDaReceita } from '@/hooks/useNotasDaReceita';
+import { pedemAcao } from '@/lib/fiscal/notasDaReceita';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { contarBoletosQuePedemAcao } from '@/lib/financeiro/boleto/caixaApi';
 import { NotaFiscalDialog, type NotaParaLancar } from '@/components/financeiro-v2/NotaFiscalDialog';
@@ -683,6 +686,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     void contarBoletosQuePedemAcao(clienteAtual.id).then((n) => { if (vivo) setBoletosPedemAcao(n); });
     return () => { vivo = false; };
   }, [clienteAtual?.id, caixaAberta]);
+  /* NOTAS-RECEITA F3.4 MÍNIMA — as notas que a busca da Receita gravou (só leitura): o selo do "+ Novo" (D2), a lista, e o XML que o
+     "Lançar" entrega ao "Da nota fiscal" de hoje (D1) */
+  const receita = useNotasDaReceita(clienteAtual?.id ?? null);
+  const [receitaAberta, setReceitaAberta] = useState(false);
+  const [xmlDaReceita, setXmlDaReceita] = useState<File[] | null>(null);
+  const notasPedemAcao = receita.data ? pedemAcao(receita.data.lista) : null;
   /* FIN-NOTA-PDF-01b — o prefill do XML (`prefillDaNota`) OU o do modal da nota (`prefillDoModal`: a nota + tudo o que foi escolhido) */
   const [prefillXml, setPrefillXml] = useState<React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] | null>(null);
   const [linhaXmlAberta, setLinhaXmlAberta] = useState<string | null>(null);
@@ -1799,7 +1808,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      Documento. A entrada do Voltar não muda posição, tamanho nem linha de nenhum outro botão, e o cabeçalho tem a mesma altura
      com e sem ele. */
   const menuNovo = (className?: string) => (
-    <NovoMenuLancamentos className={className} boletosPedemAcao={boletosPedemAcao}
+    <NovoMenuLancamentos className={className} boletosPedemAcao={boletosPedemAcao} notasDaReceita={notasPedemAcao}
       onEmBranco={openNew} onDaNota={() => setXmlAberto(true)} onDosBoletos={() => setCaixaAberta(true)} />
   );
   const blocoDeAcoesDesktop = (
@@ -3327,14 +3336,23 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       )}
       <NovoDeXmlDialog
         open={xmlAberto && !dialogOpen && !notaAberta}
-        onClose={() => { setXmlAberto(false); setLinhasXmlLancadas(new Set()); }}
+        onClose={() => { setXmlAberto(false); setLinhasXmlLancadas(new Set()); setXmlDaReceita(null); }}
         clienteId={clienteAtual?.id ?? null}
         fazendas={fazOperacionais}
         fornecedores={hook.fornecedores}
         onAbrirLancamento={abrirLancamentoDoXml}
         onAbrirNota={(nota, linhaId) => setNotaAberta({ nota, linhaId })}
         lancadas={linhasXmlLancadas}
+        arquivosIniciais={xmlDaReceita}
+        notasDaReceita={receita.data?.lista.length ?? null}
+        onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); }}
       />
+      {receitaAberta && (
+        <NotasDaReceitaDialog clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
+          erro={receita.error ? (receita.error as Error).message : null}
+          aoFechar={() => setReceitaAberta(false)}
+          aoLancar={(arquivo) => { setReceitaAberta(false); setXmlDaReceita([arquivo]); setXmlAberto(true); }} />
+      )}
 
       {notaAberta && clienteAtual?.id && (
         <NotaFiscalDialog

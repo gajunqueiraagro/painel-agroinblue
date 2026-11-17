@@ -52,7 +52,7 @@ type Corpo = Record<string, unknown>;
 export type Resposta = { status: 200 | 400 | 401 | 403 | 404 | 409 | 422 | 500 | 502; corpo: Corpo };
 const nao = (status: Resposta['status'], recusa: string, frase: string, extra: Corpo = {}): Resposta =>
   ({ status, corpo: { ok: false, recusa, frase, ...extra } });
-const erroCurto = (e: unknown) => `${e instanceof Error ? e.name : typeof e}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200);
+const erroCurto = (e: unknown) => `${e instanceof Error ? e.name : typeof e}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 400);
 function resumoDaCadeia(c: CadeiaConferida | null) {
   if (!c) return null;
   if (c.ok === true) return { ok: true, caminho: c.caminho, raiz: c.raiz };

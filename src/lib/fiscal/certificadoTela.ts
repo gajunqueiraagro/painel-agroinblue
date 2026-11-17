@@ -5,6 +5,7 @@
  * cada passo da trilha e o que a borda respondeu (em erro, o corpo mora em `error.context`, um `Response` — a lição do ACESSOS-TELA-01).
  */
 import { dataBR } from '@/lib/datas/dataBR';
+import { documentoNaTabela } from '@/lib/fiscal/documentoNaTabela';
 export { FRASE_A3_NAO_SERVE } from '../../../supabase/functions/_shared/certificadoA1';
 
 export type SituacaoDoCertificado = 'ativo' | 'substituido' | 'revogado' | 'vencido' | 'recusado_sefaz';
@@ -97,8 +98,9 @@ export type ResultadoDoTeste =
   | { ok: true; titular: string; validade: string; cadeia: string }
   | { ok: false; frase: string; cadeia: string | null };
 
-const cpfOuCnpj = (d: string) => (d.length === 11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-  : d.length === 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : d);
+/* o nome do certificado é "NOME:CPF" — na tela (texto e title) o CPF vai mascarado, como no resto (Chat 16/11 17:07) */
+const separarDoc = (nome: string) => nome.split(/:(?=\d{11}$|\d{14}$)/);
+const semCpfInteiro = (nome: string) => { const [n, doc] = separarDoc(nome); return doc ? `${n} · ${documentoNaTabela(doc)}` : nome; };
 function lerCaminho(cadeia: unknown): { nome: string; ate: string }[] {
   const c: unknown = cadeia && typeof cadeia === 'object' ? Reflect.get(cadeia, 'caminho') : null;
   if (!Array.isArray(c)) return [];
@@ -122,11 +124,10 @@ export async function lerRespostaDoTeste(res: { data: unknown; error: unknown })
   const acs = caminho.slice(1).map((p) => p.nome).join(' → ');
   const ensaio: unknown = corpo && typeof corpo === 'object' ? Reflect.get(corpo, 'ensaio') : null;
   if (res.error == null && ensaio === true && okCadeia === true && caminho.length >= 2) {
-    const [nome, doc] = caminho[0].nome.split(/:(?=\d{11}$|\d{14}$)/);
-    return { ok: true, titular: doc ? `${nome} · ${cpfOuCnpj(doc)}` : nome, validade: `até ${dataBR(caminho[0].ate.slice(0, 10))}`,
+    return { ok: true, titular: semCpfInteiro(caminho[0].nome), validade: `até ${dataBR(caminho[0].ate.slice(0, 10))}`,
       cadeia: `${acs} ✓ ICP-Brasil` };
   }
   const motivo = cadeia && typeof cadeia === 'object' ? texto(cadeia, 'motivo') : null;
   return { ok: false, frase: texto(corpo, 'frase') ?? 'Não consegui testar o certificado. Nada foi pedido à Receita.',
-    cadeia: caminho.length > 0 ? `${caminho.map((p) => p.nome).join(' → ')}${motivo ? ` ✗ ${MOTIVO_DA_CADEIA[motivo] ?? motivo}` : ''}` : null };
+    cadeia: caminho.length > 0 ? `${caminho.map((p) => semCpfInteiro(p.nome)).join(' → ')}${motivo ? ` ✗ ${MOTIVO_DA_CADEIA[motivo] ?? motivo}` : ''}` : null };
 }
