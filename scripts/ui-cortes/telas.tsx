@@ -1825,6 +1825,27 @@ if (tela === 'mesclar') {
     raiz.render(<TrocarFornecedorDialog clienteId="cli" ids={['x']} onClose={() => {}} />);
   };
   void montarTroca();
+} else if (tela === 'conferir-rateio') {
+  /* RATEIO-HIGINO-01 — o "Conferir rateio": 23 itens SINTÉTICOS da conta comum (a forma de nov/26: 3 fazendas, rótulo R_D15, um pago, um
+     sem rótulo ligado) + 2 "outros do mês"; descrições longas (o pior caso de texto) */
+  const montarRateio = async () => {
+    const { ConferirRateioDialog } = await import('@/components/financeiro-v2/ConferirRateioDialog');
+    const fazs = ['faz-1', 'faz-2', 'faz-3'];
+    const itens = Array.from({ length: 25 }, (_, i) => ({
+      id: `it-${i}`, descricao: i % 4 === 0 ? `Item Sintetico de Descricao Bem Comprida Numero ${i + 1} Conta de Energia Eletrica da Sede` : `Item ${i + 1}`,
+      fazenda_id: fazs[i % 3], plano_conta_id: i % 2 ? 'pc-1' : 'pc-2', valor: 12345.67 + i * 101.01, data_vencimento: `2026-11-${String(5 + (i % 20)).padStart(2, '0')}`,
+      data_competencia: '2026-11-01', numero_documento: i >= 23 ? 'R_Folha' : 'R_D15', tipo_documento: 'Recibo',
+      status_transacao: i === 1 ? 'realizado' : 'programado', data_pagamento: i === 1 ? '2026-11-05' : null, conciliado_em: null,
+    }));
+    g.__bancoBancada = { from: (t: string) => (t === 'financeiro_lancamentos_v2' ? itens : []), rpc: () => null };
+    raiz.render(<ConferirRateioDialog clienteId="cli" nomeDaConta="Conta Comum Sintetica de Nome Longo"
+      pagamento={{ id: 'pag', descricao: 'Rateio D15 Sintetico', valorCent: 99999999, vencimento: '2026-11-16', contaDestinoId: 'cc', status: 'programado', dataPagamento: null }}
+      fazendas={[{ id: 'faz-1', codigo: 'F1', nome: 'Faz. Um' }, { id: 'faz-2', codigo: 'F2', nome: 'Faz. Dois' }, { id: 'faz-3', codigo: 'ADM', nome: 'Administrativo' }]}
+      contasDoPlano={[{ id: 'pc-1', subcentro: 'Comunicação e Energia Pecuária Sintetica', centro_custo: 'Administração', tipo_operacao: '2-Saídas' },
+        { id: 'pc-2', subcentro: 'Contab. Jurídico e Consult. Pecuária', centro_custo: 'Administração', tipo_operacao: '2-Saídas' }]}
+      criarItem={async () => null} onClose={() => {}} onGravou={() => {}} />);
+  };
+  void montarRateio();
 } else if (tela === 'plano-contas') {
   /* P172 — Cadastros › Plano de Contas (dado SINTÉTICO, `dados/planoContas.ts`); `&perfil=cliente` = o cliente (só leitura, sem ações) */
   if (q.get('perfil') === 'cliente') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Bancada' }, clientes: [{ id: 'cli', nome: 'Cliente Bancada' }],
