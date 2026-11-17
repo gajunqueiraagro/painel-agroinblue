@@ -300,6 +300,16 @@ const CENARIOS = [
       await p.locator('[data-testid="input-da-caixa"]').setInputFiles(nomes.map((n) => ({ name: n, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
       await espera(p, 900); }],
     ['abrir a senha', clicar('[data-testid="sugestao-de-senha"]')], ['aba Todos de novo', botao(/^Todos/)],
+    ['aba Por e-mail (D3c)', botao(/^Por e-mail/)], ['ler o PDF do e-mail', async (p) => { await p.locator('[data-testid="ler-do-email"]').first().click(); await espera(p, 900); }],
+  ] },
+  /* BOLETO D3c — o endereço de boletos: trocar de modo (ver → trocar → prévia → cancelar → revogar) e de provedor não move o bloco do
+     endereço, o da ação, as abas do passo a passo nem o rodapé (os blocos têm altura fixa; a lista dos passos é `data-desloca-livre`) */
+  { nome: 'endereco-boletos', url: 'tela=caixa-boletos', regiao: '[data-testid="endereco-de-boletos"]',
+    antes: clicar('[data-testid="abrir-endereco-de-boletos"]'), estados: [
+    ['trocar', clicar('[data-testid="trocar-endereco"]')], ['prévia sem motivo', clicar('[data-testid="previa-do-endereco"]')],
+    ['motivo + prévia', async (p) => { await p.locator('[data-testid="motivo-do-endereco"]').fill('o endereço foi divulgado'); await clicar('[data-testid="previa-do-endereco"]')(p); }],
+    ['cancelar', botao(/^Cancelar$/)], ['revogar', clicar('[data-testid="revogar-endereco"]')],
+    ['Hotmail / Outlook.com', botao(/^Hotmail/)], ['Microsoft 365', botao(/^Microsoft 365/)], ['Gmail', botao(/^Gmail$/)],
   ] },
   /* LANC-PATRIMONIO-VINCULO-01 — o minimodal do "Patrimônio": trocar a aba, escolher o bem e buscar não move as abas, a prévia nem o rodapé
      (a lista e o formulário são `data-desloca-livre`, a prévia e o motivo têm lugar fixo) */

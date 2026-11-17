@@ -8,10 +8,16 @@
  * ⚠ NESTA FATIA NADA SE LIGA: ligar/desligar/substituir/marcar é a fatia (b). Daqui, nenhum lançamento muda.
  * ⚠ MODAL DE TAMANHO FIXO, UM SCROLLPORT (a tabela), a área de soltar e o rodapé no MESMO lugar em todas as abas (nada se desloca).
  * ⚠ SENHA: a linha pede a senha (sugestões = 5 primeiros dígitos dos titulares); ela não é guardada.
+ * ⚠ BOLETO D3c — "Por e-mail": o que chegou no endereço de boletos do cliente (a área de espera). "ler" põe o PDF em "Chegando" pelo
+ *   MESMO leitor e a MESMA prévia; "dispensar" tira a linha (sem anexo, confirmação do Gmail, recusado, o que não interessa). O botão
+ *   "E-mail de boletos" abre o endereço (gerar/trocar/revogar + passo a passo).
  * ⚠ RÉGUA DA CASA: cabeçalho 22/9,5 navy preso, linha 19/10, data dd/mm/aaaa, valor à direita; texto em tabela corta com "…" e o
  *   inteiro no `title`; número/valor/data nunca cortam.
  */
 import { useState } from 'react';
+import { EnderecoDeBoletosDialog } from './EnderecoDeBoletosDialog';
+import type { EntradaDoEmail, EntradaEmailApi } from '@/lib/financeiro/boleto/entradaEmailApi';
+import { fraseDaEntrada, podeLer, seloDaEntrada } from '@/lib/financeiro/boleto/entradaEmail';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -137,22 +143,60 @@ function LinhaGravada({ i }: { i: ItemDaCaixa }) {
   );
 }
 
-export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, ler }: {
+function LinhaDoEmail({ e, lendo, aoLer, aoDispensar }: { e: EntradaDoEmail; lendo: boolean; aoLer: () => void; aoDispensar: () => void }) {
+  const selo = seloDaEntrada(e);
+  const frase = fraseDaEntrada(e);
+  /* a confirmação do Gmail: o código está no assunto, que aparece inteiro no title e na coluna */
+  return (
+    <tr className={cn(LINHA, e.estado === 'recusado' && 'bg-red-50')} data-testid="linha-do-email">
+      <td className={cn(TD_REGUA_NUM, 'text-left')}>{dataBR(e.recebidoEm)}</td>
+      <td className={TD_REGUA_TEXTO} title={e.remetente ?? undefined}>{e.remetente ?? '—'}</td>
+      <td className={TD_REGUA_TEXTO} title={e.assunto ?? undefined}>{e.assunto ?? '—'}</td>
+      <td className={TD_REGUA_TEXTO} title={e.arquivoNome ?? undefined}>{e.arquivoNome ?? '—'}</td>
+      <td className={TD_REGUA} title={frase}>
+        <span className="flex min-w-0 items-center">
+          <SeloDaCaixa s={selo} />
+          <span className="min-w-0 truncate text-muted-foreground">{frase}</span>
+        </span>
+      </td>
+      <td className={TD_REGUA}>
+        <span className="flex items-center justify-end gap-2">
+          {podeLer(e) && (
+            <button type="button" className="text-[9.5px] text-primary hover:underline disabled:text-muted-foreground disabled:no-underline" disabled={lendo}
+              title={lendo ? 'já está em "Chegando"' : 'abrir em "Chegando", como um PDF solto aqui'} onClick={aoLer} data-testid="ler-do-email">ler</button>
+          )}
+          <button type="button" className="text-[9.5px] text-muted-foreground hover:underline" onClick={aoDispensar} data-testid="dispensar-do-email">dispensar</button>
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, ler, entrada }: {
   clienteId: string; clienteNome?: string | null; aoFechar: () => void;
   /** a bancada sintética injeta a API e o leitor; a tela de verdade usa os do banco e do pdfjs */
-  api?: CaixaApi; ler?: LerArquivoDeBoleto;
+  api?: CaixaApi; ler?: LerArquivoDeBoleto; entrada?: EntradaEmailApi;
 }) {
-  const caixa = useCaixaDeBoletos(clienteId, { api, ler });
+  const caixa = useCaixaDeBoletos(clienteId, { api, ler, entrada });
   const [aba, setAba] = useState<AbaDaCaixa>('chegando');
+  const [enderecoAberto, setEnderecoAberto] = useState(false);
+  const [erroDoEmail, setErroDoEmail] = useState<string | null>(null);
   const c = caixa.lista?.contadores;
   const contagem: Record<AbaDaCaixa, number | null> = {
-    chegando: caixa.chegando.length, na_caixa: c ? c.novo : null, sem_par: c ? c.sem_par : null,
+    chegando: caixa.chegando.length, por_email: caixa.pendentes ? caixa.pendentes.length : null,
+    na_caixa: c ? c.novo : null, sem_par: c ? c.sem_par : null,
     todos: c ? c.novo + c.sem_par + c.ligado + c.descartado + c.substituido : null,
   };
   const marcados = caixa.chegando.filter((x) => x.marcado).length;
   const lendo = caixa.chegando.some((x) => x.estado === 'lendo');
   const motivo = caixa.gravando ? 'gravando…' : lendo ? 'esperando a leitura terminar' : marcados === 0 ? 'nada marcado para pôr na caixa' : null;
   const gravados = itensDaAba(caixa.lista, aba);
+  const emLeitura = new Set(caixa.chegando.map((x) => x.entrada?.id).filter((x): x is string => !!x));
+  const lerDoEmail = (e: EntradaDoEmail) => { setAba('chegando'); void caixa.lerDoEmail(e); };
+  const dispensar = async (e: EntradaDoEmail) => { setErroDoEmail(await caixa.dispensar(e.id)); };
+  const fraseDaFaixa = aba === 'por_email'
+    ? (erroDoEmail ?? caixa.erroDosPendentes ?? 'o que chegou no e-mail de boletos do cliente: "ler" abre em Chegando (a conferir); nada entra sozinho')
+    : (caixa.erroDaLista ?? 'a linha digitável dá valor e vencimento (dígito conferido); o texto dá beneficiário e pagador');
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) aoFechar(); }}>
@@ -171,9 +215,12 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, le
                 valor: a.valor,
                 rotulo: <span>{a.rotulo} <TextoReservado texto={contagem[a.valor] == null ? '—' : String(contagem[a.valor])} reserva="999" /></span>,
               }))} />
-            <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title="ligar o boleto ao lançamento vem na próxima fatia; daqui nenhum lançamento muda">
-              {caixa.erroDaLista ?? 'a linha digitável dá valor e vencimento (dígito conferido); o texto dá beneficiário e pagador'}
+            <span className={cn('line-clamp-2 min-w-0 flex-1 text-[9.5px] leading-[11px]', aba === 'por_email' && erroDoEmail ? 'text-red-700' : 'text-muted-foreground')} title={fraseDaFaixa}>
+              {fraseDaFaixa}
             </span>
+            <Button variant="outline" size="sm" className="h-[22px] flex-none px-2 text-[10px]" onClick={() => setEnderecoAberto(true)} data-testid="abrir-endereco-de-boletos">
+              E-mail de boletos
+            </Button>
           </div>
           <AreaDeArquivo modo="lote" regra={REGRA_DA_CAIXA} className="h-8 shrink-0" testId="soltar-na-caixa" inputTestId="input-da-caixa"
             convite="Clique ou arraste vários boletos em PDF" rotuloDoBotao="Escolher arquivos"
@@ -195,6 +242,24 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, le
                   ))}
                   {caixa.chegando.length === 0 && (
                     <tr className={LINHA}><td colSpan={7} className={cn(TD_REGUA, 'py-4 text-center text-muted-foreground')}>Solte os PDFs dos boletos acima.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            ) : aba === 'por_email' ? (
+              <table className="w-full min-w-[860px] table-fixed border-collapse" data-testid="tabela-por-email">
+                <colgroup><col style={{ width: 76 }} /><col style={{ width: 170 }} /><col style={{ width: 190 }} /><col style={{ width: 150 }} /><col /><col style={{ width: 92 }} /></colgroup>
+                <thead><tr className="h-[22px]">
+                  <th className={TH}>Chegou em</th><th className={TH}>De</th><th className={TH}>Assunto</th><th className={TH}>Arquivo</th>
+                  <th className={TH}>Situação</th><th className={TH} />
+                </tr></thead>
+                <tbody>
+                  {(caixa.pendentes ?? []).map((e) => (
+                    <LinhaDoEmail key={e.id} e={e} lendo={emLeitura.has(e.id)} aoLer={() => lerDoEmail(e)} aoDispensar={() => void dispensar(e)} />
+                  ))}
+                  {(caixa.pendentes ?? []).length === 0 && (
+                    <tr className={LINHA}><td colSpan={6} className={cn(TD_REGUA, 'py-4 text-center text-muted-foreground')}>
+                      {caixa.pendentes ? 'Nada esperando. O que chegar no e-mail de boletos aparece aqui.' : caixa.erroDosPendentes ?? 'Carregando…'}
+                    </td></tr>
                   )}
                 </tbody>
               </table>
@@ -226,6 +291,9 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, le
           </Button>
         </div>
       </DialogContent>
+      {enderecoAberto && (
+        <EnderecoDeBoletosDialog clienteId={clienteId} clienteNome={clienteNome} api={entrada} aoFechar={() => setEnderecoAberto(false)} />
+      )}
     </Dialog>
   );
 }
