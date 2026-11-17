@@ -65,19 +65,24 @@ export function LigarContaDoSistema({ clienteId, itemId, versao }: { clienteId: 
       {permitidas === null ? <div className="text-muted-foreground">Lendo…</div>
         : permitidas.length === 0 ? <div className="text-muted-foreground">Nenhuma conta corrente marcada nesta conexão.</div>
         : permitidas.map((p) => (
-          <div key={p.id} className="flex h-7 items-center gap-2" data-testid="openfinance-ligacao">
-            <span className="w-[170px] shrink-0 truncate" title={p.rotulo}>{p.rotulo}</span>
-            <div className="w-[170px] shrink-0">
-              <ContaBancariaSelect value={escolha[p.id] || '__none__'} disabled={ocupado} className="h-6 text-[11px]" placeholder="Conta do sistema"
-                contas={contas.map((c) => ({ id: c.id, nome_conta: c.nome_conta, nome_exibicao: c.nome_exibicao, tipo_conta: c.tipo_conta }))}
-                onValueChange={(v) => { setPrevia(null); setEscolha((e) => ({ ...e, [p.id]: v === '__none__' ? '' : v })); }} />
+          /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50): a frase da prévia saía CORTADA ("L.") à direita do botão → linha PRÓPRIA
+             abaixo, inteira e sem quebrar (14px sempre reservados: aparecer não desloca); os dois botões na MESMA largura fixa */
+          <div key={p.id} data-testid="openfinance-ligacao">
+            <div className="flex h-7 items-center gap-2">
+              <span className="w-[170px] shrink-0 truncate" title={p.rotulo}>{p.rotulo}</span>
+              <div className="w-[170px] shrink-0">
+                <ContaBancariaSelect value={escolha[p.id] || '__none__'} disabled={ocupado} className="h-6 text-[11px]" placeholder="Conta do sistema"
+                  contas={contas.map((c) => ({ id: c.id, nome_conta: c.nome_conta, nome_exibicao: c.nome_exibicao, tipo_conta: c.tipo_conta }))}
+                  onValueChange={(v) => { setPrevia(null); setEscolha((e) => ({ ...e, [p.id]: v === '__none__' ? '' : v })); }} />
+              </div>
+              {previa?.permitida === p.id
+                ? <Button size="sm" className="h-6 w-[124px] shrink-0 px-1 text-[11px]" disabled={ocupado} onClick={() => void ligar(p, false)} data-testid="openfinance-gravar-ligacao">Gravar a ligação</Button>
+                : <Button size="sm" variant="outline" className="h-6 w-[124px] shrink-0 px-1 text-[11px]" disabled={ocupado} onClick={() => void ligar(p, true)} data-testid="openfinance-ver-ligacao">Prévia da ligação</Button>}
             </div>
-            {previa?.permitida === p.id
-              ? <Button size="sm" className="h-6 w-[118px] shrink-0 text-[11px]" disabled={ocupado} onClick={() => void ligar(p, false)} data-testid="openfinance-gravar-ligacao">Gravar a ligação</Button>
-              : <Button size="sm" variant="outline" className="h-6 w-[118px] shrink-0 text-[11px]" disabled={ocupado} onClick={() => void ligar(p, true)} data-testid="openfinance-ver-ligacao">Ver a prévia</Button>}
-            <span className="min-w-0 flex-1 truncate text-muted-foreground" title={previa?.permitida === p.id ? previa.frase : undefined} data-testid="openfinance-previa-ligacao">
+            <div className="h-[14px] whitespace-nowrap text-[10px] leading-[14px] text-muted-foreground" title={previa?.permitida === p.id ? previa.frase : undefined}
+              data-testid="openfinance-previa-ligacao">
               {previa?.permitida === p.id ? previa.frase : ''}
-            </span>
+            </div>
           </div>
         ))}
     </div>

@@ -58,8 +58,8 @@ export function fraseDoItem(dados: unknown): string {
   const item = ehObjeto(dados) ? dados.item : null;
   const banco = ehObjeto(item) && ehObjeto(item.connector) ? textoDe(item.connector, 'name') : null;
   return banco
-    ? `${banco} conectado. O aviso chega ao AgroinBlue pelo webhook; as transações entram na próxima etapa.`
-    : 'Banco conectado. O aviso chega ao AgroinBlue pelo webhook; as transações entram na próxima etapa.';
+    ? `${banco} conectado. O aviso chega ao AGROinBLUE pelo webhook; as transações entram na próxima etapa.`
+    : 'Banco conectado. O aviso chega ao AGROinBLUE pelo webhook; as transações entram na próxima etapa.';
 }
 
 export interface OpcoesDoWidget {
@@ -158,7 +158,7 @@ export function frasePrevia(corpo: Record<string, unknown>): string {
 }
 export function fraseDoPermitir(corpo: Record<string, unknown>): string {
   const n = inteiroDe(corpo, 'ligar') + inteiroDe(corpo, 'manter');
-  return n === 0 ? 'Nenhuma conta deste banco entra no AgroinBlue.' : `Escolha gravada: ${n} ${n === 1 ? 'conta entra' : 'contas entram'} no AgroinBlue; as outras nunca são lidas.`;
+  return n === 0 ? 'Nenhuma conta deste banco entra no AGROinBLUE.' : `Escolha gravada: ${n} ${n === 1 ? 'conta entra' : 'contas entram'} no AGROinBLUE; as outras nunca são lidas.`;
 }
 /** o item que o Widget acabou de conectar (para abrir "Escolher contas" logo depois) */
 export function itemDoSucesso(dados: unknown): string | null {

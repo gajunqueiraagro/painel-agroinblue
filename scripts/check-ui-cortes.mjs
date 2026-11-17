@@ -1987,6 +1987,40 @@ const CENARIOS = [
   /* P154 — a prévia dos previstos fora da vigência (encurtada e cancelar), vazia, carregando e com a recusa; valores no teto */
   ...['encurtada', 'cancelar', 'vazia', 'carregando', 'erro'].map((v) => ({ nome: `fora-da-vigencia-${v}`, url: `tela=fora-da-vigencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-fora-da-vigencia"]' })),
+  /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
+     botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
+  ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',
+    tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[role="dialog"]',
+    botoesDentro: '[data-testid="openfinance-lanca-na-conta"]',
+    visivelNaTela: { sels: [previa ? '[data-testid="openfinance-gravar-ligacao"]' : '[data-testid="openfinance-ver-ligacao"]', '[data-testid="openfinance-previa-ligacao"]'],
+      dentro: '[data-testid="openfinance-lanca-na-conta"]', altura: 88, inteirosEm: ['[data-testid="openfinance-lanca-na-conta"]'] },
+    semRolarNoLugar: '[data-testid="openfinance-lanca-na-conta"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="openfinance-ver-ligacao"]').waitFor();
+      if (previa) { await p.locator('[data-testid="openfinance-ver-ligacao"]').click(); await p.locator('[data-testid="openfinance-gravar-ligacao"]').waitFor(); }
+      await p.waitForTimeout(300);
+    } })),
+  /* OF-CONFERIR-CASAMENTO-01 (Gabriel 17/11 09:04) — o "Conferir com o banco": até 90vh, uma rolagem só (o corpo), cabeçalhos presos, as
+     duas datas da "outra data" em colunas próprias, nada cortado */
+  { nome: 'importar-banco-conferir', url: 'tela=importar-banco&v=conferir', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    regiao: '[data-testid="openfinance-conferencia"]',
+    visivelNaTela: { sels: ['[data-testid="openfinance-conferencia-frase"]', '[data-testid="openfinance-outra-data"]'], inteirosEm: ['[data-testid="openfinance-conferencia"]'] },
+    antes: async (p) => { await p.locator('[data-testid="openfinance-conferir-com-banco"]').click(); await p.locator('[data-testid="openfinance-outra-data"]').waitFor(); await p.waitForTimeout(400); } },
+  /* OF-IMPORTAR-BANCO-QUEBROU-01 (Gabriel 17/11 08:51) — a linha do Importar banco com a conta LIGADA ao Open Finance (Buscar/Conferir
+     do banco): numa linha de 28px, as pílulas na horizontal, nenhum botão fora da faixa; a recusa da borda numa linha própria, inteira, na
+     janela. A bancada não tinha a linha (o "Buscar do banco" estourou e o gate não viu). */
+  ...[['importar-banco', 'tela=importar-banco', null], ['importar-banco-sem', 'tela=importar-banco&v=sem', null],
+      ['importar-banco-erro', 'tela=importar-banco', 'erro']].map(([nome, url, estado]) => ({ nome, url,
+    tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[data-testid="importar-banco-cena"]',
+    botoesDentro: '[data-testid="linha-importar-banco"]',
+    visivelNaTela: { sels: estado ? ['[data-testid="resultado-busca-erro"]'] : ['[data-testid="abrir-atualizar-lr"]'],
+      dentro: '[data-testid="linha-importar-banco"]', altura: 28, inteirosEm: ['[data-testid="linha-importar-banco"]', '[data-testid="importar-banco-cena"]'] },
+    antes: async (p) => {
+      await p.locator('[data-testid="linha-importar-banco"]').waitFor();
+      if (url.endsWith('importar-banco')) await p.locator('[data-testid="openfinance-conferir-com-banco"]').waitFor();
+      if (estado) { await p.locator('[data-testid="openfinance-conferir-com-banco"]').click(); await p.locator('[data-testid="resultado-busca-erro"]').waitFor(); }
+      await p.waitForTimeout(300);
+    } })),
   /* P124 — a Conciliação do mês com o lote (de 1000px para cima: CONC-ESTREITA); antes e depois de buscar as sugestões, com o resumo do
      lote aberto e com a recusa do banco na linha */
   { nome: 'palco-do-mes', url: 'tela=palco-do-mes', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',

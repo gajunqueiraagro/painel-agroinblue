@@ -1,5 +1,5 @@
 /**
- * OPENFINANCE-P3b — o EXTRATO da conta permitida (só o admin AgroinBlue no piloto): 'buscar' (desde o corte, grava o saldo do banco) e
+ * OPENFINANCE-P3b — o EXTRATO da conta permitida (só o admin AGROinBLUE no piloto): 'buscar' (desde o corte, grava o saldo do banco) e
  * 'conferir' (só leitura, período já coberto pelo extrato). Só liga as peças; a ordem mora em `_shared/pluggy.ts` (`extrato`, provada
  * no vitest). Não grava extrato: a tela grava pela porta de sempre, depois da prévia.
  * ⚠ Não loga corpo, cabeçalho, chave, token, transação nem saldo. Secrets: PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET.
@@ -54,6 +54,20 @@ Deno.serve(async (req) => {
     registrarSaldo: async (p) => {
       const { data, error } = await admin.rpc("_fn_openfinance_saldo_registrar", p);
       return !error && !!data;
+    },
+    // OF-IMPORTAR-BANCO-QUEBROU-01: a recusa da Pluggy deixa status + código na fila (nada da resposta além disso)
+    registrarFalha: async (f) => !(await admin.rpc("_fn_openfinance_evento_registrar", {
+      p: { origem: "agroinblue", evento: "agroinblue/extrato_falhou", item_id: f.item_id, account_id: f.account_id,
+           client_user_id: corpo.cliente_id, erro_codigo: f.erro_codigo },
+    })).error,
+    // OF-CONFERIR-CASAMENTO-01: o resumo da leitura (contagens por dia e status; nenhum valor, nome ou descrição)
+    registrarLeitura: async (f) => {
+      const { data, error } = await admin.rpc("_fn_openfinance_evento_registrar", {
+        p: { origem: "agroinblue", evento: "agroinblue/extrato_lido", item_id: f.item_id, account_id: f.account_id, client_user_id: corpo.cliente_id },
+      });
+      const id = (data as { id?: string } | null)?.id;
+      if (error || !id) return false;
+      return !(await admin.from("openfinance_eventos").update({ resultado: f.resumo }).eq("id", id)).error;
     },
   });
   return json(r.status, r.corpo);

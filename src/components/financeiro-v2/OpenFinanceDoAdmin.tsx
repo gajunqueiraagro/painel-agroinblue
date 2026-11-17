@@ -1,5 +1,5 @@
 /**
- * OPENFINANCE-PILOTO-01 · P3 mínima (Gabriel 16/11 14:50) + OPENFINANCE-SEG-01 (Chat 15:31) — os botões do ADMIN AgroinBlue na barra de
+ * OPENFINANCE-PILOTO-01 · P3 mínima (Gabriel 16/11 14:50) + OPENFINANCE-SEG-01 (Chat 15:31) — os botões do ADMIN AGROinBLUE na barra de
  * Contas bancárias:
  *  · "Conectar banco"     → `openfinance-conectar` com o cliente aberto → o Widget oficial da Pluggy PRESO aos bancos do Open Finance
  *    REGULADO (`connectorIds` que a função devolve; consentimento no app do banco, nunca login/senha; sem os bancos de teste);
@@ -92,11 +92,11 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
   return (
     <div className="flex flex-none items-center gap-1.5" data-testid="openfinance-admin">
       <Button size="sm" variant="outline" className="h-6 px-2.5 text-[11px]" disabled={ocupado !== null} onClick={() => void conectar()}
-        title="Admin AgroinBlue · Open Finance regulado (Pluggy): o consentimento é dado no app do banco; nunca senha aqui" data-testid="openfinance-conectar">Conectar banco</Button>
+        title="Admin AGROinBLUE · Open Finance regulado (Pluggy): o consentimento é dado no app do banco; nunca senha aqui" data-testid="openfinance-conectar">Conectar banco</Button>
       <Button size="sm" variant="outline" className="h-6 px-2.5 text-[11px]" disabled={ocupado !== null} onClick={() => void abrirDesconectar()}
-        title="Admin AgroinBlue · os bancos conectados deste cliente: escolher as contas que entram ou desconectar" data-testid="openfinance-desconectar">Bancos conectados</Button>
+        title="Admin AGROinBLUE · os bancos conectados deste cliente: escolher as contas que entram ou desconectar" data-testid="openfinance-desconectar">Bancos conectados</Button>
       <Button size="sm" variant="outline" className="h-6 px-2.5 text-[11px]" disabled={ocupado !== null} onClick={() => void registrar()}
-        title="Admin AgroinBlue · registra na Pluggy o webhook do AgroinBlue (uma vez; não duplica)" data-testid="openfinance-registrar">Registrar webhook</Button>
+        title="Admin AGROinBLUE · registra na Pluggy o webhook do AGROinBLUE (uma vez; não duplica)" data-testid="openfinance-registrar">Registrar webhook</Button>
 
       <Dialog open={aberto} onOpenChange={(v) => { if (!v && ocupado !== 'desconectar') setAberto(false); }}>
         <DialogContent className="max-w-[460px]" data-testid="openfinance-desconectar-dialogo">

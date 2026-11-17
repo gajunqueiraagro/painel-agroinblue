@@ -259,8 +259,11 @@ describe('Importar Banco — a área no lugar do botão, nos mesmos 28px', () =>
     expect(aoLado.textContent).toBe(FRASE);
     expect(aoLado.getAttribute('title')).toBe(FRASE);
     expect(aoLado.getAttribute('role')).toBe('alert');
-    for (const c of ['truncate', 'text-destructive']) expect(aoLado.className).toContain(c);
-    expect(aoLado.parentElement).toBe(area.parentElement);
+    /* OF-IMPORTAR-BANCO-QUEBROU-01 (Gabriel 17/11): a frase sai da linha da área para a linha PRÓPRIA abaixo, inteira (até duas linhas, nunca "…") */
+    expect(aoLado.className).toContain('text-destructive');
+    expect(aoLado.className).not.toContain('truncate');
+    expect(aoLado.closest('[data-testid="linha-importar-banco-frase"]')).toBeTruthy();
+    expect(area.closest('[data-testid="linha-importar-banco"]')).toBeTruthy();
     expect(B.toastErro).not.toHaveBeenCalled();
     /* escolher um arquivo bom depois limpa a frase e abre a prévia */
     soltar(area, [new File([OFX], 'set26.ofx', { type: 'application/x-ofx' })]);

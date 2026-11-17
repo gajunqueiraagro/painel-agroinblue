@@ -1,4 +1,4 @@
-// OPENFINANCE-PILOTO-01 · P3 mínima — os botões só existem para o admin AgroinBlue; cada um chama a SUA função com o que ela espera.
+// OPENFINANCE-PILOTO-01 · P3 mínima — os botões só existem para o admin AGROinBLUE; cada um chama a SUA função com o que ela espera.
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
@@ -47,7 +47,7 @@ describe('OpenFinanceDoAdmin', () => {
   });
 
   it('Conectar banco recusado: a frase da função, e o Widget não abre', async () => {
-    const contexto = new Response(JSON.stringify({ ok: false, frase: 'Só o gestor do cliente ou a AgroinBlue conecta um banco.' }), { status: 403 });
+    const contexto = new Response(JSON.stringify({ ok: false, frase: 'Só o gestor do cliente ou a AGROinBLUE conecta um banco.' }), { status: 403 });
     invoke.mockResolvedValue({ data: null, error: { context: contexto } });
     const init = vi.fn();
     function PluggyConnect() { return { init }; }
@@ -55,7 +55,7 @@ describe('OpenFinanceDoAdmin', () => {
     try {
       render(<OpenFinanceDoAdmin clienteId="c1" />);
       fireEvent.click(screen.getByTestId('openfinance-conectar'));
-      await waitFor(() => expect(avisos.error).toHaveBeenCalledWith('Só o gestor do cliente ou a AgroinBlue conecta um banco.'));
+      await waitFor(() => expect(avisos.error).toHaveBeenCalledWith('Só o gestor do cliente ou a AGROinBLUE conecta um banco.'));
       expect(init).not.toHaveBeenCalled();
       expect(avisos.error).toHaveBeenCalledTimes(1);
     } finally { Reflect.deleteProperty(window, 'PluggyConnect'); }

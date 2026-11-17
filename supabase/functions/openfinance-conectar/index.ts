@@ -1,5 +1,5 @@
 /**
- * OPENFINANCE-PILOTO-01 · P2 — o connect token (30 min) para o Widget da Pluggy. Usuário logado: admin AgroinBlue ou gestor do cliente.
+ * OPENFINANCE-PILOTO-01 · P2 — o connect token (30 min) para o Widget da Pluggy. Usuário logado: admin AGROinBLUE ou gestor do cliente.
  * Só liga as peças; a ordem (quem → cliente → pode → configuração → Pluggy → trilha) mora em `_shared/pluggy.ts` (`conectar`).
  * A API key nasce e morre aqui; à tela vai só o `accessToken` de 30 min. ⚠ Não loga corpo, cabeçalho, chave nem token.
  * Secrets: PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET (o Gabriel cola no proto).
