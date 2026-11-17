@@ -801,12 +801,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const atencaoVG: ItemAtencao[] = [
     ...contasSemCasar.map((c): ItemAtencao => ({
       id: `conc-${c.contaId}`, texto: `Conciliação · ${c.nome} · sem casar`, numero: c.qtd,
-      title: `Conciliação de ${mesCurtoVG} · ${c.nome}: ${fmtN(c.qtd, 0)} sem casar (extrato sem par + lançamento sem par)`,
+      /* o `title` começa pelo texto INTEIRO da célula (a regra de corte: "…" + o texto inteiro no title) */
+      title: `Conciliação · ${c.nome} · sem casar: ${fmtN(c.qtd, 0)} em ${mesCurtoVG} (extrato sem par + lançamento sem par)`,
       acao: 'Conciliar', onIr: () => irPara('conciliacao') })),
     ...(receitaPedemAcao ? [{ id: 'receita', texto: 'Notas da Receita · a lançar', numero: receitaPedemAcao,
-      title: 'Notas da Receita a lançar (inclui as que pedem ciência) — a mesma conta do selo do "+ Novo"', acao: 'Abrir', onIr: () => irPara('financeiro-lanc') }] : []),
+      title: 'Notas da Receita · a lançar (inclui as que pedem ciência) — a mesma conta do selo do "+ Novo"', acao: 'Abrir', onIr: () => irPara('financeiro-lanc') }] : []),
     ...(boletosAConferir ? [{ id: 'boletos', texto: 'Boletos · a conferir', numero: boletosAConferir,
-      title: 'Boletos na caixa e sem par (a caixa de boletos)', acao: 'Abrir', onIr: () => irPara('financeiro-lanc') }] : []),
+      title: 'Boletos · a conferir (na caixa e sem par, a caixa de boletos)', acao: 'Abrir', onIr: () => irPara('financeiro-lanc') }] : []),
     ...gradeAno
       .filter(c => c.mes === mesNum && (isGlobal || c.fazendaId === fazendaAtual?.id) && (c.p1 === 'pendente' || c.p2 === 'pendente'))
       .map((c): ItemAtencao => {
@@ -1493,8 +1494,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           motivou e948a653. */}
       {/* VISAO-GERAL-04 (V4) — Área (barra + só as áreas que a fazenda tem) e, ao lado, o Caixa com a sobra, os dois na MESMA altura */}
       {/* VISAO-GERAL-PENDENCIAS-01 (mock v2, D8 = A) — Caixa com METADE da largura e, ao lado, o "Rebanho no mês", os dois na MESMA altura
-          (filhos diretos do grid, `items-stretch` + `h-full`). Abaixo de 1024 px um embaixo do outro. */}
-      <div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="vg-linha-caixa">
+          (filhos diretos do grid, `items-stretch` + `h-full`) de 1000 px para cima (Gabriel 17/11: medir em 1000/1280/1440/1920); abaixo, um embaixo do outro. */}
+      <div className="grid grid-cols-1 items-stretch gap-1.5 min-[1000px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="vg-linha-caixa">
 
         <div className="min-w-0">
         {/* NAO recebe naoFechado: caixa nao depende de fechamento de rebanho.

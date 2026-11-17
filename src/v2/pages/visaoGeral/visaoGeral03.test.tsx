@@ -95,7 +95,7 @@ describe('VISAO-GERAL-04 — sem espaço sobrando', () => {
   /* VISAO-GERAL-PENDENCIAS-01 (mock v2 aprovado 17/11, D7/D8) — a Área subiu para baixo das Pendências; o Caixa ficou com METADE da largura e o
      "Rebanho no mês" ao lado, os dois na MESMA altura (filhos diretos do grid `items-stretch`, os dois `h-full`) */
   it('Caixa e Rebanho lado a lado (1 : 1), na mesma altura; a Área na coluna da direita, com o resto da altura', () => {
-    expect(V2HOME).toContain('<div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="vg-linha-caixa">');
+    expect(V2HOME).toContain('<div className="grid grid-cols-1 items-stretch gap-1.5 min-[1000px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="vg-linha-caixa">');
     expect(V2HOME).toMatch(/subtitle="regime de caixa · sem transferências"\s*className="h-full"/);
     expect(V2HOME).toMatch(/subtitle="cabeças · Evolução do rebanho"\s*className="h-full" testid="vg-rebanho"/);
     expect(V2HOME).toMatch(/title=\{isPeriodo \? 'Área média no período' : 'Área no mês'\}\s*className="h-full"/);
