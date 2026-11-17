@@ -1016,11 +1016,13 @@ export function LancamentoV2Dialog({
 
   // Payment method fields
   const [formaPgto, setFormaPgto] = useState('');
-  /* CARTAO-LANCAMENTO-01 (decisão 2) — a forma foi posta PELA CONTA de cartão (o selo "auto"); a do operador ou da nota nunca é trocada */
-  const [formaAutomatica, setFormaAutomatica] = useState(false);
-  /** A conta é um cartão que pede a forma "Cartão de crédito": só no lançamento novo de saída, fora da OC e do extrato. */
-  const contaPedeFormaDoCartao = (contaId: string | null | undefined, novo: boolean, tipo: string) =>
-    novo && !origemOC && !ocultarParcelamento && tipo === '2-Saídas' && contas.find((x) => x.id === contaId)?.tipo_conta === 'cartao';
+  /** FIN-FORMA-CARTAO-AUTO-01 (D1/D5) — SAÍDA em conta de CARTÃO: a forma é "Cartão de crédito" e o campo fica travado. Vale em todo caminho
+   *  (novo, editar, da nota, do extrato, da OC): é o espelho do gatilho do banco (`trg_00_forma_pela_conta`), que grava assim de qualquer jeito. */
+  const contaPedeFormaDoCartao = (contaId: string | null | undefined, tipo: string | null | undefined) =>
+    (tipo ?? '').startsWith('2') && contas.find((x) => x.id === contaId)?.tipo_conta === 'cartao';
+  /** a forma TRAVADA pela conta (saída em conta de cartão): o campo mostra "Cartão de crédito", não se escolhe outra, e é ela que se grava */
+  const formaTravada = contaPedeFormaDoCartao(contaOrigemId, tipoOperacao);
+  const formaParaGravar = formaTravada ? FORMA_CARTAO_CREDITO : formaPgto;
   const [dadosPagamento, setDadosPagamento] = useState('');
   /* FIN-PIX-CADASTRO-MODAL-01 — `dadosPagamento` é o texto PRÓPRIO do lançamento (a exceção). O modo (`cadastro` | `proprio`)
      é calculado do que veio gravado até o operador decidir; daí em diante vale a decisão dele (`modoPgto`). */
@@ -1316,7 +1318,9 @@ export function LancamentoV2Dialog({
       setTipoDocumento((lancamento as any).tipo_documento || '');
       setNotaFiscal(lancamento.numero_documento || '');
       setObservacao(lancamento.observacao || '');
-      setFormaPgto(lancamento.forma_pagamento || ''); setFormaAutomatica(false);
+      /* o estado guarda o GRAVADO (a comparação "mudou?" do Editar olha ele); na conta de cartão a tela mostra e grava a forma efetiva
+         (`formaParaGravar`), sem o lançamento antigo parecer "mudado" ao abrir */
+      setFormaPgto(lancamento.forma_pagamento || '');
       setDadosPagamento(lancamento.dados_pagamento || '');
       // CRITICAL: reset parcela/recorrência when editing — prevents stale state from previous "new" dialog
       setFormaPagamentoParc('avista');
@@ -1395,9 +1399,7 @@ export function LancamentoV2Dialog({
         setModoParcelas('livres'); setParcelasLivres(daNota); setBaseLivres(daNota);
       } else { setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null); }
       {
-        const daConta = formaPelaConta({ forma: prefill.forma_pagamento ?? '', automatica: false },
-          contaPedeFormaDoCartao(prefill.conta_bancaria_id, true, prefill.tipo_operacao ?? '2-Saídas'));
-        setFormaPgto(daConta.forma); setFormaAutomatica(daConta.automatica);
+        setFormaPgto(formaPelaConta(prefill.forma_pagamento ?? '', contaPedeFormaDoCartao(prefill.conta_bancaria_id, prefill.tipo_operacao ?? '2-Saídas')));
       }
       setDadosPagamento(prefill.dados_pagamento ?? '');
     } else {
@@ -1435,7 +1437,7 @@ export function LancamentoV2Dialog({
       setFormaPagamentoParc('avista');
       setNumParcelas(2); setNumParcelasTexto('2');
       setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null);
-      setFormaPgto(''); setFormaAutomatica(false);
+      setFormaPgto('');
       setDadosPagamento('');
     }
     setFornecedorSearch('');
@@ -1662,7 +1664,7 @@ export function LancamentoV2Dialog({
     ? (fornecedorRelido[favorecidoId] ?? fornecedorPorId(favorecidoId)) : null;
   /* R6 — "realizado" é o do REGISTRO, não o do select: o que foi usado para pagar é o que está gravado. */
   const pgtoJaRealizado = !!lancamento && (lancamento.status_transacao === 'realizado' || lancamento.status_transacao === 'conciliado');
-  const formaEfetivaPgto = formaEfetiva(formaPgto, fornecedorDoPgto);
+  const formaEfetivaPgto = formaEfetiva(formaParaGravar, fornecedorDoPgto);
   const textoCadastroPgto = fornecedorDoPgto ? textoDoCadastro(fornecedorDoPgto, formaEfetivaPgto) : '';
   /* ⚠ O BLOCO DO CADASTRO É SÓ PARA SAÍDAS (ajuste do Gabriel, 04/10): o Pix do fornecedor serve para PAGAR. Numa entrada ou
      numa transferência ele não diz nada — a tela chegou a avisar "Boitel Sta. Clara não tem Pix cadastrado." num RECEBIMENTO.
@@ -1683,15 +1685,12 @@ export function LancamentoV2Dialog({
   const handleFormaPgtoChange = useCallback((metodo: string) => {
     setModoPgto(modoPgtoEfetivo);
     setFormaPgto(metodo === FORMA_PAGAMENTO_V2_NENHUMA ? '' : metodo);
-    setFormaAutomatica(false);   // CARTAO-LANCAMENTO-01 — a escolha do operador manda daqui em diante
   }, [modoPgtoEfetivo]);
-  /* CARTAO-LANCAMENTO-01 — trocar a conta de saída: cartão põe "Cartão de crédito" (se a forma está vazia ou era a automática); conta
-     comum tira a automática */
+  /* FIN-FORMA-CARTAO-AUTO-01 — trocar a conta de saída: cartão FORÇA "Cartão de crédito" (D1); sair do cartão zera só a de cartão (D2) */
   const trocarContaOrigem = (id: string) => {
+    const nova = formaPelaConta(formaPgto, contaPedeFormaDoCartao(id, tipoOperacao), contaPedeFormaDoCartao(contaOrigemId, tipoOperacao));
     setContaOrigemId(id);
-    const daConta = formaPelaConta({ forma: formaPgto, automatica: formaAutomatica }, contaPedeFormaDoCartao(id, !isEdit, tipoOperacao));
-    if (daConta.forma !== formaPgto) setFormaPgto(daConta.forma);
-    setFormaAutomatica(daConta.automatica);
+    if (nova !== formaPgto) setFormaPgto(nova);
   };
 
   /** Relê AQUELE fornecedor depois de o cadastro salvar (as mesmas colunas de `loadFornecedores`) — releitura do dono logo após
@@ -1792,6 +1791,7 @@ export function LancamentoV2Dialog({
     const aVista = {
       data_competencia: dataCompetencia, data_vencimento: dataVencimento || null, data_pagamento: dataPagamento || null, valor: Math.abs(valorNum),
       status_transacao: statusTransacao, descricao, observacao, numero_documento: notaFiscal || null, tipo_documento: tipoDocumento || null,
+      /* a forma que a PESSOA mexeu (o estado cru): a forma de cartão posta pela conta não conta como edição pendente */
       favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null, forma_pagamento: formaPgto || null,
     };
     return camposMudados(lancamento, aVista).some((c) => c in aVista);
@@ -1903,7 +1903,7 @@ export function LancamentoV2Dialog({
     operacaoId: modoOC.operacaoId, versao: modoOC.versao, natureza: modoOC.natureza,
     componente: itemOC || null, planoContaId: planoContaId ?? null, favorecidoId: favorecidoDoModoOC,
     parcelas: parcelasParaRpc(linhasDoModoOC, contaDoModoOC && contaDoModoOC !== '__none__' ? contaDoModoOC : null),
-    forma: formaPgto || null, dadosPagamento: dadosPagamentoParaGravar, documento: notaFiscal.trim() || null,
+    forma: formaParaGravar || null, dadosPagamento: dadosPagamentoParaGravar, documento: notaFiscal.trim() || null,
     observacao: observacao.trim() || null, descricao: descricao.trim() || null, simular: true,
   } : null;
   const tipoDaOCDoModo = modoOC?.tipoOperacao ?? null;
@@ -2184,7 +2184,7 @@ export function LancamentoV2Dialog({
         operacaoId: modoOC.operacaoId, versao: modoOC.versao, natureza: modoOC.natureza,
         componente: itemOC || null, planoContaId: planoContaId ?? null, favorecidoId: favorecidoForForm,
         parcelas: parcelasParaRpc(linhasDoModoOC, contaOC),
-        forma: formaPgto || null, dadosPagamento: dadosPagamentoParaGravar, documento: notaFiscal.trim() || null,
+        forma: formaParaGravar || null, dadosPagamento: dadosPagamentoParaGravar, documento: notaFiscal.trim() || null,
         observacao: observacao.trim() || null, descricao: descricao.trim() || null, simular: false,
       });
       if (r.ok !== true) { setErroAntesDeSalvar(r.ok === false ? r.erro : null); setSaving(false); return; }
@@ -2249,7 +2249,7 @@ export function LancamentoV2Dialog({
                ser mensal. A RPC faz `make_interval(months => …)`, que é mensal de verdade. */
             intervaloMeses: 1,
             favorecidoId: favorecidoForForm,
-            formaPagamento: formaPgto || null,
+            formaPagamento: formaParaGravar || null,
             contaBancariaId,
             /* ⚠ O ESCOPO VEM DO PLANO, pelo cluster. A tela de Parcelamentos indexa por ele, e
                sem escopo o parcelamento nasceria mudo lá. */
@@ -2329,7 +2329,7 @@ export function LancamentoV2Dialog({
       numero_documento: notaFiscal || null,
       tipo_documento: tipoDocumento || null,
       favorecido_id: favorecidoForForm,
-      forma_pagamento: formaPgto || null,
+      forma_pagamento: formaParaGravar || null,
       dados_pagamento: dadosPagamentoParaGravar,
       safra_id: safraParaGravar(),
       cultura: culturaParaGravar(atividade, cultura),
@@ -3233,8 +3233,9 @@ export function LancamentoV2Dialog({
                   value={favorecidoId}
                   onChange={setFavorecidoId}
                   onSelected={f => {
-                    /* O fornecedor SUGERE a forma (já no nome que o lançamento usa); os dados não são mais copiados. */
-                    if (f.tipo_recebimento) {
+                    /* O fornecedor SUGERE a forma (já no nome que o lançamento usa); os dados não são mais copiados.
+                       FIN-FORMA-CARTAO-AUTO-01 — em conta de cartão, não: a forma é a do cartão (travada) */
+                    if (f.tipo_recebimento && !contaPedeFormaDoCartao(contaOrigemId, tipoOperacao)) {
                       setModoPgto(modoPgtoEfetivo);
                       setFormaPgto(normalizarFormaDoCadastro(f.tipo_recebimento));
                     }
@@ -3451,15 +3452,13 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
                 <div>
                   <Label className={REGUA_ROTULO}>{xmlRot('Forma de pagamento', 'forma')}
-                    {/* CARTAO-LANCAMENTO-01 — posta pela conta de cartão (some quando o operador escolhe outra) */}
-                    {formaAutomatica && formaPgto === FORMA_CARTAO_CREDITO && (
-                      <span className="ml-1 rounded-[7px] bg-primary/10 px-1 text-[8px] font-semibold leading-[13px] text-primary" data-testid="forma-automatica"
-                        title={`automática pela conta ${resumoContaOrigem ?? ''} · trocar a forma aqui vale; a escolha do operador ou da nota nunca é sobrescrita`}>auto</span>
-                    )}</Label>
-                  <Select value={formaPgto || FORMA_PAGAMENTO_V2_NENHUMA} onValueChange={handleFormaPgtoChange}>
+                    </Label>
+                  {/* FIN-FORMA-CARTAO-AUTO-01 (D1) — saída em conta de cartão: "Cartão de crédito", TRAVADO (o banco grava assim de qualquer jeito) */}
+                  <Select value={formaParaGravar || FORMA_PAGAMENTO_V2_NENHUMA} onValueChange={handleFormaPgtoChange}
+                    disabled={formaTravada}>
                     <SelectTrigger tabIndex={13} className={cn("h-7 text-[11px]", fieldBg, xmlCls('forma'))}>
                       {/* P143 — a forma fora da lista: o gatilho mostra SÓ ela (o "· valor atual" fica na lista; na coluna de 150px cortava) */}
-                      <SelectValue placeholder="Selecione">{formaForaDaLista(formaPgto) ? formaPgto : undefined}</SelectValue>
+                      <SelectValue placeholder="Selecione">{formaForaDaLista(formaParaGravar) ? formaParaGravar : undefined}</SelectValue>
                     </SelectTrigger>
                     {/* ⚠ A LISTA SAIU DAQUI — PAR-01c. Os oito itens eram escritos à mão neste
                         ponto; a tela de Parcelamentos passou a gravar a MESMA coluna
@@ -3472,8 +3471,8 @@ export function LancamentoV2Dialog({
                       <SelectItem value={FORMA_PAGAMENTO_V2_NENHUMA}>Nenhuma</SelectItem>
                       {/* P143 (a regra da Mesa, 30/09) — a forma GRAVADA fora da lista ("Cartão de Crédito") entra no topo como "valor atual":
                           sem ela o Radix mostra o gatilho VAZIO sobre um dado que existe (o Resumo mostrava o texto). Nada se normaliza. */}
-                      {formaForaDaLista(formaPgto) && (
-                        <SelectItem value={formaPgto} data-testid="forma-valor-atual">{formaPgto} <span className="text-muted-foreground">· {ROTULO_VALOR_ATUAL}</span></SelectItem>
+                      {formaForaDaLista(formaParaGravar) && (
+                        <SelectItem value={formaParaGravar} data-testid="forma-valor-atual">{formaParaGravar} <span className="text-muted-foreground">· {ROTULO_VALOR_ATUAL}</span></SelectItem>
                       )}
                       {FORMAS_PAGAMENTO_V2.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                     </SelectContent>
@@ -3498,9 +3497,10 @@ export function LancamentoV2Dialog({
                   />
                 </div>
               </div>
-              {formaAutomatica && formaPgto === FORMA_CARTAO_CREDITO && (
-                <p className="text-[10px] leading-tight text-muted-foreground" data-testid="forma-automatica-frase">
-                  automática pela conta {resumoContaOrigem} · trocar a forma aqui vale; a escolha do operador ou da nota nunca é sobrescrita</p>
+              {formaTravada && (
+                <p className="text-[10px] leading-tight text-muted-foreground" data-testid="forma-pela-conta"
+                  title={`pela conta ${resumoContaOrigem ?? ''} (cartão): saída em cartão é sempre Cartão de crédito`}>
+                  pela conta (cartão): saída em cartão é sempre Cartão de crédito</p>
               )}
 
               {/* P74 B (NOTA-CARTAO-PARCELADO-01) — o lançamento À VISTA gravado vira parcelado: "Parcelar este lançamento" (o mesmo id vira a
@@ -4034,7 +4034,7 @@ export function LancamentoV2Dialog({
                 centro={centroCusto || null}
                 subcentro={subcentro || null}
                 status={{ rotulo: resumoStatusLabel, cor: resumoStatusCor }}
-                forma={formaPgto || null}
+                forma={formaParaGravar || null}
                 vencimento={resumoFmtData(dataVencimento)}
                 pagamento={resumoFmtData(pagamentoMostrado)}
                 modalidade={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista')

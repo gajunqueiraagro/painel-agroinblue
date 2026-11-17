@@ -122,14 +122,15 @@ describe('P74 — pagamento no cartão', () => {
       linha: 'Digite o dia de vencimento (ou deixe o sugerido pelas faturas) para ver em qual fatura cai a compra.', nota: '' });
   });
 
-  /* CARTAO-LANCAMENTO-01 (decisão 2) — a forma pela conta: só vazia ou a automática; o operador e a nota nunca são trocados */
-  it('K13 a forma automática do cartão', () => {
-    expect(formaPelaConta({ forma: '', automatica: false }, true)).toEqual({ forma: 'Cartão de crédito', automatica: true });
-    expect(formaPelaConta({ forma: 'PIX', automatica: false }, true)).toEqual({ forma: 'PIX', automatica: false });
-    expect(formaPelaConta({ forma: 'Cartão de crédito', automatica: true }, true)).toEqual({ forma: 'Cartão de crédito', automatica: true });
-    expect(formaPelaConta({ forma: 'Cartão de crédito', automatica: true }, false)).toEqual({ forma: '', automatica: false });
-    expect(formaPelaConta({ forma: 'Boleto', automatica: false }, false)).toEqual({ forma: 'Boleto', automatica: false });
-    expect(formaPelaConta({ forma: 'Cartão de crédito', automatica: false }, false)).toEqual({ forma: 'Cartão de crédito', automatica: false });
+  /* FIN-FORMA-CARTAO-AUTO-01 (D1/D2, Gabriel 17/11) — o espelho do gatilho do banco: conta-cartão FORÇA "Cartão de crédito" (a do operador,
+     da nota ou do fornecedor não fica); sair do cartão zera só se era a de cartão; entre contas comuns nada muda */
+  it('K13 a forma pela conta: o cartão força; sair do cartão zera só a de cartão', () => {
+    expect(formaPelaConta('', true)).toBe('Cartão de crédito');
+    expect(formaPelaConta('PIX', true)).toBe('Cartão de crédito');
+    expect(formaPelaConta('Boleto', true, true)).toBe('Cartão de crédito');
+    expect(formaPelaConta('Cartão de crédito', false, true)).toBe('');
+    expect(formaPelaConta('Boleto', false, true)).toBe('Boleto');
+    expect(formaPelaConta('Cartão de crédito', false, false)).toBe('Cartão de crédito');
   });
 
   it('K14 o vencimento pela fatura: entra no vazio ou no lugar da sugestão anterior; a data do operador fica', () => {
