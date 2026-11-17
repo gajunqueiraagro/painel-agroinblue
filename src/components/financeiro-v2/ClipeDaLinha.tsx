@@ -22,6 +22,13 @@ import { oQueAbrir, type LinhaDeDocumento } from '@/lib/financeiro/notaDosDocume
 import { tipoDoSelo } from '@/lib/financeiro/tipoDoDocumento';
 import { cn } from '@/lib/utils';
 
+/* ANEXO-COL-ALINHA-01 (Chat 17/11 06:11, UI-ALINHAMENTO soberano): o clipe fica SEMPRE no mesmo x em todas as linhas — um grupo de
+   largura FIXA (o lugar do clipe + o lugar RESERVADO do contador, 2 dígitos) centrado na coluna; com 1 anexo o lugar do contador fica
+   vazio, e o "—" sem anexo ocupa o lugar do clipe. */
+const GRUPO = 'inline-flex h-[15px] w-[31px] items-center gap-[2px]';
+const LUGAR_DO_CLIPE = 'inline-flex w-[11px] flex-none items-center justify-center';
+const LUGAR_DO_NUMERO = 'inline-flex w-[18px] flex-none items-center justify-start';
+
 type Estado = { fase: 'fechado' } | { fase: 'lendo' } | { fase: 'lista'; linhas: LinhaDeDocumento[] } | { fase: 'erro'; frase: string };
 
 const parar = (e: MouseEvent) => e.stopPropagation();
@@ -38,7 +45,12 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
   const [itensDe, setItensDe] = useState<LancDocumento | null>(null);
   /* SEM DUPLO CLIQUE: o segundo clique durante a leitura não lê de novo (nem abre a segunda aba) */
   const lendo = useRef(false);
-  if (qtd <= 0 || !clienteId) return <span className="text-muted-foreground/60" data-testid="clipe-vazio">—</span>;
+  if (qtd <= 0 || !clienteId) return (
+    <span className={GRUPO} data-clipe-grupo="">
+      <span className={cn(LUGAR_DO_CLIPE, 'text-muted-foreground/60')} data-testid="clipe-vazio">—</span>
+      <span className={LUGAR_DO_NUMERO} aria-hidden />
+    </span>
+  );
 
   const abrir = async (l: LinhaDeDocumento) => {
     const o = oQueAbrir(l);
@@ -76,11 +88,13 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
       <Popover open={estado.fase !== 'fechado'} onOpenChange={(o) => { if (!o) setEstado({ fase: 'fechado' }); }}>
         <PopoverTrigger asChild>
           <button type="button" onClick={clicar} title={resumo} aria-label={`Documentos: ${resumo}`} data-testid="clipe-da-linha"
-            className="inline-flex h-[15px] items-center gap-0.5 rounded px-0.5 text-[#41506a] hover:bg-[#e7eef8] hover:text-primary">
-            <Paperclip className="h-2.5 w-2.5" aria-hidden />
-            {qtd >= 2 && (
-              <b className="rounded-[7px] bg-[#6b7a90] px-1 text-[9.5px] font-semibold leading-[13px] text-white tabular-nums" data-testid="clipe-numero">{qtd}</b>
-            )}
+            className={cn(GRUPO, 'rounded text-[#41506a] hover:bg-[#e7eef8] hover:text-primary')} data-clipe-grupo="">
+            <span className={LUGAR_DO_CLIPE} data-testid="clipe-lugar"><Paperclip className="h-2.5 w-2.5" aria-hidden /></span>
+            <span className={LUGAR_DO_NUMERO} data-testid="clipe-lugar-numero">
+              {qtd >= 2 && (
+                <b className="rounded-[7px] bg-[#6b7a90] px-[3px] text-[9.5px] font-semibold leading-[13px] text-white tabular-nums" data-testid="clipe-numero">{qtd}</b>
+              )}
+            </span>
           </button>
         </PopoverTrigger>
         <PopoverContent align="end" sideOffset={2} className="w-max min-w-[200px] max-w-[430px] p-1" data-testid="clipe-popover">
