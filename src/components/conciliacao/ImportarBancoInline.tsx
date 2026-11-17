@@ -11,10 +11,12 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { useImportacaoExtrato } from '@/hooks/useImportacaoExtrato';
 import { tituloDaGemea } from '@/lib/financeiro/duplicidadeImportacao';
 import { detectarTipoArquivo, type TipoArquivoImport } from '@/lib/financeiro/parser/detectarTipoArquivo';
+import type { FonteDoExtrato } from '@/lib/financeiro/parser/fonteDoExtrato';
 import { V2ImportLancamentosExcel } from '@/v2/pages/V2ImportLancamentosExcel';
 import CusteioTxtImportTab from '@/v2/pages/CusteioTxtImportTab';
 import { AtualizarLucroRuralDialog } from '@/components/lucroRural/AtualizarLucroRuralDialog';
 import { decodeTxtParcial } from '@/v2/lib/custeio/parseCusteioTxt';
+import { BuscarDoBanco } from './BuscarDoBanco';
 
 /**
  * ImportarBancoInline — a aba "Importar Extrato" do Financas, clonada INTEIRA:
@@ -75,9 +77,11 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
   const [recusaDoArquivo, setRecusaDoArquivo] = useState<string | null>(null);
   /* FIN-LR-SYNC-01 passo b — o modal novo do Lucro Rural; o importador antigo (planilha) segue como está. */
   const [lrAberto, setLrAberto] = useState(false);
-  const { preview, loading, gerarPreview, confirmarImportacao, reset,
+  const { preview, loading, gerarPreview, gerarPreviewDaFonte, confirmarImportacao, reset,
     toggleImportar, marcarTodasImportaveis } = useImportacaoExtrato();
   const [arquivo, setArquivo] = useState<File | null>(null);
+  /* OPENFINANCE-P3b — a prévia que veio do BANCO ("Buscar do banco"), não de um arquivo: o nome do lote e a frase do corte. */
+  const [origemBanco, setOrigemBanco] = useState<{ nome: string; corte: string } | null>(null);
   const [gravando, setGravando] = useState(false);
   /* PR-CONC-IMPORT-BANCO-01B — o RESULTADO da gravação, escrito ao lado do botão (UX-TOAST-01), não em toast: o erro no
      rodapé da prévia, junto do "Importar N" (a prévia fica, para tentar de novo); o sucesso na linha do "Escolher
@@ -126,17 +130,25 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
     catch (e) { setRecusaDoArquivo(e instanceof Error ? e.message : 'Falha ao ler o arquivo.'); setArquivo(null); setTipo(null); }
   };
 
-  const cancelar = () => { reset(); setArquivo(null); setTipo(null); };
+  const cancelar = () => { reset(); setArquivo(null); setTipo(null); setOrigemBanco(null); };
+
+  /* OPENFINANCE-P3b — a fonte do banco entra na MESMA prévia do arquivo (gerarPreviewDaFonte → hash, dedupe, "Importar N"). */
+  const doBanco = async (fonte: FonteDoExtrato, nome: string, corte: string) => {
+    setResultado(null); setRecusaDoArquivo(null); setArquivo(null); setTipo(null);
+    try { await gerarPreviewDaFonte({ fonte, contaBancariaId: contaId }); setOrigemBanco({ nome, corte }); }
+    catch (e) { setResultado({ tipo: 'erro', texto: e instanceof Error ? e.message : 'Não consegui montar a prévia do banco.' }); }
+  };
 
   const importar = async () => {
-    if (!arquivo || !preview) return;
+    const nomeDoLote = arquivo?.name ?? origemBanco?.nome ?? null;
+    if (!nomeDoLote || !preview) return;
     setGravando(true);
     try {
       /* ⚠ O FORMATO GRAVADO É O QUE O PARSER USOU, não o que esta tela supôs.
          Enquanto só havia OFX aqui, o literal era verdadeiro; com o CSV entrando
          pelo mesmo botão, ele viraria mentira gravada em `tipo_arquivo`. O hook
          já detecta e devolve — a resposta certa é ler dele, não redecidir. */
-      const r = await confirmarImportacao({ contaBancariaId: contaId, nomeArquivo: arquivo.name, formato: preview.formato });
+      const r = await confirmarImportacao({ contaBancariaId: contaId, nomeArquivo: nomeDoLote, formato: preview.formato });
       setResultado({ tipo: 'ok', texto: r.mensagem });
       cancelar();
       if (r.inseridos > 0) onImportado?.();
@@ -211,6 +223,8 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             detalhe="" motivoExterno={recusaDoArquivo ? ARQUIVO_RECUSADO : null}
             desabilitado={!contaId || loading} motivoDesabilitado={contaId ? 'Lendo o arquivo…' : 'Escolha a conta primeiro'}
             onArquivos={([a]) => { if (a) void escolher(a); }} />
+          {/* OPENFINANCE-P3b — só o admin, só a conta ligada ao Open Finance: a mesma prévia, vinda do banco (lugar fixo: shrink-0) */}
+          {contaId && <BuscarDoBanco contaId={contaId} desabilitado={loading} aoFonte={doBanco} aoFrase={setResultado} />}
           {/* ⚠ QUATRO PÍLULAS NO LUGAR DO PARÁGRAFO — 133b. O texto dizia o que cada
               formato faz e ocupava três linhas da largura útil em TODA abertura da aba,
               inclusive nas dezenas em que o operador já sabe. A informação não some: cada
@@ -245,6 +259,13 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           {resultado?.tipo === 'ok' && (
             <span data-testid="resultado-importacao" title={resultado.texto}
               className="max-w-[340px] shrink-0 text-[10px] leading-tight text-muted-foreground">
+              {resultado.texto}
+            </span>
+          )}
+          {/* OPENFINANCE-P3b — a recusa do "Buscar do banco" (sem prévia na tela): na linha, ao lado, nunca em toast */}
+          {resultado?.tipo === 'erro' && (
+            <span data-testid="resultado-busca-erro" role="alert" title={resultado.texto}
+              className="max-w-[340px] shrink-0 text-[10px] leading-tight text-destructive">
               {resultado.texto}
             </span>
           )}
@@ -415,7 +436,10 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5">
             {seletor}
             <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Prévia</span>
-            <span className="truncate tabular-nums text-[10px] text-foreground">{arquivo?.name}</span>
+            <span className="truncate tabular-nums text-[10px] text-foreground">{arquivo?.name ?? origemBanco?.nome}</span>
+            {origemBanco && (
+              <span data-testid="openfinance-corte" title={origemBanco.corte} className="min-w-0 truncate text-[10px] text-muted-foreground">{origemBanco.corte}</span>
+            )}
             <div className="flex-1" />
             <Badge className="h-5 gap-1 px-1.5 text-[9px]">
               <CheckCircle2 className="h-2.5 w-2.5" />

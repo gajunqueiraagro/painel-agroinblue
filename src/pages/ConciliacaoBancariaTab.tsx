@@ -13,6 +13,7 @@ import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab, ABAS_ESPELHO, type AbaEspelho } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
+import { SaldoDoBanco } from '@/components/conciliacao/SaldoDoBanco';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { EnriquecerPorPlanilha } from '@/components/conciliacao/EnriquecerPorPlanilha';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
@@ -417,7 +418,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       supabase.from('financeiro_importacoes_v2')
         .select('conta_bancaria_id')
         .eq('cliente_id', clienteId)
-        .ilike('tipo_arquivo', '%ofx%')
+        /* OPENFINANCE-P3b: o extrato que veio do banco pelo Open Finance conta como o OFX (a conta importa extrato) */
+        .or('tipo_arquivo.ilike.%ofx%,tipo_arquivo.eq.OPEN_FINANCE')
         .is('cancelado_em', null)
         .is('cancelada_em', null)
         .neq('status', 'cancelada'),
@@ -1536,6 +1538,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         ? `Posição declarada em ${ddmmPosicao}: na data, a diferença é ${difNaPosicao.valor != null ? formatMoeda(difNaPosicao.valor) : '—'}.`
                         : `A diferença compara o saldo do extrato de ${posicaoDoCard}.`}
                     </div>
+                  )}
+                  {/* OPENFINANCE-P3b (f) — o saldo que o BANCO informou × o extrato do sistema no mesmo dia (só aviso; só com conta aberta) */}
+                  {selectedConta !== '__all__' && (
+                    <SaldoDoBanco clienteId={clienteId} contaId={selectedConta} anoMes={anoMesSel} abertura={saldosSel.saldo_inicial ?? null} />
                   )}
                 </div>
               {/* Os lançamentos do mês — embaixo do Resumo, fora do rolador (sempre à vista). */}

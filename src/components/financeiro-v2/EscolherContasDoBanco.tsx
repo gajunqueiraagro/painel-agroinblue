@@ -14,12 +14,14 @@ import {
   contasDaResposta, escolhaMudou, FRASE_CONTAS_FALHOU, FRASE_PERMITIR_FALHOU, frasePrevia, fraseDoPermitir, lerRespostaDaBorda,
   marcadasDePartida, type ContaDaConexao,
 } from '@/lib/openfinance/openfinanceTela';
+import { LigarContaDoSistema } from './LigarContaDoSistema';
 
 export function EscolherContasDoBanco({ clienteId, itemId, onFechar }: { clienteId: string; itemId: string | null; onFechar: () => void }) {
   const [contas, setContas] = useState<ContaDaConexao[] | null>(null);
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
   const [previa, setPrevia] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [gravadas, setGravadas] = useState(0); // P3b: relê o "Lança na conta" depois de gravar a escolha
 
   useEffect(() => {
     if (!itemId) return;
@@ -51,7 +53,8 @@ export function EscolherContasDoBanco({ clienteId, itemId, onFechar }: { cliente
       if (r.ok === false) { toast.error(r.frase); return; }
       if (simular) { setPrevia(frasePrevia(r.corpo)); return; }
       toast.success(fraseDoPermitir(r.corpo));
-      onFechar();
+      setGravadas((n) => n + 1); setPrevia(null);
+      setContas((cs) => cs && cs.map((c) => ({ ...c, permitida: marcadas.has(c.accountId) })));
     } catch { toast.error(FRASE_PERMITIR_FALHOU); } finally { setOcupado(false); }
   };
 
@@ -94,6 +97,7 @@ export function EscolherContasDoBanco({ clienteId, itemId, onFechar }: { cliente
         <div className="min-h-[34px] rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" data-testid="openfinance-previa">
           {previa ?? 'Nada é gravado antes de você conferir a prévia.'}
         </div>
+        {itemId && <LigarContaDoSistema clienteId={clienteId} itemId={itemId} versao={gravadas} />}
         <div className="flex items-center justify-end gap-2">
           <TextoReservado className="mr-auto text-[11px] text-muted-foreground" reserva="99 de 99 marcadas"
             texto={`${marcadas.size} de ${contas?.length ?? 0} marcadas`} testid="openfinance-contador" />

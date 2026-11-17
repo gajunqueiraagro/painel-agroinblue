@@ -5,7 +5,7 @@
  * ⚠ Não loga corpo, cabeçalho, chave nem token. Secrets: PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { contas } from "../_shared/pluggy.ts";
+import { contas, ligarConta } from "../_shared/pluggy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +25,20 @@ Deno.serve(async (req) => {
   let corpo: Record<string, unknown> = {};
   try { const c = await req.json(); if (c && typeof c === "object") corpo = c; } catch { corpo = {}; }
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim() || null;
+
+  /* P3b: 'ligar' = a conta permitida → a conta do sistema (não fala com a Pluggy; a interna da 118140 confere) */
+  if (corpo.acao === "ligar") {
+    const l = await ligarConta({ token, clienteId: corpo.cliente_id, permitidaId: corpo.permitida_id, contaBancariaId: corpo.conta_bancaria_id, simular: corpo.simular }, {
+      autorDoToken: async (t) => (await admin.auth.getUser(t)).data.user?.id ?? null,
+      ehAdmin: async (autor) => (await admin.rpc("is_admin_agroinblue", { _user_id: autor })).data === true,
+      ligar: async (p) => {
+        const { data, error } = await admin.rpc("_fn_openfinance_conta_ligar_sistema", p);
+        if (error || !data || typeof data !== "object") return { ok: false, codigo: error?.code ?? null };
+        return { ok: true, corpo: data };
+      },
+    });
+    return json(l.status, l.corpo);
+  }
 
   const r = await contas({ token, acao: corpo.acao, clienteId: corpo.cliente_id, itemId: corpo.item_id, accountIds: corpo.account_ids, simular: corpo.simular }, {
     autorDoToken: async (t) => (await admin.auth.getUser(t)).data.user?.id ?? null,

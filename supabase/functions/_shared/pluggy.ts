@@ -339,3 +339,180 @@ export async function contas(pedido: { token: string | null; acao: unknown; clie
   }
   return { status: 200, corpo: { ...g.corpo, ok: true } };
 }
+
+/**
+ * OPENFINANCE-P3b — LIGAR a conta permitida à conta do SISTEMA (onde o extrato cai). Só o admin AgroinBlue; quem confere cliente, tipo
+ * e "uma conta do sistema recebe de UMA conta do banco" é a interna `_fn_openfinance_conta_ligar_sistema` (118140). Não fala com a
+ * Pluggy: a conta permitida já foi conferida lá quando o admin a marcou. `contaBancariaId` nulo = desliga. `simular` = a prévia.
+ */
+export interface PecasLigar {
+  autorDoToken: (token: string) => Promise<string | null>;
+  ehAdmin: (autor: string) => Promise<boolean>;
+  ligar: (p: { p_cliente: string; p_permitida: string; p_conta: string | null; p_autor: string; p_simular: boolean }) =>
+    Promise<{ ok: true; corpo: Record<string, unknown> } | { ok: false; codigo: string | null }>;
+}
+export async function ligarConta(pedido: { token: string | null; clienteId: unknown; permitidaId: unknown; contaBancariaId: unknown; simular?: unknown },
+  pecas: PecasLigar): Promise<{ status: number; corpo: { ok: boolean; frase?: string; [k: string]: unknown } }> {
+  const autor = pedido.token ? await pecas.autorDoToken(pedido.token) : null;
+  if (!autor) return { status: 401, corpo: { ok: false, frase: 'Entre de novo no sistema.' } };
+  const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
+  const permitidaId = typeof pedido.permitidaId === 'string' && UUID.test(pedido.permitidaId) ? pedido.permitidaId : null;
+  const conta = pedido.contaBancariaId === null ? null
+    : typeof pedido.contaBancariaId === 'string' && UUID.test(pedido.contaBancariaId) ? pedido.contaBancariaId : undefined;
+  if (!clienteId || !permitidaId || conta === undefined) return { status: 400, corpo: { ok: false, frase: 'Escolha a conta do banco e a conta do sistema.' } };
+  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AgroinBlue liga a conta do banco à conta do sistema.' } };
+  const g = await pecas.ligar({ p_cliente: clienteId, p_permitida: permitidaId, p_conta: conta, p_autor: autor, p_simular: pedido.simular === true });
+  if (g.ok === false) {
+    if (g.codigo === '42501') return { status: 409, corpo: { ok: false, frase: 'Esta conta não é deste cliente. Nada foi gravado.' } };
+    if (g.codigo === '23505') return { status: 409, corpo: { ok: false, frase: 'Esta conta do sistema já recebe de outra conta do banco. Nada foi gravado.' } };
+    if (g.codigo === '22023') return { status: 400, corpo: { ok: false, frase: 'Só conta corrente ativa recebe o extrato do banco (cartão não). Nada foi gravado.' } };
+    return { status: 500, corpo: { ok: false, frase: 'Não consegui gravar a ligação agora. Nada foi gravado; tente de novo.' } };
+  }
+  return { status: 200, corpo: { ...g.corpo, ok: true } };
+}
+
+/**
+ * OPENFINANCE-P3b — o EXTRATO da conta permitida (desenho aprovado 16/11). `openfinance-extrato`, só o admin AgroinBlue (piloto):
+ *  · 'buscar'   → desde o CORTE (o dia seguinte à última linha viva do extrato da conta; sem extrato, os últimos 90 dias) até hoje;
+ *                 grava o SALDO que o banco informou (`_fn_openfinance_saldo_registrar`, 118140) — a falha dele não derruba a busca.
+ *  · 'conferir' → SÓ LEITURA, um período JÁ coberto pelo extrato (até a última linha; no máximo 62 dias): a tela compara com o que
+ *                 já está no sistema. Não grava nada, nem o saldo.
+ * Lê SÓ a conta permitida, viva e ligada a ESTA conta do sistema, e confere na Pluggy que a conexão é deste cliente. Devolve à tela só
+ * os campos que a prévia usa; a gravação do extrato é a porta de sempre (`fn_extrato_importar_arquivo`), pela tela, com a prévia.
+ * ⚠ Nunca loga transação, descrição, valor nem saldo.
+ */
+export interface TransacaoDaBorda {
+  id: string; accountId: string | null; description: string | null; amount: number; date: string;
+  status: string | null; type: string | null; providerId: string | null; currencyCode: string | null;
+}
+export interface ContaDaBorda {
+  id: string; type: string; subtype: string | null; number: string | null; balance: number | null; currencyCode: string | null;
+  /** quando o BANCO atualizou o saldo (`updatedAt` da Pluggy); nulo = não disse */
+  saldoEm: string | null;
+}
+export interface PecasExtrato {
+  autorDoToken: (token: string) => Promise<string | null>;
+  ehAdmin: (autor: string) => Promise<boolean>;
+  credenciais: () => { clientId: string; clientSecret: string } | null;
+  busca: Busca;
+  /** a conta permitida VIVA ligada a esta conta do sistema, deste cliente; nulo = nenhuma; 'erro' = não consegui ler */
+  permitidaDaConta: (clienteId: string, contaBancariaId: string) => Promise<{ item_id: string; account_id: string } | null | 'erro'>;
+  /** a data ('AAAA-MM-DD') da última linha VIVA do extrato da conta; nulo = sem extrato; 'erro' = não consegui ler */
+  ultimoDiaDoExtrato: (contaBancariaId: string) => Promise<string | null | 'erro'>;
+  registrarSaldo: (p: { p_item: string; p_account: string; p_saldo: number; p_saldo_em: string | null; p_autor: string }) => Promise<boolean>;
+}
+export interface RespostaExtrato {
+  ok: true; acao: 'buscar' | 'conferir'; de: string; ate: string; hoje: string;
+  /** o dia seguinte à última linha do extrato (nulo = conta sem extrato) e a própria última linha */
+  corte: string | null; ultimoDia: string | null;
+  conta: ContaDaBorda; transacoes: TransacaoDaBorda[]; saldoGravado: boolean | null;
+}
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
+const diaValido = (v: unknown): string | null => {
+  if (typeof v !== 'string' || !DIA.test(v)) return null;
+  const d = new Date(`${v}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v ? null : v;
+};
+export function somarDias(dia: string, n: number): string {
+  const d = new Date(`${dia}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+const diasEntre = (a: string, b: string) => Math.round((new Date(`${b}T12:00:00Z`).getTime() - new Date(`${a}T12:00:00Z`).getTime()) / 86_400_000);
+/** sem extrato na conta, a 1ª busca olha 90 dias para trás */
+export const JANELA_SEM_EXTRATO = 90;
+/** a conferência cobre no máximo 62 dias (dois meses) */
+export const JANELA_CONFERENCIA = 62;
+const PAGINAS_NO_MAXIMO = 20;
+
+export function transacaoDaPluggy(t: unknown): TransacaoDaBorda | null {
+  const o = objeto(t);
+  const id = texto(o?.id, 128);
+  const date = texto(o?.date, 40);
+  if (!o || !id || !date || typeof o.amount !== 'number' || !Number.isFinite(o.amount)) return null;
+  return {
+    id, accountId: texto(o.accountId, 128), description: texto(o.description, 200), amount: o.amount, date,
+    status: texto(o.status, 16), type: texto(o.type, 16), providerId: texto(o.providerId, 128), currencyCode: texto(o.currencyCode, 8),
+  };
+}
+
+export async function extrato(pedido: { token: string | null; acao: unknown; clienteId: unknown; contaBancariaId: unknown; de?: unknown; ate?: unknown; hoje: string },
+  pecas: PecasExtrato): Promise<{ status: number; corpo: RespostaExtrato | { ok: false; frase: string } }> {
+  const falha = (status: number, frase: string) => ({ status, corpo: { ok: false as const, frase } });
+  const autor = pedido.token ? await pecas.autorDoToken(pedido.token) : null;
+  if (!autor) return falha(401, 'Entre de novo no sistema.');
+  const acao = pedido.acao === 'buscar' || pedido.acao === 'conferir' ? pedido.acao : null;
+  const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
+  const contaId = typeof pedido.contaBancariaId === 'string' && UUID.test(pedido.contaBancariaId) ? pedido.contaBancariaId : null;
+  if (!acao || !clienteId || !contaId) return falha(400, 'Escolha o cliente e a conta.');
+  if (!(await pecas.ehAdmin(autor))) return falha(403, 'No piloto, só a AgroinBlue busca o extrato no banco.');
+
+  const permitida = await pecas.permitidaDaConta(clienteId, contaId);
+  if (permitida === 'erro') return falha(500, 'Não consegui ler a ligação com o banco. Tente de novo.');
+  if (!permitida) return falha(404, 'Esta conta do sistema não está ligada a uma conta do banco (Bancos conectados › Escolher contas).');
+  const ultimo = await pecas.ultimoDiaDoExtrato(contaId);
+  if (ultimo === 'erro') return falha(500, 'Não consegui ler o extrato desta conta. Nada foi lido no banco.');
+  const hoje = pedido.hoje;
+  const corte = ultimo ? somarDias(ultimo, 1) : null;
+
+  let de: string; let ate: string;
+  if (acao === 'buscar') {
+    de = corte ?? somarDias(hoje, -JANELA_SEM_EXTRATO);
+    ate = hoje;
+  } else {
+    const d = diaValido(pedido.de); const a = diaValido(pedido.ate);
+    if (!d || !a || d > a) return falha(400, 'Escolha o período da conferência (de ≤ até).');
+    if (!ultimo || a > ultimo) return falha(400, 'A conferência é só do período que já está no extrato (até a última linha importada).');
+    if (diasEntre(d, a) + 1 > JANELA_CONFERENCIA) return falha(400, `A conferência cobre no máximo ${JANELA_CONFERENCIA} dias.`);
+    de = d; ate = a;
+  }
+
+  const cred = pecas.credenciais();
+  if (!cred) return falha(503, 'O Open Finance ainda não está configurado neste ambiente.');
+  const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
+  if (chave.ok === false) return falha(chave.status, chave.frase);
+  const h = { 'Content-Type': 'application/json', 'X-API-KEY': chave.valor };
+
+  let conta: ContaDaBorda;
+  const transacoes: TransacaoDaBorda[] = [];
+  try {
+    const item = await pecas.busca(`${PLUGGY_BASE}/items/${permitida.item_id}`, { method: 'GET', headers: h });
+    if (item.status === 404) return falha(404, 'A conexão com o banco não existe mais na Pluggy. Nada foi lido.');
+    if (!item.ok) return falha(502, 'Não consegui ler a conexão na Pluggy. Tente de novo.');
+    if (objeto(await item.json())?.clientUserId !== clienteId) return falha(409, 'Esta conexão não é deste cliente. Nada foi lido.');
+
+    const rc = await pecas.busca(`${PLUGGY_BASE}/accounts/${permitida.account_id}`, { method: 'GET', headers: h });
+    if (!rc.ok) return falha(502, 'Não consegui ler a conta no banco. Tente de novo.');
+    const c = objeto(await rc.json());
+    const id = texto(c?.id, 128);
+    if (!c || id !== permitida.account_id || typeof c.type !== 'string') return falha(502, 'O banco devolveu outra conta. Nada foi lido.');
+    if (c.type !== 'BANK') return falha(400, 'Esta conta do banco é um cartão: a fatura ainda não se importa por aqui. Nada foi lido.');
+    conta = {
+      id, type: c.type, subtype: texto(c.subtype, 32), number: texto(c.number, 40),
+      balance: typeof c.balance === 'number' && Number.isFinite(c.balance) ? c.balance : null,
+      currencyCode: texto(c.currencyCode, 8), saldoEm: texto(c.updatedAt, 40),
+    };
+
+    if (de <= ate) {
+      for (let pagina = 1; pagina <= PAGINAS_NO_MAXIMO; pagina++) {
+        const q = `accountId=${encodeURIComponent(permitida.account_id)}&from=${de}&to=${ate}&pageSize=500&page=${pagina}`;
+        const rt = await pecas.busca(`${PLUGGY_BASE}/transactions?${q}`, { method: 'GET', headers: h });
+        if (!rt.ok) return falha(502, 'Não consegui ler o extrato no banco. Nada foi lido; tente de novo.');
+        const corpo = objeto(await rt.json());
+        const lista = Array.isArray(corpo?.results) ? corpo.results : [];
+        for (const t of lista) { const x = transacaoDaPluggy(t); if (x) transacoes.push(x); }
+        const total = numero(corpo?.totalPages) ?? 1;
+        if (pagina >= total) break;
+        if (pagina === PAGINAS_NO_MAXIMO) return falha(502, 'O extrato veio grande demais de uma vez. Nada foi lido; fale com a AgroinBlue.');
+      }
+    }
+  } catch { return falha(502, 'Não consegui falar com a Pluggy agora. Tente de novo.'); }
+
+  let saldoGravado: boolean | null = null;
+  if (acao === 'buscar' && conta.balance !== null) {
+    try {
+      saldoGravado = await pecas.registrarSaldo({ p_item: permitida.item_id, p_account: permitida.account_id, p_saldo: conta.balance, p_saldo_em: conta.saldoEm, p_autor: autor });
+    } catch { saldoGravado = false; }
+  }
+  return { status: 200, corpo: { ok: true, acao, de, ate, hoje, corte, ultimoDia: ultimo, conta, transacoes, saldoGravado } };
+}
