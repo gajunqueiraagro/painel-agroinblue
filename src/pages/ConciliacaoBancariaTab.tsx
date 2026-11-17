@@ -11,7 +11,7 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { PainelDaConta, FUNDO_ESCURO } from '@/components/conciliacao/PainelDaConta';
-import { contaNaTela, larguraDaConta } from '@/lib/conciliacao/painelDaConta';
+import { contaNaTela, larguraDaConta, larguraPelaMedida } from '@/lib/conciliacao/painelDaConta';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab, ABAS_ESPELHO, type AbaEspelho } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
@@ -161,17 +161,9 @@ const valorDaRegua = (v: number): string => formatNum(v, 2);
  *  10px; os números das CONTAS uma fonte abaixo (9,5px) dos do Total e dos grupos (10px negrito). A Diferença volta à fonte da linha (a
  *  exceção de 8px do P141 saiu); Data 38px (9,5px cinza), selos OFX/PDF em lugares de 20px, valores 86px sem "R$" (o pior valor em negrito). */
 const REGUA_SALDOS = [38, 44, 86, 86, 86, 38];
-/** CONC-PAINEL-CONTA-01 — a largura de um texto em 10px negrito, na fonte da página (canvas); sem canvas (teste), 6,2px por letra. */
-let contextoDeMedida: CanvasRenderingContext2D | null | undefined;
-function medirTexto10Negrito(t: string): number {
-  if (contextoDeMedida === undefined) {
-    /* sem canvas de verdade (jsdom diz "Not implemented" no console): a estimativa */
-    const semCanvas = typeof document === 'undefined' || /jsdom/i.test(navigator.userAgent);
-    contextoDeMedida = semCanvas ? null : document.createElement('canvas').getContext('2d');
-    if (contextoDeMedida) contextoDeMedida.font = `700 10px ${getComputedStyle(document.body).fontFamily}`;
-  }
-  return contextoDeMedida ? contextoDeMedida.measureText(t).width : t.length * 6.2;
-}
+/** CONC-PAINEL-CONTA-01 — a ESTIMATIVA da largura de um texto em 10px negrito (6,2px por letra): só antes da medida do DOM (o medidor
+ *  escondido) ou sem layout (teste). A medida em canvas saiu: errava contra o texto desenhado. */
+const medirTexto10Negrito = (t: string): number => t.length * 6.2;
 /** O selo do arquivo (OFX/PDF): 7px negrito com borda fina, num lugar FIXO de 20px (sem arquivo, o lugar fica vazio). */
 const SELO_ARQUIVO = 'inline-block rounded-[2px] border px-px text-[7px] font-bold leading-[9px]';
 const LUGAR_SELO = 'inline-flex h-[11px] w-[20px] shrink-0 items-center justify-center align-middle';
@@ -762,6 +754,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* a medida do nome em canvas só vale com a FONTE da página carregada: antes dela o canvas mede na fonte de reserva e a coluna mudava 8px
      conforme a carga (o desloca acusou entre duas páginas). Quando as fontes ficam prontas, mede de novo. */
   const [fontesProntas, setFontesProntas] = useState(false);
+  /* CONC-PAINEL-CONTA-01 — a largura da Conta MEDIDA NO DOM: um medidor escondido com os nomes do cadastro (no pior peso, o da linha
+     escolhida), os grupos e o "Total", na fonte da tabela; o canvas errava contra o texto desenhado (nomes do NJ cortados a 1750). */
+  const refMedidorConta = useRef<HTMLDivElement | null>(null);
+  const [larguraMedidaConta, setLarguraMedidaConta] = useState<number | null>(null);
   useEffect(() => {
     let vivo = true;
     const fontes = typeof document === 'undefined' ? undefined : document.fonts;
@@ -843,13 +839,34 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* CONC-PAINEL-CONTA-01 (item 3) — a coluna Conta pelo MAIOR texto dela (contas, grupos, "Total"), medido em 10px negrito.
      ⚠ PELO CADASTRO INTEIRO (`contas`), NÃO pelas linhas visíveis: com uma conta escolhida o dono vem filtrado, outra conta vira "oculta" e
      a largura mudava 8px ao voltar para "Todas" (o desloca acusou). O cadastro não muda com a seleção. */
-  const larguraConta = useMemo(() => larguraDaConta(
+  const textosDaConta = useMemo(() => ({
+    contas: [...new Set([...contas.map(c => getContaLabel(c)), ...gruposSaldos.flatMap(g => g.contas.map(c => c.label))])],
+    grupos: [...new Set(['Total', ...agruparContasPorTipo(contas.map(c => ({ ...c, label: getContaLabel(c) }))).map(g => g.rotulo),
+      ...gruposSaldos.map(g => g.rotulo)])],
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- os textos mudam com o cadastro e os grupos; a chave é o conteúdo
+  }), [JSON.stringify(contas.map(c => getContaLabel(c))), JSON.stringify(gruposSaldos.map(g => [g.rotulo, g.contas.map(c => c.label)]))]);
+  useEffect(() => {
+    const el = refMedidorConta.current;
+    if (!el) return;
+    const ler = () => {
+      const itens = [...el.querySelectorAll<HTMLElement>('[data-medida]')].map(m => ({ texto: m.getBoundingClientRect().width, recuo: Number(m.dataset.medida) }));
+      /* sem layout (todo texto com 0 de largura: teste, aba escondida) = sem medida — vale a estimativa */
+      if (!itens.some(i => i.texto > 0)) { setLarguraMedidaConta(null); return; }
+      setLarguraMedidaConta(larguraPelaMedida(Math.max(...itens.map(i => i.texto + i.recuo))));
+    };
+    ler();
+    const obs = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(ler);
+    obs?.observe(el);
+    return () => obs?.disconnect();
+  }, [textosDaConta, fontesProntas]);
+  const larguraEstimadaConta = useMemo(() => larguraDaConta(
     ['Total', ...agruparContasPorTipo(contas.map(c => ({ ...c, label: getContaLabel(c) }))).flatMap(g => [g.rotulo, ...g.contas.map(c => c.label)]),
       /* + as linhas à vista: se o cadastro não carregou, a coluna não cai no piso (com o cadastro, elas já estão nele) */
       ...gruposSaldos.flatMap(g => [g.rotulo, ...g.contas.map(c => c.label)])],
     medirTexto10Negrito,
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `fontesProntas` refaz a medida quando a fonte chega (o canvas lê a fonte carregada)
-  ), [contas, gruposSaldos, fontesProntas]);
+  ), [contas, gruposSaldos]);
+  /* a medida do DOM manda; a estimativa só antes de medir (ou sem layout, no teste) */
+  const larguraConta = larguraMedidaConta ?? larguraEstimadaConta;
   /* o teto da Conta pelo espaço (`contaNaTela`): o Resumo nunca sai da tela */
   const larguraContaNaTela = contaNaTela(larguraConta, larguraBlocos, REGUA_SALDOS.reduce((a, b) => a + b, 0), barraSaldos);
   /* CONC-ORDENAR-01 (regra soberana de 29/10, gate check-ui-ordenar): Conta, Sistema, Extrato e Diferença ordenam as contas DENTRO de cada
@@ -1355,7 +1372,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                  data-testid="blocos-conciliacao">
 
               {/* ── Saldos por conta ── */}
-              <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card" data-testid="card-saldos">
+              <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card" data-testid="card-saldos">
                 <div className="flex h-[26px] shrink-0 items-center justify-between bg-primary px-3 text-primary-foreground">
                   <span className="text-[10px] font-medium">Saldos por conta</span>
                   <div className="flex items-center gap-2">
@@ -1391,6 +1408,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   </div>
                 </div>
 
+                {/* CONC-PAINEL-CONTA-01 — o MEDIDOR da coluna Conta (escondido, fora do fluxo): cada nome no peso da linha escolhida + o recuo
+                    da célula (19 + ponto 7 + vão 4 + folga 6), cada grupo em negrito + o padding (8 + 4 + folga 4) */}
+                <div ref={refMedidorConta} aria-hidden className="pointer-events-none invisible absolute left-0 top-0 whitespace-nowrap text-[10px]"
+                  data-testid="medidor-conta">
+                  {/* o texto vem pelo CSS (`content: attr(data-texto)`): mede igual, mas não vira texto da página (busca, leitor de tela, testes) */}
+                  {textosDaConta.contas.map(t => <span key={`c:${t}`} className="block w-max font-semibold before:content-[attr(data-texto)]" data-medida={36} data-texto={t} />)}
+                  {textosDaConta.grupos.map(t => <span key={`g:${t}`} className="block w-max font-bold before:content-[attr(data-texto)]" data-medida={16} data-texto={t} />)}
+                </div>
                 {/* ⚠ SÓ A TABELA ROLA (P166): o cabeçalho do card fica fora do rolador; o das colunas e o Total grudam no topo dele. */}
                 {/* CONC-PAINEL-CONTA-01 — o lugar da barra fica RESERVADO (`scrollbar-gutter: stable`): a barra que aparece/some com a altura não
                     muda a largura da Conta (o desloca acusou 8px ao voltar para "Todas") */}

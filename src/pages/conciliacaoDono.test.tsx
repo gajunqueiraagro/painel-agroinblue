@@ -591,6 +591,18 @@ describe('CONC-PAINEL-CONTA-01 — a coluna Conta não muda de largura com a sel
     await waitFor(() => expect(screen.getAllByTestId('linha-saldo-conta').length).toBeGreaterThan(0));
     expect(largura()).toBe('200px');
   });
+  it('o MEDIDOR escondido tem os nomes do cadastro (no peso da linha escolhida), os grupos e o "Total"', async () => {
+    B.contas = [...B.contas, conta('escondida', 'Conta Escondida Bem Comprida')];
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const medidor = screen.getByTestId('medidor-conta');
+    expect(medidor.className).toContain('invisible');
+    expect(medidor.getAttribute('aria-hidden')).not.toBeNull();
+    const textos = [...medidor.querySelectorAll('[data-medida]')].map((m) => m.getAttribute('data-texto'));
+    expect(medidor.textContent).toBe('');
+    expect(textos).toEqual(expect.arrayContaining(['Conta Escondida Bem Comprida', 'Total', 'Conta corrente']));
+    expect(medidor.querySelector('[data-medida="36"]')?.className).toContain('font-semibold');
+  });
 });
 
 describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho no Extrato, escolhida com contorno, régua fixa', () => {

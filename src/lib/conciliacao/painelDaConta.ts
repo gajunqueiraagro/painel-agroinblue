@@ -72,3 +72,9 @@ export function contaNaTela(larguraDoNome: number, larguraDosBlocos: number | nu
   if (!larguraDosBlocos) return larguraDoNome;
   return Math.max(PISO_DA_CONTA, Math.min(larguraDoNome, larguraDosBlocos - 24 - 8 - RESUMO_MINIMO - regua - 2 - barra));
 }
+
+/** CONC-PAINEL-CONTA-01 — a largura da Conta a partir da MEDIDA do DOM (o maior texto + o recuo dele, já somado pelo medidor), entre o piso
+ *  e o teto. */
+export function larguraPelaMedida(maiorComRecuo: number): number {
+  return Math.min(TETO_DA_CONTA, Math.max(PISO_DA_CONTA, Math.ceil(maiorComRecuo)));
+}

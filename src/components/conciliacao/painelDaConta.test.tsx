@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { contaNaTela, fonteDaConta, larguraDaConta, passosDaConta, PISO_DA_CONTA, RESUMO_MINIMO, TETO_DA_CONTA } from '@/lib/conciliacao/painelDaConta';
+import { contaNaTela, fonteDaConta, larguraDaConta, larguraPelaMedida, passosDaConta, PISO_DA_CONTA, RESUMO_MINIMO, TETO_DA_CONTA } from '@/lib/conciliacao/painelDaConta';
 import type { LinhaResumo, StatusDono } from '@/lib/conciliacao/resumoDoDono';
 
 const NIVEL_CONTA: LinhaResumo['nivel'] = 'conta';
@@ -73,6 +73,11 @@ describe('as regras (puras)', () => {
     expect(contaNaTela(219, 500, regua)).toBe(PISO_DA_CONTA);
     expect(contaNaTela(219, null, regua)).toBe(219);
     expect(contaNaTela(219, 0, regua)).toBe(219);
+  });
+  it('a largura pela MEDIDA do DOM: arredonda para cima, entre o piso e o teto', () => {
+    expect(larguraPelaMedida(187.3)).toBe(188);
+    expect(larguraPelaMedida(40)).toBe(PISO_DA_CONTA);
+    expect(larguraPelaMedida(900)).toBe(TETO_DA_CONTA);
   });
   it('a coluna Conta = o maior nome + a folga, entre o piso e o teto', () => {
     const medir = (t: string) => t.length * 6;
