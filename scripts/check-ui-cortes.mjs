@@ -2013,6 +2013,20 @@ const CENARIOS = [
   /* P154 — a prévia dos previstos fora da vigência (encurtada e cancelar), vazia, carregando e com a recusa; valores no teto */
   ...['encurtada', 'cancelar', 'vazia', 'carregando', 'erro'].map((v) => ({ nome: `fora-da-vigencia-${v}`, url: `tela=fora-da-vigencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-fora-da-vigencia"]' })),
+  /* BPO-APROVACAO-01 — a tela do aprovador, celular primeiro (390×844) e no computador: a fila, a prévia do lote, os alertas, o desligado */
+  ...[['aprovar-pagamentos', 'tela=aprovar-pagamentos', null], ['aprovar-pagamentos-previa', 'tela=aprovar-pagamentos', 'previa'],
+      ['aprovar-pagamentos-alertas', 'tela=aprovar-pagamentos&v=alertas', 'alertas'], ['aprovar-pagamentos-desligado', 'tela=aprovar-pagamentos&v=desligado', 'desligado']]
+    .map(([nome, url, estado]) => ({ nome, url, tamanhos: [[390, 844], [1366, 768]], regiao: estado === 'previa' ? '[role="dialog"]' : 'body',
+      antes: async (p) => {
+        if (estado === 'desligado') { await p.locator('[data-testid="aprovar-desligado"]').waitFor(); return; }
+        await p.locator('[data-testid="aprovar-item"]').first().waitFor();
+        if (estado === 'alertas') { await p.getByRole('radio', { name: 'Alertas' }).or(p.getByRole('button', { name: 'Alertas' })).first().click(); await p.locator('[data-testid="aprovar-alertas"]').waitFor(); }
+        if (estado === 'previa') {
+          for (const n of [0, 1, 2]) await p.locator('[data-testid="aprovar-item"] button[role="checkbox"]').nth(n).click();
+          await p.locator('[data-testid="aprovar-lote"]').click(); await p.locator('[data-testid="aprovar-previa"]').waitFor();
+        }
+        await p.waitForTimeout(300);
+      } })),
   /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
      botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
   ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',

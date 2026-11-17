@@ -23,6 +23,8 @@ export type V2Section =
   | 'importacao-lanc-excel'
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
+  // BPO-APROVACAO-01 — a fila do aprovador
+  | 'aprovar-pagamentos'
   // FIN-VISAO-GERAL-01 PR 3 — a Visão Geral do Financeiro (topo do grupo)
   | 'fin-visao-geral'
   // financeiro — conciliação
@@ -244,6 +246,8 @@ export const NAV_GRUPOS: NavGrupo[] = [
              (Gestão) fica onde está até a homologação desta. */
           { id: 'fin-visao-geral',     label: 'Visão geral',             status: 'ready', liberadaClientes: true },
           { id: 'financeiro-lanc',     label: 'Lançamentos financeiros', status: 'ready', liberadaClientes: true },
+          /* BPO-APROVACAO-01 — o BPO nasce DESLIGADO (Gabriel 17/11 11:42): por ora só o admin vê; abrir ao aprovador do NJ vai com o OK de ligar */
+          { id: 'aprovar-pagamentos',  label: 'Aprovar pagamentos',      status: 'ready', liberadaClientes: false },
           { id: 'conciliacao',         label: 'Conciliação bancária',    status: 'ready', liberadaClientes: true },
           /* ⚠ A TELA NOVA ENTRA AO LADO DAS VELHAS, e nao no lugar delas —
              FIN-CONCIL-PORTAR-01, rodada 1. Ela leva "(novo)" no rotulo porque
@@ -441,7 +445,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'financeiro-home': 'financeiro', 'financeiro-dashboard': 'financeiro',
   'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro', 'painel-periodo': 'financeiro',
   'contas-a-pagar-receber': 'financeiro',
-  'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro', 'fin-visao-geral': 'financeiro',
+  'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro', 'aprovar-pagamentos': 'financeiro', 'fin-visao-geral': 'financeiro',
   'recorrencias': 'financeiro',
   'conciliacao-extrato': 'financeiro',
   'importacao-lanc-excel': 'financeiro',

@@ -1515,6 +1515,28 @@ if (tela === 'mesclar') {
     previa={v === 'carregando' ? null : lerForaDaVigencia(resposta)} carregando={v === 'carregando'}
     erro={v === 'erro' ? 'Os lançamentos mudaram durante a gravação (11 de 12). Nada foi gravado.' : null}
     aoConfirmar={async () => {}} aoFechar={() => {}} />);
+} else if (tela === 'aprovar-pagamentos') {
+  /* BPO-APROVACAO-01 — a tela do APROVADOR no pior caso (SINTÉTICO): 12 pagamentos em 3 dias, nomes compridos, valores no teto, sem nota/
+     sem boleto, uma conta com leitura do banco (fica negativa) e outra sem ("—"); `&v=alertas` a aba dos alertas; `&v=desligado` o BPO
+     desligado (a frase). O gate abre a prévia do lote (marca 3 e "Aprovar"). */
+  const NOMES = ['Agropecuária Sintética de Insumos e Fertilizantes do Centro-Oeste Ltda', 'Posto Exemplo', 'Veterinária Sintética Comprida Ltda'];
+  const LINHAS = Array.from({ length: 12 }, (_, i) => ({ lancamento_id: `p${i}`, rodada: i === 3 ? 2 : 1, situacao: i < 9 ? 'aguardando' : i < 11 ? 'aprovado' : 'recusado',
+    motivo: i === 11 ? 'Falta o boleto e conferir se a quantidade bate com o pedido de compra do mês' : null, observacao: i === 3 ? 'mudou: valor' : null,
+    vencimento: ['2031-10-21', '2031-10-24', '2031-10-28'][i % 3], valor: i === 0 ? -99999999.99 : -(1234.56 * (i + 1)), descricao: `Compra sintética ${i}`,
+    fornecedor: NOMES[i % 3], fazenda: 'Fazenda Sintética com Nome Longo', conta: i % 2 ? 'Sicredi Fazenda 0418' : 'Itaú Personalite 7225',
+    conta_bancaria_id: i % 2 ? 'sic' : 'itau', status_transacao: 'programado', tem_nota: i % 4 !== 2, tem_boleto: i % 3 !== 1 }));
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financeiro_bpo_config' ? (v === 'desligado' ? [] : [{ ativo: true }])
+      : t === 'financeiro_aprovadores' ? [{ id: 'a1' }]
+      : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }] : [],
+    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista' ? LINHAS
+      : fn === 'fn_aprovacao_alertas' ? [{ alerta: 'pago_sem_aprovacao', lancamento_id: 'x1', data: '2031-10-13', valor: -2140, valor_aprovado: null, fornecedor: NOMES[0] },
+          { alerta: 'aprovado_nao_pago', lancamento_id: 'x2', data: '2031-10-14', valor: -5990, valor_aprovado: -5990, fornecedor: NOMES[1] },
+          { alerta: 'pago_diferente', lancamento_id: 'x3', data: '2031-10-12', valor: -99999999.99, valor_aprovado: -99999999.98, fornecedor: NOMES[2] }]
+      : fn === 'fn_aprovacao_decidir' ? { ok: true, simulado: a.p_simular, n: (a.p_ids ?? []).length, total: 99999999.99 } : null,
+  };
+  /* import DENTRO do ramo: o trecho comum da bancada não muda (UI-GATE-RAPIDO-01) */
+  void import('@/pages/AprovarPagamentosPage').then(({ default: AprovarPagamentosPage }) => montar(<AprovarPagamentosPage />));
 } else if (tela === 'escolher-contas') {
   /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Contas bancárias › Bancos conectados › Escolher contas, com o bloco "Lança na
      conta": a conta corrente do banco, a conta do sistema com o nome no pior caso e a frase da prévia ("Liga … em …") depois do clique.
