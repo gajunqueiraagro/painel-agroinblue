@@ -24,6 +24,7 @@ const FLUXOS = {
   todas: { url: 'tela=notas-receita', antes: lista },
   'a-lancar': { url: 'tela=notas-receita', antes: aba(/^A lançar/) },
   ciencia: { url: 'tela=notas-receita', antes: aba(/^Ciência pendente/) },
+  casar: { url: 'tela=notas-receita-casar', antes: async (p) => { await p.locator('[data-testid="receita-casar"]').waitFor({ timeout: 20000 }); await p.waitForTimeout(600); } },
   ver: { url: 'tela=notas-receita', antes: async (p) => { await lista(p); await p.locator('[data-testid="receita-ver"]').first().click(); await p.waitForTimeout(500); } },
 };
 try {
