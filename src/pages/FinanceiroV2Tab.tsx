@@ -691,6 +691,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const receita = useNotasDaReceita(clienteAtual?.id ?? null);
   const [receitaAberta, setReceitaAberta] = useState(false);
   const [xmlDaReceita, setXmlDaReceita] = useState<File[] | null>(null);
+  /* NOTA-RECEITA-CASAR-01 — a prévia aberta pelo "Vincular a este": ao fechar, a lista da Receita relê (a nota vira "Já no sistema") */
+  const vinculoDaReceita = useRef(false);
   const notasPedemAcao = receita.data ? pedemAcao(receita.data.lista) : null;
   /* FIN-NOTA-PDF-01b — o prefill do XML (`prefillDaNota`) OU o do modal da nota (`prefillDoModal`: a nota + tudo o que foi escolhido) */
   const [prefillXml, setPrefillXml] = useState<React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] | null>(null);
@@ -3351,13 +3353,23 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         <NotasDaReceitaDialog clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
           erro={receita.error ? (receita.error as Error).message : null}
           aoFechar={() => setReceitaAberta(false)}
-          aoLancar={(arquivo) => { setReceitaAberta(false); setXmlDaReceita([arquivo]); setXmlAberto(true); }} />
+          aoLancar={(arquivo) => { setReceitaAberta(false); setXmlDaReceita([arquivo]); setXmlAberto(true); }}
+          /* NOTA-RECEITA-CASAR-01 — "Vincular a este" = a porta 2 (P128a): a MESMA prévia do "+ Da nota", partindo do lançamento escolhido */
+          aoVincular={async (arquivo, lancamentoId) => {
+            if (!clienteAtual?.id) return 'Escolha o cliente.';
+            const r = await notaParaAPrevia(clienteAtual.id, arquivo, hook.fornecedores, fazOperacionais);
+            if (r.ok === false) return r.frase;
+            setReceitaAberta(false);
+            vinculoDaReceita.current = true;
+            setNotaAberta({ nota: r.nota, linhaId: 'porta-2', partindoDe: lancamentoId });
+            return null;
+          }} />
       )}
 
       {notaAberta && clienteAtual?.id && (
         <NotaFiscalDialog
           open
-          onClose={() => setNotaAberta(null)}
+          onClose={() => { setNotaAberta(null); if (vinculoDaReceita.current) { vinculoDaReceita.current = false; void receita.refetch(); } }}
           clienteId={clienteAtual.id}
           clienteNome={clienteAtual.nome ?? null}
           nota={notaAberta.nota}

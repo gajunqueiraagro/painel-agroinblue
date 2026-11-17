@@ -240,10 +240,12 @@ function lancamentosCaixa(saldos: Reg[]): Reg[] {
 
 /* ── status do fechamento ──────────────────────────────────────────────────────── */
 type Pilar = 'oficial' | 'pendente' | 'nao_aplicavel' | 'nao_iniciado';
+/* VISAO-GERAL-PENDENCIAS-01 — `&emdia=1`: o cliente EM DIA (tudo fechado, nada sem casar, nenhuma nota nem boleto a conferir) */
+const EM_DIA = new URLSearchParams(globalThis.location?.search ?? '').get('emdia') === '1';
 function statusPilares(fid: string, m: number): { p1: Pilar; p2: Pilar } {
   if (fid === 'fC') return { p1: 'nao_aplicavel', p2: 'nao_aplicavel' };
   if (m > MES_ATUAL) return { p1: 'nao_iniciado', p2: 'nao_iniciado' };
-  if (fid === 'fB' && m === MES_ATUAL) return { p1: 'pendente', p2: 'pendente' };
+  if (fid === 'fB' && m === MES_ATUAL && !EM_DIA) return { p1: 'pendente', p2: 'pendente' };
   return { p1: 'oficial', p2: 'oficial' };
 }
 function statusAno(): Reg[] {
@@ -327,6 +329,7 @@ function drePecuaria(args: Reg): Reg {
 /* ── conciliação ───────────────────────────────────────────────────────────────── */
 function resumoConciliacao(): Reg[] {
   const zero = { qtde: 0, valor: 0 };
+  if (EM_DIA) return [];
   const base = { tem_extrato: true, saldo_inicial_origem: 'informado', banco: { entradas: 0, saidas: 0 }, retido_em_depositos: zero,
     motivos: [], avisos: [], posicao: null, sem_conta: null, linhas_sistema: null, proprio: null, internas: [] };
   return [
@@ -336,6 +339,13 @@ function resumoConciliacao(): Reg[] {
     { ...base, nivel: 'conta', conta_id: 'cb2', conta_nome: 'Aplicação Automática', tipo_conta: 'inv', saldo_inicial: 1160000, entradas: 25000, saidas: 5000,
       saldo_sistema: 1180000, saldo_extrato: 1180000, saldo_extrato_data: `${ANO}-${pad(MES_ATUAL)}-31`, diferenca: 0,
       extratos_sem_par: { qtde: 1, valor: 920 }, lancamentos_sem_par: { qtde: 1, valor: 1480 }, status: 'conciliado' },
+    /* VISAO-GERAL-PENDENCIAS-01 — a conta de nome LONGO (corta com "…" + title na linha) e o CARTÃO sem extrato (nunca entra nas pendências) */
+    { ...base, nivel: 'conta', conta_id: 'cb3', conta_nome: 'Conta Movimento da Cooperativa de Crédito Exemplo do Vale do Rio Grande', tipo_conta: 'cc',
+      saldo_inicial: 0, entradas: 0, saidas: 0, saldo_sistema: 0, saldo_extrato: 0, saldo_extrato_data: null, diferenca: 0,
+      extratos_sem_par: { qtde: 1088, valor: 0 }, lancamentos_sem_par: { qtde: 146, valor: 0 }, status: 'nao_conciliado' },
+    { ...base, tem_extrato: false, nivel: 'conta', conta_id: 'cb4', conta_nome: 'Cartão Exemplo', tipo_conta: 'cartao', saldo_inicial: 0, entradas: 0,
+      saidas: 0, saldo_sistema: 0, saldo_extrato: null, saldo_extrato_data: null, diferenca: null,
+      extratos_sem_par: zero, lancamentos_sem_par: { qtde: 47, valor: 0 }, status: 'nao_conciliado' },
     { ...base, nivel: 'total', conta_id: null, conta_nome: 'Total', tipo_conta: null, saldo_inicial: 1800000, entradas: 1875000, saidas: 1625000,
       saldo_sistema: 2050000, saldo_extrato: 2046300, saldo_extrato_data: null, diferenca: 3700,
       extratos_sem_par: { qtde: 4, valor: 4620 }, lancamentos_sem_par: { qtde: 3, valor: 3630 }, status: 'nao_conciliado' },
@@ -412,6 +422,13 @@ const TABELAS: Record<string, Reg[]> = {
   chuvas: chuvas(),
   financeiro_safras: SAFRAS.map((s) => ({ ...s })),
   agri_safra_area: areasSafra(),
+  /* VISAO-GERAL-PENDENCIAS-01 — as notas da Receita (SINTÉTICAS): 3 a lançar e 1 já ligada; nada no `emdia` */
+  fiscal_dfe_recebidos: EM_DIA ? [] : [1, 2, 3, 4].map((i) => ({ id: `dfe${i}`, cliente_id: CLI, titular_id: 't1', chave: `5026101122233300018155001${String(i).padStart(9, '0')}123456789${i}`,
+    situacao: 'xml', emitente_documento: '11222333000181', emitente_nome: 'Fornecedor Exemplo', emissao: `${ANO}-10-0${i}`, valor_cent: 100000 * i,
+    nota_id: i === 4 ? 'nf4' : null, recebido_em: `${ANO}-10-0${i}T10:00:00Z`, resumo: {} })),
+  fiscal_titulares: [{ id: 't1', cliente_id: CLI, nome: 'Titular Exemplo' }],
+  fiscal_dfe_controle: [],
+  nota_fiscal: [],
 };
 
 export const bancoVG02 = {
@@ -432,6 +449,9 @@ export const bancoVG02 = {
         { id: 'a3', nome: 'Eucalipto', familia: 'silvicultura', grupo_menu: 'silvicultura', ordem: 3, ativo: true },
       ] };
       case 'fn_conciliacao_resumo_mes': return resumoConciliacao();
+      /* VISAO-GERAL-PENDENCIAS-01 — a caixa de boletos: 2 na caixa + 1 sem par (nada no `emdia`) */
+      case 'fn_boletos_lista': return { itens: [], contadores: EM_DIA ? { novo: 0, ligado: 0, sem_par: 0, descartado: 0, substituido: 0 }
+        : { novo: 2, ligado: 5, sem_par: 1, descartado: 0, substituido: 0 } };
       case 'fn_estoque_graos_resumo': return [{ cultura: 'amendoim', saldo: 5400, valor: 756000, colhido: 21000, entregue: 15600, recebido: 0 }];
       case 'fn_dre_lavoura': return dreLavoura(String(a.p_safra_id ?? ''));
       default: return null;

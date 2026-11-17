@@ -128,13 +128,14 @@ export function fechamentoDaCompra(compra: string, diaFechamento: number): strin
 }
 
 /**
- * CARTAO-LANCAMENTO-01 (decisão 2) — a FORMA pela conta: conta de cartão põe "Cartão de crédito" só quando a forma está vazia ou foi
- * ela mesma que pôs (`automatica`); a escolha do operador ou da nota nunca é trocada. Conta que não é cartão volta a vazio só se a forma
- * era a automática.
+ * FIN-FORMA-CARTAO-AUTO-01 (Gabriel 17/11 07:44, D1/D2) — a FORMA pela conta, o ESPELHO do gatilho do banco `trg_00_forma_pela_conta`
+ * (20261028115520), que é quem manda: saída em conta de CARTÃO é SEMPRE "Cartão de crédito", diga o que disser o operador, a nota ou o
+ * fornecedor (D1); ao sair de uma conta de cartão para outra que não é, a forma volta a vazia só se era "Cartão de crédito" (D2).
+ * (Era CARTAO-LANCAMENTO-01: só preenchia a vazia, e só no lançamento novo.)
  */
-export function formaPelaConta(atual: { forma: string; automatica: boolean }, contaEhCartao: boolean): { forma: string; automatica: boolean } {
-  if (contaEhCartao) return atual.forma === '' || atual.automatica ? { forma: FORMA_CARTAO_CREDITO, automatica: true } : { forma: atual.forma, automatica: false };
-  return atual.automatica ? { forma: '', automatica: false } : atual;
+export function formaPelaConta(forma: string, contaEhCartao: boolean, contaAntesEraCartao = false): string {
+  if (contaEhCartao) return FORMA_CARTAO_CREDITO;
+  return contaAntesEraCartao && forma === FORMA_CARTAO_CREDITO ? '' : forma;
 }
 
 /**
