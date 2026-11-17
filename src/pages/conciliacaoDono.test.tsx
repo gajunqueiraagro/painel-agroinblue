@@ -438,10 +438,13 @@ describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Inves
   it('o lápis da linha abre com o extrato PRÓPRIO — o valor que o operador digitou (−55.734,67), nunca o consolidado', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
+    /* CONC-PAINEL-CONTA-01 — o ✎ abre o PAINEL da conta; o saldo à mão é o "✎ Informar" do passo 4 (o mesmo SaldoRealDialog) */
     fireEvent.click(within(linhaDaConta('brad')).getByTestId('botao-lapis'));
+    fireEvent.click(await screen.findByTestId('painel-informar-saldo'));
     await waitFor(() => expect(B.lapis.length).toBe(1));
     expect(B.lapis[0]).toMatchObject({ contaId: 'brad', saldoAtual: -55734.67 });
     fireEvent.click(within(linhaDaConta('if')).getByTestId('botao-lapis'));
+    fireEvent.click(await screen.findByTestId('painel-informar-saldo'));
     await waitFor(() => expect(B.lapis.length).toBe(2));
     expect(B.lapis[1]).toMatchObject({ contaId: 'if', saldoAtual: -4.02 });
   });
@@ -685,7 +688,10 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     expect(temReguaFixa(fonte.replace('[38, 44, 86, 86, 86, 38]', '[95, 95, 112, 34]'))).toBe(false);
     /* e o colgroup desenhado tem as quatro larguras */
     const cols = Array.from(total.closest('table')!.querySelectorAll('col')).map((c) => c.style.width);
-    expect(cols).toEqual(['', '38px', '44px', '86px', '86px', '86px', '38px']);
+    /* CONC-PAINEL-CONTA-01 (item 3) — a Conta deixou de ser "o resto": tem a largura do MAIOR nome (medida, com piso de 110px) */
+    expect(cols.slice(1)).toEqual(['38px', '44px', '86px', '86px', '86px', '38px']);
+    expect(cols[0]).toMatch(/^\d+px$/);
+    expect(Number(cols[0].replace('px', ''))).toBeGreaterThanOrEqual(110);
   });
 });
 

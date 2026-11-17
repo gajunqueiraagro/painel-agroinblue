@@ -10,6 +10,8 @@ import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
+import { PainelDaConta, FUNDO_ESCURO } from '@/components/conciliacao/PainelDaConta';
+import { larguraDaConta } from '@/lib/conciliacao/painelDaConta';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab, ABAS_ESPELHO, type AbaEspelho } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
@@ -159,6 +161,17 @@ const valorDaRegua = (v: number): string => formatNum(v, 2);
  *  10px; os números das CONTAS uma fonte abaixo (9,5px) dos do Total e dos grupos (10px negrito). A Diferença volta à fonte da linha (a
  *  exceção de 8px do P141 saiu); Data 38px (9,5px cinza), selos OFX/PDF em lugares de 20px, valores 86px sem "R$" (o pior valor em negrito). */
 const REGUA_SALDOS = [38, 44, 86, 86, 86, 38];
+/** CONC-PAINEL-CONTA-01 — a largura de um texto em 10px negrito, na fonte da página (canvas); sem canvas (teste), 6,2px por letra. */
+let contextoDeMedida: CanvasRenderingContext2D | null | undefined;
+function medirTexto10Negrito(t: string): number {
+  if (contextoDeMedida === undefined) {
+    /* sem canvas de verdade (jsdom diz "Not implemented" no console): a estimativa */
+    const semCanvas = typeof document === 'undefined' || /jsdom/i.test(navigator.userAgent);
+    contextoDeMedida = semCanvas ? null : document.createElement('canvas').getContext('2d');
+    if (contextoDeMedida) contextoDeMedida.font = `700 10px ${getComputedStyle(document.body).fontFamily}`;
+  }
+  return contextoDeMedida ? contextoDeMedida.measureText(t).width : t.length * 6.2;
+}
 /** O selo do arquivo (OFX/PDF): 7px negrito com borda fina, num lugar FIXO de 20px (sem arquivo, o lugar fica vazio). */
 const SELO_ARQUIVO = 'inline-block rounded-[2px] border px-px text-[7px] font-bold leading-[9px]';
 const LUGAR_SELO = 'inline-flex h-[11px] w-[20px] shrink-0 items-center justify-center align-middle';
@@ -357,6 +370,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      o modal abrir na posição já declarada, em vez de propor o fim do mês por
      cima de uma data que o operador informou. */
   const [editingSaldo, setEditingSaldo] = useState<{anoMes:string;contaId:string;current:number|null;saldoData:string|null}|null>(null);
+  /* CONC-PAINEL-CONTA-01 (Gabriel 17/11 09:57) — o ✎ da conta abre o PAINEL LATERAL (`PainelDaConta`); o saldo à mão segue no
+     `SaldoRealDialog`, aberto pelo "✎ Informar" do passo 4 */
+  const [painelContaId, setPainelContaId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!clienteId) return;
@@ -793,6 +809,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const gruposSaldos = agruparContasPorTipo(
     contasVisiveis.map(c => ({ ...c, tipo_conta: c.linha.tipo_conta ?? c.conta.tipo_conta, label: getContaLabel(c.conta) })),
   ).map(g => ({ ...g, subtotal: resumo?.find(l => l.nivel === 'tipo' && l.tipo_conta === g.chave) ?? null }));
+  /* CONC-PAINEL-CONTA-01 (item 3) — a coluna Conta pelo MAIOR texto dela (contas, grupos, "Total"), medido em 10px negrito */
+  const larguraConta = useMemo(() => larguraDaConta(
+    ['Total', ...gruposSaldos.flatMap(g => [g.rotulo, ...g.contas.map(c => c.label)])], medirTexto10Negrito,
+  ), [gruposSaldos]);
   /* CONC-ORDENAR-01 (regra soberana de 29/10, gate check-ui-ordenar): Conta, Sistema, Extrato e Diferença ordenam as contas DENTRO de cada
      grupo (o Total e as faixas dos grupos ficam onde estão). Sem clique, a ordem é a de sempre (a do cadastro, `agruparContasPorTipo`). */
   type ContaDoGrupo = (typeof gruposSaldos)[number]['contas'][number];
@@ -894,7 +914,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           altura declarada) e a tabela de saldos, que teto em `calc(100vh - 230px)` fixo, passaria
           a ser cortada embaixo. `inset shadow` pinta dentro da caixa e não move layout — o mesmo
           idioma da fresta do Total naquela tabela. */}
-      <div className="p-3 pb-0 space-y-1 sticky top-0 z-20 bg-[hsl(var(--header))] shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0">
+      {/* CONC-PAINEL-CONTA-01 (Gabriel 09:57, item 1) — SÓ O FUNDO desta faixa virou o escuro do SALDOinBLUE (#162931); os textos e as
+          abas inativas ficam claros (contraste medido); as pílulas dos meses MANTÊM as cores de estado; nada mais muda de cor. */}
+      <div className="p-3 pb-0 space-y-1 sticky top-0 z-20 shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0"
+        style={{ background: FUNDO_ESCURO }} data-testid="faixa-conciliacao">
 
         {/* ⚠ O CABEÇALHO DA PÁGINA — CONCIL-PARIDADE-VISUAL-01 §1. A tela abria
             direto no seletor de ano, sem dizer o que ela é: quem chegava por um
@@ -913,13 +936,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             na mesma altura. */}
         <div className="flex min-w-0 items-end justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold leading-none">Conciliação</h2>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <h2 className="text-[15px] font-semibold leading-none text-white">Conciliação</h2>
+            <p className="mt-1 text-[11px] text-[#b9c6cc]">
               Extrato, saldo corrente e o mês fechando — conta a conta
             </p>
           </div>
           {selectedCard && !loading && APOIO_DA_ABA[vistaExtrato] && (
-            <p className="min-w-0 max-w-[52%] truncate text-right text-[11px] leading-snug text-muted-foreground"
+            <p className="min-w-0 max-w-[52%] truncate text-right text-[11px] leading-snug text-[#b9c6cc]"
               title={APOIO_DA_ABA[vistaExtrato]}>
               {APOIO_DA_ABA[vistaExtrato]}
             </p>
@@ -929,7 +952,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         {/* ════ HEADER: year dropdown + 12 month cards ════ */}
         <div className="flex items-center gap-2">
           {onBack && (
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onBack}>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-white hover:bg-white/10" onClick={onBack}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
@@ -986,7 +1009,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 a barra segue nos 23px). Todas no MESMO peso (500): trocar de aba não muda a largura de nenhuma — nada anda. */}
             {ABAS_DA_CONCILIACAO.map(a => (
               <button key={a.chave} type="button" onClick={() => setVistaExtrato(a.chave)} data-aba={a.chave}
-                className={`px-2.5 py-1 rounded-t text-[10px] font-medium transition-colors ${vistaExtrato === a.chave ? 'bg-card text-primary shadow-[inset_0_-2px_0_hsl(var(--primary)),inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-muted-foreground hover:bg-background/60'}`}>
+                className={`px-2.5 py-1 rounded-t text-[10px] font-medium transition-colors ${vistaExtrato === a.chave ? 'bg-card text-primary shadow-[inset_0_-2px_0_hsl(var(--primary)),inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-[#cfd8dc] hover:bg-white/10'}`}>
                 {a.rotulo}
               </button>
             ))}
@@ -1332,9 +1355,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 {/* ⚠ `table-layout: FIXED` COM COLGROUP EM px — CONC-SALDOS-LAYOUT-02. As colunas da direita tem px medidos no pior
                     texto (`REGUA_SALDOS`) e a Conta e' a unica que estica; o nome corta numa linha so' quando nao cabe (inteiro no
                     `title` da linha) — de 1024px para cima, com os 260px do Resumo, o nome real cabe inteiro (P166). */}
-                <table className="w-full border-collapse" style={{fontSize:'10px', tableLayout:'fixed'}}>
+                {/* CONC-PAINEL-CONTA-01 (item 3) — a Conta na largura do MAIOR nome (medido), não "o resto": Sistema · Extrato · Diferença
+                    ficam perto do nome; a tabela não estica com a janela (largura = Conta + a régua) */}
+                <table className="border-collapse" style={{fontSize:'10px', tableLayout:'fixed', width: larguraConta + REGUA_SALDOS.reduce((a, b) => a + b, 0), maxWidth: '100%'}}
+                  data-testid="tabela-saldos">
                   <colgroup>
-                    <col />
+                    <col style={{width:`${larguraConta}px`}} />
                     {REGUA_SALDOS.map((w, i) => <col key={i} style={{width:`${w}px`}} />)}
                   </colgroup>
                   {/* O Total mora no `thead`: gruda junto com o cabeçalho das colunas no topo do rolador. A borda inferior é sombra
@@ -1411,7 +1437,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         isActive={selectedConta===s.conta.id}
                         isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
                         onClick={()=>setSelectedConta(s.conta.id)}
-                        onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,saldosDaLinha(s.linha).saldo_extrato)}
+                        onEdit={()=>setPainelContaId(s.conta.id)}
                         canEdit={canEditSaldoFinal(anoMesSel)}
                         showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null}
                         estadoOfx={estadoDoSlotOfx({
@@ -1727,6 +1753,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           posição de 13/08. Não era divergência de layout — era um dado composto
           por duas telas que não se conheciam. O antigo morreu por substituição;
           a história dele está no git. */}
+      {/* CONC-PAINEL-CONTA-01 — o painel lateral da conta (o ✎); LEVA às peças de hoje: Importar banco, o modal Conferência, o saldo à mão */}
+      <PainelDaConta aberto={painelContaId !== null} aoFechar={() => setPainelContaId(null)} clienteId={clienteId ?? null}
+        conta={(() => { const c = perContaSaldos.find(x => x.conta.id === painelContaId); return c ? { id: c.conta.id, nome: getContaLabel(c.conta) } : null; })()}
+        linha={perContaSaldos.find(x => x.conta.id === painelContaId)?.linha ?? null} anoMes={anoMesSel}
+        aoImportar={(id) => { setPainelContaId(null); setSelectedConta(id); setVistaExtrato('importar'); }}
+        aoCasar={(id) => { setPainelContaId(null); setSelectedConta(id); setVistaExtrato('enriquecer_sistema'); setAbaEspelho('conferencia'); }}
+        aoInformarSaldo={(id) => {
+          const c = perContaSaldos.find(x => x.conta.id === id);
+          setPainelContaId(null);
+          handleEditSaldo(anoMesSel, id, c ? saldosDaLinha(c.linha).saldo_extrato : null);
+        }} />
       {editingSaldo && clienteId && (
         <SaldoRealDialog
           clienteId={clienteId}
