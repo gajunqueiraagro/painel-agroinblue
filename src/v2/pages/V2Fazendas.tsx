@@ -692,8 +692,10 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
             </p>
           </div>
         </div>
-        {activeTab === 'area' && (
-          <div className="flex flex-none items-center gap-1.5">
+        {/* LIMPEZA-TELAS-01 C5: o lugar do Salvar existe nas 3 abas (invisível fora do Cadastro) — sem ele, a 918 o nome da fazenda
+            cortava no Cadastro e esticava +75,8 px nas outras abas */}
+          <div className={`flex flex-none items-center gap-1.5 ${activeTab === 'area' ? '' : 'invisible'}`} aria-hidden={activeTab !== 'area' || undefined}
+            data-testid="cadastro-lugar-salvar">
             <span className={`w-[300px] truncate text-right text-[10px] ${erroDoCadastro ? 'text-red-700' : 'text-muted-foreground'}`} title={fraseDoSalvar}
               data-testid="cadastro-frase-salvar">
               {fraseDoSalvar}
@@ -705,11 +707,12 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
               <Save className="h-3 w-3 mr-1" /> {saving ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>
-        )}
       </div>
 
-      <div className="flex items-end justify-between gap-4 mb-3 border-b border-border">
-        <div className="flex gap-0.5">
+      {/* LIMPEZA-TELAS-01 C5: a faixa das abas tem ALTURA FIXA (a barra da aba Pastos, que entra pelo portal, não a estica) — cabeçalho e
+          abas no mesmo lugar nas 3 abas */}
+      <div className="flex h-[34px] items-end justify-between gap-4 mb-3 border-b border-border">
+        <div className="flex flex-none gap-0.5">
           {TABS.map(t => (
             <button
               key={t.key}
@@ -726,12 +729,12 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
           ))}
         </div>
         {/* Slot da barra da aba ativa. Vazio nas demais abas — não ocupa espaço. */}
-        <div ref={setHostBarra} className="pb-1" />
+        <div ref={setHostBarra} className="flex h-full min-w-0 items-center" data-desloca-livre="" />
       </div>
       </div>
 
       {activeTab === 'area' && (
-        <div data-testid="cadastro-da-fazenda">
+        <div data-testid="cadastro-da-fazenda" data-aba-miolo="">
           <FaixaDePendencias pendencias={pendencias} />
           {resumo.erro && <p className="mb-1 text-[10px] text-red-700" data-testid="cadastro-erro-leitura">{resumo.erro}</p>}
           <div className="grid grid-cols-2 gap-3 items-start">
@@ -914,8 +917,9 @@ function AbaRebanhoInicial() {
     );
   }
 
+  /* LIMPEZA-TELAS-01 C5: sem recuo próprio — começa na mesma régua do Cadastro e dos Pastos */
   return (
-    <div className="px-4 py-3 space-y-3">
+    <div className="space-y-3" data-aba-miolo="">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <div className="text-[12px] font-medium">Rebanho inicial · {fazendaAtual.nome}</div>

@@ -19,12 +19,14 @@ import { cn } from '@/lib/utils';
 type Coluna = 'codigo' | 'nome' | 'local' | 'situacao' | 'atividades' | 'matricula' | 'pastosHa' | 'diferenca' | 'nPastos' | 'noMapa'
   | 'rebanho' | 'noAno' | 'lotacao' | 'pendencias';
 
+/* LIMPEZA-TELAS-01 C5 (Gabriel 16/11): a Fazenda é a ÚNICA flexível e a 1126 ficava com 70 px ("Faz. Sto. E…"); Município, Atividades e
+   Pendências cederam 40 px (texto: corta com "…" e o inteiro no title) — a Fazenda passa a ~110 px a 1126 (a cena da bancada recusa < 105) */
 const COLUNAS: readonly (ColunaOrdenavel<LinhaDaFazenda, Coluna> & { rotulo: string; largura?: number; direita?: boolean })[] = [
   { coluna: 'codigo', rotulo: 'Cód.', largura: 40, tipo: 'texto', valor: l => l.codigo },
   { coluna: 'nome', rotulo: 'Fazenda', tipo: 'texto', valor: l => l.nome },
-  { coluna: 'local', rotulo: 'Município', largura: 96, tipo: 'texto', valor: l => l.local },
+  { coluna: 'local', rotulo: 'Município', largura: 82, tipo: 'texto', valor: l => l.local },
   { coluna: 'situacao', rotulo: 'Situação', largura: 56, tipo: 'texto', valor: l => l.situacao },
-  { coluna: 'atividades', rotulo: 'Atividades', largura: 92, tipo: 'texto', valor: l => l.atividades.join(' · ') || null },
+  { coluna: 'atividades', rotulo: 'Atividades', largura: 80, tipo: 'texto', valor: l => l.atividades.join(' · ') || null },
   { coluna: 'matricula', rotulo: 'Matrícula ha', largura: 74, direita: true, tipo: 'numero', valor: l => l.matriculaHa },
   { coluna: 'pastosHa', rotulo: 'Pastos ha', largura: 66, direita: true,
     tipo: 'numero', valor: l => l.pastosHa },
@@ -35,7 +37,7 @@ const COLUNAS: readonly (ColunaOrdenavel<LinhaDaFazenda, Coluna> & { rotulo: str
   /* regra geral do rebanho (Gabriel 12/11 20:27): delta e % no ano contra o saldo inicial do ano, na coluna DELA (ALINHAMENTO SOBERANO) */
   { coluna: 'noAno', rotulo: 'No ano', largura: 76, direita: true, tipo: 'numero', valor: l => variacaoNoAno(l.rebanho, l.rebanhoInicioDoAno)?.pct ?? null },
   { coluna: 'lotacao', rotulo: 'UA/ha', largura: 46, direita: true, tipo: 'numero', valor: l => l.lotacao },
-  { coluna: 'pendencias', rotulo: 'Pendências', largura: 104, tipo: 'texto', valor: l => (l.ativa ? l.pendencias.length : -1) },
+  { coluna: 'pendencias', rotulo: 'Pendências', largura: 90, tipo: 'texto', valor: l => (l.ativa ? l.pendencias.length : -1) },
 ];
 
 const area = (v: number | null) => (v == null ? '—' : formatNum(v, 2));

@@ -426,6 +426,20 @@ const CENARIOS = [
     ] },
   /* FAZENDA-CADASTRO-01 · F1b — o cadastro sem modo Editar: digitar acende Salvar/Cancelar no LUGAR deles (a frase ao lado tem largura
      reservada), Cancelar volta, marcar a matrícula como conferida e trocar a situação não movem os blocos nem o topo */
+  /* LIMPEZA-TELAS-01 C5 (Gabriel 16/11) — trocar Cadastro ↔ Pastos ↔ Rebanho inicial não move o cabeçalho nem as abas (a barra dos Pastos
+     entra pelo portal numa faixa de altura fixa, `data-desloca-livre`), e o miolo das 3 abas começa na MESMA régua (esquerda e topo) */
+  { nome: 'fazenda-abas', url: 'tela=fazendas&f=cadastro', tamanhos: [[918, 516], [1126, 579], [1366, 768]], regiao: 'div.sticky',
+    antes: noTopo(async (p) => { await p.locator('[data-testid="cadastro-historico"]').waitFor(); await espera(p, 600); }),
+    estados: (() => {
+      const regua = async (p) => p.locator('[data-aba-miolo]').first().evaluate((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.left)},${Math.round(r.top + window.scrollY)}`; });
+      let daCadastro = null;
+      const aba = (k) => noTopo(async (p) => {
+        await clicar(`[data-testid="cadastro-aba-${k}"]`)(p); await espera(p, 500);
+        const r = await regua(p);
+        if (k === 'area') daCadastro = r; else if (daCadastro && r !== daCadastro) throw new Error(`o miolo da aba ${k} começa em ${r}; o do Cadastro em ${daCadastro}`);
+      });
+      return [['Cadastro', aba('area')], ['Pastos', aba('pastos')], ['Rebanho inicial', aba('rebanho')], ['Cadastro de volta', aba('area')]];
+    })() },
   { nome: 'fazenda-cadastro-salvar', url: 'tela=fazendas&f=cadastro', tamanhos: [[1126, 579], [1366, 768]], regiao: '#root',
     antes: noTopo(async (p) => { await p.locator('[data-testid="cadastro-historico"]').waitFor(); await espera(p, 600); }),
     estados: (() => {

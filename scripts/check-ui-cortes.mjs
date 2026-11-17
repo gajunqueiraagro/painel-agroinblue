@@ -1190,7 +1190,8 @@ const CENARIOS = [
       { nome: 'fazendas-lista', url: 'tela=fazendas&f=lista', tamanhos: TAM, regiao: '[data-testid="lista-de-fazendas"]', antes: async (p) => {
         await pronta('[data-testid="fazenda-linha"]')(p);
         const w = await p.locator('[data-testid="tabela-fazendas"] thead th').nth(1).evaluate((e) => e.getBoundingClientRect().width);
-        if (w < 70) throw new Error(`a coluna Fazenda tem ${Math.round(w)} px (mínimo 70)`); } },
+        /* LIMPEZA-TELAS-01 C5: o mínimo subiu de 70 para 105 ("Faz. Sto. Expedito" inteiro) */
+        if (w < 105) throw new Error(`a coluna Fazenda tem ${Math.round(w)} px (mínimo 105)`); } },
       { nome: 'fazenda-cadastro', url: 'tela=fazendas&f=cadastro', tamanhos: TAM, regiao: '[data-testid="cadastro-da-fazenda"]', antes: pronta('[data-testid="cadastro-historico"]') },
       { nome: 'fazenda-cadastro-topo', url: 'tela=fazendas&f=cadastro', tamanhos: TAM, regiao: 'div.sticky', antes: async (p) => {
         await pronta('[data-testid="cadastro-historico"]')(p); await p.locator('[data-testid="cadastro-ccir"]').fill('950.123.456.789-0'); await p.waitForTimeout(300); } },

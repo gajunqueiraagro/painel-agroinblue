@@ -517,7 +517,8 @@ export function PastosTab({ hostBarra, fichaInicial = null, onFichaInicialAberta
   return (
     /* PASTO-CADASTRO-GEO-01 (1): na Lista e nas Áreas a tabela vai até o fim da janela (`useAlturaAteOFim`, folga 28 = este pb-3 + o pé do pai, medido);
        os pb-20 de antes (e a folga 96 que os descontava) deixavam um vão sob o quadro. Os outros modos seguem com o pb-20. */
-    <div className={`p-3 pt-1 space-y-2 ${modo === 'lista' || modo === 'areas' ? 'pb-3' : 'pb-20'}`}>
+    /* LIMPEZA-TELAS-01 C5: dentro do Fazendas e pastos (com hostBarra) sem recuo lateral nem de topo — a mesma régua do Cadastro e do Rebanho inicial */
+    <div className={`${hostBarra ? 'px-0 pt-0' : 'p-3 pt-1'} space-y-2 ${modo === 'lista' || modo === 'areas' ? 'pb-3' : 'pb-20'}`} data-aba-miolo="">
       {/* A barra é a MESMA em qualquer lugar; só o destino do render muda. Pai que
           passa hostBarra a recebe ao lado das abas; pai que não passa (CadastrosTab)
           continua com ela no topo do próprio conteúdo, como sempre. O portal preserva
