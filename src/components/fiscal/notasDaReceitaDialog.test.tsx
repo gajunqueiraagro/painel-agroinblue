@@ -2,11 +2,13 @@
  * NOTAS-RECEITA-A1-01 · F3.4 MÍNIMA — a tela "Notas da Receita" e o selo do "+ Novo" (dados SINTÉTICOS).
  *   T1 lista, abas com contagem, rodapé · T2 "Lançar" entrega o XML ao "Da nota fiscal" (D1) · T3 resumo: sem Lançar, PDF desligado
  *   T4 "Ver" abre os dados, sem XML na tela · T5 XML que falha: aviso, nada entregue · T6 selo do "+ Novo" = boletos + notas (D2)
+ *   C1–C4 NOTA-RECEITA-CASAR-01: "Pode estar lançada"; "Lançar" com candidatos abre o quadro; 1 do mesmo CNPJ pré-marcado e "Vincular" manda
+ *   o id certo; vários = nenhum marcado; "lançar nova" segue o caminho de hoje; frase da porta 2 aparece no quadro
  */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NotasDaReceitaDialog } from './NotasDaReceitaDialog';
-import { montarLista, type LinhaRecebida } from '@/lib/fiscal/notasDaReceita';
+import { montarLista, type CandidatoDaNota, type LinhaRecebida } from '@/lib/fiscal/notasDaReceita';
 import { somaDoSelo, textoDoSelo } from '@/components/financeiro-v2/NovoMenuLancamentos';
 import type { DadosDaReceita } from '@/hooks/useNotasDaReceita';
 
@@ -20,9 +22,11 @@ const dados = (): DadosDaReceita => ({
     new Map([['t1', 'Produtora Exemplo']]), new Set([chave(3)])),
   titulares: [{ id: 't1', nome: 'Produtora Exemplo' }], ultimaBusca: '2026-11-16T22:46:00Z', proximaBusca: null,
 });
-const abrir = (o: { aoLancar?: (f: File) => void; lerXml?: (id: string) => Promise<string> } = {}) =>
-  render(<NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={dados()} carregando={false} erro={null} aoFechar={() => {}}
-    aoLancar={o.aoLancar ?? (() => {})} lerXml={o.lerXml ?? (async () => '<nfeProc/>')} />);
+const abrir = (o: { aoLancar?: (f: File) => void; aoVincular?: (f: File, id: string) => Promise<string | null>; lerXml?: (id: string) => Promise<string>;
+  d?: DadosDaReceita; abrirDanfe?: () => Window | null; mostrarNaAba?: (aba: Window | null, f: File) => Promise<void> } = {}) =>
+  render(<NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={o.d ?? dados()} carregando={false} erro={null} aoFechar={() => {}}
+    aoLancar={o.aoLancar ?? (() => {})} aoVincular={o.aoVincular ?? (async () => null)} lerXml={o.lerXml ?? (async () => '<nfeProc/>')}
+    abrirDanfe={o.abrirDanfe ?? (() => null)} mostrarNaAba={o.mostrarNaAba ?? (async () => {})} />);
 const linhaDe = (n: number) => screen.getAllByTestId('receita-linha').find((tr) => tr.textContent?.includes(`Emitente Exemplo ${n}`)) as HTMLElement;
 
 describe('NOTAS-RECEITA F3.4 — a tela', () => {
@@ -87,5 +91,75 @@ describe('NOTAS-RECEITA F3.4 — a tela', () => {
     expect(textoDoSelo(somaDoSelo(null, 2))).toBe('2');
     expect(textoDoSelo(somaDoSelo(null, null))).toBe('');
     expect(textoDoSelo(somaDoSelo(90, 20))).toBe('99+');
+  });
+});
+
+const cand = (id: string, classe: CandidatoDaNota['classe']): CandidatoDaNota => ({ id, classe, competencia: '2026-11-11', vencimento: null,
+  pagamento: '2026-12-10', descricao: `Lançamento ${id}`, status: 'realizado', conciliado: false, valorCent: 10000, conta: 'Cartão Exemplo', fornecedorNome: 'Fornecedor Exemplo' });
+const comCand = (cs: CandidatoDaNota[]): DadosDaReceita => ({ ...dados(), lista: montarLista([linha(1), linha(2, { situacao: 'resumo' })],
+  new Map([['t1', 'Produtora Exemplo']]), new Set(), new Map([[chave(1), cs]])) });
+
+describe('NOTA-RECEITA-CASAR-01 — o quadro "pode já estar lançada"', () => {
+  it('C1 candidato do mesmo CNPJ: a linha é "Pode estar lançada", Lançar abre o quadro pré-marcado e "Vincular" manda o XML + o id', async () => {
+    const aoVincular = vi.fn(async () => null); const aoLancar = vi.fn();
+    abrir({ d: comCand([cand('L1', 'mesmo_cnpj')]), aoVincular, aoLancar });
+    expect(linhaDe(1).dataset.situacao).toBe('pode_estar');
+    fireEvent.click(within(linhaDe(1)).getByTestId('receita-lancar'));
+    expect(screen.getByTestId('receita-casar')).toBeTruthy();
+    expect(aoLancar).not.toHaveBeenCalled();
+    expect(screen.getByTestId('receita-vincular')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('receita-vincular'));
+    await waitFor(() => expect(aoVincular).toHaveBeenCalledTimes(1));
+    const [f, id] = aoVincular.mock.calls[0] as unknown as [File, string];
+    expect(id).toBe('L1');
+    expect(f.name).toBe(`NFe${chave(1)}.xml`);
+    await waitFor(() => expect(screen.queryByTestId('receita-casar')).toBeNull());
+  });
+  it('C2 vários candidatos: nenhum marcado (Vincular desligado) até escolher; o escolhido é o que vai', async () => {
+    const aoVincular = vi.fn(async () => null);
+    abrir({ d: comCand([cand('L1', 'mesmo_cnpj'), cand('L2', 'sem_fornecedor')]), aoVincular });
+    fireEvent.click(within(linhaDe(1)).getByTestId('receita-lancar'));
+    expect(screen.getByTestId('receita-vincular')).toBeDisabled();
+    fireEvent.click(screen.getAllByTestId('receita-candidato')[1]);
+    fireEvent.click(screen.getByTestId('receita-vincular'));
+    await waitFor(() => expect(aoVincular).toHaveBeenCalledTimes(1));
+    expect((aoVincular.mock.calls[0] as unknown as [File, string])[1]).toBe('L2');
+  });
+  it('C3 "É outra compra: lançar nova" segue o caminho de hoje (aoLancar), sem id; só "outro fornecedor" fica "Nova" mas o quadro aparece', async () => {
+    const aoVincular = vi.fn(async () => null); const aoLancar = vi.fn();
+    abrir({ d: comCand([cand('L9', 'outro_fornecedor')]), aoVincular, aoLancar });
+    expect(linhaDe(1).dataset.situacao).toBe('nova');
+    fireEvent.click(within(linhaDe(1)).getByTestId('receita-lancar'));
+    expect(screen.getByTestId('receita-vincular')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('receita-lancar-nova'));
+    await waitFor(() => expect(aoLancar).toHaveBeenCalledTimes(1));
+    expect(aoVincular).not.toHaveBeenCalled();
+  });
+  it('C4 a porta 2 recusa: a frase fica no quadro, que não fecha', async () => {
+    abrir({ d: comCand([cand('L1', 'mesmo_cnpj')]), aoVincular: async () => 'A chave da nota não confere.' });
+    fireEvent.click(within(linhaDe(1)).getByTestId('receita-lancar'));
+    fireEvent.click(screen.getByTestId('receita-vincular'));
+    await waitFor(() => expect(screen.getByTestId('receita-casar-rodape').textContent).toBe('A chave da nota não confere.'));
+    expect(screen.getByTestId('receita-casar')).toBeTruthy();
+  });
+});
+
+describe('NOTA-DANFE-01 — o botão "PDF"', () => {
+  it('P1 abre a aba NO CLIQUE e escreve nela o DANFE do XML da nota', async () => {
+    const aba = {} as Window;
+    const abrirDanfe = vi.fn(() => aba);
+    const mostrarNaAba = vi.fn(async () => {});
+    abrir({ abrirDanfe, mostrarNaAba, lerXml: async () => '<nfeProc>x</nfeProc>' });
+    fireEvent.click(within(linhaDe(1)).getByTestId('receita-pdf'));
+    expect(abrirDanfe).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mostrarNaAba).toHaveBeenCalledTimes(1));
+    const [a, f] = mostrarNaAba.mock.calls[0] as unknown as [Window, File];
+    expect(a).toBe(aba);
+    expect(f.name).toBe(`NFe${chave(1)}.xml`);
+  });
+  it('P2 o DANFE que não sai: a frase no rodapé', async () => {
+    abrir({ mostrarNaAba: async () => { throw new Error('Este arquivo não é uma NF-e.'); } });
+    fireEvent.click(within(linhaDe(1)).getByTestId('receita-pdf'));
+    await waitFor(() => expect(screen.getByTestId('receita-aviso').textContent).toBe('Este arquivo não é uma NF-e.'));
   });
 });
