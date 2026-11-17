@@ -34,7 +34,13 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
          cliente, so' devolve boolean, fechado a authenticated); quem o chama com 42501 esta' guardado; ele mesmo, preso abaixo */
       || (/(?<!function\s+public\.)_fn_fiscal_certificado_pode\s*\(/i.test(p) && /42501/.test(p))
       || (nome === 'public._fn_fiscal_certificado_pode' && /returns\s+boolean/i.test(p)
-        && /revoke all on function public\._fn_fiscal_certificado_pode\(uuid\) from public, anon, authenticated;/i.test(p));
+        && /revoke all on function public\._fn_fiscal_certificado_pode\(uuid\) from public, anon, authenticated;/i.test(p))
+      /* BOLETO D3a (118110): `_fn_entrada_pode_gerir(cliente)` e' o PREDICADO de quem gera/revoga o endereco de boletos (admin ou gestor
+         ATIVO daquele cliente, so' devolve boolean, fechado a authenticated) — o molde do `_fn_fiscal_certificado_pode`; ele mesmo e
+         quem o chama, presos abaixo */
+      || (/(?<!function\s+public\.)_fn_entrada_pode_gerir\s*\(/i.test(p) && /42501/.test(p))
+      || (nome === 'public._fn_entrada_pode_gerir' && /returns\s+boolean/i.test(p)
+        && /revoke all on function public\._fn_entrada_pode_gerir\(uuid\) from public, anon, authenticated;/i.test(p));
     /* IMPORTAR-ABATE-01: corpo `AS %L` = o texto do PROPRIO BANCO (pg_get_functiondef/prosrc patchado por md5), que o arquivo nao
        mostra — a guarda dele e' a da definicao anterior (ver `ultimasSemGuarda`) */
     return [{ nome, guardada, ...(/\bAS\s+%L/i.test(p) ? { doBanco: true } : {}) }];
@@ -154,6 +160,39 @@ describe('guarda de cliente nas migrations novas', () => {
     /* o corpo INTEIRO: as duas condicoes e nada mais (um `or true` ou uma leitura de tabela reprova) */
     expect(corpo.slice(corpo.indexOf('as $$') + 5).replace(/\s+/g, ' ').trim()).toBe(
       "select coalesce(public.is_admin_agroinblue(auth.uid()), false) or coalesce(public.get_user_perfil(auth.uid(), p_cliente)::text = 'gestor_cliente', false)");
+    expect(semGuarda(sql)).toEqual([]);
+  });
+
+  it('o predicado do endereco de boletos e\' aceito como guarda, so\' devolve boolean (admin ou gestor ATIVO do cliente) e nasce fechado (BOLETO D3a)', () => {
+    /* o detector: quem chama o predicado com 42501 passa; o predicado aberto (ou sem o revoke) reprova */
+    const peloPredicado = `CREATE FUNCTION public.fn_q(p_cliente_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      begin if not public._fn_entrada_pode_gerir(p_cliente_id) then raise exception using errcode = '42501'; end if; return '{}'; end $$;`;
+    const predicadoAberto = `CREATE FUNCTION public._fn_entrada_pode_gerir(p_cliente_id uuid) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$ select true $$;`;
+    expect(semGuarda([peloPredicado, predicadoAberto].join('\n'))).toEqual(['public._fn_entrada_pode_gerir']);
+    const semRevoke = `CREATE FUNCTION public._fn_entrada_pode_gerir(p_cliente_id uuid) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $$ select true $$;
+      revoke all on function public._fn_entrada_pode_gerir(uuid) from public, anon;`;
+    expect(semGuarda(semRevoke)).toEqual(['public._fn_entrada_pode_gerir']);
+    const chamadaSem42501 = `CREATE FUNCTION public.fn_r(p_cliente_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      begin if not public._fn_entrada_pode_gerir(p_cliente_id) then return '{}'; end if; return '{}'; end $$;`;
+    expect(semGuarda(chamadaSem42501)).toEqual(['public.fn_r']);
+
+    /* o arquivo de verdade: o corpo INTEIRO do predicado (um `or true`, outro perfil ou membro inativo reprovam) */
+    const sql = readFileSync(join(DIR, '20261028118110_boleto_d3a_entrada_email.sql'), 'utf8');
+    const inicio = sql.indexOf('create function public._fn_entrada_pode_gerir');
+    const corpo = sql.slice(inicio, sql.indexOf('$$;', sql.indexOf('as $$', inicio)));
+    expect(corpo).toMatch(/returns boolean language sql stable security definer set search_path = public as \$\$/);
+    expect(corpo.slice(corpo.indexOf('as $$') + 5).replace(/\s+/g, ' ').trim()).toBe(
+      "select public.is_admin_agroinblue((select auth.uid())) or exists (select 1 from cliente_membros m where m.cliente_id = p_cliente_id"
+      + " and m.user_id = (select auth.uid()) and m.ativo and m.perfil = 'gestor_cliente')");
+    expect(sql).toMatch(/revoke all on function public\._fn_entrada_pode_gerir\(uuid\) from public, anon, authenticated;/);
+    expect(sql).not.toMatch(/grant execute on function public\._fn_entrada_pode_gerir/i);
+    /* quem o usa tambem passa pelo tenant_ok e recusa com 42501 (a guarda por dentro das duas RPCs da tela) */
+    for (const rpc of ['fn_entrada_email_gerar', 'fn_entrada_email_revogar']) {
+      const i = sql.indexOf(`create function public.${rpc}(`);
+      expect(i).toBeGreaterThan(0);
+      const c = sql.slice(i, sql.indexOf('end $$;', i));
+      expect(c).toMatch(/if not public\.tenant_ok\(p_cliente_id\) or not public\._fn_entrada_pode_gerir\(p_cliente_id\) then\s+raise exception '[^']+' using errcode = '42501';/);
+    }
     expect(semGuarda(sql)).toEqual([]);
   });
 
