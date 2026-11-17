@@ -1874,8 +1874,10 @@ if (tela === 'mesclar') {
      o gate solta os PDFs pelo input (o conteúdo é o nome: o leitor da bancada lê por ele) */
   const montarCaixa = async () => {
     const { CaixaDeBoletosDialog } = await import('@/components/financeiro-v2/CaixaDeBoletosDialog');
-    const { API_CAIXA_BANCADA, LER_CAIXA_BANCADA } = await import('./dados/caixaBoletos');
-    montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} aoFechar={() => {}} />);
+    const { API_CAIXA_BANCADA, LER_CAIXA_BANCADA, API_ENTRADA_BANCADA, API_ENTRADA_BANCADA_SEM_ENDERECO } = await import('./dados/caixaBoletos');
+    /* BOLETO D3c: `caso=sem_endereco` = o cliente sem endereço (o "Gerar") */
+    const entrada = q.get('caso') === 'sem_endereco' ? API_ENTRADA_BANCADA_SEM_ENDERECO : API_ENTRADA_BANCADA;
+    montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} entrada={entrada} aoFechar={() => {}} />);
   };
   void montarCaixa();
 } else if (tela === 'notas-receita' || tela === 'notas-receita-menu') {
