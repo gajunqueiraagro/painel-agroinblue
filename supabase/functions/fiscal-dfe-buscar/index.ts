@@ -1,7 +1,7 @@
 /**
  * NOTAS-RECEITA-A1-01 · F3.2 — a função de borda que BUSCA as notas do produtor na Receita (Distribuição DF-e, NFeDistribuicaoDFe 1.01).
  * Só liga as peças reais; a ordem, as recusas e o "uma chamada só" moram em `_shared/dfe/buscarDfe.ts` (provados no vitest).
- *  · POST JSON { titular_id, ambiente: "producao" | "homologacao", ensaio?: true } com o token do usuário OU a chave service_role;
+ *  · POST JSON { titular_id, ambiente: "producao" | "homologacao", ensaio?: true, chave?: "<44 dígitos>" (consChNFe) } com o token do usuário OU a chave service_role;
  *  · o .pfx sai do bucket PRIVADO `fiscal-certificados` cifrado (AES-GCM, IV de 12 bytes na frente; chave `FISCAL_CERT_CHAVE_MESTRA`) e é
  *    aberto só na memória; a senha vem do Vault pela `fn_fiscal_dfe_credencial` (só service_role);
  *  · o POST com o certificado sai pela Lambda Node `agro-dfe-mtls` (AWS sa-east-1): a Receita cobra o certificado por RENEGOCIAÇÃO TLS,
@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
 
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim() || null;
   try {
-    const r = await buscarDfe({ token, titularId: texto(campo("titular_id")) || null, ambiente: campo("ambiente"), ensaio: campo("ensaio") }, pecas);
+    const r = await buscarDfe({ token, titularId: texto(campo("titular_id")) || null, ambiente: campo("ambiente"), ensaio: campo("ensaio"), chave: campo("chave") }, pecas);
     return json(r.status, r.corpo);
   } catch {
     return json(500, { ok: false, recusa: "interno", frase: "A busca falhou no meio. Veja a trilha da busca antes de tentar de novo." });
