@@ -115,6 +115,19 @@ export const SITUACAO_NA_TELA: Record<SituacaoNaLista, { rotulo: string; cor: st
   ignorada: { rotulo: 'Ignorada', cor: 'bg-zinc-200 text-zinc-700', dica: 'marcada para não lançar' },
 };
 
+/** F34-SITUACAO-01 (Gabriel 17/11) — "já no sistema" pelo MESMO critério do "+ Da nota" (`fn_nota_ja_lancada`): algum lançamento VIVO achado
+ *  pela chave, pelo nº com o fornecedor do emitente (raiz do CNPJ / nome) ou pelo nº num documento anexado. Valor sozinho não conta (a lista não manda
+ *  parcelas); o cancelado nunca conta. */
+export const POR_QUE_E_A_NOTA: readonly string[] = ['chave', 'numero', 'documento', 'fracao'];
+export function jaLancadaPelosAchados(achados: readonly { cancelado: boolean; por: readonly string[] }[]): boolean {
+  return achados.some((a) => !a.cancelado && a.por.some((p) => POR_QUE_E_A_NOTA.includes(p)));
+}
+/** só estas perguntam ao banco: a cancelada/ignorada/ligada não muda de aba por isso */
+export function precisaConferirLancamento(l: LinhaRecebida, chavesNoSistema: ReadonlySet<string>): boolean {
+  const sit = situacaoNaLista(l, chavesNoSistema);
+  return sit === 'nova' || sit === 'pede_ciencia' || sit === 'esperando_xml';
+}
+
 /** total das que valem (sem canceladas/ignoradas) */
 export const totalDaLista = (lista: readonly NotaNaLista[]): number =>
   lista.filter((n) => n.sit !== 'cancelada' && n.sit !== 'ignorada').reduce((s, n) => s + (n.valorCent ?? 0), 0);
