@@ -65,6 +65,10 @@ const FAZENDAS: Fazenda[] = [{ id: 'faz', nome: 'Faz Sintetica', owner_id: 'u1',
 const CONTAS: ContaBancariaV2[] = [{
   id: 'cartao', nome_conta: 'Cartão Sintetico', banco: 'Banco Sintetico', fazenda_id: 'faz', tipo_conta: 'cartao', codigo_conta: null,
   nome_exibicao: 'Cartão Sintetico', agencia: null, numero_conta: null, conta_digito: null,
+}, {
+  /* FIN-FORMA-CARTAO-AUTO-01 — conta COMUM: em conta de cartão a forma é sempre "Cartão de crédito" (o M6 do P143 mora aqui) */
+  id: 'cc', nome_conta: 'Conta Sintetica', banco: 'Banco Sintetico', fazenda_id: 'faz', tipo_conta: 'cc', codigo_conta: null,
+  nome_exibicao: 'Conta Sintetica', agencia: null, numero_conta: null, conta_digito: null,
 }];
 const FORNECEDORES: FornecedorV2[] = [{ id: 'forn', nome: 'Fornecedor Sintetico', cpf_cnpj: null, fazenda_id: null, ativo: true, tipo_recebimento: null,
   pix_tipo_chave: null, pix_chave: null, banco: null, agencia: null, conta: null, tipo_conta: null, cpf_cnpj_pagamento: null, nome_favorecido: null,
@@ -173,7 +177,7 @@ describe('P143 — as parcelas no Editar', () => {
     expect(linhasPagamento().slice(4)).toEqual([['Modalid.', 'Parcela solta'], ['Parcelas', '2 de 3']]);
   });
   it('M6 a forma gravada fora da lista ("Cartão de Crédito") aparece no Editar como no Resumo', async () => {
-    montar(PARCELA(2, { forma_pagamento: 'Cartão de Crédito' }), vi.fn());
+    montar(PARCELA(2, { forma_pagamento: 'Cartão de Crédito', conta_bancaria_id: 'cc' }), vi.fn());
     await screen.findByDisplayValue('Bomba sintetica 2/4');
     await irAoPagamento();
     const rotulo = await screen.findByText('Forma de pagamento');

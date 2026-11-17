@@ -2,12 +2,13 @@
  * NOTAS-RECEITA-A1-01 · F3.4 MÍNIMA — a regra da lista "Notas da Receita" (dados SINTÉTICOS; nenhuma nota real).
  *   R1 nº e série da chave · R2 situação (nova × já no sistema × resumo × cancelada) · R3 abas e selo (D2) · R4 CPF de emitente mascarado
  *   R5 leitura do banco recusa o que não é do formato · R6 total sem canceladas · R7 busca por emitente/nº/documento
+ *   R10 NOTA-RECEITA-CASAR-01: "Pode estar lançada" (mesmo CNPJ / sem fornecedor), pré-marcado só com 1 do mesmo CNPJ, leitura dos candidatos
  *   R9 F34-SITUACAO-01 + NJ-NOTAS-LENTAS: as chaves já lançadas da resposta em lote; formato estranho = null (falha, nunca "Nova")
  */
 import { describe, expect, it } from 'vitest';
 import {
   ABAS_DA_RECEITA, arquivoDoXml, filtrarBusca, lerLinhasRecebidas, montarLista, numeroDaChave, pedemAcao, serieDaChave, situacaoNaLista,
-  chavesJaLancadas, precisaConferirLancamento, totalDaLista, type LinhaRecebida,
+  candidatoPreMarcado, chavesJaLancadas, comCandidatos, lerCandidatos, precisaConferirLancamento, totalDaLista, type LinhaRecebida,
 } from './notasDaReceita';
 
 /* chave sintética: UF 50, AAMM 2611, CNPJ, mod 55, série 001, nº 000012345, tpEmis 1, código, DV */
@@ -94,5 +95,23 @@ describe('NOTAS-RECEITA F3.4 — a regra da lista', () => {
     expect(precisaConferirLancamento(linha({ situacao: 'resumo' }), new Set())).toBe(true);
     expect(precisaConferirLancamento(linha(), new Set([chave(1)]))).toBe(false);
     expect(precisaConferirLancamento(linha({ situacao: 'cancelado_na_sefaz' }), new Set())).toBe(false);
+  });
+  it('R10 candidatos: "Pode estar lançada" só da Nova com mesmo CNPJ/sem fornecedor; pré-marcado só com 1 do mesmo CNPJ; leitura recusa o estranho', () => {
+    const c = (classe: 'mesmo_cnpj' | 'sem_fornecedor' | 'outro_fornecedor', id = 'x') => ({ id, classe, competencia: null, vencimento: null, pagamento: null,
+      descricao: null, status: null, conciliado: false, valorCent: 1, conta: null, fornecedorNome: null });
+    expect(comCandidatos('nova', [c('mesmo_cnpj')])).toBe('pode_estar');
+    expect(comCandidatos('nova', [c('sem_fornecedor')])).toBe('pode_estar');
+    expect(comCandidatos('nova', [c('outro_fornecedor')])).toBe('nova');
+    expect(comCandidatos('no_sistema', [c('mesmo_cnpj')])).toBe('no_sistema');
+    expect(candidatoPreMarcado([c('mesmo_cnpj', 'a')])).toBe('a');
+    expect(candidatoPreMarcado([c('sem_fornecedor', 'a')])).toBeNull();
+    expect(candidatoPreMarcado([c('mesmo_cnpj', 'a'), c('mesmo_cnpj', 'b')])).toBeNull();
+    const m = lerCandidatos([{ chave: 'k', candidatos: [{ id: 'a', classe: 'mesmo_cnpj', valor_cent: 100, conciliado: true, conta: 'Banco' }] }]);
+    expect(m?.get('k')?.[0]).toMatchObject({ id: 'a', classe: 'mesmo_cnpj', valorCent: 100, conciliado: true, conta: 'Banco' });
+    expect(lerCandidatos([{ chave: 'k', candidatos: [{ id: 'a', classe: 'outra', valor_cent: 1 }] }])).toBeNull();
+    expect(lerCandidatos(null)).toBeNull();
+    const [p] = lista([linha({ n: 1 })]);
+    expect(p.candidatos).toEqual([]);
+    expect(pedemAcao(montarLista([linha({ n: 1 })], new Map(), new Set(), new Map([[chave(1), [c('mesmo_cnpj')]]])))).toBe(1);
   });
 });

@@ -1,6 +1,6 @@
 /* NOTAS-RECEITA-A1-01 F3.4 — dados SINTÉTICOS da lista "Notas da Receita" na bancada (nenhuma nota real): todas as situações, o pior
    texto (emitente comprido, valor de 9 dígitos, nº de 9 dígitos, CPF de emitente pessoa física) e eventos. */
-import { montarLista, type LinhaRecebida } from '@/lib/fiscal/notasDaReceita';
+import { montarLista, type CandidatoDaNota, type LinhaRecebida } from '@/lib/fiscal/notasDaReceita';
 import type { DadosDaReceita } from '@/hooks/useNotasDaReceita';
 
 const chave = (n: number, cnpj: string) => `502611${cnpj.padStart(14, '0')}55001${String(n).padStart(9, '0')}1123456780`;
@@ -22,8 +22,25 @@ const linhas: LinhaRecebida[] = [
   L(44871, 'Cooperativa Exemplo de Insumos', '34567890000112', 5, 3120075, 'xml'),
   L(3456, 'Auto Peças Exemplo', '01234567000189', 3, 87600, 'resumo'),
 ];
+/* NOTA-RECEITA-CASAR-01 — candidatos SINTÉTICOS: 1 do mesmo CNPJ (pré-marcado) na 2.201; 3 na 44.871 (sem fornecedor com nome no teto,
+   outro fornecedor, mesmo CNPJ) — o pior texto da tabela do quadro */
+const C = (id: string, classe: CandidatoDaNota['classe'], o: Partial<CandidatoDaNota> = {}): CandidatoDaNota => ({
+  id, classe, competencia: '2026-11-11', vencimento: '2026-12-10', pagamento: '2026-12-10', descricao: 'Peças oficina', status: 'realizado',
+  conciliado: false, valorCent: 412000, conta: 'Cartão BB - Ourocard Visa', fornecedorNome: 'Mecânica Exemplo', ...o,
+});
+const CANDIDATOS = new Map<string, CandidatoDaNota[]>([
+  [chave(2201, '56789012000134'), [C('c1', 'mesmo_cnpj')]],
+  [chave(44871, '34567890000112'), [
+    C('c2', 'sem_fornecedor', { valorCent: 3120075, descricao: 'Mercadolivre*Loja Exemplo de Insumos com Descrição Muito Comprida', fornecedorNome: null,
+      conta: 'Sicredi Lavoura', competencia: '2026-11-20', pagamento: null, vencimento: '2026-12-20', status: 'programado' }),
+    C('c3', 'outro_fornecedor', { valorCent: 3120075, descricao: 'Insumos', fornecedorNome: 'Outra Cooperativa Exemplo de Nome Comprido Ltda',
+      conta: 'Banco do Brasil', competencia: '2026-11-06', pagamento: '2026-11-06', conciliado: true }),
+    C('c4', 'mesmo_cnpj', { valorCent: 3120075, descricao: 'Adubo', fornecedorNome: 'Cooperativa Exemplo de Insumos', conta: 'Banco do Brasil',
+      competencia: '2026-11-05', pagamento: '2026-11-30', status: 'realizado' }),
+  ]],
+]);
 export const DADOS_RECEITA_BANCADA: DadosDaReceita = {
-  lista: montarLista(linhas, new Map([['t1', 'Produtora Exemplo'], ['t2', 'Titular B Exemplo com Nome Comprido']]), new Set([chave(1198, '12345678000190')])),
+  lista: montarLista(linhas, new Map([['t1', 'Produtora Exemplo'], ['t2', 'Titular B Exemplo com Nome Comprido']]), new Set([chave(1198, '12345678000190')]), CANDIDATOS),
   titulares: [{ id: 't1', nome: 'Produtora Exemplo' }, { id: 't2', nome: 'Titular B Exemplo com Nome Comprido' }],
   ultimaBusca: '2026-11-16T22:46:13Z', proximaBusca: '2026-11-16T23:46:13Z',
 };

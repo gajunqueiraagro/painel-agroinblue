@@ -41,6 +41,8 @@ import { ForaDaVigenciaDialog } from '@/components/recorrencias/ForaDaVigenciaDi
 import { lerForaDaVigencia } from '@/hooks/useRecorrencias';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
+import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
+import { EscolherContasDoBanco } from '@/components/financeiro-v2/EscolherContasDoBanco';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
 import * as CONC from './dados/conciliacao';
 import { FAZENDAS_VG as FAZENDAS_VG02, bancoVG02 } from './dados/visaoGeral02';
@@ -1513,6 +1515,59 @@ if (tela === 'mesclar') {
     previa={v === 'carregando' ? null : lerForaDaVigencia(resposta)} carregando={v === 'carregando'}
     erro={v === 'erro' ? 'Os lançamentos mudaram durante a gravação (11 de 12). Nada foi gravado.' : null}
     aoConfirmar={async () => {}} aoFechar={() => {}} />);
+} else if (tela === 'escolher-contas') {
+  /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Contas bancárias › Bancos conectados › Escolher contas, com o bloco "Lança na
+     conta": a conta corrente do banco, a conta do sistema com o nome no pior caso e a frase da prévia ("Liga … em …") depois do clique.
+     SINTÉTICO; nada fala com a Pluggy. */
+  const NOME = 'Itaú Personalite 7225';
+  g.__bancoBancada = {
+    from: (t: string) => t === 'openfinance_contas_permitidas'
+      ? [{ id: 'perm-1', rotulo: 'Itaú · Conta corrente · 7225', final4: '7225', conta_bancaria_id: null }]
+      : t === 'financeiro_contas_bancarias'
+        ? [{ id: 'itau', nome_conta: NOME, nome_exibicao: null, tipo_conta: 'cc', numero_conta: '3722', conta_digito: '5', ativa: true }] : [],
+    funcao: (nome: string, op: any) => {
+      const acao = op?.body?.acao;
+      if (nome !== 'openfinance-contas') return { data: null, error: { message: 'sem função na bancada' } };
+      if (acao === 'listar') return { data: { ok: true, contas: [
+        { account_id: 'acc-cc', tipo_legivel: 'Conta corrente', banco: 'Itaú', final4: '7225', titular: 'Titular Sintético da Conta', documento: '***.000.000-**', permitida: true },
+        { account_id: 'acc-cartao', tipo_legivel: 'Cartão de crédito', banco: 'Itaú', final4: '2222', titular: 'Titular Sintético da Conta', documento: '***.000.000-**', permitida: false },
+      ] }, error: null };
+      if (acao === 'ligar') return { data: { ok: true, simulado: true, mudou: true }, error: null };
+      return { data: { ok: true }, error: null };
+    },
+  };
+  montar(<EscolherContasDoBanco clienteId="cli" itemId="item-sintetico" onFechar={() => {}} />);
+} else if (tela === 'importar-banco') {
+  /* OF-IMPORTAR-BANCO-QUEBROU-01 (Gabriel 17/11 08:51) — a linha do Importar banco do ADMIN com a conta LIGADA ao Open Finance (aparecem
+     "Buscar do banco" e "Conferir com o banco"), o pior caso de nome da conta e a recusa da borda escrita na linha (o gate clica "Conferir").
+     `&v=sem`: a mesma conta sem ligação. SINTÉTICO; nada fala com a Pluggy. */
+  /* OF-CONFERIR-CASAMENTO-01 — `&v=conferir`: o diálogo "Conferir com o banco" no pior caso (34 casam, 5 com outra data, 5 só no banco,
+     7 só no sistema; nomes compridos; valores no teto) */
+  const NOME_LONGO = (i: number) => `PIX TRANSF ENVIADO PARA FAVORECIDO SINTÉTICO COM O NOME BEM COMPRIDO NÚMERO ${i}`;
+  const diaDe = (i: number) => `2031-10-${String(1 + (i % 13)).padStart(2, '0')}`;
+  const SISTEMA = [
+    ...Array.from({ length: 34 }, (_, i) => ({ data_movimento: diaDe(i), valor: -(100 + i * 13.17), descricao: NOME_LONGO(i) })),
+    ...Array.from({ length: 5 }, (_, i) => ({ data_movimento: '2031-10-06', valor: -(6000 + i), descricao: NOME_LONGO(100 + i) })),
+    ...Array.from({ length: 7 }, (_, i) => ({ data_movimento: '2031-10-13', valor: i === 0 ? -99999999.99 : 0.02 + i, descricao: NOME_LONGO(200 + i) })),
+  ].sort((x, y) => (x.data_movimento < y.data_movimento ? 1 : -1));
+  const TX = [
+    ...Array.from({ length: 34 }, (_, i) => ({ id: `t${i}`, accountId: 'acc', description: NOME_LONGO(i), amount: -(100 + i * 13.17), date: `${diaDe(i)}T15:00:00.000Z`, status: 'POSTED', type: 'DEBIT', providerId: `p${i}`, currencyCode: 'BRL' })),
+    ...Array.from({ length: 5 }, (_, i) => ({ id: `w${i}`, accountId: 'acc', description: NOME_LONGO(100 + i), amount: -(6000 + i), date: '2031-10-04T15:00:00.000Z', status: 'POSTED', type: 'DEBIT', providerId: `pw${i}`, currencyCode: 'BRL' })),
+    ...Array.from({ length: 5 }, (_, i) => ({ id: `b${i}`, accountId: 'acc', description: NOME_LONGO(300 + i), amount: i === 0 ? 99999999.99 : -(7.5 + i), date: '2031-10-09T15:00:00.000Z', status: 'POSTED', type: i === 0 ? 'CREDIT' : 'DEBIT', providerId: `pb${i}`, currencyCode: 'BRL' })),
+  ];
+  g.__bancoBancada = {
+    from: (t: string) => t === 'openfinance_contas_permitidas' ? (v === 'sem' ? [] : [{ id: 'perm-1' }])
+      : t === 'extrato_bancario_v2' ? (v === 'conferir' ? SISTEMA : [{ data_movimento: '2031-10-13' }]) : [],
+    funcao: (nome: string) => nome !== 'openfinance-extrato' ? { data: null, error: { message: 'sem função na bancada' } }
+      : v === 'conferir'
+        ? { data: { ok: true, acao: 'conferir', de: '2031-10-01', ate: '2031-10-13', hoje: '2031-10-16', corte: '2031-10-14', ultimoDia: '2031-10-13',
+            conta: { id: 'acc', type: 'BANK', subtype: 'CHECKING_ACCOUNT', number: null, balance: null, currencyCode: 'BRL', saldoEm: null }, transacoes: TX, saldoGravado: null }, error: null }
+        : { data: { ok: false, frase: 'Não consegui ler o extrato no banco (Pluggy 400). Nada foi lido; tente de novo.' }, error: null },
+  };
+  montar(<div className="p-3" data-testid="importar-banco-cena">
+    <ImportarBancoInline contas={[{ id: 'itau', label: 'Itaú Personalite 7225', tipo_conta: 'cc' }]}
+      contaId="itau" onContaChange={() => {}} />
+  </div>);
 } else if (tela === 'palco-do-mes') {
   /* P124 (CONC-LOTE-SUGESTOES-01) — a Conciliação do mês com o lote: 30 movimentos SINTÉTICOS no pior caso (descrições longas, valores
      no teto), as sugestões do motor simulado (exata, a conferir com e sem empate, sem sugestão) e 4 já conciliados. O gate clica
@@ -1901,7 +1956,7 @@ if (tela === 'mesclar') {
     montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} entrada={entrada} aoFechar={() => {}} />);
   };
   void montarCaixa();
-} else if (tela === 'notas-receita' || tela === 'notas-receita-menu') {
+} else if (tela === 'notas-receita' || tela === 'notas-receita-menu' || tela === 'notas-receita-casar') {
   /* NOTAS-RECEITA-A1-01 F3.4 MÍNIMA — a lista "Notas da Receita" (o modal real com dados SINTÉTICOS, `dados/notasReceita.ts`) e o "+ Novo ▾"
      com o selo de boletos + notas (D2) */
   const montarReceita = async () => {
@@ -1913,7 +1968,16 @@ if (tela === 'mesclar') {
       return;
     }
     montar(<NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={DADOS_RECEITA_BANCADA} carregando={false} erro={null} aoFechar={() => {}}
-      aoLancar={() => {}} lerXml={async () => '<nfeProc/>'} />);
+      aoLancar={() => {}} aoVincular={async () => null} lerXml={async () => '<nfeProc/>'} />);
+    /* NOTA-RECEITA-CASAR-01 — o quadro "pode já estar lançada" aberto pelo "Lançar" da nota com 3 candidatos */
+    if (tela === 'notas-receita-casar') {
+      const abrir = () => {
+        const linha = [...document.querySelectorAll('[data-testid="receita-linha"]')].find((tr) => tr.textContent?.includes('44.871'));
+        const botao = linha?.querySelector<HTMLButtonElement>('[data-testid="receita-lancar"]');
+        if (botao) botao.click(); else setTimeout(abrir, 100);
+      };
+      setTimeout(abrir, 300);
+    }
   };
   void montarReceita();
 } else if (tela === 'produtores') {

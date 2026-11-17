@@ -27,13 +27,31 @@ export interface LinhaRecebida {
 }
 
 export type TipoNaLista = 'resumo' | 'completa';
-export type SituacaoNaLista = 'nova' | 'no_sistema' | 'pede_ciencia' | 'esperando_xml' | 'cancelada' | 'ignorada';
+export type SituacaoNaLista = 'nova' | 'pode_estar' | 'no_sistema' | 'pede_ciencia' | 'esperando_xml' | 'cancelada' | 'ignorada';
+
+/** NOTA-RECEITA-CASAR-01 — um lançamento que PODE SER a nota (a regra é do banco: `fn_notas_candidatos`; a tela só lê e mostra) */
+export type ClasseDoCandidato = 'mesmo_cnpj' | 'sem_fornecedor' | 'outro_fornecedor';
+export interface CandidatoDaNota {
+  id: string;
+  competencia: string | null;
+  vencimento: string | null;
+  pagamento: string | null;
+  descricao: string | null;
+  status: string | null;
+  conciliado: boolean;
+  valorCent: number;
+  conta: string | null;
+  fornecedorNome: string | null;
+  classe: ClasseDoCandidato;
+}
 
 export interface NotaNaLista extends LinhaRecebida {
   numero: string;
   serie: string;
   tipo: TipoNaLista;
   sit: SituacaoNaLista;
+  /** NOTA-RECEITA-CASAR-01 — os lançamentos que podem ser esta nota (na ordem do banco); vazio = nenhum */
+  candidatos: CandidatoDaNota[];
   titularNome: string;
   emitenteNaTabela: string;
 }
@@ -82,21 +100,59 @@ export function situacaoNaLista(l: LinhaRecebida, chavesNoSistema: ReadonlySet<s
   return 'nova';
 }
 
-export function montarLista(linhas: readonly LinhaRecebida[], titulares: ReadonlyMap<string, string>, chavesNoSistema: ReadonlySet<string>): NotaNaLista[] {
+export function montarLista(linhas: readonly LinhaRecebida[], titulares: ReadonlyMap<string, string>, chavesNoSistema: ReadonlySet<string>,
+  candidatos: ReadonlyMap<string, CandidatoDaNota[]> = new Map()): NotaNaLista[] {
   return linhas.map((l) => ({
     ...l,
     numero: numeroDaChave(l.chave),
     serie: serieDaChave(l.chave),
     tipo: (l.temXml || l.situacao === 'xml' || l.situacao === 'importado' ? 'completa' : 'resumo') as TipoNaLista,
-    sit: situacaoNaLista(l, chavesNoSistema),
+    sit: comCandidatos(situacaoNaLista(l, chavesNoSistema), candidatos.get(l.chave) ?? []),
+    candidatos: situacaoNaLista(l, chavesNoSistema) === 'nova' ? (candidatos.get(l.chave) ?? []) : [],
     titularNome: titulares.get(l.titularId) ?? '—',
     emitenteNaTabela: documentoNaTabela(l.emitenteDocumento),
   })).sort((a, b) => (b.emissao ?? '').localeCompare(a.emissao ?? '') || b.chave.localeCompare(a.chave));
 }
 
+/** D4 — a "Nova" com candidato do MESMO CNPJ ou SEM fornecedor vira "Pode estar lançada"; só "outro fornecedor" fica "Nova" (o "Lançar"
+ *  mostra o quadro do mesmo jeito) */
+export function comCandidatos(sit: SituacaoNaLista, candidatos: readonly CandidatoDaNota[]): SituacaoNaLista {
+  return sit === 'nova' && candidatos.some((c) => c.classe === 'mesmo_cnpj' || c.classe === 'sem_fornecedor') ? 'pode_estar' : sit;
+}
+
+/** o pré-marcado do quadro: SÓ quando há UM candidato e ele é do mesmo CNPJ; vários = nenhum (o operador escolhe) */
+export const candidatoPreMarcado = (c: readonly CandidatoDaNota[]): string | null => (c.length === 1 && c[0].classe === 'mesmo_cnpj' ? c[0].id : null);
+
+const CLASSES: readonly ClasseDoCandidato[] = ['mesmo_cnpj', 'sem_fornecedor', 'outro_fornecedor'];
+const txt = (x: unknown): string | null => (typeof x === 'string' && x ? x : null);
+/** a resposta da `fn_notas_candidatos` → chave → candidatos; fora do formato = `null` (quem lê trata como falha, nunca como "Nova") */
+export function lerCandidatos(dados: unknown): Map<string, CandidatoDaNota[]> | null {
+  if (!Array.isArray(dados)) return null;
+  const saida = new Map<string, CandidatoDaNota[]>();
+  for (const d of dados) {
+    if (!d || typeof d !== 'object') return null;
+    const chave: unknown = Reflect.get(d, 'chave');
+    const lista: unknown = Reflect.get(d, 'candidatos');
+    if (typeof chave !== 'string' || !Array.isArray(lista)) return null;
+    const cs: CandidatoDaNota[] = [];
+    for (const c of lista) {
+      if (!c || typeof c !== 'object') return null;
+      const id = txt(Reflect.get(c, 'id'));
+      const classe = CLASSES.find((k) => k === Reflect.get(c, 'classe'));
+      const valor: unknown = Reflect.get(c, 'valor_cent');
+      if (!id || !classe || typeof valor !== 'number') return null;
+      cs.push({ id, classe, valorCent: valor, competencia: txt(Reflect.get(c, 'competencia')), vencimento: txt(Reflect.get(c, 'vencimento')),
+        pagamento: txt(Reflect.get(c, 'pagamento')), descricao: txt(Reflect.get(c, 'descricao')), status: txt(Reflect.get(c, 'status')),
+        conciliado: Reflect.get(c, 'conciliado') === true, conta: txt(Reflect.get(c, 'conta')), fornecedorNome: txt(Reflect.get(c, 'fornecedor_nome')) });
+    }
+    saida.set(chave, cs);
+  }
+  return saida;
+}
+
 export type AbaDaReceita = 'lancar' | 'ciencia' | 'no_sistema' | 'canceladas' | 'todas';
 export const ABAS_DA_RECEITA: { valor: AbaDaReceita; rotulo: string; filtro: (n: NotaNaLista) => boolean }[] = [
-  { valor: 'lancar', rotulo: 'A lançar', filtro: (n) => n.sit === 'nova' },
+  { valor: 'lancar', rotulo: 'A lançar', filtro: (n) => n.sit === 'nova' || n.sit === 'pode_estar' },
   { valor: 'ciencia', rotulo: 'Ciência pendente', filtro: (n) => n.sit === 'pede_ciencia' || n.sit === 'esperando_xml' },
   { valor: 'no_sistema', rotulo: 'Já no sistema', filtro: (n) => n.sit === 'no_sistema' },
   { valor: 'canceladas', rotulo: 'Canceladas', filtro: (n) => n.sit === 'cancelada' || n.sit === 'ignorada' },
@@ -104,10 +160,11 @@ export const ABAS_DA_RECEITA: { valor: AbaDaReceita; rotulo: string; filtro: (n:
 ];
 
 /** o que PEDE AÇÃO (o selo do "+ Novo", D2): a lançar + ciência pendente */
-export const pedemAcao = (lista: readonly NotaNaLista[]): number => lista.filter((n) => n.sit === 'nova' || n.sit === 'pede_ciencia').length;
+export const pedemAcao = (lista: readonly NotaNaLista[]): number => lista.filter((n) => n.sit === 'nova' || n.sit === 'pode_estar' || n.sit === 'pede_ciencia').length;
 
 export const SITUACAO_NA_TELA: Record<SituacaoNaLista, { rotulo: string; cor: string; dica: string }> = {
   nova: { rotulo: 'Nova', cor: 'bg-emerald-100 text-emerald-800', dica: 'XML completo e a chave não está no sistema: "Lançar" abre o "Da nota fiscal"' },
+  pode_estar: { rotulo: 'Pode estar lançada', cor: 'bg-orange-100 text-orange-800', dica: 'há lançamento sem nota com o mesmo valor (do mesmo CNPJ ou sem fornecedor): "Lançar" mostra antes de criar' },
   no_sistema: { rotulo: 'Já no sistema', cor: 'bg-zinc-200 text-zinc-700', dica: 'a chave desta nota já está numa nota do sistema' },
   pede_ciencia: { rotulo: 'Pede ciência', cor: 'bg-amber-100 text-amber-800', dica: 'só o resumo da Receita; o XML completo vem depois da ciência (F3.3)' },
   esperando_xml: { rotulo: 'Esperando XML', cor: 'bg-sky-100 text-sky-800', dica: 'ciência enviada; o XML chega na próxima busca' },

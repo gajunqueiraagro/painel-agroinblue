@@ -74,6 +74,8 @@ const TAMANHOS_DO_CONTRATO = [[750, 483], [750, 530], [814, 530], [1000, 600], [
 /* P104 — os 9 tamanhos do gate e o do print do Gabriel (1750×1000) */
 const TAMANHOS_DO_P104 = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1130, 580], [1300, 704], [1440, 800], [1440, 860], [1750, 1000]];
 const TAMANHOS_DA_VG = [[1000, 600], [1126, 579], [1130, 580], [1440, 800], [1440, 860]];
+/* VISAO-GERAL-PENDENCIAS-01 — as larguras que o Gabriel pediu (17/11 06:53) */
+const TAMANHOS_DAS_PENDENCIAS = [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]];
 /* LOTES-03 F1 — os três oficiais + 1240×800 e 1024×600 + o zoom de 135% de 1280×800 (948×593) e de 1440×900 (1067×667) */
 const TAMANHOS_DO_LOTES = [[1000, 600], [1126, 579], [1440, 800], [1240, 800], [1024, 600], [948, 593], [1067, 667]];
 /* P141 (Gabriel 28/10, decisão a) — a Conciliação (3 cards lado a lado) só de 1000px para cima: abaixo disso ela nunca coube, nem no código
@@ -1319,6 +1321,9 @@ const CENARIOS = [
       { nome: 'notas-receita-ciencia', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^Ciência pendente/) },
       { nome: 'notas-receita-ver', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-dados"]', antes: async (p) => {
         await p.locator('[data-testid="receita-ver"]').first().click(); await p.waitForTimeout(400); } },
+      /* NOTA-RECEITA-CASAR-01 — o quadro dos candidatos (3 linhas, textos no teto) */
+      { nome: 'notas-receita-casar', url: 'tela=notas-receita-casar', tamanhos: T, regiao: '[data-testid="receita-casar"]', antes: async (p) => {
+        await p.locator('[data-testid="receita-casar"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400); } },
     ];
   })(),
   ...(() => {
@@ -1450,6 +1455,11 @@ const CENARIOS = [
   /* VG-RESULTADO-RS-01 — o Resultado em prejuízo: "+R$ 645 mil vs meta" no lugar do % (o texto mais largo da linha do cartão) */
   { nome: 'visao-geral-02-prejuizo', url: 'tela=visao-geral-02&prejuizo=1', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
   { nome: 'visao-geral-02-fazenda', url: 'tela=visao-geral-02&fz=fA', tamanhos: TAMANHOS_DA_VG, antes: (p) => p.waitForTimeout(2500) },
+  /* VISAO-GERAL-PENDENCIAS-01 (Gabriel 17/11 06:53: "medir certinho para não quebrar") — Pendências do mês + Área na coluna da direita, Caixa |
+     Rebanho lado a lado: nenhum texto quebrando, número cortado ou card vazando em 1000, 1280, 1440 e 1920; cheio (a conta de nome longo, o
+     cartão fora, Receita, Boletos, fechamento faltando + o aviso do rebanho), o cliente EM DIA e uma fazenda */
+  ...[['', ''], ['-emdia', '&emdia=1'], ['-uma-fazenda', '&fz=fA']].map(([n, extra]) => ({
+    nome: `visao-geral-pendencias${n}`, url: `tela=visao-geral-02${extra}`, tamanhos: TAMANHOS_DAS_PENDENCIAS, antes: (p) => p.waitForTimeout(2500) })),
   { nome: 'visao-geral-02-por-fazenda', url: 'tela=visao-geral-02', tamanhos: TAMANHOS_DA_VG, regiao: '[role="dialog"]',
     antes: async (p) => { await p.waitForTimeout(2500); await clicar('[data-testid="vg-ver-por-fazenda"]')(p); await p.waitForTimeout(400); } },
   { nome: 'visao-geral-agricultura', url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG,
@@ -2017,6 +2027,40 @@ const CENARIOS = [
   /* P154 — a prévia dos previstos fora da vigência (encurtada e cancelar), vazia, carregando e com a recusa; valores no teto */
   ...['encurtada', 'cancelar', 'vazia', 'carregando', 'erro'].map((v) => ({ nome: `fora-da-vigencia-${v}`, url: `tela=fora-da-vigencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-fora-da-vigencia"]' })),
+  /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
+     botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
+  ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',
+    tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[role="dialog"]',
+    botoesDentro: '[data-testid="openfinance-lanca-na-conta"]',
+    visivelNaTela: { sels: [previa ? '[data-testid="openfinance-gravar-ligacao"]' : '[data-testid="openfinance-ver-ligacao"]', '[data-testid="openfinance-previa-ligacao"]'],
+      dentro: '[data-testid="openfinance-lanca-na-conta"]', altura: 88, inteirosEm: ['[data-testid="openfinance-lanca-na-conta"]'] },
+    semRolarNoLugar: '[data-testid="openfinance-lanca-na-conta"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="openfinance-ver-ligacao"]').waitFor();
+      if (previa) { await p.locator('[data-testid="openfinance-ver-ligacao"]').click(); await p.locator('[data-testid="openfinance-gravar-ligacao"]').waitFor(); }
+      await p.waitForTimeout(300);
+    } })),
+  /* OF-CONFERIR-CASAMENTO-01 (Gabriel 17/11 09:04) — o "Conferir com o banco": até 90vh, uma rolagem só (o corpo), cabeçalhos presos, as
+     duas datas da "outra data" em colunas próprias, nada cortado */
+  { nome: 'importar-banco-conferir', url: 'tela=importar-banco&v=conferir', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    regiao: '[data-testid="openfinance-conferencia"]',
+    visivelNaTela: { sels: ['[data-testid="openfinance-conferencia-frase"]', '[data-testid="openfinance-outra-data"]'], inteirosEm: ['[data-testid="openfinance-conferencia"]'] },
+    antes: async (p) => { await p.locator('[data-testid="openfinance-conferir-com-banco"]').click(); await p.locator('[data-testid="openfinance-outra-data"]').waitFor(); await p.waitForTimeout(400); } },
+  /* OF-IMPORTAR-BANCO-QUEBROU-01 (Gabriel 17/11 08:51) — a linha do Importar banco com a conta LIGADA ao Open Finance (Buscar/Conferir
+     do banco): numa linha de 28px, as pílulas na horizontal, nenhum botão fora da faixa; a recusa da borda numa linha própria, inteira, na
+     janela. A bancada não tinha a linha (o "Buscar do banco" estourou e o gate não viu). */
+  ...[['importar-banco', 'tela=importar-banco', null], ['importar-banco-sem', 'tela=importar-banco&v=sem', null],
+      ['importar-banco-erro', 'tela=importar-banco', 'erro']].map(([nome, url, estado]) => ({ nome, url,
+    tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[data-testid="importar-banco-cena"]',
+    botoesDentro: '[data-testid="linha-importar-banco"]',
+    visivelNaTela: { sels: estado ? ['[data-testid="resultado-busca-erro"]'] : ['[data-testid="abrir-atualizar-lr"]'],
+      dentro: '[data-testid="linha-importar-banco"]', altura: 28, inteirosEm: ['[data-testid="linha-importar-banco"]', '[data-testid="importar-banco-cena"]'] },
+    antes: async (p) => {
+      await p.locator('[data-testid="linha-importar-banco"]').waitFor();
+      if (url.endsWith('importar-banco')) await p.locator('[data-testid="openfinance-conferir-com-banco"]').waitFor();
+      if (estado) { await p.locator('[data-testid="openfinance-conferir-com-banco"]').click(); await p.locator('[data-testid="resultado-busca-erro"]').waitFor(); }
+      await p.waitForTimeout(300);
+    } })),
   /* P124 — a Conciliação do mês com o lote (de 1000px para cima: CONC-ESTREITA); antes e depois de buscar as sugestões, com o resumo do
      lote aberto e com a recusa do banco na linha */
   { nome: 'palco-do-mes', url: 'tela=palco-do-mes', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',

@@ -1,5 +1,5 @@
 /**
- * OPENFINANCE-SEG-01 (b)+(c) — DESCONECTAR um banco: só o admin AgroinBlue. Confere na Pluggy que o item é DESTE cliente (o `clientUserId`
+ * OPENFINANCE-SEG-01 (b)+(c) — DESCONECTAR um banco: só o admin AGROinBLUE. Confere na Pluggy que o item é DESTE cliente (o `clientUserId`
  * que o nosso connect token gravou), apaga o item (`DELETE /items/{id}`: o consentimento cai) e registra `agroinblue/item_desconectado`
  * na fila. Extratos já importados ficam. Só liga as peças; a ordem mora em `_shared/pluggy.ts` (`desconectar`, provada no vitest).
  * ⚠ Não loga corpo, cabeçalho, chave nem token. Secrets: PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET.

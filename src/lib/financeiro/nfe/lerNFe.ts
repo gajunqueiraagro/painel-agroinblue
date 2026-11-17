@@ -164,3 +164,77 @@ export function lerNFe(bytes: ArrayBuffer): ResultadoNFe {
   if (finalidade === 'devolucao') avisos.push('devolucao');
   return { ok: true, nota, avisos };
 }
+
+/* ---------- NOTA-DANFE-01 — o que o DANFE pede além da `NotaLida` (o mesmo arquivo, os mesmos ajudantes: um dono só do XML) ---------- */
+export interface ItemDoDanfe {
+  codigo: string; descricao: string; ncm: string; cst: string; cfop: string; unidade: string; quantidade: string; unitario: string; totalCent: number;
+  bcIcmsCent: number | null; vIcmsCent: number | null; vIpiCent: number | null; aliqIcms: string | null; aliqIpi: string | null;
+}
+export interface EnderecoDoDanfe { logradouro: string | null; bairro: string | null; municipio: string | null; uf: string | null; cep: string | null; fone: string | null }
+export interface ExtrasDoDanfe {
+  ambiente: 'producao' | 'homologacao';
+  horaSaida: string | null;
+  protocoloEm: string | null;
+  emitenteIeSt: string | null;
+  destinatario: EnderecoDoDanfe;
+  impostos: { bcIcmsCent: number; icmsCent: number; bcStCent: number; stCent: number; produtosCent: number; freteCent: number; seguroCent: number;
+    descontoCent: number; outrasCent: number; ipiCent: number; tributosCent: number | null; notaCent: number };
+  ibsCbs: { ibsCent: number; cbsCent: number } | null;
+  transporte: { modFrete: string | null; nome: string | null; documento: string | null; ie: string | null; endereco: string | null; municipio: string | null;
+    uf: string | null; placa: string | null; placaUf: string | null; quantidade: string | null; especie: string | null; marca: string | null;
+    numeracao: string | null; pesoBruto: string | null; pesoLiquido: string | null };
+  infAdFisco: string | null;
+  itens: ItemDoDanfe[];
+}
+/** Lê do MESMO XML o que o DANFE mostra e a `NotaLida` não guarda. `null` quando não é uma NF-e 55 que se lê. Pura, sem log. */
+export function lerExtrasDoDanfe(bytes: ArrayBuffer): ExtrasDoDanfe | null {
+  if (bytes.byteLength > LIMITE_BYTES_NFE) return null;
+  const xml = decodificarPeloCharsetDeclarado(bytes).replace(/^﻿/, '');
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  const raiz = doc.documentElement;
+  if (!raiz || doc.getElementsByTagName('parsererror').length > 0) return null;
+  const inf = descendentes(raiz, 'infNFe')[0] ?? null;
+  if (!inf) return null;
+  const ide = filho(inf, 'ide');
+  const tot = no(inf, 'total', 'ICMSTot');
+  const ibs = no(inf, 'total', 'IBSCBSTot');
+  const enderDest = no(inf, 'dest', 'enderDest');
+  const transp = filho(inf, 'transp');
+  const transporta = filho(transp, 'transporta');
+  const vol = filho(transp, 'vol');
+  const veic = filho(transp, 'veicTransp');
+  const infProt = raiz.localName === 'nfeProc' ? no(raiz, 'protNFe', 'infProt') : null;
+  const opcional = (pai: Element | null, ...c: string[]) => centavosDoTexto(texto(pai, ...c));
+  const hora = (t: string | null) => (t && /T(\d{2}:\d{2}:\d{2})/.exec(t)?.[1]) ?? null;
+  return {
+    ambiente: texto(ide, 'tpAmb') === '2' ? 'homologacao' : 'producao',
+    horaSaida: hora(texto(ide, 'dhSaiEnt')),
+    protocoloEm: texto(infProt, 'dhRecbto'),
+    emitenteIeSt: soDigitos(texto(filho(inf, 'emit'), 'IEST')),
+    destinatario: { logradouro: [texto(enderDest, 'xLgr'), texto(enderDest, 'nro'), texto(enderDest, 'xCpl')].filter(Boolean).join(', ') || null,
+      bairro: texto(enderDest, 'xBairro'), municipio: texto(enderDest, 'xMun'), uf: texto(enderDest, 'UF'), cep: soDigitos(texto(enderDest, 'CEP')),
+      fone: soDigitos(texto(enderDest, 'fone')) },
+    impostos: { bcIcmsCent: cent(tot, 'vBC'), icmsCent: cent(tot, 'vICMS'), bcStCent: cent(tot, 'vBCST'), stCent: cent(tot, 'vST'),
+      produtosCent: cent(tot, 'vProd'), freteCent: cent(tot, 'vFrete'), seguroCent: cent(tot, 'vSeg'), descontoCent: cent(tot, 'vDesc'),
+      outrasCent: cent(tot, 'vOutro'), ipiCent: cent(tot, 'vIPI'), tributosCent: opcional(tot, 'vTotTrib'), notaCent: cent(tot, 'vNF') },
+    ibsCbs: ibs ? { ibsCent: cent(ibs, 'gIBS', 'vIBS'), cbsCent: cent(ibs, 'gCBS', 'vCBS') } : null,
+    transporte: { modFrete: texto(transp, 'modFrete'), nome: texto(transporta, 'xNome'), documento: soDigitos(texto(transporta, 'CNPJ')) ?? soDigitos(texto(transporta, 'CPF')),
+      ie: soDigitos(texto(transporta, 'IE')), endereco: texto(transporta, 'xEnder'), municipio: texto(transporta, 'xMun'), uf: texto(transporta, 'UF'),
+      placa: texto(veic, 'placa'), placaUf: texto(veic, 'UF'), quantidade: texto(vol, 'qVol'), especie: texto(vol, 'esp'), marca: texto(vol, 'marca'),
+      numeracao: texto(vol, 'nVol'), pesoBruto: texto(vol, 'pesoB'), pesoLiquido: texto(vol, 'pesoL') },
+    infAdFisco: texto(inf, 'infAdic', 'infAdFisco'),
+    itens: filhos(inf, 'det').map((d) => {
+      const prod = filho(d, 'prod');
+      const imp = filho(d, 'imposto');
+      const icms = filho(imp, 'ICMS')?.firstElementChild ?? null;
+      const ipi = no(imp, 'IPI', 'IPITrib');
+      return {
+        codigo: texto(prod, 'cProd') ?? '', descricao: texto(prod, 'xProd') ?? '', ncm: texto(prod, 'NCM') ?? '', cfop: texto(prod, 'CFOP') ?? '',
+        cst: `${texto(icms, 'orig') ?? ''}${texto(icms, 'CST') ?? texto(icms, 'CSOSN') ?? ''}`, unidade: texto(prod, 'uCom') ?? '',
+        quantidade: texto(prod, 'qCom') ?? '', unitario: texto(prod, 'vUnCom') ?? '', totalCent: cent(prod, 'vProd'),
+        bcIcmsCent: opcional(icms, 'vBC'), vIcmsCent: opcional(icms, 'vICMS'), vIpiCent: opcional(ipi, 'vIPI'),
+        aliqIcms: texto(icms, 'pICMS'), aliqIpi: texto(ipi, 'pIPI'),
+      };
+    }),
+  };
+}

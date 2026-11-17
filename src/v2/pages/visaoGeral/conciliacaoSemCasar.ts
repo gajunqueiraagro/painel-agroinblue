@@ -13,7 +13,21 @@ export function semCasarDoResumo(linhas: readonly Pick<LinhaResumo, 'nivel' | 'e
   return total ? total.extratos_sem_par.qtde + total.lancamentos_sem_par.qtde : null;
 }
 
+/** VISAO-GERAL-PENDENCIAS-01 (D1 a, Gabriel 17/11 06:53) — o "N sem casar" da linha total contava o que NUNCA terá extrato (cartão, conta
+ *  virtual, conta sem OFX: no NJ de out/26, 63 dos 86). Agora: UMA linha por CONTA COM EXTRATO (`tem_extrato`, o campo que a própria RPC
+ *  devolve) com o que sobra sem casar (extratos sem par + lançamentos sem par daquela conta). Conta sem extrato não entra; a Conciliação
+ *  continua mostrando tudo. */
+export interface ContaSemCasar { contaId: string; nome: string; qtd: number }
+export function contasSemCasarDoResumo(
+  linhas: readonly Pick<LinhaResumo, 'nivel' | 'conta_id' | 'conta_nome' | 'tem_extrato' | 'extratos_sem_par' | 'lancamentos_sem_par'>[] | undefined,
+): ContaSemCasar[] {
+  return (linhas ?? [])
+    .filter((l) => l.nivel === 'conta' && l.tem_extrato && !!l.conta_id)
+    .map((l) => ({ contaId: String(l.conta_id), nome: l.conta_nome, qtd: l.extratos_sem_par.qtde + l.lancamentos_sem_par.qtde }))
+    .filter((c) => c.qtd > 0);
+}
+
 export function useConciliacaoSemCasar(clienteId: string | null | undefined, anoMes: string) {
   const { data, isLoading } = useQuery(consultaDoResumoMes(clienteId, anoMes, null));
-  return { semCasar: semCasarDoResumo(data), carregando: isLoading };
+  return { semCasar: semCasarDoResumo(data), contas: contasSemCasarDoResumo(data), carregando: isLoading };
 }
