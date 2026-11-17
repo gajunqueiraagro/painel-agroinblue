@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  conferirComSistema, contaSugerida, diaEHoraEmBrasilia, extratoDoSistemaNoDia, fonteDaBusca, fraseDaConferencia, fraseDoCorte,
+  conferirComSistema, contaSugerida, diaEHoraEmBrasilia, diasUteisEntre, extratoDoSistemaNoDia, fonteDaBusca, fraseDaConferencia, fraseDoCorte,
   lerBuscaDoBanco, nomeDaBusca, saldoBancoXSistema,
 } from './extratoDoBanco';
 
@@ -66,10 +66,50 @@ describe('a conferência (só leitura): banco × sistema por dia + valor', () =>
     expect(r.soNoBanco).toHaveLength(1);
   });
   it('as frases', () => {
-    expect(fraseDaConferencia({ casam: 3, soNoBanco: [], soNoSistema: [] }, '2026-11-01', '2026-11-13'))
+    expect(fraseDaConferencia({ casam: 3, outraData: [], soNoBanco: [], soNoSistema: [] }, '2026-11-01', '2026-11-13'))
       .toBe('01/11/2026 a 13/11/2026: os 3 movimentos do banco casam com o extrato do sistema. Nada a mais, nada a menos.');
-    expect(fraseDaConferencia({ casam: 2, soNoBanco: [m('2026-11-01', 1)], soNoSistema: [] }, '2026-11-01', '2026-11-13'))
+    expect(fraseDaConferencia({ casam: 2, outraData: [], soNoBanco: [m('2026-11-01', 1)], soNoSistema: [] }, '2026-11-01', '2026-11-13'))
       .toBe('01/11/2026 a 13/11/2026: 2 casam · 1 só no banco · 0 só no sistema. Nada foi gravado.');
+    expect(fraseDaConferencia({ casam: 39, outraData: [{ banco: m('2026-11-01', -1), sistema: s('2026-11-03', -1), diasUteis: 1 }], soNoBanco: [], soNoSistema: [s('2026-11-13', 1)] }, '2026-11-01', '2026-11-13'))
+      .toBe('01/11/2026 a 13/11/2026: 39 casam (1 com outra data) · 0 só no banco · 1 só no sistema. Nada foi gravado.');
+  });
+});
+
+describe('OF-CONFERIR-CASAMENTO-01 — a data do banco × a data do extrato (até 3 dias úteis depois)', () => {
+  const m = (data: string, valor: number) => ({ data, valor, tipo: valor < 0 ? 'debito' as const : 'credito' as const, descricao: `banco ${data}`, documento: null });
+  const s = (data: string, valor: number) => ({ data, valor, descricao: `extrato ${data}` });
+  it('dias úteis: sáb 31/10 → ter 03/11 = 1 (dom, e seg 02/11 é Finados); sex 06 → qui 12 = 4; mesmo dia = 0; antes = -1', () => {
+    expect(diasUteisEntre('2026-10-31', '2026-11-03')).toBe(1);
+    expect(diasUteisEntre('2026-11-01', '2026-11-03')).toBe(1);
+    expect(diasUteisEntre('2026-11-06', '2026-11-12')).toBe(4);
+    expect(diasUteisEntre('2026-11-13', '2026-11-13')).toBe(0);
+    expect(diasUteisEntre('2026-11-13', '2026-11-12')).toBe(-1);
+    expect(diasUteisEntre('2026-11-19', '2026-11-23')).toBe(1);   // qui 19 → seg 23: sex 20 é Consciência Negra
+  });
+  it('o caso da Vera (01–13/11): os 5 Pix de dom 01/11 e do feriado 02/11 que o OFX lança na terça 03/11 casam com a outra data', () => {
+    const banco = [m('2026-11-01', -6000), m('2026-11-01', -6000), m('2026-11-02', -6000), m('2026-11-02', -65000), m('2026-11-02', -1650), m('2026-11-03', -12.5)];
+    const sistema = [s('2026-11-03', -6000), s('2026-11-03', -6000), s('2026-11-03', -6000), s('2026-11-03', -65000), s('2026-11-03', -1650), s('2026-11-03', -12.5)];
+    const r = conferirComSistema(banco, sistema);
+    expect(r.casam).toBe(6);
+    expect(r.outraData).toHaveLength(5);
+    expect(r.soNoBanco).toHaveLength(0);
+    expect(r.soNoSistema).toHaveLength(0);
+    expect(r.outraData.map((x) => [x.banco.data, x.sistema.data, x.banco.valor])[0]).toEqual(['2026-11-01', '2026-11-03', -6000]);
+  });
+  it('o extrato ANTES da data do banco nunca casa; mais de 3 dias úteis não casa', () => {
+    expect(conferirComSistema([m('2026-11-05', -10)], [s('2026-11-04', -10)]).casam).toBe(0);
+    expect(conferirComSistema([m('2026-11-06', -10)], [s('2026-11-12', -10)]).casam).toBe(0);   // sex 06 → qui 12 = 4 úteis
+    expect(conferirComSistema([m('2026-11-06', -10)], [s('2026-11-11', -10)]).casam).toBe(1);   // sex 06 → qua 11 = 3 úteis
+  });
+  it('o mesmo dia vem primeiro; depois o par MAIS PRÓXIMO; um a um', () => {
+    const r = conferirComSistema([m('2026-11-03', -100), m('2026-10-30', -100), m('2026-11-01', -100)], [s('2026-11-03', -100), s('2026-11-03', -100)]);
+    expect(r.casam).toBe(2);
+    expect(r.outraData.map((x) => x.banco.data)).toEqual(['2026-11-01']);   // dom 01 (2 dias corridos) ganha da sex 30/10 (4)
+    expect(r.soNoBanco.map((x) => x.data)).toEqual(['2026-10-30']);
+  });
+  it('o valor tem de ser igual ao centavo, com o sinal', () => {
+    expect(conferirComSistema([m('2026-11-01', -10)], [s('2026-11-03', 10)]).casam).toBe(0);
+    expect(conferirComSistema([m('2026-11-01', -10)], [s('2026-11-03', -10.01)]).casam).toBe(0);
   });
 });
 

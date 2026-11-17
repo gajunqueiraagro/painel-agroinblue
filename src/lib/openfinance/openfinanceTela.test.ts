@@ -11,9 +11,9 @@ describe('OPENFINANCE P3 mínima — a resposta da borda', () => {
     expect(r).toEqual({ ok: true, corpo: { ok: true, id: 'w1', ja_existia: false } });
   });
   it('erro HTTP: a FRASE que a função mandou (403 do não admin), nunca o erro cru', async () => {
-    const contexto = new Response(JSON.stringify({ ok: false, frase: 'Só a AgroinBlue registra o webhook.' }), { status: 403 });
+    const contexto = new Response(JSON.stringify({ ok: false, frase: 'Só a AGROinBLUE registra o webhook.' }), { status: 403 });
     const r = await lerRespostaDaBorda({ data: null, error: { message: 'Edge Function returned a non-2xx status code', context: contexto } }, FRASE_REGISTRO_FALHOU);
-    expect(r).toEqual({ ok: false, frase: 'Só a AgroinBlue registra o webhook.' });
+    expect(r).toEqual({ ok: false, frase: 'Só a AGROinBLUE registra o webhook.' });
   });
   it('erro sem corpo legível, ou ok ≠ true: a frase padrão', async () => {
     expect(await lerRespostaDaBorda({ data: null, error: { message: 'x' } }, 'PADRÃO')).toEqual({ ok: false, frase: 'PADRÃO' });

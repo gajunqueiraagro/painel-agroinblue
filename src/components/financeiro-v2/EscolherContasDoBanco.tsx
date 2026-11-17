@@ -1,5 +1,5 @@
 /**
- * OPENFINANCE-P3a — "Escolher contas" de UMA conexão (só o admin AgroinBlue; Gabriel 16/11, saída A): lista o que a Pluggy tem nesta
+ * OPENFINANCE-P3a — "Escolher contas" de UMA conexão (só o admin AGROinBLUE; Gabriel 16/11, saída A): lista o que a Pluggy tem nesta
  * conexão — tipo · banco · final · titular e CPF mascarados, nunca saldo nem transação — e o admin MARCA o que entra. Tudo desmarcado
  * na 1ª vez. Gravar = prévia (entram/continuam/saem) → confirmar → `openfinance-contas` 'permitir'. O resto nunca é lido nem gravado.
  */
@@ -65,7 +65,7 @@ export function EscolherContasDoBanco({ clienteId, itemId, onFechar }: { cliente
         <DialogHeader>
           <DialogTitle className="text-[13px]">Escolher contas</DialogTitle>
           <DialogDescription className="text-[11px]">
-            Marque só as contas deste cliente. As não marcadas nunca são lidas nem gravadas no AgroinBlue.
+            Marque só as contas deste cliente. As não marcadas nunca são lidas nem gravadas no AGROinBLUE.
           </DialogDescription>
         </DialogHeader>
         <div className="h-[176px] overflow-auto rounded-md border">
@@ -103,7 +103,7 @@ export function EscolherContasDoBanco({ clienteId, itemId, onFechar }: { cliente
             texto={`${marcadas.size} de ${contas?.length ?? 0} marcadas`} testid="openfinance-contador" />
           <Button size="sm" variant="ghost" className="h-6 text-[11px]" disabled={ocupado} onClick={onFechar}>Fechar</Button>
           {previa === null
-            ? <Button size="sm" className="h-6 w-[120px] text-[11px]" disabled={ocupado || !mudou} onClick={() => void permitir(true)} data-testid="openfinance-ver-previa">Ver a prévia</Button>
+            ? <Button size="sm" className="h-6 w-[120px] text-[11px]" disabled={ocupado || !mudou} onClick={() => void permitir(true)} data-testid="openfinance-ver-previa">Prévia das contas</Button>
             : <Button size="sm" className="h-6 w-[120px] text-[11px]" disabled={ocupado} onClick={() => void permitir(false)} data-testid="openfinance-gravar-escolha">Gravar a escolha</Button>}
         </div>
       </DialogContent>

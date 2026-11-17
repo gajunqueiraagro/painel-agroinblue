@@ -56,7 +56,7 @@ describe('VISAO-GERAL-04 — V3 a V7', () => {
     expect(screen.getByTestId('vg-atencao-mes').textContent).toBe('set/26');
     expect(V2HOME).toContain('const revalidarDoMes = aRevalidar.pendentes.filter(r => r.anoMes <= anoMesVG);');
     expect(V2HOME).toContain('...revalidarDoMes.map((r): ItemAtencao => {');
-    expect(V2HOME).toContain('mes={mesDaAtencaoVG} />');
+    expect(V2HOME).toContain('<PrecisaDeAtencao itens={atencaoVG} mes={mesDaAtencaoVG}');
   });
 
   it('V4: a Área sem a rosca e só com as áreas que a fazenda tem', () => {

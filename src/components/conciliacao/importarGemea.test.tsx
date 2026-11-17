@@ -86,7 +86,7 @@ describe('P140 — a gêmea de outro arquivo na prévia', () => {
     expect(titulo).toContain('Não será importada — marque se for movimento novo mesmo.');
     expect(screen.getByRole('checkbox', { name: 'Importar Resg/vencto Cdb' })).not.toBeChecked();
     expect(botao().textContent).toContain('Importar 0');
-    expect(screen.getByTestId('importar-gemeas').textContent).toBe('1 parece repetida de um arquivo anterior (o banco mudou o texto ou o documento)');
+    expect(screen.getByTestId('importar-gemeas').textContent).toBe('1 parece repetida de um arquivo anterior (o banco mudou o texto, o documento ou a data)');
     /* o "duplicado?" é outra coisa: a gêmea não conta nele */
     expect(screen.queryByText(/duplicado\?$/)).toBeNull();
   });

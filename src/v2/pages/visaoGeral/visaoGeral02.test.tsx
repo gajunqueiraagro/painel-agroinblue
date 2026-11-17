@@ -157,8 +157,9 @@ describe('cartões do topo e "Precisa de atenção"', () => {
     expect(abrir).toHaveBeenCalled();
   });
   it('sem pendência, a frase; com pendência, o link direto', () => {
+    /* VISAO-GERAL-PENDENCIAS-01 (mock v2 aprovado 17/11): nada pendente = UMA linha "✓ Tudo em dia" */
     const { rerender } = render(<PrecisaDeAtencao itens={[]} />);
-    expect(screen.getByText('Nada pendente neste mês.')).toBeTruthy();
+    expect(screen.getByTestId('vg-atencao-em-dia').textContent).toBe('✓ Tudo em dia');
     const ir = vi.fn();
     rerender(<PrecisaDeAtencao itens={[{ id: 'fech-A', texto: 'Fechamento de set faltando — RET · Retiro', acao: 'Fechar', onIr: ir }]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Fechar ›' }));
