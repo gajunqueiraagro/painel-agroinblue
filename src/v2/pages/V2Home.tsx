@@ -28,6 +28,10 @@ import { BlocosPorAtividade } from '@/v2/pages/visaoGeral/BlocosPorAtividade';
 import { diferencaEmReais, indicadoresPecuaria, variacao } from '@/v2/pages/visaoGeral/indicadoresDaAtividade';
 import { useAtividadesDoCliente, blocosDaVisao, type GrupoAtividade } from '@/v2/pages/visaoGeral/atividadesDaVisao';
 import { useConciliacaoSemCasar } from '@/v2/pages/visaoGeral/conciliacaoSemCasar';
+import { useBoletosAConferir } from '@/v2/pages/visaoGeral/boletosAConferir';
+import { avisoSemFechamento, mesesDoRecorte, rebanhoNoMes, variacaoDoRebanho } from '@/v2/pages/visaoGeral/rebanhoNoMes';
+import { useNotasDaReceita } from '@/hooks/useNotasDaReceita';
+import { pedemAcao } from '@/lib/fiscal/notasDaReceita';
 import { atividadesDaArea, rotuloDaFazenda, situacaoDoFechamento, type LinhaFazendaVG } from '@/v2/pages/visaoGeral/fazendasDaVisao';
 import { useRebanhoOficial, buildFazendaRowsFromCategories } from '@/hooks/useRebanhoOficial';
 import { useChuvas } from '@/hooks/useChuvas';
@@ -130,6 +134,29 @@ function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
       <span className={`tabular-nums shrink-0 ${corValor ?? ''}`}>
         {valor == null ? '—' : fmtR(valor)}
       </span>
+    </div>
+  );
+}
+
+/* VISAO-GERAL-PENDENCIAS-01 — irmã da LinhaCaixa no "Rebanho no mês": a MESMA anatomia e a MESMA escala, em CABEÇAS (com o sinal do lado:
+   "+299", "−99"; zero é "0", sem sinal — D9; sem dado "—") */
+function LinhaCab({ label, valor, tipo = 'detalhe', sinal, corValor }: {
+  label: string;
+  valor: number | null;
+  tipo?: 'detalhe' | 'subtotal' | 'total';
+  sinal?: '+' | '−';
+  corValor?: string;
+}) {
+  const base = tipo === 'total'
+    ? 'text-[11px] font-medium text-foreground'
+    : tipo === 'subtotal'
+    ? 'text-[10px] font-medium text-muted-foreground'
+    : 'text-[9px] leading-tight text-muted-foreground pl-2';
+  const texto = valor == null ? '—' : `${valor !== 0 && sinal ? sinal : ''}${fmtN(valor, 0)}`;
+  return (
+    <div className={`flex items-baseline justify-between gap-3 ${base}`}>
+      <span className="truncate">{label}</span>
+      <span className={`tabular-nums shrink-0 ${corValor ?? ''}`}>{texto}</span>
     </div>
   );
 }
@@ -639,10 +666,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const anoMesVG = anoMesStatus ?? '';
   const podeVerMeta = usePodeVerMeta();
   const { lidas: atividadesLidas } = useAtividadesDoCliente(clienteAtual?.id);
-  const { semCasar, carregando: carregandoConc } = useConciliacaoSemCasar(clienteAtual?.id, anoMesVG);
+  const { contas: contasSemCasar, carregando: carregandoConc } = useConciliacaoSemCasar(clienteAtual?.id, anoMesVG);
+  /* VISAO-GERAL-PENDENCIAS-01 (D2 a) — as notas da Receita que pedem ação: a MESMA leitura e o MESMO cache do selo do "+ Novo" (`pedemAcao`) */
+  const receitaVG = useNotasDaReceita(clienteAtual?.id ?? null);
+  const receitaPedemAcao = receitaVG.data ? pedemAcao(receitaVG.data.lista) : null;
+  const { aConferir: boletosAConferir, carregando: carregandoBoletos } = useBoletosAConferir(clienteAtual?.id);
   const { chuvas } = useChuvas();
   /* o rebanho oficial por fazenda (a mesma consulta do PC-100: o cache é o mesmo) */
   const { rawCategorias: categoriasVG } = useRebanhoOficial({ ano: anoNum, cenario: 'realizado', global: isGlobal });
+  /* VISAO-GERAL-PENDENCIAS-01 (D8 = A) — o "Rebanho no mês" pela conta da Evolução do rebanho (`rebanhoNoMes` → `montarMesPorCategoria`),
+     sobre as MESMAS linhas do cache que esta tela já lê; no Global soma as fazendas (D10) */
+  const rebanhoVG = useMemo(() => rebanhoNoMes(categoriasVG ?? [], mesesDoRecorte(anoNum, mesNum, isPeriodo)), [categoriasVG, anoNum, mesNum, isPeriodo]);
   /* DRE pecuária do ANO (jan → mês), realizado e meta, pela função da tela DRE. A meta só para quem a vê. */
   const deAnoVG = anoNum ? `${anoNum}-01` : null;
   const { dre: drePecAno } = useDrePecuaria(clienteAtual?.id, deAnoVG, anoMesVG || null, 'realizado');
@@ -659,6 +693,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
   const MES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const mesCurtoVG = MES_CURTO[mesNum - 1] ?? '';
+  /* VISAO-GERAL-PENDENCIAS-01 — o "Rebanho no mês" avisa o mês sem fechamento (a fazenda do recorte com o mapa de pastos pendente) */
+  const rebanhoSemFechamento = avisoSemFechamento(
+    gradeEscopo.filter(c => c.mes === mesNum && c.p1 === 'pendente')
+      .map(c => { const f = fazendas.find(x => x.id === c.fazendaId); return f?.codigo || f?.nome || c.fazendaNome; }),
+    mesCurtoVG);
   const fmtHa = (v: number | null) => (v == null ? null : `${fmtN(v, 0)} ha`);
 
   /* a chuva do mês (ou de jan → mês, no ano) por fazenda: a soma da tela Chuvas */
@@ -756,7 +795,18 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      continua, com o mês dela no texto; a de um mês POSTERIOR ao escolhido nunca aparece */
   const mesDaAtencaoVG = anoNum && mesCurtoVG ? `${mesCurtoVG}/${String(anoNum).slice(2)}` : undefined;
   const revalidarDoMes = aRevalidar.pendentes.filter(r => r.anoMes <= anoMesVG);
+  /* VISAO-GERAL-PENDENCIAS-01 (mock v2 aprovado 17/11 06:53, D1–D7) — a ordem: Conciliação (uma linha por conta COM extrato) · Notas da
+     Receita · Boletos · Fechamento · Revalidar. Cada número vem da leitura da tela dona; linha com 0 não aparece. Ficam FORA (D4–D6): pastos
+     sem mapa (já está na miniatura ao lado), vencidos não pagos (sem fonte única) e OC em rascunho. */
   const atencaoVG: ItemAtencao[] = [
+    ...contasSemCasar.map((c): ItemAtencao => ({
+      id: `conc-${c.contaId}`, texto: `Conciliação · ${c.nome} · sem casar`, numero: c.qtd,
+      title: `Conciliação de ${mesCurtoVG} · ${c.nome}: ${fmtN(c.qtd, 0)} sem casar (extrato sem par + lançamento sem par)`,
+      acao: 'Conciliar', onIr: () => irPara('conciliacao') })),
+    ...(receitaPedemAcao ? [{ id: 'receita', texto: 'Notas da Receita · a lançar', numero: receitaPedemAcao,
+      title: 'Notas da Receita a lançar (inclui as que pedem ciência) — a mesma conta do selo do "+ Novo"', acao: 'Abrir', onIr: () => irPara('financeiro-lanc') }] : []),
+    ...(boletosAConferir ? [{ id: 'boletos', texto: 'Boletos · a conferir', numero: boletosAConferir,
+      title: 'Boletos na caixa e sem par (a caixa de boletos)', acao: 'Abrir', onIr: () => irPara('financeiro-lanc') }] : []),
     ...gradeAno
       .filter(c => c.mes === mesNum && (isGlobal || c.fazendaId === fazendaAtual?.id) && (c.p1 === 'pendente' || c.p2 === 'pendente'))
       .map((c): ItemAtencao => {
@@ -767,9 +817,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           title: `Fechamento de ${mesCurtoVG} faltando — ${f ? rotuloDaFazenda({ id: f.id, nome: f.nome, codigo: f.codigo ?? null }) : c.fazendaNome}`,
           acao: 'Fechar', onIr: () => onIrPara?.(destino, c.fazendaId) };
       }),
-    ...(semCasar !== null && semCasar > 0
-      ? [{ id: 'conc', texto: `Conciliação de ${mesCurtoVG}: ${fmtN(semCasar, 0)} sem casar`, acao: 'Conciliar', onIr: () => irPara('conciliacao') }]
-      : []),
     ...revalidarDoMes.map((r): ItemAtencao => {
       const f = fazendas.find(x => x.id === r.fazendaId);
       return { id: `vr-${r.fazendaId}-${r.anoMes}`, texto: `${fraseARevalidar(r.anoMes)} · ${f?.codigo || f?.nome || ''}`,
@@ -1243,17 +1290,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           </div>
           <div className="mt-auto flex-none px-2.5 pb-2"><LegendaDasSituacoes /></div>
         </Card>
-        <PrecisaDeAtencao itens={atencaoVG} carregando={loadingGradeAno || carregandoConc || aRevalidar.carregando} mes={mesDaAtencaoVG} />
-      </div>
-
-      {/* PRIMEIRA LINHA: Area e Caixa sao filhos DIRETOS do grid, entao a linha
-          alinha a altura dos dois. Decisao explicita (Gabriel, 21/08), ciente de
-          que o card mais baixo ganha espaco vazio embaixo — e o oposto do que
-          motivou e948a653. */}
-      {/* VISAO-GERAL-04 (V4) — Área (barra + só as áreas que a fazenda tem) e, ao lado, o Caixa com a sobra, os dois na MESMA altura */}
-      <div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
-
-        <div className="min-w-0">
+        {/* VISAO-GERAL-PENDENCIAS-01 (D7) — a coluna da direita: "Pendências do mês" (altura do conteúdo) e, logo abaixo, a "Área no mês"
+            (saiu da linha do Caixa), que ocupa o resto da altura — sem espaço vazio */}
+        <div className="flex min-w-0 flex-col gap-1.5" data-testid="vg-coluna-direita">
+        <PrecisaDeAtencao itens={atencaoVG} mes={mesDaAtencaoVG}
+          carregando={loadingGradeAno || carregandoConc || aRevalidar.carregando || receitaVG.isLoading || carregandoBoletos} />
+        <div className="min-w-0 flex-1">
         {/* col-span-2 porque o miolo do SectionBlock e uma grade de DUAS colunas,
             feita para MetricTile. Sem isso a barra ocupava meia largura e o rodape
             subia para a coluna da direita, ao lado dos numeros em vez de abaixo. */}
@@ -1442,6 +1484,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           </div>
         </SectionBlock>
         </div>
+        </div>
+      </div>
+
+      {/* PRIMEIRA LINHA: Area e Caixa sao filhos DIRETOS do grid, entao a linha
+          alinha a altura dos dois. Decisao explicita (Gabriel, 21/08), ciente de
+          que o card mais baixo ganha espaco vazio embaixo — e o oposto do que
+          motivou e948a653. */}
+      {/* VISAO-GERAL-04 (V4) — Área (barra + só as áreas que a fazenda tem) e, ao lado, o Caixa com a sobra, os dois na MESMA altura */}
+      {/* VISAO-GERAL-PENDENCIAS-01 (mock v2, D8 = A) — Caixa com METADE da largura e, ao lado, o "Rebanho no mês", os dois na MESMA altura
+          (filhos diretos do grid, `items-stretch` + `h-full`). Abaixo de 1024 px um embaixo do outro. */}
+      <div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="vg-linha-caixa">
 
         <div className="min-w-0">
         {/* NAO recebe naoFechado: caixa nao depende de fechamento de rebanho.
@@ -1547,6 +1600,48 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               </p>
             )}
 
+          </div>
+        </SectionBlock>
+        </div>
+
+        <div className="min-w-0">
+        <SectionBlock title={isPeriodo ? 'Rebanho no período' : 'Rebanho no mês'} subtitle="cabeças · Evolução do rebanho"
+          className="h-full" testid="vg-rebanho">
+          <div className="col-span-2 -mt-1 space-y-0.5">
+            {/* o aviso do mês sem fechamento numa linha RESERVADA (sempre lá, invisível sem aviso): a altura do card não muda */}
+            <p className={`h-[14px] whitespace-nowrap text-[10px] leading-[14px] text-amber-700${rebanhoSemFechamento ? '' : ' invisible'}`}
+              title={rebanhoSemFechamento?.title} aria-hidden={!rebanhoSemFechamento || undefined} data-testid="vg-rebanho-aviso">
+              {rebanhoSemFechamento?.texto ?? '·'}
+            </p>
+            <LinhaCab label="Saldo inicial" valor={rebanhoVG?.inicio ?? null} tipo="subtotal" />
+            <div className="pt-1 space-y-0.5">
+              <LinhaCab label="Entradas" valor={rebanhoVG ? rebanhoVG.nascimentos + rebanhoVG.compras + rebanhoVG.transfEntrada : null} sinal="+"
+                tipo="total" corValor="text-emerald-600" />
+              <LinhaCab label="Nascimentos" valor={rebanhoVG?.nascimentos ?? null} sinal="+" />
+              <LinhaCab label="Compras" valor={rebanhoVG?.compras ?? null} sinal="+" />
+              <LinhaCab label="Transferências (entrada)" valor={rebanhoVG?.transfEntrada ?? null} sinal="+" />
+            </div>
+            <div className="pt-1 space-y-0.5">
+              <LinhaCab label="Saídas" valor={rebanhoVG ? rebanhoVG.vendasEAbates + rebanhoVG.consumo + rebanhoVG.mortes + rebanhoVG.transfSaida : null}
+                sinal="−" tipo="total" corValor="text-red-500" />
+              <LinhaCab label="Vendas e abates" valor={rebanhoVG?.vendasEAbates ?? null} sinal="−" />
+              <LinhaCab label="Consumo" valor={rebanhoVG?.consumo ?? null} sinal="−" />
+              <LinhaCab label="Mortes" valor={rebanhoVG?.mortes ?? null} sinal="−" />
+              <LinhaCab label="Transferências (saída)" valor={rebanhoVG?.transfSaida ?? null} sinal="−" />
+            </div>
+            <div className="pt-1 border-t border-border/40">
+              <div className="flex items-baseline justify-between gap-3 text-[11px] font-medium text-foreground" data-testid="vg-rebanho-final">
+                <span className="truncate">Saldo final</span>
+                <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
+                  {rebanhoVG && (
+                    <span className={`text-[9.5px] font-normal ${rebanhoVG.variacao < 0 ? 'text-red-500' : 'text-emerald-600'}`} data-testid="vg-rebanho-variacao">
+                      {variacaoDoRebanho(rebanhoVG.variacao, rebanhoVG.pct)}
+                    </span>
+                  )}
+                  <span>{rebanhoVG ? fmtN(rebanhoVG.final, 0) : '—'}</span>
+                </span>
+              </div>
+            </div>
           </div>
         </SectionBlock>
         </div>

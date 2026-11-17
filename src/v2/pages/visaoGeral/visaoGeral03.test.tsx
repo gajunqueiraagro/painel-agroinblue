@@ -50,7 +50,8 @@ describe('VISAO-GERAL-03 — a escala da Geo pastos', () => {
 
   it('os quadros são o Card de lá: título a 11 px', () => {
     render(<PrecisaDeAtencao itens={[]} />);
-    expect(screen.getByText('Precisa de atenção').className).toContain('text-[11px]');
+    /* VISAO-GERAL-PENDENCIAS-01 — o quadro passou a "Pendências do mês" (mock v2 aprovado 17/11) */
+    expect(screen.getByText('Pendências do mês').className).toContain('text-[11px]');
   });
 
   it('o "Mapa das fazendas" é a MESMA peça da Geo pastos (miniatura, sigla, "cab sem mapa"), e o clique abre a fazenda', () => {
@@ -91,10 +92,16 @@ describe('VISAO-GERAL-04 — sem espaço sobrando', () => {
     expect(DA_VISAO.some(({ fonte }) => /function AtalhosVG/.test(fonte))).toBe(false);
   });
 
-  it('Área ao lado do Caixa (1 : 1,6 — VISAO-GERAL-04 de 08/11), na mesma altura', () => {
-    expect(V2HOME).toContain('<div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">');
-    expect(V2HOME).toMatch(/title=\{isPeriodo \? 'Área média no período' : 'Área no mês'\}\s*className="h-full"/);
+  /* VISAO-GERAL-PENDENCIAS-01 (mock v2 aprovado 17/11, D7/D8) — a Área subiu para baixo das Pendências; o Caixa ficou com METADE da largura e o
+     "Rebanho no mês" ao lado, os dois na MESMA altura (filhos diretos do grid `items-stretch`, os dois `h-full`) */
+  it('Caixa e Rebanho lado a lado (1 : 1), na mesma altura; a Área na coluna da direita, com o resto da altura', () => {
+    expect(V2HOME).toContain('<div className="grid grid-cols-1 items-stretch gap-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="vg-linha-caixa">');
     expect(V2HOME).toMatch(/subtitle="regime de caixa · sem transferências"\s*className="h-full"/);
+    expect(V2HOME).toMatch(/subtitle="cabeças · Evolução do rebanho"\s*className="h-full" testid="vg-rebanho"/);
+    expect(V2HOME).toMatch(/title=\{isPeriodo \? 'Área média no período' : 'Área no mês'\}\s*className="h-full"/);
+    const linhaCaixa = V2HOME.slice(V2HOME.indexOf('data-testid="vg-linha-caixa"'));
+    expect(linhaCaixa.indexOf("'Caixa no mês'")).toBeLessThan(linhaCaixa.indexOf("'Rebanho no mês'"));
+    expect(linhaCaixa).not.toContain("'Área no mês'");
   });
 
   it('VISAO-GERAL-04 (08/11, V2): logo abaixo dos cartões, o mapa das fazendas (maior) e, ao lado, a atenção; os blocos por atividade no fim', () => {
@@ -104,7 +111,10 @@ describe('VISAO-GERAL-04 — sem espaço sobrando', () => {
     const depois = V2HOME.slice(linha);
     expect(depois.indexOf('<MiniaturaDaFazenda')).toBeLessThan(depois.indexOf('<PrecisaDeAtencao'));
     expect(depois.indexOf('<PrecisaDeAtencao')).toBeLessThan(depois.indexOf("'Área no mês'"));
-    expect(V2HOME).not.toContain('vg-coluna-dir');
+    /* VISAO-GERAL-PENDENCIAS-01 (D7) — a coluna da direita voltou, agora com Pendências + Área (e a Área ANTES da linha do Caixa) */
+    const coluna = depois.slice(depois.indexOf('data-testid="vg-coluna-direita"'), depois.indexOf('data-testid="vg-linha-caixa"'));
+    expect(coluna).toContain('<PrecisaDeAtencao');
+    expect(coluna).toContain("'Área no mês'");
     expect(V2HOME.indexOf('<BlocosPorAtividade')).toBeGreaterThan(V2HOME.indexOf('<TabelaFazendasVG'));
   });
 
@@ -191,8 +201,10 @@ describe('VISAO-GERAL-05 — indicadores das atividades e a tabela por uso', () 
 
   it('"Precisa de atenção": cada item numa linha (o texto curto; o inteiro no title)', () => {
     render(<PrecisaDeAtencao itens={[{ id: 'f', texto: 'Fechamento de out faltando · EXN', title: 'Fechamento de out faltando — EXN · Faz. Exemplo Norte', acao: 'Fechar', onIr: vi.fn() }]} />);
-    const li = screen.getByTestId('vg-atencao-f');
-    expect(li.className).toContain('whitespace-nowrap');
-    expect(li.title).toContain('Faz. Exemplo Norte');
+    /* VISAO-GERAL-PENDENCIAS-01 — a linha é uma linha de TABELA: o texto numa célula de uma linha ("…" + o inteiro no title) */
+    const texto = screen.getByTestId('vg-atencao-f').querySelector('td');
+    expect(texto?.className).toContain('truncate');
+    expect(texto?.className).toContain('whitespace-nowrap');
+    expect(texto?.title).toContain('Faz. Exemplo Norte');
   });
 });
