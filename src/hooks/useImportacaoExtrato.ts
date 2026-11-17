@@ -44,6 +44,9 @@ import { dataAncoraLancamento, orFiltroDataAncora, OR_CENARIO_NAO_META } from '@
 import {
   classificarDuplicidadeOFX,
   gemeasDaImportacao,
+  outraDataDaImportacao,
+  vivasParaOutraData,
+  lotesDaImportacao,
   extrasDasVivas,
   nomesDosArquivos,
   type ClassificacaoOFXDup,
@@ -172,6 +175,8 @@ export interface MovimentoPreview extends MovimentoBruto {
   dupExistenteGravadoEm?: string | null;
   /** P140 — a linha existente já está conciliada. */
   dupExistenteConciliado?: boolean;
+  /** OF-CONFERIR-CASAMENTO-01 — a GÊMEA com OUTRA data: o dia da linha viva (Open Finance × arquivo) */
+  dupOutraData?: string | null;
 }
 
 export interface LancamentoAgrupadoInfo {
@@ -1102,6 +1107,58 @@ export function useImportacaoExtrato() {
         m.dupExistenteGravadoEm = extra?.criadoEm ?? null;
         m.dupExistenteConciliado = extra?.status === 'conciliado';
       });
+
+      /* ── OF-CONFERIR-CASAMENTO-01 — A REPETIDA COM OUTRA DATA (Open Finance × arquivo; OK do Gabriel 17/11) ────────────────────
+         O Pix de domingo vem do Open Finance com a data dele e do OFX com a de terça: a linha NOVA que nada reivindicou casa, pelo
+         valor, com uma viva de ORIGEM DIFERENTE que nada reivindicou, até 3 dias úteis (`outraDataDaImportacao`). Vira a mesma GÊMEA
+         do P140 (D1: NÃO entra por padrão; a caixa decide; a antiga não é tocada), com a data da viva no selo e no `title`.
+         A viva pode estar fora do período do arquivo novo: a janela da consulta é o período ± 7 dias (3 úteis + fim de semana + feriado). */
+      const novasSemPar = movimentos.map((m, i) => ({ m, i })).filter(({ m }) => !m.existeNoDB && !m.jaExistenteChave && !m.dupClassificacao);
+      if (novasSemPar.length > 0) {
+        const { data: vivasRows, error: errVivas } = await supabase
+          .from('extrato_bancario_v2')
+          .select('id, data_movimento, valor, documento, descricao, status, importacao_id, created_at')
+          .eq('cliente_id', clienteAtual.id)
+          .eq('conta_bancaria_id', params.contaBancariaId)
+          .gte('data_movimento', addDays(dataMin, -7))
+          .lte('data_movimento', addDays(dataMax, +7))
+          .is('cancelado_em', null)
+          .neq('status', 'ignorado');
+        if (errVivas) throw errVivas;
+        const vivas = vivasParaOutraData(vivasRows);
+        const idsImp = [...new Set(vivas.map((v) => v.importacaoId).filter((x): x is string => !!x))];
+        let lotes = new Map<string, { tipo: string | null; nome: string | null }>();
+        if (idsImp.length) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
+          const { data: lotesRows, error: errLotes } = await (supabase as any).from('financeiro_importacoes_v2')
+            .select('id, tipo_arquivo, nome_arquivo').eq('cliente_id', clienteAtual.id).in('id', idsImp);
+          if (errLotes) throw errLotes;
+          lotes = lotesDaImportacao(lotesRows);
+        }
+        const reivindicadas = new Set<string>(reivindicados);
+        for (const m of movimentos) if (m.dupExistenteId && m.dupClassificacao) reivindicadas.add(m.dupExistenteId);
+        const novaEhOF = formato === 'OPEN_FINANCE';
+        const achados = outraDataDaImportacao(
+          novasSemPar.map(({ m, i }) => ({ chave: String(i), data: m.data, valor: m.valor, deOpenFinance: novaEhOF })),
+          vivas.map((v) => ({ chave: v.id, data: v.data, valor: v.valor, deOpenFinance: !!v.importacaoId && lotes.get(v.importacaoId)?.tipo === 'OPEN_FINANCE' })),
+          reivindicadas,
+        );
+        const vivaPorId = new Map(vivas.map((v) => [v.id, v]));
+        for (const { m, i } of novasSemPar) {
+          const id = achados.get(String(i)); const v = id ? vivaPorId.get(id) : undefined;
+          if (!id || !v) continue;
+          m.dupClassificacao = 'GEMEA';
+          m.dupImportar = false;
+          m.dupExistenteId = id;
+          m.dupOutraData = v.data;
+          m.dupResumo = 'REPETIDA COM OUTRA DATA: o mesmo valor de uma linha de outra origem (Open Finance × arquivo) até 3 dias úteis — o Open Finance usa a data da transação, o arquivo a contábil';
+          m.dupExistenteDescricao = v.descricao;
+          m.dupExistenteDocumento = v.documento;
+          m.dupExistenteArquivo = v.importacaoId ? (lotes.get(v.importacaoId)?.nome ?? null) : 'sem registro';
+          m.dupExistenteGravadoEm = v.criadoEm;
+          m.dupExistenteConciliado = v.status === 'conciliado';
+        }
+      }
 
       /* ⚠ A CONSULTA A MAIS QUE O PR-IMPORT-REIMPORTACAO-01 TROUXE SAIU JUNTO COM A RÉGUA DELE:
          a suspeita por semelhança usa `candidatosDup`, que a prévia já buscava antes de tudo

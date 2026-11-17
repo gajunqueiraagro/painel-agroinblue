@@ -1,5 +1,5 @@
 /**
- * OPENFINANCE-PILOTO-01 · P2 — o connect token (30 min) para o Widget da Pluggy. Usuário logado: admin AgroinBlue ou gestor do cliente.
+ * OPENFINANCE-PILOTO-01 · P2 — o connect token (30 min) para o Widget da Pluggy. Usuário logado: admin AGROinBLUE ou gestor do cliente.
  * Só liga as peças; a ordem (quem → cliente → pode → configuração → Pluggy → trilha) mora em `_shared/pluggy.ts` (`conectar`).
  * A API key nasce e morre aqui; à tela vai só o `accessToken` de 30 min. ⚠ Não loga corpo, cabeçalho, chave nem token.
  * Secrets: PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET (o Gabriel cola no proto).
@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
   try { const c = await req.json(); if (c && typeof c === "object") corpo = c; } catch { corpo = {}; }
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim() || null;
 
-  const r = await conectar({ token, clienteId: corpo.cliente_id }, {
+  const r = await conectar({ token, clienteId: corpo.cliente_id, itemId: corpo.item_id }, {
     autorDoToken: async (t) => (await admin.auth.getUser(t)).data.user?.id ?? null,
     podeConectar: async (autor, clienteId) => {
       const { data: ehAdmin } = await admin.rpc("is_admin_agroinblue", { _user_id: autor });

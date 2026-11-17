@@ -66,6 +66,9 @@ export interface RelatorioOpenFinance {
   repetidasNaResposta: number;
   semData: number;
   semDocumento: number;
+  /** OF-CONFERIR-CASAMENTO-01: a borda pede 1 dia a mais de cada lado (o filtro da Pluggy não é pelo dia de Brasília); o que cai fora
+   *  do período pedido, no dia de Brasília, não entra */
+  foraDoPeriodo: number;
 }
 
 export type ResultadoOpenFinance =
@@ -108,6 +111,7 @@ export function fonteDoOpenFinance(
 
   const rel: RelatorioOpenFinance = {
     recebidas: transacoes.length, entram: 0, pendentes: 0, zeradas: 0, antesDoCorte: 0, repetidasNaResposta: 0, semData: 0, semDocumento: 0,
+    foraDoPeriodo: 0,
   };
   const vistos = new Set<string>();
   const movimentos: MovimentoBruto[] = [];
@@ -121,6 +125,7 @@ export function fonteDoOpenFinance(
     if (!data) { rel.semData += 1; continue; }
     if (!Number.isFinite(t.amount) || emReais(t.amount) === 0) { rel.zeradas += 1; continue; }
     if (corte && data < corte) { rel.antesDoCorte += 1; continue; }
+    if (data < opcoes.de || data > opcoes.ate) { rel.foraDoPeriodo += 1; continue; }
     const entra = t.type === 'CREDIT' || (t.type !== 'DEBIT' && t.amount > 0);
     const documento = (t.providerId ?? '').trim() || null;
     if (!documento) rel.semDocumento += 1;

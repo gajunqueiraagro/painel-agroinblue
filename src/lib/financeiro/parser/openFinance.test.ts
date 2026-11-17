@@ -31,7 +31,7 @@ describe('a fonte do Open Finance', () => {
       ['2026-11-10', -0.26, 'debito', 'TARIFA DOC AVULSA', 'OF-BB-20261110-0010'],
     ]);
     expect(relatorio).toEqual({
-      recebidas: 11, entram: 7, pendentes: 1, zeradas: 1, antesDoCorte: 1, repetidasNaResposta: 1, semData: 0, semDocumento: 2,
+      recebidas: 11, entram: 7, pendentes: 1, zeradas: 1, antesDoCorte: 1, repetidasNaResposta: 1, semData: 0, semDocumento: 2, foraDoPeriodo: 0,
     });
     expect(fonte.linhasInformativas).toBe(1);
   });
@@ -111,5 +111,18 @@ describe('a fonte do Open Finance', () => {
     const r = lida(t);
     expect(r.fonte.movimentos.map((m) => m.valor)).toEqual([-10.01, 0.3]);
     expect(r.relatorio.zeradas).toBe(1); // 0,004 é zero ao centavo: informativa, não movimento
+  });
+
+  it('OF-CONFERIR-CASAMENTO-01 — a borda pede 1 dia a mais de cada lado: no dia de BRASÍLIA, o que cai fora do período não entra', () => {
+    const base = { accountId: conta.id, description: 'X', status: 'POSTED', type: 'DEBIT', providerId: 'p', currencyCode: 'BRL' };
+    const t: TransacaoOpenFinance[] = [
+      { ...base, id: 'antes', amount: -1, date: '2026-10-01T02:00:00.000Z' },   // 30/09 23:00 em Brasília: fora
+      { ...base, id: 'primeiro', amount: -2, date: '2026-10-01T03:00:00.000Z' }, // 01/10 00:00: dentro
+      { ...base, id: 'ultimo', amount: -3, date: '2026-11-13T02:59:00.000Z' },   // 12/11 23:59: dentro (o 13/11 em UTC)
+      { ...base, id: 'depois', amount: -4, date: '2026-11-13T03:00:00.000Z' },   // 13/11 00:00: fora
+    ];
+    const r = lida(t, { ...OPC, desde: null });
+    expect(r.fonte.movimentos.map((m) => [m.data, m.valor])).toEqual([['2026-10-01', -2], ['2026-11-12', -3]]);
+    expect(r.relatorio.foraDoPeriodo).toBe(2);
   });
 });

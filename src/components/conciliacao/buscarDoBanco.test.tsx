@@ -164,3 +164,43 @@ describe('Lança na conta (Escolher contas)', () => {
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('OF-ATUALIZAR-DO-BANCO-01 — Atualizar do banco', () => {
+  const item = (status: string, lastUpdatedAt = '2026-11-16T20:10:37.000Z') =>
+    ({ data: { ok: true, acao: 'atualizar', item: { status, lastUpdatedAt, nextAutoSyncAt: '2026-11-17T20:10:00.000Z' } }, error: null });
+  it('pede a atualização, mostra "atualizando…" e relê a cada 10 s até o banco terminar; aí "banco atualizado …"', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      invoke.mockResolvedValueOnce(item('UPDATING')).mockResolvedValueOnce(item('UPDATING')).mockResolvedValueOnce(item('UPDATED', '2026-11-17T13:42:00.000Z'));
+      const aoFrase = vi.fn();
+      render(<BuscarDoBanco contaId={CONTA} desabilitado={false} aoFonte={vi.fn()} aoFrase={aoFrase} />);
+      fireEvent.click(await screen.findByTestId('openfinance-atualizar-do-banco'));
+      await waitFor(() => expect(screen.getByTestId('openfinance-banco-atualizado').textContent).toBe('atualizando…'));
+      expect(invoke).toHaveBeenNthCalledWith(1, 'openfinance-extrato', { body: { acao: 'atualizar', cliente_id: 'cliente-teste', conta_bancaria_id: CONTA } });
+      expect(screen.getByTestId('openfinance-buscar-do-banco')).toHaveProperty('disabled', true);
+      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(10_000);
+      await waitFor(() => expect(screen.getByTestId('openfinance-banco-atualizado').textContent).toMatch(/^banco atualizado (às|em) /));
+      expect(invoke).toHaveBeenNthCalledWith(2, 'openfinance-extrato', { body: { acao: 'situacao', cliente_id: 'cliente-teste', conta_bancaria_id: CONTA } });
+      expect(invoke).toHaveBeenCalledTimes(3);
+      expect(aoFrase).toHaveBeenLastCalledWith({ tipo: 'ok', texto: 'Banco atualizado. Agora o "Buscar do banco" traz o que entrou.' });
+      expect(screen.getByTestId('openfinance-buscar-do-banco')).toHaveProperty('disabled', false);
+    } finally { vi.useRealTimers(); }
+  });
+  it('o banco pede o titular / 1 por hora: a frase da borda vai à linha, sem reler', async () => {
+    invoke.mockResolvedValue({ data: { ok: false, frase: 'O banco pede o titular de novo (…): Contas bancárias › Bancos conectados › Reconectar. Nada foi lido.', reconectar: true }, error: null });
+    const aoFrase = vi.fn();
+    render(<BuscarDoBanco contaId={CONTA} desabilitado={false} aoFonte={vi.fn()} aoFrase={aoFrase} />);
+    fireEvent.click(await screen.findByTestId('openfinance-atualizar-do-banco'));
+    await waitFor(() => expect(aoFrase).toHaveBeenCalledWith({ tipo: 'erro', texto: expect.stringContaining('Reconectar') }));
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+  it('a busca mostra quando o banco foi lido pela última vez (sem pedir nada a mais)', async () => {
+    invoke.mockResolvedValue(respostaDaBorda({ item: { status: 'UPDATED', lastUpdatedAt: '2026-11-16T20:10:37.000Z', nextAutoSyncAt: '2026-11-17T20:10:00.000Z' } }));
+    render(<BuscarDoBanco contaId={CONTA} desabilitado={false} aoFonte={vi.fn(async () => {})} aoFrase={vi.fn()} />);
+    fireEvent.click(await screen.findByTestId('openfinance-buscar-do-banco'));
+    await waitFor(() => expect(screen.getByTestId('openfinance-banco-atualizado').textContent).toBe('banco atualizado em 16/11/2026 17:10'));
+    expect(screen.getByTestId('openfinance-banco-atualizado').getAttribute('title')).toBe('A Pluggy atualiza sozinha de novo em 17/11/2026 17:10.');
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+});

@@ -6,9 +6,9 @@
  *  · `openfinance-webhook`   — PÚBLICA (sem JWT do Supabase: a Pluggy não tem). Confere o cabeçalho secreto (comparação de tempo
  *    constante) e o `clientId`; grava SÓ O AVISO, com os campos de uma lista fechada, na fila `openfinance_eventos` (118120) e responde
  *    2XX em < 10 s. NÃO grava transação: quem lê os dados é a busca com a API key, depois.
- *  · `openfinance-conectar`  — o usuário logado (admin AgroinBlue ou gestor do cliente) pede o connect token de 30 min para o Widget;
+ *  · `openfinance-conectar`  — o usuário logado (admin AGROinBLUE ou gestor do cliente) pede o connect token de 30 min para o Widget;
  *    `clientUserId` = o id do cliente (o `item/created` volta com ele). A API key (2 h) nasce e morre aqui; nunca vai à tela.
- *  · `openfinance-webhook-registrar` — SÓ o admin AgroinBlue: cria na Pluggy o webhook `all` com o cabeçalho secreto (a doc: "headers
+ *  · `openfinance-webhook-registrar` — SÓ o admin AGROinBLUE: cria na Pluggy o webhook `all` com o cabeçalho secreto (a doc: "headers
  *    só pela API"). Idempotente: se a URL já está lá, não cria outro. A resposta nunca devolve o cabeçalho.
  * ⚠ Segredos (PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET, PLUGGY_WEBHOOK_SEGREDO) só nos secrets das Edge Functions do proto; nada aqui loga
  *    corpo, cabeçalho, chave nem token.
@@ -42,18 +42,19 @@ export async function chaveDaApi(busca: Busca, clientId: string, clientSecret: s
   try {
     r = await busca(`${PLUGGY_BASE}/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, clientSecret }) });
   } catch { return { ok: false, status: 502, frase: 'Não consegui falar com a Pluggy agora. Tente de novo.' }; }
-  if (!r.ok) return { ok: false, status: 502, frase: 'A Pluggy recusou as credenciais do AgroinBlue (confira os secrets do proto).' };
+  if (!r.ok) return { ok: false, status: 502, frase: 'A Pluggy recusou as credenciais do AGROinBLUE (confira os secrets do proto).' };
   const apiKey = texto(objeto(await r.json())?.apiKey, 4096);
   return apiKey ? { ok: true, valor: apiKey } : { ok: false, status: 502, frase: 'A Pluggy não devolveu a chave.' };
 }
 
 /** `POST /connect_token` (30 min) com o cliente como `clientUserId`; `avoidDuplicates` evita 2 itens do mesmo banco/CPF. */
-export async function pedirConnectToken(busca: Busca, apiKey: string, clienteId: string): Promise<Resultado<string>> {
+export async function pedirConnectToken(busca: Busca, apiKey: string, clienteId: string, itemId?: string | null): Promise<Resultado<string>> {
   let r;
   try {
     r = await busca(`${PLUGGY_BASE}/connect_token`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey },
-      body: JSON.stringify({ options: { clientUserId: clienteId, avoidDuplicates: true } }),
+      /* OF-ATUALIZAR-DO-BANCO-01: com `itemId`, o Widget abre em MODO ATUALIZAÇÃO desse item (o banco pede de novo o MFA/consentimento) */
+      body: JSON.stringify(itemId ? { itemId, options: { clientUserId: clienteId } } : { options: { clientUserId: clienteId, avoidDuplicates: true } }),
     });
   } catch { return { ok: false, status: 502, frase: 'Não consegui falar com a Pluggy agora. Tente de novo.' }; }
   if (!r.ok) return { ok: false, status: 502, frase: 'A Pluggy não abriu a conexão agora. Tente de novo.' };
@@ -62,7 +63,7 @@ export async function pedirConnectToken(busca: Busca, apiKey: string, clienteId:
 }
 
 /**
- * OPENFINANCE-SEG-01 (a) — SÓ o Open Finance REGULADO: o consentimento é dado no app do banco (OAuth); o AgroinBlue nunca vê nem pede
+ * OPENFINANCE-SEG-01 (a) — SÓ o Open Finance REGULADO: o consentimento é dado no app do banco (OAuth); o AGROinBLUE nunca vê nem pede
  * login/senha. `GET /connectors?isOpenFinance=true` e, por garantia, só o que vem com `isOpenFinance` E `oauth` verdadeiros e SEM campo
  * de senha. O Widget abre preso a esta lista (`connectorIds`); lista vazia = não abre (nunca cai para os conectores diretos).
  */
@@ -152,20 +153,34 @@ export interface PecasConectar {
   registrar: (a: { origem: 'agroinblue'; evento: 'agroinblue/connect_token'; client_user_id: string; autor: string }) => Promise<boolean>;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export async function conectar(pedido: { token: string | null; clienteId: unknown }, pecas: PecasConectar):
+export async function conectar(pedido: { token: string | null; clienteId: unknown; itemId?: unknown }, pecas: PecasConectar):
   Promise<{ status: number; corpo: { ok: boolean; accessToken?: string; connectorIds?: number[]; frase?: string } }> {
   const autor = pedido.token ? await pecas.autorDoToken(pedido.token) : null;
   if (!autor) return { status: 401, corpo: { ok: false, frase: 'Entre de novo no sistema.' } };
   const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
   if (!clienteId) return { status: 400, corpo: { ok: false, frase: 'Escolha o cliente.' } };
-  if (!(await pecas.podeConectar(autor, clienteId))) return { status: 403, corpo: { ok: false, frase: 'Só o gestor do cliente ou a AgroinBlue conecta um banco.' } };
+  if (!(await pecas.podeConectar(autor, clienteId))) return { status: 403, corpo: { ok: false, frase: 'Só o gestor do cliente ou a AGROinBLUE conecta um banco.' } };
   const cred = pecas.credenciais();
   if (!cred) return { status: 503, corpo: { ok: false, frase: 'O Open Finance ainda não está configurado neste ambiente.' } };
   const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
   if (chave.ok === false) return { status: chave.status, corpo: { ok: false, frase: chave.frase } };
   const regulados = await conectoresOpenFinance(pecas.busca, chave.valor);
   if (regulados.ok === false) return { status: regulados.status, corpo: { ok: false, frase: regulados.frase } };
-  const t = await pedirConnectToken(pecas.busca, chave.valor, clienteId);
+  /* OF-ATUALIZAR-DO-BANCO-01 — RECONECTAR um item que pede o banco de novo: só um item DESTE cliente (o clientUserId da Pluggy) */
+  let itemId: string | null = null;
+  if (pedido.itemId !== undefined && pedido.itemId !== null) {
+    itemId = typeof pedido.itemId === 'string' && /^[A-Za-z0-9-]{1,128}$/.test(pedido.itemId) ? pedido.itemId : null;
+    if (!itemId) return { status: 400, corpo: { ok: false, frase: 'Conexão inválida.' } };
+    let dono: unknown = null;
+    try {
+      const ri = await pecas.busca(`${PLUGGY_BASE}/items/${itemId}`, { method: 'GET', headers: { 'X-API-KEY': chave.valor } });
+      if (ri.status === 404) return { status: 404, corpo: { ok: false, frase: 'A conexão não existe mais na Pluggy: conecte o banco de novo.' } };
+      if (!ri.ok) return { status: 502, corpo: { ok: false, frase: 'Não consegui ler a conexão na Pluggy. Tente de novo.' } };
+      dono = objeto(await ri.json())?.clientUserId;
+    } catch { return { status: 502, corpo: { ok: false, frase: 'Não consegui falar com a Pluggy agora. Tente de novo.' } }; }
+    if (dono !== clienteId) return { status: 409, corpo: { ok: false, frase: 'Esta conexão não é deste cliente. Nada foi aberto.' } };
+  }
+  const t = await pedirConnectToken(pecas.busca, chave.valor, clienteId, itemId);
   if (t.ok === false) return { status: t.status, corpo: { ok: false, frase: t.frase } };
   if (!(await pecas.registrar({ origem: 'agroinblue', evento: 'agroinblue/connect_token', client_user_id: clienteId, autor }))) {
     return { status: 500, corpo: { ok: false, frase: 'Não consegui registrar o pedido; nada foi aberto.' } };
@@ -174,7 +189,7 @@ export async function conectar(pedido: { token: string | null; clienteId: unknow
 }
 
 /**
- * OPENFINANCE-SEG-01 (b)+(c) — DESCONECTAR: só o admin AgroinBlue. A conexão é PRESA A UM CLIENTE: o item tem o `clientUserId` que o NOSSO
+ * OPENFINANCE-SEG-01 (b)+(c) — DESCONECTAR: só o admin AGROinBLUE. A conexão é PRESA A UM CLIENTE: o item tem o `clientUserId` que o NOSSO
  * connect token gravou; item de outro cliente (ou sem cliente) = 409, nada apagado. Apaga o item na Pluggy (`DELETE /items/{id}`; o
  * consentimento cai) e registra `agroinblue/item_desconectado` na fila (o vínculo some da tela). Extratos já importados ficam.
  * Repetir é seguro: o item que já não existe na Pluggy só registra.
@@ -195,7 +210,7 @@ export async function desconectar(pedido: { token: string | null; clienteId: unk
   const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
   const itemId = typeof pedido.itemId === 'string' && UUID.test(pedido.itemId) ? pedido.itemId : null;
   if (!clienteId || !itemId) return { status: 400, corpo: { ok: false, frase: 'Escolha o cliente e o banco.' } };
-  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AgroinBlue desconecta um banco.' } };
+  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AGROinBLUE desconecta um banco.' } };
   const cred = pecas.credenciais();
   if (!cred) return { status: 503, corpo: { ok: false, frase: 'O Open Finance ainda não está configurado neste ambiente.' } };
   const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
@@ -224,7 +239,7 @@ export async function desconectar(pedido: { token: string | null; clienteId: unk
 
 /**
  * OPENFINANCE-P3a — CONTAS PERMITIDAS (Gabriel 16/11, saída A: o consentimento do Itaú da Vera pegou o CPF inteiro do Gabriel).
- * `openfinance-contas`, só o admin AgroinBlue:
+ * `openfinance-contas`, só o admin AGROinBLUE:
  *  · 'listar'   → confere na Pluggy que o item é deste cliente e devolve, por conta, SÓ tipo · banco · 4 últimos dígitos · titular e
  *                 documento MASCARADOS · se já é permitida. Nunca saldo, limite nem transação; nunca chama /transactions.
  *  · 'permitir' → relê as contas na Pluggy, recusa accountId que não é do item e grava (`_fn_openfinance_contas_gravar`, 118130) a lista
@@ -299,7 +314,7 @@ export async function contas(pedido: { token: string | null; acao: unknown; clie
     }
     marcadas = v;
   }
-  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AgroinBlue escolhe as contas do banco.' } };
+  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AGROinBLUE escolhe as contas do banco.' } };
   const cred = pecas.credenciais();
   if (!cred) return { status: 503, corpo: { ok: false, frase: 'O Open Finance ainda não está configurado neste ambiente.' } };
   const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
@@ -341,7 +356,7 @@ export async function contas(pedido: { token: string | null; acao: unknown; clie
 }
 
 /**
- * OPENFINANCE-P3b — LIGAR a conta permitida à conta do SISTEMA (onde o extrato cai). Só o admin AgroinBlue; quem confere cliente, tipo
+ * OPENFINANCE-P3b — LIGAR a conta permitida à conta do SISTEMA (onde o extrato cai). Só o admin AGROinBLUE; quem confere cliente, tipo
  * e "uma conta do sistema recebe de UMA conta do banco" é a interna `_fn_openfinance_conta_ligar_sistema` (118140). Não fala com a
  * Pluggy: a conta permitida já foi conferida lá quando o admin a marcou. `contaBancariaId` nulo = desliga. `simular` = a prévia.
  */
@@ -360,7 +375,7 @@ export async function ligarConta(pedido: { token: string | null; clienteId: unkn
   const conta = pedido.contaBancariaId === null ? null
     : typeof pedido.contaBancariaId === 'string' && UUID.test(pedido.contaBancariaId) ? pedido.contaBancariaId : undefined;
   if (!clienteId || !permitidaId || conta === undefined) return { status: 400, corpo: { ok: false, frase: 'Escolha a conta do banco e a conta do sistema.' } };
-  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AgroinBlue liga a conta do banco à conta do sistema.' } };
+  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AGROinBLUE liga a conta do banco à conta do sistema.' } };
   const g = await pecas.ligar({ p_cliente: clienteId, p_permitida: permitidaId, p_conta: conta, p_autor: autor, p_simular: pedido.simular === true });
   if (g.ok === false) {
     if (g.codigo === '42501') return { status: 409, corpo: { ok: false, frase: 'Esta conta não é deste cliente. Nada foi gravado.' } };
@@ -372,7 +387,7 @@ export async function ligarConta(pedido: { token: string | null; clienteId: unkn
 }
 
 /**
- * OPENFINANCE-P3b — o EXTRATO da conta permitida (desenho aprovado 16/11). `openfinance-extrato`, só o admin AgroinBlue (piloto):
+ * OPENFINANCE-P3b — o EXTRATO da conta permitida (desenho aprovado 16/11). `openfinance-extrato`, só o admin AGROinBLUE (piloto):
  *  · 'buscar'   → desde o CORTE (o dia seguinte à última linha viva do extrato da conta; sem extrato, os últimos 90 dias) até hoje;
  *                 grava o SALDO que o banco informou (`_fn_openfinance_saldo_registrar`, 118140) — a falha dele não derruba a busca.
  *  · 'conferir' → SÓ LEITURA, um período JÁ coberto pelo extrato (até a última linha; no máximo 62 dias): a tela compara com o que
@@ -400,19 +415,118 @@ export interface PecasExtrato {
   /** a data ('AAAA-MM-DD') da última linha VIVA do extrato da conta; nulo = sem extrato; 'erro' = não consegui ler */
   ultimoDiaDoExtrato: (contaBancariaId: string) => Promise<string | null | 'erro'>;
   registrarSaldo: (p: { p_item: string; p_account: string; p_saldo: number; p_saldo_em: string | null; p_autor: string }) => Promise<boolean>;
+  /** a Pluggy recusou as transações: 1 linha 'agroinblue/extrato_falhou' na fila de eventos (só status e código da Pluggy) */
+  registrarFalha?: (p: { item_id: string; account_id: string; erro_codigo: string }) => Promise<boolean>;
+  /** o resumo da leitura (contagens por dia de Brasília e por status), 1 linha 'agroinblue/extrato_lido' na fila */
+  registrarLeitura?: (p: { item_id: string; account_id: string; resumo: string }) => Promise<boolean>;
 }
 export interface RespostaExtrato {
   ok: true; acao: 'buscar' | 'conferir'; de: string; ate: string; hoje: string;
   /** o dia seguinte à última linha do extrato (nulo = conta sem extrato) e a própria última linha */
   corte: string | null; ultimoDia: string | null;
   conta: ContaDaBorda; transacoes: TransacaoDaBorda[]; saldoGravado: boolean | null;
+  /** OF-ATUALIZAR-DO-BANCO-01: a situação do item na Pluggy (quando o banco foi lido pela última vez) */
+  item: ItemDaBorda | null;
 }
+/* ── OF-ATUALIZAR-DO-BANCO-01 (Gabriel 17/11 10:35: "claro!!!") — o item na Pluggy e o "Atualizar do banco" ───────────────────── */
+export interface ItemDaBorda { status: string | null; executionStatus: string | null; lastUpdatedAt: string | null; nextAutoSyncAt: string | null }
+export function itemDaPluggy(v: unknown): ItemDaBorda {
+  const o = objeto(v);
+  return { status: texto(o?.status, 32), executionStatus: texto(o?.executionStatus, 48), lastUpdatedAt: texto(o?.lastUpdatedAt, 40),
+    nextAutoSyncAt: texto(o?.nextAutoSyncAt, 40) };
+}
+/** o item que a Pluggy não consegue atualizar sozinha: o banco pede o titular de novo (MFA, consentimento, senha trocada) */
+const PEDE_O_TITULAR = new Set(['LOGIN_ERROR', 'WAITING_USER_INPUT', 'INVALID_CREDENTIALS', 'USER_INPUT_NEEDED', 'ACCOUNT_LOCKED',
+  'USER_AUTHORIZATION_PENDING', 'USER_AUTHORIZATION_NOT_GRANTED', 'ACCOUNT_NEEDS_ACTION', 'CONSENT_EXPIRED', 'CONSENT_REVOKED']);
+export const pedeOTitular = (i: ItemDaBorda): boolean => PEDE_O_TITULAR.has(i.status ?? '') || PEDE_O_TITULAR.has(i.executionStatus ?? '');
+/** a Pluggy limita o PATCH /items para client IDs novos a 1 por hora por item (doc); seguimos isso sempre */
+export const MINUTOS_ENTRE_ATUALIZACOES = 60;
+const HORA_EM_BRASILIA = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+export const FRASE_RECONECTAR = 'O banco pede o titular de novo (confirmação ou consentimento vencido): Contas bancárias › Bancos conectados › Reconectar. Nada foi lido.';
+
+export interface PecasAtualizar {
+  autorDoToken: (token: string) => Promise<string | null>;
+  ehAdmin: (autor: string) => Promise<boolean>;
+  credenciais: () => { clientId: string; clientSecret: string } | null;
+  busca: Busca;
+  permitidaDaConta: (clienteId: string, contaBancariaId: string) => Promise<{ item_id: string; account_id: string } | null | 'erro'>;
+  /** o último pedido de atualização deste item (ISO), nulo = nenhum; 'erro' = não consegui ler */
+  ultimoPedido: (itemId: string) => Promise<string | null | 'erro'>;
+  registrar: (a: { origem: 'agroinblue'; evento: 'agroinblue/item_atualizar'; item_id: string; client_user_id: string; autor: string }) => Promise<boolean>;
+}
+export type RespostaAtualizar = { ok: true; acao: 'atualizar' | 'situacao'; item: ItemDaBorda; jaAtualizando?: boolean };
+
+/**
+ * "Atualizar do banco" (só o admin no piloto) e a "situação" do item: 401 → 400 → 403 → a conta ligada → credenciais → GET /items (do
+ * cliente) → 'situacao' devolve o item; 'atualizar': o banco pede o titular = 409 com a frase do Reconectar; já atualizando = 200 sem novo
+ * pedido; pedido há menos de 60 min = 429 com a hora; senão PATCH /items/{id} e a trilha 'agroinblue/item_atualizar'. Não lê transação.
+ */
+export async function atualizarItem(pedido: { token: string | null; acao: unknown; clienteId: unknown; contaBancariaId: unknown; agora: number },
+  pecas: PecasAtualizar): Promise<{ status: number; corpo: RespostaAtualizar | { ok: false; frase: string; reconectar?: boolean } }> {
+  const falha = (status: number, frase: string, reconectar?: boolean) => ({ status, corpo: { ok: false as const, frase, ...(reconectar ? { reconectar: true } : {}) } });
+  const autor = pedido.token ? await pecas.autorDoToken(pedido.token) : null;
+  if (!autor) return falha(401, 'Entre de novo no sistema.');
+  const acao = pedido.acao === 'atualizar' || pedido.acao === 'situacao' ? pedido.acao : null;
+  const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
+  const contaId = typeof pedido.contaBancariaId === 'string' && UUID.test(pedido.contaBancariaId) ? pedido.contaBancariaId : null;
+  if (!acao || !clienteId || !contaId) return falha(400, 'Escolha o cliente e a conta.');
+  if (!(await pecas.ehAdmin(autor))) return falha(403, 'No piloto, só a AGROinBLUE atualiza a conexão com o banco.');
+  const permitida = await pecas.permitidaDaConta(clienteId, contaId);
+  if (permitida === 'erro') return falha(500, 'Não consegui ler a ligação com o banco. Tente de novo.');
+  if (!permitida) return falha(404, 'Esta conta do sistema não está ligada a uma conta do banco (Bancos conectados › Escolher contas).');
+  const cred = pecas.credenciais();
+  if (!cred) return falha(503, 'O Open Finance ainda não está configurado neste ambiente.');
+  const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
+  if (chave.ok === false) return falha(chave.status, chave.frase);
+  const h = { 'Content-Type': 'application/json', 'X-API-KEY': chave.valor };
+  let item: ItemDaBorda;
+  try {
+    const r = await pecas.busca(`${PLUGGY_BASE}/items/${permitida.item_id}`, { method: 'GET', headers: h });
+    if (r.status === 404) return falha(404, 'A conexão com o banco não existe mais na Pluggy. Conecte o banco de novo.');
+    if (!r.ok) return falha(502, `Não consegui ler a conexão na Pluggy (Pluggy ${r.status}). Tente de novo.`);
+    const o = objeto(await r.json());
+    if (o?.clientUserId !== clienteId) return falha(409, 'Esta conexão não é deste cliente. Nada foi pedido.');
+    item = itemDaPluggy(o);
+  } catch { return falha(502, 'Não consegui falar com a Pluggy agora. Tente de novo.'); }
+  if (acao === 'situacao') return { status: 200, corpo: { ok: true, acao, item } };
+
+  if (pedeOTitular(item)) return falha(409, FRASE_RECONECTAR, true);
+  if (item.status === 'UPDATING') return { status: 200, corpo: { ok: true, acao, item, jaAtualizando: true } };
+  const ultimo = await pecas.ultimoPedido(permitida.item_id);
+  if (ultimo === 'erro') return falha(500, 'Não consegui conferir o último pedido de atualização. Nada foi pedido.');
+  if (ultimo) {
+    const desde = pedido.agora - new Date(ultimo).getTime();
+    if (Number.isFinite(desde) && desde >= 0 && desde < MINUTOS_ENTRE_ATUALIZACOES * 60_000) {
+      const proximo = new Date(new Date(ultimo).getTime() + MINUTOS_ENTRE_ATUALIZACOES * 60_000);
+      return falha(429, `Já pedi a atualização às ${HORA_EM_BRASILIA.format(new Date(ultimo))}; a Pluggy aceita um pedido por hora — o próximo a partir das ${HORA_EM_BRASILIA.format(proximo)}.`);
+    }
+  }
+  try {
+    const r = await pecas.busca(`${PLUGGY_BASE}/items/${permitida.item_id}`, { method: 'PATCH', headers: h, body: '{}' });
+    if (r.status === 429) return falha(429, 'A Pluggy pediu para esperar antes de atualizar de novo. Nada foi pedido; tente mais tarde.');
+    if (r.status === 400) return falha(409, FRASE_RECONECTAR, true);
+    if (!r.ok) return falha(502, `A Pluggy não aceitou o pedido de atualização (Pluggy ${r.status}). Tente de novo.`);
+    item = itemDaPluggy(await r.json());
+  } catch { return falha(502, 'Não consegui falar com a Pluggy agora. Tente de novo.'); }
+  try { await pecas.registrar({ origem: 'agroinblue', evento: 'agroinblue/item_atualizar', item_id: permitida.item_id, client_user_id: clienteId, autor }); }
+  catch { /* a trilha falhar não desfaz o pedido feito */ }
+  return { status: 200, corpo: { ok: true, acao, item } };
+}
+
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
 const diaValido = (v: unknown): string | null => {
   if (typeof v !== 'string' || !DIA.test(v)) return null;
   const d = new Date(`${v}T12:00:00Z`);
   return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v ? null : v;
 };
+const DIA_EM_BRASILIA_DA_BORDA = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+/** o dia ('AAAA-MM-DD') em Brasília de um ISO da Pluggy; só a data = ela mesma; ilegível = nulo */
+export function diaEmBrasiliaDaBorda(iso: string | null): string | null {
+  if (!iso) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : DIA_EM_BRASILIA_DA_BORDA.format(d);
+}
 export function somarDias(dia: string, n: number): string {
   const d = new Date(`${dia}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
@@ -445,7 +559,7 @@ export async function extrato(pedido: { token: string | null; acao: unknown; cli
   const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
   const contaId = typeof pedido.contaBancariaId === 'string' && UUID.test(pedido.contaBancariaId) ? pedido.contaBancariaId : null;
   if (!acao || !clienteId || !contaId) return falha(400, 'Escolha o cliente e a conta.');
-  if (!(await pecas.ehAdmin(autor))) return falha(403, 'No piloto, só a AgroinBlue busca o extrato no banco.');
+  if (!(await pecas.ehAdmin(autor))) return falha(403, 'No piloto, só a AGROinBLUE busca o extrato no banco.');
 
   const permitida = await pecas.permitidaDaConta(clienteId, contaId);
   if (permitida === 'erro') return falha(500, 'Não consegui ler a ligação com o banco. Tente de novo.');
@@ -474,12 +588,15 @@ export async function extrato(pedido: { token: string | null; acao: unknown; cli
   const h = { 'Content-Type': 'application/json', 'X-API-KEY': chave.valor };
 
   let conta: ContaDaBorda;
+  let situacaoDoItem: ItemDaBorda | null = null;
   const transacoes: TransacaoDaBorda[] = [];
   try {
     const item = await pecas.busca(`${PLUGGY_BASE}/items/${permitida.item_id}`, { method: 'GET', headers: h });
     if (item.status === 404) return falha(404, 'A conexão com o banco não existe mais na Pluggy. Nada foi lido.');
     if (!item.ok) return falha(502, 'Não consegui ler a conexão na Pluggy. Tente de novo.');
-    if (objeto(await item.json())?.clientUserId !== clienteId) return falha(409, 'Esta conexão não é deste cliente. Nada foi lido.');
+    const oi = objeto(await item.json());
+    if (oi?.clientUserId !== clienteId) return falha(409, 'Esta conexão não é deste cliente. Nada foi lido.');
+    situacaoDoItem = itemDaPluggy(oi);
 
     const rc = await pecas.busca(`${PLUGGY_BASE}/accounts/${permitida.account_id}`, { method: 'GET', headers: h });
     if (!rc.ok) return falha(502, 'Não consegui ler a conta no banco. Tente de novo.');
@@ -494,19 +611,52 @@ export async function extrato(pedido: { token: string | null; acao: unknown; cli
     };
 
     if (de <= ate) {
+      /* OF-IMPORTAR-BANCO-QUEBROU-01 (17/11): conta criada depois de jun/2026 não lê mais o GET /transactions (page/pageSize; changelog
+         2026.06 da Pluggy, legado só até 31/12/2026) → GET /v2/transactions com cursor: o `after` sai do `next` e o pedido seguinte
+         repete a conta e o período (o `next` de exemplo da Pluggy não os traz). 500 por página; teto de 20 páginas. */
+      let after: string | null = null;
       for (let pagina = 1; pagina <= PAGINAS_NO_MAXIMO; pagina++) {
-        const q = `accountId=${encodeURIComponent(permitida.account_id)}&from=${de}&to=${ate}&pageSize=500&page=${pagina}`;
-        const rt = await pecas.busca(`${PLUGGY_BASE}/transactions?${q}`, { method: 'GET', headers: h });
-        if (!rt.ok) return falha(502, 'Não consegui ler o extrato no banco. Nada foi lido; tente de novo.');
+        /* OF-CONFERIR-CASAMENTO-01 (17/11): o 13/11 do OFX não veio — o filtro da Pluggy não é pelo dia de Brasília (o fim do dia já é
+           o dia seguinte em UTC). Pede 1 dia a mais de cada lado; quem corta no dia de BRASÍLIA é a fonte da prévia (`foraDoPeriodo`). */
+        const q = `accountId=${encodeURIComponent(permitida.account_id)}&dateFrom=${somarDias(de, -1)}&dateTo=${somarDias(ate, 1)}`
+          + (after ? `&after=${encodeURIComponent(after)}` : '');
+        const rt = await pecas.busca(`${PLUGGY_BASE}/v2/transactions?${q}`, { method: 'GET', headers: h });
+        if (!rt.ok) {
+          let erro: Record<string, unknown> | null = null;
+          try { erro = objeto(await rt.json()); } catch { erro = null; }
+          const codigo = [String(rt.status), texto(erro?.code, 24), texto(erro?.codeDescription, 32)].filter(Boolean).join(' ');
+          if (pecas.registrarFalha) {
+            try { await pecas.registrarFalha({ item_id: permitida.item_id, account_id: permitida.account_id, erro_codigo: codigo.slice(0, 64) }); } catch { /* a trilha não derruba a resposta */ }
+          }
+          return falha(502, `Não consegui ler o extrato no banco (Pluggy ${rt.status}). Nada foi lido; tente de novo.`);
+        }
         const corpo = objeto(await rt.json());
         const lista = Array.isArray(corpo?.results) ? corpo.results : [];
         for (const t of lista) { const x = transacaoDaPluggy(t); if (x) transacoes.push(x); }
-        const total = numero(corpo?.totalPages) ?? 1;
-        if (pagina >= total) break;
-        if (pagina === PAGINAS_NO_MAXIMO) return falha(502, 'O extrato veio grande demais de uma vez. Nada foi lido; fale com a AgroinBlue.');
+        const proximo = texto(corpo?.next, 2048);
+        after = proximo ? new URLSearchParams(proximo.replace(/^\?/, '')).get('after') : null;
+        if (!after) break;
+        if (pagina === PAGINAS_NO_MAXIMO) return falha(502, 'O extrato veio grande demais de uma vez. Nada foi lido; fale com a AGROinBLUE.');
       }
     }
   } catch { return falha(502, 'Não consegui falar com a Pluggy agora. Tente de novo.'); }
+
+  /* o resumo da leitura na fila de eventos (só contagens: por dia de Brasília e por status; nenhum valor, nome ou descrição) — o
+     próximo "veio a menos" se explica sem pedir o bruto */
+  if (pecas.registrarLeitura) {
+    const porDia = new Map<string, number>(); const porStatus = new Map<string, number>();
+    for (const t of transacoes) {
+      const d = diaEmBrasiliaDaBorda(t.date) ?? 'sem-data';
+      porDia.set(d, (porDia.get(d) ?? 0) + 1);
+      porStatus.set(t.status ?? 'sem-status', (porStatus.get(t.status ?? 'sem-status') ?? 0) + 1);
+    }
+    const dias = [...porDia.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([d, n]) => `${d.slice(8, 10)}/${d.slice(5, 7)}:${n}`).join(' ');
+    const st = [...porStatus.entries()].map(([k, n]) => `${k} ${n}`).join(' · ');
+    const it = situacaoDoItem;
+    const doItem = it ? ` · item ${it.status ?? '—'}/${it.executionStatus ?? '—'} · atualizado ${it.lastUpdatedAt ?? '—'} · próximo auto-sync ${it.nextAutoSyncAt ?? '—'}` : '';
+    const resumo = `${acao} ${de}..${ate} (pedido ${somarDias(de, -1)}..${somarDias(ate, 1)}) · ${transacoes.length} recebidas · ${st} · por dia: ${dias}${doItem}`;
+    try { await pecas.registrarLeitura({ item_id: permitida.item_id, account_id: permitida.account_id, resumo: resumo.slice(0, 1500) }); } catch { /* não derruba */ }
+  }
 
   let saldoGravado: boolean | null = null;
   if (acao === 'buscar' && conta.balance !== null) {
@@ -514,5 +664,5 @@ export async function extrato(pedido: { token: string | null; acao: unknown; cli
       saldoGravado = await pecas.registrarSaldo({ p_item: permitida.item_id, p_account: permitida.account_id, p_saldo: conta.balance, p_saldo_em: conta.saldoEm, p_autor: autor });
     } catch { saldoGravado = false; }
   }
-  return { status: 200, corpo: { ok: true, acao, de, ate, hoje, corte, ultimoDia: ultimo, conta, transacoes, saldoGravado } };
+  return { status: 200, corpo: { ok: true, acao, de, ate, hoje, corte, ultimoDia: ultimo, conta, transacoes, saldoGravado, item: situacaoDoItem } };
 }
