@@ -206,3 +206,26 @@ describe('F3.2 buscarDfe — Q7 consulta por chave (consChNFe)', () => {
     expect(a.d.chamadas).not.toContain('post'); expect(a.d.registros).toEqual([]);
   });
 });
+
+describe('VERA-INVESTIGACAO — a resposta bruta na trilha', () => {
+  it('137: o retDistDFeInt inteiro vai ao detalhe', async () => {
+    const a = pecas();
+    await buscarDfe(pedido(), a.p);
+    expect(a.d.registros[0].detalhe.bruto).toBe('<retDistDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><tpAmb>1</tpAmb><cStat>137</cStat>'
+      + '<xMotivo>motivo 137</xMotivo><dhResp>2026-11-16T15:00:00-03:00</dhResp><ultNSU>000000000000000</ultNSU><maxNSU>000000000000000</maxNSU></retDistDFeInt>');
+  });
+  it('138: o conteúdo de cada docZip vira o tamanho (nada da nota na trilha); os atributos ficam', async () => {
+    const z = await zipar(RES_NFE);
+    const a = pecas({ resposta: async () => ({ status: 200, corpo: ret('138', '000000000000001', '000000000000001',
+      `<docZip NSU="000000000000001" schema="resNFe_v1.01.xsd">${z}</docZip>`) }) });
+    await buscarDfe(pedido(), a.p);
+    const bruto = String(a.d.registros[0].detalhe.bruto);
+    expect(bruto).toContain(`<docZip NSU="000000000000001" schema="resNFe_v1.01.xsd">[${z.length} b64]</docZip>`);
+    expect(bruto).not.toContain(z.slice(0, 20));
+  });
+  it('o que não se lê guarda o começo do corpo no fechamento', async () => {
+    const a = pecas({ resposta: async () => ({ status: 403, corpo: '<html><title>403 - Forbidden</title></html>' }) });
+    await buscarDfe(pedido(), a.p);
+    expect(a.d.fechados[0].detalhe.bruto).toBe('<html><title>403 - Forbidden</title></html>');
+  });
+});
