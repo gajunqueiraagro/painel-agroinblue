@@ -23,7 +23,8 @@ export const ddmmaaaa = (iso: string | null | undefined): string => {
 export function fonteDaConta(ligadaAoOpenFinance: boolean, ultima: UltimaImportacao | null): FonteDaConta {
   if (ligadaAoOpenFinance) return { tipo: 'open_finance', rotulo: 'Open Finance', detalhe: 'Open Finance · ligada ao banco' };
   if (ultima) {
-    const tipo = (ultima.tipo_arquivo ?? 'arquivo').toUpperCase() === 'OPEN_FINANCE' ? 'Open Finance' : (ultima.tipo_arquivo ?? 'Arquivo').toUpperCase();
+    const bruto = (ultima.tipo_arquivo ?? '').trim();
+    const tipo = bruto.toUpperCase() === 'OPEN_FINANCE' ? 'Open Finance' : bruto ? bruto.toUpperCase() : 'Arquivo';
     const ate = ultima.saldo_declarado_data ? ` até ${ddmmaaaa(ultima.saldo_declarado_data)}` : '';
     return { tipo: 'arquivo', rotulo: `${tipo}${ate}`, detalhe: `${tipo} · último arquivo${ate}` };
   }

@@ -119,7 +119,7 @@ export function PainelDaConta({ aberto, aoFechar, clienteId, conta, linha, anoMe
                       {fonte.tipo === 'open_finance' ? 'Buscar do banco' : 'Importar banco'}
                     </button>
                   )}
-                  {p.n === 3 && p.estado !== 'espera' && (
+                  {p.n === 3 && p.estado === 'pendente' && (
                     <button type="button" className="whitespace-nowrap rounded px-2 py-0.5 text-[10.5px] text-white" style={{ background: AZUL_ATIVO }}
                       onClick={() => aoCasar(conta.id)} data-testid="painel-casar">
                       {p.titulo}

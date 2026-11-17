@@ -60,6 +60,7 @@ describe('as regras (puras)', () => {
     expect(fonteDaConta(true, { tipo_arquivo: 'OFX', saldo_declarado_data: '2026-11-13', data_importacao: null }).rotulo).toBe('Open Finance');
     expect(fonteDaConta(false, { tipo_arquivo: 'ofx', saldo_declarado_data: '2026-11-13', data_importacao: null }).rotulo).toBe('OFX até 13/11/2026');
     expect(fonteDaConta(false, null).tipo).toBe('sem_extrato');
+    expect(fonteDaConta(false, { tipo_arquivo: null, saldo_declarado_data: null, data_importacao: null }).rotulo).toBe('Arquivo');
   });
   it('a coluna Conta = o maior nome + a folga, entre o piso e o teto', () => {
     const medir = (t: string) => t.length * 6;
@@ -85,6 +86,12 @@ describe('o painel (componente)', () => {
     expect(aoInformarSaldo).toHaveBeenCalledWith('c1');
     fireEvent.click(screen.getByTestId('painel-importar'));
     expect(aoImportar).toHaveBeenCalledWith('c1');
+  });
+  it('nada sem par: o passo 3 fica verde e SEM o botão de casar', async () => {
+    render(<PainelDaConta aberto aoFechar={() => {}} clienteId="cli" conta={{ id: 'c1', nome: 'Banco Exemplo' }} anoMes="2026-11"
+      linha={LINHA({ tem: true, banco: 0, sistema: 0, extrato: 1000, dif: 0 })} aoImportar={vi.fn()} aoCasar={vi.fn()} aoInformarSaldo={vi.fn()} />);
+    expect((await screen.findByTestId('painel-passo-3')).getAttribute('data-estado')).toBe('ok');
+    expect(screen.queryByTestId('painel-casar')).toBeNull();
   });
   it('conta ligada ao Open Finance: o botão diz "Buscar do banco" e o cabeçalho diz a fonte', async () => {
     banco.ligada = true;

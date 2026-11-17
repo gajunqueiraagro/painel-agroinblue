@@ -2073,7 +2073,7 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
   /* CONC-PAINEL-CONTA-01 (Gabriel 17/11 09:57) — o ✎ da conta abre o PAINEL lateral (passos do dono + importações), nos tamanhos que ele pediu,
      no pior caso e nos nomes do tamanho do NJ; a faixa do topo escura vem junto no print */
-  ...[['', ''], ['-nj', '&v=nj']].map(([n, extra]) => ({ nome: `conciliacao-painel-conta${n}`, url: `tela=conciliacao${extra}`,
+  ...[['', ''], ['-nj', '&v=nj']].map(([n, extra]) => ({ nome: `conciliacao-painel-conta${n}`, url: `tela=conciliacao&admin=1${extra}`,
     tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
     antes: async (p) => { await p.locator('[data-testid="botao-lapis"]').first().waitFor(); await p.locator('[data-testid="botao-lapis"]').first().click();
       await p.locator('[data-testid="painel-da-conta"]').waitFor(); await p.waitForTimeout(500); } })),
