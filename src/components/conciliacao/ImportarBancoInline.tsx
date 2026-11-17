@@ -212,27 +212,33 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           ⚠ E OS 28px NÃO SÃO ESCOLHA SOLTA: é a altura do `h-7` do repo, a mesma do botão de
           voltar do cabeçalho e da régua de meses. */}
       {!preview && tipo !== 'excel' && tipo !== 'custeio-txt' && (
-        <div className="flex items-center gap-2">
+        /* ⚠ DUAS LINHAS FIXAS — OF-IMPORTAR-BANCO-QUEBROU-01 (Gabriel 17/11 08:51). Com a conta ligada ao Open Finance os dois botões do
+           banco entraram NA linha e ela estourou: as pílulas empilharam na vertical por cima da tela, o "Atualizar do Lucro Rural" foi
+           empurrado e a frase de erro saiu da janela à direita. A 1000px a linha 1 já usa ~800 dos ~824 úteis SEM os botões do banco.
+           Linha 1 (28px, nunca quebra): conta · arquivo · pílulas (sempre na horizontal) · Lucro Rural. Linha 2 (28px, SEMPRE reservada:
+           a frase aparecer não empurra a tabela): a frase do resultado/recusa à esquerda, até duas linhas, inteira; os botões do banco
+           à direita (aparecem depois da leitura da ligação e só estreitam o lugar da frase — nada anda). */
+        <div className="space-y-1">
+        <div className="flex h-7 flex-nowrap items-center gap-2" data-testid="linha-importar-banco">
           {seletor}
           {/* UI-ARRASTAR-ARQUIVO-01b — o botão virou a área do sistema, nos mesmos 28px: clicar ou arrastar. DUAS CAMADAS: o
               dono do aceite deixa passar pela EXTENSÃO; `detectarTipoArquivo` lê o conteúdo depois e a frase dele volta para
               a linha. Sem limite de tamanho, como sempre. Os formatos estão nas pílulas ao lado.
               ⚠ A FRASE DO DETECTOR É LONGA (pede ~620px) e a área tem 232: a área diz só "Arquivo recusado" e a frase INTEIRA
-              vai para a direita da linha, onde o resultado da importação já aparece (Gabriel, 05/10). */}
+              vai para a linha 2 (Gabriel, 05/10; OF-IMPORTAR-BANCO-QUEBROU-01). */}
           <AreaDeArquivo regra={REGRA_DO_IMPORTAR_BANCO} className="h-7 w-[232px] shrink-0" testId="area-importar-banco"
             detalhe="" motivoExterno={recusaDoArquivo ? ARQUIVO_RECUSADO : null}
             desabilitado={!contaId || loading} motivoDesabilitado={contaId ? 'Lendo o arquivo…' : 'Escolha a conta primeiro'}
             onArquivos={([a]) => { if (a) void escolher(a); }} />
-          {/* OPENFINANCE-P3b — só o admin, só a conta ligada ao Open Finance: a mesma prévia, vinda do banco (lugar fixo: shrink-0) */}
-          {contaId && <BuscarDoBanco contaId={contaId} desabilitado={loading} aoFonte={doBanco} aoFrase={setResultado} />}
           {/* ⚠ QUATRO PÍLULAS NO LUGAR DO PARÁGRAFO — 133b. O texto dizia o que cada
               formato faz e ocupava três linhas da largura útil em TODA abertura da aba,
               inclusive nas dezenas em que o operador já sabe. A informação não some: cada
-              pílula é o formato, e a explicação de uma linha mora no `title` dela e no "?". */}
-          <span className={recusaDoArquivo ? 'flex shrink-0 items-center gap-1' : 'flex min-w-0 flex-1 flex-wrap items-center gap-1'}>
+              pílula é o formato, e a explicação de uma linha mora no `title` dela e no "?".
+              ⚠ SEM `flex-wrap` (OF-IMPORTAR-BANCO-QUEBROU-01): faltando largura elas empilhavam POR CIMA da tela. */}
+          <span className="flex flex-none flex-nowrap items-center gap-1" data-testid="pilulas-importar-banco">
             {FORMATOS.map((f) => (
               <span key={f.ext} title={f.dica}
-                className="cursor-help rounded border border-border bg-muted/60 px-1.5 py-[1px] tabular-nums text-[10px] leading-tight text-muted-foreground">
+                className="cursor-help whitespace-nowrap rounded border border-border bg-muted/60 px-1.5 py-[1px] tabular-nums text-[10px] leading-tight text-muted-foreground">
                 {f.ext}
               </span>
             ))}
@@ -242,12 +248,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
               ?
             </span>
           </span>
-          {recusaDoArquivo && (
-            <span data-testid="recusa-do-arquivo" role="alert" title={recusaDoArquivo}
-              className="min-w-0 flex-1 truncate text-[10px] leading-tight text-destructive">
-              {recusaDoArquivo}
-            </span>
-          )}
+          <div className="min-w-0 flex-1" />
           {/* FIN-LR-SYNC-01 passo b — lugar reservado (shrink-0): a entrada do Lucro Rural não mexe no resto da linha. */}
           <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-[11px]" data-testid="abrir-atualizar-lr"
             onClick={() => setLrAberto(true)}>
@@ -256,19 +257,27 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           {/* montado SÓ aberto: os leitores dele (cliente, fazendas, plano) não rodam a cada abertura da aba */}
           {lrAberto && <AtualizarLucroRuralDialog open onOpenChange={setLrAberto} />}
           {acoes}
-          {resultado?.tipo === 'ok' && (
-            <span data-testid="resultado-importacao" title={resultado.texto}
-              className="max-w-[340px] shrink-0 text-[10px] leading-tight text-muted-foreground">
-              {resultado.texto}
+        </div>
+        <div className="flex h-7 items-center gap-2" data-testid="linha-importar-banco-frase">
+          {/* a frase: a recusa do arquivo, o resultado da importação ou a recusa do "Buscar/Conferir do banco" — nunca em toast;
+              até duas linhas (cabe a do detector, ~620px), o texto inteiro também no `title` */}
+          <span className="line-clamp-2 min-w-0 flex-1 text-[10px] leading-[13px]">
+            {recusaDoArquivo ? (
+              <span data-testid="recusa-do-arquivo" role="alert" title={recusaDoArquivo} className="text-destructive">{recusaDoArquivo}</span>
+            ) : resultado?.tipo === 'ok' ? (
+              <span data-testid="resultado-importacao" title={resultado.texto} className="text-muted-foreground">{resultado.texto}</span>
+            ) : resultado?.tipo === 'erro' ? (
+              /* OPENFINANCE-P3b — a recusa do "Buscar do banco" (sem prévia na tela) */
+              <span data-testid="resultado-busca-erro" role="alert" title={resultado.texto} className="text-destructive">{resultado.texto}</span>
+            ) : null}
+          </span>
+          {/* OPENFINANCE-P3b — só o admin, só a conta ligada ao Open Finance: a mesma prévia, vinda do banco (shrink-0, à direita) */}
+          {contaId && (
+            <span className="flex shrink-0 items-center gap-1">
+              <BuscarDoBanco contaId={contaId} desabilitado={loading} aoFonte={doBanco} aoFrase={setResultado} />
             </span>
           )}
-          {/* OPENFINANCE-P3b — a recusa do "Buscar do banco" (sem prévia na tela): na linha, ao lado, nunca em toast */}
-          {resultado?.tipo === 'erro' && (
-            <span data-testid="resultado-busca-erro" role="alert" title={resultado.texto}
-              className="max-w-[340px] shrink-0 text-[10px] leading-tight text-destructive">
-              {resultado.texto}
-            </span>
-          )}
+        </div>
         </div>
       )}
 
@@ -464,8 +473,8 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             {preview.gemeas > 0 && (
               <Badge variant="secondary" className="h-5 border-amber-400/60 bg-amber-50 px-1.5 text-[9px] text-amber-800"
                 data-testid="importar-gemeas"
-                title={`${preview.gemeas === 1 ? 'Esta linha parece repetida' : 'Estas linhas parecem repetidas'} de um arquivo anterior: a mesma data e o mesmo valor de uma linha que já está no extrato e que o arquivo novo não traz — o banco mudou o texto ou o documento. Por segurança NÃO entram; marque na lista o que for movimento novo mesmo.`}>
-                {preview.gemeas} {preview.gemeas === 1 ? 'parece repetida' : 'parecem repetidas'} de um arquivo anterior (o banco mudou o texto ou o documento)
+                title={`${preview.gemeas === 1 ? 'Esta linha parece repetida' : 'Estas linhas parecem repetidas'} de um arquivo anterior: o mesmo valor de uma linha que já está no extrato e que o arquivo novo não traz — o banco mudou o texto ou o documento, ou a data (o Open Finance usa a data da transação; o arquivo, a contábil: até 3 dias úteis). Por segurança NÃO entram; marque na lista o que for movimento novo mesmo.`}>
+                {preview.gemeas} {preview.gemeas === 1 ? 'parece repetida' : 'parecem repetidas'} de um arquivo anterior (o banco mudou o texto, o documento ou a data)
               </Badge>
             )}
             {preview.existentesNoBanco > 0 && (
@@ -638,7 +647,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                             : suspeita === 'GEMEA'
                               ? tituloDaGemea({ descricao: m.dupExistenteDescricao ?? null, documento: m.dupExistenteDocumento ?? null,
                                   arquivo: m.dupExistenteArquivo ?? null, gravadaEm: m.dupExistenteGravadoEm ?? null,
-                                  conciliada: !!m.dupExistenteConciliado, importar: m.dupImportar !== false })
+                                  conciliada: !!m.dupExistenteConciliado, importar: m.dupImportar !== false, outraData: m.dupOutraData ?? null })
                             : suspeita
                               ? `${m.dupResumo ?? ''}\nJá no extrato: ${m.dupExistenteDescricao ?? '—'}${m.dupExistenteDocumento ? ` (doc ${m.dupExistenteDocumento})` : ''}.${m.dupImportar === false ? '\nNão será importado — marque se for movimento novo mesmo.' : '\nSerá importado — desmarque se for repetição.'}`
                               : undefined}>
@@ -646,7 +655,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                             ? (m.criadoEmExistente ? `já importado ${brData(m.criadoEmExistente.slice(0, 10))}` : 'já no extrato')
                             : suspeita === 'FORTE' ? 'mesmo documento'
                             : suspeita === 'PROVAVEL' ? 'duplicado?'
-                            : suspeita === 'GEMEA' ? 'repetida?'
+                            : suspeita === 'GEMEA' ? (m.dupOutraData ? 'repetida? outra data' : 'repetida?')
                             : suspeita ? 'mesmo dia e valor'
                             : 'novo'}
                         </span>

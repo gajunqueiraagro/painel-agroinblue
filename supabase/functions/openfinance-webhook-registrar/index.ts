@@ -1,6 +1,6 @@
 /**
  * OPENFINANCE-PILOTO-01 · P2 — registra NA PLUGGY o webhook `all` com o cabeçalho secreto (a doc da Pluggy: os headers do webhook "só
- * pela API"; o painel deles não os põe). SÓ o admin AgroinBlue. Idempotente: a URL já registrada não é registrada de novo.
+ * pela API"; o painel deles não os põe). SÓ o admin AGROinBLUE. Idempotente: a URL já registrada não é registrada de novo.
  * A URL é a do `openfinance-webhook` DESTE projeto. A resposta nunca leva o cabeçalho; nada é logado.
  * Secrets: PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET, PLUGGY_WEBHOOK_SEGREDO (o Gabriel cola no proto).
  */
@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
   if (!url || !servico || !clientId || !clientSecret || !segredo) return json(503, { ok: false, frase: "Faltam os secrets do Open Finance no proto." });
   const admin = createClient(url, servico, { auth: { persistSession: false } });
 
-  /* quem chama: o admin AgroinBlue logado, OU o botão "Test" do painel do Supabase com a chave service_role (quem a tem já pode tudo;
+  /* quem chama: o admin AGROinBLUE logado, OU o botão "Test" do painel do Supabase com a chave service_role (quem a tem já pode tudo;
      é o caminho do passo a passo do Gabriel, sem colar chave em lugar nenhum) */
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   const viaPainel = token !== "" && token === servico;
@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
   if (!viaPainel) {
     if (!autor) return json(401, { ok: false, frase: "Entre de novo no sistema." });
     const { data: ehAdmin } = await admin.rpc("is_admin_agroinblue", { _user_id: autor });
-    if (ehAdmin !== true) return json(403, { ok: false, frase: "Só a AgroinBlue registra o webhook." });
+    if (ehAdmin !== true) return json(403, { ok: false, frase: "Só a AGROinBLUE registra o webhook." });
   }
 
   const chave = await chaveDaApi((u, init) => fetch(u, init), clientId, clientSecret);

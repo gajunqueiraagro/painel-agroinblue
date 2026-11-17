@@ -9,6 +9,8 @@
  * Cada classificação retorna motivos[] explicando a decisão.
  */
 
+import { DIAS_UTEIS_DE_TOLERANCIA, diasCorridosEntre, diasUteisEntre } from '@/lib/datas/diasUteis';
+
 // ── Types ──
 
 export type ClassificacaoImportacao = 'NOVO' | 'DUPLICADO_EXATO' | 'SUSPEITA';
@@ -566,13 +568,58 @@ export function gemeasDaImportacao(
   return gemeas;
 }
 
+// ── OF-CONFERIR-CASAMENTO-01 — a REPETIDA COM OUTRA DATA (Open Finance × arquivo) ─────────────────────────────────────
+// OK do Gabriel (17/11): a régua do "Conferir com o banco" vale na importação. O Open Finance traz a data da TRANSAÇÃO (o Pix de domingo
+// é de domingo); o OFX traz a data CONTÁBIL (o mesmo Pix na terça). Sem esta regra, o Pix entra duas vezes: uma pelo "Buscar do banco",
+// outra pelo arquivo (ou o contrário). A REGRA: uma linha NOVA (nada a reivindicou nem a acusou) e uma linha VIVA que nada reivindicou,
+// de ORIGENS DIFERENTES (uma do Open Finance, a outra de arquivo), com o MESMO valor ao centavo e o sinal, a data do lado do arquivo no
+// dia ou até 3 dias úteis DEPOIS da do lado do Open Finance (dia diferente: o mesmo dia já é a coincidência de sempre), uma a uma, o par
+// mais próximo primeiro. D1 do P140: a nova NÃO entra por padrão; a antiga não é tocada.
+// ⚠ ORIGENS DIFERENTES É O QUE PROTEGE O PAGAMENTO IGUAL DE VERDADE: dois Pix de R$ 6.000 em dias diferentes vêm no MESMO arquivo (ou na
+// mesma busca) e nunca se acusam.
+
+export interface LinhaParaOutraData { chave: string; data: string; valor: number; deOpenFinance: boolean }
+
+/** chave da linha nova → id da linha viva que ela repete com outra data */
+export function outraDataDaImportacao(
+  novas: readonly LinhaParaOutraData[],
+  vivas: readonly LinhaParaOutraData[],
+  reivindicados: ReadonlySet<string>,
+): Map<string, string> {
+  const cent = (v: number) => Math.round(v * 100);
+  const pares: { n: number; v: number; dist: number }[] = [];
+  novas.forEach((nova, n) => {
+    vivas.forEach((viva, v) => {
+      if (reivindicados.has(viva.chave) || nova.deOpenFinance === viva.deOpenFinance || cent(nova.valor) !== cent(viva.valor)) return;
+      if (nova.data.slice(0, 10) === viva.data.slice(0, 10)) return;
+      const [doBanco, doArquivo] = nova.deOpenFinance ? [nova.data, viva.data] : [viva.data, nova.data];
+      const uteis = diasUteisEntre(doBanco, doArquivo);
+      if (uteis < 0 || uteis > DIAS_UTEIS_DE_TOLERANCIA) return;
+      pares.push({ n, v, dist: diasCorridosEntre(doBanco, doArquivo) });
+    });
+  });
+  pares.sort((a, b) => a.dist - b.dist || a.n - b.n || a.v - b.v);
+  const usadasN = new Set<number>(); const usadasV = new Set<number>();
+  const achados = new Map<string, string>();
+  for (const p of pares) {
+    if (usadasN.has(p.n) || usadasV.has(p.v)) continue;
+    usadasN.add(p.n); usadasV.add(p.v);
+    achados.set(novas[p.n].chave, vivas[p.v].chave);
+  }
+  return achados;
+}
+
 /** O `title` do selo "repetida?": o que está no extrato, de que arquivo, quando entrou e se já está conciliado. */
 export function tituloDaGemea(x: {
   descricao: string | null; documento: string | null; arquivo: string | null; gravadaEm: string | null; conciliada: boolean; importar: boolean;
+  /** OF-CONFERIR-CASAMENTO-01: a linha viva tem OUTRA data (Open Finance × arquivo) — o dia dela */
+  outraData?: string | null;
 }): string {
   const quando = x.gravadaEm && /^\d{4}-\d{2}-\d{2}/.test(x.gravadaEm) ? `${x.gravadaEm.slice(8, 10)}/${x.gravadaEm.slice(5, 7)}/${x.gravadaEm.slice(0, 4)}` : null;
+  const od = x.outraData && /^\d{4}-\d{2}-\d{2}/.test(x.outraData) ? `${x.outraData.slice(8, 10)}/${x.outraData.slice(5, 7)}/${x.outraData.slice(0, 4)}` : null;
   return [
-    'Parece a MESMA linha de um arquivo anterior: o banco mudou o texto ou o documento.',
+    od ? `Parece a MESMA linha, com OUTRA data: no extrato em ${od} (o Open Finance usa a data da transação; o arquivo, a data contábil).`
+      : 'Parece a MESMA linha de um arquivo anterior: o banco mudou o texto ou o documento.',
     `No extrato: ${x.descricao ?? '—'}${x.documento ? ` (doc ${x.documento})` : ''}`
       + `${x.arquivo ? ` · arquivo ${x.arquivo}` : ''}${quando ? ` · gravada em ${quando}` : ''}`
       + ` · ${x.conciliada ? 'já conciliada' : 'ainda não conciliada'}.`,
@@ -606,3 +653,31 @@ export function nomesDosArquivos(rows: unknown): Map<string, string> {
   }
   return m;
 }
+
+/** OF-CONFERIR-CASAMENTO-01 — as linhas vivas da janela (período ± 7 dias), lidas sem confiar no formato. */
+export interface VivaParaOutraData {
+  id: string; data: string; valor: number; descricao: string | null; documento: string | null; importacaoId: string | null;
+  criadoEm: string | null; status: string | null;
+}
+export function vivasParaOutraData(rows: unknown): VivaParaOutraData[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((r): VivaParaOutraData[] => {
+    if (!ehRegistro(r)) return [];
+    const id = textoOuNulo(r.id); const data = textoOuNulo(r.data_movimento); const valor = Number(r.valor);
+    if (!id || !data || !Number.isFinite(valor)) return [];
+    return [{ id, data: data.slice(0, 10), valor, descricao: textoOuNulo(r.descricao), documento: textoOuNulo(r.documento),
+      importacaoId: textoOuNulo(r.importacao_id), criadoEm: textoOuNulo(r.created_at), status: textoOuNulo(r.status) }];
+  });
+}
+/** id do lote → tipo do arquivo ('OPEN_FINANCE', 'OFX', …) e nome */
+export function lotesDaImportacao(rows: unknown): Map<string, { tipo: string | null; nome: string | null }> {
+  const m = new Map<string, { tipo: string | null; nome: string | null }>();
+  if (!Array.isArray(rows)) return m;
+  for (const r of rows) {
+    if (!ehRegistro(r)) continue;
+    const id = textoOuNulo(r.id);
+    if (id) m.set(id, { tipo: textoOuNulo(r.tipo_arquivo), nome: textoOuNulo(r.nome_arquivo) });
+  }
+  return m;
+}
+

@@ -1,5 +1,5 @@
 /**
- * OPENFINANCE-P3a — as CONTAS de uma conexão (só o admin AgroinBlue): 'listar' (tipo · banco · 4 dígitos · titular mascarado; nunca
+ * OPENFINANCE-P3a — as CONTAS de uma conexão (só o admin AGROinBLUE): 'listar' (tipo · banco · 4 dígitos · titular mascarado; nunca
  * saldo nem transação) e 'permitir' (grava SÓ as marcadas em openfinance_contas_permitidas, 118130). Só liga as peças; a ordem mora em
  * `_shared/pluggy.ts` (`contas`, provada no vitest).
  * ⚠ Não loga corpo, cabeçalho, chave nem token. Secrets: PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET.

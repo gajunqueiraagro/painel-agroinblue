@@ -5,6 +5,7 @@
  *  · o SALDO DO BANCO × o extrato do sistema na mesma data (só aviso: nada se ajusta);
  *  · a SUGESTÃO da conta do sistema pelo final de 4 dígitos (nº + dígito).
  */
+import { DIAS_UTEIS_DE_TOLERANCIA, diasCorridosEntre, diasUteisEntre } from '@/lib/datas/diasUteis';
 import { fonteDoOpenFinance, type ResultadoOpenFinance, type TransacaoOpenFinance } from '@/lib/financeiro/parser/openFinance';
 import type { MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
 import { round2 } from '@/lib/calculos/numeroBR';
@@ -21,7 +22,30 @@ export interface BuscaDoBanco {
   conta: { id: string; type: string; subtype: string | null; balance: number | null; currencyCode: string | null; saldoEm: string | null };
   transacoes: TransacaoOpenFinance[];
   saldoGravado: boolean | null;
+  /** OF-ATUALIZAR-DO-BANCO-01: a situação do item na Pluggy (nulo = a borda não disse) */
+  item: ItemDoBanco | null;
 }
+
+/** OF-ATUALIZAR-DO-BANCO-01 — o item na Pluggy: quando o banco foi lido e se está atualizando agora. */
+export interface ItemDoBanco { status: string | null; lastUpdatedAt: string | null; nextAutoSyncAt: string | null }
+export function lerItemDoBanco(v: unknown): ItemDoBanco | null {
+  if (!ehObjeto(v)) return null;
+  return { status: textoOuNulo(v.status), lastUpdatedAt: textoOuNulo(v.lastUpdatedAt), nextAutoSyncAt: textoOuNulo(v.nextAutoSyncAt) };
+}
+/** "atualizando…" · "banco atualizado às 10:42" (hoje) · "banco atualizado em 16/11/2026 17:10" · '' (não se sabe) */
+export function textoDaSituacao(item: ItemDoBanco | null, hoje: string): string {
+  if (!item) return '';
+  if (item.status === 'UPDATING') return 'atualizando…';
+  const q = diaEHoraEmBrasilia(item.lastUpdatedAt);
+  if (!q) return '';
+  return q.dia === hoje ? `banco atualizado às ${q.hora}` : `banco atualizado em ${ddmmaaaa(q.dia)} ${q.hora}`;
+}
+/** o `title` da situação: quando a Pluggy atualiza sozinha de novo; sem a data = nulo */
+export function textoDoProximoSync(item: ItemDoBanco | null): string | null {
+  const q = diaEHoraEmBrasilia(item?.nextAutoSyncAt ?? null);
+  return q ? `A Pluggy atualiza sozinha de novo em ${ddmmaaaa(q.dia)} ${q.hora}.` : null;
+}
+export const FRASE_ATUALIZAR_FALHOU = 'Não consegui pedir a atualização ao banco agora. Nada foi pedido; tente de novo.';
 
 /** O corpo da `openfinance-extrato` → a busca tipada; qualquer campo fora do contrato = nulo (a tela diz que falhou). */
 export function lerBuscaDoBanco(corpo: Record<string, unknown>): BuscaDoBanco | null {
@@ -50,6 +74,7 @@ export function lerBuscaDoBanco(corpo: Record<string, unknown>): BuscaDoBanco | 
     },
     transacoes,
     saldoGravado: typeof corpo.saldoGravado === 'boolean' ? corpo.saldoGravado : null,
+    item: lerItemDoBanco(corpo.item),
   };
 }
 
@@ -84,42 +109,78 @@ export const FRASE_LIGAR_FALHOU = 'Não consegui gravar a ligação agora. Nada 
 // ── A conferência (só leitura) ─────────────────────────────────────────────────────────────────────────────────────
 
 export interface LinhaDoSistema { data: string; valor: number; descricao: string | null }
+/** Casou pelo valor com OUTRA data: o banco (Open Finance = data da transação) × o extrato (OFX = data contábil). */
+export interface CasouComOutraData { banco: MovimentoBruto; sistema: LinhaDoSistema; diasUteis: number }
 export interface ResultadoConferencia {
+  /** todos os que casam (os do mesmo dia + os com outra data) */
   casam: number;
+  outraData: CasouComOutraData[];
   soNoBanco: MovimentoBruto[];
   soNoSistema: LinhaDoSistema[];
 }
-const chaveDiaValor = (data: string, valor: number) => `${data.slice(0, 10)}|${Math.round(round2(valor) * 100)}`;
+const centavos = (valor: number) => Math.round(round2(valor) * 100);
+const chaveDiaValor = (data: string, valor: number) => `${data.slice(0, 10)}|${centavos(valor)}`;
+
+export { DIAS_UTEIS_DE_TOLERANCIA, diasUteisEntre } from '@/lib/datas/diasUteis';
 
 /**
- * Banco × sistema no MESMO período, por DIA + VALOR (com sinal), um a um: dois movimentos iguais no mesmo dia casam com duas linhas
- * iguais. O documento NÃO entra (o do OFX do Itaú é sequencial do dia; o da Pluggy é o providerId — FASE 0). Não grava nada.
+ * Banco × sistema no MESMO período, UM A UM, por VALOR (com sinal). O documento NÃO entra (o do OFX do Itaú é sequencial do dia; o da
+ * Pluggy é o providerId — FASE 0). Não grava nada.
+ *  1. mesmo DIA + mesmo valor (dois iguais no mesmo dia casam com duas linhas iguais);
+ *  2. o que sobrou: mesmo valor com a data do extrato NO DIA ou DEPOIS da do banco, até 3 dias úteis (o Pix de sábado/domingo que o
+ *     OFX lança na segunda) — o par MAIS PRÓXIMO primeiro (empate: o banco mais antigo, depois a ordem de chegada). Data do extrato
+ *     ANTES da do banco nunca casa.
  */
 export function conferirComSistema(banco: readonly MovimentoBruto[], sistema: readonly LinhaDoSistema[]): ResultadoConferencia {
-  const sobra = new Map<string, LinhaDoSistema[]>();
-  for (const l of sistema) {
+  const sobra = new Map<string, number[]>();
+  sistema.forEach((l, j) => {
     const k = chaveDiaValor(l.data, l.valor);
     const fila = sobra.get(k) ?? [];
-    fila.push(l);
+    fila.push(j);
     sobra.set(k, fila);
-  }
-  let casam = 0;
-  const soNoBanco: MovimentoBruto[] = [];
-  for (const m of banco) {
+  });
+  const usadoS = new Set<number>();
+  const restoB: number[] = [];
+  banco.forEach((m, i) => {
     const fila = sobra.get(chaveDiaValor(m.data, m.valor));
-    if (fila && fila.length > 0) { fila.shift(); casam += 1; } else soNoBanco.push(m);
+    const j = fila?.shift();
+    if (j === undefined) restoB.push(i); else usadoS.add(j);
+  });
+  const exatos = banco.length - restoB.length;
+
+  /* passo 2 — todos os pares possíveis do que sobrou, do mais próximo ao mais distante */
+  const pares: { i: number; j: number; dist: number; uteis: number }[] = [];
+  for (const i of restoB) {
+    const m = banco[i];
+    sistema.forEach((l, j) => {
+      if (usadoS.has(j) || centavos(l.valor) !== centavos(m.valor)) return;
+      const uteis = diasUteisEntre(m.data, l.data);
+      if (uteis < 0 || uteis > DIAS_UTEIS_DE_TOLERANCIA) return;
+      pares.push({ i, j, dist: diasCorridosEntre(m.data, l.data), uteis });
+    });
   }
-  const soNoSistema = [...sobra.values()].flat().sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
-  return { casam, soNoBanco, soNoSistema };
+  pares.sort((a, b) => a.dist - b.dist || (banco[a.i].data < banco[b.i].data ? -1 : banco[a.i].data > banco[b.i].data ? 1 : 0) || a.i - b.i || a.j - b.j);
+  const usadoB = new Set<number>();
+  const outraData: CasouComOutraData[] = [];
+  for (const p of pares) {
+    if (usadoB.has(p.i) || usadoS.has(p.j)) continue;
+    usadoB.add(p.i); usadoS.add(p.j);
+    outraData.push({ banco: banco[p.i], sistema: sistema[p.j], diasUteis: p.uteis });
+  }
+  outraData.sort((a, b) => (a.banco.data < b.banco.data ? -1 : a.banco.data > b.banco.data ? 1 : 0));
+  const soNoBanco = restoB.filter((i) => !usadoB.has(i)).map((i) => banco[i]);
+  const soNoSistema = sistema.filter((_, j) => !usadoS.has(j)).sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
+  return { casam: exatos + outraData.length, outraData, soNoBanco, soNoSistema };
 }
 
 export function fraseDaConferencia(r: ResultadoConferencia, de: string, ate: string): string {
   const periodo = `${ddmmaaaa(de)} a ${ddmmaaaa(ate)}`;
+  const outra = r.outraData.length > 0 ? ` (${r.outraData.length} com outra data)` : '';
   if (r.soNoBanco.length === 0 && r.soNoSistema.length === 0) {
     return r.casam === 0 ? `Nenhum movimento de ${periodo}, nem no banco nem no sistema.`
-      : `${periodo}: os ${r.casam} movimentos do banco casam com o extrato do sistema. Nada a mais, nada a menos.`;
+      : `${periodo}: os ${r.casam} movimentos do banco casam com o extrato do sistema${outra}. Nada a mais, nada a menos.`;
   }
-  return `${periodo}: ${r.casam} casam · ${r.soNoBanco.length} só no banco · ${r.soNoSistema.length} só no sistema. Nada foi gravado.`;
+  return `${periodo}: ${r.casam} casam${outra} · ${r.soNoBanco.length} só no banco · ${r.soNoSistema.length} só no sistema. Nada foi gravado.`;
 }
 
 // ── Saldo do banco × sistema (só aviso) ────────────────────────────────────────────────────────────────────────────

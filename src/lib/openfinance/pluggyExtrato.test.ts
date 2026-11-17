@@ -25,7 +25,10 @@ function pluggyFalsa(rotas: Record<string, { status: number; corpo: unknown }>) 
 }
 const tx = (id: string, date: string, amount: number, extra: Record<string, unknown> = {}) =>
   ({ id, accountId: ACC, description: `MOV ${id}`, amount, date, status: 'POSTED', type: amount < 0 ? 'DEBIT' : 'CREDIT', providerId: `p-${id}`, currencyCode: 'BRL', ...extra });
-const q = (de: string, ate: string, p = 1) => `GET /transactions?accountId=${ACC}&from=${de}&to=${ate}&pageSize=500&page=${p}`;
+/* OF-IMPORTAR-BANCO-QUEBROU-01: o v2 com cursor (o `after` do `next` da página anterior) */
+/* OF-CONFERIR-CASAMENTO-01: o pedido à Pluggy leva 1 dia a mais de cada lado do período (`de`/`ate` da resposta não mudam) */
+const q = (de: string, ate: string, after?: string) =>
+  `GET /v2/transactions?accountId=${ACC}&dateFrom=${somarDias(de, -1)}&dateTo=${somarDias(ate, 1)}` + (after ? `&after=${encodeURIComponent(after)}` : '');
 const ROTAS_BASE = {
   'POST /auth': { status: 200, corpo: { apiKey: 'chave-sintetica' } },
   [`GET /items/${ITEM}`]: { status: 200, corpo: { id: ITEM, clientUserId: CLIENTE, connector: { name: 'Itaú' } } },
@@ -65,14 +68,25 @@ describe('OPENFINANCE-P3b — buscar do banco (só a conta permitida, desde o co
     expect(pedidos).toEqual(['POST /auth', `GET /items/${ITEM}`, `GET /accounts/${ACC}`, q('2026-11-14', '2026-11-16')]);
   });
 
-  it('pagina até o fim (totalPages) e não repete transação ilegível', async () => {
-    const { pecas: pc } = pecas({}, {
-      [q('2026-11-14', '2026-11-16', 1)]: { status: 200, corpo: { totalPages: 2, results: [tx('a', '2026-11-14', -1), { id: 'sem-valor', date: '2026-11-14' }] } },
-      [q('2026-11-14', '2026-11-16', 2)]: { status: 200, corpo: { totalPages: 2, results: [tx('b', '2026-11-15', 2)] } },
+  it('segue o cursor (`after` do `next`) repetindo conta e período, até o `next` nulo; não repete transação ilegível', async () => {
+    const { pecas: pc, pedidos } = pecas({}, {
+      [q('2026-11-14', '2026-11-16')]: { status: 200, corpo: { next: `?accountId=${ACC}&after=cursor-1%3D`, results: [tx('a', '2026-11-14', -1), { id: 'sem-valor', date: '2026-11-14' }] } },
+      [q('2026-11-14', '2026-11-16', 'cursor-1=')]: { status: 200, corpo: { next: null, results: [tx('b', '2026-11-15', 2)] } },
     });
     const r = await extrato(buscar(), pc);
     if (!r.corpo.ok) throw new Error('falhou');
     expect(r.corpo.transacoes.map((t) => t.id)).toEqual(['a', 'b']);
+    expect(pedidos.filter((p) => p.startsWith('GET /v2/transactions'))).toEqual([q('2026-11-14', '2026-11-16'), q('2026-11-14', '2026-11-16', 'cursor-1=')]);
+    expect(pedidos.some((p) => p.startsWith('GET /transactions'))).toBe(false);
+  });
+
+  it('cursor que não acaba: para na 20ª página e não importa nada pela metade', async () => {
+    const rotas: Record<string, { status: number; corpo: unknown }> = { [q('2026-11-14', '2026-11-16')]: { status: 200, corpo: { next: `?after=c1`, results: [tx('t0', '2026-11-14', -1)] } } };
+    for (let i = 1; i <= 25; i++) rotas[q('2026-11-14', '2026-11-16', `c${i}`)] = { status: 200, corpo: { next: `?after=c${i + 1}`, results: [tx(`t${i}`, '2026-11-14', -1)] } };
+    const { pecas: pc, pedidos } = pecas({}, rotas);
+    const r = await extrato(buscar(), pc);
+    expect(r.status).toBe(502);
+    expect(pedidos.filter((p) => p.startsWith('GET /v2/transactions'))).toHaveLength(20);
   });
 
   it('sem extrato na conta: olha 90 dias para trás e não há corte', async () => {
@@ -88,7 +102,7 @@ describe('OPENFINANCE-P3b — buscar do banco (só a conta permitida, desde o co
     const r = await extrato(buscar(), pc);
     if (!r.corpo.ok) throw new Error('falhou');
     expect(r.corpo.transacoes).toEqual([]);
-    expect(pedidos.some((p) => p.startsWith('GET /transactions'))).toBe(false);
+    expect(pedidos.some((p) => p.startsWith('GET /v2/transactions'))).toBe(false);
   });
 
   it('a falha ao gravar o saldo não derruba a busca (saldoGravado = false)', async () => {
@@ -141,7 +155,7 @@ describe('OPENFINANCE-P3b — portas fechadas do extrato', () => {
     expect((await extrato(buscar(), outra.pecas)).status).toBe(502);
     const cartao = pecas({}, { [`GET /accounts/${ACC}`]: { status: 200, corpo: { id: ACC, type: 'CREDIT' } } });
     expect((await extrato(buscar(), cartao.pecas)).status).toBe(400);
-    expect(cartao.pedidos.some((p) => p.startsWith('GET /transactions'))).toBe(false);
+    expect(cartao.pedidos.some((p) => p.includes('/transactions'))).toBe(false);
   });
 
   it('erro ao ler a ligação ou o extrato = 500 sem falar com a Pluggy; erro nas transações = 502 e o saldo NÃO se grava', async () => {
@@ -150,6 +164,38 @@ describe('OPENFINANCE-P3b — portas fechadas do extrato', () => {
     const { pecas: pc, registrarSaldo } = pecas({}, { [q('2026-11-14', '2026-11-16')]: { status: 500, corpo: {} } });
     expect((await extrato(buscar(), pc)).status).toBe(502);
     expect(registrarSaldo).not.toHaveBeenCalled();
+  });
+
+  it('a recusa da Pluggy nas transações: a frase diz o status e a fila guarda status + código (nada da mensagem dela)', async () => {
+    const registrarFalha = vi.fn(async () => true);
+    const { pecas: pc } = pecas({ registrarFalha }, {
+      [q('2026-11-14', '2026-11-16')]: { status: 400, corpo: { code: 400, codeDescription: 'INVALID_PARAMETERS', message: 'Conta de Fulano CPF 123' } },
+    });
+    const r = await extrato(buscar(), pc);
+    expect(r.status).toBe(502);
+    expect(r.corpo).toMatchObject({ ok: false, frase: 'Não consegui ler o extrato no banco (Pluggy 400). Nada foi lido; tente de novo.' });
+    expect(registrarFalha).toHaveBeenCalledWith({ item_id: ITEM, account_id: ACC, erro_codigo: '400 INVALID_PARAMETERS' });
+    expect(JSON.stringify(registrarFalha.mock.calls)).not.toContain('Fulano');
+  });
+
+  it('o resumo da leitura vai à fila só com contagens por dia de Brasília e status (nenhum valor, nome ou descrição)', async () => {
+    const resumos: string[] = [];
+    const registrarLeitura = async (p: { resumo: string }) => { resumos.push(p.resumo); return true; };
+    const { pecas: pc } = pecas({ registrarLeitura }, {
+      [q('2026-11-14', '2026-11-16')]: { status: 200, corpo: { next: null, results: [tx('a', '2026-11-14T13:00:00Z', -50, { description: 'PIX FULANO' }), tx('b', '2026-11-15T02:30:00Z', 80), tx('c', '2026-11-16T13:00:00Z', 1, { status: 'PENDING' })] } },
+    });
+    const r = await extrato(buscar(), pc);
+    expect(r.status).toBe(200);
+    const resumo = resumos[0] ?? '';
+    expect(resumo).toBe('buscar 2026-11-14..2026-11-16 (pedido 2026-11-13..2026-11-17) · 3 recebidas · POSTED 2 · PENDING 1 · por dia: 14/11:2 16/11:1 · item —/— · atualizado — · próximo auto-sync —');
+    expect(resumo).not.toMatch(/FULANO|50|80/);
+  });
+
+  it('a trilha da falha que quebra não muda a resposta', async () => {
+    const { pecas: pc } = pecas({ registrarFalha: async () => { throw new Error('x'); } }, { [q('2026-11-14', '2026-11-16')]: { status: 503, corpo: null } });
+    const r = await extrato(buscar(), pc);
+    expect(r.status).toBe(502);
+    expect(r.corpo).toMatchObject({ frase: 'Não consegui ler o extrato no banco (Pluggy 503). Nada foi lido; tente de novo.' });
   });
 
   it('a resposta nunca leva a chave da API', async () => {
