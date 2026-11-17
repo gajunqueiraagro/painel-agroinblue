@@ -2,12 +2,12 @@
  * NOTAS-RECEITA-A1-01 · F3.4 MÍNIMA — a regra da lista "Notas da Receita" (dados SINTÉTICOS; nenhuma nota real).
  *   R1 nº e série da chave · R2 situação (nova × já no sistema × resumo × cancelada) · R3 abas e selo (D2) · R4 CPF de emitente mascarado
  *   R5 leitura do banco recusa o que não é do formato · R6 total sem canceladas · R7 busca por emitente/nº/documento
- *   R9 F34-SITUACAO-01: "já no sistema" pelos achados do "+ Da nota" (chave/nº/documento, nunca o cancelado nem só o valor)
+ *   R9 F34-SITUACAO-01 + NJ-NOTAS-LENTAS: as chaves já lançadas da resposta em lote; formato estranho = null (falha, nunca "Nova")
  */
 import { describe, expect, it } from 'vitest';
 import {
   ABAS_DA_RECEITA, arquivoDoXml, filtrarBusca, lerLinhasRecebidas, montarLista, numeroDaChave, pedemAcao, serieDaChave, situacaoNaLista,
-  jaLancadaPelosAchados, precisaConferirLancamento, totalDaLista, type LinhaRecebida,
+  chavesJaLancadas, precisaConferirLancamento, totalDaLista, type LinhaRecebida,
 } from './notasDaReceita';
 
 /* chave sintética: UF 50, AAMM 2611, CNPJ, mod 55, série 001, nº 000012345, tpEmis 1, código, DV */
@@ -84,13 +84,12 @@ describe('NOTAS-RECEITA F3.4 — a regra da lista', () => {
     expect(f.name).toBe(`NFe${chave(1)}.xml`);
     expect(f.type).toBe('application/xml');
   });
-  it('R9 F34-SITUACAO-01: achado vivo pela chave, pelo nº ou pelo documento = já no sistema; cancelado ou só valor não; só nova/ciência perguntam', () => {
-    expect(jaLancadaPelosAchados([{ cancelado: false, por: ['numero'] }])).toBe(true);
-    expect(jaLancadaPelosAchados([{ cancelado: false, por: ['chave'] }])).toBe(true);
-    expect(jaLancadaPelosAchados([{ cancelado: false, por: ['documento', 'valor'] }])).toBe(true);
-    expect(jaLancadaPelosAchados([{ cancelado: true, por: ['numero'] }])).toBe(false);
-    expect(jaLancadaPelosAchados([{ cancelado: false, por: ['valor'] }])).toBe(false);
-    expect(jaLancadaPelosAchados([])).toBe(false);
+  it('R9 as chaves já lançadas da resposta em lote; formato estranho = null; só nova/ciência perguntam', () => {
+    expect([...(chavesJaLancadas([{ chave: 'a', ja_lancada: true, por: ['numero'] }, { chave: 'b', ja_lancada: false, por: [] }]) ?? [])]).toEqual(['a']);
+    expect(chavesJaLancadas([])).toEqual(new Set());
+    expect(chavesJaLancadas(null)).toBeNull();
+    expect(chavesJaLancadas([{ chave: 'a' }])).toBeNull();
+    expect(chavesJaLancadas([{ chave: 'a', ja_lancada: 'sim' }])).toBeNull();
     expect(precisaConferirLancamento(linha(), new Set())).toBe(true);
     expect(precisaConferirLancamento(linha({ situacao: 'resumo' }), new Set())).toBe(true);
     expect(precisaConferirLancamento(linha(), new Set([chave(1)]))).toBe(false);
