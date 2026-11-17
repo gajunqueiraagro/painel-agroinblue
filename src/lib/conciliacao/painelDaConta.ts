@@ -68,6 +68,7 @@ export function larguraDaConta(nomes: readonly string[], medir: (t: string) => n
  *  abaixo do piso. Sem medida ainda, a do nome. */
 export const RESUMO_MINIMO = 260;
 export function contaNaTela(larguraDoNome: number, larguraDosBlocos: number | null, regua: number, barra = 0): number {
-  if (larguraDosBlocos == null) return larguraDoNome;
+  /* sem medida ainda (null) ou sem layout (0: o bloco ainda não tem largura) → a do nome */
+  if (!larguraDosBlocos) return larguraDoNome;
   return Math.max(PISO_DA_CONTA, Math.min(larguraDoNome, larguraDosBlocos - 24 - 8 - RESUMO_MINIMO - regua - 2 - barra));
 }

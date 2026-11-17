@@ -43,7 +43,8 @@ vi.mock('@/integrations/supabase/client', () => {
   const tabela = (nome: string) => {
     const b: Record<string, unknown> = {};
     /* `ilike`: a consulta das contas que importam OFX (o ícone do saldo, UI-SEM-CORTE-02) */
-    for (const m of ['select', 'eq', 'gte', 'lte', 'lt', 'is', 'not', 'neq', 'order', 'in', 'limit', 'range', 'ilike']) b[m] = () => b;
+    /* CONC-PAINEL-CONTA-01 — `or` entrou: sem ele o cadastro das contas não carregava ("or is not a function", erro antigo do arquivo) */
+    for (const m of ['select', 'eq', 'gte', 'lte', 'lt', 'is', 'not', 'neq', 'order', 'in', 'limit', 'range', 'ilike', 'or']) b[m] = () => b;
     b.single = () => Promise.resolve({ data: { fazenda_id: 'faz' }, error: null });
     b.insert = (linha: Record<string, unknown>) => { B.inserts.push({ tabela: nome, linha }); return Promise.resolve({ error: null }); };
     b.then = (ok: (x: { data: unknown[]; error: null }) => unknown) =>
@@ -576,6 +577,22 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
 });
 
 /* ── PR-CONC-SALDOS-LAYOUT-01: só apresentação de "Saldos por conta" ── */
+describe('CONC-PAINEL-CONTA-01 — a coluna Conta não muda de largura com a seleção (nada se desloca)', () => {
+  it('a largura vem do CADASTRO inteiro (a conta fora da vista também conta) e não muda ao escolher uma conta', async () => {
+    /* 'Conta Escondida Bem Comprida' (28 letras) está no cadastro mas NÃO no dono: nunca aparece na tabela. Na estimativa do jsdom
+       (6,2px por letra + 26 de folga) ela dá 200px; o maior nome VISÍVEL ('Cartão BB - Visa Infinite', 25) daria 181px. */
+    B.contas = [...B.contas, conta('escondida', 'Conta Escondida Bem Comprida')];
+    montar();
+    const linhas = await screen.findAllByTestId('linha-saldo-conta');
+    expect(linhas.some((l) => l.getAttribute('data-conta') === 'escondida')).toBe(false);
+    const largura = () => screen.getByTestId('tabela-saldos').querySelector('col')?.style.width;
+    expect(largura()).toBe('200px');
+    fireEvent.click(linhas[0]);
+    await waitFor(() => expect(screen.getAllByTestId('linha-saldo-conta').length).toBeGreaterThan(0));
+    expect(largura()).toBe('200px');
+  });
+});
+
 describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho no Extrato, escolhida com contorno, régua fixa', () => {
   it('(a) a faixa "Informe o saldo final REAL…" não existe; o lápis da linha continua', async () => {
     montar();

@@ -759,6 +759,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [elBlocos, setElBlocos] = useState<HTMLElement | null>(null);
   const [larguraBlocos, setLarguraBlocos] = useState<number | null>(null);
   const [barraSaldos, setBarraSaldos] = useState(0);
+  /* a medida do nome em canvas só vale com a FONTE da página carregada: antes dela o canvas mede na fonte de reserva e a coluna mudava 8px
+     conforme a carga (o desloca acusou entre duas páginas). Quando as fontes ficam prontas, mede de novo. */
+  const [fontesProntas, setFontesProntas] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    const fontes = typeof document === 'undefined' ? undefined : document.fonts;
+    if (!fontes) { setFontesProntas(true); return; }
+    void fontes.ready.then(() => { if (vivo) setFontesProntas(true); });
+    return () => { vivo = false; };
+  }, []);
   const refDosBlocos = useCallback((el: HTMLElement | null) => { refBlocos(el); setElBlocos(el); }, [refBlocos]);
   useEffect(() => {
     if (!elBlocos) return;
@@ -830,10 +840,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const gruposSaldos = agruparContasPorTipo(
     contasVisiveis.map(c => ({ ...c, tipo_conta: c.linha.tipo_conta ?? c.conta.tipo_conta, label: getContaLabel(c.conta) })),
   ).map(g => ({ ...g, subtotal: resumo?.find(l => l.nivel === 'tipo' && l.tipo_conta === g.chave) ?? null }));
-  /* CONC-PAINEL-CONTA-01 (item 3) — a coluna Conta pelo MAIOR texto dela (contas, grupos, "Total"), medido em 10px negrito */
+  /* CONC-PAINEL-CONTA-01 (item 3) — a coluna Conta pelo MAIOR texto dela (contas, grupos, "Total"), medido em 10px negrito.
+     ⚠ PELO CADASTRO INTEIRO (`contas`), NÃO pelas linhas visíveis: com uma conta escolhida o dono vem filtrado, outra conta vira "oculta" e
+     a largura mudava 8px ao voltar para "Todas" (o desloca acusou). O cadastro não muda com a seleção. */
   const larguraConta = useMemo(() => larguraDaConta(
-    ['Total', ...gruposSaldos.flatMap(g => [g.rotulo, ...g.contas.map(c => c.label)])], medirTexto10Negrito,
-  ), [gruposSaldos]);
+    ['Total', ...agruparContasPorTipo(contas.map(c => ({ ...c, label: getContaLabel(c) }))).flatMap(g => [g.rotulo, ...g.contas.map(c => c.label)]),
+      /* + as linhas à vista: se o cadastro não carregou, a coluna não cai no piso (com o cadastro, elas já estão nele) */
+      ...gruposSaldos.flatMap(g => [g.rotulo, ...g.contas.map(c => c.label)])],
+    medirTexto10Negrito,
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `fontesProntas` refaz a medida quando a fonte chega (o canvas lê a fonte carregada)
+  ), [contas, gruposSaldos, fontesProntas]);
   /* o teto da Conta pelo espaço (`contaNaTela`): o Resumo nunca sai da tela */
   const larguraContaNaTela = contaNaTela(larguraConta, larguraBlocos, REGUA_SALDOS.reduce((a, b) => a + b, 0), barraSaldos);
   /* CONC-ORDENAR-01 (regra soberana de 29/10, gate check-ui-ordenar): Conta, Sistema, Extrato e Diferença ordenam as contas DENTRO de cada

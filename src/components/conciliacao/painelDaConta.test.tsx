@@ -72,6 +72,7 @@ describe('as regras (puras)', () => {
     expect(contaNaTela(219, 840, regua)).toBe(840 - 24 - 8 - RESUMO_MINIMO - regua - 2);
     expect(contaNaTela(219, 500, regua)).toBe(PISO_DA_CONTA);
     expect(contaNaTela(219, null, regua)).toBe(219);
+    expect(contaNaTela(219, 0, regua)).toBe(219);
   });
   it('a coluna Conta = o maior nome + a folga, entre o piso e o teto', () => {
     const medir = (t: string) => t.length * 6;
