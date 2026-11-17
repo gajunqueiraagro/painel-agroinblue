@@ -187,7 +187,7 @@ describe('OPENFINANCE-P3b — portas fechadas do extrato', () => {
     const r = await extrato(buscar(), pc);
     expect(r.status).toBe(200);
     const resumo = resumos[0] ?? '';
-    expect(resumo).toBe('buscar 2026-11-14..2026-11-16 (pedido 2026-11-13..2026-11-17) · 3 recebidas · POSTED 2 · PENDING 1 · por dia: 14/11:2 16/11:1');
+    expect(resumo).toBe('buscar 2026-11-14..2026-11-16 (pedido 2026-11-13..2026-11-17) · 3 recebidas · POSTED 2 · PENDING 1 · por dia: 14/11:2 16/11:1 · item —/— · atualizado — · próximo auto-sync —');
     expect(resumo).not.toMatch(/FULANO|50|80/);
   });
 

@@ -66,6 +66,8 @@ export interface OpcoesDoWidget {
   connectToken: string;
   includeSandbox: boolean;
   connectorIds: number[];
+  /** OF-ATUALIZAR-DO-BANCO-01: o Widget em MODO ATUALIZAÇÃO deste item (Reconectar) */
+  updateItem?: string;
   onSuccess: (dados: unknown) => void;
   onError: (erro: unknown) => void;
 }

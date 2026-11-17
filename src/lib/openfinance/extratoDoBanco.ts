@@ -22,7 +22,30 @@ export interface BuscaDoBanco {
   conta: { id: string; type: string; subtype: string | null; balance: number | null; currencyCode: string | null; saldoEm: string | null };
   transacoes: TransacaoOpenFinance[];
   saldoGravado: boolean | null;
+  /** OF-ATUALIZAR-DO-BANCO-01: a situação do item na Pluggy (nulo = a borda não disse) */
+  item: ItemDoBanco | null;
 }
+
+/** OF-ATUALIZAR-DO-BANCO-01 — o item na Pluggy: quando o banco foi lido e se está atualizando agora. */
+export interface ItemDoBanco { status: string | null; lastUpdatedAt: string | null; nextAutoSyncAt: string | null }
+export function lerItemDoBanco(v: unknown): ItemDoBanco | null {
+  if (!ehObjeto(v)) return null;
+  return { status: textoOuNulo(v.status), lastUpdatedAt: textoOuNulo(v.lastUpdatedAt), nextAutoSyncAt: textoOuNulo(v.nextAutoSyncAt) };
+}
+/** "atualizando…" · "banco atualizado às 10:42" (hoje) · "banco atualizado em 16/11/2026 17:10" · '' (não se sabe) */
+export function textoDaSituacao(item: ItemDoBanco | null, hoje: string): string {
+  if (!item) return '';
+  if (item.status === 'UPDATING') return 'atualizando…';
+  const q = diaEHoraEmBrasilia(item.lastUpdatedAt);
+  if (!q) return '';
+  return q.dia === hoje ? `banco atualizado às ${q.hora}` : `banco atualizado em ${ddmmaaaa(q.dia)} ${q.hora}`;
+}
+/** o `title` da situação: quando a Pluggy atualiza sozinha de novo; sem a data = nulo */
+export function textoDoProximoSync(item: ItemDoBanco | null): string | null {
+  const q = diaEHoraEmBrasilia(item?.nextAutoSyncAt ?? null);
+  return q ? `A Pluggy atualiza sozinha de novo em ${ddmmaaaa(q.dia)} ${q.hora}.` : null;
+}
+export const FRASE_ATUALIZAR_FALHOU = 'Não consegui pedir a atualização ao banco agora. Nada foi pedido; tente de novo.';
 
 /** O corpo da `openfinance-extrato` → a busca tipada; qualquer campo fora do contrato = nulo (a tela diz que falhou). */
 export function lerBuscaDoBanco(corpo: Record<string, unknown>): BuscaDoBanco | null {
@@ -51,6 +74,7 @@ export function lerBuscaDoBanco(corpo: Record<string, unknown>): BuscaDoBanco | 
     },
     transacoes,
     saldoGravado: typeof corpo.saldoGravado === 'boolean' ? corpo.saldoGravado : null,
+    item: lerItemDoBanco(corpo.item),
   };
 }
 

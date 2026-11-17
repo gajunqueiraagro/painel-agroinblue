@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
   try { const c = await req.json(); if (c && typeof c === "object") corpo = c; } catch { corpo = {}; }
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim() || null;
 
-  const r = await conectar({ token, clienteId: corpo.cliente_id }, {
+  const r = await conectar({ token, clienteId: corpo.cliente_id, itemId: corpo.item_id }, {
     autorDoToken: async (t) => (await admin.auth.getUser(t)).data.user?.id ?? null,
     podeConectar: async (autor, clienteId) => {
       const { data: ehAdmin } = await admin.rpc("is_admin_agroinblue", { _user_id: autor });

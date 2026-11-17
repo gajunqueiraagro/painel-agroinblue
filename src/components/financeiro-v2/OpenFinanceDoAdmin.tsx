@@ -42,11 +42,13 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
     } catch { toast.error(FRASE_REGISTRO_FALHOU); } finally { setOcupado(null); }
   };
 
-  const conectar = async () => {
+  /* OF-ATUALIZAR-DO-BANCO-01 — com `itemId`: RECONECTAR (o Widget em modo atualização desse item: o banco pede o titular de novo) */
+  const conectar = async (itemId?: string) => {
     if (!clienteId) { toast.error('Escolha o cliente antes de conectar o banco.'); return; }
     setOcupado('conectar');
     try {
-      const r = await lerRespostaDaBorda(await supabase.functions.invoke('openfinance-conectar', { body: { cliente_id: clienteId } }), FRASE_CONECTAR_FALHOU);
+      const r = await lerRespostaDaBorda(await supabase.functions.invoke('openfinance-conectar',
+        { body: itemId ? { cliente_id: clienteId, item_id: itemId } : { cliente_id: clienteId } }), FRASE_CONECTAR_FALHOU);
       if (r.ok === false) { toast.error(r.frase); return; }
       const token = tokenDaConexao(r.corpo);
       if (!token) { toast.error(FRASE_CONECTAR_FALHOU); return; }
@@ -58,8 +60,12 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
         connectToken: token,
         includeSandbox: false,
         connectorIds: regulados, // SÓ o Open Finance regulado: o banco pede o consentimento no app dele; nunca login/senha aqui
+        ...(itemId ? { updateItem: itemId } : {}),
         // P3a: logo depois de conectar, o admin escolhe as contas que entram (nada entra sem marcar)
-        onSuccess: (dados) => { toast.success(fraseDoItem(dados)); setEscolher(itemDoSucesso(dados)); },
+        onSuccess: (dados) => {
+          if (itemId) { toast.success('Conexão confirmada no banco. A Pluggy volta a atualizar sozinha.'); return; }
+          toast.success(fraseDoItem(dados)); setEscolher(itemDoSucesso(dados));
+        },
         onError: () => toast.error('A conexão com o banco não terminou. Nada foi gravado; tente de novo.'),
       });
       await w.init();
@@ -99,7 +105,7 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
         title="Admin AGROinBLUE · registra na Pluggy o webhook do AGROinBLUE (uma vez; não duplica)" data-testid="openfinance-registrar">Registrar webhook</Button>
 
       <Dialog open={aberto} onOpenChange={(v) => { if (!v && ocupado !== 'desconectar') setAberto(false); }}>
-        <DialogContent className="max-w-[460px]" data-testid="openfinance-desconectar-dialogo">
+        <DialogContent className="max-w-[540px]" data-testid="openfinance-desconectar-dialogo">
           <DialogHeader>
             <DialogTitle className="text-[13px]">Bancos conectados</DialogTitle>
             <DialogDescription className="text-[11px]">
@@ -115,6 +121,9 @@ export function OpenFinanceDoAdmin({ clienteId }: { clienteId: string | null }) 
                   <span className="w-[86px] flex-none tabular-nums text-muted-foreground">desde {dataCurta(c.desde)}</span>
                   <Button size="sm" variant="ghost" className="h-5 flex-none px-2 text-[11px]" disabled={ocupado !== null}
                     onClick={() => { setAberto(false); setConfirmar(null); setEscolher(c.itemId); }} data-testid="openfinance-escolher-contas">Escolher contas</Button>
+                  <Button size="sm" variant="ghost" className="h-5 flex-none px-2 text-[11px]" disabled={ocupado !== null}
+                    title="O banco pede o titular de novo (confirmação ou consentimento vencido): abre o banco para confirmar esta conexão"
+                    onClick={() => { setAberto(false); void conectar(c.itemId); }} data-testid="openfinance-reconectar">Reconectar</Button>
                   <Button size="sm" variant="ghost" className="h-5 flex-none px-2 text-[11px] text-rose-700" disabled={ocupado !== null}
                     onClick={() => setConfirmar(c)} data-testid="openfinance-desconectar-este">Desconectar</Button>
                 </div>
