@@ -14,7 +14,7 @@
  *   cortam, texto longo corta com o inteiro no `title`.
  */
 import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -210,7 +210,8 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
   };
 }
 
-export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedores, onAbrirLancamento, onAbrirNota, lancadas, linhasIniciais, avisoInicial }: {
+export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedores, onAbrirLancamento, onAbrirNota, lancadas, linhasIniciais, avisoInicial,
+  arquivosIniciais, notasDaReceita, onNotasDaReceita }: {
   open: boolean;
   onClose: () => void;
   clienteId: string | null;
@@ -225,6 +226,11 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
   /** So' para a bancada da tela: a lista ja' montada (o pior caso de texto) e o aviso do arquivo repetido. */
   linhasIniciais?: LinhaDeNota[];
   avisoInicial?: string | null;
+  /** NOTAS-RECEITA F3.4 (D1) — o XML que veio do "Lançar" da lista da Receita: lido UMA vez, pelo MESMO caminho do arquivo solto */
+  arquivosIniciais?: File[] | null;
+  /** D1 — "escolher entre as N da Receita": o botão no cabeçalho (só aparece com N > 0) */
+  notasDaReceita?: number | null;
+  onNotasDaReceita?: () => void;
 }) {
   const [linhas, setLinhas] = useState<LinhaDeNota[]>(() => linhasIniciais ?? []);
   const [lendo, setLendo] = useState(false);
@@ -323,6 +329,14 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
     }
   }, [clienteId, chaves, montarLinha, fazendasDoCliente]);
 
+  /* F3.4 — cada lote de arquivos vindo da Receita entra uma vez (a identidade do array é o gatilho) */
+  const lidosDaReceita = useRef<File[] | null>(null);
+  useEffect(() => {
+    if (!open || !arquivosIniciais?.length || lidosDaReceita.current === arquivosIniciais) return;
+    lidosDaReceita.current = arquivosIniciais;
+    void lerArquivos(arquivosIniciais);
+  }, [open, arquivosIniciais, lerArquivos]);
+
   const fechar = () => { setLinhas([]); setAviso(null); setChaves({}); setErrosDaChave({}); onClose(); };
   const lidas = linhas.filter((l) => !l.recusa);
   const recusadas = linhas.length - lidas.length;
@@ -338,6 +352,12 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
       <DialogContent className="max-w-[1080px] p-0 gap-0 overflow-hidden" data-testid="novo-de-xml">
         <div className="flex h-9 items-center bg-primary px-4 pr-10">
           <DialogTitle className="text-[13px] font-semibold leading-none text-primary-foreground">Novo a partir da nota</DialogTitle>
+          {!!notasDaReceita && onNotasDaReceita && (
+            <button type="button" className="ml-auto h-[20px] rounded-[3px] bg-primary-foreground/15 px-2 text-[10px] font-semibold text-primary-foreground hover:bg-primary-foreground/25"
+              onClick={onNotasDaReceita} data-testid="xml-notas-da-receita" title="Escolher entre as notas que a Receita mandou">
+              {notasDaReceita > 99 ? '99+' : notasDaReceita} da Receita ›
+            </button>
+          )}
           <DialogDescription className="sr-only">Solte os XML ou PDF das notas fiscais para abrir o lançamento já preenchido.</DialogDescription>
         </div>
 

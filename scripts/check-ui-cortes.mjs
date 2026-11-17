@@ -1308,6 +1308,19 @@ const CENARIOS = [
   })(),
   /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos (dado SINTÉTICO, `dados/caixaBoletos.ts`): vazia; os 8 PDFs soltos (exato, soma de 2, já
      no sistema, por nome, parece já pago, nome/beneficiário longos e valor no teto, senha, escaneado); a senha digitada; as abas do gravado */
+  /* NOTAS-RECEITA-A1-01 F3.4 mínima — a lista "Notas da Receita" (bancada sintética) nas abas e o "Ver" */
+  ...(() => {
+    const T = [[918, 600], [1000, 600], [1126, 579], [1366, 768], [1440, 800]];
+    const R = '[data-testid="notas-da-receita"]';
+    const aba = (re) => async (p) => { await p.locator(`${R} button`, { hasText: re }).first().click(); await p.waitForTimeout(400); };
+    return [
+      { nome: 'notas-receita', url: 'tela=notas-receita', tamanhos: T, regiao: R },
+      { nome: 'notas-receita-a-lancar', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^A lançar/) },
+      { nome: 'notas-receita-ciencia', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^Ciência pendente/) },
+      { nome: 'notas-receita-ver', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-dados"]', antes: async (p) => {
+        await p.locator('[data-testid="receita-ver"]').first().click(); await p.waitForTimeout(400); } },
+    ];
+  })(),
   ...(() => {
     const T = [[918, 600], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
     const URL = 'tela=caixa-boletos';

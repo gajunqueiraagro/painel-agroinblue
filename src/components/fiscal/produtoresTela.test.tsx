@@ -210,4 +210,11 @@ describe('Cadastros › Produtores', () => {
     expect(pediuHistorico).toHaveBeenCalledWith(VERA.id);
     expect(pediuHistorico).not.toHaveBeenCalledWith(HIGINO.id);
   });
+  it('T11 CERT-ABA-UX-01: na aba Certificado o rodapé diz que o Salvar é só da ficha (o certificado grava ao subir); nas outras, nada', async () => {
+    montar();
+    await screen.findAllByTestId('produtores-item');
+    expect(screen.getByTestId('produtor-rodape').textContent).toBe('');
+    fireEvent.click(screen.getByTestId('produtor-guia-certificado'));
+    await waitFor(() => expect(screen.getByTestId('produtor-rodape').textContent).toBe('o certificado grava ao subir; Salvar e Desfazer são só dos dados da ficha'));
+  });
 });

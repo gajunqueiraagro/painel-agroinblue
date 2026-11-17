@@ -328,7 +328,9 @@ function FichaDoProdutor({ titular, titulares, futura, clienteId, cliente, aoCri
       {/* O RODAPÉ — a frase (pendência/recusa) no lugar reservado; Inativar · Desfazer · Salvar à direita */}
       <div className="flex h-[40px] shrink-0 items-center gap-2 border-t bg-card px-3">
         <p className={cn('min-w-0 flex-1 truncate text-[10px]', rodape ? 'text-destructive' : 'text-muted-foreground')} title={rodape ?? undefined} data-testid="produtor-rodape">
-          {rodape ?? (mudou ? 'há mudanças não gravadas: Salvar mostra a prévia' : '')}
+          {/* CERT-ABA-UX-01 (Amanda 16/11): o certificado grava ao subir; o Salvar/Desfazer do rodapé são só dos dados da ficha */}
+          {rodape ?? (mudou ? 'há mudanças não gravadas: Salvar mostra a prévia'
+            : aba === 'certificado' ? 'o certificado grava ao subir; Salvar e Desfazer são só dos dados da ficha' : '')}
         </p>
         {titular && (
           <Button variant="outline" size="sm" className="h-[26px] w-[74px] text-[11px]" onClick={() => void trocarAtivo()} disabled={gesto.indo}

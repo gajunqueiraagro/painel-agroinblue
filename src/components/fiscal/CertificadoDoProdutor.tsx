@@ -73,7 +73,7 @@ export function CertificadoDoProdutor({ titularId }: { titularId: string }) {
     setEnviando(false);
     if (r.ok === false) { setRecado({ tom: 'erro', frase: r.frase }); return; }
     setArquivo(null); setSenha('');
-    setRecado({ tom: 'ok', frase: [r.acao === 'trocou' ? 'Certificado trocado (o anterior ficou substituído).' : 'Certificado guardado.', ...r.avisos].join(' ') });
+    setRecado({ tom: 'ok', frase: [r.acao === 'trocou' ? 'Certificado trocado (o anterior ficou substituído) — não precisa clicar em Salvar.' : 'Certificado guardado — não precisa clicar em Salvar.', ...r.avisos].join(' ') });
     await qc.invalidateQueries({ queryKey: chave });
   }
 
@@ -133,7 +133,7 @@ export function CertificadoDoProdutor({ titularId }: { titularId: string }) {
           <p className="text-[10px] text-muted-foreground" data-testid="certificado-a3-explicacao">{FRASE_A3_NAO_SERVE}</p>
           {/* a área do arquivo numa linha inteira (ao lado da senha ela cortava o texto a 1126–1366); senha e botão embaixo */}
           <AreaDeArquivo regra={REGRA_DO_CERTIFICADO} onArquivos={(a) => { setArquivo(a[0] ?? null); setRecado(null); }}
-            convite="Arraste o arquivo ou clique" detalhe=".pfx ou .p12 · até 64 KB" fixo={arquivo?.name} onRemover={() => setArquivo(null)} testId="certificado-arquivo" />
+            convite="Arraste o arquivo ou clique" detalhe=".pfx ou .p12 · até 64 KB" fixo={arquivo?.name} onRemover={arquivo ? () => setArquivo(null) : undefined} testId="certificado-arquivo" />
           <div className={cn(GRADE_FORMULARIO, 'grid-cols-[200px_auto_1fr] items-end')}>
             <div><Rotulo texto="Senha do certificado" />
               <Input type="password" autoComplete="off" value={senha} onChange={(e) => { setSenha(e.target.value); setRecado(null); }} className={REGUA_CAMPO}

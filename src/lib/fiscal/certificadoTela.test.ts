@@ -56,6 +56,13 @@ describe('lerRespostaDoTeste — o "Testar certificado" só dá ✓ com o ENSAIO
     expect((await lerRespostaDoTeste({ data: { ok: true, cstat: '137', cadeia: { ok: true, raiz: 'R', caminho } }, error: null })).ok).toBe(false);
     expect((await lerRespostaDoTeste({ data: { ok: true, ensaio: true, cadeia: { ok: false, motivo: 'assinatura', caminho } }, error: null })).ok).toBe(false);
     expect(await lerRespostaDoTeste({ data: { ok: true, ensaio: true, cadeia: { ok: true, raiz: 'R', caminho } }, error: null }))
-      .toEqual({ ok: true, titular: 'PRODUTORA SINTETICA · 529.982.247-25', validade: 'até 16/11/2027', cadeia: 'AC X ✓ ICP-Brasil' });
+      .toEqual({ ok: true, titular: 'PRODUTORA SINTETICA · ***.982.247-**', validade: 'até 16/11/2027', cadeia: 'AC X ✓ ICP-Brasil' });
+  });
+  it('o CPF nunca sai inteiro: nem no titular do ✓ nem no caminho da recusa', async () => {
+    const ok = await lerRespostaDoTeste({ data: { ok: true, ensaio: true, cadeia: { ok: true, raiz: 'R', caminho } }, error: null });
+    const nao = await lerRespostaDoTeste({ data: { ok: false, frase: 'x', cadeia: { ok: false, motivo: 'sem_intermediaria', caminho } }, error: null });
+    expect(JSON.stringify([ok, nao])).not.toContain('52998224725');
+    expect(JSON.stringify([ok, nao])).not.toContain('529.982.247-25');
+    expect(nao.ok === false && nao.cadeia).toContain('PRODUTORA SINTETICA · ***.982.247-** → AC X');
   });
 });

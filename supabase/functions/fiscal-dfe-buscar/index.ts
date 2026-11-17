@@ -4,26 +4,29 @@
  *  · POST JSON { titular_id, ambiente: "producao" | "homologacao", ensaio?: true } com o token do usuário OU a chave service_role;
  *  · o .pfx sai do bucket PRIVADO `fiscal-certificados` cifrado (AES-GCM, IV de 12 bytes na frente; chave `FISCAL_CERT_CHAVE_MESTRA`) e é
  *    aberto só na memória; a senha vem do Vault pela `fn_fiscal_dfe_credencial` (só service_role);
- *  · mTLS pelo `Deno.createHttpClient({ cert, key })` (provado no lote 3, badssl 200); 30 s de espera; o cliente fecha sempre.
+ *  · o POST com o certificado sai pela Lambda Node `agro-dfe-mtls` (AWS sa-east-1): a Receita cobra o certificado por RENEGOCIAÇÃO TLS,
+ *    que o Deno (rustls) não faz — 1ª chamada real, buscas 9 e 10 (16/11). Vai só o par PEM, cifrado com a pública do KMS da Lambda;
+ *    pedido e resposta assinados (HMAC + relógio + nonce). Desenho aprovado pelo Gabriel 16/11 (relatório 1750);
  *  · ⚠ NÃO loga corpo, cabeçalho, senha, chave, .pfx nem XML. ⚠ O DEPLOY espera o lote; a 1ª chamada REAL, o "OK chamar" do Chat.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { buscarDfe, type Pecas } from "../_shared/dfe/buscarDfe.ts";
 import { abrirCredencial } from "../_shared/dfe/credencialA1.ts";
-import { CONTENT_TYPE_DIST_DFE, URL_DIST_DFE } from "../_shared/dfe/distribuicaoDfe.ts";
+import { URL_DIST_DFE } from "../_shared/dfe/distribuicaoDfe.ts";
+import { importarPublica, lerRespostaLambda, montarPedidoLambda } from "../_shared/dfe/clienteLambda.ts";
+import { CAB } from "../_shared/dfe/protocoloLambda.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const BUCKET = "fiscal-certificados";
-const ESPERA_MS = 30_000;
+const ESPERA_MS = 40_000; /* a Lambda espera 30 s pela Receita */
 
 function base64ParaBytes(b64: string): Uint8Array {
   const bin = atob(b64);
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
-const ehCliente = (x: unknown): x is Deno.HttpClient => !!x && typeof x === "object" && typeof Reflect.get(x, "close") === "function";
 const texto = (x: unknown): string => (typeof x === "string" ? x : "");
 
 Deno.serve(async (req) => {
@@ -42,6 +45,13 @@ Deno.serve(async (req) => {
   let corpo: unknown = null;
   try { corpo = await req.json(); } catch { return json(400, { ok: false, recusa: "pedido", frase: "Pedido inválido." }); }
   const campo = (n: string) => (corpo && typeof corpo === "object" ? Reflect.get(corpo, n) : undefined);
+  /* sem a Lambda configurada, só o ensaio roda (nada de pedido aberto nem trilha) */
+  const lambdaUrl = Deno.env.get("FISCAL_DFE_LAMBDA_URL");
+  const lambdaHmac = Deno.env.get("FISCAL_DFE_LAMBDA_HMAC");
+  const lambdaPublica = Deno.env.get("FISCAL_DFE_LAMBDA_PUBLICA");
+  if (campo("ensaio") !== true && (!lambdaUrl || !lambdaHmac || !lambdaPublica)) {
+    return json(500, { ok: false, recusa: "configuracao", frase: "A busca de notas ainda não está configurada (a Lambda). Nada foi pedido à Receita." });
+  }
 
   const pecas: Pecas = {
     ehServico: (token) => token === servico,
@@ -82,15 +92,14 @@ Deno.serve(async (req) => {
     },
     abrirCredencial: (bytes, senha, esperado) => abrirCredencial(bytes, senha, esperado),
     postarComCertificado: async (destino, par, envelope) => {
-      const cliente: unknown = Deno.createHttpClient({ cert: par.cert, key: par.key });
-      if (!ehCliente(cliente)) throw new Error("O cliente mTLS não foi criado.");
-      try {
-        const init: RequestInit & { client: Deno.HttpClient } = {
-          method: "POST", body: envelope, headers: { "Content-Type": CONTENT_TYPE_DIST_DFE }, signal: AbortSignal.timeout(ESPERA_MS), client: cliente,
-        };
-        const r = await fetch(destino, init);
-        return { status: r.status, corpo: await r.text() };
-      } finally { cliente.close(); }
+      if (!lambdaUrl || !lambdaHmac || !lambdaPublica) throw new Error("Lambda mTLS sem configuração");
+      const ambiente = destino === URL_DIST_DFE.producao ? "producao" : destino === URL_DIST_DFE.homologacao ? "homologacao" : null;
+      if (!ambiente) throw new Error("destino fora da Distribuição DF-e");
+      const pedido = await montarPedidoLambda({ ambiente, envelope, par, segredo: lambdaHmac, publica: await importarPublica(lambdaPublica),
+        agoraSegundos: Math.floor(Date.now() / 1000) });
+      const r = await fetch(lambdaUrl, { method: "POST", headers: pedido.headers, body: pedido.corpo, signal: AbortSignal.timeout(ESPERA_MS) });
+      return await lerRespostaLambda({ status: r.status, tempo: r.headers.get(CAB.tempo), assinatura: r.headers.get(CAB.assinatura),
+        corpo: await r.text(), nonce: pedido.nonce, segredo: lambdaHmac, agoraSegundos: Math.floor(Date.now() / 1000) });
     },
     registrar: async (r) => {
       const { data, error } = await admin.rpc("fn_fiscal_dfe_registrar", {

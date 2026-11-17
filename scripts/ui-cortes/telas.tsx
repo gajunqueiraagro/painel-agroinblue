@@ -1876,6 +1876,21 @@ if (tela === 'mesclar') {
     montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} aoFechar={() => {}} />);
   };
   void montarCaixa();
+} else if (tela === 'notas-receita' || tela === 'notas-receita-menu') {
+  /* NOTAS-RECEITA-A1-01 F3.4 MÍNIMA — a lista "Notas da Receita" (o modal real com dados SINTÉTICOS, `dados/notasReceita.ts`) e o "+ Novo ▾"
+     com o selo de boletos + notas (D2) */
+  const montarReceita = async () => {
+    const { NotasDaReceitaDialog } = await import('@/components/fiscal/NotasDaReceitaDialog');
+    const { NovoMenuLancamentos } = await import('@/components/financeiro-v2/NovoMenuLancamentos');
+    const { DADOS_RECEITA_BANCADA } = await import('./dados/notasReceita');
+    if (tela === 'notas-receita-menu') {
+      montar(<div className="flex justify-end p-6"><NovoMenuLancamentos boletosPedemAcao={3} notasDaReceita={12} onEmBranco={() => {}} onDaNota={() => {}} onDosBoletos={() => {}} /></div>);
+      return;
+    }
+    montar(<NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={DADOS_RECEITA_BANCADA} carregando={false} erro={null} aoFechar={() => {}}
+      aoLancar={() => {}} lerXml={async () => '<nfeProc/>'} />);
+  };
+  void montarReceita();
 } else if (tela === 'produtores') {
   /* FISCAL onda 1 (a) — Cadastros › Produtores: a tela real com a API em memória (`dados/produtores.ts`, SINTÉTICO); a prévia de cada
      gravação se monta a partir do pedido e nada grava */
