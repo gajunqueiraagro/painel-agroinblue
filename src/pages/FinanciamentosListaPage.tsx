@@ -30,6 +30,9 @@ import { contratoDaLista, ehCompraParcelada, ENCERRADOS, type ContratoDaLista } 
 import { faixaDaLinha, lerTelaDaLinha, rotuloDaLinha, type ItemDaFaixa, type LinhaDoCadastro } from '@/lib/financiamentos/linhaDeCredito';
 import { useLinhasDeCredito } from '@/hooks/useLinhasDeCredito';
 import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
+import { chaveDeOrdem, lerNotasDasCompras, numeroCurto, rotuloDasNotas, textoDasNotasParaBusca, type NotaDaCompra } from '@/lib/financiamentos/notasDasCompras';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { TD_REGUA, TD_REGUA_NUM, TH_REGUA } from '@/components/ui/regua-tabela';
 
 /* ── Types ── */
 /* ⚠ CLASSES LIDAS DO CÓDIGO DA REFERÊNCIA, não estimadas: `NUM` e `APOIO` são
@@ -308,6 +311,15 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       });
     },
   });
+  /* COMPRAS-PARC-NF-01 (Gabriel 18/11) — a NF de cada compra parcelada: a nota JÁ VINCULADA às parcelas (fonte única, sem campo
+     paralelo). Lida uma vez por lista; falhou = a coluna mostra "—" e a busca segue sem o nº (nunca trava a lista). */
+  const idsDasCompras = useMemo(() => financiamentos.filter((f) => ehCompraParcelada(f.natureza)).map((f) => f.id).sort().join(','), [financiamentos]);
+  const { data: notasDasCompras } = useQuery({
+    queryKey: ['compras-parceladas-notas', clienteId, idsDasCompras],
+    enabled: !!clienteId && !!idsDasCompras,
+    queryFn: () => lerNotasDasCompras(clienteId!, idsDasCompras.split(',')),
+  });
+  const [notasAbertas, setNotasAbertas] = useState<{ compra: string; notas: readonly NotaDaCompra[] } | null>(null);
 
   /* ── Credores dos contratos para o filtro (FIN-FINANC-28-P3-FIX3): o seletor DA CASA com busca, pelo nome ou pelo CPF/CNPJ
      (a 2ª linha da opção entra na busca). Só os credores que aparecem nos contratos do cliente. ── */
@@ -358,7 +370,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
          aqui pela mesma regra — sem ela, procurar "parcelamento" não acharia os
          parcelamentos. O escopo continua alcançável: ele não sumiu da linha,
          mudou de lugar (pílula → sufixo da descrição). */
-      if (descQ && !casaNaBusca([f.descricao, f.credor_nome, f.numero_contrato ?? '',
+      /* COMPRAS-PARC-NF-01 — a busca acha também pelo nº da NF da compra (o inteiro e o curto: "000.000.288" e "288") */
+      if (descQ && !casaNaBusca([f.descricao, f.credor_nome, f.numero_contrato ?? '', textoDasNotasParaBusca(notasDasCompras?.get(f.id)),
                      f.tipo_financiamento === 'pecuaria' ? 'PEC pecuária' : 'AGR agricultura',
                      `${PILULA_NATUREZA[f.natureza]?.sigla ?? ''} ${PILULA_NATUREZA[f.natureza]?.rotulo ?? ''}`]
                      .join(' '), descQ)) return false;
@@ -374,7 +387,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       if (!temParcelaNoIntervalo(f.situacaoDoLote, intervalo)) return false;
       return true;
     };
-  }, [filtroTipo, filtroDescricao, filtroContrato, filtroCredor,
+  }, [filtroTipo, filtroDescricao, filtroContrato, filtroCredor, notasDasCompras,
       filtroDataContratoDe, filtroDataContratoAte, intervalo]);
 
   /* a lista da aba "Compras parceladas": só os parcelamentos */
@@ -394,6 +407,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     } else if (sortCol === 'numero_contrato') {
       vA = vA ?? '';
       vB = vB ?? '';
+    } else if (sortCol === 'nf') {
+      /* COMPRAS-PARC-NF-01 — pela menor nota; sem nota fica no fim nos dois sentidos */
+      const ka = chaveDeOrdem(notasDasCompras?.get(a.id)); const kb = chaveDeOrdem(notasDasCompras?.get(b.id));
+      if (ka === null || kb === null) return ka === kb ? 0 : ka === null ? 1 : -1;
+      vA = ka; vB = kb;
     } else if (sortCol === 'parcelas') {
       vA = a.total_parcelas > 0 ? a.parcelas_pagas / a.total_parcelas : 0;
       vB = b.total_parcelas > 0 ? b.parcelas_pagas / b.total_parcelas : 0;
@@ -859,6 +877,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   inteiro no `title`); as fixas, medidas no Chromium com a régua de Lançamentos, somam 568. */}
               <colgroup>
                 <col style={{ width: 62 }} data-testid="col-data" />
+                <col style={{ width: 86 }} data-testid="col-nf" />
                 <col />
                 <col />
                 <col style={{ width: 110 }} />
@@ -872,6 +891,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                 <TableRow>
                   <CabecalhoOrdenavel rotulo="Data" ativo={sortCol === 'data_contrato'}
                     direcao={sortDir} aoOrdenar={() => handleSort('data_contrato')} />
+                  <CabecalhoOrdenavel rotulo="NF" ativo={sortCol === 'nf'} direcao={sortDir} aoOrdenar={() => handleSort('nf')} />
                   <CabecalhoOrdenavel rotulo="Descrição" ativo={sortCol === 'descricao'}
                     direcao={sortDir} aoOrdenar={() => handleSort('descricao')} />
                   <CabecalhoOrdenavel rotulo="Credor" ativo={sortCol === 'credor_nome'}
@@ -905,6 +925,22 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   >
                     <TableCell className={TD_DATA_LANC} data-testid="cel-data">
                       {f.data_contrato ? format(new Date(f.data_contrato + 'T12:00:00'), 'dd/MM/yy') : '—'}
+                    </TableCell>
+                    {/* COMPRAS-PARC-NF-01 — a NF: "—" sem nota; uma, o nº; várias, o chip "NF 288 +5" que abre as notas (sem abrir o contrato) */}
+                    <TableCell className="whitespace-nowrap" data-testid="cel-nf">
+                      {(() => {
+                        const notas = notasDasCompras?.get(f.id); const r = rotuloDasNotas(notas);
+                        if (!notas?.length) return <span className="text-muted-foreground">—</span>;
+                        if (!r.extras) return <span className="tabular-nums" title={`NF ${notas[0].numero}`}>{r.texto}</span>;
+                        return (
+                          <button type="button" data-testid="chip-nf" title={`${notas.length} notas: ${notas.map((n) => numeroCurto(n.numero)).join(', ')}`}
+                            className="rounded-full bg-sky-50 px-1.5 text-[10px] font-semibold tabular-nums text-sky-800 hover:bg-sky-100"
+                            onClick={(e) => { e.stopPropagation(); setNotasAbertas({ compra: f.descricao, notas }); }}
+                            onKeyDown={(e) => e.stopPropagation()}>
+                            {r.texto} +{r.extras}
+                          </button>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="truncate" data-testid="cel-descricao"
                       title={[f.descricao, escopoSigla(f.tipo_financiamento), f.numero_contrato ? `nº ${f.numero_contrato}` : null].filter(Boolean).join(' · ')}>
@@ -952,6 +988,32 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           planos) so' saem quando o modal abre, e nao a cada render desta lista. */}
       {/* FIN-FINANC-28 P3-GRAFICO — "O que falta pagar": fechar não mexe na lista (estado, filtros e rolagem ficam) */}
       {/* a chave pelo modo: cada abertura nasce em "Ano civil" (a escolha de safra do mensal não vaza para o anual) */}
+      {/* COMPRAS-PARC-NF-01 — o minimodal das notas da compra (uma linha por nota, a régua da casa) */}
+      <Dialog open={!!notasAbertas} onOpenChange={(v) => { if (!v) setNotasAbertas(null); }}>
+        <DialogContent className="max-w-[min(560px,calc(100vw-32px))] gap-2 p-3" data-testid="minimodal-notas">
+          <DialogTitle className="truncate pr-6 text-[12px]" title={notasAbertas?.compra}>
+            {notasAbertas ? `${notasAbertas.notas.length} notas · ${notasAbertas.compra}` : ''}
+          </DialogTitle>
+          <div className="max-h-[60vh] overflow-auto rounded border">
+            <table className="w-full table-fixed border-collapse">
+              <colgroup><col style={{ width: 110 }} /><col style={{ width: 78 }} /><col /><col style={{ width: 96 }} /></colgroup>
+              <thead className="sticky top-0 bg-primary"><tr>
+                <th className={TH_REGUA}>Nota</th><th className={TH_REGUA}>Emissão</th><th className={TH_REGUA}>Emitente</th><th className={`${TH_REGUA} text-right`}>Valor da nota</th>
+              </tr></thead>
+              <tbody>
+                {notasAbertas?.notas.map((n) => (
+                  <tr key={n.documentoId} className="border-b" data-testid="minimodal-nota">
+                    <td className={TD_REGUA}>NF {n.numero}{n.serie ? <span className="text-muted-foreground"> · s. {n.serie}</span> : null}</td>
+                    <td className={`${TD_REGUA} text-[9.5px] text-muted-foreground`}>{n.emissao ? format(new Date(n.emissao + 'T12:00:00'), 'dd/MM/yyyy') : '—'}</td>
+                    <td className={`${TD_REGUA} truncate`} title={n.emitente ?? undefined}>{n.emitente ?? '—'}</td>
+                    <td className={TD_REGUA_NUM}>{n.valorCent == null ? '—' : (n.valorCent / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
       <CronogramaEmAbertoDialog key={cronogramaAberto ?? 'fechado'} aberto={cronogramaAberto !== null} aoFechar={() => setCronogramaAberto(null)}
         modo={cronogramaAberto ?? 'mensal'} hoje={hoje}
         situacoes={cronogramaAberto === 'anual' ? vigentesFinanciamento.map(f => f.situacaoDoLote) : filtered.map(f => f.situacaoDoLote)}
