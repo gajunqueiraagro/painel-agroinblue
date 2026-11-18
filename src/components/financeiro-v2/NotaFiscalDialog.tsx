@@ -55,6 +55,7 @@ import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
+import { completarODocumentoDaNota } from '@/lib/financeiro/completarDocumentoDaNota';
 import { canceladosDaNota, casarJaLancados, comEscolhidos, contaUnicaDasIrmas, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, nDasParcelas, parcelasParaCasar,
   parcelasQueFaltamNoCartao, posicoesNoCartao, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
   type LinhaSistemaNota, type SituacaoNaTabela, ficaDeForaPorPadrao, rotuloDoAplicar } from '@/lib/financeiro/nfe/jaLancada';
@@ -971,6 +972,14 @@ export function NotaFiscalDialog({
       if (a.ok === false) {
         toast.error(`Os campos foram gravados, mas a nota não foi anexada: ${a.erro}`);
       } else for (const x of a.avisos) toast.error(x);
+      /* 3a — NOTA-ITENS-SALVAR-01 (a Selluz NF 3.240): o documento que JÁ EXISTIA (o PDF de antes, sem chave) recebe a chave da nota lida (e o
+         que estiver vazio) — é pela chave do documento que o lançamento acha os itens guardados no passo 5. Só o vazio; o digitado diferente fica. */
+      if (a.ok === true && notaExistente) {
+        const dono = alvosEscolhidos.find((l) => l.notaDocumentoId === notaExistente);
+        const eDoc = dono ? await completarODocumentoDaNota(clienteId, notaExistente, dono.id,
+          { chave: n.chave || null, numero: p.numeroDocumento || n.numero, emissao: n.emissao || null, totalCent: n.totais.notaCent }, gravadoresDaJuncao) : null;
+        if (eDoc) toast.error(`A nota foi ligada, mas a chave não foi gravada no documento (os itens não aparecem no lançamento): ${eDoc}`);
+      }
       /* 3b — NOTA-ATUALIZA-PREVISTO-01 (R3): a participação deste cliente na nota, no documento (a nota fica inteira) */
       if (pares.length && participacaoPct < 100 && a.ok === true && a.documentoIds.length) {
         const eP = await definirParticipacao(clienteId, a.documentoIds, participacaoPct);
