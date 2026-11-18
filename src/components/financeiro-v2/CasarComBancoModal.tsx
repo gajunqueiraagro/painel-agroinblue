@@ -21,6 +21,7 @@
  */
 import { useConteudoEstavel } from '@/lib/react/conteudoEstavel';
 import { TabelaDosLevados } from '@/components/conciliacao/TabelaDosLevados';
+import { lerComplementoDasLinhas } from '@/lib/conciliacao/complementoDasLinhas';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { fechaAoCentavo, podeCriarPelaDiferenca } from '@/lib/conciliacao/tolerancia';
 import { EscolherContaDaTaxa } from '@/components/conciliacao/EscolherContaDaTaxa';
@@ -125,6 +126,21 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
   const iniciais = useConteudoEstavel(iniciaisDaProp);
   const modelo = useConteudoEstavel(modeloDaProp);
   const [levados, setLevados] = useState<Levado[]>([]);
+  /* CONC-CRIAR-COM-NOTA-02 D1 (homologação 14:32: "NF —" nas 5 linhas) — o levado que chega SEM o nº (os marcados pelo "Casar selecionados" e
+     os do Procurar no histórico) tem o nº lido pelos ids, a MESMA leitura das Sugestões (`lerComplementoDasLinhas`); o que veio com o nº manda */
+  const [nfLida, setNfLida] = useState<ReadonlyMap<string, string>>(new Map());
+  const idsSemNf = levados.filter((l) => !l.numero_documento).map((l) => l.lancamento_id).sort().join(',');
+  useEffect(() => {
+    let vivo = true;
+    if (!open || !clienteId || !idsSemNf) { setNfLida(new Map()); return; }
+    void lerComplementoDasLinhas(clienteId, idsSemNf.split(',')).then((m) => {
+      if (!vivo || !m) return;
+      const nf = new Map<string, string>();
+      for (const [id, x] of m) if (x.numeroDocumento) nf.set(id, x.numeroDocumento);
+      setNfLida(nf);
+    });
+    return () => { vivo = false; };
+  }, [open, clienteId, idsSemNf]);
   const [sim, setSim] = useState<Simulacao | null>(null);
   const [erroRodape, setErroRodape] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
@@ -295,8 +311,9 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
   /* E2 — 2+ lançamentos: a tabela (o modal alarga para caber Venc · Descrição · Fornecedor · NF · Status · Valor · Aplicado · Fica) */
   const multi = levados.length >= 2;
   /* no pós-fixado o campo dos juros mostra o juro real que o banco vai gravar (o mesmo do campo do 1:1) */
-  const levadosDaTabela = levados.map((l) => (parcelaPos && respPos?.ok && respPos.juroReal != null && l.lancamento_id === respPos.jurosId
-    ? { ...l, valorTexto: paraCampo(respPos.juroReal) } : l));
+  const levadosDaTabela = levados.map((l) => ({ ...l, numero_documento: l.numero_documento || nfLida.get(l.lancamento_id) || null }))
+    .map((l) => (parcelaPos && respPos?.ok && respPos.juroReal != null && l.lancamento_id === respPos.jurosId
+      ? { ...l, valorTexto: paraCampo(respPos.juroReal) } : l));
   /* CONC-CRIAR-COM-NOTA-01 — a coluna NF so' quando algum levado traz o nº (os outros chamadores seguem como sempre) */
   const comNF = levados.some((l) => !!l.numero_documento);
   /* P153b (D3) — algum levado troca de conta ao casar: o botão diz isso (o texto é fixo enquanto o modal está aberto) */
@@ -348,7 +365,7 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
                     <button type="button" data-testid="absorver-diferenca" disabled={novo == null} aria-label="absorver a diferença"
                       title={motivo ?? `absorver a diferença: esta linha passa a ${paraCampo(novo ?? 0)}; as outras não mudam e a soma fica igual ao banco.`}
                       onClick={() => { if (novo != null) poeValor(l.lancamento_id, paraCampo(novo)); }}
-                      className={cn('h-[20px] w-[18px] shrink-0 rounded border text-[10px] leading-none', novo == null ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted')}>⇆</button>
+                      className={cn('h-[17px] w-[16px] shrink-0 rounded border text-[9px] leading-none', novo == null ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted')}>⇆</button>
                   );
                 }} />
               {levados.filter((l) => !!l.trocarConta).map((l) => (
@@ -388,7 +405,7 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
                     [`Venc.${n}`, l ? dataDdMmAaaa(l.data_vencimento) : '—', undefined, 'casar-sis-venc'],
                     ['Descrição', l ? (l.descricao ?? '—') : 'nenhum lançamento levado', l?.descricao ?? undefined, 'casar-sis-descricao'],
                     ['Fornecedor', l ? (l.fornecedor || '—') : '—', l?.fornecedor ?? undefined, 'casar-sis-fornecedor'],
-                    ['NF', l?.numero_documento ? (formatNFNumber(l.numero_documento) || l.numero_documento) : '—', undefined, 'levado-nf'],
+                    ['NF', (() => { const n = l ? (l.numero_documento || nfLida.get(l.lancamento_id)) : null; return n ? (formatNFNumber(n) || n) : '—'; })(), undefined, 'levado-nf'],
                     ['Status', st ? <span className={cn('font-medium', PALETA_DO_STATUS[st]?.texto ?? 'text-muted-foreground')}>{STATUS_FILTRO_LABEL[st] ?? l?.status_transacao}</span> : '—', undefined, 'casar-sis-status'],
                   ];
                   const rot = 'truncate px-1 text-muted-foreground';

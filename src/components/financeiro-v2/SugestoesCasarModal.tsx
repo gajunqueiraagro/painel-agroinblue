@@ -130,11 +130,11 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       {/* P159f: sem sugestão automática, o cursor vai direto ao campo do "Procurar no histórico" (no lugar do foco padrão do Radix) */}
-      {/* 12:02: a altura é a do CONTEÚDO (até a janela) e o modal fica PRESO NO TOPO — cresce para baixo ao procurar; centrado, ele subia (o gate
-          de deslocamento: −76px ao procurar) */}
-      <DialogContent className="top-3 flex max-h-none max-w-[95vw] translate-y-0 flex-col p-0 gap-0 overflow-hidden [&>button.absolute]:hidden"
+      {/* CONC-CRIAR-COM-NOTA-02 D2 (homologação 14:32, REGRA SOBERANA do Gabriel): o modal SEMPRE no tamanho padrão — a sobra fica DENTRO das
+          listas (a de 12:02, "altura do conteúdo", foi revertida) */}
+      <DialogContent className="flex max-h-none max-w-[95vw] flex-col p-0 gap-0 overflow-hidden [&>button.absolute]:hidden"
         onOpenAutoFocus={(ev) => { if (sugestoes.length === 0 && campoProcurar.current) { ev.preventDefault(); campoProcurar.current.focus(); } }}
-        style={{ width: LARGURA_MODAL, maxHeight: ALTURA_MODAL }} aria-describedby={undefined} data-testid="sugestoes-casar">
+        style={{ width: LARGURA_MODAL, height: ALTURA_MODAL }} aria-describedby={undefined} data-testid="sugestoes-casar">
         {/* CONC-SUGESTOES-FONTE-01 (08/11): o cabeçalho e a faixa do extrato UM DEGRAU menores (título 11, faixa 28px a 11, valor 13) */}
         <div className="flex h-7 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
           {/* o nome da conta pode passar da largura: "…" e o título inteiro no `title` (a exceção declarada, como o da Conferência) */}
@@ -164,10 +164,7 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
         </div>
         {/* ⚠ AJUSTE 07:55: o bloco das sugestões e o do histórico DIVIDEM a altura do modal (flex-1 cada) e vão até o rodapé; o cabeçalho
             navy fica, só as linhas rolam. O modal não muda de altura (a altura dele é a da janela). */}
-        {/* CONC-CRIAR-COM-NOTA-02 (OK do Edson, ajuste 3): a caixa das sugestões ENCOLHE ao conteúdo (cabeçalho + linhas), até metade do espaço;
-            o "Procurar no histórico" fica com a sobra (antes: metade em branco com 5 sugestões) */}
-        <div className="mx-3 min-h-0 shrink-0 overflow-auto rounded-sm border bg-card" data-testid="sugestoes-lista"
-          style={{ minHeight: PISO_DE_CADA_LISTA, height: `min(${ALTURA_DO_CABECALHO_PARA_CASAR + Math.max(1, linhasDasSugestoes.length) * ALTURA_DA_LINHA_PARA_CASAR + 4}px, calc((100vh - 220px) / 2))` }}>
+        <div className="mx-3 min-h-0 flex-1 overflow-auto rounded-sm border bg-card" style={{ minHeight: PISO_DE_CADA_LISTA }} data-testid="sugestoes-lista">
           <div style={{ minWidth: PISO_PARA_CASAR }} data-testid="sugestoes-piso">
           <TabelaDaLista larguras={largurasDasSugestoes} cabecalho={<CabecalhoParaCasar colunas={colunasDasSugestoes} prefixo="sugestoes"
             ordenar={(k) => setOrdemSug((o) => proximaOrdemParaCasar(o, k))} seta={(k) => (ordemSug?.coluna === k ? (ordemSug.sentido === 'asc' ? '↑' : '↓') : '')} />}>
@@ -190,7 +187,7 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
         </div>
 
         {onCriarIgual && (
-          <div className="mx-3 flex min-h-0 shrink-0 flex-col">
+          <div className="mx-3 flex min-h-0 flex-1 flex-col" style={{ minHeight: PISO_DE_CADA_LISTA + 32 }}>
             <ProcurarNoHistorico clienteId={clienteId ?? null} onCriarIgual={onCriarIgual} campoRef={campoProcurar} preencher
               onCasar={onCasarDoHistorico} contaDoExtrato={{ id: contaBancariaId ?? null, nome: nomeConta ?? null }}
               movimento={{ data: extrato.data, historico: extrato.historico, valor: extrato.valor }}
