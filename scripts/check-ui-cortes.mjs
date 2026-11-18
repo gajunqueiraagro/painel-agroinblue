@@ -203,6 +203,11 @@ const CENARIOS = [
   { nome: 'contrato-consorcio', url: 'tela=contrato&v=consorcio', tamanhos: TAMANHOS_DO_CONTRATO },
   /* FIN-FINANC-LAYOUT-03 (Chat 12/11 18:35/22:00) — a lista de Financiamentos na régua única: 10/9 abaixo de 1.350px e 11/10 acima, todas as
      colunas, sem rolagem horizontal de 1.126px para cima (a regra vale dali para cima); com os tamanhos reais do proto e os encerrados abertos */
+  /* COMPRAS-PARC-NF-01 — a aba Compras parceladas com a coluna NF (25 compras, nomes de 60 letras, notas de 9 dígitos, o chip "NF 288 +5") e o
+     minimodal das notas aberto */
+  { nome: 'compras-parceladas-nf', url: 'tela=compras-parceladas', antes: async (p) => { await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="chip-nf"]').first().waitFor(); } },
+  { nome: 'compras-parceladas-nf-notas', url: 'tela=compras-parceladas', tamanhos: [[918, 768], [1366, 768]],
+    antes: async (p) => { await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="chip-nf"]').first().click(); await p.locator('[data-testid="minimodal-notas"]').waitFor(); } },
   { nome: 'financiamentos-lista', url: 'tela=financiamentos-lista&enc=1', tamanhos: [[1126, 579], [1240, 700], [1349, 768], [1366, 768], [1440, 900]] },
   /* FIN-GUARDA-CHUVA G2 — o grupo da linha com o ✎ e a faixa (maiores valores); o modal da linha (editar, nova, com a revisão feita) */
   { nome: 'financiamentos-linha-grupo', url: 'tela=financiamentos-lista&linha=1', tamanhos: [[1126, 579], [1240, 700], [1349, 768], [1366, 768], [1440, 900]] },
