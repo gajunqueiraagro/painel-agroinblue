@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SeletorPeriodo, type TomDoMes } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { usePrecoMercado, BLOCOS_PRECO, type PrecoMercadoItem } from '@/hooks/usePrecoMercado';
@@ -28,6 +29,20 @@ const STATUS_CONFIG = {
 };
 
 const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+/** UI-MESES-PADRAO-01 — o status do mês (`preco_mercado_status`) no ponto da régua: validado = ok · parcial/rascunho = pend · sem = nada. */
+export function tomDoStatusDoPreco(st: string | undefined): TomDoMes | undefined {
+  if (st === 'validado') return { estado: 'ok', title: 'Validado' };
+  if (st === 'parcial') return { estado: 'pend', title: 'Parcial' };
+  if (st === 'rascunho') return { estado: 'pend', title: 'Rascunho' };
+  return undefined;
+}
+
+const LEGENDA_DO_PRECO: { estado: 'ok' | 'pend' | 'err' | 'fut'; rotulo: string }[] = [
+  { estado: 'ok', rotulo: 'Validado' },
+  { estado: 'pend', rotulo: 'Parcial / rascunho' },
+  { estado: 'fut', rotulo: 'Futuro' },
+];
 
 /** Extrai o peso médio (kg) a partir do nome da categoria */
 const getPesoMedio = (categoria: string): number => {
@@ -117,15 +132,13 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   const agioColor = (val: number) =>
     val > 0 ? 'text-emerald-600' : val < 0 ? 'text-red-600' : 'text-muted-foreground';
 
-  const getMesButtonClass = (mesVal: string) => {
-    const isActive = mes === mesVal;
-    if (isActive) return 'bg-primary text-primary-foreground shadow-sm';
-    const key = `${ano}-${mesVal}`;
-    const st = statusAno[key];
-    if (st === 'validado') return 'bg-emerald-100 text-emerald-700 border border-emerald-300';
-    if (st === 'parcial' || st === 'rascunho') return 'bg-amber-100 text-amber-700 border border-amber-300';
-    return 'text-muted-foreground hover:bg-muted hover:text-foreground';
-  };
+  /* UI-MESES-PADRAO-01 — a cor da régua vira o ponto do mês (a MESMA leitura de `statusAno`) */
+  const tomPorMesDoPreco: Record<number, TomDoMes> = {};
+  MESES_ABREV.forEach((_, i) => {
+    const mesVal = String(i + 1).padStart(2, '0');
+    const tom = tomDoStatusDoPreco(statusAno[`${ano}-${mesVal}`]);
+    if (tom) tomPorMesDoPreco[i + 1] = tom;
+  });
 
   const renderFrigorifico = () => (
     <Card className="flex-1 min-w-0">
@@ -258,30 +271,21 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
         <Card>
           <CardContent className="p-2">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className="w-[68px] h-7 text-[11px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {anos.map(a => (
-                    <SelectItem key={a} value={a}>{a}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <div className="flex gap-0.5">
-                {MESES_ABREV.map((m, i) => {
-                  const mesVal = String(i + 1).padStart(2, '0');
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => setMes(mesVal)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-all ${getMesButtonClass(mesVal)}`}
-                    >
-                      {m}
-                    </button>
-                  );
-                })}
+              {/* UI-MESES-PADRAO-01 (D2) — o ano e a régua dos meses são o `SeletorPeriodo` da casa (o Select do ano mexia no MESMO
+                  `ano`; a lista é a mesma): validado = ok, parcial/rascunho = pend. */}
+              <div className="min-w-0 flex-1">
+                <SeletorPeriodo
+                  modo="ano-mes"
+                  modoUnico
+                  anos={anos}
+                  periodo={mesUnico(Number(ano), Number(mes))}
+                  onPeriodoChange={(p) => {
+                    if (String(p.de.ano) !== ano) { setAno(String(p.de.ano)); return; }
+                    setMes(String(p.de.mes).padStart(2, '0'));
+                  }}
+                  tomPorMes={tomPorMesDoPreco}
+                  legenda={LEGENDA_DO_PRECO}
+                />
               </div>
 
               <Badge variant="outline" className={`ml-auto text-[9px] px-1.5 py-0 ${stCfg.color}`}>

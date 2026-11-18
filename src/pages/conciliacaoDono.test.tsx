@@ -902,15 +902,15 @@ describe('P166 — a tela da Conciliação sem CAIXA ALTA, abas e o Resumo do m�
     expect(container.querySelectorAll('[class*="uppercase"], [class*="tracking-"]').length).toBe(1);
   });
 
-  it('as cinco abas com só a 1ª letra maiúscula; a aberta branca com o traço navy embaixo', async () => {
+  it('as cinco abas com só a 1ª letra maiúscula; a aberta ENCAIXA no corpo (UI-MESES-PADRAO-01: a cor do corpo, texto navy)', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
     const abas = [...document.querySelectorAll('button[data-aba]')];
     expect(abas.map((a) => a.textContent)).toEqual(['Importar banco', 'Casar lançamentos', 'Enriquecer (Excel)', 'Extrato gerencial', 'Conciliação']);
     const aberta = abas.find((a) => a.getAttribute('data-aba') === 'conciliacao')!;
-    expect(aberta.className).toContain('bg-card');
-    expect(aberta.className).toContain('inset_0_-2px_0_hsl(var(--primary))');
-    for (const a of abas.filter((x) => x !== aberta)) expect(a.className).not.toContain('inset_0_-2px_0');
+    expect(aberta.className).toContain('bg-corpo');
+    expect(aberta.className).toContain('text-navy');
+    for (const a of abas.filter((x) => x !== aberta)) expect(a.className).not.toContain('bg-corpo');
     /* o mesmo peso em todas: trocar de aba não muda a largura de nenhuma */
     expect(new Set(abas.map((a) => (a.className.match(/font-(medium|bold|semibold|normal)/) ?? [''])[0]))).toEqual(new Set(['font-medium']));
   });

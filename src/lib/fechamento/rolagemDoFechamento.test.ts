@@ -31,7 +31,7 @@ describe('(1) a linha "Cards | Mapa" presa abaixo do cabeçalho fixo', () => {
     soltar();
     expect(CLASSE_LINHA_PRESA).toMatch(/\bsticky\b/);
     expect(CLASSE_LINHA_PRESA).toContain(`top-[var(${VAR_TOPO}`);
-    expect(CLASSE_LINHA_PRESA).toMatch(/\bbg-background\b/);
+    expect(CLASSE_LINHA_PRESA).toMatch(/\bbg-corpo\b/);   // UI-MESES-PADRAO-01: opaco, na cor do corpo (A21)
   });
 });
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
 import { fonteDoNomeDoCard, nomesAteOito } from '@/lib/fechamento/nomesAteOito';
 import { CLASSE_LINHA_PRESA, medirTopo, soNaPrimeiraLeitura } from '@/lib/fechamento/rolagemDoFechamento';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
@@ -1238,7 +1239,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   return (
     <div ref={setAreaDaTela} className="pb-24" data-testid="area-do-fechamento">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
-      <div ref={setTopoFixo} className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2 max-[999px]:px-2">
+      <div ref={setTopoFixo} className="sticky top-0 z-20 bg-corpo px-3 pb-2 max-[999px]:px-2">
+        {/* UI-MESES-PADRAO-01 (D1 + revisão 11:28/11:30) — o cabeçalho navy em UMA linha, com a fita de meses NELE (os pontos de estado:
+            fechado = verde, rascunho/pendente = âmbar). A faixa clara saiu: o corpo é o `--corpo` e os controles ficam num card branco. */}
+        <CabecalhoDaTela className="-mx-3 mb-2 max-[999px]:-mx-2" titulo="Fechamento de pastos" subtitulo="Cabeças conferidas pasto a pasto"
+          meses={<FechamentoFitaMeses anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp} mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} statusPorMes={statusPorMes} />} />
+        <div className="rounded-lg border border-[#D3D9E2] bg-card p-2 shadow-[0_1px_2px_rgba(15,31,58,.06)]" data-testid="fechamento-controles">
         {/* FECH-FAIXA-01 — a faixa do fechamento do mês: a 1ª linha, no MESMO lugar nas três telas (Fechamento, Valor, Mapa do rebanho) */}
         {/* VR-PRECO-EDITAR-01 ampliado — a trava do MÊS na linha da faixa (um Desbloquear para todos os pastos + o Valor do Rebanho) */}
         <div className="mb-1.5 flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><FaixaDoFechamento estado={faixaDoMes} atual="pastos" abrir={etapasDoFechamento} /></div>{fazendaAtual?.id && fazendaAtual.id !== '__global__' && <MasterLockBanner anoMes={anoMes} naFaixa />}</div>
@@ -1367,22 +1373,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               tabela numa coluna de 530px; os botões À DIREITA da tabela, em 2 colunas, dentro da altura da coluna (nunca ditam o topo) */}
           <div className="flex min-w-0 items-start justify-center gap-3 overflow-x-auto max-[999px]:gap-1" data-testid="topo-do-fechamento">
           <div className="flex w-[530px] flex-none flex-col gap-2">
-            {/**
-              * ANO + FITA NA MESMA LINHA — FECH-AREA-ANO-01 (Gabriel, 11/09/2026).
-              *
-              * ⚠ O SELETOR NÃO É NOVO, É O QUE VOLTOU. O estado `anoFiltro` e a lista
-              * `anosDisp` sempre estiveram aqui; o que sumiu foi a PORTA. Ela vinha da
-              * `V2FilterBar` do shell, que desmontou no PR-BARRA-UNICA-01a levando junto as
-              * props de valor inicial — `filtroAnoInicial` entre elas. Desde então
-              * `setAnoFiltro` não tinha nenhum chamador e a tela vivia presa no ano corrente:
-              * quem quisesse ver amendoim em 2023 não tinha por onde pedir.
-              * ⚠ A FITA NÃO SE MEXE — regra A23. O card de ano tem largura FIXA (56px) e há
-              * um espelho da mesma largura do outro lado: a fita continua centrada
-              * exatamente onde estava, e trocar 2026 por 2023 não muda nada de tamanho.
-              * Sem o espelho, os doze meses andariam 30px para a direita.
-              */}
-            <FechamentoFitaMeses anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp} alinhadaAEsquerda
-              mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} statusPorMes={statusPorMes} />
+            {/* UI-MESES-PADRAO-01: o ano + a fita (FECH-AREA-ANO-01 / FECH-TOPO-02) subiram para o cabeçalho navy. */}
 
             <TooltipProvider delayDuration={150}>
             <table className="text-[10px] border-collapse table-fixed w-[530px] min-w-[530px] max-w-[530px]">
@@ -1547,6 +1538,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             </div>
           </div>
 
+        </div>
         </div>
       </div>
 

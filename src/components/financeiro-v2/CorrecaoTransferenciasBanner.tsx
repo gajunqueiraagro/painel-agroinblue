@@ -1,158 +1,51 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { Button } from '@/components/ui/button';
-import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
-import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Info, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { AlertTriangle } from 'lucide-react';
+import { CorrecaoTransferenciasDialog } from '@/components/financeiro-v2/CorrecaoTransferenciasDialog';
 import type { ContaBancariaV2 } from '@/hooks/useFinanceiroV2';
-import { formatMoeda } from '@/lib/calculos/formatters';
-
-interface TransferenciaPendente {
-  id: string;
-  descricao: string | null;
-  valor: number;
-  data_pagamento: string | null;
-  data_competencia: string;
-  conta_bancaria_id: string | null;
-  ano_mes: string;
-  fazenda_id: string;
-}
 
 interface Props {
   contas: ContaBancariaV2[];
   onFixed: () => void;
 }
 
-function contaLabel(c: ContaBancariaV2): string {
-  return (c as any).nome_exibicao || c.nome_conta;
-}
-
+/**
+ * UI-MESES-PADRAO-01 (Gabriel 11:25, FILA 11:33) — a REGRA DA CASA: pendência como esta é um AVISO PEQUENO na faixa dos totais (o mesmo
+ * chip âmbar dos `avisos-do-filtro`, P94) e o conserto abre em MODAL próprio — nunca um bloco dentro da tela empurrando a tabela.
+ * O modal é o que já existia (`CorrecaoTransferenciasDialog`: "1 de N · conta destino · ‹ › · Pular · Salvar"); aqui só se CONTA.
+ */
 export function CorrecaoTransferenciasBanner({ contas, onFixed }: Props) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
+  const [qtde, setQtde] = useState(0);
+  const [aberto, setAberto] = useState(false);
 
-  const [pendentes, setPendentes] = useState<TransferenciaPendente[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [selectedDestino, setSelectedDestino] = useState<string>('');
-  const [saving, setSaving] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-
-  const loadPendentes = useCallback(async () => {
+  const contar = useCallback(async () => {
     if (!clienteId) return;
-    setLoading(true);
-    const { data, error } = await supabase
+    const { count, error } = await supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, descricao, valor, data_pagamento, data_competencia, conta_bancaria_id, ano_mes, fazenda_id')
+      .select('id', { count: 'exact', head: true })
       .eq('cliente_id', clienteId)
       .eq('tipo_operacao', '3-Transferências')
       .eq('cancelado', false)
-      .is('conta_destino_id', null)
-      .order('data_pagamento', { ascending: true, nullsFirst: false })
-      .order('data_competencia', { ascending: true });
-
-    setPendentes((data as TransferenciaPendente[]) || []);
-    setCurrentIdx(0);
-    setSelectedDestino('');
-    setLoading(false);
-    if (error) console.error(error);
+      .is('conta_destino_id', null);
+    if (error) { console.error(error); return; }
+    setQtde(count ?? 0);
   }, [clienteId]);
 
-  useEffect(() => { loadPendentes(); }, [loadPendentes]);
+  useEffect(() => { void contar(); }, [contar]);
 
-  const current = pendentes[currentIdx] || null;
-  const totalPendente = pendentes.length;
-
-  // Don't render if no pending or dismissed or loading
-  if (loading || totalPendente === 0 || dismissed) return null;
-
-  const contaOrigemNome = current ? contas.find(c => c.id === current.conta_bancaria_id) : null;
-
-  const handleSalvar = async () => {
-    if (!current || !selectedDestino) return;
-    if (current.conta_bancaria_id && selectedDestino === current.conta_bancaria_id) {
-      toast.error('Conta destino não pode ser igual à conta origem.');
-      return;
-    }
-    setSaving(true);
-    const { error } = await supabase
-      .from('financeiro_lancamentos_v2')
-      .update({ conta_destino_id: selectedDestino } as any)
-      .eq('id', current.id);
-    setSaving(false);
-    if (error) { toast.error('Erro ao atualizar: ' + error.message); return; }
-    toast.success('Conta destino atualizada');
-    const newPendentes = pendentes.filter((_, i) => i !== currentIdx);
-    setPendentes(newPendentes);
-    if (currentIdx >= newPendentes.length) setCurrentIdx(Math.max(0, newPendentes.length - 1));
-    setSelectedDestino('');
-    onFixed();
-  };
-
-  const handlePular = () => {
-    if (currentIdx < pendentes.length - 1) { setCurrentIdx(prev => prev + 1); setSelectedDestino(''); }
-  };
-  const handleVoltar = () => {
-    if (currentIdx > 0) { setCurrentIdx(prev => prev - 1); setSelectedDestino(''); }
-  };
-
+  if (qtde === 0) return null;
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-600" />
-          <span className="text-xs font-semibold text-amber-800">
-            Corrigir Transferências sem Destino
-          </span>
-          <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-400">
-            {currentIdx + 1} de {totalPendente}
-          </Badge>
-        </div>
-        <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-amber-600" onClick={() => setDismissed(true)}>
-          <X className="h-3 w-3" />
-        </Button>
-      </div>
-
-      {/* Info + form inline */}
-      {current && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
-          <span className="text-amber-800">
-            <strong>{current.descricao || '(Sem descrição)'}</strong> · {formatMoeda(current.valor)} · {current.data_pagamento || current.data_competencia} · Mês: {current.ano_mes}
-          </span>
-          <span className="text-amber-700">
-            Origem: <strong>{contaOrigemNome ? contaLabel(contaOrigemNome) : 'N/D'}</strong>
-          </span>
-
-          <div className="flex items-center gap-1.5 ml-auto">
-            {/* PR-H2c — ContaBancariaSelect compartilhado (agrupado por tipo_conta + dark/glass). */}
-            <ContaBancariaSelect
-              value={selectedDestino}
-              onValueChange={setSelectedDestino}
-              contas={contas}
-              excluirIds={current?.conta_bancaria_id ? [current.conta_bancaria_id] : []}
-              placeholder="Conta destino"
-              className="h-6 text-[10px] w-[180px] bg-white"
-            />
-
-            <div className="flex gap-0.5">
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleVoltar} disabled={currentIdx === 0}>
-                <ChevronLeft className="h-3 w-3" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handlePular} disabled={currentIdx >= pendentes.length - 1}>
-                <ChevronRight className="h-3 w-3" />
-              </Button>
-            </div>
-
-            <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={handlePular}>Pular</Button>
-            <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSalvar} disabled={!selectedDestino || saving}>
-              {saving ? 'Salvando...' : 'Salvar'}
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
+    <>
+      <button type="button" onClick={() => setAberto(true)} data-testid="aviso-transferencias"
+        title="Transferências sem a conta destino: clique para corrigir uma a uma"
+        className="inline-flex h-4 shrink-0 items-center gap-0.5 whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-1 text-[9.5px] text-amber-900">
+        <AlertTriangle className="h-2.5 w-2.5" /> {qtde} {qtde === 1 ? 'transferência sem destino' : 'transferências sem destino'}
+      </button>
+      <CorrecaoTransferenciasDialog open={aberto} onClose={() => { setAberto(false); void contar(); }} contas={contas}
+        onFixed={() => { void contar(); onFixed(); }} />
+    </>
   );
 }

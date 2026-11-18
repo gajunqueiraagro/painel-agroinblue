@@ -29,9 +29,9 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { salvarValorRebanhoMeta, type ValorRebanhoMetaItem } from '@/hooks/useValorRebanhoMeta';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { SeletorPeriodo, type TomDoMes } from '@/v2/components/SeletorPeriodo';
 import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
-import { anoInteiro } from '@/v2/lib/periodo';
+import { anoInteiro, mesUnico } from '@/v2/lib/periodo';
 
 interface Props {
   onBack?: () => void;
@@ -62,6 +62,20 @@ const MESES_SHORT = [
 ];
 
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+
+/** UI-MESES-PADRAO-01 — o status do mês da meta de preço no ponto da régua: validado = ok · parcial/rascunho = pend · sem = nada. */
+export function tomDoStatusDaMetaPreco(st: string | undefined): TomDoMes | undefined {
+  if (st === 'validado') return { estado: 'ok', title: 'Validado' };
+  if (st === 'parcial') return { estado: 'pend', title: 'Parcial' };
+  if (st === 'rascunho') return { estado: 'pend', title: 'Rascunho' };
+  return undefined;
+}
+
+const LEGENDA_DA_META_PRECO: { estado: 'ok' | 'pend' | 'err' | 'fut'; rotulo: string }[] = [
+  { estado: 'ok', rotulo: 'Validado' },
+  { estado: 'pend', rotulo: 'Parcial / rascunho' },
+  { estado: 'fut', rotulo: 'Futuro' },
+];
 
 const STATUS_CONFIG = {
   rascunho: { label: 'Rascunho', color: 'bg-amber-500/20 text-amber-700 border-amber-300', icon: AlertTriangle },
@@ -497,15 +511,12 @@ export function MetaPrecoTab({ onBack }: Props) {
   const uVarArrobasEstIniAno = calcVar(totals.totalArrobas, compDezAnt?.totalArrobas);
   const uVarArrobasEstAnoAnt = calcVar(totals.totalArrobas, compAnoAnt?.totalArrobas);
 
-  const getMesButtonClass = (mesVal: string) => {
-    const key = `${ano}-${mesVal}`;
-    const st = statusAno[key];
-    const isSelected = mes === mesVal;
-    if (isSelected) return 'bg-orange-500 text-white shadow-sm';
-    if (st === 'validado') return 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200';
-    if (st === 'parcial' || st === 'rascunho') return 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200';
-    return 'text-muted-foreground hover:bg-muted';
-  };
+  /* UI-MESES-PADRAO-01 — a cor da régua vira o ponto do mês (a MESMA leitura de `statusAno`) */
+  const tomPorMesDaMeta: Record<number, TomDoMes> = {};
+  MESES_SHORT.forEach(m => {
+    const tom = tomDoStatusDaMetaPreco(statusAno[`${ano}-${m.key}`]);
+    if (tom) tomPorMesDaMeta[Number(m.key)] = tom;
+  });
 
   const hasMetaData = metaRowsByCategoria.size > 0;
 
@@ -521,9 +532,8 @@ export function MetaPrecoTab({ onBack }: Props) {
 
       {/* Toolbar — compact */}
       <div className="flex gap-1 items-center flex-wrap">
-        {/* ⚠ O `<Select>` LOCAL SAIU — PR-BARRA-UNICA-01b: mesmo controle de toda tela. */}
-        <SeletorPeriodo modo="ano" anos={anos} periodo={periodo} onPeriodoChange={setPeriodo} />
-
+        {/* ⚠ O `<Select>` LOCAL SAIU — PR-BARRA-UNICA-01b: mesmo controle de toda tela.
+            UI-MESES-PADRAO-01: o ano desceu para o seletor da régua dos meses (abaixo) — um controle só para os dois. */}
         <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-5 ${stCfg.color}`}>
           <StIcon className="h-2.5 w-2.5 mr-0.5" />
           {stCfg.label}
@@ -589,18 +599,20 @@ export function MetaPrecoTab({ onBack }: Props) {
         </div>
       </div>
 
-      {/* Month ruler */}
-      <div className="flex gap-0.5 bg-orange-50 dark:bg-orange-950/20 rounded p-0.5 border border-orange-200 dark:border-orange-900/30">
-        {MESES_SHORT.map(m => (
-          <button
-            key={m.key}
-            onClick={() => setMes(m.key)}
-            className={`flex-1 text-center text-[10px] font-semibold py-0.5 rounded transition-colors ${getMesButtonClass(m.key)}`}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
+      {/* Month ruler — UI-MESES-PADRAO-01 (D2): o ano (o MESMO `periodo` da URL, sempre o ano inteiro: o mês NÃO entra nela) e os doze
+          meses no `SeletorPeriodo` da casa; o mês aberto no azul padrão (era laranja); validado = ok, parcial/rascunho = pend. */}
+      <SeletorPeriodo
+        modo="ano-mes"
+        modoUnico
+        anos={anos}
+        periodo={mesUnico(Number(ano), Number(mes))}
+        onPeriodoChange={(p) => {
+          if (String(p.de.ano) !== ano) { setPeriodo(anoInteiro(p.de.ano)); return; }
+          setMes(String(p.de.mes).padStart(2, '0'));
+        }}
+        tomPorMes={tomPorMesDaMeta}
+        legenda={LEGENDA_DA_META_PRECO}
+      />
 
       {!hasMetaData && (
         <div className="flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-700 dark:text-orange-400 rounded px-2 py-0.5 border border-orange-500/30">

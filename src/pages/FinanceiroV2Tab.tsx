@@ -1,4 +1,5 @@
 import { casaNaBusca } from '@/lib/texto/busca';
+import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
 import type { ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -1950,6 +1951,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        FIN-V2-DESEMPENHO-01b: o Ampliado desconta a barra do topo (32px) — com 100vh−8 a página rolava 24px e o rodapé da página
        (agora DENTRO do quadro) ficava abaixo da janela. */
     <div className={cn("relative px-2", modoIntensivo ? "flex flex-col h-[calc(100vh-40px)]" : "space-y-1 pb-20")}>
+      {/* UI-MESES-PADRAO-01 (D1; revisão 11:33) — o cabeçalho navy da casa em UMA linha (título + subtítulo curto). Os filtros ficam COMO
+          ESTÃO (Gabriel 11:25), no card branco logo abaixo. `-mx-2` encosta a faixa nas bordas. No Ampliado ele não entra (a altura é da tabela). */}
+      {!modoIntensivo && (
+        <CabecalhoDaTela className="-mx-2" titulo="Lançamentos financeiros" subtitulo="Previsto, programado e realizado" />
+      )}
       {/* FILTERS */}
       {/* ⚠ CANTO RETO NOS DOIS CARDS — FIN-LISTA-VISUAL-05. O raio de 8px comia a largura
           justamente nas pontas, onde moram a primeira e a última coluna, e um card
@@ -2650,6 +2656,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           <span data-testid="avisos-do-filtro" data-desloca className="flex h-5 min-w-40 flex-1 basis-40 items-center"
             title={[...chipsDaOC.map(ch => ch.texto), ...avisosDoFiltro].join('\n') || undefined}>
            <span data-desloca-livre className="uma-linha-que-rola flex min-w-0 flex-1 items-center gap-1">
+            {podeConsultar && <CorrecaoTransferenciasBanner contas={hook.contasBancarias} onFixed={() => { void listaV2.recarregar(); }} />}
             {avisosDoFiltro.map((frase, i) => (
               <span key={frase} data-testid="aviso-do-filtro" className="inline-flex shrink-0 items-center gap-0.5 text-[9.5px] text-amber-800">
                 {frase}
@@ -2734,12 +2741,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       {mode === 'list' && podeConsultar && (
         <>
-          {!modoIntensivo && (
-            <CorrecaoTransferenciasBanner
-              contas={hook.contasBancarias}
-              onFixed={() => { void listaV2.recarregar(); }}
-            />
-          )}
+          {/* UI-MESES-PADRAO-01 (11:33): o bloco amarelo das transferências virou o aviso pequeno da faixa dos totais (abre o modal) */}
            {/* ⚠ `rolagem-fina rolagem-sem-tampar` — FIN-LISTA-SCROLLBAR-01. A barra desenhava
                 POR CIMA da última linha e da coluna de ações, e clicar no lançamento de baixo
                 virava clicar na barra. As duas classes resolvem coisas diferentes: a fina é a

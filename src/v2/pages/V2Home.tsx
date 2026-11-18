@@ -16,8 +16,8 @@ import type { StatusPilar } from '@/hooks/useStatusPilares';
 import { useStatusPilaresAno, type StatusCelulaAno } from '@/hooks/useStatusPilaresAno';
 import type { V2Section } from '@/v2/lib/navGrupos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
-import { anoInteiro } from '@/v2/lib/periodo';
+import { SeletorPeriodo, type TomDoMes } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 /* VISAO-GERAL-02 — as peças da Visão Geral nova (mock aprovado, 03/11/2026) */
 import { DESTINO_DO_CAIXA } from '@/v2/pages/visaoGeral/caixaAbreVisaoFinanceira';
 import { CartoesDoTopo, type CartaoVG } from '@/v2/pages/visaoGeral/CartoesDoTopo';
@@ -238,18 +238,7 @@ function somaLinhas(valores: (number | null)[]): number {
 
    Verde exige TODAS as fazendas, por decisao explicita: "se tem 1 ou 12 fazendas, tem
    que fechar todas todo mes". Verde raro e informacao, nao defeito de UX. */
-/* VISAO-GERAL-03 — a régua compacta: cada mês na medida de um chip pequeno da Geo pastos (20 px de alto, 10 px), largura fixa (não estica
-   na tela inteira) */
-const CELULA_MES = 'inline-flex h-[20px] w-[34px] flex-none items-center justify-center rounded border text-[10px] font-semibold';
-
 type CorMes = 'verde' | 'ambar' | 'vermelho' | 'cinza';
-
-const COR_CELULA: Record<CorMes, string> = {
-  verde:    'bg-emerald-600/15 text-emerald-700 border-emerald-600/30',
-  ambar:    'bg-amber-500/15   text-amber-700   border-amber-500/30',
-  vermelho: 'bg-red-500/15     text-red-700     border-red-500/30',
-  cinza:    'bg-muted          text-muted-foreground border-border/40',
-};
 
 /* Pilar que nao existe ou nao se aplica sai da conta; o que sobra tem que ser oficial. */
 function pilarOk(s: StatusPilar): boolean {
@@ -266,58 +255,33 @@ function corDoMes(celulas: StatusCelulaAno[]): CorMes {
   return 'ambar';
 }
 
-function ReguaMeses({ celulas, mesSelecionado, ano, loading, erro, onMesChange, meses }: {
-  celulas: StatusCelulaAno[];
-  mesSelecionado: number;
-  ano: number;
-  loading: boolean;
-  erro: string | null;
-  onMesChange?: (mes: string) => void;
-  meses: string[];
-}) {
-  /* Skeleton com os ROTULOS REAIS em text-transparent: a altura de carregamento e a
-     altura final por construcao, e nao uma estimativa mantida a mao. */
-  if (loading) {
-    return (
-      <div className="flex flex-none gap-0.5" data-testid="vg-regua-meses">
-        {meses.map(m => (
-          <span key={m} className={`${CELULA_MES} ${COR_CELULA.cinza} text-transparent animate-pulse text-center`}>{m}</span>
-        ))}
-      </div>
-    );
+/* UI-MESES-PADRAO-01 (Gabriel 18/11, D2) — a régua dos meses virou o `SeletorPeriodo` da casa. A REGRA DE COR acima (corDoMes) é a
+   MESMA; aqui ela só se traduz para o ponto do mês: verde = ok, âmbar = pend, vermelho = err, cinza = sem ponto.
+   Erro do status NAO pode tirar do operador a escolha do mes: sem estado, mas clicavel. Mes futuro continua CLICAVEL. */
+const ESTADO_DA_COR: Record<CorMes, TomDoMes | undefined> = {
+  verde: { estado: 'ok', title: 'Todas as fazendas fecharam' },
+  ambar: { estado: 'pend', title: 'Alguma fazenda fechou, alguma não' },
+  vermelho: { estado: 'err', title: 'Nenhuma fazenda fechou' },
+  cinza: undefined,
+};
+
+export function tomDaReguaDoAno(celulas: StatusCelulaAno[], erro: string | null): Record<number, TomDoMes> {
+  const tom: Record<number, TomDoMes> = {};
+  if (erro !== null) return tom;
+  for (let mm = 1; mm <= 12; mm++) {
+    const doMes = celulas.filter(c => c.mes === mm);
+    const t = ESTADO_DA_COR[corDoMes(doMes)];
+    if (t) tom[mm] = t;
   }
-
-  /* Erro do status NAO pode tirar do operador a escolha do mes. Sem cor, mas clicavel. */
-  const semCor = erro !== null;
-  const hoje = new Date();
-  const mesCorrente = (hoje.getFullYear() === ano) ? hoje.getMonth() + 1 : 0;
-
-  return (
-    <div className="flex flex-none gap-0.5" data-testid="vg-regua-meses">
-      {meses.map((rotulo, i) => {
-        const mm = i + 1;
-        const doMes = celulas.filter(c => c.mes === mm);
-        const cor: CorMes = semCor ? 'cinza' : corDoMes(doMes);
-        const selecionado = mm === mesSelecionado;
-        const corrente = mm === mesCorrente;
-        const realce = selecionado
-          ? ' ring-2 ring-primary'
-          : corrente ? ' ring-1 ring-border font-bold' : '';
-        // Mes futuro continua CLICAVEL: o operador pode querer olhar.
-        return (
-          <button
-            key={rotulo}
-            type="button"
-            onClick={() => onMesChange?.(String(mm))}
-            className={`${CELULA_MES} ${COR_CELULA[cor]}${realce} text-center cursor-pointer hover:opacity-80`}
-          >
-            {rotulo}
-          </button>
-        );
-      })}
-    </div>
-  );
+  return tom;
 }
+
+const LEGENDA_DA_REGUA: { estado: 'ok' | 'pend' | 'err' | 'fut'; rotulo: string }[] = [
+  { estado: 'ok', rotulo: 'Todas fecharam' },
+  { estado: 'pend', rotulo: 'Parcial' },
+  { estado: 'err', rotulo: 'Nenhuma fechou' },
+  { estado: 'fut', rotulo: 'Futuro' },
+];
 
 /* PR-HOME-STATUS-BLOCO-01 — faixa de status de fechamento.
    DISCRETA QUANDO ESTA TUDO FECHADO, e isso e regra, nao economia de pixel: faixa que
@@ -1222,16 +1186,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
   return (
     <>
-      {onAnoChange && (
-        <div className="mb-2 px-1">
-          <SeletorPeriodo
-            modo="ano"
-            periodo={anoInteiro(Number(ano))}
-            onPeriodoChange={(p) => onAnoChange(String(p.de.ano))}
-          />
-        </div>
-      )}
-
     <div className="px-2 pb-3">
       {/* VISAO-GERAL-03 (Gabriel 04/11 06:28) — o cabeçalho é uma faixa pequena, na escala da barra da Geo pastos: o cumprimento numa linha
           de 11 px, o status e "No mês | No ano" (o `Segmentado` de lá, 22 px) ao lado, e a régua compacta dos meses embaixo.
@@ -1258,15 +1212,23 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             </div>
           )}
         </div>
-        <ReguaMeses
-          celulas={gradeEscopo}
-          mesSelecionado={mesNum}
-          ano={anoNum}
-          loading={loadingGradeAno}
-          erro={erroGradeAno}
-          onMesChange={onMesChange}
-          meses={MES_ABREV}
-        />
+        {/* UI-MESES-PADRAO-01 — UM controle para o ano e o mês (o ano que ficava acima do cabeçalho entrou aqui: é o mesmo estado
+            do V2Index). Sem `onAnoChange`, o ano não se troca: a lista oferece só o atual. */}
+        <div data-testid="vg-regua-meses">
+          <SeletorPeriodo
+            modo="ano-mes"
+            modoUnico
+            anos={onAnoChange ? undefined : [ano]}
+            periodo={mesUnico(anoNum, mesNum)}
+            onPeriodoChange={(p) => {
+              if (String(p.de.ano) !== ano) onAnoChange?.(String(p.de.ano));
+              if (p.de.mes !== mesNum) onMesChange?.(String(p.de.mes));
+            }}
+            tomPorMes={tomDaReguaDoAno(gradeEscopo, erroGradeAno)}
+            legenda={erroGradeAno === null ? LEGENDA_DA_REGUA : undefined}
+            carregando={loadingGradeAno}
+          />
+        </div>
       </div>
       <div className="flex flex-col gap-1.5" data-testid="vg-pilha">
 

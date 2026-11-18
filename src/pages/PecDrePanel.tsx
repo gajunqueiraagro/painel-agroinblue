@@ -703,7 +703,8 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
        saem de vista. `overflow-auto` sozinho não basta — ele só age depois que o pai aceita
        encolher. */
     <div ref={cartaoRef} data-desloca-livre="" data-testid="dre-grade-pec"
-      className="min-w-0 max-w-full overflow-auto rounded-lg border border-border/60 bg-card"
+      /* UI-MESES-PADRAO-01 (revisão 11:28): o cartão ACOMPANHA a tabela (`w-fit`) — sem o vão branco à direita; larga demais, rola aqui */
+      className="w-fit min-w-0 max-w-full overflow-auto rounded-lg border border-border/60 bg-card"
       style={alturaCartao ? { maxHeight: alturaCartao } : undefined}>
       {/* ⚠ A MESMA RÉGUA DA LAVOURA: `leading-none`, px fixos e largura igual à soma das colunas.
           Ver a nota no `AgriDreLavouraTab` — foi ela que fez as alturas declaradas valerem. */}
