@@ -24,13 +24,15 @@ export const ALTURA_DA_LINHA_PARA_CASAR = 19;
 export const ALTURA_DO_CABECALHO_PARA_CASAR = 18;
 /* CONC-CRIAR-COM-NOTA-02 D-g (Gabriel 18/11) — depois do Valor, "Δ valor" (banco − lançamento) e "Δ dias" (pgto. no banco − vencimento), só quando
    a lista tem o movimento do banco de referência (`colunas.deltas`) */
-export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 46, 46, 46, null, null, 30, 78, 94, 80, 38, 60, 120, 62];
+/* 12:02 (a seta ⇅ sempre visível): Faz. 30 → 36 e a reserva de Descrição/Fornecedor 60 → 62 (o rótulo + a seta); o Motivo 120 → 110 paga (o selo
+   tem "…" e o inteiro no title) — o piso segue 848 */
+export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 46, 46, 46, null, null, 36, 78, 94, 80, 38, 60, 110, 62];
 export const N_COLUNAS_PARA_CASAR = COLUNAS_PARA_CASAR.length;
 /** O piso das duas listas: as fixas + 2 × 110 para Descrição e Fornecedor (830px: cabe no modal a 1024 e a 135% de 1240, ~848 úteis — sem
  *  rolagem de lado). Só abaixo dele (janela < ~900px) a lista rola de lado DENTRO da caixa dela. */
 /* CONC-CRIAR-COM-NOTA-02 D-g: com Δ valor (80: "+99.999.999,99" a 9px pede 79) e Δ dias (38) o piso segue em 848 com Descrição e Fornecedor
    a 2 × 60 (o rótulo "Fornecedor" pede 60) — em linha única ("…" + `title`), não quebram mais */
-export const PISO_PARA_CASAR = COLUNAS_PARA_CASAR.reduce<number>((t, w) => t + (w ?? 0), 0) + 120;
+export const PISO_PARA_CASAR = COLUNAS_PARA_CASAR.reduce<number>((t, w) => t + (w ?? 0), 0) + 124;
 
 /** UI-FONTE-GATE-01 (Chat 12/11 15:22) — Faz. e NF só existem quando alguma linha DESTA lista tem o dado: vazias, a largura delas vai
  *  para Descrição e Fornecedor (as duas `null`). A ordem das colunas não muda. */
@@ -86,13 +88,19 @@ export function CabecalhoParaCasar({ ordenar, seta, prefixo, colunas = TODAS_AS_
 }) {
   /* UI-FONTE-GATE-01 (Gabriel 12/11 13:38): o rótulo alinhado como a coluna — Descrição, Fornecedor e Motivo à esquerda; NF e Valor à
      direita; datas, Faz. e Status no centro (a célula é centrada) */
+  const marca = (c: ColunaQueOrdena) => {
+    const s = seta?.(c) ?? '';
+    return s ? s : <span className="opacity-50" data-seta-inativa="">⇅</span>;
+  };
   const th = (c: ColunaQueOrdena, rotulo: string, recuo: 'px-0.5' | 'px-1', fixa?: string, title?: string, alinhar: 'left' | 'center' | 'right' = 'center') => (
     <ThDaLista recuo={recuo} ordenar={ordenar ? () => ordenar(c) : undefined} fixa={fixa} title={title} alinhar={alinhar}
       data-testid={ordenar && prefixo ? `${prefixo}-ordenar-${c}` : undefined}>
       {/* a seta não ocupa largura (o cabeçalho não anda nem quebra ao trocar a ordem; "Faz." tem 30px): ela fica no recuo da célula */}
       {/* UI-FONTE-GATE-01: no rótulo à DIREITA (Valor, NF) a seta vai à ESQUERDA dele — depois do texto ela passava do recuo e vazava */}
-      {ordenar && alinhar === 'right' ? <span className="relative inline-block w-0"><span className="absolute right-[1px] top-1/2 -translate-y-1/2">{seta?.(c) ?? ''}</span></span> : null}
-      {rotulo}{ordenar && alinhar !== 'right' ? <span className="relative inline-block w-0"><span className="absolute left-[1px] top-1/2 -translate-y-1/2">{seta?.(c) ?? ''}</span></span> : null}
+      {/* homologação Edson 12:02 (Gabriel): a seta SEMPRE visível nas colunas que ordenam — ⇅ apagada; ↑/↓ cheia na coluna ativa (sem ela o
+          usuário não sabe que ordena; como na Lançamentos) */}
+      {ordenar && alinhar === 'right' ? <span className="relative inline-block w-0"><span className="absolute right-[1px] top-1/2 -translate-y-1/2">{marca(c)}</span></span> : null}
+      {rotulo}{ordenar && alinhar !== 'right' ? <span className="relative inline-block w-0"><span className="absolute left-[1px] top-1/2 -translate-y-1/2">{marca(c)}</span></span> : null}
     </ThDaLista>
   );
   return (<>

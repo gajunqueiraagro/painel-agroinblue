@@ -157,10 +157,10 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
       {/* ⚠ o quadro: ALTURA fixa (na estação, cabeçalho + 6 linhas; no modal, o que sobra dele), o vazio fica dentro; o corpo rola aqui */}
       {/* homologação Edson 11:40 (extra): no modal, SEM achados (antes de procurar, procurando, falhou ou "nada achado") o quadro ENCOLHE às linhas
           que tem — nada de bloco branco; com achados, ocupa a sobra como antes */}
-      <div className={cn('mt-1 overflow-auto rounded-sm border bg-card', preencher && achados.length > 0 && 'min-h-0 flex-1')}
+      {/* homologação Edson 12:02: no modal, o quadro tem a ALTURA DO CONTEÚDO (até metade do que sobra da janela; daí rola por dentro) e o modal acompanha */}
+      <div className="mt-1 overflow-auto rounded-sm border bg-card"
         style={preencher
-          ? (achados.length > 0 ? { minHeight: ALTURA_DO_CABECALHO_PARA_CASAR + 2 * ALTURA_DA_LINHA_PARA_CASAR + 2 }
-            : { height: ALTURA_DO_CABECALHO_PARA_CASAR + Math.max(1, linhasNoQuadro) * ALTURA_DA_LINHA_PARA_CASAR + 2 })
+          ? { height: `min(${ALTURA_DO_CABECALHO_PARA_CASAR + Math.max(1, linhasNoQuadro) * ALTURA_DA_LINHA_PARA_CASAR + 2}px, calc((100vh - 220px) / 2))` }
           : { height: alturaFixa }} data-testid="procurar-historico-quadro">
         <div style={{ minWidth: PISO_DO_QUADRO }} data-testid="procurar-historico-piso">
         <TabelaDaLista larguras={larguras} cabecalhoPreso={!!preencher || linhasNoQuadro > LINHAS_A_VISTA} cabecalho={<CabecalhoParaCasar prefixo="procurar" colunas={colunas}
