@@ -47,7 +47,37 @@ export function largurasParaCasar(c: ColunasParaCasar): (number | null)[] {
   return COLUNAS_PARA_CASAR.filter((_, i) => (i !== I_FAZ || c.faz) && (i !== I_NF || c.nf) && ((i !== I_DV && i !== I_DD) || !!c.deltas));
 }
 
-export type ColunaQueOrdena = 'comp' | 'venc' | 'pgto' | 'descricao' | 'fornecedor' | 'fazenda' | 'valor' | 'status';
+/* CONC-CRIAR-COM-NOTA-02 (homologação Edson 11:40, D3 — regra soberana 29/10: TODA tabela ordena em TODAS as colunas): + NF, Δ valor, Δ dias, Motivo */
+export type ColunaQueOrdena = 'comp' | 'venc' | 'pgto' | 'descricao' | 'fornecedor' | 'fazenda' | 'nf' | 'valor' | 'dvalor' | 'ddias' | 'status' | 'motivo';
+export interface OrdemParaCasar { coluna: ColunaQueOrdena; sentido: 'asc' | 'desc' }
+/** Clicar no cabeçalho: a mesma coluna inverte; outra começa descendo nas datas e nos números, subindo nos textos. */
+export function proximaOrdemParaCasar(atual: OrdemParaCasar | null, coluna: ColunaQueOrdena): OrdemParaCasar {
+  if (atual?.coluna === coluna) return { coluna, sentido: atual.sentido === 'asc' ? 'desc' : 'asc' };
+  const desce = ['comp', 'venc', 'pgto', 'valor', 'dvalor', 'ddias'].includes(coluna);
+  return { coluna, sentido: desce ? 'desc' : 'asc' };
+}
+/** A chave de uma linha da tabela de casar numa coluna (o texto sem acento e em minúscula; vazio = null, vai ao fim nos dois sentidos). */
+export function chaveDaLinhaParaCasar(l: LinhaParaCasar, coluna: ColunaQueOrdena, motivo?: string | null): string | number | null {
+  const txt = (s: string | null | undefined) => (s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : null);
+  switch (coluna) {
+    case 'comp': return l.comp; case 'venc': return l.venc; case 'pgto': return l.pgto;
+    case 'descricao': return txt(l.descricao); case 'fornecedor': return txt(l.fornecedor);
+    case 'fazenda': return txt(l.fazendaCodigo ?? l.fazendaNome); case 'nf': return l.numeroDocumento ? l.numeroDocumento.replace(/\D/g, '').padStart(20, '0') : null;
+    case 'valor': return l.valor; case 'dvalor': return l.deltaValor ?? null; case 'ddias': return l.deltaDias ?? null;
+    case 'status': return l.conciliado ? 'conciliado' : (l.status ?? null); case 'motivo': return txt(motivo);
+  }
+}
+/** Ordena pela chave; empate fica na ordem de chegada; não muda a lista de entrada. */
+export function ordenarParaCasar<T>(itens: readonly T[], chaveDe: (t: T) => string | number | null, sentido: 'asc' | 'desc'): T[] {
+  const s = sentido === 'asc' ? 1 : -1;
+  return itens.map((t, i) => ({ t, i, k: chaveDe(t) })).sort((x, y) => {
+    if (x.k == null && y.k == null) return x.i - y.i;
+    if (x.k == null) return 1;
+    if (y.k == null) return -1;
+    const d = typeof x.k === 'number' && typeof y.k === 'number' ? x.k - y.k : String(x.k).localeCompare(String(y.k), 'pt-BR');
+    return d !== 0 ? d * s : x.i - y.i;
+  }).map((x) => x.t);
+}
 
 /** O cabeçalho das duas listas: os rótulos da lista do Financeiro. Com `ordenar`, o clique no cabeçalho ordena e a seta tem lugar reservado
  *  (o cabeçalho não anda ao trocar a ordem); `prefixo` dá o testid de cada um (`<prefixo>-ordenar-<coluna>`). */
@@ -74,12 +104,12 @@ export function CabecalhoParaCasar({ ordenar, seta, prefixo, colunas = TODAS_AS_
     {th('descricao', 'Descrição', 'px-1', undefined, undefined, 'left')}
     {th('fornecedor', 'Fornecedor', 'px-1', undefined, undefined, 'left')}
     {colunas.faz && th('fazenda', 'Faz.', 'px-1', undefined, 'Fazenda')}
-    {colunas.nf && <ThDaLista recuo="px-1" alinhar="right">NF</ThDaLista>}
+    {colunas.nf && th('nf', 'NF', 'px-1', undefined, undefined, 'right')}
     {th('valor', 'Valor', 'px-1', undefined, undefined, 'right')}
-    {colunas.deltas && <ThDaLista recuo="px-1" alinhar="right" title="valor do banco − valor do lançamento">Δ valor</ThDaLista>}
-    {colunas.deltas && <ThDaLista recuo="px-1" alinhar="right" title="dias entre o pagamento no banco e o vencimento (− = antes do vencimento)">Δ dias</ThDaLista>}
+    {colunas.deltas && th('dvalor', 'Δ valor', 'px-1', undefined, 'valor do banco − valor do lançamento', 'right')}
+    {colunas.deltas && th('ddias', 'Δ dias', 'px-1', undefined, 'dias entre o pagamento no banco e o vencimento (− = antes do vencimento)', 'right')}
     {th('status', 'Status', 'px-1')}
-    <ThDaLista recuo="px-1" alinhar="left">Motivo</ThDaLista>
+    {th('motivo', 'Motivo', 'px-1', undefined, undefined, 'left')}
     <ThDaLista recuo="px-1" aria-label="Ações" />
   </>);
 }
