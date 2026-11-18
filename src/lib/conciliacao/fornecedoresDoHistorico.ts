@@ -47,6 +47,19 @@ export function lerFornecedoresDoHistorico(data: unknown): Map<string, string> {
   return m;
 }
 
+/** CONC-CRIAR-COM-NOTA-02 B1 (homologação 14:32, o saldo da NF 404) — o NOME de cada fornecedor da resposta (id → nome): a família dos
+ *  cadastros irmãos ("…ME" / "…-ME") se acha pelo nome mesmo quando o cadastro do histórico não tem mais nenhum em aberto. */
+export function lerNomesDoHistorico(data: unknown): Map<string, string> {
+  const m = new Map<string, string>();
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return m;
+  for (const r of Object.values(data)) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+    const id: unknown = Reflect.get(r, 'fornecedor_id'); const nome: unknown = Reflect.get(r, 'fornecedor');
+    if (typeof id === 'string' && id && typeof nome === 'string' && nome) m.set(id, nome);
+  }
+  return m;
+}
+
 /** O fornecedor do histórico de UM movimento, pelo mesmo termo que foi pedido. */
 export function fornecedorDoMovimento(mapa: ReadonlyMap<string, string>, mov: MovimentoDoHistorico): string | null {
   return mapa.get(nomeDoHistorico(mov.historico, mov.data).trim()) ?? null;
