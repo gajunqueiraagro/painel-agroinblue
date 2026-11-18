@@ -10,8 +10,12 @@
  * ⚠ O BOLETO NUNCA MUDA O VENCIMENTO DA PARCELA. A diferença só aparece, em âmbar, acima de 7 dias.
  * ⚠ A31: 10px nas linhas, 9,5px no cabeçalho navy, linha de 18px, larguras fixas, sem reticência.
  * Recusa por arquivo e pendência ao lado do botão, sem toast.
+ * BOLETO D1d (Gabriel 17/11 14:23, mock-boleto-d1d-v1): com `naCaixa` (as parcelas JÁ GRAVADAS), a coluna "Na caixa" mostra a PRÉVIA
+ * do banco (nada grava antes do "Anexar"); depois que os documentos foram anexados, o boleto entra na caixa e se liga à parcela.
+ * D2: parcela com OUTRO boleto ligado = anexa só o documento; a troca é na caixa ("Substituir"), nunca calada. Falha na caixa não
+ * desfaz o documento: a frase fica no rodapé e o botão vira "Fechar".
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -25,6 +29,11 @@ import {
   casarBoletos, diasDeDiferenca, LIMITE_DIAS_AVISO, type CasouPor,
 } from '@/lib/financeiro/casarBoletos';
 import { NomeDoArquivo } from '@/components/financeiro-v2/NomeDoArquivo';
+import {
+  fraseDoOutroBoleto, gravarNaCaixa, leituraParaACaixa, parcelaApiDoBanco, prever, seloNaCaixa,
+  type CorDoSelo, type NaCaixa, type ParcelaApi,
+} from '@/lib/financeiro/boleto/boletoDaParcela';
+import type { LeituraDoArquivo } from '@/lib/financeiro/boleto/lerBoleto';
 
 export interface ParcelaDoBoleto {
   numero: number;
@@ -35,6 +44,19 @@ export interface ParcelaDoBoleto {
 }
 
 export interface BoletoAtribuido { arquivo: File; parcela: number; leitura: LeituraBoleto | null }
+
+/** As parcelas GRAVADAS (número → lançamento) e o cliente: liga a coluna "Na caixa". Sem isto (parcelas da prévia), nada muda. */
+export interface NaCaixaDoAnexar {
+  clienteId: string;
+  lancamentos: ReadonlyMap<number, string>;
+  api?: ParcelaApi;
+  ler?: (bytes: ArrayBuffer) => Promise<LeituraDoArquivo>;
+}
+
+const COR_DO_SELO: Record<CorDoSelo, string> = {
+  azul: 'bg-blue-100 text-blue-800', verde: 'bg-green-100 text-green-800', ambar: 'bg-amber-100 text-amber-900',
+  cinza: 'bg-gray-200 text-gray-700', vermelho: 'bg-red-100 text-red-800',
+};
 
 interface ItemArquivo {
   chave: string;
@@ -63,8 +85,9 @@ let seqArquivo = 0;
 /** A regra do BOLETO (PDF, JPG ou PNG — sem XML), em LOTE: cada arquivo é julgado sozinho e a recusa aparece na linha dele. */
 const REGRA_DOS_BOLETOS: RegraDeAceite = { ...REGRA_ARQUIVO_DO_BOLETO, varios: true };
 
-export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar }: {
+export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar, naCaixa }: {
   parcelas: readonly ParcelaDoBoleto[];
+  naCaixa?: NaCaixaDoAnexar;
   subtitulo?: string;
   /** Grava (ou guarda) os boletos. Devolve a mensagem de erro, ou null quando deu certo. */
   onConfirmar: (itens: BoletoAtribuido[]) => Promise<string | null>;
@@ -73,6 +96,10 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
   const [itens, setItens] = useState<ItemArquivo[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /** D1d: a prévia da caixa por arquivo, guardada com o lançamento a que ela se refere (trocou a parcela = pergunta de novo). */
+  const [caixa, setCaixa] = useState<Record<string, { lancamentoId: string; c: NaCaixa }>>({});
+  const [anexados, setAnexados] = useState(false);
+  const leituras = useRef(new Map<string, ReturnType<typeof leituraParaACaixa>>());
 
   const total = parcelas.length;
   const livres = useMemo(() => parcelas.filter(p => !p.temBoleto), [parcelas]);
@@ -114,8 +141,39 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
   const livresDepois = livres.filter(p => !escolhidas.includes(p.numero));
   const podeAnexar = validos.length > 0 && semParcela.length === 0 && repetidas.length === 0 && !lendoAlgum && !enviando;
 
+  /* D1d — a prévia da caixa de cada arquivo que já tem parcela GRAVADA (lê o PDF uma vez; pergunta de novo se a parcela muda) */
+  const alvosDaCaixa = useMemo(() => (naCaixa ? validos.flatMap(i => {
+    const n = parcelaDe(i.chave);
+    const lanc = n != null ? naCaixa.lancamentos.get(n) : undefined;
+    return lanc ? [{ chave: i.chave, arquivo: i.arquivo, lancamentoId: lanc }] : [];
+  }) : []), [naCaixa, validos, casamento]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!naCaixa) return;
+    const api = naCaixa.api ?? parcelaApiDoBanco;
+    for (const a of alvosDaCaixa) {
+      if (caixa[a.chave]?.lancamentoId === a.lancamentoId) continue;
+      setCaixa(prev => ({ ...prev, [a.chave]: { lancamentoId: a.lancamentoId, c: { estado: 'lendo' } } }));
+      let lida = leituras.current.get(a.chave);
+      if (!lida) { lida = leituraParaACaixa(a.arquivo, naCaixa.ler); leituras.current.set(a.chave, lida); }
+      void lida
+        .then(async (l): Promise<NaCaixa> => (l.ok === false
+          ? { estado: 'so_documento', frase: l.frase }
+          : { estado: 'previa', previa: await prever(api, naCaixa.clienteId, l.leitura, a.lancamentoId) }))
+        .catch((): NaCaixa => ({ estado: 'previa', previa: { tipo: 'recusa', frase: 'Não consegui perguntar à caixa.' } }))
+        .then(c => setCaixa(prev => (prev[a.chave]?.lancamentoId === a.lancamentoId ? { ...prev, [a.chave]: { lancamentoId: a.lancamentoId, c } } : prev)));
+    }
+  }, [naCaixa, alvosDaCaixa, caixa]);
+  const caixaDe = (chave: string): NaCaixa | null => {
+    const a = alvosDaCaixa.find(x => x.chave === chave);
+    const e = caixa[chave];
+    return a && e && e.lancamentoId === a.lancamentoId ? e.c : null;
+  };
+  const perguntandoACaixa = alvosDaCaixa.some(a => { const c = caixaDe(a.chave); return !c || c.estado === 'lendo'; });
+  const comOutroBoleto = alvosDaCaixa.filter(a => { const c = caixaDe(a.chave); return c?.estado === 'previa' && c.previa.tipo === 'outro_boleto'; }).length;
+  const podeAnexarComCaixa = podeAnexar && !perguntandoACaixa && !anexados;
+
   const confirmar = async () => {
-    if (!podeAnexar) return;
+    if (!podeAnexarComCaixa) return;
     setEnviando(true);
     setErro(null);
     try {
@@ -125,6 +183,12 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
       });
       const falha = await onConfirmar(atribuidos);
       if (falha) { setErro(falha); return; }
+      if (naCaixa) {
+        /* os documentos já estão anexados (a cadeia de hoje): agora a caixa, só o que a prévia disse; falha não desfaz nada */
+        const paraACaixa = alvosDaCaixa.flatMap(a => { const c = caixaDe(a.chave); return c?.estado === 'previa' ? [{ arquivo: a.arquivo, lancamentoId: a.lancamentoId, previa: c.previa }] : []; });
+        const falhas = await gravarNaCaixa(naCaixa.api ?? parcelaApiDoBanco, naCaixa.clienteId, paraACaixa);
+        if (falhas.length) { setAnexados(true); setErro(`Os documentos foram anexados. ${falhas.join(' · ')}`); return; }
+      }
       onFechar();
     } finally {
       setEnviando(false);
@@ -133,7 +197,7 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !enviando) onFechar(); }}>
-      <DialogContent className="max-w-[820px] p-0 gap-0 overflow-hidden">
+      <DialogContent className={`${naCaixa ? 'max-w-[920px]' : 'max-w-[820px]'} p-0 gap-0 overflow-hidden`}>
         <div className="bg-primary px-4 py-2 text-primary-foreground flex items-center justify-between">
           <DialogTitle className="text-[13px] font-semibold">
             Anexar vários boletos{subtitulo ? <span className="ml-2 font-normal opacity-80">{subtitulo}</span> : null}
@@ -155,11 +219,12 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
             <div className="max-h-[320px] overflow-auto rounded border border-[#E0E2E6]">
               <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
                 <colgroup>
-                  <col style={{ width: 250 }} /><col style={{ width: 150 }} /><col style={{ width: 110 }} />
-                  <col style={{ width: 130 }} /><col style={{ width: 100 }} /><col style={{ width: 30 }} />
+                  <col style={{ width: naCaixa ? 190 : 250 }} /><col style={{ width: 150 }} /><col style={{ width: 110 }} />
+                  <col style={{ width: naCaixa ? 110 : 130 }} /><col style={{ width: 100 }} />
+                  {naCaixa && <col style={{ width: 190 }} />}<col style={{ width: 30 }} />
                 </colgroup>
                 <thead>
-                  <tr>{['Arquivo', 'Vai para', 'Casou por', 'Vencimento', 'Valor R$', ''].map((h, k) => <th key={k} className={TH}>{h}</th>)}</tr>
+                  <tr>{['Arquivo', 'Vai para', 'Casou por', 'Vencimento', 'Valor R$', ...(naCaixa ? ['Na caixa'] : []), ''].map((h, k) => <th key={k} className={TH}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {itens.map((i, k) => {
@@ -202,6 +267,7 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
                           {longe && dif != null && <span className="ml-1 font-semibold text-amber-700" data-testid="diferenca-dias">{dif > 0 ? `+${dif}` : dif} dias</span>}
                         </td>
                         <td className={`${TD} text-right`}>{valorBR(i.leitura?.valor)}</td>
+                        {naCaixa && <CelulaNaCaixa c={i.recusa ? null : caixaDe(i.chave)} semParcelaGravada={!i.recusa && parc != null && !naCaixa.lancamentos.has(parc)} />}
                         <td className={`${TD} text-center`}>
                           <button type="button" aria-label="Tirar arquivo" title="Tirar arquivo"
                             onClick={() => setItens(prev => prev.filter(x => x.chave !== i.chave))}
@@ -227,14 +293,35 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
               ?? (semParcela.length > 0 ? `Falta escolher a parcela de ${semParcela.length} ${semParcela.length === 1 ? 'arquivo' : 'arquivos'}.`
                 : repetidas.length > 0 ? `Dois arquivos na mesma parcela: ${repetidas.map(n => `${n}/${total}`).join(', ')}.`
                   : '')}
+            {!erro && semParcela.length === 0 && repetidas.length === 0 && fraseDoOutroBoleto(comOutroBoleto) && (
+              <span className="text-amber-800" data-testid="aviso-outro-boleto">{fraseDoOutroBoleto(comOutroBoleto)}</span>
+            )}
           </span>
-          <Button type="button" variant="ghost" className="h-[22px] px-[9px] text-[10px]" onClick={onFechar} disabled={enviando}>Cancelar</Button>
-          <Button type="button" className="h-[22px] px-[9px] text-[10px] font-semibold" disabled={!podeAnexar} onClick={confirmar}
-            data-testid="anexar-boletos">
-            {enviando ? 'Anexando…' : `Anexar ${validos.length} ${validos.length === 1 ? 'boleto' : 'boletos'}`}
-          </Button>
+          {!anexados && <Button type="button" variant="ghost" className="h-[22px] px-[9px] text-[10px]" onClick={onFechar} disabled={enviando}>Cancelar</Button>}
+          {anexados ? (
+            <Button type="button" className="h-[22px] px-[9px] text-[10px] font-semibold" onClick={onFechar} data-testid="fechar-anexados">Fechar</Button>
+          ) : (
+            <Button type="button" className="h-[22px] px-[9px] text-[10px] font-semibold" disabled={!podeAnexarComCaixa} onClick={confirmar}
+              data-testid="anexar-boletos">
+              {enviando ? 'Anexando…' : `Anexar ${validos.length} ${validos.length === 1 ? 'boleto' : 'boletos'}`}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** D1d — a célula "Na caixa": o selo (nunca corta) e a frase numa linha com "…", inteira no `title`. */
+function CelulaNaCaixa({ c, semParcelaGravada }: { c: NaCaixa | null; semParcelaGravada: boolean }) {
+  if (!c) {
+    return <td className={`${TD} text-center text-muted-foreground`} data-testid="na-caixa" title={semParcelaGravada ? 'parcela ainda não gravada: só o documento' : undefined}>—</td>;
+  }
+  const s = seloNaCaixa(c);
+  return (
+    <td className={`${TD} overflow-hidden text-ellipsis whitespace-nowrap`} title={s.frase} data-testid="na-caixa">
+      <span className={`mr-1 inline-block rounded-[3px] px-1 text-[9.5px] font-semibold leading-[14px] ${COR_DO_SELO[s.cor]}`} data-testid="selo-na-caixa">{s.selo}</span>
+      <span className="text-[9.5px] text-muted-foreground">{s.frase}</span>
+    </td>
   );
 }
