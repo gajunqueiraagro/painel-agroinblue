@@ -141,7 +141,10 @@ export function acaoDoAchado(a: AchadoDoHistorico, contaDoExtrato: string | null
 /** A data de referência: o pagamento, ou o vencimento de quem não foi pago (a mesma da `fn_conciliacao_historico_buscar`). */
 export const dataDeReferencia = (a: AchadoDoHistorico): string | null => a.dataPagamento ?? a.dataVencimento;
 
-export type ColunaDoHistorico = 'comp' | 'venc' | 'pgto' | 'descricao' | 'fornecedor' | 'subcentro' | 'fazenda' | 'conta' | 'valor' | 'status';
+/* CONC-CRIAR-COM-NOTA-02 (homologação Edson 11:40, D3): + NF, Δ valor, Δ dias e Motivo — o valor deles vem da TELA (`extra`): a NF do
+   complemento, os Δ contra o movimento, o motivo da linha */
+export type ColunaDoHistorico = 'comp' | 'venc' | 'pgto' | 'descricao' | 'fornecedor' | 'subcentro' | 'fazenda' | 'conta' | 'valor' | 'status'
+  | 'nf' | 'dvalor' | 'ddias' | 'motivo';
 export interface OrdemDoHistorico { coluna: ColunaDoHistorico | 'data'; sentido: 'asc' | 'desc' }
 /** A ordem padrão: a data mais recente primeiro (a de referência). */
 export const ORDEM_PADRAO: OrdemDoHistorico = { coluna: 'data', sentido: 'desc' };
@@ -159,13 +162,17 @@ function chave(a: AchadoDoHistorico, c: OrdemDoHistorico['coluna']): string | nu
     case 'conta': return a.conta ? normalizarParaBusca(a.conta) : null;
     case 'valor': return a.valor;
     case 'status': return a.conciliado ? 'conciliado' : (a.status ?? null);
+    case 'nf': case 'dvalor': case 'ddias': case 'motivo': return null;
   }
 }
 
 /** Ordena pela coluna; o vazio vai sempre para o fim (nos dois sentidos); empate fica na ordem de chegada. Não muda a lista de entrada. */
-export function ordenarAchados(lista: readonly AchadoDoHistorico[], ordem: OrdemDoHistorico): AchadoDoHistorico[] {
+export function ordenarAchados(lista: readonly AchadoDoHistorico[], ordem: OrdemDoHistorico,
+  extra?: (a: AchadoDoHistorico, c: 'nf' | 'dvalor' | 'ddias' | 'motivo') => string | number | null): AchadoDoHistorico[] {
   const sinal = ordem.sentido === 'asc' ? 1 : -1;
-  return lista.map((a, i) => ({ a, i, k: chave(a, ordem.coluna) })).sort((x, y) => {
+  const c = ordem.coluna;
+  const k = (a: AchadoDoHistorico) => (c === 'nf' || c === 'dvalor' || c === 'ddias' || c === 'motivo' ? (extra ? extra(a, c) : null) : chave(a, c));
+  return lista.map((a, i) => ({ a, i, k: k(a) })).sort((x, y) => {
     if (x.k == null && y.k == null) return x.i - y.i;
     if (x.k == null) return 1;
     if (y.k == null) return -1;
@@ -177,7 +184,7 @@ export function ordenarAchados(lista: readonly AchadoDoHistorico[], ordem: Ordem
 /** Clicar no cabeçalho: a mesma coluna inverte; outra coluna começa descendo nas datas e no valor, subindo nos textos. */
 export function proximaOrdem(atual: OrdemDoHistorico, coluna: ColunaDoHistorico): OrdemDoHistorico {
   if (atual.coluna === coluna) return { coluna, sentido: atual.sentido === 'asc' ? 'desc' : 'asc' };
-  const desce = coluna === 'comp' || coluna === 'venc' || coluna === 'pgto' || coluna === 'valor';
+  const desce = coluna === 'comp' || coluna === 'venc' || coluna === 'pgto' || coluna === 'valor' || coluna === 'dvalor' || coluna === 'ddias';
   return { coluna, sentido: desce ? 'desc' : 'asc' };
 }
 

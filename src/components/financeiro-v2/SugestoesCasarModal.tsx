@@ -31,7 +31,8 @@ import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/concilia
 import { motivoCurto, resumoDaSelecao } from '@/lib/conciliacao/selecaoParaCasar';
 import { TabelaDaLista } from '@/components/financeiro-v2/TabelaDaLista';
 import { CabecalhoParaCasar, LinhaParaCasarNaTabela, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, colunasParaCasar, largurasParaCasar,
-  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR, deltasDoMovimento, type LinhaParaCasar } from '@/components/conciliacao/TabelaParaCasar';
+  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR, deltasDoMovimento, type LinhaParaCasar, chaveDaLinhaParaCasar, ordenarParaCasar,
+  proximaOrdemParaCasar, type OrdemParaCasar } from '@/components/conciliacao/TabelaParaCasar';
 /* ⚠ SEM IMPORT DA CONFERÊNCIA NEM DO `CasarComBancoModal`: o tipo do extrato é o estrutural da lib. Importar de lá
    fecharia um ciclo (Espelho → este modal → Casar → Espelho), que o `madge` acusa. */
 import type { CandidatoSugestao, ExtratoParaSugerir, Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
@@ -76,9 +77,11 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
   onCasarDoHistorico, contaBancariaId }: Props) {
   const campoProcurar = useRef<HTMLInputElement>(null);
   const [marcados, setMarcados] = useState<ReadonlyMap<string, Marcado>>(new Map());
+  /* D3 (homologação Edson 11:40) — a ordem pelo cabeçalho; sem clique, a do motor (o mais provável primeiro) */
+  const [ordemSug, setOrdemSug] = useState<OrdemParaCasar | null>(null);
   const [complemento, setComplemento] = useState<ReadonlyMap<string, ComplementoDaLinha>>(new Map());
   /* abrir outro extrato começa do zero */
-  useEffect(() => { setMarcados(new Map()); }, [open, extrato]);
+  useEffect(() => { setMarcados(new Map()); setOrdemSug(null); }, [open, extrato]);
   const idsDasSugestoes = useMemo(() => sugestoes.flatMap((s) => s.lancamentos.map((c) => c.lancamento_id)), [sugestoes]);
   useEffect(() => {
     let vivo = true;
@@ -113,14 +116,25 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
   };
   /* UI-FONTE-GATE-01: Faz. e NF só quando alguma sugestão tem o dado (a largura vazia vai para Descrição e Fornecedor) */
   const colunasDasSugestoes = { ...colunasParaCasar(sugestoes.flatMap((s) => s.lancamentos.map(linhaDoCandidato))), deltas: !!extrato };
+  /* D1/D2 (homologação Edson 11:40) — UMA LINHA POR LANÇAMENTO: o mesmo lançamento em duas sugestões (a 402 "do fornecedor" e na soma de 3)
+     aparecia duas vezes e marcar uma marcava as duas. Fica a 1ª (a do motivo mais forte: o motor já ordena); a outra não repete a linha. */
+  const vistos = new Set<string>();
+  const linhasDasSugestoes = sugestoes.flatMap((s, i) => s.lancamentos.map((c, j) => ({ s, i, j, c })))
+    .filter((x) => (vistos.has(x.c.lancamento_id) ? false : (vistos.add(x.c.lancamento_id), true)));
+  const motivoDaLinha = (x: { s: Sugestao; j: number }) => `${x.s.lancamentos.length > 1 ? `${x.j + 1}/${x.s.lancamentos.length} · ` : ''}${motivoCurto(x.s)}`;
+  const linhasNaOrdem = ordemSug
+    ? ordenarParaCasar(linhasDasSugestoes, (x) => chaveDaLinhaParaCasar(linhaDoCandidato(x.c), ordemSug.coluna, motivoDaLinha(x)), ordemSug.sentido)
+    : linhasDasSugestoes;
   const largurasDasSugestoes = largurasParaCasar(colunasDasSugestoes);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       {/* P159f: sem sugestão automática, o cursor vai direto ao campo do "Procurar no histórico" (no lugar do foco padrão do Radix) */}
-      <DialogContent className="flex max-h-none max-w-[95vw] flex-col p-0 gap-0 overflow-hidden [&>button.absolute]:hidden"
+      {/* 12:02: a altura é a do CONTEÚDO (até a janela) e o modal fica PRESO NO TOPO — cresce para baixo ao procurar; centrado, ele subia (o gate
+          de deslocamento: −76px ao procurar) */}
+      <DialogContent className="top-3 flex max-h-none max-w-[95vw] translate-y-0 flex-col p-0 gap-0 overflow-hidden [&>button.absolute]:hidden"
         onOpenAutoFocus={(ev) => { if (sugestoes.length === 0 && campoProcurar.current) { ev.preventDefault(); campoProcurar.current.focus(); } }}
-        style={{ width: LARGURA_MODAL, height: ALTURA_MODAL }} aria-describedby={undefined} data-testid="sugestoes-casar">
+        style={{ width: LARGURA_MODAL, maxHeight: ALTURA_MODAL }} aria-describedby={undefined} data-testid="sugestoes-casar">
         {/* CONC-SUGESTOES-FONTE-01 (08/11): o cabeçalho e a faixa do extrato UM DEGRAU menores (título 11, faixa 28px a 11, valor 13) */}
         <div className="flex h-7 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
           {/* o nome da conta pode passar da largura: "…" e o título inteiro no `title` (a exceção declarada, como o da Conferência) */}
@@ -153,27 +167,30 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
         {/* CONC-CRIAR-COM-NOTA-02 (OK do Edson, ajuste 3): a caixa das sugestões ENCOLHE ao conteúdo (cabeçalho + linhas), até metade do espaço;
             o "Procurar no histórico" fica com a sobra (antes: metade em branco com 5 sugestões) */}
         <div className="mx-3 min-h-0 shrink-0 overflow-auto rounded-sm border bg-card" data-testid="sugestoes-lista"
-          style={{ minHeight: PISO_DE_CADA_LISTA, height: `min(${ALTURA_DO_CABECALHO_PARA_CASAR + Math.max(1, sugestoes.reduce((t, s) => t + s.lancamentos.length, 0)) * ALTURA_DA_LINHA_PARA_CASAR + 4}px, 50%)` }}>
+          style={{ minHeight: PISO_DE_CADA_LISTA, height: `min(${ALTURA_DO_CABECALHO_PARA_CASAR + Math.max(1, linhasDasSugestoes.length) * ALTURA_DA_LINHA_PARA_CASAR + 4}px, calc((100vh - 220px) / 2))` }}>
           <div style={{ minWidth: PISO_PARA_CASAR }} data-testid="sugestoes-piso">
-          <TabelaDaLista larguras={largurasDasSugestoes} cabecalho={<CabecalhoParaCasar colunas={colunasDasSugestoes} />}>
+          <TabelaDaLista larguras={largurasDasSugestoes} cabecalho={<CabecalhoParaCasar colunas={colunasDasSugestoes} prefixo="sugestoes"
+            ordenar={(k) => setOrdemSug((o) => proximaOrdemParaCasar(o, k))} seta={(k) => (ordemSug?.coluna === k ? (ordemSug.sentido === 'asc' ? '↑' : '↓') : '')} />}>
             {sugestoes.length === 0 && (
               <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}><td colSpan={largurasDasSugestoes.length} className="px-1 py-1 italic text-muted-foreground" data-testid="sugestoes-nenhuma">Nenhuma sugestão automática</td></tr>
             )}
-            {sugestoes.flatMap((s, i) => s.lancamentos.map((c, j) => (
+            {linhasNaOrdem.map(({ s, i, j, c }) => (
               <LinhaParaCasarNaTabela key={`${i}-${c.lancamento_id}`} l={linhaDoCandidato(c)} colunas={colunasDasSugestoes} testid="sugestao" testidDaLinha="sugestao"
                 marcada={marcados.has(c.lancamento_id)} podeMarcar={!c.ja_conciliado} motivoMarcar="já conciliado"
                 alternar={() => alternar(c.lancamento_id, { de: 'sugestao', c })}
-                motivo={<span className={cn(SELO, s.valorDiferente ? SELO_CONFERIR : SELO_CONFERE)} title={s.motivo} data-testid="sugestao-motivo">
-                  {s.lancamentos.length > 1 ? `${j + 1}/${s.lancamentos.length} · ` : ''}{motivoCurto(s)}</span>}
+                /* o title leva o texto CURTO (o que a coluna mostra e pode cortar) e o motivo inteiro, quando são diferentes */
+                motivo={<span className={cn(SELO, s.valorDiferente ? SELO_CONFERIR : SELO_CONFERE)} data-testid="sugestao-motivo"
+                  title={motivoDaLinha({ s, j }) === s.motivo ? s.motivo : `${motivoDaLinha({ s, j })} — ${s.motivo}`}>
+                  {motivoDaLinha({ s, j })}</span>}
                 acao={<button type="button" onClick={() => onCasar(s)} className={LINK_PARA_CASAR} data-testid="sugestao-casar"
                   title={s.lancamentos.length > 1 ? `Casar a sugestão inteira (${s.lancamentos.length} lançamentos)` : 'Casar com o movimento do banco'}>Casar</button>} />
-            )))}
+            ))}
           </TabelaDaLista>
           </div>
         </div>
 
         {onCriarIgual && (
-          <div className="mx-3 flex min-h-0 flex-1 flex-col" style={{ minHeight: PISO_DE_CADA_LISTA + 32 }}>
+          <div className="mx-3 flex min-h-0 shrink-0 flex-col">
             <ProcurarNoHistorico clienteId={clienteId ?? null} onCriarIgual={onCriarIgual} campoRef={campoProcurar} preencher
               onCasar={onCasarDoHistorico} contaDoExtrato={{ id: contaBancariaId ?? null, nome: nomeConta ?? null }}
               movimento={{ data: extrato.data, historico: extrato.historico, valor: extrato.valor }}
