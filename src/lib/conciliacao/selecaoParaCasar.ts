@@ -12,9 +12,16 @@ export function resumoDaSelecao(valores: readonly number[], valorDoExtrato: numb
 }
 
 /** O MOTIVO CURTO da coluna (o inteiro vai no `title`): "mesmo valor · nome", "soma de 2", "mesmo forn. · valor ≠". */
-export function motivoCurto(s: Pick<Sugestao, 'tipo' | 'lancamentos'>): string {
+export function motivoCurto(s: Pick<Sugestao, 'tipo' | 'lancamentos'> & { motivo?: string }): string {
   const n = s.lancamentos.length;
-  switch (s.tipo) {
+  /* CONC-CRIAR-COM-NOTA-02 E1 (18/11): o selo "outro fornecedor" do motor aparece também na forma curta */
+  const outro = s.motivo?.startsWith('outro fornecedor · ') ? 'outro forn. · ' : '';
+  return outro + motivoDoTipo(s.tipo, n);
+}
+function motivoDoTipo(tipo: Sugestao['tipo'], n: number): string {
+  switch (tipo) {
+    /* E1: o em aberto da família do fornecedor do histórico (antes o selo saía VAZIO: o tipo não tinha texto curto) */
+    case 'do_historico': return 'do fornecedor · valor ≠';
     case 'mesmo_valor_nome': return 'mesmo valor · nome';
     case 'mesmo_valor': return 'mesmo valor';
     case 'soma': return `soma de ${n}`;

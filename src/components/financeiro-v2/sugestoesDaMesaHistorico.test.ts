@@ -32,3 +32,31 @@ describe('a mesa com o fornecedor do histórico', () => {
     expect(depois.map((s) => s.lancamentos[0].lancamento_id)).toEqual(['ofi-1', 'lid-1']);
   });
 });
+
+describe('CONC-CRIAR-COM-NOTA-02 D-f (tela) — o pagamento ANTECIPADO (caso Azulão: vence no mês seguinte, pago antes)', () => {
+  it('o adiantado de VALOR EXATO e em aberto entra como "mesmo valor"; valor diferente, já pago ou já conciliado, não', () => {
+    const dias = montarMesa(dados, new Set());
+    const exato = cand('adi-1', 'f-x', 'Ferragens Exemplo', -6000, '2031-11-10');
+    const outroValor = cand('adi-2', 'f-x', 'Ferragens Exemplo', -5999, '2031-11-10');
+    const pago = { ...cand('adi-3', 'f-x', 'Ferragens Exemplo', -6000, '2031-11-11'), status_transacao: 'realizado' };
+    const conciliado = { ...cand('adi-4', 'f-x', 'Ferragens Exemplo', -6000, '2031-11-12'), ja_conciliado: true };
+    /* sem os adiantados (a tela até 18/11): nada de valor exato */
+    expect((sugestoesDaMesa(dias, CANDIDATOS).get('ext-1') ?? []).some((s) => s.tipo === 'mesmo_valor')).toBe(false);
+    const lista = sugestoesDaMesa(dias, CANDIDATOS, new Map(), [exato, outroValor, pago, conciliado]).get('ext-1') ?? [];
+    expect(lista[0].lancamentos.map((c) => c.lancamento_id)).toEqual(['adi-1']);
+    expect(lista[0].tipo).toBe('mesmo_valor');
+    const ids = lista.flatMap((s) => s.lancamentos.map((c) => c.lancamento_id));
+    expect(ids).not.toContain('adi-2');
+    expect(ids).not.toContain('adi-3');
+    expect(ids).not.toContain('adi-4');
+  });
+});
+
+describe('CONC-CRIAR-COM-NOTA-02 (homologação 09:37) — o nº da NF chega ao Casar pela sugestão', () => {
+  it('levadosDaSugestao leva o numero_documento do candidato ("NF —" era o nº perdido no caminho)', async () => {
+    const { levadosDaSugestao } = await import('./EspelhoConciliacaoTab');
+    const c = { ...cand('adi-1', 'f-x', 'Ferragens Exemplo', -6000, '2031-11-10'), numero_documento: '000077066' };
+    const [lista] = [sugestoesDaMesa(montarMesa(dados, new Set()), CANDIDATOS, new Map(), [c]).get('ext-1') ?? []];
+    expect(levadosDaSugestao(lista[0])[0].numero_documento).toBe('000077066');
+  });
+});

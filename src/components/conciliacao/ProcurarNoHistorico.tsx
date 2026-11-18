@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { nomeDoHistorico } from '@/lib/conciliacao/nomeDoHistorico';
 import { TabelaDaLista } from '@/components/financeiro-v2/TabelaDaLista';
 import { CabecalhoParaCasar, LinhaParaCasarNaTabela, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, TODAS_AS_COLUNAS_PARA_CASAR, largurasParaCasar,
-  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR } from '@/components/conciliacao/TabelaParaCasar';
+  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR, deltasDoMovimento } from '@/components/conciliacao/TabelaParaCasar';
 import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/conciliacao/complementoDasLinhas';
 import {
   lerResultado, fraseDaFaixa, modeloDoAchado, contagemDosAchados, ONDE_TODOS, acaoDoAchado, outraConta, ordenarAchados, proximaOrdem,
@@ -115,7 +115,8 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
   const linhasNoQuadro = (frase ? 1 : 0) + (estado.tipo === 'pronto' ? Math.max(1, achados.length) : estado.tipo === 'falhou' ? 1 : 0);
   /* UI-FONTE-GATE-01 (Chat 12/11 17:05, escolha A): no histórico Faz. e NF ficam SEMPRE reservadas — os achados chegam por gesto e a NF
      ainda depois (o complemento); colunas pelo dado fariam o cabeçalho andar (desloca casar-sugestoes-procurar). Só as Sugestões as tiram. */
-  const colunas = TODAS_AS_COLUNAS_PARA_CASAR;
+  /* D-g — Δ valor e Δ dias contra o movimento do banco */
+  const colunas = { ...TODAS_AS_COLUNAS_PARA_CASAR, deltas: true };
   const larguras = largurasParaCasar(colunas);
 
   return (
@@ -181,7 +182,8 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
                 <LinhaParaCasarNaTabela key={a.lancamentoId} colunas={colunas} testidDaLinha="procurar-historico-achado" dadoAcao={acao} testid="procurar-acao"
                   l={{ id: a.lancamentoId, comp: a.dataCompetencia, venc: a.dataVencimento, pgto: a.dataPagamento, descricao: a.descricao, tituloDescricao,
                     fornecedor: a.fornecedor, fazendaCodigo: a.fazendaCodigo ?? a.fazenda, fazendaNome: a.fazenda,
-                    tipoDocumento: x?.tipoDocumento ?? null, numeroDocumento: x?.numeroDocumento ?? null, valor: a.valor, status: a.status, conciliado: a.conciliado }}
+                    tipoDocumento: x?.tipoDocumento ?? null, numeroDocumento: x?.numeroDocumento ?? null, valor: a.valor, status: a.status, conciliado: a.conciliado,
+                    ...deltasDoMovimento(movimento, { valor: a.valor, venc: a.dataVencimento }) }}
                   marcada={!!selecao?.marcado(a.lancamentoId)} podeMarcar={!!selecao && casa}
                   motivoMarcar={selecao ? 'Pago: não se casa de novo — use "Criar igual".' : undefined}
                   alternar={() => selecao?.alternar(a, acao === 'casar_trocando_conta')}

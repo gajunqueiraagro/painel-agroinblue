@@ -194,6 +194,17 @@ const CENARIOS = [
     ['fundo mapa', mapaCamada('Mapa')], ['fundo satélite', mapaCamada('Satélite')],
   ] },
   /* MAPA-IMPRESSAO-01 — no diálogo "Imprimir mapa", trocar o tamanho e a imagem não move nada (as áreas de mensagem têm altura fixa) */
+  /* RATEIO-HIGINO-01 — o "Conferir rateio": digitar o valor da relação e a NF numa linha (a parte, a situação e o rodapé mudam) e puxar um dos
+     outros do mês não move o cabeçalho, as colunas nem o rodapé (larguras fixas; a situação corta com "…" e o title) */
+  { nome: 'conferir-rateio', url: 'tela=conferir-rateio', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
+    antes: async (p) => { await p.locator('[data-testid="rateio-linha"]').first().waitFor({ timeout: 5000 }); await espera(p, 500); },
+    estados: [
+      ['valor da relação na 1ª linha', async (p) => { const i = p.locator('[data-testid="rateio-linha"]').first().locator('input[placeholder="0,00"]');
+        await i.click(); await i.fill('24691,34'); await i.blur(); await espera(p, 500); }],
+      ['NF na 1ª linha', digitar('[data-testid="rateio-nf"]', '885860')],
+      ['NF apagada', digitar('[data-testid="rateio-nf"]', '')],
+      ['puxar um dos outros', clicar('[data-testid="rateio-puxar"]')],
+    ] },
   /* DRE-VARIACAO-SIMPLES-01 — o modal da variação: trocar de aba (Resumo ↔ Por categoria) e de gráfico (Valor · Arrobas · Preço médio) não move
      o cabeçalho, as abas, os cards nem o segmentado (as duas abas ficam montadas; o gráfico tem altura fixa). O desenho do gráfico muda: não conta. */
   { nome: 'dre-pec-variacao', url: 'tela=dre&barra=32&f_de=2026-01&f_ate=2026-09', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',

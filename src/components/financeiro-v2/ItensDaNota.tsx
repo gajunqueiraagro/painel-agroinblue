@@ -132,9 +132,10 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
           <span className={cn(CHIP, 'shrink-0', reformaDoPdf.tom)} title={reformaDoPdf.title} data-testid="itens-ibs-cbs-pdf">{reformaDoPdf.texto}</span>
         )}
         <span className="ml-auto" />
-        <span className={cn(CHIP, 'min-w-0 shrink bg-sky-50 text-sky-800')} title={contaDoLancamento ? `Conta do lançamento: ${contaDoLancamento}` : undefined}>
-          {/* min-w-0: o selo encolhe e o texto rola no lugar dele (a 750 a barra passava da largura: o texto segurava o selo) */}
-          <span className="min-w-0 uma-linha-que-rola">Conta do lançamento manda no DRE e no caixa{contaDoLancamento ? ` · ${contaDoLancamento}` : ''}</span>
+        {/* NOTA-PARCELAR-01 (P-c) — a frase longa estourava a linha: o selo diz só a conta; o "manda no DRE e no caixa" vai no title */}
+        <span className={cn(CHIP, 'min-w-0 shrink bg-sky-50 text-sky-800')} title={`A conta do lançamento manda no DRE e no caixa${contaDoLancamento ? `: ${contaDoLancamento}` : ''}`}>
+          {/* min-w-0: o selo encolhe e o texto rola no lugar dele (nunca "…", nunca quebra) */}
+          <span className="min-w-0 uma-linha-que-rola" data-testid="itens-conta-do-lancamento">{contaDoLancamento ? `Conta: ${contaDoLancamento}` : 'Conta do lançamento'}</span>
         </span>
       </div>
 

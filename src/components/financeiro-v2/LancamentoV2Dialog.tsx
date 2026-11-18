@@ -3773,7 +3773,10 @@ export function LancamentoV2Dialog({
             ) : documentosAntesDeSalvar ? (
               <DocumentosPendentes pendentes={pendentes} onMudar={setPendentes}
                 clienteId={clienteAtual?.id ?? null}
-                travado={!!posSalvar} sugestao={sugestaoDoDocumento} />
+                travado={!!posSalvar} sugestao={sugestaoDoDocumento}
+                /* CONC-CRIAR-COM-NOTA-02 (Fatia 1) — no Novo pelo extrato, a NF adicionada aqui preenche o lançamento (o mesmo "Ler a NF") */
+                aoLerNotaNoNovo={!lancamento?.id && onLerNotaNoNovo && !posSalvar ? onLerNotaNoNovo : undefined}
+                pagoEm={dataPagamento || null} />
             ) : (
               <p className="rounded-md border bg-muted/20 px-3.5 py-3 text-[11px] text-muted-foreground">
                 Salve o lançamento para anexar documentos.

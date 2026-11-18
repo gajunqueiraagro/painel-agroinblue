@@ -908,21 +908,25 @@ const CHIPS_DA_CONFERENCIA: readonly { k: FiltroConferencia; rotulo: string }[] 
  */
 export function sugestoesDaMesa(
   dias: readonly DiaConf[], candidatos: readonly EspCandidato[], doHistorico: ReadonlyMap<string, string> = new Map(),
+  /* CONC-CRIAR-COM-NOTA-02 D-f (tela): os em aberto que vencem depois do mês — só pelo valor exato (`sugerirCasamentos`) */
+  adiantados: readonly EspCandidato[] = [],
 ): Map<string, Sugestao[]> {
   const m = new Map<string, Sugestao[]>();
   /* CONC-SUGESTOES-FONTE-01 item 4: o fornecedor que o histórico conhece para o texto de cada linha (o mesmo para o "(N)" e o modal) */
   for (const d of dias) for (const e of d.extratosSemPar) {
-    m.set(e.extrato_id, sugerirCasamentos(e, [...candidatos], { orcamentoMs: 30, fornecedorDoHistorico: fornecedorDoMovimento(doHistorico, e) }));
+    m.set(e.extrato_id, sugerirCasamentos(e, [...candidatos], { orcamentoMs: 30, fornecedorDoHistorico: fornecedorDoMovimento(doHistorico, e), adiantados }));
   }
   return m;
 }
 /** "casar" numa sugestão abre o `CasarComBancoModal` já com os levados; um lançamento de valor diferente abre com o valor do banco. */
-function levadosDaSugestao(s: Sugestao): LevadoInicial[] {
+export function levadosDaSugestao(s: Sugestao): LevadoInicial[] {
   const umDiferente = s.lancamentos.length === 1 && s.valorDiferente;
   return s.lancamentos.map((c) => ({
     lancamento_id: c.lancamento_id, descricao: c.descricao, fornecedor: c.fornecedor,
     valor_assinado: c.valor_assinado, usarValorDoBanco: umDiferente,
     data_vencimento: c.data_vencimento, status_transacao: c.status_transacao,
+    /* homologação 09:37: sem isto o lado Sistema do Casar dizia "NF —" num lançamento feito da NF */
+    numero_documento: c.numero_documento ?? null,
   }));
 }
 
@@ -2122,7 +2126,8 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
     () => (mostrarCandidatos ? termosDosMovimentos(diasDaMesa.flatMap((d) => d.extratosSemPar)) : []), [diasDaMesa, mostrarCandidatos]);
   const doHistorico = useFornecedoresDoHistorico(clienteId, anoMes, termosDoMes);
   const sugestoesPorLinha = useMemo(
-    () => sugestoesDaMesa(diasDaMesa, mostrarCandidatos ? (data?.sistema_candidatos ?? []) : [], doHistorico),
+    () => sugestoesDaMesa(diasDaMesa, mostrarCandidatos ? (data?.sistema_candidatos ?? []) : [], doHistorico,
+      mostrarCandidatos ? (data?.sistema_candidatos_adiantados ?? []) : []),
     [diasDaMesa, data, mostrarCandidatos, doHistorico]);
   const ehParcialDaMesa = (p: Pareado) => faltaDoExtrato(p.diferenca) != null;
   const chips = contagensDaMesa(diasDaMesa, ehParcialDaMesa);

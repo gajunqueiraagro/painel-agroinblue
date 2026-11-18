@@ -108,7 +108,7 @@ describe('as listas da Conciliação no tamanho da lista do Financeiro (sem a va
     const { COLUNAS_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, PISO_PARA_CASAR } = await import('@/components/conciliacao/TabelaParaCasar');
     const { ALTURA_DA_LINHA } = await import('@/components/financeiro-v2/corpoDaLista');
     expect(ALTURA_DA_LINHA_PARA_CASAR).toBe(ALTURA_DA_LINHA);
-    expect(COLUNAS_PARA_CASAR).toEqual([28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62]);
+    expect(COLUNAS_PARA_CASAR).toEqual([28, 46, 46, 46, null, null, 30, 78, 94, 80, 38, 60, 120, 62]); /* D-g: + Δ valor 80, Δ dias 38, Δ dias 44 */
     /* sem rolagem de lado no modal a 1024 e a 135% de 1240 (≈ 848px úteis): o piso cabe */
     expect(PISO_PARA_CASAR).toBeLessThanOrEqual(848);
   });
@@ -123,5 +123,13 @@ describe('as listas da Conciliação no tamanho da lista do Financeiro (sem a va
     expect(largurasParaCasar({ faz: false, nf: false })).toEqual([28, 46, 46, 46, null, null, 94, 60, 120, 62]);
     expect(largurasParaCasar({ faz: true, nf: false })).toEqual([28, 46, 46, 46, null, null, 30, 94, 60, 120, 62]);
     expect(largurasParaCasar({ faz: true, nf: true })).toEqual([28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62]);
+  });
+});
+
+describe('CONC-CRIAR-COM-NOTA-02 E1 — o motivo curto do fornecedor do histórico (o selo saía vazio)', () => {
+  it('do_historico tem texto; "outro fornecedor" aparece na forma curta', async () => {
+    const { motivoCurto } = await import('./selecaoParaCasar');
+    expect(motivoCurto({ tipo: 'do_historico', lancamentos: [] })).toBe('do fornecedor · valor ≠');
+    expect(motivoCurto({ tipo: 'mesmo_valor', lancamentos: [], motivo: 'outro fornecedor · mesmo valor' })).toBe('outro forn. · mesmo valor');
   });
 });

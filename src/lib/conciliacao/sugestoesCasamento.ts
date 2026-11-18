@@ -276,6 +276,13 @@ export function forcaDoNome(historico: string | null | undefined, fornecedor: st
   return 0;
 }
 
+/** CONC-CRIAR-COM-NOTA-02 E1 (homologação 09:48, caso Edson: "Edson Souza Dias ME" e "Edson Souza Dias-ME", 2 cadastros) — o NOME do
+ *  fornecedor sem o sufixo de empresa (ME, EPP, LTDA, EIRELI, MEI, S/A): os cadastros irmãos dão a mesma chave. */
+const SUFIXOS_DE_EMPRESA = new Set(['ME', 'EPP', 'LTDA', 'EIRELI', 'MEI', 'SA', 'S', 'A']);
+export function chaveDoNomeDoFornecedor(fornecedor: string | null | undefined): string {
+  return palavrasDoFornecedor(fornecedor).filter((p) => !SUFIXOS_DE_EMPRESA.has(p)).join(' ');
+}
+
 /** O que o motor precisa de um candidato do sistema — o `sistema_candidatos` de `fn_extratos_espelhados` o cobre. */
 export interface CandidatoSugestao {
   lancamento_id: string;
@@ -287,6 +294,8 @@ export interface CandidatoSugestao {
   favorecido_id: string | null;
   status_transacao: string | null;
   ja_conciliado?: boolean;
+  /** CONC-CRIAR-COM-NOTA-02 (homologação 09:37, "NF —" no Casar): o nº do documento que a RPC já manda, levado ao Casar com o banco */
+  numero_documento?: string | null;
 }
 
 export interface ExtratoParaSugerir { data: string | null; historico: string | null; valor: number; }
@@ -304,6 +313,8 @@ const ORDEM_DO_TIPO: Record<TipoSugestao, number> = {
    (a pista de nome que o histórico desmente: o "LIDER" que casava com LIDERANÇA) — no FIM, depois até da soma mista. */
 const TIPOS_DE_NOME = new Set<TipoSugestao>(['mesmo_fornecedor', 'nome_valor', 'nome_soma']);
 export const SELO_SO_TEXTO = 'só texto parecido';
+/** E1 (homologação 09:48) — com o fornecedor do histórico, o que é de outro fornecedor vem depois com este selo */
+export const SELO_OUTRO_FORNECEDOR = 'outro fornecedor';
 
 export interface Sugestao {
   lancamentos: CandidatoSugestao[];
@@ -328,6 +339,11 @@ export interface OpcoesSugestao {
    * `fn_conciliacao_fornecedores_do_historico`, a MESMA regra da faixa "Costuma ser…"). Sem ele, a lista é a de sempre.
    */
   fornecedorDoHistorico?: string | null;
+  /**
+   * CONC-CRIAR-COM-NOTA-02 D-f (Gabriel 18/11, caso Azulão: NF que vence 10/11 paga no banco 13/10) — os em aberto que vencem DEPOIS do mês
+   * do movimento. Entram SÓ no E1 (mesmo valor, ±1 centavo): nunca em soma nem em pista de nome — a mesma regra do motor (lote 22).
+   */
+  adiantados?: readonly CandidatoSugestao[];
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -377,6 +393,12 @@ export function sugerirCasamentos(
   const sinalBanco = Math.sign(valorBanco);
 
   const pool = candidatos.filter((c) => !c.ja_conciliado && Math.sign(Number(c.valor_assinado) || 0) === sinalBanco);
+  /* D-f: os adiantados de VALOR EXATO, em aberto, que não estão já na lista do mês */
+  const noPool = new Set(pool.map((c) => c.lancamento_id));
+  const adiantadosExatos = (opcoes.adiantados ?? []).filter((c) => !c.ja_conciliado && !noPool.has(c.lancamento_id)
+    && Math.sign(Number(c.valor_assinado) || 0) === sinalBanco && EM_ABERTO.has((c.status_transacao ?? '').toLowerCase())
+    && Math.abs(Math.abs(Number(c.valor_assinado)) - alvo) <= TOL_VALOR);
+  for (const c of adiantadosExatos) pool.push(c);
   const lancs = new Map(pool.map((c) => [c.lancamento_id, comoLancamento(c)]));
   const dias = (c: CandidatoSugestao) => {
     const anc = dataAncoraLancamento(lancs.get(c.lancamento_id)!);
@@ -387,6 +409,13 @@ export function sugerirCasamentos(
     return antes.length ? MESES[Number(antes[0].slice(5, 7)) - 1] : null;
   };
   const forca = new Map(pool.map((c) => [c.lancamento_id, forcaDoNome(extrato.historico, c.fornecedor)]));
+  /* E1 — a FAMÍLIA do fornecedor do histórico: o cadastro dele + os irmãos (mesmo nome sem o sufixo de empresa) */
+  const doHist = opcoes.fornecedorDoHistorico ?? null;
+  const familia = new Set<string>(doHist ? [doHist] : []);
+  if (doHist) {
+    const nomes = new Set(pool.filter((c) => c.favorecido_id === doHist).map((c) => chaveDoNomeDoFornecedor(c.fornecedor)).filter(Boolean));
+    for (const c of pool) if (c.favorecido_id && nomes.has(chaveDoNomeDoFornecedor(c.fornecedor))) familia.add(c.favorecido_id);
+  }
 
   const saida: (Sugestao & { forca: number })[] = [];
   const vistas = new Set<string>();
@@ -415,7 +444,9 @@ export function sugerirCasamentos(
   // ── E2: soma de 2..8 que dá o valor — primeiro dentro do mesmo fornecedor ──
   const prazo = Date.now() + orcamentoMs;
   const menores = pool.filter((c) => !iguais.has(c.lancamento_id) && Math.abs(Number(c.valor_assinado)) < alvo - TOL_SOMA);
-  const chaveForn = (c: CandidatoSugestao) => c.favorecido_id ?? (c.fornecedor ? `nome:${normalizarTexto(c.fornecedor)}` : null);
+  /* E1: os cadastros irmãos do fornecedor do histórico somam JUNTOS (a soma "do mesmo fornecedor") */
+  const chaveForn = (c: CandidatoSugestao) => (c.favorecido_id && familia.has(c.favorecido_id) ? 'familia-do-historico'
+    : c.favorecido_id ?? (c.fornecedor ? `nome:${normalizarTexto(c.fornecedor)}` : null));
   const porFornecedor = new Map<string, CandidatoSugestao[]>();
   for (const c of menores) {
     const k = chaveForn(c);
@@ -440,17 +471,15 @@ export function sugerirCasamentos(
   /* No geral, os 30 mais perto da data — o mesmo corte da prévia —, mas com no máximo 3: acima disso é coincidência. */
   tentarSoma([...menores].sort((a, b) => dias(a) - dias(b)).slice(0, 30), 3);
 
-  // ── CONC-SUGESTOES-FONTE-01: o EM ABERTO do fornecedor que o HISTÓRICO conhece, vencendo a ±5 dias, valor diferente ──
+  // ── CONC-SUGESTOES-FONTE-01 + CONC-CRIAR-COM-NOTA-02 E1: TODOS os EM ABERTO do fornecedor que o HISTÓRICO conhece (e dos cadastros
+  //    IRMÃOS, o mesmo nome sem ME/EPP/LTDA), valor diferente — sem janela de dias (a lista do mês já é o limite) ──
   /* O caso MECANICA LIDER (BB 08/10, −6.000,00): o histórico diz o fornecedor (5 vezes desde 10/04), mas o nome do cadastro não está no
-     texto do banco — sem isto, os em aberto dele nunca apareciam e só a LIDERANÇA (texto parecido) vinha. A janela é a do P153b. */
-  const doHist = opcoes.fornecedorDoHistorico ?? null;
-  if (doHist) {
-    for (const c of pool) {
-      if (c.favorecido_id !== doHist || iguais.has(c.lancamento_id)) continue;
-      if (!EM_ABERTO.has((c.status_transacao ?? '').toLowerCase()) || !c.data_vencimento) continue;
-      if (Math.abs(diasEntre(dataBanco, c.data_vencimento)) > JANELA_MESMO_FORNECEDOR_DIAS) continue;
-      pos('do_historico', [c], `do histórico · previsto ${valorSemMoeda(Number(c.valor_assinado))}`, true);
-    }
+     texto do banco. Homologação 09:48 (Gabriel): as NF 404 e 405 estão no cadastro "Edson Souza Dias-ME" (o histórico aponta o "…ME") e
+     não vinham — TODAS as notas em aberto do fornecedor vêm primeiro; outro fornecedor só depois e marcado. */
+  for (const c of pool) {
+    if (!familia.has(c.favorecido_id ?? '') || iguais.has(c.lancamento_id)) continue;
+    if (!EM_ABERTO.has((c.status_transacao ?? '').toLowerCase())) continue;
+    pos('do_historico', [c], `do histórico · previsto ${valorSemMoeda(Number(c.valor_assinado))}`, true);
   }
 
   // ── P153b: o EM ABERTO do mesmo fornecedor (o nome do extrato no fornecedor OU na descrição), vencendo a ±5 dias, valor diferente ──
@@ -482,12 +511,15 @@ export function sugerirCasamentos(
 
   const regua = (s: Sugestao) => {
     if (!doHist) return 1;
-    if (s.lancamentos.every((c) => c.favorecido_id === doHist)) return 0;
+    if (s.lancamentos.every((c) => familia.has(c.favorecido_id ?? ''))) return 0;
     return TIPOS_DE_NOME.has(s.tipo) ? 2 : 1;
   };
-  /* o selo troca o começo ("nome ·", "mesmo fornecedor · valor difere:") por "só texto parecido ·": o resto (valor, vencido) fica */
+  /* o selo troca o começo ("nome ·", "mesmo fornecedor · valor difere:") por "só texto parecido ·": o resto (valor, vencido) fica.
+     E1: com o fornecedor do histórico, o resto (outro fornecedor) vem depois e MARCADO "outro fornecedor ·" */
   for (const s of saida) {
-    if (regua(s) === 2) s.motivo = `${SELO_SO_TEXTO} · ${s.motivo.replace(/^(nome · |mesmo fornecedor · valor difere: )/, '')}`;
+    const r = regua(s);
+    if (r === 2) s.motivo = `${SELO_SO_TEXTO} · ${s.motivo.replace(/^(nome · |mesmo fornecedor · valor difere: )/, '')}`;
+    else if (r === 1 && doHist) s.motivo = `${SELO_OUTRO_FORNECEDOR} · ${s.motivo}`;
   }
   saida.sort((a, b) => regua(a) - regua(b) || ORDEM_DO_TIPO[a.tipo] - ORDEM_DO_TIPO[b.tipo] || b.forca - a.forca || a.diasDiff - b.diasDiff);
   return saida.slice(0, maximo).map(({ forca: _f, ...s }) => s);

@@ -73,8 +73,8 @@ describe('o modal no caso pós', () => {
     montar();
     await screen.findByTestId('juro-real');
     expect(screen.getByTestId('juro-real').textContent).toContain('R$ 39.995,50');
-    expect(screen.getByLabelText('Valor de Juros 2/5 · 8.233.040')).toBe(screen.getByDisplayValue('39995,50'));
-    expect(screen.getByLabelText('Valor de Amortização 2/5 · 8.233.040')).toBe(screen.getByDisplayValue('120004,50'));
+    expect(screen.getByLabelText('Valor de Juros 2/5 · 8.233.040')).toBe(screen.getByDisplayValue('39.995,50'));
+    expect(screen.getByLabelText('Valor de Amortização 2/5 · 8.233.040')).toBe(screen.getByDisplayValue('120.004,50'));
     const conciliar = screen.getByRole('button', { name: 'Conciliar' });
     await waitFor(() => expect(conciliar).not.toBeDisabled());
     fireEvent.click(conciliar);

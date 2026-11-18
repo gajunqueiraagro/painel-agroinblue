@@ -9,7 +9,7 @@
  * ⚠ A LISTA É A31 (tabela da casa): 10px nas linhas, 9,5px no cabeçalho navy, linha de 18px, datas
  * dd/mm/aa, número à direita, nada cortado com reticência.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Pencil, X } from 'lucide-react';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
@@ -19,6 +19,7 @@ import {
 } from '@/hooks/useLancamentoDocumentos';
 import { motivoArquivoRecusado, novoPendente, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
 import { NomeDoArquivo } from '@/components/financeiro-v2/NomeDoArquivo';
+import { ehArquivoDeNota } from '@/lib/financeiro/nfe/documentoDaNota';
 import { VisualizadorDeDocumento } from '@/components/financeiro-v2/VisualizadorDeDocumento';
 
 /** NOTA-NOVA-MODAL-REAL D4 — o arquivo do pendente numa aba nova (o XML, ou o PDF pelo "Abrir em nova aba" do visualizador). */
@@ -72,6 +73,30 @@ function comoDocumento(p: DocumentoPendente): LancDocumento {
  * arquivo não serve ele fica aberto para trocar — sem o desfazer, o segundo clique criaria um
  * segundo pendente igual ao primeiro.
  */
+/**
+ * CONC-CRIAR-COM-NOTA-02 (Fatia 1) — a `api` dos pendentes que, ao anexar o XML/PDF de uma NF, PREENCHE o lançamento novo pelo "Ler a NF" de hoje
+ * (`ler`). Só NF; recibo/boleto/comprovante nunca passam pelo leitor (DOC-ANEXO-E-IMPORT-01 F1). `aviso` recebe a frase do que impediu, ou `null`.
+ */
+export function comLeituraDaNota(base: LancamentoDocumentosApi, especies: Map<string, string>, ler: (arquivo: File) => Promise<string | null>,
+  aviso: (frase: string | null) => void): LancamentoDocumentosApi {
+  return {
+    ...base,
+    registrar: async (p) => {
+      const r = await base.registrar(p);
+      if (r) especies.set(r.id, p.especie ?? '');
+      return r;
+    },
+    anexar: async (chave, versao, file, destino) => {
+      const ok = await base.anexar(chave, versao, file, destino);
+      if (ok && especies.get(chave) === 'nf' && ehArquivoDeNota(file.name)) {
+        aviso(null);
+        void ler(file).then(aviso, () => aviso('Não consegui ler a nota para preencher o lançamento.'));
+      }
+      return ok;
+    },
+  };
+}
+
 export function apiDePendentes(
   lista: readonly DocumentoPendente[], mudar: (f: (l: DocumentoPendente[]) => DocumentoPendente[]) => void,
 ): LancamentoDocumentosApi {
@@ -104,7 +129,7 @@ export function apiDePendentes(
   };
 }
 
-export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, travado, sugestao }: {
+export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, travado, sugestao, aoLerNotaNoNovo, pagoEm }: {
   pendentes: DocumentoPendente[];
   onMudar: (f: (l: DocumentoPendente[]) => DocumentoPendente[]) => void;
   /** FORN-SELETOR-PADRAO-01 fatia 2a — o cliente de quem o emitente se escolhe (leitor único). */
@@ -119,10 +144,22 @@ export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, tr
   travado?: boolean;
   /** PR 2b-fix1 — o que o lançamento já diz (Nº Documento, competência, valor, favorecido), para o documento NOVO nascer preenchido. */
   sugestao?: SugestaoDocumento;
+  /**
+   * CONC-CRIAR-COM-NOTA-02 (Fatia 1, Gabriel 18/11) — lançamento NOVO pelo extrato: a NF (XML/PDF) adicionada aqui PREENCHE o lançamento pelo
+   * MESMO caminho do "Ler a NF" (`onLerNotaNoNovo` → o prefill do "+ Da nota"); a nota manda e não se compara ("difere" sai). Devolve a
+   * frase do que impediu (ex.: já lançada), ou `null`. Ausente = a lista de sempre.
+   */
+  aoLerNotaNoNovo?: (arquivo: File) => Promise<string | null>;
+  /** a data do pagamento (o extrato), para a linha "pago no banco" do documento lido */
+  pagoEm?: string | null;
 }) {
   const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<LancDocumento | null>(null);
-  const api = useMemo(() => apiDePendentes(pendentes, onMudar), [pendentes, onMudar]);
+  const base = useMemo(() => apiDePendentes(pendentes, onMudar), [pendentes, onMudar]);
+  const especies = useRef(new Map<string, string>());
+  const [avisoDaNota, setAvisoDaNota] = useState<string | null>(null);
+  const api = useMemo(() => (aoLerNotaNoNovo ? comLeituraDaNota(base, especies.current, aoLerNotaNoNovo, setAvisoDaNota) : base),
+    [base, aoLerNotaNoNovo]);
   /* NOTA-NOVA-MODAL-REAL D4 (Gabriel 30/10) — o anexo é clicável ANTES de salvar: o PDF abre no visualizador (tela cheia); o XML, numa aba nova */
   const [vendo, setVendo] = useState<{ arquivo: File; bytes: ArrayBuffer } | null>(null);
   const abrirPendente = (f: File) => {
@@ -143,6 +180,9 @@ export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, tr
           <Plus className="h-3 w-3" /> Adicionar documento
         </Button>
       </div>
+      {avisoDaNota && (
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-900" role="alert" data-testid="pendentes-aviso-nota">{avisoDaNota}</p>
+      )}
 
       {pendentes.length > 0 && (
         <div className="overflow-auto rounded border border-[#E0E2E6]">
@@ -216,7 +256,7 @@ export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, tr
 
       {formAberto && (
         <FormDocumento api={api} documento={editando} clienteId={clienteId} pendente semBoleto={!!ligadoA}
-          sugestao={sugestao}
+          sugestao={sugestao} notaManda={aoLerNotaNoNovo ? { pagoEm: pagoEm ?? null } : undefined}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
       {vendo && (

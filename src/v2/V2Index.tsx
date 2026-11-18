@@ -68,6 +68,7 @@ import { DividendosTab } from '@/pages/DividendosTab';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { FinV2SaldosTab } from '@/pages/FinV2SaldosTab';
 import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
+import AprovarPagamentosPage from '@/pages/AprovarPagamentosPage';
 import { VisaoGeralFinanceiro, type RetornoVG } from '@/v2/pages/VisaoGeralFinanceiro';
 import { inicialDaVisaoFinanceira } from '@/v2/pages/visaoGeral/caixaAbreVisaoFinanceira';
 import type { FinV2DrillFilters } from '@/pages/FinanceiroV2Tab';
@@ -1184,6 +1185,8 @@ export default function V2Index() {
     if (section === 'contas-bancarias') return (
       <FinV2ContasTab />
     );
+    /* BPO-APROVACAO-01 — a fila do aprovador (o BPO nasce desligado: sem a configuração ligada, a tela diz isso) */
+    if (section === 'aprovar-pagamentos') return <AprovarPagamentosPage />;
     if (section === 'contratos') return (
       <ContratosTab />
     );

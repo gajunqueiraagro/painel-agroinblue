@@ -1386,6 +1386,22 @@ if (tela === 'mesclar') {
       rpc: (fn: string) => fn === 'fn_conciliacao_historico_buscar' ? HIST_R : null };
     montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} onCasarSelecionados={() => {}} sugestoes={SUGS_R} clienteId="cli"
       onCriarIgual={() => {}} onCasarDoHistorico={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" extrato={EXT_R} />);
+  } else if (v === 'edson') {
+    /* CONC-CRIAR-COM-NOTA-02 E1 (homologação 09:48), SINTÉTICO no formato do caso Edson: PIX MECANICA LIDER −6.000,00; as 5 NFs em aberto em 2
+       cadastros IRMÃOS ("…ME" e "…-ME"), o histórico apontando o 1º; outro fornecedor misturado. As sugestões pelo MOTOR de verdade. */
+    const ce = (id: string, forn: string, fav: string, valor: number, venc: string, desc: string): CandidatoSugestao => ({ lancamento_id: id, valor_assinado: valor,
+      data_vencimento: venc, competencia: '2031-10-06', descricao: desc, fornecedor: forn, favorecido_id: fav, status_transacao: 'programado', ja_conciliado: false });
+    const ME = 'Oficina Exemplo Dias ME'; const ME2 = 'Oficina Exemplo Dias-ME';
+    const CANDS = [ce('e288', ME, 'f-me', -1403.35, '2031-10-06', 'Rolamento diant. int. S10/Kombi/Ranger 2.3'), ce('e289', ME, 'f-me', -330, '2031-10-06', 'Bomba alimentadora'),
+      ce('e402', ME2, 'f-me2', -2900, '2031-10-10', 'Serviço máquinas'), ce('e404', ME2, 'f-me2', -5250, '2031-10-10', 'Serviço de manutenção BH145 bomba injetora'),
+      ce('e405', ME2, 'f-me2', -980, '2031-10-10', 'Serviço máquinas'), ce('seg', 'Seguradora Exemplo Companhia de Seguros', 'f-seg', -270, '2031-10-08', 'Seguro vida - grupo 5/12')];
+    const EXT_E = { data: '2031-10-08', historico: 'PIX - ENVIADO - 08/10 15:21 MECANICA LIDER', valor: -6000 };
+    const COMPL_E = [['e288', '000.000.288'], ['e289', '000.000.289'], ['e402', '000.000.402'], ['e404', '000.000.404'], ['e405', '000.000.405']]
+      .map(([id, nf]) => ({ id, data_pagamento: null, fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: nf }));
+    g.__bancoBancada = { from: (t: string) => (t === 'financeiro_lancamentos_v2' ? COMPL_E : t === 'fazendas' ? [{ id: 'fz1', nome: 'Fazenda Exemplo Retiro', codigo: 'RET' }] : []),
+      rpc: () => null };
+    montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} sugestoes={sugerirCasamentos(EXT_E, CANDS, { fornecedorDoHistorico: 'f-me', maximo: 20 })} clienteId="cli"
+      onCriarIgual={() => {}} onCasarDoHistorico={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" extrato={EXT_E} />);
   } else if (v === 'guariroba') {
     /* P153b — O CASO que abriu a frente, SINTÉTICO: BB 07/10, "PAGAMENTO FATURA DE ÁGUA - AGUAS GUARIROBA SA", −142,72; a sugestão nova
        ("mesmo fornecedor · valor difere: previsto 500,00", calculada pelo motor de verdade) e o histórico com os quatro casos: em aberto
@@ -1429,6 +1445,27 @@ if (tela === 'mesclar') {
       extrato={{ extrato_id: 'x1', data: '2027-08-15', historico: 'DEBITO PARCELA CREDITO RURAL · CONTRATO SINTETICO 0.000.000 · PARCELA 2/5', valor: -99999999.99 }}
       iniciais={[{ lancamento_id: 'yp', descricao: 'Amortização 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -88888888.88, data_vencimento: '2027-08-15', status_transacao: 'programado' },
         { lancamento_id: 'yj', descricao: 'Juros 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -9999999.99, data_vencimento: '2027-08-15', status_transacao: 'programado' }]}
+      onConciliado={() => {}} />);
+  } else if (v === 'edson') {
+    /* CONC-CRIAR-COM-NOTA-02 E2 (homologação 09:48) — o Casar com as 5 NFs (sintético no formato do caso Edson): a TABELA, uma linha por NF */
+    g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: false, motivo: 'soma_nao_bate', no_extrato: -6000, soma: -10863.35, diferenca: -4863.35 } : null };
+    const le = (id: string, forn: string, valor: number, venc: string, desc: string, nf: string) => ({ lancamento_id: id, descricao: desc, fornecedor: forn,
+      valor_assinado: valor, data_vencimento: venc, status_transacao: 'programado', numero_documento: nf });
+    montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil"
+      extrato={{ extrato_id: 'x1', data: '2031-10-08', historico: 'PIX - ENVIADO - 08/10 15:21 MECANICA LIDER', valor: -6000 }}
+      iniciais={[le('e404', 'Oficina Exemplo Dias-ME', -5250, '2031-10-10', 'Serviço de manutenção BH145 bomba injetora', '000000404'),
+        le('e402', 'Oficina Exemplo Dias-ME', -2900, '2031-10-10', 'Serviço máquinas', '000000402'),
+        le('e288', 'Oficina Exemplo Dias ME', -1403.35, '2031-10-06', 'Rolamento diant. int. S10/Kombi/Ranger 2.3', '000000288'),
+        le('e405', 'Oficina Exemplo Dias-ME', -980, '2031-10-10', 'Serviço máquinas', '000000405'),
+        le('e289', 'Oficina Exemplo Dias ME', -330, '2031-10-06', 'Bomba alimentadora', '000000289')]}
+      onConciliado={() => {}} />);
+  } else if (v === 'antecipado') {
+    /* CONC-CRIAR-COM-NOTA-02 D-h — pago no banco 28 dias ANTES do vencimento, com NF (sintético, valores no teto, nomes longos) */
+    g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: true, simulado: true, no_extrato: -99999999.99, soma: -99999999.99 } : null };
+    montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco Exemplo Personalité"
+      extrato={{ extrato_id: 'x1', data: '2026-10-13', historico: 'PIX AGENDAMENTO 10/10 · FERRAGENS EXEMPLO PARAFUSOS E FERRAMENTAS SINTETICAS LTDA', valor: -99999999.99 }}
+      iniciais={[{ lancamento_id: 'ya', descricao: 'Chave ajustável sintética 15", parafusos, brocas · 6 itens', fornecedor: 'Ferragens Exemplo Parafusos e Ferramentas Sintéticas Ltda',
+        valor_assinado: -99999999.99, data_vencimento: '2026-11-10', status_transacao: 'programado', numero_documento: '000077066' }]}
       onConciliado={() => {}} />);
   } else if (v === 'trocar') {
     /* P153b (D3) — "Casar e trocar a conta": o em aberto de outra conta levado do histórico, com a confirmação curta (valores no teto) */
@@ -1515,6 +1552,28 @@ if (tela === 'mesclar') {
     previa={v === 'carregando' ? null : lerForaDaVigencia(resposta)} carregando={v === 'carregando'}
     erro={v === 'erro' ? 'Os lançamentos mudaram durante a gravação (11 de 12). Nada foi gravado.' : null}
     aoConfirmar={async () => {}} aoFechar={() => {}} />);
+} else if (tela === 'aprovar-pagamentos') {
+  /* BPO-APROVACAO-01 — a tela do APROVADOR no pior caso (SINTÉTICO): 12 pagamentos em 3 dias, nomes compridos, valores no teto, sem nota/
+     sem boleto, uma conta com leitura do banco (fica negativa) e outra sem ("—"); `&v=alertas` a aba dos alertas; `&v=desligado` o BPO
+     desligado (a frase). O gate abre a prévia do lote (marca 3 e "Aprovar"). */
+  const NOMES = ['Agropecuária Sintética de Insumos e Fertilizantes do Centro-Oeste Ltda', 'Posto Exemplo', 'Veterinária Sintética Comprida Ltda'];
+  const LINHAS = Array.from({ length: 12 }, (_, i) => ({ lancamento_id: `p${i}`, rodada: i === 3 ? 2 : 1, situacao: i < 9 ? 'aguardando' : i < 11 ? 'aprovado' : 'recusado',
+    motivo: i === 11 ? 'Falta o boleto e conferir se a quantidade bate com o pedido de compra do mês' : null, observacao: i === 3 ? 'mudou: valor' : null,
+    vencimento: ['2031-10-21', '2031-10-24', '2031-10-28'][i % 3], valor: i === 0 ? -99999999.99 : -(1234.56 * (i + 1)), descricao: `Compra sintética ${i}`,
+    fornecedor: NOMES[i % 3], fazenda: 'Fazenda Sintética com Nome Longo', conta: i % 2 ? 'Sicredi Fazenda 0418' : 'Itaú Personalite 7225',
+    conta_bancaria_id: i % 2 ? 'sic' : 'itau', status_transacao: 'programado', tem_nota: i % 4 !== 2, tem_boleto: i % 3 !== 1 }));
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financeiro_bpo_config' ? (v === 'desligado' ? [] : [{ ativo: true }])
+      : t === 'financeiro_aprovadores' ? [{ id: 'a1' }]
+      : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }] : [],
+    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista' ? LINHAS
+      : fn === 'fn_aprovacao_alertas' ? [{ alerta: 'pago_sem_aprovacao', lancamento_id: 'x1', data: '2031-10-13', valor: -2140, valor_aprovado: null, fornecedor: NOMES[0] },
+          { alerta: 'aprovado_nao_pago', lancamento_id: 'x2', data: '2031-10-14', valor: -5990, valor_aprovado: -5990, fornecedor: NOMES[1] },
+          { alerta: 'pago_diferente', lancamento_id: 'x3', data: '2031-10-12', valor: -99999999.99, valor_aprovado: -99999999.98, fornecedor: NOMES[2] }]
+      : fn === 'fn_aprovacao_decidir' ? { ok: true, simulado: a.p_simular, n: (a.p_ids ?? []).length, total: 99999999.99 } : null,
+  };
+  /* import DENTRO do ramo: o trecho comum da bancada não muda (UI-GATE-RAPIDO-01) */
+  void import('@/pages/AprovarPagamentosPage').then(({ default: AprovarPagamentosPage }) => montar(<AprovarPagamentosPage />));
 } else if (tela === 'escolher-contas') {
   /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Contas bancárias › Bancos conectados › Escolher contas, com o bloco "Lança na
      conta": a conta corrente do banco, a conta do sistema com o nome no pior caso e a frase da prévia ("Liga … em …") depois do clique.
@@ -1602,6 +1661,9 @@ if (tela === 'mesclar') {
      `&v=carregando`: o modal antes de o dono responder. P166: `&v=ok|pendencia|pendente` a faixa do status nos outros casos e
      `&v=nj` os nomes no tamanho real (`dados/conciliacao.ts`). */
   const semArquivos = v === 'sem';
+  /* CONC-PAINEL-CONTA-01 — `&admin=1`: o operador admin (o ✎ da conta aparece e abre o painel lateral) */
+  if (q.get('admin') === '1') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' },
+    clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
   g.__bancoBancada = {
     from: (t: string) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : CONC.CONTAS)
       : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
@@ -1880,6 +1942,27 @@ if (tela === 'mesclar') {
     raiz.render(<TrocarFornecedorDialog clienteId="cli" ids={['x']} onClose={() => {}} />);
   };
   void montarTroca();
+} else if (tela === 'conferir-rateio') {
+  /* RATEIO-HIGINO-01 — o "Conferir rateio": 23 itens SINTÉTICOS da conta comum (a forma de nov/26: 3 fazendas, rótulo R_D15, um pago, um
+     sem rótulo ligado) + 2 "outros do mês"; descrições longas (o pior caso de texto) */
+  const montarRateio = async () => {
+    const { ConferirRateioDialog } = await import('@/components/financeiro-v2/ConferirRateioDialog');
+    const fazs = ['faz-1', 'faz-2', 'faz-3'];
+    const itens = Array.from({ length: 25 }, (_, i) => ({
+      id: `it-${i}`, descricao: i % 4 === 0 ? `Item Sintetico de Descricao Bem Comprida Numero ${i + 1} Conta de Energia Eletrica da Sede` : `Item ${i + 1}`,
+      fazenda_id: fazs[i % 3], plano_conta_id: i % 2 ? 'pc-1' : 'pc-2', valor: 12345.67 + i * 101.01, data_vencimento: `2026-11-${String(5 + (i % 20)).padStart(2, '0')}`,
+      data_competencia: '2026-11-01', numero_documento: i >= 23 ? 'R_Folha' : 'R_D15', tipo_documento: 'Recibo',
+      status_transacao: i === 1 ? 'realizado' : 'programado', data_pagamento: i === 1 ? '2026-11-05' : null, conciliado_em: null,
+    }));
+    g.__bancoBancada = { from: (t: string) => (t === 'financeiro_lancamentos_v2' ? itens : []), rpc: () => null };
+    raiz.render(<ConferirRateioDialog clienteId="cli" nomeDaConta="Conta Comum Sintetica de Nome Longo"
+      pagamento={{ id: 'pag', descricao: 'Rateio D15 Sintetico', valorCent: 99999999, vencimento: '2026-11-16', contaDestinoId: 'cc', status: 'programado', dataPagamento: null }}
+      fazendas={[{ id: 'faz-1', codigo: 'F1', nome: 'Faz. Um' }, { id: 'faz-2', codigo: 'F2', nome: 'Faz. Dois' }, { id: 'faz-3', codigo: 'ADM', nome: 'Administrativo' }]}
+      contasDoPlano={[{ id: 'pc-1', subcentro: 'Comunicação e Energia Pecuária Sintetica', centro_custo: 'Administração', tipo_operacao: '2-Saídas' },
+        { id: 'pc-2', subcentro: 'Contab. Jurídico e Consult. Pecuária', centro_custo: 'Administração', tipo_operacao: '2-Saídas' }]}
+      criarItem={async () => null} onClose={() => {}} onGravou={() => {}} />);
+  };
+  void montarRateio();
 } else if (tela === 'plano-contas') {
   /* P172 — Cadastros › Plano de Contas (dado SINTÉTICO, `dados/planoContas.ts`); `&perfil=cliente` = o cliente (só leitura, sem ações) */
   if (q.get('perfil') === 'cliente') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Bancada' }, clientes: [{ id: 'cli', nome: 'Cliente Bancada' }],

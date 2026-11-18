@@ -67,13 +67,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2 } from 'lucide-react';
+import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, ListChecks } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, dataDaDimensao, notificarLancamentosMudaram, type LancamentoV2, type FiltrosV2, type DimensaoDataFinanceiro } from '@/hooks/useFinanceiroV2';
 import { CriarOCDoLegadoDialog } from '@/components/financeiro-v2/CriarOCDoLegadoDialog';
+import { ConferirRateioDialog } from '@/components/financeiro-v2/ConferirRateioDialog';
+import type { ItemNovoDoRateio } from '@/lib/financeiro/rateio/conferirRateio';
 import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { prefillDeDuplicar, type PrefillDuplicar } from '@/lib/financeiro/prefillDeDuplicar';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
@@ -670,6 +672,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [dialogOpen, setDialogOpen] = useState(false);
   /* OC-CRIAR-DO-LEGADO-01 — o recebimento legado de onde nasce a OC (null = dialogo fechado). */
   const [criarOCDe, setCriarOCDe] = useState<string | null>(null);
+  /* RATEIO-HIGINO-01 — o pagamento (transferência para a conta comum) cuja relação se confere (null = fechado). */
+  const [conferirRateioDe, setConferirRateioDe] = useState<LancamentoV2 | null>(null);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
   /* O prefill do "Duplicar" (PR-FIN-DUPLICAR-ABRE-MODAL-01): só existe entre o clique e o fechar do dialog. */
   const [prefillDuplicar, setPrefillDuplicar] = useState<PrefillDuplicar | null>(null);
@@ -1093,6 +1097,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   };
 
   const openNew = () => { setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setDialogOpen(true); };
+  /* RATEIO-HIGINO-01 — a linha nova da relação vira um item na conta comum pelo writer do Novo lançamento (o mesmo insert). O status
+     segue o do pagamento: pago → realizado com a data do pagamento (só realizado tem data de pagamento); em aberto → o mesmo status. */
+  const criarItemDoRateio = async (pagamento: LancamentoV2, n: ItemNovoDoRateio): Promise<string | null> => {
+    const cls = hook.classificacoes.find((c) => c.id === n.planoContaId);
+    const pago = pagamento.status_transacao === 'realizado' || pagamento.status_transacao === 'conciliado';
+    return hook.criarLancamentoComId({
+      fazenda_id: n.fazendaId, conta_bancaria_id: pagamento.conta_destino_id, data_competencia: n.competencia, data_vencimento: n.vencimento,
+      valor: n.valorCent / 100, tipo_operacao: '2-Saídas', status_transacao: pago ? 'realizado' : (pagamento.status_transacao ?? undefined),
+      data_pagamento: pago ? pagamento.data_pagamento : null, descricao: n.descricao,
+      macro_custo: cls?.macro_custo, grupo_custo: cls?.grupo_custo, centro_custo: cls?.centro_custo, subcentro: cls?.subcentro, plano_conta_id: n.planoContaId,
+      numero_documento: n.nf, tipo_documento: n.nf ? 'Nota Fiscal' : 'Recibo',
+    }, { origem: 'manual' });
+  };
   const openEdit = (l: LancamentoV2, permiteFavOC = false) => {
     console.log('[FinV2] reopen edit object', {
       id: l.id,
@@ -3206,6 +3223,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                                     <FilePlus2 className="mr-1.5 h-3 w-3" /> Criar OC a partir deste lançamento
                                   </DropdownMenuItem>
                                 )}
+                                {/* RATEIO-HIGINO-01 — a transferência para uma conta comum: conferir a relação contra os itens de lá */}
+                                {l.tipo_operacao === '3-Transferências' && !!l.conta_destino_id && (
+                                  <DropdownMenuItem data-testid="menu-conferir-rateio" onClick={() => setConferirRateioDe(l)}>
+                                    <ListChecks className="mr-1.5 h-3 w-3" /> Conferir rateio
+                                  </DropdownMenuItem>
+                                )}
                             </>)} />
                           </div>
                         </td>
@@ -3414,6 +3437,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             notificarLancamentosMudaram(clienteAtual.id);
             abrirOCFinanceiro(operacaoId, tipo);
           }}
+        />
+      )}
+
+      {conferirRateioDe?.conta_destino_id && clienteAtual?.id && (
+        <ConferirRateioDialog
+          clienteId={clienteAtual.id}
+          pagamento={{
+            id: conferirRateioDe.id, descricao: conferirRateioDe.descricao ?? null,
+            valorCent: Math.round(Math.abs(Number(conferirRateioDe.valor)) * 100),
+            vencimento: conferirRateioDe.data_vencimento ?? conferirRateioDe.data_competencia,
+            contaDestinoId: conferirRateioDe.conta_destino_id,
+            status: conferirRateioDe.status_transacao, dataPagamento: conferirRateioDe.data_pagamento,
+          }}
+          nomeDaConta={contaNomeMap.get(conferirRateioDe.conta_destino_id) || 'conta comum'}
+          fazendas={fazOperacionais.map((f) => ({ id: f.id, codigo: f.codigo ?? null, nome: f.nome }))}
+          contasDoPlano={hook.classificacoes.flatMap((c) => (c.id ? [{ id: c.id, subcentro: c.subcentro ?? null, centro_custo: c.centro_custo ?? null, tipo_operacao: c.tipo_operacao ?? null }] : []))}
+          criarItem={(n) => criarItemDoRateio(conferirRateioDe, n)}
+          onClose={() => setConferirRateioDe(null)}
+          onGravou={(ids) => { notificarLancamentosMudaram(clienteAtual.id, null, ids); listaV2.recarregar(); }}
         />
       )}
 

@@ -94,11 +94,11 @@ describe('o modal "Sugestões para casar"', () => {
     expect(t.style.tableLayout).toBe('fixed');
     /* UI-FONTE-GATE-01 (Chat 12/11 15:22): sem fazenda nem NF nas sugestões, Faz. e NF saem e a largura vai para Descrição/Fornecedor */
     expect([...t.querySelectorAll('col')].map((x) => (x instanceof HTMLElement ? x.style.width : '?')))
-      .toEqual(['28px', '46px', '46px', '46px', '', '', '94px', '60px', '120px', '62px']);
-    expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Valor', 'Status', 'Motivo', '']);
+      .toEqual(['28px', '46px', '46px', '46px', '', '', '94px', '80px', '38px', '60px', '120px', '62px']);
+    expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Valor', 'Δ valor', 'Δ dias', 'Status', 'Motivo', '']);
     /* UI-FONTE-GATE-01: o cabeçalho alinha como a coluna (texto à esquerda, número à direita), nunca tudo no centro */
     expect([...t.querySelectorAll('th')].map((x) => (/\btext-left\b/.test(x.className) ? 'E' : /\btext-right\b/.test(x.className) ? 'D' : 'C')))
-      .toEqual(['C', 'C', 'C', 'C', 'E', 'E', 'D', 'C', 'E', 'C']);
+      .toEqual(['C', 'C', 'C', 'C', 'E', 'E', 'D', 'D', 'D', 'C', 'E', 'C']);
     const linhas = within(modal).getAllByTestId('sugestao');
     expect(linhas.length).toBeGreaterThan(0);
     for (const tr of linhas) {
@@ -131,16 +131,12 @@ describe('o modal "Sugestões para casar"', () => {
   /* A REGRA DE CORTE (21/10): uma linha; texto com "…" e o inteiro no title; data dd/mm/aaaa nas três colunas */
   /* UI-FONTE-GATE-01 (regra do Gabriel, Chat 12/11 15:22): nome NUNCA corta — Descrição e Fornecedor quebram na célula (a linha cresce);
      data, valor e status seguem numa linha */
-  it('nome nunca corta: descrição e fornecedor quebram na célula (sem "…"); as datas são dd/mm/aaaa numa linha', () => {
+  it('CONC-CRIAR-COM-NOTA-02 D-g: LINHA ÚNICA — nada quebra (descrição e fornecedor com "…" e o inteiro no title); Δ valor e Δ dias com cor; datas dd/mm/aaaa', () => {
     const { modal } = abrir();
     for (const tr of within(modal).getAllByTestId('sugestao')) {
-      const quebram = [...tr.querySelectorAll('td')].filter((td) => td.className.includes('whitespace-normal'));
-      expect(quebram).toHaveLength(2);
-      const [desc, forn] = quebram;
-      expect(desc.className).not.toContain('truncate');
-      expect(forn.className).not.toContain('truncate');
-      expect(forn.querySelector('.truncate')).toBeNull();
-      expect(desc.getAttribute('title')).toBe(desc.textContent);
+      expect([...tr.querySelectorAll('td')].filter((td) => td.className.includes('whitespace-normal'))).toHaveLength(0);
+      expect(within(tr).getByTestId('sugestao-delta-valor').textContent).toMatch(/^(0,00|[+−][\d.]+,\d{2})$/);
+      expect(within(tr).getByTestId('sugestao-delta-dias').textContent).toMatch(/^(0|[+−]\d+|—)$/);
       for (const d of tr.querySelectorAll('td.celula-data')) expect(d.textContent).toMatch(/^(\d{2}\/\d{2}\/\d{4}|-)$/);
     }
   });
@@ -229,18 +225,18 @@ describe('o modal "Sugestões para casar"', () => {
 
 describe('casar com valor diferente abre o CasarComBancoModal com o valor do banco', () => {
   const EXT = { extrato_id: 'e-amanda', data: '2026-09-04', historico: 'Pix - Agendamento - 04/09 05:35 CAMARGO PROMOCAO DE VENDA', valor: -5665 };
-  it('o campo nasce com 5665,00 e a linha diz "era R$ 3.085,00"; o Conciliar manda esse valor à mesma RPC', async () => {
+  it('o campo nasce com 5.665,00 e a linha diz "era R$ 3.085,00"; o Conciliar manda esse valor à mesma RPC', async () => {
     render(<CasarComBancoModal open onClose={() => {}} extrato={EXT} contaBancariaId="bb" nomeConta="Banco do Brasil" onConciliado={() => {}}
       iniciais={[{ lancamento_id: 'amanda', descricao: 'Folha de Pagamento', fornecedor: 'Amanda Montes Camargo', valor_assinado: -3085, usarValorDoBanco: true }]} />);
     const campo = screen.getByLabelText('Valor de Folha de Pagamento') as HTMLInputElement;
-    expect(campo.value).toBe('5665,00');
+    expect(campo.value).toBe('5.665,00');
     expect(screen.getByTestId('era-valor').textContent).toBe('era R$ 3.085,00');
     /* o "era" ocupa o lugar do botão: com o campo já no valor do banco, o botão não aparece */
     expect(screen.queryByTestId('usar-valor-banco')).toBeNull();
     await waitFor(() => expect(RPC.chamadas.length).toBeGreaterThan(0));
     expect(RPC.chamadas[0]).toMatchObject({ fn: 'fn_espelho_casar', args: { p_simular: true, p_itens: [{ lancamento_id: 'amanda', valor: 5665 }] } });
     /* voltar o campo ao valor antigo tira o "era" — ele só diz o que mudou */
-    fireEvent.change(campo, { target: { value: '3085,00' } });
+    fireEvent.change(campo, { target: { value: '3.085,00' } });
     expect(screen.queryByTestId('era-valor')).toBeNull();
     /* e o botão volta, para quem quiser o valor do banco de novo */
     expect(screen.getByTestId('usar-valor-banco')).toBeInTheDocument();
@@ -248,7 +244,7 @@ describe('casar com valor diferente abre o CasarComBancoModal com o valor do ban
   it('sem a marca (o caminho de sempre), o campo nasce com o valor do lançamento e não há "era"', () => {
     render(<CasarComBancoModal open onClose={() => {}} extrato={EXT} contaBancariaId="bb" onConciliado={() => {}}
       iniciais={[{ lancamento_id: 'amanda', descricao: 'Folha de Pagamento', valor_assinado: -3085 }]} />);
-    expect((screen.getByLabelText('Valor de Folha de Pagamento') as HTMLInputElement).value).toBe('3085,00');
+    expect((screen.getByLabelText('Valor de Folha de Pagamento') as HTMLInputElement).value).toBe('3.085,00');
     expect(screen.queryByTestId('era-valor')).toBeNull();
     expect(screen.getByTestId('usar-valor-banco')).toBeInTheDocument();
   });
