@@ -18,7 +18,7 @@
  */
 import type { ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
 import { itensDoPdf, type PdfjsMinimo } from '@/lib/financeiro/nfe/lerNotaPdf';
-import { acharBoletoNoTexto, type BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
+import { acharBoletoNoTexto, acharBoletosNoTexto, type BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
 
 /* ═══ documento (CPF / CNPJ numérico / CNPJ alfanumérico) ═══ */
 
@@ -158,6 +158,17 @@ export function lerBoleto(paginas: ItemDoDanfe[][]): LeituraDoBoleto {
   };
 }
 
+/**
+ * BOLETO D3d (D7) — o PDF com VÁRIOS boletos: todas as linhas com DV certo (sem repetir o título) e as partes lidas como no `lerBoleto`
+ * (o mesmo emissor nas fichas do mesmo arquivo). Sem nenhuma linha = `boletos` vazio (a caixa trata como "não é boleto"). Pura.
+ */
+export interface LeituraDosBoletos { boletos: BoletoNormalizado[]; beneficiario: ParteDoBoleto; pagador: ParteDoBoleto }
+export function lerBoletos(paginas: ItemDoDanfe[][]): LeituraDosBoletos {
+  const um = lerBoleto(paginas);
+  const texto = paginas.map((p) => p.map((t) => t.str).join(' ')).join('\n');
+  return { boletos: acharBoletosNoTexto(texto), beneficiario: um.beneficiario, pagador: um.pagador };
+}
+
 /** A leitura no formato do `p_leitura` da `fn_boleto_entrar` (o banco reconfere o DV; os campos vazios não vão). */
 export function paraEntrada(l: LeituraDoBoleto & { boleto: BoletoNormalizado }, origem: 'pdf' | 'email' | 'whatsapp', arquivoNome: string) {
   const ext = /\.([A-Za-z0-9]+)$/.exec(arquivoNome)?.[1] ?? 'pdf';
@@ -198,6 +209,24 @@ export async function lerBoletoDoArquivo(
     const { paginas } = await itensDoPdf(bytes, opcoes.pdfjs, { senha: opcoes.senha });
     if (!paginas.some((p) => p.some((t) => t.str.trim() !== ''))) return { ok: false, motivo: 'sem_texto', frase: FRASE_SEM_TEXTO };
     return { ok: true, leitura: lerBoleto(paginas) };
+  } catch (e) {
+    const senha = erroDeSenha(e);
+    if (senha === 'senha') return { ok: false, motivo: 'senha', frase: FRASE_SENHA };
+    if (senha === 'senha_errada') return { ok: false, motivo: 'senha_errada', frase: FRASE_SENHA_ERRADA };
+    console.error('[boleto] PDF ilegível', e);
+    return { ok: false, motivo: 'ilegivel', frase: FRASE_ILEGIVEL };
+  }
+}
+
+/** BOLETO D3d — o arquivo inteiro: todos os boletos (D7). As recusas (senha, sem texto, ilegível) são as do `lerBoletoDoArquivo`. */
+export type LeituraDoArquivoInteiro =
+  | { ok: true; leitura: LeituraDosBoletos }
+  | { ok: false; motivo: 'senha' | 'senha_errada' | 'sem_texto' | 'ilegivel'; frase: string };
+export async function lerBoletosDoArquivo(bytes: ArrayBuffer, opcoes: { senha?: string; pdfjs?: PdfjsMinimo } = {}): Promise<LeituraDoArquivoInteiro> {
+  try {
+    const { paginas } = await itensDoPdf(bytes, opcoes.pdfjs, { senha: opcoes.senha });
+    if (!paginas.some((p) => p.some((t) => t.str.trim() !== ''))) return { ok: false, motivo: 'sem_texto', frase: FRASE_SEM_TEXTO };
+    return { ok: true, leitura: lerBoletos(paginas) };
   } catch (e) {
     const senha = erroDeSenha(e);
     if (senha === 'senha') return { ok: false, motivo: 'senha', frase: FRASE_SENHA };

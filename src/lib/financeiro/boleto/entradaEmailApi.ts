@@ -29,6 +29,24 @@ export interface EntradaDoEmail {
   id: string; mensagemId: string; remetente: string | null; assunto: string | null; recebidoEm: string | null;
   arquivoNome: string | null; tipo: 'pdf' | 'xml' | null; tamanhoBytes: number | null; storagePath: string | null;
   estado: EstadoDaEntrada; motivo: string | null; chegouDeNovo: number;
+  /** BOLETO D3d (118180) — o motivo de ignorar ("dispensado" = ignorado), o detalhe, quando; e o que a linha virou ao resolver. */
+  ignoradoMotivo: MotivoDeIgnorar | 'anterior_a_regra' | null; ignoradoDetalhe: string | null; ignoradoEm: string | null;
+  boletoId: string | null; lancamentoId: string | null; resolvidoEm: string | null;
+}
+
+/** D6 — os motivos de ignorar que a tela oferece (o banco recusa outro; 'anterior_a_regra' só o banco grava). */
+export type MotivoDeIgnorar = 'antigo' | 'repetido' | 'outro_cliente' | 'nao_e_documento' | 'outro';
+export const MOTIVOS_DE_IGNORAR: readonly { valor: MotivoDeIgnorar; rotulo: string }[] = [
+  { valor: 'antigo', rotulo: 'Boleto antigo ou já pago' },
+  { valor: 'repetido', rotulo: 'Repetido (já chegou antes)' },
+  { valor: 'outro_cliente', rotulo: 'Não é deste cliente' },
+  { valor: 'nao_e_documento', rotulo: 'Não é boleto nem nota (propaganda, comprovante…)' },
+  { valor: 'outro', rotulo: 'Outro motivo' },
+];
+const MOTIVOS = ['antigo', 'repetido', 'outro_cliente', 'nao_e_documento', 'outro', 'anterior_a_regra'] as const;
+export function rotuloDoMotivo(m: EntradaDoEmail['ignoradoMotivo']): string {
+  if (m === 'anterior_a_regra') return 'dispensado antes da regra do motivo';
+  return MOTIVOS_DE_IGNORAR.find((x) => x.valor === m)?.rotulo ?? '—';
 }
 export function entradaDaLinha(r: Linha): EntradaDoEmail {
   return {
@@ -36,6 +54,8 @@ export function entradaDaLinha(r: Linha): EntradaDoEmail {
     recebidoEm: txt(r.recebido_em), arquivoNome: txt(r.arquivo_nome), tipo: r.tipo === 'pdf' || r.tipo === 'xml' ? r.tipo : null,
     tamanhoBytes: numOuNulo(r.tamanho_bytes), storagePath: txt(r.storage_path),
     estado: ESTADOS.find((e) => e === r.estado) ?? 'a_ler', motivo: txt(r.motivo), chegouDeNovo: numOuNulo(r.chegou_de_novo) ?? 0,
+    ignoradoMotivo: MOTIVOS.find((m) => m === r.ignorado_motivo) ?? null, ignoradoDetalhe: txt(r.ignorado_detalhe), ignoradoEm: txt(r.dispensado_em),
+    boletoId: txt(r.boleto_id), lancamentoId: txt(r.lancamento_id), resolvidoEm: txt(r.lido_em),
   };
 }
 
@@ -57,18 +77,27 @@ export function fraseDoErroDaEntrada(e: unknown): string {
   return 'Não consegui falar com o banco. Tente de novo.';
 }
 
+/** A nota (pela chave) que JÁ ESTÁ num lançamento vivo do cliente: o documento com a mesma chave (D3 — "já lançada · Vincular"). */
+export interface NotaNoSistema { lancamentoId: string; descricao: string | null; valor: number | null; vencimento: string | null }
+
 export interface EntradaEmailApi {
   endereco: (clienteId: string) => Promise<Resultado<EnderecoDoCliente>>;
   gerar: (clienteId: string, motivo: string | null, simular: boolean) => Promise<Resultado<RespostaDoEndereco>>;
   revogar: (clienteId: string, motivo: string, simular: boolean) => Promise<Resultado<RespostaDoEndereco>>;
-  /** Os que pedem gesto, mais novos primeiro (até 200). */
-  pendentes: (clienteId: string) => Promise<Resultado<EntradaDoEmail[]>>;
+  /** BOLETO D3d — TUDO o que chegou (a resolver, resolvidos e ignorados), mais novos primeiro (até 300). */
+  todas: (clienteId: string) => Promise<Resultado<EntradaDoEmail[]>>;
   baixar: (storagePath: string) => Promise<Resultado<Blob>>;
-  marcarLido: (id: string, estado: 'boleto' | 'nota' | 'nao_reconhecido', boletoId: string | null) => Promise<Resultado<true>>;
-  dispensar: (id: string) => Promise<Resultado<true>>;
+  /** D6 — ignorar com motivo (vários de uma vez), voltar (Ignorados/Resolvidos → A resolver) e resolver (boleto ou nota). Sem prévia na
+   *  tela: o gesto já é a escolha explícita (o minimodal do motivo), e o banco recusa o que não cabe. */
+  ignorar: (ids: string[], motivo: MotivoDeIgnorar, detalhe: string | null) => Promise<Resultado<true>>;
+  voltar: (id: string) => Promise<Resultado<true>>;
+  resolver: (id: string, estado: 'boleto' | 'nota', boletoId: string | null, lancamentoId: string | null) => Promise<Resultado<true>>;
+  /** As chaves que já estão num lançamento vivo do cliente (pelo documento). Falhou = erro (P146: nunca "não achei"). */
+  notasNoSistema: (clienteId: string, chaves: string[]) => Promise<Resultado<Record<string, NotaNoSistema>>>;
 }
 
-const COLUNAS = 'id, mensagem_id, remetente, assunto, recebido_em, arquivo_nome, tipo, tamanho_bytes, storage_path, estado, motivo, chegou_de_novo';
+const COLUNAS = 'id, mensagem_id, remetente, assunto, recebido_em, arquivo_nome, tipo, tamanho_bytes, storage_path, estado, motivo, chegou_de_novo, '
+  + 'ignorado_motivo, ignorado_detalhe, dispensado_em, boleto_id, lancamento_id, lido_em';
 
 export const entradaEmailApiDoBanco: EntradaEmailApi = {
   async endereco(clienteId) {
@@ -92,9 +121,9 @@ export const entradaEmailApiDoBanco: EntradaEmailApi = {
     if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
     return { ok: true, dados: respostaDoEndereco(data) };
   },
-  async pendentes(clienteId) {
+  async todas(clienteId) {
     const { data, error } = await (supabase as any).from('entrada_arquivos').select(COLUNAS).eq('cliente_id', clienteId)
-      .in('estado', ESTADOS_ABERTOS).order('recebido_em', { ascending: false }).limit(200);
+      .order('recebido_em', { ascending: false }).limit(300);
     if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
     return { ok: true, dados: (Array.isArray(data) ? data.filter(ehLinha) : []).map(entradaDaLinha) };
   },
@@ -103,14 +132,39 @@ export const entradaEmailApiDoBanco: EntradaEmailApi = {
     if (error || !data) { console.error('[e-mail de boletos] baixar', error); return { ok: false, erro: 'Não consegui abrir o arquivo que chegou.' }; }
     return { ok: true, dados: data };
   },
-  async marcarLido(id, estado, boletoId) {
-    const { error } = await (supabase as any).rpc('fn_entrada_marcar_lido', { p_id: id, p_estado: estado, p_boleto_id: boletoId, p_simular: false });
+  async ignorar(ids, motivo, detalhe) {
+    const { error } = await (supabase as any).rpc('fn_entrada_ignorar', { p_ids: ids, p_motivo: motivo, p_detalhe: detalhe, p_simular: false });
     if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
     return { ok: true, dados: true };
   },
-  async dispensar(id) {
-    const { error } = await (supabase as any).rpc('fn_entrada_dispensar', { p_id: id, p_simular: false });
+  async voltar(id) {
+    const { error } = await (supabase as any).rpc('fn_entrada_voltar', { p_id: id, p_simular: false });
     if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
     return { ok: true, dados: true };
+  },
+  async resolver(id, estado, boletoId, lancamentoId) {
+    const { error } = await (supabase as any).rpc('fn_entrada_resolver', { p_id: id, p_estado: estado, p_boleto_id: boletoId, p_lancamento_id: lancamentoId, p_simular: false });
+    if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
+    return { ok: true, dados: true };
+  },
+  async notasNoSistema(clienteId, chaves) {
+    if (!chaves.length) return { ok: true, dados: {} };
+    const docs = await (supabase as any).from('financeiro_lancamento_documentos').select('chave_acesso, lancamento_id')
+      .eq('cliente_id', clienteId).eq('cancelado', false).in('chave_acesso', chaves);
+    if (docs.error) return { ok: false, erro: fraseDoErroDaEntrada(docs.error) };
+    const pares = (Array.isArray(docs.data) ? docs.data.filter(ehLinha) : [])
+      .map((d) => ({ chave: txt(d.chave_acesso), lanc: txt(d.lancamento_id) })).filter((d): d is { chave: string; lanc: string } => !!d.chave && !!d.lanc);
+    if (!pares.length) return { ok: true, dados: {} };
+    const lancs = await (supabase as any).from('financeiro_lancamentos_v2').select('id, descricao, valor, data_vencimento')
+      .eq('cliente_id', clienteId).eq('cancelado', false).in('id', [...new Set(pares.map((p) => p.lanc))]);
+    if (lancs.error) return { ok: false, erro: fraseDoErroDaEntrada(lancs.error) };
+    const porId = new Map((Array.isArray(lancs.data) ? lancs.data.filter(ehLinha) : []).map((l) => [String(l.id), l]));
+    const dados: Record<string, NotaNoSistema> = {};
+    for (const p of pares) {
+      const l = porId.get(p.lanc);
+      if (!l || dados[p.chave]) continue;
+      dados[p.chave] = { lancamentoId: p.lanc, descricao: txt(l.descricao), valor: numOuNulo(l.valor), vencimento: txt(l.data_vencimento) };
+    }
+    return { ok: true, dados };
   },
 };

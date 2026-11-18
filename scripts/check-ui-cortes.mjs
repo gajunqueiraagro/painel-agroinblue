@@ -1327,28 +1327,44 @@ const CENARIOS = [
     ];
   })(),
   ...(() => {
+    /* BOLETO D1d — a coluna "Na caixa" com os 5 estados do mock (entra e liga · já na caixa · outro boleto · já ligado · não confere) */
     const T = [[918, 600], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+    const NOMES = [1, 2, 3, 4].map((n) => `boleto-parcela-${n}.pdf`).concat('boleto-escaneado-05.pdf');
+    return [{ nome: 'anexar-boletos-caixa', url: 'tela=anexar-boletos-caixa', tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+      await p.locator('[data-testid="input-boletos"]').setInputFiles(NOMES.map((n) => ({ name: n, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
+      await p.waitForTimeout(1200);
+    } }];
+  })(),
+  ...(() => {
+    /* BOLETO D3d — a caixa por e-mail v2 (dado SINTÉTICO, `dados/caixaBoletos.ts`): "A resolver" com 6 e-mails (nota XML+DANFE, o pior caso
+       com o valor no teto, os antigos com o PDF de 2 boletos, senha/escaneado/por nome/já ligado, sem anexo/recusado/Gmail) e os guardados;
+       os arrastados; a senha; Resolvidos; Ignorados; o minimodal do Ignorar; a linha clicada (o PDF ao lado ≥1366); sem o "Lançar nota".
+       Gabriel 18/11 07:50: LINHA ÚNICA em toda tabela, conferida a 918/1126/1366/1920. */
+    const T = [[918, 600], [1000, 600], [1126, 579], [1366, 768], [1440, 800], [1920, 1080]];
     const URL = 'tela=caixa-boletos';
-    const NOMES = ['boleto-0031283.pdf', 'boleto_dez_G.pdf', 'boleto-condominio.pdf', 'boleto_insumos.pdf', 'boleto-pago-antes.pdf',
-      'boleto com nome de arquivo muito comprido que não cabe na coluna 2026-12.pdf', 'Boleto_Unimed.pdf', 'boleto-escaneado.pdf'];
+    const NOMES = ['boleto-0031283.pdf', 'boleto_dez_G.pdf', 'Boleto_Unimed.pdf', 'boleto-escaneado.pdf', 'nota-4410.xml'];
+    const pronto = async (p) => { await p.waitForTimeout(900); };
     const soltar = async (p) => {
-      await p.locator('[data-testid="input-da-caixa"]').setInputFiles(NOMES.map((n) => ({ name: n, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
+      await pronto(p);
+      await p.locator('[data-testid="input-da-caixa"]').setInputFiles(NOMES.map((n) => ({ name: n, mimeType: n.endsWith('.xml') ? 'text/xml' : 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
       await p.waitForTimeout(900);
     };
-    const aba = (re) => async (p) => { await p.locator('[data-testid="caixa-de-boletos"] button', { hasText: re }).first().click(); await p.waitForTimeout(500); };
+    const aba = (re) => async (p) => { await pronto(p); await p.locator('[data-testid="caixa-de-boletos"] button', { hasText: re }).first().click(); await p.waitForTimeout(500); };
     const R = '[data-testid="caixa-de-boletos"]';
     return [
-      { nome: 'caixa-boletos', url: URL, tamanhos: T, regiao: R },
-      { nome: 'caixa-boletos-chegando', url: URL, tamanhos: T, regiao: R, antes: soltar },
+      { nome: 'caixa-boletos', url: URL, tamanhos: T, regiao: R, antes: pronto },
+      { nome: 'caixa-boletos-arrastados', url: URL, tamanhos: T, regiao: R, antes: soltar },
       { nome: 'caixa-boletos-senha-aberta', url: URL, tamanhos: T, regiao: R, antes: async (p) => {
-        await soltar(p); await p.locator('[data-testid="sugestao-de-senha"]').first().click(); await p.waitForTimeout(700); } },
-      { nome: 'caixa-boletos-na-caixa', url: URL, tamanhos: T, regiao: R, antes: aba(/^Na caixa/) },
-      { nome: 'caixa-boletos-sem-par', url: URL, tamanhos: T, regiao: R, antes: aba(/^Sem par/) },
-      { nome: 'caixa-boletos-todos', url: URL, tamanhos: T, regiao: R, antes: aba(/^Todos/) },
-      /* BOLETO D3c — "Por e-mail" (um de cada estado + remetente/assunto/arquivo longos) e o PDF do e-mail lido em "Chegando" */
-      { nome: 'caixa-boletos-por-email', url: URL, tamanhos: T, regiao: R, antes: aba(/^Por e-mail/) },
-      { nome: 'caixa-boletos-email-lido', url: URL, tamanhos: T, regiao: R, antes: async (p) => {
-        await aba(/^Por e-mail/)(p); await p.locator('[data-testid="ler-do-email"]').first().click(); await p.waitForTimeout(900); } },
+        await pronto(p); await p.locator('[data-testid="sugestao-de-senha"]').first().click(); await p.waitForTimeout(700); } },
+      /* o arquivo AO LADO só existe de 1366 para cima (abaixo ele abre por cima, no visualizador das notas, que tem cena própria) */
+      { nome: 'caixa-boletos-linha-vista', url: URL, tamanhos: T.filter(([w]) => w >= 1366), regiao: R, antes: async (p) => {
+        await pronto(p); await p.locator('[data-testid="linha-da-caixa"]').first().click(); await p.waitForTimeout(700); } },
+      { nome: 'caixa-boletos-resolvidos', url: URL, tamanhos: T, regiao: R, antes: aba(/^Resolvidos/) },
+      { nome: 'caixa-boletos-ignorados', url: URL, tamanhos: T, regiao: R, antes: aba(/^Ignorados/) },
+      { nome: 'caixa-boletos-ignorar', url: URL, tamanhos: T, regiao: '[data-testid="ignorar-dialog"]', antes: async (p) => {
+        await pronto(p); await p.locator('[data-testid="ignorar-antigos"]').first().click(); await p.waitForTimeout(400);
+        await p.locator('[data-testid="motivo-outro"]').click(); await p.locator('[data-testid="confirmar-ignorar"]').click(); await p.waitForTimeout(300); } },
+      { nome: 'caixa-boletos-sem-lancar', url: `${URL}&caso=sem_lancar`, tamanhos: T, regiao: R, antes: pronto },
     ];
   })(),
   /* BOLETO D3c — o endereço de boletos (dado SINTÉTICO: o slug no teto de 40): ver; trocar sem motivo (vermelho) e com a prévia; revogar;

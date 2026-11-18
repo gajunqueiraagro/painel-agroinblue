@@ -16,12 +16,14 @@ type Modo = 'largura' | 'pagina' | 'livre';
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 4;
 
-export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba }: {
+export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba, onBaixar }: {
   open: boolean;
   onFechar: () => void;
   bytes: ArrayBuffer;
   nome: string;
   onNovaAba: () => void;
+  /** BOLETO D3d (Gabriel 18/11 11:59): quem passa ganha o "Baixar" (salvar o arquivo); sem ele, a barra é a de sempre. */
+  onBaixar?: () => void;
 }) {
   const quadro = useRef<HTMLDivElement>(null);
   const tela = useRef<HTMLCanvasElement>(null);
@@ -116,6 +118,7 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
           <span className="w-[44px] text-center tabular-nums" data-testid="visualizador-pagina-n">{pagina}/{total}</span>
           <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={() => setPagina((n) => Math.min(total, n + 1))} disabled={pagina >= total} aria-label="Próxima página">›</Button>
           <span className="ml-auto" />
+          {onBaixar && <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={onBaixar} data-testid="visualizador-baixar">⤓ Baixar</Button>}
           <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={onNovaAba} data-testid="visualizador-nova-aba">↗ Abrir em nova aba</Button>
         </div>
         <div ref={quadro} className="flex min-h-0 flex-1 justify-center overflow-auto bg-[#e9ecf0] p-4" data-testid="visualizador-quadro">

@@ -169,6 +169,25 @@ export function acharBoletoNoTexto(texto: string): BoletoNormalizado | null {
 }
 
 /**
+ * BOLETO D3d (D7) — TODOS os boletos do texto (o PDF com 2+ fichas de compensação), cada um com o DV conferido, sem repetir o mesmo
+ * título (a ficha e o recibo do pagador trazem a mesma linha). Ordem = a do texto. O `acharBoletoNoTexto` de hoje fica como está.
+ */
+export function acharBoletosNoTexto(texto: string): BoletoNormalizado[] {
+  const candidatas = [
+    ...[...texto.matchAll(COM_SEPARADOR_TODAS)].map((m) => ({ i: m.index ?? 0, c: m.slice(1).join('') })),
+    ...[...texto.matchAll(ARRECADACAO_EM_BLOCOS)].map((m) => ({ i: m.index ?? 0, c: m[0] })),
+    ...[...texto.matchAll(CORRIDA_47)].map((m) => ({ i: m.index ?? 0, c: m[0] })),
+    ...[...texto.matchAll(CORRIDA_48)].map((m) => ({ i: m.index ?? 0, c: m[0] })),
+  ].sort((a, b) => a.i - b.i);
+  const achados: BoletoNormalizado[] = [];
+  for (const { c } of candidatas) {
+    const r = normalizarBoleto(c);
+    if (r.ok && !achados.some((x) => x.codigo_barras === r.codigo_barras)) achados.push(r);
+  }
+  return achados;
+}
+
+/**
  * Lê a linha digitável de 47 dígitos (com ou sem separadores) COM DV CERTO. Devolve null se não houver.
  * (O "Anexar boletos das parcelas" só casa boleto bancário; a arrecadação fica para a caixa, por `acharBoletoNoTexto`.)
  */

@@ -280,16 +280,16 @@ const CENARIOS = [
     ['o terceiro', botao(/Terceiro Exemplo/)], ['a PJ', botao(/Agropecuária Exemplo/)], ['o inativo', botao(/Produtor Antigo Exemplo/)],
     ['de volta à produtora', botao(/Produtora Sintética/)],
   ] },
-  /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos: trocar a aba e soltar os PDFs não move as abas, a área de soltar, o cabeçalho nem o
-     rodapé (o quadro da tabela é `data-desloca-livre`; o contador das abas e o do botão têm lugar reservado) */
-  { nome: 'caixa-boletos', url: 'tela=caixa-boletos', regiao: '[data-testid="caixa-de-boletos"]', estados: [
-    ['aba Na caixa', botao(/^Na caixa/)], ['aba Sem par', botao(/^Sem par/)], ['aba Todos', botao(/^Todos/)], ['aba Chegando', botao(/^Chegando/)],
-    ['soltar os PDFs', async (p) => {
-      const nomes = ['boleto-0031283.pdf', 'boleto_dez_G.pdf', 'boleto-condominio.pdf', 'boleto-pago-antes.pdf', 'Boleto_Unimed.pdf'];
-      await p.locator('[data-testid="input-da-caixa"]').setInputFiles(nomes.map((n) => ({ name: n, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
+  /* BOLETO D3d — a caixa por e-mail v2: trocar a aba (A resolver · Resolvidos · Ignorados), soltar arquivos, abrir a senha e clicar numa
+     linha não movem a faixa das abas, a área de soltar, o cabeçalho nem o rodapé (o quadro da tabela é `data-desloca-livre`; os contadores
+     das abas têm lugar reservado; o painel do arquivo ao lado tem largura fixa) */
+  { nome: 'caixa-boletos', url: 'tela=caixa-boletos', regiao: '[data-testid="caixa-de-boletos"]', antes: (p) => espera(p, 900), estados: [
+    ['aba Resolvidos', botao(/^Resolvidos/)], ['aba Ignorados', botao(/^Ignorados/)], ['aba A resolver', botao(/^A resolver/)],
+    ['soltar os arquivos', async (p) => {
+      const nomes = ['boleto-0031283.pdf', 'boleto_dez_G.pdf', 'Boleto_Unimed.pdf', 'nota-4410.xml'];
+      await p.locator('[data-testid="input-da-caixa"]').setInputFiles(nomes.map((n) => ({ name: n, mimeType: n.endsWith('.xml') ? 'text/xml' : 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
       await espera(p, 900); }],
-    ['abrir a senha', clicar('[data-testid="sugestao-de-senha"]')], ['aba Todos de novo', botao(/^Todos/)],
-    ['aba Por e-mail (D3c)', botao(/^Por e-mail/)], ['ler o PDF do e-mail', async (p) => { await p.locator('[data-testid="ler-do-email"]').first().click(); await espera(p, 900); }],
+    ['abrir a senha', clicar('[data-testid="sugestao-de-senha"]')], ['aba Ignorados de novo', botao(/^Ignorados/)], ['aba A resolver de novo', botao(/^A resolver/)],
   ] },
   /* BOLETO D3c — o endereço de boletos: trocar de modo (ver → trocar → prévia → cancelar → revogar) e de provedor não move o bloco do
      endereço, o da ação, as abas do passo a passo nem o rodapé (os blocos têm altura fixa; a lista dos passos é `data-desloca-livre`) */
