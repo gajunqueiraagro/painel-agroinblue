@@ -133,9 +133,9 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
         )}
         <span className="ml-auto" />
         {/* NOTA-PARCELAR-01 (P-c) — a frase longa estourava a linha: o selo diz só a conta; o "manda no DRE e no caixa" vai no title */}
-        <span className={cn(CHIP, 'min-w-0 shrink truncate bg-sky-50 text-sky-800')} data-testid="itens-conta-do-lancamento"
-          title={`A conta do lançamento manda no DRE e no caixa${contaDoLancamento ? `: ${contaDoLancamento}` : ''}`}>
-          {contaDoLancamento ? `Conta: ${contaDoLancamento}` : 'Conta do lançamento'}
+        <span className={cn(CHIP, 'min-w-0 shrink bg-sky-50 text-sky-800')} title={`A conta do lançamento manda no DRE e no caixa${contaDoLancamento ? `: ${contaDoLancamento}` : ''}`}>
+          {/* min-w-0: o selo encolhe e o texto rola no lugar dele (nunca "…", nunca quebra) */}
+          <span className="min-w-0 uma-linha-que-rola" data-testid="itens-conta-do-lancamento">{contaDoLancamento ? `Conta: ${contaDoLancamento}` : 'Conta do lançamento'}</span>
         </span>
       </div>
 
