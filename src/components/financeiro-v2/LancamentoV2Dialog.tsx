@@ -35,6 +35,8 @@ import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { linhaDoDocumento as textoDaLinhaDoDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { ResumoDoLancamento } from '@/components/financeiro-v2/ResumoDoLancamento';
+import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
+import { boletoDoResumo, seloDoBoleto, type BoletoDoResumo } from '@/lib/financeiro/boleto/boletoDaParcela';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -702,6 +704,9 @@ export function LancamentoV2Dialog({
   /* PR 2b — "Anexar vários boletos": aberto da grade do novo parcelado ('previa') ou da parcela aberta ('irmas'). */
   const [anexarBoletos, setAnexarBoletos] = useState<'previa' | 'irmas' | null>(null);
   const [irmas, setIrmas] = useState<ParcelaIrma[] | null>(null);
+  /* BOLETO D1d D3 (Gabriel 17/11 14:23) — o boleto VIVO ligado a este lançamento (o selo do Resumo) e a caixa aberta daqui */
+  const [boletoLigado, setBoletoLigado] = useState<BoletoDoResumo | null>(null);
+  const [caixaAberta, setCaixaAberta] = useState(false);
   const [erroAntesDeSalvar, setErroAntesDeSalvar] = useState<string | null>(null);
   /* NOTA-NFSE-LEITURA-02 — o campo preenchido em formato que o banco recusaria: vermelho + a frase no rodapé (nunca o toast genérico) */
   const [campoInvalido, setCampoInvalido] = useState<ErroDeFormato | null>(null);
@@ -715,6 +720,16 @@ export function LancamentoV2Dialog({
       .catch(() => { if (!cancelado) setIrmas(null); });
     return () => { cancelado = true; };
   }, [open, lancamento?.id, clienteAtual?.id]);
+  /* relê quando o "Anexar vários boletos" ou a caixa fecham (eles podem ter ligado ou trocado o boleto) */
+  useEffect(() => {
+    let cancelado = false;
+    setBoletoLigado(null);
+    if (!open || !lancamento?.id || !clienteAtual?.id || anexarBoletos || caixaAberta) return;
+    void boletoDoResumo(clienteAtual.id, lancamento.id)
+      .then(r => { if (!cancelado) setBoletoLigado(r.ok ? r.dados : null); })
+      .catch(() => { if (!cancelado) setBoletoLigado(null); });   // o selo é só leitura: falhou = "—", nunca quebra o modal
+    return () => { cancelado = true; };
+  }, [open, lancamento?.id, clienteAtual?.id, anexarBoletos, caixaAberta]);
   const navigate = useNavigate();
   const isEdit = !!lancamento;
   // PR-SAFE-0 — título originado da Operação Comercial: valor/favorecido/classificação/tipo
@@ -4046,6 +4061,7 @@ export function LancamentoV2Dialog({
                   : isEdit && parcelaDaCompra ? `${parcelaDaCompra.numero} de ${parcelaDaCompra.total}`
                   : isEdit && soltaDoResumo ? `${soltaDoResumo.k} de ${soltaDoResumo.n}` : null}
                 documento={documentoDoResumo(docDoLancamento, tipoDocumento)}
+                boleto={boletoLigado ? { selo: seloDoBoleto(boletoLigado), onAbrir: () => setCaixaAberta(true) } : null}
               />
             </div>
           )}
@@ -4053,6 +4069,9 @@ export function LancamentoV2Dialog({
         </DialogContent>
       </Dialog>
 
+      {caixaAberta && clienteAtual?.id && (
+        <CaixaDeBoletosDialog clienteId={clienteAtual.id} clienteNome={clienteAtual.nome} aoFechar={() => setCaixaAberta(false)} />
+      )}
       {/* PR 2b — "Anexar vários boletos" (tela B do mock). Antes de salvar, as parcelas são a prévia e os
           boletos viram pendentes; depois, as irmãs gravadas e os boletos vão direto. */}
       {anexarBoletos === 'previa' && (
@@ -4070,6 +4089,7 @@ export function LancamentoV2Dialog({
           subtitulo={`${irmas.length} parcelas`}
           parcelas={irmas.filter(i => !i.cancelada).map(i => ({ numero: i.numero, vencimento: i.vencimento, valor: i.valor, temBoleto: i.temBoleto }))}
           onConfirmar={gravarBoletosNasIrmas}
+          naCaixa={clienteAtual?.id ? { clienteId: clienteAtual.id, lancamentos: new Map(irmas.filter(i => !i.cancelada).map(i => [i.numero, i.lancamentoId])) } : undefined}
           onFechar={() => setAnexarBoletos(null)} />
       )}
 

@@ -8,7 +8,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), fro
 
 import { listaDaCaixa, respostaDeEntrar, fraseDoErroDaCaixa, type CandidatoDoBoleto } from './caixaApi';
 import {
-  achadoDaPrevia, contadorDaPorta, dataBR, fraseDoAviso, itensDaAba, seloDoAchado, situacaoAVista, valorBR,
+  achadoDaPrevia, contadorDaPorta, dataBR, fraseDoAviso, seloDoAchado, situacaoAVista, valorBR,
 } from './caixaDeBoletos';
 
 const lanc = (m: Record<string, unknown> = {}) => ({
@@ -92,12 +92,8 @@ describe('a regra da tela', () => {
     expect(situacaoAVista(l)).toBe('agendado · BB CC · para 10/12/2026 · por Amanda');
     expect(situacaoAVista({ ...l, cancelado: true })).toBe('cancelado');
   });
-  it('as abas: Chegando não lê a lista; Na caixa = novo; Sem par = sem_par; Todos = tudo; a porta conta novo + sem par', () => {
+  it('a porta conta novo + sem par (as abas da caixa estão em caixaPorEmail.test.ts)', () => {
     const l = listaDaCaixa({ contadores: { novo: 1, sem_par: 1, ligado: 1 }, itens: [boleto({ id: 'a', situacao: 'novo' }), boleto({ id: 'b', situacao: 'sem_par' }), boleto({ id: 'c', situacao: 'ligado' })] });
-    expect(itensDaAba(l, 'chegando')).toEqual([]);
-    expect(itensDaAba(l, 'na_caixa').map((i) => i.boleto.id)).toEqual(['a']);
-    expect(itensDaAba(l, 'sem_par').map((i) => i.boleto.id)).toEqual(['b']);
-    expect(itensDaAba(l, 'todos')).toHaveLength(3);
     expect(contadorDaPorta(l)).toBe(2);
     expect(contadorDaPorta(null)).toBeNull();
   });
