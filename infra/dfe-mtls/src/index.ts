@@ -45,7 +45,7 @@ export const handler = async (ev: EventoUrl) => {
         if (!r.Plaintext) throw new Error('kms');
         return r.Plaintext;
       },
-      postar: (url, par, envelope) => postarMtls(url, par, envelope),
+      postar: (url, par, envelope, servico) => postarMtls(url, par, envelope, { servico }),
       log: (linha) => console.log(JSON.stringify(linha)),
     });
   } catch {
