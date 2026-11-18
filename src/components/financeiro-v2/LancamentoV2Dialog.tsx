@@ -28,7 +28,7 @@ import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
 import { FinanciamentoDoLancamento } from '@/components/financiamentos/FinanciamentoDoLancamento';
 import { PatrimonioDoLancamento } from '@/components/patrimonio/PatrimonioDoLancamento';
 import { contaPedeFinanciamento } from '@/lib/patrimonio/patrimonioDoLancamento';
-import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
+import { assinarDocumento, useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
@@ -68,6 +68,13 @@ import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaL
 import { AlertCircle, AlertTriangle, Copy, RefreshCw, DollarSign, Beef, Repeat, Loader2, Link2, Unlink, FilePlus2 } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
+
+/** BOLETO D1d (Gabriel 18/11 14:40): o 👁 do Resumo abre o PDF do boleto ligado — o mesmo gesto do clipe da lista (URL de 60 s). */
+async function abrirPdfDoBoleto(caminho: string): Promise<void> {
+  const url = await assinarDocumento(caminho);
+  if (!url) { toast.error('Não foi possível abrir o arquivo.'); return; }
+  window.open(url, '_blank', 'noopener');
+}
 import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
 import { campoEmFormatoInvalido, type ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useQueryClient } from '@tanstack/react-query';
@@ -4061,7 +4068,11 @@ export function LancamentoV2Dialog({
                   : isEdit && parcelaDaCompra ? `${parcelaDaCompra.numero} de ${parcelaDaCompra.total}`
                   : isEdit && soltaDoResumo ? `${soltaDoResumo.k} de ${soltaDoResumo.n}` : null}
                 documento={documentoDoResumo(docDoLancamento, tipoDocumento)}
-                boleto={boletoLigado ? { selo: seloDoBoleto(boletoLigado), onAbrir: () => setCaixaAberta(true) } : null}
+                boleto={boletoLigado ? {
+                  selo: seloDoBoleto(boletoLigado),
+                  /* 👁 = o PDF do boleto (o mesmo bucket dos documentos; a URL assinada de 60 s do clipe da lista) */
+                  onVer: boletoLigado.storagePath ? () => { void abrirPdfDoBoleto(boletoLigado.storagePath); } : null,
+                } : null}
               />
             </div>
           )}

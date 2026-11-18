@@ -31,18 +31,15 @@ describe('P121b — o número da nota no Resumo', () => {
     expect(documentoDoResumo(docDaLinha({ tipo_documento: 'Recibo', numero_documento: null }, []), 'Recibo')).toEqual({ numero: 'Recibo', selo: null, titulo: 'Recibo' });
     expect(documentoDoResumo(docDaLinha({ tipo_documento: null, numero_documento: null }, []), null)).toBeNull();
   });
-  it('o número de 11 dígitos NUNCA corta: não encolhe, não quebra, sem "…"; quem cede é o selo (com o title)', () => {
+  it('o número de 11 dígitos NUNCA corta: não encolhe, não quebra, sem "…"; a origem ("da compra") vai no title (Gabriel 18/11 14:40: nada cortado)', () => {
     render(<ResumoDoLancamento {...BASE} documento={documentoDoResumo(docDaLinha({ tipo_documento: null, numero_documento: null }, [NOTA_11]), null)} />);
     const numero = screen.getByTestId('resumo-nota');
     expect(numero.textContent).toBe('NF 12.345.678.901');
     expect(numero.className.split(' ')).toEqual(expect.arrayContaining(['shrink-0', 'whitespace-nowrap']));
     expect(numero.className).not.toContain('truncate');
-    /* o número vem ANTES do selo, na mesma linha */
-    const selo = screen.getByTestId('resumo-nota-selo');
-    expect(numero.compareDocumentPosition(selo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(selo.textContent).toBe('da compra');
-    expect(selo.className).toContain('truncate');
-    expect(selo.getAttribute('title')).toBe('NF 12.345.678.901 · nota da compra');
+    /* o selo saiu da linha (ele cortava: "da co…"); a origem por extenso no title da célula */
+    expect(screen.queryByTestId('resumo-nota-selo')).toBeNull();
+    expect(numero.closest('td')?.getAttribute('title')).toBe('NF 12.345.678.901 · nota da compra · da compra: a nota está na compra parcelada e vale para as parcelas');
     /* a célula do número não tem "…" própria (o truncate da célula cortaria o número) */
     expect(numero.closest('td')?.className ?? '').not.toContain('truncate');
   });

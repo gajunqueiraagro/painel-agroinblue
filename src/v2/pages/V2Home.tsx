@@ -807,7 +807,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     ...(receitaPedemAcao ? [{ id: 'receita', texto: 'Notas da Receita · a lançar', numero: receitaPedemAcao,
       title: 'Notas da Receita · a lançar (inclui as que pedem ciência) — a mesma conta do selo do "+ Novo"', acao: 'Abrir', onIr: () => irPara('financeiro-lanc') }] : []),
     ...(boletosAConferir ? [{ id: 'boletos', texto: 'Boletos · a conferir', numero: boletosAConferir,
-      title: 'Boletos · a conferir (na caixa e sem par, a caixa de boletos)', acao: 'Abrir', onIr: () => irPara('financeiro-lanc') }] : []),
+      title: 'Boletos · a conferir (na caixa e sem par, na Caixa de entrada)', acao: 'Abrir', onIr: () => irPara('financeiro-lanc') }] : []),
     ...gradeAno
       .filter(c => c.mes === mesNum && (isGlobal || c.fazendaId === fazendaAtual?.id) && (c.p1 === 'pendente' || c.p2 === 'pendente'))
       .map((c): ItemAtencao => {

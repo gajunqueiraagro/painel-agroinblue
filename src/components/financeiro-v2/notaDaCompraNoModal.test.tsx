@@ -101,7 +101,11 @@ async function abrir(lanc: LancamentoV2, extra: Partial<React.ComponentProps<typ
 }
 /** P121b — o bloco "Documento" do resumo: o NÚMERO (nada = "—") e, depois dele, o selo da origem ("da compra" · "ligado"). */
 const linhaDocumento = () => screen.getByTestId('resumo-nota').textContent ?? '';
-const seloDocumento = () => screen.queryByTestId('resumo-nota-selo')?.textContent ?? null;
+/* Gabriel 18/11 14:40: a origem saiu da linha (o selo cortava) e vai no title da célula da Nota (`tituloDaNota`) */
+const seloDocumento = () => {
+  const t = screen.queryByTestId('resumo-nota')?.closest('td')?.getAttribute('title') ?? '';
+  return / · da compra: /.test(t) ? 'da compra' : / · documento ligado /.test(t) ? 'ligado' : null;
+};
 const abaDocumentos = () => fireEvent.mouseDown(screen.getByRole('tab', { name: /Documentos/ }), { button: 0 });
 const NF = { id: 'd1', especie: 'nf', numero: '518', cancelado: false };
 

@@ -169,7 +169,8 @@ export async function gravarNaCaixa(
 
 /* ═══ D3 do mock-boleto-d1d-v1 (Gabriel 17/11 14:23): o selo "boleto · venc dd/mm/aaaa" no Resumo do Editar lançamento ═══ */
 
-export type BoletoDoResumo = { id: string; vencimento: string | null };
+/** `storagePath` = o PDF do boleto na caixa (o 👁 do Resumo abre ele); sem PDF guardado, null. */
+export type BoletoDoResumo = { id: string; vencimento: string | null; storagePath: string | null };
 
 /** O boleto VIVO ligado ao lançamento, com o vencimento DO BOLETO (leitura; nulo = sem boleto ligado). */
 export async function boletoDoResumo(clienteId: string, lancamentoId: string): Promise<Resultado<BoletoDoResumo | null>> {
@@ -178,14 +179,15 @@ export async function boletoDoResumo(clienteId: string, lancamentoId: string): P
   if (elo.error) return { ok: false, erro: fraseDoErroDaCaixa(elo.error) };
   const id = Array.isArray(elo.data) && ehLinha(elo.data[0]) ? txt(elo.data[0].boleto_id) : null;
   if (!id) return { ok: true, dados: null };
-  const b = await (supabase as any).from('boletos').select('id, vencimento').eq('cliente_id', clienteId).eq('id', id).limit(1);
+  const b = await (supabase as any).from('boletos').select('id, vencimento, storage_path').eq('cliente_id', clienteId).eq('id', id).limit(1);
   if (b.error) return { ok: false, erro: fraseDoErroDaCaixa(b.error) };
   const l = Array.isArray(b.data) && ehLinha(b.data[0]) ? b.data[0] : null;
-  return { ok: true, dados: { id, vencimento: l ? txt(l.vencimento) : null } };
+  return { ok: true, dados: { id, vencimento: l ? txt(l.vencimento) : null, storagePath: l ? txt(l.storage_path) : null } };
 }
 
-/** O texto do selo: "boleto · venc 10/12/2026" (sem vencimento no título: "boleto"); a data sempre dd/mm/aaaa. */
-export function seloDoBoleto(b: BoletoDoResumo): string {
+/** O texto da linha "Boleto" do Resumo: "venc 10/12/2026" (o rótulo já diz "Boleto"; Gabriel 18/11 14:40: sem "boleto ·" repetido);
+ *  sem vencimento no título: "sem venc."; a data sempre dd/mm/aaaa. */
+export function seloDoBoleto(b: Pick<BoletoDoResumo, 'vencimento'>): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(b.vencimento ?? '');
-  return m ? `boleto · venc ${m[3]}/${m[2]}/${m[1]}` : 'boleto';
+  return m ? `venc ${m[3]}/${m[2]}/${m[1]}` : 'sem venc.';
 }

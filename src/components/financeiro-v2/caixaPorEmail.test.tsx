@@ -57,6 +57,7 @@ beforeEach(() => {
     subirArquivo: vi.fn<CaixaApi['subirArquivo']>(async () => ({ ok: true, dados: true })),
     documentosDosTitulares: vi.fn<CaixaApi['documentosDosTitulares']>(async () => ({ ok: true, dados: [] })),
     marcar: vi.fn<CaixaApi['marcar']>(async () => ({ ok: true, dados: true })),
+    registrarDocumento: vi.fn<CaixaApi['registrarDocumento']>(async () => ({ ok: true, dados: 'gravado' })),
   };
   parcela = {
     entrar: api.entrar, subirArquivo: api.subirArquivo,
@@ -150,6 +151,40 @@ describe('BOLETO D3d — a caixa por e-mail v2', () => {
     expect(api.subirArquivo.mock.invocationCallOrder[0]).toBeLessThan(parcela.ligar.mock.invocationCallOrder[0]);
   });
 
+  /* Gabriel 18/11 14:40 ("no lançamento não aparecem nem o boleto nem o PDF"): vincular = o PDF nos DOCUMENTOS do lançamento */
+  it('"Vincular" do boleto põe o PDF que subiu nos documentos do lançamento ligado (espécie boleto), DEPOIS de ligar', async () => {
+    montar(vi.fn());
+    await esperarPronto();
+    fireEvent.click(within(await linhaDe(/boleto\.pdf/)).getByTestId('acao-vincular_boleto'));
+    await waitFor(() => expect(api.registrarDocumento).toHaveBeenCalledTimes(1));
+    expect(api.registrarDocumento).toHaveBeenCalledWith('cli', 'lanc-1', { especie: 'boleto', nome: 'boleto.pdf', url: 'cli/boletos/bol-1.pdf', tamanhoBytes: null });
+    expect(parcela.ligar.mock.invocationCallOrder[0]).toBeLessThan(api.registrarDocumento.mock.invocationCallOrder[0]);
+  });
+
+  it('"Vincular" da nota já lançada põe o DANFE (PDF) E o XML nos documentos do lançamento, com a chave e o nº (14:47)', async () => {
+    notaLancada = true;
+    montar(vi.fn());
+    await esperarPronto();
+    fireEvent.click(within(await linhaDe(/NF 122\.048/)).getByTestId('acao-vincular_nota'));
+    await waitFor(() => expect(api.registrarDocumento).toHaveBeenCalledTimes(2));
+    const docs = api.registrarDocumento.mock.calls.map((c) => c[2]).sort((a, b) => a.nome.localeCompare(b.nome));
+    expect(docs).toEqual([
+      { especie: 'nf', nome: 'chave.xml', url: 'cli/entrada/x', tamanhoBytes: 10, numero: '000.122.048', chaveAcesso: CHAVE, tipo: 'application/xml' },
+      { especie: 'nf', nome: 'DOC001.pdf', url: 'cli/entrada/p', tamanhoBytes: 10, numero: '000.122.048', chaveAcesso: CHAVE, tipo: 'application/pdf' },
+    ].sort((a, b) => a.nome.localeCompare(b.nome)));
+    expect(api.registrarDocumento.mock.calls.every((c) => c[1] === 'lanc-9')).toBe(true);
+  });
+
+  it('o PDF não entrou nos documentos: a frase diz e o vínculo fica (nunca desfeito)', async () => {
+    api.registrarDocumento.mockResolvedValue({ ok: false, erro: 'Sem acesso a este cliente.' });
+    montar(vi.fn());
+    await esperarPronto();
+    fireEvent.click(within(await linhaDe(/boleto\.pdf/)).getByTestId('acao-vincular_boleto'));
+    await waitFor(() => expect(screen.getByTestId('rodape-da-caixa').textContent).toMatch(/Ligado, mas o PDF não entrou nos documentos do lançamento: Sem acesso/));
+    expect(parcela.ligar).toHaveBeenCalledTimes(1);
+    expect(entrada.resolver).toHaveBeenCalledWith('b', 'boleto', 'bol-1', null);
+  });
+
   it('ligar recusado: a frase diz que o boleto ficou na caixa e a linha do e-mail NÃO é marcada', async () => {
     parcela.ligar.mockResolvedValue({ ok: true, dados: { ok: false, motivo: 'recusa', frase: 'O lançamento está cancelado.', outroBoletoId: null } });
     montar(vi.fn());
@@ -205,6 +240,22 @@ describe('BOLETO D3d — a caixa por e-mail v2', () => {
     const acoes = [...l.querySelectorAll<HTMLElement>('td')].at(-1);
     if (!acoes) throw new Error('sem a coluna "O que fazer"');
     expect(within(acoes).getAllByRole('button')[0].textContent).toBe('Ignorar');
+  });
+});
+
+/* ═══ O NOME "Caixa de entrada" (Gabriel 18/11, FILA 11:58/12:56): só os rótulos; o endereço @boletos.agroinblue.com.br NÃO muda ═══ */
+describe('CAIXA DE ENTRADA — o nome', () => {
+  it('o título, o botão "E-mail de entrada" e o diálogo do endereço; o domínio segue @boletos', async () => {
+    montar(vi.fn());
+    expect(await screen.findByText('Caixa de entrada · NJ Pecuária')).toBeInTheDocument();
+    expect(screen.queryByText(/Boletos e notas que chegaram/)).toBeNull();
+    fireEvent.click(screen.getByTestId('abrir-endereco-de-boletos'));
+    expect(screen.getByTestId('abrir-endereco-de-boletos').textContent).toBe('E-mail de entrada');
+    expect(await screen.findByText('E-mail de entrada · NJ Pecuária')).toBeInTheDocument();
+    expect(await screen.findByText(/Este cliente ainda não tem e-mail de entrada/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('gerar-endereco'));
+    fireEvent.click(screen.getByTestId('previa-do-endereco'));
+    expect((await screen.findByTestId('frase-do-endereco')).textContent).toMatch(/@boletos\.agroinblue\.com\.br/);
   });
 });
 

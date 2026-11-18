@@ -55,6 +55,7 @@ beforeEach(() => {
     subirArquivo: vi.fn<CaixaApi['subirArquivo']>(async () => ({ ok: true, dados: true })),
     documentosDosTitulares: vi.fn<CaixaApi['documentosDosTitulares']>(async () => ({ ok: true, dados: ['111.444.777-35', '11.222.333/0001-81'] })),
     marcar: vi.fn<CaixaApi['marcar']>(async () => ({ ok: true, dados: true })),
+    registrarDocumento: vi.fn<CaixaApi['registrarDocumento']>(async () => ({ ok: true, dados: 'gravado' })),
   };
   parcela = {
     entrar: api.entrar, subirArquivo: api.subirArquivo,
