@@ -143,22 +143,30 @@ describe('Fatia A — os documentos antes de salvar, no id que o salvar devolve'
 });
 
 describe('Fatia B — o "Ler a NF" no Novo pelo extrato', () => {
-  it('só na linha do extrato com o Casar à mão: nem na seleção (sem vínculo) nem sem o hospedeiro do Casar', () => {
+  it('na linha do extrato com o Casar à mão E no "Criar pela diferença" (sem vínculo, CONC-CRIAR-COM-NOTA-02); nunca sem nenhum dos dois', () => {
     abrir(-16238);
     expect(M.props?.onLerNotaNoNovo).toBeTypeOf('function');
     abrir(-16238, { semVinculo: true });
-    expect(M.props?.onLerNotaNoNovo).toBeUndefined();
+    expect(M.props?.onLerNotaNoNovo).toBeTypeOf('function');
     abrir(-16238, { semCasar: true });
     expect(M.props?.onLerNotaNoNovo).toBeUndefined();
   });
 
-  it('a nota que não está lançada PREENCHE: fornecedor, nº e competência da nota; contas, pagamento, vencimento, tipo e status do extrato', async () => {
+  it('CONC-CRIAR-COM-NOTA-02 — "Criar pela diferença" (sem vínculo): a nota preenche, mas o VALOR fica o do extrato (a diferença) e o vencimento é a duplicata', async () => {
+    abrir(-2903, { semVinculo: true, semCasar: true });
+    expect(await ler()).toBeNull();
+    await waitFor(() => expect(M.props?.prefill).toHaveProperty('doXml'));
+    expect(M.props?.prefill).toMatchObject({ favorecido_id: 'forn-nota', numero_documento: '000.123.456', valor: 2903,
+      data_pagamento: '2026-10-05', data_vencimento: '2026-10-31', status_transacao: 'realizado' });
+  });
+
+  it('a nota que não está lançada PREENCHE: fornecedor, nº, competência e VENCIMENTO (a duplicata, CONC-CRIAR-COM-NOTA-02) da nota; contas, pagamento, tipo e status do extrato', async () => {
     abrir(-16238);
     expect(await ler()).toBeNull();
     await waitFor(() => expect(M.props?.prefill).toHaveProperty('doXml'));
     expect(M.props?.prefill).toMatchObject({
       favorecido_id: 'forn-nota', numero_documento: '000.123.456', tipo_documento: 'Nota Fiscal', data_competencia: '2026-10-01',
-      conta_bancaria_id: 'conta-extrato', data_pagamento: '2026-10-05', data_vencimento: '2026-10-05', tipo_operacao: '2-Saídas',
+      conta_bancaria_id: 'conta-extrato', data_pagamento: '2026-10-05', data_vencimento: '2026-10-31', tipo_operacao: '2-Saídas',
       status_transacao: 'realizado', valor: 16238, descricao: 'COMPRA DEBITO EXEMPLO',
     });
     expect(H.casar).not.toHaveBeenCalled();
