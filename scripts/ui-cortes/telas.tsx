@@ -1653,6 +1653,9 @@ if (tela === 'mesclar') {
      `&v=carregando`: o modal antes de o dono responder. P166: `&v=ok|pendencia|pendente` a faixa do status nos outros casos e
      `&v=nj` os nomes no tamanho real (`dados/conciliacao.ts`). */
   const semArquivos = v === 'sem';
+  /* CONC-PAINEL-CONTA-01 — `&admin=1`: o operador admin (o ✎ da conta aparece e abre o painel lateral) */
+  if (q.get('admin') === '1') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' },
+    clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
   g.__bancoBancada = {
     from: (t: string) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : CONC.CONTAS)
       : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
