@@ -143,6 +143,6 @@ describe('o resumo lateral: blocos de altura fixa, nada rola, rótulos curtos', 
     expect(aside.querySelectorAll('[class]').length).toBeGreaterThan(10);
     expect(aside.querySelectorAll('[class*="overflow-auto"], [class*="overflow-y-auto"], [class*="overflow-scroll"]')).toHaveLength(0);
     expect(within(aside).getByText('Comp.')).toBeInTheDocument();
-    expect(within(aside).getByText('Passe o mouse num nome cortado para ver inteiro.')).toBeInTheDocument();
+    expect(within(aside).getByText('Nome cortado: passe o mouse.')).toBeInTheDocument();
   });
 });

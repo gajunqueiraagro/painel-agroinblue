@@ -9,7 +9,8 @@ import { cn } from '@/lib/utils';
  * subcentro longos empurravam o resto e o fim sumia. Aqui ela é DO FINANCEIRO, com layout próprio; as peças compartilhadas não mudam.
  *
  * ⚠ A CONTA DAS ALTURAS (medida no navegador, 28/10): título 16 + 2 + linhas de 16 (o favorecido 41, os pares 17) → 123 · 90 · 98 · 69 · 34,
- *   gaps de 2 e o rodapé de 24 (2 linhas) = ~452px. A menor janela em que o resumo aparece (≥900px de largura) é 1126×579, com 457px úteis.
+ *   gaps de 2 e o rodapé de 24 (2 linhas) = ~452px. BOLETO D1d D3 (17/11): o Documento ganhou a linha "Boleto" (34 → 50) e o rodapé
+ *   ficou com 1 linha (24 → 12, frase mais curta) = ~456px. A menor janela em que o resumo aparece (≥900px de largura) é 1126×579, com 457px úteis.
  *   Linha nova num bloco = refazer a conta e medir nos tamanhos do gate.
  * ⚠ NADA ROLA E NADA MUDA DE ALTURA: cada bloco tem ALTURA FIXA (o nome grande nunca empurra o resto). Texto longo termina em "…" com o
  *   texto inteiro no `title`; o favorecido tem até 2 linhas. O Valor ocupa a linha INTEIRA do bloco (a 20px, "R$ 99.999.999,99" não cabe
@@ -42,6 +43,8 @@ export interface ResumoDoLancamentoProps {
   /** P121b: o NÚMERO do documento ("NF 000.521.110", inteiro, logo depois do rótulo), o selo da origem ("da compra" · "ligado") e o
    *  `title` com tudo. Sem número: null ("—"). */
   documento: { numero: string; selo: string | null; titulo: string } | null;
+  /** BOLETO D1d D3: o boleto VIVO ligado ("boleto · venc dd/mm/aaaa") e o gesto de abrir a caixa. Sem boleto: null ("—"). */
+  boleto?: { selo: string; onAbrir: () => void } | null;
 }
 
 /** Título de bloco: pequeno, maiúsculo, navy, com a linha embaixo. */
@@ -148,7 +151,7 @@ export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
           </Tabela>
         </Bloco>
 
-        <Bloco titulo="Documento" altura="h-[34px]" testid="resumo-documento">
+        <Bloco titulo="Documento" altura="h-[50px]" testid="resumo-documento">
           {/* P121b: o número NUNCA corta (sem `truncate`, sem encolher); o selo vem depois e é ele que cede ("…" com o title) */}
           <Tabela>
             <tr className="h-[16px] text-[11px] leading-[14px]">
@@ -165,12 +168,28 @@ export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
                 </div>
               </td>
             </tr>
+            {/* BOLETO D1d D3: o selo (a data nunca corta) e "abrir na caixa ↗" num lugar fixo; sem boleto ligado, "—" */}
+            <tr className="h-[16px] text-[11px] leading-[14px]">
+              <td className={ROTULO} title="Boleto">Boleto</td>
+              <td className="align-middle">
+                <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+                  {p.boleto ? (
+                    <>
+                      <span className="shrink-0 whitespace-nowrap rounded-[3px] bg-blue-100 px-1 text-[9.5px] leading-[12px] tabular-nums text-blue-800"
+                        data-testid="resumo-boleto">{p.boleto.selo}</span>
+                      <button type="button" className="shrink-0 whitespace-nowrap text-[9.5px] leading-[12px] text-primary underline-offset-2 hover:underline"
+                        onClick={p.boleto.onAbrir} data-testid="resumo-boleto-abrir" title="Abre a caixa de boletos">abrir na caixa ↗</button>
+                    </>
+                  ) : <span className="text-muted-foreground" data-testid="resumo-boleto">—</span>}
+                </div>
+              </td>
+            </tr>
           </Tabela>
         </Bloco>
 
-        {/* fora de tabela nada termina em "…": a frase (228px a 9,5px) quebra em 2 linhas reservadas */}
-        <p className="mt-auto h-[24px] shrink-0 text-[9.5px] leading-[12px] text-muted-foreground">
-          Passe o mouse num nome cortado para ver inteiro.
+        {/* fora de tabela nada termina em "…": a frase cabe em 1 linha (o Documento ganhou a linha do Boleto) */}
+        <p className="mt-auto h-[12px] shrink-0 whitespace-nowrap text-[9.5px] leading-[12px] text-muted-foreground">
+          Nome cortado: passe o mouse.
         </p>
       </div>
     </aside>

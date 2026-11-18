@@ -2012,12 +2012,24 @@ if (tela === 'mesclar') {
      o gate solta os PDFs pelo input (o conteúdo é o nome: o leitor da bancada lê por ele) */
   const montarCaixa = async () => {
     const { CaixaDeBoletosDialog } = await import('@/components/financeiro-v2/CaixaDeBoletosDialog');
-    const { API_CAIXA_BANCADA, LER_CAIXA_BANCADA, API_ENTRADA_BANCADA, API_ENTRADA_BANCADA_SEM_ENDERECO } = await import('./dados/caixaBoletos');
-    /* BOLETO D3c: `caso=sem_endereco` = o cliente sem endereço (o "Gerar") */
+    const { API_CAIXA_BANCADA, PARCELA_BANCADA, LER_CAIXA_BANCADA, API_ENTRADA_BANCADA, API_ENTRADA_BANCADA_SEM_ENDERECO, HOJE_DA_BANCADA } = await import('./dados/caixaBoletos');
+    /* BOLETO D3c: `caso=sem_endereco` = o cliente sem endereço (o "Gerar"). D3d: o "hoje" fixo (o antigo não muda com o dia) e o
+       "Lançar nota" presente (a tela de Lançamentos); `caso=sem_lancar` = a caixa aberta do Editar lançamento (sem o "Lançar nota") */
     const entrada = q.get('caso') === 'sem_endereco' ? API_ENTRADA_BANCADA_SEM_ENDERECO : API_ENTRADA_BANCADA;
-    montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} entrada={entrada} aoFechar={() => {}} />);
+    const aoLancarNota = q.get('caso') === 'sem_lancar' ? undefined : () => {};
+    montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} parcela={PARCELA_BANCADA} ler={LER_CAIXA_BANCADA}
+      entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} />);
   };
   void montarCaixa();
+} else if (tela === 'anexar-boletos-caixa') {
+  /* BOLETO D1d — o "Anexar vários boletos" com a coluna "Na caixa" (as parcelas gravadas e a caixa em memória, `dados/anexarBoletosCaixa.ts`) */
+  const montarAnexar = async () => {
+    const { AnexarBoletosDialog } = await import('@/components/financeiro-v2/AnexarBoletosDialog');
+    const { PARCELAS_BANCADA, LANCAMENTOS_BANCADA, API_ANEXAR_BANCADA, LER_ANEXAR_BANCADA } = await import('./dados/anexarBoletosCaixa');
+    montar(<AnexarBoletosDialog subtitulo="6 parcelas" parcelas={PARCELAS_BANCADA} onConfirmar={async () => null} onFechar={() => {}}
+      naCaixa={{ clienteId: 'cli', lancamentos: LANCAMENTOS_BANCADA, api: API_ANEXAR_BANCADA, ler: LER_ANEXAR_BANCADA }} />);
+  };
+  void montarAnexar();
 } else if (tela === 'notas-receita' || tela === 'notas-receita-menu' || tela === 'notas-receita-casar') {
   /* NOTAS-RECEITA-A1-01 F3.4 MÍNIMA — a lista "Notas da Receita" (o modal real com dados SINTÉTICOS, `dados/notasReceita.ts`) e o "+ Novo ▾"
      com o selo de boletos + notas (D2) */

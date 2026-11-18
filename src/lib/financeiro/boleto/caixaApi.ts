@@ -151,6 +151,8 @@ export interface CaixaApi {
   subirArquivo: (caminho: string, arquivo: File) => Promise<Resultado<true>>;
   /** Os CPF/CNPJ dos titulares ATIVOS do cliente (a sugestão de senha; nunca o fornecedor). */
   documentosDosTitulares: (clienteId: string) => Promise<Resultado<string[]>>;
+  /** BOLETO D3d — ignorar o boleto guardado (`descartado`, motivo obrigatório) ou trazê-lo de volta (`novo`), pela `fn_boleto_marcar`. */
+  marcar: (boletoId: string, situacao: 'descartado' | 'novo', motivo: string | null) => Promise<Resultado<true>>;
 }
 
 export const BUCKET_DOS_BOLETOS = 'fin-documentos';
@@ -176,6 +178,11 @@ export const caixaApiDoBanco: CaixaApi = {
       .eq('cliente_id', clienteId).eq('ativo', true);
     if (error) { console.error('[caixa de boletos] titulares', error); return { ok: false, erro: 'Não consegui ler os titulares.' }; }
     return { ok: true, dados: linhas(data).flatMap((t) => [txt(t.documento), txt(t.cnpj_produtor)]).filter((d): d is string => !!d) };
+  },
+  async marcar(boletoId, situacao, motivo) {
+    const { error } = await (supabase as any).rpc('fn_boleto_marcar', { p_id: boletoId, p_situacao: situacao, p_motivo: motivo, p_simular: false });
+    if (error) return { ok: false, erro: fraseDoErroDaCaixa(error) };
+    return { ok: true, dados: true };
   },
 };
 
