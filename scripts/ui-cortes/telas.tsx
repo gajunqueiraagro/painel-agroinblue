@@ -1938,7 +1938,7 @@ if (tela === 'mesclar') {
     montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} ler={LER_CAIXA_BANCADA} entrada={entrada} aoFechar={() => {}} />);
   };
   void montarCaixa();
-} else if (tela === 'notas-receita' || tela === 'notas-receita-menu') {
+} else if (tela === 'notas-receita' || tela === 'notas-receita-menu' || tela === 'notas-receita-casar') {
   /* NOTAS-RECEITA-A1-01 F3.4 MÍNIMA — a lista "Notas da Receita" (o modal real com dados SINTÉTICOS, `dados/notasReceita.ts`) e o "+ Novo ▾"
      com o selo de boletos + notas (D2) */
   const montarReceita = async () => {
@@ -1950,7 +1950,16 @@ if (tela === 'mesclar') {
       return;
     }
     montar(<NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={DADOS_RECEITA_BANCADA} carregando={false} erro={null} aoFechar={() => {}}
-      aoLancar={() => {}} lerXml={async () => '<nfeProc/>'} />);
+      aoLancar={() => {}} aoVincular={async () => null} lerXml={async () => '<nfeProc/>'} />);
+    /* NOTA-RECEITA-CASAR-01 — o quadro "pode já estar lançada" aberto pelo "Lançar" da nota com 3 candidatos */
+    if (tela === 'notas-receita-casar') {
+      const abrir = () => {
+        const linha = [...document.querySelectorAll('[data-testid="receita-linha"]')].find((tr) => tr.textContent?.includes('44.871'));
+        const botao = linha?.querySelector<HTMLButtonElement>('[data-testid="receita-lancar"]');
+        if (botao) botao.click(); else setTimeout(abrir, 100);
+      };
+      setTimeout(abrir, 300);
+    }
   };
   void montarReceita();
 } else if (tela === 'produtores') {

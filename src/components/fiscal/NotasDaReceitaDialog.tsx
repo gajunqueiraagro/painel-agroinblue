@@ -3,6 +3,9 @@
  * A casca é a da caixa de boletos (cabeçalho azul, abas com contagem reservada, quadro com rolagem própria, rodapé azul com o total).
  * SÓ LEITURA: lista o que a busca gravou; "Lançar" entrega o XML ao "Da nota fiscal" de hoje (D1), "PDF" baixa o XML (D3), a linha
  * abre os dados ("Ver"). Dar ciência (F3.3) e Ignorar (RPC nova) não entram nesta fatia.
+ * NOTA-RECEITA-CASAR-01 (mock aprovado 17/11, D1–D4): "Lançar" numa nota com candidatos mostra ANTES o quadro "pode já estar lançada";
+ * "Vincular a este" leva o XML à porta 2 do "+ Da nota" a partir do lançamento escolhido (o Anexar de hoje: valor, datas, conta, status
+ * e conciliação NÃO mudam); nunca casa sozinho.
  */
 import { Fragment, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -12,8 +15,10 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { RODAPE_REGUA, TD_REGUA, TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA, TextoReservado } from '@/components/ui/regua-tabela';
 import { cn } from '@/lib/utils';
 import { lerXmlDaReceita, type DadosDaReceita } from '@/hooks/useNotasDaReceita';
+import { abrirAbaDoDanfe, mostrarDanfe } from '@/lib/fiscal/abrirDanfe';
 import {
-  ABAS_DA_RECEITA, arquivoDoXml, filtrarBusca, nomeDoXml, SITUACAO_NA_TELA, totalDaLista, type AbaDaReceita, type NotaNaLista,
+  ABAS_DA_RECEITA, arquivoDoXml, candidatoPreMarcado, filtrarBusca, nomeDoXml, SITUACAO_NA_TELA, totalDaLista, type AbaDaReceita,
+  type ClasseDoCandidato, type NotaNaLista,
 } from '@/lib/fiscal/notasDaReceita';
 
 const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-left');
@@ -32,7 +37,8 @@ export function baixarArquivo(arquivo: File) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, lerXml = lerXmlDaReceita }: {
+export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita,
+  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe }: {
   clienteNome?: string | null;
   dados: DadosDaReceita | undefined;
   carregando: boolean;
@@ -40,8 +46,13 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   aoFechar: () => void;
   /** D1 — o XML vai para o "Da nota fiscal" de hoje (o mesmo caminho do arquivo solto) */
   aoLancar: (arquivo: File) => void;
+  /** NOTA-RECEITA-CASAR-01 — o XML vai à porta 2 do "+ Da nota" a partir do lançamento escolhido; devolve a frase quando não abre */
+  aoVincular: (arquivo: File, lancamentoId: string) => Promise<string | null>;
   /** a bancada injeta o leitor; a tela usa o banco */
   lerXml?: (id: string) => Promise<string>;
+  /** NOTA-DANFE-01 — o "PDF" abre o DANFE do XML numa aba (a aba nasce no clique); os testes injetam */
+  abrirDanfe?: () => Window | null;
+  mostrarNaAba?: (aba: Window | null, arquivo: File) => Promise<void>;
 }) {
   const [aba, setAba] = useState<AbaDaReceita>('todas');
   const [busca, setBusca] = useState('');
@@ -49,16 +60,17 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   const [aberta, setAberta] = useState<NotaNaLista | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupada, setOcupada] = useState<string | null>(null);
+  const [casar, setCasar] = useState<NotaNaLista | null>(null);
 
   const todas = useMemo(() => filtrarBusca(dados?.lista ?? [], busca, titular), [dados, busca, titular]);
   const filtro = ABAS_DA_RECEITA.find((a) => a.valor === aba)?.filtro ?? (() => true);
   const linhas = todas.filter(filtro);
   const pedemCiencia = todas.filter((n) => n.sit === 'pede_ciencia').length;
-  const aLancar = todas.filter((n) => n.sit === 'nova').length;
+  const aLancar = todas.filter((n) => n.sit === 'nova' || n.sit === 'pode_estar').length;
 
-  const comXml = async (n: NotaNaLista, fazer: (f: File) => void) => {
+  const comXml = async (n: NotaNaLista, fazer: (f: File) => void | Promise<void>) => {
     setOcupada(n.id); setAviso(null);
-    try { fazer(arquivoDoXml(n.chave, await lerXml(n.id))); } catch (e) { setAviso(e instanceof Error ? e.message : 'Não consegui ler o XML.'); } finally { setOcupada(null); }
+    try { await fazer(arquivoDoXml(n.chave, await lerXml(n.id))); } catch (e) { setAviso(e instanceof Error ? e.message : 'Não consegui ler o XML.'); } finally { setOcupada(null); }
   };
 
   return (
@@ -89,10 +101,10 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
               className="h-[24px] w-[160px] bg-card px-1.5 text-[10px]" data-testid="receita-busca" />
           </div>
           <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card" data-testid="quadro-da-receita" data-desloca-livre>
-            <table className="w-full min-w-[860px] table-fixed border-collapse">
+            <table className="w-full min-w-[874px] table-fixed border-collapse">
               <colgroup>
                 <col style={{ width: 70 }} /><col /><col style={{ width: 116 }} /><col style={{ width: 72 }} /><col style={{ width: 80 }} />
-                <col style={{ width: 92 }} /><col style={{ width: 118 }} /><col style={{ width: 98 }} /><col style={{ width: 128 }} />
+                <col style={{ width: 92 }} /><col style={{ width: 118 }} /><col style={{ width: 112 }} /><col style={{ width: 128 }} />
               </colgroup>
               <thead><tr className="h-[22px]">
                 <th className={TH}>Emissão</th><th className={TH}>Emitente</th><th className={TH}>CNPJ/CPF</th><th className={TH_NUM}>Nº</th>
@@ -103,7 +115,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                   const s = SITUACAO_NA_TELA[n.sit];
                   const apagada = n.sit === 'cancelada' || n.sit === 'ignorada';
                   const temXml = n.tipo === 'completa';
-                  const podeLancar = temXml && n.sit === 'nova';
+                  const podeLancar = temXml && (n.sit === 'nova' || n.sit === 'pode_estar');
                   return (
                     <tr key={n.id} className={cn(LINHA, 'cursor-pointer hover:bg-muted/60', apagada && 'text-muted-foreground')} data-testid="receita-linha"
                       data-situacao={n.sit} onClick={() => setAberta(n)}>
@@ -122,11 +134,11 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                           <button type="button" className={cn(BOTAO, 'w-[52px]', podeLancar ? 'bg-[#E7C873] font-semibold text-foreground hover:bg-[#D9B95F]' : 'invisible')}
                             disabled={!podeLancar || ocupada === n.id} data-testid="receita-lancar"
                             title='Abre o "Da nota fiscal" com este XML (o mesmo caminho do arquivo solto)'
-                            onClick={() => void comXml(n, aoLancar)}>Lançar</button>
+                            onClick={() => (n.candidatos.length ? setCasar(n) : void comXml(n, aoLancar))}>Lançar</button>
                           <button type="button" className={cn(BOTAO, 'w-[34px] border', temXml ? 'bg-card hover:bg-muted' : 'cursor-not-allowed text-muted-foreground/50')}
                             disabled={!temXml || ocupada === n.id} data-testid="receita-pdf"
-                            title={temXml ? 'Baixa o XML da nota (o DANFE vem depois)' : 'Sem XML ainda: só o resumo da Receita'}
-                            onClick={() => void comXml(n, baixarArquivo)}>PDF</button>
+                            title={temXml ? 'Abre o DANFE da nota numa aba (imprimir ou salvar em PDF)' : 'Sem XML ainda: só o resumo da Receita'}
+                            onClick={() => { const aba = abrirDanfe(); void comXml(n, (f) => mostrarNaAba(aba, f)); }}>PDF</button>
                           <button type="button" className={cn(BOTAO, 'w-[30px] border bg-card hover:bg-muted')} data-testid="receita-ver"
                             title="Ver os dados da nota" onClick={() => setAberta(n)}>Ver</button>
                         </div>
@@ -156,6 +168,16 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
         </div>
         {aberta && <DadosDaNota n={aberta} aoFechar={() => setAberta(null)} />}
+        {casar && <PodeEstarLancada n={casar} ocupada={ocupada === casar.id} aviso={aviso} aoFechar={() => setCasar(null)}
+          aoLancarNova={() => { const n = casar; setCasar(null); void comXml(n, aoLancar); }}
+          aoVincular={async (id) => {
+            const n = casar;
+            setOcupada(n.id); setAviso(null);
+            try {
+              const frase = await aoVincular(arquivoDoXml(n.chave, await lerXml(n.id)), id);
+              if (frase) setAviso(frase); else setCasar(null);
+            } catch (e) { setAviso(e instanceof Error ? e.message : 'Não consegui ler o XML.'); } finally { setOcupada(null); }
+          }} />}
       </DialogContent>
     </Dialog>
   );
@@ -183,6 +205,86 @@ function DadosDaNota({ n, aoFechar }: { n: NotaNaLista; aoFechar: () => void }) 
         </dl>
         <div className="flex justify-end border-t px-3 py-1.5">
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const SELO_DA_CLASSE: Record<ClasseDoCandidato, { rotulo: string; cor: string; dica: string }> = {
+  mesmo_cnpj: { rotulo: 'mesmo CNPJ', cor: 'bg-emerald-100 text-emerald-800', dica: 'o fornecedor do lançamento tem o CNPJ do emitente' },
+  sem_fornecedor: { rotulo: 'sem fornecedor', cor: 'bg-amber-100 text-amber-800', dica: 'o lançamento não tem fornecedor, ou o cadastro não tem CNPJ' },
+  outro_fornecedor: { rotulo: 'outro fornecedor', cor: 'bg-zinc-200 text-zinc-700', dica: 'o fornecedor do lançamento é outro: a troca só marcada, na prévia' },
+};
+const TD_C = cn(TD_REGUA, 'h-[22px]');
+
+/** NOTA-RECEITA-CASAR-01 — o quadro do mock: os lançamentos sem nota com o mesmo valor (−15/+60 dias); nunca casa sozinho */
+function PodeEstarLancada({ n, ocupada, aviso, aoFechar, aoVincular, aoLancarNova }: {
+  n: NotaNaLista; ocupada: boolean; aviso: string | null; aoFechar: () => void; aoVincular: (lancamentoId: string) => void; aoLancarNova: () => void;
+}) {
+  const [escolhido, setEscolhido] = useState<string | null>(() => candidatoPreMarcado(n.candidatos));
+  const mesmo = n.candidatos.filter((c) => c.classe === 'mesmo_cnpj').length;
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) aoFechar(); }}>
+      <DialogContent className="flex w-[min(1060px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0 [&>button]:top-2.5 [&>button]:text-primary-foreground"
+        data-testid="receita-casar">
+        <div className="flex h-[34px] shrink-0 items-center bg-primary px-3 pr-10">
+          <DialogTitle className="truncate text-[11px] font-semibold text-primary-foreground">Lançar nota da Receita · NF {n.numero}</DialogTitle>
+          <DialogDescription className="sr-only">Os lançamentos sem nota que podem ser esta nota.</DialogDescription>
+        </div>
+        <div className="flex flex-col gap-2 bg-muted p-3">
+          <div className="grid grid-cols-[90px_1fr_150px_120px] items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-[10.5px]">
+            <div><div className="text-[9.5px] text-muted-foreground">Emissão</div>{dataBR(n.emissao)}</div>
+            <div className="min-w-0"><div className="text-[9.5px] text-muted-foreground">Emitente</div><div className="truncate" title={n.emitenteNome ?? undefined}>{n.emitenteNome ?? '—'}</div></div>
+            <div><div className="text-[9.5px] text-muted-foreground">CNPJ/CPF</div><span className="tabular-nums">{n.emitenteNaTabela || '—'}</span></div>
+            <div className="text-right"><div className="text-[9.5px] text-muted-foreground">Valor</div><span className="tabular-nums">R$ {n.valorCent == null ? '—' : brl(n.valorCent)}</span></div>
+          </div>
+          <div className="rounded-md bg-amber-50 px-2.5 py-1.5 text-[10.5px] text-amber-900" data-testid="receita-casar-aviso">
+            Esta nota pode já estar lançada: veja os lançamentos sem nota com o mesmo valor (de 15 dias antes a 60 depois da emissão). Criar de novo duplica a despesa.
+          </div>
+          <div className="max-h-[260px] overflow-auto rounded-md border bg-card">
+            <table className="w-full min-w-[900px] table-fixed border-collapse">
+              <colgroup><col style={{ width: 28 }} /><col style={{ width: 84 }} /><col style={{ width: 84 }} /><col style={{ width: 150 }} /><col />
+                <col style={{ width: 160 }} /><col style={{ width: 90 }} /><col style={{ width: 84 }} /><col style={{ width: 112 }} /></colgroup>
+              <thead><tr className="h-[22px]">
+                <th className={TH} /><th className={TH}>Competência</th><th className={TH}>Pagamento</th><th className={TH}>Conta</th><th className={TH}>Descrição</th>
+                <th className={TH}>Fornecedor</th><th className={TH_NUM}>Valor</th><th className={TH}>Status</th><th className={TH}>Por que</th>
+              </tr></thead>
+              <tbody>
+                {n.candidatos.map((c) => {
+                  const selo = SELO_DA_CLASSE[c.classe];
+                  return (
+                    <tr key={c.id} className={cn('cursor-pointer border-b border-border/40', escolhido === c.id && 'bg-sky-50')} data-testid="receita-candidato"
+                      data-classe={c.classe} onClick={() => setEscolhido(c.id)}>
+                      <td className={TD_C}><input type="radio" name="candidato" aria-label={`escolher ${c.descricao ?? c.id}`} checked={escolhido === c.id}
+                        onChange={() => setEscolhido(c.id)} /></td>
+                      <td className={TD_C}>{dataBR(c.competencia)}</td>
+                      <td className={TD_C}>{dataBR(c.pagamento ?? c.vencimento)}</td>
+                      <td className={cn(TD_REGUA_TEXTO, 'h-[22px]')} title={c.conta ?? undefined}>{c.conta ?? '—'}</td>
+                      <td className={cn(TD_REGUA_TEXTO, 'h-[22px]')} title={c.descricao ?? undefined}>{c.descricao ?? '—'}</td>
+                      <td className={cn(TD_REGUA_TEXTO, 'h-[22px]')} title={c.fornecedorNome ?? undefined}>{c.fornecedorNome ?? '—'}</td>
+                      <td className={cn(TD_REGUA_NUM, 'h-[22px]')}>{brl(c.valorCent)}</td>
+                      <td className={TD_C}>{c.conciliado ? 'Conciliado' : c.status === 'realizado' ? 'Realizado' : c.status === 'programado' ? 'Programado' : (c.status ?? '—')}</td>
+                      <td className={TD_C} title={selo.dica}><span className={cn('whitespace-nowrap rounded-full px-1.5 py-[1px] text-[9.5px]', selo.cor)}>{selo.rotulo}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="rounded-md border bg-card px-2.5 py-1.5 text-[10.5px]">
+            <b className="text-primary">Vincular a este</b>: o lançamento recebe o nº e a chave da NF, o XML anexado e os itens; o fornecedor, se faltar ou for outro, é
+            oferecido na prévia. <b>Valor, datas, conta, status e conciliação não mudam</b>: quem manda é o pagamento.
+          </div>
+        </div>
+        <div className="flex h-[38px] shrink-0 items-center gap-2 border-t bg-card px-3">
+          <span className={cn('min-w-0 flex-1 truncate text-[10px]', aviso ? 'text-destructive' : 'text-muted-foreground')} data-testid="receita-casar-rodape"
+            title={aviso ?? undefined}>
+            {aviso ?? <>{n.candidatos.length} {n.candidatos.length === 1 ? 'candidato' : 'candidatos'} · valor exato{mesmo ? ` · ${mesmo} do mesmo CNPJ` : ''}</>}
+          </span>
+          <Button variant="outline" size="sm" className="h-[24px] text-[10px]" disabled={ocupada} onClick={aoLancarNova} data-testid="receita-lancar-nova">É outra compra: lançar nova</Button>
+          <Button size="sm" className="h-[24px] text-[10px]" disabled={!escolhido || ocupada} onClick={() => escolhido && aoVincular(escolhido)}
+            data-testid="receita-vincular">Vincular a este</Button>
         </div>
       </DialogContent>
     </Dialog>

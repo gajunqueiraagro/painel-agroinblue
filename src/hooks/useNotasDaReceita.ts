@@ -6,7 +6,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { chavesJaLancadas, lerLinhasRecebidas, montarLista, precisaConferirLancamento, type NotaNaLista } from '@/lib/fiscal/notasDaReceita';
+import { chavesJaLancadas, lerCandidatos, lerLinhasRecebidas, montarLista, precisaConferirLancamento, situacaoNaLista, type CandidatoDaNota, type NotaNaLista } from '@/lib/fiscal/notasDaReceita';
 
 export interface DadosDaReceita {
   lista: NotaNaLista[];
@@ -48,12 +48,24 @@ export async function lerNotasDaReceita(clienteId: string): Promise<DadosDaRecei
     if (!achadas) throw new Error('Não consegui conferir quais notas já estão no sistema.');
     for (const ch of achadas) noSistema.add(ch);
   }
+  /* NOTA-RECEITA-CASAR-01 — as que sobram "Nova" (com XML ou não) perguntam UMA vez quais lançamentos podem ser elas */
+  let candidatos = new Map<string, CandidatoDaNota[]>();
+  const novas = linhas.filter((l) => situacaoNaLista(l, noSistema) === 'nova' && l.emissao && (l.valorCent ?? 0) > 0);
+  if (novas.length > 0) {
+    const { data, error } = await db().rpc('fn_notas_candidatos', {
+      p_cliente: clienteId,
+      p_notas: novas.map((l) => ({ chave: l.chave, emissao: l.emissao, valor_cent: l.valorCent, emitente_documento: l.emitenteDocumento })),
+    });
+    const lidos = error ? null : lerCandidatos(data);
+    if (!lidos) throw new Error('Não consegui procurar os lançamentos que podem ser estas notas.');
+    candidatos = lidos;
+  }
   const titulares = ((t.data ?? []) as { id: string; nome: string | null }[]).map((x) => ({ id: x.id, nome: x.nome ?? '—' }));
   const controle = (c.data ?? []) as { ultima_busca_em: string | null; nao_antes_de: string | null }[];
   const ultimas = controle.map((x) => x.ultima_busca_em).filter((x): x is string => !!x).sort();
   const proximas = controle.map((x) => x.nao_antes_de).filter((x): x is string => !!x).sort();
   return {
-    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema),
+    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema, candidatos),
     titulares,
     ultimaBusca: ultimas.at(-1) ?? null,
     proximaBusca: proximas[0] ?? null,

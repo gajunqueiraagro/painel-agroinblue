@@ -1321,6 +1321,9 @@ const CENARIOS = [
       { nome: 'notas-receita-ciencia', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^Ciência pendente/) },
       { nome: 'notas-receita-ver', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-dados"]', antes: async (p) => {
         await p.locator('[data-testid="receita-ver"]').first().click(); await p.waitForTimeout(400); } },
+      /* NOTA-RECEITA-CASAR-01 — o quadro dos candidatos (3 linhas, textos no teto) */
+      { nome: 'notas-receita-casar', url: 'tela=notas-receita-casar', tamanhos: T, regiao: '[data-testid="receita-casar"]', antes: async (p) => {
+        await p.locator('[data-testid="receita-casar"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400); } },
     ];
   })(),
   ...(() => {
