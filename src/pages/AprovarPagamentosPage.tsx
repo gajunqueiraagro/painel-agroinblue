@@ -193,20 +193,21 @@ export default function AprovarPagamentosPage() {
                       ? <Checkbox aria-label={`Marcar ${l.fornecedor ?? l.descricao ?? 'pagamento'}`} className="mt-0.5 h-[18px] w-[18px]"
                           checked={marcadas.has(l.lancamentoId)} onCheckedChange={(v) => setMarcadas((s) => { const n = new Set(s); if (v === true) n.add(l.lancamentoId); else n.delete(l.lancamentoId); return n; })} />
                       : <span />}
-                    <button type="button" className="min-w-0 truncate text-left font-semibold" title={l.fornecedor ?? l.descricao ?? ''} onClick={() => setAberta(l)}>
+                    <button type="button" className="min-w-0 break-words text-left font-semibold" title={l.fornecedor ?? l.descricao ?? ''} onClick={() => setAberta(l)}>
                       {l.fornecedor ?? l.descricao ?? 'Sem fornecedor'}
                     </button>
                     <span className="whitespace-nowrap text-right font-semibold tabular-nums">{formatMoeda(Math.abs(l.valor))}</span>
                     <span />
-                    <span className="col-span-2 truncate text-[11px] text-muted-foreground" title={[l.fazenda, l.conta, l.descricao].filter(Boolean).join(' · ')}>
-                      {[l.fazenda, l.conta, l.vencimento ? `vence ${brData(l.vencimento)}` : null].filter(Boolean).join(' · ')}
+                    <span className="col-span-2 break-words text-[11px] text-muted-foreground" title={[l.fazenda, l.conta, l.descricao].filter(Boolean).join(' · ')}>
+                      {[l.fazenda, l.conta].filter(Boolean).join(' · ')}
+                      {l.vencimento ? <span className="whitespace-nowrap">{l.fazenda || l.conta ? ' · ' : ''}vence {brData(l.vencimento)}</span> : null}
                     </span>
                     <span />
                     <span className="col-span-2 flex gap-1.5 pt-0.5">
                       <span className={`rounded-full border px-2 text-[10.5px] ${l.temNota ? '' : 'border-rose-300 text-rose-800'}`}>{l.temNota ? 'Nota' : 'sem nota'}</span>
                       <span className={`rounded-full border px-2 text-[10.5px] ${l.temBoleto ? '' : 'border-rose-300 text-rose-800'}`}>{l.temBoleto ? 'Boleto' : 'sem boleto'}</span>
-                      {l.situacao === 'recusado' && l.motivo && <span className="min-w-0 truncate text-[10.5px] text-rose-800" title={l.motivo}>{l.motivo}</span>}
-                      {l.observacao && l.situacao !== 'recusado' && <span className="min-w-0 truncate text-[10.5px] text-muted-foreground" title={l.observacao}>{l.observacao}</span>}
+                      {l.situacao === 'recusado' && l.motivo && <span className="min-w-0 break-words text-[10.5px] text-rose-800" title={l.motivo}>{l.motivo}</span>}
+                      {l.observacao && l.situacao !== 'recusado' && <span className="min-w-0 break-words text-[10.5px] text-muted-foreground" title={l.observacao}>{l.observacao}</span>}
                     </span>
                   </div>
                 ))}
@@ -298,7 +299,7 @@ function ListaDeAlertas({ alertas }: { alertas: Alerta[] | null }) {
         <div key={`${a.alerta}-${a.lancamentoId}-${i}`} className="mb-1.5 grid grid-cols-[1fr_auto] gap-x-2 rounded-lg border px-2 py-1.5 text-[12px]">
           <span className={`font-semibold ${a.alerta === 'pago_sem_aprovacao' ? 'text-rose-800' : 'text-amber-800'}`}>{ROTULO_DO_ALERTA[a.alerta] ?? a.alerta}</span>
           <span className="whitespace-nowrap text-right tabular-nums">{formatMoeda(Math.abs(a.valor))}</span>
-          <span className="truncate text-[11px] text-muted-foreground" title={a.fornecedor ?? ''}>{a.fornecedor ?? 'Sem fornecedor'}{a.data ? ` · ${brData(a.data)}` : ''}</span>
+          <span className="min-w-0 break-words text-[11px] text-muted-foreground" title={a.fornecedor ?? ''}>{a.fornecedor ?? 'Sem fornecedor'}{a.data ? <span className="whitespace-nowrap"> · {brData(a.data)}</span> : null}</span>
           <span className="whitespace-nowrap text-right text-[11px] tabular-nums text-muted-foreground">
             {a.alerta === 'pago_diferente' && a.valorAprovado !== null ? `aprovado ${formatMoeda(Math.abs(a.valorAprovado))}` : ''}
           </span>
