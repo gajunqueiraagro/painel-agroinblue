@@ -64,5 +64,10 @@ describe('D-h — a faixa do pagamento contra o vencimento', () => {
     expect(screen.getByTestId('casar-faixa-pagamento').textContent).toBe('Pago 28 dias ANTES do vencimento (venc. 10/11 · banco 13/10)');
     expect(screen.getByTestId('casar-faixa-pagamento').className).toContain('h-[22px]');
     expect(screen.getByTestId('valor-aplicado-rotulo').textContent).toBe('valor aplicado');
+    /* homologação 09:37: o histórico do banco na linha própria, com a largura toda (as 4 colunas do lado de lá do rótulo) */
+    const h = screen.getByTestId('casar-historico');
+    expect(h.textContent).toBe('PIX AGENDAMENTO 10/10 · AZULAO PARAFUSOS E FERRAM');
+    expect(h.getAttribute('colspan')).toBe('4');
+    expect(h.getAttribute('title')).toBe('PIX AGENDAMENTO 10/10 · AZULAO PARAFUSOS E FERRAM');
   });
 });

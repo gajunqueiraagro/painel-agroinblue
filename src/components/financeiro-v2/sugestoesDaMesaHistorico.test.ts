@@ -51,3 +51,12 @@ describe('CONC-CRIAR-COM-NOTA-02 D-f (tela) — o pagamento ANTECIPADO (caso Azu
     expect(ids).not.toContain('adi-4');
   });
 });
+
+describe('CONC-CRIAR-COM-NOTA-02 (homologação 09:37) — o nº da NF chega ao Casar pela sugestão', () => {
+  it('levadosDaSugestao leva o numero_documento do candidato ("NF —" era o nº perdido no caminho)', async () => {
+    const { levadosDaSugestao } = await import('./EspelhoConciliacaoTab');
+    const c = { ...cand('adi-1', 'f-x', 'Ferragens Exemplo', -6000, '2031-11-10'), numero_documento: '000077066' };
+    const [lista] = [sugestoesDaMesa(montarMesa(dados, new Set()), CANDIDATOS, new Map(), [c]).get('ext-1') ?? []];
+    expect(levadosDaSugestao(lista[0])[0].numero_documento).toBe('000077066');
+  });
+});

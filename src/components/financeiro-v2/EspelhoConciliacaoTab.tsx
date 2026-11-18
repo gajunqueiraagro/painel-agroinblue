@@ -919,12 +919,14 @@ export function sugestoesDaMesa(
   return m;
 }
 /** "casar" numa sugestão abre o `CasarComBancoModal` já com os levados; um lançamento de valor diferente abre com o valor do banco. */
-function levadosDaSugestao(s: Sugestao): LevadoInicial[] {
+export function levadosDaSugestao(s: Sugestao): LevadoInicial[] {
   const umDiferente = s.lancamentos.length === 1 && s.valorDiferente;
   return s.lancamentos.map((c) => ({
     lancamento_id: c.lancamento_id, descricao: c.descricao, fornecedor: c.fornecedor,
     valor_assinado: c.valor_assinado, usarValorDoBanco: umDiferente,
     data_vencimento: c.data_vencimento, status_transacao: c.status_transacao,
+    /* homologação 09:37: sem isto o lado Sistema do Casar dizia "NF —" num lançamento feito da NF */
+    numero_documento: c.numero_documento ?? null,
   }));
 }
 

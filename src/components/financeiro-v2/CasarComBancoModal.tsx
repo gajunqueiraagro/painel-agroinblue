@@ -319,13 +319,19 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
                 </tr>
               </thead>
               <tbody>
+                {/* CONC-CRIAR-COM-NOTA-02 (homologação 09:37, Gabriel): o histórico do banco é sempre longo — a largura TODA do modal (~95
+                    caracteres a 10px); só passa disso com "…" e o inteiro no `title` */}
+                <tr className="h-[20px] bg-muted/60">
+                  <td className="truncate px-1 text-muted-foreground">Histórico</td>
+                  <td colSpan={4} className="truncate px-1 font-medium" title={extrato.historico ?? undefined} data-testid="casar-historico">{extrato.historico ?? '—'}</td>
+                </tr>
                 {(semItens ? [null] : levados).flatMap((l, i) => {
                   const st = (l?.status_transacao ?? '').trim().toLowerCase();
                   const n = unico || !l ? '' : ` (${i + 1})`;
                   const primeiro = i === 0;
+                  /* homologação 09:37: o histórico do banco tem a LINHA PRÓPRIA (largura toda, acima das colunas) — aqui só data e conta */
                   const ext: [string, ReactNode, string?][] = primeiro
-                    ? [['Data', dataDdMmAaaa(extrato.data)], ['Histórico', extrato.historico ?? '—', extrato.historico ?? undefined],
-                      ['Conta', nomeConta ?? '—', nomeConta ?? undefined], ['', ''], ['', '']]
+                    ? [['Data', dataDdMmAaaa(extrato.data)], ['Conta', nomeConta ?? '—', nomeConta ?? undefined], ['', ''], ['', ''], ['', '']]
                     : [['', ''], ['', ''], ['', ''], ['', ''], ['', '']];
                   const sis: [string, ReactNode, string?, string?][] = [
                     [`Venc.${n}`, l ? dataDdMmAaaa(l.data_vencimento) : '—', undefined, 'casar-sis-venc'],
