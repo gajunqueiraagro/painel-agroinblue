@@ -125,3 +125,11 @@ describe('as listas da Conciliação no tamanho da lista do Financeiro (sem a va
     expect(largurasParaCasar({ faz: true, nf: true })).toEqual([28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62]);
   });
 });
+
+describe('CONC-CRIAR-COM-NOTA-02 E1 — o motivo curto do fornecedor do histórico (o selo saía vazio)', () => {
+  it('do_historico tem texto; "outro fornecedor" aparece na forma curta', async () => {
+    const { motivoCurto } = await import('./selecaoParaCasar');
+    expect(motivoCurto({ tipo: 'do_historico', lancamentos: [] })).toBe('do fornecedor · valor ≠');
+    expect(motivoCurto({ tipo: 'mesmo_valor', lancamentos: [], motivo: 'outro fornecedor · mesmo valor' })).toBe('outro forn. · mesmo valor');
+  });
+});

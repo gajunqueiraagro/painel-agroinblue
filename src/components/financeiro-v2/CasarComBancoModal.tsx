@@ -20,6 +20,7 @@
  * previsto vira o real. Nada concilia sozinho; o operador ainda clica Conciliar.
  */
 import { useConteudoEstavel } from '@/lib/react/conteudoEstavel';
+import { TabelaDosLevados } from '@/components/conciliacao/TabelaDosLevados';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { fechaAoCentavo, podeCriarPelaDiferenca } from '@/lib/conciliacao/tolerancia';
 import { EscolherContaDaTaxa } from '@/components/conciliacao/EscolherContaDaTaxa';
@@ -290,6 +291,11 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
   const podeCriar = podeCriarPelaDiferenca(sim, semItens);
   const sentido = sim && !semItens ? sentidoDaDiferenca(sim.diferenca, sim.noExtrato) : null;
   const unico = levados.length === 1;
+  /* E2 — 2+ lançamentos: a tabela (o modal alarga para caber Venc · Descrição · Fornecedor · NF · Status · Valor · Aplicado · Fica) */
+  const multi = levados.length >= 2;
+  /* no pós-fixado o campo dos juros mostra o juro real que o banco vai gravar (o mesmo do campo do 1:1) */
+  const levadosDaTabela = levados.map((l) => (parcelaPos && respPos?.ok && respPos.juroReal != null && l.lancamento_id === respPos.jurosId
+    ? { ...l, valorTexto: paraCampo(respPos.juroReal) } : l));
   /* CONC-CRIAR-COM-NOTA-01 — a coluna NF so' quando algum levado traz o nº (os outros chamadores seguem como sempre) */
   const comNF = levados.some((l) => !!l.numero_documento);
   /* P153b (D3) — algum levado troca de conta ao casar: o botão diz isso (o texto é fixo enquanto o modal está aberto) */
@@ -312,7 +318,7 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
             ⚠ E A DESCRIÇÃO NÃO TRUNCA MAIS — PR-CONC-SUGESTOES-CASAR-01 (Gabriel, print 13:42: "Servico Rastreabilidade
             ..." cortado com espaço sobrando). Cada levado ocupa DUAS linhas: a identificação inteira, uma informação por
             coluna (venc · descrição · fornecedor · status), e embaixo o campo e as ações. O que não couber quebra. */}
-        <DialogContent className="w-[640px] max-w-[95vw] max-h-[90vh] flex flex-col grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
+        <DialogContent className={cn(multi ? 'w-[1040px]' : 'w-[640px]', 'max-w-[95vw] max-h-[90vh] flex flex-col grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]')}>
           <div className="flex h-9 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
             <span className="text-[12px] font-medium">Casar com o banco</span>
             <div className="flex items-center gap-3">
@@ -325,6 +331,32 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-2.5">
+            {/* CONC-CRIAR-COM-NOTA-02 E2 (homologação 09:48, caso Edson: 5 NFs num PIX) — com 2+ lançamentos, UMA TABELA (uma linha por
+                lançamento, o Aplicado na linha, o que Fica, o ✕; o extrato numa faixa em cima; o rodapé aplicado × extrato × diferença). O 1:1 segue
+                no desenho do D-h (Extrato × Sistema). O estado, o Conciliar e a pergunta da NF são os mesmos. */}
+            {multi ? (<>
+              <TabelaDosLevados extrato={extrato} nomeConta={nomeConta} levados={levadosDaTabela}
+                onValor={poeValor} onRemover={(id) => setLevados((v) => v.filter((x) => x.lancamento_id !== id))}
+                somenteLeitura={() => !!parcelaPos} rotuloDoCampo={(l) => `Valor de ${l.descricao ?? 'lançamento'}`}
+                acaoNoCampo={parcelaPos ? undefined : (l) => {
+                  /* o "absorver a diferença" de sempre (a diferença inteira nesta linha; as outras não mudam), agora colado ao campo */
+                  const novo = difAtual == null ? null : valorAbsorvendo(valorDe(l.valorTexto), l.valor_assinado, difAtual);
+                  const motivo = difAtual == null ? 'Confere com o banco: não há diferença para absorver.'
+                    : novo == null ? 'Esta linha ficaria zerada ou negativa: escolha outra, ou remova um lançamento.' : null;
+                  return (
+                    <button type="button" data-testid="absorver-diferenca" disabled={novo == null} aria-label="absorver a diferença"
+                      title={motivo ?? `absorver a diferença: esta linha passa a ${paraCampo(novo ?? 0)}; as outras não mudam e a soma fica igual ao banco.`}
+                      onClick={() => { if (novo != null) poeValor(l.lancamento_id, paraCampo(novo)); }}
+                      className={cn('h-[20px] w-[18px] shrink-0 rounded border text-[10px] leading-none', novo == null ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted')}>⇆</button>
+                  );
+                }} />
+              {levados.filter((l) => !!l.trocarConta).map((l) => (
+                <div key={l.lancamento_id} className="rounded border border-amber-400 bg-amber-50 px-1.5 py-[2px] text-[10px] text-amber-800" data-testid="levado-troca-conta">
+                  {l.descricao ?? 'Lançamento'} · Conta: <span className="font-semibold">{l.trocarConta?.de ?? 'sem conta'}</span> → <span className="font-semibold">{l.trocarConta?.para ?? 'a do extrato'}</span>
+                  {' · '}ao conciliar, passa para a conta do extrato.
+                </div>
+              ))}
+            </>) : (<>
             {/* CONC-CRIAR-COM-NOTA-02 D-h (Gabriel 18/11, caso Azulão) — EXTRATO × SISTEMA em duas colunas de UMA tabela (regra de corte: "…"
                 com o inteiro no `title` só em tabela); as linhas casam lado a lado e o VALOR fica na mesma linha, à direita (valor sob valor) */}
             <table className="w-full table-fixed border-separate border-spacing-0 text-[10px]" data-testid="casar-colunas">
@@ -471,21 +503,23 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
                 </div>
               ))}
             </div>
+            </>)}
 
             <div className={cn('space-y-0.5', !sim && 'text-muted-foreground')}>
-              {[['No extrato', sim?.noExtrato], ['Soma dos agrupados', sim?.soma]].map(([rot, val]) => (
+              {/* E2: com a tabela, os números moram no rodapé dela; aqui ficam só as frases */}
+              {!multi && [['No extrato', sim?.noExtrato], ['Soma dos agrupados', sim?.soma]].map(([rot, val]) => (
                 <div key={String(rot)} className="grid grid-cols-[1fr_120px] items-baseline">
                   <span className="text-[10px] text-muted-foreground">{rot}</span>
                   <span className="text-right text-[11px] tabular-nums">{val == null ? '—' : fmtBRL(Number(val))}</span>
                 </div>
               ))}
-              <div className="grid grid-cols-[1fr_120px] items-baseline">
+              {!multi && <div className="grid grid-cols-[1fr_120px] items-baseline">
                 <span className="text-[10px] text-muted-foreground">Diferença</span>
                 <span className={cn('text-right text-[11px] font-semibold tabular-nums',
                   !sim ? '' : sim.ok ? 'text-emerald-600' : 'text-amber-600')}>
                   {sim == null ? '—' : fmtBRL(sim.diferenca)}
                 </span>
-              </div>
+              </div>}
               {/* ⚠ O SENTIDO E O VALOR, e a 10px (a frase estava a 9, abaixo do piso da casa). */}
               {sim && sentido === 'a_mais' && (
                 <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca">

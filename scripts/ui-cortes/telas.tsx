@@ -1386,6 +1386,22 @@ if (tela === 'mesclar') {
       rpc: (fn: string) => fn === 'fn_conciliacao_historico_buscar' ? HIST_R : null };
     montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} onCasarSelecionados={() => {}} sugestoes={SUGS_R} clienteId="cli"
       onCriarIgual={() => {}} onCasarDoHistorico={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" extrato={EXT_R} />);
+  } else if (v === 'edson') {
+    /* CONC-CRIAR-COM-NOTA-02 E1 (homologação 09:48), SINTÉTICO no formato do caso Edson: PIX MECANICA LIDER −6.000,00; as 5 NFs em aberto em 2
+       cadastros IRMÃOS ("…ME" e "…-ME"), o histórico apontando o 1º; outro fornecedor misturado. As sugestões pelo MOTOR de verdade. */
+    const ce = (id: string, forn: string, fav: string, valor: number, venc: string, desc: string): CandidatoSugestao => ({ lancamento_id: id, valor_assinado: valor,
+      data_vencimento: venc, competencia: '2031-10-06', descricao: desc, fornecedor: forn, favorecido_id: fav, status_transacao: 'programado', ja_conciliado: false });
+    const ME = 'Oficina Exemplo Dias ME'; const ME2 = 'Oficina Exemplo Dias-ME';
+    const CANDS = [ce('e288', ME, 'f-me', -1403.35, '2031-10-06', 'Rolamento diant. int. S10/Kombi/Ranger 2.3'), ce('e289', ME, 'f-me', -330, '2031-10-06', 'Bomba alimentadora'),
+      ce('e402', ME2, 'f-me2', -2900, '2031-10-10', 'Serviço máquinas'), ce('e404', ME2, 'f-me2', -5250, '2031-10-10', 'Serviço de manutenção BH145 bomba injetora'),
+      ce('e405', ME2, 'f-me2', -980, '2031-10-10', 'Serviço máquinas'), ce('seg', 'Seguradora Exemplo Companhia de Seguros', 'f-seg', -270, '2031-10-08', 'Seguro vida - grupo 5/12')];
+    const EXT_E = { data: '2031-10-08', historico: 'PIX - ENVIADO - 08/10 15:21 MECANICA LIDER', valor: -6000 };
+    const COMPL_E = [['e288', '000.000.288'], ['e289', '000.000.289'], ['e402', '000.000.402'], ['e404', '000.000.404'], ['e405', '000.000.405']]
+      .map(([id, nf]) => ({ id, data_pagamento: null, fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: nf }));
+    g.__bancoBancada = { from: (t: string) => (t === 'financeiro_lancamentos_v2' ? COMPL_E : t === 'fazendas' ? [{ id: 'fz1', nome: 'Fazenda Exemplo Retiro', codigo: 'RET' }] : []),
+      rpc: () => null };
+    montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} sugestoes={sugerirCasamentos(EXT_E, CANDS, { fornecedorDoHistorico: 'f-me', maximo: 20 })} clienteId="cli"
+      onCriarIgual={() => {}} onCasarDoHistorico={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" extrato={EXT_E} />);
   } else if (v === 'guariroba') {
     /* P153b — O CASO que abriu a frente, SINTÉTICO: BB 07/10, "PAGAMENTO FATURA DE ÁGUA - AGUAS GUARIROBA SA", −142,72; a sugestão nova
        ("mesmo fornecedor · valor difere: previsto 500,00", calculada pelo motor de verdade) e o histórico com os quatro casos: em aberto
@@ -1429,6 +1445,19 @@ if (tela === 'mesclar') {
       extrato={{ extrato_id: 'x1', data: '2027-08-15', historico: 'DEBITO PARCELA CREDITO RURAL · CONTRATO SINTETICO 0.000.000 · PARCELA 2/5', valor: -99999999.99 }}
       iniciais={[{ lancamento_id: 'yp', descricao: 'Amortização 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -88888888.88, data_vencimento: '2027-08-15', status_transacao: 'programado' },
         { lancamento_id: 'yj', descricao: 'Juros 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -9999999.99, data_vencimento: '2027-08-15', status_transacao: 'programado' }]}
+      onConciliado={() => {}} />);
+  } else if (v === 'edson') {
+    /* CONC-CRIAR-COM-NOTA-02 E2 (homologação 09:48) — o Casar com as 5 NFs (sintético no formato do caso Edson): a TABELA, uma linha por NF */
+    g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: false, motivo: 'soma_nao_bate', no_extrato: -6000, soma: -10863.35, diferenca: -4863.35 } : null };
+    const le = (id: string, forn: string, valor: number, venc: string, desc: string, nf: string) => ({ lancamento_id: id, descricao: desc, fornecedor: forn,
+      valor_assinado: valor, data_vencimento: venc, status_transacao: 'programado', numero_documento: nf });
+    montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil"
+      extrato={{ extrato_id: 'x1', data: '2031-10-08', historico: 'PIX - ENVIADO - 08/10 15:21 MECANICA LIDER', valor: -6000 }}
+      iniciais={[le('e404', 'Oficina Exemplo Dias-ME', -5250, '2031-10-10', 'Serviço de manutenção BH145 bomba injetora', '000000404'),
+        le('e402', 'Oficina Exemplo Dias-ME', -2900, '2031-10-10', 'Serviço máquinas', '000000402'),
+        le('e288', 'Oficina Exemplo Dias ME', -1403.35, '2031-10-06', 'Rolamento diant. int. S10/Kombi/Ranger 2.3', '000000288'),
+        le('e405', 'Oficina Exemplo Dias-ME', -980, '2031-10-10', 'Serviço máquinas', '000000405'),
+        le('e289', 'Oficina Exemplo Dias ME', -330, '2031-10-06', 'Bomba alimentadora', '000000289')]}
       onConciliado={() => {}} />);
   } else if (v === 'antecipado') {
     /* CONC-CRIAR-COM-NOTA-02 D-h — pago no banco 28 dias ANTES do vencimento, com NF (sintético, valores no teto, nomes longos) */

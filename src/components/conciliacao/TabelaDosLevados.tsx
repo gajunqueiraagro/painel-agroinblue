@@ -6,6 +6,7 @@
  * Só DESENHA: o valor de cada campo e o remover são do modal (o mesmo estado `levados`, o mesmo Conciliar — nada de regra nova de gravação).
  * Regra de corte: tabela — texto com "…" e o inteiro no `title`; número, valor, data e NF nunca cortam (larguras medidas para o teto).
  */
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import { STATUS_FILTRO_LABEL, STATUS_PALETA } from '@/lib/financeiro/statusFinanceiro';
@@ -15,7 +16,7 @@ export interface LinhaDoLevado {
   numero_documento?: string | null; status_transacao?: string | null; valor_assinado: number; valorTexto: string;
 }
 /* as larguras: Venc. dd/mm/aaaa 72 · NF 000.000.000 84 · Status 76 · Valor/Aplicado "99.999.999,99" 96/104 · Fica "parcial · falta 99.999.999,99" 150 */
-export const COLUNAS_DOS_LEVADOS: readonly (number | null)[] = [72, null, 170, 84, 76, 96, 104, 150, 24];
+export const COLUNAS_DOS_LEVADOS: readonly (number | null)[] = [72, null, 150, 84, 76, 96, 124, 150, 24];
 const PALETA: Record<string, { texto: string } | undefined> = {
   previsto: STATUS_PALETA.previsto, programado: STATUS_PALETA.programado, agendado: STATUS_PALETA.agendado,
   realizado: STATUS_PALETA.realizado, conciliado: STATUS_PALETA.conciliado,
@@ -32,7 +33,7 @@ export function oQueFica(valor: number, aplicado: number): { texto: string; clas
   return { tipo: 'a_mais', texto: `a mais ${fmt(d)}`, classe: 'bg-rose-50 text-rose-700' };
 }
 
-export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemover, somenteLeitura, rotuloDoCampo }: {
+export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemover, somenteLeitura, rotuloDoCampo, acaoNoCampo }: {
   extrato: { data: string | null; historico: string | null; valor: number };
   nomeConta?: string | null;
   levados: readonly LinhaDoLevado[];
@@ -41,6 +42,8 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
   /** o campo que não se edita (ex.: o juro do pós-fixado, que o banco diz) */
   somenteLeitura?: (id: string) => boolean;
   rotuloDoCampo?: (l: LinhaDoLevado) => string;
+  /** o gesto do modal colado ao campo (o "absorver a diferença", ⇆) */
+  acaoNoCampo?: (l: LinhaDoLevado) => ReactNode;
 }) {
   const aplicado = levados.reduce((t, l) => t + valorDoCampo(l.valorTexto), 0);
   const banco = Math.abs(extrato.valor);
@@ -88,13 +91,14 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
                   {st ? (STATUS_FILTRO_LABEL[st] ?? l.status_transacao) : '—'}
                 </td>
                 <td className={cn('whitespace-nowrap border-b px-1 text-right tabular-nums', cor(l.valor_assinado))}>{fmt(l.valor_assinado)}</td>
-                <td className="border-b px-0.5">
+                <td className="border-b px-0.5"><div className="flex items-center gap-0.5">
                   <input value={l.valorTexto} readOnly={somenteLeitura?.(l.lancamento_id)} inputMode="decimal"
                     onChange={(e) => onValor(l.lancamento_id, e.target.value)}
                     aria-label={rotuloDoCampo?.(l) ?? `Valor aplicado em ${l.descricao ?? 'lançamento'}`}
-                    className={cn('h-[20px] w-full rounded border px-1 text-right text-[10.5px] font-medium tabular-nums', cor(l.valor_assinado))}
+                    className={cn('h-[20px] w-full min-w-0 rounded border px-1 text-right text-[10.5px] font-medium tabular-nums', cor(l.valor_assinado))}
                     data-testid="levado-linha-aplicado" />
-                </td>
+                  {acaoNoCampo?.(l)}
+                </div></td>
                 <td className="border-b px-1">
                   <span className={cn('whitespace-nowrap rounded px-1.5 py-[1px] text-[10px] tabular-nums', fica.classe)} data-testid="levado-linha-fica">{fica.texto}</span>
                 </td>
@@ -111,7 +115,7 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
 
       {/* o rodapé: total aplicado × extrato × diferença (o que o Conciliar vai conferir) */}
       <table className="w-full table-fixed border-separate border-spacing-0 rounded bg-primary text-[10.5px] text-primary-foreground" data-testid="levados-rodape">
-        <colgroup><col /><col style={{ width: 120 }} /><col style={{ width: 70 }} /><col style={{ width: 120 }} /><col style={{ width: 76 }} /><col style={{ width: 110 }} /></colgroup>
+        <colgroup><col /><col style={{ width: 140 }} /><col style={{ width: 70 }} /><col style={{ width: 120 }} /><col style={{ width: 76 }} /><col style={{ width: 110 }} /></colgroup>
         <tbody><tr className="h-[24px]">
           <td className="truncate px-2" title={`${levados.length} lançamentos · ${inteiras} inteiras · ${parciais} parciais`}>
             {levados.length} lançamento{levados.length === 1 ? '' : 's'} · {inteiras} inteira{inteiras === 1 ? '' : 's'}{parciais ? ` + ${parciais} parcial${parciais === 1 ? '' : 's'}` : ''}
