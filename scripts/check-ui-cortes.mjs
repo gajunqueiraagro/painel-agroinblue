@@ -1876,6 +1876,10 @@ const CENARIOS = [
   /* FORN-TROCAR-LOTE-01 — o modal (40 origens de nome longo, os avisos) e a barra da selecao na lista com o "…" */
   { nome: 'trocar-fornecedor', url: 'tela=trocar-fornecedor', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="trocar-origens"]' } },
+  /* RATEIO-HIGINO-01 — o "Conferir rateio": a lista dos itens (rola dentro do quadro), e com uma linha nova (data, histórico, seletores) */
+  ...[['', null], ['-linha-nova', '[data-testid="rateio-nova"]']].map(([s, botao]) => ({ nome: `conferir-rateio${s}`, url: 'tela=conferir-rateio',
+    tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="rateio-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="rateio-linha"]').first().waitFor(); if (botao) { await p.locator(botao).click(); await p.waitForTimeout(300); } } })),
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
   /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
