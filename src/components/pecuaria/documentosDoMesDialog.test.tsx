@@ -376,13 +376,13 @@ describe('FECH-DOCS-01 — os dois pontos de tela (fonte)', () => {
     const antes = f.slice(iBotoes, iBotao);
     expect(antes).not.toContain('showAdjustButton');
     expect(antes).not.toContain('sugestoes.length');
-    /* os botões ficam À DIREITA da tabela (depois dela), na mesma linha do topo; a fita com o ano à esquerda */
+    /* os botões ficam À DIREITA da tabela (depois dela), na mesma linha do topo; a fita com o ano subiu para o cabeçalho navy (UI-MESES-PADRAO-01) */
     const iTopo = f.indexOf('data-testid="topo-do-fechamento"');
     const iTabela = f.indexOf('<table className="text-[10px] border-collapse table-fixed w-[530px]', iTopo);
     expect(iTopo).toBeGreaterThan(0);
     expect(iTabela).toBeGreaterThan(iTopo);
     expect(iBotoes).toBeGreaterThan(iTabela);
-    expect(f.slice(iTopo, iTabela)).toContain('alinhadaAEsquerda');
+    expect(f.slice(0, iTopo)).toContain('meses={<FechamentoFitaMeses');   // no cabeçalho, ANTES do topo da tabela
     /* a barra do topo (FECH-TOPO-COMPACTO-01) e a 3ª coluna não voltam */
     expect(f).not.toContain('data-testid="barra-do-topo"');
     expect(f).not.toContain('COL 3: Ações');
