@@ -40,7 +40,11 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
          quem o chama, presos abaixo */
       || (/(?<!function\s+public\.)_fn_entrada_pode_gerir\s*\(/i.test(p) && /42501/.test(p))
       || (nome === 'public._fn_entrada_pode_gerir' && /returns\s+boolean/i.test(p)
-        && /revoke all on function public\._fn_entrada_pode_gerir\(uuid\) from public, anon, authenticated;/i.test(p));
+        && /revoke all on function public\._fn_entrada_pode_gerir\(uuid\) from public, anon, authenticated;/i.test(p))
+      /* BOLETO D3d (118180): `fn_entrada_ignorar` (a tela) e `fn_entrada_dispensar` (a tela antiga) so' repassam para a interna
+         `_fn_entrada_ignorar(ids, …)`, que tem a guarda pelo cliente DAS LINHAS (todas do mesmo cliente + tenant_ok, 42501) e nasce
+         fechada a authenticated — presa por dentro abaixo. A chamada da interna e' a guarda delas. */
+      || /(?<!function\s+public\.)_fn_entrada_ignorar\s*\(/i.test(p);
     /* IMPORTAR-ABATE-01: corpo `AS %L` = o texto do PROPRIO BANCO (pg_get_functiondef/prosrc patchado por md5), que o arquivo nao
        mostra — a guarda dele e' a da definicao anterior (ver `ultimasSemGuarda`) */
     return [{ nome, guardada, ...(/\bAS\s+%L/i.test(p) ? { doBanco: true } : {}) }];
@@ -193,6 +197,28 @@ describe('guarda de cliente nas migrations novas', () => {
       const c = sql.slice(i, sql.indexOf('end $$;', i));
       expect(c).toMatch(/if not public\.tenant_ok\(p_cliente_id\) or not public\._fn_entrada_pode_gerir\(p_cliente_id\) then\s+raise exception '[^']+' using errcode = '42501';/);
     }
+    expect(semGuarda(sql)).toEqual([]);
+  });
+
+  it('a interna do Ignorar e\' aceita como guarda das duas casquinhas, e ela mesma guarda pelo cliente das linhas e nasce fechada (BOLETO D3d)', () => {
+    /* o detector: quem chama a interna passa; a casquinha que nao a chama (nem tem tenant_ok) reprova */
+    const pelaInterna = `CREATE FUNCTION public.fn_k(p_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      begin return public._fn_entrada_ignorar(array[p_id], 'x', null, true); end $$;`;
+    const semInterna = `CREATE FUNCTION public.fn_j(p_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$ begin return '{}'; end $$;`;
+    expect(semGuarda([pelaInterna, semInterna].join('\n'))).toEqual(['public.fn_j']);
+
+    /* o arquivo de verdade: a interna guarda pelo cliente DAS LINHAS (mesmo cliente + tenant_ok, 42501) e e' fechada a authenticated */
+    const sql = readFileSync(join(DIR, '20261028118180_boleto_d3d_caixa_email.sql'), 'utf8');
+    const inicio = sql.indexOf('create function public._fn_entrada_ignorar(');
+    expect(inicio).toBeGreaterThan(0);
+    const corpo = sql.slice(inicio, sql.indexOf('end $$;', inicio));
+    expect(corpo).toMatch(/select min\(cliente_id::text\)::uuid into v_cli from entrada_arquivos where id = any\(p_ids\);/);
+    expect(corpo).toMatch(/if exists \(select 1 from entrada_arquivos where id = any\(p_ids\) and cliente_id <> v_cli\) then\s+raise exception 'Sem acesso a este cliente\.' using errcode = '42501';/);
+    expect(corpo).toMatch(/if not public\.tenant_ok\(v_cli\) then raise exception 'Sem acesso a este cliente\.' using errcode = '42501'; end if;/);
+    /* a guarda vem ANTES de qualquer escrita */
+    expect(corpo.indexOf('tenant_ok(v_cli)')).toBeLessThan(corpo.indexOf('update entrada_arquivos'));
+    expect(sql).toMatch(/revoke all on function public\._fn_entrada_ignorar\(uuid\[\], text, text, boolean\) from public, anon, authenticated;/);
+    expect(sql).not.toMatch(/grant execute on function public\._fn_entrada_ignorar/i);
     expect(semGuarda(sql)).toEqual([]);
   });
 
