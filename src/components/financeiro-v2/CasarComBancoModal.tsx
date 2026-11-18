@@ -22,6 +22,8 @@
 import { useConteudoEstavel } from '@/lib/react/conteudoEstavel';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { fechaAoCentavo, podeCriarPelaDiferenca } from '@/lib/conciliacao/tolerancia';
+import { EscolherContaDaTaxa } from '@/components/conciliacao/EscolherContaDaTaxa';
+import { fraseDaEscolha, itensComDestino, perguntaNfDaResposta, ROTULO_DO_DESTINO, type EscolhaNf, type PerguntaNf } from '@/lib/conciliacao/destinoDaNf';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
@@ -167,14 +169,22 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
      Mudou o que foi levado ou o valor, a confirmacao cai (vale para aquele valor, naquele lancamento). */
   const [pergunta, setPergunta] = useState<{ lancamento_id: string; frase: string } | null>(null);
   const [aceitos, setAceitos] = useState<string[]>([]);
+  /* CONC-DESCONCILIAR-EDSON-01 (R2) — a NF nunca muda de valor: com diferença acima de R$ 1,00 o banco devolve a PERGUNTA da NF e o
+     operador diz o que é a diferença (juros/multa · desconto com motivo · parcial); a escolha vai no item (`destino`). Mudou o que foi
+     levado ou o valor, a escolha cai (vale para aquele valor, naquela NF). */
+  const [perguntaNf, setPerguntaNf] = useState<PerguntaNf | null>(null);
+  const [escolhas, setEscolhas] = useState<Record<string, EscolhaNf>>({});
+  const [motivoAberto, setMotivoAberto] = useState<string | null>(null);
+  const [motivoTexto, setMotivoTexto] = useState('');
+  const [taxaAberta, setTaxaAberta] = useState<string | null>(null);
   const itensBase = useMemo(
     () => levados.map((l) => ({ lancamento_id: l.lancamento_id, valor: Math.abs(valorDe(l.valorTexto)), ...(l.trocarConta ? { trocar_conta: true } : {}) })),
     [levados],
   );
-  useEffect(() => { setAceitos([]); setPergunta(null); }, [itensBase]);
+  useEffect(() => { setAceitos([]); setPergunta(null); setEscolhas({}); setPerguntaNf(null); setMotivoAberto(null); setMotivoTexto(''); setTaxaAberta(null); }, [itensBase]);
   const itens = useMemo(
-    () => itensBase.map((i) => (aceitos.includes(i.lancamento_id) ? { ...i, aceitar_valor_extrato: true } : i)),
-    [itensBase, aceitos],
+    () => itensComDestino(itensBase.map((i) => (aceitos.includes(i.lancamento_id) ? { ...i, aceitar_valor_extrato: true } : i)), escolhas),
+    [itensBase, aceitos, escolhas],
   );
   const idsLevados = useMemo(() => levados.map((l) => l.lancamento_id), [levados]);
   const parcelaPos = useMemo(() => parcelaPosDosLevados(idsLevados, mapaPos), [idsLevados, mapaPos]);
@@ -217,9 +227,11 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
     if (r.ok) {
       setErroRodape(null);
       setPergunta(r.pergunta ?? null);
+      setPerguntaNf(perguntaNfDaResposta(data));
       setSim({ ok: true, noExtrato: Number(r.no_extrato ?? 0), soma: Number(r.soma ?? 0), diferenca: 0, erro: null });
       return;
     }
+    setPerguntaNf(null);
     if (r.motivo === 'soma_nao_bate') {
       setErroRodape(null);
       setSim({ ok: false, noExtrato: Number(r.no_extrato ?? 0), soma: Number(r.soma ?? 0), diferenca: Number(r.diferenca ?? 0), erro: null });
@@ -260,6 +272,9 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
     const r = (data ?? {}) as { ok?: boolean; motivo?: string; frase?: string; pergunta?: { lancamento_id: string; frase: string } };
     /* o banco ainda pede confirmacao (outro item maior): mostra a pergunta, nada foi gravado */
     if (r.ok === false && r.motivo === 'confirmar_valor_extrato' && r.pergunta) { setPergunta(r.pergunta); return; }
+    /* R2: o banco ainda pede o destino da diferença de uma NF: mostra a pergunta, nada foi gravado */
+    const pnf = r.ok === false && r.motivo === 'nf_diferenca' ? perguntaNfDaResposta(data) : null;
+    if (pnf) { setPerguntaNf(pnf); return; }
     if (r.ok === false) { setErroRodape(r.frase ?? MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível conciliar.'); return; }
     onClose();
     onConciliado();
@@ -268,7 +283,10 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
   if (!extrato) return null;
   const dataCurta = extrato.data ? `${extrato.data.slice(8, 10)}/${extrato.data.slice(5, 7)}` : '—';
   const semItens = levados.length === 0;
-  const podeConciliar = !!sim?.ok && !gravando && !semItens;
+  /* R2: com a pergunta da NF aberta, nada grava até o operador dizer o que é a diferença */
+  const podeConciliar = !!sim?.ok && !gravando && !semItens && !perguntaNf;
+  const escolher = (id: string, e: EscolhaNf) => { setEscolhas((v) => ({ ...v, [id]: e })); setMotivoAberto(null); setMotivoTexto(''); setTaxaAberta(null); };
+  const escolhidas = levados.filter((l) => !!escolhas[l.lancamento_id]);
   const podeCriar = podeCriarPelaDiferenca(sim, semItens);
   const sentido = sim && !semItens ? sentidoDaDiferenca(sim.diferenca, sim.noExtrato) : null;
   const unico = levados.length === 1;
@@ -485,6 +503,55 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
             {!erroRodape && pergunta && !aceitos.includes(pergunta.lancamento_id) && (
               <div className="text-[10px] text-amber-700" data-testid="pergunta-valor-extrato">{pergunta.frase}</div>
             )}
+            {/* CONC-DESCONCILIAR-EDSON-01 (R2) — a pergunta da NF (a frase é a do banco) e os gestos que ele aceita para esta diferença */}
+            {!erroRodape && perguntaNf && (
+              <div className="rounded border border-amber-400 bg-amber-50 px-2 py-1.5 space-y-1" data-testid="pergunta-nf">
+                <div className="text-[10px] text-amber-800">{perguntaNf.frase}</div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {perguntaNf.opcoes.map((op) => (
+                    <button key={op} type="button" data-testid={`destino-${op}`}
+                      onClick={() => {
+                        if (op === 'desconto') { setTaxaAberta(null); setMotivoAberto(perguntaNf.lancamentoId); return; }
+                        if (op === 'taxa') { setMotivoAberto(null); setTaxaAberta(perguntaNf.lancamentoId); return; }
+                        escolher(perguntaNf.lancamentoId, { destino: op });
+                      }}
+                      className="h-[22px] whitespace-nowrap rounded border border-amber-500 bg-white px-2 text-[10px] hover:bg-amber-100">
+                      {ROTULO_DO_DESTINO[op]}
+                    </button>
+                  ))}
+                </div>
+                {taxaAberta === perguntaNf.lancamentoId && (
+                  <EscolherContaDaTaxa onEscolher={(c) => escolher(perguntaNf.lancamentoId, { destino: 'taxa', planoContaId: c.id, planoNome: c.subcentro })} />
+                )}
+                {motivoAberto === perguntaNf.lancamentoId && (
+                  <div className="flex items-center gap-1.5">
+                    <input value={motivoTexto} onChange={(e) => setMotivoTexto(e.target.value)} data-testid="motivo-desconto"
+                      placeholder="motivo do desconto (ex.: pagou à vista)" aria-label="Motivo do desconto"
+                      className="h-[22px] min-w-0 flex-1 rounded border px-1.5 text-[10px]" />
+                    <button type="button" data-testid="confirmar-desconto" disabled={!motivoTexto.trim()}
+                      title={motivoTexto.trim() ? undefined : 'Escreva o motivo do desconto.'}
+                      onClick={() => escolher(perguntaNf.lancamentoId, { destino: 'desconto', motivo: motivoTexto })}
+                      className={cn('h-[22px] whitespace-nowrap rounded border px-2 text-[10px]',
+                        motivoTexto.trim() ? 'border-amber-500 bg-white hover:bg-amber-100' : 'opacity-40 cursor-not-allowed')}>
+                      Confirmar desconto
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {!erroRodape && escolhidas.map((l) => {
+              const e = escolhas[l.lancamento_id];
+              const dif = Math.abs(valorDe(l.valorTexto)) - Math.abs(l.valor_assinado);
+              return (
+                <div key={l.lancamento_id} className="flex items-baseline gap-2 text-[10px] text-muted-foreground" data-testid="escolha-nf">
+                  <span className="min-w-0 flex-1">{l.numero_documento ? `NF nº ${formatNFNumber(l.numero_documento) || l.numero_documento}: ` : ''}{fraseDaEscolha(e, dif, fmtBRL)}</span>
+                  <button type="button" className="shrink-0 underline underline-offset-2 hover:text-foreground"
+                    onClick={() => setEscolhas((v) => { const n = { ...v }; delete n[l.lancamento_id]; return n; })}>
+                    trocar
+                  </button>
+                </div>
+              );
+            })}
             {!erroRodape && semItens && (
               /* Sem levados o caminho é criar, não corrigir: o texto convida em vez de acusar. */
               <div className="text-[10px] text-muted-foreground">
@@ -507,7 +574,7 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
                   /* o "sim" grava na hora, com o item confirmado (o estado novo so' chega no proximo render) */
                   const novos = [...aceitos, pergunta.lancamento_id];
                   setAceitos(novos);
-                  void conciliar(itensBase.map((i) => (novos.includes(i.lancamento_id) ? { ...i, aceitar_valor_extrato: true } : i)));
+                  void conciliar(itensComDestino(itensBase.map((i) => (novos.includes(i.lancamento_id) ? { ...i, aceitar_valor_extrato: true } : i)), escolhas));
                 }}
                 className={cn('h-[22px] rounded px-2.5 text-[11px] font-medium',
                   podeConciliar ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
