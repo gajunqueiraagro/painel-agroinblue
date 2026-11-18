@@ -96,6 +96,9 @@ export interface EspelhadosReais {
   /* Opcional: uma RPC anterior à `espelhados-04-candidatos` não emite a chave, e a tela
      trata a ausência como lista vazia. */
   sistema_candidatos?: EspCandidato[];
+  /** CONC-CRIAR-COM-NOTA-02 D-f (tela) — os EM ABERTO que vencem DEPOIS do mês (até o fim do mês seguinte), que a RPC sempre mandou à parte
+   *  (`fn_extratos_espelhados`, versão "espelhados-06-adiantados"): entram nas Sugestões só pelo VALOR EXATO (pagamento antecipado). */
+  sistema_candidatos_adiantados?: EspCandidato[];
   /* PR-CONC-CONFERENCIA-FECHAMENTO-DIA: a regra do caixa do banco (CONC-CAIXA-PONTA-01, `espelhados-05-caixa`) — uma
      linha por ponta e data. A mesa NÃO a lê para somar (o dia soma o que desenha); os testes provam que o sistema do dia
      é igual a ela, menos as internas e os sobre-aplicados (ver `lancamentosSobreAplicados`). */

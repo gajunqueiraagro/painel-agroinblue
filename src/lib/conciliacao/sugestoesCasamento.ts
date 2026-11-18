@@ -328,6 +328,11 @@ export interface OpcoesSugestao {
    * `fn_conciliacao_fornecedores_do_historico`, a MESMA regra da faixa "Costuma ser…"). Sem ele, a lista é a de sempre.
    */
   fornecedorDoHistorico?: string | null;
+  /**
+   * CONC-CRIAR-COM-NOTA-02 D-f (Gabriel 18/11, caso Azulão: NF que vence 10/11 paga no banco 13/10) — os em aberto que vencem DEPOIS do mês
+   * do movimento. Entram SÓ no E1 (mesmo valor, ±1 centavo): nunca em soma nem em pista de nome — a mesma regra do motor (lote 22).
+   */
+  adiantados?: readonly CandidatoSugestao[];
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -377,6 +382,12 @@ export function sugerirCasamentos(
   const sinalBanco = Math.sign(valorBanco);
 
   const pool = candidatos.filter((c) => !c.ja_conciliado && Math.sign(Number(c.valor_assinado) || 0) === sinalBanco);
+  /* D-f: os adiantados de VALOR EXATO, em aberto, que não estão já na lista do mês */
+  const noPool = new Set(pool.map((c) => c.lancamento_id));
+  const adiantadosExatos = (opcoes.adiantados ?? []).filter((c) => !c.ja_conciliado && !noPool.has(c.lancamento_id)
+    && Math.sign(Number(c.valor_assinado) || 0) === sinalBanco && EM_ABERTO.has((c.status_transacao ?? '').toLowerCase())
+    && Math.abs(Math.abs(Number(c.valor_assinado)) - alvo) <= TOL_VALOR);
+  for (const c of adiantadosExatos) pool.push(c);
   const lancs = new Map(pool.map((c) => [c.lancamento_id, comoLancamento(c)]));
   const dias = (c: CandidatoSugestao) => {
     const anc = dataAncoraLancamento(lancs.get(c.lancamento_id)!);

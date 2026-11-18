@@ -116,12 +116,12 @@ describe('o componente ProcurarNoHistorico', () => {
   });
 
   /* CONC-SUGESTOES-TABELA-01 (ajustes 07:55 e 08:1x): a tabela no tamanho grande — linha de 26px, cabeçalho de 26px; o piso = as fixas (858) + 2 × 120 */
-  it('LAYOUT FIXO: o quadro tem a altura de 6 linhas e piso de 830px; a frase é a 1ª linha DO QUADRO (o "…" com o title vale em tabela)', async () => {
+  it('LAYOUT FIXO: o quadro tem a altura de 6 linhas e piso de 848px (D-g); a frase é a 1ª linha DO QUADRO (o "…" com o title vale em tabela)', async () => {
     const { container } = render(<ProcurarNoHistorico clienteId="cli" movimento={MOV_BB} onCriarIgual={() => {}} />);
     const quadro = screen.getByTestId('procurar-historico-quadro');
     /* CONC-SUGESTOES-FONTE-01: cabeçalho 18 + 6 linhas de 19 (a lista do Financeiro) + 2 de borda; o piso cabe no modal a 1024/135% */
     expect(quadro.style.height).toBe('134px');
-    expect(screen.getByTestId('procurar-historico-piso').style.minWidth).toBe('830px');
+    expect(screen.getByTestId('procurar-historico-piso').style.minWidth).toBe('848px'); /* CONC-CRIAR-COM-NOTA-02 D-g: + Δ 118, Descrição/Fornecedor 2 × 60 (linha única) */
     /* com 1 achado o quadro não rola: o cabeçalho não fica preso (preso num quadro que não rola é vão no gate) */
     expect(container.querySelector('thead')?.className).not.toContain('sticky');
     fireEvent.click(screen.getByTestId('procurar-historico-botao'));
@@ -135,9 +135,9 @@ describe('o componente ProcurarNoHistorico', () => {
     /* P153b: a coluna "O que o banco disse" saiu — o texto do banco vai no `title` da descrição */
     expect(within(linha).queryByText(ACHADO.banco)).toBeNull();
     const desc = within(linha).getByText('Ração de engorda');
-    /* UI-FONTE-GATE-01: o nome quebra na célula, nunca "…" */
-    expect(desc.className).toContain('whitespace-normal');
-    expect(desc.className).not.toContain('truncate');
+    /* CONC-CRIAR-COM-NOTA-02 D-g (Gabriel 18/11): LINHA ÚNICA — "…" com o inteiro no title (a quebra do UI-FONTE-GATE-01 saiu) */
+    expect(desc.className).not.toContain('whitespace-normal');
+    expect(desc.className).toContain('truncate');
     expect(desc.getAttribute('title')).toBe(`Ração de engorda\nPecuária · Nutrição\nO banco: ${ACHADO.banco}`);
   });
 });

@@ -20,7 +20,7 @@
  * previsto vira o real. Nada concilia sozinho; o operador ainda clica Conciliar.
  */
 import { useConteudoEstavel } from '@/lib/react/conteudoEstavel';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { fechaAoCentavo, podeCriarPelaDiferenca } from '@/lib/conciliacao/tolerancia';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -307,49 +307,77 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-2.5">
-            <div className="rounded-xl bg-muted px-3 py-2 grid grid-cols-[70px_1fr] gap-x-2 gap-y-0.5 items-baseline">
-              <span className="text-[10px] text-muted-foreground">no banco</span>
-              {/* CONC-CRIAR-PERDE-DADOS-01 item 2 — a escala de modal (PADROES-UI A18): o valor do bloco de topo 15/500, o rótulo 10 */}
-              <span className={cn('text-[15px] font-medium tabular-nums', corVal(extrato.valor))} data-testid="casar-valor-banco">{fmtBRL(extrato.valor)}</span>
-              <span className="text-[10px] text-muted-foreground">histórico</span>
-              <span className="text-[11px] break-words">{extrato.historico ?? '—'}</span>
-              <span className="text-[10px] text-muted-foreground">conta</span>
-              <span className="text-[10px] text-muted-foreground">{[nomeConta, dataCurta].filter(Boolean).join(' · ')}</span>
-            </div>
+            {/* CONC-CRIAR-COM-NOTA-02 D-h (Gabriel 18/11, caso Azulão) — EXTRATO × SISTEMA em duas colunas de UMA tabela (regra de corte: "…"
+                com o inteiro no `title` só em tabela); as linhas casam lado a lado e o VALOR fica na mesma linha, à direita (valor sob valor) */}
+            <table className="w-full table-fixed border-separate border-spacing-0 text-[10px]" data-testid="casar-colunas">
+              <colgroup><col style={{ width: 62 }} /><col /><col style={{ width: 12 }} /><col style={{ width: 66 }} /><col /></colgroup>
+              <thead>
+                <tr className="h-[22px] bg-primary text-[10px] font-medium text-primary-foreground">
+                  <th colSpan={2} className="px-1 text-left" data-testid="casar-coluna-extrato">Extrato</th>
+                  <th />
+                  <th colSpan={2} className="px-1 text-left" data-testid="casar-coluna-sistema">Sistema</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(semItens ? [null] : levados).flatMap((l, i) => {
+                  const st = (l?.status_transacao ?? '').trim().toLowerCase();
+                  const n = unico || !l ? '' : ` (${i + 1})`;
+                  const primeiro = i === 0;
+                  const ext: [string, ReactNode, string?][] = primeiro
+                    ? [['Data', dataDdMmAaaa(extrato.data)], ['Histórico', extrato.historico ?? '—', extrato.historico ?? undefined],
+                      ['Conta', nomeConta ?? '—', nomeConta ?? undefined], ['', ''], ['', '']]
+                    : [['', ''], ['', ''], ['', ''], ['', ''], ['', '']];
+                  const sis: [string, ReactNode, string?, string?][] = [
+                    [`Venc.${n}`, l ? dataDdMmAaaa(l.data_vencimento) : '—', undefined, 'casar-sis-venc'],
+                    ['Descrição', l ? (l.descricao ?? '—') : 'nenhum lançamento levado', l?.descricao ?? undefined, 'casar-sis-descricao'],
+                    ['Fornecedor', l ? (l.fornecedor || '—') : '—', l?.fornecedor ?? undefined, 'casar-sis-fornecedor'],
+                    ['NF', l?.numero_documento ? (formatNFNumber(l.numero_documento) || l.numero_documento) : '—', undefined, 'levado-nf'],
+                    ['Status', st ? <span className={cn('font-medium', PALETA_DO_STATUS[st]?.texto ?? 'text-muted-foreground')}>{STATUS_FILTRO_LABEL[st] ?? l?.status_transacao}</span> : '—', undefined, 'casar-sis-status'],
+                  ];
+                  const rot = 'truncate px-1 text-muted-foreground';
+                  const val = 'truncate px-1';
+                  return [
+                    ...sis.map((x, k) => (
+                      <tr key={`${l?.lancamento_id ?? 'v'}-${k}`} className={cn('h-[18px]', k === 0 && !primeiro && 'border-t')} data-testid={k === 0 ? 'casar-sistema-lancamento' : undefined}>
+                        <td className={rot}>{ext[k][0]}</td>
+                        <td className={val} title={ext[k][2]}>{ext[k][1]}</td>
+                        <td />
+                        <td className={rot}>{x[0]}</td>
+                        <td className={cn(val, k === 3 && 'tabular-nums')} title={x[2]} data-testid={x[3]}>{x[1]}</td>
+                      </tr>
+                    )),
+                    <tr key={`${l?.lancamento_id ?? 'v'}-valor`} className="h-[24px]">
+                      <td className={rot}>{primeiro ? 'Valor' : ''}</td>
+                      <td className="px-1 text-right">
+                        {primeiro && <span className={cn('whitespace-nowrap text-[15px] font-medium tabular-nums', corVal(extrato.valor))} data-testid="casar-valor-banco">{fmtBRL(extrato.valor)}</span>}
+                      </td>
+                      <td />
+                      <td className={rot}>Valor</td>
+                      <td className="px-1 text-right">
+                        {l && <span className={cn('whitespace-nowrap text-[15px] font-medium tabular-nums', corVal(l.valor_assinado))} data-testid="casar-valor-sistema">{fmtBRL(l.valor_assinado)}</span>}
+                      </td>
+                    </tr>,
+                  ];
+                })}
+              </tbody>
+            </table>
+
+            {/* D-h — o pagamento contra o vencimento, numa faixa de ALTURA FIXA (vazia = o mesmo lugar: nada se desloca) */}
+            {(() => {
+              const f = fraseDoPagamento(extrato.data, levados.map((l) => l.data_vencimento));
+              return (
+                <div className={cn('flex h-[22px] items-center rounded px-2 text-[10.5px] whitespace-nowrap', f?.classe ?? '')} data-testid="casar-faixa-pagamento">
+                  {f?.texto ?? '\u00a0'}
+                </div>
+              );
+            })()}
 
             <div>
               <div className="text-[10px] text-muted-foreground mb-1 whitespace-nowrap">
                 lançamentos levados ({levados.length}) — ao conciliar, cada um fica com o valor do campo
               </div>
-              {semItens && <div className="text-[10px] text-muted-foreground italic py-1">nenhum lançamento levado</div>}
-              {levados.map((l) => (
+              {levados.map((l, i) => (
                 <div key={l.lancamento_id} className="py-[4px] border-b last:border-b-0" data-testid="levado">
-                  {(() => {
-                    const st = (l.status_transacao ?? '').trim().toLowerCase();
-                    /* CONC-CRIAR-COM-NOTA-01 (Gabriel 04/11 06:28) — com a NF: a coluna do nº (000.000.000 a 9,5px mede 52) e a linha a 9,5px,
-                       UMA linha só (nada quebra): descrição e fornecedor com "…" e o inteiro no `title`; o nº nunca corta */
-                    if (comNF) return (
-                      <div className="grid grid-cols-[34px_58px_minmax(0,1fr)_minmax(0,1fr)_62px] gap-x-2 items-baseline whitespace-nowrap text-[10px]" data-testid="levado-identificacao">
-                        <span className="text-muted-foreground tabular-nums" title="vencimento">{vencCurto(l.data_vencimento)}</span>
-                        <span className="tabular-nums" title="nº da nota fiscal" data-testid="levado-nf">{l.numero_documento ? (formatNFNumber(l.numero_documento) || l.numero_documento) : '—'}</span>
-                        <span className="truncate" title={l.descricao ?? undefined}>{l.descricao ?? '—'}</span>
-                        <span className="truncate text-muted-foreground" title={l.fornecedor ?? undefined}>{l.fornecedor || '—'}</span>
-                        <span className={cn('text-right font-medium', PALETA_DO_STATUS[st]?.texto ?? 'text-muted-foreground')}>
-                          {st ? (STATUS_FILTRO_LABEL[st] ?? l.status_transacao) : '—'}
-                        </span>
-                      </div>
-                    );
-                    return (
-                      <div className="grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_62px] gap-x-2 items-baseline" data-testid="levado-identificacao">
-                        <span className="text-[10px] text-muted-foreground tabular-nums" title="vencimento">{vencCurto(l.data_vencimento)}</span>
-                        <span className="text-[11px] break-words">{l.descricao ?? '—'}</span>
-                        <span className="text-[10px] text-muted-foreground break-words">{l.fornecedor || '—'}</span>
-                        <span className={cn('text-right text-[10px] font-medium', PALETA_DO_STATUS[st]?.texto ?? 'text-muted-foreground')}>
-                          {st ? (STATUS_FILTRO_LABEL[st] ?? l.status_transacao) : '—'}
-                        </span>
-                      </div>
-                    );
-                  })()}
                 {/* P153b (D3) — a confirmação curta: a conta ANTES × DEPOIS, e que valor e data viram os do extrato (o casar de hoje) */}
                 {l.trocarConta && (
                   <div className="mt-[3px] rounded border border-amber-400 bg-amber-50 px-1.5 py-[2px] text-[10px] text-amber-800" data-testid="levado-troca-conta">
@@ -358,6 +386,8 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
                   </div>
                 )}
                 <div className="mt-[3px] flex min-w-0 items-center gap-2">
+                  {/* D-h — o campo diz o que é: o valor que este lançamento recebe deste movimento */}
+                  <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground" data-testid="valor-aplicado-rotulo">valor aplicado{unico ? '' : ` (${i + 1})`}</span>
                   <input
                     /* FIN-POS-FIXADO-01b: no caso pós o campo dos juros mostra o juro real que o banco vai gravar (lido do dono) */
                     value={parcelaPos && respPos?.ok && respPos.juroReal != null && l.lancamento_id === respPos.jurosId
@@ -779,6 +809,25 @@ export const ONDE_DESFAZER_BLOCO = 'Para desfazer: menu "Ações" (⋯) da linha
 
 /* dd/mm/aaaa (UI-SEM-CORTE-01; era dd/mm/aa) */
 const dataCurta = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '—');
+
+/** CONC-CRIAR-COM-NOTA-02 D-h — data inteira (dd/mm/aaaa) nas colunas Extrato × Sistema */
+export const dataDdMmAaaa = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '—');
+
+/** D-h — a faixa do pagamento contra o vencimento: "Pago 28 dias ANTES do vencimento (venc. 10/11 · banco 13/10)". Vários levados com
+ *  vencimentos diferentes = cada um no seu "Venc."; sem data = nada (a faixa fica vazia no mesmo lugar). */
+export function fraseDoPagamento(banco: string | null | undefined, vencimentos: readonly (string | null | undefined)[]): { texto: string; classe: string } | null {
+  const vs = [...new Set(vencimentos.filter((v): v is string => !!v).map((v) => v.slice(0, 10)))];
+  if (!banco || vs.length === 0) return null;
+  if (vs.length > 1) return { texto: 'Vencimentos diferentes: veja o "Venc." de cada lançamento.', classe: 'bg-muted text-muted-foreground' };
+  const ddmm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  const dias = Math.round((Date.parse(vs[0]) - Date.parse(banco.slice(0, 10))) / 86400000);
+  const sufixo = `(venc. ${ddmm(vs[0])} · banco ${ddmm(banco)})`;
+  if (dias === 0) return { texto: `Pago no vencimento ${sufixo}`, classe: 'bg-emerald-50 text-emerald-800' };
+  const n = Math.abs(dias);
+  return dias > 0
+    ? { texto: `Pago ${n} dia${n === 1 ? '' : 's'} ANTES do vencimento ${sufixo}`, classe: 'bg-sky-50 text-sky-800' }
+    : { texto: `Pago ${n} dia${n === 1 ? '' : 's'} DEPOIS do vencimento ${sufixo}`, classe: 'bg-amber-50 text-amber-800' };
+}
 
 /**
  * CASAR COM O BANCO · BLOCO — N extratos × M lançamentos, numa gravação só (`fn_conciliar_bloco`).
