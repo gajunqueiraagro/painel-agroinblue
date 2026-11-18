@@ -302,7 +302,10 @@ function PainelDoArquivo({ vista, arquivo, carregando, aoNovaAba, aoBaixar, larg
   return (
     <div className={cn('flex h-full shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card', largura)} data-testid="painel-do-arquivo">
       <div className={cn('flex h-[22px] shrink-0 items-center gap-2 bg-primary px-2 text-[9.5px] text-primary-foreground', comFechar && 'pr-8')}>
-        <span className="min-w-0 flex-1 truncate" title={arquivo?.name ?? undefined}>{arquivo?.name ?? (vista ? vista.rotulo : 'o arquivo')}</span>
+        {/* o nome do arquivo na faixa de 22px: a exceção DECLARADA (P71) — "…" com o nome inteiro no title */}
+        <span className="min-w-0 flex-1 truncate" data-reticencias-com-title title={arquivo?.name ?? vista?.rotulo ?? undefined}>
+          {arquivo?.name ?? (vista ? vista.rotulo : 'o arquivo')}
+        </span>
         {vista && vista.arquivos.length > 1 ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -339,7 +342,7 @@ function LinhaResolvida({ e, ocupado, selecionada, arquivos, aoVer, aoBaixar, ao
       <td className={TD_REGUA}><VerEBaixar arquivos={arquivos} aoVer={aoVer} aoBaixar={aoBaixar} /></td>
       <td className={TD_REGUA_TEXTO} title={e.remetente ?? undefined}>{nomeDoRemetente(e.remetente)}</td>
       <td className={cn(TD_REGUA_NUM, 'text-left')}>{dataBR(e.recebidoEm)}</td>
-      <td className={TD_REGUA_TEXTO} title={e.assunto ?? undefined}>{virou} · {e.assunto ?? '—'}</td>
+      <td className={TD_REGUA_TEXTO} title={`${virou} · ${e.assunto ?? '—'}`}>{virou} · {e.assunto ?? '—'}</td>
       <td className={cn(TD_REGUA_NUM, 'text-left')}>{dataBR(e.resolvidoEm)}</td>
       <td className={TD_REGUA}>
         <span className="flex justify-end" onClick={(x) => x.stopPropagation()}>
@@ -466,10 +469,9 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
     setFrase(r);
   };
 
-  const dica = aba === 'a_resolver'
-    ? 'um e-mail = um grupo · clique na linha para ver o arquivo · Lançar cria · Vincular liga a um lançamento que já existe · Ignorar pede o motivo e volta pelo "Ignorados"'
-    : aba === 'resolvidos' ? 'o que chegou por e-mail e já virou nota no lançamento ou boleto na caixa · "Desfazer" só tira a marca'
-      : 'o que foi ignorado e por quê · o arquivo continua guardado · "Voltar para A resolver" desfaz';
+  /* curta (cabe a 918, fora de tabela não corta): o detalhe dos verbos está no title de cada botão */
+  const dica = aba === 'a_resolver' ? 'um grupo por e-mail · clique na linha para ver o arquivo'
+    : aba === 'resolvidos' ? '"Desfazer" só tira a marca' : 'o arquivo continua guardado';
   const rodape = frase ?? caixa.erro ?? (linhaSel ? `${linhaSel.arquivo} · ${linhaSel.noSistema.titulo}` : '');
 
   return (

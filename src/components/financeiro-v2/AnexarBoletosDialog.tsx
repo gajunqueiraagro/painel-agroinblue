@@ -219,7 +219,8 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
             <div className="max-h-[320px] overflow-auto rounded border border-[#E0E2E6]">
               <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
                 <colgroup>
-                  <col style={{ width: naCaixa ? 190 : 250 }} /><col style={{ width: 150 }} /><col style={{ width: 110 }} />
+                  {/* D1d — com "Na caixa", o "Vai para" precisa de 172 ("Parcela 1/6 · 10/12/26" + a seta, medido no gate); o Arquivo cede */}
+                  <col style={{ width: naCaixa ? 168 : 250 }} /><col style={{ width: naCaixa ? 172 : 150 }} /><col style={{ width: 110 }} />
                   <col style={{ width: naCaixa ? 110 : 130 }} /><col style={{ width: 100 }} />
                   {naCaixa && <col style={{ width: 190 }} />}<col style={{ width: 30 }} />
                 </colgroup>
@@ -246,7 +247,7 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
                           {i.recusa ? <span className="text-destructive">{i.recusa}</span> : (
                             <Select value={parc != null ? String(parc) : undefined}
                               onValueChange={v => setItens(prev => prev.map(x => (x.chave === i.chave ? { ...x, parcelaManual: Number(v) } : x)))}>
-                              <SelectTrigger className={`h-[16px] px-1 text-[10px] ${parc == null ? 'border-amber-500 text-amber-800' : ''}`}>
+                              <SelectTrigger className={`h-[16px] px-1 text-[10px] [&>span]:leading-[14px] ${parc == null ? 'border-amber-500 text-amber-800' : ''}`}>
                                 <SelectValue placeholder="escolher" />
                               </SelectTrigger>
                               <SelectContent>
@@ -319,9 +320,9 @@ function CelulaNaCaixa({ c, semParcelaGravada }: { c: NaCaixa | null; semParcela
   }
   const s = seloNaCaixa(c);
   return (
-    <td className={`${TD} overflow-hidden text-ellipsis whitespace-nowrap`} title={s.frase} data-testid="na-caixa">
+    <td className={`${TD} overflow-hidden text-ellipsis whitespace-nowrap`} title={`${s.selo} ${s.frase}`} data-testid="na-caixa">
       <span className={`mr-1 inline-block rounded-[3px] px-1 text-[9.5px] font-semibold leading-[14px] ${COR_DO_SELO[s.cor]}`} data-testid="selo-na-caixa">{s.selo}</span>
-      <span className="text-[9.5px] text-muted-foreground">{s.frase}</span>
+      {' '}<span className="text-[9.5px] text-muted-foreground">{s.frase}</span>
     </td>
   );
 }
