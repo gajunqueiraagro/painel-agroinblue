@@ -132,7 +132,7 @@ describe('P143 — as parcelas no Editar', () => {
     expect(linhas.map((l) => l.getAttribute('data-aberta'))).toEqual([null, 'sim', null, null]);
     expect(screen.getByTestId('voltar-a-vista-bloco').contains(linhas[0])).toBe(true);
     expect(screen.getByTestId('parcelas-no-pagamento-rodape').textContent).toBe('4 parcelas · R$ 959,96pagas 1 · R$ 239,99a pagar 3 · R$ 719,97');
-    expect(linhasPagamento().slice(4)).toEqual([['Modalid.', 'Compra parcelada'], ['Parcelas', '2 de 4']]);
+    expect(linhasPagamento().slice(4)).toEqual([['Modalid.', 'Parcelada'], ['Parcelas', '2 de 4']]); // 14:40: o valor curto (o inteiro no title)
   });
   it('M2 clicar na 3/4 troca no mesmo modal, fica no Pagamento e oferece a volta à de antes', async () => {
     const trocar = vi.fn();
@@ -174,7 +174,7 @@ describe('P143 — as parcelas no Editar', () => {
   it('M5 a parcela solta (sem parcelamento) no Resumo: "Parcela solta · 2 de 3"', async () => {
     montar(PARCELA(2, { id: 'solta-2', descricao: 'Peca sintetica - 2/3', origem_tipo: null, financiamento_id: null, origem_lancamento: 'excel' }), vi.fn());
     await screen.findByDisplayValue('Peca sintetica - 2/3');
-    expect(linhasPagamento().slice(4)).toEqual([['Modalid.', 'Parcela solta'], ['Parcelas', '2 de 3']]);
+    expect(linhasPagamento().slice(4)).toEqual([['Modalid.', 'Solta'], ['Parcelas', '2 de 3']]); // 14:40: o valor curto (o inteiro no title)
   });
   it('M6 a forma gravada fora da lista ("Cartão de Crédito") aparece no Editar como no Resumo', async () => {
     montar(PARCELA(2, { forma_pagamento: 'Cartão de Crédito', conta_bancaria_id: 'cc' }), vi.fn());
