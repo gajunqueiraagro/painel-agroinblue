@@ -2014,6 +2014,8 @@ const CENARIOS = [
   { nome: 'casar-1x1-certo', url: 'tela=casar-1x1&v=certo', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* P153b (D3) — "Casar e trocar a conta": a confirmação curta (conta antes → depois) e o botão "Conciliar e trocar a conta" */
   { nome: 'casar-1x1-trocar', url: 'tela=casar-1x1&v=trocar', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* CONC-CRIAR-COM-NOTA-02 D-h — Extrato × Sistema e a faixa "Pago N dias ANTES do vencimento" */
+  { nome: 'casar-1x1-antecipado', url: 'tela=casar-1x1&v=antecipado', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* P139 — criar transferencia pela linha do extrato (um espelho escolhido, empate, gemea, ja' lancada) e o lote de 6; valores no teto */
   ...['espelho', 'empate', 'gemea', 'existente'].map((v) => ({ nome: `criar-transferencia-${v}`, url: `tela=criar-transferencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-criar-transferencia"]' })),

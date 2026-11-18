@@ -1430,6 +1430,14 @@ if (tela === 'mesclar') {
       iniciais={[{ lancamento_id: 'yp', descricao: 'Amortização 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -88888888.88, data_vencimento: '2027-08-15', status_transacao: 'programado' },
         { lancamento_id: 'yj', descricao: 'Juros 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -9999999.99, data_vencimento: '2027-08-15', status_transacao: 'programado' }]}
       onConciliado={() => {}} />);
+  } else if (v === 'antecipado') {
+    /* CONC-CRIAR-COM-NOTA-02 D-h — pago no banco 28 dias ANTES do vencimento, com NF (sintético, valores no teto, nomes longos) */
+    g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: true, simulado: true, no_extrato: -99999999.99, soma: -99999999.99 } : null };
+    montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco Exemplo Personalité"
+      extrato={{ extrato_id: 'x1', data: '2026-10-13', historico: 'PIX AGENDAMENTO 10/10 · FERRAGENS EXEMPLO PARAFUSOS E FERRAMENTAS SINTETICAS LTDA', valor: -99999999.99 }}
+      iniciais={[{ lancamento_id: 'ya', descricao: 'Chave ajustável sintética 15", parafusos, brocas · 6 itens', fornecedor: 'Ferragens Exemplo Parafusos e Ferramentas Sintéticas Ltda',
+        valor_assinado: -99999999.99, data_vencimento: '2026-11-10', status_transacao: 'programado', numero_documento: '000077066' }]}
+      onConciliado={() => {}} />);
   } else if (v === 'trocar') {
     /* P153b (D3) — "Casar e trocar a conta": o em aberto de outra conta levado do histórico, com a confirmação curta (valores no teto) */
     g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: true, simulado: true, no_extrato: -99999999.99, soma: -99999999.99,
