@@ -158,7 +158,7 @@ describe('"tirar" virou "remover deste casamento"', () => {
 describe('o modal não corta nada (a estrutura que a medida da tela exigiu)', () => {
   /* PR-CONC-SUGESTOES-CASAR-01 (Gabriel, print 13:42): a descrição truncava com espaço sobrando. Cada levado agora
      ocupa DUAS linhas — a identificação inteira (venc · descrição · fornecedor · status) e o campo com as ações. */
-  it('coluna do grid travada; levado em duas linhas, identificação inteira sem reticência; botão da altura do campo', async () => {
+  it('coluna do grid travada; D-h: Extrato × Sistema numa TABELA (o inteiro no title); botão da altura do campo', async () => {
     const LONGO: LevadoInicial = { lancamento_id: 'l-rastro', descricao: 'Serviço Rastreabilidade Bovina - SISBOV mensalidade setembro',
       fornecedor: 'Agroinblue - G.F.de Rezende Junqueira; Gasto Recorrente', valor_assinado: -506.84,
       data_vencimento: '2026-09-08', status_transacao: 'programado' };
@@ -167,14 +167,14 @@ describe('o modal não corta nada (a estrutura que a medida da tela exigiu)', ()
     const dialogo = screen.getByRole('dialog');
     expect(dialogo.className).toContain('grid-cols-[minmax(0,1fr)]');
     const levado = screen.getByTestId('levado');
-    const ident = within(levado).getByTestId('levado-identificacao');
-    expect([...ident.children].map((c) => c.textContent)).toEqual([
-      '08/09', LONGO.descricao, LONGO.fornecedor, 'Programado',
-    ]);
-    /* nada corta: nem truncate nem ellipsis em lugar nenhum do levado; texto livre quebra */
+    /* CONC-CRIAR-COM-NOTA-02 D-h (Gabriel 18/11): a identificação mora na coluna SISTEMA da tabela Extrato × Sistema — em tabela, "…" com o
+       inteiro no `title` (a regra de corte); fora dela (a linha do campo) nada corta */
+    expect(['casar-sis-venc', 'casar-sis-descricao', 'casar-sis-fornecedor', 'casar-sis-status'].map((t) => screen.getByTestId(t).textContent))
+      .toEqual(['08/09/2026', LONGO.descricao, LONGO.fornecedor, 'Programado']);
+    expect(screen.getByTestId('casar-sis-descricao').getAttribute('title')).toBe(LONGO.descricao);
+    expect(screen.getByTestId('casar-sis-fornecedor').getAttribute('title')).toBe(LONGO.fornecedor);
+    expect(screen.getByTestId('casar-sis-descricao').closest('table')).not.toBeNull();
     for (const el of [levado, ...levado.querySelectorAll('*')]) expect(el.getAttribute('class') ?? '').not.toMatch(/\btruncate\b|text-ellipsis/);
-    expect(ident.children[1].className).toContain('break-words');
-    expect(ident.children[2].className).toContain('break-words');
     /* a segunda linha é a do campo e das ações */
     const linha = campo(LONGO.descricao!).parentElement!;
     expect(linha.className).toContain('min-w-0');
@@ -189,8 +189,8 @@ describe('o levado sem vencimento nem status mostra "—" (dado ausente), nunca 
   it('VIVO sem os campos novos', async () => {
     montar([VIVO]);
     await frase();
-    const ident = screen.getByTestId('levado-identificacao');
-    expect([...ident.children].map((c) => c.textContent)).toEqual(['—', 'Vivo Casa', 'Telefonica Brasil S.A.', '—']);
+    expect(['casar-sis-venc', 'casar-sis-descricao', 'casar-sis-fornecedor', 'casar-sis-status'].map((t) => screen.getByTestId(t).textContent))
+      .toEqual(['—', 'Vivo Casa', 'Telefonica Brasil S.A.', '—']);
   });
 });
 

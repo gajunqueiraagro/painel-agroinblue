@@ -1876,6 +1876,10 @@ const CENARIOS = [
   /* FORN-TROCAR-LOTE-01 — o modal (40 origens de nome longo, os avisos) e a barra da selecao na lista com o "…" */
   { nome: 'trocar-fornecedor', url: 'tela=trocar-fornecedor', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="trocar-origens"]' } },
+  /* RATEIO-HIGINO-01 — o "Conferir rateio": a lista dos itens (rola dentro do quadro), e com uma linha nova (data, histórico, seletores) */
+  ...[['', null], ['-linha-nova', '[data-testid="rateio-nova"]']].map(([s, botao]) => ({ nome: `conferir-rateio${s}`, url: 'tela=conferir-rateio',
+    tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="rateio-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="rateio-linha"]').first().waitFor(); if (botao) { await p.locator(botao).click(); await p.waitForTimeout(300); } } })),
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
   /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
@@ -2014,6 +2018,8 @@ const CENARIOS = [
   { nome: 'casar-1x1-certo', url: 'tela=casar-1x1&v=certo', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* P153b (D3) — "Casar e trocar a conta": a confirmação curta (conta antes → depois) e o botão "Conciliar e trocar a conta" */
   { nome: 'casar-1x1-trocar', url: 'tela=casar-1x1&v=trocar', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* CONC-CRIAR-COM-NOTA-02 D-h — Extrato × Sistema e a faixa "Pago N dias ANTES do vencimento" */
+  { nome: 'casar-1x1-antecipado', url: 'tela=casar-1x1&v=antecipado', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* P139 — criar transferencia pela linha do extrato (um espelho escolhido, empate, gemea, ja' lancada) e o lote de 6; valores no teto */
   ...['espelho', 'empate', 'gemea', 'existente'].map((v) => ({ nome: `criar-transferencia-${v}`, url: `tela=criar-transferencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-criar-transferencia"]' })),
@@ -2023,6 +2029,20 @@ const CENARIOS = [
   /* P154 — a prévia dos previstos fora da vigência (encurtada e cancelar), vazia, carregando e com a recusa; valores no teto */
   ...['encurtada', 'cancelar', 'vazia', 'carregando', 'erro'].map((v) => ({ nome: `fora-da-vigencia-${v}`, url: `tela=fora-da-vigencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-fora-da-vigencia"]' })),
+  /* BPO-APROVACAO-01 — a tela do aprovador, celular primeiro (390×844) e no computador: a fila, a prévia do lote, os alertas, o desligado */
+  ...[['aprovar-pagamentos', 'tela=aprovar-pagamentos', null], ['aprovar-pagamentos-previa', 'tela=aprovar-pagamentos', 'previa'],
+      ['aprovar-pagamentos-alertas', 'tela=aprovar-pagamentos&v=alertas', 'alertas'], ['aprovar-pagamentos-desligado', 'tela=aprovar-pagamentos&v=desligado', 'desligado']]
+    .map(([nome, url, estado]) => ({ nome, url, tamanhos: [[390, 844], [1366, 768]], regiao: estado === 'previa' ? '[role="dialog"]' : 'body',
+      antes: async (p) => {
+        if (estado === 'desligado') { await p.locator('[data-testid="aprovar-desligado"]').waitFor(); return; }
+        await p.locator('[data-testid="aprovar-item"]').first().waitFor();
+        if (estado === 'alertas') { await p.getByRole('radio', { name: 'Alertas' }).or(p.getByRole('button', { name: 'Alertas' })).first().click(); await p.locator('[data-testid="aprovar-alertas"]').waitFor(); }
+        if (estado === 'previa') {
+          for (const n of [0, 1, 2]) await p.locator('[data-testid="aprovar-item"] button[role="checkbox"]').nth(n).click();
+          await p.locator('[data-testid="aprovar-lote"]').click(); await p.locator('[data-testid="aprovar-previa"]').waitFor();
+        }
+        await p.waitForTimeout(300);
+      } })),
   /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
      botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
   ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',

@@ -22,23 +22,29 @@ export const LINK_PARA_CASAR = 'font-semibold text-[#1d4ed8] underline underline
    Fornecedor dividem o resto (`null`). Sem colunas congeladas. */
 export const ALTURA_DA_LINHA_PARA_CASAR = 19;
 export const ALTURA_DO_CABECALHO_PARA_CASAR = 18;
-export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62];
+/* CONC-CRIAR-COM-NOTA-02 D-g (Gabriel 18/11) — depois do Valor, "Δ valor" (banco − lançamento) e "Δ dias" (pgto. no banco − vencimento), só quando
+   a lista tem o movimento do banco de referência (`colunas.deltas`) */
+export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 46, 46, 46, null, null, 30, 78, 94, 80, 38, 60, 120, 62];
 export const N_COLUNAS_PARA_CASAR = COLUNAS_PARA_CASAR.length;
 /** O piso das duas listas: as fixas + 2 × 110 para Descrição e Fornecedor (830px: cabe no modal a 1024 e a 135% de 1240, ~848 úteis — sem
  *  rolagem de lado). Só abaixo dele (janela < ~900px) a lista rola de lado DENTRO da caixa dela. */
-export const PISO_PARA_CASAR = COLUNAS_PARA_CASAR.reduce<number>((t, w) => t + (w ?? 0), 0) + 220;
+/* CONC-CRIAR-COM-NOTA-02 D-g: com Δ valor (80: "+99.999.999,99" a 9px pede 79) e Δ dias (38) o piso segue em 848 com Descrição e Fornecedor
+   a 2 × 60 (o rótulo "Fornecedor" pede 60) — em linha única ("…" + `title`), não quebram mais */
+export const PISO_PARA_CASAR = COLUNAS_PARA_CASAR.reduce<number>((t, w) => t + (w ?? 0), 0) + 120;
 
 /** UI-FONTE-GATE-01 (Chat 12/11 15:22) — Faz. e NF só existem quando alguma linha DESTA lista tem o dado: vazias, a largura delas vai
  *  para Descrição e Fornecedor (as duas `null`). A ordem das colunas não muda. */
-export interface ColunasParaCasar { faz: boolean; nf: boolean }
+export interface ColunasParaCasar { faz: boolean; nf: boolean; deltas?: boolean }
 export const TODAS_AS_COLUNAS_PARA_CASAR: ColunasParaCasar = { faz: true, nf: true };
 const I_FAZ = 6;
 const I_NF = 7;
+const I_DV = 9;
+const I_DD = 10;
 export function colunasParaCasar(linhas: readonly Pick<LinhaParaCasar, 'fazendaCodigo' | 'fazendaNome' | 'numeroDocumento'>[]): ColunasParaCasar {
   return { faz: linhas.some((l) => !!(l.fazendaCodigo || l.fazendaNome)), nf: linhas.some((l) => !!l.numeroDocumento) };
 }
 export function largurasParaCasar(c: ColunasParaCasar): (number | null)[] {
-  return COLUNAS_PARA_CASAR.filter((_, i) => (i !== I_FAZ || c.faz) && (i !== I_NF || c.nf));
+  return COLUNAS_PARA_CASAR.filter((_, i) => (i !== I_FAZ || c.faz) && (i !== I_NF || c.nf) && ((i !== I_DV && i !== I_DD) || !!c.deltas));
 }
 
 export type ColunaQueOrdena = 'comp' | 'venc' | 'pgto' | 'descricao' | 'fornecedor' | 'fazenda' | 'valor' | 'status';
@@ -70,6 +76,8 @@ export function CabecalhoParaCasar({ ordenar, seta, prefixo, colunas = TODAS_AS_
     {colunas.faz && th('fazenda', 'Faz.', 'px-1', undefined, 'Fazenda')}
     {colunas.nf && <ThDaLista recuo="px-1" alinhar="right">NF</ThDaLista>}
     {th('valor', 'Valor', 'px-1', undefined, undefined, 'right')}
+    {colunas.deltas && <ThDaLista recuo="px-1" alinhar="right" title="valor do banco − valor do lançamento">Δ valor</ThDaLista>}
+    {colunas.deltas && <ThDaLista recuo="px-1" alinhar="right" title="dias entre o pagamento no banco e o vencimento (− = antes do vencimento)">Δ dias</ThDaLista>}
     {th('status', 'Status', 'px-1')}
     <ThDaLista recuo="px-1" alinhar="left">Motivo</ThDaLista>
     <ThDaLista recuo="px-1" aria-label="Ações" />
@@ -81,6 +89,26 @@ export interface LinhaParaCasar {
   id: string; comp: string | null; venc: string | null; pgto: string | null; descricao: string | null; tituloDescricao?: string;
   fornecedor: string | null; fazendaCodigo: string | null; fazendaNome: string | null; tipoDocumento: string | null; numeroDocumento: string | null;
   valor: number; status: string | null; conciliado: boolean;
+  /** D-g — com o movimento de referência: banco − lançamento (em módulo, R$) e pgto. no banco − vencimento (dias; − = antes) */
+  deltaValor?: number | null; deltaDias?: number | null;
+}
+
+/** D-g — os dois Δ de um lançamento contra o movimento do banco: valor (|banco| − |lançamento|) e dias (pgto. no banco − vencimento) */
+export function deltasDoMovimento(mov: { data: string | null; valor: number }, l: { valor: number; venc: string | null }): { deltaValor: number; deltaDias: number | null } {
+  const deltaValor = Math.round((Math.abs(mov.valor) - Math.abs(l.valor)) * 100) / 100;
+  const deltaDias = mov.data && l.venc ? Math.round((Date.parse(mov.data.slice(0, 10)) - Date.parse(l.venc.slice(0, 10))) / 86400000) : null;
+  return { deltaValor, deltaDias };
+}
+
+/** D-g — a cor do Δ: zero = verde (confere); diferente = âmbar (valor) / antes do vencimento = azul, depois = âmbar (dias) */
+export function textoDoDelta(tipo: 'valor' | 'dias', d: number | null | undefined): { texto: string; classe: string } {
+  if (d == null) return { texto: '—', classe: 'text-muted-foreground' };
+  if (tipo === 'valor') {
+    if (Math.abs(d) < 0.005) return { texto: '0,00', classe: 'text-emerald-700' };
+    return { texto: `${d > 0 ? '+' : '−'}${Math.abs(d).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, classe: 'text-amber-700' };
+  }
+  if (d === 0) return { texto: '0', classe: 'text-emerald-700' };
+  return { texto: `${d > 0 ? '+' : '−'}${Math.abs(d)}`, classe: d < 0 ? 'text-sky-700' : 'text-amber-700' };
 }
 
 /** Uma linha das duas listas: as células da lista do Financeiro + Motivo + a ação. */
@@ -101,12 +129,17 @@ export function LinhaParaCasarNaTabela({ l, marcada, alternar, podeMarcar, motiv
       <CelulaData iso={l.comp} coluna="comp" solta />
       <CelulaData iso={l.venc} coluna="venc" vencido={vencido} solta />
       <CelulaData iso={l.pgto} coluna="pgto" solta />
-      {/* UI-FONTE-GATE-01 (regra do Gabriel: nome nunca cortado): Descrição e Fornecedor QUEBRAM na célula, a linha cresce */}
-      <CelulaProduto title={l.tituloDescricao ?? (l.descricao || '')} quebra>{l.descricao || '-'}</CelulaProduto>
-      <CelulaFornecedor title={l.fornecedor ?? ''} quebra>{l.fornecedor || '-'}</CelulaFornecedor>
+      {/* CONC-CRIAR-COM-NOTA-02 D-g (Gabriel 18/11, substitui a quebra do UI-FONTE-GATE-01): LINHA ÚNICA — Descrição e Fornecedor com "…" e o
+          inteiro no `title` */}
+      <CelulaProduto title={l.tituloDescricao ?? (l.descricao || '')}>{l.descricao || '-'}</CelulaProduto>
+      <CelulaFornecedor title={l.fornecedor ?? ''}>{l.fornecedor || '-'}</CelulaFornecedor>
       {colunas.faz && <CelulaFaz codigo={l.fazendaCodigo} nome={l.fazendaNome} />}
       {colunas.nf && <CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />}
       <CelulaValor classe={v.classe}>{v.texto}</CelulaValor>
+      {colunas.deltas && (() => { const d = textoDoDelta('valor', l.deltaValor); return (
+        <td className={`whitespace-nowrap px-1 py-1 text-right align-middle text-[9px] tabular-nums leading-tight ${d.classe}`} data-testid={`${testid}-delta-valor`}>{d.texto}</td>); })()}
+      {colunas.deltas && (() => { const d = textoDoDelta('dias', l.deltaDias); return (
+        <td className={`whitespace-nowrap px-1 py-1 text-right align-middle text-[9px] tabular-nums leading-tight ${d.classe}`} data-testid={`${testid}-delta-dias`}>{d.texto}</td>); })()}
       <CelulaStatus title={st.stPilula || st.stEstagio ? undefined : st.stLabel}><RotuloDoStatus st={st} /></CelulaStatus>
       <td className="truncate px-1 py-1 align-middle leading-tight" data-testid={`${testid}-coluna-motivo`}>{motivo}</td>
       <td className="whitespace-nowrap px-1 py-1 text-right align-middle leading-tight" data-testid={`${testid}-coluna-acao`}>{acao}</td>

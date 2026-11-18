@@ -1086,6 +1086,32 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     const d = new Map(pedido.map((x) => [x.id, String(x.descricao)]));
     expect([d.get('m2-6'), d.get('m2-7'), d.get('m2-8')?.endsWith(' 8/10'), d.get('m2-8')?.includes('None')]).toEqual(['Manutencao sintetica 6/10', 'Manutencao sintetica - Parc.7 7/10', true, false]);
   });
+  /* NOTA-PARCELAR-01 (Gabriel 18/11, o molde da NF 5.629 da madeira; SINTÉTICO) — a nota SEM duplicata, paga em 3 FORA do cartão: 1 achada
+     conciliada na c/c (nota ÷ 3, sem número na descrição) + a 2ª cancelada ("Parcela 2 - None"). A tela diz "não traz duplicatas e foi paga em 3",
+     numera 1/3 pela ordem (sem pergunta), propõe 2/3 e 3/3 mês a mês (o centavo na última) e cria só as 2; a cancelada não conta. */
+  const MADEIRA = [
+    jaLancado(1, '2026-09-10', 'realizado', { id: 'mad-1', descricao: 'Manutenção de Instalações Sintetica', valorCent: 65553, contaBancariaId: 'sic', conciliado: true }),
+    jaLancado(2, '2026-10-12', 'programado', { id: 'mad-2', descricao: 'Parcela 2 - None', valorCent: 65554, contaBancariaId: 'sic', cancelado: true }),
+  ].map((l): LancamentoJaLancado => ({ ...l, financiamentoId: null, por: ['numero'], parcelas: [] }));
+  it('PARC1 sem duplicata, paga em 3 fora do cartão: 1/3 achada (sem pergunta), cria 2/3 e 3/3 mês a mês com o centavo na última', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: MADEIRA });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores, gj: falsos().gj });
+    await naAbaParcelas();
+    const resumo = screen.getByTestId('nota-ja-lancada-resumo').textContent ?? '';
+    expect([resumo.includes('não traz duplicatas e foi paga em 3 parcelas'), resumo.includes('achei 1'), resumo.includes('faltam 2.'), resumo.includes('cartão')])
+      .toEqual([true, true, true, false]);
+    expect(screen.queryByTestId('nota-cartao-pergunta')).toBeNull();
+    expect(screen.getAllByTestId('nota-ja-lancada-parc').map((x) => x.textContent)).toEqual(['1/3', '2/3', '3/3']);
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 1 e criar 2'));
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(g.lancamento.mock.calls.map(([f]) => [f.data_vencimento, Math.round(Number(f.valor) * 100), String(f.descricao).slice(-3)]))
+      .toEqual([['2026-10-10', 65552, '2/3'], ['2026-11-10', 65551, '3/3']]);   // nota 1.966,56: 655,53 + 655,52 + 655,51 = a nota (o resto na última)
+    /* a achada recebe a nota; as 2 que nasceram também (o gravador falso devolve o mesmo id); a cancelada nunca */
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['mad-1', 'lanc-unico', 'lanc-unico']);
+  });
   /* P128b — o "Juntar" do P96a agora é a MESMA gravação única da prévia campo a campo (padroniza e junta; o antes guardado) */
   it('J1 as 4 soltas: a prévia padroniza ("base i/4", nº, competência = emissão) e JUNTA numa gravação só; a nota vai às 4', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });

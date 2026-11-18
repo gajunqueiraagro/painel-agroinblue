@@ -240,7 +240,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - CONC-SUGESTOES-FONTE-01: o fornecedor que o HISTÓRICO conhece (o `resumo` da busca do P153, pela `fn_conciliacao_fornecedores_do_historico`, nunca regra
   na tela) vem primeiro nas sugestões e a pista de nome de OUTRO fornecedor vai ao fim com "só texto parecido"; o Sugestões para casar usa a fonte da lista do Financeiro (sem variante grande).
 - CONC-ORDENAR-01: na Conciliação TODA tabela ordena pelo `ThOrdenavel` (Palco; Saldos por conta DENTRO do grupo, Total e faixas parados); o Resumo do mês é exceção declarada (`data-ordenar-excecao`, linhas fixas da conta).
-- UI-FONTE-GATE-01 (1): nas tabelas de casar o nome QUEBRA (`quebra`), nunca "…"; Faz./NF nas Sugestões só com dado, no histórico SEMPRE reservadas (chegam por gesto: o cabeçalho não anda); seta da ordem antes do rótulo à direita.
+- UI-FONTE-GATE-01 (1): nas tabelas de casar o nome em LINHA ÚNICA ("…" + `title`; CONC-CRIAR-COM-NOTA-02 D-g, Gabriel 18/11, trocou a `quebra`) com Δ valor/Δ dias contra o banco; Faz./NF nas Sugestões só com dado, no histórico SEMPRE reservadas (chegam por gesto: o cabeçalho não anda); seta da ordem antes do rótulo à direita.
 - P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
   seguem sem os sem caixa.
 - P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
@@ -326,6 +326,11 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
   venda a NF do produtor SOMA e contrato/NF entrada/comprovante nao; a mesma chave viva no cliente e' barrada no banco (23505, com link).
 
+- NOTA-PARCELAR-01: a nota SEM duplicata cuja achada vale nota ÷ N segue o caminho do Caso 3 fora do cartão (`noCartao.cartao=false`): posição pela
+  ordem sem pergunta quando a descrição não tem número; as que faltam nascem mês a mês (resto na última); o "None" da planilha sai em `semVazioEscrito`.
+- RATEIO-HIGINO-01: "Conferir rateio" (⋯ da transferência para a conta comum) só CONFERE os itens que já existem (D2: recorrências intocadas) e grava
+  pela porta do `completarComANota` + `criarLancamentoComId` + `gravarDocumentosDoParcelamento`; nenhum gravador novo.
+
 ### Tela (detalhes em docs/PADROES-UI.md)
 - UI-GATE-RAPIDO-01: durante o trabalho, `npm run check:ui-rapido` (cortes + deslocamento so' das telas que o diff contra o origin/proto
   alcanca); sai com 3 e "rode o completo" quando o diff toca `src/components/ui/*`, `index.css`, a barra lateral, a bancada/os gates ou
@@ -352,6 +357,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   DECLARADA (D7, Gabriel 28/10): a coluna Data dessa lista é dd/mm (o gate aceita só em tabela `data-dia-mes`; o auto-teste a prova).
   P159b: a aba Sistema e o ↗ "Extrato do sistema" são a mesma lista (○ âmbar = não conciliado, o status no `title`); a Evolução: Dif. do dia =
   Mov. banco − Mov. sistema (`montarEvolucao`), some só o dia SEM NENHUMA linha, "ver o dia na Conferência" = o Espelho abre a Conferência no dia (`onAbaChange`).
+- CONC-CRIAR-COM-NOTA-02 D-f/D-h: em aberto com VALOR EXATO e vencimento −60/+90 dias do movimento é candidato elegível (`fn_candidatos_conciliacao`, lote 22; pagamento antecipado/atrasado); o Casar com o banco mostra EXTRATO × SISTEMA numa tabela (valor sob valor) e a faixa "Pago N dias ANTES/DEPOIS do vencimento" (`fraseDoPagamento`).
 - P159f: "Sugestões" (o botão do sem par e o "Ver sugestões (N)" do ⋯) abre SEMPRE; com 0, "Nenhuma sugestão automática" e o cursor no campo do "Procurar no histórico"; o contorno azul só sinaliza que há candidatos.
 - P159e: as 3 abas do Casar lançamentos no mock `mock-casar-abas-v1.html` (linha 18px a 10; dia/fechamento/saldos 22px negrito; data dd/mm/aaaa); Extrato e Sistema em Entradas · Saídas · Saldo, o saldo inicial/do dia/final
   NA coluna Saldo (rodapé = tabela com o mesmo `colgroup`; gate `alinhamento`); Conferência: o EXTRATO é a coluna flexível, inteiro ≥1366 (gate `inteiroDe`).
