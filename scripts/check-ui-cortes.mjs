@@ -30,7 +30,7 @@ import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { filtroRapido } from './ui-gate-rapido.mjs';
+import { filtroRapido, telaDoCenario } from './ui-gate-rapido.mjs';
 import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
   paginasDaMedicao } from './ui-cortes/teto.mjs';
 
@@ -41,6 +41,9 @@ const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.a
 const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.split('x').map(Number)) : [[1000, 600], [1126, 579], [1440, 800]];
 const FOTOS = arg('--fotos');
 const SO = arg('--so');
+/* UI-MESES-PADRAO-01 (decisão do Gabriel 18/11: publicar com o gate das telas ALCANÇADAS, o completo à noite) — `--telas a,b,c`: só os
+   cenários dessas telas da bancada (o `tela=` da url, a MESMA regra do modo rápido). Não substitui o completo: é o gate parcial declarado. */
+const TELAS = arg('--telas') ? new Set(arg('--telas').split(',')) : null;
 /* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
    testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
 async function cliqueNoGesto(p, t) {
@@ -3201,7 +3204,8 @@ const naRapida = RAPIDO ? filtroRapido('check-ui-cortes') : () => true;
 /* o modo rapido mede cada cenario nos MESMOS tamanhos do completo (o veredito de um cenario nao depende do modo): forcar os 7 do contrato
    reprovava o modal da OC a 750/814, largura em que ele nao tem desenho e que o completo nao mede (57 achados na prova de 21/10) */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS);
-const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c)
+  && (!TELAS || TELAS.has(telaDoCenario(c))));
 /* GATE-TELA-TETO-01 — o plano da rodada (fatia, --de) e o relógio contam desde o início do processo */
 const INICIO = Date.now() - process.uptime() * 1000;
 let OPCOES, PLANO;

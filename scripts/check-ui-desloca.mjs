@@ -22,13 +22,16 @@ import { createServer } from 'vite';
 import { chromium } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { filtroRapido } from './ui-gate-rapido.mjs';
+import { filtroRapido, telaDoCenario } from './ui-gate-rapido.mjs';
 import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
   paginasDaMedicao } from './ui-cortes/teto.mjs';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
 const SO = arg('--so');
+/* UI-MESES-PADRAO-01 (decisão do Gabriel 18/11: publicar com o gate das telas ALCANÇADAS, o completo à noite) — `--telas a,b,c`: só os
+   cenários dessas telas da bancada (o `tela=` da url, a MESMA regra do modo rápido). Não substitui o completo: é o gate parcial declarado. */
+const TELAS = arg('--telas') ? new Set(arg('--telas').split(',')) : null;
 /* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
    testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
 async function cliqueNoGesto(p, t) {
@@ -1102,7 +1105,8 @@ const naRapida = RAPIDO ? filtroRapido('check-ui-desloca') : () => true;
 const TAMANHOS_DA_VEZ = TAMANHOS;
 /* P92 — o cenario pode pedir os PROPRIOS tamanhos (`tamanhos`), como no check-ui-cortes; o `--tamanhos` da linha de comando manda sobre eles */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS_DA_VEZ);
-const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c)
+  && (!TELAS || TELAS.has(telaDoCenario(c))));
 /* GATE-TELA-TETO-01 — o plano da rodada (fatia, --de; sem os tamanhos abaixo do `minLargura`) e o relógio desde o início do processo */
 const INICIO = Date.now() - process.uptime() * 1000;
 let OPCOES, PLANO;
