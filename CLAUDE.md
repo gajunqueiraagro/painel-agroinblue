@@ -326,6 +326,11 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
   venda a NF do produtor SOMA e contrato/NF entrada/comprovante nao; a mesma chave viva no cliente e' barrada no banco (23505, com link).
 
+- NOTA-PARCELAR-01: a nota SEM duplicata cuja achada vale nota ÷ N segue o caminho do Caso 3 fora do cartão (`noCartao.cartao=false`): posição pela
+  ordem sem pergunta quando a descrição não tem número; as que faltam nascem mês a mês (resto na última); o "None" da planilha sai em `semVazioEscrito`.
+- RATEIO-HIGINO-01: "Conferir rateio" (⋯ da transferência para a conta comum) só CONFERE os itens que já existem (D2: recorrências intocadas) e grava
+  pela porta do `completarComANota` + `criarLancamentoComId` + `gravarDocumentosDoParcelamento`; nenhum gravador novo.
+
 ### Tela (detalhes em docs/PADROES-UI.md)
 - UI-GATE-RAPIDO-01: durante o trabalho, `npm run check:ui-rapido` (cortes + deslocamento so' das telas que o diff contra o origin/proto
   alcanca); sai com 3 e "rode o completo" quando o diff toca `src/components/ui/*`, `index.css`, a barra lateral, a bancada/os gates ou

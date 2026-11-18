@@ -1523,6 +1523,28 @@ if (tela === 'mesclar') {
     previa={v === 'carregando' ? null : lerForaDaVigencia(resposta)} carregando={v === 'carregando'}
     erro={v === 'erro' ? 'Os lançamentos mudaram durante a gravação (11 de 12). Nada foi gravado.' : null}
     aoConfirmar={async () => {}} aoFechar={() => {}} />);
+} else if (tela === 'aprovar-pagamentos') {
+  /* BPO-APROVACAO-01 — a tela do APROVADOR no pior caso (SINTÉTICO): 12 pagamentos em 3 dias, nomes compridos, valores no teto, sem nota/
+     sem boleto, uma conta com leitura do banco (fica negativa) e outra sem ("—"); `&v=alertas` a aba dos alertas; `&v=desligado` o BPO
+     desligado (a frase). O gate abre a prévia do lote (marca 3 e "Aprovar"). */
+  const NOMES = ['Agropecuária Sintética de Insumos e Fertilizantes do Centro-Oeste Ltda', 'Posto Exemplo', 'Veterinária Sintética Comprida Ltda'];
+  const LINHAS = Array.from({ length: 12 }, (_, i) => ({ lancamento_id: `p${i}`, rodada: i === 3 ? 2 : 1, situacao: i < 9 ? 'aguardando' : i < 11 ? 'aprovado' : 'recusado',
+    motivo: i === 11 ? 'Falta o boleto e conferir se a quantidade bate com o pedido de compra do mês' : null, observacao: i === 3 ? 'mudou: valor' : null,
+    vencimento: ['2031-10-21', '2031-10-24', '2031-10-28'][i % 3], valor: i === 0 ? -99999999.99 : -(1234.56 * (i + 1)), descricao: `Compra sintética ${i}`,
+    fornecedor: NOMES[i % 3], fazenda: 'Fazenda Sintética com Nome Longo', conta: i % 2 ? 'Sicredi Fazenda 0418' : 'Itaú Personalite 7225',
+    conta_bancaria_id: i % 2 ? 'sic' : 'itau', status_transacao: 'programado', tem_nota: i % 4 !== 2, tem_boleto: i % 3 !== 1 }));
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financeiro_bpo_config' ? (v === 'desligado' ? [] : [{ ativo: true }])
+      : t === 'financeiro_aprovadores' ? [{ id: 'a1' }]
+      : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }] : [],
+    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista' ? LINHAS
+      : fn === 'fn_aprovacao_alertas' ? [{ alerta: 'pago_sem_aprovacao', lancamento_id: 'x1', data: '2031-10-13', valor: -2140, valor_aprovado: null, fornecedor: NOMES[0] },
+          { alerta: 'aprovado_nao_pago', lancamento_id: 'x2', data: '2031-10-14', valor: -5990, valor_aprovado: -5990, fornecedor: NOMES[1] },
+          { alerta: 'pago_diferente', lancamento_id: 'x3', data: '2031-10-12', valor: -99999999.99, valor_aprovado: -99999999.98, fornecedor: NOMES[2] }]
+      : fn === 'fn_aprovacao_decidir' ? { ok: true, simulado: a.p_simular, n: (a.p_ids ?? []).length, total: 99999999.99 } : null,
+  };
+  /* import DENTRO do ramo: o trecho comum da bancada não muda (UI-GATE-RAPIDO-01) */
+  void import('@/pages/AprovarPagamentosPage').then(({ default: AprovarPagamentosPage }) => montar(<AprovarPagamentosPage />));
 } else if (tela === 'escolher-contas') {
   /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Contas bancárias › Bancos conectados › Escolher contas, com o bloco "Lança na
      conta": a conta corrente do banco, a conta do sistema com o nome no pior caso e a frase da prévia ("Liga … em …") depois do clique.
@@ -1610,6 +1632,9 @@ if (tela === 'mesclar') {
      `&v=carregando`: o modal antes de o dono responder. P166: `&v=ok|pendencia|pendente` a faixa do status nos outros casos e
      `&v=nj` os nomes no tamanho real (`dados/conciliacao.ts`). */
   const semArquivos = v === 'sem';
+  /* CONC-PAINEL-CONTA-01 — `&admin=1`: o operador admin (o ✎ da conta aparece e abre o painel lateral) */
+  if (q.get('admin') === '1') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' },
+    clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
   g.__bancoBancada = {
     from: (t: string) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : CONC.CONTAS)
       : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
@@ -1888,6 +1913,27 @@ if (tela === 'mesclar') {
     raiz.render(<TrocarFornecedorDialog clienteId="cli" ids={['x']} onClose={() => {}} />);
   };
   void montarTroca();
+} else if (tela === 'conferir-rateio') {
+  /* RATEIO-HIGINO-01 — o "Conferir rateio": 23 itens SINTÉTICOS da conta comum (a forma de nov/26: 3 fazendas, rótulo R_D15, um pago, um
+     sem rótulo ligado) + 2 "outros do mês"; descrições longas (o pior caso de texto) */
+  const montarRateio = async () => {
+    const { ConferirRateioDialog } = await import('@/components/financeiro-v2/ConferirRateioDialog');
+    const fazs = ['faz-1', 'faz-2', 'faz-3'];
+    const itens = Array.from({ length: 25 }, (_, i) => ({
+      id: `it-${i}`, descricao: i % 4 === 0 ? `Item Sintetico de Descricao Bem Comprida Numero ${i + 1} Conta de Energia Eletrica da Sede` : `Item ${i + 1}`,
+      fazenda_id: fazs[i % 3], plano_conta_id: i % 2 ? 'pc-1' : 'pc-2', valor: 12345.67 + i * 101.01, data_vencimento: `2026-11-${String(5 + (i % 20)).padStart(2, '0')}`,
+      data_competencia: '2026-11-01', numero_documento: i >= 23 ? 'R_Folha' : 'R_D15', tipo_documento: 'Recibo',
+      status_transacao: i === 1 ? 'realizado' : 'programado', data_pagamento: i === 1 ? '2026-11-05' : null, conciliado_em: null,
+    }));
+    g.__bancoBancada = { from: (t: string) => (t === 'financeiro_lancamentos_v2' ? itens : []), rpc: () => null };
+    raiz.render(<ConferirRateioDialog clienteId="cli" nomeDaConta="Conta Comum Sintetica de Nome Longo"
+      pagamento={{ id: 'pag', descricao: 'Rateio D15 Sintetico', valorCent: 99999999, vencimento: '2026-11-16', contaDestinoId: 'cc', status: 'programado', dataPagamento: null }}
+      fazendas={[{ id: 'faz-1', codigo: 'F1', nome: 'Faz. Um' }, { id: 'faz-2', codigo: 'F2', nome: 'Faz. Dois' }, { id: 'faz-3', codigo: 'ADM', nome: 'Administrativo' }]}
+      contasDoPlano={[{ id: 'pc-1', subcentro: 'Comunicação e Energia Pecuária Sintetica', centro_custo: 'Administração', tipo_operacao: '2-Saídas' },
+        { id: 'pc-2', subcentro: 'Contab. Jurídico e Consult. Pecuária', centro_custo: 'Administração', tipo_operacao: '2-Saídas' }]}
+      criarItem={async () => null} onClose={() => {}} onGravou={() => {}} />);
+  };
+  void montarRateio();
 } else if (tela === 'plano-contas') {
   /* P172 — Cadastros › Plano de Contas (dado SINTÉTICO, `dados/planoContas.ts`); `&perfil=cliente` = o cliente (só leitura, sem ações) */
   if (q.get('perfil') === 'cliente') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Bancada' }, clientes: [{ id: 'cli', nome: 'Cliente Bancada' }],
