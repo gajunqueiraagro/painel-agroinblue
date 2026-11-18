@@ -19,7 +19,7 @@ import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import type { BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
 import { entradaEmailApiDoBanco, rotuloDoMotivo, type EntradaDoEmail, type EntradaEmailApi, type MotivoDeIgnorar } from '@/lib/financeiro/boleto/entradaEmailApi';
 import {
-  FRASE_NEM_BOLETO_NEM_NOTA, grupoDosGuardados, gruposDosEmails, linhasDasFontes,
+  FRASE_NEM_BOLETO_NEM_NOTA, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes,
   type ConsultaDaNota, type ConsultaDoBoleto, type FonteParaMontar, type GrupoDaCaixa, type LinhaDaCaixa, type Lido, type ResumoDaNota,
 } from '@/lib/financeiro/boleto/caixaPorEmail';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
@@ -39,7 +39,8 @@ export const FRASE_PDF_IMAGEM = 'O PDF é uma imagem (escaneado): sem linha digi
 export const lerDaCaixa: LerArquivoDaCaixa = async (bytes, tipo, senha) => {
   if (tipo === 'xml') {
     const n = await lerNota(bytes);
-    return n.ok ? { k: 'nota', nota: resumoDaNota(n.nota) } : { k: 'nada', frase: n.frase };
+    if ('nota' in n && n.ok) return { k: 'nota', nota: resumoDaNota(n.nota) };
+    return { k: 'nada', frase: 'frase' in n ? n.frase : 'Não consegui ler a nota.' };
   }
   const b = await lerBoletosDoArquivo(bytes.slice(0), { senha });
   if (b.ok === false) {
@@ -312,7 +313,7 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
 
   /** Vincular o boleto aos lançamentos do candidato escolhido (ou só resolver, se ele já está ligado). */
   const vincularBoleto = useCallback((l: LinhaDaCaixa, lancamentos: string[]) => fazer(l.chave, async () => {
-    const jaLigado = !!(l.previa?.jaExiste && l.previa.situacao.lancamentos.length);
+    const jaLigado = boletoJaLigado(l.previa);
     if (!jaLigado && !lancamentos.length) return 'Escolha o lançamento.';
     const g = await garantirNaCaixa(l);
     if (g.ok === false) return g.frase;

@@ -334,11 +334,15 @@ export const contarAResolver = (grupos: readonly GrupoDaCaixa[]): number =>
 export const ROTULO_DA_ACAO: Record<Acao, string> = {
   lancar_nota: 'Lançar nota', vincular_nota: 'Vincular', vincular_boleto: 'Vincular', guardar: 'Guardar', ignorar: 'Ignorar', senha: 'Senha',
 };
+/** A prévia diz que o boleto já existe E já está ligado a lançamento (o "Vincular" só resolve a linha). */
+export function boletoJaLigado(p: LinhaDaCaixa['previa']): boolean {
+  return !!p && 'jaExiste' in p && p.jaExiste && p.situacao.lancamentos.length > 0;
+}
 export function tituloDaAcao(a: Acao, l: LinhaDaCaixa): string {
   switch (a) {
     case 'lancar_nota': return 'abre a prévia do "+ Da nota" com este arquivo: nada é gravado antes de você confirmar';
     case 'vincular_nota': return 'a nota já está no lançamento: marca como resolvido';
-    case 'vincular_boleto': return l.previa?.jaExiste && l.previa.situacao.lancamentos.length
+    case 'vincular_boleto': return boletoJaLigado(l.previa)
       ? 'o boleto já está ligado: marca como resolvido' : `liga o boleto a: ${l.noSistema.texto}`;
     case 'guardar': return 'põe o boleto na caixa sem lançamento (liga depois, quando o lançamento existir)';
     case 'ignorar': return 'pede o motivo; nada é apagado e volta pelo "Ignorados"';

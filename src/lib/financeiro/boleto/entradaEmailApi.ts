@@ -158,7 +158,8 @@ export const entradaEmailApiDoBanco: EntradaEmailApi = {
     const lancs = await (supabase as any).from('financeiro_lancamentos_v2').select('id, descricao, valor, data_vencimento')
       .eq('cliente_id', clienteId).eq('cancelado', false).in('id', [...new Set(pares.map((p) => p.lanc))]);
     if (lancs.error) return { ok: false, erro: fraseDoErroDaEntrada(lancs.error) };
-    const porId = new Map((Array.isArray(lancs.data) ? lancs.data.filter(ehLinha) : []).map((l) => [String(l.id), l]));
+    const lidas: Linha[] = Array.isArray(lancs.data) ? lancs.data.filter(ehLinha) : [];
+    const porId = new Map<string, Linha>(lidas.map((l) => [String(l.id), l]));
     const dados: Record<string, NotaNoSistema> = {};
     for (const p of pares) {
       const l = porId.get(p.lanc);
