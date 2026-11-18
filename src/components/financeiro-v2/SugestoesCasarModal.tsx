@@ -31,7 +31,7 @@ import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/concilia
 import { motivoCurto, resumoDaSelecao } from '@/lib/conciliacao/selecaoParaCasar';
 import { TabelaDaLista } from '@/components/financeiro-v2/TabelaDaLista';
 import { CabecalhoParaCasar, LinhaParaCasarNaTabela, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, colunasParaCasar, largurasParaCasar,
-  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR, type LinhaParaCasar } from '@/components/conciliacao/TabelaParaCasar';
+  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR, deltasDoMovimento, type LinhaParaCasar } from '@/components/conciliacao/TabelaParaCasar';
 /* ⚠ SEM IMPORT DA CONFERÊNCIA NEM DO `CasarComBancoModal`: o tipo do extrato é o estrutural da lib. Importar de lá
    fecharia um ciclo (Espelho → este modal → Casar → Espelho), que o `madge` acusa. */
 import type { CandidatoSugestao, ExtratoParaSugerir, Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
@@ -107,10 +107,12 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
       fornecedor: c.fornecedor, fazendaCodigo: x?.fazendaCodigo ?? null, fazendaNome: x?.fazendaNome ?? null,
       tipoDocumento: x?.tipoDocumento ?? null, numeroDocumento: x?.numeroDocumento ?? null,
       valor: Number(c.valor_assinado), status: c.status_transacao, conciliado: !!c.ja_conciliado,
+      /* CONC-CRIAR-COM-NOTA-02 D-g — Δ valor e Δ dias contra o movimento do banco */
+      ...(extrato ? deltasDoMovimento({ data: extrato.data, valor: extrato.valor }, { valor: Number(c.valor_assinado), venc: c.data_vencimento }) : {}),
     };
   };
   /* UI-FONTE-GATE-01: Faz. e NF só quando alguma sugestão tem o dado (a largura vazia vai para Descrição e Fornecedor) */
-  const colunasDasSugestoes = colunasParaCasar(sugestoes.flatMap((s) => s.lancamentos.map(linhaDoCandidato)));
+  const colunasDasSugestoes = { ...colunasParaCasar(sugestoes.flatMap((s) => s.lancamentos.map(linhaDoCandidato))), deltas: !!extrato };
   const largurasDasSugestoes = largurasParaCasar(colunasDasSugestoes);
 
   return (
