@@ -150,7 +150,10 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
         </div>
         {/* ⚠ AJUSTE 07:55: o bloco das sugestões e o do histórico DIVIDEM a altura do modal (flex-1 cada) e vão até o rodapé; o cabeçalho
             navy fica, só as linhas rolam. O modal não muda de altura (a altura dele é a da janela). */}
-        <div className="mx-3 min-h-0 flex-1 overflow-auto rounded-sm border bg-card" style={{ minHeight: PISO_DE_CADA_LISTA }} data-testid="sugestoes-lista">
+        {/* CONC-CRIAR-COM-NOTA-02 (OK do Edson, ajuste 3): a caixa das sugestões ENCOLHE ao conteúdo (cabeçalho + linhas), até metade do espaço;
+            o "Procurar no histórico" fica com a sobra (antes: metade em branco com 5 sugestões) */}
+        <div className="mx-3 min-h-0 shrink-0 overflow-auto rounded-sm border bg-card" data-testid="sugestoes-lista"
+          style={{ minHeight: PISO_DE_CADA_LISTA, height: `min(${ALTURA_DO_CABECALHO_PARA_CASAR + Math.max(1, sugestoes.reduce((t, s) => t + s.lancamentos.length, 0)) * ALTURA_DA_LINHA_PARA_CASAR + 4}px, 50%)` }}>
           <div style={{ minWidth: PISO_PARA_CASAR }} data-testid="sugestoes-piso">
           <TabelaDaLista larguras={largurasDasSugestoes} cabecalho={<CabecalhoParaCasar colunas={colunasDasSugestoes} />}>
             {sugestoes.length === 0 && (

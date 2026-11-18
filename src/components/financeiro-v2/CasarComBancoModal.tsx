@@ -93,7 +93,8 @@ export function valorAbsorvendo(valorAtual: number, sinalDaLinha: number, difere
   return novo > 0 ? novo : null;
 }
 
-const paraCampo = (v: number) => Math.abs(v).toFixed(2).replace('.', ',');
+/* CONC-CRIAR-COM-NOTA-02 (OK do Edson, ajuste 1): o campo com o milhar (5.250,00); o `valorDe` já tira os pontos */
+const paraCampo = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** O que a última simulação disse. `null` enquanto viaja. */
 interface Simulacao { ok: boolean; noExtrato: number; soma: number; diferenca: number; erro: string | null; }

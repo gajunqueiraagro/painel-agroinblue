@@ -16,7 +16,15 @@ export interface LinhaDoLevado {
   numero_documento?: string | null; status_transacao?: string | null; valor_assinado: number; valorTexto: string;
 }
 /* as larguras: Venc. dd/mm/aaaa 72 · NF 000.000.000 84 · Status 76 · Valor/Aplicado "99.999.999,99" 96/104 · Fica "parcial · falta 99.999.999,99" 150 */
-export const COLUNAS_DOS_LEVADOS: readonly (number | null)[] = [72, null, 150, 84, 76, 96, 124, 150, 24];
+/* ajuste 2 (OK do Edson): sem vão entre Fica e ✕ — o ✕ vai NA célula do Fica, logo depois do selo; a coluna tem a largura do MAIOR texto que o
+   conjunto pode mostrar ("parcial · falta <o maior valor>"), fixa enquanto se edita (nada anda); a sobra vai para a Descrição */
+export const COLUNAS_DOS_LEVADOS: readonly (number | null)[] = [72, null, 150, 84, 76, 96, 124];
+/** a largura do Fica + ✕ para este conjunto: o selo mais largo possível (10px tabular ≈ 5,6 px por caractere + recuos) + o ✕ */
+export function larguraDoFica(levados: readonly { valor_assinado: number }[]): number {
+  const maior = Math.max(0, ...levados.map((l) => Math.abs(l.valor_assinado)));
+  const texto = `parcial · falta ${fmt(maior)}`;
+  return Math.ceil(texto.length * 5.6) + 12 + 22;
+}
 const PALETA: Record<string, { texto: string } | undefined> = {
   previsto: STATUS_PALETA.previsto, programado: STATUS_PALETA.programado, agendado: STATUS_PALETA.agendado,
   realizado: STATUS_PALETA.realizado, conciliado: STATUS_PALETA.conciliado,
@@ -67,15 +75,15 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
       </table>
 
       <table className="w-full table-fixed border-separate border-spacing-0 text-[10px]" data-testid="levados-tabela">
-        <colgroup>{COLUNAS_DOS_LEVADOS.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>
+        <colgroup>{COLUNAS_DOS_LEVADOS.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}<col style={{ width: larguraDoFica(levados) }} /></colgroup>
         <thead><tr className="bg-primary text-primary-foreground">
           <th className={cn(th, 'text-center')}>Venc.</th><th className={cn(th, 'text-left')}>Descrição</th><th className={cn(th, 'text-left')}>Fornecedor</th>
           <th className={cn(th, 'text-right')}>NF</th><th className={cn(th, 'text-center')}>Status</th><th className={cn(th, 'text-right')}>Valor</th>
-          <th className={cn(th, 'text-right')}>Aplicado</th><th className={cn(th, 'text-left')}>Fica</th><th className={th} aria-label="Remover" />
+          <th className={cn(th, 'text-right')}>Aplicado</th><th className={cn(th, 'text-left')}>Fica</th>
         </tr></thead>
         <tbody>
           {levados.length === 0 && (
-            <tr className="h-[22px]"><td colSpan={9} className="px-1 italic text-muted-foreground" data-testid="levados-vazio">nenhum lançamento levado</td></tr>
+            <tr className="h-[22px]"><td colSpan={8} className="px-1 italic text-muted-foreground" data-testid="levados-vazio">nenhum lançamento levado</td></tr>
           )}
           {levados.map((l) => {
             const st = (l.status_transacao ?? '').trim().toLowerCase();
@@ -99,10 +107,8 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
                     data-testid="levado-linha-aplicado" />
                   {acaoNoCampo?.(l)}
                 </div></td>
-                <td className="border-b px-1">
+                <td className="whitespace-nowrap border-b px-1">
                   <span className={cn('whitespace-nowrap rounded px-1.5 py-[1px] text-[10px] tabular-nums', fica.classe)} data-testid="levado-linha-fica">{fica.texto}</span>
-                </td>
-                <td className="border-b px-0.5 text-center">
                   <button type="button" onClick={() => onRemover(l.lancamento_id)} aria-label={`Remover ${l.descricao ?? 'lançamento'} deste casamento`}
                     title="Tira este lançamento do casamento. Nada é apagado." className="rounded px-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     data-testid="levado-linha-remover">✕</button>
