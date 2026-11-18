@@ -121,6 +121,14 @@ function trimOrNull(v: unknown): string | null {
 }
 
 /** Lê a 1ª coluna não-vazia dentre os cabeçalhos aceitos. Mesmo idioma do parserClassificacao. */
+/** NOTA-PARCELAR-01 — a planilha do Lucro Rural traz o vazio do Python escrito ("Parcela 2 - None", "nan"): o texto vazio sai, nunca vira
+ *  descrição ("Parcela 2 - None" -> "Parcela 2"; "None" -> null). PURO. */
+export function semVazioEscrito(texto: string | null): string | null {
+  if (texto === null) return null;
+  const t = texto.replace(/(\s*[-–]\s*|\s+)(none|nan|null|undefined)\s*$/i, '').trim();
+  return t === '' || /^(none|nan|null|undefined)$/i.test(t) ? null : t;
+}
+
 function pickCol(raw: Record<string, unknown>, names: string[]): string | null {
   for (const n of names) {
     const v = trimOrNull(raw[n]);
@@ -289,7 +297,7 @@ function parseRow(
       conta_bancaria_texto: pickCol(raw, COL_CONTA_BANCARIA),
       data_vencimento: parseDataRef(pickRaw(raw, COL_VENCIMENTO)),
       data_pagamento: parseDataRef(pickRaw(raw, COL_PAGAMENTO)),
-      descricao: pickCol(raw, COL_DESCRICAO),
+      descricao: semVazioEscrito(pickCol(raw, COL_DESCRICAO)),
       numero_documento: pickCol(raw, COL_DOCUMENTO),
       tipo_documento: pickCol(raw, COL_TIPO_DOCUMENTO),
       forma_pagamento: pickCol(raw, COL_FORMA_PAGAMENTO),

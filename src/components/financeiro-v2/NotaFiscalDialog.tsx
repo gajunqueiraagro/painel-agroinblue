@@ -406,8 +406,15 @@ export function NotaFiscalDialog({
     /* só com a evidência do CARTÃO: uma achada numa conta de cartão, ou a condição de pagamento da nota diz cartão */
     const doCartao = dasN.some((l) => contas.find((k) => k.id === l.contaBancariaId)?.tipo_conta === 'cartao')
       || /cart[aã]o/i.test(n.informacoesComplementares ?? '');
-    return nC >= 2 && dasN.length && doCartao ? { n: nC, achadas: dasN, parteCent: Math.round(n.totais.notaCent / nC), leituras: posicoesNoCartao(dasN, nC) } : null;
-  }, [jaLancada, n.totais.notaCent, n.informacoesComplementares, contas]);
+    /* NOTA-PARCELAR-01 (Gabriel 18/11, a NF 5.629 da madeira) — a nota SEM duplicata (o papel não diz como foi paga) e a achada vale nota ÷ N:
+       foi paga em N parcelas FORA do cartão. O mesmo caminho do Caso 3: cada achada na sua posição, as que faltam nascem mês a mês. Sem
+       número na descrição, a posição é a da ordem (a 1ª achada = 1) e nada se pergunta. */
+    const semDuplicata = p.duplicatas.length === 0;
+    if (!(nC >= 2 && dasN.length && (doCartao || semDuplicata))) return null;
+    const lidas = posicoesNoCartao(dasN, nC);
+    const leituras = !doCartao && !lidas.pelaDescricao && lidas.pelaOrdem ? { ...lidas, concordam: true } : lidas;
+    return { n: nC, achadas: dasN, parteCent: Math.round(n.totais.notaCent / nC), leituras, cartao: doCartao };
+  }, [jaLancada, n.totais.notaCent, n.informacoesComplementares, contas, p.duplicatas.length]);
   const [leituraDoCartao, setLeituraDoCartao] = useState<'descricao' | 'ordem' | null>(null);
   useEffect(() => { setLeituraDoCartao(null); }, [noCartao]);
   const posicoesDoCartao = !noCartao ? null : noCartao.leituras.concordam ? noCartao.leituras.pelaOrdem
@@ -552,8 +559,9 @@ export function NotaFiscalDialog({
   const fraseDoCartao = noCartao && (noCartao.achadas.length < noCartao.n || !noCartao.leituras.concordam) ? (() => {
     const somaCent = noCartao.achadas.reduce((t, l) => t + l.valorCent, 0);
     const faltamN = noCartao.n - noCartao.achadas.length;
-    return `A nota é à vista no cartão em ${noCartao.n} parcelas e achei ${noCartao.achadas.length} (R$ ${reais(somaCent)} de R$ ${reais(n.totais.notaCent)})${faltamN ? ` — faltam ${faltamN}` : ''}`
-      + (noCartao.leituras.concordam || posicoesDoCartao ? '.' : ': diga a posição delas no cartão para seguir.');
+    const como = noCartao.cartao ? `é à vista no cartão em ${noCartao.n} parcelas` : `não traz duplicatas e foi paga em ${noCartao.n} parcelas (nota ÷ ${noCartao.n})`;
+    return `A nota ${como} e achei ${noCartao.achadas.length} (R$ ${reais(somaCent)} de R$ ${reais(n.totais.notaCent)})${faltamN ? ` — faltam ${faltamN}` : ''}`
+      + (noCartao.leituras.concordam || posicoesDoCartao ? '.' : `: diga a posição delas${noCartao.cartao ? ' no cartão' : ''} para seguir.`);
   })() : null;
   const alvosDaPrevia = useMemo((): AlvoDaPrevia[] => {
     const alvos = new Set((jaLancada?.alvos ?? []).filter((l) => recebeANota(l.id)).map((l) => l.id));
@@ -1447,7 +1455,7 @@ export function NotaFiscalDialog({
                 {/* Caso 3 — as duas leituras da posição discordam: a tela PERGUNTA (lugar reservado; nada se grava antes da resposta) */}
                 {noCartao && !noCartao.leituras.concordam && (
                   <div className="mb-1 flex h-[24px] shrink-0 items-center gap-2 rounded bg-amber-50 px-1.5 text-[10px] text-amber-900" data-testid="nota-cartao-pergunta">
-                    <span className="shrink-0 font-medium">Qual a posição no cartão?</span>
+                    <span className="shrink-0 font-medium">{noCartao.cartao ? 'Qual a posição no cartão?' : 'Qual a posição de cada parcela?'}</span>
                     <Segmentado<'descricao' | 'ordem'> altura={20} valor={leituraDoCartao ?? undefined} onEscolher={setLeituraDoCartao}
                       opcoes={opcoesDaLeitura} />
                   </div>
@@ -1884,7 +1892,7 @@ export function NotaFiscalDialog({
                     <span>junta as {soltas.n}</span>
                   </label>
                 ) : juncao.frase && !(jaLancada?.aVista && nACriar === 0) ? (
-                  <span className="shrink-0 text-amber-900" title={noCartao ? juncao.frase.replace(' duplicatas ', ' parcelas no cartão ') : juncao.frase} data-testid="nota-juntar-frase">
+                  <span className="shrink-0 text-amber-900" title={noCartao ? juncao.frase.replace(' duplicatas ', noCartao.cartao ? ' parcelas no cartão ' : ' parcelas ') : juncao.frase} data-testid="nota-juntar-frase">
                     ⚠ não junta ({juncao.frase.includes('fica') ? 'uma fica como está' : juncao.frase.includes('já é parcela') || juncao.frase.includes('já são parcelas') ? 'já é parcela' : 'faltam ou sobram'})</span>
                 ) : <span className="shrink-0 text-muted-foreground" data-testid="nota-nao-junta">não junta ({alvosEscolhidos.length + nACriar === 1 ? '1 parcela' : 'já é uma compra'})</span>}
                 <span className="shrink-0 text-muted-foreground">·</span>
@@ -1920,7 +1928,7 @@ export function NotaFiscalDialog({
             <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-falta">⚠ Falta: {faltasQueContam.join(', ')}</span>
           ) : null}
           {!bloqueio && !erro && modoJa && posicaoPendente ? (
-            <span className="min-w-0 uma-linha-que-rola text-amber-900" data-testid="nota-cartao-falta-posicao">⚠ Diga a posição das parcelas no cartão (aba Parcelas × sistema).</span>
+            <span className="min-w-0 uma-linha-que-rola text-amber-900" data-testid="nota-cartao-falta-posicao">⚠ Diga a posição das parcelas{noCartao?.cartao ? ' no cartão' : ''} (aba Parcelas × sistema).</span>
           ) : !bloqueio && !erro && jaLancada && modoJa && estadoDaPrevia?.impedimento ? (
             <span className="min-w-0 uma-linha-que-rola text-destructive" title={estadoDaPrevia.impedimento} data-testid="nota-previa-impede">⚠ {estadoDaPrevia.impedimento}</span>
           ) : !bloqueio && !erro && semCompra && remessa ? (

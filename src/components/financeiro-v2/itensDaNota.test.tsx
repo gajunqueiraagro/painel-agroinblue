@@ -53,7 +53,9 @@ describe('ItensDaNota — Valores e Fiscal', () => {
     expect(rodape()).toEqual(['', '', '3 itens', '', '', '', '350,00', '10,00', '26,50', '366,50']);
     expect(screen.getByTestId('itens-prova').textContent).toBe('✓ Soma dos itens = valor da nota');
     expect(screen.getByTestId('itens-tributos').textContent).toContain('R$ 20,00');
-    expect(screen.getByText(/Conta do lançamento manda no DRE e no caixa · Nutrição Engorda/)).toBeTruthy();
+    /* NOTA-PARCELAR-01 (P-c) — o selo diz só a conta (uma linha); o "manda no DRE e no caixa" vai no title */
+    const selo = screen.getByTestId('itens-conta-do-lancamento');
+    expect([selo.textContent, selo.getAttribute('title')]).toEqual(['Conta: Nutrição Engorda', 'A conta do lançamento manda no DRE e no caixa: Nutrição Engorda']);
     const desc = within(linhas[0]).getByText('PRODUTO SINTETICO UM');
     expect(desc.getAttribute('title')).toBe('PRODUTO SINTETICO UM · Informacao sintetica do item 1');
     expect(desc.className).toContain('truncate');
