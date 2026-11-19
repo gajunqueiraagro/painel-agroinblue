@@ -212,9 +212,9 @@ describe('resolverEmitente — documento primeiro, nome depois', () => {
   it('pelo NOME, um candidato, cadastro SEM documento: oferece gravar o do XML', () => {
     expect(resolverEmitente(E, [f('a'), f('b')], 'a')).toEqual({ achadoPor: 'nome', candidatos: [f('a')], propostoId: 'a', inativo: false, cadastroSemDocumento: true, filialDiferente: false });
   });
-  it('pelo nome, cadastro COM outro documento: propoe, e nao oferece gravar', () => {
+  it('FORN-ACHAR-CNPJ-01 — pelo nome, cadastro COM outro documento: NÃO propõe (a tela oferece cadastrar)', () => {
     const r = resolverEmitente(E, [f('a', { cpf_cnpj: '99.999.999/0001-99' })], 'a');
-    expect([r.achadoPor, r.propostoId, r.cadastroSemDocumento]).toEqual(['nome', 'a', false]);
+    expect([r.achadoPor, r.propostoId, r.cadastroSemDocumento]).toEqual([null, null, false]);
   });
   it('NENHUM: nada proposto (a tela oferece criar); id do banco que nao esta na lista tambem e nenhum', () => {
     const nada = { achadoPor: null, candidatos: [], propostoId: null, inativo: false, cadastroSemDocumento: false, filialDiferente: false };

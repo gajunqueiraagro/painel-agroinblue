@@ -896,7 +896,8 @@ const CENARIOS = [
     ['atividade Pecuária', clicar('[data-testid="conta-barra-atividade"] button:has-text("Pecuária")')],
   ] },
   /* NOTA-FORNECEDOR-COMPARAR-01 — "Atualizar N campos" -> "Confirmar" (a frase aparece no rodape) e o estado "nao parece o certo" */
-  { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro', estados: [
+  /* FORN-ACHAR-CNPJ-01 — o cadastro que É o da nota (o de nome à mão não oferece nada marcado: o Atualizar fica apagado) */
+  { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro&v=mesmo', estados: [
     ['pedindo a confirmacao', clicar('[data-testid="comparar-atualizar"]')],
     ['cadastro que nao parece o certo', { url: 'tela=comparar-cadastro&v=errado' }],
   ] },

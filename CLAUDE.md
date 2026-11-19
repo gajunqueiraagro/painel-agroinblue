@@ -269,6 +269,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   `favorecido_id`); "Marcar todos os N do filtro" pela MESMA RPC da grade (`so_linhas`); nunca UPDATE solto de favorecido.
 - NOTA-JA-LANCADA-01: antes de oferecer criar pela nota, `fn_nota_ja_lancada` (qualquer status, cadastro parecido, numero, chave); achou =
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
+- FORN-ACHAR-CNPJ-01 (19/11): com CNPJ no XML o documento MANDA (exato → RAIZ = outra filial, não propõe; outro documento NUNCA proposto); pelo nome SÓ a
+  razão social inteira igual (`razaoParaComparar`; nunca fantasia/cidade/"contém"); o comparar só oferece CNPJ/IE/razão quando `eOMesmoFornecedor`.
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
   desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
 - DOC-ANEXO-E-IMPORT-01 F1: SÓ A NF SE LÊ COMO NOTA — recibo/boleto/comprovante/outro nunca passam pelo `lerNota` nem pelo `extrairDanfe` e a

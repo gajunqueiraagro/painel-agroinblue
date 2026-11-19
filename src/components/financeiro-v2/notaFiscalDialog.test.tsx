@@ -857,8 +857,15 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
     return screen.findByTestId('comparar-cadastro');
   };
   const linha = (rotulo: string) => screen.getAllByTestId('comparar-linha').find((l) => l.firstElementChild?.textContent === rotulo);
-  it('o nome digitado a mao ("Pec.3M-Esc. Garças") vem DESMARCADO e nao muda; o CNPJ vazio vem marcado; "igual" sem caixa', async () => {
+  /* FORN-ACHAR-CNPJ-01 (URGENTE, Gabriel 19/11) — o nome digitado a mão ("Pec.3M-Esc. Garças …") é OUTRA razão social: CNPJ, IE e razão NÃO se
+     oferecem (o caso COAMO × Auto Posto); o aviso diz "parece outro fornecedor" e o resto vem desmarcado */
+  it('o nome digitado a mao ("Pec.3M-Esc. Garças"): razão social diferente → CNPJ/IE/razão nao se oferecem; "parece outro fornecedor"', async () => {
     await abrirComparar({ nome: 'Pec.3M-Esc. Garças Agro Sintetica', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, municipio: 'Campo Grande', uf: 'MS' });
+    expect([linha('Razão social'), linha('CNPJ/CPF'), linha('IE')]).toEqual([undefined, undefined, undefined]);
+    expect(screen.getByTestId('comparar-aviso').textContent).toContain('Parece outro fornecedor');
+  });
+  it('a MESMA razão social (sem o "Ltda"): o CNPJ vazio vem marcado; o resto como sempre; "igual" sem caixa', async () => {
+    await abrirComparar({ nome: 'Agro Sintética Insumos Agropecuários', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, municipio: 'Campo Grande', uf: 'MS' });
     expect(linha('Razão social')?.getAttribute('data-estado')).toBe('diferente');
     expect(linha('CNPJ/CPF')?.getAttribute('data-estado')).toBe('vazio');
     expect(linha('Cidade/UF')?.getAttribute('data-estado')).toBe('igual');
@@ -872,7 +879,7 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
     expect(campos.cpf_cnpj).toBe('11.222.333/0004-24');
   });
   it('marcar a razao social: entra no que vai ao banco; desmarcar o CNPJ: sai', async () => {
-    await abrirComparar({ nome: 'Pec.3M-Esc. Garças Agro Sintetica', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' });
+    await abrirComparar({ nome: 'Agro Sintética Insumos Agropecuários', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' });
     fireEvent.click(screen.getByTestId('comparar-marcar-razao'));
     fireEvent.click(screen.getByTestId('comparar-marcar-cnpj'));
     fireEvent.click(screen.getByTestId('comparar-atualizar'));
@@ -884,7 +891,7 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
   });
   it('o cadastro nao parece o certo (nome sem palavra em comum): a frase no topo e "Cadastrar novo" volta ao cadastrar', async () => {
     await abrirComparar({ nome: 'Posto Exemplo Combustiveis', cpf_cnpj: null, municipio: null, uf: null });
-    expect(screen.getByTestId('comparar-aviso').textContent).toContain('não parece o do emitente');
+    expect(screen.getByTestId('comparar-aviso').textContent).toContain('Parece outro fornecedor');
     fireEvent.click(screen.getByTestId('comparar-cadastrar-novo'));
     expect(screen.queryByTestId('comparar-cadastro')).toBeNull();
     expect(await screen.findByTestId('nota-cadastrar-fornecedor')).toBeTruthy();
