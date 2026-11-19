@@ -1019,17 +1019,14 @@ describe('o custeio de produção do Resumido', () => {
     const rot = rotulos();
     const iVbp = rot.findIndex(r => r.startsWith('= VBP'));
     const iCusteio = rot.findIndex(r => r.startsWith('(−) Custeio de produção'));
-    expect(rot[iVbp + 1]).toBe('por hectare');
-    expect(rot[iCusteio + 1]).toBe('por hectare');
-    expect(rot[iCusteio + 2]).toBe('= Lucro operacional');
+    /* DRE-AJUSTES-05 (Gabriel 19/11): o "por hectare" é a 2ª linha pequena DENTRO da célula do valor — nenhuma linha própria */
+    expect(rot).not.toContain('por hectare');
+    expect(rot[iCusteio + 1]).toBe('= Lucro operacional');
     const linhas = linhasDaTabela();
-    expect(linhas[iVbp + 1].semPct[1].textContent).toContain('R$ 4.512,06/ha');
-    expect(linhas[iCusteio + 1].semPct[1].textContent).toContain('R$ 2.026,93/ha');
-    /* Sem fundo próprio (o mock é branco) e na régua do subitem (13px). */
-    expect(linhas[iVbp + 1].className).toContain('bg-card');
+    expect(linhas[iVbp].semPct[1].querySelector('[data-ha-abaixo]')?.textContent).toBe('R$ 4.512,06/ha');
+    expect(linhas[iCusteio].semPct[1].querySelector('[data-ha-abaixo]')?.textContent).toBe('R$ 2.026,93/ha');
     expect(linhas[iCusteio].className).toContain('bg-card');
-    expect(linhas[iVbp + 1].style.height).toBe('13px');
-    expect(linhas[iCusteio + 2].querySelector('[data-pct-abaixo]')?.textContent).toMatch(/^\d+,\d %$/);
+    expect(linhas[iCusteio + 1].querySelector('[data-pct-abaixo]')?.textContent).toMatch(/^\d+,\d %$/);
     /* as filhas do Custeio (Custo variável e Custo fixo) são subitens: sem linha de % */
     abrirCusteio();
     const temPct = (rot: string) => !!linhaDe(rot)?.querySelector('[data-pct-abaixo]');
@@ -1051,8 +1048,9 @@ describe('o custeio de produção do Resumido', () => {
     expect(document.body.textContent).not.toMatch(/[▲▼]/);
     const rot = rotulos();
     const linhas = linhasDaTabela();
-    expect(linhas[rot.findIndex(r => r.startsWith('= VBP')) + 1].semPct[1].className).toContain('text-muted-foreground');
-    expect(linhas[rot.findIndex(r => r.startsWith('(−) Custeio')) + 1].semPct[1].className).toContain('text-red-600');
+    /* DRE-AJUSTES-05: o "por hectare" dentro da célula tem o tom do % do VBP (cinza claro), em qualquer linha */
+    expect(linhas[rot.findIndex(r => r.startsWith('= VBP'))].semPct[1].querySelector('[data-ha-abaixo]')?.className).toContain('text-muted-foreground');
+    expect(linhas[rot.findIndex(r => r.startsWith('(−) Custeio'))].semPct[1].querySelector('[data-ha-abaixo]')?.className).toContain('text-muted-foreground');
     cleanup();
     /* Prejuízo: o Lucro líquido negativo vira vermelho. E o Detalhado tem as mesmas cores. */
     montarRRCC({ unidades: ['rs'], dre: { ...RRCC21, total: { ...RRCC21.total, resultado_periodo: -5000 } } });
@@ -1283,22 +1281,20 @@ describe('a cor e a faixa de um total', () => {
     expect(linhaDe('= Receita líquida')!.semPct[1].className).toContain('text-red');
   });
 
-  /* ⚠ O "por hectare" É SUBITEM do total de cima (D6): a régua da filha (13px), sem fundo e sem ▲/▼; o negativo segue vermelho. */
-  it('"por hectare" é subitem do total a que pertence', () => {
+  /* DRE-AJUSTES-05 (Gabriel 19/11): o "por hectare" mora DENTRO do total — 2ª linha pequena da célula, como o % do VBP — nas quatro linhas que
+     fecham conta; nunca uma linha própria abaixo do traço (parecia de outro bloco). Sem área, traço. */
+  it('"por hectare" dentro do total: Lucro operacional, Lucro líquido, Resultado econômico e Investimento', () => {
     const real: DrePecuaria = { ...DRE, fazendas: [],
       total: linhas({ resultado_com_mercado: -1959802.35,
         producao: { ...linhas({}).producao, ha_medio: 4803 } }) };
     render(<PecDrePanel colunas={colunas('comparacao', { real })}
       alturaCartao={null} cartaoRef={{ current: null }} unidades={['rs']} />);
-    const apoios = linhasDaTabela().filter(tr => (tr.semPct[0]?.textContent ?? '').trim().startsWith('por hectare'));
-    expect(apoios).toHaveLength(2);
-    for (const ap of apoios) {
-      expect(ap.className).toContain('bg-card');
-      expect(ap.style.height).toBe('13px');
-      expect(ap.textContent).not.toMatch(/[▲▼]/);
-    }
-    /* O segundo é o do Resultado econômico, que no fixture é negativo. */
-    expect(apoios[1].semPct[1].className).toContain('text-red-600');
+    expect(linhasDaTabela().filter(tr => (tr.semPct[0]?.textContent ?? '').trim().startsWith('por hectare'))).toHaveLength(0);
+    const comHa = linhasDaTabela().filter(tr => tr.querySelector('[data-ha-abaixo]'))
+      .map(tr => (tr.semPct[0]?.textContent ?? '').replace(/\s+/g, ' ').trim());
+    expect(comHa.map(r => r.replace(/^(= |\(−\) )/, '').split(' ')[0])).toEqual(['Lucro', 'Lucro', 'Resultado', 'Investimento']);
+    const eco = linhasDaTabela().find(tr => (tr.semPct[0]?.textContent ?? '').includes('Resultado econômico'));
+    expect(eco?.semPct[1].querySelector('[data-ha-abaixo]')?.textContent).toBe('R$ -408,04/ha');
   });
 });
 

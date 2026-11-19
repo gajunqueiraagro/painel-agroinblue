@@ -605,8 +605,9 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
   const [rateioDentro, setRateioDentro] = useState(false);
   /* ⚠ AS UNIDADES SÃO ESCOLHA MÚLTIPLA — DRE-UNIDADES-01, e cada aba tem a sua lista: a lavoura
      fecha em saca ou tonelada, a pecuária em cabeça e arroba. As duas abrem com R$ e R$/ha. */
-  const [unidadesLav, setUnidadesLav] = useState<readonly UnidadeLav[]>(['rs', 'ha']);
-  const [unidadesPec, setUnidadesPec] = useState<readonly UnidadePec[]>(['rs', 'ha']);
+  /* DRE-AJUSTES-05 (Gabriel 19/11): o DRE SEMPRE abre em R$ — o R$/ha só com o chip (nunca lembrado de antes) */
+  const [unidadesLav, setUnidadesLav] = useState<readonly UnidadeLav[]>(['rs']);
+  const [unidadesPec, setUnidadesPec] = useState<readonly UnidadePec[]>(['rs']);
   const [ampliado, setAmpliado] = useState(false);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   /**
@@ -1426,8 +1427,13 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
                ⚠ E SEM `maxHeight` AQUI (PR-11): o teto vem do `minHeight` da linha do grid, que
                já é `max(cartões, viewport − topo − 8)`. Um teto próprio de `alturaCartao`
                cortaria o cartão quando a coluna dos cartões fosse a mais alta — a tabela pararia
-               no meio e os cartões seguiriam abaixo, que é o degrau que o §3b do PR-09 tirou. */
-            : mostraCartoes && duasColunas ? { height: '100%' }
+               no meio e os cartões seguiriam abaixo, que é o degrau que o §3b do PR-09 tirou.
+               ⚠ `height: 0` + `minHeight: 100%`, NÃO `height: 100%` (DRE-AJUSTES-05 D1, Gabriel 19/11): com
+               `100%` a grade CONTRIBUÍA a altura da tabela inteira para a linha do grid, a linha crescia
+               até o fim do DRE e quem rolava era a página — o cabeçalho soltava (1126×579, só R$). Com
+               `0` ela não empurra a linha (que fica `max(cartões, viewport − topo − 8)`) e o `100%` do
+               mínimo, resolvido depois contra a linha já medida, a faz chegar ao pé e rolar por dentro. */
+            : mostraCartoes && duasColunas ? { height: 0, minHeight: '100%' }
               : { maxHeight: alturaCartao })
           : undefined}>
         {erro ? (
