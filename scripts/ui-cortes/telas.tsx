@@ -4,6 +4,9 @@
  * Cada tela registra o banco simulado em `globalThis.__bancoBancada` (mocks/supabase.ts) antes de montar.
  */
 import React from 'react';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { FiltroMultiplo } from '@/v2/components/FiltroMultiplo';
+import type { Periodo } from '@/v2/lib/periodo';
 import { opcoesDoAtalho } from '@/v2/lib/atalhosProducao';
 
 import { ChuvasTab } from '@/pages/ChuvasTab';
@@ -867,6 +870,25 @@ if (tela === 'mesclar') {
      (`&token_hash=…&type=invite|recovery|email_change`, só verificada no clique). Tela inteira, sem a casca do V2. */
   g.__bancoBancada = { from: () => [], rpc: () => null };
   raiz.render(<MemoryRouter>{tela === 'entrada' ? <AuthPage /> : <DefinirSenhaPage />}</MemoryRouter>);
+} else if (tela === 'filtros-padrao') {
+  /* PROD-LANC-FILTROS-01 — Produção › Lançamentos: a fita (o "Personalizado…" = o SeletorDePeriodo do DRE) e o filtro de Categorias no padrão
+     único de seleção múltipla, com as 9 categorias do cadastro; `&n=grande` = contagens de 4 dígitos (o pior caso de largura). SINTÉTICO. */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  const grande = q.get('n') === 'grande';
+  const CATS = ['Mamotes M', 'Desmama M', 'Garrotes', 'Bois', 'Touros', 'Mamotes F', 'Desmama F', 'Novilhas', 'Vacas']
+    .map((l, i) => ({ value: `c${i}`, label: l, contagem: grande ? 1000 + i * 1111 : i * 3 }));
+  function FiltrosPadrao() {
+    const [periodo, setPeriodo] = React.useState<Periodo>({ de: { ano: 2026, mes: 10 }, ate: { ano: 2026, mes: 10 } });
+    const [sel, setSel] = React.useState<string[]>(['c3', 'c8']);
+    return (
+      <div className="flex flex-wrap items-center gap-1 bg-navy p-2" data-testid="filtros-padrao">
+        <SeletorPeriodo className="flex-1" anos={['2025', '2026']} periodo={periodo} onPeriodoChange={setPeriodo} />
+        <FiltroMultiplo opcoes={CATS} selecionadas={sel} onChange={setSel} rotulo={{ todos: 'Categorias', um: 'categoria', varios: 'categorias' }}
+          className="h-6 w-[136px] justify-between gap-1 whitespace-nowrap px-1.5 text-[10px] font-bold bg-card text-foreground border-border" />
+      </div>
+    );
+  }
+  montar(<div className="p-3"><FiltrosPadrao /></div>);
 } else if (tela === 'trocar-senha') {
   /* ACESSO-CONVITE-01 PR 1 — o "Trocar senha" (o mesmo gatilho da barra do topo; o cenário abre o modal) */
   g.__bancoBancada = { from: () => [], rpc: () => null };

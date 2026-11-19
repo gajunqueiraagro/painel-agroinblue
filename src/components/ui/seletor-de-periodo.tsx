@@ -10,7 +10,7 @@
  *   · "Aplicar" grava; "Cancelar" (ou Esc, ou clicar fora) deixa como estava.
  * A safra vem do cadastro (`useSafrasDoCliente`), pela atividade da tela; as regras moram em `lib/periodo/intervaloDeDatas.ts`.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -66,11 +66,17 @@ export interface SeletorDePeriodoProps {
   compacto?: boolean;
   className?: string;
   testid?: string;
+  /** PROD-LANC-FILTROS-01 — o GATILHO de quem usa o seletor por dentro (o "Personalizado…" da fita de meses): o painel é o MESMO
+      (2 calendários + atalhos + Cancelar/Aplicar), só o botão que o abre é o de quem chama. Sem ele, o campo de sempre. */
+  gatilho?: ReactElement;
+  /** PROD-LANC-FILTROS-01 — nasce ABERTO (a fita monta o seletor só no clique do "Personalizado…") e avisa quando fecha */
+  abertoInicial?: boolean;
+  onFechar?: () => void;
 }
 
 export function SeletorDePeriodo({
   valor, onChange, modo = 'datas', atividades = [], anoMaisAntigo = null, padrao, hoje: hojeFixo, rotuloVazio, className, testid = 'seletor-de-periodo',
-  porMes = false, atalhosOcultos, ajustarAtalho, compacto = false,
+  porMes = false, atalhosOcultos, ajustarAtalho, compacto = false, gatilho, abertoInicial = false, onFechar,
 }: SeletorDePeriodoProps) {
   const chip = compacto ? CHIP_C : CHIP;
   const hoje = hojeFixo ?? hojeLocal();
@@ -97,7 +103,7 @@ export function SeletorDePeriodo({
   };
   const abrir = (sim: boolean) => {
     setAberto(sim);
-    if (!sim) return;
+    if (!sim) { onFechar?.(); return; }
     mostrar(valor ? { ...valor, nome: nomePeloAtalho(valor, atalhos) } : { de: null, ate: null });
     setVista(modo === 'ano' ? 'anos' : modo === 'mes' ? 'meses' : 'datas');
   };
@@ -106,7 +112,10 @@ export function SeletorDePeriodo({
     if (!rascunho.de || !rascunho.ate) return;
     onChange({ de: rascunho.de, ate: rascunho.ate, nome: rascunho.nome });
     setAberto(false);
+    onFechar?.();
   };
+  /* nasce aberto: o mesmo preparo do clique (o rascunho com o período de agora e os calendários nos meses dele) */
+  useEffect(() => { if (abertoInicial) abrir(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const largura = compacto ? 'w-[360px]' : modo === 'datas' ? 'w-[481px]' : 'w-[300px]';
   const gradeDeAnos = (
           <div className="px-2.5 pb-2 pt-2">
@@ -131,11 +140,11 @@ export function SeletorDePeriodo({
   return (
     <Popover open={aberto} onOpenChange={abrir}>
       <PopoverTrigger asChild>
-        <button type="button" data-testid={testid}
+        {gatilho ?? <button type="button" data-testid={testid}
           className={cn('inline-flex h-[24px] flex-none items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-card px-2 text-[11px] font-semibold hover:border-primary/60', className)}>
           <CalendarDays className="h-3 w-3 text-muted-foreground" />
           {valor ? rotuloDoIntervalo({ ...valor, nome: nomePeloAtalho(valor, atalhos) }) : (rotuloVazio ?? 'Escolher período')}
-        </button>
+        </button>}
       </PopoverTrigger>
       {/* o foco fica no gatilho ao abrir: o contorno de foco no 1º atalho parecia uma escolha. `data-painel-por-cima`: o popup cobre a tela
           DE PROPÓSITO (a exceção declarada do check:ui-cortes) — o que está embaixo dele não está "sob um botão" */}
@@ -204,7 +213,7 @@ export function SeletorDePeriodo({
                 {modo === 'datas' && <> · {dataCurta(rascunho.de)} a {dataCurta(rascunho.ate)}</>}</>
               : rascunho.de ? <>Início <b className="text-foreground">{dataCurta(rascunho.de)}</b> · escolha o fim</> : 'Escolha o início e o fim'}
           </span>
-          <button type="button" onClick={() => setAberto(false)} className="h-[22px] rounded-md border border-border bg-card px-2.5 text-[11px] font-semibold hover:bg-muted">Cancelar</button>
+          <button type="button" onClick={() => abrir(false)} className="h-[22px] rounded-md border border-border bg-card px-2.5 text-[11px] font-semibold hover:bg-muted">Cancelar</button>
           <button type="button" disabled={!pronto} onClick={aplicar} data-testid={`${testid}-aplicar`}
             className="h-[22px] rounded-md bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground disabled:opacity-50">Aplicar</button>
         </div>
