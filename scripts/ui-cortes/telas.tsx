@@ -2686,11 +2686,13 @@ if (tela === 'mesclar') {
   void montarDocs();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
-     `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */
+     `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente: FORN-ACHAR-CNPJ-01 — "parece outro fornecedor", sem CNPJ/IE/razão) ·
+          `mesmo` o cadastro sem CNPJ com a MESMA razão social (sem o "Ltda": o CNPJ vazio vem marcado) · `errado` o cadastro com OUTRO CNPJ */
   const montarComparar = async () => {
     const { CompararCadastroDialog } = await import('@/components/financeiro-v2/CompararCadastroDialog');
     const hoje = v === 'errado'
       ? { nome: 'Posto Exemplo Combustiveis e Lubrificantes da Regiao Centro Oeste Sintetico Ltda', cpf_cnpj: '11.444.777/0001-61', municipio: 'Campo Grande', uf: 'MS' }
+      : v === 'mesmo' ? { nome: 'Cooperativa Agroindustrial Sintética dos Produtores Rurais de Exemplo e Região', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' }
       : { nome: 'Pec.3M-Esc. Garças Cooperativa Agroindustrial Sintetica dos Produtores de Exemplo', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' };
     const proposta = { nome: 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DE EXEMPLO E REGIAO LTDA', nome_fantasia: 'COOP EXEMPLO',
       cpf_cnpj: '11.222.333/0004-24', inscricao_estadual: '283456789', logradouro: 'Rodovia Sintetica BR-000 Km 12, Galpao 3', numero: 'S/N', bairro: 'Distrito Industrial',

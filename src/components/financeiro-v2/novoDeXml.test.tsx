@@ -84,6 +84,8 @@ const CONTAS: ContaBancariaV2[] = [{ id: 'bb', nome_conta: 'Banco do Brasil', ba
 const forn = (id: string, nome: string, cpf_cnpj: string | null, ativo = true) => ({ id, nome, cpf_cnpj, fazenda_id: null, ativo, tipo_recebimento: null }) as FornecedorV2;
 const AGRO = forn('agro', 'Agropecuaria Exemplo', '11.222.333/0001-81');
 const AGRO_SEM_DOC = forn('agro', 'Agropecuaria Exemplo', null);
+/* FORN-ACHAR-CNPJ-01 — o cadastro antigo com OUTRO nome escrito (a razão igual já se acha na lista; este só o resolvedor do banco acha) */
+const AGRO_NOME_ANTIGO = forn('agro', 'Agrop. Exemplo (antigo)', null);
 const CLASSIF: ClassificacaoItem[] = [
   { id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
 ];
@@ -221,7 +223,7 @@ describe('tela A — a lista de notas', () => {
   it('P146 — "nota já lançada" e "fornecedor pelo nome" falharam: os dois motivos na mesma frase, e a linha não abre', async () => {
     consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: false, motivo: 'sem rede' }));
     consultas.notaJaLancada.mockImplementation(async () => ({ ok: false, motivo: 'tempo esgotado' }));
-    montarLista([AGRO_SEM_DOC]);   // o cadastro sem documento: a nota pergunta pelo NOME
+    montarLista([AGRO_NOME_ANTIGO]);   // o cadastro sem documento e com outro nome: a nota pergunta pelo NOME ao banco
     soltar([arquivo('a.xml', montarNFe())]);
     await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
     expect(screen.getByTestId('xml-situacao').getAttribute('title'))
@@ -238,7 +240,7 @@ describe('tela A — a lista de notas', () => {
   });
   it('fornecedor achado pelo nome: o pacote leva "pelo nome" e o cadastro sem documento', async () => {
     consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: true, valor: 'agro' }));
-    const { onAbrir } = montarLista([AGRO_SEM_DOC]);
+    const { onAbrir } = montarLista([AGRO_NOME_ANTIGO]);
     soltar([arquivo('a.xml', montarNFe())]);
     await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
     expect(consultas.fornecedorPeloNome).toHaveBeenCalledWith('cli', 'AGROPECUARIA EXEMPLO LTDA');
