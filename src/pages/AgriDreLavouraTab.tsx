@@ -1000,7 +1000,13 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
     };
     medir();
     window.addEventListener('resize', medir);
-    return () => window.removeEventListener('resize', medir);
+    /* ⚠ E QUANDO O QUE FICA ACIMA MUDA DE TAMANHO (DRE-AJUSTES-05 D1, Gabriel 19/11): medido na bancada a 1126×579, a grade
+       descia 72px DEPOIS da medida (o topo da tela termina de montar) e o teto antigo (429px, devia ser 357) a deixava passar do
+       pé da janela — a tabela cabia no teto, o cartão não rolava e quem rolava era a página: o cabeçalho soltava. Com R$ e R$/ha
+       a tabela era mais alta que o teto e o defeito ficava escondido. Medir de novo é idempotente (mesmo topo = mesmo estado). */
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(medir);
+    if (ro && raiz.current) ro.observe(raiz.current);
+    return () => { window.removeEventListener('resize', medir); ro?.disconnect(); };
   }, [ampliado, culturaAberta, aba, unidadesLav, unidadesPec, rateioDentro, dre]);
 
 
@@ -1427,13 +1433,8 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
                ⚠ E SEM `maxHeight` AQUI (PR-11): o teto vem do `minHeight` da linha do grid, que
                já é `max(cartões, viewport − topo − 8)`. Um teto próprio de `alturaCartao`
                cortaria o cartão quando a coluna dos cartões fosse a mais alta — a tabela pararia
-               no meio e os cartões seguiriam abaixo, que é o degrau que o §3b do PR-09 tirou.
-               ⚠ `height: 0` + `minHeight: 100%`, NÃO `height: 100%` (DRE-AJUSTES-05 D1, Gabriel 19/11): com
-               `100%` a grade CONTRIBUÍA a altura da tabela inteira para a linha do grid, a linha crescia
-               até o fim do DRE e quem rolava era a página — o cabeçalho soltava (1126×579, só R$). Com
-               `0` ela não empurra a linha (que fica `max(cartões, viewport − topo − 8)`) e o `100%` do
-               mínimo, resolvido depois contra a linha já medida, a faz chegar ao pé e rolar por dentro. */
-            : mostraCartoes && duasColunas ? { height: 0, minHeight: '100%' }
+               no meio e os cartões seguiriam abaixo, que é o degrau que o §3b do PR-09 tirou. */
+            : mostraCartoes && duasColunas ? { height: '100%' }
               : { maxHeight: alturaCartao })
           : undefined}>
         {erro ? (
