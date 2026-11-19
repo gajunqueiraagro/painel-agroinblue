@@ -691,11 +691,17 @@ export interface CategoriaPatrimonio {
   /**
    * A EVOLUÇÃO DE CATEGORIA (ágio) — DRE-VARIACAO-EXPLICA-01 fatia 1a (migration 20261028115300).
    *
-   * ⚠ ESTÁ DENTRO DO `vpb`: cada reclassificação do período × kg × (R$/kg do destino − R$/kg da origem), a preço de
-   * referência (dez/AA), lançada na categoria de DESTINO. A Produção "de verdade" é `vpb − agio` (conta da tela).
+   * ⚠ DESDE A 20261028115600 (REBANHO-AGIO-PROVISORIO-01) ELE NÃO ESTÁ MAIS DENTRO DO `vpb`: mudar de categoria não muda
+   * valor — a troca vai para o `efeito` (Mercado), mês a mês, e o `agio` = `troca_categoria`. Nunca subtrair do `vpb`.
    * ⚠ `null` = a RPC não mandou a chave (anterior à migration): a tela mostra "—", nunca zero.
    */
   agio: number | null;
+  /**
+   * A TROCA DE CATEGORIA — REBANHO-AGIO-PROVISORIO-01 (migration 20261028115600): Σ dos meses de kg reclassificado ×
+   * (preço do início do destino − da origem), na categoria de DESTINO. ⚠ ESTÁ DENTRO DO `efeito` (Mercado), não do `vpb`.
+   * Zero sem a chave (RPC anterior): sem troca a separar.
+   */
+  troca_categoria: number;
   /** Alguma reclassificação que entrou aqui não tem preço de referência: o ágio dela não foi somado. */
   agio_sem_preco: boolean;
   cab_reclass_entrada: number | null; cab_reclass_saida: number | null;
@@ -783,6 +789,8 @@ export interface PatrimonioPec {
     /** O ágio do período inteiro (`null` sem a chave). */
     agio: number | null;
     agio_sem_preco: boolean;
+    /** A troca de categoria do período (dentro do `efeito`); zero sem a chave. */
+    troca_categoria: number;
     /**
      * DRE-PRECO-REF-01: as categorias cujo preço do INÍCIO não existia (sem fechamento nem tabela no mês de P0) e foram
      * valoradas ao preço do FIM — vira aviso no modal. Vazia sem a chave (RPC anterior à migration 20261028115310).
@@ -855,7 +863,7 @@ async function buscarPatrimonio(
         q1: num(c.q1), pm1: numOuNulo(c.pm1), pk1: numOuNulo(c.pk1),
         v1_p0: num(c.v1_p0), v1_p1: num(c.v1_p1),
         vpb: num(c.vpb), efeito: num(c.efeito),
-        agio: numOuNulo(c.agio), agio_sem_preco: c.agio_sem_preco === true,
+        agio: numOuNulo(c.agio), agio_sem_preco: c.agio_sem_preco === true, troca_categoria: num(c.troca_categoria),
         cab_reclass_entrada: numOuNulo(c.cab_reclass_entrada), cab_reclass_saida: numOuNulo(c.cab_reclass_saida),
         at_reclass_entrada: numOuNulo(c.at_reclass_entrada), at_reclass_saida: numOuNulo(c.at_reclass_saida),
       };
@@ -863,7 +871,7 @@ async function buscarPatrimonio(
     total: {
       q0: num(t.q0), v0: num(t.v0), q1: num(t.q1),
       v1_p0: num(t.v1_p0), v1_p1: num(t.v1_p1), vpb: num(t.vpb), efeito: num(t.efeito),
-      agio: numOuNulo(t.agio), agio_sem_preco: t.agio_sem_preco === true,
+      agio: numOuNulo(t.agio), agio_sem_preco: t.agio_sem_preco === true, troca_categoria: num(t.troca_categoria),
       preco_ref_do_fim: (Array.isArray(t.preco_ref_do_fim) ? t.preco_ref_do_fim : []).map((x: unknown) => String(x)),
     },
     meses: (Array.isArray(o.meses) ? o.meses : []).map((x: unknown): MesDoPatrimonio => {

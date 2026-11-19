@@ -355,6 +355,11 @@ describe('a cascata do DRE da pecuária', () => {
     const subs = [...(linhaDe(rot)?.querySelectorAll('[data-pct-abaixo]') ?? [])].map(d => d.textContent ?? '');
     return subs.length ? subs : null;
   };
+  it('REBANHO-AGIO-PROVISORIO-01 (D1 a): o title do Efeito de mercado diz que ele inclui a troca de categoria', () => {
+    montar();
+    expect(linhaDe('Efeito de mercado')?.semPct[0]?.getAttribute('title')).toContain('inclui a troca de categoria');
+  });
+
   it('o % do VBP fica abaixo do número, na mesma célula, só nas 4 linhas de resultado', () => {
     montar();
     expect(rotulos().some(r => r.includes('% do VBP'))).toBe(false);
