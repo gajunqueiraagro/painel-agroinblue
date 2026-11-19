@@ -58,7 +58,7 @@ import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
 import { completarODocumentoDaNota } from '@/lib/financeiro/completarDocumentoDaNota';
 import { canceladosDaNota, casarJaLancados, comEscolhidos, contaUnicaDasIrmas, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, nDasParcelas, parcelasParaCasar,
   parcelasQueFaltamNoCartao, posicoesNoCartao, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
-  type LinhaSistemaNota, type SituacaoNaTabela, ficaDeForaPorPadrao, rotuloDoAplicar } from '@/lib/financeiro/nfe/jaLancada';
+  type LinhaSistemaNota, type SituacaoNaTabela, ficaDeForaPorPadrao, rotuloDoAplicar, soPelaJanela } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Lock } from 'lucide-react';
@@ -608,6 +608,13 @@ export function NotaFiscalDialog({
     if (!l) return { texto: 'fica de fora (não é desta nota)', curto: 'fica de fora', cadeado: false };
     const acao = acaoDoLancamento(l.id);
     /* NOTA-BOLETO-COMPOSTO-01 (PR 1) — o efeito diz a ACAO escolhida (a tabela e o botão leem a mesma regra) */
+    /* NOTA-JA-LANCADA-FILIAL-01 — o "talvez" da janela larga (mesmo valor, o emitente pela raiz do CNPJ, até 90 dias): diz quantos dias e o caminho */
+    if (acao === 'deixar' && soPelaJanela(l)) {
+      const dDoLanc = l.pagamento ?? l.vencimento ?? l.competencia;
+      const dias = dDoLanc && n.emissao ? Math.round((Date.parse(`${dDoLanc.slice(0, 10)}T00:00:00Z`) - Date.parse(`${n.emissao.slice(0, 10)}T00:00:00Z`)) / 86_400_000) : null;
+      return { texto: `talvez já lançado: o mesmo valor do fornecedor${dias !== null ? `, ${Math.abs(dias)} dias ${dias >= 0 ? 'depois' : 'antes'} da emissão` : ''} — "É esta: vincular" se for a mesma compra (nada muda no valor nem no pagamento)`,
+        curto: 'talvez esta?', cadeado: false };
+    }
     if (acao === 'deixar') return x.situacao === 'so_no_sistema'
       ? { texto: 'fica de fora (não recebe a nota)', curto: 'fica de fora', cadeado: false }
       : { texto: 'fica como está (não recebe a nota)', curto: 'fica como está', cadeado: false };

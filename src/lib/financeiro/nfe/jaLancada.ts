@@ -42,8 +42,11 @@ export interface LancamentoJaLancado {
 }
 
 /** NOTA-PAGTO-PARCELADO-01 P1 — 'escolhido': o operador marcou o lançamento à mão ("Outros lançamentos do fornecedor"): é da nota */
-export type PorDoAchado = 'valor' | 'numero' | 'chave' | 'fracao' | 'documento' | 'soma' | 'parcelamento' | 'lancamento' | 'escolhido';
-const PORES: readonly PorDoAchado[] = ['valor', 'numero', 'chave', 'fracao', 'documento', 'soma', 'parcelamento', 'lancamento', 'escolhido'];
+/** NOTA-JA-LANCADA-FILIAL-01 — 'janela': o VALOR EXATO do emitente (pela raiz do CNPJ) numa janela larga (−15 a +90 dias): "talvez já lançado" */
+export type PorDoAchado = 'valor' | 'numero' | 'chave' | 'fracao' | 'documento' | 'soma' | 'parcelamento' | 'lancamento' | 'escolhido' | 'janela';
+const PORES: readonly PorDoAchado[] = ['valor', 'numero', 'chave', 'fracao', 'documento', 'soma', 'parcelamento', 'lancamento', 'escolhido', 'janela'];
+/** NOTA-JA-LANCADA-FILIAL-01 — achado SÓ pela janela larga (nada de número, chave, documento ou valor na data): é um "talvez", nunca se liga sozinho */
+export const soPelaJanela = (l: Pick<LancamentoJaLancado, 'por'>): boolean => l.por.includes('janela') && l.por.every((p) => p === 'janela' || p === 'parcelamento');
 
 /**
  * NOTA-PAGTO-PARCELADO-01 P1 (Gabriel 11/11, o trator: 110.000 + 4 × 25.000 em PIX soltos) — os lançamentos ESCOLHIDOS À MÃO entram nos
@@ -339,7 +342,11 @@ export type SituacaoNaTabela = 'conciliada' | 'realizada' | 'programada' | 'so_n
  *  "fica de fora", como a tabela escreve; recebe a nota só se o operador escolher "Vincular" (o caso real: os pagamentos do boleto que
  *  paga DUAS notas tinham o nº da NF-e e entravam no "vincular 7"). E' a mesma regra da `linhasSistemaNota`: fora da busca em parcelas. */
 export function ficaDeForaPorPadrao(j: NotaJaLancada | null | undefined, lancamentoId: string): boolean {
-  if (!j || j.emParcelas) return false;
+  if (!j) return false;
+  /* NOTA-JA-LANCADA-FILIAL-01 — o "talvez" da janela larga vem em "Fica de fora": o operador diz "É esta" (o pagamento 26 dias depois da emissão) */
+  const achado = [...j.alvos, ...j.pelaNota, ...j.porParcela.flatMap((x) => (x.lancamento ? [x.lancamento] : []))].find((l) => l.id === lancamentoId);
+  if (achado && soPelaJanela(achado) && !achado.por.includes('escolhido')) return true;
+  if (j.emParcelas) return false;
   if (j.aVista?.id === lancamentoId || j.porParcela.some((x) => x.lancamento?.id === lancamentoId)) return false;
   /* NOTA-PAGTO-PARCELADO-01 P1 — o lançamento ESCOLHIDO pelo operador é da nota: vem em "Vincular" */
   if (j.pelaNota.some((l) => l.id === lancamentoId && l.por.includes('escolhido'))) return false;
