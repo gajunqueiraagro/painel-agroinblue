@@ -7,7 +7,8 @@
  * "Vincular a este" leva o XML à porta 2 do "+ Da nota" a partir do lançamento escolhido (o Anexar de hoje: valor, datas, conta, status
  * e conciliação NÃO mudam); nunca casa sozinho.
  */
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,9 +18,26 @@ import { cn } from '@/lib/utils';
 import { lerXmlDaReceita, type DadosDaReceita } from '@/hooks/useNotasDaReceita';
 import { abrirAbaDoDanfe, mostrarDanfe } from '@/lib/fiscal/abrirDanfe';
 import {
-  ABAS_DA_RECEITA, arquivoDoXml, candidatoPreMarcado, filtrarBusca, nomeDoXml, SITUACAO_NA_TELA, totalDaLista, type AbaDaReceita,
+  ABAS_DA_RECEITA, arquivoDoXml, candidatoPreMarcado, filtrarBusca, nomeDoXml, seloDaNota, totalDaLista, type AbaDaReceita,
   type ClasseDoCandidato, type NotaNaLista,
 } from '@/lib/fiscal/notasDaReceita';
+import { ehBemDeTerceiro } from '@/lib/fiscal/classeDaNota';
+import { Ajuda } from '@/components/ui/ajuda';
+import type { PreviaDoBem } from '@/hooks/useNotasDaReceita';
+
+/* NOTAS-RECEITA-SEM-LANCAMENTO-01 — o que FAZER com cada classe (o "como fazer" do ⓘ) e a ação ligada da linha */
+type RespostaDoBem = PreviaDoBem | { ok: false; frase: string };
+function oQueFazer(n: NotaNaLista): string {
+  if (n.sit === 'venda_titular') return 'Confira no abate/venda (OC) do comprador. Não lance como compra.';
+  if (n.sit === 'cancelada') return n.substituta ? `Use a NF ${n.substituta}, que a substituiu.` : 'Nada a lançar.';
+  if (n.classe.classe !== 'nao_financeira') return '';
+  if (ehBemDeTerceiro(n.classe)) return 'Clique em "Registrar bem": ele fica em Patrimônio › Bens de terceiros até voltar.';
+  if (n.classe.motivo === 'entrega_futura') return n.citadas.length ? `Lance a NF de faturamento ${n.citadas.join(', ')} (se ainda não estiver); esta só confirma a entrega.` : 'Lance a NF de faturamento (5922) do mesmo pedido; esta só confirma a entrega.';
+  if (n.classe.motivo === 'devolucao') return 'Abata do fornecedor: ligue à nota original e ao lançamento dela (o gesto de baixa).';
+  return 'Nada a lançar: fica aqui para consulta.';
+}
+const ehAcaoFaturamento = (n: NotaNaLista) => n.sit === 'nao_financeira' && n.classe.classe === 'nao_financeira' && n.classe.motivo === 'entrega_futura';
+const ehAcaoBem = (n: NotaNaLista) => n.sit === 'nao_financeira' && ehBemDeTerceiro(n.classe);
 
 const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-left');
 const TH_NUM = cn(TH, 'text-right');
@@ -38,7 +56,7 @@ export function baixarArquivo(arquivo: File) {
 }
 
 export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita,
-  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe }: {
+  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem }: {
   clienteNome?: string | null;
   dados: DadosDaReceita | undefined;
   carregando: boolean;
@@ -53,6 +71,8 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   /** NOTA-DANFE-01 — o "PDF" abre o DANFE do XML numa aba (a aba nasce no clique); os testes injetam */
   abrirDanfe?: () => Window | null;
   mostrarNaAba?: (aba: Window | null, arquivo: File) => Promise<void>;
+  /** NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" (simular = a prévia); sem ele, o botão não aparece */
+  registrarBem?: (chave: string, previsao: string | null, observacao: string | null, simular: boolean) => Promise<RespostaDoBem>;
 }) {
   const [aba, setAba] = useState<AbaDaReceita>('todas');
   const [busca, setBusca] = useState('');
@@ -61,6 +81,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupada, setOcupada] = useState<string | null>(null);
   const [casar, setCasar] = useState<NotaNaLista | null>(null);
+  const [bem, setBem] = useState<NotaNaLista | null>(null);
 
   const todas = useMemo(() => filtrarBusca(dados?.lista ?? [], busca, titular), [dados, busca, titular]);
   const filtro = ABAS_DA_RECEITA.find((a) => a.valor === aba)?.filtro ?? (() => true);
@@ -101,10 +122,11 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
               className="h-[24px] w-[160px] bg-card px-1.5 text-[10px]" data-testid="receita-busca" />
           </div>
           <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card" data-testid="quadro-da-receita" data-desloca-livre>
-            <table className="w-full min-w-[874px] table-fixed border-collapse">
+            {/* NOTAS-RECEITA-SEM-LANCAMENTO-01: a 1ª ação passa a ter 92px numa linha ("Ver faturamento", "Registrar bem" inteiros) e a Situação 118 (selo + ⓘ) */}
+            <table className="w-full min-w-[920px] table-fixed border-collapse">
               <colgroup>
                 <col style={{ width: 70 }} /><col /><col style={{ width: 116 }} /><col style={{ width: 72 }} /><col style={{ width: 80 }} />
-                <col style={{ width: 92 }} /><col style={{ width: 118 }} /><col style={{ width: 112 }} /><col style={{ width: 128 }} />
+                <col style={{ width: 92 }} /><col style={{ width: 118 }} /><col style={{ width: 118 }} /><col style={{ width: 168 }} />
               </colgroup>
               <thead><tr className="h-[22px]">
                 <th className={TH}>Emissão</th><th className={TH}>Emitente</th><th className={TH}>CNPJ/CPF</th><th className={TH_NUM}>Nº</th>
@@ -112,7 +134,8 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
               </tr></thead>
               <tbody>
                 {linhas.map((n) => {
-                  const s = SITUACAO_NA_TELA[n.sit];
+                  const s = seloDaNota(n);
+                  const fazer = oQueFazer(n);
                   const apagada = n.sit === 'cancelada' || n.sit === 'ignorada';
                   const temXml = n.tipo === 'completa';
                   const podeLancar = temXml && (n.sit === 'nova' || n.sit === 'pode_estar');
@@ -128,13 +151,28 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                         {n.tipo === 'completa' ? 'Completa' : 'Resumo'}{n.eventos.length ? <span className="text-muted-foreground"> +{n.eventos.length} ev.</span> : null}
                       </td>
                       <td className={TD_REGUA_TEXTO} title={n.titularNome}>{n.titularNome}</td>
-                      <td className={TD_REGUA} title={s.dica}><span className={cn('whitespace-nowrap rounded-full px-1.5 py-[1px] text-[9px] font-semibold', s.cor)}>{s.rotulo}</span></td>
+                      <td className={TD_REGUA} title={s.dica} onClick={fazer ? (e) => e.stopPropagation() : undefined}>
+                        <span className="inline-flex items-center gap-1">
+                          <span className={cn('whitespace-nowrap rounded-full px-1.5 py-[1px] text-[9px] font-semibold', s.cor)} data-testid="receita-selo">{s.rotulo}</span>
+                          {fazer && <Ajuda titulo={s.rotulo} oQueE={s.dica} porQue="Lido da própria nota (o CFOP e a natureza da operação), automático pelo XML." comoFazer={fazer} />}
+                        </span>
+                      </td>
                       <td className={TD_REGUA} onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
-                          <button type="button" className={cn(BOTAO, 'w-[52px]', podeLancar ? 'bg-[#E7C873] font-semibold text-foreground hover:bg-[#D9B95F]' : 'invisible')}
+                          {ehAcaoBem(n) && registrarBem ? (
+                            <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
+                              data-testid="receita-registrar-bem" title="Registrar como bem de terceiro (Patrimônio › Bens de terceiros)"
+                              onClick={() => setBem(n)}>Registrar bem</button>
+                          ) : ehAcaoFaturamento(n) ? (
+                            <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
+                              data-testid="receita-ver-faturamento" title={n.citadas.length ? `A NF de faturamento citada: ${n.citadas.join(', ')}` : 'A nota não cita o faturamento'}
+                              onClick={() => setAberta(n)}>Ver faturamento</button>
+                          ) : (
+                          <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap', podeLancar ? 'bg-[#E7C873] font-semibold text-foreground hover:bg-[#D9B95F]' : 'invisible')}
                             disabled={!podeLancar || ocupada === n.id} data-testid="receita-lancar"
                             title='Abre o "Da nota fiscal" com este XML (o mesmo caminho do arquivo solto)'
                             onClick={() => (n.candidatos.length ? setCasar(n) : void comXml(n, aoLancar))}>Lançar</button>
+                          )}
                           <button type="button" className={cn(BOTAO, 'w-[34px] border', temXml ? 'bg-card hover:bg-muted' : 'cursor-not-allowed text-muted-foreground/50')}
                             disabled={!temXml || ocupada === n.id} data-testid="receita-pdf"
                             title={temXml ? 'Abre o DANFE da nota numa aba (imprimir ou salvar em PDF)' : 'Sem XML ainda: só o resumo da Receita'}
@@ -168,6 +206,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
         </div>
         {aberta && <DadosDaNota n={aberta} aoFechar={() => setAberta(null)} />}
+        {bem && registrarBem && <RegistrarBemDeTerceiro n={bem} registrar={registrarBem} aoFechar={(frase) => { setBem(null); if (frase) setAviso(frase); }} />}
         {casar && <PodeEstarLancada n={casar} ocupada={ocupada === casar.id} aviso={aviso} aoFechar={() => setCasar(null)}
           aoLancarNova={() => { const n = casar; setCasar(null); void comXml(n, aoLancar); }}
           aoVincular={async (id) => {
@@ -185,13 +224,16 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
 
 /** "Ver": os dados que a Receita mandou, em linhas fixas (nada de XML na tela) */
 function DadosDaNota({ n, aoFechar }: { n: NotaNaLista; aoFechar: () => void }) {
-  const s = SITUACAO_NA_TELA[n.sit];
+  const s = seloDaNota(n);
   const campos: [string, string][] = [
     ['Emitente', n.emitenteNome ?? '—'], ['CNPJ/CPF', n.emitenteNaTabela || '—'], ['Emissão', dataBR(n.emissao)],
     ['Nº · série', `${n.numero} · ${n.serie}`], ['Valor', n.valorCent == null ? '—' : `R$ ${brl(n.valorCent)}`],
     ['Tipo', n.tipo === 'completa' ? 'Completa (XML inteiro)' : 'Resumo da Receita'], ['Situação', `${s.rotulo} — ${s.dica}`],
     ['Recebeu', n.titularNome], ['Chave', n.chave.replace(/(\d{4})(?=\d)/g, '$1 ')], ['Arquivo', n.tipo === 'completa' ? nomeDoXml(n.chave) : '—'],
     ['Eventos', n.eventos.length ? n.eventos.map((e) => e.descricao ?? e.tpEvento).join(' · ') : 'nenhum'],
+    /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — as ligações que a própria nota dá */
+    ['Cita a NF', n.citadas.length ? n.citadas.join(', ') : '—'],
+    ...(n.substituta ? [['Substituída por', `NF ${n.substituta}`] satisfies [string, string]] : []),
   ];
   return (
     <Dialog open onOpenChange={(v) => { if (!v) aoFechar(); }}>
@@ -285,6 +327,69 @@ function PodeEstarLancada({ n, ocupada, aviso, aoFechar, aoVincular, aoLancarNov
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" disabled={ocupada} onClick={aoLancarNova} data-testid="receita-lancar-nova">É outra compra: lançar nova</Button>
           <Button size="sm" className="h-[24px] text-[10px]" disabled={!escolhido || ocupada} onClick={() => escolhido && aoVincular(escolhido)}
             data-testid="receita-vincular">Vincular a este</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro": a PRÉVIA pela nota (motivo, de quem, quando, os itens) e só grava no
+ *  "Registrar" (a mesma RPC com p_simular). A recusa do banco fica escrita no modal. */
+function RegistrarBemDeTerceiro({ n, registrar, aoFechar }: {
+  n: NotaNaLista; registrar: (chave: string, previsao: string | null, observacao: string | null, simular: boolean) => Promise<RespostaDoBem>;
+  aoFechar: (frase: string | null) => void;
+}) {
+  const [previa, setPrevia] = useState<RespostaDoBem | null>(null);
+  const [previsao, setPrevisao] = useState('');
+  const [obs, setObs] = useState('');
+  const [gravando, setGravando] = useState(false);
+  /* a prévia ao abrir (a mesma RPC com p_simular); a resposta de uma nota antiga não escreve depois de fechar */
+  useEffect(() => {
+    let vivo = true;
+    void registrar(n.chave, null, null, true).then((r) => { if (vivo) setPrevia(r); });
+    return () => { vivo = false; };
+  }, [n.chave, registrar]);
+  const MOTIVO: Record<string, string> = { comodato: 'Comodato — o bem é do fornecedor, emprestado', demonstracao: 'Demonstração — volta ao fornecedor', conserto: 'Conserto — vai e volta' };
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) aoFechar(null); }}>
+      <DialogContent className="w-[min(600px,calc(100vw-16px))] max-w-none gap-0 p-0 [&>button]:top-2.5 [&>button]:text-primary-foreground" data-testid="receita-bem">
+        <div className="flex h-[34px] items-center bg-primary px-3 pr-10">
+          <DialogTitle className="truncate text-[11px] font-semibold text-primary-foreground">Registrar bem de terceiro · NF {n.numero}</DialogTitle>
+          <DialogDescription className="sr-only">A prévia pela nota de remessa; nada grava antes de Registrar.</DialogDescription>
+        </div>
+        <div className="space-y-2 bg-muted p-3 text-[10.5px]">
+          {!previa && <div className="text-muted-foreground">Lendo a nota…</div>}
+          {previa && previa.ok === false && <div className="text-destructive" data-testid="receita-bem-recusa">{previa.frase}</div>}
+          {previa && previa.ok && (<>
+            <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-x-2 gap-y-1">
+              <span className="text-muted-foreground">Motivo</span><span className="font-semibold">{MOTIVO[previa.motivo] ?? previa.motivo}</span>
+              <span className="text-muted-foreground">De</span><span className="truncate" title={previa.fornecedor ?? undefined}>{previa.fornecedor ?? '—'} · {n.emitenteNaTabela || '—'}</span>
+              <span className="text-muted-foreground">Recebido em</span><span className="tabular-nums">{dataBR(previa.data)}</span>
+              <span className="text-muted-foreground">Previsão de devolução</span>
+              <div className="w-[150px]" data-testid="receita-bem-previsao"><DatePicker value={previsao} onChange={setPrevisao} className="h-[24px] text-[10px]" /></div>
+              <span className="text-muted-foreground">Observação</span>
+              <Input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="onde está, contrato…" className="h-[24px] bg-card px-1.5 text-[10px]" />
+            </div>
+            <table className="w-full table-fixed border-collapse rounded-md bg-card">
+              <colgroup><col style={{ width: 30 }} /><col /><col style={{ width: 60 }} /><col style={{ width: 120 }} /></colgroup>
+              <thead><tr className="h-[22px]"><th className={TH}>#</th><th className={TH}>Bem (da nota)</th><th className={TH_NUM}>Qtd.</th><th className={TH_NUM}>Valor de referência</th></tr></thead>
+              <tbody>{previa.itens.map((i) => (
+                <tr key={i.n} className={LINHA} data-testid="receita-bem-item"><td className={TD_REGUA}>{i.n}</td><td className={TD_REGUA_TEXTO} title={i.descricao}>{i.descricao}</td>
+                  <td className={TD_REGUA_NUM}>{i.quantidade == null ? '—' : i.quantidade.toLocaleString('pt-BR')}</td>
+                  <td className={TD_REGUA_NUM}>{i.valor == null ? '—' : brl(Math.round(i.valor * 100))}</td></tr>))}</tbody>
+            </table>
+            <div className="text-muted-foreground">Não entra no patrimônio do cliente (nem na depreciação nem no valor dos bens). Fica em Bens de terceiros até a nota de retorno.</div>
+          </>)}
+        </div>
+        <div className="flex h-[34px] items-center justify-end gap-2 border-t bg-card px-3">
+          <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={() => aoFechar(null)}>Cancelar</Button>
+          <Button size="sm" className="h-[24px] text-[10px]" disabled={!previa || previa.ok === false || gravando} data-testid="receita-bem-registrar"
+            onClick={async () => {
+              setGravando(true);
+              const r = await registrar(n.chave, previsao || null, obs.trim() || null, false);
+              setGravando(false);
+              if (r.ok === false) setPrevia(r); else aoFechar(`Registrado: ${r.itens.length} ${r.itens.length === 1 ? 'bem' : 'bens'} da NF ${r.nf} em Bens de terceiros.`);
+            }}>Registrar</Button>
         </div>
       </DialogContent>
     </Dialog>

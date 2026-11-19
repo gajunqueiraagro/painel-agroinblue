@@ -7,6 +7,7 @@
  *  · CNPJ do emitente inteiro; CPF de emitente pessoa física mascarado (`documentoNaTabela`).
  * Fora desta fatia: Dar ciência (F3.3), Ignorar (RPC nova), Fazenda pela IE.
  */
+import { classeDaNota, type AtributosFiscais, type ClasseDaNota, type MotivoNaoFinanceira } from './classeDaNota';
 import { documentoNaTabela } from '@/lib/fiscal/documentoNaTabela';
 
 export type SituacaoNoBanco = 'resumo' | 'manifestado' | 'xml' | 'importado' | 'ignorado' | 'cancelado_na_sefaz';
@@ -27,7 +28,10 @@ export interface LinhaRecebida {
 }
 
 export type TipoNaLista = 'resumo' | 'completa';
-export type SituacaoNaLista = 'nova' | 'pode_estar' | 'no_sistema' | 'pede_ciencia' | 'esperando_xml' | 'cancelada' | 'ignorada';
+/* NOTAS-RECEITA-SEM-LANCAMENTO-01: + 'nao_financeira' (a nota diz que não gera lançamento: comodato, entrega futura…) e 'venda_titular' (a NF de
+   entrada do comprador: é a venda do titular) — pela `classeDaNota`, automático pelo XML */
+export type SituacaoNaLista = 'nova' | 'pode_estar' | 'no_sistema' | 'pede_ciencia' | 'esperando_xml' | 'cancelada' | 'ignorada' | 'nao_financeira'
+  | 'venda_titular';
 
 /** NOTA-RECEITA-CASAR-01 — um lançamento que PODE SER a nota (a regra é do banco: `fn_notas_candidatos`; a tela só lê e mostra) */
 export type ClasseDoCandidato = 'mesmo_cnpj' | 'sem_fornecedor' | 'outro_fornecedor';
@@ -54,6 +58,32 @@ export interface NotaNaLista extends LinhaRecebida {
   candidatos: CandidatoDaNota[];
   titularNome: string;
   emitenteNaTabela: string;
+  /** NOTAS-RECEITA-SEM-LANCAMENTO-01 — a classe pela própria nota (sem os atributos, "compra": a lista de sempre) */
+  classe: ClasseDaNota;
+  /** os nº das notas que esta nota CITA (refNFe): a remessa de entrega futura → o faturamento; a devolução → a original */
+  citadas: string[];
+  /** a cancelada: o nº da nota viva do mesmo emitente e do mesmo valor (a que a substituiu), quando há */
+  substituta: string | null;
+}
+
+/** o que o banco extrai do XML de cada nota (`fn_notas_atributos_fiscais`) */
+export interface AtributosDaNota extends AtributosFiscais { refs: string[] }
+/** a resposta da `fn_notas_atributos_fiscais` → chave → atributos (fora do formato fica de fora: a nota segue "compra") */
+export function lerAtributos(dados: unknown): Map<string, AtributosDaNota> {
+  const m = new Map<string, AtributosDaNota>();
+  if (!Array.isArray(dados)) return m;
+  for (const d of dados) {
+    if (!d || typeof d !== 'object') continue;
+    const ch = Reflect.get(d, 'chave'); const cf = Reflect.get(d, 'cfops'); const rf = Reflect.get(d, 'refs');
+    if (typeof ch !== 'string') continue;
+    const tp = Reflect.get(d, 'tpnf'); const no = Reflect.get(d, 'natop');
+    m.set(ch, {
+      cfops: Array.isArray(cf) ? cf.filter((x): x is string => typeof x === 'string') : [],
+      tpNF: typeof tp === 'string' ? tp : null, natOp: typeof no === 'string' ? no : null,
+      refs: Array.isArray(rf) ? rf.filter((x): x is string => typeof x === 'string' && /^\d{44}$/.test(x)) : [],
+    });
+  }
+  return m;
 }
 
 const SITUACOES: readonly SituacaoNoBanco[] = ['resumo', 'manifestado', 'xml', 'importado', 'ignorado', 'cancelado_na_sefaz'];
@@ -101,18 +131,72 @@ export function situacaoNaLista(l: LinhaRecebida, chavesNoSistema: ReadonlySet<s
 }
 
 export function montarLista(linhas: readonly LinhaRecebida[], titulares: ReadonlyMap<string, string>, chavesNoSistema: ReadonlySet<string>,
-  candidatos: ReadonlyMap<string, CandidatoDaNota[]> = new Map()): NotaNaLista[] {
-  return linhas.map((l) => ({
-    ...l,
-    numero: numeroDaChave(l.chave),
-    serie: serieDaChave(l.chave),
-    tipo: (l.temXml || l.situacao === 'xml' || l.situacao === 'importado' ? 'completa' : 'resumo') as TipoNaLista,
-    sit: comCandidatos(situacaoNaLista(l, chavesNoSistema), candidatos.get(l.chave) ?? []),
-    candidatos: situacaoNaLista(l, chavesNoSistema) === 'nova' ? (candidatos.get(l.chave) ?? []) : [],
-    titularNome: titulares.get(l.titularId) ?? '—',
-    emitenteNaTabela: documentoNaTabela(l.emitenteDocumento),
-  })).sort((a, b) => (b.emissao ?? '').localeCompare(a.emissao ?? '') || b.chave.localeCompare(a.chave));
+  candidatos: ReadonlyMap<string, CandidatoDaNota[]> = new Map(), atributos: ReadonlyMap<string, AtributosDaNota> = new Map()): NotaNaLista[] {
+  return linhas.map((l) => {
+    const base = situacaoNaLista(l, chavesNoSistema);
+    const a = atributos.get(l.chave);
+    const classe: ClasseDaNota = a ? classeDaNota(a, base === 'cancelada') : base === 'cancelada' ? { classe: 'cancelada' } : { classe: 'compra' };
+    /* a classe só tira a nota do "a lançar" (nova/pode estar): já no sistema, cancelada e ciência ficam como estão */
+    const aLancar = base === 'nova';
+    const sit: SituacaoNaLista = aLancar && classe.classe === 'nao_financeira' ? 'nao_financeira'
+      : aLancar && classe.classe === 'venda_do_titular' ? 'venda_titular' : comCandidatos(base, candidatos.get(l.chave) ?? []);
+    return {
+      ...l,
+      numero: numeroDaChave(l.chave),
+      serie: serieDaChave(l.chave),
+      tipo: (l.temXml || l.situacao === 'xml' || l.situacao === 'importado' ? 'completa' : 'resumo') as TipoNaLista,
+      sit,
+      candidatos: sit === 'nova' || sit === 'pode_estar' ? (candidatos.get(l.chave) ?? []) : [],
+      titularNome: titulares.get(l.titularId) ?? '—',
+      emitenteNaTabela: documentoNaTabela(l.emitenteDocumento),
+      classe,
+      citadas: (a?.refs ?? []).map(numeroDaChave),
+      substituta: base === 'cancelada' ? substitutaDa(l, linhas) : null,
+    };
+  }).sort((a, b) => (b.emissao ?? '').localeCompare(a.emissao ?? '') || b.chave.localeCompare(a.chave));
 }
+
+/** a cancelada foi refeita: a nota VIVA do mesmo emitente com o mesmo valor (a mais próxima na data) */
+export function substitutaDa(l: LinhaRecebida, todas: readonly LinhaRecebida[]): string | null {
+  if (!l.emitenteDocumento || l.valorCent == null) return null;
+  const vivas = todas.filter((x) => x.chave !== l.chave && x.situacao !== 'cancelado_na_sefaz' && x.emitenteDocumento === l.emitenteDocumento
+    && x.valorCent === l.valorCent && !x.eventos.some((e) => e.tpEvento === '110111'));
+  const t = (d: string | null) => (d ? Date.parse(d.slice(0, 10)) : 0);
+  vivas.sort((x, y) => Math.abs(t(x.emissao) - t(l.emissao)) - Math.abs(t(y.emissao) - t(l.emissao)));
+  return vivas[0] ? numeroDaChave(vivas[0].chave) : null;
+}
+
+/** o selo da linha (CURTO, nunca corta) e o ⓘ (o que é e O QUE FAZER) — pela situação e, nas não financeiras, pelo motivo da nota */
+export function seloDaNota(n: Pick<NotaNaLista, 'sit' | 'classe' | 'citadas' | 'substituta'>): { rotulo: string; cor: string; dica: string } {
+  if (n.sit === 'nao_financeira' && n.classe.classe === 'nao_financeira') {
+    const m = n.classe.motivo;
+    const cit = n.citadas.length ? ` A nota cita a NF ${n.citadas.join(', ')}.` : '';
+    const dica: Record<typeof m, string> = {
+      entrega_futura: `Remessa da mercadoria de um pedido já faturado: o pagamento está na NF de faturamento (5922), não nesta.${cit}`,
+      comodato: 'Bem do fornecedor emprestado (comodato): não é compra. Registre como bem de terceiro para devolver.',
+      bonificacao: 'Entrada sem custo (bonificação/brinde): não gera lançamento.',
+      devolucao: `Devolução: abate do fornecedor — ligue à nota original e ao lançamento dela.${cit}`,
+      garantia: `Troca em garantia: não gera lançamento.${cit}`,
+      demonstracao: 'Bem em demonstração: volta ao fornecedor. Registre como bem de terceiro.',
+      conserto: 'Bem em conserto: vai e volta; o serviço vem em outra nota. Registre como bem de terceiro.',
+      retorno: `Retorno de um bem que foi: fecha a remessa de ida.${cit}`,
+      outra_remessa: `Remessa sem pagamento (CFOP de remessa/retorno): não gera lançamento.${cit}`,
+    };
+    return { rotulo: ROTULO_CURTO[m], cor: 'bg-zinc-100 text-zinc-700 ring-1 ring-zinc-300', dica: dica[m] };
+  }
+  if (n.sit === 'venda_titular') {
+    return { rotulo: 'Sua venda', cor: 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-300',
+      dica: 'É a sua venda: o comprador emitiu a NF de entrada (ex.: o frigorífico). Confira no abate/venda (OC); não lance como compra.' };
+  }
+  const s = SITUACAO_NA_TELA[n.sit];
+  if (n.sit === 'cancelada' && n.substituta) return { ...s, dica: `O emitente cancelou na Receita; foi substituída pela NF ${n.substituta}.` };
+  return s;
+}
+/** os rótulos curtos (cabem no selo a 9px; o resto vai no ⓘ) */
+export const ROTULO_CURTO: Record<MotivoNaoFinanceira, string> = {
+  entrega_futura: 'Entrega futura', comodato: 'Comodato', bonificacao: 'Bonificação', devolucao: 'Devolução', garantia: 'Garantia',
+  demonstracao: 'Demonstração', conserto: 'Conserto', retorno: 'Retorno', outra_remessa: 'Remessa',
+};
 
 /** D4 — a "Nova" com candidato do MESMO CNPJ ou SEM fornecedor vira "Pode estar lançada"; só "outro fornecedor" fica "Nova" (o "Lançar"
  *  mostra o quadro do mesmo jeito) */
@@ -150,11 +234,14 @@ export function lerCandidatos(dados: unknown): Map<string, CandidatoDaNota[]> | 
   return saida;
 }
 
-export type AbaDaReceita = 'lancar' | 'ciencia' | 'no_sistema' | 'canceladas' | 'todas';
+export type AbaDaReceita = 'lancar' | 'ciencia' | 'no_sistema' | 'vendas' | 'nao_financeiras' | 'canceladas' | 'todas';
 export const ABAS_DA_RECEITA: { valor: AbaDaReceita; rotulo: string; filtro: (n: NotaNaLista) => boolean }[] = [
   { valor: 'lancar', rotulo: 'A lançar', filtro: (n) => n.sit === 'nova' || n.sit === 'pode_estar' },
   { valor: 'ciencia', rotulo: 'Ciência pendente', filtro: (n) => n.sit === 'pede_ciencia' || n.sit === 'esperando_xml' },
   { valor: 'no_sistema', rotulo: 'Já no sistema', filtro: (n) => n.sit === 'no_sistema' },
+  /* NOTAS-RECEITA-SEM-LANCAMENTO-01: saem do "A lançar" sem sumir */
+  { valor: 'vendas', rotulo: 'Vendas', filtro: (n) => n.sit === 'venda_titular' },
+  { valor: 'nao_financeiras', rotulo: 'Não geram lançamento', filtro: (n) => n.sit === 'nao_financeira' },
   { valor: 'canceladas', rotulo: 'Canceladas', filtro: (n) => n.sit === 'cancelada' || n.sit === 'ignorada' },
   { valor: 'todas', rotulo: 'Todas', filtro: () => true },
 ];
@@ -170,6 +257,8 @@ export const SITUACAO_NA_TELA: Record<SituacaoNaLista, { rotulo: string; cor: st
   esperando_xml: { rotulo: 'Esperando XML', cor: 'bg-sky-100 text-sky-800', dica: 'ciência enviada; o XML chega na próxima busca' },
   cancelada: { rotulo: 'Cancelada', cor: 'bg-red-100 text-red-800', dica: 'o emitente cancelou na Receita: nada a lançar' },
   ignorada: { rotulo: 'Ignorada', cor: 'bg-zinc-200 text-zinc-700', dica: 'marcada para não lançar' },
+  nao_financeira: { rotulo: 'Não gera', cor: 'bg-zinc-100 text-zinc-700 ring-1 ring-zinc-300', dica: 'a nota diz que não gera lançamento' },
+  venda_titular: { rotulo: 'Sua venda', cor: 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-300', dica: 'NF de entrada do comprador: é a sua venda' },
 };
 
 /** F34-SITUACAO-01 + NJ-NOTAS-LENTAS — "já no sistema" pelo critério do "+ Da nota", numa pergunta só (`fn_notas_ja_lancadas`, equivalente à

@@ -21,7 +21,27 @@ const linhas: LinhaRecebida[] = [
   L(14002, 'Distribuidora de Sal Exemplo', '90123456000178', 6, 1597000, 'resumo'),
   L(44871, 'Cooperativa Exemplo de Insumos', '34567890000112', 5, 3120075, 'xml'),
   L(3456, 'Auto Peças Exemplo', '01234567000189', 3, 87600, 'resumo'),
+  /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — uma de cada classe (sintético; os atributos fiscais abaixo): comodato, entrega futura (cita o faturamento),
+     devolução, garantia, bonificação, conserto, venda do titular (entrada do frigorífico) e a substituta da cancelada 5.540 (mesmo emitente/valor) */
+  L(117573, 'Distribuidora de Combustível Exemplo de Nome Comprido Ltda', '00858886000109', 2, 700000, 'xml'),
+  L(9336394, 'Revenda de Máquinas Exemplo', '01357922000101', 2, 4082000, 'xml'),
+  L(7001, 'Rações Exemplo', '11222333000144', 2, 196656, 'xml'),
+  L(7002, 'Peças Exemplo em Garantia', '22333444000155', 1, 725681, 'xml'),
+  L(7003, 'Rações Exemplo', '11222333000144', 1, 146710, 'xml'),
+  L(7004, 'Oficina Exemplo', '33444555000166', 1, 99999999, 'xml'),
+  L(7005, 'Frigorífico Exemplo S.A.', '45678901000123', 1, 2024996, 'xml'),
+  L(5541, 'Transportadora Exemplo', '78901234000156', 8, 360000, 'xml'),
 ];
+const at = (cfops: string[], natOp: string, tpNF = '1', refs: string[] = []) => ({ cfops, tpNF, natOp, refs });
+const ATRIBUTOS = new Map([
+  [chave(117573, '00858886000109'), at(['5908'], 'REMESSA BEM P/CONTA CONTR COMODATO')],
+  [chave(9336394, '01357922000101'), at(['5116'], 'REMESSA ENTREGA FUTURA', '1', [chave(8568045, '01357922000101')])],
+  [chave(7001, '11222333000144'), at(['1202'], 'DEV VDA MERC ADQ OU REC TERC', '0')],
+  [chave(7002, '22333444000155'), at(['5949'], 'SUBSTITUICAO DE MERCADORIA EM GARANTIA')],
+  [chave(7003, '11222333000144'), at(['6910'], 'REMESSA DE BONIFICACAO')],
+  [chave(7004, '33444555000166'), at(['5915'], 'REMESSA PARA CONSERTO')],
+  [chave(7005, '45678901000123'), at(['2101'], 'COMPRA PARA INDUSTRIALIZACAO', '0')],
+]);
 /* NOTA-RECEITA-CASAR-01 — candidatos SINTÉTICOS: 1 do mesmo CNPJ (pré-marcado) na 2.201; 3 na 44.871 (sem fornecedor com nome no teto,
    outro fornecedor, mesmo CNPJ) — o pior texto da tabela do quadro */
 const C = (id: string, classe: CandidatoDaNota['classe'], o: Partial<CandidatoDaNota> = {}): CandidatoDaNota => ({
@@ -40,7 +60,7 @@ const CANDIDATOS = new Map<string, CandidatoDaNota[]>([
   ]],
 ]);
 export const DADOS_RECEITA_BANCADA: DadosDaReceita = {
-  lista: montarLista(linhas, new Map([['t1', 'Produtora Exemplo'], ['t2', 'Titular B Exemplo com Nome Comprido']]), new Set([chave(1198, '12345678000190')]), CANDIDATOS),
+  lista: montarLista(linhas, new Map([['t1', 'Produtora Exemplo'], ['t2', 'Titular B Exemplo com Nome Comprido']]), new Set([chave(1198, '12345678000190')]), CANDIDATOS, ATRIBUTOS),
   titulares: [{ id: 't1', nome: 'Produtora Exemplo' }, { id: 't2', nome: 'Titular B Exemplo com Nome Comprido' }],
   ultimaBusca: '2026-11-16T22:46:13Z', proximaBusca: '2026-11-16T23:46:13Z',
 };

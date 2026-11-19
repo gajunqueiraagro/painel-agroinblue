@@ -1319,6 +1319,14 @@ const CENARIOS = [
       { nome: 'notas-receita', url: 'tela=notas-receita', tamanhos: T, regiao: R },
       { nome: 'notas-receita-a-lancar', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^A lançar/) },
       { nome: 'notas-receita-ciencia', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^Ciência pendente/) },
+      /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — as classes pela nota: as abas novas, o ⓘ aberto e o "Registrar bem" (prévia) */
+      { nome: 'notas-receita-nao-geram', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^Não geram lançamento/) },
+      { nome: 'notas-receita-vendas', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^Vendas/) },
+      { nome: 'notas-receita-ajuda-classe', url: 'tela=notas-receita', tamanhos: T, regiao: 'body', antes: async (p) => {
+        await aba(/^Não geram lançamento/)(p); await p.locator(`${R} [data-testid="ajuda"]`).nth(1).click(); await p.waitForTimeout(400); } },
+      { nome: 'notas-receita-registrar-bem', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-bem"]', antes: async (p) => {
+        await aba(/^Não geram lançamento/)(p); await p.locator('[data-testid="receita-registrar-bem"]').first().click();
+        await p.locator('[data-testid="receita-bem-item"]').first().waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
       { nome: 'notas-receita-ver', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-dados"]', antes: async (p) => {
         await p.locator('[data-testid="receita-ver"]').first().click(); await p.waitForTimeout(400); } },
       /* NOTA-RECEITA-CASAR-01 — o quadro dos candidatos (3 linhas, textos no teto) */
