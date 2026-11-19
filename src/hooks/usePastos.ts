@@ -167,6 +167,24 @@ async function fetchCategoriasShared(clienteId: string): Promise<CategoriaRebanh
   return p;
 }
 
+/**
+ * PROD-LANC-FILTROS-01 — o CADASTRO das categorias do rebanho (`categorias_rebanho`, catálogo do banco, na ordem de exibição), pelo MESMO
+ * leitor (e o mesmo cache) do `usePastos` — sem os pastos. É a fonte das opções do filtro de Categorias (nunca a lista fixa do código).
+ * ⚠ O catálogo não tem cliente: a chave do cache é fixa.
+ */
+export function useCategoriasRebanho(): { categorias: CategoriaRebanho[]; carregando: boolean } {
+  const CHAVE = '__catalogo__';
+  const [categorias, setCategorias] = useState<CategoriaRebanho[]>(() => categoriasCacheByCliente.get(CHAVE) ?? []);
+  const [carregando, setCarregando] = useState(!categoriasCacheByCliente.has(CHAVE));
+  useEffect(() => {
+    let vivo = true;
+    fetchCategoriasShared(CHAVE).then((c) => { if (vivo) { setCategorias(c); setCarregando(false); } })
+      .catch(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+  }, []);
+  return { categorias, carregando };
+}
+
 async function fetchPastosShared(
   cacheKey: string,
   isGlobal: boolean,
