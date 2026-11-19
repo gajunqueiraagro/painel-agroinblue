@@ -157,8 +157,9 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial, 
         <Segmentado altura={22} valor={modo} onEscolher={setModo} opcoes={[
           { valor: 'sai', rotulo: 'Saídas' }, { valor: 'ent', rotulo: 'Entradas' }, { valor: 'flx', rotulo: 'Entradas × saídas' }]} />
         {/* UI-MESES-PADRAO-01 (D2) — o ‹ano› e os doze meses viraram o `SeletorPeriodo` da casa: os dois mexiam no MESMO `sel`, e o ano
-            dele troca o ano mantendo o mês (o ±12 de antes). O "· previsto" segue no `title` de cada mês. */}
-        <div className="min-w-0 shrink-0" data-testid="vg-meses" data-desloca="">
+            dele troca o ano mantendo o mês (o ±12 de antes). O "· previsto" segue no `title` de cada mês.
+            UI-LARGURA-FIXA-01: a fita tem LARGURA FIXA (512px; sem ela media o conteúdo e andava 1,2px ao trocar o mês/ano) */}
+        <div className="w-[512px] min-w-0 shrink-0" data-testid="vg-meses" data-desloca="">
           <SeletorPeriodo
             modo="ano-mes"
             modoUnico

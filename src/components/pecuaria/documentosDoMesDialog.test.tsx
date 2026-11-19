@@ -362,7 +362,7 @@ describe('FECH-DOCS-01 — os dois pontos de tela (fonte)', () => {
     expect(fimDosBotoes).toBeGreaterThan(iAjustar);
     const botoes = f.slice(iBotoes, fimDosBotoes);
     /* os 6, com borda, em 2 colunas; "Sugestões" saiu (está dentro do Ajustar) */
-    expect(f).toContain('<div className="grid flex-none grid-cols-[auto_auto] content-start gap-1 max-[999px]:grid-cols-1" data-testid="botoes-do-topo">');
+    expect(f).toContain('<div className="grid flex-none grid-cols-[auto_auto] content-start gap-1" data-testid="botoes-do-topo">');
     for (const r of ['> Resumo', '> GMD', '> Mapa', '> PDF', '> Ajustar']) expect(botoes).toContain(r);
     expect(botoes).not.toContain('Sugestões');
     expect(botoes).not.toContain('variant="ghost"');
