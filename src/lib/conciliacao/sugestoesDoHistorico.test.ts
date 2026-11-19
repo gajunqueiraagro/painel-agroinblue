@@ -102,3 +102,16 @@ describe('o pedido ao banco (a mesma regra do "Procurar no histórico")', () => 
     expect(lerFornecedoresDoHistorico([1, 2]).size).toBe(0);
   });
 });
+
+describe('CONC-CRIAR-COM-NOTA-02 B1 (homologação 14:32) — o SALDO da NF 404 depois do pagamento parcial', () => {
+  it('o histórico aponta o "…ME" (sem nenhum em aberto: 288/289 já pagas) e o saldo 4.863,35 está no irmão "…-ME": vem pelo NOME, primeiro', () => {
+    const ext = { data: '2031-10-20', historico: 'PIX - AGENDAMENTO - 20/10 05:37 MECANICA LIDER', valor: -3850 };
+    const saldo = c('saldo-404', { fornecedor: 'Edson Exemplo Dias-ME', favorecido_id: 'f-me2', valor_assinado: -4863.35, data_vencimento: '2031-10-10', status_transacao: 'programado' });
+    const contabil = c('contabil', { fornecedor: 'Contabilidade Exemplo', favorecido_id: 'f-cont', valor_assinado: -915, data_vencimento: '2031-10-20' });
+    /* sem o nome: o "…ME" não tem candidato, a família fica só nele e o saldo some (o defeito) */
+    expect(ids(sugerirCasamentos(ext, [contabil, saldo], { fornecedorDoHistorico: 'f-me' }))).not.toContain('saldo-404');
+    const r = sugerirCasamentos(ext, [contabil, saldo], { fornecedorDoHistorico: 'f-me', nomeDoFornecedorDoHistorico: 'Edson Exemplo Dias ME' });
+    expect(ids(r)[0]).toBe('saldo-404');
+    expect(r[0].motivo).toBe('do histórico · previsto 4.863,35');
+  });
+});

@@ -2042,7 +2042,11 @@ if (tela === 'mesclar') {
       return;
     }
     montar(<NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={DADOS_RECEITA_BANCADA} carregando={false} erro={null} aoFechar={() => {}}
-      aoLancar={() => {}} aoVincular={async () => null} lerXml={async () => '<nfeProc/>'} />);
+      aoLancar={() => {}} aoVincular={async () => null} lerXml={async () => '<nfeProc/>'}
+      /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — a prévia SINTÉTICA do "Registrar bem" (2 itens, nome comprido, valor no teto) */
+      registrarBem={async () => ({ ok: true, motivo: 'comodato', fornecedor: 'Distribuidora de Combustível Exemplo de Nome Comprido Ltda', nf: '117573',
+        data: '2026-11-02', total: 99999999.99, itens: [{ n: 1, descricao: 'BOMBA DE ABASTECIMENTO COMUM COM BICO AUTOMÁTICO E MEDIDOR DIGITAL', quantidade: 2, valor: 7000 },
+          { n: 2, descricao: 'TANQUE AÉREO 15.000 L', quantidade: 1, valor: 99992999.99 }] })} />);
     /* NOTA-RECEITA-CASAR-01 — o quadro "pode já estar lançada" aberto pelo "Lançar" da nota com 3 candidatos */
     if (tela === 'notas-receita-casar') {
       const abrir = () => {

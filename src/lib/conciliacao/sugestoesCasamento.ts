@@ -344,6 +344,8 @@ export interface OpcoesSugestao {
    * do movimento. Entram SÓ no E1 (mesmo valor, ±1 centavo): nunca em soma nem em pista de nome — a mesma regra do motor (lote 22).
    */
   adiantados?: readonly CandidatoSugestao[];
+  /** B1 (homologação 14:32) — o NOME do fornecedor do histórico: a família dos irmãos sai dele mesmo sem candidato em aberto do cadastro */
+  nomeDoFornecedorDoHistorico?: string | null;
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -413,7 +415,8 @@ export function sugerirCasamentos(
   const doHist = opcoes.fornecedorDoHistorico ?? null;
   const familia = new Set<string>(doHist ? [doHist] : []);
   if (doHist) {
-    const nomes = new Set(pool.filter((c) => c.favorecido_id === doHist).map((c) => chaveDoNomeDoFornecedor(c.fornecedor)).filter(Boolean));
+    const nomes = new Set([...pool.filter((c) => c.favorecido_id === doHist).map((c) => c.fornecedor), opcoes.nomeDoFornecedorDoHistorico]
+      .map((n) => chaveDoNomeDoFornecedor(n)).filter(Boolean));
     for (const c of pool) if (c.favorecido_id && nomes.has(chaveDoNomeDoFornecedor(c.fornecedor))) familia.add(c.favorecido_id);
   }
 

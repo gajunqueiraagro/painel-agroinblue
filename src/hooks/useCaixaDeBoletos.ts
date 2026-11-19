@@ -12,14 +12,14 @@
  * ⚠ LEITURA QUE TERMINA DEPOIS DE A TELA SAIR não escreve (OC-ABRIR-LENTO-01): `vivo` guarda.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { caixaApiDoBanco, type CaixaApi, type ListaDaCaixa, type RespostaDeEntrar } from '@/lib/financeiro/boleto/caixaApi';
+import { caixaApiDoBanco, type CaixaApi, type DocumentoDaCaixa, type ListaDaCaixa, type RespostaDeEntrar } from '@/lib/financeiro/boleto/caixaApi';
 import { parcelaApiDoBanco, type ParcelaApi } from '@/lib/financeiro/boleto/boletoDaParcela';
 import { lerBoletosDoArquivo, paraEntrada, sugestoesDeSenha, type ParteDoBoleto } from '@/lib/financeiro/boleto/lerBoleto';
 import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import type { BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
 import { entradaEmailApiDoBanco, rotuloDoMotivo, type EntradaDoEmail, type EntradaEmailApi, type MotivoDeIgnorar } from '@/lib/financeiro/boleto/entradaEmailApi';
 import {
-  FRASE_NEM_BOLETO_NEM_NOTA, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes,
+  FRASE_NEM_BOLETO_NEM_NOTA, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
   type ConsultaDaNota, type ConsultaDoBoleto, type FonteParaMontar, type GrupoDaCaixa, type LinhaDaCaixa, type Lido, type ResumoDaNota,
 } from '@/lib/financeiro/boleto/caixaPorEmail';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
@@ -282,8 +282,11 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   }, [ehDoEmail, entradaApi, feitos]);
 
   /** Garante o boleto na caixa (entra + sobe o PDF) e devolve o id. */
-  const garantirNaCaixa = useCallback(async (l: LinhaDaCaixa): Promise<{ ok: true; id: string; aviso: string | null } | { ok: false; frase: string }> => {
-    if (l.boletoGuardadoId) return { ok: true, id: l.boletoGuardadoId, aviso: null };
+  const garantirNaCaixa = useCallback(async (l: LinhaDaCaixa): Promise<{ ok: true; id: string; aviso: string | null; pdf: string | null } | { ok: false; frase: string }> => {
+    if (l.boletoGuardadoId) {
+      const g = lista?.itens.find((x) => x.boleto.id === l.boletoGuardadoId);
+      return { ok: true, id: l.boletoGuardadoId, aviso: null, pdf: g?.boleto.storagePath ?? null };
+    }
     if (!clienteId || !l.boleto) return { ok: false, frase: 'Escolha o cliente.' };
     const fonte = l.fontes[0];
     const b = fontes.current.get(fonte)?.boletos.find((x) => x.codigo_barras === l.boleto?.codigoBarras);
@@ -294,13 +297,26 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     if (resp.ok === false) return { ok: false, frase: resp.frase };
     if (!resp.id) return { ok: false, frase: 'O banco não devolveu o boleto. Nada foi ligado.' };
     let aviso: string | null = null;
+    let pdf: string | null = null;
     if (resp.storagePath) {
       const arq = await arquivoDe(fonte);
       const s = arq ? await api.subirArquivo(resp.storagePath, arq) : null;
       if (!s || s.ok === false) aviso = 'O boleto entrou na caixa, mas o arquivo não subiu.';
+      else pdf = resp.storagePath;
     }
-    return { ok: true, id: resp.id, aviso };
-  }, [api, clienteId, leituraParaOBanco, arquivoDe]);
+    return { ok: true, id: resp.id, aviso, pdf };
+  }, [api, clienteId, leituraParaOBanco, arquivoDe, lista]);
+
+  /** Gabriel 18/11 14:40: o PDF entra nos DOCUMENTOS de cada lançamento ligado (o clipe da lista e a aba Documentos o mostram).
+   *  Falhou = a frase diz; nunca desfaz o vínculo (ele já é verdade). */
+  const anexarAosLancamentos = useCallback(async (lancamentoIds: readonly string[], doc: DocumentoDaCaixa): Promise<string | null> => {
+    if (!clienteId) return null;
+    for (const id of lancamentoIds) {
+      const r = await api.registrarDocumento(clienteId, id, doc);
+      if (r.ok === false) return `Ligado, mas o PDF não entrou nos documentos do lançamento: ${r.erro}`;
+    }
+    return null;
+  }, [api, clienteId]);
 
   const fazer = useCallback(async (chave: string, f: () => Promise<string | null>): Promise<string | null> => {
     if (ocupado) return 'Espere o gesto anterior terminar.';
@@ -323,10 +339,14 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       if (r.dados.ok === false) return `O boleto está na caixa, mas não foi ligado: ${r.dados.frase}`;
     }
     marcarFeito(l.chave);
+    const alvos = jaLigado && l.previa?.ok === true ? l.previa.situacao.lancamentos.map((x) => x.id) : lancamentos;
+    const semDoc = g.pdf
+      ? await anexarAosLancamentos(alvos, { especie: 'boleto', nome: l.arquivoTitulo || 'boleto', url: g.pdf, tamanhoBytes: null })
+      : null;
     const m = await resolverSeCompleto(l.fontes[0], l.chave, g.id);
     await recarregar();
-    return m ?? g.aviso;
-  }), [fazer, garantirNaCaixa, parcela, resolverSeCompleto, recarregar]);
+    return m ?? semDoc ?? g.aviso;
+  }), [fazer, garantirNaCaixa, parcela, anexarAosLancamentos, resolverSeCompleto, recarregar]);
 
   const guardar = useCallback((l: LinhaDaCaixa) => fazer(l.chave, async () => {
     const g = await garantirNaCaixa(l);
@@ -345,9 +365,20 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       if (r.ok === false) return r.erro;
     }
     marcarFeito(l.chave);
+    /* os arquivos da nota do e-mail (o DANFE em PDF E o XML) entram nos documentos do lançamento achado pela chave; a mesma NF no
+       mesmo tipo de arquivo, já na compra, o gravador recusa = "já estava" (P167) — nunca duplica */
+    let semDoc: string | null = null;
+    if (lanc && l.nota) {
+      for (const e of (entradas ?? []).filter((x) => l.fontes.includes(x.id) && (x.tipo === 'pdf' || x.tipo === 'xml') && x.storagePath)) {
+        semDoc = semDoc ?? await anexarAosLancamentos([lanc], {
+          especie: 'nf', nome: e.arquivoNome ?? (e.tipo === 'xml' ? 'nota.xml' : 'nota.pdf'), url: e.storagePath ?? '', tamanhoBytes: e.tamanhoBytes,
+          numero: numeroDaNotaComPontos(l.nota.numero), chaveAcesso: l.nota.chave, tipo: e.tipo === 'xml' ? 'application/xml' : 'application/pdf',
+        });
+      }
+    }
     await recarregar();
-    return null;
-  }), [fazer, ehDoEmail, entradaApi, recarregar]);
+    return semDoc;
+  }), [fazer, ehDoEmail, entradaApi, entradas, anexarAosLancamentos, recarregar]);
 
   /** Ignorar (D6): as entradas do e-mail com o motivo; o boleto guardado = descartado; o arrastado sai da lista. */
   const ignorar = useCallback((ls: readonly LinhaDaCaixa[], motivo: MotivoDeIgnorar, detalhe: string | null) => fazer('ignorar', async () => {

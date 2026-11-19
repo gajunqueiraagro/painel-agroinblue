@@ -87,6 +87,12 @@ export const numeroDaNota = (n: string): string => {
   const d = n.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
   return d ? Number(d).toLocaleString('pt-BR') : n;
 };
+/** O número da NF no formato dos DOCUMENTOS do lançamento ("000.122.048": 9 dígitos em grupos de 3, como o "+ Da nota" grava). */
+export const numeroDaNotaComPontos = (n: string): string => {
+  const d = n.replace(/\D/g, '');
+  if (!d || d.length > 9) return n;
+  return d.padStart(9, '0').replace(/(\d{3})(\d{3})(\d{3})/, '$1.$2.$3');
+};
 
 /* ═══ as linhas ═══ */
 const SELO: Record<string, Selo> = {

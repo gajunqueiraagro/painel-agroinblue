@@ -157,11 +157,9 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
       {/* ⚠ o quadro: ALTURA fixa (na estação, cabeçalho + 6 linhas; no modal, o que sobra dele), o vazio fica dentro; o corpo rola aqui */}
       {/* homologação Edson 11:40 (extra): no modal, SEM achados (antes de procurar, procurando, falhou ou "nada achado") o quadro ENCOLHE às linhas
           que tem — nada de bloco branco; com achados, ocupa a sobra como antes */}
-      {/* homologação Edson 12:02: no modal, o quadro tem a ALTURA DO CONTEÚDO (até metade do que sobra da janela; daí rola por dentro) e o modal acompanha */}
-      <div className="mt-1 overflow-auto rounded-sm border bg-card"
-        style={preencher
-          ? { height: `min(${ALTURA_DO_CABECALHO_PARA_CASAR + Math.max(1, linhasNoQuadro) * ALTURA_DA_LINHA_PARA_CASAR + 2}px, calc((100vh - 220px) / 2))` }
-          : { height: alturaFixa }} data-testid="procurar-historico-quadro">
+      {/* D2 (homologação 14:32): no modal, o quadro ocupa a SOBRA (o modal tem tamanho fixo); vazio = a linha "nada achado" no topo dele */}
+      <div className={cn('mt-1 overflow-auto rounded-sm border bg-card', preencher && 'min-h-0 flex-1')}
+        style={preencher ? { minHeight: ALTURA_DO_CABECALHO_PARA_CASAR + 2 * ALTURA_DA_LINHA_PARA_CASAR + 2 } : { height: alturaFixa }} data-testid="procurar-historico-quadro">
         <div style={{ minWidth: PISO_DO_QUADRO }} data-testid="procurar-historico-piso">
         <TabelaDaLista larguras={larguras} cabecalhoPreso={!!preencher || linhasNoQuadro > LINHAS_A_VISTA} cabecalho={<CabecalhoParaCasar prefixo="procurar" colunas={colunas}
           ordenar={(k) => setOrdem((o) => proximaOrdem(o, k))} seta={(k) => (ordem.coluna === k ? (ordem.sentido === 'asc' ? '↑' : '↓') : '')} />}>

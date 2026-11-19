@@ -57,7 +57,7 @@ describe('P121 — o Resumo do lançamento, os 3 casos do mock', () => {
     montar(ALVORADA);
     const pares = [...screen.getByTestId('resumo-pagamento').querySelectorAll('tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent));
     expect(pares).toEqual([['Status', 'Realizado', 'Forma', 'Cartão'], ['Venc.', '10/09/2026', 'Pgto.', '10/09/2026'],
-      ['Modalid.', 'Compra parcelada', 'Parcelas', '1/4']]);
+      ['Modalid.', 'Parcelada', 'Parcelas', '1/4']]); // Gabriel 18/11 14:40: o valor curto
     expect(screen.getByTestId('resumo-status').className).toContain('pilula');
     expect(screen.getByTestId('resumo-favorecido-documento').textContent).toBe('11.222.333/0001-81 · Campo Grande/MS');
     /* sem Fase: "—" em cinza, sem title */

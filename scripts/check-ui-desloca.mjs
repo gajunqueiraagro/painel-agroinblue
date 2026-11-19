@@ -965,9 +965,6 @@ const CENARIOS = [
   /* P153 — procurar no histórico não mexe em nada fora do quadro: o botão, a contagem e a linha do banco ficam onde estão (a frase é linha do quadro) */
   { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',
-    /* EXCEÇÃO DECLARADA (CONC-CRIAR-COM-NOTA-02, Gabriel 18/11 12:02): o modal tem a ALTURA DO CONTEÚDO, preso no topo — ao procurar, o quadro
-       cresce e o RODAPÉ desce junto ("rodapé logo abaixo"); o topo (extrato, campo, botão, contagem) não anda */
-    naoMede: '[data-testid="sugestoes-rodape"]',
     estados: [['procurou', async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); }]] },
   /* CONC-SUGESTOES-TABELA-01 — marcar e desmarcar as caixinhas (das sugestões e do histórico) não mexe em nada: o rodapé tem as colunas
      reservadas (N · soma · extrato · diferença) e o "Casar selecionados" fica no lugar; o cabeçalho das listas e a faixa do extrato também */

@@ -83,7 +83,7 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 import { NovoDeXmlDialog, notaParaAPrevia } from '@/components/financeiro-v2/NovoDeXmlDialog';
 import { NovoMenuLancamentos } from '@/components/financeiro-v2/NovoMenuLancamentos';
 import { NotasDaReceitaDialog } from '@/components/fiscal/NotasDaReceitaDialog';
-import { useNotasDaReceita } from '@/hooks/useNotasDaReceita';
+import { registrarBemDeTerceiro, useNotasDaReceita } from '@/hooks/useNotasDaReceita';
 import { pedemAcao } from '@/lib/fiscal/notasDaReceita';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { contarBoletosQuePedemAcao } from '@/lib/financeiro/boleto/caixaApi';
@@ -3385,6 +3385,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         <NotasDaReceitaDialog clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
           erro={receita.error ? (receita.error as Error).message : null}
           aoFechar={() => setReceitaAberta(false)}
+          /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" (lote 25; simular = a prévia) */
+          registrarBem={clienteAtual?.id ? (chave, previsao, observacao, simular) => registrarBemDeTerceiro(clienteAtual.id, chave, previsao, observacao, simular) : undefined}
           aoLancar={(arquivo) => { setReceitaAberta(false); setXmlDaReceita([arquivo]); setXmlAberto(true); }}
           /* NOTA-RECEITA-CASAR-01 — "Vincular a este" = a porta 2 (P128a): a MESMA prévia do "+ Da nota", partindo do lançamento escolhido */
           aoVincular={async (arquivo, lancamentoId) => {

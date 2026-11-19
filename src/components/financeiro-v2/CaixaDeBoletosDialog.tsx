@@ -480,7 +480,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
         data-testid="caixa-de-boletos">
         <div className="flex h-[34px] shrink-0 items-center justify-between gap-3 bg-primary px-3 pr-10 text-primary-foreground">
           <DialogTitle className="min-w-0 truncate text-[11px] font-semibold" title={clienteNome ?? undefined}>
-            Boletos e notas que chegaram{clienteNome ? ` · ${clienteNome}` : ''}
+            Caixa de entrada{clienteNome ? ` · ${clienteNome}` : ''}
           </DialogTitle>
           <DialogDescription className="shrink-0 text-[10px] text-primary-foreground/85">nada entra sozinho</DialogDescription>
         </div>
@@ -493,7 +493,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
               }))} />
             <span className="min-w-0 flex-1 truncate text-[9.5px] text-muted-foreground" title={dica}>{dica}</span>
             <Button variant="outline" size="sm" className="h-[22px] flex-none px-2 text-[10px]" onClick={() => setEnderecoAberto(true)} data-testid="abrir-endereco-de-boletos">
-              E-mail de boletos
+              E-mail de entrada
             </Button>
           </div>
           <AreaDeArquivo modo="lote" regra={REGRA_DA_CAIXA} className="h-7 shrink-0" testId="soltar-na-caixa" inputTestId="input-da-caixa"
@@ -526,7 +526,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
                     ])}
                     {caixa.grupos.length === 0 && (
                       <tr className={LINHA}><td colSpan={N_COLUNAS} className={cn(TD_REGUA, 'py-4 text-center text-muted-foreground')}>
-                        {caixa.entradas ? 'Nada a resolver. O que chegar no e-mail de boletos aparece aqui.' : (caixa.erro ?? 'Carregando…')}
+                        {caixa.entradas ? 'Nada a resolver. O que chegar no e-mail de entrada aparece aqui.' : (caixa.erro ?? 'Carregando…')}
                       </td></tr>
                     )}
                   </tbody>

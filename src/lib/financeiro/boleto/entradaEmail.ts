@@ -72,4 +72,4 @@ export const PASSOS: Record<ProvedorDoPasso, readonly string[]> = {
   ],
 };
 export const passosCom = (p: ProvedorDoPasso, endereco: string | null): string[] =>
-  PASSOS[p].map((s) => s.split('{endereco}').join(endereco ?? 'o endereço de boletos'));
+  PASSOS[p].map((s) => s.split('{endereco}').join(endereco ?? 'o e-mail de entrada'));

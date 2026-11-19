@@ -96,6 +96,7 @@ export const API_CAIXA_BANCADA: CaixaApi = {
   subirArquivo: async () => ({ ok: true, dados: true }),
   documentosDosTitulares: async () => ({ ok: true, dados: ['111.444.777-35', '22.333.444/0001-72'] }),
   marcar: async () => ({ ok: true, dados: true }),
+  registrarDocumento: async () => ({ ok: true, dados: 'gravado' }),
 };
 export const PARCELA_BANCADA: ParcelaApi = {
   entrar: API_CAIXA_BANCADA.entrar, subirArquivo: API_CAIXA_BANCADA.subirArquivo,
