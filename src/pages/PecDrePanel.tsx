@@ -44,6 +44,7 @@ import {
   type DefPec, type ColunaPec, type UnidadePec, type ModoDre,
 } from '@/components/agri/drePecRegua';
 import type { RecorteHistoricoPec } from '@/components/agri/PecHistoricoLinhaModal';
+import { oQueMudou as gruposQueMudaram, LIMIAR_PCT, LIMIAR_RS } from '@/lib/dre/leitura';
 import {
   BLOCO_DA_LINHA, rotuloCurtoPeriodo,
   type DrePecuaria, type DrePecLinhas, type ChaveLinhaPec, type CentroPec, type RecortePec,
@@ -96,7 +97,7 @@ export type VisaoPec = 'comparacao' | 'fazenda';
  * ⚠ UM NÚMERO, NÃO UMA LISTA: 1 é "o ano anterior", 3 é "os três anteriores, em ordem". Ele é o
  * mesmo `f_anos` de sempre, agora com o papel explícito de referência.
  */
-export type ReferenciaPec = 'meta' | number;
+export type ReferenciaPec = 'meta' | 'media12' | number;
 
 /**
  * ⚠ OS TRÊS VALORES ANTIGOS DE `f_visao` CONTINUAM VALENDO, e cada um cai onde a pergunta dele
@@ -104,7 +105,7 @@ export type ReferenciaPec = 'meta' | number;
  * comparação com a meta — ela deixou de ser visão e virou referência, mas o link antigo pedia
  * exatamente isso. 'fazenda' não mudou.
  */
-const VISOES_URL: readonly string[] = ['comparacao', 'global', 'meta', 'anos', 'fazenda'];
+const VISOES_URL: readonly string[] = ['comparacao', 'global', 'meta', 'media12', 'anos', 'fazenda'];
 
 /**
  * O QUE `f_visao` GUARDA — a visão E, quando ela é a comparação com o planejado, a referência.
@@ -114,11 +115,11 @@ const VISOES_URL: readonly string[] = ['comparacao', 'global', 'meta', 'anos', '
  * antes do fix4, quando a comparação com o planejado era uma VISÃO — o link antigo continua abrindo
  * exatamente a tela que pedia.
  */
-export type VisaoUrlPec = 'comparacao' | 'meta' | 'fazenda';
+export type VisaoUrlPec = 'comparacao' | 'meta' | 'media12' | 'fazenda';
 
 /** `f_visao` na URL. ⚠ Constantes de módulo: o `useFiltroUrl` as usa nas dependências. */
 export const lerVisaoPec = (bruto: string): VisaoUrlPec =>
-  (bruto === 'fazenda' ? 'fazenda' : bruto === 'meta' ? 'meta' : 'comparacao');
+  (bruto === 'fazenda' ? 'fazenda' : bruto === 'meta' ? 'meta' : bruto === 'media12' ? 'media12' : 'comparacao');
 export const escreverVisaoPec = (v: VisaoUrlPec): string => v;
 /** A visão que a grade monta — 'meta' é comparação, com outra referência. */
 export const visaoDaUrl = (v: VisaoUrlPec): VisaoPec => (v === 'fazenda' ? 'fazenda' : 'comparacao');
@@ -176,6 +177,11 @@ export interface EntradaVisoes {
    * lugares diferentes da tela. Agora é um só, e ele mora no card "Comparação".
    */
   referencia?: ReferenciaPec;
+  /**
+   * A MÉDIA DE 12 CHAMADAS MENSAIS — DRE-PAINEL-01 (D1 a), montada por `colunaMedia` (`src/lib/dre/leitura.ts`).
+   * `linhas` nulo depois de carregar = sem a média (o período não é um mês só, ou faltou um dos 12): coluna de "—".
+   */
+  media12?: { linhas: DrePecLinhas | null; carregando: boolean; motivo: string | null };
 }
 
 /**
@@ -226,6 +232,27 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
      (4.813,6 ha contra 4.824,3 do realizado, na NJ 2026). Quando a meta não existe, `semDado` apaga
      a coluna inteira — então o `?? real.total` nunca vira número na tela; é esqueleto de layout,
      não empréstimo de dado. */
+  if (ref === 'media12') {
+    const m = e.media12;
+    const carregando = !m || m.carregando;
+    const semMedia = !carregando && !m?.linhas;
+    const referencia: ColunaPec = {
+      chave: '__media12__', nome: 'Média 12m', sub: semMedia ? 'sem média' : '',
+      subLongo: semMedia ? (m?.motivo ?? 'sem a média de 12 meses') : 'média de 12 chamadas mensais, os 12 meses antes do mês',
+      fazendaId: null, linhas: carregando ? null : (m?.linhas ?? real.total),
+      total: false, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'realizado', meses: 1, atual: false,
+      semDado: semMedia, comparacao: true, semLista: true,
+    };
+    const cols: ColunaPec[] = [referencia, { ...totalReal, nome: rotuloCurtoPeriodo(de, ate) }];
+    if (deltas.length > 0) {
+      cols.push({
+        ...totalReal, chave: '__delta__', nome: '', sub: '', total: false, tipo: 'delta', unidade: 'pct',
+        ref: semMedia ? null : (m?.linhas ?? null), deltaSlots: deltas, comparacao: true,
+      });
+    }
+    return cols;
+  }
+
   if (ref === 'meta') {
     const semMeta = !e.carregandoMeta && (!e.meta || semMovimento(e.meta));
     const referencia: ColunaPec = {
@@ -623,7 +650,7 @@ function CelulaCarregando({ total, fundo, estilo }: { total?: boolean; fundo?: s
 
 export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   unidades = ['rs', 'ha'], modo = 'detalhado', abertos, onAbertos, rateioNosGrupos = false,
-  onAbrirLista, onAbrirDidatico, onAbrirHistorico }: {
+  onAbrirLista, onAbrirDidatico, onAbrirHistorico, oQueMudou = false }: {
   colunas: readonly ColunaPec[];
   /** ⚠ AS UNIDADES MARCADAS, na ordem de `UNIDADES_PEC`. O padrão é o que a tela abre: R$ e R$/ha. */
   unidades?: readonly UnidadePec[];
@@ -670,6 +697,12 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
    */
   abertos?: Record<string, boolean>;
   onAbertos?: (f: (a: Record<string, boolean>) => Record<string, boolean>) => void;
+  /**
+   * "O QUE MUDOU" — DRE-PAINEL-01: cada grupo aberto mostra só as sublinhas com |Δ| ≥ 20% E ≥ R$ 10 mil contra a coluna de
+   * comparação (a regra é `oQueMudou` de `src/lib/dre/leitura.ts`), com um ponto laranja; o resto vira "+ N itens sem desvio", com a
+   * soma de cada coluna. Sem coluna de comparação (por fazenda, ou ela sem dado), nada se esconde.
+   */
+  oQueMudou?: boolean;
 }) {
   const colunas = colunasCruas;
   const larguras = useMemo(() => {
@@ -687,6 +720,13 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   /* ⚠ O REALCE É DA REFERÊNCIA, NÃO DA COLUNA: quem cita a meta é o cabeçalho dela E o "real − meta"
      do Δ, que é outra coluna. Por isso a pergunta é feita à grade inteira, uma vez. */
   const temMeta = colunas.some(ehMeta);
+
+  /* A comparação do "O que mudou": a coluna do período (Total) contra a referência MAIS PRÓXIMA dele (a última de comparação à esquerda). */
+  const colAtual = colunas.find(c => c.atual && c.fazendaId === null && c.tipo === 'valor' && !!c.linhas);
+  const colBase = [...colunas].reverse()
+    .find(c => c.comparacao && c.tipo === 'valor' && c.fazendaId === null && !c.semDado && !!c.linhas);
+  const filtrarMudou = oQueMudou && !!colAtual?.linhas && !!colBase?.linhas;
+  const tituloDesvio = colBase ? `com desvio contra ${colBase.nome}: |Δ| ≥ ${LIMIAR_PCT * 100}% e ≥ R$ ${formatNum(LIMIAR_RS, 0)}` : '';
 
   /** Quais grupos estão abertos. Fechados por padrão (§4) — e o estado pode vir de fora. */
   const [abertosLocal, setAbertosLocal] = useState<Record<string, boolean>>({});
@@ -830,11 +870,23 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                a ordem de render manda: filhas > Lucro por hectare > % do VBP > a própria linha. No
                `lucro_liquido`, que hoje encerra os dois modos, a base pula para o "Lucro por hectare"
                quando o chip R$/ha está desmarcado, porque é ele que aparece embaixo. */
+            /* "O que mudou": as sublinhas sem desvio saem da lista e somam numa linha só. Os marcadores do rateio (a filha do
+               rateio no Resumido e o grupo só de rateio) não são centros de custo — ficam sempre. */
+            let comDesvio: ReadonlySet<string> | null = null;
+            let escondidos: CentroPec[] = [];
+            let visiveis = centros;
+            if (filtrarMudou && def.expande && bloco && colBase?.linhas && colAtual?.linhas) {
+              comDesvio = new Set(gruposQueMudaram(colBase.linhas, colAtual.linhas, bloco).comDesvio.map(c => c.centro));
+              const ehCentro = (c: CentroPec) => c.bloco !== 'rateio_adm' && c.bloco !== BLOCO_SO_RATEIO;
+              escondidos = centros.filter(c => ehCentro(c) && !comDesvio?.has(c.centro));
+              visiveis = centros.filter(c => !ehCentro(c) || !!comDesvio?.has(c.centro));
+            }
+            const nLinhasFilhas = visiveis.length + (escondidos.length > 0 ? 1 : 0);
             const ultima = iDef === defs.length - 1;
             /* ⚠ DRE-LAYOUT-04: o "% do VBP" mora DENTRO da linha de resultado (abaixo do número), não numa linha própria. */
             const comPercentual = false;
             const comPorHectare = (COM_POR_HECTARE.has(def.chave) || !!def.porHectare) && !unidades.includes('ha');
-            const comFilhas = aberto && centros.length > 0;
+            const comFilhas = aberto && nLinhasFilhas > 0;
             /* DRE-AJUSTES-05: o "por hectare" mora DENTRO da linha (2ª linha pequena da célula), então ele não fecha mais a grade */
             const base = {
               filha: ultima && comFilhas,
@@ -856,13 +908,22 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                     sub-coluna já responde). */}
 
                 {/* As filhas: um centro por linha, na régua `filha` (9px/14px, recuo 16). */}
-                {aberto && centros.map((c, iC) => (
+                {aberto && visiveis.map((c, iC) => (
                   <LinhaCentro key={`${def.chave}-${c.centro}`} def={def} centro={c} unidades={unidades}
                     colunas={colunas} bloco={bloco ?? ''} onAbrirLista={onAbrirLista}
                     rateioNosGrupos={rateioNosGrupos}
                     recuoExtra={def.grupo ? RECUO_NO_GRUPO : 0}
-                    base={base.filha && iC === centros.length - 1} />
+                    desvio={comDesvio?.has(c.centro) ? tituloDesvio : undefined}
+                    base={base.filha && iC === nLinhasFilhas - 1} />
                 ))}
+                {aberto && escondidos.length > 0 && (
+                  <LinhaCentro key={`${def.chave}-+sem-desvio`} def={def} unidades={unidades}
+                    centro={{ bloco: bloco ?? '', centro: `+ ${escondidos.length} ${escondidos.length === 1 ? 'item' : 'itens'} sem desvio`, valor: 0, a_pagar: 0 }}
+                    agregados={escondidos}
+                    colunas={colunas} bloco={bloco ?? ''} rateioNosGrupos={rateioNosGrupos}
+                    recuoExtra={def.grupo ? RECUO_NO_GRUPO : 0}
+                    base={base.filha} />
+                )}
               </Fragment>
             );
           })}
@@ -914,7 +975,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
   /* ⚠ A LINHA DO RATEIO ADMINISTRATIVO ABRE O MODAL DE VALOR NA ABA RATEIO — DRE-MODAL-VALOR-01b.
      Era o `PecRateioAdmModal`, preso ao período da tela; agora qualquer coluna de valor abre o seu. */
   const abrirDaColunaRateio = (col: ColunaPec) => {
-    if (!onAbrirLista || !col.linhas || col.semDado || col.tipo === 'delta') return undefined;
+    if (!onAbrirLista || !col.linhas || col.semDado || col.semLista || col.tipo === 'delta') return undefined;
     const ra = valorDe(col.linhas, 'rateio_adm');
     return () => onAbrirLista({
       fazendaId: col.fazendaId, fazendaNome: col.nome, bloco: 'rateio_adm', centro: null,
@@ -979,7 +1040,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
    */
   const abrirDaColuna = (col: ColunaPec) => {
     /* ⚠ O CUSTEIO NAO TEM MODAL PROPRIO — so' abre e fecha; as filhas abrem os delas. */
-    if (def.agrupa || !col.linhas || col.semDado || col.tipo === 'delta') return undefined;
+    if (def.agrupa || !col.linhas || col.semDado || col.semLista || col.tipo === 'delta') return undefined;
     /* ⚠ JUROS NUMA FAZENDA NÃO ABRE NADA: a RPC não os divide por fazenda, a célula é "—" e uma
        lista ali mostraria os juros que o lançamento carimbou na fazenda — justamente a divisão que
        a RPC deixou de fazer. No Total, abre como sempre (`p_fazenda` nulo traz todos). */
@@ -1181,7 +1242,7 @@ function textoPorHectare(v: number | null, ha: number | null): string {
  * ⚠ E O `'(sem)'` VIAJA INTEIRO ATÉ A RPC — ele é um centro de verdade ("lançamento sem centro"),
  * não ausência. Mandar `null` no lugar dele traria o bloco todo.
  */
-function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista, rateioNosGrupos = false, recuoExtra = 0 }: {
+function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista, rateioNosGrupos = false, recuoExtra = 0, desvio, agregados }: {
   def: DefPec;
   centro: CentroPec;
   colunas: readonly ColunaPec[];
@@ -1192,6 +1253,10 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
   rateioNosGrupos?: boolean;
   /** O degrau a mais quando a mãe mora dentro de um grupo — DRE-RESUMIDO-CUSTEIO-01. */
   recuoExtra?: number;
+  /** DRE-PAINEL-01 — a sublinha tem desvio no "O que mudou": o ponto laranja, com a regra no `title`. */
+  desvio?: string;
+  /** DRE-PAINEL-01 — a linha "+ N itens sem desvio": soma estes centros em cada coluna e não abre lista. */
+  agregados?: readonly CentroPec[];
 }) {
   const regua = REGUA_LINHA.filha;
   /* ⚠ DRE-LEVE-01 (D6): o subitem em cinza; o custo e o negativo seguem vermelhos (o mock). */
@@ -1200,14 +1265,23 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
      como filha do Custo fixo no modo Resumido. Procurá-la entre os centros devolveria nulo. */
   /* ⚠ COM O BOTÃO LIGADO, O GRUPO SOMA O SEU RATEIO — DRE-MODAL-VALOR-01b; a regra mora em
      `valorDaFilha`, e desligado ela devolve exatamente o que este `achar` devolvia. */
-  const achar = (l: DrePecLinhas | null | undefined) =>
-    (l ? valorDaFilha(l, bloco, centro, rateioNosGrupos) : null);
+  const achar = (l: DrePecLinhas | null | undefined): number | null => {
+    if (!l) return null;
+    if (!agregados) return valorDaFilha(l, bloco, centro, rateioNosGrupos);
+    let soma = 0;
+    for (const c of agregados) soma += valorDaFilha(l, bloco, c, rateioNosGrupos) ?? 0;
+    return Math.round(soma * 100) / 100;
+  };
   const soRateio = centro.bloco === 'rateio_adm' || centro.bloco === BLOCO_SO_RATEIO;
   return (
     <tr className={cn('bg-card', regua.peso)} style={{ height: regua.altura }}>
       <td className="sticky left-0 z-30 truncate border-r border-border/60 bg-card py-px text-muted-foreground"
         style={{ fontSize: regua.fonte, paddingLeft: RECUO_ICONE + L_ICONE + regua.recuo + recuoExtra, paddingRight: 7 }}
-        title={centro.centro}>
+        title={desvio ? `${centro.centro} — ${desvio}` : centro.centro}>
+        {desvio && (
+          <span aria-hidden className="absolute h-[5px] w-[5px] rounded-full bg-orange-500"
+            style={{ left: RECUO_ICONE + 4 + recuoExtra, top: 'calc(50% - 2.5px)' }} />
+        )}
         {/* ⚠ A FILHA NÃO TEM ÍCONE — DRE-CASCATA-03b. Numa grade aberta eram dezenas de ícones
             repetidos na coluna de rótulos, e o que eles abrem já se alcança de dentro do modal: a
             legenda do donut do pai navega para cada filha, e entre irmãs. O ícone fica onde a
@@ -1251,7 +1325,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
           : centrosDoBloco(l, bloco).find(c => c.centro === centro.centro)?.valor ?? null;
         const rateioDaFilha = centro.bloco === 'rateio_adm' ? valorDe(l, 'rateio_adm')
           : bloco === 'fixo' ? rateioDoGrupo(l, centro.centro) : null;
-        const abrir = onAbrirLista && col.tipo === 'valor' && !col.semDado
+        const abrir = onAbrirLista && !agregados && col.tipo === 'valor' && !col.semDado && !col.semLista
           ? () => onAbrirLista({
             fazendaId: col.fazendaId, fazendaNome: col.nome,
             bloco: centro.bloco === 'rateio_adm' ? 'rateio_adm' : bloco,
@@ -1297,19 +1371,24 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
  * AS OPÇÕES DE "Comparar" — a mesma pergunta do card "Comparação" (que saiu), com os mesmos `title`: Meta (apagada para quem não vê meta,
  * com o motivo), o ano anterior e 2..5 anos.
  */
-export function opcoesDaReferenciaPec({ meta, carregandoMeta, anoAnterior, carregandoAnoAnterior, motivoSemMeta }: {
+export function opcoesDaReferenciaPec({ meta, carregandoMeta, anoAnterior, carregandoAnoAnterior, motivoSemMeta, rotuloAnoAnterior,
+  motivoSemMedia12 }: {
   meta: DrePecuaria | null; carregandoMeta: boolean; anoAnterior: DrePecuaria | null; carregandoAnoAnterior: boolean;
   motivoSemMeta: string | null;
+  /** DRE-PAINEL-01 — o rótulo do ano anterior ("out/25"), como no mock. */
+  rotuloAnoAnterior: string;
+  /** DRE-PAINEL-01 — a Média 12 meses só existe com UM mês na tela; fora disso, apagada com o porquê. */
+  motivoSemMedia12: string | null;
 }) {
   const semMeta = !carregandoMeta && (!meta || semMovimento(meta));
   const semAno = !carregandoAnoAnterior && (!anoAnterior || anoAnterior.fazendas.length === 0);
+  /* DRE-PAINEL-01 (mock aprovado): ano anterior · Meta · Média 12 meses. Os 2–5 anos na grade foram para o "Mais ▾". */
   return [
+    { valor: '1', rotulo: rotuloAnoAnterior, title: semAno ? 'sem ano anterior' : 'Comparar com o mesmo período do ano anterior' },
     { valor: 'meta', rotulo: 'Meta', ...(motivoSemMeta ? { desabilitada: true } : {}),
       title: motivoSemMeta ?? (semMeta ? 'sem meta no período' : 'Comparar com a meta do período') },
-    ...['1', '2', '3', '4', '5'].map(n => ({
-      valor: n, rotulo: n === '1' ? '1 ano' : n,
-      title: n === '1' && semAno ? 'sem ano anterior' : `Comparar com ${n === '1' ? 'o ano anterior' : `os ${n} anos anteriores`}`,
-    })),
+    { valor: 'media12', rotulo: 'Média 12 meses', ...(motivoSemMedia12 ? { desabilitada: true } : {}),
+      title: motivoSemMedia12 ?? 'Comparar com a média dos 12 meses anteriores (média de 12 chamadas mensais)' },
   ];
 }
 
@@ -1320,17 +1399,19 @@ export function opcoesDaReferenciaPec({ meta, carregandoMeta, anoAnterior, carre
 export function ComparacaoPec({ visao, referencia, onReferencia, ...dados }: {
   visao: VisaoPec; referencia: ReferenciaPec; onReferencia: (r: ReferenciaPec) => void;
   meta: DrePecuaria | null; carregandoMeta: boolean; anoAnterior: DrePecuaria | null; carregandoAnoAnterior: boolean;
-  motivoSemMeta: string | null;
+  motivoSemMeta: string | null; rotuloAnoAnterior: string; motivoSemMedia12: string | null;
 }) {
-  const valor: string = visao === 'fazenda' ? '' : referencia === 'meta' ? 'meta' : String(referencia);
+  /* Com 2–5 anos na grade (escolhidos no "Mais ▾"), nenhuma das três fica marcada: a grade não está em nenhuma delas. */
+  const valor: string = visao === 'fazenda' ? '' : referencia === 'meta' || referencia === 'media12' ? referencia
+    : referencia === 1 ? '1' : '';
   /* D5a: com "Por fazenda" ligado, APAGADO com o porquê (cor, nunca largura) — e o clique numa referência volta à comparação. */
   const porFazenda = visao === 'fazenda';
   return (
     <span className={cn('flex shrink-0 items-center gap-1', porFazenda && 'opacity-50')} data-testid="dre-comparar"
       title={porFazenda ? 'Por fazenda ligado: a grade não compara períodos. Escolher uma referência volta à comparação.' : undefined}>
-      <span className="text-[10px] text-muted-foreground">Comparar</span>
+      <span className="text-[10px] text-muted-foreground">Comparar com</span>
       <Segmentado altura={22} fonte={10} valor={valor}
-        onEscolher={v => onReferencia(v === 'meta' ? 'meta' : Number(v))}
+        onEscolher={v => onReferencia(v === 'meta' ? 'meta' : v === 'media12' ? 'media12' : Number(v))}
         opcoes={opcoesDaReferenciaPec(dados)} />
     </span>
   );
@@ -1342,12 +1423,15 @@ export function ComparacaoPec({ visao, referencia, onReferencia, ...dados }: {
  * desloca). ⚠ O MENU NÃO FECHA AO MARCAR (`preventDefault`): são três chaves independentes.
  */
 const DELTAS_PEC: readonly ('rs' | 'pct')[] = ['rs', 'pct'];
-export function MaisPec({ rateioNosGrupos, onRateioNosGrupos, deltas, onDeltas, deltaIndisponivel, visao, onVisao, nFazendas }: {
+export function MaisPec({ rateioNosGrupos, onRateioNosGrupos, deltas, onDeltas, deltaIndisponivel, visao, onVisao, nFazendas,
+  referencia, onReferencia }: {
   rateioNosGrupos: boolean; onRateioNosGrupos: (v: boolean) => void;
   deltas: readonly ('rs' | 'pct')[]; onDeltas: (d: readonly ('rs' | 'pct')[]) => void;
   /** Δ só com UMA referência (a meta ou 1 ano) e na comparação — o porquê vai no `title`. */
   deltaIndisponivel: boolean;
   visao: VisaoPec; onVisao: (v: VisaoPec) => void; nFazendas: number;
+  /** DRE-PAINEL-01 — os anos anteriores na grade (1–5) saíram do "Comparar com" e moram aqui. Sem eles, a seção não aparece. */
+  referencia?: ReferenciaPec; onReferencia?: (r: ReferenciaPec) => void;
 }) {
   const semDelta = deltaIndisponivel || visao === 'fazenda';
   const alternarDelta = (d: 'rs' | 'pct', ligar: boolean) =>
@@ -1386,6 +1470,20 @@ export function MaisPec({ rateioNosGrupos, onRateioNosGrupos, deltas, onDeltas, 
             {d === 'rs' ? 'Δ R$' : 'Δ %'}
           </DropdownMenuCheckboxItem>
         ))}
+        {onReferencia && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className={MENU_ROTULO}>Anos anteriores na grade</DropdownMenuLabel>
+            <div className="px-2 pb-1.5">
+              <Segmentado altura={22} className={MENU_SEGMENTADO}
+                valor={visao !== 'fazenda' && typeof referencia === 'number' ? String(referencia) : ''}
+                onEscolher={v => onReferencia(Number(v))}
+                opcoes={['1', '2', '3', '4', '5'].map(n => ({
+                  valor: n, rotulo: n, title: n === '1' ? 'O ano anterior' : `Os ${n} anos anteriores, do mais antigo ao período da tela`,
+                }))} />
+            </div>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem checked={visao === 'fazenda'} onSelect={e => e.preventDefault()}
           title="Qual fazenda carrega o resultado?"

@@ -779,11 +779,15 @@ const CENARIOS = [
   ...[['', ''], ['-grande', '&v=grande']].flatMap(([suf, par]) => {
     const URL_DRE = `tela=dre&barra=32&f_de=2026-01&f_ate=2026-09${par}`;
     const T = [[1126, 579], [1366, 768]];
-    const det = async (p) => { await clicarRotulo(/^Detalhado$/)(p); };
+    /* DRE-PAINEL-01: o "Detalhado" virou "O que mudou" (o padrão) · "Tudo aberto" — o "Tudo aberto" já abre todos os grupos */
+    const det = async (p) => { await clicarRotulo(/^Tudo aberto$/)(p); };
     /* DRE-LAYOUT-04: a tela abre no Detalhado — os cenários do Resumido clicam nele */
     const res = async (p) => { await clicarRotulo(/^Resumido$/)(p); };
     const tudo = async (p) => { await clicarRotulo(/^abrir tudo$/)(p); };
     const mais = (item) => async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: item }).first().click();
+      await p.keyboard.press('Escape'); await p.waitForTimeout(400); };
+    /* DRE-PAINEL-01: os anos 2–5 moram no "Mais ▾" */
+    const anos = (n) => async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('button', { name: String(n), exact: true }).first().click();
       await p.keyboard.press('Escape'); await p.waitForTimeout(400); };
     const chip = (rot) => async (p) => { await p.getByRole('button', { name: rot, exact: true }).first().click(); await p.waitForTimeout(400); };
     return [
@@ -818,17 +822,22 @@ const CENARIOS = [
           await p.locator('[data-testid="variacao-grafico"]').waitFor({ timeout: 5000 });
           await p.locator('[data-testid="variacao-grafico"] button', { hasText: rot }).click();
           await p.waitForTimeout(2000); } })),
-      { nome: `dre-pec-detalhado-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); } },
-      { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^2$/)(p); } },
-      { nome: `dre-pec-3anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^3$/)(p); } },
+      { nome: `dre-pec-detalhado-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: det },
+      /* DRE-PAINEL-01 — a tela como abre ("O que mudou": só as linhas com desvio, "+ N itens sem desvio" e o painel da direita) e a "Média 12m"
+         (um mês só na tela) */
+      { nome: `dre-pec-mudou${suf}`, url: URL_DRE, tamanhos: T },
+      { nome: `dre-pec-media12${suf}`, url: `tela=dre&barra=32&f_de=2026-09&f_ate=2026-09${par}`, tamanhos: T,
+        antes: async (p) => { await clicarRotulo(/^Média 12 meses$/)(p); } },
+      { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await anos(2)(p); } },
+      { nome: `dre-pec-3anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await anos(3)(p); } },
       { nome: `dre-pec-meta-delta${suf}`, url: URL_DRE, tamanhos: T,
-        antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^Meta$/)(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
+        antes: async (p) => { await det(p); await clicarRotulo(/^Meta$/)(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
       { nome: `dre-pec-ano-delta${suf}`, url: URL_DRE, tamanhos: T,
-        antes: async (p) => { await det(p); await tudo(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
-      { nome: `dre-pec-fazenda${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await mais(/^Ver por fazenda/)(p); } },
-      { nome: `dre-pec-so-ha${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await chip('R$')(p); } },
+        antes: async (p) => { await det(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
+      { nome: `dre-pec-fazenda${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await mais(/^Ver por fazenda/)(p); } },
+      { nome: `dre-pec-so-ha${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await chip('R$')(p); } },
       { nome: `dre-pec-rateio-grupos${suf}`, url: URL_DRE, tamanhos: T,
-        antes: async (p) => { await det(p); await tudo(p); await clicar('[data-testid="dre-mais"]')(p); await clicarRotulo(/^Rateio nos grupos$/)(p);
+        antes: async (p) => { await det(p); await clicar('[data-testid="dre-mais"]')(p); await clicarRotulo(/^Rateio nos grupos$/)(p);
           await p.keyboard.press('Escape'); await p.waitForTimeout(400); } },
       { nome: `dre-lavoura${suf}`, url: `${URL_DRE}&safra=s1`, tamanhos: T, antes: async (p) => { await clicarRotulo(/^Lavoura$/)(p); await tudo(p); } },
       { nome: `dre-lavoura-unidades${suf}`, url: `${URL_DRE}&safra=s1`, tamanhos: T,

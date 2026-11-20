@@ -693,7 +693,15 @@ export function useDrePecuariaLancamentos(
         p_cenario: cenarioEf,
       });
       if (err) throw err;
-      return (Array.isArray(r) ? r : []).map((x: unknown) => {
+      return (Array.isArray(r) ? r : []).map(lerLancamentoPec);
+    },
+  });
+  return { lancamentos: data ?? [], carregando: isLoading, erro: error as Error | null, recarregar: refetch };
+}
+
+/** Uma linha de `fn_dre_pecuaria_lancamentos` (e da `fn_dre_pecuaria_fora_do_dre`, que devolve os mesmos campos) — movida de dentro do
+    `useDrePecuariaLancamentos` para os dois leitores usarem a MESMA (DRE-PAINEL-01). */
+export function lerLancamentoPec(x: unknown): LancamentoPec {
         const o = objeto(x);
         return {
           origem: lerOrigem(o.origem),
@@ -711,10 +719,26 @@ export function useDrePecuariaLancamentos(
           bloco: o.bloco == null ? null : String(o.bloco),
           documento: o.documento == null ? null : String(o.documento),
         };
+}
+
+/**
+ * OS LANÇAMENTOS FORA DO DRE NO RECORTE — DRE-PAINEL-01 (P8): "Compõe DRE" desmarcado, com os filtros da coluna. A lista do rodapé
+ * "Fora do DRE: N lançamentos · R$ X"; a contagem e a soma vêm da própria `fn_dre_pecuaria` (`total.fora_do_dre`), não daqui.
+ * ⚠ SÓ COM O MODAL ABERTO (`enabled`): quem não clica no rodapé não paga a consulta.
+ */
+export function useDrePecuariaForaDoDre(clienteId: string | null | undefined, de: string | null, ate: string | null, enabled: boolean) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dre-pec-fora-do-dre', clienteId ?? '', de ?? '', ate ?? ''],
+    enabled: enabled && !!clienteId && !!de && !!ate,
+    queryFn: async (): Promise<LancamentoPec[]> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria_fora_do_dre', {
+        p_cliente: clienteId, p_de: de, p_ate: ate,
       });
+      if (err) throw err;
+      return (Array.isArray(r) ? r : []).map(lerLancamentoPec);
     },
   });
-  return { lancamentos: data ?? [], carregando: isLoading, erro: error as Error | null, recarregar: refetch };
+  return { lancamentos: data ?? [], carregando: isLoading, erro: error };
 }
 
 /* ══════════════ O PATRIMÔNIO POR CATEGORIA — §6 ══════════════ */

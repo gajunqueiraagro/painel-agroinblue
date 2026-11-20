@@ -113,7 +113,7 @@ export function baixarArquivo(arquivo: File) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita,
+export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita, abaInicial,
   abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null }: {
   clienteNome?: string | null;
   dados: DadosDaReceita | undefined;
@@ -133,8 +133,10 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   registrarBem?: (chave: string, previsao: string | null, observacao: string | null, simular: boolean) => Promise<RespostaDoBem>;
   /** NAV-VOLTA-ORIGEM-01 — a volta da camada de cima (o "Da nota fiscal"/a nota abertos daqui): muda `n` a cada volta */
   retorno?: RetornoDaCamada | null;
+  /** DRE-PAINEL-01 — a aba em que a lista abre quando vem de um link (o "Ver notas" da leitura do DRE abre em "A lançar"). */
+  abaInicial?: AbaDaReceita;
 }) {
-  const [aba, setAba] = useState<AbaDaReceita>('todas');
+  const [aba, setAba] = useState<AbaDaReceita>(abaInicial ?? 'todas');
   const [busca, setBusca] = useState('');
   const [titular, setTitular] = useState<string | null>(null);
   const [aberta, setAberta] = useState<NotaNaLista | null>(null);

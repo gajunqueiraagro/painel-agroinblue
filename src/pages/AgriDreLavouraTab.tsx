@@ -39,8 +39,14 @@ import {
 } from '@/components/agri/dreGrade';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  ModalValorDre, valorDaLavoura, valorDaPecuaria, type RateioDetalhe, type TipoRateio,
+  ModalValorDre, valorDaLavoura, valorDaPecuaria, type RateioDetalhe, type TipoRateio, type ValorDre,
 } from '@/components/agri/RateioDetalheModal';
+import { PecPainelLeitura, type DestinoDoPainel } from '@/components/agri/PecPainelLeitura';
+import { colunaMedia, mesesDaMedia12, seloDeConfianca, type Comparacao } from '@/lib/dre/leitura';
+import { useStatusAno } from '@/hooks/useResumoConciliacao';
+import { useStatusPilaresLote } from '@/hooks/useStatusPilaresLote';
+import { useNotasDaReceita } from '@/hooks/useNotasDaReceita';
+import { ABAS_DA_RECEITA } from '@/lib/fiscal/notasDaReceita';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { simboloDaUnidade, descricaoDaUnidade } from '@/lib/agri/colheita';
@@ -54,7 +60,7 @@ import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
 import { anoMes, descreverPeriodo } from '@/v2/lib/periodo';
 import {
   useDrePecuaria, useDrePecuariaLancamentos, useDrePecuariaPatrimonio, useDrePecuariaLista, useRateioAdmPec,
-  anoMesAntes, type RecortePec, type PeriodoPec,
+  useDrePecuariaForaDoDre, anoMesAntes, rotuloCurtoPeriodo, BLOCO_DA_LINHA, type RecortePec, type PeriodoPec, type DrePecLinhas,
 } from '@/hooks/useDrePecuaria';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
@@ -83,7 +89,7 @@ import {
 import {
   PecDrePanel, ComparacaoPec, MaisPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
   type InsumosDidaticos,
-  escreverNAnosPec, N_ANOS_PADRAO, ehVisaoMetaLegada, visaoDaUrl,
+  escreverNAnosPec, N_ANOS_PADRAO, ehVisaoMetaLegada, visaoDaUrl, semMovimento,
   type VisaoPec, type VisaoUrlPec, type ReferenciaPec,
 } from '@/pages/PecDrePanel';
 /* ⚠ AS UNIDADES VÊM DA RÉGUA, não mais da tela — DRE-HISTORICO-LINHA-01a. Mesma lista, mesmo
@@ -273,9 +279,43 @@ const corDoTom = (tom: DefLinha['tom']) =>
 
 
 
-export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
+/* DRE-PAINEL-01 — os rótulos das linhas que a leitura do mês abre no modal de valor. */
+const ROTULO_DA_LEITURA: Partial<Record<string, string>> = {
+  vendas: 'Vendas', reposicao: 'Reposição', custo_variavel: 'Custo variável', custo_fixo: 'Custo fixo', juros: 'Despesas financeiras',
+  receita_liquida: 'Receita líquida', efeito_mercado: 'Efeito de mercado', vpb_operacional: 'Variação por produção',
+};
+const proximoMes = (am: string): string => {
+  const t = Number(am.slice(0, 4)) * 12 + Number(am.slice(5, 7));
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+};
+/** A linha do rodapé da grade (P8): 18px fixos + 4 de vão, descontados da altura do cartão para a grade continuar terminando no pé da janela. */
+const ALTURA_RODAPE_FORA_DRE = 22;
+function RodapeForaDoDre({ fora, onAbrir }: { fora: { n: number; valor: number } | null; onAbrir: () => void }) {
+  return (
+    <div data-testid="dre-fora-do-dre" className="flex h-[18px] shrink-0 items-center gap-1 px-1 text-[10px] text-muted-foreground"
+      title='Lançamentos do recorte com "Compõe DRE" desmarcado (P8): ficam fora do resultado, mas estão no sistema'>
+      <span>Fora do DRE:</span>
+      {fora == null ? <span>—</span> : (
+        <>
+          <span className="tabular-nums text-foreground">
+            {formatNum(fora.n, 0)} {fora.n === 1 ? 'lançamento' : 'lançamentos'} · R$ {formatNum(fora.valor, 2)}
+          </span>
+          {fora.n > 0 && (
+            <button type="button" className="text-primary hover:underline" onClick={onAbrir}>ver lista →</button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao, onIrParaNotasALancar, onIrParaFechamento }: {
   /** CONC-SEM-CLASSIFICACAO-01 — a saída do aviso "sem plano de contas" para a Conciliação (só para quem a tem). */
   onIrParaConciliacao?: () => void;
+  /** DRE-PAINEL-01 — o "Ver notas" da leitura do mês: Notas da Receita › A lançar (no Financeiro). Sem ele, o link não leva a lugar nenhum. */
+  onIrParaNotasALancar?: () => void;
+  /** DRE-PAINEL-01 — o que falta para o selo subir: o fechamento de pastos do mês. */
+  onIrParaFechamento?: () => void;
   /**
    * ⚠ QUEM TROCA DE SECTION É O V2Index, não esta página: `section` é um `useState` dele e não
    * está na URL. O modal precisa de uma saída para a tela Valor do Rebanho, e o caminho é este
@@ -493,13 +533,14 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
   const visaoUrl: VisaoUrlPec = !veMeta && visaoUrlLida === 'meta' ? 'comparacao' : visaoUrlLida;
   const [nAnosPec, setNAnosPec] = useFiltroUrl<number>('f_anos', N_ANOS_PADRAO, lerNAnosPec, escreverNAnosPec);
   const visaoPec = visaoDaUrl(visaoUrl);
-  const referenciaPec: ReferenciaPec = visaoUrl === 'meta' ? 'meta' : nAnosPec;
+  const referenciaPec: ReferenciaPec = visaoUrl === 'meta' ? 'meta' : visaoUrl === 'media12' ? 'media12' : nAnosPec;
   /* ⚠ E O QUE SOBREVIVE A "Por fazenda" É O NÚMERO DE ANOS, não a Meta — medido na tela: a
      referência Meta mora no MESMO parâmetro que a visão (`f_visao`), então ir para "Por fazenda"
      a sobrescreve e a volta reabre na referência por anos, com o `f_anos` que estava guardado.
      Fica registrado porque é o preço de a Meta ser linkável sem um parâmetro novo. */
   const escolherVisao = useCallback((v: VisaoPec) => {
-    setVisaoUrl(v === 'fazenda' ? 'fazenda' : (referenciaPec === 'meta' ? 'meta' : 'comparacao'));
+    setVisaoUrl(v === 'fazenda' ? 'fazenda'
+      : (referenciaPec === 'meta' ? 'meta' : referenciaPec === 'media12' ? 'media12' : 'comparacao'));
   }, [setVisaoUrl, referenciaPec]);
   /* ⚠ A META E O ANO ANTERIOR SÃO BUSCADOS SEMPRE (decisão 2): os cards "× Meta" e "× Anos" mostram
      o delta em qualquer visão. São leituras em cache do react-query — trocar de visão não refaz. */
@@ -532,8 +573,23 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
   }, [historicoPec, pecDe, pecAte]);
   const anosHistoricoPec = useDrePecuariaLista(
     historicoPec ? clienteId : null, periodosHistoricoPec);
-  /* ⚠ DRE-LAYOUT-04: abre no DETALHADO (Gabriel 09/11). */
-  const [modoPec, setModoPec] = useState<ModoDre>('detalhado');
+  /* DRE-PAINEL-01 — o MODO DE ABERTURA: Resumido · O que mudou (padrão) · Tudo aberto. "O que mudou" e "Tudo aberto" são o Detalhado
+     com os grupos abertos; o primeiro esconde as sublinhas sem desvio contra a comparação (`oQueMudou` da grade). */
+  const [grauAberturaPec, setGrauAberturaPec] = useState<'resumido' | 'mudou' | 'aberto'>('mudou');
+  const modoPec: ModoDre = grauAberturaPec === 'resumido' ? 'resumido' : 'detalhado';
+  /* ── A MÉDIA 12 MESES (D1 a): 12 chamadas mensais, os 12 meses antes do mês da tela; só com UM mês na tela ── */
+  const mesUnicoPec = !!pecDe && pecDe === pecAte;
+  const motivoSemMedia12 = mesUnicoPec ? null : 'A média de 12 meses compara UM mês: escolha um mês só no período';
+  const periodosMedia12 = useMemo((): PeriodoPec[] => (referenciaPec === 'media12' && mesUnicoPec && pecAte
+    ? mesesDaMedia12(pecAte).map(m => ({ de: m, ate: m, cenario: 'realizado' })) : []), [referenciaPec, mesUnicoPec, pecAte]);
+  const mesesMedia12 = useDrePecuariaLista(ehPec ? clienteId : null, periodosMedia12);
+  const media12 = useMemo((): { linhas: DrePecLinhas | null; carregando: boolean; motivo: string | null } => {
+    if (!mesUnicoPec) return { linhas: null, carregando: false, motivo: motivoSemMedia12 };
+    if (mesesMedia12.length === 0 || mesesMedia12.some(a => a.carregando)) return { linhas: null, carregando: true, motivo: null };
+    const totais = mesesMedia12.flatMap(a => (a.dre ? [a.dre.total] : []));
+    if (totais.length < mesesMedia12.length) return { linhas: null, carregando: false, motivo: 'faltou a leitura de um dos 12 meses' };
+    return { linhas: colunaMedia(totais)?.linhas ?? null, carregando: false, motivo: null };
+  }, [mesUnicoPec, motivoSemMedia12, mesesMedia12]);
   /**
    * OS CHIPS DE Δ E A REFERÊNCIA — DRE-CASCATA-03b/adendo.
    *
@@ -556,8 +612,8 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
    * verdade sobre o que está na tela.
    */
   const escolherReferencia = useCallback((r: ReferenciaPec) => {
-    setVisaoUrl(r === 'meta' ? 'meta' : 'comparacao');
-    if (r !== 'meta') {
+    setVisaoUrl(r === 'meta' ? 'meta' : r === 'media12' ? 'media12' : 'comparacao');
+    if (typeof r === 'number') {
       setNAnosPec(r);
       if (r > 1) setDeltasPec([]);
     }
@@ -567,9 +623,103 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
       visao: visaoPec, de: pecDe, ate: pecAte, real: drePec,
       meta: drePecMeta, carregandoMeta: carregandoPecMeta,
       anos: anosPec.map(a => ({ de: a.periodo.de, ate: a.periodo.ate, dre: a.dre, carregando: a.carregando })),
-      deltas: deltasPec, referencia: referenciaPec,
+      deltas: deltasPec, referencia: referenciaPec, media12,
     })
-    : []), [drePec, pecDe, pecAte, visaoPec, drePecMeta, carregandoPecMeta, anosPec, deltasPec, referenciaPec]);
+    : []), [drePec, pecDe, pecAte, visaoPec, drePecMeta, carregandoPecMeta, anosPec, deltasPec, referenciaPec, media12]);
+  /* ══════════════ O PAINEL DA DIREITA — DRE-PAINEL-01 ══════════════
+     A comparação do painel é a MESMA da grade (o "Comparar com"); as regras são do `src/lib/dre/leitura.ts`. */
+  const comparacaoPainel: Comparacao = referenciaPec === 'meta' ? 'meta' : referenciaPec === 'media12' ? 'media12' : 'ano_anterior';
+  const anoAnteriorPec = anosPec[0] ?? null;
+  const basePainel: DrePecLinhas | null = referenciaPec === 'meta'
+    ? (drePecMeta && !semMovimento(drePecMeta) ? drePecMeta.total : null)
+    : referenciaPec === 'media12' ? media12.linhas
+      : (anoAnteriorPec?.dre && anoAnteriorPec.dre.fazendas.length > 0 ? anoAnteriorPec.dre.total : null);
+  const carregandoBasePainel = referenciaPec === 'meta' ? carregandoPecMeta
+    : referenciaPec === 'media12' ? media12.carregando : (anoAnteriorPec?.carregando ?? true);
+  const rotuloAnoAnteriorPec = pecDe && pecAte ? rotuloCurtoPeriodo(anoMesAntes(pecDe, 1), anoMesAntes(pecAte, 1)) : 'ano anterior';
+  const rotuloBasePainel = referenciaPec === 'meta' ? 'Meta' : referenciaPec === 'media12' ? 'Média 12m' : rotuloAnoAnteriorPec;
+  const rotuloBaseFrase = referenciaPec === 'meta' ? 'a Meta' : referenciaPec === 'media12' ? 'a média de 12 meses' : rotuloAnoAnteriorPec;
+  /* D5 — as Notas da Receita em "A lançar" EMITIDAS no período: o único número do painel que não sai da RPC do DRE (fonte citada na frase). */
+  const receitaPec = useNotasDaReceita(ehPec ? clienteId : null);
+  const notasALancarPec = useMemo((): number | null => {
+    const filtro = ABAS_DA_RECEITA.find(a => a.valor === 'lancar')?.filtro;
+    if (!receitaPec.data || !filtro || !pecDe || !pecAte) return null;
+    return receitaPec.data.lista.filter(n => filtro(n) && !!n.emissao
+      && n.emissao.slice(0, 7) >= pecDe && n.emissao.slice(0, 7) <= pecAte).length;
+  }, [receitaPec.data, pecDe, pecAte]);
+  /* P9 — o selo: conciliação (a fonte da fita), pastos e Valor do rebanho do último mês (P1/P2 por fazenda), o preço e a fonte do P1. */
+  const anoDoSelo = pecAte ? Number(pecAte.slice(0, 4)) : Number.NaN;
+  const statusAnoPec = useStatusAno(ehPec ? clienteId : null, anoDoSelo);
+  const fazendasDoSelo = useMemo(() => (drePec?.fazendas ?? []).map(f => ({ id: f.fazenda_id, nome: f.nome })), [drePec]);
+  const pilaresPec = useStatusPilaresLote(fazendasDoSelo, pecAte ?? undefined, ehPec && !!pecAte);
+  const seloPec = useMemo(() => {
+    const meses: string[] = [];
+    if (pecDe && pecAte) for (let m = pecDe; m <= pecAte; m = proximoMes(m)) meses.push(m);
+    const totais = (statusAnoPec.data ?? []).filter(r => r.nivel === 'total');
+    const porMes = meses.map(m => {
+      if (Number(m.slice(0, 4)) !== anoDoSelo || !statusAnoPec.data) return null;
+      const r = totais.find(t => t.ano_mes === m);
+      return r ? r.status === 'conciliado' : null;
+    });
+    const conciliado = porMes.length === 0 || porMes.some(v => v === null) ? (porMes.some(v => v === false) ? false : null)
+      : porMes.every(v => v === true);
+    const fechado = (k: 'p1' | 'p2') => (pilaresPec.loading || pilaresPec.data.length === 0 ? null
+      : pilaresPec.data.every(f => f[k] === 'oficial' || f[k] === 'nao_aplicavel'));
+    const efeito = drePec?.total.efeito_mercado;
+    return seloDeConfianca({
+      conciliado, pastosFechados: fechado('p1'), valorRebanhoFechado: fechado('p2'),
+      precoMudou: efeito == null ? null : Math.round(efeito * 100) !== 0,
+      p1_fonte: drePec?.total.p1_fonte ?? null,
+    });
+  }, [statusAnoPec.data, pilaresPec, drePec, pecDe, pecAte, anoDoSelo]);
+  /* P8 — "Fora do DRE: N lançamentos · R$ X" (a contagem e a soma vêm da `fn_dre_pecuaria`); a lista só com o modal aberto. */
+  const [foraDoDreAberto, setForaDoDreAberto] = useState(false);
+  const foraDoDre = useDrePecuariaForaDoDre(clienteId, pecDe, pecAte, foraDoDreAberto);
+  const valorForaDoDre = useMemo((): ValorDre | null => (!foraDoDreAberto ? null : {
+    titulo: 'Fora do DRE',
+    contexto: ['Pecuária', 'Todas as fazendas', descreverPeriodo(periodo), '"Compõe DRE" desmarcado'].join(' · '),
+    porUnidade: () => '—', porUnidadeNum: () => '—', rotuloUnidade: '', mostraPorUnidade: false,
+    direto: drePec?.total.fora_do_dre?.valor ?? null, rateio: null,
+    rotuloRateio: '', rotuloDireto: 'Fora do DRE', seloRateio: '', saida: false,
+    linhas: foraDoDre.lancamentos.map((l, i) => ({
+      chave: `f-${l.id ?? i}`, idEditavel: l.origem === 'lancamento' ? l.id : null,
+      competencia: l.data, pagamento: l.pagamento ?? null, descricao: l.descricao, favorecido: l.favorecido,
+      fazenda: l.fazenda, subcentro: l.subcentro, centro: l.centro, valor: l.valor, status: l.status, rateioPct: null,
+    })),
+    etapas: [], encontro: null, rodapeRateio: '',
+  }), [foraDoDreAberto, foraDoDre.lancamentos, drePec, periodo]);
+  /* Os links do painel: cada destino abre o que JÁ existe (o modal da Variação, o de valor da linha, as Notas, a Conciliação, o fechamento). */
+  const irParaDoPainel = (d: DestinoDoPainel) => {
+    if (!drePec || !pecDe || !pecAte) return;
+    const t = drePec.total;
+    const linhaDoDre = (bloco: string, rotulo: string, centro: string | null, de = pecDe, ate = pecAte) =>
+      setRecortePec({ fazendaId: null, fazendaNome: 'Total', bloco, centro, rotulo, de, ate, cenario: 'realizado' });
+    switch (d.tipo) {
+      case 'valor_rebanho':
+        setDidatico({ fazendaId: null, nome: 'Total', qual: 'vpb', de: pecDe, ate: pecAte, insumos: {
+          reposicao: t.reposicao, custeio: t.custo_variavel + t.custo_fixo, atProduzida: t.producao.at_produzida, vendas: t.vendas,
+          receitaLiquida: t.receita_liquida, vbp: t.vbp, resultadoComMercado: t.resultado_com_mercado,
+        } });
+        return;
+      case 'abates': linhaDoDre('venda', 'Abates', 'Abates'); return;
+      case 'linha_dre': {
+        const de = d.mes ?? pecDe; const ate = d.mes ?? pecAte;
+        if (d.chave === 'rateio_adm') {
+          setRecortePec({ fazendaId: null, fazendaNome: 'Total', bloco: 'rateio_adm', centro: null, rotulo: 'Rateio administrativo',
+            de, ate, cenario: 'realizado', soRateio: true,
+            celula: { direto: null, rateio: t.rateio_adm, grupo: null, cabMedia: t.patrimonio.cab_media, meses: drePec.periodo.meses, comRateio: true } });
+          return;
+        }
+        const bloco = BLOCO_DA_LINHA[d.chave];
+        if (bloco) linhaDoDre(bloco, ROTULO_DA_LEITURA[d.chave] ?? String(d.chave), null, de, ate);
+        return;
+      }
+      case 'notas_a_lancar': onIrParaNotasALancar?.(); return;
+      case 'conciliacao': onIrParaConciliacao?.(); return;
+      case 'fechamento_pastos': onIrParaFechamento?.(); return;
+    }
+  };
+
   /* ⚠ O MODAL DE LANÇAMENTOS DIZ DE QUE COLUNA VEIO: a lista da coluna de 2024 não pode aparecer
      sob o rótulo do período da tela, nem a de meta sob o do realizado. */
   const rotuloRecortePec = useMemo(() => {
@@ -619,7 +769,14 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
    * alternar. A da lavoura já morava aqui (`abertos`).
    */
 
-  const [abertosPec, setAbertosPec] = useState<Record<string, boolean>>({});
+  /* DRE-PAINEL-01 — abre em "O que mudou": os grupos do Detalhado já nascem abertos (a grade esconde o que não mudou). */
+  const gruposAbertosDoDetalhado = () => Object.fromEntries(
+    LINHAS_DO_MODO('detalhado').filter(d => d.expande || d.agrupa).map(d => [d.id ?? d.chave, true]));
+  const [abertosPec, setAbertosPec] = useState<Record<string, boolean>>(gruposAbertosDoDetalhado);
+  const escolherAbertura = (a: 'resumido' | 'mudou' | 'aberto') => {
+    setGrauAberturaPec(a);
+    setAbertosPec(a === 'resumido' ? {} : gruposAbertosDoDetalhado());
+  };
   /* ⚠ OS GRUPOS QUE EXISTEM EM CADA ABA, para o "abrir tudo" saber o que abrir. Na pecuária eles
      dependem do modo: o Resumido tem três (custo variável, custo fixo e investimento). */
   const gruposDaAba = useMemo(() => (ehPec
@@ -650,7 +807,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
    * unidade e o "abrir tudo" nunca se moveram um pixel.
    */
   /* ⚠ O Δ PRECISA DE UMA REFERÊNCIA SÓ — ver `escolherReferencia`. */
-  const deltaIndisponivel = referenciaPec !== 'meta' && referenciaPec > 1;
+  const deltaIndisponivel = typeof referenciaPec === 'number' && referenciaPec > 1;
   /* ⚠ DRE-LEVE-01 (item 1, D5a): A 2ª FAIXA DA PECUÁRIA — 22px, uma linha. O rateio nos grupos, o Δ e o "Por fazenda" foram para o "Mais ▾"
      (`MaisPec`); o aviso "sem plano de contas" mora no meio dela (na Lavoura, segue na linha própria). Os lugares são fixos: o aviso
      ocupa o vão flexível e só ele encolhe. */
@@ -660,7 +817,8 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
         opcoes={UNIDADES_PEC_GRADE.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
       <MaisPec rateioNosGrupos={rateioNosGruposPec} onRateioNosGrupos={setRateioNosGruposPec}
         deltas={deltasPec} onDeltas={setDeltasPec} deltaIndisponivel={deltaIndisponivel}
-        visao={visaoPec} onVisao={escolherVisao} nFazendas={drePec?.fazendas.length ?? 0} />
+        visao={visaoPec} onVisao={escolherVisao} nFazendas={drePec?.fazendas.length ?? 0}
+        referencia={referenciaPec} onReferencia={escolherReferencia} />
       {/* ⚠ UM BOTÃO SÓ, QUE DIZ O QUE VAI FAZER — o mesmo da linha de antes, palavra por palavra. */}
       <button type="button" onClick={alternarTudo}
         className="w-[68px] shrink-0 whitespace-nowrap rounded border px-2 text-[10px] text-muted-foreground
@@ -1083,10 +1241,15 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
                   ⚠ SÓ A PECUÁRIA O TEM (a lavoura não tem cascata resumida), e o slot é reservado
                   do mesmo tamanho nas duas abas pela mesma lei do seletor de período: sem a
                   reserva, o seletor de período e o botão Ampliar andariam ao trocar de aba. */}
-              <span className="flex w-[148px] shrink-0 items-center justify-end">
+              <span className="flex w-[206px] shrink-0 items-center justify-end">
                 {ehPec && (
-                  <Segmentado altura={22} valor={modoPec} onEscolher={setModoPec}
-                    opcoes={[{ valor: 'resumido', rotulo: 'Resumido' }, { valor: 'detalhado', rotulo: 'Detalhado' }]} />
+                  <Segmentado altura={22} fonte={10} valor={grauAberturaPec} onEscolher={escolherAbertura}
+                    opcoes={[
+                      { valor: 'resumido', rotulo: 'Resumido', title: 'A cascata curta, grupos fechados' },
+                      { valor: 'mudou', rotulo: 'O que mudou',
+                        title: 'Cada grupo abre só as linhas com desvio (≥ 20% e ≥ R$ 10 mil contra a comparação); o resto fica em "+ N itens sem desvio"' },
+                      { valor: 'aberto', rotulo: 'Tudo aberto', title: 'O Detalhado com todos os grupos abertos' },
+                    ]} />
                 )}
               </span>
               {/* ⚠ O MESMO SLOT, OUTRA PERGUNTA: a lavoura fecha por SAFRA (o ciclo), a pecuária
@@ -1121,12 +1284,14 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
               </div>
               {/* ⚠ O LUGAR DO "Comparar" É RESERVADO NAS DUAS ABAS (vazio na Lavoura): sem ele, trocar de aba andaria o seletor de
                   atividade, o modo e o período — a lei de estabilidade. */}
-              <span className="flex w-[226px] shrink-0 items-center justify-end">
+              <span className="flex w-[262px] shrink-0 items-center justify-end">
                 {ehPec && drePec && (
                   <ComparacaoPec visao={visaoPec} referencia={referenciaPec} onReferencia={escolherReferencia}
                     meta={drePecMeta} carregandoMeta={carregandoPecMeta}
                     anoAnterior={anosPec[0]?.dre ?? null} carregandoAnoAnterior={anosPec[0]?.carregando ?? true}
-                    motivoSemMeta={veMeta ? null : MOTIVO_SEM_META} />
+                    motivoSemMeta={veMeta ? null : MOTIVO_SEM_META}
+                    rotuloAnoAnterior={pecDe && pecAte ? rotuloCurtoPeriodo(anoMesAntes(pecDe, 1), anoMesAntes(pecAte, 1)) : 'Ano anterior'}
+                    motivoSemMedia12={motivoSemMedia12} />
                 )}
               </span>
               <button type="button" onClick={() => setAmpliado(true)}
@@ -1330,9 +1495,16 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
               estado segue em `f_vista`: o link que abria a cascata abre o modal. */}
           <PecGraficoModal aberto={vistaPec === 'grafico'} onFechar={() => setVistaPec('tabela')}
             colunas={colunasPec} clienteId={clienteId} clienteNome={clienteAtual?.nome ?? null} />
-          <PecDrePanel colunas={colunasPec} alturaCartao={alturaCartao} cartaoRef={cartao}
+          {/* DRE-PAINEL-01 — GRADE FIXA 58/42 (UI-LARGURA-FIXA-01): a grade e o rodapé "Fora do DRE" à esquerda, o painel à direita.
+              No Ampliar, só a grade (como antes). */}
+          <div className={cn(!ampliado && 'grid items-start gap-3')}
+            style={!ampliado ? { gridTemplateColumns: 'minmax(0,58fr) minmax(0,42fr)' } : undefined}>
+          <div className="flex min-w-0 flex-col gap-1">
+          <PecDrePanel colunas={colunasPec} cartaoRef={cartao}
+            alturaCartao={alturaCartao == null ? null : alturaCartao - ALTURA_RODAPE_FORA_DRE}
             unidades={unidadesPec}
             modo={modoPec} abertos={abertosPec} onAbertos={f => setAbertosPec(f)}
+            oQueMudou={grauAberturaPec === 'mudou'}
             rateioNosGrupos={rateioNosGruposPec}
             onAbrirLista={setRecortePec}
             /* ⚠ O PERÍODO VEM DA COLUNA — VARIACAO-REBANHO-MODAL-01. Guardá-lo aqui é o que permite
@@ -1341,8 +1513,22 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
             onAbrirDidatico={(fazendaId, nome, qual, de, ate, insumos) =>
               setDidatico({ fazendaId, nome, qual, de, ate, insumos })}
             onAbrirHistorico={setHistoricoPec} />
+          <RodapeForaDoDre fora={drePec.total.fora_do_dre ?? null} onAbrir={() => setForaDoDreAberto(true)} />
+          </div>
+          {!ampliado && pecDe && pecAte && (
+            <PecPainelLeitura atual={drePec.total} base={basePainel} comparacao={comparacaoPainel}
+              rotuloAtual={rotuloCurtoPeriodo(pecDe, pecAte)} rotuloBase={rotuloBasePainel} rotuloBaseFrase={rotuloBaseFrase}
+              carregandoBase={carregandoBasePainel} notasALancar={notasALancarPec} selo={seloPec}
+              altura={alturaCartao} onDestino={irParaDoPainel} />
+          )}
+          </div>
           </>
         )
+      )}
+      {ehPec && valorForaDoDre && (
+        <ModalValorDre aberto valor={valorForaDoDre} carregando={foraDoDre.carregando} comRateioInicial={false}
+          abaInicial="lancamentos" onFechar={() => setForaDoDreAberto(false)}
+          onAbrirLancamento={catalogosProntos ? id => { void abrirLancamento(id); } : undefined} />
       )}
 
       {/* ⚠ OS TRÊS MODAIS DA PECUÁRIA SÃO IRMÃOS DA GRADE, nunca filhos de uma célula: assim

@@ -82,6 +82,11 @@ export interface ColunaPec {
    * tinha de procurar qual era o dado.
    */
   comparacao?: boolean;
+  /**
+   * A COLUNA NÃO TEM LISTA POR TRÁS — DRE-PAINEL-01: a "Média 12m" é a média de 12 chamadas, e nenhum
+   * conjunto de lançamentos soma ao valor dela. Clicar não abre nada (abrir os 12 meses mostraria 12× o número).
+   */
+  semLista?: boolean;
 }
 
 /**
@@ -457,8 +462,11 @@ export const BASE_DO_ARROBA: Record<ChaveLinhaPec, BaseArroba> = {
   centros: 'produzida', centros_juros: 'produzida', a_pagar: 'produzida', fora_do_dre: 'produzida',
 };
 
+/* ⚠ A @ VENDIDA É `at_vendida` (DRE-PAINEL-01, D-A6 aprovada 20/11): abate + venda + venda em pé, SEM o consumo, a mesma base do R$/@
+   da leitura do mês. Antes dividia pelas @ desfrutadas (com o consumo), e a grade e a leitura mostravam dois R$/@ de venda diferentes
+   (NJ out/26: 357,93 × 361,08). Sem o campo, "—". */
 export const arrobaDaBase = (l: DrePecLinhas, b: BaseArroba): number | null =>
-  (b === 'vendida' ? l.producao.at_desfrutada
+  (b === 'vendida' ? (l.producao.at_vendida ?? null)
     : b === 'comprada' ? l.producao.at_comprada
       : l.producao.at_produzida);
 
