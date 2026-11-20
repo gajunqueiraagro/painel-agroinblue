@@ -4,6 +4,9 @@
  * Cada tela registra o banco simulado em `globalThis.__bancoBancada` (mocks/supabase.ts) antes de montar.
  */
 import React from 'react';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { FiltroMultiplo } from '@/v2/components/FiltroMultiplo';
+import type { Periodo } from '@/v2/lib/periodo';
 import { opcoesDoAtalho } from '@/v2/lib/atalhosProducao';
 
 import { ChuvasTab } from '@/pages/ChuvasTab';
@@ -901,6 +904,25 @@ if (tela === 'mesclar') {
      (`&token_hash=…&type=invite|recovery|email_change`, só verificada no clique). Tela inteira, sem a casca do V2. */
   g.__bancoBancada = { from: () => [], rpc: () => null };
   raiz.render(<MemoryRouter>{tela === 'entrada' ? <AuthPage /> : <DefinirSenhaPage />}</MemoryRouter>);
+} else if (tela === 'filtros-padrao') {
+  /* PROD-LANC-FILTROS-01 — Produção › Lançamentos: a fita (o "Personalizado…" = o SeletorDePeriodo do DRE) e o filtro de Categorias no padrão
+     único de seleção múltipla, com as 9 categorias do cadastro; `&n=grande` = contagens de 4 dígitos (o pior caso de largura). SINTÉTICO. */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  const grande = q.get('n') === 'grande';
+  const CATS = ['Mamotes M', 'Desmama M', 'Garrotes', 'Bois', 'Touros', 'Mamotes F', 'Desmama F', 'Novilhas', 'Vacas']
+    .map((l, i) => ({ value: `c${i}`, label: l, contagem: grande ? 1000 + i * 1111 : i * 3 }));
+  function FiltrosPadrao() {
+    const [periodo, setPeriodo] = React.useState<Periodo>({ de: { ano: 2026, mes: 10 }, ate: { ano: 2026, mes: 10 } });
+    const [sel, setSel] = React.useState<string[]>(['c3', 'c8']);
+    return (
+      <div className="flex flex-wrap items-center gap-1 bg-navy p-2" data-testid="filtros-padrao">
+        <SeletorPeriodo className="flex-1" anos={['2025', '2026']} periodo={periodo} onPeriodoChange={setPeriodo} />
+        <FiltroMultiplo opcoes={CATS} selecionadas={sel} onChange={setSel} rotulo={{ todos: 'Categorias', um: 'categoria', varios: 'categorias' }}
+          className="h-6 w-[136px] justify-between gap-1 whitespace-nowrap px-1.5 text-[10px] font-bold bg-card text-foreground border-border" />
+      </div>
+    );
+  }
+  montar(<div className="p-3"><FiltrosPadrao /></div>);
 } else if (tela === 'trocar-senha') {
   /* ACESSO-CONVITE-01 PR 1 — o "Trocar senha" (o mesmo gatilho da barra do topo; o cenário abre o modal) */
   g.__bancoBancada = { from: () => [], rpc: () => null };
@@ -2084,12 +2106,13 @@ if (tela === 'mesclar') {
   const montarReceita = async () => {
     const { NotasDaReceitaDialog } = await import('@/components/fiscal/NotasDaReceitaDialog');
     const { NovoMenuLancamentos } = await import('@/components/financeiro-v2/NovoMenuLancamentos');
-    const { DADOS_RECEITA_BANCADA } = await import('./dados/notasReceita');
+    const { DADOS_RECEITA_BANCADA, DADOS_RECEITA_CURTA } = await import('./dados/notasReceita');
     if (tela === 'notas-receita-menu') {
       montar(<div className="flex justify-end p-6"><NovoMenuLancamentos boletosPedemAcao={3} notasDaReceita={12} onEmBranco={() => {}} onDaNota={() => {}} onDosBoletos={() => {}} /></div>);
       return;
     }
-    montar(<NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={DADOS_RECEITA_BANCADA} carregando={false} erro={null} aoFechar={() => {}}
+    /* UI-LARGURA-FIXA-01 — `v=curta`: o 2º cliente (poucas notas, nomes curtos): a divisão tem de ser a mesma */
+    montar(<NotasDaReceitaDialog clienteNome={v === 'curta' ? 'Vera' : 'Cliente Bancada'} dados={v === 'curta' ? DADOS_RECEITA_CURTA : DADOS_RECEITA_BANCADA} carregando={false} erro={null} aoFechar={() => {}}
       aoLancar={() => {}} aoVincular={async () => null} lerXml={async () => '<nfeProc/>'}
       /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — a prévia SINTÉTICA do "Registrar bem" (2 itens, nome comprido, valor no teto) */
       registrarBem={async () => ({ ok: true, motivo: 'comodato', fornecedor: 'Distribuidora de Combustível Exemplo de Nome Comprido Ltda', nf: '117573',
@@ -2774,7 +2797,8 @@ if (tela === 'mesclar') {
     const { ItensDaNotaDialog } = await import('@/components/financeiro-v2/ItensDaNotaDialog');
     const base: any = itensDoXml(bytes);
     const LONGA = 'DEFENSIVO AGRICOLA SINTETICO DE NOME MUITO COMPRIDO PARA O PIOR CASO DA BANCADA COM EMBALAGEM DE 20 LITROS E LOTE ';
-    const itens = Array.from({ length: 40 }, (_, k) => ({ ...base.itens[k % 3], nItem: k + 1, descricao: k % 2 ? `${LONGA}${k}`.slice(0, 120) : base.itens[k % 3].descricao }));
+    /* NOTA-RECEITA-DANFE-ANEXO-01 — `v=dois`: a nota de 2 itens (a tabela encolhe; sem o bloco branco) */
+    const itens = Array.from({ length: v === 'dois' ? 2 : 40 }, (_, k) => ({ ...base.itens[k % 3], nItem: k + 1, descricao: k % 2 ? `${LONGA}${k}`.slice(0, 120) : base.itens[k % 3].descricao }));
     const soma = (f: (i: any) => number) => itens.reduce((s, i) => s + f(i), 0);
     const lidos = { ...base, itens, totais: { ...base.totais, produtosCent: soma((i) => i.produtoCent), descontoCent: soma((i) => i.descontoCent),
       freteCent: soma((i) => i.freteCent), seguroCent: soma((i) => i.seguroCent), outrasCent: soma((i) => i.outrasCent), notaCent: soma((i) => i.liquidoCent) } };
@@ -2791,6 +2815,61 @@ if (tela === 'mesclar') {
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();
+} else if (tela === 'volta-origem') {
+  /* NAV-VOLTA-ORIGEM-01 — a peça (`useCamadas`) no caso das Notas da Receita, SINTÉTICO: a lista de baixo + um "Da nota fiscal" de mentira
+     por cima (Fechar · Lançar). Lançar tira a nota da lista (como a releitura do app) e volta: a próxima linha fica destacada. */
+  const montarVolta = async () => {
+    const { NotasDaReceitaDialog } = await import('@/components/fiscal/NotasDaReceitaDialog');
+    const { Camada, useCamadas } = await import('@/components/ui/camadas');
+    const { Dialog, DialogContent, DialogTitle } = await import('@/components/ui/dialog');
+    const { DADOS_RECEITA_BANCADA } = await import('./dados/notasReceita');
+    const { useEffect, useState } = await import('react');
+    function Volta() {
+      const camadas = useCamadas<'receita' | 'xml'>();
+      /* a lista entra como camada (como o "Notas da Receita" do Financeiro: `camadas.abrir('receita')`) */
+      useEffect(() => { camadas.abrir('receita'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      const [dados, setDados] = useState(DADOS_RECEITA_BANCADA);
+      const [nota, setNota] = useState<string | null>(null);
+      return (<>
+        <Camada coberta={camadas.coberta('receita')}>
+          <NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={dados} carregando={false} erro={null} aoFechar={() => {}} aoVincular={async () => null}
+            lerXml={async () => '<nfeProc/>'} retorno={camadas.retornoPara('receita')}
+            aoLancar={(arquivo) => { setNota(arquivo.name.replace(/^NFe|\.xml$/g, '')); camadas.abrir('xml', 'receita'); }} />
+        </Camada>
+        {camadas.aberta('xml') && (
+          <Dialog open><DialogContent className="w-[520px] max-w-none p-4" data-testid="volta-de-cima">
+            <DialogTitle className="text-[13px]">Da nota fiscal (simulado)</DialogTitle>
+            <p className="text-[11px] text-muted-foreground">A lista de baixo segue montada, invisível: a aba, os filtros, a ordem e a rolagem ficam.</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="rounded border px-2 py-1 text-[11px]" data-testid="volta-fechar" onClick={() => camadas.fechar('xml')}>Fechar</button>
+              <button type="button" className="rounded bg-primary px-2 py-1 text-[11px] text-primary-foreground" data-testid="volta-lancar"
+                onClick={() => { setDados((d) => ({ ...d, lista: d.lista.filter((n) => n.chave !== nota) })); camadas.fechar('xml', 'salvou', nota); }}>Lançar</button>
+            </div>
+          </DialogContent></Dialog>
+        )}
+      </>);
+    }
+    montar(<Volta />);
+  };
+  void montarVolta();
+} else if (tela === 'danfe-guardadas') {
+  /* NOTA-RECEITA-DANFE-ANEXO-01 — o gesto "DANFE das notas já guardadas" com dado SINTÉTICO: 21 notas (emitentes compridos, a 8.702 em 4
+     parcelas, 2 sem o XML no armazenamento) ou `v=curta` (2 notas, nomes curtos — o 2º cliente da UI-LARGURA-FIXA-01) */
+  const montarDanfes = async () => {
+    const { DanfeDasNotasGuardadasDialog } = await import('@/components/financeiro-v2/DanfeDasNotasGuardadasDialog');
+    const ch = (n: number) => `5026091122233300042455001${String(n).padStart(9, '0')}1000000010`;
+    const NOMES = ['Cooperativa Agroindustrial Sintética dos Produtores Rurais do Centro-Oeste Ltda', 'Casa Agro Exemplo', 'Veterinária Exemplo de Nome Comprido Ltda'];
+    const n = v === 'curta' ? 2 : 21;
+    const cands = Array.from({ length: n }, (_, k) => ({ chave: ch(8000 + k), ligados: k === 0 ? ['p2', 'p3', 'p4'] : [],
+      doc: { id: `x${k}`, lancamento_id: `l${k}`, chave_acesso: ch(8000 + k), nome: `NFe-${8000 + k}.xml`, tipo: 'application/xml', url: `cli/x${k}.xml`,
+        especie: 'nf', numero: String(k === 0 ? 8702 : 98000 + k * 37), serie: '1', data_emissao: `2026-09-${String(1 + (k % 28)).padStart(2, '0')}`,
+        valor_documento: 259.5, emitente_id: null, emitente_nome: v === 'curta' ? ['Agro Sul', 'Pet Vet'][k] : NOMES[k % 3], emitente_documento: '01440000000200' } }));
+    const gerar = async (_c: string, c: { doc: { id: string } }): Promise<{ ok: true; bytes: number } | { ok: false; frase: string }> => (['x5', 'x13'].includes(c.doc.id)
+      ? { ok: false, frase: 'sem XML guardado' } : { ok: true, bytes: 78000 + c.doc.id.length * 1500 });
+    raiz.render(<DanfeDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} ler={async () => ({ ok: true, valor: cands })} gerar={gerar}
+      titulares={async () => ['t1']} buscar={async () => ({ ok: false, frase: 'bancada' })} />);
+  };
+  void montarDanfes();
 } else if (tela === 'custeio-txt') {
   /* CONC-CUSTEIO-FONTE-01 — Conciliação › Importar banco › "Relatório de custeio", no molde do caso do Gabriel (69 itens, divergência em 3
      escopos), com TXT SINTÉTICO no formato do relatório: 3 famílias, 45 itens de nome comprido; os subtotais impressos de 3 sub-famílias

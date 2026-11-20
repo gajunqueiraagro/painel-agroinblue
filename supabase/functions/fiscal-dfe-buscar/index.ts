@@ -15,6 +15,7 @@ import { abrirCredencial } from "../_shared/dfe/credencialA1.ts";
 import { URL_DIST_DFE } from "../_shared/dfe/distribuicaoDfe.ts";
 import { importarPublica, lerRespostaLambda, montarPedidoLambda } from "../_shared/dfe/clienteLambda.ts";
 import { CAB } from "../_shared/dfe/protocoloLambda.ts";
+import { cienciaAutomatica } from "../_shared/dfe/cienciaAutomatica.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -120,7 +121,40 @@ Deno.serve(async (req) => {
 
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim() || null;
   try {
+    const inicio = Date.now();
     const r = await buscarDfe({ token, titularId: texto(campo("titular_id")) || null, ambiente: campo("ambiente"), ensaio: campo("ensaio"), chave: campo("chave") }, pecas);
+    /* CIÊNCIA AUTOMÁTICA (210210, regra do produto 18/11): depois de uma busca que andou (137/138), sem ensaio e sem consChNFe, as notas em
+       RESUMO do titular recebem a ciência pela borda `fiscal-dfe-ciencia` (via 'automatica', service_role). O parâmetro do produto, o limite
+       e as que faltam vêm do banco (`fn_fiscal_dfe_ciencia_pendentes`); a busca nunca falha por causa da ciência. */
+    const titularId = texto(campo("titular_id"));
+    const ambiente = campo("ambiente");
+    const cstat = texto(Reflect.get(r.corpo, "cstat"));
+    if (r.status === 200 && Reflect.get(r.corpo, "ok") === true && (cstat === "137" || cstat === "138") && campo("ensaio") !== true
+      && !campo("chave") && titularId && (ambiente === "producao" || ambiente === "homologacao")) {
+      try {
+        const ciencia = await cienciaAutomatica(inicio, {
+          pendentes: async () => {
+            const { data, error } = await admin.rpc("fn_fiscal_dfe_ciencia_pendentes", { p_titular_id: titularId, p_ambiente: ambiente });
+            if (error || !data || typeof data !== "object") throw new Error(error?.message ?? "sem resposta");
+            const chaves = Reflect.get(data, "chaves");
+            return { ligada: Reflect.get(data, "ligada") === true, limite: Number(Reflect.get(data, "limite") ?? 0),
+              chaves: Array.isArray(chaves) ? chaves.filter((x): x is string => typeof x === "string") : [], motivo: texto(Reflect.get(data, "motivo")) || null };
+          },
+          enviar: async (chaveNFe) => {
+            const resp = await fetch(`${url}/functions/v1/fiscal-dfe-ciencia`, {
+              method: "POST", headers: { Authorization: `Bearer ${servico}`, apikey: servico, "Content-Type": "application/json" },
+              body: JSON.stringify({ titular_id: titularId, ambiente, chave: chaveNFe, via: "automatica" }), signal: AbortSignal.timeout(ESPERA_MS + 5_000),
+            });
+            const lido: unknown = await resp.json().catch(() => ({}));
+            return { status: resp.status, corpo: lido && typeof lido === "object" ? Object.fromEntries(Object.entries(lido)) : {} };
+          },
+          agoraMs: () => Date.now(),
+        });
+        return json(r.status, { ...r.corpo, ciencia });
+      } catch {
+        return json(r.status, { ...r.corpo, ciencia: { parou: "interno" } });
+      }
+    }
     return json(r.status, r.corpo);
   } catch {
     return json(500, { ok: false, recusa: "interno", frase: "A busca falhou no meio. Veja a trilha da busca antes de tentar de novo." });

@@ -605,8 +605,9 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
   const [rateioDentro, setRateioDentro] = useState(false);
   /* ⚠ AS UNIDADES SÃO ESCOLHA MÚLTIPLA — DRE-UNIDADES-01, e cada aba tem a sua lista: a lavoura
      fecha em saca ou tonelada, a pecuária em cabeça e arroba. As duas abrem com R$ e R$/ha. */
-  const [unidadesLav, setUnidadesLav] = useState<readonly UnidadeLav[]>(['rs', 'ha']);
-  const [unidadesPec, setUnidadesPec] = useState<readonly UnidadePec[]>(['rs', 'ha']);
+  /* DRE-AJUSTES-05 (Gabriel 19/11): o DRE SEMPRE abre em R$ — o R$/ha só com o chip (nunca lembrado de antes) */
+  const [unidadesLav, setUnidadesLav] = useState<readonly UnidadeLav[]>(['rs']);
+  const [unidadesPec, setUnidadesPec] = useState<readonly UnidadePec[]>(['rs']);
   const [ampliado, setAmpliado] = useState(false);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   /**
@@ -999,7 +1000,13 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
     };
     medir();
     window.addEventListener('resize', medir);
-    return () => window.removeEventListener('resize', medir);
+    /* ⚠ E QUANDO O QUE FICA ACIMA MUDA DE TAMANHO (DRE-AJUSTES-05 D1, Gabriel 19/11): medido na bancada a 1126×579, a grade
+       descia 72px DEPOIS da medida (o topo da tela termina de montar) e o teto antigo (429px, devia ser 357) a deixava passar do
+       pé da janela — a tabela cabia no teto, o cartão não rolava e quem rolava era a página: o cabeçalho soltava. Com R$ e R$/ha
+       a tabela era mais alta que o teto e o defeito ficava escondido. Medir de novo é idempotente (mesmo topo = mesmo estado). */
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(medir);
+    if (ro && raiz.current) ro.observe(raiz.current);
+    return () => { window.removeEventListener('resize', medir); ro?.disconnect(); };
   }, [ampliado, culturaAberta, aba, unidadesLav, unidadesPec, rateioDentro, dre]);
 
 

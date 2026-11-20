@@ -30,12 +30,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  MESES_CURTOS, anoInteiro, anoMes, contarMeses, descreverDias, descreverPeriodo,
-  ehAnoInteiro, ehMesUnico, mesCorrente, mesUnico, ordenar, type Periodo,
+  MESES_CURTOS, anoInteiro, anoMes, contarMeses, descreverPeriodo,
+  ehAnoInteiro, ehMesUnico, intervaloDoPeriodo, mesCorrente, mesUnico, ordenar, periodoDoIntervalo, type Periodo,
 } from '@/v2/lib/periodo';
+import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
 
 export { MESES_CURTOS };
 
@@ -149,7 +149,8 @@ export function SeletorPeriodo({
   const entreAnos = periodo.de.ano !== periodo.ate.ano;
 
   const [inicioParcial, setInicioParcial] = useState<{ ano: number; mes: number } | null>(null);
-  const [popoverAberto, setPopoverAberto] = useState(false);
+  /* PROD-LANC-FILTROS-01 — o "Personalizado…" abre o SeletorDePeriodo (o único do produto) */
+  const [personalizado, setPersonalizado] = useState(false);
 
   /* Um período que chega de fora (link, drill, F5) descarta um shift pela metade. */
   const chave = `${anoMes(periodo.de)}|${anoMes(periodo.ate)}`;
@@ -231,6 +232,18 @@ export function SeletorPeriodo({
   })();
 
   const podeLimpar = !inicioParcial && !ehMesUnico(periodo);
+
+  const botaoPersonalizado = (
+    <button
+      type="button"
+      className="shrink-0"
+      data-testid="periodo-personalizado-gatilho"
+      onClick={() => setPersonalizado(true)}
+      style={{ ...CONTROLE, padding: '0 10px', fontWeight: 500, ...(entreAnos ? CONTROLE_ESCOLHIDO : {}) }}
+    >
+      Personalizado…
+    </button>
+  );
 
   return (
     <div className={className}>
@@ -319,25 +332,18 @@ export function SeletorPeriodo({
               Ano
             </button>
 
-            <Popover open={popoverAberto} onOpenChange={setPopoverAberto}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="shrink-0"
-                  style={{ ...CONTROLE, padding: '0 10px', fontWeight: 500, ...(entreAnos ? CONTROLE_ESCOLHIDO : {}) }}
-                >
-                  Personalizado…
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-auto p-3">
-                <PopoverPersonalizado
-                  periodo={periodo}
-                  anos={listaAnos}
-                  onCancelar={() => setPopoverAberto(false)}
-                  onAplicar={(p) => { setPopoverAberto(false); setInicioParcial(null); onPeriodoChange(p); }}
-                />
-              </PopoverContent>
-            </Popover>
+            {/* PROD-LANC-FILTROS-01 (Gabriel 19/11): o "Personalizado…" abre o SeletorDePeriodo do DRE — o ÚNICO seletor de período
+                personalizado do produto (um campo, 2 calendários Início/Fim + atalhos, Cancelar/Aplicar); por MÊS (a fita fala em meses: o
+                clique no calendário escolhe o mês inteiro). A conversão mês ↔ data mora na borda (`intervaloDoPeriodo`/`periodoDoIntervalo`). */}
+            {/* o seletor só MONTA no clique (nasce aberto) e desmonta ao fechar: a fita está em quase toda tela e ele lê o cliente */}
+            {personalizado ? (
+              <SeletorDePeriodo porMes compacto testid="periodo-personalizado" abertoInicial onFechar={() => setPersonalizado(false)}
+                valor={intervaloDoPeriodo(periodo)}
+                anoMaisAntigo={listaAnos.length ? Math.min(...listaAnos.map(Number)) : null}
+                onChange={(i) => { const p = periodoDoIntervalo(i); if (p) { setInicioParcial(null); onPeriodoChange(p); } }}
+                gatilho={botaoPersonalizado}
+              />
+            ) : botaoPersonalizado}
           </div>
         )}
 
@@ -404,67 +410,3 @@ export function SeletorPeriodo({
  * clique: escolher "de jan/2024" com o "até" ainda em dez/2026 pediria três anos de dado
  * que ninguém quis ver. Cancelar descarta; só Aplicar fala com a tela.
  */
-function PopoverPersonalizado({
-  periodo, anos, onCancelar, onAplicar,
-}: {
-  periodo: Periodo;
-  anos: readonly string[];
-  onCancelar: () => void;
-  onAplicar: (p: Periodo) => void;
-}) {
-  const [rascunho, setRascunho] = useState<Periodo>(periodo);
-  const previa = ordenar(rascunho);
-
-  const combo = (
-    valor: number, opcoes: readonly { v: string; r: string }[], aoTrocar: (v: string) => void, largura: number,
-  ) => (
-    <Select value={String(valor)} onValueChange={aoTrocar}>
-      <SelectTrigger className="rounded-md border bg-card" style={{ width: largura, height: 28, fontSize: 12 }}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {opcoes.map((o) => <SelectItem key={o.v} value={o.v}>{o.r}</SelectItem>)}
-      </SelectContent>
-    </Select>
-  );
-
-  const OPC_MES = MESES_CURTOS.map((r, i) => ({ v: String(i + 1), r: r.toLowerCase() }));
-  const OPC_ANO = anos.map((a) => ({ v: a, r: a }));
-
-  const linha = (
-    rotulo: string, ponto: { ano: number; mes: number }, trocar: (p: { ano: number; mes: number }) => void,
-  ) => (
-    <div className="flex items-center gap-2">
-      <span className="w-8 text-muted-foreground" style={{ fontSize: 12 }}>{rotulo}</span>
-      {combo(ponto.mes, OPC_MES, (v) => trocar({ ...ponto, mes: Number(v) }), 78)}
-      {combo(ponto.ano, OPC_ANO, (v) => trocar({ ...ponto, ano: Number(v) }), 78)}
-    </div>
-  );
-
-  return (
-    <div className="flex flex-col gap-2" style={{ minWidth: 220 }}>
-      <p className="font-medium text-foreground" style={{ fontSize: 12 }}>Período personalizado</p>
-      {linha('de', rascunho.de, (p) => setRascunho({ ...rascunho, de: p }))}
-      {linha('até', rascunho.ate, (p) => setRascunho({ ...rascunho, ate: p }))}
-      <p className="text-muted-foreground" style={{ fontSize: 11 }}>
-        {contarMeses(previa)} {contarMeses(previa) === 1 ? 'mês' : 'meses'} · {descreverDias(previa)}
-      </p>
-      <div className="flex justify-end gap-2">
-        <button
-          type="button" onClick={onCancelar}
-          className="rounded-md border bg-card px-3 text-foreground transition-colors hover:bg-muted"
-          style={{ height: 28, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-        >
-          Cancelar
-        </button>
-        <button
-          type="button" onClick={() => onAplicar(previa)}
-          className="rounded-md bg-cta px-3 text-cta-foreground transition-colors hover:bg-cta-hover"
-          style={{ height: 28, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-        >
-          Aplicar
-        </button>
-      </div>
-    </div>
-  );
-}

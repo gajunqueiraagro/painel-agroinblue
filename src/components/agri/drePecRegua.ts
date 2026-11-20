@@ -119,8 +119,10 @@ export const COM_PERCENTUAL: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>
 /* ⚠ UMA SO' DESDE O DRE-DESTAQUE-01: o lucro liquido saiu da grade, e com ele o "Lucro por
    hectare" que pendurava. O denominador da terra segue embaixo da linha que fecha a conta do
    periodo — agora o resultado com mercado. */
+/* DRE-AJUSTES-05 (Gabriel 19/11): as quatro linhas que fecham conta — Lucro operacional, Lucro líquido, Resultado econômico e Investimento
+   no período — e o "por hectare" mora DENTRO da célula do valor (2ª linha pequena), não numa linha própria. */
 export const COM_POR_HECTARE: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>([
-  'resultado_operacional', 'resultado_com_mercado',
+  'resultado_operacional', 'resultado_periodo', 'resultado_com_mercado', 'investimento',
 ]);
 /* ⚠ "por hectare", nao "Lucro por hectare" — DRE-DESTAQUE-02: com a linha de cima podendo ser o
    Lucro operacional OU o Resultado economico, dizer "Lucro" ali nomeava a conta errada em metade

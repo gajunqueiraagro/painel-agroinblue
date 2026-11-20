@@ -168,3 +168,23 @@ describe('F2 — as regras puras', () => {
     expect(quantasLinhasDoClipe(null)).toBe(0);
   });
 });
+
+/* NOTA-RECEITA-DANFE-ANEXO-01 (Gabriel 19/11 07:35) — a NF com PDF (o DANFE) E XML: o clipe (1 linha) abre o popover com os DOIS */
+describe('NOTA-RECEITA-DANFE-ANEXO-01 — o clipe da NF com PDF e XML', () => {
+  it('o popover mostra "PDF · DANFE" e "XML · Itens": o PDF abre o arquivo, o XML abre os itens', async () => {
+    const XML = DOC({ id: 'x', especie: 'nf', numero: '98390', nome: 'NFe-98390.xml', tipo: 'application/xml', url: 'cli/l/x.xml', chaveAcesso: '50261122233300042455001000098390121753829' + '0' });
+    const PDF = DOC({ ...XML, id: 'p', nome: 'NFe-98390-DANFE.pdf', tipo: 'application/pdf', url: 'cli/l/p.pdf' });
+    fontes.ler.mockResolvedValue({ ok: true, valor: linhas(XML, PDF) });
+    monta(1);
+    fireEvent.click(clipe());
+    const nomes = await screen.findAllByTestId('clipe-documento-nome');
+    expect(nomes.map((n) => n.textContent)).toEqual(['PDF · DANFE', 'XML · Itens']);
+    expect(nomes[0].getAttribute('title')).toBe('NFe-98390-DANFE.pdf');
+    expect(abriu).not.toHaveBeenCalled();
+    fireEvent.click(nomes[0]);
+    await waitFor(() => expect(abriu).toHaveBeenCalledTimes(1));
+    fireEvent.click(clipe());
+    fireEvent.click((await screen.findAllByTestId('clipe-documento-nome'))[1]);
+    expect(await screen.findByTestId('itens-da-nota')).toBeTruthy();
+  });
+});

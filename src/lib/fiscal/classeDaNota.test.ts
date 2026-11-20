@@ -32,6 +32,18 @@ describe('classeDaNota — pelo CFOP, nunca pelo tPag 90 sozinho', () => {
   it('NF de ENTRADA do comprador (tpNF 0, 2101 "compra p/ industrialização") = venda do titular, não compra', () => {
     expect(classeDaNota(n(['2101'], '0', 'COMPRA PARA INDUSTRIALIZACAO'), false)).toEqual({ classe: 'venda_do_titular' });
   });
+  it('NOTA-DEMONSTRACAO-01: a demonstração (5912/6912) é bem de terceiro; o RETORNO (5913/6913 e a entrada do fornecedor 1913/2913) fecha', () => {
+    for (const cf of ['5912', '6912']) {
+      const c = classeDaNota(n([cf], '1', 'DEMONSTACAO FORA DO ESTADO'), false);
+      expect(c).toEqual({ classe: 'nao_financeira', motivo: 'demonstracao' });
+      expect(ehBemDeTerceiro(c)).toBe(true);
+    }
+    for (const cf of ['5913', '6913', '1913', '2913']) {
+      const c = classeDaNota(n([cf], cf.startsWith('1') || cf.startsWith('2') ? '0' : '1', 'RETORNO DE DEMONSTRACAO'), false);
+      expect(c).toEqual({ classe: 'nao_financeira', motivo: 'retorno_demonstracao' });
+      expect(ehBemDeTerceiro(c)).toBe(false);
+    }
+  });
   it('cancelada na Receita manda sobre tudo; sem CFOP (resumo) = compra (a classe só muda com o XML)', () => {
     expect(classeDaNota(n(['5908']), true)).toEqual({ classe: 'cancelada' });
     expect(classeDaNota({ cfops: [], tpNF: null, natOp: null }, false)).toEqual({ classe: 'compra' });

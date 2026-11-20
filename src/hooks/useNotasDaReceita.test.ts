@@ -33,13 +33,15 @@ describe('F34-SITUACAO-01 — a leitura da lista', () => {
   });
   it('S1/S2 118.480 e 118.481 achadas pelo nº com o emitente = Já no sistema; a 999 sem achado = Nova; pergunta como o "+ Da nota"', async () => {
     rpc.mockImplementation(async (f: string, a: { p_notas: { chave: string; numero: string }[] }) => ({ error: null,
-      data: f === 'fn_notas_atributos_fiscais' ? [] : f === 'fn_notas_candidatos' ? a.p_notas.map((n) => ({ chave: n.chave, candidatos: [] }))
+      data: (f === 'fn_notas_atributos_fiscais' || f === 'fn_notas_demonstracao_ligacoes') ? [] : f === 'fn_notas_candidatos' ? a.p_notas.map((n) => ({ chave: n.chave, candidatos: [] }))
         : a.p_notas.map((n) => ({ chave: n.chave, ja_lancada: n.numero === '000118480' || n.numero === '000118481', por: [] })) }));
     const d = await lerNotasDaReceita('cli');
     const sit = Object.fromEntries(d.lista.map((n) => [n.numero, n.sit]));
     expect(sit).toEqual({ '118.480': 'no_sistema', '118.481': 'no_sistema', '999': 'nova' });
     /* + a pergunta dos atributos fiscais das 3 com XML (SEM-LANCAMENTO-01), uma só para a lista inteira */
-    expect(rpc).toHaveBeenCalledTimes(3);
+    /* + a das ligações da demonstração (NOTA-DEMONSTRACAO-01), uma só para o cliente */
+    expect(rpc).toHaveBeenCalledTimes(4);
+    expect(rpc.mock.calls[3]).toEqual(['fn_notas_demonstracao_ligacoes', { p_cliente: 'cli' }]);
     expect(rpc.mock.calls[1][0]).toBe('fn_notas_candidatos');
     expect(rpc.mock.calls[2]).toEqual(['fn_notas_atributos_fiscais', { p_cliente: 'cli', p_chaves: [chave(118480), chave(118481), chave(999)] }]);
     expect(rpc.mock.calls[1][1].p_notas.map((n: { chave: string }) => n.chave)).toEqual([chave(999)]);
@@ -62,14 +64,14 @@ describe('F34-SITUACAO-01 — a leitura da lista', () => {
   });
   it('S6 candidatos (CASAR-01): a que tem candidato do mesmo CNPJ vira "Pode estar lançada"; a falha dos candidatos é erro, nunca "Nova"', async () => {
     rpc.mockImplementation(async (f: string, a: { p_notas: { chave: string }[] }) => ({ error: null,
-      data: f === 'fn_notas_atributos_fiscais' ? [] : f === 'fn_notas_candidatos'
+      data: (f === 'fn_notas_atributos_fiscais' || f === 'fn_notas_demonstracao_ligacoes') ? [] : f === 'fn_notas_candidatos'
         ? a.p_notas.map((n) => ({ chave: n.chave, candidatos: n.chave === chave(999) ? [{ id: 'L1', classe: 'mesmo_cnpj', valor_cent: 652500 }] : [] }))
         : a.p_notas.map((n) => ({ chave: n.chave, ja_lancada: false, por: [] })) }));
     const d = await lerNotasDaReceita('cli');
     expect(d.lista.find((n) => n.numero === '999')?.sit).toBe('pode_estar');
     expect(d.lista.find((n) => n.numero === '999')?.candidatos.map((c) => c.id)).toEqual(['L1']);
     rpc.mockImplementation(async (f: string, a: { p_notas: { chave: string }[] }) => (f === 'fn_notas_candidatos'
-      ? { data: null, error: { message: 'rede' } } : f === 'fn_notas_atributos_fiscais' ? { data: [], error: null } : { error: null, data: a.p_notas.map((n) => ({ chave: n.chave, ja_lancada: false, por: [] })) }));
+      ? { data: null, error: { message: 'rede' } } : (f === 'fn_notas_atributos_fiscais' || f === 'fn_notas_demonstracao_ligacoes') ? { data: [], error: null } : { error: null, data: a.p_notas.map((n) => ({ chave: n.chave, ja_lancada: false, por: [] })) }));
     await expect(lerNotasDaReceita('cli')).rejects.toThrow('Não consegui procurar os lançamentos que podem ser estas notas.');
   });
 });

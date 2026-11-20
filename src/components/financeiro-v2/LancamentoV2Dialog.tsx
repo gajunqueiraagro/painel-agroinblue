@@ -97,7 +97,7 @@ import {
   marcaAoSalvar, ocorrenciaAberta, previstoDaOcorrencia, partesDaMarcada, partesDaIntencao, tituloDasPartes,
   MOTIVO_CONTA_PAGA, MOTIVO_SALVAR_PENDENTE, type RegraDaRecorrencia, type OrigemDoValorDoMes, type PedidoDoValorDoMes,
 } from '@/lib/financeiro/valorDoMes';
-import { pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import { danfeDaNota, pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import {
   atualizarCamposDoCadastro, cadastroParaComparar, camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerCamposDoCadastro, fornecedorPeloDocumento,
   type CadastroComODocumento, type OcorrenciaDaNota,
@@ -1469,7 +1469,17 @@ export function LancamentoV2Dialog({
     abaDaTrocaRef.current = null;
     /* FIN-NFE-XML-01d — o XML da nota ja' nasce como o documento NF pendente do lancamento novo. */
     const doXml = !lancamento ? prefill?.doXml ?? null : null;
-    setPendentes(doXml ? [pendenteDaNota(doXml, doXml.proposta.favorecidoId)] : []);
+    const daNota = doXml ? pendenteDaNota(doXml, doXml.proposta.favorecidoId) : null;
+    setPendentes(daNota ? [daNota] : []);
+    /* NOTA-RECEITA-DANFE-ANEXO-01 — a nota só em XML ganha o DANFE em PDF como 2º documento pendente (gerado aqui, gravado no Salvar);
+       entra só se o XML ainda está na lista (o modal não trocou de nota enquanto gerava); falhou = só o XML, aviso no console */
+    if (doXml && daNota) {
+      void danfeDaNota(doXml, doXml.proposta.favorecidoId).then(({ pendente, aviso }) => {
+        if (aviso) console.error('[LancamentoV2Dialog] DANFE', aviso);
+        if (pendente) setPendentes((l) => (l.some((p) => p.chave === daNota.chave) && !l.some((p) => p.arquivo?.type === 'application/pdf'
+          && p.payload.chaveAcesso === daNota.payload.chaveAcesso) ? [...l, pendente] : l));
+      });
+    }
     setDivisaoNaCriacao(null);
     setXmlFaixaFechada(false);
     setXmlRegistradaDispensada(false);
