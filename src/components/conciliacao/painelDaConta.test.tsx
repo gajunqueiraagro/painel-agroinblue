@@ -139,8 +139,8 @@ describe('a ligação na Conciliação (fonte)', () => {
   it('"Casar lançamentos" abre o MODAL Conferência existente (aba Casar + sub-aba conferência), nada novo', () => {
     expect(F).toContain("aoCasar={(id) => { setPainelContaId(null); setSelectedConta(id); setVistaExtrato('enriquecer_sistema'); setAbaEspelho('conferencia'); }}");
   });
-  it('só a faixa do topo escurece (#162931); as pílulas seguem com as cores de estado (`tomPorMes`)', () => {
-    expect(F).toContain('style={{ background: FUNDO_ESCURO }} data-testid="faixa-conciliacao"');
+  it('só a faixa do topo escurece (UI-MESES-PADRAO-01: o navy da casa, era #162931); o estado dos meses segue no `tomPorMes`', () => {
+    expect(F).toContain("style={{ background: 'hsl(var(--navy))' }} data-testid=\"faixa-conciliacao\"");
     expect(F).not.toContain('bg-[hsl(var(--header))]');
     expect(F).toContain('tomPorMes={tomDosMeses}');
   });

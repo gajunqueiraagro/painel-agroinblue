@@ -8,7 +8,8 @@
 import { useState, useMemo } from 'react';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 import { useRebanhoOficial, groupByMes } from '@/hooks/useRebanhoOficial';
 import { formatNum } from '@/lib/calculos/formatters';
 
@@ -252,20 +253,9 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         }`}>{cenarioLabel}</span>
       </div>
 
-      {/* Filters — row 1: Ano + Cenário + ViewMode */}
+      {/* Filters — row 1: Cenário + ViewMode */}
       <div className="flex flex-wrap gap-1.5 items-center">
-        <Select value={ano} onValueChange={setAno}>
-          <SelectTrigger className="w-20 h-7 text-[10px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {[0, -1, -2].map(d => {
-              const y = String(new Date().getFullYear() + d);
-              return <SelectItem key={y} value={y}>{y}</SelectItem>;
-            })}
-          </SelectContent>
-        </Select>
-
+        {/* UI-MESES-PADRAO-01: o Select do ano desceu para o seletor dos meses (abaixo) — mexia no MESMO `ano`, com a MESMA lista. */}
         <div className="flex gap-0.5">
           {(['realizado', 'meta'] as Cenario[]).map(c => (
             <button key={c} onClick={() => setCenario(c)}
@@ -291,15 +281,17 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         </div>
       </div>
 
-      {/* Filters — row 2: Meses */}
-      <div className="flex gap-0.5">
-        {MESES_LABELS.map((label, i) => (
-          <button key={i} onClick={() => setMesSel(i + 1)}
-            className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
-              mesSel === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}>{label}</button>
-        ))}
-      </div>
+      {/* Filters — row 2: Ano + Meses — UI-MESES-PADRAO-01 (D2): o `SeletorPeriodo` da casa (sem status nesta tela) */}
+      <SeletorPeriodo
+        modo="ano-mes"
+        modoUnico
+        anos={[0, -1, -2].map(d => String(new Date().getFullYear() + d))}
+        periodo={mesUnico(Number(ano), mesSel)}
+        onPeriodoChange={(p) => {
+          if (String(p.de.ano) !== ano) { setAno(String(p.de.ano)); return; }
+          setMesSel(p.de.mes);
+        }}
+      />
 
       {/* Divergence Alert */}
       {hasDivergence && !isLoading && (

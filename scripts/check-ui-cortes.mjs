@@ -30,7 +30,7 @@ import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { filtroRapido } from './ui-gate-rapido.mjs';
+import { filtroRapido, telaDoCenario } from './ui-gate-rapido.mjs';
 import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
   paginasDaMedicao } from './ui-cortes/teto.mjs';
 
@@ -41,6 +41,9 @@ const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.a
 const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.split('x').map(Number)) : [[1000, 600], [1126, 579], [1440, 800]];
 const FOTOS = arg('--fotos');
 const SO = arg('--so');
+/* UI-MESES-PADRAO-01 (decisão do Gabriel 18/11: publicar com o gate das telas ALCANÇADAS, o completo à noite) — `--telas a,b,c`: só os
+   cenários dessas telas da bancada (o `tela=` da url, a MESMA regra do modo rápido). Não substitui o completo: é o gate parcial declarado. */
+const TELAS = arg('--telas') ? new Set(arg('--telas').split(',')) : null;
 /* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
    testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
 async function cliqueNoGesto(p, t) {
@@ -68,7 +71,7 @@ async function temGesto(p, t) {
   return ha;
 }
 /* P163-2 — as variantes da bancada `nota-pdf` em que a nota JÁ ESTÁ LANÇADA (o modal em abas) */
-const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
+const NOTA_JA_LANCADA = ['jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista', 'janela'];   // lr/lr2: os parcelados do LR (Gabriel 29/10 08:26)
 
 const TAMANHOS_DO_CONTRATO = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* P104 — os 9 tamanhos do gate e o do print do Gabriel (1750×1000) */
@@ -1699,7 +1702,7 @@ const CENARIOS = [
   /* P95 — `pelachave` (a previa da chave digitada: o chip, emissao e valor em ambar) e `irmas` (a nota em 4 parcelas soltas, "k/4") */
   /* NOTA-NOVA-MODAL-REAL (30/10) — a nota NOVA não fica mais nesta tela (passa ao Novo lançamento: `nota-nova-modal-*` abaixo); aqui, a já
      lançada e a barrada (`diverge`: a chave não confere) */
-  ...['diverge', 'jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  ...['diverge', 'jalancada', 'emparcela', 'cancelados', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista', 'janela'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
   })),
   /* NOTA-PAGTO-PARCELADO-01 (Gabriel 11/11) — P3 o aviso "não é compra" (a nota de conserto); P1 o "Outros lançamentos do fornecedor" com 2
@@ -1915,9 +1918,10 @@ const CENARIOS = [
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
   /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
-  ...['', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  ...['', 'mesmo', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),
-  { nome: 'comparar-cadastro-confirmar', url: 'tela=comparar-cadastro', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' },
+  /* FORN-ACHAR-CNPJ-01 — o confirmar é o do cadastro que É o da nota (o de nome à mão não oferece o CNPJ: nada vem marcado) */
+  { nome: 'comparar-cadastro-confirmar', url: 'tela=comparar-cadastro&v=mesmo', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' },
     antes: clicar('[data-testid="comparar-atualizar"]') },
   /* NOTA-PDF-IBS-CBS-01 — o selo do IBS/CBS na nota lida do PDF (sem a informação / só o total), nos dois modos da aba (Valores e Fiscal) */
   ...[['pdf-sem-ibs', ''], ['pdf-sem-ibs', 'Fiscal'], ['pdf-ibs-total', '']].map(([x, f]) => ({ nome: `itens-nota-${x}${f ? '-fiscal' : ''}`, url: `tela=itens-nota&v=${x}`,
@@ -3241,7 +3245,8 @@ const naRapida = RAPIDO ? filtroRapido('check-ui-cortes') : () => true;
 /* o modo rapido mede cada cenario nos MESMOS tamanhos do completo (o veredito de um cenario nao depende do modo): forcar os 7 do contrato
    reprovava o modal da OC a 750/814, largura em que ele nao tem desenho e que o completo nao mede (57 achados na prova de 21/10) */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS);
-const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c)
+  && (!TELAS || TELAS.has(telaDoCenario(c))));
 /* GATE-TELA-TETO-01 — o plano da rodada (fatia, --de) e o relógio contam desde o início do processo */
 const INICIO = Date.now() - process.uptime() * 1000;
 let OPCOES, PLANO;

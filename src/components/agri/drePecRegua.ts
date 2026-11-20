@@ -211,6 +211,12 @@ export interface DefPec {
   sinalNaFaixa?: boolean;
 }
 
+/**
+ * O `title` DO EFEITO DE MERCADO — REBANHO-AGIO-PROVISORIO-01 (D1 a, Gabriel 19/11): mudar de categoria não muda valor, e a troca de
+ * categoria (o lote reclassificado, ao preço da nova) entra aqui, não na Variação por produção. O modal da linha a mostra separada.
+ */
+export const TITLE_EFEITO = 'Efeito de mercado — inclui a troca de categoria (o lote que mudou de categoria, ao preço da nova)';
+
 export const LINHAS_PEC: DefPec[] = [
   { chave: 'vendas', rotulo: 'Vendas', tom: 'receita', expande: true },
   { chave: 'outras_receitas', rotulo: 'Outras receitas', tom: 'receita', expande: true },
@@ -229,7 +235,7 @@ export const LINHAS_PEC: DefPec[] = [
   { chave: 'resultado_operacional', rotulo: '= Lucro operacional', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
   { chave: 'resultado_periodo', rotulo: '= Lucro líquido', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
-  { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito' },
+  { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito', title: TITLE_EFEITO },
   /* ⚠ A CASCATA FECHA AQUI — DRE-DESTAQUE-01, e o `t4` (a faixa navy com ▲/▼) mudou de linha:
      era do lucro líquido, é do resultado com mercado. Investimento tem payback longo e
      depreciação; o que sobra depois dele não é o resultado DO PERÍODO, e encerrar a grade ali
@@ -281,7 +287,7 @@ export const LINHAS_PEC_RESUMIDO: DefPec[] = [
   { chave: 'resultado_operacional', rotulo: '= Lucro operacional', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
   { chave: 'resultado_periodo', rotulo: '= Lucro líquido', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
-  { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito' },
+  { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito', title: TITLE_EFEITO },
   { chave: 'resultado_com_mercado', rotulo: '= Resultado econômico',
     /* ⚠ A CONTA VAI NO `title`, NAO NA TELA — DRE-DESTAQUE-02, e a razao foi MEDIDA: a
        celula do rotulo tem 200px (~186 uteis), "= Resultado economico" ja' ocupa 125 e o

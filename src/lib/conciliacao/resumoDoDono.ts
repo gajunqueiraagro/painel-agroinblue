@@ -326,6 +326,21 @@ export const STATUS_COR: Record<StatusDono, {bg:string;border:string;txt:string}
   pendente:       {bg:'#F5F5F5', border:'#BDBDBD', txt:'#757575'},
 };
 
+/** UI-MESES-PADRAO-01 — o status do mês na fita de meses é um PONTO (o mesmo status, traduzido; nenhum estado novo). */
+export const ESTADO_DO_STATUS: Record<StatusDono, 'ok' | 'pend' | 'err'> = {
+  conciliado: 'ok',
+  nao_conciliado: 'err',
+  pendente: 'pend',
+};
+
+/** A legenda curta da fita da Conciliação (os três status + o mês futuro). */
+export const LEGENDA_DA_FITA = [
+  { estado: 'ok', rotulo: 'Conciliado' },
+  { estado: 'pend', rotulo: 'Pendente' },
+  { estado: 'err', rotulo: 'Não conciliado' },
+  { estado: 'fut', rotulo: 'Futuro' },
+] satisfies readonly { estado: 'ok' | 'pend' | 'err' | 'fut'; rotulo: string }[];
+
 export const ROTULO_STATUS: Record<StatusDono, string> = {
   conciliado: 'Conciliado',
   nao_conciliado: 'Não conciliado',

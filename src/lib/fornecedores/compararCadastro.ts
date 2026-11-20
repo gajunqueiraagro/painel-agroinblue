@@ -8,6 +8,18 @@
  */
 import { documentoFormatado, soDigitos } from '@/lib/financeiro/nfe/formatos';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
+import { razaoParaComparar } from '@/lib/financeiro/nfe/resolverEmitente';
+
+/** FORN-ACHAR-CNPJ-01 (URGENTE, Gabriel 19/11) — o cadastro É o da nota? O mesmo documento; ou, sem documento no cadastro, a MESMA razão
+ *  social inteira (`razaoParaComparar`, a regra do achar). Palavra em comum NÃO basta (COAMO × Auto Posto, os dois em Sidrolândia). */
+export function eOMesmoFornecedor(hoje: CadastroParaComparar, proposta: CadastroParaComparar): boolean {
+  const dh = soDigitos(hoje.cpf_cnpj ?? ''); const dp = soDigitos(proposta.cpf_cnpj ?? '');
+  if (dh && dp) return dh === dp;
+  const rh = razaoParaComparar(hoje.nome); const rp = razaoParaComparar(proposta.nome);
+  return rh !== '' && rh === rp;
+}
+/** os grupos que IDENTIFICAM o fornecedor: só se oferecem quando o cadastro é o da nota (`eOMesmoFornecedor`) */
+const GRUPOS_DE_IDENTIDADE: ReadonlySet<string> = new Set(['razao', 'cnpj', 'ie']);
 
 export type CampoDoCadastro = 'nome' | 'nome_fantasia' | 'cpf_cnpj' | 'inscricao_estadual' | 'logradouro' | 'numero' | 'complemento' | 'bairro' | 'cep' | 'municipio' | 'uf';
 export type CadastroParaComparar = Partial<Record<CampoDoCadastro, string | null>>;
@@ -45,14 +57,17 @@ const texto = (g: GrupoDoCadastro, c: CadastroParaComparar) => {
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const iguais = (g: GrupoDoCadastro, a: string, b: string) => (g.comparar === 'digitos' ? soDigitos(a) === soDigitos(b) : normal(a) === normal(b));
 
-/** As linhas da tabela: so' os grupos que a nota TRAZ (o vazio da nota nao apaga nada). */
+/** As linhas da tabela: so' os grupos que a nota TRAZ (o vazio da nota nao apaga nada). FORN-ACHAR-CNPJ-01 — cadastro que NÃO é o da nota
+ *  (`eOMesmoFornecedor`): CNPJ/CPF, IE e razão social NUNCA se oferecem; o resto vem DESMARCADO (a tela diz "parece outro fornecedor"). */
 export function linhasDaComparacao(hoje: CadastroParaComparar, proposta: CadastroParaComparar): LinhaDaComparacao[] {
+  const mesmo = eOMesmoFornecedor(hoje, proposta);
   return GRUPOS_DO_CADASTRO.flatMap((grupo) => {
+    if (!mesmo && GRUPOS_DE_IDENTIDADE.has(grupo.chave)) return [];
     const p = texto(grupo, proposta);
     if (!p) return [];
     const h = texto(grupo, hoje);
     const estado: EstadoDoCampo = !h ? 'vazio' : iguais(grupo, h, p) ? 'igual' : 'diferente';
-    return [{ grupo, hoje: h, proposto: p, estado, marcadoPadrao: estado === 'vazio' }];
+    return [{ grupo, hoje: h, proposto: p, estado, marcadoPadrao: mesmo && estado === 'vazio' }];
   });
 }
 
@@ -72,6 +87,10 @@ export function cadastroPareceErrado(hoje: CadastroParaComparar, emitente: { doc
   const docNota = soDigitos(emitente.documento ?? '');
   if (docHoje && docNota && docHoje !== docNota) return `Este cadastro tem outro CNPJ/CPF (${hoje.cpf_cnpj}) — a nota é de outro documento.`;
   if (docHoje && docHoje === docNota) return null;   // o mesmo documento: e' o cadastro certo, seja qual for o nome
+  /* FORN-ACHAR-CNPJ-01 — sem documento no cadastro: só a MESMA razão social inteira é o mesmo (a palavra em comum, como "Sidrolândia", não) */
+  if (!docHoje && docNota && razaoParaComparar(hoje.nome) !== '' && !emitente.nomes.some((n) => razaoParaComparar(n) === razaoParaComparar(hoje.nome))) {
+    return `Parece outro fornecedor: o cadastro "${hoje.nome ?? ''}" não tem CNPJ e a razão social é outra. Cadastre um novo com os dados da nota ou troque o fornecedor.`;
+  }
   const palavras = (s: string | null | undefined) => new Set(normal(s ?? '').split(' ').filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !['ltda', 'eireli', 'comercio', 'industria'].includes(w)));
   const doCadastro = new Set([...palavras(hoje.nome), ...palavras(hoje.nome_fantasia)]);
   const daNota = new Set(emitente.nomes.flatMap((n) => [...palavras(n)]));

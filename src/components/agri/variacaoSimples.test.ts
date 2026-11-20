@@ -14,7 +14,7 @@ import type { MovimentosPec, ParcelaMov } from '@/hooks/useDrePecuaria';
 
 const cat = (cod: string, jovem: boolean, at0: number, at1: number, pk0: number, pk1: number, centavos = 0.37): CatDaVariacao => {
   const v0 = at0 * pk0; const v1p0 = at1 * pk0; const v1p1 = at1 * pk1;
-  return { cod, nome: cod, jovem, at0, at1, v0, v1p0, v1p1, producao: v1p0 - v0 + centavos, mercado: v1p1 - v1p0 - centavos };
+  return { cod, nome: cod, jovem, at0, at1, v0, v1p0, v1p1, producao: v1p0 - v0 + centavos, mercado: v1p1 - v1p0 - centavos, troca: 0 };
 };
 const p = (arrobas: number): ParcelaMov => ({ cabecas: 0, arrobas, valor: 0 });
 const MOV = (o: Partial<Record<keyof MovimentosPec, number>>): MovimentosPec => ({
@@ -64,7 +64,7 @@ describe('variação simples — por categoria', () => {
   });
 
   it('(C) categoria que nasceu no período: o R$/@ do início é o do fim valorado a preço do início (o critério do banco)', () => {
-    const nova: CatDaVariacao = { cod: 'bois', nome: 'Bois', jovem: false, at0: 0, at1: 500, v0: 0, v1p0: 140000, v1p1: 165000, producao: 140000, mercado: 25000 };
+    const nova: CatDaVariacao = { cod: 'bois', nome: 'Bois', jovem: false, at0: 0, at1: 500, v0: 0, v1p0: 140000, v1p1: 165000, producao: 140000, mercado: 25000, troca: 0 };
     const l = linhaDe('Bois', [nova]);
     expect(l.pk0).toBe(280);
     expect(l.pk1).toBe(330);
@@ -127,12 +127,25 @@ describe('variação simples — de onde veio, linha por linha (mock v2)', () =>
   });
 
   it('(C) sem gado no fim: não há preço de hoje (traço), e a soma ainda fecha', () => {
-    const fim0: CatDaVariacao = { cod: 'bois', nome: 'Bois', jovem: false, at0: 100, at1: 0, v0: 30000, v1p0: 0, v1p1: 0, producao: -30000, mercado: 0 };
+    const fim0: CatDaVariacao = { cod: 'bois', nome: 'Bois', jovem: false, at0: 100, at1: 0, v0: 30000, v1p0: 0, v1p1: 0, producao: -30000, mercado: 0, troca: 0 };
     const d = degrausDoPreco(linhaDe('t', [fim0]));
     expect(d.pMeio).toBeNull();
     expect(d.p1).toBeNull();
     expect(d.quantidade.vale).toBe(-30000);
     expect(d.tipo.vale).toBe(0);
+  });
+
+  it('(D) REBANHO-AGIO-PROVISORIO-01: a troca é a linha 3 e sai do mercado (3 + 4 = efeito); o degrau do preço passa pela troca', () => {
+    /* 100 desmama → garrotes: fim a preço do início sem a troca 410.000 (1.000 @), a troca −50.000, o fim 360.000 */
+    const g: CatDaVariacao = { cod: 'garrotes', nome: 'Garrotes', jovem: false, at0: 0, at1: 1000, v0: 0, v1p0: 410000, v1p1: 360000,
+      producao: 410000, mercado: -50000, troca: -50000 };
+    const d = degrausDoPreco(linhaDe('t', [g]));
+    expect(d.troca.vale).toBe(-50000);
+    expect(d.mercado.vale).toBe(0);
+    expect(d.efeito).toBe(-50000);
+    expect(d.troca.vale + d.mercado.vale).toBe(d.efeito);
+    expect([d.pMeio, d.pTroca, d.p1]).toEqual([410, 360, 360]);
+    expect(d.quantidade.vale + d.tipo.vale + d.troca.vale + d.mercado.vale).toBeCloseTo(d.total.v1 - d.total.v0, 6);
   });
 });
 
