@@ -23,6 +23,7 @@ import {
   textoDoSelo, trocarFazenda, type DestinoDaCorrecao, type PendenteDaRegra,
 } from '@/lib/financeiro/regraFazenda';
 import { cn } from '@/lib/utils';
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 
 interface FazendaDaLista { id: string; nome: string }
 
@@ -63,12 +64,19 @@ export function SeloRegraFazenda({ clienteId, fazendas, onCorrigido }: {
   );
 }
 
-const COLUNAS: { rotulo: string; largura: number | null; num?: boolean }[] = [
-  { rotulo: '', largura: 24 }, { rotulo: 'Comp.', largura: 70 }, { rotulo: 'Descrição', largura: null }, { rotulo: 'Fornecedor', largura: 130 },
-  { rotulo: 'Conta', largura: 150 }, { rotulo: 'Fazenda hoje', largura: 96 }, { rotulo: 'Por quê', largura: 170 }, { rotulo: 'Corrigir para', largura: 210 },
-  { rotulo: 'Valor', largura: 86, num: true },
-];
-const Colunas = () => <colgroup>{COLUNAS.map((c, i) => <col key={i} style={c.largura ? { width: c.largura } : undefined} />)}</colgroup>;
+type Coluna = { chave: string; rotulo: string; largura: number | null; num?: boolean };
+/* Abaixo de 1100px de janela (o modal a 97vw não cabe as 936px fixas) Fornecedor e Conta saem — vão para o title da Descrição —
+   e Por quê/Corrigir para estreitam: as larguras seguem fixas (não dependem do dado), só o conjunto muda com a janela. */
+const LARGURA_COMPACTA = 1100;
+function colunasDe(compacto: boolean): Coluna[] {
+  return [
+    { chave: 'marca', rotulo: '', largura: 24 }, { chave: 'comp', rotulo: 'Comp.', largura: 70 }, { chave: 'desc', rotulo: 'Descrição', largura: null },
+    ...(compacto ? [] : [{ chave: 'forn', rotulo: 'Fornecedor', largura: 130 }, { chave: 'conta', rotulo: 'Conta', largura: 150 }]),
+    { chave: 'hoje', rotulo: 'Fazenda hoje', largura: 96 }, { chave: 'porque', rotulo: 'Por quê', largura: compacto ? 140 : 170 },
+    { chave: 'para', rotulo: 'Corrigir para', largura: compacto ? 180 : 210 }, { chave: 'valor', rotulo: 'Valor', largura: 86, num: true },
+  ];
+}
+const Colunas = ({ colunas }: { colunas: readonly Coluna[] }) => <colgroup>{colunas.map((c) => <col key={c.chave} style={c.largura ? { width: c.largura } : undefined} />)}</colgroup>;
 
 export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onClose, onCorrigido }: {
   clienteId: string;
@@ -159,6 +167,9 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
   const todosMarcaveis = pendentes.filter((p) => !p.mesFechado && escolha[p.id]);
   const tudo = todosMarcaveis.length > 0 && todosMarcaveis.every((p) => marcado.has(p.id));
 
+  const compacto = useLarguraDaJanela() < LARGURA_COMPACTA;
+  const colunas = colunasDe(compacto);
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !gravando) onClose(); }}>
       <DialogContent className="flex h-[min(600px,95vh)] w-[min(1180px,97vw)] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="correcao-regra-fazenda">
@@ -179,16 +190,16 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
           </div>
           <div className={cn(QUADRO_REGUA, 'min-h-0 flex-1')}>
             <table className="w-full shrink-0 table-fixed border-collapse bg-primary">
-              <Colunas />
-              <thead><tr>{COLUNAS.map((c, i) => (
-                <th key={i} className={cn(TH_REGUA, c.num ? 'text-right' : 'text-left')}>
+              <Colunas colunas={colunas} />
+              <thead><tr>{colunas.map((c, i) => (
+                <th key={c.chave} className={cn(TH_REGUA, c.num ? 'text-right' : 'text-left')}>
                   {i === 0 ? <Checkbox checked={tudo} aria-label="Marcar todas" className="h-3 w-3 border-primary-foreground"
                     onCheckedChange={(v) => setMarcado(v === true ? new Set(todosMarcaveis.map((p) => p.id)) : new Set())} /> : c.rotulo}
                 </th>))}</tr></thead>
             </table>
             <div className="min-h-0 flex-1 overflow-y-auto" data-testid="correcao-rolagem">
               <table className="w-full table-fixed border-collapse">
-                <Colunas />
+                <Colunas colunas={colunas} />
                 <tbody>
                   {pendentes.map((p) => {
                     const d = destinoDaChave(escolha[p.id] ?? '');
@@ -201,9 +212,10 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
                             onCheckedChange={(v) => alternar(p.id, v === true)} data-testid="correcao-marcar" />
                         </td>
                         <td className={TD_REGUA_NUM}>{dataBr(p.competencia)}</td>
-                        <td className={TD_REGUA_TEXTO} title={p.descricao} data-reticencias-com-title="">{p.descricao}</td>
-                        <td className={TD_REGUA_TEXTO} title={p.fornecedor ?? undefined} data-reticencias-com-title="">{p.fornecedor ?? '—'}</td>
-                        <td className={TD_REGUA_TEXTO} title={`${p.grupoCusto} › ${p.subcentro}`} data-reticencias-com-title="">{p.subcentro}</td>
+                        <td className={TD_REGUA_TEXTO} data-reticencias-com-title=""
+                          title={compacto ? `${p.descricao}\n${p.fornecedor ?? '—'} · ${p.grupoCusto} › ${p.subcentro}` : p.descricao}>{p.descricao}</td>
+                        {!compacto && <td className={TD_REGUA_TEXTO} title={p.fornecedor ?? undefined} data-reticencias-com-title="">{p.fornecedor ?? '—'}</td>}
+                        {!compacto && <td className={TD_REGUA_TEXTO} title={`${p.grupoCusto} › ${p.subcentro}`} data-reticencias-com-title="">{p.subcentro}</td>}
                         <td className={cn(TD_REGUA_TEXTO, p.mesFechado && 'text-muted-foreground')} title={p.mesFechado ? `${hoje} · mês fechado` : hoje} data-reticencias-com-title="">
                           {p.mesFechado ? '🔒 ' : ''}{hoje}</td>
                         <td className={cn(TD_REGUA_TEXTO, 'text-amber-800')} title={p.regra} data-reticencias-com-title="" data-testid="correcao-regra">{p.regra}</td>
@@ -220,9 +232,10 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
               </table>
             </div>
           </div>
-          <div className={cn('flex h-[26px] shrink-0 items-center rounded-md px-2', previa?.recusas.length ? 'bg-destructive/10 text-destructive' : 'bg-card text-muted-foreground')}
+          {/* altura FIXA de duas linhas (nada se desloca); o texto quebra e, com muitas recusas, rola aqui dentro — nunca "…" fora de tabela */}
+          <div className={cn('h-[36px] shrink-0 overflow-y-auto rounded-md px-2 py-[3px] leading-[14px]', previa?.recusas.length ? 'bg-destructive/10 text-destructive' : 'bg-card text-muted-foreground')}
             data-testid="correcao-previa">
-            <span className="min-w-0 truncate" title={previa?.recusas.join('\n') || undefined} data-reticencias-com-title="">
+            <span>
               {!n ? 'Marque as linhas a corrigir.'
                 : !previa ? 'Conferindo no banco…'
                 : previa.recusas.length ? `⚠ ${previa.recusas.length} recusa${previa.recusas.length === 1 ? '' : 's'}: ${previa.recusas.join(' · ')}`

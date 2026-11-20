@@ -1911,7 +1911,7 @@ const CENARIOS = [
   /* FIN-REGRA-VARIAVEL-FAZENDA-01 — o modal de correção (14 linhas, nomes longos; a lista rola dentro do quadro), com a recusa da prévia,
      e o selo na faixa dos totais da lista */
   ...['', 'recusa'].map((v) => ({ nome: `regra-fazenda${v ? `-${v}` : ''}`, url: `tela=regra-fazenda&v=${v}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]],
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="correcao-rolagem"]' },
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="correcao-rolagem"], [data-testid="correcao-previa"]' },
     antes: async (p) => { await p.locator('[data-testid="correcao-linha"]').first().waitFor(); await p.waitForTimeout(400); } })),
   { nome: 'financeiro-selo-regra', url: 'tela=financeiro&regra=1', tamanhos: [...TAMANHOS_DO_CONTRATO, [1280, 720], [1920, 1080]], regiao: '[data-testid="avisos-do-filtro"]',
     antes: async (p) => { await p.locator('[data-testid="selo-regra-fazenda"]').waitFor({ timeout: 8000 }); } },
