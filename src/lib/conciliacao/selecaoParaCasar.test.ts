@@ -52,16 +52,18 @@ describe('o motivo curto', () => {
 });
 
 describe('o complemento das linhas', () => {
-  it('pagamento, fazenda (código e nome) e documento de cada id; a fazenda numa segunda leitura', async () => {
+  it('pagamento, fazenda (código e nome), documento, subcentro e atividade de cada id; a fazenda numa segunda leitura', async () => {
     B.tabelas = {
-      financeiro_lancamentos_v2: [{ id: 'a', data_pagamento: '2026-09-16', fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.120.001' },
-        { id: 'b', data_pagamento: null, fazenda_id: null, tipo_documento: null, numero_documento: null }],
+      financeiro_lancamentos_v2: [{ id: 'a', data_pagamento: '2026-09-16', fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.120.001',
+        subcentro: 'Manutenção Máquinas Pecuária', escopo_negocio: 'pecuaria' },
+        { id: 'b', data_pagamento: null, fazenda_id: null, tipo_documento: null, numero_documento: null, subcentro: null, escopo_negocio: null }],
       fazendas: [{ id: 'fz1', nome: 'Fazenda Exemplo Retiro', codigo: 'RET' }],
     };
     const m = await lerComplementoDasLinhas('cli', ['a', 'b', 'a']);
     expect(m?.get('a')).toEqual({ dataPagamento: '2026-09-16', fazendaId: 'fz1', fazendaCodigo: 'RET', fazendaNome: 'Fazenda Exemplo Retiro',
-      tipoDocumento: 'Nota Fiscal', numeroDocumento: '000.120.001' });
-    expect(m?.get('b')).toEqual({ dataPagamento: null, fazendaId: null, fazendaCodigo: null, fazendaNome: null, tipoDocumento: null, numeroDocumento: null });
+      tipoDocumento: 'Nota Fiscal', numeroDocumento: '000.120.001', subcentro: 'Manutenção Máquinas Pecuária', escopoNegocio: 'pecuaria' });
+    expect(m?.get('b')).toEqual({ dataPagamento: null, fazendaId: null, fazendaCodigo: null, fazendaNome: null, tipoDocumento: null, numeroDocumento: null,
+      subcentro: null, escopoNegocio: null });
     expect(B.pedidos).toEqual(['financeiro_lancamentos_v2', 'fazendas']);
   });
   it('sem ids, nada vai ao banco; a leitura que falha devolve null (nunca "sem documento" calado)', async () => {

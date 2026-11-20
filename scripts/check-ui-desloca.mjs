@@ -910,10 +910,17 @@ const CENARIOS = [
   ] })),
   /* fatia "casar" (ate' aqui sem cenario: "0 telas"): no 1:1 digitar outro valor e corrigir o valor do lancamento nao mexem no cabecalho, no resumo nem no
      rodape; no bloco trocar a regra nao mexe nas tabelas nem no Conciliar */
-  { nome: 'casar-1x1-levado', url: 'tela=casar-1x1&v=levado', antes: async (p) => { await p.locator('[data-testid="levado"]').waitFor(); await espera(p); },
+  { nome: 'casar-1x1-levado', url: 'tela=casar-1x1&v=levado', antes: async (p) => { await p.locator('[data-testid="levado-linha"]').waitFor(); await espera(p); },
     estados: [
       ['valor do campo diferente do banco', digitar('input[aria-label^="Valor de"]', '0,02')],
       ['corrigir o valor do lancamento', botao(/Corrigir o valor do lançamento/)],
+    ] },
+  /* CONC-CASAR-1X1-TABELA-01 — o caso Luiz Gustavo (NF 1.404,00 × PIX 3.404,16): abrir a "Outra nota" ou a "taxa" na caixa da NF não mexe na
+     tabela nem na faixa do extrato (o modal preso no topo cresce para baixo) */
+  { nome: 'casar-1x1-outranota', url: 'tela=casar-1x1&v=outranota', antes: async (p) => { await p.locator('[data-testid="pergunta-nf"]').waitFor(); await espera(p); },
+    estados: [
+      ['outra nota aberta', botao(/Outra nota \(falta lançar\)/)],
+      ['taxa aberta', botao(/Outra despesa sem nota \(taxa\)/)],
     ] },
   /* P139 — no "Criar transferencia": escolher um dos espelhos do empate e confirmar a gemea nao mexem no movimento, na conta, na
      lista nem no rodape (modal de tamanho fixo; o botao principal tem largura fixa) */

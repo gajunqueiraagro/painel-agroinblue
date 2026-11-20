@@ -245,15 +245,15 @@ describe('o Casar com o banco de hoje mostra o nº da NF na linha (Gabriel 04/11
   const EXT = { extrato_id: 'ext-1', data: '2026-10-05', historico: 'COMPRA DEBITO EXEMPLO', valor: -16238 };
   const LEV: LevadoDaNota = { lancamento_id: 'lanc-ja', descricao: 'Compra exemplo', fornecedor: 'Fornecedor Sintetico', valor_assinado: -16238,
     data_vencimento: '2026-11-10', status_transacao: 'realizado', numero_documento: '000123456' };
-  it('com o nº: a linha NF da coluna Sistema (000.123.456); sem o nº, "—" (D-h)', () => {
+  it('com o nº: a coluna NF da tabela (000.123.456); sem o nº, "—"', () => {
     M.rpc.mockResolvedValue({ data: { ok: true, no_extrato: -16238, soma: -16238 }, error: null });
     const { unmount } = render(<CasarComBancoModal open onClose={() => {}} extrato={EXT} iniciais={[LEV]} contaBancariaId="conta-extrato" onConciliado={() => {}} />);
-    expect(screen.getByTestId('levado-nf').textContent).toBe('000.123.456');
-    /* CONC-CRIAR-COM-NOTA-02 D-h: a NF é a linha "NF" da coluna Sistema (tabela: uma linha, algarismos tabulares) */
-    expect(screen.getByTestId('levado-nf').className).toMatch(/tabular-nums/);
+    expect(screen.getByTestId('levado-linha-nf').textContent).toBe('000.123.456');
+    /* CONC-CASAR-1X1-TABELA-01: a NF é a coluna NF da tabela dos levados (uma linha, algarismos tabulares) */
+    expect(screen.getByTestId('levado-linha-nf').className).toMatch(/tabular-nums/);
     unmount();
     render(<CasarComBancoModal open onClose={() => {}} extrato={EXT} iniciais={[{ ...LEV, numero_documento: null }]} contaBancariaId="conta-extrato" onConciliado={() => {}} />);
-    expect(screen.getByTestId('levado-nf').textContent).toBe('—');
+    expect(screen.getByTestId('levado-linha-nf').textContent).toBe('—');
   });
 });
 

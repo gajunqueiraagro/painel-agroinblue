@@ -2046,6 +2046,20 @@ const CENARIOS = [
   { nome: 'casar-1x1-antecipado', url: 'tela=casar-1x1&v=antecipado', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* CONC-CRIAR-COM-NOTA-02 E1/E2 (homologação 09:48) — o caso Edson: as sugestões da família do fornecedor e o Casar em tabela com 5 NFs */
   { nome: 'casar-1x1-edson', url: 'tela=casar-1x1&v=edson', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* CONC-CASAR-1X1-TABELA-01 (FILA 19/11 07:26) — o caso Luiz Gustavo: o 1:1 na tabela do Casar N com Faz./Ativ./Plano, o aplicado = NF travado,
+     a caixa da NF com os 3 gestos; `-notas` com a "Outra nota" aberta (2 notas, nº e valor) e `-taxa` com o seletor da conta */
+  ...['', '-notas', '-taxa'].map((x) => ({ nome: `casar-1x1-outranota${x}`, url: 'tela=casar-1x1&v=outranota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    antes: async (p) => {
+      await p.locator('[data-testid="pergunta-nf"]').waitFor({ timeout: 15000 });
+      if (x === '-notas') {
+        await p.locator('[data-testid="destino-outra_nota"]').click();
+        await p.locator('[data-testid="outra-nota-numero"]').first().fill('270');
+        await p.locator('[data-testid="outra-nota-mais"]').click();
+        await p.locator('[data-testid="outra-nota-numero"]').nth(1).fill('272');
+      }
+      if (x === '-taxa') await p.locator('[data-testid="destino-taxa"]').click();
+      await p.waitForTimeout(400);
+    } })),
   { nome: 'casar-sugestoes-edson', url: 'tela=sugestoes-casar&v=edson', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]' },
   /* D3 (homologação Edson 11:40): a tabela ordenada pela NF (a seta no cabeçalho; todas as colunas ordenam) */
   { nome: 'casar-sugestoes-edson-por-nf', url: 'tela=sugestoes-casar&v=edson', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
@@ -2158,8 +2172,11 @@ const CENARIOS = [
   ...[['casar-extrato', 'tela=conciliacao'], ['casar-extrato-poucos', 'tela=conciliacao&v=poucos']].map(([nome, url]) => ({ nome, url,
     tamanhos: TAMANHOS_DA_CONCILIACAO, antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
       await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await p.waitForTimeout(500); } })),
-  ...[['conferencia', null], ['conferencia-vencidos', 'chip-vencidos'], ['conferencia-sem-par', 'chip-sem_par'], ['conferencia-poucos', null]].map(([nome, chip]) => ({
-    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : 'tela=conciliacao', tamanhos: [...TAMANHOS_DO_P92, [1366, 768]],
+  /* BAIXA-DESCONTO-BANCO-01: `conferencia-desconto` = a NF paga com desconto (dia 03) com a sub-linha cinza "↳ desconto · não sai do banco" */
+  ...[['conferencia', null], ['conferencia-vencidos', 'chip-vencidos'], ['conferencia-sem-par', 'chip-sem_par'], ['conferencia-poucos', null],
+    ['conferencia-desconto', null]].map(([nome, chip]) => ({
+    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : nome === 'conferencia-desconto' ? 'tela=conciliacao&v=desconto-depois' : 'tela=conciliacao',
+    tamanhos: [...TAMANHOS_DO_P92, [1366, 768]],
     regiao: '[data-testid="modal-conferencia"]',
     /* P159e (Gabriel 29/10): o nome do extrato INTEIRO de 1366px para cima; abaixo, "…" + o title (a regra de corte de sempre) */
     inteiroDe: { sel: '[data-testid="modal-conferencia"] [data-testid="conf-historico"]', de: 1366 },
@@ -2201,7 +2218,7 @@ const CENARIOS = [
   { nome: 'conc-criar-com-nota-preenchido', url: 'tela=estacao&v=nota', tamanhos: TAMANHOS_DO_CONSORCIO,
     regiao: '[role="dialog"]:has([data-testid="xml-faixas"])', antes: criarComNota(true) },
   { nome: 'conc-criar-com-nota-casar', url: 'tela=estacao&v=notaja', tamanhos: TAMANHOS_DO_P92,
-    regiao: '[role="dialog"]:has([data-testid="levado-nf"])', antes: async (p) => { await criarComNota(true)(p); await p.locator('[data-testid="levado-nf"]').waitFor(); } },
+    regiao: '[role="dialog"]:has([data-testid="levado-linha-nf"])', antes: async (p) => { await criarComNota(true)(p); await p.locator('[data-testid="levado-linha-nf"]').waitFor(); } },
   /* P159b (CONC-TELAS-02) — as abas Sistema e Evolução do saldo do Casar (de 1000px para cima, a página da Conciliação); a Evolução também
      com os dias sem movimento à vista. O modal "Extrato do sistema" (o ↗, D5) já tem os cenários `conciliacao-extrato-do-sistema*`. */
   ...[['casar-sistema', 'Sistema', null], ['casar-evolucao', 'Evolução do saldo', null], ['casar-evolucao-com-vazios', 'Evolução do saldo', 'evolucao-mostrar-vazios']]

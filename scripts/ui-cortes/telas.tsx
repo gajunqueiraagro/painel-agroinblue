@@ -1446,6 +1446,22 @@ if (tela === 'mesclar') {
       iniciais={[{ lancamento_id: 'yp', descricao: 'Amortização 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -88888888.88, data_vencimento: '2027-08-15', status_transacao: 'programado' },
         { lancamento_id: 'yj', descricao: 'Juros 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -9999999.99, data_vencimento: '2027-08-15', status_transacao: 'programado' }]}
       onConciliado={() => {}} />);
+  } else if (v === 'outranota') {
+    /* CONC-CASAR-1X1-TABELA-01 (FILA 19/11 07:26) — sintético no formato do caso Luiz Gustavo: NF 585 de 1.404,00 num PIX de 3.404,16; o banco
+       simulado devolve a pergunta da NF com os 3 gestos do "a mais" (115570); a leitura dos levados traz Faz./Ativ./Plano */
+    g.__bancoBancada = {
+      from: (t: string) => t === 'financeiro_lancamentos_v2' ? [{ id: 'g585', data_pagamento: null, fazenda_id: 'fz', tipo_documento: 'nf', numero_documento: '000000585',
+          subcentro: 'Manutenção de Máquinas e Implementos Agrícolas', escopo_negocio: 'pecuaria' }]
+        : t === 'fazendas' ? [{ id: 'fz', nome: 'Fazenda Exemplo Sintética', codigo: 'FEX' }] : [],
+      rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: true, simulado: true, no_extrato: -3404.16, soma: -3404.16,
+        pergunta_nf: { lancamento_id: 'g585', sentido: 'a_mais', opcoes: ['juros', 'taxa', 'outra_nota'], diferenca: 2000.16,
+          frase: 'A NF nº 585 vale R$ 1.404,00 e o banco pagou R$ 3.404,16: o valor da NF não muda. Diga o que é a diferença de R$ 2.000,16: juros/multa, outra despesa sem nota (taxa) ou outra nota do fornecedor que falta lançar.' } } : null };
+    montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" clienteId="cli"
+      extrato={{ extrato_id: 'x1', data: '2031-10-20', historico: 'PIX - ENVIADO - 20/10 09:12 OFICINA EXEMPLO PECAS E SERVICOS SINTETICOS', valor: -3404.16 }}
+      iniciais={[{ lancamento_id: 'g585', descricao: 'Válvula admissão / CG 150 Metal Leve, válvula escape, juntas e retentores · 9 itens',
+        fornecedor: 'Oficina Exemplo Peças e Serviços Sintéticos Ltda', valor_assinado: -1404, data_vencimento: '2031-10-20', status_transacao: 'programado',
+        numero_documento: '000000585', usarValorDoBanco: true }]}
+      onConciliado={() => {}} />);
   } else if (v === 'edson') {
     /* CONC-CRIAR-COM-NOTA-02 E2 (homologação 09:48) — o Casar com as 5 NFs (sintético no formato do caso Edson): a TABELA, uma linha por NF */
     g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: false, motivo: 'soma_nao_bate', no_extrato: -6000, soma: -10863.35, diferenca: -4863.35 } : null };
@@ -1665,7 +1681,9 @@ if (tela === 'mesclar') {
   if (q.get('admin') === '1') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' },
     clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
   g.__bancoBancada = {
-    from: (t: string) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : CONC.CONTAS)
+    from: (t: string, e?: { eq?: Record<string, unknown> }) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : CONC.CONTAS)
+      /* BAIXA-DESCONTO-BANCO-01 — a parte paga com desconto da NF do dia 03 (`&v=desconto-depois`) */
+      : t === 'financeiro_lancamentos_v2' && e?.eq?.origem_tipo === 'conc:desconto_parte' ? (v === 'desconto-depois' ? ESP.PARTES_DO_DESCONTO : [])
       : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
       : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : CONC.DOCUMENTOS) : [],
     rpc: (fn: string, a: any) => fn === 'fn_conciliacao_resumo_mes'

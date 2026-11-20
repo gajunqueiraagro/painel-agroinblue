@@ -5,20 +5,41 @@
  * a mais) · ✕; o rodapé com o total aplicado × o extrato × a diferença.
  * Só DESENHA: o valor de cada campo e o remover são do modal (o mesmo estado `levados`, o mesmo Conciliar — nada de regra nova de gravação).
  * Regra de corte: tabela — texto com "…" e o inteiro no `title`; número, valor, data e NF nunca cortam (larguras medidas para o teto).
+ * CONC-CASAR-1X1-TABELA-01 (Gabriel 19/11 07:23, caso Luiz Gustavo) — o 1:1 usa ESTA tabela (uma linha) e ela ganhou Faz. (código, o nome no
+ * `title`) · Ativ. (Pec./Agri./Adm./Silv., do escopo do plano) · Plano (o subcentro). Com NF o Aplicado é o valor da NF e não se edita (R2).
  */
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import { STATUS_FILTRO_LABEL, STATUS_PALETA } from '@/lib/financeiro/statusFinanceiro';
 
 export interface LinhaDoLevado {
   lancamento_id: string; data_vencimento?: string | null; descricao: string | null; fornecedor?: string | null;
   numero_documento?: string | null; status_transacao?: string | null; valor_assinado: number; valorTexto: string;
+  /** CONC-CASAR-1X1-TABELA-01 — a fazenda (código; o nome no title), a atividade (escopo do plano) e o plano (subcentro) */
+  fazendaCodigo?: string | null; fazendaNome?: string | null; escopoNegocio?: string | null; subcentro?: string | null;
+  /** R2 — com NF o aplicado é o valor da NF: o campo não se edita (a diferença se resolve na caixa da NF) */
+  travadoNaNf?: boolean;
 }
-/* as larguras: Venc. dd/mm/aaaa 72 · NF 000.000.000 84 · Status 76 · Valor/Aplicado "99.999.999,99" 96/104 · Fica "parcial · falta 99.999.999,99" 150 */
+/** a atividade curta pelo escopo do plano (o mesmo vocabulário da barra de atividade do seletor de conta) */
+export function atividadeCurta(escopo: string | null | undefined): string {
+  const e = (escopo ?? '').trim().toLowerCase();
+  if (e === 'pecuaria') return 'Pec.';
+  if (e === 'agricultura') return 'Agri.';
+  if (e === 'administrativo') return 'Adm.';
+  if (e === 'silvicultura') return 'Silv.';
+  return '—';
+}
+/* as larguras: Venc. dd/mm/aaaa 72 · NF 000.000.000 84 · Faz. 40 · Ativ. 38 · Plano 140 · Status 76 · Valor/Aplicado "99.999.999,99" 96/124 · Fica "parcial · falta 99.999.999,99" */
 /* ajuste 2 (OK do Edson): sem vão entre Fica e ✕ — o ✕ vai NA célula do Fica, logo depois do selo; a coluna tem a largura do MAIOR texto que o
    conjunto pode mostrar ("parcial · falta <o maior valor>"), fixa enquanto se edita (nada anda); a sobra vai para a Descrição */
-export const COLUNAS_DOS_LEVADOS: readonly (number | null)[] = [72, null, 150, 84, 76, 96, 124];
+export const COLUNAS_DOS_LEVADOS: readonly (number | null)[] = [72, null, 140, 84, 40, 38, 140, 76, 96, 124];
+/* CASAR-1X1 abaixo de 1000px (a regra do P101; o gate de 19/11 15:20: a 750 e 814 a tabela ficava mais larga que o modal, rolava de lado
+   e o foco no Aplicado deslocava tudo) — saem Fornecedor · Faz. · Ativ. · Plano (índices abaixo) e o `title` da Descrição leva os quatro.
+   A conta a 750: o modal tem 712 − 24 de recuo = 688px; sem as 4 ficam 452 + o Fica, e a Descrição ainda tem ~100px. */
+export const LARGURA_MINIMA_DAS_COLUNAS_EXTRAS = 1000;
+const SO_NA_JANELA_LARGA: readonly number[] = [2, 4, 5, 6];
 /** a largura do Fica + ✕ para este conjunto: o selo mais largo possível (10px tabular ≈ 5,6 px por caractere + recuos) + o ✕ */
 export function larguraDoFica(levados: readonly { valor_assinado: number }[]): number {
   const maior = Math.max(0, ...levados.map((l) => Math.abs(l.valor_assinado)));
@@ -60,6 +81,18 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
   const parciais = levados.filter((l) => oQueFica(l.valor_assinado, valorDoCampo(l.valorTexto)).tipo === 'parcial').length;
   /* D1 (homologação 14:32): a fonte e a linha DAS SUGESTÕES (a lista do Financeiro) — cabeçalho 8px caixa alta, texto 9px, linha 19px */
   const th = 'h-[18px] px-1 text-[8px] font-semibold uppercase leading-tight';
+  const larga = useLarguraDaJanela() >= LARGURA_MINIMA_DAS_COLUNAS_EXTRAS;
+  const colunas = COLUNAS_DOS_LEVADOS.filter((_, i) => larga || !SO_NA_JANELA_LARGA.includes(i));
+  /* estreita: o `title` da Descrição leva o que saiu da linha */
+  const tituloDaDescricao = (l: LinhaDoLevado): string | undefined => {
+    if (larga) return l.descricao ?? undefined;
+    const partes = [l.descricao ?? '—'];
+    if (l.fornecedor) partes.push(`Fornecedor: ${l.fornecedor}`);
+    if (l.fazendaCodigo || l.fazendaNome) partes.push(`Fazenda: ${l.fazendaNome || l.fazendaCodigo}`);
+    if (l.escopoNegocio) partes.push(`Atividade: ${atividadeCurta(l.escopoNegocio)}`);
+    if (l.subcentro) partes.push(`Plano: ${l.subcentro}`);
+    return partes.join(' · ');
+  };
   const cor = (v: number) => (v < 0 ? 'text-rose-600' : 'text-emerald-600');
   return (
     <div className="space-y-1.5" data-testid="tabela-dos-levados">
@@ -76,15 +109,17 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
       </table>
 
       <table className="w-full table-fixed border-separate border-spacing-0 text-[9px]" data-testid="levados-tabela">
-        <colgroup>{COLUNAS_DOS_LEVADOS.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}<col style={{ width: larguraDoFica(levados) }} /></colgroup>
+        <colgroup>{colunas.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}<col style={{ width: larguraDoFica(levados) }} /></colgroup>
         <thead><tr className="bg-primary text-primary-foreground">
-          <th className={cn(th, 'text-center')}>Venc.</th><th className={cn(th, 'text-left')}>Descrição</th><th className={cn(th, 'text-left')}>Fornecedor</th>
-          <th className={cn(th, 'text-right')}>NF</th><th className={cn(th, 'text-center')}>Status</th><th className={cn(th, 'text-right')}>Valor</th>
+          <th className={cn(th, 'text-center')}>Venc.</th><th className={cn(th, 'text-left')}>Descrição</th>{larga && <th className={cn(th, 'text-left')}>Fornecedor</th>}
+          <th className={cn(th, 'text-right')}>NF</th>
+          {larga && <><th className={cn(th, 'text-center')}>Faz.</th><th className={cn(th, 'text-center')}>Ativ.</th><th className={cn(th, 'text-left')}>Plano</th></>}
+          <th className={cn(th, 'text-center')}>Status</th><th className={cn(th, 'text-right')}>Valor</th>
           <th className={cn(th, 'text-right')}>Aplicado</th><th className={cn(th, 'text-left')}>Fica</th>
         </tr></thead>
         <tbody>
           {levados.length === 0 && (
-            <tr className="h-[19px]"><td colSpan={8} className="px-1 italic text-muted-foreground" data-testid="levados-vazio">nenhum lançamento levado</td></tr>
+            <tr className="h-[19px]"><td colSpan={colunas.length + 1} className="px-1 italic text-muted-foreground" data-testid="levados-vazio">nenhum lançamento levado</td></tr>
           )}
           {levados.map((l) => {
             const st = (l.status_transacao ?? '').trim().toLowerCase();
@@ -93,18 +128,26 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
             return (
               <tr key={l.lancamento_id} className="h-[19px] border-b" data-testid="levado-linha">
                 <td className="whitespace-nowrap border-b px-1 text-center tabular-nums">{dataBR(l.data_vencimento)}</td>
-                <td className="truncate border-b px-1" title={l.descricao ?? undefined}>{l.descricao ?? '—'}</td>
-                <td className="truncate border-b px-1 text-muted-foreground" title={l.fornecedor ?? undefined}>{l.fornecedor || '—'}</td>
+                <td className="truncate border-b px-1" title={tituloDaDescricao(l)} data-testid="levado-linha-descricao">{l.descricao ?? '—'}</td>
+                {larga && <td className="truncate border-b px-1 text-muted-foreground" title={l.fornecedor ?? undefined} data-testid="levado-linha-fornecedor">{l.fornecedor || '—'}</td>}
                 <td className="whitespace-nowrap border-b px-1 text-right tabular-nums" data-testid="levado-linha-nf">{nf}</td>
+                {larga && <>
+                  <td className="whitespace-nowrap border-b px-1 text-center" title={l.fazendaNome ?? undefined} data-testid="levado-linha-fazenda">{l.fazendaCodigo || '—'}</td>
+                  <td className="whitespace-nowrap border-b px-1 text-center" data-testid="levado-linha-atividade">{atividadeCurta(l.escopoNegocio)}</td>
+                  <td className="truncate border-b px-1" title={l.subcentro ?? undefined} data-testid="levado-linha-plano">{l.subcentro || '—'}</td>
+                </>}
                 <td className={cn('whitespace-nowrap border-b px-1 text-center font-medium', PALETA[st]?.texto ?? 'text-muted-foreground')}>
                   {st ? (STATUS_FILTRO_LABEL[st] ?? l.status_transacao) : '—'}
                 </td>
                 <td className={cn('whitespace-nowrap border-b px-1 text-right tabular-nums', cor(l.valor_assinado))}>{fmt(l.valor_assinado)}</td>
                 <td className="border-b px-0.5"><div className="flex items-center gap-0.5">
-                  <input value={l.valorTexto} readOnly={somenteLeitura?.(l.lancamento_id)} inputMode="decimal"
+                  <input value={l.valorTexto} readOnly={l.travadoNaNf || somenteLeitura?.(l.lancamento_id)} inputMode="decimal"
+                    title={l.travadoNaNf ? 'Com NF, o aplicado é o valor da NF e não muda: a diferença se resolve na caixa da NF, embaixo.' : undefined}
+                    data-travado={l.travadoNaNf ? 'nf' : undefined}
                     onChange={(e) => onValor(l.lancamento_id, e.target.value)}
                     aria-label={rotuloDoCampo?.(l) ?? `Valor aplicado em ${l.descricao ?? 'lançamento'}`}
-                    className={cn('h-[17px] w-full min-w-0 rounded border px-1 text-right text-[9px] font-medium tabular-nums', cor(l.valor_assinado))}
+                    className={cn('h-[17px] w-full min-w-0 rounded border px-1 text-right text-[9px] font-medium tabular-nums', cor(l.valor_assinado),
+                      l.travadoNaNf && 'cursor-not-allowed bg-muted')}
                     data-testid="levado-linha-aplicado" />
                   {acaoNoCampo?.(l)}
                 </div></td>

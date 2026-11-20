@@ -35,6 +35,27 @@ describe('itensComDestino', () => {
   });
 });
 
+describe('outra nota (falta lançar) — 115570', () => {
+  const itens = [{ lancamento_id: 'n', valor: 3404.16 }];
+  it('a pergunta com o 3º gesto é lida; o item leva só as notas preenchidas (nº e/ou valor)', () => {
+    expect(perguntaNfDaResposta({ pergunta_nf: { lancamento_id: 'n', frase: 'f', sentido: 'a_mais', opcoes: ['juros', 'taxa', 'outra_nota'] } })?.opcoes)
+      .toEqual(['juros', 'taxa', 'outra_nota']);
+    expect(itensComDestino(itens, { n: { destino: 'outra_nota', outrasNotas: [{ numero: ' 270, 272 ', valor: null }, { numero: '', valor: null }] } })[0])
+      .toEqual({ lancamento_id: 'n', valor: 3404.16, destino: 'outra_nota', outras_notas: [{ numero: '270, 272' }] });
+    expect(itensComDestino(itens, { n: { destino: 'outra_nota', outrasNotas: [{ numero: '270', valor: 1200.164 }, { numero: '272', valor: 800 }] } })[0])
+      .toEqual({ lancamento_id: 'n', valor: 3404.16, destino: 'outra_nota', outras_notas: [{ numero: '270', valor: 1200.16 }, { numero: '272', valor: 800 }] });
+  });
+  it('tudo em branco: vai o destino sem notas (uma linha "Falta nota" sem nº)', () => {
+    expect(itensComDestino(itens, { n: { destino: 'outra_nota', outrasNotas: [{ numero: ' ', valor: null }] } })[0])
+      .toEqual({ lancamento_id: 'n', valor: 3404.16, destino: 'outra_nota' });
+  });
+  it('a frase diz os números e a pendência', () => {
+    expect(fraseDaEscolha({ destino: 'outra_nota', outrasNotas: [{ numero: '270', valor: null }, { numero: '272', valor: null }] }, 2000.16, brl))
+      .toBe('R$ 2000,16 viram "Falta nota nº 270, 272" (a classificar), no mesmo extrato; a NF fica com o valor dela e fica a pendência de anexar a nota.');
+    expect(fraseDaEscolha({ destino: 'outra_nota' }, 2000.16, brl)).toBe('R$ 2000,16 viram "Falta nota" (a classificar), no mesmo extrato; a NF fica com o valor dela e fica a pendência de anexar a nota.');
+  });
+});
+
 describe('fraseDaEscolha', () => {
   it('diz o valor e o que acontece com a NF', () => {
     expect(fraseDaEscolha({ destino: 'juros' }, 100, brl)).toBe('R$ 100,00 viram "Juros/multa da NF", no mesmo extrato; a NF fica com o valor dela.');
