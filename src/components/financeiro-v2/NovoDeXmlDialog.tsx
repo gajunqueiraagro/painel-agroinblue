@@ -35,6 +35,7 @@ import { arquivoXmlDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { parcelasParaCasar } from '@/lib/financeiro/nfe/jaLancada';
 import { dataInteira, fraseDaChaveNaoConfere, type NotaLidaOk, type NotaParaLancar } from './NotaFiscalDialog';
 import { ItensDasNotasGuardadasDialog } from './ItensDasNotasGuardadasDialog';
+import { DanfeDasNotasGuardadasDialog } from './DanfeDasNotasGuardadasDialog';
 
 export interface LinhaDeNota {
   id: string;
@@ -237,6 +238,8 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
   /* P101 — abaixo de 1000px a tabela passava da janela (155px a 750): sem a coluna CNPJ (vai no `title` do Emitente) e colunas mais estreitas */
   const estreito = useLarguraDaJanela() < 1000;
   const [guardadas, setGuardadas] = useState(false);
+  /* NOTA-RECEITA-DANFE-ANEXO-01 — o gesto "DANFE das notas já guardadas" (todo XML sem PDF) */
+  const [danfes, setDanfes] = useState(false);
   /* P95 — a lista de agora (a leitura em lote compara com ela), o aviso do arquivo repetido e a chave digitada de cada linha recusada */
   const linhasRef = useRef(linhas);
   linhasRef.current = linhas;
@@ -500,10 +503,13 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
         <div className="flex h-8 items-center justify-end gap-2 border-t bg-muted/30 px-4">
           <Button type="button" size="sm" variant="ghost" className="mr-auto h-[22px] px-[9px] text-[10px]" disabled={!clienteId}
             onClick={() => setGuardadas(true)} data-testid="xml-itens-guardadas">Itens das notas já guardadas</Button>
+          <Button type="button" size="sm" variant="ghost" className="h-[22px] px-[9px] text-[10px]" disabled={!clienteId}
+            onClick={() => setDanfes(true)} data-testid="xml-danfe-guardadas">DANFE das notas já guardadas</Button>
           <Button type="button" size="sm" variant="outline" className="h-[22px] px-[9px] text-[10px]" onClick={fechar}>Fechar</Button>
         </div>
       </DialogContent>
       {guardadas && clienteId && <ItensDasNotasGuardadasDialog clienteId={clienteId} onClose={() => setGuardadas(false)} />}
+      {danfes && clienteId && <DanfeDasNotasGuardadasDialog clienteId={clienteId} onClose={() => setDanfes(false)} />}
     </Dialog>
   );
 }
