@@ -40,8 +40,10 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { ChipsDeStatus, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
+import { SeletorPeriodo, type TomDoMes } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 import {
-  COR, MESES_ABR, amDe, amHoje, anoDe, contarMeses, corSinal, faixaDoPeriodo, mil1, primeiroDia, rotuloMes, somarMeses, ultimoDia,
+  COR, MESES_ABR, amDe, amHoje, anoDe, contarMeses, mes0De, corSinal, faixaDoPeriodo, mil1, primeiroDia, rotuloMes, somarMeses, ultimoDia,
   dataCurta, escreverStatusVG, escreverVencidosVG, lerStatusVG, lerVencidosVG,
   filtrosVG, rotuloAtividade, type AlvoAnaliseVG, type CriterioTelaVG, type FaixaVG, type ModoVG, type TelaVG,
 } from '@/lib/financeiro/visaoGeral';
@@ -140,6 +142,13 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial, 
     });
   };
   const ano = anoDe(sel);
+  /* o ano da fita: do ano vigente − 4 ao seguinte (o 6 + 6 e o previsto passam do ano); o ano do `sel` sempre entra (o seletor garante) */
+  const anosDaFita = Array.from({ length: 6 }, (_, i) => String(anoDe(atual) + 1 - i));
+  const tomDaFita: Record<number, TomDoMes> = {};
+  MESES_ABR.forEach((_, i) => {
+    const am = amDe(ano, i);
+    tomDaFita[i + 1] = { title: `${rotuloMes(am)}${am > atual ? ' · previsto' : ''}` };
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#eef1f5] text-[11px]" data-testid="visao-geral">
@@ -147,26 +156,24 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial, 
       <div className="flex min-h-[32px] shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-[#dfe4ea] bg-white px-3 py-1" data-testid="vg-filtros">
         <Segmentado altura={22} valor={modo} onEscolher={setModo} opcoes={[
           { valor: 'sai', rotulo: 'Saídas' }, { valor: 'ent', rotulo: 'Entradas' }, { valor: 'flx', rotulo: 'Entradas × saídas' }]} />
-        <div className="flex h-[22px] shrink-0 items-center rounded border border-[#cfd6df] bg-white" data-desloca="">
-          <button type="button" aria-label="Ano anterior" className="h-full w-[18px] text-muted-foreground" onClick={() => setSel(somarMeses(sel, -12))}>‹</button>
-          <b className="w-[34px] text-center text-[11px] tabular-nums" data-testid="vg-ano">{ano}</b>
-          <button type="button" aria-label="Próximo ano" className="h-full w-[18px] text-muted-foreground" onClick={() => setSel(somarMeses(sel, 12))}>›</button>
-        </div>
-        <div className="flex shrink-0 gap-0.5">
-          {MESES_ABR.map((m, i) => {
-            const am = amDe(ano, i);
-            return (
-              <button key={m} type="button" data-testid={`vg-mes-${i + 1}`} onClick={() => setSel(am)} title={`${rotuloMes(am)}${am > atual ? ' · previsto' : ''}`}
-                className={cn('h-[20px] w-[29px] rounded border text-center text-[10px]', am === sel ? 'border-[#1f3f66] bg-[#e8eef7] font-semibold text-[#1b2430]' : 'border-[#e3e7ec] bg-white text-[#5b6878]',
-                  am > atual && 'border-dashed')}>{m}</button>
-            );
-          })}
+        {/* UI-MESES-PADRAO-01 (D2) — o ‹ano› e os doze meses viraram o `SeletorPeriodo` da casa: os dois mexiam no MESMO `sel`, e o ano
+            dele troca o ano mantendo o mês (o ±12 de antes). O "· previsto" segue no `title` de cada mês.
+            UI-LARGURA-FIXA-01: a fita tem LARGURA FIXA (512px; sem ela media o conteúdo e andava 1,2px ao trocar o mês/ano) */}
+        <div className="w-[512px] min-w-0 shrink-0" data-testid="vg-meses" data-desloca="">
+          <SeletorPeriodo
+            modo="ano-mes"
+            modoUnico
+            anos={anosDaFita}
+            periodo={mesUnico(ano, mes0De(sel) + 1)}
+            onPeriodoChange={(p) => setSel(amDe(p.de.ano, p.de.mes - 1))}
+            tomPorMes={tomDaFita}
+          />
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <Segmentado altura={22} valor={faixa === 'per' ? ('' as FaixaVG) : faixa} onEscolher={setFaixa} opcoes={[
             { valor: 'ano', rotulo: 'Ano', title: 'jan a dez do ano do mês escolhido' }, { valor: 'u12', rotulo: 'Últ. 12', title: '12 meses até o mês escolhido' },
             { valor: '66', rotulo: '6 + 6', title: '6 meses antes e 6 depois do mês escolhido' }]} />
-          <SeletorPeriodo de={de} ate={ate} atual={atual} ativo={faixa === 'per'} onEscolher={(d, a) => { setPer([d, a]); setFaixa('per'); if (sel < d || sel > a) setSel(a < atual ? a : d > atual ? d : atual); }} />
+          <SeletorPeriodoPersonalizadoVG de={de} ate={ate} atual={atual} ativo={faixa === 'per'} onEscolher={(d, a) => { setPer([d, a]); setFaixa('per'); if (sel < d || sel > a) setSel(a < atual ? a : d > atual ? d : atual); }} />
         </div>
       </div>
 
@@ -284,7 +291,7 @@ function Legenda({ modo, tela, sel }: { modo: ModoVG; tela: TelaVG | null; sel: 
 }
 
 /** o período De → Até: quadro com ‹ano› e grade de meses (nunca lista longa) — SPEC §3.2 */
-function SeletorPeriodo({ de, ate, atual, ativo, onEscolher }: { de: string; ate: string; atual: string; ativo: boolean; onEscolher: (de: string, ate: string) => void }) {
+function SeletorPeriodoPersonalizadoVG({ de, ate, atual, ativo, onEscolher }: { de: string; ate: string; atual: string; ativo: boolean; onEscolher: (de: string, ate: string) => void }) {
   const [aberto, setAberto] = useState(false);
   const [anoDe_, setAnoDe] = useState(anoDe(de));
   const [anoAte, setAnoAte] = useState(anoDe(ate));

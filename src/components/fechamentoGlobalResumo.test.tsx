@@ -154,15 +154,17 @@ describe('FECH-GLOBAL-RESUMO-01 — o componente', () => {
     const fev = screen.getByText('Fev').closest('button') as HTMLButtonElement;
     const mar = screen.getByText('Mar').closest('button') as HTMLButtonElement;
     const abr = screen.getByText('Abr').closest('button') as HTMLButtonElement;
-    expect(fev.className).toContain('bg-[#EAF3DE]');
-    expect(mar.className).toContain('bg-[#185FA5]');
-    expect(abr.className).toContain('bg-muted');
+    /* UI-MESES-PADRAO-01: o estado é o ponto (`data-estado`), a escolha é o papel (`data-papel`) — a fita é o SeletorPeriodo. */
+    expect(fev.getAttribute('data-estado')).toBe('ok');
+    expect(mar.getAttribute('data-papel')).toBe('extremo');
+    expect(['ok', 'pend', 'err']).not.toContain(abr.getAttribute('data-estado'));   // neutro (sem estado; futuro = contorno)
+    expect(abr.getAttribute('data-papel')).toBe('fora');
     fireEvent.click(fev);
     expect(p.setMesFiltro).toHaveBeenCalledWith(2);
   });
   it('março NÃO selecionado e com fazenda aberta fica âmbar', () => {
     montar({ mesFiltro: 5 });
-    expect((screen.getByText('Mar').closest('button') as HTMLButtonElement).className).toContain('bg-[#FAEEDA]');
+    expect((screen.getByText('Mar').closest('button') as HTMLButtonElement).getAttribute('data-estado')).toBe('pend');
   });
   it('clicar na linha ou no botão abre AQUELA fazenda', () => {
     const p = montar();

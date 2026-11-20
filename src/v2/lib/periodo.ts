@@ -75,6 +75,22 @@ export function ordenar(p: Periodo): Periodo {
   return anoMes(p.de) <= anoMes(p.ate) ? p : { de: p.ate, ate: p.de };
 }
 
+/** PROD-LANC-FILTROS-01 — o período de MESES (a fita) visto como DATAS (o `SeletorDePeriodo`, o único seletor de período personalizado do
+    produto): o 1º dia do mês de início ao último do mês de fim. */
+export function intervaloDoPeriodo(p: Periodo): { de: string; ate: string } {
+  const o = ordenar(p);
+  const ultimo = new Date(Date.UTC(o.ate.ano, o.ate.mes, 0)).getUTCDate();
+  return { de: `${anoMes(o.de)}-01`, ate: `${anoMes(o.ate)}-${String(ultimo).padStart(2, '0')}` };
+}
+
+/** …e de volta: as datas (aaaa-mm-dd) viram os MESES que elas tocam. Data inválida = nulo (quem chama não troca o período). */
+export function periodoDoIntervalo(i: { de: string; ate: string }): Periodo | null {
+  const ponto = (d: string) => { const m = /^(\d{4})-(\d{2})/.exec(d); return m ? { ano: Number(m[1]), mes: Number(m[2]) } : null; };
+  const de = ponto(i.de); const ate = ponto(i.ate);
+  if (!de || !ate || de.mes < 1 || de.mes > 12 || ate.mes < 1 || ate.mes > 12) return null;
+  return ordenar({ de, ate });
+}
+
 /** O mês `'YYYY-MM'` cai dentro do período? */
 export function dentro(p: Periodo, mesTexto: string): boolean {
   return mesTexto >= anoMes(p.de) && mesTexto <= anoMes(p.ate);

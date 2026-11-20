@@ -66,8 +66,11 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
     if (qtd >= 2) setEstado({ fase: 'lendo' });
     const r = await lerLinhasDoClipe(clienteId, lancamentoId).finally(() => { lendo.current = false; });
     if (r.ok === false) { setEstado({ fase: 'erro', frase: r.motivo }); return; }
-    /* um só, com arquivo: abre direto (com 1 no clipe o popover nem aparece) */
-    if (r.valor.length === 1 && oQueAbrir(r.valor[0])) { setEstado({ fase: 'fechado' }); void abrir(r.valor[0]); return; }
+    /* um só, com arquivo: abre direto (com 1 no clipe o popover nem aparece) — menos a NF com PDF E XML (NOTA-RECEITA-DANFE-ANEXO-01):
+       o popover mostra os dois ("PDF · DANFE" e "XML · Itens") */
+    if (r.valor.length === 1 && oQueAbrir(r.valor[0]) && !(r.valor[0].pdf?.url && r.valor[0].xml?.url)) {
+      setEstado({ fase: 'fechado' }); void abrir(r.valor[0]); return;
+    }
     setEstado({ fase: 'lista', linhas: r.valor });
   };
   const clicar = (e: MouseEvent) => {
@@ -97,7 +100,8 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
             </span>
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" sideOffset={2} className="w-max min-w-[200px] max-w-[430px] p-1" data-testid="clipe-popover">
+        {/* UI-LARGURA-FIXA-01 (Gabriel 19/11): o popover tem a largura da tabela (412 + p-1 + borda), não a do conteúdo */}
+        <PopoverContent align="end" sideOffset={2} className="w-[422px] p-1" data-testid="clipe-popover">
           {estado.fase === 'lendo' && <div className="px-1.5 py-1 text-[10px] text-muted-foreground" data-testid="clipe-carregando">Carregando…</div>}
           {estado.fase === 'erro' && (
             <div className="flex items-center gap-2 px-1.5 py-1 text-[10px] text-destructive" data-testid="clipe-erro">
@@ -116,17 +120,26 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
               <table className="table-fixed border-collapse text-[11px]" style={{ width: 412 }}>
                 <colgroup><col style={{ width: 92 }} /><col style={{ width: 250 }} /><col style={{ width: 70 }} /></colgroup>
                 <tbody>
-                  {estado.linhas.map((l) => {
-                    const d = l.principal;
-                    const nome = l.pdf?.nome || d.nome || '—';
+                  {estado.linhas.flatMap((l) => {
+                    /* NOTA-RECEITA-DANFE-ANEXO-01 — a NF com PDF E XML vira DUAS linhas: o PDF (o DANFE) e o XML (os itens) */
+                    if (l.pdf?.url && l.xml?.url) {
+                      const { pdf, xml } = l;
+                      return [
+                        { key: `${pdf.id}-pdf`, d: l.principal, nome: 'PDF · DANFE', title: pdf.nome || 'DANFE', linha: { ...l, xml: null }, testId: 'clipe-documento-pdf' },
+                        { key: `${xml.id}-xml`, d: l.principal, nome: 'XML · Itens', title: `${xml.nome || 'XML'} · abre os itens da nota`, linha: { ...l, pdf: null }, testId: 'clipe-documento-xml' },
+                      ];
+                    }
+                    const nome = l.pdf?.nome || l.principal.nome || '—';
+                    return [{ key: l.principal.id, d: l.principal, nome, title: nome, linha: l, testId: 'clipe-documento-unico' }];
+                  }).map(({ key, d, nome, title, linha: l, testId }) => {
                     const temArquivo = !!oQueAbrir(l);
                     const abrirEsta = () => { if (!temArquivo) return; setEstado({ fase: 'fechado' }); void abrir(l); };
                     return (
-                      <tr key={d.id} data-testid="clipe-documento" tabIndex={temArquivo ? 0 : -1} aria-disabled={!temArquivo}
+                      <tr key={key} data-testid="clipe-documento" data-qual={testId} tabIndex={temArquivo ? 0 : -1} aria-disabled={!temArquivo}
                         onClick={abrirEsta} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirEsta(); } }}
                         className={cn('h-[21px] outline-none focus-visible:bg-[#eef3fa]', temArquivo ? 'cursor-pointer hover:bg-[#eef3fa]' : 'cursor-default opacity-60')}>
                         <td className="whitespace-nowrap rounded-l-[5px] pl-1.5"><SeloDoTipo tipo={tipoDoSelo({ especie: d.especie, especieOC: d.especieOC, chaveAcesso: d.chaveAcesso })} /></td>
-                        <td className="truncate whitespace-nowrap px-1" title={temArquivo ? nome : `${nome} · sem arquivo anexado`} data-testid="clipe-documento-nome">{nome}</td>
+                        <td className="truncate whitespace-nowrap px-1" title={temArquivo ? title : `${title} · sem arquivo anexado`} data-testid="clipe-documento-nome">{nome}</td>
                         <td className="whitespace-nowrap rounded-r-[5px] pr-1.5 text-right tabular-nums text-muted-foreground" data-testid="clipe-documento-data">{dataBR(d.dataEmissao)}</td>
                       </tr>
                     );

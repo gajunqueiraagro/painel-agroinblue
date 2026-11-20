@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
@@ -8,6 +7,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { RefreshCw, Info, AlertCircle, BarChart3 } from 'lucide-react';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
 
 interface Props {
@@ -289,46 +290,28 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
     <div className="p-3 w-full space-y-2 animate-fade-in pb-20">
       {/* Header: Ano + régua de meses */}
       {!ocultarFiltrosPeriodo && (<div className="flex items-center gap-2">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="h-7 text-xs font-bold w-20 shrink-0">
-            <SelectValue placeholder="Ano" />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a}>{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <div className="flex items-center gap-0.5 flex-1">
-          {MESES_CURTOS.map((label, i) => {
-            const mesVal = String(i + 1).padStart(2, '0');
-            const isActive = mesFiltro === mesVal;
-            return (
-              <button
-                key={mesVal}
-                onClick={() => setMesFiltro(mesVal)}
-                className={`relative flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
-              >
-                {label}
-                {isActive && (
-                  <span className="absolute -top-1 -right-1">
-                    <MesAnteriorAvisoIcon
-                      fazendaId={fazendaId}
-                      anoMes={`${anoFiltro}-${mesVal}`}
-                      size={12}
-                      cenario={statusFiltro}
-                    />
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* UI-MESES-PADRAO-01 (D2) — o ano e os doze meses são o `SeletorPeriodo` da casa (o Select do ano mexia no MESMO `anoFiltro`;
+            a lista é a mesma). O aviso do mês anterior fica ao lado da fita, do mês escolhido. */}
+        <div className="min-w-0 flex-1">
+          <SeletorPeriodo
+            modo="ano-mes"
+            modoUnico
+            anos={anosDisponiveis}
+            periodo={mesUnico(ano, mesNum)}
+            onPeriodoChange={(p) => {
+              if (String(p.de.ano) !== anoFiltro) { setAnoFiltro(String(p.de.ano)); return; }
+              setMesFiltro(String(p.de.mes).padStart(2, '0'));
+            }}
+          />
         </div>
+        <span className="inline-flex shrink-0">
+          <MesAnteriorAvisoIcon
+            fazendaId={fazendaId}
+            anoMes={`${anoFiltro}-${mesFiltro}`}
+            size={12}
+            cenario={statusFiltro}
+          />
+        </span>
       </div>)}
 
       {/* Filtros: Realizado/Meta + Modo + Reclass */}

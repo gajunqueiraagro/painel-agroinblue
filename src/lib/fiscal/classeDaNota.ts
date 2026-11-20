@@ -8,7 +8,7 @@
  * Pura: recebe os atributos que o banco extrai do XML (`fn_notas_atributos_fiscais`).
  */
 export type MotivoNaoFinanceira = 'comodato' | 'entrega_futura' | 'bonificacao' | 'devolucao' | 'garantia' | 'demonstracao' | 'conserto'
-  | 'retorno' | 'outra_remessa';
+  | 'retorno' | 'retorno_demonstracao' | 'outra_remessa';
 export type ClasseDaNota =
   | { classe: 'compra' }
   | { classe: 'nao_financeira'; motivo: MotivoNaoFinanceira }
@@ -29,7 +29,10 @@ export function classeDaNota(a: AtributosFiscais, cancelada: boolean): ClasseDaN
   if (tem(c, ['5116', '5117', '6116', '6117'])) return { classe: 'nao_financeira', motivo: 'entrega_futura' };
   if (tem(c, ['5910', '6910', '5911', '6911'])) return { classe: 'nao_financeira', motivo: 'bonificacao' };
   if (tem(c, ['1202', '2202', '5202', '6202', '1411', '2411', '5411', '6411'])) return { classe: 'nao_financeira', motivo: 'devolucao' };
-  if (tem(c, ['5912', '6912', '5913', '6913'])) return { classe: 'nao_financeira', motivo: 'demonstracao' };
+  /* NOTA-DEMONSTRACAO-01 (Gabriel 19/11 08:03): 5912/6912 = o bem VEM para demonstração; o RETORNO dele é 5913/6913 (saída) ou 1913/2913 —
+     a NF de ENTRADA que o fornecedor emite ao receber o bem de volta (tpNF 0: sem esta linha cairia em "venda do titular") */
+  if (tem(c, ['5913', '6913', '1913', '2913'])) return { classe: 'nao_financeira', motivo: 'retorno_demonstracao' };
+  if (tem(c, ['5912', '6912'])) return { classe: 'nao_financeira', motivo: 'demonstracao' };
   if (tem(c, ['5915', '6915', '5916', '6916'])) return { classe: 'nao_financeira', motivo: 'conserto' };
   if (tem(c, ['5909', '6909', '1909', '2909'])) return { classe: 'nao_financeira', motivo: 'retorno' };
   if (tem(c, ['5949', '6949']) && !/DEBITO/.test(nat)) return { classe: 'nao_financeira', motivo: /GARANTIA/.test(nat) ? 'garantia' : 'outra_remessa' };
@@ -42,7 +45,8 @@ export function classeDaNota(a: AtributosFiscais, cancelada: boolean): ClasseDaN
 
 export const ROTULO_DO_MOTIVO: Record<MotivoNaoFinanceira, string> = {
   comodato: 'comodato', entrega_futura: 'remessa de entrega futura', bonificacao: 'bonificação', devolucao: 'devolução',
-  garantia: 'garantia', demonstracao: 'demonstração', conserto: 'conserto', retorno: 'retorno', outra_remessa: 'remessa',
+  garantia: 'garantia', demonstracao: 'demonstração', conserto: 'conserto', retorno: 'retorno', retorno_demonstracao: 'retorno de demonstração',
+  outra_remessa: 'remessa',
 };
 /** o que o selo diz e o ⓘ explica */
 export const DICA_DO_MOTIVO: Record<MotivoNaoFinanceira, string> = {
@@ -54,6 +58,7 @@ export const DICA_DO_MOTIVO: Record<MotivoNaoFinanceira, string> = {
   demonstracao: 'Demonstração: o bem volta ao fornecedor.',
   conserto: 'Conserto: o bem vai e volta; o serviço vem em outra nota.',
   retorno: 'Retorno de bem: fecha uma remessa anterior.',
+  retorno_demonstracao: 'O bem em demonstração voltou ao fornecedor: fecha a demonstração.',
   outra_remessa: 'Remessa sem pagamento (CFOP de remessa/retorno).',
 };
 /** o motivo que abre "Registrar bem de terceiro" (o bem fica com o titular e volta depois) */

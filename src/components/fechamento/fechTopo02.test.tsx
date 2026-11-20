@@ -15,19 +15,22 @@ const fita = (alinhadaAEsquerda?: boolean) => render(
 );
 
 describe('a fita dos meses', () => {
-  it('no Fechamento área: o ano é o 1º, os meses ocupam o resto da linha e não há espelho', () => {
-    const { container } = fita(true);
-    const linha = container.firstElementChild!;
-    expect(linha.firstElementChild?.getAttribute('title')).toBe('Ano do fechamento');
-    expect(linha.lastElementChild?.getAttribute('data-testid')).toBe('fita-dos-meses');
+  /* UI-MESES-PADRAO-01: a fita do Fechamento é o `SeletorPeriodo` da casa (o ano à esquerda, a barra no resto da linha). */
+  it('no Fechamento área: o ano é o 1º, os meses ocupam o resto da linha', () => {
+    fita(true);
+    const linha = screen.getByTestId('seletor-periodo-linha');
+    expect(linha.firstElementChild?.getAttribute('title')).toBe('Ano');
+    expect(screen.getByTestId('seletor-periodo-meses').className).toContain('flex-1');
     expect(screen.getByTestId('fita-dos-meses').className).toContain('flex-1');
     expect(screen.getByTestId('fita-dos-meses').className).not.toContain('mx-auto');
   });
-  it('sem a prop (as outras telas): como sempre, centrada e com o espelho do ano', () => {
-    const { container } = fita();
-    const linha = container.firstElementChild!;
-    expect(linha.lastElementChild?.getAttribute('aria-hidden')).toBe('true');
+  it('sem a prop (as outras telas): centrada; o estado é o ponto (fechado = ok), o mês do filtro é o escolhido', () => {
+    fita();
     expect(screen.getByTestId('fita-dos-meses').className).toContain('mx-auto');
+    const set = screen.getByText('Set');
+    expect(set.getAttribute('data-papel')).toBe('extremo');
+    expect(set.getAttribute('data-estado')).toBe('ok');
+    expect(screen.getByText('Ago').getAttribute('data-estado')).not.toBe('ok');
   });
 });
 

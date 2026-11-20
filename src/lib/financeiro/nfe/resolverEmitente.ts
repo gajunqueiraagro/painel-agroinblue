@@ -18,9 +18,16 @@
  *   SEM DOCUMENTO: o nome da nota, o mesmo sem o prefixo/sufixo de CNPJ ou CPF (o MEI escreve "22.522.463 NOME"), a fantasia e os
  *   `outrosNomes` (a razao social da Receita). Um so' -> proposto, `cadastroSemDocumento` (a tela oferece completar com o CNPJ);
  *   dois ou mais -> o operador escolhe. Criar outro e' escolha do operador, nunca o padrao.
+ * FORN-ACHAR-CNPJ-01 (URGENTE, Gabriel 19/11 08:11 — NF 210.789 COAMO, Sidrolândia: o "+ Da nota" achou "pelo nome" o AUTO POSTO … SIDROLANDIA
+ *   pela FANTASIA da nota ("SIDROLANDIA", a cidade da unidade) contida no nome do posto, e o "atualizar cadastro" gravaria a COAMO nele):
+ *   · com CNPJ/CPF no XML o documento MANDA: exato; senão a RAIZ (outra filial: não propõe, cadastrar esta filial); cadastro com OUTRO
+ *     documento nunca é proposto (nem pelo resolvedor do banco);
+ *   · pelo nome, SÓ a RAZÃO SOCIAL INTEIRA normalizada IGUAL (sem acento/caixa, sem o CNPJ grudado do MEI, sem o "Ltda/ME/EPP/S.A." do fim),
+ *     entre os cadastros ativos SEM documento — nunca palavra solta, cidade, fantasia ou "contém";
+ *   · nada disso: "cadastrar com os dados da nota" (nunca casar com outro).
  */
 import { soDigitos } from './formatos';
-import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
+import { normalizarParaBusca } from '@/lib/texto/busca';
 
 export interface FornecedorParaResolver {
   id: string;
@@ -41,13 +48,21 @@ export function nomeSemDocumento(nome: string): string {
     .trim();
 }
 
-/** Os cadastros ATIVOS e SEM DOCUMENTO que a busca do cadastro acha por algum dos nomes (termo de 5 letras ou mais). */
+/** FORN-ACHAR-CNPJ-01 — a razão social para comparar: sem acento/caixa/pontuação, sem o CNPJ/CPF grudado (MEI) e sem o tipo da empresa no
+ *  fim ("ltda", o "ltd" cortado do DANFE, "me", "epp", "eireli", "s a"). '' se sobrar menos de 5 letras (nunca casa). */
+export function razaoParaComparar(nome: string | null | undefined): string {
+  let t = normalizarParaBusca(nomeSemDocumento(nome ?? '')).replace(/[^a-z0-9]+/g, ' ').trim();
+  for (let antes = ''; antes !== t;) { antes = t; t = t.replace(/\s+(ltda|ltd|me|epp|eireli|mei|s a|sa)$/, '').trim(); }
+  return t.replace(/\s/g, '').length >= 5 ? t : '';
+}
+const ativoDeVerdade = (f: FornecedorParaResolver) => f.ativo !== false && !f.fundido_em_id;
+/** Os cadastros ATIVOS e SEM DOCUMENTO cuja RAZÃO SOCIAL (ou um apelido gravado) é IGUAL a um dos nomes — `razaoParaComparar` dos dois lados.
+ *  A fantasia da nota NÃO entra (é a cidade da unidade, o nome da loja: o caso COAMO × Auto Posto). */
 export function semDocumentoPeloNome(nomes: readonly (string | null | undefined)[], fornecedores: readonly FornecedorParaResolver[]): FornecedorParaResolver[] {
-  const semDoc = fornecedores.filter((f) => soDigitos(f.cpf_cnpj) === '');
-  const termos = [...new Set(nomes.flatMap((n) => (n ? [n, nomeSemDocumento(n)] : [])).map((t) => t.trim()).filter((t) => t.replace(/\W/g, '').length >= 5))];
-  const achados = new Map<string, FornecedorParaResolver>();
-  for (const t of termos) for (const f of buscarFornecedores(semDoc, t, 'ativos')) achados.set(f.id, f);
-  return [...achados.values()];
+  const procurados = new Set(nomes.map(razaoParaComparar).filter(Boolean));
+  if (!procurados.size) return [];
+  return fornecedores.filter((f) => soDigitos(f.cpf_cnpj) === '' && ativoDeVerdade(f)
+    && [f.nome, ...(f.aliases_norm ?? [])].some((x) => { const r = razaoParaComparar(x); return r !== '' && procurados.has(r); }));
 }
 
 export interface ResolucaoEmitente {
@@ -87,17 +102,20 @@ export function resolverEmitente(
   if (peloDocumento.length >= 1) {
     return { achadoPor: 'documento', candidatos: [peloDocumento[0]], propostoId: peloDocumento[0].id, inativo: true, cadastroSemDocumento: false, filialDiferente: false };
   }
+  /* FORN-FILIAL-01 / FORN-ACHAR-CNPJ-01 — sem o documento exato, a RAIZ: outra filial da mesma empresa no cadastro → não propõe (o lançamento
+     iria para a filial errada); a tela oferece cadastrar esta filial */
+  const raiz = raizDoCnpj(emitente.documento);
+  const filiais = raiz ? fornecedores.filter((f) => ativo(f) && raizDoCnpj(f.cpf_cnpj) === raiz) : [];
   const peloNome = idPeloNome ? fornecedores.find((f) => f.id === idPeloNome) ?? null : null;
-  if (peloNome) {
-    const raiz = raizDoCnpj(emitente.documento);
-    const filialDiferente = raiz !== '' && raizDoCnpj(peloNome.cpf_cnpj) === raiz && soDigitos(peloNome.cpf_cnpj) !== doc;
-    return {
-      achadoPor: 'nome', candidatos: [peloNome], propostoId: filialDiferente ? null : peloNome.id, inativo: !ativo(peloNome),
-      cadastroSemDocumento: soDigitos(peloNome.cpf_cnpj) === '', filialDiferente,
-    };
+  /* o resolvedor do banco (nome normalizado igual): só vale para o cadastro SEM documento — o de OUTRO documento nunca é proposto */
+  if (peloNome && soDigitos(peloNome.cpf_cnpj) === '') {
+    return { achadoPor: 'nome', candidatos: [peloNome], propostoId: peloNome.id, inativo: !ativo(peloNome), cadastroSemDocumento: true, filialDiferente: false };
   }
-  /* NOTA-FORNECEDOR-DUPLICA-01 — o cadastro SEM documento, pela regra da busca do cadastro */
-  const porBusca = semDocumentoPeloNome([emitente.nome, emitente.fantasia, ...outrosNomes], fornecedores);
+  if (filiais.length) {
+    return { achadoPor: 'nome', candidatos: filiais.slice(0, 1), propostoId: null, inativo: false, cadastroSemDocumento: false, filialDiferente: true };
+  }
+  /* NOTA-FORNECEDOR-DUPLICA-01 — o cadastro SEM documento, pela RAZÃO SOCIAL inteira igual (FORN-ACHAR-CNPJ-01: nunca a fantasia) */
+  const porBusca = semDocumentoPeloNome([emitente.nome, ...outrosNomes], fornecedores);
   if (porBusca.length >= 1) {
     return { achadoPor: 'nome', candidatos: porBusca, propostoId: porBusca.length === 1 ? porBusca[0].id : null, inativo: false,
       cadastroSemDocumento: true, filialDiferente: false };

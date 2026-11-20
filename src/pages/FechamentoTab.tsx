@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
 import { fonteDoNomeDoCard, nomesAteOito } from '@/lib/fechamento/nomesAteOito';
 import { CLASSE_LINHA_PRESA, medirTopo, soNaPrimeiraLeitura } from '@/lib/fechamento/rolagemDoFechamento';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
@@ -1238,35 +1239,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   return (
     <div ref={setAreaDaTela} className="pb-24" data-testid="area-do-fechamento">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
-      <div ref={setTopoFixo} className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2 max-[999px]:px-2">
-        {/* FECH-FAIXA-01 — a faixa do fechamento do mês: a 1ª linha, no MESMO lugar nas três telas (Fechamento, Valor, Mapa do rebanho) */}
-        {/* VR-PRECO-EDITAR-01 ampliado — a trava do MÊS na linha da faixa (um Desbloquear para todos os pastos + o Valor do Rebanho) */}
-        <div className="mb-1.5 flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><FaixaDoFechamento estado={faixaDoMes} atual="pastos" abrir={etapasDoFechamento} /></div>{fazendaAtual?.id && fazendaAtual.id !== '__global__' && <MasterLockBanner anoMes={anoMes} naFaixa />}</div>
-        {/* PR-FECH-HEADER-LARGURA-02 — a COL 1 tem trilha FIXA e ESTREITA. Fixar resolveu
-            a instabilidade (com `auto` ela crescia até o conteúdo do estado corrente e
-            empurrava a COL 2, onde ficam os cards de mês e a tabela de conciliação, que
-            ANDAVA na horizontal a cada troca de mês). Mas o 236px do -01 fixou no TETO, e
-            a COL 2 passou a ficar apertada em TODO estado, não só no de divergência.
-            150px é o menor valor que comporta o conteúdo real: o maior elemento que não
-            acompanha a trilha é o badge "N divergências", com ~123px. O aviso e o botão
-            "Fechar Mês" são `w-full` e seguem a trilha — o aviso perdeu o max-w-[220px],
-            que era quem ditava os 236, e agora quebra em duas linhas dentro dos 150.
-            Altura da COL 1 não afeta a COL 2, então quebrar não custa nada. */}
-        {/* FECH-TOPO-02 — abaixo de 1.000px (o zoom de 135% em 1.240) a linha meses+tabela+botões só cabe com o topo mais justo: padding 8px,
-            vãos menores e a COL 1 em 136px (o maior item dela, o selo "N divergências", tem ~123px) — medido: a linha pede 616px */}
-        <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 items-start max-[1099px]:gap-3 max-[999px]:grid-cols-[128px_minmax(0,1fr)] max-[999px]:gap-2">
-
-          {/* ── COL 1: Contexto / Filtros ── (FECH-TOPO-COMPACTO-01: gap 4px e o "Reabrir Mês" em 24px — a coluna cabe na altura da
-              COL 2, meses + barra + tabela, e nunca dita a altura do topo) */}
-          <div className="flex flex-col gap-1">
-            {/* PR-V2-VOLTAR-ORIGEM-01 — este header nao tem TITULO: e a grade de tres
-                colunas direto. O canto superior esquerdo dele e o topo da COL 1, e e
-                onde a seta cabe sem redesenhar nada. Fora do grid ela roubaria largura
-                da COL 2, que tres PRs seguidos trabalharam para preservar.
-                Idioma copiado de ValorRebanhoTab.tsx:1113. */}
+      <div ref={setTopoFixo} className="sticky top-0 z-20 bg-corpo px-3 pb-2 max-[999px]:px-2">
+        {/* UI-MESES-PADRAO-01 (D1 + revisão 11:28/11:30) — o cabeçalho navy em UMA linha, com a fita de meses NELE (os pontos de estado:
+            fechado = verde, rascunho/pendente = âmbar). A faixa clara saiu: o corpo é o `--corpo` e os controles ficam num card branco. */}
+        <CabecalhoDaTela className="-mx-3 mb-2 max-[999px]:-mx-2" subtitulo="Cabeças conferidas pasto a pasto"
+          titulo={<span className="flex items-center gap-1.5">
+            {/* PR-V2-VOLTAR-ORIGEM-01 — a seta de voltar (idioma de ValorRebanhoTab.tsx:1113). UI-MESES-PADRAO-01: com a fita no navy a
+                COL 1 passou a ditar a altura do topo; a linha reservada subiu para o TÍTULO do cabeçalho (altura fixa de 40px), à
+                esquerda do nome — nada abaixo anda quando ela aparece. */}
             {/* FECH-GLOBAL-RESUMO-01 — LUGAR RESERVADO de 28px: a seta de voltar e o "← Resumo" moram aqui e a linha existe
                 sempre, vazia quando nenhum dos dois aparece — a entrada deles não empurra os selos de baixo. */}
-            <div className="flex h-7 items-center gap-1" data-testid="lugar-do-voltar">
+            <div className="flex h-7 items-center gap-1 empty:hidden" data-testid="lugar-do-voltar">
             {onBack && (
               <Button
                 type="button"
@@ -1287,12 +1270,35 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </button>
             )}
             </div>
-            {/* FECH-TOPO-COMPACTO-01 — o aviso das divergências na ponta esquerda da FAIXA do topo (a linha da barra de botões): 24px
-                reservados sempre; o aviso aparece e some sem mexer em nada (antes era um bloco de 2 linhas que empurrava o "Fechar Mês") */}
-            <div className="flex h-6 items-center whitespace-nowrap text-[10px] font-semibold text-red-700" data-testid="aviso-do-topo"
-              title={showCloseButton && hasDivergencia ? 'Corrija as divergências antes de fechar o mês.' : undefined}>
-              {showCloseButton && hasDivergencia ? '⚠ Corrija as divergências' : ''}
-            </div>
+            Fechamento de pastos</span>}
+          meses={<FechamentoFitaMeses anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp} mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} statusPorMes={statusPorMes} />} />
+        <div className="rounded-lg border border-[#D3D9E2] bg-card p-2 shadow-[0_1px_2px_rgba(15,31,58,.06)]" data-testid="fechamento-controles">
+        {/* FECH-FAIXA-01 — a faixa do fechamento do mês: a 1ª linha, no MESMO lugar nas três telas (Fechamento, Valor, Mapa do rebanho) */}
+        {/* VR-PRECO-EDITAR-01 ampliado — a trava do MÊS na linha da faixa (um Desbloquear para todos os pastos + o Valor do Rebanho) */}
+        {/* FECH-TOPO-COMPACTO-01 — o aviso das divergências: 150px reservados sempre; aparece e some sem mexer em nada. UI-MESES-PADRAO-01: saiu
+            do topo da COL 1 para esta linha (lá ele fazia a COL 1 ditar a altura do topo depois que a fita subiu para o navy) */}
+        <div className="mb-1.5 flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><FaixaDoFechamento estado={faixaDoMes} atual="pastos" abrir={etapasDoFechamento} /></div>
+          <div className="flex h-6 w-[150px] shrink-0 items-center justify-end whitespace-nowrap text-[10px] font-semibold text-red-700" data-testid="aviso-do-topo"
+            title={showCloseButton && hasDivergencia ? 'Corrija as divergências antes de fechar o mês.' : undefined}>
+            {showCloseButton && hasDivergencia ? '⚠ Corrija as divergências' : ''}
+          </div>{fazendaAtual?.id && fazendaAtual.id !== '__global__' && <MasterLockBanner anoMes={anoMes} naFaixa />}</div>
+        {/* PR-FECH-HEADER-LARGURA-02 — a COL 1 tem trilha FIXA e ESTREITA. Fixar resolveu
+            a instabilidade (com `auto` ela crescia até o conteúdo do estado corrente e
+            empurrava a COL 2, onde ficam os cards de mês e a tabela de conciliação, que
+            ANDAVA na horizontal a cada troca de mês). Mas o 236px do -01 fixou no TETO, e
+            a COL 2 passou a ficar apertada em TODO estado, não só no de divergência.
+            150px é o menor valor que comporta o conteúdo real: o maior elemento que não
+            acompanha a trilha é o badge "N divergências", com ~123px. O aviso e o botão
+            "Fechar Mês" são `w-full` e seguem a trilha — o aviso perdeu o max-w-[220px],
+            que era quem ditava os 236, e agora quebra em duas linhas dentro dos 150.
+            Altura da COL 1 não afeta a COL 2, então quebrar não custa nada. */}
+        {/* FECH-TOPO-02 — abaixo de 1.000px (o zoom de 135% em 1.240) a linha meses+tabela+botões só cabe com o topo mais justo: padding 8px,
+            vãos menores e a COL 1 em 136px (o maior item dela, o selo "N divergências", tem ~123px) — medido: a linha pede 616px */}
+        <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 items-start max-[1099px]:gap-3 max-[999px]:grid-cols-[128px_minmax(0,1fr)] max-[999px]:gap-2">
+
+          {/* ── COL 1: Contexto / Filtros ── (FECH-TOPO-COMPACTO-01: gap 4px e o "Reabrir Mês" em 24px — a coluna cabe na altura da
+              COL 2, meses + barra + tabela, e nunca dita a altura do topo) */}
+          <div className="flex flex-col gap-1">
             <div className="flex flex-col gap-1">
               <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1 w-fit">
                 <CheckCircle className="h-3 w-3" />
@@ -1367,22 +1373,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               tabela numa coluna de 530px; os botões À DIREITA da tabela, em 2 colunas, dentro da altura da coluna (nunca ditam o topo) */}
           <div className="flex min-w-0 items-start justify-center gap-3 overflow-x-auto max-[999px]:gap-1" data-testid="topo-do-fechamento">
           <div className="flex w-[530px] flex-none flex-col gap-2">
-            {/**
-              * ANO + FITA NA MESMA LINHA — FECH-AREA-ANO-01 (Gabriel, 11/09/2026).
-              *
-              * ⚠ O SELETOR NÃO É NOVO, É O QUE VOLTOU. O estado `anoFiltro` e a lista
-              * `anosDisp` sempre estiveram aqui; o que sumiu foi a PORTA. Ela vinha da
-              * `V2FilterBar` do shell, que desmontou no PR-BARRA-UNICA-01a levando junto as
-              * props de valor inicial — `filtroAnoInicial` entre elas. Desde então
-              * `setAnoFiltro` não tinha nenhum chamador e a tela vivia presa no ano corrente:
-              * quem quisesse ver amendoim em 2023 não tinha por onde pedir.
-              * ⚠ A FITA NÃO SE MEXE — regra A23. O card de ano tem largura FIXA (56px) e há
-              * um espelho da mesma largura do outro lado: a fita continua centrada
-              * exatamente onde estava, e trocar 2026 por 2023 não muda nada de tamanho.
-              * Sem o espelho, os doze meses andariam 30px para a direita.
-              */}
-            <FechamentoFitaMeses anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp} alinhadaAEsquerda
-              mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} statusPorMes={statusPorMes} />
+            {/* UI-MESES-PADRAO-01: o ano + a fita (FECH-AREA-ANO-01 / FECH-TOPO-02) subiram para o cabeçalho navy. */}
 
             <TooltipProvider delayDuration={150}>
             <table className="text-[10px] border-collapse table-fixed w-[530px] min-w-[530px] max-w-[530px]">
@@ -1490,7 +1481,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
             {/* FECH-TOPO-02 — os botões em 2 colunas (Resumo · GMD / Mapa · PDF / Documentos N · Ajustar), com borda; "Sugestões" saiu (está
                 dentro do Ajustar); o Ajustar só aparece com divergência e tem o lugar dele */}
-            <div className="grid flex-none grid-cols-[auto_auto] content-start gap-1 max-[999px]:grid-cols-1" data-testid="botoes-do-topo">
+            {/* UI-MESES-PADRAO-01 — com a fita no navy, abaixo de 1.000px os botões seguem em 2 colunas ("Itens com lote" na linha inteira): em
+                1 coluna eles ditavam a altura do topo (178px a 919×519) e o mapa caía abaixo da janela */}
+            <div className="grid flex-none grid-cols-[auto_auto] content-start gap-1" data-testid="botoes-do-topo">
               <Button size="sm" variant="outline" className={BOTAO_DA_BARRA} title="Resumo por Atividade" onClick={() => setShowResumoAtividades(true)}>
                 <BarChart3 className={ICONE_DA_BARRA} /> Resumo
               </Button>
@@ -1539,14 +1532,15 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 </Button>
               )}
               {ligacaoDosLotes ? (
-                <span className={buttonVariants({ variant: 'outline', size: 'sm', className: `${BOTAO_DA_BARRA} min-w-[136px] cursor-default tabular-nums ${ligacaoDosLotes.completo ? '' : BOTAO_AMBAR}` })}
+                <span className={buttonVariants({ variant: 'outline', size: 'sm', className: `${BOTAO_DA_BARRA} min-w-[136px] max-[999px]:col-span-2 cursor-default tabular-nums ${ligacaoDosLotes.completo ? '' : BOTAO_AMBAR}` })}
                   title={ligacaoDosLotes.title} data-testid="ligacao-dos-lotes">
                   <Layers className={ICONE_DA_BARRA} /> {ligacaoDosLotes.texto}
                 </span>
-              ) : <span className={`${LUGAR_DO_BOTAO} min-w-[136px]`} aria-hidden data-testid="lugar-ligacao"><Layers className={ICONE_DA_BARRA} /> Itens com lote 0/0</span>}
+              ) : <span className={`${LUGAR_DO_BOTAO} min-w-[136px] max-[999px]:col-span-2`} aria-hidden data-testid="lugar-ligacao"><Layers className={ICONE_DA_BARRA} /> Itens com lote 0/0</span>}
             </div>
           </div>
 
+        </div>
         </div>
       </div>
 

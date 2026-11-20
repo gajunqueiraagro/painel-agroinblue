@@ -22,13 +22,16 @@ import { createServer } from 'vite';
 import { chromium } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { filtroRapido } from './ui-gate-rapido.mjs';
+import { filtroRapido, telaDoCenario } from './ui-gate-rapido.mjs';
 import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
   paginasDaMedicao } from './ui-cortes/teto.mjs';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
 const SO = arg('--so');
+/* UI-MESES-PADRAO-01 (decisão do Gabriel 18/11: publicar com o gate das telas ALCANÇADAS, o completo à noite) — `--telas a,b,c`: só os
+   cenários dessas telas da bancada (o `tela=` da url, a MESMA regra do modo rápido). Não substitui o completo: é o gate parcial declarado. */
+const TELAS = arg('--telas') ? new Set(arg('--telas').split(',')) : null;
 /* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
    testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
 async function cliqueNoGesto(p, t) {
@@ -63,6 +66,8 @@ const REGIAO_DO_ROTULO = '*:has(> [data-testid="meta-regime"])';
 const botao = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await espera(p); };
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await espera(p); };
 const noLugar = (sel) => async (p) => { await p.locator(sel).first().dispatchEvent('click'); await espera(p); };
+/* UI-MESES-PADRAO-01 — os botões de mês da Visão Geral financeira (o SeletorPeriodo da casa não tem testid por mês) */
+const MES_DA_VG = '[data-testid="vg-meses"] [data-testid="seletor-periodo-meses"] > button';
 /* o gesto e, depois, a casca da bancada de volta ao topo (o clique rola a PAGINA para trazer o botao a vista; o que se mede e' a tela) */
 const noTopo = (g) => async (p) => { await g(p); await p.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('[data-casca]').forEach((c) => { c.scrollTop = 0; }); }); await espera(p, 150); };
 const ampliar = async (p) => { await p.locator('[data-testid="rodape-lancamentos"]').waitFor(); await espera(p, 900); await p.getByRole('button', { name: /^Ampliar$/ }).first().click(); await espera(p, 700); };
@@ -596,8 +601,10 @@ const CENARIOS = [
   /* FIN-VISAO-GERAL-01 PR 3 — nada muda de altura ou posição ao trocar modo, mês, contas, atividade ou período: os QUADROS (card, gráfico,
      grade — `data-desloca`) e todos os controles ficam; o miolo deles é `data-desloca-livre` (o conteúdo que muda de propósito) */
   { nome: 'visao-geral', url: 'tela=visao-geral&barra=0', auto: true, estados: [
-    ['mês de março', clicar('[data-testid="vg-mes-3"]')], ['mês de dezembro (previsto)', clicar('[data-testid="vg-mes-12"]')],
-    ['ano anterior', botao(/^Ano anterior$/)],
+    /* UI-MESES-PADRAO-01 — o ‹ano› e os meses viraram o SeletorPeriodo da casa: o mês pela posição na fita; o ano anterior é a opção
+       logo abaixo da escolhida no seletor de ano (a lista é decrescente) */
+    ['mês de março', clicar(`${MES_DA_VG}:nth-child(3)`)], ['mês de dezembro (previsto)', clicar(`${MES_DA_VG}:nth-child(12)`)],
+    ['ano anterior', async (p) => { await clicar('[data-testid="vg-meses"] button[title="Ano"]')(p); await p.locator('[role="option"][data-state="checked"] + [role="option"]').first().click(); await espera(p); }],
     ['Últ. 12', botao(/^Últ\. 12$/)], ['6 + 6', botao(/^6 \+ 6$/)],
     /* abaixo de 768px os filtros da barra somem (`hidden md:flex`, a regra do atalho da barra): ali o gesto não existe e é pulado */
     ['só uma conta', async (p) => { if (!(await p.locator('[data-testid="vg-contas"]').isVisible())) return; await clicar('[data-testid="vg-contas"]')(p); await p.locator('button', { hasText: 'só esta' }).first().click({ force: true }); await espera(p); await p.keyboard.press('Escape'); await espera(p); }],
@@ -707,7 +714,7 @@ const CENARIOS = [
      jan 1 … ago 8) não move "Resultado" nem "Saldo final" */
   { nome: 'visao-geral-mes-grupos', url: 'tela=visao-geral&barra=0&vg_grupos=varia&mes=2026-01',
     presos: '[data-testid="card-linha-resultado"], [data-testid="card-linha-saldo-final"]',
-    estados: [1, 2, 4, 8, 3, 12, 10].map((m) => [`mês ${m}`, noLugar(`[data-testid="vg-mes-${m}"]`)]) },
+    estados: [1, 2, 4, 8, 3, 12, 10].map((m) => [`mês ${m}`, noLugar(`${MES_DA_VG}:nth-child(${m})`)]) },
   /* P100 item 7 — rolar a grade até o fim e de volta: o cabeçalho e as linhas do rodapé (Resultado, Saldo final) não saem do lugar */
   { nome: 'visao-geral-grade-rola', url: 'tela=visao-geral&barra=0',
     presos: '[data-testid="grade-linha-resultado"], [data-testid="grade-linha-saldo_final"]',
@@ -889,7 +896,8 @@ const CENARIOS = [
     ['atividade Pecuária', clicar('[data-testid="conta-barra-atividade"] button:has-text("Pecuária")')],
   ] },
   /* NOTA-FORNECEDOR-COMPARAR-01 — "Atualizar N campos" -> "Confirmar" (a frase aparece no rodape) e o estado "nao parece o certo" */
-  { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro', estados: [
+  /* FORN-ACHAR-CNPJ-01 — o cadastro que É o da nota (o de nome à mão não oferece nada marcado: o Atualizar fica apagado) */
+  { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro&v=mesmo', estados: [
     ['pedindo a confirmacao', clicar('[data-testid="comparar-atualizar"]')],
     ['cadastro que nao parece o certo', { url: 'tela=comparar-cadastro&v=errado' }],
   ] },
@@ -1105,7 +1113,8 @@ const naRapida = RAPIDO ? filtroRapido('check-ui-desloca') : () => true;
 const TAMANHOS_DA_VEZ = TAMANHOS;
 /* P92 — o cenario pode pedir os PROPRIOS tamanhos (`tamanhos`), como no check-ui-cortes; o `--tamanhos` da linha de comando manda sobre eles */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS_DA_VEZ);
-const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c)
+  && (!TELAS || TELAS.has(telaDoCenario(c))));
 /* GATE-TELA-TETO-01 — o plano da rodada (fatia, --de; sem os tamanhos abaixo do `minLargura`) e o relógio desde o início do processo */
 const INICIO = Date.now() - process.uptime() * 1000;
 let OPCOES, PLANO;

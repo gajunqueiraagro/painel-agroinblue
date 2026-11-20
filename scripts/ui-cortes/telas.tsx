@@ -4,6 +4,9 @@
  * Cada tela registra o banco simulado em `globalThis.__bancoBancada` (mocks/supabase.ts) antes de montar.
  */
 import React from 'react';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { FiltroMultiplo } from '@/v2/components/FiltroMultiplo';
+import type { Periodo } from '@/v2/lib/periodo';
 import { opcoesDoAtalho } from '@/v2/lib/atalhosProducao';
 
 import { ChuvasTab } from '@/pages/ChuvasTab';
@@ -157,6 +160,38 @@ const AVISTA_DA_NOTA = () => [{ id: 'jl-av', vencimento: '2026-10-10', pagamento
   fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
 /* NOTA-ATUALIZA-PREVISTO-01 — `v=previsto`: o molde do caso da Vera (NF 69.134): a nota SEM duplicata e, no sistema, um PREVISTO de R$ 1.000,00
    achado pelo número (linha "só no sistema"); a cena escolhe "É esta" e 70%. SINTÉTICO. */
+/* NOTA-JA-LANCADA-FILIAL-01 — `v=janela`: o molde da NF 321.826 (19/11): a nota SEM duplicata e, no sistema, a compra do MESMO valor
+   paga 26 dias depois da emissão por OUTRA filial do emitente (a mesma raiz do CNPJ) — achada só pela janela larga: "talvez esta?", fica de fora
+   até o "É esta" à mão. SINTÉTICO. */
+const JANELA_DA_NOTA = (): any[] => [{ id: 'jl-jan', vencimento: '2026-10-11', pagamento: '2026-10-11', competencia: '2026-10-11',
+  descricao: 'Compra cantina escritório sintética — paga por outra filial do mesmo fornecedor, descrição comprida para o pior caso', valor_cent: 958300,
+  status: 'realizado', conciliado: false, financiamento_id: null, conta_bancaria_id: 'sic', numero_documento: null, fornecedor_id: 'agro-s-filial',
+  fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda — Filial 80', fornecedor_por: 'cnpj', parcelas: [], por: ['janela'] }];
+/* FIN-REGRA-VARIAVEL-FAZENDA-01 — a lista fora da regra fazenda × conta (a resposta da `fn_lancamentos_regra_fazenda_pendentes`), SINTÉTICA */
+const FAZENDAS_DA_REGRA = [{ id: 'f-adm', nome: 'Administrativo' }, { id: 'f-sr', nome: 'Fazenda Sintetica Santa Rita do Pardo de Nome Longo' },
+  { id: 'f-pur', nome: 'Faz. Sintetica Pureza' }, { id: 'f-lg', nome: 'Faz. Sintetica Lagoa' }];
+const PENDENTES_DA_REGRA = (): any[] => {
+  const VAR = 'Custo variável (Vacinas e Vermífugos) não vai para o Administrativo: escolha a fazenda produtiva.';
+  const FIXO = (sub: string) => `Custo fixo da atividade (${sub}) não vai para o Administrativo: escolha a fazenda ou a conta administrativa.`;
+  const b = (o: any) => ({ competencia: '2026-06-24', valor: 375.36, status: 'programado', fornecedor: 'Distribuidora Sintetica de Produtos Veterinarios do Centro Oeste Ltda',
+    subcentro: 'Vacinas e Vermífugos', grupo_custo: 'Custo Variável Pecuária', fazenda_id: 'f-adm', regra: VAR, financiamento_id: null, conciliado: false, mes_fechado: false,
+    sugestao: { fazenda_id: 'f-sr', vezes: 14, de: 14, origem: 'histórico do fornecedor' }, conta_adm: null, ...o });
+  return [
+    ...[2, 3, 4, 5].map((k) => b({ id: `vac-${k}`, descricao: `Vacina Sintetica Polivalente de Nome Comprido ${k}/5`, mes_fechado: k === 2 })),
+    b({ id: 'adubo', competencia: '2026-07-27', descricao: 'Adubo sintetico para manutenção de pasto das duas fazendas', valor: 276600, status: 'realizado',
+      subcentro: 'Manutenção de Pasto', conciliado: true, sugestao: null, regra: 'Custo variável (Manutenção de Pasto) não vai para o Administrativo: escolha a fazenda produtiva.' }),
+    b({ id: 'esocial', competencia: '2026-03-20', descricao: 'E-Social sintetico da equipe geral', valor: 15531.22, status: 'realizado', fornecedor: 'Receita Federal Sintetica',
+      subcentro: 'Encargos Sociais Pecuária', grupo_custo: 'Custo Fixo Pecuária', regra: FIXO('Encargos Sociais Pecuária'), sugestao: null,
+      conta_adm: { plano_conta_id: 'pl-enc-adm', subcentro: 'Encargos Sociais Administrativo' } }),
+    ...[1, 2, 3, 4, 5, 6, 7].map((k) => b({ id: `seg-${k}`, competencia: `2026-${String(k + 2).padStart(2, '0')}-10`, descricao: `Seguro Vida Grupo sintetico ${k}/12`,
+      valor: 270, status: k < 6 ? 'realizado' : 'programado', fornecedor: 'Seguradora Sintetica', subcentro: 'Seguros Pecuária', grupo_custo: 'Custo Fixo Pecuária',
+      regra: FIXO('Seguros Pecuária'), sugestao: { fazenda_id: 'f-pur', vezes: 9, de: 12, origem: 'histórico do fornecedor' },
+      conta_adm: { plano_conta_id: 'pl-seg-adm', subcentro: 'Seguros Administrativo' } })),
+    b({ id: 'pecas', competencia: '2026-06-16', descricao: 'Peças pá carregadeira sintetica', valor: 1058.06, status: 'realizado', fornecedor: 'Pecas Sinteticas Ltda',
+      subcentro: 'Manutenção Máquinas Agricultura', grupo_custo: 'Custo Variável Agricultura', sugestao: { fazenda_id: 'f-pur', vezes: 26, de: 35, origem: 'histórico do fornecedor' },
+      regra: 'Custo variável (Manutenção Máquinas Agricultura) não vai para o Administrativo: escolha a fazenda produtiva.' }),
+  ];
+};
 const PREVISTO_DA_NOTA = (): any[] => [{ id: 'jl-prev', vencimento: '2026-11-05', pagamento: null, competencia: '2026-10-05',
   descricao: 'Supermercado sintetico da fazenda (70%)', valor_cent: 100000, status: 'previsto', conciliado: false, financiamento_id: null,
   numero_documento: null, fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
@@ -390,7 +425,9 @@ if (tela === 'mesclar') {
         { id: 's-lav', nome: 'Mandioca 25/26', codigo: '25/26-MAND', escopo_negocio: 'agricultura', ativa: true }]
       : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }] : [],
     rpc: (fn: string, a: any) => fn === 'get_anos_financeiro_v2' ? [{ ano: '2026' }] : fn === 'fn_parcelas_dos_lancamentos' ? {}
-      : fn === 'fn_fin_v2_lista_pagina' ? paginaDaBancada(VOL ? VOL.lancamentos : LANCAMENTOS, a) : null,
+      : fn === 'fn_fin_v2_lista_pagina' ? paginaDaBancada(VOL ? VOL.lancamentos : LANCAMENTOS, a)
+      /* FIN-REGRA-VARIAVEL-FAZENDA-01 — `&regra=1`: o selo "N despesas no Administrativo" na faixa dos totais */
+      : fn === 'fn_lancamentos_regra_fazenda_pendentes' && q.get('regra') ? PENDENTES_DA_REGRA() : null,
   };
   /* TABELA-ALTURA-FIXA-01 — com `&barra=32` a tela entra como no app (medido em 22/10: Lançamentos abre sem a sub-barra "Financeiro"):
      a barra da secao (32) e a secao que rola, sem o `p-3` da bancada */
@@ -867,6 +904,25 @@ if (tela === 'mesclar') {
      (`&token_hash=…&type=invite|recovery|email_change`, só verificada no clique). Tela inteira, sem a casca do V2. */
   g.__bancoBancada = { from: () => [], rpc: () => null };
   raiz.render(<MemoryRouter>{tela === 'entrada' ? <AuthPage /> : <DefinirSenhaPage />}</MemoryRouter>);
+} else if (tela === 'filtros-padrao') {
+  /* PROD-LANC-FILTROS-01 — Produção › Lançamentos: a fita (o "Personalizado…" = o SeletorDePeriodo do DRE) e o filtro de Categorias no padrão
+     único de seleção múltipla, com as 9 categorias do cadastro; `&n=grande` = contagens de 4 dígitos (o pior caso de largura). SINTÉTICO. */
+  g.__bancoBancada = { from: () => [], rpc: () => null };
+  const grande = q.get('n') === 'grande';
+  const CATS = ['Mamotes M', 'Desmama M', 'Garrotes', 'Bois', 'Touros', 'Mamotes F', 'Desmama F', 'Novilhas', 'Vacas']
+    .map((l, i) => ({ value: `c${i}`, label: l, contagem: grande ? 1000 + i * 1111 : i * 3 }));
+  function FiltrosPadrao() {
+    const [periodo, setPeriodo] = React.useState<Periodo>({ de: { ano: 2026, mes: 10 }, ate: { ano: 2026, mes: 10 } });
+    const [sel, setSel] = React.useState<string[]>(['c3', 'c8']);
+    return (
+      <div className="flex flex-wrap items-center gap-1 bg-navy p-2" data-testid="filtros-padrao">
+        <SeletorPeriodo className="flex-1" anos={['2025', '2026']} periodo={periodo} onPeriodoChange={setPeriodo} />
+        <FiltroMultiplo opcoes={CATS} selecionadas={sel} onChange={setSel} rotulo={{ todos: 'Categorias', um: 'categoria', varios: 'categorias' }}
+          className="h-6 w-[136px] justify-between gap-1 whitespace-nowrap px-1.5 text-[10px] font-bold bg-card text-foreground border-border" />
+      </div>
+    );
+  }
+  montar(<div className="p-3"><FiltrosPadrao /></div>);
 } else if (tela === 'trocar-senha') {
   /* ACESSO-CONVITE-01 PR 1 — o "Trocar senha" (o mesmo gatilho da barra do topo; o cenário abre o modal) */
   g.__bancoBancada = { from: () => [], rpc: () => null };
@@ -1756,7 +1812,7 @@ if (tela === 'mesclar') {
     /* P95 — `pelachave`: o PDF ESCANEADO (so' imagem, nenhum texto) seguido pela chave digitada (sintetica): a previa com o chip e a
        emissao e o valor em ambar; `irmas`: a nota sem duplicata achada em 4 parcelas soltas ("… - k/4"), a frase com soma e diferenca */
     if (v === 'pelachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
-    else for (const it of (v === 'semdup' || v === 'emparcela' || v === 'irmas' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'previsto' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
+    else for (const it of (v === 'semdup' || v === 'janela' || v === 'emparcela' || v === 'irmas' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'previsto' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
       const str = v === 'diverge' && it.str === 'Nº 000.000.937' ? 'Nº 000.000.938' : it.str;
       doc.setFontSize(Math.max(4, it.h * 1.15));
       doc.text(str, it.x, 595.28 - it.y);
@@ -1794,7 +1850,7 @@ if (tela === 'mesclar') {
       lido.nota.totais = { ...lido.nota.totais, notaCent: 99999999 * 12, descontoCent: 99999999 };
     }
     const forn = { id: 'agro-s', nome: v === 'gulartlongo' ? 'Cooperativa Agroindustrial Sintetica dos Produtores Rurais do Centro Oeste Ltda' : 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24', fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
-    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela', 'pelachave', 'irmas', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista'].includes(v) ? [forn] : [];
+    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela', 'pelachave', 'irmas', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista', 'janela'].includes(v) ? [forn] : [];
     const resolucao = resolverEmitente(lido.nota.emitente, fornecedores, null);
     const ultima = v === 'cadastrado' || v === 'parcelar' ? { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' }
       : v === 'lavoura' ? { plano_conta_id: 'pl-lav', subcentro: 'Insumos Lavoura — Defensivos e Fertilizantes', macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', escopo_negocio: 'agricultura', data: '2026-08-14', safra_id: 's-soja', cultura: 'soja' }
@@ -1820,7 +1876,7 @@ if (tela === 'mesclar') {
         /* Gabriel 29/10 10:38 — "No sistema hoje": a fazenda, o subcentro e o fornecedor de cada achado (SINTÉTICOS; o mesmo para todos os ids da bancada) */
         if (t === 'financeiro_lancamentos_v2' && v === 'm2') return ['jl-m20', 'jl-m21', 'jl-m22'].map((id, i) => ({ id, fazenda_id: 'f-pur',
           subcentro: 'Manutenção de Máquinas Agrícolas', favorecido_id: 'agro-s', plano_conta_id: 'pl-lav', safra_id: i === 2 ? 's-soja-25' : 's-soja' }));
-        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'avista', 'previsto'].includes(v)) return ['jl-prev', 'jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
+        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'avista', 'previsto', 'janela'].includes(v)) return ['jl-jan', 'jl-prev', 'jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
           'jl-irma-0', 'jl-irma-1', 'jl-irma-2', 'jl-irma-3', 'jl-p1', 'jl-lr0', 'jl-lr1', 'jl-lr2', 'jl-lr3', 'jl-g1', 'jl-av']
           .map((id) => ({ id, fazenda_id: 'f-pur', subcentro: 'Sanidade Animal — Vacinas e Medicamentos Veterinários', favorecido_id: 'agro-s', plano_conta_id: 'pl-vet' }));
         if (t === 'financeiro_lancamentos_v2' && (v === 'cadastrado' || v === 'parcelar')) return [{ id: 'l-ext', data_vencimento: '2026-10-20', data_competencia: '2026-10-20',
@@ -1868,6 +1924,7 @@ if (tela === 'mesclar') {
         : fn === 'fn_nota_ja_lancada' && (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'm2' ? M2_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'avista' ? AVISTA_DA_NOTA()
+        : fn === 'fn_nota_ja_lancada' && v === 'janela' ? JANELA_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'previsto' ? PREVISTO_DA_NOTA()
         : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'avista' || v === 'previsto') ? completarDoLr(v, a)
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
@@ -1948,6 +2005,19 @@ if (tela === 'mesclar') {
       onAbrirLancamento={() => {}} onAbrirNota={() => {}} lancadas={new Set()} linhasIniciais={linhas} avisoInicial={`${fraseJaNaLista(LONGO)} ${fraseJaNaLista('46.995.pdf')}`} />);
   };
   void montarNovoDaNota();
+} else if (tela === 'regra-fazenda') {
+  /* FIN-REGRA-VARIAVEL-FAZENDA-01 — o modal de correção: 14 lançamentos SINTÉTICOS fora da regra (4 parcelas da vacina com sugestão; o adubo
+     conciliado SEM sugestão; o E-Social e o Seguro Vida 1/12…7/12 do custo FIXO com a conta administrativa; um em mês fechado), nomes longos
+     (o pior caso de texto). `v=recusa`: a prévia do banco recusa (mês fechado). */
+  const montarRegra = async () => {
+    const { CorrecaoRegraFazendaDialog } = await import('@/components/financeiro-v2/CorrecaoRegraFazenda');
+    const { lerPendentes } = await import('@/lib/financeiro/regraFazenda');
+    g.__bancoBancada = { rpc: (fn: string, a: any) => fn !== 'fn_lancamentos_trocar_fazenda' ? null : v === 'recusa'
+      ? { ok: false, simulado: true, linhas: [], recusas: ['Vacina Sintetica Polivalente de Nome Comprido 2/5 (24/06/2026): 06/2026 fechado: reabra o mês para trocar'] }
+      : { ok: true, simulado: true, linhas: (a.p_ids ?? []).map((id: string) => ({ id })), recusas: [] } };
+    raiz.render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS_DA_REGRA} pendentes={lerPendentes(PENDENTES_DA_REGRA())} onClose={() => {}} />);
+  };
+  void montarRegra();
 } else if (tela === 'trocar-fornecedor') {
   /* FORN-TROCAR-LOTE-01 — o "Trocar fornecedor" da lista: o resumo de 4.851 lancamentos SINTETICOS saindo de 40 fornecedores de nome
      longo (a lista rola dentro do quadro), com os avisos (conciliados, meses fechados, OC) — o pior caso de texto */
@@ -2054,12 +2124,13 @@ if (tela === 'mesclar') {
   const montarReceita = async () => {
     const { NotasDaReceitaDialog } = await import('@/components/fiscal/NotasDaReceitaDialog');
     const { NovoMenuLancamentos } = await import('@/components/financeiro-v2/NovoMenuLancamentos');
-    const { DADOS_RECEITA_BANCADA } = await import('./dados/notasReceita');
+    const { DADOS_RECEITA_BANCADA, DADOS_RECEITA_CURTA } = await import('./dados/notasReceita');
     if (tela === 'notas-receita-menu') {
       montar(<div className="flex justify-end p-6"><NovoMenuLancamentos boletosPedemAcao={3} notasDaReceita={12} onEmBranco={() => {}} onDaNota={() => {}} onDosBoletos={() => {}} /></div>);
       return;
     }
-    montar(<NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={DADOS_RECEITA_BANCADA} carregando={false} erro={null} aoFechar={() => {}}
+    /* UI-LARGURA-FIXA-01 — `v=curta`: o 2º cliente (poucas notas, nomes curtos): a divisão tem de ser a mesma */
+    montar(<NotasDaReceitaDialog clienteNome={v === 'curta' ? 'Vera' : 'Cliente Bancada'} dados={v === 'curta' ? DADOS_RECEITA_CURTA : DADOS_RECEITA_BANCADA} carregando={false} erro={null} aoFechar={() => {}}
       aoLancar={() => {}} aoVincular={async () => null} lerXml={async () => '<nfeProc/>'}
       /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — a prévia SINTÉTICA do "Registrar bem" (2 itens, nome comprido, valor no teto) */
       registrarBem={async () => ({ ok: true, motivo: 'comodato', fornecedor: 'Distribuidora de Combustível Exemplo de Nome Comprido Ltda', nf: '117573',
@@ -2704,11 +2775,13 @@ if (tela === 'mesclar') {
   void montarDocs();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
-     `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */
+     `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente: FORN-ACHAR-CNPJ-01 — "parece outro fornecedor", sem CNPJ/IE/razão) ·
+          `mesmo` o cadastro sem CNPJ com a MESMA razão social (sem o "Ltda": o CNPJ vazio vem marcado) · `errado` o cadastro com OUTRO CNPJ */
   const montarComparar = async () => {
     const { CompararCadastroDialog } = await import('@/components/financeiro-v2/CompararCadastroDialog');
     const hoje = v === 'errado'
       ? { nome: 'Posto Exemplo Combustiveis e Lubrificantes da Regiao Centro Oeste Sintetico Ltda', cpf_cnpj: '11.444.777/0001-61', municipio: 'Campo Grande', uf: 'MS' }
+      : v === 'mesmo' ? { nome: 'Cooperativa Agroindustrial Sintética dos Produtores Rurais de Exemplo e Região', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' }
       : { nome: 'Pec.3M-Esc. Garças Cooperativa Agroindustrial Sintetica dos Produtores de Exemplo', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' };
     const proposta = { nome: 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DE EXEMPLO E REGIAO LTDA', nome_fantasia: 'COOP EXEMPLO',
       cpf_cnpj: '11.222.333/0004-24', inscricao_estadual: '283456789', logradouro: 'Rodovia Sintetica BR-000 Km 12, Galpao 3', numero: 'S/N', bairro: 'Distrito Industrial',
@@ -2742,7 +2815,8 @@ if (tela === 'mesclar') {
     const { ItensDaNotaDialog } = await import('@/components/financeiro-v2/ItensDaNotaDialog');
     const base: any = itensDoXml(bytes);
     const LONGA = 'DEFENSIVO AGRICOLA SINTETICO DE NOME MUITO COMPRIDO PARA O PIOR CASO DA BANCADA COM EMBALAGEM DE 20 LITROS E LOTE ';
-    const itens = Array.from({ length: 40 }, (_, k) => ({ ...base.itens[k % 3], nItem: k + 1, descricao: k % 2 ? `${LONGA}${k}`.slice(0, 120) : base.itens[k % 3].descricao }));
+    /* NOTA-RECEITA-DANFE-ANEXO-01 — `v=dois`: a nota de 2 itens (a tabela encolhe; sem o bloco branco) */
+    const itens = Array.from({ length: v === 'dois' ? 2 : 40 }, (_, k) => ({ ...base.itens[k % 3], nItem: k + 1, descricao: k % 2 ? `${LONGA}${k}`.slice(0, 120) : base.itens[k % 3].descricao }));
     const soma = (f: (i: any) => number) => itens.reduce((s, i) => s + f(i), 0);
     const lidos = { ...base, itens, totais: { ...base.totais, produtosCent: soma((i) => i.produtoCent), descontoCent: soma((i) => i.descontoCent),
       freteCent: soma((i) => i.freteCent), seguroCent: soma((i) => i.seguroCent), outrasCent: soma((i) => i.outrasCent), notaCent: soma((i) => i.liquidoCent) } };
@@ -2759,6 +2833,61 @@ if (tela === 'mesclar') {
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();
+} else if (tela === 'volta-origem') {
+  /* NAV-VOLTA-ORIGEM-01 — a peça (`useCamadas`) no caso das Notas da Receita, SINTÉTICO: a lista de baixo + um "Da nota fiscal" de mentira
+     por cima (Fechar · Lançar). Lançar tira a nota da lista (como a releitura do app) e volta: a próxima linha fica destacada. */
+  const montarVolta = async () => {
+    const { NotasDaReceitaDialog } = await import('@/components/fiscal/NotasDaReceitaDialog');
+    const { Camada, useCamadas } = await import('@/components/ui/camadas');
+    const { Dialog, DialogContent, DialogTitle } = await import('@/components/ui/dialog');
+    const { DADOS_RECEITA_BANCADA } = await import('./dados/notasReceita');
+    const { useEffect, useState } = await import('react');
+    function Volta() {
+      const camadas = useCamadas<'receita' | 'xml'>();
+      /* a lista entra como camada (como o "Notas da Receita" do Financeiro: `camadas.abrir('receita')`) */
+      useEffect(() => { camadas.abrir('receita'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      const [dados, setDados] = useState(DADOS_RECEITA_BANCADA);
+      const [nota, setNota] = useState<string | null>(null);
+      return (<>
+        <Camada coberta={camadas.coberta('receita')}>
+          <NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={dados} carregando={false} erro={null} aoFechar={() => {}} aoVincular={async () => null}
+            lerXml={async () => '<nfeProc/>'} retorno={camadas.retornoPara('receita')}
+            aoLancar={(arquivo) => { setNota(arquivo.name.replace(/^NFe|\.xml$/g, '')); camadas.abrir('xml', 'receita'); }} />
+        </Camada>
+        {camadas.aberta('xml') && (
+          <Dialog open><DialogContent className="w-[520px] max-w-none p-4" data-testid="volta-de-cima">
+            <DialogTitle className="text-[13px]">Da nota fiscal (simulado)</DialogTitle>
+            <p className="text-[11px] text-muted-foreground">A lista de baixo segue montada, invisível: a aba, os filtros, a ordem e a rolagem ficam.</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="rounded border px-2 py-1 text-[11px]" data-testid="volta-fechar" onClick={() => camadas.fechar('xml')}>Fechar</button>
+              <button type="button" className="rounded bg-primary px-2 py-1 text-[11px] text-primary-foreground" data-testid="volta-lancar"
+                onClick={() => { setDados((d) => ({ ...d, lista: d.lista.filter((n) => n.chave !== nota) })); camadas.fechar('xml', 'salvou', nota); }}>Lançar</button>
+            </div>
+          </DialogContent></Dialog>
+        )}
+      </>);
+    }
+    montar(<Volta />);
+  };
+  void montarVolta();
+} else if (tela === 'danfe-guardadas') {
+  /* NOTA-RECEITA-DANFE-ANEXO-01 — o gesto "DANFE das notas já guardadas" com dado SINTÉTICO: 21 notas (emitentes compridos, a 8.702 em 4
+     parcelas, 2 sem o XML no armazenamento) ou `v=curta` (2 notas, nomes curtos — o 2º cliente da UI-LARGURA-FIXA-01) */
+  const montarDanfes = async () => {
+    const { DanfeDasNotasGuardadasDialog } = await import('@/components/financeiro-v2/DanfeDasNotasGuardadasDialog');
+    const ch = (n: number) => `5026091122233300042455001${String(n).padStart(9, '0')}1000000010`;
+    const NOMES = ['Cooperativa Agroindustrial Sintética dos Produtores Rurais do Centro-Oeste Ltda', 'Casa Agro Exemplo', 'Veterinária Exemplo de Nome Comprido Ltda'];
+    const n = v === 'curta' ? 2 : 21;
+    const cands = Array.from({ length: n }, (_, k) => ({ chave: ch(8000 + k), ligados: k === 0 ? ['p2', 'p3', 'p4'] : [],
+      doc: { id: `x${k}`, lancamento_id: `l${k}`, chave_acesso: ch(8000 + k), nome: `NFe-${8000 + k}.xml`, tipo: 'application/xml', url: `cli/x${k}.xml`,
+        especie: 'nf', numero: String(k === 0 ? 8702 : 98000 + k * 37), serie: '1', data_emissao: `2026-09-${String(1 + (k % 28)).padStart(2, '0')}`,
+        valor_documento: 259.5, emitente_id: null, emitente_nome: v === 'curta' ? ['Agro Sul', 'Pet Vet'][k] : NOMES[k % 3], emitente_documento: '01440000000200' } }));
+    const gerar = async (_c: string, c: { doc: { id: string } }): Promise<{ ok: true; bytes: number } | { ok: false; frase: string }> => (['x5', 'x13'].includes(c.doc.id)
+      ? { ok: false, frase: 'sem XML guardado' } : { ok: true, bytes: 78000 + c.doc.id.length * 1500 });
+    raiz.render(<DanfeDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} ler={async () => ({ ok: true, valor: cands })} gerar={gerar}
+      titulares={async () => ['t1']} buscar={async () => ({ ok: false, frase: 'bancada' })} />);
+  };
+  void montarDanfes();
 } else if (tela === 'custeio-txt') {
   /* CONC-CUSTEIO-FONTE-01 — Conciliação › Importar banco › "Relatório de custeio", no molde do caso do Gabriel (69 itens, divergência em 3
      escopos), com TXT SINTÉTICO no formato do relatório: 3 famílias, 45 itens de nome comprido; os subtotais impressos de 3 sub-famílias
