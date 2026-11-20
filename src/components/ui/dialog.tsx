@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { recusarCliqueFechado } from "./menuPadrao";
 import { semFecharPeloAviso } from "./avisoSobreOModal";
+import { useCamadaCoberta } from "./camadas";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -32,10 +33,15 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onClickCapture, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
+>(({ className, children, onClickCapture, onPointerDownOutside, onInteractOutside, ...props }, ref) => {
+  /* NAV-VOLTA-ORIGEM-01 — coberto por outra camada (`<Camada coberta>`): INVISÍVEL (conteúdo e fundo), nunca desmontado — o estado e a
+     rolagem ficam para a volta. Fora de uma `<Camada>`, nada muda. */
+  const coberta = useCamadaCoberta();
+  return (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={coberta ? "invisible" : undefined} />
     <DialogPrimitive.Content
+      data-camada-coberta={coberta ? "" : undefined}
       ref={ref}
       /* DIALOG-CLIQUE-FECHANDO-01: fechando (`data-state="closed"`, durante a animação de saída), nenhum botão daqui recebe o clique */
       onClickCapture={recusarCliqueFechado(onClickCapture)}
@@ -54,6 +60,7 @@ const DialogContent = React.forwardRef<
            ⚠ E NÃO CORTA OVERLAY: `Select`, `Popover` e `DropdownMenu` da casa renderizam em
            `Portal`, fora deste nó (conferido nos três arquivos de ui/). O que `overflow-hidden`
            conteria é conteúdo absoluto do próprio diálogo, que não deveria vazar da moldura. */
+        coberta && "invisible",
         "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-hidden border bg-background p-6 shadow-lg duration-200 data-[state=closed]:!pointer-events-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
         className,
       )}
@@ -66,7 +73,8 @@ const DialogContent = React.forwardRef<
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>
-));
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
