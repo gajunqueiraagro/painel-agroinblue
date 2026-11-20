@@ -3,6 +3,7 @@
  * (o MESMO modal de sempre: nao nasce segundo formulario), e o arquivo XML como documento pendente da nota.
  */
 import { novoPendente, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
+import { danfePdfDoXml } from '@/lib/fiscal/danfePdf';
 import type { PropostaDeLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import type { ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
@@ -48,6 +49,22 @@ export function pendenteDaNota(d: DoXml, favorecidoId: string | null): Documento
     emitenteNome: favorecidoId ? null : doc.emitenteNome,
     emitenteDocumento: favorecidoId ? null : doc.emitenteDocumento,
   }, d.arquivo, null);
+}
+
+/**
+ * NOTA-RECEITA-DANFE-ANEXO-01 (Gabriel 19/11 07:35) — a nota que chegou SÓ em XML (Receita, caixa de entrada, arquivo solto) ganha o DANFE em
+ * PDF, gerado do próprio XML (`danfePdfDoXml`), como um SEGUNDO documento da mesma NF (o mesmo payload: número, série, chave, emissão,
+ * valor, emitente) — o clipe e a aba Documentos juntam os dois numa linha (`linhasDosDocumentos`). Nota lida do PDF (o arquivo JÁ é o
+ * PDF) não gera nada. Falhou a geração: só o XML segue (nada se perde); o aviso volta para a tela.
+ */
+export async function danfeDaNota(d: DoXml, favorecidoId: string | null,
+  gerar: (xml: File) => Promise<{ ok: true; pdf: File } | { ok: false; frase: string }> = danfePdfDoXml,
+): Promise<{ pendente: DocumentoPendente | null; aviso: string | null }> {
+  if (!/\.xml$/i.test(d.arquivo.name) && !/xml/i.test(d.arquivo.type)) return { pendente: null, aviso: null };
+  const r = await gerar(d.arquivo);
+  if (r.ok === false) return { pendente: null, aviso: `O DANFE em PDF não foi gerado (${r.frase}); a nota segue com o XML.` };
+  const x = pendenteDaNota(d, favorecidoId);
+  return { pendente: novoPendente({ ...x.payload, nome: `${x.payload.nome ?? 'nf'} (DANFE)` }, r.pdf, null), aviso: null };
 }
 
 /** As chaves do `prefill` do modal que a nota preenche. Tudo o que a tela mostra e' o que vai ser gravado. */

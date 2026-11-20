@@ -6,7 +6,8 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { chavesJaLancadas, lerCandidatos, lerLinhasRecebidas, montarLista, precisaConferirLancamento, situacaoNaLista, type CandidatoDaNota, type NotaNaLista, lerAtributos, type AtributosDaNota } from '@/lib/fiscal/notasDaReceita';
+import { chavesJaLancadas, lerCandidatos, lerLinhasRecebidas, montarLista, precisaConferirLancamento, situacaoNaLista, type CandidatoDaNota, type NotaNaLista, lerAtributos, type AtributosDaNota, lerLigacoes, type LigacaoDaDemonstracao } from '@/lib/fiscal/notasDaReceita';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 export interface DadosDaReceita {
   lista: NotaNaLista[];
@@ -69,12 +70,18 @@ export async function lerNotasDaReceita(clienteId: string): Promise<DadosDaRecei
     const { data, error } = await db().rpc('fn_notas_atributos_fiscais', { p_cliente: clienteId, p_chaves: comXml });
     if (error) console.error('[useNotasDaReceita] atributos', error); else atributos = lerAtributos(data);
   }
+  /* NOTA-DEMONSTRACAO-01 — a demonstração ligada à compra/ao retorno que veio depois (só leitura; falhou = sem a ligação, erro no console) */
+  let ligacoes: LigacaoDaDemonstracao[] = [];
+  if (comXml.length > 0) {
+    const { data, error } = await db().rpc('fn_notas_demonstracao_ligacoes', { p_cliente: clienteId });
+    if (error) console.error('[useNotasDaReceita] demonstração', error); else ligacoes = lerLigacoes(data);
+  }
   const titulares = ((t.data ?? []) as { id: string; nome: string | null }[]).map((x) => ({ id: x.id, nome: x.nome ?? '—' }));
   const controle = (c.data ?? []) as { ultima_busca_em: string | null; nao_antes_de: string | null }[];
   const ultimas = controle.map((x) => x.ultima_busca_em).filter((x): x is string => !!x).sort();
   const proximas = controle.map((x) => x.nao_antes_de).filter((x): x is string => !!x).sort();
   return {
-    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema, candidatos, atributos),
+    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema, candidatos, atributos, hojeLocal(), ligacoes),
     titulares,
     ultimaBusca: ultimas.at(-1) ?? null,
     proximaBusca: proximas[0] ?? null,

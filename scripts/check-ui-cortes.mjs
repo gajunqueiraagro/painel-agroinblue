@@ -1330,6 +1330,14 @@ const CENARIOS = [
       { nome: 'notas-receita-registrar-bem', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-bem"]', antes: async (p) => {
         await aba(/^Não geram lançamento/)(p); await p.locator('[data-testid="receita-registrar-bem"]').first().click();
         await p.locator('[data-testid="receita-bem-item"]').first().waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
+      /* NOTAS-RECEITA-VENC-01 — a coluna Venc. (as cores), o filtro "Vencidas sem lançamento" e o popover das parcelas (a 44.871 em 12) */
+      /* UI-LARGURA-FIXA-01 — o 2º cliente (curto): as mesmas colunas da lista longa */
+      { nome: 'notas-receita-curta', url: 'tela=notas-receita&v=curta', tamanhos: T, regiao: R },
+      { nome: 'notas-receita-so-vencidas', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: async (p) => {
+        await p.locator('[data-testid="receita-so-vencidas"]').click(); await p.waitForTimeout(300); } },
+      { nome: 'notas-receita-parcelas', url: 'tela=notas-receita', tamanhos: T, regiao: 'body', antes: async (p) => {
+        await aba(/^A lançar/)(p); await p.locator('[data-testid="receita-venc"]').filter({ hasText: '/12' }).first().click();
+        await p.locator('[data-testid="receita-parcelas"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
       { nome: 'notas-receita-ver', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-dados"]', antes: async (p) => {
         await p.locator('[data-testid="receita-ver"]').first().click(); await p.waitForTimeout(400); } },
       /* NOTA-RECEITA-CASAR-01 — o quadro dos candidatos (3 linhas, textos no teto) */
@@ -1919,6 +1927,23 @@ const CENARIOS = [
   ...[['pdf-sem-ibs', ''], ['pdf-sem-ibs', 'Fiscal'], ['pdf-ibs-total', '']].map(([x, f]) => ({ nome: `itens-nota-${x}${f ? '-fiscal' : ''}`, url: `tela=itens-nota&v=${x}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS }, antes: f ? clicarTexto(f) : undefined })),
   { nome: 'itens-nota-guardadas', url: 'tela=itens-nota&v=guardadas', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]' } },
+  /* NAV-VOLTA-ORIGEM-01 — a peça das camadas: (1) a lista em "A lançar"; (2) o "Da nota fiscal" por cima (a lista invisível, montada);
+     (3) a volta depois de lançar a 1ª: a mesma aba e a PRÓXIMA linha destacada */
+  ...['lista', 'por-cima', 'volta'].map((x) => ({ nome: `volta-origem-${x}`, url: 'tela=volta-origem', tamanhos: [[1280, 800], [1920, 1080]], regiao: 'body',
+    antes: async (p) => {
+      await p.getByText(/^A lançar/).first().click(); await p.waitForTimeout(200);
+      if (x === 'lista') return;
+      await p.locator('[data-testid="receita-lancar"]').first().click(); await p.locator('[data-testid="volta-de-cima"]').waitFor({ timeout: 8000 });
+      if (x === 'volta') { await p.locator('[data-testid="volta-lancar"]').click(); await p.locator('[data-destaque]').waitFor({ timeout: 8000 }); }
+      await p.waitForTimeout(250);
+    } })),
+  /* NOTA-RECEITA-DANFE-ANEXO-01 — o gesto "DANFE das notas já guardadas": a lista, o Simular feito (2 sem leitura) e o 2º cliente (curto) */
+  { nome: 'danfe-guardadas', url: 'tela=danfe-guardadas', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'danfe-guardadas-simulado', url: 'tela=danfe-guardadas', tamanhos: TAMANHOS_DO_CONSORCIO, antes: async (p) => {
+    await p.locator('[data-testid="danfe-guardadas-simular"]').click(); await p.getByText('19 geram o PDF').waitFor({ timeout: 8000 }); } },
+  { nome: 'danfe-guardadas-curta', url: 'tela=danfe-guardadas&v=curta', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* NOTA-RECEITA-DANFE-ANEXO-01 — a nota de 2 itens: a tabela encolhe ao conteúdo (o modal segue no tamanho padrão) */
+  { nome: 'itens-nota-dois', url: 'tela=itens-nota&v=dois', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'itens-nota-guardadas-simulado', url: 'tela=itens-nota&v=guardadas', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-guardadas"] .overflow-y-auto' },
     antes: async (p) => { await p.locator('[data-testid="itens-guardadas-simular"]').click(); await p.waitForFunction(() => document.querySelectorAll('[data-testid="itens-guardadas-linha"]').length === 30); await p.waitForTimeout(300); } },
@@ -2222,6 +2247,10 @@ const CENARIOS = [
   { nome: 'financeiro-tabela', url: 'tela=financeiro', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO },
   /* DOC-ANEXO-E-IMPORT-01 F2 — o POPOVER do clipe aberto (3 documentos, nomes longos: "…" + title; selo · nome · data dd/mm/aaaa, nunca quebra),
      nos tamanhos do Gabriel (1240, 1024, zoom 135% de 1280×800 e de 1440×900) e nos do contrato */
+  /* NOTA-RECEITA-DANFE-ANEXO-01 — a NF com PDF E XML no clipe: "PDF · DANFE" e "XML · Itens" (lf2: a NF 519 em PDF + XML + 1 boleto) */
+  { nome: 'financeiro-clipe-danfe', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
+    tamanhos: [[1240, 700], [1024, 600]], antes: async (p) => { await p.locator('[data-testid="clipe-da-linha"][title*="519"]').first().click();
+      await p.locator('[data-qual="clipe-documento-pdf"]').first().waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
   { nome: 'financeiro-clipe-popover', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
     tamanhos: [[1240, 700], [1024, 600], [948, 593], [1067, 667], ...TAMANHOS_DO_CONTRATO], antes: clicar('[data-testid="clipe-da-linha"]') },
   { nome: 'financeiro-tabela-pagina-2', url: 'tela=financeiro&v=volume&n=450', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO,
