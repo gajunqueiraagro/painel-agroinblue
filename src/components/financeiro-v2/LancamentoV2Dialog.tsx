@@ -125,6 +125,7 @@ import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@
 import { conflitoSafraEscopo, mensagemConflitoSafraEscopo } from '@/lib/financeiro/safraEscopo';
 import { erroDeDirecao, tipoDaContaNoPlano } from '@/lib/financeiro/validacaoLancamento';
 import { escopoDoSubcentro, fazendaAdministrativa, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
+import { perguntarRegraFazenda, regraValeAqui } from '@/lib/financeiro/regraFazenda';
 import {
   CULTURAS_LANCAMENTO, FASES, SEM_CULTURA, avisoCultura, avisoFase,
   culturaParaGravar, faseParaGravar,
@@ -1892,6 +1893,21 @@ export function LancamentoV2Dialog({
      válido — os campos estão "preenchidos" com nada —, e é justamente esse o caso perigoso. */
   const canSave = validacao.canSave && !carregando && motivoDasParcelas === null;
 
+  /* FIN-REGRA-VARIAVEL-FAZENDA-01 — a regra fazenda × conta (o dono é o banco: `fn_regra_fazenda_da_conta`, a mesma dos gatilhos). Só no
+     lançamento NOVO ou quando a fazenda/conta MUDAM (o legado segue editável nos outros campos). A frase sai ao lado do Salvar e o campo
+     Fazenda fica vermelho; o clique no Salvar não grava e leva o foco à Fazenda. Vazio fica com o "Selecione a fazenda" de sempre. */
+  const fazendaDaRegra = (fazendaTravadaAdm && fazendaAdm) ? fazendaAdm.id : fazendaId;
+  const regraVale = open && !!fazendaDaRegra && regraValeAqui({ novo: !lancamento?.id, fazendaDe: lancamento?.fazenda_id ?? null,
+    planoDe: lancamento?.plano_conta_id ?? null, fazenda: fazendaDaRegra || null, plano: planoContaId ?? null });
+  const [regraFazenda, setRegraFazenda] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    setRegraFazenda(null);
+    if (!regraVale || !planoContaId || !fazendaDaRegra) return;
+    void perguntarRegraFazenda(planoContaId, fazendaDaRegra).then((f) => { if (vivo) setRegraFazenda(f); });
+    return () => { vivo = false; };
+  }, [regraVale, planoContaId, fazendaDaRegra]);
+
   /* ── MODO OC — OC-CC-MODAL-FINANCEIRO-01 ───────────────────────────────────────────────────────────────────────────────
      As parcelas que vao ao banco sao as da PROPRIA OC: a lista da grade (mensal ou livres) ou, a' vista, uma so'. A conta e'
      a da direcao (entrada -> destino; saida -> origem). As duas pendencias proprias do modo (item e vencimento) NAO apagam
@@ -2045,6 +2061,13 @@ export function LancamentoV2Dialog({
        em vermelho com a frase; aqui so' se leva o foco a ele, sem toast (UX-TOAST-01). O `canSave` ja' exigia a
        fazenda (`computeValidacaoModal`), entao esta linha e' a trava do proprio gravar, nao a unica. */
     if (!fazendaIdEfetivo) {
+      document.getElementById('campo-fazenda-financeiro')?.querySelector('button')?.focus();
+      return;
+    }
+    /* FIN-REGRA-VARIAVEL-FAZENDA-01 — a conta pede outra fazenda: não grava (o gatilho recusaria com a mesma frase) */
+    if (regraFazenda) {
+      setErroAntesDeSalvar(regraFazenda);
+      setAbaAtiva('geral');
       document.getElementById('campo-fazenda-financeiro')?.querySelector('button')?.focus();
       return;
     }
@@ -3166,6 +3189,7 @@ export function LancamentoV2Dialog({
                 disabled={travado('fazenda_id') || undefined}
                 obrigatorio
                 id="campo-fazenda-financeiro"
+                erroDaRegra={regraFazenda}
                 className="col-span-4"
                 triggerClassName={cn(fieldBg, 'h-7 text-[11px]', xmlCls('fazenda'))}
                 tabIndex={7}
@@ -3997,6 +4021,11 @@ export function LancamentoV2Dialog({
             {modoOC && !posSalvar && !erroAntesDeSalvar && !motivoDasParcelas && simOC?.erro && (
               <span className="max-w-[520px] truncate text-[10px] leading-tight text-destructive" title={simOC.erro} data-testid="recusa-da-simulacao">
                 {simOC.erro}
+              </span>
+            )}
+            {!posSalvar && !erroAntesDeSalvar && !motivoDasParcelas && regraFazenda && (
+              <span className="max-w-[520px] truncate text-[10px] leading-tight text-destructive" title={regraFazenda} data-reticencias-com-title="" data-testid="regra-fazenda-frase">
+                {regraFazenda}
               </span>
             )}
             {!posSalvar && !erroAntesDeSalvar && motivoDasParcelas && (

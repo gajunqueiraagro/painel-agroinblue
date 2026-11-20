@@ -1900,6 +1900,13 @@ const CENARIOS = [
     { nome: `lancamento-${x}-Itens-sem-rolar`, url: `tela=lancamento&m=novo&v=${x}`, tamanhos: [[1126, 579], [1300, 704], [1440, 800]],
       semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS }, semRolarVertical: '[data-testid="itens-rolagem"]',
       antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); } }]),
+  /* FIN-REGRA-VARIAVEL-FAZENDA-01 — o modal de correção (14 linhas, nomes longos; a lista rola dentro do quadro), com a recusa da prévia,
+     e o selo na faixa dos totais da lista */
+  ...['', 'recusa'].map((v) => ({ nome: `regra-fazenda${v ? `-${v}` : ''}`, url: `tela=regra-fazenda&v=${v}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]],
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="correcao-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="correcao-linha"]').first().waitFor(); await p.waitForTimeout(400); } })),
+  { nome: 'financeiro-selo-regra', url: 'tela=financeiro&regra=1', tamanhos: [...TAMANHOS_DO_CONTRATO, [1280, 720], [1920, 1080]], regiao: '[data-testid="avisos-do-filtro"]',
+    antes: async (p) => { await p.locator('[data-testid="selo-regra-fazenda"]').waitFor({ timeout: 8000 }); } },
   /* FORN-TROCAR-LOTE-01 — o modal (40 origens de nome longo, os avisos) e a barra da selecao na lista com o "…" */
   { nome: 'trocar-fornecedor', url: 'tela=trocar-fornecedor', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="trocar-origens"]' } },
