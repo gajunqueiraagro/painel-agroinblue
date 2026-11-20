@@ -83,6 +83,7 @@ import { NovoDeXmlDialog, notaParaAPrevia } from '@/components/financeiro-v2/Nov
 import { NovoMenuLancamentos } from '@/components/financeiro-v2/NovoMenuLancamentos';
 import { NotasDaReceitaDialog } from '@/components/fiscal/NotasDaReceitaDialog';
 import { registrarBemDeTerceiro, useNotasDaReceita } from '@/hooks/useNotasDaReceita';
+import { Camada, useCamadas } from '@/components/ui/camadas';
 import { pedemAcao } from '@/lib/fiscal/notasDaReceita';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { contarBoletosQuePedemAcao } from '@/lib/financeiro/boleto/caixaApi';
@@ -694,6 +695,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      "Lançar" entrega ao "Da nota fiscal" de hoje (D1) */
   const receita = useNotasDaReceita(clienteAtual?.id ?? null);
   const [receitaAberta, setReceitaAberta] = useState(false);
+  /* NAV-VOLTA-ORIGEM-01 (Gabriel 19/11, peça única) — as camadas desta tela: as Notas da Receita ficam POR BAIXO (montadas, invisíveis) do
+     "Da nota fiscal"/da nota abertos a partir delas; fechar/salvar volta à mesma aba, filtros, rolagem e linha (a próxima, se lançou) */
+  const camadas = useCamadas<'receita' | 'xml' | 'nota'>();
   const [xmlDaReceita, setXmlDaReceita] = useState<File[] | null>(null);
   /* NOTA-RECEITA-CASAR-01 — a prévia aberta pelo "Vincular a este": ao fechar, a lista da Receita relê (a nota vira "Já no sistema") */
   const vinculoDaReceita = useRef(false);
@@ -3366,6 +3370,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       <NovoDeXmlDialog
         open={xmlAberto && !dialogOpen && !notaAberta}
         onClose={() => {
+          camadas.fechar('xml', linhasXmlLancadas.size > 0 ? 'salvou' : 'fechou');
           setXmlAberto(false); setLinhasXmlLancadas(new Set()); if (xmlDaReceita) void receita.refetch(); setXmlDaReceita(null);
           if (voltarParaCaixa.current) { voltarParaCaixa.current = false; setCaixaAberta(true); }
         }}
@@ -3377,31 +3382,34 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         lancadas={linhasXmlLancadas}
         arquivosIniciais={xmlDaReceita}
         notasDaReceita={receita.data?.lista.length ?? null}
-        onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); void receita.refetch(); }}
+        onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); camadas.abrir('receita'); void receita.refetch(); }}
       />
       {receitaAberta && (
-        <NotasDaReceitaDialog clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
+        <Camada coberta={camadas.coberta('receita')}>
+        <NotasDaReceitaDialog retorno={camadas.retornoPara('receita')} clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
           erro={receita.error ? (receita.error as Error).message : null}
-          aoFechar={() => setReceitaAberta(false)}
+          aoFechar={() => { setReceitaAberta(false); camadas.fechar('receita'); }}
           /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" (lote 25; simular = a prévia) */
           registrarBem={clienteAtual?.id ? (chave, previsao, observacao, simular) => registrarBemDeTerceiro(clienteAtual.id, chave, previsao, observacao, simular) : undefined}
-          aoLancar={(arquivo) => { setReceitaAberta(false); setXmlDaReceita([arquivo]); setXmlAberto(true); }}
+          /* NAV-VOLTA-ORIGEM-01: a lista NÃO fecha — o "Da nota fiscal" abre POR CIMA dela */
+          aoLancar={(arquivo) => { setXmlDaReceita([arquivo]); setXmlAberto(true); camadas.abrir('xml', 'receita'); }}
           /* NOTA-RECEITA-CASAR-01 — "Vincular a este" = a porta 2 (P128a): a MESMA prévia do "+ Da nota", partindo do lançamento escolhido */
           aoVincular={async (arquivo, lancamentoId) => {
             if (!clienteAtual?.id) return 'Escolha o cliente.';
             const r = await notaParaAPrevia(clienteAtual.id, arquivo, hook.fornecedores, fazOperacionais);
             if (r.ok === false) return r.frase;
-            setReceitaAberta(false);
+            camadas.abrir('nota', 'receita');
             vinculoDaReceita.current = true;
             setNotaAberta({ nota: r.nota, linhaId: 'porta-2', partindoDe: lancamentoId });
             return null;
           }} />
+        </Camada>
       )}
 
       {notaAberta && clienteAtual?.id && (
         <NotaFiscalDialog
           open
-          onClose={() => { setNotaAberta(null); if (vinculoDaReceita.current) { vinculoDaReceita.current = false; void receita.refetch(); } }}
+          onClose={() => { setNotaAberta(null); camadas.fechar('nota'); if (vinculoDaReceita.current) { vinculoDaReceita.current = false; void receita.refetch(); } }}
           clienteId={clienteAtual.id}
           clienteNome={clienteAtual.nome ?? null}
           nota={notaAberta.nota}
