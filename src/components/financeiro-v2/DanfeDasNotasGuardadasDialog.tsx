@@ -113,7 +113,7 @@ export function DanfeDasNotasGuardadasDialog({ clienteId, onClose, ler = candida
                       <td className={TD_REGUA_NUM} title="Os lançamentos que recebem o PDF (o do XML e os ligados a ele)">{1 + l.c.ligados.length}</td>
                       <td className={TD_REGUA_NUM}>{l.r?.ok === true ? kb(l.r.bytes) : '—'}</td>
                       <td className={cn(TD_REGUA_TEXTO, l.r?.ok === false && 'text-amber-800')} title={l.r?.ok === false ? l.r.frase : undefined}>
-                        {l.gravada ? 'anexado' : l.r == null ? (fase === 'simulando' ? 'na fila' : 'só XML') : l.r.ok ? 'gera o PDF (simulação)' : l.r.frase}
+                        {l.gravada ? 'anexado' : l.r == null ? (fase === 'simulando' ? 'na fila' : 'só XML') : l.r.ok === false ? l.r.frase : 'gera o PDF (simulação)'}
                       </td>
                       <td className={TD_REGUA}>
                         {l.r?.ok === false && l.r.frase === FRASE_SEM_XML && (

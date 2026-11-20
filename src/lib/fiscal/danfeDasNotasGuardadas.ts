@@ -14,6 +14,10 @@ import { gravarDocumentosPendentes, novoPendente } from '@/lib/financeiro/docume
 import { baixarArquivo } from '@/lib/financeiro/itensDaNotaBanco';
 import { danfePdfDoXml } from '@/lib/fiscal/danfePdf';
 
+/* as tabelas fiscais novas ainda não estão nos tipos gerados (o mesmo idioma do `useNotasDaReceita`) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: `(supabase as any)`
+const db = () => supabase as any;
+
 export interface DocDaNota {
   id: string; lancamento_id: string; chave_acesso: string | null; nome: string | null; tipo: string | null; url: string | null;
   especie: string | null; numero: string | null; serie: string | null; data_emissao: string | null; valor_documento: number | null;
@@ -72,17 +76,22 @@ export const FRASE_SEM_XML = 'sem XML guardado';
 
 /** o XML da nota na caixa da Receita (`fiscal_dfe_recebidos`, RLS por cliente), quando a busca já o trouxe */
 async function xmlDaCaixaDaReceita(clienteId: string, chave: string): Promise<ArrayBuffer | null> {
-  const { data, error } = await supabase.from('fiscal_dfe_recebidos').select('xml').eq('cliente_id', clienteId).eq('chave', chave).not('xml', 'is', null).maybeSingle();
+  const { data, error } = await db().from('fiscal_dfe_recebidos').select('xml').eq('cliente_id', clienteId).eq('chave', chave).not('xml', 'is', null).maybeSingle();
   if (error) { console.error('[danfeDasNotasGuardadas] caixa', error); return null; }
   return typeof data?.xml === 'string' && data.xml ? new TextEncoder().encode(data.xml).buffer : null;
 }
 
 /** os produtores do cliente com certificado ativo e válido (quem pode consultar a nota pela chave) */
 export async function titularesComCertificado(clienteId: string): Promise<string[]> {
-  const { data, error } = await supabase.from('fiscal_certificados').select('titular_id, valido_ate').eq('cliente_id', clienteId).eq('situacao', 'ativo');
+  const { data, error } = await db().from('fiscal_certificados').select('titular_id, valido_ate').eq('cliente_id', clienteId).eq('situacao', 'ativo');
   if (error) { console.error('[danfeDasNotasGuardadas] certificados', error); return []; }
   const agora = new Date().toISOString();
-  return [...new Set((data ?? []).filter((c) => c.titular_id && (c.valido_ate ?? '') > agora).map((c) => c.titular_id))];
+  const ids: string[] = [];
+  for (const c of Array.isArray(data) ? data : []) {
+    const id = Reflect.get(c, 'titular_id'); const ate = Reflect.get(c, 'valido_ate');
+    if (typeof id === 'string' && typeof ate === 'string' && ate > agora && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
 }
 
 /** "Buscar na Receita": a consulta pela CHAVE (consChNFe) da `fiscal-dfe-buscar` — o XML completo cai na caixa da Receita.
