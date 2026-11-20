@@ -454,7 +454,7 @@ export const BASE_DO_ARROBA: Record<ChaveLinhaPec, BaseArroba> = {
   /* As chaves que não são linha da cascata — nunca chegam a pedir base, mas o Record as exige. */
   patrimonio: 'produzida', producao: 'produzida',
   p0_fonte: 'produzida', p1_fonte: 'produzida',
-  centros: 'produzida', centros_juros: 'produzida', a_pagar: 'produzida',
+  centros: 'produzida', centros_juros: 'produzida', a_pagar: 'produzida', fora_do_dre: 'produzida',
 };
 
 export const arrobaDaBase = (l: DrePecLinhas, b: BaseArroba): number | null =>
