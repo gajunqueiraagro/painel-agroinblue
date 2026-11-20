@@ -16,9 +16,9 @@ describe('R — o cadastro sem documento, pelo nome', () => {
     const r = resolverEmitente({ documento: CNPJ, nome: '11.222.333 FULANO SINTETICO DE TESTE' }, [f('a', 'Fulano Sintético de Teste')], null);
     expect(r).toMatchObject({ achadoPor: 'nome', propostoId: 'a', cadastroSemDocumento: true, filialDiferente: false });
   });
-  it('R2 o nome cortado do DANFE ("… LTD") acha o "… Ltda"; a fantasia e a razao social da Receita tambem procuram', () => {
+  it('R2 o nome cortado do DANFE ("… LTD") acha o "… Ltda"; a razao social da Receita tambem procura; a FANTASIA nao (FORN-ACHAR-CNPJ-01)', () => {
     expect(resolverEmitente({ documento: CNPJ, nome: 'AGRO SINTETICA INSUMOS LTD' }, [f('a', 'Agro Sintetica Insumos Ltda')], null).propostoId).toBe('a');
-    expect(resolverEmitente({ documento: CNPJ, nome: 'XYZ', fantasia: 'Vidracaria Sintetica' }, [f('b', 'Vidraçaria Sintética')], null).propostoId).toBe('b');
+    expect(resolverEmitente({ documento: CNPJ, nome: 'XYZ', fantasia: 'Vidracaria Sintetica' }, [f('b', 'Vidraçaria Sintética')], null).propostoId).toBeNull();
     expect(resolverEmitente({ documento: CNPJ, nome: 'XYZ' }, [f('c', 'Razao Sintetica Completa Ltda')], null, ['RAZAO SINTETICA COMPLETA LTDA']).propostoId).toBe('c');
   });
   it('R3 so\' entre os SEM documento, ATIVOS e nao mesclados', () => {
@@ -27,8 +27,8 @@ describe('R — o cadastro sem documento, pelo nome', () => {
     expect(semDocumentoPeloNome(['FULANO SINTETICO DE TESTE'], lista)).toEqual([]);
     expect(resolverEmitente({ documento: CNPJ, nome: 'FULANO SINTETICO DE TESTE' }, lista, null).achadoPor).toBeNull();
   });
-  it('R4 dois cadastros sem documento casam: o operador escolhe (nenhum proposto)', () => {
-    const r = resolverEmitente({ documento: CNPJ, nome: 'FULANO SINTETICO' }, [f('a', 'Fulano Sintetico'), f('b', 'Fulano Sintetico Filho')], null);
+  it('R4 dois cadastros sem documento com a MESMA razão social: o operador escolhe (nenhum proposto); o "… Filho" não casa', () => {
+    const r = resolverEmitente({ documento: CNPJ, nome: 'FULANO SINTETICO' }, [f('a', 'Fulano Sintetico'), f('b', 'Fulano Sintético Ltda'), f('c', 'Fulano Sintetico Filho')], null);
     expect([r.achadoPor, r.propostoId, r.candidatos.map((c) => c.id)]).toEqual(['nome', null, ['a', 'b']]);
   });
   it('R5 termo curto (menos de 5 letras) nao procura: nada de achar qualquer coisa', () => {
@@ -38,4 +38,17 @@ describe('R — o cadastro sem documento, pelo nome', () => {
     const r = resolverEmitente({ documento: CNPJ, nome: 'FULANO SINTETICO DE TESTE' }, [f('semdoc', 'Fulano Sintetico de Teste'), f('comdoc', 'Outro Nome', { cpf_cnpj: '11.222.333/0004-24' })], null);
     expect([r.achadoPor, r.propostoId]).toEqual(['documento', 'comdoc']);
   });
+
+  it('FORN-ACHAR-CNPJ-01 (URGENTE, o caso COAMO × Auto Posto) — palavra solta, cidade ou fantasia NUNCA acham: cadastrar com os dados da nota', () => {
+    const posto = f('posto', 'Auto Posto Rota da Se Sidrolandia');
+    const r = resolverEmitente({ documento: '75904383021803', nome: 'COAMO AGROINDUSTRIAL COOPERATIVA', fantasia: 'SIDROLANDIA' }, [posto], null, ['COAMO AGROINDUSTRIAL COOPERATIVA']);
+    expect([r.achadoPor, r.propostoId, r.candidatos]).toEqual([null, null, []]);
+    expect(semDocumentoPeloNome(['Sidrolandia', 'Auto Posto'], [posto])).toEqual([]);
+  });
+  it('FORN-ACHAR-CNPJ-01 — a RAIZ do CNPJ (outra filial no cadastro): não propõe, "cadastrar esta filial"', () => {
+    const matriz = f('matriz', 'Coamo Agroindustrial Cooperativa', { cpf_cnpj: '75.904.383/0001-53' });
+    const r = resolverEmitente({ documento: '75904383021803', nome: 'COAMO AGROINDUSTRIAL COOPERATIVA' }, [matriz], null);
+    expect([r.propostoId, r.filialDiferente]).toEqual([null, true]);
+  });
 });
+

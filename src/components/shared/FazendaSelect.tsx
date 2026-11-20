@@ -36,6 +36,8 @@ export interface FazendaSelectProps {
    * "Selecione a fazenda do lançamento." embaixo, o desenho do TRANSF-FAZENDA-ORIGEM-01. Sem a prop, nada muda.
    */
   obrigatorio?: boolean;
+  /** FIN-REGRA-VARIAVEL-FAZENDA-01 — a frase da regra fazenda × conta (do banco): o campo fica vermelho e a frase no title (quem chama a mostra). */
+  erroDaRegra?: string | null;
   /** `id` do bloco, para quem grava levar o foco ao campo quando ele falta. */
   id?: string;
   /** FIN-FINANC-28-P3-FIX3 — o seletor DA CASA com busca (`SearchableSelect`). PADRAO desde o passo 8 (seletor de entidade TEM
@@ -45,7 +47,7 @@ export interface FazendaSelectProps {
 
 export function FazendaSelect({
   value, onChange, fazendas, forcaAdministrativo,
-  label, className, triggerClassName, size = 'default', tabIndex, disabled, hideAviso, obrigatorio, id, comBusca = true,
+  label, className, triggerClassName, size = 'default', tabIndex, disabled, hideAviso, obrigatorio, id, comBusca = true, erroDaRegra,
 }: FazendaSelectProps) {
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
@@ -59,13 +61,13 @@ export function FazendaSelect({
 
   /* ⚠ FORCADO AO ADMINISTRATIVO NAO FALTA: o efeito acima o preenche no mesmo ciclo, e acusar "falta" nesse
      instante seria um vermelho que pisca e some. */
-  const falta = !!obrigatorio && !value && !(forcaAdministrativo && fazendaAdm);
+  const falta = (!!obrigatorio && !value && !(forcaAdministrativo && fazendaAdm)) || !!erroDaRegra;
 
   return (
     <div className={className} id={id}>
       {label && <Label className="text-[10px]">{label}</Label>}
       {comBusca ? (
-        <div className="min-w-0" title={fazOperacionais.find(f => f.id === value)?.nome}>
+        <div className="min-w-0" title={erroDaRegra || fazOperacionais.find(f => f.id === value)?.nome} data-testid={erroDaRegra ? 'fazenda-fora-da-regra' : undefined}>
           <SearchableSelect value={value ?? ''} onValueChange={onChange} semTodos allValue="" allLabel="Selecione"
             options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))} placeholder="Buscar fazenda..."
             disabled={forcaAdministrativo || disabled} dense tabIndex={tabIndex}
@@ -79,7 +81,7 @@ export function FazendaSelect({
           </SelectContent>
         </Select>
       )}
-      {falta && <p className="mt-0.5 text-[10px] text-destructive">{MSG_FAZENDA_OBRIGATORIA}</p>}
+      {falta && !erroDaRegra && <p className="mt-0.5 text-[10px] text-destructive">{MSG_FAZENDA_OBRIGATORIA}</p>}
       {!hideAviso && forcaAdministrativo && fazendaAdm && (
         <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
           <AlertTriangle className="h-3 w-3" />

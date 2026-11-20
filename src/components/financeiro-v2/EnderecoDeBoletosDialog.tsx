@@ -91,8 +91,8 @@ export function EnderecoDeBoletosDialog({ clienteId, clienteNome, aoFechar, api 
       <DialogContent className="flex h-[min(560px,calc(100vh-16px))] w-[min(760px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0 [&>button]:top-2.5 [&>button]:text-primary-foreground"
         data-testid="endereco-de-boletos">
         <div className="flex h-[34px] shrink-0 items-center bg-primary px-3 pr-10 text-primary-foreground">
-          <DialogTitle className="min-w-0 truncate text-[11px] font-semibold" title={clienteNome ?? undefined}>E-mail de boletos{clienteNome ? ` · ${clienteNome}` : ''}</DialogTitle>
-          <DialogDescription className="sr-only">O endereço para onde o cliente encaminha os e-mails de boleto e o passo a passo.</DialogDescription>
+          <DialogTitle className="min-w-0 truncate text-[11px] font-semibold" title={clienteNome ?? undefined}>E-mail de entrada{clienteNome ? ` · ${clienteNome}` : ''}</DialogTitle>
+          <DialogDescription className="sr-only">O endereço para onde o cliente encaminha os e-mails de boletos, notas e folha, e o passo a passo.</DialogDescription>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-2 bg-muted p-2">
           {/* o endereço: altura fixa */}
@@ -109,12 +109,12 @@ export function EnderecoDeBoletosDialog({ clienteId, clienteNome, aoFechar, api 
               </div>
             ) : (
               <div className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 flex-1 text-[11px]">Este cliente ainda não tem endereço de boletos.</span>
+                <span className="min-w-0 flex-1 text-[11px]">Este cliente ainda não tem e-mail de entrada.</span>
                 <Button size="sm" className="h-[24px] shrink-0 text-[10px]" disabled={ocupado} onClick={() => abrir('gerar')} data-testid="gerar-endereco">Gerar endereço</Button>
               </div>
             )}
             <span className="text-[9.5px] text-muted-foreground">
-              {temEndereco && atual?.criadoEm ? `Ativo desde ${dataBR(atual.criadoEm)}. ` : ''}Tudo o que chega aqui cai em &quot;Por e-mail&quot; na caixa, sempre a conferir.
+              {temEndereco && atual?.criadoEm ? `Ativo desde ${dataBR(atual.criadoEm)}. ` : ''}Tudo o que chega aqui cai em &quot;A resolver&quot; na Caixa de entrada, sempre a conferir.
             </span>
           </section>
 
@@ -122,7 +122,7 @@ export function EnderecoDeBoletosDialog({ clienteId, clienteNome, aoFechar, api 
           <section className="flex h-[92px] shrink-0 flex-col justify-center gap-1 rounded-md border bg-card px-3" data-testid="bloco-da-acao">
             {modo === 'ver' ? (
               <span className="text-[10px] text-muted-foreground">
-                O cliente cria no e-mail dele UMA regra que encaminha só os e-mails de boleto para este endereço (passo a passo abaixo). Se o
+                O cliente cria no e-mail dele UMA regra que encaminha só os e-mails de boletos, notas e folha para este endereço (passo a passo abaixo). Se o
                 endereço vazar, troque: o antigo para de receber na hora.
               </span>
             ) : (

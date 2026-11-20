@@ -5,6 +5,8 @@ import { CATEGORIAS, type Lancamento, type Categoria } from '@/types/cattle';
 import { TODOS_TIPOS } from '@/types/cattle';
 import { isEntrada, isSaida, isReclassificacao } from '@/lib/calculos/zootecnicos';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 import {
   Tooltip,
   TooltipContent,
@@ -188,24 +190,16 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavi
           </div>
         </div>
 
-        <div className="flex items-center gap-1 mb-1">
-          {MESES_LABELS.map((label, i) => {
-            const mesKey = String(i + 1).padStart(2, '0');
-            const isActive = selectedMes === mesKey;
-            return (
-              <button
-                key={mesKey}
-                onClick={() => setSelectedMes(mesKey)}
-                className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
-                  isActive
-                    ? 'bg-orange-500 text-white shadow-sm'
-                    : 'bg-orange-50 text-orange-700 hover:bg-orange-100'
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
+        {/* UI-MESES-PADRAO-01 (D2) — os doze meses são o `SeletorPeriodo` da casa (o mês aberto no azul padrão; era laranja). O ano é o
+            da tela-mãe (prop): o seletor oferece só ele. Na largura da tabela de baixo. */}
+        <div className="mb-1 max-w-full" style={{ width: '750px' }}>
+          <SeletorPeriodo
+            modo="ano-mes"
+            modoUnico
+            anos={[String(ano)]}
+            periodo={mesUnico(ano, parseInt(selectedMes))}
+            onPeriodoChange={(p) => setSelectedMes(String(p.de.mes).padStart(2, '0'))}
+          />
         </div>
 
         <div className="rounded-lg border border-orange-200 mt-0 inline-block">

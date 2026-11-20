@@ -15,6 +15,9 @@ export interface ComplementoDaLinha {
   fazendaNome: string | null;
   tipoDocumento: string | null;
   numeroDocumento: string | null;
+  /** CONC-CASAR-1X1-TABELA-01 (Gabriel 19/11 07:23) — o Plano (subcentro) e a Atividade (escopo do plano) do lançamento, para o Casar */
+  subcentro: string | null;
+  escopoNegocio: string | null;
 }
 
 const texto = (v: unknown) => (typeof v === 'string' && v ? v : null);
@@ -25,7 +28,7 @@ export async function lerComplementoDasLinhas(clienteId: string, ids: readonly s
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: a coluna `tipo_documento` não está no tipo gerado
     const { data, error } = await (supabase as any).from('financeiro_lancamentos_v2')
-      .select('id, data_pagamento, fazenda_id, tipo_documento, numero_documento')
+      .select('id, data_pagamento, fazenda_id, tipo_documento, numero_documento, subcentro, escopo_negocio')
       .eq('cliente_id', clienteId).in('id', unicos);
     if (error || !Array.isArray(data)) { console.error('[complementoDasLinhas]', error); return null; }
     const idsDasFazendas = [...new Set(data.map((r) => texto(r?.fazenda_id)).filter((x): x is string => !!x))];
@@ -42,7 +45,8 @@ export async function lerComplementoDasLinhas(clienteId: string, ids: readonly s
       const fazendaId = texto(r.fazenda_id);
       const f = fazendaId ? fazendas.get(fazendaId) : undefined;
       m.set(id, { dataPagamento: texto(r.data_pagamento), fazendaId, fazendaCodigo: f?.codigo ?? null, fazendaNome: f?.nome ?? null,
-        tipoDocumento: texto(r.tipo_documento), numeroDocumento: texto(r.numero_documento) });
+        tipoDocumento: texto(r.tipo_documento), numeroDocumento: texto(r.numero_documento),
+        subcentro: texto(r.subcentro), escopoNegocio: texto(r.escopo_negocio) });
     }
     return m;
   } catch (e) { console.error('[complementoDasLinhas]', e); return null; }

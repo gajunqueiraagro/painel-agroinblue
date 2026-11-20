@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -9,7 +10,8 @@ import { cn } from '@/lib/utils';
  * subcentro longos empurravam o resto e o fim sumia. Aqui ela é DO FINANCEIRO, com layout próprio; as peças compartilhadas não mudam.
  *
  * ⚠ A CONTA DAS ALTURAS (medida no navegador, 28/10): título 16 + 2 + linhas de 16 (o favorecido 41, os pares 17) → 123 · 90 · 98 · 69 · 34,
- *   gaps de 2 e o rodapé de 24 (2 linhas) = ~452px. A menor janela em que o resumo aparece (≥900px de largura) é 1126×579, com 457px úteis.
+ *   gaps de 2 e o rodapé de 24 (2 linhas) = ~452px. BOLETO D1d D3 (17/11): o Documento ganhou a linha "Boleto" (34 → 50) e o rodapé
+ *   ficou com 1 linha (24 → 12, frase mais curta) = ~456px. A menor janela em que o resumo aparece (≥900px de largura) é 1126×579, com 457px úteis.
  *   Linha nova num bloco = refazer a conta e medir nos tamanhos do gate.
  * ⚠ NADA ROLA E NADA MUDA DE ALTURA: cada bloco tem ALTURA FIXA (o nome grande nunca empurra o resto). Texto longo termina em "…" com o
  *   texto inteiro no `title`; o favorecido tem até 2 linhas. O Valor ocupa a linha INTEIRA do bloco (a 20px, "R$ 99.999.999,99" não cabe
@@ -42,6 +44,9 @@ export interface ResumoDoLancamentoProps {
   /** P121b: o NÚMERO do documento ("NF 000.521.110", inteiro, logo depois do rótulo), o selo da origem ("da compra" · "ligado") e o
    *  `title` com tudo. Sem número: null ("—"). */
   documento: { numero: string; selo: string | null; titulo: string } | null;
+  /** BOLETO D1d D3 (+ Gabriel 18/11 14:40): o boleto VIVO ligado ("venc dd/mm/aaaa") e o 👁 que abre o PDF dele (null = sem PDF
+   *  guardado: o 👁 apagado). Sem boleto: null ("—"). */
+  boleto?: { selo: string; onVer: (() => void) | null } | null;
 }
 
 /** Título de bloco: pequeno, maiúsculo, navy, com a linha embaixo. */
@@ -81,15 +86,30 @@ function Tabela({ children, colunas = ['78px', undefined] }: { children: ReactNo
  *  ⚠ EM 240px A DATA CABE JUSTA (medido 28/10, na largura útil de 218px): rótulo 9,5px em 41px ("Modalid." ≈ 39 + 1 de recuo), valor 10,5px
  *  tabular em 69px (recuo de 3) e 67px (sem recuo) — "10/10/2026" = 63px — e a célula sem o padding de 1px do navegador. Data nunca
  *  corta: mexeu, medir no gate. */
-function Par({ a, b }: { a: { rotulo: string; valor: string | null; cor?: string; testid?: string }; b: { rotulo: string; valor: string | null; testid?: string } }) {
-  const lado = (x: { rotulo: string; valor: string | null; cor?: string; testid?: string }, ultimo: boolean) => (<>
+type LadoDoPar = { rotulo: string; valor: string | null; cor?: string; testid?: string; titulo?: string };
+function Par({ a, b }: { a: LadoDoPar; b: LadoDoPar }) {
+  const lado = (x: LadoDoPar, ultimo: boolean) => (<>
     <td className="truncate px-0 pr-px align-middle text-[9.5px] text-muted-foreground" title={x.rotulo}>{x.rotulo}</td>
-    <td className={cn('truncate px-0 align-middle text-[10.5px] tabular-nums', !ultimo && 'pr-[3px]', !x.valor && 'text-muted-foreground')} title={x.valor ?? undefined}>
+    <td className={cn('truncate px-0 align-middle text-[10.5px] tabular-nums', !ultimo && 'pr-[3px]', !x.valor && 'text-muted-foreground')} title={x.titulo ?? x.valor ?? undefined}>
       {/* o status leva a cor DE HOJE (`STATUS_PALETA`, calculada no diálogo): texto colorido ou a pílula — num span, nunca na célula */}
       <span className={cn(x.valor && x.cor)} data-testid={x.testid}>{x.valor || '—'}</span>
     </td>
   </>);
   return <tr className="h-[17px] text-[11px] leading-[14px]">{lado(a, false)}{lado(b, true)}</tr>;
+}
+
+/** O valor CURTO da Modalidade (cabe nos 69px do Par sem "…"; o inteiro vai no title). */
+export function modalidadeCurta(m: string | null): string | null {
+  if (m === 'Compra parcelada') return 'Parcelada';
+  if (m === 'Parcela solta') return 'Solta';
+  return m;
+}
+/** O title da linha "Nota": o número + a origem por extenso (o selo saiu da linha). */
+export function tituloDaNota(d: ResumoDoLancamentoProps['documento']): string | undefined {
+  if (!d) return undefined;
+  const origem = d.selo === 'da compra' ? 'da compra: a nota está na compra parcelada e vale para as parcelas'
+    : d.selo === 'ligado' ? 'documento ligado a este lançamento' : null;
+  return origem ? `${d.titulo} · ${origem}` : d.titulo;
 }
 
 export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
@@ -144,33 +164,46 @@ export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
             <Par a={{ rotulo: 'Status', valor: p.status.rotulo, cor: p.status.cor, testid: 'resumo-status' }} b={{ rotulo: 'Forma', valor: p.forma }} />
             <Par a={{ rotulo: 'Venc.', valor: p.vencimento }} b={{ rotulo: 'Pgto.', valor: p.pagamento }} />
             {/* P143 (Code Notas) preenche a Modalidade e as Parcelas na edição; aqui só o lugar e o que o lançamento já tem hoje */}
-            <Par a={{ rotulo: 'Modalid.', valor: p.modalidade, testid: 'resumo-modalidade' }} b={{ rotulo: 'Parcelas', valor: p.parcelas, testid: 'resumo-parcelas' }} />
+            {/* Gabriel 18/11 14:40 ("Compra pa…"): o valor da Modalid. é CURTO (cabe nos 69px; o inteiro no title) — `modalidadeCurta` */}
+            <Par a={{ rotulo: 'Modalid.', valor: modalidadeCurta(p.modalidade), titulo: p.modalidade ?? undefined, testid: 'resumo-modalidade' }}
+              b={{ rotulo: 'Parcelas', valor: p.parcelas, testid: 'resumo-parcelas' }} />
           </Tabela>
         </Bloco>
 
-        <Bloco titulo="Documento" altura="h-[34px]" testid="resumo-documento">
-          {/* P121b: o número NUNCA corta (sem `truncate`, sem encolher); o selo vem depois e é ele que cede ("…" com o title) */}
+        <Bloco titulo="Documento" altura="h-[50px]" testid="resumo-documento">
+          {/* P121b: o número NUNCA corta (sem `truncate`, sem encolher). Gabriel 18/11 14:40 ("da co…"): a ORIGEM ("da compra" = a nota está
+              na compra parcelada, vale para as parcelas · "ligado" = documento ligado) sai da linha e vai para o title do número — nada cortado */}
           <Tabela>
             <tr className="h-[16px] text-[11px] leading-[14px]">
               <td className={ROTULO} title="Nota">Nota</td>
-              <td className="align-middle" title={p.documento?.titulo}>
+              <td className="align-middle" title={tituloDaNota(p.documento)}>
+                <span className={cn('shrink-0 whitespace-nowrap tabular-nums', !p.documento && 'text-muted-foreground')} data-testid="resumo-nota">
+                  {p.documento?.numero || '—'}
+                </span>
+              </td>
+            </tr>
+            {/* BOLETO D1d D3 (+ 14:40): "venc dd/mm/aaaa" (a data nunca corta) e o 👁 do PDF num lugar fixo; sem boleto ligado, "—" */}
+            <tr className="h-[16px] text-[11px] leading-[14px]">
+              <td className={ROTULO} title="Boleto">Boleto</td>
+              <td className="align-middle">
                 <div className="flex min-w-0 items-center gap-1 overflow-hidden">
-                  <span className={cn('shrink-0 whitespace-nowrap tabular-nums', !p.documento && 'text-muted-foreground')} data-testid="resumo-nota">
-                    {p.documento?.numero || '—'}
-                  </span>
-                  {p.documento?.selo && (
-                    <span className="min-w-0 truncate rounded-[3px] bg-muted px-1 text-[9.5px] leading-[12px] text-muted-foreground" title={p.documento.titulo}
-                      data-testid="resumo-nota-selo">{p.documento.selo}</span>
-                  )}
+                  {p.boleto ? (
+                    <>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums" data-testid="resumo-boleto">{p.boleto.selo}</span>
+                      <button type="button" className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-[3px] text-primary hover:bg-muted disabled:opacity-30"
+                        onClick={p.boleto.onVer ?? undefined} disabled={!p.boleto.onVer} aria-label="Ver o PDF do boleto"
+                        title={p.boleto.onVer ? 'ver o PDF do boleto' : 'o boleto não tem PDF guardado'} data-testid="resumo-boleto-ver"><Eye className="h-3 w-3" /></button>
+                    </>
+                  ) : <span className="text-muted-foreground" data-testid="resumo-boleto">—</span>}
                 </div>
               </td>
             </tr>
           </Tabela>
         </Bloco>
 
-        {/* fora de tabela nada termina em "…": a frase (228px a 9,5px) quebra em 2 linhas reservadas */}
-        <p className="mt-auto h-[24px] shrink-0 text-[9.5px] leading-[12px] text-muted-foreground">
-          Passe o mouse num nome cortado para ver inteiro.
+        {/* fora de tabela nada termina em "…": a frase cabe em 1 linha (o Documento ganhou a linha do Boleto) */}
+        <p className="mt-auto h-[12px] shrink-0 whitespace-nowrap text-[9.5px] leading-[12px] text-muted-foreground">
+          Nome cortado: passe o mouse.
         </p>
       </div>
     </aside>

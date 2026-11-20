@@ -36,7 +36,7 @@ import { format, parseISO } from 'date-fns';
 import { belongsToConta, saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { useResumoMes, useStatusAno, invalidarDono, useReleDonoAoVoltarAVista } from '@/hooks/useResumoConciliacao';
 import {
-  ROTULO_STATUS, STATUS_COR, frasesDoStatus, fraseFaltaSaldo, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
+  ROTULO_STATUS, STATUS_COR, ESTADO_DO_STATUS, LEGENDA_DA_FITA, frasesDoStatus, fraseFaltaSaldo, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
   saldosDaLinha, marcaDoPar, diferencaNaPosicao, TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL,
   frasesDosAvisos, marcaDeAviso, semClassificacaoDaLinha, semFornecedorDaLinha,
   type SemClassificacao,
@@ -46,7 +46,7 @@ import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenc
 import { SemClassificacaoModal } from '@/components/conciliacao/SemClassificacaoModal';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
-import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { SeletorPeriodo, type TomDoMes } from '@/v2/components/SeletorPeriodo';
 import { mesUnico } from '@/v2/lib/periodo';
 import { estadoDoSlotOfx, TITULO_OFX_COM_SALDO, TITULO_OFX_SEM_SALDO, type EstadoDoSlotOfx } from '@/lib/conciliacao/slotOfx';
 // PR-MOS-2 — LotesExcelTab (Referências Operacionais antigas) desacoplado da aba Enriquecer (legado).
@@ -572,13 +572,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
        `title` — PR-CONC-STATUS-SALDO-01b. `marcaDeAviso` só lê o status e os avisos do dono. */
     /* ⚠ O CONTADOR VERMELHO (CONC-SEM-CLASSIFICACAO-01) é a quantidade do aviso 'sem_classificacao' do TOTAL do mês, lida do
        dono: NÃO muda a cor do mês (D6) — o mês conciliado segue verde, com o número no canto. */
-    const m: Record<number, { bg: string; border: string; txt: string; title?: string; marca?: string; contador?: { qtde: number; title: string } }> = {};
+    const m: Record<number, TomDoMes> = {};
     for (const r of statusAnoQ.data ?? []) {
       if (r.nivel !== 'total' || r.ano_mes.slice(0, 4) !== ano) continue;
-      m[Number(r.ano_mes.slice(5, 7))] = { ...STATUS_COR[r.status], title: ROTULO_STATUS[r.status], marca: marcaDeAviso(r) ?? undefined, contador: contadorDoMes(semClassificacaoDaLinha(r)) };
+      m[Number(r.ano_mes.slice(5, 7))] = { estado: ESTADO_DO_STATUS[r.status], title: ROTULO_STATUS[r.status], marca: marcaDeAviso(r) ?? undefined, contador: contadorDoMes(semClassificacaoDaLinha(r)) };
     }
     if (!statusAnoQ.data && linhaTotal) {
-      m[Number(selectedMes)] = { ...STATUS_COR[linhaTotal.status], title: ROTULO_STATUS[linhaTotal.status], marca: marcaDeAviso(linhaTotal) ?? undefined, contador: contadorDoMes(semClassificacaoDaLinha(linhaTotal)) };
+      m[Number(selectedMes)] = { estado: ESTADO_DO_STATUS[linhaTotal.status], title: ROTULO_STATUS[linhaTotal.status], marca: marcaDeAviso(linhaTotal) ?? undefined, contador: contadorDoMes(semClassificacaoDaLinha(linhaTotal)) };
     }
     return m;
   }, [statusAnoQ.data, linhaTotal, ano, selectedMes]);
@@ -972,52 +972,21 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           idioma da fresta do Total naquela tabela. */}
       {/* CONC-PAINEL-CONTA-01 (Gabriel 09:57, item 1) — SÓ O FUNDO desta faixa virou o escuro do SALDOinBLUE (#162931); os textos e as
           abas inativas ficam claros (contraste medido); as pílulas dos meses MANTÊM as cores de estado; nada mais muda de cor. */}
-      <div className="p-3 pb-0 space-y-1 sticky top-0 z-20 shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0"
-        style={{ background: FUNDO_ESCURO }} data-testid="faixa-conciliacao">
+      <div className="px-3 pt-0 pb-0 sticky top-0 z-20 shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0"
+        style={{ background: 'hsl(var(--navy))' }} data-testid="faixa-conciliacao">
 
-        {/* ⚠ O CABEÇALHO DA PÁGINA — CONCIL-PARIDADE-VISUAL-01 §1. A tela abria
-            direto no seletor de ano, sem dizer o que ela é: quem chegava por um
-            atalho via doze cards de mês e nenhum nome. O subtítulo é o da
-            referência, e diz a pergunta que a tela responde. */}
-        {/* ⚠ A FRASE DE APOIO SUBIU PARA CÁ — PR-IMPORTAR-VER-EXTRATO-01. Ela morava abaixo das
-            abas e custava uma linha inteira do cabeçalho (19,13px + o gap), justamente onde a
-            tela tem menos espaço: a tabela de saldos tem teto FIXO em `calc(100vh - 230px)` e
-            não acompanha o que cresce acima dela.
-            ⚠ AQUI ELA NÃO CUSTA NADA, e isso foi medido: esta linha já tem duas alturas de texto
-            (o título de 15px e o subtítulo de 11px) e sobrava largura à direita. A frase ocupa a
-            largura vazia, na mesma base do subtítulo — o cabeçalho encolhe pelo tanto que a
-            linha de baixo deixou de existir.
-            ⚠ `items-end` E NÃO `items-center`: as duas frases têm o mesmo tamanho e a mesma cor,
-            e alinhá-las pela base faz delas uma linha só aos olhos, em vez de dois textos soltos
-            na mesma altura. */}
-        <div className="flex min-w-0 items-end justify-between gap-4">
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold leading-none text-white">Conciliação</h2>
-            <p className="mt-1 text-[11px] text-[#b9c6cc]">
-              Extrato, saldo corrente e o mês fechando — conta a conta
-            </p>
-          </div>
-          {selectedCard && !loading && APOIO_DA_ABA[vistaExtrato] && (
-            <p className="min-w-0 max-w-[52%] truncate text-right text-[11px] leading-snug text-[#b9c6cc]"
-              title={APOIO_DA_ABA[vistaExtrato]}>
-              {APOIO_DA_ABA[vistaExtrato]}
-            </p>
-          )}
-        </div>
-
-        {/* ════ HEADER: year dropdown + 12 month cards ════ */}
-        <div className="flex items-center gap-2">
+        {/* UI-MESES-PADRAO-01 (regra do Gabriel 11:23/11:33: o cabeçalho em UMA linha) — título, a fita de meses e o voltar na MESMA linha
+            de 40px; as abas são a 2ª. O subtítulo e a frase de apoio da aba saíram da faixa: vão no `title` do título (o texto inteiro). */}
+        <div className="flex h-10 min-w-0 items-center gap-3">
           {onBack && (
             <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-white hover:bg-white/10" onClick={onBack}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
-          {/* ⚠ O BLOCO SAIU PARA `SeletorPeriodo` — PR-BARRA-UNICA-01a, e a troca é de casa,
-              não de comportamento: as mesmas cores (`STATUS_COR`), o mesmo `title`
-              (`STATUS_META`), o mesmo `outline`/`scale` do selecionado e o mesmo esqueleto
-              enquanto carrega. O componente nasceu com `tomPorMes` exatamente porque aqui a
-              COR É INFORMAÇÃO: cada mês é pintado pelo status de conciliação, e um seletor
-              que só soubesse selecionar deixaria esta tela com um seletor só dela. */}
+          <h2 className="shrink-0 whitespace-nowrap text-[15px] font-semibold leading-none text-white"
+            title={selectedCard && !loading && APOIO_DA_ABA[vistaExtrato] ? APOIO_DA_ABA[vistaExtrato] : 'Extrato, saldo corrente e o mês fechando — conta a conta'}>
+            Conciliação
+          </h2>
           <SeletorPeriodo
             modo="ano-mes"
             modoUnico
@@ -1029,8 +998,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             }}
             /* A régua não espera nada (PR-CONC-SALDO-UMA-REGUA-02): os tons vêm do dono e o mês sem tom é neutro. */
             carregando={false}
-            className="flex-1"
+            className="min-w-0 flex-1"
             tomPorMes={tomDosMeses}
+            legenda={LEGENDA_DA_FITA}
           />
         </div>
 
@@ -1065,7 +1035,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 a barra segue nos 23px). Todas no MESMO peso (500): trocar de aba não muda a largura de nenhuma — nada anda. */}
             {ABAS_DA_CONCILIACAO.map(a => (
               <button key={a.chave} type="button" onClick={() => setVistaExtrato(a.chave)} data-aba={a.chave}
-                className={`px-2.5 py-1 rounded-t text-[10px] font-medium transition-colors ${vistaExtrato === a.chave ? 'bg-card text-primary shadow-[inset_0_-2px_0_hsl(var(--primary)),inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-[#cfd8dc] hover:bg-white/10'}`}>
+                className={`px-2.5 py-1 rounded-t text-[10px] font-medium transition-colors ${vistaExtrato === a.chave ? 'bg-corpo text-navy' : 'bg-transparent text-[#cfd8dc] hover:bg-white/10'}`}>
                 {a.rotulo}
               </button>
             ))}
@@ -1143,7 +1113,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           era para as abas que TÊM seletor; este container é de TODAS, inclusive a Conciliação,
           cujos cards desceriam 8px sem ninguém ter pedido. O `pt-2` foi para o wrapper de cada
           aba com seletor — quatro lugares, nenhum compartilhado. */}
-      <div className="px-3 pb-3 bg-card md:flex-1 md:min-h-0 md:flex md:flex-col md:min-w-0">
+      {/* UI-MESES-PADRAO-01: o corpo é o `--corpo` (#D9DFE8) da casa; os cards (saldos, resumo) seguem brancos */}
+      <div className="px-3 pb-3 bg-corpo md:flex-1 md:min-h-0 md:flex md:flex-col md:min-w-0">
 
         {/* A Conciliação não espera os lançamentos do ano (PR-CONC-SALDO-UMA-REGUA-02): ela desenha o dono, e a lista do
             mês só alimenta os contadores do rodapé do Resumo e as pendências — que dizem "…" enquanto chegam. */}

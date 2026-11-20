@@ -7,12 +7,13 @@
  */
 import { X509Certificate } from 'node:crypto';
 import {
-  CAB, type AmbienteLambda, type CorpoDaResposta, type CorpoDoPedido, deB64, DESTINOS, type FalhaLambda, hmacHex, iguaisHex, JANELA_S,
-  NONCE_OK, paraB64, TEMPO_OK, textoDaResposta, textoDoPedido, VERSAO,
+  CAB, type AmbienteLambda, type CorpoDaResposta, type CorpoDoPedido, deB64, DESTINOS, DESTINOS_EVENTO, type FalhaLambda, hmacHex, iguaisHex,
+  JANELA_S, NONCE_OK, paraB64, type ServicoLambda, TEMPO_OK, textoDaResposta, textoDoPedido, VERSAO,
 } from '../../../supabase/functions/_shared/dfe/protocoloLambda.ts';
 
 export const MAX_CORPO = 64 * 1024;
-export const MAX_ENVELOPE = 4 * 1024;
+/* Lambda v2: o evento assinado leva o certificado da folha (~2–3 KB em base64) — 4 KB não cabia */
+export const MAX_ENVELOPE = 12 * 1024;
 export const MAX_RESPOSTA = 4 * 1024 * 1024;
 
 export interface EventoUrl {
@@ -32,7 +33,7 @@ export interface PecasLambda {
   /** kms:Decrypt RSAES_OAEP_SHA_256 */
   desembrulhar(chave: Uint8Array): Promise<Uint8Array>;
   /** o POST mTLS (lança `FalhaDoPost`) */
-  postar(url: string, par: { cert: string; key: string }, envelope: string): Promise<{ status: number; corpo: Uint8Array }>;
+  postar(url: string, par: { cert: string; key: string }, envelope: string, servico: ServicoLambda): Promise<{ status: number; corpo: Uint8Array }>;
   log(linha: Record<string, string | number | null>): void;
 }
 
@@ -48,12 +49,46 @@ const ENVELOPE = new RegExp('^' + [
   '(?:<distNSU><ultNSU>\\d{15}</ultNSU></distNSU>|<consNSU><NSU>\\d{15}</NSU></consNSU>|<consChNFe><chNFe>\\d{44}</chNFe></consChNFe>)',
   '</distDFeInt></nfeDadosMsg></nfeDistDFeInteresse></soap12:Body></soap12:Envelope>',
 ].join('') + '$');
-export function conferirEnvelope(envelope: unknown, ambiente: AmbienteLambda): { ok: true; documento: string } | { ok: false } {
+/** Lambda v2 (CIÊNCIA, Gabriel 18/11: "só envEvento 210210, travado na própria Lambda") — o 2º e ÚLTIMO formato: o envEvento 1.00 de UM
+ *  evento, Ambiente Nacional (cOrgao 91), tpEvento 210210 e "Ciencia da Operacao" LITERAIS (Confirmação 210200, Desconhecimento 210220 e
+ *  Não realizada 210240 não casam), nSeq 1, a mesma chave no Id, no chNFe e na Reference, e a assinatura no padrão da NF-e. A FORMA INTEIRA,
+ *  ancorada (a mesma que a `envelopeCiencia` monta): nada a mais passa. Grupos: 1 chave · 2 tpAmb · 3 CPF|CNPJ · 4 documento. */
+const B64 = '[A-Za-z0-9+/]+={0,2}';
+const ENVELOPE_EVENTO = new RegExp('^' + [
+  '<\\?xml version="1\\.0" encoding="utf-8"\\?>',
+  '<soap12:Envelope xmlns:xsi="http://www\\.w3\\.org/2001/XMLSchema-instance" xmlns:xsd="http://www\\.w3\\.org/2001/XMLSchema" ',
+  'xmlns:soap12="http://www\\.w3\\.org/2003/05/soap-envelope"><soap12:Body>',
+  '<nfeDadosMsg xmlns="http://www\\.portalfiscal\\.inf\\.br/nfe/wsdl/NFeRecepcaoEvento4">',
+  '<envEvento xmlns="http://www\\.portalfiscal\\.inf\\.br/nfe" versao="1\\.00"><idLote>\\d{1,15}</idLote>',
+  '<evento versao="1\\.00"><infEvento Id="ID210210(\\d{44})01"><cOrgao>91</cOrgao><tpAmb>([12])</tpAmb>',
+  '<(CPF|CNPJ)>(\\d{11}|\\d{14})</\\3><chNFe>\\1</chNFe>',
+  '<dhEvento>\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[-+]\\d{2}:\\d{2}</dhEvento><tpEvento>210210</tpEvento><nSeqEvento>1</nSeqEvento>',
+  '<verEvento>1\\.00</verEvento><detEvento versao="1\\.00"><descEvento>Ciencia da Operacao</descEvento></detEvento></infEvento>',
+  '<Signature xmlns="http://www\\.w3\\.org/2000/09/xmldsig#"><SignedInfo>',
+  '<CanonicalizationMethod Algorithm="http://www\\.w3\\.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod>',
+  '<SignatureMethod Algorithm="http://www\\.w3\\.org/2000/09/xmldsig#rsa-sha1"></SignatureMethod>',
+  '<Reference URI="#ID210210(?:\\1)01"><Transforms><Transform Algorithm="http://www\\.w3\\.org/2000/09/xmldsig#enveloped-signature"></Transform>',
+  '<Transform Algorithm="http://www\\.w3\\.org/TR/2001/REC-xml-c14n-20010315"></Transform></Transforms>',
+  '<DigestMethod Algorithm="http://www\\.w3\\.org/2000/09/xmldsig#sha1"></DigestMethod><DigestValue>[A-Za-z0-9+/]{27}=</DigestValue></Reference>',
+  `</SignedInfo><SignatureValue>${B64}</SignatureValue><KeyInfo><X509Data><X509Certificate>${B64}</X509Certificate></X509Data></KeyInfo>`,
+  '</Signature></evento></envEvento></nfeDadosMsg></soap12:Body></soap12:Envelope>',
+].join('') + '$');
+
+export function conferirEnvelope(envelope: unknown, ambiente: AmbienteLambda):
+  { ok: true; documento: string; servico: ServicoLambda } | { ok: false } {
   if (typeof envelope !== 'string' || envelope.length === 0 || envelope.length > MAX_ENVELOPE) return { ok: false };
+  const tpAmb = ambiente === 'producao' ? '1' : '2';
   const m = envelope.match(ENVELOPE);
-  if (!m || m[1] !== (ambiente === 'producao' ? '1' : '2')) return { ok: false };
-  if ((m[3] === 'CPF') !== (m[4].length === 11)) return { ok: false };
-  return { ok: true, documento: m[4] };
+  if (m) {
+    if (m[1] !== tpAmb || (m[3] === 'CPF') !== (m[4].length === 11)) return { ok: false };
+    return { ok: true, documento: m[4], servico: 'distribuicao' };
+  }
+  const e = envelope.match(ENVELOPE_EVENTO);
+  if (e) {
+    if (e[2] !== tpAmb || (e[3] === 'CPF') !== (e[4].length === 11)) return { ok: false };
+    return { ok: true, documento: e[4], servico: 'evento' };
+  }
+  return { ok: false };
 }
 
 /** o documento do certificado: o CN "NOME:CPF" (ou ":CNPJ") da folha */
@@ -132,10 +167,12 @@ export async function atender(ev: EventoUrl, p: PecasLambda): Promise<RespostaUr
 
   /* 5. UM POST, destino fixo */
   try {
-    const r = await p.postar(DESTINOS[pedido.ambiente], par, pedido.envelope);
+    /* Lambda v2: o destino segue FIXO — o da Distribuição ou o da Recepção de Evento, pelo formato que a regra reconheceu */
+    const destino = env.servico === 'evento' ? DESTINOS_EVENTO[pedido.ambiente] : DESTINOS[pedido.ambiente];
+    const r = await p.postar(destino, par, pedido.envelope, env.servico);
     if (r.corpo.length > MAX_RESPOSTA) return responder(502, { ok: false, falha: 'conexao' }, { http: r.status, bytes_volta: r.corpo.length });
     return responder(200, { ok: true, http: r.status, corpo: paraB64(r.corpo) },
-      { http: r.status, bytes_ida: pedido.envelope.length, bytes_volta: r.corpo.length });
+      { servico: env.servico, http: r.status, bytes_ida: pedido.envelope.length, bytes_volta: r.corpo.length });
   } catch (e) {
     return responder(502, { ok: false, falha: e instanceof FalhaDoPost ? e.falha : 'conexao' });
   } finally { par = { cert: '', key: '' }; }

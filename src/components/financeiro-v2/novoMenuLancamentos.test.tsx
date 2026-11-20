@@ -59,7 +59,7 @@ describe('o lugar na tela de Lançamentos', () => {
     expect(fonte).not.toMatch(/<Plus className="h-3 w-3" \/> Da nota/);
     expect(fonte).not.toMatch(/title="Novo Lançamento"/);
   });
-  it('"Da nota fiscal" abre o MESMO diálogo de hoje (o estado do NovoDeXmlDialog); "Dos boletos" abre a caixa', () => {
+  it('"Da nota fiscal" abre o MESMO diálogo de hoje (o estado do NovoDeXmlDialog); "Da caixa de entrada" abre a caixa', () => {
     expect(fonte).toMatch(/onDaNota=\{\(\) => setXmlAberto\(true\)\}/);
     expect(fonte).toMatch(/onDosBoletos=\{\(\) => setCaixaAberta\(true\)\}/);
     expect(fonte).toMatch(/<NovoDeXmlDialog\s+open=\{xmlAberto && !dialogOpen && !notaAberta\}/);

@@ -269,6 +269,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   `favorecido_id`); "Marcar todos os N do filtro" pela MESMA RPC da grade (`so_linhas`); nunca UPDATE solto de favorecido.
 - NOTA-JA-LANCADA-01: antes de oferecer criar pela nota, `fn_nota_ja_lancada` (qualquer status, cadastro parecido, numero, chave); achou =
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
+- FORN-ACHAR-CNPJ-01 (19/11): com CNPJ no XML o documento MANDA (exato → RAIZ = outra filial, não propõe; outro documento NUNCA proposto); pelo nome SÓ a
+  razão social inteira igual (`razaoParaComparar`; nunca fantasia/cidade/"contém"); o comparar só oferece CNPJ/IE/razão quando `eOMesmoFornecedor`.
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
   desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
 - DOC-ANEXO-E-IMPORT-01 F1: SÓ A NF SE LÊ COMO NOTA — recibo/boleto/comprovante/outro nunca passam pelo `lerNota` nem pelo `extrairDanfe` e a
@@ -315,6 +317,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P128a: a NOTA JÁ NO SISTEMA acha TODOS os irmãos (`fn_nota_ja_lancada`: nº no documento, "pela soma", o irmão do parcelamento) e mostra a
   TABELA SISTEMA × NOTA (`linhasSistemaNota`/`fraseDoAchado`; diferença em vermelho, nunca corrigida) com 3 caminhos; a chave num lançamento não
   barra (só a de OC); as duas portas (+ Da nota e o Documentos do Editar, `notaParaAPrevia`) abrem a MESMA prévia.
+- FIN-REGRA-VARIAVEL-FAZENDA-01: a regra fazenda × conta tem UM dono, o banco (`_fn_regra_fazenda_da_conta`; gatilho só no novo ou quando fazenda/conta mudam); a tela
+  só PERGUNTA (`fn_regra_fazenda_da_conta` → frase ao lado do Salvar, campo vermelho) e corrige o legado pelo selo + modal (`fn_lancamentos_trocar_fazenda`: prévia, motivo, desfazer; irmãs do contrato juntas).
 - P155: trava que ESCREVE um campo (o `FazendaSelect` forçando Administrativo) só age com a classificação do lançamento ABERTO
   (`classificacaoDe`): o render de transição da abertura tem o estado do reset ("última atividade") e gravava a fazenda errada no Salvar.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.

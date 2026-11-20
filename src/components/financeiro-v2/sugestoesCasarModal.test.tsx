@@ -94,8 +94,8 @@ describe('o modal "Sugestões para casar"', () => {
     expect(t.style.tableLayout).toBe('fixed');
     /* UI-FONTE-GATE-01 (Chat 12/11 15:22): sem fazenda nem NF nas sugestões, Faz. e NF saem e a largura vai para Descrição/Fornecedor */
     expect([...t.querySelectorAll('col')].map((x) => (x instanceof HTMLElement ? x.style.width : '?')))
-      .toEqual(['28px', '46px', '46px', '46px', '', '', '94px', '80px', '38px', '60px', '120px', '62px']);
-    expect([...t.querySelectorAll('th')].map((x) => x.textContent)).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Valor', 'Δ valor', 'Δ dias', 'Status', 'Motivo', '']);
+      .toEqual(['28px', '46px', '46px', '46px', '', '', '94px', '80px', '38px', '60px', '110px', '62px']);
+    expect([...t.querySelectorAll('th')].map((x) => (x.textContent ?? '').replace(/⇅/g, ''))).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Valor', 'Δ valor', 'Δ dias', 'Status', 'Motivo', '']);
     /* UI-FONTE-GATE-01: o cabeçalho alinha como a coluna (texto à esquerda, número à direita), nunca tudo no centro */
     expect([...t.querySelectorAll('th')].map((x) => (/\btext-left\b/.test(x.className) ? 'E' : /\btext-right\b/.test(x.className) ? 'D' : 'C')))
       .toEqual(['C', 'C', 'C', 'C', 'E', 'E', 'D', 'D', 'D', 'C', 'E', 'C']);
@@ -111,21 +111,47 @@ describe('o modal "Sugestões para casar"', () => {
   });
 
   /* uma linha por lançamento (a soma: k/N em cada uma); o motivo curto, o inteiro no title */
-  it('uma linha por LANÇAMENTO; o motivo curto (o inteiro no title): mesmo valor primeiro, a soma depois, por último as pistas de nome', () => {
+  it('uma linha por LANÇAMENTO, SEM repetir (homologação Edson 11:40, D1): o mesmo lançamento em 2 sugestões fica UMA vez, com o motivo mais forte', () => {
     const { modal } = abrir();
     const linhas = within(modal).getAllByTestId('sugestao');
     const selos = linhas.map((l) => within(l).getByTestId('sugestao-motivo'));
-    expect(selos.map((x) => x.textContent)).toEqual(['mesmo valor', '1/2 · soma de 2', '2/2 · soma de 2', 'nome · valor ≠', 'nome · valor ≠']);
-    expect(selos.map((x) => x.getAttribute('title'))).toEqual([
-      'mesmo valor', 'soma de 2 · 26 dias · vencido ago', 'soma de 2 · 26 dias · vencido ago', 'nome · valor diferente', 'nome · valor diferente · vencido ago',
-    ]);
+    /* os dois da soma também vinham de novo como "nome · valor ≠": agora ficam só na soma (a 1ª, a mais forte) */
+    expect(selos.map((x) => x.textContent)).toEqual(['mesmo valor', '1/2 · soma de 2', '2/2 · soma de 2']);
+    expect(selos.map((x) => x.getAttribute('title'))).toEqual(['mesmo valor', '1/2 · soma de 2 — soma de 2 · 26 dias · vencido ago', '2/2 · soma de 2 — soma de 2 · 26 dias · vencido ago']);
     expect(selos[0].className).toContain('border-dashed');
-    expect(selos[3].className).toContain('bg-amber-50');
     /* cada lançamento com o SEU valor, na coluna Valor */
-    expect(linhas.map((l) => (l.querySelector('td.celula-valor')!.textContent ?? '').replace(/\s/g, ' '))).toEqual(['-R$ 26.127,18', '-R$ 22.719,29', '-R$ 3.407,89', '-R$ 22.719,29', '-R$ 3.407,89']);
-    expect(within(modal).getAllByTestId('sugestao-casar')).toHaveLength(5);
+    expect(linhas.map((l) => (l.querySelector('td.celula-valor')!.textContent ?? '').replace(/\s/g, ' '))).toEqual(['-R$ 26.127,18', '-R$ 22.719,29', '-R$ 3.407,89']);
     /* UI-FONTE-GATE-01 (Chat 12/11 14:12): a ação é "Casar", a mesma grafia do Procurar no histórico */
-    expect(within(modal).getAllByTestId('sugestao-casar').map((b) => b.textContent)).toEqual(Array(5).fill('Casar'));
+    expect(within(modal).getAllByTestId('sugestao-casar').map((b) => b.textContent)).toEqual(Array(3).fill('Casar'));
+  });
+
+  it('D2: marcar/desmarcar cada linha mexe SÓ nela (sem a linha repetida, o mesmo id não marca duas)', () => {
+    const { modal } = abrir();
+    const caixas = () => within(modal).getAllByTestId('sugestao').map((l) => l.querySelector('[role="checkbox"]'));
+    const marcadas = () => caixas().map((c) => c?.getAttribute('aria-checked') === 'true');
+    fireEvent.click(caixas()[1]!);
+    expect(marcadas()).toEqual([false, true, false]);
+    fireEvent.click(caixas()[2]!);
+    expect(marcadas()).toEqual([false, true, true]);
+    fireEvent.click(caixas()[1]!);
+    expect(marcadas()).toEqual([false, false, true]);
+  });
+
+  it('D3: TODAS as colunas ordenam pelo cabeçalho (regra 29/10): Valor, Δ valor e Motivo; clicar de novo inverte', () => {
+    const { modal } = abrir();
+    /* 12:02: a seta ⇅ aparece (apagada) em TODA coluna que ordena, antes de clicar */
+    expect(within(modal).getByTestId('sugestoes-ordenar-descricao').textContent).toContain('⇅');
+    const valores = () => within(modal).getAllByTestId('sugestao').map((l) => (l.querySelector('td.celula-valor')!.textContent ?? '').replace(/\s/g, ' '));
+    /* o valor COM SINAL, o mesmo critério do Procurar no histórico (1º clique desce; o 2º inverte) */
+    fireEvent.click(within(modal).getByTestId('sugestoes-ordenar-valor'));
+    expect(valores()).toEqual(['-R$ 3.407,89', '-R$ 22.719,29', '-R$ 26.127,18']);
+    fireEvent.click(within(modal).getByTestId('sugestoes-ordenar-valor'));
+    expect(valores()).toEqual(['-R$ 26.127,18', '-R$ 22.719,29', '-R$ 3.407,89']);
+    for (const c of ['comp', 'venc', 'pgto', 'descricao', 'fornecedor', 'valor', 'dvalor', 'ddias', 'status', 'motivo']) {
+      expect(within(modal).getByTestId(`sugestoes-ordenar-${c}`)).toBeTruthy();
+    }
+    fireEvent.click(within(modal).getByTestId('sugestoes-ordenar-motivo'));
+    expect(within(modal).getAllByTestId('sugestao-motivo').map((x) => x.textContent)).toEqual(['1/2 · soma de 2', '2/2 · soma de 2', 'mesmo valor']);
   });
 
   /* A REGRA DE CORTE (21/10): uma linha; texto com "…" e o inteiro no title; data dd/mm/aaaa nas três colunas */
@@ -147,7 +173,7 @@ describe('o modal "Sugestões para casar"', () => {
     ], { data: '2026-09-04', historico: 'Pix - Agendamento - 04/09 05:35 CAMARGO PROMOCAO DE VENDA', valor: -5665 });
     const selo = within(modal).getByTestId('sugestao-motivo');
     expect(selo.textContent).toBe('mesmo forn. · valor ≠');
-    expect(selo.getAttribute('title')).toBe('mesmo fornecedor · valor difere: previsto 3.085,00');
+    expect(selo.getAttribute('title')).toBe('mesmo forn. · valor ≠ — mesmo fornecedor · valor difere: previsto 3.085,00');
     expect(selo.className).toContain('bg-amber-50');
     expect(selo.className).not.toContain('border-dashed');
   });
@@ -225,27 +251,28 @@ describe('o modal "Sugestões para casar"', () => {
 
 describe('casar com valor diferente abre o CasarComBancoModal com o valor do banco', () => {
   const EXT = { extrato_id: 'e-amanda', data: '2026-09-04', historico: 'Pix - Agendamento - 04/09 05:35 CAMARGO PROMOCAO DE VENDA', valor: -5665 };
-  it('o campo nasce com 5665,00 e a linha diz "era R$ 3.085,00"; o Conciliar manda esse valor à mesma RPC', async () => {
+  /* CONC-CASAR-1X1-TABELA-01: o 1:1 é a tabela do Casar N — o valor antigo fica na coluna Valor (o "era" virou coluna), o Fica diz "a mais" e o
+     ⇆ (Corrigir o valor do lançamento) fica desabilitado enquanto o campo já tem o valor do banco */
+  it('o campo nasce com 5.665,00, a coluna Valor diz 3.085,00 e o Fica "a mais"; o Conciliar manda esse valor à mesma RPC', async () => {
     render(<CasarComBancoModal open onClose={() => {}} extrato={EXT} contaBancariaId="bb" nomeConta="Banco do Brasil" onConciliado={() => {}}
       iniciais={[{ lancamento_id: 'amanda', descricao: 'Folha de Pagamento', fornecedor: 'Amanda Montes Camargo', valor_assinado: -3085, usarValorDoBanco: true }]} />);
     const campo = screen.getByLabelText('Valor de Folha de Pagamento') as HTMLInputElement;
-    expect(campo.value).toBe('5665,00');
-    expect(screen.getByTestId('era-valor').textContent).toBe('era R$ 3.085,00');
-    /* o "era" ocupa o lugar do botão: com o campo já no valor do banco, o botão não aparece */
-    expect(screen.queryByTestId('usar-valor-banco')).toBeNull();
+    expect(campo.value).toBe('5.665,00');
+    expect(screen.getByTestId('levado-linha').querySelectorAll('td')[8].textContent).toBe('-3.085,00');
+    expect(screen.getByTestId('levado-linha-fica').textContent).toBe('a mais 2.580,00');
+    expect(screen.getByTestId('usar-valor-banco')).toBeDisabled();
     await waitFor(() => expect(RPC.chamadas.length).toBeGreaterThan(0));
     expect(RPC.chamadas[0]).toMatchObject({ fn: 'fn_espelho_casar', args: { p_simular: true, p_itens: [{ lancamento_id: 'amanda', valor: 5665 }] } });
-    /* voltar o campo ao valor antigo tira o "era" — ele só diz o que mudou */
-    fireEvent.change(campo, { target: { value: '3085,00' } });
-    expect(screen.queryByTestId('era-valor')).toBeNull();
-    /* e o botão volta, para quem quiser o valor do banco de novo */
-    expect(screen.getByTestId('usar-valor-banco')).toBeInTheDocument();
+    /* voltar o campo ao valor antigo: inteira, e o ⇆ volta a valer */
+    fireEvent.change(campo, { target: { value: '3.085,00' } });
+    expect(screen.getByTestId('levado-linha-fica').textContent).toBe('inteira');
+    expect(screen.getByTestId('usar-valor-banco')).not.toBeDisabled();
   });
-  it('sem a marca (o caminho de sempre), o campo nasce com o valor do lançamento e não há "era"', () => {
+  it('sem a marca (o caminho de sempre), o campo nasce com o valor do lançamento (inteira)', () => {
     render(<CasarComBancoModal open onClose={() => {}} extrato={EXT} contaBancariaId="bb" onConciliado={() => {}}
       iniciais={[{ lancamento_id: 'amanda', descricao: 'Folha de Pagamento', valor_assinado: -3085 }]} />);
-    expect((screen.getByLabelText('Valor de Folha de Pagamento') as HTMLInputElement).value).toBe('3085,00');
-    expect(screen.queryByTestId('era-valor')).toBeNull();
-    expect(screen.getByTestId('usar-valor-banco')).toBeInTheDocument();
+    expect((screen.getByLabelText('Valor de Folha de Pagamento') as HTMLInputElement).value).toBe('3.085,00');
+    expect(screen.getByTestId('levado-linha-fica').textContent).toBe('inteira');
+    expect(screen.getByTestId('usar-valor-banco')).not.toBeDisabled();
   });
 });

@@ -47,7 +47,8 @@ describe('a trava do mês na faixa', () => {
     for (const arq of ['src/pages/FechamentoTab.tsx', 'src/pages/ValorRebanhoTab.tsx', 'src/pages/MapaPastosTab.tsx']) {
       const f = readFileSync(arq, 'utf8');
       const i = f.indexOf('<FaixaDoFechamento ');
-      expect(f.slice(i, i + 260)).toContain('<MasterLockBanner anoMes={anoMes} naFaixa />');
+      /* UI-MESES-PADRAO-01: no Fechamento o aviso "Corrija as divergências" (150px reservados) entrou na MESMA linha, antes da trava */
+      expect(f.slice(i, i + 900)).toContain('<MasterLockBanner anoMes={anoMes} naFaixa />');
     }
     /* o VR não mostra a trava duas vezes: o lugar antigo (o ramo fora do live) ficou vazio */
     expect(readFileSync('src/pages/ValorRebanhoTab.tsx', 'utf8')).not.toContain('<MasterLockBanner anoMes={anoMes} compacto />');

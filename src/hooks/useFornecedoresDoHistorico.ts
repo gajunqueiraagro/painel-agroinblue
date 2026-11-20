@@ -6,9 +6,11 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { emLotes, janelaDoMes, lerFornecedoresDoHistorico } from '@/lib/conciliacao/fornecedoresDoHistorico';
+import { emLotes, janelaDoMes, lerFornecedoresDoHistorico, lerNomesDoHistorico } from '@/lib/conciliacao/fornecedoresDoHistorico';
 
 const VAZIO: ReadonlyMap<string, string> = new Map();
+/** B1: os nomes (id → nome) da mesma resposta — a família do fornecedor pelo nome */
+export interface DoHistorico { ids: ReadonlyMap<string, string>; nomes: ReadonlyMap<string, string> }
 
 export function useFornecedoresDoHistorico(clienteId: string | null | undefined, anoMes: string, termos: readonly string[]) {
   const chaveTermos = [...termos].sort().join('\u0001');
@@ -17,18 +19,18 @@ export function useFornecedoresDoHistorico(clienteId: string | null | undefined,
     enabled: !!clienteId && termos.length > 0,
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
-    queryFn: async (): Promise<[string, string][]> => {
+    queryFn: async (): Promise<{ ids: [string, string][]; nomes: [string, string][] }> => {
       const { de, ate } = janelaDoMes(anoMes);
       const partes = await Promise.all(emLotes(chaveTermos.split('\u0001')).map(async (lote) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
         const { data, error } = await (supabase as any).rpc('fn_conciliacao_fornecedores_do_historico', {
           p_cliente: clienteId, p_termos: lote, p_de: de, p_ate: ate,
         });
-        if (error) { console.error('[useFornecedoresDoHistorico]', error); return []; }
-        return [...lerFornecedoresDoHistorico(data)];
+        if (error) { console.error('[useFornecedoresDoHistorico]', error); return { ids: [], nomes: [] }; }
+        return { ids: [...lerFornecedoresDoHistorico(data)], nomes: [...lerNomesDoHistorico(data)] };
       }));
-      return partes.flat();
+      return { ids: partes.flatMap((x) => x.ids), nomes: partes.flatMap((x) => x.nomes) };
     },
   });
-  return useMemo<ReadonlyMap<string, string>>(() => (Array.isArray(q.data) ? new Map(q.data) : VAZIO), [q.data]);
+  return useMemo<DoHistorico>(() => (q.data ? { ids: new Map(q.data.ids), nomes: new Map(q.data.nomes) } : { ids: VAZIO, nomes: VAZIO }), [q.data]);
 }

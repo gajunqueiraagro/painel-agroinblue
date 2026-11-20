@@ -51,16 +51,16 @@ const ABAS: readonly (readonly [Aba, string])[] = [['resumo', 'Resumo'], ['categ
  */
 const arrobas = (q: number, pm: number | null) => (q === 0 ? 0 : pm == null ? 0 : kgToArrobas(q * pm));
 
-/** O payload nas unidades da tela. Produção e Mercado são o `vpb` e o `efeito` da RPC. */
+/** O payload nas unidades da tela. Produção e Mercado são o `vpb` e o `efeito` da RPC; a troca de categoria (dentro do Mercado) é a `troca_categoria`. */
 function montar(cats: readonly CategoriaPatrimonio[]): CatDaVariacao[] {
   return cats.map(c => ({
     cod: c.categoria, nome: nomeDe(c.categoria), jovem: JOVENS.has(c.categoria),
     at0: arrobas(c.q0, c.pm0), at1: arrobas(c.q1, c.pm1),
     v0: c.v0, v1p0: c.v1_p0, v1p1: c.v1_p1,
-    producao: c.vpb, mercado: c.efeito,
+    producao: c.vpb, mercado: c.efeito, troca: c.troca_categoria,
   /* ⚠ CATEGORIA ZERADA NAS DUAS PONTAS SOME — menos a que só passou por troca de categoria: a
-     produção dela (o ágio, que está dentro do `vpb`) é real. */
-  })).filter((c, i) => cats[i].q0 !== 0 || cats[i].q1 !== 0 || c.producao !== 0 || c.mercado !== 0);
+     produção e o mercado dela são reais. */
+  })).filter((c, i) => cats[i].q0 !== 0 || cats[i].q1 !== 0 || c.producao !== 0 || c.mercado !== 0 || c.troca !== 0);
 }
 
 export function PecPatrimonioModal({

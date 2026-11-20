@@ -2,21 +2,13 @@
  * BOLETO-DDA-API-01 · D1c (a) — a REGRA DA TELA da caixa de boletos (mock v3, escolhas do Gabriel 14/11 "tudo como recomendado").
  *
  * Só apresentação: o banco decide (candidatos, avisos, "já está no sistema"); aqui se escolhe o SELO e a FRASE de cada linha.
- * ⚠ ABAS: Chegando (os arquivos desta sessão, ainda não gravados) · Na caixa (`novo`) · Sem par (`sem_par`) · Todos.
  * ⚠ "PARECE JÁ PAGO" = selo vermelho aqui; a confirmação fica no LIGAR (fatia b).
  * ⚠ AVISO NUNCA BLOQUEIA: entrar na caixa só depende da linha conferir (a recusa vem do banco).
  * ⚠ Data sempre dd/mm/aaaa; valor em pt-BR com 2 casas; "—" = ausente (nunca zero).
  */
-import type {
-  AvisoDoBoleto, CandidatoDoBoleto, ItemDaCaixa, LancamentoDaCaixa, ListaDaCaixa, RespostaDeEntrar, SituacaoDoTitulo,
-} from './caixaApi';
+import type { AvisoDoBoleto, CandidatoDoBoleto, LancamentoDaCaixa, ListaDaCaixa, RespostaDeEntrar, SituacaoDoTitulo } from './caixaApi';
 
-/* BOLETO D3c: "Por e-mail" = a área de espera do que chegou no endereço de boletos (a lista é da `entrada_arquivos`, não dos boletos) */
-export type AbaDaCaixa = 'chegando' | 'por_email' | 'na_caixa' | 'sem_par' | 'todos';
-export const ABAS_DA_CAIXA: readonly { valor: AbaDaCaixa; rotulo: string }[] = [
-  { valor: 'chegando', rotulo: 'Chegando' }, { valor: 'por_email', rotulo: 'Por e-mail' }, { valor: 'na_caixa', rotulo: 'Na caixa' },
-  { valor: 'sem_par', rotulo: 'Sem par' }, { valor: 'todos', rotulo: 'Todos' },
-];
+/* BOLETO D3d — as abas da caixa moram em `caixaPorEmail.ts` (A resolver · Resolvidos · Ignorados); as 5 da D1c/D3c saíram. */
 
 export type Tom = 'ok' | 'ambar' | 'vermelho' | 'cinza' | 'azul';
 export interface Selo { texto: string; tom: Tom }
@@ -107,13 +99,6 @@ const ROTULO_DA_SITUACAO: Record<SituacaoDoTitulo, string> = {
 };
 export const rotuloDaSituacao = (s: SituacaoDoTitulo): string => ROTULO_DA_SITUACAO[s];
 
-/** Os itens gravados que cada aba mostra (Chegando é dos arquivos desta sessão, não da lista). */
-export function itensDaAba(lista: ListaDaCaixa | null, aba: AbaDaCaixa): ItemDaCaixa[] {
-  if (!lista || aba === 'chegando' || aba === 'por_email') return [];
-  if (aba === 'todos') return lista.itens;
-  const s: SituacaoDoTitulo = aba === 'na_caixa' ? 'novo' : 'sem_par';
-  return lista.itens.filter((i) => i.boleto.situacao === s);
-}
 /** O contador da porta: o que pede ação (na caixa + sem par). */
 export const contadorDaPorta = (lista: ListaDaCaixa | null): number | null =>
   lista ? lista.contadores.novo + lista.contadores.sem_par : null;

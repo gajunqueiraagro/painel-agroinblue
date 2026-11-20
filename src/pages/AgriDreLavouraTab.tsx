@@ -19,6 +19,7 @@
  * devolve um objeto de 15 chaves sem ordem, porque JSON não tem ordem. Quem sabe que "margem de
  * contribuição" vem depois do custo variável é a apresentação.
  */
+import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
 import { Fragment, useMemo, useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Maximize2, Minimize2, AlertTriangle, Loader2, ChevronLeft } from 'lucide-react';
@@ -604,8 +605,9 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
   const [rateioDentro, setRateioDentro] = useState(false);
   /* ⚠ AS UNIDADES SÃO ESCOLHA MÚLTIPLA — DRE-UNIDADES-01, e cada aba tem a sua lista: a lavoura
      fecha em saca ou tonelada, a pecuária em cabeça e arroba. As duas abrem com R$ e R$/ha. */
-  const [unidadesLav, setUnidadesLav] = useState<readonly UnidadeLav[]>(['rs', 'ha']);
-  const [unidadesPec, setUnidadesPec] = useState<readonly UnidadePec[]>(['rs', 'ha']);
+  /* DRE-AJUSTES-05 (Gabriel 19/11): o DRE SEMPRE abre em R$ — o R$/ha só com o chip (nunca lembrado de antes) */
+  const [unidadesLav, setUnidadesLav] = useState<readonly UnidadeLav[]>(['rs']);
+  const [unidadesPec, setUnidadesPec] = useState<readonly UnidadePec[]>(['rs']);
   const [ampliado, setAmpliado] = useState(false);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   /**
@@ -998,7 +1000,13 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
     };
     medir();
     window.addEventListener('resize', medir);
-    return () => window.removeEventListener('resize', medir);
+    /* ⚠ E QUANDO O QUE FICA ACIMA MUDA DE TAMANHO (DRE-AJUSTES-05 D1, Gabriel 19/11): medido na bancada a 1126×579, a grade
+       descia 72px DEPOIS da medida (o topo da tela termina de montar) e o teto antigo (429px, devia ser 357) a deixava passar do
+       pé da janela — a tabela cabia no teto, o cartão não rolava e quem rolava era a página: o cabeçalho soltava. Com R$ e R$/ha
+       a tabela era mais alta que o teto e o defeito ficava escondido. Medir de novo é idempotente (mesmo topo = mesmo estado). */
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(medir);
+    if (ro && raiz.current) ro.observe(raiz.current);
+    return () => { window.removeEventListener('resize', medir); ro?.disconnect(); };
   }, [ampliado, culturaAberta, aba, unidadesLav, unidadesPec, rateioDentro, dre]);
 
 
@@ -1032,6 +1040,10 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
         </div>
       ) : (
         <>
+          {/* UI-MESES-PADRAO-01 (D1) — o cabeçalho navy da casa: "DRE" e o contexto (cliente · período/safra) sobem para cá; os
+              controles (atividade, modo, período, comparar, ampliar) ficam na linha de baixo, no corpo, com as medidas de sempre.
+              `-mx-4 -mt-2` encosta a faixa nas bordas (o recuo é do raiz; a largura medida da raiz não muda). */}
+          <CabecalhoDaTela className="-mx-4 -mt-2" titulo="DRE" subtitulo={contextoDaTela} />
           {/* ⚠ A RÉGUA É UMA LINHA DE 30px, E É A MESMA NAS DUAS TELAS. O contexto encolhe
               (`min-w-0` + `truncate`) e os slots não (`shrink-0` + `nowrap`): sem esses dois
               lados a linha quebrava e os seletores desciam, empurrando a faixa e a tabela para
@@ -1050,7 +1062,6 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
             {/* ⚠ DRE-LEVE-01: O CONTEXTO ("cliente · período · por fazenda") MORA NO `title` DO "DRE". Com a 1ª faixa de 22px e o lugar do
                 "Comparar", a 1126 não sobra largura para ele em nenhuma aba, e cortar com "…" fora de tabela é proibido (o gate acusou). Cliente e
                 período já estão na barra lateral e no seletor; no Ampliar, a barra continua dizendo. */}
-            <h2 className="shrink-0 cursor-default text-[13px] font-medium leading-none" title={contextoDaTela}>DRE</h2>
             <span className="min-w-0 flex-1" aria-hidden />
             <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               {/* ⚠ PECUÁRIA E CONSOLIDADO NASCEM DESLIGADOS E VISÍVEIS: eles dizem para onde a
@@ -1413,7 +1424,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
             minHeight: alturaCartao ?? undefined,
           }
           : undefined}>
-      <div ref={cartao} data-desloca-livre="" data-testid="dre-grade-lav" className="overflow-auto rounded-lg border border-border/60 bg-card"
+      <div ref={cartao} data-desloca-livre="" data-testid="dre-grade-lav" className="w-fit max-w-full overflow-auto rounded-lg border border-border/60 bg-card"
         style={alturaCartao
           ? (ampliado ? { height: alturaCartao }
             /* ⚠ COM OS CARTÕES AO LADO, `height: 100%` faz o `stretch` valer: sem altura própria

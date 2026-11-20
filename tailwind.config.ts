@@ -18,6 +18,9 @@ export default {
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
+        corpo: "hsl(var(--corpo))",
+        navy: "hsl(var(--navy))",
+        "mes-aberto": "hsl(var(--mes-aberto))",
         foreground: "hsl(var(--foreground))",
         primary: {
           DEFAULT: "hsl(var(--primary))",

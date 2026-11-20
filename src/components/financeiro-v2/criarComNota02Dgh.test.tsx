@@ -43,26 +43,24 @@ describe('D-h — a faixa do pagamento contra o vencimento', () => {
     expect(fraseDoPagamento(null, ['2026-11-10'])).toBeNull();
   });
 
-  it('o modal: Extrato × Sistema numa tabela, valor sob valor à direita, a faixa e o "valor aplicado"', async () => {
+  /* CONC-CASAR-1X1-TABELA-01 (Gabriel 19/11 07:23): o Extrato × Sistema em duas colunas foi REPROVADO — o 1:1 é a tabela do Casar N */
+  it('o modal: o extrato na faixa de cima (Data · Histórico · Conta · Valor), o lançamento numa linha da tabela, a faixa do pagamento', async () => {
     render(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil"
       extrato={{ extrato_id: 'x1', data: '2026-10-13', historico: 'PIX AGENDAMENTO 10/10 · AZULAO PARAFUSOS E FERRAM', valor: -2903 }}
       iniciais={[{ lancamento_id: 'l1', descricao: 'Jogo de chaves · 14 itens', fornecedor: 'Azulão Parafusos e Ferramentas', valor_assinado: -2903,
         data_vencimento: '2026-11-10', status_transacao: 'programado', numero_documento: '000077066' }]}
       onConciliado={() => {}} />);
-    const tabela = screen.getByTestId('casar-colunas');
-    expect(tabela.tagName).toBe('TABLE');
-    expect(screen.getByTestId('casar-coluna-extrato').textContent).toBe('Extrato');
-    expect(screen.getByTestId('casar-coluna-sistema').textContent).toBe('Sistema');
-    /* valor do banco e do sistema na MESMA linha, à direita */
-    const vb = screen.getByTestId('casar-valor-banco');
-    const vs = screen.getByTestId('casar-valor-sistema');
-    expect(vb.closest('tr')).toBe(vs.closest('tr'));
-    expect(vb.parentElement?.className).toContain('text-right');
-    expect(vs.parentElement?.className).toContain('text-right');
-    expect(screen.getByTestId('casar-sis-venc').textContent).toBe('10/11/2026');
-    expect(screen.getByTestId('levado-nf').textContent).toBe('000.077.066');
+    const ext = [...screen.getByTestId('levados-extrato').querySelectorAll('td')].map((td) => td.textContent);
+    expect(ext).toEqual(['Extrato', '13/10/2026', 'PIX AGENDAMENTO 10/10 · AZULAO PARAFUSOS E FERRAM', 'Banco do Brasil', '-2.903,00']);
+    expect(screen.getByTestId('levados-extrato-historico').getAttribute('title')).toBe('PIX AGENDAMENTO 10/10 · AZULAO PARAFUSOS E FERRAM');
+    const linha = screen.getByTestId('levado-linha');
+    expect(linha.querySelectorAll('td')[0].textContent).toBe('10/11/2026');
+    expect(screen.getByTestId('levado-linha-nf').textContent).toBe('000.077.066');
     expect(screen.getByTestId('casar-faixa-pagamento').textContent).toBe('Pago 28 dias ANTES do vencimento (venc. 10/11 · banco 13/10)');
-    expect(screen.getByTestId('casar-faixa-pagamento').className).toContain('h-[22px]');
-    expect(screen.getByTestId('valor-aplicado-rotulo').textContent).toBe('valor aplicado');
+    expect(screen.getByTestId('casar-faixa-pagamento').className).toContain('h-[20px]');
+    /* NF de saída no 1:1: o aplicado é o valor da NF, travado (R2) */
+    const aplicado = screen.getByTestId('levado-linha-aplicado');
+    expect(aplicado.getAttribute('data-travado')).toBe('nf');
+    expect(aplicado.hasAttribute('readonly')).toBe(true);
   });
 });

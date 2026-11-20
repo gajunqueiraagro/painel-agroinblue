@@ -703,7 +703,8 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
        saem de vista. `overflow-auto` sozinho não basta — ele só age depois que o pai aceita
        encolher. */
     <div ref={cartaoRef} data-desloca-livre="" data-testid="dre-grade-pec"
-      className="min-w-0 max-w-full overflow-auto rounded-lg border border-border/60 bg-card"
+      /* UI-MESES-PADRAO-01 (revisão 11:28): o cartão ACOMPANHA a tabela (`w-fit`) — sem o vão branco à direita; larga demais, rola aqui */
+      className="w-fit min-w-0 max-w-full overflow-auto rounded-lg border border-border/60 bg-card"
       style={alturaCartao ? { maxHeight: alturaCartao } : undefined}>
       {/* ⚠ A MESMA RÉGUA DA LAVOURA: `leading-none`, px fixos e largura igual à soma das colunas.
           Ver a nota no `AgriDreLavouraTab` — foi ela que fez as alturas declaradas valerem. */}
@@ -834,15 +835,15 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
             const comPercentual = false;
             const comPorHectare = (COM_POR_HECTARE.has(def.chave) || !!def.porHectare) && !unidades.includes('ha');
             const comFilhas = aberto && centros.length > 0;
+            /* DRE-AJUSTES-05: o "por hectare" mora DENTRO da linha (2ª linha pequena da célula), então ele não fecha mais a grade */
             const base = {
               filha: ultima && comFilhas,
-              porHectare: ultima && !comFilhas && comPorHectare,
-              percentual: ultima && !comFilhas && !comPorHectare && comPercentual,
-              linha: ultima && !comFilhas && !comPorHectare && !comPercentual,
+              percentual: ultima && !comFilhas && comPercentual,
+              linha: ultima && !comFilhas && !comPercentual,
             };
             return (
               <Fragment key={idLinha}>
-                <LinhaPec def={def} colunas={colunas} centros={centros} unidades={unidades}
+                <LinhaPec def={def} colunas={colunas} centros={centros} unidades={unidades} comPorHectare={comPorHectare}
                   aberto={aberto} onAlternar={() => alternar(idLinha)} base={base.linha} zebra={zebra}
                   onAbrirLista={onAbrirLista} onAbrirDidatico={onAbrirDidatico}
                   onAbrirHistorico={onAbrirHistorico} />
@@ -850,13 +851,9 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                 {/* ⚠ A LINHA DE % VEM LOGO ABAIXO e é leitura de apoio: 9px, muted, sem recuo,
                     altura 14. Ela não é uma linha do DRE — é a mesma linha vista noutra unidade,
                     e por isso não ganha nem cor de sinal nem clique. */}
-                {/* ⚠ O LUCRO POR HECTARE É LEITURA DE APOIO, como o % do VBP: mesma régua (9px,
-                    muted, altura 14), sem cor de sinal e sem clique. Ele some quando o chip R$/ha
-                    está marcado — ali a sub-coluna já responde, e repetir a mesma conta duas vezes
-                    na mesma linha é ruído. */}
-                {comPorHectare && (
-                  <LinhaPorHectare def={def} colunas={colunas} unidades={unidades} base={base.porHectare} />
-                )}
+                {/* DRE-AJUSTES-05 (Gabriel 19/11): o "por hectare" NÃO é mais uma linha abaixo do traço do total (parecia de outro bloco) — é a
+                    2ª linha pequena da célula do valor (`porHectare` da `Celula`), como o % do VBP. Some com o chip R$/ha marcado (ali a
+                    sub-coluna já responde). */}
 
                 {/* As filhas: um centro por linha, na régua `filha` (9px/14px, recuo 16). */}
                 {aberto && centros.map((c, iC) => (
@@ -875,8 +872,10 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   );
 }
 
-function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirHistorico }: {
+function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirHistorico, comPorHectare }: {
   def: DefPec;
+  /** DRE-AJUSTES-05 — o "por hectare" dentro da célula do valor (2ª linha pequena) */
+  comPorHectare?: boolean;
   /** O fundo da filha de um grupo (zebra) — DRE-RESUMIDO-CUSTEIO-01. */
   zebra?: string;
   colunas: readonly ColunaPec[];
@@ -1142,7 +1141,9 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
                 title={porqueDoTraco}
                 abaixo={COM_PERCENTUAL.has(def.chave) && col.tipo !== 'delta'
                   ? percentual(v, valorNaColuna(col, BASE_DO_PERCENTUAL) ?? 0) : undefined}
-                tituloAbaixo={`${def.rotulo.replace(/^= /, '')} em ${ROTULO_DA_BASE} desta coluna`} />
+                tituloAbaixo={`${def.rotulo.replace(/^= /, '')} em ${ROTULO_DA_BASE} desta coluna`}
+                porHectare={comPorHectare && col.tipo !== 'delta' ? textoPorHectare(v, col.linhas?.producao.ha_medio ?? null) : undefined}
+                tituloPorHectare={`${def.rotulo.replace(/^(= |\(−\) )/, '')} ${ROTULO_POR_HECTARE}: dividido pela área produtiva média do período`} />
             ) : (
               <CelulaUnit key={sl}
                 /* ⚠ O Δ% DO GRUPO DIVIDE PELA SOMA DO GRUPO na referencia, nao pela chave-lugar. */
@@ -1163,90 +1164,12 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
 }
 
 /**
- * A FAIXA DE UMA LINHA DE APOIO — "% do VBP" e "Lucro por hectare" (03b-fix1/adendo item 12).
- *
- * ⚠ ELAS ENTRARAM NA FAIXA DO TOTAL A QUE PERTENCEM, e isso é o que elas sempre foram: a mesma
- * linha dita noutra unidade. Fora da faixa, o "Lucro por hectare" ficava numa tira branca logo
- * abaixo do azul do Lucro líquido — lia-se como uma linha NOVA da cascata, e o olho parava nela
- * procurando de que conta ela é a soma. Dentro, é a segunda linha do mesmo total.
- * ⚠ O FUNDO DA COLUNA TOTAL TEM DE SAIR JUNTO: ele é `backgroundColor` inline e ganharia da faixa,
- * deixando a tira azul com um retângulo branco no meio — o mesmo defeito do item 10, uma linha
- * abaixo. `semFundo` o remove passando `undefined`, que o React omite.
+ * O "POR HECTARE" — DRE-CASCATA-03a; DRE-AJUSTES-05 (Gabriel 19/11): virou a 2ª linha pequena DENTRO da célula do valor.
+ * ⚠ O DIVISOR É O `ha_medio` DA PRÓPRIA COLUNA, o mesmo do chip R$/ha: cada fazenda tem a sua área.
+ * ⚠ SEM ÁREA, TRAÇO — nunca zero: fazenda sem fechamento de área não tem resultado por hectare.
  */
-function faixaDoApoio(def: DefPec) {
-  const da = def.faixa ? FAIXA_TOTAL[def.faixa] : null;
-  /* ⚠ A SUBLINHA DO GRUPO HERDA O FUNDO DELE — DRE-RESUMIDO-CUSTEIO-01, como a do total herda a faixa. */
-  const forte = da ? da.fundo : def.agrupa ? FUNDO_GRUPO : null;
-  return {
-    fundo: forte ?? fundoDaLinha(def.destaque),
-    /* ⚠ O RÓTULO CONTINUA SENDO O TEXTO DE APOIO — muted fora do azul, e uma versão suave do branco
-       dentro dele: quem manda na linha é o valor. */
-    corRotulo: da?.texto ? 'text-primary-foreground/80' : 'text-muted-foreground',
-    corValor: (v: number | null | undefined) => corDoApoio(v, def.faixa),
-    marcador: (v: number | null | undefined) => (def.faixa ? marcadorDoTotal(def.faixa, v) : undefined),
-    semFundo: (e: CSSProperties): CSSProperties => (forte ? { ...e, backgroundColor: undefined } : e),
-  };
-}
-
-/**
- * O LUCRO POR HECTARE — DRE-CASCATA-03a.
- *
- * ⚠ ELE É A MESMA LINHA DE CIMA NOUTRA UNIDADE, como o "% do VBP": não entra em soma nenhuma e não
- * abre lista. Por isso reusa a régua da `LinhaPercentual` — 9px, muted, altura 14, sem recuo — e o
- * mesmo `corDoApoio`, que só marca o negativo; não vira uma linha da cascata.
- * ⚠ O DIVISOR É O `ha_medio` DA PRÓPRIA COLUNA, o mesmo do chip R$/ha: cada fazenda tem a sua
- * área, e usar a do Total faria a coluna da Pureza falar do hectare do conjunto.
- * ⚠ SEM ÁREA, TRAÇO — nunca zero: fazenda sem fechamento de área não tem lucro por hectare, e
- * "R$ 0,00/ha" afirmaria que ela não lucrou.
- */
-function LinhaPorHectare({ def, colunas, unidades, base }: {
-  def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[]; base?: boolean;
-}) {
-  const apoio = faixaDoApoio(def);
-  /* ⚠ DRE-LEVE-01 (D6): "por hectare" é SUBITEM da linha de cima — a régua da filha (13px, 8,5), rótulo e número em cinza (negativo em
-     vermelho). */
-  const regua = REGUA_LINHA.filha;
-  return (
-    <tr className={cn(apoio.fundo, 'font-normal')} style={{ height: regua.altura }}>
-      <td className={cn('sticky left-0 z-30 truncate border-r border-border/60 py-px text-muted-foreground', apoio.fundo)}
-        style={{ fontSize: regua.fonte, paddingLeft: RECUO_ICONE + L_ICONE + regua.recuo, paddingRight: 7 }}
-        title={`${def.rotulo} dividido pela área produtiva média do período`}>
-        {ROTULO_POR_HECTARE}
-      </td>
-      {colunas.map(col => {
-        /* ⚠ `valorDaLinha`, NAO A CHAVE: o Custeio e' composto (DRE-RESUMIDO-CUSTEIO-01); nas linhas sem
-           `compor` as duas dao o mesmo numero. */
-        const v = col.linhas && col.tipo !== 'delta' ? valorDaLinha(col, def) : null;
-        const ha = col.linhas?.producao.ha_medio ?? null;
-        const texto = !col.linhas || col.tipo === 'delta' ? ''
-          : v == null || ha == null || !(ha > 0) ? traco : `R$ ${formatNum(v / ha, 2)}/ha`;
-        const slots = slotsDaColuna(col, unidades);
-        return (
-          <Fragment key={col.chave}>
-            <td className={cn('truncate px-[7px] text-right tabular-nums',
-              corNaGrade(v, { custo: def.tom === 'custo', apoio: true }), apoio.fundo)}
-              style={{
-                fontSize: regua.fonte,
-                ...(col.total ? { ...apoio.semFundo({ backgroundColor: FUNDO_TOTAL }), borderLeft: BORDA_TOTAL } : {}),
-                ...(congelada(col, colunas) ? apoio.semFundo(estiloTotalRs) : {}),
-                ...bordaDaMeta(col, 0, slots.length, base ? { base: true } : undefined),
-              }}>
-              {texto}
-            </td>
-            {slots.slice(1).map((sl, i) => {
-              const estilo: CSSProperties = {
-                ...(col.total && i === 0
-                  ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
-                  : {}),
-                ...bordaDaMeta(col, i + 1, slots.length, base ? { base: true } : undefined),
-              };
-              return <td key={sl} className={cn(apoio.fundo)} style={estilo} />;
-            })}
-          </Fragment>
-        );
-      })}
-    </tr>
-  );
+function textoPorHectare(v: number | null, ha: number | null): string {
+  return v == null || ha == null || !(ha > 0) ? traco : `R$ ${formatNum(v / ha, 2)}/ha`;
 }
 
 /**

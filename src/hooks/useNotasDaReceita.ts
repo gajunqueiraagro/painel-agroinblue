@@ -6,7 +6,8 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { chavesJaLancadas, lerCandidatos, lerLinhasRecebidas, montarLista, precisaConferirLancamento, situacaoNaLista, type CandidatoDaNota, type NotaNaLista } from '@/lib/fiscal/notasDaReceita';
+import { chavesJaLancadas, lerCandidatos, lerLinhasRecebidas, montarLista, precisaConferirLancamento, situacaoNaLista, type CandidatoDaNota, type NotaNaLista, lerAtributos, type AtributosDaNota, lerLigacoes, type LigacaoDaDemonstracao } from '@/lib/fiscal/notasDaReceita';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 export interface DadosDaReceita {
   lista: NotaNaLista[];
@@ -60,16 +61,51 @@ export async function lerNotasDaReceita(clienteId: string): Promise<DadosDaRecei
     if (!lidos) throw new Error('Não consegui procurar os lançamentos que podem ser estas notas.');
     candidatos = lidos;
   }
+  /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — os atributos fiscais (CFOPs, tpNF, natOp, notas citadas) das notas com XML, numa pergunta só: a CLASSE
+     da nota (`classeDaNota`) tira do "A lançar" o que não gera lançamento. Falhou = a lista de sempre (tudo "compra"), com o erro no console:
+     a classe só ESCONDE do "A lançar", nunca cria nada. */
+  let atributos = new Map<string, AtributosDaNota>();
+  const comXml = linhas.filter((l) => l.temXml || l.situacao === 'xml' || l.situacao === 'importado').map((l) => l.chave);
+  if (comXml.length > 0) {
+    const { data, error } = await db().rpc('fn_notas_atributos_fiscais', { p_cliente: clienteId, p_chaves: comXml });
+    if (error) console.error('[useNotasDaReceita] atributos', error); else atributos = lerAtributos(data);
+  }
+  /* NOTA-DEMONSTRACAO-01 — a demonstração ligada à compra/ao retorno que veio depois (só leitura; falhou = sem a ligação, erro no console) */
+  let ligacoes: LigacaoDaDemonstracao[] = [];
+  if (comXml.length > 0) {
+    const { data, error } = await db().rpc('fn_notas_demonstracao_ligacoes', { p_cliente: clienteId });
+    if (error) console.error('[useNotasDaReceita] demonstração', error); else ligacoes = lerLigacoes(data);
+  }
   const titulares = ((t.data ?? []) as { id: string; nome: string | null }[]).map((x) => ({ id: x.id, nome: x.nome ?? '—' }));
   const controle = (c.data ?? []) as { ultima_busca_em: string | null; nao_antes_de: string | null }[];
   const ultimas = controle.map((x) => x.ultima_busca_em).filter((x): x is string => !!x).sort();
   const proximas = controle.map((x) => x.nao_antes_de).filter((x): x is string => !!x).sort();
   return {
-    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema, candidatos),
+    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema, candidatos, atributos, hojeLocal(), ligacoes),
     titulares,
     ultimaBusca: ultimas.at(-1) ?? null,
     proximaBusca: proximas[0] ?? null,
   };
+}
+
+/** NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" pela nota de remessa (`fn_bem_terceiro_registrar`; simular = a prévia).
+ *  A recusa do banco volta como frase ({ ok: false, frase }), nunca como erro cru. */
+export interface PreviaDoBem { ok: true; motivo: string; fornecedor: string | null; nf: string; data: string | null; total: number;
+  itens: { n: number; descricao: string; quantidade: number | null; valor: number | null }[] }
+export async function registrarBemDeTerceiro(clienteId: string, chave: string, previsao: string | null, observacao: string | null, simular: boolean):
+  Promise<PreviaDoBem | { ok: false; frase: string }> {
+  const { data, error } = await db().rpc('fn_bem_terceiro_registrar', {
+    p_cliente: clienteId, p_chave: chave, p_previsao_devolucao: previsao, p_observacao: observacao, p_simular: simular,
+  });
+  if (error) {
+    console.error('[registrarBemDeTerceiro]', error);
+    return { ok: false, frase: error.code === 'P0001' && error.message ? error.message : 'Não consegui registrar o bem. Tente de novo.' };
+  }
+  const itens = Array.isArray(data?.itens) ? data.itens.map((i: Record<string, unknown>) => ({
+    n: Number(i.n) || 0, descricao: String(i.descricao ?? ''), quantidade: i.quantidade == null ? null : Number(i.quantidade),
+    valor: i.valor == null ? null : Number(i.valor) })) : [];
+  return { ok: true, motivo: String(data?.motivo ?? ''), fornecedor: data?.fornecedor ?? null, nf: String(data?.nf ?? ''), data: data?.data ?? null,
+    total: Number(data?.total ?? 0), itens };
 }
 
 export async function lerXmlDaReceita(id: string): Promise<string> {

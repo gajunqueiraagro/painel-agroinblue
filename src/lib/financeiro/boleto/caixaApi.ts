@@ -151,6 +151,19 @@ export interface CaixaApi {
   subirArquivo: (caminho: string, arquivo: File) => Promise<Resultado<true>>;
   /** Os CPF/CNPJ dos titulares ATIVOS do cliente (a sugestão de senha; nunca o fornecedor). */
   documentosDosTitulares: (clienteId: string) => Promise<Resultado<string[]>>;
+  /** BOLETO D3d — ignorar o boleto guardado (`descartado`, motivo obrigatório) ou trazê-lo de volta (`novo`), pela `fn_boleto_marcar`. */
+  marcar: (boletoId: string, situacao: 'descartado' | 'novo', motivo: string | null) => Promise<Resultado<true>>;
+  /** Gabriel 18/11 14:40 ("o PDF não aparece no lançamento"): o arquivo que já está no bucket vira DOCUMENTO do lançamento, pelo
+   *  gravador de sempre (`fin_documento_registrar`; a mesma NF + o mesmo tipo de arquivo ele recusa com 23505 = "já estava"). */
+  registrarDocumento: (clienteId: string, lancamentoId: string, doc: DocumentoDaCaixa) => Promise<Resultado<'gravado' | 'ja_estava'>>;
+}
+
+/** O documento que a caixa anexa: o PDF do boleto (`boleto`) ou o PDF/DANFE da nota (`nf`, com a chave e o número). */
+export interface DocumentoDaCaixa {
+  especie: 'boleto' | 'nf'; nome: string; url: string; tamanhoBytes: number | null;
+  numero?: string | null; chaveAcesso?: string | null;
+  /** o tipo do arquivo (padrão PDF); a nota vai em PDF (o DANFE) E em XML (Gabriel 14:47: "o XML do e-mail não entrou") */
+  tipo?: 'application/pdf' | 'application/xml';
 }
 
 export const BUCKET_DOS_BOLETOS = 'fin-documentos';
@@ -176,6 +189,32 @@ export const caixaApiDoBanco: CaixaApi = {
       .eq('cliente_id', clienteId).eq('ativo', true);
     if (error) { console.error('[caixa de boletos] titulares', error); return { ok: false, erro: 'Não consegui ler os titulares.' }; }
     return { ok: true, dados: linhas(data).flatMap((t) => [txt(t.documento), txt(t.cnpj_produtor)]).filter((d): d is string => !!d) };
+  },
+  async registrarDocumento(clienteId, lancamentoId, doc) {
+    /* o boleto: um PDF de boleto por lançamento — se ele já tem um (o fluxo antigo anexava como documento, ex. NF 122.049 de 17/11),
+       não se anexa outro (a NF repetida o gravador já recusa sozinho, pela chave) */
+    if (doc.especie === 'boleto') {
+      const ja = await (supabase as any).from('financeiro_lancamento_documentos').select('id', { count: 'exact', head: true })
+        .eq('cliente_id', clienteId).eq('lancamento_id', lancamentoId).eq('especie', 'boleto').eq('cancelado', false);
+      if (ja.error) return { ok: false, erro: fraseDoErroDaCaixa(ja.error) };
+      if ((ja.count ?? 0) > 0) return { ok: true, dados: 'ja_estava' };
+    }
+    const { error } = await (supabase as any).rpc('fin_documento_registrar', {
+      p_lancamento_id: lancamentoId, p_cliente_id: clienteId,
+      p_payload: {
+        especie: doc.especie, nome: doc.nome, tipo: doc.tipo ?? 'application/pdf', url: doc.url, tamanho_bytes: doc.tamanhoBytes,
+        numero: doc.numero ?? null, chave_acesso: doc.chaveAcesso ?? null,
+        ...(doc.especie === 'nf' ? { tipo_arquivo: doc.tipo ?? 'application/pdf' } : {}),
+      },
+    });
+    if (error && linha(error).code === '23505') return { ok: true, dados: 'ja_estava' };
+    if (error) return { ok: false, erro: fraseDoErroDaCaixa(error) };
+    return { ok: true, dados: 'gravado' };
+  },
+  async marcar(boletoId, situacao, motivo) {
+    const { error } = await (supabase as any).rpc('fn_boleto_marcar', { p_id: boletoId, p_situacao: situacao, p_motivo: motivo, p_simular: false });
+    if (error) return { ok: false, erro: fraseDoErroDaCaixa(error) };
+    return { ok: true, dados: true };
   },
 };
 

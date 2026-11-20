@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { CARA, SeletorPeriodo } from './SeletorPeriodo';
+import { CARA, SeletorPeriodo, type TomDoMes } from './SeletorPeriodo';
 import { mesUnico, type Periodo } from '@/v2/lib/periodo';
 
 /** As propriedades que MOVEM as coisas. Cor não está aqui, de propósito. */
@@ -53,19 +53,35 @@ describe('A23 — nada muda de tamanho ao selecionar', () => {
     expect(screen.getByText('Abr').getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('com tomPorMes a cor da situação fica, e a seleção vira anel INTERNO', () => {
-    const tom = { bg: 'rgb(1, 2, 3)', border: 'rgb(4, 5, 6)', txt: 'rgb(7, 8, 9)' };
-    montar(mesUnico(2026, 5), { tomPorMes: { 5: tom, 6: tom } });
+  it('UI-MESES-PADRAO-01: com tomPorMes o estado é um PONTO (a cor do mês é a da seleção) e a geometria não muda', () => {
+    montar(mesUnico(2026, 5), { tomPorMes: { 5: { estado: 'ok' }, 6: { estado: 'err' } } });
     const ativo = screen.getByText('Mai');
     const outro = screen.getByText('Jun');
-    expect(ativo.style.backgroundColor).toBe(tom.bg);          // a situação não é apagada
-    expect(ativo.style.boxShadow).toContain('inset');          // marca sem ocupar espaço fora
-    expect(outro.style.boxShadow).toBe('');
+    const sem = screen.getByText('Abr');
+    expect(ativo.getAttribute('data-papel')).toBe('extremo');
+    expect(ativo.getAttribute('data-estado')).toBe('ok');            // o estado não se apaga ao escolher
+    expect(outro.getAttribute('data-estado')).toBe('err');
+    expect(ativo.querySelector('[data-testid="ponto-do-mes"]')).not.toBeNull();
+    expect(outro.querySelector('[data-testid="ponto-do-mes"]')).not.toBeNull();
+    expect(sem.querySelector('[data-testid="ponto-do-mes"]')).toBeNull();   // sem estado, sem ponto (a busca sabe achar)
     expect(geometriaDe(ativo)).toEqual(geometriaDe(outro));
   });
 
+  it('UI-MESES-PADRAO-01: sem tomPorMes nenhum mês ganha ponto nem "futuro"', () => {
+    montar(mesUnico(2099, 1));
+    expect(screen.getByText('Dez').getAttribute('data-estado')).toBeNull();
+    expect(document.querySelector('[data-testid="ponto-do-mes"]')).toBeNull();
+  });
+
+  it('UI-MESES-PADRAO-01: com tomPorMes, o mês futuro sem estado leva o contorno; a legenda sai só com estado', () => {
+    montar(mesUnico(2099, 1), { tomPorMes: { 1: { estado: 'pend' } }, legenda: [{ estado: 'ok', rotulo: 'Conciliado' }] });
+    expect(screen.getByText('Dez').getAttribute('data-estado')).toBe('fut');
+    expect(screen.getByText('Jan').getAttribute('data-estado')).toBe('pend');
+    expect(screen.getByTestId('seletor-periodo-legenda').textContent).toContain('Conciliado');
+  });
+
   it('`marca` no tom: ponto âmbar FORA do fluxo (não muda a geometria nem a cor do mês) e o texto somado ao title', () => {
-    const tom = { bg: 'rgb(1, 2, 3)', border: 'rgb(4, 5, 6)', txt: 'rgb(7, 8, 9)', title: 'Conciliado' };
+    const tom: TomDoMes = { estado: 'ok', title: 'Conciliado' };
     montar(mesUnico(2026, 5), { tomPorMes: { 6: tom, 7: { ...tom, marca: '2ª prova · extrato: 1 conta com aviso do extrato' } } });
     const sem = screen.getByText('Jun');
     const com = screen.getByText('Jul');
@@ -82,7 +98,7 @@ describe('A23 — nada muda de tamanho ao selecionar', () => {
   });
 
   it('`contador` no tom (CONC-SEM-CLASSIFICACAO-01): número vermelho FORA do fluxo, sem mudar a cor nem a geometria do mês; convive com a marca', () => {
-    const tom = { bg: 'rgb(1, 2, 3)', border: 'rgb(4, 5, 6)', txt: 'rgb(7, 8, 9)', title: 'Conciliado' };
+    const tom: TomDoMes = { estado: 'ok', title: 'Conciliado' };
     montar(mesUnico(2026, 5), { tomPorMes: {
       6: tom, 7: { ...tom, contador: { qtde: 39, title: '39 sem classificação' } },
       8: { ...tom, marca: 'aviso do extrato', contador: { qtde: 2, title: '2 sem classificação' } },
@@ -192,14 +208,13 @@ describe('cores por estado — A24 corrigida', () => {
      a regra (`data-papel`) e, à parte, a tabela que a traduz em cor. */
   const papel = (rotulo: string) => screen.getByText(rotulo).getAttribute('data-papel');
 
-  it('a tabela traduz papel em cor: quanto mais escolhido, mais escuro', () => {
-    /* ⚠ VERDE, não azul: azul é a cor da barra e da lateral, e o mês escolhido dizia a
-       mesma coisa que o topo da tela. Verde é a cor que só a escolha usa. */
-    expect(CARA.extremo.background).toBe('hsl(var(--success))');
-    expect(CARA.extremo.color).toBe('hsl(var(--success-foreground))');
-    expect(CARA.meio.background).toBe('#dff3e7');
-    expect(CARA.meio.color).toBe('#1a7540');
-    expect(CARA.fora.background).toBe('#eef0f3');
+  it('a tabela traduz papel em cor: o escolhido é o azul cheio, o meio o mesmo azul claro, fora transparente sobre o navy', () => {
+    /* UI-MESES-PADRAO-01 (mock aprovado 18/11): o mês aberto é #1F56B8 (`--mes-aberto`) com texto branco; o verde passou a
+       ser só o ESTADO "fechado/conciliado" (o ponto), e por isso deixou de marcar a escolha. */
+    expect(CARA.extremo.background).toBe('hsl(var(--mes-aberto))');
+    expect(CARA.extremo.color).toBe('#fff');
+    expect(CARA.meio.background).toBe('hsl(var(--mes-aberto) / 0.38)');
+    expect(CARA.fora.background).toBe('transparent');
     /* O defeito que o operador viu era exatamente estes dois trocados. */
     expect(CARA.extremo.background).not.toBe(CARA.fora.background);
     expect(CARA.meio.background).not.toBe(CARA.fora.background);
@@ -286,14 +301,15 @@ describe('nada por cima de nada — item C', () => {
     expect(container.querySelectorAll('button').length).toBe(15);
   });
 
-  it('altura 28px, e ela não muda ao selecionar', () => {
+  it('UI-MESES-PADRAO-01: a barra tem 30px (segmento 28 + a borda de 1px) e não muda ao selecionar; Ano com os 30 da barra', () => {
     const { rerender } = montar(mesUnico(2026, 3));
     const antes = screen.getByText('Abr').style.height;
     rerender(mesUnico(2026, 4));
     const depois = screen.getByText('Abr').style.height;
     expect(antes).toBe('28px');
     expect(depois).toBe('28px');
-    expect(screen.getByText('Ano').style.height).toBe('28px');
+    expect(screen.getByTestId('seletor-periodo-meses').style.border.replace(/\s/g, '')).toMatch(/^1pxsolidrgba\(255,255,255,0?\.14\)$/);
+    expect(screen.getByText('Ano').style.height).toBe('30px');
   });
 });
 
@@ -349,3 +365,13 @@ describe('A23 ampliada — nada abaixo do seletor se desloca', () => {
   });
 });
 
+describe('UI-MESES-PADRAO-01 — o ano nunca some', () => {
+  it('o ano do período fora da lista da tela entra na lista: o campo mostra "2031", não fica vazio', () => {
+    montar(mesUnico(2031, 9), { anos: ['2026', '2025'] });
+    expect(screen.getByTitle('Ano').textContent).toContain('2031');
+  });
+  it('o ano dentro da lista aparece como sempre', () => {
+    montar(mesUnico(2026, 9), { anos: ['2026', '2025'] });
+    expect(screen.getByTitle('Ano').textContent).toContain('2026');
+  });
+});

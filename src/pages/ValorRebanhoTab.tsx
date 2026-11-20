@@ -22,7 +22,7 @@ import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
 import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import { supabase } from '@/integrations/supabase/client';
-import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
+import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
 import { FaixaDoSnapshot } from '@/components/SnapshotStatusBanner';
 import { motivoParaRevalidar, podeRevalidarOMes } from '@/lib/fechamento/travaDoP2';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
@@ -31,6 +31,8 @@ import { FaixaDoFechamento } from '@/components/fechamento/FaixaDoFechamento';
 import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 import { MiniChart } from '@/components/rebanho/MiniChartDoValor';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
+import { SeletorPeriodo, type TomDoMes } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 
@@ -115,6 +117,27 @@ const MESES_SHORT = [
   { key: '07', label: 'Jul' }, { key: '08', label: 'Ago' }, { key: '09', label: 'Set' },
   { key: '10', label: 'Out' }, { key: '11', label: 'Nov' }, { key: '12', label: 'Dez' },
 ];
+
+/**
+ * UI-MESES-PADRAO-01 — a cor do mês da régua vira o ponto do `SeletorPeriodo`, na ORDEM de antes: futuro (sem ponto: o seletor põe o
+ * contorno) · comprometido (snapshot invalidado / cadeia quebrada, o antigo ⚠ âmbar) = pend · fechado (verde) = ok · aberto (vermelho) = err.
+ */
+export function tomDoMesDoValor(isFuturo: boolean, isClosed: boolean, mesSnapStatus: SnapshotStatusValue): TomDoMes | undefined {
+  if (isFuturo) return undefined;
+  const isComprometido = mesSnapStatus === 'invalidado' || mesSnapStatus === 'cadeia_quebrada';
+  if (isComprometido) return { estado: 'pend', title: mesSnapStatus === 'invalidado' ? 'Snapshot invalidado' : 'Cadeia quebrada' };
+  if (isClosed) return { estado: 'ok', title: 'Fechado' };
+  return { estado: 'err', title: 'Aberto' };
+}
+
+const LEGENDA_DO_VALOR: { estado: 'ok' | 'pend' | 'err' | 'fut'; rotulo: string }[] = [
+  { estado: 'ok', rotulo: 'Fechado' },
+  { estado: 'err', rotulo: 'Aberto' },
+  { estado: 'pend', rotulo: 'Snapshot a revalidar' },
+  { estado: 'fut', rotulo: 'Futuro' },
+];
+/* no Global o snapshot não se lê por fazenda (sempre 'sem_snapshot'): não há comprometido */
+const LEGENDA_DO_VALOR_GLOBAL = LEGENDA_DO_VALOR.filter(l => l.estado !== 'pend');
 
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 /**
@@ -1475,6 +1498,17 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
   const uBaseInicialIncompleta = isGlobal ? false : (isAnoInicial && baseInicialIncompleta);
   const uFonteMes = isGlobal ? globalData.fonteMes : fonteMes;
   const uHistoricoPorMes = isGlobal ? globalData.historicoPorMes : historicoPorMes;
+  /* UI-MESES-PADRAO-01 — o estado de cada mês da régua (a MESMA leitura de antes, por mês) */
+  const tomPorMesDoValor: Record<number, TomDoMes> = {};
+  MESES_SHORT.forEach(m => {
+    const mesKey = `${anoFiltro}-${m.key}`;
+    const isClosed = isGlobal ? !!uHistoricoPorMes[mesKey] : !!historicoPorMes[mesKey];
+    const mesN = Number(m.key);
+    const isFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesN > mesAtualSistema);
+    const mesSnapStatus = !isGlobal ? getSnapStatus(mesN) : 'sem_snapshot';
+    const tom = tomDoMesDoValor(isFuturo, isClosed, mesSnapStatus);
+    if (tom) tomPorMesDoValor[mesN] = tom;
+  });
   /* VR-PRECO-EDITAR-01 (Gabriel 09/11 06:42) — o preço do mês ABERTO não passa pela trava master (`useMasterLock`, só de tela): ela
      mede "fechado" por pastos fechados + preço gravado, não pelo fechamento do Valor do Rebanho, e travava justamente o mês reaberto
      (BG out/26: 16/16 pastos fechados, o VR aberto, cliente sem master → ninguém editava e o "Desbloquear" nem aparecia). A trava
@@ -1669,20 +1703,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
-        {/* ⚠ O SELETOR DE ANO APARECE SEMPRE — VALOR-REBANHO-COMPACTO-01, e é MUDANÇA DE
+        {/* UI-MESES-PADRAO-01: o ano mudou para o seletor da régua dos meses (abaixo), e continua aparecendo sempre.
+            ⚠ O SELETOR DE ANO APARECE SEMPRE — VALOR-REBANHO-COMPACTO-01, e é MUDANÇA DE
             COMPORTAMENTO. Ele era escondido por `{!filtroAnoInicial && …}`: quem chegava pelo link
             "Corrigir preços" do DRE ficava preso no ano que o link mandou, justamente quem mais
             precisa navegar para conferir o ano vizinho. A prop continua SEMEANDO o estado na
             montagem; ela nunca foi uma segunda fonte, só escondia o controle. */}
-        <div className="flex h-[18px] shrink-0 items-center gap-0.5 rounded border bg-card px-0.5">
-          <button type="button" aria-label="Ano anterior"
-            onClick={() => setAnoFiltro(String(Number(anoFiltro) - 1))}
-            className="px-1 text-[11px] leading-none text-muted-foreground hover:text-foreground">◂</button>
-          <span className="min-w-[30px] text-center text-[10px] font-semibold tabular-nums">{anoFiltro}</span>
-          <button type="button" aria-label="Próximo ano"
-            onClick={() => setAnoFiltro(String(Number(anoFiltro) + 1))}
-            className="px-1 text-[11px] leading-none text-muted-foreground hover:text-foreground">▸</button>
-        </div>
 
         {!verInicio && uCanEdit && !isGlobal && (
           <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-[18px] !text-[9px] px-1.5">
@@ -1736,57 +1762,45 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, rotuloDaV
 
       {/* ⚠ O INÍCIO É O PRIMEIRO DA RÉGUA, e fica nela e não fora: ele é o ponto de partida da
           mesma série que os doze meses continuam. Um controle à parte o faria parecer outra tela. */}
-      <div className="flex gap-0.5 bg-muted/30 rounded-md p-0.5 border">
+      {/* UI-MESES-PADRAO-01 (D2) — os doze meses são o `SeletorPeriodo` da casa, e o ‹ano› que ficava na linha de estado entrou nele
+          (os dois mexiam no MESMO ano). O estado de cada mês é o de sempre, agora no ponto: fechado = ok, aberto = err, comprometido
+          (snapshot invalidado / cadeia quebrada, o antigo ⚠) = pend com o motivo no `title`; futuro = contorno.
+          ⚠ NO INÍCIO NENHUM MÊS FICA ACESO: o período vai com o mês 0, que não acende nenhum dos doze; o ano segue trocável. O mês
+          escolhido é LEMBRADO — trocar de ano o mantém. */}
+      <div className="flex items-center gap-1.5" data-testid="vr-regua-meses">
         <button type="button" onClick={() => setVerInicio(true)}
           title="Retrato de 1º de janeiro — o saldo inicial do ano"
           className={`shrink-0 rounded px-2 text-center text-[10px] font-semibold transition-colors
             ${verInicio ? 'bg-primary text-primary-foreground shadow-sm'
               : 'bg-card text-muted-foreground hover:bg-muted'}`}
-          style={{ flex: 1.3, paddingTop: 4, paddingBottom: 4 }}>
+          style={{ height: 30, width: 56 }}>
           Início
         </button>
-        {MESES_SHORT.map(m => {
-          const mesKey = `${anoFiltro}-${m.key}`;
-          const isClosed = isGlobal ? !!uHistoricoPorMes[mesKey] : !!historicoPorMes[mesKey];
-          /* ⚠ NO INÍCIO NENHUM MÊS FICA ACESO: dois navy na mesma régua diriam que a tela
-             mostra os dois. O mês escolhido é LEMBRADO — trocar de ano o mantém. */
-          const isSelected = !verInicio && mesFiltro === m.key;
-          const mesN = Number(m.key);
-          const isFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesN > mesAtualSistema);
-          const mesSnapStatus = !isGlobal ? getSnapStatus(mesN) : 'sem_snapshot';
-          const isComprometido = mesSnapStatus === 'invalidado' || mesSnapStatus === 'cadeia_quebrada';
-          return (
-            <button
-              key={m.key}
-              onClick={() => { setMesFiltro(m.key); setVerInicio(false); }}
-              title={isComprometido ? (mesSnapStatus === 'invalidado' ? 'Snapshot invalidado' : 'Cadeia quebrada') : undefined}
-              className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
-                ${isSelected
-                  ? isComprometido
-                    ? 'bg-destructive text-destructive-foreground shadow-sm'
-                    : 'bg-primary text-primary-foreground shadow-sm'
-                  : isFuturo
-                    ? 'bg-muted/40 text-muted-foreground/50 cursor-default'
-                    : isComprometido
-                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'
-                      : isClosed
-                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
-                        : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
-                }`}
-            >
-              {isComprometido ? '⚠' : ''}{m.label}
-              {isSelected && (
-                <span className="absolute -top-1 -right-1 inline-block">
-                  <MesAnteriorAvisoIcon
-                    fazendaId={fazendaId}
-                    anoMes={mesKey}
-                    size={12}
-                  />
-                </span>
-              )}
-            </button>
-          );
-        })}
+        <div className="min-w-0 flex-1">
+          <SeletorPeriodo
+            modo="ano-mes"
+            modoUnico
+            anos={anosDisponiveis}
+            periodo={mesUnico(anoNumFiltro, verInicio ? 0 : mesNumFiltro)}
+            onPeriodoChange={(p) => {
+              if (p.de.ano !== anoNumFiltro) { setAnoFiltro(String(p.de.ano)); return; }
+              if (p.de.mes < 1) return;
+              setMesFiltro(String(p.de.mes).padStart(2, '0'));
+              setVerInicio(false);
+            }}
+            tomPorMes={tomPorMesDoValor}
+            legenda={isGlobal ? LEGENDA_DO_VALOR_GLOBAL : LEGENDA_DO_VALOR}
+          />
+        </div>
+        {!verInicio && (
+          <span className="inline-flex shrink-0">
+            <MesAnteriorAvisoIcon
+              fazendaId={fazendaId}
+              anoMes={anoMes}
+              size={12}
+            />
+          </span>
+        )}
       </div>
 
       {/* ⚠ O INÍCIO SUBSTITUI O CORPO, não convive com ele: os dois mostram o MESMO tipo de tabela

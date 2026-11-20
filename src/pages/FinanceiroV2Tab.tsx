@@ -1,4 +1,5 @@
 import { casaNaBusca } from '@/lib/texto/busca';
+import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
 import type { ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -82,7 +83,8 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 import { NovoDeXmlDialog, notaParaAPrevia } from '@/components/financeiro-v2/NovoDeXmlDialog';
 import { NovoMenuLancamentos } from '@/components/financeiro-v2/NovoMenuLancamentos';
 import { NotasDaReceitaDialog } from '@/components/fiscal/NotasDaReceitaDialog';
-import { useNotasDaReceita } from '@/hooks/useNotasDaReceita';
+import { registrarBemDeTerceiro, useNotasDaReceita } from '@/hooks/useNotasDaReceita';
+import { Camada, useCamadas } from '@/components/ui/camadas';
 import { pedemAcao } from '@/lib/fiscal/notasDaReceita';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { contarBoletosQuePedemAcao } from '@/lib/financeiro/boleto/caixaApi';
@@ -91,6 +93,7 @@ import { prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
+import { SeloRegraFazenda } from '@/components/financeiro-v2/CorrecaoRegraFazenda';
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { rotulosDosFornecedores } from '@/lib/fornecedores/fornecedorTexto';
@@ -694,9 +697,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      "Lançar" entrega ao "Da nota fiscal" de hoje (D1) */
   const receita = useNotasDaReceita(clienteAtual?.id ?? null);
   const [receitaAberta, setReceitaAberta] = useState(false);
+  /* NAV-VOLTA-ORIGEM-01 (Gabriel 19/11, peça única) — as camadas desta tela: as Notas da Receita ficam POR BAIXO (montadas, invisíveis) do
+     "Da nota fiscal"/da nota abertos a partir delas; fechar/salvar volta à mesma aba, filtros, rolagem e linha (a próxima, se lançou) */
+  const camadas = useCamadas<'receita' | 'xml' | 'nota'>();
   const [xmlDaReceita, setXmlDaReceita] = useState<File[] | null>(null);
   /* NOTA-RECEITA-CASAR-01 — a prévia aberta pelo "Vincular a este": ao fechar, a lista da Receita relê (a nota vira "Já no sistema") */
   const vinculoDaReceita = useRef(false);
+  /* BOLETO D3d — a nota que veio da caixa por e-mail: ao fechar o "+ Da nota", a caixa reabre (a linha já mostra "já lançada · Vincular") */
+  const voltarParaCaixa = useRef(false);
   const notasPedemAcao = receita.data ? pedemAcao(receita.data.lista) : null;
   /* FIN-NOTA-PDF-01b — o prefill do XML (`prefillDaNota`) OU o do modal da nota (`prefillDoModal`: a nota + tudo o que foi escolhido) */
   const [prefillXml, setPrefillXml] = useState<React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] | null>(null);
@@ -1950,6 +1958,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        FIN-V2-DESEMPENHO-01b: o Ampliado desconta a barra do topo (32px) — com 100vh−8 a página rolava 24px e o rodapé da página
        (agora DENTRO do quadro) ficava abaixo da janela. */
     <div className={cn("relative px-2", modoIntensivo ? "flex flex-col h-[calc(100vh-40px)]" : "space-y-1 pb-20")}>
+      {/* UI-MESES-PADRAO-01 (D1; revisão 11:33) — o cabeçalho navy da casa em UMA linha (título + subtítulo curto). Os filtros ficam COMO
+          ESTÃO (Gabriel 11:25), no card branco logo abaixo. `-mx-2` encosta a faixa nas bordas. No Ampliado ele não entra (a altura é da tabela). */}
+      {!modoIntensivo && (
+        <CabecalhoDaTela className="-mx-2" titulo="Lançamentos financeiros" subtitulo="Previsto, programado e realizado" />
+      )}
       {/* FILTERS */}
       {/* ⚠ CANTO RETO NOS DOIS CARDS — FIN-LISTA-VISUAL-05. O raio de 8px comia a largura
           justamente nas pontas, onde moram a primeira e a última coluna, e um card
@@ -2650,6 +2663,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           <span data-testid="avisos-do-filtro" data-desloca className="flex h-5 min-w-40 flex-1 basis-40 items-center"
             title={[...chipsDaOC.map(ch => ch.texto), ...avisosDoFiltro].join('\n') || undefined}>
            <span data-desloca-livre className="uma-linha-que-rola flex min-w-0 flex-1 items-center gap-1">
+            {podeConsultar && <CorrecaoTransferenciasBanner contas={hook.contasBancarias} onFixed={() => { void listaV2.recarregar(); }} />}
+            {/* FIN-REGRA-VARIAVEL-FAZENDA-01 — o que já está fora da regra fazenda × conta: o mesmo aviso pequeno, o conserto em modal */}
+            {podeConsultar && <SeloRegraFazenda clienteId={clienteAtual?.id} fazendas={fazendas} onCorrigido={() => { void listaV2.recarregar(); }} />}
             {avisosDoFiltro.map((frase, i) => (
               <span key={frase} data-testid="aviso-do-filtro" className="inline-flex shrink-0 items-center gap-0.5 text-[9.5px] text-amber-800">
                 {frase}
@@ -2734,12 +2750,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       {mode === 'list' && podeConsultar && (
         <>
-          {!modoIntensivo && (
-            <CorrecaoTransferenciasBanner
-              contas={hook.contasBancarias}
-              onFixed={() => { void listaV2.recarregar(); }}
-            />
-          )}
+          {/* UI-MESES-PADRAO-01 (11:33): o bloco amarelo das transferências virou o aviso pequeno da faixa dos totais (abre o modal) */}
            {/* ⚠ `rolagem-fina rolagem-sem-tampar` — FIN-LISTA-SCROLLBAR-01. A barra desenhava
                 POR CIMA da última linha e da coluna de ações, e clicar no lançamento de baixo
                 virava clicar na barra. As duas classes resolvem coisas diferentes: a fina é a
@@ -3357,11 +3368,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       {/* FIN-NFE-XML-01d — a lista de notas. Fica montada (e escondida) enquanto o lancamento de uma delas esta' aberto. */}
       {caixaAberta && clienteAtual?.id && (
-        <CaixaDeBoletosDialog clienteId={clienteAtual.id} clienteNome={clienteAtual.nome} aoFechar={() => setCaixaAberta(false)} />
+        <CaixaDeBoletosDialog clienteId={clienteAtual.id} clienteNome={clienteAtual.nome} aoFechar={() => setCaixaAberta(false)}
+          /* BOLETO D3d (D3) — "Lançar nota": a MESMA prévia do "+ Da nota", com o arquivo que chegou por e-mail */
+          aoLancarNota={(arquivo) => { setCaixaAberta(false); voltarParaCaixa.current = true; setXmlDaReceita([arquivo]); setXmlAberto(true); }} />
       )}
       <NovoDeXmlDialog
         open={xmlAberto && !dialogOpen && !notaAberta}
-        onClose={() => { setXmlAberto(false); setLinhasXmlLancadas(new Set()); if (xmlDaReceita) void receita.refetch(); setXmlDaReceita(null); }}
+        onClose={() => {
+          camadas.fechar('xml', linhasXmlLancadas.size > 0 ? 'salvou' : 'fechou');
+          setXmlAberto(false); setLinhasXmlLancadas(new Set()); if (xmlDaReceita) void receita.refetch(); setXmlDaReceita(null);
+          if (voltarParaCaixa.current) { voltarParaCaixa.current = false; setCaixaAberta(true); }
+        }}
         clienteId={clienteAtual?.id ?? null}
         fazendas={fazOperacionais}
         fornecedores={hook.fornecedores}
@@ -3370,29 +3387,34 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         lancadas={linhasXmlLancadas}
         arquivosIniciais={xmlDaReceita}
         notasDaReceita={receita.data?.lista.length ?? null}
-        onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); void receita.refetch(); }}
+        onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); camadas.abrir('receita'); void receita.refetch(); }}
       />
       {receitaAberta && (
-        <NotasDaReceitaDialog clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
+        <Camada coberta={camadas.coberta('receita')}>
+        <NotasDaReceitaDialog retorno={camadas.retornoPara('receita')} clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
           erro={receita.error ? (receita.error as Error).message : null}
-          aoFechar={() => setReceitaAberta(false)}
-          aoLancar={(arquivo) => { setReceitaAberta(false); setXmlDaReceita([arquivo]); setXmlAberto(true); }}
+          aoFechar={() => { setReceitaAberta(false); camadas.fechar('receita'); }}
+          /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" (lote 25; simular = a prévia) */
+          registrarBem={clienteAtual?.id ? (chave, previsao, observacao, simular) => registrarBemDeTerceiro(clienteAtual.id, chave, previsao, observacao, simular) : undefined}
+          /* NAV-VOLTA-ORIGEM-01: a lista NÃO fecha — o "Da nota fiscal" abre POR CIMA dela */
+          aoLancar={(arquivo) => { setXmlDaReceita([arquivo]); setXmlAberto(true); camadas.abrir('xml', 'receita'); }}
           /* NOTA-RECEITA-CASAR-01 — "Vincular a este" = a porta 2 (P128a): a MESMA prévia do "+ Da nota", partindo do lançamento escolhido */
           aoVincular={async (arquivo, lancamentoId) => {
             if (!clienteAtual?.id) return 'Escolha o cliente.';
             const r = await notaParaAPrevia(clienteAtual.id, arquivo, hook.fornecedores, fazOperacionais);
             if (r.ok === false) return r.frase;
-            setReceitaAberta(false);
+            camadas.abrir('nota', 'receita');
             vinculoDaReceita.current = true;
             setNotaAberta({ nota: r.nota, linhaId: 'porta-2', partindoDe: lancamentoId });
             return null;
           }} />
+        </Camada>
       )}
 
       {notaAberta && clienteAtual?.id && (
         <NotaFiscalDialog
           open
-          onClose={() => { setNotaAberta(null); if (vinculoDaReceita.current) { vinculoDaReceita.current = false; void receita.refetch(); } }}
+          onClose={() => { setNotaAberta(null); camadas.fechar('nota'); if (vinculoDaReceita.current) { vinculoDaReceita.current = false; void receita.refetch(); } }}
           clienteId={clienteAtual.id}
           clienteNome={clienteAtual.nome ?? null}
           nota={notaAberta.nota}

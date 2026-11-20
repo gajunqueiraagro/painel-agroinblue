@@ -98,9 +98,15 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
     const n = new Set(s); if (n.has(o)) n.delete(o); else n.add(o); return n;
   });
 
-  const achados = useMemo(() => (estado.tipo === 'pronto' ? ordenarAchados(estado.r.achados, ordem) : []), [estado, ordem]);
   /* o nº da NF de cada achado (a busca não o traz): uma leitura pelos ids, depois de procurar */
   const [complemento, setComplemento] = useState<ReadonlyMap<string, ComplementoDaLinha>>(new Map());
+  /* D3 (homologação Edson 11:40): NF, Δ valor, Δ dias e Motivo também ordenam (os valores que a linha mostra) */
+  const achados = useMemo(() => (estado.tipo === 'pronto' ? ordenarAchados(estado.r.achados, ordem, (a, c) => {
+    if (c === 'nf') { const n = complemento.get(a.lancamentoId)?.numeroDocumento; return n ? n.replace(/\D/g, '').padStart(20, '0') : null; }
+    if (c === 'motivo') return outraConta(a, contaId) ? 'outra conta' : acaoDoAchado(a, contaId, !!onCasar) === 'criar_igual' ? 'pago · modelo' : 'em aberto';
+    const d = deltasDoMovimento(movimento, { valor: a.valor, venc: a.dataVencimento });
+    return c === 'dvalor' ? d.deltaValor : d.deltaDias;
+  }) : []), [estado, ordem, complemento, contaId, onCasar, movimento]);
   useEffect(() => {
     let vivo = true;
     if (!clienteId || estado.tipo !== 'pronto' || !estado.r.achados.length) { setComplemento(new Map()); return; }
@@ -149,6 +155,9 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
       </div>
 
       {/* ⚠ o quadro: ALTURA fixa (na estação, cabeçalho + 6 linhas; no modal, o que sobra dele), o vazio fica dentro; o corpo rola aqui */}
+      {/* homologação Edson 11:40 (extra): no modal, SEM achados (antes de procurar, procurando, falhou ou "nada achado") o quadro ENCOLHE às linhas
+          que tem — nada de bloco branco; com achados, ocupa a sobra como antes */}
+      {/* D2 (homologação 14:32): no modal, o quadro ocupa a SOBRA (o modal tem tamanho fixo); vazio = a linha "nada achado" no topo dele */}
       <div className={cn('mt-1 overflow-auto rounded-sm border bg-card', preencher && 'min-h-0 flex-1')}
         style={preencher ? { minHeight: ALTURA_DO_CABECALHO_PARA_CASAR + 2 * ALTURA_DA_LINHA_PARA_CASAR + 2 } : { height: alturaFixa }} data-testid="procurar-historico-quadro">
         <div style={{ minWidth: PISO_DO_QUADRO }} data-testid="procurar-historico-piso">

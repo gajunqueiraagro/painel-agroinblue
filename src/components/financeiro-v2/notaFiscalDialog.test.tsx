@@ -857,8 +857,15 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
     return screen.findByTestId('comparar-cadastro');
   };
   const linha = (rotulo: string) => screen.getAllByTestId('comparar-linha').find((l) => l.firstElementChild?.textContent === rotulo);
-  it('o nome digitado a mao ("Pec.3M-Esc. Garças") vem DESMARCADO e nao muda; o CNPJ vazio vem marcado; "igual" sem caixa', async () => {
+  /* FORN-ACHAR-CNPJ-01 (URGENTE, Gabriel 19/11) — o nome digitado a mão ("Pec.3M-Esc. Garças …") é OUTRA razão social: CNPJ, IE e razão NÃO se
+     oferecem (o caso COAMO × Auto Posto); o aviso diz "parece outro fornecedor" e o resto vem desmarcado */
+  it('o nome digitado a mao ("Pec.3M-Esc. Garças"): razão social diferente → CNPJ/IE/razão nao se oferecem; "parece outro fornecedor"', async () => {
     await abrirComparar({ nome: 'Pec.3M-Esc. Garças Agro Sintetica', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, municipio: 'Campo Grande', uf: 'MS' });
+    expect([linha('Razão social'), linha('CNPJ/CPF'), linha('IE')]).toEqual([undefined, undefined, undefined]);
+    expect(screen.getByTestId('comparar-aviso').textContent).toContain('Parece outro fornecedor');
+  });
+  it('a MESMA razão social (sem o "Ltda"): o CNPJ vazio vem marcado; o resto como sempre; "igual" sem caixa', async () => {
+    await abrirComparar({ nome: 'Agro Sintética Insumos Agropecuários', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, municipio: 'Campo Grande', uf: 'MS' });
     expect(linha('Razão social')?.getAttribute('data-estado')).toBe('diferente');
     expect(linha('CNPJ/CPF')?.getAttribute('data-estado')).toBe('vazio');
     expect(linha('Cidade/UF')?.getAttribute('data-estado')).toBe('igual');
@@ -872,7 +879,7 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
     expect(campos.cpf_cnpj).toBe('11.222.333/0004-24');
   });
   it('marcar a razao social: entra no que vai ao banco; desmarcar o CNPJ: sai', async () => {
-    await abrirComparar({ nome: 'Pec.3M-Esc. Garças Agro Sintetica', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' });
+    await abrirComparar({ nome: 'Agro Sintética Insumos Agropecuários', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' });
     fireEvent.click(screen.getByTestId('comparar-marcar-razao'));
     fireEvent.click(screen.getByTestId('comparar-marcar-cnpj'));
     fireEvent.click(screen.getByTestId('comparar-atualizar'));
@@ -884,7 +891,7 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
   });
   it('o cadastro nao parece o certo (nome sem palavra em comum): a frase no topo e "Cadastrar novo" volta ao cadastrar', async () => {
     await abrirComparar({ nome: 'Posto Exemplo Combustiveis', cpf_cnpj: null, municipio: null, uf: null });
-    expect(screen.getByTestId('comparar-aviso').textContent).toContain('não parece o do emitente');
+    expect(screen.getByTestId('comparar-aviso').textContent).toContain('Parece outro fornecedor');
     fireEvent.click(screen.getByTestId('comparar-cadastrar-novo'));
     expect(screen.queryByTestId('comparar-cadastro')).toBeNull();
     expect(await screen.findByTestId('nota-cadastrar-fornecedor')).toBeTruthy();
@@ -1024,6 +1031,30 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
      subcentro, status) e na "Parcelas × sistema"; UM botão diz o que faz e grava; nada de segunda tela por cima */
   const GULART = jaLancado(1, '2026-10-10', 'programado', { id: 'gulart-1', descricao: 'Compra cantina sintetica', valorCent: 196656, financiamentoId: null,
     por: ['numero'], parcelas: [], competencia: '2026-09-30' });
+  /* NOTA-JA-LANCADA-FILIAL-01 (Gabriel 19/11, a Sendas NF 321.826: realizada 26 dias depois da emissão, outra filial) — o banco a devolve
+     por 'janela'; a tela a mostra como "talvez esta?", em FICA DE FORA (nunca liga sozinha); "É esta" à mão liga e grava só ela */
+  it('JANELA o achado só pela janela larga vem "talvez esta?" e fica de fora; o operador vincula e o Aplicar liga só ele', async () => {
+    const TALVEZ = jaLancado(1, '2026-10-30', 'realizado', { id: 'sendas-1', descricao: 'Compra cantina escritorio sintetica', valorCent: 196656, financiamentoId: null,
+      por: ['janela'], parcelas: [], competencia: '2026-10-30', fornecedorPor: 'cnpj' });
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [TALVEZ] });
+    const { comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores, gj: falsos().gj });
+    await naAbaParcelas();
+    const efeito = await screen.findByTestId('nota-ja-lancada-efeito');
+    expect(efeito.textContent).toContain('talvez esta?');
+    expect(efeito.getAttribute('title')).toContain('talvez já lançado: o mesmo valor do fornecedor');
+    expect(screen.getAllByTestId('nota-acao').map((b) => b.getAttribute('data-acao'))).toContain('deixar');
+    expect(screen.getByTestId('nota-completar-revisar').textContent).not.toMatch(/vincular/);
+    const acao = screen.getAllByTestId('nota-acao').find((b) => b.getAttribute('data-acao') === 'deixar');
+    if (!acao) throw new Error('o talvez não nasceu fica de fora');
+    fireEvent.keyDown(acao, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('nota-acao-vincular'));
+    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 1'));
+    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('nota-completar-revisar'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['sendas-1']);
+  });
   it('G1 1 de 1: "No sistema hoje (1)" mostra o achado inteiro; a Parcelas × sistema tem a linha; "Aplicar: vincular 1" grava sem segunda tela', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [GULART] });
     consultas.comoEstaoHoje.mockResolvedValueOnce({ ok: true, valor: [{ id: 'gulart-1', fazendaId: 'faz-2', subcentro: 'Benefícios sinteticos', favorecidoId: null, planoContaId: 'pl-nut', safraId: null }] });

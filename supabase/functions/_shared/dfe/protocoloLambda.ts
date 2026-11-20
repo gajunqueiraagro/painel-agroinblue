@@ -16,6 +16,17 @@ export const DESTINOS = {
   homologacao: 'https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx',
 } as const;
 export type AmbienteLambda = keyof typeof DESTINOS;
+/** Lambda v2 (CIÊNCIA 210210, desenho aprovado pelo Gabriel 18/11): o 2º destino FIXO — a Recepção de Evento do Ambiente Nacional. Qual dos
+ *  dois vale é decidido pela FORMA do envelope (a regra ancorada da Lambda), nunca por um campo do pedido. */
+export const DESTINOS_EVENTO = {
+  producao: 'https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx',
+  homologacao: 'https://hom1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx',
+} as const;
+export type ServicoLambda = 'distribuicao' | 'evento';
+export const CONTENT_TYPES: Record<ServicoLambda, string> = {
+  distribuicao: 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse"',
+  evento: 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento"',
+};
 export type FalhaLambda = 'nao_autorizado' | 'pedido' | 'envelope' | 'certificado' | 'conexao' | 'tempo' | 'tls' | 'interno';
 
 export interface CorpoDoPedido { v: number; ambiente: AmbienteLambda; envelope: string; chave: string; iv: string; par: string }

@@ -1807,7 +1807,7 @@ export default function V2Index() {
   const appShell = modoResumo || SECOES_APP_SHELL.has(section);
 
   return (
-    <div className="h-screen bg-background overflow-hidden flex">
+    <div className="h-screen bg-corpo overflow-hidden flex">
 
       {/* SIDEBAR (desktop) — chrome lateral, oculto no mobile via className */}
       {!intensivo && (
@@ -1919,9 +1919,9 @@ export default function V2Index() {
             vira lista de seções (Set/array) consultada aqui. */}
         <section className={
           appShell
-            ? "flex-1 min-h-0 min-w-0 overflow-auto md:overflow-hidden md:flex md:flex-col bg-background"
+            ? "flex-1 min-h-0 min-w-0 overflow-auto md:overflow-hidden md:flex md:flex-col bg-corpo"
             : intensivo
-              ? "flex-1 min-h-0 w-full overflow-auto bg-background"
+              ? "flex-1 min-h-0 w-full overflow-auto bg-corpo"
               : "flex-1 min-h-0 min-w-0 overflow-auto"
         }>
           <div className={
