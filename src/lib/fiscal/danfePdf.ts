@@ -6,6 +6,7 @@
  * seleciona); a nota fiscal de verdade continua sendo o XML, que vai junto.
  */
 import { danfeDoArquivo } from '@/lib/fiscal/abrirDanfe';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 
 /** o nome do PDF: o do XML com "-DANFE.pdf" no lugar do ".xml" */
 export const nomeDoDanfe = (nomeDoXml: string): string => `${nomeDoXml.replace(/\.xml$/i, '').trim() || 'nota'}-DANFE.pdf`;
@@ -14,7 +15,8 @@ export const nomeDoDanfe = (nomeDoXml: string): string => `${nomeDoXml.replace(/
 export async function danfePdfDoXml(arquivo: File): Promise<{ ok: true; pdf: File } | { ok: false; frase: string }> {
   const r = await danfeDoArquivo(arquivo);
   if (r.ok === false) return r;
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
+  /* o import() dinâmico passa pelo dono (`importarDoApp`: a versão nova do app vira a frase de recarregar, nunca um erro cru) */
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([importarDoApp(() => import('html2canvas')), importarDoApp(() => import('jspdf'))]);
   const quadro = document.createElement('iframe');
   quadro.setAttribute('aria-hidden', 'true');
   quadro.style.cssText = 'position:fixed;left:-10000px;top:0;width:820px;height:1200px;border:0;visibility:hidden';
