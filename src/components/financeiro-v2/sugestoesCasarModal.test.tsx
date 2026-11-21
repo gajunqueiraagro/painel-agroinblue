@@ -251,27 +251,28 @@ describe('o modal "Sugestões para casar"', () => {
 
 describe('casar com valor diferente abre o CasarComBancoModal com o valor do banco', () => {
   const EXT = { extrato_id: 'e-amanda', data: '2026-09-04', historico: 'Pix - Agendamento - 04/09 05:35 CAMARGO PROMOCAO DE VENDA', valor: -5665 };
-  it('o campo nasce com 5.665,00 e a linha diz "era R$ 3.085,00"; o Conciliar manda esse valor à mesma RPC', async () => {
+  /* CONC-CASAR-1X1-TABELA-01: o 1:1 é a tabela do Casar N — o valor antigo fica na coluna Valor (o "era" virou coluna), o Fica diz "a mais" e o
+     ⇆ (Corrigir o valor do lançamento) fica desabilitado enquanto o campo já tem o valor do banco */
+  it('o campo nasce com 5.665,00, a coluna Valor diz 3.085,00 e o Fica "a mais"; o Conciliar manda esse valor à mesma RPC', async () => {
     render(<CasarComBancoModal open onClose={() => {}} extrato={EXT} contaBancariaId="bb" nomeConta="Banco do Brasil" onConciliado={() => {}}
       iniciais={[{ lancamento_id: 'amanda', descricao: 'Folha de Pagamento', fornecedor: 'Amanda Montes Camargo', valor_assinado: -3085, usarValorDoBanco: true }]} />);
     const campo = screen.getByLabelText('Valor de Folha de Pagamento') as HTMLInputElement;
     expect(campo.value).toBe('5.665,00');
-    expect(screen.getByTestId('era-valor').textContent).toBe('era R$ 3.085,00');
-    /* o "era" ocupa o lugar do botão: com o campo já no valor do banco, o botão não aparece */
-    expect(screen.queryByTestId('usar-valor-banco')).toBeNull();
+    expect(screen.getByTestId('levado-linha').querySelectorAll('td')[8].textContent).toBe('-3.085,00');
+    expect(screen.getByTestId('levado-linha-fica').textContent).toBe('a mais 2.580,00');
+    expect(screen.getByTestId('usar-valor-banco')).toBeDisabled();
     await waitFor(() => expect(RPC.chamadas.length).toBeGreaterThan(0));
     expect(RPC.chamadas[0]).toMatchObject({ fn: 'fn_espelho_casar', args: { p_simular: true, p_itens: [{ lancamento_id: 'amanda', valor: 5665 }] } });
-    /* voltar o campo ao valor antigo tira o "era" — ele só diz o que mudou */
+    /* voltar o campo ao valor antigo: inteira, e o ⇆ volta a valer */
     fireEvent.change(campo, { target: { value: '3.085,00' } });
-    expect(screen.queryByTestId('era-valor')).toBeNull();
-    /* e o botão volta, para quem quiser o valor do banco de novo */
-    expect(screen.getByTestId('usar-valor-banco')).toBeInTheDocument();
+    expect(screen.getByTestId('levado-linha-fica').textContent).toBe('inteira');
+    expect(screen.getByTestId('usar-valor-banco')).not.toBeDisabled();
   });
-  it('sem a marca (o caminho de sempre), o campo nasce com o valor do lançamento e não há "era"', () => {
+  it('sem a marca (o caminho de sempre), o campo nasce com o valor do lançamento (inteira)', () => {
     render(<CasarComBancoModal open onClose={() => {}} extrato={EXT} contaBancariaId="bb" onConciliado={() => {}}
       iniciais={[{ lancamento_id: 'amanda', descricao: 'Folha de Pagamento', valor_assinado: -3085 }]} />);
     expect((screen.getByLabelText('Valor de Folha de Pagamento') as HTMLInputElement).value).toBe('3.085,00');
-    expect(screen.queryByTestId('era-valor')).toBeNull();
-    expect(screen.getByTestId('usar-valor-banco')).toBeInTheDocument();
+    expect(screen.getByTestId('levado-linha-fica').textContent).toBe('inteira');
+    expect(screen.getByTestId('usar-valor-banco')).not.toBeDisabled();
   });
 });

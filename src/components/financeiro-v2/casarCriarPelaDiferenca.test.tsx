@@ -68,7 +68,7 @@ describe('o ciclo do "Criar lançamento pela diferença"', () => {
   it('volta com o lançamento novo levado, a diferença 0 e o Conciliar pronto — mesmo com o dono relendo', async () => {
     const repintar = montar();
     await waitFor(() => expect(screen.getByText('Criar lançamento pela diferença').closest('button')?.disabled).toBe(false));
-    expect(screen.getByText(/lançamentos levados \(0\)/)).toBeTruthy();
+    expect(screen.getByTestId('levados-vazio')).toBeTruthy();
     fireEvent.click(screen.getByText('Criar lançamento pela diferença'));
     await waitFor(() => expect(M.props).not.toBeNull());
     expect(M.props?.prefill?.valor).toBe(10500);
@@ -77,7 +77,7 @@ describe('o ciclo do "Criar lançamento pela diferença"', () => {
     repintar();
     await act(async () => { M.props?.onClose(); });
     repintar();
-    await waitFor(() => expect(screen.getByText(/lançamentos levados \(1\)/)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByTestId('levado-linha')).toHaveLength(1));
     await waitFor(() => expect(screen.getByTestId('frase-diferenca').textContent).toBe('Confere com o banco ✓'));
     const conciliar = screen.getByTestId('conciliar-casar');
     expect(conciliar.textContent).toBe('Conciliar');
@@ -94,26 +94,30 @@ describe('o ciclo do "Criar lançamento pela diferença"', () => {
       <CasarComBancoModal open onClose={() => {}} extrato={extratoNovo()} iniciais={iniciais()} contaBancariaId="conta-extrato" onConciliado={() => {}} />
     );
     const r = render(el());
-    fireEvent.click(await screen.findByText('remover deste casamento'));
-    expect(screen.getByText(/lançamentos levados \(0\)/)).toBeTruthy();
+    fireEvent.click(await screen.findByTestId('levado-linha-remover'));
+    expect(screen.getByTestId('levados-vazio')).toBeTruthy();
     r.rerender(el());
     /* o que o operador fez no modal aberto fica: o levado removido não volta por um objeto igual */
-    expect(screen.getByText(/lançamentos levados \(0\)/)).toBeTruthy();
+    expect(screen.getByTestId('levados-vazio')).toBeTruthy();
   });
 });
 
 describe('a fonte do modal no padrão (PADROES-UI A18, a escala de modal)', () => {
-  it('cabeçalho 36px com título 12/500; valor do topo 15/500; rodapé 32px com botões de 22px; nada abaixo de 10px', async () => {
+  /* CONC-CASAR-1X1-TABELA-01 (Gabriel 19/11 07:23): a TABELA dos levados tem a fonte das Sugestões (9px, linha 19; a exceção declarada das
+     tabelas do Casar); fora dela, nada abaixo de 10px */
+  it('cabeçalho 36px com título 12/500; a tabela na fonte das Sugestões; rodapé 32px com botões de 22px; fora da tabela nada abaixo de 10px', async () => {
     const LEV = { lancamento_id: 'l-1', descricao: 'Bomba', fornecedor: null, valor_assinado: -10500, numero_documento: '000123456' };
     render(<CasarComBancoModal open onClose={() => {}} extrato={extratoNovo()} iniciais={[LEV]} contaBancariaId="conta-extrato" onConciliado={() => {}} />);
     const titulo = await screen.findByText('Casar com o banco');
     expect(titulo.className).toContain('text-[12px] font-medium');
     expect(titulo.parentElement?.className).toContain('h-9');
-    expect(screen.getByTestId('casar-valor-banco').className).toContain('text-[15px] font-medium');
+    expect(screen.getByTestId('levados-tabela').className).toContain('text-[9px]');
     expect(screen.getByTestId('casar-rodape').className).toMatch(/\bh-8\b/);
     expect(screen.getByTestId('criar-pela-diferenca').className).toContain('h-[22px]');
     expect(screen.getByTestId('conciliar-casar').className).toContain('h-[22px]');
     const modal = titulo.closest('[role="dialog"]');
-    expect(modal?.innerHTML ?? '').not.toMatch(/text-\[(?:[0-8]|9(?:\.\d+)?)px\]/);
+    const fora = modal?.cloneNode(true);
+    if (fora instanceof HTMLElement) fora.querySelector('[data-testid="tabela-dos-levados"]')?.remove();
+    expect(fora instanceof HTMLElement ? fora.innerHTML : '').not.toMatch(/text-\[(?:[0-8]|9(?:\.\d+)?)px\]/);
   });
 });

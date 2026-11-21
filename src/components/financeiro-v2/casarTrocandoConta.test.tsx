@@ -39,7 +39,8 @@ describe('P153b — casar trocando a conta', () => {
   it('a confirmação curta: a conta antes × depois, e que valor e data viram os do extrato', async () => {
     montar({ ...AGUA, trocarConta: { de: 'Itaú Personalité', para: 'Banco do Brasil' } });
     const t = screen.getByTestId('levado-troca-conta');
-    expect(t.textContent).toBe('Conta: Itaú Personalité → Banco do Brasil · ao conciliar, o lançamento passa para a conta do extrato; valor e data viram os do extrato.');
+    /* CONC-CASAR-1X1-TABELA-01: a faixa da troca é a do Casar N (1 ou N), com a descrição do levado na frente */
+    expect(t.textContent).toBe('Agua e Esgoto - Escritorio · Conta: Itaú Personalité → Banco do Brasil · ao conciliar, passa para a conta do extrato; valor e data viram os do extrato.');
     /* o valor do banco no campo (o casar de hoje com valor diferente: "era R$ 500,00") */
     expect((screen.getByLabelText('Valor de Agua e Esgoto - Escritorio') as HTMLInputElement).value).toBe('142,72');
     expect(await screen.findByRole('button', { name: 'Conciliar e trocar a conta' })).toBeInTheDocument();

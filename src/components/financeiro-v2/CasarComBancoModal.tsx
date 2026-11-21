@@ -21,11 +21,12 @@
  */
 import { useConteudoEstavel } from '@/lib/react/conteudoEstavel';
 import { TabelaDosLevados } from '@/components/conciliacao/TabelaDosLevados';
-import { lerComplementoDasLinhas } from '@/lib/conciliacao/complementoDasLinhas';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/conciliacao/complementoDasLinhas';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fechaAoCentavo, podeCriarPelaDiferenca } from '@/lib/conciliacao/tolerancia';
 import { EscolherContaDaTaxa } from '@/components/conciliacao/EscolherContaDaTaxa';
-import { fraseDaEscolha, itensComDestino, perguntaNfDaResposta, ROTULO_DO_DESTINO, type EscolhaNf, type PerguntaNf } from '@/lib/conciliacao/destinoDaNf';
+import { fraseDaEscolha, itensComDestino, perguntaNfDaResposta, ROTULO_DO_DESTINO, type EscolhaNf, type OutraNota, type PerguntaNf } from '@/lib/conciliacao/destinoDaNf';
+import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
@@ -36,7 +37,6 @@ import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamento
 import type { ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 import { ConciliarDiferencaModal } from '@/components/conciliacao/ConciliarDiferencaModal';
 import { MOTIVO_CASAR_LABEL } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
-import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { FRASE_LEVE_O_PAR, fraseDoJuroReal, lerRespostaPosPagar, levadosSaoOPar, mapaDaParcelaPos, parcelaPosDosLevados,
   type RespostaPosPagar } from '@/lib/financiamentos/parcelaPosPagar';
 
@@ -63,10 +63,6 @@ export interface LevadoInicial {
   numero_documento?: string | null;
 }
 
-const PALETA_DO_STATUS: Record<string, { texto: string } | undefined> = {
-  previsto: STATUS_PALETA.previsto, programado: STATUS_PALETA.programado, agendado: STATUS_PALETA.agendado,
-  realizado: STATUS_PALETA.realizado, conciliado: STATUS_PALETA.conciliado,
-};
 const vencCurto = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '—');
 
 interface Levado extends LevadoInicial { valorTexto: string; }
@@ -128,19 +124,20 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
   const [levados, setLevados] = useState<Levado[]>([]);
   /* CONC-CRIAR-COM-NOTA-02 D1 (homologação 14:32: "NF —" nas 5 linhas) — o levado que chega SEM o nº (os marcados pelo "Casar selecionados" e
      os do Procurar no histórico) tem o nº lido pelos ids, a MESMA leitura das Sugestões (`lerComplementoDasLinhas`); o que veio com o nº manda */
-  const [nfLida, setNfLida] = useState<ReadonlyMap<string, string>>(new Map());
-  const idsSemNf = levados.filter((l) => !l.numero_documento).map((l) => l.lancamento_id).sort().join(',');
+  /* CONC-CASAR-1X1-TABELA-01 (Gabriel 19/11 07:23) — a mesma leitura dá também Faz. · Ativ. · Plano de TODOS os levados */
+  const [complemento, setComplemento] = useState<ReadonlyMap<string, ComplementoDaLinha>>(new Map());
+  const idsDosLevados = levados.map((l) => l.lancamento_id).sort().join(',');
   useEffect(() => {
     let vivo = true;
-    if (!open || !clienteId || !idsSemNf) { setNfLida(new Map()); return; }
-    void lerComplementoDasLinhas(clienteId, idsSemNf.split(',')).then((m) => {
-      if (!vivo || !m) return;
-      const nf = new Map<string, string>();
-      for (const [id, x] of m) if (x.numeroDocumento) nf.set(id, x.numeroDocumento);
-      setNfLida(nf);
-    });
+    if (!open || !clienteId || !idsDosLevados) { setComplemento(new Map()); return; }
+    void lerComplementoDasLinhas(clienteId, idsDosLevados.split(',')).then((m) => { if (vivo && m) setComplemento(m); });
     return () => { vivo = false; };
-  }, [open, clienteId, idsSemNf]);
+  }, [open, clienteId, idsDosLevados]);
+  const nfLida = useMemo(() => {
+    const nf = new Map<string, string>();
+    for (const [id, x] of complemento) if (x.numeroDocumento) nf.set(id, x.numeroDocumento);
+    return nf;
+  }, [complemento]);
   const [sim, setSim] = useState<Simulacao | null>(null);
   const [erroRodape, setErroRodape] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
@@ -195,11 +192,20 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
   const [motivoAberto, setMotivoAberto] = useState<string | null>(null);
   const [motivoTexto, setMotivoTexto] = useState('');
   const [taxaAberta, setTaxaAberta] = useState<string | null>(null);
+  /* 115570 — a "Outra nota (falta lançar)": as notas digitadas (nº e valor opcionais) antes de confirmar */
+  const [notasAbertas, setNotasAbertas] = useState<string | null>(null);
+  const [notasTexto, setNotasTexto] = useState<OutraNota[]>([{ numero: '', valor: null }]);
+  /* CONC-CASAR-1X1-TABELA-01 item 3 (R2, FILA 18/11 13:10) — UM levado de SAÍDA com NF: o aplicado é o VALOR DA NF e não se edita; ao banco
+     vai o que ele pagou (o valor do extrato) e é a pergunta da NF que diz o que é a diferença (o banco confere: `_fn_lancamento_tem_nf`) */
+  const travadoNaNf = useCallback((l: Levado) => levados.length === 1 && !!extrato && l.valor_assinado < 0
+    && !!(l.numero_documento || nfLida.get(l.lancamento_id)), [levados.length, extrato, nfLida]);
   const itensBase = useMemo(
-    () => levados.map((l) => ({ lancamento_id: l.lancamento_id, valor: Math.abs(valorDe(l.valorTexto)), ...(l.trocarConta ? { trocar_conta: true } : {}) })),
-    [levados],
+    () => levados.map((l) => ({ lancamento_id: l.lancamento_id,
+      valor: travadoNaNf(l) && extrato ? Math.abs(extrato.valor) : Math.abs(valorDe(l.valorTexto)), ...(l.trocarConta ? { trocar_conta: true } : {}) })),
+    [levados, travadoNaNf, extrato],
   );
-  useEffect(() => { setAceitos([]); setPergunta(null); setEscolhas({}); setPerguntaNf(null); setMotivoAberto(null); setMotivoTexto(''); setTaxaAberta(null); }, [itensBase]);
+  useEffect(() => { setAceitos([]); setPergunta(null); setEscolhas({}); setPerguntaNf(null); setMotivoAberto(null); setMotivoTexto(''); setTaxaAberta(null);
+    setNotasAbertas(null); setNotasTexto([{ numero: '', valor: null }]); }, [itensBase]);
   const itens = useMemo(
     () => itensComDestino(itensBase.map((i) => (aceitos.includes(i.lancamento_id) ? { ...i, aceitar_valor_extrato: true } : i)), escolhas),
     [itensBase, aceitos, escolhas],
@@ -303,19 +309,20 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
   const semItens = levados.length === 0;
   /* R2: com a pergunta da NF aberta, nada grava até o operador dizer o que é a diferença */
   const podeConciliar = !!sim?.ok && !gravando && !semItens && !perguntaNf;
-  const escolher = (id: string, e: EscolhaNf) => { setEscolhas((v) => ({ ...v, [id]: e })); setMotivoAberto(null); setMotivoTexto(''); setTaxaAberta(null); };
+  const escolher = (id: string, e: EscolhaNf) => { setEscolhas((v) => ({ ...v, [id]: e })); setMotivoAberto(null); setMotivoTexto(''); setTaxaAberta(null); setNotasAbertas(null); };
   const escolhidas = levados.filter((l) => !!escolhas[l.lancamento_id]);
   const podeCriar = podeCriarPelaDiferenca(sim, semItens);
   const sentido = sim && !semItens ? sentidoDaDiferenca(sim.diferenca, sim.noExtrato) : null;
   const unico = levados.length === 1;
-  /* E2 — 2+ lançamentos: a tabela (o modal alarga para caber Venc · Descrição · Fornecedor · NF · Status · Valor · Aplicado · Fica) */
-  const multi = levados.length >= 2;
-  /* no pós-fixado o campo dos juros mostra o juro real que o banco vai gravar (o mesmo do campo do 1:1) */
-  const levadosDaTabela = levados.map((l) => ({ ...l, numero_documento: l.numero_documento || nfLida.get(l.lancamento_id) || null }))
-    .map((l) => (parcelaPos && respPos?.ok && respPos.juroReal != null && l.lancamento_id === respPos.jurosId
-      ? { ...l, valorTexto: paraCampo(respPos.juroReal) } : l));
-  /* CONC-CRIAR-COM-NOTA-01 — a coluna NF so' quando algum levado traz o nº (os outros chamadores seguem como sempre) */
-  const comNF = levados.some((l) => !!l.numero_documento);
+  /* no pós-fixado o campo dos juros mostra o juro real que o banco vai gravar; com NF (1:1) o aplicado é o valor da NF, travado */
+  const levadosDaTabela = levados.map((l) => {
+    const c = complemento.get(l.lancamento_id);
+    const travado = travadoNaNf(l);
+    return { ...l, numero_documento: l.numero_documento || nfLida.get(l.lancamento_id) || null,
+      fazendaCodigo: c?.fazendaCodigo ?? null, fazendaNome: c?.fazendaNome ?? null, escopoNegocio: c?.escopoNegocio ?? null, subcentro: c?.subcentro ?? null,
+      travadoNaNf: travado, ...(travado ? { valorTexto: paraCampo(l.valor_assinado) } : {}) };
+  }).map((l) => (parcelaPos && respPos?.ok && respPos.juroReal != null && l.lancamento_id === respPos.jurosId
+    ? { ...l, valorTexto: paraCampo(respPos.juroReal) } : l));
   /* P153b (D3) — algum levado troca de conta ao casar: o botão diz isso (o texto é fixo enquanto o modal está aberto) */
   const trocaConta = levados.some((l) => !!l.trocarConta);
   const valorDoBanco = paraCampo(extrato.valor);
@@ -336,7 +343,7 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
             ⚠ E A DESCRIÇÃO NÃO TRUNCA MAIS — PR-CONC-SUGESTOES-CASAR-01 (Gabriel, print 13:42: "Servico Rastreabilidade
             ..." cortado com espaço sobrando). Cada levado ocupa DUAS linhas: a identificação inteira, uma informação por
             coluna (venc · descrição · fornecedor · status), e embaixo o campo e as ações. O que não couber quebra. */}
-        <DialogContent className={cn(multi ? 'w-[1040px]' : 'w-[640px]', 'max-w-[95vw] max-h-[90vh] flex flex-col grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]')}>
+        <DialogContent className={cn('top-[7.5vh] translate-y-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-top-0 w-[1200px] max-w-[95vw] max-h-[85vh] flex flex-col grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]')}>
           <div className="flex h-9 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
             <span className="text-[12px] font-medium">Casar com o banco</span>
             <div className="flex items-center gap-3">
@@ -352,192 +359,52 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
             {/* CONC-CRIAR-COM-NOTA-02 E2 (homologação 09:48, caso Edson: 5 NFs num PIX) — com 2+ lançamentos, UMA TABELA (uma linha por
                 lançamento, o Aplicado na linha, o que Fica, o ✕; o extrato numa faixa em cima; o rodapé aplicado × extrato × diferença). O 1:1 segue
                 no desenho do D-h (Extrato × Sistema). O estado, o Conciliar e a pergunta da NF são os mesmos. */}
-            {multi ? (<>
-              <TabelaDosLevados extrato={extrato} nomeConta={nomeConta} levados={levadosDaTabela}
-                onValor={poeValor} onRemover={(id) => setLevados((v) => v.filter((x) => x.lancamento_id !== id))}
-                somenteLeitura={() => !!parcelaPos} rotuloDoCampo={(l) => `Valor de ${l.descricao ?? 'lançamento'}`}
-                acaoNoCampo={parcelaPos ? undefined : (l) => {
-                  /* o "absorver a diferença" de sempre (a diferença inteira nesta linha; as outras não mudam), agora colado ao campo */
-                  const novo = difAtual == null ? null : valorAbsorvendo(valorDe(l.valorTexto), l.valor_assinado, difAtual);
-                  const motivo = difAtual == null ? 'Confere com o banco: não há diferença para absorver.'
-                    : novo == null ? 'Esta linha ficaria zerada ou negativa: escolha outra, ou remova um lançamento.' : null;
+            {/* CONC-CASAR-1X1-TABELA-01 (Gabriel 19/11 07:23, caso Luiz Gustavo: o 1:1 em duas colunas REPROVADO) — 1 ou N lançamentos, UMA TABELA,
+                a do Casar N (E2): o extrato numa faixa em cima (Data · Histórico · Conta · Valor), uma linha por lançamento (Venc · Descrição ·
+                Fornecedor · NF · Faz. · Ativ. · Plano · Status · Valor · Aplicado · Fica), o rodapé navy aplicado × extrato × diferença. Com NF (1:1)
+                o Aplicado é o valor da NF, travado; o resto do estado, o Conciliar e a pergunta da NF são os mesmos. */}
+            <TabelaDosLevados extrato={extrato} nomeConta={nomeConta} levados={levadosDaTabela}
+              onValor={poeValor} onRemover={(id) => setLevados((v) => v.filter((x) => x.lancamento_id !== id))}
+              somenteLeitura={() => !!parcelaPos} rotuloDoCampo={(l) => `Valor de ${l.descricao ?? 'lançamento'}`}
+              acaoNoCampo={parcelaPos ? undefined : (l) => {
+                if (l.travadoNaNf) return null;
+                if (unico) {
+                  /* "Corrigir o valor do lançamento" (CONC-BLOCOS-TELA-01): o campo recebe o valor do banco — o mesmo gesto, colado ao campo */
+                  const igual = l.valorTexto === valorDoBanco;
                   return (
-                    <button type="button" data-testid="absorver-diferenca" disabled={novo == null} aria-label="absorver a diferença"
-                      title={motivo ?? `absorver a diferença: esta linha passa a ${paraCampo(novo ?? 0)}; as outras não mudam e a soma fica igual ao banco.`}
-                      onClick={() => { if (novo != null) poeValor(l.lancamento_id, paraCampo(novo)); }}
-                      className={cn('h-[17px] w-[16px] shrink-0 rounded border text-[9px] leading-none', novo == null ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted')}>⇆</button>
+                    <button type="button" data-testid="usar-valor-banco" disabled={igual} aria-label="Corrigir o valor do lançamento"
+                      title={igual ? 'O campo já tem o valor do banco.' : `Corrigir o valor do lançamento: muda para o do banco (${valorDoBanco})`}
+                      onClick={() => poeValor(l.lancamento_id, valorDoBanco)}
+                      className={cn('h-[17px] w-[16px] shrink-0 rounded border text-[9px] leading-none', igual ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted')}>⇆</button>
                   );
-                }} />
-              {levados.filter((l) => !!l.trocarConta).map((l) => (
-                <div key={l.lancamento_id} className="rounded border border-amber-400 bg-amber-50 px-1.5 py-[2px] text-[10px] text-amber-800" data-testid="levado-troca-conta">
-                  {l.descricao ?? 'Lançamento'} · Conta: <span className="font-semibold">{l.trocarConta?.de ?? 'sem conta'}</span> → <span className="font-semibold">{l.trocarConta?.para ?? 'a do extrato'}</span>
-                  {' · '}ao conciliar, passa para a conta do extrato.
-                </div>
-              ))}
-            </>) : (<>
-            {/* CONC-CRIAR-COM-NOTA-02 D-h (Gabriel 18/11, caso Azulão) — EXTRATO × SISTEMA em duas colunas de UMA tabela (regra de corte: "…"
-                com o inteiro no `title` só em tabela); as linhas casam lado a lado e o VALOR fica na mesma linha, à direita (valor sob valor) */}
-            <table className="w-full table-fixed border-separate border-spacing-0 text-[10px]" data-testid="casar-colunas">
-              <colgroup><col style={{ width: 62 }} /><col /><col style={{ width: 12 }} /><col style={{ width: 66 }} /><col /></colgroup>
-              <thead>
-                <tr className="h-[22px] bg-primary text-[10px] font-medium text-primary-foreground">
-                  <th colSpan={2} className="px-1 text-left" data-testid="casar-coluna-extrato">Extrato</th>
-                  <th />
-                  <th colSpan={2} className="px-1 text-left" data-testid="casar-coluna-sistema">Sistema</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* CONC-CRIAR-COM-NOTA-02 (homologação 09:37, Gabriel): o histórico do banco é sempre longo — a largura TODA do modal (~95
-                    caracteres a 10px); só passa disso com "…" e o inteiro no `title` */}
-                <tr className="h-[20px] bg-muted/60">
-                  <td className="truncate px-1 text-muted-foreground">Histórico</td>
-                  <td colSpan={4} className="truncate px-1 font-medium" title={extrato.historico ?? undefined} data-testid="casar-historico">{extrato.historico ?? '—'}</td>
-                </tr>
-                {(semItens ? [null] : levados).flatMap((l, i) => {
-                  const st = (l?.status_transacao ?? '').trim().toLowerCase();
-                  const n = unico || !l ? '' : ` (${i + 1})`;
-                  const primeiro = i === 0;
-                  /* homologação 09:37: o histórico do banco tem a LINHA PRÓPRIA (largura toda, acima das colunas) — aqui só data e conta */
-                  const ext: [string, ReactNode, string?][] = primeiro
-                    ? [['Data', dataDdMmAaaa(extrato.data)], ['Conta', nomeConta ?? '—', nomeConta ?? undefined], ['', ''], ['', ''], ['', '']]
-                    : [['', ''], ['', ''], ['', ''], ['', ''], ['', '']];
-                  const sis: [string, ReactNode, string?, string?][] = [
-                    [`Venc.${n}`, l ? dataDdMmAaaa(l.data_vencimento) : '—', undefined, 'casar-sis-venc'],
-                    ['Descrição', l ? (l.descricao ?? '—') : 'nenhum lançamento levado', l?.descricao ?? undefined, 'casar-sis-descricao'],
-                    ['Fornecedor', l ? (l.fornecedor || '—') : '—', l?.fornecedor ?? undefined, 'casar-sis-fornecedor'],
-                    ['NF', (() => { const n = l ? (l.numero_documento || nfLida.get(l.lancamento_id)) : null; return n ? (formatNFNumber(n) || n) : '—'; })(), undefined, 'levado-nf'],
-                    ['Status', st ? <span className={cn('font-medium', PALETA_DO_STATUS[st]?.texto ?? 'text-muted-foreground')}>{STATUS_FILTRO_LABEL[st] ?? l?.status_transacao}</span> : '—', undefined, 'casar-sis-status'],
-                  ];
-                  const rot = 'truncate px-1 text-muted-foreground';
-                  const val = 'truncate px-1';
-                  return [
-                    ...sis.map((x, k) => (
-                      <tr key={`${l?.lancamento_id ?? 'v'}-${k}`} className={cn('h-[18px]', k === 0 && !primeiro && 'border-t')} data-testid={k === 0 ? 'casar-sistema-lancamento' : undefined}>
-                        <td className={rot}>{ext[k][0]}</td>
-                        <td className={val} title={ext[k][2]}>{ext[k][1]}</td>
-                        <td />
-                        <td className={rot}>{x[0]}</td>
-                        <td className={cn(val, k === 3 && 'tabular-nums')} title={x[2]} data-testid={x[3]}>{x[1]}</td>
-                      </tr>
-                    )),
-                    <tr key={`${l?.lancamento_id ?? 'v'}-valor`} className="h-[24px]">
-                      <td className={rot}>{primeiro ? 'Valor' : ''}</td>
-                      <td className="px-1 text-right">
-                        {primeiro && <span className={cn('whitespace-nowrap text-[15px] font-medium tabular-nums', corVal(extrato.valor))} data-testid="casar-valor-banco">{fmtBRL(extrato.valor)}</span>}
-                      </td>
-                      <td />
-                      <td className={rot}>Valor</td>
-                      <td className="px-1 text-right">
-                        {l && <span className={cn('whitespace-nowrap text-[15px] font-medium tabular-nums', corVal(l.valor_assinado))} data-testid="casar-valor-sistema">{fmtBRL(l.valor_assinado)}</span>}
-                      </td>
-                    </tr>,
-                  ];
-                })}
-              </tbody>
-            </table>
-
-            {/* D-h — o pagamento contra o vencimento, numa faixa de ALTURA FIXA (vazia = o mesmo lugar: nada se desloca) */}
-            {(() => {
+                }
+                /* o "absorver a diferença" de sempre (a diferença inteira nesta linha; as outras não mudam), agora colado ao campo */
+                const novo = difAtual == null ? null : valorAbsorvendo(valorDe(l.valorTexto), l.valor_assinado, difAtual);
+                const motivo = difAtual == null ? 'Confere com o banco: não há diferença para absorver.'
+                  : novo == null ? 'Esta linha ficaria zerada ou negativa: escolha outra, ou remova um lançamento.' : null;
+                return (
+                  <button type="button" data-testid="absorver-diferenca" disabled={novo == null} aria-label="absorver a diferença"
+                    title={motivo ?? `absorver a diferença: esta linha passa a ${paraCampo(novo ?? 0)}; as outras não mudam e a soma fica igual ao banco.`}
+                    onClick={() => { if (novo != null) poeValor(l.lancamento_id, paraCampo(novo)); }}
+                    className={cn('h-[17px] w-[16px] shrink-0 rounded border text-[9px] leading-none', novo == null ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted')}>⇆</button>
+                );
+              }} />
+            {levados.filter((l) => !!l.trocarConta).map((l) => (
+              <div key={l.lancamento_id} className="rounded border border-amber-400 bg-amber-50 px-1.5 py-[2px] text-[10px] text-amber-800" data-testid="levado-troca-conta">
+                {l.descricao ?? 'Lançamento'} · Conta: <span className="font-semibold">{l.trocarConta?.de ?? 'sem conta'}</span> → <span className="font-semibold">{l.trocarConta?.para ?? 'a do extrato'}</span>
+                {' · '}ao conciliar, passa para a conta do extrato; valor e data viram os do extrato.
+              </div>
+            ))}
+            {/* D-h — o pagamento contra o vencimento (1:1), só quando há o que dizer: o texto nasce com o modal e não muda com o estado */}
+            {unico && (() => {
               const f = fraseDoPagamento(extrato.data, levados.map((l) => l.data_vencimento));
-              return (
-                <div className={cn('flex h-[22px] items-center rounded px-2 text-[10.5px] whitespace-nowrap', f?.classe ?? '')} data-testid="casar-faixa-pagamento">
-                  {f?.texto ?? '\u00a0'}
-                </div>
-              );
+              return f ? (
+                <div className={cn('flex h-[20px] items-center rounded px-2 text-[10px] whitespace-nowrap', f.classe)} data-testid="casar-faixa-pagamento">{f.texto}</div>
+              ) : null;
             })()}
 
-            <div>
-              <div className="text-[10px] text-muted-foreground mb-1 whitespace-nowrap">
-                lançamentos levados ({levados.length}) — ao conciliar, cada um fica com o valor do campo
-              </div>
-              {levados.map((l, i) => (
-                <div key={l.lancamento_id} className="py-[4px] border-b last:border-b-0" data-testid="levado">
-                {/* P153b (D3) — a confirmação curta: a conta ANTES × DEPOIS, e que valor e data viram os do extrato (o casar de hoje) */}
-                {l.trocarConta && (
-                  <div className="mt-[3px] rounded border border-amber-400 bg-amber-50 px-1.5 py-[2px] text-[10px] text-amber-800" data-testid="levado-troca-conta">
-                    Conta: <span className="font-semibold">{l.trocarConta.de ?? 'sem conta'}</span> → <span className="font-semibold">{l.trocarConta.para ?? 'a do extrato'}</span>
-                    {' · '}ao conciliar, o lançamento passa para a conta do extrato; valor e data viram os do extrato.
-                  </div>
-                )}
-                <div className="mt-[3px] flex min-w-0 items-center gap-2">
-                  {/* D-h — o campo diz o que é: o valor que este lançamento recebe deste movimento */}
-                  <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground" data-testid="valor-aplicado-rotulo">valor aplicado{unico ? '' : ` (${i + 1})`}</span>
-                  <input
-                    /* FIN-POS-FIXADO-01b: no caso pós o campo dos juros mostra o juro real que o banco vai gravar (lido do dono) */
-                    value={parcelaPos && respPos?.ok && respPos.juroReal != null && l.lancamento_id === respPos.jurosId
-                      ? paraCampo(respPos.juroReal) : l.valorTexto}
-                    readOnly={!!parcelaPos}
-                    title={parcelaPos ? 'Parcela de contrato pós-fixado: o juro real vem do extrato; o principal não muda.' : undefined}
-                    onChange={(e) => setLevados((v) => v.map((x) => x.lancamento_id === l.lancamento_id ? { ...x, valorTexto: e.target.value } : x))}
-                    inputMode="decimal"
-                    className={cn('w-24 rounded border px-1 py-0.5 text-right text-[11px] font-medium tabular-nums', corVal(l.valor_assinado))}
-                    aria-label={`Valor de ${l.descricao ?? 'lançamento'}`}
-                  />
-                  {/* ⚠ "era R$ X" TOMA O LUGAR DO BOTÃO, não se soma a ele — PR-CONC-SUGESTOES-CASAR-01. Com os dois na linha
-                      de 560px a descrição virava "Folha ..." (medido na tela, NJ · BB · set/26). Com o campo já no valor do
-                      banco, o botão estaria desabilitado e não diria nada que o "era" não diga; se o operador mexer no
-                      campo, o botão volta. */}
-                  {l.usarValorDoBanco && l.valorTexto !== paraCampo(l.valor_assinado) && (
-                    <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground tabular-nums" data-testid="era-valor"
-                      title="O valor que o lançamento tinha. Ao conciliar, ele fica com o do campo.">
-                      era R$ {fmtBRL(Math.abs(l.valor_assinado))}
-                    </span>
-                  )}
-                  {/* ⚠ UM LEVADO: "Usar valor do banco" — o campo recebe o valor do extrato (em módulo, como o campo
-                      trabalha) e a diferença vai a zero na próxima simulação. VÁRIOS: "absorver a diferença" põe a
-                      diferença inteira NESTA linha; as outras não mudam. */}
-                  {parcelaPos || (unico && l.usarValorDoBanco && l.valorTexto === valorDoBanco) ? null : unico ? (
-                    /* ⚠ "CORRIGIR O VALOR DO LANÇAMENTO" — CONC-BLOCOS-TELA-01 (decisão do Gabriel): era "Usar valor do
-                       banco". É um gesto SEPARADO, com nome próprio, porque muda o valor do lançamento; o comportamento é o
-                       mesmo de antes. Na variante bloco ele não existe. */
-                    <button type="button" data-testid="usar-valor-banco"
-                      disabled={l.valorTexto === valorDoBanco}
-                      title={l.valorTexto === valorDoBanco ? 'O campo já tem o valor do banco.' : `muda o valor do lançamento para o do banco (${valorDoBanco})`}
-                      onClick={() => poeValor(l.lancamento_id, valorDoBanco)}
-                      className={cn('h-[23px] shrink-0 whitespace-nowrap rounded border px-1.5 text-[10px]',
-                        l.valorTexto === valorDoBanco ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted')}>
-                      Corrigir o valor do lançamento
-                    </button>
-                  ) : (() => {
-                    const novo = difAtual == null ? null : valorAbsorvendo(valorDe(l.valorTexto), l.valor_assinado, difAtual);
-                    const motivo = difAtual == null ? 'Confere com o banco: não há diferença para absorver.'
-                      : novo == null ? 'Esta linha ficaria zerada ou negativa: escolha outra, ou remova um lançamento.' : null;
-                    return (
-                      <button type="button" data-testid="absorver-diferenca" disabled={novo == null}
-                        title={motivo ?? `Esta linha passa a ${paraCampo(novo ?? 0)}; as outras não mudam e a soma fica igual ao banco.`}
-                        onClick={() => { if (novo != null) poeValor(l.lancamento_id, paraCampo(novo)); }}
-                        className={cn('shrink-0 whitespace-nowrap text-[10px] underline underline-offset-2',
-                          novo == null ? 'text-muted-foreground/50 cursor-not-allowed' : 'text-muted-foreground hover:text-foreground')}>
-                        absorver a diferença
-                      </button>
-                    );
-                  })()}
-                  <button type="button" className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                    title="Tira este lançamento do casamento. Nada é apagado: ele continua no sistema, sem vínculo com este movimento."
-                    onClick={() => setLevados((v) => v.filter((x) => x.lancamento_id !== l.lancamento_id))}>
-                    remover deste casamento
-                  </button>
-                </div>
-                </div>
-              ))}
-            </div>
-            </>)}
-
             <div className={cn('space-y-0.5', !sim && 'text-muted-foreground')}>
-              {/* E2: com a tabela, os números moram no rodapé dela; aqui ficam só as frases */}
-              {!multi && [['No extrato', sim?.noExtrato], ['Soma dos agrupados', sim?.soma]].map(([rot, val]) => (
-                <div key={String(rot)} className="grid grid-cols-[1fr_120px] items-baseline">
-                  <span className="text-[10px] text-muted-foreground">{rot}</span>
-                  <span className="text-right text-[11px] tabular-nums">{val == null ? '—' : fmtBRL(Number(val))}</span>
-                </div>
-              ))}
-              {!multi && <div className="grid grid-cols-[1fr_120px] items-baseline">
-                <span className="text-[10px] text-muted-foreground">Diferença</span>
-                <span className={cn('text-right text-[11px] font-semibold tabular-nums',
-                  !sim ? '' : sim.ok ? 'text-emerald-600' : 'text-amber-600')}>
-                  {sim == null ? '—' : fmtBRL(sim.diferenca)}
-                </span>
-              </div>}
+              {/* com a tabela, os números moram no rodapé navy dela; aqui ficam só as frases */}
               {/* ⚠ O SENTIDO E O VALOR, e a 10px (a frase estava a 9, abaixo do piso da casa). */}
               {sim && sentido === 'a_mais' && (
                 <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca">
@@ -549,8 +416,8 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
                   Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a menos que o banco. Conciliar… mostra as saídas (juntar outro extrato, deixar em aberto, desconto na OC), ou corrija o valor do lançamento.
                 </div>
               )}
-              {sim?.ok && (
-                <div className="text-[10px] text-emerald-600" data-testid="frase-diferenca">Confere com o banco ✓</div>
+              {sim?.ok && !perguntaNf && (
+                <div className="text-[10px] text-emerald-600" data-testid="frase-diferenca">{escolhidas.length ? 'Fecha com o banco pela escolha da NF ✓' : 'Confere com o banco ✓'}</div>
               )}
               {parcelaPos && respPos && fraseDoJuroReal(respPos) && (
                 <div className="text-[10px] text-muted-foreground" data-testid="juro-real">{fraseDoJuroReal(respPos)}</div>
@@ -561,48 +428,106 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
             {!erroRodape && pergunta && !aceitos.includes(pergunta.lancamento_id) && (
               <div className="text-[10px] text-amber-700" data-testid="pergunta-valor-extrato">{pergunta.frase}</div>
             )}
-            {/* CONC-DESCONCILIAR-EDSON-01 (R2) — a pergunta da NF (a frase é a do banco) e os gestos que ele aceita para esta diferença */}
-            {!erroRodape && perguntaNf && (
-              <div className="rounded border border-amber-400 bg-amber-50 px-2 py-1.5 space-y-1" data-testid="pergunta-nf">
-                <div className="text-[10px] text-amber-800">{perguntaNf.frase}</div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {perguntaNf.opcoes.map((op) => (
-                    <button key={op} type="button" data-testid={`destino-${op}`}
-                      onClick={() => {
-                        if (op === 'desconto') { setTaxaAberta(null); setMotivoAberto(perguntaNf.lancamentoId); return; }
-                        if (op === 'taxa') { setMotivoAberto(null); setTaxaAberta(perguntaNf.lancamentoId); return; }
-                        escolher(perguntaNf.lancamentoId, { destino: op });
-                      }}
-                      className="h-[22px] whitespace-nowrap rounded border border-amber-500 bg-white px-2 text-[10px] hover:bg-amber-100">
-                      {ROTULO_DO_DESTINO[op]}
-                    </button>
-                  ))}
-                </div>
-                {taxaAberta === perguntaNf.lancamentoId && (
-                  <EscolherContaDaTaxa onEscolher={(c) => escolher(perguntaNf.lancamentoId, { destino: 'taxa', planoContaId: c.id, planoNome: c.subcentro })} />
-                )}
-                {motivoAberto === perguntaNf.lancamentoId && (
-                  <div className="flex items-center gap-1.5">
-                    <input value={motivoTexto} onChange={(e) => setMotivoTexto(e.target.value)} data-testid="motivo-desconto"
-                      placeholder="motivo do desconto (ex.: pagou à vista)" aria-label="Motivo do desconto"
-                      className="h-[22px] min-w-0 flex-1 rounded border px-1.5 text-[10px]" />
-                    <button type="button" data-testid="confirmar-desconto" disabled={!motivoTexto.trim()}
-                      title={motivoTexto.trim() ? undefined : 'Escreva o motivo do desconto.'}
-                      onClick={() => escolher(perguntaNf.lancamentoId, { destino: 'desconto', motivo: motivoTexto })}
-                      className={cn('h-[22px] whitespace-nowrap rounded border px-2 text-[10px]',
-                        motivoTexto.trim() ? 'border-amber-500 bg-white hover:bg-amber-100' : 'opacity-40 cursor-not-allowed')}>
-                      Confirmar desconto
-                    </button>
+            {/* CONC-DESCONCILIAR-EDSON-01 (R2) — a pergunta da NF e os gestos que o banco aceita para esta diferença. CONC-CASAR-1X1-TABELA-01 item 4:
+                a frase CURTA numa linha (a inteira, a do banco, no `title`) e os 3 gestos do "a mais" (juros · taxa · outra nota) */}
+            {!erroRodape && perguntaNf && (() => {
+              const lnf = levados.find((l) => l.lancamento_id === perguntaNf.lancamentoId);
+              const nro = lnf ? (lnf.numero_documento || nfLida.get(lnf.lancamento_id)) : null;
+              const curta = `${nro ? `NF nº ${formatNFNumber(nro) || nro}: ` : 'NF: '}o banco pagou R$ ${fmtBRL(Math.abs(perguntaNf.diferenca))} `
+                + `${perguntaNf.sentido === 'a_mais' ? 'a mais' : 'a menos'} que a nota (o valor da NF não muda). O que é a diferença?`;
+              return (
+                <div className="rounded border border-amber-400 bg-amber-50 px-2 py-1 space-y-1" data-testid="pergunta-nf">
+                  <div className="truncate text-[10px] text-amber-800" title={perguntaNf.frase} data-testid="pergunta-nf-frase">{curta}</div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {perguntaNf.opcoes.map((op) => (
+                      <button key={op} type="button" data-testid={`destino-${op}`}
+                        onClick={() => {
+                          setTaxaAberta(null); setMotivoAberto(null); setNotasAbertas(null);
+                          if (op === 'desconto') { setMotivoAberto(perguntaNf.lancamentoId); return; }
+                          if (op === 'taxa') { setTaxaAberta(perguntaNf.lancamentoId); return; }
+                          if (op === 'outra_nota') { setNotasAbertas(perguntaNf.lancamentoId); return; }
+                          escolher(perguntaNf.lancamentoId, { destino: op });
+                        }}
+                        className={cn('h-[22px] whitespace-nowrap rounded border border-amber-500 px-2 text-[10px]',
+                          (op === 'taxa' && taxaAberta) || (op === 'outra_nota' && notasAbertas) || (op === 'desconto' && motivoAberto)
+                            ? 'bg-primary text-primary-foreground' : 'bg-white hover:bg-amber-100')}>
+                        {ROTULO_DO_DESTINO[op]}
+                      </button>
+                    ))}
                   </div>
-                )}
-              </div>
-            )}
+                  {/* NADA SE DESLOCA (desloca 19/11: o rodapé descia 50px ao abrir): o lugar do que abre (taxa · outra nota · motivo do desconto)
+                      é RESERVADO com a altura do maior (a conta da taxa, 49px); mais de uma outra nota rola aqui dentro */}
+                  <div className="h-[49px] overflow-y-auto" data-testid="pergunta-nf-lugar">
+                  {!taxaAberta && !notasAbertas && !motivoAberto && (
+                    <div className="text-[10px] text-amber-700/80">Escolha acima o que é a diferença.</div>
+                  )}
+                  {taxaAberta === perguntaNf.lancamentoId && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="shrink-0 whitespace-nowrap text-[10px] text-amber-800">Conta da taxa</span>
+                      <div className="w-[300px]">
+                        <EscolherContaDaTaxa onEscolher={(c) => escolher(perguntaNf.lancamentoId, { destino: 'taxa', planoContaId: c.id, planoNome: c.subcentro })} />
+                      </div>
+                    </div>
+                  )}
+                  {notasAbertas === perguntaNf.lancamentoId && (
+                    /* 115570 — nº e valor OPCIONAIS: com valor, uma linha por nota (a soma tem de fechar a diferença; quem confere é o banco);
+                       sem valor, uma linha com os números; tudo em branco = uma linha "Falta nota" sem nº */
+                    <div className="space-y-0.5" data-testid="outras-notas">
+                      {notasTexto.map((n, k) => (
+                        <div key={k} className="flex items-center gap-1.5" data-testid="outra-nota-linha">
+                          <span className="w-[86px] shrink-0 whitespace-nowrap text-[10px] text-amber-800">{k === 0 ? 'nº da(s) nota(s)' : ''}</span>
+                          <input value={n.numero} aria-label={`Número da nota ${k + 1}`} placeholder="ex.: 270, 272" data-testid="outra-nota-numero"
+                            onChange={(e) => setNotasTexto((v) => v.map((x, j) => (j === k ? { ...x, numero: e.target.value } : x)))}
+                            className="h-[22px] w-[140px] rounded border px-1.5 text-[10px]" />
+                          <span className="shrink-0 whitespace-nowrap text-[10px] text-amber-800">valor (opcional)</span>
+                          {/* 120px: o "R$ 999.999.999,99" do teto cabe (o gate pediu 113 de conteúdo) */}
+                          <div className="w-[120px]" data-testid="outra-nota-valor">
+                            <CampoMoeda valor={n.valor} className="h-[22px] text-[10px]"
+                              onChange={(v) => setNotasTexto((x) => x.map((y, j) => (j === k ? { ...y, valor: v } : y)))} />
+                          </div>
+                          {notasTexto.length > 1 && (
+                            <button type="button" aria-label={`Tirar a nota ${k + 1}`} className="rounded px-1 text-[10px] text-muted-foreground hover:bg-amber-100"
+                              onClick={() => setNotasTexto((v) => v.filter((_, j) => j !== k))}>✕</button>
+                          )}
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-1.5 pl-[92px]">
+                        <button type="button" data-testid="outra-nota-mais" className="text-[10px] text-amber-800 underline underline-offset-2"
+                          onClick={() => setNotasTexto((v) => [...v, { numero: '', valor: null }])}>+ outra nota</button>
+                        <button type="button" data-testid="confirmar-outra-nota"
+                          onClick={() => escolher(perguntaNf.lancamentoId, { destino: 'outra_nota', outrasNotas: notasTexto })}
+                          className="h-[22px] whitespace-nowrap rounded border border-amber-500 bg-white px-2 text-[10px] hover:bg-amber-100">
+                          Confirmar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {motivoAberto === perguntaNf.lancamentoId && (
+                    <div className="flex items-center gap-1.5">
+                      <input value={motivoTexto} onChange={(e) => setMotivoTexto(e.target.value)} data-testid="motivo-desconto"
+                        placeholder="motivo do desconto (ex.: pagou à vista)" aria-label="Motivo do desconto"
+                        className="h-[22px] min-w-0 flex-1 rounded border px-1.5 text-[10px]" />
+                      <button type="button" data-testid="confirmar-desconto" disabled={!motivoTexto.trim()}
+                        title={motivoTexto.trim() ? undefined : 'Escreva o motivo do desconto.'}
+                        onClick={() => escolher(perguntaNf.lancamentoId, { destino: 'desconto', motivo: motivoTexto })}
+                        className={cn('h-[22px] whitespace-nowrap rounded border px-2 text-[10px]',
+                          motivoTexto.trim() ? 'border-amber-500 bg-white hover:bg-amber-100' : 'opacity-40 cursor-not-allowed')}>
+                        Confirmar desconto
+                      </button>
+                    </div>
+                  )}
+                  </div>
+                </div>
+              );
+            })()}
             {!erroRodape && escolhidas.map((l) => {
               const e = escolhas[l.lancamento_id];
-              const dif = Math.abs(valorDe(l.valorTexto)) - Math.abs(l.valor_assinado);
+              /* a diferença é a do que vai ao banco (com NF travada, o valor do extrato) contra o valor da NF */
+              const dif = (itensBase.find((i) => i.lancamento_id === l.lancamento_id)?.valor ?? Math.abs(valorDe(l.valorTexto))) - Math.abs(l.valor_assinado);
+              const nro = l.numero_documento || nfLida.get(l.lancamento_id);
               return (
                 <div key={l.lancamento_id} className="flex items-baseline gap-2 text-[10px] text-muted-foreground" data-testid="escolha-nf">
-                  <span className="min-w-0 flex-1">{l.numero_documento ? `NF nº ${formatNFNumber(l.numero_documento) || l.numero_documento}: ` : ''}{fraseDaEscolha(e, dif, fmtBRL)}</span>
+                  <span className="min-w-0 flex-1">{nro ? `NF nº ${formatNFNumber(nro) || nro}: ` : ''}{fraseDaEscolha(e, dif, fmtBRL)}</span>
                   <button type="button" className="shrink-0 underline underline-offset-2 hover:text-foreground"
                     onClick={() => setEscolhas((v) => { const n = { ...v }; delete n[l.lancamento_id]; return n; })}>
                     trocar

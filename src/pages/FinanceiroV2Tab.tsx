@@ -93,6 +93,7 @@ import { prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
+import { SeloRegraFazenda } from '@/components/financeiro-v2/CorrecaoRegraFazenda';
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { rotulosDosFornecedores } from '@/lib/fornecedores/fornecedorTexto';
@@ -2677,6 +2678,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             title={[...chipsDaOC.map(ch => ch.texto), ...avisosDoFiltro].join('\n') || undefined}>
            <span data-desloca-livre className="uma-linha-que-rola flex min-w-0 flex-1 items-center gap-1">
             {podeConsultar && <CorrecaoTransferenciasBanner contas={hook.contasBancarias} onFixed={() => { void listaV2.recarregar(); }} />}
+            {/* FIN-REGRA-VARIAVEL-FAZENDA-01 — o que já está fora da regra fazenda × conta: o mesmo aviso pequeno, o conserto em modal */}
+            {podeConsultar && <SeloRegraFazenda clienteId={clienteAtual?.id} fazendas={fazendas} onCorrigido={() => { void listaV2.recarregar(); }} />}
             {avisosDoFiltro.map((frase, i) => (
               <span key={frase} data-testid="aviso-do-filtro" className="inline-flex shrink-0 items-center gap-0.5 text-[9.5px] text-amber-800">
                 {frase}
