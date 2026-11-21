@@ -437,6 +437,20 @@ export interface SugestaoDocumento {
 /* FORN-SELETOR-PADRAO-01 fatia 2a — a linha fixa do documento sob o campo do emitente (D8). Medida no navegador: ver o CLAUDE.md. */
 const LINHA_DO_DOCUMENTO_DO_EMITENTE = true;
 
+/** CONC-CRIAR-COM-NOTA-02 (D-c) — a linha que troca o "difere do que o lançamento diz" num lançamento NOVO: "Nota emitida 28/09, vence 10/11 ·
+ *  pago no banco 13/10 (28 dias antes)". Sem vencimento ou sem pagamento, só o que se sabe. */
+export function linhaDasDatasDaNota(emissao: string | null, vencimento: string | null, pagoEm: string | null): string {
+  const dm = (d: string) => d.slice(0, 10).split('-').reverse().slice(0, 2).join('/');
+  const partes = [emissao ? `Nota emitida ${dm(emissao)}` : null, vencimento ? `vence ${dm(vencimento)}` : null].filter(Boolean).join(', ');
+  if (!pagoEm) return partes;
+  let rel = '';
+  if (vencimento) {
+    const dias = Math.round((Date.parse(vencimento.slice(0, 10)) - Date.parse(pagoEm.slice(0, 10))) / 86400000);
+    rel = dias > 0 ? ` (${dias} ${dias === 1 ? 'dia' : 'dias'} antes)` : dias < 0 ? ` (${-dias} ${dias === -1 ? 'dia' : 'dias'} depois)` : ' (no vencimento)';
+  }
+  return `${partes}${partes ? ' · ' : ''}pago no banco ${dm(pagoEm)}${rel}`;
+}
+
 export const CAMPOS_POR_ESPECIE: Record<EspecieLancDoc, {
   numero: string; data: string; valor: string;
   /** O rótulo do emitente; `null` = o tipo não tem emitente. */
@@ -452,8 +466,11 @@ export const CAMPOS_POR_ESPECIE: Record<EspecieLancDoc, {
   outro: { numero: 'Identificação', data: 'Data', valor: 'Valor', emitente: 'Emitente', serie: false, chave: false, dataNaSugestao: 'data' },
 };
 
-export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao, onVerOQueANotaMuda, completarPelaNota, onAbrirExistente, onCriarFornecedor }: {
+export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao, onVerOQueANotaMuda, completarPelaNota, onAbrirExistente, onCriarFornecedor, notaManda }: {
   api: LancamentoDocumentosApi;
+  /** CONC-CRIAR-COM-NOTA-02 (D-c) — lançamento NOVO pelo extrato: a NOTA preenche o lançamento, não há o que comparar ("difere do quê?");
+   *  no lugar, uma linha: emissão · vencimento da nota · pago no banco (`pagoEm`, a data do extrato). */
+  notaManda?: { pagoEm: string | null };
   /** NOTA-LIGAR-LANCAMENTO-01 P1 — "Cadastrar esta filial" (ausente = sem o gesto) */
   onCriarFornecedor?: CriarFornecedorDoDocumento;
   /** P167 — a mesma NF já registrada aqui: abrir a que existe (no lugar de registrar outra) */
@@ -581,7 +598,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
     } finally { setLendoANota(false); }
   };
   /* onde a nota e o lançamento divergem: os dois lado a lado; "usar o do lançamento" troca SÓ aquele campo (e volta) */
-  const divergencias = lida ? divergenciasDaNota(lida.campos, {
+  const divergencias = lida && !notaManda ? divergenciasDaNota(lida.campos, {
     numero: lida.antes.numero || null, dataEmissao: lida.antes.dataEmissao || null, valor: lida.antes.valor,
     emitenteId: lida.antes.emitenteId || null, emitenteNome: lida.antes.emitenteNome,
   }, lida.emitenteId) : [];
@@ -809,7 +826,8 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
         ) : lida ? (
           <div className="rounded border border-sky-300 bg-sky-50 px-2 py-1 text-[10px] leading-[14px] text-sky-900" data-testid="nota-lida">
             <div className="flex flex-wrap items-center gap-x-2">
-              <span className="font-medium">Lido da nota {lida.campos.numero} (chave conferida){divergencias.length ? ` · difere ${sug ? `do que ${sug.origem ?? 'o lançamento'} diz` : 'do documento'}:` : ` · confere com ${sug?.origem ?? 'o lançamento'}`}</span>
+              <span className="font-medium">Lido da nota {lida.campos.numero} (chave conferida){notaManda ? ' · a nota preenche o lançamento' : divergencias.length ? ` · difere ${sug ? `do que ${sug.origem ?? 'o lançamento'} diz` : 'do documento'}:` : ` · confere com ${sug?.origem ?? 'o lançamento'}`}</span>
+              {notaManda && <span data-testid="nota-datas">· {linhaDasDatasDaNota(lida.nota.emissao, lida.nota.duplicatas[0]?.vencimento ?? null, notaManda.pagoEm)}</span>}
               {previaAtual && (previaAtual.recusa
                 ? <span className="text-destructive" data-testid="nota-lancamento-recusa">· o lançamento não muda: {previaAtual.recusa}</span>
                 : previaAtual.muda.length > 0 && <span data-testid="nota-lancamento-fica">· ao registrar, o lançamento fica com {previaAtual.muda.join(', ')}</span>)}

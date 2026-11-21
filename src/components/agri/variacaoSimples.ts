@@ -7,7 +7,8 @@
  * produção" e "Efeito de mercado" do DRE (FASE 0 de 10/11: iguais ao centavo nas 2 fazendas da Vera
  * jan–out/26). Refazer a partir de q·pm·pk arredondados do payload dava R$ 5,84 de diferença (BG).
  * Aqui só se SOMA (grupo, total) e se DIVIDE (R$/@ ponderado = valor ÷ @).
- * ⚠ O ÁGIO (troca de categoria) FICA DENTRO DA PRODUÇÃO, como no DRE: não tem linha própria.
+ * ⚠ A TROCA DE CATEGORIA FICA DENTRO DO MERCADO, como no DRE (REBANHO-AGIO-PROVISORIO-01, migration 20261028115600: mudar
+ * de categoria não muda valor) — e tem linha própria no "De onde veio" (a 3), separada do mercado do mesmo gado (a 4).
  */
 import { formatNum } from '@/lib/calculos/formatters';
 import type { MovimentosPec } from '@/hooks/useDrePecuaria';
@@ -18,8 +19,8 @@ export interface CatDaVariacao {
   at0: number; at1: number;
   /** início a preço do início · fim a preço do início · fim a preço do fim (do payload) */
   v0: number; v1p0: number; v1p1: number;
-  /** `vpb` e `efeito` da RPC */
-  producao: number; mercado: number;
+  /** `vpb` e `efeito` da RPC; `troca` = a `troca_categoria` (a parte do `efeito` que é troca de categoria) */
+  producao: number; mercado: number; troca: number;
 }
 
 /** Uma linha da aba Por categoria (categoria, grupo ou total). */
@@ -31,7 +32,7 @@ export interface LinhaDaVariacao {
   dPkPct: number | null;
   /** início · fim a preço do início · fim */
   v0: number; v1p0: number; v1: number;
-  producao: number; mercado: number; total: number;
+  producao: number; mercado: number; troca: number; total: number;
 }
 
 const porAt = (valor: number, at: number) => (at === 0 ? null : valor / at);
@@ -47,11 +48,11 @@ export function linhaDe(nome: string, cs: readonly CatDaVariacao[]): LinhaDaVari
   const v0 = s(c => c.v0); const v1p0 = s(c => c.v1p0); const v1 = s(c => c.v1p1);
   const pk0 = porAt(v0, at0) ?? porAt(v1p0, at1);
   const pk1 = porAt(v1, at1);
-  const producao = s(c => c.producao); const mercado = s(c => c.mercado);
+  const producao = s(c => c.producao); const mercado = s(c => c.mercado); const troca = s(c => c.troca);
   return {
     nome, at0, at1, dAt: at1 - at0, pk0, pk1,
     dPkPct: pk0 == null || pk1 == null || pk0 === 0 ? null : (pk1 / pk0 - 1) * 100,
-    v0, v1p0, v1, producao, mercado, total: producao + mercado,
+    v0, v1p0, v1, producao, mercado, troca, total: producao + mercado,
   };
 }
 
@@ -138,17 +139,24 @@ export function datasDasPontas(p0: string, p1: string): { inicio: string; fim: s
  * da @ em 3 degraus: o do início (valor ÷ @ do início) → o do rebanho de HOJE a preços do início (Σ @fim·P_início ÷ @fim) → o de
  * hoje (valor do fim ÷ @ do fim).
  *   1 Quantidade de arrobas: Δ@ × o preço médio do início.
- *   2 Tipo de gado (mistura + ágio): o RESTO da Variação por produção (vpb da RPC − linha 1). Por isso 1 + 2 = vpb, ao centavo.
- *   3 Mercado: o efeito de mercado da RPC.
- *   Total: Valor fim − Valor início = 1 + 2 + 3.
- * ⚠ AS LINHAS 2 E 3 NÃO SE REFAZEM: saem do vpb e do efeito da RPC (as linhas do DRE). Só a 1 é conta da tela.
+ *   2 Composição do rebanho (a mistura): o RESTO da Variação por produção (vpb da RPC − linha 1). Por isso 1 + 2 = vpb, ao centavo.
+ *   3 Troca de categoria: a `troca_categoria` da RPC — o lote que mudou de categoria, ao preço da nova (REBANHO-AGIO-PROVISORIO-01:
+ *     não é produção). O degrau do preço passa de pMeio a pTroca = (fim a preço do início + troca) ÷ @ do fim.
+ *   4 Mercado: o RESTO do efeito de mercado da RPC (efeito − linha 3): o mesmo gado de hoje, preço de hoje. Por isso 3 + 4 = efeito.
+ *   Total: Valor fim − Valor início = 1 + 2 + 3 + 4.
+ * ⚠ AS LINHAS 2, 3 E 4 NÃO SE REFAZEM: saem do vpb, da troca e do efeito da RPC (as linhas do DRE). Só a 1 é conta da tela.
  */
 export interface DegrausDoPreco {
-  /** os 3 degraus do preço médio ponderado da @; `null` sem @ na ponta */
-  p0: number | null; pMeio: number | null; p1: number | null;
+  /** os degraus do preço médio ponderado da @; `null` sem @ na ponta */
+  p0: number | null; pMeio: number | null; pTroca: number | null; p1: number | null;
   quantidade: { at0: number; at1: number; dAt: number; vale: number };
   tipo: { vale: number };
+  /** a linha 3 — a troca de categoria (dentro do efeito de mercado) */
+  troca: { vale: number };
+  /** a linha 4 — o mercado do mesmo gado (efeito − troca) */
   mercado: { vale: number };
+  /** o efeito de mercado da RPC (3 + 4) — o número da linha "Efeito de mercado" do DRE */
+  efeito: number;
   total: { v0: number; v1: number; vale: number };
   /** o vpb (1 + 2) — o número da linha "Variação por produção" do DRE */
   producao: number;
@@ -156,13 +164,16 @@ export interface DegrausDoPreco {
 export function degrausDoPreco(t: LinhaDaVariacao): DegrausDoPreco {
   const p0 = t.pk0;
   const pMeio = t.at1 === 0 ? null : t.v1p0 / t.at1;
+  const pTroca = t.at1 === 0 ? null : (t.v1p0 + t.troca) / t.at1;
   const p1 = t.pk1;
   const q = t.dAt * (p0 ?? 0);
   return {
-    p0, pMeio, p1,
+    p0, pMeio, pTroca, p1,
     quantidade: { at0: t.at0, at1: t.at1, dAt: t.dAt, vale: q },
     tipo: { vale: t.producao - q },
-    mercado: { vale: t.mercado },
+    troca: { vale: t.troca },
+    mercado: { vale: t.mercado - t.troca },
+    efeito: t.mercado,
     total: { v0: t.v0, v1: t.v1, vale: t.producao + t.mercado },
     producao: t.producao,
   };

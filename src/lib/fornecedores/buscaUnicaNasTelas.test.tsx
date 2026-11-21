@@ -37,7 +37,7 @@ describe('a busca única nas telas (fonte)', () => {
   it.each([
     /* FORN-CAMPO-01: o do desktop saiu do `nomeInteiro` ("…" + title); o do celular segue */
     ['pages/FinanceiroV2Tab.tsx', /<FavorecidoSelect[\s\S]{0,200}fornecedores=\{fornecedoresDoFiltro\}[\s\S]{0,40}situacao="todos"( nomeInteiro)? mostrarUso/g, 2],
-    ['pages/FinanciamentosListaPage.tsx', /<FavorecidoSelect[\s\S]{0,200}fornecedores=\{credores\} situacao="todos" nomeInteiro/g, 1],
+    ['pages/FinanciamentosListaPage.tsx', /<FavorecidoSelect[\s\S]{0,200}fornecedores=\{aba === 'parcelas' \? credoresDasCompras : credores\} situacao="todos" nomeInteiro/g, 1],
     ['pages/LancamentosTab.tsx', /<FavorecidoSelect \/\* FORN-BUSCA-UNICA-01/g, 3],
     ['components/compra/CompraMetaModalShell.tsx', /<CampoDeFornecedor/g, 1],
     ['components/venda/VendaMetaModalShell.tsx', /<CampoDeFornecedor/g, 1],

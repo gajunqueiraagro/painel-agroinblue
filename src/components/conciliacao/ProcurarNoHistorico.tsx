@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { nomeDoHistorico } from '@/lib/conciliacao/nomeDoHistorico';
 import { TabelaDaLista } from '@/components/financeiro-v2/TabelaDaLista';
 import { CabecalhoParaCasar, LinhaParaCasarNaTabela, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, TODAS_AS_COLUNAS_PARA_CASAR, largurasParaCasar,
-  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR } from '@/components/conciliacao/TabelaParaCasar';
+  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR, deltasDoMovimento } from '@/components/conciliacao/TabelaParaCasar';
 import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/conciliacao/complementoDasLinhas';
 import {
   lerResultado, fraseDaFaixa, modeloDoAchado, contagemDosAchados, ONDE_TODOS, acaoDoAchado, outraConta, ordenarAchados, proximaOrdem,
@@ -98,9 +98,15 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
     const n = new Set(s); if (n.has(o)) n.delete(o); else n.add(o); return n;
   });
 
-  const achados = useMemo(() => (estado.tipo === 'pronto' ? ordenarAchados(estado.r.achados, ordem) : []), [estado, ordem]);
   /* o nº da NF de cada achado (a busca não o traz): uma leitura pelos ids, depois de procurar */
   const [complemento, setComplemento] = useState<ReadonlyMap<string, ComplementoDaLinha>>(new Map());
+  /* D3 (homologação Edson 11:40): NF, Δ valor, Δ dias e Motivo também ordenam (os valores que a linha mostra) */
+  const achados = useMemo(() => (estado.tipo === 'pronto' ? ordenarAchados(estado.r.achados, ordem, (a, c) => {
+    if (c === 'nf') { const n = complemento.get(a.lancamentoId)?.numeroDocumento; return n ? n.replace(/\D/g, '').padStart(20, '0') : null; }
+    if (c === 'motivo') return outraConta(a, contaId) ? 'outra conta' : acaoDoAchado(a, contaId, !!onCasar) === 'criar_igual' ? 'pago · modelo' : 'em aberto';
+    const d = deltasDoMovimento(movimento, { valor: a.valor, venc: a.dataVencimento });
+    return c === 'dvalor' ? d.deltaValor : d.deltaDias;
+  }) : []), [estado, ordem, complemento, contaId, onCasar, movimento]);
   useEffect(() => {
     let vivo = true;
     if (!clienteId || estado.tipo !== 'pronto' || !estado.r.achados.length) { setComplemento(new Map()); return; }
@@ -115,7 +121,8 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
   const linhasNoQuadro = (frase ? 1 : 0) + (estado.tipo === 'pronto' ? Math.max(1, achados.length) : estado.tipo === 'falhou' ? 1 : 0);
   /* UI-FONTE-GATE-01 (Chat 12/11 17:05, escolha A): no histórico Faz. e NF ficam SEMPRE reservadas — os achados chegam por gesto e a NF
      ainda depois (o complemento); colunas pelo dado fariam o cabeçalho andar (desloca casar-sugestoes-procurar). Só as Sugestões as tiram. */
-  const colunas = TODAS_AS_COLUNAS_PARA_CASAR;
+  /* D-g — Δ valor e Δ dias contra o movimento do banco */
+  const colunas = { ...TODAS_AS_COLUNAS_PARA_CASAR, deltas: true };
   const larguras = largurasParaCasar(colunas);
 
   return (
@@ -148,6 +155,9 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
       </div>
 
       {/* ⚠ o quadro: ALTURA fixa (na estação, cabeçalho + 6 linhas; no modal, o que sobra dele), o vazio fica dentro; o corpo rola aqui */}
+      {/* homologação Edson 11:40 (extra): no modal, SEM achados (antes de procurar, procurando, falhou ou "nada achado") o quadro ENCOLHE às linhas
+          que tem — nada de bloco branco; com achados, ocupa a sobra como antes */}
+      {/* D2 (homologação 14:32): no modal, o quadro ocupa a SOBRA (o modal tem tamanho fixo); vazio = a linha "nada achado" no topo dele */}
       <div className={cn('mt-1 overflow-auto rounded-sm border bg-card', preencher && 'min-h-0 flex-1')}
         style={preencher ? { minHeight: ALTURA_DO_CABECALHO_PARA_CASAR + 2 * ALTURA_DA_LINHA_PARA_CASAR + 2 } : { height: alturaFixa }} data-testid="procurar-historico-quadro">
         <div style={{ minWidth: PISO_DO_QUADRO }} data-testid="procurar-historico-piso">
@@ -181,7 +191,8 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
                 <LinhaParaCasarNaTabela key={a.lancamentoId} colunas={colunas} testidDaLinha="procurar-historico-achado" dadoAcao={acao} testid="procurar-acao"
                   l={{ id: a.lancamentoId, comp: a.dataCompetencia, venc: a.dataVencimento, pgto: a.dataPagamento, descricao: a.descricao, tituloDescricao,
                     fornecedor: a.fornecedor, fazendaCodigo: a.fazendaCodigo ?? a.fazenda, fazendaNome: a.fazenda,
-                    tipoDocumento: x?.tipoDocumento ?? null, numeroDocumento: x?.numeroDocumento ?? null, valor: a.valor, status: a.status, conciliado: a.conciliado }}
+                    tipoDocumento: x?.tipoDocumento ?? null, numeroDocumento: x?.numeroDocumento ?? null, valor: a.valor, status: a.status, conciliado: a.conciliado,
+                    ...deltasDoMovimento(movimento, { valor: a.valor, venc: a.dataVencimento }) }}
                   marcada={!!selecao?.marcado(a.lancamentoId)} podeMarcar={!!selecao && casa}
                   motivoMarcar={selecao ? 'Pago: não se casa de novo — use "Criar igual".' : undefined}
                   alternar={() => selecao?.alternar(a, acao === 'casar_trocando_conta')}

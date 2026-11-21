@@ -37,7 +37,7 @@ export function NovoMenuLancamentos({ boletosPedemAcao, notasDaReceita = null, o
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" data-testid="btn-novo" title="Novo lançamento: em branco, da nota fiscal ou dos boletos"
+        <Button size="sm" data-testid="btn-novo" title="Novo lançamento: em branco, da nota fiscal ou da caixa de entrada"
           className={cn('h-6 gap-0.5 px-1.5 text-[10px] bg-[#E7C873] text-foreground hover:bg-[#D9B95F]', className)}>
           <Plus className="h-3 w-3" /> Novo
           <TextoReservado reserva="99+" alinhar="direita" testid="selo-boletos"
@@ -60,10 +60,10 @@ export function NovoMenuLancamentos({ boletosPedemAcao, notasDaReceita = null, o
         </DropdownMenuItem>
         <DropdownMenuItem className={item} onSelect={onDosBoletos} data-testid="novo-dos-boletos">
           <span className="flex w-full justify-between font-semibold">
-            Dos boletos
+            Da caixa de entrada
             {seloBoletos && <span className="font-semibold tabular-nums text-amber-200">{seloBoletos} pedem ação</span>}
           </span>
-          <span className="text-zinc-200">solte os PDFs: cada boleto acha a parcela em aberto</span>
+          <span className="text-zinc-200">boletos, notas e folha que chegaram por e-mail</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

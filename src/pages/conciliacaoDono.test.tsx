@@ -43,7 +43,8 @@ vi.mock('@/integrations/supabase/client', () => {
   const tabela = (nome: string) => {
     const b: Record<string, unknown> = {};
     /* `ilike`: a consulta das contas que importam OFX (o ícone do saldo, UI-SEM-CORTE-02) */
-    for (const m of ['select', 'eq', 'gte', 'lte', 'lt', 'is', 'not', 'neq', 'order', 'in', 'limit', 'range', 'ilike']) b[m] = () => b;
+    /* CONC-PAINEL-CONTA-01 — `or` entrou: sem ele o cadastro das contas não carregava ("or is not a function", erro antigo do arquivo) */
+    for (const m of ['select', 'eq', 'gte', 'lte', 'lt', 'is', 'not', 'neq', 'order', 'in', 'limit', 'range', 'ilike', 'or']) b[m] = () => b;
     b.single = () => Promise.resolve({ data: { fazenda_id: 'faz' }, error: null });
     b.insert = (linha: Record<string, unknown>) => { B.inserts.push({ tabela: nome, linha }); return Promise.resolve({ error: null }); };
     b.then = (ok: (x: { data: unknown[]; error: null }) => unknown) =>
@@ -438,10 +439,13 @@ describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Inves
   it('o lápis da linha abre com o extrato PRÓPRIO — o valor que o operador digitou (−55.734,67), nunca o consolidado', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
+    /* CONC-PAINEL-CONTA-01 — o ✎ abre o PAINEL da conta; o saldo à mão é o "✎ Informar" do passo 4 (o mesmo SaldoRealDialog) */
     fireEvent.click(within(linhaDaConta('brad')).getByTestId('botao-lapis'));
+    fireEvent.click(await screen.findByTestId('painel-informar-saldo'));
     await waitFor(() => expect(B.lapis.length).toBe(1));
     expect(B.lapis[0]).toMatchObject({ contaId: 'brad', saldoAtual: -55734.67 });
     fireEvent.click(within(linhaDaConta('if')).getByTestId('botao-lapis'));
+    fireEvent.click(await screen.findByTestId('painel-informar-saldo'));
     await waitFor(() => expect(B.lapis.length).toBe(2));
     expect(B.lapis[1]).toMatchObject({ contaId: 'if', saldoAtual: -4.02 });
   });
@@ -573,6 +577,34 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
 });
 
 /* ── PR-CONC-SALDOS-LAYOUT-01: só apresentação de "Saldos por conta" ── */
+describe('CONC-PAINEL-CONTA-01 — a coluna Conta não muda de largura com a seleção (nada se desloca)', () => {
+  it('a largura vem do CADASTRO inteiro (a conta fora da vista também conta) e não muda ao escolher uma conta', async () => {
+    /* 'Conta Escondida Bem Comprida' (28 letras) está no cadastro mas NÃO no dono: nunca aparece na tabela. Na estimativa do jsdom
+       (6,2px por letra + 26 de folga) ela dá 200px; o maior nome VISÍVEL ('Cartão BB - Visa Infinite', 25) daria 181px. */
+    B.contas = [...B.contas, conta('escondida', 'Conta Escondida Bem Comprida')];
+    montar();
+    const linhas = await screen.findAllByTestId('linha-saldo-conta');
+    expect(linhas.some((l) => l.getAttribute('data-conta') === 'escondida')).toBe(false);
+    const largura = () => screen.getByTestId('tabela-saldos').querySelector('col')?.style.width;
+    expect(largura()).toBe('200px');
+    fireEvent.click(linhas[0]);
+    await waitFor(() => expect(screen.getAllByTestId('linha-saldo-conta').length).toBeGreaterThan(0));
+    expect(largura()).toBe('200px');
+  });
+  it('o MEDIDOR escondido tem os nomes do cadastro (no peso da linha escolhida), os grupos e o "Total"', async () => {
+    B.contas = [...B.contas, conta('escondida', 'Conta Escondida Bem Comprida')];
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const medidor = screen.getByTestId('medidor-conta');
+    expect(medidor.className).toContain('invisible');
+    expect(medidor.getAttribute('aria-hidden')).not.toBeNull();
+    const textos = [...medidor.querySelectorAll('[data-medida]')].map((m) => m.getAttribute('data-texto'));
+    expect(medidor.textContent).toBe('');
+    expect(textos).toEqual(expect.arrayContaining(['Conta Escondida Bem Comprida', 'Total', 'Conta corrente']));
+    expect(medidor.querySelector('[data-medida="36"]')?.className).toContain('font-semibold');
+  });
+});
+
 describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho no Extrato, escolhida com contorno, régua fixa', () => {
   it('(a) a faixa "Informe o saldo final REAL…" não existe; o lápis da linha continua', async () => {
     montar();
@@ -685,7 +717,10 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     expect(temReguaFixa(fonte.replace('[38, 44, 86, 86, 86, 38]', '[95, 95, 112, 34]'))).toBe(false);
     /* e o colgroup desenhado tem as quatro larguras */
     const cols = Array.from(total.closest('table')!.querySelectorAll('col')).map((c) => c.style.width);
-    expect(cols).toEqual(['', '38px', '44px', '86px', '86px', '86px', '38px']);
+    /* CONC-PAINEL-CONTA-01 (item 3) — a Conta deixou de ser "o resto": tem a largura do MAIOR nome (medida, com piso de 110px) */
+    expect(cols.slice(1)).toEqual(['38px', '44px', '86px', '86px', '86px', '38px']);
+    expect(cols[0]).toMatch(/^\d+px$/);
+    expect(Number(cols[0].replace('px', ''))).toBeGreaterThanOrEqual(110);
   });
 });
 
@@ -836,14 +871,15 @@ describe('T9 — nenhum arquivo tocado importa a conta antiga', () => {
 
 /* ── CONC-CARDS-ORDEM-01 → P141 → P166 (CONC-TELA-02): a faixa do status em cima, e DOIS blocos: Saldos por conta | Resumo do mês ── */
 describe('ORDEM — a faixa do status e os 2 blocos: Saldos por conta | Resumo do mês (P166)', () => {
-  it('a faixa vem antes dos blocos; o grid tem Saldos (o resto) e Resumo (260px); o card Status não existe', async () => {
+  it('a faixa vem antes dos blocos; o grid tem Saldos (a largura da tabela) e Resumo (o resto, piso 260px); o card Status não existe', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
     const faixa = screen.getByTestId('faixa-status');
     const grid = screen.getByTestId('blocos-conciliacao');
     const antes = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     expect(antes(faixa, grid)).toBe(true);
-    expect(grid.style.gridTemplateColumns).toBe('minmax(0,1fr) 260px');
+    /* CONC-PAINEL-CONTA-01 (Gabriel 12:42): sem espaço sobrando — Saldos na largura da tabela, o Resumo cresce */
+    expect(grid.style.gridTemplateColumns).toBe('max-content minmax(260px,1fr)');
     expect([...grid.children].map((c) => c.getAttribute('data-testid'))).toEqual(['card-saldos', 'card-resumo']);
     expect(within(grid.children[0] as HTMLElement).getByText('Saldos por conta')).toBeInTheDocument();
     expect(within(grid.children[1] as HTMLElement).getByText('Resumo do mês')).toBeInTheDocument();
@@ -866,15 +902,15 @@ describe('P166 — a tela da Conciliação sem CAIXA ALTA, abas e o Resumo do m�
     expect(container.querySelectorAll('[class*="uppercase"], [class*="tracking-"]').length).toBe(1);
   });
 
-  it('as cinco abas com só a 1ª letra maiúscula; a aberta branca com o traço navy embaixo', async () => {
+  it('as cinco abas com só a 1ª letra maiúscula; a aberta ENCAIXA no corpo (UI-MESES-PADRAO-01: a cor do corpo, texto navy)', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
     const abas = [...document.querySelectorAll('button[data-aba]')];
     expect(abas.map((a) => a.textContent)).toEqual(['Importar banco', 'Casar lançamentos', 'Enriquecer (Excel)', 'Extrato gerencial', 'Conciliação']);
     const aberta = abas.find((a) => a.getAttribute('data-aba') === 'conciliacao')!;
-    expect(aberta.className).toContain('bg-card');
-    expect(aberta.className).toContain('inset_0_-2px_0_hsl(var(--primary))');
-    for (const a of abas.filter((x) => x !== aberta)) expect(a.className).not.toContain('inset_0_-2px_0');
+    expect(aberta.className).toContain('bg-corpo');
+    expect(aberta.className).toContain('text-navy');
+    for (const a of abas.filter((x) => x !== aberta)) expect(a.className).not.toContain('bg-corpo');
     /* o mesmo peso em todas: trocar de aba não muda a largura de nenhuma */
     expect(new Set(abas.map((a) => (a.className.match(/font-(medium|bold|semibold|normal)/) ?? [''])[0]))).toEqual(new Set(['font-medium']));
   });

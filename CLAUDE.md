@@ -240,7 +240,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - CONC-SUGESTOES-FONTE-01: o fornecedor que o HISTÓRICO conhece (o `resumo` da busca do P153, pela `fn_conciliacao_fornecedores_do_historico`, nunca regra
   na tela) vem primeiro nas sugestões e a pista de nome de OUTRO fornecedor vai ao fim com "só texto parecido"; o Sugestões para casar usa a fonte da lista do Financeiro (sem variante grande).
 - CONC-ORDENAR-01: na Conciliação TODA tabela ordena pelo `ThOrdenavel` (Palco; Saldos por conta DENTRO do grupo, Total e faixas parados); o Resumo do mês é exceção declarada (`data-ordenar-excecao`, linhas fixas da conta).
-- UI-FONTE-GATE-01 (1): nas tabelas de casar o nome QUEBRA (`quebra`), nunca "…"; Faz./NF nas Sugestões só com dado, no histórico SEMPRE reservadas (chegam por gesto: o cabeçalho não anda); seta da ordem antes do rótulo à direita.
+- UI-FONTE-GATE-01 (1): nas tabelas de casar o nome em LINHA ÚNICA ("…" + `title`; CONC-CRIAR-COM-NOTA-02 D-g, Gabriel 18/11, trocou a `quebra`) com Δ valor/Δ dias contra o banco; Faz./NF nas Sugestões só com dado, no histórico SEMPRE reservadas (chegam por gesto: o cabeçalho não anda); seta da ordem antes do rótulo à direita.
 - P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
   seguem sem os sem caixa.
 - P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
@@ -269,6 +269,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   `favorecido_id`); "Marcar todos os N do filtro" pela MESMA RPC da grade (`so_linhas`); nunca UPDATE solto de favorecido.
 - NOTA-JA-LANCADA-01: antes de oferecer criar pela nota, `fn_nota_ja_lancada` (qualquer status, cadastro parecido, numero, chave); achou =
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
+- FORN-ACHAR-CNPJ-01 (19/11): com CNPJ no XML o documento MANDA (exato → RAIZ = outra filial, não propõe; outro documento NUNCA proposto); pelo nome SÓ a
+  razão social inteira igual (`razaoParaComparar`; nunca fantasia/cidade/"contém"); o comparar só oferece CNPJ/IE/razão quando `eOMesmoFornecedor`.
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
   desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
 - DOC-ANEXO-E-IMPORT-01 F1: SÓ A NF SE LÊ COMO NOTA — recibo/boleto/comprovante/outro nunca passam pelo `lerNota` nem pelo `extrairDanfe` e a
@@ -315,6 +317,13 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P128a: a NOTA JÁ NO SISTEMA acha TODOS os irmãos (`fn_nota_ja_lancada`: nº no documento, "pela soma", o irmão do parcelamento) e mostra a
   TABELA SISTEMA × NOTA (`linhasSistemaNota`/`fraseDoAchado`; diferença em vermelho, nunca corrigida) com 3 caminhos; a chave num lançamento não
   barra (só a de OC); as duas portas (+ Da nota e o Documentos do Editar, `notaParaAPrevia`) abrem a MESMA prévia.
+- FIN-REGRA-VARIAVEL-FAZENDA-01: a regra fazenda × conta tem UM dono, o banco (`_fn_regra_fazenda_da_conta`; gatilho só no novo ou quando fazenda/conta mudam); a tela
+  só PERGUNTA (`fn_regra_fazenda_da_conta` → frase ao lado do Salvar, campo vermelho) e corrige o legado pelo selo + modal (`fn_lancamentos_trocar_fazenda`: prévia, motivo, desfazer; irmãs do contrato juntas).
+- FIN-REGRA-MODAL-02: a SUGESTÃO do modal da regra é do banco (`fn_lancamentos_regra_fazenda_pendentes`: descrição → fornecedor → ITR única/maior → histórico;
+  citar = `_fn_fazenda_citada`, interna fechada) e a conta ADM é a equivalente de custo fixo do mesmo centro e tipo; a linha abre o lançamento por cima (`useCamadas`).
+- COMPRAS-PARC-LAYOUT-02: os 3 modais de obrigação (Cadastro/Financiamento, ObrigacaoDialog = só compra parcelada, Consorcio) têm a MESMA moldura
+  `h-[min(720px,calc(100vh-16px))] w-[min(1150px,calc(100vw-16px))]`; o botão do topo da lista segue a aba (`ROTULO_DO_NOVO`, tipo travado por `tipoDaAba`);
+  as regras dos filtros da aba Compras moram em `lib/financiamentos/filtrosDasCompras.ts` (Atividade das atividades LIGADAS + Administrativo por último).
 - P155: trava que ESCREVE um campo (o `FazendaSelect` forçando Administrativo) só age com a classificação do lançamento ABERTO
   (`classificacaoDe`): o render de transição da abertura tem o estado do reset ("última atividade") e gravava a fazenda errada no Salvar.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
@@ -325,6 +334,11 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   a tela sair nao escreve nem avisa; leituras independentes da abertura saem juntas (`Promise.all`), nunca em serie.
 - Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
   venda a NF do produtor SOMA e contrato/NF entrada/comprovante nao; a mesma chave viva no cliente e' barrada no banco (23505, com link).
+
+- NOTA-PARCELAR-01: a nota SEM duplicata cuja achada vale nota ÷ N segue o caminho do Caso 3 fora do cartão (`noCartao.cartao=false`): posição pela
+  ordem sem pergunta quando a descrição não tem número; as que faltam nascem mês a mês (resto na última); o "None" da planilha sai em `semVazioEscrito`.
+- RATEIO-HIGINO-01: "Conferir rateio" (⋯ da transferência para a conta comum) só CONFERE os itens que já existem (D2: recorrências intocadas) e grava
+  pela porta do `completarComANota` + `criarLancamentoComId` + `gravarDocumentosDoParcelamento`; nenhum gravador novo.
 
 ### Tela (detalhes em docs/PADROES-UI.md)
 - UI-GATE-RAPIDO-01: durante o trabalho, `npm run check:ui-rapido` (cortes + deslocamento so' das telas que o diff contra o origin/proto
@@ -352,6 +366,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   DECLARADA (D7, Gabriel 28/10): a coluna Data dessa lista é dd/mm (o gate aceita só em tabela `data-dia-mes`; o auto-teste a prova).
   P159b: a aba Sistema e o ↗ "Extrato do sistema" são a mesma lista (○ âmbar = não conciliado, o status no `title`); a Evolução: Dif. do dia =
   Mov. banco − Mov. sistema (`montarEvolucao`), some só o dia SEM NENHUMA linha, "ver o dia na Conferência" = o Espelho abre a Conferência no dia (`onAbaChange`).
+- CONC-CRIAR-COM-NOTA-02 D-f/D-h: em aberto com VALOR EXATO e vencimento −60/+90 dias do movimento é candidato elegível (`fn_candidatos_conciliacao`, lote 22; pagamento antecipado/atrasado); o Casar com o banco mostra EXTRATO × SISTEMA numa tabela (valor sob valor) e a faixa "Pago N dias ANTES/DEPOIS do vencimento" (`fraseDoPagamento`).
 - P159f: "Sugestões" (o botão do sem par e o "Ver sugestões (N)" do ⋯) abre SEMPRE; com 0, "Nenhuma sugestão automática" e o cursor no campo do "Procurar no histórico"; o contorno azul só sinaliza que há candidatos.
 - P159e: as 3 abas do Casar lançamentos no mock `mock-casar-abas-v1.html` (linha 18px a 10; dia/fechamento/saldos 22px negrito; data dd/mm/aaaa); Extrato e Sistema em Entradas · Saídas · Saldo, o saldo inicial/do dia/final
   NA coluna Saldo (rodapé = tabela com o mesmo `colgroup`; gate `alinhamento`); Conferência: o EXTRATO é a coluna flexível, inteiro ≥1366 (gate `inteiroDe`).

@@ -22,13 +22,16 @@ import { createServer } from 'vite';
 import { chromium } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { filtroRapido } from './ui-gate-rapido.mjs';
+import { filtroRapido, telaDoCenario } from './ui-gate-rapido.mjs';
 import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
   paginasDaMedicao } from './ui-cortes/teto.mjs';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
 const SO = arg('--so');
+/* UI-MESES-PADRAO-01 (decisão do Gabriel 18/11: publicar com o gate das telas ALCANÇADAS, o completo à noite) — `--telas a,b,c`: só os
+   cenários dessas telas da bancada (o `tela=` da url, a MESMA regra do modo rápido). Não substitui o completo: é o gate parcial declarado. */
+const TELAS = arg('--telas') ? new Set(arg('--telas').split(',')) : null;
 /* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
    testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
 async function cliqueNoGesto(p, t) {
@@ -63,6 +66,8 @@ const REGIAO_DO_ROTULO = '*:has(> [data-testid="meta-regime"])';
 const botao = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await espera(p); };
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await espera(p); };
 const noLugar = (sel) => async (p) => { await p.locator(sel).first().dispatchEvent('click'); await espera(p); };
+/* UI-MESES-PADRAO-01 — os botões de mês da Visão Geral financeira (o SeletorPeriodo da casa não tem testid por mês) */
+const MES_DA_VG = '[data-testid="vg-meses"] [data-testid="seletor-periodo-meses"] > button';
 /* o gesto e, depois, a casca da bancada de volta ao topo (o clique rola a PAGINA para trazer o botao a vista; o que se mede e' a tela) */
 const noTopo = (g) => async (p) => { await g(p); await p.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('[data-casca]').forEach((c) => { c.scrollTop = 0; }); }); await espera(p, 150); };
 const ampliar = async (p) => { await p.locator('[data-testid="rodape-lancamentos"]').waitFor(); await espera(p, 900); await p.getByRole('button', { name: /^Ampliar$/ }).first().click(); await espera(p, 700); };
@@ -194,11 +199,22 @@ const CENARIOS = [
     ['fundo mapa', mapaCamada('Mapa')], ['fundo satélite', mapaCamada('Satélite')],
   ] },
   /* MAPA-IMPRESSAO-01 — no diálogo "Imprimir mapa", trocar o tamanho e a imagem não move nada (as áreas de mensagem têm altura fixa) */
+  /* RATEIO-HIGINO-01 — o "Conferir rateio": digitar o valor da relação e a NF numa linha (a parte, a situação e o rodapé mudam) e puxar um dos
+     outros do mês não move o cabeçalho, as colunas nem o rodapé (larguras fixas; a situação corta com "…" e o title) */
+  { nome: 'conferir-rateio', url: 'tela=conferir-rateio', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
+    antes: async (p) => { await p.locator('[data-testid="rateio-linha"]').first().waitFor({ timeout: 5000 }); await espera(p, 500); },
+    estados: [
+      ['valor da relação na 1ª linha', async (p) => { const i = p.locator('[data-testid="rateio-linha"]').first().locator('input[placeholder="0,00"]');
+        await i.click(); await i.fill('24691,34'); await i.blur(); await espera(p, 500); }],
+      ['NF na 1ª linha', digitar('[data-testid="rateio-nf"]', '885860')],
+      ['NF apagada', digitar('[data-testid="rateio-nf"]', '')],
+      ['puxar um dos outros', clicar('[data-testid="rateio-puxar"]')],
+    ] },
   /* DRE-VARIACAO-SIMPLES-01 — o modal da variação: trocar de aba (Resumo ↔ Por categoria) e de gráfico (Valor · Arrobas · Preço médio) não move
      o cabeçalho, as abas, os cards nem o segmentado (as duas abas ficam montadas; o gráfico tem altura fixa). O desenho do gráfico muda: não conta. */
   { nome: 'dre-pec-variacao', url: 'tela=dre&barra=32&f_de=2026-01&f_ate=2026-09', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
     naoMede: '.recharts-wrapper',
-    antes: async (p) => { await p.getByRole('button', { name: /^Detalhado$/ }).first().click(); await espera(p, 300);
+    antes: async (p) => { await p.getByRole('button', { name: /^Tudo aberto$/ }).first().click(); await espera(p, 300);
       await p.locator('tr', { hasText: 'Variação por produção' }).first().locator('td').nth(1).click();
       await p.locator('[data-testid="variacao-resumo"]').waitFor({ timeout: 5000 }); await espera(p, 2000); },
     estados: [
@@ -253,8 +269,12 @@ const CENARIOS = [
   /* DRE-LEVE-01 — as duas faixas de filtro do DRE não andam ao trocar o modo, a comparação, o Δ, o "por fazenda", o rateio, as unidades e
      a atividade (os lugares são reservados); a grade é o conteúdo que muda (`data-desloca-livre` no cartão). */
   { nome: 'dre', url: 'tela=dre&barra=32&f_de=2026-01&f_ate=2026-09&safra=s1', tamanhos: [[1126, 579], [1366, 768]], estados: [
-    ['detalhado', botao(/^Detalhado$/)], ['abrir tudo', botao(/^abrir tudo$/)], ['3 anos', botao(/^3$/)], ['meta', botao(/^Meta$/)],
-    ['1 ano', botao(/^1 ano$/)], ['Δ R$', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: 'Δ R$' }).click(); await p.keyboard.press('Escape'); await espera(p); }],
+    /* DRE-PAINEL-01: "Detalhado" virou "O que mudou" (padrão) · "Tudo aberto"; os anos 2–5 no "Mais ▾" */
+    ['tudo aberto', botao(/^Tudo aberto$/)], ['fechar tudo', botao(/^fechar tudo$/)], ['o que mudou', botao(/^O que mudou$/)],
+    ['3 anos', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('button', { name: '3', exact: true }).first().click(); await p.keyboard.press('Escape'); await espera(p); }],
+    /* a "Média 12 meses" fica desabilitada aqui (período de 9 meses, com o motivo no title): o cenário dela é o `dre-pec-media12` do cortes */
+    ['meta', botao(/^Meta$/)],
+    ['1 ano', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('button', { name: '1', exact: true }).first().click(); await p.keyboard.press('Escape'); await espera(p); }], ['Δ R$', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: 'Δ R$' }).click(); await p.keyboard.press('Escape'); await espera(p); }],
     ['por fazenda', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: /^Ver por fazenda/ }).click(); await p.keyboard.press('Escape'); await espera(p); }],
     ['R$/ha fora', botao(/^R\$\/ha$/)], ['resumido', botao(/^Resumido$/)], ['lavoura', botao(/^Lavoura$/)], ['pecuária', botao(/^Pecuária$/)]] },
   /* PROD-EVOLUCAO-01b — as setas do mês, o cenário e as abas do painel não deslocam a barra, os cards nem a tabela */
@@ -280,16 +300,16 @@ const CENARIOS = [
     ['o terceiro', botao(/Terceiro Exemplo/)], ['a PJ', botao(/Agropecuária Exemplo/)], ['o inativo', botao(/Produtor Antigo Exemplo/)],
     ['de volta à produtora', botao(/Produtora Sintética/)],
   ] },
-  /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos: trocar a aba e soltar os PDFs não move as abas, a área de soltar, o cabeçalho nem o
-     rodapé (o quadro da tabela é `data-desloca-livre`; o contador das abas e o do botão têm lugar reservado) */
-  { nome: 'caixa-boletos', url: 'tela=caixa-boletos', regiao: '[data-testid="caixa-de-boletos"]', estados: [
-    ['aba Na caixa', botao(/^Na caixa/)], ['aba Sem par', botao(/^Sem par/)], ['aba Todos', botao(/^Todos/)], ['aba Chegando', botao(/^Chegando/)],
-    ['soltar os PDFs', async (p) => {
-      const nomes = ['boleto-0031283.pdf', 'boleto_dez_G.pdf', 'boleto-condominio.pdf', 'boleto-pago-antes.pdf', 'Boleto_Unimed.pdf'];
-      await p.locator('[data-testid="input-da-caixa"]').setInputFiles(nomes.map((n) => ({ name: n, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
+  /* BOLETO D3d — a caixa por e-mail v2: trocar a aba (A resolver · Resolvidos · Ignorados), soltar arquivos, abrir a senha e clicar numa
+     linha não movem a faixa das abas, a área de soltar, o cabeçalho nem o rodapé (o quadro da tabela é `data-desloca-livre`; os contadores
+     das abas têm lugar reservado; o painel do arquivo ao lado tem largura fixa) */
+  { nome: 'caixa-boletos', url: 'tela=caixa-boletos', regiao: '[data-testid="caixa-de-boletos"]', antes: (p) => espera(p, 900), estados: [
+    ['aba Resolvidos', botao(/^Resolvidos/)], ['aba Ignorados', botao(/^Ignorados/)], ['aba A resolver', botao(/^A resolver/)],
+    ['soltar os arquivos', async (p) => {
+      const nomes = ['boleto-0031283.pdf', 'boleto_dez_G.pdf', 'Boleto_Unimed.pdf', 'nota-4410.xml'];
+      await p.locator('[data-testid="input-da-caixa"]').setInputFiles(nomes.map((n) => ({ name: n, mimeType: n.endsWith('.xml') ? 'text/xml' : 'application/pdf', buffer: Buffer.from(`%PDF ${n}`) })));
       await espera(p, 900); }],
-    ['abrir a senha', clicar('[data-testid="sugestao-de-senha"]')], ['aba Todos de novo', botao(/^Todos/)],
-    ['aba Por e-mail (D3c)', botao(/^Por e-mail/)], ['ler o PDF do e-mail', async (p) => { await p.locator('[data-testid="ler-do-email"]').first().click(); await espera(p, 900); }],
+    ['abrir a senha', clicar('[data-testid="sugestao-de-senha"]')], ['aba Ignorados de novo', botao(/^Ignorados/)], ['aba A resolver de novo', botao(/^A resolver/)],
   ] },
   /* BOLETO D3c — o endereço de boletos: trocar de modo (ver → trocar → prévia → cancelar → revogar) e de provedor não move o bloco do
      endereço, o da ação, as abas do passo a passo nem o rodapé (os blocos têm altura fixa; a lista dos passos é `data-desloca-livre`) */
@@ -585,8 +605,10 @@ const CENARIOS = [
   /* FIN-VISAO-GERAL-01 PR 3 — nada muda de altura ou posição ao trocar modo, mês, contas, atividade ou período: os QUADROS (card, gráfico,
      grade — `data-desloca`) e todos os controles ficam; o miolo deles é `data-desloca-livre` (o conteúdo que muda de propósito) */
   { nome: 'visao-geral', url: 'tela=visao-geral&barra=0', auto: true, estados: [
-    ['mês de março', clicar('[data-testid="vg-mes-3"]')], ['mês de dezembro (previsto)', clicar('[data-testid="vg-mes-12"]')],
-    ['ano anterior', botao(/^Ano anterior$/)],
+    /* UI-MESES-PADRAO-01 — o ‹ano› e os meses viraram o SeletorPeriodo da casa: o mês pela posição na fita; o ano anterior é a opção
+       logo abaixo da escolhida no seletor de ano (a lista é decrescente) */
+    ['mês de março', clicar(`${MES_DA_VG}:nth-child(3)`)], ['mês de dezembro (previsto)', clicar(`${MES_DA_VG}:nth-child(12)`)],
+    ['ano anterior', async (p) => { await clicar('[data-testid="vg-meses"] button[title="Ano"]')(p); await p.locator('[role="option"][data-state="checked"] + [role="option"]').first().click(); await espera(p); }],
     ['Últ. 12', botao(/^Últ\. 12$/)], ['6 + 6', botao(/^6 \+ 6$/)],
     /* abaixo de 768px os filtros da barra somem (`hidden md:flex`, a regra do atalho da barra): ali o gesto não existe e é pulado */
     ['só uma conta', async (p) => { if (!(await p.locator('[data-testid="vg-contas"]').isVisible())) return; await clicar('[data-testid="vg-contas"]')(p); await p.locator('button', { hasText: 'só esta' }).first().click({ force: true }); await espera(p); await p.keyboard.press('Escape'); await espera(p); }],
@@ -696,7 +718,7 @@ const CENARIOS = [
      jan 1 … ago 8) não move "Resultado" nem "Saldo final" */
   { nome: 'visao-geral-mes-grupos', url: 'tela=visao-geral&barra=0&vg_grupos=varia&mes=2026-01',
     presos: '[data-testid="card-linha-resultado"], [data-testid="card-linha-saldo-final"]',
-    estados: [1, 2, 4, 8, 3, 12, 10].map((m) => [`mês ${m}`, noLugar(`[data-testid="vg-mes-${m}"]`)]) },
+    estados: [1, 2, 4, 8, 3, 12, 10].map((m) => [`mês ${m}`, noLugar(`${MES_DA_VG}:nth-child(${m})`)]) },
   /* P100 item 7 — rolar a grade até o fim e de volta: o cabeçalho e as linhas do rodapé (Resultado, Saldo final) não saem do lugar */
   { nome: 'visao-geral-grade-rola', url: 'tela=visao-geral&barra=0',
     presos: '[data-testid="grade-linha-resultado"], [data-testid="grade-linha-saldo_final"]',
@@ -819,6 +841,13 @@ const CENARIOS = [
   }, estados: [1, 2, 3].map((i) => [`aba ${i}`, async (p) => { const t = p.locator('[role="dialog"] [role="tab"]').nth(i); if (await t.count()) { await t.click(); await espera(p, 500); } }]) },
   /* FIN-GUARDA-CHUVA G2 — o modal da linha: Revisar (a prévia entra na área FIXA de 96px, o botão vira Salvar) e ordenar os contratos não
      movem os blocos, o cabeçalho nem o rodapé; Cancelar linha troca a Revisão pelo motivo no mesmo lugar */
+  /* COMPRAS-PARC-LAYOUT-02 — o modal da compra parcelada na moldura dos 3 (1150 × 720): trocar de aba não move o título, a barra de abas,
+     o Resumo nem a linha do Salvar (a contagem da aba tem lugar reservado) */
+  { nome: 'compra-parcelada-abas', url: 'tela=compras-parceladas', tamanhos: [[1126, 579], [1280, 720], [1920, 1080]],
+    antes: async (p) => { await p.getByRole('tab', { name: /^Compras parceladas$/ }).first().click().catch(() => p.getByText(/^Compras parceladas$/).first().click());
+      await p.locator('[data-testid="novo-da-aba"]').click(); await p.locator('[data-testid="modal-da-compra-parcelada"]').waitFor(); await espera(p, 600); }, estados: [
+    ...['parcelas', 'classificacao', 'documentos', 'contrato'].map((k) => [`aba ${k}`, async (p) => { await p.locator(`[data-testid="aba-da-compra-${k}"]`).click(); await espera(p, 500); }]),
+  ] },
   { nome: 'financiamentos-linha-modal', url: 'tela=linha-credito', tamanhos: [[1126, 579], [1366, 768]],
     antes: async (p) => { await p.locator('[data-testid="tabela-contratos-da-linha"]').waitFor(); await espera(p, 600); }, estados: [
     ['Revisar', async (p) => { await p.locator('[data-testid="revisar-linha"]').click(); await espera(p, 600); }],
@@ -878,7 +907,8 @@ const CENARIOS = [
     ['atividade Pecuária', clicar('[data-testid="conta-barra-atividade"] button:has-text("Pecuária")')],
   ] },
   /* NOTA-FORNECEDOR-COMPARAR-01 — "Atualizar N campos" -> "Confirmar" (a frase aparece no rodape) e o estado "nao parece o certo" */
-  { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro', estados: [
+  /* FORN-ACHAR-CNPJ-01 — o cadastro que É o da nota (o de nome à mão não oferece nada marcado: o Atualizar fica apagado) */
+  { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro&v=mesmo', estados: [
     ['pedindo a confirmacao', clicar('[data-testid="comparar-atualizar"]')],
     ['cadastro que nao parece o certo', { url: 'tela=comparar-cadastro&v=errado' }],
   ] },
@@ -899,10 +929,17 @@ const CENARIOS = [
   ] })),
   /* fatia "casar" (ate' aqui sem cenario: "0 telas"): no 1:1 digitar outro valor e corrigir o valor do lancamento nao mexem no cabecalho, no resumo nem no
      rodape; no bloco trocar a regra nao mexe nas tabelas nem no Conciliar */
-  { nome: 'casar-1x1-levado', url: 'tela=casar-1x1&v=levado', antes: async (p) => { await p.locator('[data-testid="levado"]').waitFor(); await espera(p); },
+  { nome: 'casar-1x1-levado', url: 'tela=casar-1x1&v=levado', antes: async (p) => { await p.locator('[data-testid="levado-linha"]').waitFor(); await espera(p); },
     estados: [
       ['valor do campo diferente do banco', digitar('input[aria-label^="Valor de"]', '0,02')],
       ['corrigir o valor do lancamento', botao(/Corrigir o valor do lançamento/)],
+    ] },
+  /* CONC-CASAR-1X1-TABELA-01 — o caso Luiz Gustavo (NF 1.404,00 × PIX 3.404,16): abrir a "Outra nota" ou a "taxa" na caixa da NF não mexe na
+     tabela nem na faixa do extrato (o modal preso no topo cresce para baixo) */
+  { nome: 'casar-1x1-outranota', url: 'tela=casar-1x1&v=outranota', antes: async (p) => { await p.locator('[data-testid="pergunta-nf"]').waitFor(); await espera(p); },
+    estados: [
+      ['outra nota aberta', botao(/Outra nota \(falta lançar\)/)],
+      ['taxa aberta', botao(/Outra despesa sem nota \(taxa\)/)],
     ] },
   /* P139 — no "Criar transferencia": escolher um dos espelhos do empate e confirmar a gemea nao mexem no movimento, na conta, na
      lista nem no rodape (modal de tamanho fixo; o botao principal tem largura fixa) */
@@ -992,6 +1029,15 @@ const CENARIOS = [
     estados: [['mês curto', async (p) => { await p.goto(p.url().replace('tela=conciliacao', 'tela=conciliacao&v=poucos'));
       await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p); await botao(/^Casar lançamentos$/)(p);
       await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await espera(p); }]] },
+  /* FIN-REGRA-MODAL-02 — o modal "Fazenda fora da regra da conta": clicar a linha (destaque âmbar), marcar, marcar outra e reescrever o
+     motivo não mexem nas colunas, no resumo, na prévia nem no rodapé */
+  { nome: 'regra-fazenda', url: 'tela=regra-fazenda', antes: async (p) => { await p.locator('[data-testid="correcao-linha"]').first().waitFor(); await espera(p); },
+    estados: [
+      ['linha clicada (destaque)', clicar('[data-testid="correcao-linha"][data-id="seg-1"] [data-testid="correcao-regra"]')],
+      ['marcar uma', clicar('[data-testid="correcao-linha"][data-id="itr"] [data-testid="correcao-marcar"]')],
+      ['marcar outra', clicar('[data-testid="correcao-linha"][data-id="vac-3"] [data-testid="correcao-marcar"]')],
+      ['motivo reescrito', digitar('[data-testid="correcao-motivo"]', 'Motivo sintetico reescrito pelo operador com texto bem comprido para ver se empurra')],
+    ] },
   { nome: 'casar-bloco', url: 'tela=casar-bloco', antes: async (p) => { await p.locator('[data-testid="conciliar-bloco"]').waitFor(); await espera(p); },
     estados: [
       ['regra mais antigo primeiro', botao(/Mais antigo primeiro/)],
@@ -1087,7 +1133,8 @@ const naRapida = RAPIDO ? filtroRapido('check-ui-desloca') : () => true;
 const TAMANHOS_DA_VEZ = TAMANHOS;
 /* P92 — o cenario pode pedir os PROPRIOS tamanhos (`tamanhos`), como no check-ui-cortes; o `--tamanhos` da linha de comando manda sobre eles */
 const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS_DA_VEZ);
-const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c));
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || (SO.endsWith('$') ? c.nome === SO.slice(0, -1) : c.nome.startsWith(SO))) && naRapida(c)
+  && (!TELAS || TELAS.has(telaDoCenario(c))));
 /* GATE-TELA-TETO-01 — o plano da rodada (fatia, --de; sem os tamanhos abaixo do `minLargura`) e o relógio desde o início do processo */
 const INICIO = Date.now() - process.uptime() * 1000;
 let OPCOES, PLANO;

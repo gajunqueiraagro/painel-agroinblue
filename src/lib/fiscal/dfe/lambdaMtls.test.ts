@@ -164,6 +164,8 @@ describe('NOTAS-RECEITA-A1-01 — Lambda mTLS: o protocolo', () => {
       expect(tudo).not.toContain(proibido);
     }
     expect(tudo).not.toMatch(/[0-9a-f]{32}/);
-    for (const l of logs) expect(Object.keys(JSON.parse(l)).every((k) => ['req', 'ambiente', 'resultado', 'motivo', 'ms', 'http', 'bytes_ida', 'bytes_volta'].includes(k))).toBe(true);
+    /* Lambda v2 (CIÊNCIA 18/11): + "servico", que só diz QUAL dos dois destinos fixos (nunca conteúdo) */
+    for (const l of logs) expect(Object.keys(JSON.parse(l)).every((k) => ['req', 'ambiente', 'resultado', 'motivo', 'ms', 'http', 'bytes_ida', 'bytes_volta', 'servico'].includes(k))).toBe(true);
+    for (const l of logs) expect([undefined, 'distribuicao', 'evento']).toContain(JSON.parse(l).servico);
   });
 });

@@ -19,7 +19,7 @@ import { montarPayloadParcelamento, type ParcelaDoPayload, type PayloadParcelame
 import {
   gravarDocumentosDoParcelamento, gravarDocumentosPendentes, lancamentosDoParcelamento, todosGravados, type DocumentoPendente, type ParcelaGravada,
 } from '@/lib/financeiro/documentosPendentes';
-import { pendenteDaNota, prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import { danfeDaNota, pendenteDaNota, prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { notificarLancamentosMudaram, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
 import { gravarParcelamento } from './LancamentoV2Dialog';
 
@@ -71,6 +71,20 @@ export interface Gravadores {
   trocarFornecedor?: (clienteId: string, ids: readonly string[], fornecedorId: string, motivo: string) => Promise<string | null>;
   /** P167 — liga um documento que JÁ EXISTE aos lançamentos (`fin_documento_vincular`, idempotente). Devolve a frase da recusa, ou `null`. */
   vincular?: (clienteId: string, documentoId: string, ids: readonly string[]) => Promise<string | null>;
+  /** NOTA-RECEITA-DANFE-ANEXO-01 — o DANFE em PDF da nota que chegou só em XML (o 2º documento da mesma NF); sem ele, só o XML */
+  danfe?: (d: DoXml, favorecidoId: string | null) => Promise<{ pendente: DocumentoPendente | null; aviso: string | null }>;
+  /** … e se algum dos lançamentos JÁ TEM o PDF desta nota (veio da caixa de entrada): aí o DANFE não nasce (nunca dois PDFs da mesma NF) */
+  temPdfDaNota?: (clienteId: string, ids: readonly string[], chave: string) => Promise<boolean>;
+}
+
+/** NOTA-RECEITA-DANFE-ANEXO-01 — algum destes lançamentos já tem um PDF vivo com a chave da nota? (a fonte do clipe e da aba) */
+async function temPdfDaNotaNoBanco(clienteId: string, ids: readonly string[], chave: string): Promise<boolean> {
+  if (!/^\d{44}$/.test(chave) || ids.length === 0) return false;
+  const { data, error } = await supabase.from('vw_lancamento_documentos').select('nome, tipo').eq('cliente_id', clienteId)
+    .in('lancamento_id', [...ids]).eq('chave_acesso', chave).not('cancelado', 'is', true);
+  /* na dúvida (a leitura falhou), não gera: um PDF a menos se gera depois; um a mais duplica o documento */
+  if (error) { console.error('[temPdfDaNota]', error); return true; }
+  return (data ?? []).some((x) => /\.pdf$/i.test(x.nome ?? '') || /pdf/i.test(x.tipo ?? ''));
 }
 
 /** P167 — a nota que a compra já tem se LIGA às outras parcelas dela; nunca nasce um segundo documento da mesma nota (o 32ffd9af do NJ). */
@@ -120,6 +134,8 @@ export const GRAVADORES: Gravadores = {
   parcelarExistente: parcelarExistenteNoBanco,
   trocarFornecedor: trocarFornecedorNoBanco,
   vincular: vincularNoBanco,
+  danfe: (d, favorecidoId) => danfeDaNota(d, favorecidoId),
+  temPdfDaNota: temPdfDaNotaNoBanco,
 };
 
 const erroDe = (e: unknown, padrao: string) => (e && typeof e === 'object' && 'message' in e && typeof e.message === 'string' && e.message ? e.message : padrao);
@@ -200,9 +216,18 @@ export async function anexarAosJaLancados(
       if (e) return { ok: false, erro: e };
     } else {
       const parcelas: ParcelaGravada[] = todos.map((x, i) => ({ numero: x.numero || i + 1, lancamentoId: x.id }));
-      const lista = await g.documentosDoParcelamento(clienteId, parcelas, [pendenteDaNota(d, favorecidoDaNota)]);
-      const falha = falhaDosDocumentos(lista);
+      /* NOTA-RECEITA-DANFE-ANEXO-01 — + o DANFE em PDF quando a nota só tem o XML e nenhum dos alvos já tem o PDF dela */
+      const docs = [pendenteDaNota(d, favorecidoDaNota)];
+      if (g.danfe && !(g.temPdfDaNota && await g.temPdfDaNota(clienteId, todos.map((x) => x.id), d.proposta.documento.chaveAcesso))) {
+        const r = await g.danfe(d, favorecidoDaNota);
+        if (r.pendente) docs.push(r.pendente);
+        if (r.aviso) avisos.push(r.aviso);
+      }
+      const lista = await g.documentosDoParcelamento(clienteId, parcelas, docs);
+      /* a NOTA é o XML (o 1º): ele falhar = nada anexado; o DANFE falhar = aviso (o PDF se gera de novo depois) */
+      const falha = falhaDosDocumentos(lista.slice(0, 1));
       if (falha) return { ok: false, erro: `A nota não foi anexada: ${falha}` };
+      if (lista.length > 1 && !lista[1].gravado) avisos.push(`O DANFE em PDF não foi anexado: ${lista[1].erro ?? 'falhou'}.`);
       documentoIds = lista.flatMap((x) => (x.documentoId ? [x.documentoId] : []));
     }
     const e = await g.numeroNoLancamento(clienteId, todos.map((x) => x.id), d.proposta.numeroDocumento);

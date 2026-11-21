@@ -19,7 +19,9 @@ const linhaConta = (x: Record<string, unknown>) => comProprio({
 const SUB = (tipo: string, x: Record<string, unknown>) => linhaConta({ nivel: 'tipo', conta_id: null, tipo_conta: tipo, ...x });
 
 export const CONTAS = [
-  { id: 'cc1', nome_conta: 'Banco Exemplo Agro Cooperativa de Crédito Rural - Conta Movimento Principal da Sede', nome_exibicao: null, tipo_conta: 'cc', codigo_conta: null, mes_inicio: null, saldo_inicial_oficial: 1, ativo: true, cliente_id: 'cli' },
+  /* CONC-PAINEL-CONTA-01 (Gabriel 12:42) — nomes do TAMANHO DOS REAIS: o maior nome real ativo tem 26 letras (a permuta de 47 vai ser
+     renomeada, com OK); o nome gigante de antes não existe de verdade e alargava a coluna Conta à toa */
+  { id: 'cc1', nome_conta: 'Cooperativa Exemplo - Sede', nome_exibicao: null, tipo_conta: 'cc', codigo_conta: null, mes_inicio: null, saldo_inicial_oficial: 1, ativo: true, cliente_id: 'cli' },
   { id: 'cc2', nome_conta: 'Banco Alfa', nome_exibicao: null, tipo_conta: 'cc', codigo_conta: null, mes_inicio: null, saldo_inicial_oficial: 1, ativo: true, cliente_id: 'cli' },
   { id: 'inv', nome_conta: 'Invest Exemplo Aplicação Automática', nome_exibicao: null, tipo_conta: 'inv', codigo_conta: null, mes_inicio: null, saldo_inicial_oficial: 1, ativo: true, cliente_id: 'cli' },
   { id: 'car', nome_conta: 'Cartão Exemplo - Visa Infinite', nome_exibicao: null, tipo_conta: 'cartao', codigo_conta: null, mes_inicio: null, saldo_inicial_oficial: 0, ativo: true, cliente_id: 'cli' },

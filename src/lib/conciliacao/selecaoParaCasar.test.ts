@@ -52,16 +52,18 @@ describe('o motivo curto', () => {
 });
 
 describe('o complemento das linhas', () => {
-  it('pagamento, fazenda (código e nome) e documento de cada id; a fazenda numa segunda leitura', async () => {
+  it('pagamento, fazenda (código e nome), documento, subcentro e atividade de cada id; a fazenda numa segunda leitura', async () => {
     B.tabelas = {
-      financeiro_lancamentos_v2: [{ id: 'a', data_pagamento: '2026-09-16', fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.120.001' },
-        { id: 'b', data_pagamento: null, fazenda_id: null, tipo_documento: null, numero_documento: null }],
+      financeiro_lancamentos_v2: [{ id: 'a', data_pagamento: '2026-09-16', fazenda_id: 'fz1', tipo_documento: 'Nota Fiscal', numero_documento: '000.120.001',
+        subcentro: 'Manutenção Máquinas Pecuária', escopo_negocio: 'pecuaria' },
+        { id: 'b', data_pagamento: null, fazenda_id: null, tipo_documento: null, numero_documento: null, subcentro: null, escopo_negocio: null }],
       fazendas: [{ id: 'fz1', nome: 'Fazenda Exemplo Retiro', codigo: 'RET' }],
     };
     const m = await lerComplementoDasLinhas('cli', ['a', 'b', 'a']);
     expect(m?.get('a')).toEqual({ dataPagamento: '2026-09-16', fazendaId: 'fz1', fazendaCodigo: 'RET', fazendaNome: 'Fazenda Exemplo Retiro',
-      tipoDocumento: 'Nota Fiscal', numeroDocumento: '000.120.001' });
-    expect(m?.get('b')).toEqual({ dataPagamento: null, fazendaId: null, fazendaCodigo: null, fazendaNome: null, tipoDocumento: null, numeroDocumento: null });
+      tipoDocumento: 'Nota Fiscal', numeroDocumento: '000.120.001', subcentro: 'Manutenção Máquinas Pecuária', escopoNegocio: 'pecuaria' });
+    expect(m?.get('b')).toEqual({ dataPagamento: null, fazendaId: null, fazendaCodigo: null, fazendaNome: null, tipoDocumento: null, numeroDocumento: null,
+      subcentro: null, escopoNegocio: null });
     expect(B.pedidos).toEqual(['financeiro_lancamentos_v2', 'fazendas']);
   });
   it('sem ids, nada vai ao banco; a leitura que falha devolve null (nunca "sem documento" calado)', async () => {
@@ -108,7 +110,7 @@ describe('as listas da Conciliação no tamanho da lista do Financeiro (sem a va
     const { COLUNAS_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, PISO_PARA_CASAR } = await import('@/components/conciliacao/TabelaParaCasar');
     const { ALTURA_DA_LINHA } = await import('@/components/financeiro-v2/corpoDaLista');
     expect(ALTURA_DA_LINHA_PARA_CASAR).toBe(ALTURA_DA_LINHA);
-    expect(COLUNAS_PARA_CASAR).toEqual([28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62]);
+    expect(COLUNAS_PARA_CASAR).toEqual([28, 46, 46, 46, null, null, 36, 78, 94, 80, 38, 60, 110, 62]); /* D-g: + Δ valor 80, Δ dias 38; 12:02: Faz. 36, Motivo 110 */
     /* sem rolagem de lado no modal a 1024 e a 135% de 1240 (≈ 848px úteis): o piso cabe */
     expect(PISO_PARA_CASAR).toBeLessThanOrEqual(848);
   });
@@ -120,8 +122,16 @@ describe('as listas da Conciliação no tamanho da lista do Financeiro (sem a va
     expect(colunasParaCasar([vazia, vazia])).toEqual({ faz: false, nf: false });
     expect(colunasParaCasar([vazia, { ...vazia, fazendaNome: 'Fazenda X' }])).toEqual({ faz: true, nf: false });
     expect(colunasParaCasar([{ ...vazia, numeroDocumento: '518' }])).toEqual({ faz: false, nf: true });
-    expect(largurasParaCasar({ faz: false, nf: false })).toEqual([28, 46, 46, 46, null, null, 94, 60, 120, 62]);
-    expect(largurasParaCasar({ faz: true, nf: false })).toEqual([28, 46, 46, 46, null, null, 30, 94, 60, 120, 62]);
-    expect(largurasParaCasar({ faz: true, nf: true })).toEqual([28, 46, 46, 46, null, null, 30, 78, 94, 60, 120, 62]);
+    expect(largurasParaCasar({ faz: false, nf: false })).toEqual([28, 46, 46, 46, null, null, 94, 60, 110, 62]);
+    expect(largurasParaCasar({ faz: true, nf: false })).toEqual([28, 46, 46, 46, null, null, 36, 94, 60, 110, 62]);
+    expect(largurasParaCasar({ faz: true, nf: true })).toEqual([28, 46, 46, 46, null, null, 36, 78, 94, 60, 110, 62]);
+  });
+});
+
+describe('CONC-CRIAR-COM-NOTA-02 E1 — o motivo curto do fornecedor do histórico (o selo saía vazio)', () => {
+  it('do_historico tem texto; "outro fornecedor" aparece na forma curta', async () => {
+    const { motivoCurto } = await import('./selecaoParaCasar');
+    expect(motivoCurto({ tipo: 'do_historico', lancamentos: [] })).toBe('do fornecedor · valor ≠');
+    expect(motivoCurto({ tipo: 'mesmo_valor', lancamentos: [], motivo: 'outro fornecedor · mesmo valor' })).toBe('outro forn. · mesmo valor');
   });
 });

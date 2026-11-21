@@ -37,6 +37,7 @@ import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTra
 import { sugestoesDeTransferencia, porqueDaSugestao, type SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
 import { porDia } from '@/lib/conciliacao/linhasDoDia';
+import { descontoPorNf, ORIGEM_PARTE_DO_DESCONTO } from '@/lib/conciliacao/parteDoDesconto';
 import { ListaDoMesPorDia, CelSaldoDoDia, TD_LISTA, TD_LISTA_NUM, TD_RODAPE, COLUNA_SALDO, LARGURA_DATA, type ColunaDaLista } from '@/components/conciliacao/ListaDoMesPorDia';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { historicoDoBanco } from '@/lib/conciliacao/historicoDoBanco';
@@ -908,21 +909,29 @@ const CHIPS_DA_CONFERENCIA: readonly { k: FiltroConferencia; rotulo: string }[] 
  */
 export function sugestoesDaMesa(
   dias: readonly DiaConf[], candidatos: readonly EspCandidato[], doHistorico: ReadonlyMap<string, string> = new Map(),
+  /* CONC-CRIAR-COM-NOTA-02 D-f (tela): os em aberto que vencem depois do mês — só pelo valor exato (`sugerirCasamentos`) */
+  adiantados: readonly EspCandidato[] = [],
+  /* B1 (homologação 14:32): o nome de cada fornecedor do histórico (id → nome) — a família dos cadastros irmãos pelo nome */
+  nomesDoHistorico: ReadonlyMap<string, string> = new Map(),
 ): Map<string, Sugestao[]> {
   const m = new Map<string, Sugestao[]>();
   /* CONC-SUGESTOES-FONTE-01 item 4: o fornecedor que o histórico conhece para o texto de cada linha (o mesmo para o "(N)" e o modal) */
   for (const d of dias) for (const e of d.extratosSemPar) {
-    m.set(e.extrato_id, sugerirCasamentos(e, [...candidatos], { orcamentoMs: 30, fornecedorDoHistorico: fornecedorDoMovimento(doHistorico, e) }));
+    const doHist = fornecedorDoMovimento(doHistorico, e);
+    m.set(e.extrato_id, sugerirCasamentos(e, [...candidatos], { orcamentoMs: 30, fornecedorDoHistorico: doHist, adiantados,
+      nomeDoFornecedorDoHistorico: doHist ? nomesDoHistorico.get(doHist) ?? null : null }));
   }
   return m;
 }
 /** "casar" numa sugestão abre o `CasarComBancoModal` já com os levados; um lançamento de valor diferente abre com o valor do banco. */
-function levadosDaSugestao(s: Sugestao): LevadoInicial[] {
+export function levadosDaSugestao(s: Sugestao): LevadoInicial[] {
   const umDiferente = s.lancamentos.length === 1 && s.valorDiferente;
   return s.lancamentos.map((c) => ({
     lancamento_id: c.lancamento_id, descricao: c.descricao, fornecedor: c.fornecedor,
     valor_assinado: c.valor_assinado, usarValorDoBanco: umDiferente,
     data_vencimento: c.data_vencimento, status_transacao: c.status_transacao,
+    /* homologação 09:37: sem isto o lado Sistema do Casar dizia "NF —" num lançamento feito da NF */
+    numero_documento: c.numero_documento ?? null,
   }));
 }
 
@@ -957,6 +966,8 @@ export function levadosDosMarcados(marcados: readonly Marcado[], extrato: Extrat
       lancamento_id: c.lancamento_id, descricao: c.descricao, fornecedor: c.fornecedor, valor_assinado: c.valor_assinado,
       usarValorDoBanco: um && Math.abs(Math.abs(Number(c.valor_assinado)) - Math.abs(extrato.valor)) > 0.005,
       data_vencimento: c.data_vencimento, status_transacao: c.status_transacao,
+      /* D1 (homologação 14:32): o nº da NF que o candidato já traz */
+      numero_documento: c.numero_documento ?? null,
     };
   });
 }
@@ -1186,6 +1197,39 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
     })();
     return () => { vivo = false; };
   }, [idsVinculados]);
+  /**
+   * BAIXA-DESCONTO-BANCO-01 — o desconto de cada NF casada: a parte paga com desconto (115580) é SEM CAIXA, então não vem no espelho.
+   * Lida pelos ids dos vinculados (a mesma lista do aplicado) e mostrada só como sub-linha cinza da NF, fora de toda soma.
+   */
+  const [descontos, setDescontos] = useState<ReadonlyMap<string, number>>(new Map());
+  useEffect(() => {
+    if (!idsVinculados) { setDescontos(new Map()); return; }
+    let vivo = true;
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: `saldo_de_id` fora de types.ts
+      const { data: linhas } = await (supabase as any).from('financeiro_lancamentos_v2')
+        .select('saldo_de_id, valor').in('saldo_de_id', idsVinculados.split(',')).eq('origem_tipo', ORIGEM_PARTE_DO_DESCONTO).eq('cancelado', false);
+      if (vivo) setDescontos(descontoPorNf(linhas ?? []));
+    })();
+    return () => { vivo = false; };
+  }, [idsVinculados]);
+  /** A sub-linha do desconto da NF: texto cinza, a coluna de valor VAZIA (não é movimento de conta), sem status e sem "!". */
+  const linhaDoDesconto = (nfId: string | null | undefined) => {
+    const v = nfId ? descontos.get(nfId) : undefined;
+    if (!nfId || v == null) return null;
+    return (
+      <tr key={`desconto-${nfId}`} className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-desconto-da-nf="">
+        <CelHistorico nota="" />
+        <td className={TDC} />
+        <td className={cn(TDC_MEIO, 'text-muted-foreground')}>↳</td>
+        <td className={cn(TDC_NUM, SEP)} />
+        <CelulasDoSistema apagado pedacos={[{ t: `desconto ${fmtBRL(v)} · não sai do banco`, testid: 'desconto-da-nf' }]}
+          detalhe="parte da NF paga com desconto: não é movimento de conta (fora da soma do dia, do saldo e do fluxo)"
+          fornecedor={null} subcentro={null} />
+        <CelAcoes itens={[{ rotulo: 'Abrir', motivo: 'abra a NF na linha acima' }]} />
+      </tr>
+    );
+  };
   /** Quanto falta para quitar (> 0,005), ou `null` quando está inteiro ou sem vínculo. */
   const faltaDe = (lancamentoId: string, valor: number): number | null => {
     const ap = aplicadoVivo.get(lancamentoId);
@@ -1456,6 +1500,7 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
               motivo: falta != null ? MOTIVO_EXTRATO_PARCIAL : 'vínculos sem grupo: desconcilie cada um pelo lançamento' },
           ]} />
         </tr>
+        {unica && linhaDoDesconto(unica.lancamento_id)}
         {/* ⚠ A FILHA É DETALHE DE COMPOSIÇÃO, e a tipografia diz isso: peso 400 em tudo — inclusive no valor —, texto em
             muted e borda mais fraca que a das linhas. Ela explica a mãe; não compete com ela. */}
         {agrupado && p.filhas.map((f) => {
@@ -1464,7 +1509,8 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
           /* CONC-MESA-SINAL-01: o sinal da filha é o do lançamento — a dedução aparece negativa no depósito. */
           const v = sinalDoAplicado(f.sis, p.extrato.valor) * f.valor_aplicado;
           return (
-            <tr key={f.lancamento_id} className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
+            <React.Fragment key={f.lancamento_id}>
+            <tr className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
               <CelHistorico nota="" />
               <td className={TDC} />
               <td className={cn(TDC_MEIO, 'text-muted-foreground')}>↳</td>
@@ -1478,6 +1524,8 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
                 { rotulo: 'Desconciliar', motivo: 'desconcilie pela linha do extrato, acima' },
               ]} />
             </tr>
+            {linhaDoDesconto(f.lancamento_id)}
+            </React.Fragment>
           );
         })}
       </React.Fragment>
@@ -1516,6 +1564,7 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
               motivo: 'sem grupo: desconcilie cada extrato nas linhas abaixo' },
           ]} />
         </tr>
+        {linhaDoDesconto(g.sis.lancamento_id)}
         {/* ⚠ FILHAS DO LADO DO BANCO e `↰` no meio: a seta aponta para o OFX porque é ele que está sendo decomposto. */}
         {g.extratos.map((x) => (
           <tr key={x.extrato.extrato_id} className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
@@ -2122,7 +2171,8 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
     () => (mostrarCandidatos ? termosDosMovimentos(diasDaMesa.flatMap((d) => d.extratosSemPar)) : []), [diasDaMesa, mostrarCandidatos]);
   const doHistorico = useFornecedoresDoHistorico(clienteId, anoMes, termosDoMes);
   const sugestoesPorLinha = useMemo(
-    () => sugestoesDaMesa(diasDaMesa, mostrarCandidatos ? (data?.sistema_candidatos ?? []) : [], doHistorico),
+    () => sugestoesDaMesa(diasDaMesa, mostrarCandidatos ? (data?.sistema_candidatos ?? []) : [], doHistorico.ids,
+      mostrarCandidatos ? (data?.sistema_candidatos_adiantados ?? []) : [], doHistorico.nomes),
     [diasDaMesa, data, mostrarCandidatos, doHistorico]);
   const ehParcialDaMesa = (p: Pareado) => faltaDoExtrato(p.diferenca) != null;
   const chips = contagensDaMesa(diasDaMesa, ehParcialDaMesa);

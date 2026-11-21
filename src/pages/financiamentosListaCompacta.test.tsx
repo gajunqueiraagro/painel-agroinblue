@@ -33,6 +33,12 @@ vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } 
 vi.mock('@/hooks/useFinanceiroV2', () => ({ inscreverEmLancamentos: () => () => {} }));
 vi.mock('@/hooks/useSituacaoDoContrato', () => ({ lerSituacaoEmLoteDoBanco: async () => new Map() }));
 vi.mock('@/components/financiamentos/ObrigacaoDialog', () => ({ ObrigacaoDialog: () => null }));
+/* COMPRAS-PARC-NF-01 — as notas vinculadas (sintéticas): f1 com 6 notas, f3 com 1, f2 sem nota */
+const nota = (n: string) => ({ documentoId: `d${n}`, numero: `000.000.${n}`, serie: '1', emissao: '2026-10-06', valorCent: 100000, emitente: 'Oficina Sintetica' });
+vi.mock('@/lib/financiamentos/notasDasCompras', async (orig) => ({
+  ...(await orig<typeof import('@/lib/financiamentos/notasDasCompras')>()),
+  lerNotasDasCompras: async () => new Map([['f1', ['288', '289', '402', '403', '404', '405'].map(nota)], ['f3', [nota('931')]]]),
+}));
 
 import FinanciamentosListaPage from './FinanciamentosListaPage';
 
@@ -56,7 +62,8 @@ describe('FIN-LISTA-COMPACTA-01 / FIN-FINANC-28-P3-FIX2 — aba Compras parcelad
     montar();
     await screen.findAllByTestId('cel-data');
     const cab = screen.getAllByRole('columnheader').map((th) => th.textContent?.trim());
-    expect(cab).toEqual(['Data', 'Descrição', 'Credor', 'Valor da compra', 'A pagar', 'Parcela', 'Próxima', 'Situação', 'Pagas']);
+    /* COMPRAS-PARC-LAYOUT-02 (7) — a coluna da data é "Compra" */
+    expect(cab).toEqual(['Compra', 'NF', 'Descrição', 'Credor', 'Valor da compra', 'A pagar', 'Parcela', 'Próxima', 'Situação', 'Pagas']);
     expect(screen.queryByTestId('cel-numero-contrato')).toBeNull();
   });
 
@@ -75,28 +82,32 @@ describe('FIN-LISTA-COMPACTA-01 / FIN-FINANC-28-P3-FIX2 — aba Compras parcelad
     await screen.findAllByTestId('cel-status');
     expect(screen.getAllByTestId('cel-pagas').map((c) => c.textContent)).toContain('0/7');
     expect(ordemDasDatas()).toEqual(['05/01/24', '01/02/24', '10/03/24']);
-    fireEvent.click(screen.getByText('Data'));
+    fireEvent.click(screen.getAllByRole('columnheader').find((th) => th.textContent?.trim() === 'Compra')!);
     expect(ordemDasDatas()).toEqual(['10/03/24', '01/02/24', '05/01/24']);
   });
 
-  it('fonte: colgroup em px, Descrição e Credor sem largura (dividem a sobra), fixas = 568', () => {
+  it('fonte: colgroup em px (fixas = 580, medidas) e a sobra em PROPORÇÃO FIXA 3:2 — 5 colunas sem largura, Descrição 3 e Credor 2 (COMPRAS-PARC-LAYOUT-02)', () => {
     const src = readFileSync(resolve(process.cwd(), 'src/pages/FinanciamentosListaPage.tsx'), 'utf8');
     expect(src).not.toMatch(/className="[^"]*max-w-5xl/);
     const cg = src.slice(src.indexOf('<colgroup>'), src.indexOf('</colgroup>'));
     const cols = cg.match(/<col\b[^>]*\/>/g) ?? [];
-    expect(cols).toHaveLength(9);
-    expect(cols.filter((c) => !/width:/.test(c))).toHaveLength(2);
-    expect(cols.map((c) => Number(c.match(/width: (\d+)/)?.[1] ?? 0)).reduce((a, b) => a + b, 0)).toBe(568);
+    expect(cols).toHaveLength(13);
+    expect(cols.filter((c) => !/width:/.test(c))).toHaveLength(5);
+    expect(cols.map((c) => Number(c.match(/width: (\d+)/)?.[1] ?? 0)).reduce((a, b) => a + b, 0)).toBe(580);
+    expect(src).toMatch(/rotulo="Descrição" ativo=\{sortCol === 'descricao'\} colSpan=\{3\}/);
+    expect(src).toMatch(/rotulo="Credor" ativo=\{sortCol === 'credor_nome'\} colSpan=\{2\}/);
+    expect(src).toMatch(/className="truncate" colSpan=\{3\} data-testid="cel-descricao"/);
+    expect(src).toMatch(/className="truncate" colSpan=\{2\} title=/);
   });
 
   it('linhas: valores da lista, só parcelamentos', async () => {
     montar();
-    await screen.findAllByTestId('cel-data');
+    await screen.findByTestId('chip-nf');
     const linhas = screen.getAllByRole('link').map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => td.textContent?.replace(/\u00a0/g, ' ').trim()));
     expect(linhas).toEqual([
-      ['05/01/24', 'Armazem· PEC', 'BRDE', 'R$ 2.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/1'],
-      ['01/02/24', 'Trator· AGR', 'Concessionaria', 'R$ 3.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/3'],
-      ['10/03/24', 'Recuperação de Solo· AGR', 'BRDE', 'R$ 1.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/7'],
+      ['05/01/24', '—', 'Armazem · PEC', 'BRDE', 'R$ 2.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/1'],
+      ['01/02/24', 'NF 931', 'Trator · AGR', 'Concessionaria', 'R$ 3.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/3'],
+      ['10/03/24', 'NF 288 +5', 'Recuperação de Solo · AGR', 'BRDE', 'R$ 1.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/7'],
     ]);
     expect(screen.queryByText('Custeio BB')).toBeNull();
   });
@@ -213,7 +224,7 @@ describe('FIN-FINANC-28-P3-FIX4 — filtros: trocar de aba zera, "Limpar filtros
     expect(botao.disabled).toBe(true);
     expect(botao.className).toContain('w-[92px]');
     await escolherCredor('BRDE');
-    fireEvent.change(screen.getByPlaceholderText('Nº contrato...'), { target: { value: 'PR' } });
+    fireEvent.change(screen.getByPlaceholderText('Nº NF...'), { target: { value: '402' } });
     expect(screen.getAllByTestId('cel-data').length).toBe(1);
     expect(screen.getByTestId('limpar-filtros')).toBe(botao);
     expect(botao.disabled).toBe(false);
@@ -226,16 +237,16 @@ describe('FIN-FINANC-28-P3-FIX4 — filtros: trocar de aba zera, "Limpar filtros
   it('(d) FIN-FINANC-28 passo 4c — Vencimento "de": só os contratos com parcela no intervalo (sem lote, nenhum); Limpar zera', async () => {
     montar();
     await screen.findAllByTestId('cel-data');
-    /* os dois "de" da fileira: o 1º é o do Contrato, o 2º o do Vencimento (a ordem da tela) */
-    const vencDe = screen.getAllByPlaceholderText('de')[1] as HTMLInputElement;
-    fireEvent.change(vencDe, { target: { value: '01/11/2026' } });
-    fireEvent.blur(vencDe);
+    /* COMPRAS-PARC-LAYOUT-02 (8) — o Vencimento é o seletor único do DRE: o atalho "Este ano" e Aplicar */
+    fireEvent.click(screen.getByTestId('periodo-vencimento'));
+    fireEvent.click(within(screen.getByTestId('periodo-vencimento-popup')).getByText('Este ano'));
+    fireEvent.click(screen.getByTestId('periodo-vencimento-aplicar'));
     expect(screen.queryAllByTestId('cel-data').length).toBe(0);
     const botao = screen.getByTestId('limpar-filtros') as HTMLButtonElement;
     expect(botao.disabled).toBe(false);
     fireEvent.click(botao);
     expect(screen.getAllByTestId('cel-data').length).toBe(3);
-    expect((screen.getAllByPlaceholderText('de')[1] as HTMLInputElement).value).toBe('');
+    expect(screen.getByTestId('periodo-vencimento').textContent).toContain('qualquer data');
   });
 
   it('(c) a volta do detalhe mantém os filtros (só a troca de aba zera)', async () => {
@@ -251,5 +262,28 @@ describe('FIN-FINANC-28-P3-FIX4 — filtros: trocar de aba zera, "Limpar filtros
     /* FORN-BUSCA-UNICA-01 — o valor guardado é o id; o nome vem da lista carregada */
     expect((await screen.findAllByTestId('cel-data')).length).toBe(2);
     expect(screen.getByTestId('filtro-credor').getAttribute('title')).toBe('BRDE');
+  });
+
+  /* COMPRAS-PARC-NF-01 (Gabriel 18/11) — a NF depois da Data: "—" sem nota, o nº com uma, o chip "NF 288 +5" com várias (abre as notas
+     sem abrir o contrato); ordenável (sem nota no fim); a busca acha pelo nº da NF */
+  it('NF: "—" / "NF 931" / chip "NF 288 +5" que abre o minimodal das 6 notas sem abrir o contrato', async () => {
+    montar();
+    await screen.findByTestId('chip-nf');
+    const porDesc = (d: string) => screen.getAllByTestId('cel-descricao').findIndex((c) => c.textContent?.includes(d));
+    const nfs = screen.getAllByTestId('cel-nf').map((c) => c.textContent);
+    expect([nfs[porDesc('Recuperação')], nfs[porDesc('Armazem')], nfs[porDesc('Trator')]]).toEqual(['NF 288 +5', '—', 'NF 931']);
+    fireEvent.click(screen.getByTestId('chip-nf'));
+    const mm = await screen.findByTestId('minimodal-notas');
+    expect(within(mm).getAllByTestId('minimodal-nota').map((l) => l.textContent?.slice(0, 14))).toEqual(
+      ['NF 000.000.288', 'NF 000.000.289', 'NF 000.000.402', 'NF 000.000.403', 'NF 000.000.404', 'NF 000.000.405']);
+  });
+  it('NF ordenável (sem nota no fim) e a busca acha pelo nº curto da NF', async () => {
+    montar();
+    await screen.findByTestId('chip-nf');
+    fireEvent.click(screen.getByText('NF'));
+    expect(screen.getAllByTestId('cel-nf').map((c) => c.textContent)).toEqual(['NF 288 +5', 'NF 931', '—']);
+    const busca = screen.getAllByRole('textbox').find((i) => /busca|buscar|procurar|descri/i.test(i.getAttribute('placeholder') ?? ''))!;
+    fireEvent.change(busca, { target: { value: '404' } });
+    expect(screen.getAllByTestId('cel-descricao').map((c) => c.textContent?.split('·')[0].trim())).toEqual(['Recuperação de Solo']);
   });
 });

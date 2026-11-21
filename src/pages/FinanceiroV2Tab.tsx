@@ -1,4 +1,5 @@
 import { casaNaBusca } from '@/lib/texto/busca';
+import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
 import type { ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -67,21 +68,24 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2 } from 'lucide-react';
+import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, ListChecks } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, dataDaDimensao, notificarLancamentosMudaram, type LancamentoV2, type FiltrosV2, type DimensaoDataFinanceiro } from '@/hooks/useFinanceiroV2';
 import { CriarOCDoLegadoDialog } from '@/components/financeiro-v2/CriarOCDoLegadoDialog';
+import { ConferirRateioDialog } from '@/components/financeiro-v2/ConferirRateioDialog';
+import type { ItemNovoDoRateio } from '@/lib/financeiro/rateio/conferirRateio';
 import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { prefillDeDuplicar, type PrefillDuplicar } from '@/lib/financeiro/prefillDeDuplicar';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { NovoDeXmlDialog, notaParaAPrevia } from '@/components/financeiro-v2/NovoDeXmlDialog';
 import { NovoMenuLancamentos } from '@/components/financeiro-v2/NovoMenuLancamentos';
 import { NotasDaReceitaDialog } from '@/components/fiscal/NotasDaReceitaDialog';
-import { useNotasDaReceita } from '@/hooks/useNotasDaReceita';
-import { pedemAcao } from '@/lib/fiscal/notasDaReceita';
+import { registrarBemDeTerceiro, useNotasDaReceita } from '@/hooks/useNotasDaReceita';
+import { Camada, useCamadas } from '@/components/ui/camadas';
+import { pedemAcao, type AbaDaReceita } from '@/lib/fiscal/notasDaReceita';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { contarBoletosQuePedemAcao } from '@/lib/financeiro/boleto/caixaApi';
 import { NotaFiscalDialog, type NotaParaLancar } from '@/components/financeiro-v2/NotaFiscalDialog';
@@ -89,6 +93,7 @@ import { prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
+import { SeloRegraFazenda } from '@/components/financeiro-v2/CorrecaoRegraFazenda';
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { rotulosDosFornecedores } from '@/lib/fornecedores/fornecedorTexto';
@@ -275,6 +280,10 @@ interface Props {
   /** PR-OC-FIN-EDIT-FIX-02 — abre a OC vinculada na aba Financeiro (navegação SPA), preservando os
    *  filtros atuais do Financeiro V2 (salvos em sessionStorage para restauração no retorno). */
   onAbrirOperacaoOCFinanceiro?: (operacaoId: string, tipo?: string | null) => void;
+  /** DRE-PAINEL-01 — um pedido de outra tela para abrir as Notas da Receita já numa aba (o "Ver notas" da leitura do DRE → "A lançar").
+   *  Atendido uma vez ao montar; quem pediu limpa o pedido em `onNotasDaReceitaPedidoAtendido`. */
+  notasDaReceitaNaAba?: AbaDaReceita | null;
+  onNotasDaReceitaPedidoAtendido?: () => void;
 }
 
 
@@ -286,7 +295,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog, ocEditFavorecido, onAbrirOperacaoOCFinanceiro }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog, ocEditFavorecido, onAbrirOperacaoOCFinanceiro, notasDaReceitaNaAba, onNotasDaReceitaPedidoAtendido }: Props) {
   const { fazendas, fazendaAtual, loading: fazendasCarregando } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const hook = useFinanceiroV2(pageSize);
@@ -670,6 +679,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [dialogOpen, setDialogOpen] = useState(false);
   /* OC-CRIAR-DO-LEGADO-01 — o recebimento legado de onde nasce a OC (null = dialogo fechado). */
   const [criarOCDe, setCriarOCDe] = useState<string | null>(null);
+  /* RATEIO-HIGINO-01 — o pagamento (transferência para a conta comum) cuja relação se confere (null = fechado). */
+  const [conferirRateioDe, setConferirRateioDe] = useState<LancamentoV2 | null>(null);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
   /* O prefill do "Duplicar" (PR-FIN-DUPLICAR-ABRE-MODAL-01): só existe entre o clique e o fechar do dialog. */
   const [prefillDuplicar, setPrefillDuplicar] = useState<PrefillDuplicar | null>(null);
@@ -690,9 +701,37 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      "Lançar" entrega ao "Da nota fiscal" de hoje (D1) */
   const receita = useNotasDaReceita(clienteAtual?.id ?? null);
   const [receitaAberta, setReceitaAberta] = useState(false);
+  /* NAV-VOLTA-ORIGEM-01 (Gabriel 19/11, peça única) — as camadas desta tela: as Notas da Receita ficam POR BAIXO (montadas, invisíveis) do
+     "Da nota fiscal"/da nota abertos a partir delas; fechar/salvar volta à mesma aba, filtros, rolagem e linha (a próxima, se lançou) */
+  const camadas = useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>();
+  /* FIN-REGRA-MODAL-02 (a) — a linha do modal "Fazenda fora da regra da conta" abre o Editar lançamento POR CIMA ('lanc' sobre 'regra'); salvou = volta 'salvou' */
+  const salvouPorCimaDaRegra = useRef(false);
+  const abrirLancamentoDaRegra = async (id: string) => {
+    const obj = await hook.buscarLancamentoPorId(id);
+    if (!obj) { toast.error('Não consegui abrir o lançamento. Tente de novo.'); return; }
+    salvouPorCimaDaRegra.current = false;
+    setPrefillDuplicar(null); setPrefillXml(null); setEditingLanc(obj); setDialogOpen(true);
+    camadas.abrir('lanc', 'regra');
+  };
+  /* (b) a saída "Conta" da linha: as contas ADMINISTRATIVAS de custo fixo do plano já carregado (o banco confere a regra na prévia) */
+  const contasAdministrativas = useMemo(() => hook.classificacoes
+    .flatMap((c) => (c.id && c.escopo_negocio === 'administrativo' && c.grupo_custo.startsWith('Custo Fixo ') ? [{ id: c.id, subcentro: c.subcentro }] : []))
+    .sort((a, b) => a.subcentro.localeCompare(b.subcentro, 'pt-BR')), [hook.classificacoes]);
+  /* DRE-PAINEL-01 — o pedido de outra tela (o "Ver notas" do DRE): abre a lista na aba pedida, uma vez. */
+  const [abaReceitaInicial, setAbaReceitaInicial] = useState<AbaDaReceita | undefined>(undefined);
+  useEffect(() => {
+    if (!notasDaReceitaNaAba) return;
+    setAbaReceitaInicial(notasDaReceitaNaAba);
+    setReceitaAberta(true);
+    camadas.abrir('receita');
+    onNotasDaReceitaPedidoAtendido?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o pedido se atende ao chegar; `camadas` e o aviso não o repetem
+  }, [notasDaReceitaNaAba]);
   const [xmlDaReceita, setXmlDaReceita] = useState<File[] | null>(null);
   /* NOTA-RECEITA-CASAR-01 — a prévia aberta pelo "Vincular a este": ao fechar, a lista da Receita relê (a nota vira "Já no sistema") */
   const vinculoDaReceita = useRef(false);
+  /* BOLETO D3d — a nota que veio da caixa por e-mail: ao fechar o "+ Da nota", a caixa reabre (a linha já mostra "já lançada · Vincular") */
+  const voltarParaCaixa = useRef(false);
   const notasPedemAcao = receita.data ? pedemAcao(receita.data.lista) : null;
   /* FIN-NOTA-PDF-01b — o prefill do XML (`prefillDaNota`) OU o do modal da nota (`prefillDoModal`: a nota + tudo o que foi escolhido) */
   const [prefillXml, setPrefillXml] = useState<React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] | null>(null);
@@ -1091,6 +1130,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   };
 
   const openNew = () => { setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setDialogOpen(true); };
+  /* RATEIO-HIGINO-01 — a linha nova da relação vira um item na conta comum pelo writer do Novo lançamento (o mesmo insert). O status
+     segue o do pagamento: pago → realizado com a data do pagamento (só realizado tem data de pagamento); em aberto → o mesmo status. */
+  const criarItemDoRateio = async (pagamento: LancamentoV2, n: ItemNovoDoRateio): Promise<string | null> => {
+    const cls = hook.classificacoes.find((c) => c.id === n.planoContaId);
+    const pago = pagamento.status_transacao === 'realizado' || pagamento.status_transacao === 'conciliado';
+    return hook.criarLancamentoComId({
+      fazenda_id: n.fazendaId, conta_bancaria_id: pagamento.conta_destino_id, data_competencia: n.competencia, data_vencimento: n.vencimento,
+      valor: n.valorCent / 100, tipo_operacao: '2-Saídas', status_transacao: pago ? 'realizado' : (pagamento.status_transacao ?? undefined),
+      data_pagamento: pago ? pagamento.data_pagamento : null, descricao: n.descricao,
+      macro_custo: cls?.macro_custo, grupo_custo: cls?.grupo_custo, centro_custo: cls?.centro_custo, subcentro: cls?.subcentro, plano_conta_id: n.planoContaId,
+      numero_documento: n.nf, tipo_documento: n.nf ? 'Nota Fiscal' : 'Recibo',
+    }, { origem: 'manual' });
+  };
   const openEdit = (l: LancamentoV2, permiteFavOC = false) => {
     console.log('[FinV2] reopen edit object', {
       id: l.id,
@@ -1933,6 +1985,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        FIN-V2-DESEMPENHO-01b: o Ampliado desconta a barra do topo (32px) — com 100vh−8 a página rolava 24px e o rodapé da página
        (agora DENTRO do quadro) ficava abaixo da janela. */
     <div className={cn("relative px-2", modoIntensivo ? "flex flex-col h-[calc(100vh-40px)]" : "space-y-1 pb-20")}>
+      {/* UI-MESES-PADRAO-01 (D1; revisão 11:33) — o cabeçalho navy da casa em UMA linha (título + subtítulo curto). Os filtros ficam COMO
+          ESTÃO (Gabriel 11:25), no card branco logo abaixo. `-mx-2` encosta a faixa nas bordas. No Ampliado ele não entra (a altura é da tabela). */}
+      {!modoIntensivo && (
+        <CabecalhoDaTela className="-mx-2" titulo="Lançamentos financeiros" subtitulo="Previsto, programado e realizado" />
+      )}
       {/* FILTERS */}
       {/* ⚠ CANTO RETO NOS DOIS CARDS — FIN-LISTA-VISUAL-05. O raio de 8px comia a largura
           justamente nas pontas, onde moram a primeira e a última coluna, e um card
@@ -2633,6 +2690,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           <span data-testid="avisos-do-filtro" data-desloca className="flex h-5 min-w-40 flex-1 basis-40 items-center"
             title={[...chipsDaOC.map(ch => ch.texto), ...avisosDoFiltro].join('\n') || undefined}>
            <span data-desloca-livre className="uma-linha-que-rola flex min-w-0 flex-1 items-center gap-1">
+            {podeConsultar && <CorrecaoTransferenciasBanner contas={hook.contasBancarias} onFixed={() => { void listaV2.recarregar(); }} />}
+            {/* FIN-REGRA-VARIAVEL-FAZENDA-01 — o que já está fora da regra fazenda × conta: o mesmo aviso pequeno, o conserto em modal */}
+            {podeConsultar && <SeloRegraFazenda clienteId={clienteAtual?.id} fazendas={fazendas} onCorrigido={() => { void listaV2.recarregar(); }}
+              contasAdm={contasAdministrativas}
+              camada={{ coberta: camadas.coberta('regra'), retorno: camadas.retornoPara('regra'), aoAbrir: () => camadas.abrir('regra'),
+                aoFechar: () => camadas.fechar('regra'), abrirLancamento: (id) => { void abrirLancamentoDaRegra(id); } }} />}
             {avisosDoFiltro.map((frase, i) => (
               <span key={frase} data-testid="aviso-do-filtro" className="inline-flex shrink-0 items-center gap-0.5 text-[9.5px] text-amber-800">
                 {frase}
@@ -2717,12 +2780,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       {mode === 'list' && podeConsultar && (
         <>
-          {!modoIntensivo && (
-            <CorrecaoTransferenciasBanner
-              contas={hook.contasBancarias}
-              onFixed={() => { void listaV2.recarregar(); }}
-            />
-          )}
+          {/* UI-MESES-PADRAO-01 (11:33): o bloco amarelo das transferências virou o aviso pequeno da faixa dos totais (abre o modal) */}
            {/* ⚠ `rolagem-fina rolagem-sem-tampar` — FIN-LISTA-SCROLLBAR-01. A barra desenhava
                 POR CIMA da última linha e da coluna de ações, e clicar no lançamento de baixo
                 virava clicar na barra. As duas classes resolvem coisas diferentes: a fina é a
@@ -3204,6 +3262,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                                     <FilePlus2 className="mr-1.5 h-3 w-3" /> Criar OC a partir deste lançamento
                                   </DropdownMenuItem>
                                 )}
+                                {/* RATEIO-HIGINO-01 — a transferência para uma conta comum: conferir a relação contra os itens de lá */}
+                                {l.tipo_operacao === '3-Transferências' && !!l.conta_destino_id && (
+                                  <DropdownMenuItem data-testid="menu-conferir-rateio" onClick={() => setConferirRateioDe(l)}>
+                                    <ListChecks className="mr-1.5 h-3 w-3" /> Conferir rateio
+                                  </DropdownMenuItem>
+                                )}
                             </>)} />
                           </div>
                         </td>
@@ -3299,8 +3363,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       <LancamentoV2Dialog
         open={dialogOpen}
-        onClose={() => { setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); onCloseDialog?.(); }}
-        onSave={handleSave}
+        onClose={() => {
+          const idAberto = editingLanc?.id ?? null;
+          setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); onCloseDialog?.();
+          if (camadas.aberta('lanc')) { camadas.fechar('lanc', salvouPorCimaDaRegra.current ? 'salvou' : 'fechou', idAberto); salvouPorCimaDaRegra.current = false; }
+        }}
+        onSave={async (form, id, onErroDeCampo) => {
+          const r = await handleSave(form, id, onErroDeCampo);
+          if (r !== false && camadas.aberta('lanc')) salvouPorCimaDaRegra.current = true;
+          return r;
+        }}
         onLancamentoCriado={() => { if (linhaXmlAberta) setLinhasXmlLancadas(antes => new Set([...antes, linhaXmlAberta])); }}
         documentosAntesDeSalvar
         onDelete={handleDelete}
@@ -3334,11 +3406,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       {/* FIN-NFE-XML-01d — a lista de notas. Fica montada (e escondida) enquanto o lancamento de uma delas esta' aberto. */}
       {caixaAberta && clienteAtual?.id && (
-        <CaixaDeBoletosDialog clienteId={clienteAtual.id} clienteNome={clienteAtual.nome} aoFechar={() => setCaixaAberta(false)} />
+        <CaixaDeBoletosDialog clienteId={clienteAtual.id} clienteNome={clienteAtual.nome} aoFechar={() => setCaixaAberta(false)}
+          /* BOLETO D3d (D3) — "Lançar nota": a MESMA prévia do "+ Da nota", com o arquivo que chegou por e-mail */
+          aoLancarNota={(arquivo) => { setCaixaAberta(false); voltarParaCaixa.current = true; setXmlDaReceita([arquivo]); setXmlAberto(true); }} />
       )}
       <NovoDeXmlDialog
         open={xmlAberto && !dialogOpen && !notaAberta}
-        onClose={() => { setXmlAberto(false); setLinhasXmlLancadas(new Set()); if (xmlDaReceita) void receita.refetch(); setXmlDaReceita(null); }}
+        onClose={() => {
+          camadas.fechar('xml', linhasXmlLancadas.size > 0 ? 'salvou' : 'fechou');
+          setXmlAberto(false); setLinhasXmlLancadas(new Set()); if (xmlDaReceita) void receita.refetch(); setXmlDaReceita(null);
+          if (voltarParaCaixa.current) { voltarParaCaixa.current = false; setCaixaAberta(true); }
+        }}
         clienteId={clienteAtual?.id ?? null}
         fazendas={fazOperacionais}
         fornecedores={hook.fornecedores}
@@ -3347,29 +3425,34 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         lancadas={linhasXmlLancadas}
         arquivosIniciais={xmlDaReceita}
         notasDaReceita={receita.data?.lista.length ?? null}
-        onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); void receita.refetch(); }}
+        onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); camadas.abrir('receita'); void receita.refetch(); }}
       />
       {receitaAberta && (
-        <NotasDaReceitaDialog clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
+        <Camada coberta={camadas.coberta('receita')}>
+        <NotasDaReceitaDialog retorno={camadas.retornoPara('receita')} abaInicial={abaReceitaInicial} clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
           erro={receita.error ? (receita.error as Error).message : null}
-          aoFechar={() => setReceitaAberta(false)}
-          aoLancar={(arquivo) => { setReceitaAberta(false); setXmlDaReceita([arquivo]); setXmlAberto(true); }}
+          aoFechar={() => { setReceitaAberta(false); setAbaReceitaInicial(undefined); camadas.fechar('receita'); }}
+          /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" (lote 25; simular = a prévia) */
+          registrarBem={clienteAtual?.id ? (chave, previsao, observacao, simular) => registrarBemDeTerceiro(clienteAtual.id, chave, previsao, observacao, simular) : undefined}
+          /* NAV-VOLTA-ORIGEM-01: a lista NÃO fecha — o "Da nota fiscal" abre POR CIMA dela */
+          aoLancar={(arquivo) => { setXmlDaReceita([arquivo]); setXmlAberto(true); camadas.abrir('xml', 'receita'); }}
           /* NOTA-RECEITA-CASAR-01 — "Vincular a este" = a porta 2 (P128a): a MESMA prévia do "+ Da nota", partindo do lançamento escolhido */
           aoVincular={async (arquivo, lancamentoId) => {
             if (!clienteAtual?.id) return 'Escolha o cliente.';
             const r = await notaParaAPrevia(clienteAtual.id, arquivo, hook.fornecedores, fazOperacionais);
             if (r.ok === false) return r.frase;
-            setReceitaAberta(false);
+            camadas.abrir('nota', 'receita');
             vinculoDaReceita.current = true;
             setNotaAberta({ nota: r.nota, linhaId: 'porta-2', partindoDe: lancamentoId });
             return null;
           }} />
+        </Camada>
       )}
 
       {notaAberta && clienteAtual?.id && (
         <NotaFiscalDialog
           open
-          onClose={() => { setNotaAberta(null); if (vinculoDaReceita.current) { vinculoDaReceita.current = false; void receita.refetch(); } }}
+          onClose={() => { setNotaAberta(null); camadas.fechar('nota'); if (vinculoDaReceita.current) { vinculoDaReceita.current = false; void receita.refetch(); } }}
           clienteId={clienteAtual.id}
           clienteNome={clienteAtual.nome ?? null}
           nota={notaAberta.nota}
@@ -3407,6 +3490,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             notificarLancamentosMudaram(clienteAtual.id);
             abrirOCFinanceiro(operacaoId, tipo);
           }}
+        />
+      )}
+
+      {conferirRateioDe?.conta_destino_id && clienteAtual?.id && (
+        <ConferirRateioDialog
+          clienteId={clienteAtual.id}
+          pagamento={{
+            id: conferirRateioDe.id, descricao: conferirRateioDe.descricao ?? null,
+            valorCent: Math.round(Math.abs(Number(conferirRateioDe.valor)) * 100),
+            vencimento: conferirRateioDe.data_vencimento ?? conferirRateioDe.data_competencia,
+            contaDestinoId: conferirRateioDe.conta_destino_id,
+            status: conferirRateioDe.status_transacao, dataPagamento: conferirRateioDe.data_pagamento,
+          }}
+          nomeDaConta={contaNomeMap.get(conferirRateioDe.conta_destino_id) || 'conta comum'}
+          fazendas={fazOperacionais.map((f) => ({ id: f.id, codigo: f.codigo ?? null, nome: f.nome }))}
+          contasDoPlano={hook.classificacoes.flatMap((c) => (c.id ? [{ id: c.id, subcentro: c.subcentro ?? null, centro_custo: c.centro_custo ?? null, tipo_operacao: c.tipo_operacao ?? null }] : []))}
+          criarItem={(n) => criarItemDoRateio(conferirRateioDe, n)}
+          onClose={() => setConferirRateioDe(null)}
+          onGravou={(ids) => { notificarLancamentosMudaram(clienteAtual.id, null, ids); listaV2.recarregar(); }}
         />
       )}
 

@@ -101,8 +101,8 @@ export interface LevadoDaNota {
  * nem mostra o parcelamento). ⚠ O VALOR É O DA NOTA quando ela difere do extrato: o salvar cria sem vínculo e o "Casar com o banco" mostra a
  * diferença e os ajustes (Gabriel 04/11 06:28, escolha 1).
  */
-export function prefillDoExtratoComNota<T extends { fazenda_id?: string; conta_bancaria_id?: string; conta_destino_id?: string; tipo_operacao: string; descricao?: string }>(
-  doExtrato: T, doXml: DoXml, dataMov: string,
+export function prefillDoExtratoComNota<T extends { fazenda_id?: string; conta_bancaria_id?: string; conta_destino_id?: string; tipo_operacao: string; descricao?: string; valor?: number }>(
+  doExtrato: T, doXml: DoXml, dataMov: string, opcoes: { valorDoExtrato?: boolean } = {},
 ) {
   /* o aviso "sem duplicatas · preencha o vencimento" não vale aqui: o vencimento é o pagamento do extrato */
   const daNota = prefillDaNota({ ...doXml, proposta: { ...doXml.proposta, duplicatas: [], parcelamento: { tipo: 'unico', vencimento: dataMov },
@@ -115,8 +115,11 @@ export function prefillDoExtratoComNota<T extends { fazenda_id?: string; conta_b
     tipo_operacao: doExtrato.tipo_operacao,
     status_transacao: 'realizado',
     data_pagamento: dataMov,
-    data_vencimento: dataMov,
+    /* CONC-CRIAR-COM-NOTA-02 (Fatia 1, Gabriel 18/11) — o vencimento é o da DUPLICATA da nota (o pagamento é o do extrato); sem duplicata, o extrato */
+    data_vencimento: doXml.proposta.duplicatas[0]?.vencimento || dataMov,
     data_competencia: daNota.data_competencia || dataMov,
+    /* "Criar lançamento pela diferença" (`semVinculo`): o valor é o do EXTRATO (a diferença que falta), travado — a nota preenche o resto */
+    ...(opcoes.valorDoExtrato && doExtrato.valor != null ? { valor: doExtrato.valor } : {}),
     /* NOTA-NOVA-MODAL-REAL — a descrição nunca sai dos itens: fica a do extrato, como no Criar de sempre */
     descricao: doExtrato.descricao,
   };
@@ -248,7 +251,8 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
       centro_custo: modelo.centro_custo,
     } : {}),
   }), [contaQ.data, contaBancariaId, ehEntrada, dataMov, movimento, valorSugerido, modelo]);
-  const prefill = useMemo(() => (daNota ? prefillDoExtratoComNota(doExtrato, daNota, dataMov) : doExtrato), [daNota, doExtrato, dataMov]);
+  const prefill = useMemo(() => (daNota ? prefillDoExtratoComNota(doExtrato, daNota, dataMov, { valorDoExtrato: !!semVinculo }) : doExtrato),
+    [daNota, doExtrato, dataMov, semVinculo]);
 
   /* O criado (e o Casar que vem depois dele) só se avisam ao FECHAR o modal: os documentos pendentes sobem DEPOIS do `onSave`, no id
      devolvido, e fechar a estação antes disso perderia o arquivo (FIN-NFE-PARCELAS-01: falhou = o modal fica com "Tentar de novo"). */
@@ -385,7 +389,8 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
       onSave={salvar}
       /* CONC-CRIAR-COM-NOTA-01 (Fatia A) — a aba Documentos do Novo: os pendentes sobem no id que o `salvar` devolve (D1 = a) */
       documentosAntesDeSalvar
-      onLerNotaNoNovo={!semVinculo && aoCasarComBanco ? lerNota : undefined}
+      /* CONC-CRIAR-COM-NOTA-02 (Fatia 1) — o "Criar lançamento pela diferença" (`semVinculo`) também lê a NF: a nota preenche, o valor fica o do extrato */
+      onLerNotaNoNovo={semVinculo || aoCasarComBanco ? lerNota : undefined}
       fazendas={fazendas}
       contas={contasBancarias}
       classificacoes={classificacoes}

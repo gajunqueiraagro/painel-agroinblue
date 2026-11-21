@@ -148,8 +148,9 @@ describe('as unidades da pecuária', () => {
     total: linhas({
       vendas: 1000000, custo_variavel: 400000, reposicao: 50000,
       patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 500 },
-      producao: { ha_medio: 1000, at_produzida: 1000, at_desfrutada: 2000, cab_desfrutada: null,
-        at_comprada: 100, cab_comprada: null },
+      /* DRE-PAINEL-01 D-A6: a receita divide pela @ VENDIDA (`at_vendida`, sem o consumo), nunca pela desfrutada — 2.500 ≠ 2.000 */
+      producao: { ha_medio: 1000, at_produzida: 1000, at_desfrutada: 2500, cab_desfrutada: null,
+        at_comprada: 100, cab_comprada: null, at_vendida: 2000, cab_vendida: null },
     }),
   };
   const montarCom = (unidades: readonly ('rs' | 'ha' | 'cab' | 'arroba')[], dre = BASES) => render(
@@ -166,7 +167,7 @@ describe('as unidades da pecuária', () => {
 
   it('R$/@ usa a @ VENDIDA na receita, a COMPRADA na reposição e a PRODUZIDA no custo', () => {
     montarCom(['rs', 'arroba']);
-    /* Receita: 1.000.000 / 2.000 @ vendidas = 500,00 (pela produzida daria 1.000,00). */
+    /* Receita: 1.000.000 / 2.000 @ vendidas = 500,00 (pela produzida daria 1.000,00; pela desfrutada, 400,00). */
     expect(linhaDe('Vendas')?.semPct[2]?.textContent).toBe('500,00');
     /* Reposição: 50.000 / 100 @ compradas = 500,00. */
     expect(linhaDe('(−) Reposição')?.semPct[2]?.textContent).toBe('500,00');
@@ -355,6 +356,11 @@ describe('a cascata do DRE da pecuária', () => {
     const subs = [...(linhaDe(rot)?.querySelectorAll('[data-pct-abaixo]') ?? [])].map(d => d.textContent ?? '');
     return subs.length ? subs : null;
   };
+  it('REBANHO-AGIO-PROVISORIO-01 (D1 a): o title do Efeito de mercado diz que ele inclui a troca de categoria', () => {
+    montar();
+    expect(linhaDe('Efeito de mercado')?.semPct[0]?.getAttribute('title')).toContain('inclui a troca de categoria');
+  });
+
   it('o % do VBP fica abaixo do número, na mesma célula, só nas 4 linhas de resultado', () => {
     montar();
     expect(rotulos().some(r => r.includes('% do VBP'))).toBe(false);
@@ -649,20 +655,23 @@ describe('as duas visões', () => {
    */
   const ativo = () => Array.from(document.querySelectorAll('[data-testid="dre-comparar"] button'))
     .filter(b => b.className.includes('bg-primary')).map(b => b.textContent);
-  it('o Comparar: as seis referências, a escolhida marcada; escolher chama só a referência; por fazenda, nenhuma marcada', () => {
+  /* DRE-PAINEL-01 (mock aprovado): "Comparar com" = ano anterior · Meta · Média 12 meses; os 2–5 anos foram para o "Mais ▾". */
+  it('o Comparar: ano anterior · Meta · Média 12 meses, a escolhida marcada; escolher chama só a referência; por fazenda, nenhuma marcada', () => {
     const escolherRef = vi.fn();
     const { unmount } = render(<ComparacaoPec visao="comparacao" referencia={1} onReferencia={escolherRef} meta={null}
-      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null} />);
+      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null}
+      rotuloAnoAnterior="out/25" motivoSemMedia12={null} />);
     const refs = Array.from(document.querySelectorAll('[data-testid="dre-comparar"] button')).map(b => b.textContent);
-    expect(refs).toEqual(['Meta', '1 ano', '2', '3', '4', '5']);
-    expect(ativo()).toEqual(['1 ano']);
-    fireEvent.click(screen.getByRole('button', { name: '3' }));
-    expect(escolherRef).toHaveBeenCalledWith(3);
+    expect(refs).toEqual(['out/25', 'Meta', 'Média 12 meses']);
+    expect(ativo()).toEqual(['out/25']);
+    fireEvent.click(screen.getByRole('button', { name: 'Média 12 meses' }));
+    expect(escolherRef).toHaveBeenCalledWith('media12');
     /* ⚠ SEM O RESULTADO DO PERÍODO NO CONTROLE: ele está na grade. */
     expect(document.body.textContent).not.toContain('2.994.408,81');
     unmount();
     render(<ComparacaoPec visao="fazenda" referencia={1} onReferencia={() => {}} meta={null}
-      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null} />);
+      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null}
+      rotuloAnoAnterior="out/25" motivoSemMedia12={null} />);
     expect(ativo()).toEqual([]);
     const comparar = screen.getByTestId('dre-comparar');
     expect(comparar.className).toContain('opacity-50');
@@ -697,7 +706,8 @@ describe('as duas visões', () => {
      pergunta sumir junto com a resposta, e a coluna em traço é o sentinela certo para "não sei". */
   it('sem meta no período, a opção Meta fica e o title diz por quê', () => {
     render(<ComparacaoPec visao="comparacao" referencia="meta" onReferencia={() => {}} meta={null}
-      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null} />);
+      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null}
+      rotuloAnoAnterior="out/25" motivoSemMedia12={null} />);
     const meta = Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Meta');
     expect(meta).toBeTruthy();
     expect(meta?.getAttribute('title')).toBe('sem meta no período');
@@ -708,15 +718,16 @@ describe('as duas visões', () => {
     const escolherRef = vi.fn();
     const MOTIVO = 'meta: só para quem tem o Planejamento';
     render(<ComparacaoPec visao="comparacao" referencia={1} onReferencia={escolherRef} meta={null}
-      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={MOTIVO} />);
+      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={MOTIVO}
+      rotuloAnoAnterior="out/25" motivoSemMedia12={null} />);
     const botao = (t: string) => Array.from(document.querySelectorAll('button')).find(b => b.textContent === t);
     expect(botao('Meta')?.hasAttribute('disabled')).toBe(true);
     expect(botao('Meta')?.getAttribute('title')).toBe(MOTIVO);
     fireEvent.click(botao('Meta')!);
     expect(escolherRef).not.toHaveBeenCalled();
     /* a busca sabe achar: as outras referencias seguem escolhendo */
-    fireEvent.click(botao('2')!);
-    expect(escolherRef).toHaveBeenCalledWith(2);
+    fireEvent.click(botao('out/25')!);
+    expect(escolherRef).toHaveBeenCalledWith(1);
   });
   /**
    * ⚠ × ANOS COM CINCO: SEIS COLUNAS, TODAS RESOLVIDAS — o defeito da homologação de 22/09 (anos 2..N
@@ -1019,17 +1030,14 @@ describe('o custeio de produção do Resumido', () => {
     const rot = rotulos();
     const iVbp = rot.findIndex(r => r.startsWith('= VBP'));
     const iCusteio = rot.findIndex(r => r.startsWith('(−) Custeio de produção'));
-    expect(rot[iVbp + 1]).toBe('por hectare');
-    expect(rot[iCusteio + 1]).toBe('por hectare');
-    expect(rot[iCusteio + 2]).toBe('= Lucro operacional');
+    /* DRE-AJUSTES-05 (Gabriel 19/11): o "por hectare" é a 2ª linha pequena DENTRO da célula do valor — nenhuma linha própria */
+    expect(rot).not.toContain('por hectare');
+    expect(rot[iCusteio + 1]).toBe('= Lucro operacional');
     const linhas = linhasDaTabela();
-    expect(linhas[iVbp + 1].semPct[1].textContent).toContain('R$ 4.512,06/ha');
-    expect(linhas[iCusteio + 1].semPct[1].textContent).toContain('R$ 2.026,93/ha');
-    /* Sem fundo próprio (o mock é branco) e na régua do subitem (13px). */
-    expect(linhas[iVbp + 1].className).toContain('bg-card');
+    expect(linhas[iVbp].semPct[1].querySelector('[data-ha-abaixo]')?.textContent).toBe('R$ 4.512,06/ha');
+    expect(linhas[iCusteio].semPct[1].querySelector('[data-ha-abaixo]')?.textContent).toBe('R$ 2.026,93/ha');
     expect(linhas[iCusteio].className).toContain('bg-card');
-    expect(linhas[iVbp + 1].style.height).toBe('13px');
-    expect(linhas[iCusteio + 2].querySelector('[data-pct-abaixo]')?.textContent).toMatch(/^\d+,\d %$/);
+    expect(linhas[iCusteio + 1].querySelector('[data-pct-abaixo]')?.textContent).toMatch(/^\d+,\d %$/);
     /* as filhas do Custeio (Custo variável e Custo fixo) são subitens: sem linha de % */
     abrirCusteio();
     const temPct = (rot: string) => !!linhaDe(rot)?.querySelector('[data-pct-abaixo]');
@@ -1051,8 +1059,9 @@ describe('o custeio de produção do Resumido', () => {
     expect(document.body.textContent).not.toMatch(/[▲▼]/);
     const rot = rotulos();
     const linhas = linhasDaTabela();
-    expect(linhas[rot.findIndex(r => r.startsWith('= VBP')) + 1].semPct[1].className).toContain('text-muted-foreground');
-    expect(linhas[rot.findIndex(r => r.startsWith('(−) Custeio')) + 1].semPct[1].className).toContain('text-red-600');
+    /* DRE-AJUSTES-05: o "por hectare" dentro da célula tem o tom do % do VBP (cinza claro), em qualquer linha */
+    expect(linhas[rot.findIndex(r => r.startsWith('= VBP'))].semPct[1].querySelector('[data-ha-abaixo]')?.className).toContain('text-muted-foreground');
+    expect(linhas[rot.findIndex(r => r.startsWith('(−) Custeio'))].semPct[1].querySelector('[data-ha-abaixo]')?.className).toContain('text-muted-foreground');
     cleanup();
     /* Prejuízo: o Lucro líquido negativo vira vermelho. E o Detalhado tem as mesmas cores. */
     montarRRCC({ unidades: ['rs'], dre: { ...RRCC21, total: { ...RRCC21.total, resultado_periodo: -5000 } } });
@@ -1283,22 +1292,20 @@ describe('a cor e a faixa de um total', () => {
     expect(linhaDe('= Receita líquida')!.semPct[1].className).toContain('text-red');
   });
 
-  /* ⚠ O "por hectare" É SUBITEM do total de cima (D6): a régua da filha (13px), sem fundo e sem ▲/▼; o negativo segue vermelho. */
-  it('"por hectare" é subitem do total a que pertence', () => {
+  /* DRE-AJUSTES-05 (Gabriel 19/11): o "por hectare" mora DENTRO do total — 2ª linha pequena da célula, como o % do VBP — nas quatro linhas que
+     fecham conta; nunca uma linha própria abaixo do traço (parecia de outro bloco). Sem área, traço. */
+  it('"por hectare" dentro do total: Lucro operacional, Lucro líquido, Resultado econômico e Investimento', () => {
     const real: DrePecuaria = { ...DRE, fazendas: [],
       total: linhas({ resultado_com_mercado: -1959802.35,
         producao: { ...linhas({}).producao, ha_medio: 4803 } }) };
     render(<PecDrePanel colunas={colunas('comparacao', { real })}
       alturaCartao={null} cartaoRef={{ current: null }} unidades={['rs']} />);
-    const apoios = linhasDaTabela().filter(tr => (tr.semPct[0]?.textContent ?? '').trim().startsWith('por hectare'));
-    expect(apoios).toHaveLength(2);
-    for (const ap of apoios) {
-      expect(ap.className).toContain('bg-card');
-      expect(ap.style.height).toBe('13px');
-      expect(ap.textContent).not.toMatch(/[▲▼]/);
-    }
-    /* O segundo é o do Resultado econômico, que no fixture é negativo. */
-    expect(apoios[1].semPct[1].className).toContain('text-red-600');
+    expect(linhasDaTabela().filter(tr => (tr.semPct[0]?.textContent ?? '').trim().startsWith('por hectare'))).toHaveLength(0);
+    const comHa = linhasDaTabela().filter(tr => tr.querySelector('[data-ha-abaixo]'))
+      .map(tr => (tr.semPct[0]?.textContent ?? '').replace(/\s+/g, ' ').trim());
+    expect(comHa.map(r => r.replace(/^(= |\(−\) )/, '').split(' ')[0])).toEqual(['Lucro', 'Lucro', 'Resultado', 'Investimento']);
+    const eco = linhasDaTabela().find(tr => (tr.semPct[0]?.textContent ?? '').includes('Resultado econômico'));
+    expect(eco?.semPct[1].querySelector('[data-ha-abaixo]')?.textContent).toBe('R$ -408,04/ha');
   });
 });
 

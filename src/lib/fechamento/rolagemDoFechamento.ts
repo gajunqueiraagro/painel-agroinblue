@@ -7,7 +7,8 @@
  *     vai na variável `--topo-do-fechamento`, que a linha usa como `top`.
  */
 export const VAR_TOPO = '--topo-do-fechamento';
-export const CLASSE_LINHA_PRESA = 'sticky top-[var(--topo-do-fechamento,0px)] z-10 bg-background';
+// UI-MESES-PADRAO-01 (revisão 11:28: nenhuma faixa clara entre o cabeçalho e o corpo): o fundo da linha presa é o do corpo
+export const CLASSE_LINHA_PRESA = 'sticky top-[var(--topo-do-fechamento,0px)] z-10 bg-corpo';
 
 interface CardDoMes { ano_mes: string; fazenda_id: string }
 

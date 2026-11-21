@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DatePicker } from '@/components/ui/date-picker';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,6 +29,13 @@ import { contratoDaLista, ehCompraParcelada, ENCERRADOS, type ContratoDaLista } 
 import { faixaDaLinha, lerTelaDaLinha, rotuloDaLinha, type ItemDaFaixa, type LinhaDoCadastro } from '@/lib/financiamentos/linhaDeCredito';
 import { useLinhasDeCredito } from '@/hooks/useLinhasDeCredito';
 import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
+import { chaveDeOrdem, lerNotasDasCompras, numeroCurto, rotuloDasNotas, textoDasNotasParaBusca, type NotaDaCompra } from '@/lib/financiamentos/notasDasCompras';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { TD_REGUA, TD_REGUA_NUM, TH_REGUA } from '@/components/ui/regua-tabela';
+import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
+import type { AtividadeDaSafra, Intervalo } from '@/lib/periodo/intervaloDeDatas';
+import { useAtividadesDoCliente } from '@/v2/pages/visaoGeral/atividadesDaVisao';
+import { credoresComContagem, escopoSigla, opcoesDeAtividade, ROTULO_DO_NOVO } from '@/lib/financiamentos/filtrosDasCompras';
 
 /* ── Types ── */
 /* ⚠ CLASSES LIDAS DO CÓDIGO DA REFERÊNCIA, não estimadas: `NUM` e `APOIO` são
@@ -99,8 +105,7 @@ const PILULA_NATUREZA: Record<string, { sigla: string; rotulo: string; classe: s
   emprestimo:    { sigla: 'EMP',  rotulo: 'Empréstimo',    classe: 'border-amber-300 bg-amber-50 text-amber-700' },
 };
 
-/** O escopo (`tipo_financiamento`), que saiu da pílula e virou sufixo da descrição. */
-const escopoSigla = (tipo: string) => (tipo === 'pecuaria' ? 'PEC' : 'AGR');
+/* O escopo (`tipo_financiamento`), que saiu da pílula e virou sufixo da descrição: `escopoSigla` (PEC/AGR/SILV/ADM) — COMPRAS-PARC-LAYOUT-02. */
 
 /* (o selo da situação passou a ser o `SeloDoContrato`, a forma do status de Lançamentos — FIN-FINANC-28-P3) */
 
@@ -202,6 +207,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   const isoParaBR = (v: string): string => {
     const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+  };
+  /* COMPRAS-PARC-LAYOUT-02 — o par dd/mm/aaaa do filtro como o `Intervalo` do seletor único; só um lado guardado = ele nas duas pontas */
+  const intervaloDoFiltro = (de: string, ate: string): Intervalo | null => {
+    const d = brToISO(de); const a = brToISO(ate);
+    return d || a ? { de: d || a, ate: a || d } : null;
   };
 
   /* ── Query principal ── */
@@ -308,6 +318,15 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       });
     },
   });
+  /* COMPRAS-PARC-NF-01 (Gabriel 18/11) — a NF de cada compra parcelada: a nota JÁ VINCULADA às parcelas (fonte única, sem campo
+     paralelo). Lida uma vez por lista; falhou = a coluna mostra "—" e a busca segue sem o nº (nunca trava a lista). */
+  const idsDasCompras = useMemo(() => financiamentos.filter((f) => ehCompraParcelada(f.natureza)).map((f) => f.id).sort().join(','), [financiamentos]);
+  const { data: notasDasCompras } = useQuery({
+    queryKey: ['compras-parceladas-notas', clienteId, idsDasCompras],
+    enabled: !!clienteId && !!idsDasCompras,
+    queryFn: () => lerNotasDasCompras(clienteId!, idsDasCompras.split(',')),
+  });
+  const [notasAbertas, setNotasAbertas] = useState<{ compra: string; notas: readonly NotaDaCompra[] } | null>(null);
 
   /* ── Credores dos contratos para o filtro (FIN-FINANC-28-P3-FIX3): o seletor DA CASA com busca, pelo nome ou pelo CPF/CNPJ
      (a 2ª linha da opção entra na busca). Só os credores que aparecem nos contratos do cliente. ── */
@@ -330,6 +349,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     setFiltroCredor(pelos.length === 1 ? pelos[0].id : 'todos');
   }, [credores, filtroCredor]);
   const nomeDoCredorFiltrado = credores.find((c) => c.id === filtroCredor)?.nome ?? null;
+  /* COMPRAS-PARC-LAYOUT-02 (4) — o filtro "Atividade": as atividades LIGADAS do cliente (fonte única) e "Administrativo" por último (D1) */
+  const { lidas: atividadesLidas } = useAtividadesDoCliente(clienteId);
+  const opcoesAtividade = useMemo(() => opcoesDeAtividade(atividadesLidas,
+    [...new Set(financiamentos.map((f) => f.tipo_financiamento ?? ''))]), [atividadesLidas, financiamentos]);
+  /* os atalhos de safra do seletor de período ("Esta safra"): as atividades com safra que o cliente tem */
+  const atividadesDaSafra = useMemo(() => opcoesAtividade.flatMap((o): AtividadeDaSafra[] => (o.valor === 'pecuaria' ? ['pecuaria'] : o.valor === 'agricultura' ? ['agricultura'] : [])),
+    [opcoesAtividade]);
 
   /* ── Filtros (client-side, sobre dados já carregados) ── */
   /* FIN-FINANC-28-P3 — UM PREDICADO PARA AS DUAS ABAS. A situação vem de fora (cada aba tem a sua) e a natureza fica fora
@@ -346,7 +372,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
     const descQ = filtroDescricao.trim();
     const contQ = filtroContrato.trim();
-    return (f: FinanciamentoRow, situacao: string): boolean => {
+    return (f: FinanciamentoRow, situacao: string, ignorarCredor = false): boolean => {
       if (situacao === 'encerrados') { if (!ENCERRADOS.includes(f.status)) return false; }
       else if (situacao !== 'todos' && f.status !== situacao) return false;
       if (filtroTipo !== 'todos' && f.tipo_financiamento !== filtroTipo) return false;
@@ -358,12 +384,14 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
          aqui pela mesma regra — sem ela, procurar "parcelamento" não acharia os
          parcelamentos. O escopo continua alcançável: ele não sumiu da linha,
          mudou de lugar (pílula → sufixo da descrição). */
-      if (descQ && !casaNaBusca([f.descricao, f.credor_nome, f.numero_contrato ?? '',
+      /* COMPRAS-PARC-NF-01 — a busca acha também pelo nº da NF da compra (o inteiro e o curto: "000.000.288" e "288") */
+      if (descQ && !casaNaBusca([f.descricao, f.credor_nome, f.numero_contrato ?? '', textoDasNotasParaBusca(notasDasCompras?.get(f.id)),
                      f.tipo_financiamento === 'pecuaria' ? 'PEC pecuária' : 'AGR agricultura',
                      `${PILULA_NATUREZA[f.natureza]?.sigla ?? ''} ${PILULA_NATUREZA[f.natureza]?.rotulo ?? ''}`]
                      .join(' '), descQ)) return false;
-      if (contQ && !casaNaBusca(f.numero_contrato, contQ)) return false;
-      if (filtroCredor !== 'todos' && f.credor_id !== filtroCredor) return false;
+      /* COMPRAS-PARC-LAYOUT-02 (3) — na aba Compras o campo é "Nº NF" (os números das notas ligadas); nas outras, o nº do contrato */
+      if (contQ && !casaNaBusca(aba === 'parcelas' ? textoDasNotasParaBusca(notasDasCompras?.get(f.id)) : f.numero_contrato, contQ)) return false;
+      if (!ignorarCredor && filtroCredor !== 'todos' && f.credor_id !== filtroCredor) return false;
       const isoContratoDe = brToISO(filtroDataContratoDe);
       const isoContratoAte = brToISO(filtroDataContratoAte);
       if (isoContratoDe && (f.data_contrato ?? '') < isoContratoDe) return false;
@@ -374,13 +402,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       if (!temParcelaNoIntervalo(f.situacaoDoLote, intervalo)) return false;
       return true;
     };
-  }, [filtroTipo, filtroDescricao, filtroContrato, filtroCredor,
+  }, [aba, filtroTipo, filtroDescricao, filtroContrato, filtroCredor, notasDasCompras,
       filtroDataContratoDe, filtroDataContratoAte, intervalo]);
 
   /* a lista da aba "Compras parceladas": só os parcelamentos */
   const filtered = useMemo(
     () => financiamentos.filter(f => ehCompraParcelada(f.natureza) && passaNosFiltros(f, filtroStatus)),
     [financiamentos, passaNosFiltros, filtroStatus]);
+  /* COMPRAS-PARC-LAYOUT-02 (6) — os credores das compras que passam nos outros filtros, com "N compras"; o escolhido que sumiu = inexistente */
+  const credoresDasCompras = useMemo(() => credoresComContagem(financiamentos
+    .filter((f) => ehCompraParcelada(f.natureza) && passaNosFiltros(f, filtroStatus, true) && !!f.credor_id && !!f.credor_nome && f.credor_nome !== '—')
+    .map((f) => ({ id: f.credor_id, nome: f.credor_nome, nome_fantasia: f.credor_fantasia ?? null, cpf_cnpj: f.credor_documento ?? null,
+      aliases_norm: f.credor_aliases ?? null, ativo: f.credor_ativo !== false }))), [financiamentos, passaNosFiltros, filtroStatus]);
 
   const dadosOrdenados = [...filtered].sort((a: any, b: any) => {
     let vA = a[sortCol];
@@ -394,6 +427,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     } else if (sortCol === 'numero_contrato') {
       vA = vA ?? '';
       vB = vB ?? '';
+    } else if (sortCol === 'nf') {
+      /* COMPRAS-PARC-NF-01 — pela menor nota; sem nota fica no fim nos dois sentidos */
+      const ka = chaveDeOrdem(notasDasCompras?.get(a.id)); const kb = chaveDeOrdem(notasDasCompras?.get(b.id));
+      if (ka === null || kb === null) return ka === kb ? 0 : ka === null ? 1 : -1;
+      vA = ka; vB = kb;
     } else if (sortCol === 'parcelas') {
       vA = a.total_parcelas > 0 ? a.parcelas_pagas / a.total_parcelas : 0;
       vB = b.total_parcelas > 0 ? b.parcelas_pagas / b.total_parcelas : 0;
@@ -541,7 +579,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             className="h-6 w-44 text-[11px]"
           />
           <Input
-            placeholder="Nº contrato..."
+            placeholder={aba === 'parcelas' ? 'Nº NF...' : 'Nº contrato...'}
             value={filtroContrato}
             onChange={e => setFiltroContrato(e.target.value)}
             className="h-6 w-28 text-[11px]"
@@ -576,17 +614,19 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               "Todos" solto não diria mais QUAL eixo. O item ganhou o nome do
               eixo — o mesmo recurso que o select de credor já usa com "Todos
               credores", e não uma segunda régua de rótulo nesta linha. */}
+          {/* COMPRAS-PARC-LAYOUT-02 (4) — "Atividade": as do CADASTRO do cliente (nunca lista fixa) + Administrativo por último (D1);
+              largura fixa medida para "Administrativo" inteiro (sem "…") */}
           <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-            <SelectTrigger className="h-6 w-24 text-[11px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-6 w-[112px] text-[11px]" data-testid="filtro-atividade"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="todos">Todos escopos</SelectItem>
-              <SelectItem value="pecuaria">Pecuária</SelectItem>
-              <SelectItem value="agricultura">Agricultura</SelectItem>
+              <SelectItem value="todos">Atividade</SelectItem>
+              {opcoesAtividade.map((o) => <SelectItem key={o.valor} value={o.valor}>{o.rotulo}</SelectItem>)}
             </SelectContent>
           </Select>
-          {/* FIN-FINANC-28-P3 — a aba já é "Compras parceladas": a natureza fica fixa e apagada (lugar mantido). */}
-          <Select value={aba === 'parcelas' ? 'parcelamento' : filtroNatureza} onValueChange={setFiltroNatureza} disabled={aba === 'parcelas'}>
-            <SelectTrigger className="h-6 w-28 text-[11px]" title={aba === 'parcelas' ? 'a aba já é Compras parceladas' : undefined}><SelectValue /></SelectTrigger>
+          {/* COMPRAS-PARC-LAYOUT-02 (5) — na aba "Compras parceladas" a natureza não tem função: sai (a fileira é fixa por aba) */}
+          {abaCredito && (
+          <Select value={filtroNatureza} onValueChange={setFiltroNatureza}>
+            <SelectTrigger className="h-6 w-28 text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todas">Todas</SelectItem>
               <SelectItem value="financiamento">Financiamento</SelectItem>
@@ -594,13 +634,16 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               <SelectItem value="emprestimo">Empréstimo</SelectItem>
             </SelectContent>
           </Select>
+          )}
           {/* FIN-FINANC-28-P3-FIX3 — LARGURA FIXA (160px): escolher um nome longo não muda o filtro de tamanho; o nome inteiro
               fica no `title` */}
           {/* FORN-BUSCA-UNICA-01 — 160px de largura; o nome escolhido aparece INTEIRO (quebra a linha), nunca com "…" */}
           <div className="w-40 shrink-0" title={nomeDoCredorFiltrado ?? 'Todos credores'} data-testid="filtro-credor">
             <FavorecidoSelect value={filtroCredor === 'todos' ? '' : filtroCredor} onChange={(id) => setFiltroCredor(id || 'todos')}
-              fornecedores={credores} situacao="todos" nomeInteiro limpavel rotuloDoVazio="Todos credores" placeholder="Todos credores"
-              linhaDoDocumento={false} size="compact" />
+              fornecedores={aba === 'parcelas' ? credoresDasCompras : credores} situacao="todos" nomeInteiro limpavel rotuloDoVazio="Todos credores" placeholder="Todos credores"
+              linhaDoDocumento={false} size="compact"
+              mostrarUso={aba === 'parcelas'} unidadeDoUso="compras"
+              valorInexistente={aba === 'parcelas' && filtroCredor !== 'todos' && !credoresDasCompras.some((c) => c.id === filtroCredor)} />
           </div>
         </div>
 
@@ -610,37 +653,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             altura nova dos filtros e nasce vazio com o placeholder "de"/"até".
             ⚠ O ESTADO NAO MUDOU: os quatro filtros continuam guardando 'yyyy-MM-dd' e a
             persistencia em sessionStorage segue lendo as mesmas chaves. */}
+        {/* COMPRAS-PARC-LAYOUT-02 (7)(8) — os períodos pelo COMPONENTE ÚNICO do DRE (`SeletorDePeriodo`, modo datas, compacto: Início/Fim, os
+            atalhos, Cancelar/Aplicar), reutilizado; um gatilho de largura fixa por período. O estado segue em dd/mm/aaaa (as chaves do
+            sessionStorage não mudam): a conversão é na fronteira. Na aba Compras o rótulo é "Compra" (a data da compra). */}
         <div className="flex items-center gap-1.5">
-          <span className="w-14 shrink-0 text-[10px] text-muted-foreground">Contrato</span>
-          <DatePicker
-            value={brToISO(filtroDataContratoDe)}
-            onChange={iso => setFiltroDataContratoDe(isoParaBR(iso))}
-            size="compact"
-            placeholder="de"
-            className="w-[110px]"
-          />
-          <DatePicker
-            value={brToISO(filtroDataContratoAte)}
-            onChange={iso => setFiltroDataContratoAte(isoParaBR(iso))}
-            size="compact"
-            placeholder="até"
-            className="w-[110px]"
-          />
+          <span className="w-14 shrink-0 text-[10px] text-muted-foreground" data-testid="rotulo-periodo-compra">{aba === 'parcelas' ? 'Compra' : 'Contrato'}</span>
+          <SeletorDePeriodo modo="datas" compacto atividades={atividadesDaSafra} className="w-[176px]" testid="periodo-compra" rotuloVazio="qualquer data"
+            valor={intervaloDoFiltro(filtroDataContratoDe, filtroDataContratoAte)}
+            onChange={(i) => { setFiltroDataContratoDe(isoParaBR(i.de)); setFiltroDataContratoAte(isoParaBR(i.ate)); }} />
           <span className="ml-3 w-16 shrink-0 text-[10px] text-muted-foreground">Vencimento</span>
-          <DatePicker
-            value={brToISO(filtroVencDe)}
-            onChange={iso => setFiltroVencDe(isoParaBR(iso))}
-            size="compact"
-            placeholder="de"
-            className="w-[110px]"
-          />
-          <DatePicker
-            value={brToISO(filtroVencAte)}
-            onChange={iso => setFiltroVencAte(isoParaBR(iso))}
-            size="compact"
-            placeholder="até"
-            className="w-[110px]"
-          />
+          <SeletorDePeriodo modo="datas" compacto atividades={atividadesDaSafra} className="w-[176px]" testid="periodo-vencimento" rotuloVazio="qualquer data"
+            valor={intervaloDoFiltro(filtroVencDe, filtroVencAte)}
+            onChange={(i) => { setFiltroVencDe(isoParaBR(i.de)); setFiltroVencAte(isoParaBR(i.ate)); }} />
           {/* FIN-FINANC-28-P3-FIX4 — LUGAR FIXO: o botão existe sempre (apagado sem filtro) e não empurra nada ao acender. Zera
               todos os filtros da aba atual. Saiu o "Limpar" condicional da primeira linha. */}
           <Button variant="outline" size="sm" className="ml-1.5 h-6 w-[92px] shrink-0 px-2 text-[11px]" onClick={zerarFiltros}
@@ -724,9 +748,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               <Plus className="size-3.5" /> Linha de crédito
             </Button>
             {/* CTA da casa: o mesmo `bg-cta` do resto do sistema, em 28px. */}
-            <Button size="sm" className="h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover"
-              onClick={() => setCadastroNovoAberto(true)} data-testid="nova-obrigacao">
-              <Plus className="size-3.5" /> Nova obrigação
+            {/* COMPRAS-PARC-LAYOUT-02 — o botão SEGUE A ABA (176px fixos, o mesmo lugar nas 3) e abre DIRETO o cadastro dela, com o tipo
+                travado: Financiamentos → o cadastro sem o seletor de tipo · Compras → o modal da compra parcelada · Consórcios → o do consórcio */}
+            <Button size="sm" className="h-7 w-[176px] gap-1 bg-cta px-2 text-xs font-semibold text-cta-foreground hover:bg-cta-hover"
+              onClick={() => (aba === 'parcelas' ? setNovaObrigacaoAberta(true) : setCadastroNovoAberto(true))} data-testid="novo-da-aba">
+              <Plus className="size-3.5" /> {ROTULO_DO_NOVO[aba]}
             </Button>
           </div>
         </div>
@@ -857,24 +883,28 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   A pagar · Parcela · Próxima · Situação · Pagas. Saíram a pílula de Tipo (a aba só tem parcelamentos) e o Nº contrato
                   (só nesta aba; a de Financiamentos mantém). Descrição e Credor ficam SEM largura e dividem o que sobra (cortam com o
                   inteiro no `title`); as fixas, medidas no Chromium com a régua de Lançamentos, somam 568. */}
+              {/* COMPRAS-PARC-LAYOUT-02 (1) — UI-LARGURA-FIXA-01: os números em px medidos (somam 580; "Valor da compra" pede 100; a NF com 76 cabe "NF 123456789", 9 dígitos — o chip de várias notas corta com o inteiro no title) e a sobra dividida em PROPORÇÃO FIXA 3:2
+                  — cinco colunas sem largura (o `table-fixed` as faz iguais): a Descrição ocupa 3 (`colSpan`), o Credor 2. Nada depende do dado. */}
               <colgroup>
-                <col style={{ width: 62 }} data-testid="col-data" />
-                <col />
-                <col />
-                <col style={{ width: 110 }} />
-                <col style={{ width: 98 }} />
-                <col style={{ width: 98 }} />
-                <col style={{ width: 68 }} />
-                <col style={{ width: 72 }} />
-                <col style={{ width: 60 }} />
+                <col style={{ width: 58 }} data-testid="col-data" />
+                <col style={{ width: 76 }} data-testid="col-nf" />
+                <col data-testid="col-sobra" /><col data-testid="col-sobra" /><col data-testid="col-sobra" />
+                <col data-testid="col-sobra" /><col data-testid="col-sobra" />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 88 }} />
+                <col style={{ width: 84 }} />
+                <col style={{ width: 62 }} />
+                <col style={{ width: 64 }} />
+                <col style={{ width: 48 }} />
               </colgroup>
               <TableHeader className="sticky top-0 z-10 bg-primary text-primary-foreground [&_tr]:border-b-0 [&_tr]:hover:bg-primary">
                 <TableRow>
-                  <CabecalhoOrdenavel rotulo="Data" ativo={sortCol === 'data_contrato'}
+                  <CabecalhoOrdenavel rotulo="Compra" ativo={sortCol === 'data_contrato'}
                     direcao={sortDir} aoOrdenar={() => handleSort('data_contrato')} />
-                  <CabecalhoOrdenavel rotulo="Descrição" ativo={sortCol === 'descricao'}
+                  <CabecalhoOrdenavel rotulo="NF" ativo={sortCol === 'nf'} direcao={sortDir} aoOrdenar={() => handleSort('nf')} />
+                  <CabecalhoOrdenavel rotulo="Descrição" ativo={sortCol === 'descricao'} colSpan={3}
                     direcao={sortDir} aoOrdenar={() => handleSort('descricao')} />
-                  <CabecalhoOrdenavel rotulo="Credor" ativo={sortCol === 'credor_nome'}
+                  <CabecalhoOrdenavel rotulo="Credor" ativo={sortCol === 'credor_nome'} colSpan={2}
                     direcao={sortDir} aoOrdenar={() => handleSort('credor_nome')} />
                   <CabecalhoOrdenavel rotulo="Valor da compra" ativo={sortCol === 'valor_total'}
                     direcao={sortDir} aoOrdenar={() => handleSort('valor_total')} direita />
@@ -906,12 +936,28 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                     <TableCell className={TD_DATA_LANC} data-testid="cel-data">
                       {f.data_contrato ? format(new Date(f.data_contrato + 'T12:00:00'), 'dd/MM/yy') : '—'}
                     </TableCell>
-                    <TableCell className="truncate" data-testid="cel-descricao"
-                      title={[f.descricao, escopoSigla(f.tipo_financiamento), f.numero_contrato ? `nº ${f.numero_contrato}` : null].filter(Boolean).join(' · ')}>
-                      <span className="font-medium leading-tight">{f.descricao}</span>
-                      <span className="ml-1 text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
+                    {/* COMPRAS-PARC-NF-01 — a NF: "—" sem nota; uma, o nº; várias, o chip "NF 288 +5" que abre as notas (sem abrir o contrato) */}
+                    <TableCell className="whitespace-nowrap" data-testid="cel-nf">
+                      {(() => {
+                        const notas = notasDasCompras?.get(f.id); const r = rotuloDasNotas(notas);
+                        if (!notas?.length) return <span className="text-muted-foreground">—</span>;
+                        if (!r.extras) return <span className="tabular-nums" title={`NF ${notas[0].numero}`}>{r.texto}</span>;
+                        return (
+                          <button type="button" data-testid="chip-nf" title={`${r.texto} +${r.extras} · ${notas.length} notas: ${notas.map((n) => numeroCurto(n.numero)).join(', ')}`}
+                            className="block max-w-full truncate rounded-full bg-sky-50 px-1.5 text-[10px] font-semibold tabular-nums text-sky-800 hover:bg-sky-100"
+                            onClick={(e) => { e.stopPropagation(); setNotasAbertas({ compra: f.descricao, notas }); }}
+                            onKeyDown={(e) => e.stopPropagation()}>
+                            {r.texto} +{r.extras}
+                          </button>
+                        );
+                      })()}
                     </TableCell>
-                    <TableCell className="truncate" title={nomeEDocumento(f.credor_nome, f.credor_documento) || undefined} data-testid="cel-credor">{f.credor_nome}</TableCell>
+                    <TableCell className="truncate" colSpan={3} data-testid="cel-descricao"
+                      title={[f.descricao, escopoSigla(f.tipo_financiamento), f.numero_contrato ? `nº ${f.numero_contrato}` : null].filter(Boolean).join(' · ')}>
+                      <span className="font-medium leading-tight">{f.descricao}</span>{' '}
+                      <span className="text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
+                    </TableCell>
+                    <TableCell className="truncate" colSpan={2} title={nomeEDocumento(f.credor_nome, f.credor_documento) || undefined} data-testid="cel-credor">{f.credor_nome}</TableCell>
                     <TableCell className={MOEDA}>{fmt(f.valor_total)}</TableCell>
                     <TableCell className={MOEDA}>{fmt(f.total_pendente)}</TableCell>
                     <TableCell className={MOEDA}>
@@ -952,6 +998,35 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           planos) so' saem quando o modal abre, e nao a cada render desta lista. */}
       {/* FIN-FINANC-28 P3-GRAFICO — "O que falta pagar": fechar não mexe na lista (estado, filtros e rolagem ficam) */}
       {/* a chave pelo modo: cada abertura nasce em "Ano civil" (a escolha de safra do mensal não vaza para o anual) */}
+      {/* COMPRAS-PARC-NF-01 — o minimodal das notas da compra (uma linha por nota, a régua da casa) */}
+      <Dialog open={!!notasAbertas} onOpenChange={(v) => { if (!v) setNotasAbertas(null); }}>
+        <DialogContent className="max-w-[min(560px,calc(100vw-32px))] gap-2 p-3 [&>button.absolute]:hidden" data-testid="minimodal-notas">
+          <div className="flex items-center gap-2">
+            <DialogTitle className="min-w-0 flex-1 break-words text-[12px] leading-[15px]">
+              {notasAbertas ? `${notasAbertas.notas.length} notas · ${notasAbertas.compra}` : ''}
+            </DialogTitle>
+            <button type="button" onClick={() => setNotasAbertas(null)} className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground" aria-label="Fechar" data-testid="fechar-minimodal-notas">✕</button>
+          </div>
+          <div className="max-h-[60vh] overflow-auto rounded border">
+            <table className="w-full table-fixed border-collapse">
+              <colgroup><col style={{ width: 110 }} /><col style={{ width: 78 }} /><col /><col style={{ width: 96 }} /></colgroup>
+              <thead className="sticky top-0 bg-primary"><tr>
+                <th className={TH_REGUA}>Nota</th><th className={TH_REGUA}>Emissão</th><th className={TH_REGUA}>Emitente</th><th className={`${TH_REGUA} text-right`}>Valor da nota</th>
+              </tr></thead>
+              <tbody>
+                {notasAbertas?.notas.map((n) => (
+                  <tr key={n.documentoId} className="border-b" data-testid="minimodal-nota">
+                    <td className={TD_REGUA}>NF {n.numero}{n.serie ? <span className="text-muted-foreground"> · s. {n.serie}</span> : null}</td>
+                    <td className={`${TD_REGUA} text-[9.5px] text-muted-foreground`}>{n.emissao ? format(new Date(n.emissao + 'T12:00:00'), 'dd/MM/yyyy') : '—'}</td>
+                    <td className={`${TD_REGUA} truncate`} title={n.emitente ?? undefined}>{n.emitente ?? '—'}</td>
+                    <td className={TD_REGUA_NUM}>{n.valorCent == null ? '—' : (n.valorCent / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
       <CronogramaEmAbertoDialog key={cronogramaAberto ?? 'fechado'} aberto={cronogramaAberto !== null} aoFechar={() => setCronogramaAberto(null)}
         modo={cronogramaAberto ?? 'mensal'} hoje={hoje}
         situacoes={cronogramaAberto === 'anual' ? vigentesFinanciamento.map(f => f.situacaoDoLote) : filtered.map(f => f.situacaoDoLote)}
@@ -966,7 +1041,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       {/* FIN-FINANC-28 passo 7 — o cadastro novo (financiamento, empréstimo, consórcio); a compra parcelada abre o formulário aprovado */}
       {cadastroNovoAberto && (
         <CadastroDeContratoDialog aberto aoFechar={() => setCadastroNovoAberto(false)}
-          onAbrirCompraParcelada={() => setNovaObrigacaoAberta(true)}
+          tipoDaAba={aba === 'consorcios' ? 'consorcio' : 'financiamento'}
           onSalvo={() => {
             for (const k of ['financiamentos-lista', 'painel-financiamentos', 'painel-parcelas']) qc.invalidateQueries({ queryKey: [k, clienteId] });
           }} />
@@ -996,13 +1071,16 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
  * ordenam, que é justamente o que ele precisa saber antes de tentar. A lista
  * daqui usava "↑↓" em texto, que só aparecia na coluna ativa.
  */
-function CabecalhoOrdenavel({ rotulo, ativo, direcao, aoOrdenar, direita }: {
+function CabecalhoOrdenavel({ rotulo, ativo, direcao, aoOrdenar, direita, colSpan }: {
   rotulo: string; ativo: boolean; direcao: 'asc' | 'desc';
   aoOrdenar: () => void; direita?: boolean;
+  /** COMPRAS-PARC-LAYOUT-02 — Descrição (3) e Credor (2): a proporção fixa da sobra */
+  colSpan?: number;
 }) {
   const Seta = !ativo ? ChevronsUpDown : direcao === 'asc' ? ChevronUp : ChevronDown;
   return (
     <TableHead
+      colSpan={colSpan}
       /* ⚠ `text-foreground` É OVERRIDE LOCAL DESTA TELA — item 3. O primitivo dá
          `text-muted-foreground` e a referência do Finanças mantém o muted; aqui o
          Gabriel pediu cabeçalho ESCURO. Fica no arquivo da tela, de propósito:

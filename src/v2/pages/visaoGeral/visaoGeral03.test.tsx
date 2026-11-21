@@ -8,6 +8,10 @@ import { CartoesDoTopo } from './CartoesDoTopo';
 import { PrecisaDeAtencao } from './AtencaoEAtalhos';
 import { comDado, comparacoes, indicadoresAgricultura, indicadoresPecuaria, indicadoresSilvicultura, variacao, type DreLavouraLida, type DrePecLida } from './indicadoresDaAtividade';
 import { safraAnterior } from './agriculturaDaVisao';
+import { tomDaReguaDoAno } from '../V2Home';
+import type { StatusCelulaAno } from '@/hooks/useStatusPilaresAno';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 
 /* VISAO-GERAL-03 (Gabriel 04/11 06:28): "fontes, números e cards enormes" — a Visão Geral passa à escala da Geo pastos › Global, pelas
    MESMAS peças de lá (o `Kpi`, o `Card` e a miniatura do "Mapa das fazendas"). Nada de tamanho novo. */
@@ -70,10 +74,34 @@ describe('VISAO-GERAL-03 — a escala da Geo pastos', () => {
     expect(abrir).toHaveBeenCalled();
   });
 
-  it('cabeçalho pequeno: o cumprimento numa linha de 11 px; "No mês | No ano" é o Segmentado de lá; os meses em chip de 20 px', () => {
+  it('cabeçalho pequeno: o cumprimento numa linha de 11 px; "No mês | No ano" é o Segmentado de lá; os meses são o SeletorPeriodo da casa', () => {
     expect(V2HOME).toMatch(/<h2 className="whitespace-nowrap text-\[11px\] font-semibold text-foreground">\s*\{g\}/);
     expect(V2HOME).toMatch(/<Segmentado valor=\{viewMode\}[^>]*altura=\{22\}/);
-    expect(V2HOME).toContain("const CELULA_MES = 'inline-flex h-[20px] w-[34px]");
+    /* UI-MESES-PADRAO-01 (D2): a régua à mão saiu; ano e mês num controle só */
+    expect(V2HOME).not.toContain('CELULA_MES');
+    expect(V2HOME).not.toContain('function ReguaMeses');
+    expect(V2HOME.match(/<SeletorPeriodo\b/g)).toHaveLength(1);
+  });
+
+  it('UI-MESES-PADRAO-01 — a cor da régua vira o ponto: todas fecharam = ok, alguma = pend, nenhuma = err, ninguém abriu = sem ponto', () => {
+    const c = (fazendaId: string, mes: number, p1: StatusCelulaAno['p1'], p2: StatusCelulaAno['p2']): StatusCelulaAno =>
+      ({ fazendaId, fazendaNome: fazendaId, anoMes: `2026-${String(mes).padStart(2, '0')}`, mes, p1, p2 });
+    const celulas = [
+      c('a', 1, 'oficial', 'oficial'), c('b', 1, 'oficial', 'nao_aplicavel'),
+      c('a', 2, 'oficial', 'oficial'), c('b', 2, 'pendente', 'pendente'),
+      c('a', 3, 'pendente', 'pendente'), c('b', 3, 'pendente', 'pendente'),
+      c('a', 4, 'nao_iniciado', 'nao_iniciado'), c('b', 4, 'nao_iniciado', 'nao_iniciado'),
+    ];
+    const tom = tomDaReguaDoAno(celulas, null);
+    expect(tom[1]?.estado).toBe('ok');
+    expect(tom[2]?.estado).toBe('pend');
+    expect(tom[3]?.estado).toBe('err');
+    expect(tom[4]).toBeUndefined();
+    expect(tomDaReguaDoAno(celulas, 'falhou')).toEqual({});
+    render(<SeletorPeriodo modoUnico periodo={mesUnico(2026, 2)} onPeriodoChange={() => {}} tomPorMes={tom} />);
+    expect(screen.getByText('Jan').getAttribute('data-estado')).toBe('ok');
+    expect(screen.getByText('Fev').getAttribute('data-papel')).toBe('extremo');
+    expect(screen.getByText('Mar').getAttribute('data-estado')).toBe('err');
   });
 });
 

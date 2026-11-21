@@ -44,6 +44,13 @@ import {
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { PropagarContratoDialog } from '@/components/financiamentos/PropagarContratoDialog';
 import { DocumentosNaCriacao } from '@/components/financiamentos/DocumentosNaCriacao';
+import { useCliente } from '@/contexts/ClienteContext';
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
+import { mostraResumo } from '@/lib/financiamentos/consorcio';
+import { lerNotasDasCompras, numeroCurto } from '@/lib/financiamentos/notasDasCompras';
+import { numeroDaNotaDaCompra } from '@/lib/financeiro/documentosPendentes';
+import { perguntarRegraFazenda } from '@/lib/financeiro/regraFazenda';
+import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { gravarDocumentosDoParcelamento, lancamentosDoParcelamento, novoPendente, todosGravados, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
 import { parcelasDaNota } from '@/lib/financiamentos/parcelasLivres';
 import type { NotaLida } from '@/lib/financeiro/nfe/tipos';
@@ -68,10 +75,13 @@ import type { EscopoDePropagacao } from '@/components/financeiro-v2/OpcoesDeEsco
    BAIXA, onde o modal quase nao cabe. */
 /* PARC-DOCS-TABELA-01 — e nunca mais alto que a janela menos cabeçalho, abas e rodapé (159px medidos) e 9 de folga: a 750x483 o modal
    passava da janela por 9px (medido: 492). Acima de 542px de janela a conta de sempre (69vh) é a menor e nada muda. */
-const ALTURA_CORPO = 'h-[min(69vh,calc(100vh_-_168px))]';
+/* COMPRAS-PARC-LAYOUT-02 (mock aprovado 20/11) — a MOLDURA DO FINANCIAMENTO: 1150 × min(720, janela − 16), igual nos 3 modais. O corpo
+   é o que sobra de cabeçalho (34) + abas (30) + rodapé (44); a coluna de conteúdo desconta o `p-3` (24). */
+const ALTURA_DO_MODAL = 'min(720px, 100vh - 16px)';
+const ALTURA_CORPO = 'min-h-0 flex-1';
 /* PARC-DOCS-TABELA-01 — a aba Documentos ocupa a coluna INTEIRA (o corpo menos o `p-4`): a tabela das parcelas vai até o fim do modal.
    Antes era `clamp(250px, 100vh - 262px, 420px)`, menor que a coluna, e a tabela parava no meio com o Total cortado. */
-const ALTURA_DA_ABA_DOCUMENTOS = 'calc(min(69vh, 100vh - 168px) - 32px)';
+const ALTURA_DA_ABA_DOCUMENTOS = `calc(${ALTURA_DO_MODAL} - 132px)`;
 /**
  * A ALTURA DA TABELA DE PARCELAS — OBRIGACAO-UI-03.
  *
@@ -88,7 +98,7 @@ const ALTURA_PREVIA = 'max-h-[min(260px,calc(69vh-273px))]';
 /** PARC-LIVRES-01 — a grade de parcelas da criação do parcelamento: altura FIXA (barra 26 + lista + totais 20 + aviso 18). */
 /* UI-MODAL-BLOCOS-01 — a grade ocupa o que sobra da coluna (69vh − 32 do padding − 107 do bloco "Valores e prazo", da folga da
    título e do vão; 151 com o título dentro, correção de 18/10): 249px a 1.126×579 (era 276 fixo, e com o bloco a coluna passaria a rolar 15px) e 413px a 1.440×800. */
-const ALTURA_GRADE = 'calc(69vh - 151px)';
+const ALTURA_GRADE = `calc(${ALTURA_DO_MODAL} - 132px - 119px)`;
 const CAMPO = REGUA_CAMPO;                 // UI-MODAL-BLOCOS-01 — a régua dos modais (28px, 11px); era h-8 (A16)
 const CAMPO_CELULA = 'h-6';                // A16 — dentro da grade densa, todos na dela
 /* Idioma canonico de campo travado (AbaLiquidacaoOC / CompraModalShell). */
@@ -144,12 +154,6 @@ const ehAba = (v: string): v is Aba => v === 'contrato' || v === 'parcelas' || v
 const FREQUENCIAS: Frequencia[] = ['mensal', 'bimestral', 'trimestral', 'semestral', 'anual'];
 const ehFrequencia = (v: string): v is Frequencia => FREQUENCIAS.some(f => f === v);
 
-const APOIO_NATUREZA: Record<NaturezaContrato, string> = {
-  financiamento: 'Crédito com bem vinculado',
-  parcelamento: 'Compra ou despesa dividida em N vezes, sem juros',
-  emprestimo: 'Crédito sem bem vinculado',
-};
-
 export const NOME_NATUREZA: Record<NaturezaContrato, string> = {
   financiamento: 'Financiamento',
   parcelamento: 'Parcelamento',
@@ -164,7 +168,6 @@ export const PILULA_NATUREZA: Record<NaturezaContrato, string> = {
 
 /* EDITAR = CADASTRO NOVO v2 (18/10/2026): financiamento, empréstimo e consórcio nascem e se editam pelo CADASTRO NOVO
    (`CadastroDeContratoDialog`); este diálogo ficou só para a COMPRA PARCELADA. */
-const ORDEM_NATUREZA: NaturezaContrato[] = ['parcelamento'];
 
 /* ⚠ LITERAIS MEDIDOS NO BANCO PROTO, nao supostos — `financeiro_plano_contas`, 08/09/2026.
    Sao os MESMOS subcentros que `fn_reconciliar_parcela_financiamento` fixa por
@@ -183,6 +186,8 @@ export const SUBCENTRO_JUROS: Record<Escopo, string> = {
 
 const dataBR = (iso: string): string | null =>
   iso ? iso.split('-').reverse().join('/') : null;
+/** dd/mm/aa — a "1ª · última" do Resumo cabe nos 240px sem cortar */
+const dataCurta = (iso: string): string => { const [a, m, d] = iso.split('-'); return `${d}/${m}/${(a ?? '').slice(2)}`; };
 
 /* ── Resumo lateral: faixa de secao e par rotulo-valor (A17) ──────────────────── */
 function BlocoHead({ titulo }: { titulo: string }) {
@@ -413,7 +418,6 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   /* a prévia do banco, aberta no diálogo de escopo; nada foi gravado enquanto ela está na tela */
   const [propagar, setPropagar] = useState<{ previa: PreviaDaPropagacao; campos: CamposAPropagar } | null>(null);
 
-  const temParcelaPaga = parcelasGravadas.some(p => p.status === 'pago');
   /* Somas do rodape da grade — sobre TODAS as parcelas gravadas, nao so' as visiveis na
      rolagem. Mesmas linhas ja' carregadas; nenhuma consulta nova. */
   const parcelasPagas = parcelasGravadas.filter(p => p.status === 'pago').length;
@@ -661,11 +665,26 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
      ⚠ MESMAS REGRAS, MESMAS FRASES, MESMA ORDEM da pagina: o que muda e' que cada uma
      sabe em que aba mora, para a aba poder contar as suas. Nenhuma regra nova — o
      `salvar()` continua sendo a segunda barreira. */
+  /* FIN-REGRA-VARIAVEL-FAZENDA-01 — a regra fazenda × conta tem UM dono, o banco; a tela só PERGUNTA (nulo = passa). Na edição, só
+     quando a fazenda ou a conta mudaram (o legado segue editável nos outros campos — o mesmo do gatilho). */
+  const [regraFazenda, setRegraFazenda] = useState<string | null>(null);
+  const planoDaRegra = form.plano_conta_parcela_id || '';
+  const fazendaDaRegra = form.fazenda_id || '';
+  /* o "de antes" é o GRAVADO (o registro lido), nunca o form num momento qualquer da hidratação */
+  const regraVale = !!planoDaRegra && !!fazendaDaRegra
+    && (!ehEdicao || (!!contrato && ((contrato.plano_conta_parcela_id ?? '') !== planoDaRegra || (contrato.fazenda_id ?? '') !== fazendaDaRegra)));
+  useEffect(() => {
+    if (!regraVale) { setRegraFazenda(null); return; }
+    let vivo = true;
+    void perguntarRegraFazenda(planoDaRegra, fazendaDaRegra).then((f) => { if (vivo) setRegraFazenda(f); });
+    return () => { vivo = false; };
+  }, [regraVale, planoDaRegra, fazendaDaRegra]);
+
   const pendencias = useMemo(() => {
     const lista: Array<{ aba: Aba; texto: string }> = [];
     if (!form.descricao?.trim()) lista.push({ aba: 'contrato', texto: 'Informe a descrição do contrato.' });
     if (!Number(form.valor_total)) lista.push({ aba: 'parcelas', texto: 'Informe o valor total.' });
-    if (!form.data_contrato) lista.push({ aba: 'contrato', texto: 'Informe a data do contrato.' });
+    if (!form.data_contrato) lista.push({ aba: 'contrato', texto: 'Informe a data da compra.' });
     /* PARC-LIVRES-01 — nas livres quem fala é a grade: a MESMA função que ela lê (`motivoNaoSalva`). */
     if (motivoDasParcelas) lista.push({ aba: 'parcelas', texto: motivoDasParcelas });
     else if (motivoDaGradeEdicao) lista.push({ aba: 'parcelas', texto: motivoDaGradeEdicao });
@@ -678,12 +697,14 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
        existe para o operador ler a frase ANTES de clicar, em vez de receber de volta a recusa do
        banco: o botao ja fica desabilitado com o motivo no `title`. */
     if (ehParcelamento && !form.fazenda_id) lista.push({ aba: 'contrato', texto: 'Escolha a fazenda do parcelamento.' });
+    /* FIN-REGRA-VARIAVEL-FAZENDA-01 — a frase do banco (conta × fazenda) entra no "O que falta" e trava o Salvar, como no lançamento */
+    if (regraFazenda) lista.push({ aba: 'classificacao', texto: regraFazenda });
     return lista;
   }, [form.descricao, form.valor_total, form.data_contrato, form.data_primeira_parcela,
-      form.total_parcelas, form.plano_conta_parcela_id, form.fazenda_id, ehParcelamento, motivoDasParcelas, livresAbertas, motivoDaGradeEdicao]);
+      form.total_parcelas, form.plano_conta_parcela_id, form.fazenda_id, ehParcelamento, motivoDasParcelas, livresAbertas, motivoDaGradeEdicao, regraFazenda]);
 
   const primeiraPendencia = pendencias[0]?.texto ?? null;
-  const contarPendencias = (a: Aba) => pendencias.filter(p => p.aba === a).length;
+
 
   /* ── Nomes para o resumo ──────────────────────────────────────────────────────
      FORN-SELETOR-PADRAO-01 fatia 2c — o credor vem do LEITOR ÚNICO, o mesmo do seletor: entre os ativos, ou o gravado por
@@ -921,6 +942,24 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
 
   const gravando = saving || salvandoEdicao;
 
+  /* COMPRAS-PARC-LAYOUT-02 — o título da moldura, a contagem das abas (Parcelas N · Documentos N) e o Resumo a partir do MESMO corte do Cadastro */
+  const { clienteAtual } = useCliente();
+  const tituloDoModal = ehEdicao
+    ? `Editar compra parcelada · ${form.descricao || contrato?.descricao || ''}`
+    : `Nova compra parcelada · ${clienteAtual?.nome ?? ''}`;
+  const comResumo = mostraResumo(useLarguraDaJanela());
+  /* a NF do Resumo vem SÓ do anexo (D4): no novo, a nota pendente da aba Documentos; na edição, a já ligada às parcelas (a fonte da coluna NF) */
+  const { data: notasGravadas } = useQuery({
+    queryKey: ['notas-da-compra-parcelada', clienteId, financiamentoId],
+    enabled: ehEdicao && !!clienteId && !!financiamentoId,
+    queryFn: async () => (await lerNotasDasCompras(clienteId, [financiamentoId ?? '']))?.get(financiamentoId ?? '') ?? [],
+  });
+  const nfDoResumo = ehEdicao
+    ? (notasGravadas?.length ? `NF ${numeroCurto(notasGravadas[0].numero)}${notasGravadas.length > 1 ? ` +${notasGravadas.length - 1}` : ''}` : null)
+    : (() => { const n = numeroDaNotaDaCompra(pendentesDaCriacao, ''); return n ? `NF ${numeroCurto(n)}` : null; })();
+  const contagemDaAba = (a: Aba): number => (a === 'parcelas' ? parcelas.length
+    : a === 'documentos' ? (ehEdicao ? (notasGravadas?.length ?? 0) : pendentesDaCriacao.length) : 0);
+
   const subtitulo = ehParcelamento
     ? 'Uma despesa paga em N vezes. Ela gera as parcelas, e as parcelas geram os lançamentos.'
     : 'Um crédito contratado. Ele gera as parcelas, e cada parcela gera amortização e juros.';
@@ -928,7 +967,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   /* PARC-CONTRATO-01 item 3: a aba Documentos existe também ao CRIAR um parcelamento (os documentos ficam pendentes até o Salvar) */
   const abaDeDocumentos: Array<{ key: Aba; label: string }> = ehParcelamento ? [{ key: 'documentos', label: 'Documentos' }] : [];
   const abas: Array<{ key: Aba; label: string }> = [
-    { key: 'contrato', label: 'Contrato' },
+    { key: 'contrato', label: 'Compra' },
     { key: 'parcelas', label: 'Parcelas' },
     { key: 'classificacao', label: 'Classificação' },
     /* PARC-LIVRES-01 passo 6 — só na EDIÇÃO de PARCELAMENTO: os documentos moram nos lançamentos das parcelas, que só existem
@@ -961,54 +1000,34 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
           CompraModalShell recebe): `p-0 gap-0 overflow-hidden` e o X nativo escondido.
           Sem `gap-0` o DialogContent injeta `gap-4` entre cabecalho, abas, corpo e
           rodape; sem esconder o X nativo ficam DOIS botoes de fechar sobrepostos. */}
-      <DialogContent className="max-w-5xl p-0 gap-0 overflow-hidden [&>button.absolute]:hidden">
-        <div className="flex flex-col">
-          {/* ── CABECALHO ───────────────────────────────────────────────────────── */}
-          <div className="bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
-            <div className="min-w-0">
-              <DialogTitle className="text-lg font-bold leading-tight">
-              {ehEdicao ? 'Editar obrigação' : 'Nova obrigação'}
-            </DialogTitle>
-              {/* A frase muda com a natureza porque a CADEIA muda: no parcelamento nao
-                  existe captacao nem juros, e prometer "crédito contratado" ali ensina
-                  errado o operador. */}
-              <DialogDescription className="mt-1 text-xs text-white/80">{subtitulo}</DialogDescription>
-            </div>
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="text-white/80 hover:text-white shrink-0"
-              aria-label="Fechar"
-            >
-              ✕
-            </button>
+      {/* COMPRAS-PARC-LAYOUT-02 — a MOLDURA DO FINANCIAMENTO (1150 × min(720, janela − 16), igual nos 3): cabeçalho navy de 34px,
+          abas, corpo com o Resumo fixo à direita, rodapé de 44px com o motivo ao lado do Salvar. A natureza vem da aba (travada). */}
+      <DialogContent className="flex h-[min(720px,calc(100vh-16px))] w-[min(1150px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden"
+        data-testid="modal-da-compra-parcelada">
+          <div className="flex h-[34px] shrink-0 items-center gap-2 bg-primary px-3 text-primary-foreground">
+            <DialogTitle className="min-w-0 flex-1 truncate text-[11px] font-semibold" data-testid="titulo-da-compra-parcelada"
+              title={tituloDoModal}>{tituloDoModal}</DialogTitle>
+            <DialogDescription className="sr-only">{subtitulo}</DialogDescription>
+            <button type="button" onClick={() => onOpenChange(false)} className="shrink-0 text-white/80 hover:text-white" aria-label="Fechar">✕</button>
           </div>
 
-          <Tabs value={aba} onValueChange={(v) => { if (ehAba(v)) setAba(v); }} className="flex flex-col">
-            {/* ── BARRA DE ABAS ──────────────────────────────────────────────────
-                A contagem de pendencias por aba e' MARCADOR, nao parede: navegar
-                nunca e' bloqueado — o operador so' precisa saber onde falta algo,
-                inclusive olhando de outra aba. */}
-            <div className="bg-card border-b px-6 py-1.5">
-              <TabsList className="h-auto bg-transparent p-0 gap-1">
+          <Tabs value={aba} onValueChange={(v) => { if (ehAba(v)) setAba(v); }} className="flex min-h-0 flex-1 flex-col">
+            {/* ── BARRA DE ABAS — o número é CONTAGEM (parcelas, documentos), nunca pendência: o "O que falta" do Resumo diz onde falta */}
+            <div className="flex h-[30px] shrink-0 items-center gap-3 border-b bg-card px-3">
+              <TabsList className="h-auto gap-1 bg-transparent p-0">
                 {abas.map(a => {
-                  const n = contarPendencias(a.key);
+                  const n = contagemDaAba(a.key);
                   return (
-                    <TabsTrigger
-                      key={a.key}
-                      value={a.key}
-                      className="px-3 py-1 text-[12px] font-semibold data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-primary rounded-none -mb-px"
-                    >
+                    <TabsTrigger key={a.key} value={a.key} data-testid={`aba-da-compra-${a.key}`}
+                      className="-mb-px rounded-none border-b-2 border-transparent px-2.5 py-1 text-[11px] font-semibold data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none">
                       {a.label}
-                      {n > 0 && (
-                        <span className="ml-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-500">
-                          ● {n} {n === 1 ? 'pendência' : 'pendências'}
-                        </span>
-                      )}
+                      {/* lugar reservado (nada se desloca quando a contagem aparece) */}
+                      <span className="ml-1 inline-block w-[18px] text-left text-[10px] font-medium tabular-nums text-muted-foreground">{n > 0 ? n : ''}</span>
                     </TabsTrigger>
                   );
                 })}
               </TabsList>
+              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">compra parcelada · sem juros, sem amortização</span>
             </div>
 
             {/* ── CORPO ──────────────────────────────────────────────────────────
@@ -1020,40 +1039,12 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                 deixa o conteudo ser cortado pelo `overflow-hidden`.
                 ⚠ SO A PARTIR DE `lg`: abaixo disso as colunas viram linhas empilhadas
                 e altura fixa por coluna cortaria o resumo — ali o corpo rola inteiro. */}
-            <div className={`grid grid-cols-1 lg:grid-cols-[1fr_240px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 ${ALTURA_CORPO} overflow-y-auto lg:overflow-hidden bg-muted`} data-testid="corpo-da-obrigacao">
-              <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
+            <div className={`grid ${comResumo ? 'grid-cols-[minmax(0,1fr)_240px]' : 'grid-cols-1'} grid-rows-[minmax(0,1fr)] gap-3 p-3 ${ALTURA_CORPO} overflow-hidden bg-muted`} data-testid="corpo-da-obrigacao">
+              <div className="min-h-0 min-w-0 space-y-2 overflow-y-auto">
 
                 {/* ══ ABA CONTRATO ══════════════════════════════════════════════ */}
                 <TabsContent value="contrato" className="mt-0 space-y-2">
-                  {/* ⚠ PRIMEIRO CAMPO DA TELA. A natureza governa o resto (esconde
-                      juros e captacao, troca a lista da classificacao); um campo que
-                      muda os outros nao pode vir depois deles. */}
-                  <BlocoFormulario titulo="Natureza" testId="bloco-natureza">
-                    <div className="grid grid-cols-3 gap-2">
-                      {ORDEM_NATUREZA.map(n => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => set('natureza', n)}
-                          className={`rounded-md border px-2.5 py-1.5 text-left transition-colors ${
-                            form.natureza === n ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'
-                          }`}
-                        >
-                          <div className="text-[11px] font-semibold leading-tight">{NOME_NATUREZA[n]}</div>
-                          <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">{APOIO_NATUREZA[n]}</div>
-                        </button>
-                      ))}
-                    </div>
-                    {/* ⚠ AVISO, NAO TRAVA. Trocar a natureza muda para onde as PROXIMAS
-                        parcelas vao (o motor le' a natureza a cada reconciliacao), mas nao
-                        desfaz lancamento ja' gerado por parcela paga. Quem troca precisa
-                        saber disso ANTES, nao descobrir conferindo o caixa. */}
-                    {ehEdicao && temParcelaPaga && (
-                      <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-500">
-                        Trocar a natureza não refaz parcelas pagas
-                      </p>
-                    )}
-                  </BlocoFormulario>
+                  {/* COMPRAS-PARC-LAYOUT-02 — sem o bloco "Natureza": a compra parcelada chega pela aba, travada (o mock aprovado). */}
 
                   {/* ⚠ A QUARTA COLUNA SO' EXISTE SE A SITUACAO EXISTIR — OBRIGACAO-UI-02.
                       Ela hospeda o campo "Situacao do contrato", que agora some tambem ao editar
@@ -1218,7 +1209,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       )
                     )}
                     <div>
-                      <Label className={ROTULO}>Data do contrato *</Label>
+                      <Label className={ROTULO}>Data da compra *</Label>
                       <DatePicker value={form.data_contrato} onChange={v => set('data_contrato', v)} className={CAMPO} />
                     </div>
                     <div>
@@ -1668,6 +1659,12 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                              (nem sugere safra); quem a mostra, em leitura, é o bloco logo abaixo. Na criação, nada muda. */
                           ocultarLinhaDaSafra={ehEdicao}
                       />
+                      {/* FIN-REGRA-VARIAVEL-FAZENDA-01 — a frase do banco aqui e no "O que falta"; o lugar é reservado (2 linhas), nada se desloca */}
+                      <div className="h-[30px] overflow-hidden break-words text-[10px] leading-[14px]" data-testid="regra-fazenda-na-compra">
+                        {regraFazenda
+                          ? <span className="text-destructive">⚠ {regraFazenda}</span>
+                          : <span className="text-muted-foreground">Custo variável ou custo fixo de atividade nunca vai para a fazenda Administrativo (a regra do Financeiro).</span>}
+                      </div>
                       {ehEdicao && (
                         /* ⚠ SAFRA E FASE/CULTURA EM LEITURA, COM O MOTIVO — o Salvar do contrato não as grava (não são
                            colunas dele). Mesma grade de 12 do cluster, para os rótulos alinharem com os de cima; o eixo é o da
@@ -1793,79 +1790,34 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                   ⚠ FORA do scrollport da coluna de conteudo, por construcao: e' o
                   numero que se confere enquanto se preenche, e nao pode subir junto
                   com o formulario. Ausencia e' "—", nunca zero (A19/sentinelas). */}
-              <aside className="lg:min-h-0 lg:overflow-hidden" data-testid="resumo-da-obrigacao">
-                <div className="lg:h-full bg-card rounded-md border shadow-sm overflow-hidden text-[10px]">
-                  <div className="h-[24px] border-b border-border flex items-center px-3 text-[11px] font-semibold text-primary">
-                    Resumo
-                  </div>
-                  <div className="pb-1">
-                    <BlocoHead titulo="Contrato" />
-                    <div className="px-3">
-                      <div className="flex h-4 items-center justify-between gap-1.5 leading-[16px]">
-                        <span className="text-muted-foreground shrink-0">Natureza</span>
-                        <span className="flex items-center gap-1 min-w-0">
-                          <span className="rounded border border-primary/40 bg-primary/10 px-1 text-[8.5px] font-bold leading-[12px] text-primary">
-                            {PILULA_NATUREZA[form.natureza]}
-                          </span>
-                          <span className="font-medium truncate">{NOME_NATUREZA[form.natureza]}</span>
-                        </span>
-                      </div>
-                      {/* UI-TEXTO-LONGO-01 — a descrição NÃO se repete no resumo (ela está no campo da aba Contrato; longa, cortava
-                          com "…"): o resumo diz o contrato pelos dados curtos — natureza, escopo, credor, conta e data. */}
-                      <Linha rotulo="Escopo" valor={form.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'} />
-                      <Linha rotulo="Credor" valor={credor?.nome ?? null} />
-                      <Linha rotulo="Conta" valor={nomeConta} />
-                      <Linha rotulo="Contrato em" valor={dataBR(form.data_contrato)} />
-                    </div>
-
-                    <BlocoHead titulo="Cronograma" />
-                    <div className="px-3">
-                      <div className="flex h-4 items-center justify-between gap-1.5 leading-[16px]">
-                        <span className="text-muted-foreground shrink-0">Valor total</span>
-                        <span className={`text-[11px] font-bold ${NUM}`} data-testid="resumo-valor-total">
-                          {form.valor_total > 0 ? brl(form.valor_total) : '—'}
-                        </span>
-                      </div>
-                      <Linha rotulo="Entrada" valor={form.valor_entrada > 0 ? brl(form.valor_entrada) : null} />
-                      <Linha rotulo="Parcelas"
-                        valor={parcelas.length > 0 && valorParcela != null ? `${parcelas.length} × ${brl(valorParcela)}` : null} />
-                      <Linha rotulo="1ª" valor={dataBR(form.data_primeira_parcela)} />
-                      <Linha rotulo="Última" valor={dataBR(ultimaParcela)} />
-                      {!ehParcelamento && (
-                        <Linha rotulo="Juros ao ano"
-                          valor={form.taxa_juros_anual > 0 ? `${form.taxa_juros_anual.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}%` : null} />
-                      )}
-                      {!ehParcelamento && (
-                        <Linha rotulo="Total com juros" valor={totalParcelas > 0 ? brl(totalParcelas) : null} />
-                      )}
-                    </div>
-
-                    <BlocoHead titulo="Classificação" />
-                    <div className="px-3">
-                      {ehParcelamento ? (
-                        <Linha rotulo="Parcela" valor={nomeParcela} />
-                      ) : (
-                        <>
-                          <Linha rotulo="Amortização" valor={SUBCENTRO_AMORTIZACAO[form.tipo_financiamento]} />
-                          <Linha rotulo="Juros" valor={SUBCENTRO_JUROS[form.tipo_financiamento]} />
-                          <Linha rotulo="Captação" valor={nomeCaptacao} />
-                        </>
-                      )}
-                    </div>
-
-                    {pendencias.length > 0 && (
-                      /* sem rolagem no resumo: a lista do que falta para em 2 linhas, inteira no `title` */
-                      <div className="mx-3 mt-1.5 line-clamp-2 border-l-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 leading-[14px]"
-                        title={pendencias.map(p => p.texto.replace(/\.$/, '')).join(' · ')}>
-                        <span className="font-semibold text-amber-700 dark:text-amber-500">Falta: </span>
-                        <span className="text-amber-800 dark:text-amber-400">
-                          {pendencias.map(p => p.texto.replace(/\.$/, '')).join(' · ')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+              {comResumo && (
+              <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border bg-card px-3 pt-2 text-[10px] shadow-sm" data-testid="resumo-da-obrigacao">
+                <div className="mb-1 text-[11px] font-semibold">Resumo da compra</div>
+                <Linha rotulo="Atividade" valor={ATIVIDADES.find(a => a.valor === classificacao.atividade)?.rotulo ?? null} />
+                <Linha rotulo="Credor" valor={credor?.nome ?? null} />
+                <Linha rotulo="Fazenda" valor={fazendas.find(f => f.id === form.fazenda_id)?.nome ?? null} />
+                <Linha rotulo="Conta" valor={nomeConta} />
+                <Linha rotulo="Compra em" valor={dataBR(form.data_contrato)} />
+                <div className="mt-1 flex h-5 items-center justify-end border-t pt-1">
+                  <span className={`text-[11px] font-bold ${NUM}`} data-testid="resumo-valor-total">{form.valor_total > 0 ? `R$ ${brl(form.valor_total)}` : '—'}</span>
+                </div>
+                <Linha rotulo="Parcelas" valor={parcelas.length > 0 && valorParcela != null ? `${parcelas.length} × R$ ${brl(valorParcela)}` : null} />
+                <Linha rotulo="1ª · última" valor={form.data_primeira_parcela && ultimaParcela ? `${dataCurta(form.data_primeira_parcela)} · ${dataCurta(ultimaParcela)}` : null} />
+                <Linha rotulo="NF" valor={nfDoResumo} />
+                <Linha rotulo="Classificação" valor={nomeParcela} />
+                <Linha rotulo="Safra" valor={safras.find(x => x.id === classificacao.safra_id)?.nome ?? null} />
+                <div className="mb-0.5 mt-2 border-t pt-1 text-[11px] font-semibold text-foreground">O que falta</div>
+                {/* a MESMA lista que trava o Salvar; cada item leva à aba dele; nada rola — o resto no title */}
+                <div className="min-h-0 flex-1 overflow-hidden leading-[15px]" data-testid="o-que-falta">
+                  {pendencias.length === 0
+                    ? <div className="text-[#15803d]">✓ tudo preenchido</div>
+                    : pendencias.slice(0, 6).map((p) => (
+                      <button key={p.texto} type="button" className="block w-full truncate text-left text-amber-700 hover:underline" title={p.texto}
+                        onClick={() => setAba(p.aba)} data-testid="falta-item">! {p.texto.replace(/\.$/, '')}</button>))}
+                  {pendencias.length > 6 && <div className="text-muted-foreground" title={pendencias.slice(6).map(p => p.texto).join('\n')}>+{pendencias.length - 6}</div>}
                 </div>
               </aside>
+              )}
             </div>
           </Tabs>
 
@@ -1873,39 +1825,37 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
               ⚠ UMA FRASE, TRES USOS: a mesma pendencia governa o `disabled`, o
               `title` e a dica escrita. Botao desabilitado sem motivo transfere ao
               operador o trabalho de adivinhar. */}
-          <div className="border-t px-4 py-2.5 flex items-center justify-between">
-            <p className="text-[11px] text-muted-foreground min-w-0 truncate">
+          <div className="flex h-[44px] shrink-0 items-center gap-2 border-t px-3">
+            {/* a frase que impede o Salvar fica INTEIRA (quebra em até 3 linhas, nunca "…"), ao lado dos botões */}
+            <div className="max-h-[40px] min-w-0 flex-1 overflow-y-auto break-words text-[11px] leading-[13px]" data-testid="recado-da-compra">
               {posCriacao ? (
-                <span className="font-medium text-destructive" title={posCriacao.erro} data-testid="erro-dos-documentos">{posCriacao.erro}</span>
+                <span className="font-medium text-destructive" data-testid="erro-dos-documentos">{posCriacao.erro}</span>
               ) : erroDaGrade ? (
-                <span className="font-medium text-destructive" title={erroDaGrade} data-testid="erro-da-grade">{erroDaGrade}</span>
-              ) : primeiraPendencia && (
-                <>
-                  <span className="font-medium text-amber-600 dark:text-amber-500">Pendência:</span> {primeiraPendencia}
-                </>
-              )}
-            </p>
-            <div className="flex items-center gap-2 shrink-0">
+                <span className="font-medium text-destructive" data-testid="erro-da-grade">{erroDaGrade}</span>
+              ) : pendencias.length > 0 ? (
+                <span className="text-amber-700">Falta: {pendencias.map(p => p.texto.replace(/\.$/, '')).join(' · ')}</span>
+              ) : <span className="text-muted-foreground">campos com * são obrigatórios</span>}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               {/* P74b — a compra parcelada volta a ser UM lançamento à vista (só sem parcela paga/conciliada; senão apagado com a frase) */}
               {edicaoDeParcelamento && financiamentoId && clienteId && (
-                <VoltarParaAVista clienteId={clienteId} financiamentoId={financiamentoId} botaoClassName="h-8 text-xs"
+                <VoltarParaAVista clienteId={clienteId} financiamentoId={financiamentoId} botaoClassName="h-[24px] text-[10px]"
                   onVoltou={() => { void qc.invalidateQueries(); onSalvo?.(); onOpenChange(false); }} />
               )}
-              <Button variant="outline" size="sm" className="h-8" onClick={() => onOpenChange(false)} disabled={gravando}>
+              <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={() => onOpenChange(false)} disabled={gravando}>
                 Cancelar
               </Button>
               <Button
                 size="sm"
-                className="h-8 bg-cta text-cta-foreground hover:bg-cta-hover font-semibold"
+                className="h-[24px] w-[120px] bg-cta text-[10px] font-semibold text-cta-foreground hover:bg-cta-hover"
                 onClick={handleSalvar}
                 disabled={gravando || pendencias.length > 0}
                 title={primeiraPendencia ?? undefined}
               >
-                {gravando ? 'Salvando...' : ehEdicao ? 'Salvar alterações' : 'Ver prévia e salvar'}
+                {gravando ? 'Salvando…' : ehEdicao ? 'Salvar alterações' : 'Salvar compra'}
               </Button>
             </div>
           </div>
-        </div>
       </DialogContent>
     </Dialog>
 

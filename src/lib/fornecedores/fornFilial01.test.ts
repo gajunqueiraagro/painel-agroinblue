@@ -34,9 +34,9 @@ describe('FORN-FILIAL-01 — o XML de uma filial não cai no cadastro de outra',
     expect(resolverEmitente({ documento: '11222333003873', nome: 'x' }, [SEM], 'sem'))
       .toMatchObject({ propostoId: 'sem', filialDiferente: false, cadastroSemDocumento: true });
   });
-  it('raiz diferente (outra empresa de mesmo nome): segue o caminho de "o cadastro tem outro documento"', () => {
+  it('raiz diferente (outra empresa de mesmo nome): FORN-ACHAR-CNPJ-01 — o cadastro de OUTRO documento nunca é proposto (cadastrar)', () => {
     expect(resolverEmitente({ documento: '11222333003873', nome: 'x' }, [OUTRA_EMPRESA], 'oe'))
-      .toMatchObject({ propostoId: 'oe', filialDiferente: false });
+      .toMatchObject({ achadoPor: null, propostoId: null, filialDiferente: false });
   });
   it('o documento vence o nome: a própria filial achada pelo CNPJ', () => {
     expect(resolverEmitente({ documento: '11222333000424', nome: 'x' }, [TL, SEM], 'sem')).toMatchObject({ achadoPor: 'documento', propostoId: 'tl' });

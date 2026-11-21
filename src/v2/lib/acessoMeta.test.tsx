@@ -103,7 +103,8 @@ describe('DRE (AgriDreLavouraTab, lido da FONTE): a referência "Meta"', () => {
     expect(f).toContain('const veMeta = usePodeVerMeta();');
     expect(f).toContain("const visaoUrl: VisaoUrlPec = !veMeta && visaoUrlLida === 'meta' ? 'comparacao' : visaoUrlLida;");
     /* a referência (e com ela a coluna da meta na grade) sai do valor EFETIVO, nunca do lido */
-    expect(f).toContain("const referenciaPec: ReferenciaPec = visaoUrl === 'meta' ? 'meta' : nAnosPec;");
+    /* DRE-PAINEL-01: a "Média 12m" é a 3ª referência — também do valor efetivo */
+    expect(f).toContain("const referenciaPec: ReferenciaPec = visaoUrl === 'meta' ? 'meta' : visaoUrl === 'media12' ? 'media12' : nAnosPec;");
     expect(f.match(/visaoUrlLida/g)).toHaveLength(3);
   });
   it('o "Comparar" recebe o motivo só para quem não vê meta', () => {

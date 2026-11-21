@@ -17,6 +17,7 @@ import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useValorEmProjecao } from '@/hooks/useValorEmProjecao';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { FiltroMultiplo } from '@/v2/components/FiltroMultiplo';
+import { useCategoriasRebanho } from '@/hooks/usePastos';
 import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
 import { anoInteiro, descreverPeriodo, dentro, mesUnico, type Periodo } from '@/v2/lib/periodo';
 
@@ -68,7 +69,7 @@ type TopTab = 'todas' | 'entradas' | 'saidas' | 'chuvas' | 'historico';
    reorganizar no momento em que o operador troca o filtro. `justify-between` vem do padrão
    do Financeiro, para a seta ficar na borda. */
 const CLASSE_GATILHO_CATEGORIA =
-  'h-6 w-[100px] justify-between px-1.5 text-[10px] font-bold bg-card text-foreground border-border';
+  'h-6 w-[136px] justify-between gap-1 whitespace-nowrap px-1.5 text-[10px] font-bold bg-card text-foreground border-border';
 
 const ROTULO_CATEGORIA = { todos: 'Categorias', um: 'categoria', varios: 'categorias' };
 
@@ -714,16 +715,26 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   }, [lancamentosNormalizados, periodo, topTab, subAba, statusFiltro, categoriaFiltro]);
 
   /* Categories available in current type */
+  /* PROD-LANC-FILTROS-01 (Gabriel 19/11): as opções são o CADASTRO (`categorias_rebanho`, na ordem de exibição) — nunca a lista fixa do
+     código nem "as que aparecem no dado" (a lista mudava de tamanho com o mês) — e cada uma diz quantos lançamentos tem no recorte de
+     agora (o mesmo filtro da lista, MENOS o da própria categoria). */
+  const { categorias: catalogoCategorias } = useCategoriasRebanho();
   const categoriasDisponiveis = useMemo(() => {
     let tiposFilter: string[] = [];
     if (topTab === 'todas') tiposFilter = [...ENTRY_TYPES, ...EXIT_TYPES];
     else tiposFilter = [subAba];
-    const cats = new Set<string>();
+    const n = new Map<string, number>();
     lancamentosNormalizados.forEach(l => {
-      if (tiposFilter.includes(l.tipo)) cats.add(l.categoria);
+      try {
+        if (!tiposFilter.includes(l.tipo) || !dentro(periodo, format(parseISO(l.data), 'yyyy-MM'))) return;
+        const st = l.statusOperacional || 'realizado';
+        if (statusFiltro === 'realizado' && (l.cenario !== 'realizado' || st !== 'realizado')) return;
+        if (statusFiltro === 'meta' && l.cenario !== 'meta') return;
+        n.set(l.categoria, (n.get(l.categoria) ?? 0) + 1);
+      } catch { /* data inválida: fora do recorte, como na lista */ }
     });
-    return CATEGORIAS.filter(c => cats.has(c.value));
-  }, [lancamentosNormalizados, topTab, subAba]);
+    return catalogoCategorias.map(c => ({ value: c.codigo, label: c.nome, contagem: n.get(c.codigo) ?? 0 }));
+  }, [catalogoCategorias, lancamentosNormalizados, periodo, topTab, subAba, statusFiltro]);
 
   const isFinancial = FINANCIAL_TYPES.includes(subAba);
 
@@ -780,10 +791,11 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       return { qtd, pesoMedio };
     })();
 
+    /* PROD-LANC-FILTROS-01: o cadastro, com quantas reclassificações cada categoria tem no período (o histórico não filtra por categoria) */
     const reclassCatsDisponiveis = (() => {
-      const cats = new Set<string>();
-      historicoFiltrado.filter(l => isReclassificacao(l.tipo)).forEach(l => cats.add(l.categoria));
-      return CATEGORIAS.filter(c => cats.has(c.value));
+      const n = new Map<string, number>();
+      historicoFiltrado.filter(l => isReclassificacao(l.tipo)).forEach(l => n.set(l.categoria, (n.get(l.categoria) ?? 0) + 1));
+      return catalogoCategorias.map(c => ({ value: c.codigo, label: c.nome, contagem: n.get(c.codigo) ?? 0 }));
     })();
 
     const mesLabelHist = descreverPeriodo(periodo);

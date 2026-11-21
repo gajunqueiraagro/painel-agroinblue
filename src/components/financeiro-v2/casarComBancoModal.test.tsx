@@ -101,9 +101,10 @@ describe('um lançamento levado — "Corrigir o valor do lançamento"', () => {
   it('a frase diz "a mais" com o valor; o botão põe 506,51 no campo e a diferença vai a zero', async () => {
     montar([VIVO]);
     expect((await frase()).textContent).toContain('Os lançamentos somam R$ 0,33 a mais que o banco.');
+    /* CONC-CASAR-1X1-TABELA-01: o gesto mora colado ao campo (⇆, o mesmo do Casar N), com o nome no aria-label e a dica no title */
     const botao = screen.getByTestId('usar-valor-banco');
-    expect(botao.textContent).toBe('Corrigir o valor do lançamento');
-    expect(botao.getAttribute('title')).toBe('muda o valor do lançamento para o do banco (506,51)');
+    expect(botao.getAttribute('aria-label')).toBe('Corrigir o valor do lançamento');
+    expect(botao.getAttribute('title')).toBe('Corrigir o valor do lançamento: muda para o do banco (506,51)');
     fireEvent.click(botao);
     expect(campo('Vivo Casa').value).toBe('506,51');
     await waitFor(() => expect(screen.getByTestId('frase-diferenca').textContent).toBe('Confere com o banco ✓'));
@@ -143,11 +144,11 @@ describe('vários lançamentos levados — "absorver a diferença"', () => {
   });
 });
 
-describe('"tirar" virou "remover deste casamento"', () => {
-  it('o rótulo novo, com o title explicando que nada é apagado; o antigo não existe mais', async () => {
+describe('"tirar" virou o ✕ da linha (o do Casar N)', () => {
+  it('o ✕ com o title explicando que nada é apagado; o antigo não existe mais', async () => {
     montar([VIVO]);
     await frase();
-    const remover = screen.getByRole('button', { name: 'remover deste casamento' });
+    const remover = screen.getByRole('button', { name: 'Remover Vivo Casa deste casamento' });
     expect(remover.getAttribute('title')).toContain('Nada é apagado');
     expect(screen.queryByRole('button', { name: 'tirar' })).toBeNull();
     fireEvent.click(remover);
@@ -156,9 +157,9 @@ describe('"tirar" virou "remover deste casamento"', () => {
 });
 
 describe('o modal não corta nada (a estrutura que a medida da tela exigiu)', () => {
-  /* PR-CONC-SUGESTOES-CASAR-01 (Gabriel, print 13:42): a descrição truncava com espaço sobrando. Cada levado agora
-     ocupa DUAS linhas — a identificação inteira (venc · descrição · fornecedor · status) e o campo com as ações. */
-  it('coluna do grid travada; levado em duas linhas, identificação inteira sem reticência; botão da altura do campo', async () => {
+  /* CONC-CASAR-1X1-TABELA-01 (Gabriel 19/11 07:23): o 1:1 é a TABELA do Casar N — uma linha por lançamento; texto em tabela corta com "…" e o
+     inteiro no `title` (regra de corte); data e valor nunca cortam */
+  it('coluna do grid travada; o 1:1 numa linha da tabela dos levados (o inteiro no title); o ⇆ da altura do campo', async () => {
     const LONGO: LevadoInicial = { lancamento_id: 'l-rastro', descricao: 'Serviço Rastreabilidade Bovina - SISBOV mensalidade setembro',
       fornecedor: 'Agroinblue - G.F.de Rezende Junqueira; Gasto Recorrente', valor_assinado: -506.84,
       data_vencimento: '2026-09-08', status_transacao: 'programado' };
@@ -166,31 +167,26 @@ describe('o modal não corta nada (a estrutura que a medida da tela exigiu)', ()
     await frase();
     const dialogo = screen.getByRole('dialog');
     expect(dialogo.className).toContain('grid-cols-[minmax(0,1fr)]');
-    const levado = screen.getByTestId('levado');
-    const ident = within(levado).getByTestId('levado-identificacao');
-    expect([...ident.children].map((c) => c.textContent)).toEqual([
-      '08/09', LONGO.descricao, LONGO.fornecedor, 'Programado',
-    ]);
-    /* nada corta: nem truncate nem ellipsis em lugar nenhum do levado; texto livre quebra */
-    for (const el of [levado, ...levado.querySelectorAll('*')]) expect(el.getAttribute('class') ?? '').not.toMatch(/\btruncate\b|text-ellipsis/);
-    expect(ident.children[1].className).toContain('break-words');
-    expect(ident.children[2].className).toContain('break-words');
-    /* a segunda linha é a do campo e das ações */
-    const linha = campo(LONGO.descricao!).parentElement!;
-    expect(linha.className).toContain('min-w-0');
-    expect(linha.parentElement).toBe(levado);
-    expect(screen.getByTestId('usar-valor-banco').className).toContain('h-[23px]');
+    expect(dialogo.className).toContain('w-[1200px]');
+    const linha = screen.getByTestId('levado-linha');
+    const celulas = [...linha.querySelectorAll('td')].map((td) => td.textContent);
+    expect(celulas.slice(0, 3)).toEqual(['08/09/2026', LONGO.descricao, LONGO.fornecedor]);
+    expect(celulas[7]).toBe('Programado');
+    expect(linha.querySelectorAll('td')[1].getAttribute('title')).toBe(LONGO.descricao);
+    expect(linha.querySelectorAll('td')[2].getAttribute('title')).toBe(LONGO.fornecedor);
+    expect(linha.className).toContain('h-[19px]');
+    expect(screen.getByTestId('usar-valor-banco').className).toContain('h-[17px]');
     const cab = within(dialogo).getAllByText('Banco do Brasil · 01/09').find((e) => e.className.includes('opacity-90'))!;
     expect(cab.className).not.toContain('truncate');
   });
 });
 
 describe('o levado sem vencimento nem status mostra "—" (dado ausente), nunca vazio', () => {
-  it('VIVO sem os campos novos', async () => {
+  it('VIVO sem os campos novos (nem Faz./Ativ./Plano)', async () => {
     montar([VIVO]);
     await frase();
-    const ident = screen.getByTestId('levado-identificacao');
-    expect([...ident.children].map((c) => c.textContent)).toEqual(['—', 'Vivo Casa', 'Telefonica Brasil S.A.', '—']);
+    const c = [...screen.getByTestId('levado-linha').querySelectorAll('td')].map((td) => td.textContent);
+    expect([c[0], c[1], c[2], c[4], c[5], c[6], c[7]]).toEqual(['—', 'Vivo Casa', 'Telefonica Brasil S.A.', '—', '—', '—', '—']);
   });
 });
 
@@ -392,13 +388,15 @@ describe('CONC-BLOCOS-TELA-01 — Casar com o banco · bloco', () => {
 
 /**
  * CONC-CASAR-ALTURA-01 — homologação do Gabriel (01/10 12:30): o bloco com 2 Pix × 12 lançamentos passava da tela e o
- * rodapé sumia. Nas 3 variantes: teto de 90vh, só o miolo rola, cabeçalho e rodapé (border-t, 34px) fixos.
+ * rodapé sumia. Nas 3 variantes: teto de 90vh, só o miolo rola, cabeçalho e rodapé (border-t, 34px) fixos. CONC-CASAR-1X1-TABELA-01
+ * (19/11): o 1:N fica PRESO NO TOPO (7,5vh, a caixa da NF cresce para baixo) e o teto dele é 85vh (7,5 + 85 cabe na janela).
  * ⚠ O jsdom NÃO FAZ LAYOUT: o teste prova o CONTRATO (as classes e o botão FORA do rolável); a medida vai no relatório.
  */
 describe('CONC-CASAR-ALTURA-01 — teto de 90vh, miolo rola, rodapé fixo', () => {
   const contrato = (botao: RegExp | string, rodape32 = false) => {
     const dlg = screen.getByRole('dialog');
-    expect(dlg.className).toContain('max-h-[90vh]');
+    expect(dlg.className).toContain(rodape32 ? 'max-h-[85vh]' : 'max-h-[90vh]');
+    if (rodape32) expect(dlg.className).toContain('top-[7.5vh]');
     expect(dlg.className).toContain('flex-col');
     /* sem o X do Radix (`button.absolute`, escondido pela classe do modal) */
     const filhos = [...dlg.children].filter((el) => el.tagName !== 'BUTTON');

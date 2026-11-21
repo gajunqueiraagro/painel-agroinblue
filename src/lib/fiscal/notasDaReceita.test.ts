@@ -8,8 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   ABAS_DA_RECEITA, arquivoDoXml, filtrarBusca, lerLinhasRecebidas, montarLista, numeroDaChave, pedemAcao, serieDaChave, situacaoNaLista,
-  candidatoPreMarcado, chavesJaLancadas, comCandidatos, lerCandidatos, precisaConferirLancamento, totalDaLista, type LinhaRecebida,
-} from './notasDaReceita';
+  candidatoPreMarcado, chavesJaLancadas, comCandidatos, lerCandidatos, precisaConferirLancamento, totalDaLista, type LinhaRecebida, seloDaNota, ROTULO_CURTO,
+  lerAtributos, tomDoVenc, vencimentoDaNota, vencidaSemLancamento, dicaDoVenc, lerLigacoes, ligacaoDaNota, fraseDaLigacao, type LigacaoDaDemonstracao } from './notasDaReceita';
 
 /* chave sintética: UF 50, AAMM 2611, CNPJ, mod 55, série 001, nº 000012345, tpEmis 1, código, DV */
 const chave = (n: number, cnpj = '12345678000190') => `5026${'11'}${cnpj}55001${String(n).padStart(9, '0')}1${'12345678'}0`.slice(0, 44);
@@ -44,7 +44,7 @@ describe('NOTAS-RECEITA F3.4 — a regra da lista', () => {
   it('R3 abas e o selo (D2): pedem ação = a lançar + ciência pendente', () => {
     const l = lista([linha({ n: 1 }), linha({ n: 2, situacao: 'resumo' }), linha({ n: 3 }), linha({ n: 4, situacao: 'cancelado_na_sefaz' })], [chave(3)]);
     const conta = Object.fromEntries(ABAS_DA_RECEITA.map((a) => [a.valor, l.filter(a.filtro).length]));
-    expect(conta).toEqual({ lancar: 1, ciencia: 1, no_sistema: 1, canceladas: 1, todas: 4 });
+    expect(conta).toEqual({ lancar: 1, ciencia: 1, no_sistema: 1, vendas: 0, nao_financeiras: 0, canceladas: 1, todas: 4 }); /* + Vendas e Não geram lançamento (SEM-LANCAMENTO-01) */
     expect(pedemAcao(l)).toBe(2);
   });
   it('R4 CNPJ inteiro; CPF de emitente pessoa física mascarado', () => {
@@ -113,5 +113,98 @@ describe('NOTAS-RECEITA F3.4 — a regra da lista', () => {
     const [p] = lista([linha({ n: 1 })]);
     expect(p.candidatos).toEqual([]);
     expect(pedemAcao(montarLista([linha({ n: 1 })], new Map(), new Set(), new Map([[chave(1), [c('mesmo_cnpj')]]])))).toBe(1);
+  });
+});
+
+describe('NOTAS-RECEITA-SEM-LANCAMENTO-01 — a classe da nota na lista (automática pelo XML)', () => {
+  const atr = (cfops: string[], tpNF = '1', natOp = 'VENDA', refs: string[] = []) => ({ cfops, tpNF, natOp, refs, dups: [], tpags: [] });
+  it('comodato e entrega futura saem do "A lançar" para "Não geram lançamento"; a venda do titular para "Vendas"; compra fica', () => {
+    const ls = [linha({ n: 1, situacao: 'xml', temXml: true }), linha({ n: 2, situacao: 'xml', temXml: true }),
+      linha({ n: 3, situacao: 'xml', temXml: true }), linha({ n: 4, situacao: 'xml', temXml: true })];
+    const at = new Map([[ls[0].chave, atr(['5908'], '1', 'REMESSA BEM P/CONTA CONTR COMODATO')], [ls[1].chave, atr(['6116'], '1', 'REMESSA', [chave(8568045)])],
+      [ls[2].chave, atr(['2101'], '0', 'COMPRA PARA INDUSTRIALIZACAO')], [ls[3].chave, atr(['5102'])]]);
+    const l = montarLista(ls, new Map(), new Set(), new Map(), at);
+    const por = (n: number) => l.find((x) => x.chave === ls[n].chave)!;
+    expect(por(0).sit).toBe('nao_financeira');
+    expect(seloDaNota(por(0)).rotulo).toBe('Comodato');
+    expect(por(1).sit).toBe('nao_financeira');
+    expect(seloDaNota(por(1)).rotulo).toBe('Entrega futura');
+    expect(por(1).citadas).toEqual(['8.568.045']);
+    expect(seloDaNota(por(1)).dica).toContain('8.568.045');
+    expect(por(2).sit).toBe('venda_titular');
+    expect(seloDaNota(por(2)).rotulo).toBe('Sua venda');
+    expect(por(3).sit).toBe('nova');
+    expect(l.filter(ABAS_DA_RECEITA.find((a) => a.valor === 'lancar')!.filtro)).toHaveLength(1);
+    expect(l.filter(ABAS_DA_RECEITA.find((a) => a.valor === 'nao_financeiras')!.filtro)).toHaveLength(2);
+    expect(l.filter(ABAS_DA_RECEITA.find((a) => a.valor === 'vendas')!.filtro)).toHaveLength(1);
+  });
+  it('sem os atributos (a função ainda não no ar): a lista de sempre — tudo "compra"', () => {
+    const ls = [linha({ n: 1, situacao: 'xml', temXml: true })];
+    expect(montarLista(ls, new Map(), new Set()).map((x) => x.sit)).toEqual(['nova']);
+  });
+  it('a cancelada diz a substituta: a nota VIVA do mesmo emitente e do mesmo valor', () => {
+    const ls = [linha({ n: 73007, situacao: 'xml', temXml: true, valorCent: 28050000 }), linha({ n: 73006, situacao: 'cancelado_na_sefaz', valorCent: 28050000 })];
+    const canc = montarLista(ls, new Map(), new Set()).find((x) => x.sit === 'cancelada')!;
+    expect(canc.substituta).toBe('73.007');
+    expect(seloDaNota(canc).dica).toContain('substituída pela NF 73.007');
+  });
+  it('os rótulos curtos nunca passam de 14 caracteres (cabem no selo; o resto vai no ⓘ)', () => {
+    for (const r of Object.values(ROTULO_CURTO)) expect(r.length).toBeLessThanOrEqual(14);
+  });
+});
+
+/* NOTAS-RECEITA-VENC-01 (Gabriel 19/11 07:36) — a coluna "Venc." pelas duplicatas da nota (cobr/dup), hoje = 16/11/2026 */
+describe('NOTAS-RECEITA-VENC-01 — o vencimento pelas duplicatas', () => {
+  const D = (n: string, v: string, c = 100) => ({ numero: n, vencimento: v, valorCent: c });
+  it('V1 a próxima = a 1ª que vence hoje ou depois (na ordem da data, qualquer que seja a do XML); "k/N" pela posição', () => {
+    const v = vencimentoDaNota([D('003', '2026-12-20'), D('001', '2026-10-30'), D('002', '2026-11-20')], [], '2026-11-16');
+    expect(v.proxima?.numero).toBe('002');
+    expect([v.indice, v.todas.length, v.dias]).toEqual([2, 3, 4]);
+    expect(vencimentoDaNota([D('001', '2026-11-16')], [], '2026-11-16').dias).toBe(0);
+  });
+  it('V2 todas vencidas = a última (o atraso mais curto); sem duplicata: "à vista" só com tPag 01/03/04/17', () => {
+    const v = vencimentoDaNota([D('001', '2026-10-01'), D('002', '2026-11-02')], [], '2026-11-16');
+    expect([v.proxima?.numero, v.indice, v.dias]).toEqual(['002', 2, -14]);
+    expect(vencimentoDaNota([], ['17'], '2026-11-16')).toMatchObject({ proxima: null, aVista: true });
+    expect(vencimentoDaNota([], ['15'], '2026-11-16')).toMatchObject({ proxima: null, aVista: false });
+    expect(vencimentoDaNota([], ['90'], '2026-11-16').aVista).toBe(false);
+  });
+  it('V3 a cor só na que ainda não está lançada: vencida = vermelho; até 7 dias = âmbar; já no sistema = sem cor', () => {
+    const venc = (dias: number) => ({ todas: [], proxima: D('001', 'x'), indice: 1, aVista: false, dias });
+    expect(tomDoVenc({ sit: 'nova', venc: venc(-1) })).toBe('vencida');
+    expect(tomDoVenc({ sit: 'pode_estar', venc: venc(7) })).toBe('perto');
+    expect(tomDoVenc({ sit: 'nova', venc: venc(8) })).toBeNull();
+    expect(tomDoVenc({ sit: 'no_sistema', venc: venc(-30) })).toBeNull();
+    expect(vencidaSemLancamento({ sit: 'nova', venc: venc(-3) })).toBe(true);
+    expect(vencidaSemLancamento({ sit: 'nao_financeira', venc: venc(-3) })).toBe(false);
+    expect(dicaDoVenc({ sit: 'nova', venc: venc(-14) })).toBe('Venceu há 14 dias — confira se já pagou.');
+    expect(dicaDoVenc({ sit: 'nova', venc: venc(0) })).toBe('Vence hoje.');
+  });
+  it('V4 o banco devolve as duplicatas (n · venc · valor em reais) e o tPag; fora do formato fica de fora', () => {
+    const m = lerAtributos([{ chave: 'k', cfops: [], tpnf: '1', natop: 'VENDA', refs: [],
+      dups: [{ n: '001', venc: '2026-12-10', valor: '1234.56' }, { n: '002', venc: null, valor: '1' }, 'lixo'], tpags: ['15', 3] }]);
+    expect(m.get('k')?.dups).toEqual([{ numero: '001', vencimento: '2026-12-10', valorCent: 123456 }]);
+    expect(m.get('k')?.tpags).toEqual(['15']);
+  });
+});
+
+/* NOTA-DEMONSTRACAO-01 (Gabriel 19/11 08:03) — a demonstração ligada à compra/ao retorno que veio depois (o banco liga; a tela mostra) */
+describe('NOTA-DEMONSTRACAO-01 — a ligação da demonstração', () => {
+  const D = chave(7891), C = chave(8001), R = chave(8002);
+  it('L1 o banco → as ligações (fora do formato fica de fora; força desconhecida = "fornecedor", a mais fraca)', () => {
+    expect(lerLigacoes([{ demo: D, nota: C, tipo: 'compra', por: 'item' }, { demo: D, nota: R, tipo: 'devolvida' }, 'x', { demo: R, nota: D, tipo: 'retorno', por: '?' }]))
+      .toEqual([{ demo: D, nota: C, tipo: 'compra', por: 'item' }, { demo: R, nota: D, tipo: 'retorno', por: 'fornecedor' }]);
+  });
+  it('L2 os dois lados: a demonstração vê "Comprado pela NF"; a compra vê "do bem em demonstração NF"; o só-fornecedor diz "confira"', () => {
+    const lig: LigacaoDaDemonstracao[] = [{ demo: D, nota: C, tipo: 'compra', por: 'item' }];
+    const naDemo = ligacaoDaNota(D, lig); const naCompra = ligacaoDaNota(C, lig);
+    expect(naDemo).toEqual({ papel: 'demo', tipo: 'compra', outra: '8.001', outraChave: C, por: 'item' });
+    expect(naCompra).toEqual({ papel: 'compra', tipo: 'compra', outra: '7.891', outraChave: D, por: 'item' });
+    if (!naDemo || !naCompra) throw new Error('sem ligação');
+    expect(fraseDaLigacao(naDemo)).toBe('Comprado pela NF 8.001 (o mesmo item).');
+    expect(fraseDaLigacao(naCompra)).toBe('Esta compra é do bem em demonstração NF 7.891 (o mesmo item).');
+    expect(fraseDaLigacao({ papel: 'retorno', tipo: 'retorno', outra: '7.891', outraChave: D, por: 'fornecedor' }))
+      .toBe('Fecha a demonstração NF 7.891 — só pelo fornecedor: confira se é o mesmo bem.');
+    expect(ligacaoDaNota(chave(1), lig)).toBeNull();
   });
 });

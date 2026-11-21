@@ -302,6 +302,7 @@ export function DocumentosDoContrato({ financiamentoId, clienteId, hoje, credorI
         <AnexarBoletosDialog subtitulo={`${vivas.length} parcelas`}
           parcelas={vivas.map((p) => ({ numero: p.numero, vencimento: p.dataVencimento, valor: p.valorTotal, temBoleto: boletos.some((b) => b.parcela === p.numero) }))}
           onConfirmar={(itens: BoletoAtribuido[]) => gravarBoletos(itens.map((i) => ({ parcela: i.parcela, arquivo: i.arquivo })))}
+          naCaixa={{ clienteId, lancamentos: new Map(vivas.map((p) => [p.numero, p.lancamentoId])) }}
           onFechar={() => setAnexarVarios(false)} />
       )}
     </div>

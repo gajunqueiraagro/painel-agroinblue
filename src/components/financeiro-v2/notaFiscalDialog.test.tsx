@@ -653,6 +653,24 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(g.vincular).toHaveBeenCalledWith('cli', 'doc-antigo', ['velho-1', 'velho-2', 'velho-3', 'velho-4']);
     expect(g.documentosDoParcelamento).not.toHaveBeenCalled();
   });
+  /* NOTA-ITENS-SALVAR-01 (Gabriel 18/11, a Selluz NF 3.240; SINTÉTICO) — o documento que já existia (sem chave) recebe a CHAVE da nota lida
+     (e o vazio) pela porta de sempre, com a versão lida: é por ela que o lançamento acha os itens guardados. O nº digitado diferente: nada. */
+  it('ITENS1 vincular à compra que já tem o PDF sem chave: o documento ganha a chave (os itens aparecem no lançamento)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO.map((x, i) => (i === 0 ? { ...x, notaDocumentoId: 'doc-antigo' } : x)) });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const docs: DocumentoDaParcela[] = [{ id: 'doc-antigo', lancamentoId: 'velho-1', versao: 2, especie: 'nf', numero: null, chave: null, valorCent: null, emissao: null }];
+    const editarDocumento = vi.fn(async (_c: string, _d: string, _v: number, _campos: Record<string, string>) => {});
+    const gj: GravadoresDaJuncao = { juntar: vi.fn(async () => ({ ok: true, simulado: true, parcelas: 4, soma: 0, descricao: '', efeito_por_mes: [], lista: [] })),
+      documentos: vi.fn(async () => docs), editarDocumento };
+    const nota = montarNota({ fornecedores: [FORN] });
+    const props = await abrir(nota, { g: comoGravadores, gj });
+    await naAbaParcelas();
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    await waitFor(() => expect(editarDocumento).toHaveBeenCalled());
+    const [cli, docId, versao, campos] = editarDocumento.mock.calls[0];
+    expect([cli, docId, versao, campos.chave_acesso?.length, Object.keys(campos).sort()]).toEqual(['cli', 'doc-antigo', 2, 44, ['chave_acesso', 'data_emissao', 'numero', 'valor_documento']]);
+  });
   /* P167 — a soma das parcelas que recebem a nota nunca passa da nota: a frase no rodapé, o "Revisar e completar" apagado, nada gravado */
   it('P167 as parcelas somam mais que a nota: recusa com a frase, nada gravado', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [...QUATRO, { ...QUATRO[0], id: 'velho-5', parcelas: [], por: ['numero'] }] });
@@ -839,8 +857,15 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
     return screen.findByTestId('comparar-cadastro');
   };
   const linha = (rotulo: string) => screen.getAllByTestId('comparar-linha').find((l) => l.firstElementChild?.textContent === rotulo);
-  it('o nome digitado a mao ("Pec.3M-Esc. Garças") vem DESMARCADO e nao muda; o CNPJ vazio vem marcado; "igual" sem caixa', async () => {
+  /* FORN-ACHAR-CNPJ-01 (URGENTE, Gabriel 19/11) — o nome digitado a mão ("Pec.3M-Esc. Garças …") é OUTRA razão social: CNPJ, IE e razão NÃO se
+     oferecem (o caso COAMO × Auto Posto); o aviso diz "parece outro fornecedor" e o resto vem desmarcado */
+  it('o nome digitado a mao ("Pec.3M-Esc. Garças"): razão social diferente → CNPJ/IE/razão nao se oferecem; "parece outro fornecedor"', async () => {
     await abrirComparar({ nome: 'Pec.3M-Esc. Garças Agro Sintetica', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, municipio: 'Campo Grande', uf: 'MS' });
+    expect([linha('Razão social'), linha('CNPJ/CPF'), linha('IE')]).toEqual([undefined, undefined, undefined]);
+    expect(screen.getByTestId('comparar-aviso').textContent).toContain('Parece outro fornecedor');
+  });
+  it('a MESMA razão social (sem o "Ltda"): o CNPJ vazio vem marcado; o resto como sempre; "igual" sem caixa', async () => {
+    await abrirComparar({ nome: 'Agro Sintética Insumos Agropecuários', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, municipio: 'Campo Grande', uf: 'MS' });
     expect(linha('Razão social')?.getAttribute('data-estado')).toBe('diferente');
     expect(linha('CNPJ/CPF')?.getAttribute('data-estado')).toBe('vazio');
     expect(linha('Cidade/UF')?.getAttribute('data-estado')).toBe('igual');
@@ -854,7 +879,7 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
     expect(campos.cpf_cnpj).toBe('11.222.333/0004-24');
   });
   it('marcar a razao social: entra no que vai ao banco; desmarcar o CNPJ: sai', async () => {
-    await abrirComparar({ nome: 'Pec.3M-Esc. Garças Agro Sintetica', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' });
+    await abrirComparar({ nome: 'Agro Sintética Insumos Agropecuários', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' });
     fireEvent.click(screen.getByTestId('comparar-marcar-razao'));
     fireEvent.click(screen.getByTestId('comparar-marcar-cnpj'));
     fireEvent.click(screen.getByTestId('comparar-atualizar'));
@@ -866,7 +891,7 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
   });
   it('o cadastro nao parece o certo (nome sem palavra em comum): a frase no topo e "Cadastrar novo" volta ao cadastrar', async () => {
     await abrirComparar({ nome: 'Posto Exemplo Combustiveis', cpf_cnpj: null, municipio: null, uf: null });
-    expect(screen.getByTestId('comparar-aviso').textContent).toContain('não parece o do emitente');
+    expect(screen.getByTestId('comparar-aviso').textContent).toContain('Parece outro fornecedor');
     fireEvent.click(screen.getByTestId('comparar-cadastrar-novo'));
     expect(screen.queryByTestId('comparar-cadastro')).toBeNull();
     expect(await screen.findByTestId('nota-cadastrar-fornecedor')).toBeTruthy();
@@ -1006,6 +1031,30 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
      subcentro, status) e na "Parcelas × sistema"; UM botão diz o que faz e grava; nada de segunda tela por cima */
   const GULART = jaLancado(1, '2026-10-10', 'programado', { id: 'gulart-1', descricao: 'Compra cantina sintetica', valorCent: 196656, financiamentoId: null,
     por: ['numero'], parcelas: [], competencia: '2026-09-30' });
+  /* NOTA-JA-LANCADA-FILIAL-01 (Gabriel 19/11, a Sendas NF 321.826: realizada 26 dias depois da emissão, outra filial) — o banco a devolve
+     por 'janela'; a tela a mostra como "talvez esta?", em FICA DE FORA (nunca liga sozinha); "É esta" à mão liga e grava só ela */
+  it('JANELA o achado só pela janela larga vem "talvez esta?" e fica de fora; o operador vincula e o Aplicar liga só ele', async () => {
+    const TALVEZ = jaLancado(1, '2026-10-30', 'realizado', { id: 'sendas-1', descricao: 'Compra cantina escritorio sintetica', valorCent: 196656, financiamentoId: null,
+      por: ['janela'], parcelas: [], competencia: '2026-10-30', fornecedorPor: 'cnpj' });
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [TALVEZ] });
+    const { comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores, gj: falsos().gj });
+    await naAbaParcelas();
+    const efeito = await screen.findByTestId('nota-ja-lancada-efeito');
+    expect(efeito.textContent).toContain('talvez esta?');
+    expect(efeito.getAttribute('title')).toContain('talvez já lançado: o mesmo valor do fornecedor');
+    expect(screen.getAllByTestId('nota-acao').map((b) => b.getAttribute('data-acao'))).toContain('deixar');
+    expect(screen.getByTestId('nota-completar-revisar').textContent).not.toMatch(/vincular/);
+    const acao = screen.getAllByTestId('nota-acao').find((b) => b.getAttribute('data-acao') === 'deixar');
+    if (!acao) throw new Error('o talvez não nasceu fica de fora');
+    fireEvent.keyDown(acao, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('nota-acao-vincular'));
+    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 1'));
+    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('nota-completar-revisar'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['sendas-1']);
+  });
   it('G1 1 de 1: "No sistema hoje (1)" mostra o achado inteiro; a Parcelas × sistema tem a linha; "Aplicar: vincular 1" grava sem segunda tela', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [GULART] });
     consultas.comoEstaoHoje.mockResolvedValueOnce({ ok: true, valor: [{ id: 'gulart-1', fazendaId: 'faz-2', subcentro: 'Benefícios sinteticos', favorecidoId: null, planoContaId: 'pl-nut', safraId: null }] });
@@ -1085,6 +1134,32 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     expect(opcoes.juntar).toBe(true);
     const d = new Map(pedido.map((x) => [x.id, String(x.descricao)]));
     expect([d.get('m2-6'), d.get('m2-7'), d.get('m2-8')?.endsWith(' 8/10'), d.get('m2-8')?.includes('None')]).toEqual(['Manutencao sintetica 6/10', 'Manutencao sintetica - Parc.7 7/10', true, false]);
+  });
+  /* NOTA-PARCELAR-01 (Gabriel 18/11, o molde da NF 5.629 da madeira; SINTÉTICO) — a nota SEM duplicata, paga em 3 FORA do cartão: 1 achada
+     conciliada na c/c (nota ÷ 3, sem número na descrição) + a 2ª cancelada ("Parcela 2 - None"). A tela diz "não traz duplicatas e foi paga em 3",
+     numera 1/3 pela ordem (sem pergunta), propõe 2/3 e 3/3 mês a mês (o centavo na última) e cria só as 2; a cancelada não conta. */
+  const MADEIRA = [
+    jaLancado(1, '2026-09-10', 'realizado', { id: 'mad-1', descricao: 'Manutenção de Instalações Sintetica', valorCent: 65553, contaBancariaId: 'sic', conciliado: true }),
+    jaLancado(2, '2026-10-12', 'programado', { id: 'mad-2', descricao: 'Parcela 2 - None', valorCent: 65554, contaBancariaId: 'sic', cancelado: true }),
+  ].map((l): LancamentoJaLancado => ({ ...l, financiamentoId: null, por: ['numero'], parcelas: [] }));
+  it('PARC1 sem duplicata, paga em 3 fora do cartão: 1/3 achada (sem pergunta), cria 2/3 e 3/3 mês a mês com o centavo na última', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: MADEIRA });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores, gj: falsos().gj });
+    await naAbaParcelas();
+    const resumo = screen.getByTestId('nota-ja-lancada-resumo').textContent ?? '';
+    expect([resumo.includes('não traz duplicatas e foi paga em 3 parcelas'), resumo.includes('achei 1'), resumo.includes('faltam 2.'), resumo.includes('cartão')])
+      .toEqual([true, true, true, false]);
+    expect(screen.queryByTestId('nota-cartao-pergunta')).toBeNull();
+    expect(screen.getAllByTestId('nota-ja-lancada-parc').map((x) => x.textContent)).toEqual(['1/3', '2/3', '3/3']);
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 1 e criar 2'));
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(g.lancamento.mock.calls.map(([f]) => [f.data_vencimento, Math.round(Number(f.valor) * 100), String(f.descricao).slice(-3)]))
+      .toEqual([['2026-10-10', 65552, '2/3'], ['2026-11-10', 65551, '3/3']]);   // nota 1.966,56: 655,53 + 655,52 + 655,51 = a nota (o resto na última)
+    /* a achada recebe a nota; as 2 que nasceram também (o gravador falso devolve o mesmo id); a cancelada nunca */
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['mad-1', 'lanc-unico', 'lanc-unico']);
   });
   /* P128b — o "Juntar" do P96a agora é a MESMA gravação única da prévia campo a campo (padroniza e junta; o antes guardado) */
   it('J1 as 4 soltas: a prévia padroniza ("base i/4", nº, competência = emissão) e JUNTA numa gravação só; a nota vai às 4', async () => {

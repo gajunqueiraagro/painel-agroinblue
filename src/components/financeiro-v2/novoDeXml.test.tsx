@@ -71,7 +71,7 @@ import { NovoDeXmlDialog, comFornecedoresDeAgora, resumoDasDuplicatas } from './
 import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
 import { proporLancamento, FRASE_SEM_DUPLICATAS, type UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
-import { arquivoXmlDaNota, pendenteDaNota, prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import { arquivoXmlDaNota, danfeDaNota, pendenteDaNota, prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { documentoFormatado } from '@/lib/financeiro/nfe/formatos';
 import { CTE, EMITENTE_CNPJ, chaveDe, montarNFe, utf8, type OpcoesNota } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import type { Consulta, OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
@@ -84,6 +84,8 @@ const CONTAS: ContaBancariaV2[] = [{ id: 'bb', nome_conta: 'Banco do Brasil', ba
 const forn = (id: string, nome: string, cpf_cnpj: string | null, ativo = true) => ({ id, nome, cpf_cnpj, fazenda_id: null, ativo, tipo_recebimento: null }) as FornecedorV2;
 const AGRO = forn('agro', 'Agropecuaria Exemplo', '11.222.333/0001-81');
 const AGRO_SEM_DOC = forn('agro', 'Agropecuaria Exemplo', null);
+/* FORN-ACHAR-CNPJ-01 — o cadastro antigo com OUTRO nome escrito (a razão igual já se acha na lista; este só o resolvedor do banco acha) */
+const AGRO_NOME_ANTIGO = forn('agro', 'Agrop. Exemplo (antigo)', null);
 const CLASSIF: ClassificacaoItem[] = [
   { id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
 ];
@@ -221,7 +223,7 @@ describe('tela A — a lista de notas', () => {
   it('P146 — "nota já lançada" e "fornecedor pelo nome" falharam: os dois motivos na mesma frase, e a linha não abre', async () => {
     consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: false, motivo: 'sem rede' }));
     consultas.notaJaLancada.mockImplementation(async () => ({ ok: false, motivo: 'tempo esgotado' }));
-    montarLista([AGRO_SEM_DOC]);   // o cadastro sem documento: a nota pergunta pelo NOME
+    montarLista([AGRO_NOME_ANTIGO]);   // o cadastro sem documento e com outro nome: a nota pergunta pelo NOME ao banco
     soltar([arquivo('a.xml', montarNFe())]);
     await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
     expect(screen.getByTestId('xml-situacao').getAttribute('title'))
@@ -238,7 +240,7 @@ describe('tela A — a lista de notas', () => {
   });
   it('fornecedor achado pelo nome: o pacote leva "pelo nome" e o cadastro sem documento', async () => {
     consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: true, valor: 'agro' }));
-    const { onAbrir } = montarLista([AGRO_SEM_DOC]);
+    const { onAbrir } = montarLista([AGRO_NOME_ANTIGO]);
     soltar([arquivo('a.xml', montarNFe())]);
     await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
     expect(consultas.fornecedorPeloNome).toHaveBeenCalledWith('cli', 'AGROPECUARIA EXEMPLO LTDA');
@@ -966,5 +968,29 @@ describe('NOTA-NOVA-MODAL-REAL — a origem no Novo lançamento: "do PDF"; o que
     expect(screen.queryByTestId('origem-xml-valor')).toBeNull();
     expect(screen.queryByTestId('origem-xml-competencia')).toBeNull();
     expect(screen.getByTestId('origem-xml-tipo').textContent).toBe('Saída · do PDF');
+  });
+});
+
+/* NOTA-RECEITA-DANFE-ANEXO-01 (Gabriel 19/11 07:35) — a nota só em XML ganha o DANFE em PDF como 2º documento da MESMA NF */
+describe('NOTA-RECEITA-DANFE-ANEXO-01 — o DANFE da nota', () => {
+  type Gerado = { ok: true; pdf: File } | { ok: false; frase: string };
+  const PDF = new File(['%PDF-1.4 danfe'], 'NFe-12345-DANFE.pdf', { type: 'application/pdf' });
+  it('o XML gera o PDF: o mesmo payload da NF (nome com "(DANFE)") e o arquivo .pdf; quem gera recebe o XML', async () => {
+    const d = doXmlDe({}, [AGRO]);
+    const gerar = vi.fn(async (): Promise<Gerado> => ({ ok: true, pdf: PDF }));
+    const r = await danfeDaNota(d, 'agro', gerar);
+    expect(gerar).toHaveBeenCalledWith(d.arquivo);
+    expect(r.aviso).toBeNull();
+    const xml = pendenteDaNota(d, 'agro');
+    expect(r.pendente?.payload).toEqual({ ...xml.payload, nome: 'nf 000.012.345 (DANFE)' });
+    expect([r.pendente?.arquivo?.name, r.pendente?.arquivo?.type, r.pendente?.parcela]).toEqual(['NFe-12345-DANFE.pdf', 'application/pdf', null]);
+  });
+  it('a nota lida do PDF não gera nada; a geração que falha deixa só o XML e diz o aviso', async () => {
+    const d = doXmlDe({}, [AGRO]);
+    const gerar = vi.fn(async (): Promise<Gerado> => ({ ok: true, pdf: PDF }));
+    expect(await danfeDaNota({ ...d, arquivo: new File(['%PDF'], 'nota.pdf', { type: 'application/pdf' }) }, 'agro', gerar)).toEqual({ pendente: null, aviso: null });
+    expect(gerar).not.toHaveBeenCalled();
+    const r = await danfeDaNota(d, 'agro', async (): Promise<Gerado> => ({ ok: false, frase: 'Não consegui gerar o PDF do DANFE.' }));
+    expect(r).toEqual({ pendente: null, aviso: 'O DANFE em PDF não foi gerado (Não consegui gerar o PDF do DANFE.); a nota segue com o XML.' });
   });
 });

@@ -44,20 +44,34 @@ describe('o fornecedor do histórico nas sugestões', () => {
     expect(r.find((s) => s.tipo === 'nome_valor')?.motivo).toBe(`${SELO_SO_TEXTO} · valor diferente`);
   });
 
-  it('a janela do fornecedor do histórico é a do P153b (±5 dias, só em aberto)', () => {
+  it('CONC-CRIAR-COM-NOTA-02 E1 (Gabriel 18/11): TODOS os em aberto do fornecedor do histórico, sem a janela de ±5 dias; pago não', () => {
     const longe = [c('ofi-3', { valor_assinado: -50, data_vencimento: '2031-10-14' })];
-    expect(sugerirCasamentos(EXTRATO, longe, { fornecedorDoHistorico: 'f-oficina' })).toEqual([]);
+    expect(sugerirCasamentos(EXTRATO, longe, { fornecedorDoHistorico: 'f-oficina' }).map((s) => s.tipo)).toEqual(['do_historico']);
     const pago = [c('ofi-4', { valor_assinado: -50, status_transacao: 'realizado' })];
     expect(sugerirCasamentos(EXTRATO, pago, { fornecedorDoHistorico: 'f-oficina' })).toEqual([]);
     const perto = [c('ofi-5', { valor_assinado: -50, data_vencimento: '2031-10-13' })];
     expect(sugerirCasamentos(EXTRATO, perto, { fornecedorDoHistorico: 'f-oficina' }).map((s) => s.tipo)).toEqual(['do_historico']);
   });
 
-  it('o mesmo valor de outro fornecedor não é "só texto": fica no meio, sem o selo', () => {
+  it('o mesmo valor de outro fornecedor não é "só texto": fica no meio, com o selo "outro fornecedor" (E1, 18/11)', () => {
     const exato = c('outro', { fornecedor: 'Posto Exemplo', favorecido_id: 'f-posto', valor_assinado: -6000 });
     const r = sugerirCasamentos(EXTRATO, [...CANDIDATOS, exato], { fornecedorDoHistorico: 'f-oficina' });
     expect(ids(r).indexOf('outro')).toBe(2);
-    expect(r[2].motivo).toBe('mesmo valor');
+    expect(r[2].motivo).toBe('outro fornecedor · mesmo valor');
+  });
+
+  it('E1 caso Edson: os cadastros IRMÃOS ("…ME" e "…-ME") entram juntos, todos os em aberto primeiro; o resto depois e marcado', () => {
+    const me = (id: string, v: number, venc: string) => c(id, { fornecedor: 'Edson Exemplo Dias ME', favorecido_id: 'f-me', valor_assinado: v, data_vencimento: venc });
+    const hifen = (id: string, v: number, venc: string) => c(id, { fornecedor: 'Edson Exemplo Dias-ME', favorecido_id: 'f-me2', valor_assinado: v, data_vencimento: venc });
+    const outro = c('seguro', { fornecedor: 'Seguradora Exemplo', favorecido_id: 'f-seg', valor_assinado: -1200, data_vencimento: '2031-10-08' });
+    const lista = [me('288', -1403.35, '2031-10-06'), me('289', -330, '2031-10-06'), hifen('402', -2900, '2031-10-10'),
+      hifen('404', -5250, '2031-10-10'), hifen('405', -980, '2031-10-10'), outro];
+    const r = sugerirCasamentos(EXTRATO, lista, { fornecedorDoHistorico: 'f-me', maximo: 20 });
+    const daFamilia = r.filter((s) => s.lancamentos.every((x) => ['f-me', 'f-me2'].includes(x.favorecido_id ?? '')));
+    expect(daFamilia.flatMap((s) => s.lancamentos.map((x) => x.lancamento_id))).toEqual(expect.arrayContaining(['288', '289', '402', '404', '405']));
+    const primeiraDeFora = r.findIndex((s) => !s.lancamentos.every((x) => ['f-me', 'f-me2'].includes(x.favorecido_id ?? '')));
+    expect(primeiraDeFora === -1 || primeiraDeFora >= daFamilia.length).toBe(true);
+    for (const s of r.slice(daFamilia.length)) expect(s.motivo).toMatch(/^(outro fornecedor|só texto parecido) · /);
   });
 
   it('o mesmo valor do fornecedor do histórico vem antes de tudo', () => {
@@ -86,5 +100,18 @@ describe('o pedido ao banco (a mesma regra do "Procurar no histórico")', () => 
     expect(fornecedorDoMovimento(m, EXTRATO)).toBe('f-oficina');
     expect(fornecedorDoMovimento(m, { historico: 'PIX OUTRO NOME', data: '2031-10-08' })).toBeNull();
     expect(lerFornecedoresDoHistorico([1, 2]).size).toBe(0);
+  });
+});
+
+describe('CONC-CRIAR-COM-NOTA-02 B1 (homologação 14:32) — o SALDO da NF 404 depois do pagamento parcial', () => {
+  it('o histórico aponta o "…ME" (sem nenhum em aberto: 288/289 já pagas) e o saldo 4.863,35 está no irmão "…-ME": vem pelo NOME, primeiro', () => {
+    const ext = { data: '2031-10-20', historico: 'PIX - AGENDAMENTO - 20/10 05:37 MECANICA LIDER', valor: -3850 };
+    const saldo = c('saldo-404', { fornecedor: 'Edson Exemplo Dias-ME', favorecido_id: 'f-me2', valor_assinado: -4863.35, data_vencimento: '2031-10-10', status_transacao: 'programado' });
+    const contabil = c('contabil', { fornecedor: 'Contabilidade Exemplo', favorecido_id: 'f-cont', valor_assinado: -915, data_vencimento: '2031-10-20' });
+    /* sem o nome: o "…ME" não tem candidato, a família fica só nele e o saldo some (o defeito) */
+    expect(ids(sugerirCasamentos(ext, [contabil, saldo], { fornecedorDoHistorico: 'f-me' }))).not.toContain('saldo-404');
+    const r = sugerirCasamentos(ext, [contabil, saldo], { fornecedorDoHistorico: 'f-me', nomeDoFornecedorDoHistorico: 'Edson Exemplo Dias ME' });
+    expect(ids(r)[0]).toBe('saldo-404');
+    expect(r[0].motivo).toBe('do histórico · previsto 4.863,35');
   });
 });

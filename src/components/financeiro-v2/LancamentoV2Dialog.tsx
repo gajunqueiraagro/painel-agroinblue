@@ -28,13 +28,15 @@ import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
 import { FinanciamentoDoLancamento } from '@/components/financiamentos/FinanciamentoDoLancamento';
 import { PatrimonioDoLancamento } from '@/components/patrimonio/PatrimonioDoLancamento';
 import { contaPedeFinanciamento } from '@/lib/patrimonio/patrimonioDoLancamento';
-import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
+import { assinarDocumento, useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { linhaDoDocumento as textoDaLinhaDoDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { ResumoDoLancamento } from '@/components/financeiro-v2/ResumoDoLancamento';
+import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
+import { boletoDoResumo, seloDoBoleto, type BoletoDoResumo } from '@/lib/financeiro/boleto/boletoDaParcela';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -66,6 +68,13 @@ import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaL
 import { AlertCircle, AlertTriangle, Copy, RefreshCw, DollarSign, Beef, Repeat, Loader2, Link2, Unlink, FilePlus2 } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
+
+/** BOLETO D1d (Gabriel 18/11 14:40): o 👁 do Resumo abre o PDF do boleto ligado — o mesmo gesto do clipe da lista (URL de 60 s). */
+async function abrirPdfDoBoleto(caminho: string): Promise<void> {
+  const url = await assinarDocumento(caminho);
+  if (!url) { toast.error('Não foi possível abrir o arquivo.'); return; }
+  window.open(url, '_blank', 'noopener');
+}
 import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
 import { campoEmFormatoInvalido, type ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useQueryClient } from '@tanstack/react-query';
@@ -88,7 +97,7 @@ import {
   marcaAoSalvar, ocorrenciaAberta, previstoDaOcorrencia, partesDaMarcada, partesDaIntencao, tituloDasPartes,
   MOTIVO_CONTA_PAGA, MOTIVO_SALVAR_PENDENTE, type RegraDaRecorrencia, type OrigemDoValorDoMes, type PedidoDoValorDoMes,
 } from '@/lib/financeiro/valorDoMes';
-import { pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import { danfeDaNota, pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import {
   atualizarCamposDoCadastro, cadastroParaComparar, camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerCamposDoCadastro, fornecedorPeloDocumento,
   type CadastroComODocumento, type OcorrenciaDaNota,
@@ -116,6 +125,7 @@ import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@
 import { conflitoSafraEscopo, mensagemConflitoSafraEscopo } from '@/lib/financeiro/safraEscopo';
 import { erroDeDirecao, tipoDaContaNoPlano } from '@/lib/financeiro/validacaoLancamento';
 import { escopoDoSubcentro, fazendaAdministrativa, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
+import { perguntarRegraFazenda, regraValeAqui } from '@/lib/financeiro/regraFazenda';
 import {
   CULTURAS_LANCAMENTO, FASES, SEM_CULTURA, avisoCultura, avisoFase,
   culturaParaGravar, faseParaGravar,
@@ -702,6 +712,9 @@ export function LancamentoV2Dialog({
   /* PR 2b — "Anexar vários boletos": aberto da grade do novo parcelado ('previa') ou da parcela aberta ('irmas'). */
   const [anexarBoletos, setAnexarBoletos] = useState<'previa' | 'irmas' | null>(null);
   const [irmas, setIrmas] = useState<ParcelaIrma[] | null>(null);
+  /* BOLETO D1d D3 (Gabriel 17/11 14:23) — o boleto VIVO ligado a este lançamento (o selo do Resumo) e a caixa aberta daqui */
+  const [boletoLigado, setBoletoLigado] = useState<BoletoDoResumo | null>(null);
+  const [caixaAberta, setCaixaAberta] = useState(false);
   const [erroAntesDeSalvar, setErroAntesDeSalvar] = useState<string | null>(null);
   /* NOTA-NFSE-LEITURA-02 — o campo preenchido em formato que o banco recusaria: vermelho + a frase no rodapé (nunca o toast genérico) */
   const [campoInvalido, setCampoInvalido] = useState<ErroDeFormato | null>(null);
@@ -715,6 +728,16 @@ export function LancamentoV2Dialog({
       .catch(() => { if (!cancelado) setIrmas(null); });
     return () => { cancelado = true; };
   }, [open, lancamento?.id, clienteAtual?.id]);
+  /* relê quando o "Anexar vários boletos" ou a caixa fecham (eles podem ter ligado ou trocado o boleto) */
+  useEffect(() => {
+    let cancelado = false;
+    setBoletoLigado(null);
+    if (!open || !lancamento?.id || !clienteAtual?.id || anexarBoletos || caixaAberta) return;
+    void boletoDoResumo(clienteAtual.id, lancamento.id)
+      .then(r => { if (!cancelado) setBoletoLigado(r.ok ? r.dados : null); })
+      .catch(() => { if (!cancelado) setBoletoLigado(null); });   // o selo é só leitura: falhou = "—", nunca quebra o modal
+    return () => { cancelado = true; };
+  }, [open, lancamento?.id, clienteAtual?.id, anexarBoletos, caixaAberta]);
   const navigate = useNavigate();
   const isEdit = !!lancamento;
   // PR-SAFE-0 — título originado da Operação Comercial: valor/favorecido/classificação/tipo
@@ -1446,7 +1469,17 @@ export function LancamentoV2Dialog({
     abaDaTrocaRef.current = null;
     /* FIN-NFE-XML-01d — o XML da nota ja' nasce como o documento NF pendente do lancamento novo. */
     const doXml = !lancamento ? prefill?.doXml ?? null : null;
-    setPendentes(doXml ? [pendenteDaNota(doXml, doXml.proposta.favorecidoId)] : []);
+    const daNota = doXml ? pendenteDaNota(doXml, doXml.proposta.favorecidoId) : null;
+    setPendentes(daNota ? [daNota] : []);
+    /* NOTA-RECEITA-DANFE-ANEXO-01 — a nota só em XML ganha o DANFE em PDF como 2º documento pendente (gerado aqui, gravado no Salvar);
+       entra só se o XML ainda está na lista (o modal não trocou de nota enquanto gerava); falhou = só o XML, aviso no console */
+    if (doXml && daNota) {
+      void danfeDaNota(doXml, doXml.proposta.favorecidoId).then(({ pendente, aviso }) => {
+        if (aviso) console.error('[LancamentoV2Dialog] DANFE', aviso);
+        if (pendente) setPendentes((l) => (l.some((p) => p.chave === daNota.chave) && !l.some((p) => p.arquivo?.type === 'application/pdf'
+          && p.payload.chaveAcesso === daNota.payload.chaveAcesso) ? [...l, pendente] : l));
+      });
+    }
     setDivisaoNaCriacao(null);
     setXmlFaixaFechada(false);
     setXmlRegistradaDispensada(false);
@@ -1870,6 +1903,21 @@ export function LancamentoV2Dialog({
      válido — os campos estão "preenchidos" com nada —, e é justamente esse o caso perigoso. */
   const canSave = validacao.canSave && !carregando && motivoDasParcelas === null;
 
+  /* FIN-REGRA-VARIAVEL-FAZENDA-01 — a regra fazenda × conta (o dono é o banco: `fn_regra_fazenda_da_conta`, a mesma dos gatilhos). Só no
+     lançamento NOVO ou quando a fazenda/conta MUDAM (o legado segue editável nos outros campos). A frase sai ao lado do Salvar e o campo
+     Fazenda fica vermelho; o clique no Salvar não grava e leva o foco à Fazenda. Vazio fica com o "Selecione a fazenda" de sempre. */
+  const fazendaDaRegra = (fazendaTravadaAdm && fazendaAdm) ? fazendaAdm.id : fazendaId;
+  const regraVale = open && !!fazendaDaRegra && regraValeAqui({ novo: !lancamento?.id, fazendaDe: lancamento?.fazenda_id ?? null,
+    planoDe: lancamento?.plano_conta_id ?? null, fazenda: fazendaDaRegra || null, plano: planoContaId ?? null });
+  const [regraFazenda, setRegraFazenda] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    setRegraFazenda(null);
+    if (!regraVale || !planoContaId || !fazendaDaRegra) return;
+    void perguntarRegraFazenda(planoContaId, fazendaDaRegra).then((f) => { if (vivo) setRegraFazenda(f); });
+    return () => { vivo = false; };
+  }, [regraVale, planoContaId, fazendaDaRegra]);
+
   /* ── MODO OC — OC-CC-MODAL-FINANCEIRO-01 ───────────────────────────────────────────────────────────────────────────────
      As parcelas que vao ao banco sao as da PROPRIA OC: a lista da grade (mensal ou livres) ou, a' vista, uma so'. A conta e'
      a da direcao (entrada -> destino; saida -> origem). As duas pendencias proprias do modo (item e vencimento) NAO apagam
@@ -2023,6 +2071,13 @@ export function LancamentoV2Dialog({
        em vermelho com a frase; aqui so' se leva o foco a ele, sem toast (UX-TOAST-01). O `canSave` ja' exigia a
        fazenda (`computeValidacaoModal`), entao esta linha e' a trava do proprio gravar, nao a unica. */
     if (!fazendaIdEfetivo) {
+      document.getElementById('campo-fazenda-financeiro')?.querySelector('button')?.focus();
+      return;
+    }
+    /* FIN-REGRA-VARIAVEL-FAZENDA-01 — a conta pede outra fazenda: não grava (o gatilho recusaria com a mesma frase) */
+    if (regraFazenda) {
+      setErroAntesDeSalvar(regraFazenda);
+      setAbaAtiva('geral');
       document.getElementById('campo-fazenda-financeiro')?.querySelector('button')?.focus();
       return;
     }
@@ -3144,6 +3199,7 @@ export function LancamentoV2Dialog({
                 disabled={travado('fazenda_id') || undefined}
                 obrigatorio
                 id="campo-fazenda-financeiro"
+                erroDaRegra={regraFazenda}
                 className="col-span-4"
                 triggerClassName={cn(fieldBg, 'h-7 text-[11px]', xmlCls('fazenda'))}
                 tabIndex={7}
@@ -3758,7 +3814,10 @@ export function LancamentoV2Dialog({
             ) : documentosAntesDeSalvar ? (
               <DocumentosPendentes pendentes={pendentes} onMudar={setPendentes}
                 clienteId={clienteAtual?.id ?? null}
-                travado={!!posSalvar} sugestao={sugestaoDoDocumento} />
+                travado={!!posSalvar} sugestao={sugestaoDoDocumento}
+                /* CONC-CRIAR-COM-NOTA-02 (Fatia 1) — no Novo pelo extrato, a NF adicionada aqui preenche o lançamento (o mesmo "Ler a NF") */
+                aoLerNotaNoNovo={!lancamento?.id && onLerNotaNoNovo && !posSalvar ? onLerNotaNoNovo : undefined}
+                pagoEm={dataPagamento || null} />
             ) : (
               <p className="rounded-md border bg-muted/20 px-3.5 py-3 text-[11px] text-muted-foreground">
                 Salve o lançamento para anexar documentos.
@@ -3974,6 +4033,11 @@ export function LancamentoV2Dialog({
                 {simOC.erro}
               </span>
             )}
+            {!posSalvar && !erroAntesDeSalvar && !motivoDasParcelas && regraFazenda && (
+              <span className="max-w-[520px] truncate text-[10px] leading-tight text-destructive" title={regraFazenda} data-reticencias-com-title="" data-testid="regra-fazenda-frase">
+                {regraFazenda}
+              </span>
+            )}
             {!posSalvar && !erroAntesDeSalvar && motivoDasParcelas && (
               <span className="max-w-[520px] truncate text-[10px] leading-tight text-destructive" title={motivoDasParcelas} data-testid="motivo-das-parcelas">
                 {motivoDasParcelas}
@@ -4043,6 +4107,11 @@ export function LancamentoV2Dialog({
                   : isEdit && parcelaDaCompra ? `${parcelaDaCompra.numero} de ${parcelaDaCompra.total}`
                   : isEdit && soltaDoResumo ? `${soltaDoResumo.k} de ${soltaDoResumo.n}` : null}
                 documento={documentoDoResumo(docDoLancamento, tipoDocumento)}
+                boleto={boletoLigado ? {
+                  selo: seloDoBoleto(boletoLigado),
+                  /* 👁 = o PDF do boleto (o mesmo bucket dos documentos; a URL assinada de 60 s do clipe da lista) */
+                  onVer: boletoLigado.storagePath ? () => { void abrirPdfDoBoleto(boletoLigado.storagePath); } : null,
+                } : null}
               />
             </div>
           )}
@@ -4050,6 +4119,9 @@ export function LancamentoV2Dialog({
         </DialogContent>
       </Dialog>
 
+      {caixaAberta && clienteAtual?.id && (
+        <CaixaDeBoletosDialog clienteId={clienteAtual.id} clienteNome={clienteAtual.nome} aoFechar={() => setCaixaAberta(false)} />
+      )}
       {/* PR 2b — "Anexar vários boletos" (tela B do mock). Antes de salvar, as parcelas são a prévia e os
           boletos viram pendentes; depois, as irmãs gravadas e os boletos vão direto. */}
       {anexarBoletos === 'previa' && (
@@ -4067,6 +4139,7 @@ export function LancamentoV2Dialog({
           subtitulo={`${irmas.length} parcelas`}
           parcelas={irmas.filter(i => !i.cancelada).map(i => ({ numero: i.numero, vencimento: i.vencimento, valor: i.valor, temBoleto: i.temBoleto }))}
           onConfirmar={gravarBoletosNasIrmas}
+          naCaixa={clienteAtual?.id ? { clienteId: clienteAtual.id, lancamentos: new Map(irmas.filter(i => !i.cancelada).map(i => [i.numero, i.lancamentoId])) } : undefined}
           onFechar={() => setAnexarBoletos(null)} />
       )}
 
