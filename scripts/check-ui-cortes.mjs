@@ -211,6 +211,23 @@ const CENARIOS = [
   { nome: 'compras-parceladas-nf', url: 'tela=compras-parceladas', antes: async (p) => { await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="chip-nf"]').first().waitFor(); } },
   { nome: 'compras-parceladas-nf-notas', url: 'tela=compras-parceladas', tamanhos: [[918, 768], [1366, 768]],
     antes: async (p) => { await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="chip-nf"]').first().click(); await p.locator('[data-testid="minimodal-notas"]').waitFor(); } },
+  /* COMPRAS-PARC-LAYOUT-02 — a aba Compras com os filtros novos (Atividade, Nº NF, Compra/Vencimento pelo seletor único, credores com
+     contagem) e as colunas 3:2, de 918 a 1920; o botão da aba ("+ Nova compra parcelada", 176px) abre DIRETO o modal na moldura dos 3
+     (1150 × 720): as 4 abas, o Resumo com "O que falta" e o motivo ao lado do Salvar. Os botões das outras abas abrem o cadastro travado. */
+  { nome: 'compras-parceladas-layout', url: 'tela=compras-parceladas', tamanhos: [[918, 768], [1126, 579], [1280, 720], [1366, 768], [1920, 1080]],
+    antes: async (p) => { await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="chip-nf"]').first().waitFor(); } },
+  ...['Compra', 'Parcelas', 'Classificação', 'Documentos'].map((aba, i) => ({ nome: `compra-parcelada-nova-${['compra', 'parcelas', 'classificacao', 'documentos'][i]}`,
+    url: 'tela=compras-parceladas', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], regiao: '[role="dialog"]',
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="corpo-da-obrigacao"] > div, [data-testid="lista-de-parcelas"], [data-testid="corpo-das-parcelas"], [data-testid="recado-da-compra"]' },
+    antes: async (p) => {
+      await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="novo-da-aba"]').click();
+      await p.locator('[data-testid="modal-da-compra-parcelada"]').waitFor();
+      if (i) { await p.locator(`[data-testid="aba-da-compra-${['contrato', 'parcelas', 'classificacao', 'documentos'][i]}"]`).click(); }
+      await p.waitForTimeout(500);
+    } })),
+  ...[['financiamentos', /^Financiamentos$/, 'cadastro-de-contrato'], ['consorcios', /^Consórcios$/, 'consorcio-dialog']].map(([n, rotulo, modal]) => ({
+    nome: `novo-da-aba-${n}`, url: 'tela=compras-parceladas', tamanhos: [[1126, 579], [1280, 720], [1920, 1080]], regiao: '[role="dialog"]',
+    antes: async (p) => { await clicarRotulo(rotulo)(p); await p.locator('[data-testid="novo-da-aba"]').click(); await p.locator(`[data-testid="${modal}"]`).waitFor(); await p.waitForTimeout(500); } })),
   { nome: 'financiamentos-lista', url: 'tela=financiamentos-lista&enc=1', tamanhos: [[1126, 579], [1240, 700], [1349, 768], [1366, 768], [1440, 900]] },
   /* FIN-GUARDA-CHUVA G2 — o grupo da linha com o ✎ e a faixa (maiores valores); o modal da linha (editar, nova, com a revisão feita) */
   { nome: 'financiamentos-linha-grupo', url: 'tela=financiamentos-lista&linha=1', tamanhos: [[1126, 579], [1240, 700], [1349, 768], [1366, 768], [1440, 900]] },

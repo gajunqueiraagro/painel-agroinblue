@@ -198,7 +198,7 @@ const abrirEdicao = async () => {
      FIN-FINANC-28 PASSO 4: no crédito o cabeçalho é o próprio, e o botão diz "Editar contrato". */
   await screen.findByTestId(banco.contrato?.natureza === 'parcelamento' ? 'dados-do-contrato' : 'topo-do-contrato');
   fireEvent.click(screen.getAllByRole('button', { name: /^Editar( contrato)?$/ })[0]);
-  await screen.findByText('Editar obrigação');
+  await screen.findByText(/^Editar compra parcelada/);
 };
 const campoDescricao = () => screen.getByPlaceholderText('Ex: Custeio safra 2025') as HTMLInputElement;
 const irParaAba = async (nome: string) => {
@@ -257,13 +257,14 @@ describe('foto do diálogo — o que NÃO pode mudar', () => {
     await screen.findByTestId('topo-do-contrato');
     fireEvent.click(screen.getAllByRole('button', { name: /^Editar$/ })[0]);
     expect(await screen.findByTestId('cadastro-de-contrato')).toBeTruthy();
-    expect(screen.queryByText('Editar obrigação')).toBeNull();
+    expect(screen.queryByText(/^Editar compra parcelada/)).toBeNull();
   });
   for (const [natureza, rotulo] of [['parcelamento', 'Parcelamento']] as const) {
     it(`criação de ${natureza}: as três abas idênticas ao commit publicado`, async () => {
       montarCriacao();
-      await screen.findByText('Nova obrigação');
-      await escolherNatureza(rotulo);
+      await screen.findByText(/^Nova compra parcelada/);
+      /* COMPRAS-PARC-LAYOUT-02 — a natureza vem da aba (travada): não há mais o que escolher; a foto foi regravada com a moldura nova */
+      expect(rotulo).toBe('Parcelamento');
       await waitFor(() => expect(qc.isFetching()).toBe(0));
       await conferirFoto(`criacao-${natureza}-contrato`);
       await irParaAba('Parcelas'); await conferirFoto(`criacao-${natureza}-parcelas`);
@@ -277,7 +278,7 @@ const salvar = async () => {
   await waitFor(() => expect(b).toHaveProperty('disabled', false));
   fireEvent.click(b);
   /* o salvar fecha o diálogo (`onSalvo`) */
-  await waitFor(() => expect(screen.queryByText('Editar obrigação')).toBeNull());
+  await waitFor(() => expect(screen.queryByText(/^Editar compra parcelada/)).toBeNull());
 };
 const pronto = async () => {
   await waitFor(() => expect(campoDescricao().value).not.toBe(''));
@@ -316,7 +317,7 @@ describe('prova 2 — abrir um parcelamento não zera a classificação', () => 
   it('a conta do contrato fica no form, a pendência não acende, e o cluster mostra conta e atividade', async () => {
     montarDetalhe();
     await abrirEdicao(); await pronto();
-    await waitFor(() => expect(screen.queryByText(/Pendência:/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/^Falta:/)).toBeNull());
     expect(screen.queryByText(/Escolha a classificação da parcela/)).toBeNull();
     expect(screen.queryByText(/pendência/)).toBeNull();
     await irParaAba('Classificação');
@@ -530,7 +531,7 @@ describe('PARC-CONTRATO-01 item 2 — propagar a edição do contrato às parcel
     expect(screen.getByTestId('propagar-nome-proprio').textContent).toBe('Com nome próprio, ficam como estão: 1 paga.');
     fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
     await waitFor(() => expect(screen.queryByTestId('propagar-contrato')).toBeNull());
-    expect(screen.getByText('Editar obrigação')).toBeTruthy();          // o Editar continua aberto, com o digitado
+    expect(screen.getByText(/^Editar compra parcelada/)).toBeTruthy();          // o Editar continua aberto, com o digitado
     expect(campoDescricao().value).toBe('Nome novo');
     expect(updatesDoContrato().length).toBe(0);
     expect(banco.rpcs).toEqual([]);
@@ -684,7 +685,7 @@ describe('2B — a grade sobre as parcelas gravadas do parcelamento', () => {
     await waitFor(() => expect(botaoSalvar().disabled).toBe(false));
     fireEvent.click(botaoSalvar());
     await waitFor(() => expect(screen.getByTestId('erro-da-grade').textContent).toBe(banco.erroRpc));
-    expect(screen.getByText('Editar obrigação')).toBeTruthy();
+    expect(screen.getByText(/^Editar compra parcelada/)).toBeTruthy();
     expect(updatesDoContrato()).toEqual([]);
   });
 
@@ -918,13 +919,13 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(document.querySelectorAll('td.celula-data').length).toBeGreaterThan(0);
     expect(document.querySelectorAll('.font-mono').length).toBe(0);
     fireEvent.click(screen.getByRole('button', { name: /Documentos/ }));
-    await screen.findByText('Editar obrigação');
+    await screen.findByText(/^Editar compra parcelada/);
     expect((await screen.findByRole('tab', { name: /Documentos/ })).getAttribute('aria-selected')).toBe('true');
     cleanup();
     qc = novoQc(0);
     await abrirDetalhe();
     fireEvent.click(screen.getByRole('button', { name: /Editar parcelas/ }));
-    await screen.findByText('Editar obrigação');
+    await screen.findByText(/^Editar compra parcelada/);
     await waitFor(() => expect(screen.getByRole('tab', { name: /Parcelas/ }).getAttribute('aria-selected')).toBe('true'));
   });
 

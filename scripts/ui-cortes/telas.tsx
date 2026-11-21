@@ -494,7 +494,8 @@ if (tela === 'mesclar') {
   const LONGO = 'COMERCIAL AGRÍCOLA DE PEÇAS E IMPLEMENTOS EXEMPLO SINTÉTICO LTDA';
   const fins = Array.from({ length: 25 }, (_x, i) => ({ id: `cp${i}`, cliente_id: 'cli', natureza: 'parcelamento', status: i % 7 === 6 ? 'quitado' : 'ativo',
     descricao: i % 3 ? `Compra parcelada de implementos e peças para o trator 7515 exemplo ${i}` : `Ração ${i}`, numero_contrato: null,
-    tipo_financiamento: i % 2 ? 'agricultura' : 'pecuaria', credor_id: `cr${i % 4}`, valor_total: 123456789.01 - i * 1000003.3, total_parcelas: 12,
+    /* COMPRAS-PARC-LAYOUT-02 — uma em cada 5 no Administrativo (o sufixo ADM e a última opção do filtro Atividade) */
+    tipo_financiamento: i % 5 === 4 ? 'administrativo' : i % 2 ? 'agricultura' : 'pecuaria', credor_id: `cr${i % 4}`, valor_total: 123456789.01 - i * 1000003.3, total_parcelas: 12,
     data_contrato: `2026-${String(1 + (i % 10)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')}`, created_at: '2026-01-01', baixa_em: null,
     financeiro_fornecedores: { nome: i % 4 ? LONGO : 'Agro Exemplo', cpf_cnpj: '11.222.333/0001-81', nome_fantasia: null, aliases_norm: [], ativo: true } }));
   const nf = (lanc: string, n: number) => ({ lancamento_id: lanc, documento_id: `d${n}`, especie: 'nf', numero: n < 1000 ? `000.000.${n}` : n.toLocaleString('pt-BR'),

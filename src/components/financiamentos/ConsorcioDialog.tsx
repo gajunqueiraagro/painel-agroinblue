@@ -143,7 +143,8 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
 
   return (
     <Dialog open={aberto} onOpenChange={(v) => { if (!v) aoFechar(); }}>
-      <DialogContent className="flex h-[min(560px,calc(100dvh-32px))] w-[min(1120px,calc(100vw-32px))] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="consorcio-dialog">
+      {/* COMPRAS-PARC-LAYOUT-02 (D1) — o MESMO tamanho fixo dos 3 modais (Financiamento, Compra parcelada, Consórcio): 1150 × min(720, janela − 16) */}
+      <DialogContent className="flex h-[min(720px,calc(100vh-16px))] w-[min(1150px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="consorcio-dialog">
         <div className="flex h-[36px] shrink-0 items-baseline gap-2 bg-primary pl-3 pr-9 pt-[10px] text-primary-foreground">
           <DialogTitle className="shrink-0 text-[12px] font-semibold" data-testid="titulo-do-consorcio">{titulo}</DialogTitle>
           <DialogDescription className="uma-linha-que-rola min-w-0 text-[10px] text-primary-foreground/80" title={curta} data-testid="linha-curta">{curta}</DialogDescription>

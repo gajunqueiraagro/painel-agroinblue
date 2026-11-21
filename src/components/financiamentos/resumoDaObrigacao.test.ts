@@ -18,24 +18,20 @@ describe('resumo da obrigação — escala A18', () => {
     expect(acimaDe11('<span className="text-sm">')).toBe(true);
     expect(acimaDe11('<span className="text-[11px] text-[8.5px]">')).toBe(false);
   });
-  it('aside de 240px, sem rolagem; título "Resumo" 11px/600 sem caixa alta', () => {
-    expect(FONTE).toContain('lg:grid-cols-[1fr_240px]');
-    expect(aside).toContain('lg:overflow-hidden');
+  it('aside de 240px, sem rolagem; título "Resumo da compra" 11px/600 sem caixa alta (COMPRAS-PARC-LAYOUT-02: a moldura do Financiamento)', () => {
+    expect(FONTE).toContain("grid-cols-[minmax(0,1fr)_240px]");
+    expect(aside).toContain('overflow-hidden');
     expect(aside).not.toContain('overflow-y-auto');
-    expect(aside).toMatch(/text-\[11px\] font-semibold text-primary">\s*Resumo\s*</);
-    expect(aside).not.toContain('Resumo da obrigação');
+    expect(aside).toMatch(/text-\[11px\] font-semibold">Resumo da compra</);
+    expect(aside).toContain('data-testid="o-que-falta"');
   });
-  it('nenhum texto acima de 11px; total 11px/700; selo 8,5px; linhas de 16px', () => {
+  it('nenhum texto acima de 11px; total 11px/700; linhas de 16px; o "O que falta" leva à aba', () => {
     expect(acimaDe11(aside)).toBe(false);
     expect(aside).toContain('text-[11px] font-bold');
-    expect(aside).toContain('text-[8.5px]');
+    expect(aside).toContain('onClick={() => setAba(p.aba)}');
     const linha = FONTE.slice(FONTE.indexOf('function Linha('), FONTE.indexOf('interface Props'));
     expect(linha).toContain('h-4');
     expect(linha).toContain('truncate');
-    const ini = FONTE.indexOf('function BlocoHead(');
-    const secao = FONTE.slice(ini, FONTE.indexOf('\n}\n', ini)).replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(secao).toContain('text-[9px]');
-    expect(secao).toContain('uppercase');
-    expect(secao).not.toMatch(/\bbg-/);
   });
+});
 });
