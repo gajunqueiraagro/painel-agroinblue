@@ -841,6 +841,13 @@ const CENARIOS = [
   }, estados: [1, 2, 3].map((i) => [`aba ${i}`, async (p) => { const t = p.locator('[role="dialog"] [role="tab"]').nth(i); if (await t.count()) { await t.click(); await espera(p, 500); } }]) },
   /* FIN-GUARDA-CHUVA G2 — o modal da linha: Revisar (a prévia entra na área FIXA de 96px, o botão vira Salvar) e ordenar os contratos não
      movem os blocos, o cabeçalho nem o rodapé; Cancelar linha troca a Revisão pelo motivo no mesmo lugar */
+  /* COMPRAS-PARC-LAYOUT-02 — o modal da compra parcelada na moldura dos 3 (1150 × 720): trocar de aba não move o título, a barra de abas,
+     o Resumo nem a linha do Salvar (a contagem da aba tem lugar reservado) */
+  { nome: 'compra-parcelada-abas', url: 'tela=compras-parceladas', tamanhos: [[1126, 579], [1280, 720], [1920, 1080]],
+    antes: async (p) => { await p.getByRole('tab', { name: /^Compras parceladas$/ }).first().click().catch(() => p.getByText(/^Compras parceladas$/).first().click());
+      await p.locator('[data-testid="novo-da-aba"]').click(); await p.locator('[data-testid="modal-da-compra-parcelada"]').waitFor(); await espera(p, 600); }, estados: [
+    ...['parcelas', 'classificacao', 'documentos', 'contrato'].map((k) => [`aba ${k}`, async (p) => { await p.locator(`[data-testid="aba-da-compra-${k}"]`).click(); await espera(p, 500); }]),
+  ] },
   { nome: 'financiamentos-linha-modal', url: 'tela=linha-credito', tamanhos: [[1126, 579], [1366, 768]],
     antes: async (p) => { await p.locator('[data-testid="tabela-contratos-da-linha"]').waitFor(); await espera(p, 600); }, estados: [
     ['Revisar', async (p) => { await p.locator('[data-testid="revisar-linha"]').click(); await espera(p, 600); }],
