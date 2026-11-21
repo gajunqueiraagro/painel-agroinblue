@@ -44,7 +44,11 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
       /* BOLETO D3d (118180): `fn_entrada_ignorar` (a tela) e `fn_entrada_dispensar` (a tela antiga) so' repassam para a interna
          `_fn_entrada_ignorar(ids, …)`, que tem a guarda pelo cliente DAS LINHAS (todas do mesmo cliente + tenant_ok, 42501) e nasce
          fechada a authenticated — presa por dentro abaixo. A chamada da interna e' a guarda delas. */
-      || /(?<!function\s+public\.)_fn_entrada_ignorar\s*\(/i.test(p);
+      || /(?<!function\s+public\.)_fn_entrada_ignorar\s*\(/i.test(p)
+      /* FIN-REGRA-MODAL-02 (114280): `_fn_fazenda_citada(cliente, texto, plano)` e' INTERNA da `fn_lancamentos_regra_fazenda_pendentes` (que
+         tem tenant_ok + 42501): so' devolve um id de fazenda e nasce fechada a public/anon/authenticated — presa abaixo */
+      || (nome === 'public._fn_fazenda_citada' && /returns\s+uuid/i.test(p)
+        && /revoke all on function public\._fn_fazenda_citada\(uuid, text, uuid\) from public, anon, authenticated;/i.test(p));
     /* IMPORTAR-ABATE-01: corpo `AS %L` = o texto do PROPRIO BANCO (pg_get_functiondef/prosrc patchado por md5), que o arquivo nao
        mostra — a guarda dele e' a da definicao anterior (ver `ultimasSemGuarda`) */
     return [{ nome, guardada, ...(/\bAS\s+%L/i.test(p) ? { doBanco: true } : {}) }];
@@ -131,6 +135,17 @@ describe('guarda de cliente nas migrations novas', () => {
     /* as duas internas com o cliente passam a INVOKER na 116070 (a ultima definicao vale) */
     const fix = readFileSync(join(DIR, '20261028116070_patr_01_internas_invoker.sql'), 'utf8');
     expect(definicoesExpostas(fix)).toEqual([]);
+  });
+
+  it('a interna da sugestao da regra fazenda (114280) so\' passa FECHADA, e quem a chama tem tenant_ok + 42501 (FIN-REGRA-MODAL-02)', () => {
+    const sql = readFileSync(join(DIR, '20261028114280_fin_regra_modal_02_sugestao.sql'), 'utf8');
+    expect(semGuarda(sql)).toEqual([]);
+    const aberta = sql.replace(/revoke all on function public\._fn_fazenda_citada\(uuid, text, uuid\) from public, anon, authenticated;/, '');
+    expect(semGuarda(aberta)).toEqual(['public._fn_fazenda_citada']);
+    const outraComOMesmoCorpo = sql.replace(/public\._fn_fazenda_citada\(p_cliente/, 'public._fn_outra(p_cliente');
+    expect(semGuarda(outraComOMesmoCorpo)).toContain('public._fn_outra');
+    const chamador = sql.slice(sql.indexOf('create or replace function public.fn_lancamentos_regra_fazenda_pendentes'));
+    expect(chamador).toMatch(/if not tenant_ok\(p_cliente\) then raise exception .* errcode = '42501'/);
   });
 
   it('a casca dos subcentros do cliente e\' aceita, e ela mesma so\' deixa o admin passar (P171: membro do cliente = 42501)', () => {
