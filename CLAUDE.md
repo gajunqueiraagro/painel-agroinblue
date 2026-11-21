@@ -319,6 +319,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   barra (só a de OC); as duas portas (+ Da nota e o Documentos do Editar, `notaParaAPrevia`) abrem a MESMA prévia.
 - FIN-REGRA-VARIAVEL-FAZENDA-01: a regra fazenda × conta tem UM dono, o banco (`_fn_regra_fazenda_da_conta`; gatilho só no novo ou quando fazenda/conta mudam); a tela
   só PERGUNTA (`fn_regra_fazenda_da_conta` → frase ao lado do Salvar, campo vermelho) e corrige o legado pelo selo + modal (`fn_lancamentos_trocar_fazenda`: prévia, motivo, desfazer; irmãs do contrato juntas).
+- COMPRAS-PARC-LAYOUT-02: os 3 modais de obrigação (Cadastro/Financiamento, ObrigacaoDialog = só compra parcelada, Consorcio) têm a MESMA moldura
+  `h-[min(720px,calc(100vh-16px))] w-[min(1150px,calc(100vw-16px))]`; o botão do topo da lista segue a aba (`ROTULO_DO_NOVO`, tipo travado por `tipoDaAba`);
+  as regras dos filtros da aba Compras moram em `lib/financiamentos/filtrosDasCompras.ts` (Atividade das atividades LIGADAS + Administrativo por último).
 - P155: trava que ESCREVE um campo (o `FazendaSelect` forçando Administrativo) só age com a classificação do lançamento ABERTO
   (`classificacaoDe`): o render de transição da abertura tem o estado do reset ("última atividade") e gravava a fazenda errada no Salvar.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
