@@ -246,7 +246,7 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, con
               <Colunas colunas={colunas} />
               <thead><tr>{colunas.map((c, i) => (
                 <th key={c.chave} className={cn(TH_REGUA, c.num ? 'text-right' : 'text-left')}>
-                  {i === 0 ? <Checkbox checked={tudo} aria-label="Marcar todas" className="h-3 w-3 border-primary-foreground"
+                  {i === 0 ? <Checkbox checked={tudo} aria-label="Marcar todas" className="block h-3 w-3 border-primary-foreground"
                     onCheckedChange={(v) => setMarcado(v === true ? new Set(todosMarcaveis.map((p) => p.id)) : new Set())} /> : c.rotulo}
                 </th>))}</tr></thead>
             </table>

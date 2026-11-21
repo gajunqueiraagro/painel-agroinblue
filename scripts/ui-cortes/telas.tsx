@@ -188,6 +188,17 @@ const PENDENTES_DA_REGRA = (): any[] => {
       valor: 270, status: k < 6 ? 'realizado' : 'programado', fornecedor: 'Seguradora Sintetica', subcentro: 'Seguros Pecuária', grupo_custo: 'Custo Fixo Pecuária',
       regra: FIXO('Seguros Pecuária'), sugestao: { fazenda_id: 'f-pur', vezes: 9, de: 12, origem: 'histórico do fornecedor' },
       conta_adm: { plano_conta_id: 'pl-seg-adm', subcentro: 'Seguros Administrativo' } })),
+    /* FIN-REGRA-MODAL-02 — as origens novas da sugestão (descrição, fornecedor, ITR) e a conta ADM pela única do centro (o ITR) */
+    b({ id: 'itr', competencia: '2026-09-30', descricao: 'ITR 2026 sintetico - Ret. 7/80 - Fazenda Sintetica Lagoa', valor: 4321.09, status: 'realizado',
+      fornecedor: 'Pec.SR-Receita Federal Sintetica', subcentro: 'Taxas e Impostos Fixos Pecuária', grupo_custo: 'Custo Fixo Pecuária',
+      regra: FIXO('Taxas e Impostos Fixos Pecuária'), sugestao: { fazenda_id: 'f-lg', vezes: 0, de: 0, origem: 'descricao' },
+      conta_adm: { plano_conta_id: 'pl-tax-adm', subcentro: 'Taxas e Impostos Administrativos' } }),
+    b({ id: 'ccir', competencia: '2026-10-05', descricao: 'C.C.I.R. sintetico', valor: 123.45, status: 'programado', fornecedor: 'Pec.SR-INCRA Sintetico',
+      subcentro: 'Taxas e Impostos Fixos Pecuária', grupo_custo: 'Custo Fixo Pecuária', regra: FIXO('Taxas e Impostos Fixos Pecuária'),
+      sugestao: { fazenda_id: 'f-sr', vezes: 0, de: 0, origem: 'fornecedor' }, conta_adm: { plano_conta_id: 'pl-tax-adm', subcentro: 'Taxas e Impostos Administrativos' } }),
+    b({ id: 'itr-maior', competencia: '2026-09-30', descricao: 'I.T.R. sintetico da propriedade', valor: 987.65, status: 'programado', fornecedor: 'Receita Federal Sintetica',
+      subcentro: 'Taxas e Impostos Fixos Pecuária', grupo_custo: 'Custo Fixo Pecuária', regra: FIXO('Taxas e Impostos Fixos Pecuária'),
+      sugestao: { fazenda_id: 'f-sr', vezes: 0, de: 0, origem: 'itr_maior' }, conta_adm: { plano_conta_id: 'pl-tax-adm', subcentro: 'Taxas e Impostos Administrativos' } }),
     b({ id: 'pecas', competencia: '2026-06-16', descricao: 'Peças pá carregadeira sintetica', valor: 1058.06, status: 'realizado', fornecedor: 'Pecas Sinteticas Ltda',
       subcentro: 'Manutenção Máquinas Agricultura', grupo_custo: 'Custo Variável Agricultura', sugestao: { fazenda_id: 'f-pur', vezes: 26, de: 35, origem: 'histórico do fornecedor' },
       regra: 'Custo variável (Manutenção Máquinas Agricultura) não vai para o Administrativo: escolha a fazenda produtiva.' }),
@@ -2030,7 +2041,7 @@ if (tela === 'mesclar') {
   };
   void montarNovoDaNota();
 } else if (tela === 'regra-fazenda') {
-  /* FIN-REGRA-VARIAVEL-FAZENDA-01 — o modal de correção: 14 lançamentos SINTÉTICOS fora da regra (4 parcelas da vacina com sugestão; o adubo
+  /* FIN-REGRA-VARIAVEL-FAZENDA-01 — o modal de correção: 17 lançamentos SINTÉTICOS fora da regra (4 parcelas da vacina com sugestão; o adubo
      conciliado SEM sugestão; o E-Social e o Seguro Vida 1/12…7/12 do custo FIXO com a conta administrativa; um em mês fechado), nomes longos
      (o pior caso de texto). `v=recusa`: a prévia do banco recusa (mês fechado). */
   const montarRegra = async () => {
@@ -2039,7 +2050,11 @@ if (tela === 'mesclar') {
     g.__bancoBancada = { rpc: (fn: string, a: any) => fn !== 'fn_lancamentos_trocar_fazenda' ? null : v === 'recusa'
       ? { ok: false, simulado: true, linhas: [], recusas: ['Vacina Sintetica Polivalente de Nome Comprido 2/5 (24/06/2026): 06/2026 fechado: reabra o mês para trocar'] }
       : { ok: true, simulado: true, linhas: (a.p_ids ?? []).map((id: string) => ({ id })), recusas: [] } };
-    raiz.render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS_DA_REGRA} pendentes={lerPendentes(PENDENTES_DA_REGRA())} onClose={() => {}} />);
+    /* FIN-REGRA-MODAL-02 (b) — as contas administrativas de custo fixo do plano (nomes longos: o pior caso) e o clique da linha */
+    const contasAdm = [{ id: 'pl-enc-adm', subcentro: 'Encargos Sociais Administrativo' }, { id: 'pl-seg-adm', subcentro: 'Seguros Administrativo' },
+      { id: 'pl-tax-adm', subcentro: 'Taxas e Impostos Administrativos' }, { id: 'pl-long-adm', subcentro: 'Contabilidade Juridico e Consultoria Sintetica Administrativo de Nome Longo' }];
+    raiz.render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS_DA_REGRA} pendentes={lerPendentes(PENDENTES_DA_REGRA())} contasAdm={contasAdm}
+      onAbrirLancamento={() => {}} onClose={() => {}} />);
   };
   void montarRegra();
 } else if (tela === 'trocar-fornecedor') {

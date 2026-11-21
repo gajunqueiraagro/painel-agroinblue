@@ -1029,6 +1029,15 @@ const CENARIOS = [
     estados: [['mês curto', async (p) => { await p.goto(p.url().replace('tela=conciliacao', 'tela=conciliacao&v=poucos'));
       await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p); await botao(/^Casar lançamentos$/)(p);
       await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await espera(p); }]] },
+  /* FIN-REGRA-MODAL-02 — o modal "Fazenda fora da regra da conta": clicar a linha (destaque âmbar), marcar, marcar outra e reescrever o
+     motivo não mexem nas colunas, no resumo, na prévia nem no rodapé */
+  { nome: 'regra-fazenda', url: 'tela=regra-fazenda', antes: async (p) => { await p.locator('[data-testid="correcao-linha"]').first().waitFor(); await espera(p); },
+    estados: [
+      ['linha clicada (destaque)', clicar('[data-testid="correcao-linha"][data-id="seg-1"] [data-testid="correcao-regra"]')],
+      ['marcar uma', clicar('[data-testid="correcao-linha"][data-id="itr"] [data-testid="correcao-marcar"]')],
+      ['marcar outra', clicar('[data-testid="correcao-linha"][data-id="vac-3"] [data-testid="correcao-marcar"]')],
+      ['motivo reescrito', digitar('[data-testid="correcao-motivo"]', 'Motivo sintetico reescrito pelo operador com texto bem comprido para ver se empurra')],
+    ] },
   { nome: 'casar-bloco', url: 'tela=casar-bloco', antes: async (p) => { await p.locator('[data-testid="conciliar-bloco"]').waitFor(); await espera(p); },
     estados: [
       ['regra mais antigo primeiro', botao(/Mais antigo primeiro/)],
