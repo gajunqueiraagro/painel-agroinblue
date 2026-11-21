@@ -148,8 +148,9 @@ describe('as unidades da pecuária', () => {
     total: linhas({
       vendas: 1000000, custo_variavel: 400000, reposicao: 50000,
       patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 500 },
-      producao: { ha_medio: 1000, at_produzida: 1000, at_desfrutada: 2000, cab_desfrutada: null,
-        at_comprada: 100, cab_comprada: null },
+      /* DRE-PAINEL-01 D-A6: a receita divide pela @ VENDIDA (`at_vendida`, sem o consumo), nunca pela desfrutada — 2.500 ≠ 2.000 */
+      producao: { ha_medio: 1000, at_produzida: 1000, at_desfrutada: 2500, cab_desfrutada: null,
+        at_comprada: 100, cab_comprada: null, at_vendida: 2000, cab_vendida: null },
     }),
   };
   const montarCom = (unidades: readonly ('rs' | 'ha' | 'cab' | 'arroba')[], dre = BASES) => render(
@@ -166,7 +167,7 @@ describe('as unidades da pecuária', () => {
 
   it('R$/@ usa a @ VENDIDA na receita, a COMPRADA na reposição e a PRODUZIDA no custo', () => {
     montarCom(['rs', 'arroba']);
-    /* Receita: 1.000.000 / 2.000 @ vendidas = 500,00 (pela produzida daria 1.000,00). */
+    /* Receita: 1.000.000 / 2.000 @ vendidas = 500,00 (pela produzida daria 1.000,00; pela desfrutada, 400,00). */
     expect(linhaDe('Vendas')?.semPct[2]?.textContent).toBe('500,00');
     /* Reposição: 50.000 / 100 @ compradas = 500,00. */
     expect(linhaDe('(−) Reposição')?.semPct[2]?.textContent).toBe('500,00');
@@ -654,20 +655,23 @@ describe('as duas visões', () => {
    */
   const ativo = () => Array.from(document.querySelectorAll('[data-testid="dre-comparar"] button'))
     .filter(b => b.className.includes('bg-primary')).map(b => b.textContent);
-  it('o Comparar: as seis referências, a escolhida marcada; escolher chama só a referência; por fazenda, nenhuma marcada', () => {
+  /* DRE-PAINEL-01 (mock aprovado): "Comparar com" = ano anterior · Meta · Média 12 meses; os 2–5 anos foram para o "Mais ▾". */
+  it('o Comparar: ano anterior · Meta · Média 12 meses, a escolhida marcada; escolher chama só a referência; por fazenda, nenhuma marcada', () => {
     const escolherRef = vi.fn();
     const { unmount } = render(<ComparacaoPec visao="comparacao" referencia={1} onReferencia={escolherRef} meta={null}
-      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null} />);
+      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null}
+      rotuloAnoAnterior="out/25" motivoSemMedia12={null} />);
     const refs = Array.from(document.querySelectorAll('[data-testid="dre-comparar"] button')).map(b => b.textContent);
-    expect(refs).toEqual(['Meta', '1 ano', '2', '3', '4', '5']);
-    expect(ativo()).toEqual(['1 ano']);
-    fireEvent.click(screen.getByRole('button', { name: '3' }));
-    expect(escolherRef).toHaveBeenCalledWith(3);
+    expect(refs).toEqual(['out/25', 'Meta', 'Média 12 meses']);
+    expect(ativo()).toEqual(['out/25']);
+    fireEvent.click(screen.getByRole('button', { name: 'Média 12 meses' }));
+    expect(escolherRef).toHaveBeenCalledWith('media12');
     /* ⚠ SEM O RESULTADO DO PERÍODO NO CONTROLE: ele está na grade. */
     expect(document.body.textContent).not.toContain('2.994.408,81');
     unmount();
     render(<ComparacaoPec visao="fazenda" referencia={1} onReferencia={() => {}} meta={null}
-      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null} />);
+      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null}
+      rotuloAnoAnterior="out/25" motivoSemMedia12={null} />);
     expect(ativo()).toEqual([]);
     const comparar = screen.getByTestId('dre-comparar');
     expect(comparar.className).toContain('opacity-50');
@@ -702,7 +706,8 @@ describe('as duas visões', () => {
      pergunta sumir junto com a resposta, e a coluna em traço é o sentinela certo para "não sei". */
   it('sem meta no período, a opção Meta fica e o title diz por quê', () => {
     render(<ComparacaoPec visao="comparacao" referencia="meta" onReferencia={() => {}} meta={null}
-      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null} />);
+      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={null}
+      rotuloAnoAnterior="out/25" motivoSemMedia12={null} />);
     const meta = Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Meta');
     expect(meta).toBeTruthy();
     expect(meta?.getAttribute('title')).toBe('sem meta no período');
@@ -713,15 +718,16 @@ describe('as duas visões', () => {
     const escolherRef = vi.fn();
     const MOTIVO = 'meta: só para quem tem o Planejamento';
     render(<ComparacaoPec visao="comparacao" referencia={1} onReferencia={escolherRef} meta={null}
-      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={MOTIVO} />);
+      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} motivoSemMeta={MOTIVO}
+      rotuloAnoAnterior="out/25" motivoSemMedia12={null} />);
     const botao = (t: string) => Array.from(document.querySelectorAll('button')).find(b => b.textContent === t);
     expect(botao('Meta')?.hasAttribute('disabled')).toBe(true);
     expect(botao('Meta')?.getAttribute('title')).toBe(MOTIVO);
     fireEvent.click(botao('Meta')!);
     expect(escolherRef).not.toHaveBeenCalled();
     /* a busca sabe achar: as outras referencias seguem escolhendo */
-    fireEvent.click(botao('2')!);
-    expect(escolherRef).toHaveBeenCalledWith(2);
+    fireEvent.click(botao('out/25')!);
+    expect(escolherRef).toHaveBeenCalledWith(1);
   });
   /**
    * ⚠ × ANOS COM CINCO: SEIS COLUNAS, TODAS RESOLVIDAS — o defeito da homologação de 22/09 (anos 2..N

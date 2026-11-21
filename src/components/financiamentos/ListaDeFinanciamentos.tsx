@@ -44,7 +44,8 @@ export const TABELA_LANC = 'table-financeiro';
 export const TH_LANC = 'px-1 py-[3px] align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground';
 export const TD_DATA_LANC = 'celula-data tabular-nums whitespace-nowrap';
 export const TD_VALOR_LANC = 'celula-valor font-semibold tabular-nums whitespace-nowrap text-right';
-export const LINHA_LANC = 'h-[25px]';
+/* COMPRAS-PARC-LAYOUT-02 (2, D2) — a linha da RÉGUA DA CASA (19px), nas abas Compras parceladas e Financiamentos */
+export const LINHA_LANC = 'h-[19px]';
 
 /* a célula da lista na régua única */
 const TD_LISTA = `${REGUA_FIN.linha} px-[3px] py-0 align-middle ${REGUA_FIN.td} whitespace-nowrap`;

@@ -85,7 +85,7 @@ import { NovoMenuLancamentos } from '@/components/financeiro-v2/NovoMenuLancamen
 import { NotasDaReceitaDialog } from '@/components/fiscal/NotasDaReceitaDialog';
 import { registrarBemDeTerceiro, useNotasDaReceita } from '@/hooks/useNotasDaReceita';
 import { Camada, useCamadas } from '@/components/ui/camadas';
-import { pedemAcao } from '@/lib/fiscal/notasDaReceita';
+import { pedemAcao, type AbaDaReceita } from '@/lib/fiscal/notasDaReceita';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { contarBoletosQuePedemAcao } from '@/lib/financeiro/boleto/caixaApi';
 import { NotaFiscalDialog, type NotaParaLancar } from '@/components/financeiro-v2/NotaFiscalDialog';
@@ -280,6 +280,10 @@ interface Props {
   /** PR-OC-FIN-EDIT-FIX-02 — abre a OC vinculada na aba Financeiro (navegação SPA), preservando os
    *  filtros atuais do Financeiro V2 (salvos em sessionStorage para restauração no retorno). */
   onAbrirOperacaoOCFinanceiro?: (operacaoId: string, tipo?: string | null) => void;
+  /** DRE-PAINEL-01 — um pedido de outra tela para abrir as Notas da Receita já numa aba (o "Ver notas" da leitura do DRE → "A lançar").
+   *  Atendido uma vez ao montar; quem pediu limpa o pedido em `onNotasDaReceitaPedidoAtendido`. */
+  notasDaReceitaNaAba?: AbaDaReceita | null;
+  onNotasDaReceitaPedidoAtendido?: () => void;
 }
 
 
@@ -291,7 +295,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog, ocEditFavorecido, onAbrirOperacaoOCFinanceiro }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog, ocEditFavorecido, onAbrirOperacaoOCFinanceiro, notasDaReceitaNaAba, onNotasDaReceitaPedidoAtendido }: Props) {
   const { fazendas, fazendaAtual, loading: fazendasCarregando } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const hook = useFinanceiroV2(pageSize);
@@ -700,6 +704,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /* NAV-VOLTA-ORIGEM-01 (Gabriel 19/11, peça única) — as camadas desta tela: as Notas da Receita ficam POR BAIXO (montadas, invisíveis) do
      "Da nota fiscal"/da nota abertos a partir delas; fechar/salvar volta à mesma aba, filtros, rolagem e linha (a próxima, se lançou) */
   const camadas = useCamadas<'receita' | 'xml' | 'nota'>();
+  /* DRE-PAINEL-01 — o pedido de outra tela (o "Ver notas" do DRE): abre a lista na aba pedida, uma vez. */
+  const [abaReceitaInicial, setAbaReceitaInicial] = useState<AbaDaReceita | undefined>(undefined);
+  useEffect(() => {
+    if (!notasDaReceitaNaAba) return;
+    setAbaReceitaInicial(notasDaReceitaNaAba);
+    setReceitaAberta(true);
+    camadas.abrir('receita');
+    onNotasDaReceitaPedidoAtendido?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o pedido se atende ao chegar; `camadas` e o aviso não o repetem
+  }, [notasDaReceitaNaAba]);
   const [xmlDaReceita, setXmlDaReceita] = useState<File[] | null>(null);
   /* NOTA-RECEITA-CASAR-01 — a prévia aberta pelo "Vincular a este": ao fechar, a lista da Receita relê (a nota vira "Já no sistema") */
   const vinculoDaReceita = useRef(false);
@@ -3391,9 +3405,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       />
       {receitaAberta && (
         <Camada coberta={camadas.coberta('receita')}>
-        <NotasDaReceitaDialog retorno={camadas.retornoPara('receita')} clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
+        <NotasDaReceitaDialog retorno={camadas.retornoPara('receita')} abaInicial={abaReceitaInicial} clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
           erro={receita.error ? (receita.error as Error).message : null}
-          aoFechar={() => { setReceitaAberta(false); camadas.fechar('receita'); }}
+          aoFechar={() => { setReceitaAberta(false); setAbaReceitaInicial(undefined); camadas.fechar('receita'); }}
           /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" (lote 25; simular = a prévia) */
           registrarBem={clienteAtual?.id ? (chave, previsao, observacao, simular) => registrarBemDeTerceiro(clienteAtual.id, chave, previsao, observacao, simular) : undefined}
           /* NAV-VOLTA-ORIGEM-01: a lista NÃO fecha — o "Da nota fiscal" abre POR CIMA dela */

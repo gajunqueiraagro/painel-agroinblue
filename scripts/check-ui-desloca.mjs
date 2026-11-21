@@ -214,7 +214,7 @@ const CENARIOS = [
      o cabeçalho, as abas, os cards nem o segmentado (as duas abas ficam montadas; o gráfico tem altura fixa). O desenho do gráfico muda: não conta. */
   { nome: 'dre-pec-variacao', url: 'tela=dre&barra=32&f_de=2026-01&f_ate=2026-09', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
     naoMede: '.recharts-wrapper',
-    antes: async (p) => { await p.getByRole('button', { name: /^Detalhado$/ }).first().click(); await espera(p, 300);
+    antes: async (p) => { await p.getByRole('button', { name: /^Tudo aberto$/ }).first().click(); await espera(p, 300);
       await p.locator('tr', { hasText: 'Variação por produção' }).first().locator('td').nth(1).click();
       await p.locator('[data-testid="variacao-resumo"]').waitFor({ timeout: 5000 }); await espera(p, 2000); },
     estados: [
@@ -269,8 +269,12 @@ const CENARIOS = [
   /* DRE-LEVE-01 — as duas faixas de filtro do DRE não andam ao trocar o modo, a comparação, o Δ, o "por fazenda", o rateio, as unidades e
      a atividade (os lugares são reservados); a grade é o conteúdo que muda (`data-desloca-livre` no cartão). */
   { nome: 'dre', url: 'tela=dre&barra=32&f_de=2026-01&f_ate=2026-09&safra=s1', tamanhos: [[1126, 579], [1366, 768]], estados: [
-    ['detalhado', botao(/^Detalhado$/)], ['abrir tudo', botao(/^abrir tudo$/)], ['3 anos', botao(/^3$/)], ['meta', botao(/^Meta$/)],
-    ['1 ano', botao(/^1 ano$/)], ['Δ R$', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: 'Δ R$' }).click(); await p.keyboard.press('Escape'); await espera(p); }],
+    /* DRE-PAINEL-01: "Detalhado" virou "O que mudou" (padrão) · "Tudo aberto"; os anos 2–5 no "Mais ▾" */
+    ['tudo aberto', botao(/^Tudo aberto$/)], ['fechar tudo', botao(/^fechar tudo$/)], ['o que mudou', botao(/^O que mudou$/)],
+    ['3 anos', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('button', { name: '3', exact: true }).first().click(); await p.keyboard.press('Escape'); await espera(p); }],
+    /* a "Média 12 meses" fica desabilitada aqui (período de 9 meses, com o motivo no title): o cenário dela é o `dre-pec-media12` do cortes */
+    ['meta', botao(/^Meta$/)],
+    ['1 ano', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('button', { name: '1', exact: true }).first().click(); await p.keyboard.press('Escape'); await espera(p); }], ['Δ R$', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: 'Δ R$' }).click(); await p.keyboard.press('Escape'); await espera(p); }],
     ['por fazenda', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: /^Ver por fazenda/ }).click(); await p.keyboard.press('Escape'); await espera(p); }],
     ['R$/ha fora', botao(/^R\$\/ha$/)], ['resumido', botao(/^Resumido$/)], ['lavoura', botao(/^Lavoura$/)], ['pecuária', botao(/^Pecuária$/)]] },
   /* PROD-EVOLUCAO-01b — as setas do mês, o cenário e as abas do painel não deslocam a barra, os cards nem a tabela */
@@ -837,6 +841,13 @@ const CENARIOS = [
   }, estados: [1, 2, 3].map((i) => [`aba ${i}`, async (p) => { const t = p.locator('[role="dialog"] [role="tab"]').nth(i); if (await t.count()) { await t.click(); await espera(p, 500); } }]) },
   /* FIN-GUARDA-CHUVA G2 — o modal da linha: Revisar (a prévia entra na área FIXA de 96px, o botão vira Salvar) e ordenar os contratos não
      movem os blocos, o cabeçalho nem o rodapé; Cancelar linha troca a Revisão pelo motivo no mesmo lugar */
+  /* COMPRAS-PARC-LAYOUT-02 — o modal da compra parcelada na moldura dos 3 (1150 × 720): trocar de aba não move o título, a barra de abas,
+     o Resumo nem a linha do Salvar (a contagem da aba tem lugar reservado) */
+  { nome: 'compra-parcelada-abas', url: 'tela=compras-parceladas', tamanhos: [[1126, 579], [1280, 720], [1920, 1080]],
+    antes: async (p) => { await p.getByRole('tab', { name: /^Compras parceladas$/ }).first().click().catch(() => p.getByText(/^Compras parceladas$/).first().click());
+      await p.locator('[data-testid="novo-da-aba"]').click(); await p.locator('[data-testid="modal-da-compra-parcelada"]').waitFor(); await espera(p, 600); }, estados: [
+    ...['parcelas', 'classificacao', 'documentos', 'contrato'].map((k) => [`aba ${k}`, async (p) => { await p.locator(`[data-testid="aba-da-compra-${k}"]`).click(); await espera(p, 500); }]),
+  ] },
   { nome: 'financiamentos-linha-modal', url: 'tela=linha-credito', tamanhos: [[1126, 579], [1366, 768]],
     antes: async (p) => { await p.locator('[data-testid="tabela-contratos-da-linha"]').waitFor(); await espera(p, 600); }, estados: [
     ['Revisar', async (p) => { await p.locator('[data-testid="revisar-linha"]').click(); await espera(p, 600); }],

@@ -22,7 +22,9 @@ const GRAVAR = process.env.DRE_LEVE_GRAVAR === '1';
 
 /* ─────────────── o fixture da pecuária: a Vera do mock (jan–set) ─────────────── */
 const patrimonio = { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 1800, cab_fim: 2100, cab_media: 1950 };
-const producao = { ha_medio: 1500, at_produzida: 9800, at_desfrutada: 11200, cab_desfrutada: 900, at_comprada: 1300, cab_comprada: 150 };
+/* DRE-PAINEL-01 D-A6: o R$/@ da receita é pela @ vendida; aqui = a desfrutada, para a grade continuar a de antes (este teste prova o layout) */
+const producao = { ha_medio: 1500, at_produzida: 9800, at_desfrutada: 11200, cab_desfrutada: 900, at_comprada: 1300, cab_comprada: 150,
+  at_vendida: 11200, cab_vendida: 900 };
 const CV: readonly (readonly [string, number])[] = [['Comercial', 945], ['Identificação', 3457], ['Nutrição', 154089.6], ['Pastagem', 50210],
   ['Reprodução', 41725], ['Sanidade', 27612.34], ['Transferências', 48037.36]];
 

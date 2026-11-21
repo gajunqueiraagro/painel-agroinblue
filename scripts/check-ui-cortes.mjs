@@ -206,6 +206,31 @@ const CENARIOS = [
   { nome: 'contrato-consorcio', url: 'tela=contrato&v=consorcio', tamanhos: TAMANHOS_DO_CONTRATO },
   /* FIN-FINANC-LAYOUT-03 (Chat 12/11 18:35/22:00) — a lista de Financiamentos na régua única: 10/9 abaixo de 1.350px e 11/10 acima, todas as
      colunas, sem rolagem horizontal de 1.126px para cima (a regra vale dali para cima); com os tamanhos reais do proto e os encerrados abertos */
+  /* COMPRAS-PARC-NF-01 — a aba Compras parceladas com a coluna NF (25 compras, nomes de 60 letras, notas de 9 dígitos, o chip "NF 288 +5") e o
+     minimodal das notas aberto */
+  { nome: 'compras-parceladas-nf', url: 'tela=compras-parceladas', antes: async (p) => { await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="chip-nf"]').first().waitFor(); } },
+  { nome: 'compras-parceladas-nf-notas', url: 'tela=compras-parceladas', tamanhos: [[918, 768], [1366, 768]], regiao: '[role="dialog"]',
+    antes: async (p) => { await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="chip-nf"]').first().click(); await p.locator('[data-testid="minimodal-notas"]').waitFor(); } },
+  /* COMPRAS-PARC-LAYOUT-02 — a aba Compras com os filtros novos (Atividade, Nº NF, Compra/Vencimento pelo seletor único, credores com
+     contagem) e as colunas 3:2, de 918 a 1920; o botão da aba ("+ Nova compra parcelada", 176px) abre DIRETO o modal na moldura dos 3
+     (1150 × 720): as 4 abas, o Resumo com "O que falta" e o motivo ao lado do Salvar. Os botões das outras abas abrem o cadastro travado. */
+  { nome: 'compras-parceladas-layout', url: 'tela=compras-parceladas', tamanhos: [[918, 768], [1126, 579], [1280, 720], [1366, 768], [1920, 1080]],
+    antes: async (p) => { await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="chip-nf"]').first().waitFor(); } },
+  ...['Compra', 'Parcelas', 'Classificação', 'Documentos'].map((aba, i) => ({ nome: `compra-parcelada-nova-${['compra', 'parcelas', 'classificacao', 'documentos'][i]}`,
+    url: 'tela=compras-parceladas', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], regiao: '[role="dialog"]',
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="corpo-da-obrigacao"] > div, [data-testid="lista-de-parcelas"], [data-testid="corpo-das-parcelas"], [data-testid="recado-da-compra"]' },
+    antes: async (p) => {
+      /* a lista só vai até 918px: abre o modal largo e volta ao tamanho medido (o que se mede é o modal, de 750 a 1920) */
+      const medido = p.viewportSize(); if (medido && medido.width < 918) await p.setViewportSize({ width: 1280, height: 720 });
+      await clicarRotulo(/^Compras parceladas$/)(p); await p.locator('[data-testid="novo-da-aba"]').click();
+      await p.locator('[data-testid="modal-da-compra-parcelada"]').waitFor();
+      if (medido && medido.width < 918) await p.setViewportSize(medido);
+      if (i) { await p.locator(`[data-testid="aba-da-compra-${['contrato', 'parcelas', 'classificacao', 'documentos'][i]}"]`).click(); }
+      await p.waitForTimeout(500);
+    } })),
+  ...[['financiamentos', /^Financiamentos$/, 'cadastro-de-contrato'], ['consorcios', /^Consórcios$/, 'consorcio-dialog']].map(([n, rotulo, modal]) => ({
+    nome: `novo-da-aba-${n}`, url: 'tela=compras-parceladas', tamanhos: [[1126, 579], [1280, 720], [1920, 1080]], regiao: '[role="dialog"]',
+    antes: async (p) => { await clicarRotulo(rotulo)(p); await p.locator('[data-testid="novo-da-aba"]').click(); await p.locator(`[data-testid="${modal}"]`).waitFor(); await p.waitForTimeout(500); } })),
   { nome: 'financiamentos-lista', url: 'tela=financiamentos-lista&enc=1', tamanhos: [[1126, 579], [1240, 700], [1349, 768], [1366, 768], [1440, 900]] },
   /* FIN-GUARDA-CHUVA G2 — o grupo da linha com o ✎ e a faixa (maiores valores); o modal da linha (editar, nova, com a revisão feita) */
   { nome: 'financiamentos-linha-grupo', url: 'tela=financiamentos-lista&linha=1', tamanhos: [[1126, 579], [1240, 700], [1349, 768], [1366, 768], [1440, 900]] },
@@ -779,11 +804,15 @@ const CENARIOS = [
   ...[['', ''], ['-grande', '&v=grande']].flatMap(([suf, par]) => {
     const URL_DRE = `tela=dre&barra=32&f_de=2026-01&f_ate=2026-09${par}`;
     const T = [[1126, 579], [1366, 768]];
-    const det = async (p) => { await clicarRotulo(/^Detalhado$/)(p); };
+    /* DRE-PAINEL-01: o "Detalhado" virou "O que mudou" (o padrão) · "Tudo aberto" — o "Tudo aberto" já abre todos os grupos */
+    const det = async (p) => { await clicarRotulo(/^Tudo aberto$/)(p); };
     /* DRE-LAYOUT-04: a tela abre no Detalhado — os cenários do Resumido clicam nele */
     const res = async (p) => { await clicarRotulo(/^Resumido$/)(p); };
     const tudo = async (p) => { await clicarRotulo(/^abrir tudo$/)(p); };
     const mais = (item) => async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: item }).first().click();
+      await p.keyboard.press('Escape'); await p.waitForTimeout(400); };
+    /* DRE-PAINEL-01: os anos 2–5 moram no "Mais ▾" */
+    const anos = (n) => async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('button', { name: String(n), exact: true }).first().click();
       await p.keyboard.press('Escape'); await p.waitForTimeout(400); };
     const chip = (rot) => async (p) => { await p.getByRole('button', { name: rot, exact: true }).first().click(); await p.waitForTimeout(400); };
     return [
@@ -818,17 +847,22 @@ const CENARIOS = [
           await p.locator('[data-testid="variacao-grafico"]').waitFor({ timeout: 5000 });
           await p.locator('[data-testid="variacao-grafico"] button', { hasText: rot }).click();
           await p.waitForTimeout(2000); } })),
-      { nome: `dre-pec-detalhado-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); } },
-      { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^2$/)(p); } },
-      { nome: `dre-pec-3anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^3$/)(p); } },
+      { nome: `dre-pec-detalhado-aberto${suf}`, url: URL_DRE, tamanhos: T, antes: det },
+      /* DRE-PAINEL-01 — a tela como abre ("O que mudou": só as linhas com desvio, "+ N itens sem desvio" e o painel da direita) e a "Média 12m"
+         (um mês só na tela) */
+      { nome: `dre-pec-mudou${suf}`, url: URL_DRE, tamanhos: T },
+      { nome: `dre-pec-media12${suf}`, url: `tela=dre&barra=32&f_de=2026-09&f_ate=2026-09${par}`, tamanhos: T,
+        antes: async (p) => { await clicarRotulo(/^Média 12 meses$/)(p); } },
+      { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await anos(2)(p); } },
+      { nome: `dre-pec-3anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await anos(3)(p); } },
       { nome: `dre-pec-meta-delta${suf}`, url: URL_DRE, tamanhos: T,
-        antes: async (p) => { await det(p); await tudo(p); await clicarRotulo(/^Meta$/)(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
+        antes: async (p) => { await det(p); await clicarRotulo(/^Meta$/)(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
       { nome: `dre-pec-ano-delta${suf}`, url: URL_DRE, tamanhos: T,
-        antes: async (p) => { await det(p); await tudo(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
-      { nome: `dre-pec-fazenda${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await mais(/^Ver por fazenda/)(p); } },
-      { nome: `dre-pec-so-ha${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await tudo(p); await chip('R$')(p); } },
+        antes: async (p) => { await det(p); await mais('Δ R$')(p); /* DRE-LAYOUT-04: o Δ % já abre ligado */ } },
+      { nome: `dre-pec-fazenda${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await mais(/^Ver por fazenda/)(p); } },
+      { nome: `dre-pec-so-ha${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await chip('R$')(p); } },
       { nome: `dre-pec-rateio-grupos${suf}`, url: URL_DRE, tamanhos: T,
-        antes: async (p) => { await det(p); await tudo(p); await clicar('[data-testid="dre-mais"]')(p); await clicarRotulo(/^Rateio nos grupos$/)(p);
+        antes: async (p) => { await det(p); await clicar('[data-testid="dre-mais"]')(p); await clicarRotulo(/^Rateio nos grupos$/)(p);
           await p.keyboard.press('Escape'); await p.waitForTimeout(400); } },
       { nome: `dre-lavoura${suf}`, url: `${URL_DRE}&safra=s1`, tamanhos: T, antes: async (p) => { await clicarRotulo(/^Lavoura$/)(p); await tudo(p); } },
       { nome: `dre-lavoura-unidades${suf}`, url: `${URL_DRE}&safra=s1`, tamanhos: T,

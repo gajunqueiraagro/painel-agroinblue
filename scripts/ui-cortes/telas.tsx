@@ -100,6 +100,7 @@ import { AgriDreLavouraTab } from '@/pages/AgriDreLavouraTab';
 import { BarraSecao } from '@/v2/components/BarraSecao';
 import AuthPage from '@/pages/AuthPage';
 import DefinirSenhaPage from '@/pages/DefinirSenhaPage';
+import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import { VisaoGeralFinanceiro } from '@/v2/pages/VisaoGeralFinanceiro';
 import { FiltrosBarraVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
@@ -486,6 +487,29 @@ if (tela === 'mesclar') {
         faltaLiberar: 12312000, saldo: 43563000, jurosPagos: 12345678.9 }, 68000000)]]) : undefined}
       aoAbrirLinha={q.get('linha') === '1' ? () => {} : undefined} /></div>; };
   montar(<Lista />);
+} else if (tela === 'compras-parceladas') {
+  /* COMPRAS-PARC-NF-01 — a aba "Compras parceladas" (a página real) no pior caso SINTÉTICO: 25 compras, descrição e credor de 60 letras,
+     valores de 9 dígitos; a NF pela nota já vinculada às parcelas: uma compra com 6 notas (chip "NF 288 +5"), notas de 9 dígitos, e sem nota ("—").
+     O `antes` abre a aba (a página nasce em Financiamentos). */
+  const LONGO = 'COMERCIAL AGRÍCOLA DE PEÇAS E IMPLEMENTOS EXEMPLO SINTÉTICO LTDA';
+  const fins = Array.from({ length: 25 }, (_x, i) => ({ id: `cp${i}`, cliente_id: 'cli', natureza: 'parcelamento', status: i % 7 === 6 ? 'quitado' : 'ativo',
+    descricao: i % 3 ? `Compra parcelada de implementos e peças para o trator 7515 exemplo ${i}` : `Ração ${i}`, numero_contrato: null,
+    /* COMPRAS-PARC-LAYOUT-02 — uma em cada 5 no Administrativo (o sufixo ADM e a última opção do filtro Atividade) */
+    tipo_financiamento: i % 5 === 4 ? 'administrativo' : i % 2 ? 'agricultura' : 'pecuaria', credor_id: `cr${i % 4}`, valor_total: 123456789.01 - i * 1000003.3, total_parcelas: 12,
+    data_contrato: `2026-${String(1 + (i % 10)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')}`, created_at: '2026-01-01', baixa_em: null,
+    financeiro_fornecedores: { nome: i % 4 ? LONGO : 'Agro Exemplo', cpf_cnpj: '11.222.333/0001-81', nome_fantasia: null, aliases_norm: [], ativo: true } }));
+  const nf = (lanc: string, n: number) => ({ lancamento_id: lanc, documento_id: `d${n}`, especie: 'nf', numero: n < 1000 ? `000.000.${n}` : n.toLocaleString('pt-BR'),
+    serie: '1', data_emissao: '2026-10-06', valor_documento: 98765432.1, emitente_nome: LONGO, cliente_id: 'cli', cancelado: false });
+  const parcelas = fins.flatMap((f) => [{ financiamento_id: f.id, lancamento_id: `l-${f.id}-1` }, { financiamento_id: f.id, lancamento_id: `l-${f.id}-2` }]);
+  const docs = [...[288, 289, 402, 403, 404, 405].map((n) => nf('l-cp1-1', n)), nf('l-cp1-2', 404),
+    /* COMPRAS-PARC-LAYOUT-02 — o pior chip: 3 notas de 9 dígitos ("NF 999999997 +2") */
+    ...[999999997, 999999998, 999999999].map((n) => nf('l-cp0-1', n)),
+    ...fins.slice(2).flatMap((f, i) => (i % 4 === 3 ? [] : [nf(`l-${f.id}-1`, 123456700 + i * 37)]))];
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financiamentos' ? fins : t === 'financiamento_parcelas' ? parcelas : t === 'vw_lancamento_documentos' ? docs : [],
+    rpc: (fn: string) => (fn === 'fn_financiamentos_situacao_lote' ? {} : null),
+  };
+  montar(<FinanciamentosListaPage />);
 } else if (tela === 'linha-credito') {
   /* FIN-GUARDA-CHUVA G2 — o modal da LINHA DE CRÉDITO (820×560), SINTÉTICO: a linha com limite e 4 contratos-filhos (descrição longa, um de
      outro banco, um sem liberação), o aviso de outro credor; `&v=nova` = linha nova (sem contratos); `&v=previa` abre com a revisão feita

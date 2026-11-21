@@ -103,21 +103,24 @@ function LinhaResumo({ rotulo, valor, forte }: { rotulo: string; valor: string; 
    mesmas abas e o mesmo resumo, título "Editar contrato · <nº> · <credor inteiro>", natureza travada; o que estava vazio fica
    "não cadastrado". O Salvar grava o CABEÇALHO (`fn_financiamento_salvar_cabecalho`, que também sincroniza a captação); se o banco diz
    que o cronograma mudou, a aba Condições acende "Regerar parcelas em aberto" (prévia antes × depois, confirmação, trilha). */
-export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcelada, onSalvo, prefill, financiamentoId, abaInicial }: {
+export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcelada, onSalvo, prefill, financiamentoId, abaInicial, tipoDaAba }: {
   aberto: boolean; aoFechar: () => void; onAbrirCompraParcelada?: () => void; onSalvo?: (financiamentoId: string) => void; prefill?: PrefillDoCadastro;
   financiamentoId?: string | null; abaInicial?: Aba;
+  /** COMPRAS-PARC-LAYOUT-02 — o botão da aba abre direto: o tipo vem da aba, TRAVADO (sem o seletor Financiamento/Compra/Consórcio e sem o
+      "outra natureza"). Opcional: os outros chamadores (FinanciamentoDetalhe, FinanciamentoDoLancamento) seguem como estão. */
+  tipoDaAba?: 'financiamento' | 'consorcio';
 }) {
   const editando = !!financiamentoId;
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? '';
   const { fazendas } = useFazenda();
   const { contas, classificacoes } = useFinanciamentoCadastro();
-  const [escolha, setEscolha] = useState<'financiamento' | 'parcelado' | 'consorcio'>(prefill?.natureza === 'consorcio' ? 'consorcio' : 'financiamento');
+  const [escolha, setEscolha] = useState<'financiamento' | 'parcelado' | 'consorcio'>(tipoDaAba ?? (prefill?.natureza === 'consorcio' ? 'consorcio' : 'financiamento'));
   const [form, setForm] = useState<FormDoCadastro>(() => ({
-    ...formVazio(prefill?.natureza ?? 'financiamento'), credorId: prefill?.credorId ?? null, valorTotal: prefill?.valor ?? 0,
+    ...formVazio(tipoDaAba ?? prefill?.natureza ?? 'financiamento'), credorId: prefill?.credorId ?? null, valorTotal: prefill?.valor ?? 0,
     dataContrato: prefill?.data ?? null, descricao: prefill?.descricao ?? '',
   }));
-  const [aba, setAba] = useState<Aba>(prefill?.natureza === 'consorcio' ? 'consorcio' : 'contrato');
+  const [aba, setAba] = useState<Aba>((tipoDaAba ?? prefill?.natureza) === 'consorcio' ? 'consorcio' : 'contrato');
   const [cronograma, setCronograma] = useState<Cronograma | null>(null);
   const [recusa, setRecusa] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
@@ -384,7 +387,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   /* FIN-CONSORCIO-02 — consórcio novo (ou editado por aqui) é o cadastro próprio dele. */
   if (escolha === 'consorcio') {
     return <ConsorcioDialog aberto={aberto} aoFechar={aoFechar} financiamentoId={financiamentoId ?? null} onSalvo={onSalvo}
-      onOutraNatureza={editando ? undefined : () => escolher('financiamento')} />;
+      onOutraNatureza={editando || tipoDaAba ? undefined : () => escolher('financiamento')} />;
   }
 
   return (
@@ -397,12 +400,12 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
           <DialogDescription className="sr-only">Cadastro de contrato</DialogDescription>
         </div>
         <div className="flex h-[34px] shrink-0 items-center gap-3 border-b px-3">
-          <Segmentado altura={22} valor={valorDaEscolha} onEscolher={escolher} opcoes={[
+          {!tipoDaAba && <Segmentado altura={22} valor={valorDaEscolha} onEscolher={escolher} opcoes={[
             { valor: 'financiamento', rotulo: 'Financiamento', desabilitada: travado || editando },
             { valor: 'parcelado', rotulo: 'Compra parcelada', desabilitada: travado || editando },
             { valor: 'consorcio', rotulo: 'Consórcio', desabilitada: travado || editando },
-          ]} />
-          <span className="text-[10px] text-muted-foreground">natureza escolhida na criação · no editar ela fica travada</span>
+          ]} />}
+          {!tipoDaAba && <span className="text-[10px] text-muted-foreground">natureza escolhida na criação · no editar ela fica travada</span>}
           {escolha === 'financiamento' && (
             <Segmentado altura={20} className="ml-auto" valor={form.natureza === 'emprestimo' ? 'emprestimo' : 'financiamento'} onEscolher={(v) => { if (!travado && !editando) set('natureza', v); }}
               opcoes={[{ valor: 'financiamento', rotulo: 'com bem vinculado', desabilitada: travado || editando }, { valor: 'emprestimo', rotulo: 'empréstimo', desabilitada: travado || editando }]} />
