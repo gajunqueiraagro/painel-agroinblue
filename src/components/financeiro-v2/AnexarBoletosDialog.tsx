@@ -215,8 +215,9 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
             convite="Clique ou arraste os boletos"
             rotuloDoBotao="Escolher arquivos" onArquivos={(_arquivos, vereditos) => receber(vereditos)} />
 
-          {itens.length > 0 && (
-            <div className="max-h-[320px] overflow-auto rounded border border-[#E0E2E6]">
+          {/* UI-LARGURA-FIXA-01 (19/11): o quadro tem ALTURA fixa, com 0 ou 30 arquivos — o modal não cresce ao soltar o 1º boleto */}
+          {(
+            <div className="h-[320px] overflow-auto rounded border border-[#E0E2E6]" data-testid="quadro-dos-boletos">
               <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
                 <colgroup>
                   {/* D1d — com "Na caixa", o "Vai para" precisa de 172 ("Parcela 1/6 · 10/12/26" + a seta, medido no gate); o Arquivo cede */}
@@ -228,6 +229,9 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
                   <tr>{['Arquivo', 'Vai para', 'Casou por', 'Vencimento', 'Valor R$', ...(naCaixa ? ['Na caixa'] : []), ''].map((h, k) => <th key={k} className={TH}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
+                  {itens.length === 0 && (
+                    <tr><td colSpan={naCaixa ? 7 : 6} className={`${TD} py-4 text-center text-muted-foreground`}>Os boletos soltos aparecem aqui.</td></tr>
+                  )}
                   {itens.map((i, k) => {
                     const c = casamento.get(i.chave);
                     const parc = c?.parcela ?? null;
@@ -282,14 +286,16 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
             </div>
           )}
 
-          <div className="text-[10px] text-muted-foreground" data-testid="resumo-boletos">
+          <div className="h-[15px] truncate text-[10px] leading-[15px] text-muted-foreground" data-testid="resumo-boletos"
+            title={livresDepois.length > 0 ? `parcela ainda sem boleto: ${livresDepois.map(p => `${p.numero}/${total}`).join(', ')}` : undefined}>
             {validos.length} {validos.length === 1 ? 'arquivo' : 'arquivos'} · {validos.length - semParcela.length} ligados · {semParcela.length} a escolher
             {livresDepois.length > 0 && <> · parcela ainda sem boleto: {livresDepois.map(p => `${p.numero}/${total}`).join(', ')}</>}
           </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t bg-card px-4 py-1.5">
-          <span className="mr-auto text-[10px] leading-tight text-destructive" data-testid="pendencia-boletos">
+          <span className="min-w-0 flex-1 truncate text-[10px] leading-tight text-destructive" data-testid="pendencia-boletos"
+            title={erro ?? undefined}>
             {erro
               ?? (semParcela.length > 0 ? `Falta escolher a parcela de ${semParcela.length} ${semParcela.length === 1 ? 'arquivo' : 'arquivos'}.`
                 : repetidas.length > 0 ? `Dois arquivos na mesma parcela: ${repetidas.map(n => `${n}/${total}`).join(', ')}.`
@@ -298,11 +304,11 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
               <span className="text-amber-800" data-testid="aviso-outro-boleto">{fraseDoOutroBoleto(comOutroBoleto)}</span>
             )}
           </span>
-          {!anexados && <Button type="button" variant="ghost" className="h-[22px] px-[9px] text-[10px]" onClick={onFechar} disabled={enviando}>Cancelar</Button>}
+          <Button type="button" variant="ghost" className={`h-[22px] w-[64px] flex-none px-[9px] text-[10px] ${anexados ? 'invisible' : ''}`} onClick={onFechar} disabled={enviando || !!anexados}>Cancelar</Button>
           {anexados ? (
-            <Button type="button" className="h-[22px] px-[9px] text-[10px] font-semibold" onClick={onFechar} data-testid="fechar-anexados">Fechar</Button>
+            <Button type="button" className="h-[22px] w-[124px] flex-none px-[9px] text-[10px] font-semibold" onClick={onFechar} data-testid="fechar-anexados">Fechar</Button>
           ) : (
-            <Button type="button" className="h-[22px] px-[9px] text-[10px] font-semibold" disabled={!podeAnexarComCaixa} onClick={confirmar}
+            <Button type="button" className="h-[22px] w-[124px] flex-none px-[9px] text-[10px] font-semibold" disabled={!podeAnexarComCaixa} onClick={confirmar}
               data-testid="anexar-boletos">
               {enviando ? 'Anexando…' : `Anexar ${validos.length} ${validos.length === 1 ? 'boleto' : 'boletos'}`}
             </Button>

@@ -151,3 +151,21 @@ describe('tela A — grade de parcelas do novo parcelado', () => {
     expect(screen.getByTestId('boleto-fora-do-plano').textContent).toContain('parcela 5');
   });
 });
+
+/* UI-LARGURA-FIXA-01 (Gabriel 19/11): o layout NUNCA depende do dado — 0 ou 2 arquivos, o quadro, o resumo e os botões têm o MESMO tamanho. */
+describe('UI-LARGURA-FIXA-01 — Anexar vários boletos', () => {
+  it('o quadro existe vazio com a altura fixa; o resumo é uma linha; os botões têm largura fixa e o Cancelar guarda o lugar', async () => {
+    render(<AnexarBoletosDialog parcelas={PARCELAS} onConfirmar={vi.fn()} onFechar={() => {}} />);
+    const quadro = screen.getByTestId('quadro-dos-boletos');
+    expect(quadro.className).toContain('h-[320px]');
+    expect(quadro.className).not.toContain('max-h');
+    expect(quadro.textContent).toContain('Os boletos soltos aparecem aqui.');
+    expect(screen.getByTestId('resumo-boletos').className).toContain('h-[15px]');
+    expect(screen.getByTestId('anexar-boletos').className).toContain('w-[124px]');
+    soltar([pdf('boleto_b.pdf'), pdf('boleto_a.pdf')]);
+    await waitFor(() => expect(screen.getAllByTestId('linha-boleto')).toHaveLength(2));
+    expect(screen.getByTestId('quadro-dos-boletos')).toBe(quadro);
+    expect(quadro.textContent).not.toContain('Os boletos soltos aparecem aqui.');
+    expect(screen.getByText('Cancelar').className).toContain('w-[64px]');
+  });
+});
