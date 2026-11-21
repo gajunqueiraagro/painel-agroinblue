@@ -502,6 +502,8 @@ if (tela === 'mesclar') {
     serie: '1', data_emissao: '2026-10-06', valor_documento: 98765432.1, emitente_nome: LONGO, cliente_id: 'cli', cancelado: false });
   const parcelas = fins.flatMap((f) => [{ financiamento_id: f.id, lancamento_id: `l-${f.id}-1` }, { financiamento_id: f.id, lancamento_id: `l-${f.id}-2` }]);
   const docs = [...[288, 289, 402, 403, 404, 405].map((n) => nf('l-cp1-1', n)), nf('l-cp1-2', 404),
+    /* COMPRAS-PARC-LAYOUT-02 — o pior chip: 3 notas de 9 dígitos ("NF 999999997 +2") */
+    ...[999999997, 999999998, 999999999].map((n) => nf('l-cp0-1', n)),
     ...fins.slice(2).flatMap((f, i) => (i % 4 === 3 ? [] : [nf(`l-${f.id}-1`, 123456700 + i * 37)]))];
   g.__bancoBancada = {
     from: (t: string) => t === 'financiamentos' ? fins : t === 'financiamento_parcelas' ? parcelas : t === 'vw_lancamento_documentos' ? docs : [],

@@ -883,14 +883,14 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   A pagar · Parcela · Próxima · Situação · Pagas. Saíram a pílula de Tipo (a aba só tem parcelamentos) e o Nº contrato
                   (só nesta aba; a de Financiamentos mantém). Descrição e Credor ficam SEM largura e dividem o que sobra (cortam com o
                   inteiro no `title`); as fixas, medidas no Chromium com a régua de Lançamentos, somam 568. */}
-              {/* COMPRAS-PARC-LAYOUT-02 (1) — UI-LARGURA-FIXA-01: os números em px medidos (somam 560) e a sobra dividida em PROPORÇÃO FIXA 3:2
+              {/* COMPRAS-PARC-LAYOUT-02 (1) — UI-LARGURA-FIXA-01: os números em px medidos (somam 580; "Valor da compra" pede 100; a NF com 76 cabe "NF 123456789", 9 dígitos — o chip de várias notas corta com o inteiro no title) e a sobra dividida em PROPORÇÃO FIXA 3:2
                   — cinco colunas sem largura (o `table-fixed` as faz iguais): a Descrição ocupa 3 (`colSpan`), o Credor 2. Nada depende do dado. */}
               <colgroup>
                 <col style={{ width: 58 }} data-testid="col-data" />
-                <col style={{ width: 64 }} data-testid="col-nf" />
+                <col style={{ width: 76 }} data-testid="col-nf" />
                 <col data-testid="col-sobra" /><col data-testid="col-sobra" /><col data-testid="col-sobra" />
                 <col data-testid="col-sobra" /><col data-testid="col-sobra" />
-                <col style={{ width: 92 }} />
+                <col style={{ width: 100 }} />
                 <col style={{ width: 88 }} />
                 <col style={{ width: 84 }} />
                 <col style={{ width: 62 }} />
@@ -943,8 +943,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                         if (!notas?.length) return <span className="text-muted-foreground">—</span>;
                         if (!r.extras) return <span className="tabular-nums" title={`NF ${notas[0].numero}`}>{r.texto}</span>;
                         return (
-                          <button type="button" data-testid="chip-nf" title={`${notas.length} notas: ${notas.map((n) => numeroCurto(n.numero)).join(', ')}`}
-                            className="rounded-full bg-sky-50 px-1.5 text-[10px] font-semibold tabular-nums text-sky-800 hover:bg-sky-100"
+                          <button type="button" data-testid="chip-nf" title={`${r.texto} +${r.extras} · ${notas.length} notas: ${notas.map((n) => numeroCurto(n.numero)).join(', ')}`}
+                            className="block max-w-full truncate rounded-full bg-sky-50 px-1.5 text-[10px] font-semibold tabular-nums text-sky-800 hover:bg-sky-100"
                             onClick={(e) => { e.stopPropagation(); setNotasAbertas({ compra: f.descricao, notas }); }}
                             onKeyDown={(e) => e.stopPropagation()}>
                             {r.texto} +{r.extras}
@@ -954,8 +954,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                     </TableCell>
                     <TableCell className="truncate" colSpan={3} data-testid="cel-descricao"
                       title={[f.descricao, escopoSigla(f.tipo_financiamento), f.numero_contrato ? `nº ${f.numero_contrato}` : null].filter(Boolean).join(' · ')}>
-                      <span className="font-medium leading-tight">{f.descricao}</span>
-                      <span className="ml-1 text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
+                      <span className="font-medium leading-tight">{f.descricao}</span>{' '}
+                      <span className="text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
                     </TableCell>
                     <TableCell className="truncate" colSpan={2} title={nomeEDocumento(f.credor_nome, f.credor_documento) || undefined} data-testid="cel-credor">{f.credor_nome}</TableCell>
                     <TableCell className={MOEDA}>{fmt(f.valor_total)}</TableCell>
@@ -1000,10 +1000,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       {/* a chave pelo modo: cada abertura nasce em "Ano civil" (a escolha de safra do mensal não vaza para o anual) */}
       {/* COMPRAS-PARC-NF-01 — o minimodal das notas da compra (uma linha por nota, a régua da casa) */}
       <Dialog open={!!notasAbertas} onOpenChange={(v) => { if (!v) setNotasAbertas(null); }}>
-        <DialogContent className="max-w-[min(560px,calc(100vw-32px))] gap-2 p-3" data-testid="minimodal-notas">
-          <DialogTitle className="truncate pr-6 text-[12px]" title={notasAbertas?.compra}>
-            {notasAbertas ? `${notasAbertas.notas.length} notas · ${notasAbertas.compra}` : ''}
-          </DialogTitle>
+        <DialogContent className="max-w-[min(560px,calc(100vw-32px))] gap-2 p-3 [&>button.absolute]:hidden" data-testid="minimodal-notas">
+          <div className="flex items-center gap-2">
+            <DialogTitle className="min-w-0 flex-1 break-words text-[12px] leading-[15px]">
+              {notasAbertas ? `${notasAbertas.notas.length} notas · ${notasAbertas.compra}` : ''}
+            </DialogTitle>
+            <button type="button" onClick={() => setNotasAbertas(null)} className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground" aria-label="Fechar" data-testid="fechar-minimodal-notas">✕</button>
+          </div>
           <div className="max-h-[60vh] overflow-auto rounded border">
             <table className="w-full table-fixed border-collapse">
               <colgroup><col style={{ width: 110 }} /><col style={{ width: 78 }} /><col /><col style={{ width: 96 }} /></colgroup>

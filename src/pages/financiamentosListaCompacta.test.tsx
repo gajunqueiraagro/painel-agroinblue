@@ -86,14 +86,14 @@ describe('FIN-LISTA-COMPACTA-01 / FIN-FINANC-28-P3-FIX2 — aba Compras parcelad
     expect(ordemDasDatas()).toEqual(['10/03/24', '01/02/24', '05/01/24']);
   });
 
-  it('fonte: colgroup em px (fixas = 560, medidas) e a sobra em PROPORÇÃO FIXA 3:2 — 5 colunas sem largura, Descrição 3 e Credor 2 (COMPRAS-PARC-LAYOUT-02)', () => {
+  it('fonte: colgroup em px (fixas = 580, medidas) e a sobra em PROPORÇÃO FIXA 3:2 — 5 colunas sem largura, Descrição 3 e Credor 2 (COMPRAS-PARC-LAYOUT-02)', () => {
     const src = readFileSync(resolve(process.cwd(), 'src/pages/FinanciamentosListaPage.tsx'), 'utf8');
     expect(src).not.toMatch(/className="[^"]*max-w-5xl/);
     const cg = src.slice(src.indexOf('<colgroup>'), src.indexOf('</colgroup>'));
     const cols = cg.match(/<col\b[^>]*\/>/g) ?? [];
     expect(cols).toHaveLength(13);
     expect(cols.filter((c) => !/width:/.test(c))).toHaveLength(5);
-    expect(cols.map((c) => Number(c.match(/width: (\d+)/)?.[1] ?? 0)).reduce((a, b) => a + b, 0)).toBe(560);
+    expect(cols.map((c) => Number(c.match(/width: (\d+)/)?.[1] ?? 0)).reduce((a, b) => a + b, 0)).toBe(580);
     expect(src).toMatch(/rotulo="Descrição" ativo=\{sortCol === 'descricao'\} colSpan=\{3\}/);
     expect(src).toMatch(/rotulo="Credor" ativo=\{sortCol === 'credor_nome'\} colSpan=\{2\}/);
     expect(src).toMatch(/className="truncate" colSpan=\{3\} data-testid="cel-descricao"/);
@@ -105,9 +105,9 @@ describe('FIN-LISTA-COMPACTA-01 / FIN-FINANC-28-P3-FIX2 — aba Compras parcelad
     await screen.findByTestId('chip-nf');
     const linhas = screen.getAllByRole('link').map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => td.textContent?.replace(/\u00a0/g, ' ').trim()));
     expect(linhas).toEqual([
-      ['05/01/24', '—', 'Armazem· PEC', 'BRDE', 'R$ 2.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/1'],
-      ['01/02/24', 'NF 931', 'Trator· AGR', 'Concessionaria', 'R$ 3.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/3'],
-      ['10/03/24', 'NF 288 +5', 'Recuperação de Solo· AGR', 'BRDE', 'R$ 1.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/7'],
+      ['05/01/24', '—', 'Armazem · PEC', 'BRDE', 'R$ 2.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/1'],
+      ['01/02/24', 'NF 931', 'Trator · AGR', 'Concessionaria', 'R$ 3.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/3'],
+      ['10/03/24', 'NF 288 +5', 'Recuperação de Solo · AGR', 'BRDE', 'R$ 1.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/7'],
     ]);
     expect(screen.queryByText('Custeio BB')).toBeNull();
   });
@@ -284,6 +284,6 @@ describe('FIN-FINANC-28-P3-FIX4 — filtros: trocar de aba zera, "Limpar filtros
     expect(screen.getAllByTestId('cel-nf').map((c) => c.textContent)).toEqual(['NF 288 +5', 'NF 931', '—']);
     const busca = screen.getAllByRole('textbox').find((i) => /busca|buscar|procurar|descri/i.test(i.getAttribute('placeholder') ?? ''))!;
     fireEvent.change(busca, { target: { value: '404' } });
-    expect(screen.getAllByTestId('cel-descricao').map((c) => c.textContent?.split('·')[0])).toEqual(['Recuperação de Solo']);
+    expect(screen.getAllByTestId('cel-descricao').map((c) => c.textContent?.split('·')[0].trim())).toEqual(['Recuperação de Solo']);
   });
 });
