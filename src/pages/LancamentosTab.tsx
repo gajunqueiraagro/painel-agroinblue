@@ -418,7 +418,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      tres shells: nenhum componente la' dentro pergunta pelo perfil. Dono: `src/v2/lib/acessoOperacao.ts`. */
   const acessoOC = useAcessoOperacao();
   const nomeFazenda = fazendaAtual?.nome || '';
-  const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
+  const isAdministrativo = fazendaAtual?.eh_administrativa === true; // FAZ-TEM-PECUARIA-DERIVADA-01: coluna própria
   const bloqueado = isGlobal || isAdministrativo;
 
   // ─── Master lock: bloqueia submit em meses completamente fechados ───
