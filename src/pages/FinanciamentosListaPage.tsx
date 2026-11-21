@@ -33,7 +33,7 @@ import { chaveDeOrdem, lerNotasDasCompras, numeroCurto, rotuloDasNotas, textoDas
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { TD_REGUA, TD_REGUA_NUM, TH_REGUA } from '@/components/ui/regua-tabela';
 import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
-import type { Intervalo } from '@/lib/periodo/intervaloDeDatas';
+import type { AtividadeDaSafra, Intervalo } from '@/lib/periodo/intervaloDeDatas';
 import { useAtividadesDoCliente } from '@/v2/pages/visaoGeral/atividadesDaVisao';
 import { credoresComContagem, escopoSigla, opcoesDeAtividade, ROTULO_DO_NOVO } from '@/lib/financiamentos/filtrosDasCompras';
 
@@ -354,7 +354,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   const opcoesAtividade = useMemo(() => opcoesDeAtividade(atividadesLidas,
     [...new Set(financiamentos.map((f) => f.tipo_financiamento ?? ''))]), [atividadesLidas, financiamentos]);
   /* os atalhos de safra do seletor de período ("Esta safra"): as atividades com safra que o cliente tem */
-  const atividadesDaSafra = useMemo(() => opcoesAtividade.flatMap((o) => (o.valor === 'pecuaria' || o.valor === 'agricultura' ? [o.valor] : [])),
+  const atividadesDaSafra = useMemo(() => opcoesAtividade.flatMap((o): AtividadeDaSafra[] => (o.valor === 'pecuaria' ? ['pecuaria'] : o.valor === 'agricultura' ? ['agricultura'] : [])),
     [opcoesAtividade]);
 
   /* ── Filtros (client-side, sobre dados já carregados) ── */

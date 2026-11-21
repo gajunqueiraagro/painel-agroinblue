@@ -34,4 +34,3 @@ describe('resumo da obrigação — escala A18', () => {
     expect(linha).toContain('truncate');
   });
 });
-});
