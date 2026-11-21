@@ -108,6 +108,15 @@ export interface DrePecLinhas {
     cab_desfrutada: number | null;
     at_comprada: number | null;
     cab_comprada: number | null;
+    /**
+     * AS @ E AS CABEÇAS VENDIDAS, SEM O CONSUMO — DRE-PAINEL-FONTE-01 (lote 115610, Code 3, 20/11).
+     * Abate, venda e venda em pé; com carcaça, carcaça ÷ 15, sem ela, peso vivo ÷ 30. É a base do
+     * R$/@ das vendas na leitura do DRE (`src/lib/dre/leitura.ts`). `at_desfrutada` segue como era.
+     * ⚠ OPCIONAIS SÓ NO TIPO: o leitor sempre os preenche (nulo quando a RPC não manda); os testes
+     * antigos que montam a coluna à mão não precisam conhecê-los.
+     */
+    at_vendida?: number | null;
+    cab_vendida?: number | null;
   };
   /**
    * DE ONDE VEIO CADA PONTA — VPB-REGRA-UNICA-01.
@@ -131,6 +140,18 @@ export interface DrePecLinhas {
    * vazio. São eles que as filhas da linha de juros leem.
    */
   centros_juros: CentroPec[];
+  /**
+   * O QUE FICOU FORA DO DRE NO RECORTE — DRE-PAINEL-FONTE-01 (P8 da Constituição nº 2): lançamentos com
+   * "Compõe DRE" desmarcado, com os mesmos filtros da coluna. Só no TOTAL e só no realizado; na meta e
+   * nas fazendas, `null` ("—", nunca zero). A lista é `fn_dre_pecuaria_fora_do_dre`.
+   */
+  fora_do_dre?: ForaDoDre | null;
+}
+
+export interface ForaDoDre {
+  n: number;
+  valor: number;
+  por_origem: { origem_lancamento: string | null; origem_tipo: string | null; n: number; valor: number }[];
 }
 
 /**
@@ -276,6 +297,8 @@ export function lerLinhas(x: unknown): DrePecLinhas {
       cab_desfrutada: numOuNulo(pr.cab_desfrutada),
       at_comprada: numOuNulo(pr.at_comprada),
       cab_comprada: numOuNulo(pr.cab_comprada),
+      at_vendida: numOuNulo(pr.at_vendida),
+      cab_vendida: numOuNulo(pr.cab_vendida),
     },
 
     /**
@@ -295,6 +318,28 @@ export function lerLinhas(x: unknown): DrePecLinhas {
       ? o.p1_fonte : null,
     centros: lerCentros(o.centros),
     centros_juros: lerCentros(o.centros_juros),
+    fora_do_dre: lerForaDoDre(o.fora_do_dre),
+  };
+}
+
+/** `null` quando a RPC não manda (meta, fazenda) ou manda fora do contrato — ausência é traço. */
+export function lerForaDoDre(v: unknown): ForaDoDre | null {
+  if (v == null || typeof v !== 'object' || Array.isArray(v)) return null;
+  const o = objeto(v);
+  const n = numOuNulo(o.n);
+  const valor = numOuNulo(o.valor);
+  if (n == null || valor == null) return null;
+  const lista = Array.isArray(o.por_origem) ? o.por_origem : [];
+  return {
+    n, valor,
+    por_origem: lista.map(x => {
+      const p = objeto(x);
+      return {
+        origem_lancamento: typeof p.origem_lancamento === 'string' ? p.origem_lancamento : null,
+        origem_tipo: typeof p.origem_tipo === 'string' ? p.origem_tipo : null,
+        n: num(p.n), valor: num(p.valor),
+      };
+    }),
   };
 }
 
@@ -648,7 +693,15 @@ export function useDrePecuariaLancamentos(
         p_cenario: cenarioEf,
       });
       if (err) throw err;
-      return (Array.isArray(r) ? r : []).map((x: unknown) => {
+      return (Array.isArray(r) ? r : []).map(lerLancamentoPec);
+    },
+  });
+  return { lancamentos: data ?? [], carregando: isLoading, erro: error as Error | null, recarregar: refetch };
+}
+
+/** Uma linha de `fn_dre_pecuaria_lancamentos` (e da `fn_dre_pecuaria_fora_do_dre`, que devolve os mesmos campos) — movida de dentro do
+    `useDrePecuariaLancamentos` para os dois leitores usarem a MESMA (DRE-PAINEL-01). */
+export function lerLancamentoPec(x: unknown): LancamentoPec {
         const o = objeto(x);
         return {
           origem: lerOrigem(o.origem),
@@ -666,10 +719,26 @@ export function useDrePecuariaLancamentos(
           bloco: o.bloco == null ? null : String(o.bloco),
           documento: o.documento == null ? null : String(o.documento),
         };
+}
+
+/**
+ * OS LANÇAMENTOS FORA DO DRE NO RECORTE — DRE-PAINEL-01 (P8): "Compõe DRE" desmarcado, com os filtros da coluna. A lista do rodapé
+ * "Fora do DRE: N lançamentos · R$ X"; a contagem e a soma vêm da própria `fn_dre_pecuaria` (`total.fora_do_dre`), não daqui.
+ * ⚠ SÓ COM O MODAL ABERTO (`enabled`): quem não clica no rodapé não paga a consulta.
+ */
+export function useDrePecuariaForaDoDre(clienteId: string | null | undefined, de: string | null, ate: string | null, enabled: boolean) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dre-pec-fora-do-dre', clienteId ?? '', de ?? '', ate ?? ''],
+    enabled: enabled && !!clienteId && !!de && !!ate,
+    queryFn: async (): Promise<LancamentoPec[]> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria_fora_do_dre', {
+        p_cliente: clienteId, p_de: de, p_ate: ate,
       });
+      if (err) throw err;
+      return (Array.isArray(r) ? r : []).map(lerLancamentoPec);
     },
   });
-  return { lancamentos: data ?? [], carregando: isLoading, erro: error as Error | null, recarregar: refetch };
+  return { lancamentos: data ?? [], carregando: isLoading, erro: error };
 }
 
 /* ══════════════ O PATRIMÔNIO POR CATEGORIA — §6 ══════════════ */

@@ -214,7 +214,7 @@ const CENARIOS = [
      o cabeçalho, as abas, os cards nem o segmentado (as duas abas ficam montadas; o gráfico tem altura fixa). O desenho do gráfico muda: não conta. */
   { nome: 'dre-pec-variacao', url: 'tela=dre&barra=32&f_de=2026-01&f_ate=2026-09', tamanhos: [[1126, 579], [1366, 768]], regiao: '[role="dialog"]',
     naoMede: '.recharts-wrapper',
-    antes: async (p) => { await p.getByRole('button', { name: /^Detalhado$/ }).first().click(); await espera(p, 300);
+    antes: async (p) => { await p.getByRole('button', { name: /^Tudo aberto$/ }).first().click(); await espera(p, 300);
       await p.locator('tr', { hasText: 'Variação por produção' }).first().locator('td').nth(1).click();
       await p.locator('[data-testid="variacao-resumo"]').waitFor({ timeout: 5000 }); await espera(p, 2000); },
     estados: [
@@ -269,8 +269,12 @@ const CENARIOS = [
   /* DRE-LEVE-01 — as duas faixas de filtro do DRE não andam ao trocar o modo, a comparação, o Δ, o "por fazenda", o rateio, as unidades e
      a atividade (os lugares são reservados); a grade é o conteúdo que muda (`data-desloca-livre` no cartão). */
   { nome: 'dre', url: 'tela=dre&barra=32&f_de=2026-01&f_ate=2026-09&safra=s1', tamanhos: [[1126, 579], [1366, 768]], estados: [
-    ['detalhado', botao(/^Detalhado$/)], ['abrir tudo', botao(/^abrir tudo$/)], ['3 anos', botao(/^3$/)], ['meta', botao(/^Meta$/)],
-    ['1 ano', botao(/^1 ano$/)], ['Δ R$', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: 'Δ R$' }).click(); await p.keyboard.press('Escape'); await espera(p); }],
+    /* DRE-PAINEL-01: "Detalhado" virou "O que mudou" (padrão) · "Tudo aberto"; os anos 2–5 no "Mais ▾" */
+    ['tudo aberto', botao(/^Tudo aberto$/)], ['fechar tudo', botao(/^fechar tudo$/)], ['o que mudou', botao(/^O que mudou$/)],
+    ['3 anos', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('button', { name: '3', exact: true }).first().click(); await p.keyboard.press('Escape'); await espera(p); }],
+    /* a "Média 12 meses" fica desabilitada aqui (período de 9 meses, com o motivo no title): o cenário dela é o `dre-pec-media12` do cortes */
+    ['meta', botao(/^Meta$/)],
+    ['1 ano', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('button', { name: '1', exact: true }).first().click(); await p.keyboard.press('Escape'); await espera(p); }], ['Δ R$', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: 'Δ R$' }).click(); await p.keyboard.press('Escape'); await espera(p); }],
     ['por fazenda', async (p) => { await clicar('[data-testid="dre-mais"]')(p); await p.getByRole('menuitemcheckbox', { name: /^Ver por fazenda/ }).click(); await p.keyboard.press('Escape'); await espera(p); }],
     ['R$/ha fora', botao(/^R\$\/ha$/)], ['resumido', botao(/^Resumido$/)], ['lavoura', botao(/^Lavoura$/)], ['pecuária', botao(/^Pecuária$/)]] },
   /* PROD-EVOLUCAO-01b — as setas do mês, o cenário e as abas do painel não deslocam a barra, os cards nem a tabela */
