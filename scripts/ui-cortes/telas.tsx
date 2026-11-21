@@ -204,6 +204,40 @@ const PENDENTES_DA_REGRA = (): any[] => {
       regra: 'Custo variável (Manutenção Máquinas Agricultura) não vai para o Administrativo: escolha a fazenda produtiva.' }),
   ];
 };
+/* FIN-REGRA-MODAL-02 — as FORMAS de dois clientes (medidas no proto 21/11, só contagens e o tamanho dos nomes das fazendas, 10–18 letras; nomes SINTÉTICOS): `vera` = 2 fazendas + ADM, 2 linhas
+   de custo fixo sugeridas pelo fornecedor (1 com a conta ADM); `nj` = 4 fazendas + ADM, 20 linhas pelo histórico (19 de custo fixo, 15 com a
+   conta ADM, 5 conciliadas) */
+const FAZENDAS_DO_CLIENTE: Record<string, any[]> = {
+  vera: [{ id: 'f-adm', nome: 'Administrativo' }, { id: 'f-3m', nome: 'Faz. Alto do Norte' }, { id: 'f-bg', nome: 'Faz. Rio Claro II' }],
+  nj: [{ id: 'f-adm', nome: 'Administrativo' }, { id: 'f-exp', nome: 'Faz. Boa Vista Nova' }, { id: 'f-luz', nome: 'Faz. Ouro Fino' },
+    { id: 'f-pur', nome: 'Faz. Pedra' }, { id: 'f-ret', nome: 'Retiro do Campo' }],
+};
+const PENDENTES_DO_CLIENTE = (v: string): any[] => {
+  const FIXO = (sub: string) => `Custo fixo da atividade (${sub}) não vai para o Administrativo: escolha a fazenda ou a conta administrativa.`;
+  const base = { status: 'realizado', financiamento_id: null, conciliado: false, mes_fechado: false, fazenda_id: 'f-adm', grupo_custo: 'Custo Fixo Pecuária' };
+  if (v === 'vera') return [
+    { ...base, id: 'v-itr', competencia: '2026-09-30', valor: 2345.67, descricao: 'ITR 2026 sintetico - Ret. 7/80', fornecedor: 'Pec.3M-Receita Federal Sintetica',
+      subcentro: 'Taxas e Impostos Fixos Pecuária', regra: FIXO('Taxas e Impostos Fixos Pecuária'), sugestao: { fazenda_id: 'f-3m', vezes: 0, de: 0, origem: 'fornecedor' },
+      conta_adm: { plano_conta_id: 'pl-tax-adm', subcentro: 'Taxas e Impostos Administrativos' } },
+    { ...base, id: 'v-man', competencia: '2026-08-12', valor: 812.4, descricao: 'Manutenção sintetica da casa sede', fornecedor: 'Pec.BG-Construtora Sintetica',
+      subcentro: 'Manutenção de Benfeitorias Pecuária', regra: FIXO('Manutenção de Benfeitorias Pecuária'), sugestao: { fazenda_id: 'f-bg', vezes: 0, de: 0, origem: 'fornecedor' }, conta_adm: null },
+  ];
+  const subs: [string, string | null, string | null][] = [['Encargos Sociais Pecuária', 'Encargos Sociais Administrativo', 'pl-enc-adm'],
+    ['Seguros Pecuária', 'Seguros Administrativo', 'pl-seg-adm'], ['Taxas e Impostos Fixos Pecuária', 'Taxas e Impostos Administrativos', 'pl-tax-adm'],
+    ['Comunicação e Energia Pecuária', null, null]];
+  const fz = ['f-exp', 'f-luz', 'f-pur', 'f-ret'];
+  return Array.from({ length: 20 }, (_, i) => {
+    const [sub, adm, admId] = i < 15 ? subs[i % 3] : subs[3]; const comConta = i < 15;
+    return { ...base, id: `nj-${i}`, competencia: `2026-${String(1 + (i % 10)).padStart(2, '0')}-${String(5 + i).padStart(2, '0')}`, valor: 1234.56 + i * 77.7,
+      descricao: i % 5 === 0 ? `Lançamento sintetico de nome bem comprido numero ${i + 1} da folha e encargos` : `Lançamento sintetico ${i + 1}`,
+      fornecedor: `Fornecedor Sintetico ${1 + (i % 6)}`, conciliado: [1, 5, 9, 13, 17].includes(i),
+      status: i % 7 === 3 ? 'programado' : 'realizado', subcentro: i === 19 ? 'Manutenção Máquinas Pecuária' : sub,
+      grupo_custo: i === 19 ? 'Custo Variável Pecuária' : 'Custo Fixo Pecuária',
+      regra: i === 19 ? 'Custo variável (Manutenção Máquinas Pecuária) não vai para o Administrativo: escolha a fazenda produtiva.' : FIXO(sub),
+      sugestao: { fazenda_id: fz[i % 4], vezes: 9 + (i % 5), de: 14 + (i % 3), origem: 'historico' },
+      conta_adm: comConta && i !== 19 ? { plano_conta_id: admId, subcentro: adm } : null };
+  });
+};
 const PREVISTO_DA_NOTA = (): any[] => [{ id: 'jl-prev', vencimento: '2026-11-05', pagamento: null, competencia: '2026-10-05',
   descricao: 'Supermercado sintetico da fazenda (70%)', valor_cent: 100000, status: 'previsto', conciliado: false, financiamento_id: null,
   numero_documento: null, fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
@@ -2053,7 +2087,9 @@ if (tela === 'mesclar') {
     /* FIN-REGRA-MODAL-02 (b) — as contas administrativas de custo fixo do plano (nomes longos: o pior caso) e o clique da linha */
     const contasAdm = [{ id: 'pl-enc-adm', subcentro: 'Encargos Sociais Administrativo' }, { id: 'pl-seg-adm', subcentro: 'Seguros Administrativo' },
       { id: 'pl-tax-adm', subcentro: 'Taxas e Impostos Administrativos' }, { id: 'pl-long-adm', subcentro: 'Contabilidade Juridico e Consultoria Sintetica Administrativo de Nome Longo' }];
-    raiz.render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS_DA_REGRA} pendentes={lerPendentes(PENDENTES_DA_REGRA())} contasAdm={contasAdm}
+    const doCliente = v === 'vera' || v === 'nj';
+    raiz.render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={doCliente ? FAZENDAS_DO_CLIENTE[v] : FAZENDAS_DA_REGRA}
+      pendentes={lerPendentes(doCliente ? PENDENTES_DO_CLIENTE(v) : PENDENTES_DA_REGRA())} contasAdm={contasAdm}
       onAbrirLancamento={() => {}} onClose={() => {}} />);
   };
   void montarRegra();
