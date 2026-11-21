@@ -699,7 +699,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [receitaAberta, setReceitaAberta] = useState(false);
   /* NAV-VOLTA-ORIGEM-01 (Gabriel 19/11, peça única) — as camadas desta tela: as Notas da Receita ficam POR BAIXO (montadas, invisíveis) do
      "Da nota fiscal"/da nota abertos a partir delas; fechar/salvar volta à mesma aba, filtros, rolagem e linha (a próxima, se lançou) */
-  const camadas = useCamadas<'receita' | 'xml' | 'nota'>();
+  const camadas = useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>();
+  /* FIN-REGRA-MODAL-02 (a) — a linha do modal "Fazenda fora da regra da conta" abre o Editar lançamento POR CIMA ('lanc' sobre 'regra'); salvou = volta 'salvou' */
+  const salvouPorCimaDaRegra = useRef(false);
+  const abrirLancamentoDaRegra = async (id: string) => {
+    const obj = await hook.buscarLancamentoPorId(id);
+    if (!obj) { toast.error('Não consegui abrir o lançamento. Tente de novo.'); return; }
+    salvouPorCimaDaRegra.current = false;
+    setPrefillDuplicar(null); setPrefillXml(null); setEditingLanc(obj); setDialogOpen(true);
+    camadas.abrir('lanc', 'regra');
+  };
+  /* (b) a saída "Conta" da linha: as contas ADMINISTRATIVAS de custo fixo do plano já carregado (o banco confere a regra na prévia) */
+  const contasAdministrativas = useMemo(() => hook.classificacoes
+    .flatMap((c) => (c.id && c.escopo_negocio === 'administrativo' && c.grupo_custo.startsWith('Custo Fixo ') ? [{ id: c.id, subcentro: c.subcentro }] : []))
+    .sort((a, b) => a.subcentro.localeCompare(b.subcentro, 'pt-BR')), [hook.classificacoes]);
   const [xmlDaReceita, setXmlDaReceita] = useState<File[] | null>(null);
   /* NOTA-RECEITA-CASAR-01 — a prévia aberta pelo "Vincular a este": ao fechar, a lista da Receita relê (a nota vira "Já no sistema") */
   const vinculoDaReceita = useRef(false);
@@ -2665,7 +2678,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
            <span data-desloca-livre className="uma-linha-que-rola flex min-w-0 flex-1 items-center gap-1">
             {podeConsultar && <CorrecaoTransferenciasBanner contas={hook.contasBancarias} onFixed={() => { void listaV2.recarregar(); }} />}
             {/* FIN-REGRA-VARIAVEL-FAZENDA-01 — o que já está fora da regra fazenda × conta: o mesmo aviso pequeno, o conserto em modal */}
-            {podeConsultar && <SeloRegraFazenda clienteId={clienteAtual?.id} fazendas={fazendas} onCorrigido={() => { void listaV2.recarregar(); }} />}
+            {podeConsultar && <SeloRegraFazenda clienteId={clienteAtual?.id} fazendas={fazendas} onCorrigido={() => { void listaV2.recarregar(); }}
+              contasAdm={contasAdministrativas}
+              camada={{ coberta: camadas.coberta('regra'), retorno: camadas.retornoPara('regra'), aoAbrir: () => camadas.abrir('regra'),
+                aoFechar: () => camadas.fechar('regra'), abrirLancamento: (id) => { void abrirLancamentoDaRegra(id); } }} />}
             {avisosDoFiltro.map((frase, i) => (
               <span key={frase} data-testid="aviso-do-filtro" className="inline-flex shrink-0 items-center gap-0.5 text-[9.5px] text-amber-800">
                 {frase}
@@ -3333,8 +3349,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       <LancamentoV2Dialog
         open={dialogOpen}
-        onClose={() => { setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); onCloseDialog?.(); }}
-        onSave={handleSave}
+        onClose={() => {
+          const idAberto = editingLanc?.id ?? null;
+          setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); onCloseDialog?.();
+          if (camadas.aberta('lanc')) { camadas.fechar('lanc', salvouPorCimaDaRegra.current ? 'salvou' : 'fechou', idAberto); salvouPorCimaDaRegra.current = false; }
+        }}
+        onSave={async (form, id, onErroDeCampo) => {
+          const r = await handleSave(form, id, onErroDeCampo);
+          if (r !== false && camadas.aberta('lanc')) salvouPorCimaDaRegra.current = true;
+          return r;
+        }}
         onLancamentoCriado={() => { if (linhaXmlAberta) setLinhasXmlLancadas(antes => new Set([...antes, linhaXmlAberta])); }}
         documentosAntesDeSalvar
         onDelete={handleDelete}

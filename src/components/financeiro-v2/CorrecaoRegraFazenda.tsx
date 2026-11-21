@@ -19,21 +19,34 @@ import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchab
 import { QUADRO_REGUA, TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA } from '@/components/ui/regua-tabela';
 import { fazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
 import {
-  carregarPendentesDaRegra, chaveDoContrato, chaveDoDestino, desfazerTrocaDeFazenda, destinoDaChave, destinoPadrao, gruposPorDestino,
-  textoDoSelo, trocarFazenda, type DestinoDaCorrecao, type PendenteDaRegra,
+  aceitaConta, carregarPendentesDaRegra, chaveDoContrato, chaveDoDestino, desfazerTrocaDeFazenda, destinoDaChave, destinoPadrao, gruposPorDestino,
+  linhaParaDestacar, motivoSugerido, porQueCurto, rotuloDaOrigem, textoDoSelo, trocarFazenda, type DestinoDaCorrecao, type PendenteDaRegra,
 } from '@/lib/financeiro/regraFazenda';
+import { Camada, type RetornoDaCamada } from '@/components/ui/camadas';
 import { cn } from '@/lib/utils';
 import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 
 interface FazendaDaLista { id: string; nome: string }
+/** (b) uma conta administrativa do plano do cliente (a saída "Conta" da linha) */
+export interface ContaAdministrativa { id: string; subcentro: string }
+/** (a) NAV-VOLTA-ORIGEM-01 — a camada do modal na tela hospedeira: a linha abre o "Editar lançamento" POR CIMA e volta aqui */
+export interface CamadaDaRegra {
+  coberta: boolean;
+  retorno: RetornoDaCamada | null;
+  aoAbrir: () => void;
+  aoFechar: () => void;
+  abrirLancamento: (id: string) => void;
+}
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dataBr = (d: string) => (/^\d{4}-\d{2}-\d{2}/.test(d) ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : d);
 
 /** O selo na faixa dos totais. Some quando não há nada fora da regra. */
-export function SeloRegraFazenda({ clienteId, fazendas, onCorrigido }: {
+export function SeloRegraFazenda({ clienteId, fazendas, contasAdm = [], camada, onCorrigido }: {
   clienteId: string | null | undefined;
   fazendas: readonly FazendaDaLista[];
+  contasAdm?: readonly ContaAdministrativa[];
+  camada?: CamadaDaRegra;
   onCorrigido?: () => void;
 }) {
   const [pendentes, setPendentes] = useState<PendenteDaRegra[]>([]);
@@ -45,20 +58,32 @@ export function SeloRegraFazenda({ clienteId, fazendas, onCorrigido }: {
     setPendentes(r);
   }, [clienteId]);
   useEffect(() => { void contar(); }, [contar]);
+  /* (a) voltou do lançamento aberto por cima: relê a lista (a linha resolvida sai) e a lista do Financeiro, se salvou */
+  const voltaN = camada?.retorno?.n ?? 0;
+  const voltaSalvou = camada?.retorno?.acao === 'salvou';
+  useEffect(() => {
+    if (!voltaN) return;
+    void contar();
+    if (voltaSalvou) onCorrigido?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só a cada volta (o `n` muda a cada uma)
+  }, [voltaN]);
 
-  if (!clienteId || pendentes.length === 0) return null;
+  if (!clienteId || (pendentes.length === 0 && !aberto)) return null;
   const rotulo = textoDoSelo(pendentes);
   return (
     <>
-      <button type="button" onClick={() => setAberto(true)} data-testid="selo-regra-fazenda"
+      <button type="button" onClick={() => { setAberto(true); camada?.aoAbrir(); }} data-testid="selo-regra-fazenda"
         title={`${rotulo}: a conta pede outra fazenda. Clique para ver e corrigir.`}
         className="inline-flex h-4 shrink-0 items-center gap-0.5 whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-1 text-[9.5px] text-amber-900">
         <AlertTriangle className="h-2.5 w-2.5" /> {rotulo} · Ver
       </button>
       {aberto && (
-        <CorrecaoRegraFazendaDialog clienteId={clienteId} fazendas={fazendas} pendentes={pendentes}
-          onClose={() => { setAberto(false); void contar(); }}
-          onCorrigido={() => { void contar(); onCorrigido?.(); }} />
+        <Camada coberta={camada?.coberta ?? false}>
+          <CorrecaoRegraFazendaDialog clienteId={clienteId} fazendas={fazendas} pendentes={pendentes} contasAdm={contasAdm}
+            onAbrirLancamento={camada?.abrirLancamento}
+            onClose={() => { setAberto(false); camada?.aoFechar(); void contar(); }}
+            onCorrigido={() => { void contar(); onCorrigido?.(); }} />
+        </Camada>
       )}
     </>
   );
@@ -72,16 +97,21 @@ function colunasDe(compacto: boolean): Coluna[] {
   return [
     { chave: 'marca', rotulo: '', largura: 24 }, { chave: 'comp', rotulo: 'Comp.', largura: 70 }, { chave: 'desc', rotulo: 'Descrição', largura: null },
     ...(compacto ? [] : [{ chave: 'forn', rotulo: 'Fornecedor', largura: 130 }, { chave: 'conta', rotulo: 'Conta', largura: 150 }]),
-    { chave: 'hoje', rotulo: 'Fazenda hoje', largura: 96 }, { chave: 'porque', rotulo: 'Por quê', largura: compacto ? 140 : 170 },
-    { chave: 'para', rotulo: 'Corrigir para', largura: compacto ? 180 : 210 }, { chave: 'valor', rotulo: 'Valor', largura: 86, num: true },
+    { chave: 'hoje', rotulo: 'Fazenda hoje', largura: 96 }, { chave: 'porque', rotulo: 'Por quê', largura: compacto ? 120 : 130 },
+    /* FIN-REGRA-MODAL-02 (b) — as DUAS saídas da linha: outra fazenda | a conta administrativa (fica no ADM); escolher uma limpa a outra */
+    { chave: 'faz', rotulo: '→ Fazenda', largura: compacto ? 110 : 120 }, { chave: 'cta', rotulo: '→ Conta (fica no ADM)', largura: compacto ? 120 : 150 },
+    { chave: 'valor', rotulo: 'Valor', largura: 86, num: true },
   ];
 }
 const Colunas = ({ colunas }: { colunas: readonly Coluna[] }) => <colgroup>{colunas.map((c) => <col key={c.chave} style={c.largura ? { width: c.largura } : undefined} />)}</colgroup>;
 
-export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onClose, onCorrigido }: {
+export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, contasAdm = [], onAbrirLancamento, onClose, onCorrigido }: {
   clienteId: string;
   fazendas: readonly FazendaDaLista[];
   pendentes: readonly PendenteDaRegra[];
+  contasAdm?: readonly ContaAdministrativa[];
+  /** (a) a linha abre o "Editar lançamento" por cima (sem ele, a linha não é clicável) */
+  onAbrirLancamento?: (id: string) => void;
   onClose: () => void;
   onCorrigido?: () => void;
 }) {
@@ -93,7 +123,20 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
   const [escolha, setEscolha] = useState<Record<string, string>>(() =>
     Object.fromEntries(pendentes.map((p) => { const d = destinoPadrao(p); return [p.id, d ? chaveDoDestino(d) : '']; })));
   const [marcado, setMarcado] = useState<Set<string>>(() => new Set(pendentes.filter((p) => !p.mesFechado && destinoPadrao(p)).map((p) => p.id)));
-  const [motivo, setMotivo] = useState('');
+  /* (e) o motivo nasce com a regra das linhas marcadas; depois de editado, é o do operador */
+  const [motivoEditado, setMotivoEditado] = useState<string | null>(null);
+  /* (a) a linha aberta por cima e a ordem de então: na volta, a mesma (se ainda fora da regra) ou a próxima fica destacada */
+  const [aberta, setAberta] = useState<{ id: string; ordem: string[] } | null>(null);
+  const destaque = useMemo(() => linhaParaDestacar(aberta?.id ?? null, aberta?.ordem ?? [], pendentes.map((p) => p.id)), [aberta, pendentes]);
+  useEffect(() => {
+    if (!destaque) return;
+    document.querySelector(`[data-testid="correcao-linha"][data-id="${destaque}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [destaque]);
+  const abrirLinha = (id: string) => {
+    if (!onAbrirLancamento) return;
+    setAberta({ id, ordem: pendentes.map((p) => p.id) });
+    onAbrirLancamento(id);
+  };
   const [previa, setPrevia] = useState<{ prontos: number; soma: number; recusas: string[] } | null>(null);
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -115,6 +158,9 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
     return d ? [{ id: p.id, destino: d, valor: p.valor }] : [];
   }), [pendentes, marcado, escolha]);
   const grupos = useMemo(() => gruposPorDestino(selecionados), [selecionados]);
+  const motivoDaRegra = useMemo(() => { const ids = new Set(selecionados.map((s) => s.id)); return motivoSugerido(pendentes.filter((p) => ids.has(p.id))); },
+    [pendentes, selecionados]);
+  const motivo = motivoEditado ?? motivoDaRegra;
 
   /* a PRÉVIA do banco (simular): as mesmas guardas do gravar, linha a linha */
   useEffect(() => {
@@ -153,16 +199,23 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
     } finally { setGravando(false); }
   };
 
-  const opcoesDe = (p: PendenteDaRegra): OpcaoSearchable[] => {
+  /* (b) as duas saídas: a FAZENDA (as produtivas; a sugerida primeiro, com a origem) e a CONTA administrativa (a equivalente primeiro) */
+  const opcoesDeFazenda = (p: PendenteDaRegra): OpcaoSearchable[] => {
     const sug = p.sugestao?.fazendaId;
     const faz = produtivas.map((f) => ({ value: chaveDoDestino({ tipo: 'fazenda', fazendaId: f.id }), label: f.nome,
-      hint: f.id === sug && p.sugestao ? `sugerida · ${p.sugestao.vezes} de ${p.sugestao.de} do fornecedor` : undefined }));
-    const ordenadas = [...faz.filter((o) => o.hint), ...faz.filter((o) => !o.hint)];
-    return p.contaAdm ? [...ordenadas, { value: chaveDoDestino({ tipo: 'conta', planoContaId: p.contaAdm.planoContaId }), label: `Conta: ${p.contaAdm.subcentro}`,
-      hint: 'fica no Administrativo, na conta administrativa' }] : ordenadas;
+      hint: f.id === sug && p.sugestao ? `sugerida · ${rotuloDaOrigem(p.sugestao)}` : undefined }));
+    return [...faz.filter((o) => o.hint), ...faz.filter((o) => !o.hint)];
+  };
+  const nomeDaConta = useMemo(() => new Map(contasAdm.map((c) => [c.id, c.subcentro])), [contasAdm]);
+  const opcoesDeConta = (p: PendenteDaRegra): OpcaoSearchable[] => {
+    const eq = p.contaAdm?.planoContaId;
+    const lista = contasAdm.some((c) => c.id === eq) || !p.contaAdm ? contasAdm : [{ id: p.contaAdm.planoContaId, subcentro: p.contaAdm.subcentro }, ...contasAdm];
+    const ops = lista.map((c) => ({ value: chaveDoDestino({ tipo: 'conta', planoContaId: c.id }), label: c.subcentro,
+      hint: c.id === eq ? 'a equivalente administrativa' : undefined }));
+    return [...ops.filter((o) => o.hint), ...ops.filter((o) => !o.hint)];
   };
   const rotuloDoDestino = (p: PendenteDaRegra, d: DestinoDaCorrecao | null) => !d ? '' : d.tipo === 'fazenda' ? nomeDaFazenda.get(d.fazendaId) ?? '—'
-    : `Conta: ${p.contaAdm?.subcentro ?? '—'}`;
+    : `Conta: ${nomeDaConta.get(d.planoContaId) ?? (p.contaAdm?.planoContaId === d.planoContaId ? p.contaAdm.subcentro : '—')} (fica no Administrativo)`;
 
   const todosMarcaveis = pendentes.filter((p) => !p.mesFechado && escolha[p.id]);
   const tudo = todosMarcaveis.length > 0 && todosMarcaveis.every((p) => marcado.has(p.id));
@@ -178,7 +231,7 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
           <Ajuda titulo="Fazenda × conta" className="text-primary-foreground"
             oQueE="Lançamentos cuja conta pede outra fazenda: custo variável, custo fixo da atividade, receita e compra de bovinos nunca vão para o Administrativo; dividendos sempre vão."
             porQue="O DRE de cada fazenda só fecha com o custo da atividade nela. No Administrativo ele vira rateio e some da fazenda que gastou."
-            comoFazer="Confira a sugestão de cada linha (a fazenda que o fornecedor mais usa, ou a conta administrativa), marque e diga o motivo. Valor, datas e conciliação não mudam; dá para desfazer." />
+            comoFazer="Cada linha tem duas saídas: outra FAZENDA (a sugerida vem primeiro: a citada na descrição ou no fornecedor, a regra do ITR ou o histórico do fornecedor) ou, no custo fixo, a CONTA administrativa (fica no Administrativo). Marque e confira o motivo, que já vem com a regra. Clique na linha para abrir o lançamento e corrigir lá (fazenda, conta ou dividir). Valor, datas e conciliação não mudam; dá para desfazer." />
           <DialogDescription className="sr-only">Corrige a fazenda (ou a conta) dos lançamentos fora da regra, com prévia e desfazer.</DialogDescription>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-1.5 bg-muted p-2 text-[10.5px]">
@@ -205,8 +258,12 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
                     const d = destinoDaChave(escolha[p.id] ?? '');
                     const hoje = p.fazendaId ? nomeDaFazenda.get(p.fazendaId) ?? '—' : 'sem fazenda';
                     return (
-                      <tr key={p.id} className={cn('border-b border-border/50', marcado.has(p.id) && 'bg-blue-50/60')} data-testid="correcao-linha">
-                        <td className="h-[19px] px-1">
+                      <tr key={p.id} data-id={p.id} data-destaque={destaque === p.id ? '' : undefined}
+                        className={cn('border-b border-border/50', onAbrirLancamento && 'cursor-pointer hover:bg-muted/50', marcado.has(p.id) && 'bg-blue-50/60',
+                          destaque === p.id && 'bg-amber-50 outline outline-1 -outline-offset-1 outline-amber-400')}
+                        title={onAbrirLancamento ? 'Clique para abrir o lançamento (fazenda, conta ou dividir) e voltar aqui' : undefined}
+                        onClick={() => abrirLinha(p.id)} data-testid="correcao-linha">
+                        <td className="h-[19px] px-1" onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={marcado.has(p.id)} disabled={p.mesFechado || !d} aria-label={`Marcar ${p.descricao}`} className="h-3 w-3"
                             title={p.mesFechado ? 'Mês fechado: reabra o mês para corrigir' : !d ? 'Escolha para onde vai' : undefined}
                             onCheckedChange={(v) => alternar(p.id, v === true)} data-testid="correcao-marcar" />
@@ -218,11 +275,21 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
                         {!compacto && <td className={TD_REGUA_TEXTO} title={`${p.grupoCusto} › ${p.subcentro}`} data-reticencias-com-title="">{p.subcentro}</td>}
                         <td className={cn(TD_REGUA_TEXTO, p.mesFechado && 'text-muted-foreground')} title={p.mesFechado ? `${hoje} · mês fechado` : hoje} data-reticencias-com-title="">
                           {p.mesFechado ? '🔒 ' : ''}{hoje}</td>
-                        <td className={cn(TD_REGUA_TEXTO, 'text-amber-800')} title={p.regra} data-reticencias-com-title="" data-testid="correcao-regra">{p.regra}</td>
-                        <td className="h-[19px] px-1" title={d ? rotuloDoDestino(p, d) : 'Sem sugestão: escolha a fazenda'}>
-                          <SearchableSelect value={escolha[p.id] ?? ''} onValueChange={(k) => escolher(p.id, k)} options={opcoesDe(p)} semTodos allValue=""
-                            allLabel="Escolha" placeholder="Buscar fazenda..." dense disabled={p.mesFechado}
+                        <td className={cn(TD_REGUA_TEXTO, 'text-amber-800')} title={p.regra} data-reticencias-com-title="" data-testid="correcao-regra">{porQueCurto(p)}</td>
+                        <td className="h-[19px] px-1" onClick={(e) => e.stopPropagation()} data-testid="correcao-para-fazenda"
+                          title={d?.tipo === 'fazenda' ? rotuloDoDestino(p, d) : p.sugestao ? `Sugerida: ${nomeDaFazenda.get(p.sugestao.fazendaId) ?? '—'} (${rotuloDaOrigem(p.sugestao)})` : 'Sem sugestão: você decide'}>
+                          <SearchableSelect value={d?.tipo === 'fazenda' ? escolha[p.id] ?? '' : ''} onValueChange={(k) => escolher(p.id, k)} options={opcoesDeFazenda(p)}
+                            semTodos allValue="" allLabel="Escolha" placeholder="Buscar fazenda..." dense disabled={p.mesFechado}
                             triggerClassName={cn('h-[17px] px-1 text-[10px]', !d && 'border-amber-400')} />
+                        </td>
+                        <td className="h-[19px] px-1" onClick={(e) => e.stopPropagation()} data-testid="correcao-para-conta"
+                          title={!aceitaConta(p) ? 'Esta conta não fica no Administrativo: só outra fazenda resolve' : d?.tipo === 'conta' ? rotuloDoDestino(p, d)
+                            : p.contaAdm ? `Equivalente: ${p.contaAdm.subcentro}` : 'Escolha a conta administrativa'}>
+                          {aceitaConta(p) ? (
+                            <SearchableSelect value={d?.tipo === 'conta' ? escolha[p.id] ?? '' : ''} onValueChange={(k) => escolher(p.id, k)} options={opcoesDeConta(p)}
+                              semTodos allValue="" allLabel="—" placeholder="Buscar conta..." dense disabled={p.mesFechado}
+                              triggerClassName="h-[17px] px-1 text-[10px]" />
+                          ) : <span className="px-1 text-muted-foreground">—</span>}
                         </td>
                         <td className={TD_REGUA_NUM}>{brl(p.valor)}</td>
                       </tr>
@@ -242,7 +309,7 @@ export function CorrecaoRegraFazendaDialog({ clienteId, fazendas, pendentes, onC
                 : `Prévia: ${previa.prontos} lançamento${previa.prontos === 1 ? '' : 's'} · R$ ${brl(previa.soma)} mudam de fazenda (ou de conta). Valor, datas e conciliação ficam.`}
             </span>
           </div>
-          <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo (obrigatório)" className="h-[24px] shrink-0 text-[10.5px]" data-testid="correcao-motivo" />
+          <Input value={motivo} onChange={(e) => setMotivoEditado(e.target.value)} placeholder="Motivo (obrigatório)" className="h-[24px] shrink-0 text-[10.5px]" data-testid="correcao-motivo" />
         </div>
         <div className="flex h-9 shrink-0 items-center gap-2 border-t bg-card px-3 text-[10.5px]">
           <span className="min-w-0 truncate text-destructive" data-testid="correcao-erro" title={erro ?? undefined} data-reticencias-com-title="">{erro ? `⚠ ${erro}` : ''}</span>

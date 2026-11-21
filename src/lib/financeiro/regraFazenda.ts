@@ -146,3 +146,56 @@ export async function desfazerTrocaDeFazenda(clienteId: string, trocaId: string)
   notificarLancamentosMudaram(clienteId);
   return null;
 }
+
+/* ═══ FIN-REGRA-MODAL-02 (Gabriel 21/11, Vera: "ficou burra, não permite arrumar") ═══ */
+
+/** (d) O "Por quê" curto que cabe na coluna; a frase inteira do banco vai no `title`. */
+export function porQueCurto(p: Pick<PendenteDaRegra, 'grupoCusto' | 'regra'>): string {
+  const g = p.grupoCusto;
+  if (/não vai para o Administrativo/.test(p.regra)) {
+    if (/^Custo Vari/i.test(g)) return 'custo variável no ADM';
+    if (/^Custo Fixo /.test(g)) return 'custo fixo no ADM';
+    if (/^Receita/.test(g)) return 'receita no ADM';
+    if (g === 'Compra de Bovinos') return 'compra de bovinos no ADM';
+    return 'não vai para o ADM';
+  }
+  if (/^Dividendos/.test(g)) return 'dividendo fora do ADM';
+  if (/fazenda sem pecuária/.test(p.regra)) return 'fazenda sem pecuária';
+  if (/escolha a fazenda/.test(p.regra)) return 'sem fazenda';
+  return 'fora da regra';
+}
+
+/** (b) A linha aceita ficar no Administrativo trocando a CONTA (só o custo fixo de atividade; o banco confere de novo na prévia). */
+export const aceitaConta = (p: Pick<PendenteDaRegra, 'grupoCusto'>) => /^Custo Fixo /.test(p.grupoCusto);
+
+/** (c) De onde veio a sugestão, no hint da opção. O código vem do banco (114280); o texto antigo ("histórico do fornecedor") ainda é aceito. */
+export function rotuloDaOrigem(s: NonNullable<PendenteDaRegra['sugestao']>): string {
+  switch (s.origem) {
+    case 'descricao': return 'citada na descrição';
+    case 'fornecedor': return 'citada no fornecedor';
+    case 'itr_unica': return 'ITR: a única fazenda';
+    case 'itr_maior': return 'ITR: a de maior área';
+    default: return s.de > 0 ? `${s.vezes} de ${s.de} do fornecedor` : 'histórico do fornecedor';
+  }
+}
+
+/** (e) O motivo já preenchido com a regra das linhas marcadas (editável; nunca trava o operador). */
+export function motivoSugerido(marcadas: readonly Pick<PendenteDaRegra, 'grupoCusto' | 'regra'>[]): string {
+  const frases: string[] = [];
+  for (const p of marcadas) {
+    const c = porQueCurto(p);
+    const f = c === 'custo fixo no ADM' ? 'custo fixo de atividade no ADM' : c;
+    if (!frases.includes(f)) frases.push(f);
+  }
+  return frases.length ? `Regra fazenda × conta: ${frases.join(', ')}` : '';
+}
+
+/** (a) A linha a destacar depois de voltar do lançamento: a mesma, se ainda está fora da regra; senão a próxima da ordem de quando foi aberta. */
+export function linhaParaDestacar(aberta: string | null, ordemNoClique: readonly string[], agora: readonly string[]): string | null {
+  if (!aberta) return null;
+  if (agora.includes(aberta)) return aberta;
+  const i = ordemNoClique.indexOf(aberta);
+  for (const id of ordemNoClique.slice(i + 1)) if (agora.includes(id)) return id;
+  for (const id of ordemNoClique.slice(0, Math.max(i, 0)).reverse()) if (agora.includes(id)) return id;
+  return null;
+}

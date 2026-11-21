@@ -13,7 +13,9 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: (...a: unkno
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 
 import { CorrecaoRegraFazendaDialog } from './CorrecaoRegraFazenda';
-import { chaveDoContrato, gruposPorDestino, lerPendentes, regraValeAqui, textoDoSelo } from '@/lib/financeiro/regraFazenda';
+import {
+  aceitaConta, chaveDoContrato, gruposPorDestino, lerPendentes, linhaParaDestacar, motivoSugerido, porQueCurto, regraValeAqui, rotuloDaOrigem, textoDoSelo,
+} from '@/lib/financeiro/regraFazenda';
 
 const FAZENDAS = [{ id: 'f-adm', nome: 'Administrativo' }, { id: 'f-sr', nome: 'Faz. Sintetica SR' }, { id: 'f-pur', nome: 'Faz. Sintetica PUR' }];
 const ADM = 'Custo variável (Vacinas e Vermífugos) não vai para o Administrativo: escolha a fazenda produtiva.';
@@ -78,11 +80,15 @@ describe('CorrecaoRegraFazendaDialog', () => {
     render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS} pendentes={PENDENTES} onClose={() => {}} />);
     expect(marcadas()).toEqual([true, true, false, false]);
     expect(screen.getByTestId('correcao-resumo').textContent).toContain('2 sem sugestão (você decide)');
-    expect(screen.getAllByTestId('correcao-regra')[3].textContent).toContain('conta administrativa');
+    /* FIN-REGRA-MODAL-02 (d): o Por quê é CURTO; a frase inteira do banco vai no title */
+    expect(screen.getAllByTestId('correcao-regra').map((c) => c.textContent)).toEqual(['custo variável no ADM', 'custo variável no ADM', 'custo variável no ADM', 'custo fixo no ADM']);
+    expect(screen.getAllByTestId('correcao-regra')[3].getAttribute('title')).toContain('conta administrativa');
     await waitFor(() => expect(screen.getByTestId('correcao-previa').textContent).toContain('Prévia: 2 lançamentos · R$ 750,72'));
     expect(banco.rpc.mock.calls.find((c) => c[0] === 'fn_lancamentos_trocar_fazenda')?.[1]).toMatchObject({
       p_cliente: 'cli', p_ids: ['st2', 'st3'], p_fazenda: 'f-sr', p_plano: null, p_simular: true });
-    expect(screen.getByTestId('correcao-confirmar')).toBeDisabled();   // falta o motivo
+    /* (e) o motivo nasce com a regra das marcadas (editável): não trava o operador */
+    expect(screen.getByTestId('correcao-motivo')).toHaveValue('Regra fazenda × conta: custo variável no ADM');
+    expect(screen.getByTestId('correcao-confirmar')).toBeEnabled();
   });
   it('desmarcar uma parcela desmarca as irmãs do contrato', async () => {
     render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS} pendentes={PENDENTES} onClose={() => {}} />);
@@ -119,5 +125,67 @@ describe('LancamentoV2Dialog — a trava da regra (pela fonte)', () => {
     expect(src).toMatch(/if \(regraFazenda\) \{\s*setErroAntesDeSalvar\(regraFazenda\);/);
     expect(src).toContain('data-testid="regra-fazenda-frase"');
     expect(src).toContain('erroDaRegra={regraFazenda}');
+  });
+});
+
+/* ═══ FIN-REGRA-MODAL-02 (Gabriel 21/11, Vera: "ficou burra, não permite arrumar") ═══ */
+describe('FIN-REGRA-MODAL-02 — as regras puras', () => {
+  it('(d) o Por quê curto pela regra; (b) só o custo fixo aceita ficar no ADM trocando a conta', () => {
+    expect(PENDENTES.map(porQueCurto)).toEqual(['custo variável no ADM', 'custo variável no ADM', 'custo variável no ADM', 'custo fixo no ADM']);
+    expect(porQueCurto({ grupoCusto: 'Dividendos', regra: 'Dividendos/retiradas (X) vão para o Administrativo, não para a Y.' })).toBe('dividendo fora do ADM');
+    expect(porQueCurto({ grupoCusto: 'Custo Fixo Pecuária', regra: 'Conta de pecuária (X) numa fazenda sem pecuária (Y): escolha outra fazenda.' })).toBe('fazenda sem pecuária');
+    expect(PENDENTES.map(aceitaConta)).toEqual([false, false, false, true]);
+  });
+  it('(c) a origem da sugestão em palavras (o código do banco; o texto antigo ainda lido)', () => {
+    const s = (origem: string, vezes = 0, de = 0) => rotuloDaOrigem({ fazendaId: 'f', vezes, de, origem });
+    expect([s('descricao'), s('fornecedor'), s('itr_unica'), s('itr_maior'), s('historico', 14, 14), s('histórico do fornecedor', 3, 5)])
+      .toEqual(['citada na descrição', 'citada no fornecedor', 'ITR: a única fazenda', 'ITR: a de maior área', '14 de 14 do fornecedor', '3 de 5 do fornecedor']);
+  });
+  it('(e) o motivo com a regra das marcadas, sem repetir; nada marcado = vazio', () => {
+    expect(motivoSugerido(PENDENTES)).toBe('Regra fazenda × conta: custo variável no ADM, custo fixo de atividade no ADM');
+    expect(motivoSugerido([])).toBe('');
+  });
+  it('(a) na volta: a mesma linha se ainda está fora da regra; senão a próxima (ou a anterior, se era a última)', () => {
+    expect(linhaParaDestacar('b', ['a', 'b', 'c'], ['a', 'b', 'c'])).toBe('b');
+    expect(linhaParaDestacar('b', ['a', 'b', 'c'], ['a', 'c'])).toBe('c');
+    expect(linhaParaDestacar('c', ['a', 'b', 'c'], ['a', 'b'])).toBe('b');
+    expect(linhaParaDestacar('a', ['a'], [])).toBeNull();
+    expect(linhaParaDestacar(null, [], ['a'])).toBeNull();
+  });
+});
+
+describe('FIN-REGRA-MODAL-02 — o modal', () => {
+  it('(a) clicar na LINHA abre o lançamento; a caixa e os seletores não abrem', () => {
+    const abrir = vi.fn();
+    render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS} pendentes={PENDENTES} onAbrirLancamento={abrir} onClose={() => {}} />);
+    fireEvent.click(screen.getAllByTestId('correcao-regra')[2]);
+    expect(abrir).toHaveBeenCalledWith('adubo');
+    fireEvent.click(screen.getAllByTestId('correcao-marcar')[0]);
+    fireEvent.click(screen.getAllByTestId('correcao-para-conta')[3]);
+    fireEvent.click(screen.getAllByTestId('correcao-para-fazenda')[1]);
+    expect(abrir).toHaveBeenCalledTimes(1);
+  });
+  it('(a) voltou e a linha saiu da lista: a próxima fica destacada', () => {
+    const { rerender } = render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS} pendentes={PENDENTES} onAbrirLancamento={() => {}} onClose={() => {}} />);
+    fireEvent.click(screen.getAllByTestId('correcao-regra')[2]);
+    rerender(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS} pendentes={PENDENTES.filter((p) => p.id !== 'adubo')} onAbrirLancamento={() => {}} onClose={() => {}} />);
+    expect(screen.getAllByTestId('correcao-linha').filter((l) => l.hasAttribute('data-destaque')).map((l) => l.getAttribute('data-id'))).toEqual(['esocial']);
+  });
+  it('(b) duas saídas por linha: Fazenda sempre; Conta só no custo fixo (no variável, "—")', () => {
+    render(<CorrecaoRegraFazendaDialog clienteId="cli" fazendas={FAZENDAS} pendentes={PENDENTES} contasAdm={[{ id: 'pl-tax-adm', subcentro: 'Taxas e Impostos Administrativos' }]} onClose={() => {}} />);
+    expect(screen.getAllByTestId('correcao-para-fazenda').map((c) => !!c.querySelector('button'))).toEqual([true, true, true, true]);
+    expect(screen.getAllByTestId('correcao-para-conta').map((c) => (c.querySelector('button') ? 'seletor' : c.textContent))).toEqual(['—', '—', '—', 'seletor']);
+    expect(screen.getAllByTestId('correcao-para-conta')[3].getAttribute('title')).toBe('Equivalente: Encargos Administrativo');
+  });
+});
+
+describe('FIN-REGRA-MODAL-02 — a camada no Financeiro (fonte)', () => {
+  it('a linha abre o Editar lançamento POR CIMA (\'lanc\' sobre \'regra\') e a volta diz se salvou', () => {
+    const fin = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
+    expect(fin).toContain("useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>()");
+    expect(fin).toContain("camadas.abrir('lanc', 'regra');");
+    expect(fin).toContain("camadas.fechar('lanc', salvouPorCimaDaRegra.current ? 'salvou' : 'fechou', idAberto)");
+    expect(fin).toContain("if (r !== false && camadas.aberta('lanc')) salvouPorCimaDaRegra.current = true;");
+    expect(fin).toMatch(/c\.escopo_negocio === 'administrativo' && c\.grupo_custo\.startsWith\('Custo Fixo '\)/);
   });
 });
