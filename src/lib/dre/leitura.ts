@@ -185,6 +185,9 @@ export function mesesAntes(anoMes: string, k: number): string {
  *   as seis parcelas e o lucro operacional saírem dos MESMOS N meses.
  * ⚠ AS FONTES DO PATRIMÔNIO E O "FORA DO DRE" NÃO SE MEDEIAM: saem `null` ("—"); são do mês, não da média.
  */
+/** A @ (ou cabeça) vendida do mês: a da RPC; nula com vendas = 0, zero (D-B3). */
+const vendidoOuZero = (l: DrePecLinhas, v: number | null | undefined): number | null | undefined => (v == null && l.vendas === 0 ? 0 : v);
+
 export function colunaMedia(colunas: readonly DrePecLinhas[]): { linhas: DrePecLinhas; n: number } | null {
   const n = colunas.length;
   if (n === 0) return null;
@@ -235,7 +238,9 @@ export function colunaMedia(colunas: readonly DrePecLinhas[]): { linhas: DrePecL
         ha_medio: mn(l => l.producao.ha_medio), at_produzida: mn(l => l.producao.at_produzida),
         at_desfrutada: mn(l => l.producao.at_desfrutada), cab_desfrutada: mn(l => l.producao.cab_desfrutada),
         at_comprada: mn(l => l.producao.at_comprada), cab_comprada: mn(l => l.producao.cab_comprada),
-        at_vendida: mn(l => l.producao.at_vendida), cab_vendida: mn(l => l.producao.cab_vendida),
+        /* D-B3 (Gabriel 21/11): mês SEM VENDA (vendas = 0) vem da RPC com a @ vendida nula — é zero vendido, não dado ausente; só a
+           @ nula COM venda continua derrubando a média estrita para "—" */
+        at_vendida: mn(l => vendidoOuZero(l, l.producao.at_vendida)), cab_vendida: mn(l => vendidoOuZero(l, l.producao.cab_vendida)),
       },
       p0_fonte: null, p1_fonte: null,
       centros: centros(l => l.centros), centros_juros: centros(l => l.centros_juros),
@@ -477,8 +482,9 @@ export function leituraDoMes(e: EntradaLeituraDoMes): ItemLeitura[] {
         : d.pct == null ? `Vendas ${deltaCurto(d.delta).replace(/^([+−])/, '$1R$ ')}`
           : `Vendas ${pctCurto(d.pct)} ${maiorOuMenor(d.delta, false)}`;
       const frase = `${rsCurto(atual.vendas)} contra ${rsCurto(base.vendas)} em ${rotuloBase}. `
-        + `${arrobas(atual.producao.at_vendida)} vendidas a ${rsArroba(rsPorArrobaVendida(atual))}, `
-        + `contra ${arrobas(base.producao.at_vendida)} a ${rsArroba(rsPorArrobaVendida(base))}.`;
+        /* D-B3: o lado sem venda diz "sem venda", nunca "— a R$ —/@" */
+        + (atual.vendas === 0 ? 'Nenhuma venda no mês' : `${arrobas(atual.producao.at_vendida)} vendidas a ${rsArroba(rsPorArrobaVendida(atual))}`)
+        + (base.vendas === 0 ? `; ${rotuloBase} sem venda.` : `, contra ${arrobas(base.producao.at_vendida)} a ${rsArroba(rsPorArrobaVendida(base))}.`);
       itens.push({ id: 'vendas', titulo, frase, efeito: d.delta, anomalia: an != null, destino: { tipo: 'abates' } });
     }
   }

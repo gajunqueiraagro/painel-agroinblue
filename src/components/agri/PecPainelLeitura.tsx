@@ -217,13 +217,15 @@ function Ponte({ ponte, rotuloInicio, rotuloFim }: {
           : comSinal(b.valor / 1000, 0);
         return (
           <div key={b.chave} className="flex min-w-0 flex-1 flex-col items-stretch">
-            <div className="relative h-[88px]">
+            {/* D-B1 (Gabriel 21/11): a escala das barras começa 12px abaixo do topo — a faixa de cima é dos rótulos, que assim nunca
+                sobem para o título nem para o "R$ mil". A altura total (88px) não muda. */}
+            <div className="relative h-[88px]"><div data-ponte-area className="absolute inset-x-0 bottom-0 top-[12px]">
               <div className={cn('absolute inset-x-[2px] rounded-[1px]', COR[b.tipo])}
                 style={{ top: `${topo}%`, height: `${alt}%`, ...(b.tipo === 'total' ? { backgroundColor: NAVY_TOTAL } : {}) }}
                 title={b.valor == null ? `sem meta: R$ ${curto(ponte.semExplicacao)} que os degraus conhecidos não explicam` : `R$ ${formatNum(b.valor, 2)}`} />
               <span className="absolute inset-x-0 text-center text-[9.5px] tabular-nums leading-[11px]"
                 style={{ top: `calc(${topo}% - 12px)` }}>{texto}</span>
-            </div>
+            </div></div>
             <span className="mt-[2px] h-[26px] text-center text-[9.5px] leading-[12px] text-muted-foreground">{b.rotulo}</span>
           </div>
         );

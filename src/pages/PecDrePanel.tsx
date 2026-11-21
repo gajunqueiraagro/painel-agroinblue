@@ -19,7 +19,7 @@
  * ficava atrás de uma barra de rolagem. À esquerda, ele fica congelado junto da coluna de rótulos
  * e as fazendas passam por baixo dele.
  */
-import { Fragment, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, createContext, useContext, useLayoutEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { ChevronRight, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
@@ -589,9 +589,30 @@ const largurasDaColuna = (c: ColunaPec, unidades: readonly UnidadePec[]): number
  * largura que o `<colgroup>` deu àquela célula, senão a segunda coluna congelada cobre a
  * primeira (ou deixa uma fresta) exatamente na coluna que se veio conferir.
  */
-const estiloTotalRs = { position: 'sticky' as const, left: W_FAZENDA, zIndex: 20 };
-const estiloTotalCab = (c: ColunaPec, unidades: readonly UnidadePec[]) =>
-  ({ position: 'sticky' as const, left: W_FAZENDA + largurasDaColuna(c, unidades)[0], zIndex: 20 });
+const estiloTotalRs = (l: LargurasPec) => ({ position: 'sticky' as const, left: l.rotulo, zIndex: 20 });
+const estiloTotalCab = (c: ColunaPec, unidades: readonly UnidadePec[], l: LargurasPec) =>
+  ({ position: 'sticky' as const, left: l.rotulo + (l.valor ?? largurasDaColuna(c, unidades)[0]), zIndex: 20 });
+
+/**
+ * A GRADE QUE ENCHE A COLUNA — DRE-PAINEL-01 D-B2 (Gabriel 21/11, UI-LARGURA-FIXA-01): ao lado do painel, a grade ocupa a coluna
+ * de 58fr inteira. O `colgroup` vem numa PROPORÇÃO FIXA: o rótulo mede `W_FAZENDA` e toda coluna de valor mede a MAIOR largura de
+ * valor da régua; os dois crescem pelo mesmo fator até encher. A proporção só depende de QUAIS colunas existem, nunca do dado:
+ * é a mesma em todo cliente. Sem espaço (fator < 1), as larguras são as da régua e o cartão rola por dentro.
+ * Devolve `null` fora do modo "encher" (a grade ampliada segue com `w-fit`).
+ */
+export function largurasQueEnchem(larguras: readonly number[], disponivel: number): { cols: number[]; valor: number } | null {
+  if (larguras.length < 2) return null;
+  const n = larguras.length - 1;
+  const valor = Math.max(...larguras.slice(1));
+  const minimo = larguras[0] + n * valor;
+  const fator = Math.max(1, disponivel / minimo);
+  const v = Math.floor(valor * fator);
+  const rotulo = fator > 1 ? Math.floor(disponivel) - n * v : larguras[0];
+  return { cols: [rotulo, ...Array.from({ length: n }, () => v)], valor: v };
+}
+/** As larguras que as células congeladas do Total usam como `left` (a do rótulo e, no modo "encher", a de toda coluna de valor). */
+type LargurasPec = { rotulo: number; valor: number | null };
+const LargurasPecCtx = createContext<LargurasPec>({ rotulo: W_FAZENDA, valor: null });
 
 /**
  * O ÍCONE DO HISTÓRICO — DRE-HISTORICO-LINHA-01a.
@@ -650,8 +671,10 @@ function CelulaCarregando({ total, fundo, estilo }: { total?: boolean; fundo?: s
 
 export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   unidades = ['rs', 'ha'], modo = 'detalhado', abertos, onAbertos, rateioNosGrupos = false,
-  onAbrirLista, onAbrirDidatico, onAbrirHistorico, oQueMudou = false }: {
+  onAbrirLista, onAbrirDidatico, onAbrirHistorico, oQueMudou = false, encher = false }: {
   colunas: readonly ColunaPec[];
+  /** D-B2: a grade enche a largura do cartão (o lado da grade ao lado do painel), em proporção fixa — ver `largurasQueEnchem`. */
+  encher?: boolean;
   /** ⚠ AS UNIDADES MARCADAS, na ordem de `UNIDADES_PEC`. O padrão é o que a tela abre: R$ e R$/ha. */
   unidades?: readonly UnidadePec[];
   alturaCartao: number | null;
@@ -710,7 +733,21 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
     colunas.forEach(c => largurasDaColuna(c, unidades).forEach(w => cols.push(w)));
     return cols;
   }, [colunas, unidades]);
-  const larguraMin = larguras.reduce((a, b) => a + b, 0);
+  /* D-B2: a largura disponível é a do próprio cartão (w-full no modo "encher"); jsdom/sem ResizeObserver = 0 → a régua de sempre */
+  const [disponivel, setDisponivel] = useState(0);
+  useLayoutEffect(() => {
+    const el = cartaoRef.current;
+    if (!encher || !el || typeof ResizeObserver === 'undefined') return;
+    const medir = () => setDisponivel(el.clientWidth);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [encher, cartaoRef]);
+  const cheias = encher ? largurasQueEnchem(larguras, disponivel) : null;
+  const colsDaTabela = cheias?.cols ?? larguras;
+  const larguraMin = colsDaTabela.reduce((a, b) => a + b, 0);
+  const largurasCtx: LargurasPec = { rotulo: colsDaTabela[0] ?? W_FAZENDA, valor: cheias?.valor ?? null };
   /* ⚠ A LINHA DOS SUBTÍTULOS É CONDICIONAL — item 9. Ela some quando NENHUMA coluna tem o que
      dizer, e o cabeçalho passa de 40px para 28: 26+14 vira 14+14. O `top` da segunda linha
      acompanha, senão o `sticky` dela grudaria 12px abaixo de onde ela está. */
@@ -744,13 +781,13 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
        encolher. */
     <div ref={cartaoRef} data-desloca-livre="" data-testid="dre-grade-pec"
       /* UI-MESES-PADRAO-01 (revisão 11:28): o cartão ACOMPANHA a tabela (`w-fit`) — sem o vão branco à direita; larga demais, rola aqui */
-      className="w-fit min-w-0 max-w-full overflow-auto rounded-lg border border-border/60 bg-card"
+      className={cn(encher ? 'w-full' : 'w-fit', 'min-w-0 max-w-full overflow-auto rounded-lg border border-border/60 bg-card')}
       style={alturaCartao ? { maxHeight: alturaCartao } : undefined}>
       {/* ⚠ A MESMA RÉGUA DA LAVOURA: `leading-none`, px fixos e largura igual à soma das colunas.
           Ver a nota no `AgriDreLavouraTab` — foi ela que fez as alturas declaradas valerem. */}
       <table className="border-collapse text-[11px] leading-none"
         style={{ tableLayout: 'fixed', width: larguraMin }}>
-        <colgroup>{larguras.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+        <colgroup>{colsDaTabela.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
 
         <thead>
           <tr style={{ height: temSub ? 26 : 14 }}>
@@ -768,7 +805,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                 className={cn(!c.total && CINZA_CABECALHO, 'sticky top-0 px-[7px] text-center align-middle text-white',
                   c.total ? 'z-40' : 'z-20')}
                 style={c.total
-                  ? { ...(congelada(c, colunas) ? { left: W_FAZENDA } : {}),
+                  ? { ...(congelada(c, colunas) ? { left: largurasCtx.rotulo } : {}),
                       backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL_CAB }
                   : { borderLeft: '1px solid rgba(255,255,255,.22)',
                       /* ⚠ O `colSpan` JÁ COBRE A COLUNA INTEIRA: aqui o topo do contorno fecha de
@@ -804,8 +841,8 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                       ? { top: ALTURA_NOME, backgroundColor: NAVY_TOTAL,
                           ...(i === 0 ? { borderLeft: BORDA_TOTAL_CAB } : {}),
                           ...(congelada(c, colunas)
-                            ? (i === 0 ? { left: W_FAZENDA }
-                              : i === 1 ? { left: W_FAZENDA + largurasDaColuna(c, unidades)[0] } : {})
+                            ? (i === 0 ? { left: largurasCtx.rotulo }
+                              : i === 1 ? { left: largurasCtx.rotulo + (largurasCtx.valor ?? largurasDaColuna(c, unidades)[0]) } : {})
                             : {}) }
                       : { top: ALTURA_NOME, ...(i === 0 ? { borderLeft: '1px solid rgba(255,255,255,.22)' } : {}),
                           ...bordaDaMeta(c, i, slotsDaColuna(c, unidades).length) }}>
@@ -817,6 +854,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
           </tr>
         </thead>
 
+        <LargurasPecCtx.Provider value={largurasCtx}>
         <tbody>
           {defsDaGrade(modo, rateioNosGrupos).map((def, iDef, defs) => {
             /* ⚠ A FILHA DE UM GRUPO FECHADO NAO EXISTE NA TELA — DRE-RESUMIDO-CUSTEIO-01. */
@@ -928,6 +966,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
             );
           })}
         </tbody>
+        </LargurasPecCtx.Provider>
       </table>
     </div>
   );
@@ -952,6 +991,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
     de: string, ate: string, insumos: InsumosDidaticos) => void;
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
 }) {
+  const larguras = useContext(LargurasPecCtx);
   /* ⚠ A FAIXA MANDA NO FUNDO; A COR, NÃO — e este parágrafo já disse o contrário (03b). A regra
      antiga era "num total o destaque é a faixa, e pintar o número de verde ou vermelho por cima
      dela seria dois sinais para a mesma coisa". A homologação mostrou o custo: o `= Resultado com
@@ -1146,7 +1186,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, zebra, onAlte
            o React a omite —, e a classe da faixa, que é opaca, fica valendo. */
         const estiloDoSlot = (i: number): CSSProperties => {
           const fixo = !congelada(col, colunas) ? undefined
-            : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : undefined;
+            : i === 0 ? estiloTotalRs(larguras) : i === 1 ? estiloTotalCab(col, unidades, larguras) : undefined;
           const sem = fundoForte ? { ...(fixo ?? {}), backgroundColor: undefined } : fixo;
           return { ...(sem ?? {}), ...bordaDaMeta(col, i, slots.length, base ? { base: true } : undefined) };
         };
@@ -1258,6 +1298,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
   /** DRE-PAINEL-01 — a linha "+ N itens sem desvio": soma estes centros em cada coluna e não abre lista. */
   agregados?: readonly CentroPec[];
 }) {
+  const larguras = useContext(LargurasPecCtx);
   const regua = REGUA_LINHA.filha;
   /* ⚠ DRE-LEVE-01 (D6): o subitem em cinza; o custo e o negativo seguem vermelhos (o mock). */
   const corDaFilha = (v: number | null) => corNaGrade(v, { custo: def.tom === 'custo', apoio: true });
@@ -1296,7 +1337,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
         const slots = slotsDaColuna(col, unidades);
         const estiloDoSlot = (i: number): CSSProperties => ({
           ...(!congelada(col, colunas) ? {}
-            : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : {}),
+            : i === 0 ? estiloTotalRs(larguras) : i === 1 ? estiloTotalCab(col, unidades, larguras) : {}),
           ...bordaDaMeta(col, i, slots.length, base ? { base: true } : undefined),
         });
         if (!col.linhas) {

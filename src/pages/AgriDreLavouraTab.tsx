@@ -1505,6 +1505,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao, onIrP
             unidades={unidadesPec}
             modo={modoPec} abertos={abertosPec} onAbertos={f => setAbertosPec(f)}
             oQueMudou={grauAberturaPec === 'mudou'}
+            encher={!ampliado}
             rateioNosGrupos={rateioNosGruposPec}
             onAbrirLista={setRecortePec}
             /* ⚠ O PERÍODO VEM DA COLUNA — VARIACAO-REBANHO-MODAL-01. Guardá-lo aqui é o que permite

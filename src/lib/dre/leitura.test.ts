@@ -147,6 +147,19 @@ describe('a ponte do lucro operacional fecha ao centavo', () => {
     const p = ponteDoLucroOperacional(med.linhas, NJ26);
     expect(p?.fecha).toBe(true);
   });
+  it('D-B3: na média, o mês SEM venda (jan/26, @ nula da RPC) conta 0 @ — R$/@ = vendas somadas ÷ @ somadas; @ nula COM venda segue "—"', () => {
+    const cols = MESES_NJ.slice(0, 12).map(m => F(`nj-${m}`));
+    expect(cols.some(c => c.vendas === 0 && c.producao.at_vendida == null)).toBe(true);
+    const med = colunaMedia(cols);
+    expect(rsPorArrobaVendida(med?.linhas ?? null)).toBeCloseTo(15444725.73 / 44342.81, 6);
+    expect(Math.round((rsPorArrobaVendida(med?.linhas ?? null) ?? 0) * 100) / 100).toBe(348.3);
+    const nov = BRUTO['nj-2025-11'];
+    const prodNov = nov && typeof nov === 'object' && 'producao' in nov ? nov.producao : null;
+    const semArroba = com('nj-2025-11', { producao: { ...(prodNov && typeof prodNov === 'object' ? prodNov : {}), at_vendida: null } });
+    expect(semArroba.vendas).toBeGreaterThan(0);
+    const comVendaSemArroba = cols.map((c, i) => (i === 1 ? semArroba : c));
+    expect(colunaMedia(comVendaSemArroba)?.linhas.producao.at_vendida).toBeNull();
+  });
   it('contra a Meta (D2): a Variação por produção é "—" (null, não zero), não fecha e o resto é o degrau "sem meta"', () => {
     const p = ponteDoLucroOperacional(META, NJ26);
     if (!p) throw new Error('sem ponte');
@@ -278,11 +291,13 @@ describe('leitura do mês', () => {
     expect(l2.map(i => i.id)).toEqual(['vendas', 'custo_variavel', 'custo_fixo', 'rateio_adm']);
   });
 
-  it('Vera: vendas que nasceram no mês (base zero) e "—" nas @ que a fonte não tem', () => {
+  it('Vera: vendas que nasceram no mês (base zero) — o lado sem venda diz "sem venda" (D-B3), nunca "— a R$ —/@"', () => {
     const l = leituraDoMes({ base: VERA25, atual: VERA26, comparacao: 'ano_anterior', rotuloBase: 'out/25' });
     const v = l.find(i => i.id === 'vendas');
     expect(v?.titulo).toBe('Vendas +R$ 220 mil');
-    expect(v?.frase).toBe('R$ 220 mil contra R$ 0 em out/25. 645 @ vendidas a R$ 341,39/@, contra — a R$ —/@.');
+    expect(v?.frase).toBe('R$ 220 mil contra R$ 0 em out/25. 645 @ vendidas a R$ 341,39/@; out/25 sem venda.');
+    const inversa = leituraDoMes({ base: VERA26, atual: VERA25, comparacao: 'ano_anterior', rotuloBase: 'out/26' }).find(i => i.id === 'vendas');
+    expect(inversa?.frase).toBe('R$ 0 contra R$ 220 mil em out/26. Nenhuma venda no mês, contra 645 @ a R$ 341,39/@.');
   });
 
   it('"—" não dispara e sem comparação não há leitura', () => {

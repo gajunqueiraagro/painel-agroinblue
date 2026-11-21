@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { PecDrePanel, MaisPec, colunasDaVisao, type EntradaVisoes } from '@/pages/PecDrePanel';
+import { PecDrePanel, MaisPec, colunasDaVisao, largurasQueEnchem, type EntradaVisoes } from '@/pages/PecDrePanel';
 import { PecPainelLeitura } from '@/components/agri/PecPainelLeitura';
 import { LINHAS_DO_MODO } from '@/components/agri/drePecRegua';
 import { lerLinhas, type DrePecLinhas, type DrePecuaria } from '@/hooks/useDrePecuaria';
@@ -128,5 +128,33 @@ describe('o painel da direita', () => {
     expect(screen.queryByTestId('dre-leitura-mes')).toBeNull();
     expect(screen.getAllByText(/Sem comparação/).length).toBeGreaterThan(0);
     expect(screen.getByText('Lucro operacional/ha').closest('tr')?.textContent).toContain('—');
+  });
+});
+
+describe('D-B2: a grade enche a coluna de 58fr em proporção fixa (UI-LARGURA-FIXA-01)', () => {
+  it('rótulo e colunas de valor crescem pelo mesmo fator; as de valor são iguais; a soma é a largura disponível', () => {
+    const r = largurasQueEnchem([200, 98, 120, 70], 800);
+    if (!r) throw new Error('sem larguras');
+    expect(r.cols.slice(1)).toEqual([r.valor, r.valor, r.valor]);
+    expect(r.cols.reduce((a, b) => a + b, 0)).toBe(800);
+    /* fator = 800 / (200 + 3 × 120) = 1,43 → valor 171, rótulo o que sobra (287): a proporção 200:120 se mantém */
+    expect(r.valor).toBe(171);
+    expect(r.cols[0]).toBe(287);
+  });
+  it('a proporção só depende das colunas: dois clientes com as mesmas colunas têm o mesmo colgroup', () => {
+    expect(largurasQueEnchem([200, 98, 120, 70], 1000)).toEqual(largurasQueEnchem([200, 98, 120, 70], 1000));
+  });
+  it('sem espaço (fator < 1), as larguras da régua com as de valor iguais à maior — o cartão rola por dentro', () => {
+    expect(largurasQueEnchem([200, 98, 120], 300)).toEqual({ cols: [200, 120, 120], valor: 120 });
+  });
+});
+
+describe('D-B1: a ponte reserva a faixa dos rótulos acima das barras', () => {
+  it('a área das barras começa 12px abaixo do topo, em todas as 8 colunas', () => {
+    render(<PecPainelLeitura atual={NJ26} base={NJ25} comparacao="ano_anterior" rotuloAtual="out/26" rotuloBase="out/25"
+      rotuloBaseFrase="out/25" carregandoBase={false} notasALancar={0} selo={{ grau: 'alta', falta: [] }} altura={600} onDestino={vi.fn()} />);
+    const areas = screen.getByTestId('dre-ponte').querySelectorAll('[data-ponte-area]');
+    expect(areas.length).toBe(8);
+    for (const a of areas) expect(a.className).toContain('top-[12px]');
   });
 });
