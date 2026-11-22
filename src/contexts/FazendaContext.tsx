@@ -12,6 +12,9 @@ export interface Fazenda {
   codigo?: string | null;
   codigo_importacao?: string | null;
   tem_pecuaria?: boolean;
+  /* FAZ-TEM-PECUARIA-DERIVADA-01 (D2): "é Administrativo" tem coluna própria — nunca se deduz de `tem_pecuaria`, que o banco
+     mantém (liga sozinho quando entra gado). O banco garante: administrativa nunca tem pecuária. */
+  eh_administrativa?: boolean;
   /* `text` NULLABLE com default 'ativa'::text — nao e enum (conferido no
      information_schema em 22/08/2026). Opcional e anulavel de proposito: o
      tipo tem de admitir a ausencia, senao volta o fallback que este PR
@@ -42,7 +45,7 @@ interface FazendaContextType {
   fazendasComPecuaria: Fazenda[];
   fazendaAtual: Fazenda | null;
   setFazendaAtual: (f: Fazenda) => void;
-  criarFazenda: (nome: string, codigo: string) => Promise<Fazenda | null>;
+  criarFazenda: (nome: string, codigo: string, ehAdministrativa?: boolean) => Promise<Fazenda | null>;
   loading: boolean;
   reloadFazendas: () => Promise<void>;
   isGlobal: boolean;
@@ -93,12 +96,12 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
          raiz e regenerar types.ts, frente propria ja registrada.
          O `as FazendaRow[]` abaixo devolve o tipo na saida do `any`, para o
          `.map` seguinte nao propagar `any` pelo contexto inteiro. */
-      type FazendaRow = Pick<Fazenda, 'id' | 'nome' | 'codigo' | 'owner_id' | 'cliente_id' | 'codigo_importacao' | 'tem_pecuaria' | 'status_operacional'>;
+      type FazendaRow = Pick<Fazenda, 'id' | 'nome' | 'codigo' | 'owner_id' | 'cliente_id' | 'codigo_importacao' | 'tem_pecuaria' | 'eh_administrativa' | 'status_operacional'>;
       const { data: fazendasCliente, error: errFaz } = await (supabase
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .from('fazendas' as any)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .select('id, nome, codigo, owner_id, cliente_id, codigo_importacao, tem_pecuaria, status_operacional') as any)
+        .select('id, nome, codigo, owner_id, cliente_id, codigo_importacao, tem_pecuaria, eh_administrativa, status_operacional') as any)
         .eq('cliente_id', clienteAtual.id) as { data: FazendaRow[] | null; error: unknown };
       console.log(`[FazendaContext] query fazendas END (${(performance.now() - _tQ1).toFixed(0)}ms)`, { rows: fazendasCliente?.length ?? 0, error: errFaz });
 
@@ -168,11 +171,11 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const criarFazenda = async (nome: string, codigo: string): Promise<Fazenda | null> => {
+  const criarFazenda = async (nome: string, codigo: string, ehAdministrativa = false): Promise<Fazenda | null> => {
     if (!user || !clienteAtual) return null;
     if (!codigo?.trim()) { toast.error('Código da fazenda é obrigatório.'); return null; }
     const cod = codigo.trim().toUpperCase();
-    const payload: any = { nome, owner_id: user.id, cliente_id: clienteAtual.id, codigo: cod, codigo_importacao: cod };
+    const payload: any = { nome, owner_id: user.id, cliente_id: clienteAtual.id, codigo: cod, codigo_importacao: cod, eh_administrativa: ehAdministrativa };
     const { data, error } = await supabase
       .from('fazendas')
       .insert(payload)

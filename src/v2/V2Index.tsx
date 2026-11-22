@@ -80,6 +80,7 @@ import { CadastroLocaisEstoqueTab } from '@/pages/CadastroLocaisEstoqueTab';
 import { PatrimonioTela } from '@/components/patrimonio/PatrimonioTela';
 import { ProdutoresTela } from '@/components/fiscal/ProdutoresTela';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
+import type { AbaDaReceita } from '@/lib/fiscal/notasDaReceita';
 import { AgriDreLavouraTab } from '@/pages/AgriDreLavouraTab';
 import { AgriColheitaTab } from '@/pages/AgriColheitaTab';
 import { AgriBarterTab } from '@/pages/AgriBarterTab';
@@ -448,6 +449,8 @@ export default function V2Index() {
     return 'home';
   })();
   const [section, setSection] = useState<V2Section>(sectionInicial);
+  /* DRE-PAINEL-01 — o pedido "abra as Notas da Receita nesta aba", levado ao Financeiro e limpo quando ele o atende. */
+  const [pedidoNotasDaReceita, setPedidoNotasDaReceita] = useState<AbaDaReceita | null>(null);
   // PR-B1-R5 — espelho da section ativa para captura sem closure stale.
   // O useEffect do flancId lê sectionRef.current ANTES de setSection('financeiro-lanc')
   // para preservar a section de ORIGEM do drill (Conferência, Visão Zoo etc.).
@@ -1063,7 +1066,10 @@ export default function V2Index() {
         setSection('valor-rebanho');
       }}
         /* CONC-SEM-CLASSIFICACAO-01 — a saída do aviso "sem plano de contas"; sem a Conciliação, o aviso só informa. */
-        onIrParaConciliacao={podeAbrirTela('conciliacao') ? () => setSection('conciliacao') : undefined} />;
+        onIrParaConciliacao={podeAbrirTela('conciliacao') ? () => setSection('conciliacao') : undefined}
+        /* DRE-PAINEL-01 — os links da leitura e do selo: Notas da Receita › A lançar (no Financeiro) e o fechamento do mês. */
+        onIrParaNotasALancar={podeAbrirTela('financeiro-lanc') ? () => { setPedidoNotasDaReceita('lancar'); setSection('financeiro-lanc'); } : undefined}
+        onIrParaFechamento={podeAbrirTela('fechamento') ? () => setSection('fechamento') : undefined} />;
     }
     if (section === 'painel-consultor') return (
       <PainelConsultorTab
@@ -1487,6 +1493,9 @@ export default function V2Index() {
         /* ⚠ SAIR PELO LINK LIMPA O RETORNO PENDENTE — OC-RECLASSIFICAR-ITEM-01. "Abrir →" e "corrigir na
            operação" levam a OC sem passar pelo `onClose` do modal (a tela troca e o Financeiro desmonta), e o
            `drillReturn` ficava PRESO: o proximo fechar de QUALQUER lancamento do Financeiro pulava para aquela OC. */
+        /* DRE-PAINEL-01 — o "Ver notas" da leitura do DRE abre as Notas da Receita em "A lançar". */
+        notasDaReceitaNaAba={pedidoNotasDaReceita}
+        onNotasDaReceitaPedidoAtendido={() => setPedidoNotasDaReceita(null)}
         onAbrirOperacaoOCFinanceiro={(ocId: string, tipo?: string | null) => {
           setDrillReturn(null);
           abrirOperacaoOC(ocId, 'financeiro', tipo ?? 'compra', origemDaVolta(window.location.search));
@@ -1807,7 +1816,7 @@ export default function V2Index() {
   const appShell = modoResumo || SECOES_APP_SHELL.has(section);
 
   return (
-    <div className="h-screen bg-background overflow-hidden flex">
+    <div className="h-screen bg-corpo overflow-hidden flex">
 
       {/* SIDEBAR (desktop) — chrome lateral, oculto no mobile via className */}
       {!intensivo && (
@@ -1919,9 +1928,9 @@ export default function V2Index() {
             vira lista de seções (Set/array) consultada aqui. */}
         <section className={
           appShell
-            ? "flex-1 min-h-0 min-w-0 overflow-auto md:overflow-hidden md:flex md:flex-col bg-background"
+            ? "flex-1 min-h-0 min-w-0 overflow-auto md:overflow-hidden md:flex md:flex-col bg-corpo"
             : intensivo
-              ? "flex-1 min-h-0 w-full overflow-auto bg-background"
+              ? "flex-1 min-h-0 w-full overflow-auto bg-corpo"
               : "flex-1 min-h-0 min-w-0 overflow-auto"
         }>
           <div className={

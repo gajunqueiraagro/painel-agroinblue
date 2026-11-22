@@ -6,7 +6,8 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { chavesJaLancadas, lerCandidatos, lerLinhasRecebidas, montarLista, precisaConferirLancamento, situacaoNaLista, type CandidatoDaNota, type NotaNaLista, lerAtributos, type AtributosDaNota } from '@/lib/fiscal/notasDaReceita';
+import { chavesJaLancadas, lerCandidatos, lerLinhasRecebidas, montarLista, precisaConferirLancamento, situacaoNaLista, type CandidatoDaNota, type NotaNaLista, lerAtributos, type AtributosDaNota, lerLigacoes, type LigacaoDaDemonstracao } from '@/lib/fiscal/notasDaReceita';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 export interface DadosDaReceita {
   lista: NotaNaLista[];
@@ -29,10 +30,15 @@ export async function lerNotasDaReceita(clienteId: string): Promise<DadosDaRecei
   if (r.error || t.error || c.error) throw new Error('Não consegui ler as notas da Receita.');
   const linhas = lerLinhasRecebidas(r.data);
   const chaves = [...new Set(linhas.map((l) => l.chave))];
+  /* NOTA-SALVAR-RAPIDO-01 (22/11) — os atributos fiscais e as ligações da demonstração dependem só das linhas: saem JÁ, em paralelo com a
+     conferência "já lançada?" → candidatos (antes eram 7 perguntas em fila a cada volta para a lista) */
+  const comXml = linhas.filter((l) => l.temXml || l.situacao === 'xml' || l.situacao === 'importado').map((l) => l.chave);
+  const atributosP = comXml.length > 0 ? db().rpc('fn_notas_atributos_fiscais', { p_cliente: clienteId, p_chaves: comXml }) : null;
+  const ligacoesP = comXml.length > 0 ? db().rpc('fn_notas_demonstracao_ligacoes', { p_cliente: clienteId }) : null;
   const noSistema = new Set<string>();
-  for (let i = 0; i < chaves.length; i += 200) {
-    const parte = chaves.slice(i, i + 200);
-    const n = await db().from('nota_fiscal').select('chave_acesso').eq('cliente_id', clienteId).in('chave_acesso', parte);
+  const partes: string[][] = [];
+  for (let i = 0; i < chaves.length; i += 200) partes.push(chaves.slice(i, i + 200));
+  for (const n of await Promise.all(partes.map((parte) => db().from('nota_fiscal').select('chave_acesso').eq('cliente_id', clienteId).in('chave_acesso', parte)))) {
     if (n.error) throw new Error('Não consegui conferir quais notas já estão no sistema.');
     for (const x of n.data ?? []) if (typeof x.chave_acesso === 'string') noSistema.add(x.chave_acesso.replace(/\D/g, ''));
   }
@@ -64,17 +70,22 @@ export async function lerNotasDaReceita(clienteId: string): Promise<DadosDaRecei
      da nota (`classeDaNota`) tira do "A lançar" o que não gera lançamento. Falhou = a lista de sempre (tudo "compra"), com o erro no console:
      a classe só ESCONDE do "A lançar", nunca cria nada. */
   let atributos = new Map<string, AtributosDaNota>();
-  const comXml = linhas.filter((l) => l.temXml || l.situacao === 'xml' || l.situacao === 'importado').map((l) => l.chave);
-  if (comXml.length > 0) {
-    const { data, error } = await db().rpc('fn_notas_atributos_fiscais', { p_cliente: clienteId, p_chaves: comXml });
+  if (atributosP) {
+    const { data, error } = await atributosP;
     if (error) console.error('[useNotasDaReceita] atributos', error); else atributos = lerAtributos(data);
+  }
+  /* NOTA-DEMONSTRACAO-01 — a demonstração ligada à compra/ao retorno que veio depois (só leitura; falhou = sem a ligação, erro no console) */
+  let ligacoes: LigacaoDaDemonstracao[] = [];
+  if (ligacoesP) {
+    const { data, error } = await ligacoesP;
+    if (error) console.error('[useNotasDaReceita] demonstração', error); else ligacoes = lerLigacoes(data);
   }
   const titulares = ((t.data ?? []) as { id: string; nome: string | null }[]).map((x) => ({ id: x.id, nome: x.nome ?? '—' }));
   const controle = (c.data ?? []) as { ultima_busca_em: string | null; nao_antes_de: string | null }[];
   const ultimas = controle.map((x) => x.ultima_busca_em).filter((x): x is string => !!x).sort();
   const proximas = controle.map((x) => x.nao_antes_de).filter((x): x is string => !!x).sort();
   return {
-    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema, candidatos, atributos),
+    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema, candidatos, atributos, hojeLocal(), ligacoes),
     titulares,
     ultimaBusca: ultimas.at(-1) ?? null,
     proximaBusca: proximas[0] ?? null,

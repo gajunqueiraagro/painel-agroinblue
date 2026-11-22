@@ -22,7 +22,9 @@ const GRAVAR = process.env.DRE_LEVE_GRAVAR === '1';
 
 /* ─────────────── o fixture da pecuária: a Vera do mock (jan–set) ─────────────── */
 const patrimonio = { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 1800, cab_fim: 2100, cab_media: 1950 };
-const producao = { ha_medio: 1500, at_produzida: 9800, at_desfrutada: 11200, cab_desfrutada: 900, at_comprada: 1300, cab_comprada: 150 };
+/* DRE-PAINEL-01 D-A6: o R$/@ da receita é pela @ vendida; aqui = a desfrutada, para a grade continuar a de antes (este teste prova o layout) */
+const producao = { ha_medio: 1500, at_produzida: 9800, at_desfrutada: 11200, cab_desfrutada: 900, at_comprada: 1300, cab_comprada: 150,
+  at_vendida: 11200, cab_vendida: 900 };
 const CV: readonly (readonly [string, number])[] = [['Comercial', 945], ['Identificação', 3457], ['Nutrição', 154089.6], ['Pastagem', 50210],
   ['Reprodução', 41725], ['Sanidade', 27612.34], ['Transferências', 48037.36]];
 
@@ -136,18 +138,24 @@ export function rotuloLimpo(texto: string): string {
   return t;
 }
 /* DRE-LAYOUT-04: o % do VBP abaixo do número (`data-pct-abaixo`) não é o número — sai do texto da célula e é lido à parte */
+/* DRE-AJUSTES-05: o "por hectare" também mora na célula (`data-ha-abaixo`, abaixo do % do VBP) e também sai do texto do número */
 const textoDaCelula = (td: Element) => {
-  const sub = td.querySelector('[data-pct-abaixo]')?.textContent ?? '';
-  const t = (td.textContent ?? '');
-  return (sub && t.endsWith(sub) ? t.slice(0, -sub.length) : t).replace(/[▲▼]/g, '').trim();
+  let t = (td.textContent ?? '');
+  for (const sel of ['[data-ha-abaixo]', '[data-pct-abaixo]']) {
+    const sub = td.querySelector(sel)?.textContent ?? '';
+    if (sub && t.endsWith(sub)) t = t.slice(0, -sub.length);
+  }
+  return t.replace(/[▲▼]/g, '').trim();
 };
 const pctAbaixo = (td: Element) => (td.querySelector('[data-pct-abaixo]')?.textContent ?? '').trim();
+const haAbaixo = (td: Element) => (td.querySelector('[data-ha-abaixo]')?.textContent ?? '').trim();
 
-export interface Leitura { linhas: Record<string, string[]>; pct: Record<string, string[]>; abaixo?: Record<string, string[]> }
+export interface Leitura { linhas: Record<string, string[]>; pct: Record<string, string[]>; abaixo?: Record<string, string[]>; porHa?: Record<string, string[]> }
 export function lerGrade(raiz: ParentNode): Leitura {
   const linhas: Record<string, string[]> = {};
   const pct: Record<string, string[]> = {};
   const abaixo: Record<string, string[]> = {};
+  const porHa: Record<string, string[]> = {};
   let pai = '';
   for (const tr of raiz.querySelectorAll('tbody tr')) {
     const tds = [...tr.querySelectorAll('td')];
@@ -159,10 +167,11 @@ export function lerGrade(raiz: ParentNode): Leitura {
     const resto = tds.slice(1);
     linhas[chave] = resto.filter(td => !td.hasAttribute('data-pct')).map(textoDaCelula);
     if (resto.some(td => td.querySelector('[data-pct-abaixo]'))) abaixo[chave] = resto.filter(td => !td.hasAttribute('data-pct')).map(pctAbaixo);
+    if (resto.some(td => td.querySelector('[data-ha-abaixo]'))) porHa[chave] = resto.filter(td => !td.hasAttribute('data-pct')).map(haAbaixo);
     const daPct = resto.filter(td => td.hasAttribute('data-pct')).map(textoDaCelula).filter(Boolean);
     if (daPct.length) pct[chave] = daPct;
   }
-  return { linhas, pct, abaixo };
+  return { linhas, pct, abaixo, porHa };
 }
 
 /* ─────────────── os casos ─────────────── */
@@ -221,9 +230,18 @@ describe('DRE-LEVE-01: os números de cada linha são os de antes', () => {
        mostrava está agora abaixo do número da linha de cima, célula por célula; o do Lucro líquido é novo. */
     if (caso.nome.startsWith('Pecuária')) {
       const ehPct = (k: string) => PCT.test(k.split(' › ')[1]?.replace(/ #\d+$/, '') ?? '');
-      const semPct = Object.keys(a.linhas).filter(k => !ehPct(k));
+      /* DRE-AJUSTES-05 (Gabriel 19/11): o "› por hectare" de antes também está DENTRO da linha de cima (`data-ha-abaixo`), célula por
+         célula; os novos são só os que o Gabriel pediu (Lucro líquido e Investimento no período) */
+      const ehHa = (k: string) => k.split(' › ')[1]?.replace(/ #\d+$/, '') === 'por hectare';
+      const semPct = Object.keys(a.linhas).filter(k => !ehPct(k) && !ehHa(k));
       expect(Object.keys(l.linhas)).toEqual(semPct);
       for (const k of semPct) expect(l.linhas[k], k).toEqual(a.linhas[k]);
+      for (const k of Object.keys(a.linhas).filter(ehHa)) {
+        const pai = k.split(' › ')[0];
+        expect(l.porHa?.[pai], `${pai} · por hectare`).toEqual(a.linhas[k]);
+      }
+      expect(Object.keys(l.porHa ?? {}).filter(k => !Object.keys(a.linhas).includes(`${k} › por hectare`))
+        .filter(k => !k.startsWith('Lucro líquido') && !k.startsWith('(−) Investimento no período'))).toEqual([]);
       for (const k of Object.keys(a.linhas).filter(ehPct)) {
         const pai = k.split(' › ')[0];
         expect(l.abaixo?.[pai], `${pai} · %`).toEqual(a.linhas[k]);

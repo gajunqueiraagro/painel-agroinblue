@@ -30,6 +30,10 @@ export const CONTAS = [
 /** P166 — os mesmos papéis com nomes SINTÉTICOS no tamanho real (26 · 10 · 26 · 25 letras). */
 export const CONTAS_TAMANHO_REAL = CONTAS.map((c, i) => ({ ...c,
   nome_conta: ['Banco Exemplos PJ Pecuária', 'Banco Alfa', 'Invest-Exemplo PJ Pecuária', 'Cartão Exemplo - Ourocard'][i] }));
+/** CONC-LAYOUT-FIXO-01 — os mesmos papéis com nomes SINTÉTICOS no tamanho dos da Vera (8 a 16 letras: 15 · 9 · 12 · 14). Com o NJ, a prova de
+ *  que a divisão Saldos | Resumo não muda com o cliente (UI-LARGURA-FIXA-01). */
+export const CONTAS_VERA = CONTAS.map((c, i) => ({ ...c,
+  nome_conta: ['Banco Exemplo PF', 'Sicoob Ex', 'Invest Exemp', 'Cartão Exemplo'][i] }));
 
 const L = (data: string, valor: number, saldo: number, descricao: string, o: Record<string, unknown> = {}) => ({
   tipo: 'lancamento', data, valor, lancamento_id: `l-${data}-${valor}`, extrato_id: null, parcial: false, falta: null, descricao,
@@ -48,11 +52,11 @@ export const LINHAS_SISTEMA = [
 ];
 
 export function resumoDoMes(contaIds: string[] | null, v: string | null = null) {
-  const nomes = v === 'nj' ? CONTAS_TAMANHO_REAL : CONTAS;
+  const nomes = v === 'nj' ? CONTAS_TAMANHO_REAL : v === 'vera' ? CONTAS_VERA : CONTAS;
   const cc1 = linhaConta({ conta_id: 'cc1', conta_nome: nomes[0].nome_conta, tipo_conta: 'cc', status: 'conciliado', saldo_inicial: 1,
     saldo_sistema: -99999999.99, saldo_extrato: -99999999.99, diferenca: 0, entradas: 3060.6, saidas: -100003061.59,
     ...(contaIds?.length === 1 ? { linhas_sistema: LINHAS_SISTEMA } : {}) });
-  const cc2 = linhaConta({ conta_id: 'cc2', conta_nome: 'Banco Alfa', tipo_conta: 'cc', status: 'nao_conciliado', saldo_inicial: 1,
+  const cc2 = linhaConta({ conta_id: 'cc2', conta_nome: nomes[1].nome_conta, tipo_conta: 'cc', status: 'nao_conciliado', saldo_inicial: 1,
     saldo_sistema: 1, saldo_extrato: 1.03, diferenca: -0.03, motivos: [{ motivo: 'saldo_diverge', valor: -0.03 }] });
   const inv = linhaConta({ conta_id: 'inv', conta_nome: nomes[2].nome_conta, tipo_conta: 'inv', status: 'pendente', saldo_inicial: 99999999.99,
     saldo_sistema: 99999999.99, saldo_extrato: null, diferenca: null, tem_extrato: false, saldo_extrato_data: null,

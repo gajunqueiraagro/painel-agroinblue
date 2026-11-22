@@ -47,17 +47,19 @@ export function SaldoDoBanco({ clienteId, contaId, anoMes, abertura }: {
   const foraDoMes = !leitura.quando || leitura.quando.dia.slice(0, 7) !== anoMes;
   const titulo = 'Saldo que o banco informou pelo Open Finance × o extrato no sistema no fim do mesmo dia (abertura do mês + linhas do extrato até o dia). '
     + 'Só aviso: nada se ajusta.';
+  /* CONC-LAYOUT-FIXO-01 (4) — UMA linha pequena (19px) no painel; o texto inteiro no `title` (era um aviso de 2 linhas) */
+  const dif = cmp.diferenca === null ? '—' : cmp.diverge ? formatMoeda(cmp.diferenca) : 'confere';
+  const texto = `Open Finance ${quando}: banco ${formatMoeda(cmp.banco)} · extrato no sistema ${cmp.sistema === null ? '—' : formatMoeda(cmp.sistema)} · diferença ${dif}`
+    + (foraDoMes && cmp.sistema === null ? ' (a leitura do banco é de outro mês)' : '');
   return (
-    <div className={`mx-2 mt-1 rounded px-2 py-1 text-[9.5px] leading-snug ${cmp.diverge ? 'bg-warning/10 text-warning' : 'bg-muted/50 text-muted-foreground'}`}
-      data-testid="resumo-saldo-do-banco" title={titulo}>
-      <div>Banco (Open Finance, {quando}): <span className="tabular-nums font-medium">{formatMoeda(cmp.banco)}</span></div>
-      <div>
-        Extrato no sistema na mesma data: <span className="tabular-nums">{cmp.sistema === null ? '—' : formatMoeda(cmp.sistema)}</span>
-        {' · '}Diferença: <span className="tabular-nums font-medium" data-testid="resumo-saldo-do-banco-diferenca">
-          {cmp.diferenca === null ? '—' : cmp.diverge ? formatMoeda(cmp.diferenca) : 'confere'}
-        </span>
+    <div className={`mx-2 mt-1 flex h-[19px] items-center overflow-hidden whitespace-nowrap rounded px-2 text-[9.5px] ${cmp.diverge ? 'bg-warning/10 text-warning' : 'bg-muted/50 text-muted-foreground'}`}
+      data-testid="resumo-saldo-do-banco" title={`${texto}\n${titulo}`}>
+      <span className="min-w-0 flex-1 truncate">
+        Open Finance {quando}: banco <span className="tabular-nums font-medium">{formatMoeda(cmp.banco)}</span>
+        {' · '}diferença <span className="tabular-nums font-medium" data-testid="resumo-saldo-do-banco-diferenca">{dif}</span>
+        {' · '}extrato no sistema <span className="tabular-nums">{cmp.sistema === null ? '—' : formatMoeda(cmp.sistema)}</span>
         {foraDoMes && cmp.sistema === null && <span> (a leitura do banco é de outro mês)</span>}
-      </div>
+      </span>
     </div>
   );
 }

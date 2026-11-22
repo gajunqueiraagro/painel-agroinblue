@@ -18,6 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import type { Json, Database } from '@/integrations/supabase/types';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
+import { MOTIVOS_NAO_FINANCEIROS, type MotivoNaoFinanceira } from '@/lib/fiscal/classeDaNota';
 import { aceitarArquivo, fraseDeFormatoNaoAceito, type RegraDeAceite, type TipoDeArquivo } from '@/lib/arquivo/aceitarArquivo';
 
 /* ⚠ O TIPO VEM DO BANCO, não de um `as`. A tabela entrou no `types.ts` em `eb478369`;
@@ -92,6 +93,15 @@ function ligadoAQtdDe(r: object): number | null {
   return 'ligado_a_qtd' in r && typeof r.ligado_a_qtd === 'number' ? r.ligado_a_qtd : null;
 }
 
+/** lote 30: [{documento_id, motivo}] → os pares (o motivo fora da lista conhecida é descartado) */
+function daNaoFinanceira(x: unknown): [string, MotivoNaoFinanceira][] {
+  if (!x || typeof x !== 'object') return [];
+  const id = Reflect.get(x, 'documento_id');
+  const motivo = Reflect.get(x, 'motivo');
+  const m = MOTIVOS_NAO_FINANCEIROS.find((k) => k === motivo);
+  return typeof id === 'string' && m ? [[id, m]] : [];
+}
+
 /** O que o banco responde sobre "o que está documentado bate com o lançamento?". */
 export interface Confronto {
   valorLancamento: number;
@@ -118,6 +128,8 @@ export interface Confronto {
   informativos: number;
   /** A nota registrada mais de uma vez (mesmo número + CNPJ, ou a mesma chave): a faixa avisa; nunca se cancela sozinha. */
   repetidas: NotaRepetida[];
+  /** ENTREGA-FUTURA-LIGAR-01 (lote 30) — a NF que NÃO gera pagamento (a classe pelo CFOP): o documento → o motivo (o selo). Não soma. */
+  naoFinanceiras?: ReadonlyMap<string, MotivoNaoFinanceira>;
 }
 
 export interface ConfrontoFiscal {
@@ -383,6 +395,8 @@ export function daConfronto(c: Json | null | undefined): Confronto | null {
     pagamentos: Array.isArray(c.pagamentos) ? c.pagamentos.flatMap(daPagamento) : [],
     informativos: Number(c.informativos ?? 0),
     repetidas: Array.isArray(c.repetidas) ? c.repetidas.flatMap(daRepetida) : [],
+    /* lote 30 — só quando há NF que não gera pagamento (o confronto de sempre fica igual) */
+    ...(Array.isArray(c.nao_financeiras) && c.nao_financeiras.length > 0 ? { naoFinanceiras: new Map(c.nao_financeiras.flatMap(daNaoFinanceira)) } : {}),
   };
   /* PR 2b: as chaves `grupo_*` só existem com documento compartilhado — e aí vêm as três juntas. */
   if (c.grupo_soma_lancamentos == null) return base;

@@ -37,6 +37,7 @@ import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTra
 import { sugestoesDeTransferencia, porqueDaSugestao, type SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
 import { porDia } from '@/lib/conciliacao/linhasDoDia';
+import { descontoPorNf, ORIGEM_PARTE_DO_DESCONTO } from '@/lib/conciliacao/parteDoDesconto';
 import { ListaDoMesPorDia, CelSaldoDoDia, TD_LISTA, TD_LISTA_NUM, TD_RODAPE, COLUNA_SALDO, LARGURA_DATA, type ColunaDaLista } from '@/components/conciliacao/ListaDoMesPorDia';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { historicoDoBanco } from '@/lib/conciliacao/historicoDoBanco';
@@ -1196,6 +1197,39 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
     })();
     return () => { vivo = false; };
   }, [idsVinculados]);
+  /**
+   * BAIXA-DESCONTO-BANCO-01 — o desconto de cada NF casada: a parte paga com desconto (115580) é SEM CAIXA, então não vem no espelho.
+   * Lida pelos ids dos vinculados (a mesma lista do aplicado) e mostrada só como sub-linha cinza da NF, fora de toda soma.
+   */
+  const [descontos, setDescontos] = useState<ReadonlyMap<string, number>>(new Map());
+  useEffect(() => {
+    if (!idsVinculados) { setDescontos(new Map()); return; }
+    let vivo = true;
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: `saldo_de_id` fora de types.ts
+      const { data: linhas } = await (supabase as any).from('financeiro_lancamentos_v2')
+        .select('saldo_de_id, valor').in('saldo_de_id', idsVinculados.split(',')).eq('origem_tipo', ORIGEM_PARTE_DO_DESCONTO).eq('cancelado', false);
+      if (vivo) setDescontos(descontoPorNf(linhas ?? []));
+    })();
+    return () => { vivo = false; };
+  }, [idsVinculados]);
+  /** A sub-linha do desconto da NF: texto cinza, a coluna de valor VAZIA (não é movimento de conta), sem status e sem "!". */
+  const linhaDoDesconto = (nfId: string | null | undefined) => {
+    const v = nfId ? descontos.get(nfId) : undefined;
+    if (!nfId || v == null) return null;
+    return (
+      <tr key={`desconto-${nfId}`} className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-desconto-da-nf="">
+        <CelHistorico nota="" />
+        <td className={TDC} />
+        <td className={cn(TDC_MEIO, 'text-muted-foreground')}>↳</td>
+        <td className={cn(TDC_NUM, SEP)} />
+        <CelulasDoSistema apagado pedacos={[{ t: `desconto ${fmtBRL(v)} · não sai do banco`, testid: 'desconto-da-nf' }]}
+          detalhe="parte da NF paga com desconto: não é movimento de conta (fora da soma do dia, do saldo e do fluxo)"
+          fornecedor={null} subcentro={null} />
+        <CelAcoes itens={[{ rotulo: 'Abrir', motivo: 'abra a NF na linha acima' }]} />
+      </tr>
+    );
+  };
   /** Quanto falta para quitar (> 0,005), ou `null` quando está inteiro ou sem vínculo. */
   const faltaDe = (lancamentoId: string, valor: number): number | null => {
     const ap = aplicadoVivo.get(lancamentoId);
@@ -1466,6 +1500,7 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
               motivo: falta != null ? MOTIVO_EXTRATO_PARCIAL : 'vínculos sem grupo: desconcilie cada um pelo lançamento' },
           ]} />
         </tr>
+        {unica && linhaDoDesconto(unica.lancamento_id)}
         {/* ⚠ A FILHA É DETALHE DE COMPOSIÇÃO, e a tipografia diz isso: peso 400 em tudo — inclusive no valor —, texto em
             muted e borda mais fraca que a das linhas. Ela explica a mãe; não compete com ela. */}
         {agrupado && p.filhas.map((f) => {
@@ -1474,7 +1509,8 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
           /* CONC-MESA-SINAL-01: o sinal da filha é o do lançamento — a dedução aparece negativa no depósito. */
           const v = sinalDoAplicado(f.sis, p.extrato.valor) * f.valor_aplicado;
           return (
-            <tr key={f.lancamento_id} className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
+            <React.Fragment key={f.lancamento_id}>
+            <tr className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
               <CelHistorico nota="" />
               <td className={TDC} />
               <td className={cn(TDC_MEIO, 'text-muted-foreground')}>↳</td>
@@ -1488,6 +1524,8 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
                 { rotulo: 'Desconciliar', motivo: 'desconcilie pela linha do extrato, acima' },
               ]} />
             </tr>
+            {linhaDoDesconto(f.lancamento_id)}
+            </React.Fragment>
           );
         })}
       </React.Fragment>
@@ -1526,6 +1564,7 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
               motivo: 'sem grupo: desconcilie cada extrato nas linhas abaixo' },
           ]} />
         </tr>
+        {linhaDoDesconto(g.sis.lancamento_id)}
         {/* ⚠ FILHAS DO LADO DO BANCO e `↰` no meio: a seta aponta para o OFX porque é ele que está sendo decomposto. */}
         {g.extratos.map((x) => (
           <tr key={x.extrato.extrato_id} className={cn(CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">

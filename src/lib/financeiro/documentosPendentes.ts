@@ -131,14 +131,15 @@ async function gravarUm(
 }
 
 /**
- * Grava os pendentes no lançamento, um de cada vez, na ordem da lista. Devolve a lista inteira
- * atualizada — quem chama olha `todosGravados` para decidir entre fechar e "Tentar de novo".
+ * Grava os pendentes no lançamento. Devolve a lista inteira atualizada, NA ORDEM da lista — quem chama olha `todosGravados` para
+ * decidir entre fechar e "Tentar de novo".
+ * NOTA-SALVAR-RAPIDO-01 (22/11) — os pendentes gravam JUNTOS (o XML e o DANFE da nota subiam um depois do outro: +1,1 s no NJ);
+ * cada um continua com a sua própria falha (um que falha não derruba o outro).
  */
 export async function gravarDocumentosPendentes(
   clienteId: string, lancamentoId: string, pendentes: readonly DocumentoPendente[],
 ): Promise<DocumentoPendente[]> {
-  const saida: DocumentoPendente[] = [];
-  for (const p of pendentes) saida.push(await gravarUm(clienteId, lancamentoId, p));
+  const saida = await Promise.all(pendentes.map((p) => gravarUm(clienteId, lancamentoId, p)));
   avisarSeGravou(clienteId, pendentes, saida);
   return saida;
 }

@@ -9,6 +9,8 @@
  */
 import { classeDaNota, type AtributosFiscais, type ClasseDaNota, type MotivoNaoFinanceira } from './classeDaNota';
 import { documentoNaTabela } from '@/lib/fiscal/documentoNaTabela';
+import type { DuplicataNFe } from '@/lib/financeiro/nfe/tipos';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 export type SituacaoNoBanco = 'resumo' | 'manifestado' | 'xml' | 'importado' | 'ignorado' | 'cancelado_na_sefaz';
 
@@ -62,12 +64,85 @@ export interface NotaNaLista extends LinhaRecebida {
   classe: ClasseDaNota;
   /** os nº das notas que esta nota CITA (refNFe): a remessa de entrega futura → o faturamento; a devolução → a original */
   citadas: string[];
+  /** ENTREGA-FUTURA-LIGAR-01 — as CHAVES que esta nota cita (refNFe), para buscar o faturamento pela chave quando ele não está na caixa */
+  refs: string[];
   /** a cancelada: o nº da nota viva do mesmo emitente e do mesmo valor (a que a substituiu), quando há */
   substituta: string | null;
+  /** NOTAS-RECEITA-VENC-01 (Gabriel 19/11 07:36) — o vencimento pelas duplicatas da nota (cobr/dup do XML) */
+  venc: VencimentoDaNota;
+  /** NOTA-DEMONSTRACAO-01 — a ligação da demonstração com a compra ou o retorno que veio depois (`fn_notas_demonstracao_ligacoes`) */
+  demonstracao: LigacaoNaLista | null;
 }
 
-/** o que o banco extrai do XML de cada nota (`fn_notas_atributos_fiscais`) */
-export interface AtributosDaNota extends AtributosFiscais { refs: string[] }
+/** NOTA-DEMONSTRACAO-01 (Gabriel 19/11 08:03) — a demonstração (5912/6912) e o que veio DEPOIS do mesmo fornecedor: a COMPRA do bem ou
+ *  o RETORNO. `por` = a força (cita a chave · o mesmo item · só o fornecedor = "confira"). Comprado/devolvido é DERIVADO das notas. */
+export type ForcaDaLigacao = 'cita' | 'item' | 'fornecedor';
+export interface LigacaoDaDemonstracao { demo: string; nota: string; tipo: 'compra' | 'retorno'; por: ForcaDaLigacao }
+/** o lado desta nota: a demonstração vê a compra/o retorno; a compra/o retorno vê a demonstração (`outra` = nº, `outraChave` = a chave) */
+export interface LigacaoNaLista { papel: 'demo' | 'compra' | 'retorno'; tipo: 'compra' | 'retorno'; outra: string; outraChave: string; por: ForcaDaLigacao }
+export function lerLigacoes(dados: unknown): LigacaoDaDemonstracao[] {
+  if (!Array.isArray(dados)) return [];
+  return dados.flatMap((d) => {
+    if (!d || typeof d !== 'object') return [];
+    const demo = Reflect.get(d, 'demo'); const nota = Reflect.get(d, 'nota'); const tipo = Reflect.get(d, 'tipo'); const por = Reflect.get(d, 'por');
+    if (typeof demo !== 'string' || typeof nota !== 'string' || (tipo !== 'compra' && tipo !== 'retorno')) return [];
+    return [{ demo, nota, tipo, por: por === 'cita' || por === 'item' ? por : 'fornecedor' }];
+  });
+}
+export function ligacaoDaNota(chave: string, ligacoes: readonly LigacaoDaDemonstracao[]): LigacaoNaLista | null {
+  const comoDemo = ligacoes.find((l) => l.demo === chave);
+  if (comoDemo) return { papel: 'demo', tipo: comoDemo.tipo, outra: numeroDaChave(comoDemo.nota), outraChave: comoDemo.nota, por: comoDemo.por };
+  const comoNota = ligacoes.find((l) => l.nota === chave);
+  return comoNota ? { papel: comoNota.tipo, tipo: comoNota.tipo, outra: numeroDaChave(comoNota.demo), outraChave: comoNota.demo, por: comoNota.por } : null;
+}
+const CONFIRA: Record<ForcaDaLigacao, string> = { cita: ' (a nota cita a demonstração)', item: ' (o mesmo item)', fornecedor: ' — só pelo fornecedor: confira se é o mesmo bem' };
+/** a frase da ligação (o ⓘ / o title) */
+export function fraseDaLigacao(l: LigacaoNaLista): string {
+  if (l.papel === 'demo') return `${l.tipo === 'compra' ? 'Comprado' : 'Devolvido'} pela NF ${l.outra}${CONFIRA[l.por]}.`;
+  if (l.papel === 'compra') return `Esta compra é do bem em demonstração NF ${l.outra}${CONFIRA[l.por]}.`;
+  return `Fecha a demonstração NF ${l.outra}${CONFIRA[l.por]}.`;
+}
+
+/** NOTAS-RECEITA-VENC-01 — a coluna "Venc.": a PRÓXIMA duplicata (a 1ª que vence hoje ou depois; todas vencidas = a última), "k/N" com
+ *  várias; sem duplicata: "à vista" pelo tPag (01 dinheiro · 03 crédito · 04 débito · 17 PIX) ou "—". O resumo da Receita não traz duplicata. */
+export interface VencimentoDaNota {
+  todas: DuplicataNFe[];
+  proxima: DuplicataNFe | null;
+  /** a posição da próxima (1…N) */
+  indice: number;
+  aVista: boolean;
+  /** dias de hoje até a próxima (negativo = venceu) */
+  dias: number | null;
+}
+const TPAG_A_VISTA = ['01', '03', '04', '17'];
+const diasEntre = (de: string, ate: string): number => Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86_400_000);
+export function vencimentoDaNota(dups: readonly DuplicataNFe[], tpags: readonly string[], hoje: string): VencimentoDaNota {
+  const todas = [...dups].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d.vencimento)).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  if (todas.length === 0) return { todas, proxima: null, indice: 0, aVista: tpags.some((t) => TPAG_A_VISTA.includes(t)), dias: null };
+  const k = todas.findIndex((d) => d.vencimento >= hoje);
+  const i = k < 0 ? todas.length - 1 : k;
+  return { todas, proxima: todas[i], indice: i + 1, aVista: false, dias: diasEntre(hoje, todas[i].vencimento) };
+}
+/** a cor da coluna: só para a que AINDA NÃO ESTÁ LANÇADA (a lançar): venceu = vermelho; vence em até 7 dias = âmbar */
+export type TomDoVenc = 'vencida' | 'perto' | null;
+export const naoLancada = (n: Pick<NotaNaLista, 'sit'>): boolean => n.sit === 'nova' || n.sit === 'pode_estar';
+export function tomDoVenc(n: Pick<NotaNaLista, 'sit' | 'venc'>): TomDoVenc {
+  if (!naoLancada(n) || n.venc.dias == null) return null;
+  if (n.venc.dias < 0) return 'vencida';
+  return n.venc.dias <= 7 ? 'perto' : null;
+}
+/** o filtro rápido "vencidas sem lançamento" */
+export const vencidaSemLancamento = (n: Pick<NotaNaLista, 'sit' | 'venc'>): boolean => tomDoVenc(n) === 'vencida';
+/** o texto da dica (title/ⓘ) da coluna */
+export function dicaDoVenc(n: Pick<NotaNaLista, 'sit' | 'venc'>): string | undefined {
+  const t = tomDoVenc(n);
+  if (t === 'vencida' && n.venc.dias != null) return `Venceu há ${-n.venc.dias} ${n.venc.dias === -1 ? 'dia' : 'dias'} — confira se já pagou.`;
+  if (t === 'perto' && n.venc.dias != null) return n.venc.dias === 0 ? 'Vence hoje.' : `Vence em ${n.venc.dias} ${n.venc.dias === 1 ? 'dia' : 'dias'}.`;
+  return undefined;
+}
+
+/** o que o banco extrai do XML de cada nota (`fn_notas_atributos_fiscais`); `dups`/`tpags` = NOTAS-RECEITA-VENC-01 (lote 28) */
+export interface AtributosDaNota extends AtributosFiscais { refs: string[]; dups: DuplicataNFe[]; tpags: string[] }
 /** a resposta da `fn_notas_atributos_fiscais` → chave → atributos (fora do formato fica de fora: a nota segue "compra") */
 export function lerAtributos(dados: unknown): Map<string, AtributosDaNota> {
   const m = new Map<string, AtributosDaNota>();
@@ -77,10 +152,18 @@ export function lerAtributos(dados: unknown): Map<string, AtributosDaNota> {
     const ch = Reflect.get(d, 'chave'); const cf = Reflect.get(d, 'cfops'); const rf = Reflect.get(d, 'refs');
     if (typeof ch !== 'string') continue;
     const tp = Reflect.get(d, 'tpnf'); const no = Reflect.get(d, 'natop');
+    const du = Reflect.get(d, 'dups'); const pg = Reflect.get(d, 'tpags');
     m.set(ch, {
       cfops: Array.isArray(cf) ? cf.filter((x): x is string => typeof x === 'string') : [],
       tpNF: typeof tp === 'string' ? tp : null, natOp: typeof no === 'string' ? no : null,
       refs: Array.isArray(rf) ? rf.filter((x): x is string => typeof x === 'string' && /^\d{44}$/.test(x)) : [],
+      dups: Array.isArray(du) ? du.flatMap((x) => {
+        if (!x || typeof x !== 'object') return [];
+        const venc = Reflect.get(x, 'venc'); const valor = Number(Reflect.get(x, 'valor'));
+        return typeof venc === 'string' && Number.isFinite(valor)
+          ? [{ numero: String(Reflect.get(x, 'n') ?? ''), vencimento: venc, valorCent: Math.round(valor * 100) }] : [];
+      }) : [],
+      tpags: Array.isArray(pg) ? pg.filter((x): x is string => typeof x === 'string') : [],
     });
   }
   return m;
@@ -131,7 +214,8 @@ export function situacaoNaLista(l: LinhaRecebida, chavesNoSistema: ReadonlySet<s
 }
 
 export function montarLista(linhas: readonly LinhaRecebida[], titulares: ReadonlyMap<string, string>, chavesNoSistema: ReadonlySet<string>,
-  candidatos: ReadonlyMap<string, CandidatoDaNota[]> = new Map(), atributos: ReadonlyMap<string, AtributosDaNota> = new Map()): NotaNaLista[] {
+  candidatos: ReadonlyMap<string, CandidatoDaNota[]> = new Map(), atributos: ReadonlyMap<string, AtributosDaNota> = new Map(),
+  hoje: string = hojeLocal(), ligacoes: readonly LigacaoDaDemonstracao[] = []): NotaNaLista[] {
   return linhas.map((l) => {
     const base = situacaoNaLista(l, chavesNoSistema);
     const a = atributos.get(l.chave);
@@ -151,7 +235,10 @@ export function montarLista(linhas: readonly LinhaRecebida[], titulares: Readonl
       emitenteNaTabela: documentoNaTabela(l.emitenteDocumento),
       classe,
       citadas: (a?.refs ?? []).map(numeroDaChave),
+      refs: [...(a?.refs ?? [])],
       substituta: base === 'cancelada' ? substitutaDa(l, linhas) : null,
+      venc: vencimentoDaNota(a?.dups ?? [], a?.tpags ?? [], hoje),
+      demonstracao: ligacaoDaNota(l.chave, ligacoes),
     };
   }).sort((a, b) => (b.emissao ?? '').localeCompare(a.emissao ?? '') || b.chave.localeCompare(a.chave));
 }
@@ -167,9 +254,11 @@ export function substitutaDa(l: LinhaRecebida, todas: readonly LinhaRecebida[]):
 }
 
 /** o selo da linha (CURTO, nunca corta) e o ⓘ (o que é e O QUE FAZER) — pela situação e, nas não financeiras, pelo motivo da nota */
-export function seloDaNota(n: Pick<NotaNaLista, 'sit' | 'classe' | 'citadas' | 'substituta'>): { rotulo: string; cor: string; dica: string } {
+export function seloDaNota(n: Pick<NotaNaLista, 'sit' | 'classe' | 'citadas' | 'substituta'> & { demonstracao?: LigacaoNaLista | null }):
+  { rotulo: string; cor: string; dica: string } {
   if (n.sit === 'nao_financeira' && n.classe.classe === 'nao_financeira') {
     const m = n.classe.motivo;
+    const lig = n.demonstracao ? ` ${fraseDaLigacao(n.demonstracao)}` : '';
     const cit = n.citadas.length ? ` A nota cita a NF ${n.citadas.join(', ')}.` : '';
     const dica: Record<typeof m, string> = {
       entrega_futura: `Remessa da mercadoria de um pedido já faturado: o pagamento está na NF de faturamento (5922), não nesta.${cit}`,
@@ -177,9 +266,12 @@ export function seloDaNota(n: Pick<NotaNaLista, 'sit' | 'classe' | 'citadas' | '
       bonificacao: 'Entrada sem custo (bonificação/brinde): não gera lançamento.',
       devolucao: `Devolução: abate do fornecedor — ligue à nota original e ao lançamento dela.${cit}`,
       garantia: `Troca em garantia: não gera lançamento.${cit}`,
-      demonstracao: 'Bem em demonstração: volta ao fornecedor. Registre como bem de terceiro.',
+      demonstracao: n.demonstracao
+        ? `Bem em demonstração (CFOP 5912/6912), não é compra.${lig} ${n.demonstracao.papel === 'demo' ? 'Sai de Bens de terceiros.' : ''}`.trim()
+        : 'Bem em demonstração (CFOP 5912/6912): não é compra. Registre como bem de terceiro; quando vier a NF de venda (a compra) ou o retorno, as notas se ligam.',
       conserto: 'Bem em conserto: vai e volta; o serviço vem em outra nota. Registre como bem de terceiro.',
       retorno: `Retorno de um bem que foi: fecha a remessa de ida.${cit}`,
+      retorno_demonstracao: `O bem em demonstração voltou ao fornecedor (CFOP 1913/2913/5913/6913): fecha a demonstração; não gera lançamento.${lig || cit}`,
       outra_remessa: `Remessa sem pagamento (CFOP de remessa/retorno): não gera lançamento.${cit}`,
     };
     return { rotulo: ROTULO_CURTO[m], cor: 'bg-zinc-100 text-zinc-700 ring-1 ring-zinc-300', dica: dica[m] };
@@ -195,7 +287,7 @@ export function seloDaNota(n: Pick<NotaNaLista, 'sit' | 'classe' | 'citadas' | '
 /** os rótulos curtos (cabem no selo a 9px; o resto vai no ⓘ) */
 export const ROTULO_CURTO: Record<MotivoNaoFinanceira, string> = {
   entrega_futura: 'Entrega futura', comodato: 'Comodato', bonificacao: 'Bonificação', devolucao: 'Devolução', garantia: 'Garantia',
-  demonstracao: 'Demonstração', conserto: 'Conserto', retorno: 'Retorno', outra_remessa: 'Remessa',
+  demonstracao: 'Demonstração', conserto: 'Conserto', retorno: 'Retorno', retorno_demonstracao: 'Retorno demo.', outra_remessa: 'Remessa',
 };
 
 /** D4 — a "Nova" com candidato do MESMO CNPJ ou SEM fornecedor vira "Pode estar lançada"; só "outro fornecedor" fica "Nova" (o "Lançar"

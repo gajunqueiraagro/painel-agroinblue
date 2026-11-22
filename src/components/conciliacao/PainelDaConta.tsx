@@ -86,7 +86,7 @@ export function PainelDaConta({ aberto, aoFechar, clienteId, conta, linha, anoMe
   return (
     <Sheet open={aberto} onOpenChange={(v) => { if (!v) aoFechar(); }}>
       <SheetContent side="right" className="flex w-[460px] max-w-[96vw] flex-col gap-0 p-0 sm:max-w-[460px] [&>button.absolute]:text-white"
-        data-testid="painel-da-conta">
+        data-testid="painel-da-conta" data-painel-por-cima>
         <div className="shrink-0 px-3 py-2 text-white" style={{ background: FUNDO_ESCURO }}>
           <SheetTitle className="truncate pr-6 text-[12px] font-semibold text-white" title={conta.nome}>{conta.nome}</SheetTitle>
           <SheetDescription className="truncate text-[10px] text-[#b9c6cc]" title={`${fonte.detalhe} · ${anoMes.slice(5)}/${anoMes.slice(0, 4)}`}

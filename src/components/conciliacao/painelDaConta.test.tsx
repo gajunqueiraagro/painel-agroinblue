@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { contaNaTela, fonteDaConta, larguraDaConta, larguraPelaMedida, passosDaConta, PISO_DA_CONTA, RESUMO_MINIMO, TETO_DA_CONTA } from '@/lib/conciliacao/painelDaConta';
+import { fonteDaConta, passosDaConta } from '@/lib/conciliacao/painelDaConta';
 import type { LinhaResumo, StatusDono } from '@/lib/conciliacao/resumoDoDono';
 
 const NIVEL_CONTA: LinhaResumo['nivel'] = 'conta';
@@ -61,29 +61,6 @@ describe('as regras (puras)', () => {
     expect(fonteDaConta(false, { tipo_arquivo: 'ofx', saldo_declarado_data: '2026-11-13', data_importacao: null }).rotulo).toBe('OFX até 13/11/2026');
     expect(fonteDaConta(false, null).tipo).toBe('sem_extrato');
     expect(fonteDaConta(false, { tipo_arquivo: null, saldo_declarado_data: null, data_importacao: null }).rotulo).toBe('Arquivo');
-  });
-  it('a Conta na tela nunca empurra o Resumo (piso 260) para fora; com espaço, a do nome', () => {
-    const regua = 378;
-    expect(contaNaTela(219, 1400, regua)).toBe(219);
-    const apertado = contaNaTela(219, 840, regua, 15);
-    expect(apertado).toBe(840 - 24 - 8 - RESUMO_MINIMO - regua - 2 - 15);
-    expect(24 + apertado + regua + 2 + 15 + 8 + RESUMO_MINIMO).toBeLessThanOrEqual(840);
-    /* sem barra de rolagem, nada se reserva para ela */
-    expect(contaNaTela(219, 840, regua)).toBe(840 - 24 - 8 - RESUMO_MINIMO - regua - 2);
-    expect(contaNaTela(219, 500, regua)).toBe(PISO_DA_CONTA);
-    expect(contaNaTela(219, null, regua)).toBe(219);
-    expect(contaNaTela(219, 0, regua)).toBe(219);
-  });
-  it('a largura pela MEDIDA do DOM: arredonda para cima, entre o piso e o teto', () => {
-    expect(larguraPelaMedida(187.3)).toBe(188);
-    expect(larguraPelaMedida(40)).toBe(PISO_DA_CONTA);
-    expect(larguraPelaMedida(900)).toBe(TETO_DA_CONTA);
-  });
-  it('a coluna Conta = o maior nome + a folga, entre o piso e o teto', () => {
-    const medir = (t: string) => t.length * 6;
-    expect(larguraDaConta(['Total', 'Conta corrente', 'Banco Exemplo'], medir)).toBe(Math.max(PISO_DA_CONTA, 14 * 6 + 26));
-    expect(larguraDaConta(['x'.repeat(80)], medir)).toBe(TETO_DA_CONTA);
-    expect(larguraDaConta(['Ab'], medir)).toBe(PISO_DA_CONTA);
   });
 });
 
@@ -139,8 +116,8 @@ describe('a ligação na Conciliação (fonte)', () => {
   it('"Casar lançamentos" abre o MODAL Conferência existente (aba Casar + sub-aba conferência), nada novo', () => {
     expect(F).toContain("aoCasar={(id) => { setPainelContaId(null); setSelectedConta(id); setVistaExtrato('enriquecer_sistema'); setAbaEspelho('conferencia'); }}");
   });
-  it('só a faixa do topo escurece (#162931); as pílulas seguem com as cores de estado (`tomPorMes`)', () => {
-    expect(F).toContain('style={{ background: FUNDO_ESCURO }} data-testid="faixa-conciliacao"');
+  it('só a faixa do topo escurece (UI-MESES-PADRAO-01: o navy da casa, era #162931); o estado dos meses segue no `tomPorMes`', () => {
+    expect(F).toContain("style={{ background: 'hsl(var(--navy))' }} data-testid=\"faixa-conciliacao\"");
     expect(F).not.toContain('bg-[hsl(var(--header))]');
     expect(F).toContain('tomPorMes={tomDosMeses}');
   });

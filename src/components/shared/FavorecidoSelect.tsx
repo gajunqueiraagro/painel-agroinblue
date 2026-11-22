@@ -124,6 +124,8 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   nomeInteiro?: boolean;
   /** FORN-BUSCA-UNICA-01 — o uso de cada um (o `uso` da linha) aparece à direita do item: "12 lanç." */
   mostrarUso?: boolean;
+  /** COMPRAS-PARC-LAYOUT-02 — a unidade da contagem do `mostrarUso` (padrão "lanç."; o filtro de credores das compras: "compras") */
+  unidadeDoUso?: string;
   /** FIN-V2-FILTRO-FORNECEDOR-01 — o selo "N iguais" (padrão: aparece). O filtro de Lançamentos o desliga: lá a lista é a dos ativos e
    *  as filiais se distinguem pela cidade/UF e pelo CNPJ inteiro. */
   mostrarIguais?: boolean;
@@ -180,7 +182,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   search: buscaDoHospedeiro, onSearchChange: aoBuscarNoHospedeiro, onCriarNovo, novoButtonClassName,
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
   limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, linhaCompacta = false, incluirMeta = false, acaoFinal,
-  novoDesabilitado = false, novoRotulo, rotuloDoVazio = '— nenhum —', situacao = 'ativos', nomeInteiro = false, mostrarUso = false,
+  novoDesabilitado = false, novoRotulo, rotuloDoVazio = '— nenhum —', situacao = 'ativos', nomeInteiro = false, mostrarUso = false, unidadeDoUso = 'lanç.',
   mostrarIguais = true, valorInexistente = false, marcarInativo = false,
 }: FavorecidoSelectProps<F>) {
   const [open, setOpen] = useState(false);
@@ -397,7 +399,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                     <span data-testid="favorecido-iguais" className="ml-1.5 shrink-0 rounded-sm bg-amber-400/90 px-1 text-zinc-900"
                       title={`${o.iguais} cadastros ativos com este nome — confira o CNPJ/CPF`}>{seloDeIguais(o.iguais)}</span>
                   )}
-                  {mostrarUso && <span data-testid="favorecido-uso" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.uso} lanç.</span>}
+                  {mostrarUso && <span data-testid="favorecido-uso" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.uso} {unidadeDoUso}</span>}
                 </button>
               ))}
             </div>

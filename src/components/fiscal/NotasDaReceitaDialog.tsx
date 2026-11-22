@@ -7,19 +7,24 @@
  * "Vincular a este" leva o XML à porta 2 do "+ Da nota" a partir do lançamento escolhido (o Anexar de hoje: valor, datas, conta, status
  * e conciliação NÃO mudam); nunca casa sozinho.
  */
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { RetornoDaCamada } from '@/components/ui/camadas';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ThOrdenavel } from '@/components/ui/th-ordenavel';
+import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
 import { RODAPE_REGUA, TD_REGUA, TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA, TextoReservado } from '@/components/ui/regua-tabela';
 import { cn } from '@/lib/utils';
+import { LigarACompraDialog } from '@/components/fiscal/LigarACompraDialog';
 import { lerXmlDaReceita, type DadosDaReceita } from '@/hooks/useNotasDaReceita';
 import { abrirAbaDoDanfe, mostrarDanfe } from '@/lib/fiscal/abrirDanfe';
 import {
-  ABAS_DA_RECEITA, arquivoDoXml, candidatoPreMarcado, filtrarBusca, nomeDoXml, seloDaNota, totalDaLista, type AbaDaReceita,
-  type ClasseDoCandidato, type NotaNaLista,
+  ABAS_DA_RECEITA, arquivoDoXml, candidatoPreMarcado, dicaDoVenc, filtrarBusca, nomeDoXml, seloDaNota, tomDoVenc, totalDaLista,
+  vencidaSemLancamento, fraseDaLigacao, type AbaDaReceita, type ClasseDoCandidato, type NotaNaLista,
 } from '@/lib/fiscal/notasDaReceita';
 import { ehBemDeTerceiro } from '@/lib/fiscal/classeDaNota';
 import { Ajuda } from '@/components/ui/ajuda';
@@ -31,13 +36,67 @@ function oQueFazer(n: NotaNaLista): string {
   if (n.sit === 'venda_titular') return 'Confira no abate/venda (OC) do comprador. Não lance como compra.';
   if (n.sit === 'cancelada') return n.substituta ? `Use a NF ${n.substituta}, que a substituiu.` : 'Nada a lançar.';
   if (n.classe.classe !== 'nao_financeira') return '';
-  if (ehBemDeTerceiro(n.classe)) return 'Clique em "Registrar bem": ele fica em Patrimônio › Bens de terceiros até voltar.';
+  const lig = ligadaDaDemo(n);
+  if (lig) return `Clique em "Ver ${lig.tipo}" para abrir a NF ${lig.outra}. Nada a lançar nesta.`;
+  if (n.classe.motivo === 'retorno_demonstracao') return n.demonstracao ? `Nada a lançar: fecha a demonstração NF ${n.demonstracao.outra}.` : 'Nada a lançar: fecha a demonstração.';
+  if (ehBemDeTerceiro(n.classe)) return 'Clique em "Registrar bem": ele fica em Patrimônio › Bens de terceiros até voltar ou ser comprado.';
   if (n.classe.motivo === 'entrega_futura') return n.citadas.length ? `Lance a NF de faturamento ${n.citadas.join(', ')} (se ainda não estiver); esta só confirma a entrega.` : 'Lance a NF de faturamento (5922) do mesmo pedido; esta só confirma a entrega.';
   if (n.classe.motivo === 'devolucao') return 'Abata do fornecedor: ligue à nota original e ao lançamento dela (o gesto de baixa).';
   return 'Nada a lançar: fica aqui para consulta.';
 }
 const ehAcaoFaturamento = (n: NotaNaLista) => n.sit === 'nao_financeira' && n.classe.classe === 'nao_financeira' && n.classe.motivo === 'entrega_futura';
-const ehAcaoBem = (n: NotaNaLista) => n.sit === 'nao_financeira' && ehBemDeTerceiro(n.classe);
+/* NOTA-DEMONSTRACAO-01: a demonstração JÁ LIGADA à compra/ao retorno não registra bem (o bem já saiu): a ação vira "Ver compra"/"Ver retorno" */
+const ligadaDaDemo = (n: NotaNaLista) => (n.demonstracao?.papel === 'demo' ? n.demonstracao : null);
+const ehAcaoBem = (n: NotaNaLista) => n.sit === 'nao_financeira' && ehBemDeTerceiro(n.classe) && !ligadaDaDemo(n);
+
+/* NOTAS-RECEITA-VENC-01 — as colunas que ordenam (o padrão segue a emissão, a mais nova em cima) */
+type ColunaDaReceita = 'emissao' | 'emitente' | 'numero' | 'valor' | 'venc';
+const COLUNAS_DA_RECEITA: ColunaOrdenavel<NotaNaLista, ColunaDaReceita>[] = [
+  { coluna: 'emissao', tipo: 'data', valor: (n) => n.emissao },
+  { coluna: 'emitente', tipo: 'texto', valor: (n) => n.emitenteNome },
+  { coluna: 'numero', tipo: 'numero', valor: (n) => Number(n.numero.replace(/\D/g, '')) || null },
+  { coluna: 'valor', tipo: 'numero', valor: (n) => n.valorCent },
+  { coluna: 'venc', tipo: 'data', valor: (n) => n.venc.proxima?.vencimento ?? null },
+];
+
+/** a coluna "Parc." ao lado (ALINHAMENTO SOBERANO: a data sozinha na coluna dela): "k/N" com várias, "à vista" sem duplicata, vazio com 1 */
+function CelulaParcela({ n }: { n: NotaNaLista }) {
+  const v = n.venc;
+  if (!v.proxima) return v.aVista ? <span className="text-muted-foreground">à vista</span> : null;
+  return v.todas.length > 1 ? <span className={cn('tabular-nums', !tomDoVenc(n) && 'text-muted-foreground')}>{v.indice}/{v.todas.length}</span> : null;
+}
+
+/** a célula "Venc.": a data da próxima duplicata; o clique abre todas (nº · venc · valor) */
+function CelulaVenc({ n }: { n: NotaNaLista }) {
+  const v = n.venc;
+  const tom = tomDoVenc(n);
+  if (!v.proxima) return <span className="text-muted-foreground">—</span>;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className={cn('tabular-nums hover:underline',
+          tom === 'vencida' && 'font-semibold text-red-700', tom === 'perto' && 'font-semibold text-amber-700')}
+          title={dicaDoVenc(n) ?? 'Ver as parcelas da nota'} data-testid="receita-venc" data-tom={tom ?? ''} onClick={(e) => e.stopPropagation()}>
+          {dataBR(v.proxima.vencimento)}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[230px] p-1.5" onClick={(e) => e.stopPropagation()} data-testid="receita-parcelas">
+        <p className="mb-1 text-[10px] font-semibold">Parcelas da NF {n.numero}</p>
+        <table className="w-full table-fixed border-collapse text-[10px] tabular-nums">
+          <colgroup><col style={{ width: 44 }} /><col style={{ width: 78 }} /><col /></colgroup>
+          <thead><tr className="h-[18px]"><th className={TH}>Nº</th><th className={TH}>Venc.</th><th className={TH_NUM}>Valor</th></tr></thead>
+          <tbody>
+            {v.todas.map((d, i) => (
+              <tr key={`${d.numero}-${i}`} className={cn(LINHA, i + 1 === v.indice && 'bg-muted font-semibold')}>
+                <td className={TD_REGUA}>{d.numero}</td><td className={TD_REGUA}>{dataBR(d.vencimento)}</td><td className={TD_REGUA_NUM}>{brl(d.valorCent)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-left');
 const TH_NUM = cn(TH, 'text-right');
@@ -55,8 +114,8 @@ export function baixarArquivo(arquivo: File) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita,
-  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem }: {
+export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita, abaInicial,
+  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null, ligarACompra }: {
   clienteNome?: string | null;
   dados: DadosDaReceita | undefined;
   carregando: boolean;
@@ -73,8 +132,16 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   mostrarNaAba?: (aba: Window | null, arquivo: File) => Promise<void>;
   /** NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" (simular = a prévia); sem ele, o botão não aparece */
   registrarBem?: (chave: string, previsao: string | null, observacao: string | null, simular: boolean) => Promise<RespostaDoBem>;
+  /** NAV-VOLTA-ORIGEM-01 — a volta da camada de cima (o "Da nota fiscal"/a nota abertos daqui): muda `n` a cada volta */
+  retorno?: RetornoDaCamada | null;
+  /** DRE-PAINEL-01 — a aba em que a lista abre quando vem de um link (o "Ver notas" da leitura do DRE abre em "A lançar"). */
+  abaInicial?: AbaDaReceita;
+  /** ENTREGA-FUTURA-LIGAR-01 — "Ligar à compra" na remessa de entrega futura (o cliente e a busca do faturamento pela chave); sem ele, fica o
+   *  "Ver faturamento" de antes. `aoLigar` relê a lista (a remessa ligada passa a "Já no sistema"). */
+  ligarACompra?: { clienteId: string; buscarFaturamento?: (titularId: string, chave: string) => Promise<{ ok: boolean; frase: string }>; aoLigar: () => void;
+    /** a bancada injeta */ carregar?: Parameters<typeof LigarACompraDialog>[0]['carregar']; ligar?: Parameters<typeof LigarACompraDialog>[0]['ligar'] };
 }) {
-  const [aba, setAba] = useState<AbaDaReceita>('todas');
+  const [aba, setAba] = useState<AbaDaReceita>(abaInicial ?? 'todas');
   const [busca, setBusca] = useState('');
   const [titular, setTitular] = useState<string | null>(null);
   const [aberta, setAberta] = useState<NotaNaLista | null>(null);
@@ -82,10 +149,31 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   const [ocupada, setOcupada] = useState<string | null>(null);
   const [casar, setCasar] = useState<NotaNaLista | null>(null);
   const [bem, setBem] = useState<NotaNaLista | null>(null);
+  const [ligando, setLigando] = useState<NotaNaLista | null>(null);
+  const [soVencidas, setSoVencidas] = useState(false);
+  /* NAV-VOLTA-ORIGEM-01 — a linha de onde saiu (e a de baixo dela): na volta, a linha fica destacada; se ela saiu da aba (lançou, vinculou),
+     o destaque vai para a PRÓXIMA (o fluxo em série, sem reabrir nada) */
+  const [origem, setOrigem] = useState<{ chave: string; proxima: string | null } | null>(null);
+  const [voltou, setVoltou] = useState(false);
+  const quadro = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (retorno && origem) setVoltou(true); }, [retorno?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todas = useMemo(() => filtrarBusca(dados?.lista ?? [], busca, titular), [dados, busca, titular]);
   const filtro = ABAS_DA_RECEITA.find((a) => a.valor === aba)?.filtro ?? (() => true);
-  const linhas = todas.filter(filtro);
+  const vencidas = todas.filter(vencidaSemLancamento).length;
+  const filtradas = useMemo(() => todas.filter(filtro).filter((n) => !soVencidas || vencidaSemLancamento(n)), [todas, filtro, soVencidas]);
+  const { ordem, alternar, ordenadas: linhas } = useOrdenacaoTabela(filtradas, COLUNAS_DA_RECEITA, { coluna: 'emissao', direcao: 'desc' });
+  const marcarOrigem = (n: NotaNaLista) => {
+    const i = linhas.findIndex((x) => x.chave === n.chave);
+    setOrigem({ chave: n.chave, proxima: linhas[i + 1]?.chave ?? linhas[i - 1]?.chave ?? null }); setVoltou(false);
+  };
+  const destaque = voltou && origem
+    ? (linhas.some((x) => x.chave === origem.chave) ? origem.chave : origem.proxima && linhas.some((x) => x.chave === origem.proxima) ? origem.proxima : null)
+    : null;
+  useEffect(() => {
+    const linha = destaque ? quadro.current?.querySelector(`[data-chave="${destaque}"]`) : null;
+    if (linha && typeof linha.scrollIntoView === 'function') linha.scrollIntoView({ block: 'nearest' });
+  }, [destaque]);
   const pedemCiencia = todas.filter((n) => n.sit === 'pede_ciencia').length;
   const aLancar = todas.filter((n) => n.sit === 'nova' || n.sit === 'pode_estar').length;
 
@@ -112,25 +200,38 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                 valor: a.valor,
                 rotulo: <span>{a.rotulo} <TextoReservado texto={dados ? String(todas.filter(a.filtro).length) : '—'} reserva="999" /></span>,
               }))} />
+            {/* NOTAS-RECEITA-VENC-01 — o filtro rápido: só as vencidas que ainda não estão lançadas (marca navy, como a seleção da casa) */}
+            <button type="button" aria-pressed={soVencidas} onClick={() => setSoVencidas((x) => !x)} data-testid="receita-so-vencidas"
+              title="Vencidas sem lançamento: só as notas com duplicata vencida que ainda não estão lançadas — confira se já pagou"
+              className={cn('h-[24px] shrink-0 whitespace-nowrap rounded-md border px-1.5 text-[10px]',
+                soVencidas ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-red-700 hover:bg-muted')}>
+              Vencidas <TextoReservado texto={dados ? String(vencidas) : '—'} reserva="999" />
+            </button>
             <span className="flex-1" />
-            <select className="h-[24px] max-w-[170px] rounded-md border bg-card px-1 text-[10px]" value={titular ?? ''} aria-label="Produtor"
+            <select className="h-[24px] w-[130px] flex-none truncate rounded-md border bg-card px-1 text-[10px]" value={titular ?? ''} aria-label="Produtor"
               onChange={(e) => setTitular(e.target.value || null)} data-testid="receita-produtor">
               <option value="">Produtor: todos</option>
               {(dados?.titulares ?? []).map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
             </select>
             <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Busca emitente, nº"
-              className="h-[24px] w-[160px] bg-card px-1.5 text-[10px]" data-testid="receita-busca" />
+              className="h-[24px] w-[110px] bg-card px-1.5 text-[10px]" data-testid="receita-busca" />
           </div>
-          <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card" data-testid="quadro-da-receita" data-desloca-livre>
+          <div ref={quadro} className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card" data-testid="quadro-da-receita" data-desloca-livre>
             {/* NOTAS-RECEITA-SEM-LANCAMENTO-01: a 1ª ação passa a ter 92px numa linha ("Ver faturamento", "Registrar bem" inteiros) e a Situação 118 (selo + ⓘ) */}
-            <table className="w-full min-w-[920px] table-fixed border-collapse">
+            {/* NOTAS-RECEITA-VENC-01: + "Venc." (76, só a data) e "Parc." (44: "12/12" · "à vista"); "Recebeu" e "Tipo" cedem 54+8 (cabe a 1024: 982px) */}
+            <table className="w-full min-w-[982px] table-fixed border-collapse">
               <colgroup>
-                <col style={{ width: 70 }} /><col /><col style={{ width: 116 }} /><col style={{ width: 72 }} /><col style={{ width: 80 }} />
-                <col style={{ width: 92 }} /><col style={{ width: 118 }} /><col style={{ width: 118 }} /><col style={{ width: 168 }} />
+                <col style={{ width: 76 }} /><col /><col style={{ width: 116 }} /><col style={{ width: 72 }} /><col style={{ width: 80 }} />
+                <col style={{ width: 76 }} /><col style={{ width: 44 }} /><col style={{ width: 84 }} /><col style={{ width: 64 }} /><col style={{ width: 118 }} /><col style={{ width: 168 }} />
               </colgroup>
               <thead><tr className="h-[22px]">
-                <th className={TH}>Emissão</th><th className={TH}>Emitente</th><th className={TH}>CNPJ/CPF</th><th className={TH_NUM}>Nº</th>
-                <th className={TH_NUM}>Valor</th><th className={TH}>Tipo</th><th className={TH}>Recebeu</th><th className={TH}>Situação</th><th className={TH}>Ações</th>
+                <ThOrdenavel coluna="emissao" rotulo="Emissão" ordem={ordem} onOrdenar={alternar} className={TH} />
+                <ThOrdenavel coluna="emitente" rotulo="Emitente" ordem={ordem} onOrdenar={alternar} className={TH} />
+                <th className={TH}>CNPJ/CPF</th>
+                <ThOrdenavel coluna="numero" rotulo="Nº" ordem={ordem} onOrdenar={alternar} className={TH_NUM} alinhaDireita />
+                <ThOrdenavel coluna="valor" rotulo="Valor" ordem={ordem} onOrdenar={alternar} className={TH_NUM} alinhaDireita />
+                <ThOrdenavel coluna="venc" rotulo="Venc." ordem={ordem} onOrdenar={alternar} className={TH} /><th className={TH}>Parc.</th>
+                <th className={TH}>Tipo</th><th className={TH}>Recebeu</th><th className={TH}>Situação</th><th className={TH}>Ações</th>
               </tr></thead>
               <tbody>
                 {linhas.map((n) => {
@@ -140,13 +241,16 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                   const temXml = n.tipo === 'completa';
                   const podeLancar = temXml && (n.sit === 'nova' || n.sit === 'pode_estar');
                   return (
-                    <tr key={n.id} className={cn(LINHA, 'cursor-pointer hover:bg-muted/60', apagada && 'text-muted-foreground')} data-testid="receita-linha"
-                      data-situacao={n.sit} onClick={() => setAberta(n)}>
+                    <tr key={n.id} className={cn(LINHA, 'cursor-pointer hover:bg-muted/60', apagada && 'text-muted-foreground',
+                      destaque === n.chave && 'bg-sky-50 outline outline-1 -outline-offset-1 outline-sky-400')} data-testid="receita-linha"
+                      data-situacao={n.sit} data-chave={n.chave} data-destaque={destaque === n.chave ? '' : undefined} onClick={() => setAberta(n)}>
                       <td className={TD_REGUA}>{dataBR(n.emissao)}</td>
                       <td className={TD_REGUA_TEXTO} title={n.emitenteNome ?? undefined}>{n.emitenteNome ?? '—'}</td>
                       <td className={cn(TD_REGUA, 'tabular-nums')}>{n.emitenteNaTabela || '—'}</td>
                       <td className={TD_REGUA_NUM} title={`série ${n.serie}`}>{n.numero}</td>
                       <td className={cn(TD_REGUA_NUM, apagada && 'line-through')}>{n.valorCent == null ? '—' : brl(n.valorCent)}</td>
+                      <td className={TD_REGUA} onClick={(e) => e.stopPropagation()}><CelulaVenc n={n} /></td>
+                      <td className={TD_REGUA}><CelulaParcela n={n} /></td>
                       <td className={cn(TD_REGUA, 'whitespace-nowrap')} title={n.eventos.length ? n.eventos.map((e) => e.descricao ?? e.tpEvento).join(' · ') : undefined}>
                         {n.tipo === 'completa' ? 'Completa' : 'Resumo'}{n.eventos.length ? <span className="text-muted-foreground"> +{n.eventos.length} ev.</span> : null}
                       </td>
@@ -155,6 +259,12 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                         <span className="inline-flex items-center gap-1">
                           <span className={cn('whitespace-nowrap rounded-full px-1.5 py-[1px] text-[9px] font-semibold', s.cor)} data-testid="receita-selo">{s.rotulo}</span>
                           {fazer && <Ajuda titulo={s.rotulo} oQueE={s.dica} porQue="Lido da própria nota (o CFOP e a natureza da operação), automático pelo XML." comoFazer={fazer} />}
+                          {/* NOTA-DEMONSTRACAO-01 — a compra do bem que esteve em demonstração */}
+                          {n.demonstracao?.papel === 'compra' && (
+                            <span className={cn('whitespace-nowrap rounded-full px-1 py-[1px] text-[8.5px] font-semibold ring-1',
+                              n.demonstracao.por === 'fornecedor' ? 'bg-amber-50 text-amber-800 ring-amber-300' : 'bg-sky-50 text-sky-800 ring-sky-300')}
+                              title={fraseDaLigacao(n.demonstracao)} data-testid="receita-da-demo">demo</span>
+                          )}
                         </span>
                       </td>
                       <td className={TD_REGUA} onClick={(e) => e.stopPropagation()}>
@@ -163,6 +273,16 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                             <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
                               data-testid="receita-registrar-bem" title="Registrar como bem de terceiro (Patrimônio › Bens de terceiros)"
                               onClick={() => setBem(n)}>Registrar bem</button>
+                          ) : ligadaDaDemo(n) ? (
+                            <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
+                              data-testid="receita-ver-ligada" title={n.demonstracao ? fraseDaLigacao(n.demonstracao) : undefined}
+                              onClick={() => { const o = dados?.lista.find((x) => x.chave === ligadaDaDemo(n)?.outraChave); setAberta(o ?? n); }}>
+                              {ligadaDaDemo(n)?.tipo === 'retorno' ? 'Ver retorno' : 'Ver compra'}
+                            </button>
+                          ) : ehAcaoFaturamento(n) && ligarACompra ? (
+                            <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
+                              data-testid="receita-ligar-compra" title={n.citadas.length ? `Guardar esta remessa na compra (cita o faturamento NF ${n.citadas.join(', ')})` : 'Guardar esta remessa na compra (sem NF de faturamento)'}
+                              onClick={() => setLigando(n)}>Ligar à compra</button>
                           ) : ehAcaoFaturamento(n) ? (
                             <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
                               data-testid="receita-ver-faturamento" title={n.citadas.length ? `A NF de faturamento citada: ${n.citadas.join(', ')}` : 'A nota não cita o faturamento'}
@@ -171,7 +291,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                           <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap', podeLancar ? 'bg-[#E7C873] font-semibold text-foreground hover:bg-[#D9B95F]' : 'invisible')}
                             disabled={!podeLancar || ocupada === n.id} data-testid="receita-lancar"
                             title='Abre o "Da nota fiscal" com este XML (o mesmo caminho do arquivo solto)'
-                            onClick={() => (n.candidatos.length ? setCasar(n) : void comXml(n, aoLancar))}>Lançar</button>
+                            onClick={() => { marcarOrigem(n); if (n.candidatos.length) setCasar(n); else void comXml(n, aoLancar); }}>Lançar</button>
                           )}
                           <button type="button" className={cn(BOTAO, 'w-[34px] border', temXml ? 'bg-card hover:bg-muted' : 'cursor-not-allowed text-muted-foreground/50')}
                             disabled={!temXml || ocupada === n.id} data-testid="receita-pdf"
@@ -185,7 +305,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                   );
                 })}
                 {linhas.length === 0 && (
-                  <tr className={LINHA}><td colSpan={9} className={cn(TD_REGUA, 'py-4 text-center text-muted-foreground')} data-testid="receita-vazia">
+                  <tr className={LINHA}><td colSpan={11} className={cn(TD_REGUA, 'py-4 text-center text-muted-foreground')} data-testid="receita-vazia">
                     {erro ?? (carregando ? 'Carregando…' : 'Nenhuma nota aqui.')}
                   </td></tr>
                 )}
@@ -201,11 +321,16 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
         </div>
         <div className="flex h-[34px] shrink-0 items-center gap-2 border-t bg-card px-3">
           <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" data-testid="receita-aviso" title={aviso ?? undefined}>
-            {aviso ?? 'Só leitura: nada aqui muda lançamento sem o "Da nota fiscal". Dar ciência e Ignorar vêm na próxima fatia.'}
+            {aviso ?? 'Só leitura: lançar ou vincular pelo Da nota fiscal.'}
           </span>
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
         </div>
         {aberta && <DadosDaNota n={aberta} aoFechar={() => setAberta(null)} />}
+        {ligando && ligarACompra && dados && (
+          <LigarACompraDialog n={ligando} lista={dados.lista} clienteId={ligarACompra.clienteId} lerXml={lerXml}
+            buscarFaturamento={ligarACompra.buscarFaturamento} carregar={ligarACompra.carregar} ligar={ligarACompra.ligar}
+            aoFechar={(ligou) => { setLigando(null); if (ligou) { setAviso('Remessas ligadas à compra: ficam nos documentos dos lançamentos (não somam no Documentado).'); ligarACompra.aoLigar(); } }} />
+        )}
         {bem && registrarBem && <RegistrarBemDeTerceiro n={bem} registrar={registrarBem} aoFechar={(frase) => { setBem(null); if (frase) setAviso(frase); }} />}
         {casar && <PodeEstarLancada n={casar} ocupada={ocupada === casar.id} aviso={aviso} aoFechar={() => setCasar(null)}
           aoLancarNova={() => { const n = casar; setCasar(null); void comXml(n, aoLancar); }}
@@ -233,7 +358,10 @@ function DadosDaNota({ n, aoFechar }: { n: NotaNaLista; aoFechar: () => void }) 
     ['Eventos', n.eventos.length ? n.eventos.map((e) => e.descricao ?? e.tpEvento).join(' · ') : 'nenhum'],
     /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — as ligações que a própria nota dá */
     ['Cita a NF', n.citadas.length ? n.citadas.join(', ') : '—'],
-    ...(n.substituta ? [['Substituída por', `NF ${n.substituta}`] satisfies [string, string]] : []),
+    /* UI-LARGURA-FIXA-01: as linhas são SEMPRE as mesmas (a altura não depende da nota): sem dado, "—" */
+    ['Substituída por', n.substituta ? `NF ${n.substituta}` : '—'],
+    ['Demonstração', n.demonstracao ? fraseDaLigacao(n.demonstracao) : '—'],
+    ['Vencimento', n.venc.proxima ? `${dataBR(n.venc.proxima.vencimento)}${n.venc.todas.length > 1 ? ` · parcela ${n.venc.indice}/${n.venc.todas.length}` : ''}` : n.venc.aVista ? 'à vista' : '—'],
   ];
   return (
     <Dialog open onOpenChange={(v) => { if (!v) aoFechar(); }}>
@@ -242,9 +370,15 @@ function DadosDaNota({ n, aoFechar }: { n: NotaNaLista; aoFechar: () => void }) 
           <DialogTitle className="truncate text-[11px] font-semibold text-primary-foreground">Nota {n.numero} · {n.emitenteNome ?? '—'}</DialogTitle>
           <DialogDescription className="sr-only">Os dados da nota que a Receita mandou.</DialogDescription>
         </div>
-        <dl className="grid grid-cols-[84px_1fr] gap-x-2 gap-y-1 p-3 text-[10.5px]">
-          {campos.map(([k, v]) => (<Fragment key={k}><dt className="text-muted-foreground">{k}</dt><dd className="min-w-0 break-words tabular-nums">{v}</dd></Fragment>))}
-        </dl>
+        {/* UI-LARGURA-FIXA-01 (Gabriel 19/11): uma TABELA de linhas fixas — texto longo = "…" + o inteiro no title, nunca quebra (a altura é a mesma em toda nota) */}
+        <div className="p-3">
+          <table className="w-full table-fixed border-collapse text-[10.5px]">
+            <colgroup><col style={{ width: 96 }} /><col /></colgroup>
+            <tbody>{campos.map(([k, v]) => (
+              <tr key={k} className="h-[20px]"><td className={cn(TD_REGUA, 'text-muted-foreground')}>{k}</td><td className={cn(TD_REGUA_TEXTO, 'tabular-nums')} title={v}>{v}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
         <div className="flex justify-end border-t px-3 py-1.5">
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
         </div>
@@ -284,7 +418,8 @@ function PodeEstarLancada({ n, ocupada, aviso, aoFechar, aoVincular, aoLancarNov
           <div className="rounded-md bg-amber-50 px-2.5 py-1.5 text-[10.5px] text-amber-900" data-testid="receita-casar-aviso">
             Esta nota pode já estar lançada: veja os lançamentos sem nota com o mesmo valor (de 15 dias antes a 60 depois da emissão). Criar de novo duplica a despesa.
           </div>
-          <div className="max-h-[260px] overflow-auto rounded-md border bg-card">
+          {/* UI-LARGURA-FIXA-01: o quadro tem ALTURA fixa (260), nunca a do número de candidatos */}
+          <div className="h-[260px] overflow-auto rounded-md border bg-card">
             <table className="w-full min-w-[900px] table-fixed border-collapse">
               <colgroup><col style={{ width: 28 }} /><col style={{ width: 84 }} /><col style={{ width: 84 }} /><col style={{ width: 150 }} /><col />
                 <col style={{ width: 160 }} /><col style={{ width: 90 }} /><col style={{ width: 84 }} /><col style={{ width: 112 }} /></colgroup>
@@ -352,12 +487,13 @@ function RegistrarBemDeTerceiro({ n, registrar, aoFechar }: {
   const MOTIVO: Record<string, string> = { comodato: 'Comodato — o bem é do fornecedor, emprestado', demonstracao: 'Demonstração — volta ao fornecedor', conserto: 'Conserto — vai e volta' };
   return (
     <Dialog open onOpenChange={(v) => { if (!v) aoFechar(null); }}>
-      <DialogContent className="w-[min(600px,calc(100vw-16px))] max-w-none gap-0 p-0 [&>button]:top-2.5 [&>button]:text-primary-foreground" data-testid="receita-bem">
-        <div className="flex h-[34px] items-center bg-primary px-3 pr-10">
+      <DialogContent className="flex h-[min(420px,calc(100vh-16px))] w-[min(600px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0 [&>button]:top-2.5 [&>button]:text-primary-foreground" data-testid="receita-bem">
+        <div className="flex h-[34px] shrink-0 items-center bg-primary px-3 pr-10">
           <DialogTitle className="truncate text-[11px] font-semibold text-primary-foreground">Registrar bem de terceiro · NF {n.numero}</DialogTitle>
           <DialogDescription className="sr-only">A prévia pela nota de remessa; nada grava antes de Registrar.</DialogDescription>
         </div>
-        <div className="space-y-2 bg-muted p-3 text-[10.5px]">
+        {/* UI-LARGURA-FIXA-01: o modal tem altura FIXA (420); os itens rolam no quadro deles, que ocupa a sobra */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 bg-muted p-3 text-[10.5px]">
           {!previa && <div className="text-muted-foreground">Lendo a nota…</div>}
           {previa && previa.ok === false && <div className="text-destructive" data-testid="receita-bem-recusa">{previa.frase}</div>}
           {previa && previa.ok && (<>
@@ -370,7 +506,8 @@ function RegistrarBemDeTerceiro({ n, registrar, aoFechar }: {
               <span className="text-muted-foreground">Observação</span>
               <Input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="onde está, contrato…" className="h-[24px] bg-card px-1.5 text-[10px]" />
             </div>
-            <table className="w-full table-fixed border-collapse rounded-md bg-card">
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-card" data-testid="receita-bem-quadro">
+            <table className="w-full table-fixed border-collapse">
               <colgroup><col style={{ width: 30 }} /><col /><col style={{ width: 60 }} /><col style={{ width: 120 }} /></colgroup>
               <thead><tr className="h-[22px]"><th className={TH}>#</th><th className={TH}>Bem (da nota)</th><th className={TH_NUM}>Qtd.</th><th className={TH_NUM}>Valor de referência</th></tr></thead>
               <tbody>{previa.itens.map((i) => (
@@ -378,10 +515,11 @@ function RegistrarBemDeTerceiro({ n, registrar, aoFechar }: {
                   <td className={TD_REGUA_NUM}>{i.quantidade == null ? '—' : i.quantidade.toLocaleString('pt-BR')}</td>
                   <td className={TD_REGUA_NUM}>{i.valor == null ? '—' : brl(Math.round(i.valor * 100))}</td></tr>))}</tbody>
             </table>
-            <div className="text-muted-foreground">Não entra no patrimônio do cliente (nem na depreciação nem no valor dos bens). Fica em Bens de terceiros até a nota de retorno.</div>
+            </div>
+            <div className="shrink-0 text-muted-foreground">Não entra no patrimônio do cliente (nem na depreciação nem no valor dos bens). Fica em Bens de terceiros até a nota de retorno.</div>
           </>)}
         </div>
-        <div className="flex h-[34px] items-center justify-end gap-2 border-t bg-card px-3">
+        <div className="flex h-[34px] shrink-0 items-center justify-end gap-2 border-t bg-card px-3">
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={() => aoFechar(null)}>Cancelar</Button>
           <Button size="sm" className="h-[24px] text-[10px]" disabled={!previa || previa.ok === false || gravando} data-testid="receita-bem-registrar"
             onClick={async () => {

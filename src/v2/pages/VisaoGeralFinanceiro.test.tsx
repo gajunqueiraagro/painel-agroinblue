@@ -145,7 +145,7 @@ describe('Visão Geral — render-only', () => {
   it('V5 trocar o mês pela pílula: o card mostra o mês; no Ano o período segue jan → dez (P147)', async () => {
     render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
     await screen.findByTestId('grade-vg');
-    fireEvent.click(screen.getByTestId('vg-mes-4'));
+    fireEvent.click(within(screen.getByTestId('vg-meses')).getByText('Abr'));
     await waitFor(() => expect(screen.getByTestId('card-vg-titulo').textContent).toBe('Entradas e saídas · abr/26 (previsto)'));
     expect(celula('card-valor-entrada')).toBe('R$ 400,00');
     expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').at(-1)![1]).toMatchObject({ p_de: '2026-01-01', p_ate: '2026-12-31' });
@@ -168,9 +168,21 @@ describe('Visão Geral — render-only', () => {
     await waitFor(() => expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').at(-1)![1]).toMatchObject({ p_de: '2026-03-01', p_ate: '2027-02-28' }));
     /* Ano com DEZ (futuro) → jan–dez, nov e dez previstos */
     fireEvent.click(screen.getByText('Ano'));
-    fireEvent.click(screen.getByTestId('vg-mes-12'));
+    fireEvent.click(within(screen.getByTestId('vg-meses')).getByText('Dez'));
     await waitFor(() => expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').at(-1)![1]).toMatchObject({ p_de: '2026-01-01', p_ate: '2026-12-31' }));
     await waitFor(() => expect(document.querySelectorAll('[data-testid^="grade-celula-saldo_final-"]')).toHaveLength(12));
+  });
+
+  /* UI-MESES-PADRAO-01 (D2) — o ‹ano› e os meses são o SeletorPeriodo da casa: o mês escolhido é o extremo; o futuro diz "previsto" */
+  it('V20 a fita dos meses é o SeletorPeriodo: o mês do sel é o extremo, os outros fora, o previsto no title', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    const fita = within(screen.getByTestId('vg-meses'));
+    expect(fita.getByText('Fev').getAttribute('data-papel')).toBe('extremo');
+    expect(fita.getByText('Jan').getAttribute('data-papel')).toBe('fora');
+    expect(fita.getByText('Abr').getAttribute('title')).toBe('abr/26 · previsto');
+    expect(fita.getByText('Jan').getAttribute('title')).toBe('jan/26');
+    expect(screen.queryByLabelText('Ano anterior')).toBeNull();
   });
 
   const ultimoPedido = () => rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').at(-1)![1];

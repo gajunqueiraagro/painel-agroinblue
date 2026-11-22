@@ -1,7 +1,11 @@
 /* P159a (CONC-TELAS-01) — o Espelho da cc1 na bancada (`fn_extratos_espelhados`), SINTÉTICO e no pior caso: históricos longos com a
  * moldura do banco ("PIX - ENVIADO - dd/mm hh:mm"), valores no teto, o sem par, o agrupado com o aviso "lançado em", o N:1, o candidato
  * com documento e o vencido de outro mês. Serve à Conferência (modal), ao Extrato (banco) e às abas Sistema/Evolução do Casar.
- * `&v=poucos`: só o dia 01 (o mês curto: a lista não enche a tela). */
+ * `&v=poucos`: só o dia 01 (o mês curto: a lista não enche a tela).
+ * BAIXA-DESCONTO-BANCO-01 — o dia 03 com a NF paga com desconto (o caso Edson, SINTÉTICO): `&v=desconto` = ANTES da 115580 (a NF de
+ * −4.863,35 ligada só a 3.850,00: o resto 1.013,35 com "!" soma no dia); `&v=desconto-depois` = a NF com o que o banco pagou (−3.850,00) e a
+ * parte paga com desconto como sub-linha cinza (a parte vem de `financeiro_lancamentos_v2`, `dados/espelho.ts` → `PARTES_DO_DESCONTO`). */
+export const PARTES_DO_DESCONTO = [{ saldo_de_id: 's9', valor: 1013.35 }];
 const NOME = 'FORNECEDOR SINTÉTICO COM O NOME BEM COMPRIDO DE EXEMPLO AGROPECUÁRIA LTDA';
 const ofx = (extrato_id: string, data: string, valor: number, status: string, historico: string, documento: string | null = null) =>
   ({ extrato_id, data, historico, documento, valor, status, flag_dup: false, flag_investimento: false });
@@ -20,6 +24,8 @@ const cand = (lancamento_id: string, data_vencimento: string, valor_assinado: nu
 
 export function espelho(v: string | null) {
   const poucos = v === 'poucos';
+  const desconto = v === 'desconto' || v === 'desconto-depois';
+  const nfCheia = v === 'desconto';
   const ofxs = [
     ofx('e1', '2031-09-01', -99999999.99, 'conciliado', `PIX - ENVIADO - 01/09 08:46 ${NOME}`, '2031090100001'),
     ofx('e2', '2031-09-01', -175, 'sem_vinculo', 'PAGAMENTO DE BOLETO -  EMPRESA SINTÉTICA DE SERVIÇOS RURAIS E TRANSPORTES S A'),
@@ -30,6 +36,7 @@ export function espelho(v: string | null) {
       ofx('e6', '2031-09-02', -50000, 'conciliado', 'TED-CRÉDITO EM CONTA -  TRANSFERÊNCIA SINTÉTICA PARTE 2'),
       ofx('e7', '2031-09-03', -3.97, 'sem_vinculo', 'COBRANÇA DE I.O.F. - IOF SALDO DEVEDOR CONTA'),
     ]),
+    ...(desconto ? [ofx('e9', '2031-09-03', -3850, 'conciliado', 'PIX - AGENDAMENTO - 03/09 05:37 OFICINA MECÂNICA SINTÉTICA')] : []),
   ];
   const sistema = [
     sis('s1', '2031-09-01', -99999999.99, { competencia: '2031-08-01' }),
@@ -40,6 +47,8 @@ export function espelho(v: string | null) {
       sis('s5', '2031-09-02', -100000, { descricao: 'Transferência Sintética entre Contas', centro: 'Bancário', subcentro: 'Transferência entre Contas Bancárias' }),
       sis('s8', '2031-09-03', -2561.6, { status: 'sem_vinculo', descricao: 'Parcela do Contrato Sintético de Custeio Agrícola' }),
     ]),
+    ...(desconto ? [sis('s9', '2031-09-03', nfCheia ? -4863.35 : -3850, { descricao: 'Serviço de Manutenção da Bomba Injetora e Revisão',
+      centro: 'Máquinas', subcentro: 'Manutenção Máquinas Pecuária', fornecedor: 'Oficina Mecânica Sintética ME' })] : []),
   ];
   const vinculos = [
     { extrato_id: 'e1', lancamento_id: 's1', valor_aplicado: 99999999.99, tipo_aprovacao: 'manual', grupo_id: null },
@@ -50,6 +59,7 @@ export function espelho(v: string | null) {
       { extrato_id: 'e5', lancamento_id: 's5', valor_aplicado: 50000, tipo_aprovacao: 'agrupamento_manual', grupo_id: 'g2' },
       { extrato_id: 'e6', lancamento_id: 's5', valor_aplicado: 50000, tipo_aprovacao: 'agrupamento_manual', grupo_id: 'g2' },
     ]),
+    ...(desconto ? [{ extrato_id: 'e9', lancamento_id: 's9', valor_aplicado: 3850, tipo_aprovacao: 'manual', grupo_id: null }] : []),
   ];
   const candidatos = [
     cand('c1', '2031-09-01', -1234.56),

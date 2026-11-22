@@ -11,6 +11,8 @@
  *   quando UF e Mun estão escritos (vIBS = vIBSUF + vIBSMun, a própria definição do grupo). A conferência só AVISA, nunca muda valor.
  */
 
+import { CCLASSTRIB_RTC } from './cClassTribRtc';
+
 /** "632,81" / "5181,88" / "18.43" → "632.81" (o texto como no XML); nada que não seja número → null */
 function decimal(t: string | undefined): string | null {
   if (!t) return null;
@@ -74,17 +76,73 @@ export function ibsCbsTotalDaNota(complementares: string | null | undefined, det
   return null;
 }
 
-/** A CONFERÊNCIA (só avisa): cada item da forma A fecha com a sua base (alíquotas de 2026: IBS UF 0,1% · CBS 0,9%, ou as escritas no total),
+/** CALCULADORA-RTC-CONFERIR-01 (Gabriel 22/11) — a conta da CALCULADORA OFICIAL da Receita (`calculadora-rtc-regime-regular`, MIT;
+ *  `CalculoCbsIbsService` + `ArredondamentoUtils`, ADR003), para UM tributo de UM item:
+ *    alíquota efetiva = arred4(alíquota × (1 − pRed/100)) · calculado = arred2(arred2(vBC) × efetiva ÷ 100)
+ *    vDif = arred2(vBC × efetiva ÷ 100 × pDif ÷ 100) · devido = calculado − vDif
+ *  Cada número é arredondado UMA vez, em HALF_EVEN (meio → par, ABNT NBR 5891); a conta no meio é exata (inteiros grandes). Entradas e
+ *  saídas em texto decimal (como no XML: "200.00", "0.9000", "60"); os casos da calculadora prendem a conta (`calculadoraRtc.casos.json`). */
+export function contaDaCalculadora(e: { vBC: string; aliquota: string; pRed?: string | number; pDif?: string | number }): { aliquotaEfetiva: string; calculado: string; diferido: string; devido: string } {
+  const bc = escala(e.vBC, 2);                 // centavos
+  const p = escala(e.aliquota, 4);             // alíquota em 1/10.000 de ponto
+  const red = escala(String(e.pRed ?? 0), 4);  // redução em 1/10.000 de ponto
+  const dif = escala(String(e.pDif ?? 0), 4);
+  const MILHAO = BigInt(1000000);
+  const efet = meioParaPar(p * (MILHAO - red), MILHAO);                        // p × (1 − red/100), em 1/10.000 de ponto
+  const calculado = meioParaPar(bc * efet, MILHAO);                             // centavos × (efet/10⁴)/100
+  const diferido = meioParaPar(bc * efet * dif, MILHAO * MILHAO);
+  return { aliquotaEfetiva: texto(efet, 4), calculado: texto(calculado, 2), diferido: texto(diferido, 2), devido: texto(calculado - diferido, 2) };
+}
+/** "200" / "0.9000" / "-1.5" → inteiro em 10^casas (exato; mais casas que `casas` = arredondado meio → par) */
+function escala(t: string, casas: number): bigint {
+  const m = /^(-?)(\d*)(?:\.(\d*))?$/.exec(t.trim());
+  if (!m) return BigInt(0);
+  const frac = (m[3] ?? '');
+  const inteiro = BigInt((m[2] || '0') + frac.slice(0, casas).padEnd(casas, '0'));
+  const resto = frac.slice(casas);
+  const v = resto && /[1-9]/.test(resto)
+    ? meioParaPar(inteiro * BigInt(10) ** BigInt(resto.length) + BigInt(resto), BigInt(10) ** BigInt(resto.length))
+    : inteiro;
+  return m[1] === '-' ? -v : v;
+}
+/** n ÷ d arredondado meio → par (d > 0) */
+function meioParaPar(n: bigint, d: bigint): bigint {
+  const neg = n < BigInt(0); const a = neg ? -n : n;
+  let q = a / d; const r = a % d;
+  if (r * BigInt(2) > d || (r * BigInt(2) === d && q % BigInt(2) === BigInt(1))) q += BigInt(1);
+  return neg ? -q : q;
+}
+function texto(v: bigint, casas: number): string {
+  const neg = v < BigInt(0); const s = (neg ? -v : v).toString().padStart(casas + 1, '0');
+  return `${neg ? '-' : ''}${s.slice(0, s.length - casas)}.${s.slice(s.length - casas)}`;
+}
+
+/** A regra de um item: o que o grupo traz (XML: `pRedAliq`, `pDif`) e, sem isso, a TABELA de cClassTrib da calculadora (o PDF só escreve
+ *  CST/cClassTrib, base e valores). `null` = não se confere: classificação "fora" (a conta não se refaz pela base e alíquota escritas) ou
+ *  cClassTrib que a tabela não conhece com CST diferente de 000. */
+function regraDoItem(g: Record<string, string>): { pRed: { CBS: string; IBSUF: string; IBSMun: string }; pDif: string; zero: boolean } | null {
+  const t = g.cClassTrib ? CCLASSTRIB_RTC[g.cClassTrib] : undefined;
+  if (t?.regra === 'fora') return null;
+  if (!t && !g.pRedAliq && g.CST && g.CST !== '000') return null;
+  const r = (tributo: 'CBS' | 'IBSUF' | 'IBSMun') => g.pRedAliq ?? String(t?.pRed?.[tributo] ?? 0);
+  return { pRed: { CBS: r('CBS'), IBSUF: r('IBSUF'), IBSMun: r('IBSMun') }, pDif: g.pDif ?? String(t?.pDif ?? 0), zero: t?.regra === 'zero' };
+}
+
+/** A CONFERÊNCIA (só avisa): cada item fecha com a sua base pela CONTA DA CALCULADORA OFICIAL (`contaDaCalculadora`: redução e diferimento
+ *  do grupo ou da tabela de cClassTrib; alíquotas do item, senão as escritas no total, senão as de 2026: CBS 0,9% · IBS UF 0,1% · IBS Mun 0),
  *  e a soma dos itens fecha com o total escrito, quando os dois existem. Tolerância: 1 centavo por item (o arredondamento do emissor). */
 export function conferirIbsCbs(itens: readonly (Record<string, string> | null)[], total: Record<string, string> | null): string[] {
   const avisos: string[] = [];
-  const pUF = total?.pIBSUF ? Number(total.pIBSUF) / 100 : 0.001;
-  const pCBS = total?.pCBS ? Number(total.pCBS) / 100 : 0.009;
   const com = itens.map((g, k) => [g, k] as const).filter((x): x is readonly [Record<string, string>, number] => x[0] !== null);
   for (const [g, k] of com) {
     if (!g.vBC) continue;
-    const bc = cent(g.vBC);
-    if (Math.abs(Math.round(bc * pCBS) - cent(g.vCBS)) > 1 || Math.abs(Math.round(bc * pUF) - cent(g.vIBSUF)) > 1) {
+    const regra = regraDoItem(g);
+    if (!regra) continue;
+    const aliq = (campo: 'pCBS' | 'pIBSUF' | 'pIBSMun', padrao: string) => (regra.zero ? '0' : g[campo] ?? total?.[campo] ?? padrao);
+    const devido = (campo: 'pCBS' | 'pIBSUF' | 'pIBSMun', tributo: 'CBS' | 'IBSUF' | 'IBSMun', padrao: string) =>
+      contaDaCalculadora({ vBC: g.vBC, aliquota: aliq(campo, padrao), pRed: regra.pRed[tributo], pDif: regra.pDif }).devido;
+    const longe = (esperado: string, escrito: string | undefined) => escrito !== undefined && Math.abs(cent(esperado) - cent(escrito)) > 1;
+    if (longe(devido('pCBS', 'CBS', '0.90'), g.vCBS) || longe(devido('pIBSUF', 'IBSUF', '0.10'), g.vIBSUF) || longe(devido('pIBSMun', 'IBSMun', '0'), g.vIBSMun)) {
       avisos.push(`item ${k + 1}: IBS/CBS escritos não fecham com a base ${g.vBC}`);
     }
   }

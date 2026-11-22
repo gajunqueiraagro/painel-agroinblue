@@ -163,7 +163,8 @@ describe('a fonte', () => {
     expect(/\buppercase\b|tracking-/.test(fonte)).toBe(false);
   });
   it('modal de tamanho fixo limitado pela janela; só a lista de parcelas rola', () => {
-    expect(fonte).toMatch(/h-\[min\(560px,calc\(100dvh-32px\)\)\] w-\[min\(1120px,calc\(100vw-32px\)\)\]/);
+    /* COMPRAS-PARC-LAYOUT-02 (D1) — o mesmo tamanho fixo dos 3 modais */
+    expect(fonte).toMatch(/h-\[min\(720px,calc\(100vh-16px\)\)\] w-\[min\(1150px,calc\(100vw-16px\)\)\]/);
     /* FIN-CONSORCIO-03: além da lista, só o recado do rodapé rola por dentro (e só se passar de duas linhas de 11px) */
     expect((fonte.match(/overflow-y-auto/g) ?? []).length).toBe(2);
     expect(fonte).toMatch(/max-h-\[32px\] min-w-0 flex-1 overflow-y-auto break-words text-\[11px\]/);

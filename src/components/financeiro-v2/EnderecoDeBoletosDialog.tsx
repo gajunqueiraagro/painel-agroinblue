@@ -102,7 +102,7 @@ export function EnderecoDeBoletosDialog({ clienteId, clienteNome, aoFechar, api 
               <span className="text-[11px] text-muted-foreground">{erroDaLeitura ?? 'Carregando…'}</span>
             ) : temEndereco ? (
               <div className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 flex-1 break-all text-[12px] font-semibold leading-tight text-primary" data-testid="endereco-atual">{atual.endereco}</span>
+                <span className="uma-linha-que-rola min-w-0 flex-1 text-[12px] font-semibold leading-tight text-primary" data-testid="endereco-atual" title={atual.endereco}>{atual.endereco}</span>
                 <Button size="sm" variant="outline" className="h-[24px] shrink-0 text-[10px]" onClick={copiar} data-testid="copiar-endereco">Copiar</Button>
                 <Button size="sm" variant="outline" className="h-[24px] shrink-0 text-[10px]" disabled={ocupado} onClick={() => abrir('trocar')} data-testid="trocar-endereco">Trocar</Button>
                 <Button size="sm" variant="outline" className="h-[24px] shrink-0 text-[10px] text-red-700" disabled={ocupado} onClick={() => abrir('revogar')} data-testid="revogar-endereco">Revogar</Button>

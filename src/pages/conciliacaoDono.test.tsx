@@ -198,7 +198,7 @@ describe('T1 — o Emerson (NJ Sicredi Lavoura, set/26) pela régua do dono', ()
     expect(n(screen.getByTestId('resumo-retido').textContent)).toBe('↳ retido no depósito R$ 1.217,01 (15)');
     expect(screen.getByTestId('resumo-retido').getAttribute('title')).toContain('15 retenções');
     /* P166: a faixa diz o status do dono; "confere em todos os dias" segue no `title` da linha da conta */
-    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('✓ Set/2026 conciliado');
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('✓ conciliado');
     expect(screen.getByTestId('faixa-status-frase').textContent).toBe('O saldo do sistema bate com o do extrato');
     expect(n(screen.getByTestId('faixa-classificacao').textContent)).toBe('Classificação: ✓ completa');
     expect(linhaDaConta(ID_LAV).getAttribute('title')).toContain('confere em todos os dias');
@@ -210,7 +210,7 @@ describe('T2 — a faixa é o status do dono, e "confere em todos os dias" nunca
     await abrirConta('cartao');
     await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('nao_conciliado'));
     expect(screen.getByTestId('faixa-status').className).toContain('bg-destructive/10');
-    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('✕ Set/2026 não conciliado');
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('✕ não conciliado');
     /* o status é o SALDO; o valor fica na tabela (a faixa não repete o 6.470,73), por extenso no `title` */
     const frase = screen.getByTestId('faixa-status-frase');
     expect(frase.textContent).toBe('Saldo do sistema e do extrato não batem');
@@ -234,7 +234,7 @@ describe('T3 — os motivos (P166: o link do dia saiu com o card Status; os dias
     await abrirConta('parada');
     await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('pendente'));
     expect(screen.getByTestId('faixa-status').className).toContain('bg-muted');
-    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('⏳ Set/2026 pendente');
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('⏳ pendente');
     expect(screen.getByTestId('faixa-status-frase').textContent).toBe('Saldo não informado');
     expect(screen.queryByTestId('link-dia')).toBeNull();
   });
@@ -531,7 +531,7 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
     await abrirConta(PESSOAL.conta_id);
     await waitFor(() => expect(screen.getByTestId('faixa-status').getAttribute('data-status')).toBe('conciliado'));
     expect(screen.getByTestId('faixa-status').className).toContain('bg-success/10');
-    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('✓ Set/2026 conciliado');
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('✓ conciliado');
     expect(screen.queryByTestId('segunda-prova')).toBeNull();
     expect(screen.queryByTestId('link-dia')).toBeNull();
     expect(within(linhaDaConta(PESSOAL.conta_id)).getByTestId('marca-aviso-conta')).toBeInTheDocument();
@@ -577,31 +577,33 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
 });
 
 /* ── PR-CONC-SALDOS-LAYOUT-01: só apresentação de "Saldos por conta" ── */
-describe('CONC-PAINEL-CONTA-01 — a coluna Conta não muda de largura com a seleção (nada se desloca)', () => {
-  it('a largura vem do CADASTRO inteiro (a conta fora da vista também conta) e não muda ao escolher uma conta', async () => {
-    /* 'Conta Escondida Bem Comprida' (28 letras) está no cadastro mas NÃO no dono: nunca aparece na tabela. Na estimativa do jsdom
-       (6,2px por letra + 26 de folga) ela dá 200px; o maior nome VISÍVEL ('Cartão BB - Visa Infinite', 25) daria 181px. */
-    B.contas = [...B.contas, conta('escondida', 'Conta Escondida Bem Comprida')];
-    montar();
-    const linhas = await screen.findAllByTestId('linha-saldo-conta');
-    expect(linhas.some((l) => l.getAttribute('data-conta') === 'escondida')).toBe(false);
-    const largura = () => screen.getByTestId('tabela-saldos').querySelector('col')?.style.width;
-    expect(largura()).toBe('200px');
-    fireEvent.click(linhas[0]);
-    await waitFor(() => expect(screen.getAllByTestId('linha-saldo-conta').length).toBeGreaterThan(0));
-    expect(largura()).toBe('200px');
-  });
-  it('o MEDIDOR escondido tem os nomes do cadastro (no peso da linha escolhida), os grupos e o "Total"', async () => {
-    B.contas = [...B.contas, conta('escondida', 'Conta Escondida Bem Comprida')];
+/* ── CONC-LAYOUT-FIXO-01 (Chat 19/11 08:33; UI-LARGURA-FIXA-01): a divisão NÃO depende do dado — era `max-content` (a Conta medida pelo
+   maior nome do cadastro: NJ ~65/35, Vera ~50/50). Agora 60/40 fixo; a Conta é o resto da tabela. ── */
+describe('CONC-LAYOUT-FIXO-01 — Saldos 60% · Resumo 40%, o título do Resumo é a conta + o mês, o ▸ da escolhida', () => {
+  it('a divisão é fixa (3fr/2fr) com nome curto ou comprido no cadastro; a tabela ocupa o card e a Conta não tem px; o medidor saiu', async () => {
+    B.contas = [...B.contas, conta('escondida', 'Conta Escondida Bem Comprida Que Nunca Aparece Na Tabela')];
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
-    const medidor = screen.getByTestId('medidor-conta');
-    expect(medidor.className).toContain('invisible');
-    expect(medidor.getAttribute('aria-hidden')).not.toBeNull();
-    const textos = [...medidor.querySelectorAll('[data-medida]')].map((m) => m.getAttribute('data-texto'));
-    expect(medidor.textContent).toBe('');
-    expect(textos).toEqual(expect.arrayContaining(['Conta Escondida Bem Comprida', 'Total', 'Conta corrente']));
-    expect(medidor.querySelector('[data-medida="36"]')?.className).toContain('font-semibold');
+    expect(screen.getByTestId('blocos-conciliacao').style.gridTemplateColumns).toBe('minmax(0,3fr) minmax(0,2fr)');
+    const tabela = screen.getByTestId('tabela-saldos');
+    expect(tabela.className).toContain('w-full');
+    expect(tabela.style.width).toBe('');
+    expect(tabela.querySelector('col')?.style.width).toBe('');
+    expect(screen.queryByTestId('medidor-conta')).toBeNull();
+  });
+  it('sem conta: "Todas as contas · Set/2026" e nenhum ▸; com a conta: "▸ Sicredi Lavoura · Set/2026", o ▸ só na linha dela e o lugar em todas', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(n(screen.getByTestId('titulo-resumo').textContent)).toBe('Todas as contas · Set/2026');
+    const marcas = () => screen.getAllByTestId('marca-escolhida');
+    expect(marcas().length).toBe(screen.getAllByTestId('linha-saldo-conta').length);
+    expect(marcas().every((m) => m.textContent === '')).toBe(true);
+    fireEvent.click(linhaDaConta(ID_LAV));
+    await waitFor(() => expect(n(screen.getByTestId('titulo-resumo').textContent)).toBe('▸ Sicredi Lavoura · Set/2026'));
+    const linha = screen.getAllByTestId('linha-saldo-conta').find((l) => l.getAttribute('data-conta') === ID_LAV);
+    expect(within(linha as HTMLElement).getByTestId('marca-escolhida').textContent).toBe('▸');
+    expect(marcas().filter((m) => m.textContent === '▸').length).toBe(1);
+    expect(marcas().every((m) => m.className.includes('w-[7px]'))).toBe(true);
   });
 });
 
@@ -689,8 +691,9 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     /* a busca sabe achar: há conta COM data de saldo e conta SEM, e as duas têm a mesma forma */
     expect(formas.some((f) => /^\d\d\/\d\d$/.test(f.data))).toBe(true);
     expect(formas.some((f) => f.data === '')).toBe(true);
-    /* P141: a célula da Conta tem só o ponto e o nome (data e arquivos em colunas próprias); os lugares OFX/PDF têm largura FIXA */
-    for (const f of formas) expect({ filhos: f.filhos, slots: f.slots, altura: f.altura }).toEqual({ filhos: 2, slots: '1111', altura: true });
+    /* P141: a célula da Conta tem só o ponto e o nome (data e arquivos em colunas próprias); os lugares OFX/PDF têm largura FIXA.
+       CONC-LAYOUT-FIXO-01: + o lugar do ▸ da escolhida, em toda linha */
+    for (const f of formas) expect({ filhos: f.filhos, slots: f.slots, altura: f.altura }).toEqual({ filhos: 3, slots: '1111', altura: true });
     for (const t of ['slot-ofx', 'slot-pdf']) for (const el of screen.getAllByTestId(t)) expect(el.className).toContain('w-[20px]');
   });
 
@@ -717,10 +720,9 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     expect(temReguaFixa(fonte.replace('[38, 44, 86, 86, 86, 38]', '[95, 95, 112, 34]'))).toBe(false);
     /* e o colgroup desenhado tem as quatro larguras */
     const cols = Array.from(total.closest('table')!.querySelectorAll('col')).map((c) => c.style.width);
-    /* CONC-PAINEL-CONTA-01 (item 3) — a Conta deixou de ser "o resto": tem a largura do MAIOR nome (medida, com piso de 110px) */
+    /* CONC-LAYOUT-FIXO-01 — a Conta volta a ser "o resto" (o card tem 60% fixos; a largura nunca vem do maior nome) */
     expect(cols.slice(1)).toEqual(['38px', '44px', '86px', '86px', '86px', '38px']);
-    expect(cols[0]).toMatch(/^\d+px$/);
-    expect(Number(cols[0].replace('px', ''))).toBeGreaterThanOrEqual(110);
+    expect(cols[0]).toBe('');
   });
 });
 
@@ -796,7 +798,7 @@ describe('CONC-SEM-CLASSIFICACAO-01 — o contador vermelho, a "Classificação"
     expect(faixa.getAttribute('data-status')).toBe('conciliado');
     expect(faixa.getAttribute('data-pendencia')).toBe('sim');
     expect(faixa.className).toContain('bg-warning/10');
-    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('⚠ Set/2026 conciliado, com pendência');
+    expect(n(screen.getByTestId('faixa-status-rotulo').textContent)).toBe('⚠ conciliado, com pendência');
     expect(screen.queryByTestId('segunda-prova')).toBeNull();   // os dois avisos NÃO são 2ª prova do extrato
     expect(screen.queryByTestId('marca-aviso-conta')).toBeNull();
     /* a quantidade é a do dono ("sem subcentro" = sem plano de contas); o "sem fornecedor" não muda o DRE e fica no `title` da linha */
@@ -871,18 +873,23 @@ describe('T9 — nenhum arquivo tocado importa a conta antiga', () => {
 
 /* ── CONC-CARDS-ORDEM-01 → P141 → P166 (CONC-TELA-02): a faixa do status em cima, e DOIS blocos: Saldos por conta | Resumo do mês ── */
 describe('ORDEM — a faixa do status e os 2 blocos: Saldos por conta | Resumo do mês (P166)', () => {
-  it('a faixa vem antes dos blocos; o grid tem Saldos (a largura da tabela) e Resumo (o resto, piso 260px); o card Status não existe', async () => {
+  it('o status é um SELO no cabeçalho do Resumo (a faixa em toda a largura saiu); o grid tem Saldos e Resumo; o card Status não existe', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
-    const faixa = screen.getByTestId('faixa-status');
     const grid = screen.getByTestId('blocos-conciliacao');
-    const antes = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-    expect(antes(faixa, grid)).toBe(true);
-    /* CONC-PAINEL-CONTA-01 (Gabriel 12:42): sem espaço sobrando — Saldos na largura da tabela, o Resumo cresce */
-    expect(grid.style.gridTemplateColumns).toBe('max-content minmax(260px,1fr)');
+    /* CONC-LAYOUT-FIXO-01: o selo e a linha do status moram DENTRO do card Resumo, a linha logo abaixo do cabeçalho */
+    const resumo = screen.getByTestId('card-resumo');
+    expect(resumo.contains(screen.getByTestId('faixa-status'))).toBe(true);
+    expect(resumo.contains(screen.getByTestId('linha-do-status'))).toBe(true);
+    /* a frase em 2 linhas RESERVADAS (o painel tem 40%; nunca "…" fora de tabela, P104) — altura fixa, quebra no lugar dela */
+    const fraseDoStatus = screen.getByTestId('faixa-status-frase');
+    expect(fraseDoStatus.className).toContain('h-[26px]');
+    expect(fraseDoStatus.className).toContain('whitespace-normal');
+    expect(fraseDoStatus.className).not.toContain('truncate');
+    expect(grid.style.gridTemplateColumns).toBe('minmax(0,3fr) minmax(0,2fr)');
     expect([...grid.children].map((c) => c.getAttribute('data-testid'))).toEqual(['card-saldos', 'card-resumo']);
     expect(within(grid.children[0] as HTMLElement).getByText('Saldos por conta')).toBeInTheDocument();
-    expect(within(grid.children[1] as HTMLElement).getByText('Resumo do mês')).toBeInTheDocument();
+    expect(screen.getByTestId('titulo-resumo').getAttribute('title')).toBe('Resumo do mês · Todas as contas · Set/2026');
     expect(screen.queryByTestId('card-status')).toBeNull();
     expect(screen.queryByText('Resumo das movimentações')).toBeNull();
   });
@@ -902,15 +909,15 @@ describe('P166 — a tela da Conciliação sem CAIXA ALTA, abas e o Resumo do m�
     expect(container.querySelectorAll('[class*="uppercase"], [class*="tracking-"]').length).toBe(1);
   });
 
-  it('as cinco abas com só a 1ª letra maiúscula; a aberta branca com o traço navy embaixo', async () => {
+  it('as cinco abas com só a 1ª letra maiúscula; a aberta ENCAIXA no corpo (UI-MESES-PADRAO-01: a cor do corpo, texto navy)', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
     const abas = [...document.querySelectorAll('button[data-aba]')];
     expect(abas.map((a) => a.textContent)).toEqual(['Importar banco', 'Casar lançamentos', 'Enriquecer (Excel)', 'Extrato gerencial', 'Conciliação']);
     const aberta = abas.find((a) => a.getAttribute('data-aba') === 'conciliacao')!;
-    expect(aberta.className).toContain('bg-card');
-    expect(aberta.className).toContain('inset_0_-2px_0_hsl(var(--primary))');
-    for (const a of abas.filter((x) => x !== aberta)) expect(a.className).not.toContain('inset_0_-2px_0');
+    expect(aberta.className).toContain('bg-corpo');
+    expect(aberta.className).toContain('text-navy');
+    for (const a of abas.filter((x) => x !== aberta)) expect(a.className).not.toContain('bg-corpo');
     /* o mesmo peso em todas: trocar de aba não muda a largura de nenhuma */
     expect(new Set(abas.map((a) => (a.className.match(/font-(medium|bold|semibold|normal)/) ?? [''])[0]))).toEqual(new Set(['font-medium']));
   });

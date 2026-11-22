@@ -269,6 +269,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   `favorecido_id`); "Marcar todos os N do filtro" pela MESMA RPC da grade (`so_linhas`); nunca UPDATE solto de favorecido.
 - NOTA-JA-LANCADA-01: antes de oferecer criar pela nota, `fn_nota_ja_lancada` (qualquer status, cadastro parecido, numero, chave); achou =
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
+- FORN-ACHAR-CNPJ-01 (19/11): com CNPJ no XML o documento MANDA (exato → RAIZ = outra filial, não propõe; outro documento NUNCA proposto); pelo nome SÓ a
+  razão social inteira igual (`razaoParaComparar`; nunca fantasia/cidade/"contém"); o comparar só oferece CNPJ/IE/razão quando `eOMesmoFornecedor`.
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
   desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
 - DOC-ANEXO-E-IMPORT-01 F1: SÓ A NF SE LÊ COMO NOTA — recibo/boleto/comprovante/outro nunca passam pelo `lerNota` nem pelo `extrairDanfe` e a
@@ -315,6 +317,13 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P128a: a NOTA JÁ NO SISTEMA acha TODOS os irmãos (`fn_nota_ja_lancada`: nº no documento, "pela soma", o irmão do parcelamento) e mostra a
   TABELA SISTEMA × NOTA (`linhasSistemaNota`/`fraseDoAchado`; diferença em vermelho, nunca corrigida) com 3 caminhos; a chave num lançamento não
   barra (só a de OC); as duas portas (+ Da nota e o Documentos do Editar, `notaParaAPrevia`) abrem a MESMA prévia.
+- FIN-REGRA-VARIAVEL-FAZENDA-01: a regra fazenda × conta tem UM dono, o banco (`_fn_regra_fazenda_da_conta`; gatilho só no novo ou quando fazenda/conta mudam); a tela
+  só PERGUNTA (`fn_regra_fazenda_da_conta` → frase ao lado do Salvar, campo vermelho) e corrige o legado pelo selo + modal (`fn_lancamentos_trocar_fazenda`: prévia, motivo, desfazer; irmãs do contrato juntas).
+- FIN-REGRA-MODAL-02: a SUGESTÃO do modal da regra é do banco (`fn_lancamentos_regra_fazenda_pendentes`: descrição → fornecedor → ITR única/maior → histórico;
+  citar = `_fn_fazenda_citada`, interna fechada) e a conta ADM é a equivalente de custo fixo do mesmo centro e tipo; a linha abre o lançamento por cima (`useCamadas`).
+- COMPRAS-PARC-LAYOUT-02: os 3 modais de obrigação (Cadastro/Financiamento, ObrigacaoDialog = só compra parcelada, Consorcio) têm a MESMA moldura
+  `h-[min(720px,calc(100vh-16px))] w-[min(1150px,calc(100vw-16px))]`; o botão do topo da lista segue a aba (`ROTULO_DO_NOVO`, tipo travado por `tipoDaAba`);
+  as regras dos filtros da aba Compras moram em `lib/financiamentos/filtrosDasCompras.ts` (Atividade das atividades LIGADAS + Administrativo por último).
 - P155: trava que ESCREVE um campo (o `FazendaSelect` forçando Administrativo) só age com a classificação do lançamento ABERTO
   (`classificacaoDe`): o render de transição da abertura tem o estado do reset ("última atividade") e gravava a fazenda errada no Salvar.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
@@ -351,6 +360,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   subcentro/cinza) + Saldos | Resumo do mês (1fr 260px, até o fim da janela), na régua da casa e sem CAIXA ALTA; Saldos com Data · OFX/PDF em
   lugar FIXO de 20px · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
   |valor| primeiro; saldo SÓ no fim do dia, LIDO do banco na ordem dele — nunca somado na tela).
+- CONC-LAYOUT-FIXO-01 (UI-LARGURA-FIXA-01, 22/11; substitui o "1fr 260px" e a `FaixaDoMes` acima): Saldos 60% · Resumo 40% (`minmax(0,3fr) minmax(0,2fr)`,
+  nunca medido pelo dado); título do Resumo = conta · mês, com ▸ (também na linha, lugar reservado); status = selo no cabeçalho + frase em 2 linhas
+  reservadas; o nome da conta corta com "…" + `title` até 1130px, inteiro de 1300px para cima (gates `conciliacao-divisao-*`, `-nomes-inteiros`).
 - P159a (CONC-TELAS-01): Conferência e Extrato (banco) — a regra do dia é UMA (`porDia`: maior |valor| primeiro, saldo SÓ no fim do dia,
   LIDO — Extrato: o acumulado de sempre; Conferência: `montarEvolucao`); a lista do mês por dia é UM componente (`ListaDoMesPorDia`); histórico
   do banco limpo só na exibição (`historicoDoBanco`, o inteiro no `title`); a `ordenar` da mesa NÃO mudou (o Enriquecer lê dela). EXCEÇÃO

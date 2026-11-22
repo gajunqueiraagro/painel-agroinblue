@@ -2,7 +2,7 @@
  * AS DUAS ABAS DA VARIAÇÃO DO ESTOQUE — DRE-VARIACAO-SIMPLES-01 (mock ui-validar/variacao-simples.html; o topo do Resumo
  * pelo mock FINAL v4 `variacao-v4.html`, Chat 11/11 07:08: a frase saiu; 4 cards grandes em cima e a tabela de 3 linhas embaixo).
  *   Resumo: 4 cards (arrobas no pasto · sem efeito de mercado · efeito de mercado · valor do rebanho) · de onde veio a variação,
- *   linha por linha (quantidade · composição do rebanho · mercado, o preço médio em 3 degraus) · extrato das @ · onde aparece no
+ *   linha por linha (quantidade · composição do rebanho · troca de categoria · mercado, o preço médio em degraus) · extrato das @ · onde aparece no
  *   DRE · um gráfico grande de cada vez.
  *   Por categoria: P8 gado jovem × adulto com subtotais e a nota do mix.
  * As contas moram em `variacaoSimples.ts`; aqui é só desenho. Fonte única: `fn_dre_pecuaria_patrimonio`
@@ -67,7 +67,7 @@ function CardsDoTopo({ t, p0, p1 }: { t: LinhaDaVariacao; p0: string; p1: string
         grande={rsSinal(d.producao)} tomGrande={tomDe(d.producao)}
         rotBaixo="VBP" valorBaixo="linhas 1 + 2" />
       <CardGrande testid="variacao-card-mercado" titulo="Efeito de mercado" cor="#c2410c"
-        grande={rsSinal(d.mercado.vale)} tomGrande={tomDe(d.mercado.vale)}
+        grande={rsSinal(d.efeito)} tomGrande={tomDe(d.efeito)}
         rotBaixo="R$/@ médio hoje" valorBaixo={<>{rsAt(d.p1)} <span className={cn('text-[10px]', tomDe(pctP1))}>{pctTxt(pctP1)}</span></>} />
       <CardGrande testid="variacao-card-valor" titulo="Valor do rebanho" cor="#1e2a3d"
         grande={rsSinal(dV)} tomGrande={tomDe(dV)}
@@ -76,13 +76,16 @@ function CardsDoTopo({ t, p0, p1 }: { t: LinhaDaVariacao; p0: string; p1: string
   );
 }
 
-/** As larguras da tabela de 3 linhas (P1 do mock v2); "O que mudou" é a coluna que estica. */
+/** As larguras da tabela de 4 linhas (P1 do mock v2); "O que mudou" é a coluna que estica. */
 const COLS_P1 = [24, null, 104, 18, 104, 128, 112] as const;
-const H_LINHA_P1 = 26;
+/* ⚠ 24px (era 26) — REBANHO-AGIO-PROVISORIO-01: a linha 3 (Troca de categoria) entrou e o modal NÃO ROLA; em 1126×579 o corpo pedia
+   504px e tinha 497 (gate de corte). 4 × 24 = 96 ≤ 3 × 26 + 19: cabe. As duas linhas de texto da célula: 12 + 11 = 23px. */
+const H_LINHA_P1 = 24;
 
 /**
- * P1 (mock v2) — DE ONDE VEIO A VARIAÇÃO, LINHA POR LINHA. Quantidade · tipo de gado (mistura + ágio) · mercado, e o total; o
- * preço médio ponderado da @ em 3 degraus. As contas: `degrausDoPreco` (1 + 2 = vpb da RPC; 3 = efeito da RPC).
+ * P1 (mock v2) — DE ONDE VEIO A VARIAÇÃO, LINHA POR LINHA. Quantidade · composição · troca de categoria · mercado, e o total; o
+ * preço médio ponderado da @ em degraus. As contas: `degrausDoPreco` (1 + 2 = vpb da RPC; 3 + 4 = efeito da RPC).
+ * ⚠ A LINHA 3 APARECE SEMPRE (REBANHO-AGIO-PROVISORIO-01, D1 a): sem troca no período ela vale R$ 0 — o lugar é reservado, nada se desloca.
  */
 function DeOndeVeio({ t, produzido, vendido, datas }: {
   t: LinhaDaVariacao; produzido: number; vendido: number; datas: { inicio: string; fim: string };
@@ -94,15 +97,17 @@ function DeOndeVeio({ t, produzido, vendido, datas }: {
   const subQuant = d.quantidade.dAt === 0 ? 'não mudou'
     : d.quantidade.dAt < 0 ? (vendido > produzido ? 'diminuiu · vendeu mais do que produziu' : 'diminuiu')
       : (produzido > vendido ? 'aumentou · produziu mais do que vendeu' : 'aumentou');
-  const subTipo = d.p0 == null || d.pMeio == null || Math.abs(d.pMeio - d.p0) < 0.005 ? 'categorias e ágios · a mistura não mudou o preço médio'
-    : d.pMeio > d.p0 ? 'categorias e ágios · mais gado de @ mais cara · preço do início' : 'categorias e ágios · mais gado de @ mais barata · preço do início';
+  const subTipo = d.p0 == null || d.pMeio == null || Math.abs(d.pMeio - d.p0) < 0.005 ? 'a mistura das categorias não mudou o preço médio'
+    : d.pMeio > d.p0 ? 'mais gado de @ mais cara · preço do início' : 'mais gado de @ mais barata · preço do início';
   const linhas: { n: string; chave: string; rot: string; sub: string; antes: string; depois: string; dif: string; difTom: number | null; vale: number; forte?: boolean }[] = [
     { n: '1', chave: 'quantidade', rot: 'Quantidade de arrobas', sub: subQuant, antes: at(d.quantidade.at0), depois: at(d.quantidade.at1),
       dif: `${sinal(Math.round(d.quantidade.dAt))} @ · ${pctTxt(pctDe(d.quantidade.dAt, d.quantidade.at0))}`, difTom: d.quantidade.dAt, vale: d.quantidade.vale },
     { n: '2', chave: 'tipo', rot: 'Composição do rebanho', sub: subTipo, antes: rsAt(d.p0), depois: rsAt(d.pMeio),
       dif: difPreco(d.p0, d.pMeio), difTom: d.p0 == null || d.pMeio == null ? null : d.pMeio - d.p0, vale: d.tipo.vale },
-    { n: '3', chave: 'mercado', rot: 'Mercado', sub: 'o mesmo gado de hoje, preço de hoje', antes: rsAt(d.pMeio), depois: rsAt(d.p1),
-      dif: difPreco(d.pMeio, d.p1), difTom: d.pMeio == null || d.p1 == null ? null : d.p1 - d.pMeio, vale: d.mercado.vale, forte: true },
+    { n: '3', chave: 'troca', rot: 'Troca de categoria', sub: 'o lote que mudou de categoria, ao preço da nova · não é produção', antes: rsAt(d.pMeio), depois: rsAt(d.pTroca),
+      dif: difPreco(d.pMeio, d.pTroca), difTom: d.pMeio == null || d.pTroca == null ? null : d.pTroca - d.pMeio, vale: d.troca.vale },
+    { n: '4', chave: 'mercado', rot: 'Mercado', sub: 'o mesmo gado de hoje, preço de hoje', antes: rsAt(d.pTroca), depois: rsAt(d.p1),
+      dif: difPreco(d.pTroca, d.p1), difTom: d.pTroca == null || d.p1 == null ? null : d.p1 - d.pTroca, vale: d.mercado.vale, forte: true },
   ];
   const dV = d.total.v1 - d.total.v0;
   return (
@@ -110,7 +115,7 @@ function DeOndeVeio({ t, produzido, vendido, datas }: {
       <div className="mb-1 flex items-baseline gap-2 text-[11px] font-semibold text-foreground/80">
         De onde veio a variação, linha por linha
         <span className="ml-auto truncate text-[9.5px] font-normal text-muted-foreground">
-          {datas.inicio} a {datas.fim} · preço médio ponderado da @ em 3 degraus
+          {datas.inicio} a {datas.fim} · preço médio ponderado da @ em degraus
         </span>
       </div>
       <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
@@ -125,8 +130,8 @@ function DeOndeVeio({ t, produzido, vendido, datas }: {
             <tr key={l.chave} data-degrau={l.chave} className="border-t" style={{ height: H_LINHA_P1 }}>
               <td className="px-1 text-[10px] text-muted-foreground">{l.n}</td>
               <td className="min-w-0 px-1 py-0">
-                <div className="truncate text-[10.5px] font-semibold leading-[13px]" title={l.rot}>{l.rot}</div>
-                <div className="truncate text-[9.5px] leading-[12px] text-muted-foreground" title={l.sub}>{l.sub}</div>
+                <div className="truncate text-[10.5px] font-semibold leading-[12px]" title={l.rot}>{l.rot}</div>
+                <div className="truncate text-[9.5px] leading-[11px] text-muted-foreground" title={l.sub}>{l.sub}</div>
               </td>
               <td className={TD_REGUA_NUM}>{l.antes}</td>
               <td className="px-0 text-center text-[10px] text-muted-foreground">→</td>
@@ -147,7 +152,7 @@ function DeOndeVeio({ t, produzido, vendido, datas }: {
         </tbody>
       </table>
       <div className="mt-1 text-[9.5px] leading-[13px] text-muted-foreground">
-        No DRE: <b>1 + 2 = Variação por produção ({rsSinal(d.producao)})</b>, entra no VBP · <b>3 = Efeito de mercado ({rsSinal(d.mercado.vale)})</b>,
+        No DRE: <b>1 + 2 = Variação por produção ({rsSinal(d.producao)})</b>, entra no VBP · <b>3 + 4 = Efeito de mercado ({rsSinal(d.efeito)})</b>,
         no Resultado econômico. Preço médio ponderado de hoje: <b>{rsAt(d.p1)}</b>.
       </div>
     </div>

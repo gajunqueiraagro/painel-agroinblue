@@ -379,7 +379,7 @@ export const AMBAR = '#b45309';
  * transborda e é visível; faltando, o operador vê e a régua se ajusta. Só a coluna Cultura
  * trunca, porque ali o corte tem `title` para desfazer.
  */
-export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title, fonte, faixa, marcador, semSlotMarcador, abaixo, tituloAbaixo }: {
+export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title, fonte, faixa, marcador, semSlotMarcador, abaixo, tituloAbaixo, porHectare, tituloPorHectare }: {
   valor: number | null; cor: string; destaque?: DestaqueLinha;
   bordaEsquerda?: boolean;
   onAbrir?: () => void; filha?: boolean; fundo?: string; estilo?: CSSProperties;
@@ -408,6 +408,10 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
       menor e cinza claro. `data-pct-abaixo` é por onde a prova de números iguais o separa do número. */
   abaixo?: string;
   tituloAbaixo?: string;
+  /** DRE-AJUSTES-05 (Gabriel 19/11) — o "por hectare" DENTRO do total: 2ª linha pequena junto do valor, como o % do VBP (antes era uma
+      linha própria abaixo do traço do total e parecia de outro bloco). `data-ha-abaixo` o separa do número na prova dos números. */
+  porHectare?: string;
+  tituloPorHectare?: string;
   /** ⚠ O VALOR SEGUE A FONTE DA LINHA (PR-10): subtotal em 12, filha em 9. Um número de 11px ao
       lado de um rótulo de 9 desmontaria a hierarquia que o rótulo acabou de declarar. */
   fonte?: number;
@@ -438,6 +442,11 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
       {abaixo !== undefined && (
         <div data-pct-abaixo="" title={tituloAbaixo} className="font-normal text-muted-foreground/70" style={{ fontSize: 7.5, lineHeight: '9px' }}>
           {abaixo}
+        </div>
+      )}
+      {porHectare !== undefined && (
+        <div data-ha-abaixo="" title={tituloPorHectare} className="font-normal text-muted-foreground/70" style={{ fontSize: 7.5, lineHeight: '9px' }}>
+          {porHectare}
         </div>
       )}
     </td>

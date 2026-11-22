@@ -108,6 +108,15 @@ export interface DrePecLinhas {
     cab_desfrutada: number | null;
     at_comprada: number | null;
     cab_comprada: number | null;
+    /**
+     * AS @ E AS CABEÇAS VENDIDAS, SEM O CONSUMO — DRE-PAINEL-FONTE-01 (lote 115610, Code 3, 20/11).
+     * Abate, venda e venda em pé; com carcaça, carcaça ÷ 15, sem ela, peso vivo ÷ 30. É a base do
+     * R$/@ das vendas na leitura do DRE (`src/lib/dre/leitura.ts`). `at_desfrutada` segue como era.
+     * ⚠ OPCIONAIS SÓ NO TIPO: o leitor sempre os preenche (nulo quando a RPC não manda); os testes
+     * antigos que montam a coluna à mão não precisam conhecê-los.
+     */
+    at_vendida?: number | null;
+    cab_vendida?: number | null;
   };
   /**
    * DE ONDE VEIO CADA PONTA — VPB-REGRA-UNICA-01.
@@ -131,6 +140,18 @@ export interface DrePecLinhas {
    * vazio. São eles que as filhas da linha de juros leem.
    */
   centros_juros: CentroPec[];
+  /**
+   * O QUE FICOU FORA DO DRE NO RECORTE — DRE-PAINEL-FONTE-01 (P8 da Constituição nº 2): lançamentos com
+   * "Compõe DRE" desmarcado, com os mesmos filtros da coluna. Só no TOTAL e só no realizado; na meta e
+   * nas fazendas, `null` ("—", nunca zero). A lista é `fn_dre_pecuaria_fora_do_dre`.
+   */
+  fora_do_dre?: ForaDoDre | null;
+}
+
+export interface ForaDoDre {
+  n: number;
+  valor: number;
+  por_origem: { origem_lancamento: string | null; origem_tipo: string | null; n: number; valor: number }[];
 }
 
 /**
@@ -276,6 +297,8 @@ export function lerLinhas(x: unknown): DrePecLinhas {
       cab_desfrutada: numOuNulo(pr.cab_desfrutada),
       at_comprada: numOuNulo(pr.at_comprada),
       cab_comprada: numOuNulo(pr.cab_comprada),
+      at_vendida: numOuNulo(pr.at_vendida),
+      cab_vendida: numOuNulo(pr.cab_vendida),
     },
 
     /**
@@ -295,6 +318,28 @@ export function lerLinhas(x: unknown): DrePecLinhas {
       ? o.p1_fonte : null,
     centros: lerCentros(o.centros),
     centros_juros: lerCentros(o.centros_juros),
+    fora_do_dre: lerForaDoDre(o.fora_do_dre),
+  };
+}
+
+/** `null` quando a RPC não manda (meta, fazenda) ou manda fora do contrato — ausência é traço. */
+export function lerForaDoDre(v: unknown): ForaDoDre | null {
+  if (v == null || typeof v !== 'object' || Array.isArray(v)) return null;
+  const o = objeto(v);
+  const n = numOuNulo(o.n);
+  const valor = numOuNulo(o.valor);
+  if (n == null || valor == null) return null;
+  const lista = Array.isArray(o.por_origem) ? o.por_origem : [];
+  return {
+    n, valor,
+    por_origem: lista.map(x => {
+      const p = objeto(x);
+      return {
+        origem_lancamento: typeof p.origem_lancamento === 'string' ? p.origem_lancamento : null,
+        origem_tipo: typeof p.origem_tipo === 'string' ? p.origem_tipo : null,
+        n: num(p.n), valor: num(p.valor),
+      };
+    }),
   };
 }
 
@@ -648,7 +693,15 @@ export function useDrePecuariaLancamentos(
         p_cenario: cenarioEf,
       });
       if (err) throw err;
-      return (Array.isArray(r) ? r : []).map((x: unknown) => {
+      return (Array.isArray(r) ? r : []).map(lerLancamentoPec);
+    },
+  });
+  return { lancamentos: data ?? [], carregando: isLoading, erro: error as Error | null, recarregar: refetch };
+}
+
+/** Uma linha de `fn_dre_pecuaria_lancamentos` (e da `fn_dre_pecuaria_fora_do_dre`, que devolve os mesmos campos) — movida de dentro do
+    `useDrePecuariaLancamentos` para os dois leitores usarem a MESMA (DRE-PAINEL-01). */
+export function lerLancamentoPec(x: unknown): LancamentoPec {
         const o = objeto(x);
         return {
           origem: lerOrigem(o.origem),
@@ -666,10 +719,26 @@ export function useDrePecuariaLancamentos(
           bloco: o.bloco == null ? null : String(o.bloco),
           documento: o.documento == null ? null : String(o.documento),
         };
+}
+
+/**
+ * OS LANÇAMENTOS FORA DO DRE NO RECORTE — DRE-PAINEL-01 (P8): "Compõe DRE" desmarcado, com os filtros da coluna. A lista do rodapé
+ * "Fora do DRE: N lançamentos · R$ X"; a contagem e a soma vêm da própria `fn_dre_pecuaria` (`total.fora_do_dre`), não daqui.
+ * ⚠ SÓ COM O MODAL ABERTO (`enabled`): quem não clica no rodapé não paga a consulta.
+ */
+export function useDrePecuariaForaDoDre(clienteId: string | null | undefined, de: string | null, ate: string | null, enabled: boolean) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dre-pec-fora-do-dre', clienteId ?? '', de ?? '', ate ?? ''],
+    enabled: enabled && !!clienteId && !!de && !!ate,
+    queryFn: async (): Promise<LancamentoPec[]> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria_fora_do_dre', {
+        p_cliente: clienteId, p_de: de, p_ate: ate,
       });
+      if (err) throw err;
+      return (Array.isArray(r) ? r : []).map(lerLancamentoPec);
     },
   });
-  return { lancamentos: data ?? [], carregando: isLoading, erro: error as Error | null, recarregar: refetch };
+  return { lancamentos: data ?? [], carregando: isLoading, erro: error };
 }
 
 /* ══════════════ O PATRIMÔNIO POR CATEGORIA — §6 ══════════════ */
@@ -691,11 +760,17 @@ export interface CategoriaPatrimonio {
   /**
    * A EVOLUÇÃO DE CATEGORIA (ágio) — DRE-VARIACAO-EXPLICA-01 fatia 1a (migration 20261028115300).
    *
-   * ⚠ ESTÁ DENTRO DO `vpb`: cada reclassificação do período × kg × (R$/kg do destino − R$/kg da origem), a preço de
-   * referência (dez/AA), lançada na categoria de DESTINO. A Produção "de verdade" é `vpb − agio` (conta da tela).
+   * ⚠ DESDE A 20261028115600 (REBANHO-AGIO-PROVISORIO-01) ELE NÃO ESTÁ MAIS DENTRO DO `vpb`: mudar de categoria não muda
+   * valor — a troca vai para o `efeito` (Mercado), mês a mês, e o `agio` = `troca_categoria`. Nunca subtrair do `vpb`.
    * ⚠ `null` = a RPC não mandou a chave (anterior à migration): a tela mostra "—", nunca zero.
    */
   agio: number | null;
+  /**
+   * A TROCA DE CATEGORIA — REBANHO-AGIO-PROVISORIO-01 (migration 20261028115600): Σ dos meses de kg reclassificado ×
+   * (preço do início do destino − da origem), na categoria de DESTINO. ⚠ ESTÁ DENTRO DO `efeito` (Mercado), não do `vpb`.
+   * Zero sem a chave (RPC anterior): sem troca a separar.
+   */
+  troca_categoria: number;
   /** Alguma reclassificação que entrou aqui não tem preço de referência: o ágio dela não foi somado. */
   agio_sem_preco: boolean;
   cab_reclass_entrada: number | null; cab_reclass_saida: number | null;
@@ -783,6 +858,8 @@ export interface PatrimonioPec {
     /** O ágio do período inteiro (`null` sem a chave). */
     agio: number | null;
     agio_sem_preco: boolean;
+    /** A troca de categoria do período (dentro do `efeito`); zero sem a chave. */
+    troca_categoria: number;
     /**
      * DRE-PRECO-REF-01: as categorias cujo preço do INÍCIO não existia (sem fechamento nem tabela no mês de P0) e foram
      * valoradas ao preço do FIM — vira aviso no modal. Vazia sem a chave (RPC anterior à migration 20261028115310).
@@ -855,7 +932,7 @@ async function buscarPatrimonio(
         q1: num(c.q1), pm1: numOuNulo(c.pm1), pk1: numOuNulo(c.pk1),
         v1_p0: num(c.v1_p0), v1_p1: num(c.v1_p1),
         vpb: num(c.vpb), efeito: num(c.efeito),
-        agio: numOuNulo(c.agio), agio_sem_preco: c.agio_sem_preco === true,
+        agio: numOuNulo(c.agio), agio_sem_preco: c.agio_sem_preco === true, troca_categoria: num(c.troca_categoria),
         cab_reclass_entrada: numOuNulo(c.cab_reclass_entrada), cab_reclass_saida: numOuNulo(c.cab_reclass_saida),
         at_reclass_entrada: numOuNulo(c.at_reclass_entrada), at_reclass_saida: numOuNulo(c.at_reclass_saida),
       };
@@ -863,7 +940,7 @@ async function buscarPatrimonio(
     total: {
       q0: num(t.q0), v0: num(t.v0), q1: num(t.q1),
       v1_p0: num(t.v1_p0), v1_p1: num(t.v1_p1), vpb: num(t.vpb), efeito: num(t.efeito),
-      agio: numOuNulo(t.agio), agio_sem_preco: t.agio_sem_preco === true,
+      agio: numOuNulo(t.agio), agio_sem_preco: t.agio_sem_preco === true, troca_categoria: num(t.troca_categoria),
       preco_ref_do_fim: (Array.isArray(t.preco_ref_do_fim) ? t.preco_ref_do_fim : []).map((x: unknown) => String(x)),
     },
     meses: (Array.isArray(o.meses) ? o.meses : []).map((x: unknown): MesDoPatrimonio => {

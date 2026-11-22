@@ -36,6 +36,13 @@ import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { ajudaDaRegra } from '@/lib/arquivo/aceitarArquivo';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { faixaDoConfronto } from '@/lib/financeiro/faixaDoConfronto';
+import { DICA_DO_MOTIVO, ROTULO_DO_MOTIVO, type MotivoNaoFinanceira } from '@/lib/fiscal/classeDaNota';
+
+/** o selo da NF que não gera pagamento na coluna Situação (62 px): curto; o motivo inteiro vai no title */
+const SELO_NO_DOCUMENTO: Record<MotivoNaoFinanceira, string> = {
+  entrega_futura: 'Remessa', outra_remessa: 'Remessa', comodato: 'Comodato', bonificacao: 'Bonific.', devolucao: 'Devolução',
+  garantia: 'Garantia', demonstracao: 'Demonstr.', conserto: 'Conserto', retorno: 'Retorno', retorno_demonstracao: 'Ret. demo.',
+};
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import { QUADRO_REGUA, SECUNDARIA_REGUA, TD_REGUA, TD_REGUA_NUM, TH_REGUA } from '@/components/ui/regua-tabela';
 import { cn } from '@/lib/utils';
@@ -315,6 +322,12 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
                 {d.cancelado ? (
                   <span className="rounded-full bg-muted px-1.5 text-[9.5px] leading-[13px] text-muted-foreground"
                     title={d.canceladoMotivo ?? undefined}>Cancelado</span>
+                ) : api.confronto?.naoFinanceiras?.get(d.id) ? (
+                  /* ENTREGA-FUTURA-LIGAR-01 (lote 30) — a NF que não gera pagamento (a classe pelo CFOP): informativa, não soma no Documentado */
+                  <span className="whitespace-nowrap rounded-full bg-amber-100 px-1.5 text-[9.5px] leading-[13px] text-amber-800" data-testid="doc-nao-financeira"
+                    title={`${ROTULO_DO_MOTIVO[api.confronto.naoFinanceiras.get(d.id) ?? 'outra_remessa']}: não soma no Documentado. ${DICA_DO_MOTIVO[api.confronto.naoFinanceiras.get(d.id) ?? 'outra_remessa']}`}>
+                    {SELO_NO_DOCUMENTO[api.confronto.naoFinanceiras.get(d.id) ?? 'outra_remessa']}
+                  </span>
                 ) : (
                   <span className="rounded-full bg-emerald-100 px-1.5 text-[9.5px] leading-[13px] text-emerald-700">Ativo</span>
                 )}

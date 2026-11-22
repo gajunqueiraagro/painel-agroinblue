@@ -30,29 +30,31 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  MESES_CURTOS, anoInteiro, anoMes, contarMeses, descreverDias, descreverPeriodo,
-  ehAnoInteiro, ehMesUnico, mesCorrente, mesUnico, ordenar, type Periodo,
+  MESES_CURTOS, anoInteiro, anoMes, contarMeses, descreverPeriodo,
+  ehAnoInteiro, ehMesUnico, intervaloDoPeriodo, mesCorrente, mesUnico, ordenar, periodoDoIntervalo, type Periodo,
 } from '@/v2/lib/periodo';
+import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
 
 export { MESES_CURTOS };
 
-/** A cor de um mês quando ela carrega informação (status, alerta). */
+/**
+ * O ESTADO DE UM MÊS — UI-MESES-PADRAO-01 (Gabriel 18/11, mock aprovado). O estado é um PONTO de 6px, nunca a cor do mês:
+ * verde fechado/conciliado · âmbar pendente · vermelho divergência. É o MESMO estado que a tela já calcula (quem monta o tom
+ * traduz o seu status para estes três); o seletor não inventa estado. Mês futuro (sem estado, depois do mês corrente) = contorno.
+ */
+export type EstadoDoMes = 'ok' | 'pend' | 'err';
+export const COR_DO_ESTADO: Record<EstadoDoMes, string> = { ok: '#2FA36B', pend: '#D99A2B', err: '#D9534F' };
+
+/** O que um mês carrega quando ele significa algo (status, alerta). */
 export interface TomDoMes {
-  bg: string; border: string; txt: string; title?: string;
-  /**
-   * MARCADOR no canto do mês: um ponto âmbar com este texto somado ao `title`. É um aviso que NÃO muda a cor do mês
-   * (PR-CONC-STATUS-SALDO-01b: mês conciliado pelo saldo, com aviso do extrato importado). Posição absoluta — não muda
-   * a largura nem a altura do botão.
-   */
+  /** O estado do mês: o ponto. Sem estado, o mês não tem ponto. */
+  estado?: EstadoDoMes;
+  title?: string;
+  /** AVISO no canto (ponto âmbar de 5px), somado ao `title`; não muda o estado nem a medida do mês (PR-CONC-STATUS-SALDO-01b). */
   marca?: string;
-  /**
-   * CONTADOR VERMELHO no canto do mês (CONC-SEM-CLASSIFICACAO-01): a quantidade, com o `title` somado ao do mês. Como a
-   * marca, NÃO muda a cor do mês nem a geometria do botão (posição absoluta). A quantidade vem de quem monta o tom — o
-   * seletor só a desenha.
-   */
+  /** CONTADOR VERMELHO no canto esquerdo (CONC-SEM-CLASSIFICACAO-01), com o `title` somado ao do mês; posição absoluta. */
   contador?: { qtde: number; title: string };
 }
 
@@ -68,114 +70,87 @@ export interface SeletorPeriodoProps {
   anos?: readonly string[];
   periodo: Periodo;
   onPeriodoChange: (p: Periodo) => void;
-  /** A cor de cada mês (1..12) quando ela significa algo. */
+  /** O estado de cada mês (1..12) quando ele significa algo. */
   tomPorMes?: Readonly<Record<number, TomDoMes>>;
+  /** A legenda curta à direita (só com `tomPorMes`): o rótulo de cada estado que a tela usa. */
+  legenda?: readonly { estado: EstadoDoMes | 'fut'; rotulo: string }[];
   /** Enquanto carrega os tons, a fita vira esqueleto — não some. */
   carregando?: boolean;
   className?: string;
 }
 
-/* ⚠ AS CORES DO MEIO DO INTERVALO SÃO LITERAIS — A24. Elas não existem na paleta: são um
-   azul MAIS CLARO que o `--primary`, para dizer "dentro do período, mas não é o extremo que
-   você clicou". Inventá-las como token novo obrigaria a mexer na paleta que o sistema todo
-   usa, por causa de um estado de um controle. Se uma segunda peça precisar do mesmo azul,
-   aí vira token — a segunda cópia é o momento, não a primeira. */
-/* ⚠ O SELECIONADO É VERDE — decisão do Gabriel, 10/09/2026. Era azul, e azul é a cor da
-   BARRA e da lateral: o mês escolhido dizia a mesma coisa que o topo da tela, e o olho não
-   tinha como separar "onde estou" de "o que escolhi". Verde é a cor que só a escolha usa.
-   ⚠ O CLARO É HEX, o cheio é token, e a mistura é a razão: `--success` existe na paleta
-   (`hsl(145 63% 42%)` = #28AF60, conferido), mas o tom claro é ele a 15% SOBRE BRANCO, e
-   isso não se escreve com `hsl(var(--success))` — precisaria de `color-mix`, que trocaria
-   uma cor legível por uma expressão que ninguém lê no meio de um estilo inline. Os três
-   valores abaixo foram conferidos contra a derivação: #dff3e7 é exatamente 15% e #1a7540
-   difere do `hsl(145 63% 28%)` calculado em um ponto de 255, invisível. */
-const MEIO_BG = '#dff3e7';
-const MEIO_BORDA = '#bfe7cf';
-const MEIO_TXT = '#1a7540';
-
-/* ⚠ O NÃO-SELECIONADO DEIXOU DE SER BRANCO — A24, revisão final. Em branco ele se confundia
-   com o fundo da tela: doze retângulos que só se distinguiam pela borda, e o operador não
-   via a fita como uma fita. Cinza claro faz o conjunto existir, e o azul do escolhido passa
-   a ter contra o que contrastar.
-   ⚠ LITERAL, COMO OS AZUIS ACIMA, e pela mesma razão: `bg-muted` é #F6F7F9 — medido —, mais
-   claro que o #EEF0F3 pedido, e trocar o token da paleta por causa de um controle sairia
-   caro no resto do sistema. Se uma segunda peça precisar deste cinza, ele vira token. */
-const FORA_BG = '#eef0f3';
-const FORA_HOVER = '#e3e6ea';
-
-const ALTURA = 28;
-
-/**
- * As quatro caras de um botão da fita — A24 corrigida em PR-SELETOR-PERIODO-03.
- *
- * ⚠ ESTAVA INVERTIDO, e o efeito era o pior possível: o mês ESCOLHIDO saía BRANCO e o meio
- * da faixa saía azul. Quem clicava em Abr via Abr virar fundo e o vizinho virar cor — o
- * selecionado se confundindo com o que não foi selecionado. A regra é uma frase: quanto
- * mais escolhido, mais escuro. Extremo azul cheio, meio azul claro, fora branco.
- *
- * ⚠ EXPORTADA, E CADA BOTÃO CARREGA `data-papel`, porque a cor NÃO SE PROVA no jsdom:
- * medido, ele descarta `background: hsl(var(--primary))` na hora de parsear e o valor nunca
- * chega ao DOM — um teste que lesse `style.background` afirmaria `'' !== branco` e passaria
- * sem olhar nada. O que se prende então é o PAPEL (extremo / meio / fora), que é a regra de
- * verdade, mais esta tabela, que é a tradução. O `data-papel` também dá ao navegador uma
- * asa para a conferência visual da homologação.
- */
+/* ⚠ UI-MESES-PADRAO-01 — A FITA É UMA BARRA ÚNICA DE 12 SEGMENTOS SOBRE O NAVY: 30px, raio 6, borda 1px branca a 14%, Inter
+   12/500; o mês aberto = fundo `--mes-aberto` (#1F56B8) e texto branco; o meio de um intervalo = o mesmo azul a 38%. A LINHA
+   TRAZ O PRÓPRIO NAVY, para ser legível também numa tela cujo cabeçalho ainda não é navy; sobre o cabeçalho navy ela se funde.
+   Nada muda de tamanho ao selecionar (A23): os segmentos têm a mesma base e o ponto vem antes do rótulo em todos os estados.
+   ⚠ O ESCOLHIDO FICA EM 500 (o mock dizia 600): negrito só no selecionado desloca as três letras — A23, presa no teste.
+   ⚠ `CARA` SEGUE EXPORTADA: os papéis extremo/meio/fora são a regra; o `data-papel` é o que o teste prende. */
 export const CARA = {
-  extremo: {
-    background: 'hsl(var(--success))',
-    borderColor: 'hsl(var(--success))',
-    color: 'hsl(var(--success-foreground))',
-  },
-  meio: { background: MEIO_BG, borderColor: MEIO_BORDA, color: MEIO_TXT },
-  fora: { background: FORA_BG, borderColor: 'hsl(var(--border) / 0.6)', color: 'hsl(var(--muted-foreground))' },
+  extremo: { background: 'hsl(var(--mes-aberto))', borderColor: 'transparent', color: '#fff' },
+  meio: { background: 'hsl(var(--mes-aberto) / 0.38)', borderColor: 'transparent', color: '#fff' },
+  fora: { background: 'transparent', borderColor: 'transparent', color: '#C9D4E5' },
 } as const;
 
+const ALTURA = 30;
+const COR_FUTURO = '#5F7290';
+
+/** A linha inteira (ano + barra + botões + legenda) no navy: legível sobre qualquer cabeçalho. */
+const LINHA: React.CSSProperties = { background: 'hsl(var(--navy))', borderRadius: 8 };
+
 /**
- * ⚠ A FITA — `min-w-0` E `overflow-x-auto` SÃO O MESMO PEDIDO POR DOIS LADOS. A linha não
- * quebra entre o ano e os meses (A25, estado 6), e para não quebrar ela precisa poder ser
- * mais estreita que o próprio conteúdo: sem o `min-w-0`, um filho flex se recusa a encolher
- * abaixo do conteúdo e quem espreme não é a fita — é a linha do chamador.
+ * ⚠ A BARRA — `min-w-0` E `overflow-x-auto` SÃO O MESMO PEDIDO POR DOIS LADOS: a linha não quebra entre o ano e os meses (A25),
+ * e no celular os 12 segmentos rolam no lugar em vez de espremer as letras.
  */
-const FITA = 'flex min-w-0 flex-1 gap-1 overflow-x-auto';
+const FITA = 'flex min-w-0 flex-1 overflow-x-auto';
+const FITA_ESTILO: React.CSSProperties = {
+  border: '1px solid rgba(255,255,255,.14)', borderRadius: 6, background: 'rgba(255,255,255,.03)',
+};
 
 const BOTAO_BASE: React.CSSProperties = {
-  flex: '1 0 44px', height: ALTURA, textAlign: 'center', padding: '0 4px',
-  fontSize: 11, fontWeight: 500, borderRadius: 8, borderWidth: 1, borderStyle: 'solid',
-  cursor: 'pointer', lineHeight: 1, transition: 'background-color .12s, border-color .12s',
+  /* base 36px: os 12 + o ano cabem nos 530px da tabela do Fechamento; onde há largura, crescem por igual */
+  flex: '1 0 36px', height: ALTURA - 2, padding: '0 2px', fontSize: 12, fontWeight: 500, cursor: 'pointer', lineHeight: 1,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, position: 'relative', border: 0,
+  borderLeft: '1px solid rgba(255,255,255,.08)', transition: 'background-color .12s',
 };
 
-/** O ponto âmbar do canto (5px, fora do fluxo): avisa sem mudar a cor nem a medida do mês. */
+const PONTO: React.CSSProperties = { width: 6, height: 6, borderRadius: '50%', display: 'inline-block', flex: 'none' };
+const PONTO_FUTURO: React.CSSProperties = { ...PONTO, background: 'transparent', border: `1px solid ${COR_FUTURO}` };
+
+/** O aviso do canto (5px, fora do fluxo): avisa sem mudar o estado nem a medida do mês. */
 const MARCA_DO_MES: React.CSSProperties = {
-  position: 'absolute', top: 3, right: 3, width: 5, height: 5, borderRadius: '50%',
-  background: '#D97706', pointerEvents: 'none',
+  position: 'absolute', top: 4, right: 6, width: 5, height: 5, borderRadius: '50%',
+  background: COR_DO_ESTADO.pend, pointerEvents: 'none',
 };
 
-/** O contador vermelho do mês: canto superior ESQUERDO (o direito é da marca âmbar), fora do fluxo. */
+/** O contador vermelho do mês: canto superior ESQUERDO (o direito é do aviso), fora do fluxo. */
 const CONTADOR_DO_MES: React.CSSProperties = {
   position: 'absolute', top: 1, left: 2, minWidth: 11, height: 11, padding: '0 2px', borderRadius: 6,
   background: '#C62828', color: '#fff', fontSize: 8, lineHeight: '11px', fontWeight: 600, textAlign: 'center',
   fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
 };
 
-/** "Ano" usa a MESMA régua dos meses — só a largura é fixa, porque ele não é um dos doze. */
-const BOTAO_ANO: React.CSSProperties = { ...BOTAO_BASE, flex: '0 0 44px' };
+/** O ano, o "Ano" e o "Personalizado…": a mesma altura da barra, no idioma do navy. */
+const CONTROLE: React.CSSProperties = {
+  height: ALTURA, borderRadius: 6, border: '1px solid rgba(255,255,255,.16)', background: 'rgba(255,255,255,.04)',
+  color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+};
+const CONTROLE_ESCOLHIDO: React.CSSProperties = { background: CARA.extremo.background, borderColor: 'transparent' };
+
+/** O mês é futuro? (só se usa quando a tela dá estado aos meses) */
+function ehFuturo(ano: number, mes: number, hoje: Date): boolean {
+  return ano > hoje.getFullYear() || (ano === hoje.getFullYear() && mes > hoje.getMonth() + 1);
+}
 
 export function SeletorPeriodo({
-  modo = 'ano-mes', modoUnico, anos, periodo, onPeriodoChange, tomPorMes,
+  modo = 'ano-mes', modoUnico, anos, periodo, onPeriodoChange, tomPorMes, legenda,
   carregando, className,
 }: SeletorPeriodoProps) {
   const hoje = new Date();
   const entreAnos = periodo.de.ano !== periodo.ate.ano;
 
-  /* ⚠ O TOGGLE "MÊS | PERÍODO" SAIU — PR-SELETOR-PERIODO-03. Ele pedia que o operador
-     declarasse a INTENÇÃO antes de agir, e cobrava esse preço em toda interação para servir
-     à minoria delas: clicar num mês é o gesto de sempre, e faixa se faz pelo
-     "Personalizado…". Ele ainda ocupava a ponta direita da linha, e a fita rolava POR BAIXO
-     — meses desapareciam atrás de um controle que existia para não ser usado.
-     ⚠ O estado do segmento morreu junto: não há mais o que lembrar entre renders. O que
-     resta é `inicioParcial`, e ele só existe pelo atalho do shift. */
   const [inicioParcial, setInicioParcial] = useState<{ ano: number; mes: number } | null>(null);
-  const [popoverAberto, setPopoverAberto] = useState(false);
+  /* PROD-LANC-FILTROS-01 — o "Personalizado…" abre o SeletorDePeriodo (o único do produto) */
+  const [personalizado, setPersonalizado] = useState(false);
 
   /* Um período que chega de fora (link, drill, F5) descarta um shift pela metade. */
   const chave = `${anoMes(periodo.de)}|${anoMes(periodo.ate)}`;
@@ -186,12 +161,15 @@ export function SeletorPeriodo({
     setInicioParcial(null);
   }, [chave]);
 
+  /* UI-MESES-PADRAO-01 (Gabriel 18/11, BUG): o ano do período SEMPRE está na lista — fora dela o `Select` do Radix mostra o
+     campo VAZIO (só a seta). Acontecia quando a tela mostrava um ano que a lista dela não trazia. */
+  const anoDoPeriodo = String(periodo.de.ano);
   const listaAnos = useMemo(() => {
-    if (anos && anos.length) return anos;
     const a = hoje.getFullYear();
-    return [a, a - 1, a - 2, a - 3, a - 4].map(String);
+    const base = anos && anos.length ? [...anos] : [a, a - 1, a - 2, a - 3, a - 4].map(String);
+    return base.includes(anoDoPeriodo) ? base : [...base, anoDoPeriodo].sort((x, y) => Number(y) - Number(x));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anos]);
+  }, [anos, anoDoPeriodo]);
 
   /* ⚠ TROCAR DE ANO PRESERVA O RECORTE, não o zera. Quem está vendo fev→abr e troca para
      2025 quer fev→abr de 2025; devolver "o ano inteiro" ou "janeiro" faria o operador
@@ -255,30 +233,31 @@ export function SeletorPeriodo({
 
   const podeLimpar = !inicioParcial && !ehMesUnico(periodo);
 
+  const botaoPersonalizado = (
+    <button
+      type="button"
+      className="shrink-0"
+      data-testid="periodo-personalizado-gatilho"
+      onClick={() => setPersonalizado(true)}
+      style={{ ...CONTROLE, padding: '0 10px', fontWeight: 500, ...(entreAnos ? CONTROLE_ESCOLHIDO : {}) }}
+    >
+      Personalizado…
+    </button>
+  );
+
   return (
     <div className={className}>
-      {/* ⚠ NADA POR CIMA DE NADA, E ISSO É ESTRUTURA, NÃO `z-index` — item C. A fita rolava
-          POR BAIXO do grupo da direita: os últimos meses passavam atrás de um botão opaco e
-          simplesmente sumiam. A correção não é empurrar com `padding-right` nem levantar
-          camada — é o grupo da direita ser IRMÃO do scrollport, não vizinho sobreposto. Dois
-          itens flex lado a lado não têm como se cobrir; a garantia vem da caixa, e o teste
-          de retângulos só confirma o que a estrutura já impede. */}
-      <div className="flex flex-nowrap items-center gap-2">
-        {/* CARD DE ANO — mesmo desenho dos meses, nunca cinza sobre cinza. */}
+      {/* ⚠ NADA POR CIMA DE NADA, E ISSO É ESTRUTURA: o grupo da direita é IRMÃO do scrollport, não vizinho sobreposto. */}
+      <div className="flex flex-nowrap items-center gap-1" style={LINHA} data-testid="seletor-periodo-linha">
         {entreAnos ? (
-          <div
-            className="flex shrink-0 items-center justify-center rounded-lg border"
-            style={{ width: 68, height: ALTURA, fontSize: 11, fontWeight: 500, ...CARA.fora }}
-            title="Período personalizado entre anos"
-          >
+          <div className="flex shrink-0 items-center justify-center" style={{ ...CONTROLE, width: 72 }}
+            title="Período personalizado entre anos">
             {periodo.de.ano}–{periodo.ate.ano}
           </div>
         ) : (
           <Select value={String(periodo.de.ano)} onValueChange={trocarAno}>
-            <SelectTrigger
-              className="shrink-0 rounded-lg border [&>svg]:opacity-100"
-              style={{ width: 68, height: ALTURA, fontSize: 11, fontWeight: 500, ...CARA.fora }}
-            >
+            <SelectTrigger className="shrink-0 justify-center gap-1 px-2 [&>span]:!break-normal [&>svg]:opacity-70" style={{ ...CONTROLE, width: 72 }}
+              title="Ano">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -288,39 +267,45 @@ export function SeletorPeriodo({
         )}
 
         {modo === 'ano-mes' && (carregando ? (
-          <div className={FITA}>
+          <div className={FITA} style={FITA_ESTILO}>
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="h-7 min-w-[44px] flex-1 shrink-0 animate-pulse rounded-lg bg-muted" />
+              <div key={i} className="min-w-[36px] flex-1 shrink-0 animate-pulse bg-white/10" style={{ height: ALTURA - 2 }} />
             ))}
           </div>
         ) : (
-          <div className={FITA} style={entreAnos ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
+          <div className={FITA} style={{ ...FITA_ESTILO, ...(entreAnos ? { opacity: 0.45, pointerEvents: 'none' } : {}) }}
+            data-testid="seletor-periodo-meses">
             {MESES_CURTOS.map((rotulo, i) => {
               const m = i + 1;
               const tom = tomPorMes?.[m];
               const papel = papelDoMes(m);
-              /* ⚠ COM `tomPorMes`, O FUNDO É DA CONCILIAÇÃO E A SELEÇÃO É UM ANEL INTERNO:
-                 pintar o mês de azul apagaria o status — verde conciliado, âmbar parcial,
-                 vermelho divergente — que é o que aquela tela veio mostrar. */
-              const estilo: React.CSSProperties = tom
-                ? {
-                    background: tom.bg, borderColor: tom.border, color: tom.txt,
-                    ...(papel !== 'fora' ? { boxShadow: 'inset 0 0 0 2px hsl(var(--success))' } : {}),
-                  }
-                : CARA[papel];
+              const futuro = !!tomPorMes && !tom?.estado && papel === 'fora' && ehFuturo(periodo.de.ano, m, hoje);
+              const estilo: React.CSSProperties = {
+                ...CARA[papel],
+                ...(futuro ? { color: COR_FUTURO } : {}),
+                ...(i === 0 ? { borderLeft: 0 } : {}),
+              };
+              const ponto: React.CSSProperties | null = tom?.estado
+                ? { ...PONTO, background: COR_DO_ESTADO[tom.estado] }
+                : futuro ? PONTO_FUTURO : null;
+              const titulo = tom?.marca || tom?.contador
+                ? [tom.title, tom.marca, tom.contador?.title].filter(Boolean).join(' — ')
+                : (tom?.title ?? (futuro ? 'Mês futuro' : undefined));
               return (
                 <button
                   key={m}
                   type="button"
                   onClick={(e) => clicarMes(m, e.shiftKey)}
-                  title={tom?.marca || tom?.contador ? [tom.title, tom.marca, tom.contador?.title].filter(Boolean).join(' — ') : tom?.title}
+                  title={titulo}
                   aria-pressed={papel !== 'fora'}
                   data-papel={papel}
+                  data-estado={tom?.estado ?? (futuro ? 'fut' : undefined)}
                   data-marca={tom?.marca ? 'aviso' : undefined}
-                  className={papel === 'fora' && !tom ? 'hover:!bg-[#e3e6ea]' : undefined}
+                  className={papel === 'fora' ? 'hover:!bg-white/[.07] hover:!text-white' : undefined}
                   data-contador={tom?.contador ? tom.contador.qtde : undefined}
-                  style={{ ...BOTAO_BASE, ...estilo, ...(tom?.marca || tom?.contador ? { position: 'relative' } : {}) }}
+                  style={{ ...BOTAO_BASE, ...estilo }}
                 >
+                  {ponto && <i aria-hidden data-testid="ponto-do-mes" style={ponto} />}
                   {rotulo}
                   {tom?.marca && (
                     <span aria-hidden data-testid="marca-aviso-mes" style={MARCA_DO_MES} />
@@ -335,73 +320,47 @@ export function SeletorPeriodo({
         ))}
 
         {modo === 'ano-mes' && !modoUnico && (
-          /* ⚠ FORA DO SCROLLPORT, e SEM fundo próprio. O fundo branco que estava aqui existia
-             como seguro contra uma sobreposição que a estrutura já impede — e o seguro cobrava
-             caro: desenhava uma caixa branca no meio de uma linha que não tem caixa nenhuma,
-             e o grupo parecia outro controle. Irmão de flex não cobre ninguém; não há o que
-             segurar. */
           <div className="flex shrink-0 items-center gap-1">
-            {/* ⚠ "ANO" USA A RÉGUA DOS MESES de propósito: é um recorte, como eles, e não uma
-                ação. O que o distingue é a largura fixa — ele não disputa espaço com os doze. */}
             <button
               type="button"
               onClick={() => { setInicioParcial(null); onPeriodoChange(anoInteiro(periodo.de.ano)); }}
               title="O ano inteiro — janeiro a dezembro"
               aria-pressed={anoTodo}
               data-papel={anoTodo ? 'extremo' : 'fora'}
-              style={{ ...BOTAO_ANO, ...(anoTodo ? CARA.extremo : CARA.fora) }}
+              style={{ ...CONTROLE, width: 48, fontWeight: 500, ...(anoTodo ? CONTROLE_ESCOLHIDO : {}) }}
             >
               Ano
             </button>
 
-            <Popover open={popoverAberto} onOpenChange={setPopoverAberto}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="shrink-0 rounded-full border"
-                  /* ⚠ ATIVO É "EXTREMO", igual ao Ano: quando o recorte veio DAQUI, é este
-                     botão que carrega a escolha. Ele tinha uma cara própria — azul claro
-                     marcado —, e uma terceira cara para o mesmo estado é uma terceira coisa
-                     a aprender. */
-                  style={{
-                    height: 26, padding: '0 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                    ...(entreAnos ? CARA.extremo : CARA.fora),
-                  }}
-                >
-                  Personalizado…
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-auto p-3">
-                <PopoverPersonalizado
-                  periodo={periodo}
-                  anos={listaAnos}
-                  onCancelar={() => setPopoverAberto(false)}
-                  onAplicar={(p) => { setPopoverAberto(false); setInicioParcial(null); onPeriodoChange(p); }}
-                />
-              </PopoverContent>
-            </Popover>
+            {/* PROD-LANC-FILTROS-01 (Gabriel 19/11): o "Personalizado…" abre o SeletorDePeriodo do DRE — o ÚNICO seletor de período
+                personalizado do produto (um campo, 2 calendários Início/Fim + atalhos, Cancelar/Aplicar); por MÊS (a fita fala em meses: o
+                clique no calendário escolhe o mês inteiro). A conversão mês ↔ data mora na borda (`intervaloDoPeriodo`/`periodoDoIntervalo`). */}
+            {/* o seletor só MONTA no clique (nasce aberto) e desmonta ao fechar: a fita está em quase toda tela e ele lê o cliente */}
+            {personalizado ? (
+              <SeletorDePeriodo porMes compacto testid="periodo-personalizado" abertoInicial onFechar={() => setPersonalizado(false)}
+                valor={intervaloDoPeriodo(periodo)}
+                anoMaisAntigo={listaAnos.length ? Math.min(...listaAnos.map(Number)) : null}
+                onChange={(i) => { const p = periodoDoIntervalo(i); if (p) { setInicioParcial(null); onPeriodoChange(p); } }}
+                gatilho={botaoPersonalizado}
+              />
+            ) : botaoPersonalizado}
+          </div>
+        )}
+
+        {/* A LEGENDA CURTA À DIREITA (o mock): só com estado nos meses, e só onde cabe (no celular a barra precisa da largura). */}
+        {modo === 'ano-mes' && tomPorMes && legenda && legenda.length > 0 && (
+          <div className="hidden shrink-0 items-center gap-3.5 whitespace-nowrap px-1 xl:flex" style={{ fontSize: 11, color: '#9FB0C8' }}
+            data-testid="seletor-periodo-legenda">
+            {legenda.map((l) => (
+              <span key={l.estado} className="inline-flex items-center gap-[5px]">
+                <i aria-hidden style={l.estado === 'fut' ? PONTO_FUTURO : { ...PONTO, background: COR_DO_ESTADO[l.estado] }} />
+                {l.rotulo}
+              </span>
+            ))}
           </div>
         )}
       </div>
 
-      {/* ⚠ A LINHA EXISTE SEMPRE, MESMO VAZIA — A23 ampliada, adendo do PR-SELETOR-PERIODO-04.
-          A frase aparecia só no intervalo, e por isso TODO conteúdo abaixo do seletor —
-          a tabela inteira — subia 18px ao clicar num mês e descia 18px ao voltar para uma
-          faixa. Nada muda de tamanho ao selecionar vale para a tela, não só para o botão: o
-          operador que estava lendo uma linha da tabela a perdia de vista por causa de um
-          texto que apareceu acima dela. O espaço fica reservado; só o texto entra e sai.
-          ⚠ ALTURA DECLARADA, não derivada do conteúdo: `minHeight` mais `lineHeight` iguais
-          garantem que a linha vazia meça o mesmo que a preenchida. Medida que depende do
-          texto volta a mover a tabela no dia em que a frase ganhar uma palavra a mais. */}
-      {/* ⚠ E NÃO SE RESERVA NADA QUANDO `modoUnico` — PR-CONC-HEADER-AJUSTES-02. A A23 acima
-          continua valendo onde ela nasceu: na tela que ALTERNA entre mês e intervalo, a linha
-          existe sempre para a tabela não pular 18px. Mas com `modoUnico` o intervalo não existe
-          — `querPeriodo` é `!modoUnico && comShift`, então nunca há `inicioParcial`, e o período
-          é sempre mês único, o que faz `frase` ser SEMPRE `null`. Reservar 18px + 4px de `mt-1`
-          para um conteúdo impossível é espaço morto, e nesta tela ele empurrava as abas para
-          longe das pílulas de mês.
-          ⚠ O COMPONENTE JÁ FAZIA ISSO, e esta linha segue o padrão dele: a fita de intervalo
-          logo acima também é `modo === 'ano-mes' && !modoUnico`. */}
       {modo === 'ano-mes' && !modoUnico && (
         <div className="mt-1 flex items-center"
           style={{ fontSize: 11, minHeight: 18, lineHeight: '18px' }}>
@@ -416,8 +375,8 @@ export function SeletorPeriodo({
           {frase && (
             <span
               style={{
-                background: 'hsl(var(--success))',
-                color: 'hsl(var(--success-foreground))',
+                background: 'hsl(var(--mes-aberto))',
+                color: '#fff',
                 fontSize: 11, fontWeight: 500, height: 18, lineHeight: '18px',
                 padding: '0 8px', borderRadius: 8,
                 display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -451,67 +410,3 @@ export function SeletorPeriodo({
  * clique: escolher "de jan/2024" com o "até" ainda em dez/2026 pediria três anos de dado
  * que ninguém quis ver. Cancelar descarta; só Aplicar fala com a tela.
  */
-function PopoverPersonalizado({
-  periodo, anos, onCancelar, onAplicar,
-}: {
-  periodo: Periodo;
-  anos: readonly string[];
-  onCancelar: () => void;
-  onAplicar: (p: Periodo) => void;
-}) {
-  const [rascunho, setRascunho] = useState<Periodo>(periodo);
-  const previa = ordenar(rascunho);
-
-  const combo = (
-    valor: number, opcoes: readonly { v: string; r: string }[], aoTrocar: (v: string) => void, largura: number,
-  ) => (
-    <Select value={String(valor)} onValueChange={aoTrocar}>
-      <SelectTrigger className="rounded-md border bg-card" style={{ width: largura, height: 28, fontSize: 12 }}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {opcoes.map((o) => <SelectItem key={o.v} value={o.v}>{o.r}</SelectItem>)}
-      </SelectContent>
-    </Select>
-  );
-
-  const OPC_MES = MESES_CURTOS.map((r, i) => ({ v: String(i + 1), r: r.toLowerCase() }));
-  const OPC_ANO = anos.map((a) => ({ v: a, r: a }));
-
-  const linha = (
-    rotulo: string, ponto: { ano: number; mes: number }, trocar: (p: { ano: number; mes: number }) => void,
-  ) => (
-    <div className="flex items-center gap-2">
-      <span className="w-8 text-muted-foreground" style={{ fontSize: 12 }}>{rotulo}</span>
-      {combo(ponto.mes, OPC_MES, (v) => trocar({ ...ponto, mes: Number(v) }), 78)}
-      {combo(ponto.ano, OPC_ANO, (v) => trocar({ ...ponto, ano: Number(v) }), 78)}
-    </div>
-  );
-
-  return (
-    <div className="flex flex-col gap-2" style={{ minWidth: 220 }}>
-      <p className="font-medium text-foreground" style={{ fontSize: 12 }}>Período personalizado</p>
-      {linha('de', rascunho.de, (p) => setRascunho({ ...rascunho, de: p }))}
-      {linha('até', rascunho.ate, (p) => setRascunho({ ...rascunho, ate: p }))}
-      <p className="text-muted-foreground" style={{ fontSize: 11 }}>
-        {contarMeses(previa)} {contarMeses(previa) === 1 ? 'mês' : 'meses'} · {descreverDias(previa)}
-      </p>
-      <div className="flex justify-end gap-2">
-        <button
-          type="button" onClick={onCancelar}
-          className="rounded-md border bg-card px-3 text-foreground transition-colors hover:bg-muted"
-          style={{ height: 28, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-        >
-          Cancelar
-        </button>
-        <button
-          type="button" onClick={() => onAplicar(previa)}
-          className="rounded-md bg-cta px-3 text-cta-foreground transition-colors hover:bg-cta-hover"
-          style={{ height: 28, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-        >
-          Aplicar
-        </button>
-      </div>
-    </div>
-  );
-}
