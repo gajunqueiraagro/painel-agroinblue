@@ -22,7 +22,7 @@ import type { LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 const reais = (cent: number) => formatMoeda(cent / 100);
 const num = (x: number, casas = 0) => x.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 const somaDias = (iso: string, dias: number) => { const d = new Date(`${iso.slice(0, 10)}T12:00:00`); d.setDate(d.getDate() + dias); return d.toISOString().slice(0, 10); };
-const COL_REM = [26, 92, 78, 112, 110];
+const COL_REM = [26, 92, 84, null, 120];
 const COL_LANC = [26, 78, null, 104, 86];
 const colgroup = (c: (number | null)[]) => <colgroup>{c.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>;
 
@@ -128,7 +128,7 @@ export function LigarACompraDialog({ n, lista, clienteId, lerXml, aoFechar, carr
           <div className="flex h-5 shrink-0 items-center text-[10px] font-semibold text-muted-foreground">Remessas ({remessas.length})</div>
           <div className={cn(QUADRO_REGUA, 'h-[168px] shrink-0')}>
             <table className="w-full shrink-0 table-fixed border-collapse bg-primary">{colgroup(COL_REM)}
-              <thead><tr>{['', 'NF', 'Emissão', 'Quantidade', 'Valor'].map((h, i) => <th key={i} className={cn(TH_REGUA, i >= 3 ? 'text-right' : 'text-left')}>{h}</th>)}</tr></thead>
+              <thead><tr>{['', 'NF', 'Emissão', 'Quantidade', 'Valor'].map((h, i) => <th key={i} className={cn(TH_REGUA, i === 1 || i >= 3 ? 'text-right' : 'text-left')}>{h}</th>)}</tr></thead>
             </table>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <table className="w-full table-fixed border-collapse">{colgroup(COL_REM)}

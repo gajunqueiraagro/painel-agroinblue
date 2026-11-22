@@ -2965,10 +2965,10 @@ if (tela === 'mesclar') {
     const xmlDe = (id: string) => {
       const l = linhas.find((x) => x.id === id);
       const kg = ((l?.valorCent ?? 0) / 100).toFixed(4);
-      return `<nfeProc><NFe><infNFe Id="NFe${l?.chave ?? ''}"><ide><nNF>${Number((l?.chave ?? '').slice(25, 34))}</nNF><serie>890</serie><dhEmi>${l?.emissao}T10:00:00-04:00</dhEmi><tpNF>1</tpNF><natOp>REMESSA</natOp></ide>`
+      return `<nfeProc><NFe><infNFe Id="NFe${l?.chave ?? ''}" versao="4.00"><ide><mod>55</mod><nNF>${Number((l?.chave ?? '').slice(25, 34))}</nNF><serie>890</serie><dhEmi>${l?.emissao}T10:00:00-04:00</dhEmi><tpNF>1</tpNF><natOp>REMESSA</natOp><finNFe>1</finNFe></ide>`
         + `<emit><CPF>${emit}</CPF><xNome>Produtor Exemplo</xNome></emit><dest><CNPJ>12345678000190</CNPJ><xNome>Cliente</xNome></dest>`
         + `<det nItem="1"><prod><cProd>1</cProd><xProd>MILHO DEBULHADO</xProd><CFOP>5116</CFOP><uCom>KG</uCom><qCom>${kg}</qCom><vUnCom>1.00</vUnCom><vProd>${((l?.valorCent ?? 0) / 100).toFixed(2)}</vProd></prod></det>`
-        + `<total><ICMSTot><vProd>${((l?.valorCent ?? 0) / 100).toFixed(2)}</vProd><vNF>${((l?.valorCent ?? 0) / 100).toFixed(2)}</vNF></ICMSTot></total></infNFe></NFe></nfeProc>`;
+        + `<total><ICMSTot><vProd>${((l?.valorCent ?? 0) / 100).toFixed(2)}</vProd><vFrete>0.00</vFrete><vDesc>0.00</vDesc><vNF>${((l?.valorCent ?? 0) / 100).toFixed(2)}</vNF></ICMSTot></total></infNFe></NFe></nfeProc>`;
     };
     const lancs = [1, 2, 3].map((p) => ({ id: `l${p}`, vencimento: `2026-0${6 + p}-20`, pagamento: `2026-0${6 + p}-20`, competencia: '2026-07-01',
       descricao: `Compra 10.000 sc milho ${p}/3`, valorCent: 20000000, status: 'realizado', conciliado: false, financiamentoId: null, numeroDocumento: null,
