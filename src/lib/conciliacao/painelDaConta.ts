@@ -52,29 +52,3 @@ export function passosDaConta(linha: Pick<LinhaResumo, 'tem_extrato' | 'saldo_ex
       frase: fonte.tipo === 'open_finance' ? 'o saldo que o banco informou' : 'informado à mão, com o comprovante' },
   ];
 }
-
-/** A coluna Conta de "Saldos por conta" na largura do MAIOR nome (contas, grupos e "Total"), medida na fonte da tabela, mais o recuo e o
- *  padding; com piso e teto. `medir` = a largura em px de um texto (canvas na tela; estimativa no teste). */
-export const PISO_DA_CONTA = 110;
-export const TETO_DA_CONTA = 240;
-export const FOLGA_DA_CONTA = 26;
-export function larguraDaConta(nomes: readonly string[], medir: (t: string) => number): number {
-  const maior = nomes.reduce((m, n) => Math.max(m, medir(n)), 0);
-  return Math.min(TETO_DA_CONTA, Math.max(PISO_DA_CONTA, Math.ceil(maior + FOLGA_DA_CONTA)));
-}
-
-/** CONC-PAINEL-CONTA-01 (Gabriel 12:42) — a Conta NA TELA: a do maior nome, mas sem empurrar o Resumo (piso de 260px) para fora — os blocos
- *  − o padding (24) − o vão (8) − o Resumo (260) − a régua − as bordas (2) − a barra de rolagem que EXISTE (medida: 0 sem barra); nunca
- *  abaixo do piso. Sem medida ainda, a do nome. */
-export const RESUMO_MINIMO = 260;
-export function contaNaTela(larguraDoNome: number, larguraDosBlocos: number | null, regua: number, barra = 0): number {
-  /* sem medida ainda (null) ou sem layout (0: o bloco ainda não tem largura) → a do nome */
-  if (!larguraDosBlocos) return larguraDoNome;
-  return Math.max(PISO_DA_CONTA, Math.min(larguraDoNome, larguraDosBlocos - 24 - 8 - RESUMO_MINIMO - regua - 2 - barra));
-}
-
-/** CONC-PAINEL-CONTA-01 — a largura da Conta a partir da MEDIDA do DOM (o maior texto + o recuo dele, já somado pelo medidor), entre o piso
- *  e o teto. */
-export function larguraPelaMedida(maiorComRecuo: number): number {
-  return Math.min(TETO_DA_CONTA, Math.max(PISO_DA_CONTA, Math.ceil(maiorComRecuo)));
-}

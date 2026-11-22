@@ -114,7 +114,8 @@ describe('Saldo do banco no Resumo do mês', () => {
     };
     render(<SaldoDoBanco clienteId="cliente-teste" contaId={CONTA} anoMes="2026-11" abertura={1000} />);
     const bloco = await screen.findByTestId('resumo-saldo-do-banco');
-    expect(bloco.textContent).toContain('Banco (Open Finance, 16/11/2026 18:00)');
+    expect(bloco.textContent).toContain('Open Finance 16/11/2026 18:00: banco');
+    expect(bloco.className).toContain('h-[19px]');   // CONC-LAYOUT-FIXO-01: uma linha pequena
     expect(screen.getByTestId('resumo-saldo-do-banco-diferenca').textContent).toMatch(/5,00/);
     expect(bloco.className).toContain('text-warning');
   });

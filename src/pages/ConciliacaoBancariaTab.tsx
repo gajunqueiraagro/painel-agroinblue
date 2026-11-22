@@ -11,7 +11,6 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { PainelDaConta, FUNDO_ESCURO } from '@/components/conciliacao/PainelDaConta';
-import { contaNaTela, larguraDaConta, larguraPelaMedida } from '@/lib/conciliacao/painelDaConta';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab, ABAS_ESPELHO, type AbaEspelho } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
@@ -161,9 +160,6 @@ const valorDaRegua = (v: number): string => formatNum(v, 2);
  *  10px; os números das CONTAS uma fonte abaixo (9,5px) dos do Total e dos grupos (10px negrito). A Diferença volta à fonte da linha (a
  *  exceção de 8px do P141 saiu); Data 38px (9,5px cinza), selos OFX/PDF em lugares de 20px, valores 86px sem "R$" (o pior valor em negrito). */
 const REGUA_SALDOS = [38, 44, 86, 86, 86, 38];
-/** CONC-PAINEL-CONTA-01 — a ESTIMATIVA da largura de um texto em 10px negrito (6,2px por letra): só antes da medida do DOM (o medidor
- *  escondido) ou sem layout (teste). A medida em canvas saiu: errava contra o texto desenhado. */
-const medirTexto10Negrito = (t: string): number => t.length * 6.2;
 /** O selo do arquivo (OFX/PDF): 7px negrito com borda fina, num lugar FIXO de 20px (sem arquivo, o lugar fica vazio). */
 const SELO_ARQUIVO = 'inline-block rounded-[2px] border px-px text-[7px] font-bold leading-[9px]';
 const LUGAR_SELO = 'inline-flex h-[11px] w-[20px] shrink-0 items-center justify-center align-middle';
@@ -704,7 +700,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   };
 
   /* ── Derived display values ── */
-  /* P166 (CONC-TELA-02): o card Status virou a FAIXA do mês (`FaixaDoMes`), que lê a linha aberta do dono (a conta, ou o total no
+  /* P166 (CONC-TELA-02): o card Status virou o SELO do mês no cabeçalho do Resumo (`SeloDoMes` + `LinhaDoStatus`, CONC-LAYOUT-FIXO-01), que lê a linha aberta do dono (a conta, ou o total no
      Todas). Saíram com ele a 2ª prova, o pareamento (e a leitura `useConciliacaoDoMes` que só o alimentava) e o link "N dias com
      diferença" → Conferência; o "sem fornecedor" segue no `title` de cada conta.
      CONC-SEM-CLASSIFICACAO-01: o aviso de classificação da linha aberta, do dono. */
@@ -747,41 +743,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      número de contas (TABELA-ALTURA-FIXA-01); só a tabela de cada um rola. O cabeçalho do card saiu do rolador, então o
      `thead` gruda no topo dele (a medida do cabeçalho do card, PR-CONCILIA-SALDOS-UI-01, não é mais necessária). */
   const { ref: refBlocos, altura: alturaBlocos } = useAlturaAteOFim({ ativo: vistaExtrato === 'conciliacao' && !!resumo, folga: 8, minimo: 240 });
-  /* CONC-PAINEL-CONTA-01 (Gabriel 12:42) — a LARGURA dos blocos, para a Conta nunca empurrar o Resumo para fora (o card Saldos é `max-content`) */
-  const [elBlocos, setElBlocos] = useState<HTMLElement | null>(null);
-  const [larguraBlocos, setLarguraBlocos] = useState<number | null>(null);
-  const [barraSaldos, setBarraSaldos] = useState(0);
-  /* a medida do nome em canvas só vale com a FONTE da página carregada: antes dela o canvas mede na fonte de reserva e a coluna mudava 8px
-     conforme a carga (o desloca acusou entre duas páginas). Quando as fontes ficam prontas, mede de novo. */
-  const [fontesProntas, setFontesProntas] = useState(false);
-  /* CONC-PAINEL-CONTA-01 — a largura da Conta MEDIDA NO DOM: um medidor escondido com os nomes do cadastro (no pior peso, o da linha
-     escolhida), os grupos e o "Total", na fonte da tabela; o canvas errava contra o texto desenhado (nomes do NJ cortados a 1750). */
-  const refMedidorConta = useRef<HTMLDivElement | null>(null);
-  const [larguraMedidaConta, setLarguraMedidaConta] = useState<number | null>(null);
-  useEffect(() => {
-    let vivo = true;
-    const fontes = typeof document === 'undefined' ? undefined : document.fonts;
-    if (!fontes) { setFontesProntas(true); return; }
-    void fontes.ready.then(() => { if (vivo) setFontesProntas(true); });
-    return () => { vivo = false; };
-  }, []);
-  const refDosBlocos = useCallback((el: HTMLElement | null) => { refBlocos(el); setElBlocos(el); }, [refBlocos]);
-  useEffect(() => {
-    if (!elBlocos) return;
-    /* a barra de rolagem que EXISTE no rolador da tabela (0 sem barra, ou com barra sobreposta) */
-    const medir = () => {
-      setLarguraBlocos(elBlocos.clientWidth);
-      const rol = elBlocos.querySelector<HTMLElement>('[data-testid="rolagem-saldos"]');
-      setBarraSaldos(rol ? rol.offsetWidth - rol.clientWidth : 0);
-    };
-    medir();
-    const obs = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(medir);
-    obs?.observe(elBlocos);
-    const rol = elBlocos.querySelector<HTMLElement>('[data-testid="rolagem-saldos"]');
-    if (rol) obs?.observe(rol);
-    window.addEventListener('resize', medir);
-    return () => { obs?.disconnect(); window.removeEventListener('resize', medir); };
-  }, [elBlocos]);
   /* A altura do `thead` fixo (colunas + Total) — PR-CONCILIA-GRUPOS-STICKY-02. A faixa de grupo gruda logo abaixo dele.
      Medida, não escrita: o Total muda de altura com a fonte. Callback ref: o card só monta na aba Conciliação. */
   const [alturaThead, setAlturaThead] = useState(0);
@@ -836,39 +797,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const gruposSaldos = agruparContasPorTipo(
     contasVisiveis.map(c => ({ ...c, tipo_conta: c.linha.tipo_conta ?? c.conta.tipo_conta, label: getContaLabel(c.conta) })),
   ).map(g => ({ ...g, subtotal: resumo?.find(l => l.nivel === 'tipo' && l.tipo_conta === g.chave) ?? null }));
-  /* CONC-PAINEL-CONTA-01 (item 3) — a coluna Conta pelo MAIOR texto dela (contas, grupos, "Total"), medido em 10px negrito.
-     ⚠ PELO CADASTRO INTEIRO (`contas`), NÃO pelas linhas visíveis: com uma conta escolhida o dono vem filtrado, outra conta vira "oculta" e
-     a largura mudava 8px ao voltar para "Todas" (o desloca acusou). O cadastro não muda com a seleção. */
-  const textosDaConta = useMemo(() => ({
-    contas: [...new Set([...contas.map(c => getContaLabel(c)), ...gruposSaldos.flatMap(g => g.contas.map(c => c.label))])],
-    grupos: [...new Set(['Total', ...agruparContasPorTipo(contas.map(c => ({ ...c, label: getContaLabel(c) }))).map(g => g.rotulo),
-      ...gruposSaldos.map(g => g.rotulo)])],
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- os textos mudam com o cadastro e os grupos; a chave é o conteúdo
-  }), [JSON.stringify(contas.map(c => getContaLabel(c))), JSON.stringify(gruposSaldos.map(g => [g.rotulo, g.contas.map(c => c.label)]))]);
-  useEffect(() => {
-    const el = refMedidorConta.current;
-    if (!el) return;
-    const ler = () => {
-      const itens = [...el.querySelectorAll<HTMLElement>('[data-medida]')].map(m => ({ texto: m.getBoundingClientRect().width, recuo: Number(m.dataset.medida) }));
-      /* sem layout (todo texto com 0 de largura: teste, aba escondida) = sem medida — vale a estimativa */
-      if (!itens.some(i => i.texto > 0)) { setLarguraMedidaConta(null); return; }
-      setLarguraMedidaConta(larguraPelaMedida(Math.max(...itens.map(i => i.texto + i.recuo))));
-    };
-    ler();
-    const obs = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(ler);
-    obs?.observe(el);
-    return () => obs?.disconnect();
-  }, [textosDaConta, fontesProntas]);
-  const larguraEstimadaConta = useMemo(() => larguraDaConta(
-    ['Total', ...agruparContasPorTipo(contas.map(c => ({ ...c, label: getContaLabel(c) }))).flatMap(g => [g.rotulo, ...g.contas.map(c => c.label)]),
-      /* + as linhas à vista: se o cadastro não carregou, a coluna não cai no piso (com o cadastro, elas já estão nele) */
-      ...gruposSaldos.flatMap(g => [g.rotulo, ...g.contas.map(c => c.label)])],
-    medirTexto10Negrito,
-  ), [contas, gruposSaldos]);
-  /* a medida do DOM manda; a estimativa só antes de medir (ou sem layout, no teste) */
-  const larguraConta = larguraMedidaConta ?? larguraEstimadaConta;
-  /* o teto da Conta pelo espaço (`contaNaTela`): o Resumo nunca sai da tela */
-  const larguraContaNaTela = contaNaTela(larguraConta, larguraBlocos, REGUA_SALDOS.reduce((a, b) => a + b, 0), barraSaldos);
   /* CONC-ORDENAR-01 (regra soberana de 29/10, gate check-ui-ordenar): Conta, Sistema, Extrato e Diferença ordenam as contas DENTRO de cada
      grupo (o Total e as faixas dos grupos ficam onde estão). Sem clique, a ordem é a de sempre (a do cadastro, `agruparContasPorTipo`). */
   type ContaDoGrupo = (typeof gruposSaldos)[number]['contas'][number];
@@ -1329,17 +1257,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               {/* ⚠ O `text-[#185FA5]` É HEX SOLTO e fica ANOTADO, não corrigido: trocá-lo por token é frente própria. */}
               <span className="text-[12px] font-medium text-[#185FA5]">{contaAtual}</span>
             </div>
-            <FaixaDoMes mes={`${selectedCard.label}/${ano}`} linha={linhaSel ?? null} semClassificacao={semClassificacaoSel}
-              onCorrigir={() => setSemClassificacaoDe({ contaId: selectedConta === '__all__' ? null : selectedConta })}
-              duplicados={diagPendencias.duplicadosCount} onDuplicados={() => setShowPendencias(true)} />
+
 
             {/* ════ 2 BLOCOS: [Saldos por conta] [Resumo do mês] — P166 (CONC-TELA-02, mock aprovado 28/10). Era Saldos | Resumo | Status
                 (P141, 3.05fr 1.7fr 0.7fr); o Status virou a faixa acima. Os dois blocos vão até o fim da janela (`useAlturaAteOFim`): a
                 altura nunca depende do número de contas e só a tabela de cada um rola. Os cabeçalhos têm a MESMA altura (26px) e o das
                 colunas também (22px): a 1ª linha do Resumo (Saldo inicial) fica na altura do Total. ════ */}
-            {/* CONC-PAINEL-CONTA-01 (Gabriel 12:42) — SEM ESPAÇO SOBRANDO: o card Saldos tem a largura da TABELA (`max-content`: a Conta pelo
-                maior nome + a régua; com a barra de rolagem, se houver) e o Resumo do mês CRESCE com o resto (piso de 260px). */}
-            <div ref={refDosBlocos} className="grid gap-2 px-3" style={{gridTemplateColumns:'max-content minmax(260px,1fr)', height:alturaBlocos}}
+            {/* CONC-LAYOUT-FIXO-01 (Chat 19/11 08:33; UI-LARGURA-FIXA-01): a divisão é FIXA — Saldos por conta 60% · Resumo 40%, igual em todo
+                cliente e mês, de 1280 a 1920. Era `max-content minmax(260px,1fr)` (o Saldos na largura do maior nome): NJ ficava ~65/35 e
+                Vera ~50/50. A Conta é o resto da tabela (corta com "…", o nome inteiro no `title` da linha). */}
+            <div ref={refBlocos} className="grid gap-2 px-3" style={{gridTemplateColumns:'minmax(0,3fr) minmax(0,2fr)', height:alturaBlocos}}
                  data-testid="blocos-conciliacao">
 
               {/* ── Saldos por conta ── */}
@@ -1379,14 +1306,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   </div>
                 </div>
 
-                {/* CONC-PAINEL-CONTA-01 — o MEDIDOR da coluna Conta (escondido, fora do fluxo): cada nome no peso da linha escolhida + o recuo
-                    da célula (19 + ponto 7 + vão 4 + folga 6), cada grupo em negrito + o padding (8 + 4 + folga 4) */}
-                <div ref={refMedidorConta} aria-hidden className="pointer-events-none invisible absolute left-0 top-0 whitespace-nowrap text-[10px]"
-                  data-testid="medidor-conta">
-                  {/* o texto vem pelo CSS (`content: attr(data-texto)`): mede igual, mas não vira texto da página (busca, leitor de tela, testes) */}
-                  {textosDaConta.contas.map(t => <span key={`c:${t}`} className="block w-max font-semibold before:content-[attr(data-texto)]" data-medida={36} data-texto={t} />)}
-                  {textosDaConta.grupos.map(t => <span key={`g:${t}`} className="block w-max font-bold before:content-[attr(data-texto)]" data-medida={16} data-texto={t} />)}
-                </div>
                 {/* ⚠ SÓ A TABELA ROLA (P166): o cabeçalho do card fica fora do rolador; o das colunas e o Total grudam no topo dele. */}
                 {/* CONC-PAINEL-CONTA-01 — o lugar da barra fica RESERVADO (`scrollbar-gutter: stable`): a barra que aparece/some com a altura não
                     muda a largura da Conta (o desloca acusou 8px ao voltar para "Todas") */}
@@ -1394,12 +1313,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 {/* ⚠ `table-layout: FIXED` COM COLGROUP EM px — CONC-SALDOS-LAYOUT-02. As colunas da direita tem px medidos no pior
                     texto (`REGUA_SALDOS`) e a Conta e' a unica que estica; o nome corta numa linha so' quando nao cabe (inteiro no
                     `title` da linha) — de 1024px para cima, com os 260px do Resumo, o nome real cabe inteiro (P166). */}
-                {/* CONC-PAINEL-CONTA-01 (item 3) — a Conta na largura do MAIOR nome (medido), não "o resto": Sistema · Extrato · Diferença
-                    ficam perto do nome; a tabela não estica com a janela (largura = Conta + a régua) */}
-                <table className="border-collapse" style={{fontSize:'10px', tableLayout:'fixed', width: larguraContaNaTela + REGUA_SALDOS.reduce((a, b) => a + b, 0)}}
+                {/* CONC-LAYOUT-FIXO-01 — a tabela ocupa o card inteiro: a régua da direita em px e a Conta com o resto */}
+                <table className="w-full border-collapse" style={{fontSize:'10px', tableLayout:'fixed'}}
                   data-testid="tabela-saldos">
                   <colgroup>
-                    <col style={{width:`${larguraContaNaTela}px`}} />
+                    <col />
                     {REGUA_SALDOS.map((w, i) => <col key={i} style={{width:`${w}px`}} />)}
                   </colgroup>
                   {/* O Total mora no `thead`: gruda junto com o cabeçalho das colunas no topo do rolador. A borda inferior é sombra
@@ -1515,9 +1433,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   Diferença com a faixa cinza da coluna Diferença. ⚠ TUDO DA LINHA DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D1): a conta
                   aberta, ou o total no Todas. Nulo é "—", nunca zero. As saídas vêm com o sinal do dono (negativas, em vermelho). */}
               <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card" data-testid="card-resumo">
-                <div className="flex h-[26px] shrink-0 items-center bg-primary px-3 text-primary-foreground">
-                  <span className="text-[10px] font-medium whitespace-nowrap">Resumo do mês</span>
+                {/* CONC-LAYOUT-FIXO-01 (2)(3)(4): o título é a CONTA ESCOLHIDA + o mês ("Todas as contas · Nov/2026" sem conta), com o ▸ da
+                    linha escolhida; o status do mês é um SELO aqui (era a faixa em toda a largura) e a frase dele, uma linha embaixo */}
+                <div className="flex h-[26px] shrink-0 items-center gap-2 bg-primary px-3 text-primary-foreground">
+                  <span className="min-w-0 flex-1 truncate text-[10px] font-medium" data-testid="titulo-resumo"
+                    title={`Resumo do mês · ${contaAtual} · ${selectedCard.label}/${ano}`}>
+                    {selectedConta !== '__all__' && <span aria-hidden>▸ </span>}{contaAtual} · {selectedCard.label}/{ano}
+                  </span>
+                  <SeloDoMes linha={linhaSel ?? null} semClassificacao={semClassificacaoSel} />
                 </div>
+                <LinhaDoStatus linha={linhaSel ?? null} semClassificacao={semClassificacaoSel}
+                  onCorrigir={() => setSemClassificacaoDe({ contaId: selectedConta === '__all__' ? null : selectedConta })}
+                  duplicados={diagPendencias.duplicadosCount} onDuplicados={() => setShowPendencias(true)} />
                 <div className="min-h-0 flex-1 overflow-y-auto" data-testid="rolagem-resumo">
                 {/* CONC-ORDENAR-01 — EXCEÇÃO DECLARADA ao check-ui-ordenar (proposta ao Chat 13/11): o Resumo é a conta do mês em linhas FIXAS
                     (saldo inicial → entradas → saídas → saldo final); ordenar por valor desmontaria a conta */}
@@ -1960,6 +1887,8 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
         {/* ⚠ UMA LINHA, SEMPRE — CONC-SALDOS-LAYOUT-02: ponto · NOME (o unico que corta; "· par" e "⚠" cortam junto, inteiros no
             `title` da linha). P141 (CONC-LAYOUT-01): a DATA e os selos OFX/PDF sairam daqui para colunas proprias — nada colado ao nome. */}
         <div className="flex h-[18px] min-w-0 items-center gap-1 pl-[19px]" data-testid="celula-conta">
+          {/* CONC-LAYOUT-FIXO-01 (3) — o ▸ da escolhida, o mesmo do título do Resumo; o lugar existe em TODA linha (o nome não anda ao escolher) */}
+          <span aria-hidden className="inline-block w-[7px] shrink-0 text-[8px] leading-none text-primary" data-testid="marca-escolhida">{isActive ? '▸' : ''}</span>
           {/* O PONTO É O STATUS (o saldo). Conta CONCILIADA com aviso do extrato leva um ponto âmbar de 4px SOBRE o canto. */}
           <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,flexShrink:0,position:'relative'}}>
             {marcaAviso && (
@@ -2037,7 +1966,7 @@ function LinhaAbertura({ rotulo, valor }: { rotulo: string; valor: string }) {
   );
 }
 
-/* ── Sub-component: FaixaDoMes ── */
+/* ── Sub-components: o status do mês (SeloDoMes + LinhaDoStatus) ── */
 /**
  * O meio da faixa do mês: o que o STATUS DO DONO diz, sem valor de conta (os valores estão na tabela, e a conta com diferença já
  * tem o ponto vermelho). No Todas, "não batem em N contas" é o `qtde` do motivo `contas_nao_conciliadas` (os nomes, no `title`);
@@ -2073,34 +2002,53 @@ const TOM_DA_FAIXA = {
   pendente: { caixa: 'border-border bg-muted', status: 'text-muted-foreground', icone: '⏳' },
 } as const;
 
+/** O tom e o rótulo do status do mês (o do DONO da linha aberta: a conta, ou o total no Todas). Conciliado com sem classificação fica ÂMBAR
+ *  — só a cor; o status não muda (D6 da CONC-SEM-CLASSIFICACAO-01). */
+function tomDoMes(linha: LinhaResumo | null, semClassificacao: SemClassificacao | null) {
+  const status: StatusDono = linha?.status ?? 'pendente';
+  const tom = status === 'nao_conciliado' ? TOM_DA_FAIXA.nao
+    : status === 'conciliado' ? (semClassificacao ? TOM_DA_FAIXA.pendencia : TOM_DA_FAIXA.ok)
+    : TOM_DA_FAIXA.pendente;
+  const rotulo = status === 'nao_conciliado' ? 'não conciliado'
+    : status === 'conciliado' ? (semClassificacao ? 'conciliado, com pendência' : 'conciliado')
+    : 'pendente';
+  return { status, tom, rotulo };
+}
+
 /**
- * P166 (CONC-TELA-02, mock aprovado 28/10) — a FAIXA do status do mês, no lugar do card Status: UMA linha, toda a largura, altura
- * fixa (o texto nunca quebra: a tabela abaixo não anda). O status e a frase são os do DONO da linha aberta (a conta, ou o total no
- * Todas). "Classificação" é o aviso `sem_classificacao` do dono (realizados do mês sem plano de contas = sem subcentro; o subcentro
- * vem do plano). Conciliado com sem classificação fica ÂMBAR — só a cor da faixa; o status não muda (D6 da CONC-SEM-CLASSIFICACAO-01).
- * Saíram com o card: a 2ª prova, o pareamento e as contas com aviso (seguem no `title` de cada linha, no ✎ e no ↗).
+ * CONC-LAYOUT-FIXO-01 (Chat 19/11 08:33) — o SELO do status do mês no cabeçalho do Resumo (era a FAIXA do P166 em toda a largura, acima dos
+ * blocos). O mês e a conta já estão no título ao lado; a frase vai na linha de baixo (`LinhaDoStatus`). Fundo opaco sobre o navy.
  */
-function FaixaDoMes({ mes, linha, semClassificacao, onCorrigir, duplicados, onDuplicados }: {
-  mes: string;
+function SeloDoMes({ linha, semClassificacao }: { linha: LinhaResumo | null; semClassificacao: SemClassificacao | null }) {
+  const { status, tom, rotulo } = tomDoMes(linha, semClassificacao);
+  return (
+    <span className="inline-flex shrink-0 rounded-[3px] bg-card">
+      <span className={`inline-flex h-[16px] items-center whitespace-nowrap rounded-[3px] border px-1.5 text-[9.5px] ${tom.caixa}`}
+        data-testid="faixa-status" data-status={status} data-pendencia={semClassificacao ? 'sim' : undefined}>
+        <span className={`font-semibold ${tom.status}`} data-testid="faixa-status-rotulo">{tom.icone} {rotulo}</span>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * CONC-LAYOUT-FIXO-01 — a frase do status, a classificação e os duplicados em UMA linha de 19px logo abaixo do cabeçalho do Resumo (altura
+ * fixa: a tabela embaixo não anda). A frase é a única que cede ("…", inteira no `title`); Classificação, duplicados e "corrigir ›" ficam.
+ */
+function LinhaDoStatus({ linha, semClassificacao, onCorrigir, duplicados, onDuplicados }: {
   linha: LinhaResumo | null;
   semClassificacao: SemClassificacao | null;
   onCorrigir: () => void;
   duplicados: number;
   onDuplicados: () => void;
 }) {
-  const status: StatusDono = linha?.status ?? 'pendente';
-  const tom = status === 'nao_conciliado' ? TOM_DA_FAIXA.nao
-    : status === 'conciliado' ? (semClassificacao ? TOM_DA_FAIXA.pendencia : TOM_DA_FAIXA.ok)
-    : TOM_DA_FAIXA.pendente;
-  const rotulo = status === 'nao_conciliado' ? `${mes} não conciliado`
-    : status === 'conciliado' ? (semClassificacao ? `${mes} conciliado, com pendência` : `${mes} conciliado`)
-    : `${mes} pendente`;
   const frase = fraseDaFaixa(linha);
   return (
-    <div className={`mx-3 flex h-[26px] items-center gap-3 overflow-hidden whitespace-nowrap rounded-md border px-3 text-[10px] ${tom.caixa}`}
-      data-testid="faixa-status" data-status={status} data-pendencia={semClassificacao ? 'sim' : undefined}>
-      <span className={`shrink-0 text-[11px] font-semibold ${tom.status}`} data-testid="faixa-status-rotulo">{tom.icone} {rotulo}</span>
-      <span className="shrink-0 text-foreground/80" title={frase.titulo} data-testid="faixa-status-frase">{frase.texto}</span>
+    <div className="shrink-0 border-b px-2 text-[9.5px]" data-testid="linha-do-status">
+      {/* a frase muda com o mês e o painel tem 40%: duas linhas RESERVADAS (altura fixa), nunca "…" fora de tabela (P104) */}
+      <div className="h-[26px] overflow-hidden whitespace-normal pt-[1px] leading-[12px] text-foreground/80" title={frase.titulo ?? frase.texto}
+        data-testid="faixa-status-frase">{frase.texto}</div>
+      <div className="flex h-[17px] items-center gap-2 overflow-hidden whitespace-nowrap">
       <span className="shrink-0 text-foreground/80" data-testid="faixa-classificacao"
         title="lançamentos realizados do mês sem plano de contas (sem subcentro): ficam fora do DRE">
         Classificação:{' '}
@@ -2115,11 +2063,12 @@ function FaixaDoMes({ mes, linha, semClassificacao, onCorrigir, duplicados, onDu
         </button>
       )}
       {semClassificacao && (
-        <button type="button" onClick={onCorrigir} className="ml-auto shrink-0 text-primary hover:underline cursor-pointer"
+        <button type="button" onClick={onCorrigir} className="shrink-0 text-primary hover:underline cursor-pointer"
           data-testid="classificar-agora">
           corrigir ›
         </button>
       )}
+      </div>
     </div>
   );
 }

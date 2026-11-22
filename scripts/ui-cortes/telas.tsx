@@ -1800,13 +1800,13 @@ if (tela === 'mesclar') {
   /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status) e o "Extrato do sistema" do ↗, com as linhas do DONO no pior
      caso (`dados/conciliacao.ts`, SINTÉTICO). `&v=sem`: os mesmos números sem nenhum OFX/PDF (o deslocamento compara as duas páginas).
      `&v=carregando`: o modal antes de o dono responder. P166: `&v=ok|pendencia|pendente` a faixa do status nos outros casos e
-     `&v=nj` os nomes no tamanho real (`dados/conciliacao.ts`). */
+     `&v=nj` os nomes no tamanho real (`dados/conciliacao.ts`); CONC-LAYOUT-FIXO-01: `&v=vera` os nomes curtos, do tamanho dos da Vera. */
   const semArquivos = v === 'sem';
   /* CONC-PAINEL-CONTA-01 — `&admin=1`: o operador admin (o ✎ da conta aparece e abre o painel lateral) */
   if (q.get('admin') === '1') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' },
     clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
   g.__bancoBancada = {
-    from: (t: string, e?: { eq?: Record<string, unknown> }) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : CONC.CONTAS)
+    from: (t: string, e?: { eq?: Record<string, unknown> }) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : v === 'vera' ? CONC.CONTAS_VERA : CONC.CONTAS)
       /* BAIXA-DESCONTO-BANCO-01 — a parte paga com desconto da NF do dia 03 (`&v=desconto-depois`) */
       : t === 'financeiro_lancamentos_v2' && e?.eq?.origem_tipo === 'conc:desconto_parte' ? (v === 'desconto-depois' ? ESP.PARTES_DO_DESCONTO : [])
       : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
