@@ -4968,6 +4968,7 @@ export type Database = {
           codigo: string
           codigo_importacao: string | null
           created_at: string | null
+          eh_administrativa: boolean
           estado: string | null
           id: string
           nome: string
@@ -4983,6 +4984,7 @@ export type Database = {
           codigo: string
           codigo_importacao?: string | null
           created_at?: string | null
+          eh_administrativa?: boolean
           estado?: string | null
           id?: string
           nome: string
@@ -4998,6 +5000,7 @@ export type Database = {
           codigo?: string
           codigo_importacao?: string | null
           created_at?: string | null
+          eh_administrativa?: boolean
           estado?: string | null
           id?: string
           nome?: string

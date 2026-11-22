@@ -163,6 +163,8 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
   const [novaOpen, setNovaOpen] = useState(false);
   const [novaNome, setNovaNome] = useState('');
   const [novaCodigo, setNovaCodigo] = useState('');
+  /* FAZ-TEM-PECUARIA-DERIVADA-01 (D3): o cadastro pergunta se a fazenda é administrativa (coluna própria); padrão Não */
+  const [novaAdm, setNovaAdm] = useState<'nao' | 'sim'>('nao');
   const [criando, setCriando] = useState(false);
 
   /* FAZENDA-CADASTRO-01 · F1a — a lista de fazendas (só no Global). Hook aqui em cima: nunca depois de um early return. */
@@ -268,11 +270,12 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
       return;
     }
     setCriando(true);
-    const criada = await criarFazenda(novaNome.trim(), novaCodigo.trim());
+    const criada = await criarFazenda(novaNome.trim(), novaCodigo.trim(), novaAdm === 'sim');
     setCriando(false);
     if (!criada) return;
     setNovaNome('');
     setNovaCodigo('');
+    setNovaAdm('nao');
     setNovaOpen(false);
   };
 
@@ -421,7 +424,7 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
               {lista.totais.fazendas} fazenda{lista.totais.fazendas === 1 ? '' : 's'} · {lista.totais.ativas} ativa{lista.totais.ativas === 1 ? '' : 's'} · clique na fazenda para abrir o cadastro
             </p>
           </div>
-          <Dialog open={novaOpen} onOpenChange={(o) => { setNovaOpen(o); if (!o) { setNovaNome(''); setNovaCodigo(''); } }}>
+          <Dialog open={novaOpen} onOpenChange={(o) => { setNovaOpen(o); if (!o) { setNovaNome(''); setNovaCodigo(''); setNovaAdm('nao'); } }}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="h-7 text-xs shrink-0">
                 <Plus className="h-3 w-3 mr-1" /> Fazenda
@@ -458,6 +461,18 @@ export function V2Fazendas({ fichaDoPastoParaAbrir = null, onFichaDoPastoAberta,
                       e alimenta a coluna "Fazenda" do Excel financeiro. */}
                   <p className="text-[10px] text-muted-foreground">
                     Código único, usado na importação financeira.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
+                    É administrativa?
+                  </Label>
+                  <div>
+                    <Segmentado<'nao' | 'sim'> valor={novaAdm} onEscolher={setNovaAdm}
+                      opcoes={[{ valor: 'nao', rotulo: 'Não' }, { valor: 'sim', rotulo: 'Sim' }]} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Administrativa é centro de custo, sem rebanho. A pecuária liga sozinha quando entra gado.
                   </p>
                 </div>
                 <Button

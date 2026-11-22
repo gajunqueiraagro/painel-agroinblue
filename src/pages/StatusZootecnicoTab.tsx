@@ -66,7 +66,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
   const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
-  const isAdmin = !isGlobal && fazendaAtual?.tem_pecuaria === false;
+  const isAdmin = !isGlobal && fazendaAtual?.eh_administrativa === true; // FAZ-TEM-PECUARIA-DERIVADA-01: coluna própria
 
   const anosDisp = useMemo(() => {
     const set = new Set<string>();

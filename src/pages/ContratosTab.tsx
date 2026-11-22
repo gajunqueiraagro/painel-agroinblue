@@ -38,7 +38,7 @@ export function ContratosTab() {
   const { contasBancarias: contas, classificacoes, fornecedores, loadContas, loadFornecedores, loadClassificacoes } = useFinanceiroV2();
   const { fazendas, fazendaAtual, isGlobal } = useFazenda();
 
-  const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
+  const isAdministrativo = fazendaAtual?.eh_administrativa === true; // FAZ-TEM-PECUARIA-DERIVADA-01: coluna própria
   const fazOperacionais = useMemo(() => fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false), [fazendas]);
   const clienteTemUmaFazenda = fazOperacionais.length <= 1;
   const acessoPermitido = isGlobal || isAdministrativo || clienteTemUmaFazenda;

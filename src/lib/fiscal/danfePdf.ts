@@ -8,6 +8,9 @@
 import { danfeDoArquivo } from '@/lib/fiscal/abrirDanfe';
 import { importarDoApp } from '@/lib/app/falhaDeVersao';
 
+export const ESCALA_DO_DANFE = 1.5;
+export const QUALIDADE_DO_DANFE = 0.8;
+
 /** o nome do PDF: o do XML com "-DANFE.pdf" no lugar do ".xml" */
 export const nomeDoDanfe = (nomeDoXml: string): string => `${nomeDoXml.replace(/\.xml$/i, '').trim() || 'nota'}-DANFE.pdf`;
 
@@ -33,9 +36,10 @@ export async function danfePdfDoXml(arquivo: File): Promise<{ ok: true; pdf: Fil
     if (folhas.length === 0) return { ok: false, frase: 'Não consegui montar o DANFE.' };
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
     for (const [k, folha] of folhas.entries()) {
-      const tela = await html2canvas(folha, { scale: 2, backgroundColor: '#ffffff', logging: false, windowWidth: 820 });
+      /* NOTA-SALVAR-RAPIDO-01 — escala 1,5 e JPEG 0,8: a folha A4 continua legível e o PDF cai à metade (514 KB → ~250 KB no NJ) */
+      const tela = await html2canvas(folha, { scale: ESCALA_DO_DANFE, backgroundColor: '#ffffff', logging: false, windowWidth: 820 });
       if (k > 0) pdf.addPage();
-      pdf.addImage(tela.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 210, 297);
+      pdf.addImage(tela.toDataURL('image/jpeg', QUALIDADE_DO_DANFE), 'JPEG', 0, 0, 210, 297);
     }
     return { ok: true, pdf: new File([pdf.output('blob')], nomeDoDanfe(arquivo.name), { type: 'application/pdf' }) };
   } catch {

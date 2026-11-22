@@ -64,6 +64,8 @@ export interface NotaNaLista extends LinhaRecebida {
   classe: ClasseDaNota;
   /** os nº das notas que esta nota CITA (refNFe): a remessa de entrega futura → o faturamento; a devolução → a original */
   citadas: string[];
+  /** ENTREGA-FUTURA-LIGAR-01 — as CHAVES que esta nota cita (refNFe), para buscar o faturamento pela chave quando ele não está na caixa */
+  refs: string[];
   /** a cancelada: o nº da nota viva do mesmo emitente e do mesmo valor (a que a substituiu), quando há */
   substituta: string | null;
   /** NOTAS-RECEITA-VENC-01 (Gabriel 19/11 07:36) — o vencimento pelas duplicatas da nota (cobr/dup do XML) */
@@ -233,6 +235,7 @@ export function montarLista(linhas: readonly LinhaRecebida[], titulares: Readonl
       emitenteNaTabela: documentoNaTabela(l.emitenteDocumento),
       classe,
       citadas: (a?.refs ?? []).map(numeroDaChave),
+      refs: [...(a?.refs ?? [])],
       substituta: base === 'cancelada' ? substitutaDa(l, linhas) : null,
       venc: vencimentoDaNota(a?.dups ?? [], a?.tpags ?? [], hoje),
       demonstracao: ligacaoDaNota(l.chave, ligacoes),

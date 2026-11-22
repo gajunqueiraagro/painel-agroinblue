@@ -9,6 +9,9 @@
  */
 export type MotivoNaoFinanceira = 'comodato' | 'entrega_futura' | 'bonificacao' | 'devolucao' | 'garantia' | 'demonstracao' | 'conserto'
   | 'retorno' | 'retorno_demonstracao' | 'outra_remessa';
+/** a lista dos motivos (a mesma do tipo), para ler o que o banco devolve sem cast */
+export const MOTIVOS_NAO_FINANCEIROS: readonly MotivoNaoFinanceira[] = ['comodato', 'entrega_futura', 'bonificacao', 'devolucao', 'garantia',
+  'demonstracao', 'conserto', 'retorno', 'retorno_demonstracao', 'outra_remessa'];
 export type ClasseDaNota =
   | { classe: 'compra' }
   | { classe: 'nao_financeira'; motivo: MotivoNaoFinanceira }

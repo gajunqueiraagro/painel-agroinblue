@@ -300,7 +300,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
     { id: 'dre', label: '📋 DRE' },
   ];
 
-  const isAdministrativa = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
+  const isAdministrativa = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.eh_administrativa === true; // FAZ-TEM-PECUARIA-DERIVADA-01
 
   if (isAdministrativa) {
     return (
