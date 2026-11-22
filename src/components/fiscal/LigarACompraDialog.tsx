@@ -185,7 +185,7 @@ export function LigarACompraDialog({ n, lista, clienteId, lerXml, aoFechar, carr
         </div>
         <div className="flex h-9 shrink-0 items-center gap-2 border-t bg-card px-3 text-[10.5px]">
           <span className="min-w-0 flex-1 truncate text-muted-foreground" title={frase ?? undefined} data-testid="ligar-frase">
-            {frase ?? 'Não cria lançamento nem muda valor: a NF fica nos documentos da compra (informativa no Documentado).'}
+            {frase ?? 'Não cria lançamento nem muda valor.'}
           </span>
           <Button type="button" size="sm" variant="outline" className="h-[24px] px-2.5 text-[10.5px]" disabled={gravando} onClick={() => aoFechar(false)}>Cancelar</Button>
           <Button type="button" size="sm" className="h-[24px] w-[120px] px-2.5 text-[10.5px]" data-testid="ligar-gravar"
