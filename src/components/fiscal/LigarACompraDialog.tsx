@@ -125,7 +125,7 @@ export function LigarACompraDialog({ n, lista, clienteId, lerXml, aoFechar, carr
                 </>}
           </div>
           {/* as remessas */}
-          <div className="flex h-5 shrink-0 items-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Remessas ({remessas.length})</div>
+          <div className="flex h-5 shrink-0 items-center text-[10px] font-semibold text-muted-foreground">Remessas ({remessas.length})</div>
           <div className={cn(QUADRO_REGUA, 'h-[168px] shrink-0')}>
             <table className="w-full shrink-0 table-fixed border-collapse bg-primary">{colgroup(COL_REM)}
               <thead><tr>{['', 'NF', 'Emissão', 'Quantidade', 'Valor'].map((h, i) => <th key={i} className={cn(TH_REGUA, i >= 3 ? 'text-right' : 'text-left')}>{h}</th>)}</tr></thead>
@@ -150,7 +150,7 @@ export function LigarACompraDialog({ n, lista, clienteId, lerXml, aoFechar, carr
             </div>
           </div>
           {/* a compra */}
-          <div className="flex h-5 shrink-0 items-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">A compra · lançamentos de saída do mesmo CPF/CNPJ</div>
+          <div className="flex h-5 shrink-0 items-center text-[10px] font-semibold text-muted-foreground">A compra · lançamentos de saída do mesmo CPF/CNPJ</div>
           <div className={cn(QUADRO_REGUA, 'min-h-0 flex-1')}>
             <table className="w-full shrink-0 table-fixed border-collapse bg-primary">{colgroup(COL_LANC)}
               <thead><tr>{['', 'Venc.', 'Descrição', 'Valor', 'Situação'].map((h, i) => <th key={i} className={cn(TH_REGUA, i === 3 ? 'text-right' : 'text-left')}>{h}</th>)}</tr></thead>
