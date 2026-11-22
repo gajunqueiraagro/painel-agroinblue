@@ -57,7 +57,9 @@ begin
   r := fn_folha_recibos_aplicar(T, null, doc, itens, false);
   if (select valor from financeiro_lancamentos_v2 where id = la) <> 1200.10 or (select status_transacao from financeiro_lancamentos_v2 where id = la) <> 'previsto'
      or (select valor from financeiro_lancamentos_v2 where id = lc) <> 300 then raise exception 'R5a %', r; end if;
-  if (select count(*) from financeiro_lancamento_documentos where cliente_id = T and observacao like 'folha-recibo:' || MD5 || '%' and not cancelado) <> 3 then raise exception 'R5b'; end if;
+  -- PR C (118430): o arquivo vai para folha_documentos e exige funcionário; aqui ninguém está no cadastro: nada em anexo do lançamento, 3 avisados
+  if exists (select 1 from financeiro_lancamento_documentos where cliente_id = T and observacao like 'folha-recibo:' || MD5 || '%')
+     or jsonb_array_length(r->'documentos_sem_funcionario') <> 3 or jsonb_array_length(r->'documentos') <> 0 then raise exception 'R5b %', r; end if;
   if (select count(*) from financeiro_lancamentos_v2 l join financeiro_fornecedores f on f.id = l.favorecido_id
        where l.cliente_id = T and l.descricao = '13º Salário 1ª Parcela 2026' and l.valor = 240.07 and l.plano_conta_id = mold.plano_conta_id) <> 1 then raise exception 'R5c (criado fora do molde)'; end if;
   if not exists (select 1 from audit_log where registro_id = la and via = 'folha-recibo:' || MD5) then raise exception 'R5d (sem trilha)'; end if;
@@ -68,7 +70,7 @@ begin
 
   -- R7 desfazer: prévia não muda; desfaz valores, anexos e o criado
   r := fn_folha_recibos_desfazer(T, MD5, 'teste', true);
-  if (r->>'valores')::int <> 1 or (r->>'criados')::int <> 1 or (r->>'documentos')::int <> 3 or (select valor from financeiro_lancamentos_v2 where id = la) <> 1200.10 then raise exception 'R7a %', r; end if;
+  if (r->>'valores')::int <> 1 or (r->>'criados')::int <> 1 or (r->>'documentos')::int <> 0 or (select valor from financeiro_lancamentos_v2 where id = la) <> 1200.10 then raise exception 'R7a %', r; end if;
   perform fn_folha_recibos_desfazer(T, MD5, 'teste', false);
   if (select valor from financeiro_lancamentos_v2 where id = la) <> 1000 then raise exception 'R7b'; end if;
   if exists (select 1 from financeiro_lancamento_documentos where cliente_id = T and observacao like 'folha-recibo:' || MD5 || '%' and not cancelado) then raise exception 'R7c'; end if;
