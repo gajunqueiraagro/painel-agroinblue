@@ -34,6 +34,36 @@ describe('C1 — a pilha', () => {
   });
 });
 
+describe('C4 — a camada de passagem (Gabriel 22/11: Lançar da Receita → salvar volta à LISTA)', () => {
+  const tres = () => abrirNaPilha(abrirNaPilha(abrirNaPilha(VAZIA, 'lista'), 'xml', 'lista', { passagem: true }), 'nota', 'xml');
+  it('salvou em cima: a passagem fecha junto e o retorno vai à camada anterior a ela', () => {
+    const f = fecharDaPilha(tres(), 'nota', 'salvou');
+    expect(f.camadas.pilha).toEqual(['lista']);
+    expect(f.volta).toBe('lista');
+    expect(f.fechadas).toEqual(['xml']);
+  });
+  it('fechou sem salvar: volta só um degrau (à passagem)', () => {
+    const f = fecharDaPilha(tres(), 'nota', 'fechou');
+    expect(f.camadas.pilha).toEqual(['lista', 'xml']);
+    expect(f.volta).toBe('xml');
+    expect(f.fechadas).toEqual([]);
+  });
+  it('sem passagem, salvou volta à de baixo como sempre', () => {
+    const c = abrirNaPilha(abrirNaPilha(abrirNaPilha(VAZIA, 'lista'), 'xml', 'lista'), 'nota', 'xml');
+    const f = fecharDaPilha(c, 'nota', 'salvou');
+    expect([f.camadas.pilha, f.volta, f.fechadas]).toEqual([['lista', 'xml'], 'xml', []]);
+  });
+  it('o hook avisa a tela da camada que fechou junto e entrega o retorno à lista', () => {
+    const juntas: Id[] = [];
+    const { result } = renderHook(() => useCamadas<Id>({ aoFecharJunto: (id) => { juntas.push(id); } }));
+    act(() => { result.current.abrir('lista'); result.current.abrir('xml', 'lista', { passagem: true }); result.current.abrir('nota', 'xml'); });
+    act(() => { result.current.fechar('nota', 'salvou', 'k1'); });
+    expect(juntas).toEqual(['xml']);
+    expect(result.current.pilha).toEqual(['lista']);
+    expect(result.current.retornoPara('lista')).toMatchObject({ acao: 'salvou', chave: 'k1' });
+  });
+});
+
 describe('C2 — a de baixo não desmonta', () => {
   function Host() {
     const camadas = useCamadas<Id>();

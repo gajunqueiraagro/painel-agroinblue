@@ -40,14 +40,15 @@ describe('F34-SITUACAO-01 — a leitura da lista', () => {
     expect(sit).toEqual({ '118.480': 'no_sistema', '118.481': 'no_sistema', '999': 'nova' });
     /* + a pergunta dos atributos fiscais das 3 com XML (SEM-LANCAMENTO-01), uma só para a lista inteira */
     /* + a das ligações da demonstração (NOTA-DEMONSTRACAO-01), uma só para o cliente */
+    /* NOTA-SALVAR-RAPIDO-01 — atributos e ligações saem em paralelo com a conferência: a ORDEM não importa, as perguntas sim */
     expect(rpc).toHaveBeenCalledTimes(4);
-    expect(rpc.mock.calls[3]).toEqual(['fn_notas_demonstracao_ligacoes', { p_cliente: 'cli' }]);
-    expect(rpc.mock.calls[1][0]).toBe('fn_notas_candidatos');
-    expect(rpc.mock.calls[2]).toEqual(['fn_notas_atributos_fiscais', { p_cliente: 'cli', p_chaves: [chave(118480), chave(118481), chave(999)] }]);
-    expect(rpc.mock.calls[1][1].p_notas.map((n: { chave: string }) => n.chave)).toEqual([chave(999)]);
+    const chamada = (f: string) => rpc.mock.calls.find((c) => c[0] === f);
+    expect(chamada('fn_notas_demonstracao_ligacoes')).toEqual(['fn_notas_demonstracao_ligacoes', { p_cliente: 'cli' }]);
+    expect(chamada('fn_notas_atributos_fiscais')).toEqual(['fn_notas_atributos_fiscais', { p_cliente: 'cli', p_chaves: [chave(118480), chave(118481), chave(999)] }]);
+    expect(chamada('fn_notas_candidatos')?.[1].p_notas.map((n: { chave: string }) => n.chave)).toEqual([chave(999)]);
     expect(rpc).toHaveBeenCalledWith('fn_notas_ja_lancadas', { p_cliente: 'cli', p_notas: expect.arrayContaining([
       { chave: chave(118481), numero: '000118481', emitente_documento: '12345678000190', nome: 'Uniao Sintetica' }]) });
-    expect(rpc.mock.calls[0][1].p_notas).toHaveLength(3);
+    expect(rpc.mock.calls.find((c) => c[0] === 'fn_notas_ja_lancadas')?.[1].p_notas).toHaveLength(3);
   });
   it('S3 a consulta que falha não deixa a nota como "Nova": a leitura falha com a frase', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'rede' } });
@@ -60,7 +61,8 @@ describe('F34-SITUACAO-01 — a leitura da lista', () => {
     rpc.mockImplementation(async (f: string) => ({ data: [], error: null, f }));
     const d = await lerNotasDaReceita('cli');
     expect(d.lista.find((n) => n.numero === '118.480')?.sit).toBe('no_sistema');
-    expect(rpc.mock.calls[0][1].p_notas.map((n: { numero: string }) => n.numero).sort()).toEqual(['000000999', '000118481']);
+    expect(rpc.mock.calls.find((c) => c[0] === 'fn_notas_ja_lancadas')?.[1].p_notas.map((n: { numero: string }) => n.numero).sort())
+      .toEqual(['000000999', '000118481']);
   });
   it('S6 candidatos (CASAR-01): a que tem candidato do mesmo CNPJ vira "Pode estar lançada"; a falha dos candidatos é erro, nunca "Nova"', async () => {
     rpc.mockImplementation(async (f: string, a: { p_notas: { chave: string }[] }) => ({ error: null,
