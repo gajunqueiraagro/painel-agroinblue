@@ -1,0 +1,20 @@
+{
+  "_fonte": "ReceitaFederal/calculadora-rtc-regime-regular (licença MIT, Copyright (c) 2026 Receita Federal do Brasil), commit de 19/11/2026: as entradas de src/test/resources/entradas/{calculoscorretos,arredondamento} e a saída esperada dos testes src/test/java/.../testesintegracao/{calculoscorretos/cbsibs,arredondamento/Teste_CasosFixosArredondamento}. pRed e pDif: os do teste (gRed) ou, quando o teste só confere o valor, os da tabela da calculadora para o cClassTrib (PERCENTUAL_REDUCAO / TRTR_EXPRESSAO_PERCENTUAL_DIFERIMENTO). Cada tributo: [alíquota, pRed, pDif, efetiva esperada, devido esperado].",
+  "casos": [
+    { "teste": "Teste_000001_1", "cClassTrib": "000001", "vBC": "200.00", "CBS": ["0.90", 0, 0, "0.9000", "1.80"], "IBSUF": ["0.10", 0, 0, "0.1000", "0.20"], "IBSMun": ["0", 0, 0, "0.0000", "0.00"] },
+    { "teste": "Teste_000001_2", "cClassTrib": "000001", "vBC": "247.30", "CBS": ["8.40", 0, 0, "8.4000", "20.77"], "IBSUF": ["0.05", 0, 0, "0.0500", "0.12"], "IBSMun": ["0.05", 0, 0, "0.0500", "0.12"] },
+    { "teste": "Teste_000001_3", "cClassTrib": "550001", "vBC": "200.00", "CBS": ["0.00", 0, 0, "0.0000", "0.00"], "IBSUF": ["0.00", 0, 0, "0.0000", "0.00"], "IBSMun": ["0.00", 0, 0, "0.0000", "0.00"] },
+    { "teste": "Teste_000001_5", "cClassTrib": "000001", "vBC": "200.00", "CBS": ["8.40", 0, 0, "8.4000", "16.80"], "IBSUF": ["0.05", 0, 0, "0.0500", "0.10"], "IBSMun": ["0.05", 0, 0, "0.0500", "0.10"] },
+    { "teste": "Teste_000001_6", "cClassTrib": "000001", "vBC": "210.54", "CBS": ["8.40", 0, 0, "8.4000", "17.69"], "IBSUF": ["0.05", 0, 0, "0.0500", "0.11"], "IBSMun": ["0.05", 0, 0, "0.0500", "0.11"] },
+    { "teste": "Teste_011002_1", "cClassTrib": "011002", "vBC": "200.00", "CBS": ["0.90", 60, 0, "0.3600", "0.72"], "IBSUF": ["0.10", 60, 0, "0.0400", "0.08"], "IBSMun": ["0", 60, 0, "0.0000", "0.00"] },
+    { "teste": "Teste_200002_1", "cClassTrib": "200002", "vBC": "200.00", "CBS": ["0.90", 100, 0, "0.0000", "0.00"], "IBSUF": ["0.10", 100, 0, "0.0000", "0.00"], "IBSMun": ["0", 100, 0, "0.0000", "0.00"] },
+    { "teste": "Teste_200002_2", "cClassTrib": "200002", "vBC": "247.30", "CBS": ["8.40", 100, 0, "0.0000", "0.00"], "IBSUF": ["0.05", 100, 0, "0.0000", "0.00"], "IBSMun": ["0.05", 100, 0, "0.0000", "0.00"] },
+    { "teste": "Teste_200032_1", "cClassTrib": "200032", "vBC": "200.00", "CBS": ["0.90", 60, 0, "0.3600", "0.72"], "IBSUF": ["0.10", 60, 0, "0.0400", "0.08"], "IBSMun": ["0", 60, 0, "0.0000", "0.00"] },
+    { "teste": "Teste_200032_2", "cClassTrib": "200032", "vBC": "247.30", "CBS": ["8.40", 60, 0, "3.3600", "8.31"], "IBSUF": ["0.05", 60, 0, "0.0200", "0.05"], "IBSMun": ["0.05", 60, 0, "0.0200", "0.05"] },
+    { "teste": "Teste_510002_1", "cClassTrib": "510002", "vBC": "200.00", "CBS": ["0.9", 60, 100, "0.3600", "0.00"], "IBSUF": ["0.10", 60, 100, "0.0400", "0.00"], "IBSMun": ["0", 60, 100, "0.0000", "0.00"] },
+    { "teste": "Arredondamento T1 (empate exato vai para o par)", "cClassTrib": "000001", "vBC": "25.00", "CBS": ["0.90", 0, 0, "0.9000", "0.22"], "IBSUF": ["0.10", 0, 0, "0.1000", "0.02"], "IBSMun": ["0", 0, 0, "0.0000", "0.00"] },
+    { "teste": "Arredondamento T2 (2027, IBS 0,05% + 0,05%; a CBS de 2027 não vem no teste: a do T4, 8,8123%)", "cClassTrib": "000001", "vBC": "12.00", "CBS": ["8.8123", 0, 0, "8.8123", "1.06"], "IBSUF": ["0.05", 0, 0, "0.0500", "0.01"], "IBSMun": ["0.05", 0, 0, "0.0500", "0.01"] },
+    { "teste": "Arredondamento T3 (item de 14,00)", "cClassTrib": "000001", "vBC": "14.00", "CBS": ["0.90", 0, 0, "0.9000", "0.13"], "IBSUF": ["0.10", 0, 0, "0.1000", "0.01"], "IBSMun": ["0", 0, 0, "0.0000", "0.00"] },
+    { "teste": "Arredondamento T4 (1.000.000,00, CBS 8,8123% com redução de 60%)", "cClassTrib": "200034", "vBC": "1000000.00", "CBS": ["8.8123", 60, 0, "3.5249", "35249.00"], "IBSUF": ["0.05", 60, 0, "0.0200", "200.00"], "IBSMun": ["0.05", 60, 0, "0.0200", "200.00"] }
+  ]
+}
