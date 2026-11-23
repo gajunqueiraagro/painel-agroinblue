@@ -3,15 +3,17 @@
  * e-mail (convite, recuperação, troca de e-mail) e as frases. A tela só desenha; nada aqui fala com o Supabase.
  *   · o link do e-mail traz `token_hash` + `type` (os templates do PR 0 apontam para `/definir-senha`) — a página nossa só VERIFICA
  *     quando a pessoa clica: o leitor de segurança do Outlook/Gmail que "abre" o link antes não queima o convite;
- *   · senha nova: no mínimo 8 caracteres (D5); a senha provisória do admin segue com 6 (`SENHA_MINIMA` do Acessos);
+ *   · senha nova: a regra ÚNICA da senha (SEG-SENHA-01, `supabase/functions/_shared/regraDaSenha.ts`: 8+, com letras e números — a
+ *     mesma do painel do Auth e das funções do admin; a senha provisória do Acessos também);
  *   · "Esqueci minha senha" responde SEMPRE a mesma frase (não revela quem tem login).
  */
+import { FRASE_SENHA_FRACA, SENHA_MINIMA, problemaDaSenha } from '../../../supabase/functions/_shared/regraDaSenha';
 
 /** A página que recebe o link do e-mail (fora da guarda de login; ver o `AppRouter`). */
 export const CAMINHO_DEFINIR_SENHA = '/definir-senha';
 
-/** D5 — a senha que a pessoa cria (convite, recuperação, trocar senha). */
-export const SENHA_MINIMA_NOVA = 8;
+/** D5 — a senha que a pessoa cria (convite, recuperação, trocar senha): a regra única. */
+export const SENHA_MINIMA_NOVA = SENHA_MINIMA;
 
 export type TipoDoLink = 'invite' | 'recovery' | 'email_change';
 const TIPOS: readonly TipoDoLink[] = ['invite', 'recovery', 'email_change'];
@@ -38,7 +40,8 @@ export interface PendenciasDaSenha { atual?: string; nova?: string; confirmar?: 
 export function pendenciasDaSenhaNova(v: { atual?: string; nova: string; confirmar: string }, pedirAtual = false): PendenciasDaSenha {
   const p: PendenciasDaSenha = {};
   if (pedirAtual && !(v.atual ?? '')) p.atual = 'Digite a sua senha atual.';
-  if (v.nova.length < SENHA_MINIMA_NOVA) p.nova = `A senha nova precisa de pelo menos ${SENHA_MINIMA_NOVA} caracteres.`;
+  const fraca = problemaDaSenha(v.nova);
+  if (fraca) p.nova = fraca;
   else if (pedirAtual && v.nova === v.atual) p.nova = 'A senha nova precisa ser diferente da atual.';
   if (!p.nova && v.confirmar !== v.nova) p.confirmar = 'As duas senhas não são iguais.';
   return p;
@@ -58,6 +61,7 @@ export const FRASE_LINK_VENCIDO = 'Este link venceu ou já foi usado. Peça um n
 export const FRASE_ESQUECI_ENVIADO = 'Se este e-mail estiver cadastrado, enviamos um link para criar uma nova senha. Confira a caixa de entrada e o spam.';
 export const FRASE_SENHA_ALTERADA = 'Senha alterada.';
 export const FRASE_SENHA_ATUAL_ERRADA = 'A senha atual não confere.';
+export const FRASE_SENHA_VAZADA = 'Esta senha aparece em listas de senhas vazadas na internet: escolha outra.';
 
 /** A frase do erro do Supabase ao VERIFICAR o link (venceu, já usado, inválido). O texto cru vai para o console, nunca para a tela. */
 export function fraseDoErroDoLink(mensagem: string | null | undefined): string {
@@ -79,6 +83,8 @@ export function fraseDoErroDoLogin(mensagem: string | null | undefined): string 
 export function fraseDoErroDaSenha(mensagem: string | null | undefined): string {
   const m = (mensagem ?? '').toLowerCase();
   if (m.includes('should be different') || m.includes('same')) return 'A senha nova precisa ser diferente da atual.';
-  if (m.includes('weak') || m.includes('at least') || m.includes('characters')) return `Senha fraca: use pelo menos ${SENHA_MINIMA_NOVA} caracteres, com letras e números.`;
+  /* senha vazada (HaveIBeenPwned, ligado no painel 23/11): o Supabase diz "Password is known to be weak and easy to guess…" */
+  if (m.includes('easy to guess') || m.includes('known to be weak') || m.includes('pwned')) return FRASE_SENHA_VAZADA;
+  if (m.includes('weak') || m.includes('at least') || m.includes('characters')) return FRASE_SENHA_FRACA;
   return 'Não consegui gravar a senha agora. Tente de novo em instantes.';
 }

@@ -1,3 +1,6 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { exigirMembroAtivo, tokenDoPedido } from "../_shared/exigirMembro.ts";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -99,6 +102,28 @@ REGRA: retorne um array JSON contendo um objeto por pasto. Se incerto sobre um v
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  /* SEG-EDGE-IA-01: só usuário logado, membro ativo de um cliente ou admin (a chave pública do site não passa) */
+  const urlProjeto = Deno.env.get("SUPABASE_URL");
+  const servico = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!urlProjeto || !servico) {
+    return new Response(JSON.stringify({ error: "Função sem configuração." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  const admin = createClient(urlProjeto, servico, { auth: { persistSession: false } });
+  const quem = await exigirMembroAtivo({
+    token: tokenDoPedido(req.headers.get("Authorization")),
+    autorDoToken: async (t) => (await admin.auth.getUser(t)).data.user?.id ?? null,
+    ehMembroAtivo: async (u) => {
+      const [m, a] = await Promise.all([
+        admin.from("cliente_membros").select("user_id").eq("user_id", u).eq("ativo", true).limit(1),
+        admin.from("admin_agroinblue").select("user_id").eq("user_id", u).limit(1),
+      ]);
+      return (m.data?.length ?? 0) > 0 || (a.data?.length ?? 0) > 0;
+    },
+  });
+  if (!quem.ok) {
+    return new Response(JSON.stringify({ error: quem.erro }), { status: quem.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
 
   try {
     const { imageB64, imageMime, tipo } = await req.json();
