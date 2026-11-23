@@ -29,7 +29,7 @@ import { useConciliacaoDoMes, type MovimentoConciliacao } from '@/hooks/useConci
 import { buscarSugestoesDoMes, type RespostaDoMotor } from '@/lib/conciliacao/loteDeSugestoes';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
 import {
-  MAX_CARTOES_NA_FAIXA, arquivosDoMes, formatoDoArquivo, ordenarArquivos, resumoDosArquivos, sobreposicoesDePeriodo,
+  MAX_CARTOES_NA_FAIXA, arquivosDoMes, formatoDoArquivo, ordenarArquivos, periodoCurto, resumoDosArquivos, sobreposicoesDePeriodo,
   type ArquivoDoMes, type ColunaDosArquivos, type ComprovanteDoMes, type FormatoDoArquivo,
 } from '@/lib/conciliacao/arquivosDoMes';
 import { anexarSaldoDocumento, cancelarSaldoDocumento, importacoesDoMes, urlAssinadaSaldoDocumento, useImportacoesDaConta } from '@/hooks/useExtratoDaConta';
@@ -324,9 +324,9 @@ function ResumoDosArquivos({ arquivos, ligado, aoAbrir }: { arquivos: readonly A
 }
 
 const COLUNAS_DA_LISTA: { id: ColunaDosArquivos; rotulo: string; largura: number | null; direita?: boolean }[] = [
-  { id: 'nome', rotulo: 'Arquivo', largura: null }, { id: 'formato', rotulo: 'Tipo', largura: 30 }, { id: 'periodo', rotulo: 'Período', largura: 118 },
+  { id: 'nome', rotulo: 'Arquivo', largura: null }, { id: 'formato', rotulo: 'Tipo', largura: 30 }, { id: 'periodo', rotulo: 'Período', largura: 96 },
   { id: 'enviado', rotulo: 'Importado em', largura: 70 }, { id: 'movimentos', rotulo: 'Mov.', largura: 34, direita: true },
-  { id: 'saldo', rotulo: 'Saldo final', largura: 86, direita: true },
+  { id: 'saldo', rotulo: 'Saldo final', largura: 98, direita: true },
 ];
 const LARGURA_DAS_ACOES = 106;
 
@@ -362,10 +362,10 @@ function ListaDeArquivos({ arquivos, aoVer, aoBaixar, aoDesfazer }: {
           const outros = marcados.get(a.chave);
           return (
             <tr key={a.chave} className="border-t border-border" data-testid="painel-lista-linha" data-chave={a.chave} data-sobreposto={outros ? 'sim' : undefined}>
-              <td className={TD} title={outros ? `${a.nome} — cobre dias de: ${outros.join(', ')}` : a.nome} data-testid="painel-lista-nome">
+              <td className={TD} title={outros ? `⚠ ${a.nome} — cobre dias de: ${outros.join(', ')}` : a.nome} data-testid="painel-lista-nome">
                 {outros && <span className="text-[#b7791f]">⚠ </span>}{a.nome}</td>
               <td className={TD}>{a.formato}</td>
-              <td className={TD} data-testid="painel-lista-periodo">{a.periodoDe && a.periodoAte ? `${ddmmaaaa(a.periodoDe)}–${ddmmaaaa(a.periodoAte)}` : '—'}</td>
+              <td className={TD} data-testid="painel-lista-periodo" title={a.periodoDe && a.periodoAte ? `${ddmmaaaa(a.periodoDe)} a ${ddmmaaaa(a.periodoAte)}` : undefined}>{periodoCurto(a.periodoDe, a.periodoAte)}</td>
               <td className={TD}>{a.enviadoEm ? ddmmaaaa(a.enviadoEm) : '—'}</td>
               <td className={cn(TD, 'text-right')}>{a.movimentos ?? '—'}</td>
               <td className={cn(TD, 'text-right', a.saldoFinal != null && a.saldoFinal < 0 && 'text-[#c0392b]')}>{a.saldoFinal == null ? '—' : moeda(a.saldoFinal)}</td>
@@ -536,7 +536,7 @@ function CasarDoPainel({ clienteId, contaId, anoMes, linha, aoConferencia, aoAbr
                   <td className={TD}>{ddmmaaaa(l.data)}</td>
                   <td className={TD} title={l.descricao}>{l.descricao}</td>
                   <td className={cn(TD, 'text-right', l.valor < 0 ? 'text-[#c0392b]' : 'text-[#1e8449]')}>{moeda(l.valor)}</td>
-                  <td className={cn(TD, COR_DO_TOM[l.tom])} title={l.titulo} data-testid="painel-casar-sugestao">{MARCA_DO_TOM[l.tom]}{l.sugestao}</td>
+                  <td className={cn(TD, COR_DO_TOM[l.tom])} title={`${MARCA_DO_TOM[l.tom]}${l.titulo}`} data-testid="painel-casar-sugestao">{MARCA_DO_TOM[l.tom]}{l.sugestao}</td>
                   <td className={TD}><button type="button" className="text-[10px] text-[#1f5fbf] hover:underline" data-testid="painel-casar-acao"
                     title={l.acao === 'casar' ? 'abre a estação com a sugestão (a prévia antes de gravar)' : 'procurar no histórico ou criar o lançamento (na estação)'}
                     onClick={() => setEstacao(semPar.find((m) => m.id === l.id) ?? null)}>{l.acao}</button></td>

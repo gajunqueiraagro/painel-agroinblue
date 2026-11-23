@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  arquivosDoMes, contasComComprovante, formatoDoArquivo, lerComprovante, ordenarArquivos, resumoDosArquivos, sobreposicoesDePeriodo,
+  arquivosDoMes, contasComComprovante, formatoDoArquivo, lerComprovante, ordenarArquivos, periodoCurto, resumoDosArquivos, sobreposicoesDePeriodo,
   type ComprovanteDoMes, type ImportacaoDoMes,
 } from './arquivosDoMes';
 
@@ -119,5 +119,15 @@ describe('CONC-PAINEL-02 ajuste (Gabriel 23/11 17:09) — 10 arquivos no mês: r
     const c = { ...b, periodoDe: '2031-09-16' };
     expect(sobreposicoesDePeriodo([a, c])).toEqual([]);
     expect(sobreposicoesDePeriodo(lista)).toHaveLength(36); // 9 OFX todos a partir do dia 1: C(9,2); o PDF sem período fica fora
+  });
+});
+
+describe('o período curto da lista (cabe na coluna e não perde a data inteira)', () => {
+  it('R5 mesmo mês · mesmo ano · anos diferentes · um dia · sem período', () => {
+    expect(periodoCurto('2031-09-01', '2031-09-27')).toBe('01–27/09/2031');
+    expect(periodoCurto('2031-08-28', '2031-09-03')).toBe('28/08–03/09/2031');
+    expect(periodoCurto('2030-12-28', '2031-01-03')).toBe('28/12/2030–03/01/2031');
+    expect(periodoCurto('2031-09-15', '2031-09-15')).toBe('15/09/2031');
+    expect([periodoCurto(null, '2031-09-15'), periodoCurto('2031-09-01', null)]).toEqual(['—', '—']);
   });
 });

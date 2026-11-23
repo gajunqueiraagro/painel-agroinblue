@@ -324,7 +324,8 @@ describe('o painel (componente)', () => {
     const linhas = screen.getAllByTestId('painel-lista-linha');
     expect(linhas).toHaveLength(10);
     const o3 = linhas.find((l) => l.getAttribute('data-chave') === 'importacao:o3');
-    expect(o3 && within(o3).getByTestId('painel-lista-periodo').textContent).toBe('01/09/2031–03/09/2031');
+    expect(o3 && within(o3).getByTestId('painel-lista-periodo').textContent).toBe('01–03/09/2031');
+    expect(o3 && within(o3).getByTestId('painel-lista-periodo').getAttribute('title')).toBe('01/09/2031 a 03/09/2031');
     expect(o3?.textContent).toContain('800,00');
     const pdf = linhas.find((l) => l.getAttribute('data-chave') === 'comprovante:d1');
     expect(pdf && within(pdf).getByTestId('painel-lista-periodo').textContent).toBe('—');

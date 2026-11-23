@@ -196,3 +196,16 @@ export function sobreposicoesDePeriodo(lista: readonly ArquivoDoMes[]): Sobrepos
   }
   return r;
 }
+
+/** O período na lista, curto e sem perder a data inteira (cabe na coluna fixa): "01–27/09/2031" (mesmo mês) · "28/08–03/09/2031" (mesmo ano) ·
+ *  "28/12/2030–03/01/2031" (anos diferentes); um dia só = a data. Sem período = "—". */
+export function periodoCurto(de: string | null, ate: string | null): string {
+  const m = (x: string | null) => /^(\d{4})-(\d{2})-(\d{2})/.exec(x ?? '');
+  const a = m(de); const b = m(ate);
+  if (!a || !b) return '—';
+  const fim = `${b[3]}/${b[2]}/${b[1]}`;
+  if (a[0] === b[0]) return fim;
+  if (a[1] !== b[1]) return `${a[3]}/${a[2]}/${a[1]}–${fim}`;
+  if (a[2] !== b[2]) return `${a[3]}/${a[2]}–${fim}`;
+  return `${a[3]}–${fim}`;
+}
