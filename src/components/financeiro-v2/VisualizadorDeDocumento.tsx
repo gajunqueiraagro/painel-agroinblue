@@ -42,7 +42,7 @@ export const zoomPelaRoda = (z: number, deltaY: number): number => limitarZoom(z
 export const rolagemCentrada = (rolagem: number, cursor: number, z0: number, z1: number): number =>
   Math.max(0, (rolagem + cursor) * (z1 / z0) - cursor);
 
-export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba, onBaixar }: {
+export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba, onBaixar, embutido = false }: {
   open: boolean;
   onFechar: () => void;
   bytes: ArrayBuffer;
@@ -50,6 +50,9 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
   onNovaAba: () => void;
   /** BOLETO D3d (Gabriel 18/11 11:59): quem passa ganha o "Baixar" (salvar o arquivo); sem ele, a barra é a de sempre. */
   onBaixar?: () => void;
+  /** CONC-PAINEL-02 (Gabriel 23/11: "Ver abre o visualizador DENTRO do painel") — o MESMO visualizador sem o diálogo de tela cheia: a barra
+   *  e o quadro ocupam a caixa de quem o monta (altura de quem hospeda). O desenho, o zoom e o texto são os mesmos. */
+  embutido?: boolean;
 }) {
   const quadro = useRef<HTMLDivElement | null>(null);
   /* VISUALIZADOR-PDF-02: o quadro como ESTADO — o efeito da roda roda quando ele monta (o Portal do Dialog monta depois do 1º efeito) */
@@ -217,13 +220,8 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
   };
   const BOTAO = 'h-[22px] px-2 text-[10.5px]';
 
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onFechar(); }}>
-      <DialogContent className="flex h-[calc(100dvh-16px)] w-[calc(100vw-16px)] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="visualizador-documento">
-        <div className="flex h-9 shrink-0 items-center bg-primary px-3.5 pr-10">
-          <DialogTitle className="min-w-0 truncate text-[13px] font-semibold text-primary-foreground" title={nome}>{nome}</DialogTitle>
-          <DialogDescription className="sr-only">A nota fiscal em tela cheia, com zoom, girar e páginas.</DialogDescription>
-        </div>
+  const corpo = (
+      <>
         {/* a barra fixa (o mock): − % + · Ajustar à largura · Página inteira · Girar · ‹ n/N › · Abrir em nova aba */}
         <div className="flex h-[32px] shrink-0 items-center gap-1 border-b bg-card px-2 text-[10.5px]" data-testid="visualizador-barra">
           <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={() => mudarZoom(1 / 1.25)} aria-label="Diminuir o zoom" data-testid="visualizador-menos">−</Button>
@@ -240,7 +238,7 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
           <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={() => setPagina((n) => Math.min(total, n + 1))} disabled={pagina >= total} aria-label="Próxima página">›</Button>
           <span className="ml-auto" />
           {onBaixar && <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={onBaixar} data-testid="visualizador-baixar">⤓ Baixar</Button>}
-          <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={onNovaAba} data-testid="visualizador-nova-aba">↗ Abrir em nova aba</Button>
+          {!embutido && <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={onNovaAba} data-testid="visualizador-nova-aba">↗ Abrir em nova aba</Button>}
         </div>
         <div ref={refDoQuadro} className={`flex min-h-0 flex-1 overflow-auto bg-[#e9ecf0] p-4 ${arrastando ? 'cursor-grabbing select-none' : ''}`}
           data-testid="visualizador-quadro" data-modo={modo} onPointerDown={aoPressionar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerCancel={aoSoltar}
@@ -256,6 +254,20 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
               </div>
             )}
         </div>
+      </>
+  );
+
+  if (embutido) {
+    return <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden" data-testid="visualizador-documento" data-embutido="">{corpo}</div>;
+  }
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onFechar(); }}>
+      <DialogContent className="flex h-[calc(100dvh-16px)] w-[calc(100vw-16px)] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="visualizador-documento">
+        <div className="flex h-9 shrink-0 items-center bg-primary px-3.5 pr-10">
+          <DialogTitle className="min-w-0 truncate text-[13px] font-semibold text-primary-foreground" title={nome}>{nome}</DialogTitle>
+          <DialogDescription className="sr-only">A nota fiscal em tela cheia, com zoom, girar e páginas.</DialogDescription>
+        </div>
+        {corpo}
       </DialogContent>
     </Dialog>
   );

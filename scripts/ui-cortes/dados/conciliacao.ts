@@ -52,13 +52,20 @@ export const LINHAS_SISTEMA = [
 ];
 
 export function resumoDoMes(contaIds: string[] | null, v: string | null = null) {
-  const nomes = v === 'nj' ? CONTAS_TAMANHO_REAL : v === 'vera' ? CONTAS_VERA : CONTAS;
-  const cc1 = linhaConta({ conta_id: 'cc1', conta_nome: nomes[0].nome_conta, tipo_conta: 'cc', status: 'conciliado', saldo_inicial: 1,
+  const nomes = v === 'nj' ? CONTAS_TAMANHO_REAL : v === 'vera' ? CONTAS_VERA : v === 'sr' ? CONTAS_SR : CONTAS;
+  const cc1 = linhaConta({ conta_id: 'cc1', conta_nome: nomes[0].nome_conta, tipo_conta: 'cc', status: v === 'sr' ? 'nao_conciliado' : 'conciliado', saldo_inicial: 1,
     saldo_sistema: -99999999.99, saldo_extrato: -99999999.99, diferenca: 0, entradas: 3060.6, saidas: -100003061.59,
+    /* CONC-PAINEL-02 (`&v=sr`) — a corrente com linhas do extrato sem par (o passo "Casar lançamentos") */
+    ...(v === 'sr' ? { extratos_sem_par: { qtde: 58, valor: 1204330.1 }, lancamentos_sem_par: { qtde: 2, valor: 1500 } } : {}),
     ...(contaIds?.length === 1 ? { linhas_sistema: LINHAS_SISTEMA } : {}) });
   const cc2 = linhaConta({ conta_id: 'cc2', conta_nome: nomes[1].nome_conta, tipo_conta: 'cc', status: 'nao_conciliado', saldo_inicial: 1,
     saldo_sistema: 1, saldo_extrato: 1.03, diferenca: -0.03, motivos: [{ motivo: 'saldo_diverge', valor: -0.03 }] });
-  const inv = linhaConta({ conta_id: 'inv', conta_nome: nomes[2].nome_conta, tipo_conta: 'inv', status: 'pendente', saldo_inicial: 99999999.99,
+  const inv = v === 'sr'
+    /* CONC-PAINEL-02 — a previdência com saldo informado (o PDF) e a diferença (números inventados) */
+    ? linhaConta({ conta_id: 'inv', conta_nome: nomes[2].nome_conta, tipo_conta: 'inv', status: 'nao_conciliado', saldo_inicial: 684217.35,
+        saldo_sistema: 184217.35, saldo_extrato: 184217.35 + DIFERENCA_SR, diferenca: DIFERENCA_SR, tem_extrato: false, saidas: 500000,
+        saidas_transferencias: 500000, motivos: [{ motivo: 'saldo_diverge', valor: DIFERENCA_SR }], avisos: [{ motivo: 'sem_extrato' }] })
+    : linhaConta({ conta_id: 'inv', conta_nome: nomes[2].nome_conta, tipo_conta: 'inv', status: 'pendente', saldo_inicial: 99999999.99,
     saldo_sistema: 99999999.99, saldo_extrato: null, diferenca: null, tem_extrato: false, saldo_extrato_data: null,
     motivos: [{ motivo: 'saldo_nao_informado', falta: 'final' }], avisos: [{ motivo: 'sem_extrato' }] });
   const car = linhaConta({ conta_id: 'car', conta_nome: nomes[3].nome_conta, tipo_conta: 'cartao', status: 'nao_conciliado', saldo_inicial: 0,
@@ -81,6 +88,32 @@ export function resumoDoMes(contaIds: string[] | null, v: string | null = null) 
 }
 
 /* Os arquivos do mês: o OFX com saldo da cc1 (set), o da cc2 de OUTRO mês (a conta importa OFX, o de set não trouxe saldo → vazado);
-   PDF na cc1 e no cartão. */
-export const IMPORTACOES = [{ conta_bancaria_id: 'cc1', saldo_declarado_data: '2031-09-30' }, { conta_bancaria_id: 'cc2', saldo_declarado_data: '2031-08-31' }];
-export const DOCUMENTOS = [{ conta_bancaria_id: 'cc1', ano_mes: '2031-09' }, { conta_bancaria_id: 'car', ano_mes: '2031-09' }];
+   PDF na cc1 e no cartão. CONC-PAINEL-02: com id, nome e caminho (o painel lista e abre; `lerComprovante` recusa a linha sem id). */
+export const IMPORTACOES = [
+  { id: 'imp-cc1', conta_bancaria_id: 'cc1', saldo_declarado: -99999999.99, saldo_declarado_data: '2031-09-30', nome_arquivo: 'Extrato Exemplo Conta Movimento set-31.ofx',
+    tipo_arquivo: 'OFX', created_at: '2031-10-02T10:00:00Z', cancelado_em: null, cancelada_em: null },
+  { id: 'imp-cc2', conta_bancaria_id: 'cc2', saldo_declarado: 1, saldo_declarado_data: '2031-08-31', nome_arquivo: 'alfa-ago.ofx', tipo_arquivo: 'OFX',
+    created_at: '2031-09-02T10:00:00Z', cancelado_em: null, cancelada_em: null },
+];
+export const DOCUMENTOS = [
+  { id: 'doc-cc1', conta_bancaria_id: 'cc1', ano_mes: '2031-09', nome: 'Extrato Exemplo Conta Movimento set-31.pdf', tipo: 'application/pdf',
+    url: 'cli/saldos/cc1/2031-09/doc-cc1.pdf', uploaded_em: '2031-10-02T10:05:00Z' },
+  { id: 'doc-car', conta_bancaria_id: 'car', ano_mes: '2031-09', nome: 'Fatura Exemplo Visa venc 10-10.pdf', tipo: 'application/pdf',
+    url: 'cli/saldos/car/2031-09/doc-car.pdf', uploaded_em: '2031-10-03T09:00:00Z' },
+];
+/** CONC-PAINEL-02 (`&v=sr`) — o caso da Santa Rita com NOMES E NÚMEROS INVENTADOS: a previdência (investimento, sem OFX) com o comprovante do
+ *  mês e uma diferença; existe um previsto SEM CONTA do mesmo valor (o "Explicar a diferença" o acha primeiro). */
+export const DOCUMENTOS_SR = [...DOCUMENTOS,
+  { id: 'doc-inv', conta_bancaria_id: 'inv', ano_mes: '2031-09', nome: 'Previdência Exemplo Saldo 3009.pdf', tipo: 'application/pdf',
+    url: 'cli/saldos/inv/2031-09/doc-inv.pdf', uploaded_em: '2031-10-10T12:00:00Z' }];
+export const CONTAS_SR = CONTAS.map((c, i) => ({ ...c, nome_conta: ['Banco Exemplo Brasil', 'Banco Alfa', 'Previdência Exemplo VGBL', 'Cartão Exemplo'][i] }));
+export const DIFERENCA_SR = -537.42;
+export const CANDIDATOS_SR = [{ id: 'l-ajuste', descricao: 'Ajuste da previdência - previsto', valor: 537.42, tipo_operacao: '2-Saídas', status_transacao: 'previsto',
+  conta_bancaria_id: null, data_pagamento: null, data_vencimento: '2031-09-30' }];
+/** O elo arquivo → movimento (`useImportacoesDaConta`) e os movimentos que o arquivo trouxe (o "Ver" da importação). */
+export const LIGACOES = [1, 2, 3].map((n) => ({ id: `ext-${n}`, importacao_id: 'imp-cc1', cancelado_em: null, data_movimento: `2031-09-0${n}` }));
+export const MOVIMENTOS_DO_ARQUIVO = [
+  { id: 'ext-1', data_movimento: '2031-09-01', descricao: 'PIX RECEBIDO · REEMBOLSO SINTÉTICO', valor: 10.5 },
+  { id: 'ext-2', data_movimento: '2031-09-02', descricao: 'PAGAMENTO DE BOLETO · FORNECEDOR SINTÉTICO COM O NOME LONGO DE EXEMPLO', valor: -99999999.99 },
+  { id: 'ext-3', data_movimento: '2031-09-03', descricao: 'TED RECEBIDA · VENDA DE BEZERROS DESMAMADOS', valor: 1200 },
+];
