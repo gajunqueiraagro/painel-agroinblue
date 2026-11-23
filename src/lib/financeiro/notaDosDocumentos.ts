@@ -94,6 +94,15 @@ export function oQueAbrir(l: LinhaDeDocumento): { tipo: 'arquivo'; doc: LancDocu
 /* as espécies que são nota fiscal: a do lançamento e as da OC (a view entrega a da OC crua) */
 const ESPECIES_DE_NOTA: readonly string[] = ['nf', 'nf_principal', 'nf_complementar'];
 
+/** DANFE-SOB-DEMANDA-01 (Gabriel 23/11) — a NF com chave de NF-e (44) e SEM PDF: o clipe mostra "PDF · DANFE", gerado do XML na hora (o XML
+ *  guardado; sem ele, o da Receita) e aberto no visualizador — nada é gravado. Devolve a chave; senão nulo. */
+export function chaveDoDanfeSobDemanda(l: LinhaDeDocumento): string | null {
+  if (l.pdf?.url) return null;
+  if (!ESPECIES_DE_NOTA.includes(l.principal.especie ?? '')) return null;
+  const c = digitos(l.xml?.chaveAcesso ?? l.principal.chaveAcesso);
+  return c.length === 44 ? c : null;
+}
+
 /** DOC-ANEXO-E-IMPORT-01 F2 — o NÚMERO do clipe da lista: as linhas da aba Documentos (PDF + XML da mesma nota = 1), dos documentos vivos
  *  que a lista já carrega por cliente. É o mesmo `linhasDosDocumentos`: o clipe diz 2 só quando o popover vai mostrar 2. */
 export function quantasLinhasDoClipe(docs: readonly DocumentoDaLinha[] | null | undefined): number {
