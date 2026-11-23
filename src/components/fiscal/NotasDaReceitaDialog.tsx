@@ -25,7 +25,7 @@ import { abrirAbaDoDanfe, mostrarDanfe } from '@/lib/fiscal/abrirDanfe';
 import {
   ABAS_DA_RECEITA, arquivoDoXml, candidatoPreMarcado, dicaDoVenc, filtrarBusca, nomeDoXml, seloDaNota, tomDoVenc, totalDaLista,
   vencidaSemLancamento, fraseDaLigacao, type AbaDaReceita, type ClasseDoCandidato, type NotaNaLista,
-  MOTIVOS_IGNORAR, podeIgnorar, fraseDaIgnorada, type MotivoIgnorar,
+  MOTIVOS_IGNORAR, podeIgnorar, fraseDaIgnorada, type MotivoIgnorar, marcarLancadasAgora,
 } from '@/lib/fiscal/notasDaReceita';
 import { ehBemDeTerceiro } from '@/lib/fiscal/classeDaNota';
 import { Ajuda } from '@/components/ui/ajuda';
@@ -104,6 +104,7 @@ const TH_NUM = cn(TH, 'text-right');
 const LINHA = 'h-[19px] border-b border-border/40';
 const BOTAO = 'h-[16px] rounded-[3px] px-1 text-[9.5px] leading-none';
 
+const SEM_CHAVES: ReadonlySet<string> = new Set();
 const brl = (c: number) => (c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dataBR = (s: string | null) => (s ? s.slice(0, 10).split('-').reverse().join('/') : '—');
 const horaBR = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -116,7 +117,7 @@ export function baixarArquivo(arquivo: File) {
 }
 
 export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita, abaInicial,
-  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null, ligarACompra, ignorar }: {
+  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null, ligarACompra, ignorar, lancadasAgora }: {
   clienteNome?: string | null;
   dados: DadosDaReceita | undefined;
   carregando: boolean;
@@ -143,6 +144,8 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
     /** a bancada injeta */ carregar?: Parameters<typeof LigarACompraDialog>[0]['carregar']; ligar?: Parameters<typeof LigarACompraDialog>[0]['ligar'] };
   /** NOTA-IGNORAR-01 — ignorar / desfazer (devolvem a frase da recusa; null = gravou e quem chama relê a lista); sem ele, os botões não aparecem */
   ignorar?: { ignorar: (n: NotaNaLista, motivo: MotivoIgnorar, texto: string | null) => Promise<string | null>; desfazer: (n: NotaNaLista) => Promise<string | null> };
+  /** NOTA-LANCAR-SEM-DELAY-01 — as chaves lançadas AGORA (saem do "A lançar" na hora; a releitura confere em segundo plano) */
+  lancadasAgora?: ReadonlySet<string>;
 }) {
   const [aba, setAba] = useState<AbaDaReceita>(abaInicial ?? 'todas');
   const [busca, setBusca] = useState('');
@@ -160,9 +163,11 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   const [origem, setOrigem] = useState<{ chave: string; proxima: string | null } | null>(null);
   const [voltou, setVoltou] = useState(false);
   const quadro = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (retorno && origem) setVoltou(true); }, [retorno?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* NOTA-LANCAR-SEM-DELAY-01 — do clique em Lançar até voltar: a linha diz "lançando…" e o Lançar fica desligado (nunca 2 cliques) */
+  const [lancando, setLancando] = useState<string | null>(null);
+  useEffect(() => { if (retorno && origem) setVoltou(true); setLancando(null); }, [retorno?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const todas = useMemo(() => filtrarBusca(dados?.lista ?? [], busca, titular), [dados, busca, titular]);
+  const todas = useMemo(() => filtrarBusca(marcarLancadasAgora(dados?.lista ?? [], lancadasAgora ?? SEM_CHAVES), busca, titular), [dados, busca, titular, lancadasAgora]);
   const filtro = ABAS_DA_RECEITA.find((a) => a.valor === aba)?.filtro ?? (() => true);
   const vencidas = todas.filter(vencidaSemLancamento).length;
   const filtradas = useMemo(() => todas.filter(filtro).filter((n) => !soVencidas || vencidaSemLancamento(n)), [todas, filtro, soVencidas]);
@@ -183,7 +188,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
 
   const comXml = async (n: NotaNaLista, fazer: (f: File) => void | Promise<void>) => {
     setOcupada(n.id); setAviso(null);
-    try { await fazer(arquivoDoXml(n.chave, await lerXml(n.id))); } catch (e) { setAviso(e instanceof Error ? e.message : 'Não consegui ler o XML.'); } finally { setOcupada(null); }
+    try { await fazer(arquivoDoXml(n.chave, await lerXml(n.id))); } catch (e) { setLancando(null); setAviso(e instanceof Error ? e.message : 'Não consegui ler o XML.'); } finally { setOcupada(null); }
   };
   /* NOTA-IGNORAR-01 — "Desfazer" na aba Ignoradas: a nota volta para onde estava (a lista relê por quem chama) */
   const desfazerIgnorar = async (n: NotaNaLista) => {
@@ -193,9 +198,9 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   };
   const botaoLancar = (n: NotaNaLista, podeLancar: boolean, largura: string) => (
     <button type="button" className={cn(BOTAO, largura, 'whitespace-nowrap', podeLancar ? 'bg-[#E7C873] font-semibold text-foreground hover:bg-[#D9B95F]' : 'invisible')}
-      disabled={!podeLancar || ocupada === n.id} data-testid="receita-lancar"
+      disabled={!podeLancar || ocupada === n.id || lancando === n.chave} data-testid="receita-lancar"
       title='Abre o "Da nota fiscal" com este XML (o mesmo caminho do arquivo solto)'
-      onClick={() => { marcarOrigem(n); if (n.candidatos.length) setCasar(n); else void comXml(n, aoLancar); }}>Lançar</button>
+      onClick={() => { marcarOrigem(n); setLancando(n.chave); if (n.candidatos.length) setCasar(n); else void comXml(n, aoLancar); }}>Lançar</button>
   );
 
   return (
@@ -282,6 +287,15 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                               n.demonstracao.por === 'fornecedor' ? 'bg-amber-50 text-amber-800 ring-amber-300' : 'bg-sky-50 text-sky-800 ring-sky-300')}
                               title={fraseDaLigacao(n.demonstracao)} data-testid="receita-da-demo">demo</span>
                           )}
+                          {/* NOTA-LANCAR-SEM-DELAY-01 — "lançando…" (o Da nota fiscal aberto por esta linha) e "agora" (lançada nesta tela) */}
+                          {lancando === n.chave && !n.lancadaAgora && (
+                            <span className="whitespace-nowrap rounded-full bg-sky-50 px-1 py-[1px] text-[8.5px] font-semibold text-sky-800 ring-1 ring-sky-300"
+                              title="O Da nota fiscal desta nota está aberto" data-testid="receita-lancando">lançando…</span>
+                          )}
+                          {n.lancadaAgora && (
+                            <span className="whitespace-nowrap rounded-full bg-emerald-50 px-1 py-[1px] text-[8.5px] font-semibold text-emerald-800 ring-1 ring-emerald-300"
+                              title="Lançada agora nesta tela" data-testid="receita-lancada-agora">agora</span>
+                          )}
                         </span>
                       </td>
                       <td className={TD_REGUA} onClick={(e) => e.stopPropagation()}>
@@ -363,7 +377,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
             aoFechar={(feito) => { const n = ignorando; setIgnorando(null); if (feito) setAviso(`NF ${n.numero} ignorada: está na aba "Ignoradas" (Desfazer volta).`); }} />
         )}
         {bem && registrarBem && <RegistrarBemDeTerceiro n={bem} registrar={registrarBem} aoFechar={(frase) => { setBem(null); if (frase) setAviso(frase); }} />}
-        {casar && <PodeEstarLancada n={casar} ocupada={ocupada === casar.id} aviso={aviso} aoFechar={() => setCasar(null)}
+        {casar && <PodeEstarLancada n={casar} ocupada={ocupada === casar.id} aviso={aviso} aoFechar={() => { setCasar(null); setLancando(null); }}
           aoLancarNova={() => { const n = casar; setCasar(null); void comXml(n, aoLancar); }}
           aoVincular={async (id) => {
             const n = casar;
