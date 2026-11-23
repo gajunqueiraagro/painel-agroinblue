@@ -144,7 +144,7 @@ describe('os perfis do piloto', () => {
     expect(PERFIL_INICIAL).toBe('financeiro');
     await montar();
     expect(screen.getByTestId('acesso-perfil').textContent).toBe('Financeiro');
-    const base = { nome: 'A', email: 'a@b.co', senha: '123456', fazendas: ['f1'] };
+    const base = { nome: 'A', email: 'a@b.co', senha: 'abcd1234', fazendas: ['f1'] };
     expect(pendenciasDoNovoAcesso({ ...base, perfil: 'financeiro' })).toEqual({});
     expect(pendenciasDoNovoAcesso({ ...base, perfil: 'campo' }).perfil).toBeTruthy();
     expect(pendenciasDoNovoAcesso({ ...base, perfil: 'admin_agroinblue' }).perfil).toBeTruthy();
@@ -158,7 +158,7 @@ describe('criar', () => {
     expect(estado.invoke).not.toHaveBeenCalled();
     expect(screen.getByTestId('erro-nome').textContent).toBe('Informe o nome.');
     expect(screen.getByTestId('erro-email').textContent).toBe('Informe um e-mail válido.');
-    expect(screen.getByTestId('erro-senha').textContent).toBe('Mínimo de 6 caracteres.');
+    expect(screen.getByTestId('erro-senha').textContent).toBe('A senha precisa de pelo menos 8 caracteres, com letras e números.');
     expect(screen.getByTestId('erro-fazendas').textContent).toBe('Marque ao menos uma fazenda.');
   });
   it('os slots de mensagem existem antes de qualquer erro (a altura não muda)', async () => {
@@ -266,7 +266,7 @@ describe('redefinir e remover', () => {
     expect(screen.getByTestId('senha-nova').getAttribute('type')).toBe('password');
     fireEvent.click(screen.getByTestId('senha-confirmar'));
     expect(estado.invoke).not.toHaveBeenCalled();
-    expect(screen.getByTestId('senha-erro').textContent).toBe('Mínimo de 6 caracteres.');
+    expect(screen.getByTestId('senha-erro').textContent).toBe('A senha precisa de pelo menos 8 caracteres, com letras e números.');
     fireEvent.change(screen.getByTestId('senha-nova'), { target: { value: SENHA } });
     fireEvent.click(screen.getByTestId('senha-confirmar'));
     await waitFor(() => expect(estado.invoke).toHaveBeenCalledWith('redefinir-senha', { body: { user_id: 'u-fin', nova_senha: SENHA } }));

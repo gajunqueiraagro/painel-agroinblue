@@ -7,6 +7,7 @@ import {
   CAMINHO_DEFINIR_SENHA, FRASE_LINK_VENCIDO, enderecoDeVolta, fraseDoErroDaSenha, fraseDoErroDoLink, fraseDoErroDoLogin, lerLinkDoEmail,
   pendenciasDaSenhaNova, temPendencia, textosDoLink,
 } from './senhaEConvite';
+import { FRASE_SENHA_FRACA } from '../../../supabase/functions/_shared/regraDaSenha';
 
 describe('lerLinkDoEmail', () => {
   it('lê o token_hash e o tipo dos três links (convite, recuperação, troca de e-mail)', () => {
@@ -31,16 +32,20 @@ describe('enderecoDeVolta', () => {
 });
 
 describe('pendenciasDaSenhaNova', () => {
-  it('mínimo de 8 caracteres; 7 recusa e 8 passa', () => {
-    expect(pendenciasDaSenhaNova({ nova: '1234567', confirmar: '1234567' }).nova).toMatch(/8 caracteres/);
-    expect(temPendencia(pendenciasDaSenhaNova({ nova: '12345678', confirmar: '12345678' }))).toBe(false);
+  it('a regra única (SEG-SENHA-01): 8+, com letras e números; 7 recusa, só números ou só letras recusa, 8 com os dois passa', () => {
+    expect(pendenciasDaSenhaNova({ nova: 'abcd123', confirmar: 'abcd123' }).nova).toBe(FRASE_SENHA_FRACA);
+    expect(pendenciasDaSenhaNova({ nova: '12345678', confirmar: '12345678' }).nova).toBe(FRASE_SENHA_FRACA);
+    expect(pendenciasDaSenhaNova({ nova: 'abcdefgh', confirmar: 'abcdefgh' }).nova).toBe(FRASE_SENHA_FRACA);
+    expect(pendenciasDaSenhaNova({ nova: 'ãéíõúçãé1', confirmar: 'ãéíõúçãé1' }).nova).toBe(FRASE_SENHA_FRACA);
+    expect(temPendencia(pendenciasDaSenhaNova({ nova: 'abcd1234', confirmar: 'abcd1234' }))).toBe(false);
+    expect(FRASE_SENHA_FRACA).toBe('A senha precisa de pelo menos 8 caracteres, com letras e números.');
   });
   it('as duas têm de ser iguais', () => {
-    expect(pendenciasDaSenhaNova({ nova: '12345678', confirmar: '12345679' }).confirmar).toBe('As duas senhas não são iguais.');
+    expect(pendenciasDaSenhaNova({ nova: 'abcd1234', confirmar: 'abcd1235' }).confirmar).toBe('As duas senhas não são iguais.');
   });
   it('no "Trocar senha": pede a atual e a nova não pode ser igual a ela', () => {
-    expect(pendenciasDaSenhaNova({ atual: '', nova: '12345678', confirmar: '12345678' }, true).atual).toBe('Digite a sua senha atual.');
-    expect(pendenciasDaSenhaNova({ atual: '12345678', nova: '12345678', confirmar: '12345678' }, true).nova).toMatch(/diferente da atual/);
+    expect(pendenciasDaSenhaNova({ atual: '', nova: 'abcd1234', confirmar: 'abcd1234' }, true).atual).toBe('Digite a sua senha atual.');
+    expect(pendenciasDaSenhaNova({ atual: 'abcd1234', nova: 'abcd1234', confirmar: 'abcd1234' }, true).nova).toMatch(/diferente da atual/);
     expect(temPendencia(pendenciasDaSenhaNova({ atual: 'velha123', nova: 'nova12345', confirmar: 'nova12345' }, true))).toBe(false);
   });
 });
@@ -63,6 +68,9 @@ describe('frases', () => {
   });
   it('senha recusada pelo Supabase: igual à anterior e fraca', () => {
     expect(fraseDoErroDaSenha('New password should be different from the old password.')).toMatch(/diferente da atual/);
-    expect(fraseDoErroDaSenha('Password should be at least 8 characters')).toMatch(/Senha fraca/);
+    expect(fraseDoErroDaSenha('Password should be at least 8 characters')).toBe(FRASE_SENHA_FRACA);
+    /* a senha vazada (o painel liga o HaveIBeenPwned) tem frase própria */
+    expect(fraseDoErroDaSenha('Password is known to be weak and easy to guess, please choose a different one.')).toMatch(/senhas vazadas/);
+    expect(fraseDoErroDaSenha('Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789')).toBe(FRASE_SENHA_FRACA);
   });
 });
