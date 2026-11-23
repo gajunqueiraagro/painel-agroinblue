@@ -9,6 +9,7 @@ const b = vi.hoisted(() => ({
   upserts: [] as Record<string, unknown>[],
   erroNoUpsert: false,
   toastErro: vi.fn(),
+  criar: vi.fn(async () => null),
 }));
 
 vi.mock('@/integrations/supabase/client', () => {
@@ -72,7 +73,7 @@ vi.mock('@/contexts/FazendaContext', () => ({
   GLOBAL_FAZENDA: { id: '__global__', nome: 'Global', owner_id: '' },
   useFazenda: () => ({
     fazendas: FAZ, fazendaAtual: b.global ? { id: '__global__', nome: 'Global' } : FAZ[0], isGlobal: b.global,
-    setFazendaAtual, reloadFazendas: vi.fn(async () => {}), criarFazenda: vi.fn(),
+    setFazendaAtual, reloadFazendas: vi.fn(async () => {}), criarFazenda: b.criar,
   }),
 }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli' } }) }));
@@ -88,7 +89,7 @@ vi.mock('@/hooks/useStatusPilares', () => ({ useStatusPilares: () => ({ status: 
 
 import { V2Fazendas } from './V2Fazendas';
 
-beforeEach(() => { b.upserts = []; b.erroNoUpsert = false; b.toastErro.mockReset(); setFazendaAtual.mockReset(); });
+beforeEach(() => { b.upserts = []; b.erroNoUpsert = false; b.toastErro.mockReset(); setFazendaAtual.mockReset(); b.criar.mockClear(); });
 
 describe('FAZENDA-CADASTRO-01 · lista de fazendas', () => {
   beforeEach(() => { b.global = true; });
@@ -155,5 +156,28 @@ describe('FAZENDA-CADASTRO-01 · cadastro', () => {
     expect(screen.getByTestId('cadastro-frase-salvar').textContent).toBe('Falta o nome da fazenda.');
     expect(b.upserts).toHaveLength(0);
     expect(b.toastErro).not.toHaveBeenCalled();
+  });
+});
+
+/* FAZ-TEM-PECUARIA-DERIVADA-01 (D3): o Nova fazenda pergunta se é administrativa; a resposta vai ao escritor (padrão Não) */
+describe('FAZ-TEM-PECUARIA-DERIVADA-01 · Nova fazenda pergunta "É administrativa?"', () => {
+  beforeEach(() => { b.global = true; });
+  const preencher = async () => {
+    render(<V2Fazendas />);
+    fireEvent.click(await screen.findByRole('button', { name: /Fazenda$/ }));
+    fireEvent.change(await screen.findByPlaceholderText('Ex: Faz. 3 Muchachas'), { target: { value: 'Nova' } });
+    fireEvent.change(screen.getByPlaceholderText('Ex: 3M, BG, ADM'), { target: { value: 'nv' } });
+    expect(screen.getByText('É administrativa?')).toBeTruthy();
+  };
+  it('sem tocar na pergunta, cria como NÃO administrativa', async () => {
+    await preencher();
+    fireEvent.click(screen.getByRole('button', { name: /Criar fazenda/ }));
+    await waitFor(() => expect(b.criar).toHaveBeenCalledWith('Nova', 'nv', false));
+  });
+  it('com "Sim", cria como administrativa', async () => {
+    await preencher();
+    fireEvent.click(screen.getByRole('button', { name: 'Sim' }));
+    fireEvent.click(screen.getByRole('button', { name: /Criar fazenda/ }));
+    await waitFor(() => expect(b.criar).toHaveBeenCalledWith('Nova', 'nv', true));
   });
 });

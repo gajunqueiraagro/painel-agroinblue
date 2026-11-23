@@ -239,11 +239,11 @@ export function V2PlanejamentoVisaoGeral({ ano, mes, onAnoChange, onMesChange }:
 
   // Filtro atual da tela determina o layout. 3 modos:
   //   - Global:          layout completo (como hoje)
-  //   - Administrativo:  fazenda sem pecuária (tem_pecuaria === false). Sem
+  //   - Administrativo:  a fazenda administrativa (eh_administrativa, FAZ-TEM-PECUARIA-DERIVADA-01). Sem
   //                      Produção/Movimentação; Financeiro/Capital sobe.
   //   - Fazenda operacional: pecuária ativa. Sem Financeiro/Capital
   //                      (rateio cobre depois); mantém Produção/Movimentação.
-  const isAdministrativo = !isGlobal && fazendaAtual?.tem_pecuaria === false;
+  const isAdministrativo = !isGlobal && fazendaAtual?.eh_administrativa === true;
   const isFazendaOperacional = !isGlobal && !isAdministrativo;
   // Gráfico de Fluxo + cards Saldo Caixa Final / Dif. Caixa: desfocados
   // em Administrativo e Fazenda operacional (escopo não-consolidado).

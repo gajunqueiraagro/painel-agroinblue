@@ -85,6 +85,7 @@ import { NovoMenuLancamentos } from '@/components/financeiro-v2/NovoMenuLancamen
 import { NotasDaReceitaDialog } from '@/components/fiscal/NotasDaReceitaDialog';
 import { registrarBemDeTerceiro, useNotasDaReceita } from '@/hooks/useNotasDaReceita';
 import { Camada, useCamadas } from '@/components/ui/camadas';
+import { buscarNaReceitaPelaChave } from '@/lib/fiscal/danfeDasNotasGuardadas';
 import { pedemAcao, type AbaDaReceita } from '@/lib/fiscal/notasDaReceita';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { contarBoletosQuePedemAcao } from '@/lib/financeiro/boleto/caixaApi';
@@ -703,7 +704,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [receitaAberta, setReceitaAberta] = useState(false);
   /* NAV-VOLTA-ORIGEM-01 (Gabriel 19/11, peça única) — as camadas desta tela: as Notas da Receita ficam POR BAIXO (montadas, invisíveis) do
      "Da nota fiscal"/da nota abertos a partir delas; fechar/salvar volta à mesma aba, filtros, rolagem e linha (a próxima, se lançou) */
-  const camadas = useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>();
+  /* (22/11) o "Da nota fiscal" aberto pelo "Lançar" da Receita é PASSAGEM: salvou o lançamento por cima, ele fecha junto e volta à lista */
+  const fecharXmlDaTela = useRef<() => void>(() => {});
+  const camadas = useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>({ aoFecharJunto: (id) => { if (id === 'xml') fecharXmlDaTela.current(); } });
   /* FIN-REGRA-MODAL-02 (a) — a linha do modal "Fazenda fora da regra da conta" abre o Editar lançamento POR CIMA ('lanc' sobre 'regra'); salvou = volta 'salvou' */
   const salvouPorCimaDaRegra = useRef(false);
   /* DA-NOTA-ETAPAS-01 (NAV-VOLTA-ORIGEM-01) — o Editar/Novo lançamento aberto a partir do "+ Da nota" fica POR CIMA da nota ('lanc' sobre 'nota'):
@@ -746,7 +749,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setPrefillXml(prefillDaNota(doXml));
     setLinhaXmlAberta(linhaId);
     setDialogOpen(true);
+    /* NAV-VOLTA-ORIGEM-01 — o lançamento da nota é camada sobre o "Da nota fiscal" (só quando ele está nas camadas: veio da Receita) */
+    if (camadas.aberta('xml')) { salvouPorCimaDaRegra.current = false; camadas.abrir('lanc', 'xml'); }
   };
+  useEffect(() => {
+    fecharXmlDaTela.current = () => {
+      setXmlAberto(false); setLinhasXmlLancadas(new Set()); void receita.refetch(); setXmlDaReceita(null);
+    };
+  });
   /* FIN-NOTA-PDF-01 — a nota do PDF abre o "Novo lançamento · da nota fiscal" (o mock): o PDF com o lido em amarelo, criar as N
      parcelas. A lista fica montada (escondida) por baixo, como no Novo lançamento do XML. */
   /* P128a — `partindoDe`: a previa aberta pela porta 2 (o Documentos do Editar lancamento), a partir deste lancamento */
@@ -1086,11 +1096,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        não há o que perguntar. Recarregar é o certo aqui: criar é raro, o resultado tem de
        aparecer na posição certa da ordenação, e errar por omissão seria a linha sumir. */
     if (!id) {
+      /* NOTA-SALVAR-RAPIDO-01 (Gabriel 22/11: "salvar demorou muito") — a releitura da lista NÃO segura o salvar: os documentos da nota
+         (XML + DANFE) gravam logo; a lista relê em paralelo (0,3–1,6 s no banco, 319 KB no NJ) e volta à mesma rolagem */
       const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
-      await listaV2.recarregar();
-      requestAnimationFrame(() => {
+      void Promise.resolve(listaV2.recarregar()).then(() => requestAnimationFrame(() => {
         if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
-      });
+      }));
     }
     return criadoId ?? true;
   };
@@ -3446,7 +3457,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" (lote 25; simular = a prévia) */
           registrarBem={clienteAtual?.id ? (chave, previsao, observacao, simular) => registrarBemDeTerceiro(clienteAtual.id, chave, previsao, observacao, simular) : undefined}
           /* NAV-VOLTA-ORIGEM-01: a lista NÃO fecha — o "Da nota fiscal" abre POR CIMA dela */
-          aoLancar={(arquivo) => { setXmlDaReceita([arquivo]); setXmlAberto(true); camadas.abrir('xml', 'receita'); }}
+          aoLancar={(arquivo) => { setXmlDaReceita([arquivo]); setXmlAberto(true); camadas.abrir('xml', 'receita', { passagem: true }); }}
+          /* ENTREGA-FUTURA-LIGAR-01 — a remessa de entrega futura guardada na compra (sem lançamento novo); ligou = a lista relê */
+          ligarACompra={clienteAtual?.id ? { clienteId: clienteAtual.id, buscarFaturamento: buscarNaReceitaPelaChave, aoLigar: () => { void receita.refetch(); } } : undefined}
           /* NOTA-RECEITA-CASAR-01 — "Vincular a este" = a porta 2 (P128a): a MESMA prévia do "+ Da nota", partindo do lançamento escolhido */
           aoVincular={async (arquivo, lancamentoId) => {
             if (!clienteAtual?.id) return 'Escolha o cliente.';

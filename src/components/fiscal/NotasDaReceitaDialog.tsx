@@ -19,6 +19,7 @@ import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
 import { RODAPE_REGUA, TD_REGUA, TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA, TextoReservado } from '@/components/ui/regua-tabela';
 import { cn } from '@/lib/utils';
+import { LigarACompraDialog } from '@/components/fiscal/LigarACompraDialog';
 import { lerXmlDaReceita, type DadosDaReceita } from '@/hooks/useNotasDaReceita';
 import { abrirAbaDoDanfe, mostrarDanfe } from '@/lib/fiscal/abrirDanfe';
 import {
@@ -114,7 +115,7 @@ export function baixarArquivo(arquivo: File) {
 }
 
 export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita, abaInicial,
-  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null }: {
+  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null, ligarACompra }: {
   clienteNome?: string | null;
   dados: DadosDaReceita | undefined;
   carregando: boolean;
@@ -135,6 +136,10 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   retorno?: RetornoDaCamada | null;
   /** DRE-PAINEL-01 — a aba em que a lista abre quando vem de um link (o "Ver notas" da leitura do DRE abre em "A lançar"). */
   abaInicial?: AbaDaReceita;
+  /** ENTREGA-FUTURA-LIGAR-01 — "Ligar à compra" na remessa de entrega futura (o cliente e a busca do faturamento pela chave); sem ele, fica o
+   *  "Ver faturamento" de antes. `aoLigar` relê a lista (a remessa ligada passa a "Já no sistema"). */
+  ligarACompra?: { clienteId: string; buscarFaturamento?: (titularId: string, chave: string) => Promise<{ ok: boolean; frase: string }>; aoLigar: () => void;
+    /** a bancada injeta */ carregar?: Parameters<typeof LigarACompraDialog>[0]['carregar']; ligar?: Parameters<typeof LigarACompraDialog>[0]['ligar'] };
 }) {
   const [aba, setAba] = useState<AbaDaReceita>(abaInicial ?? 'todas');
   const [busca, setBusca] = useState('');
@@ -144,6 +149,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   const [ocupada, setOcupada] = useState<string | null>(null);
   const [casar, setCasar] = useState<NotaNaLista | null>(null);
   const [bem, setBem] = useState<NotaNaLista | null>(null);
+  const [ligando, setLigando] = useState<NotaNaLista | null>(null);
   const [soVencidas, setSoVencidas] = useState(false);
   /* NAV-VOLTA-ORIGEM-01 — a linha de onde saiu (e a de baixo dela): na volta, a linha fica destacada; se ela saiu da aba (lançou, vinculou),
      o destaque vai para a PRÓXIMA (o fluxo em série, sem reabrir nada) */
@@ -273,6 +279,10 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                               onClick={() => { const o = dados?.lista.find((x) => x.chave === ligadaDaDemo(n)?.outraChave); setAberta(o ?? n); }}>
                               {ligadaDaDemo(n)?.tipo === 'retorno' ? 'Ver retorno' : 'Ver compra'}
                             </button>
+                          ) : ehAcaoFaturamento(n) && ligarACompra ? (
+                            <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
+                              data-testid="receita-ligar-compra" title={n.citadas.length ? `Guardar esta remessa na compra (cita o faturamento NF ${n.citadas.join(', ')})` : 'Guardar esta remessa na compra (sem NF de faturamento)'}
+                              onClick={() => setLigando(n)}>Ligar à compra</button>
                           ) : ehAcaoFaturamento(n) ? (
                             <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
                               data-testid="receita-ver-faturamento" title={n.citadas.length ? `A NF de faturamento citada: ${n.citadas.join(', ')}` : 'A nota não cita o faturamento'}
@@ -316,6 +326,11 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
         </div>
         {aberta && <DadosDaNota n={aberta} aoFechar={() => setAberta(null)} />}
+        {ligando && ligarACompra && dados && (
+          <LigarACompraDialog n={ligando} lista={dados.lista} clienteId={ligarACompra.clienteId} lerXml={lerXml}
+            buscarFaturamento={ligarACompra.buscarFaturamento} carregar={ligarACompra.carregar} ligar={ligarACompra.ligar}
+            aoFechar={(ligou) => { setLigando(null); if (ligou) { setAviso('Remessas ligadas à compra: ficam nos documentos dos lançamentos (não somam no Documentado).'); ligarACompra.aoLigar(); } }} />
+        )}
         {bem && registrarBem && <RegistrarBemDeTerceiro n={bem} registrar={registrarBem} aoFechar={(frase) => { setBem(null); if (frase) setAviso(frase); }} />}
         {casar && <PodeEstarLancada n={casar} ocupada={ocupada === casar.id} aviso={aviso} aoFechar={() => setCasar(null)}
           aoLancarNova={() => { const n = casar; setCasar(null); void comXml(n, aoLancar); }}

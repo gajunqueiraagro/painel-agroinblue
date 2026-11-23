@@ -48,7 +48,12 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
       /* FIN-REGRA-MODAL-02 (114280): `_fn_fazenda_citada(cliente, texto, plano)` e' INTERNA da `fn_lancamentos_regra_fazenda_pendentes` (que
          tem tenant_ok + 42501): so' devolve um id de fazenda e nasce fechada a public/anon/authenticated — presa abaixo */
       || (nome === 'public._fn_fazenda_citada' && /returns\s+uuid/i.test(p)
-        && /revoke all on function public\._fn_fazenda_citada\(uuid, text, uuid\) from public, anon, authenticated;/i.test(p));
+        && /revoke all on function public\._fn_fazenda_citada\(uuid, text, uuid\) from public, anon, authenticated;/i.test(p))
+      /* LOTE 30 (113450): `_fn_doc_motivo_nao_financeira(cliente, chave)` e' INTERNA do `fin_documento_confronto` (is_admin ou cliente do
+         usuario, 42501) e da `fn_documentos_motivo` (tenant_ok + 42501): so' devolve o motivo da NF e nasce fechada a
+         public/anon/authenticated (proto 22/11: so' postgres e service_role executam) — presa abaixo */
+      || (nome === 'public._fn_doc_motivo_nao_financeira' && /returns\s+text/i.test(p)
+        && /revoke all on function public\._fn_doc_motivo_nao_financeira\(uuid, text\) from public, anon, authenticated;/i.test(p));
     /* IMPORTAR-ABATE-01: corpo `AS %L` = o texto do PROPRIO BANCO (pg_get_functiondef/prosrc patchado por md5), que o arquivo nao
        mostra — a guarda dele e' a da definicao anterior (ver `ultimasSemGuarda`) */
     return [{ nome, guardada, ...(/\bAS\s+%L/i.test(p) ? { doBanco: true } : {}) }];
@@ -146,6 +151,17 @@ describe('guarda de cliente nas migrations novas', () => {
     expect(semGuarda(outraComOMesmoCorpo)).toContain('public._fn_outra');
     const chamador = sql.slice(sql.indexOf('create or replace function public.fn_lancamentos_regra_fazenda_pendentes'));
     expect(chamador).toMatch(/if not tenant_ok\(p_cliente\) then raise exception .* errcode = '42501'/);
+  });
+
+  it('a interna do motivo da NF (113450) so\' passa FECHADA, e quem a chama tem guarda pelo cliente (LOTE 30)', () => {
+    const sql = readFileSync(join(DIR, '20261028113450_doc_soma_so_nota_que_paga.sql'), 'utf8');
+    expect(semGuarda(sql)).toEqual([]);
+    const aberta = sql.replace(/revoke all on function public\._fn_doc_motivo_nao_financeira\(uuid, text\) from public, anon, authenticated;/i, '');
+    expect(semGuarda(aberta)).toEqual(['public._fn_doc_motivo_nao_financeira']);
+    const outraComOMesmoCorpo = sql.replace(/public\._fn_doc_motivo_nao_financeira\(p_cliente/, 'public._fn_outra(p_cliente');
+    expect(semGuarda(outraComOMesmoCorpo)).toContain('public._fn_outra');
+    const chamador = sql.slice(sql.search(/create or replace function public\.fn_documentos_motivo/i));
+    expect(chamador).toMatch(/tenant_ok\(p_cliente\)[\s\S]*42501/i);
   });
 
   it('a casca dos subcentros do cliente e\' aceita, e ela mesma so\' deixa o admin passar (P171: membro do cliente = 42501)', () => {

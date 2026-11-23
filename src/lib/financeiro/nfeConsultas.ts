@@ -489,11 +489,22 @@ export async function historicoDaParticipacao(clienteId: string, fornecedorId: s
       .order('data_vencimento', { ascending: false }).limit(6);
     if (error || !ls?.length) return [];
     const ids = ls.flatMap((l) => (typeof l.id === 'string' ? [l.id] : []));
-    const { data: ds, error: e2 } = await supabase.from('financeiro_lancamento_documentos').select('lancamento_id, valor_documento')
+    const { data: ds, error: e2 } = await supabase.from('financeiro_lancamento_documentos').select('lancamento_id, valor_documento, chave_acesso')
       .eq('cliente_id', clienteId).in('lancamento_id', ids).eq('cancelado', false).not('valor_documento', 'is', null);
     if (e2) return [];
+    /* ENTREGA-FUTURA-LIGAR-01 (lote 30) — a NF que NÃO gera pagamento (remessa de entrega futura, comodato, devolução…: a classe pelo
+       CFOP, `fn_documentos_motivo`) não é a nota do pagamento: fora do histórico. Falhou = sem histórico (só não sugere). */
+    const chaves = [...new Set((ds ?? []).flatMap((d) => (typeof d.chave_acesso === 'string' && d.chave_acesso ? [d.chave_acesso] : [])))];
+    const naoPagam = new Set<string>();
+    if (chaves.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo (função nova, fora dos tipos gerados)
+      const { data: mot, error: e3 } = await (supabase as any).rpc('fn_documentos_motivo', { p_cliente: clienteId, p_chaves: chaves });
+      if (e3 || !Array.isArray(mot)) return [];
+      for (const m of mot) if (m && typeof m.chave === 'string') naoPagam.add(m.chave);
+    }
     const doc = new Map<string, number>();
     for (const d of ds ?? []) {
+      if (typeof d.chave_acesso === 'string' && naoPagam.has(d.chave_acesso.replace(/\D/g, ''))) continue;
       const v = Math.round(Number(d.valor_documento) * 100);
       if (typeof d.lancamento_id === 'string' && v > 0) doc.set(d.lancamento_id, Math.max(doc.get(d.lancamento_id) ?? 0, v));
     }

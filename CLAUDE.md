@@ -360,6 +360,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   subcentro/cinza) + Saldos | Resumo do mês (1fr 260px, até o fim da janela), na régua da casa e sem CAIXA ALTA; Saldos com Data · OFX/PDF em
   lugar FIXO de 20px · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
   |valor| primeiro; saldo SÓ no fim do dia, LIDO do banco na ordem dele — nunca somado na tela).
+- CONC-LAYOUT-FIXO-01 (UI-LARGURA-FIXA-01, 22/11; substitui o "1fr 260px" e a `FaixaDoMes` acima): Saldos 60% · Resumo 40% (`minmax(0,3fr) minmax(0,2fr)`,
+  nunca medido pelo dado); título do Resumo = conta · mês, com ▸ (também na linha, lugar reservado); status = selo no cabeçalho + frase em 2 linhas
+  reservadas; o nome da conta corta com "…" + `title` até 1130px, inteiro de 1300px para cima (gates `conciliacao-divisao-*`, `-nomes-inteiros`).
 - P159a (CONC-TELAS-01): Conferência e Extrato (banco) — a regra do dia é UMA (`porDia`: maior |valor| primeiro, saldo SÓ no fim do dia,
   LIDO — Extrato: o acumulado de sempre; Conferência: `montarEvolucao`); a lista do mês por dia é UM componente (`ListaDoMesPorDia`); histórico
   do banco limpo só na exibição (`historicoDoBanco`, o inteiro no `title`); a `ordenar` da mesa NÃO mudou (o Enriquecer lê dela). EXCEÇÃO

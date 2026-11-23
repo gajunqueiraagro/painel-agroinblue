@@ -1994,6 +1994,9 @@ const CENARIOS = [
     } })),
   /* NOTA-RECEITA-DANFE-ANEXO-01 — o gesto "DANFE das notas já guardadas": a lista, o Simular feito (2 sem leitura) e o 2º cliente (curto) */
   { nome: 'danfe-guardadas', url: 'tela=danfe-guardadas', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* ENTREGA-FUTURA-LIGAR-01 — o "Ligar à compra" (15 remessas · a compra pré-marcada · a prévia) e o curto (sem faturamento) */
+  { nome: 'ligar-compra', url: 'tela=ligar-compra', tamanhos: TAMANHOS_DO_CONSORCIO, antes: async (p) => { await p.getByText('Entregue').waitFor({ timeout: 8000 }); } },
+  { nome: 'ligar-compra-curta', url: 'tela=ligar-compra&v=curta', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'danfe-guardadas-simulado', url: 'tela=danfe-guardadas', tamanhos: TAMANHOS_DO_CONSORCIO, antes: async (p) => {
     await p.locator('[data-testid="danfe-guardadas-simular"]').click(); await p.getByText('19 geram o PDF').waitFor({ timeout: 8000 }); } },
   { nome: 'danfe-guardadas-curta', url: 'tela=danfe-guardadas&v=curta', tamanhos: TAMANHOS_DO_CONSORCIO },
@@ -2233,13 +2236,28 @@ const CENARIOS = [
   { nome: 'conciliacao-conta-escolhida', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
     antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p); } },
   /* P166 (CONC-TELA-02) — a FAIXA do status nos outros três casos (verde, âmbar com "corrigir ›", cinza com as frases do dono) e os nomes
-     no TAMANHO REAL: de 1024px para cima o nome da conta não pode cortar (o gesto mede cada nome e recusa o que não cabe inteiro) */
+     no TAMANHO REAL: de 1300px para cima o nome da conta não pode cortar (o gesto mede cada nome e recusa o que não cabe inteiro; até
+     1130px corta com "…" e o `title` — CONC-LAYOUT-FIXO-01) */
   ...['ok', 'pendencia', 'pendente'].map((v) => ({ nome: `conciliacao-faixa-${v}`, url: `tela=conciliacao&v=${v}`, tamanhos: TAMANHOS_DA_CONCILIACAO,
     antes: async (p) => { await p.locator('[data-testid="faixa-status"]').waitFor(); await p.waitForTimeout(500); } })),
+  /* CONC-LAYOUT-FIXO-01 (UI-LARGURA-FIXA-01) — a DIVISÃO não depende do cliente: nomes do tamanho do NJ e da Vera, com e sem conta
+     escolhida, Saldos por conta = 60% dos dois cards (±0,5 ponto). Era `max-content`: NJ ~65/35, Vera ~50/50. */
+  ...[['nj', ''], ['vera', ''], ['vera', 'cc1']].map(([v, conta]) => ({ nome: `conciliacao-divisao-${v}${conta ? '-conta' : ''}`, url: `tela=conciliacao&v=${v}`,
+    tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
+    antes: async (p) => {
+      await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor();
+      if (conta) await clicar(`[data-conta="${conta}"]`)(p);
+      await p.waitForTimeout(500);
+      const [s, r] = await Promise.all(['card-saldos', 'card-resumo'].map((t) => p.locator(`[data-testid="${t}"]`).evaluate((e) => e.getBoundingClientRect().width)));
+      const parte = s / (s + r);
+      if (Math.abs(parte - 0.6) > 0.005) throw new Error(`divisão Saldos|Resumo ${(parte * 100).toFixed(1)}% a ${p.viewportSize().width}px (v=${v}): tem de ser 60%`);
+    } })),
   { nome: 'conciliacao-nomes-inteiros', url: 'tela=conciliacao&v=nj', tamanhos: TAMANHOS_DA_CONCILIACAO,
     antes: async (p) => {
       await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500);
-      if (p.viewportSize().width < 1024) return;
+      /* CONC-LAYOUT-FIXO-01 (Gabriel 22/11): o 60/40 é fixo; até 1130px o nome do NJ pode cortar ("…" + o nome inteiro no `title` da linha,
+         a REGRA DE CORTE de tabela) — inteiro de 1300px para cima (era de 1024, quando a Conta tinha a largura do maior nome) */
+      if (p.viewportSize().width < 1300) return;
       const cortados = await p.$$eval('[data-testid="nome-conta"]', (els) => els.filter((e) => e.scrollWidth > e.clientWidth + 0.5).map((e) => e.textContent));
       if (cortados.length > 0) throw new Error(`nome de conta cortado a ${p.viewportSize().width}px: ${cortados.join(' | ')}`);
     } },

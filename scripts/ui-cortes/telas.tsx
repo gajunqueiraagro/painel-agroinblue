@@ -1800,13 +1800,13 @@ if (tela === 'mesclar') {
   /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status) e o "Extrato do sistema" do ↗, com as linhas do DONO no pior
      caso (`dados/conciliacao.ts`, SINTÉTICO). `&v=sem`: os mesmos números sem nenhum OFX/PDF (o deslocamento compara as duas páginas).
      `&v=carregando`: o modal antes de o dono responder. P166: `&v=ok|pendencia|pendente` a faixa do status nos outros casos e
-     `&v=nj` os nomes no tamanho real (`dados/conciliacao.ts`). */
+     `&v=nj` os nomes no tamanho real (`dados/conciliacao.ts`); CONC-LAYOUT-FIXO-01: `&v=vera` os nomes curtos, do tamanho dos da Vera. */
   const semArquivos = v === 'sem';
   /* CONC-PAINEL-CONTA-01 — `&admin=1`: o operador admin (o ✎ da conta aparece e abre o painel lateral) */
   if (q.get('admin') === '1') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' },
     clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
   g.__bancoBancada = {
-    from: (t: string, e?: { eq?: Record<string, unknown> }) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : CONC.CONTAS)
+    from: (t: string, e?: { eq?: Record<string, unknown> }) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : v === 'vera' ? CONC.CONTAS_VERA : CONC.CONTAS)
       /* BAIXA-DESCONTO-BANCO-01 — a parte paga com desconto da NF do dia 03 (`&v=desconto-depois`) */
       : t === 'financeiro_lancamentos_v2' && e?.eq?.origem_tipo === 'conc:desconto_parte' ? (v === 'desconto-depois' ? ESP.PARTES_DO_DESCONTO : [])
       : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
@@ -2951,6 +2951,42 @@ if (tela === 'mesclar') {
     montar(<Volta />);
   };
   void montarVolta();
+} else if (tela === 'ligar-compra') {
+  /* ENTREGA-FUTURA-LIGAR-01 — o "Ligar à compra" com dado SINTÉTICO: 15 remessas de milho (kg) de um produtor, 2 já ligadas, a compra em
+     3 parcelas + 1 frete; `v=curta` = 2 remessas, sem faturamento citado (o 2º cliente da UI-LARGURA-FIXA-01) */
+  const montarLigar = async () => {
+    const { LigarACompraDialog } = await import('@/components/fiscal/LigarACompraDialog');
+    const { montarLista } = await import('@/lib/fiscal/notasDaReceita');
+    const emit = '11122233344';
+    const ch = (n: number) => `50260902935843000105558900${String(n).padStart(9, '0')}159006279`.slice(0, 44);
+    const fat = '50251202935843000105558900085680451000000001';
+    const qtd = v === 'curta' ? 2 : 15;
+    const linhas = Array.from({ length: qtd }, (_, k) => ({ id: `r${k}`, titularId: 't', chave: ch(9335106 + k * 37), situacao: 'xml', emitenteDocumento: emit,
+      emitenteNome: v === 'curta' ? 'Produtor Exemplo' : 'Produtor Rural Exemplo de Nome Bem Comprido da Fazenda Sintética', emissao: `2026-${k < 7 ? '09' : '10'}-${String(3 + (k % 20)).padStart(2, '0')}`,
+      valorCent: (k % 3 === 0 ? 4706000 : 1190000 + k * 13000), notaId: null, recebidoEm: null, eventos: [], temXml: true }));
+    const at = new Map(linhas.map((l) => [l.chave, { cfops: ['5116'], tpNF: '1', natOp: 'REMESSA ENTREGA FUTURA', refs: v === 'curta' ? [] : [fat], dups: [], tpags: [] }]));
+    const noSistema = new Set(v === 'curta' ? [] : [linhas[0].chave, linhas[1].chave]);
+    const lista = montarLista(linhas, new Map([['t', 'Produtor']]), noSistema, new Map(), at, '2026-11-22');
+    const alvo = lista.find((x) => x.sit === 'nao_financeira') ?? lista[0];
+    const xmlDe = (id: string) => {
+      const l = linhas.find((x) => x.id === id);
+      const kg = ((l?.valorCent ?? 0) / 100).toFixed(4);
+      return `<nfeProc><NFe><infNFe Id="NFe${l?.chave ?? ''}" versao="4.00"><ide><mod>55</mod><nNF>${Number((l?.chave ?? '').slice(25, 34))}</nNF><serie>890</serie><dhEmi>${l?.emissao}T10:00:00-04:00</dhEmi><tpNF>1</tpNF><natOp>REMESSA</natOp><finNFe>1</finNFe></ide>`
+        + `<emit><CPF>${emit}</CPF><xNome>Produtor Exemplo</xNome></emit><dest><CNPJ>12345678000190</CNPJ><xNome>Cliente</xNome></dest>`
+        + `<det nItem="1"><prod><cProd>1</cProd><xProd>MILHO DEBULHADO</xProd><CFOP>5116</CFOP><uCom>KG</uCom><qCom>${kg}</qCom><vUnCom>1.00</vUnCom><vProd>${((l?.valorCent ?? 0) / 100).toFixed(2)}</vProd></prod></det>`
+        + `<total><ICMSTot><vProd>${((l?.valorCent ?? 0) / 100).toFixed(2)}</vProd><vFrete>0.00</vFrete><vDesc>0.00</vDesc><vNF>${((l?.valorCent ?? 0) / 100).toFixed(2)}</vNF></ICMSTot></total></infNFe></NFe></nfeProc>`;
+    };
+    const lancs = [1, 2, 3].map((p) => ({ id: `l${p}`, vencimento: `2026-0${6 + p}-20`, pagamento: `2026-0${6 + p}-20`, competencia: '2026-07-01',
+      descricao: `Compra 10.000 sc milho ${p}/3`, valorCent: 20000000, status: 'realizado', conciliado: false, financiamentoId: null, numeroDocumento: null,
+      parcelas: [], por: ['escolhido'], cancelado: false, fornecedorId: 'f1', fornecedorNome: 'Produtor Exemplo', fornecedorPor: 'cnpj' }))
+      .concat([{ id: 'l9', vencimento: '2026-08-02', pagamento: null, competencia: '2026-08-01', descricao: 'Frete do milho até a fazenda (carreta graneleira terceirizada)',
+        valorCent: 950000, status: 'programado', conciliado: false, financiamentoId: null, numeroDocumento: null, parcelas: [], por: ['escolhido'], cancelado: false,
+        fornecedorId: 'f1', fornecedorNome: 'Produtor Exemplo', fornecedorPor: 'cnpj' }]);
+    raiz.render(<LigarACompraDialog n={alvo} lista={lista} clienteId="cli" lerXml={async (id) => xmlDe(id)} aoFechar={() => {}}
+      carregar={async () => ({ ok: true, valor: lancs })} ligar={async () => ({ ligadas: 0, falhas: [] })}
+      buscarFaturamento={async () => ({ ok: false, frase: 'bancada' })} />);
+  };
+  void montarLigar();
 } else if (tela === 'danfe-guardadas') {
   /* NOTA-RECEITA-DANFE-ANEXO-01 — o gesto "DANFE das notas já guardadas" com dado SINTÉTICO: 21 notas (emitentes compridos, a 8.702 em 4
      parcelas, 2 sem o XML no armazenamento) ou `v=curta` (2 notas, nomes curtos — o 2º cliente da UI-LARGURA-FIXA-01) */

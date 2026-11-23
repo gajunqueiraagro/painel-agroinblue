@@ -182,7 +182,7 @@ describe('FIN-REGRA-MODAL-02 — o modal', () => {
 describe('FIN-REGRA-MODAL-02 — a camada no Financeiro (fonte)', () => {
   it('a linha abre o Editar lançamento POR CIMA (\'lanc\' sobre \'regra\') e a volta diz se salvou', () => {
     const fin = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
-    expect(fin).toContain("useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>()");
+    expect(fin).toContain("useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>(");
     expect(fin).toContain("camadas.abrir('lanc', 'regra');");
     /* DA-NOTA-ETAPAS-01 — o 'salvou' é lido antes (a mesma volta serve à nota: 'lanc' sobre 'nota') */
     expect(fin).toContain("const salvou = salvouPorCimaDaRegra.current;");
