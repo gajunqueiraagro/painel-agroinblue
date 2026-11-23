@@ -6977,6 +6977,7 @@ export type Database = {
       }
       financeiro_importacoes_v2: {
         Row: {
+          arquivo_caminho: string | null
           cancelada_em: string | null
           cancelado_em: string | null
           cancelado_motivo: string | null
@@ -7002,6 +7003,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          arquivo_caminho?: string | null
           cancelada_em?: string | null
           cancelado_em?: string | null
           cancelado_motivo?: string | null
@@ -7027,6 +7029,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          arquivo_caminho?: string | null
           cancelada_em?: string | null
           cancelado_em?: string | null
           cancelado_motivo?: string | null

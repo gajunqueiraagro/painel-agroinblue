@@ -41,7 +41,9 @@ describe('F34-SITUACAO-01 — a leitura da lista', () => {
     /* + a pergunta dos atributos fiscais das 3 com XML (SEM-LANCAMENTO-01), uma só para a lista inteira */
     /* + a das ligações da demonstração (NOTA-DEMONSTRACAO-01), uma só para o cliente */
     /* NOTA-SALVAR-RAPIDO-01 — atributos e ligações saem em paralelo com a conferência: a ORDEM não importa, as perguntas sim */
-    expect(rpc).toHaveBeenCalledTimes(4);
+    /* + a das ignoradas (NOTA-IGNORAR-01), uma só para o cliente */
+    expect(rpc).toHaveBeenCalledTimes(5);
+    expect(rpc).toHaveBeenCalledWith('fn_notas_receita_ignoradas', { p_cliente: 'cli' });
     const chamada = (f: string) => rpc.mock.calls.find((c) => c[0] === f);
     expect(chamada('fn_notas_demonstracao_ligacoes')).toEqual(['fn_notas_demonstracao_ligacoes', { p_cliente: 'cli' }]);
     expect(chamada('fn_notas_atributos_fiscais')).toEqual(['fn_notas_atributos_fiscais', { p_cliente: 'cli', p_chaves: [chave(118480), chave(118481), chave(999)] }]);

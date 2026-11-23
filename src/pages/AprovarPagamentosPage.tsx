@@ -5,6 +5,9 @@
  * e o "não está mais aguardando" vêm de lá). Abas: Fila · Aprovados · Recusados · Alertas (pago sem aprovação, aprovado e não pago, pago
  * diferente — calculados, só leitura). O BPO NASCE DESLIGADO: sem a configuração ligada, a tela diz isso e não mostra nada.
  */
+import { GuiaDaAprovacao } from '@/components/financeiro-v2/GuiaDaAprovacao';
+import { HelpCircle } from 'lucide-react';
+import { jaViuOGuia, marcarGuiaVisto } from '@/lib/financeiro/guiaDaAprovacao';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -44,7 +47,7 @@ function lerAlertas(rows: unknown): Alerta[] {
 const fraseDoErro = (e: { message?: string } | null, padrao: string) => (e?.message?.startsWith('BPO: ') ? e.message.slice(5) : padrao);
 
 export default function AprovarPagamentosPage() {
-  const { clienteAtual } = useCliente();
+  const { clienteAtual, isAdmin } = useCliente();
   const { user } = useAuth();
   const clienteId = clienteAtual?.id ?? null;
   const [ligado, setLigado] = useState<boolean | null>(null);
@@ -61,6 +64,10 @@ export default function AprovarPagamentosPage() {
   const [previa, setPrevia] = useState<{ ids: string[]; n: number; total: number } | null>(null);
   const [frase, setFrase] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  /* BPO-GUIA-01 — o guia "Como funciona": abre sozinho na 1ª visita de cada usuário (guardado no navegador) e pelo botão */
+  const [guia, setGuia] = useState<{ aberto: boolean; passo: number }>({ aberto: false, passo: 0 });
+  useEffect(() => { if (user?.id && !jaViuOGuia(user.id)) setGuia({ aberto: true, passo: 0 }); }, [user?.id]);
+  const fecharGuia = (naoMostrar: boolean) => { if (naoMostrar) marcarGuiaVisto(user?.id); setGuia((g) => ({ ...g, aberto: false })); };
 
   const ler = useCallback(async () => {
     if (!clienteId) return;
@@ -144,21 +151,40 @@ export default function AprovarPagamentosPage() {
 
   if (!clienteId) return <div className="p-4 text-[12px] text-muted-foreground">Escolha o cliente.</div>;
   if (ligado === null || linhas === null) return <div className="p-4 text-[12px] text-muted-foreground" data-testid="aprovar-lendo">Lendo a fila…</div>;
-  if (!ligado) return <div className="p-4 text-[12px] text-muted-foreground" data-testid="aprovar-desligado">{FRASE_BPO_DESLIGADO}</div>;
+  if (!ligado) return (
+    <div className="flex flex-wrap items-center gap-2 p-4 text-[12px] text-muted-foreground" data-testid="aprovar-desligado">
+      <span className="whitespace-nowrap">{FRASE_BPO_DESLIGADO}</span>
+      <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => setGuia({ aberto: true, passo: 0 })} data-testid="aprovar-como-funciona">Como funciona</Button>
+      {isAdmin && <Button size="sm" className="h-7 text-[12px]" onClick={() => setGuia({ aberto: true, passo: 5 })} data-testid="aprovar-ligar">Ligar neste cliente</Button>}
+      <GuiaDaAprovacao aberto={guia.aberto} passoInicial={guia.passo} onFechar={fecharGuia} ehAdmin={isAdmin} clienteId={clienteId}
+        ligado={ligado === true} onLigou={(t) => { setFrase({ tipo: 'ok', texto: t }); void ler(); }} />
+    </div>
+  );
 
-  const opcoes = [
-    { valor: 'fila' as const, rotulo: `Fila (${fila.length})` },
-    { valor: 'aprovado' as const, rotulo: 'Aprovados' },
-    { valor: 'recusado' as const, rotulo: 'Recusados' },
-    { valor: 'alertas' as const, rotulo: 'Alertas' },
+  /* zero cast: o tipo das opções vem declarado (era `as const`) */
+  const opcoes: { valor: Aba; rotulo: string }[] = [
+    { valor: 'fila', rotulo: `Fila (${fila.length})` },
+    { valor: 'aprovado', rotulo: 'Aprovados' },
+    { valor: 'recusado', rotulo: 'Recusados' },
+    { valor: 'alertas', rotulo: 'Alertas' },
   ];
   return (
     <div className="mx-auto flex h-full w-full max-w-[720px] flex-col" data-testid="aprovar-pagamentos">
+      <GuiaDaAprovacao aberto={guia.aberto} passoInicial={guia.passo} onFechar={fecharGuia} ehAdmin={isAdmin} clienteId={clienteId}
+        ligado={ligado === true} onLigou={(t) => { setFrase({ tipo: 'ok', texto: t }); void ler(); }} />
       <div className="flex-none bg-primary px-3 py-2 text-primary-foreground">
-        <div className="text-[14px] font-semibold">Pagamentos para aprovar</div>
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 whitespace-nowrap text-[14px] font-semibold">Pagamentos para aprovar</div>
+          <button type="button" onClick={() => setGuia({ aberto: true, passo: 0 })} data-testid="aprovar-como-funciona"
+            title="Como funciona" aria-label="Como funciona"
+            className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-white/30 px-1.5 text-[11px] font-medium hover:bg-white/10">
+            {/* no celular só o ícone: com o texto, o botão cobria o título a 390 px (gate de cortes) */}
+            <HelpCircle className="h-3.5 w-3.5" aria-hidden /><span className="hidden sm:inline">Como funciona</span>
+          </button>
+        </div>
         <div className="text-[11px] opacity-85 tabular-nums">{clienteAtual?.nome ?? ''} · {fila.length} aguardando · {formatMoeda(somaDe(fila))}</div>
       </div>
-      <div className="flex-none px-2 pt-2"><Segmentado valor={aba} onEscolher={setAba} opcoes={opcoes} altura={28} /></div>
+      <div className="flex-none px-2 pt-2"><Segmentado valor={aba} onEscolher={setAba} opcoes={opcoes} altura={28} fonte={10} /></div>
       {!aprovador && <div className="flex-none px-3 pt-1 text-[11px] text-muted-foreground" data-testid="aprovar-so-leitura">{FRASE_SO_APROVADOR}</div>}
       <div className="h-[16px] flex-none truncate px-3 text-[11px]" data-testid="aprovar-frase" title={frase?.texto}>
         {frase && <span className={frase.tipo === 'erro' ? 'text-destructive' : 'text-muted-foreground'}>{frase.texto}</span>}

@@ -56,6 +56,7 @@ import { linhasDoContrato, totaisDoContrato } from '@/lib/financeiro/parcelasNoP
 import { formaForaDaLista, ROTULO_VALOR_ATUAL } from '@/lib/financeiro/formasPagamentoV2';
 import { parcelaSolta } from '@/lib/financeiro/parcelaSolta';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { QuemPagaTerceiro, type QuemPaga } from '@/components/financeiro-v2/QuemPagaTerceiro';
 import { ClassificacaoLancamento, CAMPO_BG, atividadeValida } from '@/components/shared/ClassificacaoLancamento';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -143,6 +144,8 @@ import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela
 import { edicaoDaParcela, podeSerParcelaDeContrato, MOTIVO_PARCELA_PAGA } from '@/lib/financiamentos/parcelaNoModal';
 import { gravarParcelaDoModal, lerContratoDaParcela, type ContratoDaParcela } from '@/lib/financiamentos/parcelaNoModalBanco';
 import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO } from '@/lib/financeiro/casadoComExtrato';
+import { agendarSeriaRecusado, vaiAgendar, FRASE_AGENDAR_SEM_APROVACAO, FRASE_AGENDAR_NOVO_SEM_APROVACAO } from '@/lib/financeiro/aprovacao';
+import { EnviarParaAprovacaoDialog } from '@/components/financeiro-v2/EnviarParaAprovacaoDialog';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
@@ -716,6 +719,8 @@ export function LancamentoV2Dialog({
   const [boletoLigado, setBoletoLigado] = useState<BoletoDoResumo | null>(null);
   const [caixaAberta, setCaixaAberta] = useState(false);
   const [erroAntesDeSalvar, setErroAntesDeSalvar] = useState<string | null>(null);
+  /* BPO-APROVACAO-01 P3 — o "Enviar para aprovação" ao lado da frase do agendar sem aprovação (este lançamento, com a prévia do banco) */
+  const [enviarEsteAberto, setEnviarEsteAberto] = useState(false);
   /* NOTA-NFSE-LEITURA-02 — o campo preenchido em formato que o banco recusaria: vermelho + a frase no rodapé (nunca o toast genérico) */
   const [campoInvalido, setCampoInvalido] = useState<ErroDeFormato | null>(null);
   /* As irmãs de uma parcela aberta (a consulta do M6 da FASE 0). Só no editar; `null` = não é parcela. */
@@ -740,6 +745,8 @@ export function LancamentoV2Dialog({
   }, [open, lancamento?.id, clienteAtual?.id, anexarBoletos, caixaAberta]);
   const navigate = useNavigate();
   const isEdit = !!lancamento;
+  /* NOTA-PAGA-POR-TERCEIRO-01 — Terceiro escolhido ou já marcado desliga a Forma de pagamento */
+  const [quemPaga, setQuemPaga] = useState<QuemPaga>('nos');
   // PR-SAFE-0 — título originado da Operação Comercial: valor/favorecido/classificação/tipo
   //   são somente leitura (edição estrutural pertence à OC). Detecção ESTRUTURAL pelo marcador
   //   de proveniência persistido (origem_lancamento), nunca por texto de UI. O writer
@@ -2422,6 +2429,15 @@ export function LancamentoV2Dialog({
     /* FIN-CONCILIADO-NAO-REBAIXA-01 — o salvar tiraria o lançamento do estado do banco (status, pagamento, valor ou conta)?
        Pergunta-se ao banco ANTES de gravar (outra aba pode ter casado depois da abertura): casado, a frase fica ESCRITA ao
        lado do botão e nada é gravado — o P0001 do gatilho viraria a frase genérica do `normalizarErro`. */
+    /* BPO-APROVACAO-01 P3 (piloto Vera) — pôr uma saída em AGENDADO com o BPO ligado exige a aprovação: pergunta-se ANTES de gravar e a
+       frase fica ao lado do botão (nada é gravado). Sem esta pergunta, o P0001 do gatilho viraria a frase genérica do `normalizarErro`. */
+    if (clienteAtual?.id && vaiAgendar(form.status_transacao, statusOriginalRef.current, form.tipo_operacao)
+      && await agendarSeriaRecusado(clienteAtual.id, currentIsEdit ? currentEditId : null)) {
+      /* o NOVO ainda não existe para ir à fila: grava-se como Programado e envia-se depois (a frase diz isso) */
+      setErroAntesDeSalvar(currentIsEdit && currentEditId ? FRASE_AGENDAR_SEM_APROVACAO : FRASE_AGENDAR_NOVO_SEM_APROVACAO);
+      setSaving(false);
+      return;
+    }
     if (currentIsEdit && lancamento && lancamento.id === currentEditId && saiDoEstadoDoBanco(lancamento, form)
       && (casadoComExtrato || await consultarCasadoComExtrato(lancamento.id))) {
       setCasadoComExtrato(true);
@@ -3502,10 +3518,20 @@ export function LancamentoV2Dialog({
             <TabsContent value="pagamento" className="mt-0 space-y-1.5 focus-visible:outline-none">
             <section className={sectionClass}>
               <TituloDoBloco nome="Pagamento" />
+              {/* NOTA-PAGA-POR-TERCEIRO-01 (Fatia A, mock aprovado 23/11) — "Quem paga: Nós · Terceiro": só na edição; gravou = fecha e a lista relê */}
+              {isEdit && lancamento?.id && clienteAtual?.id && (
+                <QuemPagaTerceiro lancamentoId={lancamento.id} clienteId={clienteAtual.id} tipoOperacao={tipoOperacao}
+                  status={lancamento.status_transacao ?? null}
+                  documentos={(documentosApi.documentos ?? []).map((d) => ({ id: d.id, nome: d.nome }))}
+                  aoMudarQuemPaga={setQuemPaga}
+                  aoGravar={(frase) => { toast.success(frase); notificarLancamentosMudaram(clienteAtual.id); onClose(); }} />
+              )}
 
               {/* Forma / Dados de Pagamento — realocados do antigo bloco "Complementares"
                   (PR-FIN-MODAL-02B). Campos e handlers idênticos; só mudou a aba. */}
-              <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
+              {/* NOTA-PAGA-POR-TERCEIRO-01 — pago por terceiro: a forma não se aplica (desligada, nada some) */}
+              <div className={cn('grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5', quemPaga === 'terceiro' && 'pointer-events-none opacity-45')}
+                aria-disabled={quemPaga === 'terceiro' || undefined} data-testid="pagamento-forma">
                 <div>
                   <Label className={REGUA_ROTULO}>{xmlRot('Forma de pagamento', 'forma')}
                     </Label>
@@ -4047,6 +4073,19 @@ export function LancamentoV2Dialog({
               <span className="max-w-[520px] text-[10px] leading-tight text-destructive" data-testid="erro-antes-de-salvar">
                 {erroAntesDeSalvar}
               </span>
+            )}
+            {/* P3 — com a frase do agendar sem aprovação, o gesto que resolve: enviar ESTE lançamento (prévia → Enviar). A edição aberta não grava. */}
+            {!posSalvar && erroAntesDeSalvar === FRASE_AGENDAR_SEM_APROVACAO && lancamento?.id && clienteAtual?.id && (
+              <>
+                <Button variant="outline" onClick={() => setEnviarEsteAberto(true)} data-testid="enviar-este-para-aprovacao"
+                  className="h-[22px] flex-none px-[9px] text-[10px] font-semibold">
+                  Enviar para aprovação
+                </Button>
+                {enviarEsteAberto && (
+                  <EnviarParaAprovacaoDialog aberto onFechar={() => setEnviarEsteAberto(false)} clienteId={clienteAtual.id} ids={[lancamento.id]}
+                    onEnviou={(frase) => { setErroAntesDeSalvar(null); toast.success(frase); }} />
+                )}
+              </>
             )}
             {posSalvar ? (
               <>
