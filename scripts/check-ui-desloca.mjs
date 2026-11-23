@@ -320,6 +320,21 @@ const CENARIOS = [
     ['cancelar', botao(/^Cancelar$/)], ['revogar', clicar('[data-testid="revogar-endereco"]')],
     ['Hotmail / Outlook.com', botao(/^Hotmail/)], ['Microsoft 365', botao(/^Microsoft 365/)], ['Gmail', botao(/^Gmail$/)],
   ] },
+  /* BPO-GUIA-01 (23/11) — Aprovar pagamentos (a forma da fila da Vera, `v=vera`): marcar itens (a barra "Aprovar N · R$ X" tem lugar fixo) e trocar
+     de aba não movem o cabeçalho, as abas nem a barra; no guia "Como funciona", andar os 6 passos não move a lista dos passos, o título nem o
+     rodapé (Voltar · Próximo) — no celular e no computador (o miolo do passo é o conteúdo que troca) */
+  { nome: 'aprovar-pagamentos', url: 'tela=aprovar-pagamentos&v=vera', tamanhos: [[390, 844], [1280, 800], [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-testid="guia-aprovacao"]').waitFor({ timeout: 8000 }); await p.keyboard.press('Escape');
+      await p.locator('[data-testid="guia-aprovacao"]').waitFor({ state: 'detached' }); await p.locator('[data-testid="aprovar-item"]').first().waitFor(); await espera(p, 500); },
+    estados: [
+      ['marca 1', async (p) => { await p.locator('[data-testid="aprovar-item"] button[role="checkbox"]').nth(0).click(); await espera(p, 300); }],
+      ['marca 3', async (p) => { for (const n of [1, 2]) await p.locator('[data-testid="aprovar-item"] button[role="checkbox"]').nth(n).click(); await espera(p, 300); }],
+      ['aba Aprovados', botao(/^Aprovados$/)], ['aba Recusados', botao(/^Recusados$/)], ['aba Alertas', botao(/^Alertas$/)], ['aba Fila', botao(/^Fila/)],
+    ] },
+  { nome: 'aprovar-guia', url: 'tela=aprovar-pagamentos&v=desligado', regiao: '[data-testid="guia-aprovacao"]', tamanhos: [[390, 844], [1280, 800], [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-testid="guia-passo-1"]').waitFor({ timeout: 8000 }); await espera(p, 400); },
+    estados: [2, 3, 4, 5, 6].map((n) => [`passo ${n}`, async (p) => { await p.click('[data-testid="guia-avancar"]');
+      await p.locator(`[data-testid="guia-passo-${n}"]`).waitFor(); await espera(p, 300); }]) },
   /* LANC-PATRIMONIO-VINCULO-01 — o minimodal do "Patrimônio": trocar a aba, escolher o bem e buscar não move as abas, a prévia nem o rodapé
      (a lista e o formulário são `data-desloca-livre`, a prévia e o motivo têm lugar fixo) */
   { nome: 'patrimonio-lancamento', url: 'tela=patrimonio-lancamento&caso=sem_bem&aba=ligar', regiao: '[data-testid="patrimonio-do-lancamento-dialog"]', estados: [
@@ -981,6 +996,14 @@ const CENARIOS = [
   /* P159a (CONC-TELAS-01) — a Conferência: trocar o chip (Sem par, Casados, Vencidos, Todos) não mexe no cabeçalho do modal, nos chips,
      na faixa nem no cabeçalho das colunas (régua fixa); o Casar lançamentos: trocar de sub-aba não mexe na barra, e o mês curto não mexe
      nas colunas do Extrato. */
+  /* NOTA-IGNORAR-01 — trocar de aba na lista da Receita (A lançar → Ignoradas → Todas) não mexe no cabeçalho do modal, nas abas, na
+     barra de filtros, no cabeçalho das colunas nem no rodapé (contagens com lugar reservado; régua fixa) */
+  /* os MESMOS tamanhos do gate de cortes desta tela (de 918 para cima: a tabela tem 982px de régua fixa e o modal não é medido abaixo) */
+  { nome: 'notas-receita-abas', url: 'tela=notas-receita', tamanhos: [[918, 600], [1000, 600], [1126, 579], [1366, 768], [1440, 800]],
+    presos: '[data-testid="receita-relogio"], [data-testid="receita-so-vencidas"], [data-testid="receita-busca"], [data-testid="quadro-da-receita"] thead th, [data-testid="receita-rodape"]',
+    estados: [['a lançar', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^A lançar/ }).first().click(); await espera(p); }],
+      ['ignoradas', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^Ignoradas/ }).first().click(); await espera(p); }],
+      ['todas', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^Todas/ }).first().click(); await espera(p); }]] },
   /* P153 — procurar no histórico não mexe em nada fora do quadro: o botão, a contagem e a linha do banco ficam onde estão (a frase é linha do quadro) */
   { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',

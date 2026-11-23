@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { alvoPermitido, podeGerenciarAcessos } from "../_shared/regrasDeAcesso.ts";
+import { problemaDaSenha } from "../_shared/regraDaSenha.ts";
 
 /**
  * NO PILOTO SO' O ADMIN DO AGROinBLUE GERENCIA ACESSOS (Gabriel, 06/10/2026). O ramo do gestor continua no corpo, atras
@@ -56,8 +57,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (nova_senha.length < 6) {
-      return new Response(JSON.stringify({ error: "Senha deve ter pelo menos 6 caracteres" }), {
+    /* SEG-SENHA-01: a regra única (8+, letras e números), a mesma do painel do Auth e da tela */
+    const recusa = problemaDaSenha(nova_senha);
+    if (recusa) {
+      return new Response(JSON.stringify({ error: recusa }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

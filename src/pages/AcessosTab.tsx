@@ -33,7 +33,7 @@ import { cn } from '@/lib/utils';
 import {
   ehAdminAgroinblue, fraseDoLoginNovo, lerRespostaDaFuncao, pendenciasDoEditarAcesso, pendenciasDoNovoAcesso,
   FRASE_CRIADO, FRASE_EDITADO, FRASE_EDITADO_COM_LOGIN, FRASE_LOGIN_EXISTENTE, FRASE_SEM_CLIENTE, FRASE_SO_ADMIN_NA_TELA,
-  MOTIVO_LINHA_ADMIN, MOTIVO_LINHA_PROPRIA, PERFIL_INICIAL, PERFIS_DA_TELA, ROTULO_PERFIL, SENHA_MINIMA,
+  MOTIVO_LINHA_ADMIN, MOTIVO_LINHA_PROPRIA, PERFIL_INICIAL, PERFIS_DA_TELA, ROTULO_PERFIL, SENHA_MINIMA, problemaDaSenha,
 } from '@/lib/acessos/acessosDaTela';
 import { buscarNomesDosAutores } from '@/hooks/useNomesDosAutores';
 
@@ -224,7 +224,8 @@ export function AcessosTab() {
 
   const redefinir = async () => {
     if (!alvoSenha) return;
-    if (novaSenha.length < SENHA_MINIMA) { setErroSenha(`Mínimo de ${SENHA_MINIMA} caracteres.`); return; }
+    const fraca = problemaDaSenha(novaSenha);
+    if (fraca) { setErroSenha(fraca); return; }
     setOcupado(true); setErroSenha(null);
     try {
       const res = await supabase.functions.invoke('redefinir-senha', { body: { user_id: alvoSenha.user_id, nova_senha: novaSenha } });

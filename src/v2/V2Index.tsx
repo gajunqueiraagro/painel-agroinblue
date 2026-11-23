@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useBpoAtivo } from '@/hooks/useBpoAtivo';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { CentralOperacoesComerciais } from '@/components/operacao-comercial/central/CentralOperacoesComerciais';
 import { paramsAberturaOC, semParamsOC, origemDaVolta } from '@/lib/oc/paramsAberturaOC';
@@ -930,10 +931,12 @@ export default function V2Index() {
      so' CONSULTA, num ponto so' — a chamada unica de `renderContent()`, la' embaixo. O `AppRouter` so' monta esta tela depois de
      o cliente carregar, entao perfil e `isAdmin` ja' sao os de verdade aqui. Para o admin, nada muda. */
   const perfilAcesso = clienteAtual?.perfil ?? null;
-  const semAcesso = nivelDaTela(perfilAcesso, isAdmin, section) === 'nao';
+  /* BPO-APROVACAO-01 P1: o menu e a rota sabem se o BPO está ligado no cliente (Aprovar pagamentos só existe com ele) */
+  const bpoAtivo = useBpoAtivo(clienteAtual?.id);
+  const semAcesso = nivelDaTela(perfilAcesso, isAdmin, section, { bpoAtivo }) === 'nao';
   /* ACESSOS-FIN-01 — ATALHO PARA TELA SEM ACESSO NAO E' OFERECIDO (a regra do 02b), agora tambem nas saidas que esta rota entrega
      por prop as telas liberadas: a tela so' desenha o botao quando recebe o callback, e quem decide se recebe e' o dono. */
-  const podeAbrirTela = (s: V2Section): boolean => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao';
+  const podeAbrirTela = (s: V2Section): boolean => nivelDaTela(perfilAcesso, isAdmin, s, { bpoAtivo }) !== 'nao';
   const primeiraPermitida = primeiraTelaPermitida(perfilAcesso, isAdmin);
   /* A TELA INICIAL de quem nao tem a Visão Geral: ao entrar e ao trocar de cliente, quem esta' na 'home' cai na primeira tela
      permitida na ordem do menu (no piloto, Lançamentos Financeiros). ⚠ SO' A 'home' E' TROCADA: quem chegou a OUTRA tela sem
@@ -1882,7 +1885,7 @@ export default function V2Index() {
             const ativa = secaoDoAtalho(section);
             /* ACESSOS-OC-02 (M7) — atalho para tela sem acesso nao e' oferecido: so' as opcoes que a pessoa abre; sobrando so' a
                propria tela, a faixa some. Para o admin, as tres de sempre. */
-            const opcoes = opcoesDoAtalho((s) => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao');
+            const opcoes = opcoesDoAtalho((s) => nivelDaTela(perfilAcesso, isAdmin, s, { bpoAtivo }) !== 'nao');
             return ativa && opcoes.length > 1 ? (
               <Segmentado altura={22} valor={ativa} onEscolher={irPeloAtalho}
                 opcoes={opcoes} className="hidden bg-card md:inline-flex" />

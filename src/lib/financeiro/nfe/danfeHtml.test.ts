@@ -42,6 +42,17 @@ describe('NOTA-DANFE-01 — o DANFE do XML', () => {
     expect(h).toContain('<svg class="bar"');
     expect(h).not.toContain('SEM VALOR FISCAL');
   });
+  it('D2b DANFE-LAYOUT-02 — nada corta: a chave em 1 linha, o total da nota no tamanho do valor, os quadros crescem (sem overflow escondido)', () => {
+    const { nota, extras } = ler(montarNFe());
+    const h = danfeHtml(nota, extras);
+    expect(h).toMatch(/\.chave\{[^}]*white-space:nowrap/);
+    expect(h).toMatch(/\.cx\{[^}]*overflow-wrap:anywhere/);
+    expect(h).not.toMatch(/\.cx\{[^}]*overflow:hidden/);
+    /* o `.cx b` é o RÓTULO (5,6pt): o valor do total não pode estar num <b> */
+    expect(h).toMatch(/<b>Valor total da nota<\/b><span><strong>16\.238,00<\/strong><\/span>/);
+    /* a coluna do CNPJ do transportador cabe o CNPJ inteiro (30mm) */
+    expect(h).toContain("grid-template-columns:1fr 34mm 20mm 30mm 26mm");
+  });
   it('D3 Code-128C: início 105, pares, verificador mod 103, fim 106; barras de largura fixa por código', () => {
     expect(codigos128C('1234')).toEqual([105, 12, 34, (105 + 12 * 1 + 34 * 2) % 103, 106]);
     const chave = chaveDe(EMITENTE_CNPJ, '55', '12345');

@@ -162,7 +162,7 @@ describe('o modal do lancamento (LancamentoV2Dialog, lido da FONTE)', () => {
 describe('ACESSOS-FIN-01 — as saidas das telas liberadas (V2Index, lido da FONTE): um caso por ponto', () => {
   const rota = fonte('src/v2/V2Index.tsx');
   it('o dono e consultado num lugar so, e nenhum `if` de perfil entra na rota', () => {
-    expect(rota).toContain("const podeAbrirTela = (s: V2Section): boolean => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao';");
+    expect(rota).toContain("const podeAbrirTela = (s: V2Section): boolean => nivelDaTela(perfilAcesso, isAdmin, s, { bpoAtivo }) !== 'nao';");
     expect(rota).not.toMatch(/perfil === '|perfilAcesso ===|=== 'financeiro'|=== 'gestor_cliente'/);
   });
   it('"Lançar movimentação": o cartao "Movimentações por foto" (rota so do admin) so se desenha para quem a abre', () => {

@@ -2,6 +2,7 @@
  * O QUE A TELA DE ACESSOS OFERECE E COMO ELA LE A RESPOSTA DAS EDGE FUNCTIONS — ACESSOS-TELA-01 (Gabriel, 06/10/2026).
  * Puro: sem React e sem rede.
  */
+import { SENHA_MINIMA as SENHA_MINIMA_DA_REGRA, problemaDaSenha } from '../../../supabase/functions/_shared/regraDaSenha';
 
 /** O motivo dos perfis que a tela ainda nao cria (o item fica na lista, APAGADO, com ele). */
 export const MOTIVO_PERFIL_AGUARDA = 'aguarda a trava de gravação no banco';
@@ -36,14 +37,17 @@ export const FRASE_CRIADO = 'Usuário criado. Passe o e-mail e a senha provisór
 export const FRASE_LOGIN_EXISTENTE = 'Este e-mail já tinha login: o acesso ao cliente foi criado e a senha dele NÃO mudou.';
 export const FRASE_SEM_CLIENTE = 'Escolha um cliente no topo para gerenciar os acessos.';
 export const FRASE_SO_ADMIN_NA_TELA = 'Só o administrador do AGROinBLUE gerencia acessos por enquanto.';
-export const SENHA_MINIMA = 6;
+/** SEG-SENHA-01: a senha provisória segue a regra única (8+, letras e números), a mesma da criar-usuario. */
+export const SENHA_MINIMA = SENHA_MINIMA_DA_REGRA;
+export { problemaDaSenha };
 
 /** Os campos do formulario de criacao que faltam — a mensagem vai embaixo de cada um (UX-OBRIGATORIOS-01). */
 export function pendenciasDoNovoAcesso(f: { nome: string; email: string; senha: string; perfil: string; fazendas: readonly string[] }) {
   const p: Partial<Record<'nome' | 'email' | 'senha' | 'perfil' | 'fazendas', string>> = {};
   if (!f.nome.trim()) p.nome = 'Informe o nome.';
   if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) p.email = 'Informe um e-mail válido.';
-  if (f.senha.length < SENHA_MINIMA) p.senha = `Mínimo de ${SENHA_MINIMA} caracteres.`;
+  const fraca = problemaDaSenha(f.senha);
+  if (fraca) p.senha = fraca;
   if (!PERFIS_DA_TELA.some(x => x.valor === f.perfil && x.motivo == null)) p.perfil = 'Escolha um perfil.';
   if (f.fazendas.length === 0) p.fazendas = 'Marque ao menos uma fazenda.';
   return p;

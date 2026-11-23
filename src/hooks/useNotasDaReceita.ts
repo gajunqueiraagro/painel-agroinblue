@@ -6,7 +6,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { chavesJaLancadas, lerCandidatos, lerLinhasRecebidas, montarLista, precisaConferirLancamento, situacaoNaLista, type CandidatoDaNota, type NotaNaLista, lerAtributos, type AtributosDaNota, lerLigacoes, type LigacaoDaDemonstracao } from '@/lib/fiscal/notasDaReceita';
+import { chavesJaLancadas, lerCandidatos, lerLinhasRecebidas, montarLista, precisaConferirLancamento, situacaoNaLista, type CandidatoDaNota, type NotaNaLista, lerAtributos, type AtributosDaNota, lerLigacoes, type LigacaoDaDemonstracao, lerIgnoradas, type IgnoradaDaNota, type MotivoIgnorar } from '@/lib/fiscal/notasDaReceita';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 export interface DadosDaReceita {
@@ -18,6 +18,9 @@ export interface DadosDaReceita {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tabelas fiscais novas fora dos tipos gerados
 const db = () => supabase as any;
+
+/** a pergunta que só ENFEITA a lista (classe, demonstração, ignoradas) nunca derruba a leitura: a exceção vira `{ error }` */
+const comoErro = (e: unknown) => ({ data: null, error: e });
 
 export async function lerNotasDaReceita(clienteId: string): Promise<DadosDaReceita> {
   const [r, t, c] = await Promise.all([
@@ -33,8 +36,12 @@ export async function lerNotasDaReceita(clienteId: string): Promise<DadosDaRecei
   /* NOTA-SALVAR-RAPIDO-01 (22/11) — os atributos fiscais e as ligações da demonstração dependem só das linhas: saem JÁ, em paralelo com a
      conferência "já lançada?" → candidatos (antes eram 7 perguntas em fila a cada volta para a lista) */
   const comXml = linhas.filter((l) => l.temXml || l.situacao === 'xml' || l.situacao === 'importado').map((l) => l.chave);
-  const atributosP = comXml.length > 0 ? db().rpc('fn_notas_atributos_fiscais', { p_cliente: clienteId, p_chaves: comXml }) : null;
-  const ligacoesP = comXml.length > 0 ? db().rpc('fn_notas_demonstracao_ligacoes', { p_cliente: clienteId }) : null;
+  /* o pedido do supabase só SAI no `.then()`: o `Promise.resolve` dispara já (sem ele a "leitura em paralelo" esperava o `await` lá embaixo) */
+  const atributosP = comXml.length > 0 ? Promise.resolve(db().rpc('fn_notas_atributos_fiscais', { p_cliente: clienteId, p_chaves: comXml })).catch(comoErro) : null;
+  const ligacoesP = comXml.length > 0 ? Promise.resolve(db().rpc('fn_notas_demonstracao_ligacoes', { p_cliente: clienteId })).catch(comoErro) : null;
+  /* NOTA-IGNORAR-01 — o motivo/quem/quando das ignoradas e a sugestão do mesmo emitente (falhou = sem eles, erro no console; a nota
+     ignorada segue na aba "Ignoradas" pela própria situação) */
+  const ignoradasP = Promise.resolve(db().rpc('fn_notas_receita_ignoradas', { p_cliente: clienteId })).catch(comoErro);
   const noSistema = new Set<string>();
   const partes: string[][] = [];
   for (let i = 0; i < chaves.length; i += 200) partes.push(chaves.slice(i, i + 200));
@@ -80,12 +87,17 @@ export async function lerNotasDaReceita(clienteId: string): Promise<DadosDaRecei
     const { data, error } = await ligacoesP;
     if (error) console.error('[useNotasDaReceita] demonstração', error); else ligacoes = lerLigacoes(data);
   }
+  let ignoradas = new Map<string, IgnoradaDaNota>();
+  {
+    const { data, error } = await ignoradasP;
+    if (error) console.error('[useNotasDaReceita] ignoradas', error); else ignoradas = lerIgnoradas(data);
+  }
   const titulares = ((t.data ?? []) as { id: string; nome: string | null }[]).map((x) => ({ id: x.id, nome: x.nome ?? '—' }));
   const controle = (c.data ?? []) as { ultima_busca_em: string | null; nao_antes_de: string | null }[];
   const ultimas = controle.map((x) => x.ultima_busca_em).filter((x): x is string => !!x).sort();
   const proximas = controle.map((x) => x.nao_antes_de).filter((x): x is string => !!x).sort();
   return {
-    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema, candidatos, atributos, hojeLocal(), ligacoes),
+    lista: montarLista(linhas, new Map(titulares.map((x) => [x.id, x.nome])), noSistema, candidatos, atributos, hojeLocal(), ligacoes, ignoradas),
     titulares,
     ultimaBusca: ultimas.at(-1) ?? null,
     proximaBusca: proximas[0] ?? null,
@@ -110,6 +122,20 @@ export async function registrarBemDeTerceiro(clienteId: string, chave: string, p
     valor: i.valor == null ? null : Number(i.valor) })) : [];
   return { ok: true, motivo: String(data?.motivo ?? ''), fornecedor: data?.fornecedor ?? null, nf: String(data?.nf ?? ''), data: data?.data ?? null,
     total: Number(data?.total ?? 0), itens };
+}
+
+/** NOTA-IGNORAR-01 — ignorar / desfazer pelas funções do banco (lote 33); a recusa volta como FRASE (null = gravou), nunca erro cru */
+export async function ignorarNotaDaReceita(clienteId: string, recebidoId: string, motivo: MotivoIgnorar, textoLivre: string | null): Promise<string | null> {
+  const { error } = await db().rpc('fn_nota_receita_ignorar', { p_cliente: clienteId, p_recebido: recebidoId, p_motivo: motivo, p_texto: textoLivre });
+  if (!error) return null;
+  console.error('[ignorarNotaDaReceita]', error);
+  return error.code === 'P0001' && error.message ? error.message : 'Não consegui ignorar a nota. Tente de novo.';
+}
+export async function desfazerIgnorarDaReceita(clienteId: string, recebidoId: string): Promise<string | null> {
+  const { error } = await db().rpc('fn_nota_receita_desfazer_ignorar', { p_cliente: clienteId, p_recebido: recebidoId });
+  if (!error) return null;
+  console.error('[desfazerIgnorarDaReceita]', error);
+  return error.code === 'P0001' && error.message ? error.message : 'Não consegui desfazer. Tente de novo.';
 }
 
 export async function lerXmlDaReceita(id: string): Promise<string> {

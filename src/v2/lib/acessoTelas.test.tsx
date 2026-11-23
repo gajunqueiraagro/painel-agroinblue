@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { NAV_GRUPOS, HOME_LIBERADA_CLIENTES, OPERACAO_COMERCIAL_LIBERADA_CLIENTES, TELA_OPERACAO_COMERCIAL, type V2Section } from './navGrupos';
-import { MATRIZ_ACESSO, NIVEL_POR_TELA, TELAS_DA_EVOLUCAO, TELAS_DO_FINANCEIRO, TELAS_DO_GESTOR, TELA_DE_ENTRADA_PREFERIDA, gruposVisiveis, nivelDaTela, primeiraTelaPermitida, secoesVisiveis } from './acessoTelas';
+import { MATRIZ_ACESSO, NIVEL_POR_TELA, TELAS_SO_COM_BPO, TELAS_DA_EVOLUCAO, TELAS_DO_FINANCEIRO, TELAS_DO_GESTOR, TELA_DE_ENTRADA_PREFERIDA, gruposVisiveis, nivelDaTela, primeiraTelaPermitida, secoesVisiveis } from './acessoTelas';
 import { V2Sidebar } from '@/v2/components/V2Sidebar';
 import { V2ContextDrawer } from '@/v2/components/V2ContextDrawer';
 import { V2MobileNav } from '@/v2/components/V2MobileNav';
@@ -59,10 +59,12 @@ const semObraNemEscondido = (g: (typeof NAV_GRUPOS)[number]) =>
 
 describe('a marca de liberacao (navGrupos)', () => {
   it('as telas liberadas: as do financeiro (piloto, OC, ACESSOS-FIN-01, Evolução) e as do GESTOR (PERFIL-GESTOR-01); a Visão Geral SIM (só o gestor a vê)', () => {
-    expect(todosOsItens.filter((x) => x.item.liberadaClientes).map((x) => x.item.id))
+    /* BPO-APROVACAO-01 P1: "Aprovar pagamentos" tem a marca, mas só existe para o cliente com o BPO ligado (`TELAS_SO_COM_BPO`) —
+       fica fora das listas do gestor (o menu SEM o BPO) e entra na conta à parte (+1) */
+    expect(todosOsItens.filter((x) => x.item.liberadaClientes && !TELAS_SO_COM_BPO.includes(x.item.id)).map((x) => x.item.id))
       .toEqual([...PRODUCAO_GESTOR, ...FINANCEIRO_GESTOR, ...PLANEJAMENTO_GESTOR, ...EXECUTIVO_GESTOR, ...CADASTROS_GESTOR]);
-    /* 23 do financeiro (piloto 4 + OC 1 + FIN 17 + Evolução 1) + 16 itens de menu do gestor */
-    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(4 + 1 + 17 + 1 + 16);
+    /* 23 do financeiro (piloto 4 + OC 1 + FIN 17 + Evolução 1) + 16 itens de menu do gestor + 1 do BPO */
+    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(4 + 1 + 17 + 1 + 16 + 1);
     /* nenhuma tela de Auditoria ou Validar tem a marca; do Planejamento, só as 2 do gestor */
     expect(todosOsItens.filter((x) => x.item.liberadaClientes && ['auditoria', 'validar'].includes(x.grupo))).toEqual([]);
     expect(todosOsItens.filter((x) => x.item.liberadaClientes && x.grupo === 'planejamento').map((x) => x.item.id)).toEqual(PLANEJAMENTO_GESTOR);
@@ -138,7 +140,7 @@ describe('a excecao por tela (NIVEL_POR_TELA) — ACESSOS-OC-01', () => {
   it('a excecao VENCE a matriz do grupo: no grupo `rebanho` o financeiro veria e o campo editaria', () => {
     expect(MATRIZ_ACESSO.rebanho).toEqual({ gestor_cliente: 'editar', financeiro: 'ver', campo: 'editar', leitura: 'ver' });
     expect(Object.keys(NIVEL_POR_TELA).sort())
-      .toEqual([...TELAS_DA_OC, ...TELAS_DO_FINANCEIRO, ...TELAS_DA_EVOLUCAO, ...TELAS_DO_GESTOR].sort());
+      .toEqual([...TELAS_DA_OC, ...TELAS_DO_FINANCEIRO, ...TELAS_DA_EVOLUCAO, ...TELAS_DO_GESTOR, ...TELAS_SO_COM_BPO].sort());
   });
   /* PEC-ABAS-01 (Gabriel 05/11/2026): "a Evolução no ano é LIBERADA para os perfis de cliente, no menu e na aba" */
   it('a Evolução no ano (item de menu) e o mês dela (Evolução por Categoria, fora do menu): gestor e financeiro editam; campo e leitura, nao', () => {
@@ -474,7 +476,7 @@ describe('a rota (V2Index, lida da FONTE) e a decisao que ela consulta', () => {
   });
   it('um ponto so de decisao: `renderContent()` e chamada UMA vez, e so no ramo de quem tem acesso', () => {
     expect(fonte.match(/renderContent\(\)/g)).toHaveLength(2);          // a declaracao e a UNICA chamada
-    expect(fonte).toContain("const semAcesso = nivelDaTela(perfilAcesso, isAdmin, section) === 'nao';");
+    expect(fonte).toContain("const semAcesso = nivelDaTela(perfilAcesso, isAdmin, section, { bpoAtivo }) === 'nao';");
     expect(fonte.replace(/\s+/g, ' ')).toMatch(/\{modoResumo \? painelDoResumo : semAcesso \? \( <V2SemAcesso primeira=\{primeiraPermitida \? \{ rotulo: rotuloDaSecao\(primeiraPermitida\)\.secao, ir: \(\) => navegarPeloMenu\(primeiraPermitida\) \} : null\} \/> \) : renderContent\(\)\}/);
   });
   it('a tela inicial: o efeito leva a primeira permitida quem esta na home (e so quem esta nela), e nao mexe com o admin', () => {
@@ -489,7 +491,7 @@ describe('a rota (V2Index, lida da FONTE) e a decisao que ela consulta', () => {
     /* ACESSOS-FIN-01 — a faixa so' oferece as telas que a pessoa abre, e some se sobrar so' a propria */
     expect(f).toContain('{!semAcesso && !modoResumo && SUBNAV_FINANCEIRO.some((o) => o.id === section) && SUBNAV_FINANCEIRO.filter((o) => podeAbrirTela(o.id)).length > 1 && (');
     expect(f).toContain('{SUBNAV_FINANCEIRO.filter((o) => podeAbrirTela(o.id)).map(({ id, label }) => (');
-    expect(f).toContain("const podeAbrirTela = (s: V2Section): boolean => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao';");
+    expect(f).toContain("const podeAbrirTela = (s: V2Section): boolean => nivelDaTela(perfilAcesso, isAdmin, s, { bpoAtivo }) !== 'nao';");
     /* das quatro da faixa o financeiro so' tem o Fluxo Caixa: para ele a faixa some; para o admin, as quatro */
     const DA_FAIXA = ['financeiro-dashboard', 'fluxo-caixa', 'rateio-adm', 'importacao-extratos'] as const;
     for (const id of DA_FAIXA) expect(f).toContain(`{ id: '${id}',`);

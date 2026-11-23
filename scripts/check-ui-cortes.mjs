@@ -1367,6 +1367,13 @@ const CENARIOS = [
       /* NOTAS-RECEITA-VENC-01 — a coluna Venc. (as cores), o filtro "Vencidas sem lançamento" e o popover das parcelas (a 44.871 em 12) */
       /* UI-LARGURA-FIXA-01 — o 2º cliente (curto): as mesmas colunas da lista longa */
       { nome: 'notas-receita-curta', url: 'tela=notas-receita&v=curta', tamanhos: T, regiao: R },
+      /* NOTA-IGNORAR-01 — a aba Ignoradas (Desfazer + motivo no title), o modal do Ignorar ("Outro" sem texto = a frase reservada) e a curta */
+      { nome: 'notas-receita-ignoradas', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^Ignoradas/) },
+      { nome: 'notas-receita-ignoradas-curta', url: 'tela=notas-receita&v=curta', tamanhos: T, regiao: R, antes: aba(/^Ignoradas/) },
+      { nome: 'notas-receita-ignorar', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-ignorar-modal"]', antes: async (p) => {
+        await p.locator('[data-testid="receita-ignorar"][data-sugerido]').first().click(); await p.waitForTimeout(300);
+        await p.locator('[data-testid="receita-ignorar-modal"] button', { hasText: /^Outro$/ }).click();
+        await p.locator('[data-testid="receita-ignorar-gravar"]').click(); await p.waitForTimeout(300); } },
       { nome: 'notas-receita-so-vencidas', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: async (p) => {
         await p.locator('[data-testid="receita-so-vencidas"]').click(); await p.waitForTimeout(300); } },
       { nome: 'notas-receita-parcelas', url: 'tela=notas-receita', tamanhos: T, regiao: 'body', antes: async (p) => {
@@ -1958,6 +1965,18 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="rateio-linha"]').first().waitFor(); if (botao) { await p.locator(botao).click(); await p.waitForTimeout(300); } } })),
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
+  /* BPO-GUIA-01 P2 — com o BPO ligado, a barra dos marcados ganha "Enviar para aprovação" (inteiro na barra) e a prévia do banco no modal
+     (entram N, uma fica de fora com o motivo: o pior caso da frase) */
+  { nome: 'financeiro-barra-lote-bpo', url: 'tela=financeiro&bpo=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
+    botoesDentro: '[data-testid="barra-lote"]',
+    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
+      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
+      await p.locator('[data-testid="lote-enviar-aprovacao"]').waitFor(); await p.waitForTimeout(400); } },
+  { nome: 'financeiro-enviar-aprovacao', url: 'tela=financeiro&bpo=1', tamanhos: [[390, 844], [1280, 800], [1920, 1080]], regiao: '[data-testid="enviar-aprovacao"]',
+    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
+      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
+      await p.locator('[data-testid="lote-enviar-aprovacao"]').click();
+      await p.locator('[data-testid="enviar-aprovacao-previa"]', { hasText: 'para a fila' }).waitFor(); await p.waitForTimeout(300); } },
   /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
   ...['', 'mesmo', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),
@@ -2147,10 +2166,14 @@ const CENARIOS = [
   ...['encurtada', 'cancelar', 'vazia', 'carregando', 'erro'].map((v) => ({ nome: `fora-da-vigencia-${v}`, url: `tela=fora-da-vigencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-fora-da-vigencia"]' })),
   /* BPO-APROVACAO-01 — a tela do aprovador, celular primeiro (390×844) e no computador: a fila, a prévia do lote, os alertas, o desligado */
-  ...[['aprovar-pagamentos', 'tela=aprovar-pagamentos', null], ['aprovar-pagamentos-previa', 'tela=aprovar-pagamentos', 'previa'],
+  /* BPO-GUIA-01 (23/11): + 1280 e 1920, a forma da fila da Vera (`v=vera`); o guia abre sozinho na 1ª visita — a tela se mede com ele fechado */
+  ...[['aprovar-pagamentos', 'tela=aprovar-pagamentos', null], ['aprovar-pagamentos-vera', 'tela=aprovar-pagamentos&v=vera', null],
+      ['aprovar-pagamentos-previa', 'tela=aprovar-pagamentos', 'previa'],
       ['aprovar-pagamentos-alertas', 'tela=aprovar-pagamentos&v=alertas', 'alertas'], ['aprovar-pagamentos-desligado', 'tela=aprovar-pagamentos&v=desligado', 'desligado']]
-    .map(([nome, url, estado]) => ({ nome, url, tamanhos: [[390, 844], [1366, 768]], regiao: estado === 'previa' ? '[role="dialog"]' : 'body',
+    .map(([nome, url, estado]) => ({ nome, url, tamanhos: [[390, 844], [1280, 800], [1366, 768], [1920, 1080]], regiao: estado === 'previa' ? '[role="dialog"]' : 'body',
       antes: async (p) => {
+        await p.locator('[data-testid="guia-aprovacao"]').waitFor({ timeout: 8000 }); await p.keyboard.press('Escape');
+        await p.locator('[data-testid="guia-aprovacao"]').waitFor({ state: 'detached' });
         if (estado === 'desligado') { await p.locator('[data-testid="aprovar-desligado"]').waitFor(); return; }
         await p.locator('[data-testid="aprovar-item"]').first().waitFor();
         if (estado === 'alertas') { await p.getByRole('radio', { name: 'Alertas' }).or(p.getByRole('button', { name: 'Alertas' })).first().click(); await p.locator('[data-testid="aprovar-alertas"]').waitFor(); }
@@ -2160,6 +2183,21 @@ const CENARIOS = [
         }
         await p.waitForTimeout(300);
       } })),
+  /* BPO-GUIA-01 — o guia "Como funciona" (admin, BPO desligado: os 6 passos e a prévia do Ligar), 390/1280/1920: nada cortado dentro do modal.
+     A regra do Gabriel "ZERO texto quebrado" (uma linha em tudo) tem a sua medida no `fotoGuiaBpo` (cada `[data-texto-guia]` em uma linha). */
+  ...[1, 2, 3, 4, 5, 6, 'previa'].map((passo) => ({ nome: `aprovar-guia-${passo === 'previa' ? 'passo6-previa' : `passo${passo}`}`,
+    url: 'tela=aprovar-pagamentos&v=desligado', tamanhos: [[390, 844], [1280, 800], [1920, 1080]], regiao: '[data-testid="guia-aprovacao"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="guia-passo-1"]').waitFor({ timeout: 8000 });
+      const ate = passo === 'previa' ? 6 : passo;
+      for (let i = 1; i < ate; i++) { await p.click('[data-testid="guia-avancar"]'); await p.locator(`[data-testid="guia-passo-${i + 1}"]`).waitFor(); }
+      if (passo === 'previa') {
+        await p.locator('label:has-text("Quem aprova") button').first().click(); await p.locator('[data-testid="searchable-select-painel"]').waitFor();
+        await p.locator('[data-testid="searchable-select-painel"] [title="Gestor Sintético com Nome Comprido da Silva"]').first().click();
+        await p.click('[data-testid="guia-avancar"]'); await p.locator('[data-testid="guia-previa"]').waitFor();
+      }
+      await p.waitForTimeout(350);
+    } })),
   /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
      botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
   ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',

@@ -78,7 +78,7 @@ body{margin:0;background:#8a9099;font:7.2pt/1.15 Arial,Helvetica,sans-serif;colo
 .folha{position:relative;width:210mm;min-height:297mm;margin:12px auto;background:#fff;padding:6mm;box-shadow:0 4px 20px #0005;page-break-after:always}
 .folha:last-child{page-break-after:auto}
 @media print{body{background:#fff}.barra{display:none}.folha{margin:0;box-shadow:none;padding:0;width:auto;min-height:auto}}
-.cx{border:1px solid #000;padding:1px 3px;min-height:7mm;margin:-0.5px 0 0 -0.5px;overflow:hidden}
+.cx{border:1px solid #000;padding:1px 3px;min-height:7mm;margin:-0.5px 0 0 -0.5px;overflow-wrap:anywhere}
 .cx b{display:block;font-size:5.6pt;font-weight:normal;text-transform:uppercase}.cx span{font-size:7.6pt}
 .g{display:grid}.t{font-size:6.4pt;font-weight:bold;margin:2.5mm 0 .6mm;text-transform:uppercase}.r{text-align:right}.c{text-align:center}
 table{width:100%;border-collapse:collapse;table-layout:fixed}th{border:1px solid #000;font-size:5.4pt;font-weight:normal;padding:1px 2px;text-transform:uppercase}
@@ -89,7 +89,7 @@ tbody tr:last-child td{border-bottom:1px solid #000}
 .canhoto .s div+div{border-left:1px solid #000}
 .cab{display:grid;grid-template-columns:80mm 34mm 1fr}.cab>div{border:1px solid #000;margin-left:-1px;padding:2mm}
 .dt{text-align:center}.dt h1{font-size:13pt;margin:0}.dt p{margin:1mm 0;font-size:6.2pt}
-.chave{font:8pt/1 Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.4px;text-align:center}svg.bar{width:100%;height:12mm;display:block}
+.chave{font:7pt/1.2 Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.2px;text-align:center;white-space:nowrap}svg.bar{width:100%;height:12mm;display:block}
 .hom{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font:bold 40pt Arial;color:#c0000033;transform:rotate(-30deg)}`;
 
 const TH_ITENS = '<colgroup><col style="width:13mm"><col><col style="width:13mm"><col style="width:7mm"><col style="width:8mm"><col style="width:7mm">'
@@ -149,9 +149,9 @@ export function danfeHtml(n: NotaLida, x: ExtrasDoDanfe): string {
     + grade('repeat(6,1fr)', cx('Base de cálc. do ICMS', brl(i.bcIcmsCent), 'r'), cx('Valor do ICMS', brl(i.icmsCent), 'r'), cx('Base de cálc. ICMS ST', brl(i.bcStCent), 'r'),
       cx('Valor do ICMS ST', brl(i.stCent), 'r'), cx('Valor aprox. tributos', brl(i.tributosCent), 'r'), cx('Valor total dos produtos', brl(i.produtosCent), 'r'),
       cx('Valor do frete', brl(i.freteCent), 'r'), cx('Valor do seguro', brl(i.seguroCent), 'r'), cx('Desconto', brl(i.descontoCent), 'r'),
-      cx('Outras despesas', brl(i.outrasCent), 'r'), cx('Valor do IPI', brl(i.ipiCent), 'r'), cx('Valor total da nota', `<b>${brl(i.notaCent)}</b>`, 'r'))
+      cx('Outras despesas', brl(i.outrasCent), 'r'), cx('Valor do IPI', brl(i.ipiCent), 'r'), cx('Valor total da nota', `<strong>${brl(i.notaCent)}</strong>`, 'r'))
     + '<div class="t">Transportador / volumes transportados</div>'
-    + grade('1fr 34mm 22mm 22mm 28mm', cx('Razão social', esc(t.nome)), cx('Frete por conta', esc(FRETE[t.modFrete ?? ''] ?? t.modFrete)),
+    + grade('1fr 34mm 20mm 30mm 26mm', cx('Razão social', esc(t.nome)), cx('Frete por conta', esc(FRETE[t.modFrete ?? ''] ?? t.modFrete)),
       cx('Placa do veículo', `${esc(t.placa)}${t.placaUf ? ` ${esc(t.placaUf)}` : ''}`), cx('CNPJ / CPF', docFmt(t.documento)), cx('Inscrição estadual', esc(t.ie)))
     + grade('22mm 1fr 1fr 1fr 28mm 28mm', cx('Quantidade', esc(t.quantidade), 'r'), cx('Espécie', esc(t.especie)), cx('Marca', esc(t.marca)), cx('Numeração', esc(t.numeracao)),
       cx('Peso bruto', esc(t.pesoBruto), 'r'), cx('Peso líquido', esc(t.pesoLiquido), 'r'));

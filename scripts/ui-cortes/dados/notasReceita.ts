@@ -1,6 +1,6 @@
 /* NOTAS-RECEITA-A1-01 F3.4 — dados SINTÉTICOS da lista "Notas da Receita" na bancada (nenhuma nota real): todas as situações, o pior
    texto (emitente comprido, valor de 9 dígitos, nº de 9 dígitos, CPF de emitente pessoa física) e eventos. */
-import { montarLista, type CandidatoDaNota, type LinhaRecebida } from '@/lib/fiscal/notasDaReceita';
+import { lerIgnoradas, montarLista, type CandidatoDaNota, type LinhaRecebida } from '@/lib/fiscal/notasDaReceita';
 import type { DadosDaReceita } from '@/hooks/useNotasDaReceita';
 
 const chave = (n: number, cnpj: string) => `502611${cnpj.padStart(14, '0')}55001${String(n).padStart(9, '0')}1123456780`;
@@ -38,7 +38,12 @@ const linhas: LinhaRecebida[] = [
   L(7878, 'Máquinas Exemplo para Demonstração Ltda', '01762373000150', 3, 850000, 'xml'),
   L(7880, 'Máquinas Exemplo para Demonstração Ltda', '01762373000150', 10, 850000, 'xml'),
   L(7900, 'Implementos Exemplo', '61222333000144', 9, 420000, 'xml'),
+  /* NOTA-IGNORAR-01 — a ignorada ("Outro" com o texto no teto) e a nova do MESMO emitente (a sugestão no botão Ignorar) */
+  L(66001, 'Loja de Conveniência Exemplo com Nome Comprido Ltda', '44555666000177', 13, 99999999, 'ignorado'),
+  L(66002, 'Loja de Conveniência Exemplo com Nome Comprido Ltda', '44555666000177', 15, 1180, 'xml'),
 ];
+const IGNORADAS = lerIgnoradas([{ chave: chave(66001, '44555666000177'), motivo: 'outro', em: '2026-11-15T14:52:00Z', por: 'Usuária Exemplo com Nome Comprido',
+  texto: 'compra do caminhão da transportadora parceira, pago por eles, não é custo da fazenda', emitente_documento: '44555666000177' }]);
 type Dup = { numero: string; vencimento: string; valorCent: number };
 const at = (cfops: string[], natOp: string, tpNF = '1', refs: string[] = [], dups: Dup[] = [], tpags: string[] = []) => ({ cfops, tpNF, natOp, refs, dups, tpags });
 /* NOTAS-RECEITA-VENC-01 — duplicatas SINTÉTICAS com "hoje" = 16/11/2026: a 1.234 em 3 (1 vencida, a próxima em 4 dias = âmbar), a 310.554
@@ -88,7 +93,7 @@ export const DADOS_RECEITA_BANCADA: DadosDaReceita = {
   lista: montarLista(linhas, new Map([['t1', 'Produtora Exemplo'], ['t2', 'Titular B Exemplo com Nome Comprido']]), new Set([chave(1198, '12345678000190')]), CANDIDATOS, ATRIBUTOS, '2026-11-16', [
     { demo: chave(7891, '01762373000150'), nota: chave(8001, '01762373000231'), tipo: 'compra', por: 'item' },
     { demo: chave(7878, '01762373000150'), nota: chave(7880, '01762373000150'), tipo: 'retorno', por: 'cita' },
-  ]),
+  ], IGNORADAS),
   titulares: [{ id: 't1', nome: 'Produtora Exemplo' }, { id: 't2', nome: 'Titular B Exemplo com Nome Comprido' }],
   ultimaBusca: '2026-11-16T22:46:13Z', proximaBusca: '2026-11-16T23:46:13Z',
 };
@@ -99,10 +104,14 @@ const curtas: LinhaRecebida[] = [
   L(78728, 'Agro Sul', '00196816000110', 15, 25990, 'resumo'),
   L(1226616, 'Pet Vet', '11222333000144', 12, 9850, 'xml'),
   L(4512, 'Casa Rural', '22333444000155', 8, 120000, 'xml'),
+  /* NOTA-IGNORAR-01 — o caso da Vera: a compra pessoal de R$ 1,18 ignorada e a nova do mesmo emitente (sugestão) */
+  L(1226620, 'Pet Vet', '11222333000144', 14, 118, 'ignorado'),
 ];
+const IGNORADAS_CURTA = lerIgnoradas([{ chave: chave(1226620, '11222333000144'), motivo: 'pessoal', em: '2026-11-14T14:52:00Z', por: 'Vera',
+  texto: null, emitente_documento: '11222333000144' }]);
 export const DADOS_RECEITA_CURTA: DadosDaReceita = {
   lista: montarLista(curtas, new Map([['t1', 'Vera'], ['t2', 'Vera']]), new Set([chave(4512, '22333444000155')]), new Map(),
-    new Map([[chave(1226616, '11222333000144'), VENDA([D(1, '2026-12-01', 9850)])]]), '2026-11-16'),
+    new Map([[chave(1226616, '11222333000144'), VENDA([D(1, '2026-12-01', 9850)])]]), '2026-11-16', [], IGNORADAS_CURTA),
   titulares: [{ id: 't1', nome: 'Vera' }],
   ultimaBusca: '2026-11-16T22:46:13Z', proximaBusca: '2026-11-16T23:46:13Z',
 };
