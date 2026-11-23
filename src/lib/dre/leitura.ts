@@ -249,6 +249,15 @@ export function colunaMedia(colunas: readonly DrePecLinhas[]): { linhas: DrePecL
   };
 }
 
+/* ══════════════ A DIFERENÇA DE UMA LINHA (DRE-PAINEL-03, Gabriel 23/11 09:34) ══════════════ */
+
+/**
+ * Δ de uma linha = atual − comparada; "—" (null) se um dos lados é ausência. ⚠ UMA CONTA SÓ: a coluna Δ da grade (`valorNaColuna`, PecDrePanel)
+ * e os passos da ponte leem daqui — o passo da ponte é a diferença da MESMA linha da tabela, nunca um 2º cálculo.
+ */
+export const deltaDaLinha = (atual: number | null | undefined, comparada: number | null | undefined): number | null =>
+  (atual == null || comparada == null ? null : atual - comparada);
+
 /* ══════════════ A PONTE DO LUCRO OPERACIONAL ══════════════ */
 
 export type ChaveDegrau = 'receita_liquida' | 'vpb_operacional' | 'reposicao' | 'custo_variavel' | 'custo_fixo' | 'rateio_adm';
@@ -300,9 +309,8 @@ export function ponteDoLucroOperacional(base: DrePecLinhas | null, atual: DrePec
   const inicio = cent(base.resultado_operacional);
   const fim = cent(atual.resultado_operacional);
   const efeitos = DEGRAUS.map(d => {
-    const b = valorDaChave(base, d.chave);
-    const a = valorDaChave(atual, d.chave);
-    return b == null || a == null ? null : cent(d.sinal * (a - b));
+    const delta = deltaDaLinha(valorDaChave(atual, d.chave), valorDaChave(base, d.chave));
+    return delta == null ? null : cent(d.sinal * delta);
   });
   const conhecidos = efeitos.filter((e): e is number => e != null);
   const resto = fim - inicio - conhecidos.reduce((s, e) => s + e, 0);
@@ -324,6 +332,76 @@ export function ponteDoLucroOperacional(base: DrePecLinhas | null, atual: DrePec
       return { chave: d.chave, rotulo: d.rotulo, efeito: e == null ? null : e / 100 + 0 }; // + 0: nunca −0
     }),
   };
+}
+
+/* ══════════════ A PONTE EM LISTA — DRE-PAINEL-02 (2), Gabriel 23/11 07:41 ══════════════ */
+
+/** O nome do passo na lista (o fato diz se a LINHA ficou maior ou menor; o efeito no lucro vem com sinal). */
+const NOME_DO_PASSO: Record<ChaveDegrau, string> = {
+  receita_liquida: 'Receita', vpb_operacional: 'Produção', reposicao: 'Reposição',
+  custo_variavel: 'Custo variável', custo_fixo: 'Custo fixo', rateio_adm: 'Rateio',
+};
+
+/** `total` = o lucro de uma ponta (navy) · `ajuda` = verde · `tira` = vermelho · `neutro` = efeito zero · `sem` = "—" (a Meta sem produção). */
+export type TomDaPonte = 'total' | 'ajuda' | 'tira' | 'neutro' | 'sem';
+
+export interface LinhaDaPonte {
+  chave: ChaveDegrau | 'inicio' | 'fim';
+  /** "Lucro operacional out/25" · "Custo variável menor (−8%)" · "Produção: sem meta". */
+  rotulo: string;
+  /** O lucro (nas pontas) ou o EFEITO NO LUCRO (nos passos), em R$. `null` = "—". */
+  valor: number | null;
+  /** "4,52" · "+0,45" · "−0,20" · "—" — em R$ mi com 2 casas; o passo sempre com sinal. */
+  texto: string;
+  tom: TomDaPonte;
+  /** O valor inteiro em R$ (o `title`). */
+  titulo: string;
+}
+
+const emMi = (v: number) => formatNum(Math.abs(v) / 1_000_000, 2);
+const rsInteiro = (v: number) => `R$ ${v < 0 ? MENOS : ''}${formatNum(Math.abs(v), 2)}`;
+
+/**
+ * AS LINHAS DA PONTE: o lucro de `rotuloBase`, os seis passos e o lucro de `rotuloAtual`.
+ *
+ * ⚠ O FATO É DA LINHA, A COR É DO LUCRO: "Custo variável menor" é verde (tirou menos do lucro) e "Receita menor" é vermelha. O
+ *   percentual é o da linha contra a comparação (Δ ÷ |base|); sem base (zero) não há percentual. Linha igual ao centavo = "igual", cinza.
+ * ⚠ OS NÚMEROS SÃO OS DA `ponteDoLucroOperacional` (que fecha ao centavo); aqui só se nomeiam e se formatam.
+ */
+export function linhasDaPonte(base: DrePecLinhas, atual: DrePecLinhas, ponte: Ponte, rotuloBase: string, rotuloAtual: string,
+  comparacao: Comparacao = 'ano_anterior'): LinhaDaPonte[] {
+  /* DRE-PAINEL-03 (09:34): contra a Meta, as pontas são "Lucro da meta" e "Lucro realizado" e o fato é "acima/abaixo da meta" */
+  const contraMeta = comparacao === 'meta';
+  const ponta = (chave: 'inicio' | 'fim', rotulo: string, v: number): LinhaDaPonte => ({
+    chave, rotulo: contraMeta ? (chave === 'inicio' ? 'Lucro da meta' : 'Lucro realizado') : `Lucro operacional ${rotulo}`,
+    valor: v, texto: `${v < 0 ? MENOS : ''}${emMi(v)}`, tom: 'total', titulo: rsInteiro(v),
+  });
+  const passos = ponte.degraus.map((d): LinhaDaPonte => {
+    const nome = NOME_DO_PASSO[d.chave];
+    if (d.efeito == null) {
+      /* ⚠ A LINHA É "—" NA GRADE (a Meta não tem produção), mas o passo CARREGA o que os conhecidos não explicam: assim os passos somam
+         lucro do período − lucro comparado nas três comparações (o teste prova). Cinza, nunca verde/vermelho: não é um fato da linha. */
+      const r = ponte.semExplicacao;
+      return { chave: d.chave, rotulo: `${nome}: sem meta`, valor: r, texto: cent(r) === 0 ? emMi(0) : `${r < 0 ? MENOS : '+'}${emMi(r)}`, tom: 'sem',
+        titulo: `A Meta não tem ${nome.toLowerCase()}: ${rsInteiro(r)} que os passos conhecidos não explicam (a linha é "—" na grade)` };
+    }
+    const b = valorDaChave(base, d.chave);
+    const a = valorDaChave(atual, d.chave);
+    const dl = deltaDaLinha(a, b);
+    const delta = dl == null ? 0 : cent(dl);
+    const pct = a == null || b == null ? null : variacaoNoAno(a, b);
+    const fato = delta === 0 ? (contraMeta ? 'igual à meta' : 'igual')
+      : contraMeta ? (delta > 0 ? 'acima da meta' : 'abaixo da meta') : delta > 0 ? 'maior' : 'menor';
+    /* o % da casa (`pctCurto`: "8%", "23,5%"), o MESMO da leitura logo abaixo — nunca dois números para o mesmo fato no painel */
+    const rotulo = delta !== 0 && pct != null ? `${nome} ${fato} (${pctComSinal(pct)})` : `${nome} ${fato}`;
+    const e = cent(d.efeito);
+    return {
+      chave: d.chave, rotulo, valor: d.efeito, texto: e === 0 ? emMi(0) : `${e < 0 ? MENOS : '+'}${emMi(d.efeito)}`,
+      tom: e > 0 ? 'ajuda' : e < 0 ? 'tira' : 'neutro',
+      titulo: `Efeito no lucro operacional: ${e < 0 ? MENOS : '+'}R$ ${formatNum(Math.abs(d.efeito), 2)}`,
+    };
+  });
+  return [ponta('inicio', rotuloBase, ponte.inicio), ...passos, ponta('fim', rotuloAtual, ponte.fim)];
 }
 
 function valorDaChave(l: DrePecLinhas, c: ChaveDegrau): number | null {
@@ -356,15 +434,26 @@ const porHa = (v: number | null | undefined, l: DrePecLinhas | null): number | n
   return v == null || ha == null || !(ha > 0) ? null : v / ha;
 };
 
-export interface IndicadorNoMes { valor: number | null; delta: number | null }
+export interface IndicadorNoMes {
+  /** R$/ha do período (÷ a área da própria coluna). */
+  valor: number | null;
+  /** Δ R$/ha contra a comparação. */
+  delta: number | null;
+  /** DRE-PAINEL-03b (Gabriel 16:30): o R$ do período, absoluto — a MESMA linha da grade (a soma composta do custo, `indicadoresDoAno`). */
+  total: number | null;
+  /** DRE-PAINEL-03b: Δ % do R$ contra a coluna comparada — a conta do Δ % da grade (Δ ÷ |comparada|); comparada zero ou "—" = "—". */
+  pct: number | null;
+}
 export interface NoMes { lucroOpHa: IndicadorNoMes; resEconHa: IndicadorNoMes; custoTotalHa: IndicadorNoMes }
 
-/** O bloco "No mês" do painel: cada um ÷ a área DA PRÓPRIA coluna, e o Δ/ha é a diferença dos dois por ha. */
+/** O bloco "No mês" do painel: o R$, o R$/ha (÷ a área DA PRÓPRIA coluna), o Δ/ha e o Δ % do R$ contra a comparação. */
 export function noMes(base: DrePecLinhas | null, atual: DrePecLinhas): NoMes {
   const par = (f: (l: DrePecLinhas) => number | null): IndicadorNoMes => {
-    const a = porHa(f(atual), atual);
-    const b = base ? porHa(f(base), base) : null;
-    return { valor: a, delta: a == null || b == null ? null : a - b };
+    const total = f(atual);
+    const totalBase = base ? f(base) : null;
+    const a = porHa(total, atual);
+    const b = base ? porHa(totalBase, base) : null;
+    return { valor: a, delta: a == null || b == null ? null : a - b, total, pct: variacaoNoAno(total, totalBase) };
   };
   return {
     lucroOpHa: par(l => l.resultado_operacional),
@@ -436,7 +525,15 @@ export interface EntradaLeituraDoMes {
   rotuloBase: string;
   /** Notas da Receita em "A lançar" emitidas no mês (D5) — fonte própria, citada na frase. */
   notasALancar?: number | null;
+  /** DRE-PAINEL-02 (3): a tela com mais de um mês diz "no período" nas frases; o padrão é o mês. */
+  horizonte?: Horizonte;
 }
+
+/** DRE-PAINEL-02 (3): UM mês na tela = "mês"; mais de um = "período". O painel e a leitura usam a mesma palavra. */
+export type Horizonte = 'mes' | 'periodo';
+export const horizonteDe = (de: string, ate: string): Horizonte => (de === ate ? 'mes' : 'periodo');
+const noHorizonte = (h: Horizonte | undefined) => (h === 'periodo' ? 'no período' : 'no mês');
+const nesteHorizonte = (h: Horizonte | undefined) => (h === 'periodo' ? 'neste período' : 'neste mês');
 
 /** ⚠ ANOMALIA só com |Δ| ≥ R$ 10 mil: um centavo que troca de sinal não é "!". */
 function anomaliaDe(base: number, atual: number): 'zerado' | 'sinal' | null {
@@ -470,6 +567,7 @@ function topCentros(base: DrePecLinhas | null, atual: DrePecLinhas, bloco: strin
 export function leituraDoMes(e: EntradaLeituraDoMes): ItemLeitura[] {
   const { base, atual, rotuloBase } = e;
   if (!base) return [];
+  const noH = noHorizonte(e.horizonte);
   const contraMeta = e.comparacao === 'meta';
   const itens: ItemLeitura[] = [];
 
@@ -483,7 +581,7 @@ export function leituraDoMes(e: EntradaLeituraDoMes): ItemLeitura[] {
           : `Vendas ${pctCurto(d.pct)} ${maiorOuMenor(d.delta, false)}`;
       const frase = `${rsCurto(atual.vendas)} contra ${rsCurto(base.vendas)} em ${rotuloBase}. `
         /* D-B3: o lado sem venda diz "sem venda", nunca "— a R$ —/@" */
-        + (atual.vendas === 0 ? 'Nenhuma venda no mês' : `${arrobas(atual.producao.at_vendida)} vendidas a ${rsArroba(rsPorArrobaVendida(atual))}`)
+        + (atual.vendas === 0 ? `Nenhuma venda ${noH}` : `${arrobas(atual.producao.at_vendida)} vendidas a ${rsArroba(rsPorArrobaVendida(atual))}`)
         + (base.vendas === 0 ? `; ${rotuloBase} sem venda.` : `, contra ${arrobas(base.producao.at_vendida)} a ${rsArroba(rsPorArrobaVendida(base))}.`);
       itens.push({ id: 'vendas', titulo, frase, efeito: d.delta, anomalia: an != null, destino: { tipo: 'abates' } });
     }
@@ -499,7 +597,7 @@ export function leituraDoMes(e: EntradaLeituraDoMes): ItemLeitura[] {
         id: 'vpb_operacional',
         titulo: `Variação por produção ${d.delta > 0 ? 'subiu' : 'caiu'} R$ ${curto(d.delta)}`,
         frase: `${rsCurto(atual.vpb_operacional)} contra ${rsCurto(base.vpb_operacional)} em ${rotuloBase}. `
-          + `Composição ${pctComSinal(cm.composicao)} e mercado ${pctComSinal(cm.mercado)} no mês.`,
+          + `Composição ${pctComSinal(cm.composicao)} e mercado ${pctComSinal(cm.mercado)} ${noH}.`,
         efeito: d.delta, anomalia: an != null, destino: { tipo: 'valor_rebanho' },
       });
     }
@@ -539,7 +637,7 @@ export function leituraDoMes(e: EntradaLeituraDoMes): ItemLeitura[] {
       itens.push({
         id: 'juros',
         titulo: an === 'zerado' ? 'Despesas financeiras zeradas' : 'Despesas financeiras com sinal trocado',
-        frase: `Era ${rsCurto(base.juros)} em ${rotuloBase}. Estimativa sem base neste mês?`,
+        frase: `Era ${rsCurto(base.juros)} em ${rotuloBase}. Estimativa sem base ${nesteHorizonte(e.horizonte)}?`,
         efeito: 0, anomalia: true, destino: { tipo: 'linha_dre', chave: 'juros' },
       });
     }
