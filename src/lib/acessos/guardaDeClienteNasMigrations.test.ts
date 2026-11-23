@@ -45,6 +45,11 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
          `_fn_entrada_ignorar(ids, …)`, que tem a guarda pelo cliente DAS LINHAS (todas do mesmo cliente + tenant_ok, 42501) e nasce
          fechada a authenticated — presa por dentro abaixo. A chamada da interna e' a guarda delas. */
       || /(?<!function\s+public\.)_fn_entrada_ignorar\s*\(/i.test(p)
+      /* FOLHA-01 (118370): a guarda da folha e' `folha_ok(cliente)` (admin, ou tenant_ok + acesso 'folha' ativo: mais estreita que o
+         tenant_ok) e a interna `_fn_folha_exigir(cliente)` (42501 sem ela), com as duas que acham o cliente pela linha
+         (`_fn_folha_funcionario`, `_fn_folha_da_folha`) — todas presas por dentro abaixo */
+      || /(?<!function\s+public\.)\bfolha_ok\s*\(/i.test(p)
+      || /(?<!function\s+public\.)_fn_folha_(exigir|funcionario|da_folha)\s*\(/i.test(p)
       /* FIN-REGRA-MODAL-02 (114280): `_fn_fazenda_citada(cliente, texto, plano)` e' INTERNA da `fn_lancamentos_regra_fazenda_pendentes` (que
          tem tenant_ok + 42501): so' devolve um id de fazenda e nasce fechada a public/anon/authenticated — presa abaixo */
       || (nome === 'public._fn_fazenda_citada' && /returns\s+uuid/i.test(p)
@@ -235,6 +240,40 @@ describe('guarda de cliente nas migrations novas', () => {
     expect(sql).toMatch(/revoke all on function public\._fn_entrada_ignorar\(uuid\[\], text, text, boolean\) from public, anon, authenticated;/);
     expect(sql).not.toMatch(/grant execute on function public\._fn_entrada_ignorar/i);
     expect(semGuarda(sql)).toEqual([]);
+  });
+
+  it('a guarda da folha (folha_ok / _fn_folha_exigir) e\' aceita, e ela mesma exige tenant_ok + acesso folha, 42501, fechada (FOLHA-01)', () => {
+    /* o detector: quem chama a guarda passa; quem nao chama reprova */
+    const pelaGuarda = `CREATE FUNCTION public.fn_h(p_cliente uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      begin perform _fn_folha_exigir(p_cliente); return '{}'; end $$;`;
+    const pelaLinha = `CREATE FUNCTION public.fn_g(p_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      declare f record; begin f := public._fn_folha_da_folha(p_id, true); return '{}'; end $$;`;
+    const semGuardaDaFolha = `CREATE FUNCTION public.fn_f(p_cliente uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$ begin return '{}'; end $$;`;
+    expect(semGuarda([pelaGuarda, pelaLinha, semGuardaDaFolha].join('\n'))).toEqual(['public.fn_f']);
+
+    /* o arquivo de verdade: o corpo INTEIRO do folha_ok (um `or true` ou sem o tenant_ok reprova) */
+    const sql = readFileSync(join(DIR, '20261028118370_folha_01_pr_a_banco.sql'), 'utf8');
+    const corpoDe = (inicio: string, fim: string) => { const i = sql.indexOf(inicio); expect(i).toBeGreaterThan(0); return sql.slice(i, sql.indexOf(fim, i)); };
+    const ok = corpoDe('create function public.folha_ok(', '$$;');
+    expect(ok.slice(ok.indexOf('as $$') + 5).replace(/\s+/g, ' ').trim()).toBe(
+      "select public.is_admin_agroinblue((select auth.uid())) or (_cliente is not null and public.tenant_ok(_cliente)"
+      + " and exists (select 1 from public.folha_acessos a where a.cliente_id = _cliente and a.user_id = (select auth.uid())"
+      + " and a.nivel = 'folha' and a.ativo))");
+    const exigir = corpoDe('create function public._fn_folha_exigir(', 'end $$;');
+    expect(exigir).toMatch(/if p_cliente is null or not public\.folha_ok\(p_cliente\) then\s+raise exception '[^']+' using errcode = '42501';/);
+    for (const interna of ['_fn_folha_funcionario', '_fn_folha_da_folha']) {
+      const c = corpoDe(`create function public.${interna}(`, 'end $$;');
+      expect(c).toMatch(/if not found then raise exception '[^']+' using errcode = '42501'; end if;\s+perform public\._fn_folha_exigir\(f\.cliente_id\);/);
+    }
+    expect(sql).toMatch(/revoke all on function public\._fn_folha_exigir\(uuid\) from public, anon, authenticated;/);
+    expect(sql).toMatch(/revoke all on function public\._fn_folha_funcionario\(uuid\) from public, anon, authenticated;/);
+    expect(sql).toMatch(/revoke all on function public\._fn_folha_da_folha\(uuid, boolean\) from public, anon, authenticated;/);
+    expect(sql).not.toMatch(/grant execute on function public\._fn_folha_(exigir|funcionario|da_folha)/i);
+    /* as migrations da folha ficam sem nenhuma exposta sem guarda */
+    for (const f of ['20261028118370_folha_01_pr_a_banco.sql', '20261028118400_folha_01_v1_funcionario_no_lancamento.sql',
+      '20261028118420_folha_01_pr_b_ficha_documentos_pendencias.sql', '20261028118430_folha_01_pr_c_folha_do_mes_recibos_ferias.sql']) {
+      expect(semGuarda(readFileSync(join(DIR, f), 'utf8'))).toEqual([]);
+    }
   });
 
   it('nenhuma migration nova tem funcao SECURITY DEFINER com parametro de cliente sem guarda', () => {
