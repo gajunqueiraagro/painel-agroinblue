@@ -192,6 +192,11 @@ export interface ImportacaoDaConta {
   meses: string[];
   /** O registro da importação está cancelado — `cancelado_em` OU o legado `cancelada_em`. */
   canceladaNoRegistro: boolean;
+  /** CONC-PAINEL-ARQUIVOS-01 — o tipo gravado (OFX, CSV, OPEN_FINANCE; nulo na planilha antiga) e a data do saldo que o banco declarou */
+  tipoArquivo?: string | null;
+  saldoDeclaradoData?: string | null;
+  /** CONC-PAINEL-ARQUIVOS-01 (b, lote 115620) — o original no `fin-documentos`; nulo = importado antes (o original não foi guardado) */
+  arquivoCaminho?: string | null;
 }
 
 /**
@@ -246,7 +251,7 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
       const ids = Array.from(new Set(linhas.map(l => l.importacao_id)));
       const [{ data: imps }, { data: vinc }] = await Promise.all([
         supabase.from('financeiro_importacoes_v2')
-          .select('id, nome_arquivo, created_at, cancelado_em, cancelada_em').in('id', ids),
+          .select('id, nome_arquivo, created_at, cancelado_em, cancelada_em, tipo_arquivo, saldo_declarado_data, arquivo_caminho').in('id', ids),
         /* ⚠ `tipo_aprovacao` ENTROU NO SELECT — [CONCIL-MES-01] (130). O card contava
            quantos movimentos do arquivo têm vínculo, mas não DE ONDE o vínculo veio; e o
            "Conciliar o mês" produz dois tipos distintos, `ofx_cru` (lançamento novo) e
@@ -304,6 +309,9 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
           ? porImp[i.id]?.desfeitaEm ?? null : null,
         meses: [...(mesesPorImp.get(i.id) ?? [])].sort(),
         canceladaNoRegistro: i.cancelado_em != null || i.cancelada_em != null,
+        tipoArquivo: i.tipo_arquivo ?? null,
+        saldoDeclaradoData: i.saldo_declarado_data ?? null,
+        arquivoCaminho: i.arquivo_caminho ?? null,
       })).sort((a, b) => b.data.localeCompare(a.data)));
     } finally {
       setLoading(false);
