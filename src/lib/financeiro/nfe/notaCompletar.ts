@@ -182,6 +182,17 @@ export function pedidoDeCompletar(alvos: readonly AlvoDaPrevia[], todas: Valores
 export const chaveDaCelula = (id: string, c: ColunaCompletar) => `${id}:${c}`;
 
 /* ── a resposta do banco ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+/** DA-NOTA-ETAPAS-01 (etapa 4 Confirmar) — os campos que a prévia do banco MUDA em alguma parcela, na ordem do Financeiro, pelo nome curto
+ *  ("Fornecedor · NF · Competência"); cada um uma vez só. */
+const ROTULO_DO_CAMPO: Partial<Record<CampoCompletar, string>> = {
+  data_competencia: 'Competência', data_vencimento: 'Vencimento', descricao: 'Descrição', favorecido_id: 'Fornecedor', fazenda_id: 'Fazenda',
+  plano_conta_id: 'Subcentro', safra_id: 'Safra', conta_bancaria_id: 'Conta', numero_documento: 'NF', valor: 'Valor',
+};
+const ORDEM_DOS_CAMPOS: readonly CampoCompletar[] = ['data_competencia', 'data_vencimento', 'descricao', 'favorecido_id', 'fazenda_id', 'plano_conta_id', 'safra_id',
+  'conta_bancaria_id', 'numero_documento', 'valor'];
+export function camposQueMudam(linhas: readonly LinhaDaPrevia[]): string[] {
+  return ORDEM_DOS_CAMPOS.filter((c) => linhas.some((l) => l.campos[c]?.muda)).flatMap((c) => { const r = ROTULO_DO_CAMPO[c]; return r ? [r] : []; });
+}
 export interface CampoDaPrevia { hoje: unknown; fica: unknown; muda: boolean; hojeNome: string | null; ficaNome: string | null; cadeado: string | null }
 export interface LinhaDaPrevia { id: string; descricao: string | null; situacao: 'conciliada' | 'realizada' | 'programada'; parcelaN: number | null;
   campos: Partial<Record<CampoCompletar, CampoDaPrevia>> }

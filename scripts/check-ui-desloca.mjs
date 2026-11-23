@@ -785,7 +785,7 @@ const CENARIOS = [
   /* Caso 3 (Gabriel 29/10 11:33) — a nota no cartão em 10: responder a posição (pela descrição) desenha as 10 linhas DENTRO do quadro; a barra das
      abas, o Resultado e o rodapé não andam */
   { nome: 'nota-pdf-m2', url: 'tela=nota-pdf&v=m2', antes: async (p) => {
-    await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await espera(p, 400);
+    await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await espera(p, 400);
   }, estados: [
     ['posição pela descrição', clicar('[data-testid="nota-cartao-pergunta"] button:has-text("pela descrição")')],
   ] },
@@ -828,11 +828,11 @@ const CENARIOS = [
      (duplica)" no ⋯ não movem a barra das abas nem o rodapé (o conteúdo troca dentro do corpo) */
   { nome: 'nota-pdf-caminhos', url: 'tela=nota-pdf&v=diferenca', antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await espera(p, 300); },
     estados: [
-    ['aba Parcelas × sistema', clicar('[data-testid="nota-abas-ja"] button:has-text("Parcelas × sistema")')],
-    ['aba Lançamento', clicar('[data-testid="nota-abas-ja"] button:has-text("Lançamento")')],
+    ['etapa O que já existe', clicar('[data-testid="nota-abas-ja"] button:has-text("O que já existe")')],
+    ['etapa Confirmar', clicar('[data-testid="nota-abas-ja"] button:has-text("Confirmar")')],
     ['aba Como vai ficar', clicar('[data-testid="nota-abas-ja"] button:has-text("Como vai ficar")')],
     ['atualizar as nao pagas', noLugar('[data-testid="nota-atualizar-nao-pagas"] button')],
-    ['aba Itens', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens (")')],
+    ['etapa Itens da nota', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens da nota")')],
     /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
   ] },
   /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */

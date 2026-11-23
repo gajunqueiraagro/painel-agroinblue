@@ -706,6 +706,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const camadas = useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>();
   /* FIN-REGRA-MODAL-02 (a) — a linha do modal "Fazenda fora da regra da conta" abre o Editar lançamento POR CIMA ('lanc' sobre 'regra'); salvou = volta 'salvou' */
   const salvouPorCimaDaRegra = useRef(false);
+  /* DA-NOTA-ETAPAS-01 (NAV-VOLTA-ORIGEM-01) — o Editar/Novo lançamento aberto a partir do "+ Da nota" fica POR CIMA da nota ('lanc' sobre 'nota'):
+     fechar sem salvar volta à MESMA nota (a mesma etapa); salvar fecha a nota também e volta a quem a abriu (a lista, a Receita) */
+  const lancSobreANota = useRef(false);
   const abrirLancamentoDaRegra = async (id: string) => {
     const obj = await hook.buscarLancamentoPorId(id);
     if (!obj) { toast.error('Não consegui abrir o lançamento. Tente de novo.'); return; }
@@ -3366,7 +3369,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         onClose={() => {
           const idAberto = editingLanc?.id ?? null;
           setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); onCloseDialog?.();
-          if (camadas.aberta('lanc')) { camadas.fechar('lanc', salvouPorCimaDaRegra.current ? 'salvou' : 'fechou', idAberto); salvouPorCimaDaRegra.current = false; }
+          const salvou = salvouPorCimaDaRegra.current;
+          if (camadas.aberta('lanc')) { camadas.fechar('lanc', salvou ? 'salvou' : 'fechou', idAberto); salvouPorCimaDaRegra.current = false; }
+          if (lancSobreANota.current) {
+            lancSobreANota.current = false;
+            if (salvou) {
+              setNotaAberta(null); camadas.fechar('nota', 'salvou', idAberto);
+              if (vinculoDaReceita.current || camadas.aberta('receita')) { vinculoDaReceita.current = false; void receita.refetch(); }
+            }
+          }
         }}
         onSave={async (form, id, onErroDeCampo) => {
           const r = await handleSave(form, id, onErroDeCampo);
@@ -3450,6 +3461,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       )}
 
       {notaAberta && clienteAtual?.id && (
+        <Camada coberta={camadas.coberta('nota')}>
         <NotaFiscalDialog
           open
           onClose={() => { setNotaAberta(null); camadas.fechar('nota'); if (vinculoDaReceita.current) { vinculoDaReceita.current = false; void receita.refetch(); } }}
@@ -3465,9 +3477,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           safras={hook.safras}
           onCriarLancamento={async (form) => { const r = await handleSave(form); return typeof r === 'string' ? r : null; }}
           onAbrirNoLancamento={(prefill) => {
-            /* NADA ESCOLHIDO NO MODAL SE PERDE: o Novo lancamento abre com a nota E as escolhas */
+            /* NADA ESCOLHIDO NO MODAL SE PERDE: o Novo lancamento abre com a nota E as escolhas — e POR CIMA dela (DA-NOTA-ETAPAS-01: a nota
+               não fecha; fechar o lançamento sem salvar volta a ela) */
             const linha = notaAberta.linhaId;
-            setNotaAberta(null); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(prefill); setLinhaXmlAberta(linha); setDialogOpen(true);
+            if (!camadas.aberta('nota')) camadas.abrir('nota', camadas.pilha[camadas.pilha.length - 1] ?? null);
+            camadas.abrir('lanc', 'nota'); lancSobreANota.current = true; salvouPorCimaDaRegra.current = false;
+            setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(prefill); setLinhaXmlAberta(linha); setDialogOpen(true);
           }}
           onAbrirRegistrada={abrirOcorrenciaDaNota}
           onCriado={() => {
@@ -3477,6 +3492,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             setLinhasXmlLancadas((antes) => new Set([...antes, linha]));
           }}
         />
+        </Camada>
       )}
 
       {criarOCDe && clienteAtual?.id && (

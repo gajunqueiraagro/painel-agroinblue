@@ -65,6 +65,8 @@ import { Lock } from 'lucide-react';
 import { ItensDaNota } from './ItensDaNota';
 import { ContasDosItens } from './ContasDosItens';
 import { VisualizadorDeDocumento } from './VisualizadorDeDocumento';
+import { BarraDeEtapas, ResumoDoConfirmar, type CartaoDoConfirmar, type ChecagemDoConfirmar, type EtapaDaNota } from './EtapasDaNota';
+import { abrirAbaDoDanfe, mostrarDanfe } from '@/lib/fiscal/abrirDanfe';
 import { useItensDaNotaDaTela } from '@/hooks/useItensDaNota';
 import { dividir, dividirPelosItens, percentuaisDosItens, porContaDosItens } from '@/lib/financeiro/divisaoDaClassificacao';
 import { participacaoDoHistorico, previstosQueAtualizam, valorPelaParticipacao, type PrevistoQueAtualiza } from '@/lib/financeiro/nfe/atualizaPrevisto';
@@ -78,6 +80,10 @@ import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedore
 import { lerNota, type NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
 import { ehSerieAvulsa, type CampoConferido, type CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
 import { avisoDaNatureza } from '@/lib/financeiro/nfe/remessaEntregaFutura';
+import { DICA_DO_MOTIVO, ROTULO_DO_MOTIVO, classeDaNota, ehBemDeTerceiro } from '@/lib/fiscal/classeDaNota';
+import { RegistrarBemDeTerceiro } from '@/components/fiscal/NotasDaReceitaDialog';
+import { registrarBemDeTerceiro } from '@/hooks/useNotasDaReceita';
+import { TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA } from '@/components/ui/regua-tabela';
 import { OutrosLancamentosDaNota, periodoPadrao } from '@/components/financeiro-v2/OutrosLancamentosDaNota';
 import { ORIGEM_FAZENDA_PELO_ENDERECO } from '@/lib/financeiro/nfe/proporLancamento';
 import type { EmitenteNFe, NotaLida } from '@/lib/financeiro/nfe/tipos';
@@ -159,6 +165,20 @@ const TD = 'h-[19px] px-1.5 text-[10px] leading-none truncate';
 const TDN = 'h-[19px] px-1.5 text-right text-[10px] leading-none whitespace-nowrap tabular-nums';
 /* Ajuste 29/10 14:02 (itens 3 e 4) — as tabelas "No sistema hoje" e "Parcelas × sistema": fonte 9 px, linha 17 px (cabeçalho 9 px / 20 px) */
 const TH9 = 'h-[20px] px-1 text-left text-[9px] font-medium text-primary-foreground truncate';
+/** DA-NOTA-ETAPAS-01 — a atividade da conta, curta, para a coluna "Faz.·Ativ." ("ADM · Adm.") */
+const ATIVIDADE_CURTA: Record<string, string> = { pecuaria: 'Pec.', agricultura: 'Lav.', silvicultura: 'Silv.', administrativo: 'Adm.' };
+export const atividadeCurta = (escopo: string | null | undefined): string | null => (escopo ? ATIVIDADE_CURTA[escopo] ?? null : null);
+/** DA-NOTA-ETAPAS-01 — o número da NF só o número ("000.011.300" → "11.300"; CPR-LAYOUT-03 (8)); sem algarismo, como veio */
+export function numeroCurtoDaNf(nf: string): string {
+  const d = nf.replace(/\D/g, '').replace(/^0+/, '');
+  return d ? Number(d).toLocaleString('pt-BR') : nf;
+}
+/** DA-NOTA-ETAPAS-01 — dias entre o vencimento da nota e o pagamento (aaaa-mm-dd); null sem uma das datas */
+export function diasDoPagamento(vencimento: string | null | undefined, pagamento: string | null | undefined): number | null {
+  if (!vencimento || !pagamento) return null;
+  const a = Date.parse(`${vencimento.slice(0, 10)}T00:00:00Z`); const b = Date.parse(`${pagamento.slice(0, 10)}T00:00:00Z`);
+  return Number.isFinite(a) && Number.isFinite(b) ? Math.round((b - a) / 86_400_000) : null;
+}
 const TD9 = 'h-[17px] px-1 text-[9px] leading-none truncate';
 const TDN9 = 'h-[17px] px-1 text-right text-[9px] leading-none whitespace-nowrap tabular-nums';
 const BLOCO = cn(BLOCO_FORMULARIO, 'gap-0');
@@ -232,8 +252,9 @@ export function NotaFiscalDialog({
   const [aba, setAba] = useState<AbaDaNota>('nota');
   /* P163-2 — a aba da nota já lançada (abre em "No sistema hoje": é o que a pessoa confere primeiro) e as que já foram vistas (ganham ✓) */
   /* Gabriel 29/10 10:38 — abre em "No sistema hoje": o que foi achado, COMO ESTÁ (nada escondido) */
-  const [abaJa, setAbaJa] = useState<AbaDaNotaJa>('hoje');
-  const [vistas, setVistas] = useState<ReadonlySet<AbaDaNotaJa>>(new Set<AbaDaNotaJa>(['hoje']));
+  /* DA-NOTA-ETAPAS-01 (Gabriel 19/11) — abre na etapa 1 "O que já existe" (o "No sistema hoje" entrou nela: as colunas do sistema na mesma tabela) */
+  const [abaJa, setAbaJa] = useState<AbaDaNotaJa>('sistema');
+  const [vistas, setVistas] = useState<ReadonlySet<AbaDaNotaJa>>(new Set<AbaDaNotaJa>(['sistema']));
   const irParaAba = (a: AbaDaNotaJa) => { setAbaJa(a); setVistas((v) => new Set(v).add(a)); };
   /* P163-2 (b) — a nota sem itens legíveis (o PDF escaneado; a NF 31776 da Vera): o XML anexado aqui traz os itens (o XML manda sobre o PDF) */
   const [itensDoXml, setItensDoXml] = useState<NotaLida['itens'] | null>(null);
@@ -320,7 +341,7 @@ export function NotaFiscalDialog({
   const [receita, setReceita] = useState<DadosDoCnpj | null>(null);
   const [receitaFrase, setReceitaFrase] = useState<string | null>(null);
   const [completar, setCompletar] = useState<CampoDoEmitente[]>([]);
-  const [ocupado, setOcupado] = useState<null | 'cadastrar' | 'completar' | 'criar' | 'atualizar' | 'juntar' | 'nota-lida'>(null);
+  const [ocupado, setOcupado] = useState<null | 'cadastrar' | 'completar' | 'criar' | 'atualizar' | 'juntar' | 'nota-lida' | 'guardar'>(null);
   /* FIN-NOTA-PDF-01b — lavoura: a safra e a cultura ('' = "Todas (rateia)"; `null` = ainda sem resposta) */
   const [safraId, setSafraId] = useState('');
   const [cultura, setCultura] = useState<string | null>(null);
@@ -341,6 +362,15 @@ export function NotaFiscalDialog({
   /* P128a — os TRES CAMINHOS da nota que ja' esta' no sistema (o recomendado vem marcado) */
   const [caminho, setCaminho] = useState<CaminhoDaNota['id']>('completar');
   const [mesmoAssim, setMesmoAssim] = useState<string | null>(null);
+  /* DA-NOTA-ETAPAS-01 + NOTA NÃO FINANCEIRA (Gabriel 19/11 08:03, a NF 7.891 de demonstração oferecia "Criar Lançamento" de 10.000): a CLASSE
+     da nota é UMA regra (`classeDaNota`, a mesma da lista da Receita); a que não gera lançamento troca o botão principal por "Guardar a nota",
+     oferece "Registrar bem de terceiro" (demonstração, comodato, conserto) e "É uma compra mesmo?" (pede o motivo). */
+  const classe = useMemo(() => classeDaNota({ cfops: n.cfops ?? [], tpNF: n.tipoNota === 'entrada' ? '0' : '1', natOp: n.naturezaOperacao }, false), [n]);
+  const naoFinanceira = classe.classe === 'nao_financeira' ? classe.motivo : null;
+  const [compraMesmo, setCompraMesmo] = useState<string | null>(null);
+  const [pedindoCompra, setPedindoCompra] = useState<string | null>(null);
+  const [bemAberto, setBemAberto] = useState(false);
+  const naoGera = naoFinanceira !== null && compraMesmo === null;
   /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro de HOJE, para mostrar o que a nota muda antes de gravar */
   const [comparar, setComparar] = useState<CadastroParaComparar | null>(null);
 
@@ -830,13 +860,17 @@ export function NotaFiscalDialog({
   const modoJa = !!jaLancada && !bloqueio && caminho !== 'criar';
   /* Ajuste 11 (Gabriel 29/10 14:12) — NADA PISCA: enquanto a busca "nota já lançada" roda, o modal já é o esqueleto da tela NOVA (o mesmo tamanho,
      abas desabilitadas, "procurando no sistema…"), nunca a antiga; achou nada = a nota nova entra depois; achou = a tela se completa no lugar */
-  const procurandoNoSistema = !buscaRespondeu && !registrada && achados === null && !naoVerificado && divergencias.length === 0;
+  /* DA-NOTA-ETAPAS-01 FASE 0 (1) — o PISCA: a busca roda DE NOVO quando a Receita traz a razão social; com `!buscaRespondeu` aqui, a 2ª busca
+     desenhava a TELA ANTIGA (duas colunas, "Parcelas e lançamento") até responder. O esqueleto vale em TODA busca em andamento. */
+  const procurandoNoSistema = !registrada && achados === null && !naoVerificado && divergencias.length === 0;
   /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema não fica nesta tela: vai ao Novo lançamento de sempre (pelo
      "No Novo lançamento", com o que a nota leu), e só o Salvar dele grava. Aberta pelo Editar (porta 2), nunca: criaria a compra em dobro.
      Enquanto passa, o esqueleto fica (nada pisca). */
   const notaNova = !procurandoNoSistema && !verificando && !jaLancada && !bloqueio && !partindoDe;
   const telaJa = modoJa || procurandoNoSistema || notaNova;
-  const mostraEsqueleto = procurandoNoSistema || notaNova;
+  /* a nota NOVA que não gera lançamento fica nesta tela (nunca passa sozinha ao Novo lançamento): o painel e os 3 caminhos */
+  const naoFinanceiraNova = notaNova && naoFinanceira !== null;
+  const mostraEsqueleto = procurandoNoSistema || (notaNova && !naoFinanceiraNova);
   /* o esqueleto troca pela tela final: o foco que estava num elemento que sumiu volta ao MODAL (o teclado nunca fica no corpo da página) */
   const conteudoDoModal = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -846,16 +880,19 @@ export function NotaFiscalDialog({
   }, [procurandoNoSistema]);
   const itensVistos = itensDoXml ?? n.itens;
   const abaArquivo: AbaDaNotaJa = 'arquivo';
-  /* mock da nota já lançada (29/10): Parcelas × sistema · Como vai ficar · Itens · Lançamento (a Nota e o Fornecedor ficam fixos em cima) */
-  /* Gabriel 29/10 10:38 — as abas, nesta ordem: No sistema hoje (N) · Parcelas × sistema · Itens (N) · Como vai ficar · Lançamento */
-  const nomesJa: { valor: AbaDaNotaJa; nome: string }[] = [
-    { valor: 'hoje', nome: `No sistema hoje (${jaLancada?.alvos.length ?? 0})` }, { valor: 'sistema', nome: 'Parcelas × sistema' },
-    { valor: 'itens', nome: `Itens (${itensVistos.length})` }, { valor: 'ficar', nome: 'Como vai ficar' },
-    { valor: 'lancamento', nome: 'Lançamento' }];
-  /* o ✓ da aba vista mora num lugar reservado (10px): nada se desloca ao marcar */
-  const opcoesJa: { valor: AbaDaNotaJa; rotulo: ReactNode }[] = [
-    ...(estreito ? [{ valor: abaArquivo, rotulo: 'Arquivo' }] : []),
-    ...nomesJa.map((o) => ({ valor: o.valor, rotulo: <span className="whitespace-nowrap"><span className="inline-block w-[10px]">{vistas.has(o.valor) && abaJa !== o.valor ? '✓' : ''}</span>{o.nome}</span> })),
+  /* DA-NOTA-ETAPAS-01 (mock v2 aprovado 19/11 07:51) — as 4 ETAPAS: 1 O que já existe · 2 Como vai ficar · 3 Itens da nota · 4 Confirmar; o
+     contador de cada uma à direita. O "Arquivo" saiu (os chips PDF/XML na faixa da nota); o "No sistema hoje" entrou na etapa 1. */
+  const ETAPAS: readonly AbaDaNotaJa[] = ['sistema', 'ficar', 'itens', 'lancamento'];
+  const etapaAtual: AbaDaNotaJa = ETAPAS.includes(abaJa) ? abaJa : 'sistema';
+  const iEtapa = ETAPAS.indexOf(etapaAtual);
+  const nAchados = jaLancada?.alvos.length ?? 0;
+  const nMudam = estadoDaPrevia?.fraseDre ? estadoDaPrevia.mudam.length : null;
+  const textoDoAplicar = rotuloDoAplicar({ vincular: alvosEscolhidos.length - substituidosEscolhidos.length, substituir: substituidosEscolhidos.length, excluir: excluidosEscolhidos.length, criar: nACriar });
+  const etapasDaNota: EtapaDaNota<AbaDaNotaJa>[] = [
+    { valor: 'sistema', nome: 'O que já existe', detalhe: mostraEsqueleto ? '' : `${nAchados} ${nAchados === 1 ? 'achado' : 'achados'}` },
+    { valor: 'ficar', nome: 'Como vai ficar', detalhe: mostraEsqueleto ? '' : nMudam === null ? 'conferindo…' : `${nMudam} ${nMudam === 1 ? 'mudança' : 'mudanças'}` },
+    { valor: 'itens', nome: 'Itens da nota', detalhe: mostraEsqueleto ? '' : `${itensVistos.length} ${itensVistos.length === 1 ? 'item' : 'itens'}` },
+    { valor: 'lancamento', nome: 'Confirmar', detalhe: mostraEsqueleto ? '' : alvosEscolhidos.length + nACriar === 0 ? 'nada a aplicar' : textoDoAplicar.replace(/^Aplicar: /, '') },
   ];
   /* P74 — com o cartão, a conta origem das N é o cartão escolhido */
   const contaEscolhida = como === 'cartao' ? (cartaoId || null) : contaId && contaId !== '__none__' ? contaId : null;
@@ -876,11 +913,34 @@ export function NotaFiscalDialog({
     favorecidoNome: null, plano: null, safraId: null, cultura: null, vencimento: null, observacao });
   const passouAoModal = useRef(false);
   useEffect(() => {
-    if (!notaNova || passouAoModal.current) return;
+    if (!notaNova || passouAoModal.current || naoFinanceira !== null) return;
     passouAoModal.current = true;
     onAbrirNoLancamento(prefillDaNotaLida());
     // eslint-disable-next-line react-hooks/exhaustive-deps -- passa UMA vez, quando a busca diz que a nota não está no sistema
   }, [notaNova]);
+
+  /* NOTA NÃO FINANCEIRA — "Guardar a nota": o documento e os itens pela chave (`gravarItens` → `fn_nota_fiscal_gravar`, o MESMO gravador dos
+     itens); nenhum lançamento. A recusa fica escrita no rodapé (nunca toast de erro). */
+  const guardarANota = async () => {
+    setOcupado('guardar'); setErro(null);
+    try {
+      const e = /^(\d{44}|\d{50})$/.test(soDigitos(n.chave)) ? await gravarItens(clienteId, bytes) : 'sem a chave de acesso a nota não se guarda';
+      if (e) { setErro(`A nota não foi guardada: ${e}`); return; }
+      toast.success(`NF ${numeroFalado(n.numero)} guardada — não gera lançamento (${naoFinanceira ? ROTULO_DO_MOTIVO[naoFinanceira] : 'remessa'}).`);
+      onClose();
+    } finally { setOcupado(null); }
+  };
+  /* "É uma compra mesmo?" — o motivo é obrigatório: na nota nova vai à observação do Novo lançamento (só o Salvar dele grava); na nota já
+     no sistema libera o Aplicar e fica nas checagens do Confirmar */
+  const confirmarCompraMesmo = () => {
+    const m = (pedindoCompra ?? '').trim();
+    if (!m || !naoFinanceira) return;
+    setPedindoCompra(null);
+    if (naoFinanceiraNova) {
+      passouAoModal.current = true;
+      onAbrirNoLancamento(prefillDaNotaLida(`Lançado como compra mesmo sendo nota de ${ROTULO_DO_MOTIVO[naoFinanceira]}: ${m}`));
+    } else setCompraMesmo(m);
+  };
 
   const cadastrar = async () => {
     setOcupado('cadastrar'); setErro(null);
@@ -1083,65 +1143,23 @@ export function NotaFiscalDialog({
   /* Gabriel 29/10 10:38 — "No sistema hoje (N)": cada lançamento achado numa linha, COMO ESTÁ (nada escondido). A fazenda, o subcentro e o
      fornecedor vêm da leitura dos ids (`comoEstaoHoje`); falhou = a frase, nunca "—" calado. O quadro rola por dentro (de lado, estreito). */
   const ordemDosAchados = linhasDaTabela.flatMap((x) => (x.sistema && (jaLancada?.alvos ?? []).some((l) => l.id === x.sistema?.id) ? [x] : []));
-  const quadroDeHoje = jaLancada ? (
-    <section className={cn(BLOCO, 'min-h-0 flex-1')} data-testid="nota-aba-hoje">
-      <TituloDoBloco nome="No sistema hoje" dica="como está cada lançamento achado" />
-      {/* a frase do achado: 2 linhas reservadas (nada se desloca, nada corta), o texto inteiro no title */}
-      <p className="h-[26px] shrink-0 overflow-hidden whitespace-normal text-[10px] leading-[13px] text-foreground" title={fraseAchado} data-testid="nota-hoje-resumo">{fraseAchado}</p>
-      {comoHoje && comoHoje.ok === false && (
-        <p className="h-[14px] shrink-0 text-[10px] text-destructive" data-testid="nota-hoje-falhou">Não consegui ler fazenda, subcentro e fornecedor ({comoHoje.motivo}).</p>
-      )}
-      <div className="min-h-0 flex-1 overflow-auto" data-testid="nota-hoje-rolagem">
-        <table className="w-full min-w-[780px] table-fixed border-collapse">
-          <colgroup><col style={{ width: 36 }} /><col style={{ width: 66 }} /><col style={{ width: 66 }} /><col /><col style={{ width: 92 }} /><col style={{ width: 78 }} />
-            <col style={{ width: 76 }} /><col style={{ width: 86 }} /><col style={{ width: 64 }} /><col style={{ width: 66 }} /><col style={{ width: 82 }} /></colgroup>
-          <thead className="sticky top-0 z-10 bg-primary"><tr>
-            {[['Parc.', ''], ['Venc.', ''], ['Pgto.', ''], ['Descrição', ''], ['Fornecedor', ''], ['Fazenda', ''], ['Conta', ''], ['Subcentro', ''], ['Safra', ''], ['Valor', 'n'], ['Status', '']].map(([h, a]) => (
-              <th key={h} className={cn(TH9, a === 'n' && 'text-right')} title={h}>{h}</th>))}
-          </tr></thead>
-          <tbody>
-            {ordemDosAchados.map((x) => {
-              const l = x.sistema;
-              if (!l) return null;
-              const h = hojeDe(l.id);
-              const lido = !!comoHoje?.ok;
-              const forn = h?.favorecidoId ? fornecedores.find((f) => f.id === h.favorecidoId)?.nome ?? l.fornecedorNome : l.fornecedorNome;
-              /* acerto 1 (29/10) — a fazenda pelo CÓDIGO (PUR, RET), nunca o nome (a regra soberana); o nome só no title */
-              const fazObj = h?.fazendaId ? fazendas.find((f) => f.id === h.fazendaId) : undefined;
-              const faz = fazObj ? (fazObj.codigo || null) : null;
-              const conta = l.contaBancariaId ? contas.find((c) => c.id === l.contaBancariaId) : undefined;
-              const nomeDaConta = conta ? (conta.nome_exibicao || conta.nome_conta) : '—';
-              const semLer = comoHoje === null ? '…' : '—';
-              const sf = h?.safraId ? safras.find((x) => x.id === h.safraId) : undefined;
-              const nomeDaSafra = sf ? (sf.nome || sf.codigo) : null;
-              return (
-                <tr key={l.id} className={cn('border-b border-border/50', l.id === partindoDe && 'font-semibold')} data-testid="nota-hoje-linha">
-                  <td className={cn(TDN9, 'text-left')}>{x.rotulo}</td>
-                  <td className={cn(TDN9, 'text-left')}>{dataInteira(l.vencimento ?? l.competencia)}</td>
-                  <td className={cn(TDN9, 'text-left text-muted-foreground')}>{l.pagamento ? dataInteira(l.pagamento) : '—'}</td>
-                  <td className={TD9} title={l.descricao ?? undefined} data-testid="nota-hoje-descricao">{l.descricao || '—'}</td>
-                  <td className={TD9} title={forn ?? undefined} data-testid="nota-hoje-fornecedor">{forn || '—'}</td>
-                  <td className={TD9} title={fazObj?.nome ?? undefined} data-testid="nota-hoje-fazenda">{lido ? faz ?? '—' : semLer}</td>
-                  <td className={TD9} title={nomeDaConta} data-testid="nota-hoje-conta">{nomeDaConta}</td>
-                  <td className={TD9} title={h?.subcentro ?? undefined} data-testid="nota-hoje-subcentro">{lido ? h?.subcentro ?? '—' : semLer}</td>
-                  <td className={TD9} title={nomeDaSafra ?? undefined} data-testid="nota-hoje-safra">{lido ? nomeDaSafra ?? '—' : semLer}</td>
-                  <td className={TDN9} data-testid="nota-hoje-valor">{reais(l.valorCent)}</td>
-                  <td className={TD9} title={l.conciliado ? 'conciliada com o extrato' : TEXTO_DA_SITUACAO[x.situacao]}>
-                    <span className={CHIP_DA_SITUACAO[x.situacao]} data-testid="nota-hoje-status">{TEXTO_DA_SITUACAO[x.situacao]}</span></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  ) : null;
   /* item 7 (29/10 14:02) — ver a nota: o visualizador em tela cheia, ou o arquivo numa aba nova do navegador (o mesmo arquivo, sem gravar nada) */
   const [vendoNota, setVendoNota] = useState(false);
   const abrirEmNovaAba = () => {
     const url = URL.createObjectURL(new Blob([bytes], { type: lido.origem === 'pdf' ? 'application/pdf' : 'text/xml' }));
     window.open(url, '_blank', 'noopener');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+  /* DA-NOTA-ETAPAS-01 — o chip "PDF": o PDF lido abre no visualizador; com XML, o DANFE GERADO dele (o gerador do Code 1: a aba nasce no clique) */
+  const [erroDoDanfe, setErroDoDanfe] = useState<string | null>(null);
+  const verOPdf = () => {
+    if (lido.origem === 'pdf') { setVendoNota(true); return; }
+    setErroDoDanfe(null);
+    const abaDoDanfe = abrirAbaDoDanfe();
+    void mostrarDanfe(abaDoDanfe, arquivo).catch((e: unknown) => {
+      const m = e instanceof Error && e.message ? e.message : 'Não consegui gerar o DANFE desta nota.';
+      setErroDoDanfe(m); toast.error(m);
+    });
   };
   /* o quadro do ARQUIVO: a coluna da esquerda; na nota já lançada estreita, a aba "Arquivo" */
   const quadroDoArquivo = (
@@ -1205,11 +1223,43 @@ export function NotaFiscalDialog({
                   </section>
   );
 
+  /* DA-NOTA-ETAPAS-01 — a etapa 4 Confirmar: os 4 cartões (do que o Aplicar grava) e as checagens. Só leitura do que a tela já sabe. */
+  const nVincula = alvosEscolhidos.length - substituidosEscolhidos.length;
+  const cartoesDoConfirmar: CartaoDoConfirmar[] = [
+    { chave: 'vincular', rotulo: 'Vincular', valor: `${nVincula} ${nVincula === 1 ? 'lançamento' : 'lançamentos'}`,
+      sub: nVincula === 1 && alvosEscolhidos[0] ? [alvosEscolhidos[0].descricao || '—', reais(alvosEscolhidos[0].valorCent), alvosEscolhidos[0].conciliado ? 'conciliado' : alvosEscolhidos[0].status ?? '—'].join(' · ')
+        : nVincula > 1 ? `${nVincula} parcelas · R$ ${reais(somaDosLigadosCent)}` : 'nenhum' },
+    { chave: 'criar', rotulo: 'Criar', valor: `${nACriar}`, sub: nACriar ? `${nACriar === 1 ? 'a parcela' : 'as parcelas'} que a nota tem e o sistema não` : 'todas as parcelas já existem' },
+    { chave: 'atualizar', rotulo: 'Atualizar', valor: nMudam === null ? '…' : `${nMudam} ${nMudam === 1 ? 'campo' : 'campos'}`,
+      sub: nMudam === null ? 'conferindo com o banco…' : nMudam ? (estadoDaPrevia?.mudam ?? []).join(' · ') : 'nada muda nos lançamentos' },
+    { chave: 'anexar', rotulo: 'Anexar', valor: alvosEscolhidos.length && alvosEscolhidos.every((l) => l.temEstaNota) ? 'já anexada' : '1 documento',
+      sub: `${lido.origem === 'pdf' ? 'PDF' : 'XML'} da NF ${numeroCurtoDaNf(n.numero)}${lido.origem === 'pdf' ? '' : ' (o DANFE sai dele)'}` },
+  ];
+  const pagosEscolhidos = alvosEscolhidos.filter((l) => l.conciliado || l.status === 'realizado');
+  const diasPgto = alvosEscolhidos.length === 1 ? diasDoPagamento(p.duplicatas[0]?.vencimento ?? null, alvosEscolhidos[0].pagamento) : null;
+  const ck = (tipo: ChecagemDoConfirmar['tipo'], texto: string): ChecagemDoConfirmar => ({ tipo, texto });
+  const checagensDoConfirmar: ChecagemDoConfirmar[] = [
+    ...(naoFinanceira ? [compraMesmo
+      ? ck('aviso', `Nota de ${ROTULO_DO_MOTIVO[naoFinanceira]} aplicada como compra: ${compraMesmo}`)
+      : ck('erro', `Nota de ${ROTULO_DO_MOTIVO[naoFinanceira]}: não gera lançamento — Guardar a nota, ou "É uma compra mesmo?" para aplicar`)] : []),
+    ...(estadoDaPrevia?.impedimento ? [ck('erro', estadoDaPrevia.impedimento)] : []),
+    ...(recusaDaCompra ? [ck('erro', porQueDaRecusa ?? recusaDaCompra)] : []),
+    ...(pagosEscolhidos.length ? [ck('ok', `Valor e pagamento não mudam (${pagosEscolhidos.length === 1 ? 'lançamento pago' : `${pagosEscolhidos.length} pagos`}${pagosEscolhidos.some((l) => l.conciliado) ? ' e conciliado' : ''})`)] : []),
+    !estadoDaPrevia?.fraseDre ? ck('aviso', 'DRE: conferindo com o banco…')
+      : estadoDaPrevia.fraseDre === 'DRE: não muda' ? ck('ok', 'DRE não muda') : ck('aviso', estadoDaPrevia.fraseDre),
+    precisaCadastrar ? ck('aviso', 'O fornecedor da nota ainda não tem cadastro: cadastre na faixa de cima (Fornecedor).')
+      : fornecedor && (semDocumento || completar.length) ? ck('aviso', `Cadastro de ${fornecedor.nome}: falta ${semDocumento ? 'o CNPJ' : fraseDoCompletar(completar)} — "Completar" na faixa de cima.`)
+      : ck('ok', `Fornecedor: ${fornecedor?.nome ?? caixaDeTitulo(razaoSocial)}`),
+    ...(diasPgto !== null && diasPgto !== 0 ? [ck('aviso', `Pago ${Math.abs(diasPgto)} ${Math.abs(diasPgto) === 1 ? 'dia' : 'dias'} ${diasPgto > 0 ? 'depois' : 'antes'} do vencimento da nota — só aviso`)] : []),
+  ];
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && !ocupado) onClose(); }}>
       {/* P163-2 — largura = janela − 22px (11px de cada lado, inteiro): com 97vw o modal ficava em meio pixel (750 → 727,5) e a aba Itens o
           fazia saltar 1px */}
-      <DialogContent ref={conteudoDoModal} className="flex h-[min(600px,95vh)] w-[min(1094px,calc(100vw-22px))] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="nota-fiscal">
+      <DialogContent ref={conteudoDoModal} className={cn('flex max-w-none flex-col gap-0 overflow-hidden p-0',
+        /* DA-NOTA-ETAPAS-01 — a nota já no sistema: até 1320 × 820 (as tabelas cabem sem rolar de lado de 1280 a 1920); a nota nova fica como era */
+        telaJa ? 'h-[min(820px,95vh)] w-[min(1320px,calc(100vw-22px))]' : 'h-[min(600px,95vh)] w-[min(1094px,calc(100vw-22px))]')} data-testid="nota-fiscal">
         <div className="flex h-9 shrink-0 items-center gap-2.5 bg-primary px-3.5 pr-10">
           <DialogTitle className="text-[13px] font-semibold leading-none text-primary-foreground">Novo lançamento · da nota fiscal</DialogTitle>
           {!estreito && !telaJa && <span className="text-[11px] text-primary-foreground/80">{lido.origem === 'pdf' ? 'PDF lido' : 'XML lido'} · confira antes de criar</span>}
@@ -1218,7 +1268,7 @@ export function NotaFiscalDialog({
               título (não gastam altura) */}
           {/* mock da nota já lançada (29/10): as abas descem para o corpo, embaixo da Nota e do Fornecedor; aqui só a frase */}
           {telaJa ? (!estreito && (
-            <span className="text-[11px] text-primary-foreground/80" data-testid="nota-cabecalho-ja">{lido.origem === 'pdf' ? 'PDF lido' : 'XML lido'} · {mostraEsqueleto ? 'procurando no sistema…' : 'nota já no sistema · confira'}</span>
+            <span className="text-[11px] text-primary-foreground/80" data-testid="nota-cabecalho-ja">{lido.origem === 'pdf' ? 'PDF lido' : 'XML lido'} · {mostraEsqueleto ? 'procurando no sistema…' : naoFinanceiraNova && naoFinanceira ? `não gera lançamento · ${ROTULO_DO_MOTIVO[naoFinanceira]}` : 'nota já no sistema · confira em 4 etapas'}</span>
           )) : estreito && (
             <span className="ml-auto rounded-md bg-card" data-testid="nota-abas">
               <Segmentado<AbaDaNota> altura={22} valor={aba} onEscolher={setAba}
@@ -1228,16 +1278,16 @@ export function NotaFiscalDialog({
         </div>
 
         {/* P163-2 — na nota já lançada as abas trocam o corpo inteiro (de propósito): o gate de deslocamento mede a barra e o rodapé */}
-        <div className="grid min-h-0 flex-1 gap-2 bg-muted p-2" data-desloca-livre={telaJa ? '' : undefined} style={{ gridTemplateColumns: estreito ? 'minmax(0, 1fr)' : telaJa ? 'minmax(150px, 16%) minmax(0, 1fr)' : 'minmax(160px, 28%) minmax(0, 1fr)' }}>
+        <div className="grid min-h-0 flex-1 gap-2 bg-muted p-2" data-desloca-livre={telaJa ? '' : undefined} style={{ gridTemplateColumns: estreito || telaJa ? 'minmax(0, 1fr)' : 'minmax(160px, 28%) minmax(0, 1fr)' }}>
           {/* ── ARQUIVO ─── (na nota já lançada estreita, ele é a aba "Arquivo") */}
-          {(telaJa ? !estreito : (!estreito || aba === 'arquivo')) && quadroDoArquivo}
+          {!telaJa && (!estreito || aba === 'arquivo') && quadroDoArquivo}
 
           {(telaJa || !estreito || aba !== 'arquivo') && (
           <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
             {/* Ajuste 29/10 14:02 (item 2) — Nota (40%) e Fornecedor (60%) LADO A LADO, numa faixa de altura FIXA, cada um com 2 linhas no máximo e o
                 rótulo colado ao valor; a razão social inteira ou "…" + title (nunca empurra as abas) */}
             {telaJa && (<>
-            <div className="grid h-[66px] shrink-0 gap-1.5" style={{ gridTemplateColumns: estreito ? 'minmax(0, 7fr) minmax(0, 13fr)' : 'minmax(0, 2fr) minmax(0, 3fr)' }} data-testid="nota-faixa-nota-fornecedor">
+            <div className="grid h-[66px] shrink-0 gap-1.5" style={{ gridTemplateColumns: estreito ? 'minmax(0, 7fr) minmax(0, 13fr) 196px' : 'minmax(0, 2fr) minmax(0, 3fr) 196px' }} data-testid="nota-faixa-nota-fornecedor">
             {/* a conferência de regressão (29/10): o que a Nota da tela antiga mostrava e não cabe nas 2 linhas — natureza, desconto, destinatário e
                 dados adicionais — fica no title do bloco; o aviso da REMESSA (NOTA-AVULSA-890) é um selo âmbar; pela chave, emissão e valor são CAMPOS */}
             <section className={cn(BLOCO, 'min-h-0 overflow-hidden')} data-testid="nota-bloco-nota"
@@ -1328,17 +1378,41 @@ export function NotaFiscalDialog({
                 </div>
               </div>
             </section>
+            {/* DA-NOTA-ETAPAS-01 FASE 0 (2) — a coluna "Arquivo" virou 2 chips: o PDF (o lido, ou o DANFE GERADO do XML pelo gerador do Code 1,
+                `abrirDanfe`: um gerador só) e o XML ("Itens" leva à etapa 3) */}
+            <div className="flex w-[196px] shrink-0 flex-col justify-center gap-1" data-testid="nota-chips-arquivo">
+              <button type="button" className="flex h-[26px] min-w-0 items-center gap-1.5 rounded-md border bg-card px-2 text-left text-[10.5px] font-medium hover:bg-muted"
+                onClick={verOPdf} title={lido.origem === 'pdf' ? `${arquivo.name} · abrir a nota` : 'O DANFE gerado do XML desta nota, numa aba nova (para ver e imprimir)'} data-testid="nota-chip-pdf">
+                <i className="shrink-0 rounded-[3px] bg-destructive px-1 text-[9.5px] font-bold not-italic text-white">PDF</i>
+                <span className="min-w-0 flex-1 whitespace-nowrap">{lido.origem === 'pdf' ? 'Nota lida' : 'DANFE (do XML)'}</span>
+                <span className="shrink-0 text-primary">👁 Ver</span>
+              </button>
+              {lido.origem === 'pdf' ? (
+                <button type="button" className="flex h-[26px] min-w-0 items-center gap-1.5 rounded-md border bg-card px-2 text-left text-[10.5px] font-medium hover:bg-muted"
+                  onClick={abrirEmNovaAba} title={`${arquivo.name} · ${Math.max(1, Math.round(arquivo.size / 1024))} KB`} data-testid="nota-nova-aba">
+                  <span className="min-w-0 flex-1 whitespace-nowrap text-muted-foreground">O PDF numa aba nova</span><span className="shrink-0 text-primary">↗</span>
+                </button>
+              ) : (
+                <button type="button" className="flex h-[26px] min-w-0 items-center gap-1.5 rounded-md border bg-card px-2 text-left text-[10.5px] font-medium hover:bg-muted"
+                  onClick={() => irParaAba('itens')} title={`${arquivo.name}: os itens da nota (etapa 3)`} data-testid="nota-chip-xml">
+                  <i className="shrink-0 rounded-[3px] bg-blue-600 px-1 text-[9.5px] font-bold not-italic text-white">XML</i>
+                  <span className="min-w-0 flex-1 whitespace-nowrap">NF-e</span>
+                  <span className="shrink-0 text-primary">👁 Itens</span>
+                </button>
+              )}
+              {erroDoDanfe && <span className="sr-only" data-testid="nota-chip-pdf-erro">{erroDoDanfe}</span>}
             </div>
-            {/* as abas (altura fixa; nada some): Parcelas × sistema · Como vai ficar · Itens · Lançamento (estreita: Arquivo antes) */}
-            {mostraEsqueleto ? (
-              /* o esqueleto: as abas DESENHADAS e desabilitadas (nada focável: o foco do diálogo nunca cai num botão que vai sumir) */
-              <span className="flex h-[22px] shrink-0 items-center gap-3 self-start rounded-md bg-card px-2 text-[10.5px] text-muted-foreground opacity-60" data-testid="nota-abas-procurando">
-                {nomesJa.map((o) => <span key={o.valor}>{o.nome}</span>)}
-              </span>
+            </div>
+            {/* DA-NOTA-ETAPAS-01 — as ETAPAS no lugar das abas (altura fixa; o esqueleto as desenha desabilitadas) */}
+            {naoFinanceiraNova && naoFinanceira ? (
+              /* a nota que não gera lançamento: no LUGAR das etapas (a mesma altura: nada se desloca), o motivo e o porquê */
+              <div className="flex h-[34px] shrink-0 items-center gap-2 overflow-hidden rounded-md border border-red-200 bg-red-50 px-3 text-[11px]" data-testid="nota-nao-gera-faixa">
+                <span className={CHIP_ERRO}>não gera lançamento</span>
+                <b className="shrink-0 text-red-900">{ROTULO_DO_MOTIVO[naoFinanceira]}</b>
+                <span className="min-w-0 truncate text-red-900" title={DICA_DO_MOTIVO[naoFinanceira]} data-reticencias-com-title="">{DICA_DO_MOTIVO[naoFinanceira]}</span>
+              </div>
             ) : (
-            <span className="shrink-0 self-start rounded-md bg-card" data-testid="nota-abas-ja">
-              <Segmentado<AbaDaNotaJa> altura={22} valor={abaJa} onEscolher={irParaAba} opcoes={opcoesJa} />
-            </span>
+              <BarraDeEtapas<AbaDaNotaJa> etapas={etapasDaNota} atual={etapaAtual} onEscolher={irParaAba} procurando={mostraEsqueleto} />
             )}
             </>)}
             {(!telaJa && (!estreito || aba === 'nota')) && (<>
@@ -1444,7 +1518,36 @@ export function NotaFiscalDialog({
               <section className={cn(BLOCO, 'min-h-0 flex-1 items-center justify-center')} data-testid="nota-procurando">
                 <p className="text-[10.5px] text-muted-foreground">Procurando esta nota no sistema…</p>
               </section>
-            ) : modoJa && jaLancada ? (abaJa === 'hoje' ? quadroDeHoje : abaJa === 'sistema' ? (
+            ) : naoFinanceiraNova && naoFinanceira ? (
+              /* NOTA NÃO FINANCEIRA (nota nova) — os 3 caminhos, cada um numa linha FIXA (o de bem de terceiro fica no lugar, apagado, quando não se
+                 aplica: nada se desloca), e os itens da nota no quadro que rola */
+              <section className={cn(BLOCO, 'min-h-0 flex-1')} data-testid="nota-nao-gera">
+                <TituloDoBloco nome="Esta nota não gera lançamento" dica={`CFOP de ${ROTULO_DO_MOTIVO[naoFinanceira]}: nada é criado no Financeiro`} />
+                <ul className="mt-1 shrink-0 text-[11px]" data-testid="nota-nao-gera-caminhos">
+                  <li className="flex h-[24px] min-w-0 items-center gap-2 border-b border-border/50"><b className="w-[190px] shrink-0">Guardar a nota</b>
+                    <span className="min-w-0 truncate text-muted-foreground" title="O documento e os itens ficam no cliente, pela chave; nenhum lançamento." data-reticencias-com-title="">O documento e os itens ficam no cliente, pela chave; nenhum lançamento.</span></li>
+                  <li className={cn('flex h-[24px] min-w-0 items-center gap-2 border-b border-border/50', !ehBemDeTerceiro(classe) && 'opacity-40')} data-testid="nota-nao-gera-bem">
+                    <b className="w-[190px] shrink-0">Registrar bem de terceiro</b>
+                    <span className="min-w-0 truncate text-muted-foreground" title="O bem fica em Bens de terceiros (fora do patrimônio) até a nota de retorno. Só demonstração, comodato ou conserto." data-reticencias-com-title="">
+                      {ehBemDeTerceiro(classe) ? 'O bem fica em Bens de terceiros (fora do patrimônio) até a nota de retorno.' : 'Só demonstração, comodato ou conserto.'}</span></li>
+                  <li className="flex h-[24px] min-w-0 items-center gap-2"><b className="w-[190px] shrink-0">É uma compra mesmo?</b>
+                    <span className="min-w-0 truncate text-muted-foreground" title="Abre o Novo lançamento com a nota e o seu motivo na observação; só o Salvar dele grava." data-reticencias-com-title="">Abre o Novo lançamento com a nota e o seu motivo na observação; só o Salvar dele grava.</span></li>
+                </ul>
+                <div className="mt-1.5 min-h-0 flex-1 overflow-y-auto rounded-md border bg-card" data-testid="nota-nao-gera-itens">
+                  <table className="w-full table-fixed border-collapse">
+                    <colgroup><col style={{ width: 34 }} /><col /><col style={{ width: 90 }} /><col style={{ width: 110 }} /></colgroup>
+                    <thead className="sticky top-0 z-[1] bg-primary"><tr><th className={TH_REGUA}>#</th><th className={TH_REGUA}>Item da nota</th><th className={cn(TH_REGUA, 'text-right')}>Qtd.</th><th className={cn(TH_REGUA, 'text-right')}>Valor</th></tr></thead>
+                    <tbody>{itensVistos.map((i, k) => (
+                      <tr key={k} className="border-b border-border/50" data-testid="nota-nao-gera-item">
+                        <td className={TD_REGUA_NUM}>{k + 1}</td>
+                        <td className={TD_REGUA_TEXTO} title={i.descricao} data-reticencias-com-title="">{i.descricao}</td>
+                        <td className={TD_REGUA_NUM}>{i.quantidade ? `${i.quantidade} ${i.unidade}`.trim() : '—'}</td>
+                        <td className={TD_REGUA_NUM}>{reais(i.valorCent)}</td>
+                      </tr>))}</tbody>
+                  </table>
+                </div>
+              </section>
+            ) : modoJa && jaLancada ? (etapaAtual === 'sistema' ? (
               /* P128a (NOTA-JA-LANCADA, mock aprovado 27/10) — ESTA NOTA JÁ ESTÁ NO SISTEMA: a frase do que foi achado, a TABELA SISTEMA × NOTA com todas
                  as parcelas (rola por dentro, cabeçalho preso; diferença em vermelho; nunca corrigida sozinha no realizado/conciliado) e os TRÊS
                  CAMINHOS lado a lado, cada um dizendo o que muda e o que não muda. Mesma altura do bloco de parcelas: nada se desloca. */
@@ -1481,6 +1584,9 @@ export function NotaFiscalDialog({
                     da nota em vermelho; a parecida (achada só pelo valor) em âmbar. O quadro rola por dentro (de lado, na janela estreita). */}
                 {/* NOTA-PAGTO-PARCELADO-01 P1 — a nota paga em VÁRIOS lançamentos soltos (110.000 + 4 × 25.000): o operador junta os outros do
                     mesmo fornecedor (todas as filiais) — linha de altura fixa, o botão à direita */}
+                {comoHoje && comoHoje.ok === false && (
+                  <p className="h-[14px] shrink-0 text-[10px] text-destructive" data-testid="nota-hoje-falhou">Não consegui ler fazenda, subcentro e fornecedor ({comoHoje.motivo}).</p>
+                )}
                 <div className="mb-1 flex h-[22px] shrink-0 items-center gap-2 text-[10px]" data-testid="nota-outros-barra">
                   <span className="min-w-0 flex-1 truncate text-muted-foreground" title="A nota foi paga em vários lançamentos? Junte os outros do mesmo fornecedor (todas as filiais) e confira a soma × a nota.">
                     {escolhidos.length ? `${escolhidos.length} escolhido${escolhidos.length === 1 ? '' : 's'} por você` : 'Paga em vários lançamentos? Junte os outros do fornecedor.'}
@@ -1491,19 +1597,22 @@ export function NotaFiscalDialog({
                 </div>
                 <div className="min-h-0 flex-1 overflow-auto" data-testid="nota-ja-lancada-rolagem">
                   {/* de 1024 para cima a tabela CABE (nada corta): Ação e Efeito curtos (o inteiro no title); estreita, rola de lado */}
-                  <table className="w-full min-w-[780px] table-fixed border-collapse">
+                  {/* DA-NOTA-ETAPAS-01 — o "No sistema hoje" ENTROU aqui (mock v2): Fornecedor · Faz.·Ativ. · Subcentro · Conta · NF do lado do sistema;
+                      a 1280 a Descrição fica com ~170px e nada rola de lado */}
+                  <table className="w-full min-w-[1120px] table-fixed border-collapse">
                     <colgroup><col style={{ width: 36 }} /><col style={{ width: 66 }} /><col style={{ width: 62 }} /><col style={{ width: 68 }} /><col style={{ width: 66 }} />
-                      <col /><col style={{ width: 76 }} /><col style={{ width: 62 }} /><col style={{ width: 72 }} />
+                      <col /><col style={{ width: 104 }} /><col style={{ width: 66 }} /><col style={{ width: 132 }} /><col style={{ width: 86 }} /><col style={{ width: 58 }} />
+                      <col style={{ width: 62 }} /><col style={{ width: 72 }} />
                       {/* NOTA-PAGA-A-VISTA-01: com a linha à vista, a Ação cabe o "Pago à vista" inteiro (o que sobra sai da Descrição) */}
                       <col style={{ width: jaLancada?.aVista ? 92 : 74 }} data-testid="nota-ja-lancada-col-acao" /><col style={{ width: 98 }} /></colgroup>
                     <thead className="sticky top-0 z-10 bg-primary">
                       <tr>
                         <th className={cn(TH9, 'text-center')} colSpan={3}>Na nota</th>
-                        <th className={cn(TH9, 'border-l-2 border-primary-foreground/40 text-center')} colSpan={6}>No sistema hoje</th>
+                        <th className={cn(TH9, 'border-l-2 border-primary-foreground/40 text-center')} colSpan={10}>No sistema hoje</th>
                         <th className={cn(TH9, 'border-l-2 border-primary-foreground/40 text-center')} colSpan={2}>O que acontece</th>
                       </tr>
                       <tr>
-                        {[['Parc.', ''], ['Venc.', ''], ['Valor', 'n'], ['Venc.', 'sep'], ['Pgto.', ''], ['Descrição', ''], ['Conta', ''], ['Valor', 'n'], ['Status', ''], ['Ação', 'sep'], ['Efeito', '']].map(([h, a], i) => (
+                        {[['Parc.', ''], ['Venc.', ''], ['Valor', 'n'], ['Venc.', 'sep'], ['Pgto.', ''], ['Descrição', ''], ['Fornecedor', ''], ['Faz.·Ativ.', ''], ['Subcentro', ''], ['Conta', ''], ['NF', ''], ['Valor', 'n'], ['Status', ''], ['Ação', 'sep'], ['Efeito', '']].map(([h, a], i) => (
                           <th key={i} className={cn(TH9, a === 'n' && 'text-right', a === 'sep' && 'border-l-2 border-primary-foreground/40')} title={h}>{h}</th>))}
                       </tr>
                     </thead>
@@ -1515,6 +1624,14 @@ export function NotaFiscalDialog({
                         const parecida = !!l && !l.por.some((q) => q === 'numero' || q === 'chave' || q === 'parcelamento');
                         const efeito = efeitoDaLinha(x);
                         const SEP = 'border-l-2 border-primary/30';
+                        /* o que era o "No sistema hoje": a fazenda pelo CÓDIGO (o nome no title), a atividade da conta, o subcentro e o fornecedor de hoje */
+                        const h = l ? hojeDe(l.id) : null;
+                        const lidoHoje = !!comoHoje?.ok;
+                        const semLer = comoHoje === null ? '…' : '—';
+                        const forn = l ? (h?.favorecidoId ? fornecedores.find((f) => f.id === h.favorecidoId)?.nome ?? l.fornecedorNome : l.fornecedorNome) : null;
+                        const fazObj = h?.fazendaId ? fazendas.find((f) => f.id === h.fazendaId) : undefined;
+                        const ativ = atividadeCurta(h?.planoContaId ? classificacoes.find((c) => c.id === h.planoContaId)?.escopo_negocio ?? null : null);
+                        const fazAtiv = [fazObj?.codigo || null, ativ].filter(Boolean).join(' · ');
                         return (
                           <tr key={x.chave} className={cn('border-b border-border/50', parecida && 'bg-amber-50/70', l && l.id === partindoDe && 'font-semibold')}
                             data-testid="nota-ja-lancada-linha" data-situacao={x.situacao} data-este={l && l.id === partindoDe ? '' : undefined} data-parecida={parecida ? '' : undefined}>
@@ -1526,7 +1643,11 @@ export function NotaFiscalDialog({
                                 title={x.difData ? 'o vencimento do sistema difere do da nota' : undefined}>{dataInteira(l.vencimento ?? l.competencia)}</td>
                               <td className={cn(TDN9, 'text-left text-muted-foreground')} data-testid="nota-ja-lancada-pgto">{l.pagamento ? dataInteira(l.pagamento) : '—'}</td>
                               <td className={TD9} title={l.descricao ?? undefined} data-testid="nota-ja-lancada-descricao">{l.descricao || '—'}</td>
+                              <td className={cn(TD9, !forn && 'text-muted-foreground')} title={forn ?? 'sem fornecedor: a etapa 2 preenche'} data-testid="nota-hoje-fornecedor">{forn || '— vazio'}</td>
+                              <td className={TD9} title={fazObj?.nome ?? undefined} data-testid="nota-hoje-fazenda">{lidoHoje ? fazAtiv || '—' : semLer}</td>
+                              <td className={TD9} title={h?.subcentro ?? undefined} data-testid="nota-hoje-subcentro">{lidoHoje ? h?.subcentro ?? '—' : semLer}</td>
                               <td className={TD9} title={nomeDaConta} data-testid="nota-ja-lancada-conta">{nomeDaConta}</td>
+                              <td className={cn(TDN9, 'text-left', !l.numeroDocumento && 'text-muted-foreground')} title={l.numeroDocumento ?? undefined} data-testid="nota-ja-lancada-nf">{l.numeroDocumento ? numeroCurtoDaNf(l.numeroDocumento) : '—'}</td>
                               <td className={cn(TDN9, x.difValor && 'font-medium text-destructive')} data-testid="nota-ja-lancada-valor-sistema"
                                 title={x.difValor ? 'o valor do sistema difere do da nota' : undefined}>{reais(l.valorCent)}</td>
                               <td className={TD9} title={l.conciliado ? 'conciliada com o extrato: valor, data, conta e status nunca mudam' : TEXTO_DA_SITUACAO[x.situacao]}>
@@ -1537,7 +1658,8 @@ export function NotaFiscalDialog({
                                 <td className={cn(TDN9, SEP, 'text-left text-muted-foreground')}>—</td>
                                 <td className={cn(TDN9, 'text-left text-muted-foreground')}>—</td>
                                 <td className={cn(TD9, 'text-muted-foreground')} title="não existe no sistema" data-testid="nota-ja-lancada-nao-existe">não existe no sistema</td>
-                                <td className={cn(TD9, 'text-muted-foreground')}>—</td>
+                                <td className={cn(TD9, 'text-muted-foreground')}>—</td><td className={cn(TD9, 'text-muted-foreground')}>—</td><td className={cn(TD9, 'text-muted-foreground')}>—</td>
+                                <td className={cn(TD9, 'text-muted-foreground')}>—</td><td className={cn(TD9, 'text-muted-foreground')}>—</td>
                                 <td className={cn(TDN9, 'text-muted-foreground')}>—</td>
                                 <td className={cn(TD9, 'text-muted-foreground')}>—</td>
                               </>
@@ -1560,7 +1682,7 @@ export function NotaFiscalDialog({
                           <td className={cn(TDN9, 'border-l-2 border-primary/30 text-left')}>{dataInteira(l.vencimento ?? l.competencia)}</td>
                           <td className={cn(TDN9, 'text-left')}>{l.pagamento ? dataInteira(l.pagamento) : '—'}</td>
                           <td className={TD9} title={l.descricao ?? ''}>{l.descricao ?? '—'}</td>
-                          <td className={TD9}>—</td>
+                          <td className={TD9}>—</td><td className={TD9}>—</td><td className={TD9}>—</td><td className={TD9}>—</td><td className={TD9}>—</td>
                           <td className={TDN9}>{reais(l.valorCent)}</td>
                           <td className={TD9} title={`cancelado (era ${l.status ?? '—'})`}><span className={CHIP_CANCELADO} data-testid="nota-selo-cancelado">cancelado</span></td>
                           <td className={cn(TD9, 'border-l-2 border-primary/30')}>—</td>
@@ -1585,11 +1707,15 @@ export function NotaFiscalDialog({
                     title={`${diferencasDasAchadas} A conta muda só nas não pagas; a safra vai pela competência; o resto fica como está.`} data-testid="nota-ja-lancada-diferencas">⚠ {diferencasDasAchadas}</p>
                 )}
               </section>
-            ) : abaJa === 'ficar' ? null : abaJa === 'arquivo' ? quadroDoArquivo : abaJa === 'lancamento' ? (nACriar > 0 ? null : (
-              <section className={cn(BLOCO, 'min-h-0 flex-1 items-center justify-center text-center')} data-testid="nota-nada-a-criar">
-                <p className="text-[10.5px] text-muted-foreground">Nada a criar: {faltamDaNota.length ? 'as parcelas que faltam ficam sem criar (a ação na linha).' : 'todas as parcelas da nota já estão no sistema.'}</p>
+            ) : etapaAtual === 'ficar' ? null : etapaAtual === 'lancamento' ? (
+              /* DA-NOTA-ETAPAS-01 FASE 0 (3) — a etapa 4 CONFIRMAR: o resumo do que o Aplicar grava (nada antes dele) e as checagens; as parcelas
+                 que faltam (o antigo "Lançamento") ficam embaixo quando há o que criar */
+              <section className={cn(BLOCO, nACriar > 0 ? 'shrink-0' : 'min-h-0 flex-1')} data-testid="nota-confirmar">
+                <TituloDoBloco nome="Confirmar" dica="o que será gravado ao clicar em Aplicar — nada antes disso" />
+                <ResumoDoConfirmar cartoes={cartoesDoConfirmar} checagens={checagensDoConfirmar} compacto={nACriar > 0} />
+                {nACriar === 0 && <p className="sr-only" data-testid="nota-nada-a-criar">Nada a criar: {faltamDaNota.length ? 'as parcelas que faltam ficam sem criar (a ação na linha).' : 'todas as parcelas da nota já estão no sistema.'}</p>}
               </section>
-            )) : (
+            ) : (
               /* P163-2 — a aba 4 "Itens da nota", SEMPRE: sem itens legíveis (o PDF escaneado), a frase e "Anexar o XML desta nota" (a mesma chave;
                  os itens se guardam pela `fn_nota_fiscal_gravar` — o XML manda sobre o PDF) */
               itensFiscais ? (
@@ -1732,7 +1858,7 @@ export function NotaFiscalDialog({
             {/* ── LANCAMENTO ───────────────────────────────────────────────────────────────────────── */}
             {/* P163-2 — na nota JÁ LANÇADA o bloco só aparece na aba 3, no topo, como o "Para todas" (vale só nas linhas marcadas; e para a que falta) */}
             {/* P163 v4 — o "Para todas" é a 1ª linha da grade; o bloco só aparece (aba 3, embaixo) quando há parcela que FALTA: o que ela leva */}
-            {(!telaJa || (modoJa && abaJa === 'lancamento' && nACriar > 0)) && (
+            {(!telaJa || (modoJa && etapaAtual === 'lancamento' && nACriar > 0)) && (
             <section className={BLOCO} data-testid="nota-bloco-lancamento">
               <TituloDoBloco nome="Lançamento" dica={modoJa ? `o que a nota não diz para ${nACriar === 1 ? 'a parcela que nasce' : `as ${nACriar} que nascem`}` : 'o que a nota não diz, você escolhe'} acao={acaoDaIe === 'gravar' ? (
                 <button type="button" className="text-[10px] font-medium text-primary underline-offset-2 hover:underline" onClick={() => setGravarIeAberto(true)} data-testid="nota-gravar-ie">
@@ -1834,7 +1960,7 @@ export function NotaFiscalDialog({
 
             {/* "Como vai ficar" (o mock v4) — SEMPRE montada na nota já lançada, escondida fora da aba: o botão único do rodapé grava por ela */}
             {modoJa && jaLancada && (
-              <div className={abaJa === 'ficar' ? 'flex min-h-0 flex-1 flex-col gap-1.5' : 'hidden'} data-testid="nota-aba-ficar">
+              <div className={etapaAtual === 'ficar' ? 'flex min-h-0 flex-1 flex-col gap-1.5' : 'hidden'} data-testid="nota-aba-ficar">
                 {caminhosDaNota.some((c) => c.id === 'atualizar') && (
                   <label className="flex h-[18px] shrink-0 cursor-pointer items-center gap-1.5 text-[10px]" data-testid="nota-atualizar-nao-pagas"
                     title="As programadas levam o valor e o vencimento da nota; realizadas e conciliadas não mudam.">
@@ -1964,11 +2090,20 @@ export function NotaFiscalDialog({
           <span className="ml-auto" />
           <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado} onClick={onClose}>Cancelar</Button>
           {/* P128a (porta 2) — aberta pelo Editar: o Novo lançamento criaria outro (o lugar fica reservado: nada se desloca) */}
-          <Button type="button" size="sm" variant="outline" className={cn('h-[24px] shrink-0 px-2.5 text-[10.5px]', partindoDe && 'invisible')}
+          {/* NOTA NÃO FINANCEIRA — no LUGAR do "No Novo lançamento" (a mesma largura: nada se desloca), "É uma compra mesmo?" (pede o motivo) */}
+          {naoGera && !mostraEsqueleto ? (
+            <Button type="button" size="sm" variant="outline" className={cn('h-[24px] w-[140px] shrink-0 px-2 text-[10.5px]', partindoDe && 'invisible')}
+              disabled={!!ocupado || !!bloqueio || verificando || !!partindoDe} onClick={() => setPedindoCompra('')}
+              title="A nota diz que não é compra; se for, diga por quê e lance assim mesmo." data-testid="nota-compra-mesmo">
+              É uma compra mesmo?
+            </Button>
+          ) : (
+          <Button type="button" size="sm" variant="outline" className={cn('h-[24px] w-[140px] shrink-0 px-2.5 text-[10.5px]', partindoDe && 'invisible')}
             disabled={!!ocupado || !!bloqueio || verificando || !!partindoDe} onClick={abrirNoLancamento}
             title="Abre o Novo lançamento com tudo o que foi lido e escolhido aqui (nada se perde)." data-testid="nota-abrir-no-lancamento">
             No Novo lançamento
           </Button>
+          )}
           {/* o botao principal tem a MESMA largura nos dois estados (nada se desloca); "Criar mesmo assim" mora no bloco */}
           {/* P128a — o botão principal faz o CAMINHO escolhido no bloco (a MESMA largura em todos: nada se desloca) */}
           {/* P163-2 — "Criar um lançamento novo (duplica)" mora no ⋯ (pede o motivo, como sempre); a ação normal é completar. No "duplica" o ⋯
@@ -1992,13 +2127,36 @@ export function NotaFiscalDialog({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {mostraEsqueleto ? (
-            <Button type="button" size="sm" className="h-[24px] w-[260px] shrink-0 px-2.5 text-[10.5px]" disabled data-testid="nota-completar-revisar">Procurando no sistema…</Button>
+          {naoFinanceiraNova ? (<>
+            {/* NOTA NÃO FINANCEIRA (nota nova) — "Registrar bem de terceiro" (só demonstração/comodato/conserto; o lugar fica: nada se desloca) e o
+                principal "Guardar a nota" (a mesma largura do Aplicar) */}
+            <Button type="button" size="sm" variant="outline" className={cn('h-[24px] w-[170px] shrink-0 px-2 text-[10.5px]', !ehBemDeTerceiro(classe) && 'invisible')}
+              disabled={!!ocupado || !ehBemDeTerceiro(classe)} onClick={() => setBemAberto(true)} data-testid="nota-registrar-bem">Registrar bem de terceiro</Button>
+            <Button type="button" size="sm" className="h-[24px] w-[260px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado || !!bloqueio}
+              onClick={() => { void guardarANota(); }} data-testid="nota-guardar">
+              {ocupado === 'guardar' ? 'Guardando…' : 'Guardar a nota (não gera lançamento)'}</Button>
+          </>) : mostraEsqueleto ? (
+            <><span className="w-[76px] shrink-0" aria-hidden />
+            <Button type="button" size="sm" className="h-[24px] w-[260px] shrink-0 px-2.5 text-[10.5px]" disabled data-testid="nota-completar-revisar">Procurando no sistema…</Button></>
           ) : modoJa ? (<>
+            {/* DA-NOTA-ETAPAS-01 — Voltar (o lugar fica na etapa 1: nada se desloca) e, nas etapas 1–3, "Próximo ›" no LUGAR do Aplicar (a mesma
+                largura); o Aplicar só na etapa 4 Confirmar */}
+            <Button type="button" size="sm" variant="outline" className={cn('h-[24px] w-[76px] shrink-0 px-2.5 text-[10.5px]', iEtapa === 0 && 'invisible')}
+              disabled={!!ocupado || iEtapa === 0} onClick={() => irParaAba(ETAPAS[Math.max(0, iEtapa - 1)])} data-testid="nota-voltar">‹ Voltar</Button>
+            {iEtapa < ETAPAS.length - 1 ? (
+              <Button type="button" size="sm" className="h-[24px] w-[260px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado}
+                onClick={() => irParaAba(ETAPAS[iEtapa + 1])} data-testid="nota-proximo">Próximo ›</Button>
+            ) : (<>
             {/* P128b/P163-2 — o principal leva à aba 3 (a prévia campo a campo, que grava); nela o lugar fica reservado (nada se desloca) */}
             {/* mock da nota já lançada (29/10): o principal diz o que vai acontecer ("Aplicar: vincular 1 e criar 1") e leva à conferência campo a
                 campo ("Como vai ficar"), onde se grava */}
             {/* Gabriel 29/10 10:38 — UM botão, que diz o que faz, e grava de qualquer aba (pela prévia "Como vai ficar", montada sempre) */}
+            {naoGera ? (
+              /* NOTA NÃO FINANCEIRA já no sistema — no lugar do Aplicar (a mesma largura), "Guardar a nota"; o Aplicar volta com "É uma compra mesmo?" */
+              <Button type="button" size="sm" className="h-[24px] w-[260px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado}
+                onClick={() => { void guardarANota(); }} data-testid="nota-guardar">
+                {ocupado === 'guardar' ? 'Guardando…' : 'Guardar a nota (não gera lançamento)'}</Button>
+            ) : (
             <Button type="button" size="sm" className="h-[24px] w-[260px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-completar-revisar"
               disabled={!!ocupado || !!recusaDaCompra || !estadoDaPrevia?.pode || alvosEscolhidos.length + nACriar === 0 || faltasQueContam.length > 0 || posicaoPendente}
               title={rotuloDoAplicar({ vincular: alvosEscolhidos.length - substituidosEscolhidos.length, substituir: substituidosEscolhidos.length, excluir: excluidosEscolhidos.length, criar: nACriar })}
@@ -2006,6 +2164,8 @@ export function NotaFiscalDialog({
               {ocupado === 'atualizar' || estadoDaPrevia?.gravando ? 'Gravando…' : alvosEscolhidos.length + nACriar === 0 ? 'Nada a aplicar'
                 : rotuloDoAplicar({ vincular: alvosEscolhidos.length - substituidosEscolhidos.length, substituir: substituidosEscolhidos.length, excluir: excluidosEscolhidos.length, criar: nACriar })}
             </Button>
+            )}
+            </>)}
           </>
           ) : jaLancada && !bloqueio && caminho === 'criar' ? (
             <Button type="button" size="sm" variant="destructive" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-criar-duplicando"
@@ -2068,6 +2228,35 @@ export function NotaFiscalDialog({
           periodo={periodoPadrao(n.emissao, p.duplicatas[p.duplicatas.length - 1]?.vencimento ?? null)} jaNaLista={jaLancada?.alvos ?? []}
           onJuntar={(novos) => { setEscolhidos((e) => [...e, ...novos.filter((x) => !e.some((y) => y.id === x.id))]); setVendoOutros(false); }}
           onFechar={() => setVendoOutros(false)} />
+      )}
+
+      {/* NOTA NÃO FINANCEIRA — "É uma compra mesmo?": o motivo é obrigatório */}
+      <AlertDialog open={pedindoCompra !== null} onOpenChange={(o) => { if (!o) setPedindoCompra(null); }}>
+        <AlertDialogContent data-testid="nota-compra-mesmo-dialogo">
+          <AlertDialogHeader>
+            <AlertDialogTitle>É uma compra mesmo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {naoFinanceira ? `A nota é de ${ROTULO_DO_MOTIVO[naoFinanceira]} (${DICA_DO_MOTIVO[naoFinanceira]}) ` : ''}
+              {naoFinanceiraNova ? 'Diga por quê: o Novo lançamento abre com a nota e o motivo na observação; só o Salvar dele grava.'
+                : 'Diga por quê: o Aplicar volta e o motivo fica nas checagens do Confirmar.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea value={pedindoCompra ?? ''} onChange={(ev) => setPedindoCompra(ev.target.value)} placeholder="Motivo (obrigatório)" className="min-h-[60px] text-[11px]" data-testid="nota-compra-mesmo-motivo" />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction disabled={!(pedindoCompra ?? '').trim()} data-testid="nota-compra-mesmo-confirmar"
+              onClick={(ev) => { ev.preventDefault(); confirmarCompraMesmo(); }}>
+              {naoFinanceiraNova ? 'Abrir no Novo lançamento' : 'Aplicar como compra'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* NOTA NÃO FINANCEIRA — "Registrar bem de terceiro": o MESMO modal da lista da Receita (prévia pela chave; só grava no Registrar) */}
+      {bemAberto && (
+        <RegistrarBemDeTerceiro n={{ chave: soDigitos(n.chave), numero: numeroDaNota(n.numero), emitenteNaTabela: caixaDeTitulo(n.emitente.nome) }}
+          registrar={(chave, previsao, obs, simular) => registrarBemDeTerceiro(clienteId, chave, previsao, obs, simular)}
+          aoFechar={(frase) => { setBemAberto(false); if (frase) toast.success(frase); }} />
       )}
 
       {/* NOTA-JA-LANCADA-01 — "Criar mesmo assim": e' outra compra; o motivo fica na observacao do que nasce */}

@@ -184,7 +184,9 @@ describe('FIN-REGRA-MODAL-02 — a camada no Financeiro (fonte)', () => {
     const fin = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
     expect(fin).toContain("useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>()");
     expect(fin).toContain("camadas.abrir('lanc', 'regra');");
-    expect(fin).toContain("camadas.fechar('lanc', salvouPorCimaDaRegra.current ? 'salvou' : 'fechou', idAberto)");
+    /* DA-NOTA-ETAPAS-01 — o 'salvou' é lido antes (a mesma volta serve à nota: 'lanc' sobre 'nota') */
+    expect(fin).toContain("const salvou = salvouPorCimaDaRegra.current;");
+    expect(fin).toContain("camadas.fechar('lanc', salvou ? 'salvou' : 'fechou', idAberto)");
     expect(fin).toContain("if (r !== false && camadas.aberta('lanc')) salvouPorCimaDaRegra.current = true;");
     expect(fin).toMatch(/c\.escopo_negocio === 'administrativo' && c\.grupo_custo\.startsWith\('Custo Fixo '\)/);
   });

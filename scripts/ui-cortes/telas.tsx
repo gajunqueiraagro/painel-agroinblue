@@ -1897,6 +1897,10 @@ if (tela === 'mesclar') {
     if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
     /* NOTA-PAGTO-PARCELADO-01 P3 — `&natureza=conserto`: a mesma nota como REMESSA PARA CONSERTO (CFOP 6915): o aviso "não é compra" */
     if (q.get('natureza') === 'conserto') { lido.nota.naturezaOperacao = 'REMESSA DE MERCADORIA OU BEM PARA CONSERTO OU REPARO'; lido.nota.cfops = ['6915']; }
+    /* DA-NOTA-ETAPAS-01 — a nota NÃO FINANCEIRA (o molde da NF 7.891, SINTÉTICO): `&natureza=demonstracao` (5912: "Registrar bem de terceiro") e
+       `&natureza=devolucao` (1202: sem bem de terceiro) */
+    if (q.get('natureza') === 'demonstracao') { lido.nota.naturezaOperacao = 'REMESSA PARA DEMONSTRACAO'; lido.nota.cfops = ['5912']; }
+    if (q.get('natureza') === 'devolucao') { lido.nota.naturezaOperacao = 'DEVOLUCAO DE VENDA DE MERCADORIA'; lido.nota.cfops = ['1202']; }
     /* NOTA-PAGTO-PARCELADO-01 P1 — `&outros=1`: os lançamentos SOLTOS do mesmo fornecedor no período: a 4ª parcela desta nota paga por um PIX à
        parte (491,64: marcada, a soma confere com a nota) e duas de outras compras. SINTÉTICOS. */
     const OUTROS = q.get('outros') === '1' ? ([
@@ -1954,7 +1958,9 @@ if (tela === 'mesclar') {
       },
       /* NOTA-JA-LANCADA-01 — `v=jalancada`: 3 das 4 parcelas ja' lancadas (2 pagas, 1 programada, conciliada uma) num cadastro SEM CNPJ
          de nome comprido; a serie-irma de 1 centavo a mais; a 4a falta. Dados SINTETICOS. */
-      rpc: (fn: string, a?: any) => fn === 'fn_nota_ja_lancada' && (v === 'jalancada' || v === 'cancelados') ? [
+      rpc: (fn: string, a?: any) => fn === 'fn_bem_terceiro_registrar' ? { motivo: 'demonstracao', fornecedor: 'Agro Sintetica Insumos Agropecuarios Ltda', nf: '000.000.937',
+          data: '2026-09-20', total: 1966.56, itens: lido.nota.itens.map((i, k) => ({ n: k + 1, descricao: i.descricao, quantidade: 1, valor: i.valorCent / 100 })) }
+        : fn === 'fn_nota_ja_lancada' && (v === 'jalancada' || v === 'cancelados') ? [
         /* NOTA-CONTAS-NA-CRIACAO-01 D — `v=cancelados`: os mesmos, e mais 2 CANCELADOS desta nota no fim (selo cinza) */
         ...(v === 'cancelados' ? CANCELADOS_DA_NOTA : []),
         ...[['2026-10-20', 'realizado'], ['2026-11-20', 'realizado'], ['2026-12-20', 'programado']].map(([venc, st], i) => ({
