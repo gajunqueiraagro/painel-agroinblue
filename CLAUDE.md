@@ -367,6 +367,10 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   MÊS são UMA lista (`arquivosDoMes`: comprovantes de saldo do ano lidos 1× pela tela — o chip "PDF" e o painel leem dela — + `importacoesDoMes`);
   Ver dentro do painel (`VisualizadorDeDocumento embutido`; importação = os movimentos), Desfazer = cancelar com motivo / `DesfazerArquivoModal`; passos
   POR TIPO (`passosDoPainel`); "Explicar a diferença" acha 1º o lançamento de valor EXATO (`candidatosDaDiferenca`) e abre o modal do lançamento.
+  Ajuste 17:09: a faixa NUNCA rola de lado — até 2 arquivos os cartões, 3+ UM resumo de largura fixa (`MAX_CARTOES_NA_FAIXA`); a LISTA (colunas
+  fixas, `ordenarArquivos`; período = movimentos vivos) é o passo Extrato/Fatura; aviso de dias em dois arquivos (`sobreposicoesDePeriodo`).
+  17:11: toda saída do painel VOLTA a ele (`useSaidasDoPainel` sobre o `useCamadas`: Conferência, Importar banco, ✎ saldo; nenhuma fecha o painel);
+  o passo Casar LISTA as sem par com a sugestão do motor (`linhasParaCasar`; ao abrir só até `SUGESTOES_AO_ABRIR_ATE`, depois gesto) → a estação.
 - P159a (CONC-TELAS-01): Conferência e Extrato (banco) — a regra do dia é UMA (`porDia`: maior |valor| primeiro, saldo SÓ no fim do dia,
   LIDO — Extrato: o acumulado de sempre; Conferência: `montarEvolucao`); a lista do mês por dia é UM componente (`ListaDoMesPorDia`); histórico
   do banco limpo só na exibição (`historicoDoBanco`, o inteiro no `title`); a `ordenar` da mesa NÃO mudou (o Enriquecer lê dela). EXCEÇÃO

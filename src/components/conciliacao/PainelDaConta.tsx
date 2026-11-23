@@ -13,7 +13,7 @@
  *   CIMA do painel; a Conferência e o Importar banco são as abas de hoje; o saldo à mão é o `SaldoRealDialog`; o lançamento a casar abre no
  *   modal do lançamento de sempre (`LancamentoV2Dialog`), já com a conta, o realizado e a data — quem grava é o Salvar dele.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,10 +21,17 @@ import { cn } from '@/lib/utils';
 import type { LinhaResumo } from '@/lib/conciliacao/resumoDoDono';
 import { saldosDaLinha } from '@/lib/conciliacao/resumoDoDono';
 import {
-  ROTULO_DO_TIPO, candidatosDaDiferenca, ddmmaaaa, fimDoMes, fonteDaConta, moeda, passoInicial, passosDoPainel, seloDosPassos,
-  tipoDoPainel, vizinhasPendentes, type EstadoDoPasso, type IdDoPasso, type LancamentoCandidato, type TipoDoPainel,
+  ROTULO_DO_TIPO, SUGESTOES_AO_ABRIR_ATE, candidatosDaDiferenca, ddmmaaaa, fimDoMes, fonteDaConta, linhasParaCasar, moeda, passoInicial,
+  passosDoPainel, seloDosPassos, tipoDoPainel, vizinhasPendentes, type EstadoDoPasso, type IdDoPasso, type LancamentoCandidato,
+  type TipoDoPainel, type TomDaSugestao,
 } from '@/lib/conciliacao/painelDaConta';
-import { arquivosDoMes, formatoDoArquivo, type ArquivoDoMes, type ComprovanteDoMes, type FormatoDoArquivo } from '@/lib/conciliacao/arquivosDoMes';
+import { useConciliacaoDoMes, type MovimentoConciliacao } from '@/hooks/useConciliacaoDoMes';
+import { buscarSugestoesDoMes, type RespostaDoMotor } from '@/lib/conciliacao/loteDeSugestoes';
+import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
+import {
+  MAX_CARTOES_NA_FAIXA, arquivosDoMes, formatoDoArquivo, ordenarArquivos, periodoCurto, resumoDosArquivos, sobreposicoesDePeriodo,
+  type ArquivoDoMes, type ColunaDosArquivos, type ComprovanteDoMes, type FormatoDoArquivo,
+} from '@/lib/conciliacao/arquivosDoMes';
 import { anexarSaldoDocumento, cancelarSaldoDocumento, importacoesDoMes, urlAssinadaSaldoDocumento, useImportacoesDaConta } from '@/hooks/useExtratoDaConta';
 import {
   baixarComprovante, bytesDoComprovante, gravarObservacaoDoMes, lerLancamentosDeValor, lerMovimentosDaImportacao, lerObservacaoDoMes,
@@ -59,12 +66,15 @@ const CONTORNO = { borderColor: AZUL_ATIVO, color: AZUL_ATIVO };
 
 type Direita =
   | { k: 'passo'; id: IdDoPasso }
+  | { k: 'lista' }
   | { k: 'arquivo'; chave: string }
   | { k: 'desfazer'; chave: string }
   | { k: 'soltou'; arquivo: File };
 
 export interface PainelDaContaProps {
   aberto: boolean;
+  /** NAV-VOLTA-ORIGEM-01 (Gabriel 23/11 17:11): a aba Importar está na frente — o painel fica MONTADO (o passo) e some da tela; volta igual */
+  escondido?: boolean;
   /** fechar volta à linha da ÚLTIMA conta mostrada (NAV-VOLTA-ORIGEM-01) */
   aoFechar: (ultimaConta: string | null) => void;
   clienteId: string | null;
@@ -86,7 +96,7 @@ export interface PainelDaContaProps {
 }
 
 export function PainelDaConta(props: PainelDaContaProps) {
-  const { aberto, aoFechar, clienteId, conta, linha, anoMes, comprovantes, aoMudarArquivos, ordem, aoTrocarConta, aoImportar, aoCasar, aoInformarSaldo } = props;
+  const { aberto, escondido = false, aoFechar, clienteId, conta, linha, anoMes, comprovantes, aoMudarArquivos, ordem, aoTrocarConta, aoImportar, aoCasar, aoInformarSaldo } = props;
   const [ligadaOF, setLigadaOF] = useState(false);
   const { importacoes, recarregar: releImportacoes } = useImportacoesDaConta(aberto ? clienteId : null, aberto ? conta?.id ?? null : null);
   const doMes = useMemo(() => importacoesDoMes(importacoes, anoMes).ativas, [importacoes, anoMes]);
@@ -102,6 +112,9 @@ export function PainelDaConta(props: PainelDaContaProps) {
   const [sobreSistema, setSobreSistema] = useState(false);
   const [alvoDesfazer, setAlvoDesfazer] = useState<{ id: string; nome_arquivo: string | null } | null>(null);
 
+  /* voltou da aba Importar: relê as importações (a nova entra na lista); o passo fica onde estava */
+  const estavaEscondido = useRef(escondido);
+  useEffect(() => { if (estavaEscondido.current && !escondido) void releImportacoes(); estavaEscondido.current = escondido; }, [escondido, releImportacoes]);
   /* troca de conta ou de mês: volta ao 1º passo pendente */
   useEffect(() => { if (aberto) setDireita({ k: 'passo', id: passoInicial(passos) }); // eslint-disable-line react-hooks/exhaustive-deps
   }, [aberto, conta?.id, anoMes]);
@@ -124,10 +137,16 @@ export function PainelDaConta(props: PainelDaContaProps) {
   const arquivoAberto = direita.k === 'arquivo' || direita.k === 'desfazer' ? arquivos.find((a) => a.chave === direita.chave) ?? null : null;
   const voltarAoPasso = () => setDireita({ k: 'passo', id: passoInicial(passos) });
   const desfazer = (a: ArquivoDoMes) => (a.origem === 'importacao' ? setAlvoDesfazer({ id: a.id, nome_arquivo: a.nome }) : setDireita({ k: 'desfazer', chave: a.chave }));
+  const baixar = (a: ArquivoDoMes) => { if (a.caminho) void baixarComprovante(a.caminho, a.nome); };
+  /* a LISTA dos arquivos (CONC-PAINEL-02 ajuste): é o trabalho do passo "Extrato"/"Fatura"; o investimento (sem esse passo) a abre sozinha */
+  const passoDosArquivos = passos.find((x) => x.id === 'extrato' || x.id === 'fatura')?.id ?? null;
+  const abrirLista = () => setDireita(passoDosArquivos ? { k: 'passo', id: passoDosArquivos } : { k: 'lista' });
+  const listaAberta = direita.k === 'lista' || (passoDosArquivos != null && passoAberto === passoDosArquivos);
+  const lista = <ListaDeArquivos arquivos={arquivos} aoVer={(a) => setDireita({ k: 'arquivo', chave: a.chave })} aoBaixar={baixar} aoDesfazer={desfazer} />;
 
   return (
     <>
-      <Sheet open={aberto} onOpenChange={(v) => { if (!v) aoFechar(conta.id); }}>
+      <Sheet open={aberto && !escondido} onOpenChange={(v) => { if (!v && !escondido) aoFechar(conta.id); }}>
         <SheetContent side="right" className="grid w-[980px] max-w-[100vw] gap-0 p-0 sm:max-w-[980px] [&>button.absolute]:text-white"
           style={{ gridTemplateRows: `${PAINEL.topo}px ${PAINEL.arquivos}px minmax(0,1fr) ${PAINEL.rodape}px` }}
           data-testid="painel-da-conta" data-painel-por-cima data-tipo={tipo}>
@@ -153,10 +172,13 @@ export function PainelDaConta(props: PainelDaContaProps) {
           <div className="grid items-center gap-2.5 border-b border-[#e3e8ef] bg-[#f6f8fb] px-4" style={{ gridTemplateColumns: '110px minmax(0,1fr) 200px' }}
             data-testid="painel-arquivos">
             <div className="text-[11px] font-semibold text-[#55657a]">Arquivos do mês<small className="block font-normal text-[#8794a6]">todos, de qualquer origem</small></div>
-            <div className="h-[52px] min-w-0 overflow-x-auto overflow-y-hidden">
+            {/* ⚠ NUNCA ROLAGEM LATERAL (Gabriel 23/11 17:09): até 2 arquivos, os cartões; 3 ou mais, UM cartão de resumo de largura fixa */}
+            <div className="h-[52px] min-w-0 overflow-hidden" data-testid="painel-arquivos-faixa">
               {arquivos.length === 0
                 ? <p className="pt-[18px] text-[11px] text-muted-foreground" data-testid="painel-sem-arquivos">
                     {comprovantes === null ? 'Não consegui ler os arquivos do mês.' : 'Nenhum arquivo neste mês.'}</p>
+                : arquivos.length > MAX_CARTOES_NA_FAIXA
+                ? <ResumoDosArquivos arquivos={arquivos} ligado={listaAberta} aoAbrir={abrirLista} />
                 : (
                   /* uma TABELA de uma linha: o nome do arquivo corta com "…" e o nome inteiro no `title` (a regra de corte é a de tabela) */
                   <table className="table-fixed border-separate" style={{ borderSpacing: '8px 0', marginLeft: -8, width: arquivos.length * 218 }}>
@@ -165,7 +187,7 @@ export function PainelDaConta(props: PainelDaContaProps) {
                       <td key={a.chave} className="p-0 align-top">
                         <CartaoDoArquivo a={a} ligado={arquivoAberto?.chave === a.chave}
                           aoVer={() => setDireita({ k: 'arquivo', chave: a.chave })}
-                          aoBaixar={() => { if (a.caminho) void baixarComprovante(a.caminho, a.nome); }}
+                          aoBaixar={() => baixar(a)}
                           aoDesfazer={() => desfazer(a)} />
                       </td>
                     ))}</tr></tbody>
@@ -205,7 +227,11 @@ export function PainelDaConta(props: PainelDaContaProps) {
 
             <div className="grid min-h-0" style={{ gridTemplateRows: '40px minmax(0,1fr) 52px' }} data-testid="painel-trabalho">
               {direita.k === 'arquivo' && arquivoAberto && clienteId
-                ? <VerArquivo key={arquivoAberto.chave} a={arquivoAberto} clienteId={clienteId} aoVoltar={voltarAoPasso} aoDesfazer={() => desfazer(arquivoAberto)} />
+                ? <VerArquivo key={arquivoAberto.chave} a={arquivoAberto} clienteId={clienteId} aoVoltar={abrirLista} aoDesfazer={() => desfazer(arquivoAberto)} />
+                : direita.k === 'lista'
+                ? <Trabalho testid="painel-trabalho-lista" titulo="Arquivos do mês" sub={resumoDosArquivos(arquivos).total} semMargem
+                    botoes={<button type="button" className={BOTAO_PRI} style={{ background: AZUL_ATIVO }} onClick={() => aoImportar(conta.id)} data-testid="painel-importar">
+                      {fonte.tipo === 'open_finance' ? 'Buscar do banco' : 'Importar banco'}</button>}>{lista}</Trabalho>
                 : direita.k === 'desfazer' && arquivoAberto && clienteId
                   ? <DesfazerComprovante key={arquivoAberto.chave} a={arquivoAberto} clienteId={clienteId}
                       aoVoltar={() => setDireita({ k: 'arquivo', chave: arquivoAberto.chave })}
@@ -214,7 +240,7 @@ export function PainelDaConta(props: PainelDaContaProps) {
                     ? <ArquivoSolto key={`${direita.arquivo.name}-${direita.arquivo.size}`} arquivo={direita.arquivo} clienteId={clienteId} contaId={conta.id} anoMes={anoMes}
                         aoVoltar={voltarAoPasso} aoAnexado={() => { aoMudarArquivos(); voltarAoPasso(); }} aoImportar={(f) => aoImportar(conta.id, f)} />
                     : <TrabalhoDoPasso id={passoAberto ?? passoInicial(passos)} tipo={tipo} clienteId={clienteId} contaId={conta.id}
-                        anoMes={anoMes} linha={linha} saldos={saldos} fonteOF={fonte.tipo === 'open_finance'} arquivos={arquivos}
+                        anoMes={anoMes} linha={linha} saldos={saldos} fonteOF={fonte.tipo === 'open_finance'} arquivos={arquivos} lista={lista}
                         comprovante={comprovanteDoMes}
                         aoVerArquivo={(chave) => setDireita({ k: 'arquivo', chave })}
                         aoImportar={() => aoImportar(conta.id)} aoCasar={() => aoCasar(conta.id)} aoInformarSaldo={() => aoInformarSaldo(conta.id)}
@@ -276,6 +302,97 @@ function CartaoDoArquivo({ a, ligado, aoVer, aoBaixar, aoDesfazer }: {
   );
 }
 
+/** 3 ou mais arquivos: UM cartão de LARGURA FIXA ("10 arquivos" · "OFX 9 · PDF 1" · ver lista) — clicar abre a lista à direita. Numa
+ *  tabela de uma linha, como os cartões: os formatos cortam com "…" e o inteiro no `title`. */
+function ResumoDosArquivos({ arquivos, ligado, aoAbrir }: { arquivos: readonly ArquivoDoMes[]; ligado: boolean; aoAbrir: () => void }) {
+  const r = resumoDosArquivos(arquivos);
+  return (
+    <table className="table-fixed" style={{ width: 260 }}><tbody><tr><td className="p-0 align-top">
+      <button type="button" onClick={aoAbrir} title={`${r.total} · ${r.formatos} — ver a lista`}
+        className={cn('grid h-[48px] w-[260px] gap-1.5 rounded-md border bg-white px-2 py-[5px] text-left hover:bg-[#f6f8fb]',
+          ligado ? 'border-[#1f5fbf] shadow-[0_0_0_2px_#cfe0fb]' : 'border-[#d5dce6]')}
+        style={{ gridTemplateColumns: '30px minmax(0,1fr)' }} data-testid="painel-arquivos-resumo">
+        <span className="flex h-[36px] w-[30px] items-center justify-center rounded-[3px] bg-[#1d2838] text-[11px] font-bold tabular-nums text-white">{arquivos.length}</span>
+        <span className="min-w-0 leading-[12px]">
+          <span className="block whitespace-nowrap text-[11px] font-semibold" data-testid="painel-arquivos-resumo-total">{r.total}</span>
+          <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[10px] text-[#8794a6]" data-testid="painel-arquivos-resumo-formatos">{r.formatos}</span>
+          <span className="block text-[10px] text-[#1f5fbf]">ver lista</span>
+        </span>
+      </button>
+    </td></tr></tbody></table>
+  );
+}
+
+const COLUNAS_DA_LISTA: { id: ColunaDosArquivos; rotulo: string; largura: number | null; direita?: boolean }[] = [
+  { id: 'nome', rotulo: 'Arquivo', largura: null }, { id: 'formato', rotulo: 'Tipo', largura: 30 }, { id: 'periodo', rotulo: 'Período', largura: 96 },
+  { id: 'enviado', rotulo: 'Importado em', largura: 70 }, { id: 'movimentos', rotulo: 'Mov.', largura: 34, direita: true },
+  { id: 'saldo', rotulo: 'Saldo final', largura: 98, direita: true },
+];
+const LARGURA_DAS_ACOES = 106;
+
+/** A LISTA dos arquivos do mês (CONC-PAINEL-02 ajuste, Gabriel 23/11 17:09): colunas fixas e ordenáveis; Ver abre no mesmo lado (com
+ *  "← voltar à lista"); embaixo, o aviso quando dois arquivos cobrem os mesmos dias. */
+function ListaDeArquivos({ arquivos, aoVer, aoBaixar, aoDesfazer }: {
+  arquivos: readonly ArquivoDoMes[]; aoVer: (a: ArquivoDoMes) => void; aoBaixar: (a: ArquivoDoMes) => void; aoDesfazer: (a: ArquivoDoMes) => void;
+}) {
+  const [ordem, setOrdem] = useState<{ coluna: ColunaDosArquivos; crescente: boolean } | null>(null);
+  const linhas = ordem ? ordenarArquivos(arquivos, ordem.coluna, ordem.crescente) : arquivos;
+  const sobre = sobreposicoesDePeriodo(arquivos);
+  const marcados = new Map<string, string[]>();
+  for (const x of sobre) {
+    marcados.set(x.a.chave, [...(marcados.get(x.a.chave) ?? []), x.b.nome]);
+    marcados.set(x.b.chave, [...(marcados.get(x.b.chave) ?? []), x.a.nome]);
+  }
+  const LINK = 'text-[10px] text-[#1f5fbf] hover:underline disabled:cursor-not-allowed disabled:text-[#9aa7b8] disabled:no-underline';
+  const clicar = (c: ColunaDosArquivos) => setOrdem((o) => (o?.coluna === c ? { coluna: c, crescente: !o.crescente } : { coluna: c, crescente: true }));
+  return (
+    <div className="px-2 pb-2" data-testid="painel-lista">
+      <table className="w-full table-fixed border-collapse tabular-nums">
+        <colgroup>{COLUNAS_DA_LISTA.map((c) => <col key={c.id} style={c.largura ? { width: c.largura } : undefined} />)}<col style={{ width: LARGURA_DAS_ACOES }} /></colgroup>
+        <thead className="sticky top-0 z-[1]"><tr className="text-white" style={{ background: FUNDO_ESCURO }}>
+          {COLUNAS_DA_LISTA.map((c) => (
+            <th key={c.id} className={cn(TH, c.direita && 'text-right')} aria-sort={ordem?.coluna === c.id ? (ordem.crescente ? 'ascending' : 'descending') : undefined}>
+              <button type="button" className="whitespace-nowrap hover:underline" onClick={() => clicar(c.id)} data-testid={`painel-lista-ordenar-${c.id}`}>
+                {c.rotulo}{ordem?.coluna === c.id ? (ordem.crescente ? ' ▲' : ' ▼') : ''}</button>
+            </th>
+          ))}
+          <th className={TH} />
+        </tr></thead>
+        <tbody>{linhas.map((a) => {
+          const outros = marcados.get(a.chave);
+          return (
+            <tr key={a.chave} className="border-t border-border" data-testid="painel-lista-linha" data-chave={a.chave} data-sobreposto={outros ? 'sim' : undefined}>
+              <td className={TD} title={outros ? `⚠ ${a.nome} — cobre dias de: ${outros.join(', ')}` : a.nome} data-testid="painel-lista-nome">
+                {outros && <span className="text-[#b7791f]">⚠ </span>}{a.nome}</td>
+              <td className={TD}>{a.formato}</td>
+              <td className={TD} data-testid="painel-lista-periodo" title={a.periodoDe && a.periodoAte ? `${ddmmaaaa(a.periodoDe)} a ${ddmmaaaa(a.periodoAte)}` : undefined}>{periodoCurto(a.periodoDe, a.periodoAte)}</td>
+              <td className={TD}>{a.enviadoEm ? ddmmaaaa(a.enviadoEm) : '—'}</td>
+              <td className={cn(TD, 'text-right')}>{a.movimentos ?? '—'}</td>
+              <td className={cn(TD, 'text-right', a.saldoFinal != null && a.saldoFinal < 0 && 'text-[#c0392b]')}>{a.saldoFinal == null ? '—' : moeda(a.saldoFinal)}</td>
+              <td className={TD}>
+                <span className="flex gap-1.5">
+                  <button type="button" className={LINK} disabled={!a.podeVer} onClick={() => aoVer(a)} data-testid="painel-lista-ver"
+                    title={a.podeVer ? undefined : 'o arquivo não está guardado'}>Ver</button>
+                  <button type="button" className={LINK} disabled={!a.podeBaixar} onClick={() => aoBaixar(a)} data-testid="painel-lista-baixar"
+                    title={a.podeBaixar ? undefined : a.origem === 'importacao' ? 'o arquivo original não foi guardado' : 'o arquivo não subiu'}>Baixar</button>
+                  <button type="button" className={LINK} onClick={() => aoDesfazer(a)} data-testid="painel-lista-desfazer">Desfazer</button>
+                </span>
+              </td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+      {sobre.length > 0 && (
+        <p className="mt-1.5 break-words text-[10px] text-[#8a5a00]" data-testid="painel-lista-sobreposicao">
+          {sobre.length === 1
+            ? `⚠ ${sobre[0].a.nome} e ${sobre[0].b.nome} cobrem os mesmos dias (${ddmmaaaa(sobre[0].de)}–${ddmmaaaa(sobre[0].ate)}).`
+            : `⚠ ${marcados.size} arquivos cobrem dias que outro arquivo também cobre (sobreposição de período): marcados com ⚠ na lista.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ResumoDoMes({ linha, saldoSistema }: { linha: LinhaResumo | null; saldoSistema: number | null }) {
   const linhas: [string, number | null][] = [
     ['Saldo inicial', linha?.saldo_inicial ?? null], ['Entradas', linha?.entradas ?? null],
@@ -293,8 +410,10 @@ function ResumoDoMes({ linha, saldoSistema }: { linha: LinhaResumo | null; saldo
 }
 
 /** A moldura da área da direita: o cabeçalho (40), o conteúdo (rola) e os botões (52). */
-function Trabalho({ titulo, sub, extra, children, botoes, testid }: {
+function Trabalho({ titulo, sub, extra, children, botoes, testid, semMargem = false }: {
   titulo: string; sub?: string; extra?: ReactNode; children: ReactNode; botoes?: ReactNode; testid: string;
+  /** a lista de arquivos: o cabeçalho da tabela preso no topo do quadro (sem o vão da margem) */
+  semMargem?: boolean;
 }) {
   return (
     <>
@@ -302,7 +421,7 @@ function Trabalho({ titulo, sub, extra, children, botoes, testid }: {
         <span className="min-w-0 whitespace-nowrap text-[12px] font-semibold">{titulo}{sub && <small className="ml-1.5 font-normal text-[#6b7a8f]">{sub}</small>}</span>
         {extra}
       </div>
-      <div className="min-h-0 overflow-auto px-4 py-3 text-[11px]">{children}</div>
+      <div className={cn('min-h-0 overflow-auto text-[11px]', !semMargem && 'px-4 py-3')}>{children}</div>
       <div className="flex items-center justify-end gap-2 border-t border-[#e3e8ef] px-4">{botoes}</div>
     </>
   );
@@ -312,7 +431,7 @@ type Saldos = ReturnType<typeof saldosDaLinha>;
 
 function TrabalhoDoPasso(p: {
   id: IdDoPasso; tipo: TipoDoPainel; clienteId: string | null; contaId: string; anoMes: string;
-  linha: LinhaResumo | null; saldos: Saldos; fonteOF: boolean; arquivos: readonly ArquivoDoMes[];
+  linha: LinhaResumo | null; saldos: Saldos; fonteOF: boolean; arquivos: readonly ArquivoDoMes[]; lista: ReactNode;
   comprovante: ArquivoDoMes | null; aoVerArquivo: (chave: string) => void; aoImportar: () => void; aoCasar: () => void;
   aoInformarSaldo: () => void; aoAbrirPalco: () => void; aoAbrirSistema: () => void;
 }) {
@@ -328,30 +447,18 @@ function TrabalhoDoPasso(p: {
   if (p.id === 'extrato' || p.id === 'fatura') {
     const temExtrato = !!linha?.tem_extrato;
     return (
-      <Trabalho testid="painel-trabalho-extrato" titulo={p.id === 'fatura' ? 'Fatura do mês' : 'Extrato'}
+      <Trabalho testid="painel-trabalho-extrato" titulo={p.id === 'fatura' ? 'Fatura do mês' : 'Extrato'} semMargem={p.arquivos.length > 0}
         sub={temExtrato ? `até ${ddmmaaaa(linha?.saldo_extrato_data)}` : undefined}
         botoes={<button type="button" className={BOTAO_PRI} style={{ background: AZUL_ATIVO }} onClick={p.aoImportar} data-testid="painel-importar">
           {p.fonteOF ? 'Buscar do banco' : 'Importar banco'}</button>}>
-        <p>{p.arquivos.length > 0
-          ? `${p.arquivos.length} ${p.arquivos.length === 1 ? 'arquivo' : 'arquivos'} neste mês — clique num deles acima para ver.`
-          : p.id === 'fatura' ? 'Nenhuma fatura neste mês. Arraste o PDF da fatura acima.' : 'Nenhum extrato neste mês. Arraste o OFX ou o PDF acima, ou importe.'}</p>
+        {p.arquivos.length > 0 ? p.lista
+          : <p>{p.id === 'fatura' ? 'Nenhuma fatura neste mês. Arraste o PDF da fatura acima.' : 'Nenhum extrato neste mês. Arraste o OFX ou o PDF acima, ou importe.'}</p>}
       </Trabalho>
     );
   }
   if (p.id === 'casar') {
-    return (
-      <Trabalho testid="painel-trabalho-casar" titulo="Casar lançamentos" sub={`${soBanco} só no banco · ${soSistema} só no sistema`}
-        botoes={<>
-          <button type="button" className={BOTAO} style={CONTORNO} onClick={p.aoCasar} data-testid="painel-casar">Conferência lado a lado</button>
-          <button type="button" className={BOTAO_PRI} style={{ background: AZUL_ATIVO }} onClick={p.aoAbrirPalco} disabled={!linha?.tem_extrato}
-            data-testid="painel-casar-exatos">Casar os exatos (prévia)</button>
-        </>}>
-        <p className="mb-2">{!linha?.tem_extrato ? 'Primeiro o extrato do mês.'
-          : soBanco + soSistema === 0 ? 'Nada sem par: cada linha do extrato tem o seu lançamento.'
-          : `${soBanco} ${soBanco === 1 ? 'linha do extrato está' : 'linhas do extrato estão'} sem lançamento e ${soSistema} ${soSistema === 1 ? 'lançamento está' : 'lançamentos estão'} sem extrato.`}</p>
-        <p className="text-[#6b7a8f]">"Casar os exatos" mostra as sugestões do sistema para o mês e casa só o que você confirmar na prévia.</p>
-      </Trabalho>
-    );
+    return <CasarDoPainel clienteId={p.clienteId} contaId={p.contaId} anoMes={p.anoMes} linha={linha}
+      aoConferencia={p.aoCasar} aoAbrirPalco={p.aoAbrirPalco} />;
   }
   if (p.id === 'saldo') {
     return (
@@ -373,6 +480,76 @@ function TrabalhoDoPasso(p: {
   return <ExplicarDiferenca clienteId={p.clienteId} contaId={p.contaId} anoMes={p.anoMes} saldos={saldos}
     dataDoSaldo={linha?.saldo_extrato_data ?? null} titulo={p.id === 'pagamento' ? 'Pagamento da fatura' : 'Explicar a diferença'}
     botoes={<>{verComprovante}{informar}</>} />;
+}
+
+const COR_DO_TOM: Record<TomDaSugestao, string> = { exata: 'text-[#1e8449]', conferir: 'text-[#9a6b00]', sem: 'text-[#6b7a8f]', erro: 'text-destructive', nada: 'text-[#9aa7b8]' };
+const MARCA_DO_TOM: Record<TomDaSugestao, string> = { exata: '✓ ', conferir: '≈ ', sem: '', erro: '', nada: '' };
+
+/** CONC-PAINEL-02 entrega 2 (o mock aprovado; Gabriel 23/11 17:11) — "Casar lançamentos": as linhas do extrato SEM PAR com a sugestão do
+ *  motor (Data · Extrato · Valor · Sugestão do sistema · casar/procurar). "casar"/"procurar" abrem a ESTAÇÃO por cima (onde estão as travas:
+ *  casar, procurar no histórico, criar); embaixo "Casar os exatos (prévia)" (o lote do mês) e a "Conferência lado a lado" para o caso difícil. */
+function CasarDoPainel({ clienteId, contaId, anoMes, linha, aoConferencia, aoAbrirPalco }: {
+  clienteId: string | null; contaId: string; anoMes: string; linha: LinhaResumo | null; aoConferencia: () => void; aoAbrirPalco: () => void;
+}) {
+  const { movimentos, loading, recarregar } = useConciliacaoDoMes(clienteId, contaId, Number(anoMes.slice(0, 4)), Number(anoMes.slice(5, 7)));
+  const [sugestoes, setSugestoes] = useState<Map<string, RespostaDoMotor> | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  const [estacao, setEstacao] = useState<MovimentoConciliacao | null>(null);
+  const semPar = useMemo(() => movimentos.filter((m) => m.situacao !== 'conciliado'), [movimentos]);
+  const chave = semPar.map((m) => m.id).join(',');
+  const buscar = async () => {
+    if (!clienteId || semPar.length === 0) return;
+    setBuscando(true);
+    const r = await buscarSugestoesDoMes(clienteId, semPar.map((m) => m.id));
+    setSugestoes(r); setBuscando(false);
+  };
+  /* poucas linhas: o motor roda ao abrir; muitas: só pelo gesto (P124) */
+  useEffect(() => {
+    setSugestoes(null);
+    if (semPar.length > 0 && semPar.length <= SUGESTOES_AO_ABRIR_ATE) void buscar();
+  }, [chave, clienteId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const linhas = linhasParaCasar(movimentos, sugestoes, buscando);
+  const soBanco = linha?.extratos_sem_par.qtde ?? 0;
+  const soSistema = linha?.lancamentos_sem_par.qtde ?? 0;
+  const precisaGesto = sugestoes === null && !buscando && semPar.length > SUGESTOES_AO_ABRIR_ATE;
+  return (
+    <Trabalho testid="painel-trabalho-casar" titulo="Casar lançamentos" sub={`${soBanco} só no banco · ${soSistema} só no sistema`} semMargem={linhas.length > 0}
+      extra={precisaGesto ? <button type="button" className="whitespace-nowrap text-[11px] text-[#1f5fbf] hover:underline" onClick={() => void buscar()}
+        data-testid="painel-casar-buscar">Buscar sugestões ({semPar.length})</button> : undefined}
+      botoes={<>
+        <button type="button" className={BOTAO} style={CONTORNO} onClick={aoConferencia} data-testid="painel-casar">Conferência lado a lado</button>
+        <button type="button" className={BOTAO_PRI} style={{ background: AZUL_ATIVO }} onClick={aoAbrirPalco} disabled={!linha?.tem_extrato}
+          data-testid="painel-casar-exatos">Casar os exatos (prévia)</button>
+      </>}>
+      {!linha?.tem_extrato ? <p>Primeiro o extrato do mês.</p>
+        : loading && movimentos.length === 0 ? <p className="text-muted-foreground">Lendo o extrato do mês…</p>
+        : linhas.length === 0 ? <p data-testid="painel-casar-vazio">Nada sem par: cada linha do extrato tem o seu lançamento.</p>
+        : (
+          <div className="px-2 pb-2">
+            <table className="w-full table-fixed border-collapse tabular-nums" data-testid="painel-casar-linhas">
+              <colgroup><col style={{ width: 70 }} /><col style={{ width: 160 }} /><col style={{ width: 92 }} /><col /><col style={{ width: 62 }} /></colgroup>
+              <thead className="sticky top-0 z-[1]"><tr className="text-white" style={{ background: FUNDO_ESCURO }}>
+                <th className={TH}>Data</th><th className={TH}>Extrato</th><th className={cn(TH, 'text-right')}>Valor</th><th className={TH}>Sugestão do sistema</th><th className={TH} />
+              </tr></thead>
+              <tbody>{linhas.map((l) => (
+                <tr key={l.id} className={cn('border-t border-border', estacao?.id === l.id && 'bg-[#eef4ff]')} data-testid="painel-casar-linha" data-tom={l.tom}>
+                  <td className={TD}>{ddmmaaaa(l.data)}</td>
+                  <td className={TD} title={l.descricao}>{l.descricao}</td>
+                  <td className={cn(TD, 'text-right', l.valor < 0 ? 'text-[#c0392b]' : 'text-[#1e8449]')}>{moeda(l.valor)}</td>
+                  <td className={cn(TD, COR_DO_TOM[l.tom])} title={`${MARCA_DO_TOM[l.tom]}${l.titulo}`} data-testid="painel-casar-sugestao">{MARCA_DO_TOM[l.tom]}{l.sugestao}</td>
+                  <td className={TD}><button type="button" className="text-[10px] text-[#1f5fbf] hover:underline" data-testid="painel-casar-acao"
+                    title={l.acao === 'casar' ? 'abre a estação com a sugestão (a prévia antes de gravar)' : 'procurar no histórico ou criar o lançamento (na estação)'}
+                    onClick={() => setEstacao(semPar.find((m) => m.id === l.id) ?? null)}>{l.acao}</button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {soSistema > 0 && <p className="mt-1.5 text-[10px] text-[#6b7a8f]">E {soSistema} {soSistema === 1 ? 'lançamento do sistema está' : 'lançamentos do sistema estão'} sem extrato: a "Conferência lado a lado" mostra os dois lados.</p>}
+          </div>
+        )}
+      {estacao && <EstacaoConciliar movimento={estacao} contaBancariaId={contaId} aoFechar={() => setEstacao(null)}
+        aoMudar={async () => { await recarregar(); }} />}
+    </Trabalho>
+  );
 }
 
 function CaixasDoSaldo({ saldos, entradas, saidas }: { saldos: Saldos; entradas?: number; saidas?: number }) {
@@ -510,7 +687,7 @@ function VerArquivo({ a, clienteId, aoVoltar, aoDesfazer }: { a: ArquivoDoMes; c
         <table className="w-[440px] table-fixed"><tbody><tr>
           <td className="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-semibold" title={`${a.nome} — ${a.detalhe}`} data-testid="painel-ver-nome">{a.nome}</td>
         </tr></tbody></table>
-        <button type="button" className="whitespace-nowrap text-[11px] text-[#1f5fbf] hover:underline" onClick={aoVoltar} data-testid="painel-ver-voltar">voltar ao passo</button>
+        <button type="button" className="whitespace-nowrap text-[11px] text-[#1f5fbf] hover:underline" onClick={aoVoltar} data-testid="painel-ver-voltar">← voltar à lista</button>
       </div>
       <div className="min-h-0 overflow-hidden" data-testid="painel-ver" data-origem={a.origem}>
         {falhou ? <p className="p-4 text-[11px] text-muted-foreground">Não consegui abrir o arquivo aqui.</p>

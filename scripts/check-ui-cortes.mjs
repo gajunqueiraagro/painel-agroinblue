@@ -269,6 +269,12 @@ const CENARIOS = [
   /* P121b — a NF da compra de 11 dígitos na linha "Nota" do Resumo: o número inteiro, o selo "da compra" cede */
   { nome: 'lancamento-editar-nota-11', url: 'tela=lancamento&m=editar&v=salparcela&nota=11' },
   { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal&resumo=longo', alturasComo: 'tela=lancamento&m=editar&v=sal' },
+  /* NOTA-PAGA-POR-TERCEIRO-01 — "Quem paga" na aba Pagamento de uma saída Programada: Nós (o de sempre), Terceiro (o formulário) e já marcado */
+  { nome: 'lancamento-terceiro-nos', url: 'tela=lancamento&m=editar&v=sal', antes: clicarTexto('Pagamento') },
+  { nome: 'lancamento-terceiro-escolher', url: 'tela=lancamento&m=editar&v=sal', antes: async (p) => { await clicarTexto('Pagamento')(p);
+    await p.locator('[data-testid="quem-paga"] button', { hasText: /^Terceiro/ }).click(); await p.waitForTimeout(300); } },
+  { nome: 'lancamento-terceiro-marcado', url: 'tela=lancamento&m=editar&v=sal&terceiro=marcado', antes: async (p) => { await clicarTexto('Pagamento')(p);
+    await p.locator('[data-testid="quem-paga-marcado"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(200); } },
   { nome: 'lancamento-dividido-Itens', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
       await p.getByRole('button', { name: 'Contas', exact: true }).first().click(); await p.waitForTimeout(500); } },
@@ -2277,6 +2283,24 @@ const CENARIOS = [
     antes: async (p) => { const lapis = p.locator(`[data-testid="linha-saldo-conta"][data-conta="${conta}"] [data-testid="botao-lapis"]`);
       await lapis.waitFor(); await lapis.click();
       await p.locator('[data-testid="painel-da-conta"]').waitFor(); await p.waitForTimeout(600); } })),
+  /* CONC-PAINEL-02 ajuste (Gabriel 23/11 17:09) — 10 arquivos na conta (`&v=nj10`, o NJ BB out/26 com nomes inventados): a faixa com UM cartão de
+     resumo (nunca rolagem lateral), a LISTA no passo Extrato (colunas fixas, o aviso de sobreposição) e o "Ver" de uma linha com "← voltar à lista" */
+  { nome: 'conciliacao-painel-conta-nj10', url: 'tela=conciliacao&admin=1&v=nj10', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arquivos-resumo"]').click(); await p.locator('[data-testid="painel-lista"]').waitFor(); await p.waitForTimeout(500); } },
+  { nome: 'conciliacao-painel-conta-nj10-ver', url: 'tela=conciliacao&admin=1&v=nj10', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arquivos-resumo"]').click();
+      await p.locator('[data-testid="painel-lista-linha"][data-chave="importacao:imp-nj-1"] [data-testid="painel-lista-ver"]').click();
+      await p.locator('[data-testid="painel-ver-movimentos"]').waitFor(); await p.waitForTimeout(400); } },
+  /* CONC-PAINEL-02 entrega 2 (Gabriel 23/11 17:11) — o passo "Casar lançamentos" com as 3 linhas sem par e a sugestão do motor (`&v=nj10`) */
+  { nome: 'conciliacao-painel-conta-nj10-casar', url: 'tela=conciliacao&admin=1&v=nj10', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-passo-casar"]').click();
+      await p.locator('[data-testid="painel-casar-linha"][data-tom="exata"]').waitFor(); await p.waitForTimeout(500); } },
   { nome: 'conciliacao-painel-conta-ver-importacao', url: 'tela=conciliacao&admin=1', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
     antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
       await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
