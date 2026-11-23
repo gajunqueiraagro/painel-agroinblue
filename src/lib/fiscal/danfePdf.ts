@@ -37,7 +37,9 @@ export async function danfePdfDoXml(arquivo: File): Promise<{ ok: true; pdf: Fil
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
     for (const [k, folha] of folhas.entries()) {
       /* NOTA-SALVAR-RAPIDO-01 — escala 1,5 e JPEG 0,8: a folha A4 continua legível e o PDF cai à metade (514 KB → ~250 KB no NJ) */
-      const tela = await html2canvas(folha, { scale: ESCALA_DO_DANFE, backgroundColor: '#ffffff', logging: false, windowWidth: 820 });
+      /* DANFE-LAYOUT-02 (Gabriel 23/11) — `foreignObjectRendering`: quem desenha o texto é o PRÓPRIO navegador (como no "PDF" da lista). Sem ele o
+         html2canvas põe o texto alguns px mais baixo e os quadros de altura certa cortavam o fim dos valores (provado com 3 notas reais, escala 2 e 1,5) */
+      const tela = await html2canvas(folha, { scale: ESCALA_DO_DANFE, backgroundColor: '#ffffff', logging: false, windowWidth: 820, foreignObjectRendering: true });
       if (k > 0) pdf.addPage();
       pdf.addImage(tela.toDataURL('image/jpeg', QUALIDADE_DO_DANFE), 'JPEG', 0, 0, 210, 297);
     }
