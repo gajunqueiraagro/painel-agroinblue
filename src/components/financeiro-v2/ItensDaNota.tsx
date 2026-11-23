@@ -63,6 +63,9 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
   /* o codigo NUNCA corta: a coluna tem a largura do maior codigo da nota (em `ch` da fonte da tabela); a descricao cede */
   const maiorCodigo = Math.max(9, ...lidos.itens.map((i) => (i.codigo ?? '').length));   // 9ch: o rotulo "Cód. forn." inteiro
   const larguraCodigo = `calc(${maiorCodigo}ch + 10px)`;
+  /* DA-NOTA-ETAPAS-01: o NCM tambem nunca corta (o lido do PDF pode vir com o CST colado): a largura do maior, piso 56px */
+  const maiorNcm = Math.max(8, ...lidos.itens.map((i) => (i.ncm ?? '').length));
+  const larguraNcm = `max(56px, calc(${maiorNcm}ch + 10px))`;
   /* as colunas: Nº, codigo, descricao (o resto da largura) e as de numero, que nunca cortam */
   const cols: { h: string; w?: number | string; num?: boolean; codigo?: boolean; f: (i: ItemFiscal) => string; titulo?: (i: ItemFiscal) => string }[] = valores ? [
     { h: 'Nº', w: 22, num: true, f: (i) => String(i.nItem) },
@@ -78,7 +81,7 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
   ] : [
     { h: 'Nº', w: 22, num: true, f: (i) => String(i.nItem) },
     { h: 'Descrição na nota', f: (i) => i.descricao, titulo: (i) => i.descricao },
-    { h: 'NCM', w: 56, codigo: true, f: (i) => i.ncm ?? '—' },
+    { h: 'NCM', w: larguraNcm, codigo: true, f: (i) => i.ncm ?? '—' },
     { h: 'CFOP', w: 34, codigo: true, f: (i) => i.cfop ?? '—' },
     { h: 'CST/CSOSN', w: 60, f: (i) => i.csosn ?? i.cst ?? '—' },
     { h: 'BC ICMS', w: 60, num: true, f: (i) => (i.icms?.bcCent ? reais(i.icms.bcCent) : '0,00') },
@@ -123,8 +126,9 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
       <div className="flex h-[22px] shrink-0 items-center gap-1.5 overflow-hidden">
         <Segmentado<Visao> altura={22} valor={visao} onEscolher={setVisao}
           opcoes={vistaContas ? VISOES_COM_CONTAS : VISOES} />
-        <span className={cn(CHIP, prova.confere ? 'bg-[#e5f4ea] text-[#1f7a45]' : 'bg-amber-50 text-amber-800')} data-testid="itens-prova">
-          {prova.confere ? '✓ Soma dos itens = valor da nota' : `Soma dos itens ${reais(prova.somaCent)} · nota ${reais(prova.notaCent)}`}
+        <span className={cn(CHIP, prova.confere ? 'bg-[#e5f4ea] text-[#1f7a45]' : 'bg-amber-50 text-amber-800')} data-testid="itens-prova"
+          title={prova.confere ? 'A soma dos itens é igual ao valor da nota' : undefined}>
+          {prova.confere ? '✓ Soma = valor da nota' : `Soma dos itens ${reais(prova.somaCent)} · nota ${reais(prova.notaCent)}`}
         </span>
         {rateado && <span className={cn(CHIP, 'bg-amber-50 text-amber-800')} title="O PDF só traz desconto, frete, seguro e outras no total: repartidos pelo valor de cada item.">desconto/frete rateados</span>}
         {/* NOTA-PDF-IBS-CBS-01 (Chat 12/11 22:00): na nota lida do PDF, o IBS/CBS diz de onde veio — nunca zero, nunca calculado */}

@@ -1267,6 +1267,27 @@ export function NotaFiscalDialog({
           {/* P101 — abaixo de 1000px a prévia não cabe em duas colunas sem rolar (a 750×483 sobravam 21px às parcelas): três abas, na barra do
               título (não gastam altura) */}
           {/* mock da nota já lançada (29/10): as abas descem para o corpo, embaixo da Nota e do Fornecedor; aqui só a frase */}
+          {telaJa && estreito && (
+            /* abaixo de 1000px: os chips do arquivo na barra do título (altura 22px; o texto inteiro no title) */
+            <span className="ml-auto flex shrink-0 items-center gap-1" data-testid="nota-chips-arquivo">
+              <button type="button" className="flex h-[22px] items-center gap-1 rounded-md bg-card px-1.5 text-[10.5px] font-medium hover:bg-muted"
+                onClick={verOPdf} title={lido.origem === 'pdf' ? `${arquivo.name} · abrir a nota` : 'O DANFE gerado do XML desta nota, numa aba nova (para ver e imprimir)'} data-testid="nota-chip-pdf">
+                <i className="rounded-[3px] bg-destructive px-1 text-[9.5px] font-bold not-italic text-white">PDF</i><span className="text-primary">👁 Ver</span>
+              </button>
+              {lido.origem === 'pdf' ? (
+                <button type="button" className="flex h-[22px] items-center gap-1 rounded-md bg-card px-1.5 text-[10.5px] font-medium hover:bg-muted"
+                  onClick={abrirEmNovaAba} title={`O PDF numa aba nova · ${arquivo.name} · ${Math.max(1, Math.round(arquivo.size / 1024))} KB`} data-testid="nota-nova-aba">
+                  <span className="text-muted-foreground">Aba nova</span><span className="text-primary">↗</span>
+                </button>
+              ) : (
+                <button type="button" className="flex h-[22px] items-center gap-1 rounded-md bg-card px-1.5 text-[10.5px] font-medium hover:bg-muted"
+                  onClick={() => irParaAba('itens')} title={`${arquivo.name}: os itens da nota (etapa 3)`} data-testid="nota-chip-xml">
+                  <i className="rounded-[3px] bg-blue-600 px-1 text-[9.5px] font-bold not-italic text-white">XML</i><span className="text-primary">👁 Itens</span>
+                </button>
+              )}
+              {erroDoDanfe && <span className="sr-only" data-testid="nota-chip-pdf-erro">{erroDoDanfe}</span>}
+            </span>
+          )}
           {telaJa ? (!estreito && (
             <span className="text-[11px] text-primary-foreground/80" data-testid="nota-cabecalho-ja">{lido.origem === 'pdf' ? 'PDF lido' : 'XML lido'} · {mostraEsqueleto ? 'procurando no sistema…' : naoFinanceiraNova && naoFinanceira ? `não gera lançamento · ${ROTULO_DO_MOTIVO[naoFinanceira]}` : 'nota já no sistema · confira em 4 etapas'}</span>
           )) : estreito && (
@@ -1287,7 +1308,7 @@ export function NotaFiscalDialog({
             {/* Ajuste 29/10 14:02 (item 2) — Nota (40%) e Fornecedor (60%) LADO A LADO, numa faixa de altura FIXA, cada um com 2 linhas no máximo e o
                 rótulo colado ao valor; a razão social inteira ou "…" + title (nunca empurra as abas) */}
             {telaJa && (<>
-            <div className="grid h-[66px] shrink-0 gap-1.5" style={{ gridTemplateColumns: estreito ? 'minmax(0, 7fr) minmax(0, 13fr) 196px' : 'minmax(0, 2fr) minmax(0, 3fr) 196px' }} data-testid="nota-faixa-nota-fornecedor">
+            <div className="grid h-[66px] shrink-0 gap-1.5" style={{ gridTemplateColumns: estreito ? 'minmax(0, 7fr) minmax(0, 13fr)' : 'minmax(0, 2fr) minmax(0, 3fr) 196px' }} data-testid="nota-faixa-nota-fornecedor">
             {/* a conferência de regressão (29/10): o que a Nota da tela antiga mostrava e não cabe nas 2 linhas — natureza, desconto, destinatário e
                 dados adicionais — fica no title do bloco; o aviso da REMESSA (NOTA-AVULSA-890) é um selo âmbar; pela chave, emissão e valor são CAMPOS */}
             <section className={cn(BLOCO, 'min-h-0 overflow-hidden')} data-testid="nota-bloco-nota"
@@ -1380,6 +1401,8 @@ export function NotaFiscalDialog({
             </section>
             {/* DA-NOTA-ETAPAS-01 FASE 0 (2) — a coluna "Arquivo" virou 2 chips: o PDF (o lido, ou o DANFE GERADO do XML pelo gerador do Code 1,
                 `abrirDanfe`: um gerador só) e o XML ("Itens" leva à etapa 3) */}
+            {/* abaixo de 1000px os 2 chips sobem para a barra do título (Nota e Fornecedor ficam com a largura de antes) */}
+            {!estreito && (
             <div className="flex w-[196px] shrink-0 flex-col justify-center gap-1" data-testid="nota-chips-arquivo">
               <button type="button" className="flex h-[26px] min-w-0 items-center gap-1.5 rounded-md border bg-card px-2 text-left text-[10.5px] font-medium hover:bg-muted"
                 onClick={verOPdf} title={lido.origem === 'pdf' ? `${arquivo.name} · abrir a nota` : 'O DANFE gerado do XML desta nota, numa aba nova (para ver e imprimir)'} data-testid="nota-chip-pdf">
@@ -1389,7 +1412,7 @@ export function NotaFiscalDialog({
               </button>
               {lido.origem === 'pdf' ? (
                 <button type="button" className="flex h-[26px] min-w-0 items-center gap-1.5 rounded-md border bg-card px-2 text-left text-[10.5px] font-medium hover:bg-muted"
-                  onClick={abrirEmNovaAba} title={`${arquivo.name} · ${Math.max(1, Math.round(arquivo.size / 1024))} KB`} data-testid="nota-nova-aba">
+                  onClick={abrirEmNovaAba} title={`O PDF numa aba nova · ${arquivo.name} · ${Math.max(1, Math.round(arquivo.size / 1024))} KB`} data-testid="nota-nova-aba">
                   <span className="min-w-0 flex-1 whitespace-nowrap text-muted-foreground">O PDF numa aba nova</span><span className="shrink-0 text-primary">↗</span>
                 </button>
               ) : (
@@ -1402,6 +1425,7 @@ export function NotaFiscalDialog({
               )}
               {erroDoDanfe && <span className="sr-only" data-testid="nota-chip-pdf-erro">{erroDoDanfe}</span>}
             </div>
+            )}
             </div>
             {/* DA-NOTA-ETAPAS-01 — as ETAPAS no lugar das abas (altura fixa; o esqueleto as desenha desabilitadas) */}
             {naoFinanceiraNova && naoFinanceira ? (

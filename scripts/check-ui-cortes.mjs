@@ -1822,7 +1822,7 @@ const CENARIOS = [
   ...NOTA_JA_LANCADA.flatMap((v) => [['existe', 'O que já existe'], ['ficar', 'Como vai ficar'], ['itens', 'Itens da nota'], ['itens-fiscal', 'Itens da nota', 'Fiscal'],
     ['itens-contas', 'Itens da nota', 'Contas'], ['confirmar', 'Confirmar']].map(([a, rotulo, sub]) => ({
     nome: `nota-pdf-ja-${a}-${v}`, url: `tela=nota-pdf&v=${v}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"], [data-testid="contas-rolagem"]' },
     antes: async (p) => {
       await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
       await p.locator('[data-testid="nota-abas-ja"] button', { hasText: rotulo }).first().click(); await p.waitForTimeout(500);
