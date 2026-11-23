@@ -11,6 +11,7 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { PainelDaConta, FUNDO_ESCURO } from '@/components/conciliacao/PainelDaConta';
+import { useSaidasDoPainel } from '@/hooks/useSaidasDoPainel';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab, ABAS_ESPELHO, type AbaEspelho } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
@@ -362,7 +363,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [editingSaldo, setEditingSaldo] = useState<{anoMes:string;contaId:string;current:number|null;saldoData:string|null}|null>(null);
   /* CONC-PAINEL-CONTA-01 (Gabriel 17/11 09:57) — o ✎ da conta abre o PAINEL LATERAL (`PainelDaConta`); o saldo à mão segue no
      `SaldoRealDialog`, aberto pelo "✎ Informar" do passo 4 */
-  const [painelContaId, setPainelContaId] = useState<string | null>(null);
+  /* CONC-PAINEL-02 (Gabriel 23/11 17:11) — NAV-VOLTA-ORIGEM-01: as saídas do painel (Conferência, Importar banco, ✎ saldo) VOLTAM para ele
+     (`useSaidasDoPainel`, sobre o `useCamadas`); nenhuma fecha o painel */
+  const painel = useSaidasDoPainel({ vista: vistaExtrato, irParaVista: setVistaExtrato, escolherConta: setSelectedConta,
+    abrirConferencia: () => setAbaEspelho('conferencia') });
+  const painelContaId = painel.contaId;
   /* CONC-PAINEL-02 — o extrato arrastado no painel: a prévia do Importar banco já abre com ele (nada grava antes do "Importar") */
   const [arquivoParaImportar, setArquivoParaImportar] = useState<File | null>(null);
 
@@ -1085,6 +1090,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               contaId={selectedConta !== '__all__' ? selectedConta : ''}
               onContaChange={(id) => setSelectedConta(id || '__all__')}
               onImportado={() => { setRefreshExtrato(n => n + 1); queryClient.invalidateQueries({ queryKey: ['extrato-bancario-v2'] }); }}
+              /* CONC-PAINEL-02 — veio do painel da conta: a volta para ele (o mesmo passo) */
+              acoes={painel.vindoDoPainel('importar') ? <button type="button" className="whitespace-nowrap text-[11px] text-[#1f5fbf] hover:underline"
+                onClick={() => painel.voltar('importar')} data-testid="voltar-ao-painel">← voltar ao painel da conta</button> : undefined}
             />
 
             {/* ⚠ A TABELA "Importações desta conta" SAIU DAQUI — PR-IMPORTAR-CORPO-01. Ela
@@ -1188,7 +1196,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             <EspelhoConciliacaoTab clienteId={clienteId ?? null}
               contaId={selectedConta === '__all__' ? null : selectedConta}
               ano={String(ano)} mes={selectedMes} mostrarCandidatos
-              aba={abaEspelho} onAbaChange={setAbaEspelho}
+              aba={abaEspelho} onAbaChange={(a) => { setAbaEspelho(a); if (a !== 'conferencia') painel.voltar('conferencia'); }}
               diaFoco={diaFoco} onDiaFocado={() => setDiaFoco(null)}
               /* P159b — a Evolução do saldo: "ver o dia na Conferência" sem `onVerDiaNaConferencia` (o `irParaConferencia` saiu no
                  P166): o próprio Espelho abre a Conferência no dia, pelo `onAbaChange` daqui (a mesma conta, a mesma vista). */ />
@@ -1399,7 +1407,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         isActive={selectedConta===s.conta.id}
                         isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
                         onClick={()=>setSelectedConta(s.conta.id)}
-                        onEdit={()=>setPainelContaId(s.conta.id)}
+                        onEdit={()=>painel.abrirPainel(s.conta.id)}
                         canEdit={canEditSaldoFinal(anoMesSel)}
                         showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null}
                         estadoOfx={estadoDoSlotOfx({
@@ -1727,9 +1735,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       {/* CONC-PAINEL-CONTA-01 — o painel lateral da conta (o ✎); LEVA às peças de hoje: Importar banco, o modal Conferência, o saldo à mão */}
       {/* CONC-PAINEL-02 (mock 23/11 08:11) — o painel da conta no mês: os arquivos do mês (a mesma lista do chip), os passos por tipo, a
           "Próxima pendente" e o fechar que VOLTA À LINHA da última conta mostrada (NAV-VOLTA-ORIGEM-01) */}
-      <PainelDaConta aberto={painelContaId !== null} clienteId={clienteId ?? null}
+      <PainelDaConta aberto={painel.aberto} escondido={painel.escondido} clienteId={clienteId ?? null}
         aoFechar={(ultima) => {
-          setPainelContaId(null);
+          painel.fecharPainel();
           if (ultima) {
             setSelectedConta(ultima);
             window.setTimeout(() => document.querySelector(`[data-testid="linha-saldo-conta"][data-conta="${ultima}"]`)?.scrollIntoView({ block: 'nearest' }), 0);
@@ -1739,13 +1747,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         linha={perContaSaldos.find(x => x.conta.id === painelContaId)?.linha ?? null} anoMes={anoMesSel}
         comprovantes={comprovantesDoAno} aoMudarArquivos={() => { void carregarIndicadoresSaldo(); }}
         ordem={perContaSaldos.map(x => ({ id: x.conta.id, nome: getContaLabel(x.conta), pendente: x.linha?.status !== 'conciliado' }))}
-        aoTrocarConta={(id) => setPainelContaId(id)}
-        aoImportar={(id, arquivo) => { setPainelContaId(null); setSelectedConta(id); setArquivoParaImportar(arquivo ?? null); setVistaExtrato('importar'); }}
-        aoCasar={(id) => { setPainelContaId(null); setSelectedConta(id); setVistaExtrato('enriquecer_sistema'); setAbaEspelho('conferencia'); }}
+        aoTrocarConta={(id) => painel.trocarConta(id)}
+        aoImportar={(id, arquivo) => { setArquivoParaImportar(arquivo ?? null); painel.importar(id); }}
+        aoCasar={(id) => painel.conferencia(id)}
         aoInformarSaldo={(id) => {
           const c = perContaSaldos.find(x => x.conta.id === id);
-          setPainelContaId(null);
           handleEditSaldo(anoMesSel, id, c ? saldosDaLinha(c.linha).saldo_extrato : null);
+          painel.saldo();
         }} />
       {editingSaldo && clienteId && (
         <SaldoRealDialog
@@ -1758,7 +1766,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           saldoDataAtual={editingSaldo.saldoData}
           /* Anexar ou cancelar um extrato no modal não passa pelo `aoSalvar` (grava na hora),
              então os ícones recarregam ao fechar. */
-          aoFechar={()=>{ setEditingSaldo(null); void carregarIndicadoresSaldo(); }}
+          aoFechar={()=>{ setEditingSaldo(null); void carregarIndicadoresSaldo(); painel.voltar('saldo'); }}
           aoSalvar={()=>{ loadData(); releDono(); }}
         />
       )}

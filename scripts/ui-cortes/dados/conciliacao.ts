@@ -52,11 +52,13 @@ export const LINHAS_SISTEMA = [
 ];
 
 export function resumoDoMes(contaIds: string[] | null, v: string | null = null) {
-  const nomes = v === 'nj' ? CONTAS_TAMANHO_REAL : v === 'vera' ? CONTAS_VERA : v === 'sr' ? CONTAS_SR : CONTAS;
+  const nomes = v === 'nj' || v === 'nj10' ? CONTAS_TAMANHO_REAL : v === 'vera' ? CONTAS_VERA : v === 'sr' ? CONTAS_SR : CONTAS;
   const cc1 = linhaConta({ conta_id: 'cc1', conta_nome: nomes[0].nome_conta, tipo_conta: 'cc', status: v === 'sr' ? 'nao_conciliado' : 'conciliado', saldo_inicial: 1,
     saldo_sistema: -99999999.99, saldo_extrato: -99999999.99, diferenca: 0, entradas: 3060.6, saidas: -100003061.59,
     /* CONC-PAINEL-02 (`&v=sr`) — a corrente com linhas do extrato sem par (o passo "Casar lançamentos") */
     ...(v === 'sr' ? { extratos_sem_par: { qtde: 58, valor: 1204330.1 }, lancamentos_sem_par: { qtde: 2, valor: 1500 } } : {}),
+    /* CONC-PAINEL-02 entrega 2 (`&v=nj10`) — as 3 linhas do extrato sem par do NJ BB out/26 (nomes inventados) */
+    ...(v === 'nj10' ? { status: 'nao_conciliado', extratos_sem_par: { qtde: 3, valor: 413338.42 }, lancamentos_sem_par: { qtde: 1, valor: 89.9 } } : {}),
     ...(contaIds?.length === 1 ? { linhas_sistema: LINHAS_SISTEMA } : {}) });
   const cc2 = linhaConta({ conta_id: 'cc2', conta_nome: nomes[1].nome_conta, tipo_conta: 'cc', status: 'nao_conciliado', saldo_inicial: 1,
     saldo_sistema: 1, saldo_extrato: 1.03, diferenca: -0.03, motivos: [{ motivo: 'saldo_diverge', valor: -0.03 }] });
@@ -117,3 +119,33 @@ export const MOVIMENTOS_DO_ARQUIVO = [
   { id: 'ext-2', data_movimento: '2031-09-02', descricao: 'PAGAMENTO DE BOLETO · FORNECEDOR SINTÉTICO COM O NOME LONGO DE EXEMPLO', valor: -99999999.99 },
   { id: 'ext-3', data_movimento: '2031-09-03', descricao: 'TED RECEBIDA · VENDA DE BEZERROS DESMAMADOS', valor: 1200 },
 ];
+
+/** CONC-PAINEL-02 ajuste (Gabriel 23/11 17:09, `&v=nj10`) — o caso do print do NJ BB out/26 com NOMES INVENTADOS: 10 arquivos na mesma conta
+ *  (9 OFX baixados dia a dia, cada um do dia 1 até o dia do download — todos se sobrepõem — e o PDF do saldo). */
+const DD = (n: number) => String(n).padStart(2, '0');
+export const IMPORTACOES_NJ10 = Array.from({ length: 9 }, (_, i) => ({
+  id: `imp-nj-${i + 1}`, conta_bancaria_id: 'cc1', saldo_declarado: i === 8 ? -99999999.99 : 1250000 - i * 37215.4, saldo_declarado_data: `2031-09-${DD(3 + i * 3)}`,
+  nome_arquivo: `Extrato Banco Exemplos PJ Pecuária 2031-09-${DD(3 + i * 3)}.ofx`, tipo_arquivo: 'OFX', created_at: `2031-09-${DD(4 + i * 3)}T08:00:00Z`,
+  cancelado_em: null, cancelada_em: null, arquivo_caminho: i >= 7 ? `cli/importacoes/cc1/imp-nj-${i + 1}.ofx` : null,
+}));
+export const LIGACOES_NJ10 = IMPORTACOES_NJ10.flatMap((imp, i) => Array.from({ length: 3 + i * 3 }, (_, d) => ({
+  id: `ext-nj-${i + 1}-${d + 1}`, importacao_id: imp.id, cancelado_em: null, data_movimento: `2031-09-${DD(d + 1)}` })));
+
+/** CONC-PAINEL-02 entrega 2 (`&v=nj10`) — o extrato do mês da cc1 (`useConciliacaoDoMes`): 3 sem par (uma exata, uma a conferir com empate, uma sem
+ *  sugestão) e uma já conciliada; e o que o motor (`fn_candidatos_conciliacao`) devolve para cada uma. Nomes e números inventados. */
+export const MOVS_NJ10 = [
+  { id: 'mv-1', data_movimento: '2031-09-03', descricao: 'PAG BOLETO ENERGIA ELETRICA EXEMPLO DISTRIBUIDORA S/A', documento: null, valor: -3118.42 },
+  { id: 'mv-2', data_movimento: '2031-09-05', descricao: 'TED RECEBIDA FRIGORIFICO EXEMPLO DO CENTRO-OESTE LTDA', documento: null, valor: 410220 },
+  { id: 'mv-3', data_movimento: '2031-09-12', descricao: 'PIX ENVIADO JOSE EXEMPLO DA SILVA', documento: null, valor: -1500 },
+  { id: 'mv-4', data_movimento: '2031-09-15', descricao: 'TARIFA PACOTE SERVICOS', documento: null, valor: -89.9 },
+];
+export const ITENS_NJ10 = [{ extrato_id: 'mv-4', valor_aplicado: -89.9, lancamento_id: 'l-tar', financeiro_lancamentos_v2: { descricao: 'Tarifa bancária', financeiro_fornecedores: null } }];
+export function candidatosNj10(extratoId: string) {
+  const c = (o: Record<string, unknown>) => ({ numero_documento: null, status: 'programado', ja_conciliado: 0, delta_valor: 0, delta_dias: 2, indisponivel: false,
+    motivo_indisponivel: null, ambiguo: false, pre_marcado: false, score: 92, ...o });
+  if (extratoId === 'mv-1') return [c({ id: 'l-ener', descricao: 'Energia elétrica - Sede Exemplo', favorecido: 'Distribuidora de Energia Exemplo S/A', data_referencia: '2031-09-05',
+    vencimento: '2031-09-05', valor: -3118.42, saldo: -3118.42, pre_marcado: true })];
+  if (extratoId === 'mv-2') return [c({ id: 'l-boi', descricao: 'Venda de 118 bois gordos · OC exemplo 118 · parcela 1/2', favorecido: 'Frigorífico Exemplo', data_referencia: '2031-09-06',
+    vencimento: '2031-09-06', valor: 410220, saldo: 410220, ambiguo: true }), c({ id: 'l-boi2', descricao: 'Venda de bois · parcela 2/2', valor: 410220, saldo: 410220, score: 90 })];
+  return [];
+}

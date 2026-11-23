@@ -33,6 +33,10 @@ export interface ImportacaoDoMes {
   saldoDeclaradoData?: string | null;
   /** o original no bucket (lote 115620, importações de 23/11/2026 em diante); nulo = "o arquivo original não foi guardado" */
   arquivoCaminho?: string | null;
+  /** CONC-PAINEL-02 ajuste (Gabriel 17:09) — o 1º e o último dia dos movimentos do arquivo (YYYY-MM-DD) e o saldo que o banco declarou */
+  periodoDe?: string | null;
+  periodoAte?: string | null;
+  saldoDeclarado?: number | null;
 }
 
 export type FormatoDoArquivo = 'PDF' | 'IMG' | 'OFX' | 'CSV' | 'XLS' | 'OF' | 'ARQ';
@@ -52,6 +56,12 @@ export interface ArquivoDoMes {
   /** o que dá para fazer: comprovante sem arquivo no bucket não abre; importação não guarda o original (D1 a, Gabriel 23/11) */
   podeVer: boolean;
   podeBaixar: boolean;
+  /** a LISTA (CONC-PAINEL-02 ajuste): o período dos movimentos (só importação), quando entrou, quantos movimentos e o saldo final declarado */
+  periodoDe: string | null;
+  periodoAte: string | null;
+  enviadoEm: string | null;
+  movimentos: number | null;
+  saldoFinal: number | null;
 }
 
 const txt = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
@@ -112,6 +122,7 @@ export function arquivosDoMes(p: {
         caminho: c.caminho,
         podeVer: !!c.caminho && (formato === 'PDF' || formato === 'IMG'),
         podeBaixar: !!c.caminho,
+        periodoDe: null, periodoAte: null, enviadoEm: c.enviadoEm, movimentos: null, saldoFinal: null,
       };
     });
   const imps = p.importacoesDoMes
@@ -127,7 +138,61 @@ export function arquivosDoMes(p: {
         /* "Ver" de uma importação = os movimentos que ela trouxe (D1 a); "Baixar" = o original, só nas NOVAS (D1 b, lote 115620) */
         podeVer: true,
         podeBaixar: !!i.arquivoCaminho,
+        periodoDe: i.periodoDe ?? null, periodoAte: i.periodoAte ?? null, enviadoEm: i.data || null, movimentos: i.importados,
+        saldoFinal: typeof i.saldoDeclarado === 'number' ? i.saldoDeclarado : null,
       };
     });
   return [...comps, ...imps];
+}
+
+/* ─── CONC-PAINEL-02 ajuste (Gabriel 23/11 17:09, print do NJ BB out/26 com 10 arquivos: a faixa virava rolagem lateral infinita) ─── */
+
+/** Até 2 arquivos a faixa mostra os cartões; 3 ou mais = UM cartão de resumo de largura fixa (nunca rolagem lateral). */
+export const MAX_CARTOES_NA_FAIXA = 2;
+
+/** O cartão de resumo: "10 arquivos" e "OFX 9 · PDF 1" (o formato mais comum primeiro; empate pelo nome). */
+export function resumoDosArquivos(lista: readonly ArquivoDoMes[]): { total: string; formatos: string } {
+  const n = new Map<FormatoDoArquivo, number>();
+  for (const a of lista) n.set(a.formato, (n.get(a.formato) ?? 0) + 1);
+  const formatos = [...n.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).map(([f, k]) => `${f} ${k}`).join(' · ');
+  return { total: `${lista.length} ${lista.length === 1 ? 'arquivo' : 'arquivos'}`, formatos };
+}
+
+export type ColunaDosArquivos = 'nome' | 'formato' | 'periodo' | 'enviado' | 'movimentos' | 'saldo';
+
+/** A lista ordenada pela coluna clicada. O que não tem o dado ("—") vai SEMPRE para o fim, nos dois sentidos. */
+export function ordenarArquivos(lista: readonly ArquivoDoMes[], coluna: ColunaDosArquivos, crescente: boolean): ArquivoDoMes[] {
+  const chave = (a: ArquivoDoMes): string | number | null => {
+    switch (coluna) {
+      case 'nome': return a.nome.toLocaleLowerCase('pt-BR');
+      case 'formato': return a.formato;
+      case 'periodo': return a.periodoDe ? `${a.periodoDe}|${a.periodoAte ?? ''}` : null; // o início e, no empate, o fim
+      case 'enviado': return a.enviadoEm;
+      case 'movimentos': return a.movimentos;
+      case 'saldo': return a.saldoFinal;
+    }
+  };
+  return lista.slice().sort((a, b) => {
+    const x = chave(a); const y = chave(b);
+    if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
+    const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'pt-BR');
+    return crescente ? c : -c;
+  });
+}
+
+export interface Sobreposicao { a: ArquivoDoMes; b: ArquivoDoMes; de: string; ate: string }
+
+/** Dois arquivos que cobrem OS MESMOS DIAS (o período dos movimentos se cruza, nem que seja num dia). Só aviso: nada muda. */
+export function sobreposicoesDePeriodo(lista: readonly ArquivoDoMes[]): Sobreposicao[] {
+  const comPeriodo = lista.filter((a) => a.periodoDe && a.periodoAte);
+  const r: Sobreposicao[] = [];
+  for (let i = 0; i < comPeriodo.length; i++) {
+    for (let j = i + 1; j < comPeriodo.length; j++) {
+      const a = comPeriodo[i]; const b = comPeriodo[j];
+      const de = (a.periodoDe ?? '') > (b.periodoDe ?? '') ? a.periodoDe ?? '' : b.periodoDe ?? '';
+      const ate = (a.periodoAte ?? '') < (b.periodoAte ?? '') ? a.periodoAte ?? '' : b.periodoAte ?? '';
+      if (de <= ate) r.push({ a, b, de, ate });
+    }
+  }
+  return r;
 }

@@ -22,7 +22,9 @@ const NAO_CONCILIADO: StatusDono = 'nao_conciliado';
 const banco = vi.hoisted(() => {
   const importacoes: Record<string, unknown>[] = [];
   const lancamentos: Record<string, unknown>[] = [];
-  return { ligada: false, importacoes, lancamentos };
+  const movimentos: Record<string, unknown>[] = [];
+  const motor = new Map<string, unknown>();
+  return { ligada: false, importacoes, lancamentos, movimentos, motor, chamadasDoMotor: 0 };
 });
 const espias = vi.hoisted(() => ({
   cancelar: vi.fn(async () => ({ ok: true, erro: null })),
@@ -34,7 +36,7 @@ const espias = vi.hoisted(() => ({
 vi.mock('@/integrations/supabase/client', () => {
   const consulta = (dados: () => unknown[]) => {
     const q: Record<string, unknown> = {};
-    for (const m of ['select', 'eq', 'order', 'limit', 'is', 'in', 'gte', 'lte']) q[m] = () => q;
+    for (const m of ['select', 'eq', 'order', 'limit', 'is', 'in', 'gte', 'lte', 'lt']) q[m] = () => q;
     q.then = (ok: (r: { data: unknown[]; error: null }) => unknown) => Promise.resolve({ data: dados(), error: null }).then(ok);
     return q;
   };
@@ -56,6 +58,13 @@ vi.mock('@/hooks/useArquivosDoMes', () => ({
   gravarObservacaoDoMes: espias.obs,
   lerObservacaoDoMes: async () => null,
 }));
+vi.mock('@/hooks/useConciliacaoDoMes', () => ({
+  useConciliacaoDoMes: () => ({ movimentos: banco.movimentos, loading: false, recarregar: vi.fn() }),
+}));
+vi.mock('@/lib/conciliacao/loteDeSugestoes', () => ({
+  buscarSugestoesDoMes: async (_c: string, ids: string[]) => { banco.chamadasDoMotor += 1; return new Map(ids.map((id) => [id, banco.motor.get(id) ?? { ok: true, sugestao: { balde: 'sem', candidato: null, empate: false } }])); },
+}));
+vi.mock('@/components/conciliacao/EstacaoConciliar', () => ({ EstacaoConciliar: ({ movimento }: { movimento: { id: string } }) => <div data-testid="stub-estacao">{movimento.id}</div> }));
 vi.mock('@/components/conciliacao/PalcoDoMes', () => ({ PalcoDoMes: ({ contaId }: { contaId: string }) => <div data-testid="stub-palco">{contaId}</div> }));
 vi.mock('@/components/conciliacao/ExtratoDoSistemaDialog', () => ({ ExtratoDoSistemaDialog: () => <div data-testid="stub-sistema" /> }));
 vi.mock('@/components/conciliacao/DesfazerArquivoModal', () => ({
@@ -158,7 +167,7 @@ const IMPORTACAO = { id: 'i1', nomeArquivo: 'extrato-set.ofx', data: '2031-10-02
   meses: ['2031-09'], canceladaNoRegistro: false, tipoArquivo: 'OFX', saldoDeclaradoData: '2031-09-30' };
 
 describe('o painel (componente)', () => {
-  beforeEach(() => { banco.importacoes = []; banco.lancamentos = []; banco.ligada = false; vi.clearAllMocks(); });
+  beforeEach(() => { banco.importacoes = []; banco.lancamentos = []; banco.movimentos = []; banco.motor.clear(); banco.chamadasDoMotor = 0; banco.ligada = false; vi.clearAllMocks(); });
   const montar = (o: Partial<PainelDaContaProps> = {}) => {
     const props: PainelDaContaProps = {
       aberto: true, aoFechar: vi.fn(), clienteId: 'cli', conta: { id: 'c1', nome: 'Previdência Exemplo', tipoConta: 'inv' },
@@ -291,6 +300,136 @@ describe('o painel (componente)', () => {
     await waitFor(() => expect(p.aoFechar).toHaveBeenCalledWith('c1'));
   });
 
+  /* CONC-PAINEL-02 ajuste (Gabriel 23/11 17:09, print do NJ BB out/26 com 10 arquivos: a faixa virava rolagem lateral infinita) */
+  const DEZ = Array.from({ length: 9 }, (_, i) => ({ ...IMPORTACAO, id: `o${i + 1}`, nomeArquivo: `extrato-${String(i + 1).padStart(2, '0')}.ofx`,
+    data: `2031-10-${String(i + 2).padStart(2, '0')}`, importados: 10 + i, periodoDe: '2031-09-01', periodoAte: `2031-09-${String(i + 1).padStart(2, '0')}`,
+    saldoDeclarado: 1000 - i * 100 }));
+
+  it('A1 até 2 arquivos = os cartões; 3 ou mais = UM cartão de resumo ("10 arquivos · OFX 9 · PDF 1"), NUNCA rolagem lateral', async () => {
+    banco.importacoes = DEZ;
+    montar();
+    expect((await screen.findByTestId('painel-arquivos-resumo-total')).textContent).toBe('10 arquivos');
+    expect(screen.getByTestId('painel-arquivos-resumo-formatos').textContent).toBe('OFX 9 · PDF 1');
+    expect(screen.queryAllByTestId('painel-arquivo')).toHaveLength(0);
+    const faixa = screen.getByTestId('painel-arquivos-faixa');
+    expect(faixa.className).toContain('overflow-hidden');
+    expect(faixa.className).not.toContain('overflow-x-auto');
+  });
+
+  it('A2 o resumo abre a LISTA à direita (investimento: sem passo "Extrato"); colunas fixas; Ver abre no mesmo lado e "← voltar à lista" volta', async () => {
+    banco.importacoes = DEZ;
+    montar();
+    fireEvent.click(await screen.findByTestId('painel-arquivos-resumo'));
+    expect(screen.getByTestId('painel-trabalho-lista')).toBeTruthy();
+    const linhas = screen.getAllByTestId('painel-lista-linha');
+    expect(linhas).toHaveLength(10);
+    const o3 = linhas.find((l) => l.getAttribute('data-chave') === 'importacao:o3');
+    expect(o3 && within(o3).getByTestId('painel-lista-periodo').textContent).toBe('01/09/2031–03/09/2031');
+    expect(o3?.textContent).toContain('800,00');
+    const pdf = linhas.find((l) => l.getAttribute('data-chave') === 'comprovante:d1');
+    expect(pdf && within(pdf).getByTestId('painel-lista-periodo').textContent).toBe('—');
+    if (!o3) throw new Error('sem a linha');
+    fireEvent.click(within(o3).getByTestId('painel-lista-ver'));
+    expect((await screen.findByTestId('painel-ver-movimentos')).textContent).toContain('PIX RECEBIDO EXEMPLO');
+    fireEvent.click(screen.getByTestId('painel-ver-voltar'));
+    expect(screen.getAllByTestId('painel-lista-linha')).toHaveLength(10);
+  });
+
+  it('A3 conta corrente: o passo "Extrato" É a lista; ordenar pela coluna (de novo = inverte); Baixar/Desfazer pela linha', async () => {
+    banco.importacoes = DEZ;
+    montar({ conta: { id: 'c1', nome: 'Banco Exemplo', tipoConta: 'cc' }, linha: LINHA({ tem: true, banco: 3, sistema: 1, extrato: 998.5, dif: -1.5 }) });
+    fireEvent.click(await screen.findByTestId('painel-passo-extrato'));
+    expect(screen.getByTestId('painel-trabalho-extrato')).toBeTruthy();
+    const nomes = () => screen.getAllByTestId('painel-lista-nome').map((n) => (n.textContent ?? '').replace('⚠ ', ''));
+    fireEvent.click(screen.getByTestId('painel-lista-ordenar-saldo'));
+    expect(nomes().slice(0, 2)).toEqual(['extrato-09.ofx', 'extrato-08.ofx']);
+    expect(nomes().at(-1)).toBe('Saldo Previdência Exemplo 3009.pdf'); // sem saldo: sempre no fim
+    fireEvent.click(screen.getByTestId('painel-lista-ordenar-saldo'));
+    expect(nomes()[0]).toBe('extrato-01.ofx');
+    expect(screen.getByTestId('painel-lista-ordenar-saldo').textContent).toBe('Saldo final ▼');
+    const [primeira] = screen.getAllByTestId('painel-lista-linha');
+    fireEvent.click(within(primeira).getByTestId('painel-lista-desfazer'));
+    expect((await screen.findByTestId('stub-desfazer-arquivo')).textContent).toBe('extrato-01.ofx');
+    /* o resumo também abre a lista: na corrente, é o passo Extrato */
+    fireEvent.click(screen.getByTestId('painel-passo-casar'));
+    fireEvent.click(screen.getByTestId('painel-arquivos-resumo'));
+    expect(screen.getByTestId('painel-passo-extrato').className).toContain('bg-[#eef4ff]');
+  });
+
+  it('A4 o aviso de SOBREPOSIÇÃO: dois arquivos nos mesmos dias = a frase com os dois e o período; muitos = os marcados com ⚠', async () => {
+    banco.importacoes = [
+      { ...IMPORTACAO, id: 'a', nomeArquivo: 'quinzena-1.ofx', periodoDe: '2031-09-01', periodoAte: '2031-09-15' },
+      { ...IMPORTACAO, id: 'b', nomeArquivo: 'quinzena-2.ofx', periodoDe: '2031-09-15', periodoAte: '2031-09-30' },
+      { ...IMPORTACAO, id: 'c', nomeArquivo: 'outubro.ofx', periodoDe: '2031-10-01', periodoAte: '2031-10-31' }];
+    montar();
+    fireEvent.click(await screen.findByTestId('painel-arquivos-resumo'));
+    expect(screen.getByTestId('painel-lista-sobreposicao').textContent).toBe('⚠ quinzena-1.ofx e quinzena-2.ofx cobrem os mesmos dias (15/09/2031–15/09/2031).');
+    expect(screen.getAllByTestId('painel-lista-linha').filter((l) => l.getAttribute('data-sobreposto') === 'sim')).toHaveLength(2);
+    banco.importacoes = DEZ;
+  });
+
+  it('A5 sem sobreposição, sem aviso; com 2 arquivos a faixa segue nos cartões', async () => {
+    banco.importacoes = [{ ...IMPORTACAO, periodoDe: '2031-09-01', periodoAte: '2031-09-30' }];
+    montar();
+    expect(await screen.findAllByTestId('painel-arquivo')).toHaveLength(2);
+    expect(screen.queryByTestId('painel-arquivos-resumo')).toBeNull();
+    fireEvent.click(screen.getAllByTestId('painel-arquivo-ver')[1]);
+    fireEvent.click(await screen.findByTestId('painel-ver-voltar'));
+    expect(screen.getAllByTestId('painel-lista-linha')).toHaveLength(2);
+    expect(screen.queryByTestId('painel-lista-sobreposicao')).toBeNull();
+  });
+
+  /* CONC-PAINEL-02 entrega 2 (Gabriel 23/11 17:11) — o passo "Casar lançamentos" LISTA as linhas sem par com a sugestão do motor */
+  const MOV = (id: string, data: string, descricao: string, valor: number, situacao = 'sem_vinculo') => ({ id, data_movimento: data, descricao, documento: null,
+    valor, valorConciliado: 0, valorAberto: valor, situacao, lancamentoId: null, vinculos: 0 });
+  const CAND = (o: Record<string, unknown>) => ({ id: 'l', descricao: 'Energia', favorecido: null, numeroDocumento: null, dataReferencia: '2031-09-05', valor: -3118.42,
+    status: 'programado', jaConciliado: 0, saldo: -3118.42, deltaValor: 0, deltaDias: 2, score: 92, preMarcado: true, ambiguo: false, indisponivel: false,
+    motivoIndisponivel: null, vencimento: '2031-09-05', ...o });
+  const CORRENTE = { conta: { id: 'c1', nome: 'Banco Exemplo', tipoConta: 'cc' }, linha: LINHA({ tem: true, banco: 3, sistema: 1, extrato: 998.5, dif: -1.5 }), comprovantes: [] };
+
+  it('E1 as 3 linhas sem par (a conciliada fica fora) com a sugestão do motor: exata ✓ casar · a conferir ≈ casar · sem sugestão = procurar', async () => {
+    banco.movimentos = [MOV('m1', '2031-09-03', 'PAG BOLETO ENERGIA EXEMPLO', -3118.42), MOV('m2', '2031-09-05', 'TED RECEBIDA FRIGORIFICO EXEMPLO', 410220),
+      MOV('m3', '2031-09-12', 'PIX ENVIADO JOSE EXEMPLO', -1500), MOV('m4', '2031-09-15', 'TARIFA', -89.9, 'conciliado')];
+    banco.motor.set('m1', { ok: true, sugestao: { balde: 'exata', candidato: CAND({}), empate: false } });
+    banco.motor.set('m2', { ok: true, sugestao: { balde: 'conferir', candidato: CAND({ descricao: 'Venda de bois · OC exemplo', valor: 410220 }), empate: true } });
+    montar(CORRENTE);
+    await waitFor(() => expect(screen.getAllByTestId('painel-casar-sugestao')[0].textContent).toBe('✓ Energia'));
+    const linhas = screen.getAllByTestId('painel-casar-linha');
+    expect(linhas.map((l) => [l.getAttribute('data-tom'), within(l).getByTestId('painel-casar-acao').textContent])).toEqual([['exata', 'casar'], ['conferir', 'casar'], ['sem', 'procurar']]);
+    expect(linhas[0].textContent).toContain('03/09/2031');
+    expect(within(linhas[1]).getByTestId('painel-casar-sugestao').getAttribute('title')).toContain('empate com outro: conferir');
+    expect(banco.chamadasDoMotor).toBe(1); // poucas linhas: o motor rodou ao abrir, uma varredura
+    /* casar/procurar = a ESTAÇÃO por cima (as travas são dela); embaixo o lote ("Casar os exatos") e a Conferência */
+    fireEvent.click(within(linhas[2]).getByTestId('painel-casar-acao'));
+    expect((await screen.findByTestId('stub-estacao')).textContent).toBe('m3');
+    expect(screen.getByTestId('painel-casar-exatos').textContent).toBe('Casar os exatos (prévia)');
+    expect(screen.getByTestId('painel-casar').textContent).toBe('Conferência lado a lado');
+  });
+
+  it('E2 muitas linhas sem par: o motor NÃO roda sozinho (P124, buscar é gesto) — "Buscar sugestões (N)" roda', async () => {
+    banco.movimentos = Array.from({ length: 13 }, (_, i) => MOV(`m${i}`, '2031-09-10', `PIX ${i}`, -10 - i));
+    montar(CORRENTE);
+    expect((await screen.findAllByTestId('painel-casar-linha'))).toHaveLength(13);
+    expect(banco.chamadasDoMotor).toBe(0);
+    expect(screen.getAllByTestId('painel-casar-sugestao')[0].textContent).toBe('—');
+    fireEvent.click(screen.getByTestId('painel-casar-buscar'));
+    await waitFor(() => expect(banco.chamadasDoMotor).toBe(1));
+    await waitFor(() => expect(screen.getAllByTestId('painel-casar-sugestao')[0].textContent).toBe('sem sugestão'));
+  });
+
+  it('E3 voltou da aba Importar (escondido → visível): o painel segue no MESMO passo (nada recomeça)', async () => {
+    banco.movimentos = [];
+    const props: PainelDaContaProps = { aberto: true, aoFechar: vi.fn(), clienteId: 'cli', conta: CORRENTE.conta, linha: CORRENTE.linha, anoMes: '2031-09',
+      comprovantes: [], aoMudarArquivos: vi.fn(), ordem: [], aoTrocarConta: vi.fn(), aoImportar: vi.fn(), aoCasar: vi.fn(), aoInformarSaldo: vi.fn() };
+    const { rerender } = render(<PainelDaConta {...props} />);
+    fireEvent.click(screen.getByTestId('painel-passo-saldo'));
+    rerender(<PainelDaConta {...props} escondido />);
+    expect(screen.queryByTestId('painel-da-conta')).toBeNull();
+    rerender(<PainelDaConta {...props} escondido={false} />);
+    expect(await screen.findByTestId('painel-trabalho-saldo')).toBeTruthy();
+    expect(props.aoFechar).not.toHaveBeenCalled();
+  });
+
   it('LARGURA E ALTURAS FIXAS (UI-LARGURA-FIXA-01): 980 = 430 | 550; topo 56 · arquivos 72 · rodapé 44 — iguais com 0 ou N arquivos', () => {
     montar({ comprovantes: [] });
     const painel = screen.getByTestId('painel-da-conta');
@@ -305,7 +444,7 @@ describe('a ligação na Conciliação (fonte)', () => {
   const F = readFileSync(resolve(process.cwd(), 'src/pages/ConciliacaoBancariaTab.tsx'), 'utf8');
   const I = readFileSync(resolve(process.cwd(), 'src/components/conciliacao/ImportarBancoInline.tsx'), 'utf8');
   it('o ✎ da conta abre o painel', () => {
-    expect(F).toContain('onEdit={()=>setPainelContaId(s.conta.id)}');
+    expect(F).toContain('onEdit={()=>painel.abrirPainel(s.conta.id)}');
   });
   it('UMA fonte: o chip "PDF" e o painel leem a MESMA lista de comprovantes (a tela não consulta a tabela por conta própria)', () => {
     expect(F).toContain('temPdf={contasComPdfNoMes.has(s.conta.id)}');
@@ -315,7 +454,7 @@ describe('a ligação na Conciliação (fonte)', () => {
     expect(F).not.toContain("from('financeiro_saldo_documentos')");
   });
   it('"Casar lançamentos" segue levando à Conferência de hoje; o arrastado chega ao Importar banco', () => {
-    expect(F).toContain("aoCasar={(id) => { setPainelContaId(null); setSelectedConta(id); setVistaExtrato('enriquecer_sistema'); setAbaEspelho('conferencia'); }}");
+    expect(F).toContain('aoCasar={(id) => painel.conferencia(id)}');
     expect(F).toContain('arquivoInicial={arquivoParaImportar}');
   });
   it('D3: o card do Lucro Rural SAIU da linha do Importar banco; a porta é o menu ⋯', () => {

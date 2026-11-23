@@ -6,6 +6,7 @@
  */
 import type { LinhaResumo, ProprioDono } from '@/lib/conciliacao/resumoDoDono';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
+import type { RespostaDoMotor } from '@/lib/conciliacao/loteDeSugestoes';
 
 export type EstadoDoPasso = 'ok' | 'pendente' | 'espera';
 
@@ -180,4 +181,38 @@ export function fimDoMes(anoMes: string): string {
   const [a, m] = anoMes.split('-').map(Number);
   const d = new Date(Date.UTC(a, m, 0));
   return d.toISOString().slice(0, 10);
+}
+
+/* ─── CONC-PAINEL-02 entrega 2 (Gabriel 23/11 17:11, o mock aprovado): o passo "Casar lançamentos" LISTA as linhas do extrato sem par ─── */
+
+/** Até quantas linhas sem par o motor roda SOZINHO ao abrir o passo (uma chamada de `fn_candidatos_conciliacao` por linha, 4 de cada vez,
+ *  ~400 ms cada). Acima disso a busca é GESTO ("Buscar sugestões (N)"), a regra do P124: o mês inteiro de uma vez não cabe no tempo do banco. */
+export const SUGESTOES_AO_ABRIR_ATE = 12;
+
+export type TomDaSugestao = 'exata' | 'conferir' | 'sem' | 'erro' | 'nada';
+export interface LinhaParaCasar {
+  id: string; data: string; descricao: string; valor: number;
+  /** o que a coluna "Sugestão do sistema" diz (o inteiro + o valor e o vencimento no `titulo`) */
+  sugestao: string; titulo: string; tom: TomDaSugestao;
+  /** "casar" = há par do motor; "procurar" = sem par (a estação procura no histórico ou cria) */
+  acao: 'casar' | 'procurar';
+}
+
+/** As linhas do extrato SEM PAR (sem vínculo ou parciais) com a sugestão do motor — a tela só lê o que ele devolveu (`classificarCandidatos`). */
+export function linhasParaCasar(
+  movimentos: readonly { id: string; data_movimento: string; descricao: string | null; valor: number; valorAberto: number; situacao: string }[],
+  sugestoes: ReadonlyMap<string, RespostaDoMotor> | null, buscando: boolean,
+): LinhaParaCasar[] {
+  return movimentos.filter((m) => m.situacao !== 'conciliado').map((m) => {
+    const r = sugestoes?.get(m.id) ?? null;
+    const base = { id: m.id, data: m.data_movimento, descricao: m.descricao ?? '—', valor: m.situacao === 'parcial' ? m.valorAberto : m.valor };
+    if (!r) return { ...base, sugestao: buscando ? 'buscando…' : '—', titulo: buscando ? 'o motor está respondendo' : 'sugestões ainda não buscadas', tom: 'nada', acao: 'procurar' };
+    if ('erro' in r) return { ...base, sugestao: 'não consegui perguntar', titulo: r.erro, tom: 'erro', acao: 'procurar' };
+    const c = r.sugestao.candidato;
+    if (!c) return { ...base, sugestao: 'sem sugestão', titulo: 'nenhum lançamento com o valor: procurar no histórico ou criar (na estação)', tom: 'sem', acao: 'procurar' };
+    const nome = c.descricao ?? c.favorecido ?? '—';
+    const venc = c.vencimento ?? c.dataReferencia;
+    return { ...base, sugestao: nome, tom: r.sugestao.balde === 'exata' ? 'exata' : 'conferir', acao: 'casar',
+      titulo: `${nome}${c.favorecido && c.favorecido !== nome ? ` · ${c.favorecido}` : ''} · ${moeda(c.valor)}${venc ? ` · venc. ${ddmmaaaa(venc)}` : ''}${r.sugestao.empate ? ' · empate com outro: conferir' : ''}` };
+  });
 }

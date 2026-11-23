@@ -1824,22 +1824,27 @@ if (tela === 'mesclar') {
   if (q.get('admin') === '1') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' },
     clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
   g.__bancoBancada = {
-    from: (t: string, e?: { eq?: Record<string, unknown>; in?: Record<string, unknown[]>; sel?: string }) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : v === 'vera' ? CONC.CONTAS_VERA : v === 'sr' ? CONC.CONTAS_SR : CONC.CONTAS)
+    from: (t: string, e?: { eq?: Record<string, unknown>; in?: Record<string, unknown[]>; sel?: string }) => t === 'financeiro_contas_bancarias' ? (v === 'nj' || v === 'nj10' ? CONC.CONTAS_TAMANHO_REAL : v === 'vera' ? CONC.CONTAS_VERA : v === 'sr' ? CONC.CONTAS_SR : CONC.CONTAS)
       /* CONC-PAINEL-02 — o painel da conta: o elo arquivo→movimento (`useImportacoesDaConta`), os movimentos do arquivo ("Ver"), o lançamento
          de valor exato ("Explicar a diferença", `&v=sr`) */
-      : t === 'extrato_bancario_v2' && e?.sel?.startsWith('id, importacao_id') ? (semArquivos ? [] : CONC.LIGACOES.filter((l) => !e?.eq?.conta_bancaria_id || e.eq.conta_bancaria_id === 'cc1'))
+      /* CONC-PAINEL-02 ajuste — `&v=nj10`: 10 arquivos na conta (o resumo na faixa e a lista) */
+      : t === 'extrato_bancario_v2' && v === 'nj10' && e?.sel?.startsWith('id, data_movimento, descricao, documento') ? (e?.eq?.conta_bancaria_id === 'cc1' ? CONC.MOVS_NJ10 : [])
+      : t === 'conciliacao_bancaria_itens' && v === 'nj10' ? CONC.ITENS_NJ10.filter((i) => !e?.in?.extrato_id || e.in.extrato_id.includes(i.extrato_id))
+      : t === 'extrato_bancario_v2' && e?.sel?.startsWith('id, importacao_id') ? (semArquivos ? [] : (v === 'nj10' ? CONC.LIGACOES_NJ10 : CONC.LIGACOES).filter((l) => !e?.eq?.conta_bancaria_id || e.eq.conta_bancaria_id === 'cc1'))
       : t === 'extrato_bancario_v2' && e?.eq?.importacao_id ? CONC.MOVIMENTOS_DO_ARQUIVO
       : t === 'financeiro_lancamentos_v2' && e?.sel?.includes('status_transacao, conta_bancaria_id') ? (v === 'sr' ? CONC.CANDIDATOS_SR : [])
       : t === 'conciliacao_bancaria_itens' ? []
       /* BAIXA-DESCONTO-BANCO-01 — a parte paga com desconto da NF do dia 03 (`&v=desconto-depois`) */
       : t === 'financeiro_lancamentos_v2' && e?.eq?.origem_tipo === 'conc:desconto_parte' ? (v === 'desconto-depois' ? ESP.PARTES_DO_DESCONTO : [])
-      : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES.filter((i) => !e?.in?.id || e.in.id.includes(i.id)))
+      : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : (v === 'nj10' ? CONC.IMPORTACOES_NJ10 : CONC.IMPORTACOES).filter((i) => !e?.in?.id || e.in.id.includes(i.id)))
       : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : v === 'sr' ? CONC.DOCUMENTOS_SR : CONC.DOCUMENTOS) : [],
     rpc: (fn: string, a: any) => fn === 'fn_conciliacao_resumo_mes'
       ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null, v))
       : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }]
       /* P159a — o Espelho da conta escolhida (`dados/espelho.ts`): o Casar lançamentos (Extrato, Sistema, Evolução) e a Conferência */
-      : fn === 'fn_extratos_espelhados' ? ESP.espelho(v) : null,
+      : fn === 'fn_extratos_espelhados' ? ESP.espelho(v)
+      /* CONC-PAINEL-02 entrega 2 — o motor de cada linha sem par (`&v=nj10`) */
+      : fn === 'fn_candidatos_conciliacao' ? (v === 'nj10' ? CONC.candidatosNj10(a.p_extrato_id) : []) : null,
   };
   g.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
   /* P159b — montada COMO NO APP (`V2Index`, seção do app-shell: coluna flex que dá a altura até a lista). Num bloco solto quem rolava era

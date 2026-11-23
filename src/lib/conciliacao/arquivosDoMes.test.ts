@@ -3,7 +3,10 @@
  * FASE 0, com nomes inventados): o chip "PDF" acendia pelo comprovante e o painel só lia as importações.
  */
 import { describe, expect, it } from 'vitest';
-import { arquivosDoMes, contasComComprovante, formatoDoArquivo, lerComprovante, type ComprovanteDoMes, type ImportacaoDoMes } from './arquivosDoMes';
+import {
+  arquivosDoMes, contasComComprovante, formatoDoArquivo, lerComprovante, ordenarArquivos, resumoDosArquivos, sobreposicoesDePeriodo,
+  type ComprovanteDoMes, type ImportacaoDoMes,
+} from './arquivosDoMes';
 
 const COMP = (o: Partial<ComprovanteDoMes> & Pick<ComprovanteDoMes, 'id' | 'contaId' | 'anoMes'>): ComprovanteDoMes =>
   ({ nome: 'Saldo Previdência 3009.pdf', tipo: 'application/pdf', caminho: `cli/saldos/${o.contaId}/${o.anoMes}/${o.id}.pdf`, enviadoEm: '2031-10-10T12:00:00Z', ...o });
@@ -78,5 +81,43 @@ describe('os arquivos do mês (o painel) e o chip "PDF" (a linha): a MESMA lista
   it('o comprovante registrado cujo arquivo não subiu: aparece (lixo visível), mas não abre nem baixa', () => {
     const [x] = arquivosDoMes({ comprovantes: [COMP({ id: 'z', contaId: 'cc', anoMes: '2031-09', caminho: null })], importacoesDoMes: [], contaId: 'cc', anoMes: '2031-09' });
     expect([x.podeVer, x.podeBaixar, x.detalhe]).toEqual([false, false, 'comprovante de saldo · o arquivo não subiu']);
+  });
+});
+
+describe('CONC-PAINEL-02 ajuste (Gabriel 23/11 17:09) — 10 arquivos no mês: resumo, lista ordenável e sobreposição de período', () => {
+  /* o caso do print (NJ BB out/26) com nomes inventados: 9 OFX baixados dia a dia (cada um do dia 1 até o dia do download) e 1 PDF */
+  const imps = Array.from({ length: 9 }, (_, i) => IMP({ id: `o${i + 1}`, nomeArquivo: `extrato-${String(i + 1).padStart(2, '0')}.ofx`,
+    data: `2031-10-${String(i + 2).padStart(2, '0')}`, importados: 10 + i, periodoDe: '2031-09-01', periodoAte: `2031-09-${String(i + 1).padStart(2, '0')}`,
+    saldoDeclarado: i === 4 ? null : 1000 - i * 100 }));
+  const lista = arquivosDoMes({ comprovantes: [COMP({ id: 'p', contaId: 'cc', anoMes: '2031-09' })], importacoesDoMes: imps, contaId: 'cc', anoMes: '2031-09' });
+
+  it('R1 o resumo: "10 arquivos" e os formatos pelo mais comum ("OFX 9 · PDF 1")', () => {
+    expect(resumoDosArquivos(lista)).toEqual({ total: '10 arquivos', formatos: 'OFX 9 · PDF 1' });
+    expect(resumoDosArquivos(lista.slice(0, 1))).toEqual({ total: '1 arquivo', formatos: 'PDF 1' });
+  });
+  it('R2 a lista leva o período, quando entrou, os movimentos e o saldo final; o comprovante não tem período (—)', () => {
+    const o3 = lista.find((a) => a.id === 'o3');
+    expect([o3?.periodoDe, o3?.periodoAte, o3?.enviadoEm, o3?.movimentos, o3?.saldoFinal]).toEqual(['2031-09-01', '2031-09-03', '2031-10-04', 12, 800]);
+    const pdf = lista.find((a) => a.origem === 'comprovante');
+    expect([pdf?.periodoDe, pdf?.movimentos, pdf?.saldoFinal, pdf?.enviadoEm]).toEqual([null, null, null, '2031-10-10T12:00:00Z']);
+  });
+  it('R3 ordenar por coluna, nos dois sentidos; o que não tem o dado vai SEMPRE para o fim', () => {
+    expect(ordenarArquivos(lista, 'saldo', true).map((a) => a.id)).toEqual(['o9', 'o8', 'o7', 'o6', 'o4', 'o3', 'o2', 'o1', 'p', 'o5']);
+    expect(ordenarArquivos(lista, 'saldo', false).slice(-2).map((a) => a.id).sort()).toEqual(['o5', 'p']);
+    expect(ordenarArquivos(lista, 'periodo', false)[0].id).toBe('o9'); // todos do dia 1: o que vai mais longe primeiro
+    expect(ordenarArquivos(lista, 'periodo', true).map((a) => a.id).slice(0, 2)).toEqual(['o1', 'o2']);
+    expect(ordenarArquivos(lista, 'periodo', true).at(-1)?.id).toBe('p');
+    expect(ordenarArquivos(lista, 'nome', true)[0].nome).toBe('extrato-01.ofx');
+    expect(ordenarArquivos(lista, 'movimentos', false)[0].id).toBe('o9');
+    expect(ordenarArquivos(lista, 'enviado', false)[0].id).toBe('p');
+  });
+  it('R4 sobreposição: dois arquivos que cobrem os MESMOS DIAS (nem que seja um); encostados sem cruzar, não', () => {
+    const [a, b] = arquivosDoMes({ comprovantes: [], contaId: 'cc', anoMes: '2031-09', importacoesDoMes: [
+      IMP({ id: 'a', data: '2031-10-02', periodoDe: '2031-09-01', periodoAte: '2031-09-15' }),
+      IMP({ id: 'b', data: '2031-10-01', periodoDe: '2031-09-15', periodoAte: '2031-09-30' })] });
+    expect(sobreposicoesDePeriodo([a, b]).map((x) => [x.a.id, x.b.id, x.de, x.ate])).toEqual([['a', 'b', '2031-09-15', '2031-09-15']]);
+    const c = { ...b, periodoDe: '2031-09-16' };
+    expect(sobreposicoesDePeriodo([a, c])).toEqual([]);
+    expect(sobreposicoesDePeriodo(lista)).toHaveLength(36); // 9 OFX todos a partir do dia 1: C(9,2); o PDF sem período fica fora
   });
 });

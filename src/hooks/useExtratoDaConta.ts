@@ -197,6 +197,10 @@ export interface ImportacaoDaConta {
   saldoDeclaradoData?: string | null;
   /** CONC-PAINEL-ARQUIVOS-01 (b, lote 115620) — o original no `fin-documentos`; nulo = importado antes (o original não foi guardado) */
   arquivoCaminho?: string | null;
+  /** CONC-PAINEL-02 ajuste — o 1º e o último dia dos movimentos VIVOS do arquivo (desfeito: de todos) e o saldo que o banco declarou */
+  periodoDe?: string | null;
+  periodoAte?: string | null;
+  saldoDeclarado?: number | null;
 }
 
 /**
@@ -251,7 +255,7 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
       const ids = Array.from(new Set(linhas.map(l => l.importacao_id)));
       const [{ data: imps }, { data: vinc }] = await Promise.all([
         supabase.from('financeiro_importacoes_v2')
-          .select('id, nome_arquivo, created_at, cancelado_em, cancelada_em, tipo_arquivo, saldo_declarado_data, arquivo_caminho').in('id', ids),
+          .select('id, nome_arquivo, created_at, cancelado_em, cancelada_em, tipo_arquivo, saldo_declarado, saldo_declarado_data, arquivo_caminho').in('id', ids),
         /* ⚠ `tipo_aprovacao` ENTROU NO SELECT — [CONCIL-MES-01] (130). O card contava
            quantos movimentos do arquivo têm vínculo, mas não DE ONDE o vínculo veio; e o
            "Conciliar o mês" produz dois tipos distintos, `ofx_cru` (lançamento novo) e
@@ -274,6 +278,19 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
         set.add(l.data_movimento.slice(0, 7));
         mesesPorImp.set(l.importacao_id, set);
       }
+      /* CONC-PAINEL-02 ajuste — o período do arquivo (a lista do painel e o aviso de sobreposição): dos movimentos vivos; sem nenhum vivo, de todos */
+      const alargar = (m: Map<string, { de: string; ate: string }>, id: string, d: string) => {
+        const a = m.get(id);
+        m.set(id, { de: a && a.de < d ? a.de : d, ate: a && a.ate > d ? a.ate : d });
+      };
+      const periodoVivo = new Map<string, { de: string; ate: string }>();
+      const periodoTodos = new Map<string, { de: string; ate: string }>();
+      for (const l of linhas) {
+        const d = l.data_movimento.slice(0, 10);
+        alargar(periodoTodos, l.importacao_id, d);
+        if (!l.cancelado_em) alargar(periodoVivo, l.importacao_id, d);
+      }
+      const periodoDo = (id: string) => periodoVivo.get(id) ?? periodoTodos.get(id) ?? null;
       for (const l of linhas) {
         const acc = porImp[l.importacao_id] ?? { n: 0, v: 0, crus: 0, subs: 0, canceladas: 0, desfeitaEm: null };
         /* ⚠ LINHA CANCELADA NÃO É VIVA. Ela conta para saber que a importação inteira foi
@@ -312,6 +329,9 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
         tipoArquivo: i.tipo_arquivo ?? null,
         saldoDeclaradoData: i.saldo_declarado_data ?? null,
         arquivoCaminho: i.arquivo_caminho ?? null,
+        periodoDe: periodoDo(i.id)?.de ?? null,
+        periodoAte: periodoDo(i.id)?.ate ?? null,
+        saldoDeclarado: i.saldo_declarado == null ? null : Number(i.saldo_declarado),
       })).sort((a, b) => b.data.localeCompare(a.data)));
     } finally {
       setLoading(false);
