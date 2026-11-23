@@ -857,6 +857,22 @@ const CENARIOS = [
       /* DRE-PAINEL-01 — a tela como abre ("O que mudou": só as linhas com desvio, "+ N itens sem desvio" e o painel da direita) e a "Média 12m"
          (um mês só na tela) */
       { nome: `dre-pec-mudou${suf}`, url: URL_DRE, tamanhos: T },
+      /* DRE-PAINEL-02 (1), Gabriel 23/11: o "Ampliar" cortado na 1ª faixa — todo botão INTEIRO dentro dela (`botoesDentro`) de 1126 a 1920,
+         no período (jan–set: a ponte em lista, "No período") e num mês só ("No mês") */
+      { nome: `dre-pec-faixa${suf}`, url: URL_DRE, tamanhos: [[1126, 579], [1280, 800], [1366, 768], [1920, 1080]],
+        botoesDentro: '[data-testid="dre-faixa-filtros"]' },
+      /* DRE-PAINEL-03 — a aba "O que mudou" da janela do Gráfico (a ponte da coluna comparada ao período), com o ano anterior e com a Meta */
+      ...[['', null], ['-meta', /^Meta$/]].map(([s2, comp]) => ({ nome: `dre-pec-grafico-ponte${s2}${suf}`, url: URL_DRE, tamanhos: [[1126, 579], [1280, 800], [1920, 1080]],
+        regiao: '[role="dialog"]', antes: async (p) => { if (comp) await clicarRotulo(comp)(p);
+          await clicarRotulo(/^Gráfico$/)(p); await p.locator('[role="dialog"]').waitFor();
+          await p.locator('[role="dialog"]').getByRole('button', { name: 'O que mudou', exact: true }).click();
+          await p.locator('[data-testid="grafico-ponte"]').waitFor(); await p.waitForTimeout(400); } })),
+      /* DRE-PAINEL-03b — o painel da direita abre na Cascata (o `dre-pec-mudou` acima a mede); aqui a aba "O que mudou" do painel aberta */
+      { nome: `dre-pec-painel-ponte${suf}`, url: URL_DRE, tamanhos: [[1126, 579], [1280, 800], [1920, 1080]],
+        antes: async (p) => { await p.locator('[data-testid="dre-painel-abas"]').getByRole('button', { name: 'O que mudou', exact: true }).click();
+          await p.locator('[data-testid="dre-ponte"]').waitFor(); await p.waitForTimeout(300); } },
+      { nome: `dre-pec-faixa-mes${suf}`, url: `tela=dre&barra=32&f_de=2026-09&f_ate=2026-09${par}`, tamanhos: [[1126, 579], [1280, 800], [1920, 1080]],
+        botoesDentro: '[data-testid="dre-faixa-filtros"]' },
       { nome: `dre-pec-media12${suf}`, url: `tela=dre&barra=32&f_de=2026-09&f_ate=2026-09${par}`, tamanhos: T,
         antes: async (p) => { await clicarRotulo(/^Média 12 meses$/)(p); } },
       { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await anos(2)(p); } },
@@ -1971,6 +1987,18 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="rateio-linha"]').first().waitFor(); if (botao) { await p.locator(botao).click(); await p.waitForTimeout(300); } } })),
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
+  /* BPO-GUIA-01 P2 — com o BPO ligado, a barra dos marcados ganha "Enviar para aprovação" (inteiro na barra) e a prévia do banco no modal
+     (entram N, uma fica de fora com o motivo: o pior caso da frase) */
+  { nome: 'financeiro-barra-lote-bpo', url: 'tela=financeiro&bpo=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
+    botoesDentro: '[data-testid="barra-lote"]',
+    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
+      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
+      await p.locator('[data-testid="lote-enviar-aprovacao"]').waitFor(); await p.waitForTimeout(400); } },
+  { nome: 'financeiro-enviar-aprovacao', url: 'tela=financeiro&bpo=1', tamanhos: [[390, 844], [1280, 800], [1920, 1080]], regiao: '[data-testid="enviar-aprovacao"]',
+    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
+      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
+      await p.locator('[data-testid="lote-enviar-aprovacao"]').click();
+      await p.locator('[data-testid="enviar-aprovacao-previa"]', { hasText: 'para a fila' }).waitFor(); await p.waitForTimeout(300); } },
   /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
   ...['', 'mesmo', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),
@@ -2160,10 +2188,14 @@ const CENARIOS = [
   ...['encurtada', 'cancelar', 'vazia', 'carregando', 'erro'].map((v) => ({ nome: `fora-da-vigencia-${v}`, url: `tela=fora-da-vigencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-fora-da-vigencia"]' })),
   /* BPO-APROVACAO-01 — a tela do aprovador, celular primeiro (390×844) e no computador: a fila, a prévia do lote, os alertas, o desligado */
-  ...[['aprovar-pagamentos', 'tela=aprovar-pagamentos', null], ['aprovar-pagamentos-previa', 'tela=aprovar-pagamentos', 'previa'],
+  /* BPO-GUIA-01 (23/11): + 1280 e 1920, a forma da fila da Vera (`v=vera`); o guia abre sozinho na 1ª visita — a tela se mede com ele fechado */
+  ...[['aprovar-pagamentos', 'tela=aprovar-pagamentos', null], ['aprovar-pagamentos-vera', 'tela=aprovar-pagamentos&v=vera', null],
+      ['aprovar-pagamentos-previa', 'tela=aprovar-pagamentos', 'previa'],
       ['aprovar-pagamentos-alertas', 'tela=aprovar-pagamentos&v=alertas', 'alertas'], ['aprovar-pagamentos-desligado', 'tela=aprovar-pagamentos&v=desligado', 'desligado']]
-    .map(([nome, url, estado]) => ({ nome, url, tamanhos: [[390, 844], [1366, 768]], regiao: estado === 'previa' ? '[role="dialog"]' : 'body',
+    .map(([nome, url, estado]) => ({ nome, url, tamanhos: [[390, 844], [1280, 800], [1366, 768], [1920, 1080]], regiao: estado === 'previa' ? '[role="dialog"]' : 'body',
       antes: async (p) => {
+        await p.locator('[data-testid="guia-aprovacao"]').waitFor({ timeout: 8000 }); await p.keyboard.press('Escape');
+        await p.locator('[data-testid="guia-aprovacao"]').waitFor({ state: 'detached' });
         if (estado === 'desligado') { await p.locator('[data-testid="aprovar-desligado"]').waitFor(); return; }
         await p.locator('[data-testid="aprovar-item"]').first().waitFor();
         if (estado === 'alertas') { await p.getByRole('radio', { name: 'Alertas' }).or(p.getByRole('button', { name: 'Alertas' })).first().click(); await p.locator('[data-testid="aprovar-alertas"]').waitFor(); }
@@ -2173,6 +2205,21 @@ const CENARIOS = [
         }
         await p.waitForTimeout(300);
       } })),
+  /* BPO-GUIA-01 — o guia "Como funciona" (admin, BPO desligado: os 6 passos e a prévia do Ligar), 390/1280/1920: nada cortado dentro do modal.
+     A regra do Gabriel "ZERO texto quebrado" (uma linha em tudo) tem a sua medida no `fotoGuiaBpo` (cada `[data-texto-guia]` em uma linha). */
+  ...[1, 2, 3, 4, 5, 6, 'previa'].map((passo) => ({ nome: `aprovar-guia-${passo === 'previa' ? 'passo6-previa' : `passo${passo}`}`,
+    url: 'tela=aprovar-pagamentos&v=desligado', tamanhos: [[390, 844], [1280, 800], [1920, 1080]], regiao: '[data-testid="guia-aprovacao"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="guia-passo-1"]').waitFor({ timeout: 8000 });
+      const ate = passo === 'previa' ? 6 : passo;
+      for (let i = 1; i < ate; i++) { await p.click('[data-testid="guia-avancar"]'); await p.locator(`[data-testid="guia-passo-${i + 1}"]`).waitFor(); }
+      if (passo === 'previa') {
+        await p.locator('label:has-text("Quem aprova") button').first().click(); await p.locator('[data-testid="searchable-select-painel"]').waitFor();
+        await p.locator('[data-testid="searchable-select-painel"] [title="Gestor Sintético com Nome Comprido da Silva"]').first().click();
+        await p.click('[data-testid="guia-avancar"]'); await p.locator('[data-testid="guia-previa"]').waitFor();
+      }
+      await p.waitForTimeout(350);
+    } })),
   /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
      botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
   ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',
@@ -2199,7 +2246,8 @@ const CENARIOS = [
       ['importar-banco-erro', 'tela=importar-banco', 'erro']].map(([nome, url, estado]) => ({ nome, url,
     tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[data-testid="importar-banco-cena"]',
     botoesDentro: '[data-testid="linha-importar-banco"]',
-    visivelNaTela: { sels: estado ? ['[data-testid="resultado-busca-erro"]'] : ['[data-testid="abrir-atualizar-lr"]'],
+    /* CONC-PAINEL-ARQUIVOS-01 (D3) — o "Atualizar do Lucro Rural" saiu da linha; a porta é o ⋯ (que também tem de caber na faixa) */
+    visivelNaTela: { sels: estado ? ['[data-testid="resultado-busca-erro"]'] : ['[data-testid="menu-importar-banco"]'],
       dentro: '[data-testid="linha-importar-banco"]', altura: 28, inteirosEm: ['[data-testid="linha-importar-banco"]', '[data-testid="importar-banco-cena"]'] },
     antes: async (p) => {
       await p.locator('[data-testid="linha-importar-banco"]').waitFor();
@@ -2226,10 +2274,38 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
   /* CONC-PAINEL-CONTA-01 (Gabriel 17/11 09:57) — o ✎ da conta abre o PAINEL lateral (passos do dono + importações), nos tamanhos que ele pediu,
      no pior caso e nos nomes do tamanho do NJ; a faixa do topo escura vem junto no print */
-  ...[['', ''], ['-nj', '&v=nj']].map(([n, extra]) => ({ nome: `conciliacao-painel-conta${n}`, url: `tela=conciliacao&admin=1${extra}`,
+  /* CONC-PAINEL-02 (mock 23/11 08:11) — o painel da conta no mês, 980 px fixo: a corrente (extrato → casar → saldo), a previdência do caso da
+     Santa Rita com nomes e números inventados (`&v=sr`: o comprovante do mês na faixa de arquivos, "Explicar a diferença" com o previsto
+     sem conta de valor exato) e a corrente com 58 sem par; e o "Ver" de uma importação (os movimentos dentro do painel) */
+  ...[['', '', 'cc1'], ['-nj', '&v=nj', 'cc1'], ['-sr-inv', '&v=sr', 'inv'], ['-sr-cc', '&v=sr', 'cc1']].map(([n, extra, conta]) => ({
+    nome: `conciliacao-painel-conta${n}`, url: `tela=conciliacao&admin=1${extra}`,
     tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
-    antes: async (p) => { await p.locator('[data-testid="botao-lapis"]').first().waitFor(); await p.locator('[data-testid="botao-lapis"]').first().click();
-      await p.locator('[data-testid="painel-da-conta"]').waitFor(); await p.waitForTimeout(500); } })),
+    antes: async (p) => { const lapis = p.locator(`[data-testid="linha-saldo-conta"][data-conta="${conta}"] [data-testid="botao-lapis"]`);
+      await lapis.waitFor(); await lapis.click();
+      await p.locator('[data-testid="painel-da-conta"]').waitFor(); await p.waitForTimeout(600); } })),
+  /* CONC-PAINEL-02 ajuste (Gabriel 23/11 17:09) — 10 arquivos na conta (`&v=nj10`, o NJ BB out/26 com nomes inventados): a faixa com UM cartão de
+     resumo (nunca rolagem lateral), a LISTA no passo Extrato (colunas fixas, o aviso de sobreposição) e o "Ver" de uma linha com "← voltar à lista" */
+  { nome: 'conciliacao-painel-conta-nj10', url: 'tela=conciliacao&admin=1&v=nj10', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arquivos-resumo"]').click(); await p.locator('[data-testid="painel-lista"]').waitFor(); await p.waitForTimeout(500); } },
+  { nome: 'conciliacao-painel-conta-nj10-ver', url: 'tela=conciliacao&admin=1&v=nj10', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arquivos-resumo"]').click();
+      await p.locator('[data-testid="painel-lista-linha"][data-chave="importacao:imp-nj-1"] [data-testid="painel-lista-ver"]').click();
+      await p.locator('[data-testid="painel-ver-movimentos"]').waitFor(); await p.waitForTimeout(400); } },
+  /* CONC-PAINEL-02 entrega 2 (Gabriel 23/11 17:11) — o passo "Casar lançamentos" com as 3 linhas sem par e a sugestão do motor (`&v=nj10`) */
+  { nome: 'conciliacao-painel-conta-nj10-casar', url: 'tela=conciliacao&admin=1&v=nj10', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-passo-casar"]').click();
+      await p.locator('[data-testid="painel-casar-linha"][data-tom="exata"]').waitFor(); await p.waitForTimeout(500); } },
+  { nome: 'conciliacao-painel-conta-ver-importacao', url: 'tela=conciliacao&admin=1', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arquivo"][data-origem="importacao"] [data-testid="painel-arquivo-ver"]').click();
+      await p.locator('[data-testid="painel-ver-movimentos"]').waitFor(); await p.waitForTimeout(400); } },
   { nome: 'conciliacao-saldos-sem-arquivos', url: 'tela=conciliacao&v=sem', tamanhos: TAMANHOS_DA_CONCILIACAO,
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
   { nome: 'conciliacao-conta-escolhida', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,

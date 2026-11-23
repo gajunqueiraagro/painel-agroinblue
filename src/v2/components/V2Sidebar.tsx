@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import logo from '@/assets/logo.png';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useBpoAtivo } from '@/hooks/useBpoAtivo';
 import { SECTION_TO_GROUP } from '@/v2/lib/navGrupos';
 import { gruposVisiveis, nivelDaTela } from '@/v2/lib/acessoTelas';
 
@@ -86,6 +87,7 @@ export function V2Sidebar({
   /* ACESSOS-02a — o que se OFERECE vem de UM dono (`nivelDaTela`): grupo sem item visivel some, e os dois botoes soltos
      (Visão Geral, Configurações) somem para quem nao tem a tela. Para o admin nada muda. */
   const perfil = clienteAtual?.perfil ?? null;
+  const bpoAtivo = useBpoAtivo(clienteAtual?.id);
   const veHome = nivelDaTela(perfil, isAdmin, 'home') !== 'nao';
   const veConfiguracoes = nivelDaTela(perfil, isAdmin, 'configuracoes') !== 'nao';
   const activeGroup = SECTION_TO_GROUP[activeSection] ?? null;
@@ -150,7 +152,7 @@ export function V2Sidebar({
         {/* ⚠ O GRUPO "Validar" SO' APARECE PARA O ADMIN — PR-VALIDAR-01. `isAdmin` ja'
             existe no `ClienteContext` (RPC `is_admin_agroinblue`, com cache por usuario),
             entao nao ha hook novo: o front ja sabia, faltava perguntar. */}
-        {gruposVisiveis(perfil, isAdmin).map((grupo) => {
+        {gruposVisiveis(perfil, isAdmin, { bpoAtivo }).map((grupo) => {
           const Icon = GRUPO_ICONS[grupo.id] ?? Target;
           const isDrawerOpen  = drawerAtivo === grupo.id;
           const isGroupActive = activeGroup  === grupo.id;

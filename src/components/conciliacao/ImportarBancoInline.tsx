@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
@@ -15,8 +15,11 @@ import type { FonteDoExtrato } from '@/lib/financeiro/parser/fonteDoExtrato';
 import { V2ImportLancamentosExcel } from '@/v2/pages/V2ImportLancamentosExcel';
 import CusteioTxtImportTab from '@/v2/pages/CusteioTxtImportTab';
 import { AtualizarLucroRuralDialog } from '@/components/lucroRural/AtualizarLucroRuralDialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { decodeTxtParcial } from '@/v2/lib/custeio/parseCusteioTxt';
 import { BuscarDoBanco } from './BuscarDoBanco';
+import { guardarOriginalDaImportacao } from '@/hooks/useArquivosDoMes';
+import { useCliente } from '@/contexts/ClienteContext';
 
 /**
  * ImportarBancoInline — a aba "Importar Extrato" do Financas, clonada INTEIRA:
@@ -57,6 +60,10 @@ interface Props {
   onImportado?: () => void;
   /** O "Ver importações (N)" que vive na mesma linha, montado por quem tem o modal. */
   acoes?: React.ReactNode;
+  /** CONC-PAINEL-02 — o extrato arrastado no painel da conta: a prévia abre com ele (o mesmo caminho do "Escolher arquivo"); nada grava
+   *  antes do "Importar". `aoUsarArquivoInicial` avisa que foi lido (quem passou o arquivo o esquece). */
+  arquivoInicial?: File | null;
+  aoUsarArquivoInicial?: () => void;
 }
 
 /**
@@ -72,11 +79,12 @@ const REGRA_DO_IMPORTAR_BANCO: RegraDeAceite = {
   frases: { tipo: fraseDeFormatoNaoAceito(TIPOS_DO_IMPORTAR_BANCO) },
 };
 
-export function ImportarBancoInline({ contas, contaId, onContaChange, onImportado, acoes }: Props) {
+export function ImportarBancoInline({ contas, contaId, onContaChange, onImportado, acoes, arquivoInicial = null, aoUsarArquivoInicial }: Props) {
   /* UI-ARRASTAR-ARQUIVO-01b — o que o DETECTOR (conteúdo) ou o leitor recusam aparece NA ÁREA, não em toast. */
   const [recusaDoArquivo, setRecusaDoArquivo] = useState<string | null>(null);
   /* FIN-LR-SYNC-01 passo b — o modal novo do Lucro Rural; o importador antigo (planilha) segue como está. */
   const [lrAberto, setLrAberto] = useState(false);
+  const { clienteAtual } = useCliente();
   const { preview, loading, gerarPreview, gerarPreviewDaFonte, confirmarImportacao, reset,
     toggleImportar, marcarTodasImportaveis } = useImportacaoExtrato();
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -149,9 +157,16 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
          pelo mesmo botão, ele viraria mentira gravada em `tipo_arquivo`. O hook
          já detecta e devolve — a resposta certa é ler dele, não redecidir. */
       const r = await confirmarImportacao({ contaBancariaId: contaId, nomeArquivo: nomeDoLote, formato: preview.formato });
+      const original = origemBanco ? null : arquivo;
       setResultado({ tipo: 'ok', texto: r.mensagem });
       cancelar();
       if (r.inseridos > 0) onImportado?.();
+      /* CONC-PAINEL-ARQUIVOS-01 (b, lote 115620) — o ARQUIVO ORIGINAL vai ao `fin-documentos` depois de a importação gravar (o painel da
+         conta passa a ter Ver/Baixar dele). Nunca desfaz a importação: falhou = a frase ao lado do resultado. O do Open Finance não tem arquivo. */
+      if (original && r.importacaoId && clienteAtual?.id) {
+        const falha = await guardarOriginalDaImportacao({ clienteId: clienteAtual.id, contaId, importacaoId: r.importacaoId, arquivo: original });
+        if (falha) setResultado({ tipo: 'ok', texto: `${r.mensagem} · ${falha}` });
+      }
     } catch (e) {
       /* A recusa e a falha chegam autorais do hook (ErroUsuarioSeguro); a prévia fica para tentar de novo. */
       setResultado({ tipo: 'erro', texto: e instanceof Error ? e.message : 'Não foi possível gravar o extrato. Nada foi gravado.' });
@@ -159,6 +174,14 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
       setGravando(false);
     }
   };
+
+  /* CONC-PAINEL-02 — o extrato arrastado no painel da conta entra pelo MESMO `escolher` do "Escolher arquivo" (detectar, ler, prévia);
+     só depois de a conta estar escolhida (o painel a escolhe junto). */
+  useEffect(() => {
+    if (!arquivoInicial || !contaId) return;
+    aoUsarArquivoInicial?.();
+    void escolher(arquivoInicial);
+  }, [arquivoInicial, contaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ⚠ UM COMPONENTE SÓ DE SELETOR DE CONTA — 133g item 9. Este dropdown montava a lista à
      mão (chamando `agruparContasPorTipo` direto) enquanto o `ContaBancariaSelect` fazia o
@@ -249,11 +272,17 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             </span>
           </span>
           <div className="min-w-0 flex-1" />
-          {/* FIN-LR-SYNC-01 passo b — lugar reservado (shrink-0): a entrada do Lucro Rural não mexe no resto da linha. */}
-          <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-[11px]" data-testid="abrir-atualizar-lr"
-            onClick={() => setLrAberto(true)}>
-            Atualizar do Lucro Rural
-          </Button>
+          {/* CONC-PAINEL-ARQUIVOS-01 (D3, Gabriel 23/11) — o card "Atualizar do Lucro Rural" SAIU da linha; a porta do
+              `AtualizarLucroRuralDialog` (FIN-LR-SYNC-01 passo b) é este menu ⋯, em lugar reservado (28px, shrink-0). */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="sm" className="h-7 w-7 shrink-0 p-0 text-[13px]" data-testid="menu-importar-banco"
+                title="Mais: Atualizar do Lucro Rural" aria-label="Mais ações do Importar banco">⋯</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setLrAberto(true)} data-testid="abrir-atualizar-lr">Atualizar do Lucro Rural</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {/* montado SÓ aberto: os leitores dele (cliente, fazendas, plano) não rodam a cada abertura da aba */}
           {lrAberto && <AtualizarLucroRuralDialog open onOpenChange={setLrAberto} />}
           {acoes}

@@ -44,7 +44,7 @@ import {
   type DefPec, type ColunaPec, type UnidadePec, type ModoDre,
 } from '@/components/agri/drePecRegua';
 import type { RecorteHistoricoPec } from '@/components/agri/PecHistoricoLinhaModal';
-import { oQueMudou as gruposQueMudaram, LIMIAR_PCT, LIMIAR_RS } from '@/lib/dre/leitura';
+import { deltaDaLinha, oQueMudou as gruposQueMudaram, LIMIAR_PCT, LIMIAR_RS } from '@/lib/dre/leitura';
 import {
   BLOCO_DA_LINHA, rotuloCurtoPeriodo,
   type DrePecuaria, type DrePecLinhas, type ChaveLinhaPec, type CentroPec, type RecortePec,
@@ -323,9 +323,8 @@ function valorNaColuna(col: ColunaPec, chave: ChaveLinhaPec): number | null {
   if (!col.linhas || col.semDado) return null;
   if (col.tipo === 'delta') {
     if (!col.ref) return null;
-    const r = valorDe(col.linhas, chave);
-    const m = valorDe(col.ref, chave);
-    return r == null || m == null ? null : r - m;
+    /* DRE-PAINEL-03: a diferença é a MESMA função dos passos da ponte (`deltaDaLinha`, leitura.ts) — uma conta só */
+    return deltaDaLinha(valorDe(col.linhas, chave), valorDe(col.ref, chave));
   }
   return valorDe(col.linhas, chave);
 }

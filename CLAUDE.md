@@ -363,6 +363,14 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - CONC-LAYOUT-FIXO-01 (UI-LARGURA-FIXA-01, 22/11; substitui o "1fr 260px" e a `FaixaDoMes` acima): Saldos 60% · Resumo 40% (`minmax(0,3fr) minmax(0,2fr)`,
   nunca medido pelo dado); título do Resumo = conta · mês, com ▸ (também na linha, lugar reservado); status = selo no cabeçalho + frase em 2 linhas
   reservadas; o nome da conta corta com "…" + `title` até 1130px, inteiro de 1300px para cima (gates `conciliacao-divisao-*`, `-nomes-inteiros`).
+- CONC-PAINEL-02 (mock 23/11 08:11): o ✎ da conta = PAINEL DA CONTA NO MÊS, 980px fixo (430 passos | 550 trabalho; 56·72·corpo·44); os ARQUIVOS DO
+  MÊS são UMA lista (`arquivosDoMes`: comprovantes de saldo do ano lidos 1× pela tela — o chip "PDF" e o painel leem dela — + `importacoesDoMes`);
+  Ver dentro do painel (`VisualizadorDeDocumento embutido`; importação = os movimentos), Desfazer = cancelar com motivo / `DesfazerArquivoModal`; passos
+  POR TIPO (`passosDoPainel`); "Explicar a diferença" acha 1º o lançamento de valor EXATO (`candidatosDaDiferenca`) e abre o modal do lançamento.
+  Ajuste 17:09: a faixa NUNCA rola de lado — até 2 arquivos os cartões, 3+ UM resumo de largura fixa (`MAX_CARTOES_NA_FAIXA`); a LISTA (colunas
+  fixas, `ordenarArquivos`; período = movimentos vivos) é o passo Extrato/Fatura; aviso de dias em dois arquivos (`sobreposicoesDePeriodo`).
+  17:11: toda saída do painel VOLTA a ele (`useSaidasDoPainel` sobre o `useCamadas`: Conferência, Importar banco, ✎ saldo; nenhuma fecha o painel);
+  o passo Casar LISTA as sem par com a sugestão do motor (`linhasParaCasar`; ao abrir só até `SUGESTOES_AO_ABRIR_ATE`, depois gesto) → a estação.
 - P159a (CONC-TELAS-01): Conferência e Extrato (banco) — a regra do dia é UMA (`porDia`: maior |valor| primeiro, saldo SÓ no fim do dia,
   LIDO — Extrato: o acumulado de sempre; Conferência: `montarEvolucao`); a lista do mês por dia é UM componente (`ListaDoMesPorDia`); histórico
   do banco limpo só na exibição (`historicoDoBanco`, o inteiro no `title`); a `ordenar` da mesa NÃO mudou (o Enriquecer lê dela). EXCEÇÃO

@@ -15,7 +15,7 @@ import { centrosDoBloco } from '@/components/agri/drePecRegua';
 import {
   colunaMedia, composicaoEMercado, contorno, CONTORNO_MIN_LINHA, CONTORNO_MIN_SUBLINHA, curto, custoPorArrobaProduzida,
   custoTotal, desvio, desvioPadrao, leituraDoAno, leituraDoMes, media, mesesDaMedia12, noMes, oQueMudou, pctCurto,
-  ponteDoLucroOperacional, rsPorArrobaVendida, seloDeConfianca, type EntradaSelo, type MesDoAno,
+  deltaDaLinha, horizonteDe, linhasDaPonte, ponteDoLucroOperacional, rsPorArrobaVendida, seloDeConfianca, type EntradaSelo, type MesDoAno,
 } from './leitura';
 
 const BRUTO: Record<string, unknown> = JSON.parse(readFileSync(`${process.cwd()}/src/lib/dre/leitura.fixture.json`, 'utf-8'));
@@ -235,7 +235,7 @@ describe('razões (Art. 15) e "No mês"', () => {
   it('"—" e não zero: Meta sem @ produzida, Vera out/25 sem vendas, sem área', () => {
     expect(custoPorArrobaProduzida(META)).toBeNull();
     expect(rsPorArrobaVendida(VERA25)).toBeNull();
-    expect(noMes(null, lerLinhas({ resultado_operacional: 10 })).lucroOpHa).toEqual({ valor: null, delta: null });
+    expect(noMes(null, lerLinhas({ resultado_operacional: 10 })).lucroOpHa).toEqual({ valor: null, delta: null, total: 10, pct: null });
   });
   it('composição e mercado pela fonte (D3)', () => {
     const cm = composicaoEMercado(NJ26);
@@ -353,5 +353,103 @@ describe('selo de confiança (P9)', () => {
   it('NJ out/26 depois do 115610: p1_fonte "fechamento" no total (antes era "zero" todo mês)', () => {
     expect(NJ26.p1_fonte).toBe('fechamento');
     expect(seloDeConfianca({ ...tudo, p1_fonte: NJ26.p1_fonte }).grau).toBe('alta');
+  });
+});
+
+/* ══════════════ DRE-PAINEL-02 (Gabriel 23/11 07:41) ══════════════ */
+
+describe('DRE-PAINEL-02 (2): a ponte em lista — o fato da linha, o efeito no lucro com sinal e a cor do lucro', () => {
+  const linhas = (b: DrePecLinhas, a: DrePecLinhas) => {
+    const p = ponteDoLucroOperacional(b, a);
+    if (!p) throw new Error('sem ponte');
+    return linhasDaPonte(b, a, p, 'out/25', 'out/26');
+  };
+  it('NJ out/25 → out/26: 1ª e última = "Lucro operacional <período>" em R$ mi; cada passo diz o fato e o efeito com sinal', () => {
+    expect(linhas(NJ25, NJ26).map(l => [l.rotulo, l.texto, l.tom])).toEqual([
+      ['Lucro operacional out/25', '−0,23', 'total'],
+      ['Receita menor (−25%)', '−0,20', 'tira'],
+      ['Produção maior (+3.168,9%)', '+2,11', 'ajuda'],
+      ['Reposição igual', '0,00', 'neutro'],
+      ['Custo variável menor (−62,8%)', '+0,45', 'ajuda'],
+      ['Custo fixo maior (+23,5%)', '−0,04', 'tira'],
+      ['Rateio menor (−20,3%)', '+0,01', 'ajuda'],
+      ['Lucro operacional out/26', '2,10', 'total'],
+    ]);
+  });
+  it('a cor é do LUCRO, não da linha: custo menor = verde (ajuda), receita menor = vermelho (tira); o número inteiro vai no title', () => {
+    const l = linhas(NJ25, NJ26);
+    const cv = l.find(x => x.chave === 'custo_variavel');
+    const rl = l.find(x => x.chave === 'receita_liquida');
+    expect(cv?.rotulo.includes('menor') && cv.tom).toBe('ajuda');
+    expect(rl?.rotulo.includes('menor') && rl.tom).toBe('tira');
+    expect(cv?.titulo).toBe('Efeito no lucro operacional: +R$ 450.339,14');
+    expect(l[0].titulo).toMatch(/^R\$ −2\d{2}\.\d{3},\d{2}$/); // o lucro de out/25 inteiro, negativo
+  });
+  it('os passos somam a diferença das pontas ao centavo (os números são os da ponte)', () => {
+    const l = linhas(VERA25, VERA26);
+    const passos = l.slice(1, -1).reduce((s, x) => s + (x.valor ?? 0), 0);
+    expect(centavos((l[0].valor ?? 0) + passos)).toBe(centavos(l[l.length - 1].valor ?? 0));
+    /* base zero (Vera out/25 sem receita): o fato sem percentual */
+    expect(l.find(x => x.chave === 'receita_liquida')?.rotulo).toBe('Receita maior');
+  });
+  it('DRE-PAINEL-03: contra a Meta — "Lucro da meta" → "Lucro realizado", passos "acima/abaixo da meta"; a produção (sem meta, "—" na grade) carrega o resto, cinza', () => {
+    const p = ponteDoLucroOperacional(META, NJ26);
+    if (!p) throw new Error('sem ponte');
+    expect(linhasDaPonte(META, NJ26, p, 'Meta', 'out/26', 'meta').map(l => [l.rotulo, l.texto, l.tom])).toEqual([
+      ['Lucro da meta', '3,07', 'total'],
+      ['Receita abaixo da meta (−22,9%)', '−0,18', 'tira'],
+      ['Produção: sem meta', '−0,88', 'sem'],
+      ['Reposição igual à meta', '0,00', 'neutro'],
+      ['Custo variável abaixo da meta (−27,2%)', '+0,10', 'ajuda'],
+      ['Custo fixo acima da meta (+25,8%)', '−0,05', 'tira'],
+      ['Rateio abaixo da meta (−39,7%)', '+0,04', 'ajuda'],
+      ['Lucro realizado', '2,10', 'total'],
+    ]);
+  });
+});
+
+describe('DRE-PAINEL-02 (3): "no mês" vira "no período" quando a tela tem mais de um mês', () => {
+  it('horizonteDe: um mês = mês; dois ou mais = período', () => {
+    expect(horizonteDe('2026-10', '2026-10')).toBe('mes');
+    expect(horizonteDe('2026-01', '2026-10')).toBe('periodo');
+  });
+  it('as frases da leitura usam a palavra do horizonte (o padrão segue o mês)', () => {
+    const vendas = (h?: 'mes' | 'periodo') => leituraDoMes({ base: VERA26, atual: VERA25, comparacao: 'ano_anterior', rotuloBase: 'out/26',
+      ...(h ? { horizonte: h } : {}) }).find(i => i.id === 'vendas')?.frase ?? '';
+    expect(vendas()).toContain('Nenhuma venda no mês');
+    expect(vendas('periodo')).toContain('Nenhuma venda no período');
+    expect(vendas('periodo')).not.toContain('no mês');
+    const vpb = leituraDoMes({ base: NJ25, atual: NJ26, comparacao: 'ano_anterior', rotuloBase: 'jan–out/25', horizonte: 'periodo' })
+      .find(i => i.id === 'vpb_operacional')?.frase ?? '';
+    expect(vpb).toMatch(/no período\.$/);
+  });
+});
+
+describe('DRE-PAINEL-03 (Gabriel 23/11 09:34): a ponte segue o "Comparar com" e cada passo é a diferença da MESMA linha da tabela', () => {
+  const somaFecha = (base: DrePecLinhas, comparacao: 'ano_anterior' | 'meta' | 'media12') => {
+    const p = ponteDoLucroOperacional(base, NJ26);
+    if (!p) throw new Error('sem ponte');
+    const l = linhasDaPonte(base, NJ26, p, 'base', 'out/26', comparacao);
+    const passos = l.slice(1, -1).reduce((s, x) => s + centavos(x.valor ?? 0), 0);
+    return [passos, centavos(l[l.length - 1].valor ?? 0) - centavos(l[0].valor ?? 0)];
+  };
+  it('a soma dos passos = lucro do período − lucro comparado, ao centavo, nas TRÊS comparações (ano anterior, Meta, Média 12 meses)', () => {
+    const [a1, b1] = somaFecha(NJ25, 'ano_anterior');
+    expect(a1).toBe(b1);
+    const [a2, b2] = somaFecha(META, 'meta');
+    expect(a2).toBe(b2);
+    const med = colunaMedia(MESES_NJ.slice(0, 12).map(m => F(`nj-${m}`)));
+    if (!med) throw new Error('sem média');
+    const [a3, b3] = somaFecha(med.linhas, 'media12');
+    expect(a3).toBe(b3);
+  });
+  it('o passo é a diferença da linha da grade (`deltaDaLinha`, a mesma da coluna Δ) com o sinal do lucro', () => {
+    expect(deltaDaLinha(10, 4)).toBe(6);
+    expect(deltaDaLinha(null, 4)).toBeNull();
+    expect(deltaDaLinha(10, undefined)).toBeNull();
+    const p = ponteDoLucroOperacional(NJ25, NJ26);
+    const efeito = (c: string) => p?.degraus.find(d => d.chave === c)?.efeito;
+    expect(efeito('receita_liquida')).toBe(Math.round((deltaDaLinha(NJ26.receita_liquida, NJ25.receita_liquida) ?? 0) * 100) / 100);
+    expect(efeito('custo_variavel')).toBe(Math.round(-(deltaDaLinha(NJ26.custo_variavel, NJ25.custo_variavel) ?? 0) * 100) / 100);
   });
 });

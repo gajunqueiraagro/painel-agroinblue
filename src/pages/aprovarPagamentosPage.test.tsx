@@ -20,6 +20,8 @@ vi.mock('@/integrations/supabase/client', () => {
 });
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli', nome: 'Fazenda Exemplo' }, isAdmin: false }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-aprovador' } }) }));
+/* BPO-GUIA-01: este usuário já viu o guia (o guia tem os testes dele em guiaDaAprovacao.test.tsx) */
+vi.mock('@/lib/financeiro/guiaDaAprovacao', async (orig) => ({ ...(await orig<typeof import('@/lib/financeiro/guiaDaAprovacao')>()), jaViuOGuia: () => true }));
 
 import AprovarPagamentosPage from './AprovarPagamentosPage';
 
@@ -38,7 +40,10 @@ describe('BPO — a tela do aprovador', () => {
   it('BPO desligado: a frase, sem fila nem botões', async () => {
     banco.tabelas.financeiro_bpo_config = [];
     render(<AprovarPagamentosPage />);
-    expect((await screen.findByTestId('aprovar-desligado')).textContent).toBe('A aprovação de pagamentos não está ligada neste cliente.');
+    expect((await screen.findByTestId('aprovar-desligado')).textContent).toContain('A aprovação de pagamentos não está ligada neste cliente.');
+    /* BPO-GUIA-01: desligado tem o "Como funciona"; o "Ligar neste cliente" é só do admin */
+    expect(screen.getByTestId('aprovar-como-funciona')).toBeTruthy();
+    expect(screen.queryByTestId('aprovar-ligar')).toBeNull();
     expect(screen.queryByTestId('aprovar-lote')).toBeNull();
   });
   it('a fila por dia, o saldo depois da fila; marcar 2 → prévia (simular) → confirmar grava os 2', async () => {
