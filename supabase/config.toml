@@ -7,3 +7,7 @@ verify_jwt = false
 # conferida na função (`_shared/entradaEmail.ts`, `receber`).
 [functions.entrada-email]
 verify_jwt = false
+# SEG-EDGE-IA-01 (Gabriel 23/11) — a extract-caderno estava PUBLICADA com verify_jwt = false (aceitava chamada sem token). Fica declarada
+# aqui para o gateway também barrar; dentro dela, a guarda `_shared/exigirMembro.ts` (membro ativo ou admin).
+[functions.extract-caderno]
+verify_jwt = true
