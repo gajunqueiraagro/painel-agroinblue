@@ -42,7 +42,7 @@ import {
   ModalValorDre, valorDaLavoura, valorDaPecuaria, type RateioDetalhe, type TipoRateio, type ValorDre,
 } from '@/components/agri/RateioDetalheModal';
 import { PecPainelLeitura, type DestinoDoPainel } from '@/components/agri/PecPainelLeitura';
-import { colunaMedia, mesesDaMedia12, seloDeConfianca, type Comparacao } from '@/lib/dre/leitura';
+import { colunaMedia, horizonteDe, mesesDaMedia12, seloDeConfianca, type Comparacao } from '@/lib/dre/leitura';
 import { useStatusAno } from '@/hooks/useResumoConciliacao';
 import { useStatusPilaresLote } from '@/hooks/useStatusPilaresLote';
 import { useNotasDaReceita } from '@/hooks/useNotasDaReceita';
@@ -83,6 +83,7 @@ const anoAteMesFechado = (id: string, i: Intervalo): Intervalo =>
   (id === 'este-ano' ? intervaloDoPeriodo(periodoDoAno(Number(i.de.slice(0, 4)))) : i);
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
 import { PecGraficoModal } from '@/components/agri/PecGraficoModal';
+import { colunaPadraoDaCascata } from '@/components/agri/PecCascataView';
 import {
   PecHistoricoLinhaModal, type RecorteHistoricoPec,
 } from '@/components/agri/PecHistoricoLinhaModal';
@@ -1210,7 +1211,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao, onIrP
               linhas, e aqui as duas alturas têm de fechar em 30px com a faixa no mesmo y. */}
           {/* ⚠ DRE-LEVE-01 (item 1): a 1ª faixa desceu a 22px (o mock), e a Pecuária ganhou o "Comparar" nela — os cards "Comparação" e
               "Por fazenda" saíram; a tabela sobe. */}
-          <div className="flex h-[22px] items-center gap-2">
+          <div className="flex h-[22px] items-center gap-2" data-testid="dre-faixa-filtros">
             {ehLavoura && culturaAberta && (
               <button type="button" onClick={voltarParaRaiz} title="Voltar para todas as culturas"
                 className="inline-flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-md border hover:bg-muted">
@@ -1260,12 +1261,16 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao, onIrP
                   atividade 120px para a esquerda ao trocar de aba — a tela inteira andava. Agora o
                   slot é o mesmo e o conteúdo se alinha à esquerda dentro dele; na lavoura sobram
                   120px de espaço reservado, que é o preço de a régua não se mexer. */}
-              <div className="flex w-[250px] shrink-0 items-center justify-start">
+              {/* ⚠ DRE-PAINEL-02 (1), Gabriel 23/11: 250 → 190. O seletor da pecuária mede 178 ("01/01/2026 – 31/10/2026", sempre o mesmo
+                  número de dígitos) e a safra da lavoura 130; os 72px de reserva sobravam, e a faixa (1.010px) passava da janela no app a
+                  1280 — o "Ampliar" cortado. */}
+              <div className="flex w-[190px] shrink-0 items-center justify-start">
                 {ehPec ? (
                   /* UI-PERIODO-01 — o componente único de período (atalhos + dois calendários), POR MÊS (a DRE é mensal), sem mês solto
                      (o botão "Mês" saiu em 23/09) e com o "Este ano" corrente até o mês fechado (`periodoDoAno`, decisão de 23/09) */
+                  /* DRE-PAINEL-02: o gatilho em 22px, a altura da faixa (o padrão do componente é 24: saía 1px por cima e por baixo — o gate `botoesDentro`) */
                   <SeletorDePeriodo testid="dre-pec-periodo" porMes compacto atividades={ATIVIDADE_PEC} atalhosOcultos={SEM_MES_SOLTO}
-                    ajustarAtalho={anoAteMesFechado} valor={intervaloDoPeriodo(periodo)}
+                    ajustarAtalho={anoAteMesFechado} className="h-[22px]" valor={intervaloDoPeriodo(periodo)}
                     onChange={(i) => setPeriodo(periodoDoIntervalo(i))} />
                 ) : (
                   <Select value={safraId} onValueChange={setSafraId}>
@@ -1294,10 +1299,12 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao, onIrP
                     motivoSemMedia12={motivoSemMedia12} />
                 )}
               </span>
-              <button type="button" onClick={() => setAmpliado(true)}
-                title="Ampliar a grade (só a tabela)"
-                className="inline-flex h-[22px] items-center gap-1 rounded-md border px-2 text-[10px] hover:bg-muted">
-                <Maximize2 className="h-3 w-3" /> Ampliar
+              {/* ⚠ DRE-PAINEL-02 (1): o Ampliar é o ÍCONE (22 × 22, a mesma função; o nome no `title` e no `aria-label`) — com ele e o
+                  período em 190, a faixa fica em 902px e cabe inteira de 1126 para cima (o gate `botoesDentro` em 1126/1280/1366/1920). */}
+              <button type="button" onClick={() => setAmpliado(true)} data-testid="dre-ampliar"
+                title="Ampliar a grade (só a tabela)" aria-label="Ampliar"
+                className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border hover:bg-muted">
+                <Maximize2 className="h-3 w-3" />
               </button>
             </div>
           </div>
@@ -1494,7 +1501,10 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao, onIrP
               (os cards e os controles não se movem), e fechar o modal volta o segmentado para "Tabela". O
               estado segue em `f_vista`: o link que abria a cascata abre o modal. */}
           <PecGraficoModal aberto={vistaPec === 'grafico'} onFechar={() => setVistaPec('tabela')}
-            colunas={colunasPec} clienteId={clienteId} clienteNome={clienteAtual?.nome ?? null} />
+            colunas={colunasPec} clienteId={clienteId} clienteNome={clienteAtual?.nome ?? null}
+            /* DRE-PAINEL-03 — a aba "O que mudou" segue o "Comparar com" do topo (a MESMA base do painel da direita) */
+            ponte={pecDe && pecAte ? { atual: drePec.total, base: basePainel, comparacao: comparacaoPainel,
+              rotuloBase: rotuloBasePainel, rotuloAtual: rotuloCurtoPeriodo(pecDe, pecAte) } : null} />
           {/* DRE-PAINEL-01 — GRADE FIXA 58/42 (UI-LARGURA-FIXA-01): a grade e o rodapé "Fora do DRE" à esquerda, o painel à direita.
               No Ampliar, só a grade (como antes). */}
           <div className={cn(!ampliado && 'grid items-start gap-3')}
@@ -1520,7 +1530,8 @@ export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao, onIrP
             <PecPainelLeitura atual={drePec.total} base={basePainel} comparacao={comparacaoPainel}
               rotuloAtual={rotuloCurtoPeriodo(pecDe, pecAte)} rotuloBase={rotuloBasePainel} rotuloBaseFrase={rotuloBaseFrase}
               carregandoBase={carregandoBasePainel} notasALancar={notasALancarPec} selo={seloPec}
-              altura={alturaCartao} onDestino={irParaDoPainel} />
+              altura={alturaCartao} onDestino={irParaDoPainel} horizonte={horizonteDe(pecDe, pecAte)}
+              colunaCascata={colunaPadraoDaCascata(colunasPec)} />
           )}
           </div>
           </>

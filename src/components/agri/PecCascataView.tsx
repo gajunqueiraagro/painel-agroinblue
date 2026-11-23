@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import { LINHAS_PEC_RESUMIDO, type ColunaPec } from '@/components/agri/drePecRegua';
 import { valorDaLinha } from '@/pages/PecDrePanel';
-import { useDrePecuariaPatrimonio } from '@/hooks/useDrePecuaria';
+import { useDrePecuariaPatrimonio, type ChaveLinhaPec } from '@/hooks/useDrePecuaria';
 import { indicadoresDoAno } from '@/components/agri/pecLeituraAnos';
 
 const NAVY = '#0C447C';
@@ -101,7 +101,7 @@ export function PecCascataView({ colunas, clienteId, escolhido: escolhidoFora, o
   const anos = useMemo(() => colunas.filter(c => c.tipo === 'valor' && !c.semDado), [colunas]);
   /* ⚠ ABRE NO MAIS RECENTE, que é a coluna `atual` quando ela existe: é o período que a tela toda
      está mostrando, e abrir noutro faria o gráfico contradizer os cards acima dele. */
-  const padrao = anos.find(c => c.atual)?.chave ?? anos[anos.length - 1]?.chave ?? '';
+  const padrao = colunaPadraoDaCascata(colunas)?.chave ?? '';
   const [escolhidoLocal, setEscolhidoLocal] = useState<string>('');
   const escolhido = escolhidoFora ?? escolhidoLocal;
   const setEscolhido = (c: string) => { setEscolhidoLocal(c); onEscolher?.(c); };
@@ -149,28 +149,7 @@ export function PecCascataView({ colunas, clienteId, escolhido: escolhidoFora, o
     </tr>
   );
 
-  /* ─────────── O DESENHO ─────────── */
-  /* ⚠ EM PIXELS REAIS — a regra do `preserveAspectRatio="none"` (CLAUDE.md, UI): a cascata passou a morar
-     num modal de largura fixa, e o `viewBox` é exatamente o tamanho desenhado. Uma unidade vale um pixel,
-     e a fonte de 10,5 é de 10,5. Antes o SVG esticava 1180 unidades até a largura do cartão. */
-  const W = LARGURA_CASCATA, MARG_ESQ = 62, MARG_DIR = 10, H = 310, PAD_TOPO = 20, PAD_BASE = 46;
-  const FAIXA = W - MARG_ESQ - MARG_DIR;
-  const passoX = grafico ? FAIXA / grafico.barras.length : 0;
-  const escalaY = (v: number) => {
-    if (!grafico || grafico.topo === grafico.chao) return H - PAD_BASE;
-    return PAD_TOPO + (grafico.topo - v) / (grafico.topo - grafico.chao) * (H - PAD_TOPO - PAD_BASE);
-  };
-  /* ⚠ A GRADE ANDA DE 1 OU 2 MILHÕES conforme a escala: com passo fixo, um cliente de 40 milhões
-     ganharia quarenta linhas e o gráfico viraria uma malha. */
-  const linhasGrade = useMemo(() => {
-    if (!grafico) return [];
-    const amplitude = grafico.topo - grafico.chao;
-    if (amplitude <= 0) return [];
-    const passo = amplitude > 12_000_000 ? 2_000_000 : 1_000_000;
-    const fora: number[] = [];
-    for (let v = Math.ceil(grafico.chao / passo) * passo; v <= grafico.topo; v += passo) fora.push(v);
-    return fora;
-  }, [grafico]);
+  const W = LARGURA_CASCATA, H = 310;
 
   return (
     <div className="flex flex-col gap-2">
@@ -258,6 +237,57 @@ export function PecCascataView({ colunas, clienteId, escolhido: escolhidoFora, o
         </table>
       </div>
 
+      <CascataDesenho grafico={grafico} largura={W} altura={H} />
+
+      {/* ⚠ LEGENDA SEM OS QUADRADINHOS — DRE-CASCATA-MODAL-01: a palavra já vem na cor da barra. */}
+      <div className="flex shrink-0 items-baseline justify-between gap-3 text-[11px]" style={{ width: W }}>
+        <span className="flex items-center gap-3 font-medium">
+          {LEGENDA.map(l => <span key={l.rotulo} style={{ color: l.cor }}>{l.rotulo}</span>)}
+        </span>
+        <span className={cn('whitespace-nowrap font-medium tabular-nums', corSinal(grafico?.lucro ?? null))}>
+          Resultado econômico R$ {grafico ? formatNum(grafico.lucro, 2) : traco}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** O GRAFICO DA CASCATA, sozinho — DRE-PAINEL-03b (Gabriel 23/11): a MESMA peça da "Cascata do ano" (a janela do Gráfico, 960 × 310) e do
+ *  painel da direita do DRE (a largura do painel, até o Lucro operacional). Desenho em pixels reais: o `viewBox` é o tamanho desenhado. */
+export function CascataDesenho({ grafico, largura, altura, margemEsquerda = 62, margemDireita = 10, rotulosCurtos = false }: {
+  grafico: ReturnType<typeof montarBarras>; largura: number; altura: number; margemEsquerda?: number;
+  /** o painel estreito pede mais: o rótulo da última barra ("operacional") passava 0,8px do desenho a 1126 px (gate 23/11) */
+  margemDireita?: number;
+  /** DRE-PAINEL-03b (Gabriel 16:30 + escolha das 2 alturas): o PAINEL usa os nomes curtos (`ROTULO_CURTO`), 9,5px, UMA linha cada, em 2
+   *  alturas alternadas quando não cabem lado a lado; o nome inteiro no `title`. A janela do Gráfico segue com os nomes inteiros. */
+  rotulosCurtos?: boolean;
+}) {
+  /* ─────────── O DESENHO ─────────── */
+  /* ⚠ EM PIXELS REAIS — a regra do `preserveAspectRatio="none"` (CLAUDE.md, UI): a cascata passou a morar
+     num modal de largura fixa, e o `viewBox` é exatamente o tamanho desenhado. Uma unidade vale um pixel,
+     e a fonte de 10,5 é de 10,5. Antes o SVG esticava 1180 unidades até a largura do cartão. */
+  const W = largura, MARG_ESQ = margemEsquerda, MARG_DIR = margemDireita, H = altura, PAD_TOPO = 20, PAD_BASE = 46;
+  const FAIXA = W - MARG_ESQ - MARG_DIR;
+  const passoX = grafico ? FAIXA / grafico.barras.length : 0;
+  const curtos = rotulosCurtos && grafico ? grafico.barras.map(b => ROTULO_CURTO[b.chave] ?? nomeSemSinal(b.rotulo)) : null;
+  const alternar = curtos != null && precisaAlternar(curtos, passoX);
+  const escalaY = (v: number) => {
+    if (!grafico || grafico.topo === grafico.chao) return H - PAD_BASE;
+    return PAD_TOPO + (grafico.topo - v) / (grafico.topo - grafico.chao) * (H - PAD_TOPO - PAD_BASE);
+  };
+  /* ⚠ A GRADE ANDA DE 1 OU 2 MILHÕES conforme a escala: com passo fixo, um cliente de 40 milhões
+     ganharia quarenta linhas e o gráfico viraria uma malha. */
+  const linhasGrade = useMemo(() => {
+    if (!grafico) return [];
+    const amplitude = grafico.topo - grafico.chao;
+    if (amplitude <= 0) return [];
+    const passo = amplitude > 12_000_000 ? 2_000_000 : 1_000_000;
+    const fora: number[] = [];
+    for (let v = Math.ceil(grafico.chao / passo) * passo; v <= grafico.topo; v += passo) fora.push(v);
+    return fora;
+  }, [grafico]);
+
+  return (
       <div className="overflow-hidden rounded border bg-card" style={{ width: W, height: H }}>
         {!grafico ? (
           <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
@@ -307,7 +337,12 @@ export function PecCascataView({ colunas, clienteId, escolhido: escolhidoFora, o
                     fontWeight={b.forte ? 600 : 500} fill="#3A3833">
                     {b.subtotal ? abrev(b.valor) : abrevSinal(b.valor)}
                   </text>
-                  {quebrarRotulo(b.rotulo, passoX).map((linha, j) => (
+                  {curtos ? (
+                    <text x={cx + passoX / 2} y={H - PAD_BASE + 14 + (alternar && i % 2 === 1 ? ALTURA_DA_2A_FILA : 0)} fontSize={9.5}
+                      textAnchor="middle" fontWeight={b.forte ? 600 : 400} fill="#4B4944" data-rotulo-curto="">
+                      <title>{nomeSemSinal(b.rotulo)}</title>{curtos[i]}
+                    </text>
+                  ) : quebrarRotulo(b.rotulo, passoX).map((linha, j) => (
                     <text key={j} x={cx + passoX / 2} y={H - PAD_BASE + 14 + j * 11} fontSize={10}
                       textAnchor="middle" fontWeight={b.forte ? 600 : 400} fill="#4B4944">{linha}</text>
                   ))}
@@ -317,18 +352,14 @@ export function PecCascataView({ colunas, clienteId, escolhido: escolhidoFora, o
           </svg>
         )}
       </div>
-
-      {/* ⚠ LEGENDA SEM OS QUADRADINHOS — DRE-CASCATA-MODAL-01: a palavra já vem na cor da barra. */}
-      <div className="flex shrink-0 items-baseline justify-between gap-3 text-[11px]" style={{ width: W }}>
-        <span className="flex items-center gap-3 font-medium">
-          {LEGENDA.map(l => <span key={l.rotulo} style={{ color: l.cor }}>{l.rotulo}</span>)}
-        </span>
-        <span className={cn('whitespace-nowrap font-medium tabular-nums', corSinal(grafico?.lucro ?? null))}>
-          Resultado econômico R$ {grafico ? formatNum(grafico.lucro, 2) : traco}
-        </span>
-      </div>
-    </div>
   );
+}
+
+/** A coluna que a cascata abre — o período da tela (a coluna `atual`), senão a última de valor. DRE-PAINEL-03b: o painel da direita
+ *  desenha a MESMA coluna que a janela abre. */
+export function colunaPadraoDaCascata(colunas: readonly ColunaPec[]): ColunaPec | null {
+  const anos = colunas.filter(c => c.tipo === 'valor' && !c.semDado);
+  return anos.find(c => c.atual) ?? anos[anos.length - 1] ?? null;
 }
 
 /** A largura do desenho da cascata — o miolo do modal do gráfico (988 − 2 × 14 de respiro). */
@@ -338,6 +369,29 @@ const LEGENDA: ReadonlyArray<{ rotulo: string; cor: string }> = [
   { rotulo: 'Subtotal', cor: SUBTOTAL }, { rotulo: 'Soma', cor: SOMA },
   { rotulo: 'Subtrai', cor: SUBTRAI }, { rotulo: 'Investimento', cor: INFORMATIVA },
 ];
+
+/** DRE-PAINEL-03b (Gabriel 16:30): os nomes curtos do PAINEL — a lista do Gabriel, nesta ordem; o inteiro vai no `title`. */
+export const ROTULO_CURTO: Readonly<Record<string, string>> = {
+  receita_bruta: 'Rec. bruta', deducoes: 'Deduções', receita_liquida: 'Rec. líquida', vpb_operacional: 'Var. estoque', vbp: 'VBP',
+  custo_variavel: 'C. variável', margem: 'Margem', custo_fixo: 'C. fixo', resultado_operacional: 'Lucro oper.',
+};
+const nomeSemSinal = (rotulo: string) => rotulo.replace(/^[=(−)\s]+/, '');
+/** A 2ª altura dos nomes curtos (11px abaixo da 1ª), dentro dos 46px da base. */
+const ALTURA_DA_2A_FILA = 11;
+/** ~5px por caractere a 9,5px (medido no Chromium 23/11: "Var. estoque" = 56,3px, "Rec. líquida" = 51,5px) + 4px de respiro entre vizinhos. */
+const PX_POR_CARACTERE = 5;
+const RESPIRO = 4;
+/**
+ * OS NOMES CURTOS CABEM LADO A LADO? Dois vizinhos encostam quando a soma das meias larguras + o respiro passa da distância entre os
+ * centros (`passoX`). Medido 23/11: cada barra do painel tem 35px a 1126, 42 a 1280, 72 a 1920 — lado a lado só cabem a partir de ~1550px
+ * de janela; abaixo disso, as 2 alturas (os vizinhos de mesma altura ficam a 2 × `passoX`).
+ */
+export function precisaAlternar(nomes: readonly string[], passoX: number): boolean {
+  for (let i = 0; i + 1 < nomes.length; i += 1) {
+    if (((nomes[i].length + nomes[i + 1].length) * PX_POR_CARACTERE) / 2 + RESPIRO > passoX) return true;
+  }
+  return false;
+}
 
 /**
  * O NOME DA BARRA EM ATÉ TRÊS LINHAS QUE CABEM NA FAIXA DELA — DRE-CASCATA-MODAL-01.
@@ -376,7 +430,8 @@ function rotuloDeMes(am: string) {
  * ⚠ O SINAL É O DA LINHA DO DRE, NÃO O DO NÚMERO: "(−) Deduções" subtrai mesmo quando a RPC manda
  * positivo. Ler o sinal do valor faria uma dedução negativa (um estorno) somar duas vezes.
  */
-export function montarBarras(col: ColunaPec | null) {
+/* DRE-PAINEL-03b: `ate` = a última barra (inclusive). O painel da direita para no Lucro operacional; a janela desenha as quinze. */
+export function montarBarras(col: ColunaPec | null, ate?: ChaveLinhaPec) {
   if (!col?.linhas) return null;
   let acc = 0;
   const barras: Barra[] = [];
@@ -408,6 +463,7 @@ export function montarBarras(col: ColunaPec | null) {
       barras.push({ chave: def.chave, rotulo: def.rotulo, valor: delta, subtotal: false, forte,
         de: Math.min(de, acc), ate: Math.max(de, acc), cor: delta >= 0 ? SOMA : SUBTRAI });
     }
+    if (def.chave === ate) break;
   }
   if (barras.length === 0) return null;
   const topo = Math.max(...barras.map(b => b.ate), 0);

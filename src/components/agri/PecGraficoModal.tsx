@@ -12,7 +12,7 @@
  * grade), de `fn_dre_pecuaria_patrimonio` (a ponte do rebanho) e do cache só para o GMD. As razões moram
  * em `indicadoresDoAno` (`pecLeituraAnos.ts`), a mesma função que a cascata lê.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Segmentado } from '@/components/ui/segmentado';
@@ -20,6 +20,9 @@ import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import type { ColunaPec } from '@/components/agri/drePecRegua';
 import { PecCascataView, LARGURA_CASCATA } from '@/components/agri/PecCascataView';
+import { PonteDoLucro, TITULO_SEM_COMPARACAO_PAINEL } from '@/components/agri/PecPainelLeitura';
+import type { Comparacao } from '@/lib/dre/leitura';
+import type { DrePecLinhas } from '@/hooks/useDrePecuaria';
 import {
   indicadoresDoAno, variacaoNoAno, ehParcial, passosDaPonte, posicionarPonte, rsDoCentroDeVenda,
   razao, SUBCENTROS_SO_RS, COR_PONTE, type IndicadoresAno, type PassoPonte, type UnidadePonte,
@@ -39,7 +42,20 @@ const LARG_MODAL = LARGURA_CASCATA + 28;
 /** A coluna dos rótulos da tabela e a margem esquerda do gráfico do movimento — a MESMA régua. */
 const L_ROTULO = 222;
 
-type Aba = 'cascata' | 'leitura';
+type Aba = 'cascata' | 'ponte' | 'leitura';
+
+/** DRE-PAINEL-03 — a aba "O que mudou": a ponte do lucro operacional da COLUNA COMPARADA (o "Comparar com" do topo) ao período. */
+export interface PonteDoGrafico {
+  atual: DrePecLinhas;
+  /** a coluna comparada (ano anterior, Meta ou Média 12m); `null` = sem comparação ligada → a aba fica apagada */
+  base: DrePecLinhas | null;
+  comparacao: Comparacao;
+  rotuloBase: string;
+  rotuloAtual: string;
+}
+/* a MESMA frase da aba apagada do painel da direita (DRE-PAINEL-03b) */
+export const TITULO_SEM_COMPARACAO = TITULO_SEM_COMPARACAO_PAINEL;
+const LARGURA_DA_PONTE = 720;
 type AbaMov = 'global' | 'nascimentos' | 'compras' | 'desfrute' | 'mortes';
 
 const n0 = (v: number | null | undefined) => (v == null ? traco : formatNum(v, 0));
@@ -69,14 +85,21 @@ function passoDoEixo(amplitude: number) {
     margem e passo de 200, o eixo descia a −200 e metade do gráfico ficava vazia (medido no NJ jan–ago/24). */
 const pisoDoEixo = (chaoBruto: number) => (chaoBruto < 0 ? chaoBruto * 1.35 - 4 : 0);
 
-export function PecGraficoModal({ aberto, onFechar, colunas, clienteId, clienteNome }: {
+export function PecGraficoModal({ aberto, onFechar, colunas, clienteId, clienteNome, ponte }: {
   aberto: boolean;
   onFechar: () => void;
   colunas: readonly ColunaPec[];
   clienteId: string | null | undefined;
   clienteNome?: string | null;
+  /** DRE-PAINEL-03 — a aba "O que mudou" (sem ela, a aba fica apagada) */
+  ponte?: PonteDoGrafico | null;
 }) {
   const [aba, setAba] = useState<Aba>('cascata');
+  /* DRE-PAINEL-03: a Cascata segue como padrão AO ABRIR (o estado não sobra da última vez) */
+  useEffect(() => { if (aberto) setAba('cascata'); }, [aberto]);
+  const semComparacao = !ponte?.base;
+  /* desligaram o "Comparar com" com a aba aberta: volta à Cascata (a aba apagada não fica escolhida) */
+  useEffect(() => { if (semComparacao && aba === 'ponte') setAba('cascata'); }, [semComparacao, aba]);
   const [anoCascata, setAnoCascata] = useState<string | null>(null);
 
   /* ⚠ OS ANOS DA LEITURA SÃO AS COLUNAS DE VALOR DO REALIZADO, DO CLIENTE INTEIRO, na ordem da grade (a
@@ -105,7 +128,10 @@ export function PecGraficoModal({ aberto, onFechar, colunas, clienteId, clienteN
         </div>
         <div className="flex shrink-0 items-center gap-2.5 border-b px-3.5" style={{ height: 36 }}>
           <Segmentado altura={22} valor={aba} onEscolher={setAba}
-            opcoes={[{ valor: 'cascata', rotulo: 'Cascata do ano' }, { valor: 'leitura', rotulo: 'Leitura dos anos' }]} />
+            opcoes={[{ valor: 'cascata', rotulo: 'Cascata do ano' },
+              { valor: 'ponte', rotulo: 'O que mudou', ...(semComparacao ? { desabilitada: true, title: TITULO_SEM_COMPARACAO } : {
+                title: `Do lucro operacional de ${ponte?.rotuloBase ?? ''} ao de ${ponte?.rotuloAtual ?? ''}` }) },
+              { valor: 'leitura', rotulo: 'Leitura dos anos' }]} />
           {aba === 'leitura' && (
             <span className="ml-auto text-[11px] text-muted-foreground">clique num ano para abrir a cascata dele</span>
           )}
@@ -116,6 +142,17 @@ export function PecGraficoModal({ aberto, onFechar, colunas, clienteId, clienteN
           {aba === 'cascata' ? (
             <PecCascataView colunas={colunas} clienteId={clienteId}
               escolhido={anoCascata} onEscolher={setAnoCascata} />
+          ) : aba === 'ponte' && ponte?.base ? (
+            /* ⚠ LARGURA FIXA (UI-LARGURA-FIXA-01): a lista não estica no modal largo; a peça é a MESMA do painel da direita */
+            <div className="flex flex-col gap-1" style={{ width: LARGURA_DA_PONTE }} data-testid="grafico-ponte">
+              <div className="flex h-[16px] items-baseline justify-between text-[10px]">
+                <span className="font-medium">
+                  {ponte.comparacao === 'meta' ? `Da meta ao realizado de ${ponte.rotuloAtual}` : `Do lucro operacional de ${ponte.rotuloBase} ao de ${ponte.rotuloAtual}`}
+                </span>
+                <span className="text-muted-foreground">R$ mi</span>
+              </div>
+              <PonteDoLucro atual={ponte.atual} base={ponte.base} comparacao={ponte.comparacao} rotuloBase={ponte.rotuloBase} rotuloAtual={ponte.rotuloAtual} />
+            </div>
           ) : (
             <LeituraDosAnos anos={anos} clienteId={clienteId} onAbrirAno={abrirAno} />
           )}

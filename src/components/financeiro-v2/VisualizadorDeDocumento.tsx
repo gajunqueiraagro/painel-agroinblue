@@ -10,8 +10,14 @@
  * ⚠ CAMADA DE TEXTO do pdf.js (`TextLayer`, a CSS dela em `visualizadorTexto.css`, copiada verbatim): selecionar e copiar (Ctrl/⌘+C) a linha
  *   digitável, o CNPJ, os valores. PDF escaneado (imagem) não tem texto: não há o que selecionar.
  * ⚠ DUPLO CLIQUE fora do texto alterna "Ajustar à largura" ↔ 100%.
+ *
+ * VISUALIZADOR-PDF-02 (Gabriel 23/11 13:17):
+ * ⚠ ABRE EM "PÁGINA INTEIRA" (a folha toda no quadro); "Ajustar à largura" é a opção (abria em largura = 188% num DANFE).
+ * ⚠ O QUADRO É CALLBACK REF (`refDoQuadro` → estado): o Dialog monta o conteúdo pelo Portal um render DEPOIS, e o efeito da roda lia
+ *   `quadro.current` nulo e nunca mais rodava — o zoom com Ctrl/⌘ + roda e a pinça não funcionavam com um PDF que abre (o teste antigo só
+ *   passava porque o PDF dele falhava e o `falhou` rodava o efeito de novo).
  */
-import { useEffect, useRef, useState, type PointerEvent as PointerDoReact } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent as PointerDoReact } from 'react';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -25,12 +31,13 @@ type PdfJs = typeof import('pdfjs-dist');
 
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 4;
-/** A roda: cada 100 de `deltaY` ≈ 10% de zoom (a pinça manda deltas pequenos e seguidos). */
-const SENSIBILIDADE_DA_RODA = 0.001;
+/** A roda: cada 100 de `deltaY` (um dente da roda) ≈ +22% de zoom; a pinça manda deltas pequenos e seguidos. VISUALIZADOR-PDF-02: a conta
+ *  tinha um "× 10" a mais (um dente = ×2,7, de 100% direto a 272%). */
+const SENSIBILIDADE_DA_RODA = 0.002;
 
 export const limitarZoom = (z: number): number => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100));
 /** O zoom novo pela roda/pinça: para cima (deltaY < 0) amplia. */
-export const zoomPelaRoda = (z: number, deltaY: number): number => limitarZoom(z * Math.exp(-deltaY * SENSIBILIDADE_DA_RODA * 10));
+export const zoomPelaRoda = (z: number, deltaY: number): number => limitarZoom(z * Math.exp(-deltaY * SENSIBILIDADE_DA_RODA));
 /** O ponto sob o cursor fica sob o cursor: a rolagem nova para ir do zoom `z0` ao `z1` com o cursor em `cursor` (px do quadro). */
 export const rolagemCentrada = (rolagem: number, cursor: number, z0: number, z1: number): number =>
   Math.max(0, (rolagem + cursor) * (z1 / z0) - cursor);
@@ -47,7 +54,10 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
    *  e o quadro ocupam a caixa de quem o monta (altura de quem hospeda). O desenho, o zoom e o texto são os mesmos. */
   embutido?: boolean;
 }) {
-  const quadro = useRef<HTMLDivElement>(null);
+  const quadro = useRef<HTMLDivElement | null>(null);
+  /* VISUALIZADOR-PDF-02: o quadro como ESTADO — o efeito da roda roda quando ele monta (o Portal do Dialog monta depois do 1º efeito) */
+  const [quadroMontado, setQuadroMontado] = useState<HTMLDivElement | null>(null);
+  const refDoQuadro = useCallback((n: HTMLDivElement | null) => { quadro.current = n; setQuadroMontado(n); }, []);
   const tela = useRef<HTMLCanvasElement>(null);
   const folha = useRef<HTMLDivElement>(null);
   const camadaDeTexto = useRef<HTMLDivElement>(null);
@@ -55,7 +65,7 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [falhou, setFalhou] = useState(false);
   const [pagina, setPagina] = useState(1);
-  const [modo, setModo] = useState<Modo>('largura');
+  const [modo, setModo] = useState<Modo>('pagina');
   const [zoom, setZoom] = useState(1);
   const [rotacao, setRotacao] = useState(0);
   /* o ponto que o zoom pela roda/pinça mantém sob o cursor (aplicado depois que a página muda de tamanho) */
@@ -146,7 +156,7 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
 
   /* Ctrl/⌘ + roda e a pinça: zoom no documento, nunca na página do navegador (`passive: false` para poder cancelar) */
   useEffect(() => {
-    const caixa = quadro.current;
+    const caixa = quadroMontado;
     if (!open || !caixa) return undefined;
     const ampliarEm = (x: number, y: number, z1: number) => {
       const z0 = zoomAtual.current;
@@ -179,7 +189,7 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
       caixa.removeEventListener('gesturestart', noGestoComeca);
       caixa.removeEventListener('gesturechange', noGesto);
     };
-  }, [open, falhou]);
+  }, [open, quadroMontado]);
 
   /* arrastar: move o documento ampliado; começa fora do texto (no texto, o arrastar seleciona) */
   const arrasto = useRef<{ x: number; y: number; sx: number; sy: number } | null>(null);
@@ -230,7 +240,7 @@ export function VisualizadorDeDocumento({ open, onFechar, bytes, nome, onNovaAba
           {onBaixar && <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={onBaixar} data-testid="visualizador-baixar">⤓ Baixar</Button>}
           {!embutido && <Button type="button" size="sm" variant="outline" className={BOTAO} onClick={onNovaAba} data-testid="visualizador-nova-aba">↗ Abrir em nova aba</Button>}
         </div>
-        <div ref={quadro} className={`flex min-h-0 flex-1 overflow-auto bg-[#e9ecf0] p-4 ${arrastando ? 'cursor-grabbing select-none' : ''}`}
+        <div ref={refDoQuadro} className={`flex min-h-0 flex-1 overflow-auto bg-[#e9ecf0] p-4 ${arrastando ? 'cursor-grabbing select-none' : ''}`}
           data-testid="visualizador-quadro" data-modo={modo} onPointerDown={aoPressionar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerCancel={aoSoltar}
           onDoubleClick={(e) => { if (foraDoTexto(e.target)) alternarLargura(); }}>
           {falhou
