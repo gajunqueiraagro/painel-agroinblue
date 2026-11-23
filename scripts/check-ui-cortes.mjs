@@ -2186,7 +2186,8 @@ const CENARIOS = [
       ['importar-banco-erro', 'tela=importar-banco', 'erro']].map(([nome, url, estado]) => ({ nome, url,
     tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[data-testid="importar-banco-cena"]',
     botoesDentro: '[data-testid="linha-importar-banco"]',
-    visivelNaTela: { sels: estado ? ['[data-testid="resultado-busca-erro"]'] : ['[data-testid="abrir-atualizar-lr"]'],
+    /* CONC-PAINEL-ARQUIVOS-01 (D3) — o "Atualizar do Lucro Rural" saiu da linha; a porta é o ⋯ (que também tem de caber na faixa) */
+    visivelNaTela: { sels: estado ? ['[data-testid="resultado-busca-erro"]'] : ['[data-testid="menu-importar-banco"]'],
       dentro: '[data-testid="linha-importar-banco"]', altura: 28, inteirosEm: ['[data-testid="linha-importar-banco"]', '[data-testid="importar-banco-cena"]'] },
     antes: async (p) => {
       await p.locator('[data-testid="linha-importar-banco"]').waitFor();
@@ -2213,10 +2214,20 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
   /* CONC-PAINEL-CONTA-01 (Gabriel 17/11 09:57) — o ✎ da conta abre o PAINEL lateral (passos do dono + importações), nos tamanhos que ele pediu,
      no pior caso e nos nomes do tamanho do NJ; a faixa do topo escura vem junto no print */
-  ...[['', ''], ['-nj', '&v=nj']].map(([n, extra]) => ({ nome: `conciliacao-painel-conta${n}`, url: `tela=conciliacao&admin=1${extra}`,
+  /* CONC-PAINEL-02 (mock 23/11 08:11) — o painel da conta no mês, 980 px fixo: a corrente (extrato → casar → saldo), a previdência do caso da
+     Santa Rita com nomes e números inventados (`&v=sr`: o comprovante do mês na faixa de arquivos, "Explicar a diferença" com o previsto
+     sem conta de valor exato) e a corrente com 58 sem par; e o "Ver" de uma importação (os movimentos dentro do painel) */
+  ...[['', '', 'cc1'], ['-nj', '&v=nj', 'cc1'], ['-sr-inv', '&v=sr', 'inv'], ['-sr-cc', '&v=sr', 'cc1']].map(([n, extra, conta]) => ({
+    nome: `conciliacao-painel-conta${n}`, url: `tela=conciliacao&admin=1${extra}`,
     tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
-    antes: async (p) => { await p.locator('[data-testid="botao-lapis"]').first().waitFor(); await p.locator('[data-testid="botao-lapis"]').first().click();
-      await p.locator('[data-testid="painel-da-conta"]').waitFor(); await p.waitForTimeout(500); } })),
+    antes: async (p) => { const lapis = p.locator(`[data-testid="linha-saldo-conta"][data-conta="${conta}"] [data-testid="botao-lapis"]`);
+      await lapis.waitFor(); await lapis.click();
+      await p.locator('[data-testid="painel-da-conta"]').waitFor(); await p.waitForTimeout(600); } })),
+  { nome: 'conciliacao-painel-conta-ver-importacao', url: 'tela=conciliacao&admin=1', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arquivo"][data-origem="importacao"] [data-testid="painel-arquivo-ver"]').click();
+      await p.locator('[data-testid="painel-ver-movimentos"]').waitFor(); await p.waitForTimeout(400); } },
   { nome: 'conciliacao-saldos-sem-arquivos', url: 'tela=conciliacao&v=sem', tamanhos: TAMANHOS_DA_CONCILIACAO,
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
   { nome: 'conciliacao-conta-escolhida', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
