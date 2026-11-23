@@ -172,7 +172,7 @@ export function PainelDaConta(props: PainelDaContaProps) {
                   </table>
                 )}
             </div>
-            <AreaDeArquivo regra={REGRA_DO_PAINEL} className="h-[48px] w-[200px] justify-center" testId="painel-arrastar" detalhe=""
+            <AreaDeArquivo regra={REGRA_DO_PAINEL} className="h-[48px] w-[200px] justify-center px-2.5 text-[10px]" testId="painel-arrastar" detalhe=""
               convite="Arraste aqui OFX, PDF ou foto" onArquivos={([f]) => { if (f) setDireita({ k: 'soltou', arquivo: f }); }} />
           </div>
 
