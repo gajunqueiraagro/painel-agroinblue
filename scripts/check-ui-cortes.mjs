@@ -1367,6 +1367,13 @@ const CENARIOS = [
       /* NOTAS-RECEITA-VENC-01 — a coluna Venc. (as cores), o filtro "Vencidas sem lançamento" e o popover das parcelas (a 44.871 em 12) */
       /* UI-LARGURA-FIXA-01 — o 2º cliente (curto): as mesmas colunas da lista longa */
       { nome: 'notas-receita-curta', url: 'tela=notas-receita&v=curta', tamanhos: T, regiao: R },
+      /* NOTA-IGNORAR-01 — a aba Ignoradas (Desfazer + motivo no title), o modal do Ignorar ("Outro" sem texto = a frase reservada) e a curta */
+      { nome: 'notas-receita-ignoradas', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^Ignoradas/) },
+      { nome: 'notas-receita-ignoradas-curta', url: 'tela=notas-receita&v=curta', tamanhos: T, regiao: R, antes: aba(/^Ignoradas/) },
+      { nome: 'notas-receita-ignorar', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-ignorar-modal"]', antes: async (p) => {
+        await p.locator('[data-testid="receita-ignorar"][data-sugerido]').first().click(); await p.waitForTimeout(300);
+        await p.locator('[data-testid="receita-ignorar-modal"] button', { hasText: /^Outro$/ }).click();
+        await p.locator('[data-testid="receita-ignorar-gravar"]').click(); await p.waitForTimeout(300); } },
       { nome: 'notas-receita-so-vencidas', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: async (p) => {
         await p.locator('[data-testid="receita-so-vencidas"]').click(); await p.waitForTimeout(300); } },
       { nome: 'notas-receita-parcelas', url: 'tela=notas-receita', tamanhos: T, regiao: 'body', antes: async (p) => {

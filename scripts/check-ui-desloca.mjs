@@ -981,6 +981,14 @@ const CENARIOS = [
   /* P159a (CONC-TELAS-01) — a Conferência: trocar o chip (Sem par, Casados, Vencidos, Todos) não mexe no cabeçalho do modal, nos chips,
      na faixa nem no cabeçalho das colunas (régua fixa); o Casar lançamentos: trocar de sub-aba não mexe na barra, e o mês curto não mexe
      nas colunas do Extrato. */
+  /* NOTA-IGNORAR-01 — trocar de aba na lista da Receita (A lançar → Ignoradas → Todas) não mexe no cabeçalho do modal, nas abas, na
+     barra de filtros, no cabeçalho das colunas nem no rodapé (contagens com lugar reservado; régua fixa) */
+  /* os MESMOS tamanhos do gate de cortes desta tela (de 918 para cima: a tabela tem 982px de régua fixa e o modal não é medido abaixo) */
+  { nome: 'notas-receita-abas', url: 'tela=notas-receita', tamanhos: [[918, 600], [1000, 600], [1126, 579], [1366, 768], [1440, 800]],
+    presos: '[data-testid="receita-relogio"], [data-testid="receita-so-vencidas"], [data-testid="receita-busca"], [data-testid="quadro-da-receita"] thead th, [data-testid="receita-rodape"]',
+    estados: [['a lançar', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^A lançar/ }).first().click(); await espera(p); }],
+      ['ignoradas', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^Ignoradas/ }).first().click(); await espera(p); }],
+      ['todas', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^Todas/ }).first().click(); await espera(p); }]] },
   /* P153 — procurar no histórico não mexe em nada fora do quadro: o botão, a contagem e a linha do banco ficam onde estão (a frase é linha do quadro) */
   { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',

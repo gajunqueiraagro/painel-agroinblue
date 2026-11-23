@@ -83,7 +83,7 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 import { NovoDeXmlDialog, notaParaAPrevia } from '@/components/financeiro-v2/NovoDeXmlDialog';
 import { NovoMenuLancamentos } from '@/components/financeiro-v2/NovoMenuLancamentos';
 import { NotasDaReceitaDialog } from '@/components/fiscal/NotasDaReceitaDialog';
-import { registrarBemDeTerceiro, useNotasDaReceita } from '@/hooks/useNotasDaReceita';
+import { desfazerIgnorarDaReceita, ignorarNotaDaReceita, registrarBemDeTerceiro, useNotasDaReceita } from '@/hooks/useNotasDaReceita';
 import { Camada, useCamadas } from '@/components/ui/camadas';
 import { buscarNaReceitaPelaChave } from '@/lib/fiscal/danfeDasNotasGuardadas';
 import { pedemAcao, type AbaDaReceita } from '@/lib/fiscal/notasDaReceita';
@@ -3449,6 +3449,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           aoLancar={(arquivo) => { setXmlDaReceita([arquivo]); setXmlAberto(true); camadas.abrir('xml', 'receita', { passagem: true }); }}
           /* ENTREGA-FUTURA-LIGAR-01 — a remessa de entrega futura guardada na compra (sem lançamento novo); ligou = a lista relê */
           ligarACompra={clienteAtual?.id ? { clienteId: clienteAtual.id, buscarFaturamento: buscarNaReceitaPelaChave, aoLigar: () => { void receita.refetch(); } } : undefined}
+          /* NOTA-IGNORAR-01 — ignorar/desfazer pelas funções do banco (lote 33); gravou = a lista relê */
+          ignorar={clienteAtual?.id ? {
+            ignorar: async (n, motivo, texto) => { const f = await ignorarNotaDaReceita(clienteAtual.id, n.id, motivo, texto); if (!f) void receita.refetch(); return f; },
+            desfazer: async (n) => { const f = await desfazerIgnorarDaReceita(clienteAtual.id, n.id); if (!f) void receita.refetch(); return f; },
+          } : undefined}
           /* NOTA-RECEITA-CASAR-01 — "Vincular a este" = a porta 2 (P128a): a MESMA prévia do "+ Da nota", partindo do lançamento escolhido */
           aoVincular={async (arquivo, lancamentoId) => {
             if (!clienteAtual?.id) return 'Escolha o cliente.';

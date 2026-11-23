@@ -72,6 +72,43 @@ export interface NotaNaLista extends LinhaRecebida {
   venc: VencimentoDaNota;
   /** NOTA-DEMONSTRACAO-01 — a ligação da demonstração com a compra ou o retorno que veio depois (`fn_notas_demonstracao_ligacoes`) */
   demonstracao: LigacaoNaLista | null;
+  /** NOTA-IGNORAR-01 — o "Ignorar" vivo desta nota (motivo, quem, quando; `fn_notas_receita_ignoradas`); sem ele, nulo */
+  ignorada?: IgnoradaDaNota | null;
+  /** NOTA-IGNORAR-01 — só SUGESTÃO, nunca automático: a última nota deste emitente foi ignorada (a frase do selo) */
+  sugestaoIgnorar?: { motivo: MotivoIgnorar; frase: string } | null;
+}
+
+/* NOTA-IGNORAR-01 (Gabriel 23/11) — o "Ignorar" da nota: sai do "A lançar" para a aba "Ignoradas" (motivo, quem, quando); desfazer volta.
+   A gravação é do banco (`fn_nota_receita_ignorar` / `_desfazer_ignorar`, lote 33); a tela só lê e pede. */
+export type MotivoIgnorar = 'pessoal' | 'nao_operacao' | 'duplicada' | 'outro';
+export const MOTIVOS_IGNORAR: { valor: MotivoIgnorar; rotulo: string }[] = [
+  { valor: 'pessoal', rotulo: 'Compra pessoal' },
+  { valor: 'nao_operacao', rotulo: 'Não é da operação' },
+  { valor: 'duplicada', rotulo: 'Duplicada' },
+  { valor: 'outro', rotulo: 'Outro' },
+];
+export const rotuloDoMotivo = (m: MotivoIgnorar): string => MOTIVOS_IGNORAR.find((x) => x.valor === m)?.rotulo ?? m;
+export interface IgnoradaDaNota { motivo: MotivoIgnorar; texto: string | null; por: string | null; em: string; emitenteDocumento: string | null }
+const ehMotivo = (x: unknown): x is MotivoIgnorar => x === 'pessoal' || x === 'nao_operacao' || x === 'duplicada' || x === 'outro';
+/** a resposta da `fn_notas_receita_ignoradas` → chave → o ignorar vivo (fora do formato fica de fora) */
+export function lerIgnoradas(dados: unknown): Map<string, IgnoradaDaNota> {
+  const m = new Map<string, IgnoradaDaNota>();
+  if (!Array.isArray(dados)) return m;
+  for (const d of dados) {
+    if (!d || typeof d !== 'object') continue;
+    const chave: unknown = Reflect.get(d, 'chave'); const motivo: unknown = Reflect.get(d, 'motivo'); const em: unknown = Reflect.get(d, 'em');
+    if (typeof chave !== 'string' || !ehMotivo(motivo) || typeof em !== 'string') continue;
+    m.set(chave, { motivo, em, texto: texto(Reflect.get(d, 'texto')), por: texto(Reflect.get(d, 'por')), emitenteDocumento: texto(Reflect.get(d, 'emitente_documento')) });
+  }
+  return m;
+}
+/** pode ignorar: só a nota que pede ação (a lançar ou esperando ciência/XML) */
+export const podeIgnorar = (n: Pick<NotaNaLista, 'sit'>): boolean =>
+  n.sit === 'nova' || n.sit === 'pode_estar' || n.sit === 'pede_ciencia' || n.sit === 'esperando_xml';
+/** a frase do ignorar (o title do selo): "Compra pessoal · por Fulano em 23/11, 11:52 · texto" */
+export function fraseDaIgnorada(i: IgnoradaDaNota): string {
+  const quando = new Date(i.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return `${rotuloDoMotivo(i.motivo)}${i.por ? ` · por ${i.por}` : ''} em ${quando}${i.texto ? ` · ${i.texto}` : ''}`;
 }
 
 /** NOTA-DEMONSTRACAO-01 (Gabriel 19/11 08:03) — a demonstração (5912/6912) e o que veio DEPOIS do mesmo fornecedor: a COMPRA do bem ou
@@ -215,7 +252,14 @@ export function situacaoNaLista(l: LinhaRecebida, chavesNoSistema: ReadonlySet<s
 
 export function montarLista(linhas: readonly LinhaRecebida[], titulares: ReadonlyMap<string, string>, chavesNoSistema: ReadonlySet<string>,
   candidatos: ReadonlyMap<string, CandidatoDaNota[]> = new Map(), atributos: ReadonlyMap<string, AtributosDaNota> = new Map(),
-  hoje: string = hojeLocal(), ligacoes: readonly LigacaoDaDemonstracao[] = []): NotaNaLista[] {
+  hoje: string = hojeLocal(), ligacoes: readonly LigacaoDaDemonstracao[] = [], ignoradas: ReadonlyMap<string, IgnoradaDaNota> = new Map()): NotaNaLista[] {
+  /* NOTA-IGNORAR-01 — a ÚLTIMA ignorada de cada emitente (para a sugestão na nota nova dele; nunca automático) */
+  const ultimaDoEmitente = new Map<string, IgnoradaDaNota>();
+  for (const i of ignoradas.values()) {
+    if (!i.emitenteDocumento) continue;
+    const x = ultimaDoEmitente.get(i.emitenteDocumento);
+    if (!x || i.em > x.em) ultimaDoEmitente.set(i.emitenteDocumento, i);
+  }
   return linhas.map((l) => {
     const base = situacaoNaLista(l, chavesNoSistema);
     const a = atributos.get(l.chave);
@@ -239,8 +283,20 @@ export function montarLista(linhas: readonly LinhaRecebida[], titulares: Readonl
       substituta: base === 'cancelada' ? substitutaDa(l, linhas) : null,
       venc: vencimentoDaNota(a?.dups ?? [], a?.tpags ?? [], hoje),
       demonstracao: ligacaoDaNota(l.chave, ligacoes),
+      ignorada: sit === 'ignorada' ? (ignoradas.get(l.chave) ?? null) : null,
+      sugestaoIgnorar: sugestaoDeIgnorar(sit, l, ultimaDoEmitente),
     };
   }).sort((a, b) => (b.emissao ?? '').localeCompare(a.emissao ?? '') || b.chave.localeCompare(a.chave));
+}
+
+/** NOTA-IGNORAR-01 — a sugestão (só a nota que pede ação, de outro emitente nunca; a própria ignorada não sugere) */
+function sugestaoDeIgnorar(sit: SituacaoNaLista, l: LinhaRecebida, ultimaDoEmitente: ReadonlyMap<string, IgnoradaDaNota>):
+  { motivo: MotivoIgnorar; frase: string } | null {
+  if (!podeIgnorar({ sit }) || !l.emitenteDocumento) return null;
+  const i = ultimaDoEmitente.get(l.emitenteDocumento);
+  if (!i) return null;
+  const quando = i.em.slice(0, 10).split('-').reverse().join('/');
+  return { motivo: i.motivo, frase: `A última deste emitente foi ignorada como "${rotuloDoMotivo(i.motivo)}" em ${quando}. Só sugestão: você decide.` };
 }
 
 /** a cancelada foi refeita: a nota VIVA do mesmo emitente com o mesmo valor (a mais próxima na data) */
@@ -326,7 +382,7 @@ export function lerCandidatos(dados: unknown): Map<string, CandidatoDaNota[]> | 
   return saida;
 }
 
-export type AbaDaReceita = 'lancar' | 'ciencia' | 'no_sistema' | 'vendas' | 'nao_financeiras' | 'canceladas' | 'todas';
+export type AbaDaReceita = 'lancar' | 'ciencia' | 'no_sistema' | 'vendas' | 'nao_financeiras' | 'canceladas' | 'ignoradas' | 'todas';
 export const ABAS_DA_RECEITA: { valor: AbaDaReceita; rotulo: string; filtro: (n: NotaNaLista) => boolean }[] = [
   { valor: 'lancar', rotulo: 'A lançar', filtro: (n) => n.sit === 'nova' || n.sit === 'pode_estar' },
   { valor: 'ciencia', rotulo: 'Ciência pendente', filtro: (n) => n.sit === 'pede_ciencia' || n.sit === 'esperando_xml' },
@@ -334,7 +390,9 @@ export const ABAS_DA_RECEITA: { valor: AbaDaReceita; rotulo: string; filtro: (n:
   /* NOTAS-RECEITA-SEM-LANCAMENTO-01: saem do "A lançar" sem sumir */
   { valor: 'vendas', rotulo: 'Vendas', filtro: (n) => n.sit === 'venda_titular' },
   { valor: 'nao_financeiras', rotulo: 'Não geram lançamento', filtro: (n) => n.sit === 'nao_financeira' },
-  { valor: 'canceladas', rotulo: 'Canceladas', filtro: (n) => n.sit === 'cancelada' || n.sit === 'ignorada' },
+  { valor: 'canceladas', rotulo: 'Canceladas', filtro: (n) => n.sit === 'cancelada' },
+  /* NOTA-IGNORAR-01 — a ignorada sai do "A lançar" sem sumir (motivo, quem, quando; "Desfazer" volta) */
+  { valor: 'ignoradas', rotulo: 'Ignoradas', filtro: (n) => n.sit === 'ignorada' },
   { valor: 'todas', rotulo: 'Todas', filtro: () => true },
 ];
 
