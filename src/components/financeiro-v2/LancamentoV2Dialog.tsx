@@ -56,6 +56,7 @@ import { linhasDoContrato, totaisDoContrato } from '@/lib/financeiro/parcelasNoP
 import { formaForaDaLista, ROTULO_VALOR_ATUAL } from '@/lib/financeiro/formasPagamentoV2';
 import { parcelaSolta } from '@/lib/financeiro/parcelaSolta';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { QuemPagaTerceiro, type QuemPaga } from '@/components/financeiro-v2/QuemPagaTerceiro';
 import { ClassificacaoLancamento, CAMPO_BG, atividadeValida } from '@/components/shared/ClassificacaoLancamento';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -740,6 +741,8 @@ export function LancamentoV2Dialog({
   }, [open, lancamento?.id, clienteAtual?.id, anexarBoletos, caixaAberta]);
   const navigate = useNavigate();
   const isEdit = !!lancamento;
+  /* NOTA-PAGA-POR-TERCEIRO-01 — Terceiro escolhido ou já marcado desliga a Forma de pagamento */
+  const [quemPaga, setQuemPaga] = useState<QuemPaga>('nos');
   // PR-SAFE-0 — título originado da Operação Comercial: valor/favorecido/classificação/tipo
   //   são somente leitura (edição estrutural pertence à OC). Detecção ESTRUTURAL pelo marcador
   //   de proveniência persistido (origem_lancamento), nunca por texto de UI. O writer
@@ -3502,10 +3505,20 @@ export function LancamentoV2Dialog({
             <TabsContent value="pagamento" className="mt-0 space-y-1.5 focus-visible:outline-none">
             <section className={sectionClass}>
               <TituloDoBloco nome="Pagamento" />
+              {/* NOTA-PAGA-POR-TERCEIRO-01 (Fatia A, mock aprovado 23/11) — "Quem paga: Nós · Terceiro": só na edição; gravou = fecha e a lista relê */}
+              {isEdit && lancamento?.id && clienteAtual?.id && (
+                <QuemPagaTerceiro lancamentoId={lancamento.id} clienteId={clienteAtual.id} tipoOperacao={tipoOperacao}
+                  status={lancamento.status_transacao ?? null}
+                  documentos={(documentosApi.documentos ?? []).map((d) => ({ id: d.id, nome: d.nome }))}
+                  aoMudarQuemPaga={setQuemPaga}
+                  aoGravar={(frase) => { toast.success(frase); notificarLancamentosMudaram(clienteAtual.id); onClose(); }} />
+              )}
 
               {/* Forma / Dados de Pagamento — realocados do antigo bloco "Complementares"
                   (PR-FIN-MODAL-02B). Campos e handlers idênticos; só mudou a aba. */}
-              <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
+              {/* NOTA-PAGA-POR-TERCEIRO-01 — pago por terceiro: a forma não se aplica (desligada, nada some) */}
+              <div className={cn('grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5', quemPaga === 'terceiro' && 'pointer-events-none opacity-45')}
+                aria-disabled={quemPaga === 'terceiro' || undefined} data-testid="pagamento-forma">
                 <div>
                   <Label className={REGUA_ROTULO}>{xmlRot('Forma de pagamento', 'forma')}
                     </Label>

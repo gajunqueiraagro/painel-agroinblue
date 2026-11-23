@@ -269,6 +269,12 @@ const CENARIOS = [
   /* P121b — a NF da compra de 11 dígitos na linha "Nota" do Resumo: o número inteiro, o selo "da compra" cede */
   { nome: 'lancamento-editar-nota-11', url: 'tela=lancamento&m=editar&v=salparcela&nota=11' },
   { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal&resumo=longo', alturasComo: 'tela=lancamento&m=editar&v=sal' },
+  /* NOTA-PAGA-POR-TERCEIRO-01 — "Quem paga" na aba Pagamento de uma saída Programada: Nós (o de sempre), Terceiro (o formulário) e já marcado */
+  { nome: 'lancamento-terceiro-nos', url: 'tela=lancamento&m=editar&v=sal', antes: clicarTexto('Pagamento') },
+  { nome: 'lancamento-terceiro-escolher', url: 'tela=lancamento&m=editar&v=sal', antes: async (p) => { await clicarTexto('Pagamento')(p);
+    await p.locator('[data-testid="quem-paga"] button', { hasText: /^Terceiro/ }).click(); await p.waitForTimeout(300); } },
+  { nome: 'lancamento-terceiro-marcado', url: 'tela=lancamento&m=editar&v=sal&terceiro=marcado', antes: async (p) => { await clicarTexto('Pagamento')(p);
+    await p.locator('[data-testid="quem-paga-marcado"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(200); } },
   { nome: 'lancamento-dividido-Itens', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
       await p.getByRole('button', { name: 'Contas', exact: true }).first().click(); await p.waitForTimeout(500); } },

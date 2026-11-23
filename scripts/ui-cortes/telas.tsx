@@ -3251,11 +3251,19 @@ if (tela === 'mesclar') {
       : v === 'salduas' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DUAS
       : PARCELA_DA_COMPRA && t === 'financiamento_parcelas' ? [{ financiamento_id: 'fin-sint', status: 'pendente' }]
       : PARCELA_DA_COMPRA && t === 'financiamentos' ? [{ natureza: 'parcelamento', status: 'ativo' }]
+      /* NOTA-PAGA-POR-TERCEIRO-01 — `&terceiro=marcado`: o "pago por terceiro" vivo (motivo no teto) */
+      : q.get('terceiro') === 'marcado' && t === 'financeiro_pago_por_terceiro' ? [{ parceiro_id: 'agro', data_pagamento: '2026-11-20', documento_id: null,
+          feito_em: '2026-11-23T20:00:00Z', motivo: 'Comprou no nosso nome e desconta da empreitada da reforma da sede, medição de novembro, conforme o acordo assinado' }]
       : t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
       : DIV && t === 'financeiro_lancamento_partes' ? PARTES_DIV : DIV && t === 'financeiro_lancamento_divisoes' ? [{ id: 'op-div', acao: 'dividir_nota' }]
       : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string, a: any) =>
     /* P138 — a safra da competência é do banco: aqui, pelas datas das safras SINTÉTICAS da bancada (a mesma regra) */
-    fn === '_fn_safra_da_competencia' ? (SAFRAS.find((s: any) => s.escopo_negocio === a?.p_escopo && a?.p_data >= s.data_inicio && a?.p_data <= s.data_fim)?.id ?? null)
+    /* NOTA-PAGA-POR-TERCEIRO-01 — a prévia SINTÉTICA (com o aviso do boleto) */
+    fn === 'fn_lancamento_pago_por_terceiro' ? { ok: true, simulado: true, parceiro: 'Construtora Exemplo de Nome Comprido Ltda', data_pagamento: '2026-11-20',
+      antes: { status: 'programado', data_pagamento: null, sem_caixa: false }, depois: { status: 'realizado', data_pagamento: '2026-11-20', sem_caixa: true },
+      avisos: ['Tem boleto ligado: confirme que o terceiro pagou esse boleto.'],
+      efeitos: ['sai de "a pagar", da aprovação, dos vencidos e da procura no extrato', 'a despesa continua no DRE com a mesma conta', 'Livro Caixa: fora (sem movimento de caixa) até o contador definir'] }
+    : fn === '_fn_safra_da_competencia' ? (SAFRAS.find((s: any) => s.escopo_negocio === a?.p_escopo && a?.p_data >= s.data_inicio && a?.p_data <= s.data_fim)?.id ?? null)
     : PARCELA_DA_COMPRA && fn === 'fn_financiamento_situacao' ? SITUACAO_DA_COMPRA
     /* P143 — a prévia do "Juntar num parcelamento" das 6 soltas (SINTÉTICO) */
     : v === 'salsolta' && fn === 'fn_parcelamento_juntar_lancamentos' ? { ok: true, simulado: true, parcelas: 6, soma: 3724.97,
