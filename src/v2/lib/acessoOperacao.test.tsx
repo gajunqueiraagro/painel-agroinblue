@@ -117,7 +117,7 @@ describe('a faixa de atalhos de Produção (M7): atalho para tela sem acesso nã
     expect(pode('financeiro', false)).toEqual(todas);
     expect(pode('leitura', false)).toEqual([]);
     expect(pode('campo', false)).toEqual([]);
-    expect(fonte('src/v2/V2Index.tsx')).toContain("const opcoes = opcoesDoAtalho((s) => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao'); return ativa && opcoes.length > 1 ? (");
+    expect(fonte('src/v2/V2Index.tsx')).toContain("const opcoes = opcoesDoAtalho((s) => nivelDaTela(perfilAcesso, isAdmin, s, { bpoAtivo }) !== 'nao'); return ativa && opcoes.length > 1 ? (");
   });
   it('sair da tela da operação com uma OC na URL limpa os `oc_*`, como já era em "Lançar movimentação"', () => {
     expect(saiDoLancarComOC(TELA_OPERACAO_COMERCIAL, 'financeiro-lanc', '?oc_venda=1&oc_id=x')).toBe(true);

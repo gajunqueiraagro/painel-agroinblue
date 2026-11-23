@@ -105,6 +105,8 @@ export const TELAS_DO_GESTOR: readonly V2Section[] = [
 const SO_GESTOR: Record<PerfilCliente, NivelTela> = { gestor_cliente: 'editar', financeiro: 'nao', campo: 'nao', leitura: 'nao' };
 
 export const NIVEL_POR_TELA: Partial<Record<V2Section, Record<PerfilCliente, NivelTela>>> = {
+  /* BPO-APROVACAO-01 P1: o gestor e o financeiro VEEM a fila (decidir é do aprovador marcado — o banco recusa os outros) */
+  'aprovar-pagamentos': { gestor_cliente: 'ver', financeiro: 'ver', campo: 'nao', leitura: 'nao' },
   'operacoes-comerciais': GESTOR_E_FINANCEIRO,
   [TELA_OPERACAO_COMERCIAL]: GESTOR_E_FINANCEIRO,
   ...Object.fromEntries(TELAS_DO_FINANCEIRO.map((t) => [t, GESTOR_E_FINANCEIRO])),
@@ -181,8 +183,15 @@ export function podeEditarMeta(perfil: string | null | undefined, isAdmin: boole
  *   (`NIVEL_POR_TELA`), se houver; senao a matriz perfil × grupo.
  * - perfil desconhecido ou nulo -> 'nao' em tudo.
  */
-export function nivelDaTela(perfil: string | null | undefined, isAdmin: boolean, tela: V2Section): NivelTela {
+/** BPO-APROVACAO-01 P1 — telas que só aparecem no menu do cliente com o BPO LIGADO (o admin vê sempre: é ele quem liga). */
+export const TELAS_SO_COM_BPO: readonly V2Section[] = ['aprovar-pagamentos'];
+/** o que o menu sabe do cliente além do perfil (lido uma vez por cliente) */
+export interface ContextoDoMenu { bpoAtivo?: boolean }
+
+export function nivelDaTela(perfil: string | null | undefined, isAdmin: boolean, tela: V2Section, ctx: ContextoDoMenu = {}): NivelTela {
   if (isAdmin) return 'editar';
+  /* BPO-APROVACAO-01 P1: sem o BPO ligado no cliente, a tela não existe para o perfil de cliente — no menu, no drawer e na ROTA */
+  if (TELAS_SO_COM_BPO.includes(tela) && ctx.bpoAtivo !== true) return 'nao';
   const info = infoDaTela(tela);
   if (!info || !info.liberada) return 'nao';
   if (!ehPerfilCliente(perfil)) return 'nao';
@@ -191,19 +200,19 @@ export function nivelDaTela(perfil: string | null | undefined, isAdmin: boolean,
 
 /** A pessoa ve^ este item do menu? UI-VARREDURA-01 L5 (Gabriel 03/11/2026): item "em construção" NAO aparece para ninguem, nem
  *  para o admin — volta ao menu quando a tela existir (basta tirar o `emConstrucao` do item). A secao que fica sem item some. */
-export const itemVisivel = (perfil: string | null | undefined, isAdmin: boolean, item: NavItem): boolean =>
-  !item.emConstrucao && !item.escondido && nivelDaTela(perfil, isAdmin, item.id) !== 'nao';
+export const itemVisivel = (perfil: string | null | undefined, isAdmin: boolean, item: NavItem, ctx: ContextoDoMenu = {}): boolean =>
+  !item.emConstrucao && !item.escondido && nivelDaTela(perfil, isAdmin, item.id, ctx) !== 'nao';
 
 /** As secoes do drawer de um grupo, so' com os itens visiveis; a secao sem item some. */
-export function secoesVisiveis(perfil: string | null | undefined, isAdmin: boolean, grupo: NavGrupo): NavGrupo['drawer'] {
+export function secoesVisiveis(perfil: string | null | undefined, isAdmin: boolean, grupo: NavGrupo, ctx: ContextoDoMenu = {}): NavGrupo['drawer'] {
   return grupo.drawer
-    .map((sec) => ({ ...sec, itens: sec.itens.filter((i) => itemVisivel(perfil, isAdmin, i)) }))
+    .map((sec) => ({ ...sec, itens: sec.itens.filter((i) => itemVisivel(perfil, isAdmin, i, ctx)) }))
     .filter((sec) => sec.itens.length > 0);
 }
 
 /** Os grupos da lateral: o grupo sem nenhum item visivel some. `soAdmin` continua valendo (o grupo Validar). */
-export function gruposVisiveis(perfil: string | null | undefined, isAdmin: boolean): NavGrupo[] {
-  return NAV_GRUPOS.filter((g) => (!g.soAdmin || isAdmin) && secoesVisiveis(perfil, isAdmin, g).length > 0);
+export function gruposVisiveis(perfil: string | null | undefined, isAdmin: boolean, ctx: ContextoDoMenu = {}): NavGrupo[] {
+  return NAV_GRUPOS.filter((g) => (!g.soAdmin || isAdmin) && secoesVisiveis(perfil, isAdmin, g, ctx).length > 0);
 }
 
 /** ACESSOS-OC-01 — a tela de ENTRADA de quem nao tem a 'home': Lançamentos Financeiros, para quem a tem. Liberar uma tela

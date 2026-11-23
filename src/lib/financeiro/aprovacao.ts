@@ -1,9 +1,11 @@
 /**
  * BPO-APROVACAO-01 — as regras da tela do APROVADOR (pura; o banco decide quem pode e grava — 118160): ler as linhas da
  * `fn_aprovacao_lista` sem confiar no formato, agrupar por dia de vencimento, o saldo de cada conta DEPOIS dos pagamentos da fila
- * (a leitura do banco pelo Open Finance; sem ela, "—") e as frases. Rótulos genéricos (produto multi-cliente).
+ * (a leitura do banco pelo Open Finance; sem ela, "—") e as frases. Rótulos genéricos (produto multi-cliente). O `agendarSeriaRecusado` (P3) é a
+ * única leitura daqui.
  */
 import { round2 } from '@/lib/calculos/numeroBR';
+import { supabase } from '@/integrations/supabase/client';
 
 export type SituacaoDaAprovacao = 'aguardando' | 'aprovado' | 'recusado';
 export interface LinhaDaAprovacao {
@@ -73,3 +75,26 @@ export const FRASE_SO_APROVADOR = 'Só quem aprova os pagamentos deste cliente d
 export const FRASE_DECIDIR_FALHOU = 'Não consegui gravar a decisão agora. Nada foi gravado; tente de novo.';
 export const FRASE_LER_FALHOU = 'Não consegui ler a fila de aprovação agora. Tente de novo.';
 export const fraseDaRecusaSemMotivo = 'Escreva por que não aprovar (o motivo volta para quem lançou).';
+
+/* ── P3 (piloto Vera) — AGENDAR SEM APROVAÇÃO: a tela pergunta ANTES de gravar e escreve a frase ao lado do botão (o padrão do
+   "casado com o extrato"); o banco recusa do mesmo jeito (`trg_00_aprovacao_agendar`, P0001 `bpo:sem_aprovacao`) — esta é só a frase. */
+export const FRASE_AGENDAR_SEM_APROVACAO = 'Este pagamento ainda não foi aprovado: envie para aprovação antes de agendar. Nada foi gravado.';
+/** o lançamento NOVO não tem como ir à fila antes de existir: grava-se Programado e envia-se depois */
+export const FRASE_AGENDAR_NOVO_SEM_APROVACAO = 'Só o aprovado vira Agendado: salve como Programado e envie para aprovação. Nada foi gravado.';
+
+/** o salvar vai PÔR a saída em agendado agora? (a mesma condição do gatilho: só a mudança para agendado, só saída) */
+export function vaiAgendar(statusNovo: string | null | undefined, statusAntes: string | null | undefined, tipoOperacao: string | null | undefined): boolean {
+  return statusNovo === 'agendado' && statusAntes !== 'agendado' && tipoOperacao === '2-Saídas';
+}
+
+/** o banco recusaria este agendar? (BPO ligado e sem aprovação viva aprovada). Leitura que falha = deixa o banco decidir (false). */
+export async function agendarSeriaRecusado(clienteId: string, lancamentoId: string | null): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: as tabelas da 118160 não estão no types.ts
+  const sb = supabase as any;
+  const cfg = await sb.from('financeiro_bpo_config').select('ativo').eq('cliente_id', clienteId).limit(1);
+  if (cfg.error || !Array.isArray(cfg.data) || cfg.data[0]?.ativo !== true) return false;
+  if (!lancamentoId) return true;
+  const apr = await sb.from('financeiro_aprovacoes').select('id').eq('lancamento_id', lancamentoId).eq('situacao', 'aprovado').limit(1);
+  if (apr.error) return false;
+  return !(Array.isArray(apr.data) && apr.data.length > 0);
+}

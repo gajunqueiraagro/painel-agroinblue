@@ -469,8 +469,13 @@ if (tela === 'mesclar') {
       : t === 'financeiro_fornecedores' ? (VOL ? VOL.fornecedores : LISTA)
       : t === 'financeiro_safras' ? [{ id: 's-pec', nome: 'Pecuária 25/26', codigo: '25/26-Pec', escopo_negocio: 'pecuaria', ativa: true },
         { id: 's-lav', nome: 'Mandioca 25/26', codigo: '25/26-MAND', escopo_negocio: 'agricultura', ativa: true }]
-      : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }] : [],
+      : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }]
+      /* BPO-GUIA-01 P2 — `&bpo=1`: o BPO ligado no cliente (a barra dos marcados ganha "Enviar para aprovação") */
+      : t === 'financeiro_bpo_config' && q.get('bpo') ? [{ ativo: true }] : [],
     rpc: (fn: string, a: any) => fn === 'get_anos_financeiro_v2' ? [{ ano: '2026' }] : fn === 'fn_parcelas_dos_lancamentos' ? {}
+      /* P2 — a prévia do envio: entram as marcadas menos uma, que o banco recusa com o motivo (o pior caso da frase) */
+      : fn === 'fn_aprovacao_enviar' ? { ok: true, simulado: a.p_simular, enviados: Math.max(0, (a.p_ids ?? []).length - 1), aprovados_pelo_mesmo: 0,
+        recusados: (a.p_ids ?? []).slice(0, 1).map((id: string) => ({ id, motivo: 'já pago (realizado)' })) }
       : fn === 'fn_fin_v2_lista_pagina' ? paginaDaBancada(VOL ? VOL.lancamentos : LANCAMENTOS, a)
       /* FIN-REGRA-VARIAVEL-FAZENDA-01 — `&regra=1`: o selo "N despesas no Administrativo" na faixa dos totais */
       : fn === 'fn_lancamentos_regra_fazenda_pendentes' && q.get('regra') ? PENDENTES_DA_REGRA() : null,
@@ -1703,15 +1708,28 @@ if (tela === 'mesclar') {
     vencimento: ['2031-10-21', '2031-10-24', '2031-10-28'][i % 3], valor: i === 0 ? -99999999.99 : -(1234.56 * (i + 1)), descricao: `Compra sintética ${i}`,
     fornecedor: NOMES[i % 3], fazenda: 'Fazenda Sintética com Nome Longo', conta: i % 2 ? 'Sicredi Fazenda 0418' : 'Itaú Personalite 7225',
     conta_bancaria_id: i % 2 ? 'sic' : 'itau', status_transacao: 'programado', tem_nota: i % 4 !== 2, tem_boleto: i % 3 !== 1 }));
+  /* BPO-GUIA-01 (23/11) — `&v=vera`: a FORMA da fila da Vera no piloto (14 saídas programadas em 6 dias de vencimento, uma grande e várias
+     pequenas), com nomes e valores SINTÉTICOS (a fila real tem pró-labore: dado pessoal não entra na bancada) */
+  const DIAS_VERA = ['2031-11-20', '2031-11-23', '2031-12-05', '2031-12-05', '2031-12-05', '2031-12-06', '2031-12-06', '2031-12-06', '2031-12-06',
+    '2031-12-06', '2031-12-06', '2031-12-15', '2031-12-15', '2031-12-20'];
+  const VALORES_VERA = [150, 110, 3000, 670, 8100, 13700, 60000, 6000, 6000, 6000, 4400, 7200, 4500, 150];
+  const LINHAS_VERA = DIAS_VERA.map((d, i) => ({ lancamento_id: `vera${i}`, rodada: 1, situacao: 'aguardando', motivo: null, observacao: null,
+    vencimento: d, valor: -VALORES_VERA[i], descricao: `Conta sintética ${i + 1}`, fornecedor: i % 3 ? 'Fornecedor Exemplo' : 'Prestadora Sintética de Serviços Rurais Ltda',
+    fazenda: 'Fazenda Exemplo', conta: 'Banco Exemplo 0001', conta_bancaria_id: 'itau', status_transacao: 'programado', tem_nota: i % 2 === 0, tem_boleto: i % 3 === 0 }));
   g.__bancoBancada = {
     from: (t: string) => t === 'financeiro_bpo_config' ? (v === 'desligado' ? [] : [{ ativo: true }])
       : t === 'financeiro_aprovadores' ? [{ id: 'a1' }]
-      : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }] : [],
-    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista' ? LINHAS
+      : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }]
+      /* BPO-GUIA-01 — o passo 6 do guia (só admin): os gestores do cliente, um com nome comprido */
+      : t === 'cliente_membros' ? [{ user_id: 'g1', perfil: 'gestor_cliente', ativo: true }, { user_id: 'g2', perfil: 'financeiro', ativo: true }]
+      : t === 'profiles' ? [{ id: 'g1', nome: 'Gestor Sintético com Nome Comprido da Silva' }, { id: 'g2', nome: 'Financeiro Exemplo' }] : [],
+    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista' ? (v === 'vera' ? LINHAS_VERA : LINHAS)
       : fn === 'fn_aprovacao_alertas' ? [{ alerta: 'pago_sem_aprovacao', lancamento_id: 'x1', data: '2031-10-13', valor: -2140, valor_aprovado: null, fornecedor: NOMES[0] },
           { alerta: 'aprovado_nao_pago', lancamento_id: 'x2', data: '2031-10-14', valor: -5990, valor_aprovado: -5990, fornecedor: NOMES[1] },
           { alerta: 'pago_diferente', lancamento_id: 'x3', data: '2031-10-12', valor: -99999999.99, valor_aprovado: -99999999.98, fornecedor: NOMES[2] }]
-      : fn === 'fn_aprovacao_decidir' ? { ok: true, simulado: a.p_simular, n: (a.p_ids ?? []).length, total: 99999999.99 } : null,
+      : fn === 'fn_aprovacao_decidir' ? { ok: true, simulado: a.p_simular, n: (a.p_ids ?? []).length, total: 99999999.99 }
+      : fn === 'fn_bpo_config_gravar' ? { ok: true, simulado: a.p_simular, aguardando_ao_ligar: 14 }
+      : fn === 'fn_bpo_aprovador_gravar' ? { ok: true, simulado: a.p_simular, mudou: true } : null,
   };
   /* import DENTRO do ramo: o trecho comum da bancada não muda (UI-GATE-RAPIDO-01) */
   void import('@/pages/AprovarPagamentosPage').then(({ default: AprovarPagamentosPage }) => montar(<AprovarPagamentosPage />));

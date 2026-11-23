@@ -320,6 +320,21 @@ const CENARIOS = [
     ['cancelar', botao(/^Cancelar$/)], ['revogar', clicar('[data-testid="revogar-endereco"]')],
     ['Hotmail / Outlook.com', botao(/^Hotmail/)], ['Microsoft 365', botao(/^Microsoft 365/)], ['Gmail', botao(/^Gmail$/)],
   ] },
+  /* BPO-GUIA-01 (23/11) — Aprovar pagamentos (a forma da fila da Vera, `v=vera`): marcar itens (a barra "Aprovar N · R$ X" tem lugar fixo) e trocar
+     de aba não movem o cabeçalho, as abas nem a barra; no guia "Como funciona", andar os 6 passos não move a lista dos passos, o título nem o
+     rodapé (Voltar · Próximo) — no celular e no computador (o miolo do passo é o conteúdo que troca) */
+  { nome: 'aprovar-pagamentos', url: 'tela=aprovar-pagamentos&v=vera', tamanhos: [[390, 844], [1280, 800], [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-testid="guia-aprovacao"]').waitFor({ timeout: 8000 }); await p.keyboard.press('Escape');
+      await p.locator('[data-testid="guia-aprovacao"]').waitFor({ state: 'detached' }); await p.locator('[data-testid="aprovar-item"]').first().waitFor(); await espera(p, 500); },
+    estados: [
+      ['marca 1', async (p) => { await p.locator('[data-testid="aprovar-item"] button[role="checkbox"]').nth(0).click(); await espera(p, 300); }],
+      ['marca 3', async (p) => { for (const n of [1, 2]) await p.locator('[data-testid="aprovar-item"] button[role="checkbox"]').nth(n).click(); await espera(p, 300); }],
+      ['aba Aprovados', botao(/^Aprovados$/)], ['aba Recusados', botao(/^Recusados$/)], ['aba Alertas', botao(/^Alertas$/)], ['aba Fila', botao(/^Fila/)],
+    ] },
+  { nome: 'aprovar-guia', url: 'tela=aprovar-pagamentos&v=desligado', regiao: '[data-testid="guia-aprovacao"]', tamanhos: [[390, 844], [1280, 800], [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-testid="guia-passo-1"]').waitFor({ timeout: 8000 }); await espera(p, 400); },
+    estados: [2, 3, 4, 5, 6].map((n) => [`passo ${n}`, async (p) => { await p.click('[data-testid="guia-avancar"]');
+      await p.locator(`[data-testid="guia-passo-${n}"]`).waitFor(); await espera(p, 300); }]) },
   /* LANC-PATRIMONIO-VINCULO-01 — o minimodal do "Patrimônio": trocar a aba, escolher o bem e buscar não move as abas, a prévia nem o rodapé
      (a lista e o formulário são `data-desloca-livre`, a prévia e o motivo têm lugar fixo) */
   { nome: 'patrimonio-lancamento', url: 'tela=patrimonio-lancamento&caso=sem_bem&aba=ligar', regiao: '[data-testid="patrimonio-do-lancamento-dialog"]', estados: [
