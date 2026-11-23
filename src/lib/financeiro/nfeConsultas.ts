@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { lerResolucoesDoBanco } from '@/v2/lib/importLanc/importLancamentosView';
 import { soDigitos } from '@/lib/financeiro/nfe/formatos';
 import type { UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
+import { classificacaoDoHistorico } from '@/lib/financeiro/nfe/classificacaoDoHistorico';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { validarDocumento } from '@/lib/fornecedores/documentoFiscal';
 import { completarPeloEmitente, type CampoDoEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
@@ -95,22 +96,23 @@ export async function fornecedorPeloNome(clienteId: string, nome: string): Promi
   } catch (e) { return falhou(e); }
 }
 
-/** A classificacao do ULTIMO lancamento vivo e classificado deste fornecedor (pela competencia). */
+/** A classificacao que o historico do fornecedor sugere para a NOTA DE COMPRA: so' lancamentos vivos e classificados do MESMO tipo
+ *  ("2-Saídas"; NOTA-CONTA-MESMO-TIPO-01 — antes era o ultimo de qualquer tipo e a compra de milho herdava "Venda de Fêmeas"); a conta
+ *  mais usada nos 12 meses ate' o ultimo (`classificacaoDoHistorico`). */
 export async function ultimaClassificacaoDoFornecedor(clienteId: string, fornecedorId: string): Promise<UltimaClassificacao | null> {
   const { data, error } = await supabase
     .from('financeiro_lancamentos_v2')
     .select('plano_conta_id, subcentro, macro_custo, grupo_custo, centro_custo, escopo_negocio, data_competencia, safra_id, cultura')
-    .eq('cliente_id', clienteId).eq('favorecido_id', fornecedorId).eq('cancelado', false)
+    .eq('cliente_id', clienteId).eq('favorecido_id', fornecedorId).eq('cancelado', false).eq('tipo_operacao', '2-Saídas')
     .not('plano_conta_id', 'is', null)
     .order('data_competencia', { ascending: false }).order('created_at', { ascending: false })
-    .limit(1);
-  const l = error ? null : data?.[0];
-  if (!l || !l.plano_conta_id || !l.subcentro || !l.data_competencia) return null;
-  return {
+    .limit(200);
+  const linhas = (error ? [] : data ?? []).flatMap((l) => (l.plano_conta_id && l.subcentro && l.data_competencia ? [{
     plano_conta_id: l.plano_conta_id, subcentro: l.subcentro, macro_custo: l.macro_custo ?? null, grupo_custo: l.grupo_custo ?? null,
     centro_custo: l.centro_custo ?? null, escopo_negocio: l.escopo_negocio ?? null, data: l.data_competencia,
     safra_id: l.safra_id ?? null, cultura: l.cultura ?? null,
-  };
+  }] : []));
+  return classificacaoDoHistorico(linhas);
 }
 
 /**
