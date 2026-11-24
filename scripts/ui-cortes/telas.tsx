@@ -47,6 +47,7 @@ import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { EscolherContasDoBanco } from '@/components/financeiro-v2/EscolherContasDoBanco';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
+import * as FAT from './dados/fatura';
 import * as CONC from './dados/conciliacao';
 import { FAZENDAS_VG as FAZENDAS_VG02, bancoVG02 } from './dados/visaoGeral02';
 import { V2Home } from '@/v2/pages/V2Home';
@@ -1839,6 +1840,9 @@ if (tela === 'mesclar') {
       : t === 'conciliacao_bancaria_itens' && v === 'nj10' ? CONC.ITENS_NJ10.filter((i) => !e?.in?.extrato_id || e.in.extrato_id.includes(i.extrato_id))
       : t === 'extrato_bancario_v2' && e?.sel?.startsWith('id, importacao_id') ? (semArquivos ? [] : (v === 'nj10' ? CONC.LIGACOES_NJ10 : CONC.LIGACOES).filter((l) => !e?.eq?.conta_bancaria_id || e.eq.conta_bancaria_id === 'cc1'))
       : t === 'extrato_bancario_v2' && e?.eq?.importacao_id ? CONC.MOVIMENTOS_DO_ARQUIVO
+      /* CARTAO-FATURA-IMPORT-01 — `&v=fatura`: a prévia da fatura no painel do cartão (o que já está no sistema + o histórico; o plano) */
+      : t === 'financeiro_lancamentos_v2' && v === 'fatura' && e?.sel?.startsWith('id, conta_bancaria_id, data_vencimento') ? FAT.LANCAMENTOS_DA_FATURA
+      : t === 'financeiro_plano_contas' && v === 'fatura' ? FAT.PLANO_DA_FATURA
       : t === 'financeiro_lancamentos_v2' && e?.sel?.includes('status_transacao, conta_bancaria_id') ? (v === 'sr' ? CONC.CANDIDATOS_SR : [])
       : t === 'conciliacao_bancaria_itens' ? []
       /* BAIXA-DESCONTO-BANCO-01 — a parte paga com desconto da NF do dia 03 (`&v=desconto-depois`) */

@@ -2315,6 +2315,16 @@ const CENARIOS = [
       await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
       await p.locator('[data-testid="painel-passo-casar"]').click();
       await p.locator('[data-testid="painel-casar-linha"][data-tom="exata"]').waitFor(); await p.waitForTimeout(500); } },
+  /* CARTAO-FATURA-IMPORT-01 (mock 23/11 13:38, vista 1) — o PDF da fatura solto no painel do CARTÃO → "Ler a fatura" → a prévia (grupos +
+     "o que o sistema vai fazer"); `&v=fatura`: linhas sintéticas com nomes compridos (pior caso) e um lançamento em cada grupo */
+  ...[['', null], ['-sugestao', 'nova_sugestao'], ['-mover', 'mover']].map(([n, grupo]) => ({
+    nome: `conciliacao-painel-cartao-fatura${n}`, url: 'tela=conciliacao&admin=1&v=fatura', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="car"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arrastar"] input[type="file"]').setInputFiles({ name: 'fatura-bancada-out.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+      await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor();
+      if (grupo) await p.locator(`[data-testid="fatura-grupo-${grupo}"]`).click();
+      await p.waitForTimeout(400); } })),
   { nome: 'conciliacao-painel-conta-ver-importacao', url: 'tela=conciliacao&admin=1', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
     antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
       await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
