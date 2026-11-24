@@ -2771,7 +2771,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           {/* FIN-V2-COLUNAS-02 — os controles da lista, na MESMA linha dos totais (altura 20 numa faixa de 24): no Ampliado o chip
               das contas; a Classificação por nível; o "sem caixa" em três posições. Alinhados à direita: o chip que muda de
               largura ("✓") cresce para a esquerda e não move os seletores. */}
-          <span className="ml-auto flex shrink-0 items-center gap-1.5" data-testid="controles-da-lista">
+          <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5" data-testid="controles-da-lista">
             {modoIntensivo && (
               <button type="button" data-testid="chip-contas" aria-pressed={contasAmpliado} onClick={alternarContasAmpliado}
                 title="Mostrar ou esconder as colunas C. Origem e C. Destino"
@@ -2779,9 +2779,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {contasAmpliado ? '✓ ' : ''}Contas origem/destino
               </button>
             )}
+            {/* FIN-PRONTO-PAGAR-01 — cada par rótulo + seletor é UM bloco: numa janela estreita os blocos descem inteiros (nada sai da faixa) */}
+            <span className="inline-flex shrink-0 items-center gap-1.5">
             <span className="text-muted-foreground" title="Classificação: o nível mostrado na coluna">Class.</span>
             <Segmentado altura={20} valor={nivelClassif} onEscolher={setNivelClassif}
               opcoes={NIVEIS_CLASSIFICACAO.map(n => ({ valor: n, rotulo: ROTULO_NIVEL[n] }))} />
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-1.5">
             <span className="text-muted-foreground">Sem caixa</span>
             <Segmentado altura={20} valor={modoSemCaixa} onEscolher={setModoSemCaixa} opcoes={[
               { valor: 'ocultar', rotulo: 'Ocultar', title: 'Só o que movimenta caixa' },
@@ -2790,7 +2794,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 : 'Também o sem caixa (entregas, barter, consumo), na seção abaixo da lista' },
               { valor: 'so_dre', rotulo: 'Só c/ DRE', title: 'Só os lançamentos sem caixa que compõem o DRE' },
             ]} />
+            </span>
             {/* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento"; a contagem é a do recorte sem ele (não encolhe ao escolher) */}
+            <span className="inline-flex shrink-0 items-center gap-1.5">
             <span className="text-muted-foreground">Pagamento</span>
             <Segmentado altura={20} valor={prontoPagarFiltro} onEscolher={setProntoPagarFiltro} opcoes={[
               { valor: 'todos', rotulo: 'Todos', title: 'Todos os lançamentos' },
@@ -2799,6 +2805,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               { valor: 'faltando', rotulo: <>Faltando <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.faltando.toLocaleString('pt-BR') : '—'} /></>,
                 title: 'Saídas a pagar em que falta algo: a forma, o boleto, a chave PIX ou os dados bancários' },
             ]} />
+            </span>
           </span>
         </div>
       )}
@@ -3263,7 +3270,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {(() => {
                             /* FIN-PRONTO-PAGAR-01 — o ponto ANTES do status (lugar reservado mesmo sem ponto); o clique abre na aba Pagamento */
                             const rotulo = (
-                              <span className="flex min-w-0 items-center gap-1">
+                              <span className="flex min-w-0 items-center gap-0.5" title={stLabel}>
                                 <PontoProntoPagar codigo={codigoProntoDaLinha(l)} forma={formaEfetivaDaLinha(l)}
                                   onAbrir={() => { setAbaDoLancamento('pagamento'); openEdit(l); }} />
                                 <span className="min-w-0 flex-1"><RotuloDoStatus st={st} /></span>

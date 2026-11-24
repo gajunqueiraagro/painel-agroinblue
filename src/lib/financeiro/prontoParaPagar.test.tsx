@@ -75,6 +75,6 @@ describe('FIN-PRONTO-PAGAR-01 — o ponto', () => {
     expect(screen.getByTestId('ponto-pronto').dataset.pronto).toBe('sim');
     rerender(<div onClick={daLinha}><PontoProntoPagar codigo={null} forma={null} onAbrir={abrir} /></div>);
     expect(screen.queryByTestId('ponto-pronto')).toBeNull();
-    expect(screen.getByTestId('ponto-pronto-vazio').className).toContain('w-2');
+    expect(screen.getByTestId('ponto-pronto-vazio').className).toContain('w-1.5');
   });
 });

@@ -146,7 +146,7 @@ export function FormaPeloExtratoDialog({ aberto, clienteId, aoFechar, fontes = F
           ]} />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-1.5" data-testid="forma-corpo">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-1.5" data-testid="forma-corpo">
           {erro ? (
             <div className="flex flex-col items-start gap-2 pt-6 text-[10.5px]" data-testid="forma-erro">
               <span>{erro}</span>
