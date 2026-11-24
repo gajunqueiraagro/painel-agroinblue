@@ -269,6 +269,12 @@ const CENARIOS = [
   /* P121b — a NF da compra de 11 dígitos na linha "Nota" do Resumo: o número inteiro, o selo "da compra" cede */
   { nome: 'lancamento-editar-nota-11', url: 'tela=lancamento&m=editar&v=salparcela&nota=11' },
   { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal&resumo=longo', alturasComo: 'tela=lancamento&m=editar&v=sal' },
+  /* NOTA-PAGA-POR-TERCEIRO-01 — "Quem paga" na aba Pagamento de uma saída Programada: Nós (o de sempre), Terceiro (o formulário) e já marcado */
+  { nome: 'lancamento-terceiro-nos', url: 'tela=lancamento&m=editar&v=sal', antes: clicarTexto('Pagamento') },
+  { nome: 'lancamento-terceiro-escolher', url: 'tela=lancamento&m=editar&v=sal', antes: async (p) => { await clicarTexto('Pagamento')(p);
+    await p.locator('[data-testid="quem-paga"] button', { hasText: /^Terceiro/ }).click(); await p.waitForTimeout(300); } },
+  { nome: 'lancamento-terceiro-marcado', url: 'tela=lancamento&m=editar&v=sal&terceiro=marcado', antes: async (p) => { await clicarTexto('Pagamento')(p);
+    await p.locator('[data-testid="quem-paga-marcado"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(200); } },
   { nome: 'lancamento-dividido-Itens', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
       await p.getByRole('button', { name: 'Contas', exact: true }).first().click(); await p.waitForTimeout(500); } },
@@ -851,6 +857,29 @@ const CENARIOS = [
       /* DRE-PAINEL-01 — a tela como abre ("O que mudou": só as linhas com desvio, "+ N itens sem desvio" e o painel da direita) e a "Média 12m"
          (um mês só na tela) */
       { nome: `dre-pec-mudou${suf}`, url: URL_DRE, tamanhos: T },
+      /* DRE-PAINEL-02 (1), Gabriel 23/11: o "Ampliar" cortado na 1ª faixa — todo botão INTEIRO dentro dela (`botoesDentro`) de 1126 a 1920,
+         no período (jan–set: a ponte em lista, "No período") e num mês só ("No mês") */
+      { nome: `dre-pec-faixa${suf}`, url: URL_DRE, tamanhos: [[1126, 579], [1280, 800], [1366, 768], [1920, 1080]],
+        botoesDentro: '[data-testid="dre-faixa-filtros"]' },
+      /* DRE-PAINEL-03 — a aba "O que mudou" da janela do Gráfico (a ponte da coluna comparada ao período), com o ano anterior e com a Meta */
+      ...[['', null], ['-meta', /^Meta$/]].map(([s2, comp]) => ({ nome: `dre-pec-grafico-ponte${s2}${suf}`, url: URL_DRE, tamanhos: [[1126, 579], [1280, 800], [1920, 1080]],
+        regiao: '[role="dialog"]', antes: async (p) => { if (comp) await clicarRotulo(comp)(p);
+          await clicarRotulo(/^Gráfico$/)(p); await p.locator('[role="dialog"]').waitFor();
+          await p.locator('[role="dialog"]').getByRole('button', { name: 'O que mudou', exact: true }).click();
+          await p.locator('[data-testid="grafico-ponte"]').waitFor(); await p.waitForTimeout(400); } })),
+      /* DRE-GRAFICOS-02 — a "Leitura dos anos" com o seletor próprio: 2 · 3 · 5 anos, e 5 anos com os anteriores a 2024 em "—" (forma da Vera) */
+      ...[['2', ''], ['3', ''], ['5', ''], ['5', '&desde=2024']].map(([n, extra]) => ({ nome: `dre-pec-grafico-leitura-${n}${extra ? '-desde' : ''}${suf}`,
+        url: `${URL_DRE}${extra}`, tamanhos: [[1126, 579], [1280, 800], [1920, 1080]], regiao: '[role="dialog"]',
+        antes: async (p) => { await clicarRotulo(/^Gráfico$/)(p); await p.locator('[role="dialog"]').waitFor();
+          await p.locator('[role="dialog"]').getByRole('button', { name: 'Leitura dos anos', exact: true }).click();
+          await p.locator('[data-testid="leitura-n-anos"]').getByRole('button', { name: n, exact: true }).click();
+          await p.locator('[data-testid="leitura-tabela"]').waitFor(); await p.waitForTimeout(800); } })),
+      /* DRE-PAINEL-03b — o painel da direita abre na Cascata (o `dre-pec-mudou` acima a mede); aqui a aba "O que mudou" do painel aberta */
+      { nome: `dre-pec-painel-ponte${suf}`, url: URL_DRE, tamanhos: [[1126, 579], [1280, 800], [1920, 1080]],
+        antes: async (p) => { await p.locator('[data-testid="dre-painel-abas"]').getByRole('button', { name: 'O que mudou', exact: true }).click();
+          await p.locator('[data-testid="dre-ponte"]').waitFor(); await p.waitForTimeout(300); } },
+      { nome: `dre-pec-faixa-mes${suf}`, url: `tela=dre&barra=32&f_de=2026-09&f_ate=2026-09${par}`, tamanhos: [[1126, 579], [1280, 800], [1920, 1080]],
+        botoesDentro: '[data-testid="dre-faixa-filtros"]' },
       { nome: `dre-pec-media12${suf}`, url: `tela=dre&barra=32&f_de=2026-09&f_ate=2026-09${par}`, tamanhos: T,
         antes: async (p) => { await clicarRotulo(/^Média 12 meses$/)(p); } },
       { nome: `dre-pec-2anos${suf}`, url: URL_DRE, tamanhos: T, antes: async (p) => { await det(p); await anos(2)(p); } },
@@ -1367,6 +1396,13 @@ const CENARIOS = [
       /* NOTAS-RECEITA-VENC-01 — a coluna Venc. (as cores), o filtro "Vencidas sem lançamento" e o popover das parcelas (a 44.871 em 12) */
       /* UI-LARGURA-FIXA-01 — o 2º cliente (curto): as mesmas colunas da lista longa */
       { nome: 'notas-receita-curta', url: 'tela=notas-receita&v=curta', tamanhos: T, regiao: R },
+      /* NOTA-IGNORAR-01 — a aba Ignoradas (Desfazer + motivo no title), o modal do Ignorar ("Outro" sem texto = a frase reservada) e a curta */
+      { nome: 'notas-receita-ignoradas', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: aba(/^Ignoradas/) },
+      { nome: 'notas-receita-ignoradas-curta', url: 'tela=notas-receita&v=curta', tamanhos: T, regiao: R, antes: aba(/^Ignoradas/) },
+      { nome: 'notas-receita-ignorar', url: 'tela=notas-receita', tamanhos: T, regiao: '[data-testid="receita-ignorar-modal"]', antes: async (p) => {
+        await p.locator('[data-testid="receita-ignorar"][data-sugerido]').first().click(); await p.waitForTimeout(300);
+        await p.locator('[data-testid="receita-ignorar-modal"] button', { hasText: /^Outro$/ }).click();
+        await p.locator('[data-testid="receita-ignorar-gravar"]').click(); await p.waitForTimeout(300); } },
       { nome: 'notas-receita-so-vencidas', url: 'tela=notas-receita', tamanhos: T, regiao: R, antes: async (p) => {
         await p.locator('[data-testid="receita-so-vencidas"]').click(); await p.waitForTimeout(300); } },
       { nome: 'notas-receita-parcelas', url: 'tela=notas-receita', tamanhos: T, regiao: 'body', antes: async (p) => {
@@ -1672,6 +1708,9 @@ const CENARIOS = [
       await p.waitForTimeout(500); } }))),
   { nome: 'contas-lista', url: 'tela=contas&barra=32', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contas-lista-longo', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* CONTAS-OF-LINHA-01 — a coluna "Open Finance" com o link do titular vivo, e o modal do "Conectar" da linha (altura fixa) */
+  { nome: 'contas-of-link', url: 'tela=contas&barra=32&n=longo&of=link', tamanhos: TAMANHOS_DO_CONTRATO },
+  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-conectar-linha"]' },
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },
   ...['dados', 'gerente', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-editar-${aba}`, url: `tela=contas&barra=32&v=editar&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
@@ -1741,12 +1780,23 @@ const CENARIOS = [
   })),
   /* NOTA-PAGTO-PARCELADO-01 (Gabriel 11/11) — P3 o aviso "não é compra" (a nota de conserto); P1 o "Outros lançamentos do fornecedor" com 2
      marcados (o rodapé soma × nota × diferença); P2 o "Como foi pago? › Parcelado" no caminho Criar (a forma, as parcelas, a grade) */
+  /* DA-NOTA-ETAPAS-01 — a nota NÃO FINANCEIRA: a nota nova de demonstração (o painel dos 3 caminhos, o rodapé "Guardar a nota") e a de devolução
+     (o bem de terceiro apagado no lugar), o "Registrar bem de terceiro" por cima, e a já no sistema na etapa 4 (o "Guardar" no lugar do Aplicar) */
+  ...[['nao-gera', 'tela=nota-pdf&v=&natureza=demonstracao'], ['nao-gera-devolucao', 'tela=nota-pdf&v=&natureza=devolucao']].map(([n, url]) => ({
+    nome: `nota-pdf-${n}`, url, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-nao-gera-itens"]' },
+    antes: async (p) => { await p.locator('[data-testid="nota-nao-gera"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500); } })),
+  { nome: 'nota-pdf-nao-gera-bem', url: 'tela=nota-pdf&v=&natureza=demonstracao', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], regiao: '[data-testid="receita-bem"]',
+    antes: async (p) => { await p.locator('[data-testid="nota-registrar-bem"]').click(); await p.locator('[data-testid="receita-bem-item"]').first().waitFor({ timeout: 8000 }); await p.waitForTimeout(500); } },
+  { nome: 'nota-pdf-nao-gera-ja', url: 'tela=nota-pdf&v=gulart&natureza=demonstracao', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.locator('[data-testid="nota-etapa-lancamento"]').click(); await p.waitForTimeout(600); } },
   { nome: 'nota-pdf-semcompra', url: 'tela=nota-pdf&v=jalancada&natureza=conserto', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' } },
   { nome: 'nota-pdf-outros', url: 'tela=nota-pdf&v=jalancada&outros=1', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="outros-lancamentos"]',
     antes: async (p) => {
       await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(800);
-      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
       await p.locator('[data-testid="nota-outros-abrir"]').click(); await p.waitForTimeout(800);
       const c = p.locator('[data-testid="outros-marcar"]:not([disabled])'); await c.nth(0).click(); await p.waitForTimeout(300);
     } },
@@ -1806,22 +1856,25 @@ const CENARIOS = [
   /* P163-2 (NOTA-ABAS-PREVIA-01) — a nota JÁ LANÇADA em abas, cada aba nos sete tamanhos (a "No sistema hoje" é a que abre: `nota-pdf-<v>` acima);
      abaixo de 1000px também a aba "Arquivo" (ver a nota). Só rolam por dentro as tabelas (a do sistema, a da prévia, a dos itens). */
   /* mock da nota já lançada (29/10): Nota e Fornecedor fixos em cima; as abas Parcelas × sistema (a que abre) · Como vai ficar · Itens · Lançamento */
-  ...NOTA_JA_LANCADA.flatMap((v) => [['hoje', 'No sistema hoje', TAMANHOS_DO_CONSORCIO], ['parcelas', 'Parcelas × sistema', TAMANHOS_DO_CONSORCIO], ['ficar', 'Como vai ficar', TAMANHOS_DO_CONSORCIO],
-    ['itens', 'Itens (', TAMANHOS_DO_CONSORCIO], ['lancamento', 'Lançamento', TAMANHOS_DO_CONSORCIO], ['arquivo', 'Arquivo', TAMANHOS_ESTREITOS_DA_NOTA]].map(([a, rotulo, tamanhos]) => ({
-    nome: `nota-pdf-ja-${a}-${v}`, url: `tela=nota-pdf&v=${v}`, tamanhos: a === 'arquivo' ? tamanhos : [...tamanhos, [1366, 768]], titulosDeBloco: true,
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+  /* DA-NOTA-ETAPAS-01 (mock v2 aprovado 19/11 07:51) — as 4 ETAPAS (O que já existe · Como vai ficar · Itens da nota · Confirmar) e as 3 sub-abas
+     da etapa 3 (Valores · Fiscal · Contas): REGRA do gate (Chat 19/11 07:58) — corte em TODAS a 1280/1366/1920, além dos sete de sempre */
+  ...NOTA_JA_LANCADA.flatMap((v) => [['existe', 'O que já existe'], ['ficar', 'Como vai ficar'], ['itens', 'Itens da nota'], ['itens-fiscal', 'Itens da nota', 'Fiscal'],
+    ['itens-contas', 'Itens da nota', 'Contas'], ['confirmar', 'Confirmar']].map(([a, rotulo, sub]) => ({
+    nome: `nota-pdf-ja-${a}-${v}`, url: `tela=nota-pdf&v=${v}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"], [data-testid="contas-rolagem"]' },
     antes: async (p) => {
       await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
       await p.locator('[data-testid="nota-abas-ja"] button', { hasText: rotulo }).first().click(); await p.waitForTimeout(500);
+      if (sub) { await p.locator('[data-testid="nota-aba-itens"] button', { hasText: new RegExp(`^${sub}$`) }).first().click(); await p.waitForTimeout(500); }
     } }))),
   /* NOTA-ATUALIZA-PREVISTO-01 — o caso da Vera (SINTÉTICO): "É esta" no PREVISTO de R$ 1.000 + "paga 70 %": a aba Parcelas (o Resultado
      "1 atualiza · 0 cria · R$ … · paga 70 % · outro paga R$ …", o resumo em colunas) e a Como vai ficar (o valor de hoje riscado → o novo) */
-  ...[['parcelas', 'Parcelas × sistema'], ['ficar', 'Como vai ficar']].map(([a, rotulo]) => ({
+  ...[['parcelas', 'O que já existe'], ['ficar', 'Como vai ficar']].map(([a, rotulo]) => ({
     nome: `nota-pdf-ja-previsto-${a}`, url: 'tela=nota-pdf&v=previsto', tamanhos: TAMANHOS_DO_CONSORCIO, titulosDeBloco: true,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
     antes: async (p) => {
       await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
-      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
       await p.locator('[data-testid="nota-acao"][data-acao="deixar"]').first().click(); await p.locator('[data-testid="nota-acao-vincular"]').click();
       await p.locator('[data-testid="nota-participacao-pct"]').fill('70'); await p.waitForTimeout(300);
       if (a === 'ficar') await p.locator('[data-testid="nota-abas-ja"] button', { hasText: rotulo }).first().click();
@@ -1903,12 +1956,12 @@ const CENARIOS = [
   /* a frase mora na aba "Parcelas × sistema" (desde 29/10 a nota já lançada abre em "No sistema hoje"): o cenário abre a aba antes */
   { nome: 'nota-pdf-nf-digitada', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO.filter(([l]) => l >= 1000),
     semRolarNoLugar: '[data-testid="nota-nf-digitada"]',
-    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(500); } },
+    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(500); } },
   { nome: 'nota-pdf-nota-lida-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
     antes: async (p) => {
       /* P163-2 — a nota já lançada abre em abas (`nota-abas-ja`, em todo tamanho): o "Usar a nota lida" mora em "No sistema hoje" */
       const ja = p.locator('[data-testid="nota-abas-ja"]');
-      if (await ja.count()) { await ja.locator('button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(400); }
+      if (await ja.count()) { await ja.locator('button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400); }
       else if (p.viewportSize().width < 1000) { await p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' }).first().click(); await p.waitForTimeout(400); }
       await p.locator('[data-testid="nota-usar-nota-lida"]').first().click(); await p.waitForTimeout(600);
     } },
@@ -1923,6 +1976,8 @@ const CENARIOS = [
       semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS }, antes: f ? clicarTexto(f) : undefined }]),
   /* NOTA-CONTAS-NA-CRIACAO-01 A — o NOVO pela nota: a vista Contas dos itens ("Dividir em N contas ao salvar") e, depois de dividir (o item 1
      para uma conta de Lavoura, pela barra de atividade), a Geral com as partes PENDENTES ("dividida em 2 contas ao salvar") */
+  /* FORN-CRIAR-DA-NOTA-ERRO — a faixa "Fornecedor não encontrado … criar fornecedor com estes dados" com o nome SEM o código do emissor */
+  { nome: 'lancamento-xml-codigo-emissor', url: 'tela=lancamento&m=novo&v=xmlcodigo', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'lancamento-xml-Itens-contas', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
     antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p); } },
@@ -1958,6 +2013,18 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="rateio-linha"]').first().waitFor(); if (botao) { await p.locator(botao).click(); await p.waitForTimeout(300); } } })),
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
+  /* BPO-GUIA-01 P2 — com o BPO ligado, a barra dos marcados ganha "Enviar para aprovação" (inteiro na barra) e a prévia do banco no modal
+     (entram N, uma fica de fora com o motivo: o pior caso da frase) */
+  { nome: 'financeiro-barra-lote-bpo', url: 'tela=financeiro&bpo=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
+    botoesDentro: '[data-testid="barra-lote"]',
+    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
+      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
+      await p.locator('[data-testid="lote-enviar-aprovacao"]').waitFor(); await p.waitForTimeout(400); } },
+  { nome: 'financeiro-enviar-aprovacao', url: 'tela=financeiro&bpo=1', tamanhos: [[390, 844], [1280, 800], [1920, 1080]], regiao: '[data-testid="enviar-aprovacao"]',
+    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
+      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
+      await p.locator('[data-testid="lote-enviar-aprovacao"]').click();
+      await p.locator('[data-testid="enviar-aprovacao-previa"]', { hasText: 'para a fila' }).waitFor(); await p.waitForTimeout(300); } },
   /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
   ...['', 'mesmo', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),
@@ -2147,10 +2214,14 @@ const CENARIOS = [
   ...['encurtada', 'cancelar', 'vazia', 'carregando', 'erro'].map((v) => ({ nome: `fora-da-vigencia-${v}`, url: `tela=fora-da-vigencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-fora-da-vigencia"]' })),
   /* BPO-APROVACAO-01 — a tela do aprovador, celular primeiro (390×844) e no computador: a fila, a prévia do lote, os alertas, o desligado */
-  ...[['aprovar-pagamentos', 'tela=aprovar-pagamentos', null], ['aprovar-pagamentos-previa', 'tela=aprovar-pagamentos', 'previa'],
+  /* BPO-GUIA-01 (23/11): + 1280 e 1920, a forma da fila da Vera (`v=vera`); o guia abre sozinho na 1ª visita — a tela se mede com ele fechado */
+  ...[['aprovar-pagamentos', 'tela=aprovar-pagamentos', null], ['aprovar-pagamentos-vera', 'tela=aprovar-pagamentos&v=vera', null],
+      ['aprovar-pagamentos-previa', 'tela=aprovar-pagamentos', 'previa'],
       ['aprovar-pagamentos-alertas', 'tela=aprovar-pagamentos&v=alertas', 'alertas'], ['aprovar-pagamentos-desligado', 'tela=aprovar-pagamentos&v=desligado', 'desligado']]
-    .map(([nome, url, estado]) => ({ nome, url, tamanhos: [[390, 844], [1366, 768]], regiao: estado === 'previa' ? '[role="dialog"]' : 'body',
+    .map(([nome, url, estado]) => ({ nome, url, tamanhos: [[390, 844], [1280, 800], [1366, 768], [1920, 1080]], regiao: estado === 'previa' ? '[role="dialog"]' : 'body',
       antes: async (p) => {
+        await p.locator('[data-testid="guia-aprovacao"]').waitFor({ timeout: 8000 }); await p.keyboard.press('Escape');
+        await p.locator('[data-testid="guia-aprovacao"]').waitFor({ state: 'detached' });
         if (estado === 'desligado') { await p.locator('[data-testid="aprovar-desligado"]').waitFor(); return; }
         await p.locator('[data-testid="aprovar-item"]').first().waitFor();
         if (estado === 'alertas') { await p.getByRole('radio', { name: 'Alertas' }).or(p.getByRole('button', { name: 'Alertas' })).first().click(); await p.locator('[data-testid="aprovar-alertas"]').waitFor(); }
@@ -2160,6 +2231,21 @@ const CENARIOS = [
         }
         await p.waitForTimeout(300);
       } })),
+  /* BPO-GUIA-01 — o guia "Como funciona" (admin, BPO desligado: os 6 passos e a prévia do Ligar), 390/1280/1920: nada cortado dentro do modal.
+     A regra do Gabriel "ZERO texto quebrado" (uma linha em tudo) tem a sua medida no `fotoGuiaBpo` (cada `[data-texto-guia]` em uma linha). */
+  ...[1, 2, 3, 4, 5, 6, 'previa'].map((passo) => ({ nome: `aprovar-guia-${passo === 'previa' ? 'passo6-previa' : `passo${passo}`}`,
+    url: 'tela=aprovar-pagamentos&v=desligado', tamanhos: [[390, 844], [1280, 800], [1920, 1080]], regiao: '[data-testid="guia-aprovacao"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="guia-passo-1"]').waitFor({ timeout: 8000 });
+      const ate = passo === 'previa' ? 6 : passo;
+      for (let i = 1; i < ate; i++) { await p.click('[data-testid="guia-avancar"]'); await p.locator(`[data-testid="guia-passo-${i + 1}"]`).waitFor(); }
+      if (passo === 'previa') {
+        await p.locator('label:has-text("Quem aprova") button').first().click(); await p.locator('[data-testid="searchable-select-painel"]').waitFor();
+        await p.locator('[data-testid="searchable-select-painel"] [title="Gestor Sintético com Nome Comprido da Silva"]').first().click();
+        await p.click('[data-testid="guia-avancar"]'); await p.locator('[data-testid="guia-previa"]').waitFor();
+      }
+      await p.waitForTimeout(350);
+    } })),
   /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
      botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
   ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',
@@ -2186,7 +2272,8 @@ const CENARIOS = [
       ['importar-banco-erro', 'tela=importar-banco', 'erro']].map(([nome, url, estado]) => ({ nome, url,
     tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[data-testid="importar-banco-cena"]',
     botoesDentro: '[data-testid="linha-importar-banco"]',
-    visivelNaTela: { sels: estado ? ['[data-testid="resultado-busca-erro"]'] : ['[data-testid="abrir-atualizar-lr"]'],
+    /* CONC-PAINEL-ARQUIVOS-01 (D3) — o "Atualizar do Lucro Rural" saiu da linha; a porta é o ⋯ (que também tem de caber na faixa) */
+    visivelNaTela: { sels: estado ? ['[data-testid="resultado-busca-erro"]'] : ['[data-testid="menu-importar-banco"]'],
       dentro: '[data-testid="linha-importar-banco"]', altura: 28, inteirosEm: ['[data-testid="linha-importar-banco"]', '[data-testid="importar-banco-cena"]'] },
     antes: async (p) => {
       await p.locator('[data-testid="linha-importar-banco"]').waitFor();
@@ -2213,10 +2300,48 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
   /* CONC-PAINEL-CONTA-01 (Gabriel 17/11 09:57) — o ✎ da conta abre o PAINEL lateral (passos do dono + importações), nos tamanhos que ele pediu,
      no pior caso e nos nomes do tamanho do NJ; a faixa do topo escura vem junto no print */
-  ...[['', ''], ['-nj', '&v=nj']].map(([n, extra]) => ({ nome: `conciliacao-painel-conta${n}`, url: `tela=conciliacao&admin=1${extra}`,
+  /* CONC-PAINEL-02 (mock 23/11 08:11) — o painel da conta no mês, 980 px fixo: a corrente (extrato → casar → saldo), a previdência do caso da
+     Santa Rita com nomes e números inventados (`&v=sr`: o comprovante do mês na faixa de arquivos, "Explicar a diferença" com o previsto
+     sem conta de valor exato) e a corrente com 58 sem par; e o "Ver" de uma importação (os movimentos dentro do painel) */
+  ...[['', '', 'cc1'], ['-nj', '&v=nj', 'cc1'], ['-sr-inv', '&v=sr', 'inv'], ['-sr-cc', '&v=sr', 'cc1']].map(([n, extra, conta]) => ({
+    nome: `conciliacao-painel-conta${n}`, url: `tela=conciliacao&admin=1${extra}`,
     tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
-    antes: async (p) => { await p.locator('[data-testid="botao-lapis"]').first().waitFor(); await p.locator('[data-testid="botao-lapis"]').first().click();
-      await p.locator('[data-testid="painel-da-conta"]').waitFor(); await p.waitForTimeout(500); } })),
+    antes: async (p) => { const lapis = p.locator(`[data-testid="linha-saldo-conta"][data-conta="${conta}"] [data-testid="botao-lapis"]`);
+      await lapis.waitFor(); await lapis.click();
+      await p.locator('[data-testid="painel-da-conta"]').waitFor(); await p.waitForTimeout(600); } })),
+  /* CONC-PAINEL-02 ajuste (Gabriel 23/11 17:09) — 10 arquivos na conta (`&v=nj10`, o NJ BB out/26 com nomes inventados): a faixa com UM cartão de
+     resumo (nunca rolagem lateral), a LISTA no passo Extrato (colunas fixas, o aviso de sobreposição) e o "Ver" de uma linha com "← voltar à lista" */
+  { nome: 'conciliacao-painel-conta-nj10', url: 'tela=conciliacao&admin=1&v=nj10', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arquivos-resumo"]').click(); await p.locator('[data-testid="painel-lista"]').waitFor(); await p.waitForTimeout(500); } },
+  { nome: 'conciliacao-painel-conta-nj10-ver', url: 'tela=conciliacao&admin=1&v=nj10', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arquivos-resumo"]').click();
+      await p.locator('[data-testid="painel-lista-linha"][data-chave="importacao:imp-nj-1"] [data-testid="painel-lista-ver"]').click();
+      await p.locator('[data-testid="painel-ver-movimentos"]').waitFor(); await p.waitForTimeout(400); } },
+  /* CONC-PAINEL-02 entrega 2 (Gabriel 23/11 17:11) — o passo "Casar lançamentos" com as 3 linhas sem par e a sugestão do motor (`&v=nj10`) */
+  { nome: 'conciliacao-painel-conta-nj10-casar', url: 'tela=conciliacao&admin=1&v=nj10', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-passo-casar"]').click();
+      await p.locator('[data-testid="painel-casar-linha"][data-tom="exata"]').waitFor(); await p.waitForTimeout(500); } },
+  /* CARTAO-FATURA-IMPORT-01 (mock 23/11 13:38, vista 1) — o PDF da fatura solto no painel do CARTÃO → "Ler a fatura" → a prévia (grupos +
+     "o que o sistema vai fazer"); `&v=fatura`: linhas sintéticas com nomes compridos (pior caso) e um lançamento em cada grupo */
+  ...[['', null], ['-sugestao', 'nova_sugestao'], ['-mover', 'mover']].map(([n, grupo]) => ({
+    nome: `conciliacao-painel-cartao-fatura${n}`, url: 'tela=conciliacao&admin=1&v=fatura', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="car"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arrastar"] input[type="file"]').setInputFiles({ name: 'fatura-bancada-out.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+      await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor();
+      if (grupo) await p.locator(`[data-testid="fatura-grupo-${grupo}"]`).click();
+      await p.waitForTimeout(400); } })),
+  { nome: 'conciliacao-painel-conta-ver-importacao', url: 'tela=conciliacao&admin=1', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arquivo"][data-origem="importacao"] [data-testid="painel-arquivo-ver"]').click();
+      await p.locator('[data-testid="painel-ver-movimentos"]').waitFor(); await p.waitForTimeout(400); } },
   { nome: 'conciliacao-saldos-sem-arquivos', url: 'tela=conciliacao&v=sem', tamanhos: TAMANHOS_DA_CONCILIACAO,
     antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
   { nome: 'conciliacao-conta-escolhida', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
@@ -2327,6 +2452,10 @@ const CENARIOS = [
   { nome: 'financeiro-clipe-danfe', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
     tamanhos: [[1240, 700], [1024, 600]], antes: async (p) => { await p.locator('[data-testid="clipe-da-linha"][title*="519"]').first().click();
       await p.locator('[data-qual="clipe-documento-pdf"]').first().waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
+  /* DANFE-SOB-DEMANDA-01 — a NF só com o XML (sem PDF): "PDF · DANFE" (gerado na hora) e "XML · Itens" no popover */
+  { nome: 'financeiro-clipe-danfe-sob-demanda', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
+    tamanhos: [[1240, 700], [1024, 600]], antes: async (p) => { await p.locator('[data-testid="clipe-da-linha"][title*="337"]').first().click();
+      await p.locator('[data-qual="clipe-documento-danfe"]').first().waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
   { nome: 'financeiro-clipe-popover', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
     tamanhos: [[1240, 700], [1024, 600], [948, 593], [1067, 667], ...TAMANHOS_DO_CONTRATO], antes: clicar('[data-testid="clipe-da-linha"]') },
   { nome: 'financeiro-tabela-pagina-2', url: 'tela=financeiro&v=volume&n=450', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO,

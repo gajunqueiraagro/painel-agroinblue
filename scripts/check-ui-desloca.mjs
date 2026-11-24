@@ -320,6 +320,21 @@ const CENARIOS = [
     ['cancelar', botao(/^Cancelar$/)], ['revogar', clicar('[data-testid="revogar-endereco"]')],
     ['Hotmail / Outlook.com', botao(/^Hotmail/)], ['Microsoft 365', botao(/^Microsoft 365/)], ['Gmail', botao(/^Gmail$/)],
   ] },
+  /* BPO-GUIA-01 (23/11) — Aprovar pagamentos (a forma da fila da Vera, `v=vera`): marcar itens (a barra "Aprovar N · R$ X" tem lugar fixo) e trocar
+     de aba não movem o cabeçalho, as abas nem a barra; no guia "Como funciona", andar os 6 passos não move a lista dos passos, o título nem o
+     rodapé (Voltar · Próximo) — no celular e no computador (o miolo do passo é o conteúdo que troca) */
+  { nome: 'aprovar-pagamentos', url: 'tela=aprovar-pagamentos&v=vera', tamanhos: [[390, 844], [1280, 800], [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-testid="guia-aprovacao"]').waitFor({ timeout: 8000 }); await p.keyboard.press('Escape');
+      await p.locator('[data-testid="guia-aprovacao"]').waitFor({ state: 'detached' }); await p.locator('[data-testid="aprovar-item"]').first().waitFor(); await espera(p, 500); },
+    estados: [
+      ['marca 1', async (p) => { await p.locator('[data-testid="aprovar-item"] button[role="checkbox"]').nth(0).click(); await espera(p, 300); }],
+      ['marca 3', async (p) => { for (const n of [1, 2]) await p.locator('[data-testid="aprovar-item"] button[role="checkbox"]').nth(n).click(); await espera(p, 300); }],
+      ['aba Aprovados', botao(/^Aprovados$/)], ['aba Recusados', botao(/^Recusados$/)], ['aba Alertas', botao(/^Alertas$/)], ['aba Fila', botao(/^Fila/)],
+    ] },
+  { nome: 'aprovar-guia', url: 'tela=aprovar-pagamentos&v=desligado', regiao: '[data-testid="guia-aprovacao"]', tamanhos: [[390, 844], [1280, 800], [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-testid="guia-passo-1"]').waitFor({ timeout: 8000 }); await espera(p, 400); },
+    estados: [2, 3, 4, 5, 6].map((n) => [`passo ${n}`, async (p) => { await p.click('[data-testid="guia-avancar"]');
+      await p.locator(`[data-testid="guia-passo-${n}"]`).waitFor(); await espera(p, 300); }]) },
   /* LANC-PATRIMONIO-VINCULO-01 — o minimodal do "Patrimônio": trocar a aba, escolher o bem e buscar não move as abas, a prévia nem o rodapé
      (a lista e o formulário são `data-desloca-livre`, a prévia e o motivo têm lugar fixo) */
   { nome: 'patrimonio-lancamento', url: 'tela=patrimonio-lancamento&caso=sem_bem&aba=ligar', regiao: '[data-testid="patrimonio-do-lancamento-dialog"]', estados: [
@@ -785,7 +800,7 @@ const CENARIOS = [
   /* Caso 3 (Gabriel 29/10 11:33) — a nota no cartão em 10: responder a posição (pela descrição) desenha as 10 linhas DENTRO do quadro; a barra das
      abas, o Resultado e o rodapé não andam */
   { nome: 'nota-pdf-m2', url: 'tela=nota-pdf&v=m2', antes: async (p) => {
-    await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await espera(p, 400);
+    await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await espera(p, 400);
   }, estados: [
     ['posição pela descrição', clicar('[data-testid="nota-cartao-pergunta"] button:has-text("pela descrição")')],
   ] },
@@ -828,11 +843,11 @@ const CENARIOS = [
      (duplica)" no ⋯ não movem a barra das abas nem o rodapé (o conteúdo troca dentro do corpo) */
   { nome: 'nota-pdf-caminhos', url: 'tela=nota-pdf&v=diferenca', antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await espera(p, 300); },
     estados: [
-    ['aba Parcelas × sistema', clicar('[data-testid="nota-abas-ja"] button:has-text("Parcelas × sistema")')],
-    ['aba Lançamento', clicar('[data-testid="nota-abas-ja"] button:has-text("Lançamento")')],
+    ['etapa O que já existe', clicar('[data-testid="nota-abas-ja"] button:has-text("O que já existe")')],
+    ['etapa Confirmar', clicar('[data-testid="nota-abas-ja"] button:has-text("Confirmar")')],
     ['aba Como vai ficar', clicar('[data-testid="nota-abas-ja"] button:has-text("Como vai ficar")')],
     ['atualizar as nao pagas', noLugar('[data-testid="nota-atualizar-nao-pagas"] button')],
-    ['aba Itens', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens (")')],
+    ['etapa Itens da nota', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens da nota")')],
     /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
   ] },
   /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */
@@ -978,9 +993,27 @@ const CENARIOS = [
   { nome: 'conciliacao-extrato-do-sistema', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DO_P92,
     antes: async (p) => { await p.locator('[data-testid="modal-extrato-sistema"]').waitFor(); await espera(p); },
     estados: [['carregado', { url: 'tela=extrato-do-sistema' }]] },
+  /* CARTAO-FATURA-IMPORT-01 — a prévia da fatura no painel do cartão: escolher outro grupo troca as linhas da tabela, mas não mexe no
+     cabeçalho, nos selos dos grupos, no cabeçalho das colunas, no quadro, no rodapé nem no "Gravar N com prévia" */
+  { nome: 'conciliacao-painel-cartao-fatura', url: 'tela=conciliacao&admin=1&v=fatura', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    presos: '[data-testid="fatura-cabecalho"], [data-testid^="fatura-grupo-"], [data-testid="fatura-tabela"] thead th, [data-testid="fatura-quadro"], [data-testid="fatura-rodape"], [data-testid="fatura-gravar"]',
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="car"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arrastar"] input[type="file"]').setInputFiles({ name: 'fatura-bancada-out.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+      await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor(); await espera(p); },
+    estados: [['Nova · sugestão (5 linhas)', clicar('[data-testid="fatura-grupo-nova_sugestao"]')], ['Pagamento (1 linha)', clicar('[data-testid="fatura-grupo-pagamento"]')],
+      ['Já lançado', clicar('[data-testid="fatura-grupo-ja_lancado"]')]] },
   /* P159a (CONC-TELAS-01) — a Conferência: trocar o chip (Sem par, Casados, Vencidos, Todos) não mexe no cabeçalho do modal, nos chips,
      na faixa nem no cabeçalho das colunas (régua fixa); o Casar lançamentos: trocar de sub-aba não mexe na barra, e o mês curto não mexe
      nas colunas do Extrato. */
+  /* NOTA-IGNORAR-01 — trocar de aba na lista da Receita (A lançar → Ignoradas → Todas) não mexe no cabeçalho do modal, nas abas, na
+     barra de filtros, no cabeçalho das colunas nem no rodapé (contagens com lugar reservado; régua fixa) */
+  /* os MESMOS tamanhos do gate de cortes desta tela (de 918 para cima: a tabela tem 982px de régua fixa e o modal não é medido abaixo) */
+  { nome: 'notas-receita-abas', url: 'tela=notas-receita', tamanhos: [[918, 600], [1000, 600], [1126, 579], [1366, 768], [1440, 800]],
+    presos: '[data-testid="receita-relogio"], [data-testid="receita-so-vencidas"], [data-testid="receita-busca"], [data-testid="quadro-da-receita"] thead th, [data-testid="receita-rodape"]',
+    estados: [['a lançar', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^A lançar/ }).first().click(); await espera(p); }],
+      ['ignoradas', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^Ignoradas/ }).first().click(); await espera(p); }],
+      ['todas', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^Todas/ }).first().click(); await espera(p); }]] },
   /* P153 — procurar no histórico não mexe em nada fora do quadro: o botão, a contagem e a linha do banco ficam onde estão (a frase é linha do quadro) */
   { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
     presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',

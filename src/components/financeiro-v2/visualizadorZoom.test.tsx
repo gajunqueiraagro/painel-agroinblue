@@ -41,7 +41,7 @@ describe('VISUALIZADOR-PDF-01 — no componente', () => {
     expect(zoomNaBarra()).toBe('100%');
     const comCtrl = roda(quadro, { deltaY: -100, ctrlKey: true, clientX: 10, clientY: 10 });
     expect(comCtrl.defaultPrevented).toBe(true);
-    await waitFor(() => expect(zoomNaBarra()).toBe('272%'));
+    await waitFor(() => expect(zoomNaBarra()).toBe('122%'));
     const comCmd = roda(quadro, { deltaY: 100, metaKey: true });
     expect(comCmd.defaultPrevented).toBe(true);
     await waitFor(() => expect(zoomNaBarra()).toBe('100%'));
@@ -61,10 +61,12 @@ describe('VISUALIZADOR-PDF-01 — no componente', () => {
     expect(g.defaultPrevented).toBe(true);
     await waitFor(() => expect(zoomNaBarra()).toBe('200%'));
   });
-  it('duplo clique alterna para 100% (e de volta para "Ajustar à largura")', async () => {
+  it('duplo clique: da "Página inteira" (VISUALIZADOR-PDF-02 abre nela) vai a "Ajustar à largura", e alterna largura ↔ 100%', async () => {
     montar();
     const quadro = await screen.findByTestId('visualizador-quadro');
-    expect(quadro.getAttribute('data-modo')).toBe('largura');
+    expect(quadro.getAttribute('data-modo')).toBe('pagina');
+    fireEvent.doubleClick(quadro);
+    await waitFor(() => expect(quadro.getAttribute('data-modo')).toBe('largura'));
     fireEvent.doubleClick(quadro);
     await waitFor(() => expect(quadro.getAttribute('data-modo')).toBe('livre'));
     expect(zoomNaBarra()).toBe('100%');

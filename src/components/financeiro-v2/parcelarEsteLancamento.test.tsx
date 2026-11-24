@@ -14,7 +14,8 @@ import { resolve } from 'node:path';
 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async (_c: string): Promise<{ dia: number; lancamentos: number; ultimo: string }[]> => []) }));
+const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async (_c: string): Promise<{ dia: number; lancamentos: number; ultimo: string }[]> => []),
+  diasCadastradosDoCartao: vi.fn(async (_c: string): Promise<{ fechamento: number | null; vencimento: number | null }> => ({ fechamento: null, vencimento: null })) }));
 vi.mock('@/lib/financeiro/diasDoCartao', () => cartaoNoBanco);
 
 import { ParcelarEsteLancamento } from './ParcelarEsteLancamento';

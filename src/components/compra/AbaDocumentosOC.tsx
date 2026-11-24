@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus, Pencil, Ban, Paperclip, MoreHorizontal, ListTree } from 'lucide-react';
@@ -103,7 +104,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
       .from('financeiro_fornecedores')
       .insert({ cliente_id: clienteId, nome, cpf_cnpj: cpfCnpj || null })
       .select('id, nome').single();
-    if (error || !data) { toast.error('Erro ao salvar emitente'); return null; }
+    if (error || !data) { toast.error(fraseDoErroDoFornecedor(error, { nome, cpf_cnpj: cpfCnpj || null }, 'criar o fornecedor')); return null; }
     notificarFornecedoresMudaram(clienteId);
     try { await recarregarFornecedores?.(); } catch { /* o registro existe; a lista volta no proximo refresh */ }
     toast.success(`Emitente "${data.nome}" criado e selecionado`);
@@ -120,7 +121,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
       .from('financeiro_fornecedores')
       .update({ cpf_cnpj: cpfCnpj })
       .eq('id', fornecedorId).eq('cliente_id', clienteId);
-    if (error) { toast.error('Não foi possível gravar o documento no cadastro.'); return false; }
+    if (error) { toast.error(fraseDoErroDoFornecedor(error, { cpf_cnpj: cpfCnpj }, 'gravar o documento no cadastro')); return false; }
     notificarFornecedoresMudaram(clienteId);
     try { await recarregarFornecedores?.(); } catch { /* gravou; a lista volta no proximo refresh */ }
     toast.success('Documento gravado no cadastro do fornecedor.');

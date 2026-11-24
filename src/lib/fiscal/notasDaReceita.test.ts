@@ -44,7 +44,7 @@ describe('NOTAS-RECEITA F3.4 — a regra da lista', () => {
   it('R3 abas e o selo (D2): pedem ação = a lançar + ciência pendente', () => {
     const l = lista([linha({ n: 1 }), linha({ n: 2, situacao: 'resumo' }), linha({ n: 3 }), linha({ n: 4, situacao: 'cancelado_na_sefaz' })], [chave(3)]);
     const conta = Object.fromEntries(ABAS_DA_RECEITA.map((a) => [a.valor, l.filter(a.filtro).length]));
-    expect(conta).toEqual({ lancar: 1, ciencia: 1, no_sistema: 1, vendas: 0, nao_financeiras: 0, canceladas: 1, todas: 4 }); /* + Vendas e Não geram lançamento (SEM-LANCAMENTO-01) */
+    expect(conta).toEqual({ lancar: 1, ciencia: 1, no_sistema: 1, vendas: 0, nao_financeiras: 0, canceladas: 1, ignoradas: 0, todas: 4 }); /* + Vendas e Não geram lançamento (SEM-LANCAMENTO-01); + Ignoradas (NOTA-IGNORAR-01) */
     expect(pedemAcao(l)).toBe(2);
   });
   it('R4 CNPJ inteiro; CPF de emitente pessoa física mascarado', () => {

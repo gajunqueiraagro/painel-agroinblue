@@ -99,8 +99,9 @@ describe('CARTAO-LANCAMENTO-01 — o Novo lançamento numa conta de cartão', ()
     await abrir({ prefill: PREFILL });
     await waitFor(() => expect(pagamentoNoResumo()['Venc.']).toBe('10/11/2026'));
     expect(cartaoNoBanco.diasCadastradosDoCartao).toHaveBeenCalledWith('elo');
-    expect(screen.getByTestId('vencimento-da-fatura').textContent).toBe('Data vencimento * 💳');
-    expect(screen.getByTestId('frase-da-fatura').textContent).toBe('Cartão Elo: compra de 30/10 cai na fatura que fecha 03/11 e vence 10/11 · pode trocar');
+    expect(screen.getByTestId('vencimento-da-fatura').textContent).toBe('Venc. * · pela fatura ⓘ');
+    expect(screen.getByTestId('vencimento-da-fatura').getAttribute('title')).toBe('Por que 10/11? A compra é de 30/10, depois do fechamento de 03/10 → entra na fatura que fecha em 03/11 e vence em 10/11.');
+    expect(screen.queryByTestId('frase-da-fatura')).toBeNull();   // o ciclo mora no ⓘ, nunca bloco na tela (mock 23/11)
     expect(pagamentoNoResumo()).toMatchObject({ Forma: 'Cartão de crédito', 'Pgto.': '—' });
     irParaPagamento();
     expect((await screen.findByTestId('forma-pela-conta')).textContent).toBe('pela conta (cartão): saída em cartão é sempre Cartão de crédito');
@@ -112,23 +113,22 @@ describe('CARTAO-LANCAMENTO-01 — o Novo lançamento numa conta de cartão', ()
     cartaoNoBanco.diasCadastradosDoCartao.mockResolvedValue({ fechamento: 28, vencimento: 5 });
     await abrir({ prefill: PREFILL });
     await waitFor(() => expect(pagamentoNoResumo()['Venc.']).toBe('05/12/2026'));
-    expect(screen.getByTestId('frase-da-fatura').textContent).toBe('Cartão Elo: compra de 30/10 cai na fatura que fecha 28/11 e vence 05/12 · pode trocar');
+    expect(screen.getByTestId('vencimento-da-fatura').getAttribute('title')).toBe('Por que 05/12? A compra é de 30/10, depois do fechamento de 28/10 → entra na fatura que fecha em 28/11 e vence em 05/12.');
   });
 
   it('C2 sem dia digitado: o dia das faturas (sem fechamento, o mês seguinte), e a frase diz de onde veio', async () => {
     cartaoNoBanco.diasCadastradosDoCartao.mockResolvedValue({ fechamento: null, vencimento: null });
     await abrir({ prefill: { ...PREFILL, data_competencia: '2026-11-03' } });
     await waitFor(() => expect(pagamentoNoResumo()['Venc.']).toBe('10/12/2026'));
-    expect(screen.getByTestId('frase-da-fatura').textContent)
-      .toBe('Cartão Elo: compra de 03/11 cai na fatura que vence 10/12 (dia 10, sugerido pelas faturas; sem dia de fechamento) · pode trocar');
+    expect(screen.getByTestId('vencimento-da-fatura').getAttribute('title'))
+      .toBe('Por que 10/12? Sem dia de fechamento no cadastro: vence no dia 10 (sugerido pelas faturas) do mês seguinte à compra de 03/11.');
   });
 
-  it('C3 a nota traz PIX numa conta de cartão: a forma é a do cartão (D1); o vencimento da nota fica', async () => {
+  it('C3 a nota traz PIX e um vencimento numa conta de cartão: a forma é a do cartão (D1) e o vencimento é o da FATURA (CARTAO-VENC-FATURA-01)', async () => {
     await abrir({ prefill: { ...PREFILL, forma_pagamento: 'PIX', data_vencimento: '2026-11-20' } });
-    await waitFor(() => expect(cartaoNoBanco.diasDoCartao).toHaveBeenCalled());
-    await new Promise((ok) => setTimeout(ok, 30));
-    expect(pagamentoNoResumo()).toMatchObject({ Forma: 'Cartão de crédito', 'Venc.': '20/11/2026' });
-    expect(screen.queryByTestId('frase-da-fatura')).toBeNull();
+    await waitFor(() => expect(pagamentoNoResumo()['Venc.']).toBe('10/11/2026'));
+    expect(pagamentoNoResumo()).toMatchObject({ Forma: 'Cartão de crédito' });
+    expect(screen.getByTestId('vencimento-da-fatura').getAttribute('title')).toContain('vence em 10/11');
     irParaPagamento();
     expect(screen.getByTestId('forma-pela-conta')).toBeTruthy();
   });
@@ -187,7 +187,6 @@ describe('CARTAO-LANCAMENTO-01 — o Novo lançamento numa conta de cartão', ()
     await waitFor(() => expect(pagamentoNoResumo().Forma).toBe('—'));
     expect(pagamentoNoResumo()['Venc.']).toBe('10/11/2026');   // a data fica: só a forma era automática
     expect(screen.queryByTestId('vencimento-da-fatura')).toBeNull();
-    expect(screen.queryByTestId('frase-da-fatura')).toBeNull();
   });
 });
 
@@ -204,5 +203,85 @@ describe('FIN-FORMA-CARTAO-AUTO-01 — o fornecedor e a gravação', () => {
     const gravar = FONTE.replace(/const temEdicaoPendente = \(\): boolean => \{[\s\S]*?\n {2}\};/, '');
     expect(gravar).not.toBe(FONTE);
     expect(gravar).not.toMatch(/forma(_pagamento|Pagamento)?: formaPgto \|\| null/);
+  });
+});
+
+/* CARTAO-VENC-FATURA-01 (Gabriel 23/11) — o caso: a NF de supermercado de 17/11 no cartão que fecha 05 e vence 16 nascia vencendo 17/11
+   (a emissão da nota sem duplicata). Dado SINTÉTICO com os dias do caso. */
+describe('CARTAO-VENC-FATURA-01 — o lançamento no cartão nasce na fatura, Programado, sem pagamento', () => {
+  const NOTA = { ...PREFILL, status_transacao: 'programado', data_competencia: '2026-11-17', data_vencimento: '2026-11-17', tipo_documento: 'Nota Fiscal' };
+  const LANC_ITAU: LancamentoV2 = {
+    id: 'l2', cliente_id: 'teste', fazenda_id: 'sm', conta_bancaria_id: 'itau', data_competencia: '2026-11-17', data_pagamento: '2026-11-17',
+    data_vencimento: '2026-11-17', valor: 312.4, sinal: -1, tipo_operacao: '2-Saídas', status_transacao: 'realizado', descricao: 'Combustível posto',
+    macro_custo: null, grupo_custo: null, centro_custo: null, subcentro: null, escopo_negocio: 'pecuaria', observacao: null, ano_mes: '2026-11',
+    documento: null, historico: null, numero_documento: null, favorecido_id: null, conta_destino_id: null, origem_lancamento: 'manual',
+    lote_importacao_id: null, forma_pagamento: 'PIX', dados_pagamento: null, cancelado: false, conciliado_em: null, editado_manual: false,
+    created_by: null, created_at: '2026-11-17T12:00:00Z', updated_at: '2026-11-17T12:00:00Z', movimentacao_rebanho_id: null, recorrencia_id: null,
+  };
+
+  it('V1 "+ Da nota": a emissão 17/11 cede à fatura (fecha 05, vence 16) → 16/12/2026; Programado e sem data de pagamento', async () => {
+    cartaoNoBanco.diasCadastradosDoCartao.mockResolvedValue({ fechamento: 5, vencimento: 16 });
+    await abrir({ prefill: NOTA });
+    await waitFor(() => expect(pagamentoNoResumo()['Venc.']).toBe('16/12/2026'));
+    expect(pagamentoNoResumo()['Pgto.']).toBe('—');
+    expect(screen.getByTestId('resumo-pagamento').textContent).toContain('Programado');
+    expect(screen.getByTestId('vencimento-da-fatura').getAttribute('title')).toBe('Por que 16/12? A compra é de 17/11, depois do fechamento de 05/11 → entra na fatura que fecha em 05/12 e vence em 16/12.');
+    expect(screen.queryByTestId('aviso-cadastro-do-cartao')).toBeNull();
+  });
+
+  it('V2 o que veio REALIZADO com pagamento numa conta de cartão nasce Programado e sem pagamento', async () => {
+    cartaoNoBanco.diasCadastradosDoCartao.mockResolvedValue({ fechamento: 5, vencimento: 16 });
+    await abrir({ prefill: { ...NOTA, status_transacao: 'realizado', data_pagamento: '2026-11-17' } });
+    await waitFor(() => expect(pagamentoNoResumo()['Venc.']).toBe('16/12/2026'));
+    expect(pagamentoNoResumo()['Pgto.']).toBe('—');
+    expect(screen.getByTestId('resumo-pagamento').textContent).toContain('Programado');
+  });
+
+  it('V3 Editar: trocar a conta de um corrente para o cartão leva à fatura, Programado e sem pagamento; abrir sem trocar não mexe', async () => {
+    cartaoNoBanco.diasCadastradosDoCartao.mockResolvedValue({ fechamento: 5, vencimento: 16 });
+    await abrir({ lancamento: LANC_ITAU });
+    await new Promise((ok) => setTimeout(ok, 30));
+    expect(cartaoNoBanco.diasDoCartao).not.toHaveBeenCalled();
+    expect(pagamentoNoResumo()).toMatchObject({ 'Venc.': '17/11/2026', 'Pgto.': '17/11/2026' });
+    await new Promise((ok) => setTimeout(ok, 400));
+    fireEvent.click(screen.getByRole('button', { name: /Itaú Corrente/ }));
+    const painel = await screen.findByTestId('searchable-select-painel');
+    fireEvent.click(within(painel).getByText('Cartão Elo'));
+    await waitFor(() => expect(pagamentoNoResumo()['Venc.']).toBe('16/12/2026'));
+    expect(pagamentoNoResumo()['Pgto.']).toBe('—');
+    expect(screen.getByTestId('resumo-pagamento').textContent).toContain('Programado');
+  });
+
+  it('V4 o cartão sem dia de fechamento no cadastro: o aviso pequeno com o link para o cadastro (numa aba nova)', async () => {
+    cartaoNoBanco.diasCadastradosDoCartao.mockResolvedValue({ fechamento: null, vencimento: 16 });
+    await abrir({ prefill: NOTA });
+    const aviso = await screen.findByTestId('aviso-cadastro-do-cartao');
+    expect(aviso.textContent).toContain('Cartão sem dia de fechamento no cadastro');
+    const link = screen.getByTestId('link-cadastro-do-cartao');
+    expect([link.getAttribute('href'), link.getAttribute('target')]).toEqual(['/?secao=contas-bancarias', '_blank']);
+    expect(pagamentoNoResumo()['Venc.']).toBe('16/12/2026');   // sem fechamento: o dia 16 do mês seguinte (a regra de antes)
+  });
+
+  it('V5 só a data DIGITADA pelo operador fica: o campo de vencimento marca a digitação (o resto cede à fatura)', () => {
+    const FONTE = readFileSync(resolve(__dirname, 'LancamentoV2Dialog.tsx'), 'utf8');
+    expect(FONTE).toContain('<DatePicker value={dataVencimento} onChange={digitarVencimento}');
+    expect(FONTE).toContain("const digitarVencimento = (v: string) => { vencimentoDigitadoRef.current = true; setDataVencimento(v); };");
+  });
+
+  it('V6 UMA regra para toda porta: Novo, prévia da nota, Parcelar este lançamento e importação leem os dias por `useDiasDaFatura`/`lerDiasDaFatura` e a fatura por `faturaDaCompra`; a regra velha (dia mais frequente sem fechamento) não volta', () => {
+    const ler = (f: string) => readFileSync(resolve(process.cwd(), f), 'utf8');
+    const portas = {
+      novo: ler('src/components/financeiro-v2/LancamentoV2Dialog.tsx'),
+      nota: ler('src/components/financeiro-v2/NotaFiscalDialog.tsx'),
+      parcelar: ler('src/components/financeiro-v2/ParcelarEsteLancamento.tsx'),
+    };
+    for (const [nome, f] of Object.entries(portas)) {
+      expect({ nome, dias: f.includes('useDiasDaFatura('), fatura: f.includes('faturaDaCompra('), velha: /primeiraFatura\(|diaMaisFrequente\(/.test(f) })
+        .toEqual({ nome, dias: true, fatura: true, velha: false });
+    }
+    expect(portas.nota).toContain('faturaDaCompra(n.emissao, diasDoCartaoAVista.vencimento.dia, diasDoCartaoAVista.fechamento)');
+    const importacao = ler('src/v2/hooks/useImportLancamentosExcel.ts');
+    expect(importacao).toContain('await lerDiasDaFatura(id)');
+    expect(importacao).toContain('vencimentoDaImportacaoNoCartao(l.row.data_vencimento, l.row.data_competencia, diasPorCartao.get(l.contaBancariaId ?? \'\') ?? null)');
   });
 });

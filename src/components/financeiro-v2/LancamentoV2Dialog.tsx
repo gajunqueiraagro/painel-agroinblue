@@ -56,6 +56,7 @@ import { linhasDoContrato, totaisDoContrato } from '@/lib/financeiro/parcelasNoP
 import { formaForaDaLista, ROTULO_VALOR_ATUAL } from '@/lib/financeiro/formasPagamentoV2';
 import { parcelaSolta } from '@/lib/financeiro/parcelaSolta';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { QuemPagaTerceiro, type QuemPaga } from '@/components/financeiro-v2/QuemPagaTerceiro';
 import { ClassificacaoLancamento, CAMPO_BG, atividadeValida } from '@/components/shared/ClassificacaoLancamento';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -143,6 +144,8 @@ import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela
 import { edicaoDaParcela, podeSerParcelaDeContrato, MOTIVO_PARCELA_PAGA } from '@/lib/financiamentos/parcelaNoModal';
 import { gravarParcelaDoModal, lerContratoDaParcela, type ContratoDaParcela } from '@/lib/financiamentos/parcelaNoModalBanco';
 import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO } from '@/lib/financeiro/casadoComExtrato';
+import { agendarSeriaRecusado, vaiAgendar, FRASE_AGENDAR_SEM_APROVACAO, FRASE_AGENDAR_NOVO_SEM_APROVACAO } from '@/lib/financeiro/aprovacao';
+import { EnviarParaAprovacaoDialog } from '@/components/financeiro-v2/EnviarParaAprovacaoDialog';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
@@ -163,9 +166,9 @@ import {
   novoPendente, todosGravados, type DocumentoPendente, type ParcelaGravada, type ParcelaIrma,
 } from '@/lib/financeiro/documentosPendentes';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
-import { diasCadastradosDoCartao, diasDoCartao } from '@/lib/financeiro/diasDoCartao';
+import { useDiasDaFatura } from '@/hooks/useDiasDaFatura';
 import {
-  diaDoVencimentoDoCartao, faturaDaCompra, formaPelaConta, fraseDaFaturaNoLancamento, rotuloDaSugestao, vencimentoPelaFatura,
+  LINK_DO_CADASTRO_DAS_CONTAS, faturaDaCompra, formaPelaConta, porQueOVencimento, rotuloDaSugestao, statusNoCartao, vencimentoPelaFatura,
 } from '@/lib/financeiro/pagamentoNoCartao';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
@@ -716,6 +719,8 @@ export function LancamentoV2Dialog({
   const [boletoLigado, setBoletoLigado] = useState<BoletoDoResumo | null>(null);
   const [caixaAberta, setCaixaAberta] = useState(false);
   const [erroAntesDeSalvar, setErroAntesDeSalvar] = useState<string | null>(null);
+  /* BPO-APROVACAO-01 P3 — o "Enviar para aprovação" ao lado da frase do agendar sem aprovação (este lançamento, com a prévia do banco) */
+  const [enviarEsteAberto, setEnviarEsteAberto] = useState(false);
   /* NOTA-NFSE-LEITURA-02 — o campo preenchido em formato que o banco recusaria: vermelho + a frase no rodapé (nunca o toast genérico) */
   const [campoInvalido, setCampoInvalido] = useState<ErroDeFormato | null>(null);
   /* As irmãs de uma parcela aberta (a consulta do M6 da FASE 0). Só no editar; `null` = não é parcela. */
@@ -740,6 +745,8 @@ export function LancamentoV2Dialog({
   }, [open, lancamento?.id, clienteAtual?.id, anexarBoletos, caixaAberta]);
   const navigate = useNavigate();
   const isEdit = !!lancamento;
+  /* NOTA-PAGA-POR-TERCEIRO-01 — Terceiro escolhido ou já marcado desliga a Forma de pagamento */
+  const [quemPaga, setQuemPaga] = useState<QuemPaga>('nos');
   // PR-SAFE-0 — título originado da Operação Comercial: valor/favorecido/classificação/tipo
   //   são somente leitura (edição estrutural pertence à OC). Detecção ESTRUTURAL pelo marcador
   //   de proveniência persistido (origem_lancamento), nunca por texto de UI. O writer
@@ -1634,36 +1641,41 @@ export function LancamentoV2Dialog({
      cartão (vazio: o mais frequente das faturas, `fn_cartao_dias_de_vencimento`, 12 meses) e, com dia de FECHAMENTO, a fatura é a que a
      compra (a competência) pega (`faturaDaCompra`). Não sugere na edição, na OC nem no lançamento vindo do extrato (`ocultarParcelamento`:
      a data vem do banco). A data sugerida só entra no vazio ou no lugar da sugestão anterior (`vencimentoPelaFatura`). */
+  /* CARTAO-VENC-FATURA-01 (Gabriel 23/11) — no EDITAR, só quando o operador TROCA a conta para um cartão (o já salvo não muda sozinho);
+     o casado com o extrato tem a conta travada e fica de fora */
+  const contaGravada = lancamento?.conta_bancaria_id ?? '';
+  const trocouParaCartao = isEdit && !travaCasado.contaOrigem && !!contaOrigemId && contaOrigemId !== contaGravada;
   const cartaoDaCompra = useMemo(() => {
     /* só a SAÍDA paga no cartão (a transferência que paga a fatura e a entrada não são compra) */
-    const c = !isEdit && !modoOC && !ocultarParcelamento && !livresAbertas && !isTransferencia && !isEntrada ? contas.find((x) => x.id === contaOrigemId) : undefined;
+    const c = (!isEdit || trocouParaCartao) && !modoOC && !ocultarParcelamento && !livresAbertas && !isTransferencia && !isEntrada ? contas.find((x) => x.id === contaOrigemId) : undefined;
     return c && c.tipo_conta === 'cartao' ? { id: c.id, nome: c.nome_exibicao || c.nome_conta } : null;
-  }, [isEdit, modoOC, ocultarParcelamento, livresAbertas, isTransferencia, isEntrada, contas, contaOrigemId]);
-  const [diasDaCompra, setDiasDaCompra] = useState<{ vencimento: { dia: number; origem: 'digitado' | 'faturas' } | null; fechamento: number | null }>({ vencimento: null, fechamento: null });
-  useEffect(() => {
-    let vivo = true;
-    if (!open || !cartaoDaCompra) { setDiasDaCompra({ vencimento: null, fechamento: null }); return; }
-    void Promise.all([diasCadastradosDoCartao(cartaoDaCompra.id), diasDoCartao(cartaoDaCompra.id)]).then(([cad, faturas]) => {
-      if (vivo) setDiasDaCompra({ vencimento: diaDoVencimentoDoCartao(cad.vencimento, faturas), fechamento: cad.fechamento });
-    }, () => { if (vivo) setDiasDaCompra({ vencimento: null, fechamento: null }); });
-    return () => { vivo = false; };
-  }, [open, cartaoDaCompra]);
+  }, [isEdit, trocouParaCartao, modoOC, ocultarParcelamento, livresAbertas, isTransferencia, isEntrada, contas, contaOrigemId]);
+  /* os dias da fatura: a MESMA leitura da prévia da nota e do Parcelar este lançamento (`useDiasDaFatura`) */
+  const diasDaCompra = useDiasDaFatura(open && cartaoDaCompra ? cartaoDaCompra.id : null);
   const diaDoCartao = diasDaCompra.vencimento?.dia ?? null;
   const faturaSugerida = cartaoDaCompra && diaDoCartao ? faturaDaCompra(dataCompetencia, diaDoCartao, diasDaCompra.fechamento) : '';
-  /* a sugestão entra quando nasce (o cartão escolhido, a competência); a data que o operador ou a nota puseram fica */
+  /* a fatura entra quando nasce (o cartão escolhido, a competência) e no lugar da data que veio de fora (a emissão da nota, o prefill);
+     só a data que o OPERADOR digitou no campo fica. Com ela, o lançamento nasce PROGRAMADO e sem data de pagamento (a compra no cartão
+     se paga na fatura) — o operador ainda troca o status depois. */
+  const vencimentoDigitadoRef = useRef(false);
   const faturaAnteriorRef = useRef('');
   useEffect(() => {
-    if (!open) { faturaAnteriorRef.current = ''; return; }
-    if (!faturaSugerida) return;
-    const antes = faturaAnteriorRef.current;
-    setDataVencimento((v) => vencimentoPelaFatura(v, antes, faturaSugerida));
+    if (!open) { faturaAnteriorRef.current = ''; vencimentoDigitadoRef.current = false; return; }
+    if (!faturaSugerida || faturaSugerida === faturaAnteriorRef.current) return;
     faturaAnteriorRef.current = faturaSugerida;
+    if (vencimentoDigitadoRef.current) return;
+    setDataVencimento((v) => vencimentoPelaFatura(v, faturaSugerida, false));
+    /* sem data de pagamento: o não realizado não grava nem mostra pagamento (`pagamentoParaGravar`) */
+    setStatusTransacao(statusNoCartao(statusTransacao));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o status é lido no momento em que a fatura nasce, não a cada troca dele
   }, [open, faturaSugerida]);
+  const digitarVencimento = (v: string) => { vencimentoDigitadoRef.current = true; setDataVencimento(v); };
   const naFatura = !!(cartaoDaCompra && diaDoCartao && faturaSugerida && dataVencimento === faturaSugerida);
   const sugestaoDoCartao = naFatura && cartaoDaCompra && diaDoCartao && formaPagamentoParc === 'parcelada'
     ? rotuloDaSugestao(cartaoDaCompra.nome, diaDoCartao) : null;
+  /* CARTAO-VENC-FATURA-01 (mock aprovado 23/11) — o porquê do vencimento mora no ⓘ "pela fatura do cartão": nunca um bloco na tela */
   const fraseDaFatura = naFatura && cartaoDaCompra && diasDaCompra.vencimento
-    ? fraseDaFaturaNoLancamento(cartaoDaCompra.nome, dataCompetencia, diasDaCompra.vencimento, diasDaCompra.fechamento) : '';
+    ? porQueOVencimento(dataCompetencia, diasDaCompra.vencimento, diasDaCompra.fechamento, formaPagamentoParc === 'parcelada' && !livresAbertas ? numParcelas : 1) : '';
   const parcelaRows = useMemo(
     () => (livresAbertas ? parcelasComoPrevistas(parcelasLivres) : parcelasMensais),
     [livresAbertas, parcelasLivres, parcelasMensais],
@@ -2422,6 +2434,15 @@ export function LancamentoV2Dialog({
     /* FIN-CONCILIADO-NAO-REBAIXA-01 — o salvar tiraria o lançamento do estado do banco (status, pagamento, valor ou conta)?
        Pergunta-se ao banco ANTES de gravar (outra aba pode ter casado depois da abertura): casado, a frase fica ESCRITA ao
        lado do botão e nada é gravado — o P0001 do gatilho viraria a frase genérica do `normalizarErro`. */
+    /* BPO-APROVACAO-01 P3 (piloto Vera) — pôr uma saída em AGENDADO com o BPO ligado exige a aprovação: pergunta-se ANTES de gravar e a
+       frase fica ao lado do botão (nada é gravado). Sem esta pergunta, o P0001 do gatilho viraria a frase genérica do `normalizarErro`. */
+    if (clienteAtual?.id && vaiAgendar(form.status_transacao, statusOriginalRef.current, form.tipo_operacao)
+      && await agendarSeriaRecusado(clienteAtual.id, currentIsEdit ? currentEditId : null)) {
+      /* o NOVO ainda não existe para ir à fila: grava-se como Programado e envia-se depois (a frase diz isso) */
+      setErroAntesDeSalvar(currentIsEdit && currentEditId ? FRASE_AGENDAR_SEM_APROVACAO : FRASE_AGENDAR_NOVO_SEM_APROVACAO);
+      setSaving(false);
+      return;
+    }
     if (currentIsEdit && lancamento && lancamento.id === currentEditId && saiDoEstadoDoBanco(lancamento, form)
       && (casadoComExtrato || await consultarCasadoComExtrato(lancamento.id))) {
       setCasadoComExtrato(true);
@@ -2651,7 +2672,7 @@ export function LancamentoV2Dialog({
         if (ja.ok === false) { toast.error(`Não consegui conferir o CNPJ no cadastro (${ja.motivo}). Nada foi gravado — tente de novo.`); return; }
         if (ja.valor) { setXmlConflito(ja.valor); return; }
       }
-      const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId, documentoFormatado(xml.emitenteDocumento));
+      const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId || null, documentoFormatado(xml.emitenteDocumento));
       if (novo) {
         setFavorecidoId(novo.id); setXmlFaixaFechada(true);
         /* FORN-CADASTRO-02 — o fornecedor novo nasce com a fantasia, a IE e o endereço do emitente (só campo vazio) */
@@ -3126,17 +3147,17 @@ export function LancamentoV2Dialog({
                   data-testid={modoOC ? 'rotulo-vencimento-oc' : 'rotulo-vencimento'}>
                   {modoOC ? (tentouOC && faltaVencimentoOC ? `Vencimento * · ${MOTIVO_VENCIMENTO_OBRIGATORIO}` : 'Vencimento *')
                     : sugestaoDoCartao ? <span data-testid="sugestao-fatura">{sugestaoDoCartao}</span>
-                    : naFatura ? <span data-testid="vencimento-da-fatura" title={fraseDaFatura}>Data vencimento * 💳</span>
+                    : naFatura ? <span data-testid="vencimento-da-fatura" title={fraseDaFatura}>Venc. * · pela fatura ⓘ</span>
                     : xmlAmbar('vencimento') ? xmlRot('Vencimento *', 'vencimento') : 'Data vencimento *'}</Label>
                 {/* parcela paga: em leitura; o motivo está escrito no rodapé (`parcela-do-contrato`) — sem invólucro aqui, o HTML do lançamento comum não muda */}
-                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={(isOCTitulo && !ocAjustavel) || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro || campoInvalido?.campo === 'vencimento') && 'border-destructive')} />
+                <DatePicker value={dataVencimento} onChange={digitarVencimento} disabled={(isOCTitulo && !ocAjustavel) || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro || campoInvalido?.campo === 'vencimento') && 'border-destructive')} />
               </div>
               {!modoOC && (
               <div className="col-span-2"
                 title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}>
                 <Label className={REGUA_ROTULO}>Data pagamento *</Label>
                 <DatePicker value={pagamentoMostrado} onChange={handleDataPagamentoChange}
-                  disabled={pagamentoTravado || !pagamentoPermitido || travaCasado.pagamento} tabIndex={3} className={cn(dateFieldCls, campoInvalido?.campo === 'pagamento' && 'border-destructive')} />
+                  disabled={pagamentoTravado || !pagamentoPermitido || travaCasado.pagamento} placeholder={naFatura && !pagamentoMostrado ? 'pela fatura' : undefined} tabIndex={3} className={cn(dateFieldCls, campoInvalido?.campo === 'pagamento' && 'border-destructive')} />
               </div>
               )}
               <div className="col-span-3" title={modoOC ? MOTIVO_STATUS_TRAVADO_OC : undefined}>
@@ -3264,8 +3285,12 @@ export function LancamentoV2Dialog({
               )}
             </div>
             {/* CARTAO-LANCAMENTO-01 (mock v2) — por que o vencimento é aquele: a fatura onde a compra cai; some quando o operador troca a data */}
-            {fraseDaFatura && (
-              <p className="-mt-1 text-[10px] leading-tight text-muted-foreground" data-testid="frase-da-fatura">{fraseDaFatura}</p>
+            {/* CARTAO-VENC-FATURA-01 — o cartão sem fechamento/vencimento no cadastro: o aviso pequeno e o caminho para o cadastro */}
+            {cartaoDaCompra && diasDaCompra.aviso && (
+              <p className="-mt-1 text-[10px] leading-tight text-amber-800" data-testid="aviso-cadastro-do-cartao">
+                {diasDaCompra.aviso}{' '}
+                <a href={LINK_DO_CADASTRO_DAS_CONTAS} target="_blank" rel="noreferrer" className="underline" data-testid="link-cadastro-do-cartao">Abrir o cadastro do cartão</a>
+              </p>
             )}
 
             </BlocoFormulario>
@@ -3502,10 +3527,20 @@ export function LancamentoV2Dialog({
             <TabsContent value="pagamento" className="mt-0 space-y-1.5 focus-visible:outline-none">
             <section className={sectionClass}>
               <TituloDoBloco nome="Pagamento" />
+              {/* NOTA-PAGA-POR-TERCEIRO-01 (Fatia A, mock aprovado 23/11) — "Quem paga: Nós · Terceiro": só na edição; gravou = fecha e a lista relê */}
+              {isEdit && lancamento?.id && clienteAtual?.id && (
+                <QuemPagaTerceiro lancamentoId={lancamento.id} clienteId={clienteAtual.id} tipoOperacao={tipoOperacao}
+                  status={lancamento.status_transacao ?? null}
+                  documentos={(documentosApi.documentos ?? []).map((d) => ({ id: d.id, nome: d.nome }))}
+                  aoMudarQuemPaga={setQuemPaga}
+                  aoGravar={(frase) => { toast.success(frase); notificarLancamentosMudaram(clienteAtual.id); onClose(); }} />
+              )}
 
               {/* Forma / Dados de Pagamento — realocados do antigo bloco "Complementares"
                   (PR-FIN-MODAL-02B). Campos e handlers idênticos; só mudou a aba. */}
-              <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
+              {/* NOTA-PAGA-POR-TERCEIRO-01 — pago por terceiro: a forma não se aplica (desligada, nada some) */}
+              <div className={cn('grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5', quemPaga === 'terceiro' && 'pointer-events-none opacity-45')}
+                aria-disabled={quemPaga === 'terceiro' || undefined} data-testid="pagamento-forma">
                 <div>
                   <Label className={REGUA_ROTULO}>{xmlRot('Forma de pagamento', 'forma')}
                     </Label>
@@ -4047,6 +4082,19 @@ export function LancamentoV2Dialog({
               <span className="max-w-[520px] text-[10px] leading-tight text-destructive" data-testid="erro-antes-de-salvar">
                 {erroAntesDeSalvar}
               </span>
+            )}
+            {/* P3 — com a frase do agendar sem aprovação, o gesto que resolve: enviar ESTE lançamento (prévia → Enviar). A edição aberta não grava. */}
+            {!posSalvar && erroAntesDeSalvar === FRASE_AGENDAR_SEM_APROVACAO && lancamento?.id && clienteAtual?.id && (
+              <>
+                <Button variant="outline" onClick={() => setEnviarEsteAberto(true)} data-testid="enviar-este-para-aprovacao"
+                  className="h-[22px] flex-none px-[9px] text-[10px] font-semibold">
+                  Enviar para aprovação
+                </Button>
+                {enviarEsteAberto && (
+                  <EnviarParaAprovacaoDialog aberto onFechar={() => setEnviarEsteAberto(false)} clienteId={clienteAtual.id} ids={[lancamento.id]}
+                    onEnviou={(frase) => { setErroAntesDeSalvar(null); toast.success(frase); }} />
+                )}
+              </>
             )}
             {posSalvar ? (
               <>

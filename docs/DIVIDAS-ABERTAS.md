@@ -512,6 +512,13 @@ docs/historico/frentes-ate-2026-09-29.md.
 
 ## DIVIDAS DE TELA
 
+- UI-LARGURA-FIXA-01 · RECEITA-BARRA-ESTREITA (Gabriel 23/11/2026, item à parte da NOTA-IGNORAR-01) — na lista "Notas da Receita"
+  (`src/components/fiscal/NotasDaReceitaDialog.tsx`, a faixa de 26px: abas do `Segmentado` + "Vencidas" + "Produtor" + busca) a linha não cabe
+  abaixo de ~1126px: a busca passa da borda do modal (medido na bancada 23/11, já com a aba "Ignoradas": 113px a 1000, 195px a 918; de 1126
+  para cima, 0). Já passava antes da aba nova (~38px a 1000 e ~120px a 918, pela conta). O `check:ui-cortes` não pega (o `botoesDentro` mede
+  botão, não campo). Propostas (decisão do Gabriel): (a) rótulos curtos abaixo de 1126 (`useLarguraDaJanela`, como o P101: "Ciência", "Não
+  geram", "No sistema") + busca vira lupa; (b) as abas extras num "Mais ▾"; (c) deixar. Junto: o gate ganhar "campo dentro da faixa".
+
 - P174-TELA-NFSE (Gabriel 29/10/2026, T3: "AbaDocumentosLancamento e NotaFiscalDialog (bruto/retenções/líquido e "no DANFE") ficam com o
   Code 1 na tela nova — deixe anotado para ele") — a NFS-e ja' e' LIDA, proposta e gravada (P174: `danfse.ts`, `NotaLida.modelo = 'nfse'`,
   chave de 50), mas a tela ainda fala so' de NF-e. Para o Code 1, na tela nova da nota:

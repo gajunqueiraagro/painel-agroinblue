@@ -10,6 +10,7 @@
 import { Star, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useBpoAtivo } from '@/hooks/useBpoAtivo';
 import { secoesVisiveis } from '@/v2/lib/acessoTelas';
 import {
   NAV_GRUPOS,
@@ -87,6 +88,7 @@ export function V2ContextDrawer({
 }: V2ContextDrawerProps) {
   /* ACESSOS-02a — o hook vem ANTES do `return` antecipado (regra dos hooks). */
   const { isAdmin, clienteAtual } = useCliente();
+  const bpoAtivo = useBpoAtivo(clienteAtual?.id);
   if (!grupoAtivo) return null;
   const grupo = NAV_GRUPOS.find((g) => g.id === grupoAtivo);
   /* Produção: sem destaque de item (os cabecalhos de escopo organizam a lista). A densidade e' uma so' desde o L5. */
@@ -132,7 +134,7 @@ export function V2ContextDrawer({
                   ela do cabecalho seguinte — sem ele o item solto pareceria pertencer ao
                   grupo de baixo, que e' justamente o que o desenho quer evitar. */}
               {/* ACESSOS-02a — so' os itens que a pessoa acessa (`secoesVisiveis`, do dono); a secao sem item some. */}
-              {secoesVisiveis(clienteAtual?.perfil ?? null, isAdmin, grupo).map((secao, i) => (
+              {secoesVisiveis(clienteAtual?.perfil ?? null, isAdmin, grupo, { bpoAtivo }).map((secao, i) => (
                 <div key={`${secao.titulo}-${i}`} role="group"
                   aria-label={secao.titulo || undefined}
                   /* L5: as secoes separadas por UM filete + 8px (eram 20–24px de vazio) */

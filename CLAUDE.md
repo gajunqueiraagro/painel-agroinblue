@@ -271,6 +271,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
 - FORN-ACHAR-CNPJ-01 (19/11): com CNPJ no XML o documento MANDA (exato → RAIZ = outra filial, não propõe; outro documento NUNCA proposto); pelo nome SÓ a
   razão social inteira igual (`razaoParaComparar`; nunca fantasia/cidade/"contém"); o comparar só oferece CNPJ/IE/razão quando `eOMesmoFornecedor`.
+- FORN-CRIAR-DA-NOTA-ERRO: erro ao criar/salvar fornecedor diz o CAMPO e o VALOR (`fraseDoErroDoFornecedor`, toda escrita em `financeiro_fornecedores`; trava
+  `fornecedorErroUnico.test.ts`); fazenda vazia grava nula; o nome do emitente sai sem o código do emissor ("1 - ", `semCodigoDoEmissor`).
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
   desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
 - DOC-ANEXO-E-IMPORT-01 F1: SÓ A NF SE LÊ COMO NOTA — recibo/boleto/comprovante/outro nunca passam pelo `lerNota` nem pelo `extrairDanfe` e a
@@ -301,6 +303,10 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   dia mais frequente do cartão em 12 meses (`fn_cartao_dias_de_vencimento`); "Parcelar este lançamento" pela RPC (divisão às N) + docs às N.
 - P74b: voltar para à vista SÓ por `fn_parcelamento_voltar_a_vista` (sem parcela paga; a 1/N volta pelo `avista_original`, N−1 canceladas
   "voltou para à vista"); `fn_parcelamento_excluir` cancela a compra inteira, inclusive a 1/N — não é a volta.
+- CARTAO-VENC-FATURA-01: o vencimento no cartão é a FATURA em TODA porta (Novo, + Da nota, prévia da nota, Parcelar este, Excel sem vencimento) por
+  UMA lib (`pagamentoNoCartao.ts`: `faturaDaCompra`/`vencimentoPelaFatura`) e UMA leitura (`useDiasDaFatura`); só a data DIGITADA fica; compra no dia do fechamento = fatura seguinte; parcela k na fatura k.
+- CARTAO-FATURA-IMPORT-01: a fatura se lê no PAINEL do cartão (PDF solto → "Ler a fatura", `usePreviaDaFatura`, Ourocard BB) — prévia que SÓ LÊ (`linhasDaFatura` de
+  12/11 + `gruposDaFatura`); sugestão = 1ª palavra do estabelecimento + maioria estrita em 12 m (`sugestaoPeloHistorico`); parcela com elo = `financiamento_id` + k/N.
 - P101: abaixo de 1000px a prévia da nota tem ABAS (Arquivo | Nota e fornecedor | Parcelas e lançamento; `useLarguraDaJanela`) e o "Novo a
   partir da nota" perde a coluna CNPJ — nunca exceção "de 1000px para cima" no gate. P102: o Editar obrigação tem cenário (`obrigacao-*`).
 - P104: rótulo e frase NUNCA em `uma-linha-que-rola` fora de campo (corta seco; o gate só o pega em tabela ou com `semRolarNoLugar`) — fonte
@@ -363,6 +369,14 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - CONC-LAYOUT-FIXO-01 (UI-LARGURA-FIXA-01, 22/11; substitui o "1fr 260px" e a `FaixaDoMes` acima): Saldos 60% · Resumo 40% (`minmax(0,3fr) minmax(0,2fr)`,
   nunca medido pelo dado); título do Resumo = conta · mês, com ▸ (também na linha, lugar reservado); status = selo no cabeçalho + frase em 2 linhas
   reservadas; o nome da conta corta com "…" + `title` até 1130px, inteiro de 1300px para cima (gates `conciliacao-divisao-*`, `-nomes-inteiros`).
+- CONC-PAINEL-02 (mock 23/11 08:11): o ✎ da conta = PAINEL DA CONTA NO MÊS, 980px fixo (430 passos | 550 trabalho; 56·72·corpo·44); os ARQUIVOS DO
+  MÊS são UMA lista (`arquivosDoMes`: comprovantes de saldo do ano lidos 1× pela tela — o chip "PDF" e o painel leem dela — + `importacoesDoMes`);
+  Ver dentro do painel (`VisualizadorDeDocumento embutido`; importação = os movimentos), Desfazer = cancelar com motivo / `DesfazerArquivoModal`; passos
+  POR TIPO (`passosDoPainel`); "Explicar a diferença" acha 1º o lançamento de valor EXATO (`candidatosDaDiferenca`) e abre o modal do lançamento.
+  Ajuste 17:09: a faixa NUNCA rola de lado — até 2 arquivos os cartões, 3+ UM resumo de largura fixa (`MAX_CARTOES_NA_FAIXA`); a LISTA (colunas
+  fixas, `ordenarArquivos`; período = movimentos vivos) é o passo Extrato/Fatura; aviso de dias em dois arquivos (`sobreposicoesDePeriodo`).
+  17:11: toda saída do painel VOLTA a ele (`useSaidasDoPainel` sobre o `useCamadas`: Conferência, Importar banco, ✎ saldo; nenhuma fecha o painel);
+  o passo Casar LISTA as sem par com a sugestão do motor (`linhasParaCasar`; ao abrir só até `SUGESTOES_AO_ABRIR_ATE`, depois gesto) → a estação.
 - P159a (CONC-TELAS-01): Conferência e Extrato (banco) — a regra do dia é UMA (`porDia`: maior |valor| primeiro, saldo SÓ no fim do dia,
   LIDO — Extrato: o acumulado de sempre; Conferência: `montarEvolucao`); a lista do mês por dia é UM componente (`ListaDoMesPorDia`); histórico
   do banco limpo só na exibição (`historicoDoBanco`, o inteiro no `title`); a `ordenar` da mesa NÃO mudou (o Enriquecer lê dela). EXCEÇÃO

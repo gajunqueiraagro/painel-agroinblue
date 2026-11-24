@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { createPortal } from 'react-dom';
 import { FORMAS_PAGAMENTO } from '@/lib/financeiro/formasPagamento';
 import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
@@ -1072,7 +1073,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
       .insert({ cliente_id: clienteId, nome, cpf_cnpj: cpfCnpj || null })
       .select('id, nome')
       .single();
-    if (error || !data) { toast.error('Erro ao salvar fornecedor'); return null; }
+    if (error || !data) { toast.error(fraseDoErroDoFornecedor(error, { nome, cpf_cnpj: cpfCnpj || null }, 'criar o fornecedor')); return null; }
     notificarFornecedoresMudaram(clienteId);
     try { await recarregarDados?.(); } catch { /* o registro ja existe; a lista volta no proximo refresh */ }
     toast.success(`Fornecedor "${data.nome}" criado e selecionado`);

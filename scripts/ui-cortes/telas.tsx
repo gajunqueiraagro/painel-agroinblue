@@ -47,6 +47,7 @@ import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { EscolherContasDoBanco } from '@/components/financeiro-v2/EscolherContasDoBanco';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
+import * as FAT from './dados/fatura';
 import * as CONC from './dados/conciliacao';
 import { FAZENDAS_VG as FAZENDAS_VG02, bancoVG02 } from './dados/visaoGeral02';
 import { V2Home } from '@/v2/pages/V2Home';
@@ -460,6 +461,9 @@ if (tela === 'mesclar') {
     docDoClipe('dc5', 'lf2', 'nf', 'NF 000.000.519.pdf', '2026-10-05', { numero: '519' }),
     docDoClipe('dc6', 'lf2', 'nf', 'NF 000.000.519.xml', '2026-10-05', { numero: '519', tipo: 'application/xml', url: 'cli/lf2/dc6.xml' }),
     docDoClipe('dc7', 'lf2', 'boleto', 'Boleto parcela 1.pdf', '2026-10-20'),
+    /* DANFE-SOB-DEMANDA-01 — lf4: a NF só com o XML da Receita (sem arquivo guardado): o clipe mostra "PDF · DANFE" (gerado na hora) e "XML · Itens". SINTÉTICO. */
+    docDoClipe('dc8', 'lf4', 'nf', 'NF 337107 (XML da Receita)', '2026-11-18', { numero: '337107', serie: '300', tipo: 'application/xml', url: null,
+      chave_acesso: '50261106057223030240553000003371071561590540' }),
     /* ANEXO-COL-ALINHA-01 — lf3 com 12 (o contador de 2 dígitos: o clipe não sai do lugar). SINTÉTICOS. */
     ...Array.from({ length: 12 }, (_, i) => docDoClipe(`dc3-${i}`, 'lf3', 'recibo', `Recibo sintético ${i + 1}.pdf`, '2026-10-07')),
   ];
@@ -469,8 +473,13 @@ if (tela === 'mesclar') {
       : t === 'financeiro_fornecedores' ? (VOL ? VOL.fornecedores : LISTA)
       : t === 'financeiro_safras' ? [{ id: 's-pec', nome: 'Pecuária 25/26', codigo: '25/26-Pec', escopo_negocio: 'pecuaria', ativa: true },
         { id: 's-lav', nome: 'Mandioca 25/26', codigo: '25/26-MAND', escopo_negocio: 'agricultura', ativa: true }]
-      : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }] : [],
+      : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }]
+      /* BPO-GUIA-01 P2 — `&bpo=1`: o BPO ligado no cliente (a barra dos marcados ganha "Enviar para aprovação") */
+      : t === 'financeiro_bpo_config' && q.get('bpo') ? [{ ativo: true }] : [],
     rpc: (fn: string, a: any) => fn === 'get_anos_financeiro_v2' ? [{ ano: '2026' }] : fn === 'fn_parcelas_dos_lancamentos' ? {}
+      /* P2 — a prévia do envio: entram as marcadas menos uma, que o banco recusa com o motivo (o pior caso da frase) */
+      : fn === 'fn_aprovacao_enviar' ? { ok: true, simulado: a.p_simular, enviados: Math.max(0, (a.p_ids ?? []).length - 1), aprovados_pelo_mesmo: 0,
+        recusados: (a.p_ids ?? []).slice(0, 1).map((id: string) => ({ id, motivo: 'já pago (realizado)' })) }
       : fn === 'fn_fin_v2_lista_pagina' ? paginaDaBancada(VOL ? VOL.lancamentos : LANCAMENTOS, a)
       /* FIN-REGRA-VARIAVEL-FAZENDA-01 — `&regra=1`: o selo "N despesas no Administrativo" na faixa dos totais */
       : fn === 'fn_lancamentos_regra_fazenda_pendentes' && q.get('regra') ? PENDENTES_DA_REGRA() : null,
@@ -864,8 +873,22 @@ if (tela === 'mesclar') {
   const listaBase = q.get('n') === 'longo' ? CONTAS_BANC.CONTAS_LONGAS : CONTAS_BANC.CONTAS;
   /* CARTAO-LANCAMENTO-01 — `&cartao=1`: o cartão SINTÉTICO (k9) com os dias digitados (fecha 3, vence 10) — o modal abre nele */
   const lista = q.get('cartao') === '1' ? listaBase.map((c: any) => (c.id === 'k9' ? { ...c, dia_fechamento: 3, dia_vencimento: 10 } : c)) : listaBase;
+  /* CONTAS-OF-LINHA-01 — a coluna "Open Finance" com os 5 estados (SINTÉTICO): k1 Itaú conectado (lido hoje 07:40), k2 Bradesco ligado mas o
+     último aviso do item pede o titular (⚠ Reconectar), k3 BTG e k5 Bradesco Pessoal "Conectar", k4 Dinheiro "—"; `&of=link` = um link do
+     titular vivo (as não ligadas viram "Link enviado"); `&of=conectar` abre o modal do "Conectar" da 1ª linha que o tem */
+  const hojeAs = (h: number, m: number) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.toISOString(); };
+  const OF_EVENTOS = [
+    { evento: 'item/created', item_id: 'it-itau', cliente_id: 'cli', client_user_id: 'cli', connector_id: '601', recebido_em: '2026-11-16T20:10:37Z' },
+    { evento: 'item/created', item_id: 'it-brad', cliente_id: 'cli', client_user_id: 'cli', connector_id: '602', recebido_em: '2026-11-17T10:00:00Z' },
+    { evento: 'item/login_error', item_id: 'it-brad', cliente_id: 'cli', client_user_id: 'cli', connector_id: '602', recebido_em: '2026-11-22T10:00:00Z' },
+  ];
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_contas_bancarias' ? (e.in.id ? lista.filter((c: any) => e.in.id.includes(c.id)) : lista)
+      : t === 'openfinance_eventos' ? OF_EVENTOS
+      : t === 'openfinance_contas_permitidas' ? [{ item_id: 'it-itau', conta_bancaria_id: 'k1', final4: '7225', ativo: true },
+          { item_id: 'it-brad', conta_bancaria_id: 'k2', final4: '0001', ativo: true }]
+      : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'k1', lido_em: hojeAs(7, 40) }]
+      : t === 'openfinance_convites' ? (q.get('of') === 'link' ? [{ expira_em: new Date(Date.now() + 20 * 3600e3).toISOString(), usado_em: null, revogado_em: null }] : [])
       : t === 'bancos_referencia' ? CONTAS_BANC.BANCOS
       : t === 'financeiro_saldos_bancarios_v2' ? [{ saldo_final: 30943.91, saldo_data: '2026-08-31' }] : [],
     rpc: (fn: string, a: any) => fn === 'fn_conta_bancaria_painel' ? CONTAS_BANC.PAINEL
@@ -874,6 +897,7 @@ if (tela === 'mesclar') {
       : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }] : null,
   };
   montar(<div className="h-full"><FinV2ContasTab /></div>);
+  if (q.get('of') === 'conectar') setTimeout(() => { const b = document.querySelector('[data-testid="of-conectar"]'); if (b instanceof HTMLElement) b.click(); }, 600);
   const abre = q.get('v');
   if (abre) setTimeout(() => {
     /* CARTAO-LANCAMENTO-01 — `&cartao=1` abre a linha do cartão (a tela ordena a lista: a 1ª linha não é a 1ª do banco) */
@@ -957,7 +981,10 @@ if (tela === 'mesclar') {
   const ESCALA_DRE = v === 'grande' ? 10 : 1;
   g.__bancoBancada = {
     from: (t: string) => (t === 'financeiro_safras' ? DRE.SAFRAS : []),
-    rpc: (fn: string, a: any) => fn === 'fn_dre_pecuaria' ? DRE.drePecuaria(a, ESCALA_DRE)
+    /* DRE-GRAFICOS-02 — `&desde=2024`: os anos antes dele vêm SEM fazenda (a forma da Vera, com rebanho só de 2024): a Leitura com 5 anos
+       mostra esses anos em "—" */
+    rpc: (fn: string, a: any) => fn === 'fn_dre_pecuaria'
+        ? (q.get('desde') && String(a.p_de ?? '') < String(q.get('desde')) ? { ...DRE.drePecuaria(a, ESCALA_DRE), fazendas: [] } : DRE.drePecuaria(a, ESCALA_DRE))
       : fn === 'fn_dre_lavoura' ? DRE.dreLavoura(ESCALA_DRE)
       /* DRE-VARIACAO-EXPLICA-01 1b: o modal da variação (`&fim=cadastro` = o D3) */
       : fn === 'fn_dre_pecuaria_patrimonio' ? DRE.patrimonio(a, ESCALA_DRE, q.get('fim') === 'cadastro') : null,
@@ -1703,15 +1730,32 @@ if (tela === 'mesclar') {
     vencimento: ['2031-10-21', '2031-10-24', '2031-10-28'][i % 3], valor: i === 0 ? -99999999.99 : -(1234.56 * (i + 1)), descricao: `Compra sintética ${i}`,
     fornecedor: NOMES[i % 3], fazenda: 'Fazenda Sintética com Nome Longo', conta: i % 2 ? 'Sicredi Fazenda 0418' : 'Itaú Personalite 7225',
     conta_bancaria_id: i % 2 ? 'sic' : 'itau', status_transacao: 'programado', tem_nota: i % 4 !== 2, tem_boleto: i % 3 !== 1 }));
+  /* BPO-GUIA-01 (23/11) — `&v=vera`: a FORMA da fila da Vera no piloto (14 saídas programadas em 6 dias de vencimento, uma grande e várias
+     pequenas), com nomes e valores SINTÉTICOS (a fila real tem pró-labore: dado pessoal não entra na bancada) */
+  const DIAS_VERA = ['2031-11-20', '2031-11-23', '2031-12-05', '2031-12-05', '2031-12-05', '2031-12-06', '2031-12-06', '2031-12-06', '2031-12-06',
+    '2031-12-06', '2031-12-06', '2031-12-15', '2031-12-15', '2031-12-20'];
+  const VALORES_VERA = [150, 110, 3000, 670, 8100, 13700, 60000, 6000, 6000, 6000, 4400, 7200, 4500, 150];
+  const LINHAS_VERA = DIAS_VERA.map((d, i) => ({ lancamento_id: `vera${i}`, rodada: 1, situacao: 'aguardando', motivo: null, observacao: null,
+    vencimento: d, valor: -VALORES_VERA[i], descricao: `Conta sintética ${i + 1}`, fornecedor: i % 3 ? 'Fornecedor Exemplo' : 'Prestadora Sintética de Serviços Rurais Ltda',
+    fazenda: 'Fazenda Exemplo', conta: 'Banco Exemplo 0001', conta_bancaria_id: 'itau', status_transacao: 'programado', tem_nota: i % 2 === 0, tem_boleto: i % 3 === 0 }));
   g.__bancoBancada = {
     from: (t: string) => t === 'financeiro_bpo_config' ? (v === 'desligado' ? [] : [{ ativo: true }])
       : t === 'financeiro_aprovadores' ? [{ id: 'a1' }]
-      : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }] : [],
-    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista' ? LINHAS
+      : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }]
+      /* BPO-GUIA-01 — o passo 6 do guia (só admin): os gestores do cliente, um com nome comprido */
+      : t === 'cliente_membros' ? [{ user_id: 'g1', perfil: 'gestor_cliente', ativo: true }, { user_id: 'g2', perfil: 'financeiro', ativo: true }]
+      /* BPO-NOMES-LARGURA-01 — `profiles` na forma REAL (id da linha ≠ user_id; o guia não lê mais daqui). O nome vem da fonte única; o
+         financeiro sem nome no cadastro chega com o e-mail (a regra da fn_nomes_dos_autores) */
+      : t === 'profiles' ? [{ id: 'linha-1', user_id: 'g1', nome: 'Nome Errado de Profiles' }] : [],
+    rpc: (fn: string, a: any) => fn === 'fn_nomes_dos_autores' ? [{ user_id: 'g1', nome: 'Gestor Sintético com Nome Comprido da Silva', email: 'gestor@exemplo.com', situacao: 'membro ativo' },
+        { user_id: 'g2', nome: 'financeiro@exemplo.com', email: 'financeiro@exemplo.com', situacao: 'membro ativo' }]
+      : fn === 'fn_aprovacao_lista' ? (v === 'vera' ? LINHAS_VERA : LINHAS)
       : fn === 'fn_aprovacao_alertas' ? [{ alerta: 'pago_sem_aprovacao', lancamento_id: 'x1', data: '2031-10-13', valor: -2140, valor_aprovado: null, fornecedor: NOMES[0] },
           { alerta: 'aprovado_nao_pago', lancamento_id: 'x2', data: '2031-10-14', valor: -5990, valor_aprovado: -5990, fornecedor: NOMES[1] },
           { alerta: 'pago_diferente', lancamento_id: 'x3', data: '2031-10-12', valor: -99999999.99, valor_aprovado: -99999999.98, fornecedor: NOMES[2] }]
-      : fn === 'fn_aprovacao_decidir' ? { ok: true, simulado: a.p_simular, n: (a.p_ids ?? []).length, total: 99999999.99 } : null,
+      : fn === 'fn_aprovacao_decidir' ? { ok: true, simulado: a.p_simular, n: (a.p_ids ?? []).length, total: 99999999.99 }
+      : fn === 'fn_bpo_config_gravar' ? { ok: true, simulado: a.p_simular, aguardando_ao_ligar: 14 }
+      : fn === 'fn_bpo_aprovador_gravar' ? { ok: true, simulado: a.p_simular, mudou: true } : null,
   };
   /* import DENTRO do ramo: o trecho comum da bancada não muda (UI-GATE-RAPIDO-01) */
   void import('@/pages/AprovarPagamentosPage').then(({ default: AprovarPagamentosPage }) => montar(<AprovarPagamentosPage />));
@@ -1806,16 +1850,30 @@ if (tela === 'mesclar') {
   if (q.get('admin') === '1') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: 'Cliente Exemplo', perfil: 'admin_agroinblue' },
     clientes: [{ id: 'cli', nome: 'Cliente Exemplo' }], isAdmin: true, perfil: 'admin_agroinblue', loading: false };
   g.__bancoBancada = {
-    from: (t: string, e?: { eq?: Record<string, unknown> }) => t === 'financeiro_contas_bancarias' ? (v === 'nj' ? CONC.CONTAS_TAMANHO_REAL : v === 'vera' ? CONC.CONTAS_VERA : CONC.CONTAS)
+    from: (t: string, e?: { eq?: Record<string, unknown>; in?: Record<string, unknown[]>; sel?: string }) => t === 'financeiro_contas_bancarias' ? (v === 'nj' || v === 'nj10' ? CONC.CONTAS_TAMANHO_REAL : v === 'vera' ? CONC.CONTAS_VERA : v === 'sr' ? CONC.CONTAS_SR : CONC.CONTAS)
+      /* CONC-PAINEL-02 — o painel da conta: o elo arquivo→movimento (`useImportacoesDaConta`), os movimentos do arquivo ("Ver"), o lançamento
+         de valor exato ("Explicar a diferença", `&v=sr`) */
+      /* CONC-PAINEL-02 ajuste — `&v=nj10`: 10 arquivos na conta (o resumo na faixa e a lista) */
+      : t === 'extrato_bancario_v2' && v === 'nj10' && e?.sel?.startsWith('id, data_movimento, descricao, documento') ? (e?.eq?.conta_bancaria_id === 'cc1' ? CONC.MOVS_NJ10 : [])
+      : t === 'conciliacao_bancaria_itens' && v === 'nj10' ? CONC.ITENS_NJ10.filter((i) => !e?.in?.extrato_id || e.in.extrato_id.includes(i.extrato_id))
+      : t === 'extrato_bancario_v2' && e?.sel?.startsWith('id, importacao_id') ? (semArquivos ? [] : (v === 'nj10' ? CONC.LIGACOES_NJ10 : CONC.LIGACOES).filter((l) => !e?.eq?.conta_bancaria_id || e.eq.conta_bancaria_id === 'cc1'))
+      : t === 'extrato_bancario_v2' && e?.eq?.importacao_id ? CONC.MOVIMENTOS_DO_ARQUIVO
+      /* CARTAO-FATURA-IMPORT-01 — `&v=fatura`: a prévia da fatura no painel do cartão (o que já está no sistema + o histórico; o plano) */
+      : t === 'financeiro_lancamentos_v2' && v === 'fatura' && e?.sel?.startsWith('id, conta_bancaria_id, data_vencimento') ? FAT.LANCAMENTOS_DA_FATURA
+      : t === 'financeiro_plano_contas' && v === 'fatura' ? FAT.PLANO_DA_FATURA
+      : t === 'financeiro_lancamentos_v2' && e?.sel?.includes('status_transacao, conta_bancaria_id') ? (v === 'sr' ? CONC.CANDIDATOS_SR : [])
+      : t === 'conciliacao_bancaria_itens' ? []
       /* BAIXA-DESCONTO-BANCO-01 — a parte paga com desconto da NF do dia 03 (`&v=desconto-depois`) */
       : t === 'financeiro_lancamentos_v2' && e?.eq?.origem_tipo === 'conc:desconto_parte' ? (v === 'desconto-depois' ? ESP.PARTES_DO_DESCONTO : [])
-      : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
-      : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : CONC.DOCUMENTOS) : [],
+      : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : (v === 'nj10' ? CONC.IMPORTACOES_NJ10 : CONC.IMPORTACOES).filter((i) => !e?.in?.id || e.in.id.includes(i.id)))
+      : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : v === 'sr' ? CONC.DOCUMENTOS_SR : CONC.DOCUMENTOS) : [],
     rpc: (fn: string, a: any) => fn === 'fn_conciliacao_resumo_mes'
       ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null, v))
       : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }]
       /* P159a — o Espelho da conta escolhida (`dados/espelho.ts`): o Casar lançamentos (Extrato, Sistema, Evolução) e a Conferência */
-      : fn === 'fn_extratos_espelhados' ? ESP.espelho(v) : null,
+      : fn === 'fn_extratos_espelhados' ? ESP.espelho(v)
+      /* CONC-PAINEL-02 entrega 2 — o motor de cada linha sem par (`&v=nj10`) */
+      : fn === 'fn_candidatos_conciliacao' ? (v === 'nj10' ? CONC.candidatosNj10(a.p_extrato_id) : []) : null,
   };
   g.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
   /* P159b — montada COMO NO APP (`V2Index`, seção do app-shell: coluna flex que dá a altura até a lista). Num bloco solto quem rolava era
@@ -1897,6 +1955,10 @@ if (tela === 'mesclar') {
     if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
     /* NOTA-PAGTO-PARCELADO-01 P3 — `&natureza=conserto`: a mesma nota como REMESSA PARA CONSERTO (CFOP 6915): o aviso "não é compra" */
     if (q.get('natureza') === 'conserto') { lido.nota.naturezaOperacao = 'REMESSA DE MERCADORIA OU BEM PARA CONSERTO OU REPARO'; lido.nota.cfops = ['6915']; }
+    /* DA-NOTA-ETAPAS-01 — a nota NÃO FINANCEIRA (o molde da NF 7.891, SINTÉTICO): `&natureza=demonstracao` (5912: "Registrar bem de terceiro") e
+       `&natureza=devolucao` (1202: sem bem de terceiro) */
+    if (q.get('natureza') === 'demonstracao') { lido.nota.naturezaOperacao = 'REMESSA PARA DEMONSTRACAO'; lido.nota.cfops = ['5912']; }
+    if (q.get('natureza') === 'devolucao') { lido.nota.naturezaOperacao = 'DEVOLUCAO DE VENDA DE MERCADORIA'; lido.nota.cfops = ['1202']; }
     /* NOTA-PAGTO-PARCELADO-01 P1 — `&outros=1`: os lançamentos SOLTOS do mesmo fornecedor no período: a 4ª parcela desta nota paga por um PIX à
        parte (491,64: marcada, a soma confere com a nota) e duas de outras compras. SINTÉTICOS. */
     const OUTROS = q.get('outros') === '1' ? ([
@@ -1954,7 +2016,9 @@ if (tela === 'mesclar') {
       },
       /* NOTA-JA-LANCADA-01 — `v=jalancada`: 3 das 4 parcelas ja' lancadas (2 pagas, 1 programada, conciliada uma) num cadastro SEM CNPJ
          de nome comprido; a serie-irma de 1 centavo a mais; a 4a falta. Dados SINTETICOS. */
-      rpc: (fn: string, a?: any) => fn === 'fn_nota_ja_lancada' && (v === 'jalancada' || v === 'cancelados') ? [
+      rpc: (fn: string, a?: any) => fn === 'fn_bem_terceiro_registrar' ? { motivo: 'demonstracao', fornecedor: 'Agro Sintetica Insumos Agropecuarios Ltda', nf: '000.000.937',
+          data: '2026-09-20', total: 1966.56, itens: lido.nota.itens.map((i, k) => ({ n: k + 1, descricao: i.descricao, quantidade: 1, valor: i.valorCent / 100 })) }
+        : fn === 'fn_nota_ja_lancada' && (v === 'jalancada' || v === 'cancelados') ? [
         /* NOTA-CONTAS-NA-CRIACAO-01 D — `v=cancelados`: os mesmos, e mais 2 CANCELADOS desta nota no fim (selo cinza) */
         ...(v === 'cancelados' ? CANCELADOS_DA_NOTA : []),
         ...[['2026-10-20', 'realizado'], ['2026-11-20', 'realizado'], ['2026-12-20', 'programado']].map(([venc, st], i) => ({
@@ -2207,6 +2271,8 @@ if (tela === 'mesclar') {
     /* UI-LARGURA-FIXA-01 — `v=curta`: o 2º cliente (poucas notas, nomes curtos): a divisão tem de ser a mesma */
     montar(<NotasDaReceitaDialog clienteNome={v === 'curta' ? 'Vera' : 'Cliente Bancada'} dados={v === 'curta' ? DADOS_RECEITA_CURTA : DADOS_RECEITA_BANCADA} carregando={false} erro={null} aoFechar={() => {}}
       aoLancar={() => {}} aoVincular={async () => null} lerXml={async () => '<nfeProc/>'}
+      /* NOTA-IGNORAR-01 — ignorar/desfazer sintéticos (nada grava) */
+      ignorar={{ ignorar: async () => null, desfazer: async () => null }}
       /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — a prévia SINTÉTICA do "Registrar bem" (2 itens, nome comprido, valor no teto) */
       registrarBem={async () => ({ ok: true, motivo: 'comodato', fornecedor: 'Distribuidora de Combustível Exemplo de Nome Comprido Ltda', nf: '117573',
         data: '2026-11-02', total: 99999999.99, itens: [{ n: 1, descricao: 'BOMBA DE ABASTECIMENTO COMUM COM BICO AUTOMÁTICO E MEDIDOR DIGITAL', quantidade: 2, valor: 7000 },
@@ -3249,11 +3315,19 @@ if (tela === 'mesclar') {
       : v === 'salduas' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_DUAS
       : PARCELA_DA_COMPRA && t === 'financiamento_parcelas' ? [{ financiamento_id: 'fin-sint', status: 'pendente' }]
       : PARCELA_DA_COMPRA && t === 'financiamentos' ? [{ natureza: 'parcelamento', status: 'ativo' }]
+      /* NOTA-PAGA-POR-TERCEIRO-01 — `&terceiro=marcado`: o "pago por terceiro" vivo (motivo no teto) */
+      : q.get('terceiro') === 'marcado' && t === 'financeiro_pago_por_terceiro' ? [{ parceiro_id: 'agro', data_pagamento: '2026-11-20', documento_id: null,
+          feito_em: '2026-11-23T20:00:00Z', motivo: 'Comprou no nosso nome e desconta da empreitada da reforma da sede, medição de novembro, conforme o acordo assinado' }]
       : t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
       : DIV && t === 'financeiro_lancamento_partes' ? PARTES_DIV : DIV && t === 'financeiro_lancamento_divisoes' ? [{ id: 'op-div', acao: 'dividir_nota' }]
       : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string, a: any) =>
     /* P138 — a safra da competência é do banco: aqui, pelas datas das safras SINTÉTICAS da bancada (a mesma regra) */
-    fn === '_fn_safra_da_competencia' ? (SAFRAS.find((s: any) => s.escopo_negocio === a?.p_escopo && a?.p_data >= s.data_inicio && a?.p_data <= s.data_fim)?.id ?? null)
+    /* NOTA-PAGA-POR-TERCEIRO-01 — a prévia SINTÉTICA (com o aviso do boleto) */
+    fn === 'fn_lancamento_pago_por_terceiro' ? { ok: true, simulado: true, parceiro: 'Construtora Exemplo de Nome Comprido Ltda', data_pagamento: '2026-11-20',
+      antes: { status: 'programado', data_pagamento: null, sem_caixa: false }, depois: { status: 'realizado', data_pagamento: '2026-11-20', sem_caixa: true },
+      avisos: ['Tem boleto ligado: confirme que o terceiro pagou esse boleto.'],
+      efeitos: ['sai de "a pagar", da aprovação, dos vencidos e da procura no extrato', 'a despesa continua no DRE com a mesma conta', 'Livro Caixa: fora (sem movimento de caixa) até o contador definir'] }
+    : fn === '_fn_safra_da_competencia' ? (SAFRAS.find((s: any) => s.escopo_negocio === a?.p_escopo && a?.p_data >= s.data_inicio && a?.p_data <= s.data_fim)?.id ?? null)
     : PARCELA_DA_COMPRA && fn === 'fn_financiamento_situacao' ? SITUACAO_DA_COMPRA
     /* P143 — a prévia do "Juntar num parcelamento" das 6 soltas (SINTÉTICO) */
     : v === 'salsolta' && fn === 'fn_parcelamento_juntar_lancamentos' ? { ok: true, simulado: true, parcelas: 6, soma: 3724.97,
@@ -3374,6 +3448,18 @@ if (v === 'xml18' || v === 'xml14') {
     favorecidoId: resolucao.propostoId, ultima: null });
   props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao,
     ocorrencias: [], arquivo: arquivoXmlDaNota(bytes, 'NFe-sintetica.XML') } as any);
+  props.documentosAntesDeSalvar = true;
+}
+/* FORN-CRIAR-DA-NOTA-ERRO (24/11) — `xmlcodigo`: a forma da NF 39.814 — o emitente com o código do sistema emissor ("1 - ") no nome, fora
+   do cadastro e SEM fazenda identificada (o caso que dava 22P02). A faixa mostra o nome SEM o código. Nome e CNPJ SINTÉTICOS. */
+if (v === 'xmlcodigo') {
+  const bytes = utf8(montarNFe({ nomeEmitente: '1 - PNEUS SINTETICOS LTDA', duplicatas: [['001', '2026-10-30', '8119.00'], ['002', '2026-11-29', '8119.00']] }));
+  const lido: any = lerNFe(bytes);
+  const resolucao = resolverEmitente(lido.nota.emitente, [], null);
+  const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [], emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null });
+  props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao,
+    ocorrencias: [], arquivo: arquivoXmlDaNota(bytes, 'NFe-sintetica.XML') } as any);
+  props.fornecedores = [];
   props.documentosAntesDeSalvar = true;
 }
 if (v === 'xml') {

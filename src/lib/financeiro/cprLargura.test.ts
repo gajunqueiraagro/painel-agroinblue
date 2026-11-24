@@ -12,35 +12,35 @@ import {
 /** A lista a 1.280px de janela (barra lateral e margens fora), medida na bancada: 1.094px. */
 const LISTA_A_1280 = 1094;
 
-describe('o valor na largura do maior valor (medido na faixa, 11px negrito)', () => {
-  it('cobre o texto medido na bancada, de "▼ −R$ 9,99" a "▼ −R$ 999.999.999,99", sem sobrar mais de 1px', () => {
-    const medido = [63.2, 70.5, 77.9, 88.5, 95.9, 103.3, 113.9, 121.3, 128.7];
-    medido.forEach((px, i) => {
-      const w = larguraDoValorCpr(i + 1, true);
-      expect(w, `${i + 1} algarismos`).toBeGreaterThanOrEqual(px);
-      expect(w - px, `${i + 1} algarismos`).toBeLessThanOrEqual(1);
-    });
-    /* sem o "−" (A receber, A pagar): "▲ R$ 999.999,99" = 95,9 */
-    expect(larguraDoValorCpr(6, false)).toBe(96);
+describe('CPR-LAYOUT-03 — UMA coluna Valor e a Saldo, 118px (o mock), crescendo só acima de 8 algarismos', () => {
+  it('a largura a 12px negrito cobre "+99.999.999,99" (~103px) dentro dos 118 do mock', () => {
+    expect(larguraDoValorCpr(8)).toBeLessThanOrEqual(118);
+    expect(larguraDoValorCpr(8)).toBeGreaterThanOrEqual(103);
+    /* cresce com o número: 9 e 10 algarismos */
+    expect(larguraDoValorCpr(9)).toBeGreaterThan(larguraDoValorCpr(8));
+    expect(larguraDoValorCpr(10)).toBeGreaterThan(larguraDoValorCpr(9));
   });
 
-  it('em degraus: até R$ 999.999,99 · até R$ 99.999.999,99 · acima, o próprio número', () => {
+  it('em degraus: até 999.999,99 · até 99.999.999,99 · acima, o próprio número; o piso é 118', () => {
     expect([1, 5, 6, 7, 8, 9, 10].map(degrauDosAlgarismos)).toEqual([6, 6, 6, 8, 8, 9, 10]);
-    expect(larguraDosValoresCpr(0)).toEqual({ receber: 96, pagar: 96, saldo: 104 });
-    expect(larguraDosValoresCpr(113386.53)).toEqual({ receber: 96, pagar: 96, saldo: 104 });
-    expect(larguraDosValoresCpr(-999999.99)).toEqual({ receber: 96, pagar: 96, saldo: 104 });
-    expect(larguraDosValoresCpr(1000000)).toEqual({ receber: 114, pagar: 114, saldo: 122 });
-    expect(larguraDosValoresCpr(999999999.99)).toEqual({ receber: 122, pagar: 122, saldo: 129 });
+    expect(larguraDosValoresCpr(0)).toEqual({ valor: 118, saldo: 118 });
+    expect(larguraDosValoresCpr(113386.53)).toEqual({ valor: 118, saldo: 118 });
+    expect(larguraDosValoresCpr(-99999999.99)).toEqual({ valor: 118, saldo: 118 });
+    expect(larguraDosValoresCpr(999999999.99)).toEqual({ valor: Math.max(118, larguraDoValorCpr(9)), saldo: Math.max(118, larguraDoValorCpr(9)) });
+    /* só um número de 11 algarismos passa dos 118 */
+    const w = larguraDoValorCpr(11);
+    expect(w).toBeGreaterThan(118);
+    expect(larguraDosValoresCpr(99999999999.99)).toEqual({ valor: w, saldo: w });
   });
 });
 
 describe('a lista cabe a 1.280px', () => {
-  it('normal e ampliado, até R$ 99.999.999,99, com Descrição, Fornecedor e Subcentro no mínimo', () => {
+  it('normal e ampliado, até 99.999.999,99, com Descrição, Fornecedor e Subcentro no mínimo', () => {
     for (const ampliado of [false, true]) for (const v of [0, 113386.53, 99999999.99]) {
       expect(larguraMinimaCpr(reguaDaCpr(ampliado, v)), `${ampliado ? 'ampliado' : 'normal'} ${v}`).toBeLessThanOrEqual(LISTA_A_1280);
     }
-    /* a conta: 27 de moldura + as colunas + 3 × 95 + 4px por vão (normal: 9 colunas + as 3 de texto = 11 vãos) */
-    expect(larguraMinimaCpr(reguaDaCpr(false, 0))).toBe(27 + (46 * 3 + 16 + 76 + 58 + 96 + 96 + 104) + 3 * 95 + 4 * 11);
+    /* a conta: 27 de moldura + as colunas (48 + 48 + 72 + 70 + 118 + 118) + 3 × 95 + 4px por vão (6 colunas + as 3 de texto = 8 vãos) */
+    expect(larguraMinimaCpr(reguaDaCpr(false, 0))).toBe(27 + (48 + 48 + 72 + 70 + 118 + 118) + 3 * 95 + 4 * 8);
   });
 });
 
@@ -57,11 +57,14 @@ describe('a tela (lida da fonte)', () => {
   const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('{/* CAIXA INICIAL'));
   const linha = tela.slice(tela.indexOf('            key={chaveDaLinhaCpr(l)}'), tela.indexOf('{/* CPR-AJUSTES-20-10 — a ÚLTIMA linha do dia'));
 
-  it('Fornecedor e Subcentro esticam como a Descrição (a sobra em três), no cabeçalho e na linha', () => {
-    expect(cab).toContain('<span style={ESTICA}>Fornecedor</span>');
-    expect(cab).toContain('<span style={ESTICA}>Subcentro</span>');
-    expect(linha).toMatch(/<span style=\{ESTICA\} className="truncate text-muted-foreground" title=\{fornecedor\}/);
-    expect(linha).toMatch(/<span style=\{ESTICA\} className=\{cn\(FONTE_FINA, 'truncate text-muted-foreground'\)\} title=\{l\.subcentro \|\| '—'\}/);
+  it('CPR-LAYOUT-03 (ponto 8): a Descrição fica com a sobra (o dobro), Fornecedor e Subcentro param no tamanho do mock (200 / 170)', () => {
+    expect(tela).toContain("const ESTICA_DESCRICAO: CSSProperties = { flex: '2 1 0', minWidth: 0 };");
+    expect(tela).toContain("const ESTICA_FORNECEDOR: CSSProperties = { flex: '1 1 0', minWidth: 0, maxWidth: FORNECEDOR_MAXIMO_CPR };");
+    expect(tela).toContain("const ESTICA_SUBCENTRO: CSSProperties = { flex: '1 1 0', minWidth: 0, maxWidth: SUBCENTRO_MAXIMO_CPR };");
+    expect(cab).toContain("cabecalhoOrdenavel('fornecedor', ESTICA_FORNECEDOR)");
+    expect(cab).toContain("cabecalhoOrdenavel('subcentro', ESTICA_SUBCENTRO)");
+    expect(linha).toContain('<span style={ESTICA_FORNECEDOR} className="truncate text-foreground" title={fornecedor}');
+    expect(linha).toContain("<span style={ESTICA_SUBCENTRO} className=\"truncate text-foreground\" title={l.subcentro || '—'}");
   });
 
   it('a régua vem do maior valor do período (recorte e série) e a largura mínima é a dela; o teto só cresce no mesmo cliente/período/conta', () => {

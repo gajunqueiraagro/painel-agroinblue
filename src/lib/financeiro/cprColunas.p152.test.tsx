@@ -65,33 +65,40 @@ describe('P152 — a tela (lida da fonte)', () => {
     expect(grupos).not.toMatch(/const chave = \(l\.data_vencimento/);
   });
 
-  it('a régua (CPR-LARGURA-01: datas, NF e Status justos, os valores pelo maior do período) e o ampliado = a mesma + Safra e Faz.', () => {
-    expect(reguaDaCpr(false, 0)).toEqual({ comp: 46, venc: 46, pgto: 46, selo: 16, safra: 0, faz: 0, nf: 76, status: 58, receber: 96, pagar: 96, saldo: 104 });
+  it('a régua (CPR-LAYOUT-03: datas, NF e Status justos, UMA coluna Valor de 118 e a Saldo) e o ampliado = a mesma + Safra e Faz.', () => {
+    expect(reguaDaCpr(false, 0)).toEqual({ comp: 48, venc: 48, safra: 0, faz: 0, nf: 72, status: 70, valor: 118, saldo: 118 });
     expect(reguaDaCpr(true, 0)).toEqual({ ...reguaDaCpr(false, 0), safra: 56, faz: 26 });
     const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('{/* CAIXA INICIAL'));
-    const ordem = ['Comp.', 'Venc.', 'Pgto.', 'regua.selo', 'Descrição', 'Fornecedor', 'Subcentro', 'Safra', 'Faz.', '>NF<', 'Status', 'A receber', 'A pagar', 'Saldo'];
+    const ordem = ["'comp'", "'venc'", "'descricao'", "'fornecedor'", "'subcentro'", 'Safra', 'Faz.', "'nf'", "'status'", "'valor'", '>Saldo<'];
     const pos = ordem.map((t) => cab.indexOf(t));
     expect(pos.every((p) => p >= 0)).toBe(true);
     expect([...pos].sort((a, b) => a - b)).toEqual(pos);
+    /* as colunas Pgto. e a dos selos saíram (o selo vai na frente da descrição) */
+    expect(tela).not.toContain('regua.pgto');
+    expect(tela).not.toContain('regua.selo');
   });
 
   it('TRAVA DA RÉGUA (Gabriel 17:4x, opção b): o cabeçalho e a linha leem a MESMA régua, coluna a coluna, na mesma ordem — coluna sem largura fixa desalinha e o gate de tela não a pega', () => {
     const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('{/* CAIXA INICIAL'));
     const linha = tela.slice(tela.indexOf('            key={chaveDaLinhaCpr(l)}'), tela.indexOf('{/* CPR-AJUSTES-20-10 — a ÚLTIMA linha do dia'));
-    const colunas = (t: string) => Array.from(t.matchAll(/style=\{larg\(regua\.(\w+)\)\}/g), (m) => m[1]);
-    /* CPR-LARGURA-01: Fornecedor e Subcentro saíram da régua — esticam com a Descrição (`ESTICA`, em `cprLargura.test.ts`) */
-    const ORDEM = ['comp', 'venc', 'pgto', 'selo', 'safra', 'faz', 'nf', 'status', 'receber', 'pagar', 'saldo'];
+    const colunas = (t: string) => Array.from(t.matchAll(/larg\(regua\.(\w+)\)|largura=\{regua\.(\w+)\}/g), (m) => m[1] ?? m[2]);
+    const ORDEM = ['comp', 'venc', 'safra', 'faz', 'nf', 'status', 'valor', 'saldo'];
     expect(colunas(cab)).toEqual(ORDEM);
-    expect(colunas(linha)).toEqual(ORDEM);
-    /* e a Descrição é a única que estica, nos dois */
-    expect(cab).toContain('<span className="min-w-0 flex-1" data-coluna-descricao>Descrição</span>');
-    expect(linha).toContain('<span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>');
+    /* a linha: as fixas na mesma ordem; o valor é o `celValor` (largura da régua) e depois o saldo */
+    expect(colunas(linha)).toEqual(['comp', 'venc', 'safra', 'faz', 'nf', 'status', 'saldo']);
+    expect(linha.indexOf('{celValor}')).toBeLessThan(linha.indexOf('largura={regua.saldo}'));
+    expect(tela).toContain('<span data-valor-da-linha style={larg(regua.valor)}');
+    /* Descrição, Fornecedor e Subcentro: as MESMAS esticas no cabeçalho e na linha */
+    for (const e of ['ESTICA_DESCRICAO', 'ESTICA_FORNECEDOR', 'ESTICA_SUBCENTRO']) {
+      expect(cab, e).toContain(e);
+      expect(linha, e).toContain(`style={${e}}`);
+    }
   });
 
-  it('o selo do vínculo é o CelulaVinculos de Lançamentos (11px), o "NF" abre a aba Documentos e o status segue a pílula sem borda', () => {
+  it('o selo do vínculo é o CelulaVinculos de Lançamentos (11px), o "NF" abre a aba Documentos e o status segue sem borda', () => {
     expect(tela).toContain('<CelulaVinculos vinculos={vinculos} pequeno abrir={{');
     expect(tela).toContain("onClick={(e) => { e.stopPropagation(); void abrir(l.id, 'documentos'); }}");
-    expect(tela).toContain("'inline-block rounded bg-muted px-0.5 whitespace-nowrap', FONTE_STATUS,");
+    expect(tela).toContain("'inline-block px-0.5 whitespace-nowrap', FONTE_STATUS,");
     expect(tela).not.toContain('Paperclip');
     /* pago: a linha toda mais clara */
     expect(tela).toContain("paga && '[&>*]:opacity-50',");

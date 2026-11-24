@@ -40,11 +40,11 @@ import { MENU_SEGMENTADO, MENU_ROTULO } from '@/components/ui/menuPadrao';
 import {
   COM_PERCENTUAL, COM_POR_HECTARE, ROTULO_POR_HECTARE, BASE_DO_PERCENTUAL, ROTULO_DA_BASE, corDoTom, valorDe,
   valorNaUnidade, percentual, centrosDoBloco, UNIDADES_PEC, ROTULO_UNIDADE, somaComposta,
-  defsDaGrade, valorDaFilha, celulaDaColuna, rateioDoGrupo, BLOCO_SO_RATEIO,
+  defsDaGrade, valorDaFilha, celulaDaColuna, rateioDoGrupo, BLOCO_SO_RATEIO, colunaDoAnoAnterior,
   type DefPec, type ColunaPec, type UnidadePec, type ModoDre,
 } from '@/components/agri/drePecRegua';
 import type { RecorteHistoricoPec } from '@/components/agri/PecHistoricoLinhaModal';
-import { oQueMudou as gruposQueMudaram, LIMIAR_PCT, LIMIAR_RS } from '@/lib/dre/leitura';
+import { deltaDaLinha, oQueMudou as gruposQueMudaram, LIMIAR_PCT, LIMIAR_RS } from '@/lib/dre/leitura';
 import {
   BLOCO_DA_LINHA, rotuloCurtoPeriodo,
   type DrePecuaria, type DrePecLinhas, type ChaveLinhaPec, type CentroPec, type RecortePec,
@@ -295,15 +295,8 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
      ⚠ CADA ANO COM O DIVISOR DELE — TELA-03a: o hectare do JSON de cada ano; usar o do ano corrente
      compararia 2024 com a área de 2026. */
   const anos = [...e.anos].slice(0, Math.max(1, ref)).reverse();
-  const colunasAno = anos.map((a, i): ColunaPec => ({
-    chave: `__ano${anos.length - i}__`, nome: rotuloCurtoPeriodo(a.de, a.ate), sub: '', fazendaId: null,
-    linhas: a.carregando ? null : (a.dre?.total ?? real.total), total: false, tipo: 'valor',
-    unidade: 'ha', de: a.de, ate: a.ate, cenario: 'realizado', meses: a.dre?.periodo.meses ?? meses,
-    atual: false, comparacao: true,
-    /* ⚠ ANO SEM DADO É COLUNA DE "—", não coluna escondida: sumir faria "2023" parecer igual a
-       "nunca houve 2023". Sem fazenda na resposta = nem fechamento nem lançamento naquele ano. */
-    semDado: !a.carregando && (!a.dre || a.dre.fazendas.length === 0),
-  }));
+  /* DRE-GRAFICOS-02: a coluna de ano anterior é UMA regra (`colunaDoAnoAnterior`), a da grade e a da Leitura dos anos */
+  const colunasAno = anos.map((a, i): ColunaPec => colunaDoAnoAnterior(a, anos.length - i, real.total, meses));
   const atual: ColunaPec = { ...totalReal, nome: rotuloCurtoPeriodo(de, ate), sub: '' };
 
   /* ⚠ O Δ SÓ EXISTE COM UMA REFERÊNCIA SÓ — fix4. Com dois ou mais anos na tela, "a diferença" não
@@ -323,9 +316,8 @@ function valorNaColuna(col: ColunaPec, chave: ChaveLinhaPec): number | null {
   if (!col.linhas || col.semDado) return null;
   if (col.tipo === 'delta') {
     if (!col.ref) return null;
-    const r = valorDe(col.linhas, chave);
-    const m = valorDe(col.ref, chave);
-    return r == null || m == null ? null : r - m;
+    /* DRE-PAINEL-03: a diferença é a MESMA função dos passos da ponte (`deltaDaLinha`, leitura.ts) — uma conta só */
+    return deltaDaLinha(valorDe(col.linhas, chave), valorDe(col.ref, chave));
   }
   return valorDe(col.linhas, chave);
 }

@@ -1,6 +1,6 @@
 /* UI-SEM-CORTE-01 — o cliente Supabase da bancada: nada sai da maquina. Cada tela registra o seu banco em `globalThis.__bancoBancada`
  * (from(tabela, estado) -> linhas; rpc(fn, args) -> dado); a cadeia guarda os filtros que importam (eq, in, is, range, single). */
-type Estado = { eq: Record<string, unknown>; in: Record<string, unknown[]>; is: Record<string, unknown>; range: [number, number] | null; um: boolean };
+type Estado = { eq: Record<string, unknown>; in: Record<string, unknown[]>; is: Record<string, unknown>; range: [number, number] | null; um: boolean; sel?: string };
 type Banco = { from?: (t: string, e: Estado) => unknown[]; rpc?: (fn: string, a: Record<string, unknown>) => unknown; funcao?: (nome: string, op: unknown) => { data: unknown; error: unknown } };
 const banco = (): Banco => (globalThis as unknown as { __bancoBancada?: Banco }).__bancoBancada ?? {};
 /* OC-HOSPEDEIRO-LEVE-01 — cada pedido ao banco fica anotado em `globalThis.__pedidosBancada` (tipo, nome, instante): a medicao do
@@ -22,6 +22,8 @@ const cadeia = (tabela: string) => {
       return Promise.resolve({ data: e.um ? linhas[0] ?? null : linhas, error: null, count: total }).then(ok, falha);
     };
     return (...a: any[]) => {
+      /* CONC-PAINEL-02 — as colunas pedidas: a tela distingue duas leituras da mesma tabela (ex.: o elo arquivo→movimento × os movimentos) */
+      if (nome === 'select') e.sel = String(a[0] ?? '');
       if (nome === 'eq') e.eq[a[0]] = a[1];
       if (nome === 'in') e.in[a[0]] = a[1];
       if (nome === 'is') e.is[a[0]] = a[1];

@@ -25,13 +25,14 @@ import { abrirAbaDoDanfe, mostrarDanfe } from '@/lib/fiscal/abrirDanfe';
 import {
   ABAS_DA_RECEITA, arquivoDoXml, candidatoPreMarcado, dicaDoVenc, filtrarBusca, nomeDoXml, seloDaNota, tomDoVenc, totalDaLista,
   vencidaSemLancamento, fraseDaLigacao, type AbaDaReceita, type ClasseDoCandidato, type NotaNaLista,
+  MOTIVOS_IGNORAR, podeIgnorar, fraseDaIgnorada, type MotivoIgnorar, marcarLancadasAgora,
 } from '@/lib/fiscal/notasDaReceita';
 import { ehBemDeTerceiro } from '@/lib/fiscal/classeDaNota';
 import { Ajuda } from '@/components/ui/ajuda';
 import type { PreviaDoBem } from '@/hooks/useNotasDaReceita';
 
 /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — o que FAZER com cada classe (o "como fazer" do ⓘ) e a ação ligada da linha */
-type RespostaDoBem = PreviaDoBem | { ok: false; frase: string };
+export type RespostaDoBem = PreviaDoBem | { ok: false; frase: string };
 function oQueFazer(n: NotaNaLista): string {
   if (n.sit === 'venda_titular') return 'Confira no abate/venda (OC) do comprador. Não lance como compra.';
   if (n.sit === 'cancelada') return n.substituta ? `Use a NF ${n.substituta}, que a substituiu.` : 'Nada a lançar.';
@@ -103,6 +104,7 @@ const TH_NUM = cn(TH, 'text-right');
 const LINHA = 'h-[19px] border-b border-border/40';
 const BOTAO = 'h-[16px] rounded-[3px] px-1 text-[9.5px] leading-none';
 
+const SEM_CHAVES: ReadonlySet<string> = new Set();
 const brl = (c: number) => (c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dataBR = (s: string | null) => (s ? s.slice(0, 10).split('-').reverse().join('/') : '—');
 const horaBR = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -115,7 +117,7 @@ export function baixarArquivo(arquivo: File) {
 }
 
 export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita, abaInicial,
-  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null, ligarACompra }: {
+  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null, ligarACompra, ignorar, lancadasAgora }: {
   clienteNome?: string | null;
   dados: DadosDaReceita | undefined;
   carregando: boolean;
@@ -140,6 +142,10 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
    *  "Ver faturamento" de antes. `aoLigar` relê a lista (a remessa ligada passa a "Já no sistema"). */
   ligarACompra?: { clienteId: string; buscarFaturamento?: (titularId: string, chave: string) => Promise<{ ok: boolean; frase: string }>; aoLigar: () => void;
     /** a bancada injeta */ carregar?: Parameters<typeof LigarACompraDialog>[0]['carregar']; ligar?: Parameters<typeof LigarACompraDialog>[0]['ligar'] };
+  /** NOTA-IGNORAR-01 — ignorar / desfazer (devolvem a frase da recusa; null = gravou e quem chama relê a lista); sem ele, os botões não aparecem */
+  ignorar?: { ignorar: (n: NotaNaLista, motivo: MotivoIgnorar, texto: string | null) => Promise<string | null>; desfazer: (n: NotaNaLista) => Promise<string | null> };
+  /** NOTA-LANCAR-SEM-DELAY-01 — as chaves lançadas AGORA (saem do "A lançar" na hora; a releitura confere em segundo plano) */
+  lancadasAgora?: ReadonlySet<string>;
 }) {
   const [aba, setAba] = useState<AbaDaReceita>(abaInicial ?? 'todas');
   const [busca, setBusca] = useState('');
@@ -151,14 +157,17 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   const [bem, setBem] = useState<NotaNaLista | null>(null);
   const [ligando, setLigando] = useState<NotaNaLista | null>(null);
   const [soVencidas, setSoVencidas] = useState(false);
+  const [ignorando, setIgnorando] = useState<NotaNaLista | null>(null);
   /* NAV-VOLTA-ORIGEM-01 — a linha de onde saiu (e a de baixo dela): na volta, a linha fica destacada; se ela saiu da aba (lançou, vinculou),
      o destaque vai para a PRÓXIMA (o fluxo em série, sem reabrir nada) */
   const [origem, setOrigem] = useState<{ chave: string; proxima: string | null } | null>(null);
   const [voltou, setVoltou] = useState(false);
   const quadro = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (retorno && origem) setVoltou(true); }, [retorno?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* NOTA-LANCAR-SEM-DELAY-01 — do clique em Lançar até voltar: a linha diz "lançando…" e o Lançar fica desligado (nunca 2 cliques) */
+  const [lancando, setLancando] = useState<string | null>(null);
+  useEffect(() => { if (retorno && origem) setVoltou(true); setLancando(null); }, [retorno?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const todas = useMemo(() => filtrarBusca(dados?.lista ?? [], busca, titular), [dados, busca, titular]);
+  const todas = useMemo(() => filtrarBusca(marcarLancadasAgora(dados?.lista ?? [], lancadasAgora ?? SEM_CHAVES), busca, titular), [dados, busca, titular, lancadasAgora]);
   const filtro = ABAS_DA_RECEITA.find((a) => a.valor === aba)?.filtro ?? (() => true);
   const vencidas = todas.filter(vencidaSemLancamento).length;
   const filtradas = useMemo(() => todas.filter(filtro).filter((n) => !soVencidas || vencidaSemLancamento(n)), [todas, filtro, soVencidas]);
@@ -179,8 +188,20 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
 
   const comXml = async (n: NotaNaLista, fazer: (f: File) => void | Promise<void>) => {
     setOcupada(n.id); setAviso(null);
-    try { await fazer(arquivoDoXml(n.chave, await lerXml(n.id))); } catch (e) { setAviso(e instanceof Error ? e.message : 'Não consegui ler o XML.'); } finally { setOcupada(null); }
+    try { await fazer(arquivoDoXml(n.chave, await lerXml(n.id))); } catch (e) { setLancando(null); setAviso(e instanceof Error ? e.message : 'Não consegui ler o XML.'); } finally { setOcupada(null); }
   };
+  /* NOTA-IGNORAR-01 — "Desfazer" na aba Ignoradas: a nota volta para onde estava (a lista relê por quem chama) */
+  const desfazerIgnorar = async (n: NotaNaLista) => {
+    if (!ignorar) return;
+    setOcupada(n.id); setAviso(null);
+    try { const f = await ignorar.desfazer(n); setAviso(f ?? `NF ${n.numero} voltou para a lista.`); } finally { setOcupada(null); }
+  };
+  const botaoLancar = (n: NotaNaLista, podeLancar: boolean, largura: string) => (
+    <button type="button" className={cn(BOTAO, largura, 'whitespace-nowrap', podeLancar ? 'bg-[#E7C873] font-semibold text-foreground hover:bg-[#D9B95F]' : 'invisible')}
+      disabled={!podeLancar || ocupada === n.id || lancando === n.chave} data-testid="receita-lancar"
+      title='Abre o "Da nota fiscal" com este XML (o mesmo caminho do arquivo solto)'
+      onClick={() => { marcarOrigem(n); setLancando(n.chave); if (n.candidatos.length) setCasar(n); else void comXml(n, aoLancar); }}>Lançar</button>
+  );
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) aoFechar(); }}>
@@ -255,7 +276,8 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                         {n.tipo === 'completa' ? 'Completa' : 'Resumo'}{n.eventos.length ? <span className="text-muted-foreground"> +{n.eventos.length} ev.</span> : null}
                       </td>
                       <td className={TD_REGUA_TEXTO} title={n.titularNome}>{n.titularNome}</td>
-                      <td className={TD_REGUA} title={s.dica} onClick={fazer ? (e) => e.stopPropagation() : undefined}>
+                      <td className={TD_REGUA} title={n.ignorada ? `Ignorada: ${fraseDaIgnorada(n.ignorada)}` : s.dica} onClick={fazer ? (e) => e.stopPropagation() : undefined}
+                        data-testid={n.ignorada ? 'receita-ignorada-motivo' : undefined}>
                         <span className="inline-flex items-center gap-1">
                           <span className={cn('whitespace-nowrap rounded-full px-1.5 py-[1px] text-[9px] font-semibold', s.cor)} data-testid="receita-selo">{s.rotulo}</span>
                           {fazer && <Ajuda titulo={s.rotulo} oQueE={s.dica} porQue="Lido da própria nota (o CFOP e a natureza da operação), automático pelo XML." comoFazer={fazer} />}
@@ -264,6 +286,15 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                             <span className={cn('whitespace-nowrap rounded-full px-1 py-[1px] text-[8.5px] font-semibold ring-1',
                               n.demonstracao.por === 'fornecedor' ? 'bg-amber-50 text-amber-800 ring-amber-300' : 'bg-sky-50 text-sky-800 ring-sky-300')}
                               title={fraseDaLigacao(n.demonstracao)} data-testid="receita-da-demo">demo</span>
+                          )}
+                          {/* NOTA-LANCAR-SEM-DELAY-01 — "lançando…" (o Da nota fiscal aberto por esta linha) e "agora" (lançada nesta tela) */}
+                          {lancando === n.chave && !n.lancadaAgora && (
+                            <span className="whitespace-nowrap rounded-full bg-sky-50 px-1 py-[1px] text-[8.5px] font-semibold text-sky-800 ring-1 ring-sky-300"
+                              title="O Da nota fiscal desta nota está aberto" data-testid="receita-lancando">lançando…</span>
+                          )}
+                          {n.lancadaAgora && (
+                            <span className="whitespace-nowrap rounded-full bg-emerald-50 px-1 py-[1px] text-[8.5px] font-semibold text-emerald-800 ring-1 ring-emerald-300"
+                              title="Lançada agora nesta tela" data-testid="receita-lancada-agora">agora</span>
                           )}
                         </span>
                       </td>
@@ -287,12 +318,22 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                             <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
                               data-testid="receita-ver-faturamento" title={n.citadas.length ? `A NF de faturamento citada: ${n.citadas.join(', ')}` : 'A nota não cita o faturamento'}
                               onClick={() => setAberta(n)}>Ver faturamento</button>
-                          ) : (
-                          <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap', podeLancar ? 'bg-[#E7C873] font-semibold text-foreground hover:bg-[#D9B95F]' : 'invisible')}
-                            disabled={!podeLancar || ocupada === n.id} data-testid="receita-lancar"
-                            title='Abre o "Da nota fiscal" com este XML (o mesmo caminho do arquivo solto)'
-                            onClick={() => { marcarOrigem(n); if (n.candidatos.length) setCasar(n); else void comXml(n, aoLancar); }}>Lançar</button>
-                          )}
+                          ) : n.sit === 'ignorada' && ignorar ? (
+                            /* NOTA-IGNORAR-01 — a ignorada: "Desfazer" no mesmo lugar (92px) */
+                            <button type="button" className={cn(BOTAO, 'w-[92px] whitespace-nowrap border border-primary/40 bg-card font-semibold text-primary hover:bg-muted')}
+                              disabled={ocupada === n.id} data-testid="receita-desfazer-ignorar"
+                              title="Desfazer o ignorar: a nota volta para a lista em que estava" onClick={() => void desfazerIgnorar(n)}>Desfazer</button>
+                          ) : ignorar && podeIgnorar(n) ? (
+                            /* NOTA-IGNORAR-01 — os 92px viram Lançar (46) + Ignorar (42): nenhuma coluna muda de largura */
+                            <span className="flex w-[92px] items-center gap-1">
+                              {botaoLancar(n, podeLancar, 'w-[46px]')}
+                              <button type="button" className={cn(BOTAO, 'w-[42px] whitespace-nowrap border bg-card hover:bg-muted',
+                                n.sugestaoIgnorar && 'border-amber-400 font-semibold text-amber-800')}
+                                disabled={ocupada === n.id} data-testid="receita-ignorar" data-sugerido={n.sugestaoIgnorar ? '' : undefined}
+                                title={n.sugestaoIgnorar?.frase ?? 'Ignorar esta nota (compra pessoal, não é da operação, duplicada…): sai do "A lançar"'}
+                                onClick={() => setIgnorando(n)}>Ignorar</button>
+                            </span>
+                          ) : botaoLancar(n, podeLancar, 'w-[92px]')}
                           <button type="button" className={cn(BOTAO, 'w-[34px] border', temXml ? 'bg-card hover:bg-muted' : 'cursor-not-allowed text-muted-foreground/50')}
                             disabled={!temXml || ocupada === n.id} data-testid="receita-pdf"
                             title={temXml ? 'Abre o DANFE da nota numa aba (imprimir ou salvar em PDF)' : 'Sem XML ainda: só o resumo da Receita'}
@@ -331,8 +372,12 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
             buscarFaturamento={ligarACompra.buscarFaturamento} carregar={ligarACompra.carregar} ligar={ligarACompra.ligar}
             aoFechar={(ligou) => { setLigando(null); if (ligou) { setAviso('Remessas ligadas à compra: ficam nos documentos dos lançamentos (não somam no Documentado).'); ligarACompra.aoLigar(); } }} />
         )}
+        {ignorando && ignorar && (
+          <IgnorarNota n={ignorando} ignorar={(m, t) => ignorar.ignorar(ignorando, m, t)}
+            aoFechar={(feito) => { const n = ignorando; setIgnorando(null); if (feito) setAviso(`NF ${n.numero} ignorada: está na aba "Ignoradas" (Desfazer volta).`); }} />
+        )}
         {bem && registrarBem && <RegistrarBemDeTerceiro n={bem} registrar={registrarBem} aoFechar={(frase) => { setBem(null); if (frase) setAviso(frase); }} />}
-        {casar && <PodeEstarLancada n={casar} ocupada={ocupada === casar.id} aviso={aviso} aoFechar={() => setCasar(null)}
+        {casar && <PodeEstarLancada n={casar} ocupada={ocupada === casar.id} aviso={aviso} aoFechar={() => { setCasar(null); setLancando(null); }}
           aoLancarNova={() => { const n = casar; setCasar(null); void comXml(n, aoLancar); }}
           aoVincular={async (id) => {
             const n = casar;
@@ -470,8 +515,9 @@ function PodeEstarLancada({ n, ocupada, aviso, aoFechar, aoVincular, aoLancarNov
 
 /** NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro": a PRÉVIA pela nota (motivo, de quem, quando, os itens) e só grava no
  *  "Registrar" (a mesma RPC com p_simular). A recusa do banco fica escrita no modal. */
-function RegistrarBemDeTerceiro({ n, registrar, aoFechar }: {
-  n: NotaNaLista; registrar: (chave: string, previsao: string | null, observacao: string | null, simular: boolean) => Promise<RespostaDoBem>;
+export function RegistrarBemDeTerceiro({ n, registrar, aoFechar }: {
+  /* DA-NOTA-ETAPAS-01 — também do "+ Da nota" (a nota não financeira): só o que o modal lê da nota */
+  n: Pick<NotaNaLista, 'chave' | 'numero' | 'emitenteNaTabela'>; registrar: (chave: string, previsao: string | null, observacao: string | null, simular: boolean) => Promise<RespostaDoBem>;
   aoFechar: (frase: string | null) => void;
 }) {
   const [previa, setPrevia] = useState<RespostaDoBem | null>(null);
@@ -528,6 +574,65 @@ function RegistrarBemDeTerceiro({ n, registrar, aoFechar }: {
               setGravando(false);
               if (r.ok === false) setPrevia(r); else aoFechar(`Registrado: ${r.itens.length} ${r.itens.length === 1 ? 'bem' : 'bens'} da NF ${r.nf} em Bens de terceiros.`);
             }}>Registrar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* NOTA-IGNORAR-01 (Gabriel 23/11) — o modal pequeno do "Ignorar": motivo (Compra pessoal · Não é da operação · Duplicada · Outro + texto) →
+   a nota sai do "A lançar" para a aba "Ignoradas". Altura e largura FIXAS; a frase da sugestão e a da recusa têm lugar reservado. */
+function IgnorarNota({ n, ignorar, aoFechar }: {
+  n: NotaNaLista; ignorar: (motivo: MotivoIgnorar, texto: string | null) => Promise<string | null>; aoFechar: (feito: boolean) => void;
+}) {
+  const [motivo, setMotivo] = useState<MotivoIgnorar | ''>(n.sugestaoIgnorar?.motivo ?? '');
+  const [texto, setTexto] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  const [gravando, setGravando] = useState(false);
+  const falta = !motivo ? 'Escolha o motivo.' : motivo === 'outro' && !texto.trim() ? 'Em "Outro", escreva o motivo.' : null;
+  const gravar = async () => {
+    if (!motivo || falta) { setErro(falta); return; }
+    setGravando(true); setErro(null);
+    const f = await ignorar(motivo, texto.trim() || null);
+    setGravando(false);
+    if (f) setErro(f); else aoFechar(true);
+  };
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v && !gravando) aoFechar(false); }}>
+      <DialogContent className="flex h-[260px] w-[min(440px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0 [&>button]:top-2.5 [&>button]:text-primary-foreground"
+        data-testid="receita-ignorar-modal">
+        <div className="flex h-[34px] shrink-0 items-center bg-primary px-3 pr-10">
+          <DialogTitle className="truncate text-[11px] font-semibold text-primary-foreground">Ignorar a NF {n.numero}</DialogTitle>
+          <DialogDescription className="sr-only">A nota sai do A lançar e vai para a aba Ignoradas; Desfazer volta.</DialogDescription>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5 bg-muted p-3 text-[10.5px]">
+          <div className="grid h-[16px] grid-cols-[minmax(0,1fr)_110px] items-center gap-2">
+            <span className="truncate" title={n.emitenteNome ?? undefined}>{n.emitenteNome ?? '—'}</span>
+            <span className="text-right tabular-nums">{n.valorCent == null ? '—' : `R$ ${brl(n.valorCent)}`}</span>
+          </div>
+          {/* duas linhas RESERVADAS: a frase quebra, nunca corta (fora de tabela não há "…") */}
+          <span className="h-[28px] overflow-hidden text-[9.5px] leading-[14px] text-amber-800" data-testid="receita-ignorar-sugestao">
+            {n.sugestaoIgnorar?.frase ?? ''}
+          </span>
+          <div className="flex h-[16px] items-center gap-1 text-muted-foreground">
+            <span>Motivo</span>
+            <Ajuda titulo="Ignorar a nota" oQueE="A nota sai do “A lançar” e fica na aba “Ignoradas”, com o motivo, quem e quando."
+              porQue="Notas que não são da operação (compra pessoal, duplicada…) não devem ficar pedindo lançamento."
+              comoFazer="Escolha o motivo (em “Outro”, escreva qual). Para voltar, use “Desfazer” na aba Ignoradas." />
+          </div>
+          <Segmentado<MotivoIgnorar | ''> valor={motivo} onEscolher={(v) => { setMotivo(v); setErro(null); }} fonte={10}
+            opcoes={MOTIVOS_IGNORAR.map((m) => ({ valor: m.valor, rotulo: m.rotulo }))} />
+          <Input value={texto} onChange={(e) => { setTexto(e.target.value); setErro(null); }} maxLength={200} data-testid="receita-ignorar-texto"
+            placeholder={motivo === 'outro' ? 'Escreva o motivo' : 'Observação (opcional)'}
+            className={cn('h-[24px] bg-card px-1.5 text-[10px]', erro && motivo === 'outro' && !texto.trim() && 'border-destructive')} />
+          <span className="h-[28px] overflow-hidden text-[9.5px] leading-[14px] text-destructive" data-testid="receita-ignorar-erro">{erro ?? ''}</span>
+        </div>
+        <div className="flex h-[34px] shrink-0 items-center gap-2 border-t bg-card px-3">
+          <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">Desfazer na aba Ignoradas.</span>
+          <Button variant="outline" size="sm" className="h-[24px] text-[10px]" disabled={gravando} onClick={() => aoFechar(false)}>Cancelar</Button>
+          <Button size="sm" className="h-[24px] w-[64px] text-[10px]" disabled={gravando} onClick={() => void gravar()} data-testid="receita-ignorar-gravar">
+            {gravando ? '…' : 'Ignorar'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

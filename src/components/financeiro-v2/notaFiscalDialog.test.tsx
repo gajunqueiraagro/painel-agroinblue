@@ -76,13 +76,18 @@ vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 /* Ajuste 12 — a aba Itens da nota já lançada: os itens fiscais (guardados ou do arquivo) num hook só; o teste diz o que ele responde */
 const itensTela = vi.hoisted(() => ({ responder: (_o: { arquivo: File | null }): { nota: unknown; carregando: boolean } => ({ nota: null, carregando: false }) }));
 vi.mock('@/hooks/useItensDaNota', () => ({ useItensDaNotaDaTela: (o: { arquivo: File | null }) => itensTela.responder(o) }));
+/* DA-NOTA-ETAPAS-01 — o "Registrar bem de terceiro" do "+ Da nota" (a RPC de verdade vai ao banco) */
+const bem = vi.hoisted(() => ({ registrarBemDeTerceiro: vi.fn(async (..._a: unknown[]) => ({ ok: true as const, motivo: 'demonstracao', fornecedor: 'Agro Sintetica',
+  nf: '000.000.937', data: '2026-09-20', total: 1966.56, itens: [{ n: 1, descricao: 'Herbicida sintetico', quantidade: 1, valor: 1966.56 }] })) }));
+vi.mock('@/hooks/useNotasDaReceita', async (orig) => ({ ...(await orig<typeof import('@/hooks/useNotasDaReceita')>()), registrarBemDeTerceiro: bem.registrarBemDeTerceiro }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 const leitura = vi.hoisted(() => ({ lerNota: vi.fn() }));
 vi.mock('@/lib/financeiro/nfe/lerNota', () => leitura);
 /* P95 — o tamanho das paginas do PDF da chave digitada (o leitor de verdade carrega o pdfjs) */
 vi.mock('@/lib/financeiro/nfe/lerNotaPdf', () => ({ itensDoPdf: vi.fn(async () => ({ paginas: [[]], tamanhos: [{ largura: 595.28, altura: 841.89 }] })) }));
 /* P74 — os dias de vencimento do cartão (a RPC de verdade vai ao banco): o Elo sintético vence no dia 10 */
-const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async (_c: string): Promise<{ dia: number; lancamentos: number; ultimo: string }[]> => []) }));
+const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async (_c: string): Promise<{ dia: number; lancamentos: number; ultimo: string }[]> => []),
+  diasCadastradosDoCartao: vi.fn(async (_c: string): Promise<{ fechamento: number | null; vencimento: number | null }> => ({ fechamento: null, vencimento: null })) }));
 vi.mock('@/lib/financeiro/diasDoCartao', () => cartaoNoBanco);
 
 import { NotaFiscalDialog, fraseDoCompletar, quantidadeCurta, type NotaParaLancar } from './NotaFiscalDialog';
@@ -141,13 +146,16 @@ function montarNota(opcoes: { paginas?: ItemDoDanfe[][]; fornecedores?: Forneced
   /* P163-2 — o PDF escaneado que não trouxe itens legíveis (a NF 31776 da Vera) */
   semItens?: boolean;
   /* NOTA-FAZENDA-PELA-IE-01 — as fazendas que a leitura conhece (padrao: a Faz. Sintetica COM a IE da nota) */
-  fazendasDaLeitura?: { id: string; nome: string; ie: string | null; aliases?: string[] }[] } = {}): NotaParaLancar {
+  fazendasDaLeitura?: { id: string; nome: string; ie: string | null; aliases?: string[] }[];
+  /* DA-NOTA-ETAPAS-01 — os CFOPs da nota (a classe: 5912 demonstração, 1202 devolução, 5102 compra) */
+  cfops?: string[] } = {}): NotaParaLancar {
   const r = notaDoDanfe(opcoes.paginas ?? PAGINAS_DANFE_SINTETICO);
   if (r.ok === false) throw new Error(r.frase);
   /* nota de UMA parcela: a duplicata unica com o valor da nota */
   /* P162 — nota SEM duplicata (o molde do NJ: só a emissão, o pagamento é de outro dia) */
   if (opcoes.semDuplicata) { r.nota.duplicatas = []; r.nota.somaDuplicatasCent = 0; }
   if (opcoes.semItens) r.nota.itens = [];
+  if (opcoes.cfops) r.nota.cfops = opcoes.cfops;
   if (opcoes.umaParcela) { r.nota.duplicatas = [{ numero: '001', vencimento: '2026-10-20', valorCent: r.nota.totais.notaCent }]; r.nota.somaDuplicatasCent = r.nota.totais.notaCent; }
   const resolucao = resolverEmitente(r.nota.emitente, opcoes.fornecedores ?? [], null);
   const p = proporLancamento({ nota: r.nota, avisosDoLeitor: r.avisos, fazendas: opcoes.fazendasDaLeitura ?? [{ id: 'faz-1', nome: 'Faz. Sintetica', ie: '280000002' }], emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null });
@@ -204,10 +212,21 @@ async function abrir(...args: Parameters<typeof abrirSemEsperar>) {
   await waitFor(() => expect(screen.queryByTestId('nota-procurando')).toBeNull());
   return props;
 }
+/* DA-NOTA-ETAPAS-01 (Gabriel 19/11) — o Aplicar mora na etapa 4 Confirmar (nas 1–3, "Próximo ›" no lugar dele): o teste vai até ela; sem a
+   barra das etapas (a nota nova, o esqueleto), o botão de sempre */
+function botaoAplicar(paraClicar = false) {
+  const e4 = screen.queryByTestId('nota-etapa-lancamento');
+  const antes = screen.queryAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true');
+  if (e4 && antes !== e4 && !e4.hasAttribute('disabled')) fireEvent.click(e4);
+  const b = screen.getByTestId('nota-completar-revisar');
+  /* só OLHAR o estado: a tela volta à etapa em que estava (o elemento fica com o retrato do estado); para CLICAR, fica na 4 */
+  if (!paraClicar && antes && antes !== e4) fireEvent.click(antes);
+  return b;
+}
 async function escolherSubcentro(nome: string) {
   /* mock da nota já lançada (29/10) — o seletor da que NASCE mora na aba "Lançamento"; sem parcela a criar, no "Para todas" do "Como vai ficar" */
   const abas = screen.queryByTestId('nota-abas-ja');
-  if (!screen.queryByTestId('nota-subcentro') && abas) fireEvent.click(within(abas).getByText(/Lançamento/));
+  if (!screen.queryByTestId('nota-subcentro') && abas) fireEvent.click(within(abas).getByText(/Confirmar/));
   if (!screen.queryByTestId('nota-subcentro') && abas) fireEvent.click(within(abas).getByText(/Como vai ficar/));
   /* SELETOR-CONTA-POR-ATIVIDADE-01 — o subcentro da previa e' o `EscolherConta` (o gatilho e' o combobox do seletor do plano) */
   fireEvent.click(within(await screen.findByTestId('nota-subcentro')).getByRole('combobox'));
@@ -544,15 +563,24 @@ const QUATRO = [jaLancado(1, '2026-10-20', 'realizado'), jaLancado(2, '2026-11-2
 
 /* P128b — "Revisar e completar" → a prévia campo a campo → gravar (a prévia confere com o banco antes de liberar o botão) */
 /* Gabriel 29/10 10:38 — UM botão: o "Aplicar: …" do rodapé grava de qualquer aba (a prévia "Como vai ficar" fica montada e confere antes) */
+/* DA-NOTA-ETAPAS-01 — o `waitFor` NUNCA clica: o callback dele roda de novo a CADA mudança do DOM, e trocar de etapa muda o DOM — o `botaoAplicar()`
+   dentro dele virava um laço sem fim de microtarefas (o teste nunca terminava, nem o tempo-limite disparava). Vai à etapa 4 uma vez, espera, volta. */
+async function esperarOAplicar(conferir: (b: HTMLElement) => void, ficar = false) {
+  const e4 = screen.queryByTestId('nota-etapa-lancamento');
+  const antes = [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find((x) => x.getAttribute('aria-selected') === 'true');
+  if (e4 && antes !== e4 && !e4.hasAttribute('disabled')) fireEvent.click(e4);
+  await waitFor(() => conferir(screen.getByTestId('nota-completar-revisar')));
+  if (!ficar && antes && antes !== e4) fireEvent.click(antes);
+}
 async function completarPelaPrevia() {
   const pv = await screen.findByTestId('previa-completar');
-  await waitFor(() => expect(screen.getByTestId('nota-completar-revisar')).toBeEnabled());
-  fireEvent.click(screen.getByTestId('nota-completar-revisar'));
+  await esperarOAplicar((b) => expect(b).toBeEnabled(), true);
+  fireEvent.click(botaoAplicar(true));
   return pv;
 }
-/* a nota já lançada abre em "No sistema hoje"; a tabela da ação por parcela é a aba "Parcelas × sistema" */
+/* DA-NOTA-ETAPAS-01 — a tabela da ação por parcela é a etapa 1 "O que já existe" (o "No sistema hoje" entrou nela) */
 async function naAbaParcelas() {
-  fireEvent.click(within(await screen.findByTestId('nota-abas-ja')).getByText(/Parcelas × sistema/));
+  fireEvent.click(within(await screen.findByTestId('nota-abas-ja')).getByText(/O que já existe/));
   return screen.findByTestId('nota-ja-lancada');
 }
 const pedidoGravado = () => {
@@ -578,7 +606,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const pedido = consultas.notaJaLancada.mock.calls[0][1] as { parcelas: { n: number; vencimento: string; valorCent: number }[]; chave: string };
     expect(pedido.parcelas).toEqual([1, 2, 3, 4].map((n, i) => ({ n, vencimento: ['2026-10-20', '2026-11-20', '2026-12-20', '2027-01-20'][i], valorCent: 49164 })));
     expect(pedido.chave).toBe('50260911222333000424550100000009371217538298');
-    expect(screen.getByTestId('nota-completar-revisar').textContent).toMatch(/^Aplicar: vincular \d+$/);
+    expect(botaoAplicar().textContent).toMatch(/^Aplicar: vincular \d+$/);
     await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     /* P128b — uma gravação só: os 4, sem juntar (já são um parcelamento); depois a nota; o que nasceu registrado na operação */
@@ -630,7 +658,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     await naAbaParcelas();
     await escolherSubcentro('Nutrição Engorda');
     await waitFor(() => expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: conta'));
-    expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+    expect(botaoAplicar()).toBeDisabled();
   });
   it('N1 uma irmã sem conta: também "Falta: conta" (nunca nasce vazia calada)', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [QUATRO[0], { ...QUATRO[1], contaBancariaId: null }, QUATRO[2]] });
@@ -639,7 +667,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     await naAbaParcelas();
     await escolherSubcentro('Nutrição Engorda');
     await waitFor(() => expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: conta'));
-    expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+    expect(botaoAplicar()).toBeDisabled();
   });
   /* P167 (NOTA-COMPRA-ERRADA-01) — a nota que a compra JÁ TEM (o PDF de antes, sem chave: achado pelo emitente + nº) só se LIGA às parcelas;
      nunca nasce um segundo documento da mesma nota (o 32ffd9af do NJ) */
@@ -688,7 +716,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect((await screen.findByTestId('nota-recusa-compra')).textContent).toBe('⚠ Soma passa da nota. Nada gravado.');
     expect(screen.getByTestId('nota-recusa-compra').getAttribute('title'))
       .toBe('As parcelas que receberiam a nota somam R$ 2.458,21, mais que a nota (R$ 1.966,56). Confira se todas são desta compra.');
-    expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+    expect(botaoAplicar()).toBeDisabled();
   });
   it('P167 duas compras do mesmo fornecedor: a outra compra fica de fora (o chip diz) e não recebe a nota', async () => {
     const outra = QUATRO.map((x, i) => ({ ...x, id: `outra-${i + 1}`, financiamentoId: 'fin-outra', parcelas: [], por: ['soma' as const, 'fracao' as const] }));
@@ -713,7 +741,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     await naAbaParcelas();
     const acoes = screen.getAllByTestId('nota-acao');
     expect(acoes.filter((b) => b.getAttribute('data-acao') === 'deixar').map((b) => b.textContent)).toEqual(['Fica de fora▾', 'Fica de fora▾', 'Fica de fora▾']);
-    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 4');
+    expect(botaoAplicar().textContent).toBe('Aplicar: vincular 4');
     await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
@@ -729,7 +757,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     fireEvent.keyDown(screen.getAllByTestId('nota-acao')[1], { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('nota-acao-excluir'));
     expect(screen.getAllByTestId('nota-ja-lancada-efeito')[1].getAttribute('title')?.split(' · documento hoje:')[0]).toBe('é cancelado (duplicata), com o motivo na trilha');
-    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 3 e excluir 1');
+    expect(botaoAplicar().textContent).toBe('Aplicar: vincular 3 e excluir 1');
     await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['velho-1', 'velho-3', 'velho-4']);
@@ -745,7 +773,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     /* a 3ª difere 1 centavo da nota (49165 × 49164): só ela oferece Substituir */
     fireEvent.keyDown(screen.getAllByTestId('nota-acao')[2], { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('nota-acao-substituir'));
-    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 3 e substituir 1');
+    expect(botaoAplicar().textContent).toBe('Aplicar: vincular 3 e substituir 1');
     await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     const pedido = pedidoGravado().pedido;
@@ -775,8 +803,8 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     /* P163 v4 — a coluna Fornecedor aparece porque o da nota DIFERE do de hoje (o cadastro parecido) */
     expect((await within(pv).findByTestId('previa-coluna-favorecido')).getAttribute('data-state')).toBe('unchecked');
     fireEvent.click(within(pv).getByTestId('previa-coluna-favorecido'));
-    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar')).toBeEnabled());
-    fireEvent.click(screen.getByTestId('nota-completar-revisar'));
+    await esperarOAplicar((b) => expect(b).toBeEnabled());
+    fireEvent.click(botaoAplicar(true));
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     expect(pedidoGravado().pedido.map((x) => x.favorecido_id)).toEqual(['f1', 'f1', 'f1', 'f1']);
     expect(g.trocarFornecedor).not.toHaveBeenCalled();
@@ -794,7 +822,8 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(screen.queryByTestId('nota-abas-ja')).toBeNull();
     fireEvent.keyDown(screen.getByTestId('nota-mais'), { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('nota-mais-voltar-completar'));
-    expect(await screen.findByTestId('nota-completar-revisar')).toBeInTheDocument();
+    await screen.findByTestId('nota-abas-ja');
+    await esperarOAplicar((b) => expect(b).toBeInTheDocument());
     expect(screen.queryByTestId('nota-criar-duplicando')).toBeNull();
     expect(g.gravar).not.toHaveBeenCalled();
   });
@@ -811,7 +840,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(parc.getAttribute('title')).toBe('parcela ? de 4 da nota: 4 × R$ 491,64 = R$ 1.966,56 (qual das 4, a nota não diz)');
     expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('1 de 4 parcelas desta nota já estão lançadas (R$ 491,64 cada)');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
-    expect(screen.getByTestId('nota-completar-revisar').textContent).toMatch(/^Aplicar: vincular \d+$/);
+    expect(botaoAplicar().textContent).toMatch(/^Aplicar: vincular \d+$/);
   });
   /* NOTA-CONTAS-NA-CRIACAO-01 D (P76) — os lancamentos antigos da nota foram CANCELADOS (o caso de 23/10): aparecem cinza, no fim, com o
      selo, e nunca contam */
@@ -829,7 +858,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(linhas[5].textContent).not.toContain('agendado');
     expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('4 de 4 parcelas desta nota já estão lançadas');
     expect(screen.getByTestId('nota-ja-lancada-resumo').getAttribute('title')).toContain('2 cancelados (não contam)');
-    expect(screen.getByTestId('nota-completar-revisar').textContent).toMatch(/^Aplicar: vincular \d+$/);
+    expect(botaoAplicar().textContent).toMatch(/^Aplicar: vincular \d+$/);
   });
   /* P128a (porta 2) — a previa aberta pelo Documentos do Editar lancamento, partindo dele */
   it('porta 2: o lançamento aberto achado é "este lançamento" na tabela; "No Novo lançamento" some (o lugar fica)', async () => {
@@ -924,7 +953,7 @@ describe('P95 — a nota achada em N parcelas soltas (as irmas da fracao)', () =
       .toBe('4 lançamentos soltos desta nota · soma R$ 1.966,52 × nota R$ 1.966,56 (diferença R$ 0,04) · achados pelo nº da nota · 4 conciliadas');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
     /* P128b — as 4 soltas achadas inteiras: a prévia JUNTA e padroniza numa gravação só */
-    expect([screen.getByTestId('nota-juntar-caixa').getAttribute('data-state'), screen.getByTestId('nota-completar-revisar').textContent]).toEqual(['checked', 'Aplicar: vincular 4']);
+    expect([screen.getByTestId('nota-juntar-caixa').getAttribute('data-state'), botaoAplicar().textContent]).toEqual(['checked', 'Aplicar: vincular 4']);
   });
 });
 
@@ -1001,7 +1030,7 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     const frase = await screen.findByTestId('nota-juntar-frase');
     expect([frase.textContent, frase.getAttribute('title')]).toEqual(['⚠ não junta (faltam ou sobram)', 'Não junto: a nota tem 4 duplicatas e achei 3 no sistema (confira as que faltam).']);
     expect(screen.getAllByTestId('nota-ja-lancada-efeito')[3].textContent).toBe('não é criada');
-    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 3');
+    expect(botaoAplicar().textContent).toBe('Aplicar: vincular 3');
   });
   /* mock da nota já lançada (29/10) — "Deixar como está" na linha: a parcela não recebe a nota, sai do pedido e do anexar; não junta e DIZ */
   it('LR3 "Deixar como está" numa achada: sai do pedido e do anexar; o Resultado conta; não junta (a frase); o Aplicar diz quantas', async () => {
@@ -1020,7 +1049,7 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     expect(screen.getByTestId('nota-resultado').textContent).toContain('1 fica');
     expect([screen.getByTestId('nota-juntar-frase').textContent, screen.getByTestId('nota-juntar-frase').getAttribute('title')])
       .toEqual(['⚠ não junta (uma fica como está)', 'Não junto: 1 parcela fica como está (não recebe a nota).']);
-    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 3');
+    expect(botaoAplicar().textContent).toBe('Aplicar: vincular 3');
     await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     const { pedido, opcoes } = pedidoGravado();
@@ -1044,12 +1073,13 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     expect(efeito.textContent).toContain('talvez esta?');
     expect(efeito.getAttribute('title')).toContain('talvez já lançado: o mesmo valor do fornecedor');
     expect(screen.getAllByTestId('nota-acao').map((b) => b.getAttribute('data-acao'))).toContain('deixar');
-    expect(screen.getByTestId('nota-completar-revisar').textContent).not.toMatch(/vincular/);
+    /* DA-NOTA-ETAPAS-01 — o Aplicar mora na etapa 4 Confirmar */
+    expect(botaoAplicar().textContent).not.toMatch(/vincular/);
     const acao = screen.getAllByTestId('nota-acao').find((b) => b.getAttribute('data-acao') === 'deixar');
     if (!acao) throw new Error('o talvez não nasceu fica de fora');
     fireEvent.keyDown(acao, { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('nota-acao-vincular'));
-    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 1'));
+    await esperarOAplicar((b) => expect(b.textContent).toBe('Aplicar: vincular 1'), true);
     await waitFor(() => expect(screen.getByTestId('nota-completar-revisar')).toBeEnabled());
     fireEvent.click(screen.getByTestId('nota-completar-revisar'));
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
@@ -1060,20 +1090,21 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     consultas.comoEstaoHoje.mockResolvedValueOnce({ ok: true, valor: [{ id: 'gulart-1', fazendaId: 'faz-2', subcentro: 'Benefícios sinteticos', favorecidoId: null, planoContaId: 'pl-nut', safraId: null }] });
     const { comoGravadores } = gravadoresFalsos();
     const props = await abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj: falsos().gj });
-    expect(within(await screen.findByTestId('nota-abas-ja')).getByText(/No sistema hoje/).textContent).toContain('No sistema hoje (1)');
-    const linha = await screen.findByTestId('nota-hoje-linha');
+    expect((await screen.findByTestId('nota-etapa-sistema-detalhe')).textContent).toBe('1 achado');
+    const linha = await screen.findByTestId('nota-ja-lancada-linha');
     /* acerto 1 — a fazenda pelo CÓDIGO; o nome só no title */
-    await waitFor(() => expect(within(linha).getByTestId('nota-hoje-fazenda').textContent).toBe('FSD'));
+    /* DA-NOTA-ETAPAS-01 — "Faz.·Ativ." numa coluna: o código da fazenda e a atividade da conta */
+    await waitFor(() => expect(within(linha).getByTestId('nota-hoje-fazenda').textContent).toBe('FSD · Pec.'));
     expect(within(linha).getByTestId('nota-hoje-fazenda').getAttribute('title')).toBe('Faz. Sintetica Dois');
-    expect(['nota-hoje-descricao', 'nota-hoje-conta', 'nota-hoje-subcentro', 'nota-hoje-valor', 'nota-hoje-status'].map((t) => within(linha).getByTestId(t).textContent))
+    expect(['nota-ja-lancada-descricao', 'nota-ja-lancada-conta', 'nota-hoje-subcentro', 'nota-ja-lancada-valor-sistema', 'nota-ja-lancada-situacao'].map((t) => within(linha).getByTestId(t).textContent))
       .toEqual(['Compra cantina sintetica', 'Sicredi Lavoura', 'Benefícios sinteticos', '1.966,56', 'programada']);
     expect(consultas.comoEstaoHoje.mock.calls.at(-1)?.[1]).toEqual(['gulart-1']);
     expect((await naAbaParcelas()) && screen.getAllByTestId('nota-ja-lancada-linha')).toHaveLength(1);
     expect(screen.getByTestId('nota-ja-lancada-col-acao').style.width).toBe('74px');   // sem a linha à vista, a coluna Ação de sempre
     expect(screen.queryByTestId('nota-caminhos')).toBeNull();
-    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar')).toBeEnabled());
-    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 1');
-    fireEvent.click(screen.getByTestId('nota-completar-revisar'));
+    await esperarOAplicar((b) => expect(b).toBeEnabled());
+    expect(botaoAplicar().textContent).toBe('Aplicar: vincular 1');
+    fireEvent.click(botaoAplicar(true));
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['gulart-1']);
     expect(screen.queryByRole('dialog', { name: /O que a nota muda/ })).toBeNull();
@@ -1085,8 +1116,10 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     const criarUrl = vi.fn(() => 'blob:nota');
     Object.assign(URL, { createObjectURL: criarUrl, revokeObjectURL: vi.fn() });
     await abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: gravadoresFalsos().comoGravadores, gj: falsos().gj });
-    expect(screen.getByTestId('nota-selo-arquivo').textContent).toBe('PDF lido');
-    fireEvent.click(screen.getByTestId('nota-abrir-visualizador'));
+    /* DA-NOTA-ETAPAS-01 — a coluna Arquivo virou o chip "PDF · Nota lida 👁 Ver" (abre o visualizador) e o "O PDF numa aba nova" */
+    expect(screen.getByTestId('nota-chip-pdf').textContent).toContain('Nota lida');
+    expect(screen.queryByTestId('nota-bloco-arquivo')).toBeNull();
+    fireEvent.click(screen.getByTestId('nota-chip-pdf'));
     const v = await screen.findByTestId('visualizador-documento');
     expect(['visualizador-menos', 'visualizador-mais', 'visualizador-largura', 'visualizador-pagina', 'visualizador-girar', 'visualizador-pagina-n', 'visualizador-nova-aba']
       .every((t) => within(v).queryByTestId(t))).toBe(true);
@@ -1117,14 +1150,14 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     await naAbaParcelas();
     expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('à vista no cartão em 10 parcelas e achei 3');
     expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('faltam 7: diga a posição delas no cartão para seguir.');
-    expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+    expect(botaoAplicar()).toBeDisabled();
     expect(screen.getByTestId('nota-cartao-falta-posicao')).toBeTruthy();
     fireEvent.click(within(screen.getByTestId('nota-cartao-pergunta')).getByText(/pela descrição: 6, 7, 8/));
     await waitFor(() => expect(screen.getAllByTestId('nota-ja-lancada-linha')).toHaveLength(10));
     expect(screen.getAllByTestId('nota-ja-lancada-parc').map((x) => x.textContent)).toEqual(['1/10', '2/10', '3/10', '4/10', '5/10', '6/10', '7/10', '8/10', '9/10', '10/10']);
     expect(screen.getByTestId('nota-juntar-caixa').getAttribute('data-state')).toBe('checked');
     await escolherSubcentro('Nutrição Engorda');
-    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 3 e criar 7'));
+    await esperarOAplicar((b) => expect(b.textContent).toBe('Aplicar: vincular 3 e criar 7'));
     await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     const criadas = g.lancamento.mock.calls.map(([f]) => [f.conta_bancaria_id, f.data_vencimento, String(f.descricao).slice(-5).trim()]);
@@ -1153,7 +1186,7 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     expect(screen.queryByTestId('nota-cartao-pergunta')).toBeNull();
     expect(screen.getAllByTestId('nota-ja-lancada-parc').map((x) => x.textContent)).toEqual(['1/3', '2/3', '3/3']);
     await escolherSubcentro('Nutrição Engorda');
-    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Aplicar: vincular 1 e criar 2'));
+    await esperarOAplicar((b) => expect(b.textContent).toBe('Aplicar: vincular 1 e criar 2'));
     await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     expect(g.lancamento.mock.calls.map(([f]) => [f.data_vencimento, Math.round(Number(f.valor) * 100), String(f.descricao).slice(-3)]))
@@ -1186,7 +1219,7 @@ describe('P96a + P128b — juntar as soltas e completar pela prévia campo a cam
     await abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj: falsos().gj });
     /* a recusa da prévia fica no rodapé do modal (o botão único apaga) */
     expect((await screen.findByTestId('nota-previa-impede')).textContent).toBe('⚠ O mês 09/2026 está fechado: reabra antes de mudar «Tinta».');
-    expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+    expect(botaoAplicar()).toBeDisabled();
     expect(consultas.completarComANota.mock.calls.some((x) => x[2].simular === false)).toBe(false);
   });
   it('J3 a gravação recusada DEPOIS de criar a que falta: a recém-criada é CANCELADA (nada pela metade) e a frase fica na prévia', async () => {
@@ -1396,7 +1429,7 @@ describe('P146 — consulta que falha trava o Criar', () => {
     const olhar = new MutationObserver(() => { for (const t of QUADROS_DA_TELA_ANTIGA) if (document.querySelector(`[data-testid="${t}"]`) && t !== 'nota-ja-lancada') vistos.add(t); });
     olhar.observe(document.body, { childList: true, subtree: true });
     await act(async () => { responder({ ok: true, valor: QUATRO }); });
-    await screen.findByTestId('nota-aba-hoje');
+    await screen.findByTestId('nota-ja-lancada');
     olhar.disconnect();
     expect([...vistos]).toEqual([]);
   });
@@ -1428,18 +1461,17 @@ describe('P163-2 — a nota já lançada em abas', () => {
     const { comoGravadores } = gravadoresFalsos();
     await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await naAbaParcelas();
-    expect(within(screen.getByTestId('nota-abas-ja')).getByText(/Parcelas × sistema/).textContent).toContain('Parcelas × sistema');
-    expect(within(screen.getByTestId('nota-abas-ja')).getByText(/No sistema hoje/).textContent).toContain('No sistema hoje (4)');
+    expect(screen.getByTestId('nota-etapa-sistema').getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('nota-etapa-sistema-detalhe').textContent).toBe('4 achados');
     expect(screen.queryByTestId('nota-caminhos')).toBeNull();
     /* mock da nota já lançada (29/10): Nota e Fornecedor FIXOS em cima, em toda aba; o Resultado fixo acima do rodapé */
     expect([!!screen.queryByTestId('nota-bloco-nota'), !!screen.queryByTestId('nota-bloco-fornecedor'), !!screen.queryByTestId('nota-resultado')]).toEqual([true, true, true]);
     abaJa(/Itens/);
     expect([!!screen.queryByTestId('nota-bloco-nota'), !!screen.queryByTestId('nota-ja-lancada'), !!screen.queryByTestId('nota-bloco-lancamento')]).toEqual([true, false, false]);
-    expect(within(screen.getByTestId('nota-abas-ja')).getByText(/Parcelas × sistema/).textContent).toContain('✓');
-    abaJa(/Lançamento/);
+    expect(screen.getByTestId('nota-etapa-sistema').hasAttribute('data-feita')).toBe(true);
+    abaJa(/Confirmar/);
     expect(screen.getByTestId('nota-nada-a-criar').textContent).toContain('todas as parcelas da nota já estão no sistema');
-    abaJa(/Parcelas × sistema/);
-    fireEvent.click(screen.getByTestId('nota-completar-revisar'));
+    abaJa(/Como vai ficar/);
     const ficar = await screen.findByTestId('nota-aba-ficar');
     expect(within(ficar).getByTestId('previa-completar')).toBeTruthy();
     /* P163 v4 — o "Para todas" é a 1ª linha da grade; sem parcela que falte, o bloco Lançamento não aparece */
@@ -1452,7 +1484,7 @@ describe('P163-2 — a nota já lançada em abas', () => {
     const { comoGravadores } = gravadoresFalsos();
     await abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await naAbaParcelas();
-    fireEvent.click(screen.getByTestId('nota-completar-revisar'));
+    fireEvent.click(botaoAplicar(true));
     const caixa = within(await screen.findByTestId('nota-atualizar-nao-pagas')).getByRole('checkbox');
     fireEvent.click(caixa);
     await waitFor(() => expect(consultas.completarComANota.mock.calls.some((c) => c[1].some((x) => 'data_vencimento' in x))).toBe(true));
@@ -1467,7 +1499,7 @@ describe('P163-2 — a nota já lançada em abas', () => {
       numero: '937', serie: '10', emissao: '2026-09-15', natureza: 'VENDA', regime: '3', emitenteDocumento: CNPJ, emitenteNome: 'EMITENTE SINTETICO' } } : null, carregando: false });
     const props = await abrir(nota, { g: comoGravadores });
     await naAbaParcelas();
-    abaJa(/Itens \(/);
+    abaJa(/Itens da nota/);
     expect(screen.getByTestId('nota-sem-itens').textContent).toBe('A nota não trouxe itens legíveis.');
     expect(screen.queryByTestId('nota-bloco-itens')).toBeNull();   // a versão SIMPLES nunca, no caminho da já lançada
     /* outra nota: a frase, nada guardado */
@@ -1488,7 +1520,7 @@ describe('P163-2 — a nota já lançada em abas', () => {
     itensTela.responder = () => ({ nota: null, carregando: true });
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
     await abrir(montarNota({ fornecedores: [FORN] }), { g: gravadoresFalsos().comoGravadores });
-    abaJa(/Itens \(/);
+    abaJa(/Itens da nota/);
     expect([!!screen.queryByTestId('nota-itens-carregando'), !!screen.queryByTestId('nota-bloco-itens'), !!screen.queryByTestId('nota-item')]).toEqual([true, false, false]);
     itensTela.responder = () => ({ nota: null, carregando: false });
   });
@@ -1631,5 +1663,71 @@ describe('NOTA-ATUALIZA-PREVISTO-01 — a nota atualiza o previsto', () => {
     await escolherEEsta();
     expect(screen.queryByTestId('nota-resultado-atualiza')).toBeNull();
     expect((await screen.findByTestId('nota-recusa-compra')).textContent).toBe('⚠ Soma passa da nota. Nada gravado.');
+  });
+});
+
+describe('DA-NOTA-ETAPAS-01 — a nota NÃO FINANCEIRA troca o botão (Gabriel 19/11 08:03, a NF 7.891 de demonstração; SINTÉTICO)', () => {
+  it('NF1 nota nova de DEMONSTRAÇÃO: não passa ao Novo lançamento; o principal é "Guardar a nota" (grava a nota pela chave e fecha); nada de lançamento', async () => {
+    const props = await abrir(montarNota({ fornecedores: [FORN], cfops: ['5912'] }));
+    expect(screen.getByTestId('nota-nao-gera-faixa').textContent).toContain('demonstração');
+    expect(screen.getByTestId('nota-nao-gera')).toBeTruthy();
+    expect(screen.queryByTestId('nota-abrir-no-lancamento')).toBeNull();
+    expect(screen.getByTestId('nota-registrar-bem').className).not.toContain('invisible');
+    expect(screen.getAllByTestId('nota-nao-gera-item').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByTestId('nota-guardar'));
+    await waitFor(() => expect(props.onClose).toHaveBeenCalledTimes(1));
+    expect(props.gravarItens).toHaveBeenCalledTimes(1);
+    expect(props.onAbrirNoLancamento).not.toHaveBeenCalled();
+  });
+  it('NF2 "É uma compra mesmo?" pede o motivo; com ele, o Novo lançamento abre UMA vez com a nota e o motivo na observação', async () => {
+    const props = await abrir(montarNota({ fornecedores: [FORN], cfops: ['5912'] }));
+    fireEvent.click(screen.getByTestId('nota-compra-mesmo'));
+    expect(screen.getByTestId('nota-compra-mesmo-confirmar')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('nota-compra-mesmo-motivo'), { target: { value: 'comprou o bem depois da demonstração' } });
+    fireEvent.click(screen.getByTestId('nota-compra-mesmo-confirmar'));
+    await waitFor(() => expect(props.onAbrirNoLancamento).toHaveBeenCalledTimes(1));
+    expect(props.onAbrirNoLancamento.mock.calls[0][0].observacao).toBe('Lançado como compra mesmo sendo nota de demonstração: comprou o bem depois da demonstração');
+    expect(props.gravarItens).not.toHaveBeenCalled();
+  });
+  it('NF3 DEVOLUÇÃO: "Registrar bem de terceiro" fica no lugar, apagado (só demonstração, comodato ou conserto); a recusa do Guardar fica escrita e o modal não fecha', async () => {
+    const nota = montarNota({ fornecedores: [FORN], cfops: ['1202'] });
+    const props = await abrir(nota);
+    expect(screen.getByTestId('nota-nao-gera-faixa').textContent).toContain('devolução');
+    const b = screen.getByTestId('nota-registrar-bem');
+    expect([b.className.includes('invisible'), b.hasAttribute('disabled')]).toEqual([true, true]);
+    expect(screen.getByTestId('nota-nao-gera-bem').textContent).toContain('Só demonstração, comodato ou conserto.');
+    props.gravarItens.mockResolvedValueOnce('chave já guardada em outro cliente');
+    fireEvent.click(screen.getByTestId('nota-guardar'));
+    expect((await screen.findByTestId('nota-erro')).textContent).toBe('⚠ A nota não foi guardada: chave já guardada em outro cliente');
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+  it('NF4 COMPRA (5102): nada muda — a nota nova passa ao Novo lançamento como sempre, sem os botões da nota não financeira', async () => {
+    const props = abrirSemEsperar(montarNota({ fornecedores: [FORN], cfops: ['5102'] }));
+    await waitFor(() => expect(props.onAbrirNoLancamento).toHaveBeenCalledTimes(1));
+    expect([screen.queryByTestId('nota-guardar'), screen.queryByTestId('nota-compra-mesmo'), screen.queryByTestId('nota-nao-gera-faixa')]).toEqual([null, null, null]);
+  });
+  it('NF5 já no sistema + demonstração: na etapa 4 o principal é "Guardar a nota" e a checagem diz por quê; "É uma compra mesmo?" (motivo) devolve o Aplicar', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
+    await abrir(montarNota({ fornecedores: [FORN], cfops: ['5912'] }));
+    fireEvent.click(screen.getByTestId('nota-etapa-lancamento'));
+    expect(screen.getByTestId('nota-guardar').textContent).toBe('Guardar a nota (não gera lançamento)');
+    expect(screen.queryByTestId('nota-completar-revisar')).toBeNull();
+    const ck = () => screen.getAllByTestId('nota-confirmar-checagem').map((x) => x.textContent ?? '');
+    expect(ck()[0]).toContain('Nota de demonstração: não gera lançamento');
+    fireEvent.click(screen.getByTestId('nota-compra-mesmo'));
+    fireEvent.change(screen.getByTestId('nota-compra-mesmo-motivo'), { target: { value: 'é a compra do bem' } });
+    fireEvent.click(screen.getByTestId('nota-compra-mesmo-confirmar'));
+    await waitFor(() => expect(screen.getByTestId('nota-completar-revisar')).toBeTruthy());
+    expect(screen.queryByTestId('nota-guardar')).toBeNull();
+    expect(ck()[0]).toContain('Nota de demonstração aplicada como compra: é a compra do bem');
+  });
+  it('NF6 "Registrar bem de terceiro" abre o MESMO modal da lista da Receita (a prévia pela chave da nota)', async () => {
+    await abrir(montarNota({ fornecedores: [FORN], cfops: ['5912'] }));
+    bem.registrarBemDeTerceiro.mockClear();
+    fireEvent.click(screen.getByTestId('nota-registrar-bem'));
+    expect(await screen.findByTestId('receita-bem')).toBeTruthy();
+    await waitFor(() => expect(bem.registrarBemDeTerceiro).toHaveBeenCalledTimes(1));
+    const [cli, chave, prev, obs, simular] = bem.registrarBemDeTerceiro.mock.calls[0];
+    expect([cli, String(chave).length, prev, obs, simular]).toEqual(['cli', 44, null, null, true]);
   });
 });

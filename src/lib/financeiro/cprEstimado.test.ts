@@ -135,7 +135,8 @@ describe('uma regra só, e a tela só desenha (lido da FONTE)', () => {
     expect(f).toContain('<span data-testid="cpr-selo-estimado" title={tituloDoSeloDaLinha(l.id)} className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700"> estimado </span>');
     expect(fonte('src/lib/financeiro/estimadosDaCpr.ts')).toContain("recorrencia: 'valor estimado pela recorrência · informe o valor do mês no lançamento',");
     /* P152: a linha virou `div role="button"` (cursor próprio); a altura e a fonte são as mesmas */
-    expect(f).toContain("'flex h-[18px] w-full shrink-0 cursor-pointer items-center gap-1 border-b px-3 text-left text-[10px]',");
+    /* CPR-LAYOUT-03: a linha a 12px (o mock) em 20px de altura — fixa, o selo de 14px cabe */
+    expect(f).toContain("'flex h-[20px] w-full shrink-0 cursor-pointer items-center gap-1 border-b px-3 text-left', FONTE_LINHA,");
   });
   it('o aviso de leitura INCOMPLETA (teto das ocorrências estimadas) é escrito no title do selo, dos dois totais e do cartão', () => {
     const f = fonte('src/components/financeiro-v2/ContasPagarReceberTab.tsx');

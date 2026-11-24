@@ -5,6 +5,9 @@
  * e o "não está mais aguardando" vêm de lá). Abas: Fila · Aprovados · Recusados · Alertas (pago sem aprovação, aprovado e não pago, pago
  * diferente — calculados, só leitura). O BPO NASCE DESLIGADO: sem a configuração ligada, a tela diz isso e não mostra nada.
  */
+import { GuiaDaAprovacao } from '@/components/financeiro-v2/GuiaDaAprovacao';
+import { HelpCircle } from 'lucide-react';
+import { jaViuOGuia, marcarGuiaVisto } from '@/lib/financeiro/guiaDaAprovacao';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -44,7 +47,7 @@ function lerAlertas(rows: unknown): Alerta[] {
 const fraseDoErro = (e: { message?: string } | null, padrao: string) => (e?.message?.startsWith('BPO: ') ? e.message.slice(5) : padrao);
 
 export default function AprovarPagamentosPage() {
-  const { clienteAtual } = useCliente();
+  const { clienteAtual, isAdmin } = useCliente();
   const { user } = useAuth();
   const clienteId = clienteAtual?.id ?? null;
   const [ligado, setLigado] = useState<boolean | null>(null);
@@ -61,6 +64,10 @@ export default function AprovarPagamentosPage() {
   const [previa, setPrevia] = useState<{ ids: string[]; n: number; total: number } | null>(null);
   const [frase, setFrase] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  /* BPO-GUIA-01 — o guia "Como funciona": abre sozinho na 1ª visita de cada usuário (guardado no navegador) e pelo botão */
+  const [guia, setGuia] = useState<{ aberto: boolean; passo: number }>({ aberto: false, passo: 0 });
+  useEffect(() => { if (user?.id && !jaViuOGuia(user.id)) setGuia({ aberto: true, passo: 0 }); }, [user?.id]);
+  const fecharGuia = (naoMostrar: boolean) => { if (naoMostrar) marcarGuiaVisto(user?.id); setGuia((g) => ({ ...g, aberto: false })); };
 
   const ler = useCallback(async () => {
     if (!clienteId) return;
@@ -144,21 +151,40 @@ export default function AprovarPagamentosPage() {
 
   if (!clienteId) return <div className="p-4 text-[12px] text-muted-foreground">Escolha o cliente.</div>;
   if (ligado === null || linhas === null) return <div className="p-4 text-[12px] text-muted-foreground" data-testid="aprovar-lendo">Lendo a fila…</div>;
-  if (!ligado) return <div className="p-4 text-[12px] text-muted-foreground" data-testid="aprovar-desligado">{FRASE_BPO_DESLIGADO}</div>;
+  if (!ligado) return (
+    <div className="flex flex-wrap items-center gap-2 p-4 text-[12px] text-muted-foreground" data-testid="aprovar-desligado">
+      <span className="whitespace-nowrap">{FRASE_BPO_DESLIGADO}</span>
+      <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => setGuia({ aberto: true, passo: 0 })} data-testid="aprovar-como-funciona">Como funciona</Button>
+      {isAdmin && <Button size="sm" className="h-7 text-[12px]" onClick={() => setGuia({ aberto: true, passo: 5 })} data-testid="aprovar-ligar">Ligar neste cliente</Button>}
+      <GuiaDaAprovacao aberto={guia.aberto} passoInicial={guia.passo} onFechar={fecharGuia} ehAdmin={isAdmin} clienteId={clienteId}
+        ligado={ligado === true} onLigou={(t) => { setFrase({ tipo: 'ok', texto: t }); void ler(); }} />
+    </div>
+  );
 
-  const opcoes = [
-    { valor: 'fila' as const, rotulo: `Fila (${fila.length})` },
-    { valor: 'aprovado' as const, rotulo: 'Aprovados' },
-    { valor: 'recusado' as const, rotulo: 'Recusados' },
-    { valor: 'alertas' as const, rotulo: 'Alertas' },
+  /* zero cast: o tipo das opções vem declarado (era `as const`) */
+  const opcoes: { valor: Aba; rotulo: string }[] = [
+    { valor: 'fila', rotulo: `Fila (${fila.length})` },
+    { valor: 'aprovado', rotulo: 'Aprovados' },
+    { valor: 'recusado', rotulo: 'Recusados' },
+    { valor: 'alertas', rotulo: 'Alertas' },
   ];
   return (
-    <div className="mx-auto flex h-full w-full max-w-[720px] flex-col" data-testid="aprovar-pagamentos">
+    <div className="flex h-full w-full flex-col" data-testid="aprovar-pagamentos">
+      <GuiaDaAprovacao aberto={guia.aberto} passoInicial={guia.passo} onFechar={fecharGuia} ehAdmin={isAdmin} clienteId={clienteId}
+        ligado={ligado === true} onLigou={(t) => { setFrase({ tipo: 'ok', texto: t }); void ler(); }} />
       <div className="flex-none bg-primary px-3 py-2 text-primary-foreground">
-        <div className="text-[14px] font-semibold">Pagamentos para aprovar</div>
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 whitespace-nowrap text-[14px] font-semibold">Pagamentos para aprovar</div>
+          <button type="button" onClick={() => setGuia({ aberto: true, passo: 0 })} data-testid="aprovar-como-funciona"
+            title="Como funciona" aria-label="Como funciona"
+            className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-white/30 px-1.5 text-[11px] font-medium hover:bg-white/10">
+            {/* no celular só o ícone: com o texto, o botão cobria o título a 390 px (gate de cortes) */}
+            <HelpCircle className="h-3.5 w-3.5" aria-hidden /><span className="hidden sm:inline">Como funciona</span>
+          </button>
+        </div>
         <div className="text-[11px] opacity-85 tabular-nums">{clienteAtual?.nome ?? ''} · {fila.length} aguardando · {formatMoeda(somaDe(fila))}</div>
       </div>
-      <div className="flex-none px-2 pt-2"><Segmentado valor={aba} onEscolher={setAba} opcoes={opcoes} altura={28} /></div>
+      <div className="flex-none px-2 pt-2"><Segmentado valor={aba} onEscolher={setAba} opcoes={opcoes} altura={28} fonte={10} /></div>
       {!aprovador && <div className="flex-none px-3 pt-1 text-[11px] text-muted-foreground" data-testid="aprovar-so-leitura">{FRASE_SO_APROVADOR}</div>}
       <div className="h-[16px] flex-none truncate px-3 text-[11px]" data-testid="aprovar-frase" title={frase?.texto}>
         {frase && <span className={frase.tipo === 'erro' ? 'text-destructive' : 'text-muted-foreground'}>{frase.texto}</span>}
@@ -188,7 +214,7 @@ export default function AprovarPagamentosPage() {
                   <span className="tabular-nums">{formatMoeda(d.total)}</span>
                 </div>
                 {d.linhas.map((l) => (
-                  <div key={l.lancamentoId} className="mb-1.5 grid grid-cols-[22px_1fr_auto] gap-x-1.5 rounded-lg border px-2 py-1.5 text-[12px]" data-testid="aprovar-item">
+                  <div key={l.lancamentoId} className={GRADE_DO_ITEM} data-testid="aprovar-item">
                     {aba === 'fila' && aprovador
                       ? <Checkbox aria-label={`Marcar ${l.fornecedor ?? l.descricao ?? 'pagamento'}`} className="mt-0.5 h-[18px] w-[18px]"
                           checked={marcadas.has(l.lancamentoId)} onCheckedChange={(v) => setMarcadas((s) => { const n = new Set(s); if (v === true) n.add(l.lancamentoId); else n.delete(l.lancamentoId); return n; })} />
@@ -196,16 +222,18 @@ export default function AprovarPagamentosPage() {
                     <button type="button" className="min-w-0 break-words text-left font-semibold" title={l.fornecedor ?? l.descricao ?? ''} onClick={() => setAberta(l)}>
                       {l.fornecedor ?? l.descricao ?? 'Sem fornecedor'}
                     </button>
-                    <span className="whitespace-nowrap text-right font-semibold tabular-nums">{formatMoeda(Math.abs(l.valor))}</span>
-                    <span />
-                    <span className="col-span-2 break-words text-[11px] text-muted-foreground" title={[l.fazenda, l.conta, l.descricao].filter(Boolean).join(' · ')}>
+                    <span className="whitespace-nowrap text-right font-semibold tabular-nums md:order-last">{formatMoeda(Math.abs(l.valor))}</span>
+                    <span className="md:hidden" />
+                    <span className="col-span-2 break-words text-[11px] text-muted-foreground md:col-span-1" data-testid="aprovar-item-onde"
+                      title={[l.fazenda, l.conta, l.descricao].filter(Boolean).join(' · ')}>
                       {[l.fazenda, l.conta].filter(Boolean).join(' · ')}
-                      {l.vencimento ? <span className="whitespace-nowrap">{l.fazenda || l.conta ? ' · ' : ''}vence {brData(l.vencimento)}</span> : null}
+                      {l.vencimento ? <span className="whitespace-nowrap md:hidden">{l.fazenda || l.conta ? ' · ' : ''}vence {brData(l.vencimento)}</span> : null}
                     </span>
-                    <span />
-                    <span className="col-span-2 flex gap-1.5 pt-0.5">
-                      <span className={`rounded-full border px-2 text-[10.5px] ${l.temNota ? '' : 'border-rose-300 text-rose-800'}`}>{l.temNota ? 'Nota' : 'sem nota'}</span>
-                      <span className={`rounded-full border px-2 text-[10.5px] ${l.temBoleto ? '' : 'border-rose-300 text-rose-800'}`}>{l.temBoleto ? 'Boleto' : 'sem boleto'}</span>
+                    <span className="hidden whitespace-nowrap text-[11px] tabular-nums text-muted-foreground md:inline" data-testid="aprovar-item-vence">{l.vencimento ? brData(l.vencimento) : '—'}</span>
+                    <span className="md:hidden" />
+                    <span className="col-span-2 flex gap-1.5 pt-0.5 md:col-span-1 md:min-w-0 md:pt-0">
+                      <span className={`flex-none rounded-full border px-2 text-[10.5px] ${l.temNota ? '' : 'border-rose-300 text-rose-800'}`}>{l.temNota ? 'Nota' : 'sem nota'}</span>
+                      <span className={`flex-none rounded-full border px-2 text-[10.5px] ${l.temBoleto ? '' : 'border-rose-300 text-rose-800'}`}>{l.temBoleto ? 'Boleto' : 'sem boleto'}</span>
                       {l.situacao === 'recusado' && l.motivo && <span className="min-w-0 break-words text-[10.5px] text-rose-800" title={l.motivo}>{l.motivo}</span>}
                       {l.observacao && l.situacao !== 'recusado' && <span className="min-w-0 break-words text-[10.5px] text-muted-foreground" title={l.observacao}>{l.observacao}</span>}
                     </span>
@@ -289,6 +317,11 @@ export default function AprovarPagamentosPage() {
     </div>
   );
 }
+
+/* a linha da fila: celular = cartão (☐ | fornecedor | valor; embaixo onde/vence e os selos); md+ = uma linha (26px; o nome comprido QUEBRA, nunca "…" fora de tabela) em colunas fixas (px
+   medidos: data dd/mm/aaaa 74, os selos com o motivo 260, o valor no teto "R$ 99.999.999,99" 112), o fornecedor e o "onde" cedem quebrando */
+const GRADE_DO_ITEM = 'mb-1.5 grid grid-cols-[22px_1fr_auto] gap-x-1.5 rounded-lg border px-2 py-1.5 text-[12px] '
+  + 'md:mb-1 md:min-h-[26px] md:grid-cols-[22px_minmax(0,1fr)_minmax(0,320px)_74px_260px_112px] md:items-center md:py-1';
 
 function ListaDeAlertas({ alertas }: { alertas: Alerta[] | null }) {
   if (alertas === null) return <div className="p-3 text-[12px] text-muted-foreground">Lendo os alertas…</div>;

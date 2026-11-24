@@ -247,7 +247,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'fin-visao-geral',     label: 'Visão geral',             status: 'ready', liberadaClientes: true },
           { id: 'financeiro-lanc',     label: 'Lançamentos financeiros', status: 'ready', liberadaClientes: true },
           /* BPO-APROVACAO-01 — o BPO nasce DESLIGADO (Gabriel 17/11 11:42): por ora só o admin vê; abrir ao aprovador do NJ vai com o OK de ligar */
-          { id: 'aprovar-pagamentos',  label: 'Aprovar pagamentos',      status: 'ready', liberadaClientes: false },
+          /* BPO-APROVACAO-01 P1 (piloto Vera): liberada ao gestor e ao financeiro do cliente, mas o item só aparece onde o BPO está LIGADO
+             (`TELAS_SO_COM_BPO`, acessoTelas); quem decide segue sendo o banco (a marca de aprovador) */
+          { id: 'aprovar-pagamentos',  label: 'Aprovar pagamentos',      status: 'ready', liberadaClientes: true },
           { id: 'conciliacao',         label: 'Conciliação bancária',    status: 'ready', liberadaClientes: true },
           /* ⚠ A TELA NOVA ENTRA AO LADO DAS VELHAS, e nao no lugar delas —
              FIN-CONCIL-PORTAR-01, rodada 1. Ela leva "(novo)" no rotulo porque
