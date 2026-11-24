@@ -18,6 +18,7 @@ import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { MesclarFornecedoresDialog } from '@/components/financeiro-v2/MesclarFornecedoresDialog';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
+import { FormaPeloExtratoDialog } from '@/components/financeiro-v2/FormaPeloExtratoDialog';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import { ListaDeFinanciamentos } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
@@ -276,9 +277,25 @@ function paginaDaBancada(base0: any[], a: any) {
   const base = new URLSearchParams(location.search).get('div') !== '1' ? base0 : base0.map((l, k) => (k === 0
     ? { ...l, valor: -9583, sinal: -1, tipo_operacao: '2-Saídas', valor_parte: 1055, partes_total: 2, partes_casadas: 1 }
     : k === 1 ? { ...l, valor_parte: Math.abs(Number(l.valor)), partes_total: 2, partes_casadas: 2 } : l));
-  const caixa = base.filter((l) => l.sem_movimentacao_caixa !== true).slice(0, corte === null ? undefined : Number(corte));
+  /* FIN-PRONTO-PAGAR-01 — o código da regra (o banco o calcula; aqui SINTÉTICO, um por linha) nas saídas ainda a pagar; a contagem é do
+     recorte sem o filtro de pagamento e o filtro `pronto_pagar` corta a página (a regra do banco: "falta%" = faltando) */
+  const CODIGOS = [['falta_forma', null], ['pronto_boleto', 'Boleto'], ['falta_chave', 'PIX'], ['nada_a_fazer', 'Débito Automático'],
+    ['pronto_chave_cadastro', 'PIX'], ['falta_dados_bancarios', 'Transferência']];
+  const comCodigo = base.map((l, k) => {
+    const aPagar = l.tipo_operacao === '2-Saídas' && l.status_transacao !== 'realizado' && l.sem_movimentacao_caixa !== true;
+    const [codigo, forma] = aPagar ? CODIGOS[k % CODIGOS.length] : [null, null];
+    return { ...l, pronto_pagar: codigo, forma_efetiva: forma };
+  });
+  const todosCaixa = comCodigo.filter((l) => l.sem_movimentacao_caixa !== true).slice(0, corte === null ? undefined : Number(corte));
+  const pp = a?.p_filtros?.pronto_pagar;
+  const caixa = !pp || pp === 'todos' ? todosCaixa : todosCaixa.filter((l) => l.pronto_pagar && (String(l.pronto_pagar).startsWith('falta') === (pp === 'faltando')));
+  const comPonto = todosCaixa.filter((l) => l.pronto_pagar);
+  const falta = comPonto.filter((l) => String(l.pronto_pagar).startsWith('falta'));
+  const soma = (xs: any[]) => Math.round(xs.reduce((t, l) => t + Math.abs(Number(l.valor)), 0) * 100) / 100;
   const por = Number(a?.p_por_pagina) || 200, pag = Number(a?.p_pagina) || 0;
   return {
+    pronto_pagar: { prontos: comPonto.length - falta.length, prontos_valor: soma(comPonto.filter((l) => !String(l.pronto_pagar).startsWith('falta'))),
+      faltando: falta.length, faltando_valor: soma(falta) },
     versao: 'bancada', pagina: pag, por_pagina: por, total_linhas: caixa.length,
     linhas: caixa.slice(pag * por, (pag + 1) * por).map((l) => ({ ...l, conciliado: false })),
     totais: (({ entradas, saidas, transferencias, entradasSemCaixa, saidasSemCaixa }) => ({ entradas, saidas, transferencias,
@@ -331,8 +348,10 @@ const LATERAL = q.get('lateral');
 const CLI = q.get('cli') ?? 'Cliente Exemplo Nome Longo Agropecuária';
 const FAZ = q.get('faz') ?? 'Fazenda Exemplo Nome Longo Retiro';
 if (LATERAL) {
-  const clientes = [{ id: 'cli', nome: CLI, perfil: 'admin_agroinblue' }, { id: 'cli2', nome: 'Cliente Exemplo Dois', perfil: 'admin_agroinblue' }];
-  g.__clienteBancada = { clienteAtual: clientes[0], clientes, isAdmin: true, perfil: 'admin_agroinblue', loading: false,
+  /* ACESSO-UM-CLIENTE-01 — `&umcli=1`: o login que só tem UM cliente (perfil financeiro): o nome aparece travado no lugar do seletor */
+  const clientes = q.get('umcli') ? [{ id: 'cli', nome: CLI, perfil: 'financeiro' }]
+    : [{ id: 'cli', nome: CLI, perfil: 'admin_agroinblue' }, { id: 'cli2', nome: 'Cliente Exemplo Dois', perfil: 'admin_agroinblue' }];
+  g.__clienteBancada = { clienteAtual: clientes[0], clientes, isAdmin: !q.get('umcli'), perfil: 'admin_agroinblue', loading: false,
     setClienteAtual: () => {}, resumoClientes: false, setResumoClientes: () => {} };
   const fazendas = [{ id: 'f1', nome: FAZ === 'Global' ? 'Faz. Exemplo' : FAZ, cliente_id: 'cli' }, { id: 'f2', nome: 'Faz. Exemplo Dois', cliente_id: 'cli' }];
   const atual = FAZ === 'Global' ? { id: '__global__', nome: 'Global', owner_id: '' } : fazendas[0];
@@ -428,6 +447,23 @@ function buscarNaBancada(a: any) {
 if (tela === 'mesclar') {
   g.__bancoBancada = bancoDeFornecedores;
   montar(<MesclarFornecedoresDialog aberto aoFechar={() => {}} clienteId="cli" inicial={q.get('vazio') ? undefined : { manter: 'b', absorver: ['c', 'm'] }} />);
+} else if (tela === 'forma-pelo-extrato') {
+  /* FORN-FORMA-PELO-EXTRATO-01 — o modal com o banco injetado (SINTÉTICO; nomes longos = o pior caso do "…"); `&passo=gravado` abre no 2 */
+  const NOMES = ['Agropecuária Exemplo Comércio de Insumos Agrícolas e Veterinários Ltda', 'Distribuidora Modelo', 'Posto Rodovia Exemplo',
+    'Veterinária Sintética', 'Casa do Produtor Modelo de Campo Grande', 'Energia Exemplo S.A.', 'Transportadora Exemplo de Gado Ltda'];
+  const FORMAS: [string, string, string][] = [['PIX', 'PIX', 'PAGAMENTO PIX'], ['Boleto', 'Boleto', 'LIQUIDACAO BOLETO'], ['Débito', 'Débito', 'COMPRA DEBITO'],
+    ['PIX', 'PIX', 'PIX ENVIADO'], ['PIX', 'PIX', 'PIX ENVIADO'], ['Débito Automático', 'Débito Automático', 'PAGTO ENERGIA'], ['Transferência', 'Transferência Bancária', 'TED ENVIADA']];
+  const previa = Array.from({ length: 28 }, (_, i) => ({ fornecedor_id: `ff${i}`, nome: `${NOMES[i % NOMES.length]}${i >= NOMES.length ? ` ${i}` : ''}`,
+    pagamentos: [14, 11, 22, 6, 8, 12, 3][i % 7] + i, iguais_pct: [100, 100, 95.5, 83.3, 87.5, 100, 100][i % 7], forma: FORMAS[i % 7][0],
+    forma_cadastro: FORMAS[i % 7][1], exemplo: FORMAS[i % 7][2], chave_sugerida: i % 7 === 0 ? '12.345.678/0001-90' : null, tipo_chave: i % 7 === 0 ? 'CNPJ' : null,
+    abertos_sem_forma: (i * 7) % 41, hoje_forma: i % 7 === 4 ? 'Boleto' : i % 7 === 5 ? 'Débito Automático' : null, hoje_chave: null }));
+  const gravacoes = Array.from({ length: 6 }, (_, i) => ({ id: `op${i}`, fornecedor_id: `ff${i}`, forma: FORMAS[i][0], chave: i === 0 ? '12.345.678/0001-90' : null,
+    lancamentos: Array.from({ length: 3 + i * 4 }, (_, k) => `l${k}`), recusados: i === 2 ? 1 : 0, feita_em: '2026-11-24T09:42:00Z',
+    fornecedor: { nome: previa[i].nome } }));
+  const fontes = { ler: async () => previa, gravacoes: async () => gravacoes,
+    gravar: async (_c: string, ids: readonly string[], simular: boolean) => ({ ok: true, simulado: simular, fornecedores: ids.map((id) => ({ id })), lancamentos: 123 }),
+    desfazer: async () => ({ ok: true, lancamentos_voltaram: 3, mantidos: [] }) };
+  montar(<FormaPeloExtratoDialog aberto clienteId="cli" aoFechar={() => {}} fontes={fontes} />);
 } else if (tela === 'fornecedores') {
   g.__bancoBancada = bancoDeFornecedores;
   /* FORN-01b — com `&barra=32` a tela entra como no app: sem o `p-3` da bancada, na secao de altura do V2 (`SECOES_APP_SHELL`) */
@@ -1989,6 +2025,8 @@ if (tela === 'mesclar') {
       lido.nota.emitente.nome = 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO CENTRO OESTE LTDA';
       lido.nota.emitente.endereco = { ...(lido.nota.emitente.endereco ?? {}), logradouro: 'RODOVIA BR SINTETICA 163 KM 512 SAIDA PARA O DISTRITO INDUSTRIAL', municipio: 'SAO GABRIEL DO OESTE SINTETICO', uf: 'MS' };
     }
+    /* DA-NOTA-CLASSIF-01 — `&nome60=1`: o emitente SEM cadastro com a razão social de 60 letras (o cartão Fornecedor não pode empurrar os outros) */
+    if (q.get('nome60')) lido.nota.emitente.nome = 'COMERCIAL SINTETICA DE PECAS PNEUS IMPLEMENTOS AGRICOLA LTDA';
     if (v === 'longo') {
       const NOME = 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA';
       lido.nota.emitente.nome = NOME;
@@ -2016,6 +2054,8 @@ if (tela === 'mesclar') {
       parcelas: [], por: ['numero', 'chave'], cancelado: true }));
     g.__bancoBancada = {
       from: (t: string, e: any) => {
+        /* DA-NOTA-CLASSIF-01 — `&sugestao=uma|varias`: a nota já gravada (a sugestão pelos itens responde); sem o parâmetro, a nota não está lá */
+        if (t === 'nota_fiscal') return q.get('sugestao') ? [{ id: 'nf-sintetica' }] : [];
         if (OUTROS && t === 'financeiro_fornecedores' && !e?.eq?.id) return [{ id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24' }];
         if (OUTROS && t === 'financeiro_lancamentos_v2' && e?.in?.favorecido_id) return OUTROS;
         if (t === 'financeiro_fornecedores') return [{ nome_fantasia: null, inscricao_estadual: null, tipo_pessoa: 'PJ', logradouro: null, numero: null, complemento: null, bairro: null, municipio: null, uf: null, cep: null, telefone: null }];
@@ -2077,6 +2117,10 @@ if (tela === 'mesclar') {
         : fn === 'fn_nota_ja_lancada' && v === 'avista' ? AVISTA_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'janela' ? JANELA_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'previsto' ? PREVISTO_DA_NOTA()
+        /* DA-NOTA-CLASSIF-01 — a sugestão pelos itens (SINTÉTICA): `uma` = os 3 itens numa conta (outra que a de hoje: aparece o "usar"); `varias` = duas */
+        : fn === 'fn_nota_itens_sugerir_conta' ? { ok: true, nota_id: 'nf-sintetica', tipo_operacao: '2-Saídas', itens: [1, 2, 3].map((n) => ({ item_id: `it-${n}`, n_item: n,
+          plano_conta_id: q.get('sugestao') === 'varias' && n === 3 ? 'pl-lav' : 'pl-nut', subcentro: q.get('sugestao') === 'varias' && n === 3 ? 'Insumos Lavoura — Defensivos e Fertilizantes' : 'Nutrição Engorda',
+          fonte: 'a', confianca: 'alta', porque: 'Já usado 4× neste cliente.', pede_ia: false })) }
         : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'avista' || v === 'previsto') ? completarDoLr(v, a)
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
@@ -2090,7 +2134,7 @@ if (tela === 'mesclar') {
         : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 409, ultimo: '2026-10-10' }]
         : null,
     };
-    const receita = async () => ({ ok: true as const, dados: { razaoSocial: v === 'longo' ? lido.nota.emitente.nome : 'AGRO SINTETICA INSUMOS AGROPECUARIOS LTDA', fantasia: '',
+    const receita = async () => ({ ok: true as const, dados: { razaoSocial: v === 'longo' || q.get('nome60') ? lido.nota.emitente.nome : 'AGRO SINTETICA INSUMOS AGROPECUARIOS LTDA', fantasia: '',
       municipio: 'Campo Grande', uf: 'MS', logradouro: 'Rua das Flores', numero: '100', complemento: 'Sala 1', bairro: 'Centro', cep: '79000-000', matrizFilial: 'FILIAL' } });
     const PLANO = [
       { id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
@@ -2258,12 +2302,15 @@ if (tela === 'mesclar') {
   const montarCaixa = async () => {
     const { CaixaDeBoletosDialog } = await import('@/components/financeiro-v2/CaixaDeBoletosDialog');
     const { API_CAIXA_BANCADA, PARCELA_BANCADA, LER_CAIXA_BANCADA, API_ENTRADA_BANCADA, API_ENTRADA_BANCADA_SEM_ENDERECO, HOJE_DA_BANCADA } = await import('./dados/caixaBoletos');
+    /* FOLHA-NA-CAIXA-01: o banco da folha em memória; `caso=folha_aplicada` = o documento já aplicado (o Desfazer) */
+    const { apiDaFolhaDaBancada, DIVIDIR_DA_BANCADA } = await import('./dados/folhaDaCaixa');
+    const folha = { api: apiDaFolhaDaBancada(q.get('caso') === 'folha_aplicada', q.get('caso') === 'folha_completar'), dividir: DIVIDIR_DA_BANCADA };
     /* BOLETO D3c: `caso=sem_endereco` = o cliente sem endereço (o "Gerar"). D3d: o "hoje" fixo (o antigo não muda com o dia) e o
        "Lançar nota" presente (a tela de Lançamentos); `caso=sem_lancar` = a caixa aberta do Editar lançamento (sem o "Lançar nota") */
     const entrada = q.get('caso') === 'sem_endereco' ? API_ENTRADA_BANCADA_SEM_ENDERECO : API_ENTRADA_BANCADA;
     const aoLancarNota = q.get('caso') === 'sem_lancar' ? undefined : () => {};
     montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} parcela={PARCELA_BANCADA} ler={LER_CAIXA_BANCADA}
-      entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} />);
+      entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} folha={folha} />);
   };
   void montarCaixa();
 } else if (tela === 'anexar-boletos-caixa') {

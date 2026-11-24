@@ -24,7 +24,8 @@ describe('item 3 — lista sem a coluna OC de 58px, "..." sempre visivel, "Abrir
   it('a celula de 58px da OC segue fora das linhas; a coluna dos vinculos e a linha vazia ocupa todas as colunas', () => {
     expect(tela).toContain('>Vínc.</ThDaLista>');
     expect(tela).not.toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
-    expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 17 : 15}');
+    /* FIN-PRONTO-PAGAR-01 PR B: + a coluna Forma (16 na normal, 18 no Ampliado com as contas) */
+    expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 18 : 16}');
     expect(tela).not.toContain('<td colSpan={16}');
     /* a busca sabe achar: a secao sem caixa ainda usa a celula OC (cabe sem rolagem la') */
     /* FIN-V2-DESEMPENHO-01b: o total sem caixa vem do servidor; o `totalSemCaixa` saiu do import da tela */

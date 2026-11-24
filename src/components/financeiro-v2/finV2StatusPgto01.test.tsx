@@ -120,6 +120,9 @@ describe('FinanceiroV2Tab — a coluna ST', () => {
     for (const w of [60, 94, 78]) expect(fixas, String(w)).toContain(w);
     for (const velho of [64, 77, 70, 90, 88]) expect(fixas, String(velho)).not.toContain(velho);
     expect(tela).toContain('const rotulo = <RotuloDoStatus st={st} />;');
+    /* FIN-PRONTO-PAGAR-01 PR B (24/11 09:01): o ponto saiu do Status e vai com a sigla na coluna Forma (52px), antes do Status */
+    expect(fixas).toContain(52);
+    expect(tela).toContain('<td className="px-1 py-1 align-middle text-[10px] leading-tight whitespace-nowrap" data-testid="celula-forma">');
     expect(peca).toContain('<span className={cn(STATUS_PILULA_BASE, st.stPilula)} data-status={st.stKey}>{st.stLabel}</span>');
     expect(tela).not.toContain('text-[10px] leading-tight ${stColor}`}');
   });
@@ -142,7 +145,7 @@ describe('FinanceiroV2Tab — a coluna ST', () => {
       const tern = l.match(/modoIntensivo \? .+ : (\d+),/);
       return Number(tern ? tern[1] : l.match(/(\d+),/)![1]);
     });
-    expect(larguras.length).toBe(15);   // FIN-V2-COLUNAS-02: Macro e Centro viraram UMA coluna
+    expect(larguras.length).toBe(16);   // FIN-V2-COLUNAS-02: Macro e Centro viraram UMA coluna; FIN-PRONTO-PAGAR-01 PR B: + Forma
     expect(larguras.reduce((a, b) => a + b, 0)).toBe(916);   // FIN-V2-DESEMPENHO-01b: datas dd/mm/aaaa e Valor 94
     expect(larguras.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(919);
   });

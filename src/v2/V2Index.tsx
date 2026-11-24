@@ -1740,7 +1740,8 @@ export default function V2Index() {
     );
   }
 
-  const clienteSelector = clientes.length > 1 ? <ClienteSelector /> : undefined;
+  /* ACESSO-UM-CLIENTE-01 — o cliente aparece SEMPRE (com um só, travado: o `ClienteSelector` decide o desenho) */
+  const clienteSelector = clientes.length > 0 ? <ClienteSelector /> : undefined;
   /* RESUMO-CLIENTES-01 — no "Resumo dos clientes" (só admin) nenhuma tela de cliente é montada (o desenho das seções não roda), o
      seletor de fazenda some e o menu do cliente vira a aba do painel. */
   const modoResumo = isAdmin && resumoClientes;
@@ -1862,7 +1863,7 @@ export default function V2Index() {
         <div className="md:hidden flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm no-print">
           <span className="text-sm font-bold">Agroinblue</span>
           <div className="flex items-center gap-1">
-            {clientes.length > 1 && (
+            {clientes.length > 0 && (
               <div className="[&_button]:text-xs [&_button]:h-7 [&_button]:bg-primary-foreground/10 [&_button]:text-primary-foreground [&_button]:border-0">
                 <ClienteSelector />
               </div>

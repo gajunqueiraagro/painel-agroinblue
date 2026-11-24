@@ -10,10 +10,15 @@
  * ⚠ ANTIGO (D4): vencido há mais de 60 dias = selo vermelho e a ação sugerida vira "Ignorar" — nunca sozinha.
  * ⚠ "No sistema" é FRASE ("parcela 1/3 · …", "nenhum lançamento com esta nota"); a consulta que falhou diz "não consegui verificar"
  *   (P146), nunca "não lançada".
+ * ⚠ CAIXA-GUARDAR-01 (D1 a, Gabriel 23/11): o grupo dos GUARDADOS vem PRIMEIRO; o guardado tem "Desfazer" (o e-mail volta para A resolver
+ *   e o boleto vai para `descartado` com MOTIVO_DO_DESFEITO, nada se apaga); a linha do e-mail com o boleto descartado oferece "Guardar"
+ *   de novo (reabre o MESMO boleto); em Resolvidos o guardado diz "guardado · sem lançamento" (âmbar), o ligado diz a que lançamento.
  */
-import type { EntradaDoEmail, NotaNoSistema } from './entradaEmailApi';
+import type { DetalheDoResolvido, EntradaDoEmail, NotaNoSistema } from './entradaEmailApi';
 import type { ItemDaCaixa, RespostaDeEntrar } from './caixaApi';
 import { dataBR, seloDoAchado, situacaoAVista, textoDoAchado, valorBR, type Selo } from './caixaDeBoletos';
+import type { FolhaLida } from '@/lib/folha/lerFolha';
+import { ROTULO_DO_TIPO, competenciaBR, fraseDaLinhaDaFolha } from '@/lib/folha/folhaNaCaixa';
 
 export type AbaDaCaixaV2 = 'a_resolver' | 'resolvidos' | 'ignorados';
 export const ABAS_DA_CAIXA_V2: readonly { valor: AbaDaCaixaV2; rotulo: string }[] = [
@@ -31,6 +36,8 @@ export type Lido =
   | { k: 'lendo' }
   | { k: 'nota'; nota: ResumoDaNota }
   | { k: 'boletos'; boletos: BoletoLido[] }
+  /** FOLHA-NA-CAIXA-01: o recibo do contador (o `lerFolha` reconheceu) */
+  | { k: 'folha'; folha: FolhaLida }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -40,8 +47,11 @@ export type ConsultaDaNota = NotaNoSistema | null | 'erro' | undefined;
 /** A prévia da caixa para UM boleto (a `fn_boleto_entrar` com `p_simular`): `undefined` = perguntando. */
 export type ConsultaDoBoleto = RespostaDeEntrar | { ok: 'erro'; frase: string } | undefined;
 
-export type Acao = 'lancar_nota' | 'vincular_nota' | 'vincular_boleto' | 'guardar' | 'ignorar' | 'senha';
-export type TipoDaLinha = 'nota' | 'boleto' | 'nada' | 'lendo' | 'senha' | 'erro' | 'sem_anexo' | 'recusado' | 'gmail';
+export type Acao = 'lancar_nota' | 'vincular_nota' | 'vincular_boleto' | 'guardar' | 'desfazer' | 'ignorar' | 'senha' | 'abrir_folha';
+
+/** CAIXA-GUARDAR-01: o motivo do boleto tirado da caixa pelo "Desfazer" do guardado (a trilha do boleto o guarda). */
+export const MOTIVO_DO_DESFEITO = 'guardado por engano — desfeito';
+export type TipoDaLinha = 'nota' | 'boleto' | 'folha' | 'nada' | 'lendo' | 'senha' | 'erro' | 'sem_anexo' | 'recusado' | 'gmail';
 
 export interface LinhaDaCaixa {
   chave: string;
@@ -56,6 +66,8 @@ export interface LinhaDaCaixa {
   acoes: Acao[];
   nota: ResumoDaNota | null; notaNoSistema: NotaNoSistema | null;
   boleto: BoletoLido | null; previa: RespostaDeEntrar | null;
+  /** FOLHA-NA-CAIXA-01: o recibo do contador lido (a prévia abre pelo "Abrir") */
+  folha: FolhaLida | null;
   /** O boleto que JÁ está gravado na caixa (o grupo "guardados", ou o "já está no sistema"). */
   boletoGuardadoId: string | null;
   /** Nesta sessão já foi resolvido (o PDF com 2 boletos: um feito, o outro não). */
@@ -105,6 +117,8 @@ const SELO: Record<string, Selo> = {
   ja_ligado: { texto: 'já ligado', tom: 'ok' },
   sem_lancamento: { texto: 'sem lançamento', tom: 'ambar' },
   feito: { texto: 'feito', tom: 'ok' },
+  desfeito: { texto: 'fora da caixa', tom: 'cinza' },
+  guardado: { texto: 'guardado · sem lançamento', tom: 'ambar' },
 };
 
 /** O que fazer com o que não tem arquivo para ler (sem anexo, recusado, a confirmação do Gmail). */
@@ -121,7 +135,7 @@ function base(chave: string, tipo: TipoDaLinha, fontes: string[], arquivo: strin
   noSistema: LinhaDaCaixa['noSistema'], acoes: Acao[]): LinhaDaCaixa {
   return {
     chave, tipo, fontes, arquivo, arquivoTitulo, emitente: null, vencimento: null, valor: null, antigo: false, noSistema, acoes,
-    nota: null, notaNoSistema: null, boleto: null, previa: null, boletoGuardadoId: null, feito: false,
+    nota: null, notaNoSistema: null, boleto: null, previa: null, folha: null, boletoGuardadoId: null, feito: false,
   };
 }
 
@@ -177,6 +191,11 @@ export function linhaDoBoleto(chave: string, fontes: string[], arquivo: string, 
       const t = `${ligado.descricao ?? 'lançamento'} · ${dataBR(ligado.vencimento)} · ${situacaoAVista(ligado)}`;
       noSistema = { selo: SELO.ja_ligado, texto: t, titulo: `o boleto já está na caixa, ligado a: ${t} · "Vincular" marca como resolvido` };
       acoes = ['vincular_boleto', 'ignorar'];
+    } else if (consulta.jaExiste && consulta.boleto.situacao === 'descartado') {
+      /* CAIXA-GUARDAR-01: o boleto foi tirado da caixa (Desfazer ou Ignorar): "Guardar" reabre o MESMO boleto (nunca um segundo) */
+      const t = 'tirado da caixa · "Guardar" põe de volta o mesmo boleto';
+      noSistema = { selo: SELO.desfeito, texto: t, titulo: t };
+      acoes = ['guardar', 'ignorar'];
     } else if (consulta.candidatos.length) {
       const t = textoDoAchado(consulta.candidatos);
       noSistema = { selo: seloDoAchado(consulta.candidatos), texto: t, titulo: t };
@@ -199,7 +218,7 @@ export function linhaDoBoleto(chave: string, fontes: string[], arquivo: string, 
 }
 
 /** A linha de um arquivo lido que não é boleto nem nota, ainda lendo, com senha ou com erro. */
-export function linhaSemConteudo(chave: string, fonte: string, nome: string, lido: Exclude<Lido, { k: 'nota' } | { k: 'boletos' }>): LinhaDaCaixa {
+export function linhaSemConteudo(chave: string, fonte: string, nome: string, lido: Exclude<Lido, { k: 'nota' } | { k: 'boletos' } | { k: 'folha' }>): LinhaDaCaixa {
   switch (lido.k) {
     case 'lendo': return base(chave, 'lendo', [fonte], nome, nome, { selo: null, texto: 'lendo o arquivo…', titulo: 'lendo o arquivo…' }, []);
     case 'senha': {
@@ -211,7 +230,21 @@ export function linhaSemConteudo(chave: string, fonte: string, nome: string, lid
   }
 }
 
+/** FOLHA-NA-CAIXA-01 — a linha do recibo do contador: "Folha" · o arquivo · tipo e competência · N pessoas · o total; "Abrir" = a prévia
+ *  por funcionário (nada grava antes do Aprovar). */
+export function linhaDaFolha(chave: string, fonte: string, nome: string, folha: FolhaLida): LinhaDaCaixa {
+  const t = fraseDaLinhaDaFolha(folha);
+  return {
+    ...base(chave, 'folha', [fonte], nome, nome,
+      { selo: { texto: 'a aplicar', tom: 'ambar' }, texto: t, titulo: `${t} · "Abrir" mostra a prévia por funcionário (nada grava antes do Aprovar)` },
+      ['abrir_folha', 'ignorar']),
+    emitente: `${ROTULO_DO_TIPO[folha.tipo]} · ${competenciaBR(folha.competencia)}`, valor: folha.total, folha,
+  };
+}
+
 export const FRASE_NEM_BOLETO_NEM_NOTA = 'Sem linha digitável nem chave de nota.';
+/** CAIXA-FOLHA-AVISO-01: o PDF que parece recibo de pagamento, enquanto a Folha não é lida pela Caixa. */
+export const FRASE_FOLHA_AINDA_NAO = 'Folha ainda não é lida aqui — fale com o consultor.';
 
 /* ═══ os grupos de "A resolver" ═══ */
 export interface FonteParaMontar {
@@ -249,6 +282,9 @@ export function linhasDasFontes(fontes: readonly FonteParaMontar[], notas: Recor
         const linha = linhaDoBoleto(chave, [f.chave], arquivo, f.nome, b, boletos[chave], hoje, null);
         linhas.push(feitos.has(chave) ? comoFeito(linha) : linha);
       });
+    } else if (l.k === 'folha') {
+      const linha = linhaDaFolha(`folha:${f.chave}`, f.chave, f.nome, l.folha);
+      linhas.push(feitos.has(linha.chave) ? comoFeito(linha) : linha);
     } else {
       linhas.push(linhaSemConteudo(f.chave, f.chave, f.nome, l));
     }
@@ -326,10 +362,35 @@ export function grupoDosGuardados(itens: readonly ItemDaCaixa[], boletos: Record
       beneficiario: i.boleto.beneficiarioNome };
     const nome = i.boleto.arquivoNome ?? 'boleto na caixa';
     const l = linhaDoBoleto(chave, [chave], nome, nome, b, boletos[chave], hoje, id);
-    return feitos.has(chave) ? comoFeito(l) : l;
+    if (feitos.has(chave)) return comoFeito(l);
+    /* CAIXA-GUARDAR-01: o guardado se desfaz — antes do "Ignorar" do fim; no ANTIGO o "Ignorar" segue sugerido (1º) e o Desfazer vai ao fim */
+    const acoes: Acao[] = l.antigo ? [...l.acoes, 'desfazer'] : [...l.acoes.filter((a) => a !== 'ignorar'), 'desfazer', 'ignorar'];
+    return { ...l, acoes };
   });
   return { chave: 'guardados', tipo: 'guardados', titulo: 'Na caixa, sem lançamento', assunto: 'boletos guardados que ainda não ligaram a um lançamento',
     linhas, fontesAntigas: fontesAntigas(linhas) };
+}
+
+/** CAIXA-GUARDAR-01 — o "O que virou" de uma linha de Resolvidos. O boleto GUARDADO (novo / sem par) diz que está sem lançamento, em
+ *  âmbar, e só ele tem o Desfazer completo (`guardadoId`); o ligado diz a que lançamento. */
+export function virouDaEntrada(e: EntradaDoEmail, itens: readonly ItemDaCaixa[] | null, detalhe?: DetalheDoResolvido): { selo: Selo | null; texto: string; guardadoId: string | null } {
+  if (e.estado === 'nota') {
+    const d = detalhe?.nota?.descricao;
+    return { selo: null, texto: d ? `nota no lançamento ${d}` : e.lancamentoId ? 'nota no lançamento' : 'nota lançada', guardadoId: null };
+  }
+  if (e.estado === 'folha') {
+    /* FOLHA-NA-CAIXA-01b (Gabriel 14:03): o que gerou — "13º 1ª parcela · 11/2026 · 3 lançamentos" (118610, pela trilha do recibo) */
+    const f = detalhe?.folha;
+    const tipo = f?.tipo === '13_1' || f?.tipo === '13_2' || f?.tipo === 'mensal' ? ROTULO_DO_TIPO[f.tipo] : null;
+    return { selo: null, texto: f && tipo ? `${tipo} · ${competenciaBR(f.competencia ?? '')} · ${f.lancamentos} ${f.lancamentos === 1 ? 'lançamento' : 'lançamentos'}` : 'folha aplicada', guardadoId: null };
+  }
+  const i = e.boletoId ? itens?.find((x) => x.boleto.id === e.boletoId) : undefined;
+  if (i && (i.boleto.situacao === 'novo' || i.boleto.situacao === 'sem_par')) {
+    return { selo: SELO.guardado, texto: 'guardado · sem lançamento', guardadoId: i.boleto.id };
+  }
+  const l = i?.boleto.situacao === 'ligado' ? i.situacao.lancamentos[0] : undefined;
+  if (l) return { selo: null, texto: `ligado a ${l.descricao ?? 'lançamento'} · ${dataBR(l.vencimento)}`, guardadoId: null };
+  return { selo: null, texto: 'boleto na caixa', guardadoId: null };
 }
 
 /** Quantos pedem gesto (o contador da aba): as linhas com ação, sem contar as "lendo". */
@@ -338,7 +399,8 @@ export const contarAResolver = (grupos: readonly GrupoDaCaixa[]): number =>
 
 /* ═══ os botões ═══ */
 export const ROTULO_DA_ACAO: Record<Acao, string> = {
-  lancar_nota: 'Lançar nota', vincular_nota: 'Vincular', vincular_boleto: 'Vincular', guardar: 'Guardar', ignorar: 'Ignorar', senha: 'Senha',
+  lancar_nota: 'Lançar nota', vincular_nota: 'Vincular', vincular_boleto: 'Vincular', guardar: 'Guardar', desfazer: 'Desfazer', ignorar: 'Ignorar',
+  senha: 'Senha', abrir_folha: 'Abrir',
 };
 /** A prévia diz que o boleto já existe E já está ligado a lançamento (o "Vincular" só resolve a linha). */
 export function boletoJaLigado(p: LinhaDaCaixa['previa']): boolean {
@@ -351,7 +413,9 @@ export function tituloDaAcao(a: Acao, l: LinhaDaCaixa): string {
     case 'vincular_boleto': return boletoJaLigado(l.previa)
       ? 'o boleto já está ligado: marca como resolvido' : `liga o boleto a: ${l.noSistema.texto}`;
     case 'guardar': return 'põe o boleto na caixa sem lançamento (liga depois, quando o lançamento existir)';
+    case 'desfazer': return 'o e-mail volta para A resolver e o boleto sai da caixa (nada se apaga); "Guardar" de novo reabre o mesmo boleto';
     case 'ignorar': return 'pede o motivo; nada é apagado e volta pelo "Ignorados"';
     case 'senha': return 'digite a senha do PDF (ela não é guardada)';
+    case 'abrir_folha': return 'mostra a prévia por funcionário (o que casa, o que cria, o valor e o vencimento): nada grava antes do Aprovar';
   }
 }

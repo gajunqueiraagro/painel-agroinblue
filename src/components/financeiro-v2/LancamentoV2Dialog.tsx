@@ -238,7 +238,7 @@ interface Props {
   onLerNotaNoNovo?: (arquivo: File) => Promise<string | null>;
   /** P152 — a aba em que o modal abre (o "NF nnnn" da Contas a Pagar e Receber abre direto em Documentos, onde mora a regra de abrir a
    *  nota: o PDF; sem PDF, os itens). Ausente = 'geral', como sempre. */
-  abaInicial?: 'documentos';
+  abaInicial?: 'documentos' | 'pagamento';  /* FIN-PRONTO-PAGAR-01: o ponto da lista abre na Pagamento */
   prefill?: {
     fazenda_id?: string;
     conta_bancaria_id?: string;
