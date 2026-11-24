@@ -79,6 +79,7 @@ import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { CadastroLocaisEstoqueTab } from '@/pages/CadastroLocaisEstoqueTab';
 import { PatrimonioTela } from '@/components/patrimonio/PatrimonioTela';
+import { FolhaTela, type EntradaDaFolha } from '@/components/folha/FolhaTela';
 import { ProdutoresTela } from '@/components/fiscal/ProdutoresTela';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
 import type { AbaDaReceita } from '@/lib/fiscal/notasDaReceita';
@@ -901,6 +902,25 @@ export default function V2Index() {
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+  /* FOLHA-01 · PR B (D3) — o ↗ "Funcionário" do Editar lançamento chega por `?folhaFunc=<funcionário>&folhaLanc=<lançamento>`: abre a Folha ›
+     Histórico da pessoa com "‹ Voltar ao lançamento", que reabre o lançamento em Lançamentos Financeiros (o `flancIdAlvo` de sempre). */
+  const [folhaEntrada, setFolhaEntrada] = useState<EntradaDaFolha | null>(null);
+  useEffect(() => {
+    const func = searchParams.get('folhaFunc');
+    if (!func) return;
+    const lanc = searchParams.get('folhaLanc');
+    setFolhaEntrada({
+      aba: 'historico', funcionarioId: func,
+      voltarAoLancamento: lanc ? () => { setFolhaEntrada(null); setFlancIdAlvo(lanc); setSection('financeiro-lanc'); } : null,
+    });
+    setSection('folha-pagamento');
+    const next = new URLSearchParams(searchParams);
+    next.delete('folhaFunc');
+    next.delete('folhaLanc');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+  /* sair da Folha por outro caminho esquece o "voltar ao lançamento" */
+  useEffect(() => { if (section !== 'folha-pagamento') setFolhaEntrada(null); }, [section]);
 
   const { lancamento: lancamentoFromUrl } = useLancamento(editFromUrlId);
   useEffect(() => {
@@ -1210,6 +1230,8 @@ export default function V2Index() {
       />
     );
     if (section === 'painel-periodo') return <PainelPeriodoTab />;
+    /* FOLHA-01 · PR B — Financeiro › Folha de pagamento (a própria tela confere o `folha_ok`, D5) */
+    if (section === 'folha-pagamento') return <FolhaTela entrada={folhaEntrada} />;
     if (section === 'contas-a-pagar-receber') return (
       <ContasPagarReceberTab
         onIntensiveToggle={setIntensivo}
@@ -1816,6 +1838,8 @@ export default function V2Index() {
     /* FORN-01b — a lista de Fornecedores vai até o fim da tela: a altura vem do pai, não de `calc(100dvh-120px)` */
     /* PATR-01 — a lista de bens vai até o fim da tela (a altura vem do pai) */
     'patrimonio',
+    /* FOLHA-01 · PR B — a lista e a ficha da Folha vão até o fim da tela (a altura vem do pai) */
+    'folha-pagamento',
     /* FISCAL onda 1 — a lista e a ficha dos produtores vão até o fim da tela (a altura vem do pai) */
     'produtores',
     /* BPO-NOMES-LARGURA-01 — Aprovar pagamentos usa a área inteira, como Lançamentos: a altura vem do pai e a lista vai até o fim */

@@ -340,6 +340,39 @@ const CENARIOS = [
   { nome: 'patrimonio-lancamento', url: 'tela=patrimonio-lancamento&caso=sem_bem&aba=ligar', regiao: '[data-testid="patrimonio-do-lancamento-dialog"]', estados: [
     ['escolher o bem', clicar('[data-testid="bem-para-ligar"]')], ['aba Criar o bem', botao(/^Criar o bem$/)], ['aba Ligar a um bem', botao(/^Ligar a um bem$/)],
   ] },
+  /* FOLHA-01 · PR B (telas) — Financeiro › Folha de pagamento: trocar o filtro, buscar 1/0, abrir e fechar a ficha, trocar a aba da ficha e
+     as abas da tela não movem o cabeçalho, os filtros, a ficha (340px sempre) nem o rodapé; no Histórico, o tipo e o período; nas Pendências, o
+     tipo; no modal do cadastro, ir de aba em aba (o Salvar fica no lugar, invisível fora do Cadastro) */
+  ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}`, url: `tela=folha&v=${v}&barra=32`, estados: [
+    ['Desligados', clicar('[data-testid="folha-filtros"] button:has-text("Desligados")')], ['A confirmar', clicar('[data-testid="folha-filtros"] button:has-text("A confirmar")')],
+    ['Todos', clicar('[data-testid="folha-filtros"] button:has-text("Todos")')],
+    ['busca 1', digitar('[data-testid="folha-busca"]', 'Antônio Exemplo Prado')], ['abre a ficha', clicar('[data-testid="folha-linha"]')],
+    ['ficha Documentos', clicar('[data-testid="folha-ficha"] button:has-text("Documentos")')], ['ficha Cadastro', clicar('[data-testid="folha-ficha"] button:has-text("Cadastro")')],
+    ['busca 0', digitar('[data-testid="folha-busca"]', 'zzzz nada')], ['busca limpa', digitar('[data-testid="folha-busca"]', '')],
+    ['fecha a ficha', clicar('[aria-label="Fechar a ficha"]')], ['Ativos', clicar('[data-testid="folha-filtros"] button:has-text("Ativos")')],
+  ] })),
+  { nome: 'folha-abas', url: 'tela=folha&v=nj&barra=32&func=f00', estados: [
+    ['aba Histórico', async (p) => { await p.getByRole('tab', { name: /^Histórico/ }).click(); await espera(p, 700); }],
+    ['aba Pendências', async (p) => { await p.getByRole('tab', { name: /^Pendências/ }).click(); await espera(p, 700); }],
+    ['aba Folha do mês', async (p) => { await p.getByRole('tab', { name: /^Folha do mês/ }).click(); await espera(p, 500); }],
+    ['aba Funcionários', async (p) => { await p.getByRole('tab', { name: /^Funcionários/ }).click(); await espera(p, 700); }],
+  ] },
+  ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-historico`, url: `tela=folha&v=${v}&barra=32&aba=historico&func=f00`, estados: [
+    ...['Salário', '13º', 'Férias', 'Rescisão', 'Benefícios', 'Tudo'].map((t) => [`tipo ${t}`, clicar(`[data-testid="folha-historico-faixa"] button:has-text("${t}")`)]),
+    ['período 2025', botao(/^2025$/)], ['todo o período', clicar('[data-testid="folha-historico-todo"]')],
+  ] })),
+  ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-pendencias`, url: `tela=folha&v=${v}&barra=32&aba=pendencias`, estados: [
+    ...['Sem cadastro', 'Rescisão a conferir', 'Sugestão (descrição)', 'Sem recibo', 'Documento vence', 'Todas'].map((t) => [t, clicar(`[data-testid="folha-pendencias-filtros"] button:has-text("${t}")`)]),
+  ] })),
+  { nome: 'folha-funcionario', url: 'tela=folha&v=nj&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="folha-filtros"] button:has-text("Todos")').click(); await espera(p, 300);
+      await p.locator('[data-testid="folha-busca"]').fill('Antônio Exemplo Prado'); await espera(p, 400);
+      await p.locator('[data-testid="folha-linha"]').first().click(); await espera(p, 500);
+      await p.locator('[data-testid="folha-ficha-editar"]').click(); await p.locator('[data-testid="funcionario-dialog"]').waitFor(); await espera(p, 700);
+    },
+    estados: ['Salário e atuação', 'Situação', 'Cadastro'].map((a) => [`aba ${a}`, async (p) => {
+      await p.locator('[data-testid="funcionario-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 500); }]) },
   /* PATR-01 PR B — Cadastros › Patrimônio: trocar a aba da tela, o chip e a busca (1/0 bens) não move os cartões, os filtros, o cabeçalho
      nem o rodapé; no modal do bem, ir de aba em aba (as seis ficam no lugar; a apagada não se clica) não move nada — o trator, a
      pastagem e o bem NOVO (Dados ↔ Lançamentos, a terra num passo) */

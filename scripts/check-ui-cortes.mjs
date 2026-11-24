@@ -1493,6 +1493,58 @@ const CENARIOS = [
           antes: async (p) => { await espera(p); if (a === 'ligar') { await p.locator('[data-testid="bem-para-ligar"]').first().click(); await espera(p); } } })),
     ];
   })(),
+  /* FOLHA-01 · PR B (telas) — Financeiro › Folha de pagamento (dado SINTÉTICO nas formas do proto, `dados/folha.ts`: v=nj 89 funcionários e
+     157 pendências, v=vera 12 e 28; o pior caso: nome de 41+ caracteres, registro de 59, chips demais, valor no teto, documento vencido).
+     As quatro abas, a ficha aberta (cadastro e documentos), o filtro para 1/0 linhas (o quadro tem a mesma altura), o modal do cadastro nas
+     três abas, o Histórico por tipo, as Pendências e o modal de resolver, sem a folha, e o rodapé do Editar lançamento */
+  ...(() => {
+    const T = [[1126, 579], [1280, 800], [1440, 800], [1920, 1080]];
+    const U = (v, extra = '') => `tela=folha&v=${v}&barra=32${extra}`;
+    const linha = (nome) => async (p) => {
+      await p.locator('[data-testid="folha-filtros"] button', { hasText: /^Todos/ }).click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="folha-busca"]').fill(nome); await p.waitForTimeout(400);
+      await p.locator('[data-testid="folha-linha"]', { hasText: nome }).first().click(); await p.waitForTimeout(600);
+    };
+    const buscar = (txt) => async (p) => { await p.locator('[data-testid="folha-busca"]').fill(txt); await p.waitForTimeout(500); };
+    const filtro = (re) => async (p) => { await p.locator('[data-testid="folha-filtros"] button', { hasText: re }).click(); await p.waitForTimeout(500); };
+    const dialogo = (nome, aba) => async (p) => {
+      if (nome) { await linha(nome)(p); await p.locator('[data-testid="folha-ficha-editar"]').click(); } else await p.locator('[data-testid="folha-novo"]').click();
+      await p.locator('[data-testid="funcionario-dialog"]').waitFor(); await p.waitForTimeout(600);
+      if (aba) { await p.locator('[data-testid="funcionario-dialog"] button', { hasText: new RegExp(`^${aba}`) }).first().click(); await p.waitForTimeout(500); }
+    };
+    const pend = async (p) => { await p.getByRole('tab', { name: /^Pendências/ }).click(); await p.waitForTimeout(600); };
+    const resolver = (acao) => async (p) => { await pend(p); await p.locator(`[data-testid="folha-pendencia-${acao}"]`).first().click();
+      await p.locator('[data-testid="resolver-pendencia"]').waitFor(); await p.waitForTimeout(500); };
+    const LANC = '[data-testid="rodape-da-bancada"]';
+    return [
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}`, url: U(v), tamanhos: T })),
+      { nome: 'folha-nj-desligados', url: U('nj'), tamanhos: T, antes: filtro(/^Desligados/) },
+      { nome: 'folha-nj-busca-1', url: U('nj'), tamanhos: T, antes: buscar('Maria Aparecida') },
+      { nome: 'folha-nj-busca-0', url: U('nj'), tamanhos: T, antes: buscar('zzzz nada') },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-ficha`, url: U(v), tamanhos: T, antes: linha('Antônio Exemplo Prado') })),
+      { nome: 'folha-nj-ficha-longa', url: U('nj'), tamanhos: T, antes: linha('Maria Aparecida Demonstração dos Santos Lima') },
+      { nome: 'folha-nj-ficha-documentos', url: U('nj'), tamanhos: T, antes: async (p) => { await linha('Antônio Exemplo Prado')(p);
+        await p.locator('[data-testid="folha-ficha"] button', { hasText: /^Documentos/ }).click(); await p.waitForTimeout(500); } },
+      ...[['cadastro', null], ['salario', 'Salário e atuação'], ['situacao', 'Situação']].map(([n, a]) => ({
+        nome: `folha-funcionario-${n}`, url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: dialogo('Antônio Exemplo Prado', a) })),
+      { nome: 'folha-funcionario-novo', url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: dialogo(null, null) },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-historico`, url: U(v, '&aba=historico&func=f00'), tamanhos: T })),
+      { nome: 'folha-nj-historico-voltar', url: U('nj', '&aba=historico&func=f00&voltar=1'), tamanhos: T },
+      { nome: 'folha-nj-historico-rescisao', url: U('nj', '&aba=historico&func=f00'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-historico-faixa"] button', { hasText: /^Rescisão/ }).click(); await p.waitForTimeout(500); } },
+      { nome: 'folha-nj-historico-sem-pessoa', url: U('nj', '&aba=historico'), tamanhos: T },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-pendencias`, url: U(v, '&aba=pendencias'), tamanhos: T })),
+      { nome: 'folha-nj-pendencias-recibo', url: U('nj', '&aba=pendencias'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-pendencias-filtros"] button', { hasText: /^Sem recibo/ }).click(); await p.waitForTimeout(500); } },
+      ...['ligar_sugestao', 'cadastrar_desligado', 'descartar'].map((a) => ({ nome: `folha-resolver-${a}`, url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: resolver(a) })),
+      { nome: 'folha-nj-mes', url: U('nj', '&aba=mes'), tamanhos: T },
+      { nome: 'folha-sem-acesso', url: U('nj', '&ok=0'), tamanhos: T },
+      ...['ligado', 'sem'].map((c) => ({ nome: `folha-lancamento-${c}`, url: `tela=folha-lancamento&caso=${c}`, tamanhos: T, regiao: LANC,
+        antes: async (p) => { await p.waitForTimeout(600); } })),
+      { nome: 'folha-lancamento-dialogo', url: 'tela=folha-lancamento&caso=ligado', tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+        await p.locator('[data-testid="lanc-funcionario-trocar"]').click(); await p.locator('[data-testid="lanc-funcionario-dialog"]').waitFor(); await p.waitForTimeout(400); } },
+    ];
+  })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
      a lista, a busca para 1/0 bens e um chip (o quadro tem a mesma altura), a aba que chega depois, e o modal do bem em cada aba (o
      trator, a pastagem, a terra e o bem NOVO — Dados e Lançamentos, a terra num passo) */

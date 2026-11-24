@@ -27,6 +27,7 @@ import { usePodeAbrir, usePodeAlterarOperacao, TELA_DA_OPERACAO } from '@/v2/hoo
 import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
 import { FinanciamentoDoLancamento } from '@/components/financiamentos/FinanciamentoDoLancamento';
 import { PatrimonioDoLancamento } from '@/components/patrimonio/PatrimonioDoLancamento';
+import { FuncionarioDoLancamento } from '@/components/folha/FuncionarioDoLancamento';
 import { contaPedeFinanciamento } from '@/lib/patrimonio/patrimonioDoLancamento';
 import { assinarDocumento, useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
@@ -230,6 +231,8 @@ interface Props {
   /** P143 (PAGAMENTO-PARCELAS-01, D1) — abrir OUTRA parcela da mesma compra no MESMO modal: o hospedeiro rele^ o lancamento pelo id e o troca
    *  na prop `lancamento`. Ausente = a tabela das parcelas so' se le^ (nenhuma linha abre). */
   onTrocarLancamento?: (lancamentoId: string) => void;
+  /** FOLHA-01 · PR B (D3): dentro da Folha, o ↗ do funcionário só troca a pessoa no Histórico (sem ele, navega para a Folha) */
+  onAbrirFuncionario?: (funcionarioId: string) => void;
   /** P128a (NOTA-JA-LANCADA, porta 2) — "Ler a NF" no Documentos do Editar: o arquivo abre a MESMA previa do "+ Da nota", partindo deste
    *  lancamento. Devolve a frase pronta do que impediu (nota nao lida, consulta que falhou) ou `null` (a previa abriu). Ausente = sem o gesto. */
   onLerNotaFiscal?: (arquivo: File, lancamentoId: string) => Promise<string | null>;
@@ -634,7 +637,7 @@ export function LancamentoV2Dialog({
   open, carregando, onClose, onSave, onDelete, lancamento: lancamentoDaProp, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill: prefillDaProp, lockedFields: travasDaProp, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos, origemOC,
-  referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato, onTrocarLancamento,
+  referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato, onTrocarLancamento, onAbrirFuncionario,
   documentosAntesDeSalvar, onLerNotaFiscal, onLerNotaNoNovo, abaInicial,
 }: Props) {
   /* CONC-CRIAR-PERDE-DADOS-01 (Gabriel 08/11, URGENTE) — FORMULÁRIO ABERTO NUNCA PERDE DADOS. A hidratação do formulário (os efeitos com
@@ -4015,6 +4018,11 @@ export function LancamentoV2Dialog({
             {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && (
               <PatrimonioDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id} descricao={lancamento.descricao ?? null}
                 valor={Math.abs(Number(lancamento.valor) || 0)} fornecedor={resumoFavorecido} fazendaRotulo={resumoFazenda} />
+            )}
+            {/* FOLHA-01 · PR B (D3/D4) — "Funcionário ↗" / "ligar a um funcionário…": só para quem tem a folha (a peça confere o `folha_ok`) */}
+            {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && (
+              <FuncionarioDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id} onAntesDeSair={onClose}
+                onAbrirFuncionario={onAbrirFuncionario ? (id) => { onClose(); onAbrirFuncionario(id); } : undefined} />
             )}
             {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && parteOCLida && !parteOCViva && (
               <FinanciamentoDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id} parcelaDaCompra={parcelaDaCompra}
