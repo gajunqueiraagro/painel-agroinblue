@@ -3,6 +3,7 @@
  * nota. Um lugar so': nenhuma tela faz estas consultas por conta propria. (O leitor e a proposta sao puros e moram em
  * `src/lib/financeiro/nfe/`; isto aqui fala com o supabase e por isso fica fora daquela pasta.)
  */
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { supabase } from '@/integrations/supabase/client';
 import { lerResolucoesDoBanco } from '@/v2/lib/importLanc/importLancamentosView';
 import { soDigitos } from '@/lib/financeiro/nfe/formatos';
@@ -224,7 +225,7 @@ export async function gravarDocumentoNoCadastro(clienteId: string, fornecedorId:
   if (!validado.formatado) return null;
   const { error } = await supabase.from('financeiro_fornecedores').update({ cpf_cnpj: validado.formatado })
     .eq('id', fornecedorId).eq('cliente_id', clienteId).or('cpf_cnpj.is.null,cpf_cnpj.eq.');
-  if (error) return error.message;
+  if (error) return fraseDoErroDoFornecedor(error, { cpf_cnpj: validado.formatado }, 'gravar o CNPJ no cadastro');
   /* NOTA-FORNECEDOR-CNPJ-ACHADO-01 — COM O ID: a tela de Lancamentos rele^ so' os avisados (sem id, so' os da pagina — e a previa da
      proxima nota ficava com este cadastro velho, "sem CNPJ") */
   notificarFornecedoresMudaram(clienteId, [fornecedorId]);   /* FORN-SELETOR-PADRAO-01: o documento do cadastro mudou */
@@ -245,7 +246,7 @@ export async function completarCadastroPeloXml(clienteId: string, fornecedorId: 
   const patch = completarPeloEmitente(Object.fromEntries(Object.entries(data)), emitente);
   if (Object.keys(patch).length === 0) return null;
   const { error: e2 } = await supabase.from('financeiro_fornecedores').update(patch).eq('id', fornecedorId).eq('cliente_id', clienteId);
-  if (e2) return e2.message;
+  if (e2) return fraseDoErroDoFornecedor(e2, patch, 'completar o cadastro');
   notificarFornecedoresMudaram(clienteId, [fornecedorId]);
   return null;
 }

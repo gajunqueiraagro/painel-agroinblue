@@ -14,6 +14,7 @@
  *  · Edição: a linha INTEIRA é relida do banco ao abrir (o lápis do seletor entrega só as colunas do leitor); o Salvar espera essa
  *    leitura para nunca gravar vazio por cima de um campo que a tela não leu.
  */
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { BlocoFormulario, CORPO_FORMULARIO, Rotulo } from '@/components/ui/bloco-formulario';
@@ -271,7 +272,7 @@ export function FornecedorFormDialog({
     const { data: criado, error } = editing ? await tabela.update(payload).eq('id', editing.id)
       : onCriado ? await tabela.insert(payload).select('id').single() : await tabela.insert(payload);
     setSaving(false);
-    if (error) { setRecado({ texto: `Não foi possível gravar: ${error.message}`, tom: 'erro' }); return; }
+    if (error) { setRecado({ texto: fraseDoErroDoFornecedor(error, payload, editing ? 'gravar o fornecedor' : 'criar o fornecedor'), tom: 'erro' }); return; }
     if (!editing && onCriado && criado && typeof criado.id === 'string') onCriado(criado.id);
     toast.success(editing ? 'Fornecedor atualizado' : 'Fornecedor criado');
     const gravado = editing ? editing.id : criado && typeof criado.id === 'string' ? criado.id : null;
@@ -296,7 +297,7 @@ export function FornecedorFormDialog({
     setReativando(true);
     const { error } = await supabase.from('financeiro_fornecedores').update({ ativo: true }).eq('id', reativarTarget.id);
     setReativando(false);
-    if (error) { setRecado({ texto: `Não foi possível reativar: ${error.message}`, tom: 'erro' }); return; }
+    if (error) { setRecado({ texto: fraseDoErroDoFornecedor(error, { ativo: true }, 'reativar o fornecedor'), tom: 'erro' }); return; }
     toast.success(`Fornecedor "${reativarTarget.nome}" reativado`);
     setReativarTarget(null);
     notificarFornecedoresMudaram(clienteId, [reativarTarget.id]);
