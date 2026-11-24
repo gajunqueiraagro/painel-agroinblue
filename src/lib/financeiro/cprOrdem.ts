@@ -8,7 +8,7 @@
  *   - a NF só com o número ("9.232", nunca "NF 000.009.232").
  */
 
-export type ColunaCpr = 'comp' | 'venc' | 'descricao' | 'fornecedor' | 'subcentro' | 'nf' | 'status' | 'valor';
+export type ColunaCpr = 'comp' | 'venc' | 'descricao' | 'fornecedor' | 'subcentro' | 'nf' | 'status' | 'valor' | 'aprovacao' | 'lancado';
 export type SentidoCpr = 'asc' | 'desc';
 export interface OrdemCpr { coluna: ColunaCpr; sentido: SentidoCpr }
 
@@ -18,6 +18,8 @@ export const ORDEM_PADRAO_CPR: OrdemCpr = { coluna: 'venc', sentido: 'asc' };
 /** Os rótulos do cabeçalho, na ordem das colunas. */
 export const ROTULO_DA_COLUNA_CPR: Readonly<Record<ColunaCpr, string>> = {
   comp: 'Comp.', venc: 'Venc.', descricao: 'Descrição', fornecedor: 'Fornecedor', subcentro: 'Subcentro', nf: 'NF', status: 'Status', valor: 'Valor',
+  /* BPO-FUNCIONAR-01 — só com a aprovação ligada */
+  aprovacao: 'Aprovação', lancado: 'Lançado por',
 };
 
 /** Clicar numa coluna: a mesma inverte o sentido; outra começa crescente (o Valor começa do maior). */
@@ -31,6 +33,8 @@ export interface ChavesDaLinhaCpr {
   comp: string | null; venc: string | null; descricao: string; fornecedor: string; subcentro: string; nf: string; status: string;
   /** o valor COM SINAL do lado (+ a receber, − a pagar) */
   valor: number;
+  /** BPO-FUNCIONAR-01 — o texto do chip e o nome de quem lançou (ausentes sem a aprovação ligada: vazio vai para o fim) */
+  aprovacao?: string; lancado?: string;
 }
 
 const COLADOR = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });

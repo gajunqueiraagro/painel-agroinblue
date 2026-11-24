@@ -298,6 +298,20 @@ const CENARIOS = [
      cabecalho do dia em janela estreita) — frente CPR-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
   /* CPR-SEM-CORTE-01 (CPR-AJUSTES-20-10) — a CPR INTEIRA, lista e Ampliado, nos sete tamanhos: nada de "…" */
   { nome: 'cpr-lista', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* BPO-FUNCIONAR-01 — a aprovação DENTRO da CPR: as etapas no topo; "Para aprovar" (a régua da casa + seleção + barra), os cartões no celular,
+     o painel de decisão (o documento ao lado) e "Para pagar" */
+  { nome: 'cpr-bpo-tudo', url: 'tela=cpr&bpo=1', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'cpr-bpo-aprovar', url: 'tela=cpr&bpo=1&etapa=aprovar', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-celula-aprovacao], [data-testid="bpo-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(400); } },
+  /* o celular sem a casca da bancada (o app no celular não tem a lateral nem a barra do topo) */
+  { nome: 'cpr-bpo-aprovar-celular', url: 'tela=cpr&bpo=1&etapa=aprovar&semlateral=1&barra=0', tamanhos: [[390, 844], [750, 600]],
+    antes: async (p) => { await p.locator('[data-testid="bpo-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(400); } },
+  { nome: 'cpr-bpo-painel', url: 'tela=cpr&bpo=1&etapa=aprovar', tamanhos: [[1126, 579], [1280, 800], [1920, 1080]], regiao: '[data-testid="bpo-painel-decisao"]',
+    antes: async (p) => { await p.locator('[data-celula-aprovacao]').first().waitFor({ timeout: 20000 });
+      await p.locator('[data-celula-aprovacao]').first().click(); await p.locator('[data-testid="bpo-painel-decisao"]').waitFor(); await p.waitForTimeout(600); } },
+  { nome: 'cpr-bpo-pagar', url: 'tela=cpr&bpo=1', tamanhos: TAMANHOS_DO_CONSORCIO,
+    antes: async (p) => { await p.locator('[data-testid="cpr-etapa-pagar"]').click();
+      await p.locator('[data-celula-aprovacao], [data-testid="bpo-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(400); } },
   /* REC-COLUNAS-01 — Financeiro › Recorrências, a lista do mês com o pior texto de cada coluna curta, nos sete tamanhos. Descrição,
      Favorecido e a Conta acima da régua cortam com "…" e o inteiro no `title` (regra do Gabriel de 21/10, 07h25): a regra
      `reticencias` fica fora; corte calado, vazamento, número partido, quebra, sobreposição e cabeçalho valem.
@@ -1976,6 +1990,8 @@ const CENARIOS = [
       semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS }, antes: f ? clicarTexto(f) : undefined }]),
   /* NOTA-CONTAS-NA-CRIACAO-01 A — o NOVO pela nota: a vista Contas dos itens ("Dividir em N contas ao salvar") e, depois de dividir (o item 1
      para uma conta de Lavoura, pela barra de atividade), a Geral com as partes PENDENTES ("dividida em 2 contas ao salvar") */
+  /* FORN-CRIAR-DA-NOTA-ERRO — a faixa "Fornecedor não encontrado … criar fornecedor com estes dados" com o nome SEM o código do emissor */
+  { nome: 'lancamento-xml-codigo-emissor', url: 'tela=lancamento&m=novo&v=xmlcodigo', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'lancamento-xml-Itens-contas', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
     antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p); } },
@@ -2011,18 +2027,7 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="rateio-linha"]').first().waitFor(); if (botao) { await p.locator(botao).click(); await p.waitForTimeout(300); } } })),
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
-  /* BPO-GUIA-01 P2 — com o BPO ligado, a barra dos marcados ganha "Enviar para aprovação" (inteiro na barra) e a prévia do banco no modal
-     (entram N, uma fica de fora com o motivo: o pior caso da frase) */
-  { nome: 'financeiro-barra-lote-bpo', url: 'tela=financeiro&bpo=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
-    botoesDentro: '[data-testid="barra-lote"]',
-    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
-      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
-      await p.locator('[data-testid="lote-enviar-aprovacao"]').waitFor(); await p.waitForTimeout(400); } },
-  { nome: 'financeiro-enviar-aprovacao', url: 'tela=financeiro&bpo=1', tamanhos: [[390, 844], [1280, 800], [1920, 1080]], regiao: '[data-testid="enviar-aprovacao"]',
-    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
-      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
-      await p.locator('[data-testid="lote-enviar-aprovacao"]').click();
-      await p.locator('[data-testid="enviar-aprovacao-previa"]', { hasText: 'para a fila' }).waitFor(); await p.waitForTimeout(300); } },
+  /* BPO-FUNCIONAR-01 — o "Enviar para aprovação" SAIU da barra (entra sozinho pela regra, 118500): as cenas dele saíram junto */
   /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
   ...['', 'mesmo', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),

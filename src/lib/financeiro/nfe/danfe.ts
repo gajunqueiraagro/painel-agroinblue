@@ -15,6 +15,7 @@
  */
 import { soDigitos } from './formatos';
 import { somarCentavos } from './centavos';
+import { semCodigoDoEmissor } from './nomeDoEmitente';
 import type { AvisoNFe, DuplicataNFe, FinalidadeNota, NotaLida } from './tipos';
 
 /** Um item de texto do pdfjs: `x`/`y` da linha de base (pontos, origem embaixo a' esquerda), largura e altura. */
@@ -682,7 +683,7 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
     finalidade,
     naturezaOperacao,
     emitente: {
-      documento: docEmit, nome: nomeEmit, fantasia: null, ie: ie(itIeEmit),
+      documento: docEmit, nome: semCodigoDoEmissor(nomeEmit), fantasia: null, ie: ie(itIeEmit),
       endereco: { logradouro, numero: numeroEnd, complemento: null, bairro, municipio, uf, cep, telefone },
     },
     destinatario: { documento: soDigitos(itDocDest?.str) || null, nome: itNomeDest?.str.trim() || null, ie: ie(itIeDest), endereco: itEnderDest?.str.trim() || null },

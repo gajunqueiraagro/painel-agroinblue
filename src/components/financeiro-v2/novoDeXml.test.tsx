@@ -647,6 +647,14 @@ describe('tela B — a faixa do fornecedor', () => {
     fireEvent.click(screen.getByTestId('xml-criar-fornecedor'));
     await waitFor(() => expect(m.onCriarFornecedor).toHaveBeenCalledWith('AGROPECUARIA EXEMPLO LTDA', 'f-pur', '11.222.333/0001-81'));
   });
+  it('FORN-CRIAR-DA-NOTA-ERRO (NF 39.814) — sem fazenda identificada cria SEM fazenda (nunca o "" do campo vazio: o banco recusava, 22P02) e o nome vem sem o código "1 - " do emissor', async () => {
+    const d = doXmlDe({ nomeEmitente: '1 - AGROPECUARIA EXEMPLO LTDA' }, [], { ultima: null });
+    const m = montarModal({ prefill: prefillDaNota({ ...d, proposta: { ...d.proposta, fazendaId: null } }) }, []);
+    await screen.findByDisplayValue('16.238,00');
+    expect(screen.getByTestId('xml-faixa-fornecedor').textContent).toContain('"AGROPECUARIA EXEMPLO LTDA"');
+    fireEvent.click(screen.getByTestId('xml-criar-fornecedor'));
+    await waitFor(() => expect(m.onCriarFornecedor).toHaveBeenCalledWith('AGROPECUARIA EXEMPLO LTDA', null, '11.222.333/0001-81'));
+  });
   it('NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ ja\' e\' de um cadastro (conferido no banco antes): a frase pronta, nada criado, e "usar este"', async () => {
     consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ ok: true, valor: { id: 'agro-ja', nome: 'Agropecuaria Exemplo (cadastro antigo)', ativo: true } });
     const m = montarModal({ prefill: prefillDaNota(doXmlDe({}, [], { ultima: null })) }, []);
