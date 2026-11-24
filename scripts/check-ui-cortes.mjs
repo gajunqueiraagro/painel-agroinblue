@@ -867,6 +867,13 @@ const CENARIOS = [
           await clicarRotulo(/^Gráfico$/)(p); await p.locator('[role="dialog"]').waitFor();
           await p.locator('[role="dialog"]').getByRole('button', { name: 'O que mudou', exact: true }).click();
           await p.locator('[data-testid="grafico-ponte"]').waitFor(); await p.waitForTimeout(400); } })),
+      /* DRE-GRAFICOS-02 — a "Leitura dos anos" com o seletor próprio: 2 · 3 · 5 anos, e 5 anos com os anteriores a 2024 em "—" (forma da Vera) */
+      ...[['2', ''], ['3', ''], ['5', ''], ['5', '&desde=2024']].map(([n, extra]) => ({ nome: `dre-pec-grafico-leitura-${n}${extra ? '-desde' : ''}${suf}`,
+        url: `${URL_DRE}${extra}`, tamanhos: [[1126, 579], [1280, 800], [1920, 1080]], regiao: '[role="dialog"]',
+        antes: async (p) => { await clicarRotulo(/^Gráfico$/)(p); await p.locator('[role="dialog"]').waitFor();
+          await p.locator('[role="dialog"]').getByRole('button', { name: 'Leitura dos anos', exact: true }).click();
+          await p.locator('[data-testid="leitura-n-anos"]').getByRole('button', { name: n, exact: true }).click();
+          await p.locator('[data-testid="leitura-tabela"]').waitFor(); await p.waitForTimeout(800); } })),
       /* DRE-PAINEL-03b — o painel da direita abre na Cascata (o `dre-pec-mudou` acima a mede); aqui a aba "O que mudou" do painel aberta */
       { nome: `dre-pec-painel-ponte${suf}`, url: URL_DRE, tamanhos: [[1126, 579], [1280, 800], [1920, 1080]],
         antes: async (p) => { await p.locator('[data-testid="dre-painel-abas"]').getByRole('button', { name: 'O que mudou', exact: true }).click();

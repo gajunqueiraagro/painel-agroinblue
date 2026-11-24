@@ -18,8 +18,9 @@
 import { formatNum } from '@/lib/calculos/formatters';
 import { traco, VERDE, VERMELHO, type TomFaixa } from '@/components/agri/dreGrade';
 import type {
-  ChaveLinhaPec, DrePecLinhas, CentroPec, CenarioPec,
+  ChaveLinhaPec, DrePecLinhas, CentroPec, CenarioPec, DrePecuaria,
 } from '@/hooks/useDrePecuaria';
+import { rotuloCurtoPeriodo } from '@/hooks/useDrePecuaria';
 
 /**
  * UMA COLUNA DA GRADE — o Total é uma coluna como as outras, só que primeiro e destacada.
@@ -87,6 +88,24 @@ export interface ColunaPec {
    * conjunto de lançamentos soma ao valor dela. Clicar não abre nada (abrir os 12 meses mostraria 12× o número).
    */
   semLista?: boolean;
+}
+
+/**
+ * UMA COLUNA DE ANO ANTERIOR — o mesmo recorte k anos antes. DRE-GRAFICOS-02: é a da GRADE e a da "Leitura dos anos" (o seletor
+ * 2 · 3 · 5 anos da janela): uma regra só, movida da grade sem mudança (`k` = a distância em anos, 1 = o anterior).
+ */
+export function colunaDoAnoAnterior(
+  a: { de: string; ate: string; dre: Pick<DrePecuaria, 'total' | 'periodo' | 'fazendas'> | null; carregando: boolean }, k: number, linhasSemDre: DrePecLinhas | null, meses: number,
+): ColunaPec {
+  return {
+    chave: `__ano${k}__`, nome: rotuloCurtoPeriodo(a.de, a.ate), sub: '', fazendaId: null,
+    linhas: a.carregando ? null : (a.dre?.total ?? linhasSemDre), total: false, tipo: 'valor',
+    unidade: 'ha', de: a.de, ate: a.ate, cenario: 'realizado', meses: a.dre?.periodo.meses ?? meses,
+    atual: false, comparacao: true,
+    /* ⚠ ANO SEM DADO É COLUNA DE "—", não coluna escondida: sumir faria "2023" parecer igual a
+       "nunca houve 2023". Sem fazenda na resposta = nem fechamento nem lançamento naquele ano. */
+    semDado: !a.carregando && (!a.dre || a.dre.fazendas.length === 0),
+  };
 }
 
 /**

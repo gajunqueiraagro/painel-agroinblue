@@ -962,7 +962,10 @@ if (tela === 'mesclar') {
   const ESCALA_DRE = v === 'grande' ? 10 : 1;
   g.__bancoBancada = {
     from: (t: string) => (t === 'financeiro_safras' ? DRE.SAFRAS : []),
-    rpc: (fn: string, a: any) => fn === 'fn_dre_pecuaria' ? DRE.drePecuaria(a, ESCALA_DRE)
+    /* DRE-GRAFICOS-02 — `&desde=2024`: os anos antes dele vêm SEM fazenda (a forma da Vera, com rebanho só de 2024): a Leitura com 5 anos
+       mostra esses anos em "—" */
+    rpc: (fn: string, a: any) => fn === 'fn_dre_pecuaria'
+        ? (q.get('desde') && String(a.p_de ?? '') < String(q.get('desde')) ? { ...DRE.drePecuaria(a, ESCALA_DRE), fazendas: [] } : DRE.drePecuaria(a, ESCALA_DRE))
       : fn === 'fn_dre_lavoura' ? DRE.dreLavoura(ESCALA_DRE)
       /* DRE-VARIACAO-EXPLICA-01 1b: o modal da variação (`&fim=cadastro` = o D3) */
       : fn === 'fn_dre_pecuaria_patrimonio' ? DRE.patrimonio(a, ESCALA_DRE, q.get('fim') === 'cadastro') : null,

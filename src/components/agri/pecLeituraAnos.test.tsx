@@ -15,7 +15,8 @@ import {
 } from '@/components/agri/pecLeituraAnos';
 import { gmdDoPeriodo, mesesDoPeriodo } from '@/hooks/useLeituraAnosPec';
 import { computePeriodGmd } from '@/lib/calculos/painelConsultorIndicadores';
-import { TabelaIndicadores } from '@/components/agri/PecGraficoModal';
+import { TabelaIndicadores, deltaDaLinha, periodosDaLeitura } from '@/components/agri/PecGraficoModal';
+import { colunaDoAnoAnterior } from '@/components/agri/drePecRegua';
 import type { ColunaPec } from '@/components/agri/drePecRegua';
 import type { DrePecLinhas, MovimentosPec } from '@/hooks/useDrePecuaria';
 
@@ -206,56 +207,99 @@ const col = (chave: string, nome: string, l: DrePecLinhas, meses: number): Colun
   de: '2025-01', ate: meses === 12 ? '2025-12' : '2025-08', cenario: 'realizado', meses, atual: false,
 });
 
-describe('a tabela de indicadores', () => {
-  it('marca "8m" só nos valores do período e deixa os comparáveis sem marca', () => {
+describe('a tabela de indicadores — DRE-GRAFICOS-02 (colunas fixas, Unidade · base, Δ pelo sentido)', () => {
+  const linha = (rot: string): HTMLTableRowElement => {
+    const tr = document.querySelector(`tr[data-indicador="${rot}"]`);
+    if (!(tr instanceof HTMLTableRowElement)) throw new Error(`sem a linha ${rot}`);
+    return tr;
+  };
+  const celulaDoAno = (rot: string, i = 0) => linha(rot).querySelectorAll('td')[2 + i];
+
+  it('marca "8m" só nos valores do período e deixa os comparáveis sem marca; a unidade e a base na 2ª coluna', () => {
     const anos = [col('a', 'jan-ago/25', NJ2025, 8)];
     render(<TabelaIndicadores anos={anos} ind={[indicadoresDoAno(NJ2025)]} movs={[null]} gmds={[0.5]}
       unidade="at" parcial={[true]} rotulo={(c) => `${c.nome}*`} onAbrirAno={() => {}} />);
-    const linha = (rot: string) => screen.getByText(rot).closest('tr');
-    expect(within(linha('Receita do desfrute (R$)')!).getByText('8m')).toBeTruthy();
-    expect(within(linha('Custeio de produção (R$)')!).getByText('8m')).toBeTruthy();
-    expect(within(linha('Preço médio de venda (R$/@)')!).queryByText('8m')).toBeNull();
-    expect(within(linha('Custo por @ produzida (R$/@)')!).queryByText('8m')).toBeNull();
+    expect(within(linha('Receita das vendas')).getByText('8m')).toBeTruthy();
+    expect(within(linha('Custeio de produção')).getByText('8m')).toBeTruthy();
+    expect(within(linha('Preço médio de venda')).queryByText('8m')).toBeNull();
+    expect(within(linha('Custo por arroba produzida')).queryByText('8m')).toBeNull();
+    expect(linha('Preço médio de venda').querySelectorAll('td')[1].textContent).toBe('R$/@ · média do período');
+    expect(linha('Rebanho inicial').querySelectorAll('td')[1].textContent).toBe('cab · no 1º dia');
     /* ⚠ O AVISO DO GMD MORA NO INDICADOR. */
     expect(screen.getByText('período parcial: não compara com ano cheio')).toBeTruthy();
     expect(screen.getByText('jan–ago')).toBeTruthy();
   });
 
-  it('ano cheio não tem marca nem aviso do GMD', () => {
+  it('ano cheio não tem marca nem aviso do GMD; com 1 ano, o Δ é traço', () => {
     render(<TabelaIndicadores anos={[col('a', '2025', NJ2025, 12)]} ind={[indicadoresDoAno(NJ2025)]} movs={[null]}
       gmds={[0.5]} unidade="at" parcial={[false]} rotulo={(c) => c.nome} onAbrirAno={() => {}} />);
     expect(screen.queryByText('8m')).toBeNull();
     expect(screen.queryByText('período parcial: não compara com ano cheio')).toBeNull();
+    expect(linha('Preço médio de venda').querySelector('[data-delta-qtd]')?.textContent).toBe('—');
   });
 
-  it('RRCC 2021: custo por @ e margem em traço, a diferença da ponte em cinza com o número', () => {
+  it('RRCC 2021: custo por @ e margem em traço, o ajuste da ponte em cinza com o número', () => {
     render(<TabelaIndicadores anos={[col('a', '2021', RRCC2021, 12)]} ind={[indicadoresDoAno(RRCC2021)]}
       movs={[MOV_RRCC2021]} gmds={[null]} unidade="at" parcial={[false]} rotulo={(c) => c.nome} onAbrirAno={() => {}} />);
-    const celulaDe = (rot: string) => screen.getByText(rot).closest('tr')!.querySelectorAll('td')[1];
-    expect(celulaDe('Custo por @ produzida (R$/@)').textContent).toBe('—');
-    expect(celulaDe('Margem por @ (R$/@)').textContent).toBe('—');
-    expect(celulaDe('GMD (kg/cab/dia)').textContent).toBe('—');
-    expect(celulaDe('Produção').textContent).toBe('—');
-    const dif = celulaDe('Diferença');
+    expect(celulaDoAno('Custo por arroba produzida').textContent).toBe('—');
+    expect(celulaDoAno('Margem por arroba').textContent).toBe('—');
+    expect(celulaDoAno('Ganho médio diário (GMD)').textContent).toBe('—');
+    expect(celulaDoAno('Ganho de peso (produção)').textContent).toBe('—');
+    const dif = celulaDoAno('Ajuste de contagem');
     expect(dif.textContent).toBe('+3.190');
     expect(dif.className).toContain('text-muted-foreground');
-    /* A busca sabe achar: o preço de venda existe e sai verde. */
-    expect(celulaDe('Preço médio de venda (R$/@)').className).toContain('text-emerald-700');
+    /* A busca sabe achar: o preço de venda existe (não é traço). */
+    expect(celulaDoAno('Preço médio de venda').textContent).not.toBe('—');
   });
 
-  it('ágio positivo sai vermelho; custo que sobe no ano sai vermelho', () => {
-    const caro = { ...NJ2025, reposicao: 3835.5 * 400 };
-    const anos = [col('a', '2024', NJ2025, 12), col('b', '2025', caro, 12)];
-    const maisCaro = { ...caro, custo_variavel: caro.custo_variavel * 2 };
-    anos[1] = col('b', '2025', maisCaro, 12);
-    render(<TabelaIndicadores anos={anos} ind={anos.map(c => indicadoresDoAno(c.linhas))} movs={[null, null]}
+  it('o Δ (último × anterior): custo que sobe é vermelho; preço que sobe é verde; o cabeçalho diz os dois anos; a largura não estica', () => {
+    const anos = [col('a', '2024', NJ2025, 12), col('b', '2025', { ...NJ2025, custo_variavel: NJ2025.custo_variavel * 2 }, 12)];
+    const { container } = render(<TabelaIndicadores anos={anos} ind={anos.map(c => indicadoresDoAno(c.linhas))} movs={[null, null]}
       gmds={[null, null]} unidade="at" parcial={[false, false]} rotulo={(c) => c.nome} onAbrirAno={() => {}} />);
-    const celulas = (rot: string) => screen.getAllByText(rot)[0].closest('tr')!.querySelectorAll('td');
-    const agio = celulas('ágio sobre o R$/@ do desfrute')[2];
-    expect(agio.textContent?.startsWith('+')).toBe(true);
-    expect(agio.className).toContain('text-destructive');
-    const varCusto = screen.getAllByText('variação no ano')[1].closest('tr')!.querySelectorAll('td')[2];
-    expect(varCusto.textContent?.startsWith('+')).toBe(true);
-    expect(varCusto.className).toContain('text-destructive');
+    const dq = (rot: string): HTMLElement => {
+      const td = linha(rot).querySelector('[data-delta-qtd]');
+      if (!(td instanceof HTMLElement)) throw new Error(`sem o Δ de ${rot}`);
+      return td;
+    };
+    expect(dq('Custo por arroba produzida').textContent?.startsWith('+')).toBe(true);
+    expect(dq('Custo por arroba produzida').className).toContain('text-destructive');
+    expect(dq('Custeio de produção').className).toContain('text-destructive');   // mais custeio = pior
+    expect(dq('Preço médio de venda').className).toContain('text-muted-foreground');   // mesmo preço nos dois anos: sem cor
+    expect(screen.getByTestId('leitura-delta-cabecalho').textContent).toBe('Δ 2025 × 2024');
+    expect(container.querySelector('table')?.style.width).toBe(`${194 + 146 + 92 * 2 + 96 + 56}px`);
+  });
+});
+
+describe('deltaDaLinha — o sentido de cada indicador', () => {
+  it('mais é melhor, menos é melhor, neutro; fração em pp sem %; base zero ou ausente', () => {
+    expect(deltaDaLinha({ vals: [100, 120], sentido: 1 })).toEqual({ qtd: 20, pct: 0.2, tom: 'melhor' });
+    expect(deltaDaLinha({ vals: [160, 150], sentido: -1 })).toEqual({ qtd: -10, pct: -10 / 160, tom: 'melhor' });   // custo caiu
+    expect(deltaDaLinha({ vals: [-6100, -9996], sentido: -1 }).tom).toBe('melhor');   // vendeu mais (saída mais negativa)
+    expect(deltaDaLinha({ vals: [-250, -142], sentido: 1 }).tom).toBe('melhor');       // morreu menos
+    expect(deltaDaLinha({ vals: [1900, 0], sentido: 0 }).tom).toBeNull();               // compra não julga
+    const d = deltaDaLinha({ vals: [0.261, 0.322], sentido: 1, forma: 'pct' });
+    expect(d.qtd).toBeCloseTo(6.1, 6); expect(d.pct).toBeNull(); expect(d.tom).toBe('melhor');
+    expect(deltaDaLinha({ vals: [0, 5], sentido: 1 }).pct).toBeNull();
+    expect(deltaDaLinha({ vals: [-100, -50], sentido: 1 }).pct).toBe(0.5);   // base negativa: o % sobre o valor absoluto (o custeio, a morte)
+    expect(deltaDaLinha({ vals: [null, 5], sentido: 1 })).toEqual({ qtd: null, pct: null, tom: null });
+    expect(deltaDaLinha({ vals: [1, 2, 3], sentido: 1 }).qtd).toBe(1);   // só os dois últimos
+  });
+});
+
+describe('DRE-GRAFICOS-02 — o seletor "Anos 2 · 3 · 5" e a coluna de ano anterior (uma regra só)', () => {
+  it('os anos antes do período da tela: o mesmo recorte de meses, do mais antigo ao mais recente', () => {
+    expect(periodosDaLeitura({ de: '2026-01', ate: '2026-10' }, 2)).toEqual([{ de: '2025-01', ate: '2025-10', cenario: 'realizado' }]);
+    expect(periodosDaLeitura({ de: '2025-07', ate: '2026-06' }, 3).map(p => `${p.de}..${p.ate}`)).toEqual(['2023-07..2024-06', '2024-07..2025-06']);
+    expect(periodosDaLeitura({ de: '2026-01', ate: '2026-10' }, 5)).toHaveLength(4);
+    expect(periodosDaLeitura({ de: '2026-01', ate: '2026-10' }, 5)[0].de).toBe('2022-01');
+  });
+  it('a coluna de ano: sem fazenda na resposta = "—" (nunca escondida); carregando = esqueleto; com DRE, o total e os meses dele', () => {
+    const dre = (fazendas: number) => ({ total: NJ2025, periodo: { de: '2025-01', ate: '2025-10', p0: '2025-01', meses: 10 },
+      fazendas: Array.from({ length: fazendas }, (_, i) => ({ fazenda_id: `f${i}`, nome: 'Fazenda Exemplo', linhas: NJ2025 })) });
+    const comDado = colunaDoAnoAnterior({ de: '2025-01', ate: '2025-10', dre: dre(1), carregando: false }, 1, null, 12);
+    expect(comDado).toMatchObject({ chave: '__ano1__', nome: 'jan-out/25', linhas: NJ2025, meses: 10, semDado: false, comparacao: true, atual: false });
+    expect(colunaDoAnoAnterior({ de: '2022-01', ate: '2022-10', dre: dre(0), carregando: false }, 4, null, 10).semDado).toBe(true);
+    expect(colunaDoAnoAnterior({ de: '2022-01', ate: '2022-10', dre: null, carregando: false }, 4, null, 10)).toMatchObject({ semDado: true, linhas: null, meses: 10 });
+    expect(colunaDoAnoAnterior({ de: '2022-01', ate: '2022-10', dre: null, carregando: true }, 4, null, 10)).toMatchObject({ semDado: false, linhas: null });
   });
 });
