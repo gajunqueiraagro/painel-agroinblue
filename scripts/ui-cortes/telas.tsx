@@ -827,6 +827,14 @@ if (tela === 'mesclar') {
     id, cliente_id: 'cli', fazenda_id: 'f1', data_vencimento: dia(d < 0 ? d : d + desl), data_competencia: dia(d < 0 ? d : d + desl), data_pagamento: null, status_transacao: 'programado',
     tipo_operacao: '2-Saídas', valor, sinal: -1, conta_bancaria_id: 'bb', conta_destino_id: null, descricao, favorecido_nome: 'Banco Cooperativo Exemplo de Crédito',
     subcentro: 'Juros de Financiamento Pecuária', macro_custo: 'Despesas Financeiras', cancelado: false, sem_movimentacao_caixa: false, ...o });
+  const est = (id: string, estado: string, o: Record<string, unknown> = {}) => ({ lancamento_id: id, estado, rodada: null, motivo: null, observacao: null,
+    decidido_por: null, decidido_em: null, lancado_por: 'u2', lancado_em: dia(-3), posso_decidir: estado === 'aguardando', tem_nota: true, tem_boleto: true,
+    forma: 'Boleto', pronto_pagar: 'pronto', no_banco: null, no_banco_data: null, destino_mudou: false, ...o });
+  const ESTADOS_BPO = [
+    est('rec-1', 'aguardando', { tem_nota: false, tem_boleto: false }), est('juros-2', 'aguardando'), est('amort-2', 'aprovado'),
+    est('ambas', 'aguardando', { lancado_por: 'u1', posso_decidir: false }), est('avulsa', 'aguardando', { tem_boleto: false }),
+    est('parc-1', 'aprovado_regra'), est('vencido-1', 'recusado', { motivo: 'valor diferente do boleto' }),
+  ];
   const LINHAS_CPR = [
     lin('rec-1', 2, 435.75, 'Internet Fazenda Exemplo', { subcentro: 'Comunicação e Energia Pecuária' }),
     lin('juros-2', 5, 35665.34, 'Juros 2/5 · 8.233.040 · Giro Rural', { financiamento_id: 'fin-1' }),
@@ -861,12 +869,22 @@ if (tela === 'mesclar') {
           { id: 'ambas', recorrencia_id: 'reg-1', valor: 1, data_vencimento: dia(9), status_transacao: 'programado', valor_do_mes_em: null }]
       : [],
     rpc: (fn: string) => fn === 'fn_juros_estimados_do_cliente' ? [{ lancamento_id: 'juros-2' }, { lancamento_id: 'ambas' }]
-      : fn === 'fn_parcelas_dos_lancamentos' ? { 'parc-1': [3, 10] } : null,
+      : fn === 'fn_parcelas_dos_lancamentos' ? { 'parc-1': [3, 10] }
+      /* BPO-FUNCIONAR-01 — `&bpo=1`: a aprovação ligada (eu, u1, aprovo; a Amanda, u2, lançou quase tudo; uma linha é MINHA: não se marca) */
+      : fn === 'fn_aprovacao_estados' ? ESTADOS_BPO
+      : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gestor Sintético', email: null, situacao: 'membro ativo' },
+          { user_id: 'u2', nome: 'Amanda Exemplo', email: 'financeiro@exemplo.com', situacao: 'membro ativo' }]
+      : null,
   };
+  if (q.get('bpo') === '1') {
+    const de = g.__bancoBancada.from;
+    g.__bancoBancada.from = (t: string, e: any) => t === 'financeiro_bpo_config' ? [{ ativo: true, desde: dia(-30), aprova_abaixo_de: 500 }]
+      : t === 'financeiro_aprovadores' ? [{ user_id: 'u1' }] : de(t, e);
+  }
   /* CPR-AJUSTES-20-10b — `&v=futuro`: um período que começa depois de hoje (o bloco "Vencidos em aberto · entram no saldo" antes
      do Caixa inicial, e nenhum dia de hoje). P106: o gate clica "Mês futuro" / "Mês anterior" (o retorno de sessão não restaura mais
      o período) */
-  montar(<div className="h-full"><ContasPagarReceberTab onIntensiveToggle={() => {}} /></div>);
+  montar(<div className="h-full"><ContasPagarReceberTab onIntensiveToggle={() => {}} etapaInicial={q.get('etapa') === 'aprovar' ? 'aprovar' : 'tudo'} /></div>);
 } else if (tela === 'contas') {
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias: a lista (`&n=longo` = o pior caso), o modal da conta (`&v=editar&aba=dados|gerente|
      saldo|importacao`, aberto pela 1ª linha) e a nova conta (`&v=nova`). SINTÉTICO (`dados/contas.ts`). */
