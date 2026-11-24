@@ -162,10 +162,10 @@ const AVISTA_DA_NOTA = () => [{ id: 'jl-av', vencimento: '2026-10-10', pagamento
   descricao: 'Brincos de identificação sintéticos — pago à vista no Itaú Personalite, descrição comprida para o pior caso', valor_cent: 196656,
   status: 'realizado', conciliado: false, financiamento_id: null, conta_bancaria_id: 'sic', numero_documento: '937', fornecedor_id: 'agro-s',
   fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
-/* DA-NOTA-JUROS-01 — `v=juros`: o molde da NF 26.185 do NJ (nota R$ 3.441,75 × pago 1 dia depois R$ 3.446,34): a nota SEM duplicata de R$ 1.966,56
-   e, no sistema, o PAGO (conciliado) de R$ 1.971,15 (+4,59) achado pelo número. A cena o vincula e entra no "Como vai ficar". SINTÉTICO. */
+/* DA-NOTA-JUROS-01 — `v=juros`: o molde da NF 26.185 do NJ (nota R$ 3.441,75 × pago 1 dia depois R$ 3.446,34): a nota SEM duplicata de R$ 9.583,00
+   e, no sistema, o PAGO (conciliado) de R$ 9.587,59 (+4,59) achado pelo número. A cena o vincula e entra no "Como vai ficar". SINTÉTICO. */
 const JUROS_DA_NOTA = () => [{ id: 'jl-av', vencimento: '2026-10-10', pagamento: '2026-10-11', competencia: '2026-10-10',
-  descricao: 'Pecas e implementos sinteticos — pago um dia depois do vencimento, com juros, descrição comprida para o pior caso', valor_cent: 197115,
+  descricao: 'Pecas e implementos sinteticos — pago um dia depois do vencimento, com juros, descrição comprida para o pior caso', valor_cent: 958759,
   status: 'realizado', conciliado: true, financiamento_id: null, conta_bancaria_id: 'sic', numero_documento: '937', fornecedor_id: 'agro-s',
   fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
 /* NOTA-ATUALIZA-PREVISTO-01 — `v=previsto`: o molde do caso da Vera (NF 69.134): a nota SEM duplicata e, no sistema, um PREVISTO de R$ 1.000,00
