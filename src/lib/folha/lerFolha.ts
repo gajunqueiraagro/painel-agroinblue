@@ -145,3 +145,15 @@ export function lerFolha(paginas: string[][]): LeituraDaFolha {
     folha: { layout: geral.layout, tipo: geral.tipo, competencia: geral.competencia, empregadores: [...new Set(lista.map((x) => x.cei))], pessoas: lista, total },
   };
 }
+
+/**
+ * CAIXA-FOLHA-AVISO-01 (Gabriel 24/11 10:46) — o PDF PARECE recibo de pagamento? Enquanto a Folha não é lida pela Caixa, o arquivo que
+ * parece folha diz isso (e não "sem linha digitável"). Parece = o texto tem um rótulo de holerite (recibo/folha/demonstrativo de
+ * pagamento, holerite, salário/valor líquido) — os dois layouts que o `lerFolha` lê têm "Valor Líquido"/"SALÁRIO LÍQUIDO", e o que ele
+ * ainda não lê (doméstica) também avisa. Só AVISA: nunca lê a folha nem grava nada.
+ */
+const ROTULOS_DE_FOLHA = ['recibo de pagamento', 'folha de pagamento', 'demonstrativo de pagamento', 'holerite', 'salario liquido', 'valor liquido'];
+export function pareceFolha(paginas: string[][]): boolean {
+  const texto = semAcento(paginas.map((p) => p.join(' ')).join(' ')).replace(/\s*\|\s*/g, ' ').replace(/\s+/g, ' ');
+  return ROTULOS_DE_FOLHA.some((r) => texto.includes(r));
+}

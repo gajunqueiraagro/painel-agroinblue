@@ -24,7 +24,9 @@ import type { ClassificacaoItem, ContaBancariaV2, FornecedorV2, Safra } from '@/
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { cn } from '@/lib/utils';
 import { reais } from '@/lib/financeiro/nfe/formatos';
-import { completarComANota } from '@/lib/financeiro/nfeConsultas';
+import { completarComANota, sugestaoDosItensDaNota } from '@/lib/financeiro/nfeConsultas';
+import { sugestaoParaAsParcelas, type ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
+import { Ajuda } from '@/components/ui/ajuda';
 import {
   CAMPO_DA_COLUNA, COLUNAS_OPCIONAIS, ROTULO_DA_COLUNA, camposQueMudam, chaveDaGrade, colunasQueAparecem, fraseDoEfeitoNoDre, pedidoDaGrade,
   type AlvoDaPrevia, type CampoDaPrevia, type ColunaCompletar, type ResultadoCompletar, type ValoresParaTodas,
@@ -50,8 +52,9 @@ const GATILHO = 'h-[15px] min-w-0 rounded-sm px-1 text-[10px] leading-none [&_sv
 const DATA = 'text-[9.5px] tabular-nums';
 /** as larguras (px) das colunas fixas; a Descrição leva o resto (o quadro rola de lado abaixo do mínimo: nada corta) */
 const LARGURA: Record<string, number> = { parc: 90, competencia: 84, vencimento: 84, pagamento: 72, documento: 112, favorecido: 170, fazenda: 150,
-  conta: 150, subcentro: 170, safra: 110, valor: 84, status: 78 };
-const DESCRICAO_MIN = 230;
+  conta: 150, subcentro: 170, safra: 96, valor: 84, status: 78 };
+/* DA-NOTA-CLASSIF-01 — fazenda, subcentro e safra agora aparecem sempre: a Descrição cede (230 → 180) e a Safra (110 → 96) para a grade caber a 1280 */
+const DESCRICAO_MIN = 180;
 
 export interface OpcoesDaPrevia {
   fornecedores: FornecedorV2[];
@@ -105,6 +108,17 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
   const [conferindo, setConferindo] = useState(false);
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /* DA-NOTA-CLASSIF-01 (2) — a sugestão da conta pelos itens (PLANO-SUGESTAO-01 B2): só SUGERE; o "usar" põe no "Aplicar a todas" e quem grava é o
+     botão de sempre. `undefined` = procurando; `null` = a nota ainda não está gravada; `{ falha }` = não consegui verificar (P146). */
+  const [itensSugeridos, setItensSugeridos] = useState<ItemSugerido[] | null | undefined | { falha: string }>(undefined);
+  const [releSugestao, setReleSugestao] = useState(0);
+  useEffect(() => {
+    if (!open) return;
+    let vivo = true;
+    setItensSugeridos(undefined);
+    void sugestaoDosItensDaNota(clienteId, chave).then((r) => { if (!vivo) return; if (r.ok === false) setItensSugeridos({ falha: r.motivo }); else setItensSugeridos(r.valor); });
+    return () => { vivo = false; };
+  }, [open, clienteId, chave, releSugestao]);
 
   const pedido = useMemo(() => pedidoDaGrade(alvos, todas, marcadas, celulas, atualizarNaoPagas), [alvos, todas, marcadas, celulas, atualizarNaoPagas]);
   /* a prévia do BANCO a cada mudança (a última resposta vence; a que chega atrasada é ignorada) */
@@ -269,9 +283,40 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
   const larguraMin = LARGURA.parc + LARGURA.competencia + LARGURA.vencimento + LARGURA.pagamento + DESCRICAO_MIN + LARGURA.documento
     + opcionais.reduce((t, c) => t + LARGURA[c], 0) + LARGURA.valor + LARGURA.status;
   const somaCent = alvos.reduce((t, a) => t + Math.round(Number(linhaDe(a.id)?.campos.valor?.hoje ?? 0) * 100), 0);
+  /* DA-NOTA-CLASSIF-01 (2) — a sugestão numa linha, à direita do título (lugar reservado: nada empurra a tabela) */
+  const planoHoje = alvos.map((a) => { const v = linhaDe(a.id)?.campos[CAMPO_DA_COLUNA.subcentro]?.hoje; return typeof v === 'string' && v ? v : null; });
+  const sugestao = Array.isArray(itensSugeridos) ? sugestaoParaAsParcelas(itensSugeridos, planoHoje) : null;
+  const subcentroDaGrade = celulas.size === 0 && marcadas.has('subcentro') ? todas.planoContaId : null;
+  const sugestaoNaTela = (
+    <span className="ml-auto flex h-[16px] min-w-0 max-w-[60%] items-center justify-end gap-1 text-[9.5px] font-normal text-muted-foreground" data-testid="previa-sugestao">
+      {itensSugeridos === undefined ? <span>procurando a sugestão pelos itens…</span>
+        : itensSugeridos === null ? <span data-testid="previa-sugestao-sem-nota">Sugestão pelos itens depois de gravar a nota</span>
+        : !Array.isArray(itensSugeridos) ? (<>
+            <span className="min-w-0 truncate" title={itensSugeridos.falha} data-testid="previa-sugestao-falha">Não consegui verificar a sugestão pelos itens</span>
+            <button type="button" className="shrink-0 text-primary underline-offset-2 hover:underline" onClick={() => setReleSugestao((x) => x + 1)}>Tentar de novo</button>
+          </>)
+        : sugestao?.tipo === 'uma' ? (<>
+            <span className="shrink-0">Sugestão pelos itens:</span>
+            <span className="min-w-0 truncate font-medium text-foreground" title={`${sugestao.subcentro} — ${sugestao.porque}`} data-testid="previa-sugestao-conta">{sugestao.subcentro}</span>
+            {sugestao.igualAHoje || subcentroDaGrade === sugestao.planoContaId
+              ? <span className="shrink-0" data-testid="previa-sugestao-igual">· {sugestao.igualAHoje ? 'já está nela' : 'em uso'}</span>
+              : <button type="button" className="shrink-0 font-medium text-primary underline-offset-2 hover:underline" data-testid="previa-sugestao-usar"
+                  onClick={() => paraTodas('subcentro', (x) => ({ ...x, planoContaId: sugestao.planoContaId }))}>usar</button>}
+          </>)
+        : sugestao?.tipo === 'varias' ? <span data-testid="previa-sugestao-varias">Os itens vão para {sugestao.contas} contas: divida na etapa Itens da nota</span>
+        : <span data-testid="previa-sugestao-nenhuma">Sem sugestão pelos itens</span>}
+      <Ajuda titulo="Sugestão pelos itens" lado="left"
+        oQueE="A conta que os itens desta nota indicam (regra sua, uso neste cliente, o resto da nota, outros clientes ou o NCM)."
+        porQue="Na paga ou conciliada só o caixa trava (valor, pagamento e conta bancária); a classificação continua editável, com trilha e o DRE acompanhando."
+        comoFazer="Clique em usar: a conta vai para o Aplicar a todas. Nada é gravado antes do botão do rodapé." />
+    </span>
+  );
   const conteudo = (<>
     {/* o título da tabela: quantas parcelas (a linha "Aplicar a todas" não é uma delas) */}
-    <div className="flex h-[18px] shrink-0 items-center px-4 pt-1 text-[10.5px] font-semibold" data-testid="previa-titulo">{n} parcela{n === 1 ? '' : 's'}</div>
+    <div className="flex h-[18px] shrink-0 items-center gap-2 px-4 pt-1 text-[10.5px]" data-testid="previa-titulo">
+      <span className="shrink-0 font-semibold">{n} parcela{n === 1 ? '' : 's'}</span>
+      {sugestaoNaTela}
+    </div>
     <div className="min-h-0 flex-1 overflow-auto px-4 py-1" data-testid="previa-rolagem">
       <table className="w-full table-fixed border-collapse" style={{ minWidth: larguraMin }} data-testid="previa-tabela">
         <colgroup>
@@ -302,7 +347,8 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
               <span className="flex min-w-0 items-center gap-1">{todasDe('descricao')}<span className="shrink-0 font-normal text-muted-foreground">· i/{n}</span></span>
             </td>
             <td className={TD_REGUA}>{todasDe('documento')}</td>
-            {opcionais.map((c) => <td key={c} className={TD_REGUA}>{todasDe(c)}</td>)}
+            {/* a Safra vazia diz "a da competência" (cabe com "…" na coluna de 96px: o texto inteiro no title da célula) */}
+            {opcionais.map((c) => <td key={c} className={TD_REGUA} title={c === 'safra' && !todas.safraId ? 'a da competência: a safra que o banco põe pela competência' : undefined}>{todasDe(c)}</td>)}
             <td className={TD_REGUA_NUM} title={valorNotaCent !== null ? 'o valor da nota' : 'a soma das parcelas hoje'}>{valorNotaCent !== null ? reais(valorNotaCent) : previa ? reais(somaCent) : '—'}</td>
             <td className={TD_REGUA} />
           </tr>
@@ -337,7 +383,7 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
       <span className="flex shrink-0 items-center gap-1"><Lock className="h-2.5 w-2.5" />pago/conciliado</span>
       {iguais.length > 0 && (
         <span className="min-w-0 uma-linha-que-rola" data-testid="previa-iguais">
-          {iguais.map((c, i) => (i === 0 ? ROTULO_DA_COLUNA[c] : ROTULO_DA_COLUNA[c].toLowerCase())).join(', ')}: {iguais.length === 1 ? 'igual em todas, não muda' : 'iguais em todas, não mudam'}
+          {iguais.map((c, i) => (i === 0 ? ROTULO_DA_COLUNA[c] : ROTULO_DA_COLUNA[c].toLowerCase())).join(', ')}: {iguais.length === 1 ? 'igual em todas' : 'iguais em todas'}
         </span>
       )}
     </div>

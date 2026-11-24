@@ -1474,6 +1474,24 @@ const CENARIOS = [
         await pronto(p); await p.locator('[data-testid="ignorar-antigos"]').first().click(); await p.waitForTimeout(400);
         await p.locator('[data-testid="motivo-outro"]').click(); await p.locator('[data-testid="confirmar-ignorar"]').click(); await p.waitForTimeout(300); } },
       { nome: 'caixa-boletos-sem-lancar', url: `${URL}&caso=sem_lancar`, tamanhos: T, regiao: R, antes: pronto },
+      /* FOLHA-NA-CAIXA-01 — a prévia do recibo do contador (dado SINTÉTICO, `dados/folhaDaCaixa.ts`): o pior caso (nome no teto, o que divide
+         em 1ª + 2ª, valores no teto, sem lançamento com o "Criar"); com o "Criar" marcado; aplicado (um PDF que não subiu: o "de novo");
+         o já aplicado com o Desfazer aberto e o que volta */
+      ...(() => {
+        const RF = '[data-testid="folha-da-caixa"]';
+        const abrir = async (p) => { await pronto(p); await p.locator('[data-testid="acao-abrir_folha"]').first().click(); await p.waitForTimeout(800); };
+        const criar = async (p) => { await abrir(p); await p.locator('[data-testid="criar-2"]').click(); await p.waitForTimeout(500); };
+        return [
+          { nome: 'caixa-folha-previa', url: URL, tamanhos: T, regiao: RF, antes: abrir },
+          { nome: 'caixa-folha-criar', url: URL, tamanhos: T, regiao: RF, antes: criar },
+          { nome: 'caixa-folha-aplicado', url: URL, tamanhos: T, regiao: RF, antes: async (p) => {
+            await criar(p); await p.locator('[data-testid="aprovar-folha"]').click(); await p.waitForTimeout(900); } },
+          { nome: 'caixa-folha-desfazer', url: `${URL}&caso=folha_aplicada`, tamanhos: T, regiao: RF, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="desfazer-folha"]').click();
+            await p.locator('[data-testid="motivo-desfazer-folha"]').fill('o contador mandou o recibo de novo com o valor certo');
+            await p.locator('[data-testid="prever-desfazer"]').click(); await p.waitForTimeout(500); } },
+        ];
+      })(),
     ];
   })(),
   /* BOLETO D3c — o endereço de boletos (dado SINTÉTICO: o slug no teto de 40): ver; trocar sem motivo (vermelho) e com a prévia; revogar;
@@ -1889,6 +1907,18 @@ const CENARIOS = [
       await p.locator('[data-testid="nota-abas-ja"] button', { hasText: rotulo }).first().click(); await p.waitForTimeout(500);
       if (sub) { await p.locator('[data-testid="nota-aba-itens"] button', { hasText: new RegExp(`^${sub}$`) }).first().click(); await p.waitForTimeout(500); }
     } }))),
+  /* DA-NOTA-CLASSIF-01 (Gabriel 24/11 09:18, UI-LARGURA-FIXA-01) — o cartão Fornecedor SEM cadastro (razão social de 60 letras): o chip âmbar numa
+     linha, os dados do XML em cinza, "Criar fornecedor" na coluna dos botões; nada empurra Nota nem DANFE/XML. E a etapa 2 com a sugestão pelos
+     itens (`uma`: "Sugestão pelos itens: … · usar"; `varias`) e a classificação sempre à vista (fazenda, subcentro, safra) */
+  { nome: 'nota-pdf-forn-sem-cadastro', url: 'tela=nota-pdf&v=jalancada&nome60=1', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500); } },
+  ...['uma', 'varias'].map((sug) => ({ nome: `nota-pdf-ja-ficar-sugestao-${sug}`, url: `tela=nota-pdf&v=lr&sugestao=${sug}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+    } })),
   /* NOTA-ATUALIZA-PREVISTO-01 — o caso da Vera (SINTÉTICO): "É esta" no PREVISTO de R$ 1.000 + "paga 70 %": a aba Parcelas (o Resultado
      "1 atualiza · 0 cria · R$ … · paga 70 % · outro paga R$ …", o resumo em colunas) e a Como vai ficar (o valor de hoje riscado → o novo) */
   ...[['parcelas', 'O que já existe'], ['ficar', 'Como vai ficar']].map(([a, rotulo]) => ({

@@ -20,8 +20,8 @@ const linha = (v: unknown): Linha => (ehLinha(v) ? v : {});
 const numOuNulo = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 
 export type EstadoDaEntrada =
-  | 'a_ler' | 'boleto' | 'nota' | 'nao_reconhecido' | 'sem_anexo' | 'recusado' | 'confirmacao_gmail' | 'dispensado';
-const ESTADOS: readonly EstadoDaEntrada[] = ['a_ler', 'boleto', 'nota', 'nao_reconhecido', 'sem_anexo', 'recusado', 'confirmacao_gmail', 'dispensado'];
+  | 'a_ler' | 'boleto' | 'nota' | 'folha' | 'nao_reconhecido' | 'sem_anexo' | 'recusado' | 'confirmacao_gmail' | 'dispensado';
+const ESTADOS: readonly EstadoDaEntrada[] = ['a_ler', 'boleto', 'nota', 'folha', 'nao_reconhecido', 'sem_anexo', 'recusado', 'confirmacao_gmail', 'dispensado'];
 /** Os que pedem um gesto (o índice `ix_entrada_arquivos_abertos` da 118110). */
 export const ESTADOS_ABERTOS: readonly EstadoDaEntrada[] = ['a_ler', 'nao_reconhecido', 'sem_anexo', 'recusado', 'confirmacao_gmail'];
 
@@ -91,7 +91,8 @@ export interface EntradaEmailApi {
    *  tela: o gesto já é a escolha explícita (o minimodal do motivo), e o banco recusa o que não cabe. */
   ignorar: (ids: string[], motivo: MotivoDeIgnorar, detalhe: string | null) => Promise<Resultado<true>>;
   voltar: (id: string) => Promise<Resultado<true>>;
-  resolver: (id: string, estado: 'boleto' | 'nota', boletoId: string | null, lancamentoId: string | null) => Promise<Resultado<true>>;
+  /** 'folha' (FOLHA-NA-CAIXA-01): o recibo do contador aplicado — o banco aceita depois do lote da entrada (estado novo) */
+  resolver: (id: string, estado: 'boleto' | 'nota' | 'folha', boletoId: string | null, lancamentoId: string | null) => Promise<Resultado<true>>;
   /** As chaves que já estão num lançamento vivo do cliente (pelo documento). Falhou = erro (P146: nunca "não achei"). */
   notasNoSistema: (clienteId: string, chaves: string[]) => Promise<Resultado<Record<string, NotaNoSistema>>>;
 }

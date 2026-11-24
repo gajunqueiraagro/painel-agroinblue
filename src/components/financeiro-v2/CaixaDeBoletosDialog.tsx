@@ -34,6 +34,10 @@ import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { fraseDeFormatoNaoAceito, type RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { cn } from '@/lib/utils';
 import { useCaixaDeBoletos, type LerArquivoDaCaixa } from '@/hooks/useCaixaDeBoletos';
+import { FolhaDaCaixaDialog } from './FolhaDaCaixaDialog';
+import type { FolhaCaixaApi } from '@/lib/folha/folhaCaixaApi';
+import type { EntradaDaFolha } from '@/hooks/useFolhaDaCaixa';
+import type { Divisao } from '@/lib/pdf/dividirPdf';
 import type { CaixaApi, ItemDaCaixa } from '@/lib/financeiro/boleto/caixaApi';
 import type { ParcelaApi } from '@/lib/financeiro/boleto/boletoDaParcela';
 import { dataBR, valorBR, type Selo, type Tom } from '@/lib/financeiro/boleto/caixaDeBoletos';
@@ -60,7 +64,7 @@ const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-left');
 const TH_NUM = cn(TH, 'text-right');
 const LINHA = 'h-[19px] border-b border-border/40';
 const TIPO: Record<LinhaDaCaixa['tipo'], Selo> = {
-  nota: { texto: 'Nota fiscal', tom: 'azul' }, boleto: { texto: 'Boleto', tom: 'ok' }, nada: { texto: 'Não sei', tom: 'cinza' },
+  nota: { texto: 'Nota fiscal', tom: 'azul' }, boleto: { texto: 'Boleto', tom: 'ok' }, folha: { texto: 'Folha', tom: 'azul' }, nada: { texto: 'Não sei', tom: 'cinza' },
   lendo: { texto: 'lendo…', tom: 'cinza' }, senha: { texto: 'Boleto?', tom: 'ambar' }, erro: { texto: 'Erro', tom: 'vermelho' },
   sem_anexo: { texto: 'Sem anexo', tom: 'cinza' }, recusado: { texto: 'Recusado', tom: 'vermelho' }, gmail: { texto: 'Gmail', tom: 'ambar' },
 };
@@ -337,7 +341,7 @@ function LinhaResolvida({ e, virou: v, ocupado, selecionada, arquivos, aoVer, ao
   const virou = v.texto;
   return (
     <tr className={cn(LINHA, 'cursor-pointer hover:bg-muted/50', selecionada && 'bg-blue-50')} onClick={aoVer} data-testid="linha-resolvida">
-      <td className={TD_REGUA}><SeloDaCaixa s={e.estado === 'nota' ? TIPO.nota : TIPO.boleto} /></td>
+      <td className={TD_REGUA}><SeloDaCaixa s={e.estado === 'nota' ? TIPO.nota : e.estado === 'folha' ? TIPO.folha : TIPO.boleto} /></td>
       <td className={TD_REGUA_TEXTO} title={e.arquivoNome ?? undefined}>{e.arquivoNome ?? '—'}</td>
       <td className={TD_REGUA}><VerEBaixar arquivos={arquivos} aoVer={aoVer} aoBaixar={aoBaixar} /></td>
       <td className={TD_REGUA_TEXTO} title={e.remetente ?? undefined}>{nomeDoRemetente(e.remetente)}</td>
@@ -380,12 +384,14 @@ function LinhaIgnorada({ tipo, arquivo, de, chegou, motivo, em, ocupado, selecio
 const motivoSugerido = (ls: readonly LinhaDaCaixa[]): MotivoDeIgnorar | null =>
   ls.every((l) => l.antigo) ? 'antigo' : ls.every((l) => l.tipo === 'nada' || l.tipo === 'sem_anexo' || l.tipo === 'gmail') ? 'nao_e_documento' : null;
 
-export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, parcela, ler, entrada, hoje, aoLancarNota }: {
+export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, parcela, ler, entrada, hoje, aoLancarNota, folha }: {
   clienteId: string; clienteNome?: string | null; aoFechar: () => void;
   /** a bancada sintética injeta a API e o leitor; a tela de verdade usa os do banco e do pdfjs */
   api?: CaixaApi; parcela?: ParcelaApi; ler?: LerArquivoDaCaixa; entrada?: EntradaEmailApi; hoje?: string;
   /** D3 — a tela de Lançamentos recebe o arquivo da nota e abre a prévia do "+ Da nota". Sem ele, a nota só se ignora daqui. */
   aoLancarNota?: (arquivo: File) => void;
+  /** FOLHA-NA-CAIXA-01: a bancada e o teste injetam o banco da folha e o divisor de PDF */
+  folha?: { api?: FolhaCaixaApi; dividir?: (b: Uint8Array, g: number[][]) => Promise<Divisao> };
 }) {
   const caixa = useCaixaDeBoletos(clienteId, { api, parcela, ler, entrada, hoje, podeLancar: !!aoLancarNota });
   const largura = useLarguraDaJanela();
@@ -399,6 +405,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
   const [vista, setVista] = useState<Vista | null>(null);
   const [painelPorCima, setPainelPorCima] = useState(false);
   const [aIgnorar, setAIgnorar] = useState<LinhaDaCaixa[] | null>(null);
+  const [folhaAberta, setFolhaAberta] = useState<{ linha: LinhaDaCaixa; entrada: EntradaDaFolha } | null>(null);
 
   const linhas = useMemo(() => caixa.grupos.flatMap((g) => g.linhas), [caixa.grupos]);
   const linhaSel = linhas.find((l) => l.chave === selecionada) ?? null;
@@ -456,6 +463,14 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
   const agir = async (l: LinhaDaCaixa, a: Acao, lancamentos?: string[]) => {
     setFrase(null);
     if (a === 'ignorar') { setAIgnorar([l]); return; }
+    if (a === 'abrir_folha') {
+      const fonte = l.fontes[0];
+      const arquivo = fonte ? await caixa.arquivoDe(fonte) : null;
+      if (!arquivo || !l.folha) { setFrase('Não consegui abrir o arquivo da folha.'); return; }
+      const doEmail = caixa.entradas?.some((e) => e.id === fonte) ?? false;
+      setFolhaAberta({ linha: l, entrada: { clienteId, entradaId: doEmail ? fonte : null, bytes: await arquivo.arrayBuffer(), nomeDoArquivo: arquivo.name, folha: l.folha } });
+      return;
+    }
     if (a === 'lancar_nota') {
       /* o XML manda (o "+ Da nota" lê o XML inteiro); sem XML, o PDF */
       const fonte = l.fontes.find((f) => /\.xml$/i.test(caixa.entradas?.find((e) => e.id === f)?.arquivoNome ?? '')) ?? l.fontes[0];
@@ -598,6 +613,10 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
       </DialogContent>
       {enderecoAberto && (
         <EnderecoDeBoletosDialog clienteId={clienteId} clienteNome={clienteNome} api={entrada} aoFechar={() => setEnderecoAberto(false)} />
+      )}
+      {folhaAberta && (
+        <FolhaDaCaixaDialog entrada={folhaAberta.entrada} clienteNome={clienteNome} api={folha?.api} dividir={folha?.dividir} aoFechar={() => setFolhaAberta(null)}
+          aoAplicado={() => { void caixa.folhaFeita(folhaAberta.linha).then((r) => setFrase(r)); }} />
       )}
       {aIgnorar && (
         <IgnorarDialog quantos={new Set(aIgnorar.flatMap((l) => l.fontes)).size} sugerido={motivoSugerido(aIgnorar)} aoCancelar={() => setAIgnorar(null)}

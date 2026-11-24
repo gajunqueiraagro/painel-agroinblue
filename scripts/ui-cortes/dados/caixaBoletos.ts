@@ -9,6 +9,7 @@ import type { ParcelaApi } from '@/lib/financeiro/boleto/boletoDaParcela';
 import { FRASE_PDF_IMAGEM, type LerArquivoDaCaixa, type LeituraDaCaixa } from '@/hooks/useCaixaDeBoletos';
 import { entradaDaLinha, respostaDoEndereco, type EntradaEmailApi } from '@/lib/financeiro/boleto/entradaEmailApi';
 import type { ResumoDaNota } from '@/lib/financeiro/boleto/caixaPorEmail';
+import { FOLHA_DA_BANCADA, NOME_DA_FOLHA_DA_BANCADA } from './folhaDaCaixa';
 
 /** O "hoje" da bancada (o antigo depende dele): a foto não muda com o dia. */
 export const HOJE_DA_BANCADA = '2026-11-18';
@@ -58,6 +59,7 @@ export const LER_CAIXA_BANCADA: LerArquivoDaCaixa = async (bytes, _tipo, senha) 
   const nome = new TextDecoder().decode(new Uint8Array(bytes)).replace(/^%PDF /, '');
   if (nome === 'Boleto_Unimed.pdf') return senha === senhaCerta ? leituraDe(BOLETOS['boleto-0031283.pdf']) : { k: 'senha', errada: !!senha };
   if (nome === 'boleto-escaneado.pdf') return { k: 'nada', frase: FRASE_PDF_IMAGEM };
+  if (nome === NOME_DA_FOLHA_DA_BANCADA) return { k: 'folha', folha: FOLHA_DA_BANCADA };   // FOLHA-NA-CAIXA-01
   if (NOTAS[nome]) return { k: 'nota', nota: NOTAS[nome] };
   if (BOLETOS[nome]) return leituraDe(BOLETOS[nome]);
   return { k: 'nada', frase: 'Sem linha digitável nem chave de nota.' };
@@ -142,6 +144,9 @@ const TODAS = [
   /* CAIXA-GUARDAR-01: o e-mail cujo boleto foi GUARDADO sem lançamento (g-1) — o selo "guardado · sem lançamento" e o Desfazer completo */
   email('r3', 'm8', { arquivo_nome: 'boleto-fornecedor-f.pdf', estado: 'boleto', boleto_id: 'g-1', lido_em: '2026-11-17T21:05:00Z',
     recebido_em: '2026-11-14T13:00:00Z' }),
+  /* FOLHA-NA-CAIXA-01: o recibo do contador a aplicar e um já aplicado (Resolvidos) */
+  email('f1', 'm11', { remetente: 'Escritório Contábil Exemplo <folha@contabil.example>', assunto: 'Recibos 1ª parcela 13º', recebido_em: '2026-11-17T18:00:00Z', arquivo_nome: NOME_DA_FOLHA_DA_BANCADA }),
+  email('f2', 'm12', { arquivo_nome: 'recibos-outubro-ficticio.pdf', estado: 'folha', lido_em: '2026-11-17T21:00:00Z', recebido_em: '2026-11-05T10:00:00Z' }),
   /* ignorados (um de antes da regra, um com detalhe longo) */
   email('i1', 'm9', { arquivo_nome: '50261104402825000193550010001220481372684150.xml', tipo: 'xml', estado: 'dispensado', ignorado_motivo: 'anterior_a_regra',
     dispensado_em: '2026-11-17T19:35:00Z', recebido_em: '2026-11-17T19:27:00Z' }),
