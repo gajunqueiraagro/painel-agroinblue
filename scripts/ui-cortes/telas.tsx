@@ -1722,8 +1722,12 @@ if (tela === 'mesclar') {
       : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }]
       /* BPO-GUIA-01 — o passo 6 do guia (só admin): os gestores do cliente, um com nome comprido */
       : t === 'cliente_membros' ? [{ user_id: 'g1', perfil: 'gestor_cliente', ativo: true }, { user_id: 'g2', perfil: 'financeiro', ativo: true }]
-      : t === 'profiles' ? [{ id: 'g1', nome: 'Gestor Sintético com Nome Comprido da Silva' }, { id: 'g2', nome: 'Financeiro Exemplo' }] : [],
-    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista' ? (v === 'vera' ? LINHAS_VERA : LINHAS)
+      /* BPO-NOMES-LARGURA-01 — `profiles` na forma REAL (id da linha ≠ user_id; o guia não lê mais daqui). O nome vem da fonte única; o
+         financeiro sem nome no cadastro chega com o e-mail (a regra da fn_nomes_dos_autores) */
+      : t === 'profiles' ? [{ id: 'linha-1', user_id: 'g1', nome: 'Nome Errado de Profiles' }] : [],
+    rpc: (fn: string, a: any) => fn === 'fn_nomes_dos_autores' ? [{ user_id: 'g1', nome: 'Gestor Sintético com Nome Comprido da Silva', email: 'gestor@exemplo.com', situacao: 'membro ativo' },
+        { user_id: 'g2', nome: 'financeiro@exemplo.com', email: 'financeiro@exemplo.com', situacao: 'membro ativo' }]
+      : fn === 'fn_aprovacao_lista' ? (v === 'vera' ? LINHAS_VERA : LINHAS)
       : fn === 'fn_aprovacao_alertas' ? [{ alerta: 'pago_sem_aprovacao', lancamento_id: 'x1', data: '2031-10-13', valor: -2140, valor_aprovado: null, fornecedor: NOMES[0] },
           { alerta: 'aprovado_nao_pago', lancamento_id: 'x2', data: '2031-10-14', valor: -5990, valor_aprovado: -5990, fornecedor: NOMES[1] },
           { alerta: 'pago_diferente', lancamento_id: 'x3', data: '2031-10-12', valor: -99999999.99, valor_aprovado: -99999999.98, fornecedor: NOMES[2] }]
