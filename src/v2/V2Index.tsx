@@ -1815,6 +1815,8 @@ export default function V2Index() {
     'patrimonio',
     /* FISCAL onda 1 — a lista e a ficha dos produtores vão até o fim da tela (a altura vem do pai) */
     'produtores',
+    /* BPO-NOMES-LARGURA-01 — Aprovar pagamentos usa a área inteira, como Lançamentos: a altura vem do pai e a lista vai até o fim */
+    'aprovar-pagamentos',
     'fornecedores']);
   const appShell = modoResumo || SECOES_APP_SHELL.has(section);
 
