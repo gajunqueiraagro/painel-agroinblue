@@ -76,6 +76,8 @@ export const TELAS_DO_FINANCEIRO: readonly V2Section[] = [
   'fornecedores', 'contas-bancarias',
   /* PATR-01 (Chat 30/10): Cadastros › Patrimônio, gestor e financeiro editam */
   'patrimonio',
+  /* FOLHA-01 · PR B: a Folha de pagamento (gestor e financeiro; e, por cima, a marca 'folha' do banco — D5) */
+  'folha-pagamento',
 ];
 
 /**
@@ -186,7 +188,11 @@ export function podeEditarMeta(perfil: string | null | undefined, isAdmin: boole
 /** BPO-APROVACAO-01 P1 — telas que só aparecem no menu do cliente com o BPO LIGADO (o admin vê sempre: é ele quem liga). */
 export const TELAS_SO_COM_BPO: readonly V2Section[] = ['aprovar-pagamentos'];
 /** o que o menu sabe do cliente além do perfil (lido uma vez por cliente) */
-export interface ContextoDoMenu { bpoAtivo?: boolean }
+export interface ContextoDoMenu {
+  bpoAtivo?: boolean;
+  /** FOLHA-01 · PR B (D5): as telas que o banco esconde desta pessoa neste cliente (a Folha sem `folha_ok`); só o menu filtra por ela */
+  ocultas?: ReadonlySet<V2Section>;
+}
 
 export function nivelDaTela(perfil: string | null | undefined, isAdmin: boolean, tela: V2Section, ctx: ContextoDoMenu = {}): NivelTela {
   if (isAdmin) return 'editar';
@@ -201,9 +207,11 @@ export function nivelDaTela(perfil: string | null | undefined, isAdmin: boolean,
 /** A pessoa ve^ este item do menu? UI-VARREDURA-01 L5 (Gabriel 03/11/2026): item "em construção" NAO aparece para ninguem, nem
  *  para o admin — volta ao menu quando a tela existir (basta tirar o `emConstrucao` do item). A secao que fica sem item some. */
 export const itemVisivel = (perfil: string | null | undefined, isAdmin: boolean, item: NavItem, ctx: ContextoDoMenu = {}): boolean =>
-  !item.emConstrucao && !item.escondido && nivelDaTela(perfil, isAdmin, item.id, ctx) !== 'nao';
+  !item.emConstrucao && !item.escondido && !(ctx.ocultas?.has(item.id)) && nivelDaTela(perfil, isAdmin, item.id, ctx) !== 'nao';
 
-/** As secoes do drawer de um grupo, so' com os itens visiveis; a secao sem item some. */
+/** As secoes do drawer de um grupo, so' com os itens visiveis; a secao sem item some.
+ *  FOLHA-01 · PR B (D5): `ctx.ocultas` = as telas que o BANCO diz que esta pessoa nao ve^ neste cliente (hoje so' a Folha, pelo `folha_ok`) —
+ *  quem le^ o banco e' o hospedeiro do menu; aqui so' se filtra. */
 export function secoesVisiveis(perfil: string | null | undefined, isAdmin: boolean, grupo: NavGrupo, ctx: ContextoDoMenu = {}): NavGrupo['drawer'] {
   return grupo.drawer
     .map((sec) => ({ ...sec, itens: sec.itens.filter((i) => itemVisivel(perfil, isAdmin, i, ctx)) }))

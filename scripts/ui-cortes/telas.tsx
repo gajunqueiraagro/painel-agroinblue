@@ -2376,6 +2376,46 @@ if (tela === 'mesclar') {
     );
   };
   void montarPatrimonioDoLancamento();
+} else if (tela === 'folha') {
+  /* FOLHA-01 · PR B (telas) — Financeiro › Folha de pagamento: a tela real com a API em memória (`dados/folha.ts`, SINTÉTICO nas formas do
+     proto: `v=nj` 89 funcionários / 157 pendências, `v=vera` 12 / 28); `aba=` e `func=` entram como o ↗ do lançamento; `ok=0` = sem a folha */
+  const montarFolha = async () => {
+    const { FolhaTela } = await import('@/components/folha/FolhaTela');
+    const { FolhaApiProvider } = await import('@/hooks/useFolha');
+    const { apiDaFolha, FAZENDAS_DA_FOLHA } = await import('./dados/folha');
+    g.__fazendaBancada = { fazendas: FAZENDAS_DA_FOLHA, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
+    const forma = q.get('v') === 'vera' ? 'vera' : 'nj';
+    const abaQ = q.get('aba');
+    const aba = abaQ === 'historico' || abaQ === 'pendencias' || abaQ === 'mes' ? abaQ : 'funcionarios';
+    const func = q.get('func');
+    const entrada = { aba, funcionarioId: func, voltarAoLancamento: q.get('voltar') === '1' ? () => {} : null };
+    montar(<FolhaApiProvider api={apiDaFolha(forma, { folhaOk: q.get('ok') !== '0' })}><FolhaTela entrada={entrada} /></FolhaApiProvider>);
+  };
+  void montarFolha();
+} else if (tela === 'folha-lancamento') {
+  /* FOLHA-01 · PR B (telas) — o "Funcionário" do rodapé do Editar lançamento: o pedaço REAL num rodapé da largura do modal (95%), ao lado do
+     Patrimônio de mentira; `caso=ligado|sem`; `aba=ligar` abre o minimodal */
+  const montarFolhaDoLancamento = async () => {
+    const { FuncionarioDoLancamento } = await import('@/components/folha/FuncionarioDoLancamento');
+    const { FolhaApiProvider } = await import('@/hooks/useFolha');
+    const { apiDaFolha } = await import('./dados/folha');
+    const lanc = q.get('caso') === 'ligado' ? 'lanc-ligado' : 'lanc-sem';
+    montar(
+      <FolhaApiProvider api={apiDaFolha('nj')}>
+        <div className="flex h-screen items-end justify-center bg-muted">
+          <div className="mb-4 flex h-[40px] w-[95vw] items-center gap-2 border-t bg-card px-3" data-testid="rodape-da-bancada">
+            <button type="button" className="h-[22px] shrink-0 rounded border px-[9px] text-[10px]">Documentos (1)</button>
+            <button type="button" className="h-[22px] shrink-0 rounded border px-[9px] text-[10px]">Patrimônio</button>
+            <FuncionarioDoLancamento lancamentoId={lanc} clienteId="cli" onAbrirFuncionario={() => {}} />
+            <div className="flex-1" />
+            <button type="button" className="h-[26px] shrink-0 rounded border px-3 text-[11px]">Cancelar</button>
+            <button type="button" className="h-[26px] shrink-0 rounded bg-primary px-3 text-[11px] text-primary-foreground">Salvar</button>
+          </div>
+        </div>
+      </FolhaApiProvider>,
+    );
+  };
+  void montarFolhaDoLancamento();
 } else if (tela === 'caixa-boletos') {
   /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos: o modal real com a API e o leitor em memória (`dados/caixaBoletos.ts`, SINTÉTICO);
      o gate solta os PDFs pelo input (o conteúdo é o nome: o leitor da bancada lê por ele) */
