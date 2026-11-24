@@ -6,7 +6,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
 import {
-  lerBoleto, lerBoletoDoArquivo, documentoValido, documentosDoTexto, sugestoesDeSenha, paraEntrada,
+  lerBoleto, lerBoletos, lerBoletoDoArquivo, documentoValido, documentosDoTexto, sugestoesDeSenha, paraEntrada,
   FRASE_SENHA, FRASE_SENHA_ERRADA,
 } from './lerBoleto';
 
@@ -173,5 +173,19 @@ describe('o PDF com senha', () => {
 
   it('as sugestões são os 5 primeiros dígitos de cada documento do cliente, sem repetir', () => {
     expect(sugestoesDeSenha([CPF, CNPJ_A, '111.444.000-00', null, '12'])).toEqual(['11144', '11222']);
+  });
+});
+
+/* BOLETO-SEPARAR-01 — em que página está cada boleto (a divisão do PDF usa) */
+describe('a página de cada boleto', () => {
+  const LINHA_2 = '34191.09008 04882.240049 19646.100008 6 17370000300650';
+  it('capa sem boleto + 1 boleto por página: cada um na sua página, o total do PDF', () => {
+    const l = lerBoletos([[it_('AVISO DE COBRANCA', 40, 700)], [it_(LINHA, 200, 500)], [it_(LINHA_2, 200, 500)]]);
+    expect(l.boletos.map((b) => b.linha)).toEqual([LINHA, LINHA_2].map((x) => x.replace(/\D/g, '')));
+    expect([l.paginaDeCada, l.totalDePaginas]).toEqual([[2, 3], 3]);
+  });
+  it('a mesma linha no recibo e na ficha conta uma vez, na 1ª página em que aparece; 2 boletos na mesma página = a mesma página', () => {
+    expect(lerBoletos([[it_(LINHA, 200, 700)], [it_(LINHA, 200, 500)]]).paginaDeCada).toEqual([1]);
+    expect(lerBoletos([[it_(LINHA, 200, 700), it_(LINHA_2, 200, 300)]]).paginaDeCada).toEqual([1, 1]);
   });
 });

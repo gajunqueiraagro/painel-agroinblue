@@ -9,7 +9,7 @@ import {
 
 interface L { id: string; venc: string | null; comp: string | null; valor: number; desc: string; forn: string; nf: string }
 const chaves = (l: L): ChavesDaLinhaCpr => ({
-  comp: l.comp, venc: l.venc, descricao: l.desc, fornecedor: l.forn, subcentro: '', nf: l.nf, status: '', valor: l.valor,
+  comp: l.comp, venc: l.venc, banco: '', descricao: l.desc, fornecedor: l.forn, subcentro: '', nf: l.nf, status: '', valor: l.valor,
 });
 const l = (id: string, venc: string | null, valor: number, o: Partial<L> = {}): L => ({ id, venc, comp: venc, valor, desc: id, forn: '', nf: '', ...o });
 const ids = (ls: L[]) => ls.map((x) => x.id);
@@ -40,11 +40,16 @@ describe('a ordem da lista', () => {
     expect(ids(dono)).toEqual(['x', 'y', 'z']);
   });
 
-  it('clicar: a mesma coluna inverte; outra começa crescente (o Valor começa do maior)', () => {
+  it('clicar: a mesma coluna inverte; outra começa crescente (o Valor começa do maior); o 3º clique volta ao padrão (Venc. saiu da tela)', () => {
     expect(proximaOrdemCpr(ORDEM_PADRAO_CPR, 'venc')).toEqual({ coluna: 'venc', sentido: 'desc' });
     expect(proximaOrdemCpr({ coluna: 'venc', sentido: 'desc' }, 'venc')).toEqual({ coluna: 'venc', sentido: 'asc' });
     expect(proximaOrdemCpr(ORDEM_PADRAO_CPR, 'fornecedor')).toEqual({ coluna: 'fornecedor', sentido: 'asc' });
+    expect(proximaOrdemCpr({ coluna: 'fornecedor', sentido: 'asc' }, 'fornecedor')).toEqual({ coluna: 'fornecedor', sentido: 'desc' });
+    expect(proximaOrdemCpr({ coluna: 'fornecedor', sentido: 'desc' }, 'fornecedor')).toEqual(ORDEM_PADRAO_CPR);
     expect(proximaOrdemCpr(ORDEM_PADRAO_CPR, 'valor')).toEqual({ coluna: 'valor', sentido: 'desc' });
+    expect(proximaOrdemCpr({ coluna: 'valor', sentido: 'desc' }, 'valor')).toEqual({ coluna: 'valor', sentido: 'asc' });
+    expect(proximaOrdemCpr({ coluna: 'valor', sentido: 'asc' }, 'valor')).toEqual(ORDEM_PADRAO_CPR);
+    expect(proximaOrdemCpr(ORDEM_PADRAO_CPR, 'banco')).toEqual({ coluna: 'banco', sentido: 'asc' });
   });
 });
 

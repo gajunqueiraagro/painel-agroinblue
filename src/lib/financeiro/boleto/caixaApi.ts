@@ -158,9 +158,10 @@ export interface CaixaApi {
   registrarDocumento: (clienteId: string, lancamentoId: string, doc: DocumentoDaCaixa) => Promise<Resultado<'gravado' | 'ja_estava'>>;
 }
 
-/** O documento que a caixa anexa: o PDF do boleto (`boleto`) ou o PDF/DANFE da nota (`nf`, com a chave e o número). */
+/** O documento que a caixa anexa: o PDF do boleto (`boleto`), o PDF/DANFE da nota (`nf`, com a chave e o número) ou o PDF ORIGINAL de
+ *  vários boletos (`outro`, BOLETO-SEPARAR-01: "PDF original (N boletos)", guardado no 1º lançamento; a parcela leva só o seu). */
 export interface DocumentoDaCaixa {
-  especie: 'boleto' | 'nf'; nome: string; url: string; tamanhoBytes: number | null;
+  especie: 'boleto' | 'nf' | 'outro'; nome: string; url: string; tamanhoBytes: number | null;
   numero?: string | null; chaveAcesso?: string | null;
   /** o tipo do arquivo (padrão PDF); a nota vai em PDF (o DANFE) E em XML (Gabriel 14:47: "o XML do e-mail não entrou") */
   tipo?: 'application/pdf' | 'application/xml';
@@ -196,6 +197,13 @@ export const caixaApiDoBanco: CaixaApi = {
     if (doc.especie === 'boleto') {
       const ja = await (supabase as any).from('financeiro_lancamento_documentos').select('id', { count: 'exact', head: true })
         .eq('cliente_id', clienteId).eq('lancamento_id', lancamentoId).eq('especie', 'boleto').eq('cancelado', false);
+      if (ja.error) return { ok: false, erro: fraseDoErroDaCaixa(ja.error) };
+      if ((ja.count ?? 0) > 0) return { ok: true, dados: 'ja_estava' };
+    }
+    /* o original de vários boletos: o MESMO arquivo no mesmo lançamento entra uma vez só */
+    if (doc.especie === 'outro') {
+      const ja = await (supabase as any).from('financeiro_lancamento_documentos').select('id', { count: 'exact', head: true })
+        .eq('cliente_id', clienteId).eq('lancamento_id', lancamentoId).eq('url', doc.url).eq('cancelado', false);
       if (ja.error) return { ok: false, erro: fraseDoErroDaCaixa(ja.error) };
       if ((ja.count ?? 0) > 0) return { ok: true, dados: 'ja_estava' };
     }

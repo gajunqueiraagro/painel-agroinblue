@@ -20,8 +20,8 @@ const linha = (v: unknown): Linha => (ehLinha(v) ? v : {});
 const numOuNulo = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 
 export type EstadoDaEntrada =
-  | 'a_ler' | 'boleto' | 'nota' | 'nao_reconhecido' | 'sem_anexo' | 'recusado' | 'confirmacao_gmail' | 'dispensado';
-const ESTADOS: readonly EstadoDaEntrada[] = ['a_ler', 'boleto', 'nota', 'nao_reconhecido', 'sem_anexo', 'recusado', 'confirmacao_gmail', 'dispensado'];
+  | 'a_ler' | 'boleto' | 'nota' | 'folha' | 'nao_reconhecido' | 'sem_anexo' | 'recusado' | 'confirmacao_gmail' | 'dispensado';
+const ESTADOS: readonly EstadoDaEntrada[] = ['a_ler', 'boleto', 'nota', 'folha', 'nao_reconhecido', 'sem_anexo', 'recusado', 'confirmacao_gmail', 'dispensado'];
 /** Os que pedem um gesto (o índice `ix_entrada_arquivos_abertos` da 118110). */
 export const ESTADOS_ABERTOS: readonly EstadoDaEntrada[] = ['a_ler', 'nao_reconhecido', 'sem_anexo', 'recusado', 'confirmacao_gmail'];
 
@@ -32,6 +32,18 @@ export interface EntradaDoEmail {
   /** BOLETO D3d (118180) — o motivo de ignorar ("dispensado" = ignorado), o detalhe, quando; e o que a linha virou ao resolver. */
   ignoradoMotivo: MotivoDeIgnorar | 'anterior_a_regra' | null; ignoradoDetalhe: string | null; ignoradoEm: string | null;
   boletoId: string | null; lancamentoId: string | null; resolvidoEm: string | null;
+  /** 118610: 'arrastado' = o arquivo solto na Caixa e registrado no gesto (sem remetente; quem arrastou vem de `resolvidos`) */
+  origem?: 'email' | 'arrastado';
+}
+
+/** 118610 — o arquivo arrastado registrado no gesto: a linha da entrada e onde o arquivo sobe (já existia = a mesma linha, não sobe de novo). */
+export interface ArrastadoRegistrado { id: string; storagePath: string; jaExistia: boolean; estado: string }
+/** 118610 — Resolvidos: quem, quando e o que gerou (folha: tipo, competência, lançamentos; boleto; nota). */
+export interface DetalheDoResolvido {
+  quem: string | null; quando: string | null;
+  folha: { tipo: string | null; competencia: string | null; lancamentos: number; pessoas: number } | null;
+  boleto: { beneficiario: string | null; valor: number | null; vencimento: string | null } | null;
+  nota: { lancamentoId: string | null; descricao: string | null; valor: number | null } | null;
 }
 
 /** D6 — os motivos de ignorar que a tela oferece (o banco recusa outro; 'anterior_a_regra' só o banco grava). */
@@ -56,6 +68,7 @@ export function entradaDaLinha(r: Linha): EntradaDoEmail {
     estado: ESTADOS.find((e) => e === r.estado) ?? 'a_ler', motivo: txt(r.motivo), chegouDeNovo: numOuNulo(r.chegou_de_novo) ?? 0,
     ignoradoMotivo: MOTIVOS.find((m) => m === r.ignorado_motivo) ?? null, ignoradoDetalhe: txt(r.ignorado_detalhe), ignoradoEm: txt(r.dispensado_em),
     boletoId: txt(r.boleto_id), lancamentoId: txt(r.lancamento_id), resolvidoEm: txt(r.lido_em),
+    origem: r.origem === 'arrastado' ? 'arrastado' : 'email',
   };
 }
 
@@ -91,13 +104,17 @@ export interface EntradaEmailApi {
    *  tela: o gesto já é a escolha explícita (o minimodal do motivo), e o banco recusa o que não cabe. */
   ignorar: (ids: string[], motivo: MotivoDeIgnorar, detalhe: string | null) => Promise<Resultado<true>>;
   voltar: (id: string) => Promise<Resultado<true>>;
-  resolver: (id: string, estado: 'boleto' | 'nota', boletoId: string | null, lancamentoId: string | null) => Promise<Resultado<true>>;
+  /** 'folha' (FOLHA-NA-CAIXA-01): o recibo do contador aplicado — o banco aceita depois do lote da entrada (estado novo) */
+  resolver: (id: string, estado: 'boleto' | 'nota' | 'folha', boletoId: string | null, lancamentoId: string | null) => Promise<Resultado<true>>;
   /** As chaves que já estão num lançamento vivo do cliente (pelo documento). Falhou = erro (P146: nunca "não achei"). */
   notasNoSistema: (clienteId: string, chaves: string[]) => Promise<Resultado<Record<string, NotaNoSistema>>>;
+  /** 118610 (opcionais: a bancada antiga não tem; sem eles o arrastado fica só na sessão, como antes) */
+  registrarArrastado?: (clienteId: string, a: { nome: string; tipo: 'pdf' | 'xml'; tamanho: number; md5: string }) => Promise<Resultado<ArrastadoRegistrado>>;
+  resolvidos?: (clienteId: string) => Promise<Resultado<Record<string, DetalheDoResolvido>>>;
 }
 
 const COLUNAS = 'id, mensagem_id, remetente, assunto, recebido_em, arquivo_nome, tipo, tamanho_bytes, storage_path, estado, motivo, chegou_de_novo, '
-  + 'ignorado_motivo, ignorado_detalhe, dispensado_em, boleto_id, lancamento_id, lido_em';
+  + 'ignorado_motivo, ignorado_detalhe, dispensado_em, boleto_id, lancamento_id, lido_em, origem';
 
 export const entradaEmailApiDoBanco: EntradaEmailApi = {
   async endereco(clienteId) {
@@ -146,6 +163,33 @@ export const entradaEmailApiDoBanco: EntradaEmailApi = {
     const { error } = await (supabase as any).rpc('fn_entrada_resolver', { p_id: id, p_estado: estado, p_boleto_id: boletoId, p_lancamento_id: lancamentoId, p_simular: false });
     if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
     return { ok: true, dados: true };
+  },
+  async registrarArrastado(clienteId, a) {
+    const { data, error } = await (supabase as any).rpc('fn_entrada_registrar_arrastado', {
+      p_cliente: clienteId, p_nome: a.nome, p_tipo: a.tipo, p_tamanho: a.tamanho, p_md5: a.md5, p_simular: false,
+    });
+    if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
+    const d = typeof data === 'object' && data !== null ? data : {};
+    const id = txt(d.id); const storagePath = txt(d.storage_path);
+    if (!id || !storagePath) return { ok: false, erro: 'O banco não devolveu o registro do arquivo.' };
+    return { ok: true, dados: { id, storagePath, jaExistia: d.ja_existia === true, estado: txt(d.estado) ?? 'a_ler' } };
+  },
+  async resolvidos(clienteId) {
+    const { data, error } = await (supabase as any).rpc('fn_entrada_resolvidos', { p_cliente: clienteId });
+    if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
+    const dados: Record<string, DetalheDoResolvido> = {};
+    for (const r of (Array.isArray(data) ? data.filter(ehLinha) : [])) {
+      const o: Linha = ehLinha(r.o_que) ? r.o_que : {};
+      const id = txt(r.entrada_id);
+      if (!id) continue;
+      dados[id] = {
+        quem: txt(r.quem), quando: txt(r.quando),
+        folha: 'lancamentos' in o ? { tipo: txt(o.tipo), competencia: txt(o.competencia), lancamentos: numOuNulo(o.lancamentos) ?? 0, pessoas: numOuNulo(o.pessoas) ?? 0 } : null,
+        boleto: 'beneficiario' in o ? { beneficiario: txt(o.beneficiario), valor: numOuNulo(o.valor), vencimento: txt(o.vencimento) } : null,
+        nota: 'lancamento_id' in o ? { lancamentoId: txt(o.lancamento_id), descricao: txt(o.descricao), valor: numOuNulo(o.valor) } : null,
+      };
+    }
+    return { ok: true, dados };
   },
   async notasNoSistema(clienteId, chaves) {
     if (!chaves.length) return { ok: true, dados: {} };

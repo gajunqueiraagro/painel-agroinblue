@@ -72,18 +72,20 @@ describe('as larguras (FIN-V2-COLUNAS-02)', () => {
      Fornecedor e Classificação devolveram 14px — a soma fica em 916, dentro dos 919 medidos */
   /* ⚠ CONTRATO MUDOU NO DOC-ANEXO-E-IMPORT-01 F2 (mock D1, Gabriel 05/11): a coluna "Anexo" 14→36; os 22px saem de Produto (−8), Fornecedor
      (−7) e Classificação (−7) — as três que cortam com o `title`; a soma segue 916 (e 1.088 no Ampliado) */
-  it('normal: datas 46 · Vínc 36 · Produto 115 · Fornecedor 110 · Classificação 113 · Faz 30 · Safra 50 · Valor 94 · Anexo 36 · Doc 78 · Status 60 = 916', () => {
+  /* ⚠ CONTRATO MUDOU NO FIN-PRONTO-PAGAR-01 PR B (Gabriel 24/11 09:01): a coluna FORMA (52px, ponto + sigla) entre Doc. e Status; os 52px
+     saem de Produto (−18), Fornecedor (−17) e Classificação (−17) — as três que cortam com o `title`; a soma segue 916 (e 1.088 no Ampliado) */
+  it('normal: datas 46 · Vínc 36 · Produto 97 · Fornecedor 93 · Classificação 96 · Faz 30 · Safra 50 · Valor 94 · Anexo 36 · Doc 78 · Forma 52 · Status 60 = 916', () => {
     const n = larguras('normal');
-    expect(n).toEqual([28, 46, 46, 46, 36, 115, 110, 113, 30, 50, 94, 36, 78, 60, 28]);
+    expect(n).toEqual([28, 46, 46, 46, 36, 97, 93, 96, 30, 50, 94, 36, 78, 52, 60, 28]);
     expect(soma(n)).toBe(916);
   });
   it('Ampliado com e sem as contas: a mesma soma (1.088); desligadas, os 184px vão para Produto, Fornecedor e Classificação', () => {
     const a = larguras('amp'); const s = larguras('ampSem');
-    expect(a).toEqual([28, 46, 46, 46, 36, 120, 97, 109, 30, 50, 92, 92, 94, 36, 78, 60, 28]);
-    expect(s).toEqual([28, 46, 46, 46, 36, 182, 158, 170, 30, 50, 94, 36, 78, 60, 28]);
+    expect(a).toEqual([28, 46, 46, 46, 36, 102, 80, 92, 30, 50, 92, 92, 94, 36, 78, 52, 60, 28]);
+    expect(s).toEqual([28, 46, 46, 46, 36, 164, 141, 153, 30, 50, 94, 36, 78, 52, 60, 28]);
     expect(soma(a)).toBe(1088); expect(soma(s)).toBe(1088);
     expect((s[5] - a[5]) + (s[6] - a[6]) + (s[7] - a[7])).toBe(92 + 92);
-    expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 17 : 15}');
+    expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 18 : 16}');
   });
   it('as contas do Ampliado obedecem ao chip, no colgroup, no cabeçalho e na linha', () => {
     expect(colgroup.match(/\.\.\.\(modoIntensivo && contasAmpliado \? \[92\] : \[\]\),/g)?.length).toBe(2);
@@ -127,7 +129,7 @@ describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
     expect(thDoc).toBeGreaterThan(thClipe);
     for (const modo of ['normal', 'amp', 'ampSem'] as const) {
       const n = larguras(modo);
-      expect(n.slice(-5)).toEqual([94, 36, 78, 60, 28]);               // Valor 94, Anexo 36 (DOC-ANEXO F2), Doc 78, Status 60
+      expect(n.slice(-6)).toEqual([94, 36, 78, 52, 60, 28]);               // Valor 94, Anexo 36 (DOC-ANEXO F2), Doc 78, Status 60
       expect(n[1]).toBe(46);
     }
   });

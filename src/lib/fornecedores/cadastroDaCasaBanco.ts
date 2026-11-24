@@ -2,6 +2,7 @@
  * A fonte do banco do cadastro da casa (FORN-SELETOR-PADRAO-01 fatia 2c, commit 1a). Só leitura por nome e a reativação;
  * os ativos vêm do LEITOR ÚNICO. Depois de reativar, avisa o leitor (quem mostra relê).
  */
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { supabase } from '@/integrations/supabase/client';
 import { leitorDeFornecedores, notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import type { FonteDoCadastro, FornecedorDoCadastro } from './cadastroDaCasa';
@@ -46,7 +47,7 @@ export const fonteDoCadastroNoBanco: FonteDoCadastro = {
       .eq('cliente_id', clienteId)
       .eq('id', id)
       .select('id');
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(fraseDoErroDoFornecedor(error, { ativo: true }, 'reativar o fornecedor'));
     if (!data || data.length === 0) throw new Error('nenhuma linha reativada');
     notificarFornecedoresMudaram(clienteId, [id]);
   },
@@ -60,7 +61,7 @@ export const fonteDoCadastroNoBanco: FonteDoCadastro = {
       .eq('id', id)
       .or('cpf_cnpj.is.null,cpf_cnpj.eq.')
       .select('id');
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(fraseDoErroDoFornecedor(error, { cpf_cnpj: documento }, 'gravar o documento no cadastro'));
     if (!data || data.length === 0) throw new Error('o cadastro já tem documento');
     notificarFornecedoresMudaram(clienteId, [id]);   /* FIN-V2-LISTA-RELE-APOS-CADASTRO-01: com o id, quem mostra relê só ele */
   },
@@ -82,7 +83,7 @@ export async function criarFornecedorDaCasa(
     .insert({ cliente_id: clienteId, fazenda_id: dados.fazendaId || null, nome: dados.nome, cpf_cnpj: documento.formatado || null })
     .select('id, nome, cpf_cnpj, fazenda_id, ativo')
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(fraseDoErroDoFornecedor(error, { fazenda_id: dados.fazendaId || null, nome: dados.nome, cpf_cnpj: documento.formatado || null }, 'criar o fornecedor'));
   notificarFornecedoresMudaram(clienteId);
   return { id: data.id, nome: data.nome, cpf_cnpj: data.cpf_cnpj, fazenda_id: data.fazenda_id, ativo: data.ativo !== false };
 }

@@ -49,3 +49,10 @@ export function diaMes(iso: string | null | undefined): string {
 export function ehChaveDeNota(c: string | null | undefined): c is string {
   return !!c && /^(\d{44}|\d{50})$/.test(c);
 }
+
+/** NOTA-ITENS-CLASSIF-01 (Gabriel 24/11 16:3x) — a chave como o DOCUMENTO a guarda ("5026 0921 …", com ponto ou espaço) → só os dígitos, ou
+ *  nula se não for chave. Quem lê a nota pela chave do documento passa por aqui ANTES de `ehChaveDeNota` (a aba Itens sumia com a chave em grupos). */
+export function chaveDoDocumento(c: string | null | undefined): string | null {
+  const d = soDigitos(c);
+  return ehChaveDeNota(d) ? d : null;
+}

@@ -1,6 +1,7 @@
 /**
  * Hook for financeiro_lancamentos_v2 CRUD with pagination and filters.
  */
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { campoDoErroDeFormato, type ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { edicaoSemMudanca } from '@/lib/financeiro/edicaoSemMudanca';
@@ -470,13 +471,16 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   // fazendaId null vai como null (NUNCA ''); lookups são por cliente_id+nome (sem fazenda).
   const criarFornecedor = useCallback(async (nome: string, fazendaId: string | null, cpfCnpj?: string) => {
     if (!clienteId) return null;
+    /* FORN-CRIAR-DA-NOTA-ERRO (Gabriel 24/11): fazenda não escolhida chega como '' (o estado do modal) e o banco recusava o uuid vazio
+       (22P02, "Um dos campos está em formato inválido") — vazio é SEM fazenda */
+    const payload = { cliente_id: clienteId, fazenda_id: fazendaId || null, nome, cpf_cnpj: cpfCnpj || null };
     const { data, error } = await supabase
       .from('financeiro_fornecedores')
-      .insert({ cliente_id: clienteId, fazenda_id: fazendaId, nome, cpf_cnpj: cpfCnpj || null })
+      .insert(payload)
       .select('id, nome, cpf_cnpj, fazenda_id')
       .single();
     if (error) {
-      reportarErro(error, 'criarFornecedor', toast.error);
+      reportarErro(error, 'criarFornecedor', () => toast.error(fraseDoErroDoFornecedor(error, payload, 'criar o fornecedor')));
       return null;
     }
     setFornecedores(prev => [...prev, data as FornecedorV2]);

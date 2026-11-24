@@ -24,6 +24,14 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { EtapasDaAprovacao } from '@/components/financeiro-v2/EtapasDaAprovacao';
+import { GuiaDaAprovacao } from '@/components/financeiro-v2/GuiaDaAprovacao';
+import { BarraDaAprovacao, CartoesDaAprovacao, LARGURA_DOS_CARTOES, type LinhaDaEtapa } from '@/components/financeiro-v2/ListaDaAprovacao';
+import { PainelDeDecisao } from '@/components/financeiro-v2/PainelDeDecisao';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
+import { useAprovacaoDaCpr } from '@/hooks/useAprovacaoDaCpr';
+import { chipDaAprovacao, contarEtapas, entraNaEtapa, lancadoPorTexto, motivoSemSelecao, type EtapaCpr, type TomDoChip } from '@/lib/financeiro/aprovacaoNaCpr';
 import { supabase } from '@/integrations/supabase/client';
 import { notificarLancamentosMudaram, useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
@@ -58,7 +66,11 @@ import { movimentoNaConta, type LinhaDaPosicao } from '@/hooks/useExtratoDaConta
 import { rotuloOrigem } from '@/v2/lib/origemLancamento';
 import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
 import { ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  GRUPOS_DO_FILTRO_CPR, ROTULO_DO_GRUPO_CPR, SEM_FILTROS_CPR, algumFiltroCpr, alternarFiltroCpr, apelidoCurtoDaContaCpr, chipsDosFiltrosCpr,
+  fraseDosFiltrosCpr, marcadoNoFiltroCpr, opcoesDoGrupoCpr, passaNosFiltrosCpr, prontaDoCodigoCpr, type FiltrosCpr, type GrupoDoFiltroCpr,
+} from '@/lib/financeiro/cprFiltros';
 import { montarModeloCpr, nomeDoArquivoCpr, type EntradaDoModelo } from '@/lib/pdf/cpr/modeloCpr';
 import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
 import { nomeEParcela } from '@/lib/financiamentos/nomeDaParcela';
@@ -196,9 +208,11 @@ const MAX_CONTAS_NA_FAIXA = 4;
 const RESERVA_DO_VALOR_NA_FAIXA = `R$\u00a0${reservaDeNumero(10)},99`;
 /* CPR-LAYOUT-03 (mock aprovado 15/11 11:25) — a régua tipográfica do mock: a linha a 12px; DATAS a 10,5px e a NF a 10px (ponto 1); o
    status a 10,5px; a linha do dia e o fim do período a 12px negrito (ponto 7), nada maior. Safra e Faz. (ampliado) com as datas. */
-const FONTE_LINHA = 'text-[12px]';
-const FONTE_STATUS = 'text-[10.5px]';
-const FONTE_DATA = 'text-[10.5px]';
+/* CPR-LAYOUT-04 (Gabriel 24/11 07:28) — a linha a 11px e 22px de altura; as DATAS a 10px cinza; o cabeçalho a 10,5; as faixas seguem a
+   12px negrito. O status a 10px (abaixo da linha, como as datas). */
+const FONTE_LINHA = 'text-[11px]';
+const FONTE_STATUS = 'text-[10px]';
+const FONTE_DATA = 'text-[10px]';
 const FONTE_NF = 'text-[10px]';
 const FONTE_FINA = FONTE_DATA;
 const FONTE_QUANDO = 'text-[10.5px]';
@@ -207,6 +221,11 @@ const ESTICA_DESCRICAO: CSSProperties = { flex: '2 1 0', minWidth: 0 };
 const ESTICA_FORNECEDOR: CSSProperties = { flex: '1 1 0', minWidth: 0, maxWidth: FORNECEDOR_MAXIMO_CPR };
 const ESTICA_SUBCENTRO: CSSProperties = { flex: '1 1 0', minWidth: 0, maxWidth: SUBCENTRO_MAXIMO_CPR };
 /** Fundo do fim do período (o mock: azul claro, filete navy em cima) — a cor do saldo lê nele. */
+/* BPO-FUNCIONAR-01 — o chip da coluna Aprovação: âmbar aguardando, verde aprovado, vermelho recusado */
+const COR_DO_CHIP: Record<TomDoChip, string> = {
+  aguardando: 'bg-amber-50 text-amber-800', aprovado: 'bg-emerald-50 text-emerald-700', recusado: 'bg-rose-50 text-rose-700', neutro: 'text-muted-foreground',
+};
+const ROTULO_ETAPA_MINUSCULO: Record<Exclude<EtapaCpr, 'tudo'>, string> = { aprovar: 'para aprovar', pagar: 'para pagar', agendados: 'agendados', pagos: 'pagos' };
 const FUNDO_FIM = 'bg-[color-mix(in_srgb,hsl(var(--primary))_16%,hsl(var(--card)))]';
 /** CPR-LAYOUT-03 (ponto 5) — saldo positivo VERDE, negativo VERMELHO, em toda linha (regra do sistema, Gabriel 15/11 11:25). */
 const corDoSaldo = (v: number) => (v < 0 ? COR_SINAL.neg : COR_SINAL.pos);
@@ -332,7 +351,9 @@ interface Grupo {
   vencidosHoje?: { contas: number; liquido: number };
 }
 
-export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento, onAbrirRecorrencia }: {
+export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento, onAbrirRecorrencia, etapaInicial = 'tudo' }: {
+  /** BPO-FUNCIONAR-01 — "Aprovar pagamentos" do menu abre a CPR já em "Para aprovar" (sem aprovação ligada, a etapa não aparece). */
+  etapaInicial?: EtapaCpr;
   /** CPR-SALDO-DIA-01: o MESMO mecanismo do "Ampliar" da lista de Lançamentos — o shell esconde a lateral. */
   onIntensiveToggle?: (ativo: boolean) => void;
   /** PARC-CADEIA-01 — "Abrir o contrato" do aviso de parcela de compra parcelada. Ausente = a pessoa não acessa a tela do
@@ -341,7 +362,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   /** P152 — o selo R abre a regra da recorrência (ida e volta: a tela volta com o mesmo recorte). Ausente = o R é só a marca. */
   onAbrirRecorrencia?: (recorrenciaId: string) => void;
 } = {}) {
-  const { clienteAtual } = useCliente();
+  const { clienteAtual, isAdmin } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
   const { fazendaAtual, fazendas } = useFazenda();
   const fazScope = fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
@@ -369,6 +390,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   const [segmento, setSegmento] = useState<Segmento>('ambos');
   /** CPR-LAYOUT-03 — toda coluna ordena; abre (e volta) pelo vencimento crescente, dentro de cada grupo. */
   const [ordem, setOrdem] = useState<OrdemCpr>(ORDEM_PADRAO_CPR);
+  /** CPR-LAYOUT-04 — os filtros do botão "Filtros" (Origem · Forma · Pagamento); cada um ativo vira um chip com ✕. */
+  const [filtros, setFiltros] = useState<FiltrosCpr>(SEM_FILTROS_CPR);
   /** CPR-LAYOUT-03 (pontos 2–3) — a lista dos vencidos, aberta pelo "Ver e confirmar" da faixa. */
   const [vencidosAbertos, setVencidosAbertos] = useState(false);
   const [statusLigados, setStatusLigados] = useState<string[]>(retorno?.statusLigados ?? STATUS_INICIAIS);
@@ -452,6 +475,38 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
       });
     },
   });
+
+  /* BPO-FUNCIONAR-01 (mock aprovado 24/11; Code 6 07:13) — a APROVAÇÃO DENTRO DA CPR, na MESMA tabela: com o BPO ligado, as etapas no
+     topo (recortes destas linhas), a caixa de seleção e as colunas Aprovação · Lançado por na régua (`reguaDaCpr(…, true)`), a barra de
+     seleção no lugar da faixa do rodapé e, ao clicar em "Para aprovar", o painel de decisão. O estado vem pronto do banco
+     (`fn_aprovacao_estados`, 118500). BPO desligado: nada é lido e a tela é a de sempre (a régua nem ganha as colunas). */
+  const [etapa, setEtapa] = useState<EtapaCpr>(etapaInicial);
+  const saidasDaTela = useMemo(() => {
+    const vistos = new Set<string>();
+    return linhas.filter((l) => l.tipo_operacao === '2-Saídas' && !vistos.has(l.id) && vistos.add(l.id));
+  }, [linhas]);
+  const idsDasSaidas = useMemo(() => saidasDaTela.map((l) => l.id), [saidasDaTela]);
+  const aprovacao = useAprovacaoDaCpr(clienteId, idsDasSaidas);
+  const soAsMinhas = aprovacao.config?.souAprovador === true;
+  const euId = aprovacao.config?.euId ?? null;
+  const contagensDaEtapa = useMemo(() => contarEtapas(saidasDaTela, aprovacao.estados, soAsMinhas), [saidasDaTela, aprovacao.estados, soAsMinhas]);
+  const etapaAtiva = aprovacao.ligado && visao === 'lista' && etapa !== 'tudo';
+  /* a etapa de recorte (sem "Tudo"), para quem só desenha recortes (os cartões do celular) */
+  const etapaDeRecorte: Exclude<EtapaCpr, 'tudo'> | null = etapa === 'tudo' ? null : etapa;
+  const naEtapa = (l: Pick<LinhaCpr, 'id' | 'status_transacao' | 'tipo_operacao'>) =>
+    !etapaAtiva || entraNaEtapa(etapa, l, aprovacao.estados.get(l.id), soAsMinhas);
+  const decidivel = (id: string) => {
+    const a = aprovacao.estados.get(id);
+    return etapaAtiva && etapa === 'aprovar' && motivoSemSelecao(a, !!euId && a?.lancadoPor === euId) === null;
+  };
+  const [marcadas, setMarcadas] = useState<ReadonlySet<string>>(new Set());
+  const marcar = (id: string, v: boolean) => setMarcadas((m) => { const n = new Set(m); if (v) n.add(id); else n.delete(id); return n; });
+  const [painel, setPainel] = useState<number | null>(null);
+  /* a lista do painel é uma FOTO de quando ele abriu: decidir muda o estado, a lista não encolhe embaixo do ‹ › */
+  const [listaDoPainel, setListaDoPainel] = useState<LinhaDaEtapa[]>([]);
+  /* o guia ("Como funciona"; o admin liga e configura por ele — o passo 6) mora aqui desde que a tela própria saiu */
+  const [guia, setGuia] = useState<{ aberto: boolean; passo: number }>({ aberto: false, passo: 0 });
+  const largura = useLarguraDaJanela();
 
   // ── Saldo em caixa ─────────────────────────────────────────────────────────
   /**
@@ -687,110 +742,6 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     return linhas;
   }, [caixa]);
 
-  // ── Recortes em memória ────────────────────────────────────────────────────
-  /* CPR-PERIODO-VENCIDOS-01 — baldes, cartões e total saem do DONO (`recortarCpr`), dos mesmos dados nas duas visões. */
-  const ehReceber = ehReceberCpr;
-  /* CPR-SALDO-DIA-01 (D2): a âncora de CADA conta, LIDA do cartão Caixa (a data que o cálculo dele usou) — nenhuma consulta nova. */
-  const ancoras = useMemo(() => (caixaTodas ? ancorasDoCaixaCpr(caixaTodas.ancoraPorConta) : undefined), [caixaTodas]);
-  /* REC-VALOR-CERTO-02 — os lançamentos AINDA ESTIMADOS do cliente (recorrência a confirmar sem o valor do mês): o conjunto vem da
-     regra única, em até duas leituras por cliente (nunca por linha; a segunda só existe se houver recorrência a confirmar). O
-     dono reparte o total por ele; a tela só desenha o selo e os dois totais.
-     FIN-POS-FIXADO-01a: o MESMO conjunto ganha os juros futuros de contrato pós-fixado (`fn_juros_estimados_do_cliente`, uma
-     chamada por cliente), por UM dono (`lerEstimadosDaCpr`); a origem só muda o `title`. */
-  const { data: estimadasDoCliente } = useQuery({
-    queryKey: ['cpr-estimadas', clienteId],
-    enabled: !!clienteId,
-    queryFn: async () => (clienteId ? lerEstimadosDaCpr(clienteId) : SEM_ESTIMADOS),
-  });
-  const estimadas = estimadasDoCliente?.ids;
-  /* A leitura das ocorrências estimadas tem teto (`TETO_OCORRENCIAS_ESTIMADAS`): batendo nele, a tela DIZ — no `title` do selo e dos
-     dois totais — em vez de classificar calada. Só no `title`: o lugar dos totais (316px) fica cheio no pior número. */
-  const avisoEstimadasIncompleto = estimadasDoCliente?.incompleto ? AVISO_ESTIMADAS_INCOMPLETO : '';
-  /* o `title` dos totais: as origens presentes no conjunto; o do selo da linha: as origens DELA (as duas, se tiver as duas) */
-  const tituloDoSelo = tituloDoEstimado(estimadasDoCliente ? origensPresentes(estimadasDoCliente) : undefined, avisoEstimadasIncompleto);
-  const tituloDoSeloDaLinha = (id: string) => tituloDoEstimado(estimadasDoCliente?.origens.get(id), avisoEstimadasIncompleto);
-  const recorte = useMemo(
-    () => recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas, cartoes }),
-    [linhas, periodo, hojeIso, contaSel, ancoras, estimadas, cartoes]);
-  /* A SÉRIE DO SALDO — do dono, a partir do MESMO número do cartão Caixa. */
-  /* CPR-PDF-ACABAMENTO-01 — o REALIZADO do período (Caixa inicial + o que entrou e saiu por dia, até hoje): do MESMO dono do cartão
-     Caixa, sobre a MESMA entrada dele e as mesmas contas (uma, ou todas). Nulo quando o dono não responde na véspera do período. */
-  const realizado = useMemo(() => {
-    if (!caixaTodas) return null;
-    const args = caixaDeUmaConta
-      ? { ...caixaTodas.argumentos, contas: caixaTodas.argumentos.contas.filter((c) => c.id === contaSel) }
-      : caixaTodas.argumentos;
-    return realizadoDoCaixa(args, periodo.de, periodo.ate);
-  }, [caixaTodas, caixaDeUmaConta, contaSel, periodo.de, periodo.ate]);
-  /* P82 — em "todas as contas" a série é a do caixa + o saldo dos cartões (o conjunto da Visão Geral); o cartão Caixa segue sem ele */
-  const saldoDosCartoes = contaSel == null ? (cartoesDoCliente?.saldo ?? 0) : 0;
-  const serie = useMemo(
-    () => serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total + saldoDosCartoes : null, realizadoComCartoesCpr(realizado, saldoDosCartoes)),
-    [recorte, caixa, realizado, saldoDosCartoes]);
-  /* o resumo por conta (opções do seletor e a faixa): do MESMO dono, sobre os MESMOS dados, sempre de TODAS as contas */
-  const recorteDeTodas = useMemo(
-    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas, cartoes })),
-    [recorte, contaSel, linhas, periodo, hojeIso, ancoras, estimadas, cartoes]);
-  /* quem teve movimento realizado no período (do dono do caixa, sempre de TODAS as contas): entra no seletor em qualquer pílula */
-  const comRealizado = useMemo(
-    () => (caixaTodas ? contasComRealizadoNoPeriodo(caixaTodas.argumentos, periodo.de, periodo.ate) : []),
-    [caixaTodas, periodo.de, periodo.ate]);
-  const resumoContas = useMemo(
-    () => resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, contaEscolhida: contaSel, comRealizado }),
-    [linhas, periodo, hojeIso, contaSel, comRealizado]);
-  /* a faixa só desenha conta com a pagar > 0 (do dono); o seletor segue com todas */
-  const contasNaFaixa = useMemo(() => contasDaFaixaCpr(resumoContas), [resumoContas]);
-  /* o que a lista desenha por dia: o período em aberto + as pagas do período (pílula Realizado), que nunca somam */
-  const doPeriodoNaLista = useMemo(
-    /* CPR-AJUSTES-20-10b: só as pagas que vencem DENTRO do período (num período futuro, a paga de hoje abria um dia "hoje") */
-    () => [...recorte.periodoSoma.linhas, ...recorte.pagasNoPeriodo, ...recorte.foraDoCaixa].filter((l) => doSegmentoCpr(l, segmento)),
-    [recorte, segmento]);
-  /* as pontas de transferência em conta FORA do caixa (do dono): aparecem no dia, apagadas, e não somam */
-  const chavesForaDoCaixa = useMemo(() => new Set(recorte.foraDoCaixa.map(chaveDaLinhaCpr)), [recorte]);
-  /* o que o gráfico desenha: EXATAMENTE as contas em aberto que a série do saldo soma (vencidos que contam + entre hoje e "de" +
-     período), dos DOIS lados, em qualquer segmento — o saldo é da conta. O segmento vai à parte e só decide as barras (G). */
-  const doFluxo = useMemo(() => linhasDoSaldoCpr(recorte), [recorte]);
-  /* CPR-LARGURA-01 — os três valores na largura do maior do período: do recorte e da série (o que a lista soma). ⚠ As pílulas de
-     status filtram NA CONSULTA (`statusLigados`): o teto só CRESCE enquanto cliente, período e conta são os mesmos — desligar
-     Previsto/Programado nunca estreita a régua (NADA SE DESLOCA); o segmento A pagar/A receber nem entra no recorte. */
-  const tetoDoValor = useRef({ chave: '', valor: 0 });
-  const maiorValor = useMemo(() => {
-    const chave = `${clienteId ?? ''}|${periodo.de}|${periodo.ate}|${contaSel ?? ''}`;
-    const agora = maiorValorCpr(recorte, serie);
-    const valor = tetoDoValor.current.chave === chave ? Math.max(tetoDoValor.current.valor, agora) : agora;
-    tetoDoValor.current = { chave, valor };
-    return valor;
-  }, [clienteId, periodo.de, periodo.ate, contaSel, recorte, serie]);
-  const regua = useMemo(() => reguaDaCpr(ampliado, maiorValor), [ampliado, maiorValor]);
-
-  /**
-   * Os grupos de vencimento.
-   *
-   * ⚠ "SEM VENCIMENTO" VAI PARA O FIM, e vai SEMPRE — ele é o grupo que não pode faltar. A
-   * chave de ordenação usa `'9999-99-99'` para que ele caia depois de qualquer data real
-   * sem um segundo critério de ordenação por perto.
-   */
-  /**
-   * Os NOMES dos favorecidos — hook existente, não consulta nova escrita aqui.
-   *
-   * ⚠ UUID NUNCA VAI À TELA, e a view só traz `favorecido_id`. O `useNomesDeFornecedores` já
-   * resolve isso em levas (o `.in()` do PostgREST tem teto) e com uma `queryKey` que não
-   * serializa o array a cada render. Escrever a consulta aqui seria a terceira cópia da mesma.
-   */
-  const nomesFornecedores = useNomesDeFornecedores(useMemo(
-    () => linhas.map((l) => l.favorecido_id), [linhas]));
-
-  /**
-   * Quais lançamentos TÊM documento anexado.
-   *
-   * ⚠ A VIEW DA LISTA NÃO SABE DISSO — medido: `vw_financeiro_lancamentos_v2_doc` tem
-   * `documento`, `numero_documento`, `tipo_documento` e `documento_formatado`, e os quatro são
-   * o NÚMERO da nota, não um anexo. O anexo mora em `vw_lancamento_documentos`, a mesma fonte
-   * que o modal já lê.
-   * ⚠ E O CUSTO É MÍNIMO, por isso entrou sem virar item próprio: são 351 documentos em todo o
-   * proto, 111 lançamentos distintos, e a pergunta é um `.in()` sobre os ids JÁ visíveis — o
-   * mesmo padrão do mapa de conciliação do Extrato Gerencial. Nenhum join novo.
-   */
   const idsVisiveis = useMemo(() => linhas.map((l) => l.id).sort(), [linhas]);
   /* PARC-LIVRES-01 passo 5 — o "i/N" da parcela de parcelamento vem do CONTRATO, numa parte que nunca corta (lista, PDF e Excel). */
   const { data: parcelasDosLancamentos } = useParcelasDosLancamentos(clienteId);
@@ -844,6 +795,134 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
       return mapa;
     },
   });
+  /* CPR-LAYOUT-04 — o filtro Pagamento (Prontos · Faltando) lê a regra do banco (`fn_pronto_para_pagar_dos`), SÓ com o filtro ligado e
+     sobre os ids já visíveis (uma ida por leva). Ainda não lido = não filtra; falhou = não filtra e o chip DIZ (P146). */
+  const comPagamento = filtros.pagamento.length > 0;
+  const { data: prontaPorId, isError: prontoFalhou } = useQuery({
+    queryKey: ['cpr-pronto', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
+    enabled: !!clienteId && idsVisiveis.length > 0 && comPagamento,
+    queryFn: async (): Promise<Map<string, boolean | null>> => {
+      const mapa = new Map<string, boolean | null>();
+      for (let i = 0; i < idsVisiveis.length; i += 500) {
+        const { data, error } = await (supabase as any).rpc('fn_pronto_para_pagar_dos', { p_ids: idsVisiveis.slice(i, i + 500) });
+        if (error) throw error;
+        const leva: { lancamento_id: string; pronto_pagar: string | null }[] = data ?? [];
+        for (const r of leva) mapa.set(r.lancamento_id, prontaDoCodigoCpr(r.pronto_pagar));
+      }
+      return mapa;
+    },
+  });
+  /* CPR-LAYOUT-04 — O FILTRO CORTA AS LINHAS ANTES DO RECORTE: cartões, lista, PDF e Excel leem o mesmo resultado. Com filtro, o saldo
+     corrido fica vazio (ele é do caixa inteiro, não das contas filtradas) e o motivo vai no `title`. */
+  const filtroLigado = algumFiltroCpr(filtros);
+  const linhasDoRecorte = useMemo(() => (!filtroLigado ? linhas : linhas.filter((l) => passaNosFiltrosCpr(
+    { ...l, recorrencia_id: recorrenciaDaLinha?.get(l.id) ?? null }, filtros,
+    { ehParcela: parcelasDosLancamentos?.has(l.id) ?? false, pronta: !comPagamento || !prontaPorId ? undefined : (prontaPorId.get(l.id) ?? null) }))),
+  [linhas, filtroLigado, filtros, recorrenciaDaLinha, parcelasDosLancamentos, comPagamento, prontaPorId]);
+  // ── Recortes em memória ────────────────────────────────────────────────────
+  /* CPR-PERIODO-VENCIDOS-01 — baldes, cartões e total saem do DONO (`recortarCpr`), dos mesmos dados nas duas visões. */
+  const ehReceber = ehReceberCpr;
+  /* CPR-SALDO-DIA-01 (D2): a âncora de CADA conta, LIDA do cartão Caixa (a data que o cálculo dele usou) — nenhuma consulta nova. */
+  const ancoras = useMemo(() => (caixaTodas ? ancorasDoCaixaCpr(caixaTodas.ancoraPorConta) : undefined), [caixaTodas]);
+  /* REC-VALOR-CERTO-02 — os lançamentos AINDA ESTIMADOS do cliente (recorrência a confirmar sem o valor do mês): o conjunto vem da
+     regra única, em até duas leituras por cliente (nunca por linha; a segunda só existe se houver recorrência a confirmar). O
+     dono reparte o total por ele; a tela só desenha o selo e os dois totais.
+     FIN-POS-FIXADO-01a: o MESMO conjunto ganha os juros futuros de contrato pós-fixado (`fn_juros_estimados_do_cliente`, uma
+     chamada por cliente), por UM dono (`lerEstimadosDaCpr`); a origem só muda o `title`. */
+  const { data: estimadasDoCliente } = useQuery({
+    queryKey: ['cpr-estimadas', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => (clienteId ? lerEstimadosDaCpr(clienteId) : SEM_ESTIMADOS),
+  });
+  const estimadas = estimadasDoCliente?.ids;
+  /* A leitura das ocorrências estimadas tem teto (`TETO_OCORRENCIAS_ESTIMADAS`): batendo nele, a tela DIZ — no `title` do selo e dos
+     dois totais — em vez de classificar calada. Só no `title`: o lugar dos totais (316px) fica cheio no pior número. */
+  const avisoEstimadasIncompleto = estimadasDoCliente?.incompleto ? AVISO_ESTIMADAS_INCOMPLETO : '';
+  /* o `title` dos totais: as origens presentes no conjunto; o do selo da linha: as origens DELA (as duas, se tiver as duas) */
+  const tituloDoSelo = tituloDoEstimado(estimadasDoCliente ? origensPresentes(estimadasDoCliente) : undefined, avisoEstimadasIncompleto);
+  const tituloDoSeloDaLinha = (id: string) => tituloDoEstimado(estimadasDoCliente?.origens.get(id), avisoEstimadasIncompleto);
+  const recorte = useMemo(
+    () => recortarCpr(linhasDoRecorte, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas, cartoes }),
+    [linhasDoRecorte, periodo, hojeIso, contaSel, ancoras, estimadas, cartoes]);
+  /* A SÉRIE DO SALDO — do dono, a partir do MESMO número do cartão Caixa. */
+  /* CPR-PDF-ACABAMENTO-01 — o REALIZADO do período (Caixa inicial + o que entrou e saiu por dia, até hoje): do MESMO dono do cartão
+     Caixa, sobre a MESMA entrada dele e as mesmas contas (uma, ou todas). Nulo quando o dono não responde na véspera do período. */
+  const realizado = useMemo(() => {
+    if (!caixaTodas) return null;
+    const args = caixaDeUmaConta
+      ? { ...caixaTodas.argumentos, contas: caixaTodas.argumentos.contas.filter((c) => c.id === contaSel) }
+      : caixaTodas.argumentos;
+    return realizadoDoCaixa(args, periodo.de, periodo.ate);
+  }, [caixaTodas, caixaDeUmaConta, contaSel, periodo.de, periodo.ate]);
+  /* P82 — em "todas as contas" a série é a do caixa + o saldo dos cartões (o conjunto da Visão Geral); o cartão Caixa segue sem ele */
+  const saldoDosCartoes = contaSel == null ? (cartoesDoCliente?.saldo ?? 0) : 0;
+  const serie = useMemo(
+    () => serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total + saldoDosCartoes : null, realizadoComCartoesCpr(realizado, saldoDosCartoes)),
+    [recorte, caixa, realizado, saldoDosCartoes]);
+  /* o resumo por conta (opções do seletor e a faixa): do MESMO dono, sobre os MESMOS dados, sempre de TODAS as contas */
+  const recorteDeTodas = useMemo(
+    () => (contaSel == null && !filtroLigado ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas, cartoes })),
+    [recorte, contaSel, filtroLigado, linhas, periodo, hojeIso, ancoras, estimadas, cartoes]);
+  /* quem teve movimento realizado no período (do dono do caixa, sempre de TODAS as contas): entra no seletor em qualquer pílula */
+  const comRealizado = useMemo(
+    () => (caixaTodas ? contasComRealizadoNoPeriodo(caixaTodas.argumentos, periodo.de, periodo.ate) : []),
+    [caixaTodas, periodo.de, periodo.ate]);
+  const resumoContas = useMemo(
+    () => resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, contaEscolhida: contaSel, comRealizado }),
+    [linhas, periodo, hojeIso, contaSel, comRealizado]);
+  /* a faixa só desenha conta com a pagar > 0 (do dono); o seletor segue com todas */
+  const contasNaFaixa = useMemo(() => contasDaFaixaCpr(resumoContas), [resumoContas]);
+  /* o que a lista desenha por dia: o período em aberto + as pagas do período (pílula Realizado), que nunca somam */
+  const doPeriodoNaLista = useMemo(
+    /* CPR-AJUSTES-20-10b: só as pagas que vencem DENTRO do período (num período futuro, a paga de hoje abria um dia "hoje") */
+    () => [...recorte.periodoSoma.linhas, ...recorte.pagasNoPeriodo, ...recorte.foraDoCaixa].filter((l) => doSegmentoCpr(l, segmento)),
+    [recorte, segmento]);
+  /* as pontas de transferência em conta FORA do caixa (do dono): aparecem no dia, apagadas, e não somam */
+  const chavesForaDoCaixa = useMemo(() => new Set(recorte.foraDoCaixa.map(chaveDaLinhaCpr)), [recorte]);
+  /* o que o gráfico desenha: EXATAMENTE as contas em aberto que a série do saldo soma (vencidos que contam + entre hoje e "de" +
+     período), dos DOIS lados, em qualquer segmento — o saldo é da conta. O segmento vai à parte e só decide as barras (G). */
+  const doFluxo = useMemo(() => linhasDoSaldoCpr(recorte), [recorte]);
+  /* CPR-LARGURA-01 — os três valores na largura do maior do período: do recorte e da série (o que a lista soma). ⚠ As pílulas de
+     status filtram NA CONSULTA (`statusLigados`): o teto só CRESCE enquanto cliente, período e conta são os mesmos — desligar
+     Previsto/Programado nunca estreita a régua (NADA SE DESLOCA); o segmento A pagar/A receber nem entra no recorte. */
+  const tetoDoValor = useRef({ chave: '', valor: 0 });
+  const maiorValor = useMemo(() => {
+    const chave = `${clienteId ?? ''}|${periodo.de}|${periodo.ate}|${contaSel ?? ''}`;
+    const agora = maiorValorCpr(recorte, serie);
+    const valor = tetoDoValor.current.chave === chave ? Math.max(tetoDoValor.current.valor, agora) : agora;
+    tetoDoValor.current = { chave, valor };
+    return valor;
+  }, [clienteId, periodo.de, periodo.ate, contaSel, recorte, serie]);
+  const regua = useMemo(() => reguaDaCpr(ampliado, maiorValor, aprovacao.ligado), [ampliado, maiorValor, aprovacao.ligado]);
+
+  /**
+   * Os grupos de vencimento.
+   *
+   * ⚠ "SEM VENCIMENTO" VAI PARA O FIM, e vai SEMPRE — ele é o grupo que não pode faltar. A
+   * chave de ordenação usa `'9999-99-99'` para que ele caia depois de qualquer data real
+   * sem um segundo critério de ordenação por perto.
+   */
+  /**
+   * Os NOMES dos favorecidos — hook existente, não consulta nova escrita aqui.
+   *
+   * ⚠ UUID NUNCA VAI À TELA, e a view só traz `favorecido_id`. O `useNomesDeFornecedores` já
+   * resolve isso em levas (o `.in()` do PostgREST tem teto) e com uma `queryKey` que não
+   * serializa o array a cada render. Escrever a consulta aqui seria a terceira cópia da mesma.
+   */
+  const nomesFornecedores = useNomesDeFornecedores(useMemo(
+    () => linhas.map((l) => l.favorecido_id), [linhas]));
+
+  /**
+   * Quais lançamentos TÊM documento anexado.
+   *
+   * ⚠ A VIEW DA LISTA NÃO SABE DISSO — medido: `vw_financeiro_lancamentos_v2_doc` tem
+   * `documento`, `numero_documento`, `tipo_documento` e `documento_formatado`, e os quatro são
+   * o NÚMERO da nota, não um anexo. O anexo mora em `vw_lancamento_documentos`, a mesma fonte
+   * que o modal já lê.
+   * ⚠ E O CUSTO É MÍNIMO, por isso entrou sem virar item próprio: são 351 documentos em todo o
+   * proto, 111 lançamentos distintos, e a pergunta é um `.in()` sobre os ids JÁ visíveis — o
+   * mesmo padrão do mapa de conciliação do Extrato Gerencial. Nenhum join novo.
+   */
 
   const nomeConta = (id: string | null): string => {
     if (!id) return '—';
@@ -860,14 +939,25 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   const chavesVencidas = useMemo(() => new Set(recorte.vencidos.contam.linhas.map(chaveDaLinhaCpr)), [recorte]);
   /* CPR-LAYOUT-03 — o que cada coluna compara quando o cabeçalho ordena: o MESMO texto que a célula mostra (fornecedor pelo nome, NF
      pelo número curto, status pelo rótulo) e o valor com o sinal do lado */
+  const textoLancado = (id: string): string => {
+    const a = aprovacao.estados.get(id);
+    return lancadoPorTexto(a?.lancadoPor ? aprovacao.nomes.get(a.lancadoPor) ?? null : null, a?.lancadoEm ?? null);
+  };
+  /* CPR-LAYOUT-04 — a coluna Banco: o apelido curto da conta da linha (`apelidoCurtoDaContaCpr`), o nome inteiro no `title` */
+  const bancoDaLinha = (l: LinhaCpr): { curto: string; inteiro: string } => {
+    const id = contaDaConta(l);
+    const c = id ? fin.contasBancarias.find((x) => x.id === id) : undefined;
+    return { curto: (c && apelidoCurtoDaContaCpr(c.nome_exibicao || c.nome_conta)) || '—', inteiro: nomeConta(id) };
+  };
   const chavesDaLinha = (l: LinhaCpr): ChavesDaLinhaCpr => {
     const st = (l.status_transacao ?? '').toLowerCase();
     const rot = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, documentosPorLancamento?.get(l.id)).rotulo;
     return {
-      comp: l.data_competencia, venc: l.data_vencimento, descricao: l.descricao ?? '',
+      comp: l.data_competencia, venc: l.data_vencimento, banco: bancoDaLinha(l).curto.replace('—', ''), descricao: l.descricao ?? '',
       fornecedor: (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '', subcentro: l.subcentro ?? '',
       nf: numeroCurtoDoDocCpr(rot), status: STATUS_FILTRO_LABEL[st] ?? st,
       valor: (ehReceber(l) ? 1 : -1) * Math.abs(Number(l.valor ?? 0)),
+      ...(aprovacao.ligado ? { aprovacao: chipDaAprovacao(aprovacao.estados.get(l.id)).texto.replace('—', ''), lancado: textoLancado(l.id) } : {}),
     };
   };
   const grupos = useMemo((): Grupo[] => {
@@ -1012,6 +1102,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
       queryClient.invalidateQueries({ queryKey: ['cpr-anexos'] }),
       queryClient.invalidateQueries({ queryKey: ['cpr-recorrencias'] }),
       queryClient.invalidateQueries({ queryKey: ['cpr-estimadas'] }),
+      queryClient.invalidateQueries({ queryKey: ['cpr-pronto'] }),
     ]);
   };
 
@@ -1108,6 +1199,34 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   const tituloMenorSaldo = serie.menor ? (serie.encerrado ? 'menor saldo realizado da conta no período' : 'menor saldo da conta no período (realizado até hoje, previsto daí em diante)') : motivoSemSaldo;
   const codigoDaSafra = (id: string | null): string => (id && fin.safras.find((x) => x.id === id)?.codigo) || '—';
   const codigoDaFazenda = (id: string | null): string => (id && fazendas.find((x) => x.id === id)?.codigo) || '—';
+
+  /* BPO-FUNCIONAR-01 — as linhas da etapa já prontas para o painel de decisão e os cartões do celular (a mesma ordem da consulta: vencimento) */
+  const linhasDaEtapa = useMemo((): LinhaDaEtapa[] => (etapaAtiva ? saidasDaTela.filter(naEtapa) : [])
+    .map((l) => {
+      const a = aprovacao.estados.get(l.id);
+      return {
+        id: l.id, vencimento: l.data_vencimento ?? null, descricao: l.descricao ?? '', favorecidoId: l.favorecido_id ?? null,
+        fornecedor: (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—', subcentro: l.subcentro ?? '',
+        fazenda: l.fazenda_id ? codigoDaFazenda(l.fazenda_id) : '', valor: Math.abs(Number(l.valor ?? 0)),
+        doc: { nf: a?.temNota === true, boleto: a?.temBoleto === true },
+      };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `naEtapa`/`codigoDaFazenda` derivam dos listados
+    }), [saidasDaTela, etapaAtiva, etapa, aprovacao.estados, soAsMinhas, nomesFornecedores, fazendas]);
+  const selecionadas = linhasDaEtapa.filter((l) => marcadas.has(l.id) && decidivel(l.id));
+  const abrirNaEtapa = (id: string) => {
+    if (etapa === 'aprovar' && etapaAtiva) { const i = linhasDaEtapa.findIndex((x) => x.id === id); if (i >= 0) { setListaDoPainel(linhasDaEtapa); setPainel(i); return; } }
+    void abrir(id);
+  };
+  const ctlEtapas = aprovacao.ligado && visao === 'lista' ? (
+    <div className="flex items-center gap-2" data-testid="cpr-etapas-no">
+      <div className="min-w-0 flex-1">
+        <EtapasDaAprovacao etapa={etapa} onEtapa={(e) => { setEtapa(e); setMarcadas(new Set()); }} contagens={contagensDaEtapa} compacto={largura < 1000}
+          aprovadores={aprovacao.config?.aprovadores ?? []} desde={aprovacao.config?.desde ?? null} limite={aprovacao.config?.limite ?? null} />
+      </div>
+      {largura >= 1000 && <button type="button" onClick={() => setGuia({ aberto: true, passo: 0 })} data-testid="cpr-aprovacao-como-funciona"
+        className="flex h-[22px] shrink-0 items-center rounded-md border px-2 text-[10.5px] text-muted-foreground hover:bg-muted">Como funciona</button>}
+    </div>
+  ) : null;
 
   const vazioTexto = segmento === 'receber'
     ? 'Nenhum recebimento previsto neste período'
@@ -1223,6 +1342,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     clienteNome: clienteAtual?.nome ?? 'cliente', contaNome: contaSel == null ? 'Todas as contas' : nomeConta(contaSel),
     todasAsContas: contaSel == null, periodo,
   };
+  /* CPR-LAYOUT-04 — o arquivo segue a tela: com filtro, as linhas já vêm filtradas (do recorte) e o saldo corrido sai vazio */
+  const gruposDoArquivo = filtroLigado ? grupos.map((g) => ({ ...g, saldo: g.saldo === undefined ? undefined : null })) : grupos;
   const exportarPdf = async () => {
     setExportando('pdf'); setRecadoExport(null);
     try {
@@ -1238,8 +1359,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
       const modelo = montarModeloCpr<LinhaCpr>({
         ...identidadeDoArquivo, grafico,
         fazendaNome: fazScope ? (fazendaAtual?.nome ?? undefined) : undefined,
-        segmento, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'),
-        serie, grupos,
+        segmento, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'), filtros: fraseDosFiltrosCpr(filtros) || undefined,
+        serie, grupos: gruposDoArquivo,
         cartoes: {
           vencidosContamPagar: recorte.cartoes.vencidosContam.pagar, vencidosContamReceber: recorte.cartoes.vencidosContam.receber,
           pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber,
@@ -1271,8 +1392,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     setExportando('excel'); setRecadoExport(null);
     try {
       triggerXlsxDownload(montarPayloadExcelCpr<LinhaCpr>({
-        arquivo: nomeDoArquivoCpr(identidadeDoArquivo), grupos, serie, de: resolvedores, hoje: hojeIso, inicio: periodo.de,
-        fim: periodo.ate, rodape,
+        arquivo: nomeDoArquivoCpr(identidadeDoArquivo), grupos: gruposDoArquivo, serie, de: resolvedores, hoje: hojeIso, inicio: periodo.de,
+        fim: periodo.ate, rodape, filtros: fraseDosFiltrosCpr(filtros) || undefined,
       }));
     } catch (e) {
       setRecadoExport({ erro: true, texto: `Falha ao gerar Excel: ${e instanceof Error ? e.message : String(e)}` });
@@ -1280,6 +1401,52 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
       setExportando(null);
     }
   };
+  /* CPR-LAYOUT-04 — UM botão "Filtros ▾" (Origem · Forma · Pagamento: marcar várias; o menu fica aberto) e, ao lado, um chip com ✕ por
+     grupo ativo. Os chips moram num lugar que encolhe (`min-w-0`, rola no lugar): os botões da direita não andam (NADA SE DESLOCA). */
+  const tituloDoChip = (g: GrupoDoFiltroCpr, texto: string): string => (g === 'pagamento' && prontoFalhou
+    ? `${texto} — não consegui verificar o "pronto para pagar" agora: o filtro de Pagamento não está valendo (tente de novo)`
+    : g === 'pagamento' && !prontaPorId ? `${texto} — lendo o "pronto para pagar"…` : texto);
+  const ctlFiltros = (
+    <div className="flex min-w-0 shrink items-center gap-1" data-testid="cpr-filtros">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" data-testid="cpr-filtros-botao" title="Filtrar por origem, forma de pagamento e pronto para pagar"
+            className={cn('flex h-[22px] shrink-0 items-center gap-1 rounded-md border px-2 text-[10px] font-medium transition-colors',
+              filtroLigado ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+            Filtros <ChevronDown className="h-3 w-3" aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {GRUPOS_DO_FILTRO_CPR.map((g, i) => (
+            <Fragment key={g}>
+              {i > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuLabel>{ROTULO_DO_GRUPO_CPR[g]}</DropdownMenuLabel>
+              {opcoesDoGrupoCpr(g).map((o) => (
+                <DropdownMenuCheckboxItem key={o.valor} data-filtro={`${g}:${o.valor}`}
+                  checked={marcadoNoFiltroCpr(filtros, g, o.valor)}
+                  onSelect={(e) => e.preventDefault()}
+                  onCheckedChange={() => setFiltros((f) => alternarFiltroCpr(f, g, o.valor))}>
+                  {o.rotulo}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </Fragment>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <div className="uma-linha-que-rola flex min-w-0 items-center gap-1" data-testid="cpr-filtros-chips">
+        {chipsDosFiltrosCpr(filtros).map((c) => (
+          <span key={c.grupo} data-chip-filtro={c.grupo} title={tituloDoChip(c.grupo, c.texto)}
+            className={cn('flex h-[18px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/10 pl-2 pr-1 text-[10px] text-primary',
+              c.grupo === 'pagamento' && prontoFalhou && 'bg-amber-100 text-amber-800')}>
+            {c.texto}
+            <button type="button" aria-label={`Tirar o filtro ${c.texto}`} title="Tirar este filtro"
+              onClick={() => setFiltros((f) => ({ ...f, [c.grupo]: [] }))}
+              className="flex h-[14px] w-[14px] items-center justify-center rounded-full hover:bg-primary/20">✕</button>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
   /* UM nó: "Exportar ▾" (PDF · Excel). Gerando: desabilitado e "Gerando…"; sem dados no recorte: desabilitado com o motivo. */
   const ctlExportar = (
     <DropdownMenu>
@@ -1372,7 +1539,23 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   />
   );
   /* um grupo da lista (faixa, linhas e, no dia, o "Saldo em"): o MESMO desenho antes e depois da linha "Fim do período" */
-  const desenharGrupo = (g: Grupo, i?: number): ReactNode => (
+  /* BPO-FUNCIONAR-01 — numa etapa ≠ Tudo, só as linhas da etapa; grupo sem nenhuma some (o Caixa inicial fica). A faixa soma o que se vê e o
+     saldo fica vazio com o motivo: o saldo corrido é do grupo inteiro. */
+  const ehSaidaAprovavel = (l: Pick<LinhaCpr, 'tipo_operacao'>) => l.tipo_operacao === '2-Saídas';
+  const chipDaLinha = (id: string): ReactNode => {
+    const c = chipDaAprovacao(aprovacao.estados.get(id));
+    return <span className={cn('inline-block whitespace-nowrap rounded-full px-1.5 text-[10px] font-semibold leading-[15px]', COR_DO_CHIP[c.tom])} title={c.titulo}>{c.texto}</span>;
+  };
+  const MOTIVO_SALDO_NA_ETAPA = 'numa etapa o saldo fica vazio: o saldo corrido é do grupo inteiro (volte a "Tudo")';
+  /* CPR-LAYOUT-04 — com filtro, o saldo corrido fica vazio: ele é do caixa inteiro, não só das contas filtradas */
+  const MOTIVO_SALDO_COM_FILTRO = 'com filtro o saldo fica vazio: o saldo é do caixa inteiro, não só das contas filtradas (limpe os filtros)';
+  const semSaldo = etapaAtiva || filtroLigado;
+  const motivoDoSaldoVazio = etapaAtiva ? MOTIVO_SALDO_NA_ETAPA : MOTIVO_SALDO_COM_FILTRO;
+  const somaDaEtapa = (ls: readonly LinhaCpr[]) => ls.filter(naEtapa)
+    .reduce((acc, l) => acc + (chavesForaDoCaixa.has(chaveDaLinhaCpr(l)) ? 0 : (ehReceber(l) ? 1 : -1) * Math.abs(Number(l.valor ?? 0))), 0);
+  const desenharGrupo = (g: Grupo, i?: number): ReactNode => {
+    if (etapaAtiva && !g.linhas.some(naEtapa)) return i === iCaixaInicial ? <Fragment key={g.chave}>{linhaDoCaixaInicial}</Fragment> : null;
+    return (
     <Fragment key={g.chave}>
     {i === iCaixaInicial && linhaDoCaixaInicial}
     <div data-testid={`cpr-grupo-${g.tipo}`} data-total={Math.round((g.receber - g.pagar) * 100) / 100}
@@ -1392,8 +1575,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
               : g.tipo === 'vencidos' || g.tipo === 'saem_hoje' ? cn('h-[22px] border-t-[1.5px] border-t-[#b91c1c]/40 font-bold', COR_SINAL.neg, FUNDO_VENCIDOS)
               : 'h-[20px] border-b bg-muted font-medium text-muted-foreground')}
           titulo={g.titulo} quando={g.quando} dica={g.dica}
-          valor={g.receber - g.pagar} saldo={g.saldo}
-          motivoSemSaldo={motivoSemSaldo}
+          valor={etapaAtiva ? somaDaEtapa(g.linhas) : g.receber - g.pagar} saldo={semSaldo ? undefined : g.saldo}
+          motivoSemSaldo={semSaldo ? motivoDoSaldoVazio : motivoSemSaldo}
         />
       )}
       {g.frase && (
@@ -1404,21 +1587,21 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
 
       {(() => {
         /* CPR-LAYOUT-03 — a ordem escolhida no cabeçalho (padrão: vencimento crescente), DENTRO do grupo; o desempate é a do dono */
-        const ordenadas = ordenarLinhasCpr(g.linhas, ordem, chavesDaLinha);
+        const ordenadas = ordenarLinhasCpr(etapaAtiva ? g.linhas.filter(naEtapa) : g.linhas, ordem, chavesDaLinha);
         /* o SALDO EM TODA LINHA (ponto 5): corre na ordem desenhada e fecha no "Saldo em" do dia (do dono). Só em "Ambos" — com um
            lado só, o saldo pularia as linhas escondidas. Grupo sem saldo (sem vencimento, entre, saem hoje): a célula fica vazia. */
-        const comSaldo = g.tipo === 'dia' && segmento === 'ambos' && g.saldo !== undefined;
+        const comSaldo = !semSaldo && g.tipo === 'dia' && segmento === 'ambos' && g.saldo !== undefined;
         const efeito = (l: LinhaCpr) => (chavesForaDoCaixa.has(chaveDaLinhaCpr(l)) ? 0 : (ehReceber(l) ? 1 : -1) * Math.abs(Number(l.valor ?? 0)));
         const saldos = comSaldo ? saldoPorLinhaCpr(ordenadas, g.saldo, efeito) : ordenadas.map(() => undefined);
         const antes = comSaldo ? saldoAntesDoGrupoCpr(ordenadas, g.saldo, efeito) : undefined;
         return (<>
-        {g.vencidosHoje && (
+        {g.vencidosHoje && !etapaAtiva && (
           /* a linha-resumo dos vencidos (hoje): eles contam no saldo de hoje e moram na faixa do topo / "Ver e confirmar" */
           <div data-testid="cpr-vencidos-no-dia" role="button" tabIndex={0}
             onClick={() => setVencidosAbertos(true)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVencidosAbertos(true); } }}
             title="Os vencidos em aberto contam no saldo de hoje. Clique para ver a lista."
-            className={cn('flex h-[20px] w-full shrink-0 cursor-pointer items-center gap-1 border-b border-l-[3px] border-l-[#b91c1c]/60 px-3 hover:bg-muted/50', FONTE_LINHA)}>
+            className={cn('flex h-[22px] w-full shrink-0 cursor-pointer items-center gap-1 border-b border-l-[3px] border-l-[#b91c1c]/60 px-3 hover:bg-muted/50', FONTE_LINHA)}>
             <span className={cn('min-w-0 flex-1 truncate', COR_SINAL.neg)} title={textoDosVencidosNoDia(g.vencidosHoje.contas)} data-reticencias-com-title="">
               {textoDosVencidosNoDia(g.vencidosHoje.contas)}
             </span>
@@ -1484,6 +1667,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
           </span>
         );
         const nfCurta = numeroCurtoDoDocCpr(doc);
+        const lancadoTxt = regua.lancado != null && ehSaidaAprovavel(l) ? textoLancado(l.id) : '—';
         return (
           /* P152 — a linha é `div role="button"` (era `<button>`): os selos de vínculo e o "NF nnnn" são botões DENTRO dela, e botão
              dentro de botão não é HTML válido. O teclado segue: Enter/Espaço abrem; desabilitada sem catálogos. */
@@ -1494,27 +1678,41 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
             role="button"
             tabIndex={!catalogosProntos || abrindo ? -1 : 0}
             aria-disabled={!catalogosProntos || abrindo}
-            onClick={() => { if (catalogosProntos && !abrindo) void abrir(l.id); }}
-            onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && catalogosProntos && !abrindo) { e.preventDefault(); void abrir(l.id); } }}
+            onClick={() => { if (catalogosProntos && !abrindo) abrirNaEtapa(l.id); }}
+            onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && catalogosProntos && !abrindo) { e.preventDefault(); abrirNaEtapa(l.id); } }}
             title={catalogosProntos ? (paga && l.data_pagamento ? `Abrir o lançamento · pago em ${format(parseISO(l.data_pagamento), 'dd/MM/yyyy')}` : 'Abrir o lançamento') : 'Carregando os catálogos…'}
             className={cn(
-              'flex h-[20px] w-full shrink-0 cursor-pointer items-center gap-1 border-b px-3 text-left', FONTE_LINHA,
+              'flex h-[22px] w-full shrink-0 cursor-pointer items-center gap-1 border-b px-3 text-left', FONTE_LINHA,
               'transition-colors hover:bg-muted/50 aria-disabled:cursor-default',
               /* A faixa de 3px do destaque: `border-l-[3px]` em TODAS as linhas, transparente nas comuns (A27). */
               'border-l-[3px]',
               grande ? (receber ? 'border-l-success' : 'border-l-destructive') : 'border-l-transparent',
               /* P152 — pago/recebido: a LINHA TODA mais clara (datas, selos, textos e o valor no mesmo tom do lado dele) */
               paga && '[&>*]:opacity-50',
+              marcadas.has(l.id) && 'bg-sky-50 dark:bg-sky-950/30',
             )}
           >
+            {/* BPO-FUNCIONAR-01 — a caixa (só em "Para aprovar" e só no que EU posso decidir; o motivo no title) */}
+            {regua.sel != null && (
+              <span style={larg(regua.sel)} className="flex items-center justify-center" onClick={(e) => e.stopPropagation()} data-celula-sel>
+                {etapaAtiva && etapa === 'aprovar' && ehSaidaAprovavel(l) && (
+                  <Checkbox checked={marcadas.has(l.id)} disabled={!decidivel(l.id)} onCheckedChange={(v) => marcar(l.id, v === true)}
+                    aria-label="Selecionar para aprovar" className="h-3.5 w-3.5"
+                    title={motivoSemSelecao(aprovacao.estados.get(l.id), !!euId && aprovacao.estados.get(l.id)?.lancadoPor === euId) ?? 'Selecionar'} />
+                )}
+              </span>
+            )}
             {/* P152 — as datas em dd/mm/aa; Venc. em vermelho no vencido. CPR-LAYOUT-03 (ponto 1): 10,5px; a coluna Pgto. saiu (a data
                 do pagamento vai no `title` da linha paga, que já está no dia do pagamento) */}
             <span style={larg(regua.comp)} className={cn(FONTE_DATA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
               {l.data_competencia ? format(parseISO(l.data_competencia), 'dd/MM/yy') : '—'}
             </span>
-            <span style={larg(regua.venc)} className={cn(FONTE_DATA, 'whitespace-nowrap tabular-nums', vencida ? COR_SINAL.neg : 'text-muted-foreground')} data-celula-data>
-              {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yy') : '—'}
-            </span>
+            {/* CPR-LAYOUT-04 — a coluna Venc. SAI (a data está na faixa do dia): só desenha com largura na régua */}
+            {regua.venc > 0 && (
+              <span style={larg(regua.venc)} className={cn(FONTE_DATA, 'whitespace-nowrap tabular-nums', vencida ? COR_SINAL.neg : 'text-muted-foreground')} data-celula-data>
+                {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yy') : '—'}
+              </span>
+            )}
             {/* A DESCRIÇÃO, numa linha: a marca "Transf.", o nome (P152: o que não cabe termina em "…", com o texto inteiro no `title`;
                 era CPR-SEM-CORTE-01, rolava no lugar), o "i/N" do contrato e os selos "estimado" / "vencido" — marcas e selos nunca cortam; a linha segue com 18px. */}
             <span style={ESTICA_DESCRICAO} className="flex items-center gap-1" data-celula-descricao>
@@ -1555,6 +1753,15 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
                 {codigoDaFazenda(l.fazenda_id)}
               </span>
             )}
+            {/* CPR-LAYOUT-04 — o Banco: o apelido curto da conta ("Sic. Pes."), o nome inteiro no `title` */}
+            {regua.banco > 0 && (() => {
+              const b = bancoDaLinha(l);
+              return (
+                <span style={larg(regua.banco)} data-celula-banco className="truncate text-muted-foreground" title={b.inteiro} data-reticencias-com-title="">
+                  {b.curto}
+                </span>
+              );
+            })()}
             {/* P152 — "NF nnnn" (o do dono, `docDaLinha`), cinza, sem cor; com documento vivo é botão que abre a aba Documentos do
                 lançamento (o PDF; sem PDF, os itens); sem documento é só o texto (D4). Substitui o clipe solto. */}
             {/* CPR-LAYOUT-03 (ponto 8) — a NF SÓ COM O NÚMERO ("9.232"), 10px; o rótulo inteiro ("NF 000.009.232") no `title` */}
@@ -1577,6 +1784,17 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
                 {STATUS_FILTRO_LABEL[status] ?? (status || '—')}
               </span>
             </span>
+            {/* BPO-FUNCIONAR-01 — Aprovação (o chip; a regra/o motivo no title) e Lançado por ("Amanda · 20/11") */}
+            {regua.aprov != null && (
+              <span style={larg(regua.aprov)} className="text-center" data-celula-aprovacao>
+                {ehSaidaAprovavel(l) ? chipDaLinha(l.id) : <span className="text-muted-foreground">—</span>}
+              </span>
+            )}
+            {regua.lancado != null && (
+              <span data-celula-lancado style={larg(regua.lancado)} className={cn(FONTE_FINA, 'truncate text-muted-foreground')} title={lancadoTxt} data-reticencias-com-title="">
+                {lancadoTxt}
+              </span>
+            )}
             {celValor}
             {/* CPR-LAYOUT-03 (ponto 5) — o SALDO EM TODA LINHA: verde ≥ 0, vermelho < 0 */}
             <CelValor largura={regua.saldo} tipo="saldo" valor={saldoDaLinha} />
@@ -1593,13 +1811,40 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
           className={cn('h-[22px] border-b-[1.5px] border-b-primary/50 text-[12px] font-bold text-primary', FUNDO_DIA)}
           titulo={`Saldo em ${format(parseISO(g.chave), 'dd/MM/yyyy')}`}
           dica={g.hoje ? 'hoje: o realizado de hoje (já no caixa), os vencidos (contam no saldo de hoje) e o que vence hoje' : undefined}
-          valor={g.receber - g.pagar} saldo={g.saldo}
-          motivoSemSaldo={motivoSemSaldo}
+          valor={etapaAtiva ? somaDaEtapa(g.linhas) : g.receber - g.pagar} saldo={semSaldo ? undefined : g.saldo}
+          motivoSemSaldo={semSaldo ? motivoDoSaldoVazio : motivoSemSaldo}
         />
       )}
     </div>
     </Fragment>
   );
+  };
+
+  /* BPO-FUNCIONAR-01 (mock, tela 3) — CELULAR (< 900 px) numa etapa da aprovação: o topo da CPR (régua, cartões, filtros) não cabe; a tela é
+     o cabeçalho do mock ("N para aprovar · R$ · vence o 1º em dd/mm"), as etapas e os cartões da mesma lista, a barra e o painel. */
+  if (etapaAtiva && etapaDeRecorte && largura < LARGURA_DOS_CARTOES && clienteId) {
+    const totalDaEtapa = linhasDaEtapa.reduce((acc, l) => acc + l.valor, 0);
+    const primeiro = linhasDaEtapa.find((l) => l.vencimento)?.vencimento ?? null;
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col bg-background" data-testid="cpr-celular-aprovacao">
+        <div className="shrink-0 bg-primary px-3.5 pb-2.5 pt-3 text-primary-foreground">
+          <div className="text-[11px] opacity-75">{clienteAtual?.nome ?? ''}</div>
+          <div className="mt-0.5 text-[17px] font-bold">{linhasDaEtapa.length} {etapa === 'aprovar' ? 'para aprovar' : ROTULO_ETAPA_MINUSCULO[etapaDeRecorte]}</div>
+          <div className="text-[12px] tabular-nums opacity-85">{formatMoeda(totalDaEtapa)}{primeiro ? ` · vence o 1º em ${primeiro.slice(8, 10)}/${primeiro.slice(5, 7)}` : ''}</div>
+        </div>
+        <div className="shrink-0 px-2 pt-1.5">{ctlEtapas}</div>
+        <CartoesDaAprovacao etapa={etapaDeRecorte} linhas={linhasDaEtapa} estados={aprovacao.estados} euId={euId} marcadas={marcadas}
+          onMarcar={marcar} onAbrir={(_i, id) => abrirNaEtapa(id)} />
+        {etapa === 'aprovar' && selecionadas.length > 0 && (
+          <BarraDaAprovacao clienteId={clienteId} selecionadas={selecionadas} className="h-[48px]"
+            onFeito={() => { setMarcadas(new Set()); void aprovacao.recarregar(); }} />
+        )}
+        <PainelDeDecisao clienteId={clienteId} linhas={listaDoPainel} indice={painel}
+          onIndice={setPainel} estados={aprovacao.estados} nomes={aprovacao.nomes} onFechar={() => setPainel(null)}
+          onDecidido={() => { void aprovacao.recarregar(); }} />
+      </div>
+    );
+  }
 
   return (
     /* ⚠ `h-full`, E NÃO `flex-1` — a mesma lição de `V2Recorrencias`: a altura vem do pai, e
@@ -1650,9 +1895,11 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
           <div data-testid="cpr-linha-status" className="flex min-h-[20px] flex-wrap items-center gap-x-2 whitespace-nowrap">
             <span className="shrink-0 text-[9.5px] text-muted-foreground">Status</span>
             {ctlStatus}
+            {ctlFiltros}
             <div className="flex min-w-0 flex-1 basis-0 justify-end">{ctlRecadoExport}</div>
             {ctlConfirmadoEstimado}
           </div>
+          {ctlEtapas}
         </div>
       )}
 
@@ -1780,6 +2027,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
           {ctlSegmento}
 
           {ctlStatus}
+          {ctlFiltros}
 
           {/* o espaço entre os filtros e os botões carrega a frase do exportar (erro ou aviso), numa linha */}
           <div className="flex min-w-0 flex-1 basis-0 justify-end">{ctlRecadoExport}</div>
@@ -1803,18 +2051,42 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
             ]}
           />
         </div>
+        {ctlEtapas}
       </div>
       )}
 
       {/* ── CORPO — Lista ou Fluxo, no mesmo cartão e na mesma caixa ──
           ⚠ O CARTÃO É O MESMO PARA AS DUAS VISÕES, de propósito: trocar de visão não pode
           mudar a altura nem a largura do que está em volta (A27). O que troca é o conteúdo. */}
+      {aprovacao.config && !aprovacao.ligado && etapaInicial === 'aprovar' && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 px-4 pb-1 text-[12px] text-muted-foreground" data-testid="cpr-aprovacao-desligada">
+          <span className="whitespace-nowrap">A aprovação de pagamentos não está ligada neste cliente.</span>
+          <button type="button" onClick={() => setGuia({ aberto: true, passo: 0 })} className="h-[24px] rounded-md border px-2 text-[11px] hover:bg-muted">Como funciona</button>
+          {isAdmin && <button type="button" onClick={() => setGuia({ aberto: true, passo: 5 })} data-testid="cpr-aprovacao-ligar"
+            className="h-[24px] rounded-md bg-primary px-2 text-[11px] text-primary-foreground">Ligar neste cliente</button>}
+        </div>
+      )}
+      {clienteId && (
+        <GuiaDaAprovacao aberto={guia.aberto} passoInicial={guia.passo} onFechar={() => setGuia({ aberto: false, passo: 0 })} ehAdmin={isAdmin}
+          clienteId={clienteId} ligado={aprovacao.ligado}
+          onLigou={(t) => { toast.success(t); void queryClient.invalidateQueries({ queryKey: ['bpo-config-cpr', clienteId] }); }} />
+      )}
       <div className="min-h-0 flex-1 px-4 pb-2">
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
           {visao === 'fluxo' ? (
             /* ⚠ AS MESMAS CONTAS EM ABERTO QUE A SÉRIE DO SALDO SOMA, dos dois lados; o segmento só escolhe as barras.
                O gráfico começa na data "de" do período. No Ampliado ele ocupa toda a área abaixo do cabeçalho. */
             graficoDoFluxo(false)
+          ) : etapaAtiva && largura < LARGURA_DOS_CARTOES && etapaDeRecorte ? (
+            /* BPO-FUNCIONAR-01 — celular: a etapa em cartões (a mesma lista, a mesma seleção); a barra embaixo quando há marcadas */
+            <>
+              <CartoesDaAprovacao etapa={etapaDeRecorte} linhas={linhasDaEtapa} estados={aprovacao.estados} euId={euId} marcadas={marcadas}
+                onMarcar={marcar} onAbrir={(_i, id) => abrirNaEtapa(id)} />
+              {etapa === 'aprovar' && selecionadas.length > 0 && clienteId && (
+                <BarraDaAprovacao clienteId={clienteId} selecionadas={selecionadas} className="h-[44px]"
+                  onFeito={() => { setMarcadas(new Set()); void aprovacao.recarregar(); }} />
+              )}
+            </>
           ) : (
           <>
           {/* CPR-LAYOUT-03 (pontos 2–3) — OS VENCIDOS SAEM DA TABELA: uma faixa de 1 linha no topo, com quantos e quanto, e o "Ver e
@@ -1857,22 +2129,35 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
               {/* CABEÇALHO DE COLUNA — navy, 22px, a régua do modo. */}
               <div data-testid="cpr-cabecalho" className={cn(
                 'sticky top-0 z-20 flex h-[22px] shrink-0 items-center gap-1 px-3',
-                'text-[11px] font-semibold bg-primary text-primary-foreground',
+                'text-[10.5px] font-semibold bg-primary text-primary-foreground',
                 'border-l-[3px] border-l-transparent',
               )}>
                 {/* CPR-LAYOUT-03 — TODA coluna ordena (clique; de novo inverte); padrão: Venc. crescente. O Saldo corre na ordem desenhada. */}
+                {regua.sel != null && (
+                  <span style={larg(regua.sel)} className="flex items-center justify-center">
+                    {etapaAtiva && etapa === 'aprovar' && (() => {
+                      const todas = linhasDaEtapa.filter((x) => decidivel(x.id));
+                      const tudo = todas.length > 0 && todas.every((x) => marcadas.has(x.id));
+                      return <Checkbox checked={tudo} disabled={todas.length === 0} onCheckedChange={(v) => setMarcadas(v === true ? new Set(todas.map((x) => x.id)) : new Set())}
+                        aria-label="Selecionar tudo o que eu posso aprovar" className="h-3.5 w-3.5 border-primary-foreground" data-testid="cpr-marcar-tudo" />;
+                    })()}
+                  </span>
+                )}
                 {cabecalhoOrdenavel('comp', larg(regua.comp))}
-                {cabecalhoOrdenavel('venc', larg(regua.venc))}
+                {regua.venc > 0 && cabecalhoOrdenavel('venc', larg(regua.venc))}
                 {cabecalhoOrdenavel('descricao', ESTICA_DESCRICAO)}
                 {cabecalhoOrdenavel('fornecedor', ESTICA_FORNECEDOR)}
                 {cabecalhoOrdenavel('subcentro', ESTICA_SUBCENTRO)}
                 {regua.safra > 0 && <span style={larg(regua.safra)}>Safra</span>}
                 {regua.faz > 0 && <span style={larg(regua.faz)}>Faz.</span>}
+                {regua.banco > 0 && cabecalhoOrdenavel('banco', larg(regua.banco))}
                 {cabecalhoOrdenavel('nf', larg(regua.nf))}
                 {cabecalhoOrdenavel('status', larg(regua.status), 'center')}
+                {regua.aprov != null && cabecalhoOrdenavel('aprovacao', larg(regua.aprov), 'center')}
+                {regua.lancado != null && cabecalhoOrdenavel('lancado', larg(regua.lancado))}
                 {cabecalhoOrdenavel('valor', larg(regua.valor), 'right')}
                 <span style={larg(regua.saldo)} className="text-right"
-                  title={segmento === 'ambos' ? 'o saldo depois de cada linha, na ordem da lista; fecha no "Saldo em" do dia' : MOTIVO_SALDO_DOIS_LADOS}>Saldo</span>
+                  title={semSaldo ? motivoDoSaldoVazio : segmento === 'ambos' ? 'o saldo depois de cada linha, na ordem da lista; fecha no "Saldo em" do dia' : MOTIVO_SALDO_DOIS_LADOS}>Saldo</span>
               </div>
 
               {/* CAIXA INICIAL — fixo sob o cabeçalho, em TODO filtro (R1): o saldo no fim do dia anterior ao período, do mesmo dono do
@@ -1886,15 +2171,21 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
               <div className="min-h-0 flex-1" />
               {/* FIM DO PERÍODO — navy, FIXO no pé do scrollport. Os totais do dono (`rodapeDoPeriodoCpr`) e o SALDO NO FIM, o último
                   ponto da série. */}
+              {/* BPO-FUNCIONAR-01 — com algo marcado em "Para aprovar", a barra de seleção ocupa a faixa do rodapé (mesma altura, presa) */}
+              {etapaAtiva && etapa === 'aprovar' && selecionadas.length > 0 && clienteId ? (
+                <BarraDaAprovacao clienteId={clienteId} selecionadas={selecionadas} className="sticky bottom-0 z-20 h-[24px]"
+                  onFeito={() => { setMarcadas(new Set()); void aprovacao.recarregar(); }} />
+              ) : (
               <Faixa
                 testId="cpr-total" regua={regua}
                 className={cn('sticky bottom-0 z-20 h-[24px] border-t-2 border-t-primary text-[12px] font-bold text-primary', FUNDO_FIM)}
                 titulo={`Fim do período · ${format(parseISO(periodo.ate), 'dd/MM/yyyy')} · ${contagemDoRodapeCpr(fimDoPeriodo)}`}
                 dica={rodape.realizado ? 'período encerrado: o que saiu e o que entrou no período (realizado) e o saldo no fim dele'
                   : 'o que vem depois do Caixa inicial: Caixa inicial + a receber − a pagar = saldo no fim'}
-                valor={rodape.receber - rodape.pagar} saldo={serie.fim}
-                motivoSemSaldo={motivoSemSaldo}
+                valor={rodape.receber - rodape.pagar} saldo={filtroLigado ? undefined : serie.fim}
+                motivoSemSaldo={filtroLigado ? MOTIVO_SALDO_COM_FILTRO : motivoSemSaldo}
               />
+              )}
               {/* CPR-AJUSTES-20-10c — período encerrado: os vencidos em aberto do período, DEPOIS do Fim do período e fora da soma dele */}
               {gruposDepoisDoFim.map((g) => desenharGrupo(g))}
              </div>
@@ -1918,6 +2209,11 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
         naoVaiAcontecer={naoVaiAcontecer}
         motivoNaoVai={MOTIVO_NAO_VAI_DESLIGADO}
       />
+      {clienteId && aprovacao.ligado && (
+        <PainelDeDecisao clienteId={clienteId} linhas={listaDoPainel} indice={painel}
+          onIndice={setPainel} estados={aprovacao.estados} nomes={aprovacao.nomes} onFechar={() => setPainel(null)}
+          onDecidido={() => { void aprovacao.recarregar(); }} />
+      )}
       <LancamentoV2Dialog
         open={!!lancEdicao}
         carregando={!catalogosProntos}

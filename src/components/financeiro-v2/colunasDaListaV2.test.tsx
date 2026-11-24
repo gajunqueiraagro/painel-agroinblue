@@ -136,7 +136,8 @@ describe('o Ampliado com e sem as contas, e as preferências', () => {
     /* FIN-V2-DESEMPENHO-01b: o Ampliado devolveu às datas dd/mm/aaaa e ao Valor os 24px (140→128, 202→190) */
     /* CONC-SUGESTOES-TABELA-01 — as larguras são o array `larguras={[…]}` da tela (o `colgroup` é da peça `TabelaDaLista`) */
     /* DOC-ANEXO-E-IMPORT-01 F2: a coluna "Anexo" (14→36) tirou 8px do Produto nos três modos */
-    expect(tela).toContain('modoIntensivo ? (contasAmpliado ? 120 : 182) : 115,');
+    /* FIN-PRONTO-PAGAR-01 PR B: a coluna Forma (52px) tirou 18px do Produto nos três modos */
+    expect(tela).toContain('modoIntensivo ? (contasAmpliado ? 102 : 164) : 97,');
   });
   it('a escolha é lembrada; valor desconhecido = o padrão', () => {
     instalarStorage();

@@ -15,7 +15,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { LancamentoV2, LancamentoV2Form, ClassificacaoItem, ContaBancariaV2, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import {
-  camposTravadosDoCasado, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO, NADA_TRAVADO, type EstadoDoBanco,
+  camposTravadosDoCasado, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO, FRASE_CASADO_NO_RODAPE, TITLE_CASADO_NO_RODAPE, NADA_TRAVADO, type EstadoDoBanco,
 } from '@/lib/financeiro/casadoComExtrato';
 
 const banco = vi.hoisted(() => ({ casado: false, perguntas: [] as string[] }));
@@ -125,6 +125,13 @@ describe('a regra (espelho da condição do gatilho)', () => {
     /* trocar o tipo para entrada tira a conta da origem */
     expect(saiDoEstadoDoBanco(g, { ...g, tipo_operacao: '1-Entradas' })).toBe(true);
   });
+  it('NOTA-ITENS-CLASSIF-01 (3): o valor se compara em CENTAVOS — texto × número e zeros à direita não são mudança; centavo e sinal são', () => {
+    expect(saiDoEstadoDoBanco({ ...g, valor: '500.00' }, { ...g, valor: 500 })).toBe(false);
+    expect(saiDoEstadoDoBanco({ ...g, valor: 1122.5 }, { ...g, valor: '1122.50' })).toBe(false);
+    expect(saiDoEstadoDoBanco({ ...g, valor: '500.00' }, { ...g, valor: 500.01 })).toBe(true);
+    expect(saiDoEstadoDoBanco({ ...g, valor: -500 }, { ...g, valor: 500 })).toBe(true);
+    expect(saiDoEstadoDoBanco({ ...g, valor: null }, { ...g, valor: 0 })).toBe(true);
+  });
   it('a PROMOÇÃO não é saída: programado sem data -> realizado com data', () => {
     const parcial: EstadoDoBanco = { ...g, status_transacao: 'programado', data_pagamento: null };
     expect(saiDoEstadoDoBanco(parcial, { ...parcial, status_transacao: 'realizado', data_pagamento: '2026-10-09' })).toBe(false);
@@ -154,8 +161,10 @@ describe('o modal — lançamento CASADO', () => {
     montar(saida());
     await aberto('500,00');
     await waitFor(() => expect(frase()).not.toBeNull());
-    expect(frase()?.textContent).toBe(FRASE_CASADO_COM_EXTRATO);
-    expect(frase()?.getAttribute('title')).toBe(FRASE_CASADO_COM_EXTRATO);
+    /* NOTA-ITENS-CLASSIF-01 (3): o rodapé diz o que fica em leitura E que a classificação muda (nunca só "desfaça para alterar") */
+    expect(frase()?.textContent).toBe(FRASE_CASADO_NO_RODAPE);
+    expect(frase()?.textContent).toContain('a classificação muda');
+    expect(frase()?.getAttribute('title')).toBe(TITLE_CASADO_NO_RODAPE);
     expect(frase()?.className).toContain('truncate');
     expect(campoStatus().disabled).toBe(true);
     expect(campoPagamento().disabled).toBe(true);
@@ -173,6 +182,16 @@ describe('o modal — lançamento CASADO', () => {
     expect(m.onSave.mock.calls[0][0]).toMatchObject({ status_transacao: 'realizado', data_pagamento: '2026-10-02', valor: 500, conta_bancaria_id: 'bb' });
     expect(screen.queryByTestId('erro-antes-de-salvar')).toBeNull();
     expect(banco.perguntas).toHaveLength(1);
+  });
+  it('NOTA-ITENS-CLASSIF-01 (3): casado com o valor GRAVADO em texto (\'500.00\') — salvar a classificação GRAVA, sem a recusa', async () => {
+    banco.casado = true;
+    const m = montar(saida({ valor: '500.00' }));
+    await aberto('500,00');
+    await waitFor(() => expect(frase()).not.toBeNull());
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(m.onSave).toHaveBeenCalledTimes(1));
+    expect(m.onSave.mock.calls[0][0]).toMatchObject({ valor: 500, plano_conta_id: 'pl-sai' });
+    expect(screen.queryByTestId('erro-antes-de-salvar')).toBeNull();
   });
   it('parcial casado ainda programado: status e pagamento seguem a regra de sempre; valor e conta em leitura', async () => {
     banco.casado = true;

@@ -55,6 +55,7 @@ import { completarComANota, definirParticipacao, desfazerCompletar, fornecedorPe
 import type { NotaLida } from '@/lib/financeiro/nfe/tipos';
 import { participacaoSugerida } from '@/lib/financeiro/nfe/notaXLancamento';
 import { NotaXLancamentoQuadro } from './NotaXLancamentoQuadro';
+import { chaveDoDocumento } from '@/lib/financeiro/nfe/formatos';
 import { camposDaNota, divergenciasDaNota, ehArquivoDeNota, FRASE_NOTA_NAO_LIDA, type CamposDaNota, type CampoDivergente } from '@/lib/financeiro/nfe/documentoDaNota';
 import {
   ESPECIES_LANC_DOC, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
@@ -707,7 +708,8 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
        tipo seria dado sem dono. No documento da OPERAÇÃO a espécie daqui é só leitura e pode ser tradução do vocabulário da
        OC: o que não aparece é PRESERVADO como está, nunca zerado por uma tela que não o mostra. */
     serie: campos.serie ? (serie.trim() || null) : (especieSoLeitura ? (documento?.serie ?? null) : null),
-    chaveAcesso: campos.chave ? (chave.trim() || null) : (especieSoLeitura ? (documento?.chaveAcesso ?? null) : null),
+    /* NOTA-ITENS-CLASSIF-01 — chave válida grava SÓ OS DÍGITOS ("5026 0921 …" escondia os itens da nota); o que não é chave fica como digitado */
+    chaveAcesso: campos.chave ? (chaveDoDocumento(chave) ?? (chave.trim() || null)) : (especieSoLeitura ? (documento?.chaveAcesso ?? null) : null),
     dataEmissao: dataEmissao || null,
     /* `undefined` não sobe (ver `paraJson`): na OC o valor não é campo, e mandar `null`
        apagaria o que os componentes dizem. */

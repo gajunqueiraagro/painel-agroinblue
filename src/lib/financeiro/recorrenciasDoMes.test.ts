@@ -38,9 +38,14 @@ describe('a linha da recorrência no mês', () => {
       expect(uma(regra({ id: 'r1', valorAConfirmar: true }), [oc('r1', 987.65, { status })])[0].situacao).toBe('confirmado');
     }
   });
-  it('a confirmar: ESTIMADO sem marca e em aberto — mesmo com o valor diferente do valor base', () => {
-    for (const status of ['previsto', 'programado', 'agendado', null]) {
+  it('a confirmar: ESTIMADO sem marca e PREVISTO — mesmo com o valor diferente do valor base', () => {
+    for (const status of ['previsto', null]) {
       expect(uma(regra({ id: 'r1', valorAConfirmar: true }), [oc('r1', 1500, { status })])[0].situacao).toBe('estimado');
+    }
+  });
+  it('CPR-LAYOUT-04 (Gabriel 24/11): Programado ou Agendado já é valor confirmado (a mesma regra única da CPR)', () => {
+    for (const status of ['programado', 'agendado']) {
+      expect(uma(regra({ id: 'r1', valorAConfirmar: true }), [oc('r1', 1500, { status })])[0].situacao).not.toBe('estimado');
     }
   });
   it('sem ocorrência gerada (competência acima da marca): entra pelo VALOR BASE; a confirmar fica estimado', () => {
