@@ -1867,6 +1867,18 @@ const CENARIOS = [
       await p.locator('[data-testid="nota-abas-ja"] button', { hasText: rotulo }).first().click(); await p.waitForTimeout(500);
       if (sub) { await p.locator('[data-testid="nota-aba-itens"] button', { hasText: new RegExp(`^${sub}$`) }).first().click(); await p.waitForTimeout(500); }
     } }))),
+  /* DA-NOTA-CLASSIF-01 (Gabriel 24/11 09:18, UI-LARGURA-FIXA-01) — o cartão Fornecedor SEM cadastro (razão social de 60 letras): o chip âmbar numa
+     linha, os dados do XML em cinza, "Criar fornecedor" na coluna dos botões; nada empurra Nota nem DANFE/XML. E a etapa 2 com a sugestão pelos
+     itens (`uma`: "Sugestão pelos itens: … · usar"; `varias`) e a classificação sempre à vista (fazenda, subcentro, safra) */
+  { nome: 'nota-pdf-forn-sem-cadastro', url: 'tela=nota-pdf&v=jalancada&nome60=1', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500); } },
+  ...['uma', 'varias'].map((sug) => ({ nome: `nota-pdf-ja-ficar-sugestao-${sug}`, url: `tela=nota-pdf&v=lr&sugestao=${sug}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+    } })),
   /* NOTA-ATUALIZA-PREVISTO-01 — o caso da Vera (SINTÉTICO): "É esta" no PREVISTO de R$ 1.000 + "paga 70 %": a aba Parcelas (o Resultado
      "1 atualiza · 0 cria · R$ … · paga 70 % · outro paga R$ …", o resumo em colunas) e a Como vai ficar (o valor de hoje riscado → o novo) */
   ...[['parcelas', 'O que já existe'], ['ficar', 'Como vai ficar']].map(([a, rotulo]) => ({

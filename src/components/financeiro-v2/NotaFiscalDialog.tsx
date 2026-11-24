@@ -54,6 +54,7 @@ import { gravarParcelamento } from './LancamentoV2Dialog';
 import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
+import { fornecedorNaoEOEmitente } from '@/lib/financeiro/nfe/vendidoPor';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
 import { completarODocumentoDaNota } from '@/lib/financeiro/completarDocumentoDaNota';
 import { canceladosDaNota, casarJaLancados, comEscolhidos, contaUnicaDasIrmas, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, nDasParcelas, parcelasParaCasar,
@@ -1113,7 +1114,14 @@ export function NotaFiscalDialog({
     : conflito ? <span className={CHIP_ERRO} data-testid="nota-chip-fornecedor">CNPJ já cadastrado</span>
     : escolherEntre.length ? <span className={CHIP_AVISO}>{res.achadoPor === 'nome' ? 'achado pelo nome: escolha' : 'dois cadastros com este CNPJ'}</span>
       : res.filialDiferente ? <span className={CHIP_AVISO}>outra filial no cadastro</span>
-        : <span className={CHIP_AVISO}>não cadastrado neste cliente</span>;
+        /* DA-NOTA-CLASSIF-01 (UI-LARGURA-FIXA-01, Gabriel 24/11 09:18) — o cartão SEM cadastro tem o mesmo desenho do com cadastro: o chip âmbar numa
+           linha no lugar do "achado pelo CNPJ", os dados do XML em cinza e o botão "Criar fornecedor" no lugar do "Completar cadastro" */
+        : <span className={CHIP_AVISO} data-testid="nota-chip-fornecedor" title="Este CNPJ não está no cadastro deste cliente: Criar fornecedor usa a razão social, o CNPJ, a IE e a cidade da nota.">
+          não encontrado no cadastro · criar com estes dados</span>;
+  /* o texto do botão cabe na coluna dos botões (124px) em toda largura: nunca "Cadastrar com estes dados", que passava dela */
+  const rotuloDoCriar = ocupado === 'cadastrar' ? 'Criando…' : res.filialDiferente ? 'Criar esta filial' : 'Criar fornecedor';
+  /* sem cadastro, o que o cartão mostra é o que a NOTA traz: em cinza (o preto é o do cadastro) */
+  const corDoXml = fornecedor ? undefined : 'text-muted-foreground';
   const end = emitente.endereco;
   const enderecoTexto = [[end?.logradouro, end?.numero].filter(Boolean).join(', '), end?.bairro, end?.cep ? `${end.cep.slice(0, 5)}-${end.cep.slice(5)}` : null].filter(Boolean).join(' · ');
   const cidade = end?.municipio ? `${receita ? end.municipio : caixaDeTitulo(end.municipio)}/${end.uf ?? ''}` : '—';
@@ -1143,6 +1151,16 @@ export function NotaFiscalDialog({
   /* "Itens (N)": a conta por item grava no Aplicar com UM lançamento (pelos itens) ou com as parcelas juntadas (a mesma proporção nas N) */
   const divideNoAplicar = alvosEscolhidos.length + nACriar === 1 || juntarAgora;
   const hojeDe = (id: string) => (comoHoje?.ok ? comoHoje.valor.find((x) => x.id === id) ?? null : null);
+  /* DA-NOTA-CLASSIF-01 (4) — o MARKETPLACE: os fornecedores dos lançamentos achados que NÃO são o emitente (quem cobrou ≠ quem vendeu). A tela só
+     diz "vendido por <emitente>"; o fornecedor do lançamento fica (trocar é só marcando) */
+  const quemCobrou = [...new Set(linhasDaTabela.flatMap((x) => {
+    const l = x.sistema;
+    if (!l) return [];
+    const id = hojeDe(l.id)?.favorecidoId ?? l.fornecedorId;
+    if (!fornecedorNaoEOEmitente(id, favorecidoId, n.emitente.documento, fornecedores)) return [];
+    const nome = (id ? fornecedores.find((f) => f.id === id)?.nome : null) ?? l.fornecedorNome;
+    return nome ? [nome] : [];
+  }))];
   const contaDeHojeDosItens = (alvosEscolhidos[0] ? hojeDe(alvosEscolhidos[0].id)?.planoContaId : null) ?? planoId ?? null;
   /* Gabriel 29/10 10:38 — "No sistema hoje (N)": cada lançamento achado numa linha, COMO ESTÁ (nada escondido). A fazenda, o subcentro e o
      fornecedor vêm da leitura dos ids (`comoEstaoHoje`); falhou = a frase, nunca "—" calado. O quadro rola por dentro (de lado, estreito). */
@@ -1346,7 +1364,7 @@ export function NotaFiscalDialog({
                   title da Cidade) */}
               <div className="flex min-w-0 items-start gap-2.5">
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <div className="flex h-4 min-w-0 items-baseline gap-3 whitespace-nowrap">
+                  <div className={cn('flex h-4 min-w-0 items-baseline gap-3 whitespace-nowrap', corDoXml)}>
                     {/* ajuste 2 — a razão social inteira ou "…" + title (a exceção declarada `data-reticencias-com-title`, como a do P71) */}
                     <div className="flex min-w-0 flex-1 items-baseline gap-1.5" data-testid="nota-razao-social" data-reticencias-com-title=""
                       title={fornecedor ? fornecedor.nome : `${caixaDeTitulo(razaoSocial)}${receita ? ' (Receita)' : ''} — no DANFE: ${n.emitente.nome}`}>
@@ -1364,7 +1382,7 @@ export function NotaFiscalDialog({
                         titulo={receita ? 'Razão social inteira da consulta pública do CNPJ.' : (receitaFrase ?? 'Consultando a Receita…')} />
                     )}
                   </div>
-                  <div className="flex h-4 min-w-0 items-baseline gap-3 whitespace-nowrap">
+                  <div className={cn('flex h-4 min-w-0 items-baseline gap-3 whitespace-nowrap', corDoXml)} data-testid="nota-fornecedor-linha-2">
                     <Kv num k={soDigitos(n.emitente.documento).length === 11 ? 'CPF' : 'CNPJ'} v={documentoFormatado(n.emitente.documento)} erro={erroEm('cnpj')} testid="nota-documento-emitente" className="shrink-0" />
                     <Kv num k="IE" v={n.emitente.ie ?? '—'} className="shrink-0" />
                     <div className="flex min-w-0 items-baseline gap-1.5" title={enderecoTexto ? `${enderecoTexto} · ${cidade}` : cidade} data-testid="nota-cidade" data-reticencias-com-title="">
@@ -1376,7 +1394,7 @@ export function NotaFiscalDialog({
                 <div className="campos-uma-linha flex w-[124px] shrink-0 flex-col items-stretch gap-1">
                   {precisaCadastrar && (
                     <Button type="button" size="sm" className="h-[22px] px-2 text-[10.5px]" disabled={!!ocupado} onClick={() => { void cadastrar(); }} data-testid="nota-cadastrar-fornecedor">
-                      {ocupado === 'cadastrar' ? 'Cadastrando…' : res.filialDiferente ? 'Cadastrar esta filial' : 'Cadastrar com estes dados'}
+                      {rotuloDoCriar}
                     </Button>
                   )}
                   {escolherEntre.length > 0 && (
@@ -1489,7 +1507,7 @@ export function NotaFiscalDialog({
             <section className={BLOCO} data-testid="nota-bloco-fornecedor">
               <TituloDoBloco nome="Fornecedor" acao={chipFornecedor} />
               <div className="flex min-w-0 items-start gap-2.5">
-                <div className={cn(GRADE_KV, 'min-w-0 flex-1')}>
+                <div className={cn(GRADE_KV, 'min-w-0 flex-1', corDoXml)}>
                   <Kv k="Razão social" v={fornecedor ? fornecedor.nome : caixaDeTitulo(razaoSocial)} className="col-span-2"
                     titulo={fornecedor ? fornecedor.nome : `${caixaDeTitulo(razaoSocial)}${receita ? ' (Receita)' : ''} — no DANFE: ${n.emitente.nome}`} />
                   <Kv num k={soDigitos(n.emitente.documento).length === 11 ? 'CPF' : 'CNPJ'} v={documentoFormatado(n.emitente.documento)} erro={erroEm('cnpj')} testid="nota-documento-emitente" />
@@ -1510,7 +1528,7 @@ export function NotaFiscalDialog({
                 <div className="campos-uma-linha flex w-[150px] shrink-0 flex-col items-stretch gap-1">
                   {precisaCadastrar && (
                     <Button type="button" size="sm" className="h-[22px] px-2 text-[10.5px]" disabled={!!ocupado} onClick={() => { void cadastrar(); }} data-testid="nota-cadastrar-fornecedor">
-                      {ocupado === 'cadastrar' ? 'Cadastrando…' : res.filialDiferente ? 'Cadastrar esta filial' : 'Cadastrar com estes dados'}
+                      {rotuloDoCriar}
                     </Button>
                   )}
                   {escolherEntre.length > 0 && (
@@ -1597,6 +1615,13 @@ export function NotaFiscalDialog({
                     <span data-testid="nota-resumo-no-sistema">{nNoSistema} no sistema</span>
                     <span className="text-muted-foreground">·</span>
                     <span className="tabular-nums" data-testid="nota-resumo-diferenca">{difNotaSistemaCent === 0 ? 'sem diferença' : `diferença R$ ${reais(Math.abs(difNotaSistemaCent))}`}</span>
+                    {quemCobrou.length > 0 && (<>
+                      <span className="text-muted-foreground">·</span>
+                      {/* a exceção declarada `data-reticencias-com-title` (como a da razão social): o nome do emitente pode ter 60 letras */}
+                      <span className="min-w-0 overflow-hidden text-ellipsis text-amber-800" data-testid="nota-vendido-por" data-reticencias-com-title=""
+                        title={`vendido por ${caixaDeTitulo(razaoSocial)} · lançado em ${quemCobrou.join(', ')} — a nota é de quem vendeu; quem cobrou fica como fornecedor. O fornecedor do lançamento não muda.`}>
+                        vendido por {caixaDeTitulo(razaoSocial)} · lançado em {quemCobrou.join(', ')}</span>
+                    </>)}
                   </div>
                 )}
                 {/* Caso 3 — as duas leituras da posição discordam: a tela PERGUNTA (lugar reservado; nada se grava antes da resposta) */}

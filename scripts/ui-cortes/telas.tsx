@@ -1971,6 +1971,8 @@ if (tela === 'mesclar') {
       lido.nota.emitente.nome = 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO CENTRO OESTE LTDA';
       lido.nota.emitente.endereco = { ...(lido.nota.emitente.endereco ?? {}), logradouro: 'RODOVIA BR SINTETICA 163 KM 512 SAIDA PARA O DISTRITO INDUSTRIAL', municipio: 'SAO GABRIEL DO OESTE SINTETICO', uf: 'MS' };
     }
+    /* DA-NOTA-CLASSIF-01 — `&nome60=1`: o emitente SEM cadastro com a razão social de 60 letras (o cartão Fornecedor não pode empurrar os outros) */
+    if (q.get('nome60')) lido.nota.emitente.nome = 'COMERCIAL SINTETICA DE PECAS PNEUS IMPLEMENTOS AGRICOLA LTDA';
     if (v === 'longo') {
       const NOME = 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA';
       lido.nota.emitente.nome = NOME;
@@ -1998,6 +2000,8 @@ if (tela === 'mesclar') {
       parcelas: [], por: ['numero', 'chave'], cancelado: true }));
     g.__bancoBancada = {
       from: (t: string, e: any) => {
+        /* DA-NOTA-CLASSIF-01 — `&sugestao=uma|varias`: a nota já gravada (a sugestão pelos itens responde); sem o parâmetro, a nota não está lá */
+        if (t === 'nota_fiscal') return q.get('sugestao') ? [{ id: 'nf-sintetica' }] : [];
         if (OUTROS && t === 'financeiro_fornecedores' && !e?.eq?.id) return [{ id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24' }];
         if (OUTROS && t === 'financeiro_lancamentos_v2' && e?.in?.favorecido_id) return OUTROS;
         if (t === 'financeiro_fornecedores') return [{ nome_fantasia: null, inscricao_estadual: null, tipo_pessoa: 'PJ', logradouro: null, numero: null, complemento: null, bairro: null, municipio: null, uf: null, cep: null, telefone: null }];
@@ -2059,6 +2063,10 @@ if (tela === 'mesclar') {
         : fn === 'fn_nota_ja_lancada' && v === 'avista' ? AVISTA_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'janela' ? JANELA_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'previsto' ? PREVISTO_DA_NOTA()
+        /* DA-NOTA-CLASSIF-01 — a sugestão pelos itens (SINTÉTICA): `uma` = os 3 itens numa conta (outra que a de hoje: aparece o "usar"); `varias` = duas */
+        : fn === 'fn_nota_itens_sugerir_conta' ? { ok: true, nota_id: 'nf-sintetica', tipo_operacao: '2-Saídas', itens: [1, 2, 3].map((n) => ({ item_id: `it-${n}`, n_item: n,
+          plano_conta_id: q.get('sugestao') === 'varias' && n === 3 ? 'pl-lav' : 'pl-nut', subcentro: q.get('sugestao') === 'varias' && n === 3 ? 'Insumos Lavoura — Defensivos e Fertilizantes' : 'Nutrição Engorda',
+          fonte: 'a', confianca: 'alta', porque: 'Já usado 4× neste cliente.', pede_ia: false })) }
         : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'avista' || v === 'previsto') ? completarDoLr(v, a)
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
@@ -2072,7 +2080,7 @@ if (tela === 'mesclar') {
         : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 409, ultimo: '2026-10-10' }]
         : null,
     };
-    const receita = async () => ({ ok: true as const, dados: { razaoSocial: v === 'longo' ? lido.nota.emitente.nome : 'AGRO SINTETICA INSUMOS AGROPECUARIOS LTDA', fantasia: '',
+    const receita = async () => ({ ok: true as const, dados: { razaoSocial: v === 'longo' || q.get('nome60') ? lido.nota.emitente.nome : 'AGRO SINTETICA INSUMOS AGROPECUARIOS LTDA', fantasia: '',
       municipio: 'Campo Grande', uf: 'MS', logradouro: 'Rua das Flores', numero: '100', complemento: 'Sala 1', bairro: 'Centro', cep: '79000-000', matrizFilial: 'FILIAL' } });
     const PLANO = [
       { id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },

@@ -54,6 +54,13 @@ const numeroDe = (a: AlvoDaPrevia, k: number, n: number): [number, number] => (a
    "Para todas" aplica a coluna inteira (a caixinha do cabeçalho marcada); a célula editada vale SÓ naquela parcela (marcada ou não). ─────── */
 /** As colunas que só aparecem quando MUDAM ou DIFEREM entre as parcelas, na ordem da casa (antes do Valor). */
 export const COLUNAS_OPCIONAIS: readonly ColunaCompletar[] = ['favorecido', 'fazenda', 'conta', 'subcentro', 'safra'];
+/**
+ * DA-NOTA-CLASSIF-01 (Gabriel 24/11 09:17, REGRA de todo cliente) — pago/conciliado trava SÓ o que mexe no caixa (valor, pagamento, conta); a
+ * CLASSIFICAÇÃO (fazenda, subcentro, safra) é sempre editável, com trilha e o DRE acompanhando. Por isso estas três colunas APARECEM SEMPRE
+ * (antes sumiam quando iguais em todas, e a legenda dizia "não mudam": não havia onde trocar o subcentro da paga). Fornecedor e conta seguem
+ * só quando mudam ou diferem.
+ */
+export const CLASSIFICACAO_SEMPRE: ReadonlySet<ColunaCompletar> = new Set<ColunaCompletar>(['fazenda', 'subcentro', 'safra']);
 /** As células de vencimento e valor (só nas programadas; nas pagas/conciliadas, 🔒) */
 export type CelulaDinheiro = 'vencimento' | 'valor';
 export const chaveDaGrade = (id: string, c: ColunaCompletar | CelulaDinheiro) => `${id}:${c}`;
@@ -114,6 +121,7 @@ export function pedidoDaGrade(alvos: readonly AlvoDaPrevia[], todas: ValoresPara
 export function colunasQueAparecem(linhas: readonly LinhaDaPrevia[], todas: ValoresParaTodas, alvos: readonly AlvoDaPrevia[]): ColunaCompletar[] {
   if (!linhas.length) return [];
   return COLUNAS_OPCIONAIS.filter((c) => {
+    if (CLASSIFICACAO_SEMPRE.has(c)) return true;
     const campo = CAMPO_DA_COLUNA[c];
     const hoje = linhas.map((l) => { const v = l.campos[campo]?.hoje; return v === null || v === undefined || v === '' ? '' : String(v); });
     if (linhas.some((l) => l.campos[campo]?.muda)) return true;
