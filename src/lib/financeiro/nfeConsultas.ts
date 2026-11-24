@@ -3,6 +3,7 @@
  * nota. Um lugar so': nenhuma tela faz estas consultas por conta propria. (O leitor e a proposta sao puros e moram em
  * `src/lib/financeiro/nfe/`; isto aqui fala com o supabase e por isso fica fora daquela pasta.)
  */
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { supabase } from '@/integrations/supabase/client';
 import { lerResolucoesDoBanco } from '@/v2/lib/importLanc/importLancamentosView';
 import { soDigitos } from '@/lib/financeiro/nfe/formatos';
@@ -16,6 +17,7 @@ import { lerJaLancados, type LancamentoJaLancado } from '@/lib/financeiro/nfe/ja
 import type { LiberacaoDireta } from '@/lib/financeiro/nfe/notaXLancamento';
 import type { CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { lerResultadoCompletar, type ResultadoCompletar } from '@/lib/financeiro/nfe/notaCompletar';
+import { lerItensSugeridos, type ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
 export interface OcorrenciaDaNota {
@@ -224,7 +226,7 @@ export async function gravarDocumentoNoCadastro(clienteId: string, fornecedorId:
   if (!validado.formatado) return null;
   const { error } = await supabase.from('financeiro_fornecedores').update({ cpf_cnpj: validado.formatado })
     .eq('id', fornecedorId).eq('cliente_id', clienteId).or('cpf_cnpj.is.null,cpf_cnpj.eq.');
-  if (error) return error.message;
+  if (error) return fraseDoErroDoFornecedor(error, { cpf_cnpj: validado.formatado }, 'gravar o CNPJ no cadastro');
   /* NOTA-FORNECEDOR-CNPJ-ACHADO-01 — COM O ID: a tela de Lancamentos rele^ so' os avisados (sem id, so' os da pagina — e a previa da
      proxima nota ficava com este cadastro velho, "sem CNPJ") */
   notificarFornecedoresMudaram(clienteId, [fornecedorId]);   /* FORN-SELETOR-PADRAO-01: o documento do cadastro mudou */
@@ -245,7 +247,7 @@ export async function completarCadastroPeloXml(clienteId: string, fornecedorId: 
   const patch = completarPeloEmitente(Object.fromEntries(Object.entries(data)), emitente);
   if (Object.keys(patch).length === 0) return null;
   const { error: e2 } = await supabase.from('financeiro_fornecedores').update(patch).eq('id', fornecedorId).eq('cliente_id', clienteId);
-  if (e2) return e2.message;
+  if (e2) return fraseDoErroDoFornecedor(e2, patch, 'completar o cadastro');
   notificarFornecedoresMudaram(clienteId, [fornecedorId]);
   return null;
 }
@@ -419,6 +421,26 @@ export async function completarComANota(clienteId: string, pedido: readonly Reco
     });
     if (error) return recusaOuMotivo(error);
     return deu(lerResultadoCompletar(data));
+  } catch (e) { return falhou(e); }
+}
+/**
+ * DA-NOTA-CLASSIF-01 — a sugestão da conta POR ITEM (PLANO-SUGESTAO-01, `fn_nota_itens_sugerir_conta`, só lê). A nota se acha pelo cliente +
+ * chave de 44 (a função só sugere para nota que já está em `nota_fiscal`): `valor: null` = a nota ainda não está lá (a tela diz "Sugestão
+ * depois de gravar a nota"). P146: falha = `{ ok: false }`, nunca lista vazia.
+ */
+export async function sugestaoDosItensDaNota(clienteId: string, chave: string | null): Promise<Consulta<ItemSugerido[] | null>> {
+  const digitos = soDigitos(chave ?? '');
+  if (digitos.length !== 44) return deu(null);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: `nota_fiscal` fora dos tipos gerados
+    const { data: nota, error } = await (supabase as any).from('nota_fiscal').select('id').eq('cliente_id', clienteId).eq('chave_acesso', digitos).limit(1).maybeSingle();
+    if (error) return falhou(error);
+    const notaId: unknown = nota && typeof nota === 'object' ? Reflect.get(nota, 'id') : null;
+    if (typeof notaId !== 'string' || !notaId) return deu(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error: e2 } = await (supabase as any).rpc('fn_nota_itens_sugerir_conta', { p_nota_id: notaId });
+    if (e2) return falhou(e2);
+    return deu(lerItensSugeridos(data));
   } catch (e) { return falhou(e); }
 }
 /** O que nasceu DEPOIS da transação (as parcelas que faltavam, os documentos da nota): fica na operação para o desfazer. */

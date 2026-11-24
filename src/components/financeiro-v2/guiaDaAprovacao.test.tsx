@@ -102,7 +102,9 @@ describe('o modal', () => {
     expect(screen.getByTestId('guia-avancar').textContent).toBe('Ligar');
     fireEvent.click(screen.getByTestId('guia-avancar'));
     await waitFor(() => expect(onLigou).toHaveBeenCalled());
-    expect(chamadas.filter((c) => c.a.p_simular === false).map((c) => c.fn)).toEqual(['fn_bpo_aprovador_gravar', 'fn_bpo_config_gravar']);
+    /* BPO-FUNCIONAR-01: depois da configuração, o limite opcional (nulo = sem limite) */
+    expect(chamadas.filter((c) => c.a.p_simular === false).map((c) => c.fn)).toEqual(['fn_bpo_aprovador_gravar', 'fn_bpo_config_gravar', 'fn_bpo_limite_gravar']);
+    expect(chamadas.find((c) => c.fn === 'fn_bpo_limite_gravar')?.a.p_valor).toBeNull();
     expect(chamadas.find((c) => c.fn === 'fn_bpo_config_gravar' && c.a.p_simular === false)?.a.p_dias).toEqual([1]);
   });
 });

@@ -71,6 +71,8 @@ const consultas = vi.hoisted(() => ({
   /* NOTA-ATUALIZA-PREVISTO-01 — o histórico da participação (padrão: nenhum, nada sugerido) e a gravação do % no documento */
   historicoDaParticipacao: vi.fn(async (_c: string, _f: string): Promise<{ lancamentoCent: number; documentoCent: number }[]> => []),
   definirParticipacao: vi.fn(async (_c: string, _d: readonly string[], _p: number): Promise<string | null> => null),
+  /* DA-NOTA-CLASSIF-01 — a sugestão pelos itens na etapa 2 (padrão: a nota ainda não está gravada) */
+  sugestaoDosItensDaNota: vi.fn(async (_c: string, _k: string | null): Promise<Consulta<null>> => ({ ok: true, valor: null })),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 /* Ajuste 12 — a aba Itens da nota já lançada: os itens fiscais (guardados ou do arquivo) num hook só; o teste diz o que ele responde */
@@ -1729,5 +1731,36 @@ describe('DA-NOTA-ETAPAS-01 — a nota NÃO FINANCEIRA troca o botão (Gabriel 1
     await waitFor(() => expect(bem.registrarBemDeTerceiro).toHaveBeenCalledTimes(1));
     const [cli, chave, prev, obs, simular] = bem.registrarBemDeTerceiro.mock.calls[0];
     expect([cli, String(chave).length, prev, obs, simular]).toEqual(['cli', 44, null, null, true]);
+  });
+});
+
+/* ═══ DA-NOTA-CLASSIF-01 (Gabriel 24/11 09:17/09:18) — o cartão Fornecedor com o MESMO desenho com ou sem cadastro; o marketplace "vendido por" ═══ */
+describe('DA-NOTA-CLASSIF-01 — cartão do fornecedor e "vendido por"', () => {
+  it('sem cadastro: o chip âmbar numa linha, os dados do XML em cinza e "Criar fornecedor" (nunca "Cadastrar com estes dados")', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
+    await abrir(montarNota());
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('não encontrado no cadastro · criar com estes dados');
+    expect(screen.getByTestId('nota-cadastrar-fornecedor').textContent).toBe('Criar fornecedor');
+    expect(screen.getByTestId('nota-fornecedor-linha-2').className).toContain('text-muted-foreground');
+  });
+  it('com cadastro: o chip "achado pelo CNPJ", o preto do cadastro e nenhum botão de criar', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
+    await abrir(montarNota({ fornecedores: [FORN] }), { fornecedores: [FORN] });
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo CNPJ');
+    expect(screen.getByTestId('nota-fornecedor-linha-2').className).not.toContain('text-muted-foreground');
+    expect(screen.queryByTestId('nota-cadastrar-fornecedor')).toBeNull();
+  });
+  it('lançamento de OUTRO fornecedor (o marketplace): "vendido por <emitente> · lançado em <quem cobrou>"; o fornecedor do lançamento não é trocado', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });          // os 4 no cadastro sem CNPJ (outro que o emitente)
+    const { onCriarFornecedor } = await abrir(montarNota({ fornecedores: [FORN] }), { fornecedores: [FORN] });
+    const v = await screen.findByTestId('nota-vendido-por');
+    expect(v.textContent).toMatch(/^vendido por .+ · lançado em Agro Sintetica Insumos SA$/);
+    expect(v.getAttribute('title')).toContain('O fornecedor do lançamento não muda.');
+    expect(onCriarFornecedor).not.toHaveBeenCalled();
+  });
+  it('lançamento do PRÓPRIO emitente: sem "vendido por"', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO.map((l) => ({ ...l, fornecedorId: 'f1', fornecedorNome: 'Agro Sintetica' })) });
+    await abrir(montarNota({ fornecedores: [FORN] }), { fornecedores: [FORN] });
+    expect(screen.queryByTestId('nota-vendido-por')).toBeNull();
   });
 });

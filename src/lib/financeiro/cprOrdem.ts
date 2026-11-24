@@ -8,7 +8,8 @@
  *   - a NF só com o número ("9.232", nunca "NF 000.009.232").
  */
 
-export type ColunaCpr = 'comp' | 'venc' | 'descricao' | 'fornecedor' | 'subcentro' | 'nf' | 'status' | 'valor';
+/** CPR-LAYOUT-04: `venc` segue sendo a ORDEM PADRÃO mesmo sem coluna (a data está na faixa do dia); `banco` = a conta de saída. */
+export type ColunaCpr = 'comp' | 'venc' | 'banco' | 'descricao' | 'fornecedor' | 'subcentro' | 'nf' | 'status' | 'valor' | 'aprovacao' | 'lancado';
 export type SentidoCpr = 'asc' | 'desc';
 export interface OrdemCpr { coluna: ColunaCpr; sentido: SentidoCpr }
 
@@ -17,20 +18,34 @@ export const ORDEM_PADRAO_CPR: OrdemCpr = { coluna: 'venc', sentido: 'asc' };
 
 /** Os rótulos do cabeçalho, na ordem das colunas. */
 export const ROTULO_DA_COLUNA_CPR: Readonly<Record<ColunaCpr, string>> = {
-  comp: 'Comp.', venc: 'Venc.', descricao: 'Descrição', fornecedor: 'Fornecedor', subcentro: 'Subcentro', nf: 'NF', status: 'Status', valor: 'Valor',
+  comp: 'Comp.', venc: 'Venc.', banco: 'Banco', descricao: 'Descrição', fornecedor: 'Fornecedor', subcentro: 'Subcentro', nf: 'NF', status: 'Status',
+  valor: 'Valor',
+  /* BPO-FUNCIONAR-01 — só com a aprovação ligada */
+  aprovacao: 'Aprovação', lancado: 'Lançado por',
 };
 
-/** Clicar numa coluna: a mesma inverte o sentido; outra começa crescente (o Valor começa do maior). */
+/** O sentido com que uma coluna começa: crescente (o Valor começa do maior). */
+const PRIMEIRO_SENTIDO = (coluna: ColunaCpr): SentidoCpr => (coluna === 'valor' ? 'desc' : 'asc');
+
+/**
+ * Clicar numa coluna: outra começa no primeiro sentido; a mesma inverte; o TERCEIRO clique volta ao padrão (vencimento crescente —
+ * CPR-LAYOUT-04: sem a coluna Venc., é o único caminho de volta). A coluna do padrão (Venc.) só alterna.
+ */
 export function proximaOrdemCpr(atual: OrdemCpr, coluna: ColunaCpr): OrdemCpr {
-  if (atual.coluna === coluna) return { coluna, sentido: atual.sentido === 'asc' ? 'desc' : 'asc' };
-  return { coluna, sentido: coluna === 'valor' ? 'desc' : 'asc' };
+  if (atual.coluna !== coluna) return { coluna, sentido: PRIMEIRO_SENTIDO(coluna) };
+  if (coluna !== ORDEM_PADRAO_CPR.coluna && atual.sentido !== PRIMEIRO_SENTIDO(coluna)) return ORDEM_PADRAO_CPR;
+  return { coluna, sentido: atual.sentido === 'asc' ? 'desc' : 'asc' };
 }
 
 /** O que cada coluna compara, por linha. Texto vazio e data ausente vão SEMPRE para o fim, em qualquer sentido. */
 export interface ChavesDaLinhaCpr {
   comp: string | null; venc: string | null; descricao: string; fornecedor: string; subcentro: string; nf: string; status: string;
+  /** CPR-LAYOUT-04: o apelido curto da conta de saída (`apelidoCurtoDaContaCpr`); ordena por ele */
+  banco: string;
   /** o valor COM SINAL do lado (+ a receber, − a pagar) */
   valor: number;
+  /** BPO-FUNCIONAR-01 — o texto do chip e o nome de quem lançou (ausentes sem a aprovação ligada: vazio vai para o fim) */
+  aprovacao?: string; lancado?: string;
 }
 
 const COLADOR = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });

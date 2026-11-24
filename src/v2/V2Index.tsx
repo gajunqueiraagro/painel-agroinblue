@@ -69,7 +69,6 @@ import { DividendosTab } from '@/pages/DividendosTab';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { FinV2SaldosTab } from '@/pages/FinV2SaldosTab';
 import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
-import AprovarPagamentosPage from '@/pages/AprovarPagamentosPage';
 import { VisaoGeralFinanceiro, type RetornoVG } from '@/v2/pages/VisaoGeralFinanceiro';
 import { inicialDaVisaoFinanceira } from '@/v2/pages/visaoGeral/caixaAbreVisaoFinanceira';
 import type { FinV2DrillFilters } from '@/pages/FinanceiroV2Tab';
@@ -1198,7 +1197,23 @@ export default function V2Index() {
       <FinV2ContasTab />
     );
     /* BPO-APROVACAO-01 — a fila do aprovador (o BPO nasce desligado: sem a configuração ligada, a tela diz isso) */
-    if (section === 'aprovar-pagamentos') return <AprovarPagamentosPage />;
+    /* BPO-FUNCIONAR-01 — "Aprovar pagamentos" é a CPR aberta em "Para aprovar" (a aprovação mora DENTRO da CPR; a tela própria saiu) */
+    if (section === 'aprovar-pagamentos') return (
+      <ContasPagarReceberTab
+        key="cpr-aprovar"
+        etapaInicial="aprovar"
+        onIntensiveToggle={setIntensivo}
+        onAbrirFinanciamento={podeAbrirTela('financiamentos') ? (id) => {
+          setOrigemDoFinanciamento('aprovar-pagamentos');
+          setFinanciamentoIdAlvo(id);
+          setSection('financiamentos');
+        } : undefined}
+        onAbrirRecorrencia={podeAbrirTela('recorrencias') ? (id) => {
+          setRecorrenciaIdAlvo(id);
+          setSection('recorrencias');
+        } : undefined}
+      />
+    );
     if (section === 'contratos') return (
       <ContratosTab />
     );
@@ -1725,7 +1740,8 @@ export default function V2Index() {
     );
   }
 
-  const clienteSelector = clientes.length > 1 ? <ClienteSelector /> : undefined;
+  /* ACESSO-UM-CLIENTE-01 — o cliente aparece SEMPRE (com um só, travado: o `ClienteSelector` decide o desenho) */
+  const clienteSelector = clientes.length > 0 ? <ClienteSelector /> : undefined;
   /* RESUMO-CLIENTES-01 — no "Resumo dos clientes" (só admin) nenhuma tela de cliente é montada (o desenho das seções não roda), o
      seletor de fazenda some e o menu do cliente vira a aba do painel. */
   const modoResumo = isAdmin && resumoClientes;
@@ -1847,7 +1863,7 @@ export default function V2Index() {
         <div className="md:hidden flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm no-print">
           <span className="text-sm font-bold">Agroinblue</span>
           <div className="flex items-center gap-1">
-            {clientes.length > 1 && (
+            {clientes.length > 0 && (
               <div className="[&_button]:text-xs [&_button]:h-7 [&_button]:bg-primary-foreground/10 [&_button]:text-primary-foreground [&_button]:border-0">
                 <ClienteSelector />
               </div>

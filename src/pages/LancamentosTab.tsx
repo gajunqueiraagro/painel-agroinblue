@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { useSearchParams } from 'react-router-dom';
 import { MetaLancamentoPanel, useMetaValidacaoBloqueios, type EvolucaoSugestao, type MetaStepState } from '@/components/MetaLancamentoPanel';
 import { EvolucaoAssistidaDialog } from '@/components/EvolucaoAssistidaDialog';
@@ -5021,7 +5022,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               .insert({ cliente_id: clienteAtual.id, fazenda_id: (fazendaAtual?.id && fazendaAtual.id !== '__global__') ? fazendaAtual.id : null, nome, cpf_cnpj: cpfCnpj || null })
               .select('id, nome')
               .single();
-            if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+            if (error) { toast.error(fraseDoErroDoFornecedor(error, { fazenda_id: fazendaAtual?.id ?? null, nome, cpf_cnpj: cpfCnpj || null }, 'criar o fornecedor')); return; }
             notificarFornecedoresMudaram(clienteAtual.id);
             if (rec) {
               setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
@@ -7116,7 +7117,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             .insert({ cliente_id: clienteAtual.id, fazenda_id: (fazendaAtual?.id && fazendaAtual.id !== '__global__') ? fazendaAtual.id : null, nome, cpf_cnpj: cpfCnpj || null })
             .select('id, nome')
             .single();
-          if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          if (error) { toast.error(fraseDoErroDoFornecedor(error, { fazenda_id: fazendaAtual?.id ?? null, nome, cpf_cnpj: cpfCnpj || null }, 'criar o fornecedor')); return; }
           notificarFornecedoresMudaram(clienteAtual.id);
           if (rec) {
             setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
@@ -7141,7 +7142,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             .insert({ cliente_id: clienteAtual.id, fazenda_id: (fazendaAtual?.id && fazendaAtual.id !== '__global__') ? fazendaAtual.id : null, nome, cpf_cnpj: cpfCnpj || null })
             .select('id, nome')
             .single();
-          if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          if (error) { toast.error(fraseDoErroDoFornecedor(error, { fazenda_id: fazendaAtual?.id ?? null, nome, cpf_cnpj: cpfCnpj || null }, 'criar o fornecedor')); return; }
           notificarFornecedoresMudaram(clienteAtual.id);
           if (rec) {
             setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
@@ -7165,7 +7166,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             .insert({ cliente_id: clienteAtual.id, fazenda_id: (fazendaAtual?.id && fazendaAtual.id !== '__global__') ? fazendaAtual.id : null, nome, cpf_cnpj: cpfCnpj || null })
             .select('id, nome')
             .single();
-          if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          if (error) { toast.error(fraseDoErroDoFornecedor(error, { fazenda_id: fazendaAtual?.id ?? null, nome, cpf_cnpj: cpfCnpj || null }, 'criar o fornecedor')); return; }
           notificarFornecedoresMudaram(clienteAtual.id);
           if (rec) {
             setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));

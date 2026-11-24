@@ -16,6 +16,7 @@
  * - Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas.
  * ═══════════════════════════════════════════════════════════════════════
  */
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -1171,7 +1172,7 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
           // A mensagem crua do banco continua embutida aqui, mas não vaza: o
           // catch de `importarLancamentos` normaliza antes de exibir. Ver a
           // dívida registrada no relatório.
-          throw new Error(`Erro ao criar fornecedor automaticamente: ${nomeOriginal} — ${error.message}`);
+          throw new Error(fraseDoErroDoFornecedor(error, { fazenda_id: fazIdParaCriar, nome: nomeOriginal }, `criar o fornecedor ${nomeOriginal} automaticamente`));
         }
 
         fornecedorMap.set(nomeNormalizado, data.id);

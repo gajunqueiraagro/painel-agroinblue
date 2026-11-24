@@ -1,7 +1,5 @@
 import { casaNaBusca } from '@/lib/texto/busca';
 import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
-import { useBpoAtivo } from '@/hooks/useBpoAtivo';
-import { EnviarParaAprovacaoDialog } from '@/components/financeiro-v2/EnviarParaAprovacaoDialog';
 import type { ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -70,7 +68,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, ListChecks, Send } from 'lucide-react';
+import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, ListChecks } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -120,12 +118,17 @@ import {
   lerPorPaginaV2, guardarPorPaginaV2, POR_PAGINA_V2, TOTAIS_VAZIOS, porPaginaV2DoTexto, textoDoPorPaginaV2, type PorPaginaV2, type PorPaginaV2Texto,
   fornecedoresDoFiltroV2,
 } from '@/lib/financeiro/listaPaginaV2';
+import { codigoProntoDaLinha, formaEfetivaDaLinha, type FiltroPronto } from '@/lib/financeiro/prontoParaPagar';
+import { PontoProntoPagar } from '@/components/financeiro-v2/PontoProntoPagar';
+import { FormaPeloExtratoDialog } from '@/components/financeiro-v2/FormaPeloExtratoDialog';
 import { RODAPE_REGUA, TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
 /* a volta do financiamento (ano, meses, contas) — P94: guardada POR CLIENTE (`chaveDoCliente`) */
 const CHAVE_ESTADO_FIN = 'financeiro_v2_state';
 
 /* a reserva dos totais do topo: o maior valor que a faixa mostra (dezenas de milhões) */
 const RESERVA_TOTAL = 'R$ 00.000.000,00';
+/* FIN-PRONTO-PAGAR-01 — a contagem do seletor e dos totais Prontos/Faltando reserva 5 algarismos (o NJ tem ~5.700 linhas no ano) */
+const RESERVA_CONTAGEM_PRONTO = '00.000';
 
 /**
  * A memória da busca dos comboboxes desta tela.
@@ -1400,13 +1403,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [porPagina, setPorPaginaEstado] = useState<PorPaginaV2>(() => lerPorPaginaV2(null));
   const [paginaV2, setPaginaV2] = useState(0);
   const escolherPorPagina = useCallback((v: PorPaginaV2) => { setPorPaginaEstado(v); guardarPorPaginaV2(null, v); }, []);
+  /* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento" (Todos · Prontos · Faltando); a contagem vem do banco, do recorte sem ele */
+  const [prontoPagarFiltro, setProntoPagarFiltro] = useState<FiltroPronto>('todos');
+  /* a aba em que o modal do lançamento abre (o ponto abre na Pagamento); limpa ao fechar */
+  const [abaDoLancamento, setAbaDoLancamento] = useState<'pagamento' | undefined>(undefined);
+  /* FORN-FORMA-PELO-EXTRATO-01 — o atalho do "Faltando" */
+  const [formaPeloExtrato, setFormaPeloExtrato] = useState(false);
   const filtrosV2 = useMemo(() => filtrosDaPaginaV2({
     fazendaId, anos: anosSelecionados, meses: mesesSelecionados, dimensao: dataPor, tipoOperacao, status: statusSelecionados,
     contaOrigem, contaDestino, macro: macroFiltro, grupo: grupoFiltro, centro: centroFiltro, subcentro: subcentroFiltro,
     safra: safraFiltro, cultura: culturaFiltro, atividade: atividadeFiltro, produto: produtoFiltro, documento: documentoFiltro,
-    fornecedor: fornecedorFiltro, fornecedores: conjuntoDoFornecedor, modoSemCaixa,
+    fornecedor: fornecedorFiltro, fornecedores: conjuntoDoFornecedor, modoSemCaixa, prontoPagar: prontoPagarFiltro,
   }), [fazendaId, anosSelecionados, mesesSelecionados, dataPor, tipoOperacao, statusSelecionados, contaOrigem, contaDestino, macroFiltro,
-       grupoFiltro, centroFiltro, subcentroFiltro, safraFiltro, culturaFiltro, atividadeFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, conjuntoDoFornecedor, modoSemCaixa]);
+       grupoFiltro, centroFiltro, subcentroFiltro, safraFiltro, culturaFiltro, atividadeFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, conjuntoDoFornecedor, modoSemCaixa, prontoPagarFiltro]);
   const ordemV2 = useMemo(() => ordemDaPaginaV2(sortField, sortDir, nivelClassif), [sortField, sortDir, nivelClassif]);
   const chaveDoRecorte = JSON.stringify([filtrosV2, ordemV2, porPagina]);
   useEffect(() => { setPaginaV2(0); }, [chaveDoRecorte]);
@@ -1559,9 +1568,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [todosDoFiltro, setTodosDoFiltro] = useState(false);
   const [marcandoTodos, setMarcandoTodos] = useState(false);
   const [trocarAberto, setTrocarAberto] = useState(false);
-  /* BPO-APROVACAO-01 P2 — "Enviar para aprovação" dos marcados (só com o BPO ligado no cliente) */
-  const bpoAtivo = useBpoAtivo(clienteAtual?.id);
-  const [enviarAberto, setEnviarAberto] = useState(false);
+  /* BPO-FUNCIONAR-01 — o "Enviar para aprovação" SAIU: toda saída a pagar entra sozinha na aprovação pela regra (118500) */
   const idsMarcados = useMemo(() => [...selectedIds], [selectedIds]);   // estavel: o modal simula de novo so' quando a selecao muda
   const todosDoFiltroRef = useRef(false);
   todosDoFiltroRef.current = todosDoFiltro;
@@ -1787,6 +1794,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setProdutoFiltro('');
     setDocumentoFiltro('');
     setFornecedorFiltro('__all__');
+    setProntoPagarFiltro('todos');
     setAtividadeFiltro('__all__');
     setSafraFiltro('__all__');
     setCulturaFiltro('__all__');
@@ -2708,6 +2716,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
             Transf.: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalTransferencias) : '—'} />
           </span>
+          {/* FIN-PRONTO-PAGAR-01 — Prontos/Faltando do recorte (as saídas ainda a pagar), ao lado de Entradas/Saídas; "—" = o banco não mandou */}
+          <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold" data-testid="totais-pronto"
+            title="Saídas ainda a pagar neste recorte: prontas (a forma de pagamento tem o que precisa) e faltando algo. Passe o mouse no ponto de cada linha.">
+            <span className="inline-flex items-center gap-1 text-[#1F7A4D]"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-[#1F7A4D]" />Prontos{' '}
+              <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.prontos.toLocaleString('pt-BR') : '—'} />
+              <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista?.prontoPagar ? formatMoeda(paginaDaLista.prontoPagar.prontosValor) : '—'} /></span>
+            <span className="inline-flex items-center gap-1 text-[#9a5b00]"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-[#E08A00]" />Faltando{' '}
+              <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.faltando.toLocaleString('pt-BR') : '—'} />
+              <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista?.prontoPagar ? formatMoeda(paginaDaLista.prontoPagar.faltandoValor) : '—'} /></span>
+            {/* FORN-FORMA-PELO-EXTRATO-01 — o atalho: a forma de cada fornecedor pelo extrato (lugar fixo, sempre desenhado) */}
+            <button type="button" data-testid="atalho-forma-pelo-extrato" disabled={!clienteAtual?.id} onClick={() => setFormaPeloExtrato(true)}
+              title="Falta a forma? Sugerir a forma de pagamento de cada fornecedor pelo extrato conciliado"
+              className="h-4 shrink-0 rounded border border-[#E08A00] px-1 text-[9.5px] font-medium text-[#9a5b00] hover:bg-amber-50">pelo extrato</button>
+          </span>
           <span className="text-muted-foreground"><TextoReservado reserva={reservaDeNumero(5)} alinhar="direita" texto={paginaDaLista ? totalLancamentosFiltrados.toLocaleString('pt-BR') : '—'} /> lanç.</span>
           {/* P94 — O LUGAR DOS AVISOS DO FILTRO, RESERVADO: sempre desenhado (vazio sem aviso), com a largura que sobra (`flex-1`), numa
               linha que rola no lugar; mínimo de 160px, para caber ao menos o começo do aviso numa janela estreita — o aviso que
@@ -2745,7 +2767,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           {/* FIN-V2-COLUNAS-02 — os controles da lista, na MESMA linha dos totais (altura 20 numa faixa de 24): no Ampliado o chip
               das contas; a Classificação por nível; o "sem caixa" em três posições. Alinhados à direita: o chip que muda de
               largura ("✓") cresce para a esquerda e não move os seletores. */}
-          <span className="ml-auto flex shrink-0 items-center gap-1.5" data-testid="controles-da-lista">
+          <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5" data-testid="controles-da-lista">
             {modoIntensivo && (
               <button type="button" data-testid="chip-contas" aria-pressed={contasAmpliado} onClick={alternarContasAmpliado}
                 title="Mostrar ou esconder as colunas C. Origem e C. Destino"
@@ -2753,9 +2775,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {contasAmpliado ? '✓ ' : ''}Contas origem/destino
               </button>
             )}
+            {/* FIN-PRONTO-PAGAR-01 — cada par rótulo + seletor é UM bloco: numa janela estreita os blocos descem inteiros (nada sai da faixa) */}
+            <span className="inline-flex shrink-0 items-center gap-1.5">
             <span className="text-muted-foreground" title="Classificação: o nível mostrado na coluna">Class.</span>
             <Segmentado altura={20} valor={nivelClassif} onEscolher={setNivelClassif}
               opcoes={NIVEIS_CLASSIFICACAO.map(n => ({ valor: n, rotulo: ROTULO_NIVEL[n] }))} />
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-1.5">
             <span className="text-muted-foreground">Sem caixa</span>
             <Segmentado altura={20} valor={modoSemCaixa} onEscolher={setModoSemCaixa} opcoes={[
               { valor: 'ocultar', rotulo: 'Ocultar', title: 'Só o que movimenta caixa' },
@@ -2764,6 +2790,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 : 'Também o sem caixa (entregas, barter, consumo), na seção abaixo da lista' },
               { valor: 'so_dre', rotulo: 'Só c/ DRE', title: 'Só os lançamentos sem caixa que compõem o DRE' },
             ]} />
+            </span>
+            {/* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento"; a contagem é a do recorte sem ele (não encolhe ao escolher) */}
+            <span className="inline-flex shrink-0 items-center gap-1.5">
+            <span className="text-muted-foreground">Pagamento</span>
+            <Segmentado altura={20} valor={prontoPagarFiltro} onEscolher={setProntoPagarFiltro} opcoes={[
+              { valor: 'todos', rotulo: 'Todos', title: 'Todos os lançamentos' },
+              { valor: 'prontos', rotulo: <>Prontos <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.prontos.toLocaleString('pt-BR') : '—'} /></>,
+                title: 'Saídas a pagar com o que a forma de pagamento precisa (boleto ligado, chave PIX, dados bancários) ou que não precisam de nada' },
+              { valor: 'faltando', rotulo: <>Faltando <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.faltando.toLocaleString('pt-BR') : '—'} /></>,
+                title: 'Saídas a pagar em que falta algo: a forma, o boleto, a chave PIX ou os dados bancários' },
+            ]} />
+            </span>
           </span>
         </div>
       )}
@@ -2886,15 +2924,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 /* FIN-V2-DESEMPENHO-01b: no Ampliado 140→128 e 202→190 (com Fornecedor 116→104 e 177→165): as datas em dd/mm/aaaa
                     tomaram 18px e o Valor 6; a soma do Ampliado volta à de antes. Na normal, Produto 128→123, Fornecedor 122→117 e
                     Classificação 124→120: a soma vai a 916, dentro dos 919 medidos na janela do Gabriel (nomes cortam com o `title`) */
-                modoIntensivo ? (contasAmpliado ? 120 : 182) : 115,
+                modoIntensivo ? (contasAmpliado ? 102 : 164) : 97,
                 /* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */
                 /* ⚠ 100 → 124 — PARC-LIVRES-01 fechamento C (pedido do Gabriel: Fornecedor mais largo). Os 24px saem de Macro (49→33,
                     que já cortava em 5.250 de 5.251 linhas do NJ) e de Centro (49→41). Medido no NJ a 1.126. */
-                modoIntensivo ? (contasAmpliado ? 97 : 158) : 110,
+                modoIntensivo ? (contasAmpliado ? 80 : 141) : 93,
                 /* Macro e Centro 66→56, a 8,5px (`.celula-classe`, exceção ao piso só nesta lista): cortam com o texto inteiro no
                     `title`, como já cortavam — medido no NJ: 3 das 11 macros cabiam em 66 a 9px, e as mesmas 3 cabem em 56 a 8,5. */
                 /* FIN-V2-COLUNAS-02: Macro e Centro viram UMA coluna, a Classificação no nível escolhido. */
-                modoIntensivo ? (contasAmpliado ? 109 : 170) : 113,
+                modoIntensivo ? (contasAmpliado ? 92 : 153) : 96,
                 /* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
                     horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
                     icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */
@@ -2951,6 +2989,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     já cortavam e seguem cortando (dívida FIN-V2-DOC-CORTA-01). */
                 /* FIN-V2-COLUNAS-02: Doc. 90→78. */
                 78,
+                /* FIN-PRONTO-PAGAR-01 PR B (Gabriel 24/11 09:01) — a coluna FORMA (ponto + sigla: Bol · Pix · DA · TED · Créd · Déb · Din · Out · —),
+                    52px. A soma NÃO cresce: Produto −18, Fornecedor −17 e a Classificação −17 (as três cortam com o texto inteiro no `title`). */
+                52,
                 /* ⚠ 64 → 84 → 77. Com 64 o status saía cortado colado nos pontinhos ("Ag"); o
                     PR-FIN-V2-STATUS-PGTO-01 foi a 84 pela pílula em "Programado", e o fix1 a 77: previsto, programado e agendado viraram
                     TEXTO (sem o padding da pílula), e a caixa ficou só para realizado e conciliado.
@@ -2999,6 +3040,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       de grupo antes dela e antes do Status */}
                   <ThDaLista recuo="px-0.5" separador title="Documentos anexados: clique no clipe para abrir">Anexo</ThDaLista>
                   <ThDaLista recuo="px-1" ordenar={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></ThDaLista>
+                  <ThDaLista recuo="px-1" title="Forma de pagamento · ponto verde = pronto para pagar, laranja = falta algo (passe o mouse na linha: diz o quê)">Forma</ThDaLista>
                   <ThDaLista recuo="px-1" separador ordenar={() => toggleSort('status')}>Status<SortIndicator field="status" /></ThDaLista>
                   {/* ⚠ O "…" NÃO É FIXO — decisão soberana do Gabriel, 30/09 (PR-FIN-V2-STATUS-PGTO-01-fix1),
                       e revoga a do FIN-V2-HOMOLOG-FIX-01 ("fixo à direita, nunca some na rolagem"). Fixo, ele
@@ -3014,7 +3056,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   return (<>
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={modoIntensivo && contasAmpliado ? 17 : 15} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={modoIntensivo && contasAmpliado ? 18 : 16} className="text-center text-muted-foreground py-4 text-[10px]">
                       {paginaDaLista ? 'Nenhum lançamento neste filtro' : (listaV2.erro ?? 'Carregando…')}
                     </td>
                   </tr>
@@ -3208,6 +3250,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </td>
                         {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}
                         <CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />
+                        {/* FIN-PRONTO-PAGAR-01 PR B — a coluna Forma: o ponto do pronto para pagar + a sigla; o clique abre na aba Pagamento */}
+                        <td className="px-1 py-1 align-middle text-[10px] leading-tight whitespace-nowrap" data-testid="celula-forma">
+                          <PontoProntoPagar codigo={codigoProntoDaLinha(l)} forma={formaEfetivaDaLinha(l) ?? l.forma_pagamento ?? null}
+                            onAbrir={() => { setAbaDoLancamento('pagamento'); openEdit(l); }} />
+                        </td>
                         {/* `truncate` também aqui: a tabela é `tableLayout: fixed`, então a
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em
                             vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do
@@ -3333,10 +3380,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               ocDe={id => lancamentosComOC.get(id)} onAbrirOC={podeAbrirOC ? abrirOCFinanceiro : undefined} />
           )}
 
-          {enviarAberto && clienteAtual?.id && (
-            <EnviarParaAprovacaoDialog aberto={enviarAberto} onFechar={() => setEnviarAberto(false)} clienteId={clienteAtual.id}
-              ids={[...selectedIds]} onEnviou={(frase) => { toast.success(frase); setSelectedIds(new Set()); }} />
-          )}
           {/* Bulk action bar */}
           {someSelected && (
             <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 bg-muted border border-border rounded-lg" data-testid="barra-lote">
@@ -3362,14 +3405,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 onClick={() => { setMotivoLote(''); setConfirmDeleteOpen(true); }}>
                 <Trash2 className="h-3 w-3" /> Excluir selecionados
               </Button>
-              {/* BPO-APROVACAO-01 P2 — enviar as marcadas para a fila do aprovador (a prévia diz quantas entram e o que fica de fora) */}
-              {bpoAtivo && (
-                <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2" disabled={todosDoFiltro} data-testid="lote-enviar-aprovacao"
-                  title={todosDoFiltro ? 'Com "todos do filtro" marcado, só o Trocar fornecedor vale (as outras ações são da página).' : 'Mandar as marcadas para a fila de aprovação'}
-                  onClick={() => setEnviarAberto(true)}>
-                  <Send className="h-3 w-3" /> Enviar para aprovação
-                </Button>
-              )}
               {/* FORN-TROCAR-LOTE-01 — o "…" da barra: Trocar fornecedor (as marcadas, ou todos do filtro) */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -3401,9 +3436,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       <LancamentoV2Dialog
         open={dialogOpen}
+        abaInicial={abaDoLancamento}
         onClose={() => {
           const idAberto = editingLanc?.id ?? null;
-          setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); onCloseDialog?.();
+          setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); setAbaDoLancamento(undefined); onCloseDialog?.();
           const salvou = salvouPorCimaDaRegra.current;
           if (camadas.aberta('lanc')) { camadas.fechar('lanc', salvou ? 'salvou' : 'fechou', idAberto); salvouPorCimaDaRegra.current = false; }
           if (lancSobreANota.current) {
@@ -3476,6 +3512,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       />
       {receitaAberta && (
         <Camada coberta={camadas.coberta('receita')}>
+        {formaPeloExtrato && clienteAtual?.id && (
+          <FormaPeloExtratoDialog aberto clienteId={clienteAtual.id} aoFechar={() => setFormaPeloExtrato(false)} />
+        )}
         <NotasDaReceitaDialog lancadasAgora={lancadasAgora} retorno={camadas.retornoPara('receita')} abaInicial={abaReceitaInicial} clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
           erro={receita.error ? (receita.error as Error).message : null}
           aoFechar={() => { setReceitaAberta(false); setAbaReceitaInicial(undefined); camadas.fechar('receita'); }}

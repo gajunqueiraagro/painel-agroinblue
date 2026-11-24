@@ -470,7 +470,7 @@ const Index = () => {
           periodo={undefined}
           rightAction={
             <div className="flex flex-col gap-1">
-              {clientes.length > 1 && <ClienteSelector />}
+              {clientes.length > 0 && <ClienteSelector />}
               {fazendas.length > 1 && <FazendaSelector />}
             </div>
           }

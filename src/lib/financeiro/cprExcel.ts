@@ -24,6 +24,8 @@ export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
    *  com Caixa inicial + A receber − A pagar = Saldo no fim, os mesmos números da tela. Sem eles, a aba termina no último dia. */
   fim?: string;
   rodape?: { pagar: number; receber: number };
+  /** CPR-LAYOUT-04 — a frase dos filtros da tela: vai na 1ª linha do "Saldo por dia" (a aba Contas já vem filtrada) */
+  filtros?: string;
 }): XlsxDownloadPayload {
   const contas: Record<string, XlsxCellValue>[] = [];
   for (const g of e.grupos) {
@@ -44,7 +46,9 @@ export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
   /* CPR-AJUSTES-20-10 — "Saldo por dia" COMEÇA NO CAIXA INICIAL e segue os GRUPOS DA TELA, na mesma ordem: cada dia com o saldo
      da linha "Saldo em dd/mm/aaaa" (hoje inclusive, com os vencidos dentro). Os números são os da tela; nada é somado aqui. */
   const futuro = e.inicio > s.dataDeHoje;
+  const linhaDosFiltros: XlsxCellValue[][] = e.filtros ? [[`${e.filtros} · com filtro o saldo fica vazio`, null, null, null]] : [];
   const saldoPorDia: XlsxCellValue[][] = [
+    ...linhaDosFiltros,
     ['Data', 'A receber', 'A pagar', 'Saldo depois do dia'],
     /* CPR-AJUSTES-20-10b — o bloco dos vencidos do período futuro vem ANTES do Caixa inicial (que já os desconta), como na tela */
     ...e.grupos.filter((g) => g.antesDoCaixaInicial && !g.depoisDoFim).map((g): XlsxCellValue[] => [g.titulo, g.receber, g.pagar, null]),

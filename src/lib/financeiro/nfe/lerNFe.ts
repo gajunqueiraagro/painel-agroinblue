@@ -16,6 +16,7 @@
  */
 import { decodificarPeloCharsetDeclarado } from '@/lib/financeiro/parser/decodificarExtrato';
 import { centavosDoTexto, somarCentavos } from './centavos';
+import { semCodigoDoEmissor } from './nomeDoEmitente';
 import {
   CSTAT_CANCELADA_OU_DENEGADA, LIMITE_BYTES_NFE, fraseDaRecusa,
   type AvisoNFe, type CampoObrigatorioNFe, type DuplicataNFe, type FinalidadeNota, type MotivoRecusa, type NotaLida,
@@ -104,7 +105,9 @@ export function lerNFe(bytes: ArrayBuffer): ResultadoNFe {
   if (!emissao) return incompleta('data de emissão');
   const emit = filho(inf, 'emit');
   const docEmitente = soDigitos(texto(emit, 'CNPJ')) ?? soDigitos(texto(emit, 'CPF'));
-  const nomeEmitente = texto(emit, 'xNome');
+  /* FORN-CRIAR-DA-NOTA-ERRO — o código do sistema emissor ("1 - ") não é da razão social */
+  const xNome = texto(emit, 'xNome');
+  const nomeEmitente = xNome ? semCodigoDoEmissor(xNome) : xNome;
   if (!docEmitente || !nomeEmitente) return incompleta('emitente');
   const tot = no(inf, 'total', 'ICMSTot');
   const notaCent = centavosDoTexto(texto(tot, 'vNF'));

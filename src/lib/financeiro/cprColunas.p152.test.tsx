@@ -66,10 +66,14 @@ describe('P152 — a tela (lida da fonte)', () => {
   });
 
   it('a régua (CPR-LAYOUT-03: datas, NF e Status justos, UMA coluna Valor de 118 e a Saldo) e o ampliado = a mesma + Safra e Faz.', () => {
-    expect(reguaDaCpr(false, 0)).toEqual({ comp: 48, venc: 48, safra: 0, faz: 0, nf: 72, status: 70, valor: 118, saldo: 118 });
+    /* CPR-LAYOUT-04: Comp. a 10px (46), Venc. SAI (0: a data está na faixa do dia), entra o Banco (70) */
+    expect(reguaDaCpr(false, 0)).toEqual({ comp: 46, venc: 0, banco: 70, safra: 0, faz: 0, nf: 72, status: 70, valor: 118, saldo: 118 });
     expect(reguaDaCpr(true, 0)).toEqual({ ...reguaDaCpr(false, 0), safra: 56, faz: 26 });
     const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('{/* CAIXA INICIAL'));
-    const ordem = ["'comp'", "'venc'", "'descricao'", "'fornecedor'", "'subcentro'", 'Safra', 'Faz.', "'nf'", "'status'", "'valor'", '>Saldo<'];
+    const ordem = ["'comp'", "'venc'", "'descricao'", "'fornecedor'", "'subcentro'", 'Safra', 'Faz.', "'banco'", "'nf'", "'status'", "'valor'", '>Saldo<'];
+    /* a coluna Venc. só desenha com largura na régua (no cabeçalho e na linha) */
+    expect(cab).toContain("{regua.venc > 0 && cabecalhoOrdenavel('venc', larg(regua.venc))}");
+    expect(tela).toContain('{regua.venc > 0 && (\n              <span style={larg(regua.venc)}');
     const pos = ordem.map((t) => cab.indexOf(t));
     expect(pos.every((p) => p >= 0)).toBe(true);
     expect([...pos].sort((a, b) => a - b)).toEqual(pos);
@@ -82,10 +86,11 @@ describe('P152 — a tela (lida da fonte)', () => {
     const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('{/* CAIXA INICIAL'));
     const linha = tela.slice(tela.indexOf('            key={chaveDaLinhaCpr(l)}'), tela.indexOf('{/* CPR-AJUSTES-20-10 — a ÚLTIMA linha do dia'));
     const colunas = (t: string) => Array.from(t.matchAll(/larg\(regua\.(\w+)\)|largura=\{regua\.(\w+)\}/g), (m) => m[1] ?? m[2]);
-    const ORDEM = ['comp', 'venc', 'safra', 'faz', 'nf', 'status', 'valor', 'saldo'];
+    /* BPO-FUNCIONAR-01: com a aprovação ligada, a caixa antes de Comp. e Aprovação · Lançado por entre Status e Valor (campos da régua) */
+    const ORDEM = ['sel', 'comp', 'venc', 'safra', 'faz', 'banco', 'nf', 'status', 'aprov', 'lancado', 'valor', 'saldo'];
     expect(colunas(cab)).toEqual(ORDEM);
     /* a linha: as fixas na mesma ordem; o valor é o `celValor` (largura da régua) e depois o saldo */
-    expect(colunas(linha)).toEqual(['comp', 'venc', 'safra', 'faz', 'nf', 'status', 'saldo']);
+    expect(colunas(linha)).toEqual(['sel', 'comp', 'venc', 'safra', 'faz', 'banco', 'nf', 'status', 'aprov', 'lancado', 'saldo']);
     expect(linha.indexOf('{celValor}')).toBeLessThan(linha.indexOf('largura={regua.saldo}'));
     expect(tela).toContain('<span data-valor-da-linha style={larg(regua.valor)}');
     /* Descrição, Fornecedor e Subcentro: as MESMAS esticas no cabeçalho e na linha */

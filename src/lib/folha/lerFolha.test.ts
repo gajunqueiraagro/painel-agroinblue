@@ -2,7 +2,7 @@
  * lerFolha — linhas INVENTADAS na forma dos layouts (nomes, códigos, CEI e valores fictícios). ⚠ Holerite real nunca entra aqui.
  */
 import { describe, it, expect } from 'vitest';
-import { lerFolha, valorDoRecibo, FRASE_NAO_E_FOLHA, fraseViasDiferentes } from './lerFolha';
+import { lerFolha, pareceFolha, valorDoRecibo, FRASE_NAO_E_FOLHA, fraseViasDiferentes } from './lerFolha';
 
 /* uma via do layout 'nj' */
 const viaNj = (cei: string, codigo: string, nome: string, liquido: string, tipo = '13o. | Adiantamento', mes = 'Novembro') => [
@@ -76,5 +76,24 @@ describe('lerFolha — nunca chuta', () => {
     expect(valorDoRecibo('730,00')).toBe(730);
     expect(valorDoRecibo('1234,5')).toBeNull();
     expect(valorDoRecibo('R$ 10,00')).toBeNull();
+  });
+});
+
+describe('pareceFolha — CAIXA-FOLHA-AVISO-01 (o aviso enquanto a Caixa não lê a folha)', () => {
+  it('o recibo que o lerFolha reconhece parece folha (o 13º no layout SCI)', () => {
+    expect(pareceFolha([[...viaSci('12', 'FULANA FICTICIA', '730,00'), ...viaSci('12', 'FULANA FICTICIA', '730,00')]])).toBe(true);
+  });
+  it('as vias que não fecham também parecem folha (é folha; só não fecha)', () => {
+    expect(pareceFolha([[...viaNj('111111111111', '7', 'FULANO DE TAL', '1.234,56'), ...viaNj('111111111111', '7', 'FULANO DE TAL', '1.200,00')]])).toBe(true);
+  });
+  it('layout que o lerFolha não conhece, com rótulo de holerite (sem acento, em células), parece folha', () => {
+    expect(pareceFolha([['EMPREGADOR DOMESTICO FICTICIO', 'DEMONSTRATIVO DE PAGAMENTO | Competência 11/2026']])).toBe(true);
+    expect(pareceFolha([['EMPREGADOR DOMESTICO FICTICIO', 'Valor | Liquido | 500,00']])).toBe(true);
+    expect(pareceFolha([['Holerite de novembro']])).toBe(true);
+  });
+  it('boleto, nota e PDF qualquer NÃO parecem folha', () => {
+    expect(pareceFolha([['Beneficiário | FORNECEDOR FICTICIO', 'Vencimento | 10/12/2026', 'Valor do Documento | 1.234,56']])).toBe(false);
+    expect(pareceFolha([['DANFE', 'NOTA FISCAL ELETRÔNICA', 'VALOR TOTAL DA NOTA | 964,67']])).toBe(false);
+    expect(pareceFolha([])).toBe(false);
   });
 });

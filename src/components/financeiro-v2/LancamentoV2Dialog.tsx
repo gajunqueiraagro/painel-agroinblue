@@ -143,7 +143,7 @@ import { consultarSplitDoLancamento, type SplitDoLancamento } from '@/lib/concil
 import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
 import { edicaoDaParcela, podeSerParcelaDeContrato, MOTIVO_PARCELA_PAGA } from '@/lib/financiamentos/parcelaNoModal';
 import { gravarParcelaDoModal, lerContratoDaParcela, type ContratoDaParcela } from '@/lib/financiamentos/parcelaNoModalBanco';
-import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO } from '@/lib/financeiro/casadoComExtrato';
+import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO, FRASE_CASADO_NO_RODAPE, TITLE_CASADO_NO_RODAPE } from '@/lib/financeiro/casadoComExtrato';
 import { agendarSeriaRecusado, vaiAgendar, FRASE_AGENDAR_SEM_APROVACAO, FRASE_AGENDAR_NOVO_SEM_APROVACAO } from '@/lib/financeiro/aprovacao';
 import { EnviarParaAprovacaoDialog } from '@/components/financeiro-v2/EnviarParaAprovacaoDialog';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
@@ -238,7 +238,7 @@ interface Props {
   onLerNotaNoNovo?: (arquivo: File) => Promise<string | null>;
   /** P152 — a aba em que o modal abre (o "NF nnnn" da Contas a Pagar e Receber abre direto em Documentos, onde mora a regra de abrir a
    *  nota: o PDF; sem PDF, os itens). Ausente = 'geral', como sempre. */
-  abaInicial?: 'documentos';
+  abaInicial?: 'documentos' | 'pagamento';  /* FIN-PRONTO-PAGAR-01: o ponto da lista abre na Pagamento */
   prefill?: {
     fazenda_id?: string;
     conta_bancaria_id?: string;
@@ -2672,7 +2672,7 @@ export function LancamentoV2Dialog({
         if (ja.ok === false) { toast.error(`Não consegui conferir o CNPJ no cadastro (${ja.motivo}). Nada foi gravado — tente de novo.`); return; }
         if (ja.valor) { setXmlConflito(ja.valor); return; }
       }
-      const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId, documentoFormatado(xml.emitenteDocumento));
+      const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId || null, documentoFormatado(xml.emitenteDocumento));
       if (novo) {
         setFavorecidoId(novo.id); setXmlFaixaFechada(true);
         /* FORN-CADASTRO-02 — o fornecedor novo nasce com a fantasia, a IE e o endereço do emitente (só campo vazio) */
@@ -3969,8 +3969,8 @@ export function LancamentoV2Dialog({
                 conta estão em leitura (uma linha, altura do rodapé; os campos não mudam de tamanho nem de lugar). */}
             {casadoComExtrato && (
               <span className="min-w-0 truncate whitespace-nowrap text-[10px] leading-tight text-amber-700 dark:text-amber-400"
-                title={FRASE_CASADO_COM_EXTRATO} data-testid="casado-com-extrato">
-                {FRASE_CASADO_COM_EXTRATO}
+                title={TITLE_CASADO_NO_RODAPE} data-testid="casado-com-extrato">
+                {FRASE_CASADO_NO_RODAPE}
               </span>
             )}
             {edicaoParcela && (edicaoParcela.paga || edicaoParcela.frase) && (
