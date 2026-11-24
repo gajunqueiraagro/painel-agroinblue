@@ -460,6 +460,9 @@ if (tela === 'mesclar') {
     docDoClipe('dc5', 'lf2', 'nf', 'NF 000.000.519.pdf', '2026-10-05', { numero: '519' }),
     docDoClipe('dc6', 'lf2', 'nf', 'NF 000.000.519.xml', '2026-10-05', { numero: '519', tipo: 'application/xml', url: 'cli/lf2/dc6.xml' }),
     docDoClipe('dc7', 'lf2', 'boleto', 'Boleto parcela 1.pdf', '2026-10-20'),
+    /* DANFE-SOB-DEMANDA-01 — lf4: a NF só com o XML da Receita (sem arquivo guardado): o clipe mostra "PDF · DANFE" (gerado na hora) e "XML · Itens". SINTÉTICO. */
+    docDoClipe('dc8', 'lf4', 'nf', 'NF 337107 (XML da Receita)', '2026-11-18', { numero: '337107', serie: '300', tipo: 'application/xml', url: null,
+      chave_acesso: '50261106057223030240553000003371071561590540' }),
     /* ANEXO-COL-ALINHA-01 — lf3 com 12 (o contador de 2 dígitos: o clipe não sai do lugar). SINTÉTICOS. */
     ...Array.from({ length: 12 }, (_, i) => docDoClipe(`dc3-${i}`, 'lf3', 'recibo', `Recibo sintético ${i + 1}.pdf`, '2026-10-07')),
   ];

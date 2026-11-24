@@ -2416,6 +2416,10 @@ const CENARIOS = [
   { nome: 'financeiro-clipe-danfe', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
     tamanhos: [[1240, 700], [1024, 600]], antes: async (p) => { await p.locator('[data-testid="clipe-da-linha"][title*="519"]').first().click();
       await p.locator('[data-qual="clipe-documento-pdf"]').first().waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
+  /* DANFE-SOB-DEMANDA-01 — a NF só com o XML (sem PDF): "PDF · DANFE" (gerado na hora) e "XML · Itens" no popover */
+  { nome: 'financeiro-clipe-danfe-sob-demanda', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
+    tamanhos: [[1240, 700], [1024, 600]], antes: async (p) => { await p.locator('[data-testid="clipe-da-linha"][title*="337"]').first().click();
+      await p.locator('[data-qual="clipe-documento-danfe"]').first().waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
   { nome: 'financeiro-clipe-popover', url: 'tela=financeiro', regiao: '[data-testid="clipe-popover"]',
     tamanhos: [[1240, 700], [1024, 600], [948, 593], [1067, 667], ...TAMANHOS_DO_CONTRATO], antes: clicar('[data-testid="clipe-da-linha"]') },
   { nome: 'financeiro-tabela-pagina-2', url: 'tela=financeiro&v=volume&n=450', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO,
